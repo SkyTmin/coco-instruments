@@ -13,6 +13,17 @@
   align-items: center;
 }
 
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-name {
+  color: white;
+  font-size: 0.9rem;
+}
+
 .btn-primary {
   background: #4F46E5;
   color: white;
@@ -33,6 +44,8 @@
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 0.5rem;
   transition: background 0.3s;
+  background: transparent;
+  cursor: pointer;
 }
 
 .btn-secondary:hover {
@@ -47,5 +60,15 @@
   
   .nav-links .ml-4 {
     margin-left: 0;
+  }
+  
+  .user-menu {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .user-name {
+    font-size: 0.8rem;
+    text-align: center;
   }
 }
