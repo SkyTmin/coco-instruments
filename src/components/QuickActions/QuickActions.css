@@ -13,9 +13,9 @@
 
 .categories-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-  max-width: 1000px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  max-width: 800px;
   margin: 0 auto;
 }
 
@@ -47,14 +47,21 @@
   margin-bottom: 0.5rem;
 }
 
+.category-description {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
 .category-count {
   color: rgba(255, 255, 255, 0.8);
   font-size: 0.9rem;
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {
   .categories-grid {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: 1fr;
     gap: 1rem;
     padding: 0 1rem;
   }
