@@ -5,14 +5,34 @@
   <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#000000" />
-  <meta name="description" content="Coco Instruments - поиск и каталог инструментов" />
+  <meta name="description" content="Coco Instruments - сервисы финансов и геодезии" />
   <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/icon-192x192.png" />
   <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
   <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- CSS файлы -->
+  <link rel="stylesheet" href="%PUBLIC_URL%/src/styles/globals.css" />
+  <link rel="stylesheet" href="%PUBLIC_URL%/src/pages/Home/Home.css" />
+  <link rel="stylesheet" href="%PUBLIC_URL%/src/components/Header/Header.css" />
+  <link rel="stylesheet" href="%PUBLIC_URL%/src/components/Banner/Banner.css" />
+  <link rel="stylesheet" href="%PUBLIC_URL%/src/components/SearchBar/SearchBar.css" />
+  <link rel="stylesheet" href="%PUBLIC_URL%/src/components/QuickActions/QuickActions.css" />
+  
   <title>Coco Instruments</title>
 </head>
 <body>
   <noscript>Вам нужно включить JavaScript для работы приложения.</noscript>
   <div id="root"></div>
+  
+  <!-- React и другие JS файлы подключаются автоматически при сборке -->
+  
+  <script>
+    // Регистрация Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js');
+      });
+    }
+  </script>
 </body>
 </html>
