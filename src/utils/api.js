@@ -1,48 +1,126 @@
-import { createClient } from '@supabase/supabase-js';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://your-app.railway.app/api';
 
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+// Универсальная функция для запросов
+const apiRequest = async (endpoint, options = {}) => {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const token = localStorage.getItem('token');
+  
+  const config = {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options.headers,
+    },
+    ...options,
+  };
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+  try {
+    const response = await fetch(url, config);
+    const data = await response.json();
 
-// Регистрация
-export const signUp = async (email, password, name) => {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        name: name,
-      }
+    if (!response.ok) {
+      throw new Error(data.message || 'Ошибка сервера');
     }
+
+    return data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+// Аутентификация
+export const registerUser = async (userData) => {
+  return apiRequest('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(userData),
   });
-  
-  return { data, error };
 };
 
-// Логин
-export const signIn = async (email, password) => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
+export const loginUser = async (credentials) => {
+  return apiRequest('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(credentials),
   });
-  
-  return { data, error };
 };
 
-// Выход
-export const signOut = async () => {
-  const { error } = await supabase.auth.signOut();
-  return { error };
-};
-
-// Получить текущего пользователя
 export const getCurrentUser = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
+  return apiRequest('/auth/me');
 };
 
-// Проверить авторизацию
-export const onAuthStateChange = (callback) => {
-  return supabase.auth.onAuthStateChange(callback);
+// Инструменты
+export const getTools = async (category = null, search = null) => {
+  const params = new URLSearchParams();
+  if (category) params.append('category', category);
+  if (search) params.append('search', search);
+  
+  return apiRequest(`/tools?${params.toString()}`);
+};
+
+export const getTool = async (id) => {
+  return apiRequest(`/tools/${id}`);
+};
+
+export const createTool = async (toolData) => {
+  return apiRequest('/tools', {
+    method: 'POST',
+    body: JSON.stringify(toolData),
+  });
+};
+
+export const updateTool = async (id, toolData) => {
+  return apiRequest(`/tools/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(toolData),
+  });
+};
+
+export const deleteTool = async (id) => {
+  return apiRequest(`/tools/${id}`, {
+    method: 'DELETE',
+  });
+};
+
+// Категории
+export const getCategories = async () => {
+  return apiRequest('/categories');
+};
+
+// Финансовые калькуляторы
+export const calculateLoan = async (data) => {
+  return apiRequest('/finance/loan', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const calculateInvestment = async (data) => {
+  return apiRequest('/finance/investment', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+// Геодезические расчеты
+export const calculateDistance = async (data) => {
+  return apiRequest('/geodesy/distance', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const convertCoordinates = async (data) => {
+  return apiRequest('/geodesy/coordinates', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+// Статистика и аналитика
+export const getToolStats = async () => {
+  return apiRequest('/stats/tools');
+};
+
+export const getUserStats = async () => {
+  return apiRequest('/stats/user');
 };

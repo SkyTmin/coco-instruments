@@ -1,7 +1,7 @@
 .header {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--glass-bg);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .logo {
@@ -13,20 +13,9 @@
   align-items: center;
 }
 
-.user-menu {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.user-name {
-  color: white;
-  font-size: 0.9rem;
-}
-
 .btn-primary {
-  background: #4F46E5;
-  color: white;
+  background: var(--primary-color);
+  color: var(--text-light);
   padding: 0.5rem 1rem;
   border-radius: 0.5rem;
   text-decoration: none;
@@ -34,22 +23,20 @@
 }
 
 .btn-primary:hover {
-  background: #4338CA;
+  background: var(--primary-hover);
 }
 
 .btn-secondary {
-  color: white;
+  color: var(--text-light);
   padding: 0.5rem 1rem;
   text-decoration: none;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--glass-border);
   border-radius: 0.5rem;
   transition: background 0.3s;
-  background: transparent;
-  cursor: pointer;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--glass-bg);
 }
 
 @media (max-width: 768px) {
@@ -60,15 +47,5 @@
   
   .nav-links .ml-4 {
     margin-left: 0;
-  }
-  
-  .user-menu {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  
-  .user-name {
-    font-size: 0.8rem;
-    text-align: center;
   }
 }

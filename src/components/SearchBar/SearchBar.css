@@ -20,21 +20,22 @@
   font-size: 1.1rem;
   border: none;
   border-radius: 50px;
-  background: white;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  background: var(--light-beige);
+  box-shadow: 0 10px 25px var(--shadow-color);
   outline: none;
   transition: box-shadow 0.3s;
+  color: var(--text-dark);
 }
 
 .search-input:focus {
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 15px 35px rgba(139, 69, 19, 0.2);
 }
 
 .search-button {
   position: absolute;
   right: 0.5rem;
-  background: #4F46E5;
-  color: white;
+  background: var(--primary-color);
+  color: var(--text-light);
   border: none;
   border-radius: 50%;
   width: 3rem;
@@ -47,7 +48,7 @@
 }
 
 .search-button:hover {
-  background: #4338CA;
+  background: var(--primary-hover);
 }
 
 .search-button svg {
