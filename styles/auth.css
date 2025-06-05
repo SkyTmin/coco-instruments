@@ -50,6 +50,7 @@ font-size: 16px;
 color: var(–brown);
 transition: all 0.3s ease;
 box-shadow: 0 2px 5px var(–shadow);
+touch-action: manipulation;
 }
 
 .auth-input:focus {
@@ -99,7 +100,29 @@ opacity: 1;
 }
 
 @media (max-width: 768px) {
-.modal-content {
-margin: 15% auto;
+.auth-container {
+padding: 20px 15px;
 }
+
+```
+.auth-tabs {
+    margin-bottom: 20px;
+}
+
+.auth-tab {
+    font-size: 14px;
+    padding: 8px;
+}
+
+.auth-input {
+    padding: 12px;
+    font-size: 15px;
+}
+
+.auth-submit {
+    padding: 12px;
+    font-size: 15px;
+}
+```
+
 }
