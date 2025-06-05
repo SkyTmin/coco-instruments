@@ -68,7 +68,11 @@ const app = {
     },
     
     handleServiceClick(service) {
-        console.log(`Opening service: ${service}`);
+        if (service === 'coco-money') {
+            window.location.href = 'coco-money.html';
+        } else {
+            console.log(`Opening service: ${service}`);
+        }
     },
     
     addTouchSupport() {

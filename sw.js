@@ -2,14 +2,17 @@ const CACHE_NAME = 'coco-instruments-v1';
 const urlsToCache = [
     '/',
     '/index.html',
+    '/coco-money.html',
     '/styles/global.css',
     '/styles/header.css',
     '/styles/home.css',
     '/styles/auth.css',
+    '/styles/coco-money.css',
     '/js/app.js',
     '/js/auth.js',
     '/js/navigation.js',
-    '/js/pwa.js'
+    '/js/pwa.js',
+    '/js/coco-money.js'
 ];
 
 self.addEventListener('install', event => {

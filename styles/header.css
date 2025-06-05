@@ -48,6 +48,28 @@
     transform: translateY(0);
 }
 
+.back-btn {
+    background-color: var(--beige);
+    color: var(--brown);
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px var(--shadow);
+    border: none;
+    cursor: pointer;
+}
+
+.back-btn:hover {
+    transform: translateX(-3px);
+    box-shadow: 0 4px 10px var(--shadow);
+}
+
+.header-actions {
+    width: 80px;
+}
+
 @media (max-width: 768px) {
     .header {
         padding: 12px 15px;

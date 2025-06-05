@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#7B4B2A">
+    <meta name="color-scheme" content="light only">
+    <title>Coco Money</title>
+    <link rel="stylesheet" href="styles/global.css">
+    <link rel="stylesheet" href="styles/header.css">
+    <link rel="stylesheet" href="styles/coco-money.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <button class="back-btn" onclick="window.location.href='index.html'">← Назад</button>
+            <h1 class="logo">Coco Money</h1>
+            <div class="header-actions"></div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div id="coco-money-root">
+            <div id="no-data" class="card no-data">
+                <p>У вас пока нет доходных листов</p>
+                <button class="primary-btn" onclick="cocoMoney.showIncomeForm()">Добавить доходный лист</button>
+            </div>
+            
+            <div id="income-sheets-container"></div>
+            
+            <section id="statistics" class="statistics-section" style="display: none;">
+                <h2>Статистика</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Всего листов</div>
+                        <div class="stat-value" id="total-sheets">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Общий доход</div>
+                        <div class="stat-value" id="total-income">0 ₽</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Общие расходы</div>
+                        <div class="stat-value" id="total-expenses">0 ₽</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Чистая прибыль</div>
+                        <div class="stat-value" id="net-profit">0 ₽</div>
+                    </div>
+                </div>
+                <div class="categories-breakdown" id="categories-breakdown"></div>
+            </section>
+        </div>
+    </main>
+
+    <button id="add-income-btn" class="fab-button" onclick="cocoMoney.showIncomeForm()" aria-label="Добавить доходный лист">+</button>
+
+    <div class="modal" id="income-form-modal">
+        <div class="modal-content">
+            <span class="close" onclick="cocoMoney.hideIncomeForm()">&times;</span>
+            <h2>Новый доходный лист</h2>
+            <form id="income-form" onsubmit="cocoMoney.addIncomeSheet(event)">
+                <input type="text" name="title" placeholder="Название листа" required>
+                <input type="number" name="amount" placeholder="Сумма дохода" step="0.01" required>
+                <input type="date" name="date" required>
+                <textarea name="note" placeholder="Заметка (необязательно)"></textarea>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="preliminary">
+                    Предварительный доход
+                </label>
+                <button type="submit" class="primary-btn">Сохранить</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal" id="export-modal">
+        <div class="modal-content export-modal">
+            <span class="close" onclick="cocoMoney.hideExportModal()">&times;</span>
+            <h2>Экспорт данных</h2>
+            <textarea id="export-content" readonly></textarea>
+            <div class="modal-buttons">
+                <button class="primary-btn" onclick="cocoMoney.downloadData()">💾 Скачать</button>
+                <button class="secondary-btn" onclick="cocoMoney.copyData()">📋 Копировать</button>
+            </div>
+            <div id="copy-notification" class="notification" style="display: none;">Скопировано!</div>
+        </div>
+    </div>
+
+    <script src="js/coco-money.js"></script>
+</body>
+</html>
