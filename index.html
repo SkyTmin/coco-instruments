@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#7B4B2A">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>Coco Instruments</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <link rel="stylesheet" href="styles/global.css">
+    <link rel="stylesheet" href="styles/header.css">
+    <link rel="stylesheet" href="styles/home.css">
+    <link rel="stylesheet" href="styles/auth.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1 class="logo">Coco Instruments</h1>
+            <nav class="auth-nav">
+                <button class="auth-btn" id="loginBtn">Вход</button>
+                <button class="auth-btn" id="logoutBtn" style="display: none;">Выход</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="app-grid">
+            <div class="app-card" data-section="finance">
+                <div class="app-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                </div>
+                <h2 class="app-title">Финансы</h2>
+            </div>
+            <div class="app-card" data-section="geodesy">
+                <div class="app-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+                        <path d="M2 12h20"/>
+                    </svg>
+                </div>
+                <h2 class="app-title">Геодезия</h2>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="authModal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="auth-container">
+                <h2 class="auth-title">Вход</h2>
+                <form class="auth-form" id="loginForm">
+                    <input type="email" class="auth-input" placeholder="Email" required>
+                    <input type="password" class="auth-input" placeholder="Пароль" required>
+                    <button type="submit" class="auth-submit">Войти</button>
+                    <a href="#" class="auth-link" id="forgotPassword">Забыли пароль?</a>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <section class="sub-section" id="financeSection" style="display: none;">
+        <button class="back-btn">← Назад</button>
+        <h2 class="section-title">Финансы</h2>
+        <div class="sub-grid">
+            <div class="sub-card" data-service="coco-money">
+                <div class="sub-icon">💰</div>
+                <h3>Coco Money</h3>
+            </div>
+            <div class="sub-card" data-service="debts">
+                <div class="sub-icon">📊</div>
+                <h3>Долги</h3>
+            </div>
+        </div>
+    </section>
+
+    <section class="sub-section" id="geodesySection" style="display: none;">
+        <button class="back-btn">← Назад</button>
+        <h2 class="section-title">Геодезия</h2>
+        <div class="sub-grid">
+            <div class="sub-card" data-service="scale-calculator">
+                <div class="sub-icon">📐</div>
+                <h3>Калькулятор масштабов</h3>
+            </div>
+        </div>
+    </section>
+
+    <script src="js/app.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/navigation.js"></script>
+    <script src="js/pwa.js"></script>
+</body>
+</html>

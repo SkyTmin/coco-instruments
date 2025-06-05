@@ -1,0 +1,15 @@
+{
+  "name": "coco-instruments-frontend",
+  "version": "1.0.0",
+  "description": "Coco Instruments Frontend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
