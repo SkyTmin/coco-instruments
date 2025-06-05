@@ -52,12 +52,24 @@
         <div class="modal-content">
             <span class="close">&times;</span>
             <div class="auth-container">
-                <h2 class="auth-title">Вход</h2>
-                <form class="auth-form" id="loginForm">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="login">Вход</button>
+                    <button class="auth-tab" data-tab="register">Регистрация</button>
+                </div>
+                
+                <form class="auth-form" id="loginForm" data-form="login">
                     <input type="email" class="auth-input" placeholder="Email" required>
                     <input type="password" class="auth-input" placeholder="Пароль" required>
                     <button type="submit" class="auth-submit">Войти</button>
                     <a href="#" class="auth-link" id="forgotPassword">Забыли пароль?</a>
+                </form>
+                
+                <form class="auth-form" id="registerForm" data-form="register" style="display: none;">
+                    <input type="text" class="auth-input" placeholder="Имя" required>
+                    <input type="email" class="auth-input" placeholder="Email" required>
+                    <input type="password" class="auth-input" placeholder="Пароль" required>
+                    <input type="password" class="auth-input" placeholder="Повторите пароль" required>
+                    <button type="submit" class="auth-submit">Зарегистрироваться</button>
                 </form>
             </div>
         </div>
