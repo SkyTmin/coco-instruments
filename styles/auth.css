@@ -1,12 +1,38 @@
 .auth-container {
-    padding: 30px 20px;
+    padding: 20px;
 }
 
-.auth-title {
-    text-align: center;
-    font-size: 24px;
+.auth-tabs {
+    display: flex;
+    gap: 10px;
     margin-bottom: 30px;
+    background-color: rgba(123, 75, 42, 0.1);
+    padding: 5px;
+    border-radius: 12px;
+}
+
+.auth-tab {
+    flex: 1;
+    padding: 10px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
     color: var(--brown);
+    opacity: 0.6;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.auth-tab.active {
+    background-color: white;
+    opacity: 1;
+    box-shadow: 0 2px 5px var(--shadow);
+}
+
+.auth-tab:hover {
+    opacity: 0.8;
 }
 
 .auth-form {
@@ -77,9 +103,13 @@
         padding: 20px 15px;
     }
     
-    .auth-title {
-        font-size: 20px;
+    .auth-tabs {
         margin-bottom: 20px;
+    }
+    
+    .auth-tab {
+        font-size: 14px;
+        padding: 8px;
     }
     
     .auth-input {
