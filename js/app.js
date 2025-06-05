@@ -74,32 +74,34 @@ handleServiceClick(service) {
 
 addTouchSupport() {
     let touchStartX = 0;
-    let touchEndX = 0;
     let touchStartY = 0;
+    let touchEndX = 0;
     let touchEndY = 0;
     
     document.addEventListener('touchstart', e => {
         touchStartX = e.changedTouches[0].screenX;
         touchStartY = e.changedTouches[0].screenY;
-    });
+    }, { passive: true });
     
     document.addEventListener('touchend', e => {
         touchEndX = e.changedTouches[0].screenX;
         touchEndY = e.changedTouches[0].screenY;
         this.handleSwipe();
-    });
+    }, { passive: true });
     
     this.handleSwipe = () => {
         const swipeThreshold = 100;
         const verticalThreshold = 50;
         
-        const horizontalDiff = touchEndX - touchStartX;
-        const verticalDiff = Math.abs(touchEndY - touchStartY);
+        const deltaX = touchEndX - touchStartX;
+        const deltaY = Math.abs(touchEndY - touchStartY);
         
-        if (verticalDiff < verticalThreshold) {
-            if (horizontalDiff > swipeThreshold && this.currentSection !== 'home') {
-                this.hideAllSections();
-            } else if (horizontalDiff < -swipeThreshold && this.currentSection !== 'home') {
+        if (deltaY > verticalThreshold) {
+            return;
+        }
+        
+        if (this.currentSection !== 'home') {
+            if (deltaX < -swipeThreshold || deltaX > swipeThreshold) {
                 this.hideAllSections();
             }
         }
