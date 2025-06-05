@@ -1,5 +1,6 @@
 const auth = {
     modal: null,
+    currentTab: 'login',
     
     init() {
         this.modal = document.getElementById('authModal');
@@ -30,9 +31,32 @@ const auth = {
             this.handleLogin(e.target);
         });
         
+        document.getElementById('registerForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleRegister(e.target);
+        });
+        
         document.getElementById('forgotPassword').addEventListener('click', (e) => {
             e.preventDefault();
             this.handleForgotPassword();
+        });
+        
+        document.querySelectorAll('.auth-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                this.switchTab(tab.getAttribute('data-tab'));
+            });
+        });
+    },
+    
+    switchTab(tabName) {
+        this.currentTab = tabName;
+        
+        document.querySelectorAll('.auth-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.getAttribute('data-tab') === tabName);
+        });
+        
+        document.querySelectorAll('.auth-form').forEach(form => {
+            form.style.display = form.getAttribute('data-form') === tabName ? 'flex' : 'none';
         });
     },
     
@@ -51,6 +75,32 @@ const auth = {
         const password = form.querySelector('input[type="password"]').value;
         
         const user = {
+            email: email,
+            id: Date.now()
+        };
+        
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        app.currentUser = user;
+        app.updateAuthUI(true);
+        
+        this.hideModal();
+        form.reset();
+    },
+    
+    handleRegister(form) {
+        const inputs = form.querySelectorAll('input');
+        const name = inputs[0].value;
+        const email = inputs[1].value;
+        const password = inputs[2].value;
+        const confirmPassword = inputs[3].value;
+        
+        if (password !== confirmPassword) {
+            alert('Пароли не совпадают');
+            return;
+        }
+        
+        const user = {
+            name: name,
             email: email,
             id: Date.now()
         };
