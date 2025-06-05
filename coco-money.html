@@ -21,9 +21,23 @@
 
     <main class="main-content">
         <div id="coco-money-root">
-            <div id="no-data" class="card no-data">
+            <div class="tabs-container">
+                <button class="tab-btn active" data-tab="regular" onclick="cocoMoney.switchTab('regular')">
+                    Доходные листы
+                </button>
+                <button class="tab-btn" data-tab="preliminary" onclick="cocoMoney.switchTab('preliminary')">
+                    Предварительные
+                </button>
+            </div>
+            
+            <div id="no-data" class="card no-data" style="display: none;">
                 <p>У вас пока нет доходных листов</p>
                 <button class="primary-btn" onclick="cocoMoney.showIncomeForm()">Добавить доходный лист</button>
+            </div>
+            
+            <div id="no-data-preliminary" class="card no-data" style="display: none;">
+                <p>У вас пока нет предварительных листов</p>
+                <button class="primary-btn" onclick="cocoMoney.showIncomeForm(true)">Добавить предварительный лист</button>
             </div>
             
             <div id="income-sheets-container"></div>
@@ -53,7 +67,7 @@
         </div>
     </main>
 
-    <button id="add-income-btn" class="fab-button" onclick="cocoMoney.showIncomeForm()" aria-label="Добавить доходный лист">+</button>
+    <button id="add-income-btn" class="fab-button" onclick="cocoMoney.showIncomeForm()" aria-label="Добавить лист">+</button>
 
     <div class="modal" id="income-form-modal">
         <div class="modal-content">
@@ -83,6 +97,44 @@
                 <button class="secondary-btn" onclick="cocoMoney.copyData()">📋 Копировать</button>
             </div>
             <div id="copy-notification" class="notification" style="display: none;">Скопировано!</div>
+        </div>
+    </div>
+
+    <div class="modal" id="edit-sheet-modal">
+        <div class="modal-content">
+            <span class="close" onclick="cocoMoney.hideEditForm()">&times;</span>
+            <h2>Редактировать лист</h2>
+            <form id="edit-sheet-form" onsubmit="cocoMoney.updateSheet(event)">
+                <input type="hidden" name="sheetId">
+                <input type="text" name="title" placeholder="Название листа" required>
+                <input type="number" name="amount" placeholder="Сумма дохода" step="0.01" required>
+                <input type="date" name="date" required>
+                <textarea name="note" placeholder="Заметка (необязательно)"></textarea>
+                <button type="submit" class="primary-btn">Сохранить изменения</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal" id="category-modal">
+        <div class="modal-content">
+            <span class="close" onclick="cocoMoney.hideCategoryModal()">&times;</span>
+            <h2>Управление категориями</h2>
+            <form id="add-category-form" onsubmit="cocoMoney.addCategory(event)">
+                <input type="text" name="categoryName" placeholder="Название новой категории" required>
+                <button type="submit" class="primary-btn">Добавить категорию</button>
+            </form>
+            <div class="categories-list" id="categories-list"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="confirm-modal">
+        <div class="modal-content confirm-modal">
+            <h3>Подтверждение удаления</h3>
+            <p id="confirm-message">Вы точно хотите удалить этот доходный лист?</p>
+            <div class="modal-buttons">
+                <button class="primary-btn" onclick="cocoMoney.confirmDelete()">Удалить</button>
+                <button class="secondary-btn" onclick="cocoMoney.cancelDelete()">Отмена</button>
+            </div>
         </div>
     </div>
 

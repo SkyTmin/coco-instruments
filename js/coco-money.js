@@ -2,6 +2,9 @@ const cocoMoney = {
     sheets: [],
     categories: ['Транспорт', 'Продукты', 'Развлечения', 'Здоровье', 'Образование', 'Другое'],
     currentExportData: null,
+    currentTab: 'regular',
+    deleteTargetId: null,
+    editingSheetId: null,
     
     init() {
         this.loadData();
@@ -17,19 +20,37 @@ const cocoMoney = {
     },
     
     loadData() {
-        const saved = localStorage.getItem('cocoMoneySheets');
-        if (saved) {
-            this.sheets = JSON.parse(saved);
+        const savedSheets = localStorage.getItem('cocoMoneySheets');
+        if (savedSheets) {
+            this.sheets = JSON.parse(savedSheets);
+        }
+        
+        const savedCategories = localStorage.getItem('cocoMoneyCategories');
+        if (savedCategories) {
+            this.categories = JSON.parse(savedCategories);
         }
     },
     
     saveData() {
         localStorage.setItem('cocoMoneySheets', JSON.stringify(this.sheets));
+        localStorage.setItem('cocoMoneyCategories', JSON.stringify(this.categories));
     },
     
-    showIncomeForm() {
+    switchTab(tab) {
+        this.currentTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
+        });
+        this.render();
+    },
+    
+    showIncomeForm(isPreliminary = false) {
         document.getElementById('income-form-modal').style.display = 'block';
         this.setupDateDefault();
+        const checkbox = document.querySelector('#income-form input[name="preliminary"]');
+        if (checkbox) {
+            checkbox.checked = isPreliminary || this.currentTab === 'preliminary';
+        }
     },
     
     hideIncomeForm() {
@@ -55,6 +76,110 @@ const cocoMoney = {
         this.saveData();
         this.render();
         this.hideIncomeForm();
+    },
+    
+    showEditForm(sheetId) {
+        const sheet = this.sheets.find(s => s.id === sheetId);
+        if (!sheet) return;
+        
+        this.editingSheetId = sheetId;
+        const form = document.getElementById('edit-sheet-form');
+        form.sheetId.value = sheetId;
+        form.title.value = sheet.title;
+        form.amount.value = sheet.amount;
+        form.date.value = sheet.date;
+        form.note.value = sheet.note || '';
+        
+        document.getElementById('edit-sheet-modal').style.display = 'block';
+    },
+    
+    hideEditForm() {
+        document.getElementById('edit-sheet-modal').style.display = 'none';
+        document.getElementById('edit-sheet-form').reset();
+        this.editingSheetId = null;
+    },
+    
+    updateSheet(event) {
+        event.preventDefault();
+        const form = event.target;
+        const sheetId = parseInt(form.sheetId.value);
+        
+        const sheet = this.sheets.find(s => s.id === sheetId);
+        if (sheet) {
+            sheet.title = form.title.value;
+            sheet.amount = parseFloat(form.amount.value);
+            sheet.date = form.date.value;
+            sheet.note = form.note.value;
+            
+            this.saveData();
+            this.render();
+            this.hideEditForm();
+        }
+    },
+    
+    promptDelete(sheetId) {
+        const sheet = this.sheets.find(s => s.id === sheetId);
+        if (!sheet) return;
+        
+        this.deleteTargetId = sheetId;
+        const message = `Вы точно хотите удалить ${sheet.preliminary ? 'предварительный' : 'доходный'} лист "${sheet.title}"?`;
+        document.getElementById('confirm-message').textContent = message;
+        document.getElementById('confirm-modal').style.display = 'block';
+    },
+    
+    confirmDelete() {
+        if (this.deleteTargetId) {
+            this.sheets = this.sheets.filter(s => s.id !== this.deleteTargetId);
+            this.saveData();
+            this.render();
+        }
+        this.cancelDelete();
+    },
+    
+    cancelDelete() {
+        document.getElementById('confirm-modal').style.display = 'none';
+        this.deleteTargetId = null;
+    },
+    
+    showCategoryModal() {
+        this.renderCategories();
+        document.getElementById('category-modal').style.display = 'block';
+    },
+    
+    hideCategoryModal() {
+        document.getElementById('category-modal').style.display = 'none';
+        document.getElementById('add-category-form').reset();
+    },
+    
+    addCategory(event) {
+        event.preventDefault();
+        const form = event.target;
+        const categoryName = form.categoryName.value.trim();
+        
+        if (categoryName && !this.categories.includes(categoryName)) {
+            this.categories.push(categoryName);
+            this.saveData();
+            this.renderCategories();
+            form.reset();
+        }
+    },
+    
+    deleteCategory(category) {
+        if (this.categories.length > 1) {
+            this.categories = this.categories.filter(c => c !== category);
+            this.saveData();
+            this.renderCategories();
+        }
+    },
+    
+    renderCategories() {
+        const container = document.getElementById('categories-list');
+        container.innerHTML = this.categories.map(category => `
+            <div class="category-list-item">
+                <span>${category}</span>
+                <button onclick="cocoMoney.deleteCategory('${category}')">×</button>
+            </div>
+        `).join('');
     },
     
     addExpense(sheetId, event) {
@@ -86,31 +211,43 @@ const cocoMoney = {
         }
     },
     
-    deleteSheet(sheetId) {
-        if (confirm('Удалить этот доходный лист?')) {
-            this.sheets = this.sheets.filter(s => s.id !== sheetId);
-            this.saveData();
-            this.render();
-        }
-    },
-    
     render() {
         const container = document.getElementById('income-sheets-container');
-        const noData = document.getElementById('no-data');
+        const noDataRegular = document.getElementById('no-data');
+        const noDataPreliminary = document.getElementById('no-data-preliminary');
         const statistics = document.getElementById('statistics');
         
-        if (this.sheets.length === 0) {
-            noData.style.display = 'block';
-            container.innerHTML = '';
-            statistics.style.display = 'none';
-            return;
+        const regularSheets = this.sheets.filter(s => !s.preliminary);
+        const preliminarySheets = this.sheets.filter(s => s.preliminary);
+        
+        if (this.currentTab === 'regular') {
+            if (regularSheets.length === 0) {
+                noDataRegular.style.display = 'block';
+                noDataPreliminary.style.display = 'none';
+                container.innerHTML = '';
+            } else {
+                noDataRegular.style.display = 'none';
+                noDataPreliminary.style.display = 'none';
+                container.innerHTML = regularSheets.map(sheet => this.renderSheet(sheet)).join('');
+            }
+        } else {
+            if (preliminarySheets.length === 0) {
+                noDataPreliminary.style.display = 'block';
+                noDataRegular.style.display = 'none';
+                container.innerHTML = '';
+            } else {
+                noDataPreliminary.style.display = 'none';
+                noDataRegular.style.display = 'none';
+                container.innerHTML = preliminarySheets.map(sheet => this.renderSheet(sheet)).join('');
+            }
         }
         
-        noData.style.display = 'none';
-        statistics.style.display = 'block';
-        
-        container.innerHTML = this.sheets.map(sheet => this.renderSheet(sheet)).join('');
-        this.renderStatistics();
+        if (this.sheets.length > 0) {
+            statistics.style.display = 'block';
+            this.renderStatistics();
+        } else {
+            statistics.style.display = 'none';
+        }
     },
     
     renderSheet(sheet) {
@@ -138,21 +275,30 @@ const cocoMoney = {
                         <button class="export-btn" onclick="cocoMoney.showExportModal(${sheet.id})">
                             📥 Скачать
                         </button>
+                        <button class="edit-btn" onclick="cocoMoney.showEditForm(${sheet.id})">
+                            ✏️ Изменить
+                        </button>
+                        <button class="delete-btn" onclick="cocoMoney.promptDelete(${sheet.id})">
+                            🗑️ Удалить
+                        </button>
                     </div>
                 </div>
                 
                 <div class="expenses-section">
                     <h4>Расходы</h4>
                     <form class="expense-form" onsubmit="cocoMoney.addExpense(${sheet.id}, event)">
-                        <input type="text" name="expenseTitle" class="expense-input" placeholder="Название расхода" required>
                         <div class="expense-form-row">
+                            <input type="text" name="expenseTitle" class="expense-input" placeholder="Название расхода" required>
                             <input type="number" name="expenseAmount" class="expense-input" placeholder="Сумма" step="0.01" required>
-                            <select name="expenseCategory" class="expense-input" required>
-                                <option value="">Категория</option>
-                                ${this.categories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
-                            </select>
+                            <div class="category-select-wrapper">
+                                <select name="expenseCategory" class="expense-input" required>
+                                    <option value="">Категория</option>
+                                    ${this.categories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+                                </select>
+                                <button type="button" class="manage-categories-btn" onclick="cocoMoney.showCategoryModal()">⚙️</button>
+                            </div>
+                            <input type="text" name="expenseNote" class="expense-input" placeholder="Заметка (необязательно)">
                         </div>
-                        <input type="text" name="expenseNote" class="expense-input" placeholder="Заметка (необязательно)">
                         <button type="submit" class="add-expense-btn">Добавить расход</button>
                     </form>
                     
@@ -335,6 +481,12 @@ window.addEventListener('click', (e) => {
             cocoMoney.hideIncomeForm();
         } else if (e.target.id === 'export-modal') {
             cocoMoney.hideExportModal();
+        } else if (e.target.id === 'edit-sheet-modal') {
+            cocoMoney.hideEditForm();
+        } else if (e.target.id === 'category-modal') {
+            cocoMoney.hideCategoryModal();
+        } else if (e.target.id === 'confirm-modal') {
+            cocoMoney.cancelDelete();
         }
     }
 });
