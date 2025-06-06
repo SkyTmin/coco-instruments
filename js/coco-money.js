@@ -10,6 +10,7 @@ const cocoMoney = {
         this.loadData();
         this.render();
         this.setupDateDefault();
+        this.setupCategoryChangeHandlers();
     },
     
     setupDateDefault() {
@@ -17,6 +18,10 @@ const cocoMoney = {
         if (dateInput) {
             dateInput.value = new Date().toISOString().split('T')[0];
         }
+    },
+    
+    setupCategoryChangeHandlers() {
+        // Будет вызываться после рендера для установки обработчиков
     },
     
     loadData() {
@@ -117,6 +122,18 @@ const cocoMoney = {
         }
     },
     
+    convertToPermanent(sheetId) {
+        const sheet = this.sheets.find(s => s.id === sheetId);
+        if (sheet && sheet.preliminary) {
+            if (confirm(`Преобразовать предварительный лист "${sheet.title}" в обычный доходный лист?`)) {
+                sheet.preliminary = false;
+                this.saveData();
+                this.currentTab = 'regular';
+                this.switchTab('regular');
+            }
+        }
+    },
+    
     promptDelete(sheetId) {
         const sheet = this.sheets.find(s => s.id === sheetId);
         if (!sheet) return;
@@ -160,6 +177,7 @@ const cocoMoney = {
             this.categories.push(categoryName);
             this.saveData();
             this.renderCategories();
+            this.render(); // Обновляем все формы
             form.reset();
         }
     },
@@ -169,6 +187,7 @@ const cocoMoney = {
             this.categories = this.categories.filter(c => c !== category);
             this.saveData();
             this.renderCategories();
+            this.render(); // Обновляем все формы
         }
     },
     
@@ -180,6 +199,13 @@ const cocoMoney = {
                 <button onclick="cocoMoney.deleteCategory('${category}')">×</button>
             </div>
         `).join('');
+    },
+    
+    handleCategoryChange(selectElement, sheetId) {
+        if (selectElement.value === 'new_category') {
+            this.showCategoryModal();
+            selectElement.value = '';
+        }
     },
     
     addExpense(sheetId, event) {
@@ -248,6 +274,16 @@ const cocoMoney = {
         } else {
             statistics.style.display = 'none';
         }
+        
+        // Устанавливаем обработчики для селектов категорий
+        setTimeout(() => {
+            document.querySelectorAll('.category-select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const sheetId = parseInt(e.target.getAttribute('data-sheet-id'));
+                    this.handleCategoryChange(e.target, sheetId);
+                });
+            });
+        }, 0);
     },
     
     renderSheet(sheet) {
@@ -278,6 +314,11 @@ const cocoMoney = {
                         <button class="edit-btn" onclick="cocoMoney.showEditForm(${sheet.id})">
                             ✏️ Изменить
                         </button>
+                        ${sheet.preliminary ? `
+                            <button class="convert-btn" onclick="cocoMoney.convertToPermanent(${sheet.id})">
+                                ✅ В доходы
+                            </button>
+                        ` : ''}
                         <button class="delete-btn" onclick="cocoMoney.promptDelete(${sheet.id})">
                             🗑️ Удалить
                         </button>
@@ -291,11 +332,11 @@ const cocoMoney = {
                             <input type="text" name="expenseTitle" class="expense-input" placeholder="Название расхода" required>
                             <input type="number" name="expenseAmount" class="expense-input" placeholder="Сумма" step="0.01" required>
                             <div class="category-select-wrapper">
-                                <select name="expenseCategory" class="expense-input" required>
+                                <select name="expenseCategory" class="expense-input category-select" data-sheet-id="${sheet.id}" required>
                                     <option value="">Категория</option>
                                     ${this.categories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+                                    <option value="new_category" style="font-style: italic; color: var(--brown);">➕ Новая категория</option>
                                 </select>
-                                <button type="button" class="manage-categories-btn" onclick="cocoMoney.showCategoryModal()">⚙️</button>
                             </div>
                             <input type="text" name="expenseNote" class="expense-input" placeholder="Заметка (необязательно)">
                         </div>
@@ -325,19 +366,52 @@ const cocoMoney = {
     },
     
     renderStatistics() {
-        const totalSheets = this.sheets.length;
-        const totalIncome = this.sheets.reduce((sum, sheet) => sum + sheet.amount, 0);
-        const totalExpenses = this.sheets.reduce((sum, sheet) => 
+        const regularSheets = this.sheets.filter(s => !s.preliminary);
+        const preliminarySheets = this.sheets.filter(s => s.preliminary);
+        
+        // Показываем статистику только для активной вкладки
+        if (this.currentTab === 'regular') {
+            // Статистика для обычных листов
+            const regularStats = this.calculateStats(regularSheets);
+            document.getElementById('regular-total-sheets').textContent = regularStats.totalSheets;
+            document.getElementById('regular-total-income').textContent = this.formatMoney(regularStats.totalIncome);
+            document.getElementById('regular-total-expenses').textContent = this.formatMoney(regularStats.totalExpenses);
+            document.getElementById('regular-net-profit').textContent = this.formatMoney(regularStats.netProfit);
+            
+            // Категории для обычных листов
+            const regularCategoriesHtml = this.renderCategoriesBreakdown(regularStats.categoriesData);
+            document.getElementById('regular-categories-breakdown').innerHTML = regularCategoriesHtml;
+            
+            // Показываем только статистику обычных листов
+            document.getElementById('regular-statistics').style.display = regularSheets.length > 0 ? 'block' : 'none';
+            document.getElementById('preliminary-statistics').style.display = 'none';
+        } else {
+            // Статистика для предварительных листов
+            const preliminaryStats = this.calculateStats(preliminarySheets);
+            document.getElementById('preliminary-total-sheets').textContent = preliminaryStats.totalSheets;
+            document.getElementById('preliminary-total-income').textContent = this.formatMoney(preliminaryStats.totalIncome);
+            document.getElementById('preliminary-total-expenses').textContent = this.formatMoney(preliminaryStats.totalExpenses);
+            document.getElementById('preliminary-net-profit').textContent = this.formatMoney(preliminaryStats.netProfit);
+            
+            // Категории для предварительных листов
+            const preliminaryCategoriesHtml = this.renderCategoriesBreakdown(preliminaryStats.categoriesData);
+            document.getElementById('preliminary-categories-breakdown').innerHTML = preliminaryCategoriesHtml;
+            
+            // Показываем только статистику предварительных листов
+            document.getElementById('regular-statistics').style.display = 'none';
+            document.getElementById('preliminary-statistics').style.display = preliminarySheets.length > 0 ? 'block' : 'none';
+        }
+    },
+    
+    calculateStats(sheets) {
+        const totalSheets = sheets.length;
+        const totalIncome = sheets.reduce((sum, sheet) => sum + sheet.amount, 0);
+        const totalExpenses = sheets.reduce((sum, sheet) => 
             sum + sheet.expenses.reduce((expSum, exp) => expSum + exp.amount, 0), 0);
         const netProfit = totalIncome - totalExpenses;
         
-        document.getElementById('total-sheets').textContent = totalSheets;
-        document.getElementById('total-income').textContent = this.formatMoney(totalIncome);
-        document.getElementById('total-expenses').textContent = this.formatMoney(totalExpenses);
-        document.getElementById('net-profit').textContent = this.formatMoney(netProfit);
-        
         const categoriesData = {};
-        this.sheets.forEach(sheet => {
+        sheets.forEach(sheet => {
             sheet.expenses.forEach(expense => {
                 if (!categoriesData[expense.category]) {
                     categoriesData[expense.category] = 0;
@@ -346,7 +420,21 @@ const cocoMoney = {
             });
         });
         
-        const categoriesHtml = Object.keys(categoriesData).length > 0 ? `
+        return {
+            totalSheets,
+            totalIncome,
+            totalExpenses,
+            netProfit,
+            categoriesData
+        };
+    },
+    
+    renderCategoriesBreakdown(categoriesData) {
+        if (Object.keys(categoriesData).length === 0) {
+            return '';
+        }
+        
+        return `
             <h3>Расходы по категориям</h3>
             ${Object.entries(categoriesData)
                 .sort((a, b) => b[1] - a[1])
@@ -356,9 +444,7 @@ const cocoMoney = {
                         <span class="category-amount">${this.formatMoney(amount)}</span>
                     </div>
                 `).join('')}
-        ` : '';
-        
-        document.getElementById('categories-breakdown').innerHTML = categoriesHtml;
+        `;
     },
     
     showExportModal(sheetId) {

@@ -5,6 +5,11 @@
     padding-bottom: 100px;
 }
 
+#income-sheets-container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
 .tabs-container {
     display: flex;
     gap: 8px;
@@ -38,6 +43,23 @@
     opacity: 0.8;
 }
 
+.category-modal .modal-content {
+    max-width: 500px;
+}
+
+.category-modal h2 {
+    text-align: center;
+    color: var(--brown);
+    margin-bottom: 20px;
+}
+
+.expense-form-buttons {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin-top: 8px;
+}
+
 .card {
     background-color: white !important;
     border: 1px solid var(--brown);
@@ -47,12 +69,15 @@
     box-shadow: 0 2px 8px var(--shadow);
     position: relative;
     touch-action: manipulation;
+    overflow: hidden;
 }
 
 .no-data {
     text-align: center;
     padding: 40px;
     color: var(--brown);
+    max-width: 600px;
+    margin: 0 auto 16px;
 }
 
 .no-data p {
@@ -219,6 +244,15 @@
     margin-top: 20px;
     padding-top: 20px;
     border-top: 1px solid rgba(123, 75, 42, 0.2);
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.expenses-section h4 {
+    text-align: center;
+    color: var(--brown);
+    margin-bottom: 16px;
 }
 
 .expense-form {
@@ -226,6 +260,7 @@
     flex-direction: column;
     gap: 12px;
     margin-bottom: 16px;
+    padding: 0 10px;
 }
 
 .expense-form-row {
@@ -243,7 +278,6 @@
 .category-select-wrapper {
     flex: 1;
     display: flex;
-    gap: 8px;
     align-items: center;
     min-width: 0;
 }
@@ -251,23 +285,6 @@
 .category-select-wrapper select {
     flex: 1;
     min-width: 0;
-}
-
-.manage-categories-btn {
-    background: transparent;
-    border: 1px solid var(--brown);
-    color: var(--brown);
-    padding: 8px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 20px;
-    line-height: 1;
-    transition: all 0.3s ease;
-}
-
-.manage-categories-btn:hover {
-    background-color: var(--brown);
-    color: white;
 }
 
 .expense-input {
@@ -294,7 +311,9 @@
     font-size: 14px;
     font-weight: 600;
     transition: all 0.3s ease;
-    align-self: flex-start;
+    align-self: center;
+    margin: 0 auto;
+    display: block;
 }
 
 .add-expense-btn:hover {
@@ -358,10 +377,10 @@
 
 .statistics-section {
     margin-top: 40px;
-    padding: 24px;
-    background-color: white;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px var(--shadow);
+    padding: 0;
+    background-color: transparent;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .statistics-section h2 {
@@ -559,10 +578,26 @@
     color: rgba(123, 75, 42, 0.8);
 }
 
+.stats-container {
+    padding: 24px;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px var(--shadow);
+    margin-bottom: 20px;
+}
+
+.stats-container h2 {
+    font-size: 20px;
+    color: var(--brown);
+    margin-bottom: 20px;
+    text-align: center;
+}
+
 .categories-list {
     margin-top: 20px;
     max-height: 300px;
     overflow-y: auto;
+    padding: 0 16px;
 }
 
 .category-list-item {
@@ -573,6 +608,23 @@
     background-color: rgba(216, 202, 184, 0.2);
     border-radius: 6px;
     margin-bottom: 8px;
+}
+
+.category-list-item span {
+    color: var(--brown);
+    font-weight: 500;
+}
+
+#add-category-form {
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#add-category-form input {
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .category-list-item button {
@@ -590,7 +642,7 @@
     opacity: 1;
 }
 
-.primary-btn, .secondary-btn, .tab-btn, .export-btn, .edit-btn, .delete-btn, .add-expense-btn, .manage-categories-btn, .delete-expense {
+.primary-btn, .secondary-btn, .tab-btn, .export-btn, .edit-btn, .delete-btn, .add-expense-btn, .convert-btn, .delete-expense {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
@@ -607,6 +659,9 @@
     .expense-form {
         flex-direction: row;
         align-items: flex-end;
+        padding: 0 20px;
+        max-width: 800px;
+        margin: 0 auto;
     }
     
     .expense-form-row {
@@ -616,6 +671,27 @@
     
     .sheet-info {
         min-width: 300px;
+        text-align: center;
+    }
+    
+    .sheet-header {
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .sheet-meta {
+        justify-content: center;
+    }
+    
+    .income-sheet {
+        max-width: 1000px;
+        margin: 0 auto 16px;
+    }
+    
+    .stats-container {
+        max-width: 1000px;
+        margin: 0 auto;
     }
 }
 

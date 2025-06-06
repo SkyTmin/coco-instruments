@@ -43,26 +43,51 @@
             <div id="income-sheets-container"></div>
             
             <section id="statistics" class="statistics-section" style="display: none;">
-                <h2>Статистика</h2>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-label">Всего листов</div>
-                        <div class="stat-value" id="total-sheets">0</div>
+                <div id="regular-statistics" class="stats-container">
+                    <h2>Статистика доходных листов</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Всего листов</div>
+                            <div class="stat-value" id="regular-total-sheets">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Общий доход</div>
+                            <div class="stat-value" id="regular-total-income">0 ₽</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Общие расходы</div>
+                            <div class="stat-value" id="regular-total-expenses">0 ₽</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Чистая прибыль</div>
+                            <div class="stat-value" id="regular-net-profit">0 ₽</div>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Общий доход</div>
-                        <div class="stat-value" id="total-income">0 ₽</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Общие расходы</div>
-                        <div class="stat-value" id="total-expenses">0 ₽</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Чистая прибыль</div>
-                        <div class="stat-value" id="net-profit">0 ₽</div>
-                    </div>
+                    <div class="categories-breakdown" id="regular-categories-breakdown"></div>
                 </div>
-                <div class="categories-breakdown" id="categories-breakdown"></div>
+                
+                <div id="preliminary-statistics" class="stats-container">
+                    <h2>Статистика предварительных листов</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Всего листов</div>
+                            <div class="stat-value" id="preliminary-total-sheets">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Ожидаемый доход</div>
+                            <div class="stat-value" id="preliminary-total-income">0 ₽</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Планируемые расходы</div>
+                            <div class="stat-value" id="preliminary-total-expenses">0 ₽</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Ожидаемая прибыль</div>
+                            <div class="stat-value" id="preliminary-net-profit">0 ₽</div>
+                        </div>
+                    </div>
+                    <div class="categories-breakdown" id="preliminary-categories-breakdown"></div>
+                </div>
             </section>
         </div>
     </main>
@@ -115,7 +140,7 @@
         </div>
     </div>
 
-    <div class="modal" id="category-modal">
+    <div class="modal category-modal" id="category-modal">
         <div class="modal-content">
             <span class="close" onclick="cocoMoney.hideCategoryModal()">&times;</span>
             <h2>Управление категориями</h2>
