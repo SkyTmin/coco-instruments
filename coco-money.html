@@ -8,82 +8,173 @@
     <title>Coco Money</title>
     <link rel="stylesheet" href="styles/global.css">
     <link rel="stylesheet" href="styles/header.css">
-    <link rel="stylesheet" href="styles/coco-money.css">
+    <link rel="stylesheet" href="styles/coco-money-redesign.css">
 </head>
 <body>
     <header class="header">
         <div class="header-content">
-            <button class="back-btn" onclick="window.location.href='index.html'">← Назад</button>
+            <button class="icon-btn back-btn" onclick="window.location.href='index.html'">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M5 12L12 19M5 12L12 5"/>
+                </svg>
+            </button>
             <h1 class="logo">Coco Money</h1>
-            <div class="header-actions"></div>
+            <div class="header-spacer"></div>
         </div>
     </header>
 
     <main class="main-content">
-        <div id="coco-money-root">
-            <div class="tabs-container">
-                <button class="tab-btn active" data-tab="regular" onclick="cocoMoney.switchTab('regular')">
-                    Доходные листы
+        <div class="container">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="regular" onclick="cocoMoney.switchTab('regular')">
+                    <span class="tab-label">Доходные листы</span>
+                    <span class="tab-indicator"></span>
                 </button>
-                <button class="tab-btn" data-tab="preliminary" onclick="cocoMoney.switchTab('preliminary')">
-                    Предварительные
+                <button class="tab" data-tab="preliminary" onclick="cocoMoney.switchTab('preliminary')">
+                    <span class="tab-label">Предварительные</span>
+                    <span class="tab-indicator"></span>
                 </button>
             </div>
             
-            <div id="no-data" class="card no-data" style="display: none;">
-                <p>У вас пока нет доходных листов</p>
-                <button class="primary-btn" onclick="cocoMoney.showIncomeForm()">Добавить доходный лист</button>
+            <!-- Empty States -->
+            <div id="no-data" class="empty-state" style="display: none;">
+                <div class="empty-state-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                </div>
+                <h3 class="empty-state-title">Нет доходных листов</h3>
+                <p class="empty-state-text">Начните учет доходов прямо сейчас</p>
+                <button class="btn btn-primary" onclick="cocoMoney.showIncomeForm()">
+                    <span class="btn-icon">+</span>
+                    Добавить доходный лист
+                </button>
             </div>
             
-            <div id="no-data-preliminary" class="card no-data" style="display: none;">
-                <p>У вас пока нет предварительных листов</p>
-                <button class="primary-btn" onclick="cocoMoney.showIncomeForm(true)">Добавить предварительный лист</button>
+            <div id="no-data-preliminary" class="empty-state" style="display: none;">
+                <div class="empty-state-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        <path d="M3 3l18 18" stroke-dasharray="2 2"/>
+                    </svg>
+                </div>
+                <h3 class="empty-state-title">Нет предварительных листов</h3>
+                <p class="empty-state-text">Планируйте будущие доходы</p>
+                <button class="btn btn-primary" onclick="cocoMoney.showIncomeForm(true)">
+                    <span class="btn-icon">+</span>
+                    Добавить предварительный лист
+                </button>
             </div>
             
-            <div id="income-sheets-container"></div>
+            <!-- Income Sheets Grid -->
+            <div id="income-sheets-container" class="sheets-grid"></div>
             
+            <!-- Statistics -->
             <section id="statistics" class="statistics-section" style="display: none;">
-                <div id="regular-statistics" class="stats-container">
-                    <h2>Статистика доходных листов</h2>
+                <div id="regular-statistics" class="stats-card">
+                    <h2 class="stats-title">Статистика доходных листов</h2>
                     <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-label">Всего листов</div>
-                            <div class="stat-value" id="regular-total-sheets">0</div>
+                        <div class="stat-item">
+                            <div class="stat-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                    <path d="M8 12h8"/>
+                                </svg>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="regular-total-sheets">0</div>
+                                <div class="stat-label">Всего листов</div>
+                            </div>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Общий доход</div>
-                            <div class="stat-value" id="regular-total-income">0 ₽</div>
+                        <div class="stat-item">
+                            <div class="stat-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                </svg>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="regular-total-income">0 ₽</div>
+                                <div class="stat-label">Общий доход</div>
+                            </div>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Общие расходы</div>
-                            <div class="stat-value" id="regular-total-expenses">0 ₽</div>
+                        <div class="stat-item">
+                            <div class="stat-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                                    <line x1="7" y1="7" x2="7.01" y2="7"/>
+                                </svg>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="regular-total-expenses">0 ₽</div>
+                                <div class="stat-label">Общие расходы</div>
+                            </div>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Чистая прибыль</div>
-                            <div class="stat-value" id="regular-net-profit">0 ₽</div>
+                        <div class="stat-item">
+                            <div class="stat-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                    <polyline points="22 4 12 14.01 9 11.01"/>
+                                </svg>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="regular-net-profit">0 ₽</div>
+                                <div class="stat-label">Чистая прибыль</div>
+                            </div>
                         </div>
                     </div>
                     <div class="categories-breakdown" id="regular-categories-breakdown"></div>
                 </div>
                 
-                <div id="preliminary-statistics" class="stats-container">
-                    <h2>Статистика предварительных листов</h2>
+                <div id="preliminary-statistics" class="stats-card">
+                    <h2 class="stats-title">Статистика предварительных листов</h2>
                     <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-label">Всего листов</div>
-                            <div class="stat-value" id="preliminary-total-sheets">0</div>
+                        <div class="stat-item">
+                            <div class="stat-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                    <path d="M8 12h8"/>
+                                </svg>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="preliminary-total-sheets">0</div>
+                                <div class="stat-label">Всего листов</div>
+                            </div>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Ожидаемый доход</div>
-                            <div class="stat-value" id="preliminary-total-income">0 ₽</div>
+                        <div class="stat-item">
+                            <div class="stat-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                </svg>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="preliminary-total-income">0 ₽</div>
+                                <div class="stat-label">Ожидаемый доход</div>
+                            </div>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Планируемые расходы</div>
-                            <div class="stat-value" id="preliminary-total-expenses">0 ₽</div>
+                        <div class="stat-item">
+                            <div class="stat-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                                    <line x1="7" y1="7" x2="7.01" y2="7"/>
+                                </svg>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="preliminary-total-expenses">0 ₽</div>
+                                <div class="stat-label">Планируемые расходы</div>
+                            </div>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Ожидаемая прибыль</div>
-                            <div class="stat-value" id="preliminary-net-profit">0 ₽</div>
+                        <div class="stat-item">
+                            <div class="stat-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                    <polyline points="22 4 12 14.01 9 11.01"/>
+                                </svg>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="preliminary-net-profit">0 ₽</div>
+                                <div class="stat-label">Ожидаемая прибыль</div>
+                            </div>
                         </div>
                     </div>
                     <div class="categories-breakdown" id="preliminary-categories-breakdown"></div>
@@ -92,77 +183,185 @@
         </div>
     </main>
 
-    <button id="add-income-btn" class="fab-button" onclick="cocoMoney.showIncomeForm()" aria-label="Добавить лист">+</button>
+    <!-- FAB -->
+    <button id="add-income-btn" class="fab" onclick="cocoMoney.showIncomeForm()" aria-label="Добавить лист">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+    </button>
 
+    <!-- Income Form Modal -->
     <div class="modal" id="income-form-modal">
+        <div class="modal-overlay" onclick="cocoMoney.hideIncomeForm()"></div>
         <div class="modal-content">
-            <span class="close" onclick="cocoMoney.hideIncomeForm()">&times;</span>
-            <h2>Новый доходный лист</h2>
-            <form id="income-form" onsubmit="cocoMoney.addIncomeSheet(event)">
-                <input type="text" name="title" placeholder="Название листа" required>
-                <input type="number" name="amount" placeholder="Сумма дохода" step="0.01" required>
-                <input type="date" name="date" required>
-                <textarea name="note" placeholder="Заметка (необязательно)"></textarea>
-                <label class="checkbox-label">
-                    <input type="checkbox" name="preliminary">
-                    Предварительный доход
-                </label>
-                <button type="submit" class="primary-btn">Сохранить</button>
-            </form>
-        </div>
-    </div>
-
-    <div class="modal" id="export-modal">
-        <div class="modal-content export-modal">
-            <span class="close" onclick="cocoMoney.hideExportModal()">&times;</span>
-            <h2>Экспорт данных</h2>
-            <textarea id="export-content" readonly></textarea>
-            <div class="modal-buttons">
-                <button class="primary-btn" onclick="cocoMoney.downloadData()">💾 Скачать</button>
-                <button class="secondary-btn" onclick="cocoMoney.copyData()">📋 Копировать</button>
+            <div class="modal-header">
+                <h2 class="modal-title">Новый доходный лист</h2>
+                <button class="icon-btn" onclick="cocoMoney.hideIncomeForm()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
             </div>
-            <div id="copy-notification" class="notification" style="display: none;">Скопировано!</div>
-        </div>
-    </div>
-
-    <div class="modal" id="edit-sheet-modal">
-        <div class="modal-content">
-            <span class="close" onclick="cocoMoney.hideEditForm()">&times;</span>
-            <h2>Редактировать лист</h2>
-            <form id="edit-sheet-form" onsubmit="cocoMoney.updateSheet(event)">
-                <input type="hidden" name="sheetId">
-                <input type="text" name="title" placeholder="Название листа" required>
-                <input type="number" name="amount" placeholder="Сумма дохода" step="0.01" required>
-                <input type="date" name="date" required>
-                <textarea name="note" placeholder="Заметка (необязательно)"></textarea>
-                <button type="submit" class="primary-btn">Сохранить изменения</button>
+            <form id="income-form" class="form" onsubmit="cocoMoney.addIncomeSheet(event)">
+                <div class="form-group">
+                    <label class="form-label">Название листа</label>
+                    <input type="text" name="title" class="form-input" placeholder="Например: Зарплата за январь" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Сумма дохода</label>
+                    <input type="number" name="amount" class="form-input" placeholder="0" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Дата</label>
+                    <input type="date" name="date" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Заметка</label>
+                    <textarea name="note" class="form-textarea" placeholder="Дополнительная информация (необязательно)" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox">
+                        <input type="checkbox" name="preliminary">
+                        <span class="checkbox-label">Предварительный доход</span>
+                    </label>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="cocoMoney.hideIncomeForm()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
             </form>
         </div>
     </div>
 
-    <div class="modal category-modal" id="category-modal">
+    <!-- Export Modal -->
+    <div class="modal" id="export-modal">
+        <div class="modal-overlay" onclick="cocoMoney.hideExportModal()"></div>
         <div class="modal-content">
-            <span class="close" onclick="cocoMoney.hideCategoryModal()">&times;</span>
-            <h2>Управление категориями</h2>
-            <form id="add-category-form" onsubmit="cocoMoney.addCategory(event)">
-                <input type="text" name="categoryName" placeholder="Название новой категории" required>
-                <button type="submit" class="primary-btn">Добавить категорию</button>
+            <div class="modal-header">
+                <h2 class="modal-title">Экспорт данных</h2>
+                <button class="icon-btn" onclick="cocoMoney.hideExportModal()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="export-preview">
+                <textarea id="export-content" class="export-textarea" readonly></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="cocoMoney.copyData()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                    Копировать
+                </button>
+                <button class="btn btn-primary" onclick="cocoMoney.downloadData()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Скачать
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Sheet Modal -->
+    <div class="modal" id="edit-sheet-modal">
+        <div class="modal-overlay" onclick="cocoMoney.hideEditForm()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Редактировать лист</h2>
+                <button class="icon-btn" onclick="cocoMoney.hideEditForm()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <form id="edit-sheet-form" class="form" onsubmit="cocoMoney.updateSheet(event)">
+                <input type="hidden" name="sheetId">
+                <div class="form-group">
+                    <label class="form-label">Название листа</label>
+                    <input type="text" name="title" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Сумма дохода</label>
+                    <input type="number" name="amount" class="form-input" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Дата</label>
+                    <input type="date" name="date" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Заметка</label>
+                    <textarea name="note" class="form-textarea" rows="3"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="cocoMoney.hideEditForm()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Category Modal -->
+    <div class="modal" id="category-modal">
+        <div class="modal-overlay" onclick="cocoMoney.hideCategoryModal()"></div>
+        <div class="modal-content modal-content-small">
+            <div class="modal-header">
+                <h2 class="modal-title">Управление категориями</h2>
+                <button class="icon-btn" onclick="cocoMoney.hideCategoryModal()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <form id="add-category-form" class="form" onsubmit="cocoMoney.addCategory(event)">
+                <div class="form-group">
+                    <div class="input-group">
+                        <input type="text" name="categoryName" class="form-input" placeholder="Название новой категории" required>
+                        <button type="submit" class="btn btn-primary">Добавить</button>
+                    </div>
+                </div>
             </form>
             <div class="categories-list" id="categories-list"></div>
         </div>
     </div>
 
+    <!-- Confirm Modal -->
     <div class="modal" id="confirm-modal">
-        <div class="modal-content confirm-modal">
-            <h3>Подтверждение удаления</h3>
-            <p id="confirm-message">Вы точно хотите удалить этот доходный лист?</p>
-            <div class="modal-buttons">
-                <button class="primary-btn" onclick="cocoMoney.confirmDelete()">Удалить</button>
-                <button class="secondary-btn" onclick="cocoMoney.cancelDelete()">Отмена</button>
+        <div class="modal-overlay" onclick="cocoMoney.cancelDelete()"></div>
+        <div class="modal-content modal-content-small">
+            <div class="modal-icon modal-icon-warning">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14M10 11v6M14 11v6"/>
+                </svg>
+            </div>
+            <h3 class="modal-subtitle">Подтверждение удаления</h3>
+            <p id="confirm-message" class="modal-text">Вы точно хотите удалить этот доходный лист?</p>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="cocoMoney.cancelDelete()">Отмена</button>
+                <button class="btn btn-danger" onclick="cocoMoney.confirmDelete()">Удалить</button>
             </div>
         </div>
     </div>
 
-    <script src="js/coco-money.js"></script>
+    <!-- Toast Notification -->
+    <div id="copy-notification" class="toast" style="display: none;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        <span>Скопировано в буфер обмена</span>
+    </div>
+
+    <script src="js/coco-money-redesign.js"></script>
 </body>
 </html>
