@@ -1,578 +1,761 @@
 const cocoMoney = {
-    sheets: [],
-    categories: ['Транспорт', 'Продукты', 'Развлечения', 'Здоровье', 'Образование', 'Другое'],
-    currentExportData: null,
-    currentTab: 'regular',
-    deleteTargetId: null,
-    editingSheetId: null,
-    
+    sheets: {
+        income: [],
+        preliminary: []
+    },
+    currentSheet: null,
+    currentTab: 'income',
+    customCategories: [],
+    confirmCallback: null,
+    touchStartX: 0,
+    touchStartY: 0,
+
     init() {
-        this.loadData();
-        this.render();
-        this.setupDateDefault();
-        this.setupCategoryChangeHandlers();
-    },
-    
-    setupDateDefault() {
-        const dateInput = document.querySelector('#income-form input[name="date"]');
-        if (dateInput) {
-            dateInput.value = new Date().toISOString().split('T')[0];
-        }
-    },
-    
-    setupCategoryChangeHandlers() {
-        // Будет вызываться после рендера для установки обработчиков
-    },
-    
-    loadData() {
-        const savedSheets = localStorage.getItem('cocoMoneySheets');
-        if (savedSheets) {
-            this.sheets = JSON.parse(savedSheets);
-        }
-        
-        const savedCategories = localStorage.getItem('cocoMoneyCategories');
-        if (savedCategories) {
-            this.categories = JSON.parse(savedCategories);
-        }
-    },
-    
-    saveData() {
-        localStorage.setItem('cocoMoneySheets', JSON.stringify(this.sheets));
-        localStorage.setItem('cocoMoneyCategories', JSON.stringify(this.categories));
-    },
-    
-    switchTab(tab) {
-        this.currentTab = tab;
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
-        });
-        this.render();
-    },
-    
-    showIncomeForm(isPreliminary = false) {
-        document.getElementById('income-form-modal').style.display = 'block';
-        this.setupDateDefault();
-        const checkbox = document.querySelector('#income-form input[name="preliminary"]');
-        if (checkbox) {
-            checkbox.checked = isPreliminary || this.currentTab === 'preliminary';
-        }
-    },
-    
-    hideIncomeForm() {
-        document.getElementById('income-form-modal').style.display = 'none';
-        document.getElementById('income-form').reset();
-    },
-    
-    addIncomeSheet(event) {
-        event.preventDefault();
-        const form = event.target;
-        
-        const sheet = {
-            id: Date.now(),
-            title: form.title.value,
-            amount: parseFloat(form.amount.value),
-            date: form.date.value,
-            note: form.note.value,
-            preliminary: form.preliminary.checked,
-            expenses: []
+        // Ensure default structure exists before loading
+        this.sheets = {
+            income: [],
+            preliminary: []
         };
         
-        this.sheets.push(sheet);
-        this.saveData();
-        this.render();
-        this.hideIncomeForm();
+        this.loadData();
+        this.setupEventListeners();
+        this.setupTouchGestures();
+        this.renderAll();
+        this.setToday();
     },
-    
-    showEditForm(sheetId) {
-        const sheet = this.sheets.find(s => s.id === sheetId);
-        if (!sheet) return;
+
+    loadData() {
+        const savedSheets = localStorage.getItem('cocoMoneySheets');
+        const savedCategories = localStorage.getItem('cocoMoneyCategories');
         
-        this.editingSheetId = sheetId;
-        const form = document.getElementById('edit-sheet-form');
-        form.sheetId.value = sheetId;
-        form.title.value = sheet.title;
-        form.amount.value = sheet.amount;
-        form.date.value = sheet.date;
-        form.note.value = sheet.note || '';
+        if (savedSheets) {
+            try {
+                const parsed = JSON.parse(savedSheets);
+                // Ensure structure is correct
+                this.sheets = {
+                    income: parsed.income || [],
+                    preliminary: parsed.preliminary || []
+                };
+            } catch (e) {
+                console.error('Error parsing saved sheets:', e);
+                // Reset to default structure
+                this.sheets = {
+                    income: [],
+                    preliminary: []
+                };
+            }
+        } else {
+            // Initialize default structure
+            this.sheets = {
+                income: [],
+                preliminary: []
+            };
+        }
         
-        document.getElementById('edit-sheet-modal').style.display = 'block';
-    },
-    
-    hideEditForm() {
-        document.getElementById('edit-sheet-modal').style.display = 'none';
-        document.getElementById('edit-sheet-form').reset();
-        this.editingSheetId = null;
-    },
-    
-    updateSheet(event) {
-        event.preventDefault();
-        const form = event.target;
-        const sheetId = parseInt(form.sheetId.value);
-        
-        const sheet = this.sheets.find(s => s.id === sheetId);
-        if (sheet) {
-            sheet.title = form.title.value;
-            sheet.amount = parseFloat(form.amount.value);
-            sheet.date = form.date.value;
-            sheet.note = form.note.value;
-            
-            this.saveData();
-            this.render();
-            this.hideEditForm();
+        if (savedCategories) {
+            try {
+                this.customCategories = JSON.parse(savedCategories) || [];
+            } catch (e) {
+                console.error('Error parsing saved categories:', e);
+                this.customCategories = [];
+            }
+            this.updateCategorySelect();
         }
     },
-    
-    convertToPermanent(sheetId) {
-        const sheet = this.sheets.find(s => s.id === sheetId);
-        if (sheet && sheet.preliminary) {
-            if (confirm(`Преобразовать предварительный лист "${sheet.title}" в обычный доходный лист?`)) {
-                sheet.preliminary = false;
-                this.saveData();
-                this.currentTab = 'regular';
-                this.switchTab('regular');
+
+    saveData() {
+        localStorage.setItem('cocoMoneySheets', JSON.stringify(this.sheets));
+        localStorage.setItem('cocoMoneyCategories', JSON.stringify(this.customCategories));
+    },
+
+    setupEventListeners() {
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.switchTab(btn.dataset.tab);
+            });
+        });
+
+        // FAB button
+        document.getElementById('fab-btn').addEventListener('click', () => {
+            this.showCreateForm(this.currentTab);
+        });
+
+        // Sheet form
+        document.getElementById('sheetForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveSheet();
+        });
+
+        // Expense form
+        document.getElementById('expenseForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.addExpense();
+        });
+
+        // Category select
+        document.getElementById('expenseCategory').addEventListener('change', (e) => {
+            if (e.target.value === 'new') {
+                this.saveFormData();
+                this.showCategoryModal();
+            }
+        });
+
+        // Category form
+        document.getElementById('categoryForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.addCategory();
+        });
+
+        // Modal close on backdrop click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+    },
+
+    setupTouchGestures() {
+        let touchStartTime = 0;
+        
+        document.addEventListener('touchstart', (e) => {
+            this.touchStartX = e.changedTouches[0].screenX;
+            this.touchStartY = e.changedTouches[0].screenY;
+            touchStartTime = Date.now();
+            
+            // Show swipe indicators
+            if (this.currentTab === 'income') {
+                document.getElementById('swipe-right').style.opacity = '0.3';
+            } else {
+                document.getElementById('swipe-left').style.opacity = '0.3';
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+            const touchX = e.changedTouches[0].screenX;
+            const deltaX = touchX - this.touchStartX;
+            
+            // Update indicator opacity based on swipe distance
+            if (Math.abs(deltaX) > 20) {
+                const opacity = Math.min(Math.abs(deltaX) / 100, 0.6);
+                if (deltaX > 0 && this.currentTab === 'preliminary') {
+                    document.getElementById('swipe-left').style.opacity = opacity;
+                } else if (deltaX < 0 && this.currentTab === 'income') {
+                    document.getElementById('swipe-right').style.opacity = opacity;
+                }
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchend', (e) => {
+            const touchEndX = e.changedTouches[0].screenX;
+            const touchEndY = e.changedTouches[0].screenY;
+            const touchEndTime = Date.now();
+            
+            // Hide swipe indicators
+            document.getElementById('swipe-left').style.opacity = '0';
+            document.getElementById('swipe-right').style.opacity = '0';
+            
+            // Only handle swipe if it was quick enough (less than 300ms)
+            if (touchEndTime - touchStartTime < 300) {
+                this.handleSwipe(touchEndX, touchEndY);
+            }
+        }, { passive: true });
+    },
+
+    handleSwipe(endX, endY) {
+        const deltaX = endX - this.touchStartX;
+        const deltaY = Math.abs(endY - this.touchStartY);
+        const threshold = 50; // Reduced threshold for easier swiping
+        const verticalThreshold = 100; // Increased to prevent accidental triggers
+
+        if (deltaY > verticalThreshold) return;
+
+        if (Math.abs(deltaX) > threshold) {
+            if (deltaX > 0 && this.currentTab === 'preliminary') {
+                this.switchTab('income');
+            } else if (deltaX < 0 && this.currentTab === 'income') {
+                this.switchTab('preliminary');
             }
         }
     },
-    
-    promptDelete(sheetId) {
-        const sheet = this.sheets.find(s => s.id === sheetId);
+
+    switchTab(tab) {
+        this.currentTab = tab;
+        
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+        
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.toggle('active', content.id === `${tab}-content`);
+        });
+    },
+
+    renderAll() {
+        this.renderSheets('income');
+        this.renderSheets('preliminary');
+        this.updateStats('income');
+        this.updateStats('preliminary');
+    },
+
+    renderSheets(type) {
+        const container = document.getElementById(`${type}-cards`);
+        const sheets = this.sheets[type] || []; // Add fallback
+        
+        if (!container) {
+            console.error(`Container ${type}-cards not found`);
+            return;
+        }
+        
+        if (sheets.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>У вас пока нет ${type === 'income' ? 'доходных листов' : 'предварительных доходов'}</p>
+                    <button class="btn btn-primary" onclick="cocoMoney.showCreateForm('${type}')">
+                        Добавить ${type === 'income' ? 'доходный лист' : 'предварительный доход'}
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = sheets.map(sheet => this.createMiniCard(sheet, type)).join('');
+    },
+
+    createMiniCard(sheet, type) {
+        const expenses = sheet.expenses || [];
+        const totalExpenses = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+        return `
+            <div class="mini-card ${type === 'preliminary' ? 'preliminary' : ''}" 
+                 onclick="cocoMoney.showDetail('${sheet.id}', '${type}')">
+                <h3>${sheet.name || 'Без названия'}</h3>
+                <div class="mini-card-info">
+                    <div class="info-row">
+                        <span class="info-label">Сумма:</span>
+                        <span class="info-value amount-value">+${this.formatAmount(sheet.amount || 0)}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Дата:</span>
+                        <span class="info-value">${this.formatDate(sheet.date || new Date())}</span>
+                    </div>
+                    ${sheet.note ? `
+                        <div class="info-row">
+                            <span class="info-label">Заметка:</span>
+                            <span class="info-value">${sheet.note}</span>
+                        </div>
+                    ` : ''}
+                    ${totalExpenses > 0 ? `
+                        <div class="info-row">
+                            <span class="info-label">Расходы:</span>
+                            <span class="info-value expense-preview">-${this.formatAmount(totalExpenses)}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    },
+
+    showCreateForm(type = 'income') {
+        const modal = document.getElementById('createModal');
+        const form = document.getElementById('sheetForm');
+        const title = document.getElementById('modal-title');
+        
+        form.reset();
+        document.getElementById('sheetId').value = '';
+        document.getElementById('sheetType').value = type;
+        title.textContent = type === 'income' ? 'Новый доходный лист' : 'Новый предварительный доход';
+        
+        this.setToday();
+        modal.classList.add('active');
+    },
+
+    hideCreateForm() {
+        document.getElementById('createModal').classList.remove('active');
+    },
+
+    setToday() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('sheetDate').value = today;
+    },
+
+    saveSheet() {
+        const id = document.getElementById('sheetId').value;
+        const type = document.getElementById('sheetType').value;
+        
+        // Ensure sheets structure exists
+        if (!this.sheets[type]) {
+            this.sheets[type] = [];
+        }
+        
+        const sheetData = {
+            id: id || Date.now().toString(),
+            name: document.getElementById('sheetName').value,
+            amount: parseFloat(document.getElementById('sheetAmount').value),
+            date: document.getElementById('sheetDate').value,
+            note: document.getElementById('sheetNote').value,
+            expenses: id ? (this.getSheetById(id, type)?.expenses || []) : []
+        };
+        
+        if (id) {
+            const index = this.sheets[type].findIndex(s => s.id === id);
+            if (index !== -1) {
+                this.sheets[type][index] = sheetData;
+            }
+        } else {
+            this.sheets[type].push(sheetData);
+        }
+        
+        this.saveData();
+        this.renderAll();
+        this.hideCreateForm();
+    },
+
+    showDetail(sheetId, type) {
+        const sheet = this.getSheetById(sheetId, type);
         if (!sheet) return;
         
-        this.deleteTargetId = sheetId;
-        const message = `Вы точно хотите удалить ${sheet.preliminary ? 'предварительный' : 'доходный'} лист "${sheet.title}"?`;
-        document.getElementById('confirm-message').textContent = message;
-        document.getElementById('confirm-modal').style.display = 'block';
-    },
-    
-    confirmDelete() {
-        if (this.deleteTargetId) {
-            this.sheets = this.sheets.filter(s => s.id !== this.deleteTargetId);
-            this.saveData();
-            this.render();
+        // Ensure expenses array exists
+        if (!sheet.expenses) {
+            sheet.expenses = [];
         }
-        this.cancelDelete();
-    },
-    
-    cancelDelete() {
-        document.getElementById('confirm-modal').style.display = 'none';
-        this.deleteTargetId = null;
-    },
-    
-    showCategoryModal() {
-        this.renderCategories();
-        document.getElementById('category-modal').style.display = 'block';
-    },
-    
-    hideCategoryModal() {
-        document.getElementById('category-modal').style.display = 'none';
-        document.getElementById('add-category-form').reset();
-    },
-    
-    addCategory(event) {
-        event.preventDefault();
-        const form = event.target;
-        const categoryName = form.categoryName.value.trim();
         
-        if (categoryName && !this.categories.includes(categoryName)) {
-            this.categories.push(categoryName);
-            this.saveData();
-            this.renderCategories();
-            this.render(); // Обновляем все формы
-            form.reset();
+        this.currentSheet = { ...sheet, type };
+        
+        document.getElementById('detail-title').textContent = sheet.name || 'Без названия';
+        document.getElementById('detail-amount').textContent = `+${this.formatAmount(sheet.amount || 0)}`;
+        document.getElementById('detail-date').textContent = this.formatDate(sheet.date);
+        
+        const noteWrapper = document.getElementById('detail-note-wrapper');
+        const noteElement = document.getElementById('detail-note');
+        if (sheet.note) {
+            noteWrapper.style.display = 'flex';
+            noteElement.textContent = sheet.note;
+        } else {
+            noteWrapper.style.display = 'none';
         }
+        
+        const convertSection = document.getElementById('convert-section');
+        convertSection.style.display = type === 'preliminary' ? 'block' : 'none';
+        
+        this.renderExpenses();
+        this.updateDetailStats();
+        
+        document.getElementById('detailModal').classList.add('active');
     },
-    
-    deleteCategory(category) {
-        if (this.categories.length > 1) {
-            this.categories = this.categories.filter(c => c !== category);
-            this.saveData();
-            this.renderCategories();
-            this.render(); // Обновляем все формы
+
+    hideDetail() {
+        document.getElementById('detailModal').classList.remove('active');
+        this.currentSheet = null;
+    },
+
+    renderExpenses() {
+        const container = document.getElementById('expenses-list');
+        const expenses = this.currentSheet.expenses || [];
+        
+        if (expenses.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: rgba(123, 75, 42, 0.6);">Расходов пока нет</p>';
+            return;
         }
-    },
-    
-    renderCategories() {
-        const container = document.getElementById('categories-list');
-        container.innerHTML = this.categories.map(category => `
-            <div class="category-list-item">
-                <span>${category}</span>
-                <button onclick="cocoMoney.deleteCategory('${category}')">×</button>
+        
+        container.innerHTML = expenses.map((expense, index) => `
+            <div class="expense-item">
+                <div class="expense-info">
+                    <div class="expense-title">${expense.name}</div>
+                    <div class="expense-meta">
+                        ${this.getCategoryName(expense.category)}
+                        ${expense.note ? ` • ${expense.note}` : ''}
+                    </div>
+                </div>
+                <div class="expense-amount">-${this.formatAmount(expense.amount)}</div>
             </div>
         `).join('');
     },
-    
-    handleCategoryChange(selectElement, sheetId) {
-        if (selectElement.value === 'new_category') {
-            this.showCategoryModal();
-            selectElement.value = '';
-        }
-    },
-    
-    addExpense(sheetId, event) {
-        event.preventDefault();
-        const form = event.target;
-        
+
+    addExpense() {
         const expense = {
-            id: Date.now(),
-            title: form.expenseTitle.value,
-            amount: parseFloat(form.expenseAmount.value),
-            category: form.expenseCategory.value,
-            note: form.expenseNote.value
+            name: document.getElementById('expenseName').value,
+            amount: parseFloat(document.getElementById('expenseAmount').value),
+            category: document.getElementById('expenseCategory').value,
+            note: document.getElementById('expenseNote').value
         };
         
-        const sheet = this.sheets.find(s => s.id === sheetId);
-        if (sheet) {
-            sheet.expenses.push(expense);
-            this.saveData();
-            this.render();
-        }
-    },
-    
-    deleteExpense(sheetId, expenseId) {
-        const sheet = this.sheets.find(s => s.id === sheetId);
-        if (sheet) {
-            sheet.expenses = sheet.expenses.filter(e => e.id !== expenseId);
-            this.saveData();
-            this.render();
-        }
-    },
-    
-    render() {
-        const container = document.getElementById('income-sheets-container');
-        const noDataRegular = document.getElementById('no-data');
-        const noDataPreliminary = document.getElementById('no-data-preliminary');
-        const statistics = document.getElementById('statistics');
-        
-        const regularSheets = this.sheets.filter(s => !s.preliminary);
-        const preliminarySheets = this.sheets.filter(s => s.preliminary);
-        
-        if (this.currentTab === 'regular') {
-            if (regularSheets.length === 0) {
-                noDataRegular.style.display = 'block';
-                noDataPreliminary.style.display = 'none';
-                container.innerHTML = '';
-            } else {
-                noDataRegular.style.display = 'none';
-                noDataPreliminary.style.display = 'none';
-                container.innerHTML = regularSheets.map(sheet => this.renderSheet(sheet)).join('');
-            }
-        } else {
-            if (preliminarySheets.length === 0) {
-                noDataPreliminary.style.display = 'block';
-                noDataRegular.style.display = 'none';
-                container.innerHTML = '';
-            } else {
-                noDataPreliminary.style.display = 'none';
-                noDataRegular.style.display = 'none';
-                container.innerHTML = preliminarySheets.map(sheet => this.renderSheet(sheet)).join('');
-            }
+        // Ensure expenses array exists
+        if (!this.currentSheet.expenses) {
+            this.currentSheet.expenses = [];
         }
         
-        if (this.sheets.length > 0) {
-            statistics.style.display = 'block';
-            this.renderStatistics();
-        } else {
-            statistics.style.display = 'none';
+        this.currentSheet.expenses.push(expense);
+        
+        const sheetIndex = this.sheets[this.currentSheet.type].findIndex(s => s.id === this.currentSheet.id);
+        if (sheetIndex !== -1) {
+            this.sheets[this.currentSheet.type][sheetIndex].expenses = this.currentSheet.expenses;
         }
         
-        // Устанавливаем обработчики для селектов категорий
-        setTimeout(() => {
-            document.querySelectorAll('.category-select').forEach(select => {
-                select.addEventListener('change', (e) => {
-                    const sheetId = parseInt(e.target.getAttribute('data-sheet-id'));
-                    this.handleCategoryChange(e.target, sheetId);
-                });
-            });
-        }, 0);
-    },
-    
-    renderSheet(sheet) {
-        const totalExpenses = sheet.expenses.reduce((sum, exp) => sum + exp.amount, 0);
-        const balance = sheet.amount - totalExpenses;
+        this.saveData();
+        this.renderExpenses();
+        this.updateDetailStats();
+        this.renderAll();
         
-        return `
-            <div class="card income-sheet ${sheet.preliminary ? 'preliminary-card' : ''}">
-                <div class="sheet-header">
-                    <div class="sheet-info">
-                        <h3 class="sheet-title">
-                            ${sheet.title}
-                            ${sheet.preliminary ? '<span class="preliminary-badge">Предварительный</span>' : ''}
-                        </h3>
-                        <div class="sheet-amount">+ ${this.formatMoney(sheet.amount)}</div>
-                        <div class="sheet-meta">
-                            <span>📅 ${this.formatDate(sheet.date)}</span>
-                            ${sheet.note ? `<span>📝 ${sheet.note}</span>` : ''}
-                        </div>
-                        <div class="sheet-meta">
-                            <span>💰 Баланс: <strong class="${balance >= 0 ? '' : 'negative'}">${this.formatMoney(balance)}</strong></span>
-                        </div>
-                    </div>
-                    <div class="sheet-actions">
-                        <button class="export-btn" onclick="cocoMoney.showExportModal(${sheet.id})">
-                            📥 Скачать
-                        </button>
-                        <button class="edit-btn" onclick="cocoMoney.showEditForm(${sheet.id})">
-                            ✏️ Изменить
-                        </button>
-                        ${sheet.preliminary ? `
-                            <button class="convert-btn" onclick="cocoMoney.convertToPermanent(${sheet.id})">
-                                ✅ В доходы
-                            </button>
-                        ` : ''}
-                        <button class="delete-btn" onclick="cocoMoney.promptDelete(${sheet.id})">
-                            🗑️ Удалить
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="expenses-section">
-                    <h4>Расходы</h4>
-                    <form class="expense-form" onsubmit="cocoMoney.addExpense(${sheet.id}, event)">
-                        <div class="expense-form-row">
-                            <input type="text" name="expenseTitle" class="expense-input" placeholder="Название расхода" required>
-                            <input type="number" name="expenseAmount" class="expense-input" placeholder="Сумма" step="0.01" required>
-                            <div class="category-select-wrapper">
-                                <select name="expenseCategory" class="expense-input category-select" data-sheet-id="${sheet.id}" required>
-                                    <option value="">Категория</option>
-                                    ${this.categories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
-                                    <option value="new_category" style="font-style: italic; color: var(--brown);">➕ Новая категория</option>
-                                </select>
-                            </div>
-                            <input type="text" name="expenseNote" class="expense-input" placeholder="Заметка (необязательно)">
-                        </div>
-                        <button type="submit" class="add-expense-btn">Добавить расход</button>
-                    </form>
-                    
-                    ${sheet.expenses.length > 0 ? `
-                        <ul class="expenses-list">
-                            ${sheet.expenses.map(expense => `
-                                <li class="expense-item">
-                                    <div class="expense-info">
-                                        <div class="expense-title">${expense.title}</div>
-                                        <div class="expense-meta">
-                                            <span>🏷️ ${expense.category}</span>
-                                            ${expense.note ? `<span>📝 ${expense.note}</span>` : ''}
-                                        </div>
-                                    </div>
-                                    <div class="expense-amount">− ${this.formatMoney(expense.amount)}</div>
-                                    <button class="delete-expense" onclick="cocoMoney.deleteExpense(${sheet.id}, ${expense.id})">×</button>
-                                </li>
-                            `).join('')}
-                        </ul>
-                    ` : '<p style="text-align: center; color: rgba(123, 75, 42, 0.5);">Расходов пока нет</p>'}
-                </div>
-            </div>
-        `;
+        document.getElementById('expenseForm').reset();
     },
-    
-    renderStatistics() {
-        const regularSheets = this.sheets.filter(s => !s.preliminary);
-        const preliminarySheets = this.sheets.filter(s => s.preliminary);
+
+    updateDetailStats() {
+        const expenses = this.currentSheet.expenses || [];
+        const totalExpenses = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+        const balance = (this.currentSheet.amount || 0) - totalExpenses;
         
-        // Показываем статистику только для активной вкладки
-        if (this.currentTab === 'regular') {
-            // Статистика для обычных листов
-            const regularStats = this.calculateStats(regularSheets);
-            document.getElementById('regular-total-sheets').textContent = regularStats.totalSheets;
-            document.getElementById('regular-total-income').textContent = this.formatMoney(regularStats.totalIncome);
-            document.getElementById('regular-total-expenses').textContent = this.formatMoney(regularStats.totalExpenses);
-            document.getElementById('regular-net-profit').textContent = this.formatMoney(regularStats.netProfit);
-            
-            // Категории для обычных листов
-            const regularCategoriesHtml = this.renderCategoriesBreakdown(regularStats.categoriesData);
-            document.getElementById('regular-categories-breakdown').innerHTML = regularCategoriesHtml;
-            
-            // Показываем только статистику обычных листов
-            document.getElementById('regular-statistics').style.display = regularSheets.length > 0 ? 'block' : 'none';
-            document.getElementById('preliminary-statistics').style.display = 'none';
-        } else {
-            // Статистика для предварительных листов
-            const preliminaryStats = this.calculateStats(preliminarySheets);
-            document.getElementById('preliminary-total-sheets').textContent = preliminaryStats.totalSheets;
-            document.getElementById('preliminary-total-income').textContent = this.formatMoney(preliminaryStats.totalIncome);
-            document.getElementById('preliminary-total-expenses').textContent = this.formatMoney(preliminaryStats.totalExpenses);
-            document.getElementById('preliminary-net-profit').textContent = this.formatMoney(preliminaryStats.netProfit);
-            
-            // Категории для предварительных листов
-            const preliminaryCategoriesHtml = this.renderCategoriesBreakdown(preliminaryStats.categoriesData);
-            document.getElementById('preliminary-categories-breakdown').innerHTML = preliminaryCategoriesHtml;
-            
-            // Показываем только статистику предварительных листов
-            document.getElementById('regular-statistics').style.display = 'none';
-            document.getElementById('preliminary-statistics').style.display = preliminarySheets.length > 0 ? 'block' : 'none';
-        }
+        document.getElementById('detail-income').textContent = `${this.formatAmount(this.currentSheet.amount || 0)}`;
+        document.getElementById('detail-expenses').textContent = `${this.formatAmount(totalExpenses)}`;
+        document.getElementById('detail-balance').textContent = `${this.formatAmount(balance)}`;
     },
-    
-    calculateStats(sheets) {
+
+    updateStats(type) {
+        const sheets = this.sheets[type] || [];
         const totalSheets = sheets.length;
-        const totalIncome = sheets.reduce((sum, sheet) => sum + sheet.amount, 0);
+        const totalAmount = sheets.reduce((sum, sheet) => sum + (sheet.amount || 0), 0);
         const totalExpenses = sheets.reduce((sum, sheet) => 
-            sum + sheet.expenses.reduce((expSum, exp) => expSum + exp.amount, 0), 0);
-        const netProfit = totalIncome - totalExpenses;
+            sum + (sheet.expenses || []).reduce((expSum, exp) => expSum + (exp.amount || 0), 0), 0);
+        const net = totalAmount - totalExpenses;
         
-        const categoriesData = {};
+        // Safe element updates
+        const updateElement = (id, value) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value;
+            }
+        };
+        
+        updateElement(`${type}-total-sheets`, totalSheets);
+        updateElement(`${type}-total-amount`, this.formatAmount(totalAmount));
+        updateElement(`${type}-total-expenses`, this.formatAmount(totalExpenses));
+        updateElement(`${type}-net`, this.formatAmount(net));
+        
+        this.updateCategoryStats(type);
+    },
+
+    updateCategoryStats(type) {
+        const container = document.getElementById(`${type}-categories-stats`);
+        if (!container) return;
+        
+        const sheets = this.sheets[type] || [];
+        const categoryTotals = {};
+        
         sheets.forEach(sheet => {
-            sheet.expenses.forEach(expense => {
-                if (!categoriesData[expense.category]) {
-                    categoriesData[expense.category] = 0;
+            (sheet.expenses || []).forEach(expense => {
+                if (expense.category) {
+                    const categoryName = this.getCategoryName(expense.category);
+                    categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + (expense.amount || 0);
                 }
-                categoriesData[expense.category] += expense.amount;
             });
         });
         
-        return {
-            totalSheets,
-            totalIncome,
-            totalExpenses,
-            netProfit,
-            categoriesData
-        };
-    },
-    
-    renderCategoriesBreakdown(categoriesData) {
-        if (Object.keys(categoriesData).length === 0) {
-            return '';
+        const categories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+        
+        if (categories.length === 0) {
+            container.innerHTML = '';
+            return;
         }
         
-        return `
-            <h3>Расходы по категориям</h3>
-            ${Object.entries(categoriesData)
-                .sort((a, b) => b[1] - a[1])
-                .map(([category, amount]) => `
-                    <div class="category-item">
-                        <span class="category-name">${category}</span>
-                        <span class="category-amount">${this.formatMoney(amount)}</span>
-                    </div>
-                `).join('')}
+        container.innerHTML = `
+            <h4>Расходы по категориям:</h4>
+            ${categories.map(([category, amount]) => `
+                <div class="category-stat">
+                    <span>${category}</span>
+                    <span>${this.formatAmount(amount)}</span>
+                </div>
+            `).join('')}
         `;
     },
-    
-    showExportModal(sheetId) {
-        const sheet = this.sheets.find(s => s.id === sheetId);
-        if (!sheet) return;
+
+    editCurrentSheet() {
+        const sheet = this.currentSheet;
+        document.getElementById('sheetId').value = sheet.id;
+        document.getElementById('sheetType').value = sheet.type;
+        document.getElementById('sheetName').value = sheet.name;
+        document.getElementById('sheetAmount').value = sheet.amount;
+        document.getElementById('sheetDate').value = sheet.date;
+        document.getElementById('sheetNote').value = sheet.note || '';
         
-        const exportData = this.formatExportData(sheet);
-        this.currentExportData = exportData;
+        document.getElementById('modal-title').textContent = 
+            sheet.type === 'income' ? 'Редактировать доходный лист' : 'Редактировать предварительный доход';
         
-        document.getElementById('export-content').value = exportData;
-        document.getElementById('export-modal').style.display = 'block';
+        this.hideDetail();
+        document.getElementById('createModal').classList.add('active');
     },
-    
-    hideExportModal() {
-        document.getElementById('export-modal').style.display = 'none';
-        this.currentExportData = null;
+
+    deleteCurrentSheet() {
+        const message = `Вы действительно хотите удалить "${this.currentSheet.name || 'Без названия'}"? Это действие нельзя отменить.`;
+        this.showConfirm(message, () => {
+            const index = this.sheets[this.currentSheet.type].findIndex(s => s.id === this.currentSheet.id);
+            if (index !== -1) {
+                this.sheets[this.currentSheet.type].splice(index, 1);
+                this.saveData();
+                this.renderAll();
+                this.hideDetail();
+            }
+        });
     },
-    
-    formatExportData(sheet) {
-        const totalExpenses = sheet.expenses.reduce((sum, exp) => sum + exp.amount, 0);
-        const balance = sheet.amount - totalExpenses;
+
+    convertToIncome() {
+        const message = `Преобразовать "${this.currentSheet.name || 'Без названия'}" в доходный лист?`;
+        this.showConfirm(message, () => {
+            const prelimIndex = this.sheets.preliminary.findIndex(s => s.id === this.currentSheet.id);
+            if (prelimIndex !== -1) {
+                const sheet = this.sheets.preliminary[prelimIndex];
+                
+                this.sheets.preliminary.splice(prelimIndex, 1);
+                
+                // Ensure income array exists
+                if (!this.sheets.income) {
+                    this.sheets.income = [];
+                }
+                
+                this.sheets.income.push(sheet);
+                
+                this.saveData();
+                this.renderAll();
+                this.hideDetail();
+                this.switchTab('income');
+            }
+        });
+    },
+
+    exportSheet() {
+        const sheet = this.currentSheet;
+        const expenses = sheet.expenses || [];
+        const totalExpenses = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+        const balance = (sheet.amount || 0) - totalExpenses;
         
-        let text = `╔═══════════════════════════════════════╗
-║         COCO MONEY - ОТЧЁТ            ║
-╚═══════════════════════════════════════╝
-
-📊 ДОХОДНЫЙ ЛИСТ${sheet.preliminary ? ' (ПРЕДВАРИТЕЛЬНЫЙ)' : ''}
-═══════════════════════════════════════
-
-📌 Название: ${sheet.title}
-💵 Доход: ${this.formatMoney(sheet.amount)}
-📅 Дата: ${this.formatDate(sheet.date)}
-${sheet.note ? `📝 Заметка: ${sheet.note}\n` : ''}
-
-💸 РАСХОДЫ
-───────────────────────────────────────`;
+        let exportText = `${sheet.name || 'Без названия'}\n`;
+        exportText += `${'='.repeat(40)}\n\n`;
+        exportText += `Дата: ${this.formatDate(sheet.date)}\n`;
+        exportText += `Сумма: ${this.formatAmount(sheet.amount || 0)}\n`;
+        if (sheet.note) {
+            exportText += `Заметка: ${sheet.note}\n`;
+        }
+        exportText += `\nРасходы:\n`;
+        exportText += `${'-'.repeat(40)}\n`;
         
-        if (sheet.expenses.length > 0) {
-            sheet.expenses.forEach((expense, index) => {
-                text += `
-
-${index + 1}. ${expense.title}
-   Сумма: ${this.formatMoney(expense.amount)}
-   Категория: ${expense.category}${expense.note ? `
-   Заметка: ${expense.note}` : ''}`;
-            });
-            
-            text += `
-
-───────────────────────────────────────
-ИТОГО РАСХОДОВ: ${this.formatMoney(totalExpenses)}`;
+        if (expenses.length === 0) {
+            exportText += `Нет расходов\n`;
         } else {
-            text += `
-
-   Расходов не зарегистрировано`;
+            expenses.forEach(expense => {
+                exportText += `${expense.name}: ${this.formatAmount(expense.amount || 0)} (${this.getCategoryName(expense.category)})`;
+                if (expense.note) {
+                    exportText += ` - ${expense.note}`;
+                }
+                exportText += `\n`;
+            });
         }
         
-        text += `
-
-═══════════════════════════════════════
-💰 БАЛАНС: ${this.formatMoney(balance)}
-═══════════════════════════════════════
-
-Сгенерировано: ${new Date().toLocaleString('ru-RU')}
-© Coco Instruments`;
+        exportText += `\n${'='.repeat(40)}\n`;
+        exportText += `Итого доход: ${this.formatAmount(sheet.amount || 0)}\n`;
+        exportText += `Итого расходы: ${this.formatAmount(totalExpenses)}\n`;
+        exportText += `Остаток: ${this.formatAmount(balance)}\n`;
         
-        return text;
+        document.getElementById('exportData').value = exportText;
+        document.getElementById('exportModal').classList.add('active');
     },
-    
-    downloadData() {
-        if (!this.currentExportData) return;
+
+    copyExportData() {
+        const textarea = document.getElementById('exportData');
+        textarea.select();
+        document.execCommand('copy');
         
-        const blob = new Blob([this.currentExportData], { type: 'text/plain;charset=utf-8' });
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = 'Скопировано!';
+        setTimeout(() => {
+            btn.textContent = originalText;
+        }, 2000);
+    },
+
+    downloadExportData() {
+        const text = document.getElementById('exportData').value;
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
         const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `coco-money-${new Date().toISOString().split('T')[0]}.txt`;
-        link.click();
-    },
-    
-    async copyData() {
-        if (!this.currentExportData) return;
+        const sheetName = this.currentSheet.name || 'dohodnyj-list';
+        const fileName = `${sheetName.replace(/[^a-zа-я0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
         
-        try {
-            await navigator.clipboard.writeText(this.currentExportData);
-            const notification = document.getElementById('copy-notification');
-            notification.style.display = 'block';
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 2000);
-        } catch (err) {
-            alert('Не удалось скопировать текст');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.click();
+        
+        URL.revokeObjectURL(link.href);
+        this.hideExport();
+    },
+
+    hideExport() {
+        document.getElementById('exportModal').classList.remove('active');
+    },
+
+    showCategoryModal() {
+        document.getElementById('categoryModal').classList.add('active');
+        document.getElementById('categoryName').focus();
+    },
+
+    hideCategoryModal() {
+        document.getElementById('categoryModal').classList.remove('active');
+        document.getElementById('categoryForm').reset();
+        this.restoreFormData();
+    },
+
+    addCategory() {
+        const categoryName = document.getElementById('categoryName').value.trim();
+        if (!categoryName) return;
+        
+        const categoryId = categoryName.toLowerCase().replace(/\s+/g, '-');
+        
+        if (!this.customCategories.find(cat => cat.id === categoryId)) {
+            this.customCategories.push({ id: categoryId, name: categoryName });
+            this.saveData();
+            this.updateCategorySelect();
+        }
+        
+        document.getElementById('expenseCategory').value = categoryId;
+        this.hideCategoryModal();
+    },
+
+    updateCategorySelect() {
+        const select = document.getElementById('expenseCategory');
+        const currentValue = select.value;
+        
+        const defaultOptions = `
+            <option value="">Категория</option>
+            <option value="transport">Транспорт</option>
+            <option value="food">Продукты</option>
+            <option value="utilities">Коммунальные услуги</option>
+            <option value="entertainment">Развлечения</option>
+            <option value="other">Другое</option>
+        `;
+        
+        const customOptions = this.customCategories.map(cat => 
+            `<option value="${cat.id}">${cat.name}</option>`
+        ).join('');
+        
+        select.innerHTML = defaultOptions + customOptions + '<option value="new">+ Новая категория</option>';
+        
+        if (currentValue && currentValue !== 'new') {
+            select.value = currentValue;
         }
     },
-    
-    formatMoney(amount) {
+
+    saveFormData() {
+        // Save both expense form and main sheet form data
+        this.tempFormData = {
+            // Expense form data
+            expenseName: document.getElementById('expenseName').value,
+            expenseAmount: document.getElementById('expenseAmount').value,
+            expenseNote: document.getElementById('expenseNote').value,
+            // Sheet form data (if modal is open)
+            sheetName: document.getElementById('sheetName').value,
+            sheetAmount: document.getElementById('sheetAmount').value,
+            sheetDate: document.getElementById('sheetDate').value,
+            sheetNote: document.getElementById('sheetNote').value,
+            sheetId: document.getElementById('sheetId').value,
+            sheetType: document.getElementById('sheetType').value
+        };
+    },
+
+    restoreFormData() {
+        if (this.tempFormData) {
+            // Restore expense form data
+            if (this.tempFormData.expenseName !== undefined) {
+                document.getElementById('expenseName').value = this.tempFormData.expenseName;
+                document.getElementById('expenseAmount').value = this.tempFormData.expenseAmount;
+                document.getElementById('expenseNote').value = this.tempFormData.expenseNote;
+            }
+            // Restore sheet form data if needed
+            if (document.getElementById('createModal').classList.contains('active') && 
+                this.tempFormData.sheetName !== undefined) {
+                document.getElementById('sheetName').value = this.tempFormData.sheetName;
+                document.getElementById('sheetAmount').value = this.tempFormData.sheetAmount;
+                document.getElementById('sheetDate').value = this.tempFormData.sheetDate;
+                document.getElementById('sheetNote').value = this.tempFormData.sheetNote;
+                document.getElementById('sheetId').value = this.tempFormData.sheetId;
+                document.getElementById('sheetType').value = this.tempFormData.sheetType;
+            }
+            this.tempFormData = null;
+        }
+    },
+
+    showConfirm(message, callback) {
+        document.getElementById('confirmMessage').textContent = message;
+        this.confirmCallback = callback;
+        document.getElementById('confirmModal').classList.add('active');
+    },
+
+    confirmAction() {
+        if (this.confirmCallback) {
+            this.confirmCallback();
+            this.confirmCallback = null;
+        }
+        document.getElementById('confirmModal').classList.remove('active');
+    },
+
+    cancelAction() {
+        this.confirmCallback = null;
+        document.getElementById('confirmModal').classList.remove('active');
+    },
+
+    getCategoryName(categoryId) {
+        const defaultCategories = {
+            transport: 'Транспорт',
+            food: 'Продукты',
+            utilities: 'Коммунальные услуги',
+            entertainment: 'Развлечения',
+            other: 'Другое'
+        };
+        
+        if (defaultCategories[categoryId]) {
+            return defaultCategories[categoryId];
+        }
+        
+        const customCategory = this.customCategories.find(cat => cat.id === categoryId);
+        return customCategory ? customCategory.name : categoryId;
+    },
+
+    getSheetById(id, type) {
+        if (!this.sheets[type]) return null;
+        return this.sheets[type].find(sheet => sheet.id === id);
+    },
+
+    formatAmount(amount) {
         return new Intl.NumberFormat('ru-RU', {
             style: 'currency',
             currency: 'RUB',
             minimumFractionDigits: 0,
-            maximumFractionDigits: 2
+            maximumFractionDigits: 0
         }).format(amount);
     },
-    
+
     formatDate(dateString) {
-        return new Date(dateString).toLocaleDateString('ru-RU', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-        });
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                return 'Неизвестная дата';
+            }
+            return date.toLocaleDateString('ru-RU', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+        } catch (e) {
+            return 'Неизвестная дата';
+        }
     }
 };
 
+// Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     cocoMoney.init();
 });
 
-window.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal')) {
-        if (e.target.id === 'income-form-modal') {
-            cocoMoney.hideIncomeForm();
-        } else if (e.target.id === 'export-modal') {
-            cocoMoney.hideExportModal();
-        } else if (e.target.id === 'edit-sheet-modal') {
-            cocoMoney.hideEditForm();
-        } else if (e.target.id === 'category-modal') {
-            cocoMoney.hideCategoryModal();
-        } else if (e.target.id === 'confirm-modal') {
-            cocoMoney.cancelDelete();
-        }
-    }
-});
+// Register service worker for PWA (only on HTTPS or localhost)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
+        console.log('Service Worker registration failed:', error);
+    });
+}

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'coco-instruments-v1';
+const CACHE_NAME = 'coco-instruments-v2';
 const urlsToCache = [
     '/',
     '/index.html',

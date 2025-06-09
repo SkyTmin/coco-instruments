@@ -17,6 +17,19 @@
     touch-action: manipulation;
 }
 
+/* Allow text selection in forms and content */
+input,
+textarea,
+.info-value,
+.expense-title,
+.expense-meta,
+#exportData {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+}
+
 html {
     color-scheme: light only;
     -webkit-text-size-adjust: 100%;
@@ -33,6 +46,8 @@ body {
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .main-content {
