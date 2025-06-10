@@ -70,6 +70,8 @@ const app = {
     handleServiceClick(service) {
         if (service === 'coco-money') {
             window.location.href = 'coco-money.html';
+        } else if (service === 'debts') {
+            window.location.href = 'debts.html';
         } else {
             console.log(`Opening service: ${service}`);
         }

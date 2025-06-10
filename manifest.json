@@ -9,6 +9,22 @@
   "orientation": "portrait",
   "scope": "/",
   "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Coco Money",
+      "short_name": "Money",
+      "description": "Управление доходами и расходами",
+      "url": "/coco-money.html",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Долги",
+      "short_name": "Долги",
+      "description": "Управление долгами",
+      "url": "/debts.html",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    }
+  ],
   "icons": [
     {
       "src": "icons/icon-72x72.png",
