@@ -444,10 +444,8 @@ const cocoMoney = {
         
         sheets.forEach(sheet => {
             (sheet.expenses || []).forEach(expense => {
-                if (expense.category) {
-                    const categoryName = this.getCategoryName(expense.category);
-                    categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + (expense.amount || 0);
-                }
+                const categoryName = this.getCategoryName(expense.category || '');
+                categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + (expense.amount || 0);
             });
         });
         
@@ -542,7 +540,8 @@ const cocoMoney = {
             exportText += `Нет расходов\n`;
         } else {
             expenses.forEach(expense => {
-                exportText += `${expense.name}: ${this.formatAmount(expense.amount || 0)} (${this.getCategoryName(expense.category)})`;
+                const categoryName = expense.category ? this.getCategoryName(expense.category) : 'Без категории';
+                exportText += `${expense.name}: ${this.formatAmount(expense.amount || 0)} (${categoryName})`;
                 if (expense.note) {
                     exportText += ` - ${expense.note}`;
                 }
@@ -701,6 +700,10 @@ const cocoMoney = {
     },
 
     getCategoryName(categoryId) {
+        if (!categoryId) {
+            return 'Без категории';
+        }
+        
         const defaultCategories = {
             transport: 'Транспорт',
             food: 'Продукты',

@@ -40,16 +40,16 @@
 
 /* Container */
 .coco-money-container {
-    min-height: calc(100vh - 70px);
+    min-height: 100vh;
     background-color: var(--beige);
-    padding-bottom: 80px;
+    padding-bottom: 100px;
     max-width: 1400px;
     margin: 0 auto;
 }
 
 @media (min-width: 1024px) {
     .coco-money-container {
-        padding: 0 40px 80px;
+        padding: 0 40px 100px;
     }
 }
 
@@ -415,6 +415,8 @@
     max-height: none;
     border-radius: 0;
     animation: slideIn 0.3s ease;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .detail-content {
@@ -422,6 +424,8 @@
     flex-direction: column;
     padding: 0;
     background-color: var(--beige);
+    min-height: 100vh;
+    padding-bottom: env(safe-area-inset-bottom);
 }
 
 .detail-header {
@@ -432,7 +436,8 @@
     color: var(--beige);
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 100;
+    flex-shrink: 0;
 }
 
 .back-detail-btn {
@@ -483,7 +488,7 @@
 .detail-info {
     padding: 20px;
     background-color: white;
-    margin: 20px;
+    margin: 20px auto;
     border-radius: 16px;
     box-shadow: 0 2px 10px var(--shadow);
 }
@@ -519,6 +524,7 @@
 
 .convert-section {
     padding: 0 20px 20px;
+    margin: 0 auto;
 }
 
 .convert-section .btn {
@@ -528,8 +534,7 @@
 /* Expenses Section */
 .expenses-section {
     padding: 20px;
-    flex: 1;
-    overflow-y: auto;
+    margin: 0 auto 20px;
 }
 
 .expenses-section h3 {
@@ -585,12 +590,11 @@
 /* Detail Stats */
 .detail-stats {
     background-color: white;
-    margin: 20px;
+    margin: 20px auto;
     padding: 20px;
     border-radius: 16px;
     box-shadow: 0 2px 10px var(--shadow);
-    position: sticky;
-    bottom: 20px;
+    margin-bottom: 40px;
 }
 
 .stat-row {
@@ -789,13 +793,56 @@
 /* Detail Info and Stats Centering */
 .detail-info,
 .detail-stats,
-.expenses-section {
+.expenses-section,
+.convert-section {
     max-width: 800px;
     margin-left: auto;
     margin-right: auto;
+    width: calc(100% - 40px);
+}
+
+.detail-info {
+    padding: 20px;
+    background-color: white;
+    margin: 20px auto;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px var(--shadow);
+}
+
+.convert-section {
+    padding: 0 20px 20px;
+    margin: 0 auto;
+}
+
+/* Expenses Section */
+.expenses-section {
+    padding: 20px;
+    flex: 1;
+    margin: 0 auto;
+}
+
+.expenses-section h3 {
+    margin-bottom: 20px;
+    color: var(--brown);
+}
+
+/* Detail Stats */
+.detail-stats {
+    background-color: white;
+    margin: 20px auto;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px var(--shadow);
 }
 
 @media (min-width: 768px) {
+    .detail-info,
+    .detail-stats,
+    .expenses-section,
+    .convert-section {
+        width: calc(100% - 80px);
+    }
+    
     .detail-info {
         padding: 24px;
     }
@@ -889,6 +936,11 @@ select {
     .coco-money-container {
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        height: 100vh;
+        min-height: 100vh;
+    }
+    
+    .modal.fullscreen .modal-content {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 }
