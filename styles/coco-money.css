@@ -10,7 +10,7 @@
     align-items: center;
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 1000; /* Increased z-index */
     box-shadow: 0 2px 10px var(--shadow);
 }
 
@@ -57,11 +57,11 @@
 .tabs-container {
     display: flex;
     gap: 10px;
-    padding: 20px;
+    padding: 20px 20px 0;
     background-color: var(--beige);
-    position: sticky;
-    top: 70px;
-    z-index: 90;
+    position: relative;
+    z-index: 1;
+    margin-bottom: 20px;
 }
 
 .tab-btn {
@@ -89,7 +89,7 @@
 
 /* Content */
 .content-wrapper {
-    padding: 0 20px;
+    padding: 0 20px 20px;
 }
 
 .tab-content {
@@ -872,10 +872,6 @@ select {
 @media (display-mode: standalone) {
     .header {
         padding-top: calc(env(safe-area-inset-top) + 15px);
-    }
-    
-    .tabs-container {
-        top: calc(70px + env(safe-area-inset-top));
     }
     
     .fab-button {
