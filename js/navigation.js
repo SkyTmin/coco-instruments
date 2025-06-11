@@ -1,59 +1,40 @@
 const navigation = {
-history: [],
+init() {
+// Handle direct links with hash
+const hash = window.location.hash.substring(1);
+if (hash && (hash === ‘finance’ || hash === ‘geodesy’)) {
+// Wait for app to initialize
+setTimeout(() => {
+if (typeof app !== ‘undefined’ && app.showSection) {
+app.showSection(hash);
+}
+}, 100);
+}
 
 ```
-init() {
-    this.setupBackButton();
-    this.setupDeepLinks();
-    this.setupHashChange();
-},
-
-setupBackButton() {
+    // Handle browser back button
     window.addEventListener('popstate', (e) => {
-        if (e.state && e.state.section) {
-            this.navigateToSection(e.state.section, false);
-        } else {
-            app.hideAllSections();
-        }
-    });
-},
-
-setupDeepLinks() {
-    const hash = window.location.hash.substring(1);
-    if (hash && (hash === 'finance' || hash === 'geodesy')) {
-        // Use setTimeout to ensure DOM is ready
-        setTimeout(() => {
-            app.showSection(hash);
-        }, 0);
-    }
-},
-
-setupHashChange() {
-    window.addEventListener('hashchange', () => {
         const hash = window.location.hash.substring(1);
-        if (hash === 'finance' || hash === 'geodesy') {
-            app.showSection(hash);
-        } else if (!hash) {
-            app.hideAllSections();
+        if (hash && (hash === 'finance' || hash === 'geodesy')) {
+            if (typeof app !== 'undefined' && app.showSection) {
+                app.showSection(hash);
+            }
+        } else {
+            if (typeof app !== 'undefined' && app.hideAllSections) {
+                app.hideAllSections();
+            }
         }
     });
-},
-
-navigateToSection(section, pushState = true) {
-    app.showSection(section);
-    
-    if (pushState) {
-        history.pushState({ section: section }, '', `#${section}`);
-    }
-},
-
-goBack() {
-    history.back();
 }
 ```
 
 };
 
+// Initialize navigation when DOM is ready
+if (document.readyState === ‘loading’) {
 document.addEventListener(‘DOMContentLoaded’, () => {
 navigation.init();
 });
+} else {
+navigation.init();
+}
