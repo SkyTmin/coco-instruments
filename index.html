@@ -107,5 +107,17 @@
     <script src="js/auth.js"></script>
     <script src="js/navigation.js"></script>
     <script src="js/pwa.js"></script>
+<script>
+// Обработка перехода по хэшу на главной странице
+if (window.location.hash === '#finance') {
+    window.addEventListener('DOMContentLoaded', function() {
+        setTimeout(() => {
+            if (window.app) {
+                app.showSection('finance');
+            }
+        }, 100);
+    });
+}
+</script>
 </body>
 </html>

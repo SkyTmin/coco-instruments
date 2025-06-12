@@ -1,12 +1,14 @@
 const app = {
     currentUser: null,
     currentSection: 'home',
+    previousSection: null,
 
     init() {
         console.log('App init started');
         this.checkAuth();
         this.setupEventListeners();
         this.addTouchSupport();
+        this.handleBrowserNavigation();
         console.log('App init completed');
     },
 
@@ -57,7 +59,7 @@ const app = {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 console.log('Back button clicked');
-                this.hideAllSections();
+                this.goBack();
             });
         });
         
@@ -77,30 +79,78 @@ const app = {
 
     showSection(sectionName) {
         console.log('Showing section:', sectionName);
-        this.hideAllSections();
+        
+        // Сохраняем текущую секцию как предыдущую
+        this.previousSection = this.currentSection;
+        
+        // Скрываем все секции
+        this.hideAllSections(false);
+        
         const section = document.getElementById(`${sectionName}Section`);
         if (section) {
             section.style.display = 'block';
             this.currentSection = sectionName;
-            // Don't use hash for navigation
             console.log('Section displayed:', sectionName);
         } else {
             console.error('Section not found:', `${sectionName}Section`);
         }
     },
 
-    hideAllSections() {
-        console.log('Hiding all sections');
+    // Новый метод для прямого показа секции без анимации
+    showSectionDirect(sectionName) {
+        console.log('Showing section directly (no animation):', sectionName);
+        
+        // Скрываем все секции
         const sections = document.querySelectorAll('.sub-section');
         sections.forEach(section => {
             section.style.display = 'none';
         });
-        this.currentSection = 'home';
-        history.pushState(null, null, window.location.pathname);
+        
+        // Показываем нужную секцию
+        const section = document.getElementById(`${sectionName}Section`);
+        if (section) {
+            section.style.display = 'block';
+            this.currentSection = sectionName;
+            this.previousSection = 'home';
+            console.log('Section displayed directly:', sectionName);
+        } else {
+            console.error('Section not found:', `${sectionName}Section`);
+        }
+    },
+
+    hideAllSections(resetToHome = true) {
+        console.log('Hiding all sections, resetToHome:', resetToHome);
+
+        const sections = document.querySelectorAll('.sub-section');
+        sections.forEach(section => {
+            section.style.display = 'none';
+        });
+
+        if (resetToHome) {
+            this.currentSection = 'home';
+            this.previousSection = null;
+            if (window.location.hash) {
+                history.pushState(null, null, window.location.pathname);
+            }
+        }
+    },
+
+    goBack() {
+        console.log('Going back from:', this.currentSection, 'to:', this.previousSection);
+        
+        if (this.currentSection === 'home') {
+            return;
+        }
+        
+        // Всегда возвращаемся на главную при нажатии "Назад"
+        this.hideAllSections(true);
     },
 
     handleServiceClick(service) {
         console.log('Handle service click:', service);
+        // Сохраняем информацию о том, откуда пришли
+        sessionStorage.setItem('returnToSection', 'finance');
+        
         if (service === 'coco-money') {
             window.location.href = 'coco-money.html';
         } else if (service === 'debts') {
@@ -108,6 +158,51 @@ const app = {
         } else {
             console.log(`Service not implemented: ${service}`);
         }
+    },
+
+    // Новый метод для возврата к секции финансов
+    returnToFinanceSection() {
+        console.log('Returning to finance section');
+        this.showSectionDirect('finance'); // Используем прямой показ без анимации
+        // Очищаем информацию о возврате
+        sessionStorage.removeItem('returnToSection');
+    },
+
+    handleBrowserNavigation() {
+        // Проверяем, нужно ли вернуться к определенной секции
+        window.addEventListener('focus', () => {
+            const returnToSection = sessionStorage.getItem('returnToSection');
+            if (returnToSection === 'finance') {
+                console.log('Returning to finance section from service');
+                setTimeout(() => {
+                    this.returnToFinanceSection();
+                }, 100);
+            }
+        });
+
+        // Обработка кнопки "Назад" браузера
+        window.addEventListener('popstate', (e) => {
+            console.log('Browser back button pressed');
+            const returnToSection = sessionStorage.getItem('returnToSection');
+            if (returnToSection === 'finance') {
+                this.returnToFinanceSection();
+            } else {
+                this.hideAllSections(true);
+            }
+        });
+
+        // Обработка восстановления страницы из кэша
+        window.addEventListener('pageshow', (e) => {
+            if (e.persisted) {
+                console.log('Page restored from cache');
+                const returnToSection = sessionStorage.getItem('returnToSection');
+                if (returnToSection === 'finance') {
+                    this.returnToFinanceSection();
+                } else {
+                    this.hideAllSections(true);
+                }
+            }
+        });
     },
 
     addTouchSupport() {
@@ -140,7 +235,7 @@ const app = {
             
             if (this.currentSection !== 'home') {
                 if (deltaX < -swipeThreshold || deltaX > swipeThreshold) {
-                    this.hideAllSections();
+                    this.goBack();
                 }
             }
         };
@@ -154,7 +249,6 @@ if (document.readyState === 'loading') {
         app.init();
     });
 } else {
-    // DOM is already ready
     console.log('DOM already ready - initializing app');
     app.init();
 }

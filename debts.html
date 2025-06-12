@@ -309,5 +309,29 @@
     </div>
 
     <script src="js/debts.js"></script>
+<script>
+// Функция для правильного возврата к секции финансов
+function goBackToFinance() {
+    const returnToSection = sessionStorage.getItem('returnToSection');
+    
+    if (returnToSection === 'finance') {
+        window.location.href = 'index.html#finance';
+    } else {
+        window.history.back();
+    }
+}
+
+// Переопределяем поведение кнопки "Назад"
+document.addEventListener('DOMContentLoaded', function() {
+    const backBtn = document.querySelector('.back-btn');
+    if (backBtn) {
+        backBtn.removeAttribute('onclick');
+        backBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            goBackToFinance();
+        });
+    }
+});
+</script>
 </body>
 </html>
