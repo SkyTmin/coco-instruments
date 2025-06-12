@@ -161,6 +161,12 @@ const app = {
             // Сохраняем информацию о том, откуда пришли для калькулятора масштабов
             sessionStorage.setItem('returnToSection', 'geodesy');
             window.location.href = 'scale-calculator.html';
+	} else if (service === 'clothing-size') {
+    sessionStorage.setItem('returnToSection', 'clothing');
+    window.location.href = 'clothing-size.html';
+	} else if (service === 'clothing-carousel') {
+    console.log('Карусель одежды еще не реализована');
+    this.showToast('Функция в разработке');
         } else {
             console.log(`Service not implemented: ${service}`);
         }

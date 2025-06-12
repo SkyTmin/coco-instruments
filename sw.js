@@ -1,24 +1,27 @@
-const CACHE_NAME = 'coco-instruments-v4'; // Увеличена версия кэша
+const CACHE_NAME = 'coco-instruments-v5'; // Увеличена версия кэша
 const urlsToCache = [
     '/',
     '/index.html',
     '/coco-money.html',
     '/debts.html',
-    '/scale-calculator.html', // Новый файл
+    '/scale-calculator.html',
+    '/clothing-size.html', // Новый файл
     '/styles/global.css',
     '/styles/header.css',
     '/styles/home.css',
     '/styles/auth.css',
     '/styles/coco-money.css',
     '/styles/debts.css',
-    '/styles/scale-calculator.css', // Новый файл
+    '/styles/scale-calculator.css', 
+    '/styles/clothing-size.css',// Новый файл
     '/js/app.js',
     '/js/auth.js',
     '/js/navigation.js',
     '/js/pwa.js',
     '/js/coco-money.js',
     '/js/debts.js',
-    '/js/scale-calculator.js' // Новый файл
+    '/js/scale-calculator.js'
+    '/js/clothing-size.js' // Новый файл
 ];
 
 self.addEventListener('install', event => {

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#7B4B2A">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Размер вещей">
+    <meta name="color-scheme" content="light only">
+    <meta name="format-detection" content="telephone=no">
+    <title>Размер вещей</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <link rel="stylesheet" href="styles/global.css">
+    <link rel="stylesheet" href="styles/clothing-size.css">
+</head>
+<body>
+    <!-- Верхняя панель -->
+    <header class="clothing-header">
+        <button class="clothing-back-btn" onclick="goBackToClothing()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 12H5M5 12l7 7m-7-7l7-7"/>
+            </svg>
+        </button>
+        <div class="header-logo">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-6.22 3.58H12a8 8 0 0 1-6.22-3.58L4.55 8.57a2 2 0 0 1 .25-2.57l1.96-1.96A2 2 0 0 1 8.18 3.77c.5 0 .98.2 1.33.55l.71.71a4 4 0 0 0 5.66 0l.71-.71c.35-.35.83-.55 1.33-.55c.5 0 .98.2 1.41.59L21.37 6a2 2 0 0 1 .01 2.57z"/>
+            </svg>
+            <span>Размер вещей</span>
+        </div>
+        <div class="unit-switcher">
+            <button class="unit-btn active" data-unit="cm">см</button>
+            <button class="unit-btn" data-unit="inch">дюймы</button>
+        </div>
+        <button class="profile-btn">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+            </svg>
+        </button>
+    </header>
+
+    <!-- Основная рабочая область -->
+    <main class="clothing-main">
+        <!-- Боковая панель навигации (только для десктопа) -->
+        <aside class="side-navigation">
+            <nav class="nav-menu">
+                <button class="nav-item active" data-section="parameters">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    </svg>
+                    <span>Мои параметры</span>
+                </button>
+                <button class="nav-item" data-section="calculator">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="4" y="2" width="16" height="20" rx="2"/>
+                        <line x1="8" y1="6" x2="16" y2="6"/>
+                        <line x1="8" y1="10" x2="16" y2="10"/>
+                        <line x1="8" y1="14" x2="10" y2="14"/>
+                    </svg>
+                    <span>Калькулятор</span>
+                </button>
+                <button class="nav-item" data-section="tables">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 3H3v7h7V3zM21 3h-7v7h7V3zM21 14h-7v7h7v-7zM10 14H3v7h7v-7z"/>
+                    </svg>
+                    <span>Таблицы</span>
+                </button>
+                <button class="nav-item" data-section="oversize">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                    </svg>
+                    <span>Оверсайз</span>
+                </button>
+            </nav>
+        </aside>
+
+        <!-- Центральная область контента -->
+        <div class="content-area">
+            <!-- Секция: Мои параметры -->
+            <section class="content-section active" id="parameters-section">
+                <div class="parameters-container">
+                    <div class="section-header">
+                        <h2>Мои параметры</h2>
+                        <button class="edit-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="gender-selection">
+                        <label class="gender-radio">
+                            <input type="radio" name="gender" value="male" checked>
+                            <span>Мужской</span>
+                        </label>
+                        <label class="gender-radio">
+                            <input type="radio" name="gender" value="female">
+                            <span>Женский</span>
+                        </label>
+                        <label class="gender-radio">
+                            <input type="radio" name="gender" value="child">
+                            <span>Детский</span>
+                        </label>
+                    </div>
+                    
+                    <div class="parameters-grid">
+                        <div class="parameter-block">
+                            <h3>Общие измерения</h3>
+                            <div class="parameter-inputs">
+                                <div class="parameter-input">
+                                    <label for="height">Рост:</label>
+                                    <input type="number" id="height" placeholder="170" min="50" max="250">
+                                    <span class="unit">см</span>
+                                    <button class="hint-btn" data-hint="height">?</button>
+                                </div>
+                                <div class="parameter-input">
+                                    <label for="weight">Вес:</label>
+                                    <input type="number" id="weight" placeholder="70" min="20" max="300">
+                                    <span class="unit">кг</span>
+                                    <button class="hint-btn" data-hint="weight">?</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="parameter-block">
+                            <h3>Параметры тела</h3>
+                            <div class="parameter-inputs">
+                                <div class="parameter-input">
+                                    <label for="chest">Обхват груди:</label>
+                                    <input type="number" id="chest" placeholder="96" min="30" max="200">
+                                    <span class="unit">см</span>
+                                    <button class="hint-btn" data-hint="chest">?</button>
+                                </div>
+                                <div class="parameter-input female-only" style="display: none;">
+                                    <label for="underbust">Обхват под грудью:</label>
+                                    <input type="number" id="underbust" placeholder="75" min="30" max="200">
+                                    <span class="unit">см</span>
+                                    <button class="hint-btn" data-hint="underbust">?</button>
+                                </div>
+                                <div class="parameter-input">
+                                    <label for="waist">Обхват талии:</label>
+                                    <input type="number" id="waist" placeholder="80" min="30" max="200">
+                                    <span class="unit">см</span>
+                                    <button class="hint-btn" data-hint="waist">?</button>
+                                </div>
+                                <div class="parameter-input">
+                                    <label for="hips">Обхват бедер:</label>
+                                    <input type="number" id="hips" placeholder="98" min="30" max="200">
+                                    <span class="unit">см</span>
+                                    <button class="hint-btn" data-hint="hips">?</button>
+                                </div>
+                                <div class="parameter-input">
+                                    <label for="neck">Обхват шеи:</label>
+                                    <input type="number" id="neck" placeholder="38" min="20" max="80">
+                                    <span class="unit">см</span>
+                                    <button class="hint-btn" data-hint="neck">?</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="parameter-block">
+                            <h3>Длины</h3>
+                            <div class="parameter-inputs">
+                                <div class="parameter-input">
+                                    <label for="foot">Длина стопы:</label>
+                                    <input type="number" id="foot" placeholder="26" min="10" max="50">
+                                    <span class="unit">см</span>
+                                    <button class="hint-btn" data-hint="foot">?</button>
+                                </div>
+                                <div class="parameter-input">
+                                    <label for="inseam">Длина внутр. шва:</label>
+                                    <input type="number" id="inseam" placeholder="81" min="30" max="120">
+                                    <span class="unit">см</span>
+                                    <button class="hint-btn" data-hint="inseam">?</button>
+                                </div>
+                                <div class="parameter-input">
+                                    <label for="wrist">Обхват запястья:</label>
+                                    <input type="number" id="wrist" placeholder="17" min="10" max="30">
+                                    <span class="unit">см</span>
+                                    <button class="hint-btn" data-hint="wrist">?</button>
+                                </div>
+                                <div class="parameter-input">
+                                    <label for="head">Обхват головы:</label>
+                                    <input type="number" id="head" placeholder="56" min="40" max="70">
+                                    <span class="unit">см</span>
+                                    <button class="hint-btn" data-hint="head">?</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="save-params-btn">Сохранить параметры</button>
+                </div>
+            </section>
+
+            <!-- Секция: Калькулятор размеров -->
+            <section class="content-section" id="calculator-section">
+                <div class="categories-grid">
+                    <!-- Верхняя одежда -->
+                    <div class="category-card" data-category="outerwear">
+                        <div class="category-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 2l-2 4-3 1v14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7l-3-1z"/>
+                            </svg>
+                        </div>
+                        <h3>Верхняя одежда</h3>
+                        <p>Куртки, пальто, пуховики</p>
+                        <div class="required-params">
+                            <span class="param-badge">Обхват груди</span>
+                            <span class="param-badge">Рост</span>
+                        </div>
+                        <button class="calculate-btn">Рассчитать размер</button>
+                    </div>
+
+                    <!-- Футболки, рубашки -->
+                    <div class="category-card" data-category="shirts">
+                        <div class="category-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-6.22 3.58H12a8 8 0 0 1-6.22-3.58L4.55 8.57a2 2 0 0 1 .25-2.57l1.96-1.96A2 2 0 0 1 8.18 3.77c.5 0 .98.2 1.33.55l.71.71a4 4 0 0 0 5.66 0l.71-.71c.35-.35.83-.55 1.33-.55c.5 0 .98.2 1.41.59L21.37 6a2 2 0 0 1 .01 2.57z"/>
+                            </svg>
+                        </div>
+                        <h3>Футболки, рубашки</h3>
+                        <p>Футболки, рубашки, кофты</p>
+                        <div class="required-params">
+                            <span class="param-badge">Обхват груди</span>
+                            <span class="param-badge">Обхват шеи</span>
+                        </div>
+                        <button class="calculate-btn">Рассчитать размер</button>
+                    </div>
+
+                    <!-- Брюки -->
+                    <div class="category-card" data-category="pants">
+                        <div class="category-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M8 2h8l-1 10h-2v10H11V12H9z"/>
+                            </svg>
+                        </div>
+                        <h3>Брюки, джинсы</h3>
+                        <p>Брюки, джинсы, шорты</p>
+                        <div class="required-params">
+                            <span class="param-badge">Обхват талии</span>
+                            <span class="param-badge">Длина шва</span>
+                        </div>
+                        <button class="calculate-btn">Рассчитать размер</button>
+                    </div>
+
+                    <!-- Обувь -->
+                    <div class="category-card" data-category="shoes">
+                        <div class="category-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M10 2L2 18h20L14 2h-4zM9 18v4M15 18v4"/>
+                            </svg>
+                        </div>
+                        <h3>Обувь</h3>
+                        <p>Кроссовки, ботинки, туфли</p>
+                        <div class="required-params">
+                            <span class="param-badge">Длина стопы</span>
+                        </div>
+                        <button class="calculate-btn">Рассчитать размер</button>
+                    </div>
+
+                    <!-- Нижнее белье -->
+                    <div class="category-card female-only" data-category="underwear" style="display: none;">
+                        <div class="category-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M19 9.5c0 2.5-1.5 4.5-3.5 4.5S12 12 12 9.5 13.5 5 15.5 5 19 7 19 9.5zM5 9.5C5 12 6.5 14 8.5 14S12 12 12 9.5 10.5 5 8.5 5 5 7 5 9.5z"/>
+                            </svg>
+                        </div>
+                        <h3>Нижнее белье</h3>
+                        <p>Бюстгальтеры</p>
+                        <div class="required-params">
+                            <span class="param-badge">Обхват груди</span>
+                            <span class="param-badge">Под грудью</span>
+                        </div>
+                        <button class="calculate-btn">Рассчитать размер</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Секция: Таблицы размеров -->
+            <section class="content-section" id="tables-section">
+                <div class="tables-container">
+                    <div class="table-controls">
+                        <select class="table-type-select">
+                            <option value="tops">Верхняя одежда</option>
+                            <option value="bottoms">Брюки и джинсы</option>
+                            <option value="shoes">Обувь</option>
+                            <option value="underwear">Нижнее белье</option>
+                        </select>
+                        <div class="table-view-switcher">
+                            <button class="view-btn active" data-view="table">Таблица</button>
+                            <button class="view-btn" data-view="cards">Карточки</button>
+                        </div>
+                    </div>
+                    
+                    <div class="size-table-wrapper">
+                        <table class="size-table" id="size-table">
+                            <thead>
+                                <tr>
+                                    <th>RU</th>
+                                    <th>EU</th>
+                                    <th>US</th>
+                                    <th>UK</th>
+                                    <th>INT</th>
+                                    <th>Обхват груди</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Заполняется динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="size-cards" id="size-cards" style="display: none;">
+                        <!-- Заполняется динамически -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Секция: Оверсайз -->
+            <section class="content-section" id="oversize-section">
+                <div class="oversize-container">
+                    <div class="oversize-header">
+                        <h2>Оверсайз - свободная посадка</h2>
+                        <p>Выберите насколько свободную посадку вы предпочитаете</p>
+                    </div>
+                    
+                    <div class="oversize-calculator">
+                        <div class="base-size-display">
+                            <span>Ваш обычный размер:</span>
+                            <span class="size-value" id="base-size">M</span>
+                        </div>
+                        
+                        <div class="oversize-slider-container">
+                            <input type="range" class="oversize-slider" id="oversize-slider" min="0" max="3" step="1" value="1">
+                            <div class="slider-labels">
+                                <span>Обычный</span>
+                                <span>Легкий</span>
+                                <span>Средний</span>
+                                <span>Сильный</span>
+                            </div>
+                        </div>
+                        
+                        <div class="oversize-result">
+                            <div class="result-size">
+                                <span>Рекомендуемый размер:</span>
+                                <span class="size-display" id="oversize-result">L</span>
+                            </div>
+                            <div class="oversize-tips">
+                                <h4>Советы по стилю:</h4>
+                                <ul id="oversize-tips">
+                                    <li>Сочетайте с облегающим низом для баланса</li>
+                                    <li>Подчеркните талию ремнем или заправьте спереди</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="oversize-examples">
+                        <h3>Примеры оверсайз стилей</h3>
+                        <div class="style-grid">
+                            <div class="style-card">
+                                <div class="style-icon">👔</div>
+                                <h4>Легкий оверсайз</h4>
+                                <p>+1 размер для комфортной свободы</p>
+                            </div>
+                            <div class="style-card">
+                                <div class="style-icon">🧥</div>
+                                <h4>Средний оверсайз</h4>
+                                <p>+2 размера для расслабленного образа</p>
+                            </div>
+                            <div class="style-card">
+                                <div class="style-icon">🧤</div>
+                                <h4>Максимальный оверсайз</h4>
+                                <p>+3 размера для экстремального стиля</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Модальное окно подсказок -->
+    <div class="hint-modal" id="hint-modal">
+        <div class="hint-content">
+            <button class="hint-close">&times;</button>
+            <h3 id="hint-title">Как измерить</h3>
+            <div class="hint-image" id="hint-image">
+                <!-- SVG иллюстрация -->
+            </div>
+            <p id="hint-description">Описание измерения</p>
+            <ul id="hint-tips">
+                <li>Совет по измерению</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Модальное окно результата -->
+    <div class="result-modal" id="result-modal">
+        <div class="result-content">
+            <button class="result-close">&times;</button>
+            <h2>Ваш размер</h2>
+            <div class="result-display" id="result-display">
+                <!-- Результаты расчета -->
+            </div>
+            <button class="save-result-btn">Сохранить результат</button>
+        </div>
+    </div>
+
+    <!-- Мобильная навигация -->
+    <nav class="mobile-navigation">
+        <button class="mobile-nav-item active" data-section="parameters">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            </svg>
+            <span>Параметры</span>
+        </button>
+        <button class="mobile-nav-item" data-section="calculator">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="2" width="16" height="20" rx="2"/>
+                <line x1="8" y1="6" x2="16" y2="6"/>
+            </svg>
+            <span>Размеры</span>
+        </button>
+        <button class="mobile-nav-item" data-section="tables">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 3H3v7h7V3zM21 3h-7v7h7V3z"/>
+            </svg>
+            <span>Таблицы</span>
+        </button>
+        <button class="mobile-nav-item" data-section="oversize">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 3h6v6M9 21H3v-6"/>
+            </svg>
+            <span>Оверсайз</span>
+        </button>
+    </nav>
+
+    <!-- Всплывающее уведомление -->
+    <div class="toast" id="toast"></div>
+
+    <script src="js/clothing-size.js"></script>
+    <script>
+    // Функция для возврата к секции одежды
+    function goBackToClothing() {
+        window.location.href = 'index.html#clothing';
+    }
+    </script>
+</body>
+</html>

@@ -2,7 +2,7 @@ const navigation = {
     init() {
         // Handle direct links with hash
         const hash = window.location.hash.substring(1);
-        if (hash && (hash === 'finance' || hash === 'geodesy')) {
+        if (hash && (hash === 'finance' || hash === 'geodesy' || hash === 'clothing')) {
             // Wait for app to initialize
             setTimeout(() => {
                 if (typeof app !== 'undefined' && app.showSection) {
@@ -14,7 +14,7 @@ const navigation = {
         // Handle browser back button
         window.addEventListener('popstate', (e) => {
             const hash = window.location.hash.substring(1);
-            if (hash && (hash === 'finance' || hash === 'geodesy')) {
+            if (hash && (hash === 'finance' || hash === 'geodesy' || hash === 'clothing')) {
                 if (typeof app !== 'undefined' && app.showSection) {
                     app.showSection(hash);
                 }
