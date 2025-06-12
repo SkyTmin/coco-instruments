@@ -30,7 +30,14 @@
         "description": "Расчёт соотношения масштаба и высоты текста",
         "url": "/scale-calculator.html",
         "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
-    }
+    }, 
+	{
+   	 "name": "Размер вещей",
+    	 "short_name": "Размеры",
+    	 "description": "Калькулятор размеров одежды",
+    	 "url": "/clothing-size.html",
+   	 "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+	}
   ],
   "icons": [
     {
