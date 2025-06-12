@@ -82,7 +82,7 @@ const app = {
         if (section) {
             section.style.display = 'block';
             this.currentSection = sectionName;
-            window.location.hash = sectionName;
+            // Don't use hash for navigation
             console.log('Section displayed:', sectionName);
         } else {
             console.error('Section not found:', `${sectionName}Section`);
