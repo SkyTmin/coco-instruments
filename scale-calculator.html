@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#7B4B2A">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Калькулятор масштабов">
+    <meta name="color-scheme" content="light only">
+    <meta name="format-detection" content="telephone=no">
+    <title>Калькулятор масштабов</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <link rel="stylesheet" href="styles/global.css">
+    <link rel="stylesheet" href="styles/scale-calculator.css">
+</head>
+<body>
+    <!-- Заголовок -->
+    <header class="header">
+        <button class="back-btn" onclick="goBackToGeodesy()">← Назад</button>
+        <h1 class="page-title">Калькулятор масштабов</h1>
+        <div class="header-space"></div>
+    </header>
+
+    <!-- Основной контейнер -->
+    <main class="scale-calculator-container">
+        <!-- Информационная карточка -->
+        <div class="info-card">
+            <h2>Интерполяция масштабов</h2>
+            <p>Рассчитайте соотношение между масштабом карты и высотой текста на основе известных значений.</p>
+            <div class="known-values">
+                <div class="known-value">
+                    <span class="value-label">Масштаб 1:1000</span>
+                    <span class="arrow">→</span>
+                    <span class="value-result">Высота текста 2.5</span>
+                </div>
+                <div class="known-value">
+                    <span class="value-label">Масштаб 1:100</span>
+                    <span class="arrow">→</span>
+                    <span class="value-result">Высота текста 0.250</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Калькулятор -->
+        <div class="calculator-card">
+            <div class="input-section">
+                <div class="input-group">
+                    <label for="scaleInput">
+                        <span class="label-text">Масштаб</span>
+                        <span class="label-hint">1:</span>
+                    </label>
+                    <div class="input-wrapper">
+                        <input 
+                            type="number" 
+                            id="scaleInput" 
+                            placeholder="500"
+                            min="1"
+                            step="any"
+                            inputmode="decimal"
+                        >
+                        <div class="input-underline"></div>
+                    </div>
+                    <div class="input-description">
+                        Введите знаменатель масштаба
+                    </div>
+                </div>
+
+                <div class="bidirectional-indicator">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M7 16l-4-4m0 0l4-4m-4 4h18m-4-4l4 4m0 0l-4 4"/>
+                    </svg>
+                </div>
+
+                <div class="input-group">
+                    <label for="textHeightInput">
+                        <span class="label-text">Высота текста</span>
+                        <span class="label-hint">мм</span>
+                    </label>
+                    <div class="input-wrapper">
+                        <input 
+                            type="number" 
+                            id="textHeightInput" 
+                            placeholder="1.25"
+                            min="0.001"
+                            step="any"
+                            inputmode="decimal"
+                        >
+                        <div class="input-underline"></div>
+                    </div>
+                    <div class="input-description">
+                        Введите высоту текста в миллиметрах
+                    </div>
+                </div>
+            </div>
+
+            <!-- Результат -->
+            <div class="result-section" id="resultSection">
+                <div class="result-card">
+                    <h3>Результат расчёта</h3>
+                    <div class="result-content" id="resultContent">
+                        <p>Введите значение масштаба или высоты текста для расчёта</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Кнопка очистки -->
+            <button class="clear-btn" id="clearBtn" onclick="scaleCalculator.clearInputs()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+                Очистить
+            </button>
+        </div>
+
+        <!-- История расчётов -->
+        <div class="history-section" id="historySection">
+            <div class="history-header">
+                <h3>История расчётов</h3>
+                <button class="history-clear-btn" onclick="scaleCalculator.clearHistory()">
+                    Очистить историю
+                </button>
+            </div>
+            <div class="history-list" id="historyList">
+                <p class="history-empty">История пока пуста</p>
+            </div>
+        </div>
+
+        <!-- Дополнительная информация -->
+        <div class="help-section">
+            <h3>Как пользоваться калькулятором?</h3>
+            <ol>
+                <li>Введите известное значение масштаба (например, 500 для масштаба 1:500)</li>
+                <li>Калькулятор автоматически рассчитает соответствующую высоту текста</li>
+                <li>Или введите высоту текста, чтобы узнать соответствующий масштаб</li>
+                <li>Расчёт выполняется на основе интерполяции между известными значениями</li>
+            </ol>
+            <div class="formula-info">
+                <h4>Используемая формула</h4>
+                <p>Калькулятор использует логарифмическую интерполяцию для точного расчёта промежуточных значений между известными точками.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Всплывающее уведомление -->
+    <div class="toast" id="toast"></div>
+
+    <script src="js/scale-calculator.js"></script>
+    <script>
+    // Функция для правильного возврата к секции геодезии
+    function goBackToGeodesy() {
+        const returnToSection = sessionStorage.getItem('returnToSection');
+        
+        if (returnToSection === 'geodesy') {
+            window.location.href = 'index.html#geodesy';
+        } else {
+            window.history.back();
+        }
+    }
+    </script>
+</body>
+</html>

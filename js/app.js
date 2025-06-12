@@ -148,13 +148,19 @@ const app = {
 
     handleServiceClick(service) {
         console.log('Handle service click:', service);
-        // Сохраняем информацию о том, откуда пришли
-        sessionStorage.setItem('returnToSection', 'finance');
         
         if (service === 'coco-money') {
+            // Сохраняем информацию о том, откуда пришли
+            sessionStorage.setItem('returnToSection', 'finance');
             window.location.href = 'coco-money.html';
         } else if (service === 'debts') {
+            // Сохраняем информацию о том, откуда пришли
+            sessionStorage.setItem('returnToSection', 'finance');
             window.location.href = 'debts.html';
+        } else if (service === 'scale-calculator') {
+            // Сохраняем информацию о том, откуда пришли для калькулятора масштабов
+            sessionStorage.setItem('returnToSection', 'geodesy');
+            window.location.href = 'scale-calculator.html';
         } else {
             console.log(`Service not implemented: ${service}`);
         }

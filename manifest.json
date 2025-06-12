@@ -23,6 +23,13 @@
       "description": "Управление долгами",
       "url": "/debts.html",
       "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+        "name": "Калькулятор масштабов",
+        "short_name": "Масштабы",
+        "description": "Расчёт соотношения масштаба и высоты текста",
+        "url": "/scale-calculator.html",
+        "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
     }
   ],
   "icons": [
