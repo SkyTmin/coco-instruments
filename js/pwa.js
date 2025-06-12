@@ -2,16 +2,22 @@ const pwa = {
     deferredPrompt: null,
     
     init() {
-        this.registerServiceWorker();
-        this.setupInstallPrompt();
         this.detectStandalone();
+        
+        // Only register service worker if served over HTTPS or localhost
+        if (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+            this.registerServiceWorker();
+            this.setupInstallPrompt();
+        } else {
+            console.log('Service Worker requires HTTPS or localhost');
+        }
     },
     
     registerServiceWorker() {
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js')
                 .then(registration => {
-                    console.log('ServiceWorker registered');
+                    console.log('ServiceWorker registered successfully');
                 })
                 .catch(error => {
                     console.log('ServiceWorker registration failed:', error);
@@ -33,6 +39,11 @@ const pwa = {
     },
     
     showInstallButton() {
+        const existingBtn = document.querySelector('.install-btn');
+        if (existingBtn) {
+            existingBtn.remove();
+        }
+        
         const installBtn = document.createElement('button');
         installBtn.className = 'install-btn';
         installBtn.textContent = 'Установить приложение';
@@ -67,7 +78,9 @@ const pwa = {
         document.body.appendChild(installBtn);
         
         setTimeout(() => {
-            installBtn.remove();
+            if (document.querySelector('.install-btn')) {
+                installBtn.remove();
+            }
         }, 10000);
     },
     
