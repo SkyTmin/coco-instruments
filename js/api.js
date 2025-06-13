@@ -9,7 +9,7 @@ window.addEventListener('unhandledrejection', event => {
 });
 // js/api.js
 const API = {
-  baseURL: 'https://your-backend.railway.app/api/v1', // Для разработки
+  baseURL: 'https://coco-instruments-production.up.railway.app/api/v1', // Для разработки
   // baseURL: 'https://your-backend.railway.app/api/v1', // Для продакшена
   
   // Токены
