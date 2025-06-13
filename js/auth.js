@@ -135,7 +135,7 @@ async handleLogin(form) {
     localStorage.removeItem('cocoDebts');
     
     window.location.href = '/';
-};
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     auth.init();
