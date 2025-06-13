@@ -1,3 +1,14 @@
+document.addEventListener('DOMContentLoaded', () => {
+    // Проверить авторизацию
+    if (!API.tokens.access) {
+        alert('Необходимо войти в систему');
+        window.location.href = '/';
+        return;
+    }
+    
+    // Инициализация модуля
+    cocoMoney.init();
+});
 const cocoMoney = {
     sheets: {
         income: [],
@@ -24,44 +35,28 @@ const cocoMoney = {
         this.setToday();
     },
 
-    loadData() {
-        const savedSheets = localStorage.getItem('cocoMoneySheets');
-        const savedCategories = localStorage.getItem('cocoMoneyCategories');
+    async loadData() {
+    try {
+        // Загрузить категории
+        const categoriesResponse = await API.cocoMoney.getCategories();
+        this.customCategories = categoriesResponse.data
+            .filter(cat => !cat.isSystem)
+            .map(cat => ({ id: cat.slug, name: cat.name }));
+        this.updateCategorySelect();
         
-        if (savedSheets) {
-            try {
-                const parsed = JSON.parse(savedSheets);
-                // Ensure structure is correct
-                this.sheets = {
-                    income: parsed.income || [],
-                    preliminary: parsed.preliminary || []
-                };
-            } catch (e) {
-                console.error('Error parsing saved sheets:', e);
-                // Reset to default structure
-                this.sheets = {
-                    income: [],
-                    preliminary: []
-                };
-            }
-        } else {
-            // Initialize default structure
-            this.sheets = {
-                income: [],
-                preliminary: []
-            };
-        }
+        // Загрузить листы
+        const sheetsResponse = await API.cocoMoney.getSheets();
+        this.sheets = {
+            income: sheetsResponse.data.filter(s => s.type === 'income'),
+            preliminary: sheetsResponse.data.filter(s => s.type === 'preliminary')
+        };
         
-        if (savedCategories) {
-            try {
-                this.customCategories = JSON.parse(savedCategories) || [];
-            } catch (e) {
-                console.error('Error parsing saved categories:', e);
-                this.customCategories = [];
-            }
-            this.updateCategorySelect();
-        }
-    },
+        this.renderAll();
+    } catch (error) {
+        console.error('Failed to load data:', error);
+        // Показать сообщение об ошибке
+    }
+},
 
     saveData() {
         localStorage.setItem('cocoMoneySheets', JSON.stringify(this.sheets));
@@ -280,23 +275,31 @@ const cocoMoney = {
         document.getElementById('sheetDate').value = today;
     },
 
-    saveSheet() {
-        const id = document.getElementById('sheetId').value;
-        const type = document.getElementById('sheetType').value;
-        
-        // Ensure sheets structure exists
-        if (!this.sheets[type]) {
-            this.sheets[type] = [];
+    async saveSheet() {
+    const id = document.getElementById('sheetId').value;
+    const type = document.getElementById('sheetType').value;
+    
+    const sheetData = {
+        name: document.getElementById('sheetName').value,
+        amount: parseFloat(document.getElementById('sheetAmount').value),
+        date: document.getElementById('sheetDate').value,
+        note: document.getElementById('sheetNote').value,
+        type: type
+    };
+    
+    try {
+        if (id) {
+            await API.cocoMoney.updateSheet(id, sheetData);
+        } else {
+            await API.cocoMoney.createSheet(sheetData);
         }
         
-        const sheetData = {
-            id: id || Date.now().toString(),
-            name: document.getElementById('sheetName').value,
-            amount: parseFloat(document.getElementById('sheetAmount').value),
-            date: document.getElementById('sheetDate').value,
-            note: document.getElementById('sheetNote').value,
-            expenses: id ? (this.getSheetById(id, type)?.expenses || []) : []
-        };
+        await this.loadData();
+        this.hideCreateForm();
+    } catch (error) {
+        alert('Ошибка сохранения: ' + error.message);
+    }
+};
         
         if (id) {
             const index = this.sheets[type].findIndex(s => s.id === id);
@@ -373,33 +376,33 @@ const cocoMoney = {
         `).join('');
     },
 
-    addExpense() {
-        const expense = {
-            name: document.getElementById('expenseName').value,
-            amount: parseFloat(document.getElementById('expenseAmount').value),
-            category: document.getElementById('expenseCategory').value,
-            note: document.getElementById('expenseNote').value
-        };
+    async addExpense() {
+    const expense = {
+        name: document.getElementById('expenseName').value,
+        amount: parseFloat(document.getElementById('expenseAmount').value),
+        categoryId: document.getElementById('expenseCategory').value || null,
+        note: document.getElementById('expenseNote').value
+    };
+    
+    try {
+        await API.cocoMoney.addExpense(this.currentSheet.id, expense);
         
-        // Ensure expenses array exists
-        if (!this.currentSheet.expenses) {
-            this.currentSheet.expenses = [];
-        }
+        // Перезагрузить данные
+        await this.loadData();
         
-        this.currentSheet.expenses.push(expense);
+        // Обновить текущий лист
+        const response = await API.cocoMoney.getSheets();
+        const sheets = response.data;
+        this.currentSheet = sheets.find(s => s.id === this.currentSheet.id);
         
-        const sheetIndex = this.sheets[this.currentSheet.type].findIndex(s => s.id === this.currentSheet.id);
-        if (sheetIndex !== -1) {
-            this.sheets[this.currentSheet.type][sheetIndex].expenses = this.currentSheet.expenses;
-        }
-        
-        this.saveData();
         this.renderExpenses();
         this.updateDetailStats();
-        this.renderAll();
         
         document.getElementById('expenseForm').reset();
-    },
+    } catch (error) {
+        alert('Ошибка добавления расхода: ' + error.message);
+    }
+},
 
     updateDetailStats() {
         const expenses = this.currentSheet.expenses || [];

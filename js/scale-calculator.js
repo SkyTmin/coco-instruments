@@ -1,3 +1,15 @@
+// В начале каждого модуля (coco-money.js, debts.js и т.д.)
+document.addEventListener('DOMContentLoaded', () => {
+    // Проверить авторизацию
+    if (!API.tokens.access) {
+        alert('Необходимо войти в систему');
+        window.location.href = '/';
+        return;
+    }
+    
+    // Инициализация модуля
+    cocoMoney.init();
+});
 const scaleCalculator = {
     // Известные значения для интерполяции
     knownValues: {
