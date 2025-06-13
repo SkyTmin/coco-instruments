@@ -9,8 +9,7 @@ window.addEventListener('unhandledrejection', event => {
 });
 javascript// js/api.js
 const API = {
-  // Базовый URL - поменяйте на ваш Railway URL после деплоя
-  baseURL: 'https://coco-instruments-production.up.railway.app/', // Для разработки
+  baseURL: 'https://your-backend.railway.app/api/v1',, // Для разработки
   // baseURL: 'https://your-backend.railway.app/api/v1', // Для продакшена
   
   // Токены
