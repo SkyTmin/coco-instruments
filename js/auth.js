@@ -70,73 +70,60 @@ const auth = {
         document.body.style.overflow = 'auto';
     },
     
-async handleLogin(form) {
-    const email = form.querySelector('input[type="email"]').value;
-    const password = form.querySelector('input[type="password"]').value;
-    
-    try {
-        const response = await API.auth.login(email, password);
+    handleLogin(form) {
+        const email = form.querySelector('input[type="email"]').value;
+        const password = form.querySelector('input[type="password"]').value;
         
-        app.currentUser = response.user;
-        localStorage.setItem('currentUser', JSON.stringify(response.user));
+        const user = {
+            email: email,
+            id: Date.now()
+        };
+        
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        app.currentUser = user;
         app.updateAuthUI(true);
         
         this.hideModal();
         form.reset();
+    },
+    
+    handleRegister(form) {
+        const inputs = form.querySelectorAll('input');
+        const name = inputs[0].value;
+        const email = inputs[1].value;
+        const password = inputs[2].value;
+        const confirmPassword = inputs[3].value;
         
-        // Перезагрузить данные если нужно
-        if (typeof cocoMoney !== 'undefined') {
-            cocoMoney.loadData();
+        if (password !== confirmPassword) {
+            alert('Пароли не совпадают');
+            return;
         }
-    } catch (error) {
-        alert('Ошибка входа: ' + error.message);
-    }
-},
-    
-    async handleRegister(form) {
-    const inputs = form.querySelectorAll('input');
-    const name = inputs[0].value;
-    const email = inputs[1].value;
-    const password = inputs[2].value;
-    const confirmPassword = inputs[3].value;
-    
-    if (password !== confirmPassword) {
-        alert('Пароли не совпадают');
-        return;
-    }
-    
-    try {
-        const response = await API.auth.register(email, name, password);
         
-        app.currentUser = response.user;
-        localStorage.setItem('currentUser', JSON.stringify(response.user));
+        const user = {
+            name: name,
+            email: email,
+            id: Date.now()
+        };
+        
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        app.currentUser = user;
         app.updateAuthUI(true);
         
         this.hideModal();
         form.reset();
-    } catch (error) {
-        alert('Ошибка регистрации: ' + error.message);
+    },
+    
+    logout() {
+        localStorage.removeItem('currentUser');
+        app.currentUser = null;
+        app.updateAuthUI(false);
+    },
+    
+    handleForgotPassword() {
+        alert('Функция восстановления пароля');
     }
-},
-    
-    async logout() {
-    try {
-        await API.auth.logout();
-    } catch (error) {
-        console.error('Logout error:', error);
-    }
-    
-    localStorage.removeItem('currentUser');
-    app.currentUser = null;
-    app.updateAuthUI(false);
-    
-    // Очистить локальные данные
-    localStorage.removeItem('cocoMoneySheets');
-    localStorage.removeItem('cocoDebts');
-    
-    window.location.href = '/';
-  }
 };
+
 document.addEventListener('DOMContentLoaded', () => {
     auth.init();
 });

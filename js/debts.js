@@ -1,14 +1,3 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Проверить авторизацию
-    if (!API.tokens.access) {
-        alert('Необходимо войти в систему');
-        window.location.href = '/';
-        return;
-    }
-    
-    // Инициализация модуля
-    cocoMoney.init();
-});
 const debts = {
     debtsList: [],
     currentDebt: null,
