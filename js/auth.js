@@ -70,24 +70,40 @@ const auth = {
         document.body.style.overflow = 'auto';
     },
     
-    handleLogin(form) {
+    async handleLogin(form) {
         const email = form.querySelector('input[type="email"]').value;
         const password = form.querySelector('input[type="password"]').value;
         
-        const user = {
-            email: email,
-            id: Date.now()
-        };
-        
-        localStorage.setItem('currentUser', JSON.stringify(user));
-        app.currentUser = user;
-        app.updateAuthUI(true);
-        
-        this.hideModal();
-        form.reset();
+        try {
+            const submitBtn = form.querySelector('.auth-submit');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Вход...';
+            
+            const response = await API.auth.login(email, password);
+            
+            const user = {
+                id: response.user.id,
+                email: response.user.email,
+                name: response.user.name
+            };
+            
+            localStorage.setItem('currentUser', JSON.stringify(user));
+            app.currentUser = user;
+            app.updateAuthUI(true);
+            
+            this.hideModal();
+            form.reset();
+        } catch (error) {
+            console.error('Login error:', error);
+            alert('Ошибка входа. Проверьте email и пароль.');
+        } finally {
+            const submitBtn = form.querySelector('.auth-submit');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Войти';
+        }
     },
     
-    handleRegister(form) {
+    async handleRegister(form) {
         const inputs = form.querySelectorAll('input');
         const name = inputs[0].value;
         const email = inputs[1].value;
@@ -99,28 +115,61 @@ const auth = {
             return;
         }
         
-        const user = {
-            name: name,
-            email: email,
-            id: Date.now()
-        };
+        if (password.length < 8) {
+            alert('Пароль должен быть не менее 8 символов');
+            return;
+        }
         
-        localStorage.setItem('currentUser', JSON.stringify(user));
-        app.currentUser = user;
-        app.updateAuthUI(true);
-        
-        this.hideModal();
-        form.reset();
+        try {
+            const submitBtn = form.querySelector('.auth-submit');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Регистрация...';
+            
+            const response = await API.auth.register(email, name, password);
+            
+            const user = {
+                id: response.user.id,
+                email: response.user.email,
+                name: response.user.name
+            };
+            
+            localStorage.setItem('currentUser', JSON.stringify(user));
+            app.currentUser = user;
+            app.updateAuthUI(true);
+            
+            this.hideModal();
+            form.reset();
+        } catch (error) {
+            console.error('Registration error:', error);
+            if (error.message.includes('409')) {
+                alert('Пользователь с таким email уже существует');
+            } else {
+                alert('Ошибка регистрации. Попробуйте позже.');
+            }
+        } finally {
+            const submitBtn = form.querySelector('.auth-submit');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Зарегистрироваться';
+        }
     },
     
-    logout() {
+    async logout() {
+        try {
+            await API.auth.logout();
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+        
         localStorage.removeItem('currentUser');
         app.currentUser = null;
         app.updateAuthUI(false);
+        
+        // Redirect to home if on protected page
+        window.location.href = '/';
     },
     
     handleForgotPassword() {
-        alert('Функция восстановления пароля');
+        alert('Функция восстановления пароля будет доступна в ближайшее время');
     }
 };
 
