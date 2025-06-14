@@ -1,24 +1,21 @@
 window.addEventListener('unhandledrejection', event => {
     console.error('Unhandled promise rejection:', event.reason);
-    
+
     if (event.reason?.message?.includes('401')) {
         alert('Сессия истекла. Необходимо войти снова.');
         API.clearTokens();
         window.location.href = '/';
     }
 });
-// js/api.js
+
 const API = {
-  baseURL: 'https://coco-instruments-backend-production.up.railway.app/api/v1', // Для разработки
-  // baseURL: 'https://your-backend.railway.app/api/v1', // Для продакшена
-  
-  // Токены
+  baseURL: 'https://coco-instruments-backend-production.up.railway.app/api/v1',
+
   tokens: {
     access: null,
     refresh: null
   },
 
-  // Получить токен из localStorage
   loadTokens() {
     const savedTokens = localStorage.getItem('cocoTokens');
     if (savedTokens) {
@@ -26,43 +23,38 @@ const API = {
     }
   },
 
-  // Сохранить токены
   saveTokens(tokens) {
     this.tokens = tokens;
     localStorage.setItem('cocoTokens', JSON.stringify(tokens));
   },
 
-  // Очистить токены
   clearTokens() {
     this.tokens = { access: null, refresh: null };
     localStorage.removeItem('cocoTokens');
   },
 
-  // Базовый метод для запросов
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    
+
     const config = {
       ...options,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
-      }
+      },
+      credentials: 'include', // 🔥 Ключевой момент для CORS + токены/cookies
     };
 
-    // Добавить токен если есть
     if (this.tokens.access) {
       config.headers.Authorization = `Bearer ${this.tokens.access}`;
     }
 
     try {
       const response = await fetch(url, config);
-      
-      // Если 401 - попробовать обновить токен
+
       if (response.status === 401 && this.tokens.refresh) {
         const refreshed = await this.refreshToken();
         if (refreshed) {
-          // Повторить запрос с новым токеном
           config.headers.Authorization = `Bearer ${this.tokens.access}`;
           return fetch(url, config).then(res => res.json());
         }
@@ -79,13 +71,13 @@ const API = {
     }
   },
 
-  // Обновить токен
   async refreshToken() {
     try {
       const response = await fetch(`${this.baseURL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: this.tokens.refresh })
+        body: JSON.stringify({ refreshToken: this.tokens.refresh }),
+        credentials: 'include' // 🔥 тоже важно
       });
 
       if (response.ok) {
@@ -99,25 +91,22 @@ const API = {
     } catch (error) {
       console.error('Token refresh failed:', error);
     }
-    
+
     this.clearTokens();
     window.location.href = '/';
     return false;
   },
 
-  // AUTH методы
   auth: {
     async register(email, name, password) {
       const response = await API.request('/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, name, password })
       });
-      
       API.saveTokens({
         access: response.data.accessToken,
         refresh: response.data.refreshToken
       });
-      
       return response.data;
     },
 
@@ -126,12 +115,10 @@ const API = {
         method: 'POST',
         body: JSON.stringify({ email, password })
       });
-      
       API.saveTokens({
         access: response.data.accessToken,
         refresh: response.data.refreshToken
       });
-      
       return response.data;
     },
 
@@ -141,7 +128,6 @@ const API = {
     }
   },
 
-  // COCO MONEY методы
   cocoMoney: {
     async getSheets(type) {
       const query = type ? `?type=${type}` : '';
@@ -187,7 +173,6 @@ const API = {
     }
   },
 
-  // DEBTS методы
   debts: {
     async getDebts(sort, status) {
       const params = new URLSearchParams();
@@ -225,7 +210,6 @@ const API = {
     }
   },
 
-  // CLOTHING SIZE методы
   clothingSize: {
     async getParameters() {
       return API.request('/clothing/size/parameters');
@@ -253,7 +237,6 @@ const API = {
     }
   },
 
-  // SCALE CALCULATOR методы
   scaleCalculator: {
     async calculate(type, value) {
       return API.request('/geodesy/scale-calculator/calculate', {
@@ -274,5 +257,4 @@ const API = {
   }
 };
 
-// Загрузить токены при инициализации
 API.loadTokens();
