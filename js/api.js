@@ -42,7 +42,7 @@ const API = {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      credentials: 'include', // 🔥 Ключевой момент для CORS + токены/cookies
+      credentials: 'include',
     };
 
     if (this.tokens.access) {
@@ -77,7 +77,7 @@ const API = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: this.tokens.refresh }),
-        credentials: 'include' // 🔥 тоже важно
+        credentials: 'include'
       });
 
       if (response.ok) {
