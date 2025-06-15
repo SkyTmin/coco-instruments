@@ -79,7 +79,11 @@ const auth = {
             submitBtn.disabled = true;
             submitBtn.textContent = 'Вход...';
             
+            console.log('Attempting login for:', email);
+            
             const response = await API.auth.login(email, password);
+            
+            console.log('Login successful:', response);
             
             const user = {
                 id: response.user.id,
@@ -93,9 +97,18 @@ const auth = {
             
             this.hideModal();
             form.reset();
+            
+            alert('Вход выполнен успешно!');
         } catch (error) {
             console.error('Login error:', error);
-            alert('Ошибка входа. Проверьте email и пароль.');
+            
+            if (error.message.includes('401')) {
+                alert('Неверный email или пароль');
+            } else if (error.message.includes('Ошибка сети')) {
+                alert(error.message);
+            } else {
+                alert('Ошибка входа. Попробуйте позже.');
+            }
         } finally {
             const submitBtn = form.querySelector('.auth-submit');
             submitBtn.disabled = false;
@@ -105,10 +118,23 @@ const auth = {
     
     async handleRegister(form) {
         const inputs = form.querySelectorAll('input');
-        const name = inputs[0].value;
-        const email = inputs[1].value;
+        const name = inputs[0].value.trim();
+        const email = inputs[1].value.trim();
         const password = inputs[2].value;
         const confirmPassword = inputs[3].value;
+        
+        console.log('Registration attempt:', { name, email });
+        
+        // Валидация на клиенте
+        if (!name || name.length < 2) {
+            alert('Имя должно содержать минимум 2 символа');
+            return;
+        }
+        
+        if (!email || !email.includes('@')) {
+            alert('Введите корректный email');
+            return;
+        }
         
         if (password !== confirmPassword) {
             alert('Пароли не совпадают');
@@ -120,12 +146,27 @@ const auth = {
             return;
         }
         
+        // Проверка сложности пароля
+        const hasUpperCase = /[A-Z]/.test(password);
+        const hasLowerCase = /[a-z]/.test(password);
+        const hasNumbers = /\d/.test(password);
+        const hasSpecialChar = /\W/.test(password);
+        
+        if (!hasUpperCase || !hasLowerCase || (!hasNumbers && !hasSpecialChar)) {
+            alert('Пароль должен содержать заглавные и строчные буквы, а также цифры или специальные символы');
+            return;
+        }
+        
         try {
             const submitBtn = form.querySelector('.auth-submit');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Регистрация...';
             
+            console.log('Sending registration request...');
+            
             const response = await API.auth.register(email, name, password);
+            
+            console.log('Registration successful:', response);
             
             const user = {
                 id: response.user.id,
@@ -139,12 +180,19 @@ const auth = {
             
             this.hideModal();
             form.reset();
+            
+            alert('Регистрация прошла успешно! Добро пожаловать!');
         } catch (error) {
             console.error('Registration error:', error);
+            
             if (error.message.includes('409')) {
                 alert('Пользователь с таким email уже существует');
+            } else if (error.message.includes('400')) {
+                alert('Проверьте правильность введенных данных');
+            } else if (error.message.includes('Ошибка сети')) {
+                alert(error.message);
             } else {
-                alert('Ошибка регистрации. Попробуйте позже.');
+                alert(`Ошибка регистрации: ${error.message || 'Попробуйте позже'}`);
             }
         } finally {
             const submitBtn = form.querySelector('.auth-submit');
@@ -163,6 +211,8 @@ const auth = {
         localStorage.removeItem('currentUser');
         app.currentUser = null;
         app.updateAuthUI(false);
+        
+        alert('Вы вышли из системы');
         
         // Redirect to home if on protected page
         window.location.href = '/';
