@@ -40,8 +40,10 @@ const API = {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         ...options.headers,
       },
+      mode: 'cors',
       credentials: 'include',
     };
 
@@ -49,24 +51,46 @@ const API = {
       config.headers.Authorization = `Bearer ${this.tokens.access}`;
     }
 
+    console.log('Making request to:', url);
+    console.log('Request config:', config);
+
     try {
       const response = await fetch(url, config);
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
 
       if (response.status === 401 && this.tokens.refresh) {
         const refreshed = await this.refreshToken();
         if (refreshed) {
           config.headers.Authorization = `Bearer ${this.tokens.access}`;
-          return fetch(url, config).then(res => res.json());
+          const retryResponse = await fetch(url, config);
+          if (!retryResponse.ok) {
+            const errorText = await retryResponse.text();
+            console.error('Retry response error:', errorText);
+            throw new Error(`HTTP error! status: ${retryResponse.status}, message: ${errorText}`);
+          }
+          return retryResponse.json();
         }
       }
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Response error:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
-      return response.json();
+      const data = await response.json();
+      console.log('Response data:', data);
+      return data;
     } catch (error) {
       console.error('API request failed:', error);
+      
+      if (error.message.includes('Failed to fetch')) {
+        console.error('Network error - possibly CORS issue');
+        throw new Error('Ошибка сети. Проверьте подключение к интернету или обратитесь к администратору.');
+      }
+      
       throw error;
     }
   },
@@ -75,9 +99,13 @@ const API = {
     try {
       const response = await fetch(`${this.baseURL}/auth/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ refreshToken: this.tokens.refresh }),
-        credentials: 'include'
+        credentials: 'include',
+        mode: 'cors'
       });
 
       if (response.ok) {
@@ -99,31 +127,49 @@ const API = {
 
   auth: {
     async register(email, name, password) {
+      console.log('Registering user:', { email, name });
       const response = await API.request('/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, name, password })
       });
-      API.saveTokens({
-        access: response.data.accessToken,
-        refresh: response.data.refreshToken
-      });
+      
+      console.log('Registration response:', response);
+      
+      if (response.data) {
+        API.saveTokens({
+          access: response.data.accessToken,
+          refresh: response.data.refreshToken
+        });
+      }
+      
       return response.data;
     },
 
     async login(email, password) {
+      console.log('Logging in user:', email);
       const response = await API.request('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password })
       });
-      API.saveTokens({
-        access: response.data.accessToken,
-        refresh: response.data.refreshToken
-      });
+      
+      console.log('Login response:', response);
+      
+      if (response.data) {
+        API.saveTokens({
+          access: response.data.accessToken,
+          refresh: response.data.refreshToken
+        });
+      }
+      
       return response.data;
     },
 
     async logout() {
-      await API.request('/auth/logout', { method: 'POST' });
+      try {
+        await API.request('/auth/logout', { method: 'POST' });
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
       API.clearTokens();
     }
   },
