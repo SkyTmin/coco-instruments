@@ -295,16 +295,11 @@ const API = {
 
     async saveHistory(history) {
       try {
-        // Сохраняем каждый элемент истории отдельно, так как бэкенд ожидает индивидуальные вычисления
-        for (const item of history) {
-          await API.request('/geodesy/scale-calculator/calculate', {
-            method: 'POST',
-            body: JSON.stringify({
-              type: 'scale',
-              value: item.scale
-            })
-          });
-        }
+        // Теперь используем новый endpoint для синхронизации
+        await API.request('/geodesy/scale-calculator/history', {
+          method: 'POST',
+          body: JSON.stringify({ history })
+        });
         return true;
       } catch (err) {
         console.error('Error saving scale calculator history:', err);
