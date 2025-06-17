@@ -274,12 +274,19 @@ const API = {
     }
   },
 
-  // Scale Calculator API
+  // Scale Calculator API - ИСПРАВЛЕН ПУТЬ
   scaleCalculator: {
     async getHistory() {
       try {
-        const res = await API.request('/scale-calculator/history');
-        return res.data || [];
+        const res = await API.request('/geodesy/scale-calculator/history');
+        // Конвертируем формат с бэкенда в формат фронтенда
+        const history = res.data || [];
+        return history.map(item => ({
+          id: Date.parse(item.createdAt) || item.id, // Используем timestamp как id для совместимости
+          scale: item.scale,
+          textHeight: item.textHeight,
+          timestamp: item.createdAt
+        }));
       } catch (err) {
         console.error('Error loading scale calculator history:', err);
         return [];
@@ -288,10 +295,16 @@ const API = {
 
     async saveHistory(history) {
       try {
-        await API.request('/scale-calculator/history', {
-          method: 'POST',
-          body: JSON.stringify({ history })
-        });
+        // Сохраняем каждый элемент истории отдельно, так как бэкенд ожидает индивидуальные вычисления
+        for (const item of history) {
+          await API.request('/geodesy/scale-calculator/calculate', {
+            method: 'POST',
+            body: JSON.stringify({
+              type: 'scale',
+              value: item.scale
+            })
+          });
+        }
         return true;
       } catch (err) {
         console.error('Error saving scale calculator history:', err);
@@ -323,47 +336,91 @@ const API = {
 
     async syncCocoMoney() {
       if (typeof cocoMoney !== 'undefined') {
-        const serverData = await API.cocoMoney.getSheets();
-        const serverCategories = await API.cocoMoney.getCategories();
-        
-        cocoMoney.sheets = serverData;
-        cocoMoney.customCategories = serverCategories;
-        cocoMoney.renderAll();
-        cocoMoney.updateCategorySelect();
+        try {
+          const serverData = await API.cocoMoney.getSheets();
+          const serverCategories = await API.cocoMoney.getCategories();
+          
+          // Обновляем данные только если они есть на сервере
+          if (serverData && (serverData.income.length > 0 || serverData.preliminary.length > 0)) {
+            cocoMoney.sheets = serverData;
+          }
+          
+          if (serverCategories && serverCategories.length > 0) {
+            cocoMoney.customCategories = serverCategories;
+          }
+          
+          cocoMoney.renderAll();
+          cocoMoney.updateCategorySelect();
+        } catch (err) {
+          console.error('Error syncing CocoMoney:', err);
+        }
       }
     },
 
     async syncDebts() {
       if (typeof debts !== 'undefined') {
-        const serverDebts = await API.debts.getDebts();
-        const serverCategories = await API.debts.getCategories();
-        
-        debts.debtsList = serverDebts;
-        debts.customCategories = serverCategories;
-        debts.renderAll();
-        debts.updateCategorySelect();
+        try {
+          const serverDebts = await API.debts.getDebts();
+          const serverCategories = await API.debts.getCategories();
+          
+          // Обновляем данные только если они есть на сервере
+          if (serverDebts && serverDebts.length > 0) {
+            debts.debtsList = serverDebts;
+          }
+          
+          if (serverCategories && serverCategories.length > 0) {
+            debts.customCategories = serverCategories;
+          }
+          
+          debts.renderAll();
+          debts.updateCategorySelect();
+        } catch (err) {
+          console.error('Error syncing Debts:', err);
+        }
       }
     },
 
     async syncClothingSize() {
       if (typeof clothingSize !== 'undefined') {
-        const serverData = await API.clothingSize.getData();
-        
-        clothingSize.state.parameters = serverData.parameters || {};
-        clothingSize.state.savedResults = serverData.savedResults || [];
-        clothingSize.state.currentGender = serverData.currentGender || 'male';
-        
-        clothingSize.restoreParameters();
-        clothingSize.updateGenderSpecificElements();
+        try {
+          const serverData = await API.clothingSize.getData();
+          
+          // Обновляем данные только если они есть на сервере
+          if (serverData) {
+            if (Object.keys(serverData.parameters || {}).length > 0) {
+              clothingSize.state.parameters = serverData.parameters;
+            }
+            
+            if (serverData.savedResults && serverData.savedResults.length > 0) {
+              clothingSize.state.savedResults = serverData.savedResults;
+            }
+            
+            if (serverData.currentGender) {
+              clothingSize.state.currentGender = serverData.currentGender;
+            }
+            
+            clothingSize.restoreParameters();
+            clothingSize.updateGenderSpecificElements();
+          }
+        } catch (err) {
+          console.error('Error syncing ClothingSize:', err);
+        }
       }
     },
 
     async syncScaleCalculator() {
       if (typeof scaleCalculator !== 'undefined') {
-        const serverHistory = await API.scaleCalculator.getHistory();
-        
-        scaleCalculator.history = serverHistory;
-        scaleCalculator.renderHistory();
+        try {
+          const serverHistory = await API.scaleCalculator.getHistory();
+          
+          // Обновляем историю только если она есть на сервере
+          if (serverHistory && serverHistory.length > 0) {
+            scaleCalculator.history = serverHistory;
+            scaleCalculator.renderHistory();
+          }
+        } catch (err) {
+          console.error('Error syncing ScaleCalculator:', err);
+        }
       }
     }
   }
