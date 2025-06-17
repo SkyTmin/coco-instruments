@@ -57,14 +57,138 @@ const app = {
         this.showSyncIndicator(true);
 
         try {
-            await API.sync.syncAllData();
+            console.log('🔄 Начинаем полную синхронизацию данных...');
+            
+            // Загружаем данные с сервера для всех модулей
+            await Promise.all([
+                this.loadCocoMoneyData(),
+                this.loadDebtsData(),
+                this.loadClothingSizeData(),
+                this.loadScaleCalculatorData()
+            ]);
+            
+            console.log('✅ Синхронизация завершена успешно');
             this.showToast('Данные синхронизированы', 'success');
         } catch (error) {
-            console.error('Sync failed:', error);
+            console.error('❌ Ошибка синхронизации:', error);
             this.showToast('Ошибка синхронизации', 'error');
         } finally {
             this.syncInProgress = false;
             this.showSyncIndicator(false);
+        }
+    },
+
+    async loadCocoMoneyData() {
+        try {
+            console.log('📊 Загружаем данные Coco Money...');
+            const serverSheets = await API.cocoMoney.getSheets();
+            const serverCategories = await API.cocoMoney.getCategories();
+            
+            // Если модуль загружен, обновляем данные
+            if (typeof cocoMoney !== 'undefined') {
+                // Проверяем, есть ли данные на сервере
+                if (serverSheets && (serverSheets.income.length > 0 || serverSheets.preliminary.length > 0)) {
+                    console.log('📥 Загружены листы с сервера:', serverSheets);
+                    cocoMoney.sheets = serverSheets;
+                    cocoMoney.renderAll();
+                }
+                
+                if (serverCategories && serverCategories.length > 0) {
+                    console.log('📥 Загружены категории с сервера:', serverCategories);
+                    cocoMoney.customCategories = serverCategories;
+                    cocoMoney.updateCategorySelect();
+                }
+            }
+            
+            console.log('✅ Coco Money данные загружены');
+        } catch (error) {
+            console.error('❌ Ошибка загрузки Coco Money:', error);
+        }
+    },
+
+    async loadDebtsData() {
+        try {
+            console.log('💳 Загружаем данные долгов...');
+            const serverDebts = await API.debts.getDebts();
+            const serverCategories = await API.debts.getCategories();
+            
+            // Если модуль загружен, обновляем данные
+            if (typeof debts !== 'undefined') {
+                if (serverDebts && serverDebts.length > 0) {
+                    console.log('📥 Загружены долги с сервера:', serverDebts);
+                    debts.debtsList = serverDebts;
+                    debts.renderAll();
+                }
+                
+                if (serverCategories && serverCategories.length > 0) {
+                    console.log('📥 Загружены категории долгов с сервера:', serverCategories);
+                    debts.customCategories = serverCategories;
+                    debts.updateCategorySelect();
+                }
+            }
+            
+            console.log('✅ Данные долгов загружены');
+        } catch (error) {
+            console.error('❌ Ошибка загрузки долгов:', error);
+        }
+    },
+
+    async loadClothingSizeData() {
+        try {
+            console.log('👕 Загружаем данные размеров одежды...');
+            const serverData = await API.clothingSize.getData();
+            
+            // Если модуль загружен, обновляем данные
+            if (typeof clothingSize !== 'undefined' && serverData) {
+                let hasData = false;
+                
+                if (Object.keys(serverData.parameters || {}).length > 0) {
+                    console.log('📥 Загружены параметры одежды с сервера:', serverData.parameters);
+                    clothingSize.state.parameters = serverData.parameters;
+                    hasData = true;
+                }
+                
+                if (serverData.savedResults && serverData.savedResults.length > 0) {
+                    console.log('📥 Загружены результаты одежды с сервера:', serverData.savedResults);
+                    clothingSize.state.savedResults = serverData.savedResults;
+                    hasData = true;
+                }
+                
+                if (serverData.currentGender) {
+                    console.log('📥 Загружен пол с сервера:', serverData.currentGender);
+                    clothingSize.state.currentGender = serverData.currentGender;
+                    hasData = true;
+                }
+                
+                if (hasData) {
+                    clothingSize.restoreParameters();
+                    clothingSize.updateGenderSpecificElements();
+                }
+            }
+            
+            console.log('✅ Данные размеров одежды загружены');
+        } catch (error) {
+            console.error('❌ Ошибка загрузки размеров одежды:', error);
+        }
+    },
+
+    async loadScaleCalculatorData() {
+        try {
+            console.log('📐 Загружаем историю калькулятора масштабов...');
+            const serverHistory = await API.scaleCalculator.getHistory();
+            
+            // Если модуль загружен, обновляем данные
+            if (typeof scaleCalculator !== 'undefined') {
+                if (serverHistory && serverHistory.length > 0) {
+                    console.log('📥 Загружена история масштабов с сервера:', serverHistory);
+                    scaleCalculator.history = serverHistory;
+                    scaleCalculator.renderHistory();
+                }
+            }
+            
+            console.log('✅ История калькулятора масштабов загружена');
+        } catch (error) {
+            console.error('❌ Ошибка загрузки истории калькулятора:', error);
         }
     },
 
@@ -128,22 +252,26 @@ const app = {
     },
 
     async onUserLogin(userData) {
+        console.log('👤 Пользователь вошел в систему:', userData);
         this.currentUser = userData;
         this.updateAuthUI(true);
         
-        // Синхронизация данных после входа
+        // Принудительная синхронизация данных после входа
         if (this.isOnline) {
-            setTimeout(() => {
-                this.syncAllData();
-            }, 1000); // Небольшая задержка для UI
+            console.log('🔄 Запускаем синхронизацию после входа...');
+            // Небольшая задержка для завершения UI обновлений
+            setTimeout(async () => {
+                await this.syncAllData();
+            }, 500);
         }
     },
 
     async onUserLogout() {
+        console.log('👤 Пользователь вышел из системы');
         this.currentUser = null;
         this.updateAuthUI(false);
         
-        // Очистка данных при выходе (опционально)
+        // Опционально: очистить локальные данные при выходе
         // this.clearLocalData();
     },
 
