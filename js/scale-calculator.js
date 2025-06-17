@@ -13,12 +13,94 @@ const scaleCalculator = {
     // Таймер для задержки расчёта
     debounceTimer: null,
     
+    // Синхронизация
+    isOnline: navigator.onLine,
+    pendingSync: false,
+    
     init() {
         console.log('Инициализация калькулятора масштабов');
-        this.loadHistory();
         this.setupEventListeners();
-        this.renderHistory();
+        this.setupNetworkListeners();
+        this.loadHistory();
         this.addInitialAnimation();
+    },
+
+    setupNetworkListeners() {
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            if (this.pendingSync) {
+                this.syncToServer();
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+        });
+    },
+
+    async loadHistory() {
+        const user = await API.getProfile();
+        if (user && this.isOnline) {
+            // Загружаем данные с сервера
+            try {
+                const serverHistory = await API.scaleCalculator.getHistory();
+                this.history = serverHistory;
+                
+                // Сохраняем в localStorage как резервную копию
+                this.saveToLocalStorage();
+            } catch (err) {
+                console.error('Failed to load from server, using localStorage:', err);
+                this.loadFromLocalStorage();
+            }
+        } else {
+            // Загружаем из localStorage
+            this.loadFromLocalStorage();
+        }
+        
+        this.renderHistory();
+    },
+
+    loadFromLocalStorage() {
+        const saved = localStorage.getItem('scaleCalculatorHistory');
+        if (saved) {
+            try {
+                this.history = JSON.parse(saved) || [];
+            } catch (e) {
+                console.error('Ошибка загрузки истории:', e);
+                this.history = [];
+            }
+        }
+    },
+
+    saveToLocalStorage() {
+        localStorage.setItem('scaleCalculatorHistory', JSON.stringify(this.history));
+    },
+
+    async saveHistory() {
+        // Всегда сохраняем в localStorage
+        this.saveToLocalStorage();
+        
+        // Пытаемся синхронизировать с сервером
+        if (this.isOnline) {
+            await this.syncToServer();
+        } else {
+            this.pendingSync = true;
+        }
+    },
+
+    async syncToServer() {
+        const user = await API.getProfile();
+        if (!user) return;
+
+        try {
+            await API.scaleCalculator.saveHistory(this.history);
+            this.pendingSync = false;
+            this.showToast('История синхронизирована');
+        } catch (err) {
+            console.error('Failed to sync to server:', err);
+            this.pendingSync = true;
+            this.showToast('Ошибка синхронизации');
+        }
     },
     
     setupEventListeners() {
@@ -216,7 +298,7 @@ const scaleCalculator = {
     },
     
     // Работа с историей
-    addToHistory(scale, textHeight) {
+    async addToHistory(scale, textHeight) {
         const timestamp = new Date().toISOString();
         const entry = {
             id: Date.now(),
@@ -233,30 +315,14 @@ const scaleCalculator = {
             this.history = this.history.slice(0, 20);
         }
         
-        this.saveHistory();
+        await this.saveHistory();
         this.renderHistory();
     },
     
-    loadHistory() {
-        const saved = localStorage.getItem('scaleCalculatorHistory');
-        if (saved) {
-            try {
-                this.history = JSON.parse(saved) || [];
-            } catch (e) {
-                console.error('Ошибка загрузки истории:', e);
-                this.history = [];
-            }
-        }
-    },
-    
-    saveHistory() {
-        localStorage.setItem('scaleCalculatorHistory', JSON.stringify(this.history));
-    },
-    
-    clearHistory() {
+    async clearHistory() {
         if (confirm('Вы действительно хотите очистить всю историю расчётов?')) {
             this.history = [];
-            this.saveHistory();
+            await this.saveHistory();
             this.renderHistory();
             this.showToast('История очищена');
         }
@@ -273,6 +339,8 @@ const scaleCalculator = {
         }
         
         historySection.classList.add('has-history');
+        
+        const syncStatus = this.pendingSync && !this.isOnline ? ' <span class="sync-pending">⏳</span>' : '';
         
         const html = this.history.map(entry => {
             const date = new Date(entry.timestamp);
@@ -297,7 +365,7 @@ const scaleCalculator = {
             `;
         }).join('');
         
-        historyList.innerHTML = html;
+        historyList.innerHTML = html + (this.history.length > 0 && syncStatus ? `<div class="sync-status">${syncStatus}</div>` : '');
     },
     
     restoreFromHistory(scale, textHeight) {
@@ -380,12 +448,74 @@ const scaleCalculator = {
     // Уведомления
     showToast(message) {
         const toast = document.getElementById('toast');
+        
+        if (this.pendingSync && !this.isOnline) {
+            message += ' (ожидает синхронизации)';
+        }
+        
         toast.textContent = message;
         toast.classList.add('show');
         
         setTimeout(() => {
             toast.classList.remove('show');
         }, 3000);
+    },
+
+    // Экспорт истории
+    exportHistory() {
+        if (this.history.length === 0) {
+            this.showToast('История пуста');
+            return;
+        }
+        
+        const data = {
+            history: this.history,
+            exportDate: new Date().toISOString(),
+            version: '1.0'
+        };
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `scale-calculator-history-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.showToast('История экспортирована');
+    },
+
+    // Импорт истории
+    async importHistory(file) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                
+                if (data.history && Array.isArray(data.history)) {
+                    // Объединяем с существующей историей, избегая дубликатов
+                    const existingIds = new Set(this.history.map(entry => entry.id));
+                    const newEntries = data.history.filter(entry => !existingIds.has(entry.id));
+                    
+                    this.history = [...newEntries, ...this.history];
+                    
+                    // Ограничиваем размер
+                    if (this.history.length > 50) {
+                        this.history = this.history.slice(0, 50);
+                    }
+                    
+                    await this.saveHistory();
+                    this.renderHistory();
+                    this.showToast(`Импортировано ${newEntries.length} записей`);
+                } else {
+                    this.showToast('Неверный формат файла');
+                }
+            } catch (error) {
+                this.showToast('Ошибка импорта');
+                console.error('Import error:', error);
+            }
+        };
+        reader.readAsText(file);
     }
 };
 
