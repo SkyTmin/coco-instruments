@@ -44,20 +44,30 @@ const cocoMoney = {
         if (user && this.isOnline) {
             // Загружаем данные с сервера
             try {
+                console.log('🔄 Загружаем данные Coco Money с сервера...');
                 const serverSheets = await API.cocoMoney.getSheets();
                 const serverCategories = await API.cocoMoney.getCategories();
                 
-                this.sheets = serverSheets;
-                this.customCategories = serverCategories;
+                console.log('📥 Полученные данные с сервера:', { 
+                    sheets: serverSheets, 
+                    categories: serverCategories 
+                });
+                
+                // Обновляем данные ВСЕГДА, даже если они пустые (важно для синхронизации!)
+                this.sheets = serverSheets || { income: [], preliminary: [] };
+                this.customCategories = serverCategories || [];
+                
+                console.log('✅ Данные Coco Money обновлены из сервера');
                 
                 // Сохраняем в localStorage как резервную копию
                 this.saveToLocalStorage();
             } catch (err) {
-                console.error('Failed to load from server, using localStorage:', err);
+                console.error('❌ Ошибка загрузки с сервера, используем localStorage:', err);
                 this.loadFromLocalStorage();
             }
         } else {
             // Загружаем из localStorage
+            console.log('📱 Загружаем данные Coco Money из localStorage');
             this.loadFromLocalStorage();
         }
         
@@ -76,6 +86,7 @@ const cocoMoney = {
                     income: parsed.income || [],
                     preliminary: parsed.preliminary || []
                 };
+                console.log('📥 Листы загружены из localStorage:', this.sheets);
             } catch (e) {
                 console.error('Error parsing saved sheets:', e);
                 this.sheets = {
@@ -93,6 +104,7 @@ const cocoMoney = {
         if (savedCategories) {
             try {
                 this.customCategories = JSON.parse(savedCategories) || [];
+                console.log('📥 Категории загружены из localStorage:', this.customCategories);
             } catch (e) {
                 console.error('Error parsing saved categories:', e);
                 this.customCategories = [];
@@ -103,6 +115,7 @@ const cocoMoney = {
     saveToLocalStorage() {
         localStorage.setItem('cocoMoneySheets', JSON.stringify(this.sheets));
         localStorage.setItem('cocoMoneyCategories', JSON.stringify(this.customCategories));
+        console.log('💾 Данные Coco Money сохранены в localStorage');
     },
 
     async saveData() {
@@ -114,22 +127,34 @@ const cocoMoney = {
             await this.syncToServer();
         } else {
             this.pendingSync = true;
+            console.log('⏳ Отложена синхронизация с сервером (офлайн)');
         }
     },
 
     async syncToServer() {
         const user = await API.getProfile();
-        if (!user) return;
+        if (!user) {
+            console.log('❌ Пользователь не авторизован, пропускаем синхронизацию');
+            return;
+        }
 
         try {
+            console.log('🔄 Синхронизируем данные Coco Money с сервером...');
+            console.log('📤 Отправляем данные:', { 
+                sheets: this.sheets, 
+                categories: this.customCategories 
+            });
+            
             await Promise.all([
                 API.cocoMoney.saveSheets(this.sheets),
                 API.cocoMoney.saveCategories(this.customCategories)
             ]);
+            
             this.pendingSync = false;
+            console.log('✅ Данные Coco Money синхронизированы с сервером');
             this.showToast('Данные синхронизированы', 'success');
         } catch (err) {
-            console.error('Failed to sync to server:', err);
+            console.error('❌ Ошибка синхронизации с сервером:', err);
             this.pendingSync = true;
             this.showToast('Ошибка синхронизации', 'warning');
         }
@@ -376,9 +401,11 @@ const cocoMoney = {
             this.sheets[type].push(sheetData);
         }
         
+        console.log('💾 Сохраняем лист:', sheetData);
         await this.saveData();
         this.renderAll();
         this.hideCreateForm();
+        this.showToast('Лист сохранен');
     },
 
     showDetail(sheetId, type) {
@@ -462,12 +489,14 @@ const cocoMoney = {
             this.sheets[this.currentSheet.type][sheetIndex].expenses = this.currentSheet.expenses;
         }
         
+        console.log('💾 Добавляем расход:', expense);
         await this.saveData();
         this.renderExpenses();
         this.updateDetailStats();
         this.renderAll();
         
         document.getElementById('expenseForm').reset();
+        this.showToast('Расход добавлен');
     },
 
     updateDetailStats() {
@@ -558,9 +587,11 @@ const cocoMoney = {
             const index = this.sheets[this.currentSheet.type].findIndex(s => s.id === this.currentSheet.id);
             if (index !== -1) {
                 this.sheets[this.currentSheet.type].splice(index, 1);
+                console.log('🗑️ Удаляем лист:', this.currentSheet.name);
                 await this.saveData();
                 this.renderAll();
                 this.hideDetail();
+                this.showToast('Лист удален');
             }
         });
     },
@@ -581,10 +612,12 @@ const cocoMoney = {
                 
                 this.sheets.income.push(sheet);
                 
+                console.log('🔄 Конвертируем лист в доходный:', sheet.name);
                 await this.saveData();
                 this.renderAll();
                 this.hideDetail();
                 this.switchTab('income');
+                this.showToast('Лист перемещен в доходы');
             }
         });
     },
@@ -678,8 +711,10 @@ const cocoMoney = {
         
         if (!this.customCategories.find(cat => cat.id === categoryId)) {
             this.customCategories.push({ id: categoryId, name: categoryName });
+            console.log('📝 Добавляем категорию:', categoryName);
             await this.saveData();
             this.updateCategorySelect();
+            this.showToast('Категория добавлена');
         }
         
         document.getElementById('expenseCategory').value = categoryId;
