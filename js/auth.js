@@ -56,13 +56,32 @@ const auth = {
 
     try {
       const res = await API.auth.login(email, password);
-      app.currentUser = await API.getProfile();
+      const user = await API.getProfile();
+      
+      // Уведомляем приложение о входе пользователя
+      if (typeof app !== 'undefined' && app.onUserLogin) {
+        await app.onUserLogin(user);
+      }
+      
+      app.currentUser = user;
       app.updateAuthUI(true);
       this.hideModal();
       form.reset();
-      alert('Вход выполнен успешно!');
+      
+      // Показываем уведомление об успешном входе
+      if (typeof app !== 'undefined' && app.showToast) {
+        app.showToast('Добро пожаловать! Синхронизируем ваши данные...', 'success');
+      } else {
+        alert('Вход выполнен успешно!');
+      }
     } catch (err) {
-      alert(err.message.includes('401') ? 'Неверный email или пароль' : err.message);
+      const errorMessage = err.message.includes('401') ? 'Неверный email или пароль' : err.message;
+      
+      if (typeof app !== 'undefined' && app.showToast) {
+        app.showToast(errorMessage, 'error');
+      } else {
+        alert(errorMessage);
+      }
     } finally {
       btn.disabled = false;
       btn.textContent = 'Войти';
@@ -76,10 +95,22 @@ const auth = {
     const password = passInput.value;
     const confirmPassword = confirmInput.value;
 
-    if (!name || name.length < 2) return alert('Имя слишком короткое');
-    if (!email.includes('@')) return alert('Некорректный email');
-    if (password !== confirmPassword) return alert('Пароли не совпадают');
-    if (password.length < 8) return alert('Пароль должен быть не менее 8 символов');
+    if (!name || name.length < 2) {
+      this.showError('Имя слишком короткое');
+      return;
+    }
+    if (!email.includes('@')) {
+      this.showError('Некорректный email');
+      return;
+    }
+    if (password !== confirmPassword) {
+      this.showError('Пароли не совпадают');
+      return;
+    }
+    if (password.length < 8) {
+      this.showError('Пароль должен быть не менее 8 символов');
+      return;
+    }
 
     const btn = form.querySelector('.auth-submit');
     btn.disabled = true;
@@ -87,13 +118,26 @@ const auth = {
 
     try {
       await API.auth.register(email, name, password);
-      app.currentUser = await API.getProfile();
+      const user = await API.getProfile();
+      
+      // Уведомляем приложение о входе пользователя
+      if (typeof app !== 'undefined' && app.onUserLogin) {
+        await app.onUserLogin(user);
+      }
+      
+      app.currentUser = user;
       app.updateAuthUI(true);
       this.hideModal();
       form.reset();
-      alert('Регистрация прошла успешно!');
+      
+      if (typeof app !== 'undefined' && app.showToast) {
+        app.showToast('Регистрация успешна! Добро пожаловать!', 'success');
+      } else {
+        alert('Регистрация прошла успешно!');
+      }
     } catch (err) {
-      alert(err.message.includes('409') ? 'Email уже занят' : err.message);
+      const errorMessage = err.message.includes('409') ? 'Email уже занят' : err.message;
+      this.showError(errorMessage);
     } finally {
       btn.disabled = false;
       btn.textContent = 'Зарегистрироваться';
@@ -101,29 +145,78 @@ const auth = {
   },
 
   async logout() {
-    await API.auth.logout();
-    app.currentUser = null;
-    app.updateAuthUI(false);
-    alert('Вы вышли из системы');
-    window.location.href = '/';
+    const confirmLogout = confirm('Вы действительно хотите выйти? Несинхронизированные данные могут быть потеряны.');
+    if (!confirmLogout) return;
+
+    try {
+      await API.auth.logout();
+      
+      // Уведомляем приложение о выходе пользователя
+      if (typeof app !== 'undefined' && app.onUserLogout) {
+        await app.onUserLogout();
+      }
+      
+      app.currentUser = null;
+      app.updateAuthUI(false);
+      
+      if (typeof app !== 'undefined' && app.showToast) {
+        app.showToast('Вы вышли из системы', 'info');
+      } else {
+        alert('Вы вышли из системы');
+      }
+      
+      // Перенаправляем на главную страницу
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Logout error:', err);
+      
+      if (typeof app !== 'undefined' && app.showToast) {
+        app.showToast('Ошибка при выходе', 'error');
+      }
+    }
   },
 
   handleForgotPassword() {
-    alert('Функция восстановления пароля скоро будет доступна');
+    if (typeof app !== 'undefined' && app.showToast) {
+      app.showToast('Функция восстановления пароля скоро будет доступна', 'info');
+    } else {
+      alert('Функция восстановления пароля скоро будет доступна');
+    }
+  },
+
+  showError(message) {
+    if (typeof app !== 'undefined' && app.showToast) {
+      app.showToast(message, 'error');
+    } else {
+      alert(message);
+    }
+  },
+
+  // Проверка статуса авторизации при загрузке страницы
+  async checkAuthStatus() {
+    try {
+      const user = await API.getProfile();
+      if (user) {
+        app.currentUser = user;
+        app.updateAuthUI(true);
+        
+        // Автоматическая синхронизация при обнаружении авторизованного пользователя
+        if (typeof app !== 'undefined' && app.syncAllData && navigator.onLine) {
+          setTimeout(() => {
+            app.syncAllData();
+          }, 500);
+        }
+      } else {
+        app.updateAuthUI(false);
+      }
+    } catch (e) {
+      console.error('Auth status check failed:', e);
+      app.updateAuthUI(false);
+    }
   }
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
   auth.init();
-  try {
-    const user = await API.getProfile();
-    if (user) {
-      app.currentUser = user;
-      app.updateAuthUI(true);
-    } else {
-      app.updateAuthUI(false);
-    }
-  } catch (e) {
-    app.updateAuthUI(false);
-  }
+  await auth.checkAuthStatus();
 });
