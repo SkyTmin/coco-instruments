@@ -8,6 +8,8 @@ const clothingSize = {
         savedResults: [],
         currentCategory: null
     },
+    isOnline: navigator.onLine,
+    pendingSync: false,
 
     // Формулы расчета размеров
     formulas: {
@@ -229,22 +231,102 @@ const clothingSize = {
 
     // Инициализация
     init() {
-        this.loadSavedData();
         this.setupEventListeners();
+        this.setupNetworkListeners();
+        this.loadSavedData();
         this.updateGenderSpecificElements();
         this.initializeAnimations();
         this.checkRequiredParameters();
     },
 
+    setupNetworkListeners() {
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            if (this.pendingSync) {
+                this.syncToServer();
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+        });
+    },
+
     // Загрузка сохраненных данных
-    loadSavedData() {
+    async loadSavedData() {
+        const user = await API.getProfile();
+        if (user && this.isOnline) {
+            // Загружаем данные с сервера
+            try {
+                const serverData = await API.clothingSize.getData();
+                
+                this.state.parameters = serverData.parameters || {};
+                this.state.savedResults = serverData.savedResults || [];
+                this.state.currentGender = serverData.currentGender || 'male';
+                
+                // Сохраняем в localStorage как резервную копию
+                this.saveToLocalStorage();
+            } catch (err) {
+                console.error('Failed to load from server, using localStorage:', err);
+                this.loadFromLocalStorage();
+            }
+        } else {
+            // Загружаем из localStorage
+            this.loadFromLocalStorage();
+        }
+        
+        this.restoreParameters();
+    },
+
+    loadFromLocalStorage() {
         const saved = localStorage.getItem('clothingSizeData');
         if (saved) {
             const data = JSON.parse(saved);
             this.state.parameters = data.parameters || {};
             this.state.savedResults = data.savedResults || [];
             this.state.currentGender = data.currentGender || 'male';
-            this.restoreParameters();
+        }
+    },
+
+    saveToLocalStorage() {
+        const data = {
+            parameters: this.state.parameters,
+            savedResults: this.state.savedResults,
+            currentGender: this.state.currentGender
+        };
+        localStorage.setItem('clothingSizeData', JSON.stringify(data));
+    },
+
+    async saveData() {
+        // Всегда сохраняем в localStorage
+        this.saveToLocalStorage();
+        
+        // Пытаемся синхронизировать с сервером
+        if (this.isOnline) {
+            await this.syncToServer();
+        } else {
+            this.pendingSync = true;
+        }
+    },
+
+    async syncToServer() {
+        const user = await API.getProfile();
+        if (!user) return;
+
+        try {
+            const data = {
+                parameters: this.state.parameters,
+                savedResults: this.state.savedResults,
+                currentGender: this.state.currentGender
+            };
+            
+            await API.clothingSize.saveData(data);
+            this.pendingSync = false;
+            this.showToast('Данные синхронизированы', 'success');
+        } catch (err) {
+            console.error('Failed to sync to server:', err);
+            this.pendingSync = true;
+            this.showToast('Ошибка синхронизации', 'warning');
         }
     },
 
@@ -404,6 +486,7 @@ const clothingSize = {
         this.state.currentGender = gender;
         this.updateGenderSpecificElements();
         this.checkRequiredParameters();
+        this.saveData(); // Auto-save gender change
     },
 
     // Обновление элементов в зависимости от пола
@@ -523,7 +606,7 @@ const clothingSize = {
     },
 
     // Сохранение параметров
-    saveParameters() {
+    async saveParameters() {
         const params = {};
         document.querySelectorAll('.parameter-input input').forEach(input => {
             if (input.value) {
@@ -532,7 +615,7 @@ const clothingSize = {
         });
 
         this.state.parameters = params;
-        this.saveTolocalStorage();
+        await this.saveData();
         this.showToast('Параметры сохранены');
         this.checkRequiredParameters();
     },
@@ -680,7 +763,7 @@ const clothingSize = {
     },
 
     // Сохранение результата
-    saveResult() {
+    async saveResult() {
         if (!this.state.currentCategory) return;
         
         const result = {
@@ -694,7 +777,7 @@ const clothingSize = {
             this.state.savedResults = this.state.savedResults.slice(0, 10);
         }
         
-        this.saveTolocalStorage();
+        await this.saveData();
         this.showToast('Результат сохранен');
         document.getElementById('result-modal').classList.remove('active');
     },
@@ -861,22 +944,16 @@ const clothingSize = {
         );
     },
 
-    // Сохранение в localStorage
-    saveTolocalStorage() {
-        const data = {
-            parameters: this.state.parameters,
-            savedResults: this.state.savedResults,
-            currentGender: this.state.currentGender
-        };
-        localStorage.setItem('clothingSizeData', JSON.stringify(data));
-    },
-
     // Показ уведомления
     showToast(message, type = 'success') {
         const toast = document.getElementById('toast');
         toast.textContent = message;
         toast.className = `toast ${type}`;
         toast.classList.add('show');
+        
+        if (this.pendingSync && !this.isOnline) {
+            message += ' (ожидает синхронизации)';
+        }
         
         setTimeout(() => {
             toast.classList.remove('show');
@@ -938,15 +1015,15 @@ const clothingSize = {
     },
 
     // Импорт данных
-    importData(file) {
+    async importData(file) {
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
                 const data = JSON.parse(e.target.result);
                 this.state.parameters = data.parameters || {};
                 this.state.savedResults = data.savedResults || [];
                 this.restoreParameters();
-                this.saveTolocalStorage();
+                await this.saveData();
                 this.showToast('Данные импортированы');
             } catch (error) {
                 this.showToast('Ошибка импорта данных', 'error');
