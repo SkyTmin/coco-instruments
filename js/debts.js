@@ -33,20 +33,30 @@ const debts = {
         if (user && this.isOnline) {
             // Загружаем данные с сервера
             try {
+                console.log('🔄 Загружаем данные долгов с сервера...');
                 const serverDebts = await API.debts.getDebts();
                 const serverCategories = await API.debts.getCategories();
                 
-                this.debtsList = serverDebts;
-                this.customCategories = serverCategories;
+                console.log('📥 Полученные данные с сервера:', { 
+                    debts: serverDebts, 
+                    categories: serverCategories 
+                });
+                
+                // Обновляем данные ВСЕГДА, даже если они пустые (важно для синхронизации!)
+                this.debtsList = serverDebts || [];
+                this.customCategories = serverCategories || [];
+                
+                console.log('✅ Данные долгов обновлены из сервера');
                 
                 // Сохраняем в localStorage как резервную копию
                 this.saveToLocalStorage();
             } catch (err) {
-                console.error('Failed to load from server, using localStorage:', err);
+                console.error('❌ Ошибка загрузки с сервера, используем localStorage:', err);
                 this.loadFromLocalStorage();
             }
         } else {
             // Загружаем из localStorage
+            console.log('📱 Загружаем данные долгов из localStorage');
             this.loadFromLocalStorage();
         }
         
@@ -61,25 +71,32 @@ const debts = {
         if (savedDebts) {
             try {
                 this.debtsList = JSON.parse(savedDebts) || [];
+                console.log('📥 Долги загружены из localStorage:', this.debtsList);
             } catch (e) {
                 console.error('Error parsing saved debts:', e);
                 this.debtsList = [];
             }
+        } else {
+            this.debtsList = [];
         }
         
         if (savedCategories) {
             try {
                 this.customCategories = JSON.parse(savedCategories) || [];
+                console.log('📥 Категории долгов загружены из localStorage:', this.customCategories);
             } catch (e) {
                 console.error('Error parsing saved categories:', e);
                 this.customCategories = [];
             }
+        } else {
+            this.customCategories = [];
         }
     },
 
     saveToLocalStorage() {
         localStorage.setItem('cocoDebts', JSON.stringify(this.debtsList));
         localStorage.setItem('cocoDebtCategories', JSON.stringify(this.customCategories));
+        console.log('💾 Данные долгов сохранены в localStorage');
     },
 
     async saveData() {
@@ -91,22 +108,34 @@ const debts = {
             await this.syncToServer();
         } else {
             this.pendingSync = true;
+            console.log('⏳ Отложена синхронизация с сервером (офлайн)');
         }
     },
 
     async syncToServer() {
         const user = await API.getProfile();
-        if (!user) return;
+        if (!user) {
+            console.log('❌ Пользователь не авторизован, пропускаем синхронизацию');
+            return;
+        }
 
         try {
+            console.log('🔄 Синхронизируем данные долгов с сервером...');
+            console.log('📤 Отправляем данные:', { 
+                debts: this.debtsList, 
+                categories: this.customCategories 
+            });
+            
             await Promise.all([
                 API.debts.saveDebts(this.debtsList),
                 API.debts.saveCategories(this.customCategories)
             ]);
+            
             this.pendingSync = false;
+            console.log('✅ Данные долгов синхронизированы с сервером');
             this.showToast('Данные синхронизированы', 'success');
         } catch (err) {
-            console.error('Failed to sync to server:', err);
+            console.error('❌ Ошибка синхронизации с сервером:', err);
             this.pendingSync = true;
             this.showToast('Ошибка синхронизации', 'warning');
         }
@@ -228,9 +257,11 @@ const debts = {
             this.debtsList.push(debtData);
         }
         
+        console.log('💾 Сохраняем долг:', debtData);
         await this.saveData();
         this.renderAll();
         this.hideDebtForm();
+        this.showToast('Долг сохранен');
     },
 
     renderAll() {
@@ -519,6 +550,7 @@ const debts = {
         
         document.getElementById('paymentForm').reset();
         this.setToday();
+        this.showToast('Платеж добавлен');
     },
 
     showPaymentEditForm(paymentId) {
@@ -586,6 +618,7 @@ const debts = {
             this.updateDetailStats();
             this.updateProgressBar();
             this.renderAll();
+            this.showToast('Платеж обновлен');
         }
         
         this.hidePaymentEditForm();
@@ -605,6 +638,7 @@ const debts = {
         this.updateDetailStats();
         this.updateProgressBar();
         this.renderAll();
+        this.showToast('Платеж удален');
     },
 
     updateDebtStatus(debt) {
@@ -682,6 +716,7 @@ const debts = {
                 await this.saveData();
                 this.renderAll();
                 this.hideDetail();
+                this.showToast('Долг удален');
             }
         });
     },
@@ -802,8 +837,10 @@ const debts = {
         
         if (!this.customCategories.find(cat => cat.id === categoryId)) {
             this.customCategories.push({ id: categoryId, name: categoryName });
+            console.log('📝 Добавляем категорию:', categoryName);
             await this.saveData();
             this.updateCategorySelect();
+            this.showToast('Категория добавлена');
         }
         
         document.getElementById('debtCategory').value = categoryId;
@@ -930,7 +967,12 @@ const debts = {
             document.body.appendChild(toast);
         }
         
-        toast.textContent = message;
+        let displayMessage = message;
+        if (this.pendingSync && !this.isOnline) {
+            displayMessage += ' (ожидает синхронизации)';
+        }
+        
+        toast.textContent = displayMessage;
         toast.className = `toast ${type} show`;
         
         setTimeout(() => {
