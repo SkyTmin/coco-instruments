@@ -9,6 +9,8 @@ const cocoMoney = {
     confirmCallback: null,
     touchStartX: 0,
     touchStartY: 0,
+    isOnline: navigator.onLine,
+    pendingSync: false,
 
     init() {
         // Ensure default structure exists before loading
@@ -17,35 +19,71 @@ const cocoMoney = {
             preliminary: []
         };
         
-        this.loadData();
         this.setupEventListeners();
         this.setupTouchGestures();
-        this.renderAll();
+        this.setupNetworkListeners();
+        this.loadData();
         this.setToday();
     },
 
-    loadData() {
+    setupNetworkListeners() {
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            if (this.pendingSync) {
+                this.syncToServer();
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+        });
+    },
+
+    async loadData() {
+        const user = await API.getProfile();
+        if (user && this.isOnline) {
+            // Загружаем данные с сервера
+            try {
+                const serverSheets = await API.cocoMoney.getSheets();
+                const serverCategories = await API.cocoMoney.getCategories();
+                
+                this.sheets = serverSheets;
+                this.customCategories = serverCategories;
+                
+                // Сохраняем в localStorage как резервную копию
+                this.saveToLocalStorage();
+            } catch (err) {
+                console.error('Failed to load from server, using localStorage:', err);
+                this.loadFromLocalStorage();
+            }
+        } else {
+            // Загружаем из localStorage
+            this.loadFromLocalStorage();
+        }
+        
+        this.renderAll();
+        this.updateCategorySelect();
+    },
+
+    loadFromLocalStorage() {
         const savedSheets = localStorage.getItem('cocoMoneySheets');
         const savedCategories = localStorage.getItem('cocoMoneyCategories');
         
         if (savedSheets) {
             try {
                 const parsed = JSON.parse(savedSheets);
-                // Ensure structure is correct
                 this.sheets = {
                     income: parsed.income || [],
                     preliminary: parsed.preliminary || []
                 };
             } catch (e) {
                 console.error('Error parsing saved sheets:', e);
-                // Reset to default structure
                 this.sheets = {
                     income: [],
                     preliminary: []
                 };
             }
         } else {
-            // Initialize default structure
             this.sheets = {
                 income: [],
                 preliminary: []
@@ -59,13 +97,42 @@ const cocoMoney = {
                 console.error('Error parsing saved categories:', e);
                 this.customCategories = [];
             }
-            this.updateCategorySelect();
         }
     },
 
-    saveData() {
+    saveToLocalStorage() {
         localStorage.setItem('cocoMoneySheets', JSON.stringify(this.sheets));
         localStorage.setItem('cocoMoneyCategories', JSON.stringify(this.customCategories));
+    },
+
+    async saveData() {
+        // Всегда сохраняем в localStorage
+        this.saveToLocalStorage();
+        
+        // Пытаемся синхронизировать с сервером
+        if (this.isOnline) {
+            await this.syncToServer();
+        } else {
+            this.pendingSync = true;
+        }
+    },
+
+    async syncToServer() {
+        const user = await API.getProfile();
+        if (!user) return;
+
+        try {
+            await Promise.all([
+                API.cocoMoney.saveSheets(this.sheets),
+                API.cocoMoney.saveCategories(this.customCategories)
+            ]);
+            this.pendingSync = false;
+            this.showToast('Данные синхронизированы', 'success');
+        } catch (err) {
+            console.error('Failed to sync to server:', err);
+            this.pendingSync = true;
+            this.showToast('Ошибка синхронизации', 'warning');
+        }
     },
 
     setupEventListeners() {
@@ -227,10 +294,12 @@ const cocoMoney = {
     createMiniCard(sheet, type) {
         const expenses = sheet.expenses || [];
         const totalExpenses = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+        const syncStatus = this.pendingSync && !this.isOnline ? '<span class="sync-pending">⏳</span>' : '';
+        
         return `
             <div class="mini-card ${type === 'preliminary' ? 'preliminary' : ''}" 
                  onclick="cocoMoney.showDetail('${sheet.id}', '${type}')">
-                <h3>${sheet.name || 'Без названия'}</h3>
+                <h3>${sheet.name || 'Без названия'} ${syncStatus}</h3>
                 <div class="mini-card-info">
                     <div class="info-row">
                         <span class="info-label">Сумма:</span>
@@ -280,7 +349,7 @@ const cocoMoney = {
         document.getElementById('sheetDate').value = today;
     },
 
-    saveSheet() {
+    async saveSheet() {
         const id = document.getElementById('sheetId').value;
         const type = document.getElementById('sheetType').value;
         
@@ -307,7 +376,7 @@ const cocoMoney = {
             this.sheets[type].push(sheetData);
         }
         
-        this.saveData();
+        await this.saveData();
         this.renderAll();
         this.hideCreateForm();
     },
@@ -373,7 +442,7 @@ const cocoMoney = {
         `).join('');
     },
 
-    addExpense() {
+    async addExpense() {
         const expense = {
             name: document.getElementById('expenseName').value,
             amount: parseFloat(document.getElementById('expenseAmount').value),
@@ -393,7 +462,7 @@ const cocoMoney = {
             this.sheets[this.currentSheet.type][sheetIndex].expenses = this.currentSheet.expenses;
         }
         
-        this.saveData();
+        await this.saveData();
         this.renderExpenses();
         this.updateDetailStats();
         this.renderAll();
@@ -483,22 +552,22 @@ const cocoMoney = {
         document.getElementById('createModal').classList.add('active');
     },
 
-    deleteCurrentSheet() {
+    async deleteCurrentSheet() {
         const message = `Вы действительно хотите удалить "${this.currentSheet.name || 'Без названия'}"? Это действие нельзя отменить.`;
-        this.showConfirm(message, () => {
+        this.showConfirm(message, async () => {
             const index = this.sheets[this.currentSheet.type].findIndex(s => s.id === this.currentSheet.id);
             if (index !== -1) {
                 this.sheets[this.currentSheet.type].splice(index, 1);
-                this.saveData();
+                await this.saveData();
                 this.renderAll();
                 this.hideDetail();
             }
         });
     },
 
-    convertToIncome() {
+    async convertToIncome() {
         const message = `Преобразовать "${this.currentSheet.name || 'Без названия'}" в доходный лист?`;
-        this.showConfirm(message, () => {
+        this.showConfirm(message, async () => {
             const prelimIndex = this.sheets.preliminary.findIndex(s => s.id === this.currentSheet.id);
             if (prelimIndex !== -1) {
                 const sheet = this.sheets.preliminary[prelimIndex];
@@ -512,7 +581,7 @@ const cocoMoney = {
                 
                 this.sheets.income.push(sheet);
                 
-                this.saveData();
+                await this.saveData();
                 this.renderAll();
                 this.hideDetail();
                 this.switchTab('income');
@@ -601,7 +670,7 @@ const cocoMoney = {
         this.restoreFormData();
     },
 
-    addCategory() {
+    async addCategory() {
         const categoryName = document.getElementById('categoryName').value.trim();
         if (!categoryName) return;
         
@@ -609,7 +678,7 @@ const cocoMoney = {
         
         if (!this.customCategories.find(cat => cat.id === categoryId)) {
             this.customCategories.push({ id: categoryId, name: categoryName });
-            this.saveData();
+            await this.saveData();
             this.updateCategorySelect();
         }
         
@@ -748,6 +817,24 @@ const cocoMoney = {
         } catch (e) {
             return 'Неизвестная дата';
         }
+    },
+
+    showToast(message, type = 'info') {
+        // Create toast element if it doesn't exist
+        let toast = document.getElementById('toast-coco-money');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'toast-coco-money';
+            toast.className = 'toast';
+            document.body.appendChild(toast);
+        }
+        
+        toast.textContent = message;
+        toast.className = `toast ${type} show`;
+        
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
     }
 };
 
