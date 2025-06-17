@@ -5,15 +5,56 @@ const debts = {
     customCategories: [],
     confirmCallback: null,
     sortOrder: 'date-desc',
+    isOnline: navigator.onLine,
+    pendingSync: false,
 
     init() {
-        this.loadData();
         this.setupEventListeners();
-        this.renderAll();
+        this.setupNetworkListeners();
+        this.loadData();
         this.setToday();
     },
 
-    loadData() {
+    setupNetworkListeners() {
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            if (this.pendingSync) {
+                this.syncToServer();
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+        });
+    },
+
+    async loadData() {
+        const user = await API.getProfile();
+        if (user && this.isOnline) {
+            // Загружаем данные с сервера
+            try {
+                const serverDebts = await API.debts.getDebts();
+                const serverCategories = await API.debts.getCategories();
+                
+                this.debtsList = serverDebts;
+                this.customCategories = serverCategories;
+                
+                // Сохраняем в localStorage как резервную копию
+                this.saveToLocalStorage();
+            } catch (err) {
+                console.error('Failed to load from server, using localStorage:', err);
+                this.loadFromLocalStorage();
+            }
+        } else {
+            // Загружаем из localStorage
+            this.loadFromLocalStorage();
+        }
+        
+        this.renderAll();
+        this.updateCategorySelect();
+    },
+
+    loadFromLocalStorage() {
         const savedDebts = localStorage.getItem('cocoDebts');
         const savedCategories = localStorage.getItem('cocoDebtCategories');
         
@@ -33,13 +74,42 @@ const debts = {
                 console.error('Error parsing saved categories:', e);
                 this.customCategories = [];
             }
-            this.updateCategorySelect();
         }
     },
 
-    saveData() {
+    saveToLocalStorage() {
         localStorage.setItem('cocoDebts', JSON.stringify(this.debtsList));
         localStorage.setItem('cocoDebtCategories', JSON.stringify(this.customCategories));
+    },
+
+    async saveData() {
+        // Всегда сохраняем в localStorage
+        this.saveToLocalStorage();
+        
+        // Пытаемся синхронизировать с сервером
+        if (this.isOnline) {
+            await this.syncToServer();
+        } else {
+            this.pendingSync = true;
+        }
+    },
+
+    async syncToServer() {
+        const user = await API.getProfile();
+        if (!user) return;
+
+        try {
+            await Promise.all([
+                API.debts.saveDebts(this.debtsList),
+                API.debts.saveCategories(this.customCategories)
+            ]);
+            this.pendingSync = false;
+            this.showToast('Данные синхронизированы', 'success');
+        } catch (err) {
+            console.error('Failed to sync to server:', err);
+            this.pendingSync = true;
+            this.showToast('Ошибка синхронизации', 'warning');
+        }
     },
 
     setupEventListeners() {
@@ -135,7 +205,7 @@ const debts = {
         }
     },
 
-    saveDebt() {
+    async saveDebt() {
         const id = document.getElementById('debtId').value;
         
         const debtData = {
@@ -158,7 +228,7 @@ const debts = {
             this.debtsList.push(debtData);
         }
         
-        this.saveData();
+        await this.saveData();
         this.renderAll();
         this.hideDebtForm();
     },
@@ -230,12 +300,13 @@ const debts = {
         };
         
         const hasPreliminary = preliminaryPayments.length > 0;
+        const syncStatus = this.pendingSync && !this.isOnline ? '<span class="sync-pending">⏳</span>' : '';
         
         return `
             <div class="debt-card ${hasPreliminary ? 'has-preliminary' : ''}" onclick="debts.showDetail('${debt.id}')">
                 ${hasPreliminary ? '<div class="preliminary-indicator" title="Есть предварительные погашения"></div>' : ''}
                 <div class="debt-card-header">
-                    <h3>${debt.name || 'Без названия'}</h3>
+                    <h3>${debt.name || 'Без названия'} ${syncStatus}</h3>
                     <span class="status-badge" style="background-color: ${statusColors[debt.status]}">
                         ${statusLabels[debt.status]}
                     </span>
@@ -414,7 +485,7 @@ const debts = {
         `;
     },
 
-    addPayment() {
+    async addPayment() {
         const isPreliminary = document.getElementById('paymentPreliminary').checked;
         const paymentDate = document.getElementById('paymentDate').value;
         
@@ -440,7 +511,7 @@ const debts = {
             this.updateDebtStatus(this.debtsList[debtIndex]);
         }
         
-        this.saveData();
+        await this.saveData();
         this.renderPayments();
         this.updateDetailStats();
         this.updateProgressBar();
@@ -486,7 +557,7 @@ const debts = {
         this.currentPayment = null;
     },
 
-    updatePayment() {
+    async updatePayment() {
         const paymentId = document.getElementById('editPaymentId').value;
         const paymentIndex = this.currentDebt.payments.findIndex(p => p.id === paymentId);
         
@@ -510,7 +581,7 @@ const debts = {
                 this.updateDebtStatus(this.debtsList[debtIndex]);
             }
             
-            this.saveData();
+            await this.saveData();
             this.renderPayments();
             this.updateDetailStats();
             this.updateProgressBar();
@@ -520,7 +591,7 @@ const debts = {
         this.hidePaymentEditForm();
     },
 
-    deletePayment(paymentId) {
+    async deletePayment(paymentId) {
         this.currentDebt.payments = this.currentDebt.payments.filter(p => p.id !== paymentId);
         
         const debtIndex = this.debtsList.findIndex(d => d.id === this.currentDebt.id);
@@ -529,7 +600,7 @@ const debts = {
             this.updateDebtStatus(this.debtsList[debtIndex]);
         }
         
-        this.saveData();
+        await this.saveData();
         this.renderPayments();
         this.updateDetailStats();
         this.updateProgressBar();
@@ -602,13 +673,13 @@ const debts = {
         document.getElementById('debtModal').classList.add('active');
     },
 
-    deleteCurrentDebt() {
+    async deleteCurrentDebt() {
         const message = `Вы действительно хотите удалить долг "${this.currentDebt.name || 'Без названия'}"? Это действие нельзя отменить.`;
-        this.showConfirm(message, () => {
+        this.showConfirm(message, async () => {
             const index = this.debtsList.findIndex(d => d.id === this.currentDebt.id);
             if (index !== -1) {
                 this.debtsList.splice(index, 1);
-                this.saveData();
+                await this.saveData();
                 this.renderAll();
                 this.hideDetail();
             }
@@ -723,7 +794,7 @@ const debts = {
         this.restoreFormData();
     },
 
-    addCategory() {
+    async addCategory() {
         const categoryName = document.getElementById('categoryName').value.trim();
         if (!categoryName) return;
         
@@ -731,7 +802,7 @@ const debts = {
         
         if (!this.customCategories.find(cat => cat.id === categoryId)) {
             this.customCategories.push({ id: categoryId, name: categoryName });
-            this.saveData();
+            await this.saveData();
             this.updateCategorySelect();
         }
         
@@ -847,6 +918,24 @@ const debts = {
         } catch (e) {
             return 'Неизвестная дата';
         }
+    },
+
+    showToast(message, type = 'info') {
+        // Create toast element if it doesn't exist
+        let toast = document.getElementById('toast-debts');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'toast-debts';
+            toast.className = 'toast';
+            document.body.appendChild(toast);
+        }
+        
+        toast.textContent = message;
+        toast.className = `toast ${type} show`;
+        
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
     }
 };
 
