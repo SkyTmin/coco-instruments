@@ -84,20 +84,17 @@ const app = {
             const serverSheets = await API.cocoMoney.getSheets();
             const serverCategories = await API.cocoMoney.getCategories();
             
-            // Если модуль загружен, обновляем данные
+            console.log('📥 Данные с сервера - листы:', serverSheets, 'категории:', serverCategories);
+            
+            // Если модуль загружен, обновляем данные ВСЕГДА (даже если они пустые)
             if (typeof cocoMoney !== 'undefined') {
-                // Проверяем, есть ли данные на сервере
-                if (serverSheets && (serverSheets.income.length > 0 || serverSheets.preliminary.length > 0)) {
-                    console.log('📥 Загружены листы с сервера:', serverSheets);
-                    cocoMoney.sheets = serverSheets;
-                    cocoMoney.renderAll();
-                }
+                // Обновляем данные независимо от того, пустые они или нет
+                cocoMoney.sheets = serverSheets || { income: [], preliminary: [] };
+                cocoMoney.customCategories = serverCategories || [];
                 
-                if (serverCategories && serverCategories.length > 0) {
-                    console.log('📥 Загружены категории с сервера:', serverCategories);
-                    cocoMoney.customCategories = serverCategories;
-                    cocoMoney.updateCategorySelect();
-                }
+                console.log('✅ Данные Coco Money обновлены локально');
+                cocoMoney.renderAll();
+                cocoMoney.updateCategorySelect();
             }
             
             console.log('✅ Coco Money данные загружены');
@@ -112,19 +109,17 @@ const app = {
             const serverDebts = await API.debts.getDebts();
             const serverCategories = await API.debts.getCategories();
             
-            // Если модуль загружен, обновляем данные
+            console.log('📥 Данные с сервера - долги:', serverDebts, 'категории:', serverCategories);
+            
+            // Если модуль загружен, обновляем данные ВСЕГДА (даже если они пустые)
             if (typeof debts !== 'undefined') {
-                if (serverDebts && serverDebts.length > 0) {
-                    console.log('📥 Загружены долги с сервера:', serverDebts);
-                    debts.debtsList = serverDebts;
-                    debts.renderAll();
-                }
+                // Обновляем данные независимо от того, пустые они или нет
+                debts.debtsList = serverDebts || [];
+                debts.customCategories = serverCategories || [];
                 
-                if (serverCategories && serverCategories.length > 0) {
-                    console.log('📥 Загружены категории долгов с сервера:', serverCategories);
-                    debts.customCategories = serverCategories;
-                    debts.updateCategorySelect();
-                }
+                console.log('✅ Данные долгов обновлены локально');
+                debts.renderAll();
+                debts.updateCategorySelect();
             }
             
             console.log('✅ Данные долгов загружены');
@@ -138,32 +133,18 @@ const app = {
             console.log('👕 Загружаем данные размеров одежды...');
             const serverData = await API.clothingSize.getData();
             
-            // Если модуль загружен, обновляем данные
+            console.log('📥 Данные размеров одежды с сервера:', serverData);
+            
+            // Если модуль загружен, обновляем данные ВСЕГДА
             if (typeof clothingSize !== 'undefined' && serverData) {
-                let hasData = false;
+                // Обновляем данные независимо от того, пустые они или нет
+                clothingSize.state.parameters = serverData.parameters || {};
+                clothingSize.state.savedResults = serverData.savedResults || [];
+                clothingSize.state.currentGender = serverData.currentGender || 'male';
                 
-                if (Object.keys(serverData.parameters || {}).length > 0) {
-                    console.log('📥 Загружены параметры одежды с сервера:', serverData.parameters);
-                    clothingSize.state.parameters = serverData.parameters;
-                    hasData = true;
-                }
-                
-                if (serverData.savedResults && serverData.savedResults.length > 0) {
-                    console.log('📥 Загружены результаты одежды с сервера:', serverData.savedResults);
-                    clothingSize.state.savedResults = serverData.savedResults;
-                    hasData = true;
-                }
-                
-                if (serverData.currentGender) {
-                    console.log('📥 Загружен пол с сервера:', serverData.currentGender);
-                    clothingSize.state.currentGender = serverData.currentGender;
-                    hasData = true;
-                }
-                
-                if (hasData) {
-                    clothingSize.restoreParameters();
-                    clothingSize.updateGenderSpecificElements();
-                }
+                console.log('✅ Данные размеров одежды обновлены локально');
+                clothingSize.restoreParameters();
+                clothingSize.updateGenderSpecificElements();
             }
             
             console.log('✅ Данные размеров одежды загружены');
@@ -177,13 +158,15 @@ const app = {
             console.log('📐 Загружаем историю калькулятора масштабов...');
             const serverHistory = await API.scaleCalculator.getHistory();
             
-            // Если модуль загружен, обновляем данные
+            console.log('📥 История масштабов с сервера:', serverHistory);
+            
+            // Если модуль загружен, обновляем данные ВСЕГДА (даже если пустые)
             if (typeof scaleCalculator !== 'undefined') {
-                if (serverHistory && serverHistory.length > 0) {
-                    console.log('📥 Загружена история масштабов с сервера:', serverHistory);
-                    scaleCalculator.history = serverHistory;
-                    scaleCalculator.renderHistory();
-                }
+                // Обновляем данные независимо от того, пустые они или нет
+                scaleCalculator.history = serverHistory || [];
+                
+                console.log('✅ История калькулятора масштабов обновлена локально');
+                scaleCalculator.renderHistory();
             }
             
             console.log('✅ История калькулятора масштабов загружена');
