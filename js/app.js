@@ -2,9 +2,12 @@ const app = {
     currentUser: null,
     currentSection: 'home',
     previousSection: null,
+    isOnline: navigator.onLine,
+    syncInProgress: false,
 
     init() {
         console.log('App init started');
+        this.setupNetworkListeners();
         this.checkAuth();
         this.setupEventListeners();
         this.addTouchSupport();
@@ -12,11 +15,70 @@ const app = {
         console.log('App init completed');
     },
 
-    checkAuth() {
-        const user = localStorage.getItem('currentUser');
-        if (user) {
-            this.currentUser = JSON.parse(user);
-            this.updateAuthUI(true);
+    setupNetworkListeners() {
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            if (this.currentUser) {
+                this.syncAllData();
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+        });
+    },
+
+    async checkAuth() {
+        try {
+            const user = await API.getProfile();
+            if (user) {
+                this.currentUser = user;
+                this.updateAuthUI(true);
+                
+                // Автоматическая синхронизация при запуске приложения
+                if (this.isOnline) {
+                    await this.syncAllData();
+                }
+            } else {
+                this.updateAuthUI(false);
+            }
+        } catch (error) {
+            console.error('Auth check failed:', error);
+            this.updateAuthUI(false);
+        }
+    },
+
+    async syncAllData() {
+        if (this.syncInProgress || !this.currentUser || !this.isOnline) {
+            return;
+        }
+
+        this.syncInProgress = true;
+        this.showSyncIndicator(true);
+
+        try {
+            await API.sync.syncAllData();
+            this.showToast('Данные синхронизированы', 'success');
+        } catch (error) {
+            console.error('Sync failed:', error);
+            this.showToast('Ошибка синхронизации', 'error');
+        } finally {
+            this.syncInProgress = false;
+            this.showSyncIndicator(false);
+        }
+    },
+
+    showSyncIndicator(show) {
+        let indicator = document.getElementById('sync-indicator');
+        
+        if (show && !indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'sync-indicator';
+            indicator.className = 'sync-indicator';
+            indicator.innerHTML = '⏳ Синхронизация...';
+            document.body.appendChild(indicator);
+        } else if (!show && indicator) {
+            indicator.remove();
         }
     },
 
@@ -33,6 +95,66 @@ const app = {
                 logoutBtn.style.display = 'none';
             }
         }
+
+        // Показываем/скрываем индикатор статуса синхронизации
+        this.updateSyncStatus();
+    },
+
+    updateSyncStatus() {
+        let statusIndicator = document.getElementById('connection-status');
+        
+        if (this.currentUser) {
+            if (!statusIndicator) {
+                statusIndicator = document.createElement('div');
+                statusIndicator.id = 'connection-status';
+                statusIndicator.className = 'connection-status';
+                
+                const header = document.querySelector('.header-content');
+                if (header) {
+                    header.appendChild(statusIndicator);
+                }
+            }
+            
+            if (this.isOnline) {
+                statusIndicator.innerHTML = '🟢 Онлайн';
+                statusIndicator.className = 'connection-status online';
+            } else {
+                statusIndicator.innerHTML = '🔴 Офлайн';
+                statusIndicator.className = 'connection-status offline';
+            }
+        } else if (statusIndicator) {
+            statusIndicator.remove();
+        }
+    },
+
+    async onUserLogin(userData) {
+        this.currentUser = userData;
+        this.updateAuthUI(true);
+        
+        // Синхронизация данных после входа
+        if (this.isOnline) {
+            setTimeout(() => {
+                this.syncAllData();
+            }, 1000); // Небольшая задержка для UI
+        }
+    },
+
+    async onUserLogout() {
+        this.currentUser = null;
+        this.updateAuthUI(false);
+        
+        // Очистка данных при выходе (опционально)
+        // this.clearLocalData();
+    },
+
+    clearLocalData() {
+        // Очищаем все локальные данные при выходе из аккаунта
+        localStorage.removeItem('cocoMoneySheets');
+        localStorage.removeItem('cocoMoneyCategories');
+        localStorage.removeItem('cocoDebts');
+        localStorage.removeItem('cocoDebtCategories');
+        localStorage.removeItem('clothingSizeData');
+        localStorage.removeItem('scaleCalculatorHistory');
     },
 
     setupEventListeners() {
@@ -161,12 +283,12 @@ const app = {
             // Сохраняем информацию о том, откуда пришли для калькулятора масштабов
             sessionStorage.setItem('returnToSection', 'geodesy');
             window.location.href = 'scale-calculator.html';
-	} else if (service === 'clothing-size') {
-    sessionStorage.setItem('returnToSection', 'clothing');
-    window.location.href = 'clothing-size.html';
-	} else if (service === 'clothing-carousel') {
-    console.log('Карусель одежды еще не реализована');
-    this.showToast('Функция в разработке');
+        } else if (service === 'clothing-size') {
+            sessionStorage.setItem('returnToSection', 'clothing');
+            window.location.href = 'clothing-size.html';
+        } else if (service === 'clothing-carousel') {
+            console.log('Карусель одежды еще не реализована');
+            this.showToast('Функция в разработке');
         } else {
             console.log(`Service not implemented: ${service}`);
         }
@@ -251,6 +373,24 @@ const app = {
                 }
             }
         };
+    },
+
+    showToast(message, type = 'info') {
+        // Create toast element if it doesn't exist
+        let toast = document.getElementById('app-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'app-toast';
+            toast.className = 'toast';
+            document.body.appendChild(toast);
+        }
+        
+        toast.textContent = message;
+        toast.className = `toast ${type} show`;
+        
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
     }
 };
 
