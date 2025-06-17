@@ -140,6 +140,232 @@ const API = {
       }
       API.clearTokens();
     }
+  },
+
+  // Coco Money API
+  cocoMoney: {
+    async getSheets() {
+      try {
+        const res = await API.request('/coco-money/sheets');
+        return res.data || { income: [], preliminary: [] };
+      } catch (err) {
+        console.error('Error loading sheets:', err);
+        return { income: [], preliminary: [] };
+      }
+    },
+
+    async saveSheets(sheets) {
+      try {
+        await API.request('/coco-money/sheets', {
+          method: 'POST',
+          body: JSON.stringify({ sheets })
+        });
+        return true;
+      } catch (err) {
+        console.error('Error saving sheets:', err);
+        return false;
+      }
+    },
+
+    async getCategories() {
+      try {
+        const res = await API.request('/coco-money/categories');
+        return res.data || [];
+      } catch (err) {
+        console.error('Error loading categories:', err);
+        return [];
+      }
+    },
+
+    async saveCategories(categories) {
+      try {
+        await API.request('/coco-money/categories', {
+          method: 'POST',
+          body: JSON.stringify({ categories })
+        });
+        return true;
+      } catch (err) {
+        console.error('Error saving categories:', err);
+        return false;
+      }
+    }
+  },
+
+  // Debts API
+  debts: {
+    async getDebts() {
+      try {
+        const res = await API.request('/debts');
+        return res.data || [];
+      } catch (err) {
+        console.error('Error loading debts:', err);
+        return [];
+      }
+    },
+
+    async saveDebts(debts) {
+      try {
+        await API.request('/debts', {
+          method: 'POST',
+          body: JSON.stringify({ debts })
+        });
+        return true;
+      } catch (err) {
+        console.error('Error saving debts:', err);
+        return false;
+      }
+    },
+
+    async getCategories() {
+      try {
+        const res = await API.request('/debts/categories');
+        return res.data || [];
+      } catch (err) {
+        console.error('Error loading debt categories:', err);
+        return [];
+      }
+    },
+
+    async saveCategories(categories) {
+      try {
+        await API.request('/debts/categories', {
+          method: 'POST',
+          body: JSON.stringify({ categories })
+        });
+        return true;
+      } catch (err) {
+        console.error('Error saving debt categories:', err);
+        return false;
+      }
+    }
+  },
+
+  // Clothing Size API
+  clothingSize: {
+    async getData() {
+      try {
+        const res = await API.request('/clothing-size');
+        return res.data || {
+          parameters: {},
+          savedResults: [],
+          currentGender: 'male'
+        };
+      } catch (err) {
+        console.error('Error loading clothing size data:', err);
+        return {
+          parameters: {},
+          savedResults: [],
+          currentGender: 'male'
+        };
+      }
+    },
+
+    async saveData(data) {
+      try {
+        await API.request('/clothing-size', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+        return true;
+      } catch (err) {
+        console.error('Error saving clothing size data:', err);
+        return false;
+      }
+    }
+  },
+
+  // Scale Calculator API
+  scaleCalculator: {
+    async getHistory() {
+      try {
+        const res = await API.request('/scale-calculator/history');
+        return res.data || [];
+      } catch (err) {
+        console.error('Error loading scale calculator history:', err);
+        return [];
+      }
+    },
+
+    async saveHistory(history) {
+      try {
+        await API.request('/scale-calculator/history', {
+          method: 'POST',
+          body: JSON.stringify({ history })
+        });
+        return true;
+      } catch (err) {
+        console.error('Error saving scale calculator history:', err);
+        return false;
+      }
+    }
+  },
+
+  // Sync utilities
+  sync: {
+    async syncAllData() {
+      const user = await API.getProfile();
+      if (!user) return false;
+
+      try {
+        // Синхронизация всех модулей
+        await Promise.all([
+          API.sync.syncCocoMoney(),
+          API.sync.syncDebts(),
+          API.sync.syncClothingSize(),
+          API.sync.syncScaleCalculator()
+        ]);
+        return true;
+      } catch (err) {
+        console.error('Sync failed:', err);
+        return false;
+      }
+    },
+
+    async syncCocoMoney() {
+      if (typeof cocoMoney !== 'undefined') {
+        const serverData = await API.cocoMoney.getSheets();
+        const serverCategories = await API.cocoMoney.getCategories();
+        
+        cocoMoney.sheets = serverData;
+        cocoMoney.customCategories = serverCategories;
+        cocoMoney.renderAll();
+        cocoMoney.updateCategorySelect();
+      }
+    },
+
+    async syncDebts() {
+      if (typeof debts !== 'undefined') {
+        const serverDebts = await API.debts.getDebts();
+        const serverCategories = await API.debts.getCategories();
+        
+        debts.debtsList = serverDebts;
+        debts.customCategories = serverCategories;
+        debts.renderAll();
+        debts.updateCategorySelect();
+      }
+    },
+
+    async syncClothingSize() {
+      if (typeof clothingSize !== 'undefined') {
+        const serverData = await API.clothingSize.getData();
+        
+        clothingSize.state.parameters = serverData.parameters || {};
+        clothingSize.state.savedResults = serverData.savedResults || [];
+        clothingSize.state.currentGender = serverData.currentGender || 'male';
+        
+        clothingSize.restoreParameters();
+        clothingSize.updateGenderSpecificElements();
+      }
+    },
+
+    async syncScaleCalculator() {
+      if (typeof scaleCalculator !== 'undefined') {
+        const serverHistory = await API.scaleCalculator.getHistory();
+        
+        scaleCalculator.history = serverHistory;
+        scaleCalculator.renderHistory();
+      }
+    }
   }
 };
 
