@@ -254,29 +254,48 @@ const clothingSize = {
 
     // Загрузка сохраненных данных
     async loadSavedData() {
-        const user = await API.getProfile();
-        if (user && this.isOnline) {
-            // Загружаем данные с сервера
-            try {
-                const serverData = await API.clothingSize.getData();
-                
-                this.state.parameters = serverData.parameters || {};
-                this.state.savedResults = serverData.savedResults || [];
-                this.state.currentGender = serverData.currentGender || 'male';
-                
-                // Сохраняем в localStorage как резервную копию
-                this.saveToLocalStorage();
-            } catch (err) {
-                console.error('Failed to load from server, using localStorage:', err);
-                this.loadFromLocalStorage();
-            }
-        } else {
-            // Загружаем из localStorage
-            this.loadFromLocalStorage();
+    const user = await API.getProfile();
+    if (user && this.isOnline) {
+        // Загружаем данные с сервера ТОЛЬКО для авторизованного пользователя
+        try {
+            const serverData = await API.clothingSize.getData();
+            
+            this.state.parameters = serverData.parameters || {};
+            this.state.savedResults = serverData.savedResults || [];
+            this.state.currentGender = serverData.currentGender || 'male';
+            
+            // Сохраняем в localStorage как резервную копию
+            this.saveToLocalStorage();
+        } catch (err) {
+            console.error('Failed to load from server:', err);
+            // НЕ загружаем из localStorage при ошибке если пользователь авторизован
+            // Показываем пустые данные
+            this.state = {
+                currentSection: 'parameters',
+                currentUnit: 'cm',
+                currentGender: 'male',
+                parameters: {},
+                savedResults: [],
+                currentCategory: null
+            };
         }
-        
-        this.restoreParameters();
-    },
+    } else if (!user) {
+        // Если пользователь не авторизован - показываем пустые данные
+        this.state = {
+            currentSection: 'parameters',
+            currentUnit: 'cm',
+            currentGender: 'male',
+            parameters: {},
+            savedResults: [],
+            currentCategory: null
+        };
+    } else {
+        // Пользователь авторизован, но офлайн - загружаем из localStorage
+        this.loadFromLocalStorage();
+    }
+    
+    this.restoreParameters();
+},
 
     loadFromLocalStorage() {
         const saved = localStorage.getItem('clothingSizeData');
