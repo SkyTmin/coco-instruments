@@ -43,17 +43,25 @@ const scaleCalculator = {
         if (user && this.isOnline) {
             // Загружаем данные с сервера
             try {
+                console.log('🔄 Загружаем историю калькулятора масштабов с сервера...');
                 const serverHistory = await API.scaleCalculator.getHistory();
-                this.history = serverHistory;
+                
+                console.log('📥 История с сервера:', serverHistory);
+                
+                // Обновляем данные ВСЕГДА, даже если они пустые (важно для синхронизации!)
+                this.history = serverHistory || [];
+                
+                console.log('✅ История калькулятора масштабов обновлена из сервера');
                 
                 // Сохраняем в localStorage как резервную копию
                 this.saveToLocalStorage();
             } catch (err) {
-                console.error('Failed to load from server, using localStorage:', err);
+                console.error('❌ Ошибка загрузки с сервера, используем localStorage:', err);
                 this.loadFromLocalStorage();
             }
         } else {
             // Загружаем из localStorage
+            console.log('📱 Загружаем историю калькулятора масштабов из localStorage');
             this.loadFromLocalStorage();
         }
         
@@ -65,15 +73,19 @@ const scaleCalculator = {
         if (saved) {
             try {
                 this.history = JSON.parse(saved) || [];
+                console.log('📥 История загружена из localStorage:', this.history);
             } catch (e) {
                 console.error('Ошибка загрузки истории:', e);
                 this.history = [];
             }
+        } else {
+            this.history = [];
         }
     },
 
     saveToLocalStorage() {
         localStorage.setItem('scaleCalculatorHistory', JSON.stringify(this.history));
+        console.log('💾 История калькулятора масштабов сохранена в localStorage');
     },
 
     async saveHistory() {
@@ -85,19 +97,28 @@ const scaleCalculator = {
             await this.syncToServer();
         } else {
             this.pendingSync = true;
+            console.log('⏳ Отложена синхронизация с сервером (офлайн)');
         }
     },
 
     async syncToServer() {
         const user = await API.getProfile();
-        if (!user) return;
+        if (!user) {
+            console.log('❌ Пользователь не авторизован, пропускаем синхронизацию');
+            return;
+        }
 
         try {
+            console.log('🔄 Синхронизируем историю калькулятора масштабов с сервером...');
+            console.log('📤 Отправляем данные:', this.history);
+            
             await API.scaleCalculator.saveHistory(this.history);
+            
             this.pendingSync = false;
+            console.log('✅ История калькулятора масштабов синхронизирована с сервером');
             this.showToast('История синхронизирована');
         } catch (err) {
-            console.error('Failed to sync to server:', err);
+            console.error('❌ Ошибка синхронизации с сервером:', err);
             this.pendingSync = true;
             this.showToast('Ошибка синхронизации');
         }
@@ -449,11 +470,12 @@ const scaleCalculator = {
     showToast(message) {
         const toast = document.getElementById('toast');
         
+        let displayMessage = message;
         if (this.pendingSync && !this.isOnline) {
-            message += ' (ожидает синхронизации)';
+            displayMessage += ' (ожидает синхронизации)';
         }
         
-        toast.textContent = message;
+        toast.textContent = displayMessage;
         toast.classList.add('show');
         
         setTimeout(() => {
@@ -529,4 +551,3 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
     navigator.serviceWorker.register('/sw.js').catch((error) => {
         console.log('Service Worker registration failed:', error);
     });
-}
