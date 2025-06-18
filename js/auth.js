@@ -70,7 +70,7 @@ const auth = {
       
       // Показываем уведомление об успешном входе
       if (typeof app !== 'undefined' && app.showToast) {
-        app.showToast('Добро пожаловать! Синхронизируем ваши данные...', 'success');
+        app.showToast('Добро пожаловать! Загружаем ваши данные...', 'success');
       } else {
         alert('Вход выполнен успешно!');
       }
@@ -145,7 +145,7 @@ const auth = {
   },
 
   async logout() {
-    const confirmLogout = confirm('Вы действительно хотите выйти? Несинхронизированные данные могут быть потеряны.');
+    const confirmLogout = confirm('Вы действительно хотите выйти?');
     if (!confirmLogout) return;
 
     try {
@@ -200,18 +200,28 @@ const auth = {
         app.currentUser = user;
         app.updateAuthUI(true);
         
-        // Автоматическая синхронизация при обнаружении авторизованного пользователя
-        if (typeof app !== 'undefined' && app.syncAllData && navigator.onLine) {
+        // ВАЖНО: Загружаем данные с сервера для авторизованного пользователя
+        if (typeof app !== 'undefined' && app.loadAllDataFromServer && navigator.onLine) {
           setTimeout(() => {
-            app.syncAllData();
+            app.loadAllDataFromServer();
           }, 500);
         }
       } else {
         app.updateAuthUI(false);
+        
+        // ВАЖНО: Очищаем локальные данные для неавторизованного пользователя
+        if (typeof app !== 'undefined' && app.clearAllLocalData) {
+          app.clearAllLocalData();
+        }
       }
     } catch (e) {
       console.error('Auth status check failed:', e);
       app.updateAuthUI(false);
+      
+      // Очищаем данные при ошибке проверки авторизации
+      if (typeof app !== 'undefined' && app.clearAllLocalData) {
+        app.clearAllLocalData();
+      }
     }
   }
 };
