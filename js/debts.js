@@ -29,40 +29,48 @@ const debts = {
     },
 
     async loadData() {
-        const user = await API.getProfile();
-        if (user && this.isOnline) {
-            // Загружаем данные с сервера
-            try {
-                console.log('🔄 Загружаем данные долгов с сервера...');
-                const serverDebts = await API.debts.getDebts();
-                const serverCategories = await API.debts.getCategories();
-                
-                console.log('📥 Полученные данные с сервера:', { 
-                    debts: serverDebts, 
-                    categories: serverCategories 
-                });
-                
-                // Обновляем данные ВСЕГДА, даже если они пустые (важно для синхронизации!)
-                this.debtsList = serverDebts || [];
-                this.customCategories = serverCategories || [];
-                
-                console.log('✅ Данные долгов обновлены из сервера');
-                
-                // Сохраняем в localStorage как резервную копию
-                this.saveToLocalStorage();
-            } catch (err) {
-                console.error('❌ Ошибка загрузки с сервера, используем localStorage:', err);
-                this.loadFromLocalStorage();
-            }
-        } else {
-            // Загружаем из localStorage
-            console.log('📱 Загружаем данные долгов из localStorage');
-            this.loadFromLocalStorage();
+    const user = await API.getProfile();
+    if (user && this.isOnline) {
+        // Загружаем данные с сервера ТОЛЬКО для авторизованного пользователя
+        try {
+            console.log('🔄 Загружаем данные долгов с сервера...');
+            const serverDebts = await API.debts.getDebts();
+            const serverCategories = await API.debts.getCategories();
+            
+            console.log('📥 Полученные данные с сервера:', { 
+                debts: serverDebts, 
+                categories: serverCategories 
+            });
+            
+            // Обновляем данные ВСЕГДА, даже если они пустые (важно для синхронизации!)
+            this.debtsList = serverDebts || [];
+            this.customCategories = serverCategories || [];
+            
+            console.log('✅ Данные долгов обновлены из сервера');
+            
+            // Сохраняем в localStorage как резервную копию
+            this.saveToLocalStorage();
+        } catch (err) {
+            console.error('❌ Ошибка загрузки с сервера:', err);
+            // НЕ загружаем из localStorage при ошибке если пользователь авторизован
+            // Показываем пустые данные
+            this.debtsList = [];
+            this.customCategories = [];
         }
-        
-        this.renderAll();
-        this.updateCategorySelect();
-    },
+    } else if (!user) {
+        // Если пользователь не авторизован - показываем пустые данные
+        console.log('📱 Пользователь не авторизован - показываем пустые данные');
+        this.debtsList = [];
+        this.customCategories = [];
+    } else {
+        // Пользователь авторизован, но офлайн - загружаем из localStorage
+        console.log('📱 Загружаем данные долгов из localStorage (офлайн режим)');
+        this.loadFromLocalStorage();
+    }
+    
+    this.renderAll();
+    this.updateCategorySelect();
+},
 
     loadFromLocalStorage() {
         const savedDebts = localStorage.getItem('cocoDebts');
