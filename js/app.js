@@ -35,16 +35,47 @@ const app = {
                 this.currentUser = user;
                 this.updateAuthUI(true);
                 
-                // Автоматическая синхронизация при запуске приложения
+                // ВАЖНО: Всегда загружаем данные с сервера при проверке авторизации
                 if (this.isOnline) {
-                    await this.syncAllData();
+                    await this.loadAllDataFromServer();
                 }
             } else {
                 this.updateAuthUI(false);
+                // Очищаем локальные данные если пользователь не авторизован
+                this.clearAllLocalData();
             }
         } catch (error) {
             console.error('Auth check failed:', error);
             this.updateAuthUI(false);
+            this.clearAllLocalData();
+        }
+    },
+
+    async loadAllDataFromServer() {
+        if (!this.currentUser || !this.isOnline) {
+            return;
+        }
+
+        this.showSyncIndicator(true);
+
+        try {
+            console.log('🔄 Загружаем все данные с сервера...');
+            
+            // Параллельная загрузка всех данных
+            await Promise.all([
+                this.loadCocoMoneyData(),
+                this.loadDebtsData(),
+                this.loadClothingSizeData(),
+                this.loadScaleCalculatorData()
+            ]);
+            
+            console.log('✅ Все данные загружены с сервера');
+            this.showToast('Данные загружены', 'success');
+        } catch (error) {
+            console.error('❌ Ошибка загрузки данных:', error);
+            this.showToast('Ошибка загрузки данных', 'error');
+        } finally {
+            this.showSyncIndicator(false);
         }
     },
 
@@ -57,17 +88,17 @@ const app = {
         this.showSyncIndicator(true);
 
         try {
-            console.log('🔄 Начинаем полную синхронизацию данных...');
+            console.log('🔄 Синхронизация данных с сервером...');
             
-            // Загружаем данные с сервера для всех модулей
+            // Отправляем локальные данные на сервер
             await Promise.all([
-                this.loadCocoMoneyData(),
-                this.loadDebtsData(),
-                this.loadClothingSizeData(),
-                this.loadScaleCalculatorData()
+                this.syncCocoMoneyToServer(),
+                this.syncDebtsToServer(),
+                this.syncClothingSizeToServer(),
+                this.syncScaleCalculatorToServer()
             ]);
             
-            console.log('✅ Синхронизация завершена успешно');
+            console.log('✅ Синхронизация завершена');
             this.showToast('Данные синхронизированы', 'success');
         } catch (error) {
             console.error('❌ Ошибка синхронизации:', error);
@@ -84,15 +115,14 @@ const app = {
             const serverSheets = await API.cocoMoney.getSheets();
             const serverCategories = await API.cocoMoney.getCategories();
             
-            console.log('📥 Данные с сервера - листы:', serverSheets, 'категории:', serverCategories);
+            // Сохраняем в localStorage для офлайн доступа
+            localStorage.setItem('cocoMoneySheets', JSON.stringify(serverSheets));
+            localStorage.setItem('cocoMoneyCategories', JSON.stringify(serverCategories));
             
-            // Если модуль загружен, обновляем данные ВСЕГДА (даже если они пустые)
+            // Обновляем UI если модуль загружен
             if (typeof cocoMoney !== 'undefined') {
-                // Обновляем данные независимо от того, пустые они или нет
                 cocoMoney.sheets = serverSheets || { income: [], preliminary: [] };
                 cocoMoney.customCategories = serverCategories || [];
-                
-                console.log('✅ Данные Coco Money обновлены локально');
                 cocoMoney.renderAll();
                 cocoMoney.updateCategorySelect();
             }
@@ -109,15 +139,14 @@ const app = {
             const serverDebts = await API.debts.getDebts();
             const serverCategories = await API.debts.getCategories();
             
-            console.log('📥 Данные с сервера - долги:', serverDebts, 'категории:', serverCategories);
+            // Сохраняем в localStorage для офлайн доступа
+            localStorage.setItem('cocoDebts', JSON.stringify(serverDebts));
+            localStorage.setItem('cocoDebtCategories', JSON.stringify(serverCategories));
             
-            // Если модуль загружен, обновляем данные ВСЕГДА (даже если они пустые)
+            // Обновляем UI если модуль загружен
             if (typeof debts !== 'undefined') {
-                // Обновляем данные независимо от того, пустые они или нет
                 debts.debtsList = serverDebts || [];
                 debts.customCategories = serverCategories || [];
-                
-                console.log('✅ Данные долгов обновлены локально');
                 debts.renderAll();
                 debts.updateCategorySelect();
             }
@@ -133,16 +162,14 @@ const app = {
             console.log('👕 Загружаем данные размеров одежды...');
             const serverData = await API.clothingSize.getData();
             
-            console.log('📥 Данные размеров одежды с сервера:', serverData);
+            // Сохраняем в localStorage для офлайн доступа
+            localStorage.setItem('clothingSizeData', JSON.stringify(serverData));
             
-            // Если модуль загружен, обновляем данные ВСЕГДА
+            // Обновляем UI если модуль загружен
             if (typeof clothingSize !== 'undefined' && serverData) {
-                // Обновляем данные независимо от того, пустые они или нет
                 clothingSize.state.parameters = serverData.parameters || {};
                 clothingSize.state.savedResults = serverData.savedResults || [];
                 clothingSize.state.currentGender = serverData.currentGender || 'male';
-                
-                console.log('✅ Данные размеров одежды обновлены локально');
                 clothingSize.restoreParameters();
                 clothingSize.updateGenderSpecificElements();
             }
@@ -158,20 +185,49 @@ const app = {
             console.log('📐 Загружаем историю калькулятора масштабов...');
             const serverHistory = await API.scaleCalculator.getHistory();
             
-            console.log('📥 История масштабов с сервера:', serverHistory);
+            // Сохраняем в localStorage для офлайн доступа
+            localStorage.setItem('scaleCalculatorHistory', JSON.stringify(serverHistory));
             
-            // Если модуль загружен, обновляем данные ВСЕГДА (даже если пустые)
+            // Обновляем UI если модуль загружен
             if (typeof scaleCalculator !== 'undefined') {
-                // Обновляем данные независимо от того, пустые они или нет
                 scaleCalculator.history = serverHistory || [];
-                
-                console.log('✅ История калькулятора масштабов обновлена локально');
                 scaleCalculator.renderHistory();
             }
             
             console.log('✅ История калькулятора масштабов загружена');
         } catch (error) {
             console.error('❌ Ошибка загрузки истории калькулятора:', error);
+        }
+    },
+
+    // Методы синхронизации локальных данных на сервер
+    async syncCocoMoneyToServer() {
+        if (typeof cocoMoney !== 'undefined' && cocoMoney.sheets) {
+            await API.cocoMoney.saveSheets(cocoMoney.sheets);
+            await API.cocoMoney.saveCategories(cocoMoney.customCategories);
+        }
+    },
+
+    async syncDebtsToServer() {
+        if (typeof debts !== 'undefined' && debts.debtsList) {
+            await API.debts.saveDebts(debts.debtsList);
+            await API.debts.saveCategories(debts.customCategories);
+        }
+    },
+
+    async syncClothingSizeToServer() {
+        if (typeof clothingSize !== 'undefined' && clothingSize.state) {
+            await API.clothingSize.saveData({
+                parameters: clothingSize.state.parameters,
+                savedResults: clothingSize.state.savedResults,
+                currentGender: clothingSize.state.currentGender
+            });
+        }
+    },
+
+    async syncScaleCalculatorToServer() {
+        if (typeof scaleCalculator !== 'undefined' && scaleCalculator.history) {
+            await API.scaleCalculator.saveHistory(scaleCalculator.history);
         }
     },
 
@@ -203,7 +259,6 @@ const app = {
             }
         }
 
-        // Показываем/скрываем индикатор статуса синхронизации
         this.updateSyncStatus();
     },
 
@@ -239,12 +294,11 @@ const app = {
         this.currentUser = userData;
         this.updateAuthUI(true);
         
-        // Принудительная синхронизация данных после входа
+        // ВАЖНО: Загружаем все данные с сервера после входа
         if (this.isOnline) {
-            console.log('🔄 Запускаем синхронизацию после входа...');
-            // Небольшая задержка для завершения UI обновлений
+            console.log('🔄 Загружаем данные пользователя после входа...');
             setTimeout(async () => {
-                await this.syncAllData();
+                await this.loadAllDataFromServer();
             }, 500);
         }
     },
@@ -254,18 +308,52 @@ const app = {
         this.currentUser = null;
         this.updateAuthUI(false);
         
-        // Опционально: очистить локальные данные при выходе
-        // this.clearLocalData();
+        // ВАЖНО: Очищаем все локальные данные при выходе
+        this.clearAllLocalData();
     },
 
-    clearLocalData() {
-        // Очищаем все локальные данные при выходе из аккаунта
+    clearAllLocalData() {
+        console.log('🗑️ Очищаем все локальные данные...');
+        
+        // Очищаем localStorage
         localStorage.removeItem('cocoMoneySheets');
         localStorage.removeItem('cocoMoneyCategories');
         localStorage.removeItem('cocoDebts');
         localStorage.removeItem('cocoDebtCategories');
         localStorage.removeItem('clothingSizeData');
         localStorage.removeItem('scaleCalculatorHistory');
+        
+        // Очищаем данные в модулях если они загружены
+        if (typeof cocoMoney !== 'undefined') {
+            cocoMoney.sheets = { income: [], preliminary: [] };
+            cocoMoney.customCategories = [];
+            cocoMoney.renderAll();
+        }
+        
+        if (typeof debts !== 'undefined') {
+            debts.debtsList = [];
+            debts.customCategories = [];
+            debts.renderAll();
+        }
+        
+        if (typeof clothingSize !== 'undefined') {
+            clothingSize.state = {
+                currentSection: 'parameters',
+                currentUnit: 'cm',
+                currentGender: 'male',
+                parameters: {},
+                savedResults: [],
+                currentCategory: null
+            };
+            clothingSize.restoreParameters();
+        }
+        
+        if (typeof scaleCalculator !== 'undefined') {
+            scaleCalculator.history = [];
+            scaleCalculator.renderHistory();
+        }
+        
+        console.log('✅ Локальные данные очищены');
     },
 
     setupEventListeners() {
@@ -313,10 +401,7 @@ const app = {
     showSection(sectionName) {
         console.log('Showing section:', sectionName);
         
-        // Сохраняем текущую секцию как предыдущую
         this.previousSection = this.currentSection;
-        
-        // Скрываем все секции
         this.hideAllSections(false);
         
         const section = document.getElementById(`${sectionName}Section`);
@@ -329,17 +414,14 @@ const app = {
         }
     },
 
-    // Новый метод для прямого показа секции без анимации
     showSectionDirect(sectionName) {
         console.log('Showing section directly (no animation):', sectionName);
         
-        // Скрываем все секции
         const sections = document.querySelectorAll('.sub-section');
         sections.forEach(section => {
             section.style.display = 'none';
         });
         
-        // Показываем нужную секцию
         const section = document.getElementById(`${sectionName}Section`);
         if (section) {
             section.style.display = 'block';
@@ -375,7 +457,6 @@ const app = {
             return;
         }
         
-        // Всегда возвращаемся на главную при нажатии "Назад"
         this.hideAllSections(true);
     },
 
@@ -383,15 +464,12 @@ const app = {
         console.log('Handle service click:', service);
         
         if (service === 'coco-money') {
-            // Сохраняем информацию о том, откуда пришли
             sessionStorage.setItem('returnToSection', 'finance');
             window.location.href = 'coco-money.html';
         } else if (service === 'debts') {
-            // Сохраняем информацию о том, откуда пришли
             sessionStorage.setItem('returnToSection', 'finance');
             window.location.href = 'debts.html';
         } else if (service === 'scale-calculator') {
-            // Сохраняем информацию о том, откуда пришли для калькулятора масштабов
             sessionStorage.setItem('returnToSection', 'geodesy');
             window.location.href = 'scale-calculator.html';
         } else if (service === 'clothing-size') {
@@ -405,16 +483,13 @@ const app = {
         }
     },
 
-    // Новый метод для возврата к секции финансов
     returnToFinanceSection() {
         console.log('Returning to finance section');
-        this.showSectionDirect('finance'); // Используем прямой показ без анимации
-        // Очищаем информацию о возврате
+        this.showSectionDirect('finance');
         sessionStorage.removeItem('returnToSection');
     },
 
     handleBrowserNavigation() {
-        // Проверяем, нужно ли вернуться к определенной секции
         window.addEventListener('focus', () => {
             const returnToSection = sessionStorage.getItem('returnToSection');
             if (returnToSection === 'finance') {
@@ -425,7 +500,6 @@ const app = {
             }
         });
 
-        // Обработка кнопки "Назад" браузера
         window.addEventListener('popstate', (e) => {
             console.log('Browser back button pressed');
             const returnToSection = sessionStorage.getItem('returnToSection');
@@ -436,7 +510,6 @@ const app = {
             }
         });
 
-        // Обработка восстановления страницы из кэша
         window.addEventListener('pageshow', (e) => {
             if (e.persisted) {
                 console.log('Page restored from cache');
@@ -487,7 +560,6 @@ const app = {
     },
 
     showToast(message, type = 'info') {
-        // Create toast element if it doesn't exist
         let toast = document.getElementById('app-toast');
         if (!toast) {
             toast = document.createElement('div');
