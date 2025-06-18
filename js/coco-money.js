@@ -39,41 +39,49 @@ const cocoMoney = {
         });
     },
 
-    async loadData() {
-        const user = await API.getProfile();
-        if (user && this.isOnline) {
-            // Загружаем данные с сервера
-            try {
-                console.log('🔄 Загружаем данные Coco Money с сервера...');
-                const serverSheets = await API.cocoMoney.getSheets();
-                const serverCategories = await API.cocoMoney.getCategories();
-                
-                console.log('📥 Полученные данные с сервера:', { 
-                    sheets: serverSheets, 
-                    categories: serverCategories 
-                });
-                
-                // Обновляем данные ВСЕГДА, даже если они пустые (важно для синхронизации!)
-                this.sheets = serverSheets || { income: [], preliminary: [] };
-                this.customCategories = serverCategories || [];
-                
-                console.log('✅ Данные Coco Money обновлены из сервера');
-                
-                // Сохраняем в localStorage как резервную копию
-                this.saveToLocalStorage();
-            } catch (err) {
-                console.error('❌ Ошибка загрузки с сервера, используем localStorage:', err);
-                this.loadFromLocalStorage();
-            }
-        } else {
-            // Загружаем из localStorage
-            console.log('📱 Загружаем данные Coco Money из localStorage');
-            this.loadFromLocalStorage();
+async loadData() {
+    const user = await API.getProfile();
+    if (user && this.isOnline) {
+        // Загружаем данные с сервера ТОЛЬКО для авторизованного пользователя
+        try {
+            console.log('🔄 Загружаем данные Coco Money с сервера...');
+            const serverSheets = await API.cocoMoney.getSheets();
+            const serverCategories = await API.cocoMoney.getCategories();
+            
+            console.log('📥 Полученные данные с сервера:', { 
+                sheets: serverSheets, 
+                categories: serverCategories 
+            });
+            
+            // Обновляем данные ВСЕГДА, даже если они пустые (важно для синхронизации!)
+            this.sheets = serverSheets || { income: [], preliminary: [] };
+            this.customCategories = serverCategories || [];
+            
+            console.log('✅ Данные Coco Money обновлены из сервера');
+            
+            // Сохраняем в localStorage как резервную копию
+            this.saveToLocalStorage();
+        } catch (err) {
+            console.error('❌ Ошибка загрузки с сервера:', err);
+            // НЕ загружаем из localStorage при ошибке если пользователь авторизован
+            // Показываем пустые данные
+            this.sheets = { income: [], preliminary: [] };
+            this.customCategories = [];
         }
-        
-        this.renderAll();
-        this.updateCategorySelect();
-    },
+    } else if (!user) {
+        // Если пользователь не авторизован - показываем пустые данные
+        console.log('📱 Пользователь не авторизован - показываем пустые данные');
+        this.sheets = { income: [], preliminary: [] };
+        this.customCategories = [];
+    } else {
+        // Пользователь авторизован, но офлайн - загружаем из localStorage
+        console.log('📱 Загружаем данные Coco Money из localStorage (офлайн режим)');
+        this.loadFromLocalStorage();
+    }
+    
+    this.renderAll();
+    this.updateCategorySelect();
+},
 
     loadFromLocalStorage() {
         const savedSheets = localStorage.getItem('cocoMoneySheets');
