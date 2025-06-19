@@ -1,35 +1,41 @@
 // js/app.js - Enterprise-Grade Application Controller with Advanced Sync Management
-interface SyncMetrics {
-  startTime: number;
-  endTime?: number;
-  duration?: number;
-  success: boolean;
-  errors: string[];
-  modules: Record<string, { success: boolean; duration: number; error?: string }>;
-}
 
-interface NetworkStatus {
-  isOnline: boolean;
-  lastOnlineTime: number;
-  lastOfflineTime: number;
-  connectionType?: string;
-  effectiveType?: string;
-}
+// Type definitions using JSDoc for JavaScript compatibility
+/**
+ * @typedef {Object} SyncMetrics
+ * @property {number} startTime
+ * @property {number} [endTime]
+ * @property {number} [duration]
+ * @property {boolean} success
+ * @property {string[]} errors
+ * @property {Object.<string, {success: boolean, duration: number, error?: string}>} modules
+ */
 
-interface AppState {
-  currentUser: any;
-  currentSection: string;
-  previousSection: string | null;
-  isInitialized: boolean;
-  syncInProgress: boolean;
-  lastSyncTime: number;
-  networkStatus: NetworkStatus;
-  syncMetrics: SyncMetrics[];
-  retryQueue: Array<{ action: string; data: any; attempts: number; maxAttempts: number }>;
-}
+/**
+ * @typedef {Object} NetworkStatus
+ * @property {boolean} isOnline
+ * @property {number} lastOnlineTime
+ * @property {number} lastOfflineTime
+ * @property {string} [connectionType]
+ * @property {string} [effectiveType]
+ */
+
+/**
+ * @typedef {Object} AppState
+ * @property {any} currentUser
+ * @property {string} currentSection
+ * @property {string|null} previousSection
+ * @property {boolean} isInitialized
+ * @property {boolean} syncInProgress
+ * @property {number} lastSyncTime
+ * @property {NetworkStatus} networkStatus
+ * @property {SyncMetrics[]} syncMetrics
+ * @property {Array<{action: string, data: any, attempts: number, maxAttempts: number}>} retryQueue
+ */
 
 const app = {
   // Application state with comprehensive tracking
+  /** @type {AppState} */
   state: {
     currentUser: null,
     currentSection: 'home',
@@ -41,12 +47,12 @@ const app = {
       isOnline: navigator.onLine,
       lastOnlineTime: Date.now(),
       lastOfflineTime: 0,
-      connectionType: (navigator as any).connection?.type || 'unknown',
-      effectiveType: (navigator as any).connection?.effectiveType || 'unknown'
+      connectionType: navigator.connection?.type || 'unknown',
+      effectiveType: navigator.connection?.effectiveType || 'unknown'
     },
     syncMetrics: [],
     retryQueue: []
-  } as AppState,
+  },
 
   // Configuration constants
   config: {
@@ -60,14 +66,14 @@ const app = {
 
   // Performance monitoring
   performance: {
-    marks: new Map<string, number>(),
-    measures: new Map<string, number>(),
+    marks: new Map(),
+    measures: new Map(),
     
-    mark(name: string): void {
+    mark(name) {
       this.marks.set(name, performance.now());
     },
     
-    measure(name: string, startMark: string): number {
+    measure(name, startMark) {
       const startTime = this.marks.get(startMark);
       if (!startTime) return 0;
       
@@ -83,7 +89,7 @@ const app = {
   },
 
   // Enhanced initialization with comprehensive setup
-  async init(): Promise<void> {
+  async init() {
     try {
       console.log('🚀 Initializing Coco Instruments Application...');
       this.performance.mark('app-init-start');
@@ -119,7 +125,7 @@ const app = {
     }
   },
 
-  async initializeCore(): Promise<void> {
+  async initializeCore() {
     // Initialize API client
     if (typeof API !== 'undefined' && API.init) {
       await API.init();
@@ -132,10 +138,10 @@ const app = {
     this.setupGlobalErrorHandlers();
   },
 
-  setupMonitoring(): void {
+  setupMonitoring() {
     // Network connection monitoring
     if ('connection' in navigator) {
-      const connection = (navigator as any).connection;
+      const connection = navigator.connection;
       
       connection.addEventListener('change', () => {
         this.state.networkStatus.connectionType = connection.type;
@@ -152,7 +158,7 @@ const app = {
     // Memory usage monitoring
     if ('memory' in performance) {
       setInterval(() => {
-        const memory = (performance as any).memory;
+        const memory = performance.memory;
         if (memory.usedJSHeapSize > memory.totalJSHeapSize * 0.8) {
           console.warn('⚠️ High memory usage detected:', {
             used: Math.round(memory.usedJSHeapSize / 1024 / 1024),
@@ -164,7 +170,7 @@ const app = {
     }
   },
 
-  setupNetworkListeners(): void {
+  setupNetworkListeners() {
     window.addEventListener('online', async () => {
       const now = Date.now();
       this.state.networkStatus.isOnline = true;
@@ -193,7 +199,7 @@ const app = {
     });
   },
 
-  setupPerformanceObserver(): void {
+  setupPerformanceObserver() {
     if ('PerformanceObserver' in window) {
       // Monitor long tasks
       try {
@@ -227,7 +233,7 @@ const app = {
     }
   },
 
-  async checkAuthAndLoadData(): Promise<void> {
+  async checkAuthAndLoadData() {
     try {
       this.performance.mark('auth-check-start');
       
@@ -260,13 +266,14 @@ const app = {
     }
   },
 
-  async loadAllDataFromServer(): Promise<void> {
+  async loadAllDataFromServer() {
     if (!this.state.currentUser || !this.state.networkStatus.isOnline) {
       console.log('⏭️ Skipping server data load - no user or offline');
       return;
     }
 
-    const syncMetric: SyncMetrics = {
+    /** @type {SyncMetrics} */
+    const syncMetric = {
       startTime: Date.now(),
       success: false,
       errors: [],
@@ -334,7 +341,7 @@ const app = {
     }
   },
 
-  async loadModuleData(moduleName: string, loadFunction: () => Promise<void>): Promise<{ success: boolean; duration: number; error?: string }> {
+  async loadModuleData(moduleName, loadFunction) {
     const startTime = Date.now();
     
     try {
@@ -352,7 +359,7 @@ const app = {
     }
   },
 
-  async loadCocoMoneyData(): Promise<void> {
+  async loadCocoMoneyData() {
     console.log('📊 Loading Coco Money data...');
     const [serverSheets, serverCategories] = await Promise.all([
       API.cocoMoney.getSheets(),
@@ -372,7 +379,7 @@ const app = {
     }
   },
 
-  async loadDebtsData(): Promise<void> {
+  async loadDebtsData() {
     console.log('💳 Loading debts data...');
     const [serverDebts, serverCategories] = await Promise.all([
       API.debts.getDebts(),
@@ -392,7 +399,7 @@ const app = {
     }
   },
 
-  async loadClothingSizeData(): Promise<void> {
+  async loadClothingSizeData() {
     console.log('👕 Loading clothing size data...');
     const serverData = await API.clothingSize.getData();
     
@@ -409,7 +416,7 @@ const app = {
     }
   },
 
-  async loadScaleCalculatorData(): Promise<void> {
+  async loadScaleCalculatorData() {
     console.log('📐 Loading scale calculator data...');
     const serverHistory = await API.scaleCalculator.getHistory();
     
@@ -423,7 +430,7 @@ const app = {
     }
   },
 
-  loadCachedData(): void {
+  loadCachedData() {
     console.log('💾 Loading cached data...');
     
     // Load cached data for each module
@@ -433,7 +440,7 @@ const app = {
     this.loadCachedModuleData('scaleCalculator', 'scaleCalculatorHistory');
   },
 
-  loadCachedModuleData(moduleName: string, ...cacheKeys: string[]): void {
+  loadCachedModuleData(moduleName, ...cacheKeys) {
     try {
       if (moduleName === 'cocoMoney' && typeof cocoMoney !== 'undefined') {
         const sheets = localStorage.getItem(cacheKeys[0]);
@@ -453,14 +460,15 @@ const app = {
     }
   },
 
-  async syncAllData(): Promise<boolean> {
+  async syncAllData() {
     if (this.state.syncInProgress || !this.state.currentUser || !this.state.networkStatus.isOnline) {
       console.log('⏭️ Skipping sync - already syncing, not authenticated, or offline');
       return false;
     }
 
     this.state.syncInProgress = true;
-    const syncMetric: SyncMetrics = {
+    /** @type {SyncMetrics} */
+    const syncMetric = {
       startTime: Date.now(),
       success: false,
       errors: [],
@@ -530,7 +538,7 @@ const app = {
     }
   },
 
-  async syncModuleData(moduleName: string, syncFunction: () => Promise<void>): Promise<{ success: boolean; duration: number; error?: string }> {
+  async syncModuleData(moduleName, syncFunction) {
     const startTime = Date.now();
     
     try {
@@ -548,7 +556,7 @@ const app = {
     }
   },
 
-  async syncCocoMoneyToServer(): Promise<void> {
+  async syncCocoMoneyToServer() {
     if (typeof cocoMoney !== 'undefined' && cocoMoney.sheets) {
       await Promise.all([
         API.cocoMoney.saveSheets(cocoMoney.sheets),
@@ -557,7 +565,7 @@ const app = {
     }
   },
 
-  async syncDebtsToServer(): Promise<void> {
+  async syncDebtsToServer() {
     if (typeof debts !== 'undefined' && debts.debtsList) {
       await Promise.all([
         API.debts.saveDebts(debts.debtsList),
@@ -566,7 +574,7 @@ const app = {
     }
   },
 
-  async syncClothingSizeToServer(): Promise<void> {
+  async syncClothingSizeToServer() {
     if (typeof clothingSize !== 'undefined' && clothingSize.state) {
       await API.clothingSize.saveData({
         parameters: clothingSize.state.parameters,
@@ -576,13 +584,13 @@ const app = {
     }
   },
 
-  async syncScaleCalculatorToServer(): Promise<void> {
+  async syncScaleCalculatorToServer() {
     if (typeof scaleCalculator !== 'undefined' && scaleCalculator.history) {
       await API.scaleCalculator.saveHistory(scaleCalculator.history);
     }
   },
 
-  async processRetryQueue(): Promise<void> {
+  async processRetryQueue() {
     if (this.state.retryQueue.length === 0) return;
     
     console.log(`🔄 Processing retry queue: ${this.state.retryQueue.length} items`);
@@ -607,7 +615,7 @@ const app = {
     }
   },
 
-  async retryAction(item: { action: string; data: any; attempts: number; maxAttempts: number }): Promise<void> {
+  async retryAction(item) {
     // Implement specific retry logic based on action type
     switch (item.action) {
       case 'sync':
@@ -621,7 +629,7 @@ const app = {
     }
   },
 
-  addSyncMetric(metric: SyncMetrics): void {
+  addSyncMetric(metric) {
     this.state.syncMetrics.unshift(metric);
     
     // Keep only the last N metrics
@@ -630,7 +638,7 @@ const app = {
     }
   },
 
-  startBackgroundTasks(): void {
+  startBackgroundTasks() {
     // Periodic sync for authenticated users
     setInterval(async () => {
       if (this.state.currentUser && 
@@ -649,7 +657,7 @@ const app = {
     }, this.config.HEALTH_CHECK_INTERVAL);
   },
 
-  performHealthCheck(): void {
+  performHealthCheck() {
     const now = Date.now();
     const recentMetrics = this.state.syncMetrics.slice(0, 5);
     const failureRate = recentMetrics.length > 0 
@@ -667,14 +675,14 @@ const app = {
     }
   },
 
-  initializePerformanceMonitoring(): void {
+  initializePerformanceMonitoring() {
     // Monitor critical web vitals
     if ('web-vitals' in window || 'PerformanceObserver' in window) {
       console.log('📊 Performance monitoring enabled');
     }
   },
 
-  setupGlobalErrorHandlers(): void {
+  setupGlobalErrorHandlers() {
     window.addEventListener('error', (event) => {
       console.error('🚨 Global JavaScript Error:', {
         message: event.message,
@@ -697,7 +705,7 @@ const app = {
     });
   },
 
-  handleInitializationError(error: any): void {
+  handleInitializationError(error) {
     console.error('❌ Critical initialization error:', error);
     
     // Show user-friendly error message
@@ -710,7 +718,7 @@ const app = {
     }, 5000);
   },
 
-  handleAuthenticationError(): void {
+  handleAuthenticationError() {
     console.log('🔐 Handling authentication error');
     
     API.clearTokens();
@@ -724,10 +732,7 @@ const app = {
     }
   },
 
-  // Rest of the existing methods with performance improvements...
-  // [Previous methods remain the same but with enhanced error handling and logging]
-
-  showSyncIndicator(show: boolean): void {
+  showSyncIndicator(show) {
     let indicator = document.getElementById('sync-indicator');
     
     if (show && !indicator) {
@@ -764,7 +769,7 @@ const app = {
     }
   },
 
-  updateAuthUI(isLoggedIn: boolean): void {
+  updateAuthUI(isLoggedIn) {
     const loginBtn = document.getElementById('loginBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     
@@ -781,7 +786,7 @@ const app = {
     this.updateConnectionStatus();
   },
 
-  updateConnectionStatus(): void {
+  updateConnectionStatus() {
     let statusIndicator = document.getElementById('connection-status');
     
     if (this.state.currentUser) {
@@ -812,7 +817,7 @@ const app = {
     }
   },
 
-  clearAllLocalData(): void {
+  clearAllLocalData() {
     console.log('🗑️ Clearing all local data...');
     
     // Clear localStorage
@@ -830,7 +835,7 @@ const app = {
     console.log('✅ Local data cleared');
   },
 
-  clearModuleData(): void {
+  clearModuleData() {
     if (typeof cocoMoney !== 'undefined') {
       cocoMoney.sheets = { income: [], preliminary: [] };
       cocoMoney.customCategories = [];
@@ -861,7 +866,7 @@ const app = {
     }
   },
 
-  async onUserLogin(userData: any): Promise<void> {
+  async onUserLogin(userData) {
     console.log('👤 User logged in:', userData.user?.email || userData.email);
     this.state.currentUser = userData;
     this.updateAuthUI(true);
@@ -874,14 +879,14 @@ const app = {
     }
   },
 
-  async onUserLogout(): Promise<void> {
+  async onUserLogout() {
     console.log('👤 User logged out');
     this.state.currentUser = null;
     this.updateAuthUI(false);
     this.clearAllLocalData();
   },
 
-  showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info'): void {
+  showToast(message, type = 'info') {
     let toast = document.getElementById('app-toast');
     if (!toast) {
       toast = document.createElement('div');
@@ -905,26 +910,108 @@ const app = {
     }, 3000);
   },
 
-  // Navigation methods remain the same...
-  setupEventListeners(): void {
-    // [Previous implementation with enhanced error handling]
+  // Navigation methods
+  setupEventListeners() {
+    document.querySelectorAll('.app-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const section = card.dataset.section;
+        this.showSection(section);
+      });
+    });
+
+    document.querySelectorAll('.sub-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const service = card.dataset.service;
+        this.navigateToService(service);
+      });
+    });
+
+    document.querySelectorAll('.back-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.hideAllSections();
+      });
+    });
   },
 
-  showSection(sectionName: string): void {
-    // [Previous implementation]
+  showSection(sectionName) {
+    this.state.previousSection = this.state.currentSection;
+    this.state.currentSection = sectionName;
+    
+    document.querySelector('.app-grid').style.display = 'none';
+    
+    const sectionMap = {
+      finance: 'financeSection',
+      geodesy: 'geodesySection',
+      clothing: 'clothingSection'
+    };
+    
+    const sectionId = sectionMap[sectionName];
+    if (sectionId) {
+      document.getElementById(sectionId).style.display = 'block';
+    }
+    
+    window.location.hash = sectionName;
   },
 
-  hideAllSections(resetToHome: boolean = true): void {
-    // [Previous implementation]
+  hideAllSections(resetToHome = true) {
+    document.querySelectorAll('.sub-section').forEach(section => {
+      section.style.display = 'none';
+    });
+    
+    if (resetToHome) {
+      document.querySelector('.app-grid').style.display = 'grid';
+      this.state.currentSection = 'home';
+      window.location.hash = '';
+    }
   },
 
-  // Touch and navigation methods remain the same...
-  addTouchSupport(): void {
-    // [Previous implementation]
+  navigateToService(service) {
+    const routes = {
+      'coco-money': '/coco-money.html',
+      'debts': '/debts.html',
+      'scale-calculator': '/scale-calculator.html',
+      'clothing-size': '/clothing-size.html'
+    };
+    
+    const route = routes[service];
+    if (route) {
+      sessionStorage.setItem('returnToSection', this.state.currentSection);
+      window.location.href = route;
+    }
   },
 
-  handleBrowserNavigation(): void {
-    // [Previous implementation]
+  addTouchSupport() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    
+    document.addEventListener('touchstart', e => {
+      touchStartX = e.changedTouches[0].screenX;
+      touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+    
+    document.addEventListener('touchend', e => {
+      const touchEndX = e.changedTouches[0].screenX;
+      const touchEndY = e.changedTouches[0].screenY;
+      const deltaX = touchEndX - touchStartX;
+      const deltaY = Math.abs(touchEndY - touchStartY);
+      
+      if (Math.abs(deltaX) > 50 && deltaY < 100) {
+        if (deltaX > 0 && this.state.currentSection !== 'home') {
+          this.hideAllSections();
+        }
+      }
+    }, { passive: true });
+  },
+
+  handleBrowserNavigation() {
+    window.addEventListener('popstate', () => {
+      const hash = window.location.hash.substring(1);
+      if (hash && ['finance', 'geodesy', 'clothing'].includes(hash)) {
+        this.showSection(hash);
+      } else {
+        this.hideAllSections();
+      }
+    });
   }
 };
 
@@ -939,5 +1026,5 @@ if (document.readyState === 'loading') {
   app.init();
 }
 
-// Export for debugging
-(window as any).app = app;
+// Export for debugging and other modules
+window.app = app;
