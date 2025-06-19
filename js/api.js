@@ -116,7 +116,7 @@ const API = {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Cache-Control': 'no-cache',
+        // Remove Cache-Control header that causes CORS issues
         ...options.headers,
       },
       mode: 'cors',
