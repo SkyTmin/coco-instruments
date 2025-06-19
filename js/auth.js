@@ -58,30 +58,21 @@ const auth = {
       const res = await API.auth.login(email, password);
       const user = await API.getProfile();
       
-      // Уведомляем приложение о входе пользователя
-      if (typeof app !== 'undefined' && app.onUserLogin) {
-        await app.onUserLogin(user);
+      // Safely notify the app about user login
+      if (window.app && typeof window.app.onUserLogin === 'function') {
+        await window.app.onUserLogin(user);
+        window.app.currentUser = user;
+        window.app.updateAuthUI(true);
       }
       
-      app.currentUser = user;
-      app.updateAuthUI(true);
       this.hideModal();
       form.reset();
       
-      // Показываем уведомление об успешном входе
-      if (typeof app !== 'undefined' && app.showToast) {
-        app.showToast('Добро пожаловать! Загружаем ваши данные...', 'success');
-      } else {
-        alert('Вход выполнен успешно!');
-      }
+      // Show success notification
+      this.showNotification('Добро пожаловать! Загружаем ваши данные...', 'success');
     } catch (err) {
       const errorMessage = err.message.includes('401') ? 'Неверный email или пароль' : err.message;
-      
-      if (typeof app !== 'undefined' && app.showToast) {
-        app.showToast(errorMessage, 'error');
-      } else {
-        alert(errorMessage);
-      }
+      this.showNotification(errorMessage, 'error');
     } finally {
       btn.disabled = false;
       btn.textContent = 'Войти';
@@ -120,21 +111,17 @@ const auth = {
       await API.auth.register(email, name, password);
       const user = await API.getProfile();
       
-      // Уведомляем приложение о входе пользователя
-      if (typeof app !== 'undefined' && app.onUserLogin) {
-        await app.onUserLogin(user);
+      // Safely notify the app about user login
+      if (window.app && typeof window.app.onUserLogin === 'function') {
+        await window.app.onUserLogin(user);
+        window.app.currentUser = user;
+        window.app.updateAuthUI(true);
       }
       
-      app.currentUser = user;
-      app.updateAuthUI(true);
       this.hideModal();
       form.reset();
       
-      if (typeof app !== 'undefined' && app.showToast) {
-        app.showToast('Регистрация успешна! Добро пожаловать!', 'success');
-      } else {
-        alert('Регистрация прошла успешно!');
-      }
+      this.showNotification('Регистрация успешна! Добро пожаловать!', 'success');
     } catch (err) {
       const errorMessage = err.message.includes('409') ? 'Email уже занят' : err.message;
       this.showError(errorMessage);
@@ -151,82 +138,90 @@ const auth = {
     try {
       await API.auth.logout();
       
-      // Уведомляем приложение о выходе пользователя
-      if (typeof app !== 'undefined' && app.onUserLogout) {
-        await app.onUserLogout();
+      // Safely notify the app about user logout
+      if (window.app && typeof window.app.onUserLogout === 'function') {
+        await window.app.onUserLogout();
+        window.app.currentUser = null;
+        window.app.updateAuthUI(false);
       }
       
-      app.currentUser = null;
-      app.updateAuthUI(false);
+      this.showNotification('Вы вышли из системы', 'info');
       
-      if (typeof app !== 'undefined' && app.showToast) {
-        app.showToast('Вы вышли из системы', 'info');
-      } else {
-        alert('Вы вышли из системы');
-      }
-      
-      // Перенаправляем на главную страницу
+      // Redirect to main page
       window.location.href = '/';
     } catch (err) {
       console.error('Logout error:', err);
-      
-      if (typeof app !== 'undefined' && app.showToast) {
-        app.showToast('Ошибка при выходе', 'error');
-      }
+      this.showNotification('Ошибка при выходе', 'error');
     }
   },
 
   handleForgotPassword() {
-    if (typeof app !== 'undefined' && app.showToast) {
-      app.showToast('Функция восстановления пароля скоро будет доступна', 'info');
-    } else {
-      alert('Функция восстановления пароля скоро будет доступна');
-    }
+    this.showNotification('Функция восстановления пароля скоро будет доступна', 'info');
   },
 
   showError(message) {
-    if (typeof app !== 'undefined' && app.showToast) {
-      app.showToast(message, 'error');
+    this.showNotification(message, 'error');
+  },
+
+  showNotification(message, type = 'info') {
+    // Use app's toast if available
+    if (window.app && typeof window.app.showToast === 'function') {
+      window.app.showToast(message, type);
     } else {
+      // Fallback to alert
       alert(message);
     }
   },
 
-  // Проверка статуса авторизации при загрузке страницы
+  // Check auth status on page load
   async checkAuthStatus() {
     try {
       const user = await API.getProfile();
       if (user) {
-        app.currentUser = user;
-        app.updateAuthUI(true);
-        
-        // ВАЖНО: Загружаем данные с сервера для авторизованного пользователя
-        if (typeof app !== 'undefined' && app.loadAllDataFromServer && navigator.onLine) {
-          setTimeout(() => {
-            app.loadAllDataFromServer();
-          }, 500);
+        // Update app state if app is available
+        if (window.app) {
+          window.app.currentUser = user;
+          window.app.updateAuthUI(true);
+          
+          // Load user data from server for authenticated user
+          if (typeof window.app.loadAllDataFromServer === 'function' && navigator.onLine) {
+            setTimeout(() => {
+              window.app.loadAllDataFromServer();
+            }, 500);
+          }
         }
       } else {
-        app.updateAuthUI(false);
-        
-        // ВАЖНО: Очищаем локальные данные для неавторизованного пользователя
-        if (typeof app !== 'undefined' && app.clearAllLocalData) {
-          app.clearAllLocalData();
+        // Update UI for unauthenticated user
+        if (window.app) {
+          window.app.updateAuthUI(false);
+          
+          // Clear local data for unauthenticated user
+          if (typeof window.app.clearAllLocalData === 'function') {
+            window.app.clearAllLocalData();
+          }
         }
       }
     } catch (e) {
       console.error('Auth status check failed:', e);
-      app.updateAuthUI(false);
       
-      // Очищаем данные при ошибке проверки авторизации
-      if (typeof app !== 'undefined' && app.clearAllLocalData) {
-        app.clearAllLocalData();
+      // Update UI and clear data on error
+      if (window.app) {
+        window.app.updateAuthUI(false);
+        
+        if (typeof window.app.clearAllLocalData === 'function') {
+          window.app.clearAllLocalData();
+        }
       }
     }
   }
 };
 
+// Initialize auth when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
   auth.init();
-  await auth.checkAuthStatus();
+  
+  // Wait a bit for app to initialize before checking auth status
+  setTimeout(async () => {
+    await auth.checkAuthStatus();
+  }, 100);
 });
