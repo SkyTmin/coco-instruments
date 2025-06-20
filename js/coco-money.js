@@ -513,11 +513,16 @@ const cocoMoney = {
         this.showToast('Расход добавлен');
     },
 
-    // НОВАЯ ФУНКЦИЯ: Удаление расхода
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ: Удаление расхода
     async deleteExpense(expenseIndex) {
         if (!this.currentSheet || !this.currentSheet.expenses) return;
         
         const expense = this.currentSheet.expenses[expenseIndex];
+        if (!expense) {
+            console.error('Expense not found at index:', expenseIndex);
+            return;
+        }
+        
         const confirmMessage = `Удалить расход "${expense.name}" на сумму ${this.formatAmount(expense.amount)}?`;
         
         if (!confirm(confirmMessage)) return;
