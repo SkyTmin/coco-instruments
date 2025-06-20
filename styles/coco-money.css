@@ -944,3 +944,207 @@ select {
         -webkit-overflow-scrolling: touch;
     }
 }
+.expense-item {
+    position: relative;
+    padding: 12px;
+    border: 1px solid rgba(123, 75, 42, 0.1);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    transition: all 0.2s ease;
+}
+
+.expense-item:hover {
+    background: rgba(123, 75, 42, 0.02);
+    border-color: rgba(123, 75, 42, 0.2);
+    transform: translateX(2px);
+}
+
+.expense-info {
+    flex: 1;
+    margin-right: 12px;
+}
+
+.expense-title {
+    font-weight: 600;
+    color: var(--brown);
+    margin-bottom: 4px;
+}
+
+.expense-meta {
+    font-size: 0.9em;
+    color: rgba(123, 75, 42, 0.7);
+}
+
+.expense-amount {
+    font-weight: 600;
+    color: #e74c3c;
+    margin-right: 8px;
+    min-width: 80px;
+    text-align: right;
+}
+
+.expense-delete {
+    background: none;
+    border: none;
+    padding: 8px;
+    border-radius: 50%;
+    cursor: pointer;
+    color: rgba(231, 76, 60, 0.7);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.expense-item:hover .expense-delete {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.expense-delete:hover {
+    background: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
+    transform: scale(1.1);
+}
+
+.expense-delete:active {
+    transform: scale(0.95);
+    background: rgba(231, 76, 60, 0.2);
+}
+
+.expense-delete svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2;
+}
+
+/* Анимация для удаления */
+.expense-item.deleting {
+    animation: slideOutRight 0.3s ease-in forwards;
+}
+
+@keyframes slideOutRight {
+    0% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(100%);
+        opacity: 0;
+        height: 0;
+        padding: 0;
+        margin: 0;
+    }
+}
+
+/* Мобильная версия - всегда показываем кнопку удаления */
+@media (max-width: 768px) {
+    .expense-delete {
+        opacity: 1;
+        transform: scale(1);
+    }
+    
+    .expense-item {
+        padding: 16px 12px;
+    }
+    
+    .expense-delete {
+        position: relative;
+        margin-left: 8px;
+    }
+}
+
+/* Улучшения для списка расходов */
+.expenses-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin: 16px 0;
+    padding-right: 4px;
+}
+
+.expenses-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.expenses-list::-webkit-scrollbar-track {
+    background: rgba(123, 75, 42, 0.1);
+    border-radius: 2px;
+}
+
+.expenses-list::-webkit-scrollbar-thumb {
+    background: rgba(123, 75, 42, 0.3);
+    border-radius: 2px;
+}
+
+.expenses-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(123, 75, 42, 0.5);
+}
+
+/* Состояние пустого списка */
+.expenses-list p {
+    padding: 20px;
+    text-align: center;
+    color: rgba(123, 75, 42, 0.6);
+    font-style: italic;
+    border: 2px dashed rgba(123, 75, 42, 0.2);
+    border-radius: 8px;
+    margin: 0;
+}
+
+/* Улучшения для формы добавления расходов */
+.expense-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+    .expense-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.expense-form-grid input,
+.expense-form-grid select {
+    padding: 10px 12px;
+    border: 1px solid rgba(123, 75, 42, 0.2);
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+}
+
+.expense-form-grid input:focus,
+.expense-form-grid select:focus {
+    border-color: var(--brown);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(123, 75, 42, 0.1);
+}
+
+.expense-form-grid button {
+    grid-column: 1 / -1;
+    padding: 12px;
+    background: var(--brown);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.expense-form-grid button:hover {
+    background: #6a3f1f;
+}
+
+.expense-form-grid button:active {
+    transform: translateY(1px);
+}
