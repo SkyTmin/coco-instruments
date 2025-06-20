@@ -2,309 +2,145 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#7B4B2A">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Coco Money">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="color-scheme" content="light only">
-    <meta name="format-detection" content="telephone=no">
-    <title>Coco Money</title>
+    <meta name="supported-color-schemes" content="light">
+    <title>Coco Instruments</title>
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <link rel="stylesheet" href="styles/global.css">
-    <link rel="stylesheet" href="styles/coco-money.css">
+    <link rel="stylesheet" href="styles/header.css">
+    <link rel="stylesheet" href="styles/home.css">
+    <link rel="stylesheet" href="styles/auth.css">
 </head>
 <body>
     <header class="header">
-        <button class="back-btn" onclick="window.history.back()">← Назад</button>
-        <h1 class="page-title">Coco Money</h1>
-        <div class="header-space"></div>
+        <div class="header-content">
+            <h1 class="logo">Coco Instruments</h1>
+            <nav class="auth-nav">
+                <button class="auth-btn" id="loginBtn">Вход</button>
+                <button class="auth-btn" id="logoutBtn" style="display: none;">Выход</button>
+            </nav>
+        </div>
     </header>
 
-    <main class="coco-money-container">
-        <div class="tabs-container">
-            <button class="tab-btn active" data-tab="income">Доходные листы</button>
-            <button class="tab-btn" data-tab="preliminary">Предварительные</button>
-        </div>
-
-        <div class="content-wrapper">
-            <div id="income-content" class="tab-content active">
-                <div id="income-cards" class="cards-grid">
-                    <div class="empty-state">
-                        <p>У вас пока нет доходных листов</p>
-                        <button class="btn btn-primary" onclick="cocoMoney.showCreateForm('income')">
-                            Добавить доходный лист
-                        </button>
-                    </div>
+    <main class="main-content">
+        <div class="app-grid">
+            <div class="app-card" data-section="finance">
+                <div class="app-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
                 </div>
-                <div id="income-stats" class="stats-section">
-                    <h3>Статистика доходов</h3>
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <span class="stat-label">Всего листов:</span>
-                            <span class="stat-value" id="income-total-sheets">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Общий доход:</span>
-                            <span class="stat-value" id="income-total-amount">0 ₽</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Общие расходы:</span>
-                            <span class="stat-value" id="income-total-expenses">0 ₽</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Чистый доход:</span>
-                            <span class="stat-value" id="income-net">0 ₽</span>
-                        </div>
-                    </div>
-                    <div id="income-categories-stats" class="categories-stats"></div>
-                </div>
+                <h2 class="app-title">Финансы</h2>
             </div>
-
-            <div id="preliminary-content" class="tab-content">
-                <div id="preliminary-cards" class="cards-grid">
-                    <div class="empty-state">
-                        <p>У вас пока нет предварительных доходов</p>
-                        <button class="btn btn-primary" onclick="cocoMoney.showCreateForm('preliminary')">
-                            Добавить предварительный доход
-                        </button>
-                    </div>
+            <div class="app-card" data-section="geodesy">
+                <div class="app-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+                        <path d="M2 12h20"/>
+                    </svg>
                 </div>
-                <div id="preliminary-stats" class="stats-section">
-                    <h3>Статистика предварительных доходов</h3>
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <span class="stat-label">Всего листов:</span>
-                            <span class="stat-value" id="preliminary-total-sheets">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Ожидаемый доход:</span>
-                            <span class="stat-value" id="preliminary-total-amount">0 ₽</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Планируемые расходы:</span>
-                            <span class="stat-value" id="preliminary-total-expenses">0 ₽</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Ожидаемая прибыль:</span>
-                            <span class="stat-value" id="preliminary-net">0 ₽</span>
-                        </div>
-                    </div>
-                    <div id="preliminary-categories-stats" class="categories-stats"></div>
-                </div>
+                <h2 class="app-title">Геодезия</h2>
             </div>
+		<div class="app-card" data-section="clothing">
+    <div class="app-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-6.22 3.58H12a8 8 0 0 1-6.22-3.58L4.55 8.57a2 2 0 0 1 .25-2.57l1.96-1.96A2 2 0 0 1 8.18 3.77c.5 0 .98.2 1.33.55l.71.71a4 4 0 0 0 5.66 0l.71-.71c.35-.35.83-.55 1.33-.55c.5 0 .98.2 1.41.59L21.37 6a2 2 0 0 1 .01 2.57z"/>
+        </svg>
+    		</div>
+    <h2 class="app-title">Одежда</h2>
+</div>
         </div>
     </main>
 
-    <button class="fab-button" id="fab-btn" aria-label="Добавить">+</button>
-
-    <!-- Swipe indicators -->
-    <div class="swipe-indicator left" id="swipe-left"></div>
-    <div class="swipe-indicator right" id="swipe-right"></div>
-
-    <!-- Модальное окно создания/редактирования -->
-    <div class="modal" id="createModal">
+    <div class="modal" id="authModal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-title">Новый доходный лист</h2>
-                <button class="close-btn" onclick="cocoMoney.hideCreateForm()">&times;</button>
-            </div>
-            <form id="sheetForm" class="sheet-form">
-                <input type="hidden" id="sheetId" value="">
-                <input type="hidden" id="sheetType" value="income">
-                
-                <div class="form-group">
-                    <label for="sheetName">Название</label>
-                    <input type="text" id="sheetName" required placeholder="Например: Зарплата за январь">
+            <span class="close">&times;</span>
+            <div class="auth-container">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="login">Вход</button>
+                    <button class="auth-tab" data-tab="register">Регистрация</button>
                 </div>
                 
-                <div class="form-group">
-                    <label for="sheetAmount">Сумма</label>
-                    <input type="number" id="sheetAmount" required placeholder="0" min="0">
-                </div>
-                
-                <div class="form-group">
-                    <label for="sheetDate">Дата</label>
-                    <input type="date" id="sheetDate" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="sheetNote">Заметка</label>
-                    <textarea id="sheetNote" rows="3" placeholder="Дополнительная информация (необязательно)"></textarea>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="cocoMoney.hideCreateForm()">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Сохранить</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Модальное окно детального просмотра -->
-    <div class="modal fullscreen" id="detailModal">
-        <div class="modal-content detail-content">
-            <div class="detail-header">
-                <button class="back-detail-btn" onclick="cocoMoney.hideDetail()">← Назад</button>
-                <h2 id="detail-title"></h2>
-                <div class="detail-actions">
-                    <button class="icon-btn" onclick="cocoMoney.exportSheet()" title="Скачать">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                    </button>
-                    <button class="icon-btn" onclick="cocoMoney.editCurrentSheet()" title="Редактировать">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                        </svg>
-                    </button>
-                    <button class="icon-btn delete" onclick="cocoMoney.deleteCurrentSheet()" title="Удалить">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="detail-info">
-                <div class="info-item">
-                    <span class="info-label">Сумма:</span>
-                    <span class="info-value amount" id="detail-amount"></span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Дата:</span>
-                    <span class="info-value" id="detail-date"></span>
-                </div>
-                <div class="info-item" id="detail-note-wrapper">
-                    <span class="info-label">Заметка:</span>
-                    <span class="info-value" id="detail-note"></span>
-                </div>
-            </div>
-
-            <div class="convert-section" id="convert-section" style="display: none;">
-                <button class="btn btn-primary" onclick="cocoMoney.convertToIncome()">
-                    Преобразовать в доходный лист
-                </button>
-            </div>
-            
-            <div class="expenses-section">
-                <h3>Расходы</h3>
-                <form id="expenseForm" class="expense-form">
-                    <div class="expense-form-grid">
-                        <input type="text" id="expenseName" placeholder="Название расхода" required>
-                        <input type="number" id="expenseAmount" placeholder="Сумма" required min="0">
-                        <select id="expenseCategory">
-                            <option value="">Категория</option>
-                            <option value="transport">Транспорт</option>
-                            <option value="food">Продукты</option>
-                            <option value="utilities">Коммунальные услуги</option>
-                            <option value="entertainment">Развлечения</option>
-                            <option value="other">Другое</option>
-                            <option value="new">+ Новая категория</option>
-                        </select>
-                        <input type="text" id="expenseNote" placeholder="Заметка">
-                        <button type="submit" class="btn btn-primary">Добавить</button>
-                    </div>
+                <form class="auth-form" id="loginForm" data-form="login">
+                    <input type="email" class="auth-input" placeholder="Email" required>
+                    <input type="password" class="auth-input" placeholder="Пароль" required>
+                    <button type="submit" class="auth-submit">Войти</button>
+                    <a href="#" class="auth-link" id="forgotPassword">Забыли пароль?</a>
                 </form>
                 
-                <div id="expenses-list" class="expenses-list"></div>
-            </div>
-            
-            <div class="detail-stats">
-                <div class="stat-row">
-                    <span>Доход:</span>
-                    <span id="detail-income">0 ₽</span>
-                </div>
-                <div class="stat-row">
-                    <span>Расходы:</span>
-                    <span id="detail-expenses">0 ₽</span>
-                </div>
-                <div class="stat-row total">
-                    <span>Остаток:</span>
-                    <span id="detail-balance">0 ₽</span>
-                </div>
+                <form class="auth-form" id="registerForm" data-form="register" style="display: none;">
+                    <input type="text" class="auth-input" placeholder="Имя" required>
+                    <input type="email" class="auth-input" placeholder="Email" required>
+                    <input type="password" class="auth-input" placeholder="Пароль" required>
+                    <input type="password" class="auth-input" placeholder="Повторите пароль" required>
+                    <button type="submit" class="auth-submit">Зарегистрироваться</button>
+                </form>
             </div>
         </div>
     </div>
 
-    <!-- Модальное окно экспорта -->
-    <div class="modal" id="exportModal">
-        <div class="modal-content export-content">
-            <div class="modal-header">
-                <h2>Экспорт данных</h2>
-                <button class="close-btn" onclick="cocoMoney.hideExport()">&times;</button>
+    <section class="sub-section" id="financeSection" style="display: none;">
+        <button class="back-btn">← Назад</button>
+        <h2 class="section-title">Финансы</h2>
+        <div class="sub-grid">
+            <div class="sub-card" data-service="coco-money">
+                <div class="sub-icon">💰</div>
+                <h3>Coco Money</h3>
             </div>
-            <textarea id="exportData" readonly></textarea>
-            <div class="export-actions">
-                <button class="btn btn-secondary" onclick="cocoMoney.copyExportData()">Скопировать</button>
-                <button class="btn btn-primary" onclick="cocoMoney.downloadExportData()">Скачать</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Модальное окно подтверждения -->
-    <div class="modal" id="confirmModal">
-        <div class="modal-content confirm-content">
-            <h3>Подтверждение</h3>
-            <p id="confirmMessage"></p>
-            <div class="confirm-actions">
-                <button class="btn btn-secondary" onclick="cocoMoney.cancelAction()">Отмена</button>
-                <button class="btn btn-primary delete" onclick="cocoMoney.confirmAction()">Удалить</button>
+            <div class="sub-card" data-service="debts">
+                <div class="sub-icon">💸</div>
+                <h3>Долги</h3>
             </div>
         </div>
-    </div>
+    </section>
 
-    <!-- Модальное окно новой категории -->
-    <div class="modal" id="categoryModal">
-        <div class="modal-content category-content">
-            <div class="modal-header">
-                <h2>Новая категория</h2>
-                <button class="close-btn" onclick="cocoMoney.hideCategoryModal()">&times;</button>
+    <section class="sub-section" id="geodesySection" style="display: none;">
+        <button class="back-btn">← Назад</button>
+        <h2 class="section-title">Геодезия</h2>
+        <div class="sub-grid">
+            <div class="sub-card" data-service="scale-calculator">
+                <div class="sub-icon">📐</div>
+                <h3>Калькулятор масштабов</h3>
             </div>
-            <form id="categoryForm">
-                <div class="form-group">
-                    <label for="categoryName">Название категории</label>
-                    <input type="text" id="categoryName" required placeholder="Например: Медицина">
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="cocoMoney.hideCategoryModal()">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Добавить</button>
-                </div>
-            </form>
+        </div>
+    </section>
+	<section class="sub-section" id="clothingSection" style="display: none;">
+    <button class="back-btn">← Назад</button>
+    <h2 class="section-title">Одежда</h2>
+    <div class="sub-grid">
+        <div class="sub-card" data-service="clothing-size">
+            <div class="sub-icon">📏</div>
+            <h3>Размер вещей</h3>
+        </div>
+        <div class="sub-card" data-service="clothing-carousel">
+            <div class="sub-icon">👗</div>
+            <h3>Карусель одежды</h3>
         </div>
     </div>
+	</section>
 
-    <!-- Подключаем API ПЕРЕД основным скриптом -->
     <script src="js/api.js"></script>
-    <script src="js/coco-money.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/navigation.js"></script>
+    <script src="js/pwa.js"></script>
 <script>
-// Функция для правильного возврата к секции финансов
-function goBackToFinance() {
-    const returnToSection = sessionStorage.getItem('returnToSection');
-    
-    if (returnToSection === 'finance') {
-        window.location.href = 'index.html#finance';
-    } else {
-        window.history.back();
-    }
+// Обработка перехода по хэшу на главной странице
+if (window.location.hash === '#finance') {
+    window.addEventListener('DOMContentLoaded', function() {
+        setTimeout(() => {
+            if (window.app) {
+                app.showSection('finance');
+            }
+        }, 100);
+    });
 }
-
-// Переопределяем поведение кнопки "Назад"
-document.addEventListener('DOMContentLoaded', function() {
-    const backBtn = document.querySelector('.back-btn');
-    if (backBtn) {
-        backBtn.removeAttribute('onclick');
-        backBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            goBackToFinance();
-        });
-    }
-});
 </script>
 </body>
 </html>
