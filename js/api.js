@@ -347,110 +347,7 @@ const API = {
         throw error;
       }
     },
-    async addExpense(sheetId, expenseData) {
-        try {
-            console.log('💾 Adding expense to sheet...', { sheetId, expenseData });
-            const response = await API.request(`/coco-money/sheets/${sheetId}/expenses`, {
-                method: 'POST',
-                body: JSON.stringify(expenseData)
-            });
-            console.log('✅ Expense added successfully');
-            return response.data;
-        } catch (error) {
-            console.error('❌ Failed to add expense:', error);
-            throw error;
-        }
-    },
 
-    async updateExpense(sheetId, expenseId, expenseData) {
-        try {
-            console.log('💾 Updating expense...', { sheetId, expenseId, expenseData });
-            const response = await API.request(`/coco-money/sheets/${sheetId}/expenses/${expenseId}`, {
-                method: 'PUT',
-                body: JSON.stringify(expenseData)
-            });
-            console.log('✅ Expense updated successfully');
-            return response.data;
-        } catch (error) {
-            console.error('❌ Failed to update expense:', error);
-            throw error;
-        }
-    },
-
-    async deleteExpense(sheetId, expenseId) {
-        try {
-            console.log('🗑️ Deleting expense...', { sheetId, expenseId });
-            await API.request(`/coco-money/sheets/${sheetId}/expenses/${expenseId}`, {
-                method: 'DELETE'
-            });
-            console.log('✅ Expense deleted successfully');
-            return true;
-        } catch (error) {
-            console.error('❌ Failed to delete expense:', error);
-            throw error;
-        }
-    },
-
-    // НОВЫЕ МЕТОДЫ: Работа с отдельными листами
-    async createSheet(sheetData) {
-        try {
-            console.log('💾 Creating new sheet...', sheetData);
-            const response = await API.request('/coco-money/sheets/create', {
-                method: 'POST',
-                body: JSON.stringify(sheetData)
-            });
-            console.log('✅ Sheet created successfully');
-            return response.data;
-        } catch (error) {
-            console.error('❌ Failed to create sheet:', error);
-            throw error;
-        }
-    },
-
-    async updateSheet(sheetId, sheetData) {
-        try {
-            console.log('💾 Updating sheet...', { sheetId, sheetData });
-            const response = await API.request(`/coco-money/sheets/${sheetId}`, {
-                method: 'PUT',
-                body: JSON.stringify(sheetData)
-            });
-            console.log('✅ Sheet updated successfully');
-            return response.data;
-        } catch (error) {
-            console.error('❌ Failed to update sheet:', error);
-            throw error;
-        }
-    },
-
-    async deleteSheet(sheetId) {
-        try {
-            console.log('🗑️ Deleting sheet...', sheetId);
-            await API.request(`/coco-money/sheets/${sheetId}`, {
-                method: 'DELETE'
-            });
-            console.log('✅ Sheet deleted successfully');
-            return true;
-        } catch (error) {
-            console.error('❌ Failed to delete sheet:', error);
-            throw error;
-        }
-    },
-
-    async createCategory(categoryData) {
-        try {
-            console.log('💾 Creating new category...', categoryData);
-            const response = await API.request('/coco-money/categories/create', {
-                method: 'POST',
-                body: JSON.stringify(categoryData)
-            });
-            console.log('✅ Category created successfully');
-            return response.data;
-        } catch (error) {
-            console.error('❌ Failed to create category:', error);
-            throw error;
-        }
-    }
-};
     async saveSheets(sheets) {
       try {
         console.log('💾 Saving Coco Money sheets...', sheets);
@@ -465,7 +362,96 @@ const API = {
         throw error;
       }
     },
-    
+
+    async addExpense(sheetId, expenseData) {
+      try {
+        console.log('💾 Adding expense to sheet...', { sheetId, expenseData });
+        const response = await API.request(`/coco-money/sheets/${sheetId}/expenses`, {
+          method: 'POST',
+          body: JSON.stringify(expenseData)
+        });
+        console.log('✅ Expense added successfully');
+        return response.data;
+      } catch (error) {
+        console.error('❌ Failed to add expense:', error);
+        throw error;
+      }
+    },
+
+    async updateExpense(sheetId, expenseId, expenseData) {
+      try {
+        console.log('💾 Updating expense...', { sheetId, expenseId, expenseData });
+        const response = await API.request(`/coco-money/sheets/${sheetId}/expenses/${expenseId}`, {
+          method: 'PUT',
+          body: JSON.stringify(expenseData)
+        });
+        console.log('✅ Expense updated successfully');
+        return response.data;
+      } catch (error) {
+        console.error('❌ Failed to update expense:', error);
+        throw error;
+      }
+    },
+
+    async deleteExpense(sheetId, expenseId) {
+      try {
+        console.log('🗑️ Deleting expense...', { sheetId, expenseId });
+        await API.request(`/coco-money/sheets/${sheetId}/expenses/${expenseId}`, {
+          method: 'DELETE'
+        });
+        console.log('✅ Expense deleted successfully');
+        return true;
+      } catch (error) {
+        console.error('❌ Failed to delete expense:', error);
+        throw error;
+      }
+    },
+
+    // НОВЫЕ МЕТОДЫ: Работа с отдельными листами
+    async createSheet(sheetData) {
+      try {
+        console.log('💾 Creating new sheet...', sheetData);
+        const response = await API.request('/coco-money/sheets/create', {
+          method: 'POST',
+          body: JSON.stringify(sheetData)
+        });
+        console.log('✅ Sheet created successfully');
+        return response.data;
+      } catch (error) {
+        console.error('❌ Failed to create sheet:', error);
+        throw error;
+      }
+    },
+
+    async updateSheet(sheetId, sheetData) {
+      try {
+        console.log('💾 Updating sheet...', { sheetId, sheetData });
+        const response = await API.request(`/coco-money/sheets/${sheetId}`, {
+          method: 'PUT',
+          body: JSON.stringify(sheetData)
+        });
+        console.log('✅ Sheet updated successfully');
+        return response.data;
+      } catch (error) {
+        console.error('❌ Failed to update sheet:', error);
+        throw error;
+      }
+    },
+
+    async deleteSheet(sheetId) {
+      try {
+        console.log('🗑️ Deleting sheet...', sheetId);
+        await API.request(`/coco-money/sheets/${sheetId}`, {
+          method: 'DELETE'
+        });
+        console.log('✅ Sheet deleted successfully');
+        return true;
+      } catch (error) {
+        console.error('❌ Failed to delete sheet:', error);
+        throw error;
+      }
+    },
+
     async getCategories() {
       try {
         console.log('📋 Fetching Coco Money categories...');
@@ -496,6 +482,21 @@ const API = {
         return true;
       } catch (error) {
         console.error('❌ Failed to save Coco Money categories:', error);
+        throw error;
+      }
+    },
+
+    async createCategory(categoryData) {
+      try {
+        console.log('💾 Creating new category...', categoryData);
+        const response = await API.request('/coco-money/categories/create', {
+          method: 'POST',
+          body: JSON.stringify(categoryData)
+        });
+        console.log('✅ Category created successfully');
+        return response.data;
+      } catch (error) {
+        console.error('❌ Failed to create category:', error);
         throw error;
       }
     }
