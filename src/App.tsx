@@ -15,6 +15,8 @@ import { tapLight } from '@/lib/haptics';
 
 import { HomePage } from '@/pages/HomePage';
 import { ClothingPage } from '@/pages/ClothingPage';
+import { NoteEditorPage } from '@/pages/NoteEditorPage';
+import { NotesGraphPage } from '@/pages/NotesGraphPage';
 import { NotesPage } from '@/pages/NotesPage';
 import { FinanceDashboardPage } from '@/pages/finance/FinanceDashboardPage';
 import { ExpensesListPage } from '@/pages/finance/ExpensesListPage';
@@ -89,6 +91,9 @@ export function App() {
           <Route path="/finance/savings/:id" element={<SavingsDetailPage />} />
           <Route path="/finance/savings/:id/edit" element={<SavingsFormPage />} />
           <Route path="/notes" element={<NotesPage />} />
+          <Route path="/notes/new" element={<NoteEditorPage />} />
+          <Route path="/notes/graph" element={<NotesGraphPage />} />
+          <Route path="/notes/:id" element={<NoteEditorPage />} />
           <Route path="/clothing" element={<ClothingPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

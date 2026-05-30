@@ -161,8 +161,18 @@ export interface Note {
   id: string;
   title: string;
   body: string;
+  attachments?: NoteAttachment[];
   createdAt: number;
   updatedAt: number;
+}
+
+export interface NoteAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
+  createdAt: number;
 }
 
 export interface NotesBlob {

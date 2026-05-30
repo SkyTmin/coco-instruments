@@ -44,6 +44,20 @@ export const IconGraph = (p: IconProps) => (
   </svg>
 );
 
+export const IconPaperclip = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M21.44 11.05 12.2 20.29a6 6 0 0 1-8.49-8.49l9.24-9.24a4 4 0 0 1 5.66 5.66l-9.24 9.24a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+  </svg>
+);
+
+export const IconImage = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="3" width="18" height="18" rx="3" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+  </svg>
+);
+
 export const IconPlus = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M12 5v14M5 12h14" />
