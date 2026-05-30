@@ -3,6 +3,8 @@ import type {
   FinanceExpensesBlob,
   FinanceRecurringBlob,
   FinanceSavingsBlob,
+  Note,
+  NotesBlob,
   Obligation,
   Payment,
   RecurringPayment,
@@ -20,6 +22,8 @@ export type ObligationDraft = Omit<
 export type SavingsDraft = Omit<SavingsGoal, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type RecurringDraft = Omit<RecurringPayment, 'id' | 'createdAt' | 'updatedAt'>;
+
+export type NoteDraft = Omit<Note, 'id' | 'createdAt' | 'updatedAt'>;
 
 /** Recompute the auto-status from the payments and bump updatedAt. */
 function normalize(o: Obligation): Obligation {
@@ -55,10 +59,19 @@ function persistRecurring(items: RecurringPayment[]): void {
   }, 300);
 }
 
+let notesTimer: ReturnType<typeof setTimeout> | undefined;
+function persistNotes(items: Note[]): void {
+  clearTimeout(notesTimer);
+  notesTimer = setTimeout(() => {
+    void getStorage().set<NotesBlob>(STORAGE_KEYS.notes, { version: 1, items });
+  }, 300);
+}
+
 interface FinanceState {
   expenses: Obligation[];
   savings: SavingsGoal[];
   recurring: RecurringPayment[];
+  notes: Note[];
   hydrated: boolean;
 
   hydrate: () => Promise<void>;
@@ -81,25 +94,33 @@ interface FinanceState {
   updateRecurring: (id: string, patch: Partial<RecurringPayment>) => void;
   removeRecurring: (id: string) => void;
   getRecurring: (id: string) => RecurringPayment | undefined;
+
+  addNote: (draft: NoteDraft) => Note;
+  updateNote: (id: string, patch: Partial<Note>) => void;
+  removeNote: (id: string) => void;
+  getNote: (id: string) => Note | undefined;
 }
 
 export const useFinanceStore = create<FinanceState>((set, get) => ({
   expenses: [],
   savings: [],
   recurring: [],
+  notes: [],
   hydrated: false,
 
   hydrate: async () => {
     const storage = getStorage();
-    const [exp, sav, rec] = await Promise.all([
+    const [exp, sav, rec, notes] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
       storage.get<FinanceRecurringBlob>(STORAGE_KEYS.recurring),
+      storage.get<NotesBlob>(STORAGE_KEYS.notes),
     ]);
     set({
       expenses: exp?.items ?? [],
       savings: sav?.items ?? [],
       recurring: rec?.items ?? [],
+      notes: notes?.items ?? [],
       hydrated: true,
     });
   },
@@ -216,4 +237,44 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   getRecurring: (id) => get().recurring.find((r) => r.id === id),
+
+  addNote: (draft) => {
+    const now = Date.now();
+    const note: Note = {
+      ...draft,
+      title: draft.title.trim(),
+      body: draft.body.trim(),
+      id: genId(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const notes = [note, ...get().notes];
+    set({ notes });
+    persistNotes(notes);
+    return note;
+  },
+
+  updateNote: (id, patch) => {
+    const notes = get().notes.map((n) =>
+      n.id === id
+        ? {
+            ...n,
+            ...patch,
+            title: patch.title !== undefined ? patch.title.trim() : n.title,
+            body: patch.body !== undefined ? patch.body.trim() : n.body,
+            updatedAt: Date.now(),
+          }
+        : n,
+    );
+    set({ notes });
+    persistNotes(notes);
+  },
+
+  removeNote: (id) => {
+    const notes = get().notes.filter((n) => n.id !== id);
+    set({ notes });
+    persistNotes(notes);
+  },
+
+  getNote: (id) => get().notes.find((n) => n.id === id),
 }));

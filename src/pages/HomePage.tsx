@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Screen } from '@/components/ui';
-import { IconShirt, IconWallet } from '@/components/icons';
+import { IconNotes, IconShirt, IconWallet } from '@/components/icons';
 import { tapLight } from '@/lib/haptics';
 
 export function HomePage() {
@@ -21,6 +21,17 @@ export function HomePage() {
           <div>
             <div className="home-card__title">Финансы</div>
             <div className="home-card__desc">Расходы, кредиты, рассрочки и накопления</div>
+          </div>
+        </div>
+
+        <div className="home-card home-card--notes" onClick={() => go('/notes')} role="button">
+          <div className="home-card__glow" />
+          <div className="home-card__icon">
+            <IconNotes />
+          </div>
+          <div>
+            <div className="home-card__title">Заметки</div>
+            <div className="home-card__desc">Связи, теги и граф идей</div>
           </div>
         </div>
 

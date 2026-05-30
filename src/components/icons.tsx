@@ -28,6 +28,22 @@ export const IconShirt = (p: IconProps) => (
   </svg>
 );
 
+export const IconNotes = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M6 3h9l3 3v15H6z" />
+    <path d="M14 3v4h4M9 11h6M9 15h6M9 19h3" />
+  </svg>
+);
+
+export const IconGraph = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="6" cy="7" r="3" />
+    <circle cx="18" cy="7" r="3" />
+    <circle cx="12" cy="17" r="3" />
+    <path d="M8.6 8.6l2.8 5.8M15.4 8.6l-2.8 5.8M9 7h6" />
+  </svg>
+);
+
 export const IconPlus = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M12 5v14M5 12h14" />

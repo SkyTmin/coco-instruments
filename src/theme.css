@@ -177,6 +177,9 @@ select {
   color: var(--text);
   box-shadow: var(--shadow-sm);
 }
+.home-card--notes {
+  background: linear-gradient(135deg, #35656d, #6b8f5f);
+}
 .home-card__glow {
   position: absolute;
   inset: -40% -30% auto auto;
@@ -423,3 +426,289 @@ select {
 .pay-row__date { color: var(--muted); font-size: 13px; }
 .icon-btn { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 6px; border-radius: 10px; }
 .icon-btn:active { background: var(--surface-2); }
+
+/* ---- Notes ---------------------------------------------------------------- */
+.notes-page .card {
+  overflow: hidden;
+}
+
+.notes-head-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 13px;
+  border-radius: 13px;
+  flex: none;
+}
+
+.notes-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.notes-card-title {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.notes-card-sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.notes-graph-card .segmented {
+  margin-bottom: 12px;
+}
+
+.notes-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.notes-search {
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.notes-toggle,
+.notes-depth__btn {
+  border: 0;
+  cursor: pointer;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 11px;
+}
+
+.notes-toggle.is-active,
+.notes-depth__btn.is-active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-grad-1), var(--accent-grad-2));
+}
+
+.notes-depth {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.notes-depth__btn {
+  width: 38px;
+  height: 34px;
+  padding: 0;
+}
+
+.notes-graph {
+  width: 100%;
+  aspect-ratio: 520 / 330;
+  display: block;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 28% 25%, rgba(53, 101, 109, 0.14), transparent 28%),
+    radial-gradient(circle at 76% 70%, rgba(107, 143, 95, 0.14), transparent 30%),
+    var(--surface-2);
+}
+
+.notes-graph__link {
+  stroke: rgba(123, 75, 42, 0.26);
+  stroke-width: 2;
+}
+
+.notes-graph__link--tag {
+  stroke-dasharray: 5 6;
+  stroke: rgba(46, 158, 107, 0.42);
+}
+
+.notes-graph__node {
+  cursor: pointer;
+}
+
+.notes-graph__node circle {
+  fill: url(#noteNodeGradient);
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 5px 8px rgba(63, 42, 27, 0.18));
+}
+
+.notes-graph__node--missing circle {
+  fill: rgba(215, 154, 43, 0.24);
+  stroke: var(--warn);
+  stroke-dasharray: 5 4;
+}
+
+.notes-graph__node--tag circle {
+  fill: rgba(46, 158, 107, 0.2);
+  stroke: var(--pos);
+}
+
+.notes-graph__node.is-active circle {
+  stroke: var(--pos);
+  stroke-width: 4;
+}
+
+.notes-graph__node text {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--surface-2);
+  stroke-width: 5;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.notes-graph__node--missing,
+.notes-graph__node--tag {
+  cursor: default;
+}
+
+.notes-graph-empty {
+  min-height: 220px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.notes-textarea {
+  min-height: 156px;
+  resize: vertical;
+  line-height: 1.42;
+}
+
+.notes-error {
+  color: var(--neg);
+  font-size: 13px;
+  font-weight: 700;
+  margin: -6px 0 12px;
+}
+
+.notes-relations {
+  margin-top: 16px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 12px;
+}
+
+.notes-relation-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.notes-relation-row > span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.notes-relation-row > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.notes-relation-row em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.note-chip {
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-chip--new {
+  color: var(--warn);
+}
+
+.note-chip--tag {
+  color: var(--pos);
+  cursor: default;
+}
+
+.note-row {
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: var(--shadow-sm);
+  padding: 14px 15px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.note-row.is-active {
+  border-color: rgba(46, 158, 107, 0.38);
+}
+
+.note-row__title {
+  font-size: 16px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-row__body {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.note-row__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.note-row__tags span {
+  color: var(--pos);
+  background: rgba(46, 158, 107, 0.12);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+@media (max-width: 390px) {
+  .notes-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+  .notes-search {
+    grid-column: 1 / -1;
+  }
+  .notes-relation-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}

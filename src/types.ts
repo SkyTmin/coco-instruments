@@ -153,3 +153,19 @@ export interface RecurringComputed {
   monthlyEquivalent: number; // normalized cost per month
   upcoming: string[]; // next few ISO dates
 }
+
+// ---- Notes ----------------------------------------------------------------
+
+/** A markdown-like note with Obsidian-style [[wiki links]]. */
+export interface Note {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface NotesBlob {
+  version: 1;
+  items: Note[];
+}
