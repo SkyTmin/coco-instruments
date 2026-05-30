@@ -22,6 +22,8 @@ import { ExpenseDetailPage } from '@/pages/finance/ExpenseDetailPage';
 import { SavingsListPage } from '@/pages/finance/SavingsListPage';
 import { SavingsFormPage } from '@/pages/finance/SavingsFormPage';
 import { SavingsDetailPage } from '@/pages/finance/SavingsDetailPage';
+import { RecurringFormPage } from '@/pages/finance/RecurringFormPage';
+import { RecurringDetailPage } from '@/pages/finance/RecurringDetailPage';
 
 /** Drives the native Telegram BackButton from the router. */
 function NavigationController() {
@@ -78,6 +80,9 @@ export function App() {
           <Route path="/finance/expenses/new" element={<ExpenseFormPage />} />
           <Route path="/finance/expenses/:id" element={<ExpenseDetailPage />} />
           <Route path="/finance/expenses/:id/edit" element={<ExpenseFormPage />} />
+          <Route path="/finance/recurring/new" element={<RecurringFormPage />} />
+          <Route path="/finance/recurring/:id" element={<RecurringDetailPage />} />
+          <Route path="/finance/recurring/:id/edit" element={<RecurringFormPage />} />
           <Route path="/finance/savings" element={<SavingsListPage />} />
           <Route path="/finance/savings/new" element={<SavingsFormPage />} />
           <Route path="/finance/savings/:id" element={<SavingsDetailPage />} />

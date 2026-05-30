@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Screen, SectionCard, StatTile } from '@/components/ui';
 import { IconTarget, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
-import { computeObligation } from '@/lib/finance-calc';
+import { computeObligation, computeRecurring } from '@/lib/finance-calc';
 import { formatDate, formatRUB } from '@/lib/format';
 import { tapLight } from '@/lib/haptics';
 
@@ -43,6 +43,7 @@ export function FinanceDashboardPage() {
   const navigate = useNavigate();
   const expenses = useFinanceStore((s) => s.expenses);
   const savings = useFinanceStore((s) => s.savings);
+  const recurring = useFinanceStore((s) => s.recurring);
 
   const { monthlyTotal, totalRemaining, active, next, breakdown } = useMemo(() => {
     const active = expenses.filter((o) => o.status !== 'closed');
@@ -59,10 +60,17 @@ export function FinanceDashboardPage() {
         upcoming.push({ name: o.name, date: c.nextPaymentDate, amount: c.monthlyPayment });
       }
     }
+    for (const r of recurring) {
+      if (r.paused) continue;
+      const c = computeRecurring(r);
+      monthlyTotal += c.monthlyEquivalent;
+      breakdown.push({ name: r.name, value: Math.round(c.monthlyEquivalent) });
+      upcoming.push({ name: r.name, date: c.nextDue, amount: r.amount });
+    }
     upcoming.sort((a, b) => a.date.localeCompare(b.date));
     breakdown.sort((a, b) => b.value - a.value);
     return { monthlyTotal, totalRemaining, active, next: upcoming[0], breakdown };
-  }, [expenses]);
+  }, [expenses, recurring]);
 
   const go = (path: string) => {
     tapLight();
@@ -93,7 +101,11 @@ export function FinanceDashboardPage() {
         <SectionCard
           icon={<IconWallet />}
           title="Мои расходы"
-          sub={expenses.length ? `${expenses.length} • активных: ${active.length}` : 'Кредиты, рассрочки, платежи'}
+          sub={
+            expenses.length || recurring.length
+              ? `Платежи: ${active.length} • регулярные: ${recurring.length}`
+              : 'Кредиты, рассрочки, подписки'
+          }
           onClick={() => go('/finance/expenses')}
         />
         <SectionCard

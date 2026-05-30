@@ -18,6 +18,7 @@ export interface Storage {
 export const STORAGE_KEYS = {
   expenses: 'finance.expenses',
   savings: 'finance.savings',
+  recurring: 'finance.recurring',
   meta: 'app.meta',
 } as const;
 

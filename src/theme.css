@@ -247,6 +247,40 @@ select {
 .amount-pos { color: var(--pos); }
 .amount-neg { color: var(--neg); }
 
+.rec-card__hint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Tabs (Платежи / Регулярные) */
+.tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  margin-bottom: 16px;
+}
+.tabs__tab {
+  border: 0;
+  cursor: pointer;
+  padding: 10px 6px;
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  background: transparent;
+  transition: all 0.15s ease;
+}
+.tabs__tab.is-active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-grad-1), var(--accent-grad-2));
+  box-shadow: var(--shadow-sm);
+}
+
 /* Badges */
 .badge {
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em;

@@ -118,3 +118,38 @@ export interface FinanceSavingsBlob {
   version: 1;
   items: SavingsGoal[];
 }
+
+// ---- Recurring payments (subscriptions, rent, internet, …) ----------------
+
+/** Unit of a recurring cycle. */
+export type IntervalUnit = 'day' | 'week' | 'month' | 'year';
+
+/** A recurring/periodic payment that repeats forever on a fixed cycle. */
+export interface RecurringPayment {
+  id: string;
+  name: string;
+  amount: number;
+  /** Repeats every `intervalCount` × `intervalUnit` (e.g. 2 weeks, 1 month). */
+  intervalCount: number;
+  intervalUnit: IntervalUnit;
+  /** Anchor date — when the cycle starts / first due. */
+  startDate: string;
+  /** Temporarily paused (excluded from totals & upcoming). */
+  paused?: boolean;
+  category?: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FinanceRecurringBlob {
+  version: 1;
+  items: RecurringPayment[];
+}
+
+/** Computed view of a recurring payment — never persisted. */
+export interface RecurringComputed {
+  nextDue: string; // ISO of the next upcoming charge
+  monthlyEquivalent: number; // normalized cost per month
+  upcoming: string[]; // next few ISO dates
+}

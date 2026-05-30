@@ -1,11 +1,14 @@
 import type {
+  IntervalUnit,
   Obligation,
   ObligationComputed,
   ObligationStatus,
   Payment,
+  RecurringComputed,
+  RecurringPayment,
   ScheduleEntry,
 } from '@/types';
-import { monthsBetween, parseISO, paymentDueDate, todayISO } from './date';
+import { addInterval, monthsBetween, parseISO, paymentDueDate, toISO, todayISO } from './date';
 
 // ---------------------------------------------------------------------------
 // Pure finance math. No React, no side effects — fully unit-testable.
@@ -251,4 +254,55 @@ export function computeSavings(target: number, current: number, deadline?: strin
     requiredPerMonth = remaining / months;
   }
   return { progressPercent: pct, remaining, requiredPerMonth };
+}
+
+// ---- Recurring payments ----------------------------------------------------
+
+const AVG_DAYS_PER_MONTH = 30.4375;
+
+/** Approximate number of days in one cycle. */
+function cycleDays(count: number, unit: IntervalUnit): number {
+  if (unit === 'day') return count;
+  if (unit === 'week') return count * 7;
+  if (unit === 'month') return count * AVG_DAYS_PER_MONTH;
+  return count * 365.25; // year
+}
+
+/** Normalize a recurring charge to an average cost per month. */
+export function monthlyEquivalent(amount: number, count: number, unit: IntervalUnit): number {
+  const days = cycleDays(count, unit);
+  return days > 0 ? amount * (AVG_DAYS_PER_MONTH / days) : 0;
+}
+
+/** First due date on/after `fromISO`, stepping from the anchor by the interval. */
+export function nextDueFrom(
+  startISO: string,
+  count: number,
+  unit: IntervalUnit,
+  fromISO: string,
+): string {
+  const from = parseISO(fromISO) ?? new Date();
+  let d = parseISO(startISO) ?? new Date();
+  let guard = 0;
+  while (d.getTime() < from.getTime() && guard < 5000) {
+    d = addInterval(d, Math.max(1, count), unit);
+    guard++;
+  }
+  return toISO(d);
+}
+
+/** Full computed view of a recurring payment. */
+export function computeRecurring(r: RecurringPayment, fromISO = todayISO()): RecurringComputed {
+  const next = nextDueFrom(r.startDate, r.intervalCount, r.intervalUnit, fromISO);
+  const upcoming: string[] = [];
+  let d = parseISO(next) ?? new Date();
+  for (let i = 0; i < 4; i++) {
+    upcoming.push(toISO(d));
+    d = addInterval(d, Math.max(1, r.intervalCount), r.intervalUnit);
+  }
+  return {
+    nextDue: next,
+    monthlyEquivalent: monthlyEquivalent(r.amount, r.intervalCount, r.intervalUnit),
+    upcoming,
+  };
 }

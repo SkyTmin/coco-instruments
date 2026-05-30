@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import type {
   FinanceExpensesBlob,
+  FinanceRecurringBlob,
   FinanceSavingsBlob,
   Obligation,
   Payment,
+  RecurringPayment,
   SavingsGoal,
 } from '@/types';
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
@@ -16,6 +18,8 @@ export type ObligationDraft = Omit<
 > & { payments?: Payment[] };
 
 export type SavingsDraft = Omit<SavingsGoal, 'id' | 'createdAt' | 'updatedAt'>;
+
+export type RecurringDraft = Omit<RecurringPayment, 'id' | 'createdAt' | 'updatedAt'>;
 
 /** Recompute the auto-status from the payments and bump updatedAt. */
 function normalize(o: Obligation): Obligation {
@@ -43,9 +47,18 @@ function persistSavings(items: SavingsGoal[]): void {
   }, 300);
 }
 
+let recurringTimer: ReturnType<typeof setTimeout> | undefined;
+function persistRecurring(items: RecurringPayment[]): void {
+  clearTimeout(recurringTimer);
+  recurringTimer = setTimeout(() => {
+    void getStorage().set<FinanceRecurringBlob>(STORAGE_KEYS.recurring, { version: 1, items });
+  }, 300);
+}
+
 interface FinanceState {
   expenses: Obligation[];
   savings: SavingsGoal[];
+  recurring: RecurringPayment[];
   hydrated: boolean;
 
   hydrate: () => Promise<void>;
@@ -63,22 +76,30 @@ interface FinanceState {
   updateSaving: (id: string, patch: Partial<SavingsGoal>) => void;
   removeSaving: (id: string) => void;
   getSaving: (id: string) => SavingsGoal | undefined;
+
+  addRecurring: (draft: RecurringDraft) => RecurringPayment;
+  updateRecurring: (id: string, patch: Partial<RecurringPayment>) => void;
+  removeRecurring: (id: string) => void;
+  getRecurring: (id: string) => RecurringPayment | undefined;
 }
 
 export const useFinanceStore = create<FinanceState>((set, get) => ({
   expenses: [],
   savings: [],
+  recurring: [],
   hydrated: false,
 
   hydrate: async () => {
     const storage = getStorage();
-    const [exp, sav] = await Promise.all([
+    const [exp, sav, rec] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
+      storage.get<FinanceRecurringBlob>(STORAGE_KEYS.recurring),
     ]);
     set({
       expenses: exp?.items ?? [],
       savings: sav?.items ?? [],
+      recurring: rec?.items ?? [],
       hydrated: true,
     });
   },
@@ -170,4 +191,29 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   getSaving: (id) => get().savings.find((s) => s.id === id),
+
+  addRecurring: (draft) => {
+    const now = Date.now();
+    const item: RecurringPayment = { ...draft, id: genId(), createdAt: now, updatedAt: now };
+    const recurring = [item, ...get().recurring];
+    set({ recurring });
+    persistRecurring(recurring);
+    return item;
+  },
+
+  updateRecurring: (id, patch) => {
+    const recurring = get().recurring.map((r) =>
+      r.id === id ? { ...r, ...patch, updatedAt: Date.now() } : r,
+    );
+    set({ recurring });
+    persistRecurring(recurring);
+  },
+
+  removeRecurring: (id) => {
+    const recurring = get().recurring.filter((r) => r.id !== id);
+    set({ recurring });
+    persistRecurring(recurring);
+  },
+
+  getRecurring: (id) => get().recurring.find((r) => r.id === id),
 }));

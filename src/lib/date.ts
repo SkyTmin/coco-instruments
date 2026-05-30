@@ -1,5 +1,7 @@
 /** Date helpers operating on ISO 'YYYY-MM-DD' strings (no timezone surprises). */
 
+import type { IntervalUnit } from '@/types';
+
 export function todayISO(): string {
   return toISO(new Date());
 }
@@ -53,4 +55,19 @@ export function paymentDueDate(startISO: string, paymentDay: number, k: number):
   // First payment is in the start month; subsequent ones add months.
   const due = addMonths(start, k - 1, paymentDay);
   return toISO(due);
+}
+
+/** Add `n` calendar days to a date. */
+export function addDays(base: Date, n: number): Date {
+  const d = new Date(base);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+/** Advance a date by one recurring interval (count × unit). */
+export function addInterval(base: Date, count: number, unit: IntervalUnit): Date {
+  if (unit === 'day') return addDays(base, count);
+  if (unit === 'week') return addDays(base, count * 7);
+  if (unit === 'month') return addMonths(base, count);
+  return addMonths(base, count * 12); // year
 }

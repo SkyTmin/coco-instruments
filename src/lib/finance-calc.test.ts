@@ -3,8 +3,11 @@ import type { Obligation, Payment } from '@/types';
 import {
   annuityPayment,
   computeObligation,
+  computeRecurring,
   computeSavings,
   deriveMonthlyRate,
+  monthlyEquivalent,
+  nextDueFrom,
   paidSoFar,
   progressPercent,
 } from './finance-calc';
@@ -146,5 +149,46 @@ describe('savings', () => {
     expect(s.progressPercent).toBe(25);
     expect(s.remaining).toBe(75_000);
     expect(s.requiredPerMonth).toBeNull();
+  });
+});
+
+describe('recurring payments', () => {
+  it('monthly equivalent: monthly = amount, weekly ≈ 4.35×, yearly = amount/12', () => {
+    expect(monthlyEquivalent(1000, 1, 'month')).toBe(1000);
+    expect(Math.round(monthlyEquivalent(1000, 1, 'week'))).toBe(4348);
+    expect(Math.round(monthlyEquivalent(1200, 1, 'year'))).toBe(100);
+    expect(Math.round(monthlyEquivalent(900, 1, 'day'))).toBe(27394);
+  });
+
+  it('every 2 weeks ≈ half of weekly cost', () => {
+    const w = monthlyEquivalent(1000, 1, 'week');
+    const w2 = monthlyEquivalent(1000, 2, 'week');
+    expect(Math.abs(w / 2 - w2)).toBeLessThan(1);
+  });
+
+  it('nextDueFrom steps the anchor forward to the first date >= today', () => {
+    // anchor in the past, monthly cycle → next due is on/after the "from" date
+    const next = nextDueFrom('2026-01-10', 1, 'month', '2026-05-30');
+    expect(next).toBe('2026-06-10');
+  });
+
+  it('computeRecurring returns 4 upcoming dates spaced by the interval', () => {
+    const c = computeRecurring(
+      {
+        id: 'r',
+        name: 'rent',
+        amount: 30000,
+        intervalCount: 1,
+        intervalUnit: 'month',
+        startDate: '2026-01-05',
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      '2026-05-30',
+    );
+    expect(c.upcoming).toHaveLength(4);
+    expect(c.nextDue).toBe('2026-06-05');
+    expect(c.upcoming[1]).toBe('2026-07-05');
+    expect(c.monthlyEquivalent).toBe(30000);
   });
 });

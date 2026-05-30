@@ -1,3 +1,4 @@
+import type { IntervalUnit } from '@/types';
 import { parseISO } from './date';
 
 const rub = new Intl.NumberFormat('ru-RU', {
@@ -47,4 +48,33 @@ export function pluralizeRu(n: number, forms: [string, string, string]): string 
 
 export function monthsLabel(n: number): string {
   return `${n} ${pluralizeRu(n, ['месяц', 'месяца', 'месяцев'])}`;
+}
+
+const UNIT_FORMS: Record<IntervalUnit, [string, string, string]> = {
+  day: ['день', 'дня', 'дней'],
+  week: ['неделю', 'недели', 'недель'],
+  month: ['месяц', 'месяца', 'месяцев'],
+  year: ['год', 'года', 'лет'],
+};
+
+const UNIT_EVERY: Record<IntervalUnit, string> = {
+  day: 'Каждый день',
+  week: 'Каждую неделю',
+  month: 'Каждый месяц',
+  year: 'Каждый год',
+};
+
+/** Human label for a cycle, e.g. (1,'month') → "Каждый месяц", (2,'week') → "Каждые 2 недели". */
+export function intervalLabel(count: number, unit: IntervalUnit): string {
+  if (count === 1) return UNIT_EVERY[unit];
+  return `Каждые ${count} ${pluralizeRu(count, UNIT_FORMS[unit])}`;
+}
+
+/** Short label for chips/cards, e.g. (1,'month') → "в месяц", (2,'week') → "2 нед.". */
+export function intervalShort(count: number, unit: IntervalUnit): string {
+  const short: Record<IntervalUnit, string> = { day: 'дн.', week: 'нед.', month: 'мес.', year: 'г.' };
+  if (count === 1) {
+    return { day: 'в день', week: 'в неделю', month: 'в месяц', year: 'в год' }[unit];
+  }
+  return `${count} ${short[unit]}`;
 }
