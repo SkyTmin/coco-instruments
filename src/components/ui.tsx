@@ -64,10 +64,25 @@ export function StatRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function StatTile({ label, value }: { label: string; value: ReactNode }) {
+export function StatTile({
+  label,
+  value,
+  onClick,
+}: {
+  label: string;
+  value: ReactNode;
+  onClick?: () => void;
+}) {
   return (
-    <div className="stat-tile">
-      <div className="stat-tile__label">{label}</div>
+    <div
+      className={`stat-tile${onClick ? ' stat-tile--tap' : ''}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+    >
+      <div className="stat-tile__label">
+        {label}
+        {onClick && <span className="stat-tile__more">›</span>}
+      </div>
       <div className="stat-tile__value">{value}</div>
     </div>
   );

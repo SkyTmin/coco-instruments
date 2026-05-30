@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Screen } from '@/components/ui';
 import type { IntervalUnit } from '@/types';
 import { useFinanceStore, type RecurringDraft } from '@/store';
@@ -26,12 +26,15 @@ export function RecurringFormPage() {
   const existing = useFinanceStore((s) => (id ? s.getRecurring(id) : undefined));
   const addRecurring = useFinanceStore((s) => s.addRecurring);
   const updateRecurring = useFinanceStore((s) => s.updateRecurring);
+  const lists = useFinanceStore((s) => s.lists);
+  const [params] = useSearchParams();
 
   const [name, setName] = useState(existing?.name ?? '');
   const [amount, setAmount] = useState(existing ? String(existing.amount) : '');
   const [count, setCount] = useState(existing ? String(existing.intervalCount) : '1');
   const [unit, setUnit] = useState<IntervalUnit>(existing?.intervalUnit ?? 'month');
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayISO());
+  const [listId, setListId] = useState(existing?.listId ?? params.get('list') ?? '');
 
   const c = Math.max(1, Math.round(num(count)) || 1);
   const preview = useMemo(() => {
@@ -64,6 +67,7 @@ export function RecurringFormPage() {
       intervalUnit: unit,
       startDate: startDate || todayISO(),
       paused: existing?.paused ?? false,
+      listId: listId || undefined,
     };
     if (existing) updateRecurring(existing.id, draft);
     else addRecurring(draft);
@@ -147,6 +151,20 @@ export function RecurringFormPage() {
             <span className="stat-row__label">Ближайшее списание</span>
             <span className="stat-row__value">{formatDate(preview.next)}</span>
           </div>
+        </div>
+      )}
+
+      {lists.length > 0 && (
+        <div className="field">
+          <label className="field__label">Список</label>
+          <select className="select" value={listId} onChange={(e) => setListId(e.target.value)}>
+            <option value="">Без списка</option>
+            {lists.map((l) => (
+              <option key={l.id} value={l.id}>
+                {(l.emoji ? `${l.emoji} ` : '') + l.name}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 

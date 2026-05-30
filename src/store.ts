@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type {
+  ExpenseList,
   FinanceExpensesBlob,
+  FinanceListsBlob,
   FinanceRecurringBlob,
   FinanceSavingsBlob,
   Note,
@@ -25,6 +27,8 @@ export type RecurringDraft = Omit<RecurringPayment, 'id' | 'createdAt' | 'update
 
 export type NoteDraft = Omit<Note, 'id' | 'createdAt' | 'updatedAt'>;
 
+export type ListDraft = Omit<ExpenseList, 'id' | 'createdAt' | 'updatedAt'>;
+
 /** Recompute the auto-status from the payments and bump updatedAt. */
 function normalize(o: Obligation): Obligation {
   const total = resolve(o).totalToPay;
@@ -33,44 +37,54 @@ function normalize(o: Obligation): Obligation {
   return { ...o, status, updatedAt: Date.now() };
 }
 
-// --- Debounced persistence (avoids hammering CloudStorage) ------------------
-let expensesTimer: ReturnType<typeof setTimeout> | undefined;
-let savingsTimer: ReturnType<typeof setTimeout> | undefined;
+// --- Debounced persistence --------------------------------------------------
+// Writes are debounced (to avoid hammering CloudStorage), but ALWAYS flushed
+// immediately when the Mini App is hidden/closed so a just-made change is never
+// lost if the user swipes the app away right after editing.
+const flushers: Array<() => void> = [];
 
-function persistExpenses(items: Obligation[]): void {
-  clearTimeout(expensesTimer);
-  expensesTimer = setTimeout(() => {
-    void getStorage().set<FinanceExpensesBlob>(STORAGE_KEYS.expenses, { version: 1, items });
-  }, 300);
+function makePersister<T>(key: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let pending: T | undefined;
+  const write = () => {
+    if (pending !== undefined) {
+      void getStorage().set<T>(key, pending);
+      pending = undefined;
+    }
+  };
+  flushers.push(write);
+  return (blob: T) => {
+    pending = blob;
+    clearTimeout(timer);
+    timer = setTimeout(write, 300);
+  };
 }
 
-function persistSavings(items: SavingsGoal[]): void {
-  clearTimeout(savingsTimer);
-  savingsTimer = setTimeout(() => {
-    void getStorage().set<FinanceSavingsBlob>(STORAGE_KEYS.savings, { version: 1, items });
-  }, 300);
+if (typeof window !== 'undefined') {
+  const flushAll = () => flushers.forEach((f) => f());
+  window.addEventListener('pagehide', flushAll);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushAll();
+  });
 }
 
-let recurringTimer: ReturnType<typeof setTimeout> | undefined;
-function persistRecurring(items: RecurringPayment[]): void {
-  clearTimeout(recurringTimer);
-  recurringTimer = setTimeout(() => {
-    void getStorage().set<FinanceRecurringBlob>(STORAGE_KEYS.recurring, { version: 1, items });
-  }, 300);
-}
+const writeExpenses = makePersister<FinanceExpensesBlob>(STORAGE_KEYS.expenses);
+const writeSavings = makePersister<FinanceSavingsBlob>(STORAGE_KEYS.savings);
+const writeRecurring = makePersister<FinanceRecurringBlob>(STORAGE_KEYS.recurring);
+const writeLists = makePersister<FinanceListsBlob>(STORAGE_KEYS.lists);
+const writeNotes = makePersister<NotesBlob>(STORAGE_KEYS.notes);
 
-let notesTimer: ReturnType<typeof setTimeout> | undefined;
-function persistNotes(items: Note[]): void {
-  clearTimeout(notesTimer);
-  notesTimer = setTimeout(() => {
-    void getStorage().set<NotesBlob>(STORAGE_KEYS.notes, { version: 1, items });
-  }, 300);
-}
+const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, items });
+const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, items });
+const persistRecurring = (items: RecurringPayment[]) => writeRecurring({ version: 1, items });
+const persistLists = (items: ExpenseList[]) => writeLists({ version: 1, items });
+const persistNotes = (items: Note[]) => writeNotes({ version: 1, items });
 
 interface FinanceState {
   expenses: Obligation[];
   savings: SavingsGoal[];
   recurring: RecurringPayment[];
+  lists: ExpenseList[];
   notes: Note[];
   hydrated: boolean;
 
@@ -95,6 +109,11 @@ interface FinanceState {
   removeRecurring: (id: string) => void;
   getRecurring: (id: string) => RecurringPayment | undefined;
 
+  addList: (draft: ListDraft) => ExpenseList;
+  updateList: (id: string, patch: Partial<ExpenseList>) => void;
+  removeList: (id: string) => void;
+  getList: (id: string) => ExpenseList | undefined;
+
   addNote: (draft: NoteDraft) => Note;
   updateNote: (id: string, patch: Partial<Note>) => void;
   removeNote: (id: string) => void;
@@ -105,21 +124,24 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   expenses: [],
   savings: [],
   recurring: [],
+  lists: [],
   notes: [],
   hydrated: false,
 
   hydrate: async () => {
     const storage = getStorage();
-    const [exp, sav, rec, notes] = await Promise.all([
+    const [exp, sav, rec, lists, notes] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
       storage.get<FinanceRecurringBlob>(STORAGE_KEYS.recurring),
+      storage.get<FinanceListsBlob>(STORAGE_KEYS.lists),
       storage.get<NotesBlob>(STORAGE_KEYS.notes),
     ]);
     set({
       expenses: exp?.items ?? [],
       savings: sav?.items ?? [],
       recurring: rec?.items ?? [],
+      lists: lists?.items ?? [],
       notes: notes?.items ?? [],
       hydrated: true,
     });
@@ -237,6 +259,34 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   getRecurring: (id) => get().recurring.find((r) => r.id === id),
+
+  addList: (draft) => {
+    const now = Date.now();
+    const list: ExpenseList = { ...draft, id: genId(), createdAt: now, updatedAt: now };
+    const lists = [list, ...get().lists];
+    set({ lists });
+    persistLists(lists);
+    return list;
+  },
+
+  updateList: (id, patch) => {
+    const lists = get().lists.map((l) => (l.id === id ? { ...l, ...patch, updatedAt: Date.now() } : l));
+    set({ lists });
+    persistLists(lists);
+  },
+
+  removeList: (id) => {
+    const lists = get().lists.filter((l) => l.id !== id);
+    // Keep the items, just detach them from the deleted list.
+    const expenses = get().expenses.map((o) => (o.listId === id ? { ...o, listId: undefined } : o));
+    const recurring = get().recurring.map((r) => (r.listId === id ? { ...r, listId: undefined } : r));
+    set({ lists, expenses, recurring });
+    persistLists(lists);
+    persistExpenses(expenses);
+    persistRecurring(recurring);
+  },
+
+  getList: (id) => get().lists.find((l) => l.id === id),
 
   addNote: (draft) => {
     const now = Date.now();

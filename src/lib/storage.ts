@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   expenses: 'finance.expenses',
   savings: 'finance.savings',
   recurring: 'finance.recurring',
+  lists: 'finance.lists',
   notes: 'notes.items',
   meta: 'app.meta',
 } as const;

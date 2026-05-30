@@ -284,6 +284,69 @@ select {
   box-shadow: var(--shadow-sm);
 }
 
+/* Tappable affordances on the dashboard */
+.stat-tile--tap {
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.stat-tile--tap:active {
+  transform: scale(0.98);
+}
+.stat-tile__more {
+  float: right;
+  opacity: 0.5;
+  font-weight: 800;
+}
+.next-pay--tap {
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.next-pay--tap:active {
+  transform: scale(0.99);
+}
+.pay-row--tap {
+  cursor: pointer;
+  border-radius: 12px;
+  margin: 0 -8px;
+  padding-left: 8px;
+  padding-right: 8px;
+  transition: background 0.12s ease;
+}
+.pay-row--tap:active {
+  background: var(--surface-2);
+}
+
+/* Small "belongs to a list" tag on cards */
+.list-tag {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Emoji picker (list icon) */
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+.emoji-opt {
+  font-size: 22px;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.emoji-opt:active {
+  transform: scale(0.92);
+}
+.emoji-opt.is-active {
+  outline: 2px solid var(--accent);
+  background: var(--surface);
+}
+
 /* Badges */
 .badge {
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em;

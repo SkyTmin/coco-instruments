@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Screen } from '@/components/ui';
 import type { ExpenseType, Obligation } from '@/types';
 import { useFinanceStore, type ObligationDraft } from '@/store';
@@ -25,6 +25,8 @@ export function ExpenseFormPage() {
   const existing = useFinanceStore((s) => (id ? s.getExpense(id) : undefined));
   const addExpense = useFinanceStore((s) => s.addExpense);
   const updateExpense = useFinanceStore((s) => s.updateExpense);
+  const lists = useFinanceStore((s) => s.lists);
+  const [params] = useSearchParams();
 
   const [name, setName] = useState(existing?.name ?? '');
   const [type, setType] = useState<ExpenseType>(existing?.type ?? 'credit');
@@ -35,6 +37,7 @@ export function ExpenseFormPage() {
   const [term, setTerm] = useState(existing ? String(existing.termMonths) : '12');
   const [day, setDay] = useState(existing ? String(existing.paymentDay) : '1');
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayISO());
+  const [listId, setListId] = useState(existing?.listId ?? params.get('list') ?? '');
 
   const draft = useMemo<ObligationDraft>(() => {
     const start = startDate || todayISO();
@@ -46,6 +49,7 @@ export function ExpenseFormPage() {
         paymentDay: parseISO(start)?.getDate() ?? 1,
         termMonths: 1,
         startDate: start,
+        listId: listId || undefined,
       };
     }
     const base: ObligationDraft = {
@@ -55,6 +59,7 @@ export function ExpenseFormPage() {
       paymentDay: Math.min(31, Math.max(1, Math.round(num(day)) || 1)),
       termMonths: Math.max(1, Math.round(num(term)) || 1),
       startDate: start,
+      listId: listId || undefined,
     };
     if (type === 'credit') {
       return {
@@ -69,7 +74,7 @@ export function ExpenseFormPage() {
       monthlyPayment: num(monthly) || undefined,
       overpayment: num(overpay) || undefined,
     };
-  }, [name, type, principal, monthly, rate, overpay, term, day, startDate]);
+  }, [name, type, principal, monthly, rate, overpay, term, day, startDate, listId]);
 
   const preview = useMemo(() => {
     if (num(principal) <= 0) return null;
@@ -245,6 +250,20 @@ export function ExpenseFormPage() {
               <span className="stat-row__value">≈ {preview.derivedInterestRate.toFixed(1)}% годовых</span>
             </div>
           )}
+        </div>
+      )}
+
+      {lists.length > 0 && (
+        <div className="field">
+          <label className="field__label">Список</label>
+          <select className="select" value={listId} onChange={(e) => setListId(e.target.value)}>
+            <option value="">Без списка</option>
+            {lists.map((l) => (
+              <option key={l.id} value={l.id}>
+                {(l.emoji ? `${l.emoji} ` : '') + l.name}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 

@@ -64,6 +64,12 @@ export const IconPlus = (p: IconProps) => (
   </svg>
 );
 
+export const IconList = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+  </svg>
+);
+
 export const IconChevron = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M9 6l6 6-6 6" />

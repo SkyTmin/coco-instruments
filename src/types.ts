@@ -56,6 +56,8 @@ export interface Obligation {
   manuallyClosed?: boolean;
   note?: string;
   category?: string;
+  /** Optional grouping list (e.g. "Свадьба"). */
+  listId?: string;
 
   /** Source of truth for "paid so far". */
   payments: Payment[];
@@ -138,6 +140,8 @@ export interface RecurringPayment {
   paused?: boolean;
   category?: string;
   note?: string;
+  /** Optional grouping list (e.g. "Свадьба"). */
+  listId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -152,6 +156,22 @@ export interface RecurringComputed {
   nextDue: string; // ISO of the next upcoming charge
   monthlyEquivalent: number; // normalized cost per month
   upcoming: string[]; // next few ISO dates
+}
+
+// ---- Lists (group expenses by project, e.g. "Свадьба") --------------------
+
+export interface ExpenseList {
+  id: string;
+  name: string;
+  emoji?: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FinanceListsBlob {
+  version: 1;
+  items: ExpenseList[];
 }
 
 // ---- Notes ----------------------------------------------------------------
