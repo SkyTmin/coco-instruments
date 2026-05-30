@@ -1,0 +1,10 @@
+# Example Caddyfile (setup.sh generates this automatically with your real domain).
+# Caddy obtains and renews a free Let's Encrypt certificate for the domain,
+# which is what Telegram requires for Mini Apps.
+
+31.184.198.91.nip.io {
+    root * /opt/coco/dist
+    encode gzip zstd
+    try_files {path} /index.html   # SPA fallback for client-side routing
+    file_server
+}
