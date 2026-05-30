@@ -15,6 +15,7 @@ set -euo pipefail
 REPO="${REPO:-https://github.com/SkyTmin/coco-instruments.git}"
 BRANCH="${BRANCH:-claude/intelligent-noether-bcnYS}"
 APP_DIR="${APP_DIR:-/opt/coco}"
+UPLOAD_DIR="${UPLOAD_DIR:-/var/lib/coco/uploads}"
 
 echo "==> Detecting public IP / domain"
 IP="$(curl -fsS https://api.ipify.org 2>/dev/null || true)"
@@ -65,13 +66,39 @@ cd "$APP_DIR"
 npm ci
 npm run build
 
+echo "==> Configuring persistent uploads"
+mkdir -p "$UPLOAD_DIR"
+chown -R root:root "$UPLOAD_DIR"
+
+echo "==> Writing systemd service"
+cat > /etc/systemd/system/coco.service <<EOF
+[Unit]
+Description=Coco Mini App
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$APP_DIR
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=UPLOAD_DIR=$UPLOAD_DIR
+Environment=MAX_UPLOAD_BYTES=3145728
+ExecStart=/usr/bin/node $APP_DIR/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable coco >/dev/null 2>&1 || true
+systemctl restart coco
+
 echo "==> Writing /etc/caddy/Caddyfile"
 cat > /etc/caddy/Caddyfile <<EOF
 $DOMAIN {
-    root * $APP_DIR/dist
     encode gzip zstd
-    try_files {path} /index.html
-    file_server
+    reverse_proxy 127.0.0.1:3000
 }
 EOF
 

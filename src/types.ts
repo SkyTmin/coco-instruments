@@ -171,7 +171,8 @@ export interface NoteAttachment {
   name: string;
   type: string;
   size: number;
-  dataUrl: string;
+  url?: string;
+  dataUrl?: string;
   createdAt: number;
 }
 

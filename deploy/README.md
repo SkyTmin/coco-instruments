@@ -1,7 +1,11 @@
 # Деплой на VPS (Ubuntu) + подключение бота
 
-Приложение — статический сайт. Раздаём его по **HTTPS** через **Caddy**
-(автоматический сертификат Let's Encrypt) на хосте вида `<ваш-ip>.nip.io`.
+Приложение — Telegram Mini App с небольшим Node/Express backend. **Caddy**
+принимает HTTPS, проксирует всё в Express, а Express раздаёт SPA, `/api/*`
+и `/uploads/*`. Файлы заметок хранятся на VPS в `/var/lib/coco/uploads`.
+
+Раздаём приложение по **HTTPS** через **Caddy** (автоматический сертификат
+Let's Encrypt) на хосте вида `<ваш-ip>.nip.io`.
 Telegram требует HTTPS с валидным сертификатом, а у голого IP его не получить —
 `nip.io` бесплатно даёт имя, указывающее на ваш IP.
 
@@ -14,7 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/SkyTmin/coco-instruments/claude/int
 ```
 
 Скрипт сам: добавит swap, поставит Node 20 и Caddy, скачает код, соберёт его и
-поднимет HTTPS. В конце выведет ваш адрес, например:
+поднимет HTTPS + systemd-сервис `coco`. В конце выведет ваш адрес, например:
 
 ```
 https://31.184.198.91.nip.io
@@ -45,6 +49,65 @@ curl -s "https://api.telegram.org/bot<BOT_TOKEN>/setChatMenuButton" \
 ```bash
 sudo bash /opt/coco/deploy/redeploy.sh
 ```
+
+## 4. Как теперь работают файлы заметок
+
+- Frontend сжимает фото на клиенте и отправляет `POST /api/notes/attachments`.
+- Express сохраняет файл в `/var/lib/coco/uploads` и возвращает URL вида
+  `/uploads/<id>-photo.jpg`.
+- В заметке хранится только метаданные + URL, а не весь base64-файл.
+- Caddy проксирует `/uploads/*` в Express, поэтому ссылки открываются и
+  скачиваются с того же HTTPS-домена Telegram Mini App.
+- Текущий лимит backend: `MAX_UPLOAD_BYTES=3145728` (3 МБ на сохранённый файл).
+  Фото можно выбрать крупнее: клиент пытается сжать исходник до лимита.
+
+Для будущего раздела «Одежда» используйте тот же endpoint или вынесите общий
+upload helper. Если понадобится много оригинальных фото без сжатия, лучше
+подключить S3-совместимое хранилище или Supabase Storage; Telegram CloudStorage
+для этого не подходит. У CloudStorage лимит порядка 1024 ключей по 4096 символов
+на пользователя для бота, то есть это место для настроек/малых JSON, а не
+фотогалерея.
+
+## Для Клауда / второго агента
+
+Не кладите фото в Telegram CloudStorage или localStorage, кроме fallback в dev.
+Правильный путь:
+
+1. Подготовить файл на клиенте (для фото желательно сжать).
+2. Отправить JSON:
+
+```http
+POST /api/notes/attachments
+Content-Type: application/json
+
+{
+  "name": "coat.jpg",
+  "type": "image/jpeg",
+  "size": 123456,
+  "dataUrl": "data:image/jpeg;base64,..."
+}
+```
+
+3. Сохранить в клиентском состоянии ответ:
+
+```json
+{
+  "id": "...",
+  "name": "coat.jpg",
+  "type": "image/jpeg",
+  "size": 123456,
+  "url": "/uploads/..."
+}
+```
+
+4. Для отображения использовать `url`, для старых/dev-вложений fallback на
+`dataUrl`.
+
+Deploy secrets в GitHub Actions:
+- `VPS_HOST`: `31.184.198.91`
+- `VPS_PASSWORD`: пароль root от VPS
+- `BOT_TOKEN`: токен Telegram-бота
+- опционально `DOMAIN`: свой домен вместо `31.184.198.91.nip.io`
 
 ## Заметки
 - Сертификат Caddy выпускает и продлевает сам (нужны открытые порты 80 и 443).

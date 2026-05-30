@@ -12,28 +12,34 @@ import {
   layoutNoteGraph,
   normalizeNoteTitle,
 } from '@/lib/notes-graph';
-import { selectionChanged, tapLight } from '@/lib/haptics';
+import { selectionChanged } from '@/lib/haptics';
 
 interface Velocity {
   x: number;
   y: number;
 }
 
-function shortLabel(value: string, max = 17): string {
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+interface PointerSession {
+  id: string;
+  pointerId: number;
+  x: number;
+  y: number;
+  moved: boolean;
+  startedAt: number;
 }
 
-function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  return Math.sqrt(dx * dx + dy * dy);
+const TAP_MOVE_LIMIT = 10;
+const TAP_TIME_LIMIT = 450;
+
+function shortLabel(value: string, max = 17): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
 export function NotesGraphPage() {
   const navigate = useNavigate();
   const notes = useFinanceStore((s) => s.notes);
   const graph = useMemo(() => buildNoteGraph(notes), [notes]);
-  const [activeId, setActiveId] = useState(notes[0]?.id);
+  const [activeId, setActiveId] = useState<string | undefined>(notes[0]?.id);
   const [mode, setMode] = useState<'global' | 'local'>('global');
   const [depth, setDepth] = useState(2);
   const [showMissing, setShowMissing] = useState(true);
@@ -46,8 +52,12 @@ export function NotesGraphPage() {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const velocities = useRef(new Map<string, Velocity>());
   const dragOffset = useRef({ x: 0, y: 0 });
-  const dragStart = useRef({ x: 0, y: 0 });
-  const lastMoved = useRef(0);
+  const activeIdRef = useRef<string | undefined>(activeId);
+  const pointerSession = useRef<PointerSession | null>(null);
+
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
 
   useEffect(() => {
     if (activeId && notes.some((note) => note.id === activeId)) return;
@@ -159,23 +169,36 @@ export function NotesGraphPage() {
   };
 
   const beginNodeDrag = (event: PointerEvent<SVGGElement>, id: string) => {
+    event.preventDefault();
     event.stopPropagation();
     const point = pointById.get(id);
     if (!point) return;
     const cursor = toGraphPoint(event as unknown as PointerEvent<SVGSVGElement>);
     setDraggingId(id);
-    setActiveId(id.startsWith('missing:') || id.startsWith('tag:') ? activeId : id);
+    setActiveId(id.startsWith('missing:') || id.startsWith('tag:') ? activeIdRef.current : id);
     dragOffset.current = { x: point.x - cursor.x, y: point.y - cursor.y };
-    dragStart.current = { x: event.clientX, y: event.clientY };
-    lastMoved.current = 0;
+    pointerSession.current = {
+      id,
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      startedAt: performance.now(),
+    };
     (event.currentTarget as SVGGElement).setPointerCapture(event.pointerId);
     selectionChanged();
   };
 
   const movePointer = (event: PointerEvent<SVGSVGElement>) => {
+    event.preventDefault();
     if (draggingId) {
       const cursor = toGraphPoint(event);
-      lastMoved.current = distance(dragStart.current, { x: event.clientX, y: event.clientY });
+      const session = pointerSession.current;
+      if (session && session.pointerId === event.pointerId) {
+        const dx = event.clientX - session.x;
+        const dy = event.clientY - session.y;
+        if (Math.sqrt(dx * dx + dy * dy) > TAP_MOVE_LIMIT) session.moved = true;
+      }
       setPoints((current) =>
         current.map((point) =>
           point.id === draggingId
@@ -194,14 +217,16 @@ export function NotesGraphPage() {
     }
   };
 
-  const endPointer = () => {
-    if (draggingId && lastMoved.current < 5) {
+  const endPointer = (openOnTap: boolean) => {
+    const session = pointerSession.current;
+    if (openOnTap && draggingId && session?.id === draggingId && !session.moved) {
+      const elapsed = performance.now() - session.startedAt;
       const point = pointById.get(draggingId);
-      if (point?.kind === 'note') {
-        tapLight();
+      if (elapsed < TAP_TIME_LIMIT && point?.kind === 'note') {
         navigate(`/notes/${point.id}`);
       }
     }
+    pointerSession.current = null;
     setDraggingId(null);
     setPanning(null);
   };
@@ -265,12 +290,13 @@ export function NotesGraphPage() {
               role="img"
               aria-label="Граф заметок"
               onPointerDown={(event) => {
+                event.preventDefault();
                 setPanning({ x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y });
               }}
               onPointerMove={movePointer}
-              onPointerUp={endPointer}
-              onPointerCancel={endPointer}
-              onPointerLeave={endPointer}
+              onPointerUp={() => endPointer(true)}
+              onPointerCancel={() => endPointer(false)}
+              onPointerLeave={() => endPointer(false)}
             >
               <defs>
                 <linearGradient id="noteNodeGradientInteractive" x1="0" x2="1" y1="0" y2="1">
@@ -299,6 +325,7 @@ export function NotesGraphPage() {
                     key={point.id}
                     className={`notes-graph__node notes-graph__node--${point.kind}${point.id === activeId ? ' is-active' : ''}${point.id === draggingId ? ' is-dragging' : ''}`}
                     onPointerDown={(event) => beginNodeDrag(event, point.id)}
+                    onClick={(event) => event.preventDefault()}
                   >
                     <title>{point.label}</title>
                     <circle cx={point.x} cy={point.y} r={point.r} />
@@ -318,7 +345,7 @@ export function NotesGraphPage() {
         </div>
 
         <div className="card notes-graph-hint">
-          Перетаскивайте поле или отдельные заметки. Связанные заметки тянутся следом.
+          Перетаскивайте поле или отдельные заметки. Короткий тап откроет выбранную заметку.
           {activeNote && (
             <button className="btn btn--ghost btn--block" onClick={() => navigate(`/notes/${activeNote.id}`)}>
               Открыть «{activeNote.title}»
