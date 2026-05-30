@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { EmptyState, Fab, ProgressBar, Screen, TypeBadge } from '@/components/ui';
 import { useFinanceStore } from '@/store';
 import { computeObligation, computeRecurring } from '@/lib/finance-calc';
@@ -54,7 +53,9 @@ export function ExpensesListPage() {
   const navigate = useNavigate();
   const expenses = useFinanceStore((s) => s.expenses);
   const recurring = useFinanceStore((s) => s.recurring);
-  const [tab, setTab] = useState<Tab>('once');
+  // Tab lives in the URL so it survives navigating to a form and back.
+  const [params, setParams] = useSearchParams();
+  const tab: Tab = params.get('tab') === 'recurring' ? 'recurring' : 'once';
 
   const go = (path: string) => {
     tapLight();
@@ -64,7 +65,7 @@ export function ExpensesListPage() {
   const switchTab = (t: Tab) => {
     if (t !== tab) {
       tapLight();
-      setTab(t);
+      setParams(t === 'recurring' ? { tab: 'recurring' } : {}, { replace: true });
     }
   };
 
