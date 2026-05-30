@@ -306,3 +306,61 @@ export function computeRecurring(r: RecurringPayment, fromISO = todayISO()): Rec
     upcoming,
   };
 }
+
+/** All occurrence dates of a recurring payment within [fromISO, untilISO]. */
+export function recurringOccurrences(r: RecurringPayment, fromISO: string, untilISO: string): string[] {
+  const until = parseISO(untilISO);
+  if (!until) return [];
+  const dates: string[] = [];
+  let d = parseISO(nextDueFrom(r.startDate, r.intervalCount, r.intervalUnit, fromISO));
+  let guard = 0;
+  while (d && d.getTime() <= until.getTime() && guard < 400) {
+    dates.push(toISO(d));
+    d = addInterval(d, Math.max(1, r.intervalCount), r.intervalUnit);
+    guard++;
+  }
+  return dates;
+}
+
+export interface CalendarPayment {
+  date: string;
+  name: string;
+  amount: number;
+  kind: 'obligation' | 'recurring';
+  id: string;
+}
+
+/**
+ * Collect every scheduled payment (obligations + recurring) that falls within
+ * [fromISO, untilISO]. Closed/paused items are skipped; optional listId filter.
+ */
+export function collectPayments(
+  fromISO: string,
+  untilISO: string,
+  expenses: Obligation[],
+  recurring: RecurringPayment[],
+  listId?: string,
+): CalendarPayment[] {
+  const fromT = parseISO(fromISO)?.getTime() ?? 0;
+  const untilT = parseISO(untilISO)?.getTime() ?? 0;
+  const out: CalendarPayment[] = [];
+  for (const o of expenses) {
+    if (o.status === 'closed') continue;
+    if (listId && o.listId !== listId) continue;
+    for (const e of computeObligation(o).schedule) {
+      const t = parseISO(e.dueDate)?.getTime() ?? -1;
+      if (t >= fromT && t <= untilT) {
+        out.push({ date: e.dueDate, name: o.name, amount: e.amount, kind: 'obligation', id: o.id });
+      }
+    }
+  }
+  for (const r of recurring) {
+    if (r.paused) continue;
+    if (listId && r.listId !== listId) continue;
+    for (const d of recurringOccurrences(r, fromISO, untilISO)) {
+      out.push({ date: d, name: r.name, amount: r.amount, kind: 'recurring', id: r.id });
+    }
+  }
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}

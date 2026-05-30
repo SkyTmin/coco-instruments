@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Screen, SectionCard, Sheet, StatTile } from '@/components/ui';
+import { Screen, SectionCard, SectionHeader, Sheet, StatTile } from '@/components/ui';
 import { IconList, IconTarget, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { computeObligation, computeRecurring } from '@/lib/finance-calc';
@@ -90,8 +90,6 @@ export function FinanceDashboardPage() {
   const openItem = (it: { kind: Kind; id: string }) => go(pathFor(it.kind, it.id));
 
   const max = Math.max(...breakdown.map((b) => b.value), 1);
-  const next = upcoming[0];
-  const rest = upcoming.slice(1);
 
   return (
     <Screen title="Финансы" subtitle="Обзор">
@@ -135,29 +133,27 @@ export function FinanceDashboardPage() {
           onClick={() => go('/finance/savings')}
         />
 
-        {next && (
+        {upcoming.length > 0 && (
           <>
-            <div className="section-label">Ближайшие платежи</div>
-            <div className="next-pay next-pay--tap" onClick={() => openItem(next)} role="button">
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, opacity: 0.9 }}>{next.name}</div>
-                <div className="next-pay__big">{formatRUB(next.amount)}</div>
-              </div>
-              <div style={{ textAlign: 'right', fontSize: 13 }}>{formatDate(next.date, true)}</div>
-            </div>
-            {rest.length > 0 && (
-              <div className="card">
-                {rest.map((u) => (
-                  <div key={u.kind + u.id} className="pay-row pay-row--tap" onClick={() => openItem(u)} role="button">
-                    <div style={{ flex: 1 }}>
-                      <div className="pay-row__amount">{u.name}</div>
-                      <div className="pay-row__date">{formatDate(u.date, true)}</div>
-                    </div>
-                    <span style={{ fontWeight: 700 }}>{formatRUB(u.amount)}</span>
+            <SectionHeader
+              title="Ближайшие платежи"
+              action={
+                <button className="link-all" onClick={() => go('/finance/calendar')}>
+                  Все ›
+                </button>
+              }
+            />
+            <div className="stack">
+              {upcoming.map((u) => (
+                <div key={u.kind + u.id} className="up-row" onClick={() => openItem(u)} role="button">
+                  <div style={{ minWidth: 0 }}>
+                    <div className="up-row__name">{u.name}</div>
+                    <div className="up-row__amount">{formatRUB(u.amount)}</div>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className="up-row__date">{formatDate(u.date, true)}</div>
+                </div>
+              ))}
+            </div>
           </>
         )}
 

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ConfirmDialog, EmptyState, Fab, Screen, Sheet, StatTile } from '@/components/ui';
+import { ConfirmDialog, EmptyState, Fab, Screen, SectionHeader, Sheet, StatTile } from '@/components/ui';
 import { IconPencil, IconTrash } from '@/components/icons';
 import { ObligationMiniCard, RecurringMiniCard } from '@/components/finance-cards';
 import { useFinanceStore } from '@/store';
-import { computeObligation, computeRecurring } from '@/lib/finance-calc';
+import { computeObligation, computeRecurring, paidSoFar } from '@/lib/finance-calc';
 import { formatRUB } from '@/lib/format';
 import { notifyWarning, tapLight } from '@/lib/haptics';
 
@@ -24,7 +24,9 @@ export function ListDetailPage() {
   const recs = recurring.filter((r) => r.listId === id);
   let remaining = 0;
   let monthly = 0;
+  let spent = 0;
   for (const o of obls) {
+    spent += paidSoFar(o.payments); // counts closed credits too
     if (o.status !== 'closed') {
       const c = computeObligation(o);
       remaining += c.remaining;
@@ -46,8 +48,9 @@ export function ListDetailPage() {
       <div className="stack">
         <div className="card">
           <div className="stat-grid">
-            <StatTile label="Осталось выплатить" value={formatRUB(remaining)} />
-            <StatTile label="Платежей в месяц" value={formatRUB(monthly)} />
+            <StatTile label="Потрачено" value={formatRUB(spent)} />
+            <StatTile label="Осталось" value={formatRUB(remaining)} />
+            <StatTile label="В месяц" value={formatRUB(monthly)} />
           </div>
         </div>
 
@@ -55,6 +58,14 @@ export function ListDetailPage() {
           <EmptyState icon="📂" title="В списке пока пусто" sub="Добавьте сюда платёж или регулярный расход по кнопке +" />
         ) : (
           <>
+            <SectionHeader
+              title="Платежи списка"
+              action={
+                <button className="link-all" onClick={() => go(`/finance/calendar?list=${id}`)}>
+                  Все ›
+                </button>
+              }
+            />
             {obls.map((o) => (
               <ObligationMiniCard key={o.id} o={o} onClick={() => go(`/finance/expenses/${o.id}`)} />
             ))}

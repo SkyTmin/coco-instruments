@@ -88,6 +88,17 @@ export function StatTile({
   );
 }
 
+export function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
+  return (
+    <div className="section-head">
+      <span className="section-label" style={{ margin: 0 }}>
+        {title}
+      </span>
+      {action}
+    </div>
+  );
+}
+
 const TYPE_BADGE: Record<ExpenseType, { label: string; cls: string }> = {
   single: { label: 'Разовый', cls: 'badge--single' },
   credit: { label: 'Кредит', cls: 'badge--credit' },
