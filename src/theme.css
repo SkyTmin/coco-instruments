@@ -100,6 +100,26 @@ select {
   to { opacity: 1; transform: translateY(0); }
 }
 
+.back-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 14px;
+  transition: transform 0.1s ease;
+}
+.back-bar:active {
+  transform: scale(0.96);
+}
+
 .screen__head {
   margin: 4px 2px 18px;
 }

@@ -1,8 +1,6 @@
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   Cell,
   Pie,
   PieChart,
@@ -12,7 +10,7 @@ import {
 } from 'recharts';
 import type { Obligation, ScheduleEntry } from '@/types';
 import { computeObligation } from '@/lib/finance-calc';
-import { formatCompact, formatRUB } from '@/lib/format';
+import { formatRUB } from '@/lib/format';
 
 function cssVar(name: string, fallback: string): string {
   if (typeof window === 'undefined') return fallback;
@@ -144,36 +142,3 @@ export function SavingsDonut({ current, target }: { current: number; target: num
   );
 }
 
-/** Bar chart of monthly payment per active obligation (dashboard). */
-export function ObligationsBreakdownChart({ obligations }: { obligations: Obligation[] }) {
-  const col = colors();
-  const data = obligations
-    .filter((o) => o.status !== 'closed')
-    .map((o) => ({
-      name: o.name.length > 8 ? `${o.name.slice(0, 8)}…` : o.name,
-      value: Math.round(computeObligation(o).monthlyPayment),
-    }));
-
-  if (data.length === 0) return null;
-
-  return (
-    <ResponsiveContainer width="100%" height={Math.max(140, data.length * 44)}>
-      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
-        <XAxis type="number" hide />
-        <Tooltip
-          cursor={{ fill: col.track, opacity: 0.4 }}
-          contentStyle={tooltipStyle()}
-          formatter={(v: number) => [formatRUB(v), 'В месяц']}
-        />
-        <Bar dataKey="value" radius={[8, 8, 8, 8]} barSize={20}>
-          {data.map((_, i) => (
-            <Cell key={i} fill={col.a1} />
-          ))}
-        </Bar>
-        {/* name labels rendered via YAxis-less layout */}
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-export { formatCompact };

@@ -63,7 +63,12 @@ export function ExpenseFormPage() {
         interestRate: num(rate) || undefined,
       };
     }
-    return { ...base, overpayment: num(overpay) || 0 };
+    // installment — accept EITHER a monthly payment OR a total overpayment.
+    return {
+      ...base,
+      monthlyPayment: num(monthly) || undefined,
+      overpayment: num(overpay) || undefined,
+    };
   }, [name, type, principal, monthly, rate, overpay, term, day, startDate]);
 
   const preview = useMemo(() => {
@@ -158,16 +163,31 @@ export function ExpenseFormPage() {
       )}
 
       {type === 'installment' && (
-        <div className="field">
-          <label className="field__label">Переплата всего</label>
-          <input
-            className="input"
-            inputMode="decimal"
-            value={overpay}
-            onChange={(e) => setOverpay(e.target.value)}
-            placeholder="0 — если без переплаты"
-          />
-        </div>
+        <>
+          <div className="field">
+            <label className="field__label">Платёж в месяц (если знаете)</label>
+            <input
+              className="input"
+              inputMode="decimal"
+              value={monthly}
+              onChange={(e) => setMonthly(e.target.value)}
+              placeholder="напр. 9456"
+            />
+          </div>
+          <div className="field">
+            <label className="field__label">Переплата всего (если знаете)</label>
+            <input
+              className="input"
+              inputMode="decimal"
+              value={overpay}
+              onChange={(e) => setOverpay(e.target.value)}
+              placeholder="0 — если без переплаты"
+            />
+          </div>
+          <p className="muted" style={{ marginTop: -8, marginBottom: 16, fontSize: 13 }}>
+            Заполните одно из полей — второе посчитается само.
+          </p>
+        </>
       )}
 
       {type !== 'single' && (

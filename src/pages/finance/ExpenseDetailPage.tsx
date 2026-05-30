@@ -93,18 +93,22 @@ export function ExpenseDetailPage() {
   const updatePayment = useFinanceStore((s) => s.updatePayment);
   const removePayment = useFinanceStore((s) => s.removePayment);
   const removeExpense = useFinanceStore((s) => s.removeExpense);
+  const updateExpense = useFinanceStore((s) => s.updateExpense);
 
   const [sheet, setSheet] = useState<{ mode: 'add' } | { mode: 'edit'; payment: Payment } | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
 
   if (!obligation || !id) return <Navigate to="/finance/expenses" replace />;
   const c = computeObligation(obligation);
+  const closed = obligation.status === 'closed';
   const payments = [...obligation.payments].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
   return (
     <Screen
       title={obligation.name}
-      action={<TypeBadge type={obligation.type} />}
+      action={
+        closed ? <span className="badge badge--closed">Завершён</span> : <TypeBadge type={obligation.type} />
+      }
     >
       <div className="stack">
         <div className="card">
@@ -201,6 +205,30 @@ export function ExpenseDetailPage() {
             + Добавить платёж
           </button>
         </div>
+
+        {obligation.manuallyClosed ? (
+          <button
+            className="btn btn--block"
+            onClick={() => {
+              updateExpense(id, { manuallyClosed: false });
+              tapLight();
+            }}
+          >
+            Возобновить счёт
+          </button>
+        ) : (
+          obligation.status !== 'closed' && (
+            <button
+              className="btn btn--block"
+              onClick={() => {
+                updateExpense(id, { manuallyClosed: true });
+                notifySuccess();
+              }}
+            >
+              Завершить счёт
+            </button>
+          )
+        )}
 
         <div className="row" style={{ gap: 12, marginTop: 8 }}>
           <button

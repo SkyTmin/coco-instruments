@@ -1,16 +1,32 @@
 import type { PropsWithChildren, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { ExpenseType } from '@/types';
 import { formatRUB } from '@/lib/format';
-import { IconChevron, IconPlus } from '@/components/icons';
+import { IconBack, IconChevron, IconPlus } from '@/components/icons';
+import { tapLight } from '@/lib/haptics';
 
 export function Screen({
   title,
   subtitle,
   action,
+  back = true,
   children,
-}: PropsWithChildren<{ title?: string; subtitle?: string; action?: ReactNode }>) {
+}: PropsWithChildren<{ title?: string; subtitle?: string; action?: ReactNode; back?: boolean }>) {
+  const navigate = useNavigate();
   return (
     <div className="screen">
+      {back && (
+        <button
+          className="back-bar"
+          onClick={() => {
+            tapLight();
+            navigate(-1);
+          }}
+        >
+          <IconBack size={18} />
+          Назад
+        </button>
+      )}
       {(title || action) && (
         <div className="screen__head">
           <div className="row">

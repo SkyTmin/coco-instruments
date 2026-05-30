@@ -52,6 +52,8 @@ export interface Obligation {
   overpaymentPerMonth?: number;
 
   status: ObligationStatus;
+  /** Manually marked as finished by the user. Excluded from statistics. */
+  manuallyClosed?: boolean;
   note?: string;
   category?: string;
 

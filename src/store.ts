@@ -21,7 +21,8 @@ export type SavingsDraft = Omit<SavingsGoal, 'id' | 'createdAt' | 'updatedAt'>;
 function normalize(o: Obligation): Obligation {
   const total = resolve(o).totalToPay;
   const paid = paidSoFar(o.payments);
-  return { ...o, status: deriveStatus(paid, total), updatedAt: Date.now() };
+  const status = o.manuallyClosed ? 'closed' : deriveStatus(paid, total);
+  return { ...o, status, updatedAt: Date.now() };
 }
 
 // --- Debounced persistence (avoids hammering CloudStorage) ------------------

@@ -4,30 +4,64 @@ import { Screen, SectionCard, StatTile } from '@/components/ui';
 import { IconTarget, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { computeObligation } from '@/lib/finance-calc';
-import { ObligationsBreakdownChart } from '@/charts';
 import { formatDate, formatRUB } from '@/lib/format';
 import { tapLight } from '@/lib/haptics';
+
+interface BreakdownItem {
+  name: string;
+  value: number;
+}
+
+/** Clean labeled list of monthly payments per obligation (name + amount + bar). */
+function MonthlyBreakdown({ items }: { items: BreakdownItem[] }) {
+  const max = Math.max(...items.map((i) => i.value), 1);
+  return (
+    <div className="card">
+      <div className="chart-card__title" style={{ marginLeft: 0 }}>Платежи в месяц</div>
+      <div className="stack" style={{ gap: 14, marginTop: 10 }}>
+        {items.map((it, i) => (
+          <div key={i}>
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+              <span
+                style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {it.name}
+              </span>
+              <span style={{ fontWeight: 700, flex: 'none' }}>{formatRUB(it.value)}</span>
+            </div>
+            <div className="progress">
+              <div className="progress__fill" style={{ width: `${(it.value / max) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function FinanceDashboardPage() {
   const navigate = useNavigate();
   const expenses = useFinanceStore((s) => s.expenses);
   const savings = useFinanceStore((s) => s.savings);
 
-  const { monthlyTotal, totalRemaining, active, next } = useMemo(() => {
+  const { monthlyTotal, totalRemaining, active, next, breakdown } = useMemo(() => {
     const active = expenses.filter((o) => o.status !== 'closed');
     let monthlyTotal = 0;
     let totalRemaining = 0;
     const upcoming: { name: string; date: string; amount: number }[] = [];
+    const breakdown: BreakdownItem[] = [];
     for (const o of active) {
       const c = computeObligation(o);
       monthlyTotal += c.monthlyPayment;
       totalRemaining += c.remaining;
+      breakdown.push({ name: o.name, value: Math.round(c.monthlyPayment) });
       if (c.nextPaymentDate) {
         upcoming.push({ name: o.name, date: c.nextPaymentDate, amount: c.monthlyPayment });
       }
     }
     upcoming.sort((a, b) => a.date.localeCompare(b.date));
-    return { monthlyTotal, totalRemaining, active, next: upcoming[0] };
+    breakdown.sort((a, b) => b.value - a.value);
+    return { monthlyTotal, totalRemaining, active, next: upcoming[0], breakdown };
   }, [expenses]);
 
   const go = (path: string) => {
@@ -69,12 +103,7 @@ export function FinanceDashboardPage() {
           onClick={() => go('/finance/savings')}
         />
 
-        {active.length > 0 && (
-          <div className="chart-card">
-            <div className="chart-card__title">Платежи в месяц</div>
-            <ObligationsBreakdownChart obligations={active} />
-          </div>
-        )}
+        {breakdown.length > 0 && <MonthlyBreakdown items={breakdown} />}
       </div>
     </Screen>
   );

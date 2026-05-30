@@ -40,6 +40,12 @@ export const IconChevron = (p: IconProps) => (
   </svg>
 );
 
+export const IconBack = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M19 12H5M12 19l-7-7 7-7" />
+  </svg>
+);
+
 export const IconPencil = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M12 20h9" />

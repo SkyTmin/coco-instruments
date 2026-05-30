@@ -84,6 +84,17 @@ export function resolve(o: Obligation): Resolved {
   const term = Math.max(1, Math.round(o.termMonths || 1));
 
   if (o.type === 'installment') {
+    // If the user knows the monthly payment but not the overpayment, derive it.
+    if (o.monthlyPayment && o.monthlyPayment > 0) {
+      const total = o.monthlyPayment * term;
+      return {
+        totalToPay: total,
+        totalOverpayment: Math.max(0, total - principal),
+        monthlyPayment: o.monthlyPayment,
+        termMonths: term,
+        monthlyRate: 0,
+      };
+    }
     const overTotal =
       o.overpayment != null
         ? Math.max(0, o.overpayment)

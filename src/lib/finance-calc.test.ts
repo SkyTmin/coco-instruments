@@ -102,6 +102,15 @@ describe('installment — counter-check (100 000 + 13 472 over 12 mo)', () => {
     expect(c2.totalOverpayment).toBe(12_000);
     expect(c2.totalToPay).toBe(112_000);
   });
+
+  it('supports monthly-payment input (derives the overpayment)', () => {
+    const c3 = computeObligation(
+      obligation({ type: 'installment', principalAmount: 100_000, monthlyPayment: 9_456, termMonths: 12 }),
+    );
+    expect(c3.monthlyPayment).toBe(9_456);
+    expect(c3.totalToPay).toBe(113_472);
+    expect(c3.totalOverpayment).toBe(13_472);
+  });
 });
 
 describe('single payment', () => {

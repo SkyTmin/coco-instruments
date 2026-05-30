@@ -11,7 +11,7 @@ export function HomePage() {
   };
 
   return (
-    <Screen title="Coco" subtitle="Личный помощник">
+    <Screen title="Coco" subtitle="Личный помощник" back={false}>
       <div className="home-grid">
         <div className="home-card" onClick={() => go('/finance')} role="button">
           <div className="home-card__glow" />
