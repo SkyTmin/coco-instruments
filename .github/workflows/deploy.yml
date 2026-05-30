@@ -1,0 +1,71 @@
+name: Deploy to VPS
+
+# Full auto-deploy: builds nothing locally — it SSHes into the VPS, runs the
+# tested deploy/setup.sh (Node + Caddy + HTTPS via nip.io), then points the
+# Telegram bot's menu button at the app.
+#
+# Runs on GitHub's servers (which CAN reach the VPS and api.telegram.org).
+# It stays GREEN and skips until the required secrets are added:
+#   Repo → Settings → Secrets and variables → Actions →
+#     VPS_HOST       e.g. 31.184.198.91
+#     VPS_PASSWORD   the server root password
+#     BOT_TOKEN      the @coco_instruments_bot token
+#   (optional) VPS_USER (default root), DOMAIN (default <VPS_HOST>.nip.io)
+
+on:
+  push:
+    branches: [claude/intelligent-noether-bcnYS]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that secrets are configured
+        id: gate
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+        run: |
+          if [ -z "$VPS_HOST" ] || [ -z "$VPS_PASSWORD" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Add secrets VPS_HOST and VPS_PASSWORD (and BOT_TOKEN) to enable deployment. Skipping for now."
+            exit 0
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "domain=${DOMAIN:-${VPS_HOST}.nip.io}" >> "$GITHUB_OUTPUT"
+          if [ -n "$BOT_TOKEN" ]; then echo "has_bot=true" >> "$GITHUB_OUTPUT"; else echo "has_bot=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Deploy on VPS (install + build + HTTPS)
+        if: steps.gate.outputs.ready == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 25m
+          script: |
+            export DOMAIN='${{ steps.gate.outputs.domain }}'
+            export BRANCH='claude/intelligent-noether-bcnYS'
+            curl -fsSL "https://raw.githubusercontent.com/SkyTmin/coco-instruments/${BRANCH}/deploy/setup.sh" | bash
+
+      - name: Point the Telegram bot at the app
+        if: steps.gate.outputs.ready == 'true' && steps.gate.outputs.has_bot == 'true'
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          DOMAIN: ${{ steps.gate.outputs.domain }}
+        run: |
+          curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/setChatMenuButton" \
+            -H "Content-Type: application/json" \
+            -d "{\"menu_button\":{\"type\":\"web_app\",\"text\":\"Coco\",\"web_app\":{\"url\":\"https://${DOMAIN}/\"}}}"
+          echo
+
+      - name: Done
+        if: steps.gate.outputs.ready == 'true'
+        run: echo "Deployed. Open @coco_instruments_bot and tap the menu button."
