@@ -22,13 +22,15 @@ export function ListDetailPage() {
 
   const obls = expenses.filter((o) => o.listId === id);
   const recs = recurring.filter((r) => r.listId === id);
+  let totalNeeded = 0; // sum of every obligation's full cost (paid + unpaid)
   let remaining = 0;
   let monthly = 0;
   let spent = 0;
   for (const o of obls) {
-    spent += paidSoFar(o.payments); // counts closed credits too
+    const c = computeObligation(o);
+    totalNeeded += c.totalToPay; // counts closed credits too
+    spent += paidSoFar(o.payments);
     if (o.status !== 'closed') {
-      const c = computeObligation(o);
       remaining += c.remaining;
       monthly += c.monthlyPayment;
     }
@@ -48,6 +50,7 @@ export function ListDetailPage() {
       <div className="stack">
         <div className="card">
           <div className="stat-grid">
+            <StatTile label="Всего" value={formatRUB(totalNeeded)} />
             <StatTile label="Потрачено" value={formatRUB(spent)} />
             <StatTile label="Осталось" value={formatRUB(remaining)} />
             <StatTile label="В месяц" value={formatRUB(monthly)} />

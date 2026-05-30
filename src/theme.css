@@ -503,6 +503,37 @@ select {
 .badge--installment { background: rgba(215, 154, 43, 0.18); color: var(--warn); }
 .badge--single { background: rgba(46, 158, 107, 0.16); color: var(--pos); }
 .badge--closed { background: rgba(120, 120, 120, 0.18); color: var(--muted); }
+.badge--recurring { background: rgba(110, 142, 251, 0.18); color: #6e8efb; }
+
+/* Round icon button (e.g. calendar in the finance header) */
+.icon-round {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.icon-round:active {
+  transform: scale(0.92);
+}
+
+/* Tag chip under an upcoming-payment row */
+.up-row__tag {
+  display: inline-block;
+  margin-top: 8px;
+}
+
+/* Calendar: subtle tint on days that have payments */
+.cal__day.has-pay:not(.is-sel) {
+  background: var(--surface-2);
+}
 
 /* Progress bar */
 .progress {

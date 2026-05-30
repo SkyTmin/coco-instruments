@@ -50,6 +50,8 @@ export interface Obligation {
   overpayment?: number;
   /** installment only — alternative input; total = overpaymentPerMonth * termMonths. */
   overpaymentPerMonth?: number;
+  /** installment only — the full amount you will pay over the term, RUB. */
+  totalAmount?: number;
 
   status: ObligationStatus;
   /** Manually marked as finished by the user. Excluded from statistics. */

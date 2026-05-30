@@ -14,6 +14,14 @@ const TYPES: { value: ExpenseType; label: string }[] = [
   { value: 'installment', label: 'Рассрочка' },
 ];
 
+// What the user knows about an installment plan.
+type InstMode = 'monthly' | 'total' | 'body';
+const INST_MODES: { value: InstMode; label: string }[] = [
+  { value: 'monthly', label: 'Платёж/мес' },
+  { value: 'total', label: 'Вся сумма' },
+  { value: 'body', label: 'Тело' },
+];
+
 function num(s: string): number {
   const n = parseFloat(s.replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
@@ -34,6 +42,16 @@ export function ExpenseFormPage() {
   const [monthly, setMonthly] = useState(existing?.monthlyPayment ? String(existing.monthlyPayment) : '');
   const [rate, setRate] = useState(existing?.interestRate ? String(existing.interestRate) : '');
   const [overpay, setOverpay] = useState(existing?.overpayment ? String(existing.overpayment) : '');
+  const [total, setTotal] = useState(existing?.totalAmount ? String(existing.totalAmount) : '');
+  const [instMode, setInstMode] = useState<InstMode>(
+    existing?.type === 'installment'
+      ? existing.totalAmount
+        ? 'total'
+        : existing.principalAmount
+          ? 'body'
+          : 'monthly'
+      : 'monthly',
+  );
   const [term, setTerm] = useState(existing ? String(existing.termMonths) : '12');
   const [day, setDay] = useState(existing ? String(existing.paymentDay) : '1');
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayISO());
@@ -68,16 +86,18 @@ export function ExpenseFormPage() {
         interestRate: num(rate) || undefined,
       };
     }
-    // installment — accept EITHER a monthly payment OR a total overpayment.
+    // installment — the user supplies ONE of: monthly payment, total amount, or
+    // the body (тело). Optionally the body to also see the overpayment.
     return {
       ...base,
-      monthlyPayment: num(monthly) || undefined,
-      overpayment: num(overpay) || undefined,
+      principalAmount: instMode === 'body' ? num(principal) : num(principal) || 0,
+      monthlyPayment: instMode === 'monthly' ? num(monthly) || undefined : undefined,
+      totalAmount: instMode === 'total' ? num(total) || undefined : undefined,
+      overpayment: instMode === 'body' ? num(overpay) || undefined : undefined,
     };
-  }, [name, type, principal, monthly, rate, overpay, term, day, startDate, listId]);
+  }, [name, type, principal, monthly, rate, overpay, total, instMode, term, day, startDate, listId]);
 
   const preview = useMemo(() => {
-    if (num(principal) <= 0) return null;
     const o: Obligation = {
       ...draft,
       id: 'preview',
@@ -86,10 +106,19 @@ export function ExpenseFormPage() {
       createdAt: 0,
       updatedAt: 0,
     };
-    return computeObligation(o);
-  }, [draft, principal]);
+    const c = computeObligation(o);
+    return c.totalToPay > 0 ? c : null;
+  }, [draft]);
 
-  const valid = name.trim().length > 0 && num(principal) > 0;
+  const valid =
+    name.trim().length > 0 &&
+    (type === 'installment'
+      ? instMode === 'monthly'
+        ? num(monthly) > 0
+        : instMode === 'total'
+          ? num(total) > 0
+          : num(principal) > 0
+      : num(principal) > 0);
 
   const submit = () => {
     if (!valid) return;
@@ -129,18 +158,20 @@ export function ExpenseFormPage() {
         </div>
       </div>
 
-      <div className="field">
-        <label className="field__label">
-          {type === 'single' ? 'Сумма' : 'Сумма (тело долга)'}
-        </label>
-        <input
-          className="input"
-          inputMode="decimal"
-          value={principal}
-          onChange={(e) => setPrincipal(e.target.value)}
-          placeholder="100000"
-        />
-      </div>
+      {type !== 'installment' && (
+        <div className="field">
+          <label className="field__label">
+            {type === 'single' ? 'Сумма' : 'Сумма (тело долга)'}
+          </label>
+          <input
+            className="input"
+            inputMode="decimal"
+            value={principal}
+            onChange={(e) => setPrincipal(e.target.value)}
+            placeholder="100000"
+          />
+        </div>
+      )}
 
       {type === 'credit' && (
         <>
@@ -170,27 +201,75 @@ export function ExpenseFormPage() {
       {type === 'installment' && (
         <>
           <div className="field">
-            <label className="field__label">Платёж в месяц (если знаете)</label>
-            <input
-              className="input"
-              inputMode="decimal"
-              value={monthly}
-              onChange={(e) => setMonthly(e.target.value)}
-              placeholder="напр. 9456"
-            />
+            <label className="field__label">Что вы знаете?</label>
+            <div className="segmented">
+              {INST_MODES.map((m) => (
+                <button
+                  key={m.value}
+                  className={`segmented__opt${instMode === m.value ? ' is-active' : ''}`}
+                  onClick={() => {
+                    selectionChanged();
+                    setInstMode(m.value);
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="field">
-            <label className="field__label">Переплата всего (если знаете)</label>
-            <input
-              className="input"
-              inputMode="decimal"
-              value={overpay}
-              onChange={(e) => setOverpay(e.target.value)}
-              placeholder="0 — если без переплаты"
-            />
-          </div>
+
+          {instMode === 'monthly' && (
+            <div className="field">
+              <label className="field__label">Платёж в месяц</label>
+              <input
+                className="input"
+                inputMode="decimal"
+                value={monthly}
+                onChange={(e) => setMonthly(e.target.value)}
+                placeholder="напр. 9456"
+              />
+            </div>
+          )}
+
+          {instMode === 'total' && (
+            <div className="field">
+              <label className="field__label">Вся сумма (сколько отдадите всего)</label>
+              <input
+                className="input"
+                inputMode="decimal"
+                value={total}
+                onChange={(e) => setTotal(e.target.value)}
+                placeholder="напр. 113472"
+              />
+            </div>
+          )}
+
+          {instMode === 'body' && (
+            <>
+              <div className="field">
+                <label className="field__label">Тело рассрочки</label>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={principal}
+                  onChange={(e) => setPrincipal(e.target.value)}
+                  placeholder="100000"
+                />
+              </div>
+              <div className="field">
+                <label className="field__label">Переплата всего (необязательно)</label>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={overpay}
+                  onChange={(e) => setOverpay(e.target.value)}
+                  placeholder="0 — если без переплаты"
+                />
+              </div>
+            </>
+          )}
           <p className="muted" style={{ marginTop: -8, marginBottom: 16, fontSize: 13 }}>
-            Заполните одно из полей — второе посчитается само.
+            Остальное посчитается само из срока.
           </p>
         </>
       )}
@@ -236,10 +315,12 @@ export function ExpenseFormPage() {
             <span className="stat-row__label">Итого к выплате</span>
             <span className="stat-row__value">{formatRUB(preview.totalToPay)}</span>
           </div>
-          <div className="stat-row">
-            <span className="stat-row__label">Переплата</span>
-            <span className="stat-row__value amount-neg">{formatRUB(preview.totalOverpayment)}</span>
-          </div>
+          {preview.totalOverpayment > 0 && (
+            <div className="stat-row">
+              <span className="stat-row__label">Переплата</span>
+              <span className="stat-row__value amount-neg">{formatRUB(preview.totalOverpayment)}</span>
+            </div>
+          )}
           <div className="stat-row">
             <span className="stat-row__label">Платёж в месяц</span>
             <span className="stat-row__value">{formatRUB(Math.round(preview.monthlyPayment))}</span>

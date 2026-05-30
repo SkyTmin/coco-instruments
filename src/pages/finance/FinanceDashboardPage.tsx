@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Screen, SectionCard, SectionHeader, Sheet, StatTile } from '@/components/ui';
-import { IconList, IconTarget, IconWallet } from '@/components/icons';
+import { IconCalendar, IconList, IconTarget, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { computeObligation, computeRecurring } from '@/lib/finance-calc';
 import { formatDate, formatRUB } from '@/lib/format';
 import { tapLight } from '@/lib/haptics';
 
 type Kind = 'obligation' | 'recurring';
+type Tag = 'single' | 'credit' | 'installment' | 'recurring';
 interface FlowItem {
   kind: Kind;
   id: string;
@@ -17,7 +18,15 @@ interface FlowItem {
 interface UpItem extends FlowItem {
   date: string;
   amount: number;
+  tag: Tag;
 }
+
+const TAG_META: Record<Tag, { label: string; cls: string }> = {
+  single: { label: 'Разовый', cls: 'badge--single' },
+  credit: { label: 'Кредит', cls: 'badge--credit' },
+  installment: { label: 'Рассрочка', cls: 'badge--installment' },
+  recurring: { label: 'Регулярный', cls: 'badge--recurring' },
+};
 
 const pathFor = (kind: Kind, id: string) =>
   kind === 'recurring' ? `/finance/recurring/${id}` : `/finance/expenses/${id}`;
@@ -68,14 +77,14 @@ export function FinanceDashboardPage() {
       if (c.remaining > 0)
         remainingItems.push({ kind: 'obligation', id: o.id, name: o.name, value: Math.round(c.remaining) });
       if (c.nextPaymentDate)
-        upcoming.push({ kind: 'obligation', id: o.id, name: o.name, date: c.nextPaymentDate, amount: c.monthlyPayment, value: 0 });
+        upcoming.push({ kind: 'obligation', id: o.id, name: o.name, date: c.nextPaymentDate, amount: c.monthlyPayment, value: 0, tag: o.type });
     }
     for (const r of recurring) {
       if (r.paused) continue;
       const c = computeRecurring(r);
       monthlyTotal += c.monthlyEquivalent;
       breakdown.push({ kind: 'recurring', id: r.id, name: r.name, value: Math.round(c.monthlyEquivalent) });
-      upcoming.push({ kind: 'recurring', id: r.id, name: r.name, date: c.nextDue, amount: r.amount, value: 0 });
+      upcoming.push({ kind: 'recurring', id: r.id, name: r.name, date: c.nextDue, amount: r.amount, value: 0, tag: 'recurring' });
     }
     upcoming.sort((a, b) => a.date.localeCompare(b.date));
     breakdown.sort((a, b) => b.value - a.value);
@@ -92,7 +101,15 @@ export function FinanceDashboardPage() {
   const max = Math.max(...breakdown.map((b) => b.value), 1);
 
   return (
-    <Screen title="Финансы" subtitle="Обзор">
+    <Screen
+      title="Финансы"
+      subtitle="Обзор"
+      action={
+        <button className="icon-round" onClick={() => go('/finance/calendar')} aria-label="Календарь">
+          <IconCalendar size={22} />
+        </button>
+      }
+    >
       <div className="stack">
         <div className="card">
           <div className="stat-grid">
@@ -146,9 +163,10 @@ export function FinanceDashboardPage() {
             <div className="stack">
               {upcoming.map((u) => (
                 <div key={u.kind + u.id} className="up-row" onClick={() => openItem(u)} role="button">
-                  <div style={{ minWidth: 0 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="up-row__name">{u.name}</div>
                     <div className="up-row__amount">{formatRUB(u.amount)}</div>
+                    <span className={`badge ${TAG_META[u.tag].cls} up-row__tag`}>{TAG_META[u.tag].label}</span>
                   </div>
                   <div className="up-row__date">{formatDate(u.date, true)}</div>
                 </div>

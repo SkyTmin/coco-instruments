@@ -33,6 +33,14 @@ export async function init(debug: boolean): Promise<void> {
   if (viewport.mount.isAvailable()) {
     void viewport.mount().then(() => {
       viewport.bindCssVars();
+      // Open the Mini App expanded to the full screen (Telegram v8.0+).
+      try {
+        if (viewport.requestFullscreen.isAvailable() && !viewport.isFullscreen()) {
+          void viewport.requestFullscreen().catch(() => {});
+        }
+      } catch {
+        /* fullscreen not supported on this client */
+      }
     });
   }
 }

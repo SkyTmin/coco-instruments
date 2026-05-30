@@ -26,34 +26,38 @@ export function PaymentsCalendarPage() {
   const lists = useFinanceStore((s) => s.lists);
 
   const today = todayISO();
-  const [cursor, setCursor] = useState(() => {
-    const d = new Date();
-    return { y: d.getFullYear(), m: d.getMonth() };
-  });
+  const now = new Date();
+  const [cursor, setCursor] = useState(() => ({ y: now.getFullYear(), m: now.getMonth() }));
   const [selected, setSelected] = useState<string>(today);
 
   const { byDay, monthTotal, cells } = useMemo(() => {
-    const monthStart = toISO(new Date(cursor.y, cursor.m, 1));
-    const monthEnd = toISO(new Date(cursor.y, cursor.m + 1, 0));
-    // Only show upcoming payments: clamp the current month's start to today.
-    const rangeStart = monthStart < today ? today : monthStart;
-    const payments = collectPayments(rangeStart, monthEnd, expenses, recurring, listId);
-    const byDay = new Map<string, CalendarPayment[]>();
-    let monthTotal = 0;
-    for (const p of payments) {
-      monthTotal += p.amount;
-      const arr = byDay.get(p.date) ?? [];
-      arr.push(p);
-      byDay.set(p.date, arr);
-    }
+    // 6-week grid (Monday-first), incl. trailing/leading days of adjacent months.
     const first = new Date(cursor.y, cursor.m, 1);
-    const offset = (first.getDay() + 6) % 7; // Monday-first
+    const offset = (first.getDay() + 6) % 7;
     const gridStart = new Date(cursor.y, cursor.m, 1 - offset);
     const cells = Array.from({ length: 42 }, (_, i) => {
       const d = new Date(gridStart);
       d.setDate(gridStart.getDate() + i);
       return d;
     });
+
+    // Collect payments for the WHOLE visible grid (so adjacent-month days are
+    // accurate too), clamped to today so only upcoming charges show.
+    const gridStartISO = toISO(cells[0]);
+    const gridEndISO = toISO(cells[41]);
+    const rangeStart = gridStartISO < today ? today : gridStartISO;
+    const payments = collectPayments(rangeStart, gridEndISO, expenses, recurring, listId);
+
+    const byDay = new Map<string, CalendarPayment[]>();
+    const mStart = toISO(new Date(cursor.y, cursor.m, 1));
+    const mEnd = toISO(new Date(cursor.y, cursor.m + 1, 0));
+    let monthTotal = 0;
+    for (const p of payments) {
+      const arr = byDay.get(p.date) ?? [];
+      arr.push(p);
+      byDay.set(p.date, arr);
+      if (p.date >= mStart && p.date <= mEnd) monthTotal += p.amount;
+    }
     return { byDay, monthTotal, cells };
   }, [cursor, expenses, recurring, listId, today]);
 
@@ -65,6 +69,22 @@ export function PaymentsCalendarPage() {
     });
   };
 
+  // Tapping any day selects it; if it belongs to an adjacent month, follow it.
+  const pickDay = (d: Date) => {
+    tapLight();
+    setSelected(toISO(d));
+    if (d.getMonth() !== cursor.m || d.getFullYear() !== cursor.y) {
+      setCursor({ y: d.getFullYear(), m: d.getMonth() });
+    }
+  };
+
+  const goToday = () => {
+    tapLight();
+    setCursor({ y: now.getFullYear(), m: now.getMonth() });
+    setSelected(today);
+  };
+
+  const isCurrentMonth = cursor.y === now.getFullYear() && cursor.m === now.getMonth();
   const dayPayments = byDay.get(selected) ?? [];
   const listName = listId ? lists.find((l) => l.id === listId)?.name : undefined;
 
@@ -72,11 +92,11 @@ export function PaymentsCalendarPage() {
     <Screen title="Календарь" subtitle={listName ? `Список «${listName}»` : 'Будущие платежи'}>
       <div className="cal">
         <div className="cal__head">
-          <button className="cal__nav" onClick={() => shift(-1)} aria-label="Назад">
+          <button className="cal__nav" onClick={() => shift(-1)} aria-label="Предыдущий месяц">
             ‹
           </button>
           <div className="cal__title">{monthTitle(cursor.y, cursor.m)}</div>
-          <button className="cal__nav" onClick={() => shift(1)} aria-label="Вперёд">
+          <button className="cal__nav" onClick={() => shift(1)} aria-label="Следующий месяц">
             ›
           </button>
         </div>
@@ -97,11 +117,8 @@ export function PaymentsCalendarPage() {
                 key={iso}
                 className={`cal__day${inMonth ? '' : ' is-out'}${iso === selected ? ' is-sel' : ''}${
                   iso === today ? ' is-today' : ''
-                }`}
-                onClick={() => {
-                  tapLight();
-                  setSelected(iso);
-                }}
+                }${has ? ' has-pay' : ''}`}
+                onClick={() => pickDay(d)}
               >
                 <span>{d.getDate()}</span>
                 {has && <i className="cal__dot" />}
@@ -113,6 +130,11 @@ export function PaymentsCalendarPage() {
         <div className="cal__total">
           За {monthTitle(cursor.y, cursor.m).toLowerCase()}: <b>{formatRUB(Math.round(monthTotal))}</b>
         </div>
+        {!isCurrentMonth && (
+          <button className="link-all" style={{ display: 'block', margin: '6px auto 0' }} onClick={goToday}>
+            Сегодня
+          </button>
+        )}
       </div>
 
       <div className="section-label">{formatDate(selected)}</div>

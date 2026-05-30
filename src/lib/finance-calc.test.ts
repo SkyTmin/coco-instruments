@@ -114,6 +114,33 @@ describe('installment — counter-check (100 000 + 13 472 over 12 mo)', () => {
     expect(c3.totalToPay).toBe(113_472);
     expect(c3.totalOverpayment).toBe(13_472);
   });
+
+  it('works with ONLY monthly payment (no body known) — overpayment unknown', () => {
+    const c = computeObligation(
+      obligation({ type: 'installment', principalAmount: 0, monthlyPayment: 5_000, termMonths: 10 }),
+    );
+    expect(c.totalToPay).toBe(50_000);
+    expect(c.monthlyPayment).toBe(5_000);
+    expect(c.totalOverpayment).toBe(0); // no body → can't know overpayment
+  });
+
+  it('works with ONLY the total amount (no body known)', () => {
+    const c = computeObligation(
+      obligation({ type: 'installment', principalAmount: 0, totalAmount: 120_000, termMonths: 12 }),
+    );
+    expect(c.totalToPay).toBe(120_000);
+    expect(c.monthlyPayment).toBe(10_000);
+    expect(c.totalOverpayment).toBe(0);
+  });
+
+  it('total amount takes precedence and yields overpayment when body is known', () => {
+    const c = computeObligation(
+      obligation({ type: 'installment', principalAmount: 100_000, totalAmount: 113_472, termMonths: 12 }),
+    );
+    expect(c.totalToPay).toBe(113_472);
+    expect(c.totalOverpayment).toBe(13_472);
+    expect(c.monthlyPayment).toBe(9_456);
+  });
 });
 
 describe('single payment', () => {

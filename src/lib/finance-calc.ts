@@ -87,28 +87,32 @@ export function resolve(o: Obligation): Resolved {
   const term = Math.max(1, Math.round(o.termMonths || 1));
 
   if (o.type === 'installment') {
-    // If the user knows the monthly payment but not the overpayment, derive it.
-    if (o.monthlyPayment && o.monthlyPayment > 0) {
-      const total = o.monthlyPayment * term;
-      return {
-        totalToPay: total,
-        totalOverpayment: Math.max(0, total - principal),
-        monthlyPayment: o.monthlyPayment,
-        termMonths: term,
-        monthlyRate: 0,
-      };
+    // Installment can be defined by any of: principal (тело), monthlyPayment,
+    // totalAmount, overpayment. We resolve total + monthly from whatever is known,
+    // preferring explicit total/monthly over a derived principal.
+    let total = 0;
+    if (o.totalAmount && o.totalAmount > 0) {
+      total = o.totalAmount;
+    } else if (o.monthlyPayment && o.monthlyPayment > 0) {
+      total = o.monthlyPayment * term;
+    } else if (principal > 0) {
+      const overTotal =
+        o.overpayment != null
+          ? Math.max(0, o.overpayment)
+          : o.overpaymentPerMonth != null
+            ? Math.max(0, o.overpaymentPerMonth) * term
+            : 0;
+      total = principal + overTotal;
+    } else if (o.monthlyPayment) {
+      total = o.monthlyPayment * term;
     }
-    const overTotal =
-      o.overpayment != null
-        ? Math.max(0, o.overpayment)
-        : o.overpaymentPerMonth != null
-          ? Math.max(0, o.overpaymentPerMonth) * term
-          : 0;
-    const total = principal + overTotal;
+    const monthly = o.monthlyPayment && o.monthlyPayment > 0 ? o.monthlyPayment : total / term;
+    // Overpayment is only meaningful when we know the body (principal).
+    const overpayment = principal > 0 ? Math.max(0, total - principal) : 0;
     return {
       totalToPay: total,
-      totalOverpayment: overTotal,
-      monthlyPayment: total / term,
+      totalOverpayment: overpayment,
+      monthlyPayment: monthly,
       termMonths: term,
       monthlyRate: 0,
     };
