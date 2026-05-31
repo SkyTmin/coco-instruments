@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { validate as validateInitDataSig } from '@telegram-apps/init-data-node';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -88,41 +89,32 @@ const RELAY_SECRET = BOT_TOKEN
   ? crypto.createHash('sha256').update(`relay:${BOT_TOKEN}`).digest('hex').slice(0, 48)
   : '';
 
-/** Validate Telegram initData (HMAC-SHA256). Returns the user object or null. */
-function validateInitData(raw, token) {
-  if (!raw || !token) return null;
-  try {
-    const params = new URLSearchParams(raw);
-    const hash = params.get('hash');
-    if (!hash) return null;
-    params.delete('hash');
-    params.delete('signature');
-    const dataCheckString = [...params.entries()]
-      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-      .map(([k, v]) => `${k}=${v}`)
-      .join('\n');
-    const secret = crypto.createHmac('sha256', 'WebAppData').update(token).digest();
-    const calc = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
-    if (calc !== hash) return null;
-    const userRaw = params.get('user');
-    return userRaw ? JSON.parse(userRaw) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Authenticate a reminder request; sets a specific error response and returns null on failure. */
+/**
+ * Authenticate a reminder request using Telegram's official validator (handles
+ * the hash + signature correctly). Sets a specific error and returns null on failure.
+ */
 function authReminder(raw, res) {
   if (!BOT_TOKEN) {
     res.status(503).json({ error: 'server_no_token' });
     return null;
   }
-  const user = validateInitData(raw, BOT_TOKEN);
-  if (!user || !user.id) {
-    res.status(401).json({ error: 'bad_init_data' });
+  try {
+    validateInitDataSig(raw, BOT_TOKEN, { expiresIn: 0 });
+  } catch (e) {
+    res.status(401).json({ error: 'bad_init_data', detail: String(e?.message || e).slice(0, 120) });
     return null;
   }
-  return user;
+  try {
+    const user = JSON.parse(new URLSearchParams(raw).get('user') || 'null');
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'no_user' });
+      return null;
+    }
+    return user;
+  } catch {
+    res.status(401).json({ error: 'no_user' });
+    return null;
+  }
 }
 
 let reminders = {};
