@@ -31,14 +31,24 @@ jobs:
           if [ -z "${VPS_HOST:-}" ] || [ -z "${BOT_TOKEN:-}" ]; then
             echo "Secrets not set; skipping."; exit 0
           fi
-          DOMAIN="${DOMAIN_SECRET:-${VPS_HOST}.nip.io}"
+          # Normalize the token (a stray newline/space in the secret would break the
+          # relay secret, which the server derives from the trimmed token).
+          BOT_TOKEN="$(printf '%s' "$BOT_TOKEN" | tr -d '[:space:]')"
+          DOMAIN="$(printf '%s' "${DOMAIN_SECRET:-${VPS_HOST}.nip.io}" | tr -d '[:space:]')"
           SECRET=$(printf '%s' "relay:${BOT_TOKEN}" | sha256sum | cut -c1-48)
+          echo "domain: $DOMAIN"
 
-          RESP=$(curl -fsS -X POST "https://${DOMAIN}/api/reminders/drain" \
-            -H "X-Relay-Secret: ${SECRET}" || echo '{"items":[]}')
+          HTTP=$(curl -s -o /tmp/drain.json -w '%{http_code}' -X POST \
+            "https://${DOMAIN}/api/reminders/drain" -H "X-Relay-Secret: ${SECRET}" || echo 000)
+          echo "drain HTTP: $HTTP"
+          if [ "$HTTP" != "200" ]; then
+            echo "drain body:"; cat /tmp/drain.json 2>/dev/null || true; echo
+            echo "Drain failed — check VPS reachability / relay secret."; exit 1
+          fi
+          RESP=$(cat /tmp/drain.json)
           COUNT=$(echo "$RESP" | jq '.items | length')
           echo "due reminders: $COUNT"
-          [ "$COUNT" = "0" ] && exit 0
+          [ "$COUNT" = "0" ] && { echo "Nothing due right now."; exit 0; }
 
           SENT='[]'
           for i in $(seq 0 $((COUNT - 1))); do
@@ -47,13 +57,13 @@ jobs:
             TEXT=$(echo "$RESP" | jq -r ".items[$i].text")
             BODY=$(jq -nc --arg c "$CHAT" --arg t "$TEXT" \
               '{chat_id:$c, text:$t, parse_mode:"HTML", disable_web_page_preview:true}')
-            OK=$(curl -fsS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-              -H "Content-Type: application/json" -d "$BODY" | jq -r '.ok' || echo false)
-            if [ "$OK" = "true" ]; then
+            R=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+              -H "Content-Type: application/json" -d "$BODY")
+            if [ "$(echo "$R" | jq -r '.ok')" = "true" ]; then
               SENT=$(echo "$SENT" | jq -c --arg k "$KEY" '. + [$k]')
               echo "sent: $KEY"
             else
-              echo "FAILED: $KEY"
+              echo "FAILED: $KEY -> $R"
             fi
           done
 
