@@ -66,6 +66,12 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"menu_button\":{\"type\":\"web_app\",\"text\":\"Coco\",\"web_app\":{\"url\":\"https://${DOMAIN}/\"}}}"
           echo
+          # Register the webhook so /start works and users become reachable.
+          SECRET=$(printf '%s' "$BOT_TOKEN" | sha256sum | cut -c1-48)
+          curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
+            -H "Content-Type: application/json" \
+            -d "{\"url\":\"https://${DOMAIN}/api/bot/webhook\",\"secret_token\":\"${SECRET}\",\"allowed_updates\":[\"message\"]}"
+          echo
 
       - name: Done
         if: steps.gate.outputs.ready == 'true'

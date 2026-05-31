@@ -81,6 +81,9 @@ app.use(PUBLIC_UPLOAD_PATH, express.static(UPLOAD_DIR, {
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const REMINDERS_FILE =
   process.env.REMINDERS_FILE || path.join(path.dirname(UPLOAD_DIR), 'reminders.json');
+const WEBHOOK_SECRET = BOT_TOKEN
+  ? crypto.createHash('sha256').update(BOT_TOKEN).digest('hex').slice(0, 48)
+  : '';
 
 /** Validate Telegram initData (HMAC-SHA256). Returns the user object or null. */
 function validateInitData(raw, token) {
@@ -138,8 +141,10 @@ async function sendTelegram(chatId, text) {
   }
 }
 
+// The app sends reminders as ABSOLUTE fire timestamps (computed on the device
+// in its local/Moscow time), so the server needs no timezone math.
 app.post('/api/reminders/sync', (req, res) => {
-  const { initData, tzOffset, prefs, payments } = req.body ?? {};
+  const { initData, reminders: items } = req.body ?? {};
   const user = validateInitData(initData, BOT_TOKEN);
   if (!user || !user.id) {
     res.status(401).json({ error: 'unauthorized' });
@@ -149,19 +154,13 @@ app.post('/api/reminders/sync', (req, res) => {
   const prev = reminders[uid] || {};
   reminders[uid] = {
     chatId: user.id,
-    tzOffset: Number(tzOffset) || 0,
-    prefs: {
-      enabled: !!(prefs && prefs.enabled),
-      leadDays: Math.max(0, Math.min(30, Math.round((prefs && prefs.leadDays) || 0))),
-      hour: Math.max(0, Math.min(23, Math.round((prefs && prefs.hour) ?? 9))),
-      minute: Math.max(0, Math.min(59, Math.round((prefs && prefs.minute) || 0))),
-    },
-    payments: Array.isArray(payments)
-      ? payments.slice(0, 300).map((p) => ({
+    items: Array.isArray(items)
+      ? items.slice(0, 300).map((p) => ({
           key: String(p.key),
           name: String(p.name || '').slice(0, 100),
-          date: String(p.date),
           amount: Number(p.amount) || 0,
+          dueDate: String(p.dueDate || ''),
+          fireAt: Number(p.fireAt) || 0,
         }))
       : [],
     sent: prev.sent || {},
@@ -184,12 +183,24 @@ app.post('/api/reminders/test', async (req, res) => {
   res.json(r);
 });
 
-const ymd = (d) => d.toISOString().slice(0, 10);
-const addDaysISO = (iso, n) => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return ymd(d);
-};
+// Telegram webhook → greet on /start (and any message). Sending this reply also
+// confirms the user is reachable, so scheduled reminders can be delivered.
+app.post('/api/bot/webhook', (req, res) => {
+  if (WEBHOOK_SECRET && req.get('X-Telegram-Bot-Api-Secret-Token') !== WEBHOOK_SECRET) {
+    res.sendStatus(401);
+    return;
+  }
+  const chatId = req.body?.message?.chat?.id;
+  if (chatId) {
+    void sendTelegram(
+      chatId,
+      'Привет! 👋 Это <b>Coco</b>. Открой приложение кнопкой меню (слева от поля ввода) — ' +
+        'и я буду напоминать тебе о платежах прямо здесь.',
+    );
+  }
+  res.sendStatus(200);
+});
+
 const escapeHtml = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const formatRuDate = (iso) => {
@@ -201,34 +212,38 @@ const formatRuDate = (iso) => {
     return iso;
   }
 };
+const whenLabel = (dueDate) => {
+  if (!dueDate) return '';
+  const days = Math.ceil((Date.parse(`${dueDate}T00:00:00Z`) - Date.now()) / 86400000);
+  if (days <= 0) return ' сегодня';
+  if (days === 1) return ' завтра';
+  if (days >= 2 && days <= 4) return ` через ${days} дня`;
+  return ` через ${days} дн.`;
+};
 
 async function checkReminders() {
-  const todayUTC = ymd(new Date());
+  const now = Date.now();
   for (const uid of Object.keys(reminders)) {
     const u = reminders[uid];
-    if (!u?.prefs?.enabled || !Array.isArray(u.payments) || !u.payments.length) continue;
-    const localNow = new Date(Date.now() + (u.tzOffset || 0) * 60000);
-    const localDate = ymd(localNow);
-    const localMinutes = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
-    if (localMinutes < u.prefs.hour * 60 + u.prefs.minute) continue; // not time yet today
+    if (!u || !Array.isArray(u.items) || !u.items.length) continue;
     u.sent = u.sent || {};
-    for (const p of u.payments) {
-      if (addDaysISO(p.date, -u.prefs.leadDays) !== localDate) continue;
+    for (const p of u.items) {
+      if (!p.fireAt || p.fireAt > now) continue; // not time yet
+      if (now - p.fireAt > 2 * 86400000) continue; // too stale, skip
       if (u.sent[p.key]) continue;
-      const when =
-        u.prefs.leadDays === 0 ? 'сегодня' : u.prefs.leadDays === 1 ? 'завтра' : `через ${u.prefs.leadDays} дн.`;
       const amount = new Intl.NumberFormat('ru-RU').format(Math.round(p.amount));
-      const text = `🔔 Платёж ${when}: <b>${escapeHtml(p.name)}</b> — ${amount} ₽ (${formatRuDate(p.date)})`;
+      const datePart = p.dueDate ? ` (${formatRuDate(p.dueDate)})` : '';
+      const text = `🔔 Платёж${whenLabel(p.dueDate)}: <b>${escapeHtml(p.name)}</b> — ${amount} ₽${datePart}`;
       // eslint-disable-next-line no-await-in-loop
       const r = await sendTelegram(u.chatId, text);
       if (r.ok) {
-        u.sent[p.key] = p.date;
+        u.sent[p.key] = now;
         saveReminders();
       }
     }
-    // prune sent keys for dates older than 3 days
+    // prune sent keys older than 7 days
     for (const k of Object.keys(u.sent)) {
-      if (u.sent[k] < addDaysISO(todayUTC, -3)) delete u.sent[k];
+      if (now - u.sent[k] > 7 * 86400000) delete u.sent[k];
     }
   }
 }

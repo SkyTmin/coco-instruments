@@ -62,6 +62,8 @@ export interface Obligation {
   listId?: string;
   /** Send a Telegram reminder before/at each due date (default on). */
   notify?: boolean;
+  /** Custom exact reminder moment (local ISO datetime). Overrides global timing. */
+  notifyAt?: string;
 
   /** Source of truth for "paid so far". */
   payments: Payment[];
@@ -148,6 +150,8 @@ export interface RecurringPayment {
   listId?: string;
   /** Send a Telegram reminder before/at each charge (default on). */
   notify?: boolean;
+  /** Custom exact reminder moment (local ISO datetime). Overrides global timing. */
+  notifyAt?: string;
   createdAt: number;
   updatedAt: number;
 }

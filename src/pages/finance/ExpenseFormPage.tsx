@@ -57,6 +57,7 @@ export function ExpenseFormPage() {
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayISO());
   const [listId, setListId] = useState(existing?.listId ?? params.get('list') ?? '');
   const [notify, setNotify] = useState(existing?.notify ?? true);
+  const [notifyAt, setNotifyAt] = useState(existing?.notifyAt ?? '');
 
   const draft = useMemo<ObligationDraft>(() => {
     const start = startDate || todayISO();
@@ -70,6 +71,7 @@ export function ExpenseFormPage() {
         startDate: start,
         listId: listId || undefined,
         notify,
+        notifyAt: notifyAt || undefined,
       };
     }
     const base: ObligationDraft = {
@@ -81,6 +83,7 @@ export function ExpenseFormPage() {
       startDate: start,
       listId: listId || undefined,
       notify,
+      notifyAt: notifyAt || undefined,
     };
     if (type === 'credit') {
       return {
@@ -98,7 +101,7 @@ export function ExpenseFormPage() {
       totalAmount: instMode === 'total' ? num(total) || undefined : undefined,
       overpayment: instMode === 'body' ? num(overpay) || undefined : undefined,
     };
-  }, [name, type, principal, monthly, rate, overpay, total, instMode, term, day, startDate, listId, notify]);
+  }, [name, type, principal, monthly, rate, overpay, total, instMode, term, day, startDate, listId, notify, notifyAt]);
 
   const preview = useMemo(() => {
     const o: Obligation = {
@@ -355,6 +358,21 @@ export function ExpenseFormPage() {
         <span>🔔 Напоминать о платеже</span>
         <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
       </label>
+
+      {notify && (
+        <div className="field">
+          <label className="field__label">Время напоминания (необязательно)</label>
+          <input
+            className="input"
+            type="datetime-local"
+            value={notifyAt}
+            onChange={(e) => setNotifyAt(e.target.value)}
+          />
+          <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+            Пусто — напомню по общим настройкам. Время — московское (с вашего устройства).
+          </p>
+        </div>
+      )}
 
       <button className="btn btn--primary btn--block" disabled={!valid} onClick={submit}>
         {existing ? 'Сохранить' : 'Добавить'}

@@ -36,6 +36,7 @@ export function RecurringFormPage() {
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayISO());
   const [listId, setListId] = useState(existing?.listId ?? params.get('list') ?? '');
   const [notify, setNotify] = useState(existing?.notify ?? true);
+  const [notifyAt, setNotifyAt] = useState(existing?.notifyAt ?? '');
 
   const c = Math.max(1, Math.round(num(count)) || 1);
   const preview = useMemo(() => {
@@ -70,6 +71,7 @@ export function RecurringFormPage() {
       paused: existing?.paused ?? false,
       listId: listId || undefined,
       notify,
+      notifyAt: notifyAt || undefined,
     };
     if (existing) updateRecurring(existing.id, draft);
     else addRecurring(draft);
@@ -174,6 +176,21 @@ export function RecurringFormPage() {
         <span>🔔 Напоминать о платеже</span>
         <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
       </label>
+
+      {notify && (
+        <div className="field">
+          <label className="field__label">Время напоминания (необязательно)</label>
+          <input
+            className="input"
+            type="datetime-local"
+            value={notifyAt}
+            onChange={(e) => setNotifyAt(e.target.value)}
+          />
+          <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+            Пусто — напомню перед каждым списанием по общим настройкам.
+          </p>
+        </div>
+      )}
 
       <button className="btn btn--primary btn--block" disabled={!valid} onClick={submit}>
         {existing ? 'Сохранить' : 'Добавить'}
