@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { EmptyState, Screen, StatTile } from '@/components/ui';
-import { IconGraph, IconNotes } from '@/components/icons';
+import { EmptyState, Screen, Skeleton, StatTile, SwipeRow } from '@/components/ui';
+import { IconGraph, IconNotes, IconTrash } from '@/components/icons';
 import type { Note } from '@/types';
 import { useFinanceStore } from '@/store';
 import { buildNoteGraph, normalizeNoteTitle, parseNoteTags } from '@/lib/notes-graph';
 import { noteExcerpt } from '@/lib/notes-markdown';
-import { selectionChanged, tapLight } from '@/lib/haptics';
+import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
 export const noteDateFmt = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
@@ -29,6 +29,8 @@ function firstImage(note: Note) {
 export function NotesPage() {
   const navigate = useNavigate();
   const notes = useFinanceStore((s) => s.notes);
+  const removeNote = useFinanceStore((s) => s.removeNote);
+  const hydrated = useFinanceStore((s) => s.hydrated);
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState(params.get('q') ?? '');
 
@@ -58,6 +60,23 @@ export function NotesPage() {
     tapLight();
     navigate(path);
   };
+
+  if (!hydrated) {
+    return (
+      <Screen title="Заметки" subtitle="Быстрые записи и связи">
+        <div className="stack notes-page">
+          <div className="notes-actions">
+            <Skeleton height={74} radius={18} />
+            <Skeleton height={74} radius={18} />
+          </div>
+          <Skeleton height={96} radius={20} />
+          <Skeleton height={48} radius={13} />
+          <Skeleton height={84} radius={18} />
+          <Skeleton height={84} radius={18} />
+        </div>
+      </Screen>
+    );
+  }
 
   return (
     <Screen
@@ -104,37 +123,47 @@ export function NotesPage() {
             const tags = parseNoteTags(note.body);
             const thumb = firstImage(note);
             return (
-              <div
+              <SwipeRow
                 key={note.id}
-                className="note-row"
-                style={{ animationDelay: `${Math.min(i, 12) * 28}ms` }}
-                onClick={() => {
+                onTap={() => {
                   selectionChanged();
                   navigate(`/notes/${note.id}`);
                 }}
-                role="button"
+                actions={[
+                  {
+                    icon: <IconTrash size={20} />,
+                    label: 'Удалить',
+                    danger: true,
+                    onClick: () => {
+                      notifyWarning();
+                      removeNote(note.id);
+                    },
+                  },
+                ]}
               >
-                <div className="note-row__main">
-                  <div className="note-row__top">
-                    <div className="note-row__title">{note.title}</div>
-                    <div className="note-row__date">{noteDateFmt.format(new Date(note.updatedAt))}</div>
+                <div className="note-row" style={{ animationDelay: `${Math.min(i, 12) * 28}ms` }}>
+                  <div className="note-row__main">
+                    <div className="note-row__top">
+                      <div className="note-row__title">{note.title}</div>
+                      <div className="note-row__date">{noteDateFmt.format(new Date(note.updatedAt))}</div>
+                    </div>
+                    <div className="note-row__body">{noteSnippet(note)}</div>
+                    {(tags.length > 0 || note.attachments?.length) && (
+                      <div className="note-row__tags">
+                        {tags.slice(0, 3).map((tag) => (
+                          <span key={tag}>#{tag}</span>
+                        ))}
+                        {!!note.attachments?.length && <span className="is-attach">{note.attachments.length} файл.</span>}
+                      </div>
+                    )}
                   </div>
-                  <div className="note-row__body">{noteSnippet(note)}</div>
-                  {(tags.length > 0 || note.attachments?.length) && (
-                    <div className="note-row__tags">
-                      {tags.slice(0, 3).map((tag) => (
-                        <span key={tag}>#{tag}</span>
-                      ))}
-                      {!!note.attachments?.length && <span className="is-attach">{note.attachments.length} файл.</span>}
+                  {thumb && (
+                    <div className="note-row__thumb">
+                      <img src={thumb.url ?? thumb.dataUrl} alt="" loading="lazy" />
                     </div>
                   )}
                 </div>
-                {thumb && (
-                  <div className="note-row__thumb">
-                    <img src={thumb.url ?? thumb.dataUrl} alt="" loading="lazy" />
-                  </div>
-                )}
-              </div>
+              </SwipeRow>
             );
           })}
           {!filteredNotes.length && (

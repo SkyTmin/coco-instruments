@@ -1,19 +1,25 @@
+import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { EmptyState, Fab, Screen } from '@/components/ui';
+import { ConfirmDialog, EmptyState, Fab, Screen, SwipeRow } from '@/components/ui';
+import { IconPencil, IconTrash } from '@/components/icons';
 import { ObligationMiniCard, RecurringMiniCard } from '@/components/finance-cards';
 import { useFinanceStore } from '@/store';
-import { tapLight } from '@/lib/haptics';
+import { notifyWarning, tapLight } from '@/lib/haptics';
 
 type Tab = 'once' | 'recurring';
+type Confirm = { kind: 'obligation' | 'recurring'; id: string; name: string };
 
 export function ExpensesListPage() {
   const navigate = useNavigate();
   const expenses = useFinanceStore((s) => s.expenses);
   const recurring = useFinanceStore((s) => s.recurring);
   const lists = useFinanceStore((s) => s.lists);
+  const removeExpense = useFinanceStore((s) => s.removeExpense);
+  const removeRecurring = useFinanceStore((s) => s.removeRecurring);
   // Tab lives in the URL so it survives navigating to a form and back.
   const [params, setParams] = useSearchParams();
   const tab: Tab = params.get('tab') === 'recurring' ? 'recurring' : 'once';
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
 
   const listName = (id?: string) => (id ? lists.find((l) => l.id === id)?.name : undefined);
 
@@ -27,6 +33,14 @@ export function ExpensesListPage() {
       tapLight();
       setParams(t === 'recurring' ? { tab: 'recurring' } : {}, { replace: true });
     }
+  };
+
+  const doDelete = () => {
+    if (!confirm) return;
+    notifyWarning();
+    if (confirm.kind === 'obligation') removeExpense(confirm.id);
+    else removeRecurring(confirm.id);
+    setConfirm(null);
   };
 
   return (
@@ -53,12 +67,25 @@ export function ExpensesListPage() {
         ) : (
           <div className="stack">
             {expenses.map((o) => (
-              <ObligationMiniCard
+              <SwipeRow
                 key={o.id}
-                o={o}
-                tag={listName(o.listId)}
-                onClick={() => go(`/finance/expenses/${o.id}`)}
-              />
+                onTap={() => go(`/finance/expenses/${o.id}`)}
+                actions={[
+                  {
+                    icon: <IconPencil size={19} />,
+                    label: 'Изменить',
+                    onClick: () => go(`/finance/expenses/${o.id}/edit`),
+                  },
+                  {
+                    icon: <IconTrash size={19} />,
+                    label: 'Удалить',
+                    danger: true,
+                    onClick: () => setConfirm({ kind: 'obligation', id: o.id, name: o.name }),
+                  },
+                ]}
+              >
+                <ObligationMiniCard o={o} tag={listName(o.listId)} onClick={() => {}} />
+              </SwipeRow>
             ))}
           </div>
         ))}
@@ -73,17 +100,38 @@ export function ExpensesListPage() {
         ) : (
           <div className="stack">
             {recurring.map((r) => (
-              <RecurringMiniCard
+              <SwipeRow
                 key={r.id}
-                r={r}
-                tag={listName(r.listId)}
-                onClick={() => go(`/finance/recurring/${r.id}`)}
-              />
+                onTap={() => go(`/finance/recurring/${r.id}`)}
+                actions={[
+                  {
+                    icon: <IconPencil size={19} />,
+                    label: 'Изменить',
+                    onClick: () => go(`/finance/recurring/${r.id}/edit`),
+                  },
+                  {
+                    icon: <IconTrash size={19} />,
+                    label: 'Удалить',
+                    danger: true,
+                    onClick: () => setConfirm({ kind: 'recurring', id: r.id, name: r.name }),
+                  },
+                ]}
+              >
+                <RecurringMiniCard r={r} tag={listName(r.listId)} onClick={() => {}} />
+              </SwipeRow>
             ))}
           </div>
         ))}
 
       <Fab onClick={() => go(tab === 'once' ? '/finance/expenses/new' : '/finance/recurring/new')} />
+
+      {confirm && (
+        <ConfirmDialog
+          message={`Удалить «${confirm.name}»${confirm.kind === 'obligation' ? ' и все его платежи' : ''}?`}
+          onConfirm={doDelete}
+          onClose={() => setConfirm(null)}
+        />
+      )}
     </Screen>
   );
 }

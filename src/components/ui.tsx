@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties, PropsWithChildren, ReactNode } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, PropsWithChildren, ReactNode } from 'react';
 import { useNavigationType } from 'react-router-dom';
 import type { ExpenseType } from '@/types';
 import { formatRUB } from '@/lib/format';
@@ -126,6 +126,110 @@ export function Skeleton({
   style?: CSSProperties;
 }) {
   return <div className="skeleton" style={{ width, height, borderRadius: radius, ...style }} />;
+}
+
+interface SwipeAction {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}
+
+/**
+ * A row that reveals action buttons (Edit / Delete) when swiped left, and
+ * fires `onTap` on a plain tap. Vertical drags fall through to page scroll.
+ */
+export function SwipeRow({
+  children,
+  actions,
+  onTap,
+}: PropsWithChildren<{ actions: SwipeAction[]; onTap?: () => void }>) {
+  const width = actions.length * 76;
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const openRef = useRef(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const g = useRef<{ x: number; y: number; base: number; decided: boolean; hz: boolean; pid: number } | null>(null);
+
+  const down = (e: ReactPointerEvent<HTMLDivElement>) => {
+    g.current = { x: e.clientX, y: e.clientY, base: offset, decided: false, hz: false, pid: e.pointerId };
+  };
+  const move = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const s = g.current;
+    if (!s) return;
+    const dx = e.clientX - s.x;
+    const dy = e.clientY - s.y;
+    if (!s.decided && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      s.decided = true;
+      s.hz = Math.abs(dx) > Math.abs(dy);
+      if (s.hz) {
+        ref.current?.setPointerCapture(s.pid);
+        setDragging(true);
+      }
+    }
+    if (s.decided && s.hz) {
+      e.preventDefault();
+      setOffset(Math.max(-width, Math.min(0, s.base + dx)));
+    }
+  };
+  const up = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const s = g.current;
+    g.current = null;
+    if (!s) return;
+    if (s.hz) {
+      setDragging(false);
+      const cur = Math.max(-width, Math.min(0, s.base + (e.clientX - s.x)));
+      const open = cur < -width / 2;
+      setOffset(open ? -width : 0);
+      openRef.current = open;
+      if (open) selectionChanged();
+      return;
+    }
+    if (s.decided) return; // vertical scroll — ignore
+    if (openRef.current) {
+      setOffset(0);
+      openRef.current = false;
+    } else {
+      onTap?.();
+    }
+  };
+  const cancel = () => {
+    g.current = null;
+    setDragging(false);
+    setOffset(openRef.current ? -width : 0);
+  };
+
+  return (
+    <div
+      ref={ref}
+      className={`swipe${offset < -2 ? ' is-open' : ''}`}
+      onPointerDown={down}
+      onPointerMove={move}
+      onPointerUp={up}
+      onPointerCancel={cancel}
+    >
+      <div className="swipe__actions" style={{ width }}>
+        {actions.map((a, i) => (
+          <button
+            key={i}
+            className={`swipe__act${a.danger ? ' swipe__act--danger' : ''}`}
+            aria-label={a.label}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOffset(0);
+              openRef.current = false;
+              a.onClick();
+            }}
+          >
+            {a.icon}
+          </button>
+        ))}
+      </div>
+      <div className="swipe__front" style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : undefined }}>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 /** An SVG progress ring whose arc animates in on mount. */
