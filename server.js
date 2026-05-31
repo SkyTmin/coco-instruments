@@ -78,7 +78,7 @@ app.use(PUBLIC_UPLOAD_PATH, express.static(UPLOAD_DIR, {
 // here; a 1-minute scheduler messages the user via the bot at the chosen time.
 // Requires BOT_TOKEN in the environment (set by deploy/setup.sh).
 // ---------------------------------------------------------------------------
-const BOT_TOKEN = process.env.BOT_TOKEN || '';
+const BOT_TOKEN = (process.env.BOT_TOKEN || '').trim();
 const REMINDERS_FILE =
   process.env.REMINDERS_FILE || path.join(path.dirname(UPLOAD_DIR), 'reminders.json');
 const WEBHOOK_SECRET = BOT_TOKEN
@@ -109,6 +109,20 @@ function validateInitData(raw, token) {
   } catch {
     return null;
   }
+}
+
+/** Authenticate a reminder request; sets a specific error response and returns null on failure. */
+function authReminder(raw, res) {
+  if (!BOT_TOKEN) {
+    res.status(503).json({ error: 'server_no_token' });
+    return null;
+  }
+  const user = validateInitData(raw, BOT_TOKEN);
+  if (!user || !user.id) {
+    res.status(401).json({ error: 'bad_init_data' });
+    return null;
+  }
+  return user;
 }
 
 let reminders = {};
@@ -148,11 +162,8 @@ async function sendTelegram(chatId, text) {
 // in its local/Moscow time), so the server needs no timezone math.
 app.post('/api/reminders/sync', (req, res) => {
   const { initData, reminders: items } = req.body ?? {};
-  const user = validateInitData(initData, BOT_TOKEN);
-  if (!user || !user.id) {
-    res.status(401).json({ error: 'unauthorized' });
-    return;
-  }
+  const user = authReminder(initData, res);
+  if (!user) return;
   const uid = String(user.id);
   const prev = reminders[uid] || {};
   reminders[uid] = {
@@ -174,16 +185,25 @@ app.post('/api/reminders/sync', (req, res) => {
 });
 
 app.post('/api/reminders/test', async (req, res) => {
-  const user = validateInitData(req.body?.initData, BOT_TOKEN);
-  if (!user || !user.id) {
-    res.status(401).json({ error: 'unauthorized' });
-    return;
-  }
+  const user = authReminder(req.body?.initData, res);
+  if (!user) return;
   const r = await sendTelegram(
     user.id,
     '🔔 Тест: напоминания о платежах подключены. Так будет приходить уведомление.',
   );
   res.json(r);
+});
+
+// Diagnostics (no secrets): shows whether the bot token reached the server and
+// how many users have synced reminders. Open in a browser to check.
+app.get('/api/reminders/health', (req, res) => {
+  res.json({
+    ok: true,
+    hasToken: !!BOT_TOKEN,
+    hasWebhookSecret: !!WEBHOOK_SECRET,
+    users: Object.keys(reminders).length,
+    serverTime: new Date().toISOString(),
+  });
 });
 
 // Telegram webhook → greet on /start (and any message). Sending this reply also
