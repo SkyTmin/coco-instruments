@@ -524,6 +524,31 @@ select {
   transform: scale(0.92);
 }
 
+/* Toggle row (reminder checkboxes) */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+input[type='checkbox'] {
+  accent-color: var(--accent);
+  width: 22px;
+  height: 22px;
+  flex: none;
+  cursor: pointer;
+}
+input[type='time'] {
+  color-scheme: light dark;
+}
+
 /* Tag chip under an upcoming-payment row */
 .up-row__tag {
   display: inline-block;

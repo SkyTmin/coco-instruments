@@ -35,6 +35,7 @@ export function RecurringFormPage() {
   const [unit, setUnit] = useState<IntervalUnit>(existing?.intervalUnit ?? 'month');
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayISO());
   const [listId, setListId] = useState(existing?.listId ?? params.get('list') ?? '');
+  const [notify, setNotify] = useState(existing?.notify ?? true);
 
   const c = Math.max(1, Math.round(num(count)) || 1);
   const preview = useMemo(() => {
@@ -68,6 +69,7 @@ export function RecurringFormPage() {
       startDate: startDate || todayISO(),
       paused: existing?.paused ?? false,
       listId: listId || undefined,
+      notify,
     };
     if (existing) updateRecurring(existing.id, draft);
     else addRecurring(draft);
@@ -167,6 +169,11 @@ export function RecurringFormPage() {
           </select>
         </div>
       )}
+
+      <label className="toggle-row">
+        <span>🔔 Напоминать о платеже</span>
+        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+      </label>
 
       <button className="btn btn--primary btn--block" disabled={!valid} onClick={submit}>
         {existing ? 'Сохранить' : 'Добавить'}

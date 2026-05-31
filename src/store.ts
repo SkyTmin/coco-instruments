@@ -4,14 +4,18 @@ import type {
   FinanceExpensesBlob,
   FinanceListsBlob,
   FinanceRecurringBlob,
+  FinanceRemindersBlob,
   FinanceSavingsBlob,
   Note,
   NotesBlob,
   Obligation,
   Payment,
   RecurringPayment,
+  ReminderPrefs,
   SavingsGoal,
 } from '@/types';
+
+export const DEFAULT_REMINDER_PREFS: ReminderPrefs = { enabled: true, leadDays: 0, hour: 9, minute: 0 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { genId } from '@/lib/id';
 import { deriveStatus, paidSoFar, resolve } from '@/lib/finance-calc';
@@ -73,12 +77,14 @@ const writeSavings = makePersister<FinanceSavingsBlob>(STORAGE_KEYS.savings);
 const writeRecurring = makePersister<FinanceRecurringBlob>(STORAGE_KEYS.recurring);
 const writeLists = makePersister<FinanceListsBlob>(STORAGE_KEYS.lists);
 const writeNotes = makePersister<NotesBlob>(STORAGE_KEYS.notes);
+const writeReminders = makePersister<FinanceRemindersBlob>(STORAGE_KEYS.reminders);
 
 const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, items });
 const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, items });
 const persistRecurring = (items: RecurringPayment[]) => writeRecurring({ version: 1, items });
 const persistLists = (items: ExpenseList[]) => writeLists({ version: 1, items });
 const persistNotes = (items: Note[]) => writeNotes({ version: 1, items });
+const persistReminderPrefs = (prefs: ReminderPrefs) => writeReminders({ version: 1, prefs });
 
 interface FinanceState {
   expenses: Obligation[];
@@ -86,6 +92,7 @@ interface FinanceState {
   recurring: RecurringPayment[];
   lists: ExpenseList[];
   notes: Note[];
+  reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
   hydrate: () => Promise<void>;
@@ -118,6 +125,8 @@ interface FinanceState {
   updateNote: (id: string, patch: Partial<Note>) => void;
   removeNote: (id: string) => void;
   getNote: (id: string) => Note | undefined;
+
+  setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
 
 export const useFinanceStore = create<FinanceState>((set, get) => ({
@@ -126,16 +135,18 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   recurring: [],
   lists: [],
   notes: [],
+  reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
   hydrate: async () => {
     const storage = getStorage();
-    const [exp, sav, rec, lists, notes] = await Promise.all([
+    const [exp, sav, rec, lists, notes, rem] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
       storage.get<FinanceRecurringBlob>(STORAGE_KEYS.recurring),
       storage.get<FinanceListsBlob>(STORAGE_KEYS.lists),
       storage.get<NotesBlob>(STORAGE_KEYS.notes),
+      storage.get<FinanceRemindersBlob>(STORAGE_KEYS.reminders),
     ]);
     set({
       expenses: exp?.items ?? [],
@@ -143,6 +154,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       recurring: rec?.items ?? [],
       lists: lists?.items ?? [],
       notes: notes?.items ?? [],
+      reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
   },
@@ -327,4 +339,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   getNote: (id) => get().notes.find((n) => n.id === id),
+
+  setReminderPrefs: (patch) => {
+    const reminderPrefs = { ...get().reminderPrefs, ...patch };
+    set({ reminderPrefs });
+    persistReminderPrefs(reminderPrefs);
+  },
 }));

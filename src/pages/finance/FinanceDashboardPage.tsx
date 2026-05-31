@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Screen, SectionCard, SectionHeader, Sheet, StatTile } from '@/components/ui';
-import { IconCalendar, IconList, IconTarget, IconWallet } from '@/components/icons';
+import { IconBell, IconCalendar, IconList, IconTarget, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { computeObligation, computeRecurring } from '@/lib/finance-calc';
 import { formatDate, formatRUB } from '@/lib/format';
@@ -105,9 +105,14 @@ export function FinanceDashboardPage() {
       title="Финансы"
       subtitle="Обзор"
       action={
-        <button className="icon-round" onClick={() => go('/finance/calendar')} aria-label="Календарь">
-          <IconCalendar size={22} />
-        </button>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="icon-round" onClick={() => go('/finance/settings')} aria-label="Напоминания">
+            <IconBell size={20} />
+          </button>
+          <button className="icon-round" onClick={() => go('/finance/calendar')} aria-label="Календарь">
+            <IconCalendar size={22} />
+          </button>
+        </div>
       }
     >
       <div className="stack">

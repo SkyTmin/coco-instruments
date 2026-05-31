@@ -60,6 +60,8 @@ export interface Obligation {
   category?: string;
   /** Optional grouping list (e.g. "Свадьба"). */
   listId?: string;
+  /** Send a Telegram reminder before/at each due date (default on). */
+  notify?: boolean;
 
   /** Source of truth for "paid so far". */
   payments: Payment[];
@@ -144,6 +146,8 @@ export interface RecurringPayment {
   note?: string;
   /** Optional grouping list (e.g. "Свадьба"). */
   listId?: string;
+  /** Send a Telegram reminder before/at each charge (default on). */
+  notify?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -174,6 +178,21 @@ export interface ExpenseList {
 export interface FinanceListsBlob {
   version: 1;
   items: ExpenseList[];
+}
+
+// ---- Reminder preferences (Telegram notifications) ------------------------
+
+export interface ReminderPrefs {
+  enabled: boolean;
+  /** Days before the due date to notify; 0 = on the due date. */
+  leadDays: number;
+  hour: number; // 0..23, local time
+  minute: number; // 0..59
+}
+
+export interface FinanceRemindersBlob {
+  version: 1;
+  prefs: ReminderPrefs;
 }
 
 // ---- Notes ----------------------------------------------------------------

@@ -16,6 +16,7 @@ REPO="${REPO:-https://github.com/SkyTmin/coco-instruments.git}"
 BRANCH="${BRANCH:-claude/intelligent-noether-bcnYS}"
 APP_DIR="${APP_DIR:-/opt/coco}"
 UPLOAD_DIR="${UPLOAD_DIR:-/var/lib/coco/uploads}"
+BOT_TOKEN="${BOT_TOKEN:-}"
 
 echo "==> Detecting public IP / domain"
 IP="$(curl -fsS https://api.ipify.org 2>/dev/null || true)"
@@ -70,6 +71,22 @@ echo "==> Configuring persistent uploads"
 mkdir -p "$UPLOAD_DIR"
 chown -R root:root "$UPLOAD_DIR"
 
+echo "==> Writing server environment (/etc/coco.env)"
+# Preserve an existing bot token if this run didn't pass one (manual re-run).
+if [ -z "$BOT_TOKEN" ] && [ -f /etc/coco.env ]; then
+  BOT_TOKEN="$(grep -E '^BOT_TOKEN=' /etc/coco.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
+fi
+touch /etc/coco.env && chmod 600 /etc/coco.env
+{
+  echo "NODE_ENV=production"
+  echo "PORT=3000"
+  echo "UPLOAD_DIR=$UPLOAD_DIR"
+  echo "MAX_UPLOAD_BYTES=3145728"
+  echo "REMINDERS_FILE=$(dirname "$UPLOAD_DIR")/reminders.json"
+  [ -n "$BOT_TOKEN" ] && echo "BOT_TOKEN=$BOT_TOKEN"
+} > /etc/coco.env
+[ -n "$BOT_TOKEN" ] && echo "    bot token set → reminders enabled" || echo "    no bot token → reminders disabled"
+
 echo "==> Writing systemd service"
 cat > /etc/systemd/system/coco.service <<EOF
 [Unit]
@@ -79,10 +96,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$APP_DIR
-Environment=NODE_ENV=production
-Environment=PORT=3000
-Environment=UPLOAD_DIR=$UPLOAD_DIR
-Environment=MAX_UPLOAD_BYTES=3145728
+EnvironmentFile=/etc/coco.env
 ExecStart=/usr/bin/node $APP_DIR/server.js
 Restart=always
 RestartSec=5

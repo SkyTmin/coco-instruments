@@ -20,6 +20,7 @@ export const STORAGE_KEYS = {
   savings: 'finance.savings',
   recurring: 'finance.recurring',
   lists: 'finance.lists',
+  reminders: 'finance.reminders',
   notes: 'notes.items',
   meta: 'app.meta',
 } as const;

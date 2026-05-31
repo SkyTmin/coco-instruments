@@ -8,9 +8,10 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { AppRoot } from '@telegram-apps/telegram-ui';
-import { backButton, miniApp, useLaunchParams, useSignal } from '@tma.js/sdk-react';
+import { backButton, miniApp, useLaunchParams, useRawInitData, useSignal } from '@tma.js/sdk-react';
 
 import { useFinanceStore } from '@/store';
+import { syncReminders } from '@/lib/reminders';
 import { tapLight } from '@/lib/haptics';
 
 import { HomePage } from '@/pages/HomePage';
@@ -31,6 +32,7 @@ import { ListsPage } from '@/pages/finance/ListsPage';
 import { ListFormPage } from '@/pages/finance/ListFormPage';
 import { ListDetailPage } from '@/pages/finance/ListDetailPage';
 import { PaymentsCalendarPage } from '@/pages/finance/PaymentsCalendarPage';
+import { NotificationSettingsPage } from '@/pages/finance/NotificationSettingsPage';
 
 /** Drives the native Telegram BackButton from the router. */
 function NavigationController() {
@@ -64,6 +66,11 @@ export function App() {
   const lp = useLaunchParams();
   const isDark = useSignal(miniApp.isDark);
   const hydrate = useFinanceStore((s) => s.hydrate);
+  const rawInitData = useRawInitData();
+  const hydrated = useFinanceStore((s) => s.hydrated);
+  const expenses = useFinanceStore((s) => s.expenses);
+  const recurring = useFinanceStore((s) => s.recurring);
+  const reminderPrefs = useFinanceStore((s) => s.reminderPrefs);
 
   useEffect(() => {
     document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
@@ -72,6 +79,15 @@ export function App() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  // Keep the server's reminder schedule in sync with the local data (debounced).
+  useEffect(() => {
+    if (!hydrated) return;
+    const t = setTimeout(() => {
+      void syncReminders(rawInitData, reminderPrefs, expenses, recurring);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [hydrated, rawInitData, reminderPrefs, expenses, recurring]);
 
   return (
     <AppRoot
@@ -84,6 +100,7 @@ export function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/finance" element={<FinanceDashboardPage />} />
           <Route path="/finance/calendar" element={<PaymentsCalendarPage />} />
+          <Route path="/finance/settings" element={<NotificationSettingsPage />} />
           <Route path="/finance/expenses" element={<ExpensesListPage />} />
           <Route path="/finance/expenses/new" element={<ExpenseFormPage />} />
           <Route path="/finance/expenses/:id" element={<ExpenseDetailPage />} />

@@ -56,6 +56,7 @@ export function ExpenseFormPage() {
   const [day, setDay] = useState(existing ? String(existing.paymentDay) : '1');
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayISO());
   const [listId, setListId] = useState(existing?.listId ?? params.get('list') ?? '');
+  const [notify, setNotify] = useState(existing?.notify ?? true);
 
   const draft = useMemo<ObligationDraft>(() => {
     const start = startDate || todayISO();
@@ -68,6 +69,7 @@ export function ExpenseFormPage() {
         termMonths: 1,
         startDate: start,
         listId: listId || undefined,
+        notify,
       };
     }
     const base: ObligationDraft = {
@@ -78,6 +80,7 @@ export function ExpenseFormPage() {
       termMonths: Math.max(1, Math.round(num(term)) || 1),
       startDate: start,
       listId: listId || undefined,
+      notify,
     };
     if (type === 'credit') {
       return {
@@ -95,7 +98,7 @@ export function ExpenseFormPage() {
       totalAmount: instMode === 'total' ? num(total) || undefined : undefined,
       overpayment: instMode === 'body' ? num(overpay) || undefined : undefined,
     };
-  }, [name, type, principal, monthly, rate, overpay, total, instMode, term, day, startDate, listId]);
+  }, [name, type, principal, monthly, rate, overpay, total, instMode, term, day, startDate, listId, notify]);
 
   const preview = useMemo(() => {
     const o: Obligation = {
@@ -347,6 +350,11 @@ export function ExpenseFormPage() {
           </select>
         </div>
       )}
+
+      <label className="toggle-row">
+        <span>🔔 Напоминать о платеже</span>
+        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+      </label>
 
       <button className="btn btn--primary btn--block" disabled={!valid} onClick={submit}>
         {existing ? 'Сохранить' : 'Добавить'}
