@@ -62,8 +62,10 @@ export interface Obligation {
   listId?: string;
   /** Send a Telegram reminder before/at each due date (default on). */
   notify?: boolean;
-  /** Custom exact reminder moment (local ISO datetime). Overrides global timing. */
-  notifyAt?: string;
+  /** Which lead-days to remind on, e.g. [0,1] = on the day + a day before. */
+  notifyLeads?: number[];
+  /** Time of day to remind, "HH:MM" local. */
+  notifyTime?: string;
 
   /** Source of truth for "paid so far". */
   payments: Payment[];
@@ -150,8 +152,10 @@ export interface RecurringPayment {
   listId?: string;
   /** Send a Telegram reminder before/at each charge (default on). */
   notify?: boolean;
-  /** Custom exact reminder moment (local ISO datetime). Overrides global timing. */
-  notifyAt?: string;
+  /** Which lead-days to remind on, e.g. [0,1] = on the day + a day before. */
+  notifyLeads?: number[];
+  /** Time of day to remind, "HH:MM" local. */
+  notifyTime?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -188,8 +192,8 @@ export interface FinanceListsBlob {
 
 export interface ReminderPrefs {
   enabled: boolean;
-  /** Days before the due date to notify; 0 = on the due date. */
-  leadDays: number;
+  /** Which lead-days to remind on by default; 0 = on the due date. */
+  leads: number[];
   hour: number; // 0..23, local time
   minute: number; // 0..59
 }

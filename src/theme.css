@@ -545,8 +545,35 @@ input[type='checkbox'] {
   flex: none;
   cursor: pointer;
 }
-input[type='time'] {
+input[type='time'],
+input[type='datetime-local'] {
   color-scheme: light dark;
+}
+
+/* Multi-select chips (reminder lead-days) */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  border: 0;
+  cursor: pointer;
+  padding: 9px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface-2);
+  transition: all 0.15s ease;
+}
+.chip:active {
+  transform: scale(0.95);
+}
+.chip.is-active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-grad-1), var(--accent-grad-2));
+  box-shadow: var(--shadow-sm);
 }
 
 /* Tag chip under an upcoming-payment row */

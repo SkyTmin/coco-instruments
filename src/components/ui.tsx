@@ -3,7 +3,37 @@ import { useNavigate } from 'react-router-dom';
 import type { ExpenseType } from '@/types';
 import { formatRUB } from '@/lib/format';
 import { IconBack, IconChevron, IconPlus } from '@/components/icons';
-import { tapLight } from '@/lib/haptics';
+import { selectionChanged, tapLight } from '@/lib/haptics';
+
+export const LEAD_OPTIONS: { v: number; label: string }[] = [
+  { v: 0, label: 'в день' },
+  { v: 1, label: 'за день' },
+  { v: 2, label: 'за 2 дня' },
+  { v: 3, label: 'за 3 дня' },
+  { v: 7, label: 'за неделю' },
+];
+
+/** Multi-select chips for choosing which lead-days to remind on. */
+export function LeadPicker({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
+  const toggle = (v: number) => {
+    selectionChanged();
+    onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v].sort((a, b) => a - b));
+  };
+  return (
+    <div className="chips">
+      {LEAD_OPTIONS.map((o) => (
+        <button
+          key={o.v}
+          type="button"
+          className={`chip${value.includes(o.v) ? ' is-active' : ''}`}
+          onClick={() => toggle(o.v)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function Screen({
   title,

@@ -84,6 +84,9 @@ const REMINDERS_FILE =
 const WEBHOOK_SECRET = BOT_TOKEN
   ? crypto.createHash('sha256').update(BOT_TOKEN).digest('hex').slice(0, 48)
   : '';
+const RELAY_SECRET = BOT_TOKEN
+  ? crypto.createHash('sha256').update(`relay:${BOT_TOKEN}`).digest('hex').slice(0, 48)
+  : '';
 
 /** Validate Telegram initData (HMAC-SHA256). Returns the user object or null. */
 function validateInitData(raw, token) {
@@ -220,30 +223,79 @@ const whenLabel = (dueDate) => {
   if (days >= 2 && days <= 4) return ` через ${days} дня`;
   return ` через ${days} дн.`;
 };
+const buildText = (p) => {
+  const amount = new Intl.NumberFormat('ru-RU').format(Math.round(p.amount));
+  const datePart = p.dueDate ? ` (${formatRuDate(p.dueDate)})` : '';
+  return `🔔 Платёж${whenLabel(p.dueDate)}: <b>${escapeHtml(p.name)}</b> — ${amount} ₽${datePart}`;
+};
 
-async function checkReminders() {
+/** Due, not-yet-sent reminders across all users. Skips items claimed in the last 10 min. */
+function dueItemsFor(now, claim) {
+  const out = [];
+  for (const uid of Object.keys(reminders)) {
+    const u = reminders[uid];
+    if (!u || !Array.isArray(u.items)) continue;
+    u.sent = u.sent || {};
+    u.claimed = u.claimed || {};
+    for (const p of u.items) {
+      if (!p.fireAt || p.fireAt > now || now - p.fireAt > 2 * 86400000) continue;
+      if (u.sent[p.key]) continue;
+      if (u.claimed[p.key] && now - u.claimed[p.key] < 10 * 60000) continue;
+      if (claim) u.claimed[p.key] = now;
+      out.push({ uid, chatId: u.chatId, key: p.key, text: buildText(p) });
+    }
+  }
+  return out;
+}
+
+// GitHub Actions pulls due reminders and sends them from a non-RU runner
+// (Russian servers often can't reach api.telegram.org directly).
+app.post('/api/reminders/drain', (req, res) => {
+  if (!RELAY_SECRET || req.get('X-Relay-Secret') !== RELAY_SECRET) {
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
+  const items = dueItemsFor(Date.now(), true).slice(0, 100);
+  if (items.length) saveReminders();
+  res.json({ items });
+});
+
+app.post('/api/reminders/ack', (req, res) => {
+  if (!RELAY_SECRET || req.get('X-Relay-Secret') !== RELAY_SECRET) {
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
+  const keys = Array.isArray(req.body?.keys) ? req.body.keys : [];
   const now = Date.now();
   for (const uid of Object.keys(reminders)) {
     const u = reminders[uid];
-    if (!u || !Array.isArray(u.items) || !u.items.length) continue;
+    if (!u) continue;
     u.sent = u.sent || {};
-    for (const p of u.items) {
-      if (!p.fireAt || p.fireAt > now) continue; // not time yet
-      if (now - p.fireAt > 2 * 86400000) continue; // too stale, skip
-      if (u.sent[p.key]) continue;
-      const amount = new Intl.NumberFormat('ru-RU').format(Math.round(p.amount));
-      const datePart = p.dueDate ? ` (${formatRuDate(p.dueDate)})` : '';
-      const text = `🔔 Платёж${whenLabel(p.dueDate)}: <b>${escapeHtml(p.name)}</b> — ${amount} ₽${datePart}`;
-      // eslint-disable-next-line no-await-in-loop
-      const r = await sendTelegram(u.chatId, text);
-      if (r.ok) {
-        u.sent[p.key] = now;
-        saveReminders();
+    for (const k of keys) {
+      if (u.claimed && u.claimed[k]) {
+        u.sent[k] = now;
+        delete u.claimed[k];
       }
     }
-    // prune sent keys older than 7 days
-    for (const k of Object.keys(u.sent)) {
-      if (now - u.sent[k] > 7 * 86400000) delete u.sent[k];
+    for (const k of Object.keys(u.sent)) if (now - u.sent[k] > 7 * 86400000) delete u.sent[k];
+  }
+  saveReminders();
+  res.json({ ok: true });
+});
+
+// Fallback: also try to send directly from the VPS (works if it can reach Telegram).
+async function checkReminders() {
+  const now = Date.now();
+  for (const item of dueItemsFor(now, false)) {
+    // eslint-disable-next-line no-await-in-loop
+    const r = await sendTelegram(item.chatId, item.text);
+    if (r.ok) {
+      const u = reminders[item.uid];
+      if (u) {
+        u.sent = u.sent || {};
+        u.sent[item.key] = now;
+        saveReminders();
+      }
     }
   }
 }

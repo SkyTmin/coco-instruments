@@ -1,0 +1,65 @@
+name: Send reminders
+
+# Sends due payment reminders via Telegram from GitHub's runners, which (unlike a
+# Russian VPS) can reach api.telegram.org. The VPS only STORES reminders; this
+# job drains the due ones and delivers them.
+#
+# NOTE: GitHub only runs `schedule:` for workflows on the repo's DEFAULT branch.
+# Until this branch is the default (or merged to main), trigger via "Run workflow"
+# (workflow_dispatch). The VPS also tries to send directly as a fallback.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: send-reminders
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Drain due reminders and deliver
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          DOMAIN_SECRET: ${{ secrets.DOMAIN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VPS_HOST:-}" ] || [ -z "${BOT_TOKEN:-}" ]; then
+            echo "Secrets not set; skipping."; exit 0
+          fi
+          DOMAIN="${DOMAIN_SECRET:-${VPS_HOST}.nip.io}"
+          SECRET=$(printf '%s' "relay:${BOT_TOKEN}" | sha256sum | cut -c1-48)
+
+          RESP=$(curl -fsS -X POST "https://${DOMAIN}/api/reminders/drain" \
+            -H "X-Relay-Secret: ${SECRET}" || echo '{"items":[]}')
+          COUNT=$(echo "$RESP" | jq '.items | length')
+          echo "due reminders: $COUNT"
+          [ "$COUNT" = "0" ] && exit 0
+
+          SENT='[]'
+          for i in $(seq 0 $((COUNT - 1))); do
+            CHAT=$(echo "$RESP" | jq -r ".items[$i].chatId")
+            KEY=$(echo "$RESP" | jq -r ".items[$i].key")
+            TEXT=$(echo "$RESP" | jq -r ".items[$i].text")
+            BODY=$(jq -nc --arg c "$CHAT" --arg t "$TEXT" \
+              '{chat_id:$c, text:$t, parse_mode:"HTML", disable_web_page_preview:true}')
+            OK=$(curl -fsS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+              -H "Content-Type: application/json" -d "$BODY" | jq -r '.ok' || echo false)
+            if [ "$OK" = "true" ]; then
+              SENT=$(echo "$SENT" | jq -c --arg k "$KEY" '. + [$k]')
+              echo "sent: $KEY"
+            else
+              echo "FAILED: $KEY"
+            fi
+          done
+
+          if [ "$(echo "$SENT" | jq 'length')" != "0" ]; then
+            curl -fsS -X POST "https://${DOMAIN}/api/reminders/ack" \
+              -H "X-Relay-Secret: ${SECRET}" -H "Content-Type: application/json" \
+              -d "$(jq -nc --argjson k "$SENT" '{keys:$k}')" >/dev/null
+            echo "acked: $(echo "$SENT" | jq 'length')"
+          fi

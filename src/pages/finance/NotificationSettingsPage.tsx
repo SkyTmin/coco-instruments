@@ -1,16 +1,9 @@
 import { useState } from 'react';
 import { useRawInitData } from '@tma.js/sdk-react';
-import { Screen } from '@/components/ui';
+import { LeadPicker, Screen } from '@/components/ui';
 import { useFinanceStore } from '@/store';
 import { testReminder } from '@/lib/reminders';
-import { selectionChanged, tapLight } from '@/lib/haptics';
-
-const LEADS = [
-  { value: 0, label: 'В день' },
-  { value: 1, label: 'За 1 день' },
-  { value: 2, label: 'За 2 дня' },
-  { value: 3, label: 'За 3 дня' },
-];
+import { tapLight } from '@/lib/haptics';
 
 export function NotificationSettingsPage() {
   const prefs = useFinanceStore((s) => s.reminderPrefs);
@@ -47,25 +40,12 @@ export function NotificationSettingsPage() {
       {prefs.enabled && (
         <>
           <div className="field">
-            <label className="field__label">Когда</label>
-            <div className="segmented">
-              {LEADS.map((l) => (
-                <button
-                  key={l.value}
-                  className={`segmented__opt${prefs.leadDays === l.value ? ' is-active' : ''}`}
-                  onClick={() => {
-                    selectionChanged();
-                    setPrefs({ leadDays: l.value });
-                  }}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
+            <label className="field__label">Когда напоминать (по умолчанию)</label>
+            <LeadPicker value={prefs.leads} onChange={(leads) => setPrefs({ leads })} />
           </div>
 
           <div className="field">
-            <label className="field__label">Во сколько</label>
+            <label className="field__label">Во сколько (МСК)</label>
             <input
               className="input"
               type="time"
@@ -97,10 +77,10 @@ export function NotificationSettingsPage() {
 
       <div className="card" style={{ marginTop: 18 }}>
         <p className="muted" style={{ fontSize: 13, margin: 0, lineHeight: 1.5 }}>
-          Уведомления приходят сообщением от <b>@coco_instruments_bot</b> в выбранное время
-          (московское, берётся с вашего устройства). <b>Важно:</b> чтобы бот мог вам писать, откройте
-          @coco_instruments_bot и нажмите «Запустить» (или отправьте любое сообщение). Для конкретного
-          платежа можно задать своё точное время прямо в его форме.
+          Уведомления приходят сообщением от <b>@coco_instruments_bot</b> в выбранное время (МСК).
+          Можно выбрать несколько вариантов — например, «за день» и «в день» сразу. Для отдельного
+          платежа дни и время настраиваются прямо в его форме. <b>Важно:</b> чтобы бот мог писать,
+          откройте @coco_instruments_bot и нажмите «Запустить».
         </p>
       </div>
     </Screen>

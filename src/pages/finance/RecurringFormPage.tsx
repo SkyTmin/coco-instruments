@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Screen } from '@/components/ui';
+import { LeadPicker, Screen } from '@/components/ui';
 import type { IntervalUnit } from '@/types';
 import { useFinanceStore, type RecurringDraft } from '@/store';
 import { computeRecurring, monthlyEquivalent } from '@/lib/finance-calc';
@@ -27,6 +27,7 @@ export function RecurringFormPage() {
   const addRecurring = useFinanceStore((s) => s.addRecurring);
   const updateRecurring = useFinanceStore((s) => s.updateRecurring);
   const lists = useFinanceStore((s) => s.lists);
+  const reminderPrefs = useFinanceStore((s) => s.reminderPrefs);
   const [params] = useSearchParams();
 
   const [name, setName] = useState(existing?.name ?? '');
@@ -36,7 +37,11 @@ export function RecurringFormPage() {
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayISO());
   const [listId, setListId] = useState(existing?.listId ?? params.get('list') ?? '');
   const [notify, setNotify] = useState(existing?.notify ?? true);
-  const [notifyAt, setNotifyAt] = useState(existing?.notifyAt ?? '');
+  const [notifyLeads, setNotifyLeads] = useState<number[]>(existing?.notifyLeads ?? reminderPrefs.leads);
+  const [notifyTime, setNotifyTime] = useState(
+    existing?.notifyTime ??
+      `${String(reminderPrefs.hour).padStart(2, '0')}:${String(reminderPrefs.minute).padStart(2, '0')}`,
+  );
 
   const c = Math.max(1, Math.round(num(count)) || 1);
   const preview = useMemo(() => {
@@ -71,7 +76,8 @@ export function RecurringFormPage() {
       paused: existing?.paused ?? false,
       listId: listId || undefined,
       notify,
-      notifyAt: notifyAt || undefined,
+      notifyLeads,
+      notifyTime,
     };
     if (existing) updateRecurring(existing.id, draft);
     else addRecurring(draft);
@@ -179,16 +185,17 @@ export function RecurringFormPage() {
 
       {notify && (
         <div className="field">
-          <label className="field__label">Время напоминания (необязательно)</label>
+          <label className="field__label">Когда напоминать (перед каждым списанием)</label>
+          <LeadPicker value={notifyLeads} onChange={setNotifyLeads} />
+          <label className="field__label" style={{ marginTop: 12 }}>
+            Во сколько (МСК)
+          </label>
           <input
             className="input"
-            type="datetime-local"
-            value={notifyAt}
-            onChange={(e) => setNotifyAt(e.target.value)}
+            type="time"
+            value={notifyTime}
+            onChange={(e) => setNotifyTime(e.target.value)}
           />
-          <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-            Пусто — напомню перед каждым списанием по общим настройкам.
-          </p>
         </div>
       )}
 

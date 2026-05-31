@@ -15,7 +15,7 @@ import type {
   SavingsGoal,
 } from '@/types';
 
-export const DEFAULT_REMINDER_PREFS: ReminderPrefs = { enabled: true, leadDays: 0, hour: 9, minute: 0 };
+export const DEFAULT_REMINDER_PREFS: ReminderPrefs = { enabled: true, leads: [0], hour: 9, minute: 0 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { genId } from '@/lib/id';
 import { deriveStatus, paidSoFar, resolve } from '@/lib/finance-calc';
