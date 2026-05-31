@@ -1,10 +1,46 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Screen } from '@/components/ui';
+import { AnimatedNumber, Screen } from '@/components/ui';
 import { IconNotes, IconShirt, IconWallet } from '@/components/icons';
+import { useFinanceStore } from '@/store';
+import { computeObligation, computeRecurring } from '@/lib/finance-calc';
+import { formatRUB } from '@/lib/format';
 import { tapLight } from '@/lib/haptics';
+
+function notesWord(n: number): string {
+  const n1 = n % 10;
+  const n2 = n % 100;
+  if (n1 === 1 && n2 !== 11) return 'заметка';
+  if (n1 >= 2 && n1 <= 4 && (n2 < 10 || n2 >= 20)) return 'заметки';
+  return 'заметок';
+}
 
 export function HomePage() {
   const navigate = useNavigate();
+  const expenses = useFinanceStore((s) => s.expenses);
+  const recurring = useFinanceStore((s) => s.recurring);
+  const notes = useFinanceStore((s) => s.notes);
+
+  const fin = useMemo(() => {
+    let monthly = 0;
+    let remaining = 0;
+    for (const o of expenses) {
+      if (o.status === 'closed') continue;
+      const c = computeObligation(o);
+      monthly += c.monthlyPayment;
+      remaining += c.remaining;
+    }
+    for (const r of recurring) {
+      if (r.paused) continue;
+      monthly += computeRecurring(r).monthlyEquivalent;
+    }
+    return {
+      monthly: Math.round(monthly),
+      remaining: Math.round(remaining),
+      has: expenses.length > 0 || recurring.length > 0,
+    };
+  }, [expenses, recurring]);
+
   const go = (path: string) => {
     tapLight();
     navigate(path);
@@ -18,9 +54,26 @@ export function HomePage() {
           <div className="home-card__icon">
             <IconWallet />
           </div>
-          <div>
+          <div className="home-card__body">
             <div className="home-card__title">Финансы</div>
-            <div className="home-card__desc">Расходы, кредиты, рассрочки и накопления</div>
+            {fin.has ? (
+              <div className="home-card__stats">
+                <div className="hc-stat">
+                  <div className="hc-stat__num">
+                    <AnimatedNumber value={fin.monthly} format={formatRUB} />
+                  </div>
+                  <div className="hc-stat__lbl">в месяц</div>
+                </div>
+                <div className="hc-stat">
+                  <div className="hc-stat__num">
+                    <AnimatedNumber value={fin.remaining} format={formatRUB} />
+                  </div>
+                  <div className="hc-stat__lbl">осталось выплатить</div>
+                </div>
+              </div>
+            ) : (
+              <div className="home-card__desc">Расходы, кредиты, рассрочки и накопления</div>
+            )}
           </div>
         </div>
 
@@ -29,9 +82,11 @@ export function HomePage() {
           <div className="home-card__icon">
             <IconNotes />
           </div>
-          <div>
+          <div className="home-card__body">
             <div className="home-card__title">Заметки</div>
-            <div className="home-card__desc">Связи, теги и граф идей</div>
+            <div className="home-card__desc">
+              {notes.length ? `${notes.length} ${notesWord(notes.length)}` : 'Связи, теги и граф идей'}
+            </div>
           </div>
         </div>
 
@@ -40,7 +95,7 @@ export function HomePage() {
           <div className="home-card__icon">
             <IconShirt />
           </div>
-          <div>
+          <div className="home-card__body">
             <div className="home-card__title">Одежда</div>
             <div className="home-card__desc">Раздел в разработке</div>
           </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
+import { useNavigationType } from 'react-router-dom';
 import type { ExpenseType } from '@/types';
 import { formatRUB } from '@/lib/format';
 import { IconChevron, IconPlus } from '@/components/icons';
@@ -41,8 +42,11 @@ export function Screen({
   action,
   children,
 }: PropsWithChildren<{ title?: string; subtitle?: string; action?: ReactNode }>) {
+  // Going "back" (POP) slides in from the left, forward (PUSH) from the right —
+  // a native push/pop feel. The slide is tiny + clipped, so it never scrolls.
+  const dir = useNavigationType() === 'POP' ? 'pop' : 'push';
   return (
-    <div className="screen">
+    <div className={`screen screen--${dir}`}>
       {(title || action) && (
         <div className="screen__head">
           <div className="row">
