@@ -94,6 +94,7 @@ const GH_TOKEN = (process.env.GH_DISPATCH_TOKEN || '').trim();
 const GH_REPO = process.env.GH_REPO || 'SkyTmin/coco-instruments';
 const GH_REF = process.env.GH_REF || 'claude/intelligent-noether-bcnYS';
 let lastDispatch = 0;
+let lastDispatchInfo = null;
 
 /**
  * Authenticate a reminder request using Telegram's official validator (handles
@@ -158,7 +159,10 @@ async function sendTelegram(chatId, text) {
 
 /** Ask GitHub Actions to run the delivery workflow now (throttled to once / 90s). */
 async function triggerRelay() {
-  if (!GH_TOKEN) return { ok: false, error: 'no_gh_token' };
+  if (!GH_TOKEN) {
+    lastDispatchInfo = { ok: false, error: 'no_gh_token', at: new Date().toISOString() };
+    return lastDispatchInfo;
+  }
   const now = Date.now();
   if (now - lastDispatch < 90_000) return { ok: true, throttled: true };
   lastDispatch = now;
@@ -177,11 +181,17 @@ async function triggerRelay() {
         body: JSON.stringify({ ref: GH_REF }),
       },
     );
-    if (r.status !== 204) lastDispatch = 0; // let it retry sooner on failure
-    return { ok: r.status === 204, status: r.status };
+    let detail;
+    if (r.status !== 204) {
+      detail = (await r.text().catch(() => '')).slice(0, 200);
+      lastDispatch = 0; // let it retry sooner on failure
+    }
+    lastDispatchInfo = { ok: r.status === 204, status: r.status, detail, at: new Date().toISOString() };
+    return lastDispatchInfo;
   } catch (e) {
     lastDispatch = 0;
-    return { ok: false, error: String(e) };
+    lastDispatchInfo = { ok: false, error: String(e).slice(0, 200), at: new Date().toISOString() };
+    return lastDispatchInfo;
   }
 }
 
@@ -243,6 +253,7 @@ app.get('/api/reminders/health', (req, res) => {
     hasToken: !!BOT_TOKEN,
     hasWebhookSecret: !!WEBHOOK_SECRET,
     hasDispatchToken: !!GH_TOKEN,
+    lastDispatch: lastDispatchInfo,
     users: Object.keys(reminders).length,
     serverTime: new Date().toISOString(),
   });
