@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { EmptyState, Screen, StatTile } from '@/components/ui';
-import { IconGraph, IconNotes, IconPlus } from '@/components/icons';
+import { IconGraph, IconNotes } from '@/components/icons';
 import type { Note } from '@/types';
 import { useFinanceStore } from '@/store';
 import { buildNoteGraph, normalizeNoteTitle, parseNoteTags } from '@/lib/notes-graph';
+import { noteExcerpt } from '@/lib/notes-markdown';
 import { selectionChanged, tapLight } from '@/lib/haptics';
 
 export const noteDateFmt = new Intl.DateTimeFormat('ru-RU', {
@@ -15,28 +16,43 @@ export const noteDateFmt = new Intl.DateTimeFormat('ru-RU', {
 });
 
 export function noteSnippet(note: Note): string {
-  const clean = note.body
-    .replace(/\[\[([^[\]|#]+)(?:#[^[\]|]+)?(?:\|([^[\]]+))?\]\]/g, '$2$1')
-    .replace(/(^|[^#\p{L}\p{N}_-])#[\p{L}\p{N}_][\p{L}\p{N}_-]{0,31}/gu, '$1')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const clean = noteExcerpt(note.body);
   if (clean) return clean;
   if (note.attachments?.length) return `Вложений: ${note.attachments.length}`;
   return 'Пустая заметка';
 }
 
+function firstImage(note: Note) {
+  return note.attachments?.find((a) => a.type.startsWith('image/'));
+}
+
 export function NotesPage() {
   const navigate = useNavigate();
   const notes = useFinanceStore((s) => s.notes);
-  const [query, setQuery] = useState('');
+  const [params, setParams] = useSearchParams();
+  const [query, setQuery] = useState(params.get('q') ?? '');
+
+  // Keep the field in sync when arriving via a #tag link from a note.
+  useEffect(() => {
+    const q = params.get('q');
+    if (q !== null) setQuery(q);
+  }, [params]);
 
   const graph = useMemo(() => buildNoteGraph(notes), [notes]);
   const queryKey = normalizeNoteTitle(query);
   const filteredNotes = useMemo(() => {
     const list = [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
     if (!queryKey) return list;
-    return list.filter((note) => normalizeNoteTitle(`${note.title} ${note.body}`).includes(queryKey));
+    return list.filter((note) =>
+      normalizeNoteTitle(`${note.title} ${note.body}`).includes(queryKey),
+    );
   }, [notes, queryKey]);
+
+  const setSearch = (value: string) => {
+    setQuery(value);
+    // Drop the ?q= once the user edits the field, so Back behaves predictably.
+    if (params.has('q')) setParams({}, { replace: true });
+  };
 
   const go = (path: string) => {
     tapLight();
@@ -46,13 +62,7 @@ export function NotesPage() {
   return (
     <Screen
       title="Заметки"
-      subtitle="Быстрые записи и связи"
-      action={
-        <button className="btn btn--primary notes-head-action" onClick={() => go('/notes/new')}>
-          <IconPlus size={18} />
-          Создать
-        </button>
-      }
+      subtitle={notes.length ? `${notes.length} зам. · ${graph.links.filter((l) => l.kind === 'wiki').length} связей` : 'Быстрые записи и связи'}
     >
       <div className="stack notes-page">
         <div className="notes-actions">
@@ -75,37 +85,53 @@ export function NotesPage() {
           </div>
         </div>
 
-        <input
-          className="input notes-search notes-search--list"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Найти заметку"
-        />
+        <div className="notes-search-wrap">
+          <input
+            className="input notes-search notes-search--list"
+            value={query}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Найти заметку или #тег"
+          />
+          {query && (
+            <button className="notes-search__clear" onClick={() => setSearch('')} aria-label="Очистить">
+              ×
+            </button>
+          )}
+        </div>
 
         <div className="stack">
-          {filteredNotes.map((note) => {
+          {filteredNotes.map((note, i) => {
             const tags = parseNoteTags(note.body);
+            const thumb = firstImage(note);
             return (
               <div
                 key={note.id}
                 className="note-row"
+                style={{ animationDelay: `${Math.min(i, 12) * 28}ms` }}
                 onClick={() => {
                   selectionChanged();
                   navigate(`/notes/${note.id}`);
                 }}
                 role="button"
               >
-                <div className="note-row__top">
-                  <div className="note-row__title">{note.title}</div>
-                  <div className="note-row__date">{noteDateFmt.format(new Date(note.updatedAt))}</div>
+                <div className="note-row__main">
+                  <div className="note-row__top">
+                    <div className="note-row__title">{note.title}</div>
+                    <div className="note-row__date">{noteDateFmt.format(new Date(note.updatedAt))}</div>
+                  </div>
+                  <div className="note-row__body">{noteSnippet(note)}</div>
+                  {(tags.length > 0 || note.attachments?.length) && (
+                    <div className="note-row__tags">
+                      {tags.slice(0, 3).map((tag) => (
+                        <span key={tag}>#{tag}</span>
+                      ))}
+                      {!!note.attachments?.length && <span className="is-attach">{note.attachments.length} файл.</span>}
+                    </div>
+                  )}
                 </div>
-                <div className="note-row__body">{noteSnippet(note)}</div>
-                {(tags.length > 0 || note.attachments?.length) && (
-                  <div className="note-row__tags">
-                    {tags.slice(0, 3).map((tag) => (
-                      <span key={tag}>#{tag}</span>
-                    ))}
-                    {!!note.attachments?.length && <span>{note.attachments.length} файл.</span>}
+                {thumb && (
+                  <div className="note-row__thumb">
+                    <img src={thumb.url ?? thumb.dataUrl} alt="" loading="lazy" />
                   </div>
                 )}
               </div>
@@ -115,7 +141,7 @@ export function NotesPage() {
             <EmptyState
               icon="📝"
               title={notes.length ? 'Ничего не найдено' : 'Заметок пока нет'}
-              sub={notes.length ? 'Попробуйте другой поиск' : 'Создайте первую запись'}
+              sub={notes.length ? 'Попробуйте другой запрос' : 'Создайте первую запись'}
             />
           )}
         </div>

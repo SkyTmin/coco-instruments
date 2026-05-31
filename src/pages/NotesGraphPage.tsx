@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PointerEvent } from 'react';
+import type { PointerEvent, WheelEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Screen } from '@/components/ui';
 import { IconGraph } from '@/components/icons';
@@ -10,7 +10,6 @@ import {
   buildNoteGraph,
   filterNoteGraph,
   layoutNoteGraph,
-  normalizeNoteTitle,
 } from '@/lib/notes-graph';
 import { selectionChanged } from '@/lib/haptics';
 
@@ -30,10 +29,14 @@ interface PointerSession {
 
 const TAP_MOVE_LIMIT = 10;
 const TAP_TIME_LIMIT = 450;
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 2.6;
 
 function shortLabel(value: string, max = 17): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
+
+const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
 
 export function NotesGraphPage() {
   const navigate = useNavigate();
@@ -47,6 +50,7 @@ export function NotesGraphPage() {
   const [query, setQuery] = useState('');
   const [points, setPoints] = useState<NoteGraphPoint[]>([]);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [panning, setPanning] = useState<null | { x: number; y: number; panX: number; panY: number }>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -159,13 +163,40 @@ export function NotesGraphPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [draggingId, visibleGraph.links]);
 
-  const toGraphPoint = (event: PointerEvent<SVGSVGElement>) => {
+  // Screen pixels → graph coordinates (accounts for pan and zoom).
+  const toGraphPoint = (clientX: number, clientY: number) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
-    return {
-      x: ((event.clientX - rect.left) / rect.width) * GRAPH_VIEW_BOX.width - pan.x,
-      y: ((event.clientY - rect.top) / rect.height) * GRAPH_VIEW_BOX.height - pan.y,
-    };
+    const sx = ((clientX - rect.left) / rect.width) * GRAPH_VIEW_BOX.width;
+    const sy = ((clientY - rect.top) / rect.height) * GRAPH_VIEW_BOX.height;
+    return { x: (sx - pan.x) / scale, y: (sy - pan.y) / scale };
+  };
+
+  // Zoom around a screen point, or the stage centre when none is given.
+  const zoomBy = (factor: number, atClientX?: number, atClientY?: number) => {
+    const next = clampScale(scale * factor);
+    const rect = svgRef.current?.getBoundingClientRect();
+    let sx = GRAPH_VIEW_BOX.width / 2;
+    let sy = GRAPH_VIEW_BOX.height / 2;
+    if (rect && atClientX !== undefined && atClientY !== undefined) {
+      sx = ((atClientX - rect.left) / rect.width) * GRAPH_VIEW_BOX.width;
+      sy = ((atClientY - rect.top) / rect.height) * GRAPH_VIEW_BOX.height;
+    }
+    const gx = (sx - pan.x) / scale;
+    const gy = (sy - pan.y) / scale;
+    setPan({ x: sx - next * gx, y: sy - next * gy });
+    setScale(next);
+  };
+
+  const onWheel = (event: WheelEvent<SVGSVGElement>) => {
+    event.preventDefault();
+    zoomBy(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX, event.clientY);
+  };
+
+  const resetView = () => {
+    selectionChanged();
+    setPan({ x: 0, y: 0 });
+    setScale(1);
   };
 
   const beginNodeDrag = (event: PointerEvent<SVGGElement>, id: string) => {
@@ -173,7 +204,7 @@ export function NotesGraphPage() {
     event.stopPropagation();
     const point = pointById.get(id);
     if (!point) return;
-    const cursor = toGraphPoint(event as unknown as PointerEvent<SVGSVGElement>);
+    const cursor = toGraphPoint(event.clientX, event.clientY);
     setDraggingId(id);
     setActiveId(id.startsWith('missing:') || id.startsWith('tag:') ? activeIdRef.current : id);
     dragOffset.current = { x: point.x - cursor.x, y: point.y - cursor.y };
@@ -192,7 +223,7 @@ export function NotesGraphPage() {
   const movePointer = (event: PointerEvent<SVGSVGElement>) => {
     event.preventDefault();
     if (draggingId) {
-      const cursor = toGraphPoint(event);
+      const cursor = toGraphPoint(event.clientX, event.clientY);
       const session = pointerSession.current;
       if (session && session.pointerId === event.pointerId) {
         const dx = event.clientX - session.x;
@@ -283,59 +314,73 @@ export function NotesGraphPage() {
 
         <div className="notes-graph-stage">
           {points.length ? (
-            <svg
-              ref={svgRef}
-              className="notes-graph notes-graph--interactive"
-              viewBox={`0 0 ${GRAPH_VIEW_BOX.width} ${GRAPH_VIEW_BOX.height}`}
-              role="img"
-              aria-label="Граф заметок"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                setPanning({ x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y });
-              }}
-              onPointerMove={movePointer}
-              onPointerUp={() => endPointer(true)}
-              onPointerCancel={() => endPointer(false)}
-              onPointerLeave={() => endPointer(false)}
-            >
-              <defs>
-                <linearGradient id="noteNodeGradientInteractive" x1="0" x2="1" y1="0" y2="1">
-                  <stop offset="0%" stopColor="var(--accent-grad-1)" />
-                  <stop offset="100%" stopColor="var(--accent-grad-2)" />
-                </linearGradient>
-              </defs>
-              <g transform={`translate(${pan.x} ${pan.y})`}>
-                {visibleGraph.links.map((link) => {
-                  const source = pointById.get(link.source);
-                  const target = pointById.get(link.target);
-                  if (!source || !target) return null;
-                  return (
-                    <line
-                      key={link.id}
-                      className={`notes-graph__link notes-graph__link--${link.kind}`}
-                      x1={source.x}
-                      y1={source.y}
-                      x2={target.x}
-                      y2={target.y}
-                    />
-                  );
-                })}
-                {points.map((point) => (
-                  <g
-                    key={point.id}
-                    className={`notes-graph__node notes-graph__node--${point.kind}${point.id === activeId ? ' is-active' : ''}${point.id === draggingId ? ' is-dragging' : ''}`}
-                    onPointerDown={(event) => beginNodeDrag(event, point.id)}
-                    onClick={(event) => event.preventDefault()}
-                  >
-                    <title>{point.label}</title>
-                    <circle cx={point.x} cy={point.y} r={point.r} />
-                    <text x={point.x} y={point.y + point.r + 15}>
-                      {shortLabel(point.label)}
-                    </text>
-                  </g>
-                ))}
-              </g>
-            </svg>
+            <>
+              <svg
+                ref={svgRef}
+                className="notes-graph notes-graph--interactive"
+                viewBox={`0 0 ${GRAPH_VIEW_BOX.width} ${GRAPH_VIEW_BOX.height}`}
+                role="img"
+                aria-label="Граф заметок"
+                onWheel={onWheel}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  setPanning({ x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y });
+                }}
+                onPointerMove={movePointer}
+                onPointerUp={() => endPointer(true)}
+                onPointerCancel={() => endPointer(false)}
+                onPointerLeave={() => endPointer(false)}
+              >
+                <defs>
+                  <linearGradient id="noteNodeGradientInteractive" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stopColor="var(--accent-grad-1)" />
+                    <stop offset="100%" stopColor="var(--accent-grad-2)" />
+                  </linearGradient>
+                </defs>
+                <g transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}>
+                  {visibleGraph.links.map((link) => {
+                    const source = pointById.get(link.source);
+                    const target = pointById.get(link.target);
+                    if (!source || !target) return null;
+                    return (
+                      <line
+                        key={link.id}
+                        className={`notes-graph__link notes-graph__link--${link.kind}`}
+                        x1={source.x}
+                        y1={source.y}
+                        x2={target.x}
+                        y2={target.y}
+                      />
+                    );
+                  })}
+                  {points.map((point) => (
+                    <g
+                      key={point.id}
+                      className={`notes-graph__node notes-graph__node--${point.kind}${point.id === activeId ? ' is-active' : ''}${point.id === draggingId ? ' is-dragging' : ''}`}
+                      onPointerDown={(event) => beginNodeDrag(event, point.id)}
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <title>{point.label}</title>
+                      <circle cx={point.x} cy={point.y} r={point.r} />
+                      <text x={point.x} y={point.y + point.r + 15}>
+                        {shortLabel(point.label)}
+                      </text>
+                    </g>
+                  ))}
+                </g>
+              </svg>
+              <div className="notes-graph-zoom">
+                <button onClick={() => { selectionChanged(); zoomBy(1.25); }} aria-label="Приблизить">
+                  +
+                </button>
+                <button onClick={() => { selectionChanged(); zoomBy(1 / 1.25); }} aria-label="Отдалить">
+                  −
+                </button>
+                <button onClick={resetView} aria-label="Сбросить вид">
+                  ⊙
+                </button>
+              </div>
+            </>
           ) : (
             <div className="notes-graph-empty">
               <IconGraph size={34} />
@@ -345,7 +390,7 @@ export function NotesGraphPage() {
         </div>
 
         <div className="card notes-graph-hint">
-          Перетаскивайте поле или отдельные заметки. Короткий тап откроет выбранную заметку.
+          Перетаскивайте поле или узлы, колесо/кнопки — масштаб. Короткий тап откроет заметку.
           {activeNote && (
             <button className="btn btn--ghost btn--block" onClick={() => navigate(`/notes/${activeNote.id}`)}>
               Открыть «{activeNote.title}»
