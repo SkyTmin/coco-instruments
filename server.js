@@ -88,6 +88,12 @@ const WEBHOOK_SECRET = BOT_TOKEN
 const RELAY_SECRET = BOT_TOKEN
   ? crypto.createHash('sha256').update(`relay:${BOT_TOKEN}`).digest('hex').slice(0, 48)
   : '';
+// Optional GitHub token (fine-grained PAT, Actions: read+write) so the VPS can
+// trigger the delivery workflow on demand — GitHub's own `schedule` is too slow.
+const GH_TOKEN = (process.env.GH_DISPATCH_TOKEN || '').trim();
+const GH_REPO = process.env.GH_REPO || 'SkyTmin/coco-instruments';
+const GH_REF = process.env.GH_REF || 'claude/intelligent-noether-bcnYS';
+let lastDispatch = 0;
 
 /**
  * Authenticate a reminder request using Telegram's official validator (handles
@@ -150,6 +156,35 @@ async function sendTelegram(chatId, text) {
   }
 }
 
+/** Ask GitHub Actions to run the delivery workflow now (throttled to once / 90s). */
+async function triggerRelay() {
+  if (!GH_TOKEN) return { ok: false, error: 'no_gh_token' };
+  const now = Date.now();
+  if (now - lastDispatch < 90_000) return { ok: true, throttled: true };
+  lastDispatch = now;
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${GH_REPO}/actions/workflows/reminders.yml/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${GH_TOKEN}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+          'User-Agent': 'coco-reminders',
+        },
+        body: JSON.stringify({ ref: GH_REF }),
+      },
+    );
+    if (r.status !== 204) lastDispatch = 0; // let it retry sooner on failure
+    return { ok: r.status === 204, status: r.status };
+  } catch (e) {
+    lastDispatch = 0;
+    return { ok: false, error: String(e) };
+  }
+}
+
 // The app sends reminders as ABSOLUTE fire timestamps (computed on the device
 // in its local/Moscow time), so the server needs no timezone math.
 app.post('/api/reminders/sync', (req, res) => {
@@ -196,7 +231,8 @@ app.post('/api/reminders/test', async (req, res) => {
   u.testItems.push({ key: `test:${Date.now()}`, text, fireAt: Date.now() - 1000 });
   reminders[uid] = u;
   saveReminders();
-  res.json({ ok: true, queued: true, directError: direct.error });
+  const relay = await triggerRelay(); // poke GitHub to deliver within ~1 min
+  res.json({ ok: true, queued: true, dispatched: relay.ok, directError: direct.error });
 });
 
 // Diagnostics (no secrets): shows whether the bot token reached the server and
@@ -206,6 +242,7 @@ app.get('/api/reminders/health', (req, res) => {
     ok: true,
     hasToken: !!BOT_TOKEN,
     hasWebhookSecret: !!WEBHOOK_SECRET,
+    hasDispatchToken: !!GH_TOKEN,
     users: Object.keys(reminders).length,
     serverTime: new Date().toISOString(),
   });
@@ -312,7 +349,15 @@ app.post('/api/reminders/ack', (req, res) => {
 // Fallback: also try to send directly from the VPS (works if it can reach Telegram).
 async function checkReminders() {
   const now = Date.now();
-  for (const item of dueItemsFor(now, false)) {
+  const due = dueItemsFor(now, false);
+  if (!due.length) return;
+  // Preferred: have GitHub deliver (the VPS usually can't reach Telegram).
+  if (GH_TOKEN) {
+    await triggerRelay();
+    return;
+  }
+  // Fallback: send directly (works only if the VPS can reach api.telegram.org).
+  for (const item of due) {
     // eslint-disable-next-line no-await-in-loop
     const r = await sendTelegram(item.chatId, item.text);
     if (r.ok) {
