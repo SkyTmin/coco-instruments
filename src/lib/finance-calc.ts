@@ -1,4 +1,5 @@
 import type {
+  ExpenseType,
   IntervalUnit,
   Obligation,
   ObligationComputed,
@@ -331,6 +332,7 @@ export interface CalendarPayment {
   name: string;
   amount: number;
   kind: 'obligation' | 'recurring';
+  tag: ExpenseType | 'recurring';
   id: string;
 }
 
@@ -354,7 +356,7 @@ export function collectPayments(
     for (const e of computeObligation(o).schedule) {
       const t = parseISO(e.dueDate)?.getTime() ?? -1;
       if (t >= fromT && t <= untilT) {
-        out.push({ date: e.dueDate, name: o.name, amount: e.amount, kind: 'obligation', id: o.id });
+        out.push({ date: e.dueDate, name: o.name, amount: e.amount, kind: 'obligation', tag: o.type, id: o.id });
       }
     }
   }
@@ -362,7 +364,7 @@ export function collectPayments(
     if (r.paused) continue;
     if (listId && r.listId !== listId) continue;
     for (const d of recurringOccurrences(r, fromISO, untilISO)) {
-      out.push({ date: d, name: r.name, amount: r.amount, kind: 'recurring', id: r.id });
+      out.push({ date: d, name: r.name, amount: r.amount, kind: 'recurring', tag: 'recurring', id: r.id });
     }
   }
   out.sort((a, b) => a.date.localeCompare(b.date));

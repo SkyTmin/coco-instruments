@@ -50,6 +50,24 @@ export function monthsLabel(n: number): string {
   return `${n} ${pluralizeRu(n, ['месяц', 'месяца', 'месяцев'])}`;
 }
 
+const DAY_FORMS: [string, string, string] = ['день', 'дня', 'дней'];
+
+/** Human relative day, e.g. "сегодня", "завтра", "через 3 дня", "2 дня назад". */
+export function relativeDay(iso: string): string {
+  const d = parseISO(iso);
+  if (!d) return '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+  const days = Math.round((d.getTime() - today.getTime()) / 86400000);
+  if (days === 0) return 'сегодня';
+  if (days === 1) return 'завтра';
+  if (days === 2) return 'послезавтра';
+  if (days > 0) return `через ${days} ${pluralizeRu(days, DAY_FORMS)}`;
+  if (days === -1) return 'вчера';
+  return `${Math.abs(days)} ${pluralizeRu(Math.abs(days), DAY_FORMS)} назад`;
+}
+
 const UNIT_FORMS: Record<IntervalUnit, [string, string, string]> = {
   day: ['день', 'дня', 'дней'],
   week: ['неделю', 'недели', 'недель'],
