@@ -91,6 +91,7 @@ touch /etc/coco.env && chmod 600 /etc/coco.env
   [ -n "$GH_DISPATCH_TOKEN" ] && echo "GH_DISPATCH_TOKEN=$GH_DISPATCH_TOKEN"
 } > /etc/coco.env
 [ -n "$BOT_TOKEN" ] && echo "    bot token set → reminders enabled" || echo "    no bot token → reminders disabled"
+[ -n "$GH_DISPATCH_TOKEN" ] && echo "    dispatch token set → instant delivery enabled" || echo "    NO dispatch token (add GH_TOKEN secret + redeploy) → delivery via slow schedule"
 
 echo "==> Writing systemd service"
 cat > /etc/systemd/system/coco.service <<EOF
