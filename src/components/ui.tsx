@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { CSSProperties, PropsWithChildren, ReactNode } from 'react';
 import { useNavigationType } from 'react-router-dom';
 import type { ExpenseType } from '@/types';
 import { formatRUB } from '@/lib/format';
@@ -111,6 +111,21 @@ export function AnimatedNumber({
 
 export function Money({ value, precise }: { value: number; precise?: boolean }) {
   return <>{formatRUB(value, precise)}</>;
+}
+
+/** Shimmering placeholder block shown while data hydrates. */
+export function Skeleton({
+  width = '100%',
+  height = 16,
+  radius = 10,
+  style,
+}: {
+  width?: number | string;
+  height?: number | string;
+  radius?: number;
+  style?: CSSProperties;
+}) {
+  return <div className="skeleton" style={{ width, height, borderRadius: radius, ...style }} />;
 }
 
 /** An SVG progress ring whose arc animates in on mount. */

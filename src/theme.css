@@ -1749,6 +1749,25 @@ input[type='datetime-local'] {
   }
 }
 
+/* ---- Skeleton shimmer ------------------------------------------------------ */
+.skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--surface-2) 30%,
+    color-mix(in srgb, var(--surface-2) 55%, var(--surface)) 50%,
+    var(--surface-2) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
 /* ---- Finance hero ring ----------------------------------------------------- */
 .hero {
   display: flex;

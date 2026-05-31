@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AnimatedNumber, ProgressRing, Screen, SectionCard, SectionHeader, Sheet, StatTile } from '@/components/ui';
+import { AnimatedNumber, ProgressRing, Screen, SectionCard, SectionHeader, Sheet, Skeleton, StatTile } from '@/components/ui';
 import { IconBell, IconCalendar, IconList, IconTarget, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
@@ -62,6 +62,7 @@ export function FinanceDashboardPage() {
   const savings = useFinanceStore((s) => s.savings);
   const recurring = useFinanceStore((s) => s.recurring);
   const lists = useFinanceStore((s) => s.lists);
+  const hydrated = useFinanceStore((s) => s.hydrated);
   const [sheet, setSheet] = useState<null | 'monthly' | 'remaining'>(null);
 
   const {
@@ -146,6 +147,31 @@ export function FinanceDashboardPage() {
   const paidPct = totalToPaySum > 0 ? Math.round((paidSum / totalToPaySum) * 100) : 0;
   const sparkMax = Math.max(...months.map((mo) => mo.total), 1);
   const hasForecast = months.some((mo) => mo.total > 0);
+
+  if (!hydrated) {
+    return (
+      <Screen title="Финансы" subtitle="Обзор">
+        <div className="stack">
+          <div className="card hero">
+            <Skeleton width={108} height={108} radius={54} />
+            <div className="hero__main" style={{ display: 'grid', gap: 12 }}>
+              <Skeleton height={18} />
+              <Skeleton height={18} />
+              <Skeleton height={14} width="55%" />
+            </div>
+          </div>
+          <div className="card">
+            <div className="stat-grid">
+              <Skeleton height={52} />
+              <Skeleton height={52} />
+            </div>
+          </div>
+          <Skeleton height={70} radius={18} />
+          <Skeleton height={70} radius={18} />
+        </div>
+      </Screen>
+    );
+  }
 
   return (
     <Screen

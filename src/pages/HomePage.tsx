@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AnimatedNumber, Screen } from '@/components/ui';
+import { AnimatedNumber, Screen, Skeleton } from '@/components/ui';
 import { IconNotes, IconShirt, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
@@ -21,6 +21,7 @@ export function HomePage() {
   const expenses = useFinanceStore((s) => s.expenses);
   const recurring = useFinanceStore((s) => s.recurring);
   const notes = useFinanceStore((s) => s.notes);
+  const hydrated = useFinanceStore((s) => s.hydrated);
 
   const fin = useMemo(() => {
     let monthly = 0;
@@ -52,6 +53,18 @@ export function HomePage() {
     tapLight();
     navigate(path);
   };
+
+  if (!hydrated) {
+    return (
+      <Screen title="Coco" subtitle="Личный помощник">
+        <div className="home-grid">
+          <Skeleton height={132} radius={24} />
+          <Skeleton height={120} radius={24} />
+          <Skeleton height={120} radius={24} />
+        </div>
+      </Screen>
+    );
+  }
 
   return (
     <Screen title="Coco" subtitle="Личный помощник">
