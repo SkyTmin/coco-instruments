@@ -107,7 +107,7 @@ export async function syncReminders(
 /** Ask the server to send a test reminder right now. */
 export async function testReminder(
   rawInitData: string | undefined,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; queued?: boolean; error?: string }> {
   if (!rawInitData) return { ok: false, error: 'no_init_data' };
   try {
     const r = await fetch('/api/reminders/test', {

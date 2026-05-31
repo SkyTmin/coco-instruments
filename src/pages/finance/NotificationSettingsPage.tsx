@@ -21,7 +21,9 @@ export function NotificationSettingsPage() {
     setTesting(false);
     setTestMsg(
       r.ok
-        ? '✅ Отправили тестовое сообщение в чат с ботом'
+        ? r.queued
+          ? '✅ В очереди — придёт в течение ~10 мин (или запустите «Send reminders» в Actions сейчас)'
+          : '✅ Отправили — проверьте чат с ботом'
         : `Не удалось — ${r.error || 'проверьте внутри Telegram'}`,
     );
   };

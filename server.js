@@ -169,7 +169,9 @@ app.post('/api/reminders/sync', (req, res) => {
           fireAt: Number(p.fireAt) || 0,
         }))
       : [],
+    testItems: prev.testItems || [], // preserved across syncs (used by the test button)
     sent: prev.sent || {},
+    claimed: prev.claimed || {},
     updatedAt: Date.now(),
   };
   saveReminders();
@@ -179,11 +181,22 @@ app.post('/api/reminders/sync', (req, res) => {
 app.post('/api/reminders/test', async (req, res) => {
   const user = authReminder(req.body?.initData, res);
   if (!user) return;
-  const r = await sendTelegram(
-    user.id,
-    '🔔 Тест: напоминания о платежах подключены. Так будет приходить уведомление.',
-  );
-  res.json(r);
+  const text = '🔔 Тест: напоминания подключены. Так будет приходить уведомление о платеже.';
+  // Try sending directly from the VPS first (instant if it can reach Telegram).
+  const direct = await sendTelegram(user.id, text);
+  if (direct.ok) {
+    res.json({ ok: true });
+    return;
+  }
+  // Otherwise queue it for the GitHub Actions relay (which can reach Telegram).
+  const uid = String(user.id);
+  const u = reminders[uid] || { chatId: user.id, items: [], testItems: [], sent: {}, claimed: {} };
+  u.chatId = user.id;
+  u.testItems = (u.testItems || []).slice(-4);
+  u.testItems.push({ key: `test:${Date.now()}`, text, fireAt: Date.now() - 1000 });
+  reminders[uid] = u;
+  saveReminders();
+  res.json({ ok: true, queued: true, directError: direct.error });
 });
 
 // Diagnostics (no secrets): shows whether the bot token reached the server and
@@ -246,15 +259,16 @@ function dueItemsFor(now, claim) {
   const out = [];
   for (const uid of Object.keys(reminders)) {
     const u = reminders[uid];
-    if (!u || !Array.isArray(u.items)) continue;
+    if (!u) continue;
     u.sent = u.sent || {};
     u.claimed = u.claimed || {};
-    for (const p of u.items) {
+    const all = [...(u.items || []), ...(u.testItems || [])];
+    for (const p of all) {
       if (!p.fireAt || p.fireAt > now || now - p.fireAt > 2 * 86400000) continue;
       if (u.sent[p.key]) continue;
       if (u.claimed[p.key] && now - u.claimed[p.key] < 10 * 60000) continue;
       if (claim) u.claimed[p.key] = now;
-      out.push({ uid, chatId: u.chatId, key: p.key, text: buildText(p) });
+      out.push({ uid, chatId: u.chatId, key: p.key, text: p.text || buildText(p) });
     }
   }
   return out;
