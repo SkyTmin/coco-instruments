@@ -1,9 +1,9 @@
+import { useEffect, useRef, useState } from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
 import type { ExpenseType } from '@/types';
 import { formatRUB } from '@/lib/format';
-import { IconBack, IconChevron, IconPlus } from '@/components/icons';
-import { selectionChanged, tapLight } from '@/lib/haptics';
+import { IconChevron, IconPlus } from '@/components/icons';
+import { selectionChanged } from '@/lib/haptics';
 
 export const LEAD_OPTIONS: { v: number; label: string }[] = [
   { v: 0, label: 'в день' },
@@ -39,24 +39,10 @@ export function Screen({
   title,
   subtitle,
   action,
-  back = true,
   children,
-}: PropsWithChildren<{ title?: string; subtitle?: string; action?: ReactNode; back?: boolean }>) {
-  const navigate = useNavigate();
+}: PropsWithChildren<{ title?: string; subtitle?: string; action?: ReactNode }>) {
   return (
     <div className="screen">
-      {back && (
-        <button
-          className="back-bar"
-          onClick={() => {
-            tapLight();
-            navigate(-1);
-          }}
-        >
-          <IconBack size={18} />
-          Назад
-        </button>
-      )}
       {(title || action) && (
         <div className="screen__head">
           <div className="row">
@@ -71,6 +57,52 @@ export function Screen({
       {children}
     </div>
   );
+}
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Counts a number up to its target on mount (and re-animates on change) —
+ * the fintech "ticker" feel. Falls back to the final value when the user
+ * prefers reduced motion.
+ */
+export function AnimatedNumber({
+  value,
+  format = (n) => String(Math.round(n)),
+  duration = 700,
+}: {
+  value: number;
+  format?: (n: number) => string;
+  duration?: number;
+}) {
+  const [display, setDisplay] = useState(prefersReducedMotion() ? value : 0);
+  const fromRef = useRef(prefersReducedMotion() ? value : 0);
+  const rafRef = useRef(0);
+
+  useEffect(() => {
+    if (prefersReducedMotion()) {
+      setDisplay(value);
+      fromRef.current = value;
+      return;
+    }
+    const from = fromRef.current;
+    const to = value;
+    if (from === to) return;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      setDisplay(from + (to - from) * eased);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+      else fromRef.current = to;
+    };
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [value, duration]);
+
+  return <>{format(display)}</>;
 }
 
 export function Money({ value, precise }: { value: number; precise?: boolean }) {

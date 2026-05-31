@@ -100,25 +100,6 @@ select {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.back-bar {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  cursor: pointer;
-  background: var(--surface);
-  color: var(--text);
-  font-weight: 600;
-  font-size: 15px;
-  padding: 8px 14px 8px 10px;
-  border-radius: 999px;
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 14px;
-  transition: transform 0.1s ease;
-}
-.back-bar:active {
-  transform: scale(0.96);
-}
 
 .screen__head {
   margin: 4px 2px 18px;
@@ -597,6 +578,15 @@ input[type='datetime-local'] {
   height: 100%; border-radius: 999px;
   background: linear-gradient(90deg, var(--accent-grad-1), var(--accent-grad-2));
   transition: width 0.5s cubic-bezier(0.3, 0.8, 0.3, 1);
+  transform-origin: left center;
+  animation: grow-x 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress__fill { animation: none; }
 }
 .progress--lg { height: 12px; }
 
@@ -1506,5 +1496,106 @@ input[type='datetime-local'] {
   }
   .notes-graph--interactive {
     min-height: 380px;
+  }
+}
+
+/* ---- Breakdown sheets: clean, overflow-safe rows --------------------------- */
+.sheet-list {
+  max-height: 62vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 0 -4px;
+}
+.flow-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 10px;
+  transition: background 0.12s ease;
+}
+.flow-row:last-child { border-bottom: 0; }
+.flow-row:active { background: var(--surface-2); }
+.flow-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.flow-row__amount {
+  flex: none;
+  font-weight: 800;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ---- "Платежи в месяц" share bars ----------------------------------------- */
+.bar-caption {
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+.bar-row {
+  cursor: pointer;
+}
+.bar-row__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.bar-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.bar-row__val {
+  flex: none;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.bar-row__val i {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---- Confetti (milestone celebration) ------------------------------------- */
+.confetti-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 200;
+  overflow: hidden;
+}
+.confetti-root i {
+  position: absolute;
+  top: -8%;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0.96;
+  transform: rotate(var(--r)) scale(var(--s));
+  animation: confetti-fall var(--d) cubic-bezier(0.4, 0.2, 0.6, 1) forwards;
+}
+@keyframes confetti-fall {
+  to {
+    transform: translate(calc(var(--x) * 60px), 116vh) rotate(calc(var(--r) + 540deg)) scale(var(--s));
+    opacity: 0;
   }
 }

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ConfirmDialog, ProgressBar, Screen, Sheet, StatTile } from '@/components/ui';
+import { AnimatedNumber, ConfirmDialog, ProgressBar, Screen, Sheet, StatTile } from '@/components/ui';
 import { IconPencil, IconTrash } from '@/components/icons';
 import { SavingsDonut } from '@/charts';
 import { useFinanceStore } from '@/store';
 import { computeSavings } from '@/lib/finance-calc';
 import { formatDate, formatRUB } from '@/lib/format';
+import { burstConfetti } from '@/lib/confetti';
 import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
 
 function num(s: string): number {
@@ -69,14 +70,16 @@ export function SavingsDetailPage() {
         <div className="chart-card">
           <SavingsDonut current={goal.currentAmount} target={goal.targetAmount} />
           <div className="center" style={{ marginTop: -4, marginBottom: 6 }}>
-            <span style={{ fontSize: 26, fontWeight: 800 }}>{s.progressPercent}%</span>
+            <span style={{ fontSize: 26, fontWeight: 800 }}>
+              <AnimatedNumber value={s.progressPercent} format={(n) => `${Math.round(n)}%`} />
+            </span>
           </div>
         </div>
 
         <div className="card">
           <ProgressBar percent={s.progressPercent} large />
           <div className="stat-grid" style={{ marginTop: 14 }}>
-            <StatTile label="Накоплено" value={formatRUB(goal.currentAmount)} />
+            <StatTile label="Накоплено" value={<AnimatedNumber value={goal.currentAmount} format={formatRUB} />} />
             <StatTile label="Осталось" value={formatRUB(s.remaining)} />
             <StatTile label="Цель" value={formatRUB(goal.targetAmount)} />
             {goal.deadline && <StatTile label="Срок" value={formatDate(goal.deadline, true)} />}
@@ -123,9 +126,14 @@ export function SavingsDetailPage() {
           current={goal.currentAmount}
           onClose={() => setTopUp(false)}
           onSave={(newCurrent) => {
+            const justReached =
+              goal.targetAmount > 0 &&
+              goal.currentAmount < goal.targetAmount &&
+              newCurrent >= goal.targetAmount;
             updateSaving(id, { currentAmount: newCurrent });
             notifySuccess();
             setTopUp(false);
+            if (justReached) burstConfetti();
           }}
         />
       )}

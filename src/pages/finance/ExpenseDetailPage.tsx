@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import {
+  AnimatedNumber,
   ConfirmDialog,
   ProgressBar,
   Screen,
@@ -15,6 +16,7 @@ import { computeObligation } from '@/lib/finance-calc';
 import type { Payment } from '@/types';
 import { todayISO } from '@/lib/date';
 import { formatDate, formatRUB, monthsLabel } from '@/lib/format';
+import { burstConfetti } from '@/lib/confetti';
 import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
 
 function num(s: string): number {
@@ -118,8 +120,8 @@ export function ExpenseDetailPage() {
           </div>
           <ProgressBar percent={c.progressPercent} large />
           <div className="stat-grid" style={{ marginTop: 14 }}>
-            <StatTile label="Осталось" value={formatRUB(c.remaining)} />
-            <StatTile label="Выплачено" value={formatRUB(c.paidSoFar)} />
+            <StatTile label="Осталось" value={<AnimatedNumber value={c.remaining} format={formatRUB} />} />
+            <StatTile label="Выплачено" value={<AnimatedNumber value={c.paidSoFar} format={formatRUB} />} />
             <StatTile label="Итого к выплате" value={formatRUB(c.totalToPay)} />
             <StatTile label="Переплата" value={formatRUB(c.totalOverpayment)} />
           </div>
@@ -254,8 +256,12 @@ export function ExpenseDetailPage() {
           payment={sheet.mode === 'edit' ? sheet.payment : undefined}
           onClose={() => setSheet(null)}
           onSave={(data) => {
-            if (sheet.mode === 'edit') updatePayment(id, sheet.payment.id, data);
-            else addPayment(id, data);
+            if (sheet.mode === 'edit') {
+              updatePayment(id, sheet.payment.id, data);
+            } else {
+              addPayment(id, data);
+              if (!data.isPreliminary && c.remaining > 0 && data.amount >= c.remaining) burstConfetti();
+            }
             notifySuccess();
             setSheet(null);
           }}

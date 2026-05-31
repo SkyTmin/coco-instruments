@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Screen, SectionCard, SectionHeader, Sheet, StatTile } from '@/components/ui';
+import { AnimatedNumber, Screen, SectionCard, SectionHeader, Sheet, StatTile } from '@/components/ui';
 import { IconBell, IconCalendar, IconList, IconTarget, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { computeObligation, computeRecurring } from '@/lib/finance-calc';
@@ -42,12 +42,12 @@ function listsWord(n: number): string {
 /** Tappable name → amount rows used inside the stat-tile sheets. */
 function FlowList({ items, onPick }: { items: FlowItem[]; onPick: (it: FlowItem) => void }) {
   return (
-    <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+    <div className="sheet-list">
       {items.map((it) => (
-        <div key={it.kind + it.id} className="pay-row pay-row--tap" onClick={() => onPick(it)} role="button">
-          <span style={{ flex: 1 }}>{it.name}</span>
-          <span style={{ fontWeight: 700 }}>{formatRUB(it.value)}</span>
-        </div>
+        <button key={it.kind + it.id} className="flow-row" onClick={() => onPick(it)}>
+          <span className="flow-row__name">{it.name}</span>
+          <span className="flow-row__amount">{formatRUB(it.value)}</span>
+        </button>
       ))}
     </div>
   );
@@ -98,7 +98,7 @@ export function FinanceDashboardPage() {
   };
   const openItem = (it: { kind: Kind; id: string }) => go(pathFor(it.kind, it.id));
 
-  const max = Math.max(...breakdown.map((b) => b.value), 1);
+  const barsTotal = Math.max(breakdown.reduce((sum, b) => sum + b.value, 0), 1);
 
   return (
     <Screen
@@ -120,12 +120,12 @@ export function FinanceDashboardPage() {
           <div className="stat-grid">
             <StatTile
               label="Платежей в месяц"
-              value={formatRUB(monthlyTotal)}
+              value={<AnimatedNumber value={monthlyTotal} format={formatRUB} />}
               onClick={breakdown.length ? () => { tapLight(); setSheet('monthly'); } : undefined}
             />
             <StatTile
               label="Осталось выплатить"
-              value={formatRUB(totalRemaining)}
+              value={<AnimatedNumber value={totalRemaining} format={formatRUB} />}
               onClick={remainingItems.length ? () => { tapLight(); setSheet('remaining'); } : undefined}
             />
           </div>
@@ -184,20 +184,24 @@ export function FinanceDashboardPage() {
           <>
             <div className="section-label">Платежи в месяц</div>
             <div className="card">
+              <p className="muted bar-caption">Доля каждого платежа в месячных тратах</p>
               <div className="stack" style={{ gap: 14 }}>
-                {breakdown.map((it) => (
-                  <div key={it.kind + it.id} onClick={() => openItem(it)} role="button" style={{ cursor: 'pointer' }}>
-                    <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
-                      <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {it.name}
-                      </span>
-                      <span style={{ fontWeight: 700, flex: 'none' }}>{formatRUB(it.value)}</span>
+                {breakdown.map((it) => {
+                  const pct = Math.round((it.value / barsTotal) * 100);
+                  return (
+                    <div key={it.kind + it.id} className="bar-row" onClick={() => openItem(it)} role="button">
+                      <div className="bar-row__head">
+                        <span className="bar-row__name">{it.name}</span>
+                        <span className="bar-row__val">
+                          {formatRUB(it.value)} <i>· {pct}%</i>
+                        </span>
+                      </div>
+                      <div className="progress">
+                        <div className="progress__fill" style={{ width: `${Math.max(pct, 2)}%` }} />
+                      </div>
                     </div>
-                    <div className="progress">
-                      <div className="progress__fill" style={{ width: `${(it.value / max) * 100}%` }} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </>
