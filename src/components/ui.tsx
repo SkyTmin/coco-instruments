@@ -113,6 +113,59 @@ export function Money({ value, precise }: { value: number; precise?: boolean }) 
   return <>{formatRUB(value, precise)}</>;
 }
 
+/** An SVG progress ring whose arc animates in on mount. */
+export function ProgressRing({
+  percent,
+  size = 108,
+  stroke = 11,
+  children,
+}: PropsWithChildren<{ percent: number; size?: number; stroke?: number }>) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, percent));
+  const reduce = prefersReducedMotion();
+  const [shown, setShown] = useState(reduce ? clamped : 0);
+
+  useEffect(() => {
+    if (reduce) {
+      setShown(clamped);
+      return;
+    }
+    const id = requestAnimationFrame(() => setShown(clamped));
+    return () => cancelAnimationFrame(id);
+  }, [clamped, reduce]);
+
+  const center = size / 2;
+  const offset = circ * (1 - shown / 100);
+  return (
+    <div className="ring" style={{ width: size, height: size }}>
+      <svg width={size} height={size}>
+        <defs>
+          <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="var(--accent-grad-1)" />
+            <stop offset="100%" stopColor="var(--accent-grad-2)" />
+          </linearGradient>
+        </defs>
+        <circle className="ring__track" cx={center} cy={center} r={r} strokeWidth={stroke} fill="none" />
+        <circle
+          className="ring__fill"
+          cx={center}
+          cy={center}
+          r={r}
+          strokeWidth={stroke}
+          fill="none"
+          stroke="url(#ringGrad)"
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          transform={`rotate(-90 ${center} ${center})`}
+        />
+      </svg>
+      <div className="ring__center">{children}</div>
+    </div>
+  );
+}
+
 export function ProgressBar({ percent, large }: { percent: number; large?: boolean }) {
   return (
     <div className={`progress${large ? ' progress--lg' : ''}`}>

@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { AnimatedNumber, Screen } from '@/components/ui';
 import { IconNotes, IconShirt, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
-import { computeObligation, computeRecurring } from '@/lib/finance-calc';
-import { formatRUB } from '@/lib/format';
+import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
+import { toISO, todayISO } from '@/lib/date';
+import { formatRUB, relativeDay } from '@/lib/format';
 import { tapLight } from '@/lib/haptics';
 
 function notesWord(n: number): string {
@@ -41,6 +42,12 @@ export function HomePage() {
     };
   }, [expenses, recurring]);
 
+  const nearest = useMemo(() => {
+    const base = new Date();
+    const end = toISO(new Date(base.getFullYear(), base.getMonth() + 3, 0));
+    return collectPayments(todayISO(), end, expenses, recurring)[0];
+  }, [expenses, recurring]);
+
   const go = (path: string) => {
     tapLight();
     navigate(path);
@@ -73,6 +80,12 @@ export function HomePage() {
               </div>
             ) : (
               <div className="home-card__desc">Расходы, кредиты, рассрочки и накопления</div>
+            )}
+            {fin.has && nearest && (
+              <div className="hc-next">
+                <span className="hc-next__dot" />
+                Ближайший: <b>{nearest.name}</b> · {relativeDay(nearest.date)}
+              </div>
             )}
           </div>
         </div>

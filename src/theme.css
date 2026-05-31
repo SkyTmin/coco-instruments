@@ -1748,3 +1748,125 @@ input[type='datetime-local'] {
     opacity: 0;
   }
 }
+
+/* ---- Finance hero ring ----------------------------------------------------- */
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.ring {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.ring__track { stroke: var(--hairline); }
+.ring__fill { transition: stroke-dashoffset 0.9s cubic-bezier(0.3, 0.8, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .ring__fill { transition: none; }
+}
+.ring__center { position: absolute; text-align: center; line-height: 1.1; }
+.hero__pct { font-size: 24px; font-weight: 800; color: var(--text); }
+.hero__pct small { display: block; font-size: 10px; font-weight: 700; color: var(--muted); margin-top: 1px; }
+.hero__main { flex: 1; min-width: 0; }
+.hero__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+}
+.hero__row span { color: var(--muted); font-size: 14px; }
+.hero__row b { font-weight: 800; font-size: 16px; }
+.hero__row--muted { border-top: 1px solid var(--hairline); margin-top: 4px; padding-top: 9px; }
+.hero__row--muted b { color: var(--muted); font-weight: 700; }
+
+/* ---- 6-month forecast sparkline ------------------------------------------- */
+.spark-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 124px;
+}
+.spark__col {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.spark__val {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  transform: rotate(-32deg);
+  transform-origin: center;
+  height: 12px;
+}
+.spark__track {
+  flex: 1;
+  width: 100%;
+  max-width: 30px;
+  display: flex;
+  align-items: flex-end;
+  background: var(--surface-2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.spark__bar {
+  width: 100%;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--accent-grad-2), var(--accent-grad-1));
+  transform-origin: bottom;
+  animation: grow-y 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes grow-y {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spark__bar { animation: none; }
+}
+.spark__col:active .spark__bar { filter: brightness(1.08); }
+.spark__lbl { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: capitalize; }
+
+/* Nearest payment on the Финансы home card */
+.hc-next {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  font-size: 13px;
+  opacity: 0.95;
+}
+.hc-next b { font-weight: 800; }
+.hc-next__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  flex: none;
+  animation: hc-pulse 1.8s ease-in-out infinite;
+}
+@keyframes hc-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hc-next__dot { animation: none; }
+}

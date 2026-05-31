@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AnimatedNumber, Screen, SectionCard, SectionHeader, Sheet, StatTile } from '@/components/ui';
+import { AnimatedNumber, ProgressRing, Screen, SectionCard, SectionHeader, Sheet, StatTile } from '@/components/ui';
 import { IconBell, IconCalendar, IconList, IconTarget, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
-import { computeObligation, computeRecurring } from '@/lib/finance-calc';
+import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
+import { parseISO, toISO, todayISO } from '@/lib/date';
 import { formatDate, formatRUB } from '@/lib/format';
 import { tapLight } from '@/lib/haptics';
+
+const monthShortFmt = new Intl.DateTimeFormat('ru-RU', { month: 'short' });
 
 type Kind = 'obligation' | 'recurring';
 type Tag = 'single' | 'credit' | 'installment' | 'recurring';
@@ -61,10 +64,22 @@ export function FinanceDashboardPage() {
   const lists = useFinanceStore((s) => s.lists);
   const [sheet, setSheet] = useState<null | 'monthly' | 'remaining'>(null);
 
-  const { monthlyTotal, totalRemaining, activeCount, upcoming, breakdown, remainingItems } = useMemo(() => {
+  const {
+    monthlyTotal,
+    totalRemaining,
+    paidSum,
+    totalToPaySum,
+    activeCount,
+    upcoming,
+    breakdown,
+    remainingItems,
+    months,
+  } = useMemo(() => {
     const active = expenses.filter((o) => o.status !== 'closed');
     let monthlyTotal = 0;
     let totalRemaining = 0;
+    let paidSum = 0;
+    let totalToPaySum = 0;
     const upcoming: UpItem[] = [];
     const breakdown: FlowItem[] = [];
     const remainingItems: FlowItem[] = [];
@@ -72,6 +87,8 @@ export function FinanceDashboardPage() {
       const c = computeObligation(o);
       monthlyTotal += c.monthlyPayment;
       totalRemaining += c.remaining;
+      paidSum += c.paidSoFar;
+      totalToPaySum += c.totalToPay;
       if (c.monthlyPayment > 0)
         breakdown.push({ kind: 'obligation', id: o.id, name: o.name, value: Math.round(c.monthlyPayment) });
       if (c.remaining > 0)
@@ -89,7 +106,34 @@ export function FinanceDashboardPage() {
     upcoming.sort((a, b) => a.date.localeCompare(b.date));
     breakdown.sort((a, b) => b.value - a.value);
     remainingItems.sort((a, b) => b.value - a.value);
-    return { monthlyTotal, totalRemaining, activeCount: active.length, upcoming, breakdown, remainingItems };
+
+    // Next-6-months payment forecast (obligations + recurring).
+    const base = new Date();
+    const today = todayISO();
+    const horizonEnd = toISO(new Date(base.getFullYear(), base.getMonth() + 6, 0));
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(base.getFullYear(), base.getMonth() + i, 1);
+      const label = monthShortFmt.format(d).replace('.', '');
+      return { y: d.getFullYear(), m: d.getMonth(), label, total: 0 };
+    });
+    for (const p of collectPayments(today, horizonEnd, expenses, recurring)) {
+      const dt = parseISO(p.date);
+      if (!dt) continue;
+      const idx = (dt.getFullYear() - base.getFullYear()) * 12 + (dt.getMonth() - base.getMonth());
+      if (idx >= 0 && idx < 6) months[idx].total += p.amount;
+    }
+
+    return {
+      monthlyTotal,
+      totalRemaining,
+      paidSum,
+      totalToPaySum,
+      activeCount: active.length,
+      upcoming,
+      breakdown,
+      remainingItems,
+      months,
+    };
   }, [expenses, recurring]);
 
   const go = (path: string) => {
@@ -99,6 +143,9 @@ export function FinanceDashboardPage() {
   const openItem = (it: { kind: Kind; id: string }) => go(pathFor(it.kind, it.id));
 
   const barsTotal = Math.max(breakdown.reduce((sum, b) => sum + b.value, 0), 1);
+  const paidPct = totalToPaySum > 0 ? Math.round((paidSum / totalToPaySum) * 100) : 0;
+  const sparkMax = Math.max(...months.map((mo) => mo.total), 1);
+  const hasForecast = months.some((mo) => mo.total > 0);
 
   return (
     <Screen
@@ -116,6 +163,31 @@ export function FinanceDashboardPage() {
       }
     >
       <div className="stack">
+        {totalToPaySum > 0 && (
+          <div className="card hero">
+            <ProgressRing percent={paidPct}>
+              <div className="hero__pct">
+                <AnimatedNumber value={paidPct} format={(n) => `${Math.round(n)}%`} />
+                <small>выплачено</small>
+              </div>
+            </ProgressRing>
+            <div className="hero__main">
+              <div className="hero__row">
+                <span>Выплачено</span>
+                <b className="amount-pos"><AnimatedNumber value={Math.round(paidSum)} format={formatRUB} /></b>
+              </div>
+              <div className="hero__row">
+                <span>Осталось</span>
+                <b><AnimatedNumber value={Math.round(totalRemaining)} format={formatRUB} /></b>
+              </div>
+              <div className="hero__row hero__row--muted">
+                <span>Всего к выплате</span>
+                <b>{formatRUB(Math.round(totalToPaySum))}</b>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="card">
           <div className="stat-grid">
             <StatTile
@@ -130,6 +202,33 @@ export function FinanceDashboardPage() {
             />
           </div>
         </div>
+
+        {hasForecast && (
+          <div className="card">
+            <div className="spark-head">
+              <span className="section-label" style={{ margin: 0 }}>Платежи вперёд</span>
+              <span className="muted" style={{ fontSize: 12 }}>6 месяцев</span>
+            </div>
+            <div className="spark">
+              {months.map((mo) => (
+                <button
+                  key={`${mo.y}-${mo.m}`}
+                  className="spark__col"
+                  onClick={() => go(`/finance/calendar?ym=${mo.y}-${String(mo.m + 1).padStart(2, '0')}`)}
+                >
+                  <span className="spark__val">{mo.total > 0 ? formatRUB(Math.round(mo.total)) : ''}</span>
+                  <span className="spark__track">
+                    <span
+                      className="spark__bar"
+                      style={{ height: `${Math.max((mo.total / sparkMax) * 100, mo.total > 0 ? 6 : 0)}%` }}
+                    />
+                  </span>
+                  <span className="spark__lbl">{mo.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="section-label">Разделы</div>
         <SectionCard

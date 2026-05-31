@@ -48,8 +48,17 @@ export function PaymentsCalendarPage() {
 
   const today = todayISO();
   const now = new Date();
-  const [cursor, setCursor] = useState(() => ({ y: now.getFullYear(), m: now.getMonth() }));
-  const [selected, setSelected] = useState<string>(today);
+  const ym = params.get('ym');
+  const [cursor, setCursor] = useState(() => {
+    if (ym && /^\d{4}-\d{2}$/.test(ym)) {
+      const [y, m] = ym.split('-').map(Number);
+      return { y, m: m - 1 };
+    }
+    return { y: now.getFullYear(), m: now.getMonth() };
+  });
+  const [selected, setSelected] = useState<string>(
+    ym && /^\d{4}-\d{2}$/.test(ym) ? `${ym}-01` : today,
+  );
   const [anim, setAnim] = useState<'next' | 'prev' | null>(null);
   const [drag, setDrag] = useState(0);
 
