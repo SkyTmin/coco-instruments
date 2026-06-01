@@ -268,7 +268,9 @@ export function NotesGraphPage() {
       moved: false,
       startedAt: performance.now(),
     };
-    (event.currentTarget as SVGGElement).setPointerCapture(event.pointerId);
+    // Capture on the <svg> root (where move/up handlers live), not the <g>:
+    // iOS WebKit drops events captured on SVG child elements.
+    svgRef.current?.setPointerCapture(event.pointerId);
     selectionChanged();
   };
 

@@ -972,6 +972,11 @@ input[type='datetime-local'] {
   overflow: hidden;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  /* iOS WebView ignores touch-action on <svg>, so own the gesture on the DIV:
+     this is what lets you drag nodes / pan with a finger instead of scrolling. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .notes-graph--interactive {
