@@ -141,7 +141,9 @@ export function NotesGraphPage() {
           const dy = target.y - source.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
           const preferred = link.kind === 'tag' ? 84 : 116;
-          const stiffness = link.kind === 'tag' ? 0.008 : 0.018;
+          let stiffness = link.kind === 'tag' ? 0.03 : 0.055;
+          // Direct neighbours of the grabbed node trail it more tightly.
+          if (draggingId && (link.source === draggingId || link.target === draggingId)) stiffness *= 1.7;
           const force = (dist - preferred) * stiffness;
           const fx = (dx / dist) * force;
           const fy = (dy / dist) * force;
@@ -153,6 +155,10 @@ export function NotesGraphPage() {
           tv.y -= fy;
         }
 
+        // While dragging, relax the centering pull so the whole connected
+        // cluster can follow your hand instead of being yanked to the middle.
+        const centerPull = draggingId ? 0.0005 : 0.0018;
+        const vmax = 28;
         for (const point of next) {
           const velocity = velocities.current.get(point.id)!;
           if (point.id === draggingId) {
@@ -160,10 +166,12 @@ export function NotesGraphPage() {
             velocity.y = 0;
             continue;
           }
-          velocity.x += (GRAPH_VIEW_BOX.width / 2 - point.x) * 0.0018;
-          velocity.y += (GRAPH_VIEW_BOX.height / 2 - point.y) * 0.0018;
-          velocity.x *= 0.86;
-          velocity.y *= 0.86;
+          velocity.x += (GRAPH_VIEW_BOX.width / 2 - point.x) * centerPull;
+          velocity.y += (GRAPH_VIEW_BOX.height / 2 - point.y) * centerPull;
+          velocity.x *= 0.84;
+          velocity.y *= 0.84;
+          velocity.x = Math.max(-vmax, Math.min(vmax, velocity.x));
+          velocity.y = Math.max(-vmax, Math.min(vmax, velocity.y));
           point.x = Math.max(32, Math.min(GRAPH_VIEW_BOX.width - 32, point.x + velocity.x));
           point.y = Math.max(34, Math.min(GRAPH_VIEW_BOX.height - 34, point.y + velocity.y));
         }
@@ -410,10 +418,12 @@ export function NotesGraphPage() {
                     const source = pointById.get(link.source);
                     const target = pointById.get(link.target);
                     if (!source || !target) return null;
+                    const highlightId = draggingId ?? activeId;
+                    const hot = !!highlightId && (link.source === highlightId || link.target === highlightId);
                     return (
                       <line
                         key={link.id}
-                        className={`notes-graph__link notes-graph__link--${link.kind}`}
+                        className={`notes-graph__link notes-graph__link--${link.kind}${hot ? ' is-active' : ''}`}
                         x1={source.x}
                         y1={source.y}
                         x2={target.x}

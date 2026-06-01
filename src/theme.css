@@ -989,11 +989,22 @@ input[type='datetime-local'] {
 .notes-graph__link {
   stroke: rgba(123, 75, 42, 0.26);
   stroke-width: 2;
+  transition: stroke 0.18s ease, stroke-width 0.18s ease, opacity 0.18s ease;
 }
 
 .notes-graph__link--tag {
   stroke-dasharray: 5 6;
   stroke: rgba(46, 158, 107, 0.42);
+}
+
+/* Links of the grabbed / active node light up. */
+.notes-graph__link.is-active {
+  stroke: var(--accent);
+  stroke-width: 3;
+  opacity: 1;
+}
+.notes-graph__link--tag.is-active {
+  stroke: var(--pos);
 }
 
 .notes-graph__node {
