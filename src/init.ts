@@ -4,7 +4,6 @@ import {
   init as initSDK,
   miniApp,
   setDebug,
-  swipeBehavior,
   themeParams,
   viewport,
 } from '@tma.js/sdk-react';
@@ -24,19 +23,6 @@ export async function init(debug: boolean): Promise<void> {
 
   backButton.mount.ifAvailable();
   initData.restore();
-
-  // Stop Telegram from minimizing / dropping out of fullscreen when our own
-  // horizontal swipes (calendar paging, swipe-to-delete) carry a slight
-  // vertical component. This disables only Telegram's native swipe-down
-  // gesture — our in-app swipes and normal vertical scrolling keep working.
-  try {
-    if (swipeBehavior.mount.isAvailable()) {
-      swipeBehavior.mount();
-      if (swipeBehavior.disableVertical.isAvailable()) swipeBehavior.disableVertical();
-    }
-  } catch {
-    /* swipe behavior not supported on this client */
-  }
 
   if (miniApp.mount.isAvailable()) {
     themeParams.mount();

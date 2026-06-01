@@ -8,7 +8,7 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { AppRoot } from '@telegram-apps/telegram-ui';
-import { backButton, miniApp, useLaunchParams, useRawInitData, useSignal } from '@tma.js/sdk-react';
+import { backButton, miniApp, swipeBehavior, useLaunchParams, useRawInitData, useSignal } from '@tma.js/sdk-react';
 
 import { useFinanceStore } from '@/store';
 import { syncReminders } from '@/lib/reminders';
@@ -75,6 +75,21 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
   }, [isDark]);
+
+  // Stop Telegram minimizing the app when our horizontal swipes (calendar
+  // paging, swipe-to-delete) carry a slight vertical component. Done in an
+  // effect (after first paint) so it can never block rendering. Disables only
+  // Telegram's native swipe-down gesture; in-app swipes + scroll are untouched.
+  useEffect(() => {
+    try {
+      if (swipeBehavior.mount.isAvailable()) {
+        swipeBehavior.mount();
+        if (swipeBehavior.disableVertical.isAvailable()) swipeBehavior.disableVertical();
+      }
+    } catch {
+      /* swipe behavior not supported on this client */
+    }
+  }, []);
 
   useEffect(() => {
     void hydrate();
