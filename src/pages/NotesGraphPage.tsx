@@ -52,7 +52,6 @@ export function NotesGraphPage() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(1);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [panning, setPanning] = useState<null | { x: number; y: number; panX: number; panY: number }>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const velocities = useRef(new Map<string, Velocity>());
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -63,6 +62,11 @@ export function NotesGraphPage() {
   const pinch = useRef<{ dist: number; mx: number; my: number } | null>(null);
   const scaleRef = useRef(1);
   const panRef = useRef({ x: 0, y: 0 });
+  // Gestures are driven by window-level listeners (SVG pointer capture is
+  // unreliable on iOS), so the live gesture state lives in refs.
+  const draggingIdRef = useRef<string | null>(null);
+  const panningRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const pointByIdRef = useRef(new Map<string, NoteGraphPoint>());
 
   useEffect(() => {
     scaleRef.current = scale;
@@ -99,6 +103,7 @@ export function NotesGraphPage() {
   }, [activeId, visibleGraph]);
 
   const pointById = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
+  pointByIdRef.current = pointById;
   const activeNote = notes.find((note) => note.id === activeId);
 
   useEffect(() => {
@@ -183,18 +188,19 @@ export function NotesGraphPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [draggingId, visibleGraph.links]);
 
-  // Screen pixels → graph coordinates (accounts for pan and zoom).
+  // Screen pixels → graph coordinates (accounts for pan and zoom; refs so the
+  // window-level gesture handlers always read the latest transform).
   const toGraphPoint = (clientX: number, clientY: number) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
     const sx = ((clientX - rect.left) / rect.width) * GRAPH_VIEW_BOX.width;
     const sy = ((clientY - rect.top) / rect.height) * GRAPH_VIEW_BOX.height;
-    return { x: (sx - pan.x) / scale, y: (sy - pan.y) / scale };
+    return { x: (sx - panRef.current.x) / scaleRef.current, y: (sy - panRef.current.y) / scaleRef.current };
   };
 
   // Zoom around a screen point, or the stage centre when none is given.
   const zoomBy = (factor: number, atClientX?: number, atClientY?: number) => {
-    const next = clampScale(scale * factor);
+    const next = clampScale(scaleRef.current * factor);
     const rect = svgRef.current?.getBoundingClientRect();
     let sx = GRAPH_VIEW_BOX.width / 2;
     let sy = GRAPH_VIEW_BOX.height / 2;
@@ -202,9 +208,12 @@ export function NotesGraphPage() {
       sx = ((atClientX - rect.left) / rect.width) * GRAPH_VIEW_BOX.width;
       sy = ((atClientY - rect.top) / rect.height) * GRAPH_VIEW_BOX.height;
     }
-    const gx = (sx - pan.x) / scale;
-    const gy = (sy - pan.y) / scale;
-    setPan({ x: sx - next * gx, y: sy - next * gy });
+    const gx = (sx - panRef.current.x) / scaleRef.current;
+    const gy = (sy - panRef.current.y) / scaleRef.current;
+    const nextPan = { x: sx - next * gx, y: sy - next * gy };
+    panRef.current = nextPan;
+    scaleRef.current = next;
+    setPan(nextPan);
     setScale(next);
   };
 
@@ -215,11 +224,13 @@ export function NotesGraphPage() {
 
   const resetView = () => {
     selectionChanged();
+    panRef.current = { x: 0, y: 0 };
+    scaleRef.current = 1;
     setPan({ x: 0, y: 0 });
     setScale(1);
   };
 
-  // ---- pinch-zoom -----------------------------------------------------------
+  // ---- gestures (pointerdown starts them; window listeners drive them) ------
   const twoPointers = () => {
     const it = pointers.current.values();
     const a = it.next().value as { x: number; y: number } | undefined;
@@ -236,17 +247,17 @@ export function NotesGraphPage() {
       my: (tp.a.y + tp.b.y) / 2,
     };
     pointerSession.current = null;
+    draggingIdRef.current = null;
     setDraggingId(null);
-    setPanning(null);
+    panningRef.current = null;
     return true;
   };
 
   const backgroundPointerDown = (event: PointerEvent<SVGSVGElement>) => {
     event.preventDefault();
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    svgRef.current?.setPointerCapture(event.pointerId);
     if (maybeStartPinch()) return;
-    setPanning({ x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y });
+    panningRef.current = { x: event.clientX, y: event.clientY, panX: panRef.current.x, panY: panRef.current.y };
   };
 
   const beginNodeDrag = (event: PointerEvent<SVGGElement>, id: string) => {
@@ -257,6 +268,7 @@ export function NotesGraphPage() {
     const point = pointById.get(id);
     if (!point) return;
     const cursor = toGraphPoint(event.clientX, event.clientY);
+    draggingIdRef.current = id;
     setDraggingId(id);
     setActiveId(id.startsWith('missing:') || id.startsWith('tag:') ? activeIdRef.current : id);
     dragOffset.current = { x: point.x - cursor.x, y: point.y - cursor.y };
@@ -268,80 +280,101 @@ export function NotesGraphPage() {
       moved: false,
       startedAt: performance.now(),
     };
-    // Capture on the <svg> root (where move/up handlers live), not the <g>:
-    // iOS WebKit drops events captured on SVG child elements.
-    svgRef.current?.setPointerCapture(event.pointerId);
     selectionChanged();
   };
 
-  const movePointer = (event: PointerEvent<SVGSVGElement>) => {
-    event.preventDefault();
-    if (pointers.current.has(event.pointerId)) {
-      pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    }
-    if (pinch.current) {
-      const tp = twoPointers();
-      const rect = svgRef.current?.getBoundingClientRect();
-      if (!tp || !rect) return;
-      const dist = Math.hypot(tp.a.x - tp.b.x, tp.a.y - tp.b.y) || 1;
-      const midX = (tp.a.x + tp.b.x) / 2;
-      const midY = (tp.a.y + tp.b.y) / 2;
-      const sx = ((midX - rect.left) / rect.width) * GRAPH_VIEW_BOX.width;
-      const sy = ((midY - rect.top) / rect.height) * GRAPH_VIEW_BOX.height;
-      const newScale = clampScale((scaleRef.current * dist) / pinch.current.dist);
-      const midDx = ((midX - pinch.current.mx) / rect.width) * GRAPH_VIEW_BOX.width;
-      const midDy = ((midY - pinch.current.my) / rect.height) * GRAPH_VIEW_BOX.height;
-      const gx = (sx - panRef.current.x) / scaleRef.current;
-      const gy = (sy - panRef.current.y) / scaleRef.current;
-      const nextPan = { x: sx - newScale * gx + midDx, y: sy - newScale * gy + midDy };
-      scaleRef.current = newScale;
-      panRef.current = nextPan;
-      setScale(newScale);
-      setPan(nextPan);
-      pinch.current = { dist, mx: midX, my: midY };
-      return;
-    }
-    if (draggingId) {
-      const cursor = toGraphPoint(event.clientX, event.clientY);
-      const session = pointerSession.current;
-      if (session && session.pointerId === event.pointerId) {
-        const dx = event.clientX - session.x;
-        const dy = event.clientY - session.y;
-        if (Math.sqrt(dx * dx + dy * dy) > TAP_MOVE_LIMIT) session.moved = true;
+  // Window-level move/up so touch dragging works (SVG pointer capture is
+  // dropped by iOS WebKit). Attached once; all state is read from refs.
+  useEffect(() => {
+    const onMove = (event: globalThis.PointerEvent) => {
+      if (pointers.current.has(event.pointerId)) {
+        pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
       }
-      setPoints((current) =>
-        current.map((point) =>
-          point.id === draggingId
-            ? { ...point, x: cursor.x + dragOffset.current.x, y: cursor.y + dragOffset.current.y }
-            : point,
-        ),
-      );
-      return;
-    }
-    if (panning) {
-      const rect = svgRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const dx = ((event.clientX - panning.x) / rect.width) * GRAPH_VIEW_BOX.width;
-      const dy = ((event.clientY - panning.y) / rect.height) * GRAPH_VIEW_BOX.height;
-      setPan({ x: panning.panX + dx, y: panning.panY + dy });
-    }
-  };
+      if (pinch.current) {
+        const tp = twoPointers();
+        const rect = svgRef.current?.getBoundingClientRect();
+        if (!tp || !rect) return;
+        event.preventDefault();
+        const dist = Math.hypot(tp.a.x - tp.b.x, tp.a.y - tp.b.y) || 1;
+        const midX = (tp.a.x + tp.b.x) / 2;
+        const midY = (tp.a.y + tp.b.y) / 2;
+        const sx = ((midX - rect.left) / rect.width) * GRAPH_VIEW_BOX.width;
+        const sy = ((midY - rect.top) / rect.height) * GRAPH_VIEW_BOX.height;
+        const newScale = clampScale((scaleRef.current * dist) / pinch.current.dist);
+        const midDx = ((midX - pinch.current.mx) / rect.width) * GRAPH_VIEW_BOX.width;
+        const midDy = ((midY - pinch.current.my) / rect.height) * GRAPH_VIEW_BOX.height;
+        const gx = (sx - panRef.current.x) / scaleRef.current;
+        const gy = (sy - panRef.current.y) / scaleRef.current;
+        const nextPan = { x: sx - newScale * gx + midDx, y: sy - newScale * gy + midDy };
+        scaleRef.current = newScale;
+        panRef.current = nextPan;
+        setScale(newScale);
+        setPan(nextPan);
+        pinch.current = { dist, mx: midX, my: midY };
+        return;
+      }
+      const id = draggingIdRef.current;
+      if (id) {
+        event.preventDefault();
+        const cursor = toGraphPoint(event.clientX, event.clientY);
+        const session = pointerSession.current;
+        if (session && session.pointerId === event.pointerId) {
+          const dx = event.clientX - session.x;
+          const dy = event.clientY - session.y;
+          if (Math.sqrt(dx * dx + dy * dy) > TAP_MOVE_LIMIT) session.moved = true;
+        }
+        setPoints((current) =>
+          current.map((point) =>
+            point.id === id
+              ? { ...point, x: cursor.x + dragOffset.current.x, y: cursor.y + dragOffset.current.y }
+              : point,
+          ),
+        );
+        return;
+      }
+      if (panningRef.current) {
+        const rect = svgRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        event.preventDefault();
+        const dx = ((event.clientX - panningRef.current.x) / rect.width) * GRAPH_VIEW_BOX.width;
+        const dy = ((event.clientY - panningRef.current.y) / rect.height) * GRAPH_VIEW_BOX.height;
+        const nextPan = { x: panningRef.current.panX + dx, y: panningRef.current.panY + dy };
+        panRef.current = nextPan;
+        setPan(nextPan);
+      }
+    };
 
-  const endPointer = (event: PointerEvent<SVGSVGElement>, openOnTap: boolean) => {
-    pointers.current.delete(event.pointerId);
-    if (pinch.current && pointers.current.size < 2) pinch.current = null;
-    const session = pointerSession.current;
-    if (openOnTap && draggingId && session?.id === draggingId && !session.moved) {
-      const elapsed = performance.now() - session.startedAt;
-      const point = pointById.get(draggingId);
-      if (elapsed < TAP_TIME_LIMIT && point?.kind === 'note') {
-        navigate(`/notes/${point.id}`);
+    const onUp = (event: globalThis.PointerEvent) => {
+      pointers.current.delete(event.pointerId);
+      if (pinch.current && pointers.current.size < 2) pinch.current = null;
+      const id = draggingIdRef.current;
+      if (id) {
+        const s = pointerSession.current;
+        if (s && s.id === id && !s.moved && performance.now() - s.startedAt < TAP_TIME_LIMIT) {
+          const point = pointByIdRef.current.get(id);
+          if (point?.kind === 'note') navigate(`/notes/${id}`);
+        }
       }
-    }
-    pointerSession.current = null;
-    setDraggingId(null);
-    setPanning(null);
-  };
+      if (pointers.current.size === 0) {
+        pointerSession.current = null;
+        if (draggingIdRef.current) {
+          draggingIdRef.current = null;
+          setDraggingId(null);
+        }
+        panningRef.current = null;
+      }
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigate]);
 
   return (
     <Screen title="Граф заметок" subtitle={activeNote ? activeNote.title : 'Вся база'}>
@@ -404,10 +437,6 @@ export function NotesGraphPage() {
                 aria-label="Граф заметок"
                 onWheel={onWheel}
                 onPointerDown={backgroundPointerDown}
-                onPointerMove={movePointer}
-                onPointerUp={(e) => endPointer(e, true)}
-                onPointerCancel={(e) => endPointer(e, false)}
-                onPointerLeave={(e) => endPointer(e, false)}
               >
                 <defs>
                   <linearGradient id="noteNodeGradientInteractive" x1="0" x2="1" y1="0" y2="1">
