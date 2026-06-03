@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, EmptyState, Screen, Sheet } from '@/components/ui';
-import { IconPencil, IconPlus, IconTrash } from '@/components/icons';
+import { IconCheck, IconPencil, IconPlus, IconSparkles, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { CATEGORIES, CATEGORY_EMOJI } from '@/lib/clothing';
 import { attachmentHref } from '@/lib/images';
 import type { ClothingCategory, WardrobeItem } from '@/types';
-import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
+import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
 export function OutfitDetailPage() {
   const { id } = useParams();
@@ -15,6 +15,7 @@ export function OutfitDetailPage() {
   const wardrobe = useFinanceStore((s) => s.wardrobe);
   const updateOutfit = useFinanceStore((s) => s.updateOutfit);
   const removeOutfit = useFinanceStore((s) => s.removeOutfit);
+  const logWear = useFinanceStore((s) => s.logWear);
   const [confirm, setConfirm] = useState(false);
   const [picking, setPicking] = useState(false);
   const [filter, setFilter] = useState<ClothingCategory | 'all'>('all');
@@ -71,6 +72,12 @@ export function OutfitDetailPage() {
           </div>
         )}
 
+        <button className="btn btn--primary btn--block" onClick={() => go(`/clothing/outfits/${id}/build`)}>
+          <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
+            <IconSparkles size={18} /> Собрать коллаж
+          </span>
+        </button>
+
         <button
           className="btn btn--block"
           onClick={() => {
@@ -82,6 +89,20 @@ export function OutfitDetailPage() {
             <IconPlus size={18} /> Добавить вещь
           </span>
         </button>
+
+        {members.length > 0 && (
+          <button
+            className="btn btn--block"
+            onClick={() => {
+              notifySuccess();
+              logWear(outfit.itemIds);
+            }}
+          >
+            <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
+              <IconCheck size={18} /> Надел сегодня
+            </span>
+          </button>
+        )}
 
         <div className="row" style={{ gap: 12 }}>
           <button className="btn btn--block" style={{ flex: 1 }} onClick={() => go(`/clothing/outfits/${id}/edit`)}>

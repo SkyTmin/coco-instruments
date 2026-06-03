@@ -23,6 +23,8 @@ import { WardrobeItemDetailPage } from '@/pages/clothing/WardrobeItemDetailPage'
 import { OutfitsPage } from '@/pages/clothing/OutfitsPage';
 import { OutfitFormPage } from '@/pages/clothing/OutfitFormPage';
 import { OutfitDetailPage } from '@/pages/clothing/OutfitDetailPage';
+import { OutfitBuilderPage } from '@/pages/clothing/OutfitBuilderPage';
+import { InsightsPage } from '@/pages/clothing/InsightsPage';
 import { SizesPage } from '@/pages/clothing/SizesPage';
 import { WishlistPage } from '@/pages/clothing/WishlistPage';
 import { WishFormPage } from '@/pages/clothing/WishFormPage';
@@ -162,6 +164,8 @@ export function App() {
           <Route path="/clothing/outfits/new" element={<OutfitFormPage />} />
           <Route path="/clothing/outfits/:id" element={<OutfitDetailPage />} />
           <Route path="/clothing/outfits/:id/edit" element={<OutfitFormPage />} />
+          <Route path="/clothing/outfits/:id/build" element={<OutfitBuilderPage />} />
+          <Route path="/clothing/insights" element={<InsightsPage />} />
           <Route path="/clothing/sizes" element={<SizesPage />} />
           <Route path="/clothing/wishlist" element={<WishlistPage />} />
           <Route path="/clothing/wishlist/new" element={<WishFormPage />} />

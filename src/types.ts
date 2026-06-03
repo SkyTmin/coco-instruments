@@ -379,7 +379,10 @@ export interface WardrobeItem {
   season?: Season;
   brand?: string;
   size?: string;
+  price?: number;
   note?: string;
+  wears?: number;
+  lastWornAt?: string; // ISO date
   createdAt: number;
   updatedAt: number;
 }
@@ -388,12 +391,23 @@ export interface WardrobeItemsBlob {
   items: WardrobeItem[];
 }
 
-/** A saved look: a cover selfie + the wardrobe items it's made of. */
+/** Placement of one item-sticker on the outfit collage board (fractions 0..1). */
+export interface OutfitLayoutItem {
+  itemId: string;
+  x: number;
+  y: number;
+  scale: number;
+  rot: number; // degrees
+  z: number;
+}
+
+/** A saved look: a collage/cover + the wardrobe items it's made of. */
 export interface Outfit {
   id: string;
   name: string;
   cover?: Attachment;
   itemIds: string[];
+  layout?: OutfitLayoutItem[];
   note?: string;
   createdAt: number;
   updatedAt: number;

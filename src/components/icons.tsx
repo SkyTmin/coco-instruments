@@ -142,3 +142,10 @@ export const IconSparkles = (p: IconProps) => (
     <path d="M18.5 14l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
   </svg>
 );
+
+export const IconChart = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 3v18h18" />
+    <path d="M7 14v3M12 9v8M17 5v12" />
+  </svg>
+);

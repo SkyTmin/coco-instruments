@@ -35,6 +35,7 @@ import type {
 export const DEFAULT_REMINDER_PREFS: ReminderPrefs = { enabled: true, leads: [0], hour: 9, minute: 0 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { genId } from '@/lib/id';
+import { todayISO } from '@/lib/date';
 import { deriveStatus, paidSoFar, resolve } from '@/lib/finance-calc';
 
 export type ObligationDraft = Omit<
@@ -224,6 +225,7 @@ interface FinanceState {
   updateItem: (id: string, patch: Partial<WardrobeItem>) => void;
   removeItem: (id: string) => void;
   getItem: (id: string) => WardrobeItem | undefined;
+  logWear: (itemIds: string[]) => void;
 
   addOutfit: (draft: OutfitDraft) => Outfit;
   updateOutfit: (id: string, patch: Partial<Outfit>) => void;
@@ -824,6 +826,18 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   getItem: (id) => get().wardrobe.find((it) => it.id === id),
+
+  logWear: (itemIds) => {
+    const today = todayISO();
+    const ids = new Set(itemIds);
+    const wardrobe = get().wardrobe.map((it) =>
+      ids.has(it.id)
+        ? { ...it, wears: (it.wears ?? 0) + 1, lastWornAt: today, updatedAt: Date.now() }
+        : it,
+    );
+    set({ wardrobe });
+    persistWardrobe(wardrobe);
+  },
 
   addOutfit: (draft) => {
     const now = Date.now();

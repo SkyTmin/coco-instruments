@@ -2814,3 +2814,173 @@ input[type='datetime-local'] {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ---- Outfit collage builder ----------------------------------------------- */
+.collage-board {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  max-height: 60vh;
+  margin: 0 auto;
+  border-radius: 20px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(122, 92, 200, 0.12), transparent 45%),
+    radial-gradient(circle at 75% 80%, rgba(193, 120, 201, 0.12), transparent 45%),
+    var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.collage-board__hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 0 32px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.sticker {
+  position: absolute;
+  cursor: grab;
+  touch-action: none;
+}
+.sticker img {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+  box-shadow: 0 6px 16px rgba(40, 25, 15, 0.22);
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+.sticker.is-sel img {
+  box-shadow: 0 0 0 2.5px var(--accent), 0 6px 16px rgba(40, 25, 15, 0.28);
+}
+.sticker__del,
+.sticker__handle {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+}
+.sticker__del {
+  top: -11px;
+  left: -11px;
+  background: var(--neg);
+  color: #fff;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.sticker__handle {
+  bottom: -11px;
+  right: -11px;
+  background: var(--accent);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.sticker__handle::after {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translate(-1px, -1px) rotate(-45deg);
+}
+.collage-filter {
+  margin: 14px 0 10px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.collage-filter .chip { flex: none; }
+.collage-tray {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.collage-tray__item {
+  position: relative;
+  flex: none;
+  width: 66px;
+  height: 66px;
+  border: 2px solid transparent;
+  border-radius: 13px;
+  overflow: hidden;
+  background: var(--surface-2);
+  padding: 0;
+  cursor: pointer;
+}
+.collage-tray__item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.collage-tray__item.is-on { border-color: var(--accent); }
+.collage-tray__on {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  display: grid;
+  place-items: center;
+}
+
+/* ---- Wear card + insights -------------------------------------------------- */
+.wear-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wear-card__count { font-size: 20px; font-weight: 800; }
+.wear-card__sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+.insight-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.insight-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.insight-legend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+.worn-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+.worn-row__thumb {
+  width: 50px;
+  height: 50px;
+  flex: none;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+.worn-row__thumb--ph { display: grid; place-items: center; font-size: 24px; }
+.worn-row__main { flex: 1; min-width: 0; }
+.worn-row__name { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.worn-row__sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.worn-row__right { flex: none; text-align: right; }
+.worn-row__right b { font-weight: 800; font-size: 14px; }
+.worn-row__right span { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }

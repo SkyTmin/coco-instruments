@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Screen, SectionCard, Skeleton } from '@/components/ui';
-import { IconHeart, IconImage, IconRuler, IconShirt, IconSparkles } from '@/components/icons';
+import { IconChart, IconHeart, IconImage, IconRuler, IconShirt, IconSparkles } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { attachmentHref } from '@/lib/images';
 import { CATEGORY_EMOJI } from '@/lib/clothing';
@@ -91,6 +91,14 @@ export function ClothingDashboardPage() {
           }
           onClick={() => go('/clothing/outfits')}
         />
+        {wardrobe.length > 0 && (
+          <SectionCard
+            icon={<IconChart />}
+            title="Аналитика"
+            sub="Состав, носки и цена за носку"
+            onClick={() => go('/clothing/insights')}
+          />
+        )}
         <SectionCard
           icon={<IconRuler />}
           title="Размеры"

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EmptyState, Screen } from '@/components/ui';
-import { IconSparkles } from '@/components/icons';
+import { IconCheck, IconSparkles } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { CATEGORY_EMOJI, CATEGORY_LABEL, suggestOutfit } from '@/lib/clothing';
 import { attachmentHref } from '@/lib/images';
@@ -11,6 +11,7 @@ export function ShufflePage() {
   const navigate = useNavigate();
   const wardrobe = useFinanceStore((s) => s.wardrobe);
   const addOutfit = useFinanceStore((s) => s.addOutfit);
+  const logWear = useFinanceStore((s) => s.logWear);
   const [combo, setCombo] = useState(() => suggestOutfit(wardrobe));
   const [spin, setSpin] = useState(0);
 
@@ -71,6 +72,17 @@ export function ShufflePage() {
         </button>
         <button className="btn btn--block" onClick={save}>
           Сохранить как образ
+        </button>
+        <button
+          className="btn btn--block"
+          onClick={() => {
+            notifySuccess();
+            logWear(combo.map((i) => i.id));
+          }}
+        >
+          <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
+            <IconCheck size={18} /> Надел это
+          </span>
         </button>
       </div>
     </Screen>

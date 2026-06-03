@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, Screen, StatRow } from '@/components/ui';
-import { IconPencil, IconTrash } from '@/components/icons';
+import { IconCheck, IconPencil, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { CATEGORY_EMOJI, CATEGORY_LABEL, SEASON_LABEL } from '@/lib/clothing';
 import { attachmentHref } from '@/lib/images';
-import { notifyWarning, tapLight } from '@/lib/haptics';
+import { formatRUB, pluralizeRu, relativeDay } from '@/lib/format';
+import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
 
 export function WardrobeItemDetailPage() {
   const { id } = useParams();
@@ -13,6 +14,7 @@ export function WardrobeItemDetailPage() {
   const item = useFinanceStore((s) => (id ? s.getItem(id) : undefined));
   const outfits = useFinanceStore((s) => s.outfits);
   const removeItem = useFinanceStore((s) => s.removeItem);
+  const logWear = useFinanceStore((s) => s.logWear);
   const [confirm, setConfirm] = useState(false);
 
   if (!item || !id) return <Navigate to="/clothing/wardrobe" replace />;
@@ -34,12 +36,38 @@ export function WardrobeItemDetailPage() {
           <div className="item-photo item-photo--ph">{CATEGORY_EMOJI[item.category]}</div>
         )}
 
+        <div className="card wear-card">
+          <div className="wear-card__main">
+            <div className="wear-card__count">
+              {item.wears ?? 0} {pluralizeRu(item.wears ?? 0, ['раз', 'раза', 'раз'])}
+            </div>
+            <div className="wear-card__sub">
+              {item.lastWornAt ? `Последний раз — ${relativeDay(item.lastWornAt)}` : 'Ещё не надевали'}
+              {item.price && (item.wears ?? 0) > 0
+                ? ` · ${formatRUB(Math.round(item.price / (item.wears ?? 1)))} за носку`
+                : ''}
+            </div>
+          </div>
+          <button
+            className="btn btn--primary"
+            onClick={() => {
+              notifySuccess();
+              logWear([id]);
+            }}
+          >
+            <span className="row" style={{ gap: 6 }}>
+              <IconCheck size={18} /> Надел
+            </span>
+          </button>
+        </div>
+
         <div className="card">
           <StatRow label="Категория" value={`${CATEGORY_EMOJI[item.category]} ${CATEGORY_LABEL[item.category]}`} />
           {item.color && <StatRow label="Цвет" value={item.color} />}
           {item.season && <StatRow label="Сезон" value={SEASON_LABEL[item.season]} />}
           {item.brand && <StatRow label="Бренд" value={item.brand} />}
           {item.size && <StatRow label="Размер" value={item.size} />}
+          {item.price ? <StatRow label="Цена" value={formatRUB(item.price)} /> : null}
           {item.note && <StatRow label="Заметка" value={item.note} />}
         </div>
 
