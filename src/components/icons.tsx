@@ -122,3 +122,16 @@ export const IconCheck = (p: IconProps) => (
     <path d="M20 6 9 17l-5-5" />
   </svg>
 );
+
+export const IconRuler = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 9.5 9.5 3 21 14.5 14.5 21z" />
+    <path d="M7 7l1.5 1.5M10 10l1.5 1.5M13 7l1.5 1.5M10 13l1.5 1.5" />
+  </svg>
+);
+
+export const IconHeart = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M19 5.5a4.5 4.5 0 0 0-7-1L12 5l-.5-.5a4.5 4.5 0 1 0-6.5 6.2l6.5 6.8 6.5-6.8a4.5 4.5 0 0 0 1-5.2z" />
+  </svg>
+);

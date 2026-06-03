@@ -15,7 +15,16 @@ import { syncReminders } from '@/lib/reminders';
 import { tapLight } from '@/lib/haptics';
 
 import { HomePage } from '@/pages/HomePage';
-import { ClothingPage } from '@/pages/ClothingPage';
+import { ClothingDashboardPage } from '@/pages/clothing/ClothingDashboardPage';
+import { WardrobePage } from '@/pages/clothing/WardrobePage';
+import { WardrobeItemFormPage } from '@/pages/clothing/WardrobeItemFormPage';
+import { WardrobeItemDetailPage } from '@/pages/clothing/WardrobeItemDetailPage';
+import { OutfitsPage } from '@/pages/clothing/OutfitsPage';
+import { OutfitFormPage } from '@/pages/clothing/OutfitFormPage';
+import { OutfitDetailPage } from '@/pages/clothing/OutfitDetailPage';
+import { SizesPage } from '@/pages/clothing/SizesPage';
+import { WishlistPage } from '@/pages/clothing/WishlistPage';
+import { WishFormPage } from '@/pages/clothing/WishFormPage';
 import { NoteEditorPage } from '@/pages/NoteEditorPage';
 import { NotesGraphPage } from '@/pages/NotesGraphPage';
 import { NotesPage } from '@/pages/NotesPage';
@@ -135,7 +144,19 @@ export function App() {
           <Route path="/notes/new" element={<NoteEditorPage />} />
           <Route path="/notes/graph" element={<NotesGraphPage />} />
           <Route path="/notes/:id" element={<NoteEditorPage />} />
-          <Route path="/clothing" element={<ClothingPage />} />
+          <Route path="/clothing" element={<ClothingDashboardPage />} />
+          <Route path="/clothing/wardrobe" element={<WardrobePage />} />
+          <Route path="/clothing/wardrobe/new" element={<WardrobeItemFormPage />} />
+          <Route path="/clothing/wardrobe/:id" element={<WardrobeItemDetailPage />} />
+          <Route path="/clothing/wardrobe/:id/edit" element={<WardrobeItemFormPage />} />
+          <Route path="/clothing/outfits" element={<OutfitsPage />} />
+          <Route path="/clothing/outfits/new" element={<OutfitFormPage />} />
+          <Route path="/clothing/outfits/:id" element={<OutfitDetailPage />} />
+          <Route path="/clothing/outfits/:id/edit" element={<OutfitFormPage />} />
+          <Route path="/clothing/sizes" element={<SizesPage />} />
+          <Route path="/clothing/wishlist" element={<WishlistPage />} />
+          <Route path="/clothing/wishlist/new" element={<WishFormPage />} />
+          <Route path="/clothing/wishlist/:id/edit" element={<WishFormPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>

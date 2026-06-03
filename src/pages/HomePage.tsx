@@ -5,7 +5,7 @@ import { IconNotes, IconShirt, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
 import { toISO, todayISO } from '@/lib/date';
-import { formatRUB, relativeDay } from '@/lib/format';
+import { formatRUB, pluralizeRu, relativeDay } from '@/lib/format';
 import { tapLight } from '@/lib/haptics';
 
 function notesWord(n: number): string {
@@ -21,6 +21,8 @@ export function HomePage() {
   const expenses = useFinanceStore((s) => s.expenses);
   const recurring = useFinanceStore((s) => s.recurring);
   const notes = useFinanceStore((s) => s.notes);
+  const wardrobe = useFinanceStore((s) => s.wardrobe);
+  const outfits = useFinanceStore((s) => s.outfits);
   const hydrated = useFinanceStore((s) => s.hydrated);
 
   const fin = useMemo(() => {
@@ -116,14 +118,18 @@ export function HomePage() {
           </div>
         </div>
 
-        <div className="home-card is-muted" onClick={() => go('/clothing')} role="button">
-          <div className="home-card__badge">Скоро</div>
+        <div className="home-card home-card--clothing" onClick={() => go('/clothing')} role="button">
+          <div className="home-card__glow" />
           <div className="home-card__icon">
             <IconShirt />
           </div>
           <div className="home-card__body">
             <div className="home-card__title">Одежда</div>
-            <div className="home-card__desc">Раздел в разработке</div>
+            <div className="home-card__desc">
+              {wardrobe.length
+                ? `${wardrobe.length} ${pluralizeRu(wardrobe.length, ['вещь', 'вещи', 'вещей'])} · ${outfits.length} ${pluralizeRu(outfits.length, ['образ', 'образа', 'образов'])}`
+                : 'Гардероб, образы и размеры'}
+            </div>
           </div>
         </div>
       </div>

@@ -6,133 +6,20 @@ import { NoteMarkdown } from '@/components/NoteMarkdown';
 import { IconCheck, IconImage, IconPaperclip, IconPencil, IconTrash } from '@/components/icons';
 import type { NoteAttachment } from '@/types';
 import { useFinanceStore } from '@/store';
-import { genId } from '@/lib/id';
+import {
+  attachmentHref,
+  fileToAttachment,
+  formatBytes,
+  MAX_ATTACHMENT_SIZE,
+  MAX_ATTACHMENTS,
+  MAX_IMAGE_SOURCE_SIZE,
+} from '@/lib/images';
 import { getNoteRelations, normalizeNoteTitle } from '@/lib/notes-graph';
 import { countTasks, toggleTaskInBody } from '@/lib/notes-markdown';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { noteDateFmt } from '@/pages/NotesPage';
 
-const MAX_ATTACHMENT_SIZE = 3 * 1024 * 1024;
-const MAX_IMAGE_SOURCE_SIZE = 12 * 1024 * 1024;
-const MAX_ATTACHMENTS = 8;
-const IMAGE_MAX_SIDE = 1800;
 const AUTOSAVE_MS = 700;
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} КБ`;
-  return `${bytes} Б`;
-}
-
-function attachmentHref(attachment: NoteAttachment): string {
-  return attachment.url ?? attachment.dataUrl ?? '';
-}
-
-function readAsDataUrl(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('file-read-failed'));
-    reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.readAsDataURL(file);
-  });
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('canvas-failed'))), type, quality);
-  });
-}
-
-function loadImage(file: File): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('image-load-failed'));
-    };
-    img.src = url;
-  });
-}
-
-function jpegName(name: string): string {
-  return name.replace(/\.[^.]+$/, '') + '.jpg';
-}
-
-async function compressImage(file: File): Promise<{ blob: Blob; name: string; type: string }> {
-  const img = await loadImage(file);
-  const scale = Math.min(1, IMAGE_MAX_SIDE / Math.max(img.width, img.height));
-  const width = Math.max(1, Math.round(img.width * scale));
-  const height = Math.max(1, Math.round(img.height * scale));
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('canvas-context-failed');
-  ctx.drawImage(img, 0, 0, width, height);
-
-  for (const quality of [0.86, 0.76, 0.66, 0.56]) {
-    const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
-    if (blob.size <= MAX_ATTACHMENT_SIZE) {
-      return { blob, name: jpegName(file.name), type: 'image/jpeg' };
-    }
-  }
-  throw new Error('image-too-large');
-}
-
-async function fileToAttachment(file: File): Promise<NoteAttachment> {
-  const isImage = file.type.startsWith('image/');
-  if (isImage && file.size > MAX_IMAGE_SOURCE_SIZE) throw new Error('image-source-too-large');
-  if (!isImage && file.size > MAX_ATTACHMENT_SIZE) throw new Error('file-too-large');
-
-  const prepared =
-    isImage && file.type !== 'image/svg+xml' && file.type !== 'image/gif'
-      ? await compressImage(file)
-      : { blob: file, name: file.name, type: file.type || 'application/octet-stream' };
-  if (prepared.blob.size > MAX_ATTACHMENT_SIZE) throw new Error('file-too-large');
-
-  const dataUrl = await readAsDataUrl(prepared.blob);
-  const uploaded = await uploadAttachment({
-    name: prepared.name,
-    type: prepared.type,
-    size: prepared.blob.size,
-    dataUrl,
-  });
-
-  return {
-    id: genId(),
-    name: prepared.name,
-    type: prepared.type,
-    size: prepared.blob.size,
-    url: uploaded?.url,
-    dataUrl: uploaded ? undefined : dataUrl,
-    createdAt: Date.now(),
-  };
-}
-
-async function uploadAttachment(input: {
-  name: string;
-  type: string;
-  size: number;
-  dataUrl: string;
-}): Promise<{ url: string } | null> {
-  try {
-    const res = await fetch('/api/notes/attachments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) return null;
-    const json = (await res.json()) as { url?: string };
-    return json.url ? { url: json.url } : null;
-  } catch {
-    return null;
-  }
-}
 
 function imageToken(attachment: NoteAttachment): string {
   return `![${attachment.name}](${attachmentHref(attachment) || `attachment:${attachment.id}`})`;

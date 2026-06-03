@@ -215,7 +215,8 @@ export interface Note {
   updatedAt: number;
 }
 
-export interface NoteAttachment {
+/** A stored photo/file: a served `url` once uploaded, else an inline `dataUrl`. */
+export interface Attachment {
   id: string;
   name: string;
   type: string;
@@ -224,8 +225,76 @@ export interface NoteAttachment {
   dataUrl?: string;
   createdAt: number;
 }
+/** Notes historically called it NoteAttachment — keep the alias. */
+export type NoteAttachment = Attachment;
 
 export interface NotesBlob {
   version: 1;
   items: Note[];
+}
+
+// ---- Clothing: wardrobe items, outfits, sizes, wishlist -------------------
+
+export type ClothingCategory = 'top' | 'bottom' | 'outerwear' | 'shoes' | 'accessory' | 'other';
+export type Season = 'winter' | 'spring' | 'summer' | 'autumn' | 'all';
+
+/** A single garment, photographed so you remember you own it. */
+export interface WardrobeItem {
+  id: string;
+  name: string;
+  category: ClothingCategory;
+  photo?: Attachment;
+  color?: string;
+  season?: Season;
+  brand?: string;
+  size?: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface WardrobeItemsBlob {
+  version: 1;
+  items: WardrobeItem[];
+}
+
+/** A saved look: a cover selfie + the wardrobe items it's made of. */
+export interface Outfit {
+  id: string;
+  name: string;
+  cover?: Attachment;
+  itemIds: string[];
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface WardrobeOutfitsBlob {
+  version: 1;
+  items: Outfit[];
+}
+
+/** Something you'd like to buy. */
+export interface WishItem {
+  id: string;
+  name: string;
+  photo?: Attachment;
+  price?: number;
+  link?: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface WardrobeWishlistBlob {
+  version: 1;
+  items: WishItem[];
+}
+
+/** One row of the "my sizes" record, e.g. { label: "Футболка", value: "M" }. */
+export interface SizeEntry {
+  id: string;
+  label: string;
+  value: string;
+}
+export interface WardrobeSizesBlob {
+  version: 1;
+  items: SizeEntry[];
 }

@@ -1939,3 +1939,233 @@ input[type='datetime-local'] {
   transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
   touch-action: pan-y;
 }
+
+/* ===========================================================================
+   Clothing — wardrobe, outfits, sizes, wishlist
+   =========================================================================== */
+.home-card--clothing {
+  background: linear-gradient(135deg, #7a5cc8, #a96fd0);
+}
+
+/* Photo picker (forms) */
+.photo-pick {
+  position: relative;
+  width: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.photo-pick img {
+  display: block;
+  width: 100%;
+  max-height: 340px;
+  object-fit: cover;
+}
+.photo-pick--empty {
+  border: 1px dashed var(--hairline);
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.photo-pick--empty svg { color: var(--accent); }
+.photo-pick__btn {
+  position: absolute;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  backdrop-filter: blur(3px);
+}
+.photo-pick__change { left: 10px; bottom: 10px; }
+.photo-pick__remove { right: 10px; bottom: 10px; display: grid; place-items: center; padding: 8px; }
+
+/* Wardrobe grid */
+.wardrobe-filter {
+  margin-bottom: 14px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.wardrobe-filter .chip { flex: none; white-space: nowrap; }
+.wardrobe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 12px;
+}
+.wardrobe-card {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+  animation: note-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.wardrobe-card:active { transform: scale(0.97); }
+.wardrobe-card > img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+.wardrobe-card__ph {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  font-size: 40px;
+  background: var(--surface-2);
+}
+.wardrobe-card__name {
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Single big photo (item / outfit detail) */
+.item-photo {
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+}
+.item-photo img { display: block; width: 100%; max-height: 460px; object-fit: cover; }
+.item-photo--ph { min-height: 220px; display: grid; place-items: center; font-size: 72px; }
+
+/* Outfit gallery */
+.outfit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.outfit-card {
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  aspect-ratio: 3 / 4;
+  transition: transform 0.1s ease;
+  animation: note-in 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.outfit-card:active { transform: scale(0.98); }
+.outfit-card > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.outfit-card__ph { width: 100%; height: 100%; display: grid; place-items: center; font-size: 52px; }
+.outfit-card__overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 22px 12px 11px;
+  color: #fff;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+}
+.outfit-card__name { font-weight: 800; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outfit-card__count { font-size: 12px; opacity: 0.9; }
+
+/* Item picker sheet */
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.picker-card {
+  position: relative;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.picker-card > img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; }
+.picker-card .wardrobe-card__ph { font-size: 30px; }
+.picker-card > span {
+  display: block;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-card.is-on { border-color: var(--accent); }
+.picker-card__check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+/* Sizes record row */
+.size-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.size-row .input { padding: 11px 12px; }
+
+/* Wishlist row */
+.wish-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+  padding: 10px 12px;
+}
+.wish-row__thumb {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+.wish-row__thumb--ph { display: grid; place-items: center; font-size: 24px; }
+.wish-row__main { flex: 1; min-width: 0; }
+.wish-row__name { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wish-row__sub { color: var(--muted); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wish-row__link {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-size: 18px;
+  text-decoration: none;
+}

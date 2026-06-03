@@ -9,10 +9,18 @@ import type {
   Note,
   NotesBlob,
   Obligation,
+  Outfit,
   Payment,
   RecurringPayment,
   ReminderPrefs,
   SavingsGoal,
+  SizeEntry,
+  WardrobeItem,
+  WardrobeItemsBlob,
+  WardrobeOutfitsBlob,
+  WardrobeSizesBlob,
+  WardrobeWishlistBlob,
+  WishItem,
 } from '@/types';
 
 export const DEFAULT_REMINDER_PREFS: ReminderPrefs = { enabled: true, leads: [0], hour: 9, minute: 0 };
@@ -32,6 +40,10 @@ export type RecurringDraft = Omit<RecurringPayment, 'id' | 'createdAt' | 'update
 export type NoteDraft = Omit<Note, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type ListDraft = Omit<ExpenseList, 'id' | 'createdAt' | 'updatedAt'>;
+
+export type WardrobeItemDraft = Omit<WardrobeItem, 'id' | 'createdAt' | 'updatedAt'>;
+export type OutfitDraft = Omit<Outfit, 'id' | 'createdAt' | 'updatedAt'>;
+export type WishDraft = Omit<WishItem, 'id' | 'createdAt' | 'updatedAt'>;
 
 /** Recompute the auto-status from the payments and bump updatedAt. */
 function normalize(o: Obligation): Obligation {
@@ -78,6 +90,10 @@ const writeRecurring = makePersister<FinanceRecurringBlob>(STORAGE_KEYS.recurrin
 const writeLists = makePersister<FinanceListsBlob>(STORAGE_KEYS.lists);
 const writeNotes = makePersister<NotesBlob>(STORAGE_KEYS.notes);
 const writeReminders = makePersister<FinanceRemindersBlob>(STORAGE_KEYS.reminders);
+const writeWardrobe = makePersister<WardrobeItemsBlob>(STORAGE_KEYS.wardrobe);
+const writeOutfits = makePersister<WardrobeOutfitsBlob>(STORAGE_KEYS.outfits);
+const writeWishlist = makePersister<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist);
+const writeSizes = makePersister<WardrobeSizesBlob>(STORAGE_KEYS.sizes);
 
 const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, items });
 const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, items });
@@ -85,6 +101,10 @@ const persistRecurring = (items: RecurringPayment[]) => writeRecurring({ version
 const persistLists = (items: ExpenseList[]) => writeLists({ version: 1, items });
 const persistNotes = (items: Note[]) => writeNotes({ version: 1, items });
 const persistReminderPrefs = (prefs: ReminderPrefs) => writeReminders({ version: 1, prefs });
+const persistWardrobe = (items: WardrobeItem[]) => writeWardrobe({ version: 1, items });
+const persistOutfits = (items: Outfit[]) => writeOutfits({ version: 1, items });
+const persistWishlist = (items: WishItem[]) => writeWishlist({ version: 1, items });
+const persistSizes = (items: SizeEntry[]) => writeSizes({ version: 1, items });
 
 interface FinanceState {
   expenses: Obligation[];
@@ -92,6 +112,10 @@ interface FinanceState {
   recurring: RecurringPayment[];
   lists: ExpenseList[];
   notes: Note[];
+  wardrobe: WardrobeItem[];
+  outfits: Outfit[];
+  wishlist: WishItem[];
+  sizes: SizeEntry[];
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -126,6 +150,23 @@ interface FinanceState {
   removeNote: (id: string) => void;
   getNote: (id: string) => Note | undefined;
 
+  addItem: (draft: WardrobeItemDraft) => WardrobeItem;
+  updateItem: (id: string, patch: Partial<WardrobeItem>) => void;
+  removeItem: (id: string) => void;
+  getItem: (id: string) => WardrobeItem | undefined;
+
+  addOutfit: (draft: OutfitDraft) => Outfit;
+  updateOutfit: (id: string, patch: Partial<Outfit>) => void;
+  removeOutfit: (id: string) => void;
+  getOutfit: (id: string) => Outfit | undefined;
+
+  addWish: (draft: WishDraft) => WishItem;
+  updateWish: (id: string, patch: Partial<WishItem>) => void;
+  removeWish: (id: string) => void;
+  getWish: (id: string) => WishItem | undefined;
+
+  setSizes: (items: SizeEntry[]) => void;
+
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
 
@@ -135,18 +176,26 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   recurring: [],
   lists: [],
   notes: [],
+  wardrobe: [],
+  outfits: [],
+  wishlist: [],
+  sizes: [],
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
   hydrate: async () => {
     const storage = getStorage();
-    const [exp, sav, rec, lists, notes, rem] = await Promise.all([
+    const [exp, sav, rec, lists, notes, rem, ward, outf, wish, sizes] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
       storage.get<FinanceRecurringBlob>(STORAGE_KEYS.recurring),
       storage.get<FinanceListsBlob>(STORAGE_KEYS.lists),
       storage.get<NotesBlob>(STORAGE_KEYS.notes),
       storage.get<FinanceRemindersBlob>(STORAGE_KEYS.reminders),
+      storage.get<WardrobeItemsBlob>(STORAGE_KEYS.wardrobe),
+      storage.get<WardrobeOutfitsBlob>(STORAGE_KEYS.outfits),
+      storage.get<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist),
+      storage.get<WardrobeSizesBlob>(STORAGE_KEYS.sizes),
     ]);
     set({
       expenses: exp?.items ?? [],
@@ -154,6 +203,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       recurring: rec?.items ?? [],
       lists: lists?.items ?? [],
       notes: notes?.items ?? [],
+      wardrobe: ward?.items ?? [],
+      outfits: outf?.items ?? [],
+      wishlist: wish?.items ?? [],
+      sizes: sizes?.items ?? [],
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -339,6 +392,91 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   getNote: (id) => get().notes.find((n) => n.id === id),
+
+  addItem: (draft) => {
+    const now = Date.now();
+    const item: WardrobeItem = { ...draft, id: genId(), createdAt: now, updatedAt: now };
+    const wardrobe = [item, ...get().wardrobe];
+    set({ wardrobe });
+    persistWardrobe(wardrobe);
+    return item;
+  },
+
+  updateItem: (id, patch) => {
+    const wardrobe = get().wardrobe.map((it) =>
+      it.id === id ? { ...it, ...patch, updatedAt: Date.now() } : it,
+    );
+    set({ wardrobe });
+    persistWardrobe(wardrobe);
+  },
+
+  removeItem: (id) => {
+    const wardrobe = get().wardrobe.filter((it) => it.id !== id);
+    // Detach the item from any outfit that referenced it.
+    const outfits = get().outfits.map((o) =>
+      o.itemIds.includes(id) ? { ...o, itemIds: o.itemIds.filter((x) => x !== id) } : o,
+    );
+    set({ wardrobe, outfits });
+    persistWardrobe(wardrobe);
+    persistOutfits(outfits);
+  },
+
+  getItem: (id) => get().wardrobe.find((it) => it.id === id),
+
+  addOutfit: (draft) => {
+    const now = Date.now();
+    const outfit: Outfit = { ...draft, id: genId(), createdAt: now, updatedAt: now };
+    const outfits = [outfit, ...get().outfits];
+    set({ outfits });
+    persistOutfits(outfits);
+    return outfit;
+  },
+
+  updateOutfit: (id, patch) => {
+    const outfits = get().outfits.map((o) =>
+      o.id === id ? { ...o, ...patch, updatedAt: Date.now() } : o,
+    );
+    set({ outfits });
+    persistOutfits(outfits);
+  },
+
+  removeOutfit: (id) => {
+    const outfits = get().outfits.filter((o) => o.id !== id);
+    set({ outfits });
+    persistOutfits(outfits);
+  },
+
+  getOutfit: (id) => get().outfits.find((o) => o.id === id),
+
+  addWish: (draft) => {
+    const now = Date.now();
+    const wish: WishItem = { ...draft, id: genId(), createdAt: now, updatedAt: now };
+    const wishlist = [wish, ...get().wishlist];
+    set({ wishlist });
+    persistWishlist(wishlist);
+    return wish;
+  },
+
+  updateWish: (id, patch) => {
+    const wishlist = get().wishlist.map((w) =>
+      w.id === id ? { ...w, ...patch, updatedAt: Date.now() } : w,
+    );
+    set({ wishlist });
+    persistWishlist(wishlist);
+  },
+
+  removeWish: (id) => {
+    const wishlist = get().wishlist.filter((w) => w.id !== id);
+    set({ wishlist });
+    persistWishlist(wishlist);
+  },
+
+  getWish: (id) => get().wishlist.find((w) => w.id === id),
+
+  setSizes: (items) => {
+    set({ sizes: items });
+    persistSizes(items);
+  },
 
   setReminderPrefs: (patch) => {
     const reminderPrefs = { ...get().reminderPrefs, ...patch };
