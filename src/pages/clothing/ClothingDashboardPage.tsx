@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import { Screen, SectionCard, Skeleton } from '@/components/ui';
-import { IconHeart, IconImage, IconRuler, IconShirt } from '@/components/icons';
+import { IconHeart, IconImage, IconRuler, IconShirt, IconSparkles } from '@/components/icons';
 import { useFinanceStore } from '@/store';
+import { attachmentHref } from '@/lib/images';
+import { CATEGORY_EMOJI } from '@/lib/clothing';
 import { pluralizeRu } from '@/lib/format';
-import { tapLight } from '@/lib/haptics';
+import { selectionChanged, tapLight } from '@/lib/haptics';
 
 export function ClothingDashboardPage() {
   const navigate = useNavigate();
@@ -30,9 +32,45 @@ export function ClothingDashboardPage() {
     );
   }
 
+  const recent = wardrobe.slice(0, 12);
+
   return (
     <Screen title="Одежда" subtitle="Гардероб и образы">
       <div className="stack">
+        {wardrobe.length >= 2 && (
+          <button className="shuffle-hero" onClick={() => go('/clothing/shuffle')}>
+            <div className="shuffle-hero__icon">
+              <IconSparkles />
+            </div>
+            <div className="shuffle-hero__body">
+              <div className="shuffle-hero__title">Что надеть?</div>
+              <div className="shuffle-hero__sub">Соберу случайный образ из ваших вещей</div>
+            </div>
+          </button>
+        )}
+
+        {recent.length > 0 && (
+          <div className="wardrobe-strip">
+            {recent.map((it) => (
+              <button
+                key={it.id}
+                className="wardrobe-strip__item"
+                onClick={() => {
+                  selectionChanged();
+                  navigate(`/clothing/wardrobe/${it.id}`);
+                }}
+                aria-label={it.name}
+              >
+                {it.photo ? (
+                  <img src={attachmentHref(it.photo)} alt="" loading="lazy" />
+                ) : (
+                  <span className="wardrobe-strip__ph">{CATEGORY_EMOJI[it.category]}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
         <SectionCard
           icon={<IconShirt />}
           title="Гардероб"

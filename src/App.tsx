@@ -16,6 +16,7 @@ import { tapLight } from '@/lib/haptics';
 
 import { HomePage } from '@/pages/HomePage';
 import { ClothingDashboardPage } from '@/pages/clothing/ClothingDashboardPage';
+import { ShufflePage } from '@/pages/clothing/ShufflePage';
 import { WardrobePage } from '@/pages/clothing/WardrobePage';
 import { WardrobeItemFormPage } from '@/pages/clothing/WardrobeItemFormPage';
 import { WardrobeItemDetailPage } from '@/pages/clothing/WardrobeItemDetailPage';
@@ -145,6 +146,7 @@ export function App() {
           <Route path="/notes/graph" element={<NotesGraphPage />} />
           <Route path="/notes/:id" element={<NoteEditorPage />} />
           <Route path="/clothing" element={<ClothingDashboardPage />} />
+          <Route path="/clothing/shuffle" element={<ShufflePage />} />
           <Route path="/clothing/wardrobe" element={<WardrobePage />} />
           <Route path="/clothing/wardrobe/new" element={<WardrobeItemFormPage />} />
           <Route path="/clothing/wardrobe/:id" element={<WardrobeItemDetailPage />} />

@@ -135,3 +135,10 @@ export const IconHeart = (p: IconProps) => (
     <path d="M19 5.5a4.5 4.5 0 0 0-7-1L12 5l-.5-.5a4.5 4.5 0 1 0-6.5 6.2l6.5 6.8 6.5-6.8a4.5 4.5 0 0 0 1-5.2z" />
   </svg>
 );
+
+export const IconSparkles = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 3l1.7 4.6L18 9l-4.3 1.4L12 15l-1.7-4.6L6 9l4.3-1.4z" />
+    <path d="M18.5 14l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
+  </svg>
+);
