@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent, WheelEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Screen } from '@/components/ui';
 import { IconGraph } from '@/components/icons';
 import { useFinanceStore } from '@/store';
@@ -10,6 +10,7 @@ import {
   buildNoteGraph,
   filterNoteGraph,
   layoutNoteGraph,
+  personNodeId,
 } from '@/lib/notes-graph';
 import { selectionChanged } from '@/lib/haptics';
 
@@ -40,13 +41,38 @@ const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
 
 export function NotesGraphPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const notes = useFinanceStore((s) => s.notes);
-  const graph = useMemo(() => buildNoteGraph(notes), [notes]);
-  const [activeId, setActiveId] = useState<string | undefined>(notes[0]?.id);
+  const people = useFinanceStore((s) => s.people);
+  const gifts = useFinanceStore((s) => s.gifts);
+  const promises = useFinanceStore((s) => s.promises);
+  const conversations = useFinanceStore((s) => s.conversations);
+  const meetIdeas = useFinanceStore((s) => s.meetIdeas);
+  const relations = useFinanceStore((s) => s.personRelations);
+  const noteLinks = useFinanceStore((s) => s.personNoteLinks);
+  const personParam = params.get('person');
+  const graph = useMemo(
+    () =>
+      buildNoteGraph(notes, {
+        people,
+        gifts,
+        promises,
+        conversations,
+        meetIdeas,
+        relations,
+        noteLinks,
+      }),
+    [conversations, gifts, meetIdeas, noteLinks, notes, people, promises, relations],
+  );
+  const [activeId, setActiveId] = useState<string | undefined>(
+    personParam ? personNodeId(personParam) : notes[0]?.id,
+  );
   const [mode, setMode] = useState<'global' | 'local'>('global');
   const [depth, setDepth] = useState(2);
   const [showMissing, setShowMissing] = useState(true);
   const [showTags, setShowTags] = useState(true);
+  const [showPeople, setShowPeople] = useState(true);
+  const [showDetails, setShowDetails] = useState(true);
   const [query, setQuery] = useState('');
   const [points, setPoints] = useState<NoteGraphPoint[]>([]);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -80,9 +106,17 @@ export function NotesGraphPage() {
   }, [activeId]);
 
   useEffect(() => {
-    if (activeId && notes.some((note) => note.id === activeId)) return;
-    setActiveId(notes[0]?.id);
-  }, [activeId, notes]);
+    if (!personParam) return;
+    setMode('local');
+    setShowPeople(true);
+    setShowDetails(true);
+    setActiveId(personNodeId(personParam));
+  }, [personParam]);
+
+  useEffect(() => {
+    if (activeId && graph.nodes.some((node) => node.id === activeId)) return;
+    setActiveId(graph.nodes.find((node) => node.kind === 'note' || node.kind === 'person')?.id ?? graph.nodes[0]?.id);
+  }, [activeId, graph.nodes]);
 
   const visibleGraph = useMemo(
     () =>
@@ -92,9 +126,11 @@ export function NotesGraphPage() {
         depth,
         showMissing,
         showTags,
+        showPeople,
+        showDetails,
         query,
       }),
-    [activeId, depth, graph, mode, query, showMissing, showTags],
+    [activeId, depth, graph, mode, query, showDetails, showMissing, showPeople, showTags],
   );
 
   useEffect(() => {
@@ -104,7 +140,9 @@ export function NotesGraphPage() {
 
   const pointById = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
   pointByIdRef.current = pointById;
-  const activeNote = notes.find((note) => note.id === activeId);
+  const activeNode = graph.nodes.find((node) => node.id === activeId);
+  const activeNote = activeNode?.note;
+  const activePerson = activeNode?.person;
 
   useEffect(() => {
     let frame = 0;
@@ -145,8 +183,15 @@ export function NotesGraphPage() {
           const dx = target.x - source.x;
           const dy = target.y - source.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const preferred = link.kind === 'tag' ? 84 : 116;
-          let stiffness = link.kind === 'tag' ? 0.03 : 0.055;
+          const preferred =
+            link.kind === 'tag'
+              ? 84
+              : link.kind === 'person-relation'
+                ? 138
+                : link.kind.startsWith('person-')
+                  ? 110
+                  : 116;
+          let stiffness = link.kind === 'tag' ? 0.03 : link.kind === 'person-relation' ? 0.04 : 0.055;
           // Direct neighbours of the grabbed node trail it more tightly.
           if (draggingId && (link.source === draggingId || link.target === draggingId)) stiffness *= 1.7;
           const force = (dist - preferred) * stiffness;
@@ -270,7 +315,7 @@ export function NotesGraphPage() {
     const cursor = toGraphPoint(event.clientX, event.clientY);
     draggingIdRef.current = id;
     setDraggingId(id);
-    setActiveId(id.startsWith('missing:') || id.startsWith('tag:') ? activeIdRef.current : id);
+    setActiveId(point.kind === 'missing' || point.kind === 'tag' ? activeIdRef.current : id);
     dragOffset.current = { x: point.x - cursor.x, y: point.y - cursor.y };
     pointerSession.current = {
       id,
@@ -353,6 +398,7 @@ export function NotesGraphPage() {
         if (s && s.id === id && !s.moved && performance.now() - s.startedAt < TAP_TIME_LIMIT) {
           const point = pointByIdRef.current.get(id);
           if (point?.kind === 'note') navigate(`/notes/${id}`);
+          if (point?.kind === 'person' && point.person) navigate(`/people/${point.person.id}`);
         }
       }
       if (pointers.current.size === 0) {
@@ -377,7 +423,7 @@ export function NotesGraphPage() {
   }, [navigate]);
 
   return (
-    <Screen title="Граф заметок" subtitle={activeNote ? activeNote.title : 'Вся база'}>
+    <Screen title="Граф связей" subtitle={activeNode ? activeNode.label : 'Вся база'}>
       <div className="stack notes-page notes-graph-screen">
         <div className="card notes-graph-controls">
           <div className="segmented">
@@ -409,6 +455,19 @@ export function NotesGraphPage() {
               onClick={() => setShowMissing((v) => !v)}
             >
               Пустые
+            </button>
+            <button
+              className={`notes-toggle${showPeople ? ' is-active' : ''}`}
+              onClick={() => setShowPeople((v) => !v)}
+            >
+              Люди
+            </button>
+            <button
+              className={`notes-toggle${showDetails ? ' is-active' : ''}`}
+              onClick={() => setShowDetails((v) => !v)}
+              disabled={!showPeople}
+            >
+              Детали
             </button>
           </div>
           {mode === 'local' && (
@@ -442,6 +501,10 @@ export function NotesGraphPage() {
                   <linearGradient id="noteNodeGradientInteractive" x1="0" x2="1" y1="0" y2="1">
                     <stop offset="0%" stopColor="var(--accent-grad-1)" />
                     <stop offset="100%" stopColor="var(--accent-grad-2)" />
+                  </linearGradient>
+                  <linearGradient id="personNodeGradientInteractive" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#ee7f8f" />
+                    <stop offset="100%" stopColor="#f2b37e" />
                   </linearGradient>
                 </defs>
                 <g transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}>
@@ -500,10 +563,15 @@ export function NotesGraphPage() {
 
         <div className="card notes-graph-hint">
           Перетаскивайте поле или узлы, щипком двумя пальцами (или колесо/кнопки) — масштаб.
-          Короткий тап откроет заметку.
+          Короткий тап откроет заметку или человека.
           {activeNote && (
             <button className="btn btn--ghost btn--block" onClick={() => navigate(`/notes/${activeNote.id}`)}>
               Открыть «{activeNote.title}»
+            </button>
+          )}
+          {activePerson && (
+            <button className="btn btn--ghost btn--block" onClick={() => navigate(`/people/${activePerson.id}`)}>
+              Открыть «{activePerson.name}»
             </button>
           )}
         </div>

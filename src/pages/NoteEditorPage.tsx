@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ConfirmDialog, Screen } from '@/components/ui';
+import { ConfirmDialog, Screen, Sheet } from '@/components/ui';
 import { NoteMarkdown } from '@/components/NoteMarkdown';
-import { IconCheck, IconImage, IconPaperclip, IconPencil, IconTrash } from '@/components/icons';
+import { IconCheck, IconHeart, IconImage, IconPaperclip, IconPencil, IconTrash } from '@/components/icons';
 import type { NoteAttachment } from '@/types';
 import { useFinanceStore } from '@/store';
 import {
@@ -52,6 +52,10 @@ export function NoteEditorPage() {
   const addNote = useFinanceStore((s) => s.addNote);
   const updateNote = useFinanceStore((s) => s.updateNote);
   const removeNote = useFinanceStore((s) => s.removeNote);
+  const people = useFinanceStore((s) => s.people);
+  const personNoteLinks = useFinanceStore((s) => s.personNoteLinks);
+  const linkNoteToPerson = useFinanceStore((s) => s.linkNoteToPerson);
+  const unlinkNoteFromPerson = useFinanceStore((s) => s.unlinkNoteFromPerson);
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLInputElement | null>(null);
@@ -64,6 +68,7 @@ export function NoteEditorPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
   const [wiki, setWiki] = useState<{ start: number; query: string } | null>(null);
+  const [peopleSheet, setPeopleSheet] = useState(false);
 
   // Refs that mirror state so the unmount flush can read the latest values.
   const latest = useRef({ title, body, attachments });
@@ -170,6 +175,12 @@ export function NoteEditorPage() {
 
   const note = id ? existing : undefined;
   const relations = useMemo(() => getNoteRelations(note, notes), [note, notes]);
+  const linkedPeople = useMemo(() => {
+    const noteId = currentId.current ?? id;
+    if (!noteId) return [];
+    const personIds = new Set(personNoteLinks.filter((link) => link.noteId === noteId).map((link) => link.personId));
+    return people.filter((person) => personIds.has(person.id));
+  }, [id, people, personNoteLinks]);
 
   if (id && hydrated && !existing && !deleted.current) return <Navigate to="/notes" replace />;
 
@@ -281,6 +292,15 @@ export function NoteEditorPage() {
   const openNote = (noteId: string) => {
     persistRef.current();
     navigate(`/notes/${noteId}`);
+  };
+
+  const openPeopleSheet = () => {
+    persistRef.current();
+    if (!currentId.current) {
+      notifyWarning();
+      return;
+    }
+    setPeopleSheet(true);
   };
 
   const openMissing = (linkTitle: string) => {
@@ -473,6 +493,33 @@ export function NoteEditorPage() {
 
         {mode === 'view' && hasTasks && <TaskProgress body={body} />}
 
+        {(linkedPeople.length > 0 || note) && (
+          <div className="notes-relations notes-relations--editor">
+            <div className="notes-relation-row">
+              <span>Люди</span>
+              <div>
+                {linkedPeople.map((person) => (
+                  <button
+                    key={person.id}
+                    className="note-chip note-chip--person"
+                    onClick={() => {
+                      persistRef.current();
+                      navigate(`/people/${person.id}`);
+                    }}
+                  >
+                    <IconHeart size={13} /> {person.name}
+                  </button>
+                ))}
+                {people.length > 0 && (
+                  <button className="note-chip note-chip--new" onClick={openPeopleSheet}>
+                    + связать
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {note && (relations.outgoing.length > 0 || relations.backlinks.length > 0 || relations.missing.length > 0) && (
           <div className="notes-relations notes-relations--editor">
             {relations.outgoing.length > 0 && (
@@ -564,6 +611,33 @@ export function NoteEditorPage() {
           onClose={() => setConfirmDelete(false)}
           onConfirm={deleteNote}
         />
+      )}
+
+      {peopleSheet && currentId.current && (
+        <Sheet title="Связанные люди" onClose={() => setPeopleSheet(false)}>
+          <div className="sheet-list">
+            {people.map((person) => {
+              const linked = personNoteLinks.some(
+                (link) => link.noteId === currentId.current && link.personId === person.id,
+              );
+              return (
+                <button
+                  key={person.id}
+                  className="flow-row"
+                  onClick={() => {
+                    if (!currentId.current) return;
+                    if (linked) unlinkNoteFromPerson(person.id, currentId.current);
+                    else linkNoteToPerson(person.id, currentId.current);
+                    selectionChanged();
+                  }}
+                >
+                  <span className="flow-row__name">{person.name}</span>
+                  <span className="flow-row__amount">{linked ? '✓' : '+'}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Sheet>
       )}
     </Screen>
   );

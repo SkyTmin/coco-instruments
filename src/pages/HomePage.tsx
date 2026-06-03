@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatedNumber, Screen, Skeleton } from '@/components/ui';
-import { IconNotes, IconShirt, IconWallet } from '@/components/icons';
+import { IconHeart, IconNotes, IconShirt, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
 import { toISO, todayISO } from '@/lib/date';
 import { formatRUB, pluralizeRu, relativeDay } from '@/lib/format';
+import { nextBirthday, peopleStats, peopleUpcomingEvents, peopleWord } from '@/lib/people';
 import { tapLight } from '@/lib/haptics';
 
 function notesWord(n: number): string {
@@ -21,6 +22,10 @@ export function HomePage() {
   const expenses = useFinanceStore((s) => s.expenses);
   const recurring = useFinanceStore((s) => s.recurring);
   const notes = useFinanceStore((s) => s.notes);
+  const people = useFinanceStore((s) => s.people);
+  const gifts = useFinanceStore((s) => s.gifts);
+  const promises = useFinanceStore((s) => s.promises);
+  const meetIdeas = useFinanceStore((s) => s.meetIdeas);
   const wardrobe = useFinanceStore((s) => s.wardrobe);
   const outfits = useFinanceStore((s) => s.outfits);
   const hydrated = useFinanceStore((s) => s.hydrated);
@@ -51,6 +56,20 @@ export function HomePage() {
     return collectPayments(todayISO(), end, expenses, recurring)[0];
   }, [expenses, recurring]);
 
+  const peopleCard = useMemo(() => {
+    const stats = peopleStats({ people, gifts, promises });
+    const nearestBirthday = people
+      .flatMap((person) => {
+        const birthday = nextBirthday(person);
+        return birthday ? [{ person, birthday }] : [];
+      })
+      .sort((a, b) => a.birthday.days - b.birthday.days)[0];
+    const reminders = peopleUpcomingEvents({ people, gifts, promises, meetIdeas, withinDays: 14 }).filter(
+      (event) => event.kind !== 'birthday',
+    ).length;
+    return { ...stats, nearestBirthday, reminders };
+  }, [gifts, meetIdeas, people, promises]);
+
   const go = (path: string) => {
     tapLight();
     navigate(path);
@@ -61,6 +80,7 @@ export function HomePage() {
       <Screen title="Coco" subtitle="Личный помощник">
         <div className="home-grid">
           <Skeleton height={132} radius={24} />
+          <Skeleton height={120} radius={24} />
           <Skeleton height={120} radius={24} />
           <Skeleton height={120} radius={24} />
         </div>
@@ -115,6 +135,38 @@ export function HomePage() {
             <div className="home-card__desc">
               {notes.length ? `${notes.length} ${notesWord(notes.length)}` : 'Связи, теги и граф идей'}
             </div>
+          </div>
+        </div>
+
+        <div className="home-card home-card--people" onClick={() => go('/people')} role="button">
+          <div className="home-card__glow" />
+          <div className="home-card__icon">
+            <IconHeart />
+          </div>
+          <div className="home-card__body">
+            <div className="home-card__title">Люди</div>
+            {people.length ? (
+              <>
+                <div className="home-card__stats">
+                  <div className="hc-stat">
+                    <div className="hc-stat__num">{people.length}</div>
+                    <div className="hc-stat__lbl">{peopleWord(people.length)}</div>
+                  </div>
+                  <div className="hc-stat">
+                    <div className="hc-stat__num">{peopleCard.reminders}</div>
+                    <div className="hc-stat__lbl">напоминаний</div>
+                  </div>
+                </div>
+                {peopleCard.nearestBirthday && (
+                  <div className="hc-next">
+                    <span className="hc-next__dot" />
+                    ДР: <b>{peopleCard.nearestBirthday.person.name}</b> · {peopleCard.nearestBirthday.birthday.label}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="home-card__desc">Близкие, даты и важное</div>
+            )}
           </div>
         </div>
 

@@ -29,6 +29,9 @@ import { WishFormPage } from '@/pages/clothing/WishFormPage';
 import { NoteEditorPage } from '@/pages/NoteEditorPage';
 import { NotesGraphPage } from '@/pages/NotesGraphPage';
 import { NotesPage } from '@/pages/NotesPage';
+import { PeopleDashboardPage } from '@/pages/people/PeopleDashboardPage';
+import { PersonDetailPage } from '@/pages/people/PersonDetailPage';
+import { PersonFormPage } from '@/pages/people/PersonFormPage';
 import { FinanceDashboardPage } from '@/pages/finance/FinanceDashboardPage';
 import { ExpensesListPage } from '@/pages/finance/ExpensesListPage';
 import { ExpenseFormPage } from '@/pages/finance/ExpenseFormPage';
@@ -145,6 +148,10 @@ export function App() {
           <Route path="/notes/new" element={<NoteEditorPage />} />
           <Route path="/notes/graph" element={<NotesGraphPage />} />
           <Route path="/notes/:id" element={<NoteEditorPage />} />
+          <Route path="/people" element={<PeopleDashboardPage />} />
+          <Route path="/people/new" element={<PersonFormPage />} />
+          <Route path="/people/:id" element={<PersonDetailPage />} />
+          <Route path="/people/:id/edit" element={<PersonFormPage />} />
           <Route path="/clothing" element={<ClothingDashboardPage />} />
           <Route path="/clothing/shuffle" element={<ShufflePage />} />
           <Route path="/clothing/wardrobe" element={<WardrobePage />} />

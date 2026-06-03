@@ -233,6 +233,134 @@ export interface NotesBlob {
   items: Note[];
 }
 
+// ---- People: personal relationship base ----------------------------------
+
+export type PersonCategory = 'family' | 'friend' | 'work' | 'relationship' | 'other';
+export type PersonCloseness = 1 | 2 | 3 | 4 | 5;
+export type PreferenceType =
+  | 'food'
+  | 'drink'
+  | 'music'
+  | 'movies'
+  | 'places'
+  | 'colors'
+  | 'style'
+  | 'hobbies'
+  | 'dislikes'
+  | 'other';
+export type GiftStatus = 'idea' | 'bought' | 'given';
+export type ConversationImportance = 'low' | 'normal' | 'high';
+export type ConversationMood = 'warm' | 'neutral' | 'hard' | 'happy';
+export type PersonPromiseStatus = 'open' | 'done' | 'cancelled';
+export type MeetIdeaStatus = 'idea' | 'planned' | 'done';
+export type PersonRelationType = 'friend' | 'relative' | 'colleague' | 'acquaintance' | 'couple' | 'other';
+
+/** A person in the private relationship base, not a phonebook contact. */
+export interface Person {
+  id: string;
+  name: string;
+  avatar?: Attachment;
+  category: PersonCategory;
+  closeness: PersonCloseness;
+  birthday?: string;
+  phone?: string;
+  socials?: string;
+  city?: string;
+  /** "Кто это для меня?" */
+  description?: string;
+  tags: string[];
+  favorite: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Preference {
+  id: string;
+  personId: string;
+  type: PreferenceType;
+  value: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Gift {
+  id: string;
+  personId: string;
+  title: string;
+  status: GiftStatus;
+  price?: number;
+  date?: string;
+  reaction?: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Conversation {
+  id: string;
+  personId: string;
+  date: string;
+  title: string;
+  note?: string;
+  importance: ConversationImportance;
+  mood?: ConversationMood;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PersonPromise {
+  id: string;
+  personId: string;
+  title: string;
+  dueDate?: string;
+  reminderDate?: string;
+  status: PersonPromiseStatus;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MeetIdea {
+  id: string;
+  personId: string;
+  title: string;
+  status: MeetIdeaStatus;
+  date?: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PersonRelation {
+  id: string;
+  fromPersonId: string;
+  toPersonId: string;
+  relationType: PersonRelationType;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PersonNoteLink {
+  id: string;
+  personId: string;
+  noteId: string;
+  createdAt: number;
+}
+
+export interface PeopleBlob {
+  version: 1;
+  people: Person[];
+  preferences: Preference[];
+  gifts: Gift[];
+  conversations: Conversation[];
+  promises: PersonPromise[];
+  meetIdeas: MeetIdea[];
+  relations: PersonRelation[];
+  noteLinks: PersonNoteLink[];
+}
+
 // ---- Clothing: wardrobe items, outfits, sizes, wishlist -------------------
 
 export type ClothingCategory = 'top' | 'bottom' | 'outerwear' | 'shoes' | 'accessory' | 'other';

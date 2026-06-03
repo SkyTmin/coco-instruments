@@ -11,6 +11,15 @@ import type {
   Obligation,
   Outfit,
   Payment,
+  Conversation,
+  Gift,
+  MeetIdea,
+  PeopleBlob,
+  Person,
+  PersonNoteLink,
+  PersonPromise,
+  PersonRelation,
+  Preference,
   RecurringPayment,
   ReminderPrefs,
   SavingsGoal,
@@ -41,6 +50,14 @@ export type NoteDraft = Omit<Note, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type ListDraft = Omit<ExpenseList, 'id' | 'createdAt' | 'updatedAt'>;
 
+export type PersonDraft = Omit<Person, 'id' | 'createdAt' | 'updatedAt'>;
+export type PreferenceDraft = Omit<Preference, 'id' | 'createdAt' | 'updatedAt'>;
+export type GiftDraft = Omit<Gift, 'id' | 'createdAt' | 'updatedAt'>;
+export type ConversationDraft = Omit<Conversation, 'id' | 'createdAt' | 'updatedAt'>;
+export type PersonPromiseDraft = Omit<PersonPromise, 'id' | 'createdAt' | 'updatedAt'>;
+export type MeetIdeaDraft = Omit<MeetIdea, 'id' | 'createdAt' | 'updatedAt'>;
+export type PersonRelationDraft = Omit<PersonRelation, 'id' | 'createdAt' | 'updatedAt'>;
+
 export type WardrobeItemDraft = Omit<WardrobeItem, 'id' | 'createdAt' | 'updatedAt'>;
 export type OutfitDraft = Omit<Outfit, 'id' | 'createdAt' | 'updatedAt'>;
 export type WishDraft = Omit<WishItem, 'id' | 'createdAt' | 'updatedAt'>;
@@ -51,6 +68,15 @@ function normalize(o: Obligation): Obligation {
   const paid = paidSoFar(o.payments);
   const status = o.manuallyClosed ? 'closed' : deriveStatus(paid, total);
   return { ...o, status, updatedAt: Date.now() };
+}
+
+function uniqueTags(tags: string[]): string[] {
+  return Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean)));
+}
+
+function touchPeople(people: Person[], personId: string): Person[] {
+  const now = Date.now();
+  return people.map((person) => (person.id === personId ? { ...person, updatedAt: now } : person));
 }
 
 // --- Debounced persistence --------------------------------------------------
@@ -89,6 +115,7 @@ const writeSavings = makePersister<FinanceSavingsBlob>(STORAGE_KEYS.savings);
 const writeRecurring = makePersister<FinanceRecurringBlob>(STORAGE_KEYS.recurring);
 const writeLists = makePersister<FinanceListsBlob>(STORAGE_KEYS.lists);
 const writeNotes = makePersister<NotesBlob>(STORAGE_KEYS.notes);
+const writePeople = makePersister<PeopleBlob>(STORAGE_KEYS.people);
 const writeReminders = makePersister<FinanceRemindersBlob>(STORAGE_KEYS.reminders);
 const writeWardrobe = makePersister<WardrobeItemsBlob>(STORAGE_KEYS.wardrobe);
 const writeOutfits = makePersister<WardrobeOutfitsBlob>(STORAGE_KEYS.outfits);
@@ -100,6 +127,7 @@ const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, item
 const persistRecurring = (items: RecurringPayment[]) => writeRecurring({ version: 1, items });
 const persistLists = (items: ExpenseList[]) => writeLists({ version: 1, items });
 const persistNotes = (items: Note[]) => writeNotes({ version: 1, items });
+const persistPeople = (blob: Omit<PeopleBlob, 'version'>) => writePeople({ version: 1, ...blob });
 const persistReminderPrefs = (prefs: ReminderPrefs) => writeReminders({ version: 1, prefs });
 const persistWardrobe = (items: WardrobeItem[]) => writeWardrobe({ version: 1, items });
 const persistOutfits = (items: Outfit[]) => writeOutfits({ version: 1, items });
@@ -112,6 +140,14 @@ interface FinanceState {
   recurring: RecurringPayment[];
   lists: ExpenseList[];
   notes: Note[];
+  people: Person[];
+  preferences: Preference[];
+  gifts: Gift[];
+  conversations: Conversation[];
+  promises: PersonPromise[];
+  meetIdeas: MeetIdea[];
+  personRelations: PersonRelation[];
+  personNoteLinks: PersonNoteLink[];
   wardrobe: WardrobeItem[];
   outfits: Outfit[];
   wishlist: WishItem[];
@@ -150,6 +186,35 @@ interface FinanceState {
   removeNote: (id: string) => void;
   getNote: (id: string) => Note | undefined;
 
+  addPerson: (draft: PersonDraft) => Person;
+  updatePerson: (id: string, patch: Partial<Person>) => void;
+  removePerson: (id: string) => void;
+  getPerson: (id: string) => Person | undefined;
+
+  addPreference: (draft: PreferenceDraft) => Preference;
+  removePreference: (id: string) => void;
+
+  addGift: (draft: GiftDraft) => Gift;
+  updateGift: (id: string, patch: Partial<Gift>) => void;
+  removeGift: (id: string) => void;
+
+  addConversation: (draft: ConversationDraft) => Conversation;
+  removeConversation: (id: string) => void;
+
+  addPromise: (draft: PersonPromiseDraft) => PersonPromise;
+  updatePromise: (id: string, patch: Partial<PersonPromise>) => void;
+  removePromise: (id: string) => void;
+
+  addMeetIdea: (draft: MeetIdeaDraft) => MeetIdea;
+  updateMeetIdea: (id: string, patch: Partial<MeetIdea>) => void;
+  removeMeetIdea: (id: string) => void;
+
+  addPersonRelation: (draft: PersonRelationDraft) => PersonRelation;
+  removePersonRelation: (id: string) => void;
+
+  linkNoteToPerson: (personId: string, noteId: string) => void;
+  unlinkNoteFromPerson: (personId: string, noteId: string) => void;
+
   addItem: (draft: WardrobeItemDraft) => WardrobeItem;
   updateItem: (id: string, patch: Partial<WardrobeItem>) => void;
   removeItem: (id: string) => void;
@@ -170,12 +235,33 @@ interface FinanceState {
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
 
+function peopleSnapshot(state: FinanceState): Omit<PeopleBlob, 'version'> {
+  return {
+    people: state.people,
+    preferences: state.preferences,
+    gifts: state.gifts,
+    conversations: state.conversations,
+    promises: state.promises,
+    meetIdeas: state.meetIdeas,
+    relations: state.personRelations,
+    noteLinks: state.personNoteLinks,
+  };
+}
+
 export const useFinanceStore = create<FinanceState>((set, get) => ({
   expenses: [],
   savings: [],
   recurring: [],
   lists: [],
   notes: [],
+  people: [],
+  preferences: [],
+  gifts: [],
+  conversations: [],
+  promises: [],
+  meetIdeas: [],
+  personRelations: [],
+  personNoteLinks: [],
   wardrobe: [],
   outfits: [],
   wishlist: [],
@@ -185,12 +271,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   hydrate: async () => {
     const storage = getStorage();
-    const [exp, sav, rec, lists, notes, rem, ward, outf, wish, sizes] = await Promise.all([
+    const [exp, sav, rec, lists, notes, people, rem, ward, outf, wish, sizes] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
       storage.get<FinanceRecurringBlob>(STORAGE_KEYS.recurring),
       storage.get<FinanceListsBlob>(STORAGE_KEYS.lists),
       storage.get<NotesBlob>(STORAGE_KEYS.notes),
+      storage.get<PeopleBlob>(STORAGE_KEYS.people),
       storage.get<FinanceRemindersBlob>(STORAGE_KEYS.reminders),
       storage.get<WardrobeItemsBlob>(STORAGE_KEYS.wardrobe),
       storage.get<WardrobeOutfitsBlob>(STORAGE_KEYS.outfits),
@@ -203,6 +290,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       recurring: rec?.items ?? [],
       lists: lists?.items ?? [],
       notes: notes?.items ?? [],
+      people: people?.people ?? [],
+      preferences: people?.preferences ?? [],
+      gifts: people?.gifts ?? [],
+      conversations: people?.conversations ?? [],
+      promises: people?.promises ?? [],
+      meetIdeas: people?.meetIdeas ?? [],
+      personRelations: people?.relations ?? [],
+      personNoteLinks: people?.noteLinks ?? [],
       wardrobe: ward?.items ?? [],
       outfits: outf?.items ?? [],
       wishlist: wish?.items ?? [],
@@ -387,11 +482,302 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   removeNote: (id) => {
     const notes = get().notes.filter((n) => n.id !== id);
-    set({ notes });
+    const personNoteLinks = get().personNoteLinks.filter((link) => link.noteId !== id);
+    set({ notes, personNoteLinks });
     persistNotes(notes);
+    persistPeople(peopleSnapshot(get()));
   },
 
   getNote: (id) => get().notes.find((n) => n.id === id),
+
+  addPerson: (draft) => {
+    const now = Date.now();
+    const person: Person = {
+      ...draft,
+      id: genId(),
+      name: draft.name.trim(),
+      description: draft.description?.trim() || undefined,
+      phone: draft.phone?.trim() || undefined,
+      socials: draft.socials?.trim() || undefined,
+      city: draft.city?.trim() || undefined,
+      tags: uniqueTags(draft.tags),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const people = [person, ...get().people];
+    set({ people });
+    persistPeople(peopleSnapshot(get()));
+    return person;
+  },
+
+  updatePerson: (id, patch) => {
+    const people = get().people.map((person) =>
+      person.id === id
+        ? {
+            ...person,
+            ...patch,
+            name: patch.name !== undefined ? patch.name.trim() : person.name,
+            description: patch.description !== undefined ? patch.description.trim() || undefined : person.description,
+            phone: patch.phone !== undefined ? patch.phone.trim() || undefined : person.phone,
+            socials: patch.socials !== undefined ? patch.socials.trim() || undefined : person.socials,
+            city: patch.city !== undefined ? patch.city.trim() || undefined : person.city,
+            tags: patch.tags !== undefined ? uniqueTags(patch.tags) : person.tags,
+            updatedAt: Date.now(),
+          }
+        : person,
+    );
+    set({ people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  removePerson: (id) => {
+    const people = get().people.filter((person) => person.id !== id);
+    const preferences = get().preferences.filter((item) => item.personId !== id);
+    const gifts = get().gifts.filter((item) => item.personId !== id);
+    const conversations = get().conversations.filter((item) => item.personId !== id);
+    const promises = get().promises.filter((item) => item.personId !== id);
+    const meetIdeas = get().meetIdeas.filter((item) => item.personId !== id);
+    const personRelations = get().personRelations.filter(
+      (item) => item.fromPersonId !== id && item.toPersonId !== id,
+    );
+    const personNoteLinks = get().personNoteLinks.filter((item) => item.personId !== id);
+    set({ people, preferences, gifts, conversations, promises, meetIdeas, personRelations, personNoteLinks });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  getPerson: (id) => get().people.find((person) => person.id === id),
+
+  addPreference: (draft) => {
+    const now = Date.now();
+    const preference: Preference = {
+      ...draft,
+      id: genId(),
+      value: draft.value.trim(),
+      note: draft.note?.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const preferences = [preference, ...get().preferences];
+    const people = touchPeople(get().people, draft.personId);
+    set({ preferences, people });
+    persistPeople(peopleSnapshot(get()));
+    return preference;
+  },
+
+  removePreference: (id) => {
+    const item = get().preferences.find((pref) => pref.id === id);
+    const preferences = get().preferences.filter((pref) => pref.id !== id);
+    const people = item ? touchPeople(get().people, item.personId) : get().people;
+    set({ preferences, people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  addGift: (draft) => {
+    const now = Date.now();
+    const gift: Gift = {
+      ...draft,
+      id: genId(),
+      title: draft.title.trim(),
+      reaction: draft.reaction?.trim() || undefined,
+      note: draft.note?.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const gifts = [gift, ...get().gifts];
+    const people = touchPeople(get().people, draft.personId);
+    set({ gifts, people });
+    persistPeople(peopleSnapshot(get()));
+    return gift;
+  },
+
+  updateGift: (id, patch) => {
+    let personId = '';
+    const gifts = get().gifts.map((gift) => {
+      if (gift.id !== id) return gift;
+      personId = gift.personId;
+      return {
+        ...gift,
+        ...patch,
+        title: patch.title !== undefined ? patch.title.trim() : gift.title,
+        reaction: patch.reaction !== undefined ? patch.reaction.trim() || undefined : gift.reaction,
+        note: patch.note !== undefined ? patch.note.trim() || undefined : gift.note,
+        updatedAt: Date.now(),
+      };
+    });
+    const people = personId ? touchPeople(get().people, personId) : get().people;
+    set({ gifts, people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  removeGift: (id) => {
+    const item = get().gifts.find((gift) => gift.id === id);
+    const gifts = get().gifts.filter((gift) => gift.id !== id);
+    const people = item ? touchPeople(get().people, item.personId) : get().people;
+    set({ gifts, people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  addConversation: (draft) => {
+    const now = Date.now();
+    const conversation: Conversation = {
+      ...draft,
+      id: genId(),
+      title: draft.title.trim(),
+      note: draft.note?.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const conversations = [conversation, ...get().conversations];
+    const people = touchPeople(get().people, draft.personId);
+    set({ conversations, people });
+    persistPeople(peopleSnapshot(get()));
+    return conversation;
+  },
+
+  removeConversation: (id) => {
+    const item = get().conversations.find((conversation) => conversation.id === id);
+    const conversations = get().conversations.filter((conversation) => conversation.id !== id);
+    const people = item ? touchPeople(get().people, item.personId) : get().people;
+    set({ conversations, people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  addPromise: (draft) => {
+    const now = Date.now();
+    const promise: PersonPromise = {
+      ...draft,
+      id: genId(),
+      title: draft.title.trim(),
+      note: draft.note?.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const promises = [promise, ...get().promises];
+    const people = touchPeople(get().people, draft.personId);
+    set({ promises, people });
+    persistPeople(peopleSnapshot(get()));
+    return promise;
+  },
+
+  updatePromise: (id, patch) => {
+    let personId = '';
+    const promises = get().promises.map((promise) => {
+      if (promise.id !== id) return promise;
+      personId = promise.personId;
+      return {
+        ...promise,
+        ...patch,
+        title: patch.title !== undefined ? patch.title.trim() : promise.title,
+        note: patch.note !== undefined ? patch.note.trim() || undefined : promise.note,
+        updatedAt: Date.now(),
+      };
+    });
+    const people = personId ? touchPeople(get().people, personId) : get().people;
+    set({ promises, people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  removePromise: (id) => {
+    const item = get().promises.find((promise) => promise.id === id);
+    const promises = get().promises.filter((promise) => promise.id !== id);
+    const people = item ? touchPeople(get().people, item.personId) : get().people;
+    set({ promises, people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  addMeetIdea: (draft) => {
+    const now = Date.now();
+    const meetIdea: MeetIdea = {
+      ...draft,
+      id: genId(),
+      title: draft.title.trim(),
+      note: draft.note?.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const meetIdeas = [meetIdea, ...get().meetIdeas];
+    const people = touchPeople(get().people, draft.personId);
+    set({ meetIdeas, people });
+    persistPeople(peopleSnapshot(get()));
+    return meetIdea;
+  },
+
+  updateMeetIdea: (id, patch) => {
+    let personId = '';
+    const meetIdeas = get().meetIdeas.map((meetIdea) => {
+      if (meetIdea.id !== id) return meetIdea;
+      personId = meetIdea.personId;
+      return {
+        ...meetIdea,
+        ...patch,
+        title: patch.title !== undefined ? patch.title.trim() : meetIdea.title,
+        note: patch.note !== undefined ? patch.note.trim() || undefined : meetIdea.note,
+        updatedAt: Date.now(),
+      };
+    });
+    const people = personId ? touchPeople(get().people, personId) : get().people;
+    set({ meetIdeas, people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  removeMeetIdea: (id) => {
+    const item = get().meetIdeas.find((meetIdea) => meetIdea.id === id);
+    const meetIdeas = get().meetIdeas.filter((meetIdea) => meetIdea.id !== id);
+    const people = item ? touchPeople(get().people, item.personId) : get().people;
+    set({ meetIdeas, people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  addPersonRelation: (draft) => {
+    const now = Date.now();
+    const existing = get().personRelations.find(
+      (relation) =>
+        relation.fromPersonId === draft.fromPersonId &&
+        relation.toPersonId === draft.toPersonId &&
+        relation.relationType === draft.relationType,
+    );
+    if (existing) return existing;
+    const relation: PersonRelation = {
+      ...draft,
+      id: genId(),
+      note: draft.note?.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const personRelations = [relation, ...get().personRelations];
+    const people = touchPeople(touchPeople(get().people, draft.fromPersonId), draft.toPersonId);
+    set({ personRelations, people });
+    persistPeople(peopleSnapshot(get()));
+    return relation;
+  },
+
+  removePersonRelation: (id) => {
+    const item = get().personRelations.find((relation) => relation.id === id);
+    const personRelations = get().personRelations.filter((relation) => relation.id !== id);
+    const people = item
+      ? touchPeople(touchPeople(get().people, item.fromPersonId), item.toPersonId)
+      : get().people;
+    set({ personRelations, people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  linkNoteToPerson: (personId, noteId) => {
+    const exists = get().personNoteLinks.some((link) => link.personId === personId && link.noteId === noteId);
+    if (exists) return;
+    const personNoteLinks = [{ id: genId(), personId, noteId, createdAt: Date.now() }, ...get().personNoteLinks];
+    const people = touchPeople(get().people, personId);
+    set({ personNoteLinks, people });
+    persistPeople(peopleSnapshot(get()));
+  },
+
+  unlinkNoteFromPerson: (personId, noteId) => {
+    const personNoteLinks = get().personNoteLinks.filter(
+      (link) => !(link.personId === personId && link.noteId === noteId),
+    );
+    const people = touchPeople(get().people, personId);
+    set({ personNoteLinks, people });
+    persistPeople(peopleSnapshot(get()));
+  },
 
   addItem: (draft) => {
     const now = Date.now();
