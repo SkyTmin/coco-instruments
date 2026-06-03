@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { EmptyState, Screen } from '@/components/ui';
 import { IconCheck, IconSparkles } from '@/components/icons';
 import { useFinanceStore } from '@/store';
-import { CATEGORY_EMOJI, CATEGORY_LABEL, suggestOutfit } from '@/lib/clothing';
-import { attachmentHref } from '@/lib/images';
+import { WardrobeCard } from '@/components/clothing-cards';
+import { CATEGORY_LABEL, suggestOutfit } from '@/lib/clothing';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 
 export function ShufflePage() {
@@ -44,24 +44,16 @@ export function ShufflePage() {
       <div className="stack">
         <div key={spin} className="wardrobe-grid">
           {combo.map((it, i) => (
-            <div
+            <WardrobeCard
               key={it.id}
-              className="wardrobe-card"
+              item={it}
+              badge={CATEGORY_LABEL[it.category]}
               style={{ animationDelay: `${i * 60}ms` }}
               onClick={() => {
                 tapLight();
                 navigate(`/clothing/wardrobe/${it.id}`);
               }}
-              role="button"
-            >
-              {it.photo ? (
-                <img src={attachmentHref(it.photo)} alt="" loading="lazy" />
-              ) : (
-                <div className="wardrobe-card__ph">{CATEGORY_EMOJI[it.category]}</div>
-              )}
-              <div className="wardrobe-card__name">{it.name}</div>
-              <div className="shuffle-slot">{CATEGORY_LABEL[it.category]}</div>
-            </div>
+            />
           ))}
         </div>
 

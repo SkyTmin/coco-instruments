@@ -2550,49 +2550,113 @@ input[type='datetime-local'] {
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 12px;
 }
+/* Shared photo: shimmer placeholder → fade/scale-in (fills a positioned parent) */
+.ph {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.ph__sk {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    var(--surface-2) 30%,
+    color-mix(in srgb, var(--surface-2) 55%, var(--surface)) 50%,
+    var(--surface-2) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+  transition: opacity 0.3s ease;
+}
+.ph.is-loaded .ph__sk { opacity: 0; }
+.ph__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.05);
+  transition: opacity 0.45s ease, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.ph.is-loaded .ph__img { opacity: 1; transform: none; }
+.ph--contain .ph__img { object-fit: contain; }
+@media (prefers-reduced-motion: reduce) {
+  .ph__sk { animation: none; }
+  .ph__img { transition: none; opacity: 1; transform: none; }
+}
+
+/* Unified wardrobe tile (grid / outfit members / shuffle) */
 .wardrobe-card {
   position: relative;
-  border-radius: 16px;
-  overflow: hidden;
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition: transform 0.1s ease;
-  animation: note-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-.wardrobe-card:active { transform: scale(0.97); }
-.wardrobe-card > img {
   display: block;
   width: 100%;
   aspect-ratio: 1 / 1;
-  object-fit: cover;
+  border: 0;
+  padding: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+  animation: note-in 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
+.wardrobe-card:active { transform: scale(0.96); }
 .wardrobe-card__ph {
-  width: 100%;
-  aspect-ratio: 1 / 1;
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
   font-size: 40px;
-  background: var(--surface-2);
+}
+.wardrobe-card__overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 18px 10px 9px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.62));
+  pointer-events: none;
 }
 .wardrobe-card__name {
-  padding: 8px 10px;
+  color: #fff;
   font-size: 13px;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.wardrobe-card__badge {
+  flex: none;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: rgba(255, 255, 255, 0.24);
+  padding: 2px 6px;
+  border-radius: 6px;
+  backdrop-filter: blur(2px);
 }
 
 /* Single big photo (item / outfit detail) */
 .item-photo {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  max-height: 62vh;
   border-radius: 20px;
   overflow: hidden;
   background: var(--surface-2);
   box-shadow: var(--shadow-sm);
 }
-.item-photo img { display: block; width: 100%; max-height: 460px; object-fit: cover; }
-.item-photo--ph { min-height: 220px; display: grid; place-items: center; font-size: 72px; }
+.item-photo--ph { aspect-ratio: 3 / 4; display: grid; place-items: center; font-size: 72px; }
 
 /* Outfit gallery */
 .outfit-grid {
@@ -2612,8 +2676,7 @@ input[type='datetime-local'] {
   animation: note-in 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 .outfit-card:active { transform: scale(0.98); }
-.outfit-card > img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.outfit-card__ph { width: 100%; height: 100%; display: grid; place-items: center; font-size: 52px; }
+.outfit-card__ph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 52px; }
 .outfit-card__overlay {
   position: absolute;
   inset: auto 0 0 0;
@@ -2717,6 +2780,8 @@ input[type='datetime-local'] {
 
 /* "Что надеть?" hero on the clothing dashboard */
 .shuffle-hero {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -2730,9 +2795,17 @@ input[type='datetime-local'] {
   background: linear-gradient(135deg, #7a5cc8, #c178c9);
   box-shadow: var(--shadow);
   transition: transform 0.12s ease;
-  animation: note-in 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 .shuffle-hero:active { transform: scale(0.985); }
+.shuffle-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: card-sheen 1.2s ease 0.55s;
+  pointer-events: none;
+}
 .shuffle-hero__icon {
   width: 44px;
   height: 44px;
@@ -2757,6 +2830,7 @@ input[type='datetime-local'] {
 }
 .wardrobe-strip::-webkit-scrollbar { display: none; }
 .wardrobe-strip__item {
+  position: relative;
   flex: none;
   width: 70px;
   height: 70px;
@@ -2768,17 +2842,19 @@ input[type='datetime-local'] {
   cursor: pointer;
   box-shadow: var(--shadow-sm);
 }
-.wardrobe-strip__item img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.wardrobe-strip__ph { display: grid; place-items: center; width: 100%; height: 100%; font-size: 28px; }
+.wardrobe-strip__ph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 28px; }
 
-/* Category label under a shuffled item */
-.shuffle-slot {
-  padding: 0 10px 8px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+/* Staggered entrance for the clothing dashboard */
+.clothing-dash > * { animation: note-in 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.clothing-dash > *:nth-child(2) { animation-delay: 0.05s; }
+.clothing-dash > *:nth-child(3) { animation-delay: 0.1s; }
+.clothing-dash > *:nth-child(4) { animation-delay: 0.15s; }
+.clothing-dash > *:nth-child(5) { animation-delay: 0.2s; }
+.clothing-dash > *:nth-child(6) { animation-delay: 0.25s; }
+.clothing-dash > *:nth-child(7) { animation-delay: 0.3s; }
+@media (prefers-reduced-motion: reduce) {
+  .shuffle-hero::after { animation: none; }
+  .clothing-dash > * { animation: none; }
 }
 
 /* Bulk upload progress overlay */

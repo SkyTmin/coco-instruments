@@ -3,6 +3,8 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, EmptyState, Screen, Sheet } from '@/components/ui';
 import { IconCheck, IconPencil, IconPlus, IconSparkles, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
+import { Photo } from '@/components/Photo';
+import { WardrobeCard } from '@/components/clothing-cards';
 import { CATEGORIES, CATEGORY_EMOJI } from '@/lib/clothing';
 import { attachmentHref } from '@/lib/images';
 import type { ClothingCategory, WardrobeItem } from '@/types';
@@ -44,7 +46,7 @@ export function OutfitDetailPage() {
       <div className="stack">
         {outfit.cover && (
           <div className="item-photo">
-            <img src={attachmentHref(outfit.cover)} alt="" />
+            <Photo src={attachmentHref(outfit.cover)} contain />
           </div>
         )}
 
@@ -60,14 +62,7 @@ export function OutfitDetailPage() {
         ) : (
           <div className="wardrobe-grid">
             {members.map((it) => (
-              <div key={it.id} className="wardrobe-card" onClick={() => go(`/clothing/wardrobe/${it.id}`)} role="button">
-                {it.photo ? (
-                  <img src={attachmentHref(it.photo)} alt="" loading="lazy" />
-                ) : (
-                  <div className="wardrobe-card__ph">{CATEGORY_EMOJI[it.category]}</div>
-                )}
-                <div className="wardrobe-card__name">{it.name}</div>
-              </div>
+              <WardrobeCard key={it.id} item={it} onClick={() => go(`/clothing/wardrobe/${it.id}`)} />
             ))}
           </div>
         )}

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { EmptyState, Fab, Screen } from '@/components/ui';
 import { useFinanceStore } from '@/store';
+import { Photo } from '@/components/Photo';
 import { attachmentHref } from '@/lib/images';
 import { pluralizeRu } from '@/lib/format';
 import { selectionChanged, tapLight } from '@/lib/haptics';
@@ -39,7 +40,7 @@ export function OutfitsPage() {
               role="button"
             >
               {o.cover ? (
-                <img src={attachmentHref(o.cover)} alt="" loading="lazy" />
+                <Photo src={attachmentHref(o.cover)} />
               ) : (
                 <div className="outfit-card__ph">🧥</div>
               )}

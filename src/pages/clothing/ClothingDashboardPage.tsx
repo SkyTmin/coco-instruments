@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Screen, SectionCard, Skeleton } from '@/components/ui';
 import { IconChart, IconHeart, IconImage, IconRuler, IconShirt, IconSparkles } from '@/components/icons';
 import { useFinanceStore } from '@/store';
+import { Photo } from '@/components/Photo';
 import { attachmentHref } from '@/lib/images';
 import { CATEGORY_EMOJI } from '@/lib/clothing';
 import { pluralizeRu } from '@/lib/format';
@@ -36,7 +37,7 @@ export function ClothingDashboardPage() {
 
   return (
     <Screen title="Одежда" subtitle="Гардероб и образы">
-      <div className="stack">
+      <div className="stack clothing-dash">
         {wardrobe.length >= 2 && (
           <button className="shuffle-hero" onClick={() => go('/clothing/shuffle')}>
             <div className="shuffle-hero__icon">
@@ -62,7 +63,7 @@ export function ClothingDashboardPage() {
                 aria-label={it.name}
               >
                 {it.photo ? (
-                  <img src={attachmentHref(it.photo)} alt="" loading="lazy" />
+                  <Photo src={attachmentHref(it.photo)} />
                 ) : (
                   <span className="wardrobe-strip__ph">{CATEGORY_EMOJI[it.category]}</span>
                 )}

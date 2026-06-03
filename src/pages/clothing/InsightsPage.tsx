@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { EmptyState, Screen, StatTile } from '@/components/ui';
+import { Photo } from '@/components/Photo';
 import { useFinanceStore } from '@/store';
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABEL } from '@/lib/clothing';
 import { attachmentHref } from '@/lib/images';
@@ -154,7 +155,7 @@ export function InsightsPage() {
               {d.neverWorn.slice(0, 14).map((it) => (
                 <button key={it.id} className="wardrobe-strip__item" onClick={() => go(it.id)} aria-label={it.name}>
                   {it.photo ? (
-                    <img src={attachmentHref(it.photo)} alt="" loading="lazy" />
+                    <Photo src={attachmentHref(it.photo)} />
                   ) : (
                     <span className="wardrobe-strip__ph">{CATEGORY_EMOJI[it.category]}</span>
                   )}

@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { EmptyState, Fab, Screen } from '@/components/ui';
 import { IconImage } from '@/components/icons';
 import { useFinanceStore } from '@/store';
-import { CATEGORIES, CATEGORY_EMOJI } from '@/lib/clothing';
-import { attachmentHref, fileToAttachment } from '@/lib/images';
+import { WardrobeCard } from '@/components/clothing-cards';
+import { CATEGORIES } from '@/lib/clothing';
+import { fileToAttachment } from '@/lib/images';
 import { pluralizeRu } from '@/lib/format';
 import type { ClothingCategory } from '@/types';
 import { notifySuccess, selectionChanged, tapLight } from '@/lib/haptics';
@@ -118,23 +119,15 @@ export function WardrobePage() {
 
           <div className="wardrobe-grid">
             {items.map((it, i) => (
-              <div
+              <WardrobeCard
                 key={it.id}
-                className="wardrobe-card"
+                item={it}
                 style={{ animationDelay: `${Math.min(i, 16) * 24}ms` }}
                 onClick={() => {
                   selectionChanged();
                   navigate(`/clothing/wardrobe/${it.id}`);
                 }}
-                role="button"
-              >
-                {it.photo ? (
-                  <img src={attachmentHref(it.photo)} alt="" loading="lazy" />
-                ) : (
-                  <div className="wardrobe-card__ph">{CATEGORY_EMOJI[it.category]}</div>
-                )}
-                <div className="wardrobe-card__name">{it.name}</div>
-              </div>
+              />
             ))}
           </div>
         </>

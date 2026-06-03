@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, Screen, StatRow } from '@/components/ui';
 import { IconCheck, IconPencil, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
+import { Photo } from '@/components/Photo';
 import { CATEGORY_EMOJI, CATEGORY_LABEL, SEASON_LABEL } from '@/lib/clothing';
 import { attachmentHref } from '@/lib/images';
 import { formatRUB, pluralizeRu, relativeDay } from '@/lib/format';
@@ -30,7 +31,7 @@ export function WardrobeItemDetailPage() {
       <div className="stack">
         {item.photo ? (
           <div className="item-photo">
-            <img src={attachmentHref(item.photo)} alt="" />
+            <Photo src={attachmentHref(item.photo)} contain />
           </div>
         ) : (
           <div className="item-photo item-photo--ph">{CATEGORY_EMOJI[item.category]}</div>
