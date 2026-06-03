@@ -355,7 +355,7 @@ export function NoteEditorPage() {
         <div className="notes-editor-actions">
           {mode === 'view' ? (
             <button
-              className="icon-btn notes-edit"
+              className="icon-btn notes-edit notes-edit--text"
               onClick={() => {
                 tapLight();
                 setMode('edit');
@@ -363,6 +363,7 @@ export function NoteEditorPage() {
               aria-label="Редактировать"
             >
               <IconPencil size={20} />
+              <span>Править</span>
             </button>
           ) : (
             <button

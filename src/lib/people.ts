@@ -36,6 +36,24 @@ export const PERSON_CATEGORY_EMOJI: Record<PersonCategory, string> = {
   other: '✨',
 };
 
+export function personCategories(person: Person): PersonCategory[] {
+  const values = person.categories?.length ? person.categories : [person.category];
+  return Array.from(new Set(values)).filter((category): category is PersonCategory => category in PERSON_CATEGORY_LABEL);
+}
+
+export function personCategoryLabel(person: Person): string {
+  return personCategories(person)
+    .map((category) => PERSON_CATEGORY_LABEL[category])
+    .join(' · ');
+}
+
+export function personCategoryEmoji(person: Person): string {
+  return personCategories(person)
+    .slice(0, 2)
+    .map((category) => PERSON_CATEGORY_EMOJI[category])
+    .join('');
+}
+
 export const CLOSENESS_LABEL: Record<PersonCloseness, string> = {
   1: 'обычный',
   2: 'приятель',

@@ -5,11 +5,12 @@ import { IconHeart, IconPlus } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { attachmentHref } from '@/lib/images';
 import {
-  PERSON_CATEGORY_EMOJI,
-  PERSON_CATEGORY_LABEL,
   birthdayInDays,
   latestPersonNote,
   nextBirthday,
+  personCategories,
+  personCategoryEmoji,
+  personCategoryLabel,
   peopleStats,
   peopleUpcomingEvents,
   peopleWord,
@@ -60,15 +61,16 @@ export function PeopleDashboardPage() {
     return [...people]
       .sort((a, b) => Number(b.favorite) - Number(a.favorite) || b.updatedAt - a.updatedAt)
       .filter((person) => {
+        const categories = personCategories(person);
         if (filter === 'close' && person.closeness < 4) return false;
-        if (filter === 'family' && person.category !== 'family') return false;
-        if (filter === 'friend' && person.category !== 'friend') return false;
-        if (filter === 'work' && person.category !== 'work') return false;
+        if (filter === 'family' && !categories.includes('family')) return false;
+        if (filter === 'friend' && !categories.includes('friend')) return false;
+        if (filter === 'work' && !categories.includes('work')) return false;
         if (filter === 'favorite' && !person.favorite) return false;
         if (filter === 'birthday' && !person.birthday) return false;
         if (!key) return true;
         return normalizeNoteTitle(
-          `${person.name} ${person.description ?? ''} ${person.city ?? ''} ${person.tags.join(' ')}`,
+          `${person.name} ${person.description ?? ''} ${person.city ?? ''} ${personCategoryLabel(person)} ${person.tags.join(' ')}`,
         ).includes(key);
       });
   }, [filter, people, query]);
@@ -197,7 +199,7 @@ export function PeopleDashboardPage() {
                       {person.favorite && <i>♡</i>}
                     </span>
                     <span className="person-card__meta">
-                      {PERSON_CATEGORY_EMOJI[person.category]} {PERSON_CATEGORY_LABEL[person.category]}
+                      {personCategoryEmoji(person)} {personCategoryLabel(person)}
                       {birthday && <> · день рождения {birthdayInDays(birthday.days)}</>}
                     </span>
                     <span className="person-card__note">{latestPersonNote(person, conversations)}</span>

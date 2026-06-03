@@ -74,6 +74,11 @@ function uniqueTags(tags: string[]): string[] {
   return Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean)));
 }
 
+function uniqueCategories(categories: Person['category'][] | undefined, fallback: Person['category']): Person['category'][] {
+  const values = Array.from(new Set([...(categories ?? []), fallback])).filter(Boolean);
+  return values.length ? values : [fallback];
+}
+
 function touchPeople(people: Person[], personId: string): Person[] {
   const now = Date.now();
   return people.map((person) => (person.id === personId ? { ...person, updatedAt: now } : person));
@@ -492,10 +497,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   addPerson: (draft) => {
     const now = Date.now();
+    const categories = uniqueCategories(draft.categories, draft.category);
     const person: Person = {
       ...draft,
       id: genId(),
       name: draft.name.trim(),
+      category: categories[0],
+      categories,
       description: draft.description?.trim() || undefined,
       phone: draft.phone?.trim() || undefined,
       socials: draft.socials?.trim() || undefined,
@@ -513,17 +521,25 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   updatePerson: (id, patch) => {
     const people = get().people.map((person) =>
       person.id === id
-        ? {
+        ? (() => {
+            const categories = uniqueCategories(
+              patch.categories !== undefined ? patch.categories : person.categories,
+              patch.category ?? person.category,
+            );
+            return {
             ...person,
             ...patch,
             name: patch.name !== undefined ? patch.name.trim() : person.name,
+            category: categories[0],
+            categories,
             description: patch.description !== undefined ? patch.description.trim() || undefined : person.description,
             phone: patch.phone !== undefined ? patch.phone.trim() || undefined : person.phone,
             socials: patch.socials !== undefined ? patch.socials.trim() || undefined : person.socials,
             city: patch.city !== undefined ? patch.city.trim() || undefined : person.city,
             tags: patch.tags !== undefined ? uniqueTags(patch.tags) : person.tags,
             updatedAt: Date.now(),
-          }
+          };
+          })()
         : person,
     );
     set({ people });

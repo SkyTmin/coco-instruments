@@ -260,7 +260,10 @@ export interface Person {
   id: string;
   name: string;
   avatar?: Attachment;
+  /** Primary category kept for older saved data and simple filtering. */
   category: PersonCategory;
+  /** Multi-category profile, e.g. friend + work. */
+  categories?: PersonCategory[];
   closeness: PersonCloseness;
   birthday?: string;
   phone?: string;

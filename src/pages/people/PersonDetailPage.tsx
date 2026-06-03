@@ -19,13 +19,13 @@ import { formatDate, formatRUB, relativeDay } from '@/lib/format';
 import { attachmentHref } from '@/lib/images';
 import {
   CLOSENESS_LABEL,
-  PERSON_CATEGORY_EMOJI,
-  PERSON_CATEGORY_LABEL,
   PREFERENCE_LABEL,
   PREFERENCE_TYPES,
   RELATION_LABEL,
   defaultReminderDate,
   nextBirthday,
+  personCategoryEmoji,
+  personCategoryLabel,
   personInitials,
 } from '@/lib/people';
 import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
@@ -117,7 +117,7 @@ export function PersonDetailPage() {
   return (
     <Screen
       title={person.name}
-      subtitle={`${PERSON_CATEGORY_LABEL[person.category]} · ${CLOSENESS_LABEL[person.closeness]}`}
+      subtitle={`${personCategoryLabel(person)} · ${CLOSENESS_LABEL[person.closeness]}`}
       action={
         <div className="row">
           <button className="icon-round" onClick={() => go(`/people/${person.id}/edit`)} aria-label="Изменить">
@@ -137,7 +137,7 @@ export function PersonDetailPage() {
           <div className="person-hero__body">
             <div className="person-hero__title">
               {person.favorite && <IconHeart size={18} />}
-              <span>{PERSON_CATEGORY_EMOJI[person.category]} {PERSON_CATEGORY_LABEL[person.category]}</span>
+              <span>{personCategoryEmoji(person)} {personCategoryLabel(person)}</span>
             </div>
             <div className="person-hero__sub">
               {birthday ? `День рождения ${relativeDay(birthday.date)}` : 'День рождения можно добавить'}
@@ -153,7 +153,14 @@ export function PersonDetailPage() {
           <QuickButton label="Встреча" onClick={() => setSheet('meet')} />
         </div>
 
-        <DetailSection title="Главное">
+        <DetailSection
+          title="Главное"
+          action={
+            <button className="people-edit-link" onClick={() => go(`/people/${person.id}/edit`)}>
+              <IconPencil size={15} /> Изменить
+            </button>
+          }
+        >
           <div className="card">
             <StatRow label="Кто это для меня" value={person.description || 'Можно дописать'} />
             {person.birthday && <StatRow label="День рождения" value={formatDate(person.birthday)} />}
@@ -258,12 +265,20 @@ export function PersonDetailPage() {
             </button>
           </div>
           {linkedNotes.length ? (
-            <div className="people-chip-row">
+            <div className="stack">
               {linkedNotes.map((note) => (
-                <button key={note.id} className="note-chip" onClick={() => go(`/notes/${note.id}`)}>
-                  {note.title}
-                  <span onClick={(e) => { e.stopPropagation(); unlinkNoteFromPerson(person.id, note.id); }}>×</span>
-                </button>
+                <div key={note.id} className="people-linked-note">
+                  <button onClick={() => go(`/notes/${note.id}`)}>
+                    <IconPencil size={16} />
+                    <span>
+                      <b>{note.title}</b>
+                      <small>Открыть и редактировать заметку</small>
+                    </span>
+                  </button>
+                  <button onClick={() => unlinkNoteFromPerson(person.id, note.id)} aria-label="Отвязать">
+                    ×
+                  </button>
+                </div>
               ))}
             </div>
           ) : <SoftEmpty text="Можно привязать обычные заметки Coco к этому человеку." />}

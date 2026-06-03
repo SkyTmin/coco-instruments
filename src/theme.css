@@ -1499,6 +1499,17 @@ input[type='datetime-local'] {
 
 /* ---- Note editor: toolbar, autocomplete, thumbnails ----------------------- */
 .notes-edit { color: var(--accent); background: var(--surface); box-shadow: var(--shadow-sm); }
+.notes-edit--text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 11px;
+  color: var(--text);
+  font-weight: 800;
+}
+.notes-edit--text span {
+  font-size: 13px;
+}
 
 .note-foot {
   position: sticky;
@@ -2184,6 +2195,20 @@ input[type='datetime-local'] {
   box-shadow: var(--shadow-sm);
   cursor: pointer;
 }
+.people-edit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--surface);
+  color: #b65d68;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+}
 .people-chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -2280,6 +2305,62 @@ input[type='datetime-local'] {
   justify-content: center;
   gap: 7px;
   padding: 11px 10px;
+}
+.people-linked-note {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border-radius: 16px;
+  padding: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.people-linked-note button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+.people-linked-note > button:first-child {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+}
+.people-linked-note svg {
+  flex: none;
+  color: #b65d68;
+}
+.people-linked-note span {
+  min-width: 0;
+}
+.people-linked-note b,
+.people-linked-note small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.people-linked-note b {
+  font-size: 14px;
+}
+.people-linked-note small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.people-linked-note > button:last-child {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 18px;
+  font-weight: 900;
 }
 .people-textarea {
   resize: vertical;

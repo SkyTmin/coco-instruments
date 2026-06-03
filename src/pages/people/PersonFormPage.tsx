@@ -4,7 +4,7 @@ import { Screen } from '@/components/ui';
 import { PhotoPicker } from '@/components/PhotoPicker';
 import { useFinanceStore, type PersonDraft } from '@/store';
 import type { Attachment, PersonCategory, PersonCloseness } from '@/types';
-import { CLOSENESS_LABEL, PERSON_CATEGORIES, splitTags } from '@/lib/people';
+import { CLOSENESS_LABEL, PERSON_CATEGORIES, personCategories, splitTags } from '@/lib/people';
 import { notifySuccess, selectionChanged } from '@/lib/haptics';
 
 export function PersonFormPage() {
@@ -17,7 +17,9 @@ export function PersonFormPage() {
   const editing = !!id;
   const [avatar, setAvatar] = useState<Attachment | undefined>(existing?.avatar);
   const [name, setName] = useState(existing?.name ?? '');
-  const [category, setCategory] = useState<PersonCategory>(existing?.category ?? 'friend');
+  const [categories, setCategories] = useState<PersonCategory[]>(
+    existing ? personCategories(existing) : ['friend'],
+  );
   const [closeness, setCloseness] = useState<PersonCloseness>(existing?.closeness ?? 3);
   const [birthday, setBirthday] = useState(existing?.birthday ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
@@ -29,13 +31,20 @@ export function PersonFormPage() {
 
   if (editing && !existing) return <Navigate to="/people" replace />;
 
-  const valid = name.trim().length > 0;
+  const valid = name.trim().length > 0 && categories.length > 0;
+  const toggleCategory = (id: PersonCategory) => {
+    selectionChanged();
+    setCategories((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  };
   const submit = () => {
     if (!valid) return;
     const draft: PersonDraft = {
       name: name.trim(),
       avatar,
-      category,
+      category: categories[0] ?? 'other',
+      categories,
       closeness,
       birthday: birthday || undefined,
       description: description.trim() || undefined,
@@ -75,17 +84,14 @@ export function PersonFormPage() {
       </div>
 
       <div className="field">
-        <label className="field__label">Категория</label>
+        <label className="field__label">Категории</label>
         <div className="chips">
           {PERSON_CATEGORIES.map((item) => (
             <button
               key={item.id}
               type="button"
-              className={`chip${category === item.id ? ' is-active' : ''}`}
-              onClick={() => {
-                selectionChanged();
-                setCategory(item.id);
-              }}
+              className={`chip${categories.includes(item.id) ? ' is-active' : ''}`}
+              onClick={() => toggleCategory(item.id)}
             >
               {item.emoji} {item.label}
             </button>
