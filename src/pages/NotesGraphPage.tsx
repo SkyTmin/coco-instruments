@@ -560,8 +560,8 @@ export function NotesGraphPage() {
               >
                 <defs>
                   <linearGradient id="noteNodeGradientInteractive" x1="0" x2="1" y1="0" y2="1">
-                    <stop offset="0%" stopColor="var(--accent-grad-1)" />
-                    <stop offset="100%" stopColor="var(--accent-grad-2)" />
+                    <stop offset="0%" stopColor="#1fc2b8" />
+                    <stop offset="100%" stopColor="#36a7e0" />
                   </linearGradient>
                   <linearGradient id="personNodeGradientInteractive" x1="0" x2="1" y1="0" y2="1">
                     <stop offset="0%" stopColor="#ee7f8f" />

@@ -389,8 +389,10 @@ function linkStiffness(kind: NoteGraphLinkKind): number {
 /** Visual radius of a node, scaled by how connected it is. */
 export function nodeRadius(node: Pick<NoteGraphNode, 'kind' | 'degree'>): number {
   const isDetail = node.kind === 'gift' || node.kind === 'promise' || node.kind === 'event';
-  const base = node.kind === 'person' ? 15 : node.kind === 'tag' ? 8 : isDetail ? 7 : 9;
-  const cap = node.kind === 'person' ? 34 : node.kind === 'tag' ? 16 : isDetail ? 15 : 28;
+  // Notes are first-class here, so they get the same heft as people.
+  const big = node.kind === 'person' || node.kind === 'note';
+  const base = big ? 15 : node.kind === 'tag' ? 8 : isDetail ? 7 : 9;
+  const cap = big ? 34 : node.kind === 'tag' ? 16 : isDetail ? 15 : 28;
   return Math.min(cap, base + node.degree * 1.8);
 }
 
