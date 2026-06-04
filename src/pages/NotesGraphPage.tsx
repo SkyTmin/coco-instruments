@@ -38,8 +38,7 @@ const SIM_DECAY = 0.985;
 const SIM_MIN_ALPHA = 0.006;
 const SIM_DRAG_ALPHA = 0.24;
 
-// Label decluttering thresholds.
-const LABEL_MIN_DEGREE = 3;
+// Tiny detail nodes (gifts/promises/events) only get labels once you zoom in.
 const LABEL_ZOOM = 1.2;
 
 function shortLabel(value: string, max = 18): string {
@@ -110,6 +109,9 @@ export function NotesGraphPage() {
   const alphaRef = useRef(0);
   const runningRef = useRef(false);
   const rafRef = useRef(0);
+  // Nodes you've dragged are "pinned" — they stay exactly where you put them
+  // and don't drift while you arrange the rest.
+  const pinnedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     scaleRef.current = scale;
@@ -152,6 +154,24 @@ export function NotesGraphPage() {
     [activeId, depth, graph, mode, query, showDetails, showMissing, showPeople, showTags],
   );
 
+  // Live mirrors so the layout effect can read the latest graph/positions
+  // without taking them as dependencies (selection alone must not re-layout).
+  const visibleGraphRef = useRef(visibleGraph);
+  visibleGraphRef.current = visibleGraph;
+  const pointsRef = useRef<NoteGraphPoint[]>(points);
+  pointsRef.current = points;
+
+  // Only the *set* of nodes (or the stage size) forces a rebuild; changing just
+  // the selection keeps every position exactly where it is.
+  const layoutKey = useMemo(
+    () =>
+      `${visibleGraph.nodes
+        .map((node) => node.id)
+        .sort()
+        .join('|')}#${visibleGraph.links.length}@${size.width}x${size.height}`,
+    [visibleGraph, size],
+  );
+
   useEffect(() => {
     linksRef.current = visibleGraph.links;
   }, [visibleGraph.links]);
@@ -168,7 +188,9 @@ export function NotesGraphPage() {
       setPoints((current) => {
         if (current.length < 2) return current;
         const next = current.map((p) => ({ ...p }));
-        simulationStep(next, linksRef.current, sizeRef.current, alpha, dragging);
+        const fixed = new Set(pinnedRef.current);
+        if (dragging) fixed.add(dragging);
+        simulationStep(next, linksRef.current, sizeRef.current, alpha, fixed, dragging);
         return next;
       });
       let nextAlpha = alpha * SIM_DECAY;
@@ -205,11 +227,19 @@ export function NotesGraphPage() {
     return () => ro.disconnect();
   }, []);
 
-  // (Re)build the layout when the visible graph, focus, or stage size changes.
+  // Rebuild only when the node set / size changes, carrying over any positions
+  // you've already arranged so dragging one node never resets another.
   useEffect(() => {
-    setPoints(layoutNoteGraph(visibleGraph, activeId, sizeRef.current));
-    kick(1);
-  }, [activeId, visibleGraph, size, kick]);
+    const graphNow = visibleGraphRef.current;
+    // Drop pins for nodes that are no longer visible so they re-settle if back.
+    const visibleIds = new Set(graphNow.nodes.map((node) => node.id));
+    for (const id of pinnedRef.current) if (!visibleIds.has(id)) pinnedRef.current.delete(id);
+    const previous = pointsRef.current;
+    const seed = previous.length ? new Map(previous.map((p) => [p.id, { x: p.x, y: p.y }])) : undefined;
+    setPoints(layoutNoteGraph(graphNow, activeIdRef.current, sizeRef.current, seed, pinnedRef.current));
+    kick(seed ? 0.6 : 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutKey, kick]);
 
   const pointById = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
   pointByIdRef.current = pointById;
@@ -230,12 +260,14 @@ export function NotesGraphPage() {
   }, [focusId, visibleGraph.links]);
 
   const labelVisible = (point: NoteGraphPoint): boolean => {
+    // While focusing a node, label only its neighbourhood (keeps it readable).
     if (neighborIds) return neighborIds.has(point.id);
-    if (point.id === activeId) return true;
-    if (point.kind === 'note' || point.kind === 'person') {
-      return point.degree >= LABEL_MIN_DEGREE || scale >= LABEL_ZOOM;
+    // Otherwise label every meaningful node — notes, people, tags, missing — so
+    // you can always tell what's what; tiny detail dots wait until you zoom in.
+    if (point.kind === 'gift' || point.kind === 'promise' || point.kind === 'event') {
+      return scale >= LABEL_ZOOM;
     }
-    return scale >= LABEL_ZOOM + 0.25;
+    return true;
   };
 
   // Screen pixels → graph coordinates (accounts for pan and zoom; refs so the
@@ -272,12 +304,17 @@ export function NotesGraphPage() {
     zoomBy(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX, event.clientY);
   };
 
+  // Reset recenters the view and re-runs the auto-layout (releasing any nodes
+  // you've pinned), so it doubles as a "tidy up / reshuffle".
   const resetView = () => {
     selectionChanged();
+    pinnedRef.current.clear();
     panRef.current = { x: 0, y: 0 };
     scaleRef.current = 1;
     setPan({ x: 0, y: 0 });
     setScale(1);
+    setPoints(layoutNoteGraph(visibleGraphRef.current, activeIdRef.current, sizeRef.current));
+    kick(1);
   };
 
   // ---- gestures (pointerdown starts them; window listeners drive them) ------
@@ -372,7 +409,10 @@ export function NotesGraphPage() {
         if (session && session.pointerId === event.pointerId) {
           const dx = event.clientX - session.x;
           const dy = event.clientY - session.y;
-          if (Math.sqrt(dx * dx + dy * dy) > TAP_MOVE_LIMIT) session.moved = true;
+          if (Math.sqrt(dx * dx + dy * dy) > TAP_MOVE_LIMIT) {
+            session.moved = true;
+            pinnedRef.current.add(id); // arranged by hand → keep it there
+          }
         }
         setPoints((current) =>
           current.map((point) =>
@@ -581,7 +621,7 @@ export function NotesGraphPage() {
                 <button onClick={() => { selectionChanged(); zoomBy(1 / 1.25); }} aria-label="Отдалить">
                   −
                 </button>
-                <button onClick={resetView} aria-label="Сбросить вид">
+                <button onClick={resetView} aria-label="Собрать заново">
                   ⊙
                 </button>
               </div>
@@ -596,7 +636,7 @@ export function NotesGraphPage() {
 
         <div className="card notes-graph-hint">
           Перетаскивайте поле или узлы, щипком двумя пальцами (или колесо/кнопки) — масштаб.
-          Короткий тап откроет заметку или человека.
+          Передвинутые узлы остаются на месте; ⊙ — собрать граф заново. Короткий тап откроет заметку или человека.
           {activeNote && (
             <button className="btn btn--ghost btn--block" onClick={() => navigate(`/notes/${activeNote.id}`)}>
               Открыть «{activeNote.title}»

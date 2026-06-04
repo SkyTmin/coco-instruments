@@ -387,26 +387,30 @@ function linkStiffness(kind: NoteGraphLinkKind): number {
 }
 
 /** Visual radius of a node, scaled by how connected it is. */
-export function nodeRadius(node: Pick<NoteGraphNode, 'kind' | 'degree' | 'id'>, activeId?: string): number {
+export function nodeRadius(node: Pick<NoteGraphNode, 'kind' | 'degree'>): number {
   const isDetail = node.kind === 'gift' || node.kind === 'promise' || node.kind === 'event';
   const base = node.kind === 'person' ? 15 : node.kind === 'tag' ? 8 : isDetail ? 7 : 9;
   const cap = node.kind === 'person' ? 34 : node.kind === 'tag' ? 16 : isDetail ? 15 : 28;
-  return Math.min(cap, base + node.degree * 1.8 + (node.id === activeId ? 3 : 0));
+  return Math.min(cap, base + node.degree * 1.8);
 }
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-/** Advance the simulation by one tick (mutates node x/y/vx/vy in place). */
+/** Advance the simulation by one tick (mutates node x/y/vx/vy in place).
+ *  `fixed` nodes (the one being dragged + any you've arranged) hold their
+ *  position; `draggingId` additionally makes its links trail it more tightly. */
 export function simulationStep(
   nodes: NoteGraphPoint[],
   links: NoteGraphLink[],
   size: GraphSize,
   alpha: number,
+  fixed?: ReadonlySet<string>,
   draggingId?: string | null,
 ): void {
   const cx = size.width / 2;
   const cy = size.height / 2;
   const byId = new Map(nodes.map((node) => [node.id, node]));
+  const isFixed = (id: string) => (fixed ? fixed.has(id) : false);
 
   // Many-body repulsion — keeps unrelated clusters from piling up.
   for (let i = 0; i < nodes.length; i++) {
@@ -453,7 +457,7 @@ export function simulationStep(
 
   // Gravity + integration.
   for (const node of nodes) {
-    if (node.id === draggingId) {
+    if (isFixed(node.id)) {
       node.vx = 0;
       node.vy = 0;
       continue;
@@ -481,11 +485,11 @@ export function simulationStep(
         const push = (min - dist) / 2;
         const ux = dx / dist;
         const uy = dy / dist;
-        if (a.id !== draggingId) {
+        if (!isFixed(a.id)) {
           a.x -= ux * push;
           a.y -= uy * push;
         }
-        if (b.id !== draggingId) {
+        if (!isFixed(b.id)) {
           b.x += ux * push;
           b.y += uy * push;
         }
@@ -504,6 +508,8 @@ export function layoutNoteGraph(
   graph: NoteGraph,
   activeId?: string,
   size: GraphSize = GRAPH_VIEW_BOX,
+  prev?: Map<string, { x: number; y: number }>,
+  fixed?: ReadonlySet<string>,
 ): NoteGraphPoint[] {
   const cx = size.width / 2;
   const cy = size.height / 2;
@@ -511,28 +517,32 @@ export function layoutNoteGraph(
   const maxRing = Math.min(cx, cy) * 0.92;
   // Deterministic sunflower (phyllotaxis) seed — spread out, no random clumps.
   const spread = clamp((Math.min(size.width, size.height) / Math.sqrt(count)) * 1.1, 24, 64);
+  let reused = 0;
   const nodes: NoteGraphPoint[] = graph.nodes.map((node, index) => {
+    const r = nodeRadius(node);
+    // Keep positions you've already arranged — a filter toggle or selection
+    // must never re-scramble nodes that are already on screen.
+    const known = prev?.get(node.id);
+    if (known) {
+      reused++;
+      return { ...node, x: known.x, y: known.y, vx: 0, vy: 0, r };
+    }
     if (node.id === activeId) {
-      return { ...node, x: cx, y: cy, vx: 0, vy: 0, r: nodeRadius(node, activeId) };
+      return { ...node, x: cx, y: cy, vx: 0, vy: 0, r };
     }
     const angle = index * 2.399963229728653; // golden angle
     const ring = Math.min(maxRing, spread * Math.sqrt(index + 0.7));
-    return {
-      ...node,
-      x: cx + Math.cos(angle) * ring,
-      y: cy + Math.sin(angle) * ring,
-      vx: 0,
-      vy: 0,
-      r: nodeRadius(node, activeId),
-    };
+    return { ...node, x: cx + Math.cos(angle) * ring, y: cy + Math.sin(angle) * ring, vx: 0, vy: 0, r };
   });
 
-  // Pre-settle with the same physics the live loop uses, so it opens relaxed.
-  const iterations = count > 120 ? 140 : 300;
-  let alpha = 1;
+  // A fresh layout settles hard; an incremental one (positions carried over)
+  // only nudges gently so existing nodes stay put while new ones find a spot.
+  const incremental = reused > 0;
+  const iterations = incremental ? 120 : count > 120 ? 140 : 300;
+  let alpha = incremental ? 0.32 : 1;
   for (let i = 0; i < iterations; i++) {
-    simulationStep(nodes, graph.links, size, alpha);
-    alpha *= 0.992;
+    simulationStep(nodes, graph.links, size, alpha, fixed);
+    alpha *= incremental ? 0.985 : 0.992;
   }
   for (const node of nodes) {
     node.vx = 0;
