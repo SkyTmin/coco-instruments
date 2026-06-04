@@ -380,6 +380,8 @@ export interface CalculatorPrefs {
   angleMode: CalculatorAngleMode;
   memory: number;
   lastAns: number;
+  /** Whether the gesture onboarding has been completed (don't auto-show again). */
+  onboardingDone?: boolean;
 }
 
 export interface CalculatorBlob {

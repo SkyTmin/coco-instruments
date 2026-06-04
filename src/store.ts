@@ -42,7 +42,12 @@ import type {
 } from '@/types';
 
 export const DEFAULT_REMINDER_PREFS: ReminderPrefs = { enabled: true, leads: [0], hour: 9, minute: 0 };
-export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = { angleMode: 'DEG', memory: 0, lastAns: 0 };
+export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
+  angleMode: 'DEG',
+  memory: 0,
+  lastAns: 0,
+  onboardingDone: false,
+};
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { genId } from '@/lib/id';
 import { deriveStatus, paidSoFar, resolve } from '@/lib/finance-calc';

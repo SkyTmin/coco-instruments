@@ -159,6 +159,20 @@ export const IconSwap = (p: IconProps) => (
   </svg>
 );
 
+export const IconClock = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3.5 2" />
+  </svg>
+);
+
+export const IconGear = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="3.2" />
+    <path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05a1.7 1.7 0 0 0-2.87 1.2V19a2 2 0 0 1-4 0v-.08a1.7 1.7 0 0 0-2.87-1.2l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05A1.7 1.7 0 0 0 4.6 13a1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.08a1.7 1.7 0 0 0 1.2-2.87l-.05-.05A2 2 0 1 1 7.06 3.2l.05.05A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.08a1.7 1.7 0 0 0 2.87 1.2l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05A1.7 1.7 0 0 0 19.4 11z" />
+  </svg>
+);
+
 export const IconCalculator = (p: IconProps) => (
   <svg {...base(p)}>
     <rect x="4" y="2.8" width="16" height="18.4" rx="3.2" />
