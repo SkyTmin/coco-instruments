@@ -111,13 +111,16 @@ export function CalculatorPage() {
     selectionChanged();
   };
 
+  // Insert an operator — but if one is already right before the cursor, swap it
+  // instead of stacking (so "5 +" then a swipe "−" becomes "5 −", not "5 + −").
   const insertOperation = (op: Op) => {
-    const left = expression.slice(0, cursor);
-    const right = expression.slice(cursor);
-    const needsLeftSpace = left.length > 0 && !/\s$/.test(left);
-    const needsRightSpace = right.length > 0 && !/^\s/.test(right);
-    const text = `${needsLeftSpace ? ' ' : ''}${op}${needsRightSpace ? ' ' : ' '}`;
-    insertText(text);
+    const left = expression.slice(0, cursor).replace(/\s+$/, '');
+    const right = expression.slice(cursor).replace(/^\s+/, '');
+    const base = /[-+−×÷*/]$/.test(left) ? left.slice(0, -1).replace(/\s+$/, '') : left;
+    // No left operand yet → chain from the previous answer.
+    const head = `${base === '' ? 'Ans ' : `${base} `}${op} `;
+    setFormula(`${head}${right}`, head.length);
+    selectionChanged();
   };
   const opButton = (op: Op) => {
     insertOperation(op);
