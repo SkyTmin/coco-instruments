@@ -16,7 +16,6 @@ import { tapLight } from '@/lib/haptics';
 
 import { HomePage } from '@/pages/HomePage';
 import { ClothingDashboardPage } from '@/pages/clothing/ClothingDashboardPage';
-import { ShufflePage } from '@/pages/clothing/ShufflePage';
 import { WardrobePage } from '@/pages/clothing/WardrobePage';
 import { WardrobeItemFormPage } from '@/pages/clothing/WardrobeItemFormPage';
 import { WardrobeItemDetailPage } from '@/pages/clothing/WardrobeItemDetailPage';
@@ -24,7 +23,10 @@ import { OutfitsPage } from '@/pages/clothing/OutfitsPage';
 import { OutfitFormPage } from '@/pages/clothing/OutfitFormPage';
 import { OutfitDetailPage } from '@/pages/clothing/OutfitDetailPage';
 import { OutfitBuilderPage } from '@/pages/clothing/OutfitBuilderPage';
-import { InsightsPage } from '@/pages/clothing/InsightsPage';
+import { CollectionsPage } from '@/pages/clothing/CollectionsPage';
+import { CollectionFormPage } from '@/pages/clothing/CollectionFormPage';
+import { CollectionDetailPage } from '@/pages/clothing/CollectionDetailPage';
+import { InspirationPage } from '@/pages/clothing/InspirationPage';
 import { SizesPage } from '@/pages/clothing/SizesPage';
 import { WishlistPage } from '@/pages/clothing/WishlistPage';
 import { WishFormPage } from '@/pages/clothing/WishFormPage';
@@ -155,7 +157,6 @@ export function App() {
           <Route path="/people/:id" element={<PersonDetailPage />} />
           <Route path="/people/:id/edit" element={<PersonFormPage />} />
           <Route path="/clothing" element={<ClothingDashboardPage />} />
-          <Route path="/clothing/shuffle" element={<ShufflePage />} />
           <Route path="/clothing/wardrobe" element={<WardrobePage />} />
           <Route path="/clothing/wardrobe/new" element={<WardrobeItemFormPage />} />
           <Route path="/clothing/wardrobe/:id" element={<WardrobeItemDetailPage />} />
@@ -165,7 +166,11 @@ export function App() {
           <Route path="/clothing/outfits/:id" element={<OutfitDetailPage />} />
           <Route path="/clothing/outfits/:id/edit" element={<OutfitFormPage />} />
           <Route path="/clothing/outfits/:id/build" element={<OutfitBuilderPage />} />
-          <Route path="/clothing/insights" element={<InsightsPage />} />
+          <Route path="/clothing/collections" element={<CollectionsPage />} />
+          <Route path="/clothing/collections/new" element={<CollectionFormPage />} />
+          <Route path="/clothing/collections/:id" element={<CollectionDetailPage />} />
+          <Route path="/clothing/collections/:id/edit" element={<CollectionFormPage />} />
+          <Route path="/clothing/inspiration" element={<InspirationPage />} />
           <Route path="/clothing/sizes" element={<SizesPage />} />
           <Route path="/clothing/wishlist" element={<WishlistPage />} />
           <Route path="/clothing/wishlist/new" element={<WishFormPage />} />

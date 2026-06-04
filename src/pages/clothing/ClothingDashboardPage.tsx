@@ -1,65 +1,90 @@
+import { useMemo } from 'react';
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Screen, SectionCard, Skeleton } from '@/components/ui';
-import { IconChart, IconHeart, IconImage, IconRuler, IconShirt, IconSparkles } from '@/components/icons';
-import { useFinanceStore } from '@/store';
+import { Screen, SectionHeader, Skeleton } from '@/components/ui';
+import { OutfitCarousel } from '@/components/OutfitCarousel';
+import { CollectionTile } from '@/components/clothing-cards';
 import { Photo } from '@/components/Photo';
-import { attachmentHref } from '@/lib/images';
+import { IconHeart, IconPlus, IconRuler } from '@/components/icons';
+import { useFinanceStore } from '@/store';
 import { CATEGORY_EMOJI } from '@/lib/clothing';
-import { pluralizeRu } from '@/lib/format';
+import { attachmentHref } from '@/lib/images';
 import { selectionChanged, tapLight } from '@/lib/haptics';
+
+function Cta({ emoji, title, sub, onClick }: { emoji: string; title: string; sub: string; onClick: () => void }) {
+  return (
+    <button className="cl-cta" onClick={onClick}>
+      <span className="cl-cta__emoji">{emoji}</span>
+      <span className="cl-cta__text">
+        <b>{title}</b>
+        <i>{sub}</i>
+      </span>
+      <IconPlus size={20} />
+    </button>
+  );
+}
 
 export function ClothingDashboardPage() {
   const navigate = useNavigate();
   const wardrobe = useFinanceStore((s) => s.wardrobe);
   const outfits = useFinanceStore((s) => s.outfits);
-  const wishlist = useFinanceStore((s) => s.wishlist);
-  const sizes = useFinanceStore((s) => s.sizes);
+  const collections = useFinanceStore((s) => s.collections);
+  const inspiration = useFinanceStore((s) => s.inspiration);
   const hydrated = useFinanceStore((s) => s.hydrated);
+  const byId = useMemo(() => new Map(wardrobe.map((w) => [w.id, w])), [wardrobe]);
 
   const go = (path: string) => {
     tapLight();
     navigate(path);
   };
+  const open = (path: string) => {
+    selectionChanged();
+    navigate(path);
+  };
+  const all = (path: string): ReactNode => (
+    <button className="link-all" onClick={() => go(path)}>
+      Все ›
+    </button>
+  );
 
   if (!hydrated) {
     return (
-      <Screen title="Одежда" subtitle="Гардероб и образы">
+      <Screen title="Одежда" subtitle="Ваш визуальный гардероб">
         <div className="stack">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} height={72} radius={18} />
-          ))}
+          <Skeleton height={20} width="40%" radius={8} />
+          <Skeleton height={320} radius={20} />
+          <Skeleton height={20} width="40%" radius={8} />
+          <Skeleton height={74} radius={16} />
         </div>
       </Screen>
     );
   }
 
-  const recent = wardrobe.slice(0, 12);
-
   return (
-    <Screen title="Одежда" subtitle="Гардероб и образы">
+    <Screen title="Одежда" subtitle="Ваш визуальный гардероб">
       <div className="stack clothing-dash">
-        {wardrobe.length >= 2 && (
-          <button className="shuffle-hero" onClick={() => go('/clothing/shuffle')}>
-            <div className="shuffle-hero__icon">
-              <IconSparkles />
-            </div>
-            <div className="shuffle-hero__body">
-              <div className="shuffle-hero__title">Что надеть?</div>
-              <div className="shuffle-hero__sub">Соберу случайный образ из ваших вещей</div>
-            </div>
-          </button>
+        {/* Образы — главный объект */}
+        <SectionHeader title="Образы" action={outfits.length ? all('/clothing/outfits') : undefined} />
+        {outfits.length ? (
+          <OutfitCarousel outfits={outfits.slice(0, 12)} />
+        ) : (
+          <Cta
+            emoji="🧥"
+            title="Соберите первый образ"
+            sub="Фото-обложка и вещи из гардероба"
+            onClick={() => go('/clothing/outfits/new')}
+          />
         )}
 
-        {recent.length > 0 && (
+        {/* Гардероб */}
+        <SectionHeader title="Гардероб" action={wardrobe.length ? all('/clothing/wardrobe') : undefined} />
+        {wardrobe.length ? (
           <div className="wardrobe-strip">
-            {recent.map((it) => (
+            {wardrobe.slice(0, 16).map((it) => (
               <button
                 key={it.id}
                 className="wardrobe-strip__item"
-                onClick={() => {
-                  selectionChanged();
-                  navigate(`/clothing/wardrobe/${it.id}`);
-                }}
+                onClick={() => open(`/clothing/wardrobe/${it.id}`)}
                 aria-label={it.name}
               >
                 {it.photo ? (
@@ -70,56 +95,72 @@ export function ClothingDashboardPage() {
               </button>
             ))}
           </div>
-        )}
-
-        <SectionCard
-          icon={<IconShirt />}
-          title="Гардероб"
-          sub={
-            wardrobe.length
-              ? `${wardrobe.length} ${pluralizeRu(wardrobe.length, ['вещь', 'вещи', 'вещей'])}`
-              : 'Сфотографируйте свои вещи'
-          }
-          onClick={() => go('/clothing/wardrobe')}
-        />
-        <SectionCard
-          icon={<IconImage />}
-          title="Образы"
-          sub={
-            outfits.length
-              ? `${outfits.length} ${pluralizeRu(outfits.length, ['образ', 'образа', 'образов'])}`
-              : 'Соберите готовые луки'
-          }
-          onClick={() => go('/clothing/outfits')}
-        />
-        {wardrobe.length > 0 && (
-          <SectionCard
-            icon={<IconChart />}
-            title="Аналитика"
-            sub="Состав, носки и цена за носку"
-            onClick={() => go('/clothing/insights')}
+        ) : (
+          <Cta
+            emoji="👕"
+            title="Добавьте вещи"
+            sub="Сфотографируйте гардероб — по одной или пачкой"
+            onClick={() => go('/clothing/wardrobe')}
           />
         )}
-        <SectionCard
-          icon={<IconRuler />}
-          title="Размеры"
-          sub={
-            sizes.length
-              ? `${sizes.length} ${pluralizeRu(sizes.length, ['запись', 'записи', 'записей'])} · калькулятор`
-              : 'Запись и калькулятор'
-          }
-          onClick={() => go('/clothing/sizes')}
-        />
-        <SectionCard
-          icon={<IconHeart />}
-          title="Список желаний"
-          sub={
-            wishlist.length
-              ? `${wishlist.length} ${pluralizeRu(wishlist.length, ['вещь', 'вещи', 'вещей'])}`
-              : 'Что хочется купить'
-          }
-          onClick={() => go('/clothing/wishlist')}
-        />
+
+        {/* Подборки */}
+        <SectionHeader title="Подборки" action={collections.length ? all('/clothing/collections') : undefined} />
+        {collections.length ? (
+          <div className="cl-hscroll">
+            {collections.slice(0, 8).map((c) => (
+              <CollectionTile
+                key={c.id}
+                collection={c}
+                byId={byId}
+                onClick={() => open(`/clothing/collections/${c.id}`)}
+              />
+            ))}
+          </div>
+        ) : (
+          <Cta
+            emoji="🗂"
+            title="Создайте подборку"
+            sub="«Для работы», «Чёрное», «Лето»…"
+            onClick={() => go('/clothing/collections/new')}
+          />
+        )}
+
+        {/* Вдохновение */}
+        <SectionHeader title="Вдохновение" action={inspiration.length ? all('/clothing/inspiration') : undefined} />
+        {inspiration.length ? (
+          <div className="wardrobe-strip">
+            {inspiration.slice(0, 16).map((img) => (
+              <button
+                key={img.id}
+                className="wardrobe-strip__item"
+                onClick={() => open('/clothing/inspiration')}
+                aria-label="Вдохновение"
+              >
+                <Photo src={attachmentHref(img.photo)} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <Cta
+            emoji="✨"
+            title="Доска вдохновения"
+            sub="Скриншоты, фото и идеи образов"
+            onClick={() => go('/clothing/inspiration')}
+          />
+        )}
+
+        {/* Утилиты — в самом низу, без акцента */}
+        <div className="cl-util">
+          <button className="cl-util__btn" onClick={() => go('/clothing/sizes')}>
+            <IconRuler size={20} />
+            <span>Размеры</span>
+          </button>
+          <button className="cl-util__btn" onClick={() => go('/clothing/wishlist')}>
+            <IconHeart size={20} />
+            <span>Желания</span>
+          </button>
+        </div>
       </div>
     </Screen>
   );

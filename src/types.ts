@@ -379,16 +379,39 @@ export interface WardrobeItem {
   season?: Season;
   brand?: string;
   size?: string;
-  price?: number;
   note?: string;
-  wears?: number;
-  lastWornAt?: string; // ISO date
   createdAt: number;
   updatedAt: number;
 }
 export interface WardrobeItemsBlob {
   version: 1;
   items: WardrobeItem[];
+}
+
+/** A themed group of wardrobe items (e.g. "Для работы", "Чёрное", "Лето"). */
+export interface Collection {
+  id: string;
+  name: string;
+  emoji?: string;
+  itemIds: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+export interface WardrobeCollectionsBlob {
+  version: 1;
+  items: Collection[];
+}
+
+/** A saved inspiration image (screenshot / reference / idea). */
+export interface InspirationImage {
+  id: string;
+  photo: Attachment;
+  note?: string;
+  createdAt: number;
+}
+export interface WardrobeInspirationBlob {
+  version: 1;
+  items: InspirationImage[];
 }
 
 /** Placement of one item-sticker on the outfit collage board (fractions 0..1). */

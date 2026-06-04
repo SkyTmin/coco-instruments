@@ -8,16 +8,21 @@ export function Photo({
   src,
   alt = '',
   contain = false,
+  natural = false,
   className = '',
 }: {
   src?: string;
   alt?: string;
   contain?: boolean;
+  /** Flow at the image's natural height (for masonry) instead of filling. */
+  natural?: boolean;
   className?: string;
 }) {
   const [loaded, setLoaded] = useState(false);
   return (
-    <span className={`ph${contain ? ' ph--contain' : ''}${loaded ? ' is-loaded' : ''}${className ? ` ${className}` : ''}`}>
+    <span
+      className={`ph${contain ? ' ph--contain' : ''}${natural ? ' ph--natural' : ''}${loaded ? ' is-loaded' : ''}${className ? ` ${className}` : ''}`}
+    >
       <span className="ph__sk" aria-hidden />
       {src && (
         <img

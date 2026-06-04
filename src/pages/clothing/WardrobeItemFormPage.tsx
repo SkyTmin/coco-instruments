@@ -21,13 +21,11 @@ export function WardrobeItemFormPage() {
   const [season, setSeason] = useState<Season | ''>(existing?.season ?? '');
   const [brand, setBrand] = useState(existing?.brand ?? '');
   const [size, setSize] = useState(existing?.size ?? '');
-  const [price, setPrice] = useState(existing?.price ? String(existing.price) : '');
   const [note, setNote] = useState(existing?.note ?? '');
 
   const valid = name.trim().length > 0;
   const submit = () => {
     if (!valid) return;
-    const p = parseFloat(price.replace(',', '.'));
     const draft: WardrobeItemDraft = {
       name: name.trim(),
       category,
@@ -36,7 +34,6 @@ export function WardrobeItemFormPage() {
       season: season || undefined,
       brand: brand.trim() || undefined,
       size: size.trim() || undefined,
-      price: Number.isFinite(p) && p > 0 ? p : undefined,
       note: note.trim() || undefined,
     };
     if (existing) updateItem(existing.id, draft);
@@ -109,16 +106,6 @@ export function WardrobeItemFormPage() {
       <div className="field">
         <label className="field__label">Размер (необяз.)</label>
         <input className="input" value={size} onChange={(e) => setSize(e.target.value)} placeholder="Напр. M / 42" />
-      </div>
-      <div className="field">
-        <label className="field__label">Цена (необяз.)</label>
-        <input
-          className="input"
-          inputMode="decimal"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          placeholder="₽ — для цены за носку"
-        />
       </div>
       <div className="field">
         <label className="field__label">Заметка (необяз.)</label>

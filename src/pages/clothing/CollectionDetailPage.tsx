@@ -1,38 +1,37 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, EmptyState, Screen, Sheet } from '@/components/ui';
-import { IconPencil, IconPlus, IconSparkles, IconTrash } from '@/components/icons';
+import { IconPencil, IconPlus, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
-import { Photo } from '@/components/Photo';
 import { WardrobeCard } from '@/components/clothing-cards';
 import { CATEGORIES, CATEGORY_EMOJI } from '@/lib/clothing';
 import { attachmentHref } from '@/lib/images';
 import type { ClothingCategory, WardrobeItem } from '@/types';
 import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
-export function OutfitDetailPage() {
+export function CollectionDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const outfit = useFinanceStore((s) => (id ? s.getOutfit(id) : undefined));
+  const collection = useFinanceStore((s) => (id ? s.getCollection(id) : undefined));
   const wardrobe = useFinanceStore((s) => s.wardrobe);
-  const updateOutfit = useFinanceStore((s) => s.updateOutfit);
-  const removeOutfit = useFinanceStore((s) => s.removeOutfit);
+  const updateCollection = useFinanceStore((s) => s.updateCollection);
+  const removeCollection = useFinanceStore((s) => s.removeCollection);
   const [confirm, setConfirm] = useState(false);
   const [picking, setPicking] = useState(false);
   const [filter, setFilter] = useState<ClothingCategory | 'all'>('all');
 
-  if (!outfit || !id) return <Navigate to="/clothing/outfits" replace />;
+  if (!collection || !id) return <Navigate to="/clothing/collections" replace />;
 
-  const members = outfit.itemIds
+  const members = collection.itemIds
     .map((iid) => wardrobe.find((w) => w.id === iid))
     .filter((w): w is WardrobeItem => Boolean(w));
   const pickList = filter === 'all' ? wardrobe : wardrobe.filter((w) => w.category === filter);
 
   const toggle = (itemId: string) => {
     selectionChanged();
-    const has = outfit.itemIds.includes(itemId);
-    updateOutfit(id, {
-      itemIds: has ? outfit.itemIds.filter((x) => x !== itemId) : [...outfit.itemIds, itemId],
+    const has = collection.itemIds.includes(itemId);
+    updateCollection(id, {
+      itemIds: has ? collection.itemIds.filter((x) => x !== itemId) : [...collection.itemIds, itemId],
     });
   };
   const go = (path: string) => {
@@ -41,23 +40,13 @@ export function OutfitDetailPage() {
   };
 
   return (
-    <Screen title={outfit.name}>
+    <Screen title={`${collection.emoji ? collection.emoji + ' ' : ''}${collection.name}`}>
       <div className="stack">
-        {outfit.cover && (
-          <div className="item-photo">
-            <Photo src={attachmentHref(outfit.cover)} contain />
-          </div>
-        )}
-
-        <div className="section-label" style={{ margin: '4px 2px' }}>
-          Вещи в образе · {members.length}
+        <div className="section-label" style={{ margin: '2px 2px' }}>
+          Вещей · {members.length}
         </div>
         {members.length === 0 ? (
-          <EmptyState
-            icon="👚"
-            title="Вещей пока нет"
-            sub="Нажмите «Добавить вещь», чтобы привязать вещи из гардероба"
-          />
+          <EmptyState icon="🗂" title="Подборка пуста" sub="Добавьте сюда вещи из гардероба" />
         ) : (
           <div className="wardrobe-grid">
             {members.map((it) => (
@@ -66,26 +55,14 @@ export function OutfitDetailPage() {
           </div>
         )}
 
-        <button className="btn btn--primary btn--block" onClick={() => go(`/clothing/outfits/${id}/build`)}>
-          <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
-            <IconSparkles size={18} /> Собрать коллаж
-          </span>
-        </button>
-
-        <button
-          className="btn btn--block"
-          onClick={() => {
-            tapLight();
-            setPicking(true);
-          }}
-        >
+        <button className="btn btn--block" onClick={() => { tapLight(); setPicking(true); }}>
           <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
             <IconPlus size={18} /> Добавить вещь
           </span>
         </button>
 
         <div className="row" style={{ gap: 12 }}>
-          <button className="btn btn--block" style={{ flex: 1 }} onClick={() => go(`/clothing/outfits/${id}/edit`)}>
+          <button className="btn btn--block" style={{ flex: 1 }} onClick={() => go(`/clothing/collections/${id}/edit`)}>
             <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
               <IconPencil size={18} /> Изменить
             </span>
@@ -120,7 +97,7 @@ export function OutfitDetailPage() {
               </div>
               <div className="picker-grid">
                 {pickList.map((it) => {
-                  const on = outfit.itemIds.includes(it.id);
+                  const on = collection.itemIds.includes(it.id);
                   return (
                     <button key={it.id} className={`picker-card${on ? ' is-on' : ''}`} onClick={() => toggle(it.id)}>
                       {it.photo ? (
@@ -144,11 +121,11 @@ export function OutfitDetailPage() {
 
       {confirm && (
         <ConfirmDialog
-          message={`Удалить образ «${outfit.name}»? Вещи останутся в гардеробе.`}
+          message={`Удалить подборку «${collection.name}»? Вещи останутся в гардеробе.`}
           onConfirm={() => {
-            removeOutfit(id);
+            removeCollection(id);
             notifyWarning();
-            navigate('/clothing/outfits', { replace: true });
+            navigate('/clothing/collections', { replace: true });
           }}
           onClose={() => setConfirm(false)}
         />
