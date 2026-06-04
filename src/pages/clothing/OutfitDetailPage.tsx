@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, EmptyState, Screen, Sheet } from '@/components/ui';
-import { IconPencil, IconPlus, IconSparkles, IconTrash } from '@/components/icons';
+import { IconHeart, IconPencil, IconPlus, IconSparkles, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { Photo } from '@/components/Photo';
 import { WardrobeCard } from '@/components/clothing-cards';
 import { CATEGORIES, CATEGORY_EMOJI } from '@/lib/clothing';
 import { attachmentHref } from '@/lib/images';
 import type { ClothingCategory, WardrobeItem } from '@/types';
-import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
+import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
 export function OutfitDetailPage() {
   const { id } = useParams();
@@ -41,7 +41,21 @@ export function OutfitDetailPage() {
   };
 
   return (
-    <Screen title={outfit.name}>
+    <Screen
+      title={outfit.name}
+      action={
+        <button
+          className={`icon-round${outfit.favorite ? ' is-fav' : ''}`}
+          onClick={() => {
+            notifySuccess();
+            updateOutfit(id, { favorite: !outfit.favorite });
+          }}
+          aria-label={outfit.favorite ? 'Убрать из избранного' : 'В избранное'}
+        >
+          <IconHeart size={20} />
+        </button>
+      }
+    >
       <div className="stack">
         {outfit.cover && (
           <div className="item-photo">

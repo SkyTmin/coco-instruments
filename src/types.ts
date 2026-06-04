@@ -380,12 +380,19 @@ export interface WardrobeItem {
   brand?: string;
   size?: string;
   note?: string;
+  favorite?: boolean;
   createdAt: number;
   updatedAt: number;
 }
 export interface WardrobeItemsBlob {
   version: 1;
   items: WardrobeItem[];
+}
+
+/** The "fitting room" — a temporary set of items being assembled into a look. */
+export interface WardrobeFittingBlob {
+  version: 1;
+  itemIds: string[];
 }
 
 /** A themed group of wardrobe items (e.g. "Для работы", "Чёрное", "Лето"). */
@@ -432,6 +439,7 @@ export interface Outfit {
   itemIds: string[];
   layout?: OutfitLayoutItem[];
   note?: string;
+  favorite?: boolean;
   createdAt: number;
   updatedAt: number;
 }

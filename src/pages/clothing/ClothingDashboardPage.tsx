@@ -5,7 +5,7 @@ import { Screen, SectionHeader, Skeleton } from '@/components/ui';
 import { OutfitCarousel } from '@/components/OutfitCarousel';
 import { CollectionTile } from '@/components/clothing-cards';
 import { Photo } from '@/components/Photo';
-import { IconHeart, IconPlus, IconRuler } from '@/components/icons';
+import { IconChevron, IconHeart, IconPlus, IconRuler, IconSparkles } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { CATEGORY_EMOJI } from '@/lib/clothing';
 import { attachmentHref } from '@/lib/images';
@@ -32,6 +32,10 @@ export function ClothingDashboardPage() {
   const inspiration = useFinanceStore((s) => s.inspiration);
   const hydrated = useFinanceStore((s) => s.hydrated);
   const byId = useMemo(() => new Map(wardrobe.map((w) => [w.id, w])), [wardrobe]);
+  const feed = useMemo(
+    () => [...outfits].sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite))).slice(0, 12),
+    [outfits],
+  );
 
   const go = (path: string) => {
     tapLight();
@@ -66,15 +70,27 @@ export function ClothingDashboardPage() {
         {/* Образы — главный объект */}
         <SectionHeader title="Образы" action={outfits.length ? all('/clothing/outfits') : undefined} />
         {outfits.length ? (
-          <OutfitCarousel outfits={outfits.slice(0, 12)} />
+          <OutfitCarousel outfits={feed} />
         ) : (
           <Cta
             emoji="🧥"
-            title="Соберите первый образ"
-            sub="Фото-обложка и вещи из гардероба"
-            onClick={() => go('/clothing/outfits/new')}
+            title="Образов пока нет"
+            sub="Соберите первый образ из вещей гардероба"
+            onClick={() => go('/clothing/compose')}
           />
         )}
+
+        {/* Собрать образ — заметное действие */}
+        <button className="compose-cta" onClick={() => go('/clothing/compose')}>
+          <span className="compose-cta__icon">
+            <IconSparkles />
+          </span>
+          <span className="compose-cta__text">
+            <b>Собрать образ</b>
+            <i>Примерочная из вещей гардероба</i>
+          </span>
+          <IconChevron size={20} />
+        </button>
 
         {/* Гардероб */}
         <SectionHeader title="Гардероб" action={wardrobe.length ? all('/clothing/wardrobe') : undefined} />

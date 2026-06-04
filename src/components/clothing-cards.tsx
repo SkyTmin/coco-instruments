@@ -11,24 +11,42 @@ export function WardrobeCard({
   onClick,
   style,
   badge,
+  inFitting,
+  onToggleFitting,
 }: {
   item: WardrobeItem;
   onClick: () => void;
   style?: CSSProperties;
   badge?: string;
+  inFitting?: boolean;
+  onToggleFitting?: () => void;
 }) {
   return (
-    <button type="button" className="wardrobe-card" style={style} onClick={onClick}>
+    <div className="wardrobe-card" style={style} onClick={onClick} role="button">
       {item.photo ? (
         <Photo src={attachmentHref(item.photo)} />
       ) : (
         <span className="wardrobe-card__ph">{CATEGORY_EMOJI[item.category]}</span>
       )}
+      {item.favorite && <span className="wardrobe-card__fav" aria-hidden>♥</span>}
+      {onToggleFitting && (
+        <button
+          type="button"
+          className={`wardrobe-card__add${inFitting ? ' is-on' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFitting();
+          }}
+          aria-label={inFitting ? 'Убрать из примерочной' : 'В примерочную'}
+        >
+          {inFitting ? '✓' : '+'}
+        </button>
+      )}
       <span className="wardrobe-card__overlay">
         <span className="wardrobe-card__name">{item.name}</span>
         {badge && <span className="wardrobe-card__badge">{badge}</span>}
       </span>
-    </button>
+    </div>
   );
 }
 

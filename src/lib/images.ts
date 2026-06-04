@@ -97,6 +97,64 @@ export async function uploadAttachment(input: {
   }
 }
 
+/** Load an <img> from a URL (same-origin /uploads or a dataUrl). */
+export function loadImageSrc(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
+  const scale = Math.max(w / img.width, h / img.height);
+  const dw = img.width * scale;
+  const dh = img.height * scale;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  ctx.restore();
+}
+
+/** Compose up to 4 photos into a 3:4 mosaic cover (auto outfit cover). */
+export async function composeMosaic(srcs: string[]): Promise<Blob | null> {
+  const W = 900;
+  const H = 1200;
+  const g = 8;
+  const imgs = ((await Promise.all(srcs.slice(0, 4).map(loadImageSrc))).filter(Boolean) as HTMLImageElement[]).filter(
+    (im) => im.width,
+  );
+  if (!imgs.length) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.fillStyle = '#efe7db';
+  ctx.fillRect(0, 0, W, H);
+
+  const halfW = (W - g) / 2;
+  const halfH = (H - g) / 2;
+  let cells: [number, number, number, number][];
+  if (imgs.length === 1) cells = [[0, 0, W, H]];
+  else if (imgs.length === 2) cells = [[0, 0, halfW, H], [halfW + g, 0, halfW, H]];
+  else if (imgs.length === 3)
+    cells = [[0, 0, halfW, H], [halfW + g, 0, halfW, halfH], [halfW + g, halfH + g, halfW, halfH]];
+  else
+    cells = [
+      [0, 0, halfW, halfH],
+      [halfW + g, 0, halfW, halfH],
+      [0, halfH + g, halfW, halfH],
+      [halfW + g, halfH + g, halfW, halfH],
+    ];
+  imgs.forEach((img, i) => drawCover(ctx, img, ...cells[i]));
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85));
+}
+
 /** Pick → compress (images) → upload → returns an Attachment with a `url` or
  *  an inline `dataUrl` fallback. Throws on oversized / unreadable files. */
 export async function fileToAttachment(file: File): Promise<Attachment> {

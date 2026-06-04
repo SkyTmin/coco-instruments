@@ -28,6 +28,7 @@ import type {
   SavingsGoal,
   SizeEntry,
   WardrobeCollectionsBlob,
+  WardrobeFittingBlob,
   WardrobeInspirationBlob,
   WardrobeItem,
   WardrobeItemsBlob,
@@ -132,6 +133,7 @@ const writeWardrobe = makePersister<WardrobeItemsBlob>(STORAGE_KEYS.wardrobe);
 const writeOutfits = makePersister<WardrobeOutfitsBlob>(STORAGE_KEYS.outfits);
 const writeCollections = makePersister<WardrobeCollectionsBlob>(STORAGE_KEYS.collections);
 const writeInspiration = makePersister<WardrobeInspirationBlob>(STORAGE_KEYS.inspiration);
+const writeFitting = makePersister<WardrobeFittingBlob>(STORAGE_KEYS.fitting);
 const writeWishlist = makePersister<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist);
 const writeSizes = makePersister<WardrobeSizesBlob>(STORAGE_KEYS.sizes);
 
@@ -146,6 +148,7 @@ const persistWardrobe = (items: WardrobeItem[]) => writeWardrobe({ version: 1, i
 const persistOutfits = (items: Outfit[]) => writeOutfits({ version: 1, items });
 const persistCollections = (items: Collection[]) => writeCollections({ version: 1, items });
 const persistInspiration = (items: InspirationImage[]) => writeInspiration({ version: 1, items });
+const persistFitting = (itemIds: string[]) => writeFitting({ version: 1, itemIds });
 const persistWishlist = (items: WishItem[]) => writeWishlist({ version: 1, items });
 const persistSizes = (items: SizeEntry[]) => writeSizes({ version: 1, items });
 
@@ -167,6 +170,7 @@ interface FinanceState {
   outfits: Outfit[];
   collections: Collection[];
   inspiration: InspirationImage[];
+  fitting: string[];
   wishlist: WishItem[];
   sizes: SizeEntry[];
   reminderPrefs: ReminderPrefs;
@@ -247,6 +251,9 @@ interface FinanceState {
   removeCollection: (id: string) => void;
   getCollection: (id: string) => Collection | undefined;
 
+  toggleFitting: (id: string) => void;
+  clearFitting: () => void;
+
   addInspiration: (photos: Attachment[]) => void;
   removeInspiration: (id: string) => void;
 
@@ -291,6 +298,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   outfits: [],
   collections: [],
   inspiration: [],
+  fitting: [],
   wishlist: [],
   sizes: [],
   reminderPrefs: DEFAULT_REMINDER_PREFS,
@@ -298,7 +306,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   hydrate: async () => {
     const storage = getStorage();
-    const [exp, sav, rec, lists, notes, people, rem, ward, outf, coll, insp, wish, sizes] =
+    const [exp, sav, rec, lists, notes, people, rem, ward, outf, coll, insp, fit, wish, sizes] =
       await Promise.all([
         storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
         storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
@@ -311,6 +319,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         storage.get<WardrobeOutfitsBlob>(STORAGE_KEYS.outfits),
         storage.get<WardrobeCollectionsBlob>(STORAGE_KEYS.collections),
         storage.get<WardrobeInspirationBlob>(STORAGE_KEYS.inspiration),
+        storage.get<WardrobeFittingBlob>(STORAGE_KEYS.fitting),
         storage.get<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist),
         storage.get<WardrobeSizesBlob>(STORAGE_KEYS.sizes),
       ]);
@@ -332,6 +341,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       outfits: outf?.items ?? [],
       collections: coll?.items ?? [],
       inspiration: insp?.items ?? [],
+      fitting: fit?.itemIds ?? [],
       wishlist: wish?.items ?? [],
       sizes: sizes?.items ?? [],
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
@@ -848,10 +858,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const collections = get().collections.map((c) =>
       c.itemIds.includes(id) ? { ...c, itemIds: c.itemIds.filter((x) => x !== id) } : c,
     );
-    set({ wardrobe, outfits, collections });
+    const fitting = get().fitting.filter((x) => x !== id);
+    set({ wardrobe, outfits, collections, fitting });
     persistWardrobe(wardrobe);
     persistOutfits(outfits);
     persistCollections(collections);
+    persistFitting(fitting);
   },
 
   getItem: (id) => get().wardrobe.find((it) => it.id === id),
@@ -905,6 +917,18 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   getCollection: (id) => get().collections.find((c) => c.id === id),
+
+  toggleFitting: (id) => {
+    const has = get().fitting.includes(id);
+    const fitting = has ? get().fitting.filter((x) => x !== id) : [...get().fitting, id];
+    set({ fitting });
+    persistFitting(fitting);
+  },
+
+  clearFitting: () => {
+    set({ fitting: [] });
+    persistFitting([]);
+  },
 
   addInspiration: (photos) => {
     const now = Date.now();

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, Screen, StatRow } from '@/components/ui';
-import { IconPencil, IconTrash } from '@/components/icons';
+import { IconHeart, IconPencil, IconSparkles, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { Photo } from '@/components/Photo';
 import { CATEGORY_EMOJI, CATEGORY_LABEL, SEASON_LABEL } from '@/lib/clothing';
 import { attachmentHref } from '@/lib/images';
-import { notifyWarning, tapLight } from '@/lib/haptics';
+import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
 export function WardrobeItemDetailPage() {
   const { id } = useParams();
@@ -14,6 +14,9 @@ export function WardrobeItemDetailPage() {
   const item = useFinanceStore((s) => (id ? s.getItem(id) : undefined));
   const outfits = useFinanceStore((s) => s.outfits);
   const collections = useFinanceStore((s) => s.collections);
+  const fitting = useFinanceStore((s) => s.fitting);
+  const updateItem = useFinanceStore((s) => s.updateItem);
+  const toggleFitting = useFinanceStore((s) => s.toggleFitting);
   const removeItem = useFinanceStore((s) => s.removeItem);
   const [confirm, setConfirm] = useState(false);
 
@@ -21,15 +24,29 @@ export function WardrobeItemDetailPage() {
 
   const inOutfits = outfits.filter((o) => o.itemIds.includes(id));
   const inCollections = collections.filter((c) => c.itemIds.includes(id));
+  const inFitting = fitting.includes(id);
   const go = (path: string) => {
     tapLight();
     navigate(path);
   };
-
   const hasDetails = item.color || item.season || item.brand || item.size || item.note;
 
   return (
-    <Screen title={item.name}>
+    <Screen
+      title={item.name}
+      action={
+        <button
+          className={`icon-round${item.favorite ? ' is-fav' : ''}`}
+          onClick={() => {
+            notifySuccess();
+            updateItem(id, { favorite: !item.favorite });
+          }}
+          aria-label={item.favorite ? 'Убрать из избранного' : 'В избранное'}
+        >
+          <IconHeart size={20} />
+        </button>
+      }
+    >
       <div className="stack">
         {item.photo ? (
           <div className="item-photo">
@@ -38,6 +55,21 @@ export function WardrobeItemDetailPage() {
         ) : (
           <div className="item-photo item-photo--ph">{CATEGORY_EMOJI[item.category]}</div>
         )}
+
+        <button className="btn btn--primary btn--block" onClick={() => go(`/clothing/compose?from=${id}`)}>
+          <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
+            <IconSparkles size={18} /> Собрать образ с этой вещью
+          </span>
+        </button>
+        <button
+          className="btn btn--block"
+          onClick={() => {
+            selectionChanged();
+            toggleFitting(id);
+          }}
+        >
+          {inFitting ? '✓ В примерочной' : '+ В примерочную'}
+        </button>
 
         <div className="card">
           <StatRow label="Категория" value={`${CATEGORY_EMOJI[item.category]} ${CATEGORY_LABEL[item.category]}`} />
@@ -53,37 +85,48 @@ export function WardrobeItemDetailPage() {
           )}
         </div>
 
-        {(inOutfits.length > 0 || inCollections.length > 0) && (
+        <div className="card">
+          <div className="section-label" style={{ margin: '0 0 10px' }}>
+            {inOutfits.length
+              ? `Образы с этой вещью · ${inOutfits.length}`
+              : 'Образы с этой вещью'}
+          </div>
+          {inOutfits.length ? (
+            <div className="cl-hscroll">
+              {inOutfits.map((o) => (
+                <div
+                  key={o.id}
+                  className="outfit-card mini"
+                  role="button"
+                  onClick={() => go(`/clothing/outfits/${o.id}`)}
+                >
+                  {o.cover ? <Photo src={attachmentHref(o.cover)} /> : <div className="outfit-card__ph">🧥</div>}
+                  <div className="outfit-card__overlay">
+                    <div className="outfit-card__name">{o.name}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+              Эта вещь пока не добавлена ни в один образ.
+            </p>
+          )}
+        </div>
+
+        {inCollections.length > 0 && (
           <div className="card">
-            {inOutfits.length > 0 && (
-              <>
-                <div className="section-label" style={{ margin: '0 0 10px' }}>
-                  В образах
-                </div>
-                <div className="chips" style={{ marginBottom: inCollections.length ? 14 : 0 }}>
-                  {inOutfits.map((o) => (
-                    <button key={o.id} className="note-chip" onClick={() => go(`/clothing/outfits/${o.id}`)}>
-                      {o.name}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-            {inCollections.length > 0 && (
-              <>
-                <div className="section-label" style={{ margin: '0 0 10px' }}>
-                  В подборках
-                </div>
-                <div className="chips">
-                  {inCollections.map((c) => (
-                    <button key={c.id} className="note-chip" onClick={() => go(`/clothing/collections/${c.id}`)}>
-                      {c.emoji ? `${c.emoji} ` : ''}
-                      {c.name}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            <div className="section-label" style={{ margin: '0 0 10px' }}>
+              В подборках
+            </div>
+            <div className="chips">
+              {inCollections.map((c) => (
+                <button key={c.id} className="note-chip" onClick={() => go(`/clothing/collections/${c.id}`)}>
+                  {c.emoji ? `${c.emoji} ` : ''}
+                  {c.name}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

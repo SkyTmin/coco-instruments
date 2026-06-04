@@ -27,6 +27,7 @@ export const STORAGE_KEYS = {
   outfits: 'wardrobe.outfits',
   collections: 'wardrobe.collections',
   inspiration: 'wardrobe.inspiration',
+  fitting: 'wardrobe.fitting',
   wishlist: 'wardrobe.wishlist',
   sizes: 'wardrobe.sizes',
   meta: 'app.meta',

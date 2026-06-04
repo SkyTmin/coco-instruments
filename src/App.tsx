@@ -16,6 +16,7 @@ import { tapLight } from '@/lib/haptics';
 
 import { HomePage } from '@/pages/HomePage';
 import { ClothingDashboardPage } from '@/pages/clothing/ClothingDashboardPage';
+import { ComposePage } from '@/pages/clothing/ComposePage';
 import { WardrobePage } from '@/pages/clothing/WardrobePage';
 import { WardrobeItemFormPage } from '@/pages/clothing/WardrobeItemFormPage';
 import { WardrobeItemDetailPage } from '@/pages/clothing/WardrobeItemDetailPage';
@@ -157,6 +158,7 @@ export function App() {
           <Route path="/people/:id" element={<PersonDetailPage />} />
           <Route path="/people/:id/edit" element={<PersonFormPage />} />
           <Route path="/clothing" element={<ClothingDashboardPage />} />
+          <Route path="/clothing/compose" element={<ComposePage />} />
           <Route path="/clothing/wardrobe" element={<WardrobePage />} />
           <Route path="/clothing/wardrobe/new" element={<WardrobeItemFormPage />} />
           <Route path="/clothing/wardrobe/:id" element={<WardrobeItemDetailPage />} />
