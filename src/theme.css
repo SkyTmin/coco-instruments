@@ -3596,9 +3596,8 @@ input[type='datetime-local'] {
 }
 .wish-linked b { color: var(--text); }
 
-
 /* ===========================================================================
-   Calculator — compact, gesture-first surface
+   Calculator — gesture-first, with tape + full-size (scientific) mode
    =========================================================================== */
 .calc-actions { display: flex; gap: 8px; }
 .calc-iconbtn {
@@ -3609,27 +3608,34 @@ input[type='datetime-local'] {
   color: var(--accent);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: transform 0.14s ease;
+  transition: transform 0.14s ease, background 0.14s ease;
 }
 .calc-iconbtn:active { transform: scale(0.92); }
+.calc-iconbtn--fx { font-size: 16px; font-weight: 900; font-style: italic; }
+.calc-iconbtn--fx.is-on {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-grad-1), var(--accent-grad-2));
+}
 
 .calc {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* Fill the space under the header so everything fits one screen, no scroll. */
   min-height: calc(100dvh - 178px);
+  touch-action: none;
 }
+/* Full-size mode is allowed to grow taller than the screen (scrolls). */
+.calc.is-scientific { min-height: 0; }
 
-/* ---- display / swipe surface --------------------------------------------- */
+/* ---- display + tape ------------------------------------------------------ */
 .calc-screen {
   position: relative;
   flex: 1 1 auto;
   min-height: 150px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 18px;
+  padding: 14px 18px 16px;
   border-radius: 24px;
   overflow: hidden;
   background:
@@ -3637,9 +3643,6 @@ input[type='datetime-local'] {
     radial-gradient(circle at 86% 30%, rgba(216, 115, 82, 0.16), transparent 38%),
     var(--surface-2);
   box-shadow: inset 0 0 0 1px var(--hairline), var(--shadow-sm);
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
 }
 :root[data-theme='dark'] .calc-screen {
   background:
@@ -3647,14 +3650,20 @@ input[type='datetime-local'] {
     radial-gradient(circle at 86% 30%, rgba(216, 115, 82, 0.12), transparent 40%),
     var(--surface);
 }
+.calc.is-scientific .calc-screen { flex: 0 0 auto; min-height: 138px; }
 
-.calc-screen__history {
+.calc-tape {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   gap: 2px;
-  opacity: 0.85;
+  scrollbar-width: none;
 }
-.calc-peek {
+.calc-tape::-webkit-scrollbar { display: none; }
+.calc-tape__row {
   display: flex;
   align-items: baseline;
   justify-content: flex-end;
@@ -3662,20 +3671,20 @@ input[type='datetime-local'] {
   width: 100%;
   border: 0;
   background: transparent;
-  padding: 1px 2px;
-  color: var(--muted);
-  font-size: 13px;
+  padding: 3px 2px;
   cursor: pointer;
-  overflow: hidden;
+  border-radius: 8px;
+  transition: background 0.12s ease;
 }
-.calc-peek span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.calc-peek b { color: color-mix(in srgb, var(--accent) 75%, var(--text)); flex: none; }
+.calc-tape__row:active { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.calc-tape__expr { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.calc-tape__res { color: color-mix(in srgb, var(--accent) 78%, var(--text)); font-size: 14px; font-weight: 800; flex: none; }
 
-.calc-screen__main {
-  margin-top: auto;
+.calc-current {
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   align-items: flex-end;
   text-align: right;
 }
@@ -3700,9 +3709,9 @@ input[type='datetime-local'] {
 }
 @keyframes calc-cursor-blink { 50% { opacity: 0; } }
 .calc-result {
-  min-height: 22px;
+  min-height: 20px;
   color: color-mix(in srgb, var(--accent) 78%, var(--text));
-  font-size: clamp(16px, 4.6vw, 20px);
+  font-size: clamp(15px, 4.4vw, 19px);
   font-weight: 800;
   width: 100%;
 }
@@ -3735,21 +3744,21 @@ input[type='datetime-local'] {
   100% { opacity: 0; transform: scale(1.55); }
 }
 
-/* ---- compass ring around the finger -------------------------------------- */
+/* ---- compass ring around the finger (works anywhere on the calc) --------- */
 .calc-compass {
   position: absolute;
   width: 152px; height: 152px;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  z-index: 6;
+  z-index: 8;
   animation: calc-ring-in 0.16s ease;
 }
 @keyframes calc-ring-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.7); } }
 .calc-compass__ring {
   position: absolute; inset: 0;
   border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%);
-  border: 1.5px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 15%, transparent), transparent 70%);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 34%, transparent);
   backdrop-filter: blur(3px);
 }
 .calc-compass__op {
@@ -3774,18 +3783,20 @@ input[type='datetime-local'] {
 }
 
 /* ---- keypad -------------------------------------------------------------- */
-.calc-pad {
+.calc-pad,
+.calc-sci {
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
+.calc-sci { gap: 6px; }
 .calc-key {
   min-width: 0;
-  min-height: clamp(46px, 7.4vh, 60px);
+  min-height: clamp(42px, 6.8vh, 58px);
   border: 0;
   border-radius: 16px;
-  padding: 0 6px;
+  padding: 0 4px;
   background: var(--surface);
   color: var(--text);
   font-size: 21px;
@@ -3793,23 +3804,24 @@ input[type='datetime-local'] {
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: transform 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
-  touch-action: manipulation;
+  touch-action: none;
 }
 .calc-key:active { transform: scale(0.96); box-shadow: none; }
-.calc-key--util {
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 18px;
-  box-shadow: none;
+.calc-key--util { background: var(--surface-2); color: var(--muted); font-size: 17px; box-shadow: none; }
+.calc-key--danger { color: var(--neg); background: color-mix(in srgb, var(--neg) 12%, var(--surface-2)); box-shadow: none; }
+.calc-key--op {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  font-size: 24px;
 }
-.calc-key--danger { color: var(--neg); background: color-mix(in srgb, var(--neg) 12%, var(--surface-2)); }
 .calc-key--equals {
   color: #fff;
   font-size: 24px;
   background: linear-gradient(135deg, var(--accent-grad-1), var(--accent-grad-2));
   box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 32%, transparent);
 }
-.calc-key--sci { min-height: 46px; font-size: 16px; background: var(--surface-2); box-shadow: none; }
+.calc-key--sci { min-height: 44px; font-size: 15px; font-weight: 800; background: var(--surface-2); color: var(--text); box-shadow: none; }
+.calc.is-scientific .calc-key { min-height: 48px; }
 
 /* ---- history panel (slides down from the top) ---------------------------- */
 .calc-scrim {
@@ -3822,6 +3834,7 @@ input[type='datetime-local'] {
   position: fixed; z-index: 41;
   top: calc(var(--safe-top) + var(--content-top) + 8px);
   left: 50%;
+  transform: translate(-50%, 0);
   width: min(520px, calc(100% - 24px));
   max-height: 72dvh;
   display: flex; flex-direction: column;
@@ -3835,7 +3848,6 @@ input[type='datetime-local'] {
   from { opacity: 0; transform: translate(-50%, -16px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
-.calc-history-panel { transform: translate(-50%, 0); }
 .calc-history-panel__head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 15px 18px;
@@ -3859,15 +3871,10 @@ input[type='datetime-local'] {
 .calc-history-item b { color: color-mix(in srgb, var(--accent) 78%, var(--text)); font-size: 15px; }
 .calc-history-empty { padding: 28px 18px; text-align: center; color: var(--muted); font-size: 14px; }
 
-/* ---- settings sheet bits ------------------------------------------------- */
-.calc-seg {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
-  padding: 4px; border-radius: 14px; background: var(--surface-2);
-}
+/* ---- settings sheet ------------------------------------------------------ */
+.calc-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: var(--surface-2); }
 .calc-seg__opt { border: 0; border-radius: 11px; padding: 10px; background: transparent; color: var(--muted); font-weight: 800; cursor: pointer; }
 .calc-seg__opt.is-active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
-.calc-sci-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.calc-mem-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 
 /* ---- onboarding ---------------------------------------------------------- */
 .calc-ob {
@@ -3906,29 +3913,17 @@ input[type='datetime-local'] {
   color: color-mix(in srgb, var(--accent) 86%, var(--text));
   animation: calc-ob-op 1.8s ease-in-out infinite;
 }
-.calc-ob__finger {
-  position: absolute;
-  font-size: 38px;
-  animation: ob-finger-tap 1.8s ease-in-out infinite;
-}
+.calc-ob__finger { position: absolute; font-size: 38px; animation: ob-finger-tap 1.8s ease-in-out infinite; }
 .calc-ob__stage--right .calc-ob__finger { animation-name: ob-finger-right; }
 .calc-ob__stage--left .calc-ob__finger { animation-name: ob-finger-left; }
 .calc-ob__stage--up .calc-ob__finger { animation-name: ob-finger-up; }
 .calc-ob__stage--down .calc-ob__finger { animation-name: ob-finger-down; }
-.calc-ob__trail {
-  position: absolute;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-}
+.calc-ob__trail { position: absolute; border-radius: 999px; background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .calc-ob__stage--right .calc-ob__trail,
 .calc-ob__stage--left .calc-ob__trail { width: 124px; height: 4px; }
 .calc-ob__stage--up .calc-ob__trail,
 .calc-ob__stage--down .calc-ob__trail { width: 4px; height: 116px; }
-.calc-ob__stage--tap .calc-ob__trail {
-  width: 56px; height: 56px; border-radius: 50%;
-  background: transparent;
-  border: 2px dashed color-mix(in srgb, var(--accent) 32%, transparent);
-}
+.calc-ob__stage--tap .calc-ob__trail { width: 56px; height: 56px; border-radius: 50%; background: transparent; border: 2px dashed color-mix(in srgb, var(--accent) 32%, transparent); }
 @keyframes ob-finger-right { 0% { transform: translateX(-58px); opacity: 0; } 20% { opacity: 1; } 80% { transform: translateX(58px); opacity: 1; } 100% { transform: translateX(58px); opacity: 0; } }
 @keyframes ob-finger-left { 0% { transform: translateX(58px); opacity: 0; } 20% { opacity: 1; } 80% { transform: translateX(-58px); opacity: 1; } 100% { transform: translateX(-58px); opacity: 0; } }
 @keyframes ob-finger-up { 0% { transform: translateY(52px); opacity: 0; } 20% { opacity: 1; } 80% { transform: translateY(-52px); opacity: 1; } 100% { transform: translateY(-52px); opacity: 0; } }
@@ -3944,17 +3939,12 @@ input[type='datetime-local'] {
 .calc-ob__actions .btn { flex: 1; }
 
 @media (max-height: 680px) {
-  .calc { min-height: calc(100dvh - 156px); gap: 9px; }
-  .calc-key { min-height: clamp(42px, 6.6vh, 54px); border-radius: 14px; font-size: 19px; }
-  .calc-screen { padding: 13px 15px; border-radius: 20px; }
+  .calc { min-height: calc(100dvh - 152px); gap: 9px; }
+  .calc-key { min-height: clamp(38px, 6vh, 50px); border-radius: 13px; font-size: 19px; }
+  .calc-screen { padding: 12px 15px 13px; border-radius: 20px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .calc-cursor,
-  .calc-bigop,
-  .calc-compass,
-  .calc-ob__op,
-  .calc-ob__finger,
-  .calc-ob__card { animation: none; }
+  .calc-cursor, .calc-bigop, .calc-compass, .calc-ob__op, .calc-ob__finger, .calc-ob__card { animation: none; }
   .calc-key { transition: none; }
 }

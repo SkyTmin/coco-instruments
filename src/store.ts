@@ -47,6 +47,7 @@ export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
   memory: 0,
   lastAns: 0,
   onboardingDone: false,
+  scientific: false,
 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { genId } from '@/lib/id';

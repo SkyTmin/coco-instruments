@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { Screen, Sheet } from '@/components/ui';
 import { IconClock, IconGear } from '@/components/icons';
 import { useFinanceStore } from '@/store';
-import { CalculatorError, evaluateExpression, formatCalculatorNumber, toCalculatorInputNumber } from '@/lib/calculator';
+import { CalculatorError, evaluateExpression, toCalculatorInputNumber } from '@/lib/calculator';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 
 type Op = '+' | '−' | '×' | '÷';
 
 const SWIPE_THRESHOLD = 36;
-const DIR_THRESHOLD = 12;
+const DIR_THRESHOLD = 14;
+const MOVE_TOLERANCE = 7;
 const DOUBLE_TAP_MS = 300;
 
-/** Gesture onboarding steps, shown once on first open. */
 const STEPS: { dir: 'right' | 'left' | 'up' | 'down' | 'tap'; op: Op | '='; title: string; desc: string }[] = [
   { dir: 'right', op: '+', title: 'Свайп вправо', desc: 'Прибавить' },
   { dir: 'left', op: '−', title: 'Свайп влево', desc: 'Вычесть' },
@@ -30,10 +30,16 @@ function errorText(error: unknown): string {
   return 'Ошибка';
 }
 
-/** Dominant-axis direction → operator. right=+, left=−, up=×, down=÷. */
 function dirToOp(dx: number, dy: number): Op {
   if (Math.abs(dx) >= Math.abs(dy)) return dx > 0 ? '+' : '−';
   return dy > 0 ? '÷' : '×';
+}
+
+interface Key {
+  label: ReactNode;
+  tone?: 'util' | 'op' | 'equals' | 'danger';
+  aria?: string;
+  onClick: () => void;
 }
 
 export function CalculatorPage() {
@@ -52,7 +58,6 @@ export function CalculatorPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [onboarding, setOnboarding] = useState(false);
   const [obStep, setObStep] = useState(0);
-  // Live swipe state for the center symbol + compass ring.
   const [swipe, setSwipe] = useState<{ active: boolean; dir: Op | null; x: number; y: number }>({
     active: false,
     dir: null,
@@ -61,18 +66,25 @@ export function CalculatorPage() {
   });
   const [confirmOp, setConfirmOp] = useState<Op | null>(null);
 
-  const screenRef = useRef<HTMLDivElement>(null);
-  const gesture = useRef<{ x: number; y: number; pointerId: number; moved: boolean } | null>(null);
+  const calcRef = useRef<HTMLDivElement>(null);
+  const tapeRef = useRef<HTMLDivElement>(null);
+  const gestureRef = useRef<{ x: number; y: number; pointerId: number; moved: boolean; onButton: boolean } | null>(null);
+  const suppressClickRef = useRef(false);
   const lastTapAt = useRef(0);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // First-run onboarding (once hydrated so we read the persisted flag).
   useEffect(() => {
     if (hydrated && !prefs.onboardingDone) {
       setObStep(0);
       setOnboarding(true);
     }
   }, [hydrated, prefs.onboardingDone]);
+
+  // Keep the tape scrolled to the newest entry (bottom).
+  useEffect(() => {
+    const el = tapeRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [history.length]);
 
   const preview = useMemo(() => {
     if (!expression.trim()) return '';
@@ -107,6 +119,10 @@ export function CalculatorPage() {
     const text = `${needsLeftSpace ? ' ' : ''}${op}${needsRightSpace ? ' ' : ' '}`;
     insertText(text);
   };
+  const opButton = (op: Op) => {
+    insertOperation(op);
+    tapMedium();
+  };
 
   const insertFunction = (name: string) => insertText(`${name}()`, name.length + 1);
 
@@ -116,10 +132,14 @@ export function CalculatorPage() {
     tapLight();
   };
 
-  const clear = () => {
+  const clearAll = () => {
     setFormula('');
     setResultLine('');
     tapMedium();
+  };
+  const clearEntry = () => {
+    setFormula('');
+    tapLight();
   };
 
   const moveCursor = (delta: number) => {
@@ -170,10 +190,15 @@ export function CalculatorPage() {
     setPrefs({ angleMode: prefs.angleMode === 'DEG' ? 'RAD' : 'DEG' });
     selectionChanged();
   };
+  const scientific = prefs.scientific ?? false;
+  const toggleScientific = () => {
+    setPrefs({ scientific: !scientific });
+    tapLight();
+  };
 
-  const loadHistory = (expr: string, result: string) => {
+  // Reuse a past calculation: load its expression to keep editing → a new line.
+  const reuse = (expr: string) => {
     setFormula(expr);
-    setResultLine(result);
     setHistoryOpen(false);
     tapLight();
   };
@@ -188,87 +213,99 @@ export function CalculatorPage() {
     setOnboarding(true);
   };
 
-  // ---- swipe gesture on the display surface --------------------------------
-  const localPoint = (clientX: number, clientY: number) => {
-    const rect = screenRef.current?.getBoundingClientRect();
-    return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
-  };
-
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('button, a')) return;
-    gesture.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, moved: false };
-    const p = localPoint(event.clientX, event.clientY);
-    setSwipe({ active: true, dir: null, x: p.x, y: p.y });
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      /* capture unsupported */
-    }
-  };
-
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const start = gesture.current;
-    if (!start) return;
-    const dx = event.clientX - start.x;
-    const dy = event.clientY - start.y;
-    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) start.moved = true;
-    const dist = Math.max(Math.abs(dx), Math.abs(dy));
-    const dir = dist >= DIR_THRESHOLD ? dirToOp(dx, dy) : null;
-    const p = localPoint(event.clientX, event.clientY);
-    setSwipe((prev) => {
-      if (dir && dir !== prev.dir) selectionChanged();
-      return { active: true, dir, x: p.x, y: p.y };
-    });
-    if (dist > SWIPE_THRESHOLD) event.preventDefault();
-  };
-
   const playConfirm = (op: Op) => {
     setConfirmOp(op);
     if (confirmTimer.current) clearTimeout(confirmTimer.current);
     confirmTimer.current = setTimeout(() => setConfirmOp(null), 440);
   };
 
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const start = gesture.current;
-    gesture.current = null;
-    setSwipe({ active: false, dir: null, x: 0, y: 0 });
-    if (!start) return;
-    const dx = event.clientX - start.x;
-    const dy = event.clientY - start.y;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) >= SWIPE_THRESHOLD) {
-      const op = dirToOp(dx, dy);
-      insertOperation(op);
-      tapMedium();
-      playConfirm(op);
-      return;
-    }
-    if (start.moved) return;
-    const now = Date.now();
-    if (now - lastTapAt.current <= DOUBLE_TAP_MS) {
-      lastTapAt.current = 0;
-      evaluateCurrent();
-    } else {
-      lastTapAt.current = now;
-    }
+  // ---- swipe gesture across the WHOLE calculator ---------------------------
+  const localPoint = (clientX: number, clientY: number) => {
+    const rect = calcRef.current?.getBoundingClientRect();
+    return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
   };
 
-  const onPointerCancel = () => {
-    gesture.current = null;
-    setSwipe({ active: false, dir: null, x: 0, y: 0 });
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (gestureRef.current) return;
+    suppressClickRef.current = false;
+    gestureRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      pointerId: event.pointerId,
+      moved: false,
+      onButton: !!(event.target as HTMLElement).closest('button'),
+    };
+  };
+
+  // Window-level move/up keep the gesture alive even past the element edges.
+  useEffect(() => {
+    const onMove = (event: PointerEvent) => {
+      const g = gestureRef.current;
+      if (!g || event.pointerId !== g.pointerId) return;
+      const dx = event.clientX - g.x;
+      const dy = event.clientY - g.y;
+      if (Math.abs(dx) > MOVE_TOLERANCE || Math.abs(dy) > MOVE_TOLERANCE) g.moved = true;
+      const dist = Math.max(Math.abs(dx), Math.abs(dy));
+      const dir = dist >= DIR_THRESHOLD ? dirToOp(dx, dy) : null;
+      const p = localPoint(event.clientX, event.clientY);
+      setSwipe((prev) => {
+        if (dir && dir !== prev.dir) selectionChanged();
+        return { active: g.moved, dir, x: p.x, y: p.y };
+      });
+    };
+    const onUp = (event: PointerEvent) => {
+      const g = gestureRef.current;
+      if (!g || event.pointerId !== g.pointerId) return;
+      gestureRef.current = null;
+      setSwipe({ active: false, dir: null, x: 0, y: 0 });
+      const dx = event.clientX - g.x;
+      const dy = event.clientY - g.y;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) >= SWIPE_THRESHOLD) {
+        const op = dirToOp(dx, dy);
+        insertOperation(op);
+        tapMedium();
+        playConfirm(op);
+        suppressClickRef.current = true; // cancel the click on whatever we lifted over
+        return;
+      }
+      if (g.onButton || g.moved) return; // button tap → its onClick handles it
+      const now = Date.now();
+      if (now - lastTapAt.current <= DOUBLE_TAP_MS) {
+        lastTapAt.current = 0;
+        evaluateCurrent();
+      } else {
+        lastTapAt.current = now;
+      }
+    };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  });
+
+  const onClickCapture = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (suppressClickRef.current) {
+      event.stopPropagation();
+      event.preventDefault();
+      suppressClickRef.current = false;
+    }
   };
 
   useEffect(() => () => { if (confirmTimer.current) clearTimeout(confirmTimer.current); }, []);
 
-  // Physical keyboard (desktop).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey || onboarding) return;
       if (/^[0-9]$/.test(event.key)) { event.preventDefault(); insertText(event.key); }
       else if (event.key === '.' || event.key === ',') { event.preventDefault(); insertText(','); }
-      else if (event.key === '+') { event.preventDefault(); insertOperation('+'); }
-      else if (event.key === '-') { event.preventDefault(); insertOperation('−'); }
-      else if (event.key === '*') { event.preventDefault(); insertOperation('×'); }
-      else if (event.key === '/') { event.preventDefault(); insertOperation('÷'); }
+      else if (event.key === '+') { event.preventDefault(); opButton('+'); }
+      else if (event.key === '-') { event.preventDefault(); opButton('−'); }
+      else if (event.key === '*') { event.preventDefault(); opButton('×'); }
+      else if (event.key === '/') { event.preventDefault(); opButton('÷'); }
       else if (event.key === 'Enter' || event.key === '=') { event.preventDefault(); evaluateCurrent(); }
       else if (event.key === 'Backspace') { event.preventDefault(); deleteChar(); }
       else if (event.key === 'ArrowLeft') { event.preventDefault(); moveCursor(-1); }
@@ -279,8 +316,57 @@ export function CalculatorPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
-  const digits = ['7', '8', '9', '4', '5', '6', '1', '2', '3'];
-  const resultDisplay = status || resultLine || (preview ? `≈ ${preview}` : formatCalculatorNumber(prefs.lastAns));
+  // Standard calculator keypad (digits + operation column) — swipes work too.
+  const pad: Key[] = [
+    { label: '%', tone: 'util', aria: 'Процент', onClick: () => insertText('%') },
+    { label: 'CE', tone: 'util', aria: 'Очистить ввод', onClick: clearEntry },
+    { label: 'C', tone: 'danger', aria: 'Сбросить', onClick: clearAll },
+    { label: '⌫', tone: 'util', aria: 'Стереть', onClick: deleteChar },
+    { label: '¹⁄ₓ', tone: 'util', aria: 'Обратное число', onClick: () => insertText('^(-1)') },
+    { label: 'x²', tone: 'util', aria: 'Квадрат', onClick: () => insertText('^2') },
+    { label: '√', tone: 'util', aria: 'Корень', onClick: () => insertFunction('sqrt') },
+    { label: '÷', tone: 'op', onClick: () => opButton('÷') },
+    { label: '7', onClick: () => insertText('7') },
+    { label: '8', onClick: () => insertText('8') },
+    { label: '9', onClick: () => insertText('9') },
+    { label: '×', tone: 'op', onClick: () => opButton('×') },
+    { label: '4', onClick: () => insertText('4') },
+    { label: '5', onClick: () => insertText('5') },
+    { label: '6', onClick: () => insertText('6') },
+    { label: '−', tone: 'op', onClick: () => opButton('−') },
+    { label: '1', onClick: () => insertText('1') },
+    { label: '2', onClick: () => insertText('2') },
+    { label: '3', onClick: () => insertText('3') },
+    { label: '+', tone: 'op', onClick: () => opButton('+') },
+    { label: '±', tone: 'util', aria: 'Сменить знак', onClick: () => insertText('-') },
+    { label: '0', onClick: () => insertText('0') },
+    { label: ',', aria: 'Запятая', onClick: () => insertText(',') },
+    { label: '=', tone: 'equals', aria: 'Равно', onClick: evaluateCurrent },
+  ];
+
+  // Full-size (scientific) rows — revealed by the ƒx toggle.
+  const sci: Key[] = [
+    { label: prefs.angleMode, tone: 'util', aria: 'Градусы или радианы', onClick: toggleAngleMode },
+    { label: 'sin', tone: 'util', onClick: () => insertFunction('sin') },
+    { label: 'cos', tone: 'util', onClick: () => insertFunction('cos') },
+    { label: 'tan', tone: 'util', onClick: () => insertFunction('tan') },
+    { label: 'asin', tone: 'util', onClick: () => insertFunction('asin') },
+    { label: 'acos', tone: 'util', onClick: () => insertFunction('acos') },
+    { label: 'atan', tone: 'util', onClick: () => insertFunction('atan') },
+    { label: 'ln', tone: 'util', onClick: () => insertFunction('ln') },
+    { label: 'log', tone: 'util', onClick: () => insertFunction('log') },
+    { label: 'π', tone: 'util', onClick: () => insertText('π') },
+    { label: 'e', tone: 'util', onClick: () => insertText('e') },
+    { label: '^', tone: 'util', aria: 'Степень', onClick: () => insertText('^') },
+    { label: '(', tone: 'util', onClick: () => insertText('(') },
+    { label: ')', tone: 'util', onClick: () => insertText(')') },
+    { label: '!', tone: 'util', aria: 'Факториал', onClick: () => insertText('!') },
+    { label: 'Ans', tone: 'util', onClick: () => insertText('Ans') },
+    { label: 'MC', tone: 'util', aria: 'Очистить память', onClick: () => memory('clear') },
+    { label: 'MR', tone: 'util', aria: 'Вставить память', onClick: () => memory('recall') },
+    { label: 'M+', tone: 'util', aria: 'Добавить в память', onClick: () => memory('plus') },
+    { label: 'M−', tone: 'util', aria: 'Вычесть из памяти', onClick: () => memory('minus') },
+  ];
 
   return (
     <Screen
@@ -288,6 +374,15 @@ export function CalculatorPage() {
       subtitle="Свайп — операция, двойной тап — равно"
       action={
         <div className="calc-actions">
+          <button
+            className={`calc-iconbtn calc-iconbtn--fx${scientific ? ' is-on' : ''}`}
+            type="button"
+            aria-label="Научный режим"
+            aria-pressed={scientific}
+            onClick={toggleScientific}
+          >
+            ƒx
+          </button>
           <button className="calc-iconbtn" type="button" aria-label="История" onClick={() => { tapLight(); setHistoryOpen(true); }}>
             <IconClock size={20} />
           </button>
@@ -297,27 +392,18 @@ export function CalculatorPage() {
         </div>
       }
     >
-      <div className="calc">
-        <div
-          className="calc-screen"
-          ref={screenRef}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
-        >
-          {history.length > 0 && (
-            <div className="calc-screen__history">
-              {history.slice(0, 3).reverse().map((item) => (
-                <button key={item.id} className="calc-peek" type="button" onClick={() => loadHistory(item.expression, item.result)}>
-                  <span>{item.expression}</span>
-                  <b>= {item.result}</b>
-                </button>
-              ))}
-            </div>
-          )}
+      <div className={`calc${scientific ? ' is-scientific' : ''}`} ref={calcRef} onPointerDown={onPointerDown} onClickCapture={onClickCapture}>
+        <div className="calc-screen">
+          <div className="calc-tape" ref={tapeRef}>
+            {history.slice().reverse().map((item) => (
+              <button key={item.id} className="calc-tape__row" type="button" onClick={() => reuse(item.expression)}>
+                <span className="calc-tape__expr">{item.expression}</span>
+                <span className="calc-tape__res">= {item.result}</span>
+              </button>
+            ))}
+          </div>
 
-          <div className="calc-screen__main">
+          <div className="calc-current">
             <div className={`calc-expr${expression ? '' : ' is-empty'}`}>
               {expression ? (
                 <>
@@ -332,47 +418,56 @@ export function CalculatorPage() {
                 </>
               )}
             </div>
-            <div className={`calc-result${status ? ' is-error' : ''}`}>{resultDisplay}</div>
+            <div className={`calc-result${status ? ' is-error' : ''}`}>
+              {status || (resultLine ? `= ${resultLine}` : preview ? `≈ ${preview}` : '')}
+            </div>
           </div>
 
-          {/* Big centred operation symbol while swiping */}
           {swipe.dir && <div className="calc-bigop">{swipe.dir}</div>}
           {confirmOp && <div className="calc-bigop is-confirm" key={`c${confirmOp}`}>{confirmOp}</div>}
-
-          {/* Compass ring around the finger */}
-          {swipe.active && (
-            <div className="calc-compass" style={{ left: swipe.x, top: swipe.y }} aria-hidden="true">
-              <span className="calc-compass__ring" />
-              <span className={`calc-compass__op is-up${swipe.dir === '×' ? ' is-on' : ''}`}>×</span>
-              <span className={`calc-compass__op is-right${swipe.dir === '+' ? ' is-on' : ''}`}>+</span>
-              <span className={`calc-compass__op is-down${swipe.dir === '÷' ? ' is-on' : ''}`}>÷</span>
-              <span className={`calc-compass__op is-left${swipe.dir === '−' ? ' is-on' : ''}`}>−</span>
-            </div>
-          )}
         </div>
+
+        {scientific && (
+          <div className="calc-sci">
+            {sci.map((k, i) => (
+              <button
+                key={i}
+                type="button"
+                aria-label={k.aria}
+                className="calc-key calc-key--sci"
+                onClick={k.onClick}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="calc-pad">
-          <button className="calc-key calc-key--util calc-key--danger" type="button" onClick={clear}>AC</button>
-          <button className="calc-key calc-key--util" type="button" onClick={() => insertText('(')}>(</button>
-          <button className="calc-key calc-key--util" type="button" onClick={() => insertText(')')}>)</button>
-          <button className="calc-key calc-key--util" type="button" aria-label="Удалить" onClick={deleteChar}>⌫</button>
-
-          {digits.slice(0, 3).map((d) => <button key={d} className="calc-key" type="button" onClick={() => insertText(d)}>{d}</button>)}
-          <button className="calc-key calc-key--util" type="button" aria-label="Курсор влево" onClick={() => moveCursor(-1)}>‹</button>
-
-          {digits.slice(3, 6).map((d) => <button key={d} className="calc-key" type="button" onClick={() => insertText(d)}>{d}</button>)}
-          <button className="calc-key calc-key--util" type="button" aria-label="Курсор вправо" onClick={() => moveCursor(1)}>›</button>
-
-          {digits.slice(6, 9).map((d) => <button key={d} className="calc-key" type="button" onClick={() => insertText(d)}>{d}</button>)}
-          <button className="calc-key calc-key--util" type="button" onClick={() => insertText('Ans')}>Ans</button>
-
-          <button className="calc-key" type="button" onClick={() => insertText('0')}>0</button>
-          <button className="calc-key" type="button" aria-label="Запятая" onClick={() => insertText(',')}>,</button>
-          <button className="calc-key calc-key--equals" type="button" aria-label="Равно" onClick={evaluateCurrent} style={{ gridColumn: 'span 2' }}>=</button>
+          {pad.map((k, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={k.aria}
+              className={`calc-key${k.tone ? ` calc-key--${k.tone}` : ''}`}
+              onClick={k.onClick}
+            >
+              {k.label}
+            </button>
+          ))}
         </div>
+
+        {swipe.active && (
+          <div className="calc-compass" style={{ left: swipe.x, top: swipe.y }} aria-hidden="true">
+            <span className="calc-compass__ring" />
+            <span className={`calc-compass__op is-up${swipe.dir === '×' ? ' is-on' : ''}`}>×</span>
+            <span className={`calc-compass__op is-right${swipe.dir === '+' ? ' is-on' : ''}`}>+</span>
+            <span className={`calc-compass__op is-down${swipe.dir === '÷' ? ' is-on' : ''}`}>÷</span>
+            <span className={`calc-compass__op is-left${swipe.dir === '−' ? ' is-on' : ''}`}>−</span>
+          </div>
+        )}
       </div>
 
-      {/* History — slides down from the top */}
       {historyOpen && (
         <>
           <div className="calc-scrim" onClick={() => setHistoryOpen(false)} />
@@ -389,7 +484,7 @@ export function CalculatorPage() {
             {history.length ? (
               <div className="calc-history-panel__list">
                 {history.map((item) => (
-                  <button key={item.id} className="calc-history-item" type="button" onClick={() => loadHistory(item.expression, item.result)}>
+                  <button key={item.id} className="calc-history-item" type="button" onClick={() => reuse(item.expression)}>
                     <span>{item.expression}</span>
                     <b>= {item.result}</b>
                   </button>
@@ -402,7 +497,6 @@ export function CalculatorPage() {
         </>
       )}
 
-      {/* Settings + scientific functions */}
       {settingsOpen && (
         <Sheet title="Калькулятор" onClose={() => setSettingsOpen(false)}>
           <div className="stack">
@@ -411,35 +505,19 @@ export function CalculatorPage() {
               <button className={`calc-seg__opt${prefs.angleMode === 'RAD' ? ' is-active' : ''}`} type="button" onClick={() => prefs.angleMode !== 'RAD' && toggleAngleMode()}>Радианы</button>
             </div>
 
-            <div className="section-label" style={{ margin: '4px 2px 0' }}>Научные функции</div>
-            <div className="calc-sci-grid">
-              {['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'ln', 'log'].map((fn) => (
-                <button key={fn} className="calc-key calc-key--sci" type="button" onClick={() => { insertFunction(fn); setSettingsOpen(false); }}>{fn}</button>
-              ))}
-              <button className="calc-key calc-key--sci" type="button" onClick={() => { insertFunction('sqrt'); setSettingsOpen(false); }}>√</button>
-              <button className="calc-key calc-key--sci" type="button" onClick={() => { insertText('^2'); setSettingsOpen(false); }}>x²</button>
-              <button className="calc-key calc-key--sci" type="button" onClick={() => { insertText('^'); setSettingsOpen(false); }}>xʸ</button>
-              <button className="calc-key calc-key--sci" type="button" onClick={() => { insertText('!'); setSettingsOpen(false); }}>n!</button>
-              <button className="calc-key calc-key--sci" type="button" onClick={() => { insertText('%'); setSettingsOpen(false); }}>%</button>
-              <button className="calc-key calc-key--sci" type="button" onClick={() => { insertText('π'); setSettingsOpen(false); }}>π</button>
-              <button className="calc-key calc-key--sci" type="button" onClick={() => { insertText('e'); setSettingsOpen(false); }}>e</button>
-              <button className="calc-key calc-key--sci" type="button" onClick={() => { insertFunction('abs'); setSettingsOpen(false); }}>|x|</button>
-            </div>
-
-            <div className="section-label" style={{ margin: '4px 2px 0' }}>Память</div>
-            <div className="calc-mem-grid">
-              <button className="calc-key calc-key--sci" type="button" onClick={() => memory('clear')}>MC</button>
-              <button className="calc-key calc-key--sci" type="button" onClick={() => { memory('recall'); setSettingsOpen(false); }}>MR</button>
-              <button className="calc-key calc-key--sci" type="button" onClick={() => memory('plus')}>M+</button>
-              <button className="calc-key calc-key--sci" type="button" onClick={() => memory('minus')}>M−</button>
-            </div>
-
+            <button className="btn btn--block" type="button" onClick={() => { toggleScientific(); setSettingsOpen(false); }}>
+              {scientific ? 'Скрыть научные функции' : 'Показать научные функции (ƒx)'}
+            </button>
             <button className="btn btn--block" type="button" onClick={replayOnboarding}>Показать обучение ещё раз</button>
+            {history.length > 0 && (
+              <button className="btn btn--block btn--danger" type="button" onClick={() => { clearHistory(); tapMedium(); setSettingsOpen(false); }}>
+                Очистить историю
+              </button>
+            )}
           </div>
         </Sheet>
       )}
 
-      {/* First-run gesture onboarding */}
       {onboarding && (
         <OnboardingOverlay
           step={obStep}
@@ -486,14 +564,8 @@ function OnboardingOverlay({
         </div>
 
         <div className="calc-ob__actions">
-          {step > 0 ? (
-            <button className="btn btn--ghost" type="button" onClick={onPrev}>Назад</button>
-          ) : (
-            <span />
-          )}
-          <button className="btn btn--primary" type="button" onClick={onNext}>
-            {last ? 'Начать' : 'Далее'}
-          </button>
+          {step > 0 ? <button className="btn btn--ghost" type="button" onClick={onPrev}>Назад</button> : <span />}
+          <button className="btn btn--primary" type="button" onClick={onNext}>{last ? 'Начать' : 'Далее'}</button>
         </div>
       </div>
     </div>

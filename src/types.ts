@@ -382,6 +382,8 @@ export interface CalculatorPrefs {
   lastAns: number;
   /** Whether the gesture onboarding has been completed (don't auto-show again). */
   onboardingDone?: boolean;
+  /** Full-size (scientific) keypad with trig / log / constants visible. */
+  scientific?: boolean;
 }
 
 export interface CalculatorBlob {
