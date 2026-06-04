@@ -4,6 +4,7 @@ import {
   buildNoteGraph,
   filterNoteGraph,
   getNoteRelations,
+  layoutNoteGraph,
   normalizeNoteTitle,
   parseNoteTags,
   parseWikiLinks,
@@ -65,6 +66,36 @@ describe('notes graph', () => {
     });
 
     expect(local.nodes.map((node) => node.label).sort()).toEqual(['A', 'B']);
+  });
+
+  it('lays out nodes without overlaps and inside the stage', () => {
+    const notes = [
+      note('a', 'Хаб', '[[B]] [[C]] [[D]] #тег'),
+      note('b', 'B', '[[C]] #тег'),
+      note('c', 'C', '[[D]]'),
+      note('d', 'D', ''),
+      note('e', 'E', '[[Хаб]]'),
+    ];
+    const graph = buildNoteGraph(notes);
+    const size = { width: 480, height: 600 };
+    const points = layoutNoteGraph(graph, 'a', size);
+
+    expect(points.length).toBe(graph.nodes.length);
+    for (const point of points) {
+      expect(point.x).toBeGreaterThanOrEqual(point.r - 0.01);
+      expect(point.x).toBeLessThanOrEqual(size.width - point.r + 0.01);
+      expect(point.y).toBeGreaterThanOrEqual(point.r - 0.01);
+      expect(point.y).toBeLessThanOrEqual(size.height - point.r + 0.01);
+    }
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 1; j < points.length; j++) {
+        const a = points[i];
+        const b = points[j];
+        const distance = Math.hypot(a.x - b.x, a.y - b.y);
+        // Collision resolution guarantees nodes never hard-overlap.
+        expect(distance).toBeGreaterThanOrEqual(a.r + b.r - 0.5);
+      }
+    }
   });
 
   it('adds people, gifts, promises and linked notes to the graph', () => {

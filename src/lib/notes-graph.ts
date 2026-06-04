@@ -44,9 +44,19 @@ export interface NoteGraphPoint extends NoteGraphNode {
   x: number;
   y: number;
   r: number;
+  /** Live velocity carried by the cooling simulation. */
+  vx: number;
+  vy: number;
 }
 
-export const GRAPH_VIEW_BOX = { width: 520, height: 330 };
+export interface GraphSize {
+  width: number;
+  height: number;
+}
+
+/** Default coordinate space (portrait — matches the tall mobile stage). The
+ *  page measures the real stage and overrides this so the graph fills it. */
+export const GRAPH_VIEW_BOX: GraphSize = { width: 480, height: 600 };
 
 export interface PeopleGraphData {
   people: Person[];
@@ -350,77 +360,183 @@ function hash(value: string): number {
   return Math.abs(h);
 }
 
-export function layoutNoteGraph(graph: NoteGraph, activeId?: string): NoteGraphPoint[] {
-  const { width, height } = GRAPH_VIEW_BOX;
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const nodes = graph.nodes.map((node, index) => {
-    const angle = ((hash(node.id) % 360) / 180) * Math.PI;
-    const ring = 78 + ((index % 4) * 23);
-    const baseRadius =
-      node.kind === 'person' ? 16 : node.kind === 'gift' || node.kind === 'promise' || node.kind === 'event' ? 8 : 10;
-    return {
-      ...node,
-      x: centerX + Math.cos(angle) * ring,
-      y: centerY + Math.sin(angle) * ring,
-      r: Math.min(node.kind === 'person' ? 28 : 24, baseRadius + node.degree * 2.1 + (node.id === activeId ? 4 : 0)),
-    };
-  });
+// --- Force-directed simulation (Obsidian-style: charge + links + collision) --
+// One `simulationStep` is shared by the initial settle and the live, cooling
+// loop in the page, so the graph opens already-relaxed and stays consistent.
+
+const CHARGE = 200; // long-range repulsion strength (1/distance falloff)
+const CHARGE_MIN_DIST = 16;
+const CENTER_PULL = 0.011; // gentle gravity toward the middle
+const FRICTION = 0.82; // velocity decay per tick
+const VELOCITY_MAX = 48;
+const COLLIDE_PAD = 16; // breathing room enforced between every pair
+const BOUNDS_PAD = 6;
+
+function linkDistance(kind: NoteGraphLinkKind): number {
+  if (kind === 'tag') return 92;
+  if (kind === 'person-relation') return 188;
+  if (kind.startsWith('person-')) return 124;
+  return 150; // wiki
+}
+
+function linkStiffness(kind: NoteGraphLinkKind): number {
+  if (kind === 'tag') return 0.045;
+  if (kind === 'person-relation') return 0.05;
+  if (kind.startsWith('person-')) return 0.06;
+  return 0.08; // wiki — keep linked notes close
+}
+
+/** Visual radius of a node, scaled by how connected it is. */
+export function nodeRadius(node: Pick<NoteGraphNode, 'kind' | 'degree' | 'id'>, activeId?: string): number {
+  const isDetail = node.kind === 'gift' || node.kind === 'promise' || node.kind === 'event';
+  const base = node.kind === 'person' ? 15 : node.kind === 'tag' ? 8 : isDetail ? 7 : 9;
+  const cap = node.kind === 'person' ? 34 : node.kind === 'tag' ? 16 : isDetail ? 15 : 28;
+  return Math.min(cap, base + node.degree * 1.8 + (node.id === activeId ? 3 : 0));
+}
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+/** Advance the simulation by one tick (mutates node x/y/vx/vy in place). */
+export function simulationStep(
+  nodes: NoteGraphPoint[],
+  links: NoteGraphLink[],
+  size: GraphSize,
+  alpha: number,
+  draggingId?: string | null,
+): void {
+  const cx = size.width / 2;
+  const cy = size.height / 2;
   const byId = new Map(nodes.map((node) => [node.id, node]));
 
-  for (let tick = 0; tick < 80; tick++) {
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i];
-        const b = nodes[j];
-        const dx = a.x - b.x || 0.01;
-        const dy = a.y - b.y || 0.01;
-        const distanceSq = dx * dx + dy * dy;
-        const minDistance = a.r + b.r + 34;
-        if (distanceSq > minDistance * minDistance) continue;
-        const distance = Math.sqrt(distanceSq);
-        const force = (minDistance - distance) * 0.018;
-        const fx = (dx / distance) * force;
-        const fy = (dy / distance) * force;
-        a.x += fx;
-        a.y += fy;
-        b.x -= fx;
-        b.y -= fy;
+  // Many-body repulsion — keeps unrelated clusters from piling up.
+  for (let i = 0; i < nodes.length; i++) {
+    const a = nodes[i];
+    for (let j = i + 1; j < nodes.length; j++) {
+      const b = nodes[j];
+      let dx = a.x - b.x;
+      let dy = a.y - b.y;
+      let raw = Math.sqrt(dx * dx + dy * dy);
+      if (raw < 0.01) {
+        dx = (hash(a.id + b.id) % 100) / 100 - 0.5;
+        dy = (hash(b.id + a.id) % 100) / 100 - 0.5;
+        raw = Math.sqrt(dx * dx + dy * dy) || 1;
       }
-    }
-
-    for (const link of graph.links) {
-      const source = byId.get(link.source);
-      const target = byId.get(link.target);
-      if (!source || !target) continue;
-      const dx = target.x - source.x;
-      const dy = target.y - source.y;
-      const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-      const preferred =
-        link.kind === 'tag'
-          ? 82
-          : link.kind === 'person-relation'
-            ? 132
-            : link.kind.startsWith('person-')
-              ? 106
-              : 112;
-      const force = (distance - preferred) * 0.025;
-      const fx = (dx / distance) * force;
-      const fy = (dy / distance) * force;
-      source.x += fx;
-      source.y += fy;
-      target.x -= fx;
-      target.y -= fy;
-    }
-
-    for (const node of nodes) {
-      const centerForce = node.id === activeId ? 0.08 : 0.018;
-      node.x += (centerX - node.x) * centerForce;
-      node.y += (centerY - node.y) * centerForce;
-      node.x = Math.max(36, Math.min(width - 36, node.x));
-      node.y = Math.max(38, Math.min(height - 38, node.y));
+      const dist = Math.max(CHARGE_MIN_DIST, raw);
+      const force = ((CHARGE / dist) * alpha);
+      const fx = (dx / raw) * force;
+      const fy = (dy / raw) * force;
+      a.vx += fx;
+      a.vy += fy;
+      b.vx -= fx;
+      b.vy -= fy;
     }
   }
 
+  // Link springs — pull connected nodes toward a comfortable distance.
+  for (const link of links) {
+    const source = byId.get(link.source);
+    const target = byId.get(link.target);
+    if (!source || !target) continue;
+    const dx = target.x - source.x;
+    const dy = target.y - source.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    let stiffness = linkStiffness(link.kind);
+    if (draggingId && (link.source === draggingId || link.target === draggingId)) stiffness *= 1.7;
+    const force = (dist - linkDistance(link.kind)) * stiffness * alpha;
+    const fx = (dx / dist) * force;
+    const fy = (dy / dist) * force;
+    source.vx += fx;
+    source.vy += fy;
+    target.vx -= fx;
+    target.vy -= fy;
+  }
+
+  // Gravity + integration.
+  for (const node of nodes) {
+    if (node.id === draggingId) {
+      node.vx = 0;
+      node.vy = 0;
+      continue;
+    }
+    node.vx += (cx - node.x) * CENTER_PULL * alpha;
+    node.vy += (cy - node.y) * CENTER_PULL * alpha;
+    node.vx = clamp(node.vx * FRICTION, -VELOCITY_MAX, VELOCITY_MAX);
+    node.vy = clamp(node.vy * FRICTION, -VELOCITY_MAX, VELOCITY_MAX);
+    node.x += node.vx;
+    node.y += node.vy;
+  }
+
+  // Hard collision resolution — guarantees nodes never overlap (the big
+  // readability win) regardless of how the soft forces settle.
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = nodes[j];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const min = a.r + b.r + COLLIDE_PAD;
+        if (dist >= min || dist === 0) continue;
+        const push = (min - dist) / 2;
+        const ux = dx / dist;
+        const uy = dy / dist;
+        if (a.id !== draggingId) {
+          a.x -= ux * push;
+          a.y -= uy * push;
+        }
+        if (b.id !== draggingId) {
+          b.x += ux * push;
+          b.y += uy * push;
+        }
+      }
+    }
+  }
+
+  // Keep everything inside the stage.
+  for (const node of nodes) {
+    node.x = clamp(node.x, node.r + BOUNDS_PAD, size.width - node.r - BOUNDS_PAD);
+    node.y = clamp(node.y, node.r + BOUNDS_PAD, size.height - node.r - BOUNDS_PAD);
+  }
+}
+
+export function layoutNoteGraph(
+  graph: NoteGraph,
+  activeId?: string,
+  size: GraphSize = GRAPH_VIEW_BOX,
+): NoteGraphPoint[] {
+  const cx = size.width / 2;
+  const cy = size.height / 2;
+  const count = Math.max(1, graph.nodes.length);
+  const maxRing = Math.min(cx, cy) * 0.92;
+  // Deterministic sunflower (phyllotaxis) seed — spread out, no random clumps.
+  const spread = clamp((Math.min(size.width, size.height) / Math.sqrt(count)) * 1.1, 24, 64);
+  const nodes: NoteGraphPoint[] = graph.nodes.map((node, index) => {
+    if (node.id === activeId) {
+      return { ...node, x: cx, y: cy, vx: 0, vy: 0, r: nodeRadius(node, activeId) };
+    }
+    const angle = index * 2.399963229728653; // golden angle
+    const ring = Math.min(maxRing, spread * Math.sqrt(index + 0.7));
+    return {
+      ...node,
+      x: cx + Math.cos(angle) * ring,
+      y: cy + Math.sin(angle) * ring,
+      vx: 0,
+      vy: 0,
+      r: nodeRadius(node, activeId),
+    };
+  });
+
+  // Pre-settle with the same physics the live loop uses, so it opens relaxed.
+  const iterations = count > 120 ? 140 : 300;
+  let alpha = 1;
+  for (let i = 0; i < iterations; i++) {
+    simulationStep(nodes, graph.links, size, alpha);
+    alpha *= 0.992;
+  }
+  for (const node of nodes) {
+    node.vx = 0;
+    node.vy = 0;
+  }
   return nodes;
 }

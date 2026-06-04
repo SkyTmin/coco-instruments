@@ -968,6 +968,7 @@ input[type='datetime-local'] {
 }
 
 .notes-graph-stage {
+  height: 462px;
   border-radius: 20px;
   overflow: hidden;
   background: var(--surface);
@@ -980,7 +981,8 @@ input[type='datetime-local'] {
 }
 
 .notes-graph--interactive {
-  min-height: 430px;
+  width: 100%;
+  height: 100%;
   aspect-ratio: auto;
   touch-action: none;
   cursor: grab;
@@ -992,35 +994,58 @@ input[type='datetime-local'] {
 }
 
 .notes-graph__link {
-  stroke: rgba(123, 75, 42, 0.26);
-  stroke-width: 2;
-  transition: stroke 0.18s ease, stroke-width 0.18s ease, opacity 0.18s ease;
+  stroke: color-mix(in srgb, var(--accent) 30%, transparent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0.72;
+  transition: stroke 0.18s ease, stroke-width 0.18s ease, opacity 0.2s ease;
 }
 
 .notes-graph__link--tag {
-  stroke-dasharray: 5 6;
-  stroke: rgba(46, 158, 107, 0.42);
+  stroke-dasharray: 4 7;
+  stroke: color-mix(in srgb, var(--pos) 32%, transparent);
 }
 
-/* Links of the grabbed / active node light up. */
-.notes-graph__link.is-active {
+/* Links touching the focused node light up; the rest fade right back. */
+.notes-graph__link.is-hot {
   stroke: var(--accent);
-  stroke-width: 3;
+  stroke-width: 2.6;
   opacity: 1;
 }
-.notes-graph__link--tag.is-active {
+.notes-graph__link--tag.is-hot {
   stroke: var(--pos);
+}
+.notes-graph__link.is-dim {
+  opacity: 0.07;
 }
 
 .notes-graph__node {
   cursor: pointer;
+  transition: opacity 0.22s ease;
+}
+/* Obsidian-style focus: highlight the hovered/dragged node + its neighbours,
+   gently fade the rest so the local structure pops out of the cloud. */
+.notes-graph__node.is-dim {
+  opacity: 0.2;
+}
+.notes-graph__node.is-hot {
+  opacity: 1;
+}
+
+.notes-graph__halo {
+  fill: color-mix(in srgb, var(--accent) 22%, transparent);
+  stroke: none;
+  pointer-events: none;
+}
+.notes-graph__node--person .notes-graph__halo {
+  fill: color-mix(in srgb, #ee7f8f 28%, transparent);
 }
 
 .notes-graph__node circle {
   fill: url(#noteNodeGradient);
-  stroke: rgba(255, 255, 255, 0.72);
-  stroke-width: 2.5;
-  filter: drop-shadow(0 5px 8px rgba(63, 42, 27, 0.18));
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 2;
+  filter: drop-shadow(0 4px 7px rgba(63, 42, 27, 0.16));
 }
 
 .notes-graph--interactive .notes-graph__node circle {
@@ -1053,10 +1078,19 @@ input[type='datetime-local'] {
   font-weight: 700;
   text-anchor: middle;
   paint-order: stroke;
-  stroke: var(--surface-2);
-  stroke-width: 5;
+  stroke: var(--surface);
+  stroke-width: 4.5;
   stroke-linejoin: round;
   pointer-events: none;
+}
+
+/* Labels are decluttered: hidden by default, faded in for hubs, the focused
+   neighbourhood, or when you zoom in. */
+.notes-graph__label {
+  opacity: 0;
+}
+.notes-graph__label.is-shown {
+  opacity: 1;
 }
 
 .notes-graph__node--missing,
@@ -1670,8 +1704,8 @@ input[type='datetime-local'] {
   .note-title-input {
     font-size: 25px;
   }
-  .notes-graph--interactive {
-    min-height: 380px;
+  .notes-graph-stage {
+    height: 408px;
   }
 }
 
