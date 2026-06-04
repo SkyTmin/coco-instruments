@@ -23,6 +23,7 @@ export const STORAGE_KEYS = {
   reminders: 'finance.reminders',
   notes: 'notes.items',
   people: 'people.items',
+  calculator: 'calculator.items',
   wardrobe: 'wardrobe.items',
   outfits: 'wardrobe.outfits',
   collections: 'wardrobe.collections',

@@ -158,3 +158,13 @@ export const IconSwap = (p: IconProps) => (
     <path d="M21 16H7" />
   </svg>
 );
+
+export const IconCalculator = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="4" y="2.8" width="16" height="18.4" rx="3.2" />
+    <path d="M8 7h8" />
+    <path d="M8 11h.01M12 11h.01M16 11h.01" />
+    <path d="M8 15h.01M12 15h.01M16 15h.01" />
+    <path d="M8 19h4M16 19h.01" />
+  </svg>
+);

@@ -364,6 +364,30 @@ export interface PeopleBlob {
   noteLinks: PersonNoteLink[];
 }
 
+// ---- Calculator: swipe-first scientific calculator ------------------------
+
+export type CalculatorAngleMode = 'DEG' | 'RAD';
+
+export interface CalculatorHistoryEntry {
+  id: string;
+  expression: string;
+  result: string;
+  value: number;
+  createdAt: number;
+}
+
+export interface CalculatorPrefs {
+  angleMode: CalculatorAngleMode;
+  memory: number;
+  lastAns: number;
+}
+
+export interface CalculatorBlob {
+  version: 1;
+  history: CalculatorHistoryEntry[];
+  prefs: CalculatorPrefs;
+}
+
 // ---- Clothing: wardrobe items, outfits, sizes, wishlist -------------------
 
 export type ClothingCategory = 'top' | 'bottom' | 'outerwear' | 'shoes' | 'accessory' | 'other';

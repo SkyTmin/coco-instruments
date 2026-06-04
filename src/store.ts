@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type {
   Attachment,
+  CalculatorBlob,
+  CalculatorHistoryEntry,
+  CalculatorPrefs,
   ExpenseList,
   FinanceExpensesBlob,
   FinanceListsBlob,
@@ -39,6 +42,7 @@ import type {
 } from '@/types';
 
 export const DEFAULT_REMINDER_PREFS: ReminderPrefs = { enabled: true, leads: [0], hour: 9, minute: 0 };
+export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = { angleMode: 'DEG', memory: 0, lastAns: 0 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { genId } from '@/lib/id';
 import { deriveStatus, paidSoFar, resolve } from '@/lib/finance-calc';
@@ -128,6 +132,7 @@ const writeRecurring = makePersister<FinanceRecurringBlob>(STORAGE_KEYS.recurrin
 const writeLists = makePersister<FinanceListsBlob>(STORAGE_KEYS.lists);
 const writeNotes = makePersister<NotesBlob>(STORAGE_KEYS.notes);
 const writePeople = makePersister<PeopleBlob>(STORAGE_KEYS.people);
+const writeCalculator = makePersister<CalculatorBlob>(STORAGE_KEYS.calculator);
 const writeReminders = makePersister<FinanceRemindersBlob>(STORAGE_KEYS.reminders);
 const writeWardrobe = makePersister<WardrobeItemsBlob>(STORAGE_KEYS.wardrobe);
 const writeOutfits = makePersister<WardrobeOutfitsBlob>(STORAGE_KEYS.outfits);
@@ -143,6 +148,8 @@ const persistRecurring = (items: RecurringPayment[]) => writeRecurring({ version
 const persistLists = (items: ExpenseList[]) => writeLists({ version: 1, items });
 const persistNotes = (items: Note[]) => writeNotes({ version: 1, items });
 const persistPeople = (blob: Omit<PeopleBlob, 'version'>) => writePeople({ version: 1, ...blob });
+const persistCalculator = (history: CalculatorHistoryEntry[], prefs: CalculatorPrefs) =>
+  writeCalculator({ version: 1, history, prefs });
 const persistReminderPrefs = (prefs: ReminderPrefs) => writeReminders({ version: 1, prefs });
 const persistWardrobe = (items: WardrobeItem[]) => writeWardrobe({ version: 1, items });
 const persistOutfits = (items: Outfit[]) => writeOutfits({ version: 1, items });
@@ -166,6 +173,8 @@ interface FinanceState {
   meetIdeas: MeetIdea[];
   personRelations: PersonRelation[];
   personNoteLinks: PersonNoteLink[];
+  calculatorHistory: CalculatorHistoryEntry[];
+  calculatorPrefs: CalculatorPrefs;
   wardrobe: WardrobeItem[];
   outfits: Outfit[];
   collections: Collection[];
@@ -236,6 +245,10 @@ interface FinanceState {
   linkNoteToPerson: (personId: string, noteId: string) => void;
   unlinkNoteFromPerson: (personId: string, noteId: string) => void;
 
+  addCalculatorHistory: (expression: string, result: string, value: number) => void;
+  clearCalculatorHistory: () => void;
+  setCalculatorPrefs: (patch: Partial<CalculatorPrefs>) => void;
+
   addItem: (draft: WardrobeItemDraft) => WardrobeItem;
   updateItem: (id: string, patch: Partial<WardrobeItem>) => void;
   removeItem: (id: string) => void;
@@ -295,6 +308,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   meetIdeas: [],
   personRelations: [],
   personNoteLinks: [],
+  calculatorHistory: [],
+  calculatorPrefs: DEFAULT_CALCULATOR_PREFS,
   wardrobe: [],
   outfits: [],
   collections: [],
@@ -307,7 +322,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   hydrate: async () => {
     const storage = getStorage();
-    const [exp, sav, rec, lists, notes, people, rem, ward, outf, coll, insp, fit, wish, sizes] =
+    const [exp, sav, rec, lists, notes, people, calc, rem, ward, outf, coll, insp, fit, wish, sizes] =
       await Promise.all([
         storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
         storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
@@ -315,6 +330,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         storage.get<FinanceListsBlob>(STORAGE_KEYS.lists),
         storage.get<NotesBlob>(STORAGE_KEYS.notes),
         storage.get<PeopleBlob>(STORAGE_KEYS.people),
+        storage.get<CalculatorBlob>(STORAGE_KEYS.calculator),
         storage.get<FinanceRemindersBlob>(STORAGE_KEYS.reminders),
         storage.get<WardrobeItemsBlob>(STORAGE_KEYS.wardrobe),
         storage.get<WardrobeOutfitsBlob>(STORAGE_KEYS.outfits),
@@ -338,6 +354,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       meetIdeas: people?.meetIdeas ?? [],
       personRelations: people?.relations ?? [],
       personNoteLinks: people?.noteLinks ?? [],
+      calculatorHistory: calc?.history ?? [],
+      calculatorPrefs: { ...DEFAULT_CALCULATOR_PREFS, ...(calc?.prefs ?? {}) },
       wardrobe: ward?.items ?? [],
       outfits: outf?.items ?? [],
       collections: coll?.items ?? [],
@@ -831,6 +849,32 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const people = touchPeople(get().people, personId);
     set({ personNoteLinks, people });
     persistPeople(peopleSnapshot(get()));
+  },
+
+  addCalculatorHistory: (expression, result, value) => {
+    const entry: CalculatorHistoryEntry = {
+      id: genId(),
+      expression,
+      result,
+      value,
+      createdAt: Date.now(),
+    };
+    const calculatorHistory = [entry, ...get().calculatorHistory].slice(0, 30);
+    const calculatorPrefs = { ...get().calculatorPrefs, lastAns: value };
+    set({ calculatorHistory, calculatorPrefs });
+    persistCalculator(calculatorHistory, calculatorPrefs);
+  },
+
+  clearCalculatorHistory: () => {
+    const calculatorHistory: CalculatorHistoryEntry[] = [];
+    set({ calculatorHistory });
+    persistCalculator(calculatorHistory, get().calculatorPrefs);
+  },
+
+  setCalculatorPrefs: (patch) => {
+    const calculatorPrefs = { ...get().calculatorPrefs, ...patch };
+    set({ calculatorPrefs });
+    persistCalculator(get().calculatorHistory, calculatorPrefs);
   },
 
   addItem: (draft) => {

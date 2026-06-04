@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatedNumber, Screen, Skeleton } from '@/components/ui';
-import { IconHeart, IconNotes, IconShirt, IconWallet } from '@/components/icons';
+import { IconCalculator, IconHeart, IconNotes, IconShirt, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
 import { toISO, todayISO } from '@/lib/date';
@@ -28,6 +28,8 @@ export function HomePage() {
   const meetIdeas = useFinanceStore((s) => s.meetIdeas);
   const wardrobe = useFinanceStore((s) => s.wardrobe);
   const outfits = useFinanceStore((s) => s.outfits);
+  const calculatorHistory = useFinanceStore((s) => s.calculatorHistory);
+  const calculatorPrefs = useFinanceStore((s) => s.calculatorPrefs);
   const hydrated = useFinanceStore((s) => s.hydrated);
 
   const fin = useMemo(() => {
@@ -80,6 +82,7 @@ export function HomePage() {
       <Screen title="Coco" subtitle="Личный помощник">
         <div className="home-grid">
           <Skeleton height={132} radius={24} />
+          <Skeleton height={120} radius={24} />
           <Skeleton height={120} radius={24} />
           <Skeleton height={120} radius={24} />
           <Skeleton height={120} radius={24} />
@@ -182,6 +185,38 @@ export function HomePage() {
                 ? `${wardrobe.length} ${pluralizeRu(wardrobe.length, ['вещь', 'вещи', 'вещей'])} · ${outfits.length} ${pluralizeRu(outfits.length, ['образ', 'образа', 'образов'])}`
                 : 'Гардероб, образы и размеры'}
             </div>
+          </div>
+        </div>
+
+        <div className="home-card home-card--calculator" onClick={() => go('/calculator')} role="button">
+          <div className="home-card__glow" />
+          <div className="home-card__icon">
+            <IconCalculator />
+          </div>
+          <div className="home-card__body">
+            <div className="home-card__title">Калькулятор</div>
+            {calculatorHistory.length ? (
+              <>
+                <div className="home-card__stats">
+                  <div className="hc-stat">
+                    <div className="hc-stat__num">{calculatorHistory.length}</div>
+                    <div className="hc-stat__lbl">
+                      {pluralizeRu(calculatorHistory.length, ['пример', 'примера', 'примеров'])}
+                    </div>
+                  </div>
+                  <div className="hc-stat">
+                    <div className="hc-stat__num">{calculatorPrefs.angleMode}</div>
+                    <div className="hc-stat__lbl">углы</div>
+                  </div>
+                </div>
+                <div className="hc-next">
+                  <span className="hc-next__dot" />
+                  Последний: <b>{calculatorHistory[0].result}</b>
+                </div>
+              </>
+            ) : (
+              <div className="home-card__desc">Свайпы, формулы и история</div>
+            )}
           </div>
         </div>
       </div>

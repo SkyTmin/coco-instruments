@@ -32,6 +32,7 @@ import { InspirationPage } from '@/pages/clothing/InspirationPage';
 import { SizesPage } from '@/pages/clothing/SizesPage';
 import { WishlistPage } from '@/pages/clothing/WishlistPage';
 import { WishFormPage } from '@/pages/clothing/WishFormPage';
+import { CalculatorPage } from '@/pages/CalculatorPage';
 import { NoteEditorPage } from '@/pages/NoteEditorPage';
 import { NotesGraphPage } from '@/pages/NotesGraphPage';
 import { NotesPage } from '@/pages/NotesPage';
@@ -158,6 +159,7 @@ export function App() {
           <Route path="/people/new" element={<PersonFormPage />} />
           <Route path="/people/:id" element={<PersonDetailPage />} />
           <Route path="/people/:id/edit" element={<PersonFormPage />} />
+          <Route path="/calculator" element={<CalculatorPage />} />
           <Route path="/clothing" element={<ClothingDashboardPage />} />
           <Route path="/clothing/compose" element={<ComposePage />} />
           <Route path="/clothing/compare" element={<ComparePage />} />
