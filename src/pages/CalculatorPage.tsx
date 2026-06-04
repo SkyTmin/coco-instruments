@@ -52,7 +52,6 @@ export function CalculatorPage() {
 
   const [expression, setExpression] = useState('');
   const [cursor, setCursor] = useState(0);
-  const [resultLine, setResultLine] = useState('');
   const [status, setStatus] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -67,7 +66,7 @@ export function CalculatorPage() {
   const [confirmOp, setConfirmOp] = useState<Op | null>(null);
 
   const calcRef = useRef<HTMLDivElement>(null);
-  const tapeRef = useRef<HTMLDivElement>(null);
+  const docRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<{ x: number; y: number; pointerId: number; moved: boolean; onButton: boolean } | null>(null);
   const suppressClickRef = useRef(false);
   const lastTapAt = useRef(0);
@@ -80,11 +79,11 @@ export function CalculatorPage() {
     }
   }, [hydrated, prefs.onboardingDone]);
 
-  // Keep the tape scrolled to the newest entry (bottom).
+  // Keep the document scrolled to the live input line (bottom).
   useEffect(() => {
-    const el = tapeRef.current;
+    const el = docRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [history.length]);
+  }, [history.length, expression]);
 
   const preview = useMemo(() => {
     if (!expression.trim()) return '';
@@ -137,7 +136,6 @@ export function CalculatorPage() {
 
   const clearAll = () => {
     setFormula('');
-    setResultLine('');
     tapMedium();
   };
   const clearEntry = () => {
@@ -156,12 +154,11 @@ export function CalculatorPage() {
     try {
       const result = evaluateExpression(raw, { ans: prefs.lastAns, angleMode: prefs.angleMode });
       addHistory(raw, result.formatted, result.value);
-      setFormula(normalizeInputNumber(result.value));
-      setResultLine(result.formatted);
+      // Drop the result into the tape and start a fresh line (Panecal-style).
+      setFormula('');
       notifySuccess();
     } catch (error) {
       setStatus(errorText(error));
-      setResultLine('');
       notifyWarning();
     }
   };
@@ -397,32 +394,33 @@ export function CalculatorPage() {
     >
       <div className={`calc${scientific ? ' is-scientific' : ''}`} ref={calcRef} onPointerDown={onPointerDown} onClickCapture={onClickCapture}>
         <div className="calc-screen">
-          <div className="calc-tape" ref={tapeRef}>
+          <div className="calc-doc" ref={docRef}>
             {history.slice().reverse().map((item) => (
-              <button key={item.id} className="calc-tape__row" type="button" onClick={() => reuse(item.expression)}>
-                <span className="calc-tape__expr">{item.expression}</span>
-                <span className="calc-tape__res">= {item.result}</span>
+              <button key={item.id} className="calc-doc__entry" type="button" onClick={() => reuse(item.expression)}>
+                <span className="calc-doc__expr">{item.expression}</span>
+                <span className="calc-doc__res">= {item.result}</span>
               </button>
             ))}
-          </div>
-
-          <div className="calc-current">
-            <div className={`calc-expr${expression ? '' : ' is-empty'}`}>
-              {expression ? (
-                <>
-                  <span>{before}</span>
-                  <span className="calc-cursor" />
-                  <span>{after}</span>
-                </>
-              ) : (
-                <>
-                  <span>0</span>
-                  <span className="calc-cursor" />
-                </>
+            <div className="calc-doc__input">
+              <div className={`calc-expr${expression ? '' : ' is-empty'}`}>
+                {expression ? (
+                  <>
+                    <span>{before}</span>
+                    <span className="calc-cursor" />
+                    <span>{after}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>0</span>
+                    <span className="calc-cursor" />
+                  </>
+                )}
+              </div>
+              {(status || (expression && preview)) && (
+                <div className={`calc-doc__preview${status ? ' is-error' : ''}`}>
+                  {status || (preview ? `= ${preview}` : '')}
+                </div>
               )}
-            </div>
-            <div className={`calc-result${status ? ' is-error' : ''}`}>
-              {status || (resultLine ? `= ${resultLine}` : preview ? `≈ ${preview}` : '')}
             </div>
           </div>
 
