@@ -1,24 +1,31 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ConfirmDialog, Screen } from '@/components/ui';
 import { PhotoPicker } from '@/components/PhotoPicker';
 import { useFinanceStore, type WishDraft } from '@/store';
-import type { Attachment } from '@/types';
+import type { Attachment, WishStatus } from '@/types';
+import { WISH_STATUSES } from '@/lib/clothing';
 import { notifySuccess, notifyWarning } from '@/lib/haptics';
 
 export function WishFormPage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [params] = useSearchParams();
   const existing = useFinanceStore((s) => (id ? s.getWish(id) : undefined));
   const addWish = useFinanceStore((s) => s.addWish);
   const updateWish = useFinanceStore((s) => s.updateWish);
   const removeWish = useFinanceStore((s) => s.removeWish);
+
+  // When opened as "чего не хватает для образа" the outfit is passed in the URL.
+  const linkedOutfitId = existing?.outfitId ?? params.get('outfit') ?? undefined;
+  const linkedOutfit = useFinanceStore((s) => (linkedOutfitId ? s.getOutfit(linkedOutfitId) : undefined));
 
   const [photo, setPhoto] = useState<Attachment | undefined>(existing?.photo);
   const [name, setName] = useState(existing?.name ?? '');
   const [price, setPrice] = useState(existing?.price ? String(existing.price) : '');
   const [link, setLink] = useState(existing?.link ?? '');
   const [note, setNote] = useState(existing?.note ?? '');
+  const [status, setStatus] = useState<WishStatus>(existing?.status ?? 'want');
   const [confirm, setConfirm] = useState(false);
 
   const valid = name.trim().length > 0;
@@ -31,6 +38,8 @@ export function WishFormPage() {
       price: Number.isFinite(p) && p > 0 ? p : undefined,
       link: link.trim() || undefined,
       note: note.trim() || undefined,
+      status,
+      outfitId: linkedOutfit ? linkedOutfit.id : undefined,
     };
     if (existing) updateWish(existing.id, draft);
     else addWish(draft);
@@ -40,7 +49,28 @@ export function WishFormPage() {
 
   return (
     <Screen title={existing ? 'Изменить' : 'Новая вещь'}>
+      {linkedOutfit && (
+        <div className="wish-linked">
+          Не хватает для образа <b>«{linkedOutfit.name}»</b>
+        </div>
+      )}
+
       <PhotoPicker photo={photo} onChange={setPhoto} label="Фото (необяз.)" />
+
+      <div className="field">
+        <label className="field__label">Статус</label>
+        <div className="chips">
+          {WISH_STATUSES.map((s) => (
+            <button
+              key={s.id}
+              className={`chip${status === s.id ? ' is-active' : ''}`}
+              onClick={() => setStatus(s.id)}
+            >
+              {s.emoji} {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="field">
         <label className="field__label">Название</label>

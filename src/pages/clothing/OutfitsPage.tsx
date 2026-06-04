@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { EmptyState, Fab, Screen, Sheet } from '@/components/ui';
 import { useFinanceStore } from '@/store';
 import { Photo } from '@/components/Photo';
-import { IconImage, IconSparkles } from '@/components/icons';
+import { IconImage, IconSparkles, IconSwap } from '@/components/icons';
 import { attachmentHref } from '@/lib/images';
 import { pluralizeRu } from '@/lib/format';
 import { selectionChanged, tapLight } from '@/lib/haptics';
@@ -46,6 +46,12 @@ export function OutfitsPage() {
           </button>
         </>
       ) : (
+        <>
+        {outfits.length >= 2 && (
+          <button className="compare-link" onClick={() => go('/clothing/compare')}>
+            <IconSwap size={16} /> Сравнить образы
+          </button>
+        )}
         <div className="outfit-grid">
           {sorted.map((o, i) => (
             <div
@@ -71,6 +77,7 @@ export function OutfitsPage() {
             </div>
           ))}
         </div>
+        </>
       )}
 
       {outfits.length > 0 && (

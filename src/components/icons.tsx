@@ -149,3 +149,12 @@ export const IconChart = (p: IconProps) => (
     <path d="M7 14v3M12 9v8M17 5v12" />
   </svg>
 );
+
+export const IconSwap = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M7 4 3 8l4 4" />
+    <path d="M3 8h14" />
+    <path d="m17 20 4-4-4-4" />
+    <path d="M21 16H7" />
+  </svg>
+);

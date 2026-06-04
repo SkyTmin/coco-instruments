@@ -1,4 +1,4 @@
-import type { ClothingCategory, Season } from '@/types';
+import type { ClothingCategory, Season, WishStatus } from '@/types';
 
 export const CATEGORIES: { id: ClothingCategory; label: string; emoji: string }[] = [
   { id: 'top', label: 'Верх', emoji: '👕' },
@@ -28,5 +28,20 @@ export const SEASONS: { id: Season; label: string }[] = [
 
 export const SEASON_LABEL = Object.fromEntries(SEASONS.map((s) => [s.id, s.label])) as Record<
   Season,
+  string
+>;
+
+export const WISH_STATUSES: { id: WishStatus; label: string; emoji: string }[] = [
+  { id: 'want', label: 'Хочу', emoji: '💭' },
+  { id: 'searching', label: 'Ищу', emoji: '🔎' },
+  { id: 'bought', label: 'Куплено', emoji: '✅' },
+];
+
+export const WISH_STATUS_LABEL = Object.fromEntries(WISH_STATUSES.map((s) => [s.id, s.label])) as Record<
+  WishStatus,
+  string
+>;
+export const WISH_STATUS_EMOJI = Object.fromEntries(WISH_STATUSES.map((s) => [s.id, s.emoji])) as Record<
+  WishStatus,
   string
 >;

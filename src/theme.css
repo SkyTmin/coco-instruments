@@ -3408,3 +3408,140 @@ input[type='datetime-local'] {
   display: grid;
   place-items: center;
 }
+
+/* Compare two outfits */
+.compare-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 auto 14px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.compare-link svg { flex: none; }
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 12px;
+}
+.compare-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  animation: fade-up 0.32s ease both;
+}
+.compare-col--empty {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 240px;
+  border: 2px dashed var(--hairline);
+  border-radius: 18px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.compare-col__plus { font-size: 34px; line-height: 1; color: var(--accent); }
+.compare-col__cover {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border: 0;
+  padding: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+.compare-col__ph { width: 100%; height: 100%; display: grid; place-items: center; font-size: 44px; }
+.compare-col__name { font-weight: 800; font-size: 15px; line-height: 1.25; }
+.compare-col__count { color: var(--muted); font-size: 12px; }
+.compare-col__note {
+  color: var(--muted);
+  font-size: 13px;
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+.compare-col__items { display: flex; flex-wrap: wrap; gap: 6px; }
+.compare-thumb {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  position: relative;
+  border: 0;
+  padding: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.compare-thumb__ph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; }
+.compare-col__open {
+  margin-top: 2px;
+  padding: 9px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.compare-swap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 11px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.compare-swap svg { flex: none; }
+
+/* Wishlist status + outfit link */
+.wish-row__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.wish-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wish-badge--searching { background: rgba(215, 154, 43, 0.16); color: var(--warn); }
+.wish-badge--bought { background: rgba(46, 158, 107, 0.16); color: var(--pos); }
+.wish-badge--outfit { background: rgba(123, 75, 42, 0.12); color: var(--accent); }
+.wish-linked {
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.wish-linked b { color: var(--text); }

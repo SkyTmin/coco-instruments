@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, EmptyState, Screen, Sheet } from '@/components/ui';
-import { IconPencil, IconPlus, IconTrash } from '@/components/icons';
+import { IconPencil, IconPlus, IconSparkles, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { WardrobeCard } from '@/components/clothing-cards';
 import { CATEGORIES, CATEGORY_EMOJI } from '@/lib/clothing';
@@ -16,6 +16,7 @@ export function CollectionDetailPage() {
   const wardrobe = useFinanceStore((s) => s.wardrobe);
   const updateCollection = useFinanceStore((s) => s.updateCollection);
   const removeCollection = useFinanceStore((s) => s.removeCollection);
+  const setFitting = useFinanceStore((s) => s.setFitting);
   const [confirm, setConfirm] = useState(false);
   const [picking, setPicking] = useState(false);
   const [filter, setFilter] = useState<ClothingCategory | 'all'>('all');
@@ -53,6 +54,21 @@ export function CollectionDetailPage() {
               <WardrobeCard key={it.id} item={it} onClick={() => go(`/clothing/wardrobe/${it.id}`)} />
             ))}
           </div>
+        )}
+
+        {members.length > 0 && (
+          <button
+            className="btn btn--primary btn--block"
+            onClick={() => {
+              tapLight();
+              setFitting(members.map((it) => it.id));
+              navigate('/clothing/compose');
+            }}
+          >
+            <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
+              <IconSparkles size={18} /> Собрать образ из вещей подборки
+            </span>
+          </button>
         )}
 
         <button className="btn btn--block" onClick={() => { tapLight(); setPicking(true); }}>

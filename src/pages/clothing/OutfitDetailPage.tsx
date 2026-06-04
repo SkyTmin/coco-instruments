@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, EmptyState, Screen, Sheet } from '@/components/ui';
-import { IconHeart, IconPencil, IconPlus, IconSparkles, IconTrash } from '@/components/icons';
+import { IconHeart, IconPencil, IconPlus, IconSparkles, IconSwap, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
+import { WISH_STATUS_EMOJI } from '@/lib/clothing';
 import { Photo } from '@/components/Photo';
 import { WardrobeCard } from '@/components/clothing-cards';
 import { CATEGORIES, CATEGORY_EMOJI } from '@/lib/clothing';
@@ -15,6 +16,7 @@ export function OutfitDetailPage() {
   const navigate = useNavigate();
   const outfit = useFinanceStore((s) => (id ? s.getOutfit(id) : undefined));
   const wardrobe = useFinanceStore((s) => s.wardrobe);
+  const wishlist = useFinanceStore((s) => s.wishlist);
   const updateOutfit = useFinanceStore((s) => s.updateOutfit);
   const removeOutfit = useFinanceStore((s) => s.removeOutfit);
   const [confirm, setConfirm] = useState(false);
@@ -26,6 +28,7 @@ export function OutfitDetailPage() {
   const members = outfit.itemIds
     .map((iid) => wardrobe.find((w) => w.id === iid))
     .filter((w): w is WardrobeItem => Boolean(w));
+  const missing = wishlist.filter((w) => w.outfitId === id);
   const pickList = filter === 'all' ? wardrobe : wardrobe.filter((w) => w.category === filter);
 
   const toggle = (itemId: string) => {
@@ -96,6 +99,35 @@ export function OutfitDetailPage() {
           <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
             <IconPlus size={18} /> Добавить вещь
           </span>
+        </button>
+
+        <div className="card">
+          <div className="section-label" style={{ margin: '0 0 10px' }}>
+            {missing.length ? `Недостаёт для образа · ${missing.length}` : 'Недостаёт для образа'}
+          </div>
+          {missing.length > 0 && (
+            <div className="chips" style={{ marginBottom: 10 }}>
+              {missing.map((w) => (
+                <button
+                  key={w.id}
+                  className="note-chip"
+                  onClick={() => go(`/clothing/wishlist/${w.id}/edit`)}
+                >
+                  {w.status ? `${WISH_STATUS_EMOJI[w.status]} ` : ''}
+                  {w.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <button className="btn btn--ghost btn--block" onClick={() => go(`/clothing/wishlist/new?outfit=${id}`)}>
+            <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
+              <IconPlus size={16} /> Чего не хватает
+            </span>
+          </button>
+        </div>
+
+        <button className="compare-link" onClick={() => go(`/clothing/compare?a=${id}`)}>
+          <IconSwap size={16} /> Сравнить с другим образом
         </button>
 
         <div className="row" style={{ gap: 12 }}>

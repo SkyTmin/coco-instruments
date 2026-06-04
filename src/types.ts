@@ -448,6 +448,9 @@ export interface WardrobeOutfitsBlob {
   items: Outfit[];
 }
 
+/** Where a wished item is in the buying journey. */
+export type WishStatus = 'want' | 'searching' | 'bought';
+
 /** Something you'd like to buy. */
 export interface WishItem {
   id: string;
@@ -456,6 +459,10 @@ export interface WishItem {
   price?: number;
   link?: string;
   note?: string;
+  /** Buying stage: хочу / ищу / куплено. */
+  status?: WishStatus;
+  /** Optional link to the outfit this item is missing for. */
+  outfitId?: string;
   createdAt: number;
   updatedAt: number;
 }

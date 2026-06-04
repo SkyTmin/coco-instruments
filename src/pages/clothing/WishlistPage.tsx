@@ -1,15 +1,19 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EmptyState, Fab, Screen, SwipeRow } from '@/components/ui';
 import { IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { attachmentHref } from '@/lib/images';
+import { WISH_STATUS_EMOJI, WISH_STATUS_LABEL } from '@/lib/clothing';
 import { formatRUB, pluralizeRu } from '@/lib/format';
 import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
 export function WishlistPage() {
   const navigate = useNavigate();
   const wishlist = useFinanceStore((s) => s.wishlist);
+  const outfits = useFinanceStore((s) => s.outfits);
   const removeWish = useFinanceStore((s) => s.removeWish);
+  const outfitName = useMemo(() => new Map(outfits.map((o) => [o.id, o.name])), [outfits]);
 
   const go = (path: string) => {
     tapLight();
@@ -63,6 +67,16 @@ export function WishlistPage() {
                       {w.note ?? ''}
                     </div>
                   )}
+                  <div className="wish-row__tags">
+                    {w.status && w.status !== 'want' && (
+                      <span className={`wish-badge wish-badge--${w.status}`}>
+                        {WISH_STATUS_EMOJI[w.status]} {WISH_STATUS_LABEL[w.status]}
+                      </span>
+                    )}
+                    {w.outfitId && outfitName.has(w.outfitId) && (
+                      <span className="wish-badge wish-badge--outfit">🧥 {outfitName.get(w.outfitId)}</span>
+                    )}
+                  </div>
                 </div>
                 {w.link && (
                   <a

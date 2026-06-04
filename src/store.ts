@@ -252,6 +252,7 @@ interface FinanceState {
   getCollection: (id: string) => Collection | undefined;
 
   toggleFitting: (id: string) => void;
+  setFitting: (ids: string[]) => void;
   clearFitting: () => void;
 
   addInspiration: (photos: Attachment[]) => void;
@@ -887,8 +888,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   removeOutfit: (id) => {
     const outfits = get().outfits.filter((o) => o.id !== id);
-    set({ outfits });
+    // Detach any wishlist items that pointed at this outfit.
+    const wishlist = get().wishlist.map((w) => (w.outfitId === id ? { ...w, outfitId: undefined } : w));
+    set({ outfits, wishlist });
     persistOutfits(outfits);
+    persistWishlist(wishlist);
   },
 
   getOutfit: (id) => get().outfits.find((o) => o.id === id),
@@ -921,6 +925,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   toggleFitting: (id) => {
     const has = get().fitting.includes(id);
     const fitting = has ? get().fitting.filter((x) => x !== id) : [...get().fitting, id];
+    set({ fitting });
+    persistFitting(fitting);
+  },
+
+  setFitting: (ids) => {
+    const valid = get().wardrobe.map((w) => w.id);
+    const fitting = [...new Set(ids.filter((id) => valid.includes(id)))];
     set({ fitting });
     persistFitting(fitting);
   },
