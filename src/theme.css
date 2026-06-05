@@ -3650,79 +3650,52 @@ input[type='datetime-local'] {
     radial-gradient(circle at 86% 30%, rgba(216, 115, 82, 0.12), transparent 40%),
     var(--surface);
 }
-.calc.is-scientific .calc-screen { flex: 0 0 auto; min-height: 138px; }
+.calc.is-scientific .calc-screen { flex: 0 0 auto; height: 132px; min-height: 0; }
 
-/* The whole window is one continuous tape: past "expr / =result" pairs stacked
-   top→bottom, the live input as the last line at the bottom. */
-.calc-doc {
+/* The display is one editable tape (a real textarea): every line can be moved
+   through, edited and re-run. It scrolls inside the fixed window — the window
+   itself never grows with the content. */
+.calc-input {
   flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 9px;
-  scrollbar-width: none;
-}
-.calc-doc::-webkit-scrollbar { display: none; }
-.calc-doc__entry {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
   width: 100%;
+  min-height: 0;
   margin: 0;
-  padding: 2px 4px;
+  padding: 2px 2px 4px;
   border: 0;
+  outline: none;
+  resize: none;
   background: transparent;
-  border-radius: 9px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.calc-doc__entry:active { background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.calc-doc__expr {
-  font-size: 22px;
-  font-weight: 650;
-  line-height: 1.22;
-  color: color-mix(in srgb, var(--text) 76%, var(--muted));
-  overflow-wrap: anywhere;
-}
-.calc-doc__res {
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1.18;
-  color: color-mix(in srgb, var(--accent) 70%, var(--text));
-  overflow-wrap: anywhere;
-}
-.calc-doc__input { padding: 2px 4px; }
-.calc-expr {
   color: var(--text);
-  font-size: clamp(28px, 8.4vw, 40px);
-  line-height: 1.16;
-  font-weight: 850;
-  letter-spacing: -0.5px;
-  overflow-wrap: anywhere;
+  caret-color: var(--accent);
+  font-family: inherit;
+  font-size: clamp(26px, 7.6vw, 38px);
+  font-weight: 800;
+  line-height: 1.28;
+  letter-spacing: -0.4px;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+  scrollbar-width: none;
+  touch-action: auto; /* the tape handles its own caret / scroll / selection */
+  -webkit-user-select: text;
+  user-select: text;
 }
-.calc-expr.is-empty { color: color-mix(in srgb, var(--muted) 64%, transparent); }
-.calc-cursor {
-  display: inline-block;
-  width: 2px; height: 0.92em;
-  margin: 0 1px -0.1em;
-  border-radius: 999px;
-  background: var(--accent);
-  animation: calc-cursor-blink 1s steps(2, start) infinite;
-  vertical-align: baseline;
-}
-@keyframes calc-cursor-blink { 50% { opacity: 0; } }
-.calc-doc__preview {
-  margin-top: 4px;
+.calc-input::-webkit-scrollbar { display: none; }
+.calc-input::placeholder { color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.calc-preview {
+  flex: 0 0 auto;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline);
   font-size: 16px;
   font-weight: 750;
   color: var(--muted);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.calc-doc__preview.is-error { color: var(--neg); }
+.calc-preview.is-error { color: var(--neg); }
 
 /* ---- big centred operation symbol while swiping -------------------------- */
 .calc-bigop {
@@ -3952,6 +3925,6 @@ input[type='datetime-local'] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .calc-cursor, .calc-bigop, .calc-compass, .calc-ob__op, .calc-ob__finger, .calc-ob__card { animation: none; }
+  .calc-bigop, .calc-compass, .calc-ob__op, .calc-ob__finger, .calc-ob__card { animation: none; }
   .calc-key { transition: none; }
 }

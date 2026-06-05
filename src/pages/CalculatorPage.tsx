@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type {
+  PointerEvent as ReactPointerEvent,
+  MouseEvent as ReactMouseEvent,
+  ChangeEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+} from 'react';
 import { Screen, Sheet } from '@/components/ui';
 import { IconClock, IconGear } from '@/components/icons';
 import { useFinanceStore } from '@/store';
@@ -35,6 +41,13 @@ function dirToOp(dx: number, dy: number): Op {
   return dy > 0 ? '÷' : '×';
 }
 
+// Bounds of the line the caret sits on inside the multi-line tape.
+function lineRange(text: string, caret: number): { start: number; end: number } {
+  const start = text.lastIndexOf('\n', caret - 1) + 1;
+  const nl = text.indexOf('\n', caret);
+  return { start, end: nl === -1 ? text.length : nl };
+}
+
 interface Key {
   label: ReactNode;
   tone?: 'util' | 'op' | 'equals' | 'danger';
@@ -50,8 +63,10 @@ export function CalculatorPage() {
   const setPrefs = useFinanceStore((s) => s.setCalculatorPrefs);
   const hydrated = useFinanceStore((s) => s.hydrated);
 
-  const [expression, setExpression] = useState('');
-  const [cursor, setCursor] = useState(0);
+  // The whole display is one editable tape (multi-line). `caret` mirrors the
+  // textarea selection so we can preview the active line and insert in place.
+  const [doc, setDoc] = useState('');
+  const [caret, setCaret] = useState(0);
   const [status, setStatus] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -66,7 +81,9 @@ export function CalculatorPage() {
   const [confirmOp, setConfirmOp] = useState<Op | null>(null);
 
   const calcRef = useRef<HTMLDivElement>(null);
-  const docRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Caret to restore after a programmatic edit (null → leave native caret alone).
+  const pendingCaret = useRef<number | null>(null);
   const gestureRef = useRef<{ x: number; y: number; pointerId: number; moved: boolean; onButton: boolean } | null>(null);
   const suppressClickRef = useRef(false);
   const lastTapAt = useRef(0);
@@ -79,46 +96,70 @@ export function CalculatorPage() {
     }
   }, [hydrated, prefs.onboardingDone]);
 
-  // Keep the document scrolled to the live input line (bottom).
+  // After a programmatic edit, put the native caret back where we want it (and
+  // keep it in view). Native typing leaves pendingCaret null → untouched.
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el || pendingCaret.current == null) return;
+    const pos = Math.max(0, Math.min(doc.length, pendingCaret.current));
+    pendingCaret.current = null;
+    if (!onboarding) el.focus({ preventScroll: true });
+    el.setSelectionRange(pos, pos);
+    if (pos >= doc.length) el.scrollTop = el.scrollHeight;
+  }, [doc, onboarding]);
+
+  // Give the tape focus once ready so a hardware keyboard works right away.
   useEffect(() => {
-    const el = docRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [history.length, expression]);
+    if (hydrated && !onboarding) inputRef.current?.focus({ preventScroll: true });
+  }, [hydrated, onboarding]);
+
+  const activeLine = useMemo(() => {
+    const { start, end } = lineRange(doc, Math.min(caret, doc.length));
+    return doc.slice(start, end).trim();
+  }, [doc, caret]);
 
   const preview = useMemo(() => {
-    if (!expression.trim()) return '';
+    if (!activeLine) return '';
     try {
-      return evaluateExpression(expression, { ans: prefs.lastAns, angleMode: prefs.angleMode }).formatted;
+      return evaluateExpression(activeLine, { ans: prefs.lastAns, angleMode: prefs.angleMode }).formatted;
     } catch {
       return '';
     }
-  }, [expression, prefs.angleMode, prefs.lastAns]);
+  }, [activeLine, prefs.angleMode, prefs.lastAns]);
 
-  const safeCursor = Math.max(0, Math.min(expression.length, cursor));
-  const before = expression.slice(0, safeCursor);
-  const after = expression.slice(safeCursor);
-
-  const setFormula = (next: string, nextCursor = next.length) => {
-    setExpression(next);
-    setCursor(Math.max(0, Math.min(next.length, nextCursor)));
+  // Single entry point for every programmatic change to the tape.
+  const commit = (next: string, nextCaret: number) => {
+    pendingCaret.current = Math.max(0, Math.min(next.length, nextCaret));
+    setCaret(pendingCaret.current);
+    setDoc(next);
     setStatus('');
   };
 
+  const selection = () => {
+    const el = inputRef.current;
+    if (!el) return { start: doc.length, end: doc.length };
+    return { start: el.selectionStart ?? doc.length, end: el.selectionEnd ?? doc.length };
+  };
+
   const insertText = (text: string, offset = text.length) => {
-    const next = `${expression.slice(0, cursor)}${text}${expression.slice(cursor)}`;
-    setFormula(next, cursor + offset);
+    const { start, end } = selection();
+    commit(`${doc.slice(0, start)}${text}${doc.slice(end)}`, start + offset);
     selectionChanged();
   };
 
-  // Insert an operator — but if one is already right before the cursor, swap it
-  // instead of stacking (so "5 +" then a swipe "−" becomes "5 −", not "5 + −").
+  const insertFunction = (name: string) => insertText(`${name}()`, name.length + 1);
+
+  // Insert an operator on the current line — if one already sits right before the
+  // caret, swap it (so "5 +" then "−" becomes "5 −"); with no left operand, chain
+  // from the previous answer (Ans).
   const insertOperation = (op: Op) => {
-    const left = expression.slice(0, cursor).replace(/\s+$/, '');
-    const right = expression.slice(cursor).replace(/^\s+/, '');
-    const base = /[-+−×÷*/]$/.test(left) ? left.slice(0, -1).replace(/\s+$/, '') : left;
-    // No left operand yet → chain from the previous answer.
-    const head = `${base === '' ? 'Ans ' : `${base} `}${op} `;
-    setFormula(`${head}${right}`, head.length);
+    const { start } = selection();
+    const { start: lineStart } = lineRange(doc, start);
+    const lineLeft = doc.slice(lineStart, start).replace(/[ \t]+$/, '');
+    const rest = doc.slice(start);
+    const base = /[-+−×÷*/^]$/.test(lineLeft) ? lineLeft.slice(0, -1).replace(/[ \t]+$/, '') : lineLeft;
+    const head = base.trim() === '' ? `Ans ${op} ` : `${base} ${op} `;
+    commit(`${doc.slice(0, lineStart)}${head}${rest}`, lineStart + head.length);
     selectionChanged();
   };
   const opButton = (op: Op) => {
@@ -126,36 +167,43 @@ export function CalculatorPage() {
     tapMedium();
   };
 
-  const insertFunction = (name: string) => insertText(`${name}()`, name.length + 1);
-
   const deleteChar = () => {
-    if (cursor <= 0) return;
-    setFormula(`${expression.slice(0, cursor - 1)}${expression.slice(cursor)}`, cursor - 1);
+    const { start, end } = selection();
+    if (start !== end) {
+      commit(`${doc.slice(0, start)}${doc.slice(end)}`, start);
+    } else {
+      if (start <= 0) return;
+      commit(`${doc.slice(0, start - 1)}${doc.slice(start)}`, start - 1);
+    }
     tapLight();
   };
 
+  // CE — clear just the current line. C — clear the whole tape. Neither touches
+  // the saved history: it always stays under the «История» button.
+  const clearEntry = () => {
+    const { start } = selection();
+    const { start: lineStart, end: lineEnd } = lineRange(doc, start);
+    commit(`${doc.slice(0, lineStart)}${doc.slice(lineEnd)}`, lineStart);
+    tapLight();
+  };
   const clearAll = () => {
-    setFormula('');
+    commit('', 0);
     tapMedium();
   };
-  const clearEntry = () => {
-    setFormula('');
-    tapLight();
-  };
 
-  const moveCursor = (delta: number) => {
-    setCursor((value) => Math.max(0, Math.min(expression.length, value + delta)));
-    selectionChanged();
-  };
-
+  // Evaluate the line the caret is on, then drop the result on a brand-new line at
+  // the very bottom — every earlier line stays exactly where it is and editable.
   const evaluateCurrent = () => {
-    const raw = expression.trim();
-    if (!raw) return;
+    const { start } = selection();
+    const { start: lineStart, end: lineEnd } = lineRange(doc, start);
+    const lineText = doc.slice(lineStart, lineEnd).trim();
+    if (!lineText) return;
     try {
-      const result = evaluateExpression(raw, { ans: prefs.lastAns, angleMode: prefs.angleMode });
-      addHistory(raw, result.formatted, result.value);
-      // Drop the result into the tape and start a fresh line (Panecal-style).
-      setFormula('');
+      const result = evaluateExpression(lineText, { ans: prefs.lastAns, angleMode: prefs.angleMode });
+      addHistory(lineText, result.formatted, result.value);
+      const body = doc.replace(/\s+$/u, '');
+      const next = `${body}\n${normalizeInputNumber(result.value)}\n`;
+      commit(next, next.length);
       notifySuccess();
     } catch (error) {
       setStatus(errorText(error));
@@ -165,7 +213,7 @@ export function CalculatorPage() {
 
   const currentValue = () => {
     try {
-      return evaluateExpression(expression || 'Ans', { ans: prefs.lastAns, angleMode: prefs.angleMode }).value;
+      return evaluateExpression(activeLine || 'Ans', { ans: prefs.lastAns, angleMode: prefs.angleMode }).value;
     } catch {
       return prefs.lastAns;
     }
@@ -196,9 +244,9 @@ export function CalculatorPage() {
     tapLight();
   };
 
-  // Reuse a past calculation: load its expression to keep editing → a new line.
+  // Reuse a past calculation: drop its expression in at the caret to keep editing.
   const reuse = (expr: string) => {
-    setFormula(expr);
+    insertText(expr);
     setHistoryOpen(false);
     tapLight();
   };
@@ -219,7 +267,36 @@ export function CalculatorPage() {
     confirmTimer.current = setTimeout(() => setConfirmOp(null), 440);
   };
 
-  // ---- swipe gesture across the WHOLE calculator ---------------------------
+  // ---- tape editing keys ---------------------------------------------------
+  const onDocChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setDoc(event.target.value);
+    setCaret(event.target.selectionStart ?? event.target.value.length);
+    setStatus('');
+  };
+  const syncCaret = (event: { currentTarget: HTMLTextAreaElement }) => {
+    setCaret(event.currentTarget.selectionStart ?? 0);
+  };
+  const onDocKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      evaluateCurrent();
+    } else if (event.key === '=') {
+      event.preventDefault();
+      evaluateCurrent();
+    } else if (event.key === '*') {
+      event.preventDefault();
+      insertText('×');
+    } else if (event.key === '/') {
+      event.preventDefault();
+      insertText('÷');
+    } else if (event.key === '.') {
+      event.preventDefault();
+      insertText(',');
+    }
+    // digits, +, -, comma, parens, arrows, Backspace … all stay native.
+  };
+
+  // ---- swipe gesture across the keypad (the tape stays a normal editor) -----
   const localPoint = (clientX: number, clientY: number) => {
     const rect = calcRef.current?.getBoundingClientRect();
     return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
@@ -227,6 +304,8 @@ export function CalculatorPage() {
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (gestureRef.current) return;
+    // The editable tape owns its own pointer (caret placement, selection, scroll).
+    if ((event.target as HTMLElement).closest('.calc-input')) return;
     suppressClickRef.current = false;
     gestureRef.current = {
       x: event.clientX,
@@ -297,30 +376,11 @@ export function CalculatorPage() {
 
   useEffect(() => () => { if (confirmTimer.current) clearTimeout(confirmTimer.current); }, []);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || onboarding) return;
-      if (/^[0-9]$/.test(event.key)) { event.preventDefault(); insertText(event.key); }
-      else if (event.key === '.' || event.key === ',') { event.preventDefault(); insertText(','); }
-      else if (event.key === '+') { event.preventDefault(); opButton('+'); }
-      else if (event.key === '-') { event.preventDefault(); opButton('−'); }
-      else if (event.key === '*') { event.preventDefault(); opButton('×'); }
-      else if (event.key === '/') { event.preventDefault(); opButton('÷'); }
-      else if (event.key === 'Enter' || event.key === '=') { event.preventDefault(); evaluateCurrent(); }
-      else if (event.key === 'Backspace') { event.preventDefault(); deleteChar(); }
-      else if (event.key === 'ArrowLeft') { event.preventDefault(); moveCursor(-1); }
-      else if (event.key === 'ArrowRight') { event.preventDefault(); moveCursor(1); }
-      else if (event.key === '(' || event.key === ')') { event.preventDefault(); insertText(event.key); }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  });
-
   // Standard calculator keypad (digits + operation column) — swipes work too.
   const pad: Key[] = [
     { label: '%', tone: 'util', aria: 'Процент', onClick: () => insertText('%') },
-    { label: 'CE', tone: 'util', aria: 'Очистить ввод', onClick: clearEntry },
-    { label: 'C', tone: 'danger', aria: 'Сбросить', onClick: clearAll },
+    { label: 'CE', tone: 'util', aria: 'Очистить строку', onClick: clearEntry },
+    { label: 'C', tone: 'danger', aria: 'Очистить всё', onClick: clearAll },
     { label: '⌫', tone: 'util', aria: 'Стереть', onClick: deleteChar },
     { label: '¹⁄ₓ', tone: 'util', aria: 'Обратное число', onClick: () => insertText('^(-1)') },
     { label: 'x²', tone: 'util', aria: 'Квадрат', onClick: () => insertText('^2') },
@@ -371,7 +431,7 @@ export function CalculatorPage() {
   return (
     <Screen
       title="Калькулятор"
-      subtitle="Свайп — операция, двойной тап — равно"
+      subtitle="Свайп по клавишам — операция · тап по ленте — курсор"
       action={
         <div className="calc-actions">
           <button
@@ -394,35 +454,28 @@ export function CalculatorPage() {
     >
       <div className={`calc${scientific ? ' is-scientific' : ''}`} ref={calcRef} onPointerDown={onPointerDown} onClickCapture={onClickCapture}>
         <div className="calc-screen">
-          <div className="calc-doc" ref={docRef}>
-            {history.slice().reverse().map((item) => (
-              <button key={item.id} className="calc-doc__entry" type="button" onClick={() => reuse(item.expression)}>
-                <span className="calc-doc__expr">{item.expression}</span>
-                <span className="calc-doc__res">= {item.result}</span>
-              </button>
-            ))}
-            <div className="calc-doc__input">
-              <div className={`calc-expr${expression ? '' : ' is-empty'}`}>
-                {expression ? (
-                  <>
-                    <span>{before}</span>
-                    <span className="calc-cursor" />
-                    <span>{after}</span>
-                  </>
-                ) : (
-                  <>
-                    <span>0</span>
-                    <span className="calc-cursor" />
-                  </>
-                )}
-              </div>
-              {(status || (expression && preview)) && (
-                <div className={`calc-doc__preview${status ? ' is-error' : ''}`}>
-                  {status || (preview ? `= ${preview}` : '')}
-                </div>
-              )}
+          <textarea
+            ref={inputRef}
+            className="calc-input"
+            value={doc}
+            onChange={onDocChange}
+            onSelect={syncCaret}
+            onKeyUp={syncCaret}
+            onClick={syncCaret}
+            onKeyDown={onDocKeyDown}
+            inputMode="none"
+            placeholder="0"
+            spellCheck={false}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            aria-label="Лента вычислений"
+          />
+          {(status || preview) && (
+            <div className={`calc-preview${status ? ' is-error' : ''}`}>
+              {status || (preview ? `= ${preview}` : '')}
             </div>
-          </div>
+          )}
 
           {swipe.dir && <div className="calc-bigop">{swipe.dir}</div>}
           {confirmOp && <div className="calc-bigop is-confirm" key={`c${confirmOp}`}>{confirmOp}</div>}
