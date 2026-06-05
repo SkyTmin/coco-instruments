@@ -2,7 +2,7 @@
 # Pull the latest code and rebuild. Run as root: sudo bash deploy/redeploy.sh
 set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/coco}"
-BRANCH="${BRANCH:-claude/intelligent-noether-bcnYS}"
+BRANCH="${BRANCH:-prod}"
 cd "$APP_DIR"
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"

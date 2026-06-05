@@ -14,7 +14,7 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: [claude/intelligent-noether-bcnYS]
+    branches: [prod]
   workflow_dispatch:
 
 concurrency:
@@ -52,7 +52,7 @@ jobs:
           command_timeout: 25m
           script: |
             export DOMAIN='${{ steps.gate.outputs.domain }}'
-            export BRANCH='claude/intelligent-noether-bcnYS'
+            export BRANCH='prod'
             export BOT_TOKEN='${{ secrets.BOT_TOKEN }}'
             export GH_DISPATCH_TOKEN='${{ secrets.GH_TOKEN }}'
             curl -fsSL "https://raw.githubusercontent.com/SkyTmin/coco-instruments/${BRANCH}/deploy/setup.sh" | bash

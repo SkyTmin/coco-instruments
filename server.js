@@ -92,7 +92,7 @@ const RELAY_SECRET = BOT_TOKEN
 // trigger the delivery workflow on demand — GitHub's own `schedule` is too slow.
 const GH_TOKEN = (process.env.GH_DISPATCH_TOKEN || '').trim();
 const GH_REPO = process.env.GH_REPO || 'SkyTmin/coco-instruments';
-const GH_REF = process.env.GH_REF || 'claude/intelligent-noether-bcnYS';
+const GH_REF = process.env.GH_REF || 'prod';
 let lastDispatch = 0;
 let lastDispatchInfo = null;
 

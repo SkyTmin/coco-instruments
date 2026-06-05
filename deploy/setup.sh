@@ -2,7 +2,7 @@
 # =============================================================================
 # Coco — one-shot VPS deploy (Ubuntu 22.04+). Run as root:
 #
-#     curl -fsSL https://raw.githubusercontent.com/SkyTmin/coco-instruments/claude/intelligent-noether-bcnYS/deploy/setup.sh | bash
+#     curl -fsSL https://raw.githubusercontent.com/SkyTmin/coco-instruments/prod/deploy/setup.sh | bash
 #
 # or after cloning:  sudo bash deploy/setup.sh
 #
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 REPO="${REPO:-https://github.com/SkyTmin/coco-instruments.git}"
-BRANCH="${BRANCH:-claude/intelligent-noether-bcnYS}"
+BRANCH="${BRANCH:-prod}"
 APP_DIR="${APP_DIR:-/opt/coco}"
 UPLOAD_DIR="${UPLOAD_DIR:-/var/lib/coco/uploads}"
 BOT_TOKEN="${BOT_TOKEN:-}"

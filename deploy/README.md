@@ -14,7 +14,7 @@ Telegram требует HTTPS с валидным сертификатом, а �
 Зайдите на VPS по SSH под `root` и выполните:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SkyTmin/coco-instruments/claude/intelligent-noether-bcnYS/deploy/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SkyTmin/coco-instruments/prod/deploy/setup.sh | bash
 ```
 
 Скрипт сам: добавит swap, поставит Node 20 и Caddy, скачает код, соберёт его и
