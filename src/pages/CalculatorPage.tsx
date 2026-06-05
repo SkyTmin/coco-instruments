@@ -17,14 +17,13 @@ type Op = '+' | '−' | '×' | '÷';
 const SWIPE_THRESHOLD = 36;
 const DIR_THRESHOLD = 14;
 const MOVE_TOLERANCE = 7;
-const DOUBLE_TAP_MS = 300;
 
 const STEPS: { dir: 'right' | 'left' | 'up' | 'down' | 'tap'; op: Op | '='; title: string; desc: string }[] = [
   { dir: 'right', op: '+', title: 'Свайп вправо', desc: 'Прибавить' },
   { dir: 'left', op: '−', title: 'Свайп влево', desc: 'Вычесть' },
   { dir: 'up', op: '×', title: 'Свайп вверх', desc: 'Умножить' },
   { dir: 'down', op: '÷', title: 'Свайп вниз', desc: 'Разделить' },
-  { dir: 'tap', op: '=', title: 'Двойной тап', desc: 'Посчитать результат' },
+  { dir: 'tap', op: '=', title: 'Кнопка «=»', desc: 'Посчитать результат' },
 ];
 
 function normalizeInputNumber(value: number): string {
@@ -86,7 +85,6 @@ export function CalculatorPage() {
   const pendingCaret = useRef<number | null>(null);
   const gestureRef = useRef<{ x: number; y: number; pointerId: number; moved: boolean; onButton: boolean } | null>(null);
   const suppressClickRef = useRef(false);
-  const lastTapAt = useRef(0);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -304,8 +302,6 @@ export function CalculatorPage() {
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (gestureRef.current) return;
-    // The editable tape owns its own pointer (caret placement, selection, scroll).
-    if ((event.target as HTMLElement).closest('.calc-input')) return;
     suppressClickRef.current = false;
     gestureRef.current = {
       x: event.clientX,
@@ -345,16 +341,9 @@ export function CalculatorPage() {
         tapMedium();
         playConfirm(op);
         suppressClickRef.current = true; // cancel the click on whatever we lifted over
-        return;
       }
-      if (g.onButton || g.moved) return; // button tap → its onClick handles it
-      const now = Date.now();
-      if (now - lastTapAt.current <= DOUBLE_TAP_MS) {
-        lastTapAt.current = 0;
-        evaluateCurrent();
-      } else {
-        lastTapAt.current = now;
-      }
+      // A plain tap falls through to native handling: the tape places its caret
+      // (tap to position the cursor), a key fires its onClick.
     };
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('pointerup', onUp);
@@ -431,7 +420,8 @@ export function CalculatorPage() {
   return (
     <Screen
       title="Калькулятор"
-      subtitle="Свайп по клавишам — операция · тап по ленте — курсор"
+      subtitle="Свайп — операция · тап — курсор"
+      className={scientific ? undefined : 'screen--fit'}
       action={
         <div className="calc-actions">
           <button

@@ -3617,6 +3617,23 @@ input[type='datetime-local'] {
   background: linear-gradient(135deg, var(--accent-grad-1), var(--accent-grad-2));
 }
 
+/* Basic calculator pins the page to the viewport so the whole screen never
+   scrolls or rubber-bands — header, tape and keypad all stay put. Scientific
+   mode opts out (its extra rows are taller than the viewport, so it scrolls). */
+.screen.screen--fit {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  display: flex;
+  flex-direction: column;
+  padding-top: calc(var(--safe-top) + var(--content-top) + 10px);
+  padding-bottom: calc(var(--safe-bottom) + 8px);
+}
+.screen--fit .screen__head { flex: 0 0 auto; margin: 2px 2px 12px; }
+.screen--fit .calc { flex: 1 1 auto; min-height: 0; }
+.screen--fit .calc-screen { min-height: 96px; }
+
 .calc {
   position: relative;
   display: flex;
@@ -3676,7 +3693,7 @@ input[type='datetime-local'] {
   overflow-wrap: anywhere;
   overflow-y: auto;
   scrollbar-width: none;
-  touch-action: auto; /* the tape handles its own caret / scroll / selection */
+  touch-action: none; /* swipes over the tape become operations; a tap still places the caret */
   -webkit-user-select: text;
   user-select: text;
 }

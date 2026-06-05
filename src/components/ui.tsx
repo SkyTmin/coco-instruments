@@ -40,13 +40,14 @@ export function Screen({
   title,
   subtitle,
   action,
+  className,
   children,
-}: PropsWithChildren<{ title?: string; subtitle?: string; action?: ReactNode }>) {
+}: PropsWithChildren<{ title?: string; subtitle?: string; action?: ReactNode; className?: string }>) {
   // Going "back" (POP) slides in from the left, forward (PUSH) from the right —
   // a native push/pop feel. The slide is tiny + clipped, so it never scrolls.
   const dir = useNavigationType() === 'POP' ? 'pop' : 'push';
   return (
-    <div className={`screen screen--${dir}`}>
+    <div className={`screen screen--${dir}${className ? ` ${className}` : ''}`}>
       {(title || action) && (
         <div className="screen__head">
           <div className="row">
