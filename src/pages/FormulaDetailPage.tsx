@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Screen } from '@/components/ui';
+import { ShapeDiagram } from '@/components/ShapeDiagram';
 import { dimSuffix, getShape } from '@/lib/geometry';
 import { formatCalculatorNumber } from '@/lib/calculator';
 
@@ -39,6 +40,10 @@ export function FormulaDetailPage() {
 
   return (
     <Screen title={shape.name} subtitle={shape.blurb}>
+      <div className="formula-diagram">
+        <ShapeDiagram id={shape.id} />
+      </div>
+
       <h3 className="formula-h">Введите значения</h3>
       <div className="formula-inputs">
         {shape.vars.map((v) => (

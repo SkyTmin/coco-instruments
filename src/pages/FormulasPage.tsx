@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Screen } from '@/components/ui';
+import { ShapeDiagram } from '@/components/ShapeDiagram';
 import { shapesByCategory, type ShapeCategory } from '@/lib/geometry';
 import { tapLight } from '@/lib/haptics';
 
@@ -36,8 +37,10 @@ export function FormulasPage() {
             type="button"
             onClick={() => { tapLight(); navigate(`/calculator/formulas/${s.id}`); }}
           >
+            <span className="formula-card__viz">
+              <ShapeDiagram id={s.id} />
+            </span>
             <span className="formula-card__name">{s.name}</span>
-            <span className="formula-card__f">{s.results.map((r) => r.label).join(' · ')}</span>
           </button>
         ))}
       </div>
