@@ -6,8 +6,9 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
 } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Screen, Sheet } from '@/components/ui';
-import { IconClock, IconGear } from '@/components/icons';
+import { IconClock, IconGear, IconShapes } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { CalculatorError, evaluateExpression, toCalculatorInputNumber } from '@/lib/calculator';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
@@ -61,6 +62,7 @@ export function CalculatorPage() {
   const clearHistory = useFinanceStore((s) => s.clearCalculatorHistory);
   const setPrefs = useFinanceStore((s) => s.setCalculatorPrefs);
   const hydrated = useFinanceStore((s) => s.hydrated);
+  const navigate = useNavigate();
 
   // The whole display is one editable tape (multi-line). `caret` mirrors the
   // textarea selection so we can preview the active line and insert in place.
@@ -424,6 +426,14 @@ export function CalculatorPage() {
       className={scientific ? undefined : 'screen--fit'}
       action={
         <div className="calc-actions">
+          <button
+            className="calc-iconbtn"
+            type="button"
+            aria-label="Формулы фигур"
+            onClick={() => { tapLight(); navigate('/calculator/formulas'); }}
+          >
+            <IconShapes size={20} />
+          </button>
           <button
             className={`calc-iconbtn calc-iconbtn--fx${scientific ? ' is-on' : ''}`}
             type="button"

@@ -182,3 +182,10 @@ export const IconCalculator = (p: IconProps) => (
     <path d="M8 19h4M16 19h.01" />
   </svg>
 );
+
+export const IconShapes = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M8.5 3l5.5 9.5H3z" />
+    <circle cx="16" cy="15.5" r="5" />
+  </svg>
+);
