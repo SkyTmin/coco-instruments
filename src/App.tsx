@@ -35,6 +35,7 @@ import { WishFormPage } from '@/pages/clothing/WishFormPage';
 import { CalculatorPage } from '@/pages/CalculatorPage';
 import { FormulasPage } from '@/pages/FormulasPage';
 import { FormulaDetailPage } from '@/pages/FormulaDetailPage';
+import { CropProvider } from '@/components/CropProvider';
 import { NoteEditorPage } from '@/pages/NoteEditorPage';
 import { NotesGraphPage } from '@/pages/NotesGraphPage';
 import { NotesPage } from '@/pages/NotesPage';
@@ -133,6 +134,7 @@ export function App() {
     >
       <HashRouter>
         <NavigationController />
+        <CropProvider>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/finance" element={<FinanceDashboardPage />} />
@@ -187,6 +189,7 @@ export function App() {
           <Route path="/clothing/wishlist/:id/edit" element={<WishFormPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </CropProvider>
       </HashRouter>
     </AppRoot>
   );

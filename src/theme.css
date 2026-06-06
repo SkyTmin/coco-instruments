@@ -2595,9 +2595,17 @@ input[type='datetime-local'] {
   animation: fade 0.2s ease;
 }
 .cropper__head {
-  padding: calc(var(--safe-top) + var(--content-top) + 14px) 16px 12px;
-  text-align: center; color: #fff; font-weight: 800; font-size: 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: calc(var(--safe-top) + var(--content-top) + 12px) 12px 10px;
+  color: #fff;
 }
+.cropper__title { flex: 1; text-align: center; font-weight: 800; font-size: 15px; }
+.cropper__act {
+  border: 0; background: transparent; color: #fff; cursor: pointer;
+  font: inherit; font-weight: 700; font-size: 14px; padding: 6px 8px;
+  white-space: nowrap; opacity: 0.92;
+}
+.cropper__act:disabled { opacity: 0.4; }
 .cropper__area { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; touch-action: none; }
 .cropper__img { position: absolute; object-fit: fill; pointer-events: none; user-select: none; -webkit-user-drag: none; }
 .cropper__crop {

@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, Screen, Sheet } from '@/components/ui';
 import { NoteMarkdown } from '@/components/NoteMarkdown';
+import { useCrop } from '@/components/CropProvider';
 import { IconCheck, IconHeart, IconImage, IconPaperclip, IconPencil, IconTrash } from '@/components/icons';
 import type { NoteAttachment } from '@/types';
 import { useFinanceStore } from '@/store';
@@ -242,12 +243,16 @@ export function NoteEditorPage() {
   };
 
   // ---- attachments ----------------------------------------------------------
+  const cropImages = useCrop();
+
   const addFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     setAttachmentError('');
+    const picked = await cropImages(Array.from(files));
+    if (!picked.length) return;
     const next = [...attachments];
     const insertedImages: NoteAttachment[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of picked) {
       if (next.length >= MAX_ATTACHMENTS) {
         setAttachmentError(`Максимум ${MAX_ATTACHMENTS} вложений`);
         notifyWarning();

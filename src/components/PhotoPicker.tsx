@@ -2,12 +2,12 @@ import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type { Attachment } from '@/types';
 import { attachmentHref, fileToAttachment, formatBytes, MAX_IMAGE_SOURCE_SIZE } from '@/lib/images';
-import { ImageCropper } from '@/components/ImageCropper';
+import { useCrop } from '@/components/CropProvider';
 import { IconImage, IconTrash } from '@/components/icons';
 import { notifyWarning, selectionChanged } from '@/lib/haptics';
 
 /** A single-photo picker (camera or gallery on mobile) used by clothing forms.
- *  Picked photos go through a crop step before compress + upload. */
+ *  Picked photos go through the app-wide crop step before compress + upload. */
 export function PhotoPicker({
   photo,
   onChange,
@@ -20,10 +20,9 @@ export function PhotoPicker({
   const ref = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [cropFile, setCropFile] = useState<File | null>(null);
+  const cropImages = useCrop();
 
   const process = async (file: File) => {
-    setError('');
     setBusy(true);
     try {
       const att = await fileToAttachment(file);
@@ -37,16 +36,10 @@ export function PhotoPicker({
     }
   };
 
-  const pick = (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
+  const pickAndCrop = async (file: File) => {
     setError('');
-    // Animated / vector images can't be sensibly cropped to a raster — use as-is.
-    if (file.type === 'image/gif' || file.type === 'image/svg+xml') {
-      void process(file);
-      return;
-    }
-    setCropFile(file);
+    const [out] = await cropImages([file]); // cropped, skipped, or [] on cancel
+    if (out) await process(out);
   };
 
   // Re-crop the photo already attached (load it back into the cropper).
@@ -55,7 +48,7 @@ export function PhotoPicker({
     try {
       const res = await fetch(attachmentHref(photo));
       const blob = await res.blob();
-      setCropFile(new File([blob], photo.name || 'photo.jpg', { type: blob.type || 'image/jpeg' }));
+      await pickAndCrop(new File([blob], photo.name || 'photo.jpg', { type: blob.type || 'image/jpeg' }));
     } catch {
       notifyWarning();
     }
@@ -111,20 +104,11 @@ export function PhotoPicker({
         type="file"
         accept="image/*"
         onChange={(e: ChangeEvent<HTMLInputElement>) => {
-          pick(e.target.files);
+          const file = e.target.files?.[0];
           e.target.value = '';
+          if (file) void pickAndCrop(file);
         }}
       />
-      {cropFile && (
-        <ImageCropper
-          file={cropFile}
-          onCancel={() => setCropFile(null)}
-          onDone={(f) => {
-            setCropFile(null);
-            void process(f);
-          }}
-        />
-      )}
     </div>
   );
 }

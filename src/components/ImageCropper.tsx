@@ -21,11 +21,17 @@ type Mode = CropHandle;
  */
 export function ImageCropper({
   file,
+  index = 0,
+  total = 1,
   onCancel,
+  onSkip,
   onDone,
 }: {
   file: File;
+  index?: number;
+  total?: number;
   onCancel: () => void;
+  onSkip: () => void;
   onDone: (cropped: File) => void;
 }) {
   const areaRef = useRef<HTMLDivElement>(null);
@@ -139,7 +145,15 @@ export function ImageCropper({
 
   return (
     <div className="cropper" role="dialog" aria-label="Обрезка фото">
-      <div className="cropper__head">Обрезать фото</div>
+      <div className="cropper__head">
+        <button type="button" className="cropper__act" onClick={reset} disabled={busy}>
+          Сбросить
+        </button>
+        <span className="cropper__title">Обрезать фото{total > 1 ? ` · ${index + 1}/${total}` : ''}</span>
+        <button type="button" className="cropper__act" onClick={() => !busy && onSkip()} disabled={busy}>
+          Пропустить
+        </button>
+      </div>
       <div className="cropper__area" ref={areaRef}>
         {url && (
           <img
@@ -165,9 +179,6 @@ export function ImageCropper({
       <div className="cropper__foot">
         <button className="btn btn--ghost" type="button" onClick={onCancel} disabled={busy}>
           Отмена
-        </button>
-        <button className="btn btn--ghost" type="button" onClick={reset} disabled={busy}>
-          Сбросить
         </button>
         <button className="btn btn--primary" type="button" onClick={done} disabled={busy}>
           {busy ? 'Готовлю…' : 'Готово'}

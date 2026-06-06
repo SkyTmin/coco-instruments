@@ -5,6 +5,7 @@ import { IconTrash } from '@/components/icons';
 import { Photo } from '@/components/Photo';
 import { useFinanceStore } from '@/store';
 import { attachmentHref, fileToAttachment } from '@/lib/images';
+import { useCrop } from '@/components/CropProvider';
 import { pluralizeRu } from '@/lib/format';
 import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
 
@@ -16,9 +17,12 @@ export function InspirationPage() {
   const [busy, setBusy] = useState<{ done: number; total: number } | null>(null);
   const [view, setView] = useState<string | null>(null);
 
+  const cropImages = useCrop();
+
   const add = async (files: FileList | null) => {
     if (!files?.length) return;
-    const arr = Array.from(files).slice(0, 40);
+    const arr = await cropImages(Array.from(files).slice(0, 40));
+    if (!arr.length) return;
     setBusy({ done: 0, total: arr.length });
     const atts = [];
     let n = 0;

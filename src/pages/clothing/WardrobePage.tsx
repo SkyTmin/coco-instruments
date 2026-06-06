@@ -7,6 +7,7 @@ import { useFinanceStore } from '@/store';
 import { WardrobeCard } from '@/components/clothing-cards';
 import { CATEGORIES } from '@/lib/clothing';
 import { fileToAttachment } from '@/lib/images';
+import { useCrop } from '@/components/CropProvider';
 import { pluralizeRu } from '@/lib/format';
 import type { ClothingCategory } from '@/types';
 import { notifySuccess, selectionChanged, tapLight } from '@/lib/haptics';
@@ -40,9 +41,12 @@ export function WardrobePage() {
     navigate(path);
   };
 
+  const cropImages = useCrop();
+
   const bulkAdd = async (files: FileList | null) => {
     if (!files?.length) return;
-    const arr = Array.from(files).slice(0, 40);
+    const arr = await cropImages(Array.from(files).slice(0, 40));
+    if (!arr.length) return;
     setBulk({ done: 0, total: arr.length });
     let n = 0;
     for (const file of arr) {
