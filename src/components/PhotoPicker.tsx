@@ -2,10 +2,12 @@ import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type { Attachment } from '@/types';
 import { attachmentHref, fileToAttachment, formatBytes, MAX_IMAGE_SOURCE_SIZE } from '@/lib/images';
+import { ImageCropper } from '@/components/ImageCropper';
 import { IconImage, IconTrash } from '@/components/icons';
 import { notifyWarning, selectionChanged } from '@/lib/haptics';
 
-/** A single-photo picker (camera or gallery on mobile) used by clothing forms. */
+/** A single-photo picker (camera or gallery on mobile) used by clothing forms.
+ *  Picked photos go through a crop step before compress + upload. */
 export function PhotoPicker({
   photo,
   onChange,
@@ -18,10 +20,9 @@ export function PhotoPicker({
   const ref = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
-  const pick = async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
+  const process = async (file: File) => {
     setError('');
     setBusy(true);
     try {
@@ -33,6 +34,30 @@ export function PhotoPicker({
       notifyWarning();
     } finally {
       setBusy(false);
+    }
+  };
+
+  const pick = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setError('');
+    // Animated / vector images can't be sensibly cropped to a raster — use as-is.
+    if (file.type === 'image/gif' || file.type === 'image/svg+xml') {
+      void process(file);
+      return;
+    }
+    setCropFile(file);
+  };
+
+  // Re-crop the photo already attached (load it back into the cropper).
+  const recrop = async () => {
+    if (!photo) return;
+    try {
+      const res = await fetch(attachmentHref(photo));
+      const blob = await res.blob();
+      setCropFile(new File([blob], photo.name || 'photo.jpg', { type: blob.type || 'image/jpeg' }));
+    } catch {
+      notifyWarning();
     }
   };
 
@@ -48,6 +73,9 @@ export function PhotoPicker({
             onClick={() => ref.current?.click()}
           >
             Заменить
+          </button>
+          <button type="button" className="photo-pick__btn photo-pick__crop" onClick={() => void recrop()}>
+            Обрезать
           </button>
           <button
             type="button"
@@ -83,10 +111,20 @@ export function PhotoPicker({
         type="file"
         accept="image/*"
         onChange={(e: ChangeEvent<HTMLInputElement>) => {
-          void pick(e.target.files);
+          pick(e.target.files);
           e.target.value = '';
         }}
       />
+      {cropFile && (
+        <ImageCropper
+          file={cropFile}
+          onCancel={() => setCropFile(null)}
+          onDone={(f) => {
+            setCropFile(null);
+            void process(f);
+          }}
+        />
+      )}
     </div>
   );
 }
