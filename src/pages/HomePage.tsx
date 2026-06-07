@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatedNumber, Screen, Skeleton } from '@/components/ui';
 import { IconCalculator, IconHeart, IconNotes, IconShirt, IconWallet } from '@/components/icons';
@@ -7,7 +7,8 @@ import { collectPayments, computeObligation, computeRecurring } from '@/lib/fina
 import { toISO, todayISO } from '@/lib/date';
 import { formatRUB, pluralizeRu, relativeDay } from '@/lib/format';
 import { nextBirthday, peopleStats, peopleUpcomingEvents, peopleWord } from '@/lib/people';
-import { tapLight } from '@/lib/haptics';
+import { requestTelegramBackup } from '@/lib/backup';
+import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
 
 function notesWord(n: number): string {
   const n1 = n % 10;
@@ -75,6 +76,23 @@ export function HomePage() {
   const go = (path: string) => {
     tapLight();
     navigate(path);
+  };
+
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupMsg, setBackupMsg] = useState('');
+  const doBackup = async () => {
+    setBackupBusy(true);
+    setBackupMsg('');
+    tapLight();
+    const r = await requestTelegramBackup();
+    setBackupBusy(false);
+    if (r.ok) {
+      setBackupMsg('Копия придёт тебе в Telegram в течение минуты ✅');
+      notifySuccess();
+    } else {
+      setBackupMsg('Не получилось запросить копию — попробуй ещё раз.');
+      notifyWarning();
+    }
   };
 
   if (!hydrated) {
@@ -219,6 +237,14 @@ export function HomePage() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="home-backup">
+        <button className="btn btn--block" type="button" onClick={doBackup} disabled={backupBusy}>
+          {backupBusy ? 'Запрашиваю…' : '🗄 Прислать резервную копию в Telegram'}
+        </button>
+        {backupMsg && <p className="home-backup__msg">{backupMsg}</p>}
+        <p className="home-backup__hint">Резервная копия всех данных придёт файлом тебе в чат с ботом.</p>
       </div>
     </Screen>
   );

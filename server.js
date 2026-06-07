@@ -332,6 +332,37 @@ async function triggerRelay() {
   }
 }
 
+// Ask GitHub Actions to make + deliver a backup now (the runner can reach
+// Telegram even when the VPS can't). Throttled.
+let lastBackupDispatch = 0;
+async function triggerBackup() {
+  if (!GH_TOKEN) return { ok: false, error: 'no_gh_token' };
+  const now = Date.now();
+  if (now - lastBackupDispatch < 30_000) return { ok: true, throttled: true };
+  lastBackupDispatch = now;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/actions/workflows/backup.yml/dispatches`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${GH_TOKEN}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        'User-Agent': 'coco-backup',
+      },
+      body: JSON.stringify({ ref: GH_REF }),
+    });
+    if (r.status !== 204) {
+      lastBackupDispatch = 0;
+      return { ok: false, status: r.status, detail: (await r.text().catch(() => '')).slice(0, 200) };
+    }
+    return { ok: true };
+  } catch (e) {
+    lastBackupDispatch = 0;
+    return { ok: false, error: String(e).slice(0, 200) };
+  }
+}
+
 // The app sends reminders as ABSOLUTE fire timestamps (computed on the device
 // in its local/Moscow time), so the server needs no timezone math.
 app.post('/api/reminders/sync', (req, res) => {
@@ -638,6 +669,17 @@ app.post('/api/backup/run', async (req, res) => {
   }
   const result = await runBackup(getAdminChatId());
   res.json(result);
+});
+
+// The app asks for a backup here (reliable: app → VPS always works). It records
+// the requesting user as the backup recipient and kicks the GitHub runner, which
+// makes the archive on the VPS and delivers it to that user in Telegram.
+app.post('/api/backup/request', async (req, res) => {
+  const user = authReminder(req.body?.initData, res);
+  if (!user) return;
+  setAdminChatId(user.id);
+  const dispatched = await triggerBackup();
+  res.json({ ok: true, dispatched: dispatched.ok, error: dispatched.error });
 });
 
 // Telegram fetches a freshly-made backup here via a single-use, short-lived
