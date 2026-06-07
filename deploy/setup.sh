@@ -16,6 +16,7 @@ REPO="${REPO:-https://github.com/SkyTmin/coco-instruments.git}"
 BRANCH="${BRANCH:-prod}"
 APP_DIR="${APP_DIR:-/opt/coco}"
 UPLOAD_DIR="${UPLOAD_DIR:-/var/lib/coco/uploads}"
+STORE_DIR="${STORE_DIR:-$(dirname "$UPLOAD_DIR")/store}"
 BOT_TOKEN="${BOT_TOKEN:-}"
 GH_DISPATCH_TOKEN="${GH_DISPATCH_TOKEN:-}"
 
@@ -69,8 +70,8 @@ npm ci
 npm run build
 
 echo "==> Configuring persistent uploads"
-mkdir -p "$UPLOAD_DIR"
-chown -R root:root "$UPLOAD_DIR"
+mkdir -p "$UPLOAD_DIR" "$STORE_DIR"
+chown -R root:root "$UPLOAD_DIR" "$STORE_DIR"
 
 echo "==> Writing server environment (/etc/coco.env)"
 # Preserve existing tokens if this run didn't pass them (manual re-run).
@@ -85,6 +86,7 @@ touch /etc/coco.env && chmod 600 /etc/coco.env
   echo "NODE_ENV=production"
   echo "PORT=3000"
   echo "UPLOAD_DIR=$UPLOAD_DIR"
+  echo "STORE_DIR=$STORE_DIR"
   echo "MAX_UPLOAD_BYTES=3145728"
   echo "REMINDERS_FILE=$(dirname "$UPLOAD_DIR")/reminders.json"
   [ -n "$BOT_TOKEN" ] && echo "BOT_TOKEN=$BOT_TOKEN"

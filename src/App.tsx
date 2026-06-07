@@ -11,6 +11,7 @@ import { AppRoot } from '@telegram-apps/telegram-ui';
 import { backButton, miniApp, swipeBehavior, useLaunchParams, useRawInitData, useSignal } from '@tma.js/sdk-react';
 
 import { useFinanceStore } from '@/store';
+import { setServerAuth } from '@/lib/storage';
 import { syncReminders } from '@/lib/reminders';
 import { tapLight } from '@/lib/haptics';
 
@@ -113,6 +114,11 @@ export function App() {
       /* swipe behavior not supported on this client */
     }
   }, []);
+
+  // Let app data persist on the server (must run before hydrate's first read).
+  useEffect(() => {
+    setServerAuth(rawInitData);
+  }, [rawInitData]);
 
   useEffect(() => {
     void hydrate();

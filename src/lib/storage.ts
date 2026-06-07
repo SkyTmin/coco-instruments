@@ -125,21 +125,119 @@ class CloudStorageImpl implements Storage {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Server-backed storage. The source of truth is the VPS (POST /api/store/*,
+// authenticated by Telegram initData), which never loses data the way the
+// webview's localStorage can and isn't subject to CloudStorage's tiny limits.
+// localStorage is kept as an instant offline cache; existing CloudStorage data
+// is migrated to the server on first read.
+// ---------------------------------------------------------------------------
+let serverAuth: string | undefined;
+
+/** Provide the Telegram initData so app data can persist on the server. */
+export function setServerAuth(rawInitData: string | undefined): void {
+  serverAuth = rawInitData || undefined;
+}
+
+async function serverCall<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ initData: serverAuth, ...body }),
+  });
+  if (!res.ok) throw new Error(`store-${res.status}`);
+  return (await res.json()) as T;
+}
+
+class ServerStorage implements Storage {
+  constructor(private cache: Storage, private migrate: Storage | null) {}
+
+  async get<T>(key: string): Promise<T | null> {
+    if (serverAuth) {
+      try {
+        const { values } = await serverCall<{ values: Record<string, T | null> }>('/api/store/get', { keys: [key] });
+        const value = values?.[key] ?? null;
+        if (value !== null) {
+          void this.cache.set(key, value).catch(() => {});
+          return value;
+        }
+        // Server has nothing yet — migrate from CloudStorage / localStorage once.
+        const fallback = (this.migrate ? await this.migrate.get<T>(key) : null) ?? (await this.cache.get<T>(key));
+        if (fallback !== null) {
+          void serverCall('/api/store/set', { key, value: fallback }).catch(() => {});
+          void this.cache.set(key, fallback).catch(() => {});
+        }
+        return fallback;
+      } catch {
+        // Offline / server error → best available local copy.
+        return (await this.cache.get<T>(key)) ?? (this.migrate ? await this.migrate.get<T>(key) : null);
+      }
+    }
+    return (this.migrate ? await this.migrate.get<T>(key) : null) ?? (await this.cache.get<T>(key));
+  }
+
+  async set<T>(key: string, value: T): Promise<void> {
+    await this.cache.set(key, value).catch(() => {});
+    if (serverAuth) {
+      // When the app is being hidden/closed, a normal fetch may be killed —
+      // sendBeacon is delivered reliably by the browser.
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'hidden' &&
+        typeof navigator !== 'undefined' &&
+        navigator.sendBeacon
+      ) {
+        try {
+          const blob = new Blob([JSON.stringify({ initData: serverAuth, key, value })], {
+            type: 'application/json',
+          });
+          if (navigator.sendBeacon('/api/store/set', blob)) return;
+        } catch {
+          /* fall through to fetch */
+        }
+      }
+      try {
+        await serverCall('/api/store/set', { key, value });
+      } catch {
+        /* kept in the local cache; will re-sync on next read */
+      }
+    } else if (this.migrate) {
+      await this.migrate.set(key, value).catch(() => {});
+    }
+  }
+
+  async remove(key: string): Promise<void> {
+    await this.cache.remove(key).catch(() => {});
+    if (serverAuth) {
+      await serverCall('/api/store/remove', { key }).catch(() => {});
+    } else if (this.migrate) {
+      await this.migrate.remove(key).catch(() => {});
+    }
+  }
+
+  async keys(): Promise<string[]> {
+    return this.cache.keys();
+  }
+}
+
 let cached: Storage | null = null;
 
 /** Returns the active storage backend (memoized). */
 export function getStorage(): Storage {
   if (cached) return cached;
-  let useCloud = false;
-  // In dev we run against the mocked Telegram env, which can't answer CloudStorage
-  // requests — always use localStorage there.
-  if (!import.meta.env.DEV) {
-    try {
-      useCloud = cloudStorage.isSupported();
-    } catch {
-      useCloud = false;
-    }
+  // In dev we run against the mocked Telegram env — plain localStorage.
+  if (import.meta.env.DEV) {
+    cached = new LocalStorageImpl();
+    return cached;
   }
-  cached = useCloud ? new CloudStorageImpl() : new LocalStorageImpl();
+  let cloudOk = false;
+  try {
+    cloudOk = cloudStorage.isSupported();
+  } catch {
+    cloudOk = false;
+  }
+  // Server is the source of truth; localStorage caches; CloudStorage (if any)
+  // is read once to migrate a returning user's existing data.
+  cached = new ServerStorage(new LocalStorageImpl(), cloudOk ? new CloudStorageImpl() : null);
   return cached;
 }

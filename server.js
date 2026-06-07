@@ -15,6 +15,12 @@ const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES || 3 * 1024 * 1024)
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+// Per-user app-data store (reliable persistence). Lives next to uploads so it
+// survives deploys (the app checkout is reset, /var/lib/coco is not).
+const STORE_DIR = process.env.STORE_DIR || path.join(path.dirname(UPLOAD_DIR), 'store');
+const MAX_STORE_BYTES = Number(process.env.MAX_STORE_BYTES || 2 * 1024 * 1024);
+fs.mkdirSync(STORE_DIR, { recursive: true });
+
 app.use(express.json({ limit: '8mb' }));
 
 function safeName(name = 'file') {
@@ -388,6 +394,67 @@ if (BOT_TOKEN) {
 } else {
   console.log('Reminders disabled (no BOT_TOKEN set)');
 }
+
+// ---------------------------------------------------------------------------
+// Per-user key-value store — reliable persistence for the app's data. The Mini
+// App writes here so nothing is lost when Telegram CloudStorage is unavailable
+// or the webview wipes localStorage. Authenticated by Telegram initData; each
+// user can only read/write their own folder.
+// ---------------------------------------------------------------------------
+function storeKeyName(key) {
+  return String(key || '').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 120);
+}
+function userStoreDir(userId) {
+  const safe = String(userId).replace(/[^0-9]/g, '').slice(0, 32) || '0';
+  return path.join(STORE_DIR, safe);
+}
+
+app.post('/api/store/get', (req, res) => {
+  const { initData, keys } = req.body ?? {};
+  const user = authReminder(initData, res);
+  if (!user) return;
+  const dir = userStoreDir(user.id);
+  const values = {};
+  if (Array.isArray(keys)) {
+    for (const key of keys.slice(0, 64)) {
+      try {
+        values[key] = JSON.parse(fs.readFileSync(path.join(dir, storeKeyName(key) + '.json'), 'utf8'));
+      } catch {
+        values[key] = null;
+      }
+    }
+  }
+  res.json({ ok: true, values });
+});
+
+app.post('/api/store/set', (req, res) => {
+  const { initData, key, value } = req.body ?? {};
+  const user = authReminder(initData, res);
+  if (!user) return;
+  if (!key) return res.status(400).json({ error: 'no_key' });
+  const str = JSON.stringify(value ?? null);
+  if (str.length > MAX_STORE_BYTES) return res.status(413).json({ error: 'too_large' });
+  const dir = userStoreDir(user.id);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, storeKeyName(key) + '.json'), str);
+  } catch {
+    return res.status(500).json({ error: 'write_failed' });
+  }
+  res.json({ ok: true });
+});
+
+app.post('/api/store/remove', (req, res) => {
+  const { initData, key } = req.body ?? {};
+  const user = authReminder(initData, res);
+  if (!user) return;
+  try {
+    fs.unlinkSync(path.join(userStoreDir(user.id), storeKeyName(key) + '.json'));
+  } catch {
+    /* already gone */
+  }
+  res.json({ ok: true });
+});
 
 // Serve the built Vite app (run `npm run build` first to produce dist/).
 const distDir = path.join(__dirname, 'dist');
