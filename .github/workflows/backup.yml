@@ -1,0 +1,63 @@
+name: Daily backup to Telegram
+
+# The VPS often can't reach api.telegram.org to push a file out. So a GitHub
+# runner (which can) makes a fresh backup on the VPS, pulls it, and sends it to
+# the admin. Recipient = ADMIN_CHAT_ID secret, or the chat that ran /backup once
+# (stored in /var/lib/coco/admin.json on the VPS).
+on:
+  schedule:
+    - cron: '30 0 * * *' # 03:30 MSK
+  workflow_dispatch:
+
+concurrency:
+  group: coco-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets
+        id: gate
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          if [ -z "$VPS_HOST" ] || [ -z "$VPS_PASSWORD" ] || [ -z "$BOT_TOKEN" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Backup skipped — need VPS_HOST, VPS_PASSWORD, BOT_TOKEN."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Make + fetch backup, deliver to admin
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+          USER="${VPS_USER:-root}"
+          SSH="sshpass -p $VPS_PASSWORD ssh -o StrictHostKeyChecking=no -o ConnectTimeout=20 $USER@$VPS_HOST"
+          # 1) refresh the backup on the VPS, then read admin + archive out
+          $SSH 'bash /opt/coco/deploy/backup.sh >/dev/null 2>&1 || true; cat /var/lib/coco/admin.json 2>/dev/null || true' > admin.json || true
+          $SSH 'base64 -w0 /var/lib/coco/backups/latest.tar.gz' > latest.b64
+          base64 -d latest.b64 > latest.tar.gz
+          ADMIN="$ADMIN_CHAT_ID"
+          if [ -z "$ADMIN" ] && [ -s admin.json ]; then
+            ADMIN=$(node -e "try{process.stdout.write(String(JSON.parse(require('fs').readFileSync('admin.json','utf8')).chatId||''))}catch(e){}")
+          fi
+          if [ -z "$ADMIN" ]; then
+            echo "::warning::No admin yet — send /backup to the bot once (or set ADMIN_CHAT_ID)."
+            exit 0
+          fi
+          curl -fsS -F chat_id="$ADMIN" \
+            -F caption="🗄 Ежедневная копия Coco ($(date +%F))" \
+            -F document=@latest.tar.gz \
+            "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" >/dev/null
+          echo "Backup delivered to $ADMIN"

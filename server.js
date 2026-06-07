@@ -398,49 +398,63 @@ app.get('/api/reminders/health', (req, res) => {
 
 // Telegram webhook → greet on /start (and any message). Sending this reply also
 // confirms the user is reachable, so scheduled reminders can be delivered.
-app.post('/api/bot/webhook', (req, res) => {
+// One-time tokens for serving a backup archive to Telegram by URL (the VPS often
+// can't reach Telegram outbound, so we answer the webhook with a method and let
+// Telegram FETCH the file from our public domain).
+const backupTokens = new Map();
+function publicBase(req) {
+  return process.env.PUBLIC_URL || `https://${req.get('host')}`;
+}
+
+app.post('/api/bot/webhook', async (req, res) => {
   if (WEBHOOK_SECRET && req.get('X-Telegram-Bot-Api-Secret-Token') !== WEBHOOK_SECRET) {
-    res.sendStatus(401);
-    return;
+    return res.sendStatus(401);
   }
   const msg = req.body?.message;
   const chatId = msg?.chat?.id;
   const text = String(msg?.text || '').trim();
-  if (chatId) {
-    if (/^\/id\b/.test(text)) {
-      void sendTelegram(chatId, `Ваш chat id: <b>${chatId}</b>`);
-    } else if (/^\/backup\b/.test(text)) {
-      let admin = getAdminChatId();
-      if (!admin) {
-        setAdminChatId(chatId);
-        admin = String(chatId);
-      }
-      if (String(admin) === String(chatId)) {
-        void sendTelegram(chatId, '📦 Делаю резервную копию…');
-        void runBackup(chatId).then((r) => {
-          if (r.ok && !r.sent) {
-            void sendTelegram(
-              chatId,
-              `Копия сохранена на сервере (${r.size} МБ), но отправить файлом не вышло` +
-                `${r.deliverError ? ` (${escapeHtml(String(r.deliverError))})` : ''}.`,
-            );
-          } else if (!r.ok) {
-            void sendTelegram(chatId, `Не удалось сделать бэкап${r.error ? ` (${escapeHtml(String(r.error))})` : ''}.`);
-          }
-        });
-      } else {
-        void sendTelegram(chatId, 'Бэкапы доступны только администратору бота.');
-      }
-    } else {
-      void sendTelegram(
-        chatId,
-        'Привет! 👋 Это <b>Coco</b>. Открой приложение кнопкой меню (слева от поля ввода) — ' +
-          'и я буду напоминать тебе о платежах прямо здесь.\n\n' +
-          'Команды: /backup — прислать резервную копию, /id — узнать свой chat id.',
-      );
+  if (!chatId) return res.sendStatus(200);
+
+  // Reply by returning the method in the webhook response — works even when the
+  // VPS can't open outbound connections to api.telegram.org.
+  const reply = (t) =>
+    res.json({ method: 'sendMessage', chat_id: chatId, text: t, parse_mode: 'HTML', disable_web_page_preview: true });
+
+  if (/^\/id\b/.test(text)) {
+    return reply(`Ваш chat id: <b>${chatId}</b>`);
+  }
+
+  if (/^\/backup\b/.test(text)) {
+    let admin = getAdminChatId();
+    if (!admin) {
+      setAdminChatId(chatId); // personal bot: the first /backup claims the owner
+      admin = String(chatId);
+    }
+    if (String(admin) !== String(chatId)) {
+      return reply('Бэкапы доступны только администратору бота.');
+    }
+    try {
+      const archive = await createBackupArchive();
+      pruneBackups();
+      const token = crypto.randomBytes(24).toString('hex');
+      backupTokens.set(token, { file: archive, exp: Date.now() + 10 * 60_000 });
+      const sizeMb = (fs.statSync(archive).size / 1048576).toFixed(2);
+      return res.json({
+        method: 'sendDocument',
+        chat_id: chatId,
+        document: `${publicBase(req)}/api/backup/file/${token}`,
+        caption: `🗄 Резервная копия Coco · ${sizeMb} МБ · ${new Date().toLocaleString('ru-RU')}`,
+      });
+    } catch (e) {
+      return reply(`Не удалось сделать бэкап (${escapeHtml(String(e?.message || e))}).`);
     }
   }
-  res.sendStatus(200);
+
+  return reply(
+    'Привет! 👋 Это <b>Coco</b>. Открой приложение кнопкой меню (слева от поля ввода) — ' +
+      'и я буду напоминать тебе о платежах прямо здесь.\n\n' +
+      'Команды: /backup — прислать резервную копию, /id — узнать свой chat id.',
+  );
 });
 
 const escapeHtml = (s) =>
@@ -624,6 +638,16 @@ app.post('/api/backup/run', async (req, res) => {
   }
   const result = await runBackup(getAdminChatId());
   res.json(result);
+});
+
+// Telegram fetches a freshly-made backup here via a single-use, short-lived
+// token (handed to it in the /backup webhook reply). Random token + 10-min TTL.
+app.get('/api/backup/file/:token', (req, res) => {
+  const entry = backupTokens.get(req.params.token);
+  if (!entry || entry.exp < Date.now() || !fs.existsSync(entry.file)) {
+    return res.sendStatus(404);
+  }
+  res.download(entry.file, path.basename(entry.file));
 });
 
 // Serve the built Vite app (run `npm run build` first to produce dist/).

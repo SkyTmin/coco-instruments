@@ -93,6 +93,7 @@ touch /etc/coco.env && chmod 600 /etc/coco.env
   echo "STORE_DIR=$STORE_DIR"
   echo "MAX_UPLOAD_BYTES=3145728"
   echo "REMINDERS_FILE=$(dirname "$UPLOAD_DIR")/reminders.json"
+  echo "PUBLIC_URL=https://$DOMAIN"
   [ -n "$BOT_TOKEN" ] && echo "BOT_TOKEN=$BOT_TOKEN"
   [ -n "$GH_DISPATCH_TOKEN" ] && echo "GH_DISPATCH_TOKEN=$GH_DISPATCH_TOKEN"
   [ -n "$ADMIN_CHAT_ID" ] && echo "ADMIN_CHAT_ID=$ADMIN_CHAT_ID"
