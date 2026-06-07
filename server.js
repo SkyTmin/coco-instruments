@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'url';
 import { validate as validateInitDataSig } from '@telegram-apps/init-data-node';
 
@@ -20,6 +21,52 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 const STORE_DIR = process.env.STORE_DIR || path.join(path.dirname(UPLOAD_DIR), 'store');
 const MAX_STORE_BYTES = Number(process.env.MAX_STORE_BYTES || 2 * 1024 * 1024);
 fs.mkdirSync(STORE_DIR, { recursive: true });
+
+// Everything worth keeping lives under DATA_ROOT (/var/lib/coco) — that's what
+// the backups archive and restore.sh restores.
+const DATA_ROOT = path.dirname(UPLOAD_DIR);
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_ROOT, 'backups');
+const ADMIN_FILE = path.join(DATA_ROOT, 'admin.json');
+fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+// Atomic file write (temp + rename) so a crash mid-write can't corrupt data.
+function writeFileAtomic(file, data) {
+  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tmp, data);
+  fs.renameSync(tmp, file);
+}
+function writeJsonAtomic(file, obj) {
+  writeFileAtomic(file, JSON.stringify(obj));
+}
+
+// Tiny in-memory rate limiter (per key, sliding window).
+const rateBuckets = new Map();
+function rateLimit(keyId, max, windowMs) {
+  const now = Date.now();
+  const hits = (rateBuckets.get(keyId) || []).filter((t) => now - t < windowMs);
+  hits.push(now);
+  rateBuckets.set(keyId, hits);
+  return hits.length <= max;
+}
+
+// The backup recipient: a configured admin chat id, or the first person to send
+// /backup to the bot (it's a personal bot — first come claims it).
+function getAdminChatId() {
+  const env = (process.env.ADMIN_CHAT_ID || '').trim();
+  if (env) return env;
+  try {
+    return String(JSON.parse(fs.readFileSync(ADMIN_FILE, 'utf8')).chatId || '') || null;
+  } catch {
+    return null;
+  }
+}
+function setAdminChatId(chatId) {
+  try {
+    writeJsonAtomic(ADMIN_FILE, { chatId: String(chatId), at: Date.now() });
+  } catch {
+    /* non-fatal */
+  }
+}
 
 app.use(express.json({ limit: '8mb' }));
 
@@ -42,7 +89,13 @@ function extensionFromType(type = '') {
 }
 
 app.post('/api/notes/attachments', (req, res) => {
-  const { name, type, dataUrl } = req.body ?? {};
+  const { initData, name, type, dataUrl } = req.body ?? {};
+  const user = authReminder(initData, res);
+  if (!user) return;
+  if (!rateLimit(`upload:${user.id}`, 60, 60_000)) {
+    res.status(429).json({ error: 'rate_limited' });
+    return;
+  }
   if (typeof name !== 'string' || typeof dataUrl !== 'string') {
     res.status(400).json({ error: 'invalid_payload' });
     return;
@@ -64,7 +117,7 @@ app.post('/api/notes/attachments', (req, res) => {
   const ext = path.extname(name) || extensionFromType(contentType);
   const id = crypto.randomUUID();
   const fileName = `${id}-${safeName(path.basename(name, ext))}${ext}`;
-  fs.writeFileSync(path.join(UPLOAD_DIR, fileName), buffer);
+  writeFileAtomic(path.join(UPLOAD_DIR, fileName), buffer);
 
   res.json({
     id,
@@ -93,6 +146,10 @@ const WEBHOOK_SECRET = BOT_TOKEN
   : '';
 const RELAY_SECRET = BOT_TOKEN
   ? crypto.createHash('sha256').update(`relay:${BOT_TOKEN}`).digest('hex').slice(0, 48)
+  : '';
+// Secret for the localhost backup trigger (used by the systemd timer).
+const BACKUP_SECRET = BOT_TOKEN
+  ? crypto.createHash('sha256').update(`backup:${BOT_TOKEN}`).digest('hex').slice(0, 48)
   : '';
 // Optional GitHub token (fine-grained PAT, Actions: read+write) so the VPS can
 // trigger the delivery workflow on demand — GitHub's own `schedule` is too slow.
@@ -141,7 +198,7 @@ function saveReminders() {
   clearTimeout(remSaveTimer);
   remSaveTimer = setTimeout(() => {
     try {
-      fs.writeFileSync(REMINDERS_FILE, JSON.stringify(reminders));
+      writeJsonAtomic(REMINDERS_FILE, reminders);
     } catch (e) {
       console.error('reminders save failed', e);
     }
@@ -161,6 +218,80 @@ async function sendTelegram(chatId, text) {
   } catch (e) {
     return { ok: false, error: String(e) };
   }
+}
+
+async function sendDocument(chatId, filePath, caption) {
+  if (!BOT_TOKEN) return { ok: false, error: 'no_token' };
+  try {
+    const data = fs.readFileSync(filePath);
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    if (caption) form.append('caption', caption);
+    form.append('document', new Blob([data]), path.basename(filePath));
+    const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, { method: 'POST', body: form });
+    const j = await r.json().catch(() => ({}));
+    return { ok: !!j.ok, error: j.description };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+// ---- Backups: archive all data, keep a rotated copy, deliver to the admin ----
+function createBackupArchive() {
+  return new Promise((resolve, reject) => {
+    const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    const out = path.join(BACKUP_DIR, `coco-backup-${ts}.tar.gz`);
+    const entries = ['store', 'uploads', 'reminders.json', 'admin.json'].filter((e) =>
+      fs.existsSync(path.join(DATA_ROOT, e)),
+    );
+    if (!entries.length) return reject(new Error('nothing-to-backup'));
+    const tar = spawn('tar', ['-czf', out, '-C', DATA_ROOT, ...entries]);
+    tar.on('error', reject);
+    tar.on('close', (code) => {
+      if (code !== 0) return reject(new Error(`tar-exit-${code}`));
+      try {
+        fs.copyFileSync(out, path.join(BACKUP_DIR, 'latest.tar.gz')); // stable name for fetching
+      } catch {
+        /* non-fatal */
+      }
+      resolve(out);
+    });
+  });
+}
+
+function pruneBackups(keep = 14) {
+  try {
+    const files = fs
+      .readdirSync(BACKUP_DIR)
+      .filter((f) => f.startsWith('coco-backup-') && f.endsWith('.tar.gz'))
+      .sort();
+    for (const f of files.slice(0, Math.max(0, files.length - keep))) {
+      fs.unlinkSync(path.join(BACKUP_DIR, f));
+    }
+  } catch {
+    /* non-fatal */
+  }
+}
+
+let lastBackupAt = 0;
+async function runBackup(deliverTo) {
+  let archive;
+  try {
+    archive = await createBackupArchive();
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+  pruneBackups();
+  lastBackupAt = Date.now();
+  const sizeMb = (fs.statSync(archive).size / 1048576).toFixed(2);
+  if (!deliverTo) return { ok: true, archive, size: sizeMb, sent: false };
+  const sent = await sendDocument(
+    deliverTo,
+    archive,
+    `🗄 Резервная копия Coco · ${sizeMb} МБ · ${new Date().toLocaleString('ru-RU')}\n` +
+      `Перенос на новый сервер: положи файл рядом и запусти deploy/restore.sh <файл>.`,
+  );
+  return { ok: true, archive, size: sizeMb, sent: sent.ok, deliverError: sent.error };
 }
 
 /** Ask GitHub Actions to run the delivery workflow now (throttled to once / 90s). */
@@ -272,13 +403,42 @@ app.post('/api/bot/webhook', (req, res) => {
     res.sendStatus(401);
     return;
   }
-  const chatId = req.body?.message?.chat?.id;
+  const msg = req.body?.message;
+  const chatId = msg?.chat?.id;
+  const text = String(msg?.text || '').trim();
   if (chatId) {
-    void sendTelegram(
-      chatId,
-      'Привет! 👋 Это <b>Coco</b>. Открой приложение кнопкой меню (слева от поля ввода) — ' +
-        'и я буду напоминать тебе о платежах прямо здесь.',
-    );
+    if (/^\/id\b/.test(text)) {
+      void sendTelegram(chatId, `Ваш chat id: <b>${chatId}</b>`);
+    } else if (/^\/backup\b/.test(text)) {
+      let admin = getAdminChatId();
+      if (!admin) {
+        setAdminChatId(chatId);
+        admin = String(chatId);
+      }
+      if (String(admin) === String(chatId)) {
+        void sendTelegram(chatId, '📦 Делаю резервную копию…');
+        void runBackup(chatId).then((r) => {
+          if (r.ok && !r.sent) {
+            void sendTelegram(
+              chatId,
+              `Копия сохранена на сервере (${r.size} МБ), но отправить файлом не вышло` +
+                `${r.deliverError ? ` (${escapeHtml(String(r.deliverError))})` : ''}.`,
+            );
+          } else if (!r.ok) {
+            void sendTelegram(chatId, `Не удалось сделать бэкап${r.error ? ` (${escapeHtml(String(r.error))})` : ''}.`);
+          }
+        });
+      } else {
+        void sendTelegram(chatId, 'Бэкапы доступны только администратору бота.');
+      }
+    } else {
+      void sendTelegram(
+        chatId,
+        'Привет! 👋 Это <b>Coco</b>. Открой приложение кнопкой меню (слева от поля ввода) — ' +
+          'и я буду напоминать тебе о платежах прямо здесь.\n\n' +
+          'Команды: /backup — прислать резервную копию, /id — узнать свой chat id.',
+      );
+    }
   }
   res.sendStatus(200);
 });
@@ -437,7 +597,7 @@ app.post('/api/store/set', (req, res) => {
   const dir = userStoreDir(user.id);
   try {
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, storeKeyName(key) + '.json'), str);
+    writeFileAtomic(path.join(dir, storeKeyName(key) + '.json'), str);
   } catch {
     return res.status(500).json({ error: 'write_failed' });
   }
@@ -454,6 +614,16 @@ app.post('/api/store/remove', (req, res) => {
     /* already gone */
   }
   res.json({ ok: true });
+});
+
+// Localhost backup trigger (called by the systemd daily timer). Protected by a
+// secret derived from BOT_TOKEN so it can't be hit through the public proxy.
+app.post('/api/backup/run', async (req, res) => {
+  if (!BACKUP_SECRET || req.get('X-Backup-Secret') !== BACKUP_SECRET) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  const result = await runBackup(getAdminChatId());
+  res.json(result);
 });
 
 // Serve the built Vite app (run `npm run build` first to produce dist/).

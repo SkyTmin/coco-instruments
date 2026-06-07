@@ -139,6 +139,11 @@ export function setServerAuth(rawInitData: string | undefined): void {
   serverAuth = rawInitData || undefined;
 }
 
+/** The Telegram initData used to authenticate server requests (uploads, store). */
+export function getServerAuth(): string | undefined {
+  return serverAuth;
+}
+
 async function serverCall<T>(path: string, body: Record<string, unknown>): Promise<T> {
   const res = await fetch(path, {
     method: 'POST',

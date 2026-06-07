@@ -19,6 +19,7 @@ UPLOAD_DIR="${UPLOAD_DIR:-/var/lib/coco/uploads}"
 STORE_DIR="${STORE_DIR:-$(dirname "$UPLOAD_DIR")/store}"
 BOT_TOKEN="${BOT_TOKEN:-}"
 GH_DISPATCH_TOKEN="${GH_DISPATCH_TOKEN:-}"
+ADMIN_CHAT_ID="${ADMIN_CHAT_ID:-}"
 
 echo "==> Detecting public IP / domain"
 IP="$(curl -fsS https://api.ipify.org 2>/dev/null || true)"
@@ -81,6 +82,9 @@ fi
 if [ -z "$GH_DISPATCH_TOKEN" ] && [ -f /etc/coco.env ]; then
   GH_DISPATCH_TOKEN="$(grep -E '^GH_DISPATCH_TOKEN=' /etc/coco.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
 fi
+if [ -z "$ADMIN_CHAT_ID" ] && [ -f /etc/coco.env ]; then
+  ADMIN_CHAT_ID="$(grep -E '^ADMIN_CHAT_ID=' /etc/coco.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
+fi
 touch /etc/coco.env && chmod 600 /etc/coco.env
 {
   echo "NODE_ENV=production"
@@ -91,6 +95,7 @@ touch /etc/coco.env && chmod 600 /etc/coco.env
   echo "REMINDERS_FILE=$(dirname "$UPLOAD_DIR")/reminders.json"
   [ -n "$BOT_TOKEN" ] && echo "BOT_TOKEN=$BOT_TOKEN"
   [ -n "$GH_DISPATCH_TOKEN" ] && echo "GH_DISPATCH_TOKEN=$GH_DISPATCH_TOKEN"
+  [ -n "$ADMIN_CHAT_ID" ] && echo "ADMIN_CHAT_ID=$ADMIN_CHAT_ID"
 } > /etc/coco.env
 [ -n "$BOT_TOKEN" ] && echo "    bot token set → reminders enabled" || echo "    no bot token → reminders disabled"
 [ -n "$GH_DISPATCH_TOKEN" ] && echo "    dispatch token set → instant delivery enabled" || echo "    NO dispatch token (add GH_TOKEN secret + redeploy) → delivery via slow schedule"
@@ -112,8 +117,32 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+echo "==> Writing daily backup timer"
+cat > /etc/systemd/system/coco-backup.service <<EOF
+[Unit]
+Description=Coco daily backup
+After=coco.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/coco.env
+ExecStart=/usr/bin/env bash $APP_DIR/deploy/backup.sh
+EOF
+cat > /etc/systemd/system/coco-backup.timer <<EOF
+[Unit]
+Description=Coco daily backup timer
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
 systemctl daemon-reload
 systemctl enable coco >/dev/null 2>&1 || true
+systemctl enable --now coco-backup.timer >/dev/null 2>&1 || true
 systemctl restart coco
 
 echo "==> Writing /etc/caddy/Caddyfile"

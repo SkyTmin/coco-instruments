@@ -33,8 +33,14 @@ Production is a VPS, deployed **automatically by GitHub Actions**.
   rest. Always confirm with the user before pushing to `prod` (it deploys to production
   and retargets the bot).
 - Required GitHub Actions secrets (already configured): `VPS_HOST`, `VPS_PASSWORD`,
-  `BOT_TOKEN` (optional: `VPS_USER`, `DOMAIN`, `GH_TOKEN`). Without them the workflow
-  stays green and simply skips.
+  `BOT_TOKEN` (optional: `VPS_USER`, `DOMAIN`, `GH_TOKEN`, `ADMIN_CHAT_ID`). Without
+  them the workflow stays green and simply skips.
+- **Data lives in `/var/lib/coco`** (`store/` = per-user app data, `uploads/` = photos,
+  `reminders.json`, `admin.json`) — outside the app checkout, so deploys never touch it.
+  A daily systemd timer (`coco-backup.timer`) archives it, keeps the last 14 copies in
+  `/var/lib/coco/backups`, and sends the archive to the admin via the bot. Bot commands:
+  `/backup` (send a copy now), `/id` (get your chat id). Restore on a new box:
+  `sudo bash deploy/restore.sh <archive>.tar.gz`.
 - The branch name is referenced in several places — keep them in sync if it is ever
   renamed: `.github/workflows/deploy.yml` (trigger + `BRANCH`), `deploy/setup.sh`,
   `deploy/redeploy.sh`, `deploy/README.md`, and `server.js` (`GH_REF`).

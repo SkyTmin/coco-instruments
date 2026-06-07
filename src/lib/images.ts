@@ -4,6 +4,7 @@
 // Notes and the Wardrobe.
 import type { Attachment } from '@/types';
 import { genId } from '@/lib/id';
+import { getServerAuth } from '@/lib/storage';
 
 export const MAX_ATTACHMENT_SIZE = 3 * 1024 * 1024; // final size after compression
 export const MAX_IMAGE_SOURCE_SIZE = 12 * 1024 * 1024; // largest original we accept
@@ -87,7 +88,7 @@ export async function uploadAttachment(input: {
     const res = await fetch('/api/notes/attachments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, initData: getServerAuth() }),
     });
     if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) return null;
     const json = (await res.json()) as { url?: string };

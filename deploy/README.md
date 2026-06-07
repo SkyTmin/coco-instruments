@@ -50,6 +50,23 @@ curl -s "https://api.telegram.org/bot<BOT_TOKEN>/setChatMenuButton" \
 sudo bash /opt/coco/deploy/redeploy.sh
 ```
 
+## 3.1. Бэкапы и перенос на новый сервер
+
+Все данные лежат в `/var/lib/coco` (`store/` — данные пользователей, `uploads/` —
+фото, `reminders.json`, `admin.json`).
+
+- **Ежедневный бэкап** — systemd-таймер `coco-backup.timer` (в 03:30): архивирует
+  `/var/lib/coco`, хранит последние 14 копий в `/var/lib/coco/backups` и присылает
+  архив администратору в Telegram.
+- **Команды бота:** `/backup` — сделать и прислать копию прямо сейчас; `/id` —
+  узнать свой chat id. Первый, кто отправит `/backup`, становится получателем
+  бэкапов (или задаётся секретом `ADMIN_CHAT_ID`).
+- **Перенос на новый сервер:** разверни новый сервер (`setup.sh`), затем
+  `sudo bash /opt/coco/deploy/restore.sh <архив>.tar.gz` — все данные вернутся.
+
+Опциональный секрет GitHub Actions **`ADMIN_CHAT_ID`** — твой Telegram chat id
+(узнать через `/id`), чтобы бэкапы шли тебе автоматически.
+
 ## 4. Как теперь работают файлы заметок
 
 - Frontend сжимает фото на клиенте и отправляет `POST /api/notes/attachments`.

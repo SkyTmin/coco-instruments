@@ -55,6 +55,7 @@ jobs:
             export BRANCH='prod'
             export BOT_TOKEN='${{ secrets.BOT_TOKEN }}'
             export GH_DISPATCH_TOKEN='${{ secrets.GH_TOKEN }}'
+            export ADMIN_CHAT_ID='${{ secrets.ADMIN_CHAT_ID }}'
             curl -fsSL "https://raw.githubusercontent.com/SkyTmin/coco-instruments/${BRANCH}/deploy/setup.sh" | bash
 
       - name: Point the Telegram bot at the app
