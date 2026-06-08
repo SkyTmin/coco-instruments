@@ -1,6 +1,6 @@
 import type { Conversation, Gift, MeetIdea, Note, NoteList, Person, PersonNoteLink, PersonPromise, PersonRelation } from '@/types';
 
-export type NoteGraphNodeKind = 'note' | 'missing' | 'tag' | 'person' | 'gift' | 'promise' | 'event' | 'list';
+export type NoteGraphNodeKind = 'note' | 'missing' | 'tag' | 'person' | 'gift' | 'promise' | 'event' | 'list' | 'people';
 export type NoteGraphLinkKind =
   | 'wiki'
   | 'tag'
@@ -295,10 +295,19 @@ export function buildNoteGraph(notes: Note[], peopleData?: PeopleGraphData): Not
   return { nodes: Array.from(nodes.values()), links: Array.from(links.values()) };
 }
 
+export const PEOPLE_NODE_ID = 'people:all';
+
 /** Top-level notes graph: each list is a single node, plus the loose (unlisted)
  *  notes and their tags / wiki links. Links pointing at a note inside a list are
- *  redirected to that list's node, so a whole notebook reads as one circle. */
-export function buildOverviewGraph(notes: Note[], lists: NoteList[]): NoteGraph {
+ *  redirected to that list's node, so a whole notebook reads as one circle. All
+ *  people collapse into one "Люди" node (tap to open the full people graph),
+ *  connected to every note/notebook that references someone. */
+export function buildOverviewGraph(
+  notes: Note[],
+  lists: NoteList[],
+  people: Person[] = [],
+  noteLinks: PersonNoteLink[] = [],
+): NoteGraph {
   const listById = new Map(lists.map((l) => [l.id, l]));
   const repId = (note: Note) => (note.listId && listById.has(note.listId) ? `list:${note.listId}` : note.id);
 
@@ -361,6 +370,24 @@ export function buildOverviewGraph(notes: Note[], lists: NoteList[]): NoteGraph 
       addLink(src, missingId, 'wiki');
     }
     for (const tag of parseNoteTags(note.body)) addTag(src, tag);
+  }
+
+  // All people collapse into one node; connect it to whatever references them.
+  if (people.length) {
+    nodes.set(PEOPLE_NODE_ID, {
+      id: PEOPLE_NODE_ID,
+      kind: 'people',
+      label: '👥 Люди',
+      count: people.length,
+      degree: 0,
+      incoming: 0,
+      outgoing: 0,
+    });
+    const repById = new Map(notes.map((note) => [note.id, repId(note)]));
+    for (const link of noteLinks) {
+      const src = repById.get(link.noteId);
+      if (src) addLink(src, PEOPLE_NODE_ID, 'person-note');
+    }
   }
 
   for (const link of links.values()) {
@@ -544,8 +571,11 @@ function linkStiffness(kind: NoteGraphLinkKind): number {
 
 /** Visual radius of a node, scaled by how connected it is. */
 export function nodeRadius(node: Pick<NoteGraphNode, 'kind' | 'degree' | 'count'>): number {
-  // A whole notebook collapsed to one node — the biggest, sized by how many notes.
-  if (node.kind === 'list') return Math.min(48, 20 + (node.count ?? 0) * 2.2 + node.degree * 1.1);
+  // A whole notebook (or all people) collapsed to one node — the biggest,
+  // sized by how many items it stands for.
+  if (node.kind === 'list' || node.kind === 'people') {
+    return Math.min(48, 20 + (node.count ?? 0) * 2.2 + node.degree * 1.1);
+  }
   const isDetail = node.kind === 'gift' || node.kind === 'promise' || node.kind === 'event';
   // Notes are first-class here, so they get the same heft as people.
   const big = node.kind === 'person' || node.kind === 'note';

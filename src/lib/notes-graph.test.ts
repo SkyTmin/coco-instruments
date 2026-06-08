@@ -48,6 +48,30 @@ describe('overview graph (notebooks)', () => {
   });
 });
 
+describe('overview graph — people', () => {
+  const lists = [{ id: 'health', name: 'Здоровье', createdAt: 0, updatedAt: 0 }];
+  const notes = [note('l1', 'Идея', 'про Аню'), note('a1', 'Горло', '', 'health')];
+  const people = [
+    { id: 'p1', name: 'Аня', category: 'friend' as const, closeness: 3 as const, tags: [], favorite: false, createdAt: 0, updatedAt: 0 },
+  ];
+  const noteLinks = [{ id: 'ln1', personId: 'p1', noteId: 'l1', createdAt: 0 }];
+  const g = buildOverviewGraph(notes, lists, people, noteLinks);
+
+  it('collapses everyone into one "people" node linked to referencing notes', () => {
+    const peopleNode = g.nodes.find((n) => n.id === 'people:all');
+    expect(peopleNode?.kind).toBe('people');
+    expect(peopleNode?.count).toBe(1);
+    expect(g.links.some((l) => l.source === 'l1' && l.target === 'people:all' && l.kind === 'person-note')).toBe(true);
+    // individual people are NOT separate nodes in the overview
+    expect(g.nodes.some((n) => n.id === 'person:p1')).toBe(false);
+  });
+
+  it('omits the people node when there are no people', () => {
+    const bare = buildOverviewGraph(notes, lists);
+    expect(bare.nodes.some((n) => n.id === 'people:all')).toBe(false);
+  });
+});
+
 describe('hierarchical tags', () => {
   it('parses nested tags and trims stray slashes', () => {
     expect(parseNoteTags('#здоровье/горло болит, #а//б/ и #x но не #')).toEqual(['здоровье/горло', 'а/б', 'x']);

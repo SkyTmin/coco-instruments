@@ -2529,6 +2529,16 @@ input[type='datetime-local'] {
 }
 .notes-graph__link--list.is-hot { stroke: #8b5cf6; opacity: 1; }
 
+/* "Люди": one rose container node — tap to open the full people graph. */
+.notes-graph__node--people { cursor: pointer; }
+.notes-graph__node--people circle {
+  fill: url(#personNodeGradientInteractive);
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 2.4px;
+}
+.notes-graph__node--people .notes-graph__halo { fill: rgba(238, 127, 143, 0.2); }
+.notes-graph__node--people .notes-graph__label { font-weight: 800; fill: var(--text); }
+
 /* Notes are the stars of this graph: cool teal, big, softly glowing. */
 .notes-graph--interactive .notes-graph__node--note circle {
   stroke: rgba(255, 255, 255, 0.82);

@@ -65,6 +65,8 @@ export function NotesGraphPage() {
   const listParam = params.get('list');
   // Open the local graph centred on one note (the Obsidian "local graph").
   const focusParam = params.get('focus');
+  // Drill into the full people graph (from the collapsed "Люди" node).
+  const peopleParam = params.get('people');
   const activeList = listParam ? noteLists.find((l) => l.id === listParam) : undefined;
   const graph = useMemo(() => {
     // A single notebook's inner graph, with the notebook itself as an index hub.
@@ -72,8 +74,9 @@ export function NotesGraphPage() {
       const scoped = notes.filter((n) => n.listId === listParam);
       return activeList ? buildListGraph(activeList, scoped) : buildNoteGraph(scoped);
     }
-    // Person-centric view (opened from the People section).
-    if (personParam) {
+    // Person-centric view (opened from the People section) and the full people
+    // graph (drilled in from the "Люди" node) both show people individually.
+    if (personParam || peopleParam) {
       return buildNoteGraph(notes, { people, gifts, promises, conversations, meetIdeas, relations, noteLinks });
     }
     // Local graph around one note: every note is its own node (not collapsed
@@ -81,9 +84,10 @@ export function NotesGraphPage() {
     if (focusParam) {
       return buildNoteGraph(notes, { people, gifts, promises, conversations, meetIdeas, relations, noteLinks });
     }
-    // Default overview: notebooks collapse to one node each, plus loose notes.
-    return buildOverviewGraph(notes, noteLists);
-  }, [listParam, activeList, personParam, focusParam, conversations, gifts, meetIdeas, noteLinks, noteLists, notes, people, promises, relations]);
+    // Default overview: notebooks + a single "Люди" node collapse the graph;
+    // loose notes and tags stay individual.
+    return buildOverviewGraph(notes, noteLists, people, noteLinks);
+  }, [listParam, activeList, personParam, peopleParam, focusParam, conversations, gifts, meetIdeas, noteLinks, noteLists, notes, people, promises, relations]);
   const [activeId, setActiveId] = useState<string | undefined>(
     personParam ? personNodeId(personParam) : focusParam ?? notes[0]?.id,
   );
@@ -154,6 +158,14 @@ export function NotesGraphPage() {
     setMode('local');
     setActiveId(focusParam);
   }, [focusParam]);
+
+  // The full people graph opens in global mode with people + details on.
+  useEffect(() => {
+    if (!peopleParam) return;
+    setMode('global');
+    setShowPeople(true);
+    setShowDetails(true);
+  }, [peopleParam]);
 
   useEffect(() => {
     if (activeId && graph.nodes.some((node) => node.id === activeId)) return;
@@ -476,6 +488,8 @@ export function NotesGraphPage() {
                 : `/notes/graph?list=${point.list.id}`,
             );
           }
+          // The collapsed "Люди" node drills into the full people graph.
+          if (point?.kind === 'people') navigate('/notes/graph?people=1');
         }
       }
       if (pointers.current.size === 0) {
@@ -514,18 +528,20 @@ export function NotesGraphPage() {
 
   return (
     <Screen
-      title={activeList ? `Список: ${activeList.name}` : 'Граф связей'}
+      title={activeList ? `Список: ${activeList.name}` : peopleParam ? 'Граф: Люди' : 'Граф связей'}
       subtitle={
         activeList
           ? 'В центре — тетрадь, вокруг её заметки и связи'
-          : activeNode
-            ? activeNode.label
-            : 'Списки и заметки'
+          : peopleParam
+            ? 'Люди, их заметки, подарки и обещания'
+            : activeNode
+              ? activeNode.label
+              : 'Списки, заметки и люди'
       }
     >
       <div className="stack notes-page notes-graph-screen">
         <div className="card notes-graph-controls">
-          {activeList && (
+          {(activeList || peopleParam) && (
             <button className="btn btn--ghost btn--block" onClick={() => { selectionChanged(); navigate('/notes/graph'); }}>
               ← Все списки и заметки
             </button>
