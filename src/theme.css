@@ -923,6 +923,22 @@ input[type='datetime-local'] {
   color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
+/* "Граф вокруг заметки" button in the note view */
+.note-graph-link { display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+/* tag filter chips inside a notebook (list detail) */
+.note-list-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+.note-list-tag {
+  flex: 0 0 auto; border: 0; cursor: pointer;
+  padding: 6px 12px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted);
+  font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.note-list-tag.is-active {
+  background: color-mix(in srgb, var(--pos) 16%, var(--surface));
+  color: var(--pos); box-shadow: inset 0 0 0 1.5px var(--pos);
+}
+
 .notes-action {
   border: 0;
   cursor: pointer;
@@ -992,8 +1008,16 @@ input[type='datetime-local'] {
 
 .notes-depth {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin: 0 0 10px;
+}
+
+.notes-depth__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-right: 2px;
 }
 
 .notes-depth__btn {
@@ -2497,6 +2521,13 @@ input[type='datetime-local'] {
 }
 .notes-graph__node--list .notes-graph__halo { fill: rgba(139, 92, 246, 0.18); }
 .notes-graph__node--list .notes-graph__label { font-weight: 800; fill: var(--text); }
+/* Index spokes (notebook → its notes): faint dotted violet, never dominant. */
+.notes-graph__link--list {
+  stroke: rgba(139, 92, 246, 0.3);
+  stroke-width: 1.3;
+  stroke-dasharray: 1 6;
+}
+.notes-graph__link--list.is-hot { stroke: #8b5cf6; opacity: 1; }
 
 /* Notes are the stars of this graph: cool teal, big, softly glowing. */
 .notes-graph--interactive .notes-graph__node--note circle {

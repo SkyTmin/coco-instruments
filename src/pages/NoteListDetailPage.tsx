@@ -26,6 +26,20 @@ export function NoteListDetailPage() {
     return all.filter((n) => normalizeNoteTitle(`${n.title} ${n.body}`).includes(queryKey));
   }, [all, queryKey]);
 
+  // Top-level tags used inside this notebook → quick filter chips. Tapping a
+  // chip filters by `#тег` (which also catches its `#тег/подтеги`).
+  const tagChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const n of all) {
+      for (const t of parseNoteTags(n.body)) {
+        const top = t.split('/')[0];
+        if (top) counts.set(top, (counts.get(top) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14).map(([t]) => t);
+  }, [all]);
+  const activeTag = query.trim().toLowerCase();
+
   if (hydrated && listId && !list) return <Navigate to="/notes/lists" replace />;
 
   const go = (path: string) => {
@@ -49,6 +63,26 @@ export function NoteListDetailPage() {
             <span>Граф списка</span>
           </button>
         </div>
+
+        {tagChips.length > 0 && (
+          <div className="note-list-tags">
+            {tagChips.map((t) => {
+              const active = activeTag === `#${t}`;
+              return (
+                <button
+                  key={t}
+                  className={`note-list-tag${active ? ' is-active' : ''}`}
+                  onClick={() => {
+                    selectionChanged();
+                    setQuery(active ? '' : `#${t}`);
+                  }}
+                >
+                  #{t}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="notes-search-wrap">
           <input

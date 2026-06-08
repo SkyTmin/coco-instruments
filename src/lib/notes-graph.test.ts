@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Note } from '@/types';
 import {
+  buildListGraph,
   buildNoteGraph,
   buildOverviewGraph,
   filterNoteGraph,
@@ -10,6 +11,7 @@ import {
   parseNoteTags,
   parseWikiLinks,
   personNodeId,
+  tagAncestry,
 } from './notes-graph';
 
 function note(id: string, title: string, body: string, listId?: string): Note {
@@ -43,6 +45,62 @@ describe('overview graph (notebooks)', () => {
     // the list connects to the tags of its notes
     expect(g.links.some((l) => l.source === 'list:health' && l.kind === 'tag')).toBe(true);
     expect(g.nodes.some((n) => n.id === 'tag:таблетки')).toBe(true);
+  });
+});
+
+describe('hierarchical tags', () => {
+  it('parses nested tags and trims stray slashes', () => {
+    expect(parseNoteTags('#здоровье/горло болит, #а//б/ и #x но не #')).toEqual(['здоровье/горло', 'а/б', 'x']);
+    expect(parseNoteTags('#дом-2 и C# не тег')).toEqual(['дом-2']);
+  });
+
+  it('expands a tag into its ancestor chain', () => {
+    expect(tagAncestry('a/b/c')).toEqual(['a', 'a/b', 'a/b/c']);
+    expect(tagAncestry('one')).toEqual(['one']);
+  });
+
+  it('links a note to the leaf tag and chains parent → child', () => {
+    const graph = buildNoteGraph([note('n', 'T', '#здоровье/горло')]);
+    expect(graph.nodes.some((x) => x.id === 'tag:здоровье')).toBe(true);
+    expect(graph.nodes.some((x) => x.id === 'tag:здоровье/горло')).toBe(true);
+    expect(graph.links.some((l) => l.source === 'n' && l.target === 'tag:здоровье/горло' && l.kind === 'tag')).toBe(true);
+    expect(
+      graph.links.some((l) => l.source === 'tag:здоровье' && l.target === 'tag:здоровье/горло' && l.kind === 'tag'),
+    ).toBe(true);
+  });
+});
+
+describe('list graph (Map of Content)', () => {
+  const list = { id: 'health', name: 'Здоровье', createdAt: 0, updatedAt: 0 };
+  const notes = [note('a1', 'Горло', '[[Насморк]]', 'health'), note('a2', 'Насморк', '', 'health')];
+  const g = buildListGraph(list, notes);
+
+  it('adds the notebook as a hub linked to every note', () => {
+    const hub = g.nodes.find((n) => n.id === 'list:health');
+    expect(hub?.kind).toBe('list');
+    expect(hub?.count).toBe(2);
+    expect(g.links.filter((l) => l.source === 'list:health' && l.kind === 'list')).toHaveLength(2);
+    expect(hub?.degree).toBe(2);
+  });
+
+  it('keeps the notes and their wiki links intact', () => {
+    expect(g.nodes.some((n) => n.id === 'a1' && n.kind === 'note')).toBe(true);
+    expect(g.links.some((l) => l.source === 'a1' && l.target === 'a2' && l.kind === 'wiki')).toBe(true);
+  });
+
+  it('excludes index spokes from the local-graph neighbourhood', () => {
+    // From a1 at depth 1: its wiki neighbour a2 is reached, but NOT the hub
+    // (index links are not real adjacency), so the hub stays out of the local view.
+    const local = filterNoteGraph(g, {
+      mode: 'local',
+      activeId: 'a1',
+      depth: 1,
+      showMissing: true,
+      showTags: true,
+      query: '',
+    });
+    expect(local.nodes.some((n) => n.id === 'a2')).toBe(true);
+    expect(local.nodes.some((n) => n.id === 'list:health')).toBe(false);
   });
 });
 

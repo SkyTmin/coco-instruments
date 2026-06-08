@@ -36,7 +36,7 @@ const TASK_RE = /^\s*[-*]\s+\[([ xX])\]\s+(.*)$/;
 const UL_RE = /^\s*[-*]\s+(.*)$/;
 const OL_RE = /^\s*\d+\.\s+(.*)$/;
 const FENCE_RE = /^```(.*)$/;
-const TAG_SPLIT_RE = /(^|[^#\p{L}\p{N}_-])#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,31})/gu;
+const TAG_SPLIT_RE = /(^|[^#\p{L}\p{N}_-])#([\p{L}\p{N}_][\p{L}\p{N}_/-]{0,63})/gu;
 
 const SAFE_LINK = /^(https?:|mailto:|tel:)/i;
 const SAFE_IMG = /^(https?:|data:image\/|blob:|attachment:)/i;
@@ -90,7 +90,8 @@ function splitTags(text: string): Inline[] {
     const lead = m[1];
     const start = m.index + lead.length; // position of '#'
     if (start > last) out.push({ t: 'text', v: text.slice(last, start) });
-    out.push({ t: 'tag', v: m[2] });
+    // Tidy hierarchy separators but keep the author's casing for display.
+    out.push({ t: 'tag', v: m[2].replace(/\/{2,}/g, '/').replace(/^\/+|\/+$/g, '') });
     last = m.index + m[0].length;
   }
   if (last < text.length) out.push({ t: 'text', v: text.slice(last) });
@@ -278,7 +279,7 @@ export function noteExcerpt(body: string): string {
     .replace(/^\s*#{1,3}\s+/gm, '')
     .replace(/^\s*>\s?/gm, '')
     .replace(/(\*\*|__|~~|`|\*)/g, '')
-    .replace(/(^|[^#\p{L}\p{N}_-])#[\p{L}\p{N}_][\p{L}\p{N}_-]{0,31}/gu, '$1')
+    .replace(/(^|[^#\p{L}\p{N}_-])#[\p{L}\p{N}_][\p{L}\p{N}_/-]{0,63}/gu, '$1')
     .replace(/\s+/g, ' ')
     .trim();
 }

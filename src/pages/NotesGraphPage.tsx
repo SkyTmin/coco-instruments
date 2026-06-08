@@ -7,6 +7,7 @@ import { useFinanceStore } from '@/store';
 import type { GraphSize, NoteGraphLink, NoteGraphPoint } from '@/lib/notes-graph';
 import {
   GRAPH_VIEW_BOX,
+  buildListGraph,
   buildNoteGraph,
   buildOverviewGraph,
   filterNoteGraph,
@@ -62,19 +63,29 @@ export function NotesGraphPage() {
   const noteLinks = useFinanceStore((s) => s.personNoteLinks);
   const personParam = params.get('person');
   const listParam = params.get('list');
+  // Open the local graph centred on one note (the Obsidian "local graph").
+  const focusParam = params.get('focus');
   const activeList = listParam ? noteLists.find((l) => l.id === listParam) : undefined;
   const graph = useMemo(() => {
-    // A single notebook's inner graph.
-    if (listParam) return buildNoteGraph(notes.filter((n) => n.listId === listParam));
+    // A single notebook's inner graph, with the notebook itself as an index hub.
+    if (listParam) {
+      const scoped = notes.filter((n) => n.listId === listParam);
+      return activeList ? buildListGraph(activeList, scoped) : buildNoteGraph(scoped);
+    }
     // Person-centric view (opened from the People section).
     if (personParam) {
       return buildNoteGraph(notes, { people, gifts, promises, conversations, meetIdeas, relations, noteLinks });
     }
+    // Local graph around one note: every note is its own node (not collapsed
+    // into a list), so the focused note and its real neighbourhood exist.
+    if (focusParam) {
+      return buildNoteGraph(notes, { people, gifts, promises, conversations, meetIdeas, relations, noteLinks });
+    }
     // Default overview: notebooks collapse to one node each, plus loose notes.
     return buildOverviewGraph(notes, noteLists);
-  }, [listParam, personParam, conversations, gifts, meetIdeas, noteLinks, noteLists, notes, people, promises, relations]);
+  }, [listParam, activeList, personParam, focusParam, conversations, gifts, meetIdeas, noteLinks, noteLists, notes, people, promises, relations]);
   const [activeId, setActiveId] = useState<string | undefined>(
-    personParam ? personNodeId(personParam) : notes[0]?.id,
+    personParam ? personNodeId(personParam) : focusParam ?? notes[0]?.id,
   );
   const [mode, setMode] = useState<'global' | 'local'>('global');
   const [depth, setDepth] = useState(2);
@@ -93,6 +104,8 @@ export function NotesGraphPage() {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const activeIdRef = useRef<string | undefined>(activeId);
+  const listParamRef = useRef<string | null>(listParam);
+  listParamRef.current = listParam;
   const pointerSession = useRef<PointerSession | null>(null);
   // Multi-touch pinch-zoom bookkeeping.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -134,6 +147,13 @@ export function NotesGraphPage() {
     setShowDetails(true);
     setActiveId(personNodeId(personParam));
   }, [personParam]);
+
+  // Arriving with ?focus=<noteId> drops you into that note's local neighbourhood.
+  useEffect(() => {
+    if (!focusParam) return;
+    setMode('local');
+    setActiveId(focusParam);
+  }, [focusParam]);
 
   useEffect(() => {
     if (activeId && graph.nodes.some((node) => node.id === activeId)) return;
@@ -447,7 +467,15 @@ export function NotesGraphPage() {
           const point = pointByIdRef.current.get(id);
           if (point?.kind === 'note') navigate(`/notes/${id}`);
           if (point?.kind === 'person' && point.person) navigate(`/people/${point.person.id}`);
-          if (point?.kind === 'list' && point.list) navigate(`/notes/graph?list=${point.list.id}`);
+          if (point?.kind === 'list' && point.list) {
+            // The hub of the list you're already inside opens that list; a list
+            // node in the overview drills into its inner graph.
+            navigate(
+              listParamRef.current === point.list.id
+                ? `/notes/lists/${point.list.id}`
+                : `/notes/graph?list=${point.list.id}`,
+            );
+          }
         }
       }
       if (pointers.current.size === 0) {
@@ -487,7 +515,13 @@ export function NotesGraphPage() {
   return (
     <Screen
       title={activeList ? `Список: ${activeList.name}` : 'Граф связей'}
-      subtitle={activeList ? 'Заметки и связи этого списка' : activeNode ? activeNode.label : 'Списки и заметки'}
+      subtitle={
+        activeList
+          ? 'В центре — тетрадь, вокруг её заметки и связи'
+          : activeNode
+            ? activeNode.label
+            : 'Списки и заметки'
+      }
     >
       <div className="stack notes-page notes-graph-screen">
         <div className="card notes-graph-controls">
@@ -542,6 +576,7 @@ export function NotesGraphPage() {
           </div>
           {mode === 'local' && (
             <div className="notes-depth">
+              <span className="notes-depth__label">Глубина связей</span>
               {[1, 2, 3].map((value) => (
                 <button
                   key={value}
@@ -651,6 +686,9 @@ export function NotesGraphPage() {
         <div className="card notes-graph-hint">
           Перетаскивайте поле или узлы, щипком двумя пальцами (или колесо/кнопки) — масштаб.
           Передвинутые узлы остаются на месте; ⊙ — собрать граф заново. Короткий тап откроет заметку или человека.
+          {activeList
+            ? ' Фиолетовый кружок в центре — сама тетрадь; тап по нему открывает список.'
+            : ' «Локальный» режим показывает связи вокруг выбранного узла на заданную глубину.'}
           {activeNote && (
             <button className="btn btn--ghost btn--block" onClick={() => navigate(`/notes/${activeNote.id}`)}>
               Открыть «{activeNote.title}»

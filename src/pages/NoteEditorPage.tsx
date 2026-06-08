@@ -4,7 +4,7 @@ import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-
 import { ConfirmDialog, Screen, Sheet } from '@/components/ui';
 import { NoteMarkdown } from '@/components/NoteMarkdown';
 import { useCrop } from '@/components/CropProvider';
-import { IconCheck, IconHeart, IconImage, IconPaperclip, IconPencil, IconTrash } from '@/components/icons';
+import { IconCheck, IconGraph, IconHeart, IconImage, IconPaperclip, IconPencil, IconTrash } from '@/components/icons';
 import type { NoteAttachment } from '@/types';
 import { useFinanceStore } from '@/store';
 import {
@@ -52,7 +52,6 @@ export function NoteEditorPage() {
   const noteLists = useFinanceStore((s) => s.noteLists);
   const existing = useFinanceStore((s) => (id ? s.getNote(id) : undefined));
   const hydrated = useFinanceStore((s) => s.hydrated);
-  const addNote = useFinanceStore((s) => s.addNote);
   const updateNote = useFinanceStore((s) => s.updateNote);
   const removeNote = useFinanceStore((s) => s.removeNote);
   const people = useFinanceStore((s) => s.people);
@@ -454,7 +453,7 @@ export function NoteEditorPage() {
               }}
               onClick={(e) => syncWiki(body, e.currentTarget.selectionStart ?? body.length)}
               onKeyUp={(e) => syncWiki(body, e.currentTarget.selectionStart ?? body.length)}
-              placeholder="Пишите заметку. Связь: [[Проект]], тег: #идея, задача: - [ ] дело"
+              placeholder="Пишите заметку. Связь: [[Проект]], тег: #идея или #тема/подтема, задача: - [ ] дело"
               rows={1}
             />
           </>
@@ -538,6 +537,19 @@ export function NoteEditorPage() {
         )}
 
         {mode === 'view' && hasTasks && <TaskProgress body={body} />}
+
+        {mode === 'view' && note && (
+          <button
+            className="btn btn--ghost btn--block note-graph-link"
+            onClick={() => {
+              tapLight();
+              persistRef.current();
+              navigate(`/notes/graph?focus=${note.id}`);
+            }}
+          >
+            <IconGraph size={17} /> Граф вокруг заметки
+          </button>
+        )}
 
         {(linkedPeople.length > 0 || note) && (
           <div className="notes-relations notes-relations--editor">
