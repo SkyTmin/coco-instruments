@@ -183,8 +183,6 @@ export function NoteEditorPage() {
     return people.filter((person) => personIds.has(person.id));
   }, [id, people, personNoteLinks]);
 
-  if (id && hydrated && !existing && !deleted.current) return <Navigate to="/notes" replace />;
-
   // ---- wiki-link autocomplete ----------------------------------------------
   const syncWiki = (value: string, caret: number) => {
     const before = value.slice(0, caret);
@@ -244,6 +242,10 @@ export function NoteEditorPage() {
 
   // ---- attachments ----------------------------------------------------------
   const cropImages = useCrop();
+
+  // Deep link to a deleted/missing note → bounce. Placed after every hook so the
+  // hook order never changes between renders (Rules of Hooks).
+  if (id && hydrated && !existing && !deleted.current) return <Navigate to="/notes" replace />;
 
   const addFiles = async (files: FileList | null) => {
     if (!files?.length) return;

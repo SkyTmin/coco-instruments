@@ -238,7 +238,7 @@ export function NotesGraphPage() {
     const seed = previous.length ? new Map(previous.map((p) => [p.id, { x: p.x, y: p.y }])) : undefined;
     setPoints(layoutNoteGraph(graphNow, activeIdRef.current, sizeRef.current, seed, pinnedRef.current));
     kick(seed ? 0.6 : 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [layoutKey, kick]);
 
   const pointById = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);

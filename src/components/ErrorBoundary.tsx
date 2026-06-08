@@ -13,7 +13,6 @@ export class ErrorBoundary extends Component<PropsWithChildren, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // eslint-disable-next-line no-console
     console.error('Unhandled error:', error, info);
     logError({ kind: 'react', message: error.message, stack: error.stack });
   }

@@ -58,7 +58,7 @@ if (import.meta.env.DEV) {
       ]),
     });
 
-    // eslint-disable-next-line no-console
+     
     console.info('⚠️ Telegram environment mocked for local development.');
   }
 }
