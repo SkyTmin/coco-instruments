@@ -165,6 +165,31 @@ const persistFitting = (itemIds: string[]) => writeFitting({ version: 1, itemIds
 const persistWishlist = (items: WishItem[]) => writeWishlist({ version: 1, items });
 const persistSizes = (items: SizeEntry[]) => writeSizes({ version: 1, items });
 
+// ---- Full data export / import (user-controlled backup) -------------------
+interface ExportData {
+  expenses?: Obligation[];
+  savings?: SavingsGoal[];
+  recurring?: RecurringPayment[];
+  lists?: ExpenseList[];
+  notes?: Note[];
+  people?: Partial<Omit<PeopleBlob, 'version'>>;
+  calculator?: { history?: CalculatorHistoryEntry[]; prefs?: Partial<CalculatorPrefs> };
+  wardrobe?: WardrobeItem[];
+  outfits?: Outfit[];
+  collections?: Collection[];
+  inspiration?: InspirationImage[];
+  fitting?: string[];
+  wishlist?: WishItem[];
+  sizes?: SizeEntry[];
+  reminderPrefs?: Partial<ReminderPrefs>;
+}
+export interface ExportBundle {
+  app: string;
+  version: number;
+  exportedAt: number;
+  data: ExportData;
+}
+
 interface FinanceState {
   expenses: Obligation[];
   savings: SavingsGoal[];
@@ -254,6 +279,8 @@ interface FinanceState {
   addCalculatorHistory: (expression: string, result: string, value: number) => void;
   clearCalculatorHistory: () => void;
   setCalculatorPrefs: (patch: Partial<CalculatorPrefs>) => void;
+  exportAll: () => ExportBundle;
+  importAll: (payload: unknown) => boolean;
 
   addItem: (draft: WardrobeItemDraft) => WardrobeItem;
   updateItem: (id: string, patch: Partial<WardrobeItem>) => void;
@@ -881,6 +908,81 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const calculatorPrefs = { ...get().calculatorPrefs, ...patch };
     set({ calculatorPrefs });
     persistCalculator(get().calculatorHistory, calculatorPrefs);
+  },
+
+  exportAll: () => {
+    const s = get();
+    return {
+      app: 'coco',
+      version: 1,
+      exportedAt: Date.now(),
+      data: {
+        expenses: s.expenses,
+        savings: s.savings,
+        recurring: s.recurring,
+        lists: s.lists,
+        notes: s.notes,
+        people: peopleSnapshot(s),
+        calculator: { history: s.calculatorHistory, prefs: s.calculatorPrefs },
+        wardrobe: s.wardrobe,
+        outfits: s.outfits,
+        collections: s.collections,
+        inspiration: s.inspiration,
+        fitting: s.fitting,
+        wishlist: s.wishlist,
+        sizes: s.sizes,
+        reminderPrefs: s.reminderPrefs,
+      },
+    };
+  },
+
+  importAll: (payload) => {
+    const bundle = payload as Partial<ExportBundle> | null;
+    const d = bundle?.data;
+    if (!d || typeof d !== 'object' || bundle?.app !== 'coco') return false;
+    const ppl = d.people ?? {};
+    set({
+      expenses: d.expenses ?? [],
+      savings: d.savings ?? [],
+      recurring: d.recurring ?? [],
+      lists: d.lists ?? [],
+      notes: d.notes ?? [],
+      people: ppl.people ?? [],
+      preferences: ppl.preferences ?? [],
+      gifts: ppl.gifts ?? [],
+      conversations: ppl.conversations ?? [],
+      promises: ppl.promises ?? [],
+      meetIdeas: ppl.meetIdeas ?? [],
+      personRelations: ppl.relations ?? [],
+      personNoteLinks: ppl.noteLinks ?? [],
+      calculatorHistory: d.calculator?.history ?? [],
+      calculatorPrefs: { ...DEFAULT_CALCULATOR_PREFS, ...(d.calculator?.prefs ?? {}) },
+      wardrobe: d.wardrobe ?? [],
+      outfits: d.outfits ?? [],
+      collections: d.collections ?? [],
+      inspiration: d.inspiration ?? [],
+      fitting: d.fitting ?? [],
+      wishlist: d.wishlist ?? [],
+      sizes: d.sizes ?? [],
+      reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
+    });
+    const st = get();
+    persistExpenses(st.expenses);
+    persistSavings(st.savings);
+    persistRecurring(st.recurring);
+    persistLists(st.lists);
+    persistNotes(st.notes);
+    persistPeople(peopleSnapshot(st));
+    persistCalculator(st.calculatorHistory, st.calculatorPrefs);
+    persistWardrobe(st.wardrobe);
+    persistOutfits(st.outfits);
+    persistCollections(st.collections);
+    persistInspiration(st.inspiration);
+    persistFitting(st.fitting);
+    persistWishlist(st.wishlist);
+    persistSizes(st.sizes);
+    persistReminderPrefs(st.reminderPrefs);
+    return true;
   },
 
   addItem: (draft) => {

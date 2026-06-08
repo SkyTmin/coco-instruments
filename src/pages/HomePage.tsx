@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatedNumber, Screen, Skeleton } from '@/components/ui';
 import { IconCalculator, IconHeart, IconNotes, IconShirt, IconWallet } from '@/components/icons';
@@ -32,6 +32,8 @@ export function HomePage() {
   const calculatorHistory = useFinanceStore((s) => s.calculatorHistory);
   const calculatorPrefs = useFinanceStore((s) => s.calculatorPrefs);
   const hydrated = useFinanceStore((s) => s.hydrated);
+  const exportAll = useFinanceStore((s) => s.exportAll);
+  const importAll = useFinanceStore((s) => s.importAll);
 
   const fin = useMemo(() => {
     let monthly = 0;
@@ -100,6 +102,38 @@ export function HomePage() {
       notifySuccess();
     } else {
       setBackupMsg('Не получилось запросить копию — попробуй ещё раз.');
+      notifyWarning();
+    }
+  };
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const doExport = () => {
+    tapLight();
+    const blob = new Blob([JSON.stringify(exportAll())], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `coco-data-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setBackupMsg('Файл с данными сохранён.');
+  };
+  const doImport = async (file: File | undefined) => {
+    if (!file) return;
+    if (!window.confirm('Импорт заменит ВСЕ текущие данные данными из файла. Продолжить?')) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (importAll(data)) {
+        setBackupMsg('Данные импортированы ✅');
+        notifySuccess();
+      } else {
+        setBackupMsg('Это не похоже на файл экспорта Coco.');
+        notifyWarning();
+      }
+    } catch {
+      setBackupMsg('Не удалось прочитать файл.');
       notifyWarning();
     }
   };
@@ -253,11 +287,29 @@ export function HomePage() {
           <button className="btn btn--block" type="button" onClick={doBackup} disabled={backupBusy}>
             {backupBusy ? 'Запрашиваю…' : '🗄 Прислать резервную копию в Telegram'}
           </button>
+          <div className="home-backup__row">
+            <button className="btn btn--ghost" type="button" onClick={doExport}>
+              Экспорт в файл
+            </button>
+            <button className="btn btn--ghost" type="button" onClick={() => fileRef.current?.click()}>
+              Импорт из файла
+            </button>
+          </div>
           {backupMsg && <p className="home-backup__msg">{backupMsg}</p>}
           <p className="home-backup__hint">
-            Видно только тебе (владельцу). Резервная копия всех данных придёт файлом в чат с ботом, плюс
-            автоматически раз в день.
+            Видно только тебе (владельцу). Копия придёт файлом в чат с ботом (плюс автоматически раз в день).
+            Экспорт/импорт — резервная копия в файл на устройстве.
           </p>
+          <input
+            ref={fileRef}
+            hidden
+            type="file"
+            accept="application/json,.json"
+            onChange={(e) => {
+              void doImport(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
         </div>
       )}
     </Screen>

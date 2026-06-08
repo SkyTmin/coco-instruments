@@ -200,6 +200,7 @@ select {
 .home-card__icon svg { width: 26px; height: 26px; }
 
 .home-backup { margin-top: 22px; }
+.home-backup__row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .home-backup__msg { margin: 10px 2px 0; font-size: 14px; font-weight: 700; color: var(--accent); }
 .home-backup__hint { margin: 8px 2px 0; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
 .home-card__body { margin-top: auto; }
