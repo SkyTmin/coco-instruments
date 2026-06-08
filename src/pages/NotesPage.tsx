@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { EmptyState, Screen, Skeleton, StatTile, SwipeRow } from '@/components/ui';
-import { IconGraph, IconNotes, IconTrash } from '@/components/icons';
+import { IconGraph, IconList, IconNotes, IconTrash } from '@/components/icons';
 import type { Note } from '@/types';
 import { useFinanceStore } from '@/store';
 import { buildNoteGraph, normalizeNoteTitle, parseNoteTags } from '@/lib/notes-graph';
@@ -88,6 +88,10 @@ export function NotesPage() {
           <button className="notes-action notes-action--primary" onClick={() => go('/notes/new')}>
             <IconNotes />
             <span>Новая заметка</span>
+          </button>
+          <button className="notes-action" onClick={() => go('/notes/lists')}>
+            <IconList />
+            <span>Списки</span>
           </button>
           <button className="notes-action" onClick={() => go('/notes/graph')}>
             <IconGraph />

@@ -8,6 +8,7 @@ import type { GraphSize, NoteGraphLink, NoteGraphPoint } from '@/lib/notes-graph
 import {
   GRAPH_VIEW_BOX,
   buildNoteGraph,
+  buildOverviewGraph,
   filterNoteGraph,
   layoutNoteGraph,
   personNodeId,
@@ -51,6 +52,7 @@ export function NotesGraphPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const notes = useFinanceStore((s) => s.notes);
+  const noteLists = useFinanceStore((s) => s.noteLists);
   const people = useFinanceStore((s) => s.people);
   const gifts = useFinanceStore((s) => s.gifts);
   const promises = useFinanceStore((s) => s.promises);
@@ -59,19 +61,18 @@ export function NotesGraphPage() {
   const relations = useFinanceStore((s) => s.personRelations);
   const noteLinks = useFinanceStore((s) => s.personNoteLinks);
   const personParam = params.get('person');
-  const graph = useMemo(
-    () =>
-      buildNoteGraph(notes, {
-        people,
-        gifts,
-        promises,
-        conversations,
-        meetIdeas,
-        relations,
-        noteLinks,
-      }),
-    [conversations, gifts, meetIdeas, noteLinks, notes, people, promises, relations],
-  );
+  const listParam = params.get('list');
+  const activeList = listParam ? noteLists.find((l) => l.id === listParam) : undefined;
+  const graph = useMemo(() => {
+    // A single notebook's inner graph.
+    if (listParam) return buildNoteGraph(notes.filter((n) => n.listId === listParam));
+    // Person-centric view (opened from the People section).
+    if (personParam) {
+      return buildNoteGraph(notes, { people, gifts, promises, conversations, meetIdeas, relations, noteLinks });
+    }
+    // Default overview: notebooks collapse to one node each, plus loose notes.
+    return buildOverviewGraph(notes, noteLists);
+  }, [listParam, personParam, conversations, gifts, meetIdeas, noteLinks, noteLists, notes, people, promises, relations]);
   const [activeId, setActiveId] = useState<string | undefined>(
     personParam ? personNodeId(personParam) : notes[0]?.id,
   );
@@ -446,6 +447,7 @@ export function NotesGraphPage() {
           const point = pointByIdRef.current.get(id);
           if (point?.kind === 'note') navigate(`/notes/${id}`);
           if (point?.kind === 'person' && point.person) navigate(`/people/${point.person.id}`);
+          if (point?.kind === 'list' && point.list) navigate(`/notes/graph?list=${point.list.id}`);
         }
       }
       if (pointers.current.size === 0) {
@@ -483,9 +485,17 @@ export function NotesGraphPage() {
   };
 
   return (
-    <Screen title="Граф связей" subtitle={activeNode ? activeNode.label : 'Вся база'}>
+    <Screen
+      title={activeList ? `Список: ${activeList.name}` : 'Граф связей'}
+      subtitle={activeList ? 'Заметки и связи этого списка' : activeNode ? activeNode.label : 'Списки и заметки'}
+    >
       <div className="stack notes-page notes-graph-screen">
         <div className="card notes-graph-controls">
+          {activeList && (
+            <button className="btn btn--ghost btn--block" onClick={() => { selectionChanged(); navigate('/notes/graph'); }}>
+              ← Все списки и заметки
+            </button>
+          )}
           <div className="segmented">
             <button
               className={`segmented__opt${mode === 'global' ? ' is-active' : ''}`}
@@ -566,6 +576,10 @@ export function NotesGraphPage() {
                   <linearGradient id="personNodeGradientInteractive" x1="0" x2="1" y1="0" y2="1">
                     <stop offset="0%" stopColor="#ee7f8f" />
                     <stop offset="100%" stopColor="#f2b37e" />
+                  </linearGradient>
+                  <linearGradient id="listNodeGradientInteractive" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" />
+                    <stop offset="100%" stopColor="#6366f1" />
                   </linearGradient>
                 </defs>
                 <g transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}>

@@ -882,6 +882,46 @@ input[type='datetime-local'] {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+/* "Новая заметка" spans the top; "Списки" + "Граф" share the row below. */
+.notes-actions .notes-action--primary { grid-column: 1 / -1; }
+
+/* ---- note lists (notebooks) ---------------------------------------------- */
+.note-list-emoji { display: flex; flex-wrap: wrap; gap: 6px; }
+.note-list-emoji__btn {
+  width: 40px; height: 40px; border: 0; border-radius: 12px;
+  background: var(--surface-2); font-size: 20px; cursor: pointer;
+  display: grid; place-items: center; transition: transform 0.1s ease;
+}
+.note-list-emoji__btn.is-active { background: color-mix(in srgb, var(--accent) 22%, var(--surface-2)); box-shadow: 0 0 0 2px var(--accent); }
+.note-list-emoji__btn:active { transform: scale(0.9); }
+
+.note-list-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-sm);
+}
+.note-list-row__emoji {
+  width: 44px; height: 44px; flex: 0 0 auto;
+  display: grid; place-items: center; font-size: 24px;
+  border-radius: 13px; background: var(--surface-2);
+}
+.note-list-row__main { flex: 1; min-width: 0; }
+.note-list-row__name { font-size: 16px; font-weight: 800; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-list-row__sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.note-list-row__chevron { color: var(--muted); font-size: 22px; }
+
+/* list picker inside the note editor */
+.note-list-pick { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.note-list-pick::-webkit-scrollbar { display: none; }
+.note-list-pick__chip {
+  flex: 0 0 auto; border: 0; cursor: pointer;
+  padding: 7px 14px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted);
+  font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.note-list-pick__chip.is-active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent);
+}
 
 .notes-action {
   border: 0;
@@ -2448,6 +2488,15 @@ input[type='datetime-local'] {
   fill: rgba(90, 128, 196, 0.22);
   stroke: #6e8efb;
 }
+/* Notebooks: bold violet "container" nodes — tap to open the list's graph. */
+.notes-graph__node--list { cursor: pointer; }
+.notes-graph__node--list circle {
+  fill: url(#listNodeGradientInteractive);
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 2.4px;
+}
+.notes-graph__node--list .notes-graph__halo { fill: rgba(139, 92, 246, 0.18); }
+.notes-graph__node--list .notes-graph__label { font-weight: 800; fill: var(--text); }
 
 /* Notes are the stars of this graph: cool teal, big, softly glowing. */
 .notes-graph--interactive .notes-graph__node--note circle {

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ConfirmDialog, Screen, Sheet } from '@/components/ui';
 import { NoteMarkdown } from '@/components/NoteMarkdown';
 import { useCrop } from '@/components/CropProvider';
@@ -47,7 +47,9 @@ const emptyAttachments: NoteAttachment[] = [];
 export function NoteEditorPage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const notes = useFinanceStore((s) => s.notes);
+  const noteLists = useFinanceStore((s) => s.noteLists);
   const existing = useFinanceStore((s) => (id ? s.getNote(id) : undefined));
   const hydrated = useFinanceStore((s) => s.hydrated);
   const addNote = useFinanceStore((s) => s.addNote);
@@ -70,6 +72,10 @@ export function NoteEditorPage() {
   const [attachmentError, setAttachmentError] = useState('');
   const [wiki, setWiki] = useState<{ start: number; query: string } | null>(null);
   const [peopleSheet, setPeopleSheet] = useState(false);
+  // Which notebook/list this note belongs to (from ?list= for new notes).
+  const [listId, setListId] = useState<string | undefined>(existing?.listId ?? searchParams.get('list') ?? undefined);
+  const listIdRef = useRef(listId);
+  listIdRef.current = listId;
 
   // Refs that mirror state so the unmount flush can read the latest values.
   const latest = useRef({ title, body, attachments });
@@ -92,6 +98,7 @@ export function NoteEditorPage() {
     setTitle(existing.title);
     setBody(existing.body);
     setAttachments(existing.attachments ?? emptyAttachments);
+    setListId(existing.listId);
     setMode('view');
     savedSnapshot.current = JSON.stringify({
       title: existing.title,
@@ -129,9 +136,9 @@ export function NoteEditorPage() {
     );
     if (dup) return;
     if (currentId.current) {
-      state.updateNote(currentId.current, { title: trimmed, body: b, attachments: a });
+      state.updateNote(currentId.current, { title: trimmed, body: b, attachments: a, listId: listIdRef.current });
     } else {
-      const created = state.addNote({ title: trimmed, body: b, attachments: a });
+      const created = state.addNote({ title: trimmed, body: b, attachments: a, listId: listIdRef.current });
       currentId.current = created.id;
       loadedId.current = created.id;
       navigate(`/notes/${created.id}`, { replace: true });
@@ -312,9 +319,17 @@ export function NoteEditorPage() {
 
   const openMissing = (linkTitle: string) => {
     persistRef.current();
-    const created = useFinanceStore.getState().addNote({ title: linkTitle, body: '' });
+    // A note created from a [[link]] inherits the current note's list, so linked
+    // notes stay together in the same notebook.
+    const created = useFinanceStore.getState().addNote({ title: linkTitle, body: '', listId: listIdRef.current });
     notifySuccess();
     navigate(`/notes/${created.id}`);
+  };
+
+  const pickList = (newListId: string | undefined) => {
+    selectionChanged();
+    setListId(newListId);
+    if (currentId.current) updateNote(currentId.current, { listId: newListId });
   };
 
   const finishEditing = () => {
@@ -405,6 +420,29 @@ export function NoteEditorPage() {
               autoFocus={!id}
             />
             {hasDuplicate && <div className="notes-error">Такое название уже есть</div>}
+
+            {noteLists.length > 0 && (
+              <div className="note-list-pick">
+                <button
+                  type="button"
+                  className={`note-list-pick__chip${!listId ? ' is-active' : ''}`}
+                  onClick={() => pickList(undefined)}
+                >
+                  Без списка
+                </button>
+                {noteLists.map((l) => (
+                  <button
+                    type="button"
+                    key={l.id}
+                    className={`note-list-pick__chip${listId === l.id ? ' is-active' : ''}`}
+                    onClick={() => pickList(l.id)}
+                  >
+                    {l.emoji ? `${l.emoji} ` : ''}
+                    {l.name}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <textarea
               ref={bodyRef}

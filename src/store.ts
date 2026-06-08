@@ -13,6 +13,7 @@ import type {
   Collection,
   InspirationImage,
   Note,
+  NoteList,
   NotesBlob,
   Obligation,
   Outfit,
@@ -152,7 +153,7 @@ const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, ite
 const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, items });
 const persistRecurring = (items: RecurringPayment[]) => writeRecurring({ version: 1, items });
 const persistLists = (items: ExpenseList[]) => writeLists({ version: 1, items });
-const persistNotes = (items: Note[]) => writeNotes({ version: 1, items });
+const persistNotes = (items: Note[], lists: NoteList[]) => writeNotes({ version: 1, items, lists });
 const persistPeople = (blob: Omit<PeopleBlob, 'version'>) => writePeople({ version: 1, ...blob });
 const persistCalculator = (history: CalculatorHistoryEntry[], prefs: CalculatorPrefs) =>
   writeCalculator({ version: 1, history, prefs });
@@ -172,6 +173,7 @@ interface ExportData {
   recurring?: RecurringPayment[];
   lists?: ExpenseList[];
   notes?: Note[];
+  noteLists?: NoteList[];
   people?: Partial<Omit<PeopleBlob, 'version'>>;
   calculator?: { history?: CalculatorHistoryEntry[]; prefs?: Partial<CalculatorPrefs> };
   wardrobe?: WardrobeItem[];
@@ -196,6 +198,7 @@ interface FinanceState {
   recurring: RecurringPayment[];
   lists: ExpenseList[];
   notes: Note[];
+  noteLists: NoteList[];
   people: Person[];
   preferences: Preference[];
   gifts: Gift[];
@@ -246,6 +249,10 @@ interface FinanceState {
   updateNote: (id: string, patch: Partial<Note>) => void;
   removeNote: (id: string) => void;
   getNote: (id: string) => Note | undefined;
+  addNoteList: (name: string, emoji?: string) => NoteList;
+  updateNoteList: (id: string, patch: Partial<Pick<NoteList, 'name' | 'emoji'>>) => void;
+  removeNoteList: (id: string, deleteNotes?: boolean) => void;
+  getNoteList: (id: string) => NoteList | undefined;
 
   addPerson: (draft: PersonDraft) => Person;
   updatePerson: (id: string, patch: Partial<Person>) => void;
@@ -333,6 +340,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   recurring: [],
   lists: [],
   notes: [],
+  noteLists: [],
   people: [],
   preferences: [],
   gifts: [],
@@ -379,6 +387,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       recurring: rec?.items ?? [],
       lists: lists?.items ?? [],
       notes: notes?.items ?? [],
+      noteLists: notes?.lists ?? [],
       people: people?.people ?? [],
       preferences: people?.preferences ?? [],
       gifts: people?.gifts ?? [],
@@ -554,7 +563,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     };
     const notes = [note, ...get().notes];
     set({ notes });
-    persistNotes(notes);
+    persistNotes(notes, get().noteLists);
     return note;
   },
 
@@ -571,18 +580,61 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         : n,
     );
     set({ notes });
-    persistNotes(notes);
+    persistNotes(notes, get().noteLists);
   },
 
   removeNote: (id) => {
     const notes = get().notes.filter((n) => n.id !== id);
     const personNoteLinks = get().personNoteLinks.filter((link) => link.noteId !== id);
     set({ notes, personNoteLinks });
-    persistNotes(notes);
+    persistNotes(notes, get().noteLists);
     persistPeople(peopleSnapshot(get()));
   },
 
   getNote: (id) => get().notes.find((n) => n.id === id),
+
+  addNoteList: (name, emoji) => {
+    const now = Date.now();
+    const list: NoteList = { id: genId(), name: name.trim() || 'Список', emoji, createdAt: now, updatedAt: now };
+    const noteLists = [list, ...get().noteLists];
+    set({ noteLists });
+    persistNotes(get().notes, noteLists);
+    return list;
+  },
+
+  updateNoteList: (id, patch) => {
+    const noteLists = get().noteLists.map((l) =>
+      l.id === id
+        ? {
+            ...l,
+            name: patch.name !== undefined ? patch.name.trim() || l.name : l.name,
+            emoji: patch.emoji !== undefined ? patch.emoji || undefined : l.emoji,
+            updatedAt: Date.now(),
+          }
+        : l,
+    );
+    set({ noteLists });
+    persistNotes(get().notes, noteLists);
+  },
+
+  removeNoteList: (id, deleteNotes = false) => {
+    const noteLists = get().noteLists.filter((l) => l.id !== id);
+    let notes = get().notes;
+    let personNoteLinks = get().personNoteLinks;
+    if (deleteNotes) {
+      const goneIds = new Set(notes.filter((n) => n.listId === id).map((n) => n.id));
+      notes = notes.filter((n) => !goneIds.has(n.id));
+      personNoteLinks = personNoteLinks.filter((link) => !goneIds.has(link.noteId));
+    } else {
+      // Keep the notes, just detach them from the (now gone) list.
+      notes = notes.map((n) => (n.listId === id ? { ...n, listId: undefined } : n));
+    }
+    set({ noteLists, notes, personNoteLinks });
+    persistNotes(notes, noteLists);
+    if (deleteNotes) persistPeople(peopleSnapshot(get()));
+  },
+
+  getNoteList: (id) => get().noteLists.find((l) => l.id === id),
 
   addPerson: (draft) => {
     const now = Date.now();
@@ -922,6 +974,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         recurring: s.recurring,
         lists: s.lists,
         notes: s.notes,
+        noteLists: s.noteLists,
         people: peopleSnapshot(s),
         calculator: { history: s.calculatorHistory, prefs: s.calculatorPrefs },
         wardrobe: s.wardrobe,
@@ -947,6 +1000,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       recurring: d.recurring ?? [],
       lists: d.lists ?? [],
       notes: d.notes ?? [],
+      noteLists: d.noteLists ?? [],
       people: ppl.people ?? [],
       preferences: ppl.preferences ?? [],
       gifts: ppl.gifts ?? [],
@@ -971,7 +1025,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistSavings(st.savings);
     persistRecurring(st.recurring);
     persistLists(st.lists);
-    persistNotes(st.notes);
+    persistNotes(st.notes, st.noteLists);
     persistPeople(peopleSnapshot(st));
     persistCalculator(st.calculatorHistory, st.calculatorPrefs);
     persistWardrobe(st.wardrobe);

@@ -211,6 +211,17 @@ export interface Note {
   title: string;
   body: string;
   attachments?: NoteAttachment[];
+  /** Optional notebook/list this note belongs to. */
+  listId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A notebook: a named group of notes with its own graph. */
+export interface NoteList {
+  id: string;
+  name: string;
+  emoji?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -231,6 +242,7 @@ export type NoteAttachment = Attachment;
 export interface NotesBlob {
   version: 1;
   items: Note[];
+  lists?: NoteList[];
 }
 
 // ---- People: personal relationship base ----------------------------------

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Note } from '@/types';
 import {
   buildNoteGraph,
+  buildOverviewGraph,
   filterNoteGraph,
   getNoteRelations,
   layoutNoteGraph,
@@ -11,9 +12,39 @@ import {
   personNodeId,
 } from './notes-graph';
 
-function note(id: string, title: string, body: string): Note {
-  return { id, title, body, createdAt: 0, updatedAt: 0 };
+function note(id: string, title: string, body: string, listId?: string): Note {
+  return { id, title, body, listId, createdAt: 0, updatedAt: 0 };
 }
+
+describe('overview graph (notebooks)', () => {
+  const lists = [{ id: 'health', name: 'Здоровье', createdAt: 0, updatedAt: 0 }];
+  const notes = [
+    note('a1', 'Горло', '#таблетки [[Насморк]]', 'health'),
+    note('a2', 'Насморк', '#капли', 'health'),
+    note('l1', 'Идея', 'смотри [[Горло]]'), // loose (no list)
+  ];
+  const g = buildOverviewGraph(notes, lists);
+
+  it('collapses a list into one node with a note count', () => {
+    const listNode = g.nodes.find((n) => n.id === 'list:health');
+    expect(listNode?.kind).toBe('list');
+    expect(listNode?.count).toBe(2);
+    // member notes are NOT individual nodes
+    expect(g.nodes.some((n) => n.id === 'a1')).toBe(false);
+    expect(g.nodes.some((n) => n.id === 'a2')).toBe(false);
+  });
+
+  it('keeps loose notes and redirects links to list nodes', () => {
+    expect(g.nodes.some((n) => n.id === 'l1' && n.kind === 'note')).toBe(true);
+    // loose note → note inside the list → link points at the list node
+    expect(g.links.some((l) => l.source === 'l1' && l.target === 'list:health' && l.kind === 'wiki')).toBe(true);
+    // wiki between two notes of the same list collapses to a self-link → dropped
+    expect(g.links.some((l) => l.source === 'list:health' && l.target === 'list:health')).toBe(false);
+    // the list connects to the tags of its notes
+    expect(g.links.some((l) => l.source === 'list:health' && l.kind === 'tag')).toBe(true);
+    expect(g.nodes.some((n) => n.id === 'tag:таблетки')).toBe(true);
+  });
+});
 
 describe('notes graph', () => {
   it('parses wiki links, aliases, headings and tags', () => {
