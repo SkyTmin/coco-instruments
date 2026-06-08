@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatedNumber, Screen, Skeleton } from '@/components/ui';
 import { IconCalculator, IconHeart, IconNotes, IconShirt, IconWallet } from '@/components/icons';
@@ -7,7 +7,7 @@ import { collectPayments, computeObligation, computeRecurring } from '@/lib/fina
 import { toISO, todayISO } from '@/lib/date';
 import { formatRUB, pluralizeRu, relativeDay } from '@/lib/format';
 import { nextBirthday, peopleStats, peopleUpcomingEvents, peopleWord } from '@/lib/people';
-import { requestTelegramBackup } from '@/lib/backup';
+import { getBackupStatus, requestTelegramBackup } from '@/lib/backup';
 import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
 
 function notesWord(n: number): string {
@@ -77,6 +77,15 @@ export function HomePage() {
     tapLight();
     navigate(path);
   };
+
+  const [isOwner, setIsOwner] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void getBackupStatus().then((s) => alive && setIsOwner(s.owner));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupMsg, setBackupMsg] = useState('');
@@ -239,13 +248,18 @@ export function HomePage() {
         </div>
       </div>
 
-      <div className="home-backup">
-        <button className="btn btn--block" type="button" onClick={doBackup} disabled={backupBusy}>
-          {backupBusy ? 'Запрашиваю…' : '🗄 Прислать резервную копию в Telegram'}
-        </button>
-        {backupMsg && <p className="home-backup__msg">{backupMsg}</p>}
-        <p className="home-backup__hint">Резервная копия всех данных придёт файлом тебе в чат с ботом.</p>
-      </div>
+      {isOwner && (
+        <div className="home-backup">
+          <button className="btn btn--block" type="button" onClick={doBackup} disabled={backupBusy}>
+            {backupBusy ? 'Запрашиваю…' : '🗄 Прислать резервную копию в Telegram'}
+          </button>
+          {backupMsg && <p className="home-backup__msg">{backupMsg}</p>}
+          <p className="home-backup__hint">
+            Видно только тебе (владельцу). Резервная копия всех данных придёт файлом в чат с ботом, плюс
+            автоматически раз в день.
+          </p>
+        </div>
+      )}
     </Screen>
   );
 }

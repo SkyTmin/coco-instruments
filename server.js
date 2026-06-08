@@ -682,6 +682,15 @@ app.post('/api/backup/request', async (req, res) => {
   res.json({ ok: true, dispatched: dispatched.ok, error: dispatched.error });
 });
 
+// Is this user the backup owner? (Used to show the backup control only to the
+// owner.) True for the configured admin, or for anyone while none is set yet.
+app.post('/api/backup/status', (req, res) => {
+  const user = authReminder(req.body?.initData, res);
+  if (!user) return;
+  const admin = getAdminChatId();
+  res.json({ owner: !admin || String(admin) === String(user.id), configured: !!admin });
+});
+
 // Telegram fetches a freshly-made backup here via a single-use, short-lived
 // token (handed to it in the /backup webhook reply). Random token + 10-min TTL.
 app.get('/api/backup/file/:token', (req, res) => {
