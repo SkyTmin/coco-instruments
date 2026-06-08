@@ -2479,6 +2479,26 @@ input[type='datetime-local'] {
   color: #b65d68;
 }
 
+/* Linked-person chip: tap the name to open, tap × to detach. */
+.note-chip--detach { padding: 0; gap: 0; overflow: hidden; }
+.note-chip--detach .note-chip__open {
+  border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 5px 6px 11px;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.note-chip__detach {
+  border: 0; background: transparent; color: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 6px 10px 6px 4px; font-size: 16px; line-height: 1; opacity: 0.6;
+}
+.note-chip__detach:active { opacity: 1; background: color-mix(in srgb, #b65d68 16%, transparent); }
+
+/* Link/unlink action label inside the "Связать людей" sheet. */
+.note-link-toggle { font-size: 13px; font-weight: 700; color: var(--accent); }
+.note-link-toggle.is-on { color: var(--muted); }
+.flow-row.is-linked { background: color-mix(in srgb, #b65d68 7%, transparent); }
+
 .notes-graph-controls .notes-toolbar {
   grid-template-columns: minmax(0, 1fr) repeat(4, auto);
 }

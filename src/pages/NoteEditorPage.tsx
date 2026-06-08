@@ -316,6 +316,13 @@ export function NoteEditorPage() {
     setPeopleSheet(true);
   };
 
+  // Detach a person right from the chip (re-linking is one tap in the sheet).
+  const detachPerson = (personId: string) => {
+    if (!currentId.current) return;
+    unlinkNoteFromPerson(personId, currentId.current);
+    selectionChanged();
+  };
+
   const openMissing = (linkTitle: string) => {
     persistRef.current();
     // A note created from a [[link]] inherits the current note's list, so linked
@@ -557,16 +564,26 @@ export function NoteEditorPage() {
               <span>Люди</span>
               <div>
                 {linkedPeople.map((person) => (
-                  <button
-                    key={person.id}
-                    className="note-chip note-chip--person"
-                    onClick={() => {
-                      persistRef.current();
-                      navigate(`/people/${person.id}`);
-                    }}
-                  >
-                    <IconHeart size={13} /> {person.name}
-                  </button>
+                  <span key={person.id} className="note-chip note-chip--person note-chip--detach">
+                    <button
+                      type="button"
+                      className="note-chip__open"
+                      onClick={() => {
+                        persistRef.current();
+                        navigate(`/people/${person.id}`);
+                      }}
+                    >
+                      <IconHeart size={13} /> {person.name}
+                    </button>
+                    <button
+                      type="button"
+                      className="note-chip__detach"
+                      onClick={() => detachPerson(person.id)}
+                      aria-label={`Отвязать ${person.name}`}
+                    >
+                      ×
+                    </button>
+                  </span>
                 ))}
                 {people.length > 0 && (
                   <button className="note-chip note-chip--new" onClick={openPeopleSheet}>
@@ -672,7 +689,7 @@ export function NoteEditorPage() {
       )}
 
       {peopleSheet && currentId.current && (
-        <Sheet title="Связанные люди" onClose={() => setPeopleSheet(false)}>
+        <Sheet title="Связать и отвязать людей" onClose={() => setPeopleSheet(false)}>
           <div className="sheet-list">
             {people.map((person) => {
               const linked = personNoteLinks.some(
@@ -681,7 +698,7 @@ export function NoteEditorPage() {
               return (
                 <button
                   key={person.id}
-                  className="flow-row"
+                  className={`flow-row${linked ? ' is-linked' : ''}`}
                   onClick={() => {
                     if (!currentId.current) return;
                     if (linked) unlinkNoteFromPerson(person.id, currentId.current);
@@ -689,8 +706,13 @@ export function NoteEditorPage() {
                     selectionChanged();
                   }}
                 >
-                  <span className="flow-row__name">{person.name}</span>
-                  <span className="flow-row__amount">{linked ? '✓' : '+'}</span>
+                  <span className="flow-row__name">
+                    {linked ? '💛 ' : ''}
+                    {person.name}
+                  </span>
+                  <span className={`note-link-toggle${linked ? ' is-on' : ''}`}>
+                    {linked ? 'Отвязать' : 'Связать'}
+                  </span>
                 </button>
               );
             })}
