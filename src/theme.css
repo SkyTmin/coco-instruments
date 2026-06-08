@@ -136,6 +136,7 @@ select {
   font-size: 14px;
 }
 
+.route-fallback { min-height: 70vh; }
 .stack { display: flex; flex-direction: column; gap: 12px; }
 .row { display: flex; align-items: center; gap: 10px; }
 .spacer { flex: 1; }

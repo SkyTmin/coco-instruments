@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import {
   HashRouter,
   Navigate,
@@ -16,47 +16,49 @@ import { syncReminders } from '@/lib/reminders';
 import { tapLight } from '@/lib/haptics';
 
 import { HomePage } from '@/pages/HomePage';
-import { ClothingDashboardPage } from '@/pages/clothing/ClothingDashboardPage';
-import { ComposePage } from '@/pages/clothing/ComposePage';
-import { ComparePage } from '@/pages/clothing/ComparePage';
-import { WardrobePage } from '@/pages/clothing/WardrobePage';
-import { WardrobeItemFormPage } from '@/pages/clothing/WardrobeItemFormPage';
-import { WardrobeItemDetailPage } from '@/pages/clothing/WardrobeItemDetailPage';
-import { OutfitsPage } from '@/pages/clothing/OutfitsPage';
-import { OutfitFormPage } from '@/pages/clothing/OutfitFormPage';
-import { OutfitDetailPage } from '@/pages/clothing/OutfitDetailPage';
-import { OutfitBuilderPage } from '@/pages/clothing/OutfitBuilderPage';
-import { CollectionsPage } from '@/pages/clothing/CollectionsPage';
-import { CollectionFormPage } from '@/pages/clothing/CollectionFormPage';
-import { CollectionDetailPage } from '@/pages/clothing/CollectionDetailPage';
-import { InspirationPage } from '@/pages/clothing/InspirationPage';
-import { SizesPage } from '@/pages/clothing/SizesPage';
-import { WishlistPage } from '@/pages/clothing/WishlistPage';
-import { WishFormPage } from '@/pages/clothing/WishFormPage';
-import { CalculatorPage } from '@/pages/CalculatorPage';
-import { FormulasPage } from '@/pages/FormulasPage';
-import { FormulaDetailPage } from '@/pages/FormulaDetailPage';
 import { CropProvider } from '@/components/CropProvider';
-import { NoteEditorPage } from '@/pages/NoteEditorPage';
-import { NotesGraphPage } from '@/pages/NotesGraphPage';
-import { NotesPage } from '@/pages/NotesPage';
-import { PeopleDashboardPage } from '@/pages/people/PeopleDashboardPage';
-import { PersonDetailPage } from '@/pages/people/PersonDetailPage';
-import { PersonFormPage } from '@/pages/people/PersonFormPage';
-import { FinanceDashboardPage } from '@/pages/finance/FinanceDashboardPage';
-import { ExpensesListPage } from '@/pages/finance/ExpensesListPage';
-import { ExpenseFormPage } from '@/pages/finance/ExpenseFormPage';
-import { ExpenseDetailPage } from '@/pages/finance/ExpenseDetailPage';
-import { SavingsListPage } from '@/pages/finance/SavingsListPage';
-import { SavingsFormPage } from '@/pages/finance/SavingsFormPage';
-import { SavingsDetailPage } from '@/pages/finance/SavingsDetailPage';
-import { RecurringFormPage } from '@/pages/finance/RecurringFormPage';
-import { RecurringDetailPage } from '@/pages/finance/RecurringDetailPage';
-import { ListsPage } from '@/pages/finance/ListsPage';
-import { ListFormPage } from '@/pages/finance/ListFormPage';
-import { ListDetailPage } from '@/pages/finance/ListDetailPage';
-import { PaymentsCalendarPage } from '@/pages/finance/PaymentsCalendarPage';
-import { NotificationSettingsPage } from '@/pages/finance/NotificationSettingsPage';
+
+// Per-section route chunks — keep the initial bundle small; pages load on demand.
+const ClothingDashboardPage = lazy(() => import('@/pages/clothing/ClothingDashboardPage').then((m) => ({ default: m.ClothingDashboardPage })));
+const ComposePage = lazy(() => import('@/pages/clothing/ComposePage').then((m) => ({ default: m.ComposePage })));
+const ComparePage = lazy(() => import('@/pages/clothing/ComparePage').then((m) => ({ default: m.ComparePage })));
+const WardrobePage = lazy(() => import('@/pages/clothing/WardrobePage').then((m) => ({ default: m.WardrobePage })));
+const WardrobeItemFormPage = lazy(() => import('@/pages/clothing/WardrobeItemFormPage').then((m) => ({ default: m.WardrobeItemFormPage })));
+const WardrobeItemDetailPage = lazy(() => import('@/pages/clothing/WardrobeItemDetailPage').then((m) => ({ default: m.WardrobeItemDetailPage })));
+const OutfitsPage = lazy(() => import('@/pages/clothing/OutfitsPage').then((m) => ({ default: m.OutfitsPage })));
+const OutfitFormPage = lazy(() => import('@/pages/clothing/OutfitFormPage').then((m) => ({ default: m.OutfitFormPage })));
+const OutfitDetailPage = lazy(() => import('@/pages/clothing/OutfitDetailPage').then((m) => ({ default: m.OutfitDetailPage })));
+const OutfitBuilderPage = lazy(() => import('@/pages/clothing/OutfitBuilderPage').then((m) => ({ default: m.OutfitBuilderPage })));
+const CollectionsPage = lazy(() => import('@/pages/clothing/CollectionsPage').then((m) => ({ default: m.CollectionsPage })));
+const CollectionFormPage = lazy(() => import('@/pages/clothing/CollectionFormPage').then((m) => ({ default: m.CollectionFormPage })));
+const CollectionDetailPage = lazy(() => import('@/pages/clothing/CollectionDetailPage').then((m) => ({ default: m.CollectionDetailPage })));
+const InspirationPage = lazy(() => import('@/pages/clothing/InspirationPage').then((m) => ({ default: m.InspirationPage })));
+const SizesPage = lazy(() => import('@/pages/clothing/SizesPage').then((m) => ({ default: m.SizesPage })));
+const WishlistPage = lazy(() => import('@/pages/clothing/WishlistPage').then((m) => ({ default: m.WishlistPage })));
+const WishFormPage = lazy(() => import('@/pages/clothing/WishFormPage').then((m) => ({ default: m.WishFormPage })));
+const CalculatorPage = lazy(() => import('@/pages/CalculatorPage').then((m) => ({ default: m.CalculatorPage })));
+const FormulasPage = lazy(() => import('@/pages/FormulasPage').then((m) => ({ default: m.FormulasPage })));
+const FormulaDetailPage = lazy(() => import('@/pages/FormulaDetailPage').then((m) => ({ default: m.FormulaDetailPage })));
+const NoteEditorPage = lazy(() => import('@/pages/NoteEditorPage').then((m) => ({ default: m.NoteEditorPage })));
+const NotesGraphPage = lazy(() => import('@/pages/NotesGraphPage').then((m) => ({ default: m.NotesGraphPage })));
+const NotesPage = lazy(() => import('@/pages/NotesPage').then((m) => ({ default: m.NotesPage })));
+const PeopleDashboardPage = lazy(() => import('@/pages/people/PeopleDashboardPage').then((m) => ({ default: m.PeopleDashboardPage })));
+const PersonDetailPage = lazy(() => import('@/pages/people/PersonDetailPage').then((m) => ({ default: m.PersonDetailPage })));
+const PersonFormPage = lazy(() => import('@/pages/people/PersonFormPage').then((m) => ({ default: m.PersonFormPage })));
+const FinanceDashboardPage = lazy(() => import('@/pages/finance/FinanceDashboardPage').then((m) => ({ default: m.FinanceDashboardPage })));
+const ExpensesListPage = lazy(() => import('@/pages/finance/ExpensesListPage').then((m) => ({ default: m.ExpensesListPage })));
+const ExpenseFormPage = lazy(() => import('@/pages/finance/ExpenseFormPage').then((m) => ({ default: m.ExpenseFormPage })));
+const ExpenseDetailPage = lazy(() => import('@/pages/finance/ExpenseDetailPage').then((m) => ({ default: m.ExpenseDetailPage })));
+const SavingsListPage = lazy(() => import('@/pages/finance/SavingsListPage').then((m) => ({ default: m.SavingsListPage })));
+const SavingsFormPage = lazy(() => import('@/pages/finance/SavingsFormPage').then((m) => ({ default: m.SavingsFormPage })));
+const SavingsDetailPage = lazy(() => import('@/pages/finance/SavingsDetailPage').then((m) => ({ default: m.SavingsDetailPage })));
+const RecurringFormPage = lazy(() => import('@/pages/finance/RecurringFormPage').then((m) => ({ default: m.RecurringFormPage })));
+const RecurringDetailPage = lazy(() => import('@/pages/finance/RecurringDetailPage').then((m) => ({ default: m.RecurringDetailPage })));
+const ListsPage = lazy(() => import('@/pages/finance/ListsPage').then((m) => ({ default: m.ListsPage })));
+const ListFormPage = lazy(() => import('@/pages/finance/ListFormPage').then((m) => ({ default: m.ListFormPage })));
+const ListDetailPage = lazy(() => import('@/pages/finance/ListDetailPage').then((m) => ({ default: m.ListDetailPage })));
+const PaymentsCalendarPage = lazy(() => import('@/pages/finance/PaymentsCalendarPage').then((m) => ({ default: m.PaymentsCalendarPage })));
+const NotificationSettingsPage = lazy(() => import('@/pages/finance/NotificationSettingsPage').then((m) => ({ default: m.NotificationSettingsPage })));
 
 /** Drives the native Telegram BackButton from the router. */
 function NavigationController() {
@@ -141,6 +143,7 @@ export function App() {
       <HashRouter>
         <NavigationController />
         <CropProvider>
+        <Suspense fallback={<div className="route-fallback" aria-hidden />}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/finance" element={<FinanceDashboardPage />} />
@@ -195,6 +198,7 @@ export function App() {
           <Route path="/clothing/wishlist/:id/edit" element={<WishFormPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
         </CropProvider>
       </HashRouter>
     </AppRoot>
