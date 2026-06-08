@@ -27,6 +27,8 @@ fs.mkdirSync(STORE_DIR, { recursive: true });
 const DATA_ROOT = path.dirname(UPLOAD_DIR);
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_ROOT, 'backups');
 const ADMIN_FILE = path.join(DATA_ROOT, 'admin.json');
+const LOG_FILE = path.join(DATA_ROOT, 'errors.log');
+const MAX_LOG_BYTES = 256 * 1024;
 fs.mkdirSync(BACKUP_DIR, { recursive: true });
 
 // Atomic file write (temp + rename) so a crash mid-write can't corrupt data.
@@ -37,6 +39,20 @@ function writeFileAtomic(file, data) {
 }
 function writeJsonAtomic(file, obj) {
   writeFileAtomic(file, JSON.stringify(obj));
+}
+
+// Append a line to the rotating error log (kept small; rides along in backups).
+function appendLog(line) {
+  try {
+    fs.appendFileSync(LOG_FILE, line + '\n');
+    const size = fs.statSync(LOG_FILE).size;
+    if (size > MAX_LOG_BYTES * 2) {
+      const buf = fs.readFileSync(LOG_FILE);
+      writeFileAtomic(LOG_FILE, buf.subarray(buf.length - MAX_LOG_BYTES));
+    }
+  } catch {
+    /* logging must never throw */
+  }
 }
 
 // Tiny in-memory rate limiter (per key, sliding window).
@@ -241,7 +257,7 @@ function createBackupArchive() {
   return new Promise((resolve, reject) => {
     const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
     const out = path.join(BACKUP_DIR, `coco-backup-${ts}.tar.gz`);
-    const entries = ['store', 'uploads', 'reminders.json', 'admin.json'].filter((e) =>
+    const entries = ['store', 'uploads', 'reminders.json', 'admin.json', 'errors.log'].filter((e) =>
       fs.existsSync(path.join(DATA_ROOT, e)),
     );
     if (!entries.length) return reject(new Error('nothing-to-backup'));
@@ -689,6 +705,33 @@ app.post('/api/backup/status', (req, res) => {
   if (!user) return;
   const admin = getAdminChatId();
   res.json({ owner: !admin || String(admin) === String(user.id), configured: !!admin });
+});
+
+// Client error reports → rotating errors.log (ships in backups). Rate-limited.
+app.post('/api/log', (req, res) => {
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  if (!rateLimit(`log:${ip}`, 40, 60_000)) return res.sendStatus(429);
+  const { message, stack, url, kind, initData } = req.body ?? {};
+  let uid = '';
+  if (initData && BOT_TOKEN) {
+    try {
+      validateInitDataSig(initData, BOT_TOKEN, { expiresIn: 0 });
+      uid = String(JSON.parse(new URLSearchParams(initData).get('user') || 'null')?.id || '');
+    } catch {
+      /* unauthenticated report — still logged */
+    }
+  }
+  appendLog(
+    JSON.stringify({
+      t: new Date().toISOString(),
+      kind: String(kind || 'error').slice(0, 24),
+      uid,
+      url: String(url || '').slice(0, 200),
+      msg: String(message || '').slice(0, 400),
+      stack: String(stack || '').slice(0, 1200),
+    }),
+  );
+  res.json({ ok: true });
 });
 
 // Telegram fetches a freshly-made backup here via a single-use, short-lived

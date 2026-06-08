@@ -11,6 +11,9 @@ import { retrieveLaunchParams } from '@tma.js/sdk-react';
 
 import { Root } from '@/Root';
 import { init } from '@/init';
+import { installGlobalErrorLogging } from '@/lib/log';
+
+installGlobalErrorLogging();
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 
