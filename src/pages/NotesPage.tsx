@@ -5,6 +5,7 @@ import { IconGraph, IconList, IconNotes, IconTrash } from '@/components/icons';
 import type { Note } from '@/types';
 import { useFinanceStore } from '@/store';
 import { NotesHelpButton } from '@/components/NotesGuide';
+import { tagColor } from '@/lib/tag-color';
 import { buildNoteGraph, normalizeNoteTitle, parseNoteTags } from '@/lib/notes-graph';
 import { noteExcerpt } from '@/lib/notes-markdown';
 import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
@@ -157,7 +158,7 @@ export function NotesPage() {
                     {(tags.length > 0 || note.attachments?.length) && (
                       <div className="note-row__tags">
                         {tags.slice(0, 3).map((tag) => (
-                          <span key={tag}>#{tag}</span>
+                          <span key={tag} style={{ color: tagColor(tag).stroke }}>#{tag}</span>
                         ))}
                         {!!note.attachments?.length && <span className="is-attach">{note.attachments.length} файл.</span>}
                       </div>

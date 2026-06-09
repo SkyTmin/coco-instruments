@@ -7,6 +7,7 @@ import { normalizeNoteTitle, parseNoteTags } from '@/lib/notes-graph';
 import { noteDateFmt, noteSnippet } from '@/pages/NotesPage';
 import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { NotesHelpButton } from '@/components/NotesGuide';
+import { tagColor } from '@/lib/tag-color';
 
 export function NoteListDetailPage() {
   const navigate = useNavigate();
@@ -70,10 +71,16 @@ export function NoteListDetailPage() {
           <div className="note-list-tags">
             {tagChips.map((t) => {
               const active = activeTag === `#${t}`;
+              const tc = tagColor(t);
               return (
                 <button
                   key={t}
                   className={`note-list-tag${active ? ' is-active' : ''}`}
+                  style={
+                    active
+                      ? { color: tc.stroke, background: tc.chipBg, boxShadow: `inset 0 0 0 1.5px ${tc.stroke}` }
+                      : { color: tc.stroke }
+                  }
                   onClick={() => {
                     selectionChanged();
                     setQuery(active ? '' : `#${t}`);
@@ -133,7 +140,7 @@ export function NoteListDetailPage() {
                     {(tags.length > 0 || note.attachments?.length) && (
                       <div className="note-row__tags">
                         {tags.slice(0, 3).map((tag) => (
-                          <span key={tag}>#{tag}</span>
+                          <span key={tag} style={{ color: tagColor(tag).stroke }}>#{tag}</span>
                         ))}
                         {!!note.attachments?.length && <span className="is-attach">{note.attachments.length} файл.</span>}
                       </div>

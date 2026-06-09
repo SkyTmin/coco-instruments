@@ -1799,7 +1799,7 @@ input[type='datetime-local'] {
 
 .guide-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; }
 .guide-legend__item { display: inline-flex; align-items: center; font-size: 13px; font-weight: 700; color: var(--text); }
-.guide-dot { width: 15px; height: 15px; border-radius: 50%; display: inline-block; margin-right: 7px; box-sizing: border-box; }
+.guide-dot { width: 15px; height: 15px; border-radius: 50%; display: inline-block; margin-right: 7px; box-sizing: border-box; border: 2px solid transparent; }
 .guide-dot--note { background: #1fc2b8; box-shadow: 0 0 6px rgba(31, 194, 184, 0.6); }
 .guide-dot--tag { background: rgba(46, 158, 107, 0.25); border: 2px dashed var(--pos); }
 .guide-dot--list { background: #8b5cf6; }
@@ -1810,6 +1810,30 @@ input[type='datetime-local'] {
 .guide-syntax__row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 .guide-syntax__row code { flex: 0 0 auto; }
 .guide-syntax__row span { color: var(--muted); }
+
+/* Guide animations: cards rise in, links draw on, tag links flow (marching
+   ants), nodes pop. Base state is the final visible state, so disabling
+   motion simply shows everything. */
+.guide__card { animation: guide-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.guide-line { stroke-dasharray: 400; stroke-dashoffset: 0; }
+.guide-dia--anim .guide-line { animation: guide-draw 0.7s ease both; }
+.guide-dia--anim .guide-flow { animation: guide-fade 0.5s ease both, guide-march 0.9s linear infinite; }
+.guide-dia--anim .guide-node { animation: guide-rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@keyframes guide-draw { from { stroke-dashoffset: 400; } to { stroke-dashoffset: 0; } }
+@keyframes guide-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes guide-march { to { stroke-dashoffset: -18; } }
+@keyframes guide-rise {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide__card,
+  .guide-dia--anim .guide-line,
+  .guide-dia--anim .guide-flow,
+  .guide-dia--anim .guide-node { animation: none; }
+}
 
 @media (max-width: 390px) {
   .notes-actions {

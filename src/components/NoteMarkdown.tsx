@@ -4,6 +4,7 @@ import type { Note, NoteAttachment } from '@/types';
 import { normalizeNoteTitle } from '@/lib/notes-graph';
 import { parseBlocks, safeHref, safeImageSrc } from '@/lib/notes-markdown';
 import type { Block, Inline } from '@/lib/notes-markdown';
+import { tagColor } from '@/lib/tag-color';
 
 interface Props {
   body: string;
@@ -58,12 +59,20 @@ export function NoteMarkdown({
               {node.v}
             </code>
           );
-        case 'tag':
+        case 'tag': {
+          const tc = tagColor(node.v);
           return (
-            <button key={i} type="button" className="md-tag" onClick={() => onTag(node.v)}>
+            <button
+              key={i}
+              type="button"
+              className="md-tag"
+              style={{ color: tc.stroke, background: tc.chipBg }}
+              onClick={() => onTag(node.v)}
+            >
               #{node.v}
             </button>
           );
+        }
         case 'link': {
           const href = safeHref(node.href);
           return href ? (

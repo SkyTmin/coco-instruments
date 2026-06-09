@@ -17,6 +17,7 @@ import {
 } from '@/lib/notes-graph';
 import { selectionChanged } from '@/lib/haptics';
 import { NotesHelpButton } from '@/components/NotesGuide';
+import { tagColor } from '@/lib/tag-color';
 
 interface PointerSession {
   id: string;
@@ -642,10 +643,13 @@ export function NotesGraphPage() {
                     if (!source || !target) return null;
                     const hot = !!focusId && (link.source === focusId || link.target === focusId);
                     const dim = !!focusId && !hot;
+                    // Tag links inherit their tag's colour so each topic reads as a family.
+                    const tc = link.kind === 'tag' && link.target.startsWith('tag:') ? tagColor(link.target.slice(4)) : null;
                     return (
                       <line
                         key={link.id}
                         className={`notes-graph__link notes-graph__link--${link.kind}${hot ? ' is-hot' : ''}${dim ? ' is-dim' : ''}`}
+                        style={tc ? { stroke: tc.stroke } : undefined}
                         x1={source.x}
                         y1={source.y}
                         x2={target.x}
@@ -656,6 +660,8 @@ export function NotesGraphPage() {
                   {points.map((point) => {
                     const hot = !!neighborIds && neighborIds.has(point.id);
                     const dim = !!neighborIds && !hot;
+                    // Per-tag colour: each topic its own hue, sub-tags lighter.
+                    const tc = point.kind === 'tag' ? tagColor(point.id.slice(4)) : null;
                     return (
                       <g
                         key={point.id}
@@ -668,9 +674,15 @@ export function NotesGraphPage() {
                         {point.id === focusId && (
                           <circle className="notes-graph__halo" cx={point.x} cy={point.y} r={point.r + 10} />
                         )}
-                        <circle cx={point.x} cy={point.y} r={point.r} />
+                        <circle
+                          cx={point.x}
+                          cy={point.y}
+                          r={point.r}
+                          style={tc ? { fill: tc.fill, stroke: tc.stroke, filter: `drop-shadow(0 0 5px ${tc.glow})` } : undefined}
+                        />
                         <text
                           className={`notes-graph__label${labelVisible(point) ? ' is-shown' : ''}`}
+                          style={tc ? { fill: tc.stroke } : undefined}
                           x={point.x}
                           y={point.y + point.r + 14}
                         >
