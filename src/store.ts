@@ -570,10 +570,18 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   // A tag is a page: opening #тег finds the note with that title, or creates it.
+  // If the page exists but has no list while the tag lives inside one, adopt it
+  // there — so a tag's page stays together with the list it belongs to.
   getOrCreateNoteByTitle: (title, listId) => {
     const key = normalizeNoteTitle(title);
     const existing = get().notes.find((n) => normalizeNoteTitle(n.title) === key);
-    if (existing) return existing;
+    if (existing) {
+      if (listId && !existing.listId) {
+        get().updateNote(existing.id, { listId });
+        return { ...existing, listId };
+      }
+      return existing;
+    }
     return get().addNote({ title: title.trim(), body: '', listId });
   },
 

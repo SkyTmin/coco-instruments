@@ -9,6 +9,7 @@ import {
   getNoteRelations,
   getTagPageRelations,
   layoutNoteGraph,
+  tagHomeListId,
   normalizeNoteTitle,
   parseNoteTags,
   parseWikiLinks,
@@ -44,9 +45,25 @@ describe('overview graph (notebooks)', () => {
     expect(g.links.some((l) => l.source === 'l1' && l.target === 'list:health' && l.kind === 'wiki')).toBe(true);
     // wiki between two notes of the same list collapses to a self-link → dropped
     expect(g.links.some((l) => l.source === 'list:health' && l.target === 'list:health')).toBe(false);
-    // the list connects to the tags of its notes
-    expect(g.links.some((l) => l.source === 'list:health' && l.kind === 'tag')).toBe(true);
-    expect(g.nodes.some((n) => n.id === 'tag:таблетки')).toBe(true);
+  });
+
+  it('draws no tag nodes in the overview (tags live inside lists)', () => {
+    expect(g.nodes.some((n) => n.kind === 'tag')).toBe(false);
+    expect(g.links.some((l) => l.kind === 'tag')).toBe(false);
+  });
+});
+
+describe('tag home list', () => {
+  it('returns the list a tag is used exclusively within', () => {
+    const notes = [note('x', 'Лечение', '#бородавки/лазер', 'health'), note('y', 'Другое', 'без тегов', 'health')];
+    expect(tagHomeListId('бородавки', notes)).toBe('health');
+  });
+
+  it('has no home when the tag spans lists or any loose note', () => {
+    const shared = [note('a', 'A', '#общее', 'health'), note('b', 'B', '#общее')]; // b is loose
+    expect(tagHomeListId('общее', shared)).toBeUndefined();
+    const twoLists = [note('a', 'A', '#общее', 'health'), note('b', 'B', '#общее', 'work')];
+    expect(tagHomeListId('общее', twoLists)).toBeUndefined();
   });
 });
 

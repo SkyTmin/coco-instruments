@@ -345,18 +345,8 @@ export function buildOverviewGraph(
     const id = `${source}->${target}:${kind}`;
     if (!links.has(id)) links.set(id, { id, source, target, kind });
   };
-  const ensureTagNode = (tag: string) => {
-    const tagId = `tag:${tag}`;
-    if (!nodes.has(tagId)) nodes.set(tagId, { id: tagId, kind: 'tag', label: `#${tag}`, degree: 0, incoming: 0, outgoing: 0 });
-    return tagId;
-  };
-  const addTag = (fromId: string, tag: string) => {
-    const chain = tagAncestry(tag);
-    if (!chain.length) return;
-    addLink(fromId, ensureTagNode(tag), 'tag');
-    for (let i = 1; i < chain.length; i++) addLink(ensureTagNode(chain[i - 1]), ensureTagNode(chain[i]), 'tag');
-  };
-
+  // Tags are an inside-the-list detail (they show in a list's own graph and on
+  // tag pages), so the overview stays high-level: lists, loose notes and people.
   for (const note of notes) {
     const src = repId(note);
     for (const title of parseWikiLinks(note.body)) {
@@ -369,7 +359,6 @@ export function buildOverviewGraph(
       if (!nodes.has(missingId)) nodes.set(missingId, { id: missingId, kind: 'missing', label: title, degree: 0, incoming: 0, outgoing: 0 });
       addLink(src, missingId, 'wiki');
     }
-    for (const tag of parseNoteTags(note.body)) addTag(src, tag);
   }
 
   // All people collapse into one node; connect it to whatever references them.
@@ -513,6 +502,24 @@ export interface TagPageRelations {
   children: string[];
   /** Notes carrying this exact tag in their body. */
   tagged: Note[];
+}
+
+/** If a tag is used exclusively within a single list (no loose notes, no other
+ *  lists), that list is the tag's "home" — its page belongs there too. Returns
+ *  undefined when the tag spans several lists or any loose note. */
+export function tagHomeListId(tag: string, notes: Note[]): string | undefined {
+  const key = normalizeNoteTitle(tag);
+  if (!key) return undefined;
+  const prefix = `${key}/`;
+  const lists = new Set<string>();
+  let loose = false;
+  for (const note of notes) {
+    const uses = parseNoteTags(note.body).some((t) => t === key || t.startsWith(prefix));
+    if (!uses) continue;
+    if (note.listId) lists.add(note.listId);
+    else loose = true;
+  }
+  return !loose && lists.size === 1 ? [...lists][0] : undefined;
 }
 
 /** A tag behaves like a page: this gathers everything that page should show —

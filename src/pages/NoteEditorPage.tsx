@@ -15,7 +15,7 @@ import {
   MAX_ATTACHMENTS,
   MAX_IMAGE_SOURCE_SIZE,
 } from '@/lib/images';
-import { getNoteRelations, getTagPageRelations, normalizeNoteTitle } from '@/lib/notes-graph';
+import { getNoteRelations, getTagPageRelations, normalizeNoteTitle, tagHomeListId } from '@/lib/notes-graph';
 import { tagColor } from '@/lib/tag-color';
 import { countTasks, toggleTaskInBody } from '@/lib/notes-markdown';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
@@ -328,10 +328,12 @@ export function NoteEditorPage() {
     selectionChanged();
   };
 
-  // A tag is a page: open (or create) the note named after the tag.
+  // A tag is a page: open (or create) the note named after the tag. It inherits
+  // the list the tag lives in (or the current note's list), so it stays inside.
   const openTagPage = (tagPath: string) => {
     persistRef.current();
-    const target = useFinanceStore.getState().getOrCreateNoteByTitle(tagPath);
+    const home = tagHomeListId(tagPath, notes) ?? listIdRef.current;
+    const target = useFinanceStore.getState().getOrCreateNoteByTitle(tagPath, home);
     if (target.id === currentId.current) return;
     navigate(`/notes/${target.id}`);
   };
