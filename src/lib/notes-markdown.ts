@@ -51,6 +51,15 @@ export function safeImageSrc(src: string): string | undefined {
   return SAFE_IMG.test(src.trim()) ? src.trim() : undefined;
 }
 
+/** Strip inline image tokens `![alt](src)` — used when migrating a legacy body
+ *  (which embedded photos as markdown) into chat messages (photos as bubbles). */
+export function stripImageTokens(body: string): string {
+  return body
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 // ---- inline -----------------------------------------------------------------
 
 interface TokenMatch {

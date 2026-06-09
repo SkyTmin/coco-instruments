@@ -13,6 +13,7 @@ import type {
   Collection,
   InspirationImage,
   Note,
+  NoteAttachment,
   NoteList,
   NotesBlob,
   TagPage,
@@ -54,6 +55,7 @@ export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { genId } from '@/lib/id';
 import { normalizeNoteTitle } from '@/lib/notes-graph';
+import { deriveFromMessages, makeMessage, materializeMessages } from '@/lib/notes-messages';
 import { deriveStatus, paidSoFar, resolve } from '@/lib/finance-calc';
 
 export type ObligationDraft = Omit<
@@ -251,8 +253,13 @@ interface FinanceState {
   getList: (id: string) => ExpenseList | undefined;
 
   addNote: (draft: NoteDraft) => Note;
+  addNoteMessage: (noteId: string, text: string, attachments: NoteAttachment[]) => void;
+  updateNoteMessage: (noteId: string, messageId: string, text: string, attachments: NoteAttachment[]) => void;
+  removeNoteMessage: (noteId: string, messageId: string) => void;
   getTagPage: (tag: string) => TagPage | undefined;
-  upsertTagPage: (tag: string, patch: Partial<Pick<TagPage, 'body' | 'attachments'>>) => TagPage;
+  addTagMessage: (tag: string, text: string, attachments: NoteAttachment[]) => void;
+  updateTagMessage: (tag: string, messageId: string, text: string, attachments: NoteAttachment[]) => void;
+  removeTagMessage: (tag: string, messageId: string) => void;
   updateNote: (id: string, patch: Partial<Note>) => void;
   removeNote: (id: string) => void;
   getNote: (id: string) => Note | undefined;
@@ -576,24 +583,77 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return note;
   },
 
-  // A tag IS a page: its content lives on the tag itself (no separate note).
+  // ---- note chat messages (body/attachments stay in sync for the graph) ----
+  addNoteMessage: (noteId, text, attachments) => {
+    const cur = get().notes.find((n) => n.id === noteId);
+    if (!cur) return;
+    const messages = [...materializeMessages(cur), makeMessage(text, attachments)];
+    const notes = get().notes.map((n) =>
+      n.id === noteId ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() } : n,
+    );
+    set({ notes });
+    persistNotes(notes, get().noteLists, get().tagPages);
+  },
+  updateNoteMessage: (noteId, messageId, text, attachments) => {
+    const cur = get().notes.find((n) => n.id === noteId);
+    if (!cur) return;
+    const messages = materializeMessages(cur).map((m) =>
+      m.id === messageId ? { ...m, text: text.trim(), attachments, editedAt: Date.now() } : m,
+    );
+    const notes = get().notes.map((n) =>
+      n.id === noteId ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() } : n,
+    );
+    set({ notes });
+    persistNotes(notes, get().noteLists, get().tagPages);
+  },
+  removeNoteMessage: (noteId, messageId) => {
+    const cur = get().notes.find((n) => n.id === noteId);
+    if (!cur) return;
+    const messages = materializeMessages(cur).filter((m) => m.id !== messageId);
+    const notes = get().notes.map((n) =>
+      n.id === noteId ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() } : n,
+    );
+    set({ notes });
+    persistNotes(notes, get().noteLists, get().tagPages);
+  },
+
+  // A tag IS a page (a chat): its messages live on the tag itself, no note.
   getTagPage: (tag) => {
     const key = normalizeNoteTitle(tag);
     return get().tagPages.find((p) => p.tag === key);
   },
-  upsertTagPage: (tag, patch) => {
+  addTagMessage: (tag, text, attachments) => {
     const key = normalizeNoteTitle(tag);
     const now = Date.now();
     const existing = get().tagPages.find((p) => p.tag === key);
-    const next: TagPage = existing
-      ? { ...existing, ...patch, updatedAt: now }
-      : { tag: key, body: '', attachments: [], ...patch, createdAt: now, updatedAt: now };
-    const tagPages = existing
-      ? get().tagPages.map((p) => (p.tag === key ? next : p))
-      : [next, ...get().tagPages];
+    const base: TagPage = existing ?? { tag: key, body: '', attachments: [], messages: [], createdAt: now, updatedAt: now };
+    const messages = [...materializeMessages(base), makeMessage(text, attachments)];
+    const next: TagPage = { ...base, messages, ...deriveFromMessages(messages), updatedAt: now };
+    const tagPages = existing ? get().tagPages.map((p) => (p.tag === key ? next : p)) : [next, ...get().tagPages];
     set({ tagPages });
     persistNotes(get().notes, get().noteLists, tagPages);
-    return next;
+  },
+  updateTagMessage: (tag, messageId, text, attachments) => {
+    const key = normalizeNoteTitle(tag);
+    const existing = get().tagPages.find((p) => p.tag === key);
+    if (!existing) return;
+    const messages = materializeMessages(existing).map((m) =>
+      m.id === messageId ? { ...m, text: text.trim(), attachments, editedAt: Date.now() } : m,
+    );
+    const next: TagPage = { ...existing, messages, ...deriveFromMessages(messages), updatedAt: Date.now() };
+    const tagPages = get().tagPages.map((p) => (p.tag === key ? next : p));
+    set({ tagPages });
+    persistNotes(get().notes, get().noteLists, tagPages);
+  },
+  removeTagMessage: (tag, messageId) => {
+    const key = normalizeNoteTitle(tag);
+    const existing = get().tagPages.find((p) => p.tag === key);
+    if (!existing) return;
+    const messages = materializeMessages(existing).filter((m) => m.id !== messageId);
+    const next: TagPage = { ...existing, messages, ...deriveFromMessages(messages), updatedAt: Date.now() };
+    const tagPages = get().tagPages.map((p) => (p.tag === key ? next : p));
+    set({ tagPages });
+    persistNotes(get().notes, get().noteLists, tagPages);
   },
 
   updateNote: (id, patch) => {

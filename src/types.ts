@@ -209,8 +209,11 @@ export interface FinanceRemindersBlob {
 export interface Note {
   id: string;
   title: string;
+  /** Combined text of all messages — kept in sync, used for tag/link parsing. */
   body: string;
   attachments?: NoteAttachment[];
+  /** Chat messages. Legacy notes have only `body`/`attachments` and migrate lazily. */
+  messages?: NoteMessage[];
   /** Optional notebook/list this note belongs to. */
   listId?: string;
   createdAt: number;
@@ -239,12 +242,22 @@ export interface Attachment {
 /** Notes historically called it NoteAttachment — keep the alias. */
 export type NoteAttachment = Attachment;
 
-/** A tag's own page: editable content + photos that live on the tag itself
- *  (not a separate note). Keyed by the normalised tag path, e.g. "здоровье/горло". */
+/** One message in a note/tag "chat": text and/or photos, sent at a time. */
+export interface NoteMessage {
+  id: string;
+  text: string;
+  attachments?: NoteAttachment[];
+  createdAt: number;
+  editedAt?: number;
+}
+
+/** A tag's own page: a chat of messages (with a legacy text body kept in sync
+ *  for tag/link parsing). Keyed by the normalised tag path, e.g. "здоровье/горло". */
 export interface TagPage {
   tag: string;
   body: string;
   attachments?: NoteAttachment[];
+  messages?: NoteMessage[];
   createdAt: number;
   updatedAt: number;
 }

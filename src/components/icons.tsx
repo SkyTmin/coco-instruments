@@ -52,6 +52,13 @@ export const IconInfo = (p: IconProps) => (
   </svg>
 );
 
+export const IconSend = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M22 2 11 13" />
+    <path d="M22 2 15 22l-4-9-9-4 20-7z" />
+  </svg>
+);
+
 export const IconPaperclip = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M21.44 11.05 12.2 20.29a6 6 0 0 1-8.49-8.49l9.24-9.24a4 4 0 0 1 5.66 5.66l-9.24 9.24a2 2 0 0 1-2.83-2.83l8.49-8.48" />
