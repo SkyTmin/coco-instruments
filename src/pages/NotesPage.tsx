@@ -31,6 +31,7 @@ function firstImage(note: Note) {
 export function NotesPage() {
   const navigate = useNavigate();
   const notes = useFinanceStore((s) => s.notes);
+  const noteLists = useFinanceStore((s) => s.noteLists);
   const removeNote = useFinanceStore((s) => s.removeNote);
   const hydrated = useFinanceStore((s) => s.hydrated);
   const [params, setParams] = useSearchParams();
@@ -43,6 +44,7 @@ export function NotesPage() {
   }, [params]);
 
   const graph = useMemo(() => buildNoteGraph(notes), [notes]);
+  const listById = useMemo(() => new Map(noteLists.map((l) => [l.id, l])), [noteLists]);
   const queryKey = normalizeNoteTitle(query);
   const filteredNotes = useMemo(() => {
     const list = [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -89,15 +91,15 @@ export function NotesPage() {
       <div className="stack notes-page">
         <div className="notes-actions">
           <button className="notes-action notes-action--primary" onClick={() => go('/notes/new')}>
-            <IconNotes />
+            <span className="notes-action__icon"><IconNotes /></span>
             <span>Новая заметка</span>
           </button>
-          <button className="notes-action" onClick={() => go('/notes/lists')}>
-            <IconList />
+          <button className="notes-action notes-action--lists" onClick={() => go('/notes/lists')}>
+            <span className="notes-action__icon"><IconList /></span>
             <span>Списки</span>
           </button>
-          <button className="notes-action" onClick={() => go('/notes/graph')}>
-            <IconGraph />
+          <button className="notes-action notes-action--graph" onClick={() => go('/notes/graph')}>
+            <span className="notes-action__icon"><IconGraph /></span>
             <span>Граф</span>
           </button>
         </div>
@@ -129,6 +131,7 @@ export function NotesPage() {
           {filteredNotes.map((note, i) => {
             const tags = parseNoteTags(note.body);
             const thumb = firstImage(note);
+            const list = note.listId ? listById.get(note.listId) : undefined;
             return (
               <SwipeRow
                 key={note.id}
@@ -155,11 +158,19 @@ export function NotesPage() {
                       <div className="note-row__date">{noteDateFmt.format(new Date(note.updatedAt))}</div>
                     </div>
                     <div className="note-row__body">{noteSnippet(note)}</div>
-                    {(tags.length > 0 || note.attachments?.length) && (
+                    {(tags.length > 0 || note.attachments?.length || list) && (
                       <div className="note-row__tags">
-                        {tags.slice(0, 3).map((tag) => (
-                          <span key={tag} style={{ color: tagColor(tag).stroke }}>#{tag}</span>
-                        ))}
+                        {list && (
+                          <span className="is-list">
+                            {list.emoji ?? '📋'} {list.name}
+                          </span>
+                        )}
+                        {tags.slice(0, 3).map((tag) => {
+                          const tc = tagColor(tag);
+                          return (
+                            <span key={tag} style={{ color: tc.stroke, background: tc.chipBg }}>#{tag}</span>
+                          );
+                        })}
                         {!!note.attachments?.length && <span className="is-attach">{note.attachments.length} файл.</span>}
                       </div>
                     )}

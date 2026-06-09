@@ -908,6 +908,54 @@ input[type='datetime-local'] {
   overflow: hidden;
 }
 
+/* Juicy stat tiles: each number gets its own hue + a soft corner glow. */
+.notes-page .stat-tile {
+  position: relative;
+  overflow: hidden;
+  background: var(--glass-2);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+.notes-page .stat-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(80% 110% at 100% 0%, var(--tile-tint, transparent), transparent 60%);
+}
+.notes-page .stat-tile__value { font-size: 23px; font-weight: 850; letter-spacing: -0.02em; }
+.notes-page .stat-tile:nth-child(1) { --tile-tint: rgba(31, 194, 184, 0.16); }
+.notes-page .stat-tile:nth-child(1) .stat-tile__value { color: #1fc2b8; text-shadow: 0 0 16px rgba(31, 194, 184, 0.4); }
+.notes-page .stat-tile:nth-child(2) { --tile-tint: rgba(54, 167, 224, 0.16); }
+.notes-page .stat-tile:nth-child(2) .stat-tile__value { color: #36a7e0; text-shadow: 0 0 16px rgba(54, 167, 224, 0.4); }
+.notes-page .stat-tile:nth-child(3) { --tile-tint: rgba(139, 92, 246, 0.16); }
+.notes-page .stat-tile:nth-child(3) .stat-tile__value { color: #8f6df5; text-shadow: 0 0 16px rgba(139, 92, 246, 0.4); }
+.notes-page .stat-tile:nth-child(4) { --tile-tint: color-mix(in srgb, var(--accent-grad-2) 16%, transparent); }
+.notes-page .stat-tile:nth-child(4) .stat-tile__value { color: var(--accent); text-shadow: 0 0 16px var(--glow); }
+
+/* Notes: the empty-state icon floats in a glass bubble. */
+.notes-page .empty__icon {
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 14px;
+  display: grid;
+  place-items: center;
+  font-size: 46px;
+  border-radius: 30px;
+  background: var(--glass-2);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow-sm);
+  animation: empty-float 3.6s ease-in-out infinite;
+}
+@keyframes empty-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notes-page .empty__icon { animation: none; }
+}
+
 .notes-head-action {
   display: inline-flex;
   align-items: center;
@@ -937,12 +985,19 @@ input[type='datetime-local'] {
 
 .note-list-row {
   display: flex; align-items: center; gap: 14px;
-  padding: 14px 16px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-sm);
+  padding: 14px 16px; border-radius: 20px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  backdrop-filter: blur(14px) saturate(1.35);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 var(--glass-hi);
 }
 .note-list-row__emoji {
-  width: 44px; height: 44px; flex: 0 0 auto;
-  display: grid; place-items: center; font-size: 24px;
-  border-radius: 13px; background: var(--surface-2);
+  width: 48px; height: 48px; flex: 0 0 auto;
+  display: grid; place-items: center; font-size: 25px;
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(99, 102, 241, 0.2));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 8px 18px rgba(139, 92, 246, 0.22);
 }
 .note-list-row__main { flex: 1; min-width: 0; }
 .note-list-row__name { font-size: 16px; font-weight: 800; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1115,6 +1170,8 @@ input[type='datetime-local'] {
   cursor: pointer;
   min-height: 74px;
   border-radius: 20px;
+  position: relative;
+  overflow: hidden;
   background: var(--glass);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
   backdrop-filter: blur(16px) saturate(1.4);
@@ -1128,13 +1185,21 @@ input[type='datetime-local'] {
   font-size: 15px;
   font-weight: 800;
   text-align: left;
+  transition: transform 0.12s ease;
 }
+.notes-action:active { transform: scale(0.97); }
 
-.notes-action svg {
-  width: 25px;
-  height: 25px;
-  color: var(--accent);
+/* Each action wears its own colour: a gradient icon chip + a matching tint
+   bleeding from the card's corner. */
+.notes-action__icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
 }
+.notes-action__icon svg { width: 22px; height: 22px; color: #fff; }
 
 .notes-action--primary {
   color: #fff;
@@ -1142,9 +1207,28 @@ input[type='datetime-local'] {
   border-color: transparent;
   box-shadow: 0 10px 26px rgba(31, 175, 200, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
-
-.notes-action--primary svg {
-  color: #fff;
+.notes-action--primary .notes-action__icon {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.notes-action--lists .notes-action__icon {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  box-shadow: 0 8px 18px rgba(139, 92, 246, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.notes-action--graph .notes-action__icon {
+  background: linear-gradient(135deg, var(--accent-grad-1), var(--accent-grad-2));
+  box-shadow: 0 8px 18px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.notes-action--lists::after,
+.notes-action--graph::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(95% 130% at 100% 0%, rgba(139, 92, 246, 0.14), transparent 55%);
+}
+.notes-action--graph::after {
+  background: radial-gradient(95% 130% at 100% 0%, color-mix(in srgb, var(--accent-grad-2) 17%, transparent), transparent 55%);
 }
 
 .notes-toolbar {
@@ -1161,7 +1245,13 @@ input[type='datetime-local'] {
 }
 
 .notes-search--list {
-  box-shadow: var(--shadow-sm);
+  border-radius: 999px;
+  padding: 12px 16px;
+  background: var(--glass-2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  backdrop-filter: blur(12px) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 
 .notes-toggle,
@@ -1541,17 +1631,19 @@ input[type='datetime-local'] {
   display: flex;
   align-items: stretch;
   gap: 12px;
-  background: var(--surface);
-  border-radius: 18px;
-  box-shadow: var(--shadow-sm);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  backdrop-filter: blur(14px) saturate(1.35);
+  border-radius: 20px;
+  box-shadow: var(--shadow-sm), inset 0 1px 0 var(--glass-hi);
   padding: 14px 15px;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid var(--glass-border);
   transition: transform 0.1s ease;
   animation: note-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 .note-row:active {
-  transform: scale(0.99);
+  transform: scale(0.98);
 }
 @keyframes note-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -1563,12 +1655,13 @@ input[type='datetime-local'] {
 }
 .note-row__thumb {
   flex: none;
-  width: 58px;
-  height: 58px;
-  border-radius: 13px;
+  width: 60px;
+  height: 60px;
+  border-radius: 15px;
   overflow: hidden;
   background: var(--surface-2);
   align-self: center;
+  box-shadow: 0 0 0 1.5px var(--glass-border), 0 8px 16px rgba(0, 0, 0, 0.16);
 }
 .note-row__thumb img {
   width: 100%;
@@ -1589,7 +1682,8 @@ input[type='datetime-local'] {
 
 .note-row__title {
   font-size: 16px;
-  font-weight: 800;
+  font-weight: 850;
+  letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1599,8 +1693,12 @@ input[type='datetime-local'] {
 
 .note-row__date {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 700;
   flex: none;
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 3px 9px;
 }
 
 .note-row__body {
@@ -1632,6 +1730,11 @@ input[type='datetime-local'] {
 .note-row__tags span.is-attach {
   color: var(--muted);
   background: var(--surface-2);
+}
+/* Which notebook the note lives in — violet, matching list nodes in the graph. */
+.note-row__tags span.is-list {
+  color: #8f6df5;
+  background: rgba(139, 92, 246, 0.14);
 }
 
 /* Search field with a clear (×) button */

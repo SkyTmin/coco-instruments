@@ -102,11 +102,11 @@ export function NoteListsPage() {
         ) : (
           <div className="notes-actions">
             <button className="notes-action notes-action--primary" onClick={() => { tapLight(); setOpen(true); }}>
-              <IconList />
+              <span className="notes-action__icon"><IconList /></span>
               <span>Новый список</span>
             </button>
-            <button className="notes-action" onClick={() => { tapLight(); navigate('/notes/graph'); }}>
-              <IconGraph />
+            <button className="notes-action notes-action--graph" onClick={() => { tapLight(); navigate('/notes/graph'); }}>
+              <span className="notes-action__icon"><IconGraph /></span>
               <span>Общий граф</span>
             </button>
           </div>

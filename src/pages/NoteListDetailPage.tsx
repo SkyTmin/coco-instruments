@@ -58,11 +58,11 @@ export function NoteListDetailPage() {
       <div className="stack notes-page">
         <div className="notes-actions">
           <button className="notes-action notes-action--primary" onClick={() => go(`/notes/new?list=${listId}`)}>
-            <IconNotes />
+            <span className="notes-action__icon"><IconNotes /></span>
             <span>Новая заметка</span>
           </button>
-          <button className="notes-action" onClick={() => go(`/notes/graph?list=${listId}`)}>
-            <IconGraph />
+          <button className="notes-action notes-action--graph" onClick={() => go(`/notes/graph?list=${listId}`)}>
+            <span className="notes-action__icon"><IconGraph /></span>
             <span>Граф списка</span>
           </button>
         </div>
@@ -79,7 +79,7 @@ export function NoteListDetailPage() {
                   style={
                     active
                       ? { color: tc.stroke, background: tc.chipBg, boxShadow: `inset 0 0 0 1.5px ${tc.stroke}` }
-                      : { color: tc.stroke }
+                      : { color: tc.stroke, background: tc.chipBg }
                   }
                   onClick={() => {
                     selectionChanged();
@@ -139,9 +139,12 @@ export function NoteListDetailPage() {
                     <div className="note-row__body">{noteSnippet(note)}</div>
                     {(tags.length > 0 || note.attachments?.length) && (
                       <div className="note-row__tags">
-                        {tags.slice(0, 3).map((tag) => (
-                          <span key={tag} style={{ color: tagColor(tag).stroke }}>#{tag}</span>
-                        ))}
+                        {tags.slice(0, 3).map((tag) => {
+                          const tc = tagColor(tag);
+                          return (
+                            <span key={tag} style={{ color: tc.stroke, background: tc.chipBg }}>#{tag}</span>
+                          );
+                        })}
                         {!!note.attachments?.length && <span className="is-attach">{note.attachments.length} файл.</span>}
                       </div>
                     )}
