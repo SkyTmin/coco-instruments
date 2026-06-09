@@ -52,6 +52,7 @@ export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { genId } from '@/lib/id';
+import { normalizeNoteTitle } from '@/lib/notes-graph';
 import { deriveStatus, paidSoFar, resolve } from '@/lib/finance-calc';
 
 export type ObligationDraft = Omit<
@@ -246,6 +247,7 @@ interface FinanceState {
   getList: (id: string) => ExpenseList | undefined;
 
   addNote: (draft: NoteDraft) => Note;
+  getOrCreateNoteByTitle: (title: string, listId?: string) => Note;
   updateNote: (id: string, patch: Partial<Note>) => void;
   removeNote: (id: string) => void;
   getNote: (id: string) => Note | undefined;
@@ -565,6 +567,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ notes });
     persistNotes(notes, get().noteLists);
     return note;
+  },
+
+  // A tag is a page: opening #тег finds the note with that title, or creates it.
+  getOrCreateNoteByTitle: (title, listId) => {
+    const key = normalizeNoteTitle(title);
+    const existing = get().notes.find((n) => normalizeNoteTitle(n.title) === key);
+    if (existing) return existing;
+    return get().addNote({ title: title.trim(), body: '', listId });
   },
 
   updateNote: (id, patch) => {

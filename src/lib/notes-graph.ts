@@ -504,6 +504,42 @@ export function getNoteRelations(note: Note | undefined, notes: Note[]): NoteRel
   };
 }
 
+export interface TagPageRelations {
+  /** This title is used as a tag somewhere, or has sub-topics → it's a tag page. */
+  isTag: boolean;
+  /** Parent topic, if the title is itself a sub-topic (`здоровье/горло` → `здоровье`). */
+  parent?: string;
+  /** Direct sub-topics one level down (`здоровье` → `здоровье/горло`, `здоровье/нос`). */
+  children: string[];
+  /** Notes carrying this exact tag in their body. */
+  tagged: Note[];
+}
+
+/** A tag behaves like a page: this gathers everything that page should show —
+ *  its sub-topics, its parent topic, and every note tagged with it. */
+export function getTagPageRelations(title: string, notes: Note[]): TagPageRelations {
+  const key = normalizeNoteTitle(title);
+  if (!key) return { isTag: false, children: [], tagged: [] };
+  const childSet = new Set<string>();
+  const tagged = new Map<string, Note>();
+  const prefix = `${key}/`;
+
+  for (const note of notes) {
+    for (const tag of parseNoteTags(note.body)) {
+      if (tag === key) tagged.set(note.id, note);
+      if (tag.startsWith(prefix)) {
+        // Keep only the next segment down so we list direct children, not grandchildren.
+        const directChild = key + '/' + tag.slice(prefix.length).split('/')[0];
+        childSet.add(directChild);
+      }
+    }
+  }
+
+  const parent = key.includes('/') ? key.slice(0, key.lastIndexOf('/')) : undefined;
+  const children = Array.from(childSet).sort((a, b) => a.localeCompare(b, 'ru'));
+  return { isTag: tagged.size > 0 || children.length > 0, parent, children, tagged: Array.from(tagged.values()) };
+}
+
 export function filterNoteGraph(
   graph: NoteGraph,
   options: {

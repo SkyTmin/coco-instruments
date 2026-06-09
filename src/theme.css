@@ -926,6 +926,9 @@ input[type='datetime-local'] {
 /* "Граф вокруг заметки" button in the note view */
 .note-graph-link { display: flex; align-items: center; justify-content: center; gap: 8px; }
 
+/* Tag-as-page: hint above the sub-topics / tagged-notes sections */
+.tag-page__hint { font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-bottom: 4px; }
+
 /* tag filter chips inside a notebook (list detail) */
 .note-list-tags { display: flex; flex-wrap: wrap; gap: 7px; }
 .note-list-tag {
@@ -1163,9 +1166,12 @@ input[type='datetime-local'] {
   opacity: 1;
 }
 
-.notes-graph__node--missing,
-.notes-graph__node--tag {
+.notes-graph__node--missing {
   cursor: default;
+}
+/* Tags are pages now — tap to open them. */
+.notes-graph__node--tag {
+  cursor: pointer;
 }
 
 .notes-graph-empty {

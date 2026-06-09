@@ -498,6 +498,11 @@ export function NotesGraphPage() {
           }
           // The collapsed "Люди" node drills into the full people graph.
           if (point?.kind === 'people') navigate('/notes/graph?people=1');
+          // A tag is a page: open (or create) the note named after it.
+          if (point?.kind === 'tag') {
+            const target = useFinanceStore.getState().getOrCreateNoteByTitle(point.id.slice(4));
+            navigate(`/notes/${target.id}`);
+          }
         }
       }
       if (pointers.current.size === 0) {

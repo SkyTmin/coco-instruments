@@ -7,6 +7,7 @@ import {
   buildPeopleGraph,
   filterNoteGraph,
   getNoteRelations,
+  getTagPageRelations,
   layoutNoteGraph,
   normalizeNoteTitle,
   parseNoteTags,
@@ -101,6 +102,37 @@ describe('people graph (the "Люди" view)', () => {
     const detached = buildPeopleGraph(notes, { ...data, noteLinks: [] });
     expect(detached.nodes.some((n) => n.id === 'a1')).toBe(false);
     expect(detached.nodes.some((n) => n.id === personNodeId('p1'))).toBe(true);
+  });
+});
+
+describe('tag pages', () => {
+  const notes = [
+    note('h', 'здоровье', 'Заметки о здоровье'),
+    note('n1', 'Горло', '#здоровье/горло болит'),
+    note('n2', 'Простуда', '#здоровье и #здоровье/нос'),
+    note('n3', 'Работа', '#работа'),
+  ];
+
+  it('lists direct sub-topics and notes tagged with it', () => {
+    const rel = getTagPageRelations('здоровье', notes);
+    expect(rel.isTag).toBe(true);
+    expect(rel.parent).toBeUndefined();
+    expect(rel.children).toEqual(['здоровье/горло', 'здоровье/нос']);
+    // tagged with exactly #здоровье
+    expect(rel.tagged.map((n) => n.id)).toContain('n2');
+    // a note with only the sub-tag #здоровье/горло is not "tagged" by the parent
+    expect(rel.tagged.map((n) => n.id)).not.toContain('n1');
+  });
+
+  it('reports the parent topic of a sub-topic page', () => {
+    const rel = getTagPageRelations('здоровье/горло', notes);
+    expect(rel.parent).toBe('здоровье');
+    expect(rel.children).toEqual([]);
+    expect(rel.tagged.map((n) => n.id)).toContain('n1');
+  });
+
+  it('is not a tag page for an unused title', () => {
+    expect(getTagPageRelations('случайное', notes).isTag).toBe(false);
   });
 });
 
