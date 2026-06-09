@@ -6,6 +6,7 @@ import { useFinanceStore } from '@/store';
 import { normalizeNoteTitle, parseNoteTags } from '@/lib/notes-graph';
 import { noteDateFmt, noteSnippet } from '@/pages/NotesPage';
 import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
+import { NotesHelpButton } from '@/components/NotesGuide';
 
 export function NoteListDetailPage() {
   const navigate = useNavigate();
@@ -51,6 +52,7 @@ export function NoteListDetailPage() {
     <Screen
       title={list ? `${list.emoji ? `${list.emoji} ` : ''}${list.name}` : 'Список'}
       subtitle={all.length ? `${all.length} зам.` : 'Заметки этого списка'}
+      action={<NotesHelpButton />}
     >
       <div className="stack notes-page">
         <div className="notes-actions">

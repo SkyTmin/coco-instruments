@@ -4,6 +4,7 @@ import { EmptyState, Screen, SwipeRow } from '@/components/ui';
 import { IconGraph, IconList, IconPencil, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
+import { NotesHelpButton } from '@/components/NotesGuide';
 
 const LIST_EMOJIS = ['📋', '🏥', '💪', '💼', '🏠', '🎓', '✈️', '🍳', '🎬', '📚', '💡', '🌱', '💰', '❤️'];
 
@@ -60,6 +61,7 @@ export function NoteListsPage() {
     <Screen
       title="Списки"
       subtitle={noteLists.length ? `${noteLists.length} ${listWord(noteLists.length)}` : 'Заметки по тетрадям'}
+      action={<NotesHelpButton />}
     >
       <div className="stack notes-page">
         {open ? (

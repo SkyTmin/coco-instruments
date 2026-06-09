@@ -19,6 +19,7 @@ import { getNoteRelations, normalizeNoteTitle } from '@/lib/notes-graph';
 import { countTasks, toggleTaskInBody } from '@/lib/notes-markdown';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { noteDateFmt } from '@/pages/NotesPage';
+import { NotesHelpButton } from '@/components/NotesGuide';
 
 const AUTOSAVE_MS = 700;
 
@@ -381,6 +382,7 @@ export function NoteEditorPage() {
       subtitle={subtitle}
       action={
         <div className="notes-editor-actions">
+          <NotesHelpButton />
           {mode === 'view' ? (
             <button
               className="icon-btn notes-edit notes-edit--text"

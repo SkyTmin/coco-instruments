@@ -16,6 +16,7 @@ import {
   simulationStep,
 } from '@/lib/notes-graph';
 import { selectionChanged } from '@/lib/haptics';
+import { NotesHelpButton } from '@/components/NotesGuide';
 
 interface PointerSession {
   id: string;
@@ -538,6 +539,7 @@ export function NotesGraphPage() {
               ? activeNode.label
               : 'Списки, заметки и люди'
       }
+      action={<NotesHelpButton />}
     >
       <div className="stack notes-page notes-graph-screen">
         <div className="card notes-graph-controls">

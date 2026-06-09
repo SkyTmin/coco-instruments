@@ -4,6 +4,7 @@ import { EmptyState, Screen, Skeleton, StatTile, SwipeRow } from '@/components/u
 import { IconGraph, IconList, IconNotes, IconTrash } from '@/components/icons';
 import type { Note } from '@/types';
 import { useFinanceStore } from '@/store';
+import { NotesHelpButton } from '@/components/NotesGuide';
 import { buildNoteGraph, normalizeNoteTitle, parseNoteTags } from '@/lib/notes-graph';
 import { noteExcerpt } from '@/lib/notes-markdown';
 import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
@@ -63,7 +64,7 @@ export function NotesPage() {
 
   if (!hydrated) {
     return (
-      <Screen title="Заметки" subtitle="Быстрые записи и связи">
+      <Screen title="Заметки" subtitle="Быстрые записи и связи" action={<NotesHelpButton />}>
         <div className="stack notes-page">
           <div className="notes-actions">
             <Skeleton height={74} radius={18} />
@@ -82,6 +83,7 @@ export function NotesPage() {
     <Screen
       title="Заметки"
       subtitle={notes.length ? `${notes.length} зам. · ${graph.links.filter((l) => l.kind === 'wiki').length} связей` : 'Быстрые записи и связи'}
+      action={<NotesHelpButton />}
     >
       <div className="stack notes-page">
         <div className="notes-actions">
