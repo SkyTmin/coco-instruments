@@ -29,6 +29,8 @@
   --glass-2: rgba(247, 240, 230, 0.66);
   --glass-border: rgba(123, 75, 42, 0.12);
   --glass-hi: rgba(255, 255, 255, 0.7);
+  --chip-active-bg: #3a281d;
+  --chip-active-fg: #fdf6ee;
   --pos: #1fa86d;
   --neg: #e0613a;
   --warn: #d79a2b;
@@ -60,6 +62,8 @@
   --glass-2: rgba(57, 44, 35, 0.55);
   --glass-border: rgba(255, 232, 210, 0.13);
   --glass-hi: rgba(255, 246, 236, 0.15);
+  --chip-active-bg: #f2e3d2;
+  --chip-active-fg: #2a1d14;
   --pos: #4cd29a;
   --neg: #ff8a72;
   --warn: #ffc24e;
@@ -948,8 +952,85 @@ input[type='datetime-local'] {
   50% { transform: translateY(-7px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .notes-page .empty__icon { animation: none; }
+  .notes-page .empty__icon,
+  .notes-welcome__icon { animation: none; }
 }
+
+/* Header actions (graph + help) */
+.notes-head-actions { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+
+/* List filter chips — the fast, in-place way to slice notes by notebook. */
+.notes-chips {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 2px; margin: -2px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.notes-chips::-webkit-scrollbar { display: none; }
+.notes-chip {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  border: 0; cursor: pointer;
+  padding: 8px 13px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text);
+  font-size: 13.5px; font-weight: 700; white-space: nowrap;
+  transition: transform 0.12s ease, background 0.16s ease, color 0.16s ease;
+}
+.notes-chip:active { transform: scale(0.95); }
+.notes-chip__emoji { font-size: 14px; }
+.notes-chip__count {
+  font-size: 11px; font-weight: 800; color: var(--muted);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: 999px; padding: 1px 6px; min-width: 18px; text-align: center;
+}
+.notes-chip.is-active { background: var(--chip-active-bg); color: var(--chip-active-fg); }
+.notes-chip.is-active .notes-chip__count {
+  color: var(--chip-active-fg);
+  background: color-mix(in srgb, var(--chip-active-fg) 20%, transparent);
+}
+.notes-chip--add { font-size: 19px; font-weight: 600; color: var(--accent); padding: 7px 15px; }
+
+/* Section dividers (Закреплённые / Недавние) */
+.notes-section-head {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--muted); margin: 8px 2px 0;
+}
+.notes-section-head svg { opacity: 0.75; }
+
+/* Pinned cards: a hint of caramel and a pin glyph in the title. */
+.note-row.is-pinned {
+  background: color-mix(in srgb, var(--accent) 8%, var(--glass));
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--glass-border));
+}
+.note-row__pin { color: var(--accent); margin-right: 4px; vertical-align: -1px; }
+
+.notes-fab-spacer { height: 78px; }
+
+/* First-run welcome — an invitation, not a dead end. */
+.notes-welcome {
+  text-align: center;
+  padding: 24px 20px 22px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  box-shadow: var(--shadow-sm), inset 0 1px 0 var(--glass-hi);
+  margin-top: 8px;
+}
+.notes-welcome__icon {
+  width: 84px; height: 84px; margin: 4px auto 16px;
+  display: grid; place-items: center; font-size: 40px;
+  border-radius: 26px; background: var(--surface-2); box-shadow: var(--shadow-sm);
+  animation: empty-float 3.6s ease-in-out infinite;
+}
+.notes-welcome__title { margin: 0 0 6px; font-size: 22px; font-weight: 850; letter-spacing: -0.02em; }
+.notes-welcome__sub { margin: 0 auto 18px; max-width: 320px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.notes-welcome__feats { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; text-align: left; }
+.notes-welcome__feats > div {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface-2); border-radius: 13px; padding: 11px 14px; font-size: 14px; color: var(--muted);
+}
+.notes-welcome__feats b { color: var(--accent); font-weight: 800; min-width: 46px; }
 
 .notes-head-action {
   display: inline-flex;

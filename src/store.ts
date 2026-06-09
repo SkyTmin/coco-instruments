@@ -262,6 +262,7 @@ interface FinanceState {
   removeTagMessage: (tag: string, messageId: string) => void;
   updateNote: (id: string, patch: Partial<Note>) => void;
   removeNote: (id: string) => void;
+  setNotePinned: (id: string, pinned: boolean) => void;
   setNoteDepsHidden: (id: string, hidden: boolean) => void;
   getNote: (id: string) => Note | undefined;
   addNoteList: (name: string, emoji?: string) => NoteList;
@@ -679,6 +680,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ notes, personNoteLinks });
     persistNotes(notes, get().noteLists, get().tagPages);
     persistPeople(peopleSnapshot(get()));
+  },
+
+  // Pin/unpin — a position preference, so it doesn't bump updatedAt.
+  setNotePinned: (id, pinned) => {
+    const notes = get().notes.map((n) => (n.id === id ? { ...n, pinned } : n));
+    set({ notes });
+    persistNotes(notes, get().noteLists, get().tagPages);
   },
 
   // Graph view preference — toggled by long-press; doesn't bump updatedAt.

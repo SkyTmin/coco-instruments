@@ -4,7 +4,7 @@ import { EmptyState, Screen, SwipeRow } from '@/components/ui';
 import { IconGraph, IconNotes, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { normalizeNoteTitle, parseNoteTags } from '@/lib/notes-graph';
-import { noteDateFmt, noteSnippet } from '@/pages/NotesPage';
+import { noteSnippet, relativeDate } from '@/pages/NotesPage';
 import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { NotesHelpButton } from '@/components/NotesGuide';
 import { tagColor } from '@/lib/tag-color';
@@ -134,7 +134,7 @@ export function NoteListDetailPage() {
                   <div className="note-row__main">
                     <div className="note-row__top">
                       <div className="note-row__title">{note.title}</div>
-                      <div className="note-row__date">{noteDateFmt.format(new Date(note.updatedAt))}</div>
+                      <div className="note-row__date">{relativeDate(note.updatedAt)}</div>
                     </div>
                     <div className="note-row__body">{noteSnippet(note)}</div>
                     {(tags.length > 0 || note.attachments?.length) && (

@@ -216,6 +216,8 @@ export interface Note {
   messages?: NoteMessage[];
   /** Optional notebook/list this note belongs to. */
   listId?: string;
+  /** Pinned to the top of the notes list. */
+  pinned?: boolean;
   /** Graph: hide this note's dependency closure (collapsed via long-press). */
   depsHidden?: boolean;
   createdAt: number;
