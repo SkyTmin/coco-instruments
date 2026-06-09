@@ -44,6 +44,7 @@ const NotesGraphPage = lazy(() => import('@/pages/NotesGraphPage').then((m) => (
 const NotesPage = lazy(() => import('@/pages/NotesPage').then((m) => ({ default: m.NotesPage })));
 const NoteListsPage = lazy(() => import('@/pages/NoteListsPage').then((m) => ({ default: m.NoteListsPage })));
 const NoteListDetailPage = lazy(() => import('@/pages/NoteListDetailPage').then((m) => ({ default: m.NoteListDetailPage })));
+const TagPageEditor = lazy(() => import('@/pages/TagPageEditor').then((m) => ({ default: m.TagPageEditor })));
 const PeopleDashboardPage = lazy(() => import('@/pages/people/PeopleDashboardPage').then((m) => ({ default: m.PeopleDashboardPage })));
 const PersonDetailPage = lazy(() => import('@/pages/people/PersonDetailPage').then((m) => ({ default: m.PersonDetailPage })));
 const PersonFormPage = lazy(() => import('@/pages/people/PersonFormPage').then((m) => ({ default: m.PersonFormPage })));
@@ -171,6 +172,7 @@ export function App() {
           <Route path="/notes/graph" element={<NotesGraphPage />} />
           <Route path="/notes/lists" element={<NoteListsPage />} />
           <Route path="/notes/lists/:listId" element={<NoteListDetailPage />} />
+          <Route path="/notes/tag/:tag" element={<TagPageEditor />} />
           <Route path="/notes/:id" element={<NoteEditorPage />} />
           <Route path="/people" element={<PeopleDashboardPage />} />
           <Route path="/people/new" element={<PersonFormPage />} />

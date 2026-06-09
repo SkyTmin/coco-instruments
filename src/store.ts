@@ -15,6 +15,7 @@ import type {
   Note,
   NoteList,
   NotesBlob,
+  TagPage,
   Obligation,
   Outfit,
   Payment,
@@ -154,7 +155,8 @@ const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, ite
 const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, items });
 const persistRecurring = (items: RecurringPayment[]) => writeRecurring({ version: 1, items });
 const persistLists = (items: ExpenseList[]) => writeLists({ version: 1, items });
-const persistNotes = (items: Note[], lists: NoteList[]) => writeNotes({ version: 1, items, lists });
+const persistNotes = (items: Note[], lists: NoteList[], tagPages: TagPage[]) =>
+  writeNotes({ version: 1, items, lists, tagPages });
 const persistPeople = (blob: Omit<PeopleBlob, 'version'>) => writePeople({ version: 1, ...blob });
 const persistCalculator = (history: CalculatorHistoryEntry[], prefs: CalculatorPrefs) =>
   writeCalculator({ version: 1, history, prefs });
@@ -175,6 +177,7 @@ interface ExportData {
   lists?: ExpenseList[];
   notes?: Note[];
   noteLists?: NoteList[];
+  tagPages?: TagPage[];
   people?: Partial<Omit<PeopleBlob, 'version'>>;
   calculator?: { history?: CalculatorHistoryEntry[]; prefs?: Partial<CalculatorPrefs> };
   wardrobe?: WardrobeItem[];
@@ -200,6 +203,7 @@ interface FinanceState {
   lists: ExpenseList[];
   notes: Note[];
   noteLists: NoteList[];
+  tagPages: TagPage[];
   people: Person[];
   preferences: Preference[];
   gifts: Gift[];
@@ -247,7 +251,8 @@ interface FinanceState {
   getList: (id: string) => ExpenseList | undefined;
 
   addNote: (draft: NoteDraft) => Note;
-  getOrCreateNoteByTitle: (title: string, listId?: string) => Note;
+  getTagPage: (tag: string) => TagPage | undefined;
+  upsertTagPage: (tag: string, patch: Partial<Pick<TagPage, 'body' | 'attachments'>>) => TagPage;
   updateNote: (id: string, patch: Partial<Note>) => void;
   removeNote: (id: string) => void;
   getNote: (id: string) => Note | undefined;
@@ -343,6 +348,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   lists: [],
   notes: [],
   noteLists: [],
+  tagPages: [],
   people: [],
   preferences: [],
   gifts: [],
@@ -390,6 +396,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       lists: lists?.items ?? [],
       notes: notes?.items ?? [],
       noteLists: notes?.lists ?? [],
+      tagPages: notes?.tagPages ?? [],
       people: people?.people ?? [],
       preferences: people?.preferences ?? [],
       gifts: people?.gifts ?? [],
@@ -565,24 +572,28 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     };
     const notes = [note, ...get().notes];
     set({ notes });
-    persistNotes(notes, get().noteLists);
+    persistNotes(notes, get().noteLists, get().tagPages);
     return note;
   },
 
-  // A tag is a page: opening #тег finds the note with that title, or creates it.
-  // If the page exists but has no list while the tag lives inside one, adopt it
-  // there — so a tag's page stays together with the list it belongs to.
-  getOrCreateNoteByTitle: (title, listId) => {
-    const key = normalizeNoteTitle(title);
-    const existing = get().notes.find((n) => normalizeNoteTitle(n.title) === key);
-    if (existing) {
-      if (listId && !existing.listId) {
-        get().updateNote(existing.id, { listId });
-        return { ...existing, listId };
-      }
-      return existing;
-    }
-    return get().addNote({ title: title.trim(), body: '', listId });
+  // A tag IS a page: its content lives on the tag itself (no separate note).
+  getTagPage: (tag) => {
+    const key = normalizeNoteTitle(tag);
+    return get().tagPages.find((p) => p.tag === key);
+  },
+  upsertTagPage: (tag, patch) => {
+    const key = normalizeNoteTitle(tag);
+    const now = Date.now();
+    const existing = get().tagPages.find((p) => p.tag === key);
+    const next: TagPage = existing
+      ? { ...existing, ...patch, updatedAt: now }
+      : { tag: key, body: '', attachments: [], ...patch, createdAt: now, updatedAt: now };
+    const tagPages = existing
+      ? get().tagPages.map((p) => (p.tag === key ? next : p))
+      : [next, ...get().tagPages];
+    set({ tagPages });
+    persistNotes(get().notes, get().noteLists, tagPages);
+    return next;
   },
 
   updateNote: (id, patch) => {
@@ -598,14 +609,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         : n,
     );
     set({ notes });
-    persistNotes(notes, get().noteLists);
+    persistNotes(notes, get().noteLists, get().tagPages);
   },
 
   removeNote: (id) => {
     const notes = get().notes.filter((n) => n.id !== id);
     const personNoteLinks = get().personNoteLinks.filter((link) => link.noteId !== id);
     set({ notes, personNoteLinks });
-    persistNotes(notes, get().noteLists);
+    persistNotes(notes, get().noteLists, get().tagPages);
     persistPeople(peopleSnapshot(get()));
   },
 
@@ -616,7 +627,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const list: NoteList = { id: genId(), name: name.trim() || 'Список', emoji, createdAt: now, updatedAt: now };
     const noteLists = [list, ...get().noteLists];
     set({ noteLists });
-    persistNotes(get().notes, noteLists);
+    persistNotes(get().notes, noteLists, get().tagPages);
     return list;
   },
 
@@ -632,7 +643,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         : l,
     );
     set({ noteLists });
-    persistNotes(get().notes, noteLists);
+    persistNotes(get().notes, noteLists, get().tagPages);
   },
 
   removeNoteList: (id, deleteNotes = false) => {
@@ -648,7 +659,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       notes = notes.map((n) => (n.listId === id ? { ...n, listId: undefined } : n));
     }
     set({ noteLists, notes, personNoteLinks });
-    persistNotes(notes, noteLists);
+    persistNotes(notes, noteLists, get().tagPages);
     if (deleteNotes) persistPeople(peopleSnapshot(get()));
   },
 
@@ -993,6 +1004,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         lists: s.lists,
         notes: s.notes,
         noteLists: s.noteLists,
+        tagPages: s.tagPages,
         people: peopleSnapshot(s),
         calculator: { history: s.calculatorHistory, prefs: s.calculatorPrefs },
         wardrobe: s.wardrobe,
@@ -1019,6 +1031,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       lists: d.lists ?? [],
       notes: d.notes ?? [],
       noteLists: d.noteLists ?? [],
+      tagPages: d.tagPages ?? [],
       people: ppl.people ?? [],
       preferences: ppl.preferences ?? [],
       gifts: ppl.gifts ?? [],
@@ -1043,7 +1056,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistSavings(st.savings);
     persistRecurring(st.recurring);
     persistLists(st.lists);
-    persistNotes(st.notes, st.noteLists);
+    persistNotes(st.notes, st.noteLists, st.tagPages);
     persistPeople(peopleSnapshot(st));
     persistCalculator(st.calculatorHistory, st.calculatorPrefs);
     persistWardrobe(st.wardrobe);

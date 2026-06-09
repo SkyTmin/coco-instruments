@@ -15,8 +15,7 @@ import {
   MAX_ATTACHMENTS,
   MAX_IMAGE_SOURCE_SIZE,
 } from '@/lib/images';
-import { getNoteRelations, getTagPageRelations, normalizeNoteTitle, tagHomeListId } from '@/lib/notes-graph';
-import { tagColor } from '@/lib/tag-color';
+import { getNoteRelations, normalizeNoteTitle } from '@/lib/notes-graph';
 import { countTasks, toggleTaskInBody } from '@/lib/notes-markdown';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { noteDateFmt } from '@/pages/NotesPage';
@@ -184,9 +183,6 @@ export function NoteEditorPage() {
 
   const note = id ? existing : undefined;
   const relations = useMemo(() => getNoteRelations(note, notes), [note, notes]);
-  // Tag-as-page: when this note's title is used as a tag, surface its sub-topics
-  // and the notes carrying that tag.
-  const tagRel = useMemo(() => getTagPageRelations(note ? note.title : '', notes), [note, notes]);
   const linkedPeople = useMemo(() => {
     const noteId = currentId.current ?? id;
     if (!noteId) return [];
@@ -328,14 +324,10 @@ export function NoteEditorPage() {
     selectionChanged();
   };
 
-  // A tag is a page: open (or create) the note named after the tag. It inherits
-  // the list the tag lives in (or the current note's list), so it stays inside.
+  // A tag is its own page — open it (content lives on the tag, not a note).
   const openTagPage = (tagPath: string) => {
     persistRef.current();
-    const home = tagHomeListId(tagPath, notes) ?? listIdRef.current;
-    const target = useFinanceStore.getState().getOrCreateNoteByTitle(tagPath, home);
-    if (target.id === currentId.current) return;
-    navigate(`/notes/${target.id}`);
+    navigate(`/notes/tag/${encodeURIComponent(tagPath)}`);
   };
 
   const openMissing = (linkTitle: string) => {
@@ -557,57 +549,6 @@ export function NoteEditorPage() {
         )}
 
         {mode === 'view' && hasTasks && <TaskProgress body={body} />}
-
-        {mode === 'view' && note && tagRel.isTag && (
-          <div className="notes-relations notes-relations--editor tag-page">
-            <div className="tag-page__hint">🏷 Это страница тега — пишите, добавляйте фото, как в обычной заметке</div>
-            {tagRel.parent && (
-              <div className="notes-relation-row">
-                <span>Тема</span>
-                <div>
-                  <button
-                    className="note-chip"
-                    style={{ color: tagColor(tagRel.parent).stroke, background: tagColor(tagRel.parent).chipBg }}
-                    onClick={() => openTagPage(tagRel.parent as string)}
-                  >
-                    #{tagRel.parent}
-                  </button>
-                </div>
-              </div>
-            )}
-            {tagRel.children.length > 0 && (
-              <div className="notes-relation-row">
-                <span>Подтемы</span>
-                <div>
-                  {tagRel.children.map((child) => (
-                    <button
-                      key={child}
-                      className="note-chip"
-                      style={{ color: tagColor(child).stroke, background: tagColor(child).chipBg }}
-                      onClick={() => openTagPage(child)}
-                    >
-                      #{child}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {tagRel.tagged.some((n) => n.id !== note.id) && (
-              <div className="notes-relation-row">
-                <span>С этим тегом</span>
-                <div>
-                  {tagRel.tagged
-                    .filter((n) => n.id !== note.id)
-                    .map((n) => (
-                      <button key={n.id} className="note-chip" onClick={() => openNote(n.id)}>
-                        {n.title}
-                      </button>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {mode === 'view' && note && (
           <button

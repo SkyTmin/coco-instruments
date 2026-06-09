@@ -15,7 +15,6 @@ import {
   layoutNoteGraph,
   personNodeId,
   simulationStep,
-  tagHomeListId,
 } from '@/lib/notes-graph';
 import { selectionChanged } from '@/lib/haptics';
 import { NotesHelpButton } from '@/components/NotesGuide';
@@ -499,14 +498,9 @@ export function NotesGraphPage() {
           }
           // The collapsed "Люди" node drills into the full people graph.
           if (point?.kind === 'people') navigate('/notes/graph?people=1');
-          // A tag is a page: open (or create) the note named after it, kept in
-          // the list you're viewing (or the tag's home list).
+          // A tag is its own page — open it (content lives on the tag).
           if (point?.kind === 'tag') {
-            const tag = point.id.slice(4);
-            const store = useFinanceStore.getState();
-            const home = listParamRef.current ?? tagHomeListId(tag, store.notes) ?? undefined;
-            const target = store.getOrCreateNoteByTitle(tag, home);
-            navigate(`/notes/${target.id}`);
+            navigate(`/notes/tag/${encodeURIComponent(point.id.slice(4))}`);
           }
         }
       }

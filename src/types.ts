@@ -239,10 +239,21 @@ export interface Attachment {
 /** Notes historically called it NoteAttachment — keep the alias. */
 export type NoteAttachment = Attachment;
 
+/** A tag's own page: editable content + photos that live on the tag itself
+ *  (not a separate note). Keyed by the normalised tag path, e.g. "здоровье/горло". */
+export interface TagPage {
+  tag: string;
+  body: string;
+  attachments?: NoteAttachment[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface NotesBlob {
   version: 1;
   items: Note[];
   lists?: NoteList[];
+  tagPages?: TagPage[];
 }
 
 // ---- People: personal relationship base ----------------------------------

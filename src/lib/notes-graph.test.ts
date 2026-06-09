@@ -9,7 +9,6 @@ import {
   getNoteRelations,
   getTagPageRelations,
   layoutNoteGraph,
-  tagHomeListId,
   normalizeNoteTitle,
   parseNoteTags,
   parseWikiLinks,
@@ -53,19 +52,6 @@ describe('overview graph (notebooks)', () => {
   });
 });
 
-describe('tag home list', () => {
-  it('returns the list a tag is used exclusively within', () => {
-    const notes = [note('x', 'Лечение', '#бородавки/лазер', 'health'), note('y', 'Другое', 'без тегов', 'health')];
-    expect(tagHomeListId('бородавки', notes)).toBe('health');
-  });
-
-  it('has no home when the tag spans lists or any loose note', () => {
-    const shared = [note('a', 'A', '#общее', 'health'), note('b', 'B', '#общее')]; // b is loose
-    expect(tagHomeListId('общее', shared)).toBeUndefined();
-    const twoLists = [note('a', 'A', '#общее', 'health'), note('b', 'B', '#общее', 'work')];
-    expect(tagHomeListId('общее', twoLists)).toBeUndefined();
-  });
-});
 
 describe('overview graph — people', () => {
   const lists = [{ id: 'health', name: 'Здоровье', createdAt: 0, updatedAt: 0 }];

@@ -504,24 +504,6 @@ export interface TagPageRelations {
   tagged: Note[];
 }
 
-/** If a tag is used exclusively within a single list (no loose notes, no other
- *  lists), that list is the tag's "home" — its page belongs there too. Returns
- *  undefined when the tag spans several lists or any loose note. */
-export function tagHomeListId(tag: string, notes: Note[]): string | undefined {
-  const key = normalizeNoteTitle(tag);
-  if (!key) return undefined;
-  const prefix = `${key}/`;
-  const lists = new Set<string>();
-  let loose = false;
-  for (const note of notes) {
-    const uses = parseNoteTags(note.body).some((t) => t === key || t.startsWith(prefix));
-    if (!uses) continue;
-    if (note.listId) lists.add(note.listId);
-    else loose = true;
-  }
-  return !loose && lists.size === 1 ? [...lists][0] : undefined;
-}
-
 /** A tag behaves like a page: this gathers everything that page should show —
  *  its sub-topics, its parent topic, and every note tagged with it. */
 export function getTagPageRelations(title: string, notes: Note[]): TagPageRelations {
