@@ -8,24 +8,13 @@ describe('tag colour', () => {
     expect(tagDepth('a/b/c')).toBe(2);
   });
 
-  it('is deterministic and shares one hue across a namespace', () => {
-    const parent = tagColor('здоровье');
-    const child = tagColor('здоровье/горло');
-    const grand = tagColor('здоровье/горло/боль');
-    expect(parent.hue).toBe(child.hue);
-    expect(child.hue).toBe(grand.hue);
-    expect(tagColor('здоровье')).toEqual(parent); // stable
-  });
-
-  it('gives different topics different hues', () => {
-    expect(tagColor('здоровье').hue).not.toBe(tagColor('работа').hue);
-  });
-
-  it('lightens nested tags so children read as lighter than their parent', () => {
-    expect(tagColor('здоровье/горло').depth).toBe(1);
-    const lightness = (s: string) => Number(s.match(/(\d+)%\)$/)![1]);
-    expect(lightness(tagColor('здоровье/горло').stroke)).toBeGreaterThan(
-      lightness(tagColor('здоровье').stroke),
-    );
+  it('is one unified style for every tag (no random per-tag colours)', () => {
+    const a = tagColor('здоровье');
+    const b = tagColor('работа');
+    expect(a.stroke).toBe(b.stroke);
+    expect(a.fill).toBe(b.fill);
+    expect(a.chipBg).toBe(b.chipBg);
+    // and it leans on a single design-system token rather than a hashed hue
+    expect(a.stroke).toContain('--tag');
   });
 });

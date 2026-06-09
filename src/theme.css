@@ -31,6 +31,11 @@
   --glass-hi: rgba(255, 255, 255, 0.7);
   --chip-active-bg: #3a281d;
   --chip-active-fg: #fdf6ee;
+  /* One calm, unified tag style (derives from --accent → adapts per theme). */
+  --tag-fg: var(--accent);
+  --tag-bg: color-mix(in srgb, var(--accent) 12%, transparent);
+  --tag-fill: color-mix(in srgb, var(--accent) 16%, transparent);
+  --tag-glow: color-mix(in srgb, var(--accent) 22%, transparent);
   --pos: #1fa86d;
   --neg: #e0613a;
   --warn: #d79a2b;
@@ -1145,7 +1150,16 @@ input[type='datetime-local'] {
   gap: 8px;
 }
 .chat-info { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
-.chat-empty { color: var(--muted); text-align: center; padding: 30px 16px; font-size: 14px; line-height: 1.5; }
+.chat-empty { text-align: center; padding: 36px 18px 24px; }
+.chat-empty__icon {
+  width: 80px; height: 80px; margin: 0 auto 14px;
+  display: grid; place-items: center; font-size: 38px;
+  border-radius: 26px; background: var(--surface-2); box-shadow: var(--shadow-sm);
+  animation: empty-float 3.6s ease-in-out infinite;
+}
+.chat-empty__title { font-size: 18px; font-weight: 850; letter-spacing: -0.01em; margin-bottom: 6px; }
+.chat-empty__hint { color: var(--muted); font-size: 13.5px; line-height: 1.55; max-width: 290px; margin: 0 auto; }
+.chat-empty__hint b { color: var(--accent); }
 
 .chat-bubble {
   align-self: flex-end;
@@ -1186,9 +1200,36 @@ input[type='datetime-local'] {
   -webkit-backdrop-filter: blur(22px) saturate(1.4);
   backdrop-filter: blur(22px) saturate(1.4);
 }
-.chat-input__row { display: flex; align-items: flex-end; gap: 6px; }
-.chat-attach { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 7px; border-radius: 10px; flex: 0 0 auto; }
-.chat-attach:active { background: var(--surface-2); }
+.chat-input__row { display: flex; align-items: flex-end; gap: 8px; }
+.chat-plus {
+  flex: 0 0 auto;
+  width: 38px; height: 38px; border-radius: 50%;
+  border: 0; cursor: pointer;
+  display: grid; place-items: center;
+  background: var(--surface-2); color: var(--accent);
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+.chat-plus:active { transform: scale(0.9); background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); }
+
+/* "＋" quick-actions sheet */
+.chat-actions { display: flex; flex-direction: column; gap: 2px; }
+.chat-actions button {
+  display: flex; align-items: center; gap: 14px;
+  border: 0; background: transparent; color: var(--text); cursor: pointer;
+  padding: 13px 6px; font-size: 15.5px; font-weight: 600; text-align: left;
+  border-bottom: 1px solid var(--hairline);
+}
+.chat-actions button:last-child { border-bottom: 0; }
+.chat-actions button:active { background: var(--surface-2); }
+.chat-actions__ic {
+  width: 38px; height: 38px; flex: none; display: grid; place-items: center;
+  border-radius: 12px; background: var(--tag-bg); color: var(--accent);
+}
+
+/* Note-link picker (Связать с заметкой) */
+.link-picker { margin-top: 10px; max-height: 48vh; overflow-y: auto; display: flex; flex-direction: column; }
+.link-picker__hint { color: var(--accent); font-size: 12px; font-weight: 700; }
+.link-picker__empty { padding: 16px 4px; text-align: center; }
 .chat-text {
   flex: 1;
   min-width: 0;
@@ -1227,6 +1268,65 @@ input[type='datetime-local'] {
 
 .chat-lightbox { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.92); display: grid; place-items: center; padding: 16px; }
 .chat-lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+
+/* Note meta bar — sticky context strip under the title: список · теги · связи. */
+.note-meta {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 7px;
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+.note-meta::-webkit-scrollbar { display: none; }
+.note-meta__chip {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
+  border: 0; cursor: pointer; white-space: nowrap;
+  padding: 6px 12px; border-radius: 999px;
+  font-size: 13px; font-weight: 700;
+  background: var(--surface-2); color: var(--text);
+  transition: transform 0.12s ease;
+}
+.note-meta__chip:active { transform: scale(0.94); }
+.note-meta__list { color: var(--text); }
+.note-meta__tag { color: var(--tag-fg); background: var(--tag-bg); }
+.note-meta__links { color: var(--accent); background: var(--tag-bg); }
+.note-meta__tag-title { color: var(--tag-fg); }
+
+/* Connections hub (Связи sheet) */
+.links-lead { margin: -2px 0 14px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.links-group { margin-top: 16px; }
+.links-group__title {
+  font-size: 11.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 8px;
+}
+.links-group__chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.links-group__empty { color: var(--muted); font-size: 13px; }
+.links-group + .btn, .links-group + .links-group { margin-top: 16px; }
+.note-graph-link { margin-top: 16px; }
+
+/* Help guide (plain, closable bottom sheet) */
+.guide-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.guide-head__title { margin: 0; font-size: 19px; font-weight: 850; letter-spacing: -0.02em; }
+.guide-head__close {
+  flex: none; width: 32px; height: 32px; border: 0; border-radius: 50%;
+  background: var(--surface-2); color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer;
+}
+.guide-head__close:active { transform: scale(0.9); }
+.guide__lead { margin: 0 0 4px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.guide-steps { display: flex; flex-direction: column; gap: 4px; margin: 12px 0 18px; }
+.guide-step { display: flex; align-items: flex-start; gap: 14px; padding: 12px 4px; border-bottom: 1px solid var(--hairline); }
+.guide-step:last-child { border-bottom: 0; }
+.guide-step__emoji {
+  flex: none; width: 42px; height: 42px; display: grid; place-items: center;
+  font-size: 21px; border-radius: 13px; background: var(--surface-2);
+}
+.guide-step__title { font-size: 15px; font-weight: 800; margin-bottom: 3px; }
+.guide-step__text { font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.guide-step__text code {
+  background: var(--tag-bg); color: var(--accent); padding: 1px 6px; border-radius: 6px;
+  font-size: 12.5px; font-weight: 700;
+}
+.guide-step__text b { color: var(--accent); font-weight: 800; }
 
 /* tag filter chips inside a notebook (list detail) */
 .note-list-tags { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -1894,8 +1994,8 @@ input[type='datetime-local'] {
 }
 .md-tag {
   border: 0;
-  background: rgba(46, 158, 107, 0.12);
-  color: var(--pos);
+  background: var(--tag-bg);
+  color: var(--tag-fg);
   font: inherit;
   font-weight: 700;
   padding: 1px 7px;

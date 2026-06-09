@@ -59,6 +59,27 @@ export const IconPin = (p: IconProps) => (
   </svg>
 );
 
+export const IconDots = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="5" r="1.4" />
+    <circle cx="12" cy="12" r="1.4" />
+    <circle cx="12" cy="19" r="1.4" />
+  </svg>
+);
+
+export const IconLink = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </svg>
+);
+
+export const IconHash = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" />
+  </svg>
+);
+
 export const IconSend = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M22 2 11 13" />

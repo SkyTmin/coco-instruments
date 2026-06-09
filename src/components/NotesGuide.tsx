@@ -1,15 +1,11 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Sheet } from '@/components/ui';
 import { IconInfo } from '@/components/icons';
 import { tapLight } from '@/lib/haptics';
-import { tagColor } from '@/lib/tag-color';
 
-/**
- * "i" button → an illustrated, animated cheat-sheet explaining how notes,
- * links, tags, sub-tags and the graph fit together. Drop `<NotesHelpButton />`
- * into any notes-section Screen's `action` prop so the guide is reachable
- * everywhere.
- */
+/** "Помощь" button → a short, plain-language guide. Used on the notes list
+ *  (a normal screen); inside a note the guide is opened from the ⋯ menu. */
 export function NotesHelpButton() {
   const [open, setOpen] = useState(false);
   return (
@@ -30,152 +26,53 @@ export function NotesHelpButton() {
   );
 }
 
-// Real graph colours for the examples, so the guide matches the live graph.
-const HEALTH = tagColor('здоровье');
-const THROAT = tagColor('здоровье/горло');
-const NOSE = tagColor('здоровье/нос');
-
-const tagStyle = (c: typeof HEALTH) => ({
-  fill: c.fill,
-  stroke: c.stroke,
-  filter: `drop-shadow(0 0 5px ${c.glow})`,
-});
+function Step({ emoji, title, children }: { emoji: string; title: string; children: ReactNode }) {
+  return (
+    <div className="guide-step">
+      <div className="guide-step__emoji">{emoji}</div>
+      <div className="guide-step__body">
+        <div className="guide-step__title">{title}</div>
+        <div className="guide-step__text">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 export function NotesGuide({ onClose }: { onClose: () => void }) {
   return (
-    <Sheet title="Как работают заметки" onClose={onClose}>
+    <Sheet onClose={onClose}>
       <div className="guide">
+        <div className="guide-head">
+          <h3 className="guide-head__title">Как работают заметки</h3>
+          <button className="guide-head__close" onClick={onClose} aria-label="Закрыть">
+            ×
+          </button>
+        </div>
         <p className="guide__lead">
-          Заметки можно связывать друг с другом и помечать тегами — получается ваша личная мини-вики и
-          наглядный граф. Вот из чего всё состоит:
+          Каждая заметка — это личный чат с собой. Записывайте мысли по одной, как сообщения: текст, фото,
+          задачи.
         </p>
 
-        {/* 1 — notes, the link between them, and a tag */}
-        <section className="guide__card" style={{ animationDelay: '0.04s' }}>
-          <svg className="guide-dia guide-dia--anim" viewBox="0 0 320 170" role="img" aria-label="Две заметки связаны ссылкой, у одной есть тег">
-            <text className="guide-dia__cap" x="160" y="40">связь [[ ]]</text>
-            <line className="guide-dia__link guide-line" style={{ animationDelay: '0.2s' }} x1="94" y1="54" x2="226" y2="54" />
-            <line
-              className="guide-dia__link guide-dia__link--tag guide-flow"
-              style={{ stroke: HEALTH.stroke, animationDelay: '0.5s' }}
-              x1="90"
-              y1="66"
-              x2="170"
-              y2="112"
-            />
-            <g className="guide-node" style={{ animationDelay: '0s' }}>
-              <circle className="guide-dia__note" cx="72" cy="54" r="22" />
-              <text className="guide-dia__label" x="72" y="92">Горло</text>
-            </g>
-            <g className="guide-node" style={{ animationDelay: '0.12s' }}>
-              <circle className="guide-dia__note" cx="248" cy="54" r="22" />
-              <text className="guide-dia__label" x="248" y="92">Насморк</text>
-            </g>
-            <g className="guide-node" style={{ animationDelay: '0.32s' }}>
-              <circle cx="180" cy="122" r="15" style={tagStyle(HEALTH)} />
-              <text className="guide-dia__label" x="180" y="152" style={{ fill: HEALTH.stroke }}>#здоровье</text>
-            </g>
-          </svg>
-          <h4 className="guide__h">Заметки и связи</h4>
-          <p className="guide__p">
-            Внутри заметки «Горло» напишите <code>[[Насморк]]</code> — появится <b>связь</b> с заметкой
-            «Насморк». В графе это линия между двумя кружками. «Горло» и «Насморк» — просто примеры
-            названий ваших заметок.
-          </p>
-          <p className="guide__p">
-            <code>#здоровье</code> — это <b>тег</b>, метка-категория. Заметки с одним тегом легко
-            находить и собирать вместе.
-          </p>
-        </section>
-
-        {/* 2 — hierarchical tags, parent vs lighter children */}
-        <section className="guide__card" style={{ animationDelay: '0.1s' }}>
-          <svg className="guide-dia guide-dia--anim" viewBox="0 0 320 170" role="img" aria-label="Тема с двумя подтемами разных оттенков">
-            <line className="guide-dia__link guide-dia__link--tag guide-flow" style={{ stroke: THROAT.stroke, animationDelay: '0.4s' }} x1="160" y1="58" x2="86" y2="105" />
-            <line className="guide-dia__link guide-dia__link--tag guide-flow" style={{ stroke: NOSE.stroke, animationDelay: '0.55s' }} x1="160" y1="58" x2="234" y2="105" />
-            <g className="guide-node" style={{ animationDelay: '0s' }}>
-              <circle cx="160" cy="44" r="18" style={tagStyle(HEALTH)} />
-              <text className="guide-dia__label" x="160" y="20" style={{ fill: HEALTH.stroke }}>#здоровье</text>
-            </g>
-            <g className="guide-node" style={{ animationDelay: '0.2s' }}>
-              <circle cx="80" cy="120" r="15" style={tagStyle(THROAT)} />
-              <text className="guide-dia__label" x="80" y="152" style={{ fill: THROAT.stroke }}>горло</text>
-            </g>
-            <g className="guide-node" style={{ animationDelay: '0.32s' }}>
-              <circle cx="240" cy="120" r="15" style={tagStyle(NOSE)} />
-              <text className="guide-dia__label" x="240" y="152" style={{ fill: NOSE.stroke }}>нос</text>
-            </g>
-          </svg>
-          <h4 className="guide__h">Вложенные теги (подтемы)</h4>
-          <p className="guide__p">
-            Тег можно разбить на <b>подтемы</b> через слэш: <code>#здоровье/горло</code> и{' '}
-            <code>#здоровье/нос</code>. «Здоровье» становится <b>темой</b>, а «горло» и «нос» — её
-            подтемами. У каждой темы <b>свой цвет</b>, а подтемы — тот же цвет, но светлее.
-          </p>
-        </section>
-
-        {/* 3 — colour legend, matching the real graph */}
-        <section className="guide__card" style={{ animationDelay: '0.16s' }}>
-          <h4 className="guide__h">Цвета в графе</h4>
-          <div className="guide-legend">
-            <span className="guide-legend__item">
-              <i className="guide-dot guide-dot--note" />Заметка
-            </span>
-            <span className="guide-legend__item">
-              <i className="guide-dot guide-dot--list" />Список
-            </span>
-            <span className="guide-legend__item">
-              <i className="guide-dot guide-dot--people" />Люди
-            </span>
-            <span className="guide-legend__item">
-              <i className="guide-dot guide-dot--missing" />Ещё не создана
-            </span>
-          </div>
-          <p className="guide__p" style={{ margin: '10px 0 8px' }}>
-            <b>Теги</b> — у каждой темы свой цвет, подтема светлее своей темы:
-          </p>
-          <div className="guide-legend">
-            <span className="guide-legend__item">
-              <i className="guide-dot" style={{ background: HEALTH.chipBg, borderColor: HEALTH.stroke }} />
-              <span style={{ color: HEALTH.stroke }}>#здоровье</span>
-            </span>
-            <span className="guide-legend__item">
-              <i className="guide-dot" style={{ background: THROAT.chipBg, borderColor: THROAT.stroke }} />
-              <span style={{ color: THROAT.stroke }}>#здоровье/горло</span>
-            </span>
-          </div>
-        </section>
-
-        {/* 4 — quick syntax cheat-sheet */}
-        <section className="guide__card" style={{ animationDelay: '0.22s' }}>
-          <h4 className="guide__h">Шпаргалка</h4>
-          <div className="guide-syntax">
-            <div className="guide-syntax__row">
-              <code>[[Заметка]]</code>
-              <span>связь с другой заметкой</span>
-            </div>
-            <div className="guide-syntax__row">
-              <code>#метка</code>
-              <span>тег-категория</span>
-            </div>
-            <div className="guide-syntax__row">
-              <code>#тема/подтема</code>
-              <span>вложенный тег</span>
-            </div>
-            <div className="guide-syntax__row">
-              <code>- [ ] дело</code>
-              <span>задача с галочкой</span>
-            </div>
-            <div className="guide-syntax__row">
-              <code>**жирный**</code>
-              <span>выделение текста</span>
-            </div>
-            <div className="guide-syntax__row">
-              <code>## Заголовок</code>
-              <span>подзаголовок</span>
-            </div>
-          </div>
-        </section>
+        <div className="guide-steps">
+          <Step emoji="✍️" title="Пишите мысли">
+            Печатайте внизу и жмите <b>➤</b>. Каждая запись — отдельное сообщение. Долгий тап по нему —
+            изменить или удалить.
+          </Step>
+          <Step emoji="＋" title="Кнопка «плюс»">
+            Слева от поля ввода. Добавляет фото, файл, тег, связь или задачу — символы помнить не нужно.
+          </Step>
+          <Step emoji="🔗" title="Связи между мыслями">
+            Заметки можно объединять по смыслу. Кнопка <b>«Связи»</b> вверху показывает связанные заметки и
+            помогает связать новые.
+          </Step>
+          <Step emoji="#️⃣" title="Теги и темы">
+            Помечайте темы: <code>#здоровье</code>. Через слэш — подтема: <code>#здоровье/горло</code>. Теги
+            видно под заголовком; тап открывает страницу темы.
+          </Step>
+          <Step emoji="🕸" title="Граф связей">
+            Все заметки и связи — на одной карте. Откройте через <b>«Связи → Граф вокруг заметки»</b>.
+          </Step>
+        </div>
 
         <button className="btn btn--primary btn--block" onClick={onClose}>
           Понятно

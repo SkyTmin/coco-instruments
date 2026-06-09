@@ -713,7 +713,7 @@ export function NotesGraphPage() {
                           cx={point.x}
                           cy={point.y}
                           r={point.r}
-                          style={tc ? { fill: tc.fill, stroke: tc.stroke, filter: `drop-shadow(0 0 5px ${tc.glow})` } : undefined}
+                          style={tc ? { fill: tc.fill, stroke: tc.stroke } : undefined}
                         />
                         <text
                           className={`notes-graph__label${labelVisible(point) ? ' is-shown' : ''}`}
