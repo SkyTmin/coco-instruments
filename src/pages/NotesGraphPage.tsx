@@ -10,6 +10,7 @@ import {
   buildListGraph,
   buildNoteGraph,
   buildOverviewGraph,
+  buildPeopleGraph,
   filterNoteGraph,
   layoutNoteGraph,
   personNodeId,
@@ -76,9 +77,14 @@ export function NotesGraphPage() {
       const scoped = notes.filter((n) => n.listId === listParam);
       return activeList ? buildListGraph(activeList, scoped) : buildNoteGraph(scoped);
     }
-    // Person-centric view (opened from the People section) and the full people
-    // graph (drilled in from the "Люди" node) both show people individually.
-    if (personParam || peopleParam) {
+    // The "Люди" node drills into a people-only graph: people + just the notes
+    // linked to them (unrelated notes stay out).
+    if (peopleParam) {
+      return buildPeopleGraph(notes, { people, gifts, promises, conversations, meetIdeas, relations, noteLinks });
+    }
+    // Person-centric view (opened from the People section) — local mode keeps it
+    // to that person's neighbourhood.
+    if (personParam) {
       return buildNoteGraph(notes, { people, gifts, promises, conversations, meetIdeas, relations, noteLinks });
     }
     // Local graph around one note: every note is its own node (not collapsed

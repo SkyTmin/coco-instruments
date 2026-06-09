@@ -444,6 +444,40 @@ export function buildListGraph(list: NoteList, notes: Note[]): NoteGraph {
   return { nodes, links };
 }
 
+/** People-focused graph (the "Люди" view): every person — with their gifts,
+ *  promises, events and inter-person relations — plus ONLY the notes actually
+ *  linked to someone. Unrelated notes are left out, so detaching a person from
+ *  a note also removes that note from this view. */
+export function buildPeopleGraph(notes: Note[], peopleData: PeopleGraphData): NoteGraph {
+  const linkedNoteIds = new Set(peopleData.noteLinks.map((link) => link.noteId));
+  const peopleNotes = notes.filter((note) => linkedNoteIds.has(note.id));
+  const graph = buildNoteGraph(peopleNotes, peopleData);
+
+  // A people-note may [[link]] to a note outside the circle — that would show
+  // as a dashed "missing" placeholder. Drop those so the view stays about people.
+  const drop = new Set(graph.nodes.filter((node) => node.kind === 'missing').map((node) => node.id));
+  if (!drop.size) return graph;
+
+  const nodes = graph.nodes.filter((node) => !drop.has(node.id));
+  for (const node of nodes) {
+    node.degree = 0;
+    node.incoming = 0;
+    node.outgoing = 0;
+  }
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const links = graph.links.filter((link) => byId.has(link.source) && byId.has(link.target));
+  for (const link of links) {
+    const source = byId.get(link.source);
+    const target = byId.get(link.target);
+    if (!source || !target) continue;
+    source.outgoing += 1;
+    source.degree += 1;
+    target.incoming += 1;
+    target.degree += 1;
+  }
+  return { nodes, links };
+}
+
 export function getNoteRelations(note: Note | undefined, notes: Note[]): NoteRelations {
   if (!note) return { outgoing: [], missing: [], backlinks: [], tags: [] };
   const byTitle = new Map(notes.map((item) => [normalizeNoteTitle(item.title), item]));

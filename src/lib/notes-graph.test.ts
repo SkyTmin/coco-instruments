@@ -4,6 +4,7 @@ import {
   buildListGraph,
   buildNoteGraph,
   buildOverviewGraph,
+  buildPeopleGraph,
   filterNoteGraph,
   getNoteRelations,
   layoutNoteGraph,
@@ -69,6 +70,37 @@ describe('overview graph — people', () => {
   it('omits the people node when there are no people', () => {
     const bare = buildOverviewGraph(notes, lists);
     expect(bare.nodes.some((n) => n.id === 'people:all')).toBe(false);
+  });
+});
+
+describe('people graph (the "Люди" view)', () => {
+  const people = [
+    { id: 'p1', name: 'Аня', category: 'friend' as const, closeness: 3 as const, tags: [], favorite: false, createdAt: 0, updatedAt: 0 },
+  ];
+  const notes = [note('a1', 'Звонок Ане', ''), note('a2', 'Несвязанная заметка', '')];
+  const data = {
+    people,
+    gifts: [],
+    promises: [],
+    conversations: [],
+    meetIdeas: [],
+    relations: [],
+    noteLinks: [{ id: 'ln1', personId: 'p1', noteId: 'a1', createdAt: 0 }],
+  };
+  const g = buildPeopleGraph(notes, data);
+
+  it('keeps people and only the notes linked to them', () => {
+    expect(g.nodes.some((n) => n.id === personNodeId('p1'))).toBe(true);
+    expect(g.nodes.some((n) => n.id === 'a1')).toBe(true);
+    // a note not linked to anyone is left out of the people view
+    expect(g.nodes.some((n) => n.id === 'a2')).toBe(false);
+    expect(g.links.some((l) => l.kind === 'person-note' && l.target === 'a1')).toBe(true);
+  });
+
+  it('drops the note once its last person link is removed', () => {
+    const detached = buildPeopleGraph(notes, { ...data, noteLinks: [] });
+    expect(detached.nodes.some((n) => n.id === 'a1')).toBe(false);
+    expect(detached.nodes.some((n) => n.id === personNodeId('p1'))).toBe(true);
   });
 });
 
