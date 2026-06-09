@@ -38,15 +38,17 @@ export function tagColor(tag: string): TagColor {
   const root = (tag.split('/').filter(Boolean)[0] ?? tag).toLocaleLowerCase('ru-RU');
   const depth = tagDepth(tag);
   const hue = hashString(root) % 360;
-  // Children get lighter + slightly softer, so the topic stays the visual hub.
-  const light = Math.min(72, 56 + depth * 9);
-  const sat = Math.max(52, 70 - depth * 6);
+  // Milky, low-saturation tones (dusty rose, sage, slate — never neon): the
+  // whole namespace shares a hue, children get lighter and softer than the
+  // parent topic, so hierarchy reads like shades of one candy.
+  const light = Math.min(68, 50 + depth * 8);
+  const sat = Math.max(26, 38 - depth * 4);
   return {
     hue,
     depth,
     stroke: `hsl(${hue}, ${sat}%, ${light}%)`,
-    fill: `hsla(${hue}, ${sat}%, ${light}%, 0.22)`,
-    glow: `hsla(${hue}, ${Math.min(88, sat + 14)}%, ${Math.min(72, light + 6)}%, 0.55)`,
-    chipBg: `hsla(${hue}, ${sat}%, ${light}%, 0.16)`,
+    fill: `hsla(${hue}, ${sat + 8}%, ${light + 8}%, 0.28)`,
+    glow: `hsla(${hue}, ${sat + 10}%, ${light + 10}%, 0.3)`,
+    chipBg: `hsla(${hue}, ${sat + 8}%, ${light}%, 0.14)`,
   };
 }
