@@ -262,6 +262,7 @@ interface FinanceState {
   removeTagMessage: (tag: string, messageId: string) => void;
   updateNote: (id: string, patch: Partial<Note>) => void;
   removeNote: (id: string) => void;
+  setNoteDepsHidden: (id: string, hidden: boolean) => void;
   getNote: (id: string) => Note | undefined;
   addNoteList: (name: string, emoji?: string) => NoteList;
   updateNoteList: (id: string, patch: Partial<Pick<NoteList, 'name' | 'emoji'>>) => void;
@@ -678,6 +679,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ notes, personNoteLinks });
     persistNotes(notes, get().noteLists, get().tagPages);
     persistPeople(peopleSnapshot(get()));
+  },
+
+  // Graph view preference — toggled by long-press; doesn't bump updatedAt.
+  setNoteDepsHidden: (id, hidden) => {
+    const notes = get().notes.map((n) => (n.id === id ? { ...n, depsHidden: hidden } : n));
+    set({ notes });
+    persistNotes(notes, get().noteLists, get().tagPages);
   },
 
   getNote: (id) => get().notes.find((n) => n.id === id),

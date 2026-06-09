@@ -591,6 +591,37 @@ export function filterNoteGraph(
   };
 }
 
+/** Hide the "dependency closure" of every collapsed node — the things it points
+ *  to (wiki-links, tags) that only exist because of it. A node is hidden when
+ *  every edge pointing AT it comes from a collapsed-or-hidden node; nodes that
+ *  merely link to the collapsed node (its parents) and shared nodes stay. */
+export function collapseDependencies(graph: NoteGraph, collapsed: ReadonlySet<string>): NoteGraph {
+  if (!collapsed.size) return graph;
+  const incoming = new Map<string, string[]>();
+  for (const node of graph.nodes) incoming.set(node.id, []);
+  for (const link of graph.links) incoming.get(link.target)?.push(link.source);
+
+  const hidden = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of graph.nodes) {
+      if (collapsed.has(node.id) || hidden.has(node.id)) continue;
+      const sources = incoming.get(node.id);
+      if (!sources || sources.length === 0) continue; // a root / not depended-on → keep
+      if (sources.every((s) => collapsed.has(s) || hidden.has(s))) {
+        hidden.add(node.id);
+        changed = true;
+      }
+    }
+  }
+  if (!hidden.size) return graph;
+  const nodes = graph.nodes.filter((node) => !hidden.has(node.id));
+  const visible = new Set(nodes.map((node) => node.id));
+  const links = graph.links.filter((link) => visible.has(link.source) && visible.has(link.target));
+  return { nodes, links };
+}
+
 function hash(value: string): number {
   let h = 2166136261;
   for (let i = 0; i < value.length; i++) {

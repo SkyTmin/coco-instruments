@@ -5,6 +5,7 @@ import {
   buildNoteGraph,
   buildOverviewGraph,
   buildPeopleGraph,
+  collapseDependencies,
   filterNoteGraph,
   getNoteRelations,
   getTagPageRelations,
@@ -105,6 +106,36 @@ describe('people graph (the "Люди" view)', () => {
     const detached = buildPeopleGraph(notes, { ...data, noteLinks: [] });
     expect(detached.nodes.some((n) => n.id === 'a1')).toBe(false);
     expect(detached.nodes.some((n) => n.id === personNodeId('p1'))).toBe(true);
+  });
+});
+
+describe('collapse dependencies', () => {
+  it('hides a note’s downstream dependencies, keeps the note and its parents', () => {
+    // A -> B -> C ; collapsing B hides C (its dependency), keeps A (points to B).
+    const graph = buildNoteGraph([note('a', 'A', '[[B]]'), note('b', 'B', '[[C]]'), note('c', 'C', '')]);
+    const out = collapseDependencies(graph, new Set(['b']));
+    expect(out.nodes.some((n) => n.id === 'b')).toBe(true);
+    expect(out.nodes.some((n) => n.id === 'a')).toBe(true);
+    expect(out.nodes.some((n) => n.id === 'c')).toBe(false);
+  });
+
+  it('keeps dependencies shared with another visible note', () => {
+    const graph = buildNoteGraph([note('b', 'B', '[[C]]'), note('c', 'C', ''), note('d', 'D', '[[C]]')]);
+    const out = collapseDependencies(graph, new Set(['b']));
+    expect(out.nodes.some((n) => n.id === 'c')).toBe(true);
+  });
+
+  it('hides a private tag of a collapsed note', () => {
+    const graph = buildNoteGraph([note('a', 'A', '#личное'), note('b', 'B', '#общее #личное')]);
+    const out = collapseDependencies(graph, new Set(['b']));
+    // #общее is private to B → hidden; #личное shared with A → stays
+    expect(out.nodes.some((n) => n.id === 'tag:общее')).toBe(false);
+    expect(out.nodes.some((n) => n.id === 'tag:личное')).toBe(true);
+  });
+
+  it('is a no-op when nothing is collapsed', () => {
+    const graph = buildNoteGraph([note('a', 'A', '[[B]]')]);
+    expect(collapseDependencies(graph, new Set())).toBe(graph);
   });
 });
 

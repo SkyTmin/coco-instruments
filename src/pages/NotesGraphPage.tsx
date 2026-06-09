@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent, WheelEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Screen } from '@/components/ui';
+import { Screen, Sheet } from '@/components/ui';
 import { IconGraph } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import type { GraphSize, NoteGraphLink, NoteGraphPoint } from '@/lib/notes-graph';
@@ -11,6 +11,7 @@ import {
   buildNoteGraph,
   buildOverviewGraph,
   buildPeopleGraph,
+  collapseDependencies,
   filterNoteGraph,
   layoutNoteGraph,
   personNodeId,
@@ -31,6 +32,7 @@ interface PointerSession {
 
 const TAP_MOVE_LIMIT = 10;
 const TAP_TIME_LIMIT = 450;
+const LONG_PRESS_MS = 450;
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.6;
 
@@ -64,6 +66,7 @@ export function NotesGraphPage() {
   const meetIdeas = useFinanceStore((s) => s.meetIdeas);
   const relations = useFinanceStore((s) => s.personRelations);
   const noteLinks = useFinanceStore((s) => s.personNoteLinks);
+  const setNoteDepsHidden = useFinanceStore((s) => s.setNoteDepsHidden);
   const personParam = params.get('person');
   const listParam = params.get('list');
   // Open the local graph centred on one note (the Obsidian "local graph").
@@ -111,6 +114,7 @@ export function NotesGraphPage() {
   const [scale, setScale] = useState(1);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [menuNode, setMenuNode] = useState<NoteGraphPoint | null>(null);
   const [size, setSize] = useState<GraphSize>(GRAPH_VIEW_BOX);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -119,6 +123,7 @@ export function NotesGraphPage() {
   const listParamRef = useRef<string | null>(listParam);
   listParamRef.current = listParam;
   const pointerSession = useRef<PointerSession | null>(null);
+  const longPressTimer = useRef(0);
   // Multi-touch pinch-zoom bookkeeping.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; mx: number; my: number } | null>(null);
@@ -180,7 +185,7 @@ export function NotesGraphPage() {
     setActiveId(graph.nodes.find((node) => node.kind === 'note' || node.kind === 'person')?.id ?? graph.nodes[0]?.id);
   }, [activeId, graph.nodes]);
 
-  const visibleGraph = useMemo(
+  const baseVisible = useMemo(
     () =>
       filterNoteGraph(graph, {
         mode,
@@ -194,6 +199,9 @@ export function NotesGraphPage() {
       }),
     [activeId, depth, graph, mode, query, showDetails, showMissing, showPeople, showTags],
   );
+  // Notes whose dependencies are collapsed (hidden) via long-press.
+  const collapsedSet = useMemo(() => new Set(notes.filter((n) => n.depsHidden).map((n) => n.id)), [notes]);
+  const visibleGraph = useMemo(() => collapseDependencies(baseVisible, collapsedSet), [baseVisible, collapsedSet]);
 
   // Live mirrors so the layout effect can read the latest graph/positions
   // without taking them as dependencies (selection alone must not re-layout).
@@ -408,6 +416,15 @@ export function NotesGraphPage() {
       moved: false,
       startedAt: performance.now(),
     };
+    // A still hold on a note → buzz when the context menu becomes available
+    // (it opens on release, so the press never fights the sheet's backdrop tap).
+    window.clearTimeout(longPressTimer.current);
+    if (point.kind === 'note') {
+      longPressTimer.current = window.setTimeout(() => {
+        const s = pointerSession.current;
+        if (s && s.id === id && !s.moved) selectionChanged();
+      }, LONG_PRESS_MS);
+    }
     kick(0.6);
     selectionChanged();
   };
@@ -452,6 +469,7 @@ export function NotesGraphPage() {
           const dy = event.clientY - session.y;
           if (Math.sqrt(dx * dx + dy * dy) > TAP_MOVE_LIMIT) {
             session.moved = true;
+            window.clearTimeout(longPressTimer.current); // a drag isn't a long-press
             pinnedRef.current.add(id); // arranged by hand → keep it there
           }
         }
@@ -479,12 +497,18 @@ export function NotesGraphPage() {
 
     const onUp = (event: globalThis.PointerEvent) => {
       pointers.current.delete(event.pointerId);
+      window.clearTimeout(longPressTimer.current);
       if (pinch.current && pointers.current.size < 2) pinch.current = null;
       const id = draggingIdRef.current;
       if (id) {
         const s = pointerSession.current;
-        if (s && s.id === id && !s.moved && performance.now() - s.startedAt < TAP_TIME_LIMIT) {
+        if (s && s.id === id && !s.moved) {
           const point = pointByIdRef.current.get(id);
+          const held = performance.now() - s.startedAt;
+          // A still long-press on a note opens its context menu (collapse deps).
+          if (held >= LONG_PRESS_MS && point?.kind === 'note') {
+            setMenuNode(point);
+          } else if (held < TAP_TIME_LIMIT) {
           if (point?.kind === 'note') navigate(`/notes/${id}`);
           if (point?.kind === 'person' && point.person) navigate(`/people/${point.person.id}`);
           if (point?.kind === 'list' && point.list) {
@@ -501,6 +525,7 @@ export function NotesGraphPage() {
           // A tag is its own page — open it (content lives on the tag).
           if (point?.kind === 'tag') {
             navigate(`/notes/tag/${encodeURIComponent(point.id.slice(4))}`);
+          }
           }
         }
       }
@@ -675,7 +700,7 @@ export function NotesGraphPage() {
                     return (
                       <g
                         key={point.id}
-                        className={`notes-graph__node notes-graph__node--${point.kind}${point.id === activeId ? ' is-active' : ''}${point.id === draggingId ? ' is-dragging' : ''}${point.id === focusId ? ' is-focus' : ''}${hot ? ' is-hot' : ''}${dim ? ' is-dim' : ''}`}
+                        className={`notes-graph__node notes-graph__node--${point.kind}${point.id === activeId ? ' is-active' : ''}${point.id === draggingId ? ' is-dragging' : ''}${point.id === focusId ? ' is-focus' : ''}${hot ? ' is-hot' : ''}${dim ? ' is-dim' : ''}${collapsedSet.has(point.id) ? ' is-collapsed' : ''}`}
                         onPointerDown={(event) => beginNodeDrag(event, point.id)}
                         onClick={(event) => event.preventDefault()}
                         {...hoverable(point)}
@@ -725,7 +750,8 @@ export function NotesGraphPage() {
 
         <div className="card notes-graph-hint">
           Перетаскивайте поле или узлы, щипком двумя пальцами (или колесо/кнопки) — масштаб.
-          Передвинутые узлы остаются на месте; ⊙ — собрать граф заново. Короткий тап откроет заметку или человека.
+          Передвинутые узлы остаются на месте; ⊙ — собрать граф заново. Короткий тап откроет заметку или человека,
+          долгий тап по заметке — скрыть/показать её зависимости.
           {activeList
             ? ' Фиолетовый кружок в центре — сама тетрадь; тап по нему открывает список.'
             : ' «Локальный» режим показывает связи вокруг выбранного узла на заданную глубину.'}
@@ -741,6 +767,44 @@ export function NotesGraphPage() {
           )}
         </div>
       </div>
+
+      {menuNode && (
+        <Sheet title={menuNode.label} onClose={() => setMenuNode(null)}>
+          <div className="stack">
+            {collapsedSet.has(menuNode.id) ? (
+              <button
+                className="btn btn--ghost btn--block"
+                onClick={() => {
+                  setNoteDepsHidden(menuNode.id, false);
+                  setMenuNode(null);
+                }}
+              >
+                Показать зависимости
+              </button>
+            ) : (
+              <button
+                className="btn btn--ghost btn--block"
+                onClick={() => {
+                  setNoteDepsHidden(menuNode.id, true);
+                  setMenuNode(null);
+                }}
+              >
+                Скрыть зависимости
+              </button>
+            )}
+            <button
+              className="btn btn--ghost btn--block"
+              onClick={() => {
+                const nid = menuNode.id;
+                setMenuNode(null);
+                navigate(`/notes/${nid}`);
+              }}
+            >
+              Открыть заметку
+            </button>
+          </div>
+        </Sheet>
+      )}
     </Screen>
   );
 }
