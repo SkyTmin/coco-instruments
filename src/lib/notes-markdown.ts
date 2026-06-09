@@ -39,7 +39,9 @@ const FENCE_RE = /^```(.*)$/;
 const TAG_SPLIT_RE = /(^|[^#\p{L}\p{N}_-])#([\p{L}\p{N}_][\p{L}\p{N}_/-]{0,63})/gu;
 
 const SAFE_LINK = /^(https?:|mailto:|tel:)/i;
-const SAFE_IMG = /^(https?:|data:image\/|blob:|attachment:)/i;
+// Allow http(s)/data/blob/attachment, plus same-origin root paths like
+// `/uploads/...` (server-stored photos) — but never protocol-relative `//host`.
+const SAFE_IMG = /^(https?:|data:image\/|blob:|attachment:|\/(?!\/))/i;
 
 /** Restrict hrefs so a [label](javascript:…) can never produce a live link. */
 export function safeHref(href: string): string | undefined {
