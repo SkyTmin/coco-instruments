@@ -58,6 +58,12 @@ jobs:
             export ADMIN_CHAT_ID='${{ secrets.ADMIN_CHAT_ID }}'
             curl -fsSL "https://raw.githubusercontent.com/SkyTmin/coco-instruments/${BRANCH}/deploy/setup.sh" | bash
 
+      - name: Verify the app is up
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          DOMAIN: ${{ steps.gate.outputs.domain }}
+        run: curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "https://${DOMAIN}/api/health"
+
       - name: Point the Telegram bot at the app
         if: steps.gate.outputs.ready == 'true' && steps.gate.outputs.has_bot == 'true'
         env:
