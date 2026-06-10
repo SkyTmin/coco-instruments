@@ -234,19 +234,26 @@ if (typeof window !== 'undefined') {
 }
 
 class ServerStorage implements Storage {
-  constructor(private cache: Storage, private migrate: Storage | null) {}
+  constructor(
+    private cache: Storage,
+    private migrate: Storage | null,
+  ) {}
 
   async get<T>(key: string): Promise<T | null> {
     if (serverAuth) {
       try {
-        const { values } = await serverCall<{ values: Record<string, T | null> }>('/api/store/get', { keys: [key] });
+        const { values } = await serverCall<{ values: Record<string, T | null> }>(
+          '/api/store/get',
+          { keys: [key] },
+        );
         const value = values?.[key] ?? null;
         if (value !== null) {
           void this.cache.set(key, value).catch(() => {});
           return value;
         }
         // Server has nothing yet — migrate from CloudStorage / localStorage once.
-        const fallback = (this.migrate ? await this.migrate.get<T>(key) : null) ?? (await this.cache.get<T>(key));
+        const fallback =
+          (this.migrate ? await this.migrate.get<T>(key) : null) ?? (await this.cache.get<T>(key));
         if (fallback !== null) {
           void serverCall('/api/store/set', { key, value: fallback }).catch(() => {});
           void this.cache.set(key, fallback).catch(() => {});
@@ -254,7 +261,9 @@ class ServerStorage implements Storage {
         return fallback;
       } catch {
         // Offline / server error → best available local copy.
-        return (await this.cache.get<T>(key)) ?? (this.migrate ? await this.migrate.get<T>(key) : null);
+        return (
+          (await this.cache.get<T>(key)) ?? (this.migrate ? await this.migrate.get<T>(key) : null)
+        );
       }
     }
     return (this.migrate ? await this.migrate.get<T>(key) : null) ?? (await this.cache.get<T>(key));

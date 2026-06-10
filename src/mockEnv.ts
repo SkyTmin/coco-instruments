@@ -58,7 +58,6 @@ if (import.meta.env.DEV) {
       ]),
     });
 
-     
     console.info('⚠️ Telegram environment mocked for local development.');
   }
 }

@@ -28,7 +28,11 @@ export function WardrobeCard({
       ) : (
         <span className="wardrobe-card__ph">{CATEGORY_EMOJI[item.category]}</span>
       )}
-      {item.favorite && <span className="wardrobe-card__fav" aria-hidden>♥</span>}
+      {item.favorite && (
+        <span className="wardrobe-card__fav" aria-hidden>
+          ♥
+        </span>
+      )}
       {onToggleFitting && (
         <button
           type="button"

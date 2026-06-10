@@ -25,10 +25,16 @@ export function ClothingDashboardPage() {
 
   const byId = useMemo(() => new Map(wardrobe.map((w) => [w.id, w])), [wardrobe]);
   const looks = useMemo(
-    () => [...outfits].sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite))).slice(0, 12),
+    () =>
+      [...outfits]
+        .sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)))
+        .slice(0, 12),
     [outfits],
   );
-  const recentItems = useMemo(() => [...wardrobe].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 14), [wardrobe]);
+  const recentItems = useMemo(
+    () => [...wardrobe].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 14),
+    [wardrobe],
+  );
 
   const go = (path: string) => {
     tapLight();
@@ -64,7 +70,14 @@ export function ClothingDashboardPage() {
       }
       action={
         !firstRun ? (
-          <button className="icon-btn" onClick={() => { tapLight(); setQuickAdd(true); }} aria-label="Добавить">
+          <button
+            className="icon-btn"
+            onClick={() => {
+              tapLight();
+              setQuickAdd(true);
+            }}
+            aria-label="Добавить"
+          >
             <IconPlus size={22} />
           </button>
         ) : undefined
@@ -75,15 +88,25 @@ export function ClothingDashboardPage() {
           <div className="cl-welcome__icon">👗</div>
           <h2 className="cl-welcome__title">Ваш цифровой гардероб</h2>
           <p className="cl-welcome__sub">
-            Сфотографируйте вещи, собирайте из них образы, храните идеи, размеры и желания — всё в одном месте.
+            Сфотографируйте вещи, собирайте из них образы, храните идеи, размеры и желания — всё в
+            одном месте.
           </p>
-          <button className="btn btn--primary btn--block" onClick={() => go('/clothing/wardrobe/new')}>
+          <button
+            className="btn btn--primary btn--block"
+            onClick={() => go('/clothing/wardrobe/new')}
+          >
             Добавить первую вещь
           </button>
           <div className="cl-welcome__feats">
-            <div><span>👕</span>Вещи</div>
-            <div><span>🧥</span>Образы</div>
-            <div><span>✨</span>Идеи</div>
+            <div>
+              <span>👕</span>Вещи
+            </div>
+            <div>
+              <span>🧥</span>Образы
+            </div>
+            <div>
+              <span>✨</span>Идеи
+            </div>
           </div>
         </div>
       ) : (
@@ -102,13 +125,24 @@ export function ClothingDashboardPage() {
           )}
 
           {/* 2 — Hero: собрать образ (или добавить готовый, если вещей ещё нет) */}
-          <button className="cl-hero" onClick={() => go(composeReady ? '/clothing/compose' : '/clothing/outfits/new')}>
-            <span className="cl-hero__icon"><IconSparkles /></span>
+          <button
+            className="cl-hero"
+            onClick={() => go(composeReady ? '/clothing/compose' : '/clothing/outfits/new')}
+          >
+            <span className="cl-hero__icon">
+              <IconSparkles />
+            </span>
             <span className="cl-hero__text">
               <b>{composeReady ? 'Собрать образ' : 'Добавить образ'}</b>
-              <i>{composeReady ? 'Примерочная — выберите вещи и составьте лук' : 'Сфотографируйте готовый лук — вещи добавите позже'}</i>
+              <i>
+                {composeReady
+                  ? 'Примерочная — выберите вещи и составьте лук'
+                  : 'Сфотографируйте готовый лук — вещи добавите позже'}
+              </i>
             </span>
-            <span className="cl-hero__go"><IconChevron size={22} /></span>
+            <span className="cl-hero__go">
+              <IconChevron size={22} />
+            </span>
           </button>
 
           {/* 3 — Вещи: вход в каталог + добавление */}
@@ -130,10 +164,18 @@ export function ClothingDashboardPage() {
                     onClick={() => open(`/clothing/wardrobe/${it.id}`)}
                     aria-label={it.name}
                   >
-                    {it.photo ? <Photo src={attachmentHref(it.photo)} /> : <span className="wardrobe-strip__ph">{CATEGORY_EMOJI[it.category]}</span>}
+                    {it.photo ? (
+                      <Photo src={attachmentHref(it.photo)} />
+                    ) : (
+                      <span className="wardrobe-strip__ph">{CATEGORY_EMOJI[it.category]}</span>
+                    )}
                   </button>
                 ))}
-                <button className="wardrobe-strip__add" onClick={() => go('/clothing/wardrobe/new')} aria-label="Добавить вещь">
+                <button
+                  className="wardrobe-strip__add"
+                  onClick={() => go('/clothing/wardrobe/new')}
+                  aria-label="Добавить вещь"
+                >
                   <IconPlus size={22} />
                   <i>Добавить</i>
                 </button>
@@ -141,7 +183,10 @@ export function ClothingDashboardPage() {
             ) : (
               <button className="cl-empty" onClick={() => go('/clothing/wardrobe/new')}>
                 <span className="cl-empty__ic">👕</span>
-                <span className="cl-empty__txt"><b>Добавьте вещи</b><i>Сфотографируйте гардероб — по одной или пачкой</i></span>
+                <span className="cl-empty__txt">
+                  <b>Добавьте вещи</b>
+                  <i>Сфотографируйте гардероб — по одной или пачкой</i>
+                </span>
                 <IconPlus size={20} />
               </button>
             )}
@@ -158,9 +203,18 @@ export function ClothingDashboardPage() {
               </div>
               <div className="cl-hscroll">
                 {collections.slice(0, 8).map((c) => (
-                  <CollectionTile key={c.id} collection={c} byId={byId} onClick={() => open(`/clothing/collections/${c.id}`)} />
+                  <CollectionTile
+                    key={c.id}
+                    collection={c}
+                    byId={byId}
+                    onClick={() => open(`/clothing/collections/${c.id}`)}
+                  />
                 ))}
-                <button className="cl-add-tile" onClick={() => go('/clothing/collections/new')} aria-label="Новая подборка">
+                <button
+                  className="cl-add-tile"
+                  onClick={() => go('/clothing/collections/new')}
+                  aria-label="Новая подборка"
+                >
                   <IconPlus size={24} />
                   <span>Новая</span>
                 </button>
@@ -170,7 +224,10 @@ export function ClothingDashboardPage() {
             wardrobe.length > 0 && (
               <button className="cl-empty" onClick={() => go('/clothing/collections/new')}>
                 <span className="cl-empty__ic">🗂</span>
-                <span className="cl-empty__txt"><b>Соберите подборку</b><i>Сгруппируйте вещи: «Для работы», «Чёрное», «Лето»…</i></span>
+                <span className="cl-empty__txt">
+                  <b>Соберите подборку</b>
+                  <i>Сгруппируйте вещи: «Для работы», «Чёрное», «Лето»…</i>
+                </span>
                 <IconPlus size={20} />
               </button>
             )
@@ -188,13 +245,19 @@ export function ClothingDashboardPage() {
               </div>
               <div className="cl-board__meta">
                 <b>Доска вдохновения</b>
-                <span>{inspiration.length} {pluralizeRu(inspiration.length, ['идея', 'идеи', 'идей'])} ·  открыть</span>
+                <span>
+                  {inspiration.length} {pluralizeRu(inspiration.length, ['идея', 'идеи', 'идей'])} ·
+                  открыть
+                </span>
               </div>
             </button>
           ) : (
             <button className="cl-empty" onClick={() => go('/clothing/inspiration')}>
               <span className="cl-empty__ic">✨</span>
-              <span className="cl-empty__txt"><b>Доска вдохновения</b><i>Скриншоты, референсы и идеи образов</i></span>
+              <span className="cl-empty__txt">
+                <b>Доска вдохновения</b>
+                <i>Скриншоты, референсы и идеи образов</i>
+              </span>
               <IconPlus size={20} />
             </button>
           )}
@@ -218,19 +281,44 @@ export function ClothingDashboardPage() {
       {quickAdd && (
         <Sheet title="Что добавить?" onClose={() => setQuickAdd(false)}>
           <div className="chat-actions">
-            <button onClick={() => { setQuickAdd(false); go('/clothing/wardrobe/new'); }}>
+            <button
+              onClick={() => {
+                setQuickAdd(false);
+                go('/clothing/wardrobe/new');
+              }}
+            >
               <span className="chat-actions__ic">👕</span> Вещь
             </button>
-            <button onClick={() => { setQuickAdd(false); go('/clothing/compose'); }}>
+            <button
+              onClick={() => {
+                setQuickAdd(false);
+                go('/clothing/compose');
+              }}
+            >
               <span className="chat-actions__ic">🧥</span> Собрать образ
             </button>
-            <button onClick={() => { setQuickAdd(false); go('/clothing/collections/new'); }}>
+            <button
+              onClick={() => {
+                setQuickAdd(false);
+                go('/clothing/collections/new');
+              }}
+            >
               <span className="chat-actions__ic">🗂</span> Подборку
             </button>
-            <button onClick={() => { setQuickAdd(false); go('/clothing/inspiration'); }}>
+            <button
+              onClick={() => {
+                setQuickAdd(false);
+                go('/clothing/inspiration');
+              }}
+            >
               <span className="chat-actions__ic">✨</span> Вдохновение
             </button>
-            <button onClick={() => { setQuickAdd(false); go('/clothing/wishlist/new'); }}>
+            <button
+              onClick={() => {
+                setQuickAdd(false);
+                go('/clothing/wishlist/new');
+              }}
+            >
               <span className="chat-actions__ic">♡</span> Желание
             </button>
           </div>

@@ -293,7 +293,13 @@ export type ConversationImportance = 'low' | 'normal' | 'high';
 export type ConversationMood = 'warm' | 'neutral' | 'hard' | 'happy';
 export type PersonPromiseStatus = 'open' | 'done' | 'cancelled';
 export type MeetIdeaStatus = 'idea' | 'planned' | 'done';
-export type PersonRelationType = 'friend' | 'relative' | 'colleague' | 'acquaintance' | 'couple' | 'other';
+export type PersonRelationType =
+  | 'friend'
+  | 'relative'
+  | 'colleague'
+  | 'acquaintance'
+  | 'couple'
+  | 'other';
 
 /** A person in the private relationship base, not a phonebook contact. */
 export interface Person {

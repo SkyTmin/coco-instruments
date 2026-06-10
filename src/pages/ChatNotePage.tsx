@@ -36,7 +36,9 @@ export function ChatNotePage() {
   const deleted = useRef(false);
 
   const [title, setTitle] = useState(note?.title ?? '');
-  const [listId, setListId] = useState<string | undefined>(note?.listId ?? searchParams.get('list') ?? undefined);
+  const [listId, setListId] = useState<string | undefined>(
+    note?.listId ?? searchParams.get('list') ?? undefined,
+  );
   const [menu, setMenu] = useState(false);
   const [guide, setGuide] = useState(false);
   const [linksSheet, setLinksSheet] = useState(false);
@@ -77,7 +79,13 @@ export function ChatNotePage() {
     const msg = makeMessage(firstText, atts);
     const derived = deriveFromMessages([msg]);
     const t = title.trim() || firstText.split('\n')[0].trim().slice(0, 60) || 'Заметка';
-    const created = addNote({ title: t, messages: [msg], body: derived.body, attachments: derived.attachments, listId });
+    const created = addNote({
+      title: t,
+      messages: [msg],
+      body: derived.body,
+      attachments: derived.attachments,
+      listId,
+    });
     currentId.current = created.id;
     loadedId.current = created.id;
     if (!title.trim()) setTitle(t);
@@ -121,7 +129,14 @@ export function ChatNotePage() {
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
           placeholder="Название заметки"
         />
-        <button className="icon-btn" onClick={() => { tapLight(); setMenu(true); }} aria-label="Меню заметки">
+        <button
+          className="icon-btn"
+          onClick={() => {
+            tapLight();
+            setMenu(true);
+          }}
+          aria-label="Меню заметки"
+        >
           <IconDots size={20} />
         </button>
       </div>
@@ -144,7 +159,13 @@ export function ChatNotePage() {
           </button>
         ))}
         {note && (
-          <button className="note-meta__chip note-meta__links" onClick={() => { tapLight(); setLinksSheet(true); }}>
+          <button
+            className="note-meta__chip note-meta__links"
+            onClick={() => {
+              tapLight();
+              setLinksSheet(true);
+            }}
+          >
             <IconLink size={13} /> Связи{connections ? ` · ${connections}` : ''}
           </button>
         )}
@@ -156,7 +177,9 @@ export function ChatNotePage() {
         emptyTitle="Ваше пространство для мыслей"
         placeholder="Новая мысль…"
         onSend={onSend}
-        onEditMessage={(mid, text, atts) => currentId.current && updateNoteMessage(currentId.current, mid, text, atts)}
+        onEditMessage={(mid, text, atts) =>
+          currentId.current && updateNoteMessage(currentId.current, mid, text, atts)
+        }
         onDeleteMessage={(mid) => currentId.current && removeNoteMessage(currentId.current, mid)}
         onOpenNote={(nid) => navigate(`/notes/${nid}`)}
         onOpenMissing={(t) => {
@@ -170,11 +193,23 @@ export function ChatNotePage() {
       {menu && (
         <Sheet title={title.trim() || 'Заметка'} onClose={() => setMenu(false)}>
           <div className="stack">
-            <button className="btn btn--ghost btn--block" onClick={() => { setMenu(false); setGuide(true); }}>
+            <button
+              className="btn btn--ghost btn--block"
+              onClick={() => {
+                setMenu(false);
+                setGuide(true);
+              }}
+            >
               Как это работает
             </button>
             {note && (
-              <button className="btn btn--danger btn--block" onClick={() => { setMenu(false); setConfirmDelete(true); }}>
+              <button
+                className="btn btn--danger btn--block"
+                onClick={() => {
+                  setMenu(false);
+                  setConfirmDelete(true);
+                }}
+              >
                 Удалить заметку
               </button>
             )}
@@ -186,17 +221,45 @@ export function ChatNotePage() {
 
       {linksSheet && (
         <Sheet title="Связи заметки" onClose={() => setLinksSheet(false)}>
-          <p className="links-lead">Объединяйте мысли по смыслу — связанные заметки видно здесь и в графе.</p>
+          <p className="links-lead">
+            Объединяйте мысли по смыслу — связанные заметки видно здесь и в графе.
+          </p>
           {currentId.current && (
-            <button className="btn btn--primary btn--block" onClick={() => { setLinksSheet(false); setLinkPick(true); }}>
+            <button
+              className="btn btn--primary btn--block"
+              onClick={() => {
+                setLinksSheet(false);
+                setLinkPick(true);
+              }}
+            >
               <IconLink size={16} /> Связать с заметкой
             </button>
           )}
           {relations.outgoing.length > 0 && (
-            <LinksGroup title="Связанные мысли" items={relations.outgoing.map((n) => ({ key: n.id, label: n.title, onClick: () => { setLinksSheet(false); navigate(`/notes/${n.id}`); } }))} />
+            <LinksGroup
+              title="Связанные мысли"
+              items={relations.outgoing.map((n) => ({
+                key: n.id,
+                label: n.title,
+                onClick: () => {
+                  setLinksSheet(false);
+                  navigate(`/notes/${n.id}`);
+                },
+              }))}
+            />
           )}
           {relations.backlinks.length > 0 && (
-            <LinksGroup title="Упоминают эту" items={relations.backlinks.map((n) => ({ key: n.id, label: n.title, onClick: () => { setLinksSheet(false); navigate(`/notes/${n.id}`); } }))} />
+            <LinksGroup
+              title="Упоминают эту"
+              items={relations.backlinks.map((n) => ({
+                key: n.id,
+                label: n.title,
+                onClick: () => {
+                  setLinksSheet(false);
+                  navigate(`/notes/${n.id}`);
+                },
+              }))}
+            />
           )}
           {relations.missing.length > 0 && (
             <LinksGroup
@@ -206,7 +269,9 @@ export function ChatNotePage() {
                 label: `+ ${t}`,
                 isNew: true,
                 onClick: () => {
-                  const created = useFinanceStore.getState().addNote({ title: t, body: '', listId });
+                  const created = useFinanceStore
+                    .getState()
+                    .addNote({ title: t, body: '', listId });
                   notifySuccess();
                   setLinksSheet(false);
                   navigate(`/notes/${created.id}`);
@@ -220,25 +285,49 @@ export function ChatNotePage() {
             <div className="links-group__chips">
               {linkedPeople.map((p) => (
                 <span key={p.id} className="note-chip note-chip--person note-chip--detach">
-                  <button className="note-chip__open" onClick={() => { setLinksSheet(false); navigate(`/people/${p.id}`); }}>
+                  <button
+                    className="note-chip__open"
+                    onClick={() => {
+                      setLinksSheet(false);
+                      navigate(`/people/${p.id}`);
+                    }}
+                  >
                     <IconHeart size={13} /> {p.name}
                   </button>
-                  <button className="note-chip__detach" onClick={() => detachPerson(p.id)} aria-label="Отвязать">
+                  <button
+                    className="note-chip__detach"
+                    onClick={() => detachPerson(p.id)}
+                    aria-label="Отвязать"
+                  >
                     ×
                   </button>
                 </span>
               ))}
               {people.length > 0 && currentId.current && (
-                <button className="note-chip note-chip--new" onClick={() => { setLinksSheet(false); setPeopleSheet(true); }}>
+                <button
+                  className="note-chip note-chip--new"
+                  onClick={() => {
+                    setLinksSheet(false);
+                    setPeopleSheet(true);
+                  }}
+                >
                   + связать
                 </button>
               )}
-              {!linkedPeople.length && !people.length && <span className="links-group__empty">Людей пока нет</span>}
+              {!linkedPeople.length && !people.length && (
+                <span className="links-group__empty">Людей пока нет</span>
+              )}
             </div>
           </div>
 
           {note && (
-            <button className="btn btn--ghost btn--block" onClick={() => { setLinksSheet(false); navigate(`/notes/graph?focus=${note.id}`); }}>
+            <button
+              className="btn btn--ghost btn--block"
+              onClick={() => {
+                setLinksSheet(false);
+                navigate(`/notes/graph?focus=${note.id}`);
+              }}
+            >
               <IconGraph size={16} /> Граф вокруг заметки
             </button>
           )}
@@ -248,12 +337,25 @@ export function ChatNotePage() {
       {listSheet && (
         <Sheet title="Список заметки" onClose={() => setListSheet(false)}>
           <div className="sheet-list">
-            <button className="flow-row" onClick={() => { pickList(undefined); setListSheet(false); }}>
+            <button
+              className="flow-row"
+              onClick={() => {
+                pickList(undefined);
+                setListSheet(false);
+              }}
+            >
               <span className="flow-row__name">Без списка</span>
               {!listId && <span className="flow-row__amount">✓</span>}
             </button>
             {noteLists.map((l) => (
-              <button key={l.id} className="flow-row" onClick={() => { pickList(l.id); setListSheet(false); }}>
+              <button
+                key={l.id}
+                className="flow-row"
+                onClick={() => {
+                  pickList(l.id);
+                  setListSheet(false);
+                }}
+              >
                 <span className="flow-row__name">
                   {l.emoji ? `${l.emoji} ` : ''}
                   {l.name}
@@ -262,7 +364,14 @@ export function ChatNotePage() {
               </button>
             ))}
           </div>
-          <button className="btn btn--ghost btn--block" style={{ marginTop: 10 }} onClick={() => { setListSheet(false); navigate('/notes/lists'); }}>
+          <button
+            className="btn btn--ghost btn--block"
+            style={{ marginTop: 10 }}
+            onClick={() => {
+              setListSheet(false);
+              navigate('/notes/lists');
+            }}
+          >
             Управление списками
           </button>
         </Sheet>
@@ -285,7 +394,9 @@ export function ChatNotePage() {
         <Sheet title="Связать и отвязать людей" onClose={() => setPeopleSheet(false)}>
           <div className="sheet-list">
             {people.map((person) => {
-              const linked = personNoteLinks.some((l) => l.noteId === currentId.current && l.personId === person.id);
+              const linked = personNoteLinks.some(
+                (l) => l.noteId === currentId.current && l.personId === person.id,
+              );
               return (
                 <button
                   key={person.id}
@@ -301,7 +412,9 @@ export function ChatNotePage() {
                     {linked ? '💛 ' : ''}
                     {person.name}
                   </span>
-                  <span className={`note-link-toggle${linked ? ' is-on' : ''}`}>{linked ? 'Отвязать' : 'Связать'}</span>
+                  <span className={`note-link-toggle${linked ? ' is-on' : ''}`}>
+                    {linked ? 'Отвязать' : 'Связать'}
+                  </span>
                 </button>
               );
             })}
@@ -333,7 +446,11 @@ function LinksGroup({
       <div className="links-group__title">{title}</div>
       <div className="links-group__chips">
         {items.map((it) => (
-          <button key={it.key} className={`note-chip${it.isNew ? ' note-chip--new' : ''}`} onClick={it.onClick}>
+          <button
+            key={it.key}
+            className={`note-chip${it.isNew ? ' note-chip--new' : ''}`}
+            onClick={it.onClick}
+          >
             {it.label}
           </button>
         ))}

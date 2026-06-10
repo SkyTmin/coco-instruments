@@ -100,7 +100,12 @@ describe('installment — counter-check (100 000 + 13 472 over 12 mo)', () => {
 
   it('supports per-month overpayment input', () => {
     const c2 = computeObligation(
-      obligation({ type: 'installment', principalAmount: 100_000, overpaymentPerMonth: 1_000, termMonths: 12 }),
+      obligation({
+        type: 'installment',
+        principalAmount: 100_000,
+        overpaymentPerMonth: 1_000,
+        termMonths: 12,
+      }),
     );
     expect(c2.totalOverpayment).toBe(12_000);
     expect(c2.totalToPay).toBe(112_000);
@@ -108,7 +113,12 @@ describe('installment — counter-check (100 000 + 13 472 over 12 mo)', () => {
 
   it('supports monthly-payment input (derives the overpayment)', () => {
     const c3 = computeObligation(
-      obligation({ type: 'installment', principalAmount: 100_000, monthlyPayment: 9_456, termMonths: 12 }),
+      obligation({
+        type: 'installment',
+        principalAmount: 100_000,
+        monthlyPayment: 9_456,
+        termMonths: 12,
+      }),
     );
     expect(c3.monthlyPayment).toBe(9_456);
     expect(c3.totalToPay).toBe(113_472);
@@ -117,7 +127,12 @@ describe('installment — counter-check (100 000 + 13 472 over 12 mo)', () => {
 
   it('works with ONLY monthly payment (no body known) — overpayment unknown', () => {
     const c = computeObligation(
-      obligation({ type: 'installment', principalAmount: 0, monthlyPayment: 5_000, termMonths: 10 }),
+      obligation({
+        type: 'installment',
+        principalAmount: 0,
+        monthlyPayment: 5_000,
+        termMonths: 10,
+      }),
     );
     expect(c.totalToPay).toBe(50_000);
     expect(c.monthlyPayment).toBe(5_000);
@@ -135,7 +150,12 @@ describe('installment — counter-check (100 000 + 13 472 over 12 mo)', () => {
 
   it('total amount takes precedence and yields overpayment when body is known', () => {
     const c = computeObligation(
-      obligation({ type: 'installment', principalAmount: 100_000, totalAmount: 113_472, termMonths: 12 }),
+      obligation({
+        type: 'installment',
+        principalAmount: 100_000,
+        totalAmount: 113_472,
+        termMonths: 12,
+      }),
     );
     expect(c.totalToPay).toBe(113_472);
     expect(c.totalOverpayment).toBe(13_472);

@@ -89,30 +89,72 @@ export function NotesGraphPage() {
     if (tagParam) {
       const key = normalizeNoteTitle(tagParam);
       const prefix = `${key}/`;
-      const scoped = notes.filter((n) => parseNoteTags(n.body).some((t) => t === key || t.startsWith(prefix)));
+      const scoped = notes.filter((n) =>
+        parseNoteTags(n.body).some((t) => t === key || t.startsWith(prefix)),
+      );
       return buildNoteGraph(scoped);
     }
     // The "Люди" node drills into a people-only graph: people + just the notes
     // linked to them (unrelated notes stay out).
     if (peopleParam) {
-      return buildPeopleGraph(notes, { people, gifts, promises, conversations, meetIdeas, relations, noteLinks });
+      return buildPeopleGraph(notes, {
+        people,
+        gifts,
+        promises,
+        conversations,
+        meetIdeas,
+        relations,
+        noteLinks,
+      });
     }
     // Person-centric view (opened from the People section) — local mode keeps it
     // to that person's neighbourhood.
     if (personParam) {
-      return buildNoteGraph(notes, { people, gifts, promises, conversations, meetIdeas, relations, noteLinks });
+      return buildNoteGraph(notes, {
+        people,
+        gifts,
+        promises,
+        conversations,
+        meetIdeas,
+        relations,
+        noteLinks,
+      });
     }
     // Local graph around one note: every note is its own node (not collapsed
     // into a list), so the focused note and its real neighbourhood exist.
     if (focusParam) {
-      return buildNoteGraph(notes, { people, gifts, promises, conversations, meetIdeas, relations, noteLinks });
+      return buildNoteGraph(notes, {
+        people,
+        gifts,
+        promises,
+        conversations,
+        meetIdeas,
+        relations,
+        noteLinks,
+      });
     }
     // Default overview: notebooks + a single "Люди" node collapse the graph;
     // loose notes and tags stay individual.
     return buildOverviewGraph(notes, noteLists, people, noteLinks);
-  }, [listParam, activeList, personParam, peopleParam, focusParam, tagParam, conversations, gifts, meetIdeas, noteLinks, noteLists, notes, people, promises, relations]);
+  }, [
+    listParam,
+    activeList,
+    personParam,
+    peopleParam,
+    focusParam,
+    tagParam,
+    conversations,
+    gifts,
+    meetIdeas,
+    noteLinks,
+    noteLists,
+    notes,
+    people,
+    promises,
+    relations,
+  ]);
   const [activeId, setActiveId] = useState<string | undefined>(
-    personParam ? personNodeId(personParam) : focusParam ?? notes[0]?.id,
+    personParam ? personNodeId(personParam) : (focusParam ?? notes[0]?.id),
   );
   const [mode, setMode] = useState<'global' | 'local'>('global');
   const [depth, setDepth] = useState(2);
@@ -217,7 +259,10 @@ export function NotesGraphPage() {
 
   useEffect(() => {
     if (activeId && graph.nodes.some((node) => node.id === activeId)) return;
-    setActiveId(graph.nodes.find((node) => node.kind === 'note' || node.kind === 'person')?.id ?? graph.nodes[0]?.id);
+    setActiveId(
+      graph.nodes.find((node) => node.kind === 'note' || node.kind === 'person')?.id ??
+        graph.nodes[0]?.id,
+    );
   }, [activeId, graph.nodes]);
 
   const baseVisible = useMemo(
@@ -235,8 +280,14 @@ export function NotesGraphPage() {
     [activeId, depth, graph, mode, query, showDetails, showMissing, showPeople, showTags],
   );
   // Notes whose dependencies are collapsed (hidden) via long-press.
-  const collapsedSet = useMemo(() => new Set(notes.filter((n) => n.depsHidden).map((n) => n.id)), [notes]);
-  const visibleGraph = useMemo(() => collapseDependencies(baseVisible, collapsedSet), [baseVisible, collapsedSet]);
+  const collapsedSet = useMemo(
+    () => new Set(notes.filter((n) => n.depsHidden).map((n) => n.id)),
+    [notes],
+  );
+  const visibleGraph = useMemo(
+    () => collapseDependencies(baseVisible, collapsedSet),
+    [baseVisible, collapsedSet],
+  );
 
   // Live mirrors so the layout effect can read the latest graph/positions
   // without taking them as dependencies (selection alone must not re-layout).
@@ -319,10 +370,13 @@ export function NotesGraphPage() {
     const visibleIds = new Set(graphNow.nodes.map((node) => node.id));
     for (const id of pinnedRef.current) if (!visibleIds.has(id)) pinnedRef.current.delete(id);
     const previous = pointsRef.current;
-    const seed = previous.length ? new Map(previous.map((p) => [p.id, { x: p.x, y: p.y }])) : undefined;
-    setPoints(layoutNoteGraph(graphNow, activeIdRef.current, sizeRef.current, seed, pinnedRef.current));
+    const seed = previous.length
+      ? new Map(previous.map((p) => [p.id, { x: p.x, y: p.y }]))
+      : undefined;
+    setPoints(
+      layoutNoteGraph(graphNow, activeIdRef.current, sizeRef.current, seed, pinnedRef.current),
+    );
     kick(seed ? 0.6 : 1);
-     
   }, [layoutKey, kick]);
 
   const pointById = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
@@ -361,7 +415,10 @@ export function NotesGraphPage() {
     if (!rect) return { x: 0, y: 0 };
     const sx = ((clientX - rect.left) / rect.width) * sizeRef.current.width;
     const sy = ((clientY - rect.top) / rect.height) * sizeRef.current.height;
-    return { x: (sx - panRef.current.x) / scaleRef.current, y: (sy - panRef.current.y) / scaleRef.current };
+    return {
+      x: (sx - panRef.current.x) / scaleRef.current,
+      y: (sy - panRef.current.y) / scaleRef.current,
+    };
   };
 
   // Zoom around a screen point, or the stage centre when none is given.
@@ -428,7 +485,12 @@ export function NotesGraphPage() {
     event.preventDefault();
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (maybeStartPinch()) return;
-    panningRef.current = { x: event.clientX, y: event.clientY, panX: panRef.current.x, panY: panRef.current.y };
+    panningRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      panX: panRef.current.x,
+      panY: panRef.current.y,
+    };
   };
 
   const beginNodeDrag = (event: PointerEvent<SVGGElement>, id: string) => {
@@ -509,7 +571,13 @@ export function NotesGraphPage() {
         setPoints((current) =>
           current.map((point) =>
             point.id === id
-              ? { ...point, x: cursor.x + dragOffset.current.x, y: cursor.y + dragOffset.current.y, vx: 0, vy: 0 }
+              ? {
+                  ...point,
+                  x: cursor.x + dragOffset.current.x,
+                  y: cursor.y + dragOffset.current.y,
+                  vx: 0,
+                  vy: 0,
+                }
               : point,
           ),
         );
@@ -542,23 +610,23 @@ export function NotesGraphPage() {
           if (held >= LONG_PRESS_MS && point) {
             setMenuNode(point);
           } else if (held < TAP_TIME_LIMIT) {
-          if (point?.kind === 'note') navigate(`/notes/${id}`);
-          if (point?.kind === 'person' && point.person) navigate(`/people/${point.person.id}`);
-          if (point?.kind === 'list' && point.list) {
-            // The hub of the list you're already inside opens that list; a list
-            // node in the overview drills into its inner graph.
-            navigate(
-              listParamRef.current === point.list.id
-                ? `/notes/lists/${point.list.id}`
-                : `/notes/graph?list=${point.list.id}`,
-            );
-          }
-          // The collapsed "Люди" node drills into the full people graph.
-          if (point?.kind === 'people') navigate('/notes/graph?people=1');
-          // A tag is its own page — open it (content lives on the tag).
-          if (point?.kind === 'tag') {
-            navigate(`/notes/tag/${encodeURIComponent(point.id.slice(4))}`);
-          }
+            if (point?.kind === 'note') navigate(`/notes/${id}`);
+            if (point?.kind === 'person' && point.person) navigate(`/people/${point.person.id}`);
+            if (point?.kind === 'list' && point.list) {
+              // The hub of the list you're already inside opens that list; a list
+              // node in the overview drills into its inner graph.
+              navigate(
+                listParamRef.current === point.list.id
+                  ? `/notes/lists/${point.list.id}`
+                  : `/notes/graph?list=${point.list.id}`,
+              );
+            }
+            // The collapsed "Люди" node drills into the full people graph.
+            if (point?.kind === 'people') navigate('/notes/graph?people=1');
+            // A tag is its own page — open it (content lives on the tag).
+            if (point?.kind === 'tag') {
+              navigate(`/notes/tag/${encodeURIComponent(point.id.slice(4))}`);
+            }
           }
         }
       }
@@ -598,7 +666,15 @@ export function NotesGraphPage() {
 
   return (
     <Screen
-      title={activeList ? `Список: ${activeList.name}` : peopleParam ? 'Граф: Люди' : tagParam ? `Граф тега` : 'Граф связей'}
+      title={
+        activeList
+          ? `Список: ${activeList.name}`
+          : peopleParam
+            ? 'Граф: Люди'
+            : tagParam
+              ? `Граф тега`
+              : 'Граф связей'
+      }
       subtitle={
         activeList
           ? 'В центре — тетрадь, вокруг её заметки и связи'
@@ -615,7 +691,13 @@ export function NotesGraphPage() {
       <div className="stack notes-page notes-graph-screen">
         <div className="card notes-graph-controls">
           {(activeList || peopleParam || tagParam) && (
-            <button className="btn btn--ghost btn--block" onClick={() => { selectionChanged(); navigate('/notes/graph'); }}>
+            <button
+              className="btn btn--ghost btn--block"
+              onClick={() => {
+                selectionChanged();
+                navigate('/notes/graph');
+              }}
+            >
               ← Все списки и заметки
             </button>
           )}
@@ -640,7 +722,10 @@ export function NotesGraphPage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Фильтр"
             />
-            <button className={`notes-toggle${showTags ? ' is-active' : ''}`} onClick={() => setShowTags((v) => !v)}>
+            <button
+              className={`notes-toggle${showTags ? ' is-active' : ''}`}
+              onClick={() => setShowTags((v) => !v)}
+            >
               Теги
             </button>
             <button
@@ -714,7 +799,10 @@ export function NotesGraphPage() {
                     const hot = !!focusId && (link.source === focusId || link.target === focusId);
                     const dim = !!focusId && !hot;
                     // Tag links inherit their tag's colour so each topic reads as a family.
-                    const tc = link.kind === 'tag' && link.target.startsWith('tag:') ? tagColor(link.target.slice(4)) : null;
+                    const tc =
+                      link.kind === 'tag' && link.target.startsWith('tag:')
+                        ? tagColor(link.target.slice(4))
+                        : null;
                     return (
                       <line
                         key={link.id}
@@ -754,7 +842,12 @@ export function NotesGraphPage() {
                       >
                         <title>{point.label}</title>
                         {point.id === focusId && (
-                          <circle className="notes-graph__halo" cx={point.x} cy={point.y} r={point.r + 10} />
+                          <circle
+                            className="notes-graph__halo"
+                            cx={point.x}
+                            cy={point.y}
+                            r={point.r + 10}
+                          />
                         )}
                         <circle cx={point.x} cy={point.y} r={point.r} style={circleStyle} />
                         <text
@@ -771,10 +864,22 @@ export function NotesGraphPage() {
                 </g>
               </svg>
               <div className="notes-graph-zoom">
-                <button onClick={() => { selectionChanged(); zoomBy(1.25); }} aria-label="Приблизить">
+                <button
+                  onClick={() => {
+                    selectionChanged();
+                    zoomBy(1.25);
+                  }}
+                  aria-label="Приблизить"
+                >
                   +
                 </button>
-                <button onClick={() => { selectionChanged(); zoomBy(1 / 1.25); }} aria-label="Отдалить">
+                <button
+                  onClick={() => {
+                    selectionChanged();
+                    zoomBy(1 / 1.25);
+                  }}
+                  aria-label="Отдалить"
+                >
                   −
                 </button>
                 <button onClick={resetView} aria-label="Собрать заново">
@@ -798,12 +903,18 @@ export function NotesGraphPage() {
             ? ' Фиолетовый кружок в центре — сама тетрадь; тап по нему открывает список.'
             : ' «Локальный» режим показывает связи вокруг выбранного узла на заданную глубину.'}
           {activeNote && (
-            <button className="btn btn--ghost btn--block" onClick={() => navigate(`/notes/${activeNote.id}`)}>
+            <button
+              className="btn btn--ghost btn--block"
+              onClick={() => navigate(`/notes/${activeNote.id}`)}
+            >
               Открыть «{activeNote.title}»
             </button>
           )}
           {activePerson && (
-            <button className="btn btn--ghost btn--block" onClick={() => navigate(`/people/${activePerson.id}`)}>
+            <button
+              className="btn btn--ghost btn--block"
+              onClick={() => navigate(`/people/${activePerson.id}`)}
+            >
               Открыть «{activePerson.name}»
             </button>
           )}

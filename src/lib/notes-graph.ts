@@ -1,6 +1,25 @@
-import type { Conversation, Gift, MeetIdea, Note, NoteList, Person, PersonNoteLink, PersonPromise, PersonRelation } from '@/types';
+import type {
+  Conversation,
+  Gift,
+  MeetIdea,
+  Note,
+  NoteList,
+  Person,
+  PersonNoteLink,
+  PersonPromise,
+  PersonRelation,
+} from '@/types';
 
-export type NoteGraphNodeKind = 'note' | 'missing' | 'tag' | 'person' | 'gift' | 'promise' | 'event' | 'list' | 'people';
+export type NoteGraphNodeKind =
+  | 'note'
+  | 'missing'
+  | 'tag'
+  | 'person'
+  | 'gift'
+  | 'promise'
+  | 'event'
+  | 'list'
+  | 'people';
 export type NoteGraphLinkKind =
   | 'wiki'
   | 'tag'
@@ -171,7 +190,8 @@ export function buildNoteGraph(notes: Note[], peopleData?: PeopleGraphData): Not
     const chain = tagAncestry(tag);
     if (!chain.length) return;
     addLink(fromId, ensureTagNode(tag), 'tag');
-    for (let i = 1; i < chain.length; i++) addLink(ensureTagNode(chain[i - 1]), ensureTagNode(chain[i]), 'tag');
+    for (let i = 1; i < chain.length; i++)
+      addLink(ensureTagNode(chain[i - 1]), ensureTagNode(chain[i]), 'tag');
   };
 
   for (const note of notes) {
@@ -278,7 +298,11 @@ export function buildNoteGraph(notes: Note[], peopleData?: PeopleGraphData): Not
 
     for (const relation of peopleData.relations) {
       if (!peopleById.has(relation.fromPersonId) || !peopleById.has(relation.toPersonId)) continue;
-      addLink(personNodeId(relation.fromPersonId), personNodeId(relation.toPersonId), 'person-relation');
+      addLink(
+        personNodeId(relation.fromPersonId),
+        personNodeId(relation.toPersonId),
+        'person-relation',
+      );
     }
   }
 
@@ -309,7 +333,8 @@ export function buildOverviewGraph(
   noteLinks: PersonNoteLink[] = [],
 ): NoteGraph {
   const listById = new Map(lists.map((l) => [l.id, l]));
-  const repId = (note: Note) => (note.listId && listById.has(note.listId) ? `list:${note.listId}` : note.id);
+  const repId = (note: Note) =>
+    note.listId && listById.has(note.listId) ? `list:${note.listId}` : note.id;
 
   const nodes = new Map<string, NoteGraphNode>();
   const links = new Map<string, NoteGraphLink>();
@@ -321,7 +346,8 @@ export function buildOverviewGraph(
 
   const counts = new Map<string, number>();
   for (const note of notes) {
-    if (note.listId && listById.has(note.listId)) counts.set(note.listId, (counts.get(note.listId) ?? 0) + 1);
+    if (note.listId && listById.has(note.listId))
+      counts.set(note.listId, (counts.get(note.listId) ?? 0) + 1);
   }
   for (const list of lists) {
     nodes.set(`list:${list.id}`, {
@@ -337,7 +363,15 @@ export function buildOverviewGraph(
   }
   for (const note of notes) {
     if (note.listId && listById.has(note.listId)) continue;
-    nodes.set(note.id, { id: note.id, kind: 'note', label: note.title, note, degree: 0, incoming: 0, outgoing: 0 });
+    nodes.set(note.id, {
+      id: note.id,
+      kind: 'note',
+      label: note.title,
+      note,
+      degree: 0,
+      incoming: 0,
+      outgoing: 0,
+    });
   }
 
   const addLink = (source: string, target: string, kind: NoteGraphLink['kind']) => {
@@ -356,7 +390,15 @@ export function buildOverviewGraph(
         continue;
       }
       const missingId = `missing:${normalizeNoteTitle(title)}`;
-      if (!nodes.has(missingId)) nodes.set(missingId, { id: missingId, kind: 'missing', label: title, degree: 0, incoming: 0, outgoing: 0 });
+      if (!nodes.has(missingId))
+        nodes.set(missingId, {
+          id: missingId,
+          kind: 'missing',
+          label: title,
+          degree: 0,
+          incoming: 0,
+          outgoing: 0,
+        });
       addLink(src, missingId, 'wiki');
     }
   }
@@ -444,7 +486,9 @@ export function buildPeopleGraph(notes: Note[], peopleData: PeopleGraphData): No
 
   // A people-note may [[link]] to a note outside the circle — that would show
   // as a dashed "missing" placeholder. Drop those so the view stays about people.
-  const drop = new Set(graph.nodes.filter((node) => node.kind === 'missing').map((node) => node.id));
+  const drop = new Set(
+    graph.nodes.filter((node) => node.kind === 'missing').map((node) => node.id),
+  );
   if (!drop.size) return graph;
 
   const nodes = graph.nodes.filter((node) => !drop.has(node.id));
@@ -526,7 +570,12 @@ export function getTagPageRelations(title: string, notes: Note[]): TagPageRelati
 
   const parent = key.includes('/') ? key.slice(0, key.lastIndexOf('/')) : undefined;
   const children = Array.from(childSet).sort((a, b) => a.localeCompare(b, 'ru'));
-  return { isTag: tagged.size > 0 || children.length > 0, parent, children, tagged: Array.from(tagged.values()) };
+  return {
+    isTag: tagged.size > 0 || children.length > 0,
+    parent,
+    children,
+    tagged: Array.from(tagged.values()),
+  };
 }
 
 export function filterNoteGraph(
@@ -576,11 +625,15 @@ export function filterNoteGraph(
     if (!options.showMissing && node.kind === 'missing') return false;
     if (!options.showTags && node.kind === 'tag') return false;
     if (options.showPeople === false && node.kind === 'person') return false;
-    if (options.showPeople === false && ['gift', 'promise', 'event'].includes(node.kind)) return false;
-    if (options.showDetails === false && ['gift', 'promise', 'event'].includes(node.kind)) return false;
+    if (options.showPeople === false && ['gift', 'promise', 'event'].includes(node.kind))
+      return false;
+    if (options.showDetails === false && ['gift', 'promise', 'event'].includes(node.kind))
+      return false;
     if (!query) return true;
     const body = node.note?.body ?? '';
-    const person = node.person ? `${node.person.description ?? ''} ${node.person.tags.join(' ')}` : '';
+    const person = node.person
+      ? `${node.person.description ?? ''} ${node.person.tags.join(' ')}`
+      : '';
     return normalizeNoteTitle(`${node.label} ${body} ${person}`).includes(query);
   });
 
@@ -706,7 +759,7 @@ export function simulationStep(
         raw = Math.sqrt(dx * dx + dy * dy) || 1;
       }
       const dist = Math.max(CHARGE_MIN_DIST, raw);
-      const force = ((CHARGE / dist) * alpha);
+      const force = (CHARGE / dist) * alpha;
       const fx = (dx / raw) * force;
       const fy = (dy / raw) * force;
       a.vx += fx;
@@ -812,7 +865,14 @@ export function layoutNoteGraph(
     }
     const angle = index * 2.399963229728653; // golden angle
     const ring = Math.min(maxRing, spread * Math.sqrt(index + 0.7));
-    return { ...node, x: cx + Math.cos(angle) * ring, y: cy + Math.sin(angle) * ring, vx: 0, vy: 0, r };
+    return {
+      ...node,
+      x: cx + Math.cos(angle) * ring,
+      y: cy + Math.sin(angle) * ring,
+      vx: 0,
+      vy: 0,
+      r,
+    };
   });
 
   // A fresh layout settles hard; an incremental one (positions carried over)

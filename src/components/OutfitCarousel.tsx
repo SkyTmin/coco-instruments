@@ -39,7 +39,11 @@ export function OutfitCarousel({ outfits }: { outfits: Outfit[] }) {
             navigate(`/clothing/outfits/${o.id}`);
           }}
         >
-          {o.cover ? <Photo src={attachmentHref(o.cover)} /> : <span className="qp-card__ph">🧥</span>}
+          {o.cover ? (
+            <Photo src={attachmentHref(o.cover)} />
+          ) : (
+            <span className="qp-card__ph">🧥</span>
+          )}
           <span className="qp-card__overlay">
             <span className="qp-card__name">{o.name}</span>
             <span className="qp-card__count">

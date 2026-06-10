@@ -45,14 +45,24 @@ export function ChatTagPage() {
     <div className="chat-page">
       <div className="chat-head">
         <div className="chat-title chat-title--static note-meta__tag-title">#{tag}</div>
-        <button className="icon-btn" onClick={() => { tapLight(); setMenu(true); }} aria-label="Меню тега">
+        <button
+          className="icon-btn"
+          onClick={() => {
+            tapLight();
+            setMenu(true);
+          }}
+          aria-label="Меню тега"
+        >
           <IconDots size={20} />
         </button>
       </div>
 
       <div className="note-meta">
         {rel.parent && (
-          <button className="note-meta__chip note-meta__tag" onClick={() => openTag(rel.parent as string)}>
+          <button
+            className="note-meta__chip note-meta__tag"
+            onClick={() => openTag(rel.parent as string)}
+          >
             ↑ #{rel.parent}
           </button>
         )}
@@ -62,7 +72,13 @@ export function ChatTagPage() {
           </button>
         ))}
         {rel.tagged.length > 0 && (
-          <button className="note-meta__chip note-meta__links" onClick={() => { tapLight(); setTaggedSheet(true); }}>
+          <button
+            className="note-meta__chip note-meta__links"
+            onClick={() => {
+              tapLight();
+              setTaggedSheet(true);
+            }}
+          >
             📝 С этим тегом · {rel.tagged.length}
           </button>
         )}
@@ -88,8 +104,16 @@ export function ChatTagPage() {
       {menu && (
         <Sheet title={`#${tag}`} onClose={() => setMenu(false)}>
           <div className="stack">
-            <p className="links-lead">Это страница тега — общее пространство для всего, что помечено #{tag}.</p>
-            <button className="btn btn--ghost btn--block" onClick={() => { setMenu(false); setGuide(true); }}>
+            <p className="links-lead">
+              Это страница тега — общее пространство для всего, что помечено #{tag}.
+            </p>
+            <button
+              className="btn btn--ghost btn--block"
+              onClick={() => {
+                setMenu(false);
+                setGuide(true);
+              }}
+            >
               Как это работает
             </button>
           </div>
@@ -102,7 +126,14 @@ export function ChatTagPage() {
         <Sheet title={`Заметки с тегом #${tag}`} onClose={() => setTaggedSheet(false)}>
           <div className="sheet-list">
             {rel.tagged.map((n) => (
-              <button key={n.id} className="flow-row" onClick={() => { setTaggedSheet(false); navigate(`/notes/${n.id}`); }}>
+              <button
+                key={n.id}
+                className="flow-row"
+                onClick={() => {
+                  setTaggedSheet(false);
+                  navigate(`/notes/${n.id}`);
+                }}
+              >
                 <span className="flow-row__name">{n.title}</span>
                 <span className="flow-row__amount">›</span>
               </button>

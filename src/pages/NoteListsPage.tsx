@@ -6,7 +6,22 @@ import { useFinanceStore } from '@/store';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { NotesHelpButton } from '@/components/NotesGuide';
 
-const LIST_EMOJIS = ['📋', '🏥', '💪', '💼', '🏠', '🎓', '✈️', '🍳', '🎬', '📚', '💡', '🌱', '💰', '❤️'];
+const LIST_EMOJIS = [
+  '📋',
+  '🏥',
+  '💪',
+  '💼',
+  '🏠',
+  '🎓',
+  '✈️',
+  '🍳',
+  '🎬',
+  '📚',
+  '💡',
+  '🌱',
+  '💰',
+  '❤️',
+];
 
 export function NoteListsPage() {
   const navigate = useNavigate();
@@ -60,7 +75,11 @@ export function NoteListsPage() {
   return (
     <Screen
       title="Списки"
-      subtitle={noteLists.length ? `${noteLists.length} ${listWord(noteLists.length)}` : 'Заметки по тетрадям'}
+      subtitle={
+        noteLists.length
+          ? `${noteLists.length} ${listWord(noteLists.length)}`
+          : 'Заметки по тетрадям'
+      }
       action={<NotesHelpButton />}
     >
       <div className="stack notes-page">
@@ -94,19 +113,40 @@ export function NoteListsPage() {
               <button className="btn btn--ghost" style={{ flex: 1 }} onClick={closeForm}>
                 Отмена
               </button>
-              <button className="btn btn--primary" style={{ flex: 1 }} disabled={!name.trim()} onClick={save}>
+              <button
+                className="btn btn--primary"
+                style={{ flex: 1 }}
+                disabled={!name.trim()}
+                onClick={save}
+              >
                 {editingId ? 'Сохранить' : 'Создать'}
               </button>
             </div>
           </div>
         ) : (
           <div className="notes-actions">
-            <button className="notes-action notes-action--primary" onClick={() => { tapLight(); setOpen(true); }}>
-              <span className="notes-action__icon"><IconList /></span>
+            <button
+              className="notes-action notes-action--primary"
+              onClick={() => {
+                tapLight();
+                setOpen(true);
+              }}
+            >
+              <span className="notes-action__icon">
+                <IconList />
+              </span>
               <span>Новый список</span>
             </button>
-            <button className="notes-action notes-action--graph" onClick={() => { tapLight(); navigate('/notes/graph'); }}>
-              <span className="notes-action__icon"><IconGraph /></span>
+            <button
+              className="notes-action notes-action--graph"
+              onClick={() => {
+                tapLight();
+                navigate('/notes/graph');
+              }}
+            >
+              <span className="notes-action__icon">
+                <IconGraph />
+              </span>
               <span>Общий граф</span>
             </button>
           </div>
@@ -138,14 +178,20 @@ export function NoteListsPage() {
                 <span className="note-list-row__emoji">{list.emoji ?? '📋'}</span>
                 <div className="note-list-row__main">
                   <div className="note-list-row__name">{list.name}</div>
-                  <div className="note-list-row__sub">{countOf(list.id)} {noteWord(countOf(list.id))}</div>
+                  <div className="note-list-row__sub">
+                    {countOf(list.id)} {noteWord(countOf(list.id))}
+                  </div>
                 </div>
                 <span className="note-list-row__chevron">›</span>
               </div>
             </SwipeRow>
           ))}
           {!noteLists.length && !open && (
-            <EmptyState icon="📚" title="Списков пока нет" sub="Создайте первый — например «Здоровье»" />
+            <EmptyState
+              icon="📚"
+              title="Списков пока нет"
+              sub="Создайте первый — например «Здоровье»"
+            />
           )}
         </div>
       </div>

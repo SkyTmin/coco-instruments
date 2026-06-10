@@ -22,7 +22,9 @@ export function NotePicker({
   const results = useMemo(() => {
     const key = normalizeNoteTitle(q);
     return notes
-      .filter((n) => n.id !== excludeId && n.title && (!key || normalizeNoteTitle(n.title).includes(key)))
+      .filter(
+        (n) => n.id !== excludeId && n.title && (!key || normalizeNoteTitle(n.title).includes(key)),
+      )
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, 30);
   }, [notes, q, excludeId]);

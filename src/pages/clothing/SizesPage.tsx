@@ -48,9 +48,12 @@ export function SizesPage() {
       {tab === 'record' ? (
         <div className="stack">
           {sizes.length === 0 && (
-            <p className="muted" style={{ textAlign: 'center', padding: '8px 10px', lineHeight: 1.5 }}>
-              Сохраните свои размеры, чтобы не вспоминать их в магазине. Или посчитайте их во вкладке
-              «Калькулятор».
+            <p
+              className="muted"
+              style={{ textAlign: 'center', padding: '8px 10px', lineHeight: 1.5 }}
+            >
+              Сохраните свои размеры, чтобы не вспоминать их в магазине. Или посчитайте их во
+              вкладке «Калькулятор».
             </p>
           )}
           {sizes.map((r) => (

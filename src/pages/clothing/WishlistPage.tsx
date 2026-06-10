@@ -54,7 +54,12 @@ export function WishlistPage() {
             >
               <div className="wish-row">
                 {w.photo ? (
-                  <img className="wish-row__thumb" src={attachmentHref(w.photo)} alt="" loading="lazy" />
+                  <img
+                    className="wish-row__thumb"
+                    src={attachmentHref(w.photo)}
+                    alt=""
+                    loading="lazy"
+                  />
                 ) : (
                   <div className="wish-row__thumb wish-row__thumb--ph">✨</div>
                 )}
@@ -74,7 +79,9 @@ export function WishlistPage() {
                       </span>
                     )}
                     {w.outfitId && outfitName.has(w.outfitId) && (
-                      <span className="wish-badge wish-badge--outfit">🧥 {outfitName.get(w.outfitId)}</span>
+                      <span className="wish-badge wish-badge--outfit">
+                        🧥 {outfitName.get(w.outfitId)}
+                      </span>
                     )}
                   </div>
                 </div>

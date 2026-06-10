@@ -32,10 +32,18 @@ export function logError(info: { kind?: string; message: string; stack?: string 
 export function installGlobalErrorLogging(): void {
   if (typeof window === 'undefined') return;
   window.addEventListener('error', (e) => {
-    logError({ kind: 'window.error', message: String(e.message || e.error || 'error'), stack: e.error?.stack });
+    logError({
+      kind: 'window.error',
+      message: String(e.message || e.error || 'error'),
+      stack: e.error?.stack,
+    });
   });
   window.addEventListener('unhandledrejection', (e) => {
     const r = e.reason;
-    logError({ kind: 'unhandledrejection', message: String(r?.message ?? r ?? 'rejection'), stack: r?.stack });
+    logError({
+      kind: 'unhandledrejection',
+      message: String(r?.message ?? r ?? 'rejection'),
+      stack: r?.stack,
+    });
   });
 }

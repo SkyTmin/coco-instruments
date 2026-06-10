@@ -25,7 +25,9 @@ export function RecurringDetailPage() {
         item.paused ? (
           <span className="badge badge--closed">Пауза</span>
         ) : (
-          <span className="badge badge--installment">{intervalLabel(item.intervalCount, item.intervalUnit)}</span>
+          <span className="badge badge--installment">
+            {intervalLabel(item.intervalCount, item.intervalUnit)}
+          </span>
         )
       }
     >
@@ -51,7 +53,9 @@ export function RecurringDetailPage() {
 
         {!item.paused && (
           <div className="card">
-            <div className="chart-card__title" style={{ marginLeft: 0 }}>Ближайшие списания</div>
+            <div className="chart-card__title" style={{ marginLeft: 0 }}>
+              Ближайшие списания
+            </div>
             {c.upcoming.map((d, i) => (
               <div key={i} className="pay-row">
                 <IconCalendar size={18} className="chev" />
@@ -87,7 +91,11 @@ export function RecurringDetailPage() {
               <IconPencil size={18} /> Изменить
             </span>
           </button>
-          <button className="btn btn--danger" onClick={() => setConfirmDel(true)} aria-label="Удалить">
+          <button
+            className="btn btn--danger"
+            onClick={() => setConfirmDel(true)}
+            aria-label="Удалить"
+          >
             <IconTrash size={18} />
           </button>
         </div>

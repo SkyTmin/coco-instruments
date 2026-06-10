@@ -1,10 +1,25 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChangeEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type {
+  ChangeEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from 'react';
 import { NoteMarkdown } from '@/components/NoteMarkdown';
 import { NotePicker } from '@/components/NotePicker';
 import { Sheet } from '@/components/ui';
 import { useCrop } from '@/components/CropProvider';
-import { IconCheck, IconHash, IconImage, IconLink, IconPaperclip, IconPencil, IconPlus, IconSend, IconTrash } from '@/components/icons';
+import {
+  IconCheck,
+  IconHash,
+  IconImage,
+  IconLink,
+  IconPaperclip,
+  IconPencil,
+  IconPlus,
+  IconSend,
+  IconTrash,
+} from '@/components/icons';
 import type { Note, NoteAttachment, NoteMessage } from '@/types';
 import {
   attachmentHref,
@@ -23,7 +38,8 @@ const timeFmt = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-d
 // On desktop (mouse/trackpad) Enter sends and Shift+Enter adds a newline, like
 // every messenger. On touch keyboards Enter keeps making newlines.
 const ENTER_SENDS =
-  typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
+  typeof window !== 'undefined' &&
+  !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
 interface Props {
   messages: NoteMessage[];
@@ -214,8 +230,8 @@ export function ChatThread({
             <div className="chat-empty__icon">💭</div>
             <div className="chat-empty__title">{emptyTitle ?? 'Ваше пространство для мыслей'}</div>
             <div className="chat-empty__hint">
-              Пишите как в личном чате с собой — мысль за мыслью. Внизу: <b>＋</b> добавит фото, тег, связь
-              или задачу, <b>➤</b> отправит.
+              Пишите как в личном чате с собой — мысль за мыслью. Внизу: <b>＋</b> добавит фото,
+              тег, связь или задачу, <b>➤</b> отправит.
             </div>
           </div>
         )}
@@ -288,9 +304,19 @@ export function ChatThread({
         {pending.length > 0 && (
           <div className="chat-pending">
             {pending.map((a) => (
-              <div key={a.id} className={`chat-pending__item${a.type.startsWith('image/') ? '' : ' is-file'}`}>
-                {a.type.startsWith('image/') ? <img src={attachmentHref(a)} alt={a.name} /> : <IconPaperclip size={18} />}
-                <button onClick={() => setPending((p) => p.filter((x) => x.id !== a.id))} aria-label="Убрать">
+              <div
+                key={a.id}
+                className={`chat-pending__item${a.type.startsWith('image/') ? '' : ' is-file'}`}
+              >
+                {a.type.startsWith('image/') ? (
+                  <img src={attachmentHref(a)} alt={a.name} />
+                ) : (
+                  <IconPaperclip size={18} />
+                )}
+                <button
+                  onClick={() => setPending((p) => p.filter((x) => x.id !== a.id))}
+                  aria-label="Убрать"
+                >
                   <IconTrash size={13} />
                 </button>
               </div>
@@ -298,7 +324,14 @@ export function ChatThread({
           </div>
         )}
         <div className="chat-input__row">
-          <button className="chat-plus" onClick={() => { tapLight(); setShowActions(true); }} aria-label="Добавить фото, тег, связь">
+          <button
+            className="chat-plus"
+            onClick={() => {
+              tapLight();
+              setShowActions(true);
+            }}
+            aria-label="Добавить фото, тег, связь"
+          >
             <IconPlus size={22} />
           </button>
           <textarea
@@ -317,7 +350,12 @@ export function ChatThread({
             placeholder={placeholder ?? 'Новая мысль…'}
             rows={1}
           />
-          <button className="chat-send" onClick={send} disabled={!draft.trim() && !pending.length} aria-label="Отправить">
+          <button
+            className="chat-send"
+            onClick={send}
+            disabled={!draft.trim() && !pending.length}
+            aria-label="Отправить"
+          >
             <IconSend size={20} />
           </button>
         </div>
@@ -348,20 +386,60 @@ export function ChatThread({
       {showActions && (
         <Sheet title="Добавить" onClose={() => setShowActions(false)}>
           <div className="chat-actions">
-            <button onClick={() => { setShowActions(false); imageRef.current?.click(); }}>
-              <span className="chat-actions__ic"><IconImage size={20} /></span> Фото
+            <button
+              onClick={() => {
+                setShowActions(false);
+                imageRef.current?.click();
+              }}
+            >
+              <span className="chat-actions__ic">
+                <IconImage size={20} />
+              </span>{' '}
+              Фото
             </button>
-            <button onClick={() => { setShowActions(false); fileRef.current?.click(); }}>
-              <span className="chat-actions__ic"><IconPaperclip size={20} /></span> Файл
+            <button
+              onClick={() => {
+                setShowActions(false);
+                fileRef.current?.click();
+              }}
+            >
+              <span className="chat-actions__ic">
+                <IconPaperclip size={20} />
+              </span>{' '}
+              Файл
             </button>
-            <button onClick={() => { setShowActions(false); setLinkPicker(true); }}>
-              <span className="chat-actions__ic"><IconLink size={20} /></span> Связать с заметкой
+            <button
+              onClick={() => {
+                setShowActions(false);
+                setLinkPicker(true);
+              }}
+            >
+              <span className="chat-actions__ic">
+                <IconLink size={20} />
+              </span>{' '}
+              Связать с заметкой
             </button>
-            <button onClick={() => { setShowActions(false); insert('#'); }}>
-              <span className="chat-actions__ic"><IconHash size={20} /></span> Добавить тег
+            <button
+              onClick={() => {
+                setShowActions(false);
+                insert('#');
+              }}
+            >
+              <span className="chat-actions__ic">
+                <IconHash size={20} />
+              </span>{' '}
+              Добавить тег
             </button>
-            <button onClick={() => { setShowActions(false); insert('- [ ] '); }}>
-              <span className="chat-actions__ic"><IconCheck size={20} /></span> Задача
+            <button
+              onClick={() => {
+                setShowActions(false);
+                insert('- [ ] ');
+              }}
+            >
+              <span className="chat-actions__ic">
+                <IconCheck size={20} />
+              </span>{' '}
+              Задача
             </button>
           </div>
         </Sheet>

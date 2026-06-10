@@ -1,6 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AnimatedNumber, ProgressRing, Screen, SectionCard, SectionHeader, Sheet, Skeleton, StatTile } from '@/components/ui';
+import {
+  AnimatedNumber,
+  ProgressRing,
+  Screen,
+  SectionCard,
+  SectionHeader,
+  Sheet,
+  Skeleton,
+  StatTile,
+} from '@/components/ui';
 import { IconBell, IconCalendar, IconList, IconTarget, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
@@ -91,18 +100,49 @@ export function FinanceDashboardPage() {
       paidSum += c.paidSoFar;
       totalToPaySum += c.totalToPay;
       if (c.monthlyPayment > 0)
-        breakdown.push({ kind: 'obligation', id: o.id, name: o.name, value: Math.round(c.monthlyPayment) });
+        breakdown.push({
+          kind: 'obligation',
+          id: o.id,
+          name: o.name,
+          value: Math.round(c.monthlyPayment),
+        });
       if (c.remaining > 0)
-        remainingItems.push({ kind: 'obligation', id: o.id, name: o.name, value: Math.round(c.remaining) });
+        remainingItems.push({
+          kind: 'obligation',
+          id: o.id,
+          name: o.name,
+          value: Math.round(c.remaining),
+        });
       if (c.nextPaymentDate)
-        upcoming.push({ kind: 'obligation', id: o.id, name: o.name, date: c.nextPaymentDate, amount: c.monthlyPayment, value: 0, tag: o.type });
+        upcoming.push({
+          kind: 'obligation',
+          id: o.id,
+          name: o.name,
+          date: c.nextPaymentDate,
+          amount: c.monthlyPayment,
+          value: 0,
+          tag: o.type,
+        });
     }
     for (const r of recurring) {
       if (r.paused) continue;
       const c = computeRecurring(r);
       monthlyTotal += c.monthlyEquivalent;
-      breakdown.push({ kind: 'recurring', id: r.id, name: r.name, value: Math.round(c.monthlyEquivalent) });
-      upcoming.push({ kind: 'recurring', id: r.id, name: r.name, date: c.nextDue, amount: r.amount, value: 0, tag: 'recurring' });
+      breakdown.push({
+        kind: 'recurring',
+        id: r.id,
+        name: r.name,
+        value: Math.round(c.monthlyEquivalent),
+      });
+      upcoming.push({
+        kind: 'recurring',
+        id: r.id,
+        name: r.name,
+        date: c.nextDue,
+        amount: r.amount,
+        value: 0,
+        tag: 'recurring',
+      });
     }
     upcoming.sort((a, b) => a.date.localeCompare(b.date));
     breakdown.sort((a, b) => b.value - a.value);
@@ -143,7 +183,10 @@ export function FinanceDashboardPage() {
   };
   const openItem = (it: { kind: Kind; id: string }) => go(pathFor(it.kind, it.id));
 
-  const barsTotal = Math.max(breakdown.reduce((sum, b) => sum + b.value, 0), 1);
+  const barsTotal = Math.max(
+    breakdown.reduce((sum, b) => sum + b.value, 0),
+    1,
+  );
   const paidPct = totalToPaySum > 0 ? Math.round((paidSum / totalToPaySum) * 100) : 0;
   const sparkMax = Math.max(...months.map((mo) => mo.total), 1);
   const hasForecast = months.some((mo) => mo.total > 0);
@@ -179,10 +222,18 @@ export function FinanceDashboardPage() {
       subtitle="Обзор"
       action={
         <div className="row" style={{ gap: 8 }}>
-          <button className="icon-round" onClick={() => go('/finance/settings')} aria-label="Напоминания">
+          <button
+            className="icon-round"
+            onClick={() => go('/finance/settings')}
+            aria-label="Напоминания"
+          >
             <IconBell size={20} />
           </button>
-          <button className="icon-round" onClick={() => go('/finance/calendar')} aria-label="Календарь">
+          <button
+            className="icon-round"
+            onClick={() => go('/finance/calendar')}
+            aria-label="Календарь"
+          >
             <IconCalendar size={22} />
           </button>
         </div>
@@ -200,11 +251,15 @@ export function FinanceDashboardPage() {
             <div className="hero__main">
               <div className="hero__row">
                 <span>Выплачено</span>
-                <b className="amount-pos"><AnimatedNumber value={Math.round(paidSum)} format={formatRUB} /></b>
+                <b className="amount-pos">
+                  <AnimatedNumber value={Math.round(paidSum)} format={formatRUB} />
+                </b>
               </div>
               <div className="hero__row">
                 <span>Осталось</span>
-                <b><AnimatedNumber value={Math.round(totalRemaining)} format={formatRUB} /></b>
+                <b>
+                  <AnimatedNumber value={Math.round(totalRemaining)} format={formatRUB} />
+                </b>
               </div>
               <div className="hero__row hero__row--muted">
                 <span>Всего к выплате</span>
@@ -219,12 +274,26 @@ export function FinanceDashboardPage() {
             <StatTile
               label="Платежей в месяц"
               value={<AnimatedNumber value={monthlyTotal} format={formatRUB} />}
-              onClick={breakdown.length ? () => { tapLight(); setSheet('monthly'); } : undefined}
+              onClick={
+                breakdown.length
+                  ? () => {
+                      tapLight();
+                      setSheet('monthly');
+                    }
+                  : undefined
+              }
             />
             <StatTile
               label="Осталось выплатить"
               value={<AnimatedNumber value={totalRemaining} format={formatRUB} />}
-              onClick={remainingItems.length ? () => { tapLight(); setSheet('remaining'); } : undefined}
+              onClick={
+                remainingItems.length
+                  ? () => {
+                      tapLight();
+                      setSheet('remaining');
+                    }
+                  : undefined
+              }
             />
           </div>
         </div>
@@ -232,21 +301,31 @@ export function FinanceDashboardPage() {
         {hasForecast && (
           <div className="card">
             <div className="spark-head">
-              <span className="section-label" style={{ margin: 0 }}>Платежи вперёд</span>
-              <span className="muted" style={{ fontSize: 12 }}>6 месяцев</span>
+              <span className="section-label" style={{ margin: 0 }}>
+                Платежи вперёд
+              </span>
+              <span className="muted" style={{ fontSize: 12 }}>
+                6 месяцев
+              </span>
             </div>
             <div className="spark">
               {months.map((mo) => (
                 <button
                   key={`${mo.y}-${mo.m}`}
                   className="spark__col"
-                  onClick={() => go(`/finance/calendar?ym=${mo.y}-${String(mo.m + 1).padStart(2, '0')}`)}
+                  onClick={() =>
+                    go(`/finance/calendar?ym=${mo.y}-${String(mo.m + 1).padStart(2, '0')}`)
+                  }
                 >
-                  <span className="spark__val">{mo.total > 0 ? formatRUB(Math.round(mo.total)) : ''}</span>
+                  <span className="spark__val">
+                    {mo.total > 0 ? formatRUB(Math.round(mo.total)) : ''}
+                  </span>
                   <span className="spark__track">
                     <span
                       className="spark__bar"
-                      style={{ height: `${Math.max((mo.total / sparkMax) * 100, mo.total > 0 ? 6 : 0)}%` }}
+                      style={{
+                        height: `${Math.max((mo.total / sparkMax) * 100, mo.total > 0 ? 6 : 0)}%`,
+                      }}
                     />
                   </span>
                   <span className="spark__lbl">{mo.label}</span>
@@ -270,13 +349,19 @@ export function FinanceDashboardPage() {
         <SectionCard
           icon={<IconList />}
           title="Списки"
-          sub={lists.length ? `${lists.length} ${listsWord(lists.length)}` : 'Свадьба, ремонт, отпуск…'}
+          sub={
+            lists.length ? `${lists.length} ${listsWord(lists.length)}` : 'Свадьба, ремонт, отпуск…'
+          }
           onClick={() => go('/finance/lists')}
         />
         <SectionCard
           icon={<IconTarget />}
           title="Накопления"
-          sub={savings.length ? `${savings.length} цел${savings.length === 1 ? 'ь' : 'и'}` : 'Цели и прогресс'}
+          sub={
+            savings.length
+              ? `${savings.length} цел${savings.length === 1 ? 'ь' : 'и'}`
+              : 'Цели и прогресс'
+          }
           onClick={() => go('/finance/savings')}
         />
 
@@ -292,11 +377,18 @@ export function FinanceDashboardPage() {
             />
             <div className="stack">
               {upcoming.map((u) => (
-                <div key={u.kind + u.id} className="up-row" onClick={() => openItem(u)} role="button">
+                <div
+                  key={u.kind + u.id}
+                  className="up-row"
+                  onClick={() => openItem(u)}
+                  role="button"
+                >
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="up-row__name">{u.name}</div>
                     <div className="up-row__amount">{formatRUB(u.amount)}</div>
-                    <span className={`badge ${TAG_META[u.tag].cls} up-row__tag`}>{TAG_META[u.tag].label}</span>
+                    <span className={`badge ${TAG_META[u.tag].cls} up-row__tag`}>
+                      {TAG_META[u.tag].label}
+                    </span>
                   </div>
                   <div className="up-row__date">{formatDate(u.date, true)}</div>
                 </div>
@@ -314,7 +406,12 @@ export function FinanceDashboardPage() {
                 {breakdown.map((it) => {
                   const pct = Math.round((it.value / barsTotal) * 100);
                   return (
-                    <div key={it.kind + it.id} className="bar-row" onClick={() => openItem(it)} role="button">
+                    <div
+                      key={it.kind + it.id}
+                      className="bar-row"
+                      onClick={() => openItem(it)}
+                      role="button"
+                    >
                       <div className="bar-row__head">
                         <span className="bar-row__name">{it.name}</span>
                         <span className="bar-row__val">
@@ -335,12 +432,24 @@ export function FinanceDashboardPage() {
 
       {sheet === 'monthly' && (
         <Sheet title="Из чего складывается" onClose={() => setSheet(null)}>
-          <FlowList items={breakdown} onPick={(it) => { setSheet(null); openItem(it); }} />
+          <FlowList
+            items={breakdown}
+            onPick={(it) => {
+              setSheet(null);
+              openItem(it);
+            }}
+          />
         </Sheet>
       )}
       {sheet === 'remaining' && (
         <Sheet title="Осталось выплатить" onClose={() => setSheet(null)}>
-          <FlowList items={remainingItems} onPick={(it) => { setSheet(null); openItem(it); }} />
+          <FlowList
+            items={remainingItems}
+            onPick={(it) => {
+              setSheet(null);
+              openItem(it);
+            }}
+          />
         </Sheet>
       )}
     </Screen>

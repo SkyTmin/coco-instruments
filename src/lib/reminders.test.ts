@@ -51,9 +51,18 @@ describe('buildReminders', () => {
 
   it('an obligation also produces reminders', () => {
     const o: Obligation = {
-      id: 'o1', name: 'Кредит', type: 'credit', principalAmount: 100000, monthlyPayment: 5000,
-      paymentDay: 15, termMonths: 12, startDate: todayISO(), status: 'active', payments: [],
-      createdAt: 0, updatedAt: 0,
+      id: 'o1',
+      name: 'Кредит',
+      type: 'credit',
+      principalAmount: 100000,
+      monthlyPayment: 5000,
+      paymentDay: 15,
+      termMonths: 12,
+      startDate: todayISO(),
+      status: 'active',
+      payments: [],
+      createdAt: 0,
+      updatedAt: 0,
     };
     expect(buildReminders([o], [], prefs).length).toBeGreaterThanOrEqual(1);
   });

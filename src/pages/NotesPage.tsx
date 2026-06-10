@@ -73,7 +73,8 @@ export function NotesPage() {
   const visible = useMemo(() => {
     let list = notes;
     if (listFilter) list = list.filter((n) => n.listId === listFilter);
-    if (queryKey) list = list.filter((n) => normalizeNoteTitle(`${n.title} ${n.body}`).includes(queryKey));
+    if (queryKey)
+      list = list.filter((n) => normalizeNoteTitle(`${n.title} ${n.body}`).includes(queryKey));
     return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
   }, [notes, listFilter, queryKey]);
 
@@ -126,7 +127,10 @@ export function NotesPage() {
           },
         ]}
       >
-        <div className={`note-row${note.pinned ? ' is-pinned' : ''}`} style={{ animationDelay: `${Math.min(i, 12) * 26}ms` }}>
+        <div
+          className={`note-row${note.pinned ? ' is-pinned' : ''}`}
+          style={{ animationDelay: `${Math.min(i, 12) * 26}ms` }}
+        >
           <div className="note-row__main">
             <div className="note-row__top">
               <div className="note-row__title">
@@ -151,7 +155,9 @@ export function NotesPage() {
                     </span>
                   );
                 })}
-                {!!note.attachments?.length && <span className="is-attach">{note.attachments.length} 📎</span>}
+                {!!note.attachments?.length && (
+                  <span className="is-attach">{note.attachments.length} 📎</span>
+                )}
               </div>
             )}
           </div>
@@ -212,7 +218,11 @@ export function NotesPage() {
                 placeholder="Поиск по заметкам и #тегам"
               />
               {query && (
-                <button className="notes-search__clear" onClick={() => setSearch('')} aria-label="Очистить">
+                <button
+                  className="notes-search__clear"
+                  onClick={() => setSearch('')}
+                  aria-label="Очистить"
+                >
                   ×
                 </button>
               )}
@@ -242,7 +252,11 @@ export function NotesPage() {
                   <span className="notes-chip__count">{countByList.get(l.id) ?? 0}</span>
                 </button>
               ))}
-              <button className="notes-chip notes-chip--add" onClick={() => go('/notes/lists')} aria-label="Списки">
+              <button
+                className="notes-chip notes-chip--add"
+                onClick={() => go('/notes/lists')}
+                aria-label="Списки"
+              >
                 +
               </button>
             </div>
@@ -254,7 +268,8 @@ export function NotesPage() {
             <div className="notes-welcome__icon">📝</div>
             <h2 className="notes-welcome__title">Заметки-чаты</h2>
             <p className="notes-welcome__sub">
-              Пишите как в мессенджере — текстом и фото. Связывайте мысли, группируйте по спискам и находите всё в графе.
+              Пишите как в мессенджере — текстом и фото. Связывайте мысли, группируйте по спискам и
+              находите всё в графе.
             </p>
             <button className="btn btn--primary btn--block" onClick={() => go('/notes/new')}>
               Создать первую заметку
@@ -276,7 +291,11 @@ export function NotesPage() {
             {visible.length ? (
               visible.map(renderCard)
             ) : (
-              <EmptyState icon="🔍" title="Ничего не найдено" sub="Попробуйте другой запрос или тег" />
+              <EmptyState
+                icon="🔍"
+                title="Ничего не найдено"
+                sub="Попробуйте другой запрос или тег"
+              />
             )}
           </div>
         ) : visible.length === 0 ? (
@@ -297,7 +316,9 @@ export function NotesPage() {
             )}
             {recent.length > 0 && (
               <>
-                <div className="notes-section-head">{pinned.length > 0 ? 'Остальные' : activeList ? activeList.name : 'Недавние'}</div>
+                <div className="notes-section-head">
+                  {pinned.length > 0 ? 'Остальные' : activeList ? activeList.name : 'Недавние'}
+                </div>
                 {recent.map(renderCard)}
               </>
             )}

@@ -28,7 +28,9 @@ const pathFor = (p: CalendarPayment) =>
   p.kind === 'recurring' ? `/finance/recurring/${p.id}` : `/finance/expenses/${p.id}`;
 
 function monthTitle(y: number, m: number): string {
-  const s = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(new Date(y, m, 1));
+  const s = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(
+    new Date(y, m, 1),
+  );
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -63,7 +65,13 @@ export function PaymentsCalendarPage() {
   const [drag, setDrag] = useState(0);
 
   const swipeRef = useRef<HTMLDivElement | null>(null);
-  const gesture = useRef<{ x: number; y: number; decided: boolean; horizontal: boolean; pid: number } | null>(null);
+  const gesture = useRef<{
+    x: number;
+    y: number;
+    decided: boolean;
+    horizontal: boolean;
+    pid: number;
+  } | null>(null);
   const swipedRef = useRef(false);
 
   const { byDay, monthTotal, monthCount, cells } = useMemo(() => {
@@ -126,7 +134,13 @@ export function PaymentsCalendarPage() {
 
   // ---- swipe between months -------------------------------------------------
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    gesture.current = { x: e.clientX, y: e.clientY, decided: false, horizontal: false, pid: e.pointerId };
+    gesture.current = {
+      x: e.clientX,
+      y: e.clientY,
+      decided: false,
+      horizontal: false,
+      pid: e.pointerId,
+    };
     swipedRef.current = false;
     setAnim(null);
   };
@@ -194,7 +208,10 @@ export function PaymentsCalendarPage() {
           <div
             key={`${cursor.y}-${cursor.m}`}
             className={`cal__grid${anim ? ` cal__grid--${anim}` : ''}`}
-            style={{ transform: drag ? `translateX(${drag}px)` : undefined, transition: drag ? 'none' : undefined }}
+            style={{
+              transform: drag ? `translateX(${drag}px)` : undefined,
+              transition: drag ? 'none' : undefined,
+            }}
           >
             {cells.map((d) => {
               const iso = toISO(d);
@@ -224,7 +241,9 @@ export function PaymentsCalendarPage() {
 
         <div className="cal__summary">
           <span>
-            {monthCount > 0 ? `${monthCount} ${monthCount === 1 ? 'платёж' : 'платежей'}` : 'Нет платежей'}
+            {monthCount > 0
+              ? `${monthCount} ${monthCount === 1 ? 'платёж' : 'платежей'}`
+              : 'Нет платежей'}
           </span>
           <b>
             <AnimatedNumber value={Math.round(monthTotal)} format={formatRUB} />

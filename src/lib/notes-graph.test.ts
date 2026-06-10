@@ -42,9 +42,13 @@ describe('overview graph (notebooks)', () => {
   it('keeps loose notes and redirects links to list nodes', () => {
     expect(g.nodes.some((n) => n.id === 'l1' && n.kind === 'note')).toBe(true);
     // loose note → note inside the list → link points at the list node
-    expect(g.links.some((l) => l.source === 'l1' && l.target === 'list:health' && l.kind === 'wiki')).toBe(true);
+    expect(
+      g.links.some((l) => l.source === 'l1' && l.target === 'list:health' && l.kind === 'wiki'),
+    ).toBe(true);
     // wiki between two notes of the same list collapses to a self-link → dropped
-    expect(g.links.some((l) => l.source === 'list:health' && l.target === 'list:health')).toBe(false);
+    expect(g.links.some((l) => l.source === 'list:health' && l.target === 'list:health')).toBe(
+      false,
+    );
   });
 
   it('draws no tag nodes in the overview (tags live inside lists)', () => {
@@ -53,12 +57,20 @@ describe('overview graph (notebooks)', () => {
   });
 });
 
-
 describe('overview graph — people', () => {
   const lists = [{ id: 'health', name: 'Здоровье', createdAt: 0, updatedAt: 0 }];
   const notes = [note('l1', 'Идея', 'про Аню'), note('a1', 'Горло', '', 'health')];
   const people = [
-    { id: 'p1', name: 'Аня', category: 'friend' as const, closeness: 3 as const, tags: [], favorite: false, createdAt: 0, updatedAt: 0 },
+    {
+      id: 'p1',
+      name: 'Аня',
+      category: 'friend' as const,
+      closeness: 3 as const,
+      tags: [],
+      favorite: false,
+      createdAt: 0,
+      updatedAt: 0,
+    },
   ];
   const noteLinks = [{ id: 'ln1', personId: 'p1', noteId: 'l1', createdAt: 0 }];
   const g = buildOverviewGraph(notes, lists, people, noteLinks);
@@ -67,7 +79,11 @@ describe('overview graph — people', () => {
     const peopleNode = g.nodes.find((n) => n.id === 'people:all');
     expect(peopleNode?.kind).toBe('people');
     expect(peopleNode?.count).toBe(1);
-    expect(g.links.some((l) => l.source === 'l1' && l.target === 'people:all' && l.kind === 'person-note')).toBe(true);
+    expect(
+      g.links.some(
+        (l) => l.source === 'l1' && l.target === 'people:all' && l.kind === 'person-note',
+      ),
+    ).toBe(true);
     // individual people are NOT separate nodes in the overview
     expect(g.nodes.some((n) => n.id === 'person:p1')).toBe(false);
   });
@@ -80,7 +96,16 @@ describe('overview graph — people', () => {
 
 describe('people graph (the "Люди" view)', () => {
   const people = [
-    { id: 'p1', name: 'Аня', category: 'friend' as const, closeness: 3 as const, tags: [], favorite: false, createdAt: 0, updatedAt: 0 },
+    {
+      id: 'p1',
+      name: 'Аня',
+      category: 'friend' as const,
+      closeness: 3 as const,
+      tags: [],
+      favorite: false,
+      createdAt: 0,
+      updatedAt: 0,
+    },
   ];
   const notes = [note('a1', 'Звонок Ане', ''), note('a2', 'Несвязанная заметка', '')];
   const data = {
@@ -112,7 +137,11 @@ describe('people graph (the "Люди" view)', () => {
 describe('collapse dependencies', () => {
   it('hides a note’s downstream dependencies, keeps the note and its parents', () => {
     // A -> B -> C ; collapsing B hides C (its dependency), keeps A (points to B).
-    const graph = buildNoteGraph([note('a', 'A', '[[B]]'), note('b', 'B', '[[C]]'), note('c', 'C', '')]);
+    const graph = buildNoteGraph([
+      note('a', 'A', '[[B]]'),
+      note('b', 'B', '[[C]]'),
+      note('c', 'C', ''),
+    ]);
     const out = collapseDependencies(graph, new Set(['b']));
     expect(out.nodes.some((n) => n.id === 'b')).toBe(true);
     expect(out.nodes.some((n) => n.id === 'a')).toBe(true);
@@ -120,7 +149,11 @@ describe('collapse dependencies', () => {
   });
 
   it('keeps dependencies shared with another visible note', () => {
-    const graph = buildNoteGraph([note('b', 'B', '[[C]]'), note('c', 'C', ''), note('d', 'D', '[[C]]')]);
+    const graph = buildNoteGraph([
+      note('b', 'B', '[[C]]'),
+      note('c', 'C', ''),
+      note('d', 'D', '[[C]]'),
+    ]);
     const out = collapseDependencies(graph, new Set(['b']));
     expect(out.nodes.some((n) => n.id === 'c')).toBe(true);
   });
@@ -172,7 +205,11 @@ describe('tag pages', () => {
 
 describe('hierarchical tags', () => {
   it('parses nested tags and trims stray slashes', () => {
-    expect(parseNoteTags('#здоровье/горло болит, #а//б/ и #x но не #')).toEqual(['здоровье/горло', 'а/б', 'x']);
+    expect(parseNoteTags('#здоровье/горло болит, #а//б/ и #x но не #')).toEqual([
+      'здоровье/горло',
+      'а/б',
+      'x',
+    ]);
     expect(parseNoteTags('#дом-2 и C# не тег')).toEqual(['дом-2']);
   });
 
@@ -185,9 +222,15 @@ describe('hierarchical tags', () => {
     const graph = buildNoteGraph([note('n', 'T', '#здоровье/горло')]);
     expect(graph.nodes.some((x) => x.id === 'tag:здоровье')).toBe(true);
     expect(graph.nodes.some((x) => x.id === 'tag:здоровье/горло')).toBe(true);
-    expect(graph.links.some((l) => l.source === 'n' && l.target === 'tag:здоровье/горло' && l.kind === 'tag')).toBe(true);
     expect(
-      graph.links.some((l) => l.source === 'tag:здоровье' && l.target === 'tag:здоровье/горло' && l.kind === 'tag'),
+      graph.links.some(
+        (l) => l.source === 'n' && l.target === 'tag:здоровье/горло' && l.kind === 'tag',
+      ),
+    ).toBe(true);
+    expect(
+      graph.links.some(
+        (l) => l.source === 'tag:здоровье' && l.target === 'tag:здоровье/горло' && l.kind === 'tag',
+      ),
     ).toBe(true);
   });
 });
@@ -207,7 +250,9 @@ describe('list graph (Map of Content)', () => {
 
   it('keeps the notes and their wiki links intact', () => {
     expect(g.nodes.some((n) => n.id === 'a1' && n.kind === 'note')).toBe(true);
-    expect(g.links.some((l) => l.source === 'a1' && l.target === 'a2' && l.kind === 'wiki')).toBe(true);
+    expect(g.links.some((l) => l.source === 'a1' && l.target === 'a2' && l.kind === 'wiki')).toBe(
+      true,
+    );
   });
 
   it('excludes index spokes from the local-graph neighbourhood', () => {
@@ -243,7 +288,9 @@ describe('notes graph', () => {
     ]);
 
     expect(graph.nodes.some((node) => node.id === 'a' && node.degree > 0)).toBe(true);
-    expect(graph.nodes.some((node) => node.id === `missing:${normalizeNoteTitle('Нет файла')}`)).toBe(true);
+    expect(
+      graph.nodes.some((node) => node.id === `missing:${normalizeNoteTitle('Нет файла')}`),
+    ).toBe(true);
     expect(graph.nodes.some((node) => node.id === 'tag:работа')).toBe(true);
     expect(graph.links.filter((link) => link.kind === 'wiki')).toHaveLength(3);
   });
@@ -261,11 +308,7 @@ describe('notes graph', () => {
   });
 
   it('filters local graph by depth', () => {
-    const notes = [
-      note('a', 'A', '[[B]]'),
-      note('b', 'B', '[[C]]'),
-      note('c', 'C', ''),
-    ];
+    const notes = [note('a', 'A', '[[B]]'), note('b', 'B', '[[C]]'), note('c', 'C', '')];
     const graph = buildNoteGraph(notes);
     const local = filterNoteGraph(graph, {
       mode: 'local',
@@ -350,9 +393,15 @@ describe('notes graph', () => {
       noteLinks: [{ id: 'ln1', personId: 'p1', noteId: 'n1', createdAt: 0 }],
     });
 
-    expect(graph.nodes.some((node) => node.id === personNodeId('p1') && node.kind === 'person')).toBe(true);
+    expect(
+      graph.nodes.some((node) => node.id === personNodeId('p1') && node.kind === 'person'),
+    ).toBe(true);
     expect(graph.nodes.some((node) => node.kind === 'gift' && node.label === 'Книга')).toBe(true);
-    expect(graph.nodes.some((node) => node.kind === 'promise' && node.label === 'Скинуть ссылку')).toBe(true);
-    expect(graph.links.some((link) => link.kind === 'person-note' && link.target === 'n1')).toBe(true);
+    expect(
+      graph.nodes.some((node) => node.kind === 'promise' && node.label === 'Скинуть ссылку'),
+    ).toBe(true);
+    expect(graph.links.some((link) => link.kind === 'person-note' && link.target === 'n1')).toBe(
+      true,
+    );
   });
 });

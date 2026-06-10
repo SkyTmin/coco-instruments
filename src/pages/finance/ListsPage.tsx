@@ -40,8 +40,16 @@ export function ListsPage() {
           {lists.map((l) => {
             const s = statsFor(l.id);
             return (
-              <div key={l.id} className="section-card" onClick={() => go(`/finance/lists/${l.id}`)} role="button">
-                <div className="section-card__icon" style={{ background: 'var(--surface-2)', fontSize: 22 }}>
+              <div
+                key={l.id}
+                className="section-card"
+                onClick={() => go(`/finance/lists/${l.id}`)}
+                role="button"
+              >
+                <div
+                  className="section-card__icon"
+                  style={{ background: 'var(--surface-2)', fontSize: 22 }}
+                >
                   {l.emoji || '📂'}
                 </div>
                 <div className="section-card__body">

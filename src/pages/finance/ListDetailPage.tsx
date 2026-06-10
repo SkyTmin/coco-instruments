@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ConfirmDialog, EmptyState, Fab, Screen, SectionHeader, Sheet, StatTile } from '@/components/ui';
+import {
+  ConfirmDialog,
+  EmptyState,
+  Fab,
+  Screen,
+  SectionHeader,
+  Sheet,
+  StatTile,
+} from '@/components/ui';
 import { IconPencil, IconTrash } from '@/components/icons';
 import { ObligationMiniCard, RecurringMiniCard } from '@/components/finance-cards';
 import { useFinanceStore } from '@/store';
@@ -58,7 +66,11 @@ export function ListDetailPage() {
         </div>
 
         {empty ? (
-          <EmptyState icon="📂" title="В списке пока пусто" sub="Добавьте сюда платёж или регулярный расход по кнопке +" />
+          <EmptyState
+            icon="📂"
+            title="В списке пока пусто"
+            sub="Добавьте сюда платёж или регулярный расход по кнопке +"
+          />
         ) : (
           <>
             <SectionHeader
@@ -70,21 +82,37 @@ export function ListDetailPage() {
               }
             />
             {obls.map((o) => (
-              <ObligationMiniCard key={o.id} o={o} onClick={() => go(`/finance/expenses/${o.id}`)} />
+              <ObligationMiniCard
+                key={o.id}
+                o={o}
+                onClick={() => go(`/finance/expenses/${o.id}`)}
+              />
             ))}
             {recs.map((r) => (
-              <RecurringMiniCard key={r.id} r={r} onClick={() => go(`/finance/recurring/${r.id}`)} />
+              <RecurringMiniCard
+                key={r.id}
+                r={r}
+                onClick={() => go(`/finance/recurring/${r.id}`)}
+              />
             ))}
           </>
         )}
 
         <div className="row" style={{ gap: 12, marginTop: 8 }}>
-          <button className="btn btn--block" style={{ flex: 1 }} onClick={() => go(`/finance/lists/${id}/edit`)}>
+          <button
+            className="btn btn--block"
+            style={{ flex: 1 }}
+            onClick={() => go(`/finance/lists/${id}/edit`)}
+          >
             <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
               <IconPencil size={18} /> Изменить
             </span>
           </button>
-          <button className="btn btn--danger" onClick={() => setConfirmDel(true)} aria-label="Удалить">
+          <button
+            className="btn btn--danger"
+            onClick={() => setConfirmDel(true)}
+            aria-label="Удалить"
+          >
             <IconTrash size={18} />
           </button>
         </div>
@@ -100,10 +128,16 @@ export function ListDetailPage() {
       {adding && (
         <Sheet title="Добавить в список" onClose={() => setAdding(false)}>
           <div className="stack">
-            <button className="btn btn--primary btn--block" onClick={() => go(`/finance/expenses/new?list=${id}`)}>
+            <button
+              className="btn btn--primary btn--block"
+              onClick={() => go(`/finance/expenses/new?list=${id}`)}
+            >
               Платёж / кредит / рассрочка
             </button>
-            <button className="btn btn--block" onClick={() => go(`/finance/recurring/new?list=${id}`)}>
+            <button
+              className="btn btn--block"
+              onClick={() => go(`/finance/recurring/new?list=${id}`)}
+            >
               Регулярный платёж
             </button>
             <button className="btn btn--ghost btn--block" onClick={() => setAdding(false)}>

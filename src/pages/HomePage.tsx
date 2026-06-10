@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatedNumber, ConfirmDialog, Screen, Sheet, Skeleton } from '@/components/ui';
-import { IconCalculator, IconGear, IconHeart, IconNotes, IconShirt, IconWallet } from '@/components/icons';
+import {
+  IconCalculator,
+  IconGear,
+  IconHeart,
+  IconNotes,
+  IconShirt,
+  IconWallet,
+} from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
 import { toISO, todayISO } from '@/lib/date';
@@ -10,7 +17,11 @@ import { nextBirthday, peopleUpcomingEvents, peopleWord } from '@/lib/people';
 import { getBackupStatus, requestTelegramBackup } from '@/lib/backup';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
-const dateFmt = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+const dateFmt = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+});
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -92,9 +103,13 @@ export function HomePage() {
         to: `/people/${birthday.person.id}`,
       });
     }
-    const reminders = peopleUpcomingEvents({ people, gifts, promises, meetIdeas, withinDays: 14 }).filter(
-      (e) => e.kind !== 'birthday',
-    ).length;
+    const reminders = peopleUpcomingEvents({
+      people,
+      gifts,
+      promises,
+      meetIdeas,
+      withinDays: 14,
+    }).filter((e) => e.kind !== 'birthday').length;
     if (reminders > 0) {
       facts.push({
         key: 'rem',
@@ -217,7 +232,14 @@ export function HomePage() {
       title={greeting()}
       subtitle={dateFmt.format(new Date())}
       action={
-        <button className="icon-btn" onClick={() => { tapLight(); setDataSheet(true); }} aria-label="Данные и резервные копии">
+        <button
+          className="icon-btn"
+          onClick={() => {
+            tapLight();
+            setDataSheet(true);
+          }}
+          aria-label="Данные и резервные копии"
+        >
           <IconGear size={21} />
         </button>
       }
@@ -282,7 +304,9 @@ export function HomePage() {
 
         <div className="home-pair">
           <button className="home-tile" onClick={() => go('/notes')}>
-            <span className="home-tile__icon"><IconNotes /></span>
+            <span className="home-tile__icon">
+              <IconNotes />
+            </span>
             <span className="home-tile__title">Заметки</span>
             <span className="home-tile__fact">
               {notes.length
@@ -291,17 +315,23 @@ export function HomePage() {
             </span>
           </button>
           <button className="home-tile" onClick={() => go('/people')}>
-            <span className="home-tile__icon"><IconHeart /></span>
+            <span className="home-tile__icon">
+              <IconHeart />
+            </span>
             <span className="home-tile__title">Люди</span>
             <span className="home-tile__fact">
-              {people.length ? `${people.length} ${peopleWord(people.length)}` : 'Близкие и важные даты'}
+              {people.length
+                ? `${people.length} ${peopleWord(people.length)}`
+                : 'Близкие и важные даты'}
             </span>
           </button>
         </div>
 
         <div className="home-pair">
           <button className="home-tile" onClick={() => go('/clothing')}>
-            <span className="home-tile__icon"><IconShirt /></span>
+            <span className="home-tile__icon">
+              <IconShirt />
+            </span>
             <span className="home-tile__title">Гардероб</span>
             <span className="home-tile__fact">
               {wardrobe.length
@@ -310,7 +340,9 @@ export function HomePage() {
             </span>
           </button>
           <button className="home-tile" onClick={() => go('/calculator')}>
-            <span className="home-tile__icon"><IconCalculator /></span>
+            <span className="home-tile__icon">
+              <IconCalculator />
+            </span>
             <span className="home-tile__title">Калькулятор</span>
             <span className="home-tile__fact">Инженерный, с жестами</span>
           </button>
@@ -321,14 +353,23 @@ export function HomePage() {
         <Sheet title="Данные и копии" onClose={() => setDataSheet(false)}>
           <div className="stack">
             {isOwner && (
-              <button className="btn btn--primary btn--block" type="button" onClick={doBackup} disabled={backupBusy}>
+              <button
+                className="btn btn--primary btn--block"
+                type="button"
+                onClick={doBackup}
+                disabled={backupBusy}
+              >
                 {backupBusy ? 'Запрашиваю…' : '🗄 Прислать копию в Telegram'}
               </button>
             )}
             <button className="btn btn--ghost btn--block" type="button" onClick={doExport}>
               Экспорт в файл
             </button>
-            <button className="btn btn--ghost btn--block" type="button" onClick={() => fileRef.current?.click()}>
+            <button
+              className="btn btn--ghost btn--block"
+              type="button"
+              onClick={() => fileRef.current?.click()}
+            >
               Импорт из файла
             </button>
             {backupMsg && <p className="home-backup__msg">{backupMsg}</p>}

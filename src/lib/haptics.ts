@@ -21,7 +21,8 @@ export function tapMedium(): void {
 
 export function notifySuccess(): void {
   try {
-    if (hapticFeedback.notificationOccurred.isAvailable()) hapticFeedback.notificationOccurred('success');
+    if (hapticFeedback.notificationOccurred.isAvailable())
+      hapticFeedback.notificationOccurred('success');
   } catch {
     /* no-op */
   }
@@ -29,7 +30,8 @@ export function notifySuccess(): void {
 
 export function notifyWarning(): void {
   try {
-    if (hapticFeedback.notificationOccurred.isAvailable()) hapticFeedback.notificationOccurred('warning');
+    if (hapticFeedback.notificationOccurred.isAvailable())
+      hapticFeedback.notificationOccurred('warning');
   } catch {
     /* no-op */
   }

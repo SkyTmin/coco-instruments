@@ -88,7 +88,12 @@ export function NoteMarkdown({
           const label = node.alias || node.target;
           if (found) {
             return (
-              <button key={i} type="button" className="md-wiki" onClick={() => onOpenNote(found.id)}>
+              <button
+                key={i}
+                type="button"
+                className="md-wiki"
+                onClick={() => onOpenNote(found.id)}
+              >
                 {label}
               </button>
             );
@@ -120,7 +125,7 @@ export function NoteMarkdown({
   const renderBlock = (block: Block, key: number): ReactNode => {
     switch (block.t) {
       case 'h': {
-        const Tag = (`h${block.level}` as 'h1' | 'h2' | 'h3');
+        const Tag = `h${block.level}` as 'h1' | 'h2' | 'h3';
         return (
           <Tag key={key} className={`md-h md-h${block.level}`}>
             {renderInline(block.c)}

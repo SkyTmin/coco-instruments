@@ -27,7 +27,11 @@ export function formatCompact(value: number): string {
   return `${Math.round(value)}`;
 }
 
-const dateFmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+const dateFmt = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
 const dateShortFmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' });
 
 export function formatDate(iso: string, short = false): string {
@@ -90,7 +94,12 @@ export function intervalLabel(count: number, unit: IntervalUnit): string {
 
 /** Short label for chips/cards, e.g. (1,'month') → "в месяц", (2,'week') → "2 нед.". */
 export function intervalShort(count: number, unit: IntervalUnit): string {
-  const short: Record<IntervalUnit, string> = { day: 'дн.', week: 'нед.', month: 'мес.', year: 'г.' };
+  const short: Record<IntervalUnit, string> = {
+    day: 'дн.',
+    week: 'нед.',
+    month: 'мес.',
+    year: 'г.',
+  };
   if (count === 1) {
     return { day: 'в день', week: 'в неделю', month: 'в месяц', year: 'в год' }[unit];
   }

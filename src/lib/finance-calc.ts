@@ -18,9 +18,7 @@ import { addInterval, monthsBetween, parseISO, paymentDueDate, toISO, todayISO }
 
 /** Sum of real (non-preliminary) payments. Ported from debts.js. */
 export function paidSoFar(payments: Payment[]): number {
-  return payments
-    .filter((p) => !p.isPreliminary)
-    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  return payments.filter((p) => !p.isPreliminary).reduce((sum, p) => sum + (p.amount || 0), 0);
 }
 
 export function remainingOf(totalToPay: number, paid: number): number {
@@ -220,7 +218,8 @@ export function computeObligation(o: Obligation): ObligationComputed {
   const schedule = buildSchedule(o, r);
 
   const nextEntry = schedule.find(
-    (e) => (parseISO(e.dueDate)?.getTime() ?? 0) > (parseISO(today)?.getTime() ?? 0) && remaining > 0,
+    (e) =>
+      (parseISO(e.dueDate)?.getTime() ?? 0) > (parseISO(today)?.getTime() ?? 0) && remaining > 0,
   );
 
   const derivedInterestRate =
@@ -250,7 +249,11 @@ export interface SavingsComputed {
   requiredPerMonth: number | null;
 }
 
-export function computeSavings(target: number, current: number, deadline?: string): SavingsComputed {
+export function computeSavings(
+  target: number,
+  current: number,
+  deadline?: string,
+): SavingsComputed {
   const remaining = Math.max(0, target - current);
   const pct = target > 0 ? Math.min(100, Math.max(0, Math.round((current / target) * 100))) : 0;
   let requiredPerMonth: number | null = null;
@@ -313,7 +316,11 @@ export function computeRecurring(r: RecurringPayment, fromISO = todayISO()): Rec
 }
 
 /** All occurrence dates of a recurring payment within [fromISO, untilISO]. */
-export function recurringOccurrences(r: RecurringPayment, fromISO: string, untilISO: string): string[] {
+export function recurringOccurrences(
+  r: RecurringPayment,
+  fromISO: string,
+  untilISO: string,
+): string[] {
   const until = parseISO(untilISO);
   if (!until) return [];
   const dates: string[] = [];
@@ -356,7 +363,14 @@ export function collectPayments(
     for (const e of computeObligation(o).schedule) {
       const t = parseISO(e.dueDate)?.getTime() ?? -1;
       if (t >= fromT && t <= untilT) {
-        out.push({ date: e.dueDate, name: o.name, amount: e.amount, kind: 'obligation', tag: o.type, id: o.id });
+        out.push({
+          date: e.dueDate,
+          name: o.name,
+          amount: e.amount,
+          kind: 'obligation',
+          tag: o.type,
+          id: o.id,
+        });
       }
     }
   }
@@ -364,7 +378,14 @@ export function collectPayments(
     if (r.paused) continue;
     if (listId && r.listId !== listId) continue;
     for (const d of recurringOccurrences(r, fromISO, untilISO)) {
-      out.push({ date: d, name: r.name, amount: r.amount, kind: 'recurring', tag: 'recurring', id: r.id });
+      out.push({
+        date: d,
+        name: r.name,
+        amount: r.amount,
+        kind: 'recurring',
+        tag: 'recurring',
+        id: r.id,
+      });
     }
   }
   out.sort((a, b) => a.date.localeCompare(b.date));

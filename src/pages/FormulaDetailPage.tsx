@@ -20,7 +20,9 @@ export function FormulaDetailPage() {
   if (!shape) {
     return (
       <Screen title="Формула">
-        <div className="formula-hint" style={{ padding: 12 }}>Фигура не найдена.</div>
+        <div className="formula-hint" style={{ padding: 12 }}>
+          Фигура не найдена.
+        </div>
       </Screen>
     );
   }
@@ -70,7 +72,9 @@ export function FormulaDetailPage() {
           let display = '—';
           if (ready) {
             const value = r.compute(nums);
-            display = Number.isFinite(value) ? `${formatCalculatorNumber(value)}${dimSuffix(r.dim)}` : '—';
+            display = Number.isFinite(value)
+              ? `${formatCalculatorNumber(value)}${dimSuffix(r.dim)}`
+              : '—';
           }
           return (
             <div className="formula-result" key={r.key}>

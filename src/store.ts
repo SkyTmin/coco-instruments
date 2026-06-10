@@ -44,7 +44,12 @@ import type {
   WishItem,
 } from '@/types';
 
-export const DEFAULT_REMINDER_PREFS: ReminderPrefs = { enabled: true, leads: [0], hour: 9, minute: 0 };
+export const DEFAULT_REMINDER_PREFS: ReminderPrefs = {
+  enabled: true,
+  leads: [0],
+  hour: 9,
+  minute: 0,
+};
 export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
   angleMode: 'DEG',
   memory: 0,
@@ -96,7 +101,10 @@ function uniqueTags(tags: string[]): string[] {
   return Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean)));
 }
 
-function uniqueCategories(categories: Person['category'][] | undefined, fallback: Person['category']): Person['category'][] {
+function uniqueCategories(
+  categories: Person['category'][] | undefined,
+  fallback: Person['category'],
+): Person['category'][] {
   const values = Array.from(new Set([...(categories ?? []), fallback])).filter(Boolean);
   return values.length ? values : [fallback];
 }
@@ -254,11 +262,21 @@ interface FinanceState {
 
   addNote: (draft: NoteDraft) => Note;
   addNoteMessage: (noteId: string, text: string, attachments: NoteAttachment[]) => void;
-  updateNoteMessage: (noteId: string, messageId: string, text: string, attachments: NoteAttachment[]) => void;
+  updateNoteMessage: (
+    noteId: string,
+    messageId: string,
+    text: string,
+    attachments: NoteAttachment[],
+  ) => void;
   removeNoteMessage: (noteId: string, messageId: string) => void;
   getTagPage: (tag: string) => TagPage | undefined;
   addTagMessage: (tag: string, text: string, attachments: NoteAttachment[]) => void;
-  updateTagMessage: (tag: string, messageId: string, text: string, attachments: NoteAttachment[]) => void;
+  updateTagMessage: (
+    tag: string,
+    messageId: string,
+    text: string,
+    attachments: NoteAttachment[],
+  ) => void;
   removeTagMessage: (tag: string, messageId: string) => void;
   updateNote: (id: string, patch: Partial<Note>) => void;
   removeNote: (id: string) => void;
@@ -380,24 +398,39 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   hydrate: async () => {
     const storage = getStorage();
-    const [exp, sav, rec, lists, notes, people, calc, rem, ward, outf, coll, insp, fit, wish, sizes] =
-      await Promise.all([
-        storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
-        storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
-        storage.get<FinanceRecurringBlob>(STORAGE_KEYS.recurring),
-        storage.get<FinanceListsBlob>(STORAGE_KEYS.lists),
-        storage.get<NotesBlob>(STORAGE_KEYS.notes),
-        storage.get<PeopleBlob>(STORAGE_KEYS.people),
-        storage.get<CalculatorBlob>(STORAGE_KEYS.calculator),
-        storage.get<FinanceRemindersBlob>(STORAGE_KEYS.reminders),
-        storage.get<WardrobeItemsBlob>(STORAGE_KEYS.wardrobe),
-        storage.get<WardrobeOutfitsBlob>(STORAGE_KEYS.outfits),
-        storage.get<WardrobeCollectionsBlob>(STORAGE_KEYS.collections),
-        storage.get<WardrobeInspirationBlob>(STORAGE_KEYS.inspiration),
-        storage.get<WardrobeFittingBlob>(STORAGE_KEYS.fitting),
-        storage.get<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist),
-        storage.get<WardrobeSizesBlob>(STORAGE_KEYS.sizes),
-      ]);
+    const [
+      exp,
+      sav,
+      rec,
+      lists,
+      notes,
+      people,
+      calc,
+      rem,
+      ward,
+      outf,
+      coll,
+      insp,
+      fit,
+      wish,
+      sizes,
+    ] = await Promise.all([
+      storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
+      storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
+      storage.get<FinanceRecurringBlob>(STORAGE_KEYS.recurring),
+      storage.get<FinanceListsBlob>(STORAGE_KEYS.lists),
+      storage.get<NotesBlob>(STORAGE_KEYS.notes),
+      storage.get<PeopleBlob>(STORAGE_KEYS.people),
+      storage.get<CalculatorBlob>(STORAGE_KEYS.calculator),
+      storage.get<FinanceRemindersBlob>(STORAGE_KEYS.reminders),
+      storage.get<WardrobeItemsBlob>(STORAGE_KEYS.wardrobe),
+      storage.get<WardrobeOutfitsBlob>(STORAGE_KEYS.outfits),
+      storage.get<WardrobeCollectionsBlob>(STORAGE_KEYS.collections),
+      storage.get<WardrobeInspirationBlob>(STORAGE_KEYS.inspiration),
+      storage.get<WardrobeFittingBlob>(STORAGE_KEYS.fitting),
+      storage.get<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist),
+      storage.get<WardrobeSizesBlob>(STORAGE_KEYS.sizes),
+    ]);
     set({
       expenses: exp?.items ?? [],
       savings: sav?.items ?? [],
@@ -551,7 +584,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   updateList: (id, patch) => {
-    const lists = get().lists.map((l) => (l.id === id ? { ...l, ...patch, updatedAt: Date.now() } : l));
+    const lists = get().lists.map((l) =>
+      l.id === id ? { ...l, ...patch, updatedAt: Date.now() } : l,
+    );
     set({ lists });
     persistLists(lists);
   },
@@ -560,7 +595,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const lists = get().lists.filter((l) => l.id !== id);
     // Keep the items, just detach them from the deleted list.
     const expenses = get().expenses.map((o) => (o.listId === id ? { ...o, listId: undefined } : o));
-    const recurring = get().recurring.map((r) => (r.listId === id ? { ...r, listId: undefined } : r));
+    const recurring = get().recurring.map((r) =>
+      r.listId === id ? { ...r, listId: undefined } : r,
+    );
     set({ lists, expenses, recurring });
     persistLists(lists);
     persistExpenses(expenses);
@@ -591,7 +628,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!cur) return;
     const messages = [...materializeMessages(cur), makeMessage(text, attachments)];
     const notes = get().notes.map((n) =>
-      n.id === noteId ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() } : n,
+      n.id === noteId
+        ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() }
+        : n,
     );
     set({ notes });
     persistNotes(notes, get().noteLists, get().tagPages);
@@ -603,7 +642,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       m.id === messageId ? { ...m, text: text.trim(), attachments, editedAt: Date.now() } : m,
     );
     const notes = get().notes.map((n) =>
-      n.id === noteId ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() } : n,
+      n.id === noteId
+        ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() }
+        : n,
     );
     set({ notes });
     persistNotes(notes, get().noteLists, get().tagPages);
@@ -613,7 +654,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!cur) return;
     const messages = materializeMessages(cur).filter((m) => m.id !== messageId);
     const notes = get().notes.map((n) =>
-      n.id === noteId ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() } : n,
+      n.id === noteId
+        ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() }
+        : n,
     );
     set({ notes });
     persistNotes(notes, get().noteLists, get().tagPages);
@@ -628,10 +671,19 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const key = normalizeNoteTitle(tag);
     const now = Date.now();
     const existing = get().tagPages.find((p) => p.tag === key);
-    const base: TagPage = existing ?? { tag: key, body: '', attachments: [], messages: [], createdAt: now, updatedAt: now };
+    const base: TagPage = existing ?? {
+      tag: key,
+      body: '',
+      attachments: [],
+      messages: [],
+      createdAt: now,
+      updatedAt: now,
+    };
     const messages = [...materializeMessages(base), makeMessage(text, attachments)];
     const next: TagPage = { ...base, messages, ...deriveFromMessages(messages), updatedAt: now };
-    const tagPages = existing ? get().tagPages.map((p) => (p.tag === key ? next : p)) : [next, ...get().tagPages];
+    const tagPages = existing
+      ? get().tagPages.map((p) => (p.tag === key ? next : p))
+      : [next, ...get().tagPages];
     set({ tagPages });
     persistNotes(get().notes, get().noteLists, tagPages);
   },
@@ -642,7 +694,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const messages = materializeMessages(existing).map((m) =>
       m.id === messageId ? { ...m, text: text.trim(), attachments, editedAt: Date.now() } : m,
     );
-    const next: TagPage = { ...existing, messages, ...deriveFromMessages(messages), updatedAt: Date.now() };
+    const next: TagPage = {
+      ...existing,
+      messages,
+      ...deriveFromMessages(messages),
+      updatedAt: Date.now(),
+    };
     const tagPages = get().tagPages.map((p) => (p.tag === key ? next : p));
     set({ tagPages });
     persistNotes(get().notes, get().noteLists, tagPages);
@@ -652,7 +709,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const existing = get().tagPages.find((p) => p.tag === key);
     if (!existing) return;
     const messages = materializeMessages(existing).filter((m) => m.id !== messageId);
-    const next: TagPage = { ...existing, messages, ...deriveFromMessages(messages), updatedAt: Date.now() };
+    const next: TagPage = {
+      ...existing,
+      messages,
+      ...deriveFromMessages(messages),
+      updatedAt: Date.now(),
+    };
     const tagPages = get().tagPages.map((p) => (p.tag === key ? next : p));
     set({ tagPages });
     persistNotes(get().notes, get().noteLists, tagPages);
@@ -700,7 +762,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   addNoteList: (name, emoji) => {
     const now = Date.now();
-    const list: NoteList = { id: genId(), name: name.trim() || 'Список', emoji, createdAt: now, updatedAt: now };
+    const list: NoteList = {
+      id: genId(),
+      name: name.trim() || 'Список',
+      emoji,
+      createdAt: now,
+      updatedAt: now,
+    };
     const noteLists = [list, ...get().noteLists];
     set({ noteLists });
     persistNotes(get().notes, noteLists, get().tagPages);
@@ -773,18 +841,22 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
               patch.category ?? person.category,
             );
             return {
-            ...person,
-            ...patch,
-            name: patch.name !== undefined ? patch.name.trim() : person.name,
-            category: categories[0],
-            categories,
-            description: patch.description !== undefined ? patch.description.trim() || undefined : person.description,
-            phone: patch.phone !== undefined ? patch.phone.trim() || undefined : person.phone,
-            socials: patch.socials !== undefined ? patch.socials.trim() || undefined : person.socials,
-            city: patch.city !== undefined ? patch.city.trim() || undefined : person.city,
-            tags: patch.tags !== undefined ? uniqueTags(patch.tags) : person.tags,
-            updatedAt: Date.now(),
-          };
+              ...person,
+              ...patch,
+              name: patch.name !== undefined ? patch.name.trim() : person.name,
+              category: categories[0],
+              categories,
+              description:
+                patch.description !== undefined
+                  ? patch.description.trim() || undefined
+                  : person.description,
+              phone: patch.phone !== undefined ? patch.phone.trim() || undefined : person.phone,
+              socials:
+                patch.socials !== undefined ? patch.socials.trim() || undefined : person.socials,
+              city: patch.city !== undefined ? patch.city.trim() || undefined : person.city,
+              tags: patch.tags !== undefined ? uniqueTags(patch.tags) : person.tags,
+              updatedAt: Date.now(),
+            };
           })()
         : person,
     );
@@ -803,7 +875,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       (item) => item.fromPersonId !== id && item.toPersonId !== id,
     );
     const personNoteLinks = get().personNoteLinks.filter((item) => item.personId !== id);
-    set({ people, preferences, gifts, conversations, promises, meetIdeas, personRelations, personNoteLinks });
+    set({
+      people,
+      preferences,
+      gifts,
+      conversations,
+      promises,
+      meetIdeas,
+      personRelations,
+      personNoteLinks,
+    });
     persistPeople(peopleSnapshot(get()));
   },
 
@@ -1024,9 +1105,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   linkNoteToPerson: (personId, noteId) => {
-    const exists = get().personNoteLinks.some((link) => link.personId === personId && link.noteId === noteId);
+    const exists = get().personNoteLinks.some(
+      (link) => link.personId === personId && link.noteId === noteId,
+    );
     if (exists) return;
-    const personNoteLinks = [{ id: genId(), personId, noteId, createdAt: Date.now() }, ...get().personNoteLinks];
+    const personNoteLinks = [
+      { id: genId(), personId, noteId, createdAt: Date.now() },
+      ...get().personNoteLinks,
+    ];
     const people = touchPeople(get().people, personId);
     set({ personNoteLinks, people });
     persistPeople(peopleSnapshot(get()));
@@ -1202,7 +1288,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   removeOutfit: (id) => {
     const outfits = get().outfits.filter((o) => o.id !== id);
     // Detach any wishlist items that pointed at this outfit.
-    const wishlist = get().wishlist.map((w) => (w.outfitId === id ? { ...w, outfitId: undefined } : w));
+    const wishlist = get().wishlist.map((w) =>
+      w.outfitId === id ? { ...w, outfitId: undefined } : w,
+    );
     set({ outfits, wishlist });
     persistOutfits(outfits);
     persistWishlist(wishlist);

@@ -68,7 +68,10 @@ interface TokenMatch {
   node: Inline;
 }
 
-function firstOf(text: string, ...res: { re: RegExp; make: (m: RegExpExecArray) => Inline }[]): TokenMatch | null {
+function firstOf(
+  text: string,
+  ...res: { re: RegExp; make: (m: RegExpExecArray) => Inline }[]
+): TokenMatch | null {
   let best: TokenMatch | null = null;
   for (const { re, make } of res) {
     re.lastIndex = 0;
@@ -127,7 +130,10 @@ export function parseInline(input: string): Inline[] {
       { re: /`([^`\n]+)`/, make: (x) => ({ t: 'code', v: x[1] }) },
       { re: /!\[([^\]\n]*)\]\(([^)\s\n]+)\)/, make: (x) => ({ t: 'image', src: x[2], alt: x[1] }) },
       { re: /\[\[([^\]\n]+?)\]\]/, make: (x) => parseWiki(x[1]) },
-      { re: /\[([^\]\n]+)\]\(([^)\s\n]+)\)/, make: (x) => ({ t: 'link', label: x[1], href: x[2] }) },
+      {
+        re: /\[([^\]\n]+)\]\(([^)\s\n]+)\)/,
+        make: (x) => ({ t: 'link', label: x[1], href: x[2] }),
+      },
       { re: /\*\*([^\n]+?)\*\*/, make: (x) => ({ t: 'strong', c: parseInline(x[1]) }) },
       { re: /__([^\n]+?)__/, make: (x) => ({ t: 'strong', c: parseInline(x[1]) }) },
       { re: /~~([^\n]+?)~~/, make: (x) => ({ t: 'del', c: parseInline(x[1]) }) },

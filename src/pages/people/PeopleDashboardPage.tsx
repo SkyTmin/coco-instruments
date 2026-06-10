@@ -98,7 +98,11 @@ export function PeopleDashboardPage() {
       title="Люди"
       subtitle="Близкие, даты и важное"
       action={
-        <button className="icon-round people-add-round" onClick={() => go('/people/new')} aria-label="Новый человек">
+        <button
+          className="icon-round people-add-round"
+          onClick={() => go('/people/new')}
+          aria-label="Новый человек"
+        >
           <IconPlus size={21} />
         </button>
       }
@@ -122,7 +126,11 @@ export function PeopleDashboardPage() {
             placeholder="Найти человека, тег или город"
           />
           {query && (
-            <button className="notes-search__clear" onClick={() => setQuery('')} aria-label="Очистить">
+            <button
+              className="notes-search__clear"
+              onClick={() => setQuery('')}
+              aria-label="Очистить"
+            >
               ×
             </button>
           )}
@@ -202,7 +210,9 @@ export function PeopleDashboardPage() {
                       {personCategoryEmoji(person)} {personCategoryLabel(person)}
                       {birthday && <> · день рождения {birthdayInDays(birthday.days)}</>}
                     </span>
-                    <span className="person-card__note">{latestPersonNote(person, conversations)}</span>
+                    <span className="person-card__note">
+                      {latestPersonNote(person, conversations)}
+                    </span>
                     {person.tags.length > 0 && (
                       <span className="person-card__tags">
                         {person.tags.slice(0, 4).map((tag) => (
@@ -220,7 +230,11 @@ export function PeopleDashboardPage() {
             <EmptyState
               icon="♡"
               title={people.length ? 'Ничего не найдено' : 'Пока никого нет'}
-              sub={people.length ? 'Попробуйте другой фильтр или запрос' : 'Добавьте первого человека, чтобы помнить важное'}
+              sub={
+                people.length
+                  ? 'Попробуйте другой фильтр или запрос'
+                  : 'Добавьте первого человека, чтобы помнить важное'
+              }
             />
             {!people.length && (
               <button className="btn btn--primary btn--block" onClick={() => go('/people/new')}>

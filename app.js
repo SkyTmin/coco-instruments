@@ -135,7 +135,8 @@ app.post('/api/notes/attachments', (req, res) => {
     return;
   }
 
-  const contentType = typeof type === 'string' && type ? type : match[1] || 'application/octet-stream';
+  const contentType =
+    typeof type === 'string' && type ? type : match[1] || 'application/octet-stream';
   const buffer = Buffer.from(match[3], 'base64');
   if (!buffer.length || buffer.length > MAX_UPLOAD_BYTES) {
     res.status(413).json({ error: 'file_too_large', maxBytes: MAX_UPLOAD_BYTES });
@@ -156,10 +157,13 @@ app.post('/api/notes/attachments', (req, res) => {
   });
 });
 
-app.use(PUBLIC_UPLOAD_PATH, express.static(UPLOAD_DIR, {
-  immutable: true,
-  maxAge: '365d',
-}));
+app.use(
+  PUBLIC_UPLOAD_PATH,
+  express.static(UPLOAD_DIR, {
+    immutable: true,
+    maxAge: '365d',
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // Payment reminders. The Mini App syncs its upcoming payments + preferences
@@ -249,7 +253,12 @@ async function sendTelegram(chatId, text) {
     const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
     });
     const j = await r.json().catch(() => ({}));
     return { ok: !!j.ok, error: j.description };
@@ -266,7 +275,10 @@ async function sendDocument(chatId, filePath, caption) {
     form.append('chat_id', String(chatId));
     if (caption) form.append('caption', caption);
     form.append('document', new Blob([data]), path.basename(filePath));
-    const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, { method: 'POST', body: form });
+    const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+      method: 'POST',
+      body: form,
+    });
     const j = await r.json().catch(() => ({}));
     return { ok: !!j.ok, error: j.description };
   } catch (e) {
@@ -359,7 +371,12 @@ async function triggerRelay() {
       detail = (await r.text().catch(() => '')).slice(0, 200);
       lastDispatch = 0; // let it retry sooner on failure
     }
-    lastDispatchInfo = { ok: r.status === 204, status: r.status, detail, at: new Date().toISOString() };
+    lastDispatchInfo = {
+      ok: r.status === 204,
+      status: r.status,
+      detail,
+      at: new Date().toISOString(),
+    };
     return lastDispatchInfo;
   } catch (e) {
     lastDispatch = 0;
@@ -377,20 +394,27 @@ async function triggerBackup() {
   if (now - lastBackupDispatch < 30_000) return { ok: true, throttled: true };
   lastBackupDispatch = now;
   try {
-    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/actions/workflows/backup.yml/dispatches`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${GH_TOKEN}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'Content-Type': 'application/json',
-        'User-Agent': 'coco-backup',
+    const r = await fetch(
+      `https://api.github.com/repos/${GH_REPO}/actions/workflows/backup.yml/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${GH_TOKEN}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+          'User-Agent': 'coco-backup',
+        },
+        body: JSON.stringify({ ref: GH_REF }),
       },
-      body: JSON.stringify({ ref: GH_REF }),
-    });
+    );
     if (r.status !== 204) {
       lastBackupDispatch = 0;
-      return { ok: false, status: r.status, detail: (await r.text().catch(() => '')).slice(0, 200) };
+      return {
+        ok: false,
+        status: r.status,
+        detail: (await r.text().catch(() => '')).slice(0, 200),
+      };
     }
     return { ok: true };
   } catch (e) {
@@ -505,7 +529,13 @@ app.post('/api/bot/webhook', async (req, res) => {
   // Reply by returning the method in the webhook response — works even when the
   // VPS can't open outbound connections to api.telegram.org.
   const reply = (t) =>
-    res.json({ method: 'sendMessage', chat_id: chatId, text: t, parse_mode: 'HTML', disable_web_page_preview: true });
+    res.json({
+      method: 'sendMessage',
+      chat_id: chatId,
+      text: t,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    });
 
   if (/^\/id\b/.test(text)) {
     return reply(`Ваш chat id: <b>${chatId}</b>`);
@@ -656,10 +686,15 @@ async function checkReminders() {
 // user can only read/write their own folder.
 // ---------------------------------------------------------------------------
 function storeKeyName(key) {
-  return String(key || '').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 120);
+  return String(key || '')
+    .replace(/[^A-Za-z0-9_.-]/g, '_')
+    .slice(0, 120);
 }
 function userStoreDir(userId) {
-  const safe = String(userId).replace(/[^0-9]/g, '').slice(0, 32) || '0';
+  const safe =
+    String(userId)
+      .replace(/[^0-9]/g, '')
+      .slice(0, 32) || '0';
   return path.join(STORE_DIR, safe);
 }
 
@@ -675,7 +710,9 @@ app.post('/api/store/get', (req, res) => {
   if (Array.isArray(keys)) {
     for (const key of keys.slice(0, 64)) {
       try {
-        values[key] = JSON.parse(fs.readFileSync(path.join(dir, storeKeyName(key) + '.json'), 'utf8'));
+        values[key] = JSON.parse(
+          fs.readFileSync(path.join(dir, storeKeyName(key) + '.json'), 'utf8'),
+        );
       } catch {
         values[key] = null;
       }

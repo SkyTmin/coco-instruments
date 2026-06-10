@@ -40,7 +40,9 @@ export function ExpenseFormPage() {
   const [name, setName] = useState(existing?.name ?? '');
   const [type, setType] = useState<ExpenseType>(existing?.type ?? 'credit');
   const [principal, setPrincipal] = useState(existing ? String(existing.principalAmount) : '');
-  const [monthly, setMonthly] = useState(existing?.monthlyPayment ? String(existing.monthlyPayment) : '');
+  const [monthly, setMonthly] = useState(
+    existing?.monthlyPayment ? String(existing.monthlyPayment) : '',
+  );
   const [rate, setRate] = useState(existing?.interestRate ? String(existing.interestRate) : '');
   const [overpay, setOverpay] = useState(existing?.overpayment ? String(existing.overpayment) : '');
   const [total, setTotal] = useState(existing?.totalAmount ? String(existing.totalAmount) : '');
@@ -58,7 +60,9 @@ export function ExpenseFormPage() {
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayISO());
   const [listId, setListId] = useState(existing?.listId ?? params.get('list') ?? '');
   const [notify, setNotify] = useState(existing?.notify ?? true);
-  const [notifyLeads, setNotifyLeads] = useState<number[]>(existing?.notifyLeads ?? reminderPrefs.leads);
+  const [notifyLeads, setNotifyLeads] = useState<number[]>(
+    existing?.notifyLeads ?? reminderPrefs.leads,
+  );
   const [notifyTime, setNotifyTime] = useState(
     existing?.notifyTime ??
       `${String(reminderPrefs.hour).padStart(2, '0')}:${String(reminderPrefs.minute).padStart(2, '0')}`,
@@ -108,7 +112,23 @@ export function ExpenseFormPage() {
       totalAmount: instMode === 'total' ? num(total) || undefined : undefined,
       overpayment: instMode === 'body' ? num(overpay) || undefined : undefined,
     };
-  }, [name, type, principal, monthly, rate, overpay, total, instMode, term, day, startDate, listId, notify, notifyLeads, notifyTime]);
+  }, [
+    name,
+    type,
+    principal,
+    monthly,
+    rate,
+    overpay,
+    total,
+    instMode,
+    term,
+    day,
+    startDate,
+    listId,
+    notify,
+    notifyLeads,
+    notifyTime,
+  ]);
 
   const preview = useMemo(() => {
     const o: Obligation = {
@@ -331,7 +351,9 @@ export function ExpenseFormPage() {
           {preview.totalOverpayment > 0 && (
             <div className="stat-row">
               <span className="stat-row__label">Переплата</span>
-              <span className="stat-row__value amount-neg">{formatRUB(preview.totalOverpayment)}</span>
+              <span className="stat-row__value amount-neg">
+                {formatRUB(preview.totalOverpayment)}
+              </span>
             </div>
           )}
           <div className="stat-row">
@@ -341,7 +363,9 @@ export function ExpenseFormPage() {
           {preview.derivedInterestRate != null && (
             <div className="stat-row">
               <span className="stat-row__label">Эффективная ставка</span>
-              <span className="stat-row__value">≈ {preview.derivedInterestRate.toFixed(1)}% годовых</span>
+              <span className="stat-row__value">
+                ≈ {preview.derivedInterestRate.toFixed(1)}% годовых
+              </span>
             </div>
           )}
         </div>

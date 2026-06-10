@@ -155,8 +155,15 @@ export function ImageCropper({
         <button type="button" className="cropper__act" onClick={reset} disabled={busy}>
           Сбросить
         </button>
-        <span className="cropper__title">Обрезать фото{total > 1 ? ` · ${index + 1}/${total}` : ''}</span>
-        <button type="button" className="cropper__act" onClick={() => !busy && onSkip()} disabled={busy}>
+        <span className="cropper__title">
+          Обрезать фото{total > 1 ? ` · ${index + 1}/${total}` : ''}
+        </span>
+        <button
+          type="button"
+          className="cropper__act"
+          onClick={() => !busy && onSkip()}
+          disabled={busy}
+        >
           Пропустить
         </button>
       </div>

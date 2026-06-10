@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent, PropsWithChildren, ReactNode } from 'react';
+import type {
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+  PropsWithChildren,
+  ReactNode,
+} from 'react';
 import { useNavigationType } from 'react-router-dom';
 import type { ExpenseType } from '@/types';
 import { formatRUB } from '@/lib/format';
@@ -16,10 +21,18 @@ export const LEAD_OPTIONS: { v: number; label: string }[] = [
 ];
 
 /** Multi-select chips for choosing which lead-days to remind on. */
-export function LeadPicker({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
+export function LeadPicker({
+  value,
+  onChange,
+}: {
+  value: number[];
+  onChange: (v: number[]) => void;
+}) {
   const toggle = (v: number) => {
     selectionChanged();
-    onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v].sort((a, b) => a - b));
+    onChange(
+      value.includes(v) ? value.filter((x) => x !== v) : [...value, v].sort((a, b) => a - b),
+    );
   };
   return (
     <div className="chips">
@@ -43,7 +56,12 @@ export function Screen({
   action,
   className,
   children,
-}: PropsWithChildren<{ title?: string; subtitle?: string; action?: ReactNode; className?: string }>) {
+}: PropsWithChildren<{
+  title?: string;
+  subtitle?: string;
+  action?: ReactNode;
+  className?: string;
+}>) {
   // Going "back" (POP) slides in from the left, forward (PUSH) from the right —
   // a native push/pop feel. The slide is tiny + clipped, so it never scrolls.
   const dir = useNavigationType() === 'POP' ? 'pop' : 'push';
@@ -151,10 +169,24 @@ export function SwipeRow({
   const [dragging, setDragging] = useState(false);
   const openRef = useRef(false);
   const ref = useRef<HTMLDivElement | null>(null);
-  const g = useRef<{ x: number; y: number; base: number; decided: boolean; hz: boolean; pid: number } | null>(null);
+  const g = useRef<{
+    x: number;
+    y: number;
+    base: number;
+    decided: boolean;
+    hz: boolean;
+    pid: number;
+  } | null>(null);
 
   const down = (e: ReactPointerEvent<HTMLDivElement>) => {
-    g.current = { x: e.clientX, y: e.clientY, base: offset, decided: false, hz: false, pid: e.pointerId };
+    g.current = {
+      x: e.clientX,
+      y: e.clientY,
+      base: offset,
+      decided: false,
+      hz: false,
+      pid: e.pointerId,
+    };
   };
   const move = (e: ReactPointerEvent<HTMLDivElement>) => {
     const s = g.current;
@@ -227,7 +259,10 @@ export function SwipeRow({
           </button>
         ))}
       </div>
-      <div className="swipe__front" style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : undefined }}>
+      <div
+        className="swipe__front"
+        style={{ transform: `translateX(${offset}px)`, transition: dragging ? 'none' : undefined }}
+      >
         {children}
       </div>
     </div>
@@ -267,7 +302,14 @@ export function ProgressRing({
             <stop offset="100%" stopColor="var(--accent-grad-2)" />
           </linearGradient>
         </defs>
-        <circle className="ring__track" cx={center} cy={center} r={r} strokeWidth={stroke} fill="none" />
+        <circle
+          className="ring__track"
+          cx={center}
+          cy={center}
+          r={r}
+          strokeWidth={stroke}
+          fill="none"
+        />
         <circle
           className="ring__fill"
           cx={center}
@@ -290,7 +332,10 @@ export function ProgressRing({
 export function ProgressBar({ percent, large }: { percent: number; large?: boolean }) {
   return (
     <div className={`progress${large ? ' progress--lg' : ''}`}>
-      <div className="progress__fill" style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
+      <div
+        className="progress__fill"
+        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+      />
     </div>
   );
 }
@@ -351,15 +396,7 @@ export function TypeBadge({ type }: { type: ExpenseType }) {
   return <span className={`badge ${b.cls}`}>{b.label}</span>;
 }
 
-export function EmptyState({
-  icon,
-  title,
-  sub,
-}: {
-  icon: string;
-  title: string;
-  sub?: string;
-}) {
+export function EmptyState({ icon, title, sub }: { icon: string; title: string; sub?: string }) {
   return (
     <div className="empty">
       <div className="empty__icon">{icon}</div>

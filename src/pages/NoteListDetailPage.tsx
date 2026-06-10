@@ -38,7 +38,10 @@ export function NoteListDetailPage() {
         if (top) counts.set(top, (counts.get(top) ?? 0) + 1);
       }
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14).map(([t]) => t);
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 14)
+      .map(([t]) => t);
   }, [all]);
   const activeTag = query.trim().toLowerCase();
 
@@ -57,12 +60,22 @@ export function NoteListDetailPage() {
     >
       <div className="stack notes-page">
         <div className="notes-actions">
-          <button className="notes-action notes-action--primary" onClick={() => go(`/notes/new?list=${listId}`)}>
-            <span className="notes-action__icon"><IconNotes /></span>
+          <button
+            className="notes-action notes-action--primary"
+            onClick={() => go(`/notes/new?list=${listId}`)}
+          >
+            <span className="notes-action__icon">
+              <IconNotes />
+            </span>
             <span>Новая заметка</span>
           </button>
-          <button className="notes-action notes-action--graph" onClick={() => go(`/notes/graph?list=${listId}`)}>
-            <span className="notes-action__icon"><IconGraph /></span>
+          <button
+            className="notes-action notes-action--graph"
+            onClick={() => go(`/notes/graph?list=${listId}`)}
+          >
+            <span className="notes-action__icon">
+              <IconGraph />
+            </span>
             <span>Граф списка</span>
           </button>
         </div>
@@ -78,7 +91,11 @@ export function NoteListDetailPage() {
                   className={`note-list-tag${active ? ' is-active' : ''}`}
                   style={
                     active
-                      ? { color: tc.stroke, background: tc.chipBg, boxShadow: `inset 0 0 0 1.5px ${tc.stroke}` }
+                      ? {
+                          color: tc.stroke,
+                          background: tc.chipBg,
+                          boxShadow: `inset 0 0 0 1.5px ${tc.stroke}`,
+                        }
                       : { color: tc.stroke, background: tc.chipBg }
                   }
                   onClick={() => {
@@ -101,7 +118,11 @@ export function NoteListDetailPage() {
             placeholder="Найти в списке"
           />
           {query && (
-            <button className="notes-search__clear" onClick={() => setQuery('')} aria-label="Очистить">
+            <button
+              className="notes-search__clear"
+              onClick={() => setQuery('')}
+              aria-label="Очистить"
+            >
               ×
             </button>
           )}
@@ -142,10 +163,14 @@ export function NoteListDetailPage() {
                         {tags.slice(0, 3).map((tag) => {
                           const tc = tagColor(tag);
                           return (
-                            <span key={tag} style={{ color: tc.stroke, background: tc.chipBg }}>#{tag}</span>
+                            <span key={tag} style={{ color: tc.stroke, background: tc.chipBg }}>
+                              #{tag}
+                            </span>
                           );
                         })}
-                        {!!note.attachments?.length && <span className="is-attach">{note.attachments.length} файл.</span>}
+                        {!!note.attachments?.length && (
+                          <span className="is-attach">{note.attachments.length} файл.</span>
+                        )}
                       </div>
                     )}
                   </div>

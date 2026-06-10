@@ -22,7 +22,10 @@ export function materializeMessages(src: MessageSource): NoteMessage[] {
 
 /** The legacy fields kept in sync with messages: a combined text body (for tag
  *  and wiki-link parsing / the graph) and a flat list of every photo/file. */
-export function deriveFromMessages(messages: NoteMessage[]): { body: string; attachments: NoteAttachment[] } {
+export function deriveFromMessages(messages: NoteMessage[]): {
+  body: string;
+  attachments: NoteAttachment[];
+} {
   const body = messages
     .map((m) => m.text.trim())
     .filter(Boolean)

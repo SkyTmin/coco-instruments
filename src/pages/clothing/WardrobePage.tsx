@@ -72,7 +72,11 @@ export function WardrobePage() {
           : 'Ваши вещи'
       }
       action={
-        <button className="icon-round" onClick={() => bulkRef.current?.click()} aria-label="Загрузить несколько фото">
+        <button
+          className="icon-round"
+          onClick={() => bulkRef.current?.click()}
+          aria-label="Загрузить несколько фото"
+        >
           <IconImage size={20} />
         </button>
       }
@@ -155,7 +159,10 @@ export function WardrobePage() {
               />
             ))}
             {items.length === 0 && (
-              <p className="muted" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 16 }}>
+              <p
+                className="muted"
+                style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 16 }}
+              >
                 Ничего не найдено
               </p>
             )}
