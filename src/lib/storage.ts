@@ -1,5 +1,8 @@
 import { cloudStorage } from '@tma.js/sdk-react';
 
+import { reportSyncStatus } from '@/lib/sync-status';
+import { showToast } from '@/components/Toast';
+
 // ---------------------------------------------------------------------------
 // Persistence abstraction.
 // Inside Telegram (production) → Telegram CloudStorage (synced to the user's
@@ -154,6 +157,82 @@ async function serverCall<T>(path: string, body: Record<string, unknown>): Promi
   return (await res.json()) as T;
 }
 
+// ---------------------------------------------------------------------------
+// Pending-writes queue: server writes are queued and retried with backoff, so
+// a flaky network can't silently drop data. Latest value per key wins (a newer
+// set() simply replaces the queued value). Status is reported for the
+// SyncIndicator; after 3 consecutive failures the user is told via a toast,
+// while retries keep going in the background.
+// ---------------------------------------------------------------------------
+const pendingWrites = new Map<string, unknown>();
+let flushing = false;
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let consecutiveFailures = 0;
+let inErrorState = false;
+
+function reportPending(): void {
+  const n = pendingWrites.size;
+  if (n === 0) {
+    consecutiveFailures = 0;
+    if (inErrorState) {
+      inErrorState = false;
+      showToast('Данные сохранены');
+    }
+    reportSyncStatus('idle', 0);
+  } else {
+    reportSyncStatus(consecutiveFailures >= 3 ? 'error' : 'saving', n);
+  }
+}
+
+function scheduleFlush(delayMs = 0): void {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    void flushPending();
+  }, delayMs);
+}
+
+async function flushPending(): Promise<void> {
+  if (flushing || !serverAuth) return;
+  flushing = true;
+  try {
+    while (pendingWrites.size > 0) {
+      const [key, value] = pendingWrites.entries().next().value as [string, unknown];
+      try {
+        await serverCall('/api/store/set', { key, value });
+        // Drop only if it wasn't replaced by a newer value while in flight.
+        if (pendingWrites.get(key) === value) pendingWrites.delete(key);
+        consecutiveFailures = 0;
+        reportPending();
+      } catch {
+        consecutiveFailures += 1;
+        if (consecutiveFailures === 3 && !inErrorState) {
+          inErrorState = true;
+          showToast('Не удалось сохранить — повторяю…', 'error');
+        }
+        reportPending();
+        // Backoff: 1s → 3s → 9s → 27s, capped at 30s.
+        const delay = Math.min(1000 * 3 ** Math.min(consecutiveFailures - 1, 3), 30_000);
+        scheduleFlush(delay);
+        return;
+      }
+    }
+    reportPending();
+  } finally {
+    flushing = false;
+  }
+}
+
+// Re-kick the queue when connectivity or visibility returns.
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    if (pendingWrites.size) scheduleFlush();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && pendingWrites.size) scheduleFlush();
+  });
+}
+
 class ServerStorage implements Storage {
   constructor(private cache: Storage, private migrate: Storage | null) {}
 
@@ -196,16 +275,19 @@ class ServerStorage implements Storage {
           const blob = new Blob([JSON.stringify({ initData: serverAuth, key, value })], {
             type: 'application/json',
           });
-          if (navigator.sendBeacon('/api/store/set', blob)) return;
+          if (navigator.sendBeacon('/api/store/set', blob)) {
+            // The beacon carries the latest value — any queued older one is stale.
+            pendingWrites.delete(key);
+            reportPending();
+            return;
+          }
         } catch {
-          /* fall through to fetch */
+          /* fall through to the queue */
         }
       }
-      try {
-        await serverCall('/api/store/set', { key, value });
-      } catch {
-        /* kept in the local cache; will re-sync on next read */
-      }
+      pendingWrites.set(key, value);
+      reportPending();
+      scheduleFlush();
     } else if (this.migrate) {
       await this.migrate.set(key, value).catch(() => {});
     }

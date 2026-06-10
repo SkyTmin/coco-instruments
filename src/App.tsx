@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef } from 'react';
 import {
   HashRouter,
   Navigate,
+  Outlet,
   Route,
   Routes,
   useLocation,
@@ -18,6 +19,9 @@ import { tapLight } from '@/lib/haptics';
 
 import { HomePage } from '@/pages/HomePage';
 import { CropProvider } from '@/components/CropProvider';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { SyncIndicator } from '@/components/SyncIndicator';
+import { ToastHost } from '@/components/Toast';
 
 // Per-section route chunks — keep the initial bundle small; pages load on demand.
 const ClothingDashboardPage = lazy(() => import('@/pages/clothing/ClothingDashboardPage').then((m) => ({ default: m.ClothingDashboardPage })));
@@ -108,6 +112,20 @@ function KeyboardController() {
   return null;
 }
 
+/**
+ * Per-section error boundary: a crash in one section shows its fallback while
+ * the Telegram BackButton (mounted outside) still navigates away; changing the
+ * section remounts a clean boundary via the key.
+ */
+function SectionBoundary() {
+  const { pathname } = useLocation();
+  return (
+    <ErrorBoundary key={pathname.split('/')[1] || 'home'}>
+      <Outlet />
+    </ErrorBoundary>
+  );
+}
+
 /** Drives the native Telegram BackButton from the router. */
 function NavigationController() {
   const location = useLocation();
@@ -194,6 +212,7 @@ export function App() {
         <CropProvider>
         <Suspense fallback={<div className="route-fallback" aria-hidden />}>
         <Routes>
+          <Route element={<SectionBoundary />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/finance" element={<FinanceDashboardPage />} />
           <Route path="/finance/calendar" element={<PaymentsCalendarPage />} />
@@ -249,9 +268,12 @@ export function App() {
           <Route path="/clothing/wishlist/new" element={<WishFormPage />} />
           <Route path="/clothing/wishlist/:id/edit" element={<WishFormPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
         </Routes>
         </Suspense>
         </CropProvider>
+        <ToastHost />
+        <SyncIndicator />
       </HashRouter>
     </AppRoot>
   );
