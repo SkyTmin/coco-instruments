@@ -14,6 +14,8 @@ import {
   collapseDependencies,
   filterNoteGraph,
   layoutNoteGraph,
+  normalizeNoteTitle,
+  parseNoteTags,
   personNodeId,
   simulationStep,
 } from '@/lib/notes-graph';
@@ -33,6 +35,7 @@ interface PointerSession {
 const TAP_MOVE_LIMIT = 10;
 const TAP_TIME_LIMIT = 450;
 const LONG_PRESS_MS = 450;
+const HIGHLIGHTS_KEY = 'coco-graph-highlights';
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.6;
 
@@ -73,12 +76,21 @@ export function NotesGraphPage() {
   const focusParam = params.get('focus');
   // Drill into the full people graph (from the collapsed "Люди" node).
   const peopleParam = params.get('people');
+  // A graph scoped to one tag — every note carrying #tag (or #tag/*) + connections.
+  const tagParam = params.get('tag');
   const activeList = listParam ? noteLists.find((l) => l.id === listParam) : undefined;
   const graph = useMemo(() => {
     // A single notebook's inner graph, with the notebook itself as an index hub.
     if (listParam) {
       const scoped = notes.filter((n) => n.listId === listParam);
       return activeList ? buildListGraph(activeList, scoped) : buildNoteGraph(scoped);
+    }
+    // A tag's own graph: the notes tagged with it and how they connect.
+    if (tagParam) {
+      const key = normalizeNoteTitle(tagParam);
+      const prefix = `${key}/`;
+      const scoped = notes.filter((n) => parseNoteTags(n.body).some((t) => t === key || t.startsWith(prefix)));
+      return buildNoteGraph(scoped);
     }
     // The "Люди" node drills into a people-only graph: people + just the notes
     // linked to them (unrelated notes stay out).
@@ -98,7 +110,7 @@ export function NotesGraphPage() {
     // Default overview: notebooks + a single "Люди" node collapse the graph;
     // loose notes and tags stay individual.
     return buildOverviewGraph(notes, noteLists, people, noteLinks);
-  }, [listParam, activeList, personParam, peopleParam, focusParam, conversations, gifts, meetIdeas, noteLinks, noteLists, notes, people, promises, relations]);
+  }, [listParam, activeList, personParam, peopleParam, focusParam, tagParam, conversations, gifts, meetIdeas, noteLinks, noteLists, notes, people, promises, relations]);
   const [activeId, setActiveId] = useState<string | undefined>(
     personParam ? personNodeId(personParam) : focusParam ?? notes[0]?.id,
   );
@@ -115,13 +127,26 @@ export function NotesGraphPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [menuNode, setMenuNode] = useState<NoteGraphPoint | null>(null);
-  const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
+  // Highlights persist (localStorage) so you can mark as many nodes as you like
+  // and they survive leaving the graph / reloading.
+  const [highlighted, setHighlighted] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem(HIGHLIGHTS_KEY) || '[]'));
+    } catch {
+      return new Set<string>();
+    }
+  });
   const toggleHighlight = (nodeId: string) => {
     selectionChanged();
     setHighlighted((cur) => {
       const next = new Set(cur);
       if (next.has(nodeId)) next.delete(nodeId);
       else next.add(nodeId);
+      try {
+        localStorage.setItem(HIGHLIGHTS_KEY, JSON.stringify([...next]));
+      } catch {
+        /* ignore quota / private mode */
+      }
       return next;
     });
   };
@@ -573,21 +598,23 @@ export function NotesGraphPage() {
 
   return (
     <Screen
-      title={activeList ? `Список: ${activeList.name}` : peopleParam ? 'Граф: Люди' : 'Граф связей'}
+      title={activeList ? `Список: ${activeList.name}` : peopleParam ? 'Граф: Люди' : tagParam ? `Граф тега` : 'Граф связей'}
       subtitle={
         activeList
           ? 'В центре — тетрадь, вокруг её заметки и связи'
           : peopleParam
             ? 'Люди, их заметки, подарки и обещания'
-            : activeNode
-              ? activeNode.label
-              : 'Списки, заметки и люди'
+            : tagParam
+              ? `#${normalizeNoteTitle(tagParam)} — заметки с этим тегом`
+              : activeNode
+                ? activeNode.label
+                : 'Списки, заметки и люди'
       }
       action={<NotesHelpButton />}
     >
       <div className="stack notes-page notes-graph-screen">
         <div className="card notes-graph-controls">
-          {(activeList || peopleParam) && (
+          {(activeList || peopleParam || tagParam) && (
             <button className="btn btn--ghost btn--block" onClick={() => { selectionChanged(); navigate('/notes/graph'); }}>
               ← Все списки и заметки
             </button>
@@ -843,6 +870,17 @@ export function NotesGraphPage() {
                       Скрыть зависимости
                     </button>
                   ))}
+                {m.kind === 'tag' && (
+                  <button
+                    className="btn btn--ghost btn--block"
+                    onClick={() => {
+                      setMenuNode(null);
+                      navigate(`/notes/graph?tag=${encodeURIComponent(m.id.slice(4))}`);
+                    }}
+                  >
+                    Открыть граф тега
+                  </button>
+                )}
                 {open && (
                   <button
                     className="btn btn--ghost btn--block"
