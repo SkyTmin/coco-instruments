@@ -208,6 +208,7 @@ export function NotesPage() {
                 className="input notes-search notes-search--list"
                 value={query}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                 placeholder="Поиск по заметкам и #тегам"
               />
               {query && (

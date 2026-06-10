@@ -15,9 +15,15 @@ import {
   MAX_IMAGE_SOURCE_SIZE,
 } from '@/lib/images';
 import { toggleTaskInBody } from '@/lib/notes-markdown';
+import { registerEscape } from '@/lib/escape-stack';
 import { notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
 const timeFmt = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+// On desktop (mouse/trackpad) Enter sends and Shift+Enter adds a newline, like
+// every messenger. On touch keyboards Enter keeps making newlines.
+const ENTER_SENDS =
+  typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
 interface Props {
   messages: NoteMessage[];
@@ -80,6 +86,12 @@ export function ChatThread({
       document.documentElement.style.removeProperty('--chat-vh');
     };
   }, []);
+
+  // The photo lightbox closes on Esc like any other overlay.
+  useEffect(() => {
+    if (!lightbox) return;
+    return registerEscape(() => setLightbox(null));
+  }, [lightbox]);
 
   // Auto-grow the composer + restore caret after a programmatic insert.
   useLayoutEffect(() => {
@@ -294,6 +306,14 @@ export function ChatThread({
             className="chat-text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && ENTER_SENDS) {
+                e.preventDefault();
+                send();
+              } else if (e.key === 'Escape' && editingId) {
+                resetComposer();
+              }
+            }}
             placeholder={placeholder ?? 'Новая мысль…'}
             rows={1}
           />

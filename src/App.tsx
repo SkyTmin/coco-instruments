@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import {
   HashRouter,
   Navigate,
@@ -13,6 +13,7 @@ import { backButton, miniApp, swipeBehavior, useLaunchParams, useRawInitData, us
 import { useFinanceStore } from '@/store';
 import { setServerAuth } from '@/lib/storage';
 import { syncReminders } from '@/lib/reminders';
+import { closeTopOverlay } from '@/lib/escape-stack';
 import { tapLight } from '@/lib/haptics';
 
 import { HomePage } from '@/pages/HomePage';
@@ -62,6 +63,50 @@ const ListFormPage = lazy(() => import('@/pages/finance/ListFormPage').then((m) 
 const ListDetailPage = lazy(() => import('@/pages/finance/ListDetailPage').then((m) => ({ default: m.ListDetailPage })));
 const PaymentsCalendarPage = lazy(() => import('@/pages/finance/PaymentsCalendarPage').then((m) => ({ default: m.PaymentsCalendarPage })));
 const NotificationSettingsPage = lazy(() => import('@/pages/finance/NotificationSettingsPage').then((m) => ({ default: m.NotificationSettingsPage })));
+
+/** App-wide keyboard support (desktop Telegram / browser):
+ *  Esc — blur the focused field → close the topmost sheet → go back;
+ *  Enter/Space — activate focused role="button" elements (so Tab works everywhere). */
+function KeyboardController() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const pathRef = useRef(location.pathname);
+  pathRef.current = location.pathname;
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        const el = document.activeElement as HTMLElement | null;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) {
+          el.blur();
+          return;
+        }
+        if (closeTopOverlay()) return;
+        if (pathRef.current !== '/') {
+          e.preventDefault();
+          navigate(-1);
+        }
+        return;
+      }
+      // Make div-based "buttons" (cards, tiles) work from the keyboard.
+      if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) {
+        const t = e.target as HTMLElement | null;
+        if (
+          t &&
+          t.getAttribute?.('role') === 'button' &&
+          !['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)
+        ) {
+          e.preventDefault();
+          t.click();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [navigate]);
+
+  return null;
+}
 
 /** Drives the native Telegram BackButton from the router. */
 function NavigationController() {
@@ -145,6 +190,7 @@ export function App() {
     >
       <HashRouter>
         <NavigationController />
+        <KeyboardController />
         <CropProvider>
         <Suspense fallback={<div className="route-fallback" aria-hidden />}>
         <Routes>

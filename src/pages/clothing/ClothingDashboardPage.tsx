@@ -101,12 +101,12 @@ export function ClothingDashboardPage() {
             </section>
           )}
 
-          {/* 2 — Hero: собрать образ (или добавить вещи, если их нет) */}
-          <button className="cl-hero" onClick={() => go(composeReady ? '/clothing/compose' : '/clothing/wardrobe/new')}>
+          {/* 2 — Hero: собрать образ (или добавить готовый, если вещей ещё нет) */}
+          <button className="cl-hero" onClick={() => go(composeReady ? '/clothing/compose' : '/clothing/outfits/new')}>
             <span className="cl-hero__icon"><IconSparkles /></span>
             <span className="cl-hero__text">
-              <b>{composeReady ? 'Собрать образ' : 'Добавить вещи'}</b>
-              <i>{composeReady ? 'Примерочная — выберите вещи и составьте лук' : 'Сначала наполните гардероб'}</i>
+              <b>{composeReady ? 'Собрать образ' : 'Добавить образ'}</b>
+              <i>{composeReady ? 'Примерочная — выберите вещи и составьте лук' : 'Сфотографируйте готовый лук — вещи добавите позже'}</i>
             </span>
             <span className="cl-hero__go"><IconChevron size={22} /></span>
           </button>

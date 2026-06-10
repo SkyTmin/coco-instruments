@@ -4,6 +4,7 @@ import { useNavigationType } from 'react-router-dom';
 import type { ExpenseType } from '@/types';
 import { formatRUB } from '@/lib/format';
 import { IconChevron, IconPlus } from '@/components/icons';
+import { registerEscape } from '@/lib/escape-stack';
 import { selectionChanged } from '@/lib/haptics';
 
 export const LEAD_OPTIONS: { v: number; label: string }[] = [
@@ -317,6 +318,7 @@ export function StatTile({
       className={`stat-tile${onClick ? ' stat-tile--tap' : ''}`}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
     >
       <div className="stat-tile__label">
         {label}
@@ -387,7 +389,7 @@ export function SectionCard({
   onClick: () => void;
 }) {
   return (
-    <div className="section-card" onClick={onClick} role="button">
+    <div className="section-card" onClick={onClick} role="button" tabIndex={0}>
       <div className="section-card__icon">{icon}</div>
       <div className="section-card__body">
         <div className="section-card__title">{title}</div>
@@ -403,6 +405,10 @@ export function Sheet({
   onClose,
   children,
 }: PropsWithChildren<{ title?: string; onClose: () => void }>) {
+  // Esc closes the topmost sheet (see escape-stack); ref keeps the handler fresh.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => registerEscape(() => closeRef.current()), []);
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>

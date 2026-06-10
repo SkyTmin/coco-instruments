@@ -22,7 +22,7 @@ export function WardrobeCard({
   onToggleFitting?: () => void;
 }) {
   return (
-    <div className="wardrobe-card" style={style} onClick={onClick} role="button">
+    <div className="wardrobe-card" style={style} onClick={onClick} role="button" tabIndex={0}>
       {item.photo ? (
         <Photo src={attachmentHref(item.photo)} />
       ) : (

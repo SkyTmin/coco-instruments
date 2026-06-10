@@ -118,6 +118,7 @@ export function ChatNotePage() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={saveTitle}
+          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
           placeholder="Название заметки"
         />
         <button className="icon-btn" onClick={() => { tapLight(); setMenu(true); }} aria-label="Меню заметки">

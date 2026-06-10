@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { registerEscape } from '@/lib/escape-stack';
 import { selectionChanged, tapMedium } from '@/lib/haptics';
 import {
   cropToSource,
@@ -38,6 +39,11 @@ export function ImageCropper({
   const imgRef = useRef<HTMLImageElement>(null);
   const drag = useRef<{ mode: Mode; sx: number; sy: number; r0: Crop; pid: number } | null>(null);
   const inited = useRef(false);
+
+  // Esc cancels the crop like any other overlay.
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
+  useEffect(() => registerEscape(() => cancelRef.current()), []);
 
   const [url, setUrl] = useState('');
   const [imgRect, setImgRect] = useState<Rect>({ x: 0, y: 0, w: 0, h: 0 });

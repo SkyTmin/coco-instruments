@@ -79,6 +79,18 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Keyboard navigation: a clear focus ring on Tab (mouse/touch stay clean).
+   Text fields keep their own focus style instead of a doubled ring. */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 75%, transparent);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
 html,
 body,
 #root {

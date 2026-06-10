@@ -35,6 +35,12 @@ export function NotePicker({
         placeholder="Найти заметку…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && results[0]) {
+            e.preventDefault();
+            onPick(results[0]);
+          }
+        }}
       />
       <div className="link-picker">
         {results.map((n) => (
