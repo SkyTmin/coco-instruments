@@ -1,21 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AnimatedNumber, Screen, Skeleton } from '@/components/ui';
-import { IconCalculator, IconHeart, IconNotes, IconShirt, IconWallet } from '@/components/icons';
+import { AnimatedNumber, Screen, Sheet, Skeleton } from '@/components/ui';
+import { IconCalculator, IconGear, IconHeart, IconNotes, IconShirt, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
 import { toISO, todayISO } from '@/lib/date';
 import { formatRUB, pluralizeRu, relativeDay } from '@/lib/format';
-import { nextBirthday, peopleStats, peopleUpcomingEvents, peopleWord } from '@/lib/people';
+import { nextBirthday, peopleUpcomingEvents, peopleWord } from '@/lib/people';
 import { getBackupStatus, requestTelegramBackup } from '@/lib/backup';
-import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
+import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
-function notesWord(n: number): string {
-  const n1 = n % 10;
-  const n2 = n % 100;
-  if (n1 === 1 && n2 !== 11) return 'заметка';
-  if (n1 >= 2 && n1 <= 4 && (n2 < 10 || n2 >= 20)) return 'заметки';
-  return 'заметок';
+const dateFmt = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return 'Доброе утро';
+  if (h >= 12 && h < 18) return 'Добрый день';
+  if (h >= 18 && h < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+interface TodayFact {
+  key: string;
+  emoji: string;
+  text: string;
+  accent?: string;
+  to: string;
 }
 
 export function HomePage() {
@@ -29,8 +39,6 @@ export function HomePage() {
   const meetIdeas = useFinanceStore((s) => s.meetIdeas);
   const wardrobe = useFinanceStore((s) => s.wardrobe);
   const outfits = useFinanceStore((s) => s.outfits);
-  const calculatorHistory = useFinanceStore((s) => s.calculatorHistory);
-  const calculatorPrefs = useFinanceStore((s) => s.calculatorPrefs);
   const hydrated = useFinanceStore((s) => s.hydrated);
   const exportAll = useFinanceStore((s) => s.exportAll);
   const importAll = useFinanceStore((s) => s.importAll);
@@ -55,31 +63,62 @@ export function HomePage() {
     };
   }, [expenses, recurring]);
 
-  const nearest = useMemo(() => {
+  // «Сегодня»: живые факты дня — ближайший платёж, ДР, напоминания.
+  const today = useMemo<TodayFact[]>(() => {
+    const facts: TodayFact[] = [];
     const base = new Date();
     const end = toISO(new Date(base.getFullYear(), base.getMonth() + 3, 0));
-    return collectPayments(todayISO(), end, expenses, recurring)[0];
-  }, [expenses, recurring]);
-
-  const peopleCard = useMemo(() => {
-    const stats = peopleStats({ people, gifts, promises });
-    const nearestBirthday = people
+    const payment = collectPayments(todayISO(), end, expenses, recurring)[0];
+    if (payment) {
+      facts.push({
+        key: 'pay',
+        emoji: '💳',
+        text: `${payment.name} · ${relativeDay(payment.date)}`,
+        accent: formatRUB(payment.amount),
+        to: '/finance',
+      });
+    }
+    const birthday = people
       .flatMap((person) => {
-        const birthday = nextBirthday(person);
-        return birthday ? [{ person, birthday }] : [];
+        const b = nextBirthday(person);
+        return b ? [{ person, b }] : [];
       })
-      .sort((a, b) => a.birthday.days - b.birthday.days)[0];
+      .sort((x, y) => x.b.days - y.b.days)[0];
+    if (birthday) {
+      facts.push({
+        key: 'bd',
+        emoji: '🎂',
+        text: `${birthday.person.name} · ${birthday.b.label}`,
+        to: `/people/${birthday.person.id}`,
+      });
+    }
     const reminders = peopleUpcomingEvents({ people, gifts, promises, meetIdeas, withinDays: 14 }).filter(
-      (event) => event.kind !== 'birthday',
+      (e) => e.kind !== 'birthday',
     ).length;
-    return { ...stats, nearestBirthday, reminders };
-  }, [gifts, meetIdeas, people, promises]);
+    if (reminders > 0) {
+      facts.push({
+        key: 'rem',
+        emoji: '🔔',
+        text: `${reminders} ${pluralizeRu(reminders, ['напоминание', 'напоминания', 'напоминаний'])} на 2 недели`,
+        to: '/people',
+      });
+    }
+    return facts.slice(0, 3);
+  }, [expenses, recurring, people, gifts, promises, meetIdeas]);
+
+  const pinnedNotes = useMemo(() => notes.filter((n) => n.pinned).length, [notes]);
 
   const go = (path: string) => {
     tapLight();
     navigate(path);
   };
+  const open = (path: string) => {
+    selectionChanged();
+    navigate(path);
+  };
 
+  // ---- data & backups (hidden behind ⚙) ------------------------------------
+  const [dataSheet, setDataSheet] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -98,10 +137,10 @@ export function HomePage() {
     const r = await requestTelegramBackup();
     setBackupBusy(false);
     if (r.ok) {
-      setBackupMsg('Копия придёт тебе в Telegram в течение минуты ✅');
+      setBackupMsg('Копия придёт в Telegram в течение минуты ✅');
       notifySuccess();
     } else {
-      setBackupMsg('Не получилось запросить копию — попробуй ещё раз.');
+      setBackupMsg('Не получилось запросить копию — попробуйте ещё раз.');
       notifyWarning();
     }
   };
@@ -140,21 +179,60 @@ export function HomePage() {
 
   if (!hydrated) {
     return (
-      <Screen title="Coco" subtitle="Личный помощник">
-        <div className="home-grid">
-          <Skeleton height={132} radius={24} />
-          <Skeleton height={120} radius={24} />
-          <Skeleton height={120} radius={24} />
-          <Skeleton height={120} radius={24} />
-          <Skeleton height={120} radius={24} />
+      <Screen title={greeting()} subtitle="Coco — личный помощник">
+        <div className="stack">
+          <Skeleton height={92} radius={20} />
+          <Skeleton height={44} radius={999} />
+          <Skeleton height={148} radius={24} />
+          <div className="home-pair">
+            <Skeleton height={118} radius={20} />
+            <Skeleton height={118} radius={20} />
+          </div>
         </div>
       </Screen>
     );
   }
 
   return (
-    <Screen title="Coco" subtitle="Личный помощник">
-      <div className="home-grid">
+    <Screen
+      title={greeting()}
+      subtitle={dateFmt.format(new Date())}
+      action={
+        <button className="icon-btn" onClick={() => { tapLight(); setDataSheet(true); }} aria-label="Данные и резервные копии">
+          <IconGear size={21} />
+        </button>
+      }
+    >
+      <div className="stack home-v2">
+        {/* Сегодня */}
+        {today.length > 0 && (
+          <div className="home-today">
+            <div className="home-today__label">Сегодня</div>
+            {today.map((f) => (
+              <button key={f.key} className="home-today__row" onClick={() => open(f.to)}>
+                <span className="home-today__emoji">{f.emoji}</span>
+                <span className="home-today__text">{f.text}</span>
+                {f.accent && <span className="home-today__accent">{f.accent}</span>}
+                <span className="home-today__chev">›</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Быстрые действия */}
+        <div className="home-quick">
+          <button className="home-quick__chip" onClick={() => go('/notes/new')}>
+            ✍️ Заметка
+          </button>
+          <button className="home-quick__chip" onClick={() => go('/finance/expenses/new')}>
+            💸 Расход
+          </button>
+          <button className="home-quick__chip" onClick={() => go('/clothing/compose')}>
+            ✨ Образ
+          </button>
+        </div>
+
+        {/* Разделы: финансы — hero, остальные — компактные плитки 2×2 */}
         <div className="home-card" onClick={() => go('/finance')} role="button">
           <div className="home-card__glow" />
           <div className="home-card__icon">
@@ -178,128 +256,69 @@ export function HomePage() {
                 </div>
               </div>
             ) : (
-              <div className="home-card__desc">Расходы, кредиты, рассрочки и накопления</div>
-            )}
-            {fin.has && nearest && (
-              <div className="hc-next">
-                <span className="hc-next__dot" />
-                Ближайший: <b>{nearest.name}</b> · {relativeDay(nearest.date)}
-              </div>
+              <div className="home-card__desc">Кредиты, рассрочки и накопления</div>
             )}
           </div>
         </div>
 
-        <div className="home-card home-card--notes" onClick={() => go('/notes')} role="button">
-          <div className="home-card__glow" />
-          <div className="home-card__icon">
-            <IconNotes />
-          </div>
-          <div className="home-card__body">
-            <div className="home-card__title">Заметки</div>
-            <div className="home-card__desc">
-              {notes.length ? `${notes.length} ${notesWord(notes.length)}` : 'Связи, теги и граф идей'}
-            </div>
-          </div>
+        <div className="home-pair">
+          <button className="home-tile" onClick={() => go('/notes')}>
+            <span className="home-tile__icon"><IconNotes /></span>
+            <span className="home-tile__title">Заметки</span>
+            <span className="home-tile__fact">
+              {notes.length
+                ? `${notes.length} ${pluralizeRu(notes.length, ['заметка', 'заметки', 'заметок'])}${pinnedNotes ? ` · ${pinnedNotes} 📌` : ''}`
+                : 'Мысли-чаты со связями'}
+            </span>
+          </button>
+          <button className="home-tile" onClick={() => go('/people')}>
+            <span className="home-tile__icon"><IconHeart /></span>
+            <span className="home-tile__title">Люди</span>
+            <span className="home-tile__fact">
+              {people.length ? `${people.length} ${peopleWord(people.length)}` : 'Близкие и важные даты'}
+            </span>
+          </button>
         </div>
 
-        <div className="home-card home-card--people" onClick={() => go('/people')} role="button">
-          <div className="home-card__glow" />
-          <div className="home-card__icon">
-            <IconHeart />
-          </div>
-          <div className="home-card__body">
-            <div className="home-card__title">Люди</div>
-            {people.length ? (
-              <>
-                <div className="home-card__stats">
-                  <div className="hc-stat">
-                    <div className="hc-stat__num">{people.length}</div>
-                    <div className="hc-stat__lbl">{peopleWord(people.length)}</div>
-                  </div>
-                  <div className="hc-stat">
-                    <div className="hc-stat__num">{peopleCard.reminders}</div>
-                    <div className="hc-stat__lbl">напоминаний</div>
-                  </div>
-                </div>
-                {peopleCard.nearestBirthday && (
-                  <div className="hc-next">
-                    <span className="hc-next__dot" />
-                    ДР: <b>{peopleCard.nearestBirthday.person.name}</b> · {peopleCard.nearestBirthday.birthday.label}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="home-card__desc">Близкие, даты и важное</div>
-            )}
-          </div>
-        </div>
-
-        <div className="home-card home-card--clothing" onClick={() => go('/clothing')} role="button">
-          <div className="home-card__glow" />
-          <div className="home-card__icon">
-            <IconShirt />
-          </div>
-          <div className="home-card__body">
-            <div className="home-card__title">Одежда</div>
-            <div className="home-card__desc">
+        <div className="home-pair">
+          <button className="home-tile" onClick={() => go('/clothing')}>
+            <span className="home-tile__icon"><IconShirt /></span>
+            <span className="home-tile__title">Гардероб</span>
+            <span className="home-tile__fact">
               {wardrobe.length
                 ? `${wardrobe.length} ${pluralizeRu(wardrobe.length, ['вещь', 'вещи', 'вещей'])} · ${outfits.length} ${pluralizeRu(outfits.length, ['образ', 'образа', 'образов'])}`
-                : 'Гардероб, образы и размеры'}
-            </div>
-          </div>
-        </div>
-
-        <div className="home-card home-card--calculator" onClick={() => go('/calculator')} role="button">
-          <div className="home-card__glow" />
-          <div className="home-card__icon">
-            <IconCalculator />
-          </div>
-          <div className="home-card__body">
-            <div className="home-card__title">Калькулятор</div>
-            {calculatorHistory.length ? (
-              <>
-                <div className="home-card__stats">
-                  <div className="hc-stat">
-                    <div className="hc-stat__num">{calculatorHistory.length}</div>
-                    <div className="hc-stat__lbl">
-                      {pluralizeRu(calculatorHistory.length, ['пример', 'примера', 'примеров'])}
-                    </div>
-                  </div>
-                  <div className="hc-stat">
-                    <div className="hc-stat__num">{calculatorPrefs.angleMode}</div>
-                    <div className="hc-stat__lbl">углы</div>
-                  </div>
-                </div>
-                <div className="hc-next">
-                  <span className="hc-next__dot" />
-                  Последний: <b>{calculatorHistory[0].result}</b>
-                </div>
-              </>
-            ) : (
-              <div className="home-card__desc">Свайпы, формулы и история</div>
-            )}
-          </div>
+                : 'Вещи, образы и идеи'}
+            </span>
+          </button>
+          <button className="home-tile" onClick={() => go('/calculator')}>
+            <span className="home-tile__icon"><IconCalculator /></span>
+            <span className="home-tile__title">Калькулятор</span>
+            <span className="home-tile__fact">Инженерный, с жестами</span>
+          </button>
         </div>
       </div>
 
-      {isOwner && (
-        <div className="home-backup">
-          <button className="btn btn--block" type="button" onClick={doBackup} disabled={backupBusy}>
-            {backupBusy ? 'Запрашиваю…' : '🗄 Прислать резервную копию в Telegram'}
-          </button>
-          <div className="home-backup__row">
-            <button className="btn btn--ghost" type="button" onClick={doExport}>
+      {dataSheet && (
+        <Sheet title="Данные и копии" onClose={() => setDataSheet(false)}>
+          <div className="stack">
+            {isOwner && (
+              <button className="btn btn--primary btn--block" type="button" onClick={doBackup} disabled={backupBusy}>
+                {backupBusy ? 'Запрашиваю…' : '🗄 Прислать копию в Telegram'}
+              </button>
+            )}
+            <button className="btn btn--ghost btn--block" type="button" onClick={doExport}>
               Экспорт в файл
             </button>
-            <button className="btn btn--ghost" type="button" onClick={() => fileRef.current?.click()}>
+            <button className="btn btn--ghost btn--block" type="button" onClick={() => fileRef.current?.click()}>
               Импорт из файла
             </button>
+            {backupMsg && <p className="home-backup__msg">{backupMsg}</p>}
+            <p className="home-backup__hint">
+              {isOwner
+                ? 'Копия уходит файлом в чат с ботом (и автоматически раз в день). Экспорт/импорт — файл на устройстве.'
+                : 'Экспорт сохраняет все данные в файл; импорт восстанавливает их из файла.'}
+            </p>
           </div>
-          {backupMsg && <p className="home-backup__msg">{backupMsg}</p>}
-          <p className="home-backup__hint">
-            Видно только тебе (владельцу). Копия придёт файлом в чат с ботом (плюс автоматически раз в день).
-            Экспорт/импорт — резервная копия в файл на устройстве.
-          </p>
           <input
             ref={fileRef}
             hidden
@@ -310,7 +329,7 @@ export function HomePage() {
               e.target.value = '';
             }}
           />
-        </div>
+        </Sheet>
       )}
     </Screen>
   );
