@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AnimatedNumber, Screen, Sheet, Skeleton } from '@/components/ui';
+import { AnimatedNumber, ConfirmDialog, Screen, Sheet, Skeleton } from '@/components/ui';
 import { IconCalculator, IconGear, IconHeart, IconNotes, IconShirt, IconWallet } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
@@ -146,22 +146,41 @@ export function HomePage() {
   };
 
   const fileRef = useRef<HTMLInputElement>(null);
-  const doExport = () => {
+  const [pendingImport, setPendingImport] = useState<File | null>(null);
+
+  const doExport = async () => {
     tapLight();
-    const blob = new Blob([JSON.stringify(exportAll())], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    const json = JSON.stringify(exportAll(), null, 2);
+    const file = new File([json], `coco-data-${new Date().toISOString().slice(0, 10)}.json`, {
+      type: 'application/json',
+    });
+    // In the Telegram in-app browser a normal <a download> just opens the JSON
+    // as a page — the native share sheet ("Сохранить в Файлы") is the reliable
+    // way to actually get a file out.
+    if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Coco — резервная копия' });
+        setBackupMsg('Готово — сохраните файл в «Файлы» или отправьте себе.');
+        return;
+      } catch (err) {
+        if ((err as DOMException)?.name === 'AbortError') return; // sheet closed
+      }
+    }
+    const url = URL.createObjectURL(file);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `coco-data-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = file.name;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
     setBackupMsg('Файл с данными сохранён.');
   };
-  const doImport = async (file: File | undefined) => {
+
+  const runImport = async () => {
+    const file = pendingImport;
+    setPendingImport(null);
     if (!file) return;
-    if (!window.confirm('Импорт заменит ВСЕ текущие данные данными из файла. Продолжить?')) return;
     try {
       const data = JSON.parse(await file.text());
       if (importAll(data)) {
@@ -227,8 +246,8 @@ export function HomePage() {
           <button className="home-quick__chip" onClick={() => go('/finance/expenses/new')}>
             💸 Расход
           </button>
-          <button className="home-quick__chip" onClick={() => go('/clothing/compose')}>
-            ✨ Образ
+          <button className="home-quick__chip" onClick={() => go('/clothing/outfits')}>
+            🧥 Образы
           </button>
         </div>
 
@@ -325,11 +344,22 @@ export function HomePage() {
             type="file"
             accept="application/json,.json"
             onChange={(e) => {
-              void doImport(e.target.files?.[0]);
+              const f = e.target.files?.[0];
+              if (f) setPendingImport(f);
               e.target.value = '';
             }}
           />
         </Sheet>
+      )}
+
+      {pendingImport && (
+        <ConfirmDialog
+          title="Импортировать данные?"
+          message="Импорт заменит ВСЕ текущие данные данными из файла. Это действие необратимо."
+          confirmLabel="Заменить и импортировать"
+          onClose={() => setPendingImport(null)}
+          onConfirm={() => void runImport()}
+        />
       )}
     </Screen>
   );

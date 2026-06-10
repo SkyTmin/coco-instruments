@@ -115,6 +115,16 @@ export function NotesGraphPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [menuNode, setMenuNode] = useState<NoteGraphPoint | null>(null);
+  const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
+  const toggleHighlight = (nodeId: string) => {
+    selectionChanged();
+    setHighlighted((cur) => {
+      const next = new Set(cur);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  };
   const [size, setSize] = useState<GraphSize>(GRAPH_VIEW_BOX);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -416,15 +426,13 @@ export function NotesGraphPage() {
       moved: false,
       startedAt: performance.now(),
     };
-    // A still hold on a note → buzz when the context menu becomes available
+    // A still hold on any node → buzz when the context menu becomes available
     // (it opens on release, so the press never fights the sheet's backdrop tap).
     window.clearTimeout(longPressTimer.current);
-    if (point.kind === 'note') {
-      longPressTimer.current = window.setTimeout(() => {
-        const s = pointerSession.current;
-        if (s && s.id === id && !s.moved) selectionChanged();
-      }, LONG_PRESS_MS);
-    }
+    longPressTimer.current = window.setTimeout(() => {
+      const s = pointerSession.current;
+      if (s && s.id === id && !s.moved) selectionChanged();
+    }, LONG_PRESS_MS);
     kick(0.6);
     selectionChanged();
   };
@@ -505,8 +513,8 @@ export function NotesGraphPage() {
         if (s && s.id === id && !s.moved) {
           const point = pointByIdRef.current.get(id);
           const held = performance.now() - s.startedAt;
-          // A still long-press on a note opens its context menu (collapse deps).
-          if (held >= LONG_PRESS_MS && point?.kind === 'note') {
+          // A still long-press on any node opens its context menu.
+          if (held >= LONG_PRESS_MS && point) {
             setMenuNode(point);
           } else if (held < TAP_TIME_LIMIT) {
           if (point?.kind === 'note') navigate(`/notes/${id}`);
@@ -695,12 +703,24 @@ export function NotesGraphPage() {
                   {points.map((point) => {
                     const hot = !!neighborIds && neighborIds.has(point.id);
                     const dim = !!neighborIds && !hot;
+                    const hl = highlighted.has(point.id);
                     // Per-tag colour: each topic its own hue, sub-tags lighter.
                     const tc = point.kind === 'tag' ? tagColor(point.id.slice(4)) : null;
+                    // Highlight (green) overrides any per-node colour.
+                    const circleStyle = hl
+                      ? {
+                          fill: 'color-mix(in srgb, var(--pos) 32%, var(--surface))',
+                          stroke: 'var(--pos)',
+                          strokeWidth: 3.5,
+                          filter: 'drop-shadow(0 0 9px var(--pos))',
+                        }
+                      : tc
+                        ? { fill: tc.fill, stroke: tc.stroke }
+                        : undefined;
                     return (
                       <g
                         key={point.id}
-                        className={`notes-graph__node notes-graph__node--${point.kind}${point.id === activeId ? ' is-active' : ''}${point.id === draggingId ? ' is-dragging' : ''}${point.id === focusId ? ' is-focus' : ''}${hot ? ' is-hot' : ''}${dim ? ' is-dim' : ''}${collapsedSet.has(point.id) ? ' is-collapsed' : ''}`}
+                        className={`notes-graph__node notes-graph__node--${point.kind}${point.id === activeId ? ' is-active' : ''}${point.id === draggingId ? ' is-dragging' : ''}${point.id === focusId ? ' is-focus' : ''}${hot ? ' is-hot' : ''}${dim ? ' is-dim' : ''}${collapsedSet.has(point.id) ? ' is-collapsed' : ''}${hl ? ' is-highlighted' : ''}`}
                         onPointerDown={(event) => beginNodeDrag(event, point.id)}
                         onClick={(event) => event.preventDefault()}
                         {...hoverable(point)}
@@ -709,15 +729,10 @@ export function NotesGraphPage() {
                         {point.id === focusId && (
                           <circle className="notes-graph__halo" cx={point.x} cy={point.y} r={point.r + 10} />
                         )}
-                        <circle
-                          cx={point.x}
-                          cy={point.y}
-                          r={point.r}
-                          style={tc ? { fill: tc.fill, stroke: tc.stroke } : undefined}
-                        />
+                        <circle cx={point.x} cy={point.y} r={point.r} style={circleStyle} />
                         <text
                           className={`notes-graph__label${labelVisible(point) ? ' is-shown' : ''}`}
-                          style={tc ? { fill: tc.stroke } : undefined}
+                          style={hl ? { fill: 'var(--pos)' } : tc ? { fill: tc.stroke } : undefined}
                           x={point.x}
                           y={point.y + point.r + 14}
                         >
@@ -750,8 +765,8 @@ export function NotesGraphPage() {
 
         <div className="card notes-graph-hint">
           Перетаскивайте поле или узлы, щипком двумя пальцами (или колесо/кнопки) — масштаб.
-          Передвинутые узлы остаются на месте; ⊙ — собрать граф заново. Короткий тап откроет заметку или человека,
-          долгий тап по заметке — скрыть/показать её зависимости.
+          Передвинутые узлы остаются на месте; ⊙ — собрать граф заново. Короткий тап откроет узел,
+          долгий тап — меню: подсветить, скрыть зависимости и т.д.
           {activeList
             ? ' Фиолетовый кружок в центре — сама тетрадь; тап по нему открывает список.'
             : ' «Локальный» режим показывает связи вокруг выбранного узла на заданную глубину.'}
@@ -768,43 +783,81 @@ export function NotesGraphPage() {
         </div>
       </div>
 
-      {menuNode && (
-        <Sheet title={menuNode.label} onClose={() => setMenuNode(null)}>
-          <div className="stack">
-            {collapsedSet.has(menuNode.id) ? (
-              <button
-                className="btn btn--ghost btn--block"
-                onClick={() => {
-                  setNoteDepsHidden(menuNode.id, false);
-                  setMenuNode(null);
-                }}
-              >
-                Показать зависимости
-              </button>
-            ) : (
-              <button
-                className="btn btn--ghost btn--block"
-                onClick={() => {
-                  setNoteDepsHidden(menuNode.id, true);
-                  setMenuNode(null);
-                }}
-              >
-                Скрыть зависимости
-              </button>
-            )}
-            <button
-              className="btn btn--ghost btn--block"
-              onClick={() => {
-                const nid = menuNode.id;
-                setMenuNode(null);
-                navigate(`/notes/${nid}`);
-              }}
-            >
-              Открыть заметку
-            </button>
-          </div>
-        </Sheet>
-      )}
+      {menuNode &&
+        (() => {
+          const m = menuNode;
+          const isHL = highlighted.has(m.id);
+          const open =
+            m.kind === 'note'
+              ? `/notes/${m.id}`
+              : m.kind === 'tag'
+                ? `/notes/tag/${encodeURIComponent(m.id.slice(4))}`
+                : m.kind === 'list' && m.list
+                  ? `/notes/lists/${m.list.id}`
+                  : m.kind === 'people'
+                    ? '/notes/graph?people=1'
+                    : m.kind === 'person' && m.person
+                      ? `/people/${m.person.id}`
+                      : null;
+          const openLabel =
+            m.kind === 'note'
+              ? 'Открыть заметку'
+              : m.kind === 'tag'
+                ? 'Открыть тег'
+                : m.kind === 'list'
+                  ? 'Открыть список'
+                  : m.kind === 'people'
+                    ? 'Открыть людей'
+                    : 'Открыть человека';
+          return (
+            <Sheet title={m.label} onClose={() => setMenuNode(null)}>
+              <div className="stack">
+                <button
+                  className={`btn btn--block graph-hl-btn${isHL ? ' is-on' : ''}`}
+                  onClick={() => {
+                    toggleHighlight(m.id);
+                    setMenuNode(null);
+                  }}
+                >
+                  {isHL ? 'Снять подсветку' : 'Подсветить'}
+                </button>
+                {m.kind === 'note' &&
+                  (collapsedSet.has(m.id) ? (
+                    <button
+                      className="btn btn--ghost btn--block"
+                      onClick={() => {
+                        setNoteDepsHidden(m.id, false);
+                        setMenuNode(null);
+                      }}
+                    >
+                      Показать зависимости
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn--ghost btn--block"
+                      onClick={() => {
+                        setNoteDepsHidden(m.id, true);
+                        setMenuNode(null);
+                      }}
+                    >
+                      Скрыть зависимости
+                    </button>
+                  ))}
+                {open && (
+                  <button
+                    className="btn btn--ghost btn--block"
+                    onClick={() => {
+                      setMenuNode(null);
+                      navigate(open);
+                    }}
+                  >
+                    {openLabel}
+                  </button>
+                )}
+              </div>
+            </Sheet>
+          );
+        })()}
     </Screen>
   );
 }
