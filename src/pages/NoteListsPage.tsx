@@ -153,7 +153,7 @@ export function NoteListsPage() {
         )}
 
         <div className="stack">
-          {noteLists.map((list) => (
+          {noteLists.map((list, index) => (
             <SwipeRow
               key={list.id}
               onTap={() => {
@@ -174,7 +174,10 @@ export function NoteListsPage() {
                 },
               ]}
             >
-              <div className="note-list-row">
+              <div
+                className="note-list-row"
+                style={{ animationDelay: `${Math.min(index, 10) * 26}ms` }}
+              >
                 <span className="note-list-row__emoji">{list.emoji ?? '📋'}</span>
                 <div className="note-list-row__main">
                   <div className="note-list-row__name">{list.name}</div>

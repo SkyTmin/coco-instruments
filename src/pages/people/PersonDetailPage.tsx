@@ -159,7 +159,7 @@ export function PersonDetailPage() {
         </div>
       }
     >
-      <div className="stack people-detail">
+      <div className="stack people-detail stagger">
         <div className="person-hero card">
           <div className="person-hero__avatar">
             {person.avatar ? (
@@ -293,7 +293,10 @@ export function PersonDetailPage() {
                   note={promise.note}
                   onDone={
                     promise.status === 'open'
-                      ? () => updatePromise(promise.id, { status: 'done' })
+                      ? () => {
+                          notifySuccess();
+                          updatePromise(promise.id, { status: 'done' });
+                        }
                       : undefined
                   }
                   onDelete={() => removePromise(promise.id)}
@@ -316,7 +319,10 @@ export function PersonDetailPage() {
                   note={meet.note}
                   onDone={
                     meet.status !== 'done'
-                      ? () => updateMeetIdea(meet.id, { status: 'done' })
+                      ? () => {
+                          notifySuccess();
+                          updateMeetIdea(meet.id, { status: 'done' });
+                        }
                       : undefined
                   }
                   onDelete={() => removeMeetIdea(meet.id)}

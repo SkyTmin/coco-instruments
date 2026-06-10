@@ -58,7 +58,7 @@ export function Screen({
   children,
 }: PropsWithChildren<{
   title?: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   action?: ReactNode;
   className?: string;
 }>) {

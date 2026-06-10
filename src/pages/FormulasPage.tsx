@@ -35,12 +35,14 @@ export function FormulasPage() {
         </button>
       </div>
 
-      <div className="formula-grid">
-        {shapes.map((s) => (
+      {/* key={cat} remounts the grid so the 2D/3D toggle replays the cascade */}
+      <div className="formula-grid" key={cat}>
+        {shapes.map((s, index) => (
           <button
             key={s.id}
             className="formula-card"
             type="button"
+            style={{ animationDelay: `${Math.min(index, 11) * 22}ms` }}
             onClick={() => {
               tapLight();
               navigate(`/calculator/formulas/${s.id}`);

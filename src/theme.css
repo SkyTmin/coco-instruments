@@ -7581,3 +7581,148 @@ input[type='datetime-local'] {
     animation: none;
   }
 }
+
+/* ===== Shared staggered entrance (finance/home language) ==================== */
+.stagger > * {
+  animation: note-in 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 45ms;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 90ms;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 135ms;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 180ms;
+}
+.stagger > *:nth-child(6) {
+  animation-delay: 225ms;
+}
+.stagger > *:nth-child(n + 7) {
+  animation-delay: 260ms;
+}
+/* Children that orchestrate their own per-item stagger opt out so cascades
+   don't compound. */
+.stagger > .stagger-skip {
+  animation: none;
+}
+
+/* People: avatar pops, "Скоро" rows cascade */
+@keyframes avatar-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+.person-hero__avatar {
+  animation: avatar-pop 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) 0.08s backwards;
+}
+.people-soon__row {
+  animation: note-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Notes graph entrance: nodes bloom in, links fade in after */
+@keyframes graph-node-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes graph-node-pop {
+  from {
+    transform: scale(0.4);
+  }
+}
+.notes-graph--interactive .notes-graph__node {
+  animation: graph-node-in 0.4s ease var(--gd, 0ms) backwards;
+}
+.notes-graph--interactive .notes-graph__node circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: graph-node-pop 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) var(--gd, 0ms) backwards;
+}
+.notes-graph--interactive .notes-graph__link {
+  animation: graph-node-in 0.5s ease 0.28s backwards;
+}
+
+/* Note meta chips cascade (chat note / tag pages) */
+.note-meta > * {
+  animation: note-in 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.note-meta > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.note-meta > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.note-meta > *:nth-child(n + 4) {
+  animation-delay: 110ms;
+}
+
+/* Note lists rows */
+.note-list-row {
+  animation: note-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Clothing: lookbook carousel fades in (opacity only — transform belongs to
+   the is-focus snap), wishlist rows cascade */
+@keyframes qp-in {
+  from {
+    opacity: 0;
+  }
+}
+.qp-card {
+  animation: qp-in 0.45s ease backwards;
+}
+.wish-row {
+  animation: note-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Formulas: tiles cascade; hero diagram draws itself on the detail page */
+.formula-card {
+  animation: note-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes shape-draw {
+  from {
+    stroke-dashoffset: 620;
+  }
+}
+.shape-svg--draw .body,
+.shape-svg--draw .ln {
+  stroke-dasharray: 620;
+  stroke-dashoffset: 0;
+  animation: shape-draw 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+/* dashed dims keep their dash pattern — fade, don't draw */
+.shape-svg--draw .dim,
+.shape-svg--draw .ang,
+.shape-svg--draw .dot {
+  animation: graph-node-in 0.4s ease 0.45s backwards;
+}
+.shape-svg--draw text {
+  animation: graph-node-in 0.35s ease 0.55s backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger > *,
+  .person-hero__avatar,
+  .people-soon__row,
+  .notes-graph--interactive .notes-graph__node,
+  .notes-graph--interactive .notes-graph__node circle,
+  .notes-graph--interactive .notes-graph__link,
+  .note-meta > *,
+  .note-list-row,
+  .qp-card,
+  .wish-row,
+  .formula-card,
+  .shape-svg--draw .body,
+  .shape-svg--draw .ln,
+  .shape-svg--draw .dim,
+  .shape-svg--draw .ang,
+  .shape-svg--draw .dot,
+  .shape-svg--draw text {
+    animation: none;
+  }
+}

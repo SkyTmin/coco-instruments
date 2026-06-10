@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Screen, Sheet, Skeleton } from '@/components/ui';
+import { AnimatedNumber, Screen, Sheet, Skeleton } from '@/components/ui';
 import { OutfitCarousel } from '@/components/OutfitCarousel';
 import { CollectionTile } from '@/components/clothing-cards';
 import { Photo } from '@/components/Photo';
@@ -64,9 +64,16 @@ export function ClothingDashboardPage() {
     <Screen
       title="Гардероб"
       subtitle={
-        firstRun
-          ? 'Ваш цифровой гардероб'
-          : `${wardrobe.length} ${pluralizeRu(wardrobe.length, ['вещь', 'вещи', 'вещей'])} · ${outfits.length} ${pluralizeRu(outfits.length, ['образ', 'образа', 'образов'])}`
+        firstRun ? (
+          'Ваш цифровой гардероб'
+        ) : (
+          <>
+            <AnimatedNumber value={wardrobe.length} />{' '}
+            {pluralizeRu(wardrobe.length, ['вещь', 'вещи', 'вещей'])} ·{' '}
+            <AnimatedNumber value={outfits.length} />{' '}
+            {pluralizeRu(outfits.length, ['образ', 'образа', 'образов'])}
+          </>
+        )
       }
       action={
         !firstRun ? (
@@ -267,12 +274,16 @@ export function ClothingDashboardPage() {
             <button className="cl-util__card" onClick={() => go('/clothing/sizes')}>
               <IconRuler size={20} />
               <span className="cl-util__name">Размеры</span>
-              <span className="cl-util__count">{sizes.length || '—'}</span>
+              <span className="cl-util__count">
+                {sizes.length ? <AnimatedNumber value={sizes.length} /> : '—'}
+              </span>
             </button>
             <button className="cl-util__card" onClick={() => go('/clothing/wishlist')}>
               <IconHeart size={20} />
               <span className="cl-util__name">Желания</span>
-              <span className="cl-util__count">{wishlist.length || '—'}</span>
+              <span className="cl-util__count">
+                {wishlist.length ? <AnimatedNumber value={wishlist.length} /> : '—'}
+              </span>
             </button>
           </div>
         </div>

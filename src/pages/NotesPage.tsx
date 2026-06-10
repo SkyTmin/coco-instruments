@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { EmptyState, Fab, Screen, Skeleton, SwipeRow } from '@/components/ui';
+import { AnimatedNumber, EmptyState, Fab, Screen, Skeleton, SwipeRow } from '@/components/ui';
 import { IconGraph, IconPin, IconTrash } from '@/components/icons';
 import type { Note } from '@/types';
 import { useFinanceStore } from '@/store';
@@ -191,9 +191,16 @@ export function NotesPage() {
     <Screen
       title="Заметки"
       subtitle={
-        activeList
-          ? `${visible.length} в «${activeList.name}»`
-          : `${notes.length} ${plural(notes.length, 'заметка', 'заметки', 'заметок')}`
+        activeList ? (
+          <>
+            <AnimatedNumber value={visible.length} /> в «{activeList.name}»
+          </>
+        ) : (
+          <>
+            <AnimatedNumber value={notes.length} />{' '}
+            {plural(notes.length, 'заметка', 'заметки', 'заметок')}
+          </>
+        )
       }
       action={
         <div className="notes-head-actions">

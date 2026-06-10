@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { PointerEvent, WheelEvent } from 'react';
+import type { CSSProperties, PointerEvent, WheelEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Screen, Sheet } from '@/components/ui';
 import { IconGraph } from '@/components/icons';
@@ -688,7 +688,7 @@ export function NotesGraphPage() {
       }
       action={<NotesHelpButton />}
     >
-      <div className="stack notes-page notes-graph-screen">
+      <div className="stack notes-page notes-graph-screen stagger">
         <div className="card notes-graph-controls">
           {(activeList || peopleParam || tagParam) && (
             <button
@@ -764,7 +764,7 @@ export function NotesGraphPage() {
           )}
         </div>
 
-        <div className="notes-graph-stage" ref={stageRef}>
+        <div className="notes-graph-stage stagger-skip" ref={stageRef}>
           {points.length ? (
             <>
               <svg
@@ -815,7 +815,7 @@ export function NotesGraphPage() {
                       />
                     );
                   })}
-                  {points.map((point) => {
+                  {points.map((point, pointIndex) => {
                     const hot = !!neighborIds && neighborIds.has(point.id);
                     const dim = !!neighborIds && !hot;
                     const hl = highlighted.has(point.id);
@@ -836,6 +836,7 @@ export function NotesGraphPage() {
                       <g
                         key={point.id}
                         className={`notes-graph__node notes-graph__node--${point.kind}${point.id === activeId ? ' is-active' : ''}${point.id === draggingId ? ' is-dragging' : ''}${point.id === focusId ? ' is-focus' : ''}${hot ? ' is-hot' : ''}${dim ? ' is-dim' : ''}${collapsedSet.has(point.id) ? ' is-collapsed' : ''}${hl ? ' is-highlighted' : ''}`}
+                        style={{ '--gd': `${Math.min(pointIndex, 12) * 24}ms` } as CSSProperties}
                         onPointerDown={(event) => beginNodeDrag(event, point.id)}
                         onClick={(event) => event.preventDefault()}
                         {...hoverable(point)}

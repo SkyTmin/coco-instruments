@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { EmptyState, Screen, Skeleton, StatTile } from '@/components/ui';
+import { AnimatedNumber, EmptyState, Screen, Skeleton, StatTile } from '@/components/ui';
 import { IconHeart, IconPlus } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { attachmentHref } from '@/lib/images';
@@ -107,7 +107,7 @@ export function PeopleDashboardPage() {
         </button>
       }
     >
-      <div className="stack people-page">
+      <div className="stack people-page stagger">
         <button className="people-new-hero" onClick={() => go('/people/new')}>
           <span className="people-new-hero__icon">
             <IconHeart />
@@ -153,10 +153,10 @@ export function PeopleDashboardPage() {
 
         <div className="card">
           <div className="stat-grid">
-            <StatTile label="Людей" value={stats.people} />
-            <StatTile label="Дней рождения" value={stats.birthdays} />
-            <StatTile label="Идей подарков" value={stats.giftIdeas} />
-            <StatTile label="Обещаний" value={stats.promises} />
+            <StatTile label="Людей" value={<AnimatedNumber value={stats.people} />} />
+            <StatTile label="Дней рождения" value={<AnimatedNumber value={stats.birthdays} />} />
+            <StatTile label="Идей подарков" value={<AnimatedNumber value={stats.giftIdeas} />} />
+            <StatTile label="Обещаний" value={<AnimatedNumber value={stats.promises} />} />
           </div>
         </div>
 
@@ -164,11 +164,12 @@ export function PeopleDashboardPage() {
           <div className="card people-soon">
             <div className="people-section-title">Скоро</div>
             <div className="stack">
-              {upcoming.map((event) => (
+              {upcoming.map((event, index) => (
                 <button
                   key={event.id}
                   className="people-soon__row"
                   onClick={() => go(`/people/${event.personId}`)}
+                  style={{ animationDelay: `${Math.min(index, 4) * 40}ms` }}
                 >
                   <span>
                     <b>{event.title}</b>
@@ -184,7 +185,7 @@ export function PeopleDashboardPage() {
         )}
 
         {filteredPeople.length > 0 ? (
-          <div className="stack">
+          <div className="stack stagger-skip">
             {filteredPeople.map((person, index) => {
               const birthday = nextBirthday(person);
               return (
@@ -226,7 +227,7 @@ export function PeopleDashboardPage() {
             })}
           </div>
         ) : (
-          <div className="card people-empty-card">
+          <div className="card people-empty-card stagger-skip">
             <EmptyState
               icon="♡"
               title={people.length ? 'Ничего не найдено' : 'Пока никого нет'}
@@ -246,7 +247,7 @@ export function PeopleDashboardPage() {
 
         {people.length > 0 && (
           <div className="people-footnote">
-            {people.length} {peopleWord(people.length)} в личной базе
+            <AnimatedNumber value={people.length} /> {peopleWord(people.length)} в личной базе
           </div>
         )}
       </div>
