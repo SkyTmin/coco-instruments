@@ -1,11 +1,12 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
+import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 
 // Focused on catching real bugs (Rules of Hooks, undefined vars), not style.
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'legacy', 'icons', 'public', '**/*.config.*', 'server.js'] },
+  { ignores: ['dist', 'node_modules', 'legacy', 'icons', 'public', '**/*.config.*'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -20,4 +21,12 @@ export default tseslint.config(
       'no-empty': 'off',
     },
   },
+  {
+    files: ['server.js', 'app.js', 'tests/**/*.js'],
+    languageOptions: { globals: { ...globals.node } },
+    rules: {
+      'no-empty': 'off',
+    },
+  },
+  prettier,
 );
