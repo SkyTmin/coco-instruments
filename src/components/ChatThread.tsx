@@ -588,9 +588,7 @@ export function ChatThread({
         )}
         {m.card && (
           <div
-            className={`chat-card${flipped.has(m.id) ? ' is-flipped' : ''}${
-              !m.card.front.photo && !m.card.back.photo ? ' chat-card--auto' : ''
-            }`}
+            className={`chat-card${flipped.has(m.id) ? ' is-flipped' : ''}`}
             style={cardAspect(m) ? ({ '--card-ar': cardAspect(m) } as CSSProperties) : undefined}
             onClick={(e) => {
               // In the long-press overlay only the ⟲ button flips — a tap on
@@ -606,7 +604,7 @@ export function ChatThread({
                 return (
                   <div key={sideKey} className={`chat-card__face chat-card__${sideKey}`}>
                     {side.photo && (
-                      <>
+                      <div className="chat-card__media">
                         {/* Blurred copy fills the bars when the photo's shape
                             differs from the card's — like Telegram. */}
                         <img
@@ -623,12 +621,10 @@ export function ChatThread({
                           loading="lazy"
                           onLoad={(e) => captureCardAR(m.id, sideKey === 'front', e.currentTarget)}
                         />
-                      </>
+                      </div>
                     )}
                     {(side.text ?? '').trim() ? (
-                      <div
-                        className={`chat-card__text${side.photo ? ' chat-card__text--overlay' : ''}`}
-                      >
+                      <div className="chat-card__text">
                         <NoteMarkdown
                           body={side.text!}
                           notes={notes}
