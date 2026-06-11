@@ -7996,10 +7996,13 @@ input[type='datetime-local'] {
 }
 .chat-card {
   position: relative;
-  width: min(74vw, 320px);
-  aspect-ratio: 4 / 3;
+  /* The shape follows the photo (--card-ar set from its natural size);
+     tall cards shrink in width so the height stays sane. */
+  width: min(74vw, 320px, calc(440px * var(--card-ar, 1.333)));
+  aspect-ratio: var(--card-ar, 1.333);
   perspective: 900px;
   cursor: pointer;
+  transition: width 0.25s ease;
 }
 .chat-card__inner {
   position: absolute;
@@ -8036,10 +8039,21 @@ input[type='datetime-local'] {
   inset: 0;
   width: 100%;
   height: 100%;
+}
+/* Blurred fill behind the photo — visible as soft bars whenever the photo's
+   shape differs from the card's (Telegram-style letterboxing). */
+.chat-card__bg {
   object-fit: cover;
+  filter: blur(18px) saturate(1.15);
+  transform: scale(1.18);
+}
+.chat-card__img {
+  object-fit: contain;
+  z-index: 1;
 }
 .chat-card__text {
   position: relative;
+  z-index: 2;
   max-height: 100%;
   overflow-y: auto;
   padding: 14px;

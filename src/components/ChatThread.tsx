@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   ChangeEvent,
+  CSSProperties,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
@@ -164,6 +165,9 @@ export function ChatThread({
   const [confirmDelete, setConfirmDelete] = useState<NoteMessage | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
+  // Natural aspect ratio of each card's photo (front wins) — sizes the card
+  // like Telegram sizes photos: tall photo → tall card, wide → wide.
+  const [cardARs, setCardARs] = useState<Map<string, number>>(new Map());
   const [cardEditor, setCardEditor] = useState<{ id?: string; card: NoteCard } | null>(null);
   const [pinIndex, setPinIndex] = useState(0);
 
@@ -462,6 +466,33 @@ export function ChatThread({
     onEditMessage(m.id, toggleTaskInBody(m.text, index), m.attachments ?? []);
   };
 
+  const captureCardAR = (id: string, isFront: boolean, img: HTMLImageElement) => {
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    const ar = img.naturalWidth / img.naturalHeight;
+    setCardARs((prev) => {
+      if (!isFront && prev.has(id)) return prev; // the front photo wins
+      if (prev.get(id) === ar) return prev;
+      const next = new Map(prev);
+      next.set(id, ar);
+      return next;
+    });
+  };
+
+  /** Card shape: photo's own ratio, clamped; lots of text → closer to 4:3 so
+   *  the text has room (the photo then gets blurred side bars, TG-style). */
+  const cardAspect = (m: NoteMessage): number | undefined => {
+    const ar = cardARs.get(m.id);
+    if (!ar) return undefined; // CSS default until the photo loads
+    const textLen = Math.max(
+      (m.card?.front.text ?? '').trim().length,
+      (m.card?.back.text ?? '').trim().length,
+    );
+    const heavyText = textLen > 60;
+    const lo = heavyText ? 0.95 : 0.62;
+    const hi = heavyText ? 1.45 : 1.78;
+    return Math.min(hi, Math.max(lo, ar));
+  };
+
   const toggleFlip = (id: string) => {
     tapLight();
     setFlipped((prev) => {
@@ -550,6 +581,7 @@ export function ChatThread({
         {m.card && (
           <div
             className={`chat-card${flipped.has(m.id) ? ' is-flipped' : ''}`}
+            style={cardAspect(m) ? ({ '--card-ar': cardAspect(m) } as CSSProperties) : undefined}
             onClick={(e) => {
               // Flipping works everywhere — including the long-press overlay
               // clone, so the other side can be read/copied from the menu.
@@ -562,7 +594,26 @@ export function ChatThread({
                 const side = m.card![sideKey];
                 return (
                   <div key={sideKey} className={`chat-card__face chat-card__${sideKey}`}>
-                    {side.photo && <img src={attachmentHref(side.photo)} alt="" loading="lazy" />}
+                    {side.photo && (
+                      <>
+                        {/* Blurred copy fills the bars when the photo's shape
+                            differs from the card's — like Telegram. */}
+                        <img
+                          className="chat-card__bg"
+                          src={attachmentHref(side.photo)}
+                          alt=""
+                          aria-hidden
+                          loading="lazy"
+                        />
+                        <img
+                          className="chat-card__img"
+                          src={attachmentHref(side.photo)}
+                          alt=""
+                          loading="lazy"
+                          onLoad={(e) => captureCardAR(m.id, sideKey === 'front', e.currentTarget)}
+                        />
+                      </>
+                    )}
                     {(side.text ?? '').trim() ? (
                       <div
                         className={`chat-card__text${side.photo ? ' chat-card__text--overlay' : ''}`}
