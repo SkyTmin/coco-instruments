@@ -157,7 +157,7 @@ export function ChatThread({
   const [replyTo, setReplyTo] = useState<NoteMessage | null>(null);
   const [error, setError] = useState('');
   const [menu, setMenu] = useState<MenuState | null>(null);
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ items: string[]; index: number } | null>(null);
   const [showActions, setShowActions] = useState(false);
   const [linkPicker, setLinkPicker] = useState(false);
   const [selected, setSelected] = useState<Set<string> | null>(null);
@@ -184,6 +184,35 @@ export function ChatThread({
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
   const pinnedMsgs = useMemo(() => messages.filter((m) => m.pinned), [messages]);
+
+  // Every photo of the thread in order — the lightbox swipes through them
+  // like Telegram's media viewer.
+  const galleryItems = useMemo(() => {
+    const out: string[] = [];
+    for (const m of messages) {
+      for (const a of m.attachments ?? []) {
+        if (a.type.startsWith('image/')) {
+          const h = attachmentHref(a);
+          if (h) out.push(h);
+        }
+      }
+      if (m.card) {
+        for (const p of [m.card.front.photo, m.card.back.photo]) {
+          if (p) {
+            const h = attachmentHref(p);
+            if (h) out.push(h);
+          }
+        }
+      }
+    }
+    return out;
+  }, [messages]);
+
+  const openLightbox = (href: string | undefined) => {
+    if (!href) return;
+    const idx = galleryItems.indexOf(href);
+    setLightbox(idx >= 0 ? { items: galleryItems, index: idx } : { items: [href], index: 0 });
+  };
 
   // Keep the latest message in view as the thread grows or on first paint —
   // unless we arrived via a deep link to a specific message.
@@ -611,7 +640,7 @@ export function ChatThread({
                           // it fullscreen (in chat the tap keeps flipping).
                           if (interactive) return;
                           e.stopPropagation();
-                          setLightbox(attachmentHref(side.photo!) || null);
+                          openLightbox(attachmentHref(side.photo!));
                         }}
                       >
                         {/* Blurred copy fills the bars when the photo's shape
@@ -673,7 +702,7 @@ export function ChatThread({
                 src={attachmentHref(a)}
                 alt={a.name}
                 loading="lazy"
-                onClick={() => setLightbox(attachmentHref(a) || null)}
+                onClick={() => openLightbox(attachmentHref(a))}
               />
             ))}
           </div>
@@ -1142,9 +1171,12 @@ export function ChatThread({
       )}
 
       {lightbox && (
-        <div className="chat-lightbox" onClick={() => setLightbox(null)}>
-          <img src={lightbox} alt="" />
-        </div>
+        <Lightbox
+          items={lightbox.items}
+          index={lightbox.index}
+          onIndex={(i) => setLightbox({ ...lightbox, index: i })}
+          onClose={() => setLightbox(null)}
+        />
       )}
     </>
   );
@@ -1263,5 +1295,103 @@ function CardEditor({
         }}
       />
     </Sheet>
+  );
+}
+
+/** Telegram-style media viewer: swipe (or arrows) through the thread's photos. */
+function Lightbox({
+  items,
+  index,
+  onIndex,
+  onClose,
+}: {
+  items: string[];
+  index: number;
+  onIndex: (i: number) => void;
+  onClose: () => void;
+}) {
+  const [drag, setDrag] = useState(0);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const moved = useRef(false);
+
+  const go = (next: number) => {
+    if (next < 0 || next >= items.length) return;
+    selectionChanged();
+    onIndex(next);
+  };
+
+  const onDown = (e: ReactPointerEvent) => {
+    start.current = { x: e.clientX, y: e.clientY };
+    moved.current = false;
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const onMove = (e: ReactPointerEvent) => {
+    if (!start.current) return;
+    const dx = e.clientX - start.current.x;
+    if (Math.abs(dx) > 8) moved.current = true;
+    // Damp the drag at the ends so the edge feels solid.
+    const atEdge = (dx > 0 && index === 0) || (dx < 0 && index === items.length - 1);
+    setDrag(atEdge ? dx * 0.3 : dx);
+  };
+  const onUp = () => {
+    if (!start.current) return;
+    const dx = drag;
+    start.current = null;
+    setDrag(0);
+    if (dx <= -56) go(index + 1);
+    else if (dx >= 56) go(index - 1);
+    else if (!moved.current) onClose();
+  };
+
+  return (
+    <div
+      className="chat-lightbox"
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
+    >
+      {items.length > 1 && (
+        <div className="chat-lightbox__counter">
+          {index + 1} / {items.length}
+        </div>
+      )}
+      <img
+        key={index}
+        src={items[index]}
+        alt=""
+        draggable={false}
+        style={{
+          transform: drag ? `translateX(${drag}px)` : undefined,
+          transition: start.current ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
+        }}
+      />
+      {index > 0 && (
+        <button
+          className="chat-lightbox__nav chat-lightbox__nav--prev"
+          onClick={(e) => {
+            e.stopPropagation();
+            go(index - 1);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label="Предыдущее фото"
+        >
+          ‹
+        </button>
+      )}
+      {index < items.length - 1 && (
+        <button
+          className="chat-lightbox__nav chat-lightbox__nav--next"
+          onClick={(e) => {
+            e.stopPropagation();
+            go(index + 1);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label="Следующее фото"
+        >
+          ›
+        </button>
+      )}
+    </div>
   );
 }

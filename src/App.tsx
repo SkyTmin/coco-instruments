@@ -258,6 +258,38 @@ function NavigationController() {
   return null;
 }
 
+/** Desktop: the mouse wheel scrolls horizontal rows (chips, carousels) the
+ *  cursor is over — they have no other way to scroll without touch. */
+function WheelScrollController() {
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaX !== 0 || !e.deltaY) return; // trackpads scroll natively
+      let el = e.target as HTMLElement | null;
+      while (el && el !== document.body) {
+        if (el.scrollWidth > el.clientWidth + 2) {
+          const style = getComputedStyle(el);
+          if (style.overflowX === 'auto' || style.overflowX === 'scroll') {
+            const canScroll =
+              e.deltaY > 0
+                ? el.scrollLeft + el.clientWidth < el.scrollWidth - 1
+                : el.scrollLeft > 0;
+            if (canScroll) {
+              el.scrollLeft += e.deltaY;
+              e.preventDefault();
+            }
+            return;
+          }
+        }
+        el = el.parentElement;
+      }
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, []);
+
+  return null;
+}
+
 /** iOS-style edge swipe (from the left edge to the right) navigates back. */
 function SwipeBackController() {
   const navigate = useNavigate();
@@ -364,6 +396,7 @@ export function App() {
       <HashRouter>
         <NavigationController />
         <SwipeBackController />
+        <WheelScrollController />
         <KeyboardController />
         <CropProvider>
           <Suspense fallback={<div className="route-fallback" aria-hidden />}>

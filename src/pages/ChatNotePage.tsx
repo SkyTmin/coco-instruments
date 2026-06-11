@@ -25,6 +25,7 @@ export function ChatNotePage() {
   const personNoteLinks = useFinanceStore((s) => s.personNoteLinks);
 
   const addNote = useFinanceStore((s) => s.addNote);
+  const addNoteList = useFinanceStore((s) => s.addNoteList);
   const addNoteMessage = useFinanceStore((s) => s.addNoteMessage);
   const updateNoteMessage = useFinanceStore((s) => s.updateNoteMessage);
   const removeNoteMessage = useFinanceStore((s) => s.removeNoteMessage);
@@ -47,6 +48,8 @@ export function ChatNotePage() {
   const [guide, setGuide] = useState(false);
   const [linksSheet, setLinksSheet] = useState(false);
   const [listSheet, setListSheet] = useState(false);
+  const [newListOpen, setNewListOpen] = useState(false);
+  const [newListName, setNewListName] = useState('');
   const [linkPick, setLinkPick] = useState(false);
   const [peopleSheet, setPeopleSheet] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -114,6 +117,18 @@ export function ChatNotePage() {
     selectionChanged();
     setListId(newListId);
     if (currentId.current) updateNote(currentId.current, { listId: newListId });
+  };
+
+  // Create a list right from the picker sheet and put the note into it.
+  const createListHere = () => {
+    const name = newListName.trim();
+    if (!name) return;
+    const created = addNoteList(name);
+    pickList(created.id);
+    notifySuccess();
+    setNewListName('');
+    setNewListOpen(false);
+    setListSheet(false);
   };
 
   const detachPerson = (personId: string) => {
@@ -386,6 +401,33 @@ export function ChatNotePage() {
               </button>
             ))}
           </div>
+          {newListOpen ? (
+            <div className="newlist-inline">
+              <input
+                className="input"
+                value={newListName}
+                onChange={(e) => setNewListName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && createListHere()}
+                placeholder="Название списка"
+                autoFocus
+              />
+              <button
+                className="btn btn--primary"
+                disabled={!newListName.trim()}
+                onClick={createListHere}
+              >
+                Создать
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn btn--primary btn--block"
+              style={{ marginTop: 10 }}
+              onClick={() => setNewListOpen(true)}
+            >
+              ＋ Новый список
+            </button>
+          )}
           <button
             className="btn btn--ghost btn--block"
             style={{ marginTop: 10 }}

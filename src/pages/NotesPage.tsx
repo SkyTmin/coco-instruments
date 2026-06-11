@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatedNumber, EmptyState, Fab, Screen, Skeleton, SwipeRow } from '@/components/ui';
-import { IconGraph, IconPin, IconTrash } from '@/components/icons';
+import { IconGraph, IconList, IconPin, IconTrash } from '@/components/icons';
 import type { Note } from '@/types';
 import { useFinanceStore } from '@/store';
 import { NotesHelpButton } from '@/components/NotesGuide';
@@ -228,65 +228,63 @@ export function NotesPage() {
       <div className="stack notes-page">
         {!firstRun && (
           <>
-            <div className="notes-search-wrap">
-              <input
-                className="input notes-search notes-search--list"
-                value={query}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                placeholder="Поиск по заметкам и #тегам"
-              />
-              {query && (
-                <button
-                  className="notes-search__clear"
-                  onClick={() => setSearch('')}
-                  aria-label="Очистить"
-                >
-                  ×
-                </button>
-              )}
+            <div className="notes-search-row">
+              <div className="notes-search-wrap">
+                <input
+                  className="input notes-search notes-search--list"
+                  value={query}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                  placeholder="Поиск по заметкам и #тегам"
+                />
+                {query && (
+                  <button
+                    className="notes-search__clear"
+                    onClick={() => setSearch('')}
+                    aria-label="Очистить"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              {/* Always reachable — never scrolls away with the chips. */}
+              <button
+                className="notes-lists-btn"
+                onClick={() => go(noteLists.length ? '/notes/lists' : '/notes/lists?new=1')}
+                aria-label="Списки заметок"
+              >
+                <IconList size={19} />
+                <span>Списки</span>
+              </button>
             </div>
 
-            <div className="notes-chips">
-              <button
-                className={`notes-chip${!listFilter ? ' is-active' : ''}`}
-                onClick={() => {
-                  selectionChanged();
-                  setListFilter(null);
-                }}
-              >
-                Все<span className="notes-chip__count">{notes.length}</span>
-              </button>
-              {noteLists.map((l) => (
+            {noteLists.length > 0 && (
+              <div className="notes-chips">
                 <button
-                  key={l.id}
-                  className={`notes-chip${listFilter === l.id ? ' is-active' : ''}`}
+                  className={`notes-chip${!listFilter ? ' is-active' : ''}`}
                   onClick={() => {
                     selectionChanged();
-                    setListFilter(listFilter === l.id ? null : l.id);
+                    setListFilter(null);
                   }}
                 >
-                  {l.emoji && <span className="notes-chip__emoji">{l.emoji}</span>}
-                  {l.name}
-                  <span className="notes-chip__count">{countByList.get(l.id) ?? 0}</span>
+                  Все<span className="notes-chip__count">{notes.length}</span>
                 </button>
-              ))}
-              {noteLists.length > 0 ? (
-                <button
-                  className="notes-chip notes-chip--manage"
-                  onClick={() => go('/notes/lists')}
-                >
-                  📋 Списки
-                </button>
-              ) : (
-                <button
-                  className="notes-chip notes-chip--manage"
-                  onClick={() => go('/notes/lists?new=1')}
-                >
-                  ＋ Создать список
-                </button>
-              )}
-            </div>
+                {noteLists.map((l) => (
+                  <button
+                    key={l.id}
+                    className={`notes-chip${listFilter === l.id ? ' is-active' : ''}`}
+                    onClick={() => {
+                      selectionChanged();
+                      setListFilter(listFilter === l.id ? null : l.id);
+                    }}
+                  >
+                    {l.emoji && <span className="notes-chip__emoji">{l.emoji}</span>}
+                    {l.name}
+                    <span className="notes-chip__count">{countByList.get(l.id) ?? 0}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {noteLists.length === 0 && !listsPromoHidden && (
               <div className="lists-promo">
