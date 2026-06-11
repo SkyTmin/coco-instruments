@@ -27,15 +27,17 @@ export function ComposePage() {
   useEffect(() => {
     if (!from) return;
     const st = useFinanceStore.getState();
-    if (!st.fitting.includes(from) && st.wardrobe.some((w) => w.id === from)) st.toggleFitting(from);
+    if (!st.fitting.includes(from) && st.wardrobe.some((w) => w.id === from))
+      st.toggleFitting(from);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const byId = useMemo(() => new Map(wardrobe.map((w) => [w.id, w])), [wardrobe]);
   const selected = fitting.map((id) => byId.get(id)).filter((w): w is WardrobeItem => Boolean(w));
-  const lanes = CATEGORIES.map((c) => ({ cat: c, items: wardrobe.filter((w) => w.category === c.id) })).filter(
-    (l) => l.items.length,
-  );
+  const lanes = CATEGORIES.map((c) => ({
+    cat: c,
+    items: wardrobe.filter((w) => w.category === c.id),
+  })).filter((l) => l.items.length);
 
   const save = async () => {
     if (!selected.length) return;
@@ -45,7 +47,8 @@ export function ComposePage() {
       const srcs = selected.map((it) => (it.photo ? attachmentHref(it.photo) : '')).filter(Boolean);
       if (srcs.length) {
         const blob = await composeMosaic(srcs);
-        if (blob) cover = await fileToAttachment(new File([blob], 'outfit.jpg', { type: 'image/jpeg' }));
+        if (blob)
+          cover = await fileToAttachment(new File([blob], 'outfit.jpg', { type: 'image/jpeg' }));
       }
       const created = addOutfit({
         name: name.trim() || 'Новый образ',

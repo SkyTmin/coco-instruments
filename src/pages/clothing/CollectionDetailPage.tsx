@@ -32,7 +32,9 @@ export function CollectionDetailPage() {
     selectionChanged();
     const has = collection.itemIds.includes(itemId);
     updateCollection(id, {
-      itemIds: has ? collection.itemIds.filter((x) => x !== itemId) : [...collection.itemIds, itemId],
+      itemIds: has
+        ? collection.itemIds.filter((x) => x !== itemId)
+        : [...collection.itemIds, itemId],
     });
   };
   const go = (path: string) => {
@@ -51,7 +53,11 @@ export function CollectionDetailPage() {
         ) : (
           <div className="wardrobe-grid">
             {members.map((it) => (
-              <WardrobeCard key={it.id} item={it} onClick={() => go(`/clothing/wardrobe/${it.id}`)} />
+              <WardrobeCard
+                key={it.id}
+                item={it}
+                onClick={() => go(`/clothing/wardrobe/${it.id}`)}
+              />
             ))}
           </div>
         )}
@@ -71,14 +77,24 @@ export function CollectionDetailPage() {
           </button>
         )}
 
-        <button className="btn btn--block" onClick={() => { tapLight(); setPicking(true); }}>
+        <button
+          className="btn btn--block"
+          onClick={() => {
+            tapLight();
+            setPicking(true);
+          }}
+        >
           <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
             <IconPlus size={18} /> Добавить вещь
           </span>
         </button>
 
         <div className="row" style={{ gap: 12 }}>
-          <button className="btn btn--block" style={{ flex: 1 }} onClick={() => go(`/clothing/collections/${id}/edit`)}>
+          <button
+            className="btn btn--block"
+            style={{ flex: 1 }}
+            onClick={() => go(`/clothing/collections/${id}/edit`)}
+          >
             <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
               <IconPencil size={18} /> Изменить
             </span>
@@ -98,7 +114,10 @@ export function CollectionDetailPage() {
           ) : (
             <>
               <div className="chips" style={{ marginBottom: 12 }}>
-                <button className={`chip${filter === 'all' ? ' is-active' : ''}`} onClick={() => setFilter('all')}>
+                <button
+                  className={`chip${filter === 'all' ? ' is-active' : ''}`}
+                  onClick={() => setFilter('all')}
+                >
                   Все
                 </button>
                 {CATEGORIES.filter((c) => wardrobe.some((w) => w.category === c.id)).map((c) => (
@@ -115,7 +134,11 @@ export function CollectionDetailPage() {
                 {pickList.map((it) => {
                   const on = collection.itemIds.includes(it.id);
                   return (
-                    <button key={it.id} className={`picker-card${on ? ' is-on' : ''}`} onClick={() => toggle(it.id)}>
+                    <button
+                      key={it.id}
+                      className={`picker-card${on ? ' is-on' : ''}`}
+                      onClick={() => toggle(it.id)}
+                    >
                       {it.photo ? (
                         <img src={attachmentHref(it.photo)} alt="" />
                       ) : (
@@ -129,7 +152,11 @@ export function CollectionDetailPage() {
               </div>
             </>
           )}
-          <button className="btn btn--primary btn--block" style={{ marginTop: 14 }} onClick={() => setPicking(false)}>
+          <button
+            className="btn btn--primary btn--block"
+            style={{ marginTop: 14 }}
+            onClick={() => setPicking(false)}
+          >
             Готово
           </button>
         </Sheet>

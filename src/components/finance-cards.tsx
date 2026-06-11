@@ -49,7 +49,9 @@ export function RecurringMiniCard({
         {r.paused ? (
           <span className="badge badge--closed">Пауза</span>
         ) : (
-          <span className="badge badge--installment">{intervalLabel(r.intervalCount, r.intervalUnit)}</span>
+          <span className="badge badge--installment">
+            {intervalLabel(r.intervalCount, r.intervalUnit)}
+          </span>
         )}
       </div>
       <div className="obl-card__nums">

@@ -17,7 +17,12 @@ const isCroppable = (f: File) =>
 
 export function CropProvider({ children }: PropsWithChildren) {
   const [active, setActive] = useState<{ file: File; index: number; total: number } | null>(null);
-  const job = useRef<{ files: File[]; targets: number[]; pos: number; resolve: (r: File[]) => void } | null>(null);
+  const job = useRef<{
+    files: File[];
+    targets: number[];
+    pos: number;
+    resolve: (r: File[]) => void;
+  } | null>(null);
 
   const advance = useCallback((pos: number) => {
     const j = job.current;

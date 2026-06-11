@@ -20,8 +20,12 @@ export function ComparePage() {
 
   const initialA = params.get('a');
   const initialB = params.get('b');
-  const [a, setA] = useState<string | null>(initialA && outfits.some((o) => o.id === initialA) ? initialA : null);
-  const [b, setB] = useState<string | null>(initialB && outfits.some((o) => o.id === initialB) ? initialB : null);
+  const [a, setA] = useState<string | null>(
+    initialA && outfits.some((o) => o.id === initialA) ? initialA : null,
+  );
+  const [b, setB] = useState<string | null>(
+    initialB && outfits.some((o) => o.id === initialB) ? initialB : null,
+  );
   const [pick, setPick] = useState<'a' | 'b' | null>(null);
 
   const outfitA = a ? outfits.find((o) => o.id === a) : undefined;
@@ -54,8 +58,24 @@ export function ComparePage() {
   return (
     <Screen title="Сравнить образы" subtitle="Два образа рядом — выбор за вами">
       <div className="compare-grid">
-        <CompareColumn outfit={outfitA} byId={byId} onPick={() => { tapLight(); setPick('a'); }} navigate={navigate} />
-        <CompareColumn outfit={outfitB} byId={byId} onPick={() => { tapLight(); setPick('b'); }} navigate={navigate} />
+        <CompareColumn
+          outfit={outfitA}
+          byId={byId}
+          onPick={() => {
+            tapLight();
+            setPick('a');
+          }}
+          navigate={navigate}
+        />
+        <CompareColumn
+          outfit={outfitB}
+          byId={byId}
+          onPick={() => {
+            tapLight();
+            setPick('b');
+          }}
+          navigate={navigate}
+        />
       </div>
 
       {a && b && (
@@ -77,7 +97,11 @@ export function ComparePage() {
                   style={taken ? { opacity: 0.4 } : undefined}
                   onClick={() => choose(o.id)}
                 >
-                  {o.cover ? <img src={attachmentHref(o.cover)} alt="" /> : <div className="picker-card__ph">🧥</div>}
+                  {o.cover ? (
+                    <img src={attachmentHref(o.cover)} alt="" />
+                  ) : (
+                    <div className="picker-card__ph">🧥</div>
+                  )}
                   <span>{o.name}</span>
                 </button>
               );
@@ -108,12 +132,22 @@ function CompareColumn({
       </button>
     );
   }
-  const members = outfit.itemIds.map((id) => byId.get(id)).filter((w): w is WardrobeItem => Boolean(w));
+  const members = outfit.itemIds
+    .map((id) => byId.get(id))
+    .filter((w): w is WardrobeItem => Boolean(w));
   return (
     <div className="compare-col">
       <button className="compare-col__cover" onClick={onPick} aria-label="Сменить образ">
-        {outfit.cover ? <Photo src={attachmentHref(outfit.cover)} /> : <div className="compare-col__ph">🧥</div>}
-        {outfit.favorite && <span className="outfit-card__fav" aria-hidden>♥</span>}
+        {outfit.cover ? (
+          <Photo src={attachmentHref(outfit.cover)} />
+        ) : (
+          <div className="compare-col__ph">🧥</div>
+        )}
+        {outfit.favorite && (
+          <span className="outfit-card__fav" aria-hidden>
+            ♥
+          </span>
+        )}
       </button>
       <div className="compare-col__name">{outfit.name}</div>
       <div className="compare-col__count">
@@ -140,7 +174,10 @@ function CompareColumn({
           ))}
         </div>
       )}
-      <button className="compare-col__open" onClick={() => navigate(`/clothing/outfits/${outfit.id}`)}>
+      <button
+        className="compare-col__open"
+        onClick={() => navigate(`/clothing/outfits/${outfit.id}`)}
+      >
         Открыть
       </button>
     </div>

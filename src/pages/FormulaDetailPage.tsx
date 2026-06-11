@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Screen } from '@/components/ui';
+import { AnimatedNumber, Screen } from '@/components/ui';
 import { ShapeDiagram } from '@/components/ShapeDiagram';
 import { dimSuffix, getShape } from '@/lib/geometry';
 import { formatCalculatorNumber } from '@/lib/calculator';
@@ -20,7 +20,9 @@ export function FormulaDetailPage() {
   if (!shape) {
     return (
       <Screen title="Формула">
-        <div className="formula-hint" style={{ padding: 12 }}>Фигура не найдена.</div>
+        <div className="formula-hint" style={{ padding: 12 }}>
+          Фигура не найдена.
+        </div>
       </Screen>
     );
   }
@@ -41,7 +43,7 @@ export function FormulaDetailPage() {
   return (
     <Screen title={shape.name} subtitle={shape.blurb}>
       <div className="formula-diagram">
-        <ShapeDiagram id={shape.id} />
+        <ShapeDiagram id={shape.id} className="shape-svg--draw" />
       </div>
 
       <h3 className="formula-h">Введите значения</h3>
@@ -67,16 +69,23 @@ export function FormulaDetailPage() {
       <h3 className="formula-h">Результаты</h3>
       <div className="formula-results">
         {shape.results.map((r) => {
-          let display = '—';
-          if (ready) {
-            const value = r.compute(nums);
-            display = Number.isFinite(value) ? `${formatCalculatorNumber(value)}${dimSuffix(r.dim)}` : '—';
-          }
+          const value = ready ? r.compute(nums) : NaN;
+          const suffix = dimSuffix(r.dim);
           return (
             <div className="formula-result" key={r.key}>
               <div className="formula-result__top">
                 <span className="formula-result__label">{r.label}</span>
-                <span className="formula-result__val">{display}</span>
+                <span className="formula-result__val">
+                  {ready && Number.isFinite(value) ? (
+                    <AnimatedNumber
+                      value={value}
+                      duration={450}
+                      format={(n) => `${formatCalculatorNumber(n)}${suffix}`}
+                    />
+                  ) : (
+                    '—'
+                  )}
+                </span>
               </div>
               <code className="formula-result__formula">{r.formula}</code>
               <p className="formula-hint">{r.hint}</p>

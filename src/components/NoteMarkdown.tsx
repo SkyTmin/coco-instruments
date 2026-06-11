@@ -4,6 +4,7 @@ import type { Note, NoteAttachment } from '@/types';
 import { normalizeNoteTitle } from '@/lib/notes-graph';
 import { parseBlocks, safeHref, safeImageSrc } from '@/lib/notes-markdown';
 import type { Block, Inline } from '@/lib/notes-markdown';
+import { tagColor } from '@/lib/tag-color';
 
 interface Props {
   body: string;
@@ -13,6 +14,8 @@ interface Props {
   onOpenMissing: (title: string) => void;
   onTag: (tag: string) => void;
   onToggleTask: (index: number) => void;
+  /** Open a deep link to one message ([[msg:…]] chips). */
+  onOpenMessage?: (kind: 'n' | 't', ref: string, messageId: string) => void;
 }
 
 function resolveImage(src: string, attachments: NoteAttachment[]): string | undefined {
@@ -32,6 +35,7 @@ export function NoteMarkdown({
   onOpenMissing,
   onTag,
   onToggleTask,
+  onOpenMessage,
 }: Props) {
   const blocks = useMemo(() => parseBlocks(body), [body]);
   const byTitle = useMemo(
@@ -58,12 +62,20 @@ export function NoteMarkdown({
               {node.v}
             </code>
           );
-        case 'tag':
+        case 'tag': {
+          const tc = tagColor(node.v);
           return (
-            <button key={i} type="button" className="md-tag" onClick={() => onTag(node.v)}>
+            <button
+              key={i}
+              type="button"
+              className="md-tag"
+              style={{ color: tc.stroke, background: tc.chipBg }}
+              onClick={() => onTag(node.v)}
+            >
               #{node.v}
             </button>
           );
+        }
         case 'link': {
           const href = safeHref(node.href);
           return href ? (
@@ -79,7 +91,12 @@ export function NoteMarkdown({
           const label = node.alias || node.target;
           if (found) {
             return (
-              <button key={i} type="button" className="md-wiki" onClick={() => onOpenNote(found.id)}>
+              <button
+                key={i}
+                type="button"
+                className="md-wiki"
+                onClick={() => onOpenNote(found.id)}
+              >
                 {label}
               </button>
             );
@@ -92,6 +109,24 @@ export function NoteMarkdown({
               onClick={() => onOpenMissing(node.target)}
             >
               {label}
+            </button>
+          );
+        }
+        case 'msglink': {
+          const targetNote = node.kind === 'n' ? notes.find((n) => n.id === node.ref) : undefined;
+          const label = node.kind === 'n' ? (targetNote?.title ?? 'сообщение') : `#${node.ref}`;
+          return (
+            <button
+              key={i}
+              type="button"
+              className="md-msglink"
+              onClick={() => {
+                if (onOpenMessage) onOpenMessage(node.kind, node.ref, node.mid);
+                else if (node.kind === 'n' && targetNote) onOpenNote(targetNote.id);
+                else if (node.kind === 't') onTag(node.ref);
+              }}
+            >
+              ↩ {label}
             </button>
           );
         }
@@ -111,7 +146,7 @@ export function NoteMarkdown({
   const renderBlock = (block: Block, key: number): ReactNode => {
     switch (block.t) {
       case 'h': {
-        const Tag = (`h${block.level}` as 'h1' | 'h2' | 'h3');
+        const Tag = `h${block.level}` as 'h1' | 'h2' | 'h3';
         return (
           <Tag key={key} className={`md-h md-h${block.level}`}>
             {renderInline(block.c)}

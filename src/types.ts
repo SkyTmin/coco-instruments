@@ -209,8 +209,26 @@ export interface FinanceRemindersBlob {
 export interface Note {
   id: string;
   title: string;
+  /** Combined text of all messages — kept in sync, used for tag/link parsing. */
   body: string;
   attachments?: NoteAttachment[];
+  /** Chat messages. Legacy notes have only `body`/`attachments` and migrate lazily. */
+  messages?: NoteMessage[];
+  /** Optional notebook/list this note belongs to. */
+  listId?: string;
+  /** Pinned to the top of the notes list. */
+  pinned?: boolean;
+  /** Graph: hide this note's dependency closure (collapsed via long-press). */
+  depsHidden?: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A notebook: a named group of notes with its own graph. */
+export interface NoteList {
+  id: string;
+  name: string;
+  emoji?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -228,9 +246,49 @@ export interface Attachment {
 /** Notes historically called it NoteAttachment — keep the alias. */
 export type NoteAttachment = Attachment;
 
+/** One side of a flip-card: a photo, a text, or both (text over the photo). */
+export interface NoteCardSide {
+  text?: string;
+  photo?: NoteAttachment;
+}
+
+/** A two-sided flip-card message: tap flips front ⇄ back. */
+export interface NoteCard {
+  front: NoteCardSide;
+  back: NoteCardSide;
+}
+
+/** One message in a note/tag "chat": text and/or photos, sent at a time. */
+export interface NoteMessage {
+  id: string;
+  text: string;
+  attachments?: NoteAttachment[];
+  createdAt: number;
+  editedAt?: number;
+  /** Pinned to the top bar of the chat (like Telegram). */
+  pinned?: boolean;
+  /** Replied-to message id (quote shown above the bubble). */
+  replyToId?: string;
+  /** When present the message renders as a flip-card instead of a bubble. */
+  card?: NoteCard;
+}
+
+/** A tag's own page: a chat of messages (with a legacy text body kept in sync
+ *  for tag/link parsing). Keyed by the normalised tag path, e.g. "здоровье/горло". */
+export interface TagPage {
+  tag: string;
+  body: string;
+  attachments?: NoteAttachment[];
+  messages?: NoteMessage[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface NotesBlob {
   version: 1;
   items: Note[];
+  lists?: NoteList[];
+  tagPages?: TagPage[];
 }
 
 // ---- People: personal relationship base ----------------------------------
@@ -253,7 +311,13 @@ export type ConversationImportance = 'low' | 'normal' | 'high';
 export type ConversationMood = 'warm' | 'neutral' | 'hard' | 'happy';
 export type PersonPromiseStatus = 'open' | 'done' | 'cancelled';
 export type MeetIdeaStatus = 'idea' | 'planned' | 'done';
-export type PersonRelationType = 'friend' | 'relative' | 'colleague' | 'acquaintance' | 'couple' | 'other';
+export type PersonRelationType =
+  | 'friend'
+  | 'relative'
+  | 'colleague'
+  | 'acquaintance'
+  | 'couple'
+  | 'other';
 
 /** A person in the private relationship base, not a phonebook contact. */
 export interface Person {

@@ -97,31 +97,47 @@ export function ExpenseDetailPage() {
   const removeExpense = useFinanceStore((s) => s.removeExpense);
   const updateExpense = useFinanceStore((s) => s.updateExpense);
 
-  const [sheet, setSheet] = useState<{ mode: 'add' } | { mode: 'edit'; payment: Payment } | null>(null);
+  const [sheet, setSheet] = useState<{ mode: 'add' } | { mode: 'edit'; payment: Payment } | null>(
+    null,
+  );
   const [confirmDel, setConfirmDel] = useState(false);
 
   if (!obligation || !id) return <Navigate to="/finance/expenses" replace />;
   const c = computeObligation(obligation);
   const closed = obligation.status === 'closed';
-  const payments = [...obligation.payments].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const payments = [...obligation.payments].sort((a, b) =>
+    (b.date || '').localeCompare(a.date || ''),
+  );
 
   return (
     <Screen
       title={obligation.name}
       action={
-        closed ? <span className="badge badge--closed">Завершён</span> : <TypeBadge type={obligation.type} />
+        closed ? (
+          <span className="badge badge--closed">Завершён</span>
+        ) : (
+          <TypeBadge type={obligation.type} />
+        )
       }
     >
       <div className="stack">
         <div className="card">
           <div className="row" style={{ justifyContent: 'space-between', marginBottom: 4 }}>
-            <span className="muted" style={{ fontSize: 13 }}>Прогресс выплаты</span>
+            <span className="muted" style={{ fontSize: 13 }}>
+              Прогресс выплаты
+            </span>
             <span style={{ fontWeight: 800 }}>{c.progressPercent}%</span>
           </div>
           <ProgressBar percent={c.progressPercent} large />
           <div className="stat-grid" style={{ marginTop: 14 }}>
-            <StatTile label="Осталось" value={<AnimatedNumber value={c.remaining} format={formatRUB} />} />
-            <StatTile label="Выплачено" value={<AnimatedNumber value={c.paidSoFar} format={formatRUB} />} />
+            <StatTile
+              label="Осталось"
+              value={<AnimatedNumber value={c.remaining} format={formatRUB} />}
+            />
+            <StatTile
+              label="Выплачено"
+              value={<AnimatedNumber value={c.paidSoFar} format={formatRUB} />}
+            />
             <StatTile label="Итого к выплате" value={formatRUB(c.totalToPay)} />
             <StatTile label="Переплата" value={formatRUB(c.totalOverpayment)} />
           </div>
@@ -148,7 +164,9 @@ export function ExpenseDetailPage() {
             {c.derivedInterestRate != null && (
               <div className="stat-row">
                 <span className="stat-row__label">Эффективная ставка</span>
-                <span className="stat-row__value">≈ {c.derivedInterestRate.toFixed(1)}% годовых</span>
+                <span className="stat-row__value">
+                  ≈ {c.derivedInterestRate.toFixed(1)}% годовых
+                </span>
               </div>
             )}
           </div>
@@ -171,7 +189,9 @@ export function ExpenseDetailPage() {
         <div className="section-label">Платежи</div>
         <div className="card">
           {payments.length === 0 ? (
-            <div className="muted center" style={{ padding: '8px 0' }}>Платежей пока нет</div>
+            <div className="muted center" style={{ padding: '8px 0' }}>
+              Платежей пока нет
+            </div>
           ) : (
             payments.map((p) => (
               <div
@@ -245,7 +265,11 @@ export function ExpenseDetailPage() {
               <IconPencil size={18} /> Изменить
             </span>
           </button>
-          <button className="btn btn--danger" onClick={() => setConfirmDel(true)} aria-label="Удалить">
+          <button
+            className="btn btn--danger"
+            onClick={() => setConfirmDel(true)}
+            aria-label="Удалить"
+          >
             <IconTrash size={18} />
           </button>
         </div>
@@ -260,7 +284,8 @@ export function ExpenseDetailPage() {
               updatePayment(id, sheet.payment.id, data);
             } else {
               addPayment(id, data);
-              if (!data.isPreliminary && c.remaining > 0 && data.amount >= c.remaining) burstConfetti();
+              if (!data.isPreliminary && c.remaining > 0 && data.amount >= c.remaining)
+                burstConfetti();
             }
             notifySuccess();
             setSheet(null);

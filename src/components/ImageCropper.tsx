@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { registerEscape } from '@/lib/escape-stack';
 import { selectionChanged, tapMedium } from '@/lib/haptics';
 import {
   cropToSource,
@@ -38,6 +39,11 @@ export function ImageCropper({
   const imgRef = useRef<HTMLImageElement>(null);
   const drag = useRef<{ mode: Mode; sx: number; sy: number; r0: Crop; pid: number } | null>(null);
   const inited = useRef(false);
+
+  // Esc cancels the crop like any other overlay.
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
+  useEffect(() => registerEscape(() => cancelRef.current()), []);
 
   const [url, setUrl] = useState('');
   const [imgRect, setImgRect] = useState<Rect>({ x: 0, y: 0, w: 0, h: 0 });
@@ -149,8 +155,15 @@ export function ImageCropper({
         <button type="button" className="cropper__act" onClick={reset} disabled={busy}>
           Сбросить
         </button>
-        <span className="cropper__title">Обрезать фото{total > 1 ? ` · ${index + 1}/${total}` : ''}</span>
-        <button type="button" className="cropper__act" onClick={() => !busy && onSkip()} disabled={busy}>
+        <span className="cropper__title">
+          Обрезать фото{total > 1 ? ` · ${index + 1}/${total}` : ''}
+        </span>
+        <button
+          type="button"
+          className="cropper__act"
+          onClick={() => !busy && onSkip()}
+          disabled={busy}
+        >
           Пропустить
         </button>
       </div>

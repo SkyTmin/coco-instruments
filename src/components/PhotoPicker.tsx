@@ -48,7 +48,9 @@ export function PhotoPicker({
     try {
       const res = await fetch(attachmentHref(photo));
       const blob = await res.blob();
-      await pickAndCrop(new File([blob], photo.name || 'photo.jpg', { type: blob.type || 'image/jpeg' }));
+      await pickAndCrop(
+        new File([blob], photo.name || 'photo.jpg', { type: blob.type || 'image/jpeg' }),
+      );
     } catch {
       notifyWarning();
     }
@@ -67,7 +69,11 @@ export function PhotoPicker({
           >
             Заменить
           </button>
-          <button type="button" className="photo-pick__btn photo-pick__crop" onClick={() => void recrop()}>
+          <button
+            type="button"
+            className="photo-pick__btn photo-pick__crop"
+            onClick={() => void recrop()}
+          >
             Обрезать
           </button>
           <button

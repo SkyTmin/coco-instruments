@@ -146,6 +146,20 @@ systemctl enable coco >/dev/null 2>&1 || true
 systemctl enable --now coco-backup.timer >/dev/null 2>&1 || true
 systemctl restart coco
 
+echo "==> Waiting for the app to come up"
+for i in $(seq 1 15); do
+  if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
+    echo "==> App is healthy"
+    break
+  fi
+  if [ "$i" = 15 ]; then
+    echo "!! App failed to respond on /api/health after restart" >&2
+    journalctl -u coco -n 30 --no-pager >&2 || true
+    exit 1
+  fi
+  sleep 2
+done
+
 echo "==> Writing /etc/caddy/Caddyfile"
 cat > /etc/caddy/Caddyfile <<EOF
 $DOMAIN {

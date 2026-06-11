@@ -56,7 +56,10 @@ export function WardrobeItemDetailPage() {
           <div className="item-photo item-photo--ph">{CATEGORY_EMOJI[item.category]}</div>
         )}
 
-        <button className="btn btn--primary btn--block" onClick={() => go(`/clothing/compose?from=${id}`)}>
+        <button
+          className="btn btn--primary btn--block"
+          onClick={() => go(`/clothing/compose?from=${id}`)}
+        >
           <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
             <IconSparkles size={18} /> Собрать образ с этой вещью
           </span>
@@ -72,7 +75,10 @@ export function WardrobeItemDetailPage() {
         </button>
 
         <div className="card">
-          <StatRow label="Категория" value={`${CATEGORY_EMOJI[item.category]} ${CATEGORY_LABEL[item.category]}`} />
+          <StatRow
+            label="Категория"
+            value={`${CATEGORY_EMOJI[item.category]} ${CATEGORY_LABEL[item.category]}`}
+          />
           {item.color && <StatRow label="Цвет" value={item.color} />}
           {item.season && <StatRow label="Сезон" value={SEASON_LABEL[item.season]} />}
           {item.brand && <StatRow label="Бренд" value={item.brand} />}
@@ -87,9 +93,7 @@ export function WardrobeItemDetailPage() {
 
         <div className="card">
           <div className="section-label" style={{ margin: '0 0 10px' }}>
-            {inOutfits.length
-              ? `Образы с этой вещью · ${inOutfits.length}`
-              : 'Образы с этой вещью'}
+            {inOutfits.length ? `Образы с этой вещью · ${inOutfits.length}` : 'Образы с этой вещью'}
           </div>
           {inOutfits.length ? (
             <div className="cl-hscroll">
@@ -100,7 +104,11 @@ export function WardrobeItemDetailPage() {
                   role="button"
                   onClick={() => go(`/clothing/outfits/${o.id}`)}
                 >
-                  {o.cover ? <Photo src={attachmentHref(o.cover)} /> : <div className="outfit-card__ph">🧥</div>}
+                  {o.cover ? (
+                    <Photo src={attachmentHref(o.cover)} />
+                  ) : (
+                    <div className="outfit-card__ph">🧥</div>
+                  )}
                   <div className="outfit-card__overlay">
                     <div className="outfit-card__name">{o.name}</div>
                   </div>
@@ -121,7 +129,11 @@ export function WardrobeItemDetailPage() {
             </div>
             <div className="chips">
               {inCollections.map((c) => (
-                <button key={c.id} className="note-chip" onClick={() => go(`/clothing/collections/${c.id}`)}>
+                <button
+                  key={c.id}
+                  className="note-chip"
+                  onClick={() => go(`/clothing/collections/${c.id}`)}
+                >
                   {c.emoji ? `${c.emoji} ` : ''}
                   {c.name}
                 </button>
@@ -131,7 +143,11 @@ export function WardrobeItemDetailPage() {
         )}
 
         <div className="row" style={{ gap: 12, marginTop: 8 }}>
-          <button className="btn btn--block" style={{ flex: 1 }} onClick={() => go(`/clothing/wardrobe/${id}/edit`)}>
+          <button
+            className="btn btn--block"
+            style={{ flex: 1 }}
+            onClick={() => go(`/clothing/wardrobe/${id}/edit`)}
+          >
             <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
               <IconPencil size={18} /> Изменить
             </span>

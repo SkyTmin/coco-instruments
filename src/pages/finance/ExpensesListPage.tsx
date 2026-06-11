@@ -46,7 +46,10 @@ export function ExpensesListPage() {
   return (
     <Screen title="Мои расходы">
       <div className="tabs">
-        <button className={`tabs__tab${tab === 'once' ? ' is-active' : ''}`} onClick={() => switchTab('once')}>
+        <button
+          className={`tabs__tab${tab === 'once' ? ' is-active' : ''}`}
+          onClick={() => switchTab('once')}
+        >
           Платежи
         </button>
         <button
@@ -123,7 +126,9 @@ export function ExpensesListPage() {
           </div>
         ))}
 
-      <Fab onClick={() => go(tab === 'once' ? '/finance/expenses/new' : '/finance/recurring/new')} />
+      <Fab
+        onClick={() => go(tab === 'once' ? '/finance/expenses/new' : '/finance/recurring/new')}
+      />
 
       {confirm && (
         <ConfirmDialog

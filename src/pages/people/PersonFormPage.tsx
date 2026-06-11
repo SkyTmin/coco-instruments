@@ -122,11 +122,18 @@ export function PersonFormPage() {
 
       <div className="field">
         <label className="field__label">День рождения</label>
-        <input className="input" type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+        <input
+          className="input"
+          type="date"
+          value={birthday}
+          onChange={(e) => setBirthday(e.target.value)}
+        />
       </div>
 
       <div className="field">
-        <label className="field__label">{existing ? 'Кто это для меня?' : 'Короткая заметка'}</label>
+        <label className="field__label">
+          {existing ? 'Кто это для меня?' : 'Короткая заметка'}
+        </label>
         <textarea
           className="input people-textarea"
           value={description}
@@ -140,15 +147,30 @@ export function PersonFormPage() {
         <>
           <div className="field">
             <label className="field__label">Телефон</label>
-            <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7..." />
+            <input
+              className="input"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+7..."
+            />
           </div>
           <div className="field">
             <label className="field__label">Telegram / соцсети</label>
-            <input className="input" value={socials} onChange={(e) => setSocials(e.target.value)} placeholder="@username, Instagram..." />
+            <input
+              className="input"
+              value={socials}
+              onChange={(e) => setSocials(e.target.value)}
+              placeholder="@username, Instagram..."
+            />
           </div>
           <div className="field">
             <label className="field__label">Город</label>
-            <input className="input" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Москва" />
+            <input
+              className="input"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Москва"
+            />
           </div>
         </>
       )}
@@ -166,7 +188,11 @@ export function PersonFormPage() {
       {existing && (
         <label className="toggle-row">
           <span>Закрепить в избранное</span>
-          <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={favorite}
+            onChange={(e) => setFavorite(e.target.checked)}
+          />
         </label>
       )}
 

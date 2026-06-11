@@ -13,6 +13,7 @@ export type Inline =
   | { t: 'del'; c: Inline[] }
   | { t: 'code'; v: string }
   | { t: 'wiki'; target: string; alias?: string; section?: string }
+  | { t: 'msglink'; kind: 'n' | 't'; ref: string; mid: string }
   | { t: 'tag'; v: string }
   | { t: 'link'; href: string; label: string }
   | { t: 'image'; src: string; alt: string };
@@ -36,10 +37,12 @@ const TASK_RE = /^\s*[-*]\s+\[([ xX])\]\s+(.*)$/;
 const UL_RE = /^\s*[-*]\s+(.*)$/;
 const OL_RE = /^\s*\d+\.\s+(.*)$/;
 const FENCE_RE = /^```(.*)$/;
-const TAG_SPLIT_RE = /(^|[^#\p{L}\p{N}_-])#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,31})/gu;
+const TAG_SPLIT_RE = /(^|[^#\p{L}\p{N}_-])#([\p{L}\p{N}_][\p{L}\p{N}_/-]{0,63})/gu;
 
 const SAFE_LINK = /^(https?:|mailto:|tel:)/i;
-const SAFE_IMG = /^(https?:|data:image\/|blob:|attachment:)/i;
+// Allow http(s)/data/blob/attachment, plus same-origin root paths like
+// `/uploads/...` (server-stored photos) — but never protocol-relative `//host`.
+const SAFE_IMG = /^(https?:|data:image\/|blob:|attachment:|\/(?!\/))/i;
 
 /** Restrict hrefs so a [label](javascript:…) can never produce a live link. */
 export function safeHref(href: string): string | undefined {
@@ -47,6 +50,15 @@ export function safeHref(href: string): string | undefined {
 }
 export function safeImageSrc(src: string): string | undefined {
   return SAFE_IMG.test(src.trim()) ? src.trim() : undefined;
+}
+
+/** Strip inline image tokens `![alt](src)` — used when migrating a legacy body
+ *  (which embedded photos as markdown) into chat messages (photos as bubbles). */
+export function stripImageTokens(body: string): string {
+  return body
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 // ---- inline -----------------------------------------------------------------
@@ -57,7 +69,10 @@ interface TokenMatch {
   node: Inline;
 }
 
-function firstOf(text: string, ...res: { re: RegExp; make: (m: RegExpExecArray) => Inline }[]): TokenMatch | null {
+function firstOf(
+  text: string,
+  ...res: { re: RegExp; make: (m: RegExpExecArray) => Inline }[]
+): TokenMatch | null {
   let best: TokenMatch | null = null;
   for (const { re, make } of res) {
     re.lastIndex = 0;
@@ -70,6 +85,12 @@ function firstOf(text: string, ...res: { re: RegExp; make: (m: RegExpExecArray) 
 }
 
 function parseWiki(inner: string): Inline {
+  // [[msg:n:<noteId>:<messageId>]] / [[msg:t:<tag>:<messageId>]] — a deep link
+  // to one message in a note/tag chat ("copy link" in the message menu).
+  const msg = /^msg:(n|t):(.+):([A-Za-z0-9_-]+)$/.exec(inner.trim());
+  if (msg) {
+    return { t: 'msglink', kind: msg[1] as 'n' | 't', ref: msg[2], mid: msg[3] };
+  }
   const [lhs, alias] = inner.split('|');
   const [target, section] = lhs.split('#');
   return {
@@ -78,6 +99,11 @@ function parseWiki(inner: string): Inline {
     alias: alias?.trim() || undefined,
     section: section?.trim() || undefined,
   };
+}
+
+/** Build the copyable token that links to one message. */
+export function buildMessageLink(kind: 'n' | 't', ref: string, messageId: string): string {
+  return `[[msg:${kind}:${ref}:${messageId}]]`;
 }
 
 /** Split a plain run into text + #tag inlines (tags only after a boundary). */
@@ -90,7 +116,8 @@ function splitTags(text: string): Inline[] {
     const lead = m[1];
     const start = m.index + lead.length; // position of '#'
     if (start > last) out.push({ t: 'text', v: text.slice(last, start) });
-    out.push({ t: 'tag', v: m[2] });
+    // Tidy hierarchy separators but keep the author's casing for display.
+    out.push({ t: 'tag', v: m[2].replace(/\/{2,}/g, '/').replace(/^\/+|\/+$/g, '') });
     last = m.index + m[0].length;
   }
   if (last < text.length) out.push({ t: 'text', v: text.slice(last) });
@@ -115,7 +142,10 @@ export function parseInline(input: string): Inline[] {
       { re: /`([^`\n]+)`/, make: (x) => ({ t: 'code', v: x[1] }) },
       { re: /!\[([^\]\n]*)\]\(([^)\s\n]+)\)/, make: (x) => ({ t: 'image', src: x[2], alt: x[1] }) },
       { re: /\[\[([^\]\n]+?)\]\]/, make: (x) => parseWiki(x[1]) },
-      { re: /\[([^\]\n]+)\]\(([^)\s\n]+)\)/, make: (x) => ({ t: 'link', label: x[1], href: x[2] }) },
+      {
+        re: /\[([^\]\n]+)\]\(([^)\s\n]+)\)/,
+        make: (x) => ({ t: 'link', label: x[1], href: x[2] }),
+      },
       { re: /\*\*([^\n]+?)\*\*/, make: (x) => ({ t: 'strong', c: parseInline(x[1]) }) },
       { re: /__([^\n]+?)__/, make: (x) => ({ t: 'strong', c: parseInline(x[1]) }) },
       { re: /~~([^\n]+?)~~/, make: (x) => ({ t: 'del', c: parseInline(x[1]) }) },
@@ -278,7 +308,7 @@ export function noteExcerpt(body: string): string {
     .replace(/^\s*#{1,3}\s+/gm, '')
     .replace(/^\s*>\s?/gm, '')
     .replace(/(\*\*|__|~~|`|\*)/g, '')
-    .replace(/(^|[^#\p{L}\p{N}_-])#[\p{L}\p{N}_][\p{L}\p{N}_-]{0,31}/gu, '$1')
+    .replace(/(^|[^#\p{L}\p{N}_-])#[\p{L}\p{N}_][\p{L}\p{N}_/-]{0,63}/gu, '$1')
     .replace(/\s+/g, ' ')
     .trim();
 }

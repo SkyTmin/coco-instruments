@@ -33,7 +33,7 @@ export function WishlistPage() {
         <EmptyState icon="✨" title="Пока пусто" sub="Добавьте вещи, которые хотите купить" />
       ) : (
         <div className="stack">
-          {wishlist.map((w) => (
+          {wishlist.map((w, index) => (
             <SwipeRow
               key={w.id}
               onTap={() => {
@@ -52,9 +52,14 @@ export function WishlistPage() {
                 },
               ]}
             >
-              <div className="wish-row">
+              <div className="wish-row" style={{ animationDelay: `${Math.min(index, 10) * 26}ms` }}>
                 {w.photo ? (
-                  <img className="wish-row__thumb" src={attachmentHref(w.photo)} alt="" loading="lazy" />
+                  <img
+                    className="wish-row__thumb"
+                    src={attachmentHref(w.photo)}
+                    alt=""
+                    loading="lazy"
+                  />
                 ) : (
                   <div className="wish-row__thumb wish-row__thumb--ph">✨</div>
                 )}
@@ -74,7 +79,9 @@ export function WishlistPage() {
                       </span>
                     )}
                     {w.outfitId && outfitName.has(w.outfitId) && (
-                      <span className="wish-badge wish-badge--outfit">🧥 {outfitName.get(w.outfitId)}</span>
+                      <span className="wish-badge wish-badge--outfit">
+                        🧥 {outfitName.get(w.outfitId)}
+                      </span>
                     )}
                   </div>
                 </div>

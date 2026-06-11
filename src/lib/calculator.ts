@@ -31,7 +31,18 @@ const CONSTANTS: Record<string, number> = {
   e: Math.E,
 };
 
-const FUNCTIONS = new Set(['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'ln', 'log', 'sqrt', 'abs']);
+const FUNCTIONS = new Set([
+  'sin',
+  'cos',
+  'tan',
+  'asin',
+  'acos',
+  'atan',
+  'ln',
+  'log',
+  'sqrt',
+  'abs',
+]);
 
 function normalizeExpression(input: string): string {
   return input
@@ -139,7 +150,8 @@ class Parser {
     while (this.matchOperator('*') || this.matchOperator('/')) {
       const op = this.previous().value;
       const right = this.parsePower();
-      if (op === '/' && Math.abs(right) < Number.EPSILON) throw new CalculatorError('Деление на ноль');
+      if (op === '/' && Math.abs(right) < Number.EPSILON)
+        throw new CalculatorError('Деление на ноль');
       left = op === '*' ? left * right : left / right;
     }
     return left;
@@ -291,14 +303,18 @@ class Parser {
 }
 
 function factorial(value: number): number {
-  if (!Number.isInteger(value) || value < 0) throw new CalculatorError('Факториал только для целых');
+  if (!Number.isInteger(value) || value < 0)
+    throw new CalculatorError('Факториал только для целых');
   if (value > 170) throw new CalculatorError('Слишком большое число');
   let result = 1;
   for (let i = 2; i <= value; i += 1) result *= i;
   return result;
 }
 
-export function evaluateExpression(input: string, options: CalculatorEvalOptions = {}): CalculatorEvalResult {
+export function evaluateExpression(
+  input: string,
+  options: CalculatorEvalOptions = {},
+): CalculatorEvalResult {
   const parser = new Parser(tokenizeExpression(input), options);
   const value = parser.parse();
   return { value, formatted: formatCalculatorNumber(value) };

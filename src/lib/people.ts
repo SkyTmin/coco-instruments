@@ -38,7 +38,9 @@ export const PERSON_CATEGORY_EMOJI: Record<PersonCategory, string> = {
 
 export function personCategories(person: Person): PersonCategory[] {
   const values = person.categories?.length ? person.categories : [person.category];
-  return Array.from(new Set(values)).filter((category): category is PersonCategory => category in PERSON_CATEGORY_LABEL);
+  return Array.from(new Set(values)).filter(
+    (category): category is PersonCategory => category in PERSON_CATEGORY_LABEL,
+  );
 }
 
 export function personCategoryLabel(person: Person): string {
@@ -118,7 +120,8 @@ export function nextBirthday(person: Person, from = new Date()) {
   const today = new Date(from);
   today.setHours(0, 0, 0, 0);
   let next = new Date(today.getFullYear(), birthday.getMonth(), birthday.getDate());
-  if (next < today) next = new Date(today.getFullYear() + 1, birthday.getMonth(), birthday.getDate());
+  if (next < today)
+    next = new Date(today.getFullYear() + 1, birthday.getMonth(), birthday.getDate());
   const days = Math.round((next.getTime() - today.getTime()) / 86400000);
   return { date: toISO(next), days, label: days === 0 ? 'сегодня' : relativeDay(toISO(next)) };
 }
@@ -218,11 +221,7 @@ export function peopleUpcomingEvents(input: {
     .sort((a, b) => a.days - b.days || a.title.localeCompare(b.title, 'ru'));
 }
 
-export function peopleStats(input: {
-  people: Person[];
-  gifts: Gift[];
-  promises: PersonPromise[];
-}) {
+export function peopleStats(input: { people: Person[]; gifts: Gift[]; promises: PersonPromise[] }) {
   return {
     people: input.people.length,
     birthdays: input.people.filter((person) => !!person.birthday).length,

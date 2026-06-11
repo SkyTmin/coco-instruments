@@ -1,9 +1,29 @@
-import type { Conversation, Gift, MeetIdea, Note, Person, PersonNoteLink, PersonPromise, PersonRelation } from '@/types';
+import type {
+  Conversation,
+  Gift,
+  MeetIdea,
+  Note,
+  NoteList,
+  Person,
+  PersonNoteLink,
+  PersonPromise,
+  PersonRelation,
+} from '@/types';
 
-export type NoteGraphNodeKind = 'note' | 'missing' | 'tag' | 'person' | 'gift' | 'promise' | 'event';
+export type NoteGraphNodeKind =
+  | 'note'
+  | 'missing'
+  | 'tag'
+  | 'person'
+  | 'gift'
+  | 'promise'
+  | 'event'
+  | 'list'
+  | 'people';
 export type NoteGraphLinkKind =
   | 'wiki'
   | 'tag'
+  | 'list'
   | 'person-note'
   | 'person-gift'
   | 'person-promise'
@@ -16,6 +36,9 @@ export interface NoteGraphNode {
   label: string;
   note?: Note;
   person?: Person;
+  /** For 'list' nodes: the notebook and how many notes it holds. */
+  list?: NoteList;
+  count?: number;
   degree: number;
   incoming: number;
   outgoing: number;
@@ -69,7 +92,8 @@ export interface PeopleGraphData {
 }
 
 const WIKI_LINK_RE = /\[\[([^[\]]+?)\]\]/g;
-const TAG_RE = /(^|[^#\p{L}\p{N}_-])#([\p{L}\p{N}_][\p{L}\p{N}_-]{0,31})/gu;
+// Tags may be hierarchical, Obsidian-style: #парент/чайлд/внук.
+const TAG_RE = /(^|[^#\p{L}\p{N}_-])#([\p{L}\p{N}_][\p{L}\p{N}_/-]{0,63})/gu;
 
 export const personNodeId = (personId: string) => `person:${personId}`;
 export const giftNodeId = (giftId: string) => `gift:${giftId}`;
@@ -96,10 +120,28 @@ export function parseWikiLinks(body: string): string[] {
 export function parseNoteTags(body: string): string[] {
   const tags: string[] = [];
   for (const match of body.matchAll(TAG_RE)) {
-    const raw = match[2].trim().toLocaleLowerCase('ru-RU');
+    // Normalise hierarchy: lowercase, collapse `//`, drop leading/trailing `/`.
+    const raw = match[2]
+      .toLocaleLowerCase('ru-RU')
+      .replace(/\/{2,}/g, '/')
+      .replace(/^\/+|\/+$/g, '')
+      .trim();
     if (raw) tags.push(raw);
   }
   return unique(tags);
+}
+
+/** Ancestor chain of a hierarchical tag (Obsidian-style `#parent/child`):
+ *  `a/b/c` → `['a', 'a/b', 'a/b/c']`. A flat tag returns just itself. */
+export function tagAncestry(tag: string): string[] {
+  const parts = tag.split('/').filter(Boolean);
+  const chain: string[] = [];
+  let prefix = '';
+  for (const part of parts) {
+    prefix = prefix ? `${prefix}/${part}` : part;
+    chain.push(prefix);
+  }
+  return chain;
 }
 
 export function buildNoteGraph(notes: Note[], peopleData?: PeopleGraphData): NoteGraph {
@@ -142,6 +184,16 @@ export function buildNoteGraph(notes: Note[], peopleData?: PeopleGraphData): Not
     return tagId;
   };
 
+  // Hierarchical tags: link the source to the full-path tag, then chain
+  // parent → child so a top-level tag becomes a hub over its sub-tags.
+  const addTag = (fromId: string, tag: string) => {
+    const chain = tagAncestry(tag);
+    if (!chain.length) return;
+    addLink(fromId, ensureTagNode(tag), 'tag');
+    for (let i = 1; i < chain.length; i++)
+      addLink(ensureTagNode(chain[i - 1]), ensureTagNode(chain[i]), 'tag');
+  };
+
   for (const note of notes) {
     for (const title of parseWikiLinks(note.body)) {
       const target = byTitle.get(normalizeNoteTitle(title));
@@ -163,10 +215,7 @@ export function buildNoteGraph(notes: Note[], peopleData?: PeopleGraphData): Not
       addLink(note.id, missingId, 'wiki');
     }
 
-    for (const tag of parseNoteTags(note.body)) {
-      const tagId = ensureTagNode(tag);
-      addLink(note.id, tagId, 'tag');
-    }
+    for (const tag of parseNoteTags(note.body)) addTag(note.id, tag);
   }
 
   if (peopleData) {
@@ -183,7 +232,7 @@ export function buildNoteGraph(notes: Note[], peopleData?: PeopleGraphData): Not
         incoming: 0,
         outgoing: 0,
       });
-      for (const tag of person.tags) addLink(id, ensureTagNode(tag.toLocaleLowerCase('ru-RU')), 'tag');
+      for (const tag of person.tags) addTag(id, tag.toLocaleLowerCase('ru-RU'));
     }
 
     for (const link of peopleData.noteLinks) {
@@ -249,7 +298,11 @@ export function buildNoteGraph(notes: Note[], peopleData?: PeopleGraphData): Not
 
     for (const relation of peopleData.relations) {
       if (!peopleById.has(relation.fromPersonId) || !peopleById.has(relation.toPersonId)) continue;
-      addLink(personNodeId(relation.fromPersonId), personNodeId(relation.toPersonId), 'person-relation');
+      addLink(
+        personNodeId(relation.fromPersonId),
+        personNodeId(relation.toPersonId),
+        'person-relation',
+      );
     }
   }
 
@@ -264,6 +317,198 @@ export function buildNoteGraph(notes: Note[], peopleData?: PeopleGraphData): Not
   }
 
   return { nodes: Array.from(nodes.values()), links: Array.from(links.values()) };
+}
+
+export const PEOPLE_NODE_ID = 'people:all';
+
+/** Top-level notes graph: each list is a single node, plus the loose (unlisted)
+ *  notes and their tags / wiki links. Links pointing at a note inside a list are
+ *  redirected to that list's node, so a whole notebook reads as one circle. All
+ *  people collapse into one "Люди" node (tap to open the full people graph),
+ *  connected to every note/notebook that references someone. */
+export function buildOverviewGraph(
+  notes: Note[],
+  lists: NoteList[],
+  people: Person[] = [],
+  noteLinks: PersonNoteLink[] = [],
+): NoteGraph {
+  const listById = new Map(lists.map((l) => [l.id, l]));
+  const repId = (note: Note) =>
+    note.listId && listById.has(note.listId) ? `list:${note.listId}` : note.id;
+
+  const nodes = new Map<string, NoteGraphNode>();
+  const links = new Map<string, NoteGraphLink>();
+  const byTitle = new Map<string, Note>();
+  for (const note of notes) {
+    const key = normalizeNoteTitle(note.title);
+    if (key && !byTitle.has(key)) byTitle.set(key, note);
+  }
+
+  const counts = new Map<string, number>();
+  for (const note of notes) {
+    if (note.listId && listById.has(note.listId))
+      counts.set(note.listId, (counts.get(note.listId) ?? 0) + 1);
+  }
+  for (const list of lists) {
+    nodes.set(`list:${list.id}`, {
+      id: `list:${list.id}`,
+      kind: 'list',
+      label: list.emoji ? `${list.emoji} ${list.name}` : list.name,
+      list,
+      count: counts.get(list.id) ?? 0,
+      degree: 0,
+      incoming: 0,
+      outgoing: 0,
+    });
+  }
+  for (const note of notes) {
+    if (note.listId && listById.has(note.listId)) continue;
+    nodes.set(note.id, {
+      id: note.id,
+      kind: 'note',
+      label: note.title,
+      note,
+      degree: 0,
+      incoming: 0,
+      outgoing: 0,
+    });
+  }
+
+  const addLink = (source: string, target: string, kind: NoteGraphLink['kind']) => {
+    if (source === target) return;
+    const id = `${source}->${target}:${kind}`;
+    if (!links.has(id)) links.set(id, { id, source, target, kind });
+  };
+  // Tags are an inside-the-list detail (they show in a list's own graph and on
+  // tag pages), so the overview stays high-level: lists, loose notes and people.
+  for (const note of notes) {
+    const src = repId(note);
+    for (const title of parseWikiLinks(note.body)) {
+      const target = byTitle.get(normalizeNoteTitle(title));
+      if (target) {
+        addLink(src, repId(target), 'wiki');
+        continue;
+      }
+      const missingId = `missing:${normalizeNoteTitle(title)}`;
+      if (!nodes.has(missingId))
+        nodes.set(missingId, {
+          id: missingId,
+          kind: 'missing',
+          label: title,
+          degree: 0,
+          incoming: 0,
+          outgoing: 0,
+        });
+      addLink(src, missingId, 'wiki');
+    }
+  }
+
+  // All people collapse into one node; connect it to whatever references them.
+  if (people.length) {
+    nodes.set(PEOPLE_NODE_ID, {
+      id: PEOPLE_NODE_ID,
+      kind: 'people',
+      label: '👥 Люди',
+      count: people.length,
+      degree: 0,
+      incoming: 0,
+      outgoing: 0,
+    });
+    const repById = new Map(notes.map((note) => [note.id, repId(note)]));
+    for (const link of noteLinks) {
+      const src = repById.get(link.noteId);
+      if (src) addLink(src, PEOPLE_NODE_ID, 'person-note');
+    }
+  }
+
+  for (const link of links.values()) {
+    const source = nodes.get(link.source);
+    const target = nodes.get(link.target);
+    if (!source || !target) continue;
+    source.outgoing += 1;
+    source.degree += 1;
+    target.incoming += 1;
+    target.degree += 1;
+  }
+
+  return { nodes: Array.from(nodes.values()), links: Array.from(links.values()) };
+}
+
+/** A single notebook's inner graph with the notebook itself as a central index
+ *  ("Map of Content"): the list node links to every note, so the notebook reads
+ *  as a hub and loose notes are never stranded — while wiki/tag links still pull
+ *  their own clusters together. */
+export function buildListGraph(list: NoteList, notes: Note[]): NoteGraph {
+  const base = buildNoteGraph(notes);
+  const hubId = `list:${list.id}`;
+  const hub: NoteGraphNode = {
+    id: hubId,
+    kind: 'list',
+    label: list.emoji ? `${list.emoji} ${list.name}` : list.name,
+    list,
+    count: notes.length,
+    degree: 0,
+    incoming: 0,
+    outgoing: 0,
+  };
+  const nodes = [hub, ...base.nodes];
+  const links = base.links.slice();
+  for (const note of notes) {
+    links.push({ id: `${hubId}->${note.id}:list`, source: hubId, target: note.id, kind: 'list' });
+  }
+  // Recompute degrees over the augmented graph.
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  for (const node of nodes) {
+    node.degree = 0;
+    node.incoming = 0;
+    node.outgoing = 0;
+  }
+  for (const link of links) {
+    const source = byId.get(link.source);
+    const target = byId.get(link.target);
+    if (!source || !target) continue;
+    source.outgoing += 1;
+    source.degree += 1;
+    target.incoming += 1;
+    target.degree += 1;
+  }
+  return { nodes, links };
+}
+
+/** People-focused graph (the "Люди" view): every person — with their gifts,
+ *  promises, events and inter-person relations — plus ONLY the notes actually
+ *  linked to someone. Unrelated notes are left out, so detaching a person from
+ *  a note also removes that note from this view. */
+export function buildPeopleGraph(notes: Note[], peopleData: PeopleGraphData): NoteGraph {
+  const linkedNoteIds = new Set(peopleData.noteLinks.map((link) => link.noteId));
+  const peopleNotes = notes.filter((note) => linkedNoteIds.has(note.id));
+  const graph = buildNoteGraph(peopleNotes, peopleData);
+
+  // A people-note may [[link]] to a note outside the circle — that would show
+  // as a dashed "missing" placeholder. Drop those so the view stays about people.
+  const drop = new Set(
+    graph.nodes.filter((node) => node.kind === 'missing').map((node) => node.id),
+  );
+  if (!drop.size) return graph;
+
+  const nodes = graph.nodes.filter((node) => !drop.has(node.id));
+  for (const node of nodes) {
+    node.degree = 0;
+    node.incoming = 0;
+    node.outgoing = 0;
+  }
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const links = graph.links.filter((link) => byId.has(link.source) && byId.has(link.target));
+  for (const link of links) {
+    const source = byId.get(link.source);
+    const target = byId.get(link.target);
+    if (!source || !target) continue;
+    source.outgoing += 1;
+    source.degree += 1;
+    target.incoming += 1;
+    target.degree += 1;
+  }
+  return { nodes, links };
 }
 
 export function getNoteRelations(note: Note | undefined, notes: Note[]): NoteRelations {
@@ -292,6 +537,47 @@ export function getNoteRelations(note: Note | undefined, notes: Note[]): NoteRel
   };
 }
 
+export interface TagPageRelations {
+  /** This title is used as a tag somewhere, or has sub-topics → it's a tag page. */
+  isTag: boolean;
+  /** Parent topic, if the title is itself a sub-topic (`здоровье/горло` → `здоровье`). */
+  parent?: string;
+  /** Direct sub-topics one level down (`здоровье` → `здоровье/горло`, `здоровье/нос`). */
+  children: string[];
+  /** Notes carrying this exact tag in their body. */
+  tagged: Note[];
+}
+
+/** A tag behaves like a page: this gathers everything that page should show —
+ *  its sub-topics, its parent topic, and every note tagged with it. */
+export function getTagPageRelations(title: string, notes: Note[]): TagPageRelations {
+  const key = normalizeNoteTitle(title);
+  if (!key) return { isTag: false, children: [], tagged: [] };
+  const childSet = new Set<string>();
+  const tagged = new Map<string, Note>();
+  const prefix = `${key}/`;
+
+  for (const note of notes) {
+    for (const tag of parseNoteTags(note.body)) {
+      if (tag === key) tagged.set(note.id, note);
+      if (tag.startsWith(prefix)) {
+        // Keep only the next segment down so we list direct children, not grandchildren.
+        const directChild = key + '/' + tag.slice(prefix.length).split('/')[0];
+        childSet.add(directChild);
+      }
+    }
+  }
+
+  const parent = key.includes('/') ? key.slice(0, key.lastIndexOf('/')) : undefined;
+  const children = Array.from(childSet).sort((a, b) => a.localeCompare(b, 'ru'));
+  return {
+    isTag: tagged.size > 0 || children.length > 0,
+    parent,
+    children,
+    tagged: Array.from(tagged.values()),
+  };
+}
+
 export function filterNoteGraph(
   graph: NoteGraph,
   options: {
@@ -316,6 +602,9 @@ export function filterNoteGraph(
       const next: string[] = [];
       for (const id of frontier) {
         for (const link of graph.links) {
+          // Index spokes (notebook → every note) aren't real adjacency — skip
+          // them so a local graph reflects genuine links, not the MOC hub.
+          if (link.kind === 'list') continue;
           const neighbor =
             link.source === id ? link.target : link.target === id ? link.source : undefined;
           if (neighbor && !allowed.has(neighbor)) {
@@ -336,11 +625,15 @@ export function filterNoteGraph(
     if (!options.showMissing && node.kind === 'missing') return false;
     if (!options.showTags && node.kind === 'tag') return false;
     if (options.showPeople === false && node.kind === 'person') return false;
-    if (options.showPeople === false && ['gift', 'promise', 'event'].includes(node.kind)) return false;
-    if (options.showDetails === false && ['gift', 'promise', 'event'].includes(node.kind)) return false;
+    if (options.showPeople === false && ['gift', 'promise', 'event'].includes(node.kind))
+      return false;
+    if (options.showDetails === false && ['gift', 'promise', 'event'].includes(node.kind))
+      return false;
     if (!query) return true;
     const body = node.note?.body ?? '';
-    const person = node.person ? `${node.person.description ?? ''} ${node.person.tags.join(' ')}` : '';
+    const person = node.person
+      ? `${node.person.description ?? ''} ${node.person.tags.join(' ')}`
+      : '';
     return normalizeNoteTitle(`${node.label} ${body} ${person}`).includes(query);
   });
 
@@ -349,6 +642,37 @@ export function filterNoteGraph(
     nodes,
     links: graph.links.filter((link) => visible.has(link.source) && visible.has(link.target)),
   };
+}
+
+/** Hide the "dependency closure" of every collapsed node — the things it points
+ *  to (wiki-links, tags) that only exist because of it. A node is hidden when
+ *  every edge pointing AT it comes from a collapsed-or-hidden node; nodes that
+ *  merely link to the collapsed node (its parents) and shared nodes stay. */
+export function collapseDependencies(graph: NoteGraph, collapsed: ReadonlySet<string>): NoteGraph {
+  if (!collapsed.size) return graph;
+  const incoming = new Map<string, string[]>();
+  for (const node of graph.nodes) incoming.set(node.id, []);
+  for (const link of graph.links) incoming.get(link.target)?.push(link.source);
+
+  const hidden = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of graph.nodes) {
+      if (collapsed.has(node.id) || hidden.has(node.id)) continue;
+      const sources = incoming.get(node.id);
+      if (!sources || sources.length === 0) continue; // a root / not depended-on → keep
+      if (sources.every((s) => collapsed.has(s) || hidden.has(s))) {
+        hidden.add(node.id);
+        changed = true;
+      }
+    }
+  }
+  if (!hidden.size) return graph;
+  const nodes = graph.nodes.filter((node) => !hidden.has(node.id));
+  const visible = new Set(nodes.map((node) => node.id));
+  const links = graph.links.filter((link) => visible.has(link.source) && visible.has(link.target));
+  return { nodes, links };
 }
 
 function hash(value: string): number {
@@ -374,6 +698,7 @@ const BOUNDS_PAD = 6;
 
 function linkDistance(kind: NoteGraphLinkKind): number {
   if (kind === 'tag') return 92;
+  if (kind === 'list') return 150;
   if (kind === 'person-relation') return 188;
   if (kind.startsWith('person-')) return 124;
   return 150; // wiki
@@ -381,13 +706,19 @@ function linkDistance(kind: NoteGraphLinkKind): number {
 
 function linkStiffness(kind: NoteGraphLinkKind): number {
   if (kind === 'tag') return 0.045;
+  if (kind === 'list') return 0.028; // gentle: gather notes around the index hub without overpowering wiki clusters
   if (kind === 'person-relation') return 0.05;
   if (kind.startsWith('person-')) return 0.06;
   return 0.08; // wiki — keep linked notes close
 }
 
 /** Visual radius of a node, scaled by how connected it is. */
-export function nodeRadius(node: Pick<NoteGraphNode, 'kind' | 'degree'>): number {
+export function nodeRadius(node: Pick<NoteGraphNode, 'kind' | 'degree' | 'count'>): number {
+  // A whole notebook (or all people) collapsed to one node — the biggest,
+  // sized by how many items it stands for.
+  if (node.kind === 'list' || node.kind === 'people') {
+    return Math.min(48, 20 + (node.count ?? 0) * 2.2 + node.degree * 1.1);
+  }
   const isDetail = node.kind === 'gift' || node.kind === 'promise' || node.kind === 'event';
   // Notes are first-class here, so they get the same heft as people.
   const big = node.kind === 'person' || node.kind === 'note';
@@ -428,7 +759,7 @@ export function simulationStep(
         raw = Math.sqrt(dx * dx + dy * dy) || 1;
       }
       const dist = Math.max(CHARGE_MIN_DIST, raw);
-      const force = ((CHARGE / dist) * alpha);
+      const force = (CHARGE / dist) * alpha;
       const fx = (dx / raw) * force;
       const fy = (dy / raw) * force;
       a.vx += fx;
@@ -534,7 +865,14 @@ export function layoutNoteGraph(
     }
     const angle = index * 2.399963229728653; // golden angle
     const ring = Math.min(maxRing, spread * Math.sqrt(index + 0.7));
-    return { ...node, x: cx + Math.cos(angle) * ring, y: cy + Math.sin(angle) * ring, vx: 0, vy: 0, r };
+    return {
+      ...node,
+      x: cx + Math.cos(angle) * ring,
+      y: cy + Math.sin(angle) * ring,
+      vx: 0,
+      vy: 0,
+      r,
+    };
   });
 
   // A fresh layout settles hard; an incremental one (positions carried over)

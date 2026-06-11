@@ -37,7 +37,9 @@ export function RecurringFormPage() {
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayISO());
   const [listId, setListId] = useState(existing?.listId ?? params.get('list') ?? '');
   const [notify, setNotify] = useState(existing?.notify ?? true);
-  const [notifyLeads, setNotifyLeads] = useState<number[]>(existing?.notifyLeads ?? reminderPrefs.leads);
+  const [notifyLeads, setNotifyLeads] = useState<number[]>(
+    existing?.notifyLeads ?? reminderPrefs.leads,
+  );
   const [notifyTime, setNotifyTime] = useState(
     existing?.notifyTime ??
       `${String(reminderPrefs.hour).padStart(2, '0')}:${String(reminderPrefs.minute).padStart(2, '0')}`,
@@ -48,18 +50,16 @@ export function RecurringFormPage() {
     if (num(amount) <= 0) return null;
     return {
       monthly: monthlyEquivalent(num(amount), c, unit),
-      next: computeRecurring(
-        {
-          id: 'p',
-          name,
-          amount: num(amount),
-          intervalCount: c,
-          intervalUnit: unit,
-          startDate: startDate || todayISO(),
-          createdAt: 0,
-          updatedAt: 0,
-        },
-      ).nextDue,
+      next: computeRecurring({
+        id: 'p',
+        name,
+        amount: num(amount),
+        intervalCount: c,
+        intervalUnit: unit,
+        startDate: startDate || todayISO(),
+        createdAt: 0,
+        updatedAt: 0,
+      }).nextDue,
     };
   }, [amount, c, unit, startDate, name]);
 
@@ -125,7 +125,9 @@ export function RecurringFormPage() {
           ))}
         </div>
         <div className="row" style={{ gap: 10, marginTop: 10, alignItems: 'center' }}>
-          <span className="muted" style={{ fontSize: 14 }}>Каждые</span>
+          <span className="muted" style={{ fontSize: 14 }}>
+            Каждые
+          </span>
           <input
             className="input"
             style={{ width: 90 }}
@@ -133,7 +135,9 @@ export function RecurringFormPage() {
             value={count}
             onChange={(e) => setCount(e.target.value)}
           />
-          <span className="muted" style={{ fontSize: 14, flex: 1 }}>{intervalLabel(c, unit).toLowerCase()}</span>
+          <span className="muted" style={{ fontSize: 14, flex: 1 }}>
+            {intervalLabel(c, unit).toLowerCase()}
+          </span>
         </div>
       </div>
 

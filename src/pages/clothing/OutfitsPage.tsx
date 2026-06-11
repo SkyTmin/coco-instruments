@@ -35,48 +35,64 @@ export function OutfitsPage() {
     >
       {outfits.length === 0 ? (
         <>
-          <EmptyState icon="🧍" title="Образов пока нет" sub="Соберите первый образ из вещей гардероба" />
+          <EmptyState
+            icon="🧍"
+            title="Образов пока нет"
+            sub="Соберите первый образ из вещей гардероба"
+          />
           <button className="btn btn--primary btn--block" onClick={() => go('/clothing/compose')}>
             <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
               <IconSparkles size={18} /> Собрать образ
             </span>
           </button>
-          <button className="btn btn--block" style={{ marginTop: 10 }} onClick={() => go('/clothing/outfits/new')}>
+          <button
+            className="btn btn--block"
+            style={{ marginTop: 10 }}
+            onClick={() => go('/clothing/outfits/new')}
+          >
             Загрузить фото образа
           </button>
         </>
       ) : (
         <>
-        {outfits.length >= 2 && (
-          <button className="compare-link" onClick={() => go('/clothing/compare')}>
-            <IconSwap size={16} /> Сравнить образы
-          </button>
-        )}
-        <div className="outfit-grid">
-          {sorted.map((o, i) => (
-            <div
-              key={o.id}
-              className="outfit-card"
-              style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
-              onClick={() => {
-                selectionChanged();
-                navigate(`/clothing/outfits/${o.id}`);
-              }}
-              role="button"
-            >
-              {o.cover ? <Photo src={attachmentHref(o.cover)} /> : <div className="outfit-card__ph">🧥</div>}
-              {o.favorite && <span className="outfit-card__fav" aria-hidden>♥</span>}
-              <div className="outfit-card__overlay">
-                <div className="outfit-card__name">{o.name}</div>
-                <div className="outfit-card__count">
-                  {o.itemIds.length
-                    ? `${o.itemIds.length} ${pluralizeRu(o.itemIds.length, ['вещь', 'вещи', 'вещей'])}`
-                    : 'фото-образ'}
+          {outfits.length >= 2 && (
+            <button className="compare-link" onClick={() => go('/clothing/compare')}>
+              <IconSwap size={16} /> Сравнить образы
+            </button>
+          )}
+          <div className="outfit-grid">
+            {sorted.map((o, i) => (
+              <div
+                key={o.id}
+                className="outfit-card"
+                style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
+                onClick={() => {
+                  selectionChanged();
+                  navigate(`/clothing/outfits/${o.id}`);
+                }}
+                role="button"
+              >
+                {o.cover ? (
+                  <Photo src={attachmentHref(o.cover)} />
+                ) : (
+                  <div className="outfit-card__ph">🧥</div>
+                )}
+                {o.favorite && (
+                  <span className="outfit-card__fav" aria-hidden>
+                    ♥
+                  </span>
+                )}
+                <div className="outfit-card__overlay">
+                  <div className="outfit-card__name">{o.name}</div>
+                  <div className="outfit-card__count">
+                    {o.itemIds.length
+                      ? `${o.itemIds.length} ${pluralizeRu(o.itemIds.length, ['вещь', 'вещи', 'вещей'])}`
+                      : 'фото-образ'}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
         </>
       )}
 

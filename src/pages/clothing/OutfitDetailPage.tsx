@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, EmptyState, Screen, Sheet } from '@/components/ui';
-import { IconHeart, IconPencil, IconPlus, IconSparkles, IconSwap, IconTrash } from '@/components/icons';
+import {
+  IconHeart,
+  IconPencil,
+  IconPlus,
+  IconSparkles,
+  IconSwap,
+  IconTrash,
+} from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { WISH_STATUS_EMOJI } from '@/lib/clothing';
 import { Photo } from '@/components/Photo';
@@ -78,12 +85,19 @@ export function OutfitDetailPage() {
         ) : (
           <div className="wardrobe-grid">
             {members.map((it) => (
-              <WardrobeCard key={it.id} item={it} onClick={() => go(`/clothing/wardrobe/${it.id}`)} />
+              <WardrobeCard
+                key={it.id}
+                item={it}
+                onClick={() => go(`/clothing/wardrobe/${it.id}`)}
+              />
             ))}
           </div>
         )}
 
-        <button className="btn btn--primary btn--block" onClick={() => go(`/clothing/outfits/${id}/build`)}>
+        <button
+          className="btn btn--primary btn--block"
+          onClick={() => go(`/clothing/outfits/${id}/build`)}
+        >
           <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
             <IconSparkles size={18} /> Собрать коллаж
           </span>
@@ -119,7 +133,10 @@ export function OutfitDetailPage() {
               ))}
             </div>
           )}
-          <button className="btn btn--ghost btn--block" onClick={() => go(`/clothing/wishlist/new?outfit=${id}`)}>
+          <button
+            className="btn btn--ghost btn--block"
+            onClick={() => go(`/clothing/wishlist/new?outfit=${id}`)}
+          >
             <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
               <IconPlus size={16} /> Чего не хватает
             </span>
@@ -131,7 +148,11 @@ export function OutfitDetailPage() {
         </button>
 
         <div className="row" style={{ gap: 12 }}>
-          <button className="btn btn--block" style={{ flex: 1 }} onClick={() => go(`/clothing/outfits/${id}/edit`)}>
+          <button
+            className="btn btn--block"
+            style={{ flex: 1 }}
+            onClick={() => go(`/clothing/outfits/${id}/edit`)}
+          >
             <span className="row" style={{ justifyContent: 'center', gap: 8 }}>
               <IconPencil size={18} /> Изменить
             </span>
@@ -151,7 +172,10 @@ export function OutfitDetailPage() {
           ) : (
             <>
               <div className="chips" style={{ marginBottom: 12 }}>
-                <button className={`chip${filter === 'all' ? ' is-active' : ''}`} onClick={() => setFilter('all')}>
+                <button
+                  className={`chip${filter === 'all' ? ' is-active' : ''}`}
+                  onClick={() => setFilter('all')}
+                >
                   Все
                 </button>
                 {CATEGORIES.filter((c) => wardrobe.some((w) => w.category === c.id)).map((c) => (
@@ -168,7 +192,11 @@ export function OutfitDetailPage() {
                 {pickList.map((it) => {
                   const on = outfit.itemIds.includes(it.id);
                   return (
-                    <button key={it.id} className={`picker-card${on ? ' is-on' : ''}`} onClick={() => toggle(it.id)}>
+                    <button
+                      key={it.id}
+                      className={`picker-card${on ? ' is-on' : ''}`}
+                      onClick={() => toggle(it.id)}
+                    >
                       {it.photo ? (
                         <img src={attachmentHref(it.photo)} alt="" />
                       ) : (
@@ -182,7 +210,11 @@ export function OutfitDetailPage() {
               </div>
             </>
           )}
-          <button className="btn btn--primary btn--block" style={{ marginTop: 14 }} onClick={() => setPicking(false)}>
+          <button
+            className="btn btn--primary btn--block"
+            style={{ marginTop: 14 }}
+            onClick={() => setPicking(false)}
+          >
             Готово
           </button>
         </Sheet>

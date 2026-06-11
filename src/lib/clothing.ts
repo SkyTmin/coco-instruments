@@ -37,11 +37,9 @@ export const WISH_STATUSES: { id: WishStatus; label: string; emoji: string }[] =
   { id: 'bought', label: 'Куплено', emoji: '✅' },
 ];
 
-export const WISH_STATUS_LABEL = Object.fromEntries(WISH_STATUSES.map((s) => [s.id, s.label])) as Record<
-  WishStatus,
-  string
->;
-export const WISH_STATUS_EMOJI = Object.fromEntries(WISH_STATUSES.map((s) => [s.id, s.emoji])) as Record<
-  WishStatus,
-  string
->;
+export const WISH_STATUS_LABEL = Object.fromEntries(
+  WISH_STATUSES.map((s) => [s.id, s.label]),
+) as Record<WishStatus, string>;
+export const WISH_STATUS_EMOJI = Object.fromEntries(
+  WISH_STATUSES.map((s) => [s.id, s.emoji]),
+) as Record<WishStatus, string>;

@@ -11,26 +11,71 @@ import { retrieveLaunchParams } from '@tma.js/sdk-react';
 
 import { Root } from '@/Root';
 import { init } from '@/init';
+import { installGlobalErrorLogging } from '@/lib/log';
+
+installGlobalErrorLogging();
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 
-try {
-  const lp = retrieveLaunchParams();
-  const debug = import.meta.env.DEV || `${lp.tgWebAppStartParam || ''}`.includes('debug');
-  await init(debug);
-  root.render(
-    <StrictMode>
-      <Root />
-    </StrictMode>,
-  );
-} catch (e) {
+// Telegram Desktop sometimes loads the page before the launch params are in
+// place on a cold start — previously that meant the "open in Telegram" gate
+// until the user reloaded by hand. Give the params a moment, then reload
+// ourselves once before giving up.
+const BOOT_RETRY_KEY = 'coco.bootRetried';
+
+async function retrieveLaunchParamsWithGrace() {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      return retrieveLaunchParams();
+    } catch {
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  }
+  return null;
+}
+
+const lp = await retrieveLaunchParamsWithGrace();
+
+if (!lp && !sessionStorage.getItem(BOOT_RETRY_KEY)) {
+  try {
+    sessionStorage.setItem(BOOT_RETRY_KEY, '1');
+  } catch {
+    /* private mode */
+  }
+  location.reload();
+} else if (!lp) {
   root.render(
     <div className="screen">
       <div className="empty">
         <div className="empty__icon">📵</div>
         <div className="empty__title">Откройте приложение в Telegram</div>
-        <div className="empty__sub">{e instanceof Error ? e.message : String(e)}</div>
+        <div className="empty__sub">Запустите Coco кнопкой меню в чате с ботом.</div>
       </div>
     </div>,
   );
+} else {
+  try {
+    sessionStorage.removeItem(BOOT_RETRY_KEY);
+  } catch {
+    /* private mode */
+  }
+  try {
+    const debug = import.meta.env.DEV || `${lp.tgWebAppStartParam || ''}`.includes('debug');
+    await init(debug);
+    root.render(
+      <StrictMode>
+        <Root />
+      </StrictMode>,
+    );
+  } catch (e) {
+    root.render(
+      <div className="screen">
+        <div className="empty">
+          <div className="empty__icon">⚠️</div>
+          <div className="empty__title">Не удалось запустить приложение</div>
+          <div className="empty__sub">{e instanceof Error ? e.message : String(e)}</div>
+        </div>
+      </div>,
+    );
+  }
 }

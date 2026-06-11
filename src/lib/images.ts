@@ -33,7 +33,11 @@ export function readAsDataUrl(file: Blob): Promise<string> {
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('canvas-failed'))), type, quality);
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('canvas-failed'))),
+      type,
+      quality,
+    );
   });
 }
 
@@ -57,7 +61,9 @@ function jpegName(name: string): string {
   return name.replace(/\.[^.]+$/, '') + '.jpg';
 }
 
-export async function compressImage(file: File): Promise<{ blob: Blob; name: string; type: string }> {
+export async function compressImage(
+  file: File,
+): Promise<{ blob: Blob; name: string; type: string }> {
   const img = await loadImage(file);
   const scale = Math.min(1, IMAGE_MAX_SIDE / Math.max(img.width, img.height));
   const width = Math.max(1, Math.round(img.width * scale));
@@ -109,7 +115,14 @@ export function loadImageSrc(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
-function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
   const scale = Math.max(w / img.width, h / img.height);
   const dw = img.width * scale;
   const dh = img.height * scale;
@@ -126,9 +139,9 @@ export async function composeMosaic(srcs: string[]): Promise<Blob | null> {
   const W = 900;
   const H = 1200;
   const g = 8;
-  const imgs = ((await Promise.all(srcs.slice(0, 4).map(loadImageSrc))).filter(Boolean) as HTMLImageElement[]).filter(
-    (im) => im.width,
-  );
+  const imgs = (
+    (await Promise.all(srcs.slice(0, 4).map(loadImageSrc))).filter(Boolean) as HTMLImageElement[]
+  ).filter((im) => im.width);
   if (!imgs.length) return null;
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -142,9 +155,17 @@ export async function composeMosaic(srcs: string[]): Promise<Blob | null> {
   const halfH = (H - g) / 2;
   let cells: [number, number, number, number][];
   if (imgs.length === 1) cells = [[0, 0, W, H]];
-  else if (imgs.length === 2) cells = [[0, 0, halfW, H], [halfW + g, 0, halfW, H]];
+  else if (imgs.length === 2)
+    cells = [
+      [0, 0, halfW, H],
+      [halfW + g, 0, halfW, H],
+    ];
   else if (imgs.length === 3)
-    cells = [[0, 0, halfW, H], [halfW + g, 0, halfW, halfH], [halfW + g, halfH + g, halfW, halfH]];
+    cells = [
+      [0, 0, halfW, H],
+      [halfW + g, 0, halfW, halfH],
+      [halfW + g, halfH + g, halfW, halfH],
+    ];
   else
     cells = [
       [0, 0, halfW, halfH],

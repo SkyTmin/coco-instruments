@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { AnimatedNumber, ConfirmDialog, ProgressBar, Screen, Sheet, StatTile } from '@/components/ui';
+import {
+  AnimatedNumber,
+  ConfirmDialog,
+  ProgressBar,
+  Screen,
+  Sheet,
+  StatTile,
+} from '@/components/ui';
 import { IconPencil, IconTrash } from '@/components/icons';
 import { SavingsDonut } from '@/charts';
 import { useFinanceStore } from '@/store';
@@ -79,7 +86,10 @@ export function SavingsDetailPage() {
         <div className="card">
           <ProgressBar percent={s.progressPercent} large />
           <div className="stat-grid" style={{ marginTop: 14 }}>
-            <StatTile label="Накоплено" value={<AnimatedNumber value={goal.currentAmount} format={formatRUB} />} />
+            <StatTile
+              label="Накоплено"
+              value={<AnimatedNumber value={goal.currentAmount} format={formatRUB} />}
+            />
             <StatTile label="Осталось" value={formatRUB(s.remaining)} />
             <StatTile label="Цель" value={formatRUB(goal.targetAmount)} />
             {goal.deadline && <StatTile label="Срок" value={formatDate(goal.deadline, true)} />}
@@ -115,7 +125,11 @@ export function SavingsDetailPage() {
               <IconPencil size={18} /> Изменить
             </span>
           </button>
-          <button className="btn btn--danger" onClick={() => setConfirmDel(true)} aria-label="Удалить">
+          <button
+            className="btn btn--danger"
+            onClick={() => setConfirmDel(true)}
+            aria-label="Удалить"
+          >
             <IconTrash size={18} />
           </button>
         </div>

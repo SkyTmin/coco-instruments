@@ -18,7 +18,9 @@ export function WishFormPage() {
 
   // When opened as "чего не хватает для образа" the outfit is passed in the URL.
   const linkedOutfitId = existing?.outfitId ?? params.get('outfit') ?? undefined;
-  const linkedOutfit = useFinanceStore((s) => (linkedOutfitId ? s.getOutfit(linkedOutfitId) : undefined));
+  const linkedOutfit = useFinanceStore((s) =>
+    linkedOutfitId ? s.getOutfit(linkedOutfitId) : undefined,
+  );
 
   const [photo, setPhoto] = useState<Attachment | undefined>(existing?.photo);
   const [name, setName] = useState(existing?.name ?? '');
@@ -94,18 +96,32 @@ export function WishFormPage() {
       </div>
       <div className="field">
         <label className="field__label">Ссылка (необяз.)</label>
-        <input className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://…" />
+        <input
+          className="input"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="https://…"
+        />
       </div>
       <div className="field">
         <label className="field__label">Заметка (необяз.)</label>
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Цвет, размер…" />
+        <input
+          className="input"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Цвет, размер…"
+        />
       </div>
 
       <button className="btn btn--primary btn--block" disabled={!valid} onClick={submit}>
         {existing ? 'Сохранить' : 'Добавить'}
       </button>
       {existing && (
-        <button className="btn btn--danger btn--block" style={{ marginTop: 12 }} onClick={() => setConfirm(true)}>
+        <button
+          className="btn btn--danger btn--block"
+          style={{ marginTop: 12 }}
+          onClick={() => setConfirm(true)}
+        >
           Удалить
         </button>
       )}

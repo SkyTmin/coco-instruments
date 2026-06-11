@@ -2,7 +2,15 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog, Screen, Sheet, StatRow } from '@/components/ui';
-import { IconCheck, IconGraph, IconHeart, IconNotes, IconPencil, IconPlus, IconTrash } from '@/components/icons';
+import {
+  IconCheck,
+  IconGraph,
+  IconHeart,
+  IconNotes,
+  IconPencil,
+  IconPlus,
+  IconTrash,
+} from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import type {
   ConversationImportance,
@@ -76,20 +84,34 @@ export function PersonDetailPage() {
   const [sheet, setSheet] = useState<SheetKind | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const personPrefs = useMemo(() => preferences.filter((item) => item.personId === id), [id, preferences]);
+  const personPrefs = useMemo(
+    () => preferences.filter((item) => item.personId === id),
+    [id, preferences],
+  );
   const personGifts = useMemo(() => gifts.filter((item) => item.personId === id), [gifts, id]);
   const personConversations = useMemo(
-    () => conversations.filter((item) => item.personId === id).sort((a, b) => b.date.localeCompare(a.date)),
+    () =>
+      conversations
+        .filter((item) => item.personId === id)
+        .sort((a, b) => b.date.localeCompare(a.date)),
     [conversations, id],
   );
-  const personPromises = useMemo(() => promises.filter((item) => item.personId === id), [id, promises]);
-  const personMeetIdeas = useMemo(() => meetIdeas.filter((item) => item.personId === id), [id, meetIdeas]);
+  const personPromises = useMemo(
+    () => promises.filter((item) => item.personId === id),
+    [id, promises],
+  );
+  const personMeetIdeas = useMemo(
+    () => meetIdeas.filter((item) => item.personId === id),
+    [id, meetIdeas],
+  );
   const personRelations = useMemo(
     () => relations.filter((item) => item.fromPersonId === id || item.toPersonId === id),
     [id, relations],
   );
   const linkedNotes = useMemo(() => {
-    const ids = new Set(noteLinks.filter((link) => link.personId === id).map((link) => link.noteId));
+    const ids = new Set(
+      noteLinks.filter((link) => link.personId === id).map((link) => link.noteId),
+    );
     return notes.filter((note) => ids.has(note.id));
   }, [id, noteLinks, notes]);
 
@@ -120,27 +142,43 @@ export function PersonDetailPage() {
       subtitle={`${personCategoryLabel(person)} · ${CLOSENESS_LABEL[person.closeness]}`}
       action={
         <div className="row">
-          <button className="icon-round" onClick={() => go(`/people/${person.id}/edit`)} aria-label="Изменить">
+          <button
+            className="icon-round"
+            onClick={() => go(`/people/${person.id}/edit`)}
+            aria-label="Изменить"
+          >
             <IconPencil size={19} />
           </button>
-          <button className="icon-round people-danger-round" onClick={() => setConfirmDelete(true)} aria-label="Удалить">
+          <button
+            className="icon-round people-danger-round"
+            onClick={() => setConfirmDelete(true)}
+            aria-label="Удалить"
+          >
             <IconTrash size={19} />
           </button>
         </div>
       }
     >
-      <div className="stack people-detail">
+      <div className="stack people-detail stagger">
         <div className="person-hero card">
           <div className="person-hero__avatar">
-            {person.avatar ? <img src={attachmentHref(person.avatar)} alt="" /> : <span>{personInitials(person.name)}</span>}
+            {person.avatar ? (
+              <img src={attachmentHref(person.avatar)} alt="" />
+            ) : (
+              <span>{personInitials(person.name)}</span>
+            )}
           </div>
           <div className="person-hero__body">
             <div className="person-hero__title">
               {person.favorite && <IconHeart size={18} />}
-              <span>{personCategoryEmoji(person)} {personCategoryLabel(person)}</span>
+              <span>
+                {personCategoryEmoji(person)} {personCategoryLabel(person)}
+              </span>
             </div>
             <div className="person-hero__sub">
-              {birthday ? `День рождения ${relativeDay(birthday.date)}` : 'День рождения можно добавить'}
+              {birthday
+                ? `День рождения ${relativeDay(birthday.date)}`
+                : 'День рождения можно добавить'}
             </div>
             {person.city && <div className="person-hero__sub">{person.city}</div>}
           </div>
@@ -163,30 +201,43 @@ export function PersonDetailPage() {
         >
           <div className="card">
             <StatRow label="Кто это для меня" value={person.description || 'Можно дописать'} />
-            {person.birthday && <StatRow label="День рождения" value={formatDate(person.birthday)} />}
+            {person.birthday && (
+              <StatRow label="День рождения" value={formatDate(person.birthday)} />
+            )}
             {person.phone && <StatRow label="Телефон" value={person.phone} />}
             {person.socials && <StatRow label="Telegram / соцсети" value={person.socials} />}
             {person.city && <StatRow label="Город" value={person.city} />}
             {person.tags.length > 0 && (
               <div className="people-chip-row">
-                {person.tags.map((tag) => <span key={tag} className="note-chip">#{tag}</span>)}
+                {person.tags.map((tag) => (
+                  <span key={tag} className="note-chip">
+                    #{tag}
+                  </span>
+                ))}
               </div>
             )}
           </div>
         </DetailSection>
 
-        <DetailSection title="Что любит" action={<AddTiny onClick={() => setSheet('preference')} />}>
+        <DetailSection
+          title="Что любит"
+          action={<AddTiny onClick={() => setSheet('preference')} />}
+        >
           {personPrefs.length ? (
             <div className="people-chip-row">
               {personPrefs.map((item) => (
                 <span key={item.id} className={`people-pref people-pref--${item.type}`}>
                   <b>{PREFERENCE_LABEL[item.type]}</b>
                   {item.value}
-                  <button onClick={() => removePreference(item.id)} aria-label="Убрать">×</button>
+                  <button onClick={() => removePreference(item.id)} aria-label="Убрать">
+                    ×
+                  </button>
                 </span>
               ))}
             </div>
-          ) : <SoftEmpty text="Любимая еда, музыка, места и то, что лучше не дарить." />}
+          ) : (
+            <SoftEmpty text="Любимая еда, музыка, места и то, что лучше не дарить." />
+          )}
         </DetailSection>
 
         <DetailSection title="Подарки" action={<AddTiny onClick={() => setSheet('gift')} />}>
@@ -202,10 +253,15 @@ export function PersonDetailPage() {
                 />
               ))}
             </div>
-          ) : <SoftEmpty text="Идеи подарков, что уже дарили и какая была реакция." />}
+          ) : (
+            <SoftEmpty text="Идеи подарков, что уже дарили и какая была реакция." />
+          )}
         </DetailSection>
 
-        <DetailSection title="Важные разговоры" action={<AddTiny onClick={() => setSheet('conversation')} />}>
+        <DetailSection
+          title="Важные разговоры"
+          action={<AddTiny onClick={() => setSheet('conversation')} />}
+        >
           {personConversations.length ? (
             <div className="stack">
               {personConversations.map((conversation) => (
@@ -218,10 +274,15 @@ export function PersonDetailPage() {
                 />
               ))}
             </div>
-          ) : <SoftEmpty text="Короткий журнал: темы, настроение, что важно не забыть." />}
+          ) : (
+            <SoftEmpty text="Короткий журнал: темы, настроение, что важно не забыть." />
+          )}
         </DetailSection>
 
-        <DetailSection title="Обещания и напоминания" action={<AddTiny onClick={() => setSheet('promise')} />}>
+        <DetailSection
+          title="Обещания и напоминания"
+          action={<AddTiny onClick={() => setSheet('promise')} />}
+        >
           {personPromises.length ? (
             <div className="stack">
               {personPromises.map((promise) => (
@@ -230,12 +291,21 @@ export function PersonDetailPage() {
                   title={promise.title}
                   meta={`${PROMISE_STATUS[promise.status]}${promise.dueDate ? ` · ${relativeDay(promise.dueDate)}` : ''}${promise.reminderDate ? ` · напомнить ${relativeDay(promise.reminderDate)}` : ''}`}
                   note={promise.note}
-                  onDone={promise.status === 'open' ? () => updatePromise(promise.id, { status: 'done' }) : undefined}
+                  onDone={
+                    promise.status === 'open'
+                      ? () => {
+                          notifySuccess();
+                          updatePromise(promise.id, { status: 'done' });
+                        }
+                      : undefined
+                  }
                   onDelete={() => removePromise(promise.id)}
                 />
               ))}
             </div>
-          ) : <SoftEmpty text="Скинуть ссылку, спросить как врач, поздравить вовремя." />}
+          ) : (
+            <SoftEmpty text="Скинуть ссылку, спросить как врач, поздравить вовремя." />
+          )}
         </DetailSection>
 
         <DetailSection title="Идеи встреч" action={<AddTiny onClick={() => setSheet('meet')} />}>
@@ -247,12 +317,21 @@ export function PersonDetailPage() {
                   title={meet.title}
                   meta={`${MEET_STATUS[meet.status]}${meet.date ? ` · ${formatDate(meet.date, true)}` : ''}`}
                   note={meet.note}
-                  onDone={meet.status !== 'done' ? () => updateMeetIdea(meet.id, { status: 'done' }) : undefined}
+                  onDone={
+                    meet.status !== 'done'
+                      ? () => {
+                          notifySuccess();
+                          updateMeetIdea(meet.id, { status: 'done' });
+                        }
+                      : undefined
+                  }
                   onDelete={() => removeMeetIdea(meet.id)}
                 />
               ))}
             </div>
-          ) : <SoftEmpty text="Куда сходить, что сделать вместе и как прошло." />}
+          ) : (
+            <SoftEmpty text="Куда сходить, что сделать вместе и как прошло." />
+          )}
         </DetailSection>
 
         <DetailSection title="Заметки" action={<AddTiny onClick={() => setSheet('note')} />}>
@@ -275,34 +354,59 @@ export function PersonDetailPage() {
                       <small>Открыть и редактировать заметку</small>
                     </span>
                   </button>
-                  <button onClick={() => unlinkNoteFromPerson(person.id, note.id)} aria-label="Отвязать">
+                  <button
+                    onClick={() => unlinkNoteFromPerson(person.id, note.id)}
+                    aria-label="Отвязать"
+                  >
                     ×
                   </button>
                 </div>
               ))}
             </div>
-          ) : <SoftEmpty text="Можно привязать обычные заметки Coco к этому человеку." />}
+          ) : (
+            <SoftEmpty text="Можно привязать обычные заметки Coco к этому человеку." />
+          )}
         </DetailSection>
 
-        <DetailSection title="Связи между людьми" action={<AddTiny onClick={() => setSheet('relation')} />}>
+        <DetailSection
+          title="Связи между людьми"
+          action={<AddTiny onClick={() => setSheet('relation')} />}
+        >
           {personRelations.length ? (
             <div className="people-chip-row">
               {personRelations.map((relation) => {
-                const otherId = relation.fromPersonId === person.id ? relation.toPersonId : relation.fromPersonId;
+                const otherId =
+                  relation.fromPersonId === person.id ? relation.toPersonId : relation.fromPersonId;
                 const other = people.find((item) => item.id === otherId);
                 if (!other) return null;
                 return (
-                  <button key={relation.id} className="note-chip" onClick={() => go(`/people/${other.id}`)}>
+                  <button
+                    key={relation.id}
+                    className="note-chip"
+                    onClick={() => go(`/people/${other.id}`)}
+                  >
                     {other.name} · {RELATION_LABEL[relation.relationType]}
-                    <span onClick={(e) => { e.stopPropagation(); removePersonRelation(relation.id); }}>×</span>
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removePersonRelation(relation.id);
+                      }}
+                    >
+                      ×
+                    </span>
                   </button>
                 );
               })}
             </div>
-          ) : <SoftEmpty text="Например: коллега, пара, родственник, знакомый." />}
+          ) : (
+            <SoftEmpty text="Например: коллега, пара, родственник, знакомый." />
+          )}
         </DetailSection>
 
-        <button className="people-graph-link" onClick={() => go(`/notes/graph?person=${person.id}`)}>
+        <button
+          className="people-graph-link"
+          onClick={() => go(`/notes/graph?person=${person.id}`)}
+        >
           <span className="people-graph-link__icon">
             <IconGraph />
           </span>
@@ -357,7 +461,15 @@ function AddTiny({ onClick }: { onClick: () => void }) {
   );
 }
 
-function DetailSection({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+function DetailSection({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="people-block">
       <div className="people-block__head">
@@ -441,7 +553,9 @@ function PersonActionSheet({
   const [reminderDate, setReminderDate] = useState('');
   const [relationType, setRelationType] = useState<PersonRelationType>('friend');
   const [targetPersonId, setTargetPersonId] = useState(people[0]?.id ?? '');
-  const [targetNoteId, setTargetNoteId] = useState(notes.find((item) => !linkedNoteIds.has(item.id))?.id ?? '');
+  const [targetNoteId, setTargetNoteId] = useState(
+    notes.find((item) => !linkedNoteIds.has(item.id))?.id ?? '',
+  );
 
   const closeSuccess = () => {
     notifySuccess();
@@ -450,12 +564,17 @@ function PersonActionSheet({
 
   const save = () => {
     const cleanTitle = title.trim();
-    if ((kind !== 'relation' && kind !== 'note') && !cleanTitle) {
+    if (kind !== 'relation' && kind !== 'note' && !cleanTitle) {
       notifyWarning();
       return;
     }
     if (kind === 'preference') {
-      addPreference({ personId: person.id, type: prefType, value: cleanTitle, note: note.trim() || undefined });
+      addPreference({
+        personId: person.id,
+        type: prefType,
+        value: cleanTitle,
+        note: note.trim() || undefined,
+      });
     }
     if (kind === 'gift') {
       addGift({
@@ -534,37 +653,92 @@ function PersonActionSheet({
       <div className="stack">
         {kind === 'preference' && (
           <>
-            <select className="select" value={prefType} onChange={(e) => setPrefType(e.target.value as PreferenceType)}>
-              {PREFERENCE_TYPES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            <select
+              className="select"
+              value={prefType}
+              onChange={(e) => setPrefType(e.target.value as PreferenceType)}
+            >
+              {PREFERENCE_TYPES.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
             </select>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Напр. раф без сахара" autoFocus />
+            <input
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Напр. раф без сахара"
+              autoFocus
+            />
           </>
         )}
 
         {kind === 'gift' && (
           <>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Идея подарка" autoFocus />
+            <input
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Идея подарка"
+              autoFocus
+            />
             <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="idea">Идея</option>
               <option value="bought">Куплено</option>
               <option value="given">Подарено</option>
             </select>
-            <input className="input" type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Цена" />
-            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <input className="input" value={reaction} onChange={(e) => setReaction(e.target.value)} placeholder="Реакция" />
+            <input
+              className="input"
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="Цена"
+            />
+            <input
+              className="input"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            <input
+              className="input"
+              value={reaction}
+              onChange={(e) => setReaction(e.target.value)}
+              placeholder="Реакция"
+            />
           </>
         )}
 
         {kind === 'conversation' && (
           <>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Тема разговора" autoFocus />
-            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <select className="select" value={importance} onChange={(e) => setImportance(e.target.value as ConversationImportance)}>
+            <input
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Тема разговора"
+              autoFocus
+            />
+            <input
+              className="input"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            <select
+              className="select"
+              value={importance}
+              onChange={(e) => setImportance(e.target.value as ConversationImportance)}
+            >
               <option value="normal">Обычная важность</option>
               <option value="high">Важно</option>
               <option value="low">Лёгкое</option>
             </select>
-            <select className="select" value={mood} onChange={(e) => setMood(e.target.value as ConversationMood)}>
+            <select
+              className="select"
+              value={mood}
+              onChange={(e) => setMood(e.target.value as ConversationMood)}
+            >
               <option value="warm">Тёплое настроение</option>
               <option value="happy">Радостно</option>
               <option value="neutral">Нейтрально</option>
@@ -575,10 +749,30 @@ function PersonActionSheet({
 
         {kind === 'promise' && (
           <>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Что я пообещал" autoFocus />
-            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <input className="input" type="date" value={reminderDate} onChange={(e) => setReminderDate(e.target.value)} />
-            <select className="select" value={promiseStatus} onChange={(e) => setPromiseStatus(e.target.value as PersonPromiseStatus)}>
+            <input
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Что я пообещал"
+              autoFocus
+            />
+            <input
+              className="input"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            <input
+              className="input"
+              type="date"
+              value={reminderDate}
+              onChange={(e) => setReminderDate(e.target.value)}
+            />
+            <select
+              className="select"
+              value={promiseStatus}
+              onChange={(e) => setPromiseStatus(e.target.value as PersonPromiseStatus)}
+            >
               <option value="open">Активно</option>
               <option value="done">Сделано</option>
               <option value="cancelled">Отменено</option>
@@ -588,13 +782,24 @@ function PersonActionSheet({
 
         {kind === 'meet' && (
           <>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Куда сходить / что сделать" autoFocus />
+            <input
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Куда сходить / что сделать"
+              autoFocus
+            />
             <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="idea">Идея</option>
               <option value="planned">Запланировано</option>
               <option value="done">Было</option>
             </select>
-            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <input
+              className="input"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
           </>
         )}
 
@@ -602,10 +807,22 @@ function PersonActionSheet({
           <>
             {people.length ? (
               <>
-                <select className="select" value={targetPersonId} onChange={(e) => setTargetPersonId(e.target.value)}>
-                  {people.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                <select
+                  className="select"
+                  value={targetPersonId}
+                  onChange={(e) => setTargetPersonId(e.target.value)}
+                >
+                  {people.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
                 </select>
-                <select className="select" value={relationType} onChange={(e) => setRelationType(e.target.value as PersonRelationType)}>
+                <select
+                  className="select"
+                  value={relationType}
+                  onChange={(e) => setRelationType(e.target.value as PersonRelationType)}
+                >
                   <option value="friend">Друг</option>
                   <option value="relative">Родственник</option>
                   <option value="colleague">Коллега</option>
@@ -623,10 +840,15 @@ function PersonActionSheet({
         {kind === 'note' && (
           <>
             {notes.length ? (
-              <select className="select" value={targetNoteId} onChange={(e) => setTargetNoteId(e.target.value)}>
+              <select
+                className="select"
+                value={targetNoteId}
+                onChange={(e) => setTargetNoteId(e.target.value)}
+              >
                 {notes.map((item) => (
                   <option key={item.id} value={item.id} disabled={linkedNoteIds.has(item.id)}>
-                    {linkedNoteIds.has(item.id) ? '✓ ' : ''}{item.title}
+                    {linkedNoteIds.has(item.id) ? '✓ ' : ''}
+                    {item.title}
                   </option>
                 ))}
               </select>

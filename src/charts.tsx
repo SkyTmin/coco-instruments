@@ -44,7 +44,10 @@ export function PrincipalVsOverpaymentChart({ obligation }: { obligation: Obliga
   const col = colors();
   const data = [
     { name: 'Основная сумма', value: obligation.principalAmount },
-    { name: obligation.type === 'installment' ? 'Переплата' : 'Проценты', value: c.totalOverpayment },
+    {
+      name: obligation.type === 'installment' ? 'Переплата' : 'Проценты',
+      value: c.totalOverpayment,
+    },
   ];
   if (c.totalOverpayment <= 0) data.pop();
 
@@ -132,13 +135,22 @@ export function SavingsDonut({ current, target }: { current: number; target: num
   return (
     <ResponsiveContainer width="100%" height={180}>
       <PieChart>
-        <Pie data={data} dataKey="value" nameKey="name" innerRadius={52} outerRadius={78} stroke="none">
+        <Pie
+          data={data}
+          dataKey="value"
+          nameKey="name"
+          innerRadius={52}
+          outerRadius={78}
+          stroke="none"
+        >
           <Cell fill={col.a1} />
           <Cell fill={col.track} />
         </Pie>
-        <Tooltip contentStyle={tooltipStyle()} formatter={(v: number, n: string) => [formatRUB(v), n]} />
+        <Tooltip
+          contentStyle={tooltipStyle()}
+          formatter={(v: number, n: string) => [formatRUB(v), n]}
+        />
       </PieChart>
     </ResponsiveContainer>
   );
 }
-

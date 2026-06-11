@@ -97,19 +97,39 @@ export function WardrobeItemFormPage() {
 
       <div className="field">
         <label className="field__label">Цвет (необяз.)</label>
-        <input className="input" value={color} onChange={(e) => setColor(e.target.value)} placeholder="Напр. синий" />
+        <input
+          className="input"
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+          placeholder="Напр. синий"
+        />
       </div>
       <div className="field">
         <label className="field__label">Бренд (необяз.)</label>
-        <input className="input" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Напр. Uniqlo" />
+        <input
+          className="input"
+          value={brand}
+          onChange={(e) => setBrand(e.target.value)}
+          placeholder="Напр. Uniqlo"
+        />
       </div>
       <div className="field">
         <label className="field__label">Размер (необяз.)</label>
-        <input className="input" value={size} onChange={(e) => setSize(e.target.value)} placeholder="Напр. M / 42" />
+        <input
+          className="input"
+          value={size}
+          onChange={(e) => setSize(e.target.value)}
+          placeholder="Напр. M / 42"
+        />
       </div>
       <div className="field">
         <label className="field__label">Заметка (необяз.)</label>
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Любые детали" />
+        <input
+          className="input"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Любые детали"
+        />
       </div>
 
       <button className="btn btn--primary btn--block" disabled={!valid} onClick={submit}>

@@ -15,7 +15,15 @@ const MAX_SCALE = 3;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 type Gesture =
-  | { kind: 'move'; itemId: string; offX: number; offY: number; sx: number; sy: number; moved: boolean }
+  | {
+      kind: 'move';
+      itemId: string;
+      offX: number;
+      offY: number;
+      sx: number;
+      sy: number;
+      moved: boolean;
+    }
   | {
       kind: 'handle';
       itemId: string;
@@ -38,7 +46,14 @@ function loadImageSrc(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -215,7 +230,14 @@ export function OutfitBuilderPage() {
       const n = s.length;
       return [
         ...s,
-        { itemId, x: 0.5 + ((n % 3) - 1) * 0.12, y: 0.42 + (n % 2) * 0.1, scale: 1, rot: 0, z: maxZ + 1 },
+        {
+          itemId,
+          x: 0.5 + ((n % 3) - 1) * 0.12,
+          y: 0.42 + (n % 2) * 0.1,
+          scale: 1,
+          rot: 0,
+          z: maxZ + 1,
+        },
       ];
     });
     setSelected(itemId);
@@ -228,7 +250,9 @@ export function OutfitBuilderPage() {
       if (stickers.length > 0) {
         const blob = await renderCollage(stickers, byId);
         if (blob) {
-          const att = await fileToAttachment(new File([blob], 'outfit.jpg', { type: 'image/jpeg' }));
+          const att = await fileToAttachment(
+            new File([blob], 'outfit.jpg', { type: 'image/jpeg' }),
+          );
           cover = att;
         }
       }
@@ -247,7 +271,12 @@ export function OutfitBuilderPage() {
       title="Коллаж образа"
       subtitle={outfit.name}
       action={
-        <button className="icon-btn notes-save" onClick={() => void save()} disabled={saving} aria-label="Сохранить">
+        <button
+          className="icon-btn notes-save"
+          onClick={() => void save()}
+          disabled={saving}
+          aria-label="Сохранить"
+        >
           <IconCheck size={21} />
         </button>
       }
@@ -260,7 +289,9 @@ export function OutfitBuilderPage() {
         }}
       >
         {stickers.length === 0 && (
-          <div className="collage-board__hint">Нажимайте на вещи снизу, двигайте, тяните за угол — масштаб и поворот</div>
+          <div className="collage-board__hint">
+            Нажимайте на вещи снизу, двигайте, тяните за угол — масштаб и поворот
+          </div>
         )}
         {[...stickers]
           .sort((a, b) => a.z - b.z)
@@ -301,7 +332,10 @@ export function OutfitBuilderPage() {
       </div>
 
       <div className="chips collage-filter">
-        <button className={`chip${filter === 'all' ? ' is-active' : ''}`} onClick={() => setFilter('all')}>
+        <button
+          className={`chip${filter === 'all' ? ' is-active' : ''}`}
+          onClick={() => setFilter('all')}
+        >
           Все
         </button>
         {CATEGORIES.filter((c) => withPhoto.some((w) => w.category === c.id)).map((c) => (
@@ -324,7 +358,11 @@ export function OutfitBuilderPage() {
           {trayItems.map((it) => {
             const on = stickers.some((s) => s.itemId === it.id);
             return (
-              <button key={it.id} className={`collage-tray__item${on ? ' is-on' : ''}`} onClick={() => addOrSelect(it.id)}>
+              <button
+                key={it.id}
+                className={`collage-tray__item${on ? ' is-on' : ''}`}
+                onClick={() => addOrSelect(it.id)}
+              >
                 <img src={attachmentHref(it.photo!)} alt="" loading="lazy" />
                 {on && <i className="collage-tray__on">✓</i>}
               </button>
@@ -333,7 +371,12 @@ export function OutfitBuilderPage() {
         </div>
       )}
 
-      <button className="btn btn--primary btn--block" style={{ marginTop: 14 }} onClick={() => void save()} disabled={saving}>
+      <button
+        className="btn btn--primary btn--block"
+        style={{ marginTop: 14 }}
+        onClick={() => void save()}
+        disabled={saving}
+      >
         {saving ? 'Сохраняем…' : 'Сохранить коллаж'}
       </button>
 

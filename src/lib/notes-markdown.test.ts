@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildMessageLink,
   countTasks,
   noteExcerpt,
   parseBlocks,
@@ -135,5 +136,26 @@ describe('noteExcerpt', () => {
 
   it('drops images and code fences', () => {
     expect(noteExcerpt('text\n![p](attachment:1)\n```\ncode\n```')).toBe('text');
+  });
+});
+
+describe('message deep links', () => {
+  it('parses [[msg:n:…]] and [[msg:t:…]] into msglink nodes', () => {
+    const n = parseInline('смотри [[msg:n:note42:abc-1]] тут')[1];
+    expect(n).toEqual({ t: 'msglink', kind: 'n', ref: 'note42', mid: 'abc-1' });
+    const t = parseInline('[[msg:t:здоровье/горло:xyz]]')[0];
+    expect(t).toEqual({ t: 'msglink', kind: 't', ref: 'здоровье/горло', mid: 'xyz' });
+  });
+
+  it('buildMessageLink round-trips through the parser', () => {
+    const link = buildMessageLink('n', 'id9', 'm7');
+    expect(parseInline(link)[0]).toEqual({ t: 'msglink', kind: 'n', ref: 'id9', mid: 'm7' });
+  });
+
+  it('ordinary wiki links still parse as wiki', () => {
+    expect(parseInline('[[Просто заметка]]')[0]).toMatchObject({
+      t: 'wiki',
+      target: 'Просто заметка',
+    });
   });
 });

@@ -25,7 +25,12 @@ export function OutfitFormPage() {
       notifySuccess();
       navigate(-1);
     } else {
-      const created = addOutfit({ name: name.trim(), cover, itemIds: [], note: note.trim() || undefined });
+      const created = addOutfit({
+        name: name.trim(),
+        cover,
+        itemIds: [],
+        note: note.trim() || undefined,
+      });
       notifySuccess();
       navigate(`/clothing/outfits/${created.id}`, { replace: true });
     }
@@ -47,7 +52,12 @@ export function OutfitFormPage() {
       </div>
       <div className="field">
         <label className="field__label">Заметка (необяз.)</label>
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Когда / куда" />
+        <input
+          className="input"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Когда / куда"
+        />
       </div>
 
       <button className="btn btn--primary btn--block" disabled={!valid} onClick={submit}>
