@@ -588,11 +588,14 @@ export function ChatThread({
         )}
         {m.card && (
           <div
-            className={`chat-card${flipped.has(m.id) ? ' is-flipped' : ''}`}
+            className={`chat-card${flipped.has(m.id) ? ' is-flipped' : ''}${
+              !m.card.front.photo && !m.card.back.photo ? ' chat-card--auto' : ''
+            }`}
             style={cardAspect(m) ? ({ '--card-ar': cardAspect(m) } as CSSProperties) : undefined}
             onClick={(e) => {
-              // Flipping works everywhere — including the long-press overlay
-              // clone, so the other side can be read/copied from the menu.
+              // In the long-press overlay only the ⟲ button flips — a tap on
+              // the card there is for selecting/copying text.
+              if (!interactive) return;
               if ((e.target as HTMLElement).closest('a, button:not(.chat-card__hint)')) return;
               toggleFlip(m.id);
             }}

@@ -8500,3 +8500,28 @@ input[type='datetime-local'] {
     transition: none;
   }
 }
+
+/* Text-only cards: the height follows the front side's text (no clipping),
+   the photo aspect-ratio machinery applies only when there IS a photo. */
+.chat-card--auto {
+  width: min(74vw, 320px);
+  aspect-ratio: auto;
+}
+.chat-card--auto .chat-card__inner {
+  position: relative;
+  inset: auto;
+}
+.chat-card--auto .chat-card__front {
+  position: relative;
+  inset: auto;
+  min-height: 124px;
+}
+.chat-card--auto .chat-card__front .chat-card__text {
+  max-height: none;
+  overflow: visible;
+}
+/* The back matches the front's height; longer back text scrolls inside. */
+.chat-card--auto .chat-card__back {
+  position: absolute;
+  inset: 0;
+}
