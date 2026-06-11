@@ -56,6 +56,18 @@ export function NotesPage() {
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState(params.get('q') ?? '');
   const [listFilter, setListFilter] = useState<string | null>(null);
+  // One-time inline intro of lists for users who haven't created any yet.
+  const [listsPromoHidden, setListsPromoHidden] = useState(
+    () => typeof window !== 'undefined' && localStorage.getItem('coco.listsPromo') === 'off',
+  );
+  const hideListsPromo = () => {
+    setListsPromoHidden(true);
+    try {
+      localStorage.setItem('coco.listsPromo', 'off');
+    } catch {
+      /* private mode */
+    }
+  };
 
   useEffect(() => {
     const q = params.get('q');
@@ -259,14 +271,44 @@ export function NotesPage() {
                   <span className="notes-chip__count">{countByList.get(l.id) ?? 0}</span>
                 </button>
               ))}
-              <button
-                className="notes-chip notes-chip--add"
-                onClick={() => go('/notes/lists')}
-                aria-label="Списки"
-              >
-                +
-              </button>
+              {noteLists.length > 0 ? (
+                <button
+                  className="notes-chip notes-chip--manage"
+                  onClick={() => go('/notes/lists')}
+                >
+                  📋 Списки
+                </button>
+              ) : (
+                <button
+                  className="notes-chip notes-chip--manage"
+                  onClick={() => go('/notes/lists?new=1')}
+                >
+                  ＋ Создать список
+                </button>
+              )}
             </div>
+
+            {noteLists.length === 0 && !listsPromoHidden && (
+              <div className="lists-promo">
+                <button className="lists-promo__close" onClick={hideListsPromo} aria-label="Скрыть">
+                  ×
+                </button>
+                <div className="lists-promo__head">
+                  <span className="lists-promo__icon">📋</span>
+                  <b>Списки-тетради</b>
+                </div>
+                <p>
+                  Разложите заметки по тетрадям — «Работа», «Личное», «Идеи». У каждого списка свой
+                  граф связей.
+                </p>
+                <button
+                  className="btn btn--primary btn--block"
+                  onClick={() => go('/notes/lists?new=1')}
+                >
+                  Создать первый список
+                </button>
+              </div>
+            )}
           </>
         )}
 

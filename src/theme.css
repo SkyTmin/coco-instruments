@@ -8543,3 +8543,58 @@ input[type='datetime-local'] {
     box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 45%, transparent);
   }
 }
+
+/* Inline intro of note lists (shown until the first list exists) */
+.lists-promo {
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--glass-border));
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--accent) 13%, var(--surface)),
+    var(--surface)
+  );
+  padding: 14px;
+  animation: note-in 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.lists-promo__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15.5px;
+  margin-bottom: 4px;
+}
+.lists-promo__icon {
+  font-size: 19px;
+}
+.lists-promo p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.lists-promo__close {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  background: transparent;
+}
+
+/* Labeled "manage lists" chip — discoverable, unlike the old bare "+" */
+.notes-chip--manage {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 36%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  font-weight: 700;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lists-promo {
+    animation: none;
+  }
+}

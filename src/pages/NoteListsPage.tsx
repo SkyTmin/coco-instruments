@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { EmptyState, Screen, SwipeRow } from '@/components/ui';
 import { IconGraph, IconList, IconPencil, IconTrash } from '@/components/icons';
 import { useFinanceStore } from '@/store';
@@ -31,7 +31,9 @@ export function NoteListsPage() {
   const updateNoteList = useFinanceStore((s) => s.updateNoteList);
   const removeNoteList = useFinanceStore((s) => s.removeNoteList);
 
-  const [open, setOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+  // ?new=1 (the "create a list" promo) opens the form right away.
+  const [open, setOpen] = useState(searchParams.get('new') === '1');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState(LIST_EMOJIS[0]);
