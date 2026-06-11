@@ -7858,19 +7858,8 @@ input[type='datetime-local'] {
   background: var(--accent);
 }
 
-/* Deep-link flash highlight */
-@keyframes bubble-flash {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-  }
-  25% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent);
-  }
-}
-.chat-bubble.is-flash {
-  animation: bubble-flash 1.6s ease both;
-}
+/* Deep-link flash highlight lives on ::after (see the juicy block below) so
+   it never replaces — and so never restarts — the bubble's entrance pop. */
 
 /* Reply quote inside a bubble */
 .chat-quote {
@@ -8164,6 +8153,348 @@ input[type='datetime-local'] {
   .chat-menu,
   .chat-bubble.is-flash {
     animation: none;
+  }
+  .chat-card__inner {
+    transition: none;
+  }
+}
+
+/* ===== Chat 2.0 — juicy, springy animations =============================== */
+
+/* Spring curve used everywhere below: fast in, playful overshoot, soft land */
+:root {
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Sending a message: bubble bounces up from the send button corner */
+.chat-bubble {
+  transform-origin: bottom right;
+}
+@keyframes chat-pop-juicy {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.7);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* NB: fill "backwards", not "both" — a lingering fill would override the
+   is-pressing / is-selected transform transitions below. */
+.chat-scroll .chat-bubble {
+  animation: chat-pop-juicy 0.38s var(--spring) backwards;
+}
+
+/* Holding a bubble: it squeezes like a sponge until the menu pops */
+.chat-bubble.is-pressing {
+  transform: scale(0.96);
+  transition: transform 0.34s var(--spring);
+}
+
+/* Long-press menu: bubble clone springs forward, menu pops with a cascade */
+@keyframes menu-bubble-spring {
+  0% {
+    transform: scale(0.94);
+  }
+  55% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.chat-bubble--clone {
+  animation: menu-bubble-spring 0.32s var(--spring) both;
+}
+@keyframes menu-spring {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.chat-menu {
+  animation: menu-spring 0.3s var(--spring) both;
+}
+.chat-menu__item {
+  animation: note-in 0.26s var(--spring) backwards;
+}
+.chat-menu__item:nth-child(2) {
+  animation-delay: 26ms;
+}
+.chat-menu__item:nth-child(3) {
+  animation-delay: 52ms;
+}
+.chat-menu__item:nth-child(4) {
+  animation-delay: 78ms;
+}
+.chat-menu__item:nth-child(5) {
+  animation-delay: 104ms;
+}
+.chat-menu__item:nth-child(6) {
+  animation-delay: 130ms;
+}
+.chat-menu__item:nth-child(n + 7) {
+  animation-delay: 156ms;
+}
+.chat-menu__item:active {
+  transform: scale(0.96);
+  transition: transform 0.1s ease;
+}
+
+/* Day chips drop in with a tiny bounce */
+@keyframes day-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.chat-day span {
+  animation: day-drop 0.4s var(--spring) both;
+}
+
+/* Pinned bar: slides down springy; the pin wiggles hello; snippets swap */
+@keyframes pin-bar-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.chat-pinned {
+  animation: pin-bar-in 0.38s var(--spring) backwards;
+}
+@keyframes pin-wiggle {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-22deg);
+  }
+  55% {
+    transform: rotate(14deg);
+  }
+  80% {
+    transform: rotate(-6deg);
+  }
+}
+.chat-pinned svg {
+  animation: pin-wiggle 0.7s ease 0.35s both;
+}
+@keyframes snippet-swap {
+  0% {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.chat-pinned__snippet {
+  animation: snippet-swap 0.28s var(--spring) both;
+}
+.chat-pinned:active {
+  transform: scale(0.97);
+  transition: transform 0.12s ease;
+}
+
+/* Selection mode: bar bounces in, dots pop, count number jumps */
+@keyframes selectbar-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.chat-selectbar {
+  animation: selectbar-in 0.34s var(--spring) both;
+}
+@keyframes dot-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(-50%) scale(0);
+  }
+  70% {
+    transform: translateY(-50%) scale(1.25);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+.chat-select-dot {
+  animation: dot-pop 0.32s var(--spring) both;
+}
+.chat-select-dot.is-on {
+  animation: dot-pop 0.3s var(--spring) both;
+}
+.chat-bubble.is-selected {
+  transform: scale(0.985) rotate(-0.4deg);
+  transition: transform 0.25s var(--spring);
+}
+.chat-selectbar__count em {
+  display: inline-block;
+  font-style: normal;
+  animation: count-jump 0.32s var(--spring) both;
+}
+@keyframes count-jump {
+  0% {
+    transform: scale(1.6) translateY(-3px);
+    color: var(--accent);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+/* Reply bar in the composer slides up with a bounce */
+@keyframes reply-bar-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.chat-editing {
+  animation: reply-bar-in 0.3s var(--spring) both;
+}
+/* Quote block inside a bubble nudges on tap */
+.chat-quote:active {
+  transform: translateX(3px) scale(0.99);
+  transition: transform 0.12s ease;
+}
+
+/* Message-link chip: bouncy entrance + press feedback */
+.md-msglink {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 9px;
+  border-radius: 9px;
+  font-weight: 700;
+  font-size: 0.94em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  cursor: pointer;
+  animation: day-drop 0.34s var(--spring) backwards;
+}
+.md-msglink:active {
+  transform: scale(0.93);
+  transition: transform 0.1s ease;
+}
+
+/* Flip-card: springy overshoot rotation + a hint that wiggles once */
+.chat-card__inner {
+  transition: transform 0.65s var(--spring);
+}
+.chat-card:active .chat-card__inner {
+  transform: scale(0.98);
+}
+.chat-card.is-flipped:active .chat-card__inner {
+  transform: rotateY(180deg) scale(0.98);
+}
+@keyframes hint-wiggle {
+  0%,
+  100% {
+    transform: rotate(0) scale(1);
+  }
+  30% {
+    transform: rotate(-30deg) scale(1.18);
+  }
+  65% {
+    transform: rotate(18deg) scale(1.08);
+  }
+}
+.chat-card__hint svg {
+  animation: hint-wiggle 0.9s ease 0.8s both;
+}
+/* Card lands in the chat with a flourish */
+@keyframes card-land {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) rotate(-2.5deg) scale(0.82);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-3px) rotate(0.8deg) scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.chat-scroll .chat-bubble--card {
+  animation: card-land 0.5s var(--spring) backwards;
+}
+
+/* Deep-link flash: a springy ring drawn on ::after — replacing the bubble's
+   own animation would restart its entrance pop when the flash class drops. */
+@keyframes flash-ring {
+  0% {
+    box-shadow: 0 0 0 0 transparent;
+    opacity: 1;
+  }
+  18% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+    opacity: 0;
+  }
+}
+.chat-bubble.is-flash::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: flash-ring 1.5s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-scroll .chat-bubble,
+  .chat-bubble.is-pressing,
+  .chat-bubble--clone,
+  .chat-menu,
+  .chat-menu__item,
+  .chat-day span,
+  .chat-pinned,
+  .chat-pinned svg,
+  .chat-pinned__snippet,
+  .chat-selectbar,
+  .chat-select-dot,
+  .chat-selectbar__count em,
+  .chat-editing,
+  .md-msglink,
+  .chat-card__hint svg,
+  .chat-scroll .chat-bubble--card,
+  .chat-bubble.is-flash::after {
+    animation: none;
+    transition: none;
   }
   .chat-card__inner {
     transition: none;

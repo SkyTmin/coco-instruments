@@ -170,6 +170,8 @@ export function ChatThread({
   const [cardARs, setCardARs] = useState<Map<string, number>>(new Map());
   const [cardEditor, setCardEditor] = useState<{ id?: string; card: NoteCard } | null>(null);
   const [pinIndex, setPinIndex] = useState(0);
+  // The bubble being long-pressed right now — gets a playful squeeze.
+  const [pressingId, setPressingId] = useState<string | null>(null);
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -518,9 +520,11 @@ export function ChatThread({
     const el = e.currentTarget as HTMLElement;
     press.current = { id: m.id, x: e.clientX, y: e.clientY, fired: false };
     window.clearTimeout(longPressTimer.current);
+    setPressingId(m.id); // squeeze while holding
     longPressTimer.current = window.setTimeout(() => {
       if (!press.current) return;
       press.current.fired = true;
+      setPressingId(null);
       if (selected) {
         toggleSelected(m.id);
         return;
@@ -538,9 +542,13 @@ export function ChatThread({
     if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 12) {
       window.clearTimeout(longPressTimer.current);
       press.current = null;
+      setPressingId(null);
     }
   };
-  const onBubbleUp = () => window.clearTimeout(longPressTimer.current);
+  const onBubbleUp = () => {
+    window.clearTimeout(longPressTimer.current);
+    setPressingId(null);
+  };
   const onBubbleClickCapture = (m: NoteMessage, e: ReactMouseEvent) => {
     if (press.current?.fired) {
       e.preventDefault();
@@ -821,7 +829,9 @@ export function ChatThread({
           >
             ×
           </button>
-          <span className="chat-selectbar__count">Выбрано: {selected.size}</span>
+          <span className="chat-selectbar__count">
+            Выбрано: <em key={selected.size}>{selected.size}</em>
+          </span>
           <div className="chat-selectbar__actions">
             <button
               onClick={() => void copySelected()}
@@ -851,7 +861,7 @@ export function ChatThread({
                   ? ` · ${(pinIndex % pinnedMsgs.length) + 1}/${pinnedMsgs.length}`
                   : ''}
               </span>
-              <span className="chat-pinned__snippet">
+              <span className="chat-pinned__snippet" key={pinIndex % pinnedMsgs.length}>
                 {messageSnippet(pinnedMsgs[pinIndex % pinnedMsgs.length])}
               </span>
             </span>
@@ -882,7 +892,9 @@ export function ChatThread({
               data-mid={m.id}
               className={`chat-bubble${m.card ? ' chat-bubble--card' : ''}${
                 selected?.has(m.id) ? ' is-selected' : ''
-              }${highlightId === m.id ? ' is-flash' : ''}${selected ? ' in-select' : ''}`}
+              }${highlightId === m.id ? ' is-flash' : ''}${selected ? ' in-select' : ''}${
+                pressingId === m.id ? ' is-pressing' : ''
+              }`}
               onPointerDown={(e) => onBubbleDown(m, e)}
               onPointerMove={onBubbleMove}
               onPointerUp={onBubbleUp}
