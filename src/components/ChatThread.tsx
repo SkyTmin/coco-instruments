@@ -604,7 +604,16 @@ export function ChatThread({
                 return (
                   <div key={sideKey} className={`chat-card__face chat-card__${sideKey}`}>
                     {side.photo && (
-                      <div className="chat-card__media">
+                      <div
+                        className="chat-card__media"
+                        onClick={(e) => {
+                          // In the long-press overlay a tap on the photo opens
+                          // it fullscreen (in chat the tap keeps flipping).
+                          if (interactive) return;
+                          e.stopPropagation();
+                          setLightbox(attachmentHref(side.photo!) || null);
+                        }}
+                      >
                         {/* Blurred copy fills the bars when the photo's shape
                             differs from the card's — like Telegram. */}
                         <img
@@ -664,7 +673,7 @@ export function ChatThread({
                 src={attachmentHref(a)}
                 alt={a.name}
                 loading="lazy"
-                onClick={() => interactive && setLightbox(attachmentHref(a) || null)}
+                onClick={() => setLightbox(attachmentHref(a) || null)}
               />
             ))}
           </div>

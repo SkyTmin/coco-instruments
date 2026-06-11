@@ -2225,7 +2225,8 @@ input[type='datetime-local'] {
 .chat-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  /* Above the long-press overlay (980–982): card photos open from the menu. */
+  z-index: 1010;
   background: rgba(0, 0, 0, 0.92);
   display: grid;
   place-items: center;
