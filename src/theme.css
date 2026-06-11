@@ -8521,3 +8521,24 @@ input[type='datetime-local'] {
     transition: none;
   }
 }
+
+/* Glowing call-to-action (wardrobe welcome: "first outfit") */
+@keyframes btn-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 32%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 26px color-mix(in srgb, var(--accent) 62%, transparent);
+  }
+}
+.btn--glow {
+  animation: btn-glow 1.9s ease-in-out infinite;
+  margin-bottom: 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn--glow {
+    animation: none;
+    box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}

@@ -99,6 +99,12 @@ export function ClothingDashboardPage() {
             одном месте.
           </p>
           <button
+            className="btn btn--primary btn--block btn--glow"
+            onClick={() => go('/clothing/outfits/new')}
+          >
+            ✨ Добавить первый образ
+          </button>
+          <button
             className="btn btn--primary btn--block"
             onClick={() => go('/clothing/wardrobe/new')}
           >
