@@ -245,11 +245,65 @@ function NavigationController() {
     try {
       return backButton.onClick(() => {
         tapLight();
+        // An open sheet/menu/lightbox closes first — only then navigate back.
+        // Without this the back press pops history invisibly UNDER the overlay.
+        if (closeTopOverlay()) return;
         navigate(-1);
       });
     } catch {
       return undefined;
     }
+  }, [navigate]);
+
+  return null;
+}
+
+/** iOS-style edge swipe (from the left edge to the right) navigates back. */
+function SwipeBackController() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const pathRef = useRef(location.pathname);
+  pathRef.current = location.pathname;
+
+  useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+    let active = false;
+    let fired = false;
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      // Only react to gestures that begin at the very left edge — everything
+      // else belongs to in-app swipes (calendar, swipe-to-delete, graph pan).
+      active = t.clientX <= 28 && pathRef.current !== '/';
+      fired = false;
+      startX = t.clientX;
+      startY = t.clientY;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!active || fired) return;
+      const t = e.touches[0];
+      if (!t) return;
+      const dx = t.clientX - startX;
+      const dy = Math.abs(t.clientY - startY);
+      if (dx > 64 && dy < 50 && dx > dy * 1.6) {
+        fired = true;
+        active = false;
+        tapLight();
+        if (!closeTopOverlay()) navigate(-1);
+      }
+    };
+    const onEnd = () => {
+      active = false;
+    };
+    window.addEventListener('touchstart', onStart, { passive: true });
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend', onEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onStart);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
   }, [navigate]);
 
   return null;
@@ -309,6 +363,7 @@ export function App() {
     >
       <HashRouter>
         <NavigationController />
+        <SwipeBackController />
         <KeyboardController />
         <CropProvider>
           <Suspense fallback={<div className="route-fallback" aria-hidden />}>

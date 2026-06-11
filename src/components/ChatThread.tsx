@@ -161,6 +161,7 @@ export function ChatThread({
   const [linkPicker, setLinkPicker] = useState(false);
   const [selected, setSelected] = useState<Set<string> | null>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<NoteMessage | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [cardEditor, setCardEditor] = useState<{ id?: string; card: NoteCard } | null>(null);
@@ -322,10 +323,17 @@ export function ChatThread({
     window.setTimeout(() => textRef.current?.focus(), 0);
   };
 
-  const removeMessage = (m: NoteMessage) => {
+  // Deleting always asks first (single via the menu, bulk via the select bar).
+  const askRemoveMessage = (m: NoteMessage) => {
     setMenu(null);
+    setConfirmDelete(m);
+  };
+
+  const removeMessage = (m: NoteMessage) => {
+    setConfirmDelete(null);
     if (editingId === m.id) resetComposer();
     onDeleteMessage(m.id);
+    notifyWarning();
   };
 
   const copyMessage = async (m: NoteMessage) => {
@@ -543,8 +551,9 @@ export function ChatThread({
           <div
             className={`chat-card${flipped.has(m.id) ? ' is-flipped' : ''}`}
             onClick={(e) => {
-              if (!interactive) return;
-              if ((e.target as HTMLElement).closest('a, button')) return;
+              // Flipping works everywhere — including the long-press overlay
+              // clone, so the other side can be read/copied from the menu.
+              if ((e.target as HTMLElement).closest('a, button:not(.chat-card__hint)')) return;
               toggleFlip(m.id);
             }}
           >
@@ -576,9 +585,17 @@ export function ChatThread({
                 );
               })}
             </div>
-            <span className="chat-card__hint" aria-hidden>
-              <IconSwap size={13} />
-            </span>
+            <button
+              type="button"
+              className="chat-card__hint"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFlip(m.id);
+              }}
+              aria-label="Перевернуть карточку"
+            >
+              <IconSwap size={14} />
+            </button>
           </div>
         )}
         {images.length > 0 && (
@@ -700,7 +717,7 @@ export function ChatThread({
         label: 'Удалить',
         icon: <IconTrash size={18} />,
         danger: true,
-        onClick: () => removeMessage(m),
+        onClick: () => askRemoveMessage(m),
       },
     ];
     const menuH = actions.length * 44 + 14;
@@ -1041,6 +1058,15 @@ export function ChatThread({
           message="Выбранные сообщения исчезнут из заметки."
           onClose={() => setConfirmBulk(false)}
           onConfirm={deleteSelected}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Удалить сообщение?"
+          message={`«${messageSnippet(confirmDelete, 60)}» исчезнет из заметки.`}
+          onClose={() => setConfirmDelete(null)}
+          onConfirm={() => removeMessage(confirmDelete)}
         />
       )}
 

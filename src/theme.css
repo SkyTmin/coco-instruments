@@ -7923,6 +7923,10 @@ input[type='datetime-local'] {
 .chat-bubble--clone button {
   pointer-events: none;
 }
+/* …except the card-flip button: the other side must be reachable from the menu. */
+.chat-bubble--clone .chat-card__hint {
+  pointer-events: auto;
+}
 @keyframes menu-bubble-in {
   from {
     transform: scale(0.96);
@@ -8060,18 +8064,20 @@ input[type='datetime-local'] {
 }
 .chat-card__hint {
   position: absolute;
-  right: 8px;
-  top: 8px;
+  right: 6px;
+  top: 6px;
   z-index: 2;
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   color: #fff;
   background: rgba(0, 0, 0, 0.38);
   backdrop-filter: blur(4px);
-  pointer-events: none;
+}
+.chat-card__hint:active {
+  transform: scale(0.9);
 }
 
 /* Card editor sheet */
