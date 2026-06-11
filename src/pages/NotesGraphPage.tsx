@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent, WheelEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Screen, Sheet } from '@/components/ui';
+import { ConfirmDialog, Screen, Sheet } from '@/components/ui';
 import { IconGraph, IconSearch } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import type { GraphSize, NoteGraphLink, NoteGraphPoint } from '@/lib/notes-graph';
@@ -204,14 +204,26 @@ export function NotesGraphPage() {
       return next;
     });
   };
+  // Highlighted nodes that actually exist in THIS graph. The clear chip lives
+  // where the highlights are — so a highlight made inside a list never surfaces
+  // a clear button on the unrelated overview graph.
+  const highlightedHere = useMemo(
+    () => graph.nodes.filter((n) => highlighted.has(n.id)).map((n) => n.id),
+    [graph, highlighted],
+  );
+  const [confirmClear, setConfirmClear] = useState(false);
   const clearHighlights = () => {
     selectionChanged();
-    setHighlighted(new Set());
-    try {
-      localStorage.removeItem(HIGHLIGHTS_KEY);
-    } catch {
-      /* ignore quota / private mode */
-    }
+    setHighlighted((cur) => {
+      const next = new Set(cur);
+      for (const id of highlightedHere) next.delete(id);
+      try {
+        localStorage.setItem(HIGHLIGHTS_KEY, JSON.stringify([...next]));
+      } catch {
+        /* ignore quota / private mode */
+      }
+      return next;
+    });
   };
   const [size, setSize] = useState<GraphSize>(GRAPH_VIEW_BOX);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -782,7 +794,7 @@ export function NotesGraphPage() {
             avail.missing ||
             avail.people ||
             (avail.details && showPeople) ||
-            highlighted.size > 0) && (
+            highlightedHere.length > 0) && (
             <div className="graph-filters">
               {avail.tags && (
                 <button
@@ -832,10 +844,13 @@ export function NotesGraphPage() {
                   Детали
                 </button>
               )}
-              {highlighted.size > 0 && (
-                <button className="graph-chip graph-chip--clear" onClick={clearHighlights}>
+              {highlightedHere.length > 0 && (
+                <button
+                  className="graph-chip graph-chip--clear"
+                  onClick={() => setConfirmClear(true)}
+                >
                   <span className="graph-chip__dot" />
-                  Снять подсветку · {highlighted.size}
+                  Снять подсветку · {highlightedHere.length}
                 </button>
               )}
             </div>
@@ -1086,6 +1101,19 @@ export function NotesGraphPage() {
             </Sheet>
           );
         })()}
+
+      {confirmClear && (
+        <ConfirmDialog
+          title="Снять подсветку?"
+          message={`Подсветка будет снята со всех выделенных узлов в этом графе (${highlightedHere.length}).`}
+          confirmLabel="Снять подсветку"
+          onClose={() => setConfirmClear(false)}
+          onConfirm={() => {
+            clearHighlights();
+            setConfirmClear(false);
+          }}
+        />
+      )}
     </Screen>
   );
 }
