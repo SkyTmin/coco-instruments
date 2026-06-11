@@ -30,6 +30,14 @@ export async function init(debug: boolean): Promise<void> {
     themeParams.bindCssVars();
   }
 
+  // Tell Telegram we're ready to be shown. Desktop is strict about this —
+  // without the signal it can keep its loader and fail the launch.
+  try {
+    miniApp.ready();
+  } catch {
+    /* not critical outside Telegram */
+  }
+
   if (viewport.mount.isAvailable()) {
     void viewport.mount().then(() => {
       viewport.bindCssVars();

@@ -3402,10 +3402,95 @@ input[type='datetime-local'] {
 
 .notes-graph-controls {
   padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
+/* The column gap spaces the controls evenly; clear the legacy per-row margins. */
 .notes-graph-controls .segmented {
-  margin-bottom: 10px;
+  margin-bottom: 0;
+}
+.notes-graph-controls .notes-depth {
+  margin: 0;
+}
+
+/* Graph search: the shared glass pill plus a leading magnifier (graph only). */
+.graph-search-wrap .notes-search--list {
+  padding-left: 40px;
+}
+.graph-search-ico {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* Context-aware layer filters. Each chip carries its node's colour, so the row
+   doubles as a quiet legend; "on" means that kind is currently drawn. */
+.graph-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.graph-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 8px 13px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    background 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+.graph-chip:active {
+  transform: scale(0.95);
+}
+.graph-chip__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--chip, var(--muted));
+  opacity: 0.35;
+  transition: opacity 0.16s ease;
+}
+.graph-chip.is-on {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--chip) 55%, var(--glass-border));
+  background: color-mix(in srgb, var(--chip) 14%, var(--surface));
+}
+.graph-chip.is-on .graph-chip__dot {
+  opacity: 1;
+}
+.graph-chip--tags {
+  --chip: var(--accent);
+}
+.graph-chip--missing {
+  --chip: var(--warn);
+}
+.graph-chip--people {
+  --chip: #ec7f8f;
+}
+.graph-chip--details {
+  --chip: #c79653;
+}
+.graph-chip--clear {
+  --chip: var(--pos);
+  border-style: dashed;
+}
+.graph-chip--clear .graph-chip__dot {
+  opacity: 1;
 }
 
 .notes-graph-hint {

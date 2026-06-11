@@ -39,6 +39,9 @@ export interface NoteGraphNode {
   /** For 'list' nodes: the notebook and how many notes it holds. */
   list?: NoteList;
   count?: number;
+  /** Extra haystack for the graph filter (e.g. a list node carries the titles
+   *  of its member notes, so searching a note finds its collapsed notebook). */
+  searchText?: string;
   degree: number;
   incoming: number;
   outgoing: number;
@@ -345,9 +348,17 @@ export function buildOverviewGraph(
   }
 
   const counts = new Map<string, number>();
+  // Member note titles per list — so searching a note finds its notebook node.
+  const memberTitles = new Map<string, string[]>();
   for (const note of notes) {
-    if (note.listId && listById.has(note.listId))
+    if (note.listId && listById.has(note.listId)) {
       counts.set(note.listId, (counts.get(note.listId) ?? 0) + 1);
+      if (note.title) {
+        const arr = memberTitles.get(note.listId) ?? [];
+        arr.push(note.title);
+        memberTitles.set(note.listId, arr);
+      }
+    }
   }
   for (const list of lists) {
     nodes.set(`list:${list.id}`, {
@@ -356,6 +367,7 @@ export function buildOverviewGraph(
       label: list.emoji ? `${list.emoji} ${list.name}` : list.name,
       list,
       count: counts.get(list.id) ?? 0,
+      searchText: (memberTitles.get(list.id) ?? []).join(' '),
       degree: 0,
       incoming: 0,
       outgoing: 0,
@@ -624,7 +636,9 @@ export function filterNoteGraph(
     if (!allowed.has(node.id)) return false;
     if (!options.showMissing && node.kind === 'missing') return false;
     if (!options.showTags && node.kind === 'tag') return false;
-    if (options.showPeople === false && node.kind === 'person') return false;
+    // 'person' = an individual; 'people' = the collapsed overview node.
+    if (options.showPeople === false && (node.kind === 'person' || node.kind === 'people'))
+      return false;
     if (options.showPeople === false && ['gift', 'promise', 'event'].includes(node.kind))
       return false;
     if (options.showDetails === false && ['gift', 'promise', 'event'].includes(node.kind))
@@ -634,7 +648,9 @@ export function filterNoteGraph(
     const person = node.person
       ? `${node.person.description ?? ''} ${node.person.tags.join(' ')}`
       : '';
-    return normalizeNoteTitle(`${node.label} ${body} ${person}`).includes(query);
+    return normalizeNoteTitle(`${node.label} ${body} ${person} ${node.searchText ?? ''}`).includes(
+      query,
+    );
   });
 
   const visible = new Set(nodes.map((node) => node.id));

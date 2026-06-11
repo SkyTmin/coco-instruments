@@ -94,6 +94,13 @@ export const IconHash = (p: IconProps) => (
   </svg>
 );
 
+export const IconSearch = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m21 21-4.3-4.3" />
+  </svg>
+);
+
 export const IconSend = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M22 2 11 13" />

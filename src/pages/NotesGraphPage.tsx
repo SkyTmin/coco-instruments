@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, PointerEvent, WheelEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Screen, Sheet } from '@/components/ui';
-import { IconGraph } from '@/components/icons';
+import { IconGraph, IconSearch } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import type { GraphSize, NoteGraphLink, NoteGraphPoint } from '@/lib/notes-graph';
 import {
@@ -153,6 +153,18 @@ export function NotesGraphPage() {
     promises,
     relations,
   ]);
+  // Which layer filters are meaningful here: a toggle only appears when the
+  // current graph actually holds that kind of node, so no filter ever sits dead
+  // (e.g. the overview has no tag/missing nodes, so those chips stay hidden).
+  const avail = useMemo(() => {
+    const kinds = new Set(graph.nodes.map((n) => n.kind));
+    return {
+      tags: kinds.has('tag'),
+      missing: kinds.has('missing'),
+      people: kinds.has('person') || kinds.has('people'),
+      details: kinds.has('gift') || kinds.has('promise') || kinds.has('event'),
+    };
+  }, [graph]);
   const [activeId, setActiveId] = useState<string | undefined>(
     personParam ? personNodeId(personParam) : (focusParam ?? notes[0]?.id),
   );
@@ -191,6 +203,15 @@ export function NotesGraphPage() {
       }
       return next;
     });
+  };
+  const clearHighlights = () => {
+    selectionChanged();
+    setHighlighted(new Set());
+    try {
+      localStorage.removeItem(HIGHLIGHTS_KEY);
+    } catch {
+      /* ignore quota / private mode */
+    }
   };
   const [size, setSize] = useState<GraphSize>(GRAPH_VIEW_BOX);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -701,51 +722,43 @@ export function NotesGraphPage() {
               ← Все списки и заметки
             </button>
           )}
+          <div className="notes-search-wrap graph-search-wrap">
+            <IconSearch size={17} className="graph-search-ico" />
+            <input
+              className="input notes-search notes-search--list"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+              placeholder="Найти узел на графе"
+            />
+            {query && (
+              <button
+                className="notes-search__clear"
+                onClick={() => setQuery('')}
+                aria-label="Очистить"
+              >
+                ×
+              </button>
+            )}
+          </div>
           <div className="segmented">
             <button
               className={`segmented__opt${mode === 'global' ? ' is-active' : ''}`}
-              onClick={() => setMode('global')}
+              onClick={() => {
+                selectionChanged();
+                setMode('global');
+              }}
             >
-              Глобальный
+              Весь граф
             </button>
             <button
               className={`segmented__opt${mode === 'local' ? ' is-active' : ''}`}
-              onClick={() => setMode('local')}
+              onClick={() => {
+                selectionChanged();
+                setMode('local');
+              }}
             >
-              Локальный
-            </button>
-          </div>
-          <div className="notes-toolbar">
-            <input
-              className="input notes-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Фильтр"
-            />
-            <button
-              className={`notes-toggle${showTags ? ' is-active' : ''}`}
-              onClick={() => setShowTags((v) => !v)}
-            >
-              Теги
-            </button>
-            <button
-              className={`notes-toggle${showMissing ? ' is-active' : ''}`}
-              onClick={() => setShowMissing((v) => !v)}
-            >
-              Пустые
-            </button>
-            <button
-              className={`notes-toggle${showPeople ? ' is-active' : ''}`}
-              onClick={() => setShowPeople((v) => !v)}
-            >
-              Люди
-            </button>
-            <button
-              className={`notes-toggle${showDetails ? ' is-active' : ''}`}
-              onClick={() => setShowDetails((v) => !v)}
-              disabled={!showPeople}
-            >
-              Детали
+              Вокруг узла
             </button>
           </div>
           {mode === 'local' && (
@@ -755,11 +768,76 @@ export function NotesGraphPage() {
                 <button
                   key={value}
                   className={`notes-depth__btn${depth === value ? ' is-active' : ''}`}
-                  onClick={() => setDepth(value)}
+                  onClick={() => {
+                    selectionChanged();
+                    setDepth(value);
+                  }}
                 >
                   {value}
                 </button>
               ))}
+            </div>
+          )}
+          {(avail.tags ||
+            avail.missing ||
+            avail.people ||
+            (avail.details && showPeople) ||
+            highlighted.size > 0) && (
+            <div className="graph-filters">
+              {avail.tags && (
+                <button
+                  className={`graph-chip graph-chip--tags${showTags ? ' is-on' : ''}`}
+                  onClick={() => {
+                    selectionChanged();
+                    setShowTags((v) => !v);
+                  }}
+                >
+                  <span className="graph-chip__dot" />
+                  Теги
+                </button>
+              )}
+              {avail.missing && (
+                <button
+                  className={`graph-chip graph-chip--missing${showMissing ? ' is-on' : ''}`}
+                  onClick={() => {
+                    selectionChanged();
+                    setShowMissing((v) => !v);
+                  }}
+                >
+                  <span className="graph-chip__dot" />
+                  Не созданы
+                </button>
+              )}
+              {avail.people && (
+                <button
+                  className={`graph-chip graph-chip--people${showPeople ? ' is-on' : ''}`}
+                  onClick={() => {
+                    selectionChanged();
+                    setShowPeople((v) => !v);
+                  }}
+                >
+                  <span className="graph-chip__dot" />
+                  Люди
+                </button>
+              )}
+              {avail.details && showPeople && (
+                <button
+                  className={`graph-chip graph-chip--details${showDetails ? ' is-on' : ''}`}
+                  onClick={() => {
+                    selectionChanged();
+                    setShowDetails((v) => !v);
+                  }}
+                >
+                  <span className="graph-chip__dot" />
+                  Детали
+                </button>
+              )}
+              {highlighted.size > 0 && (
+                <button className="graph-chip graph-chip--clear" onClick={clearHighlights}>
+                  <span className="graph-chip__dot" />
+                  Снять подсветку · {highlighted.size}
+                </button>
+              )}
             </div>
           )}
         </div>

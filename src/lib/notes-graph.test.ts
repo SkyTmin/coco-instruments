@@ -92,6 +92,29 @@ describe('overview graph — people', () => {
     const bare = buildOverviewGraph(notes, lists);
     expect(bare.nodes.some((n) => n.id === 'people:all')).toBe(false);
   });
+
+  it('hides the collapsed people node with showPeople=false', () => {
+    const filtered = filterNoteGraph(g, {
+      mode: 'global',
+      depth: 1,
+      showMissing: true,
+      showTags: true,
+      showPeople: false,
+      query: '',
+    });
+    expect(filtered.nodes.some((n) => n.id === 'people:all')).toBe(false);
+  });
+
+  it('finds a collapsed list by the title of a note inside it', () => {
+    const filtered = filterNoteGraph(g, {
+      mode: 'global',
+      depth: 1,
+      showMissing: true,
+      showTags: true,
+      query: 'Горло',
+    });
+    expect(filtered.nodes.some((n) => n.id === 'list:health')).toBe(true);
+  });
 });
 
 describe('people graph (the "Люди" view)', () => {

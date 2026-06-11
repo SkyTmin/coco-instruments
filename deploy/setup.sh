@@ -65,10 +65,20 @@ else
   git clone -b "$BRANCH" "$REPO" "$APP_DIR"
 fi
 
-echo "==> Building"
+echo "==> Building (zero-downtime: build aside, then swap)"
 cd "$APP_DIR"
 npm ci
-npm run build
+# Vite empties the output dir at build start. Building straight into dist/
+# would leave the RUNNING server with an empty folder for the whole build —
+# anyone opening the app then gets Telegram's "Не удалось запустить
+# приложение" (Desktop caches it until restart). So: build into dist-next,
+# swap atomically, only then restart.
+rm -rf dist-next
+npm run build -- --outDir dist-next
+rm -rf dist-old
+[ -d dist ] && mv dist dist-old
+mv dist-next dist
+rm -rf dist-old
 
 echo "==> Configuring persistent uploads"
 mkdir -p "$UPLOAD_DIR" "$STORE_DIR"
