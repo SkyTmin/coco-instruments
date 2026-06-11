@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { deriveFromMessages, makeMessage, materializeMessages } from './notes-messages';
+import {
+  deriveFromMessages,
+  makeMessage,
+  materializeMessages,
+  messageSnippet,
+} from './notes-messages';
 
 const img = {
   id: 'a1',
@@ -37,5 +42,37 @@ describe('notes messages', () => {
     const d = deriveFromMessages(messages);
     expect(d.body).toBe('первое #t\n\nвторое [[L]]');
     expect(d.attachments).toEqual([img]);
+  });
+});
+
+describe('chat 2.0 messages', () => {
+  it('keeps reply and card via makeMessage extra', () => {
+    const card = { front: { text: 'A' }, back: { text: 'B' } };
+    const m = makeMessage('', [], { replyToId: 'r1', card });
+    expect(m.replyToId).toBe('r1');
+    expect(m.card).toEqual(card);
+  });
+
+  it('derives card text into the body (for tags/links/graph)', () => {
+    const m = makeMessage('', [], {
+      card: { front: { text: 'лицо #тема' }, back: { text: 'оборот [[Связь]]' } },
+    });
+    const d = deriveFromMessages([m]);
+    expect(d.body).toContain('лицо #тема');
+    expect(d.body).toContain('оборот [[Связь]]');
+  });
+
+  it('derives card photos into the flat attachments', () => {
+    const m = makeMessage('', [], { card: { front: { photo: img }, back: {} } });
+    expect(deriveFromMessages([m]).attachments).toEqual([img]);
+  });
+
+  it('builds a one-line snippet for text, cards and photos', () => {
+    expect(messageSnippet(makeMessage('многострочный\nтекст', []))).toBe('многострочный текст');
+    expect(messageSnippet(makeMessage('', [], { card: { front: {}, back: {} } }))).toBe(
+      '🃏 Карточка',
+    );
+    expect(messageSnippet(makeMessage('', [img]))).toBe('📷 Фото');
+    expect(messageSnippet(makeMessage('х'.repeat(100), []))).toHaveLength(70);
   });
 });

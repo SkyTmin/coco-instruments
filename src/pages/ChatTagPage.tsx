@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChatThread } from '@/components/ChatThread';
 import { NotesGuide } from '@/components/NotesGuide';
 import { Sheet } from '@/components/ui';
@@ -7,6 +7,7 @@ import { IconDots } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { getTagPageRelations, normalizeNoteTitle } from '@/lib/notes-graph';
 import { materializeMessages } from '@/lib/notes-messages';
+import { buildMessageLink } from '@/lib/notes-markdown';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 
 function decodeTag(raw: string | undefined): string {
@@ -21,6 +22,7 @@ function decodeTag(raw: string | undefined): string {
 export function ChatTagPage() {
   const navigate = useNavigate();
   const { tag: rawTag } = useParams();
+  const [searchParams] = useSearchParams();
   const tag = decodeTag(rawTag);
   const hydrated = useFinanceStore((s) => s.hydrated);
   const notes = useFinanceStore((s) => s.notes);
@@ -28,6 +30,8 @@ export function ChatTagPage() {
   const addTagMessage = useFinanceStore((s) => s.addTagMessage);
   const updateTagMessage = useFinanceStore((s) => s.updateTagMessage);
   const removeTagMessage = useFinanceStore((s) => s.removeTagMessage);
+  const removeTagMessages = useFinanceStore((s) => s.removeTagMessages);
+  const setTagMessagePinned = useFinanceStore((s) => s.setTagMessagePinned);
 
   const page = useMemo(() => tagPages.find((p) => p.tag === tag), [tagPages, tag]);
   const messages = useMemo(() => (page ? materializeMessages(page) : []), [page]);
@@ -89,9 +93,13 @@ export function ChatTagPage() {
         notes={notes}
         emptyTitle={`Тема «${tag}»`}
         placeholder="Мысль по теме…"
-        onSend={(text, atts) => addTagMessage(tag, text, atts)}
-        onEditMessage={(mid, text, atts) => updateTagMessage(tag, mid, text, atts)}
+        focusMessageId={searchParams.get('msg')}
+        onSend={(text, atts, extra) => addTagMessage(tag, text, atts, extra)}
+        onEditMessage={(mid, text, atts, extra) => updateTagMessage(tag, mid, text, atts, extra)}
         onDeleteMessage={(mid) => removeTagMessage(tag, mid)}
+        onDeleteMessages={(ids) => removeTagMessages(tag, ids)}
+        onTogglePin={(mid, pinned) => setTagMessagePinned(tag, mid, pinned)}
+        messageLink={(m) => buildMessageLink('t', tag, m.id)}
         onOpenNote={(nid) => navigate(`/notes/${nid}`)}
         onOpenMissing={(t) => {
           const created = useFinanceStore.getState().addNote({ title: t, body: '' });
@@ -99,6 +107,10 @@ export function ChatTagPage() {
           navigate(`/notes/${created.id}`);
         }}
         onTag={openTag}
+        onOpenMessage={(kind, ref, mid) => {
+          if (kind === 'n') navigate(`/notes/${ref}?msg=${mid}`);
+          else navigate(`/notes/tag/${encodeURIComponent(ref)}?msg=${mid}`);
+        }}
       />
 
       {menu && (

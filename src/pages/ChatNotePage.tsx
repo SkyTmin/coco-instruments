@@ -8,7 +8,9 @@ import { IconDots, IconGraph, IconHeart, IconLink } from '@/components/icons';
 import type { NoteAttachment } from '@/types';
 import { useFinanceStore } from '@/store';
 import { getNoteRelations, parseNoteTags } from '@/lib/notes-graph';
+import type { MessageExtra } from '@/lib/notes-messages';
 import { deriveFromMessages, makeMessage, materializeMessages } from '@/lib/notes-messages';
+import { buildMessageLink } from '@/lib/notes-markdown';
 import { notifySuccess, selectionChanged, tapLight } from '@/lib/haptics';
 
 export function ChatNotePage() {
@@ -26,6 +28,8 @@ export function ChatNotePage() {
   const addNoteMessage = useFinanceStore((s) => s.addNoteMessage);
   const updateNoteMessage = useFinanceStore((s) => s.updateNoteMessage);
   const removeNoteMessage = useFinanceStore((s) => s.removeNoteMessage);
+  const removeNoteMessages = useFinanceStore((s) => s.removeNoteMessages);
+  const setNoteMessagePinned = useFinanceStore((s) => s.setNoteMessagePinned);
   const updateNote = useFinanceStore((s) => s.updateNote);
   const removeNote = useFinanceStore((s) => s.removeNote);
   const linkNoteToPerson = useFinanceStore((s) => s.linkNoteToPerson);
@@ -75,10 +79,14 @@ export function ChatNotePage() {
     if (currentId.current && t && t !== note?.title) updateNote(currentId.current, { title: t });
   };
 
-  const ensureNote = (firstText: string, atts: NoteAttachment[]) => {
-    const msg = makeMessage(firstText, atts);
+  const ensureNote = (firstText: string, atts: NoteAttachment[], extra?: MessageExtra) => {
+    const msg = makeMessage(firstText, atts, extra);
     const derived = deriveFromMessages([msg]);
-    const t = title.trim() || firstText.split('\n')[0].trim().slice(0, 60) || 'Заметка';
+    const t =
+      title.trim() ||
+      firstText.split('\n')[0].trim().slice(0, 60) ||
+      derived.body.split('\n')[0].trim().slice(0, 60) ||
+      'Заметка';
     const created = addNote({
       title: t,
       messages: [msg],
@@ -92,9 +100,14 @@ export function ChatNotePage() {
     navigate(`/notes/${created.id}`, { replace: true });
   };
 
-  const onSend = (text: string, atts: NoteAttachment[]) => {
-    if (currentId.current) addNoteMessage(currentId.current, text, atts);
-    else ensureNote(text, atts);
+  const onSend = (text: string, atts: NoteAttachment[], extra?: MessageExtra) => {
+    if (currentId.current) addNoteMessage(currentId.current, text, atts, extra);
+    else ensureNote(text, atts, extra);
+  };
+
+  const openMessage = (kind: 'n' | 't', ref: string, mid: string) => {
+    if (kind === 'n') navigate(`/notes/${ref}?msg=${mid}`);
+    else navigate(`/notes/tag/${encodeURIComponent(ref)}?msg=${mid}`);
   };
 
   const pickList = (newListId: string | undefined) => {
@@ -176,11 +189,19 @@ export function ChatNotePage() {
         notes={notes}
         emptyTitle="Ваше пространство для мыслей"
         placeholder="Новая мысль…"
+        focusMessageId={searchParams.get('msg')}
         onSend={onSend}
-        onEditMessage={(mid, text, atts) =>
-          currentId.current && updateNoteMessage(currentId.current, mid, text, atts)
+        onEditMessage={(mid, text, atts, extra) =>
+          currentId.current && updateNoteMessage(currentId.current, mid, text, atts, extra)
         }
         onDeleteMessage={(mid) => currentId.current && removeNoteMessage(currentId.current, mid)}
+        onDeleteMessages={(ids) => currentId.current && removeNoteMessages(currentId.current, ids)}
+        onTogglePin={(mid, pinned) =>
+          currentId.current && setNoteMessagePinned(currentId.current, mid, pinned)
+        }
+        messageLink={(m) =>
+          currentId.current ? buildMessageLink('n', currentId.current, m.id) : null
+        }
         onOpenNote={(nid) => navigate(`/notes/${nid}`)}
         onOpenMissing={(t) => {
           const created = useFinanceStore.getState().addNote({ title: t, body: '', listId });
@@ -188,6 +209,7 @@ export function ChatNotePage() {
           navigate(`/notes/${created.id}`);
         }}
         onTag={openTag}
+        onOpenMessage={openMessage}
       />
 
       {menu && (

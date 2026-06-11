@@ -14,6 +14,8 @@ interface Props {
   onOpenMissing: (title: string) => void;
   onTag: (tag: string) => void;
   onToggleTask: (index: number) => void;
+  /** Open a deep link to one message ([[msg:…]] chips). */
+  onOpenMessage?: (kind: 'n' | 't', ref: string, messageId: string) => void;
 }
 
 function resolveImage(src: string, attachments: NoteAttachment[]): string | undefined {
@@ -33,6 +35,7 @@ export function NoteMarkdown({
   onOpenMissing,
   onTag,
   onToggleTask,
+  onOpenMessage,
 }: Props) {
   const blocks = useMemo(() => parseBlocks(body), [body]);
   const byTitle = useMemo(
@@ -106,6 +109,24 @@ export function NoteMarkdown({
               onClick={() => onOpenMissing(node.target)}
             >
               {label}
+            </button>
+          );
+        }
+        case 'msglink': {
+          const targetNote = node.kind === 'n' ? notes.find((n) => n.id === node.ref) : undefined;
+          const label = node.kind === 'n' ? (targetNote?.title ?? 'сообщение') : `#${node.ref}`;
+          return (
+            <button
+              key={i}
+              type="button"
+              className="md-msglink"
+              onClick={() => {
+                if (onOpenMessage) onOpenMessage(node.kind, node.ref, node.mid);
+                else if (node.kind === 'n' && targetNote) onOpenNote(targetNote.id);
+                else if (node.kind === 't') onTag(node.ref);
+              }}
+            >
+              ↩ {label}
             </button>
           );
         }

@@ -246,6 +246,18 @@ export interface Attachment {
 /** Notes historically called it NoteAttachment — keep the alias. */
 export type NoteAttachment = Attachment;
 
+/** One side of a flip-card: a photo, a text, or both (text over the photo). */
+export interface NoteCardSide {
+  text?: string;
+  photo?: NoteAttachment;
+}
+
+/** A two-sided flip-card message: tap flips front ⇄ back. */
+export interface NoteCard {
+  front: NoteCardSide;
+  back: NoteCardSide;
+}
+
 /** One message in a note/tag "chat": text and/or photos, sent at a time. */
 export interface NoteMessage {
   id: string;
@@ -253,6 +265,12 @@ export interface NoteMessage {
   attachments?: NoteAttachment[];
   createdAt: number;
   editedAt?: number;
+  /** Pinned to the top bar of the chat (like Telegram). */
+  pinned?: boolean;
+  /** Replied-to message id (quote shown above the bubble). */
+  replyToId?: string;
+  /** When present the message renders as a flip-card instead of a bubble. */
+  card?: NoteCard;
 }
 
 /** A tag's own page: a chat of messages (with a legacy text body kept in sync

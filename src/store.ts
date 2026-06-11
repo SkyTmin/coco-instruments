@@ -61,6 +61,7 @@ import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { genId } from '@/lib/id';
 import { normalizeNoteTitle } from '@/lib/notes-graph';
 import { deriveFromMessages, makeMessage, materializeMessages } from '@/lib/notes-messages';
+import type { MessageExtra } from '@/lib/notes-messages';
 import { deriveStatus, paidSoFar, resolve } from '@/lib/finance-calc';
 
 export type ObligationDraft = Omit<
@@ -261,23 +262,39 @@ interface FinanceState {
   getList: (id: string) => ExpenseList | undefined;
 
   addNote: (draft: NoteDraft) => Note;
-  addNoteMessage: (noteId: string, text: string, attachments: NoteAttachment[]) => void;
+  addNoteMessage: (
+    noteId: string,
+    text: string,
+    attachments: NoteAttachment[],
+    extra?: MessageExtra,
+  ) => void;
   updateNoteMessage: (
     noteId: string,
     messageId: string,
     text: string,
     attachments: NoteAttachment[],
+    extra?: MessageExtra,
   ) => void;
   removeNoteMessage: (noteId: string, messageId: string) => void;
+  removeNoteMessages: (noteId: string, messageIds: string[]) => void;
+  setNoteMessagePinned: (noteId: string, messageId: string, pinned: boolean) => void;
   getTagPage: (tag: string) => TagPage | undefined;
-  addTagMessage: (tag: string, text: string, attachments: NoteAttachment[]) => void;
+  addTagMessage: (
+    tag: string,
+    text: string,
+    attachments: NoteAttachment[],
+    extra?: MessageExtra,
+  ) => void;
   updateTagMessage: (
     tag: string,
     messageId: string,
     text: string,
     attachments: NoteAttachment[],
+    extra?: MessageExtra,
   ) => void;
   removeTagMessage: (tag: string, messageId: string) => void;
+  removeTagMessages: (tag: string, messageIds: string[]) => void;
+  setTagMessagePinned: (tag: string, messageId: string, pinned: boolean) => void;
   updateNote: (id: string, patch: Partial<Note>) => void;
   removeNote: (id: string) => void;
   setNotePinned: (id: string, pinned: boolean) => void;
@@ -623,10 +640,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   // ---- note chat messages (body/attachments stay in sync for the graph) ----
-  addNoteMessage: (noteId, text, attachments) => {
+  addNoteMessage: (noteId, text, attachments, extra) => {
     const cur = get().notes.find((n) => n.id === noteId);
     if (!cur) return;
-    const messages = [...materializeMessages(cur), makeMessage(text, attachments)];
+    const messages = [...materializeMessages(cur), makeMessage(text, attachments, extra)];
     const notes = get().notes.map((n) =>
       n.id === noteId
         ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() }
@@ -635,11 +652,19 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ notes });
     persistNotes(notes, get().noteLists, get().tagPages);
   },
-  updateNoteMessage: (noteId, messageId, text, attachments) => {
+  updateNoteMessage: (noteId, messageId, text, attachments, extra) => {
     const cur = get().notes.find((n) => n.id === noteId);
     if (!cur) return;
     const messages = materializeMessages(cur).map((m) =>
-      m.id === messageId ? { ...m, text: text.trim(), attachments, editedAt: Date.now() } : m,
+      m.id === messageId
+        ? {
+            ...m,
+            text: text.trim(),
+            attachments,
+            editedAt: Date.now(),
+            ...(extra && 'card' in extra ? { card: extra.card } : {}),
+          }
+        : m,
     );
     const notes = get().notes.map((n) =>
       n.id === noteId
@@ -650,14 +675,28 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistNotes(notes, get().noteLists, get().tagPages);
   },
   removeNoteMessage: (noteId, messageId) => {
+    get().removeNoteMessages(noteId, [messageId]);
+  },
+  removeNoteMessages: (noteId, messageIds) => {
     const cur = get().notes.find((n) => n.id === noteId);
     if (!cur) return;
-    const messages = materializeMessages(cur).filter((m) => m.id !== messageId);
+    const drop = new Set(messageIds);
+    const messages = materializeMessages(cur).filter((m) => !drop.has(m.id));
     const notes = get().notes.map((n) =>
       n.id === noteId
         ? { ...n, messages, ...deriveFromMessages(messages), updatedAt: Date.now() }
         : n,
     );
+    set({ notes });
+    persistNotes(notes, get().noteLists, get().tagPages);
+  },
+  setNoteMessagePinned: (noteId, messageId, pinned) => {
+    const cur = get().notes.find((n) => n.id === noteId);
+    if (!cur) return;
+    const messages = materializeMessages(cur).map((m) =>
+      m.id === messageId ? { ...m, pinned: pinned || undefined } : m,
+    );
+    const notes = get().notes.map((n) => (n.id === noteId ? { ...n, messages } : n));
     set({ notes });
     persistNotes(notes, get().noteLists, get().tagPages);
   },
@@ -667,7 +706,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const key = normalizeNoteTitle(tag);
     return get().tagPages.find((p) => p.tag === key);
   },
-  addTagMessage: (tag, text, attachments) => {
+  addTagMessage: (tag, text, attachments, extra) => {
     const key = normalizeNoteTitle(tag);
     const now = Date.now();
     const existing = get().tagPages.find((p) => p.tag === key);
@@ -679,7 +718,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       createdAt: now,
       updatedAt: now,
     };
-    const messages = [...materializeMessages(base), makeMessage(text, attachments)];
+    const messages = [...materializeMessages(base), makeMessage(text, attachments, extra)];
     const next: TagPage = { ...base, messages, ...deriveFromMessages(messages), updatedAt: now };
     const tagPages = existing
       ? get().tagPages.map((p) => (p.tag === key ? next : p))
@@ -687,12 +726,20 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ tagPages });
     persistNotes(get().notes, get().noteLists, tagPages);
   },
-  updateTagMessage: (tag, messageId, text, attachments) => {
+  updateTagMessage: (tag, messageId, text, attachments, extra) => {
     const key = normalizeNoteTitle(tag);
     const existing = get().tagPages.find((p) => p.tag === key);
     if (!existing) return;
     const messages = materializeMessages(existing).map((m) =>
-      m.id === messageId ? { ...m, text: text.trim(), attachments, editedAt: Date.now() } : m,
+      m.id === messageId
+        ? {
+            ...m,
+            text: text.trim(),
+            attachments,
+            editedAt: Date.now(),
+            ...(extra && 'card' in extra ? { card: extra.card } : {}),
+          }
+        : m,
     );
     const next: TagPage = {
       ...existing,
@@ -705,16 +752,32 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistNotes(get().notes, get().noteLists, tagPages);
   },
   removeTagMessage: (tag, messageId) => {
+    get().removeTagMessages(tag, [messageId]);
+  },
+  removeTagMessages: (tag, messageIds) => {
     const key = normalizeNoteTitle(tag);
     const existing = get().tagPages.find((p) => p.tag === key);
     if (!existing) return;
-    const messages = materializeMessages(existing).filter((m) => m.id !== messageId);
+    const drop = new Set(messageIds);
+    const messages = materializeMessages(existing).filter((m) => !drop.has(m.id));
     const next: TagPage = {
       ...existing,
       messages,
       ...deriveFromMessages(messages),
       updatedAt: Date.now(),
     };
+    const tagPages = get().tagPages.map((p) => (p.tag === key ? next : p));
+    set({ tagPages });
+    persistNotes(get().notes, get().noteLists, tagPages);
+  },
+  setTagMessagePinned: (tag, messageId, pinned) => {
+    const key = normalizeNoteTitle(tag);
+    const existing = get().tagPages.find((p) => p.tag === key);
+    if (!existing) return;
+    const messages = materializeMessages(existing).map((m) =>
+      m.id === messageId ? { ...m, pinned: pinned || undefined } : m,
+    );
+    const next: TagPage = { ...existing, messages };
     const tagPages = get().tagPages.map((p) => (p.tag === key ? next : p));
     set({ tagPages });
     persistNotes(get().notes, get().noteLists, tagPages);

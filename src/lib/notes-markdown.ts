@@ -13,6 +13,7 @@ export type Inline =
   | { t: 'del'; c: Inline[] }
   | { t: 'code'; v: string }
   | { t: 'wiki'; target: string; alias?: string; section?: string }
+  | { t: 'msglink'; kind: 'n' | 't'; ref: string; mid: string }
   | { t: 'tag'; v: string }
   | { t: 'link'; href: string; label: string }
   | { t: 'image'; src: string; alt: string };
@@ -84,6 +85,12 @@ function firstOf(
 }
 
 function parseWiki(inner: string): Inline {
+  // [[msg:n:<noteId>:<messageId>]] / [[msg:t:<tag>:<messageId>]] — a deep link
+  // to one message in a note/tag chat ("copy link" in the message menu).
+  const msg = /^msg:(n|t):(.+):([A-Za-z0-9_-]+)$/.exec(inner.trim());
+  if (msg) {
+    return { t: 'msglink', kind: msg[1] as 'n' | 't', ref: msg[2], mid: msg[3] };
+  }
   const [lhs, alias] = inner.split('|');
   const [target, section] = lhs.split('#');
   return {
@@ -92,6 +99,11 @@ function parseWiki(inner: string): Inline {
     alias: alias?.trim() || undefined,
     section: section?.trim() || undefined,
   };
+}
+
+/** Build the copyable token that links to one message. */
+export function buildMessageLink(kind: 'n' | 't', ref: string, messageId: string): string {
+  return `[[msg:${kind}:${ref}:${messageId}]]`;
 }
 
 /** Split a plain run into text + #tag inlines (tags only after a boundary). */
