@@ -63,8 +63,8 @@ Telegram client ──> Express (server.js) ──> serves dist/ (SPA) + /api
   Action that SSHes into the VPS, builds **off to the side and swaps atomically**
   (zero downtime), runs a `/api/health` check, restarts the service, and
   re-points the Telegram bot's menu button.
-- **Backups:** a daily systemd timer archives the data dir, keeps the last 14
-  copies, and sends the archive to the admin via the bot (`/backup`, `/id`).
+- **Backups:** a daily systemd timer archives the data directory and keeps the
+  last 14 copies, stored separately from the app checkout.
 
 ## Develop locally
 
@@ -144,7 +144,7 @@ legacy/                             # the earlier vanilla PWA, kept for referenc
 - Данные хранятся **на сервере по пользователю** (JSON на хосте, фото — загрузкой).
 - **Деплой автоматический:** пуш в ветку `prod` → GitHub Action собирает на VPS со
   сборкой «в сторону» и атомарной заменой (без простоя), проверяет здоровье и
-  перенацеливает кнопку бота. Ежедневные бэкапы (хранит 14, шлёт админу через бота).
+  перенацеливает кнопку бота. Ежедневные автоматические бэкапы (хранятся последние 14 копий).
 - Запуск локально: `npm install` → `npm run dev` (окружение Telegram мокается),
   `npm test`, `npm run build`. Запуск внутри Telegram — через `ngrok` и @BotFather.
 
