@@ -32,6 +32,7 @@ jobs:
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           DOMAIN: ${{ secrets.DOMAIN }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: |
           if [ -z "$VPS_HOST" ] || [ -z "$VPS_PASSWORD" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
@@ -41,6 +42,33 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "domain=${DOMAIN:-${VPS_HOST}.nip.io}" >> "$GITHUB_OUTPUT"
           if [ -n "$BOT_TOKEN" ]; then echo "has_bot=true" >> "$GITHUB_OUTPUT"; else echo "has_bot=false" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$CF_API_TOKEN" ]; then echo "has_cf=true" >> "$GITHUB_OUTPUT"; else echo "has_cf=false" >> "$GITHUB_OUTPUT"; fi
+
+      # The VPS can't reach caddyserver.com, so fetch the Caddy build that has the
+      # Cloudflare DNS plugin here (the runner has open internet) and ship it over.
+      # Both steps are best-effort: if either fails, setup.sh just keeps the
+      # current Caddy and cert (DNS-01 stays off) — the deploy still succeeds.
+      - name: Fetch Caddy + Cloudflare DNS plugin (for cert auto-renewal)
+        id: caddycf
+        if: steps.gate.outputs.ready == 'true' && steps.gate.outputs.has_cf == 'true'
+        continue-on-error: true
+        run: |
+          curl -fsSL --retry 3 --connect-timeout 20 --max-time 240 -o caddy-cf \
+            "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com/caddy-dns/cloudflare"
+          chmod +x caddy-cf
+          ./caddy-cf list-modules | grep -q 'dns.providers.cloudflare'
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Ship Caddy + plugin to the VPS
+        if: steps.gate.outputs.ready == 'true' && steps.caddycf.outputs.ok == 'true'
+        continue-on-error: true
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          source: caddy-cf
+          target: /tmp/
 
       - name: Deploy on VPS (install + build + HTTPS)
         if: steps.gate.outputs.ready == 'true'

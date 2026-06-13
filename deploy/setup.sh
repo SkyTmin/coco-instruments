@@ -139,6 +139,7 @@ if [ -n "$CF_API_TOKEN" ]; then
     fi
     # Replace Caddy only if the new binary actually runs AND has the plugin —
     # so a failed download or wrong arch can never break the running Caddy.
+    chmod +x /tmp/caddy-cf 2>/dev/null || true
     if [ -s /tmp/caddy-cf ] && /tmp/caddy-cf list-modules 2>/dev/null | grep -q 'dns.providers.cloudflare'; then
       install -m 0755 /tmp/caddy-cf /usr/bin/caddy
     fi
