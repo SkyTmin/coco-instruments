@@ -117,8 +117,8 @@ function extensionFromType(type = '') {
 }
 
 app.post('/api/notes/attachments', (req, res) => {
-  const { initData, name, type, dataUrl } = req.body ?? {};
-  const user = authReminder(initData, res);
+  const { name, type, dataUrl } = req.body ?? {};
+  const user = authUser(req, res);
   if (!user) return;
   if (!rateLimit(`upload:${user.id}`, 60, 60_000)) {
     res.status(429).json({ error: 'rate_limited' });
@@ -183,6 +183,14 @@ const RELAY_SECRET = BOT_TOKEN
 const BACKUP_SECRET = BOT_TOKEN
   ? crypto.createHash('sha256').update(`backup:${BOT_TOKEN}`).digest('hex').slice(0, 48)
   : '';
+// Secret for signing website session cookies (browser login via the Telegram
+// Login Widget — see /api/auth/telegram). Derived from BOT_TOKEN so it needs no
+// extra config and rotates with the token.
+const SESSION_SECRET = BOT_TOKEN
+  ? crypto.createHash('sha256').update(`session:${BOT_TOKEN}`).digest('hex')
+  : '';
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const SESSION_COOKIE = 'coco_session';
 // Optional GitHub token (fine-grained PAT, Actions: read+write) so the VPS can
 // trigger the delivery workflow on demand — GitHub's own `schedule` is too slow.
 const GH_TOKEN = (process.env.GH_DISPATCH_TOKEN || '').trim();
@@ -218,6 +226,118 @@ function authReminder(raw, res) {
     return null;
   }
 }
+
+// --- Website auth: "Log in with Telegram" (Login Widget) -------------------
+// Browser users (outside Telegram) log in once via Telegram's Login Widget; we
+// verify its signature and issue a signed session cookie. Every data route
+// accepts EITHER Mini App initData OR this cookie — both resolve to the same
+// Telegram user id, so the Mini App and the website share the same data.
+
+function signSession(user) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      id: user.id,
+      first_name: user.first_name,
+      username: user.username,
+      exp: Date.now() + SESSION_TTL_MS,
+    }),
+  ).toString('base64url');
+  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+function verifySession(value) {
+  if (!value || !SESSION_SECRET) return null;
+  const dot = value.indexOf('.');
+  if (dot < 0) return null;
+  const payload = value.slice(0, dot);
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+  const a = Buffer.from(value.slice(dot + 1));
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!data || !data.id || !data.exp || data.exp < Date.now()) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function readSessionCookie(req) {
+  const m = (req.headers.cookie || '').match(/(?:^|;\s*)coco_session=([^;]+)/);
+  return m ? verifySession(decodeURIComponent(m[1])) : null;
+}
+
+// Verify a Telegram Login Widget payload — https://core.telegram.org/widgets/login
+function verifyTelegramLogin(data) {
+  if (!BOT_TOKEN || !data || typeof data !== 'object' || !data.hash || !data.id) return null;
+  const { hash, ...fields } = data;
+  const checkString = Object.keys(fields)
+    .sort()
+    .map((k) => `${k}=${fields[k]}`)
+    .join('\n');
+  const secretKey = crypto.createHash('sha256').update(BOT_TOKEN).digest();
+  const computed = crypto.createHmac('sha256', secretKey).update(checkString).digest('hex');
+  const a = Buffer.from(computed);
+  const b = Buffer.from(String(hash));
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  const authDate = Number(fields.auth_date || 0);
+  if (!authDate || Date.now() / 1000 - authDate > 86400) return null; // stale (>24h)
+  return fields;
+}
+
+function setSessionCookie(res, user) {
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE}=${encodeURIComponent(signSession(user))}; Path=/; Max-Age=${Math.floor(
+      SESSION_TTL_MS / 1000,
+    )}; HttpOnly; Secure; SameSite=Lax`,
+  );
+}
+
+// Unified auth for data routes: Mini App initData (in the body) OR a website
+// session cookie. Returns the user ({ id, … }) or null (after sending an error).
+function authUser(req, res) {
+  const initData = req.body?.initData;
+  if (initData) return authReminder(initData, res);
+  const sess = readSessionCookie(req);
+  if (sess) return sess;
+  res.status(401).json({ error: 'unauthorized' });
+  return null;
+}
+
+app.post('/api/auth/telegram', (req, res) => {
+  const user = verifyTelegramLogin(req.body);
+  if (!user) {
+    res.status(401).json({ error: 'bad_login' });
+    return;
+  }
+  setSessionCookie(res, user);
+  res.json({
+    ok: true,
+    user: {
+      id: user.id,
+      first_name: user.first_name,
+      username: user.username,
+      photo_url: user.photo_url,
+    },
+  });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const sess = readSessionCookie(req);
+  if (!sess) {
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
+  res.json({ user: { id: sess.id, first_name: sess.first_name, username: sess.username } });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+  res.json({ ok: true });
+});
 
 let reminders = {};
 try {
@@ -426,8 +546,8 @@ async function triggerBackup() {
 // The app sends reminders as ABSOLUTE fire timestamps (computed on the device
 // in its local/Moscow time), so the server needs no timezone math.
 app.post('/api/reminders/sync', (req, res) => {
-  const { initData, reminders: items } = req.body ?? {};
-  const user = authReminder(initData, res);
+  const { reminders: items } = req.body ?? {};
+  const user = authUser(req, res);
   if (!user) return;
   if (!rateLimit(`remsync:${user.id}`, 30, 60_000)) {
     return res.status(429).json({ error: 'rate_limited' });
@@ -455,7 +575,7 @@ app.post('/api/reminders/sync', (req, res) => {
 });
 
 app.post('/api/reminders/test', async (req, res) => {
-  const user = authReminder(req.body?.initData, res);
+  const user = authUser(req, res);
   if (!user) return;
   const text = '🔔 Тест: напоминания подключены. Так будет приходить уведомление о платеже.';
   // Try sending directly from the VPS first (instant if it can reach Telegram).
@@ -699,8 +819,8 @@ function userStoreDir(userId) {
 }
 
 app.post('/api/store/get', (req, res) => {
-  const { initData, keys } = req.body ?? {};
-  const user = authReminder(initData, res);
+  const { keys } = req.body ?? {};
+  const user = authUser(req, res);
   if (!user) return;
   if (!rateLimit(`store:${user.id}`, 120, 60_000)) {
     return res.status(429).json({ error: 'rate_limited' });
@@ -722,8 +842,8 @@ app.post('/api/store/get', (req, res) => {
 });
 
 app.post('/api/store/set', (req, res) => {
-  const { initData, key, value } = req.body ?? {};
-  const user = authReminder(initData, res);
+  const { key, value } = req.body ?? {};
+  const user = authUser(req, res);
   if (!user) return;
   if (!rateLimit(`store:${user.id}`, 120, 60_000)) {
     return res.status(429).json({ error: 'rate_limited' });
@@ -742,8 +862,8 @@ app.post('/api/store/set', (req, res) => {
 });
 
 app.post('/api/store/remove', (req, res) => {
-  const { initData, key } = req.body ?? {};
-  const user = authReminder(initData, res);
+  const { key } = req.body ?? {};
+  const user = authUser(req, res);
   if (!user) return;
   if (!rateLimit(`store:${user.id}`, 120, 60_000)) {
     return res.status(429).json({ error: 'rate_limited' });
@@ -770,7 +890,7 @@ app.post('/api/backup/run', async (req, res) => {
 // the requesting user as the backup recipient and kicks the GitHub runner, which
 // makes the archive on the VPS and delivers it to that user in Telegram.
 app.post('/api/backup/request', async (req, res) => {
-  const user = authReminder(req.body?.initData, res);
+  const user = authUser(req, res);
   if (!user) return;
   setAdminChatId(user.id);
   const dispatched = await triggerBackup();
@@ -780,7 +900,7 @@ app.post('/api/backup/request', async (req, res) => {
 // Is this user the backup owner? (Used to show the backup control only to the
 // owner.) True for the configured admin, or for anyone while none is set yet.
 app.post('/api/backup/status', (req, res) => {
-  const user = authReminder(req.body?.initData, res);
+  const user = authUser(req, res);
   if (!user) return;
   const admin = getAdminChatId();
   res.json({ owner: !admin || String(admin) === String(user.id), configured: !!admin });
