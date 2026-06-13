@@ -20,6 +20,9 @@ STORE_DIR="${STORE_DIR:-$(dirname "$UPLOAD_DIR")/store}"
 BOT_TOKEN="${BOT_TOKEN:-}"
 GH_DISPATCH_TOKEN="${GH_DISPATCH_TOKEN:-}"
 ADMIN_CHAT_ID="${ADMIN_CHAT_ID:-}"
+# Cloudflare API token (Zone:DNS:Edit) → Caddy renews certs via DNS-01, which
+# works even when the domain is proxied through Cloudflare (orange cloud).
+CF_API_TOKEN="${CF_API_TOKEN:-}"
 
 echo "==> Detecting public IP / domain"
 IP="$(curl -fsS https://api.ipify.org 2>/dev/null || true)"
@@ -111,6 +114,37 @@ touch /etc/coco.env && chmod 600 /etc/coco.env
 [ -n "$BOT_TOKEN" ] && echo "    bot token set → reminders enabled" || echo "    no bot token → reminders disabled"
 [ -n "$GH_DISPATCH_TOKEN" ] && echo "    dispatch token set → instant delivery enabled" || echo "    NO dispatch token (add GH_TOKEN secret + redeploy) → delivery via slow schedule"
 
+# Cloudflare DNS-01 for automatic cert renewal behind the Cloudflare proxy. The
+# stock Caddy can't do it (no DNS plugin), so swap in a build that includes the
+# cloudflare provider, then hand Caddy the token via a systemd drop-in.
+# CF_READY stays empty unless the plugin is actually present — so the Caddyfile
+# never references a provider Caddy doesn't have (which would break startup).
+CF_DROPIN=/etc/systemd/system/caddy.service.d/cf.conf
+# Preserve the token across deploys that don't pass it (read from the drop-in).
+if [ -z "$CF_API_TOKEN" ] && [ -f "$CF_DROPIN" ]; then
+  CF_API_TOKEN="$(sed -n 's/^Environment=CF_API_TOKEN=//p' "$CF_DROPIN" | head -1 || true)"
+fi
+CF_READY=""
+if [ -n "$CF_API_TOKEN" ]; then
+  if ! caddy list-modules 2>/dev/null | grep -q 'dns.providers.cloudflare'; then
+    echo "==> Installing Caddy with the Cloudflare DNS plugin"
+    ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
+    if curl -fsSL -o /tmp/caddy-cf "https://caddyserver.com/api/download?os=linux&arch=${ARCH}&p=github.com/caddy-dns/cloudflare"; then
+      install -m 0755 /tmp/caddy-cf /usr/bin/caddy && rm -f /tmp/caddy-cf
+    else
+      echo "!! Could not fetch Caddy+cloudflare; keeping current Caddy (default challenge)."
+    fi
+  fi
+  if caddy list-modules 2>/dev/null | grep -q 'dns.providers.cloudflare'; then
+    CF_READY=1
+    mkdir -p /etc/systemd/system/caddy.service.d
+    printf '[Service]\nEnvironment=CF_API_TOKEN=%s\n' "$CF_API_TOKEN" > "$CF_DROPIN"
+    chmod 600 "$CF_DROPIN"
+    systemctl daemon-reload
+    echo "    Cloudflare DNS plugin ready → automatic cert renewal via DNS-01"
+  fi
+fi
+
 echo "==> Writing systemd service"
 cat > /etc/systemd/system/coco.service <<EOF
 [Unit]
@@ -172,6 +206,16 @@ done
 
 echo "==> Writing /etc/caddy/Caddyfile"
 {
+  # Global ACME via Cloudflare DNS-01 (only when the plugin + token are ready),
+  # so certs renew automatically even behind the Cloudflare proxy.
+  if [ -n "$CF_READY" ]; then
+    cat <<'EOF'
+{
+    acme_dns cloudflare {env.CF_API_TOKEN}
+}
+
+EOF
+  fi
   cat <<EOF
 $DOMAIN {
     encode gzip zstd
