@@ -3,8 +3,9 @@ import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-
 import { ChatThread } from '@/components/ChatThread';
 import { NotesGuide } from '@/components/NotesGuide';
 import { Sheet } from '@/components/ui';
-import { IconDots } from '@/components/icons';
+import { IconBack, IconDots, IconGraph } from '@/components/icons';
 import { useFinanceStore } from '@/store';
+import { isWebMode } from '@/lib/runtime';
 import { getTagPageRelations, normalizeNoteTitle } from '@/lib/notes-graph';
 import { materializeMessages } from '@/lib/notes-messages';
 import { buildMessageLink } from '@/lib/notes-markdown';
@@ -48,7 +49,30 @@ export function ChatTagPage() {
   return (
     <div className="chat-page">
       <div className="chat-head">
+        {isWebMode() && (
+          <button
+            className="icon-btn chat-back"
+            onClick={() => {
+              tapLight();
+              if (window.history.length > 1) navigate(-1);
+              else navigate('/notes');
+            }}
+            aria-label="Назад"
+          >
+            <IconBack size={20} />
+          </button>
+        )}
         <div className="chat-title chat-title--static note-meta__tag-title">#{tag}</div>
+        <button
+          className="icon-btn"
+          onClick={() => {
+            tapLight();
+            navigate(`/notes/graph?tag=${encodeURIComponent(tag)}`);
+          }}
+          aria-label="Граф тега"
+        >
+          <IconGraph size={20} />
+        </button>
         <button
           className="icon-btn"
           onClick={() => {

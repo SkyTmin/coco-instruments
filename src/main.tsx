@@ -15,6 +15,7 @@ import { LoginScreen } from '@/components/LoginScreen';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { init } from '@/init';
 import { setWebAuth } from '@/lib/storage';
+import { setWebMode } from '@/lib/runtime';
 import { installGlobalErrorLogging } from '@/lib/log';
 
 installGlobalErrorLogging();
@@ -83,6 +84,7 @@ if (lp) {
   location.reload();
 } else {
   // --- Website (a normal browser): log in with Telegram, then run on the web -
+  setWebMode(true);
   let authed = false;
   try {
     authed = (await fetch('/api/auth/me', { credentials: 'include' })).ok;

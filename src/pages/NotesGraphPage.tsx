@@ -20,6 +20,7 @@ import {
   simulationStep,
 } from '@/lib/notes-graph';
 import { selectionChanged } from '@/lib/haptics';
+import { getStorage } from '@/lib/storage';
 import { NotesHelpButton } from '@/components/NotesGuide';
 import { tagColor } from '@/lib/tag-color';
 
@@ -181,8 +182,9 @@ export function NotesGraphPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [menuNode, setMenuNode] = useState<NoteGraphPoint | null>(null);
-  // Highlights persist (localStorage) so you can mark as many nodes as you like
-  // and they survive leaving the graph / reloading.
+  // Highlights persist on the server (via the app's storage), so they survive
+  // even when the Telegram webview clears localStorage. localStorage seeds the
+  // initial state instantly; the durable server copy reconciles on mount.
   const [highlighted, setHighlighted] = useState<Set<string>>(() => {
     try {
       return new Set<string>(JSON.parse(localStorage.getItem(HIGHLIGHTS_KEY) || '[]'));
@@ -190,17 +192,28 @@ export function NotesGraphPage() {
       return new Set<string>();
     }
   });
+  useEffect(() => {
+    let alive = true;
+    void getStorage()
+      .get<string[]>(HIGHLIGHTS_KEY)
+      .then((ids) => {
+        if (alive && Array.isArray(ids)) setHighlighted(new Set(ids));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const persistHighlights = (next: Set<string>) => {
+    void getStorage().set(HIGHLIGHTS_KEY, [...next]);
+  };
   const toggleHighlight = (nodeId: string) => {
     selectionChanged();
     setHighlighted((cur) => {
       const next = new Set(cur);
       if (next.has(nodeId)) next.delete(nodeId);
       else next.add(nodeId);
-      try {
-        localStorage.setItem(HIGHLIGHTS_KEY, JSON.stringify([...next]));
-      } catch {
-        /* ignore quota / private mode */
-      }
+      persistHighlights(next);
       return next;
     });
   };
@@ -217,11 +230,7 @@ export function NotesGraphPage() {
     setHighlighted((cur) => {
       const next = new Set(cur);
       for (const id of highlightedHere) next.delete(id);
-      try {
-        localStorage.setItem(HIGHLIGHTS_KEY, JSON.stringify([...next]));
-      } catch {
-        /* ignore quota / private mode */
-      }
+      persistHighlights(next);
       return next;
     });
   };

@@ -80,6 +80,10 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"url\":\"https://${DOMAIN}/api/bot/webhook\",\"secret_token\":\"${SECRET}\",\"allowed_updates\":[\"message\"]}"
           echo
+          # Print webhook status (no token in the response) so failures are visible.
+          echo "== getWebhookInfo =="
+          curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo" || true
+          echo
 
       - name: Done
         if: steps.gate.outputs.ready == 'true'

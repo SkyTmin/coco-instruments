@@ -4,9 +4,10 @@ import { ConfirmDialog, Sheet } from '@/components/ui';
 import { ChatThread } from '@/components/ChatThread';
 import { NotePicker } from '@/components/NotePicker';
 import { NotesGuide } from '@/components/NotesGuide';
-import { IconDots, IconGraph, IconHeart, IconLink } from '@/components/icons';
+import { IconBack, IconDots, IconGraph, IconHeart, IconLink } from '@/components/icons';
 import type { NoteAttachment } from '@/types';
 import { useFinanceStore } from '@/store';
+import { isWebMode } from '@/lib/runtime';
 import { getNoteRelations, parseNoteTags } from '@/lib/notes-graph';
 import type { MessageExtra } from '@/lib/notes-messages';
 import { deriveFromMessages, makeMessage, materializeMessages } from '@/lib/notes-messages';
@@ -149,6 +150,19 @@ export function ChatNotePage() {
   return (
     <div className="chat-page">
       <div className="chat-head">
+        {isWebMode() && (
+          <button
+            className="icon-btn chat-back"
+            onClick={() => {
+              tapLight();
+              if (window.history.length > 1) navigate(-1);
+              else navigate('/notes');
+            }}
+            aria-label="Назад"
+          >
+            <IconBack size={20} />
+          </button>
+        )}
         <input
           className="chat-title"
           value={title}
@@ -157,6 +171,16 @@ export function ChatNotePage() {
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
           placeholder="Название заметки"
         />
+        <button
+          className="icon-btn"
+          onClick={() => {
+            tapLight();
+            navigate('/notes/graph');
+          }}
+          aria-label="Граф связей"
+        >
+          <IconGraph size={20} />
+        </button>
         <button
           className="icon-btn"
           onClick={() => {

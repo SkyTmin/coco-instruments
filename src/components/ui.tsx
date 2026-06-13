@@ -5,11 +5,13 @@ import type {
   PropsWithChildren,
   ReactNode,
 } from 'react';
-import { useNavigationType } from 'react-router-dom';
+import { useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import type { ExpenseType } from '@/types';
 import { formatRUB } from '@/lib/format';
-import { IconChevron, IconPlus } from '@/components/icons';
-import { registerEscape } from '@/lib/escape-stack';
+import { IconBack, IconChevron, IconPlus } from '@/components/icons';
+import { registerEscape, closeTopOverlay } from '@/lib/escape-stack';
+import { isWebMode } from '@/lib/runtime';
+import { tapLight } from '@/lib/haptics';
 import { selectionChanged } from '@/lib/haptics';
 
 export const LEAD_OPTIONS: { v: number; label: string }[] = [
@@ -65,11 +67,28 @@ export function Screen({
   // Going "back" (POP) slides in from the left, forward (PUSH) from the right —
   // a native push/pop feel. The slide is tiny + clipped, so it never scrolls.
   const dir = useNavigationType() === 'POP' ? 'pop' : 'push';
+  const location = useLocation();
+  const navigate = useNavigate();
+  // The website has no Telegram back bar — render our own in the header (left of
+  // the title, so it never covers the logo/title). Hidden on home and in the
+  // Mini App (Telegram provides its own back button there).
+  const showBack = isWebMode() && location.pathname !== '/';
+  const goBack = () => {
+    tapLight();
+    if (closeTopOverlay()) return; // close an open sheet/menu first
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/');
+  };
   return (
     <div className={`screen screen--${dir}${className ? ` ${className}` : ''}`}>
-      {(title || action) && (
+      {(title || action || showBack) && (
         <div className="screen__head">
           <div className="row">
+            {showBack && (
+              <button className="screen__back" type="button" onClick={goBack} aria-label="Назад">
+                <IconBack size={22} />
+              </button>
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
               {title && <h1 className="page-title">{title}</h1>}
               {subtitle && <p className="page-sub">{subtitle}</p>}

@@ -188,6 +188,29 @@ select {
 .screen__head {
   margin: 4px 2px 18px;
 }
+/* Website back button (in the header, left of the title; not shown in Telegram). */
+.screen__back {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  margin: 2px 10px 0 -4px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.12s ease;
+}
+.screen__back:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+}
+.screen__back:active {
+  transform: scale(0.92);
+}
 .page-title {
   font-size: 30px;
   font-weight: 850;
@@ -1877,6 +1900,10 @@ input[type='datetime-local'] {
   background: color-mix(in srgb, var(--surface) 55%, transparent);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   backdrop-filter: blur(18px) saturate(1.4);
+}
+.chat-back {
+  flex: none;
+  margin-left: -4px;
 }
 .chat-title {
   flex: 1;
