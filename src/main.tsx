@@ -20,6 +20,49 @@ import { installGlobalErrorLogging } from '@/lib/log';
 
 installGlobalErrorLogging();
 
+// --- App freshness (fixes stale PWA + "not a valid JS MIME type" on iOS) -----
+// Home-screen PWAs can hold an old app shell across deploys. Nudge the service
+// worker to check for a new build whenever the app is re-opened, and reload once
+// when a new worker takes control. Also recover from a stale chunk (an old
+// hashed import that 404s after a deploy) by reloading to the fresh shell.
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing || !hadController) return; // ignore the first install's claim
+    refreshing = true;
+    window.location.reload();
+  });
+  const checkForUpdate = () => {
+    void navigator.serviceWorker.getRegistration().then((reg) => reg?.update());
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
+  window.addEventListener('focus', checkForUpdate);
+}
+
+// A dynamic import failing (a stale chunk after a deploy) → reload once to the
+// fresh shell instead of crashing with a MIME/parse error.
+window.addEventListener('vite:preloadError', () => {
+  if (sessionStorage.getItem('coco.staleReload')) return;
+  try {
+    sessionStorage.setItem('coco.staleReload', '1');
+  } catch {
+    /* private mode */
+  }
+  window.location.reload();
+});
+// Clear the one-shot guard once the app has been running a few seconds, so a
+// later stale chunk can recover too (without risking a reload loop).
+setTimeout(() => {
+  try {
+    sessionStorage.removeItem('coco.staleReload');
+  } catch {
+    /* ignore */
+  }
+}, 6000);
+
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 
 // Telegram Desktop sometimes loads the page before the launch params are in

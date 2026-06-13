@@ -129,11 +129,20 @@ if [ -n "$CF_API_TOKEN" ]; then
   if ! caddy list-modules 2>/dev/null | grep -q 'dns.providers.cloudflare'; then
     echo "==> Installing Caddy with the Cloudflare DNS plugin"
     ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
-    if curl -fsSL -o /tmp/caddy-cf "https://caddyserver.com/api/download?os=linux&arch=${ARCH}&p=github.com/caddy-dns/cloudflare"; then
-      install -m 0755 /tmp/caddy-cf /usr/bin/caddy && rm -f /tmp/caddy-cf
-    else
-      echo "!! Could not fetch Caddy+cloudflare; keeping current Caddy (default challenge)."
+    # Prefer a binary delivered by CI (the GitHub runner has unrestricted
+    # internet); only fall back to the download API with a SHORT timeout so this
+    # can never hang the deploy if the VPS can't reach caddyserver.com.
+    if [ ! -s /tmp/caddy-cf ]; then
+      curl -fsSL --connect-timeout 15 --max-time 150 -o /tmp/caddy-cf \
+        "https://caddyserver.com/api/download?os=linux&arch=${ARCH}&p=github.com/caddy-dns/cloudflare" \
+        || echo "!! Could not fetch Caddy+cloudflare (network); keeping current Caddy."
     fi
+    # Replace Caddy only if the new binary actually runs AND has the plugin —
+    # so a failed download or wrong arch can never break the running Caddy.
+    if [ -s /tmp/caddy-cf ] && /tmp/caddy-cf list-modules 2>/dev/null | grep -q 'dns.providers.cloudflare'; then
+      install -m 0755 /tmp/caddy-cf /usr/bin/caddy
+    fi
+    rm -f /tmp/caddy-cf
   fi
   if caddy list-modules 2>/dev/null | grep -q 'dns.providers.cloudflare'; then
     CF_READY=1
@@ -142,6 +151,8 @@ if [ -n "$CF_API_TOKEN" ]; then
     chmod 600 "$CF_DROPIN"
     systemctl daemon-reload
     echo "    Cloudflare DNS plugin ready → automatic cert renewal via DNS-01"
+  else
+    echo "    Cloudflare plugin unavailable → keeping the current cert (renewal needs the CI-built Caddy)."
   fi
 fi
 

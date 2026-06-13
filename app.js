@@ -1010,8 +1010,15 @@ app.get('/api/health', (req, res) => {
 const distDir = path.join(__dirname, 'dist');
 app.use(express.static(distDir));
 
-// SPA fallback: any non-asset route returns index.html so client-side routing works.
+// SPA fallback: a navigation route returns index.html so client-side routing
+// works. But a request for a hashed asset that no longer exists (a stale build
+// asking for an old chunk) must NOT get index.html — returning text/html for a
+// `.js` import yields "not a valid JavaScript MIME type" in the browser. 404 it
+// so the client can recover (reload to the fresh shell).
 app.get('*', (req, res) => {
+  if (req.path.startsWith('/assets/') || /\.[a-z0-9]+$/i.test(req.path)) {
+    return res.sendStatus(404);
+  }
   res.sendFile(path.join(distDir, 'index.html'));
 });
 
