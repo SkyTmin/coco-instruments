@@ -339,6 +339,49 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// --- Website login via the bot (deep link) ---------------------------------
+// The browser asks for a one-time token, opens t.me/<bot>?start=login_<token>
+// (which opens the Telegram APP — phone and desktop alike), the user taps Start,
+// the bot webhook confirms the token with their verified Telegram identity, and
+// the browser (which is polling) receives a session cookie. No web OAuth popup.
+const LOGIN_TTL_MS = 5 * 60 * 1000;
+const pendingLogins = new Map(); // token -> { status, user, createdAt }
+function pruneLogins() {
+  const now = Date.now();
+  for (const [t, v] of pendingLogins) if (now - v.createdAt > LOGIN_TTL_MS) pendingLogins.delete(t);
+}
+
+app.post('/api/auth/start', (_req, res) => {
+  if (!BOT_TOKEN) {
+    res.status(503).json({ error: 'server_no_token' });
+    return;
+  }
+  pruneLogins();
+  const token = crypto.randomBytes(16).toString('hex');
+  pendingLogins.set(token, { status: 'pending', user: null, createdAt: Date.now() });
+  res.json({ token, ttl: LOGIN_TTL_MS });
+});
+
+app.get('/api/auth/poll', (req, res) => {
+  pruneLogins();
+  const token = String(req.query.token || '');
+  const entry = pendingLogins.get(token);
+  if (!entry) {
+    res.json({ status: 'expired' });
+    return;
+  }
+  if (entry.status !== 'confirmed' || !entry.user) {
+    res.json({ status: 'pending' });
+    return;
+  }
+  pendingLogins.delete(token); // single use
+  setSessionCookie(res, entry.user);
+  res.json({
+    status: 'ok',
+    user: { id: entry.user.id, first_name: entry.user.first_name, username: entry.user.username },
+  });
+});
+
 let reminders = {};
 try {
   reminders = JSON.parse(fs.readFileSync(REMINDERS_FILE, 'utf8'));
@@ -642,6 +685,7 @@ app.post('/api/bot/webhook', async (req, res) => {
   }
   const msg = req.body?.message;
   const chatId = msg?.chat?.id;
+  const from = msg?.from;
   const text = String(msg?.text || '').trim();
   if (!chatId) return res.sendStatus(200);
   if (!rateLimit(`webhook:${chatId}`, 30, 60_000)) return res.sendStatus(200);
@@ -656,6 +700,19 @@ app.post('/api/bot/webhook', async (req, res) => {
       parse_mode: 'HTML',
       disable_web_page_preview: true,
     });
+
+  // Website login: /start login_<token> confirms a pending browser login with
+  // the sender's verified Telegram identity (see /api/auth/start + /poll).
+  const loginMatch = text.match(/^\/start\s+login_([a-f0-9]{8,})$/);
+  if (loginMatch && from?.id) {
+    const entry = pendingLogins.get(loginMatch[1]);
+    if (entry && entry.status === 'pending') {
+      entry.status = 'confirmed';
+      entry.user = { id: from.id, first_name: from.first_name, username: from.username };
+      return reply('✅ Вход подтверждён. Вернись на вкладку с сайтом — Coco откроется сам.');
+    }
+    return reply('Ссылка для входа устарела. Открой сайт и нажми «Войти через Telegram» заново.');
+  }
 
   if (/^\/id\b/.test(text)) {
     return reply(`Ваш chat id: <b>${chatId}</b>`);
