@@ -70,19 +70,24 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           DOMAIN: ${{ steps.gate.outputs.domain }}
         run: |
-          curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/setChatMenuButton" \
+          # Trim any stray whitespace/newline so the secret below matches the
+          # server's (which hashes the trimmed token). A drift here = webhook 401.
+          TOK="$(printf '%s' "$BOT_TOKEN" | tr -d '[:space:]')"
+          echo "== getWebhookInfo (before re-register) =="
+          curl -fsS "https://api.telegram.org/bot${TOK}/getWebhookInfo" || true
+          echo
+          curl -fsS "https://api.telegram.org/bot${TOK}/setChatMenuButton" \
             -H "Content-Type: application/json" \
             -d "{\"menu_button\":{\"type\":\"web_app\",\"text\":\"Coco\",\"web_app\":{\"url\":\"https://${DOMAIN}/\"}}}"
           echo
           # Register the webhook so /start works and users become reachable.
-          SECRET=$(printf '%s' "$BOT_TOKEN" | sha256sum | cut -c1-48)
-          curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
+          SECRET=$(printf '%s' "$TOK" | sha256sum | cut -c1-48)
+          curl -fsS "https://api.telegram.org/bot${TOK}/setWebhook" \
             -H "Content-Type: application/json" \
             -d "{\"url\":\"https://${DOMAIN}/api/bot/webhook\",\"secret_token\":\"${SECRET}\",\"allowed_updates\":[\"message\"]}"
           echo
-          # Print webhook status (no token in the response) so failures are visible.
-          echo "== getWebhookInfo =="
-          curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo" || true
+          echo "== getWebhookInfo (after) =="
+          curl -fsS "https://api.telegram.org/bot${TOK}/getWebhookInfo" || true
           echo
 
       - name: Done
