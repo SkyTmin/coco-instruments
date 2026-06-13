@@ -53,10 +53,14 @@ jobs:
         if: steps.gate.outputs.ready == 'true' && steps.gate.outputs.has_cf == 'true'
         continue-on-error: true
         run: |
-          curl -fsSL --retry 3 --connect-timeout 20 --max-time 240 -o caddy-cf \
-            "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com/caddy-dns/cloudflare"
-          chmod +x caddy-cf
-          ./caddy-cf list-modules | grep -q 'dns.providers.cloudflare'
+          # Build for both arches — the VPS arch is unknown here; setup.sh picks.
+          for A in amd64 arm64; do
+            curl -fsSL --retry 3 --connect-timeout 20 --max-time 240 -o "caddy-cf-$A" \
+              "https://caddyserver.com/api/download?os=linux&arch=$A&p=github.com/caddy-dns/cloudflare"
+          done
+          chmod +x caddy-cf-amd64 caddy-cf-arm64
+          ./caddy-cf-amd64 list-modules | grep -q 'dns.providers.cloudflare'
+          ls -la caddy-cf-*
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Ship Caddy + plugin to the VPS
@@ -67,7 +71,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER || 'root' }}
           password: ${{ secrets.VPS_PASSWORD }}
-          source: caddy-cf
+          source: "caddy-cf-amd64,caddy-cf-arm64"
           target: /tmp/
 
       - name: Deploy on VPS (install + build + HTTPS)

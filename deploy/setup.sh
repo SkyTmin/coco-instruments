@@ -128,10 +128,14 @@ CF_READY=""
 if [ -n "$CF_API_TOKEN" ]; then
   if ! caddy list-modules 2>/dev/null | grep -q 'dns.providers.cloudflare'; then
     echo "==> Installing Caddy with the Cloudflare DNS plugin"
-    ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
-    # Prefer a binary delivered by CI (the GitHub runner has unrestricted
-    # internet); only fall back to the download API with a SHORT timeout so this
-    # can never hang the deploy if the VPS can't reach caddyserver.com.
+    ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"  # amd64 / arm64
+    echo "    arch=$ARCH; shipped: $(ls /tmp/caddy-cf* 2>/dev/null | tr '\n' ' ' || echo none)"
+    # Prefer the CI-shipped binary for THIS arch (the runner has open internet);
+    # only fall back to the download API with a SHORT timeout so this can never
+    # hang the deploy if the VPS can't reach caddyserver.com.
+    if [ ! -s /tmp/caddy-cf ] && [ -s "/tmp/caddy-cf-$ARCH" ]; then
+      cp "/tmp/caddy-cf-$ARCH" /tmp/caddy-cf
+    fi
     if [ ! -s /tmp/caddy-cf ]; then
       curl -fsSL --connect-timeout 15 --max-time 150 -o /tmp/caddy-cf \
         "https://caddyserver.com/api/download?os=linux&arch=${ARCH}&p=github.com/caddy-dns/cloudflare" \
@@ -142,8 +146,11 @@ if [ -n "$CF_API_TOKEN" ]; then
     chmod +x /tmp/caddy-cf 2>/dev/null || true
     if [ -s /tmp/caddy-cf ] && /tmp/caddy-cf list-modules 2>/dev/null | grep -q 'dns.providers.cloudflare'; then
       install -m 0755 /tmp/caddy-cf /usr/bin/caddy
+      echo "    installed Caddy+cloudflare ($ARCH)"
+    else
+      echo "    (debug) caddy-cf: $(/tmp/caddy-cf version 2>&1 | head -1 || echo 'cannot run')"
     fi
-    rm -f /tmp/caddy-cf
+    rm -f /tmp/caddy-cf /tmp/caddy-cf-amd64 /tmp/caddy-cf-arm64
   fi
   if caddy list-modules 2>/dev/null | grep -q 'dns.providers.cloudflare'; then
     CF_READY=1
