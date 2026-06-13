@@ -135,23 +135,43 @@ class CloudStorageImpl implements Storage {
 // localStorage is kept as an instant offline cache; existing CloudStorage data
 // is migrated to the server on first read.
 // ---------------------------------------------------------------------------
-let serverAuth: string | undefined;
+// Auth for server requests. Inside Telegram → Mini App initData (sent in the
+// body). On the website → a session cookie (set by /api/auth/telegram), sent
+// automatically with credentials:'include'. Both resolve to the same user id.
+type ServerAuth = { kind: 'telegram'; initData: string } | { kind: 'web' } | null;
+let auth: ServerAuth = null;
 
 /** Provide the Telegram initData so app data can persist on the server. */
 export function setServerAuth(rawInitData: string | undefined): void {
-  serverAuth = rawInitData || undefined;
+  auth = rawInitData ? { kind: 'telegram', initData: rawInitData } : null;
+}
+
+/** Website (browser) auth: rely on the session cookie instead of initData. */
+export function setWebAuth(): void {
+  auth = { kind: 'web' };
 }
 
 /** The Telegram initData used to authenticate server requests (uploads, store). */
 export function getServerAuth(): string | undefined {
-  return serverAuth;
+  return auth?.kind === 'telegram' ? auth.initData : undefined;
+}
+
+/** Whether server-backed storage is active (Telegram initData or website cookie). */
+function serverActive(): boolean {
+  return auth !== null;
+}
+
+/** Attach initData in Telegram mode; in web mode the cookie carries the identity. */
+function withAuth(body: Record<string, unknown>): Record<string, unknown> {
+  return auth?.kind === 'telegram' ? { initData: auth.initData, ...body } : { ...body };
 }
 
 async function serverCall<T>(path: string, body: Record<string, unknown>): Promise<T> {
   const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ initData: serverAuth, ...body }),
+    credentials: 'include',
+    body: JSON.stringify(withAuth(body)),
   });
   if (!res.ok) throw new Error(`store-${res.status}`);
   return (await res.json()) as T;
@@ -193,7 +213,7 @@ function scheduleFlush(delayMs = 0): void {
 }
 
 async function flushPending(): Promise<void> {
-  if (flushing || !serverAuth) return;
+  if (flushing || !serverActive()) return;
   flushing = true;
   try {
     while (pendingWrites.size > 0) {
@@ -240,7 +260,7 @@ class ServerStorage implements Storage {
   ) {}
 
   async get<T>(key: string): Promise<T | null> {
-    if (serverAuth) {
+    if (serverActive()) {
       try {
         const { values } = await serverCall<{ values: Record<string, T | null> }>(
           '/api/store/get',
@@ -271,7 +291,7 @@ class ServerStorage implements Storage {
 
   async set<T>(key: string, value: T): Promise<void> {
     await this.cache.set(key, value).catch(() => {});
-    if (serverAuth) {
+    if (serverActive()) {
       // When the app is being hidden/closed, a normal fetch may be killed —
       // sendBeacon is delivered reliably by the browser.
       if (
@@ -281,7 +301,7 @@ class ServerStorage implements Storage {
         navigator.sendBeacon
       ) {
         try {
-          const blob = new Blob([JSON.stringify({ initData: serverAuth, key, value })], {
+          const blob = new Blob([JSON.stringify(withAuth({ key, value }))], {
             type: 'application/json',
           });
           if (navigator.sendBeacon('/api/store/set', blob)) {
@@ -304,7 +324,7 @@ class ServerStorage implements Storage {
 
   async remove(key: string): Promise<void> {
     await this.cache.remove(key).catch(() => {});
-    if (serverAuth) {
+    if (serverActive()) {
       await serverCall('/api/store/remove', { key }).catch(() => {});
     } else if (this.migrate) {
       await this.migrate.remove(key).catch(() => {});

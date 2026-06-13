@@ -10,7 +10,11 @@ import ReactDOM from 'react-dom/client';
 import { retrieveLaunchParams } from '@tma.js/sdk-react';
 
 import { Root } from '@/Root';
+import { WebApp } from '@/App';
+import { LoginScreen } from '@/components/LoginScreen';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { init } from '@/init';
+import { setWebAuth } from '@/lib/storage';
 import { installGlobalErrorLogging } from '@/lib/log';
 
 installGlobalErrorLogging();
@@ -36,24 +40,14 @@ async function retrieveLaunchParamsWithGrace() {
 
 const lp = await retrieveLaunchParamsWithGrace();
 
-if (!lp && !sessionStorage.getItem(BOOT_RETRY_KEY)) {
-  try {
-    sessionStorage.setItem(BOOT_RETRY_KEY, '1');
-  } catch {
-    /* private mode */
-  }
-  location.reload();
-} else if (!lp) {
-  root.render(
-    <div className="screen">
-      <div className="empty">
-        <div className="empty__icon">📵</div>
-        <div className="empty__title">Откройте приложение в Telegram</div>
-        <div className="empty__sub">Запустите Coco кнопкой меню в чате с ботом.</div>
-      </div>
-    </div>,
-  );
-} else {
+// Are we inside a Telegram client at all? Telegram injects window.Telegram.WebApp;
+// a normal browser doesn't — that's how we tell a Mini App from the website.
+const inTelegramClient =
+  typeof window !== 'undefined' &&
+  Boolean((window as unknown as { Telegram?: { WebApp?: unknown } }).Telegram?.WebApp);
+
+if (lp) {
+  // --- Telegram Mini App ----------------------------------------------------
   try {
     sessionStorage.removeItem(BOOT_RETRY_KEY);
   } catch {
@@ -76,6 +70,39 @@ if (!lp && !sessionStorage.getItem(BOOT_RETRY_KEY)) {
           <div className="empty__sub">{e instanceof Error ? e.message : String(e)}</div>
         </div>
       </div>,
+    );
+  }
+} else if (inTelegramClient && !sessionStorage.getItem(BOOT_RETRY_KEY)) {
+  // Telegram Desktop sometimes loads before the launch params are ready on a
+  // cold start — reload ourselves once before giving up.
+  try {
+    sessionStorage.setItem(BOOT_RETRY_KEY, '1');
+  } catch {
+    /* private mode */
+  }
+  location.reload();
+} else {
+  // --- Website (a normal browser): log in with Telegram, then run on the web -
+  let authed = false;
+  try {
+    authed = (await fetch('/api/auth/me', { credentials: 'include' })).ok;
+  } catch {
+    authed = false;
+  }
+  if (authed) {
+    setWebAuth();
+    root.render(
+      <StrictMode>
+        <ErrorBoundary>
+          <WebApp />
+        </ErrorBoundary>
+      </StrictMode>,
+    );
+  } else {
+    root.render(
+      <StrictMode>
+        <LoginScreen />
+      </StrictMode>,
     );
   }
 }

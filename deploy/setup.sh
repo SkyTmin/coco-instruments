@@ -171,12 +171,27 @@ for i in $(seq 1 15); do
 done
 
 echo "==> Writing /etc/caddy/Caddyfile"
-cat > /etc/caddy/Caddyfile <<EOF
+{
+  cat <<EOF
 $DOMAIN {
     encode gzip zstd
     reverse_proxy 127.0.0.1:3000
 }
 EOF
+  # For a real registrable domain (e.g. coco-instruments.ru) also serve www and
+  # redirect it to the apex. Skipped for the nip.io fallback and sub-domains.
+  case "$DOMAIN" in
+    *.nip.io | *.*.*) : ;;
+    *.*)
+      cat <<EOF
+
+www.$DOMAIN {
+    redir https://$DOMAIN{uri} permanent
+}
+EOF
+      ;;
+  esac
+} > /etc/caddy/Caddyfile
 
 echo "==> Starting Caddy"
 systemctl enable caddy >/dev/null 2>&1 || true

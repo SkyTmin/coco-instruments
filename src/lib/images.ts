@@ -94,6 +94,7 @@ export async function uploadAttachment(input: {
     const res = await fetch('/api/notes/attachments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ ...input, initData: getServerAuth() }),
     });
     if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) return null;

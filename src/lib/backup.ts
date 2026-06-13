@@ -6,6 +6,7 @@ export async function getBackupStatus(): Promise<{ owner: boolean }> {
     const res = await fetch('/api/backup/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ initData: getServerAuth() }),
     });
     if (!res.ok) return { owner: false };
@@ -21,6 +22,7 @@ export async function requestTelegramBackup(): Promise<{ ok: boolean; dispatched
     const res = await fetch('/api/backup/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ initData: getServerAuth() }),
     });
     if (!res.ok) return { ok: false };

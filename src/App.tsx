@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import {
   HashRouter,
   Navigate,
@@ -19,7 +19,7 @@ import {
 } from '@tma.js/sdk-react';
 
 import { useFinanceStore } from '@/store';
-import { setServerAuth } from '@/lib/storage';
+import { setServerAuth, setWebAuth } from '@/lib/storage';
 import { syncReminders } from '@/lib/reminders';
 import { closeTopOverlay } from '@/lib/escape-stack';
 import { tapLight } from '@/lib/haptics';
@@ -341,11 +341,15 @@ function SwipeBackController() {
   return null;
 }
 
-export function App() {
-  const lp = useLaunchParams();
-  const isDark = useSignal(miniApp.isDark);
+interface AppShellProps {
+  platform: 'ios' | 'base';
+  isDark: boolean;
+  webMode: boolean;
+  rawInitData?: string;
+}
+
+function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
   const hydrate = useFinanceStore((s) => s.hydrate);
-  const rawInitData = useRawInitData();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const expenses = useFinanceStore((s) => s.expenses);
   const recurring = useFinanceStore((s) => s.recurring);
@@ -372,8 +376,9 @@ export function App() {
 
   // Let app data persist on the server (must run before hydrate's first read).
   useEffect(() => {
-    setServerAuth(rawInitData);
-  }, [rawInitData]);
+    if (webMode) setWebAuth();
+    else setServerAuth(rawInitData);
+  }, [webMode, rawInitData]);
 
   useEffect(() => {
     void hydrate();
@@ -391,7 +396,7 @@ export function App() {
   return (
     <AppRoot
       appearance={isDark ? 'dark' : 'light'}
-      platform={['macos', 'ios'].includes(lp.tgWebAppPlatform) ? 'ios' : 'base'}
+      platform={platform}
     >
       <HashRouter>
         <NavigationController />
@@ -466,4 +471,37 @@ export function App() {
       </HashRouter>
     </AppRoot>
   );
+}
+
+/** Telegram Mini App entry — identity & theme come from the Telegram SDK. */
+export function App() {
+  const lp = useLaunchParams();
+  const isDark = useSignal(miniApp.isDark);
+  const rawInitData = useRawInitData();
+  return (
+    <AppShell
+      platform={['macos', 'ios'].includes(lp.tgWebAppPlatform) ? 'ios' : 'base'}
+      isDark={isDark}
+      webMode={false}
+      rawInitData={rawInitData}
+    />
+  );
+}
+
+/** Website entry — opened in a normal browser after "Log in with Telegram".
+ *  No Telegram SDK; identity rides on the session cookie, theme follows the OS. */
+export function WebApp() {
+  const [isDark, setIsDark] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => setIsDark(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return <AppShell platform="base" isDark={isDark} webMode />;
 }
