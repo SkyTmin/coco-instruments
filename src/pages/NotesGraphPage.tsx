@@ -23,7 +23,7 @@ import { selectionChanged } from '@/lib/haptics';
 import { getStorage } from '@/lib/storage';
 import { NotesHelpButton } from '@/components/NotesGuide';
 import { tagColor } from '@/lib/tag-color';
-import { englishTagTooltip } from '@/lib/english-words';
+import { hydrateCache, tooltipForTag } from '@/lib/english-deck';
 
 interface PointerSession {
   id: string;
@@ -61,7 +61,7 @@ function shortLabel(value: string, max = 18): string {
  *  when the tag is a word from the English deck (the user is learning English). */
 function nodeTitle(point: NoteGraphPoint): string {
   if (point.kind === 'tag') {
-    const tip = englishTagTooltip(point.id.slice(4));
+    const tip = tooltipForTag(point.id.slice(4));
     if (tip) return `${point.label} — ${tip}`;
   }
   return point.label;
@@ -214,6 +214,11 @@ export function NotesGraphPage() {
     return () => {
       alive = false;
     };
+  }, []);
+  // Warm the English-deck cache so tag tooltips can show translations of words
+  // fetched in earlier sessions, not just the curated core.
+  useEffect(() => {
+    void hydrateCache();
   }, []);
   const persistHighlights = (next: Set<string>) => {
     void getStorage().set(HIGHLIGHTS_KEY, [...next]);

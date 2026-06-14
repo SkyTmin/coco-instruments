@@ -165,6 +165,7 @@ export function ChatThread({
   const [showActions, setShowActions] = useState(false);
   const [linkPicker, setLinkPicker] = useState(false);
   const [showExtensions, setShowExtensions] = useState(false);
+  const [extBusy, setExtBusy] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string> | null>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<NoteMessage | null>(null);
@@ -345,18 +346,33 @@ export function ChatThread({
   const tagsWithPending = () => new Set([...presentTags, ...extPendingRef.current]);
 
   // Run a composer extension: add its next not-yet-present item to the note.
-  const runExtension = (ext: NoteExtension) => {
-    const pick = ext.next(tagsWithPending());
-    if (!pick) {
-      showToast('Все слова из словаря уже добавлены 🎉');
-      notifyWarning();
-      return;
+  // Async — a new word may need its translation/reading fetched on-device.
+  const runExtension = async (ext: NoteExtension) => {
+    if (extBusy) return;
+    const present = tagsWithPending();
+    setExtBusy(ext.id);
+    try {
+      const pick = await ext.next(present);
+      if (!pick) {
+        const exhausted = ext.remaining(present) === 0;
+        showToast(
+          exhausted
+            ? 'Все слова из словаря уже добавлены 🎉'
+            : 'Не удалось загрузить слово — проверьте интернет',
+          exhausted ? 'info' : 'error',
+        );
+        notifyWarning();
+        return;
+      }
+      // Guard a fast re-tap until the new card is reflected in `messages`.
+      extPendingRef.current.add(pick.key);
+      window.setTimeout(() => extPendingRef.current.delete(pick.key), 4000);
+      onSend('', [], pick.extra);
+      tapLight();
+      showToast(`Добавлено: ${pick.label}`);
+    } finally {
+      setExtBusy(null);
     }
-    extPendingRef.current.add(pick.key);
-    window.setTimeout(() => extPendingRef.current.delete(pick.key), 1500);
-    onSend('', [], pick.extra);
-    tapLight();
-    showToast(`Добавлено: ${pick.label}`);
   };
 
   const send = () => {
@@ -1183,24 +1199,29 @@ export function ChatThread({
               const left = ext.remaining(present);
               const added = ext.total - left;
               const done = left === 0;
+              const busy = extBusy === ext.id;
               return (
                 <button
                   key={ext.id}
                   type="button"
                   className="chat-ext__item"
-                  onClick={() => runExtension(ext)}
-                  disabled={done}
+                  onClick={() => void runExtension(ext)}
+                  disabled={done || extBusy !== null}
                 >
                   <span className="chat-ext__emoji">{ext.emoji}</span>
                   <span className="chat-ext__body">
                     <span className="chat-ext__name">{ext.name}</span>
                     <span className="chat-ext__desc">{ext.description}</span>
                     <span className="chat-ext__progress">
-                      {done ? 'Все слова добавлены 🎉' : `Добавлено ${added} из ${ext.total}`}
+                      {busy
+                        ? 'Загрузка слова…'
+                        : done
+                          ? 'Все слова добавлены 🎉'
+                          : `Добавлено ${added} из ${ext.total}`}
                     </span>
                   </span>
                   <span className="chat-ext__add">
-                    <IconPlus size={18} />
+                    {busy ? <span className="chat-ext__spin" /> : <IconPlus size={18} />}
                   </span>
                 </button>
               );

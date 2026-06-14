@@ -161,14 +161,8 @@ export const ENGLISH_WORDS: EnglishWord[] = [
   { word: 'future', translation: 'будущее', pronunciation: 'фьЮ-чэр' },
 ];
 
-/** Lookup by word (lowercase) — used by the graph to show a tag's translation. */
+/** Lookup by word (lowercase). The graph tooltip and the deck resolver both
+ *  read it; see english-deck.ts for the cache-aware tooltip used by the graph. */
 export const ENGLISH_BY_WORD: ReadonlyMap<string, EnglishWord> = new Map(
   ENGLISH_WORDS.map((w) => [w.word, w]),
 );
-
-/** Tooltip text for a tag that happens to be a deck word, else null.
- *  e.g. "actually" → "на самом деле / вообще-то · Эк-чу-а-ли". */
-export function englishTagTooltip(tag: string): string | null {
-  const w = ENGLISH_BY_WORD.get(tag.toLowerCase());
-  return w ? `${w.translation} · ${w.pronunciation}` : null;
-}

@@ -1,11 +1,10 @@
 // Note "extensions" — small helpers reached from the composer "+" menu that
-// drop a ready-made message into the current note. The first one is a spaced
-// English vocabulary deck. The shape is deliberately a registry so user-defined
-// extensions can be added later (that part is planned, not built yet).
+// drop a ready-made message into the current note. The first one is an endless
+// English vocabulary deck. The shape is a registry so user-defined extensions
+// can be added later (planned, not built yet).
 
 import type { MessageExtra } from '@/lib/notes-messages';
-import type { EnglishWord } from '@/lib/english-words';
-import { ENGLISH_WORDS } from '@/lib/english-words';
+import { cardBack, deckRemaining, deckTotal, nextWord, resolveWord } from '@/lib/english-deck';
 
 /** One thing an extension wants to add to the note. */
 export interface ExtensionPick {
@@ -27,21 +26,12 @@ export interface NoteExtension {
   description: string;
   /** How many items it can add in total (for the progress line). */
   total: number;
-  /** The next item to add, skipping `present`; null when nothing is left. */
-  next(present: ReadonlySet<string>): ExtensionPick | null;
-  /** How many items are still not in the note (for the progress line). */
+  /** How many items are still not in the note. When this is 0 and next()
+   *  returns null the deck is truly exhausted (vs. a failed fetch). */
   remaining(present: ReadonlySet<string>): number;
-}
-
-/** Flip-card for one English word: front = #tag, back = translation + the
- *  Russian-phonetic reading on its own line ("Читается — …"). */
-function englishCard(w: EnglishWord): MessageExtra {
-  return {
-    card: {
-      front: { text: `#${w.word}` },
-      back: { text: `${w.translation}\nЧитается — ${w.pronunciation}` },
-    },
-  };
+  /** The next item to add, skipping `present`. Async because a new word may
+   *  need its translation/reading fetched. Null = exhausted or unresolved. */
+  next(present: ReadonlySet<string>): Promise<ExtensionPick | null>;
 }
 
 export const englishExtension: NoteExtension = {
@@ -49,13 +39,31 @@ export const englishExtension: NoteExtension = {
   name: 'Английский язык',
   emoji: '🇬🇧',
   description: 'Карточка-слово: тег, перевод и произношение. Каждое нажатие — новое слово.',
-  total: ENGLISH_WORDS.length,
-  next(present) {
-    const w = ENGLISH_WORDS.find((item) => !present.has(item.word));
-    return w ? { extra: englishCard(w), label: w.word, key: w.word } : null;
-  },
-  remaining(present) {
-    return ENGLISH_WORDS.reduce((n, item) => (present.has(item.word) ? n : n + 1), 0);
+  total: deckTotal,
+  remaining: deckRemaining,
+  async next(present) {
+    // Try a few candidates so one un-resolvable word (offline / no translation)
+    // doesn't dead-end the whole deck.
+    const pool = new Set(present);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const word = nextWord(pool);
+      if (!word) return null; // exhausted
+      const data = await resolveWord(word);
+      if (data) {
+        return {
+          extra: {
+            card: {
+              front: { text: `#${word}` },
+              back: { text: cardBack(data.translation, data.pronunciation) },
+            },
+          },
+          label: word,
+          key: word,
+        };
+      }
+      pool.add(word); // couldn't resolve — skip it and try the next word
+    }
+    return null;
   },
 };
 
