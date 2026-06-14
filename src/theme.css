@@ -2140,6 +2140,80 @@ input[type='datetime-local'] {
   color: var(--accent);
 }
 
+/* Composer extensions ("Расширения") */
+.chat-ext__lead {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 2px 2px 12px;
+}
+.chat-ext {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chat-ext__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.chat-ext__item:active {
+  background: var(--surface);
+}
+.chat-ext__item:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.chat-ext__emoji {
+  font-size: 26px;
+  line-height: 1;
+  flex: none;
+}
+.chat-ext__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.chat-ext__name {
+  font-weight: 700;
+  font-size: 15px;
+}
+.chat-ext__desc {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.chat-ext__progress {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.chat-ext__add {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--tag-bg);
+  color: var(--accent);
+}
+.chat-ext__item:disabled .chat-ext__add {
+  background: transparent;
+  color: var(--muted);
+}
+
 /* Note-link picker (Связать с заметкой) */
 .link-picker {
   margin-top: 10px;

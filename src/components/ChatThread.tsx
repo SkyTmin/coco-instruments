@@ -23,6 +23,7 @@ import {
   IconPlus,
   IconReply,
   IconSend,
+  IconSparkles,
   IconSwap,
   IconTrash,
 } from '@/components/icons';
@@ -36,8 +37,11 @@ import {
   MAX_IMAGE_SOURCE_SIZE,
 } from '@/lib/images';
 import { toggleTaskInBody } from '@/lib/notes-markdown';
+import { parseNoteTags } from '@/lib/notes-graph';
 import type { MessageExtra } from '@/lib/notes-messages';
-import { messageSnippet } from '@/lib/notes-messages';
+import { deriveFromMessages, messageSnippet } from '@/lib/notes-messages';
+import type { NoteExtension } from '@/lib/extensions';
+import { NOTE_EXTENSIONS } from '@/lib/extensions';
 import { registerEscape } from '@/lib/escape-stack';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
@@ -160,6 +164,7 @@ export function ChatThread({
   const [lightbox, setLightbox] = useState<{ items: string[]; index: number } | null>(null);
   const [showActions, setShowActions] = useState(false);
   const [linkPicker, setLinkPicker] = useState(false);
+  const [showExtensions, setShowExtensions] = useState(false);
   const [selected, setSelected] = useState<Set<string> | null>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<NoteMessage | null>(null);
@@ -181,9 +186,17 @@ export function ChatThread({
   const caretRef = useRef<number | null>(null);
   const highlightTimer = useRef(0);
   const cropImages = useCrop();
+  // Tags an extension just added but that may not be reflected in `messages`
+  // yet (guards a fast double-tap from inserting the same word twice).
+  const extPendingRef = useRef<Set<string>>(new Set());
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
   const pinnedMsgs = useMemo(() => messages.filter((m) => m.pinned), [messages]);
+  // Every #tag already in the note — so an extension never adds a duplicate.
+  const presentTags = useMemo(
+    () => new Set(parseNoteTags(deriveFromMessages(messages).body)),
+    [messages],
+  );
 
   // Every photo of the thread in order — the lightbox swipes through them
   // like Telegram's media viewer.
@@ -325,6 +338,25 @@ export function ChatThread({
     setEditingId(null);
     setReplyTo(null);
     setError('');
+  };
+
+  // Combine the note's existing tags with the ones added in the last moment so
+  // dedup holds even before the store re-renders this thread.
+  const tagsWithPending = () => new Set([...presentTags, ...extPendingRef.current]);
+
+  // Run a composer extension: add its next not-yet-present item to the note.
+  const runExtension = (ext: NoteExtension) => {
+    const pick = ext.next(tagsWithPending());
+    if (!pick) {
+      showToast('Все слова из словаря уже добавлены 🎉');
+      notifyWarning();
+      return;
+    }
+    extPendingRef.current.add(pick.key);
+    window.setTimeout(() => extPendingRef.current.delete(pick.key), 1500);
+    onSend('', [], pick.extra);
+    tapLight();
+    showToast(`Добавлено: ${pick.label}`);
   };
 
   const send = () => {
@@ -1124,6 +1156,55 @@ export function ChatThread({
               </span>{' '}
               Задача
             </button>
+            <button
+              onClick={() => {
+                setShowActions(false);
+                setShowExtensions(true);
+              }}
+            >
+              <span className="chat-actions__ic">
+                <IconSparkles size={20} />
+              </span>{' '}
+              Расширения
+            </button>
+          </div>
+        </Sheet>
+      )}
+
+      {showExtensions && (
+        <Sheet title="Расширения" onClose={() => setShowExtensions(false)}>
+          <p className="chat-ext__lead">
+            Маленькие помощники для заметки — нажмите, и в чат добавится готовая карточка. Свои
+            расширения можно будет добавлять позже.
+          </p>
+          <div className="chat-ext">
+            {NOTE_EXTENSIONS.map((ext) => {
+              const present = tagsWithPending();
+              const left = ext.remaining(present);
+              const added = ext.total - left;
+              const done = left === 0;
+              return (
+                <button
+                  key={ext.id}
+                  type="button"
+                  className="chat-ext__item"
+                  onClick={() => runExtension(ext)}
+                  disabled={done}
+                >
+                  <span className="chat-ext__emoji">{ext.emoji}</span>
+                  <span className="chat-ext__body">
+                    <span className="chat-ext__name">{ext.name}</span>
+                    <span className="chat-ext__desc">{ext.description}</span>
+                    <span className="chat-ext__progress">
+                      {done ? 'Все слова добавлены 🎉' : `Добавлено ${added} из ${ext.total}`}
+                    </span>
+                  </span>
+                  <span className="chat-ext__add">
+                    <IconPlus size={18} />
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </Sheet>
       )}

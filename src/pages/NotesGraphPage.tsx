@@ -23,6 +23,7 @@ import { selectionChanged } from '@/lib/haptics';
 import { getStorage } from '@/lib/storage';
 import { NotesHelpButton } from '@/components/NotesGuide';
 import { tagColor } from '@/lib/tag-color';
+import { englishTagTooltip } from '@/lib/english-words';
 
 interface PointerSession {
   id: string;
@@ -54,6 +55,16 @@ const LABEL_ZOOM = 1.2;
 
 function shortLabel(value: string, max = 18): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+/** Hover tooltip for a node. Tag nodes also show their translation + reading
+ *  when the tag is a word from the English deck (the user is learning English). */
+function nodeTitle(point: NoteGraphPoint): string {
+  if (point.kind === 'tag') {
+    const tip = englishTagTooltip(point.id.slice(4));
+    if (tip) return `${point.label} — ${tip}`;
+  }
+  return point.label;
 }
 
 const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
@@ -943,7 +954,7 @@ export function NotesGraphPage() {
                         onClick={(event) => event.preventDefault()}
                         {...hoverable(point)}
                       >
-                        <title>{point.label}</title>
+                        <title>{nodeTitle(point)}</title>
                         {point.id === focusId && (
                           <circle
                             className="notes-graph__halo"
