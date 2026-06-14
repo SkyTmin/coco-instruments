@@ -2,27 +2,26 @@ import { describe, expect, it } from 'vitest';
 import { ipaToRussian } from './ipa-ru';
 
 describe('ipaToRussian', () => {
-  it('reads journey with the stressed vowel capitalised', () => {
-    expect(ipaToRussian('ˈdʒɜːrni')).toBe('джЁрни');
+  it('reads journey with syllables and stress like the core deck', () => {
+    expect(ipaToRussian('ˈdʒɜːrni')).toBe('джЁр-ни');
   });
 
   it('handles slashes, dots and length marks', () => {
-    expect(ipaToRussian('/ˈdʒɜːr.ni/')).toBe('джЁрни');
+    expect(ipaToRussian('/ˈdʒɜːr.ni/')).toBe('джЁр-ни');
   });
 
-  it('maps common digraphs', () => {
-    expect(ipaToRussian('ˈbʌtər')).toBe('бАтэр'); // butter
-    expect(ipaToRussian('θɪŋk')).toBe('сИнгк'); // think → θ→с, ŋ→нг (keeps -ing readable)
+  it('keeps onset clusters together (ин-стЭд, not инс-тЭд)', () => {
+    expect(ipaToRussian('ɪnˈsted')).toBe('ин-стЭд');
   });
 
-  it('capitalises the stressed vowel, not the first, when stress is later', () => {
-    const r = ipaToRussian('ɪnˈsted'); // instead
-    expect(r).toBe('инстЭд');
+  it('maps digraphs and splits two-vowel words', () => {
+    expect(ipaToRussian('ˈbʌtər')).toBe('бА-тэр'); // butter
+    expect(ipaToRussian('ˈheloʊ')).toBe('хЭ-лоу'); // hello
   });
 
-  it('falls back to the first vowel when no stress mark is present', () => {
-    const r = ipaToRussian('kæt'); // cat
-    expect(r).toBe('кЭт');
+  it('leaves single-syllable words lowercase', () => {
+    expect(ipaToRussian('kæt')).toBe('кэт');
+    expect(ipaToRussian('θɪŋk')).toBe('сингк'); // θ→с, ŋ→нг
   });
 
   it('returns empty string for empty / unusable input', () => {
@@ -30,7 +29,7 @@ describe('ipaToRussian', () => {
     expect(ipaToRussian('   ')).toBe('');
   });
 
-  it('drops unknown glyphs instead of leaking them', () => {
-    expect(ipaToRussian('ˈheloʊ')).not.toMatch(/[a-zɪʊ]/);
+  it('never leaks latin / raw IPA glyphs', () => {
+    expect(ipaToRussian('ˈbjuːtɪfəl')).not.toMatch(/[a-zɪʊəː]/);
   });
 });

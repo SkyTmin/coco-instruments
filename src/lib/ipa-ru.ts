@@ -1,142 +1,166 @@
-// Approximate IPA → Russian reading, so an auto-fetched English word can show a
-// "Читается — …" line like the curated deck. It is a practical transcription
-// (not exact): good enough to sound the word out, with the hand-tuned curated
-// deck covering the most common words perfectly. The stressed vowel is
-// capitalised (IPA marks primary stress with "ˈ").
+// IPA → Russian practical transcription. It tokenises IPA into phonemes,
+// splits them into syllables (one coda consonant, the rest onset — so clusters
+// like "st" stay together: ин-стЭд), maps each phoneme to Russian, joins
+// syllables with "-", and capitalises the stressed syllable's vowel — matching
+// the hand-tuned core deck ("джЁр-ни"). It is an approximation: good enough to
+// sound a word out, with the curated core covering the common words perfectly.
 
-const RU_VOWELS = 'аэоуыияеёю';
+interface Phone {
+  ru: string;
+  vowel: boolean;
+}
 
-// Longest IPA keys first so digraphs win over single symbols.
-const MAP: ReadonlyArray<readonly [string, string]> = [
+// [ipaKey, russian, isVowel] — longest keys first so digraphs win over singles.
+const TABLE: ReadonlyArray<readonly [string, string, boolean]> = [
   // diphthongs & long vowels
-  ['eɪ', 'эй'],
-  ['aɪ', 'ай'],
-  ['ɔɪ', 'ой'],
-  ['oɪ', 'ой'],
-  ['aʊ', 'ау'],
-  ['oʊ', 'оу'],
-  ['əʊ', 'оу'],
-  ['ɪə', 'иэ'],
-  ['eə', 'эа'],
-  ['ɛə', 'эа'],
-  ['ʊə', 'уэ'],
-  ['juː', 'ю'],
-  ['ju', 'ю'],
-  ['ɑː', 'а'],
-  ['ɔː', 'о'],
-  ['iː', 'и'],
-  ['uː', 'у'],
-  ['ɜː', 'ё'],
-  ['ɝ', 'ё'],
-  ['ɚ', 'эр'],
+  ['juː', 'ю', true],
+  ['eɪ', 'эй', true],
+  ['aɪ', 'ай', true],
+  ['ɔɪ', 'ой', true],
+  ['oɪ', 'ой', true],
+  ['aʊ', 'ау', true],
+  ['oʊ', 'оу', true],
+  ['əʊ', 'оу', true],
+  ['ɪə', 'иэ', true],
+  ['eə', 'эа', true],
+  ['ɛə', 'эа', true],
+  ['ʊə', 'уэ', true],
+  ['ju', 'ю', true],
+  ['ɑː', 'а', true],
+  ['ɔː', 'о', true],
+  ['iː', 'и', true],
+  ['uː', 'у', true],
+  ['ɜː', 'ё', true],
+  ['əː', 'ё', true],
+  ['ɝ', 'ёр', true],
+  ['ɚ', 'эр', true],
   // consonant digraphs
-  ['tʃ', 'ч'],
-  ['dʒ', 'дж'],
-  ['ʃ', 'ш'],
-  ['ʒ', 'ж'],
-  ['θ', 'с'],
-  ['ð', 'з'],
-  ['ŋ', 'нг'],
+  ['tʃ', 'ч', false],
+  ['dʒ', 'дж', false],
+  ['ʃ', 'ш', false],
+  ['ʒ', 'ж', false],
+  ['θ', 'с', false],
+  ['ð', 'з', false],
+  ['ŋ', 'нг', false],
   // single vowels
-  ['æ', 'э'],
-  ['ʌ', 'а'],
-  ['ɒ', 'о'],
-  ['ɑ', 'а'],
-  ['ɔ', 'о'],
-  ['ə', 'э'],
-  ['ɛ', 'э'],
-  ['e', 'э'],
-  ['ɪ', 'и'],
-  ['i', 'и'],
-  ['ʊ', 'у'],
-  ['u', 'у'],
-  ['ʉ', 'у'],
+  ['æ', 'э', true],
+  ['ʌ', 'а', true],
+  ['ɒ', 'о', true],
+  ['ɑ', 'а', true],
+  ['ɔ', 'о', true],
+  ['ə', 'э', true],
+  ['ɛ', 'э', true],
+  ['e', 'э', true],
+  ['ɪ', 'и', true],
+  ['i', 'и', true],
+  ['ʊ', 'у', true],
+  ['u', 'у', true],
+  ['ʉ', 'у', true],
+  ['ɜ', 'ё', true],
+  ['o', 'о', true],
+  ['a', 'а', true],
   // single consonants
-  ['p', 'п'],
-  ['b', 'б'],
-  ['t', 'т'],
-  ['d', 'д'],
-  ['k', 'к'],
-  ['g', 'г'],
-  ['ɡ', 'г'],
-  ['f', 'ф'],
-  ['v', 'в'],
-  ['s', 'с'],
-  ['z', 'з'],
-  ['m', 'м'],
-  ['n', 'н'],
-  ['l', 'л'],
-  ['r', 'р'],
-  ['ɹ', 'р'],
-  ['h', 'х'],
-  ['w', 'у'],
-  ['j', 'й'],
-  ['x', 'х'],
+  ['p', 'п', false],
+  ['b', 'б', false],
+  ['t', 'т', false],
+  ['d', 'д', false],
+  ['k', 'к', false],
+  ['g', 'г', false],
+  ['ɡ', 'г', false],
+  ['f', 'ф', false],
+  ['v', 'в', false],
+  ['s', 'с', false],
+  ['z', 'з', false],
+  ['m', 'м', false],
+  ['n', 'н', false],
+  ['l', 'л', false],
+  ['r', 'р', false],
+  ['ɹ', 'р', false],
+  ['h', 'х', false],
+  ['w', 'у', false],
+  ['j', 'й', false],
+  ['x', 'х', false],
 ];
 
-function capitalizeAt(text: string, index: number): string {
-  if (index < 0 || index >= text.length) return text;
-  return text.slice(0, index) + text[index].toUpperCase() + text.slice(index + 1);
-}
-
-function firstVowelIndex(text: string): number {
-  for (let i = 0; i < text.length; i++) if (RU_VOWELS.includes(text[i])) return i;
-  return -1;
-}
-
-/** Convert an IPA string (e.g. "ˈdʒɜːrni" or "/ˈdʒɜː.ni/") to an approximate
- *  Russian reading with the stressed vowel capitalised (e.g. "джЁрни"). Returns
- *  '' when there's nothing usable to read. */
-export function ipaToRussian(input: string): string {
-  if (!input) return '';
-  // Keep only the first pronunciation variant; drop slashes, brackets, dots.
-  const s = input
-    .split(',')[0]
-    .trim()
-    .replace(/[/[\]().]/g, '')
-    .replace(/ˌ/g, ''); // secondary stress — ignore
-
-  let out = '';
+function tokenize(ipa: string): { phones: Phone[]; stress: number } {
+  const phones: Phone[] = [];
+  let stress = -1;
   let stressNext = false;
-  let stressedAt = -1;
   let i = 0;
-  while (i < s.length) {
-    const ch = s[i];
-    if (ch === 'ˈ' || ch === "'") {
+  while (i < ipa.length) {
+    const c = ipa[i];
+    if (c === 'ˈ' || c === "'") {
       stressNext = true;
       i++;
       continue;
     }
-    if (ch === 'ː' || ch === ' ' || ch === '-' || ch === '‍') {
+    if (c === 'ˌ' || c === 'ː' || c === ' ' || c === '-' || c === '.') {
       i++;
       continue;
     }
-    let key = ch;
-    let val = '';
-    for (const [k, v] of MAP) {
-      if (s.startsWith(k, i)) {
-        key = k;
-        val = v;
+    let hit: readonly [string, string, boolean] | null = null;
+    for (const e of TABLE) {
+      if (ipa.startsWith(e[0], i)) {
+        hit = e;
         break;
       }
     }
-    if (!val) {
-      // Unknown symbol — skip it rather than leaking IPA glyphs.
-      i += key.length;
+    if (!hit) {
+      i++; // unknown glyph — skip rather than leak it
       continue;
     }
-    if (stressNext) {
-      const vowelOffset = firstVowelIndex(val);
-      if (vowelOffset >= 0) {
-        stressedAt = out.length + vowelOffset;
-        stressNext = false;
-      }
+    if (stressNext && hit[2]) {
+      stress = phones.length;
+      stressNext = false;
     }
-    out += val;
-    i += key.length;
+    phones.push({ ru: hit[1], vowel: hit[2] });
+    i += hit[0].length;
   }
+  return { phones, stress };
+}
 
-  if (!out) return '';
-  if (stressedAt < 0) stressedAt = firstVowelIndex(out);
-  return capitalizeAt(out, stressedAt);
+/** Cut points (start index of each syllable after the first). One consonant
+ *  stays as the coda of the previous syllable, the rest open the next. */
+function syllableCuts(phones: Phone[]): number[] {
+  const vowels: number[] = [];
+  phones.forEach((p, i) => p.vowel && vowels.push(i));
+  const cuts: number[] = [];
+  for (let k = 0; k < vowels.length - 1; k++) {
+    const v = vowels[k];
+    const nextV = vowels[k + 1];
+    const between = nextV - v - 1;
+    cuts.push(between >= 2 ? v + 2 : v + 1);
+  }
+  return cuts;
+}
+
+const capFirst = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
+/** Convert an IPA string (e.g. "ˈdʒɜːrni" / "/ˈdʒɜː.ni/") to an approximate,
+ *  syllable-hyphenated Russian reading with the stressed vowel capitalised
+ *  ("джЁр-ни"). Returns '' when there's nothing usable. */
+export function ipaToRussian(input: string): string {
+  if (!input) return '';
+  const ipa = input
+    .split(',')[0]
+    .trim()
+    .replace(/[/[\]()]/g, '');
+  const { phones, stress: rawStress } = tokenize(ipa);
+  if (!phones.length) return '';
+  let stress = rawStress;
+
+  const vowelCount = phones.filter((p) => p.vowel).length;
+  // No explicit stress: mark the first vowel — but only for polysyllables
+  // (single-syllable words read fine without a capital, like the core's "зоу").
+  if (stress < 0 && vowelCount > 1) stress = phones.findIndex((p) => p.vowel);
+
+  const pieces = phones.map((p, i) => (i === stress ? capFirst(p.ru) : p.ru));
+  const cuts = syllableCuts(phones);
+  const out: string[] = [];
+  let start = 0;
+  for (const cut of [...cuts, phones.length]) {
+    out.push(pieces.slice(start, cut).join(''));
+    start = cut;
+  }
+  return out.filter(Boolean).join('-');
 }

@@ -13,6 +13,8 @@
 import { ENGLISH_BY_WORD, ENGLISH_WORDS } from '@/lib/english-words';
 import { ENGLISH_FREQUENCY } from '@/lib/english-frequency';
 import { ipaToRussian } from '@/lib/ipa-ru';
+import { fetchJson } from '@/lib/fetch-json';
+import { translateToRu } from '@/lib/english-translate';
 import { getStorage } from '@/lib/storage';
 
 export interface WordData {
@@ -46,7 +48,9 @@ export function cardBack(translation: string, pronunciation: string): string {
 }
 
 // ---- cache of fetched (non-core) words -----------------------------------
-const CACHE_KEY = 'coco-english-cache';
+// v2: richer entries (multi-sense translation + part of speech + IPA), so the
+// bump re-fetches anything cached by the older MyMemory-only pipeline.
+const CACHE_KEY = 'coco-english-cache-v2';
 const memCache = new Map<string, { translation: string; pronunciation: string }>();
 let hydrated = false;
 let hydrating: Promise<void> | null = null;
@@ -79,62 +83,25 @@ function persistCache() {
   }, 400);
 }
 
-async function fetchJson(url: string, ms = 8000): Promise<unknown | null> {
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), ms);
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
-async function fetchTranslation(word: string): Promise<string | null> {
-  const data = (await fetchJson(
-    `https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|ru`,
-  )) as { responseData?: { translatedText?: string } } | null;
-  let t = (data?.responseData?.translatedText ?? '').trim();
-  if (!t) return null;
-  // MyMemory returns ALL-CAPS warnings when something is off — reject those.
-  if (/PLEASE SELECT|INVALID|NO QUERY|MYMEMORY WARNING|QUERY LENGTH/i.test(t)) return null;
-  // No real translation found → it echoes the source word back.
-  if (t.toLowerCase() === word.toLowerCase()) return null;
-  // Trim to a couple of variants to keep the card tidy.
-  t = t
-    .replace(/\s*;\s*/g, ' / ')
-    .split(' / ')
-    .slice(0, 3)
-    .join(' / ');
-  return t;
-}
-
-async function fetchPronunciation(word: string): Promise<string> {
+/** Raw IPA string for a word (e.g. "ˈdʒɜːni"), from the free dictionary API. */
+async function fetchIpaRaw(word: string): Promise<string> {
   const data = (await fetchJson(
     `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`,
   )) as Array<{ phonetic?: string; phonetics?: Array<{ text?: string }> }> | null;
-  let ipa = '';
   if (Array.isArray(data)) {
     for (const entry of data) {
-      if (entry?.phonetic) {
-        ipa = entry.phonetic;
-        break;
-      }
-      const p = (entry?.phonetics ?? []).find((x) => x?.text);
-      if (p?.text) {
-        ipa = p.text;
-        break;
-      }
+      if (entry?.phonetic?.trim()) return entry.phonetic.trim();
+      const p = (entry?.phonetics ?? []).find((x) => x?.text?.trim());
+      if (p?.text) return p.text.trim();
     }
   }
-  return ipaToRussian(ipa);
+  return '';
 }
 
 /** Resolve a word to its card data: instant for the curated core and anything
- *  cached; otherwise fetch translation + reading and cache. Null = couldn't
- *  resolve (e.g. offline, or no translation found). */
+ *  cached; otherwise fetch a good translation (+ part of speech) and the
+ *  reading (Russian transcription + IPA), then cache. Null = couldn't resolve
+ *  (offline, or no translation found). */
 export async function resolveWord(word: string): Promise<WordData | null> {
   const core = ENGLISH_BY_WORD.get(word);
   if (core) {
@@ -144,11 +111,14 @@ export async function resolveWord(word: string): Promise<WordData | null> {
   const cached = memCache.get(word);
   if (cached) return { word, ...cached };
 
-  const [translation, pronunciation] = await Promise.all([
-    fetchTranslation(word),
-    fetchPronunciation(word),
-  ]);
-  if (!translation) return null;
+  const [tr, ipaRaw] = await Promise.all([translateToRu(word), fetchIpaRaw(word)]);
+  if (!tr) return null;
+
+  const translation = tr.pos ? `${tr.translation} · ${tr.pos}` : tr.translation;
+  const reading = ipaToRussian(ipaRaw);
+  const ipaText = ipaRaw.replace(/[/[\]]/g, '').trim();
+  const pronunciation = [reading, ipaText ? `[${ipaText}]` : ''].filter(Boolean).join(' · ');
+
   const entry = { translation, pronunciation };
   memCache.set(word, entry);
   persistCache();
