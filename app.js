@@ -1008,7 +1008,25 @@ app.get('/api/health', (req, res) => {
 
 // Serve the built Vite app (run `npm run build` first to produce dist/).
 const distDir = path.join(__dirname, 'dist');
-app.use(express.static(distDir));
+app.use(
+  express.static(distDir, {
+    setHeaders(res, filePath) {
+      const rel = path.relative(distDir, filePath);
+      if (rel.split(path.sep)[0] === 'assets') {
+        // Everything in /assets/ is content-hashed by Vite → safe forever.
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (
+        /(?:^|[\\/])(?:index\.html|sw\.js|registerSW\.js|manifest\.webmanifest)$/i.test(rel)
+      ) {
+        // The app shell + service worker must NEVER be served stale, or a cached
+        // index.html keeps pointing at chunk hashes the last deploy deleted →
+        // blank screen (iOS WKWebView ignores max-age=0, hence no-store).
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+      }
+    },
+  }),
+);
 
 // SPA fallback: a navigation route returns index.html so client-side routing
 // works. But a request for a hashed asset that no longer exists (a stale build
@@ -1019,6 +1037,9 @@ app.get('*', (req, res) => {
   if (req.path.startsWith('/assets/') || /\.[a-z0-9]+$/i.test(req.path)) {
     return res.sendStatus(404);
   }
+  // Never let the navigation shell be cached stale (see static handler above).
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
   res.sendFile(path.join(distDir, 'index.html'));
 });
 
