@@ -268,7 +268,7 @@ export function HomePage() {
           <button className="home-quick__chip" onClick={() => go('/finance/expenses/new')}>
             💸 Расход
           </button>
-          <button className="home-quick__chip" onClick={() => go('/clothing/outfits')}>
+          <button className="home-quick__chip" onClick={() => go('/clothing/lookbook')}>
             🧥 Образы
           </button>
         </div>

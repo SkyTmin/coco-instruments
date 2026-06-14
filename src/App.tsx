@@ -58,6 +58,9 @@ const WardrobeItemDetailPage = lazy(() =>
 const OutfitsPage = lazy(() =>
   import('@/pages/clothing/OutfitsPage').then((m) => ({ default: m.OutfitsPage })),
 );
+const LookbookPage = lazy(() =>
+  import('@/pages/clothing/LookbookPage').then((m) => ({ default: m.LookbookPage })),
+);
 const OutfitFormPage = lazy(() =>
   import('@/pages/clothing/OutfitFormPage').then((m) => ({ default: m.OutfitFormPage })),
 );
@@ -441,6 +444,7 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
                 <Route path="/calculator/formulas" element={<FormulasPage />} />
                 <Route path="/calculator/formulas/:id" element={<FormulaDetailPage />} />
                 <Route path="/clothing" element={<ClothingDashboardPage />} />
+                <Route path="/clothing/lookbook" element={<LookbookPage />} />
                 <Route path="/clothing/compose" element={<ComposePage />} />
                 <Route path="/clothing/compare" element={<ComparePage />} />
                 <Route path="/clothing/wardrobe" element={<WardrobePage />} />

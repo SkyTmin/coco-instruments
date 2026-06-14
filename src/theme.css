@@ -5674,6 +5674,15 @@ input[type='datetime-local'] {
 }
 
 /* Outfit quick-pick carousel ("Быстрый выбор") */
+.lookbook {
+  margin-top: 6px;
+}
+.lookbook__hint {
+  margin-top: 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
 .qp-track {
   display: flex;
   gap: 14px;

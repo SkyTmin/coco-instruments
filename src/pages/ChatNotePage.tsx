@@ -175,7 +175,12 @@ export function ChatNotePage() {
           className="icon-btn"
           onClick={() => {
             tapLight();
-            navigate('/notes/graph');
+            // Open the graph in the note's own context: a note in a notebook
+            // opens that notebook's graph; a loose note opens its local
+            // neighbourhood; an unsaved note falls back to the overview.
+            if (listId) navigate(`/notes/graph?list=${listId}`);
+            else if (currentId.current) navigate(`/notes/graph?focus=${currentId.current}`);
+            else navigate('/notes/graph');
           }}
           aria-label="Граф связей"
         >
