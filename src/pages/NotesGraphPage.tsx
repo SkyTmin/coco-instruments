@@ -59,7 +59,7 @@ const LABEL_ZOOM = 1.2;
 // out to EXIT returns to the overview (low, so it takes a deliberate zoom-out).
 const ENTER_HINT = 1.7;
 const ENTER_SCALE = 2.25;
-const EXIT_SCALE = 0.62;
+const EXIT_SCALE = 0.56;
 
 function shortLabel(value: string, max = 18): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -272,6 +272,7 @@ export function NotesGraphPage() {
   // Zoom-to-navigate bookkeeping: the focused notebook, a guard so a transition
   // fires once, and whether the "pull" cue tick has been played.
   const focusedRef = useRef<string | null>(null);
+  const focusedTargetRef = useRef<string | null>(null);
   const transitionRef = useRef(false);
   const hintArmedRef = useRef(false);
   // Multi-touch pinch-zoom bookkeeping.
@@ -316,8 +317,8 @@ export function NotesGraphPage() {
   // notebook's own graph; zoom back out far enough to return — each a seamless
   // state change with a Telegram-style "pull" tick + commit haptic.
   useEffect(() => {
-    const fid = focusedRef.current;
-    const inHint = isOverview && scale >= ENTER_HINT && !!fid;
+    const target = focusedTargetRef.current;
+    const inHint = isOverview && scale >= ENTER_HINT && !!target;
     if (inHint && !hintArmedRef.current) {
       hintArmedRef.current = true;
       selectionChanged(); // pull cue, like Telegram revealing the next channel
@@ -325,26 +326,28 @@ export function NotesGraphPage() {
       hintArmedRef.current = false;
     }
     if (transitionRef.current) return;
+    // `replace` so zoom transitions don't pile onto history — the back button
+    // returns to where you opened the graph from, not through every zoom.
     const framed = () => {
       panRef.current = { x: 0, y: 0 };
       scaleRef.current = 1;
       setPan({ x: 0, y: 0 });
       setScale(1);
     };
-    if (isOverview && fid && scale >= ENTER_SCALE) {
+    if (isOverview && target && scale >= ENTER_SCALE) {
       transitionRef.current = true;
       tapMedium();
       notifySuccess();
       framed();
-      navigate(`/notes/graph?list=${fid.slice(5)}`);
-    } else if (listParam && scale <= EXIT_SCALE) {
+      navigate(target, { replace: true });
+    } else if ((listParam || peopleParam) && scale <= EXIT_SCALE) {
       transitionRef.current = true;
       tapMedium();
       notifySuccess();
       framed();
-      navigate('/notes/graph');
+      navigate('/notes/graph', { replace: true });
     }
-  }, [scale, isOverview, listParam, navigate]);
+  }, [scale, isOverview, listParam, peopleParam, navigate]);
 
   useEffect(() => {
     if (!personParam) return;
@@ -776,26 +779,36 @@ export function NotesGraphPage() {
     };
   };
 
-  // The notebook nearest the viewport centre — the one a zoom-in will open.
-  // A ring "arms" around it from ENTER_HINT→ENTER_SCALE as a pull cue.
-  let focusedListId: string | null = null;
+  // The node nearest the viewport centre that a zoom-in will open — a notebook
+  // or the "Люди" hub. A ring "arms" around it from ENTER_HINT→ENTER_SCALE.
+  let focusedNodeId: string | null = null;
+  let focusedTarget: string | null = null;
   let hintT = 0;
   if (isOverview && scale >= ENTER_HINT) {
     const vcx = (size.width / 2 - pan.x) / scale;
     const vcy = (size.height / 2 - pan.y) / scale;
     const reach = (size.width / 2 / scale) * 1.15;
     let best = Infinity;
+    let bestPoint: NoteGraphPoint | null = null;
     for (const p of points) {
-      if (p.kind !== 'list') continue;
+      if (p.kind !== 'list' && p.kind !== 'people') continue;
       const d = Math.hypot(p.x - vcx, p.y - vcy);
       if (d < best && d < reach) {
         best = d;
-        focusedListId = p.id;
+        bestPoint = p;
       }
+    }
+    if (bestPoint) {
+      focusedNodeId = bestPoint.id;
+      focusedTarget =
+        bestPoint.kind === 'people'
+          ? '/notes/graph?people=1'
+          : `/notes/graph?list=${bestPoint.id.slice(5)}`;
     }
     hintT = Math.max(0, Math.min(1, (scale - ENTER_HINT) / (ENTER_SCALE - ENTER_HINT)));
   }
-  focusedRef.current = focusedListId;
+  focusedRef.current = focusedNodeId;
+  focusedTargetRef.current = focusedTarget;
 
   return (
     <Screen
@@ -828,6 +841,12 @@ export function NotesGraphPage() {
               className="btn btn--ghost btn--block"
               onClick={() => {
                 selectionChanged();
+                // Reset the zoom so the overview opens framed (not at the
+                // carried-over zoom that would instantly re-arm a notebook).
+                panRef.current = { x: 0, y: 0 };
+                scaleRef.current = 1;
+                setPan({ x: 0, y: 0 });
+                setScale(1);
                 navigate('/notes/graph');
               }}
             >
@@ -1025,9 +1044,9 @@ export function NotesGraphPage() {
                       : tc
                         ? { fill: tc.fill, stroke: tc.stroke }
                         : undefined;
-                    // The notebook a zoom-in will open gets an "arming" ring that
+                    // The node a zoom-in will open gets an "arming" ring that
                     // tightens as you approach the threshold (a pull cue).
-                    const armed = isOverview && point.id === focusedListId;
+                    const armed = isOverview && point.id === focusedNodeId;
                     return (
                       <g
                         key={point.id}
