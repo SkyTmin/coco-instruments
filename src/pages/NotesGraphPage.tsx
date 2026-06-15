@@ -330,9 +330,13 @@ export function NotesGraphPage() {
     activeIdRef.current = activeId;
   }, [activeId]);
 
-  // A finished route change clears the one-shot transition guard.
+  // A finished route change clears the one-shot transition guard — and any
+  // stale hover/drag focus, which would otherwise dim the whole new graph until
+  // you move the mouse (everything reads as "not a neighbour" of the old node).
   useEffect(() => {
     transitionRef.current = false;
+    setHoverId(null);
+    setDraggingId(null);
   }, [listParam, tagParam, peopleParam, personParam, focusParam]);
 
   // Zoom-to-navigate: keep zooming into the centred notebook and it opens that
@@ -1079,6 +1083,11 @@ export function NotesGraphPage() {
                         style={{ '--gd': `${Math.min(pointIndex, 12) * 24}ms` } as CSSProperties}
                         onPointerDown={(event) => beginNodeDrag(event, point.id)}
                         onClick={(event) => event.preventDefault()}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          selectionChanged();
+                          setMenuNode(point);
+                        }}
                         {...hoverable(point)}
                       >
                         <title>{nodeTitle(point)}</title>

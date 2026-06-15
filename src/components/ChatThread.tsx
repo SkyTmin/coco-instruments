@@ -985,6 +985,23 @@ export function ChatThread({
               onPointerUp={onBubbleUp}
               onPointerCancel={onBubbleUp}
               onClickCapture={(e) => onBubbleClickCapture(m, e)}
+              onContextMenu={(e) => {
+                // Desktop right-click opens the same menu as a long-press.
+                if (selected) return;
+                e.preventDefault();
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                setMenu({
+                  msg: m,
+                  rect: {
+                    top: r.top,
+                    left: r.left,
+                    width: r.width,
+                    height: r.height,
+                    right: r.right,
+                  },
+                });
+                selectionChanged();
+              }}
             >
               {selected && (
                 <span className={`chat-select-dot${selected.has(m.id) ? ' is-on' : ''}`}>

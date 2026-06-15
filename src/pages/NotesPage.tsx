@@ -217,7 +217,11 @@ export function NotesPage() {
       action={
         <div className="notes-head-actions">
           {notes.length > 0 && (
-            <button className="icon-btn" onClick={() => go(graphPath)} aria-label="Граф связей">
+            <button
+              className="icon-btn chat-graph-btn"
+              onClick={() => go(graphPath)}
+              aria-label="Граф связей"
+            >
               <IconGraph size={21} />
             </button>
           )}

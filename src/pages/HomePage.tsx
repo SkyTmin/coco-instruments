@@ -273,6 +273,9 @@ export function HomePage() {
           <button className="home-quick__chip" onClick={() => go('/clothing/lookbook')}>
             🧥 Образы
           </button>
+          <button className="home-quick__chip" onClick={() => go('/notes/graph')}>
+            🕸 Граф
+          </button>
         </div>
 
         {/* Разделы: финансы — hero, остальные — компактные плитки 2×2 */}
