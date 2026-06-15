@@ -55,10 +55,11 @@ const SIM_DRAG_ALPHA = 0.24;
 // Tiny detail nodes (gifts/promises/events) only get labels once you zoom in.
 const LABEL_ZOOM = 1.2;
 
-// Semantic zoom for notebook containers: a list is a solid node below LO, and a
-// fully expanded transparent circle showing its members above HI (smooth between).
-const EXPAND_LO = 1.15;
-const EXPAND_HI = 1.9;
+// Semantic zoom for notebook containers: the notebook nearest the viewport
+// centre stays a solid node below LO and is a fully expanded transparent circle
+// (members shown) above HI — only that one list opens, never all of them.
+const EXPAND_LO = 1.4;
+const EXPAND_HI = 2.4;
 
 function shortLabel(value: string, max = 18): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -780,11 +781,28 @@ export function NotesGraphPage() {
     };
   };
 
-  // How "expanded" the notebook containers are at the current zoom (0 collapsed
+  // How "expanded" the focused notebook is at the current zoom (0 collapsed
   // solid node → 1 transparent circle with members shown).
   const expandT = isOverview
     ? Math.max(0, Math.min(1, (scale - EXPAND_LO) / (EXPAND_HI - EXPAND_LO)))
     : 0;
+  // Only the notebook nearest the viewport centre expands, so zooming into one
+  // list opens just that list — the rest stay collapsed (and usually off-screen).
+  let focusedListId: string | null = null;
+  if (isOverview && expandT > 0) {
+    const vcx = (size.width / 2 - pan.x) / scale;
+    const vcy = (size.height / 2 - pan.y) / scale;
+    const reach = (size.width / 2 / scale) * 1.1;
+    let best = Infinity;
+    for (const p of points) {
+      if (p.kind !== 'list') continue;
+      const d = Math.hypot(p.x - vcx, p.y - vcy);
+      if (d < best && d < reach) {
+        best = d;
+        focusedListId = p.id;
+      }
+    }
+  }
   // Open a member node tapped inside a container.
   const openMember = (m: NoteGraphPoint) => {
     if (m.kind === 'note') navigate(`/notes/${m.id}`);
@@ -1020,16 +1038,16 @@ export function NotesGraphPage() {
                         ? { fill: tc.fill, stroke: tc.stroke }
                         : undefined;
                     // A notebook container collapses to a small solid node and
-                    // expands to a big transparent circle (sized to its members).
+                    // expands to a big transparent circle (sized to its members)
+                    // — but only the focused notebook expands.
                     const isContainer = isOverview && point.kind === 'list';
+                    const t = isContainer && point.id === focusedListId ? expandT : 0;
                     const cgl = isContainer
                       ? groupLayouts.get(point.list?.id ?? point.id.slice(5))
                       : null;
                     const collapsedR = Math.min(46, 20 + (point.count ?? 0) * 2.2);
                     const fullR = cgl?.r ?? point.r;
-                    const drawR = isContainer
-                      ? collapsedR + (fullR - collapsedR) * expandT
-                      : point.r;
+                    const drawR = isContainer ? collapsedR + (fullR - collapsedR) * t : point.r;
                     return (
                       <g
                         key={point.id}
@@ -1048,7 +1066,7 @@ export function NotesGraphPage() {
                               cy={point.y}
                               r={drawR}
                               fill="url(#listNodeGradientInteractive)"
-                              fillOpacity={1 - expandT}
+                              fillOpacity={1 - t}
                               stroke={hl ? 'var(--pos)' : '#7c6cf2'}
                               strokeWidth={2.4}
                             />
@@ -1088,9 +1106,10 @@ export function NotesGraphPage() {
                     );
                   })}
                   {isOverview &&
+                    focusedListId &&
                     expandT > 0.01 &&
-                    points.map((listPt) => {
-                      if (listPt.kind !== 'list') return null;
+                    [points.find((p) => p.id === focusedListId)].map((listPt) => {
+                      if (!listPt) return null;
                       const gl = groupLayouts.get(listPt.list?.id ?? listPt.id.slice(5));
                       if (!gl) return null;
                       return (
