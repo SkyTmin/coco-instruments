@@ -38,7 +38,7 @@ const TAP_MOVE_LIMIT = 10;
 const TAP_TIME_LIMIT = 450;
 const LONG_PRESS_MS = 450;
 const HIGHLIGHTS_KEY = 'coco-graph-highlights';
-const MIN_SCALE = 0.5;
+const MIN_SCALE = 0.3;
 const MAX_SCALE = 2.6;
 
 // Coordinate space: a fixed virtual height; the width follows the real stage's
@@ -57,11 +57,11 @@ const LABEL_ZOOM = 1.2;
 // viewport centre and at ENTER it opens that notebook's own graph (a new state);
 // a ring "arms" from HINT→ENTER as a pull cue. Inside a notebook, zooming back
 // out to EXIT returns to the overview (low, so it takes a deliberate zoom-out).
-const ENTER_HINT = 1.7;
-const ENTER_SCALE = 2.25;
-const EXIT_SCALE = 0.54;
-// Home framing never zooms below this, so it can't accidentally trip EXIT.
-const HOME_MIN_SCALE = 0.66;
+// Zoom-to-navigate thresholds are relative to the (zoomed-out) home framing, so
+// they adapt to however far out the graph is fitted — see zoomThresholds().
+const HINT_FACTOR = 2.6;
+const ENTER_FACTOR = 3.6;
+const EXIT_FACTOR = 0.6;
 
 function shortLabel(value: string, max = 18): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -300,6 +300,8 @@ export function NotesGraphPage() {
   const focusedTargetRef = useRef<string | null>(null);
   const transitionRef = useRef(false);
   const hintArmedRef = useRef(false);
+  // The current zoomed-out "home" scale — enter/exit thresholds key off it.
+  const homeScaleRef = useRef(0.7);
   // Multi-touch pinch-zoom bookkeeping.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; mx: number; my: number } | null>(null);
@@ -353,13 +355,27 @@ export function NotesGraphPage() {
       reserveVB = Math.min(sz.height * 0.5, (reservePx / stage.height) * sz.height);
     }
     const availH = sz.height - reserveVB;
-    const s = Math.max(HOME_MIN_SCALE, Math.min(1, (availH / sz.height) * 0.97));
+    // Fit the whole coordinate space into the area below the panel, with a
+    // margin so the graph reads "framed", not edge-to-edge (this is what makes
+    // it open zoomed-out, not right in your face). Capped so it's never ~1.
+    const s = Math.max(MIN_SCALE, Math.min(0.9, (availH / sz.height) * 0.92));
     const panX = (sz.width * (1 - s)) / 2;
     const panY = reserveVB + (availH - sz.height * s) / 2;
+    homeScaleRef.current = s;
     scaleRef.current = s;
     panRef.current = { x: panX, y: panY };
     setScale(s);
     setPan({ x: panX, y: panY });
+  }, []);
+
+  // Enter/exit zoom thresholds, derived from the home scale (clamped so they're
+  // always reachable within MIN/MAX).
+  const zoomThresholds = useCallback(() => {
+    const h = homeScaleRef.current || 0.7;
+    const hint = Math.min(MAX_SCALE - 0.4, Math.max(h + 0.25, h * HINT_FACTOR));
+    const enter = Math.min(MAX_SCALE - 0.1, Math.max(hint + 0.25, h * ENTER_FACTOR));
+    const exit = Math.max(MIN_SCALE + 0.03, Math.min(h - 0.06, h * EXIT_FACTOR));
+    return { hint, enter, exit };
   }, []);
 
   // A finished route change clears the one-shot transition guard — and any
@@ -383,7 +399,8 @@ export function NotesGraphPage() {
       return; // transitions frozen by the lock — just zoom freely
     }
     const target = focusedTargetRef.current;
-    const inHint = isOverview && scale >= ENTER_HINT && !!target;
+    const { enter, exit } = zoomThresholds();
+    const inHint = isOverview && scale >= zoomThresholds().hint && !!target;
     if (inHint && !hintArmedRef.current) {
       hintArmedRef.current = true;
       selectionChanged(); // pull cue, like Telegram revealing the next channel
@@ -393,20 +410,20 @@ export function NotesGraphPage() {
     if (transitionRef.current) return;
     // `replace` so zoom transitions don't pile onto history — the back button
     // returns to where you opened the graph from, not through every zoom.
-    if (isOverview && target && scale >= ENTER_SCALE) {
+    if (isOverview && target && scale >= enter) {
       transitionRef.current = true;
       tapMedium();
       notifySuccess();
       homeView();
       navigate(target, { replace: true });
-    } else if ((listParam || peopleParam) && scale <= EXIT_SCALE) {
+    } else if ((listParam || peopleParam) && scale <= exit) {
       transitionRef.current = true;
       tapMedium();
       notifySuccess();
       homeView();
       navigate('/notes/graph', { replace: true });
     }
-  }, [scale, isOverview, listParam, peopleParam, locked, homeView, navigate]);
+  }, [scale, isOverview, listParam, peopleParam, locked, homeView, zoomThresholds, navigate]);
 
   useEffect(() => {
     if (!personParam) return;
@@ -834,11 +851,12 @@ export function NotesGraphPage() {
   };
 
   // The node nearest the viewport centre that a zoom-in will open — a notebook
-  // or the "Люди" hub. A ring "arms" around it from ENTER_HINT→ENTER_SCALE.
+  // or the "Люди" hub. A ring "arms" around it between the hint and enter zooms.
   let focusedNodeId: string | null = null;
   let focusedTarget: string | null = null;
   let hintT = 0;
-  if (isOverview && !locked && scale >= ENTER_HINT) {
+  const { hint: hintScale, enter: enterScale } = zoomThresholds();
+  if (isOverview && !locked && scale >= hintScale) {
     const vcx = (size.width / 2 - pan.x) / scale;
     const vcy = (size.height / 2 - pan.y) / scale;
     const reach = (size.width / 2 / scale) * 1.15;
@@ -859,7 +877,7 @@ export function NotesGraphPage() {
           ? '/notes/graph?people=1'
           : `/notes/graph?list=${bestPoint.id.slice(5)}`;
     }
-    hintT = Math.max(0, Math.min(1, (scale - ENTER_HINT) / (ENTER_SCALE - ENTER_HINT)));
+    hintT = Math.max(0, Math.min(1, (scale - hintScale) / (enterScale - hintScale)));
   }
   focusedRef.current = focusedNodeId;
   focusedTargetRef.current = focusedTarget;
