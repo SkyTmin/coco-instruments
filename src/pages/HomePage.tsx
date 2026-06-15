@@ -17,6 +17,7 @@ import { nextBirthday, peopleUpcomingEvents, peopleWord } from '@/lib/people';
 import { getBackupStatus, requestTelegramBackup } from '@/lib/backup';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { setThemePref, useThemePref } from '@/lib/theme';
+import { versionLabel } from '@/version';
 
 const dateFmt = new Intl.DateTimeFormat('ru-RU', {
   weekday: 'long',
@@ -352,6 +353,7 @@ export function HomePage() {
             <span className="home-tile__fact">Инженерный, с жестами</span>
           </button>
         </div>
+        <div className="home-version">{versionLabel()}</div>
       </div>
 
       {dataSheet && (

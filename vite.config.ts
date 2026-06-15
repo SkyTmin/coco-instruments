@@ -9,6 +9,9 @@ export default defineConfig({
   // Served from the domain root for now (hosting is decided later). If the app is
   // ever hosted under a sub-path, change this to '/sub-path/'.
   base: '/',
+  // Stamp the build time into the bundle so the home screen can show which build
+  // is running (lets you spot a stale cache after a deploy).
+  define: { __BUILD_AT__: JSON.stringify(new Date().toISOString()) },
   plugins: [
     react(),
     tsconfigPaths(),

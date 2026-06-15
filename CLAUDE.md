@@ -59,3 +59,7 @@ Production is a VPS, deployed **automatically by GitHub Actions**.
 - Do not commit secrets. `dist/` and `node_modules/` are build artifacts (git-ignored).
 - The app runs inside Telegram's webview (mobile-first); the calculator pins itself to
   the viewport and uses pointer gestures — test touch behaviour, not just desktop.
+- **Bump the version on every deploy.** `src/version.ts` holds `APP_VERSION` — raise it
+  for each user-visible release and name it in the commit. It's shown in the home
+  screen's bottom corner (with the Vite-injected build time) so the user can confirm a
+  fresh build actually loaded (vs. a stale PWA cache).
