@@ -6,9 +6,7 @@ import { IconGraph, IconSearch } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import type { GraphSize, NoteGraphLink, NoteGraphPoint } from '@/lib/notes-graph';
 import {
-  CONTAINER_MARGIN,
   GRAPH_VIEW_BOX,
-  buildContainerGraph,
   buildListGraph,
   buildNoteGraph,
   buildOverviewGraph,
@@ -21,7 +19,7 @@ import {
   personNodeId,
   simulationStep,
 } from '@/lib/notes-graph';
-import { selectionChanged } from '@/lib/haptics';
+import { notifySuccess, selectionChanged, tapMedium } from '@/lib/haptics';
 import { getStorage } from '@/lib/storage';
 import { NotesHelpButton } from '@/components/NotesGuide';
 import { tagColor } from '@/lib/tag-color';
@@ -55,11 +53,13 @@ const SIM_DRAG_ALPHA = 0.24;
 // Tiny detail nodes (gifts/promises/events) only get labels once you zoom in.
 const LABEL_ZOOM = 1.2;
 
-// Semantic zoom for notebook containers: the notebook nearest the viewport
-// centre stays a solid node below LO and is a fully expanded transparent circle
-// (members shown) above HI — only that one list opens, never all of them.
-const EXPAND_LO = 1.4;
-const EXPAND_HI = 2.4;
+// Zoom-to-navigate: in the overview, keep zooming into the notebook nearest the
+// viewport centre and at ENTER it opens that notebook's own graph (a new state);
+// a ring "arms" from HINT→ENTER as a pull cue. Inside a notebook, zooming back
+// out to EXIT returns to the overview (low, so it takes a deliberate zoom-out).
+const ENTER_HINT = 1.7;
+const ENTER_SCALE = 2.25;
+const EXIT_SCALE = 0.62;
 
 function shortLabel(value: string, max = 18): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -99,13 +99,9 @@ export function NotesGraphPage() {
   // A graph scoped to one tag — every note carrying #tag (or #tag/*) + connections.
   const tagParam = params.get('tag');
   const activeList = listParam ? noteLists.find((l) => l.id === listParam) : undefined;
-  // The default overview, where notebooks become *containers* (a big transparent
-  // circle enclosing their notes/tags) that collapse to a solid node on zoom-out.
+  // The default overview (all notebooks/people). Zooming into a notebook here
+  // navigates into that notebook's own graph (a seamless "new state").
   const isOverview = !listParam && !tagParam && !peopleParam && !personParam && !focusParam;
-  const containerData = useMemo(
-    () => (isOverview ? buildContainerGraph(notes, noteLists, people, noteLinks) : null),
-    [isOverview, notes, noteLists, people, noteLinks],
-  );
   const graph = useMemo(() => {
     // A single notebook's inner graph, with the notebook itself as an index hub.
     if (listParam) {
@@ -160,11 +156,8 @@ export function NotesGraphPage() {
         noteLinks,
       });
     }
-    // Default overview: notebooks become containers (built above), with a single
-    // "Люди" node and loose notes alongside.
-    return containerData
-      ? containerData.graph
-      : buildOverviewGraph(notes, noteLists, people, noteLinks);
+    // Default overview: notebooks + a single "Люди" node; loose notes stay solo.
+    return buildOverviewGraph(notes, noteLists, people, noteLinks);
   }, [
     listParam,
     activeList,
@@ -172,7 +165,6 @@ export function NotesGraphPage() {
     peopleParam,
     focusParam,
     tagParam,
-    containerData,
     conversations,
     gifts,
     meetIdeas,
@@ -183,47 +175,6 @@ export function NotesGraphPage() {
     promises,
     relations,
   ]);
-  const groups = containerData?.groups ?? null;
-  // Lay out each notebook's inner graph (its list-graph: a central hub with
-  // spokes to its notes/tags) spaciously, re-centred on the hub at the origin —
-  // so an expanded container reads like the list's own graph. Positions are
-  // relative to the container centre; the measured radius `r` is the visual
-  // size the container grows to (decoupled from the compact overview spacing).
-  const groupLayouts = useMemo(() => {
-    const out = new Map<
-      string,
-      {
-        members: NoteGraphPoint[];
-        pos: Map<string, { x: number; y: number }>;
-        links: NoteGraphLink[];
-        r: number;
-      }
-    >();
-    if (!groups) return out;
-    for (const [listId, g] of groups) {
-      const memberCount = g.nodes.filter((n) => n.kind !== 'list').length;
-      if (!memberCount) continue;
-      const side = Math.min(760, Math.max(400, 320 + memberCount * 18));
-      const pts = layoutNoteGraph(g, undefined, { width: side, height: side });
-      const hub = pts.find((p) => p.id === `list:${listId}`);
-      const hx = hub?.x ?? side / 2;
-      const hy = hub?.y ?? side / 2;
-      for (const p of pts) {
-        p.x -= hx;
-        p.y -= hy;
-      }
-      const members = pts.filter((p) => p.kind !== 'list');
-      let r = 80;
-      for (const m of members) r = Math.max(r, Math.hypot(m.x, m.y) + m.r);
-      out.set(listId, {
-        members,
-        pos: new Map(pts.map((p) => [p.id, { x: p.x, y: p.y }])),
-        links: g.links,
-        r: Math.min(300, r + CONTAINER_MARGIN + 8),
-      });
-    }
-    return out;
-  }, [groups]);
   // Which layer filters are meaningful here: a toggle only appears when the
   // current graph actually holds that kind of node, so no filter ever sits dead
   // (e.g. the overview has no tag/missing nodes, so those chips stay hidden).
@@ -318,6 +269,11 @@ export function NotesGraphPage() {
   listParamRef.current = listParam;
   const pointerSession = useRef<PointerSession | null>(null);
   const longPressTimer = useRef(0);
+  // Zoom-to-navigate bookkeeping: the focused notebook, a guard so a transition
+  // fires once, and whether the "pull" cue tick has been played.
+  const focusedRef = useRef<string | null>(null);
+  const transitionRef = useRef(false);
+  const hintArmedRef = useRef(false);
   // Multi-touch pinch-zoom bookkeeping.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; mx: number; my: number } | null>(null);
@@ -350,6 +306,45 @@ export function NotesGraphPage() {
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
+
+  // A finished route change clears the one-shot transition guard.
+  useEffect(() => {
+    transitionRef.current = false;
+  }, [listParam, tagParam, peopleParam, personParam, focusParam]);
+
+  // Zoom-to-navigate: keep zooming into the centred notebook and it opens that
+  // notebook's own graph; zoom back out far enough to return — each a seamless
+  // state change with a Telegram-style "pull" tick + commit haptic.
+  useEffect(() => {
+    const fid = focusedRef.current;
+    const inHint = isOverview && scale >= ENTER_HINT && !!fid;
+    if (inHint && !hintArmedRef.current) {
+      hintArmedRef.current = true;
+      selectionChanged(); // pull cue, like Telegram revealing the next channel
+    } else if (!inHint && hintArmedRef.current) {
+      hintArmedRef.current = false;
+    }
+    if (transitionRef.current) return;
+    const framed = () => {
+      panRef.current = { x: 0, y: 0 };
+      scaleRef.current = 1;
+      setPan({ x: 0, y: 0 });
+      setScale(1);
+    };
+    if (isOverview && fid && scale >= ENTER_SCALE) {
+      transitionRef.current = true;
+      tapMedium();
+      notifySuccess();
+      framed();
+      navigate(`/notes/graph?list=${fid.slice(5)}`);
+    } else if (listParam && scale <= EXIT_SCALE) {
+      transitionRef.current = true;
+      tapMedium();
+      notifySuccess();
+      framed();
+      navigate('/notes/graph');
+    }
+  }, [scale, isOverview, listParam, navigate]);
 
   useEffect(() => {
     if (!personParam) return;
@@ -781,18 +776,14 @@ export function NotesGraphPage() {
     };
   };
 
-  // How "expanded" the focused notebook is at the current zoom (0 collapsed
-  // solid node → 1 transparent circle with members shown).
-  const expandT = isOverview
-    ? Math.max(0, Math.min(1, (scale - EXPAND_LO) / (EXPAND_HI - EXPAND_LO)))
-    : 0;
-  // Only the notebook nearest the viewport centre expands, so zooming into one
-  // list opens just that list — the rest stay collapsed (and usually off-screen).
+  // The notebook nearest the viewport centre — the one a zoom-in will open.
+  // A ring "arms" around it from ENTER_HINT→ENTER_SCALE as a pull cue.
   let focusedListId: string | null = null;
-  if (isOverview && expandT > 0) {
+  let hintT = 0;
+  if (isOverview && scale >= ENTER_HINT) {
     const vcx = (size.width / 2 - pan.x) / scale;
     const vcy = (size.height / 2 - pan.y) / scale;
-    const reach = (size.width / 2 / scale) * 1.1;
+    const reach = (size.width / 2 / scale) * 1.15;
     let best = Infinity;
     for (const p of points) {
       if (p.kind !== 'list') continue;
@@ -802,12 +793,9 @@ export function NotesGraphPage() {
         focusedListId = p.id;
       }
     }
+    hintT = Math.max(0, Math.min(1, (scale - ENTER_HINT) / (ENTER_SCALE - ENTER_HINT)));
   }
-  // Open a member node tapped inside a container.
-  const openMember = (m: NoteGraphPoint) => {
-    if (m.kind === 'note') navigate(`/notes/${m.id}`);
-    else if (m.kind === 'tag') navigate(`/notes/tag/${encodeURIComponent(m.id.slice(4))}`);
-  };
+  focusedRef.current = focusedListId;
 
   return (
     <Screen
@@ -1037,17 +1025,9 @@ export function NotesGraphPage() {
                       : tc
                         ? { fill: tc.fill, stroke: tc.stroke }
                         : undefined;
-                    // A notebook container collapses to a small solid node and
-                    // expands to a big transparent circle (sized to its members)
-                    // — but only the focused notebook expands.
-                    const isContainer = isOverview && point.kind === 'list';
-                    const t = isContainer && point.id === focusedListId ? expandT : 0;
-                    const cgl = isContainer
-                      ? groupLayouts.get(point.list?.id ?? point.id.slice(5))
-                      : null;
-                    const collapsedR = Math.min(46, 20 + (point.count ?? 0) * 2.2);
-                    const fullR = cgl?.r ?? point.r;
-                    const drawR = isContainer ? collapsedR + (fullR - collapsedR) * t : point.r;
+                    // The notebook a zoom-in will open gets an "arming" ring that
+                    // tightens as you approach the threshold (a pull cue).
+                    const armed = isOverview && point.id === focusedListId;
                     return (
                       <g
                         key={point.id}
@@ -1058,117 +1038,35 @@ export function NotesGraphPage() {
                         {...hoverable(point)}
                       >
                         <title>{nodeTitle(point)}</title>
-                        {isContainer ? (
-                          <>
-                            <circle
-                              className="notes-graph__container"
-                              cx={point.x}
-                              cy={point.y}
-                              r={drawR}
-                              fill="url(#listNodeGradientInteractive)"
-                              fillOpacity={1 - t}
-                              stroke={hl ? 'var(--pos)' : '#7c6cf2'}
-                              strokeWidth={2.4}
-                            />
-                            <text
-                              className="notes-graph__label is-shown notes-graph__container-label"
-                              style={hl ? { fill: 'var(--pos)' } : undefined}
-                              x={point.x}
-                              y={point.y - drawR - 7}
-                            >
-                              {shortLabel(point.label)}
-                            </text>
-                          </>
-                        ) : (
-                          <>
-                            {point.id === focusId && (
-                              <circle
-                                className="notes-graph__halo"
-                                cx={point.x}
-                                cy={point.y}
-                                r={point.r + 10}
-                              />
-                            )}
-                            <circle cx={point.x} cy={point.y} r={point.r} style={circleStyle} />
-                            <text
-                              className={`notes-graph__label${labelVisible(point) ? ' is-shown' : ''}`}
-                              style={
-                                hl ? { fill: 'var(--pos)' } : tc ? { fill: tc.stroke } : undefined
-                              }
-                              x={point.x}
-                              y={point.y + point.r + 14}
-                            >
-                              {shortLabel(point.label)}
-                            </text>
-                          </>
+                        {armed && hintT > 0.02 && (
+                          <circle
+                            className="notes-graph__arm"
+                            cx={point.x}
+                            cy={point.y}
+                            r={point.r + 6 + (1 - hintT) * 26}
+                            opacity={0.25 + hintT * 0.6}
+                          />
                         )}
+                        {point.id === focusId && (
+                          <circle
+                            className="notes-graph__halo"
+                            cx={point.x}
+                            cy={point.y}
+                            r={point.r + 10}
+                          />
+                        )}
+                        <circle cx={point.x} cy={point.y} r={point.r} style={circleStyle} />
+                        <text
+                          className={`notes-graph__label${labelVisible(point) ? ' is-shown' : ''}`}
+                          style={hl ? { fill: 'var(--pos)' } : tc ? { fill: tc.stroke } : undefined}
+                          x={point.x}
+                          y={point.y + point.r + 14}
+                        >
+                          {shortLabel(point.label)}
+                        </text>
                       </g>
                     );
                   })}
-                  {isOverview &&
-                    focusedListId &&
-                    expandT > 0.01 &&
-                    [points.find((p) => p.id === focusedListId)].map((listPt) => {
-                      if (!listPt) return null;
-                      const gl = groupLayouts.get(listPt.list?.id ?? listPt.id.slice(5));
-                      if (!gl) return null;
-                      return (
-                        <g
-                          key={`members:${listPt.id}`}
-                          className="notes-graph__members"
-                          style={{ opacity: expandT }}
-                        >
-                          {gl.links.map((lk) => {
-                            const s = gl.pos.get(lk.source);
-                            const t = gl.pos.get(lk.target);
-                            if (!s || !t) return null;
-                            return (
-                              <line
-                                key={`${listPt.id}:${lk.id}`}
-                                className="notes-graph__link notes-graph__link--member"
-                                x1={listPt.x + s.x * expandT}
-                                y1={listPt.y + s.y * expandT}
-                                x2={listPt.x + t.x * expandT}
-                                y2={listPt.y + t.y * expandT}
-                              />
-                            );
-                          })}
-                          {gl.members.map((mp) => {
-                            // Members emerge from the list centre as the container grows.
-                            const cx = listPt.x + mp.x * expandT;
-                            const cy = listPt.y + mp.y * expandT;
-                            const mtc = mp.kind === 'tag' ? tagColor(mp.id.slice(4)) : null;
-                            return (
-                              <g
-                                key={`${listPt.id}:${mp.id}`}
-                                className={`notes-graph__node notes-graph__node--${mp.kind} notes-graph__member`}
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openMember(mp);
-                                }}
-                              >
-                                <title>{nodeTitle(mp)}</title>
-                                <circle
-                                  cx={cx}
-                                  cy={cy}
-                                  r={mp.r}
-                                  style={mtc ? { fill: mtc.fill, stroke: mtc.stroke } : undefined}
-                                />
-                                <text
-                                  className="notes-graph__label is-shown"
-                                  style={mtc ? { fill: mtc.stroke } : undefined}
-                                  x={cx}
-                                  y={cy + mp.r + 11}
-                                >
-                                  {shortLabel(mp.label, 13)}
-                                </text>
-                              </g>
-                            );
-                          })}
-                        </g>
-                      );
-                    })}
                 </g>
               </svg>
               <div className="notes-graph-zoom">
