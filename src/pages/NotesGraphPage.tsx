@@ -59,7 +59,9 @@ const LABEL_ZOOM = 1.2;
 // out to EXIT returns to the overview (low, so it takes a deliberate zoom-out).
 const ENTER_HINT = 1.7;
 const ENTER_SCALE = 2.25;
-const EXIT_SCALE = 0.56;
+const EXIT_SCALE = 0.54;
+// Home framing never zooms below this, so it can't accidentally trip EXIT.
+const HOME_MIN_SCALE = 0.66;
 
 function shortLabel(value: string, max = 18): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -284,6 +286,7 @@ export function NotesGraphPage() {
   };
   const [size, setSize] = useState<GraphSize>(GRAPH_VIEW_BOX);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const controlsRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const activeIdRef = useRef<string | undefined>(activeId);
@@ -330,6 +333,35 @@ export function NotesGraphPage() {
     activeIdRef.current = activeId;
   }, [activeId]);
 
+  // Frame the graph zoomed-out to fit *below* the floating controls panel — so
+  // nothing hides under the panel and lists never open uncomfortably close. The
+  // reserved top band is measured from the panel, so it adapts per device.
+  const homeView = useCallback(() => {
+    const stage = stageRef.current?.getBoundingClientRect();
+    const sz = sizeRef.current;
+    if (!stage || stage.height < 4) {
+      scaleRef.current = 1;
+      panRef.current = { x: 0, y: 0 };
+      setScale(1);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+    let reserveVB = 0;
+    const panel = controlsRef.current?.getBoundingClientRect();
+    if (panel) {
+      const reservePx = Math.max(0, panel.bottom - stage.top + 10);
+      reserveVB = Math.min(sz.height * 0.5, (reservePx / stage.height) * sz.height);
+    }
+    const availH = sz.height - reserveVB;
+    const s = Math.max(HOME_MIN_SCALE, Math.min(1, (availH / sz.height) * 0.97));
+    const panX = (sz.width * (1 - s)) / 2;
+    const panY = reserveVB + (availH - sz.height * s) / 2;
+    scaleRef.current = s;
+    panRef.current = { x: panX, y: panY };
+    setScale(s);
+    setPan({ x: panX, y: panY });
+  }, []);
+
   // A finished route change clears the one-shot transition guard — and any
   // stale hover/drag focus, which would otherwise dim the whole new graph until
   // you move the mouse (everything reads as "not a neighbour" of the old node).
@@ -337,7 +369,10 @@ export function NotesGraphPage() {
     transitionRef.current = false;
     setHoverId(null);
     setDraggingId(null);
-  }, [listParam, tagParam, peopleParam, personParam, focusParam]);
+    // Frame the new view zoomed-out below the panel (after the DOM updates so the
+    // panel is measurable).
+    requestAnimationFrame(homeView);
+  }, [listParam, tagParam, peopleParam, personParam, focusParam, homeView]);
 
   // Zoom-to-navigate: keep zooming into the centred notebook and it opens that
   // notebook's own graph; zoom back out far enough to return — each a seamless
@@ -358,26 +393,20 @@ export function NotesGraphPage() {
     if (transitionRef.current) return;
     // `replace` so zoom transitions don't pile onto history — the back button
     // returns to where you opened the graph from, not through every zoom.
-    const framed = () => {
-      panRef.current = { x: 0, y: 0 };
-      scaleRef.current = 1;
-      setPan({ x: 0, y: 0 });
-      setScale(1);
-    };
     if (isOverview && target && scale >= ENTER_SCALE) {
       transitionRef.current = true;
       tapMedium();
       notifySuccess();
-      framed();
+      homeView();
       navigate(target, { replace: true });
     } else if ((listParam || peopleParam) && scale <= EXIT_SCALE) {
       transitionRef.current = true;
       tapMedium();
       notifySuccess();
-      framed();
+      homeView();
       navigate('/notes/graph', { replace: true });
     }
-  }, [scale, isOverview, listParam, peopleParam, locked, navigate]);
+  }, [scale, isOverview, listParam, peopleParam, locked, homeView, navigate]);
 
   useEffect(() => {
     if (!personParam) return;
@@ -593,11 +622,8 @@ export function NotesGraphPage() {
   const resetView = () => {
     selectionChanged();
     pinnedRef.current.clear();
-    panRef.current = { x: 0, y: 0 };
-    scaleRef.current = 1;
-    setPan({ x: 0, y: 0 });
-    setScale(1);
     setPoints(layoutNoteGraph(visibleGraphRef.current, activeIdRef.current, sizeRef.current));
+    homeView();
     kick(1);
   };
 
@@ -864,7 +890,7 @@ export function NotesGraphPage() {
       className="notes-graph-full"
     >
       <div className="notes-graph-fullwrap">
-        <div className="card notes-graph-controls graph-controls--float">
+        <div className="card notes-graph-controls graph-controls--float" ref={controlsRef}>
           {(activeList || peopleParam || tagParam) && (
             <button
               className="btn btn--ghost btn--block"

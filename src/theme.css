@@ -3487,7 +3487,7 @@ input[type='datetime-local'] {
 .notes-graph-zoom {
   position: absolute;
   right: 12px;
-  bottom: 12px;
+  bottom: calc(var(--safe-bottom) + 14px);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -3531,8 +3531,8 @@ input[type='datetime-local'] {
   z-index: 6;
   max-width: 560px;
   margin: 0 auto;
-  padding: calc(var(--safe-top) + 10px) 14px 22px;
-  background: linear-gradient(to bottom, var(--bg-1) 42%, transparent);
+  padding: calc(var(--safe-top) + var(--content-top) + 8px) 14px 20px;
+  background: linear-gradient(to bottom, var(--bg-1) 46%, transparent);
   pointer-events: none;
 }
 .screen.notes-graph-full .screen__head button {
@@ -3555,10 +3555,10 @@ input[type='datetime-local'] {
   z-index: 5;
   left: 8px;
   right: 8px;
-  top: calc(var(--safe-top) + 74px);
+  top: calc(var(--safe-top) + var(--content-top) + 66px);
   margin: 0 auto;
   max-width: 544px;
-  max-height: 52vh;
+  max-height: 48vh;
   overflow-y: auto;
   background: color-mix(in srgb, var(--surface) 82%, transparent);
   backdrop-filter: blur(12px);
