@@ -253,3 +253,10 @@ export const IconShapes = (p: IconProps) => (
     <circle cx="16" cy="15.5" r="5" />
   </svg>
 );
+
+export const IconLock = ({ open = false, ...p }: IconProps & { open?: boolean }) => (
+  <svg {...base(p)}>
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+    <path d={open ? 'M8 11V7a4 4 0 0 1 7-1.6' : 'M8 11V7a4 4 0 0 1 8 0v4'} />
+  </svg>
+);

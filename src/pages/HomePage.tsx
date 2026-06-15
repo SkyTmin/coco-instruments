@@ -16,6 +16,7 @@ import { formatRUB, pluralizeRu, relativeDay } from '@/lib/format';
 import { nextBirthday, peopleUpcomingEvents, peopleWord } from '@/lib/people';
 import { getBackupStatus, requestTelegramBackup } from '@/lib/backup';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
+import { setThemePref, useThemePref } from '@/lib/theme';
 
 const dateFmt = new Intl.DateTimeFormat('ru-RU', {
   weekday: 'long',
@@ -134,6 +135,7 @@ export function HomePage() {
 
   // ---- data & backups (hidden behind ⚙) ------------------------------------
   const [dataSheet, setDataSheet] = useState(false);
+  const themePref = useThemePref();
   const [isOwner, setIsOwner] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -350,8 +352,26 @@ export function HomePage() {
       </div>
 
       {dataSheet && (
-        <Sheet title="Данные и копии" onClose={() => setDataSheet(false)}>
+        <Sheet title="Настройки" onClose={() => setDataSheet(false)}>
           <div className="stack">
+            <div className="theme-pick">
+              <span className="theme-pick__label">Тема оформления</span>
+              <div className="segmented">
+                {(['system', 'light', 'dark'] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    className={`segmented__opt${themePref === opt ? ' is-active' : ''}`}
+                    onClick={() => {
+                      selectionChanged();
+                      setThemePref(opt);
+                    }}
+                  >
+                    {opt === 'system' ? 'Система' : opt === 'light' ? 'Светлая' : 'Тёмная'}
+                  </button>
+                ))}
+              </div>
+            </div>
             {isOwner && (
               <button
                 className="btn btn--primary btn--block"

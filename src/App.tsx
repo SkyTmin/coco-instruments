@@ -20,6 +20,7 @@ import {
 
 import { useFinanceStore } from '@/store';
 import { setServerAuth, setWebAuth } from '@/lib/storage';
+import { resolveDark, useThemePref } from '@/lib/theme';
 import { syncReminders } from '@/lib/reminders';
 import { closeTopOverlay } from '@/lib/escape-stack';
 import { tapLight } from '@/lib/haptics';
@@ -480,12 +481,13 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
 /** Telegram Mini App entry — identity & theme come from the Telegram SDK. */
 export function App() {
   const lp = useLaunchParams();
-  const isDark = useSignal(miniApp.isDark);
+  const systemDark = useSignal(miniApp.isDark);
+  const pref = useThemePref();
   const rawInitData = useRawInitData();
   return (
     <AppShell
       platform={['macos', 'ios'].includes(lp.tgWebAppPlatform) ? 'ios' : 'base'}
-      isDark={isDark}
+      isDark={resolveDark(pref, systemDark)}
       webMode={false}
       rawInitData={rawInitData}
     />
@@ -495,7 +497,7 @@ export function App() {
 /** Website entry — opened in a normal browser after "Log in with Telegram".
  *  No Telegram SDK; identity rides on the session cookie, theme follows the OS. */
 export function WebApp() {
-  const [isDark, setIsDark] = useState(
+  const [systemDark, setSystemDark] = useState(
     () =>
       typeof window !== 'undefined' &&
       typeof window.matchMedia === 'function' &&
@@ -503,9 +505,10 @@ export function WebApp() {
   );
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => setIsDark(mq.matches);
+    const onChange = () => setSystemDark(mq.matches);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
-  return <AppShell platform="base" isDark={isDark} webMode />;
+  const pref = useThemePref();
+  return <AppShell platform="base" isDark={resolveDark(pref, systemDark)} webMode />;
 }

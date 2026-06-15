@@ -172,7 +172,7 @@ export function ChatNotePage() {
           placeholder="Название заметки"
         />
         <button
-          className="icon-btn"
+          className="icon-btn chat-graph-btn"
           onClick={() => {
             tapLight();
             // Open the graph in the note's own context: a note in a notebook

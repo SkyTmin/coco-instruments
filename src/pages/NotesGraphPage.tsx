@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, PointerEvent, WheelEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ConfirmDialog, Screen, Sheet } from '@/components/ui';
-import { IconGraph, IconSearch } from '@/components/icons';
+import { IconGraph, IconLock, IconSearch } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import type { GraphSize, NoteGraphLink, NoteGraphPoint } from '@/lib/notes-graph';
 import {
@@ -251,6 +251,28 @@ export function NotesGraphPage() {
     [graph, highlighted],
   );
   const [confirmClear, setConfirmClear] = useState(false);
+  // The lock (🔒) freezes zoom-to-navigate transitions so you can zoom freely.
+  const [locked, setLocked] = useState(() => {
+    try {
+      return localStorage.getItem('coco-graph-lock') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
+  const toggleLock = () => {
+    selectionChanged();
+    setLocked((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem('coco-graph-lock', next ? '1' : '0');
+      } catch {
+        /* private mode */
+      }
+      return next;
+    });
+  };
   const clearHighlights = () => {
     selectionChanged();
     setHighlighted((cur) => {
@@ -317,6 +339,10 @@ export function NotesGraphPage() {
   // notebook's own graph; zoom back out far enough to return — each a seamless
   // state change with a Telegram-style "pull" tick + commit haptic.
   useEffect(() => {
+    if (lockedRef.current) {
+      hintArmedRef.current = false;
+      return; // transitions frozen by the lock — just zoom freely
+    }
     const target = focusedTargetRef.current;
     const inHint = isOverview && scale >= ENTER_HINT && !!target;
     if (inHint && !hintArmedRef.current) {
@@ -347,7 +373,7 @@ export function NotesGraphPage() {
       framed();
       navigate('/notes/graph', { replace: true });
     }
-  }, [scale, isOverview, listParam, peopleParam, navigate]);
+  }, [scale, isOverview, listParam, peopleParam, locked, navigate]);
 
   useEffect(() => {
     if (!personParam) return;
@@ -497,8 +523,6 @@ export function NotesGraphPage() {
   const pointById = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
   pointByIdRef.current = pointById;
   const activeNode = graph.nodes.find((node) => node.id === activeId);
-  const activeNote = activeNode?.note;
-  const activePerson = activeNode?.person;
 
   // Interaction focus drives the Obsidian-style highlight/dim of a neighbourhood.
   const focusId = hoverId ?? draggingId;
@@ -784,7 +808,7 @@ export function NotesGraphPage() {
   let focusedNodeId: string | null = null;
   let focusedTarget: string | null = null;
   let hintT = 0;
-  if (isOverview && scale >= ENTER_HINT) {
+  if (isOverview && !locked && scale >= ENTER_HINT) {
     const vcx = (size.width / 2 - pan.x) / scale;
     const vcy = (size.height / 2 - pan.y) / scale;
     const reach = (size.width / 2 / scale) * 1.15;
@@ -833,9 +857,10 @@ export function NotesGraphPage() {
                 : 'Списки, заметки и люди'
       }
       action={<NotesHelpButton />}
+      className="notes-graph-full"
     >
-      <div className="stack notes-page notes-graph-screen stagger">
-        <div className="card notes-graph-controls">
+      <div className="notes-graph-fullwrap">
+        <div className="card notes-graph-controls graph-controls--float">
           {(activeList || peopleParam || tagParam) && (
             <button
               className="btn btn--ghost btn--block"
@@ -1110,6 +1135,13 @@ export function NotesGraphPage() {
                 <button onClick={resetView} aria-label="Собрать заново">
                   ⊙
                 </button>
+                <button
+                  className={`graph-lock${locked ? ' is-locked' : ''}`}
+                  onClick={toggleLock}
+                  aria-label={locked ? 'Разблокировать переходы' : 'Заблокировать переходы'}
+                >
+                  <IconLock open={!locked} size={17} />
+                </button>
               </div>
             </>
           ) : (
@@ -1117,31 +1149,6 @@ export function NotesGraphPage() {
               <IconGraph size={34} />
               <div>Нет связей</div>
             </div>
-          )}
-        </div>
-
-        <div className="card notes-graph-hint">
-          Перетаскивайте поле или узлы, щипком двумя пальцами (или колесо/кнопки) — масштаб.
-          Передвинутые узлы остаются на месте; ⊙ — собрать граф заново. Короткий тап откроет узел,
-          долгий тап — меню: подсветить, скрыть зависимости и т.д.
-          {activeList
-            ? ' Фиолетовый кружок в центре — сама тетрадь; тап по нему открывает список.'
-            : ' «Локальный» режим показывает связи вокруг выбранного узла на заданную глубину.'}
-          {activeNote && (
-            <button
-              className="btn btn--ghost btn--block"
-              onClick={() => navigate(`/notes/${activeNote.id}`)}
-            >
-              Открыть «{activeNote.title}»
-            </button>
-          )}
-          {activePerson && (
-            <button
-              className="btn btn--ghost btn--block"
-              onClick={() => navigate(`/people/${activePerson.id}`)}
-            >
-              Открыть «{activePerson.name}»
-            </button>
           )}
         </div>
       </div>
