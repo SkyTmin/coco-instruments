@@ -42,6 +42,9 @@ export interface NoteGraphNode {
   /** Extra haystack for the graph filter (e.g. a list node carries the titles
    *  of its member notes, so searching a note finds its collapsed notebook). */
   searchText?: string;
+  /** Explicit visual/layout radius override (container list nodes use this so
+   *  they're spaced far enough apart to hold their members when expanded). */
+  radius?: number;
   degree: number;
   incoming: number;
   outgoing: number;
@@ -446,6 +449,50 @@ export function buildOverviewGraph(
   return { nodes: Array.from(nodes.values()), links: Array.from(links.values()) };
 }
 
+/** Inner (expanded) radius a list container needs to hold `memberNodeCount`
+ *  member nodes. Grows with the count, clamped so it never dominates the stage. */
+export function containerInnerRadius(memberNodeCount: number): number {
+  return Math.max(64, Math.min(200, 46 + Math.sqrt(Math.max(1, memberNodeCount)) * 24));
+}
+
+/** Margin between the outermost member and the container's edge. */
+export const CONTAINER_MARGIN = 14;
+
+/** Overview graph where each notebook is a *container*: the top-level graph
+ *  (`graph`) holds list nodes (sized to enclose their members), loose notes and
+ *  the people node — exactly like buildOverviewGraph — while `groups` carries
+ *  each list's own inner graph (its notes + tags + links) to render inside the
+ *  container circle when zoomed in. */
+export function buildContainerGraph(
+  notes: Note[],
+  lists: NoteList[],
+  people: Person[] = [],
+  noteLinks: PersonNoteLink[] = [],
+): { graph: NoteGraph; groups: Map<string, NoteGraph> } {
+  const listById = new Map(lists.map((l) => [l.id, l]));
+  const byList = new Map<string, Note[]>();
+  for (const note of notes) {
+    if (note.listId && listById.has(note.listId)) {
+      const arr = byList.get(note.listId) ?? [];
+      arr.push(note);
+      byList.set(note.listId, arr);
+    }
+  }
+
+  const groups = new Map<string, NoteGraph>();
+  for (const list of lists) groups.set(list.id, buildNoteGraph(byList.get(list.id) ?? []));
+
+  const graph = buildOverviewGraph(notes, lists, people, noteLinks);
+  for (const node of graph.nodes) {
+    if (node.kind === 'list') {
+      const inner = groups.get(node.list?.id ?? node.id.slice(5));
+      const memberNodes = inner ? inner.nodes.length : (node.count ?? 0);
+      node.radius = containerInnerRadius(memberNodes) + CONTAINER_MARGIN;
+    }
+  }
+  return { graph, groups };
+}
+
 /** A single notebook's inner graph with the notebook itself as a central index
  *  ("Map of Content"): the list node links to every note, so the notebook reads
  *  as a hub and loose notes are never stranded — while wiki/tag links still pull
@@ -729,7 +776,11 @@ function linkStiffness(kind: NoteGraphLinkKind): number {
 }
 
 /** Visual radius of a node, scaled by how connected it is. */
-export function nodeRadius(node: Pick<NoteGraphNode, 'kind' | 'degree' | 'count'>): number {
+export function nodeRadius(
+  node: Pick<NoteGraphNode, 'kind' | 'degree' | 'count' | 'radius'>,
+): number {
+  // A container list node carries its own (expanded) radius.
+  if (node.radius != null) return node.radius;
   // A whole notebook (or all people) collapsed to one node — the biggest,
   // sized by how many items it stands for.
   if (node.kind === 'list' || node.kind === 'people') {

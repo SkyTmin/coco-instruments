@@ -6,12 +6,15 @@ import { IconGraph, IconSearch } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import type { GraphSize, NoteGraphLink, NoteGraphPoint } from '@/lib/notes-graph';
 import {
+  CONTAINER_MARGIN,
   GRAPH_VIEW_BOX,
+  buildContainerGraph,
   buildListGraph,
   buildNoteGraph,
   buildOverviewGraph,
   buildPeopleGraph,
   collapseDependencies,
+  containerInnerRadius,
   filterNoteGraph,
   layoutNoteGraph,
   normalizeNoteTitle,
@@ -53,6 +56,11 @@ const SIM_DRAG_ALPHA = 0.24;
 // Tiny detail nodes (gifts/promises/events) only get labels once you zoom in.
 const LABEL_ZOOM = 1.2;
 
+// Semantic zoom for notebook containers: a list is a solid node below LO, and a
+// fully expanded transparent circle showing its members above HI (smooth between).
+const EXPAND_LO = 1.15;
+const EXPAND_HI = 1.9;
+
 function shortLabel(value: string, max = 18): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
@@ -91,6 +99,13 @@ export function NotesGraphPage() {
   // A graph scoped to one tag — every note carrying #tag (or #tag/*) + connections.
   const tagParam = params.get('tag');
   const activeList = listParam ? noteLists.find((l) => l.id === listParam) : undefined;
+  // The default overview, where notebooks become *containers* (a big transparent
+  // circle enclosing their notes/tags) that collapse to a solid node on zoom-out.
+  const isOverview = !listParam && !tagParam && !peopleParam && !personParam && !focusParam;
+  const containerData = useMemo(
+    () => (isOverview ? buildContainerGraph(notes, noteLists, people, noteLinks) : null),
+    [isOverview, notes, noteLists, people, noteLinks],
+  );
   const graph = useMemo(() => {
     // A single notebook's inner graph, with the notebook itself as an index hub.
     if (listParam) {
@@ -145,9 +160,11 @@ export function NotesGraphPage() {
         noteLinks,
       });
     }
-    // Default overview: notebooks + a single "Люди" node collapse the graph;
-    // loose notes and tags stay individual.
-    return buildOverviewGraph(notes, noteLists, people, noteLinks);
+    // Default overview: notebooks become containers (built above), with a single
+    // "Люди" node and loose notes alongside.
+    return containerData
+      ? containerData.graph
+      : buildOverviewGraph(notes, noteLists, people, noteLinks);
   }, [
     listParam,
     activeList,
@@ -155,6 +172,7 @@ export function NotesGraphPage() {
     peopleParam,
     focusParam,
     tagParam,
+    containerData,
     conversations,
     gifts,
     meetIdeas,
@@ -165,6 +183,43 @@ export function NotesGraphPage() {
     promises,
     relations,
   ]);
+  const groups = containerData?.groups ?? null;
+  // Lay out each notebook's members inside a disk, centred at the origin, so they
+  // can be rendered relative to (and clipped within) the container circle.
+  const groupLayouts = useMemo(() => {
+    const out = new Map<
+      string,
+      {
+        pts: NoteGraphPoint[];
+        byId: Map<string, NoteGraphPoint>;
+        links: NoteGraphLink[];
+        r: number;
+      }
+    >();
+    if (!groups) return out;
+    for (const [listId, g] of groups) {
+      if (!g.nodes.length) continue;
+      const inner = containerInnerRadius(g.nodes.length);
+      const pts = layoutNoteGraph(g, undefined, { width: inner * 2, height: inner * 2 });
+      for (const p of pts) {
+        p.x -= inner;
+        p.y -= inner;
+        const d = Math.hypot(p.x, p.y);
+        const max = inner - p.r - 4;
+        if (d > max && d > 0) {
+          p.x = (p.x / d) * max;
+          p.y = (p.y / d) * max;
+        }
+      }
+      out.set(listId, {
+        pts,
+        byId: new Map(pts.map((p) => [p.id, p])),
+        links: g.links,
+        r: inner + CONTAINER_MARGIN,
+      });
+    }
+    return out;
+  }, [groups]);
   // Which layer filters are meaningful here: a toggle only appears when the
   // current graph actually holds that kind of node, so no filter ever sits dead
   // (e.g. the overview has no tag/missing nodes, so those chips stay hidden).
@@ -722,6 +777,17 @@ export function NotesGraphPage() {
     };
   };
 
+  // How "expanded" the notebook containers are at the current zoom (0 collapsed
+  // solid node → 1 transparent circle with members shown).
+  const expandT = isOverview
+    ? Math.max(0, Math.min(1, (scale - EXPAND_LO) / (EXPAND_HI - EXPAND_LO)))
+    : 0;
+  // Open a member node tapped inside a container.
+  const openMember = (m: NoteGraphPoint) => {
+    if (m.kind === 'note') navigate(`/notes/${m.id}`);
+    else if (m.kind === 'tag') navigate(`/notes/tag/${encodeURIComponent(m.id.slice(4))}`);
+  };
+
   return (
     <Screen
       title={
@@ -950,6 +1016,13 @@ export function NotesGraphPage() {
                       : tc
                         ? { fill: tc.fill, stroke: tc.stroke }
                         : undefined;
+                    // A notebook container collapses to a small solid node and
+                    // expands to a big transparent circle with the zoom.
+                    const isContainer = isOverview && point.kind === 'list';
+                    const collapsedR = Math.min(46, 20 + (point.count ?? 0) * 2.2);
+                    const drawR = isContainer
+                      ? collapsedR + (point.r - collapsedR) * expandT
+                      : point.r;
                     return (
                       <g
                         key={point.id}
@@ -960,26 +1033,116 @@ export function NotesGraphPage() {
                         {...hoverable(point)}
                       >
                         <title>{nodeTitle(point)}</title>
-                        {point.id === focusId && (
-                          <circle
-                            className="notes-graph__halo"
-                            cx={point.x}
-                            cy={point.y}
-                            r={point.r + 10}
-                          />
+                        {isContainer ? (
+                          <>
+                            <circle
+                              className="notes-graph__container"
+                              cx={point.x}
+                              cy={point.y}
+                              r={drawR}
+                              fill="url(#listNodeGradientInteractive)"
+                              fillOpacity={1 - expandT}
+                              stroke={hl ? 'var(--pos)' : '#7c6cf2'}
+                              strokeWidth={2.4}
+                            />
+                            <text
+                              className="notes-graph__label is-shown notes-graph__container-label"
+                              style={hl ? { fill: 'var(--pos)' } : undefined}
+                              x={point.x}
+                              y={point.y - drawR - 7}
+                            >
+                              {shortLabel(point.label)}
+                            </text>
+                          </>
+                        ) : (
+                          <>
+                            {point.id === focusId && (
+                              <circle
+                                className="notes-graph__halo"
+                                cx={point.x}
+                                cy={point.y}
+                                r={point.r + 10}
+                              />
+                            )}
+                            <circle cx={point.x} cy={point.y} r={point.r} style={circleStyle} />
+                            <text
+                              className={`notes-graph__label${labelVisible(point) ? ' is-shown' : ''}`}
+                              style={
+                                hl ? { fill: 'var(--pos)' } : tc ? { fill: tc.stroke } : undefined
+                              }
+                              x={point.x}
+                              y={point.y + point.r + 14}
+                            >
+                              {shortLabel(point.label)}
+                            </text>
+                          </>
                         )}
-                        <circle cx={point.x} cy={point.y} r={point.r} style={circleStyle} />
-                        <text
-                          className={`notes-graph__label${labelVisible(point) ? ' is-shown' : ''}`}
-                          style={hl ? { fill: 'var(--pos)' } : tc ? { fill: tc.stroke } : undefined}
-                          x={point.x}
-                          y={point.y + point.r + 14}
-                        >
-                          {shortLabel(point.label)}
-                        </text>
                       </g>
                     );
                   })}
+                  {isOverview &&
+                    expandT > 0.01 &&
+                    points.map((listPt) => {
+                      if (listPt.kind !== 'list') return null;
+                      const gl = groupLayouts.get(listPt.list?.id ?? listPt.id.slice(5));
+                      if (!gl) return null;
+                      return (
+                        <g
+                          key={`members:${listPt.id}`}
+                          className="notes-graph__members"
+                          style={{ opacity: expandT }}
+                        >
+                          {gl.links.map((lk) => {
+                            const s = gl.byId.get(lk.source);
+                            const t = gl.byId.get(lk.target);
+                            if (!s || !t) return null;
+                            return (
+                              <line
+                                key={`${listPt.id}:${lk.id}`}
+                                className="notes-graph__link notes-graph__link--member"
+                                x1={listPt.x + s.x * expandT}
+                                y1={listPt.y + s.y * expandT}
+                                x2={listPt.x + t.x * expandT}
+                                y2={listPt.y + t.y * expandT}
+                              />
+                            );
+                          })}
+                          {gl.pts.map((mp) => {
+                            // Members emerge from the list centre as the container grows.
+                            const cx = listPt.x + mp.x * expandT;
+                            const cy = listPt.y + mp.y * expandT;
+                            const mtc = mp.kind === 'tag' ? tagColor(mp.id.slice(4)) : null;
+                            return (
+                              <g
+                                key={`${listPt.id}:${mp.id}`}
+                                className={`notes-graph__node notes-graph__node--${mp.kind} notes-graph__member`}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openMember(mp);
+                                }}
+                              >
+                                <title>{nodeTitle(mp)}</title>
+                                <circle
+                                  cx={cx}
+                                  cy={cy}
+                                  r={mp.r}
+                                  style={mtc ? { fill: mtc.fill, stroke: mtc.stroke } : undefined}
+                                />
+                                <text
+                                  className="notes-graph__label is-shown"
+                                  style={mtc ? { fill: mtc.stroke } : undefined}
+                                  x={cx}
+                                  y={cy + mp.r + 11}
+                                >
+                                  {shortLabel(mp.label, 13)}
+                                </text>
+                              </g>
+                            );
+                          })}
+                        </g>
+                      );
+                    })}
                 </g>
               </svg>
               <div className="notes-graph-zoom">
