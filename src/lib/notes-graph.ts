@@ -479,15 +479,17 @@ export function buildContainerGraph(
     }
   }
 
+  // Each notebook's inner graph is its *list graph* (the notebook as a central
+  // hub with spokes to its notes) — so an expanded container reads exactly like
+  // opening that list's own graph, just bounded by the container circle.
   const groups = new Map<string, NoteGraph>();
-  for (const list of lists) groups.set(list.id, buildNoteGraph(byList.get(list.id) ?? []));
+  for (const list of lists) groups.set(list.id, buildListGraph(list, byList.get(list.id) ?? []));
 
   const graph = buildOverviewGraph(notes, lists, people, noteLinks);
   for (const node of graph.nodes) {
     if (node.kind === 'list') {
-      const inner = groups.get(node.list?.id ?? node.id.slice(5));
-      const memberNodes = inner ? inner.nodes.length : (node.count ?? 0);
-      node.radius = containerInnerRadius(memberNodes) + CONTAINER_MARGIN;
+      const memberNotes = byList.get(node.list?.id ?? node.id.slice(5))?.length ?? node.count ?? 0;
+      node.radius = containerInnerRadius(memberNotes) + CONTAINER_MARGIN;
     }
   }
   return { graph, groups };

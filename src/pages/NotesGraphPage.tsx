@@ -14,7 +14,6 @@ import {
   buildOverviewGraph,
   buildPeopleGraph,
   collapseDependencies,
-  containerInnerRadius,
   filterNoteGraph,
   layoutNoteGraph,
   normalizeNoteTitle,
@@ -184,38 +183,42 @@ export function NotesGraphPage() {
     relations,
   ]);
   const groups = containerData?.groups ?? null;
-  // Lay out each notebook's members inside a disk, centred at the origin, so they
-  // can be rendered relative to (and clipped within) the container circle.
+  // Lay out each notebook's inner graph (its list-graph: a central hub with
+  // spokes to its notes/tags) spaciously, re-centred on the hub at the origin —
+  // so an expanded container reads like the list's own graph. Positions are
+  // relative to the container centre; the measured radius `r` is the visual
+  // size the container grows to (decoupled from the compact overview spacing).
   const groupLayouts = useMemo(() => {
     const out = new Map<
       string,
       {
-        pts: NoteGraphPoint[];
-        byId: Map<string, NoteGraphPoint>;
+        members: NoteGraphPoint[];
+        pos: Map<string, { x: number; y: number }>;
         links: NoteGraphLink[];
         r: number;
       }
     >();
     if (!groups) return out;
     for (const [listId, g] of groups) {
-      if (!g.nodes.length) continue;
-      const inner = containerInnerRadius(g.nodes.length);
-      const pts = layoutNoteGraph(g, undefined, { width: inner * 2, height: inner * 2 });
+      const memberCount = g.nodes.filter((n) => n.kind !== 'list').length;
+      if (!memberCount) continue;
+      const side = Math.min(760, Math.max(400, 320 + memberCount * 18));
+      const pts = layoutNoteGraph(g, undefined, { width: side, height: side });
+      const hub = pts.find((p) => p.id === `list:${listId}`);
+      const hx = hub?.x ?? side / 2;
+      const hy = hub?.y ?? side / 2;
       for (const p of pts) {
-        p.x -= inner;
-        p.y -= inner;
-        const d = Math.hypot(p.x, p.y);
-        const max = inner - p.r - 4;
-        if (d > max && d > 0) {
-          p.x = (p.x / d) * max;
-          p.y = (p.y / d) * max;
-        }
+        p.x -= hx;
+        p.y -= hy;
       }
+      const members = pts.filter((p) => p.kind !== 'list');
+      let r = 80;
+      for (const m of members) r = Math.max(r, Math.hypot(m.x, m.y) + m.r);
       out.set(listId, {
-        pts,
-        byId: new Map(pts.map((p) => [p.id, p])),
+        members,
+        pos: new Map(pts.map((p) => [p.id, { x: p.x, y: p.y }])),
         links: g.links,
-        r: inner + CONTAINER_MARGIN,
+        r: Math.min(300, r + CONTAINER_MARGIN + 8),
       });
     }
     return out;
@@ -1017,11 +1020,15 @@ export function NotesGraphPage() {
                         ? { fill: tc.fill, stroke: tc.stroke }
                         : undefined;
                     // A notebook container collapses to a small solid node and
-                    // expands to a big transparent circle with the zoom.
+                    // expands to a big transparent circle (sized to its members).
                     const isContainer = isOverview && point.kind === 'list';
+                    const cgl = isContainer
+                      ? groupLayouts.get(point.list?.id ?? point.id.slice(5))
+                      : null;
                     const collapsedR = Math.min(46, 20 + (point.count ?? 0) * 2.2);
+                    const fullR = cgl?.r ?? point.r;
                     const drawR = isContainer
-                      ? collapsedR + (point.r - collapsedR) * expandT
+                      ? collapsedR + (fullR - collapsedR) * expandT
                       : point.r;
                     return (
                       <g
@@ -1093,8 +1100,8 @@ export function NotesGraphPage() {
                           style={{ opacity: expandT }}
                         >
                           {gl.links.map((lk) => {
-                            const s = gl.byId.get(lk.source);
-                            const t = gl.byId.get(lk.target);
+                            const s = gl.pos.get(lk.source);
+                            const t = gl.pos.get(lk.target);
                             if (!s || !t) return null;
                             return (
                               <line
@@ -1107,7 +1114,7 @@ export function NotesGraphPage() {
                               />
                             );
                           })}
-                          {gl.pts.map((mp) => {
+                          {gl.members.map((mp) => {
                             // Members emerge from the list centre as the container grows.
                             const cx = listPt.x + mp.x * expandT;
                             const cy = listPt.y + mp.y * expandT;
