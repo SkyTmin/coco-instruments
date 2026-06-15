@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, PointerEvent, WheelEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ConfirmDialog, Screen, Sheet } from '@/components/ui';
-import { IconGraph, IconLock, IconSearch } from '@/components/icons';
+import { IconChevron, IconGraph, IconLock, IconSearch } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import type { GraphSize, NoteGraphLink, NoteGraphPoint } from '@/lib/notes-graph';
 import {
@@ -253,6 +253,9 @@ export function NotesGraphPage() {
     [graph, highlighted],
   );
   const [confirmClear, setConfirmClear] = useState(false);
+  // The floating controls panel collapses to just the search row to free the
+  // screen; the filters/mode expand on demand.
+  const [controlsOpen, setControlsOpen] = useState(false);
   // The lock (🔒) freezes zoom-to-navigate transitions so you can zoom freely.
   const [locked, setLocked] = useState(() => {
     try {
@@ -302,6 +305,8 @@ export function NotesGraphPage() {
   const hintArmedRef = useRef(false);
   // The current zoomed-out "home" scale — enter/exit thresholds key off it.
   const homeScaleRef = useRef(0.7);
+  // Set once the user pans/zooms/drags, so auto-framing never fights a gesture.
+  const userMovedRef = useRef(false);
   // Multi-touch pinch-zoom bookkeeping.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; mx: number; my: number } | null>(null);
@@ -335,32 +340,52 @@ export function NotesGraphPage() {
     activeIdRef.current = activeId;
   }, [activeId]);
 
-  // Frame the graph zoomed-out to fit *below* the floating controls panel — so
-  // nothing hides under the panel and lists never open uncomfortably close. The
-  // reserved top band is measured from the panel, so it adapts per device.
+  // Frame the graph to fit its actual node bounding box into the area *below*
+  // the floating panel, with margins — so it opens framed (never edge-to-edge,
+  // never under the panel), adapting to however big/small the graph is. The
+  // resulting home scale also drives the (content-dependent) enter/exit zooms.
   const homeView = useCallback(() => {
     const stage = stageRef.current?.getBoundingClientRect();
     const sz = sizeRef.current;
-    if (!stage || stage.height < 4) {
-      scaleRef.current = 1;
-      panRef.current = { x: 0, y: 0 };
-      setScale(1);
-      setPan({ x: 0, y: 0 });
-      return;
-    }
+    const pts = pointsRef.current;
     let reserveVB = 0;
-    const panel = controlsRef.current?.getBoundingClientRect();
-    if (panel) {
-      const reservePx = Math.max(0, panel.bottom - stage.top + 10);
-      reserveVB = Math.min(sz.height * 0.5, (reservePx / stage.height) * sz.height);
+    if (stage && stage.height > 4) {
+      const panel = controlsRef.current?.getBoundingClientRect();
+      if (panel && panel.height > 0) {
+        reserveVB = Math.min(
+          sz.height * 0.5,
+          Math.max(0, ((panel.bottom - stage.top + 12) / stage.height) * sz.height),
+        );
+      }
     }
-    const availH = sz.height - reserveVB;
-    // Fit the whole coordinate space into the area below the panel, with a
-    // margin so the graph reads "framed", not edge-to-edge (this is what makes
-    // it open zoomed-out, not right in your face). Capped so it's never ~1.
-    const s = Math.max(MIN_SCALE, Math.min(0.9, (availH / sz.height) * 0.92));
-    const panX = (sz.width * (1 - s)) / 2;
-    const panY = reserveVB + (availH - sz.height * s) / 2;
+    const mX = sz.width * 0.07;
+    const mB = sz.height * 0.05;
+    const availW = sz.width - 2 * mX;
+    const availH = sz.height - reserveVB - mB;
+    let s: number;
+    let panX: number;
+    let panY: number;
+    if (pts.length && availW > 10 && availH > 10) {
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const p of pts) {
+        minX = Math.min(minX, p.x - p.r);
+        maxX = Math.max(maxX, p.x + p.r);
+        minY = Math.min(minY, p.y - p.r);
+        maxY = Math.max(maxY, p.y + p.r + 18); // labels sit below the node
+      }
+      const bw = Math.max(1, maxX - minX);
+      const bh = Math.max(1, maxY - minY);
+      s = Math.max(MIN_SCALE, Math.min(0.95, Math.min(availW / bw, availH / bh) * 0.88));
+      panX = sz.width / 2 - ((minX + maxX) / 2) * s;
+      panY = reserveVB + availH / 2 - ((minY + maxY) / 2) * s;
+    } else {
+      s = 0.7;
+      panX = (sz.width * (1 - s)) / 2;
+      panY = reserveVB + (availH - sz.height * s) / 2;
+    }
     homeScaleRef.current = s;
     scaleRef.current = s;
     panRef.current = { x: panX, y: panY };
@@ -385,10 +410,26 @@ export function NotesGraphPage() {
     transitionRef.current = false;
     setHoverId(null);
     setDraggingId(null);
-    // Frame the new view zoomed-out below the panel (after the DOM updates so the
-    // panel is measurable).
-    requestAnimationFrame(homeView);
+    userMovedRef.current = false;
+    // Frame immediately, then again once the layout has settled — unless the
+    // user has already started panning/zooming (then we leave their view alone).
+    const raf = requestAnimationFrame(homeView);
+    const settle = window.setTimeout(() => {
+      if (!userMovedRef.current) homeView();
+    }, 420);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(settle);
+    };
   }, [listParam, tagParam, peopleParam, personParam, focusParam, homeView]);
+
+  // Re-frame when the controls panel is collapsed/expanded (the reserved top
+  // band changes), unless the user has taken over the view.
+  useEffect(() => {
+    if (userMovedRef.current) return;
+    const raf = requestAnimationFrame(homeView);
+    return () => cancelAnimationFrame(raf);
+  }, [controlsOpen, homeView]);
 
   // Zoom-to-navigate: keep zooming into the centred notebook and it opens that
   // notebook's own graph; zoom back out far enough to return — each a seamless
@@ -612,6 +653,7 @@ export function NotesGraphPage() {
 
   // Zoom around a screen point, or the stage centre when none is given.
   const zoomBy = (factor: number, atClientX?: number, atClientY?: number) => {
+    userMovedRef.current = true;
     const next = clampScale(scaleRef.current * factor);
     const rect = svgRef.current?.getBoundingClientRect();
     let sx = sizeRef.current.width / 2;
@@ -639,9 +681,13 @@ export function NotesGraphPage() {
   const resetView = () => {
     selectionChanged();
     pinnedRef.current.clear();
+    userMovedRef.current = false;
     setPoints(layoutNoteGraph(visibleGraphRef.current, activeIdRef.current, sizeRef.current));
     homeView();
     kick(1);
+    window.setTimeout(() => {
+      if (!userMovedRef.current) homeView();
+    }, 420);
   };
 
   // ---- gestures (pointerdown starts them; window listeners drive them) ------
@@ -669,6 +715,7 @@ export function NotesGraphPage() {
 
   const backgroundPointerDown = (event: PointerEvent<SVGSVGElement>) => {
     event.preventDefault();
+    userMovedRef.current = true;
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (maybeStartPinch()) return;
     panningRef.current = {
@@ -682,6 +729,7 @@ export function NotesGraphPage() {
   const beginNodeDrag = (event: PointerEvent<SVGGElement>, id: string) => {
     event.preventDefault();
     event.stopPropagation();
+    userMovedRef.current = true;
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (maybeStartPinch()) return;
     const point = pointById.get(id);
@@ -926,126 +974,142 @@ export function NotesGraphPage() {
               ← Все списки и заметки
             </button>
           )}
-          <div className="notes-search-wrap graph-search-wrap">
-            <IconSearch size={17} className="graph-search-ico" />
-            <input
-              className="input notes-search notes-search--list"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-              placeholder="Найти узел на графе"
-            />
-            {query && (
-              <button
-                className="notes-search__clear"
-                onClick={() => setQuery('')}
-                aria-label="Очистить"
-              >
-                ×
-              </button>
-            )}
-          </div>
-          <div className="segmented">
-            <button
-              className={`segmented__opt${mode === 'global' ? ' is-active' : ''}`}
-              onClick={() => {
-                selectionChanged();
-                setMode('global');
-              }}
-            >
-              Весь граф
-            </button>
-            <button
-              className={`segmented__opt${mode === 'local' ? ' is-active' : ''}`}
-              onClick={() => {
-                selectionChanged();
-                setMode('local');
-              }}
-            >
-              Вокруг узла
-            </button>
-          </div>
-          {mode === 'local' && (
-            <div className="notes-depth">
-              <span className="notes-depth__label">Глубина связей</span>
-              {[1, 2, 3].map((value) => (
+          <div className="graph-ctrl-row">
+            <div className="notes-search-wrap graph-search-wrap">
+              <IconSearch size={17} className="graph-search-ico" />
+              <input
+                className="input notes-search notes-search--list"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                placeholder="Найти узел на графе"
+              />
+              {query && (
                 <button
-                  key={value}
-                  className={`notes-depth__btn${depth === value ? ' is-active' : ''}`}
-                  onClick={() => {
-                    selectionChanged();
-                    setDepth(value);
-                  }}
+                  className="notes-search__clear"
+                  onClick={() => setQuery('')}
+                  aria-label="Очистить"
                 >
-                  {value}
-                </button>
-              ))}
-            </div>
-          )}
-          {(avail.tags ||
-            avail.missing ||
-            avail.people ||
-            (avail.details && showPeople) ||
-            highlightedHere.length > 0) && (
-            <div className="graph-filters">
-              {avail.tags && (
-                <button
-                  className={`graph-chip graph-chip--tags${showTags ? ' is-on' : ''}`}
-                  onClick={() => {
-                    selectionChanged();
-                    setShowTags((v) => !v);
-                  }}
-                >
-                  <span className="graph-chip__dot" />
-                  Теги
-                </button>
-              )}
-              {avail.missing && (
-                <button
-                  className={`graph-chip graph-chip--missing${showMissing ? ' is-on' : ''}`}
-                  onClick={() => {
-                    selectionChanged();
-                    setShowMissing((v) => !v);
-                  }}
-                >
-                  <span className="graph-chip__dot" />
-                  Не созданы
-                </button>
-              )}
-              {avail.people && (
-                <button
-                  className={`graph-chip graph-chip--people${showPeople ? ' is-on' : ''}`}
-                  onClick={() => {
-                    selectionChanged();
-                    setShowPeople((v) => !v);
-                  }}
-                >
-                  <span className="graph-chip__dot" />
-                  Люди
-                </button>
-              )}
-              {avail.details && showPeople && (
-                <button
-                  className={`graph-chip graph-chip--details${showDetails ? ' is-on' : ''}`}
-                  onClick={() => {
-                    selectionChanged();
-                    setShowDetails((v) => !v);
-                  }}
-                >
-                  <span className="graph-chip__dot" />
-                  Детали
-                </button>
-              )}
-              {highlightedHere.length > 0 && (
-                <button
-                  className="graph-chip graph-chip--clear"
-                  onClick={() => setConfirmClear(true)}
-                >
-                  <span className="graph-chip__dot" />
-                  Снять подсветку · {highlightedHere.length}
+                  ×
                 </button>
               )}
             </div>
+            <button
+              className={`graph-ctrl-toggle${controlsOpen ? ' is-open' : ''}`}
+              onClick={() => {
+                selectionChanged();
+                setControlsOpen((o) => !o);
+              }}
+              aria-label={controlsOpen ? 'Свернуть панель' : 'Фильтры и режим'}
+            >
+              <IconChevron size={18} />
+            </button>
+          </div>
+          {controlsOpen && (
+            <>
+              <div className="segmented">
+                <button
+                  className={`segmented__opt${mode === 'global' ? ' is-active' : ''}`}
+                  onClick={() => {
+                    selectionChanged();
+                    setMode('global');
+                  }}
+                >
+                  Весь граф
+                </button>
+                <button
+                  className={`segmented__opt${mode === 'local' ? ' is-active' : ''}`}
+                  onClick={() => {
+                    selectionChanged();
+                    setMode('local');
+                  }}
+                >
+                  Вокруг узла
+                </button>
+              </div>
+              {mode === 'local' && (
+                <div className="notes-depth">
+                  <span className="notes-depth__label">Глубина связей</span>
+                  {[1, 2, 3].map((value) => (
+                    <button
+                      key={value}
+                      className={`notes-depth__btn${depth === value ? ' is-active' : ''}`}
+                      onClick={() => {
+                        selectionChanged();
+                        setDepth(value);
+                      }}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(avail.tags ||
+                avail.missing ||
+                avail.people ||
+                (avail.details && showPeople) ||
+                highlightedHere.length > 0) && (
+                <div className="graph-filters">
+                  {avail.tags && (
+                    <button
+                      className={`graph-chip graph-chip--tags${showTags ? ' is-on' : ''}`}
+                      onClick={() => {
+                        selectionChanged();
+                        setShowTags((v) => !v);
+                      }}
+                    >
+                      <span className="graph-chip__dot" />
+                      Теги
+                    </button>
+                  )}
+                  {avail.missing && (
+                    <button
+                      className={`graph-chip graph-chip--missing${showMissing ? ' is-on' : ''}`}
+                      onClick={() => {
+                        selectionChanged();
+                        setShowMissing((v) => !v);
+                      }}
+                    >
+                      <span className="graph-chip__dot" />
+                      Не созданы
+                    </button>
+                  )}
+                  {avail.people && (
+                    <button
+                      className={`graph-chip graph-chip--people${showPeople ? ' is-on' : ''}`}
+                      onClick={() => {
+                        selectionChanged();
+                        setShowPeople((v) => !v);
+                      }}
+                    >
+                      <span className="graph-chip__dot" />
+                      Люди
+                    </button>
+                  )}
+                  {avail.details && showPeople && (
+                    <button
+                      className={`graph-chip graph-chip--details${showDetails ? ' is-on' : ''}`}
+                      onClick={() => {
+                        selectionChanged();
+                        setShowDetails((v) => !v);
+                      }}
+                    >
+                      <span className="graph-chip__dot" />
+                      Детали
+                    </button>
+                  )}
+                  {highlightedHere.length > 0 && (
+                    <button
+                      className="graph-chip graph-chip--clear"
+                      onClick={() => setConfirmClear(true)}
+                    >
+                      <span className="graph-chip__dot" />
+                      Снять подсветку · {highlightedHere.length}
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
 

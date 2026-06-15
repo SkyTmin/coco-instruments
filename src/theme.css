@@ -3575,6 +3575,40 @@ input[type='datetime-local'] {
   -webkit-backdrop-filter: blur(12px);
 }
 
+/* Collapsible graph controls: search row + a chevron that expands mode/filters. */
+.graph-ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.graph-ctrl-row .notes-search-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.graph-ctrl-toggle {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.graph-ctrl-toggle svg {
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+}
+.graph-ctrl-toggle.is-open {
+  background: var(--tag-bg);
+  color: var(--accent);
+}
+.graph-ctrl-toggle.is-open svg {
+  transform: rotate(-90deg);
+}
+
 /* Settings theme picker. */
 .theme-pick {
   display: flex;
