@@ -216,6 +216,7 @@ select {
   font-weight: 850;
   letter-spacing: -0.03em;
   margin: 0;
+  text-wrap: balance;
 }
 /* Subtle warm gradient on titles (safe: solid text if clip is unsupported). */
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
@@ -234,6 +235,7 @@ select {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 14px;
+  text-wrap: pretty;
 }
 
 .route-fallback {
@@ -429,6 +431,7 @@ select {
   font-weight: 800;
   font-size: 13.5px;
   color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 .home-today__chev {
   flex: none;
@@ -515,11 +518,13 @@ select {
   font-weight: 850;
   letter-spacing: -0.01em;
   margin-top: auto;
+  text-wrap: balance;
 }
 .home-tile__fact {
   font-size: 12.5px;
   color: var(--muted);
   line-height: 1.35;
+  text-wrap: pretty;
 }
 .home-card__body {
   margin-top: auto;
@@ -527,11 +532,13 @@ select {
 .home-card__title {
   font-size: 21px;
   font-weight: 800;
+  text-wrap: balance;
 }
 .home-card__desc {
   font-size: 13px;
   opacity: 0.92;
   margin-top: 2px;
+  text-wrap: pretty;
 }
 .home-card__stats {
   display: flex;
@@ -546,6 +553,7 @@ select {
   font-weight: 800;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .hc-stat__lbl {
   font-size: 12px;
@@ -633,11 +641,13 @@ select {
 .section-card__title {
   font-weight: 700;
   font-size: 16px;
+  text-wrap: balance;
 }
 .section-card__sub {
   color: var(--muted);
   font-size: 13px;
   margin-top: 1px;
+  text-wrap: pretty;
 }
 .chev {
   color: var(--muted);
@@ -1229,6 +1239,7 @@ input[type='datetime-local'] {
   font-size: 18px;
   font-weight: 800;
   margin-top: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-row {
@@ -1248,6 +1259,7 @@ input[type='datetime-local'] {
 .stat-row__value {
   font-weight: 700;
   font-size: 15px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Buttons -------------------------------------------------------------- */

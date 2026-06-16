@@ -280,7 +280,18 @@ export function HomePage() {
         </div>
 
         {/* Разделы: финансы — hero, остальные — компактные плитки 2×2 */}
-        <div className="home-card" onClick={() => go('/finance')} role="button" tabIndex={0}>
+        <div
+          className="home-card"
+          onClick={() => go('/finance')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              go('/finance');
+            }
+          }}
+          role="button"
+          tabIndex={0}
+        >
           <div className="home-card__glow" />
           <div className="home-card__icon">
             <IconWallet />

@@ -445,7 +445,18 @@ export function SectionCard({
   onClick: () => void;
 }) {
   return (
-    <div className="section-card" onClick={onClick} role="button" tabIndex={0}>
+    <div
+      className="section-card"
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+    >
       <div className="section-card__icon">{icon}</div>
       <div className="section-card__body">
         <div className="section-card__title">{title}</div>
