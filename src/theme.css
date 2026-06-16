@@ -2784,6 +2784,15 @@ input[type='datetime-local'] {
   filter: drop-shadow(0 4px 7px rgba(63, 42, 27, 0.16));
 }
 
+/* User-chosen node shapes (square / diamond / star / …): same depth as circles;
+   their fill/stroke come from the inline style the page computes. */
+.notes-graph__shape {
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 4px 7px rgba(63, 42, 27, 0.16));
+}
+
 .notes-graph--interactive .notes-graph__node circle {
   fill: url(#noteNodeGradientInteractive);
 }
@@ -2854,6 +2863,81 @@ input[type='datetime-local'] {
   gap: 8px;
   color: var(--muted);
   font-weight: 700;
+}
+
+/* ---- Node appearance picker (in the node's context sheet) ----------------- */
+.graph-style {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.graph-style__title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.graph-swatches,
+.graph-shapes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.graph-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.graph-swatch:active {
+  transform: scale(0.9);
+}
+.graph-swatch.is-on {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+}
+.graph-swatch--none {
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border-color: var(--glass-border);
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+}
+.graph-shape-opt {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-2);
+  padding: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.1s ease;
+}
+.graph-shape-opt:active {
+  transform: scale(0.92);
+}
+.graph-shape-opt.is-on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+}
+.graph-shape-opt svg {
+  width: 22px;
+  height: 22px;
+}
+.graph-shape-opt svg :is(circle, rect, polygon) {
+  fill: var(--accent);
+}
+.graph-style__reset {
+  margin-top: 2px;
 }
 
 .note-editor-page {

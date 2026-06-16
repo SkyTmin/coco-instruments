@@ -24,6 +24,16 @@ import { getStorage } from '@/lib/storage';
 import { NotesHelpButton } from '@/components/NotesGuide';
 import { tagColor } from '@/lib/tag-color';
 import { hydrateCache, tooltipForTag } from '@/lib/english-deck';
+import {
+  GRAPH_COLORS,
+  GRAPH_COLOR_BY_ID,
+  GRAPH_SHAPES,
+  GRAPH_STYLES_KEY,
+  type GraphNodeStyle,
+  type GraphStyleMap,
+  type NodeShape,
+  resolveShape,
+} from '@/lib/graph-style';
 
 interface PointerSession {
   id: string;
@@ -87,6 +97,32 @@ function nodeTitle(point: NoteGraphPoint): string {
 }
 
 const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+
+// The SVG body of a node: the default round node (so un-styled nodes look
+// exactly as before), or a user-chosen shape drawn to fit radius `r`. Also used
+// to draw the little previews in the appearance picker.
+function renderShape(shape: NodeShape, cx: number, cy: number, r: number, style?: CSSProperties) {
+  if (shape === 'circle') return <circle cx={cx} cy={cy} r={r} style={style} />;
+  const g = resolveShape(shape, cx, cy, r);
+  if (g.el === 'rect') {
+    return (
+      <rect
+        className="notes-graph__shape"
+        x={g.x}
+        y={g.y}
+        width={g.size}
+        height={g.size}
+        rx={g.rx}
+        ry={g.rx}
+        style={style}
+      />
+    );
+  }
+  if (g.el === 'polygon') {
+    return <polygon className="notes-graph__shape" points={g.points} style={style} />;
+  }
+  return <circle cx={cx} cy={cy} r={r} style={style} />;
+}
 
 export function NotesGraphPage() {
   const navigate = useNavigate();
@@ -251,6 +287,59 @@ export function NotesGraphPage() {
       if (next.has(nodeId)) next.delete(nodeId);
       else next.add(nodeId);
       persistHighlights(next);
+      return next;
+    });
+  };
+  // Per-node appearance (colour + shape) — same persistence model as highlights:
+  // seed instantly from localStorage, then reconcile from the durable server copy.
+  const [styles, setStyles] = useState<GraphStyleMap>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(GRAPH_STYLES_KEY) || '{}') as GraphStyleMap;
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    let alive = true;
+    void getStorage()
+      .get<GraphStyleMap>(GRAPH_STYLES_KEY)
+      .then((s) => {
+        if (alive && s && typeof s === 'object') setStyles(s);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const persistStyles = (next: GraphStyleMap) => {
+    try {
+      localStorage.setItem(GRAPH_STYLES_KEY, JSON.stringify(next));
+    } catch {
+      /* private mode */
+    }
+    void getStorage().set(GRAPH_STYLES_KEY, next);
+  };
+  const setNodeStyle = (id: string, patch: Partial<GraphNodeStyle>) => {
+    selectionChanged();
+    setStyles((cur) => {
+      const merged: GraphNodeStyle = { ...cur[id], ...patch };
+      const cleaned: GraphNodeStyle = {};
+      if (merged.color) cleaned.color = merged.color;
+      if (merged.shape && merged.shape !== 'circle') cleaned.shape = merged.shape;
+      const next = { ...cur };
+      if (cleaned.color || cleaned.shape) next[id] = cleaned;
+      else delete next[id];
+      persistStyles(next);
+      return next;
+    });
+  };
+  const clearNodeStyle = (id: string) => {
+    selectionChanged();
+    setStyles((cur) => {
+      if (!cur[id]) return cur;
+      const next = { ...cur };
+      delete next[id];
+      persistStyles(next);
       return next;
     });
   };
@@ -1176,17 +1265,27 @@ export function NotesGraphPage() {
                     const hl = highlighted.has(point.id);
                     // Per-tag colour: each topic its own hue, sub-tags lighter.
                     const tc = point.kind === 'tag' ? tagColor(point.id.slice(4)) : null;
-                    // Highlight (green) overrides any per-node colour.
-                    const circleStyle = hl
+                    // User customisation: a chosen palette colour and/or shape.
+                    const custom = styles[point.id];
+                    const palette = custom?.color ? GRAPH_COLOR_BY_ID.get(custom.color) : null;
+                    const nodeShape: NodeShape = custom?.shape ?? 'circle';
+                    // Colour precedence: highlight (green) → chosen colour → tag
+                    // colour → a neutral fill for a shaped-but-uncoloured node →
+                    // none (the default CSS gradient for a plain circle).
+                    const circleStyle: CSSProperties | undefined = hl
                       ? {
                           fill: 'color-mix(in srgb, var(--pos) 32%, var(--surface))',
                           stroke: 'var(--pos)',
                           strokeWidth: 3.5,
                           filter: 'drop-shadow(0 0 9px var(--pos))',
                         }
-                      : tc
-                        ? { fill: tc.fill, stroke: tc.stroke }
-                        : undefined;
+                      : palette
+                        ? { fill: palette.fill, stroke: palette.stroke }
+                        : tc
+                          ? { fill: tc.fill, stroke: tc.stroke }
+                          : nodeShape !== 'circle'
+                            ? { fill: 'var(--surface-2)', stroke: 'var(--accent)' }
+                            : undefined;
                     // The node a zoom-in will open gets an "arming" ring that
                     // tightens as you approach the threshold (a pull cue).
                     const armed = isOverview && point.id === focusedNodeId;
@@ -1222,10 +1321,18 @@ export function NotesGraphPage() {
                             r={point.r + 10}
                           />
                         )}
-                        <circle cx={point.x} cy={point.y} r={point.r} style={circleStyle} />
+                        {renderShape(nodeShape, point.x, point.y, point.r, circleStyle)}
                         <text
                           className={`notes-graph__label${labelVisible(point) ? ' is-shown' : ''}`}
-                          style={hl ? { fill: 'var(--pos)' } : tc ? { fill: tc.stroke } : undefined}
+                          style={
+                            hl
+                              ? { fill: 'var(--pos)' }
+                              : palette
+                                ? { fill: palette.stroke }
+                                : tc
+                                  ? { fill: tc.stroke }
+                                  : undefined
+                          }
                           x={point.x}
                           y={point.y + point.r + 14}
                         >
@@ -1281,6 +1388,7 @@ export function NotesGraphPage() {
         (() => {
           const m = menuNode;
           const isHL = highlighted.has(m.id);
+          const cur = styles[m.id];
           const open =
             m.kind === 'note'
               ? `/notes/${m.id}`
@@ -1306,6 +1414,57 @@ export function NotesGraphPage() {
           return (
             <Sheet title={m.label} onClose={() => setMenuNode(null)}>
               <div className="stack">
+                <div className="graph-style">
+                  <span className="graph-style__title">Цвет</span>
+                  <div className="graph-swatches">
+                    <button
+                      type="button"
+                      className={`graph-swatch graph-swatch--none${!cur?.color ? ' is-on' : ''}`}
+                      onClick={() => setNodeStyle(m.id, { color: undefined })}
+                      aria-label="Цвет по умолчанию"
+                      aria-pressed={!cur?.color}
+                    >
+                      ×
+                    </button>
+                    {GRAPH_COLORS.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`graph-swatch${cur?.color === c.id ? ' is-on' : ''}`}
+                        style={{ background: c.fill, borderColor: c.stroke }}
+                        onClick={() => setNodeStyle(m.id, { color: c.id })}
+                        aria-label={c.name}
+                        aria-pressed={cur?.color === c.id}
+                      />
+                    ))}
+                  </div>
+                  <span className="graph-style__title">Форма</span>
+                  <div className="graph-shapes">
+                    {GRAPH_SHAPES.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={`graph-shape-opt${(cur?.shape ?? 'circle') === s.id ? ' is-on' : ''}`}
+                        onClick={() => setNodeStyle(m.id, { shape: s.id })}
+                        aria-label={s.name}
+                        aria-pressed={(cur?.shape ?? 'circle') === s.id}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          {renderShape(s.id, 12, 12, 9)}
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                  {cur && (
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--block graph-style__reset"
+                      onClick={() => clearNodeStyle(m.id)}
+                    >
+                      Сбросить оформление
+                    </button>
+                  )}
+                </div>
                 <button
                   className={`btn btn--block graph-hl-btn${isHL ? ' is-on' : ''}`}
                   onClick={() => {
