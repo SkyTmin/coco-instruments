@@ -409,10 +409,13 @@ select {
   padding: 10px;
   border-radius: 14px;
   font-size: 14.5px;
-  transition: background 0.15s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.12s ease;
 }
 .home-today__row:active {
   background: var(--surface-2);
+  transform: scale(0.98);
 }
 .home-today__emoji {
   flex: none;

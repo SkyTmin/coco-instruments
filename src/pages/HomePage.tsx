@@ -241,7 +241,7 @@ export function HomePage() {
             tapLight();
             setDataSheet(true);
           }}
-          aria-label="Данные и резервные копии"
+          aria-label="Настройки"
         >
           <IconGear size={21} />
         </button>
@@ -254,10 +254,14 @@ export function HomePage() {
             <div className="home-today__label">Сегодня</div>
             {today.map((f) => (
               <button key={f.key} className="home-today__row" onClick={() => open(f.to)}>
-                <span className="home-today__emoji">{f.emoji}</span>
+                <span className="home-today__emoji" aria-hidden="true">
+                  {f.emoji}
+                </span>
                 <span className="home-today__text">{f.text}</span>
                 {f.accent && <span className="home-today__accent">{f.accent}</span>}
-                <span className="home-today__chev">›</span>
+                <span className="home-today__chev" aria-hidden="true">
+                  ›
+                </span>
               </button>
             ))}
           </div>
