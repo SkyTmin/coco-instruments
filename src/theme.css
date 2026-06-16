@@ -8463,10 +8463,11 @@ input[type='datetime-local'] {
   position: fixed;
   inset: 0;
   z-index: 980;
-  background: rgba(20, 12, 6, 0.45);
-  backdrop-filter: blur(7px);
-  -webkit-backdrop-filter: blur(7px);
-  animation: fade 0.18s ease;
+  /* A plain dim that fades in — smooth on every phone. A full-screen
+     backdrop-filter blur here caused a frame hitch the instant the menu opened
+     (blurring the whole viewport per frame); the menu keeps its own glass blur. */
+  background: rgba(18, 11, 6, 0.52);
+  animation: fade 0.2s ease;
 }
 .chat-bubble--clone {
   position: fixed;
@@ -8691,25 +8692,25 @@ input[type='datetime-local'] {
   animation: menu-spring 0.2s var(--spring) both;
 }
 .chat-menu__item {
-  animation: note-in 0.26s var(--spring) backwards;
+  animation: note-in 0.2s var(--spring) backwards;
 }
 .chat-menu__item:nth-child(2) {
-  animation-delay: 26ms;
+  animation-delay: 15ms;
 }
 .chat-menu__item:nth-child(3) {
-  animation-delay: 52ms;
+  animation-delay: 30ms;
 }
 .chat-menu__item:nth-child(4) {
-  animation-delay: 78ms;
+  animation-delay: 45ms;
 }
 .chat-menu__item:nth-child(5) {
-  animation-delay: 104ms;
+  animation-delay: 60ms;
 }
 .chat-menu__item:nth-child(6) {
-  animation-delay: 130ms;
+  animation-delay: 75ms;
 }
 .chat-menu__item:nth-child(n + 7) {
-  animation-delay: 156ms;
+  animation-delay: 90ms;
 }
 .chat-menu__item:active {
   transform: scale(0.96);

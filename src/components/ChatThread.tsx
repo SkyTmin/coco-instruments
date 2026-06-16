@@ -43,7 +43,7 @@ import { deriveFromMessages, messageSnippet } from '@/lib/notes-messages';
 import type { NoteExtension } from '@/lib/extensions';
 import { NOTE_EXTENSIONS } from '@/lib/extensions';
 import { registerEscape } from '@/lib/escape-stack';
-import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
+import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 
 const timeFmt = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' });
 const dayFmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
@@ -627,8 +627,8 @@ export function ChatThread({
         msg: m,
         rect: { top: r.top, left: r.left, width: r.width, height: r.height, right: r.right },
       });
-      selectionChanged();
-    }, 420);
+      tapMedium(); // firm, satisfying buzz the instant the menu triggers (Telegram-like)
+    }, 280);
   };
   const onBubbleMove = (e: ReactPointerEvent) => {
     const p = press.current;
