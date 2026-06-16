@@ -998,6 +998,7 @@ export function NotesGraphPage() {
                 setControlsOpen((o) => !o);
               }}
               aria-label={controlsOpen ? 'Свернуть панель' : 'Фильтры и режим'}
+              aria-expanded={controlsOpen}
             >
               <IconChevron size={18} />
             </button>
@@ -1007,6 +1008,7 @@ export function NotesGraphPage() {
               <div className="segmented">
                 <button
                   className={`segmented__opt${mode === 'global' ? ' is-active' : ''}`}
+                  aria-pressed={mode === 'global'}
                   onClick={() => {
                     selectionChanged();
                     setMode('global');
@@ -1016,6 +1018,7 @@ export function NotesGraphPage() {
                 </button>
                 <button
                   className={`segmented__opt${mode === 'local' ? ' is-active' : ''}`}
+                  aria-pressed={mode === 'local'}
                   onClick={() => {
                     selectionChanged();
                     setMode('local');
@@ -1031,6 +1034,8 @@ export function NotesGraphPage() {
                     <button
                       key={value}
                       className={`notes-depth__btn${depth === value ? ' is-active' : ''}`}
+                      aria-label={`Глубина связей: ${value}`}
+                      aria-pressed={depth === value}
                       onClick={() => {
                         selectionChanged();
                         setDepth(value);
@@ -1050,6 +1055,7 @@ export function NotesGraphPage() {
                   {avail.tags && (
                     <button
                       className={`graph-chip graph-chip--tags${showTags ? ' is-on' : ''}`}
+                      aria-pressed={showTags}
                       onClick={() => {
                         selectionChanged();
                         setShowTags((v) => !v);
@@ -1062,6 +1068,7 @@ export function NotesGraphPage() {
                   {avail.missing && (
                     <button
                       className={`graph-chip graph-chip--missing${showMissing ? ' is-on' : ''}`}
+                      aria-pressed={showMissing}
                       onClick={() => {
                         selectionChanged();
                         setShowMissing((v) => !v);
@@ -1074,6 +1081,7 @@ export function NotesGraphPage() {
                   {avail.people && (
                     <button
                       className={`graph-chip graph-chip--people${showPeople ? ' is-on' : ''}`}
+                      aria-pressed={showPeople}
                       onClick={() => {
                         selectionChanged();
                         setShowPeople((v) => !v);
@@ -1086,6 +1094,7 @@ export function NotesGraphPage() {
                   {avail.details && showPeople && (
                     <button
                       className={`graph-chip graph-chip--details${showDetails ? ' is-on' : ''}`}
+                      aria-pressed={showDetails}
                       onClick={() => {
                         selectionChanged();
                         setShowDetails((v) => !v);
@@ -1253,6 +1262,7 @@ export function NotesGraphPage() {
                   className={`graph-lock${locked ? ' is-locked' : ''}`}
                   onClick={toggleLock}
                   aria-label={locked ? 'Разблокировать переходы' : 'Заблокировать переходы'}
+                  aria-pressed={locked}
                 >
                   <IconLock open={!locked} size={17} />
                 </button>

@@ -3529,6 +3529,7 @@ input[type='datetime-local'] {
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(6px);
+  transition: transform 0.1s ease;
 }
 .notes-graph-zoom button:active {
   transform: scale(0.92);
