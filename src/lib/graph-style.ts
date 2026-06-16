@@ -24,8 +24,11 @@ export interface GraphNodeStyle {
   shape?: NodeShape;
   /** Visual radius multiplier (1 = default). Cosmetic only. */
   size?: number;
-  /** An emoji glyph drawn instead of the coloured body, with no background. */
+  /** An emoji glyph drawn instead of the coloured body, with no background.
+   *  Native unicode char (e.g. "🔥") or a pack ref ("op:1f525" / "tw:1f525"). */
   emoji?: string;
+  /** Palette id used to tint the links touching this node. */
+  linkColor?: string;
 }
 
 /** node id → style. Only customised nodes appear here. */
@@ -131,6 +134,68 @@ export const GRAPH_EMOJI: string[] = [
   '😎',
   '🤝',
 ];
+
+// Downloaded image emoji packs (bundled under public/emoji/<pack>/<code>.svg).
+// On a node these are stored as "op:<code>" (OpenMoji) or "tw:<code>" (Twemoji).
+export interface EmojiPack {
+  id: 'system' | 'openmoji' | 'twemoji';
+  name: string;
+  /** value prefix for this pack ('' = a native unicode char from GRAPH_EMOJI) */
+  prefix: '' | 'op' | 'tw';
+}
+
+export const EMOJI_PACKS: EmojiPack[] = [
+  { id: 'system', name: 'Обычные', prefix: '' },
+  { id: 'openmoji', name: 'OpenMoji', prefix: 'op' },
+  { id: 'twemoji', name: 'Twemoji', prefix: 'tw' },
+];
+
+// Codepoints bundled for BOTH image packs (lowercase hex), in a curated order.
+export const EMOJI_CODES: string[] = [
+  '1f525',
+  '2b50',
+  '2764',
+  '1f680',
+  '1f389',
+  '1f3af',
+  '2705',
+  '1f4cc',
+  '1f48e',
+  '1f31f',
+  '26a1',
+  '1f340',
+  '1f308',
+  '1f3b5',
+  '1f4da',
+  '1f4b0',
+  '1f3c6',
+  '1f9e0',
+  '1f451',
+  '1f511',
+  '1f381',
+  '1f3a8',
+  '1f4c8',
+  '1f431',
+  '1f436',
+  '1f338',
+  '2615',
+  '1f355',
+  '1f3ae',
+  '1f30d',
+  '2600',
+  '1f319',
+  '1f600',
+  '1f60e',
+  '1f44d',
+  '1f44b',
+];
+
+/** A node's emoji value → bundled image URL, or null when it's native unicode. */
+export function emojiImageUrl(value: string): string | null {
+  const m = /^(op|tw):([0-9a-f-]+)$/.exec(value);
+  if (!m) return null;
+  return `/emoji/${m[1] === 'op' ? 'openmoji' : 'twemoji'}/${m[2]}.svg`;
+}
 
 // ---- geometry -------------------------------------------------------------
 

@@ -3021,6 +3021,37 @@ input[type='datetime-local'] {
   color: var(--muted);
 }
 
+/* Emoji pack tabs (Обычные / OpenMoji / Twemoji). */
+.cz-tabs {
+  display: flex;
+  gap: 6px;
+}
+.cz-tab {
+  flex: 1;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.cz-tab:active {
+  transform: scale(0.95);
+}
+.cz-tab.is-on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+}
+.cz-emoji__img img {
+  width: 26px;
+  height: 26px;
+  display: block;
+  pointer-events: none;
+}
+
 /* Size picker. */
 .cz-sizes {
   display: flex;

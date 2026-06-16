@@ -25,12 +25,15 @@ import { NotesHelpButton } from '@/components/NotesGuide';
 import { tagColor } from '@/lib/tag-color';
 import { hydrateCache, tooltipForTag } from '@/lib/english-deck';
 import {
+  EMOJI_CODES,
+  EMOJI_PACKS,
   GRAPH_COLORS,
   GRAPH_COLOR_BY_ID,
   GRAPH_EMOJI,
   GRAPH_SHAPES,
   GRAPH_SIZES,
   GRAPH_STYLES_KEY,
+  emojiImageUrl,
   type GraphNodeStyle,
   type GraphStyleMap,
   type NodeShape,
@@ -271,6 +274,7 @@ export function NotesGraphPage() {
   const [menuNode, setMenuNode] = useState<NoteGraphPoint | null>(null);
   // The node whose appearance is being edited (the "Кастомизация" sub-sheet).
   const [styleNode, setStyleNode] = useState<NoteGraphPoint | null>(null);
+  const [emojiTab, setEmojiTab] = useState<'system' | 'openmoji' | 'twemoji'>('system');
   // Highlights persist on the server (via the app's storage), so they survive
   // even when the Telegram webview clears localStorage. localStorage seeds the
   // initial state instantly; the durable server copy reconciles on mount.
@@ -349,8 +353,10 @@ export function NotesGraphPage() {
       if (merged.shape && merged.shape !== 'circle') cleaned.shape = merged.shape;
       if (merged.size && merged.size !== 1) cleaned.size = merged.size;
       if (merged.emoji) cleaned.emoji = merged.emoji;
+      if (merged.linkColor) cleaned.linkColor = merged.linkColor;
       const next = { ...cur };
-      if (cleaned.color || cleaned.shape || cleaned.size || cleaned.emoji) next[id] = cleaned;
+      if (cleaned.color || cleaned.shape || cleaned.size || cleaned.emoji || cleaned.linkColor)
+        next[id] = cleaned;
       else delete next[id];
       persistStyles(next);
       return next;
@@ -1270,11 +1276,23 @@ export function NotesGraphPage() {
                       link.kind === 'tag' && link.target.startsWith('tag:')
                         ? tagColor(link.target.slice(4))
                         : null;
+                    // A node with a chosen "link colour" tints the links touching it
+                    // (source wins over target); skipped on the focused/hot link so
+                    // the highlight still reads.
+                    const linkPalId =
+                      styles[link.source]?.linkColor ?? styles[link.target]?.linkColor;
+                    const linkPal = linkPalId ? GRAPH_COLOR_BY_ID.get(linkPalId) : null;
+                    const linkStyle: CSSProperties | undefined =
+                      !hot && linkPal
+                        ? { stroke: linkPal.stroke }
+                        : tc
+                          ? { stroke: tc.stroke }
+                          : undefined;
                     return (
                       <line
                         key={link.id}
                         className={`notes-graph__link notes-graph__link--${link.kind}${hot ? ' is-hot' : ''}${dim ? ' is-dim' : ''}`}
-                        style={tc ? { stroke: tc.stroke } : undefined}
+                        style={linkStyle}
                         x1={source.x}
                         y1={source.y}
                         x2={target.x}
@@ -1351,14 +1369,24 @@ export function NotesGraphPage() {
                         {emoji ? (
                           <>
                             <circle cx={point.x} cy={point.y} r={vr} fill="transparent" />
-                            <text
-                              className="notes-graph__emoji"
-                              x={point.x}
-                              y={point.y}
-                              style={{ fontSize: vr * 1.7 }}
-                            >
-                              {emoji}
-                            </text>
+                            {emojiImageUrl(emoji) ? (
+                              <image
+                                href={emojiImageUrl(emoji)!}
+                                x={point.x - vr}
+                                y={point.y - vr}
+                                width={vr * 2}
+                                height={vr * 2}
+                              />
+                            ) : (
+                              <text
+                                className="notes-graph__emoji"
+                                x={point.x}
+                                y={point.y}
+                                style={{ fontSize: vr * 1.7 }}
+                              >
+                                {emoji}
+                              </text>
+                            )}
                           </>
                         ) : (
                           renderShape(nodeShape, point.x, point.y, vr, circleStyle)
@@ -1530,19 +1558,41 @@ export function NotesGraphPage() {
           // A single node drawn for the before/after preview swatches.
           const previewBody = (style: GraphNodeStyle | null) => {
             const r = 17 * (style?.size ?? 1);
+            const linkPal = style?.linkColor ? GRAPH_COLOR_BY_ID.get(style.linkColor) : null;
+            let body;
             if (style?.emoji) {
-              return (
+              const url = emojiImageUrl(style.emoji);
+              body = url ? (
+                <image href={url} x={32 - r} y={32 - r} width={r * 2} height={r * 2} />
+              ) : (
                 <text className="notes-graph__emoji" x={32} y={32} style={{ fontSize: r * 1.7 }}>
                   {style.emoji}
                 </text>
               );
+            } else {
+              const pal = style?.color ? GRAPH_COLOR_BY_ID.get(style.color) : null;
+              const fallback = kindColors(m.kind);
+              const st: CSSProperties = pal
+                ? { fill: pal.fill, stroke: pal.stroke }
+                : { fill: fallback.fill, stroke: fallback.stroke };
+              body = renderShape(style?.shape ?? 'circle', 32, 32, r, st);
             }
-            const pal = style?.color ? GRAPH_COLOR_BY_ID.get(style.color) : null;
-            const fallback = kindColors(m.kind);
-            const st: CSSProperties = pal
-              ? { fill: pal.fill, stroke: pal.stroke }
-              : { fill: fallback.fill, stroke: fallback.stroke };
-            return renderShape(style?.shape ?? 'circle', 32, 32, r, st);
+            return (
+              <>
+                {linkPal && (
+                  <line
+                    x1={5}
+                    y1={32}
+                    x2={59}
+                    y2={32}
+                    stroke={linkPal.stroke}
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                  />
+                )}
+                {body}
+              </>
+            );
           };
           return (
             <Sheet title={`Кастомизация · ${m.label}`} onClose={() => setStyleNode(null)}>
@@ -1566,6 +1616,19 @@ export function NotesGraphPage() {
                 </div>
 
                 <span className="graph-style__title">Эмодзи</span>
+                <div className="cz-tabs">
+                  {EMOJI_PACKS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`cz-tab${emojiTab === p.id ? ' is-on' : ''}`}
+                      onClick={() => setEmojiTab(p.id)}
+                      aria-pressed={emojiTab === p.id}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
                 <div className="cz-emoji">
                   <button
                     type="button"
@@ -1576,18 +1639,35 @@ export function NotesGraphPage() {
                   >
                     ×
                   </button>
-                  {GRAPH_EMOJI.map((e) => (
-                    <button
-                      key={e}
-                      type="button"
-                      className={`cz-emoji__btn${cur?.emoji === e ? ' is-on' : ''}`}
-                      onClick={() => setNodeStyle(m.id, { emoji: e })}
-                      aria-label={`Эмодзи ${e}`}
-                      aria-pressed={cur?.emoji === e}
-                    >
-                      {e}
-                    </button>
-                  ))}
+                  {emojiTab === 'system'
+                    ? GRAPH_EMOJI.map((e) => (
+                        <button
+                          key={e}
+                          type="button"
+                          className={`cz-emoji__btn${cur?.emoji === e ? ' is-on' : ''}`}
+                          onClick={() => setNodeStyle(m.id, { emoji: e })}
+                          aria-label={`Эмодзи ${e}`}
+                          aria-pressed={cur?.emoji === e}
+                        >
+                          {e}
+                        </button>
+                      ))
+                    : EMOJI_CODES.map((code) => {
+                        const dir = emojiTab === 'openmoji' ? 'openmoji' : 'twemoji';
+                        const val = `${emojiTab === 'openmoji' ? 'op' : 'tw'}:${code}`;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            className={`cz-emoji__btn cz-emoji__img${cur?.emoji === val ? ' is-on' : ''}`}
+                            onClick={() => setNodeStyle(m.id, { emoji: val })}
+                            aria-label="Эмодзи"
+                            aria-pressed={cur?.emoji === val}
+                          >
+                            <img src={`/emoji/${dir}/${code}.svg`} alt="" loading="lazy" />
+                          </button>
+                        );
+                      })}
                 </div>
                 <p className="cz-hint">С эмодзи узел показывается без фона.</p>
 
@@ -1611,6 +1691,30 @@ export function NotesGraphPage() {
                       onClick={() => setNodeStyle(m.id, { color: c.id })}
                       aria-label={c.name}
                       aria-pressed={cur?.color === c.id}
+                    />
+                  ))}
+                </div>
+
+                <span className="graph-style__title">Цвет связей</span>
+                <div className="graph-swatches">
+                  <button
+                    type="button"
+                    className={`graph-swatch graph-swatch--none${!cur?.linkColor ? ' is-on' : ''}`}
+                    onClick={() => setNodeStyle(m.id, { linkColor: undefined })}
+                    aria-label="Связи по умолчанию"
+                    aria-pressed={!cur?.linkColor}
+                  >
+                    ×
+                  </button>
+                  {GRAPH_COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`graph-swatch${cur?.linkColor === c.id ? ' is-on' : ''}`}
+                      style={{ background: c.fill, borderColor: c.stroke }}
+                      onClick={() => setNodeStyle(m.id, { linkColor: c.id })}
+                      aria-label={c.name}
+                      aria-pressed={cur?.linkColor === c.id}
                     />
                   ))}
                 </div>

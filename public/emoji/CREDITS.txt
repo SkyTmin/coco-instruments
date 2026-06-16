@@ -1,0 +1,13 @@
+Emoji assets bundled in this folder
+===================================
+
+openmoji/  — OpenMoji (https://openmoji.org)
+             (c) the OpenMoji project, licensed CC BY-SA 4.0
+             https://creativecommons.org/licenses/by-sa/4.0/
+
+twemoji/   — Twemoji (https://github.com/jdecked/twemoji)
+             (c) Twitter, Inc and other contributors, licensed CC-BY 4.0
+             https://creativecommons.org/licenses/by/4.0/
+
+Only a small curated subset of each set is bundled, used as optional node
+icons in the notes graph. SVGs are included unmodified.
