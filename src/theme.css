@@ -16,7 +16,8 @@
   --surface: #fffdf9;
   --surface-2: #f7f0e6;
   --text: #3f2a1b;
-  --muted: rgba(63, 42, 27, 0.58);
+  /* Strong enough for WCAG AA on small text (was 0.58 → ~3.8:1, below AA). */
+  --muted: rgba(58, 39, 25, 0.72);
   --hairline: rgba(123, 75, 42, 0.12);
   --accent: #b06a36;
   --accent-grad-1: #d2823f;
@@ -54,7 +55,7 @@
   --surface: #2a201a;
   --surface-2: #372a22;
   --text: #f6ece0;
-  --muted: rgba(246, 236, 224, 0.62);
+  --muted: rgba(247, 238, 227, 0.75);
   --hairline: rgba(246, 236, 224, 0.12);
   --accent: #f4a96a;
   --accent-grad-1: #ffb259;
@@ -642,7 +643,8 @@ select {
   min-width: 0;
 }
 .section-card__title {
-  font-weight: 700;
+  color: var(--text);
+  font-weight: 800;
   font-size: 16px;
   text-wrap: balance;
 }
