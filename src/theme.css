@@ -2940,6 +2940,112 @@ input[type='datetime-local'] {
   margin-top: 2px;
 }
 
+/* Emoji node body (graph + preview): no background, centred glyph. */
+.notes-graph__emoji {
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+/* "🎨 Кастомизация" entry in a node's context sheet. */
+.graph-customize-btn {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+  color: var(--text);
+  font-weight: 800;
+}
+
+/* Before / after preview. */
+.cz-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+.cz-preview__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.cz-preview__svg {
+  width: 72px;
+  height: 72px;
+}
+.cz-preview__svg :is(circle, rect, polygon) {
+  stroke-width: 2.5;
+}
+.cz-preview__arrow {
+  font-size: 22px;
+  color: var(--muted);
+}
+
+/* Emoji picker. */
+.cz-emoji {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cz-emoji__btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-2);
+  font-size: 21px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.1s ease;
+}
+.cz-emoji__btn:active {
+  transform: scale(0.9);
+}
+.cz-emoji__btn.is-on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+}
+.cz-emoji__none {
+  font-size: 17px;
+  color: var(--muted);
+}
+.cz-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Size picker. */
+.cz-sizes {
+  display: flex;
+  gap: 8px;
+}
+.cz-size-btn {
+  flex: 1;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.cz-size-btn:active {
+  transform: scale(0.94);
+}
+.cz-size-btn.is-on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+}
+
 .note-editor-page {
   display: flex;
   flex-direction: column;

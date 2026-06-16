@@ -22,6 +22,10 @@ export interface GraphNodeStyle {
   color?: string;
   /** Absent or 'circle' → the default round node. */
   shape?: NodeShape;
+  /** Visual radius multiplier (1 = default). Cosmetic only. */
+  size?: number;
+  /** An emoji glyph drawn instead of the coloured body, with no background. */
+  emoji?: string;
 }
 
 /** node id → style. Only customised nodes appear here. */
@@ -71,6 +75,61 @@ export const GRAPH_SHAPES: ShapeOption[] = [
   { id: 'pentagon', name: 'Пятиугольник' },
   { id: 'hexagon', name: 'Шестиугольник' },
   { id: 'star', name: 'Звезда' },
+];
+
+export interface SizeOption {
+  id: string;
+  name: string;
+  /** visual radius multiplier */
+  mult: number;
+}
+
+export const GRAPH_SIZES: SizeOption[] = [
+  { id: 's', name: 'S', mult: 0.78 },
+  { id: 'm', name: 'M', mult: 1 },
+  { id: 'l', name: 'L', mult: 1.3 },
+  { id: 'xl', name: 'XL', mult: 1.65 },
+];
+
+// A curated set of fun, useful emoji for tagging nodes (rendered natively with
+// no background — nothing to download). Custom image packs come on top of this.
+export const GRAPH_EMOJI: string[] = [
+  '⭐',
+  '🔥',
+  '❤️',
+  '💡',
+  '🚀',
+  '🎯',
+  '✅',
+  '📌',
+  '💎',
+  '🌟',
+  '⚡',
+  '🍀',
+  '🌈',
+  '🎵',
+  '📚',
+  '💰',
+  '🏆',
+  '🧠',
+  '👑',
+  '🔑',
+  '🎁',
+  '🎨',
+  '🛠️',
+  '📈',
+  '🐱',
+  '🐶',
+  '🌸',
+  '☕',
+  '🍕',
+  '🎮',
+  '🌍',
+  '☀️',
+  '🌙',
+  '😀',
+  '😎',
+  '🤝',
 ];
 
 // ---- geometry -------------------------------------------------------------

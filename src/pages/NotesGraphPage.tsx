@@ -27,7 +27,9 @@ import { hydrateCache, tooltipForTag } from '@/lib/english-deck';
 import {
   GRAPH_COLORS,
   GRAPH_COLOR_BY_ID,
+  GRAPH_EMOJI,
   GRAPH_SHAPES,
+  GRAPH_SIZES,
   GRAPH_STYLES_KEY,
   type GraphNodeStyle,
   type GraphStyleMap,
@@ -122,6 +124,23 @@ function renderShape(shape: NodeShape, cx: number, cy: number, r: number, style?
     return <polygon className="notes-graph__shape" points={g.points} style={style} />;
   }
   return <circle cx={cx} cy={cy} r={r} style={style} />;
+}
+
+// Representative solid colours per node kind — used only for the "before"
+// preview in the customization sheet (the live graph uses gradients).
+function kindColors(kind: NoteGraphPoint['kind']): { fill: string; stroke: string } {
+  switch (kind) {
+    case 'person':
+      return { fill: '#f1a6ad', stroke: '#e2566f' };
+    case 'list':
+      return { fill: '#a99bf2', stroke: '#6366f1' };
+    case 'tag':
+      return { fill: 'var(--tag-fill)', stroke: 'var(--tag-fg)' };
+    case 'missing':
+      return { fill: 'rgba(215, 154, 43, 0.5)', stroke: 'var(--warn)' };
+    default:
+      return { fill: '#7fcfd6', stroke: '#2bb0c9' };
+  }
 }
 
 export function NotesGraphPage() {
@@ -250,6 +269,8 @@ export function NotesGraphPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [menuNode, setMenuNode] = useState<NoteGraphPoint | null>(null);
+  // The node whose appearance is being edited (the "Кастомизация" sub-sheet).
+  const [styleNode, setStyleNode] = useState<NoteGraphPoint | null>(null);
   // Highlights persist on the server (via the app's storage), so they survive
   // even when the Telegram webview clears localStorage. localStorage seeds the
   // initial state instantly; the durable server copy reconciles on mount.
@@ -326,8 +347,10 @@ export function NotesGraphPage() {
       const cleaned: GraphNodeStyle = {};
       if (merged.color) cleaned.color = merged.color;
       if (merged.shape && merged.shape !== 'circle') cleaned.shape = merged.shape;
+      if (merged.size && merged.size !== 1) cleaned.size = merged.size;
+      if (merged.emoji) cleaned.emoji = merged.emoji;
       const next = { ...cur };
-      if (cleaned.color || cleaned.shape) next[id] = cleaned;
+      if (cleaned.color || cleaned.shape || cleaned.size || cleaned.emoji) next[id] = cleaned;
       else delete next[id];
       persistStyles(next);
       return next;
@@ -1269,6 +1292,10 @@ export function NotesGraphPage() {
                     const custom = styles[point.id];
                     const palette = custom?.color ? GRAPH_COLOR_BY_ID.get(custom.color) : null;
                     const nodeShape: NodeShape = custom?.shape ?? 'circle';
+                    // Visual radius (size multiplier) and an optional emoji glyph
+                    // — both purely cosmetic; physics/hit-testing still use point.r.
+                    const vr = point.r * (custom?.size ?? 1);
+                    const emoji = custom?.emoji;
                     // Colour precedence: highlight (green) → chosen colour → tag
                     // colour → a neutral fill for a shaped-but-uncoloured node →
                     // none (the default CSS gradient for a plain circle).
@@ -1309,7 +1336,7 @@ export function NotesGraphPage() {
                             className="notes-graph__arm"
                             cx={point.x}
                             cy={point.y}
-                            r={point.r + 6 + (1 - hintT) * 26}
+                            r={vr + 6 + (1 - hintT) * 26}
                             opacity={0.25 + hintT * 0.6}
                           />
                         )}
@@ -1318,10 +1345,24 @@ export function NotesGraphPage() {
                             className="notes-graph__halo"
                             cx={point.x}
                             cy={point.y}
-                            r={point.r + 10}
+                            r={vr + 10}
                           />
                         )}
-                        {renderShape(nodeShape, point.x, point.y, point.r, circleStyle)}
+                        {emoji ? (
+                          <>
+                            <circle cx={point.x} cy={point.y} r={vr} fill="transparent" />
+                            <text
+                              className="notes-graph__emoji"
+                              x={point.x}
+                              y={point.y}
+                              style={{ fontSize: vr * 1.7 }}
+                            >
+                              {emoji}
+                            </text>
+                          </>
+                        ) : (
+                          renderShape(nodeShape, point.x, point.y, vr, circleStyle)
+                        )}
                         <text
                           className={`notes-graph__label${labelVisible(point) ? ' is-shown' : ''}`}
                           style={
@@ -1334,7 +1375,7 @@ export function NotesGraphPage() {
                                   : undefined
                           }
                           x={point.x}
-                          y={point.y + point.r + 14}
+                          y={point.y + vr + 14}
                         >
                           {shortLabel(point.label)}
                         </text>
@@ -1388,7 +1429,6 @@ export function NotesGraphPage() {
         (() => {
           const m = menuNode;
           const isHL = highlighted.has(m.id);
-          const cur = styles[m.id];
           const open =
             m.kind === 'note'
               ? `/notes/${m.id}`
@@ -1414,57 +1454,16 @@ export function NotesGraphPage() {
           return (
             <Sheet title={m.label} onClose={() => setMenuNode(null)}>
               <div className="stack">
-                <div className="graph-style">
-                  <span className="graph-style__title">Цвет</span>
-                  <div className="graph-swatches">
-                    <button
-                      type="button"
-                      className={`graph-swatch graph-swatch--none${!cur?.color ? ' is-on' : ''}`}
-                      onClick={() => setNodeStyle(m.id, { color: undefined })}
-                      aria-label="Цвет по умолчанию"
-                      aria-pressed={!cur?.color}
-                    >
-                      ×
-                    </button>
-                    {GRAPH_COLORS.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className={`graph-swatch${cur?.color === c.id ? ' is-on' : ''}`}
-                        style={{ background: c.fill, borderColor: c.stroke }}
-                        onClick={() => setNodeStyle(m.id, { color: c.id })}
-                        aria-label={c.name}
-                        aria-pressed={cur?.color === c.id}
-                      />
-                    ))}
-                  </div>
-                  <span className="graph-style__title">Форма</span>
-                  <div className="graph-shapes">
-                    {GRAPH_SHAPES.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        className={`graph-shape-opt${(cur?.shape ?? 'circle') === s.id ? ' is-on' : ''}`}
-                        onClick={() => setNodeStyle(m.id, { shape: s.id })}
-                        aria-label={s.name}
-                        aria-pressed={(cur?.shape ?? 'circle') === s.id}
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          {renderShape(s.id, 12, 12, 9)}
-                        </svg>
-                      </button>
-                    ))}
-                  </div>
-                  {cur && (
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--block graph-style__reset"
-                      onClick={() => clearNodeStyle(m.id)}
-                    >
-                      Сбросить оформление
-                    </button>
-                  )}
-                </div>
+                <button
+                  className="btn btn--block graph-customize-btn"
+                  onClick={() => {
+                    selectionChanged();
+                    setMenuNode(null);
+                    setStyleNode(m);
+                  }}
+                >
+                  🎨 Кастомизация
+                </button>
                 <button
                   className={`btn btn--block graph-hl-btn${isHL ? ' is-on' : ''}`}
                   onClick={() => {
@@ -1516,6 +1515,147 @@ export function NotesGraphPage() {
                     }}
                   >
                     {openLabel}
+                  </button>
+                )}
+              </div>
+            </Sheet>
+          );
+        })()}
+
+      {styleNode &&
+        (() => {
+          const m = styleNode;
+          const cur = styles[m.id];
+          const curSize = cur?.size ?? 1;
+          // A single node drawn for the before/after preview swatches.
+          const previewBody = (style: GraphNodeStyle | null) => {
+            const r = 17 * (style?.size ?? 1);
+            if (style?.emoji) {
+              return (
+                <text className="notes-graph__emoji" x={32} y={32} style={{ fontSize: r * 1.7 }}>
+                  {style.emoji}
+                </text>
+              );
+            }
+            const pal = style?.color ? GRAPH_COLOR_BY_ID.get(style.color) : null;
+            const fallback = kindColors(m.kind);
+            const st: CSSProperties = pal
+              ? { fill: pal.fill, stroke: pal.stroke }
+              : { fill: fallback.fill, stroke: fallback.stroke };
+            return renderShape(style?.shape ?? 'circle', 32, 32, r, st);
+          };
+          return (
+            <Sheet title={`Кастомизация · ${m.label}`} onClose={() => setStyleNode(null)}>
+              <div className="stack">
+                <div className="cz-preview">
+                  <div className="cz-preview__cell">
+                    <svg viewBox="0 0 64 64" className="cz-preview__svg" aria-hidden="true">
+                      {previewBody(null)}
+                    </svg>
+                    <span>Было</span>
+                  </div>
+                  <div className="cz-preview__arrow" aria-hidden="true">
+                    →
+                  </div>
+                  <div className="cz-preview__cell">
+                    <svg viewBox="0 0 64 64" className="cz-preview__svg" aria-hidden="true">
+                      {previewBody(cur ?? null)}
+                    </svg>
+                    <span>Стало</span>
+                  </div>
+                </div>
+
+                <span className="graph-style__title">Эмодзи</span>
+                <div className="cz-emoji">
+                  <button
+                    type="button"
+                    className={`cz-emoji__btn cz-emoji__none${!cur?.emoji ? ' is-on' : ''}`}
+                    onClick={() => setNodeStyle(m.id, { emoji: undefined })}
+                    aria-label="Без эмодзи"
+                    aria-pressed={!cur?.emoji}
+                  >
+                    ×
+                  </button>
+                  {GRAPH_EMOJI.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      className={`cz-emoji__btn${cur?.emoji === e ? ' is-on' : ''}`}
+                      onClick={() => setNodeStyle(m.id, { emoji: e })}
+                      aria-label={`Эмодзи ${e}`}
+                      aria-pressed={cur?.emoji === e}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+                <p className="cz-hint">С эмодзи узел показывается без фона.</p>
+
+                <span className="graph-style__title">Цвет</span>
+                <div className="graph-swatches">
+                  <button
+                    type="button"
+                    className={`graph-swatch graph-swatch--none${!cur?.color ? ' is-on' : ''}`}
+                    onClick={() => setNodeStyle(m.id, { color: undefined })}
+                    aria-label="Цвет по умолчанию"
+                    aria-pressed={!cur?.color}
+                  >
+                    ×
+                  </button>
+                  {GRAPH_COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`graph-swatch${cur?.color === c.id ? ' is-on' : ''}`}
+                      style={{ background: c.fill, borderColor: c.stroke }}
+                      onClick={() => setNodeStyle(m.id, { color: c.id })}
+                      aria-label={c.name}
+                      aria-pressed={cur?.color === c.id}
+                    />
+                  ))}
+                </div>
+
+                <span className="graph-style__title">Форма</span>
+                <div className="graph-shapes">
+                  {GRAPH_SHAPES.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`graph-shape-opt${(cur?.shape ?? 'circle') === s.id ? ' is-on' : ''}`}
+                      onClick={() => setNodeStyle(m.id, { shape: s.id })}
+                      aria-label={s.name}
+                      aria-pressed={(cur?.shape ?? 'circle') === s.id}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        {renderShape(s.id, 12, 12, 9)}
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+
+                <span className="graph-style__title">Размер</span>
+                <div className="cz-sizes">
+                  {GRAPH_SIZES.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`cz-size-btn${curSize === s.mult ? ' is-on' : ''}`}
+                      onClick={() => setNodeStyle(m.id, { size: s.mult })}
+                      aria-label={`Размер ${s.name}`}
+                      aria-pressed={curSize === s.mult}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+
+                {cur && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--block graph-style__reset"
+                    onClick={() => clearNodeStyle(m.id)}
+                  >
+                    Сбросить оформление
                   </button>
                 )}
               </div>
