@@ -45,6 +45,11 @@ const MAX_SCALE = 2.6;
 // aspect ratio so the graph fills the whole card (no letterbox, no crop).
 const VIRTUAL_H = GRAPH_VIEW_BOX.height;
 
+// Nodes are laid out in a fixed SQUARE box (not the tall full-screen stage), so
+// the force layout spreads them radially instead of into a tall rectangle. The
+// tall viewport is just a window into this box (positioned by pan/zoom).
+const LAYOUT_BOX = { width: VIRTUAL_H, height: VIRTUAL_H };
+
 // Cooling schedule for the live simulation (settles, then sleeps).
 const SIM_DECAY = 0.985;
 const SIM_MIN_ALPHA = 0.006;
@@ -551,7 +556,7 @@ export function NotesGraphPage() {
         const next = current.map((p) => ({ ...p }));
         const fixed = new Set(pinnedRef.current);
         if (dragging) fixed.add(dragging);
-        simulationStep(next, linksRef.current, sizeRef.current, alpha, fixed, dragging);
+        simulationStep(next, linksRef.current, LAYOUT_BOX, alpha, fixed, dragging);
         return next;
       });
       let nextAlpha = alpha * SIM_DECAY;
@@ -599,9 +604,7 @@ export function NotesGraphPage() {
     const seed = previous.length
       ? new Map(previous.map((p) => [p.id, { x: p.x, y: p.y }]))
       : undefined;
-    setPoints(
-      layoutNoteGraph(graphNow, activeIdRef.current, sizeRef.current, seed, pinnedRef.current),
-    );
+    setPoints(layoutNoteGraph(graphNow, activeIdRef.current, LAYOUT_BOX, seed, pinnedRef.current));
     kick(seed ? 0.6 : 1);
   }, [layoutKey, kick]);
 
@@ -676,7 +679,7 @@ export function NotesGraphPage() {
     selectionChanged();
     pinnedRef.current.clear();
     userMovedRef.current = false;
-    setPoints(layoutNoteGraph(visibleGraphRef.current, activeIdRef.current, sizeRef.current));
+    setPoints(layoutNoteGraph(visibleGraphRef.current, activeIdRef.current, LAYOUT_BOX));
     homeView();
     kick(1);
     window.setTimeout(() => {
