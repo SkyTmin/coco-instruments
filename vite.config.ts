@@ -30,12 +30,19 @@ export default defineConfig({
         icons: [
           { src: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          {
+            src: '/icons/icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
         ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        globIgnores: ['**/eruda-*.js'], // debug-only, big — don't precache
+        // Don't precache the debug bundle or the (large) emoji packs — emoji are
+        // optional decorations, fetched on demand and cached at runtime instead.
+        globIgnores: ['**/eruda-*.js', '**/emoji/**'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],
         cleanupOutdatedCaches: true,
@@ -46,6 +53,14 @@ export default defineConfig({
             options: {
               cacheName: 'coco-uploads',
               expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/emoji/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'coco-emoji',
+              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 90 },
             },
           },
         ],

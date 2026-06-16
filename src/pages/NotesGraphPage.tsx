@@ -33,7 +33,9 @@ import {
   GRAPH_SHAPES,
   GRAPH_SIZES,
   GRAPH_STYLES_KEY,
+  cleanStyle,
   emojiImageUrl,
+  styleIsEmpty,
   type GraphNodeStyle,
   type GraphStyleMap,
   type NodeShape,
@@ -275,6 +277,8 @@ export function NotesGraphPage() {
   // The node whose appearance is being edited (the "Кастомизация" sub-sheet).
   const [styleNode, setStyleNode] = useState<NoteGraphPoint | null>(null);
   const [emojiTab, setEmojiTab] = useState<'system' | 'openmoji' | 'twemoji'>('system');
+  // The editor works on a DRAFT; it lands on the graph only on "Применить".
+  const [draft, setDraft] = useState<GraphNodeStyle>({});
   // Highlights persist on the server (via the app's storage), so they survive
   // even when the Telegram webview clears localStorage. localStorage seeds the
   // initial state instantly; the durable server copy reconciles on mount.
@@ -344,33 +348,23 @@ export function NotesGraphPage() {
     }
     void getStorage().set(GRAPH_STYLES_KEY, next);
   };
-  const setNodeStyle = (id: string, patch: Partial<GraphNodeStyle>) => {
+  const patchDraft = (patch: Partial<GraphNodeStyle>) => {
     selectionChanged();
-    setStyles((cur) => {
-      const merged: GraphNodeStyle = { ...cur[id], ...patch };
-      const cleaned: GraphNodeStyle = {};
-      if (merged.color) cleaned.color = merged.color;
-      if (merged.shape && merged.shape !== 'circle') cleaned.shape = merged.shape;
-      if (merged.size && merged.size !== 1) cleaned.size = merged.size;
-      if (merged.emoji) cleaned.emoji = merged.emoji;
-      if (merged.linkColor) cleaned.linkColor = merged.linkColor;
-      const next = { ...cur };
-      if (cleaned.color || cleaned.shape || cleaned.size || cleaned.emoji || cleaned.linkColor)
-        next[id] = cleaned;
-      else delete next[id];
-      persistStyles(next);
-      return next;
-    });
+    setDraft((d) => cleanStyle({ ...d, ...patch }));
   };
-  const clearNodeStyle = (id: string) => {
-    selectionChanged();
+  const applyDraft = () => {
+    if (!styleNode) return;
+    const id = styleNode.id;
+    const cleaned = cleanStyle(draft);
     setStyles((cur) => {
-      if (!cur[id]) return cur;
       const next = { ...cur };
-      delete next[id];
+      if (styleIsEmpty(cleaned)) delete next[id];
+      else next[id] = cleaned;
       persistStyles(next);
       return next;
     });
+    notifySuccess();
+    setStyleNode(null);
   };
   // Highlighted nodes that actually exist in THIS graph. The clear chip lives
   // where the highlights are — so a highlight made inside a list never surfaces
@@ -1491,6 +1485,8 @@ export function NotesGraphPage() {
                   className="btn btn--block graph-customize-btn"
                   onClick={() => {
                     selectionChanged();
+                    setDraft(styles[m.id] ?? {});
+                    setEmojiTab('system');
                     setMenuNode(null);
                     setStyleNode(m);
                   }}
@@ -1558,8 +1554,8 @@ export function NotesGraphPage() {
       {styleNode &&
         (() => {
           const m = styleNode;
-          const cur = styles[m.id];
-          const curSize = cur?.size ?? 1;
+          const cur = draft;
+          const curSize = draft.size ?? 1;
           // A single node drawn for the before/after preview swatches.
           const previewBody = (style: GraphNodeStyle | null) => {
             const r = 17 * (style?.size ?? 1);
@@ -1605,7 +1601,7 @@ export function NotesGraphPage() {
                 <div className="cz-preview">
                   <div className="cz-preview__cell">
                     <svg viewBox="0 0 64 64" className="cz-preview__svg" aria-hidden="true">
-                      {previewBody(null)}
+                      {previewBody(styles[m.id] ?? null)}
                     </svg>
                     <span>Было</span>
                   </div>
@@ -1614,7 +1610,7 @@ export function NotesGraphPage() {
                   </div>
                   <div className="cz-preview__cell">
                     <svg viewBox="0 0 64 64" className="cz-preview__svg" aria-hidden="true">
-                      {previewBody(cur ?? null)}
+                      {previewBody(draft)}
                     </svg>
                     <span>Стало</span>
                   </div>
@@ -1638,7 +1634,7 @@ export function NotesGraphPage() {
                   <button
                     type="button"
                     className={`cz-emoji__btn cz-emoji__none${!cur?.emoji ? ' is-on' : ''}`}
-                    onClick={() => setNodeStyle(m.id, { emoji: undefined })}
+                    onClick={() => patchDraft({ emoji: undefined })}
                     aria-label="Без эмодзи"
                     aria-pressed={!cur?.emoji}
                   >
@@ -1650,7 +1646,7 @@ export function NotesGraphPage() {
                           key={e}
                           type="button"
                           className={`cz-emoji__btn${cur?.emoji === e ? ' is-on' : ''}`}
-                          onClick={() => setNodeStyle(m.id, { emoji: e })}
+                          onClick={() => patchDraft({ emoji: e })}
                           aria-label={`Эмодзи ${e}`}
                           aria-pressed={cur?.emoji === e}
                         >
@@ -1665,7 +1661,7 @@ export function NotesGraphPage() {
                             key={val}
                             type="button"
                             className={`cz-emoji__btn cz-emoji__img${cur?.emoji === val ? ' is-on' : ''}`}
-                            onClick={() => setNodeStyle(m.id, { emoji: val })}
+                            onClick={() => patchDraft({ emoji: val })}
                             aria-label="Эмодзи"
                             aria-pressed={cur?.emoji === val}
                           >
@@ -1681,7 +1677,7 @@ export function NotesGraphPage() {
                   <button
                     type="button"
                     className={`graph-swatch graph-swatch--none${!cur?.color ? ' is-on' : ''}`}
-                    onClick={() => setNodeStyle(m.id, { color: undefined })}
+                    onClick={() => patchDraft({ color: undefined })}
                     aria-label="Цвет по умолчанию"
                     aria-pressed={!cur?.color}
                   >
@@ -1693,7 +1689,7 @@ export function NotesGraphPage() {
                       type="button"
                       className={`graph-swatch${cur?.color === c.id ? ' is-on' : ''}`}
                       style={{ background: c.fill, borderColor: c.stroke }}
-                      onClick={() => setNodeStyle(m.id, { color: c.id })}
+                      onClick={() => patchDraft({ color: c.id })}
                       aria-label={c.name}
                       aria-pressed={cur?.color === c.id}
                     />
@@ -1705,7 +1701,7 @@ export function NotesGraphPage() {
                   <button
                     type="button"
                     className={`graph-swatch graph-swatch--none${!cur?.linkColor ? ' is-on' : ''}`}
-                    onClick={() => setNodeStyle(m.id, { linkColor: undefined })}
+                    onClick={() => patchDraft({ linkColor: undefined })}
                     aria-label="Связи по умолчанию"
                     aria-pressed={!cur?.linkColor}
                   >
@@ -1717,7 +1713,7 @@ export function NotesGraphPage() {
                       type="button"
                       className={`graph-swatch${cur?.linkColor === c.id ? ' is-on' : ''}`}
                       style={{ background: c.fill, borderColor: c.stroke }}
-                      onClick={() => setNodeStyle(m.id, { linkColor: c.id })}
+                      onClick={() => patchDraft({ linkColor: c.id })}
                       aria-label={c.name}
                       aria-pressed={cur?.linkColor === c.id}
                     />
@@ -1731,7 +1727,7 @@ export function NotesGraphPage() {
                       key={s.id}
                       type="button"
                       className={`graph-shape-opt${(cur?.shape ?? 'circle') === s.id ? ' is-on' : ''}`}
-                      onClick={() => setNodeStyle(m.id, { shape: s.id })}
+                      onClick={() => patchDraft({ shape: s.id })}
                       aria-label={s.name}
                       aria-pressed={(cur?.shape ?? 'circle') === s.id}
                     >
@@ -1749,7 +1745,7 @@ export function NotesGraphPage() {
                       key={s.id}
                       type="button"
                       className={`cz-size-btn${curSize === s.mult ? ' is-on' : ''}`}
-                      onClick={() => setNodeStyle(m.id, { size: s.mult })}
+                      onClick={() => patchDraft({ size: s.mult })}
                       aria-label={`Размер ${s.name}`}
                       aria-pressed={curSize === s.mult}
                     >
@@ -1758,15 +1754,25 @@ export function NotesGraphPage() {
                   ))}
                 </div>
 
-                {cur && (
+                {!styleIsEmpty(draft) && (
                   <button
                     type="button"
                     className="btn btn--ghost btn--block graph-style__reset"
-                    onClick={() => clearNodeStyle(m.id)}
+                    onClick={() => {
+                      selectionChanged();
+                      setDraft({});
+                    }}
                   >
                     Сбросить оформление
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="btn btn--primary btn--block cz-apply"
+                  onClick={applyDraft}
+                >
+                  ✓ Применить
+                </button>
               </div>
             </Sheet>
           );
