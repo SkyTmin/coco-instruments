@@ -1368,7 +1368,12 @@ export function NotesGraphPage() {
                         )}
                         {emoji ? (
                           <>
-                            <circle cx={point.x} cy={point.y} r={vr} fill="transparent" />
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r={vr}
+                              style={{ fill: 'transparent', stroke: 'none', filter: 'none' }}
+                            />
                             {emojiImageUrl(emoji) ? (
                               <image
                                 href={emojiImageUrl(emoji)!}
@@ -1596,7 +1601,7 @@ export function NotesGraphPage() {
           };
           return (
             <Sheet title={`Кастомизация · ${m.label}`} onClose={() => setStyleNode(null)}>
-              <div className="stack">
+              <div className="stack cz-body">
                 <div className="cz-preview">
                   <div className="cz-preview__cell">
                     <svg viewBox="0 0 64 64" className="cz-preview__svg" aria-hidden="true">

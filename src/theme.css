@@ -2866,6 +2866,10 @@ input[type='datetime-local'] {
 }
 
 /* ---- Node appearance picker (in the node's context sheet) ----------------- */
+/* The customization sheet runs tight to stay compact. */
+.stack.cz-body {
+  gap: 7px;
+}
 .graph-style {
   display: flex;
   flex-direction: column;
@@ -2885,8 +2889,8 @@ input[type='datetime-local'] {
   gap: 8px;
 }
 .graph-swatch {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   border: 2px solid transparent;
   padding: 0;
@@ -2911,9 +2915,9 @@ input[type='datetime-local'] {
   line-height: 1;
 }
 .graph-shape-opt {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
   padding: 0;
@@ -2930,8 +2934,8 @@ input[type='datetime-local'] {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
 }
 .graph-shape-opt svg {
-  width: 22px;
-  height: 22px;
+  width: 19px;
+  height: 19px;
 }
 .graph-shape-opt svg :is(circle, rect, polygon) {
   fill: var(--accent);
@@ -2958,9 +2962,9 @@ input[type='datetime-local'] {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  padding: 12px;
-  border-radius: 16px;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 14px;
   background: var(--surface-2);
 }
 .cz-preview__cell {
@@ -2973,8 +2977,8 @@ input[type='datetime-local'] {
   color: var(--muted);
 }
 .cz-preview__svg {
-  width: 72px;
-  height: 72px;
+  width: 54px;
+  height: 54px;
 }
 .cz-preview__svg :is(circle, rect, polygon) {
   stroke-width: 2.5;
@@ -2988,15 +2992,20 @@ input[type='datetime-local'] {
 .cz-emoji {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 6px;
+  max-height: 124px;
+  overflow-y: auto;
+  padding: 2px;
+  margin: -2px;
 }
 .cz-emoji__btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
-  font-size: 21px;
+  font-size: 19px;
   line-height: 1;
   padding: 0;
   cursor: pointer;
@@ -3028,7 +3037,7 @@ input[type='datetime-local'] {
 }
 .cz-tab {
   flex: 1;
-  height: 32px;
+  height: 30px;
   border-radius: 10px;
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
@@ -3046,8 +3055,8 @@ input[type='datetime-local'] {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
 }
 .cz-emoji__img img {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   display: block;
   pointer-events: none;
 }
@@ -3059,7 +3068,7 @@ input[type='datetime-local'] {
 }
 .cz-size-btn {
   flex: 1;
-  height: 38px;
+  height: 36px;
   border-radius: 11px;
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
