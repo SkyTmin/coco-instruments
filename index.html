@@ -13,6 +13,138 @@
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- Last-resort recovery: if the app never mounts (e.g. a stale cached shell
+         whose JS chunk 404s on a deploy), this inline UI still appears — it lives
+         in the HTML, not the bundle — and offers a reload / hard cache reset. -->
+    <div
+      id="boot-fallback"
+      style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 24px;
+        text-align: center;
+        font-family: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+        background: Canvas;
+        color: CanvasText;
+        z-index: 99999;
+      "
+    >
+      <div style="font-size: 42px">🥥</div>
+      <div id="boot-msg" style="font-size: 16px; font-weight: 700">Приложение не загрузилось</div>
+      <div style="font-size: 13px; opacity: 0.65; max-width: 290px; line-height: 1.4">
+        Похоже, завис старый кеш. Перезагрузите или очистите кеш — данные хранятся на сервере и не
+        потеряются.
+      </div>
+      <button
+        type="button"
+        onclick="location.reload()"
+        style="
+          margin-top: 6px;
+          min-width: 240px;
+          padding: 13px 18px;
+          border: 0;
+          border-radius: 14px;
+          font-size: 15px;
+          font-weight: 700;
+          background: #b06a36;
+          color: #fff;
+        "
+      >
+        Перезагрузить
+      </button>
+      <button
+        type="button"
+        onclick="window.__cocoReset && window.__cocoReset()"
+        style="
+          min-width: 240px;
+          padding: 13px 18px;
+          border: 1px solid rgba(128, 128, 128, 0.4);
+          border-radius: 14px;
+          font-size: 15px;
+          font-weight: 600;
+          background: transparent;
+          color: CanvasText;
+        "
+      >
+        Очистить кеш и перезагрузить
+      </button>
+    </div>
+
+    <script>
+      (function () {
+        function mounted() {
+          var r = document.getElementById('root');
+          return !!r && r.childElementCount > 0;
+        }
+        var shown = false;
+        function showFallback(msg) {
+          if (shown || mounted()) return;
+          shown = true;
+          var fb = document.getElementById('boot-fallback');
+          if (fb) fb.style.display = 'flex';
+          if (msg) {
+            var m = document.getElementById('boot-msg');
+            if (m) m.textContent = msg;
+          }
+        }
+        // A failed module/stylesheet load (stale chunk 404) → recover immediately.
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e && e.target;
+            if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+              showFallback('Не удалось загрузить приложение.');
+            }
+          },
+          true,
+        );
+        // Or if nothing has rendered after a while (a hung boot).
+        setTimeout(function () {
+          showFallback();
+        }, 9000);
+        // If the app does mount (e.g. just a slow network), hide the fallback.
+        var poll = setInterval(function () {
+          if (mounted()) {
+            clearInterval(poll);
+            var fb = document.getElementById('boot-fallback');
+            if (fb) fb.remove();
+          }
+        }, 600);
+        // Hard reset: drop the service worker + caches + local cache, then reload.
+        window.__cocoReset = function () {
+          try {
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function (rs) {
+                rs.forEach(function (r) {
+                  r.unregister();
+                });
+              });
+            }
+          } catch (e) {}
+          try {
+            if (window.caches) {
+              caches.keys().then(function (ks) {
+                ks.forEach(function (k) {
+                  caches.delete(k);
+                });
+              });
+            }
+          } catch (e) {}
+          try {
+            localStorage.clear();
+          } catch (e) {}
+          setTimeout(function () {
+            location.reload();
+          }, 350);
+        };
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

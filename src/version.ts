@@ -4,7 +4,7 @@
 // BUMP `APP_VERSION` on every release and mention it in the commit message.
 // `__BUILD_AT__` (injected by Vite) changes on every build as an extra signal,
 // so even without a bump the timestamp will differ once the new bundle loads.
-export const APP_VERSION = '2.1.4';
+export const APP_VERSION = '2.1.5';
 
 const buildFmt = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
