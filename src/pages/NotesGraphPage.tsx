@@ -61,7 +61,10 @@ const LABEL_ZOOM = 1.2;
 // they adapt to however far out the graph is fitted — see zoomThresholds().
 const HINT_FACTOR = 2.6;
 const ENTER_FACTOR = 3.6;
-const EXIT_FACTOR = 0.6;
+const EXIT_FACTOR = 0.75;
+// Home framing never zooms out below this — a big graph overflows the edges
+// (pannable) instead of being crammed into a tiny rectangle.
+const HOME_MIN_FIT = 0.6;
 
 function shortLabel(value: string, max = 18): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -378,7 +381,7 @@ export function NotesGraphPage() {
       }
       const bw = Math.max(1, maxX - minX);
       const bh = Math.max(1, maxY - minY);
-      s = Math.max(MIN_SCALE, Math.min(0.95, Math.min(availW / bw, availH / bh) * 0.88));
+      s = Math.max(HOME_MIN_FIT, Math.min(0.95, Math.min(availW / bw, availH / bh) * 0.88));
       panX = sz.width / 2 - ((minX + maxX) / 2) * s;
       panY = reserveVB + availH / 2 - ((minY + maxY) / 2) * s;
     } else {

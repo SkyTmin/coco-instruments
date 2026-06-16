@@ -102,7 +102,9 @@ if (lp) {
     await init(debug);
     root.render(
       <StrictMode>
-        <Root />
+        <ErrorBoundary>
+          <Root />
+        </ErrorBoundary>
       </StrictMode>,
     );
   } catch (e) {
