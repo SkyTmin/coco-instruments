@@ -38,7 +38,7 @@ const TAP_MOVE_LIMIT = 10;
 const TAP_TIME_LIMIT = 450;
 const LONG_PRESS_MS = 450;
 const HIGHLIGHTS_KEY = 'coco-graph-highlights';
-const MIN_SCALE = 0.3;
+const MIN_SCALE = 0.2;
 const MAX_SCALE = 2.6;
 
 // Coordinate space: a fixed virtual height; the width follows the real stage's
@@ -61,10 +61,11 @@ const LABEL_ZOOM = 1.2;
 // they adapt to however far out the graph is fitted — see zoomThresholds().
 const HINT_FACTOR = 2.6;
 const ENTER_FACTOR = 3.6;
-const EXIT_FACTOR = 0.75;
-// Home framing never zooms out below this — a big graph overflows the edges
-// (pannable) instead of being crammed into a tiny rectangle.
-const HOME_MIN_FIT = 0.6;
+// Lower → must zoom out more to leave a notebook (deliberate, not accidental).
+const EXIT_FACTOR = 0.45;
+// The graph opens at this fixed, slightly zoomed-out scale — nodes are NOT
+// fitted to a frame, so a busy graph just overflows the edges (pannable).
+const HOME_SCALE = 0.5;
 
 function shortLabel(value: string, max = 18): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -343,10 +344,9 @@ export function NotesGraphPage() {
     activeIdRef.current = activeId;
   }, [activeId]);
 
-  // Frame the graph to fit its actual node bounding box into the area *below*
-  // the floating panel, with margins — so it opens framed (never edge-to-edge,
-  // never under the panel), adapting to however big/small the graph is. The
-  // resulting home scale also drives the (content-dependent) enter/exit zooms.
+  // Open the graph at a fixed, slightly zoomed-out scale, centred on its nodes
+  // in the area *below* the floating panel. No fit-to-frame: a busy graph simply
+  // overflows the edges and you pan to explore it.
   const homeView = useCallback(() => {
     const stage = stageRef.current?.getBoundingClientRect();
     const sz = sizeRef.current;
@@ -361,34 +361,25 @@ export function NotesGraphPage() {
         );
       }
     }
-    const mX = sz.width * 0.07;
-    const mB = sz.height * 0.05;
-    const availW = sz.width - 2 * mX;
-    const availH = sz.height - reserveVB - mB;
-    let s: number;
-    let panX: number;
-    let panY: number;
-    if (pts.length && availW > 10 && availH > 10) {
+    const s = HOME_SCALE;
+    let bcx = sz.width / 2;
+    let bcy = sz.height / 2;
+    if (pts.length) {
       let minX = Infinity;
       let minY = Infinity;
       let maxX = -Infinity;
       let maxY = -Infinity;
       for (const p of pts) {
-        minX = Math.min(minX, p.x - p.r);
-        maxX = Math.max(maxX, p.x + p.r);
-        minY = Math.min(minY, p.y - p.r);
-        maxY = Math.max(maxY, p.y + p.r + 18); // labels sit below the node
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
       }
-      const bw = Math.max(1, maxX - minX);
-      const bh = Math.max(1, maxY - minY);
-      s = Math.max(HOME_MIN_FIT, Math.min(0.95, Math.min(availW / bw, availH / bh) * 0.88));
-      panX = sz.width / 2 - ((minX + maxX) / 2) * s;
-      panY = reserveVB + availH / 2 - ((minY + maxY) / 2) * s;
-    } else {
-      s = 0.7;
-      panX = (sz.width * (1 - s)) / 2;
-      panY = reserveVB + (availH - sz.height * s) / 2;
+      bcx = (minX + maxX) / 2;
+      bcy = (minY + maxY) / 2;
     }
+    const panX = sz.width / 2 - bcx * s;
+    const panY = reserveVB + (sz.height - reserveVB) / 2 - bcy * s;
     homeScaleRef.current = s;
     scaleRef.current = s;
     panRef.current = { x: panX, y: panY };
