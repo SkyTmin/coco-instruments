@@ -2016,17 +2016,6 @@ input[type='datetime-local'] {
   box-shadow:
     var(--shadow-sm),
     inset 0 1px 0 var(--glass-hi);
-  animation: chat-pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-@keyframes chat-pop {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 .chat-photos {
@@ -8643,68 +8632,63 @@ input[type='datetime-local'] {
 
 /* ===== Chat 2.0 — juicy, springy animations =============================== */
 
-/* Spring curve used everywhere below: fast in, playful overshoot, soft land */
+/* Smooth deceleration curve used across the chat — a gliding ease-out with no
+   overshoot (kept under the same var name to avoid touching every reference). */
 :root {
-  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Sending a message: bubble bounces up from the send button corner */
 .chat-bubble {
   transform-origin: bottom right;
 }
+/* Entrance for a newly-arrived message: a subtle slide + fade. No big scale or
+   overshoot — those read as janky on phones. */
 @keyframes chat-pop-juicy {
-  0% {
+  from {
     opacity: 0;
-    transform: translateY(14px) scale(0.7);
+    transform: translateY(9px) scale(0.99);
   }
-  60% {
-    opacity: 1;
-    transform: translateY(-2px) scale(1.03);
-  }
-  100% {
+  to {
     opacity: 1;
     transform: none;
   }
 }
-/* NB: fill "backwards", not "both" — a lingering fill would override the
-   is-pressing / is-selected transform transitions below. */
-.chat-scroll .chat-bubble {
-  animation: chat-pop-juicy 0.38s var(--spring) backwards;
+/* Only NEW messages animate (gated in ChatThread) so opening a chat is calm.
+   fill "backwards" so it never lingers over is-pressing / is-selected. */
+.chat-bubble--in {
+  animation: chat-pop-juicy 0.28s var(--spring) backwards;
 }
 
-/* Holding a bubble: it squeezes like a sponge until the menu pops */
+/* Holding a bubble: a gentle squeeze until the menu opens */
 .chat-bubble.is-pressing {
-  transform: scale(0.96);
-  transition: transform 0.34s var(--spring);
+  transform: scale(0.97);
+  transition: transform 0.18s var(--spring);
 }
 
-/* Long-press menu: bubble clone springs forward, menu pops with a cascade */
+/* Long-press menu: the clone settles in, the menu glides out */
 @keyframes menu-bubble-spring {
-  0% {
-    transform: scale(0.94);
+  from {
+    transform: scale(0.96);
   }
-  55% {
-    transform: scale(1.04);
-  }
-  100% {
+  to {
     transform: scale(1);
   }
 }
 .chat-bubble--clone {
-  animation: menu-bubble-spring 0.32s var(--spring) both;
+  animation: menu-bubble-spring 0.22s var(--spring) both;
 }
 @keyframes menu-spring {
-  0% {
+  from {
     opacity: 0;
-    transform: scale(0.6) translateY(-8px);
+    transform: scale(0.96) translateY(-6px);
   }
-  100% {
+  to {
     opacity: 1;
     transform: none;
   }
 }
 .chat-menu {
-  animation: menu-spring 0.3s var(--spring) both;
+  animation: menu-spring 0.2s var(--spring) both;
 }
 .chat-menu__item {
   animation: note-in 0.26s var(--spring) backwards;
@@ -8734,50 +8718,50 @@ input[type='datetime-local'] {
 
 /* Day chips drop in with a tiny bounce */
 @keyframes day-drop {
-  0% {
+  from {
     opacity: 0;
-    transform: translateY(-12px) scale(0.8);
+    transform: translateY(-6px);
   }
-  100% {
+  to {
     opacity: 1;
     transform: none;
   }
 }
 .chat-day span {
-  animation: day-drop 0.4s var(--spring) both;
+  animation: day-drop 0.26s var(--spring) both;
 }
 
 /* Pinned bar: slides down springy; the pin wiggles hello; snippets swap */
 @keyframes pin-bar-in {
-  0% {
+  from {
     opacity: 0;
-    transform: translateY(-14px) scale(0.94);
+    transform: translateY(-12px);
   }
-  100% {
+  to {
     opacity: 1;
     transform: none;
   }
 }
 .chat-pinned {
-  animation: pin-bar-in 0.38s var(--spring) backwards;
+  animation: pin-bar-in 0.28s var(--spring) backwards;
 }
 @keyframes pin-wiggle {
   0%,
   100% {
     transform: rotate(0);
   }
-  25% {
-    transform: rotate(-22deg);
+  30% {
+    transform: rotate(-12deg);
   }
-  55% {
-    transform: rotate(14deg);
+  60% {
+    transform: rotate(7deg);
   }
-  80% {
-    transform: rotate(-6deg);
+  85% {
+    transform: rotate(-3deg);
   }
 }
 .chat-pinned svg {
-  animation: pin-wiggle 0.7s ease 0.35s both;
+  animation: pin-wiggle 0.7s ease 0.3s both;
 }
 @keyframes snippet-swap {
   0% {
@@ -8799,27 +8783,24 @@ input[type='datetime-local'] {
 
 /* Selection mode: bar bounces in, dots pop, count number jumps */
 @keyframes selectbar-in {
-  0% {
+  from {
     opacity: 0;
-    transform: translateY(-16px) scale(0.92);
+    transform: translateY(-12px);
   }
-  100% {
+  to {
     opacity: 1;
     transform: none;
   }
 }
 .chat-selectbar {
-  animation: selectbar-in 0.34s var(--spring) both;
+  animation: selectbar-in 0.26s var(--spring) both;
 }
 @keyframes dot-pop {
-  0% {
+  from {
     opacity: 0;
-    transform: translateY(-50%) scale(0);
+    transform: translateY(-50%) scale(0.4);
   }
-  70% {
-    transform: translateY(-50%) scale(1.25);
-  }
-  100% {
+  to {
     opacity: 1;
     transform: translateY(-50%) scale(1);
   }
@@ -8831,8 +8812,8 @@ input[type='datetime-local'] {
   animation: dot-pop 0.3s var(--spring) both;
 }
 .chat-bubble.is-selected {
-  transform: scale(0.985) rotate(-0.4deg);
-  transition: transform 0.25s var(--spring);
+  transform: scale(0.97);
+  transition: transform 0.2s var(--spring);
 }
 .chat-selectbar__count em {
   display: inline-block;
@@ -8840,11 +8821,11 @@ input[type='datetime-local'] {
   animation: count-jump 0.32s var(--spring) both;
 }
 @keyframes count-jump {
-  0% {
-    transform: scale(1.6) translateY(-3px);
+  from {
+    transform: scale(1.3);
     color: var(--accent);
   }
-  100% {
+  to {
     transform: none;
   }
 }
@@ -8895,30 +8876,26 @@ input[type='datetime-local'] {
   100% {
     transform: rotate(0) scale(1);
   }
-  30% {
-    transform: rotate(-30deg) scale(1.18);
+  35% {
+    transform: rotate(-16deg) scale(1.1);
   }
-  65% {
-    transform: rotate(18deg) scale(1.08);
+  70% {
+    transform: rotate(9deg) scale(1.04);
   }
 }
 /* Card lands in the chat with a flourish */
 @keyframes card-land {
-  0% {
+  from {
     opacity: 0;
-    transform: translateY(18px) rotate(-2.5deg) scale(0.82);
+    transform: translateY(12px) scale(0.97);
   }
-  60% {
-    opacity: 1;
-    transform: translateY(-3px) rotate(0.8deg) scale(1.03);
-  }
-  100% {
+  to {
     opacity: 1;
     transform: none;
   }
 }
-.chat-scroll .chat-bubble--card {
-  animation: card-land 0.5s var(--spring) backwards;
+.chat-bubble--in.chat-bubble--card {
+  animation: card-land 0.32s var(--spring) backwards;
 }
 
 /* Deep-link flash: a springy ring drawn on ::after — replacing the bubble's

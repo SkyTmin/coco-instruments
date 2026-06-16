@@ -191,6 +191,17 @@ export function ChatThread({
   // yet (guards a fast double-tap from inserting the same word twice).
   const extPendingRef = useRef<Set<string>>(new Set());
 
+  // Entrance gating: only messages that arrive AFTER the first render glide in,
+  // so opening a chat shows the existing thread calmly (no wall of animations).
+  // The set persists the class, so a re-render mid-animation never cuts it short.
+  const prevMsgIds = useRef<Set<string> | null>(null);
+  const animatedIn = useRef<Set<string>>(new Set());
+  if (prevMsgIds.current) {
+    for (const mm of messages) {
+      if (!prevMsgIds.current.has(mm.id)) animatedIn.current.add(mm.id);
+    }
+  }
+
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
   const pinnedMsgs = useMemo(() => messages.filter((m) => m.pinned), [messages]);
   // Every #tag already in the note — so an extension never adds a duplicate.
@@ -238,6 +249,11 @@ export function ChatThread({
     }
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
+
+  // Remember which messages exist now, so the next render can tell new ones apart.
+  useEffect(() => {
+    prevMsgIds.current = new Set(messages.map((mm) => mm.id));
+  });
 
   const scrollToMessage = (id: string) => {
     const el = scrollRef.current?.querySelector(`[data-mid="${id}"]`);
@@ -979,7 +995,7 @@ export function ChatThread({
                 selected?.has(m.id) ? ' is-selected' : ''
               }${highlightId === m.id ? ' is-flash' : ''}${selected ? ' in-select' : ''}${
                 pressingId === m.id ? ' is-pressing' : ''
-              }`}
+              }${animatedIn.current.has(m.id) ? ' chat-bubble--in' : ''}`}
               onPointerDown={(e) => onBubbleDown(m, e)}
               onPointerMove={onBubbleMove}
               onPointerUp={onBubbleUp}
