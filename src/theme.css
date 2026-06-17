@@ -124,6 +124,14 @@ body {
   user-select: none;
 }
 
+/* telegram-ui's <AppRoot> applies a text color from the Telegram client's
+   appearance, which can differ from the app's chosen theme — that mismatch made
+   inheriting text (card titles, amounts) go light-on-light. Pin OUR token so all
+   inherited text follows the app's theme; explicitly-coloured text is unaffected. */
+.coco-root {
+  color: var(--text);
+}
+
 input,
 textarea,
 select {
@@ -136,6 +144,7 @@ select {
 .screen {
   max-width: 560px;
   margin: 0 auto;
+  color: var(--text);
   padding: calc(var(--safe-top) + var(--content-top) + 14px) 16px calc(var(--safe-bottom) + 28px);
   min-height: 100%;
 }
