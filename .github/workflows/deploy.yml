@@ -59,21 +59,28 @@ jobs:
           DOMAIN: ${{ steps.gate.outputs.domain }}
         run: |
           set -u
-          api() { curl -fsS -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" "$@"; }
-          # The token is scoped to the zone(s) it manages — pick the one whose name
-          # is a suffix of DOMAIN (works for both apex and sub-domains).
-          ZONES="$(api 'https://api.cloudflare.com/client/v4/zones?per_page=50' || true)"
-          ZID="$(printf '%s' "$ZONES" | jq -r --arg d "$DOMAIN" '.result[]? | select($d|endswith(.name)) | .id' | head -1)"
-          if [ -z "$ZID" ] || [ "$ZID" = "null" ]; then
-            echo "::warning::Cloudflare zone for $DOMAIN not found via token — flip the cloud to grey (DNS only) manually."; exit 0
+          api() { curl -sS -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" "$@"; }
+          # ACME-scoped tokens can't LIST zones (that returns 400/403), so find the
+          # zone by NAME: try DOMAIN, then each parent (app.x.ru → x.ru), keep the hit.
+          ZID=""; ZONE=""; CAND="$DOMAIN"
+          while [ -n "$CAND" ]; do
+            R="$(api "https://api.cloudflare.com/client/v4/zones?name=$CAND" || true)"
+            ZID="$(printf '%s' "$R" | jq -r '.result[0].id // empty' 2>/dev/null || true)"
+            if [ -n "$ZID" ]; then ZONE="$CAND"; break; fi
+            case "$CAND" in *.*.*) CAND="${CAND#*.}" ;; *) CAND="" ;; esac
+          done
+          if [ -z "$ZID" ]; then
+            echo "::warning::API token can't find the zone — turn the cloud GREY (DNS only) for the app's DNS record manually in the Cloudflare dashboard."
+            exit 0
           fi
           REC="$(api "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records?name=$DOMAIN" || true)"
-          RID="$(printf '%s' "$REC" | jq -r '[.result[]? | select(.type=="A" or .type=="AAAA" or .type=="CNAME")][0].id')"
-          PROXIED="$(printf '%s' "$REC" | jq -r '[.result[]? | select(.type=="A" or .type=="AAAA" or .type=="CNAME")][0].proxied')"
-          if [ -z "$RID" ] || [ "$RID" = "null" ]; then
-            echo "::warning::No A/AAAA/CNAME record for $DOMAIN — flip the cloud to grey manually."; exit 0
+          SEL='[.result[]? | select(.type=="A" or .type=="AAAA" or .type=="CNAME")][0]'
+          RID="$(printf '%s' "$REC" | jq -r "$SEL.id // empty" 2>/dev/null || true)"
+          PROXIED="$(printf '%s' "$REC" | jq -r "$SEL.proxied // empty" 2>/dev/null || true)"
+          if [ -z "$RID" ]; then
+            echo "::warning::No A/AAAA/CNAME record for $DOMAIN in zone $ZONE — flip the cloud to grey manually."; exit 0
           fi
-          echo "DNS record for $DOMAIN: proxied=$PROXIED"
+          echo "Zone $ZONE: record $DOMAIN proxied=$PROXIED"
           if [ "$PROXIED" = "false" ]; then echo "Already DNS-only (grey) — nothing to do."; exit 0; fi
           api -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records/$RID" \
             --data '{"proxied":false}' | jq -r '"==> now proxied=" + (.result.proxied|tostring) + " (DNS-only, direct to the VPS)"'
