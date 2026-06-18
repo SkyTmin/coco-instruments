@@ -398,7 +398,7 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
   }, [hydrated, rawInitData, reminderPrefs, expenses, recurring]);
 
   return (
-    <AppRoot appearance={isDark ? 'dark' : 'light'} platform={platform} className="coco-root">
+    <AppRoot appearance={isDark ? 'dark' : 'light'} platform={platform}>
       <HashRouter>
         <NavigationController />
         <SwipeBackController />
