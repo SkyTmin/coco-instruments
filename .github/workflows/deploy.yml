@@ -44,6 +44,40 @@ jobs:
           if [ -n "$BOT_TOKEN" ]; then echo "has_bot=true" >> "$GITHUB_OUTPUT"; else echo "has_bot=false" >> "$GITHUB_OUTPUT"; fi
           if [ -n "$CF_API_TOKEN" ]; then echo "has_cf=true" >> "$GITHUB_OUTPUT"; else echo "has_cf=false" >> "$GITHUB_OUTPUT"; fi
 
+      # Russia (since 2025-06) throttles Cloudflare's proxy to ~16 KB per asset,
+      # so a Cloudflare-fronted site never finishes loading there. Take the domain
+      # OUT of the proxy (grey-cloud / "DNS only") so users connect STRAIGHT to the
+      # VPS IP — which, for a Russian VPS, isn't throttled like Cloudflare is.
+      # Caddy keeps serving a real Let's Encrypt cert, so HTTPS stays valid.
+      # Best-effort + idempotent: a token/zone problem only prints a warning.
+      - name: Take domain out of the Cloudflare proxy (DNS-only, so Russia can reach it)
+        id: greycloud
+        if: steps.gate.outputs.ready == 'true' && steps.gate.outputs.has_cf == 'true'
+        continue-on-error: true
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          DOMAIN: ${{ steps.gate.outputs.domain }}
+        run: |
+          set -u
+          api() { curl -fsS -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" "$@"; }
+          # The token is scoped to the zone(s) it manages — pick the one whose name
+          # is a suffix of DOMAIN (works for both apex and sub-domains).
+          ZONES="$(api 'https://api.cloudflare.com/client/v4/zones?per_page=50' || true)"
+          ZID="$(printf '%s' "$ZONES" | jq -r --arg d "$DOMAIN" '.result[]? | select($d|endswith(.name)) | .id' | head -1)"
+          if [ -z "$ZID" ] || [ "$ZID" = "null" ]; then
+            echo "::warning::Cloudflare zone for $DOMAIN not found via token — flip the cloud to grey (DNS only) manually."; exit 0
+          fi
+          REC="$(api "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records?name=$DOMAIN" || true)"
+          RID="$(printf '%s' "$REC" | jq -r '[.result[]? | select(.type=="A" or .type=="AAAA" or .type=="CNAME")][0].id')"
+          PROXIED="$(printf '%s' "$REC" | jq -r '[.result[]? | select(.type=="A" or .type=="AAAA" or .type=="CNAME")][0].proxied')"
+          if [ -z "$RID" ] || [ "$RID" = "null" ]; then
+            echo "::warning::No A/AAAA/CNAME record for $DOMAIN — flip the cloud to grey manually."; exit 0
+          fi
+          echo "DNS record for $DOMAIN: proxied=$PROXIED"
+          if [ "$PROXIED" = "false" ]; then echo "Already DNS-only (grey) — nothing to do."; exit 0; fi
+          api -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records/$RID" \
+            --data '{"proxied":false}' | jq -r '"==> now proxied=" + (.result.proxied|tostring) + " (DNS-only, direct to the VPS)"'
+
       # The VPS can't reach caddyserver.com, so fetch the Caddy build that has the
       # Cloudflare DNS plugin here (the runner has open internet) and ship it over.
       # Both steps are best-effort: if either fails, setup.sh just keeps the
