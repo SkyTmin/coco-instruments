@@ -242,6 +242,36 @@ select {
 
 .route-fallback {
   min-height: 70vh;
+  display: grid;
+  place-items: center;
+}
+/* Only shows if a route load is slow: it fades in after 160ms, so a prefetched
+   (instant) route never flashes a spinner. */
+.route-spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid var(--hairline);
+  border-top-color: var(--accent);
+  opacity: 0;
+  animation:
+    route-spin 0.7s linear infinite,
+    route-fade 0.18s ease 0.16s forwards;
+}
+@keyframes route-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes route-fade {
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-spinner {
+    animation: route-fade 0.18s ease 0.16s forwards;
+  }
 }
 .stack {
   display: flex;

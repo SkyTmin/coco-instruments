@@ -173,6 +173,25 @@ const NotificationSettingsPage = lazy(() =>
   })),
 );
 
+// Warm the heaviest / most-visited section chunks during idle time, right after
+// the home screen is interactive — so the first open of a section (e.g. the
+// graph) is instant instead of waiting on a network fetch + parse. Same module
+// specifiers as the lazy() defs above → the module/browser cache is shared, so
+// this never double-downloads.
+let sectionsPrefetched = false;
+function prefetchSections() {
+  if (sectionsPrefetched) return;
+  sectionsPrefetched = true;
+  const warm = (load: () => Promise<unknown>) => void load().catch(() => {});
+  warm(() => import('@/pages/NotesPage'));
+  warm(() => import('@/pages/ChatNotePage'));
+  warm(() => import('@/pages/NotesGraphPage'));
+  warm(() => import('@/pages/finance/FinanceDashboardPage'));
+  warm(() => import('@/pages/people/PeopleDashboardPage'));
+  warm(() => import('@/pages/clothing/ClothingDashboardPage'));
+  warm(() => import('@/pages/CalculatorPage'));
+}
+
 /** App-wide keyboard support (desktop Telegram / browser):
  *  Esc — blur the focused field → close the topmost sheet → go back;
  *  Enter/Space — activate focused role="button" elements (so Tab works everywhere). */
@@ -378,6 +397,15 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
     }
   }, []);
 
+  // Prefetch section chunks once the browser is idle (after first paint), so the
+  // first open of a section is snappy. Falls back to a timer on engines without
+  // requestIdleCallback (older iOS WebKit).
+  useEffect(() => {
+    const ric = window.requestIdleCallback;
+    if (ric) ric(prefetchSections, { timeout: 2500 });
+    else window.setTimeout(prefetchSections, 1200);
+  }, []);
+
   // Let app data persist on the server (must run before hydrate's first read).
   useEffect(() => {
     if (webMode) setWebAuth();
@@ -405,7 +433,13 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
         <WheelScrollController />
         <KeyboardController />
         <CropProvider>
-          <Suspense fallback={<div className="route-fallback" aria-hidden />}>
+          <Suspense
+            fallback={
+              <div className="route-fallback" aria-hidden>
+                <div className="route-spinner" />
+              </div>
+            }
+          >
             <Routes>
               <Route element={<SectionBoundary />}>
                 <Route path="/" element={<HomePage />} />
