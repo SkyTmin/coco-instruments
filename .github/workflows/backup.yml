@@ -38,13 +38,21 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           SSHPASS: ${{ secrets.VPS_PASSWORD }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
         run: |
           set -euo pipefail
-          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
           HOSTSPEC="${VPS_USER:-root}@${VPS_HOST}"
-          vps() { sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=25 "$HOSTSPEC" "$@"; }
+          # Prefer key-based auth (secret VPS_SSH_KEY); fall back to the password.
+          if [ -n "${VPS_SSH_KEY:-}" ]; then
+            install -m 600 /dev/null key
+            printf '%s\n' "$VPS_SSH_KEY" > key
+            vps() { ssh -i key -o StrictHostKeyChecking=no -o ConnectTimeout=25 "$HOSTSPEC" "$@"; }
+          else
+            sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+            vps() { sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=25 "$HOSTSPEC" "$@"; }
+          fi
 
           # 1) make a fresh backup on the VPS, then read the admin id and archive out
           vps 'bash /opt/coco/deploy/backup.sh >/dev/null 2>&1 || true; cat /var/lib/coco/admin.json 2>/dev/null || true' > admin.json || true

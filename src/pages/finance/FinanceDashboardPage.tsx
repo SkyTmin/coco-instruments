@@ -10,9 +10,17 @@ import {
   Skeleton,
   StatTile,
 } from '@/components/ui';
-import { IconBell, IconCalendar, IconList, IconTarget, IconWallet } from '@/components/icons';
+import {
+  IconBell,
+  IconCalendar,
+  IconChart,
+  IconList,
+  IconTarget,
+  IconWallet,
+} from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { collectPayments, computeObligation, computeRecurring } from '@/lib/finance-calc';
+import { totalMonthlyIncome } from '@/lib/income';
 import { parseISO, toISO, todayISO } from '@/lib/date';
 import { formatDate, formatRUB } from '@/lib/format';
 import { tapLight } from '@/lib/haptics';
@@ -71,8 +79,11 @@ export function FinanceDashboardPage() {
   const savings = useFinanceStore((s) => s.savings);
   const recurring = useFinanceStore((s) => s.recurring);
   const lists = useFinanceStore((s) => s.lists);
+  const incomeSources = useFinanceStore((s) => s.incomeSources);
   const hydrated = useFinanceStore((s) => s.hydrated);
   const [sheet, setSheet] = useState<null | 'monthly' | 'remaining'>(null);
+  const incomeCount = incomeSources.length;
+  const monthlyIncomeTotal = useMemo(() => totalMonthlyIncome(incomeSources), [incomeSources]);
 
   const {
     monthlyTotal,
@@ -336,6 +347,22 @@ export function FinanceDashboardPage() {
         )}
 
         <div className="section-label">Разделы</div>
+        <SectionCard
+          icon={<IconChart />}
+          title="Траты и доходы"
+          sub="Дневник расходов и доходов по категориям"
+          onClick={() => go('/finance/transactions')}
+        />
+        <SectionCard
+          icon={<IconWallet />}
+          title="Доходы"
+          sub={
+            incomeCount
+              ? `${incomeCount} источник${incomeCount === 1 ? '' : 'ов'} • ≈ ${formatRUB(monthlyIncomeTotal)}/мес`
+              : 'Оклад, вахта, смены, разовый доход'
+          }
+          onClick={() => go('/finance/income')}
+        />
         <SectionCard
           icon={<IconWallet />}
           title="Мои расходы"

@@ -6,6 +6,7 @@ import {
   IconGear,
   IconHeart,
   IconNotes,
+  IconSearch,
   IconShirt,
   IconWallet,
 } from '@/components/icons';
@@ -235,16 +236,21 @@ export function HomePage() {
       title={greeting()}
       subtitle={dateFmt.format(new Date())}
       action={
-        <button
-          className="icon-btn"
-          onClick={() => {
-            tapLight();
-            setDataSheet(true);
-          }}
-          aria-label="Настройки"
-        >
-          <IconGear size={21} />
-        </button>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="icon-btn" onClick={() => go('/search')} aria-label="Поиск">
+            <IconSearch size={20} />
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => {
+              tapLight();
+              setDataSheet(true);
+            }}
+            aria-label="Настройки"
+          >
+            <IconGear size={21} />
+          </button>
+        </div>
       }
     >
       <div className="stack home-v2">

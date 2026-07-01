@@ -43,6 +43,62 @@ describe('auth', () => {
     const res = await request(app).post('/api/store/set').send({ key: 'a', value: 1 });
     expect(res.status).toBe(401);
   });
+
+  it('rejects stale initData older than the max age (replay defense)', async () => {
+    const stale = sign(
+      { user: { id: USER_ID, first_name: 'Test' } },
+      BOT_TOKEN,
+      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+    );
+    const res = await request(app)
+      .post('/api/store/get')
+      .send({ initData: stale, keys: ['a'] });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('backup ownership', () => {
+  const adminFile = () => path.join(dataRoot, 'admin.json');
+  const clearAdmin = () => {
+    try {
+      fs.unlinkSync(adminFile());
+    } catch {
+      /* ignore */
+    }
+  };
+
+  it('refuses backup requests when no owner is configured', async () => {
+    clearAdmin();
+    const res = await request(app)
+      .post('/api/backup/request')
+      .send({ initData: initDataFor(USER_ID) });
+    expect(res.status).toBe(409);
+    // The request must NOT have claimed ownership as a side effect.
+    expect(fs.existsSync(adminFile())).toBe(false);
+  });
+
+  it('refuses backup requests from a non-owner', async () => {
+    fs.writeFileSync(adminFile(), JSON.stringify({ chatId: '123456', at: Date.now() }));
+    const res = await request(app)
+      .post('/api/backup/request')
+      .send({ initData: initDataFor(USER_ID) });
+    expect(res.status).toBe(403);
+    clearAdmin();
+  });
+
+  it('reports owner=false for a non-owner and true for the owner', async () => {
+    fs.writeFileSync(adminFile(), JSON.stringify({ chatId: String(USER_ID), at: Date.now() }));
+    const owner = await request(app)
+      .post('/api/backup/status')
+      .send({ initData: initDataFor(USER_ID) });
+    expect(owner.body).toEqual({ owner: true, configured: true });
+
+    const other = await request(app)
+      .post('/api/backup/status')
+      .send({ initData: initDataFor(4242) });
+    expect(other.body).toEqual({ owner: false, configured: true });
+    clearAdmin();
+  });
 });
 
 describe('store', () => {
@@ -130,10 +186,40 @@ describe('attachments', () => {
       .post('/api/notes/attachments')
       .send({
         initData: initDataFor(),
-        name: 'big.bin',
-        dataUrl: `data:application/octet-stream;base64,${big}`,
+        name: 'big.png',
+        type: 'image/png',
+        dataUrl: `data:image/png;base64,${big}`,
       });
     expect(res.status).toBe(413);
+  });
+
+  it('rejects non-image types (blocks html/svg → stored XSS)', async () => {
+    for (const type of ['text/html', 'image/svg+xml', 'application/octet-stream']) {
+      const res = await request(app)
+        .post('/api/notes/attachments')
+        .send({
+          initData: initDataFor(),
+          name: 'evil.html',
+          type,
+          dataUrl: `data:${type};base64,${TINY_PNG_B64}`,
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('unsupported_type');
+    }
+  });
+
+  it('stores under an image extension regardless of the filename', async () => {
+    const res = await request(app)
+      .post('/api/notes/attachments')
+      .send({
+        initData: initDataFor(),
+        name: 'x.html', // attacker-chosen extension must be ignored
+        type: 'image/png',
+        dataUrl: `data:image/png;base64,${TINY_PNG_B64}`,
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.url).toMatch(/\.png$/);
+    expect(res.body.url).not.toMatch(/\.html/);
   });
 });
 

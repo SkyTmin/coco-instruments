@@ -32,6 +32,9 @@ import { SyncIndicator } from '@/components/SyncIndicator';
 import { ToastHost } from '@/components/Toast';
 
 // Per-section route chunks — keep the initial bundle small; pages load on demand.
+const SearchPage = lazy(() =>
+  import('@/pages/SearchPage').then((m) => ({ default: m.SearchPage })),
+);
 const ClothingDashboardPage = lazy(() =>
   import('@/pages/clothing/ClothingDashboardPage').then((m) => ({
     default: m.ClothingDashboardPage,
@@ -163,6 +166,24 @@ const ListFormPage = lazy(() =>
 );
 const ListDetailPage = lazy(() =>
   import('@/pages/finance/ListDetailPage').then((m) => ({ default: m.ListDetailPage })),
+);
+const TransactionsPage = lazy(() =>
+  import('@/pages/finance/TransactionsPage').then((m) => ({ default: m.TransactionsPage })),
+);
+const TransactionFormPage = lazy(() =>
+  import('@/pages/finance/TransactionFormPage').then((m) => ({ default: m.TransactionFormPage })),
+);
+const IncomeListPage = lazy(() =>
+  import('@/pages/finance/IncomeListPage').then((m) => ({ default: m.IncomeListPage })),
+);
+const IncomeFormPage = lazy(() =>
+  import('@/pages/finance/IncomeFormPage').then((m) => ({ default: m.IncomeFormPage })),
+);
+const IncomeDetailPage = lazy(() =>
+  import('@/pages/finance/IncomeDetailPage').then((m) => ({ default: m.IncomeDetailPage })),
+);
+const FinanceAnalyticsPage = lazy(() =>
+  import('@/pages/finance/FinanceAnalyticsPage').then((m) => ({ default: m.FinanceAnalyticsPage })),
 );
 const PaymentsCalendarPage = lazy(() =>
   import('@/pages/finance/PaymentsCalendarPage').then((m) => ({ default: m.PaymentsCalendarPage })),
@@ -443,6 +464,7 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
             <Routes>
               <Route element={<SectionBoundary />}>
                 <Route path="/" element={<HomePage />} />
+                <Route path="/search" element={<SearchPage />} />
                 <Route path="/finance" element={<FinanceDashboardPage />} />
                 <Route path="/finance/calendar" element={<PaymentsCalendarPage />} />
                 <Route path="/finance/settings" element={<NotificationSettingsPage />} />
@@ -461,6 +483,14 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
                 <Route path="/finance/savings/new" element={<SavingsFormPage />} />
                 <Route path="/finance/savings/:id" element={<SavingsDetailPage />} />
                 <Route path="/finance/savings/:id/edit" element={<SavingsFormPage />} />
+                <Route path="/finance/transactions" element={<TransactionsPage />} />
+                <Route path="/finance/transactions/new" element={<TransactionFormPage />} />
+                <Route path="/finance/transactions/:id/edit" element={<TransactionFormPage />} />
+                <Route path="/finance/income" element={<IncomeListPage />} />
+                <Route path="/finance/income/new" element={<IncomeFormPage />} />
+                <Route path="/finance/income/:id" element={<IncomeDetailPage />} />
+                <Route path="/finance/income/:id/edit" element={<IncomeFormPage />} />
+                <Route path="/finance/analytics" element={<FinanceAnalyticsPage />} />
                 <Route path="/notes" element={<NotesPage />} />
                 <Route path="/notes/new" element={<ChatNotePage />} />
                 <Route path="/notes/graph" element={<NotesGraphPage />} />

@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
   recurring: 'finance.recurring',
   lists: 'finance.lists',
   reminders: 'finance.reminders',
+  transactions: 'finance.transactions',
+  income: 'finance.income',
   notes: 'notes.items',
   people: 'people.items',
   calculator: 'calculator.items',

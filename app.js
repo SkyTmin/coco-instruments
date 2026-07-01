@@ -107,13 +107,24 @@ function safeName(name = 'file') {
   return cleaned || 'file';
 }
 
-function extensionFromType(type = '') {
-  if (type === 'image/jpeg') return '.jpg';
-  if (type === 'image/png') return '.png';
-  if (type === 'image/webp') return '.webp';
-  if (type === 'image/gif') return '.gif';
-  if (type === 'application/pdf') return '.pdf';
-  return '';
+// Allowlist of uploadable content types → the extension we store them under.
+// Only raster images: the file is served from our own origin, so allowing
+// text/html or image/svg+xml would let an attacker host a script on the app
+// domain (stored XSS). The extension is derived from THIS map (never from the
+// user-supplied filename), and the file is served with a matching Content-Type.
+const UPLOAD_TYPE_EXT = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/heic': '.heic',
+  'image/heif': '.heif',
+};
+
+/** Normalise a content-type header to its bare lowercase mime (drops params). */
+function normalizeType(type = '') {
+  return String(type).toLowerCase().split(';')[0].trim();
 }
 
 app.post('/api/notes/attachments', (req, res) => {
@@ -137,15 +148,24 @@ app.post('/api/notes/attachments', (req, res) => {
 
   const contentType =
     typeof type === 'string' && type ? type : match[1] || 'application/octet-stream';
+  // Extension comes from our allowlist, keyed by the declared content-type —
+  // NOT from the user filename. Anything that isn't a known raster image is
+  // rejected outright (blocks .html/.svg → stored XSS on our origin).
+  const ext = UPLOAD_TYPE_EXT[normalizeType(contentType)];
+  if (!ext) {
+    res.status(400).json({ error: 'unsupported_type', allowed: Object.keys(UPLOAD_TYPE_EXT) });
+    return;
+  }
+
   const buffer = Buffer.from(match[3], 'base64');
   if (!buffer.length || buffer.length > MAX_UPLOAD_BYTES) {
     res.status(413).json({ error: 'file_too_large', maxBytes: MAX_UPLOAD_BYTES });
     return;
   }
 
-  const ext = path.extname(name) || extensionFromType(contentType);
+  const label = safeName(path.basename(name).replace(/\.[^.]+$/, ''));
   const id = crypto.randomUUID();
-  const fileName = `${id}-${safeName(path.basename(name, ext))}${ext}`;
+  const fileName = `${id}-${label}${ext}`;
   writeFileAtomic(path.join(UPLOAD_DIR, fileName), buffer);
 
   res.json({
@@ -162,6 +182,11 @@ app.use(
   express.static(UPLOAD_DIR, {
     immutable: true,
     maxAge: '365d',
+    // Only image extensions ever reach disk (see the allowlist above), but be
+    // explicit: never let the browser sniff a stored file into a script type.
+    setHeaders(res) {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    },
   }),
 );
 
@@ -199,6 +224,11 @@ const GH_REF = process.env.GH_REF || 'prod';
 let lastDispatch = 0;
 let lastDispatchInfo = null;
 
+// Max accepted age of a Telegram initData string. Bounding it means a captured
+// initData (leaked via logs, a shared device, etc.) stops authenticating after
+// a day, instead of forever. The Mini App gets fresh initData on each launch.
+const INITDATA_MAX_AGE_SEC = 24 * 60 * 60;
+
 /**
  * Authenticate a reminder request using Telegram's official validator (handles
  * the hash + signature correctly). Sets a specific error and returns null on failure.
@@ -209,7 +239,7 @@ function authReminder(raw, res) {
     return null;
   }
   try {
-    validateInitDataSig(raw, BOT_TOKEN, { expiresIn: 0 });
+    validateInitDataSig(raw, BOT_TOKEN, { expiresIn: INITDATA_MAX_AGE_SEC });
   } catch (e) {
     res.status(401).json({ error: 'bad_init_data', detail: String(e?.message || e).slice(0, 120) });
     return null;
@@ -307,7 +337,13 @@ function authUser(req, res) {
   return null;
 }
 
+// Client IP for rate-limiting unauthenticated endpoints.
+const clientIp = (req) => req.ip || req.socket?.remoteAddress || 'unknown';
+
 app.post('/api/auth/telegram', (req, res) => {
+  if (!rateLimit(`auth-tg:${clientIp(req)}`, 20, 60_000)) {
+    return res.status(429).json({ error: 'rate_limited' });
+  }
   const user = verifyTelegramLogin(req.body);
   if (!user) {
     res.status(401).json({ error: 'bad_login' });
@@ -335,7 +371,10 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
+  );
   res.json({ ok: true });
 });
 
@@ -351,7 +390,10 @@ function pruneLogins() {
   for (const [t, v] of pendingLogins) if (now - v.createdAt > LOGIN_TTL_MS) pendingLogins.delete(t);
 }
 
-app.post('/api/auth/start', (_req, res) => {
+app.post('/api/auth/start', (req, res) => {
+  if (!rateLimit(`auth-start:${clientIp(req)}`, 20, 60_000)) {
+    return res.status(429).json({ error: 'rate_limited' });
+  }
   if (!BOT_TOKEN) {
     res.status(503).json({ error: 'server_no_token' });
     return;
@@ -363,6 +405,9 @@ app.post('/api/auth/start', (_req, res) => {
 });
 
 app.get('/api/auth/poll', (req, res) => {
+  if (!rateLimit(`auth-poll:${clientIp(req)}`, 90, 60_000)) {
+    return res.status(429).json({ error: 'rate_limited' });
+  }
   pruneLogins();
   const token = String(req.query.token || '');
   const entry = pendingLogins.get(token);
@@ -659,8 +704,12 @@ app.get('/api/reminders/health', (req, res) => {
 // can't reach Telegram outbound, so we answer the webhook with a method and let
 // Telegram FETCH the file from our public domain).
 const backupTokens = new Map();
-function publicBase(req) {
-  return process.env.PUBLIC_URL || `https://${req.get('host')}`;
+// The backup archive is fetched by Telegram from this base URL, so it must be a
+// trusted, configured value — never the client-controlled Host header (a spoofed
+// Host could point Telegram at an attacker origin). Returns null if unset.
+function publicBase() {
+  const url = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  return url || null;
 }
 
 // Periodic sweep so the in-memory maps can't grow forever: drop rate-limit
@@ -721,11 +770,18 @@ app.post('/api/bot/webhook', async (req, res) => {
   if (/^\/backup\b/.test(text)) {
     let admin = getAdminChatId();
     if (!admin) {
-      setAdminChatId(chatId); // personal bot: the first /backup claims the owner
+      // Personal-bot bootstrap: the first /backup claims ownership — but only
+      // when no owner is configured. Set ADMIN_CHAT_ID to disable claiming on a
+      // bot that more than one person can message. The web app can never claim.
+      setAdminChatId(chatId);
       admin = String(chatId);
     }
     if (String(admin) !== String(chatId)) {
       return reply('Бэкапы доступны только администратору бота.');
+    }
+    const base = publicBase();
+    if (!base) {
+      return reply('Бэкап не настроен: не задан PUBLIC_URL на сервере.');
     }
     try {
       const archive = await createBackupArchive();
@@ -736,7 +792,7 @@ app.post('/api/bot/webhook', async (req, res) => {
       return res.json({
         method: 'sendDocument',
         chat_id: chatId,
-        document: `${publicBase(req)}/api/backup/file/${token}`,
+        document: `${base}/api/backup/file/${token}`,
         caption: `🗄 Резервная копия Coco · ${sizeMb} МБ · ${new Date().toLocaleString('ru-RU')}`,
       });
     } catch (e) {
@@ -949,18 +1005,36 @@ app.post('/api/backup/run', async (req, res) => {
 app.post('/api/backup/request', async (req, res) => {
   const user = authUser(req, res);
   if (!user) return;
-  setAdminChatId(user.id);
+  if (!rateLimit(`backup-req:${user.id}`, 6, 60_000)) {
+    return res.status(429).json({ error: 'rate_limited' });
+  }
+  // A backup archive bundles EVERY user's data, so it may only ever be sent to
+  // the configured owner. Previously this endpoint claimed ownership for the
+  // caller unconditionally — any logged-in user could redirect the whole
+  // archive to themselves. Ownership is now bootstrapped only via the bot
+  // (send /backup once, or set ADMIN_CHAT_ID); the web app can never claim it.
+  const admin = getAdminChatId();
+  if (!admin) {
+    return res.status(409).json({ error: 'owner_not_configured' });
+  }
+  if (String(admin) !== String(user.id)) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
   const dispatched = await triggerBackup();
   res.json({ ok: true, dispatched: dispatched.ok, error: dispatched.error });
 });
 
 // Is this user the backup owner? (Used to show the backup control only to the
-// owner.) True for the configured admin, or for anyone while none is set yet.
+// owner.) Owner = the configured admin. When none is configured yet, nobody is
+// the owner (bootstrap happens through the bot's /backup command).
 app.post('/api/backup/status', (req, res) => {
   const user = authUser(req, res);
   if (!user) return;
+  if (!rateLimit(`backup-stat:${user.id}`, 30, 60_000)) {
+    return res.status(429).json({ error: 'rate_limited' });
+  }
   const admin = getAdminChatId();
-  res.json({ owner: !admin || String(admin) === String(user.id), configured: !!admin });
+  res.json({ owner: !!admin && String(admin) === String(user.id), configured: !!admin });
 });
 
 // Client error reports → rotating errors.log (ships in backups). Rate-limited.
@@ -971,7 +1045,7 @@ app.post('/api/log', (req, res) => {
   let uid = '';
   if (initData && BOT_TOKEN) {
     try {
-      validateInitDataSig(initData, BOT_TOKEN, { expiresIn: 0 });
+      validateInitDataSig(initData, BOT_TOKEN, { expiresIn: INITDATA_MAX_AGE_SEC });
       uid = String(JSON.parse(new URLSearchParams(initData).get('user') || 'null')?.id || '');
     } catch {
       /* unauthenticated report — still logged */

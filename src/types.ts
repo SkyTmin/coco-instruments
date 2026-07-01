@@ -203,6 +203,110 @@ export interface FinanceRemindersBlob {
   prefs: ReminderPrefs;
 }
 
+// ---- Cashflow: day-to-day transactions (spending + income) ----------------
+
+/** Direction of a money movement. */
+export type TxDirection = 'expense' | 'income';
+
+/**
+ * A single recorded movement of money — a purchase, a salary payout, a refund.
+ * Unlike an Obligation (a debt paid off over a schedule), a Transaction is a
+ * one-off fact: "on this date, this much money moved, in this category".
+ */
+export interface Transaction {
+  id: string;
+  direction: TxDirection;
+  /** Always positive, in RUB. `direction` carries the sign. */
+  amount: number;
+  /** ISO 'YYYY-MM-DD'. */
+  date: string;
+  /** Category id from the catalog (see src/lib/categories.ts). */
+  category: string;
+  note?: string;
+  /** Optional grouping list (reuses ExpenseList, e.g. "Свадьба"). */
+  listId?: string;
+  /** Set when this row was generated from an income source's payout. */
+  incomeSourceId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FinanceTransactionsBlob {
+  version: 1;
+  items: Transaction[];
+}
+
+// ---- Income sources (Russian pay schemes: оклад, вахта, смены) ------------
+
+/**
+ * How an income source pays out.
+ * - salary:    monthly оклад split into аванс + окончательный расчёт (ТК ст.136).
+ * - vahta:     rotational work (вахта) — on/off day cycle + вахтовая надбавка
+ *              + районный коэффициент / северная надбавка.
+ * - shift:     shift schedules (2/2, 3/3, сутки-трое) — rate × shifts, +ночные.
+ * - recurring: a fixed periodic income (аренда, пенсия) — like RecurringPayment.
+ * - oneoff:    a single expected payout (фриланс, продажа, подарок).
+ */
+export type IncomeScheme = 'salary' | 'vahta' | 'shift' | 'recurring' | 'oneoff';
+
+export interface IncomeSource {
+  id: string;
+  name: string;
+  scheme: IncomeScheme;
+
+  // salary — оклад «на руки» за месяц + распределение по двум датам
+  /** Net monthly pay, RUB. */
+  monthlyNet?: number;
+  /** Day of month the аванс lands (1..31). */
+  advanceDay?: number;
+  /** Day of month the окончательный расчёт lands (1..31, usually next month). */
+  salaryDay?: number;
+  /** Share of monthly pay paid as аванс, 0..100 (default ~45%). */
+  advancePercent?: number;
+
+  // vahta / shift — ставки и график
+  /** Дневная ставка, RUB (vahta). */
+  dayRate?: number;
+  /** Часовая ставка, RUB (shift). */
+  hourRate?: number;
+  /** Рабочих дней в цикле (напр. 15, 30, 2, 3). */
+  onDays?: number;
+  /** Дней отдыха/межвахты в цикле (напр. 15, 30, 2, 3). */
+  offDays?: number;
+  /** Длина смены в часах (12, 24…). */
+  shiftHours?: number;
+  /** Вахтовая надбавка, RUB за календарный день (необлагаемая до 700 ₽/день, РФ). */
+  vahtaAllowancePerDay?: number;
+  /** Районный коэффициент (напр. 1.15, 1.7) — множитель на «тело», не на надбавку. */
+  districtCoeff?: number;
+  /** Северная надбавка, % (0..100). */
+  northPercent?: number;
+  /** Доплата за ночные часы, % (по умолчанию 20). */
+  nightBonusPercent?: number;
+
+  // recurring — интервал как у RecurringPayment
+  intervalCount?: number;
+  intervalUnit?: IntervalUnit;
+
+  // общие
+  /** Anchor date — start of the cycle / date of a one-off payout. */
+  startDate: string;
+  /** Temporarily excluded from forecasts & totals. */
+  paused?: boolean;
+  note?: string;
+  /** Notify before/at each payout (default off). */
+  notify?: boolean;
+  notifyLeads?: number[];
+  notifyTime?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FinanceIncomeBlob {
+  version: 1;
+  items: IncomeSource[];
+}
+
 // ---- Notes ----------------------------------------------------------------
 
 /** A markdown-like note with Obsidian-style [[wiki links]]. */

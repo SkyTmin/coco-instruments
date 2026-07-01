@@ -10,6 +10,10 @@ import type {
   FinanceRecurringBlob,
   FinanceRemindersBlob,
   FinanceSavingsBlob,
+  FinanceTransactionsBlob,
+  FinanceIncomeBlob,
+  IncomeSource,
+  Transaction,
   Collection,
   InspirationImage,
   Note,
@@ -72,6 +76,10 @@ export type ObligationDraft = Omit<
 export type SavingsDraft = Omit<SavingsGoal, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type RecurringDraft = Omit<RecurringPayment, 'id' | 'createdAt' | 'updatedAt'>;
+
+export type TransactionDraft = Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>;
+
+export type IncomeSourceDraft = Omit<IncomeSource, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type NoteDraft = Omit<Note, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -150,6 +158,8 @@ const writeExpenses = makePersister<FinanceExpensesBlob>(STORAGE_KEYS.expenses);
 const writeSavings = makePersister<FinanceSavingsBlob>(STORAGE_KEYS.savings);
 const writeRecurring = makePersister<FinanceRecurringBlob>(STORAGE_KEYS.recurring);
 const writeLists = makePersister<FinanceListsBlob>(STORAGE_KEYS.lists);
+const writeTransactions = makePersister<FinanceTransactionsBlob>(STORAGE_KEYS.transactions);
+const writeIncome = makePersister<FinanceIncomeBlob>(STORAGE_KEYS.income);
 const writeNotes = makePersister<NotesBlob>(STORAGE_KEYS.notes);
 const writePeople = makePersister<PeopleBlob>(STORAGE_KEYS.people);
 const writeCalculator = makePersister<CalculatorBlob>(STORAGE_KEYS.calculator);
@@ -166,6 +176,8 @@ const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, ite
 const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, items });
 const persistRecurring = (items: RecurringPayment[]) => writeRecurring({ version: 1, items });
 const persistLists = (items: ExpenseList[]) => writeLists({ version: 1, items });
+const persistTransactions = (items: Transaction[]) => writeTransactions({ version: 1, items });
+const persistIncome = (items: IncomeSource[]) => writeIncome({ version: 1, items });
 const persistNotes = (items: Note[], lists: NoteList[], tagPages: TagPage[]) =>
   writeNotes({ version: 1, items, lists, tagPages });
 const persistPeople = (blob: Omit<PeopleBlob, 'version'>) => writePeople({ version: 1, ...blob });
@@ -186,6 +198,8 @@ interface ExportData {
   savings?: SavingsGoal[];
   recurring?: RecurringPayment[];
   lists?: ExpenseList[];
+  transactions?: Transaction[];
+  income?: IncomeSource[];
   notes?: Note[];
   noteLists?: NoteList[];
   tagPages?: TagPage[];
@@ -212,6 +226,8 @@ interface FinanceState {
   savings: SavingsGoal[];
   recurring: RecurringPayment[];
   lists: ExpenseList[];
+  transactions: Transaction[];
+  incomeSources: IncomeSource[];
   notes: Note[];
   noteLists: NoteList[];
   tagPages: TagPage[];
@@ -255,6 +271,16 @@ interface FinanceState {
   updateRecurring: (id: string, patch: Partial<RecurringPayment>) => void;
   removeRecurring: (id: string) => void;
   getRecurring: (id: string) => RecurringPayment | undefined;
+
+  addTransaction: (draft: TransactionDraft) => Transaction;
+  updateTransaction: (id: string, patch: Partial<Transaction>) => void;
+  removeTransaction: (id: string) => void;
+  getTransaction: (id: string) => Transaction | undefined;
+
+  addIncomeSource: (draft: IncomeSourceDraft) => IncomeSource;
+  updateIncomeSource: (id: string, patch: Partial<IncomeSource>) => void;
+  removeIncomeSource: (id: string) => void;
+  getIncomeSource: (id: string) => IncomeSource | undefined;
 
   addList: (draft: ListDraft) => ExpenseList;
   updateList: (id: string, patch: Partial<ExpenseList>) => void;
@@ -390,6 +416,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   savings: [],
   recurring: [],
   lists: [],
+  transactions: [],
+  incomeSources: [],
   notes: [],
   noteLists: [],
   tagPages: [],
@@ -420,6 +448,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       sav,
       rec,
       lists,
+      txns,
+      income,
       notes,
       people,
       calc,
@@ -436,6 +466,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
       storage.get<FinanceRecurringBlob>(STORAGE_KEYS.recurring),
       storage.get<FinanceListsBlob>(STORAGE_KEYS.lists),
+      storage.get<FinanceTransactionsBlob>(STORAGE_KEYS.transactions),
+      storage.get<FinanceIncomeBlob>(STORAGE_KEYS.income),
       storage.get<NotesBlob>(STORAGE_KEYS.notes),
       storage.get<PeopleBlob>(STORAGE_KEYS.people),
       storage.get<CalculatorBlob>(STORAGE_KEYS.calculator),
@@ -453,6 +485,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       savings: sav?.items ?? [],
       recurring: rec?.items ?? [],
       lists: lists?.items ?? [],
+      transactions: txns?.items ?? [],
+      incomeSources: income?.items ?? [],
       notes: notes?.items ?? [],
       noteLists: notes?.lists ?? [],
       tagPages: notes?.tagPages ?? [],
@@ -591,6 +625,61 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   getRecurring: (id) => get().recurring.find((r) => r.id === id),
 
+  addTransaction: (draft) => {
+    const now = Date.now();
+    const item: Transaction = { ...draft, id: genId(), createdAt: now, updatedAt: now };
+    const transactions = [item, ...get().transactions];
+    set({ transactions });
+    persistTransactions(transactions);
+    return item;
+  },
+
+  updateTransaction: (id, patch) => {
+    const transactions = get().transactions.map((t) =>
+      t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t,
+    );
+    set({ transactions });
+    persistTransactions(transactions);
+  },
+
+  removeTransaction: (id) => {
+    const transactions = get().transactions.filter((t) => t.id !== id);
+    set({ transactions });
+    persistTransactions(transactions);
+  },
+
+  getTransaction: (id) => get().transactions.find((t) => t.id === id),
+
+  addIncomeSource: (draft) => {
+    const now = Date.now();
+    const item: IncomeSource = { ...draft, id: genId(), createdAt: now, updatedAt: now };
+    const incomeSources = [item, ...get().incomeSources];
+    set({ incomeSources });
+    persistIncome(incomeSources);
+    return item;
+  },
+
+  updateIncomeSource: (id, patch) => {
+    const incomeSources = get().incomeSources.map((s) =>
+      s.id === id ? { ...s, ...patch, updatedAt: Date.now() } : s,
+    );
+    set({ incomeSources });
+    persistIncome(incomeSources);
+  },
+
+  removeIncomeSource: (id) => {
+    const incomeSources = get().incomeSources.filter((s) => s.id !== id);
+    // Detach any transactions that were generated from this source.
+    const transactions = get().transactions.map((t) =>
+      t.incomeSourceId === id ? { ...t, incomeSourceId: undefined } : t,
+    );
+    set({ incomeSources, transactions });
+    persistIncome(incomeSources);
+    persistTransactions(transactions);
+  },
+
+  getIncomeSource: (id) => get().incomeSources.find((s) => s.id === id),
+
   addList: (draft) => {
     const now = Date.now();
     const list: ExpenseList = { ...draft, id: genId(), createdAt: now, updatedAt: now };
@@ -615,10 +704,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const recurring = get().recurring.map((r) =>
       r.listId === id ? { ...r, listId: undefined } : r,
     );
-    set({ lists, expenses, recurring });
+    const transactions = get().transactions.map((t) =>
+      t.listId === id ? { ...t, listId: undefined } : t,
+    );
+    set({ lists, expenses, recurring, transactions });
     persistLists(lists);
     persistExpenses(expenses);
     persistRecurring(recurring);
+    persistTransactions(transactions);
   },
 
   getList: (id) => get().lists.find((l) => l.id === id),
@@ -1227,6 +1320,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         savings: s.savings,
         recurring: s.recurring,
         lists: s.lists,
+        transactions: s.transactions,
+        income: s.incomeSources,
         notes: s.notes,
         noteLists: s.noteLists,
         tagPages: s.tagPages,
@@ -1254,6 +1349,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       savings: d.savings ?? [],
       recurring: d.recurring ?? [],
       lists: d.lists ?? [],
+      transactions: d.transactions ?? [],
+      incomeSources: d.income ?? [],
       notes: d.notes ?? [],
       noteLists: d.noteLists ?? [],
       tagPages: d.tagPages ?? [],
@@ -1281,6 +1378,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistSavings(st.savings);
     persistRecurring(st.recurring);
     persistLists(st.lists);
+    persistTransactions(st.transactions);
+    persistIncome(st.incomeSources);
     persistNotes(st.notes, st.noteLists, st.tagPages);
     persistPeople(peopleSnapshot(st));
     persistCalculator(st.calculatorHistory, st.calculatorPrefs);

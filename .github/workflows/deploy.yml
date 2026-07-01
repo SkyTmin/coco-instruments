@@ -111,6 +111,8 @@ jobs:
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER || 'root' }}
+          # Prefer a key (add secret VPS_SSH_KEY); falls back to the password if unset.
+          key: ${{ secrets.VPS_SSH_KEY }}
           password: ${{ secrets.VPS_PASSWORD }}
           source: "caddy-cf-amd64,caddy-cf-arm64"
           target: /tmp/
@@ -121,6 +123,9 @@ jobs:
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER || 'root' }}
+          # Prefer key-based auth (set secret VPS_SSH_KEY — safer than a root
+          # password). If it's empty the action falls back to the password.
+          key: ${{ secrets.VPS_SSH_KEY }}
           password: ${{ secrets.VPS_PASSWORD }}
           command_timeout: 25m
           script: |
@@ -130,7 +135,18 @@ jobs:
             export GH_DISPATCH_TOKEN='${{ secrets.GH_TOKEN }}'
             export ADMIN_CHAT_ID='${{ secrets.ADMIN_CHAT_ID }}'
             export CF_API_TOKEN='${{ secrets.CF_API_TOKEN }}'
-            curl -fsSL "https://raw.githubusercontent.com/SkyTmin/coco-instruments/${BRANCH}/deploy/setup.sh" | bash
+            # After the first provisioning the repo is checked out at /opt/coco.
+            # Update it via git and run the CHECKED-OUT setup.sh instead of piping a
+            # freshly-fetched script into bash as root (avoids curl|bash RCE/MITM).
+            # Only the very first install still bootstraps over the network.
+            if [ -d /opt/coco/.git ]; then
+              git -C /opt/coco fetch --depth 1 origin "$BRANCH"
+              git -C /opt/coco reset --hard "origin/$BRANCH"
+              bash /opt/coco/deploy/setup.sh
+            else
+              curl -fsSL --proto '=https' --tlsv1.2 \
+                "https://raw.githubusercontent.com/SkyTmin/coco-instruments/${BRANCH}/deploy/setup.sh" | bash
+            fi
 
       - name: Verify the app is up
         if: steps.gate.outputs.ready == 'true'
