@@ -77,7 +77,10 @@ npm ci
 # приложение" (Desktop caches it until restart). So: build into dist-next,
 # swap atomically, only then restart.
 rm -rf dist-next
-npm run build -- --outDir dist-next
+# Small VPS: give Node a bigger heap so the production build (tsc + Vite +
+# workbox) doesn't hit the default ~512 MB limit and OOM. The 2 GB swap set up
+# above lets this spill safely if physical RAM is short.
+NODE_OPTIONS="--max-old-space-size=2048" npm run build -- --outDir dist-next
 rm -rf dist-old
 [ -d dist ] && mv dist dist-old
 mv dist-next dist

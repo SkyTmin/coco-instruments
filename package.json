@@ -1,6 +1,6 @@
 {
   "name": "coco-instruments",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "Coco — Telegram Mini App (finance & more)",
   "private": true,
   "type": "module",

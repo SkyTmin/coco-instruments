@@ -40,9 +40,11 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // Don't precache the debug bundle or the (large) emoji packs — emoji are
-        // optional decorations, fetched on demand and cached at runtime instead.
-        globIgnores: ['**/eruda-*.js', '**/emoji/**'],
+        // Don't precache the debug bundle, the (large) emoji packs, or the heavy
+        // pdf.js bundle. Emoji are optional decorations; pdf.js is only pulled in
+        // lazily when importing a payslip. Precaching them bloated the service
+        // worker and blew the build's memory on the small VPS — fetch on demand.
+        globIgnores: ['**/eruda-*.js', '**/emoji/**', '**/pdf-*.js', '**/pdf.worker*'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],
         cleanupOutdatedCaches: true,
