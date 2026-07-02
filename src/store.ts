@@ -12,7 +12,10 @@ import type {
   FinanceSavingsBlob,
   FinanceTransactionsBlob,
   FinanceIncomeBlob,
+  FinanceSalaryTemplatesBlob,
   IncomeSource,
+  SalaryConfig,
+  SalaryTemplate,
   Transaction,
   Collection,
   InspirationImage,
@@ -160,6 +163,9 @@ const writeRecurring = makePersister<FinanceRecurringBlob>(STORAGE_KEYS.recurrin
 const writeLists = makePersister<FinanceListsBlob>(STORAGE_KEYS.lists);
 const writeTransactions = makePersister<FinanceTransactionsBlob>(STORAGE_KEYS.transactions);
 const writeIncome = makePersister<FinanceIncomeBlob>(STORAGE_KEYS.income);
+const writeSalaryTemplates = makePersister<FinanceSalaryTemplatesBlob>(
+  STORAGE_KEYS.salaryTemplates,
+);
 const writeNotes = makePersister<NotesBlob>(STORAGE_KEYS.notes);
 const writePeople = makePersister<PeopleBlob>(STORAGE_KEYS.people);
 const writeCalculator = makePersister<CalculatorBlob>(STORAGE_KEYS.calculator);
@@ -178,6 +184,8 @@ const persistRecurring = (items: RecurringPayment[]) => writeRecurring({ version
 const persistLists = (items: ExpenseList[]) => writeLists({ version: 1, items });
 const persistTransactions = (items: Transaction[]) => writeTransactions({ version: 1, items });
 const persistIncome = (items: IncomeSource[]) => writeIncome({ version: 1, items });
+const persistSalaryTemplates = (items: SalaryTemplate[]) =>
+  writeSalaryTemplates({ version: 1, items });
 const persistNotes = (items: Note[], lists: NoteList[], tagPages: TagPage[]) =>
   writeNotes({ version: 1, items, lists, tagPages });
 const persistPeople = (blob: Omit<PeopleBlob, 'version'>) => writePeople({ version: 1, ...blob });
@@ -200,6 +208,7 @@ interface ExportData {
   lists?: ExpenseList[];
   transactions?: Transaction[];
   income?: IncomeSource[];
+  salaryTemplates?: SalaryTemplate[];
   notes?: Note[];
   noteLists?: NoteList[];
   tagPages?: TagPage[];
@@ -228,6 +237,7 @@ interface FinanceState {
   lists: ExpenseList[];
   transactions: Transaction[];
   incomeSources: IncomeSource[];
+  salaryTemplates: SalaryTemplate[];
   notes: Note[];
   noteLists: NoteList[];
   tagPages: TagPage[];
@@ -276,6 +286,9 @@ interface FinanceState {
   updateTransaction: (id: string, patch: Partial<Transaction>) => void;
   removeTransaction: (id: string) => void;
   getTransaction: (id: string) => Transaction | undefined;
+
+  addSalaryTemplate: (name: string, config: SalaryConfig) => SalaryTemplate;
+  removeSalaryTemplate: (id: string) => void;
 
   addIncomeSource: (draft: IncomeSourceDraft) => IncomeSource;
   updateIncomeSource: (id: string, patch: Partial<IncomeSource>) => void;
@@ -418,6 +431,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   lists: [],
   transactions: [],
   incomeSources: [],
+  salaryTemplates: [],
   notes: [],
   noteLists: [],
   tagPages: [],
@@ -450,6 +464,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       lists,
       txns,
       income,
+      salaryTpl,
       notes,
       people,
       calc,
@@ -468,6 +483,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       storage.get<FinanceListsBlob>(STORAGE_KEYS.lists),
       storage.get<FinanceTransactionsBlob>(STORAGE_KEYS.transactions),
       storage.get<FinanceIncomeBlob>(STORAGE_KEYS.income),
+      storage.get<FinanceSalaryTemplatesBlob>(STORAGE_KEYS.salaryTemplates),
       storage.get<NotesBlob>(STORAGE_KEYS.notes),
       storage.get<PeopleBlob>(STORAGE_KEYS.people),
       storage.get<CalculatorBlob>(STORAGE_KEYS.calculator),
@@ -487,6 +503,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       lists: lists?.items ?? [],
       transactions: txns?.items ?? [],
       incomeSources: income?.items ?? [],
+      salaryTemplates: salaryTpl?.items ?? [],
       notes: notes?.items ?? [],
       noteLists: notes?.lists ?? [],
       tagPages: notes?.tagPages ?? [],
@@ -679,6 +696,20 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   getIncomeSource: (id) => get().incomeSources.find((s) => s.id === id),
+
+  addSalaryTemplate: (name, config) => {
+    const tpl: SalaryTemplate = { id: genId(), name: name.trim(), config, createdAt: Date.now() };
+    const salaryTemplates = [tpl, ...get().salaryTemplates];
+    set({ salaryTemplates });
+    persistSalaryTemplates(salaryTemplates);
+    return tpl;
+  },
+
+  removeSalaryTemplate: (id) => {
+    const salaryTemplates = get().salaryTemplates.filter((t) => t.id !== id);
+    set({ salaryTemplates });
+    persistSalaryTemplates(salaryTemplates);
+  },
 
   addList: (draft) => {
     const now = Date.now();
@@ -1322,6 +1353,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         lists: s.lists,
         transactions: s.transactions,
         income: s.incomeSources,
+        salaryTemplates: s.salaryTemplates,
         notes: s.notes,
         noteLists: s.noteLists,
         tagPages: s.tagPages,
@@ -1351,6 +1383,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       lists: d.lists ?? [],
       transactions: d.transactions ?? [],
       incomeSources: d.income ?? [],
+      salaryTemplates: d.salaryTemplates ?? [],
       notes: d.notes ?? [],
       noteLists: d.noteLists ?? [],
       tagPages: d.tagPages ?? [],
@@ -1380,6 +1413,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistLists(st.lists);
     persistTransactions(st.transactions);
     persistIncome(st.incomeSources);
+    persistSalaryTemplates(st.salaryTemplates);
     persistNotes(st.notes, st.noteLists, st.tagPages);
     persistPeople(peopleSnapshot(st));
     persistCalculator(st.calculatorHistory, st.calculatorPrefs);

@@ -182,6 +182,12 @@ const IncomeFormPage = lazy(() =>
 const IncomeDetailPage = lazy(() =>
   import('@/pages/finance/IncomeDetailPage').then((m) => ({ default: m.IncomeDetailPage })),
 );
+const WorkCalendarPage = lazy(() =>
+  import('@/pages/finance/WorkCalendarPage').then((m) => ({ default: m.WorkCalendarPage })),
+);
+const PayslipPage = lazy(() =>
+  import('@/pages/finance/PayslipPage').then((m) => ({ default: m.PayslipPage })),
+);
 const FinanceAnalyticsPage = lazy(() =>
   import('@/pages/finance/FinanceAnalyticsPage').then((m) => ({ default: m.FinanceAnalyticsPage })),
 );
@@ -490,6 +496,8 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
                 <Route path="/finance/income/new" element={<IncomeFormPage />} />
                 <Route path="/finance/income/:id" element={<IncomeDetailPage />} />
                 <Route path="/finance/income/:id/edit" element={<IncomeFormPage />} />
+                <Route path="/finance/income/:id/calendar" element={<WorkCalendarPage />} />
+                <Route path="/finance/income/:id/payslip" element={<PayslipPage />} />
                 <Route path="/finance/analytics" element={<FinanceAnalyticsPage />} />
                 <Route path="/notes" element={<NotesPage />} />
                 <Route path="/notes/new" element={<ChatNotePage />} />

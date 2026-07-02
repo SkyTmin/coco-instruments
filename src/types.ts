@@ -236,6 +236,92 @@ export interface FinanceTransactionsBlob {
   items: Transaction[];
 }
 
+// ---- Salary constructor (универсальный расчёт зарплаты вахтовика) ---------
+
+/** How the base pay is measured. */
+export type RateMode = 'hourly' | 'daily' | 'monthly';
+
+/** How a supplement is expressed. */
+export type BonusMode = 'percent' | 'fixed';
+
+/** Manual mark for one calendar day (overrides the auto on/off cycle). */
+export type WorkDayKind = 'work' | 'off' | 'holiday';
+export interface WorkDayMark {
+  kind: WorkDayKind;
+  /** Night shift (paid night-hours bonus). */
+  night?: boolean;
+  /** Extra hours beyond the shift, paid at the overtime multiplier. */
+  overtimeHours?: number;
+}
+
+/**
+ * Full pay model for the salary calculator. Every supplement can be switched
+ * on/off independently; the pure math lives in src/lib/salary.ts.
+ */
+export interface SalaryConfig {
+  rateMode: RateMode;
+  /** hourly — ₽/час. */
+  hourRate?: number;
+  /** daily — ₽/смена(день). */
+  dayRate?: number;
+  /** monthly — оклад ₽/мес. */
+  monthlyBase?: number;
+  /** Hours per shift (used by hourly mode and night/overtime math). */
+  shiftHours?: number;
+
+  premiumEnabled?: boolean;
+  premiumMode?: BonusMode;
+  premiumValue?: number;
+
+  districtEnabled?: boolean;
+  /** Районный коэффициент, e.g. 1.7 (multiplies the earnings body). */
+  districtCoeff?: number;
+
+  northEnabled?: boolean;
+  /** Северная надбавка, % of the body. */
+  northPercent?: number;
+
+  specialEnabled?: boolean;
+  specialMode?: BonusMode;
+  /** Надбавка за особые условия (вредность и т.п.). */
+  specialValue?: number;
+
+  vahtaEnabled?: boolean;
+  /** Вахтовая надбавка, ₽ за каждый рабочий календарный день (не облагается). */
+  vahtaAllowancePerDay?: number;
+
+  holidayEnabled?: boolean;
+  /** Множитель оплаты праздничной смены (ТК: не менее 2). */
+  holidayMultiplier?: number;
+
+  nightEnabled?: boolean;
+  /** Доплата за ночные часы, % от часовой ставки (ТК: не менее 20). */
+  nightPercent?: number;
+  /** Ночных часов в ночной смене (обычно 8: 22:00–06:00). */
+  nightHoursPerShift?: number;
+
+  overtimeEnabled?: boolean;
+  /** Множитель сверхурочных (упрощённо один: обычно 2). */
+  overtimeMultiplier?: number;
+
+  /** true → показываем «на руки» (минус НДФЛ), false → «грязными». */
+  ndflEnabled?: boolean;
+  ndflPercent?: number;
+}
+
+/** A saved employer preset: apply once, never re-enter the numbers. */
+export interface SalaryTemplate {
+  id: string;
+  name: string;
+  config: SalaryConfig;
+  createdAt: number;
+}
+
+export interface FinanceSalaryTemplatesBlob {
+  version: 1;
+  items: SalaryTemplate[];
+}
+
 // ---- Income sources (Russian pay schemes: оклад, вахта, смены) ------------
 
 /**
@@ -287,6 +373,12 @@ export interface IncomeSource {
   // recurring — интервал как у RecurringPayment
   intervalCount?: number;
   intervalUnit?: IntervalUnit;
+
+  /** Универсальный зарплатный конструктор (vahta/shift/salary). Когда задан,
+   *  расчёт идёт через src/lib/salary.ts, а legacy-поля выше игнорируются. */
+  salary?: SalaryConfig;
+  /** Ручная разметка календаря: ISO-дата → отметка дня (поверх авто-цикла). */
+  calendar?: Record<string, WorkDayMark>;
 
   // общие
   /** Anchor date — start of the cycle / date of a one-off payout. */

@@ -96,6 +96,23 @@ export function IncomeDetailPage() {
         </label>
       </div>
 
+      {source.salary && (
+        <div className="row" style={{ gap: 10 }}>
+          <button
+            className="btn btn--ghost btn--block"
+            onClick={() => go(`/finance/income/${source.id}/payslip`)}
+          >
+            🧾 Расчётный лист
+          </button>
+          <button
+            className="btn btn--ghost btn--block"
+            onClick={() => go(`/finance/income/${source.id}/calendar`)}
+          >
+            🗓 Календарь смен
+          </button>
+        </div>
+      )}
+
       <div className="section-label">Ближайшие выплаты</div>
       {upcoming.length === 0 ? (
         <EmptyState icon="📭" title="Нет выплат в ближайшие полгода" />

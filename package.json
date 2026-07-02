@@ -1,6 +1,6 @@
 {
   "name": "coco-instruments",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Coco — Telegram Mini App (finance & more)",
   "private": true,
   "type": "module",
@@ -21,6 +21,7 @@
     "@telegram-apps/telegram-ui": "^2.1.9",
     "@tma.js/sdk-react": "^3.0.8",
     "express": "^4.22.2",
+    "pdfjs-dist": "^6.1.200",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.1",

@@ -17,6 +17,7 @@
 
 import type { IncomeSource, RecurringPayment } from '@/types';
 import { monthlyEquivalent, recurringOccurrences } from '@/lib/finance-calc';
+import { computePayslip } from '@/lib/salary';
 import { addMonths, daysInMonth, parseISO, toISO, todayISO } from '@/lib/date';
 
 /** Average calendar days per month (365.25 / 12). */
@@ -99,6 +100,11 @@ export function shiftEstimate(src: IncomeSource): number {
 /** Normalised monthly income estimate for any source (0 for one-offs). */
 export function monthlyIncome(src: IncomeSource): number {
   if (src.paused) return 0;
+  // Sources configured through the salary constructor are computed by the
+  // payslip engine (exact, per this month's calendar) — not the estimates.
+  if (src.salary && (src.scheme === 'salary' || src.scheme === 'vahta' || src.scheme === 'shift')) {
+    return computePayslip(src, todayISO().slice(0, 7)).net;
+  }
   switch (src.scheme) {
     case 'salary':
       return rub(src.monthlyNet || 0);
@@ -184,7 +190,33 @@ export function incomeOccurrences(
   let events: IncomeEvent[] = [];
 
   if (src.scheme === 'salary' || src.scheme === 'vahta' || src.scheme === 'shift') {
-    events = twiceMonthly(src, monthlyIncome(src), fromISO, untilISO);
+    if (src.salary) {
+      // Salary-constructor sources: amounts differ month to month (calendar!),
+      // so compute a payslip per month and emit its advance/salary payouts.
+      const advanceDay = src.advanceDay || 25;
+      const salaryDay = src.salaryDay || 10;
+      const out: IncomeEvent[] = [];
+      eachMonth(fromISO, untilISO, (y, m0) => {
+        const p = computePayslip(src, `${y}-${String(m0 + 1).padStart(2, '0')}`);
+        out.push({
+          date: dayInMonth(y, m0, salaryDay),
+          amount: p.salary,
+          kind: 'salary',
+          sourceId: src.id,
+          name: src.name,
+        });
+        out.push({
+          date: dayInMonth(y, m0, advanceDay),
+          amount: p.advance,
+          kind: 'advance',
+          sourceId: src.id,
+          name: src.name,
+        });
+      });
+      events = out.filter((e) => e.date >= fromISO && e.date <= untilISO);
+    } else {
+      events = twiceMonthly(src, monthlyIncome(src), fromISO, untilISO);
+    }
   } else if (src.scheme === 'recurring') {
     const pseudo = {
       startDate: src.startDate,

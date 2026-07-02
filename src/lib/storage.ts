@@ -26,6 +26,7 @@ export const STORAGE_KEYS = {
   reminders: 'finance.reminders',
   transactions: 'finance.transactions',
   income: 'finance.income',
+  salaryTemplates: 'finance.salarytpl',
   notes: 'notes.items',
   people: 'people.items',
   calculator: 'calculator.items',
