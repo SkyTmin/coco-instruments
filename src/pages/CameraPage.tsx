@@ -82,6 +82,7 @@ export function CameraPage() {
   const [shot, setShot] = useState<Shot | null>(null);
   const [shotMsg, setShotMsg] = useState('');
   const galleryRef = useRef<HTMLInputElement>(null);
+  const hdRef = useRef<HTMLInputElement>(null);
 
   const stopStream = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -206,6 +207,23 @@ export function CameraPage() {
     }
   };
 
+  // «HD-снимок»: file input с capture открывает НАТИВНУЮ камеру iOS — она
+  // отдаёт фото в полном разрешении матрицы (~12 МП), недоступном через
+  // getUserMedia. Компромисс: во время нативной съёмки сетки и эскиз не видны,
+  // поэтому кадр сначала компонуют в нашем видоискателе.
+  const pickHd = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setShotMsg('');
+    setShot({ blob: file, url: URL.createObjectURL(file) });
+    notifySuccess();
+    // Нативная камера могла оборвать наш видеопоток — оживляем видоискатель.
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || track.readyState === 'ended') void startStream(facing);
+    else void videoRef.current?.play().catch(() => {});
+  };
+
   const closeShot = () => {
     tapLight();
     setShot(null);
@@ -225,7 +243,7 @@ export function CameraPage() {
   const saveShot = async () => {
     if (!shot) return;
     tapLight();
-    const file = new File([shot.blob], shotName(), { type: 'image/jpeg' });
+    const file = new File([shot.blob], shotName(), { type: shot.blob.type || 'image/jpeg' });
     // В Telegram WebView обычный <a download> открывает JPEG как страницу —
     // надёжный путь наружу это системный share sheet: оттуда «Сохранить
     // изображение» в галерею или отправка файлом в любой чат Telegram.
@@ -367,8 +385,16 @@ export function CameraPage() {
             >
               <span className="camera-shutter__inner" />
             </button>
-            {/* Симметричная заглушка держит кнопку съёмки по центру. */}
-            <span className="camera-btn-slot" aria-hidden="true" />
+            <button
+              className="camera-btn"
+              onClick={() => {
+                tapLight();
+                hdRef.current?.click();
+              }}
+              aria-label="HD-снимок нативной камерой"
+            >
+              HD
+            </button>
           </div>
         </div>
       )}
@@ -379,6 +405,14 @@ export function CameraPage() {
         type="file"
         accept="image/*"
         onChange={pickReference}
+      />
+      <input
+        ref={hdRef}
+        hidden
+        type="file"
+        accept="image/*"
+        capture={facing === 'user' ? 'user' : 'environment'}
+        onChange={pickHd}
       />
 
       {shot && (

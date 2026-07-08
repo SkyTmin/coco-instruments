@@ -9940,9 +9940,6 @@ input[type='datetime-local'] {
 .camera-btn--wide {
   width: 100%;
 }
-.camera-btn-slot {
-  min-width: 104px;
-}
 
 /* Кнопка съёмки — классическое белое кольцо. */
 .camera-shutter {
