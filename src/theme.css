@@ -6719,7 +6719,9 @@ input[type='datetime-local'] {
 .lightbox__close,
 .lightbox__del {
   position: absolute;
-  top: calc(var(--safe-top) + 12px);
+  /* --content-top учитывает собственные кнопки Telegram (закрыть/⋯) — иначе
+     наши кнопки прячутся под ними. */
+  top: calc(var(--safe-top) + var(--content-top) + 12px);
   width: 42px;
   height: 42px;
   border: 0;
@@ -10057,42 +10059,36 @@ input[type='datetime-local'] {
   text-wrap: pretty;
 }
 
-/* Предпросмотр снимка. */
-.camera-shot {
+/* Вспышка-подтверждение съёмки (как затвор iPhone): короткий блик, момент
+   не перекрывается никакими окнами. */
+.camera-flash {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: #000;
+  pointer-events: none;
+  background: #fff;
+  animation: camera-flash 0.28s ease-out forwards;
 }
-.camera-shot__img {
-  flex: 1;
-  min-height: 0;
+@keyframes camera-flash {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Кнопка галереи показывает миниатюру последнего снимка. */
+.camera-btn--shot {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 13px;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.camera-btn--shot img {
   width: 100%;
-  object-fit: contain;
-  padding-top: calc(var(--safe-top) + var(--content-top));
-}
-.camera-shot__panel {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px calc(var(--safe-bottom) + 14px);
-}
-.camera-shot__msg {
-  margin: 0;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 650;
-  color: #fff;
-}
-.camera-shot__hint {
-  margin: 0;
-  text-align: center;
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: rgba(255, 255, 255, 0.6);
-  text-wrap: pretty;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 /* Фильтры эскиза (Цвет / Серый / Ч-Б) — чипы над ползунком прозрачности. */

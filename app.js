@@ -177,6 +177,40 @@ app.post('/api/notes/attachments', (req, res) => {
   });
 });
 
+// Удаление загруженного файла (когда снимок/эскиз убирают из приложения), чтобы
+// не копить осиротевшие фото на диске. URL с uuid в имени — это и есть право
+// на файл (как и для чтения); принимаем только имена нашего формата и никогда
+// не выходим за пределы UPLOAD_DIR.
+app.post('/api/notes/attachments/delete', (req, res) => {
+  const user = authUser(req, res);
+  if (!user) return;
+  if (!rateLimit(`upload-del:${user.id}`, 60, 60_000)) {
+    res.status(429).json({ error: 'rate_limited' });
+    return;
+  }
+  const { url } = req.body ?? {};
+  if (typeof url !== 'string' || !url.startsWith(`${PUBLIC_UPLOAD_PATH}/`)) {
+    res.status(400).json({ error: 'invalid_url' });
+    return;
+  }
+  const fileName = path.basename(url.slice(PUBLIC_UPLOAD_PATH.length + 1));
+  if (!/^[0-9a-f-]{36}-[\w.-]+\.(jpg|png|webp|gif|heic|heif)$/i.test(fileName)) {
+    res.status(400).json({ error: 'invalid_name' });
+    return;
+  }
+  const filePath = path.join(UPLOAD_DIR, fileName);
+  if (!filePath.startsWith(UPLOAD_DIR + path.sep)) {
+    res.status(400).json({ error: 'invalid_path' });
+    return;
+  }
+  try {
+    fs.unlinkSync(filePath);
+  } catch {
+    /* уже удалён или не существует — для клиента это тот же успех */
+  }
+  res.json({ ok: true });
+});
+
 app.use(
   PUBLIC_UPLOAD_PATH,
   express.static(UPLOAD_DIR, {

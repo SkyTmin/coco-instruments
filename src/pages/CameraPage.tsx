@@ -3,7 +3,6 @@ import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sheet } from '@/components/ui';
 import { IconBack, IconImage, IconSwap, IconTrash } from '@/components/icons';
-import { registerEscape } from '@/lib/escape-stack';
 import { attachmentHref, fileToAttachment } from '@/lib/images';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 import { useFinanceStore } from '@/store';
@@ -76,11 +75,6 @@ type Facing = 'environment' | 'user';
 // | unsupported (нет getUserMedia — старый WebView или не-HTTPS).
 type CamStatus = 'starting' | 'on' | 'denied' | 'error' | 'unsupported';
 
-interface Shot {
-  blob: Blob;
-  url: string;
-}
-
 // Снимки в галерею уходят крупнее обычных фото (сервер принимает до 3 МБ).
 const SHOT_MAX_SIDE = 2560;
 
@@ -109,9 +103,9 @@ export function CameraPage() {
   const [sketchBusy, setSketchBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
-  const [shot, setShot] = useState<Shot | null>(null);
-  const [shotMsg, setShotMsg] = useState('');
-  const [savingShot, setSavingShot] = useState(false);
+  const [flash, setFlash] = useState(false);
+  // Мгновенная миниатюра последнего кадра (пока идёт фоновая загрузка).
+  const [lastThumb, setLastThumb] = useState<string | null>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const hdRef = useRef<HTMLInputElement>(null);
 
@@ -155,12 +149,12 @@ export function CameraPage() {
     };
   }, [startStream]);
 
-  // Освобождаем object URL снимка при замене/уходе со страницы.
+  // Освобождаем object URL миниатюры при замене/уходе со страницы.
   useEffect(
     () => () => {
-      if (shot) URL.revokeObjectURL(shot.url);
+      if (lastThumb) URL.revokeObjectURL(lastThumb);
     },
-    [shot],
+    [lastThumb],
   );
 
   // Одна камера (десктоп/ноутбук) — прячем кнопку переключения.
@@ -224,22 +218,26 @@ export function CameraPage() {
 
   // ---- съёмка ---------------------------------------------------------------
 
-  // Каждый снимок сразу уходит в галерею приложения (стор → сервер); из неё
-  // потом можно сохранить на телефон. Полный оригинал остаётся доступен через
-  // «Сохранить / отправить» прямо из предпросмотра.
+  // Как на камере iPhone: снимок молча уходит в галерею приложения, видоискатель
+  // не перекрывается — момент не теряется. Кадр виден миниатюрой вверху справа.
   const saveToAppGallery = async (blob: Blob) => {
-    setSavingShot(true);
     try {
       const file = new File([blob], shotName(), { type: blob.type || 'image/jpeg' });
       const att = await fileToAttachment(file, SHOT_MAX_SIDE);
       addShot(att);
-      setShotMsg('Снимок в галерее приложения ✅');
     } catch {
-      setShotMsg('Не удалось сохранить в галерею — можно сохранить файлом ниже.');
       notifyWarning();
-    } finally {
-      setSavingShot(false);
     }
+  };
+
+  const registerShot = (blob: Blob) => {
+    setFlash(true);
+    setLastThumb((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(blob);
+    });
+    notifySuccess();
+    void saveToAppGallery(blob);
   };
 
   const takePhoto = async () => {
@@ -264,16 +262,38 @@ export function CameraPage() {
         canvas.toBlob(res, 'image/jpeg', 0.92),
       );
       if (!blob) throw new Error('toBlob');
-      setShotMsg('');
-      setShot({ blob, url: URL.createObjectURL(blob) });
-      notifySuccess();
-      void saveToAppGallery(blob);
+      registerShot(blob);
     } catch {
       notifyWarning();
     } finally {
       setCapturing(false);
     }
   };
+
+  // Съёмка с клавиш: кнопки громкости (там, где WebView отдаёт их как клавиши —
+  // iOS, увы, не отдаёт: ни громкость, ни Camera Control недоступны вебу),
+  // плюс Enter/Пробел на десктопе.
+  const takePhotoRef = useRef<() => void>(() => {});
+  takePhotoRef.current = () => {
+    if (status !== 'on' || sketchSheet || pendingDelete) return;
+    void takePhoto();
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const volume = ['AudioVolumeUp', 'AudioVolumeDown', 'VolumeUp', 'VolumeDown'].includes(
+        e.key,
+      );
+      const t = e.target as HTMLElement | null;
+      const onControl =
+        !!t && ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName);
+      if (volume || ((e.key === 'Enter' || e.key === ' ') && !onControl)) {
+        e.preventDefault();
+        takePhotoRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // «HD-снимок»: file input с capture открывает НАТИВНУЮ камеру iOS — она
   // отдаёт фото в полном разрешении матрицы (~12 МП), недоступном через
@@ -283,55 +303,11 @@ export function CameraPage() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    setShotMsg('');
-    setShot({ blob: file, url: URL.createObjectURL(file) });
-    notifySuccess();
-    void saveToAppGallery(file);
+    registerShot(file);
     // Нативная камера могла оборвать наш видеопоток — оживляем видоискатель.
     const track = streamRef.current?.getVideoTracks()[0];
     if (!track || track.readyState === 'ended') void startStream(facing);
     else void videoRef.current?.play().catch(() => {});
-  };
-
-  const closeShot = () => {
-    tapLight();
-    setShot(null);
-    setShotMsg('');
-  };
-
-  // Telegram BackButton/Esc сначала закрывают предпросмотр снимка.
-  const shotOpen = !!shot;
-  useEffect(() => {
-    if (!shotOpen) return undefined;
-    return registerEscape(() => {
-      setShot(null);
-      setShotMsg('');
-    });
-  }, [shotOpen]);
-
-  const saveShot = async () => {
-    if (!shot) return;
-    tapLight();
-    const file = new File([shot.blob], shotName(), { type: shot.blob.type || 'image/jpeg' });
-    // В Telegram WebView обычный <a download> открывает JPEG как страницу —
-    // надёжный путь наружу это системный share sheet: оттуда «Сохранить
-    // изображение» в галерею или отправка файлом в любой чат Telegram.
-    if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: 'Coco Камера' });
-        setShotMsg('Готово — фото ушло через системное меню.');
-        return;
-      } catch (err) {
-        if ((err as DOMException)?.name === 'AbortError') return; // меню закрыли
-      }
-    }
-    const a = document.createElement('a');
-    a.href = shot.url;
-    a.download = file.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setShotMsg('Файл со снимком сохранён.');
   };
 
   const goBack = () => {
@@ -372,14 +348,14 @@ export function CameraPage() {
             </button>
             <span className="camera-top__cluster">
               <button
-                className="camera-btn camera-btn--icon"
+                className={`camera-btn camera-btn--icon${lastThumb ? ' camera-btn--shot' : ''}`}
                 onClick={() => {
                   tapLight();
                   navigate('/camera/gallery');
                 }}
                 aria-label="Галерея снимков"
               >
-                <IconImage size={19} />
+                {lastThumb ? <img src={lastThumb} alt="" /> : <IconImage size={19} />}
               </button>
               {canFlip && (
                 <button
@@ -579,30 +555,7 @@ export function CameraPage() {
         </Sheet>
       )}
 
-      {shot && (
-        <div className="camera-shot">
-          <img className="camera-shot__img" src={shot.url} alt="Снимок" />
-          <div className="camera-shot__panel">
-            <p className="camera-shot__msg">
-              {savingShot ? 'Сохраняю в галерею приложения…' : shotMsg}
-            </p>
-            <button
-              className="btn btn--primary btn--block"
-              type="button"
-              onClick={() => void saveShot()}
-            >
-              Сохранить / отправить
-            </button>
-            <button className="camera-btn camera-btn--wide" type="button" onClick={closeShot}>
-              Ещё снимок
-            </button>
-            <p className="camera-shot__hint">
-              Снимки копятся в галерее приложения (значок 🖼 вверху) — оттуда их можно
-              сохранить на телефон или отправить в чат.
-            </p>
-          </div>
-        </div>
-      )}
+      {flash && <div className="camera-flash" onAnimationEnd={() => setFlash(false)} />}
     </div>
   );
 }

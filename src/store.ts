@@ -68,6 +68,7 @@ export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
   scientific: false,
 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
+import { deleteAttachmentFile } from '@/lib/images';
 import { genId } from '@/lib/id';
 import { normalizeNoteTitle } from '@/lib/notes-graph';
 import { deriveFromMessages, makeMessage, materializeMessages } from '@/lib/notes-messages';
@@ -1630,9 +1631,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   removeCameraSketch: (id) => {
+    const gone = get().cameraSketches.find((s) => s.id === id);
     const cameraSketches = get().cameraSketches.filter((s) => s.id !== id);
     set({ cameraSketches });
     persistCamera(cameraSketches, get().cameraShots);
+    if (gone) deleteAttachmentFile(gone.photo); // чистим файл на сервере
   },
 
   addCameraShot: (photo) => {
@@ -1644,9 +1647,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   removeCameraShot: (id) => {
+    const gone = get().cameraShots.find((s) => s.id === id);
     const cameraShots = get().cameraShots.filter((s) => s.id !== id);
     set({ cameraShots });
     persistCamera(get().cameraSketches, cameraShots);
+    if (gone) deleteAttachmentFile(gone.photo); // чистим файл на сервере
   },
 
   setReminderPrefs: (patch) => {

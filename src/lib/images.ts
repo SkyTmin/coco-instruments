@@ -106,6 +106,18 @@ export async function uploadAttachment(input: {
   }
 }
 
+/** Delete the server-side file behind an attachment (fire-and-forget: the
+ *  record is already gone from the store; an orphaned file only wastes disk). */
+export function deleteAttachmentFile(attachment: Attachment): void {
+  if (!attachment.url) return; // inline dataUrl — нечего удалять на сервере
+  void fetch('/api/notes/attachments/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ url: attachment.url, initData: getServerAuth() }),
+  }).catch(() => {});
+}
+
 /** Load an <img> from a URL (same-origin /uploads or a dataUrl). */
 export function loadImageSrc(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
