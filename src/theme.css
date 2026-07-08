@@ -9793,3 +9793,303 @@ input[type='datetime-local'] {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
+
+/* ===========================================================================
+   Камера — сетки композиции и эскизы для портретов
+   =========================================================================== */
+
+/* Широкая плитка на главной (камера занимает весь ряд). */
+.home-tile--wide {
+  grid-column: 1 / -1;
+  min-height: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 13px;
+}
+.home-tile--wide .home-tile__title {
+  margin-top: 0;
+}
+.home-tile--wide .home-tile__fact {
+  margin-left: auto;
+  text-align: right;
+}
+
+/* Полноэкранный видоискатель: тёмный, прибит к вьюпорту, не скроллится.
+   Управление отступает от краёв на safe-area (чёлка/индикатор iPhone). */
+.camera {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: #000;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+.camera-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.camera-video.is-mirrored {
+  transform: scaleX(-1);
+}
+
+/* Сетки: тонкие полупрозрачные белые линии поверх видоискателя. */
+.camera-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.camera-grid__v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.camera-grid__h {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.camera-grid__circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 96px;
+  height: 96px;
+  margin: -48px 0 0 -48px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+}
+
+/* Эскиз-референс: полупрозрачный слой, весь кадр, пропорции сохраняются. */
+.camera-ref {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.camera-top {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--content-top) + 10px);
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+}
+.camera-top .camera-btn:not(.camera-btn--icon) {
+  justify-self: center;
+}
+.camera-bottom {
+  position: absolute;
+  bottom: calc(var(--safe-bottom) + 14px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 14px;
+}
+.camera-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Кнопки поверх видоискателя — полупрозрачные тёмные пилюли. */
+.camera-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 104px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  cursor: pointer;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: transform 0.12s ease;
+}
+.camera-btn:active {
+  transform: scale(0.95);
+}
+.camera-btn--icon {
+  min-width: 0;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+}
+.camera-btn--wide {
+  width: 100%;
+}
+.camera-btn-slot {
+  min-width: 104px;
+}
+
+/* Кнопка съёмки — классическое белое кольцо. */
+.camera-shutter {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.12s ease;
+}
+.camera-shutter:active {
+  transform: scale(0.92);
+}
+.camera-shutter:disabled {
+  opacity: 0.5;
+}
+.camera-shutter__inner {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* Ползунок прозрачности эскиза. */
+.camera-opacity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.42);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+}
+.camera-opacity input[type='range'] {
+  flex: 1;
+  height: 32px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  touch-action: pan-x;
+}
+.camera-opacity input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.camera-opacity input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -10px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.camera-opacity input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.camera-opacity input[type='range']::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Экран состояния: запуск, нет доступа, нет камеры. */
+.camera-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px 28px;
+  padding-top: calc(var(--safe-top) + var(--content-top) + 32px);
+  text-align: center;
+  background: #000;
+  color: #fff;
+}
+.camera-state__icon {
+  font-size: 44px;
+}
+.camera-state h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  text-wrap: balance;
+}
+.camera-state p {
+  margin: 0;
+  max-width: 340px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+  text-wrap: pretty;
+}
+
+/* Предпросмотр снимка. */
+.camera-shot {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
+.camera-shot__img {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+  padding-top: calc(var(--safe-top) + var(--content-top));
+}
+.camera-shot__panel {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px calc(var(--safe-bottom) + 14px);
+}
+.camera-shot__msg {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 650;
+  color: #fff;
+}
+.camera-shot__hint {
+  margin: 0;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.6);
+  text-wrap: pretty;
+}

@@ -254,6 +254,13 @@ export const IconShapes = (p: IconProps) => (
   </svg>
 );
 
+export const IconCamera = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M14.5 4h-5L8 6.5H4.8A1.8 1.8 0 0 0 3 8.3v9.9A1.8 1.8 0 0 0 4.8 20h14.4a1.8 1.8 0 0 0 1.8-1.8V8.3a1.8 1.8 0 0 0-1.8-1.8H16z" />
+    <circle cx="12" cy="13" r="3.6" />
+  </svg>
+);
+
 export const IconLock = ({ open = false, ...p }: IconProps & { open?: boolean }) => (
   <svg {...base(p)}>
     <rect x="5" y="11" width="14" height="10" rx="2" />

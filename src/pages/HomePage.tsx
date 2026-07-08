@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AnimatedNumber, ConfirmDialog, Screen, Sheet, Skeleton } from '@/components/ui';
 import {
   IconCalculator,
+  IconCamera,
   IconGear,
   IconHeart,
   IconNotes,
@@ -372,6 +373,16 @@ export function HomePage() {
             </span>
             <span className="home-tile__title">Калькулятор</span>
             <span className="home-tile__fact">Инженерный, с жестами</span>
+          </button>
+        </div>
+
+        <div className="home-pair">
+          <button className="home-tile home-tile--wide" onClick={() => go('/camera')}>
+            <span className="home-tile__icon">
+              <IconCamera />
+            </span>
+            <span className="home-tile__title">Камера</span>
+            <span className="home-tile__fact">Сетки и эскизы для портретов</span>
           </button>
         </div>
         <div className="home-version">{versionLabel()}</div>
