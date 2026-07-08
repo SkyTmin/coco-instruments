@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconBack, IconImage, IconSwap } from '@/components/icons';
+import { Sheet } from '@/components/ui';
+import { IconBack, IconImage, IconSwap, IconTrash } from '@/components/icons';
 import { registerEscape } from '@/lib/escape-stack';
+import { attachmentHref, fileToAttachment } from '@/lib/images';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
+import { useFinanceStore } from '@/store';
+import type { CameraSketch, SketchFilter } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Сетки композиции: тонкие полупрозрачные линии поверх видоискателя.
@@ -48,9 +52,22 @@ function GridOverlay({ mode }: { mode: GridMode }) {
   );
 }
 
+// Фильтры эскиза (редактирование): CSS-фильтр поверх референса.
+const SKETCH_FILTERS: { v: SketchFilter; label: string }[] = [
+  { v: 'none', label: 'Цвет' },
+  { v: 'gray', label: 'Серый' },
+  { v: 'bw', label: 'Ч/Б' },
+];
+
+export const SKETCH_FILTER_CSS: Record<SketchFilter, string> = {
+  none: 'none',
+  gray: 'grayscale(1)',
+  bw: 'grayscale(1) contrast(1.9) brightness(1.05)',
+};
+
 // ---------------------------------------------------------------------------
-// Камера: живой видоискатель + сетки + полупрозрачный эскиз-референс. Всё
-// работает локально в WebView — поток и снимки никуда не отправляются.
+// Камера: живой видоискатель + сетки + полупрозрачный эскиз-референс.
+// Эскизы и снимки хранятся в сторе (и через него — на сервере).
 // ---------------------------------------------------------------------------
 
 type Facing = 'environment' | 'user';
@@ -64,6 +81,9 @@ interface Shot {
   url: string;
 }
 
+// Снимки в галерею уходят крупнее обычных фото (сервер принимает до 3 МБ).
+const SHOT_MAX_SIDE = 2560;
+
 const shotName = () =>
   `coco-photo-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.jpg`;
 
@@ -72,17 +92,30 @@ export function CameraPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  const sketches = useFinanceStore((s) => s.cameraSketches);
+  const addSketch = useFinanceStore((s) => s.addCameraSketch);
+  const updateSketch = useFinanceStore((s) => s.updateCameraSketch);
+  const removeSketch = useFinanceStore((s) => s.removeCameraSketch);
+  const addShot = useFinanceStore((s) => s.addCameraShot);
+  const hydrated = useFinanceStore((s) => s.hydrated);
+
   const [status, setStatus] = useState<CamStatus>('starting');
   const [facing, setFacing] = useState<Facing>('environment');
   const [canFlip, setCanFlip] = useState(true);
   const [gridMode, setGridMode] = useState<GridMode>('thirds');
-  const [reference, setReference] = useState<string | null>(null);
+  const [activeSketchId, setActiveSketchId] = useState<string | null>(null);
   const [refOpacity, setRefOpacity] = useState(0.4);
+  const [sketchSheet, setSketchSheet] = useState(false);
+  const [sketchBusy, setSketchBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [shot, setShot] = useState<Shot | null>(null);
   const [shotMsg, setShotMsg] = useState('');
+  const [savingShot, setSavingShot] = useState(false);
   const galleryRef = useRef<HTMLInputElement>(null);
   const hdRef = useRef<HTMLInputElement>(null);
+
+  const activeSketch: CameraSketch | undefined = sketches.find((s) => s.id === activeSketchId);
 
   const stopStream = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -122,13 +155,7 @@ export function CameraPage() {
     };
   }, [startStream]);
 
-  // Освобождаем object URL эскиза и снимка при уходе со страницы.
-  useEffect(
-    () => () => {
-      if (reference) URL.revokeObjectURL(reference);
-    },
-    [reference],
-  );
+  // Освобождаем object URL снимка при замене/уходе со страницы.
   useEffect(
     () => () => {
       if (shot) URL.revokeObjectURL(shot.url);
@@ -156,23 +183,63 @@ export function CameraPage() {
     void startStream(next);
   };
 
-  const pickReference = (e: ChangeEvent<HTMLInputElement>) => {
+  // ---- эскизы ---------------------------------------------------------------
+
+  const pickSketchFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    selectionChanged();
-    setReference((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
-    });
+    setSketchBusy(true);
+    try {
+      const att = await fileToAttachment(file);
+      const sketch = addSketch(att);
+      setActiveSketchId(sketch.id);
+      setSketchSheet(false);
+      notifySuccess();
+    } catch {
+      notifyWarning();
+    } finally {
+      setSketchBusy(false);
+    }
   };
 
-  const clearReference = () => {
-    tapLight();
-    setReference((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
+  const applySketch = (id: string) => {
+    selectionChanged();
+    setActiveSketchId(id);
+    setSketchSheet(false);
+  };
+
+  const deleteSketch = (id: string) => {
+    notifyWarning();
+    if (activeSketchId === id) setActiveSketchId(null);
+    removeSketch(id);
+    setPendingDelete(null);
+  };
+
+  const setFilter = (filter: SketchFilter) => {
+    if (!activeSketch) return;
+    selectionChanged();
+    updateSketch(activeSketch.id, { filter });
+  };
+
+  // ---- съёмка ---------------------------------------------------------------
+
+  // Каждый снимок сразу уходит в галерею приложения (стор → сервер); из неё
+  // потом можно сохранить на телефон. Полный оригинал остаётся доступен через
+  // «Сохранить / отправить» прямо из предпросмотра.
+  const saveToAppGallery = async (blob: Blob) => {
+    setSavingShot(true);
+    try {
+      const file = new File([blob], shotName(), { type: blob.type || 'image/jpeg' });
+      const att = await fileToAttachment(file, SHOT_MAX_SIDE);
+      addShot(att);
+      setShotMsg('Снимок в галерее приложения ✅');
+    } catch {
+      setShotMsg('Не удалось сохранить в галерею — можно сохранить файлом ниже.');
+      notifyWarning();
+    } finally {
+      setSavingShot(false);
+    }
   };
 
   const takePhoto = async () => {
@@ -200,6 +267,7 @@ export function CameraPage() {
       setShotMsg('');
       setShot({ blob, url: URL.createObjectURL(blob) });
       notifySuccess();
+      void saveToAppGallery(blob);
     } catch {
       notifyWarning();
     } finally {
@@ -218,6 +286,7 @@ export function CameraPage() {
     setShotMsg('');
     setShot({ blob: file, url: URL.createObjectURL(file) });
     notifySuccess();
+    void saveToAppGallery(file);
     // Нативная камера могла оборвать наш видеопоток — оживляем видоискатель.
     const track = streamRef.current?.getVideoTracks()[0];
     if (!track || track.readyState === 'ended') void startStream(facing);
@@ -283,8 +352,13 @@ export function CameraPage() {
       />
 
       {status === 'on' && <GridOverlay mode={gridMode} />}
-      {status === 'on' && reference && (
-        <img className="camera-ref" src={reference} alt="" style={{ opacity: refOpacity }} />
+      {status === 'on' && activeSketch && (
+        <img
+          className="camera-ref"
+          src={attachmentHref(activeSketch.photo)}
+          alt=""
+          style={{ opacity: refOpacity, filter: SKETCH_FILTER_CSS[activeSketch.filter] }}
+        />
       )}
 
       <div className="camera-top">
@@ -296,17 +370,27 @@ export function CameraPage() {
             <button className="camera-btn" onClick={cycleGrid}>
               {GRID_LABELS[gridMode]}
             </button>
-            {canFlip ? (
+            <span className="camera-top__cluster">
               <button
                 className="camera-btn camera-btn--icon"
-                onClick={flipCamera}
-                aria-label="Сменить камеру"
+                onClick={() => {
+                  tapLight();
+                  navigate('/camera/gallery');
+                }}
+                aria-label="Галерея снимков"
               >
-                <IconSwap size={20} />
+                <IconImage size={19} />
               </button>
-            ) : (
-              <span aria-hidden="true" />
-            )}
+              {canFlip && (
+                <button
+                  className="camera-btn camera-btn--icon"
+                  onClick={flipCamera}
+                  aria-label="Сменить камеру"
+                >
+                  <IconSwap size={20} />
+                </button>
+              )}
+            </span>
           </>
         )}
       </div>
@@ -346,23 +430,42 @@ export function CameraPage() {
 
       {status === 'on' && (
         <div className="camera-bottom">
-          {reference && (
-            <div className="camera-opacity">
-              <span>Эскиз</span>
-              <input
-                type="range"
-                min={0.05}
-                max={0.9}
-                step={0.01}
-                value={refOpacity}
-                onChange={(e) => setRefOpacity(Number(e.target.value))}
-                aria-label="Прозрачность эскиза"
-              />
-            </div>
+          {activeSketch && (
+            <>
+              <div className="camera-filters">
+                {SKETCH_FILTERS.map((f) => (
+                  <button
+                    key={f.v}
+                    className={`camera-filters__opt${activeSketch.filter === f.v ? ' is-active' : ''}`}
+                    onClick={() => setFilter(f.v)}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <div className="camera-opacity">
+                <span>Эскиз</span>
+                <input
+                  type="range"
+                  min={0.05}
+                  max={0.9}
+                  step={0.01}
+                  value={refOpacity}
+                  onChange={(e) => setRefOpacity(Number(e.target.value))}
+                  aria-label="Прозрачность эскиза"
+                />
+              </div>
+            </>
           )}
           <div className="camera-controls">
-            {reference ? (
-              <button className="camera-btn" onClick={clearReference}>
+            {activeSketch ? (
+              <button
+                className="camera-btn"
+                onClick={() => {
+                  tapLight();
+                  setActiveSketchId(null);
+                }}
+              >
                 Убрать эскиз
               </button>
             ) : (
@@ -370,7 +473,7 @@ export function CameraPage() {
                 className="camera-btn"
                 onClick={() => {
                   tapLight();
-                  galleryRef.current?.click();
+                  setSketchSheet(true);
                 }}
               >
                 <IconImage size={17} />
@@ -399,13 +502,7 @@ export function CameraPage() {
         </div>
       )}
 
-      <input
-        ref={galleryRef}
-        hidden
-        type="file"
-        accept="image/*"
-        onChange={pickReference}
-      />
+      <input ref={galleryRef} hidden type="file" accept="image/*" onChange={pickSketchFile} />
       <input
         ref={hdRef}
         hidden
@@ -415,20 +512,93 @@ export function CameraPage() {
         onChange={pickHd}
       />
 
+      {sketchSheet && (
+        <Sheet title="Эскизы" onClose={() => setSketchSheet(false)}>
+          <div className="stack">
+            {hydrated && sketches.length > 0 && (
+              <div className="sketch-grid">
+                {sketches.map((s) => (
+                  <div key={s.id} className="sketch-cell">
+                    <button
+                      className={`sketch-cell__pick${s.id === activeSketchId ? ' is-active' : ''}`}
+                      onClick={() => applySketch(s.id)}
+                      aria-label="Выбрать эскиз"
+                    >
+                      <img
+                        src={attachmentHref(s.photo)}
+                        alt=""
+                        style={{ filter: SKETCH_FILTER_CSS[s.filter] }}
+                        loading="lazy"
+                      />
+                    </button>
+                    <button
+                      className="sketch-cell__del"
+                      onClick={() => setPendingDelete(s.id)}
+                      aria-label="Удалить эскиз"
+                    >
+                      <IconTrash size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {sketches.length === 0 && (
+              <p className="muted" style={{ margin: 0 }}>
+                Сохранённых эскизов пока нет. Добавьте референс-портрет из галереи — он
+                останется здесь и будет доступен с любого устройства.
+              </p>
+            )}
+            <button
+              className="btn btn--primary btn--block"
+              type="button"
+              disabled={sketchBusy}
+              onClick={() => {
+                tapLight();
+                galleryRef.current?.click();
+              }}
+            >
+              {sketchBusy ? 'Загружаю…' : 'Добавить из галереи'}
+            </button>
+          </div>
+        </Sheet>
+      )}
+
+      {pendingDelete && (
+        <Sheet title="Удалить эскиз?" onClose={() => setPendingDelete(null)}>
+          <div className="stack">
+            <button
+              className="btn btn--danger btn--block"
+              onClick={() => deleteSketch(pendingDelete)}
+            >
+              Удалить
+            </button>
+            <button className="btn btn--ghost btn--block" onClick={() => setPendingDelete(null)}>
+              Отмена
+            </button>
+          </div>
+        </Sheet>
+      )}
+
       {shot && (
         <div className="camera-shot">
           <img className="camera-shot__img" src={shot.url} alt="Снимок" />
           <div className="camera-shot__panel">
-            {shotMsg && <p className="camera-shot__msg">{shotMsg}</p>}
-            <button className="btn btn--primary btn--block" type="button" onClick={() => void saveShot()}>
+            <p className="camera-shot__msg">
+              {savingShot ? 'Сохраняю в галерею приложения…' : shotMsg}
+            </p>
+            <button
+              className="btn btn--primary btn--block"
+              type="button"
+              onClick={() => void saveShot()}
+            >
               Сохранить / отправить
             </button>
             <button className="camera-btn camera-btn--wide" type="button" onClick={closeShot}>
               Ещё снимок
             </button>
             <p className="camera-shot__hint">
-              В системном меню можно сохранить фото в галерею или отправить его файлом в чат
-              Telegram.
+              Снимки копятся в галерее приложения (значок 🖼 вверху) — оттуда их можно
+              сохранить на телефон или отправить в чат.
             </p>
           </div>
         </div>

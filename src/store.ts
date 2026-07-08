@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import type {
   Attachment,
   CalculatorBlob,
+  CameraBlob,
+  CameraShotItem,
+  CameraSketch,
   CalculatorHistoryEntry,
   CalculatorPrefs,
   ExpenseList,
@@ -177,6 +180,7 @@ const writeInspiration = makePersister<WardrobeInspirationBlob>(STORAGE_KEYS.ins
 const writeFitting = makePersister<WardrobeFittingBlob>(STORAGE_KEYS.fitting);
 const writeWishlist = makePersister<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist);
 const writeSizes = makePersister<WardrobeSizesBlob>(STORAGE_KEYS.sizes);
+const writeCamera = makePersister<CameraBlob>(STORAGE_KEYS.camera);
 
 const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, items });
 const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, items });
@@ -199,6 +203,8 @@ const persistInspiration = (items: InspirationImage[]) => writeInspiration({ ver
 const persistFitting = (itemIds: string[]) => writeFitting({ version: 1, itemIds });
 const persistWishlist = (items: WishItem[]) => writeWishlist({ version: 1, items });
 const persistSizes = (items: SizeEntry[]) => writeSizes({ version: 1, items });
+const persistCamera = (sketches: CameraSketch[], shots: CameraShotItem[]) =>
+  writeCamera({ version: 1, sketches, shots });
 
 // ---- Full data export / import (user-controlled backup) -------------------
 interface ExportData {
@@ -221,6 +227,8 @@ interface ExportData {
   fitting?: string[];
   wishlist?: WishItem[];
   sizes?: SizeEntry[];
+  cameraSketches?: CameraSketch[];
+  cameraShots?: CameraShotItem[];
   reminderPrefs?: Partial<ReminderPrefs>;
 }
 export interface ExportBundle {
@@ -258,6 +266,8 @@ interface FinanceState {
   fitting: string[];
   wishlist: WishItem[];
   sizes: SizeEntry[];
+  cameraSketches: CameraSketch[];
+  cameraShots: CameraShotItem[];
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -408,6 +418,12 @@ interface FinanceState {
 
   setSizes: (items: SizeEntry[]) => void;
 
+  addCameraSketch: (photo: Attachment) => CameraSketch;
+  updateCameraSketch: (id: string, patch: Partial<CameraSketch>) => void;
+  removeCameraSketch: (id: string) => void;
+  addCameraShot: (photo: Attachment) => CameraShotItem;
+  removeCameraShot: (id: string) => void;
+
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
 
@@ -452,6 +468,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   fitting: [],
   wishlist: [],
   sizes: [],
+  cameraSketches: [],
+  cameraShots: [],
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -476,6 +494,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       fit,
       wish,
       sizes,
+      camera,
     ] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
@@ -495,6 +514,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       storage.get<WardrobeFittingBlob>(STORAGE_KEYS.fitting),
       storage.get<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist),
       storage.get<WardrobeSizesBlob>(STORAGE_KEYS.sizes),
+      storage.get<CameraBlob>(STORAGE_KEYS.camera),
     ]);
     set({
       expenses: exp?.items ?? [],
@@ -524,6 +544,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       fitting: fit?.itemIds ?? [],
       wishlist: wish?.items ?? [],
       sizes: sizes?.items ?? [],
+      cameraSketches: camera?.sketches ?? [],
+      cameraShots: camera?.shots ?? [],
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -1366,6 +1388,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         fitting: s.fitting,
         wishlist: s.wishlist,
         sizes: s.sizes,
+        cameraSketches: s.cameraSketches,
+        cameraShots: s.cameraShots,
         reminderPrefs: s.reminderPrefs,
       },
     };
@@ -1404,6 +1428,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       fitting: d.fitting ?? [],
       wishlist: d.wishlist ?? [],
       sizes: d.sizes ?? [],
+      cameraSketches: d.cameraSketches ?? [],
+      cameraShots: d.cameraShots ?? [],
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -1424,6 +1450,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistFitting(st.fitting);
     persistWishlist(st.wishlist);
     persistSizes(st.sizes);
+    persistCamera(st.cameraSketches, st.cameraShots);
     persistReminderPrefs(st.reminderPrefs);
     return true;
   },
@@ -1584,6 +1611,42 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   setSizes: (items) => {
     set({ sizes: items });
     persistSizes(items);
+  },
+
+  addCameraSketch: (photo) => {
+    const sketch: CameraSketch = { id: genId(), photo, filter: 'none', createdAt: Date.now() };
+    const cameraSketches = [sketch, ...get().cameraSketches];
+    set({ cameraSketches });
+    persistCamera(cameraSketches, get().cameraShots);
+    return sketch;
+  },
+
+  updateCameraSketch: (id, patch) => {
+    const cameraSketches = get().cameraSketches.map((s) =>
+      s.id === id ? { ...s, ...patch, id: s.id } : s,
+    );
+    set({ cameraSketches });
+    persistCamera(cameraSketches, get().cameraShots);
+  },
+
+  removeCameraSketch: (id) => {
+    const cameraSketches = get().cameraSketches.filter((s) => s.id !== id);
+    set({ cameraSketches });
+    persistCamera(cameraSketches, get().cameraShots);
+  },
+
+  addCameraShot: (photo) => {
+    const shot: CameraShotItem = { id: genId(), photo, createdAt: Date.now() };
+    const cameraShots = [shot, ...get().cameraShots];
+    set({ cameraShots });
+    persistCamera(get().cameraSketches, cameraShots);
+    return shot;
+  },
+
+  removeCameraShot: (id) => {
+    const cameraShots = get().cameraShots.filter((s) => s.id !== id);
+    set({ cameraShots });
+    persistCamera(get().cameraSketches, cameraShots);
   },
 
   setReminderPrefs: (patch) => {

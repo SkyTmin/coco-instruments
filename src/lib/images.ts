@@ -63,9 +63,10 @@ function jpegName(name: string): string {
 
 export async function compressImage(
   file: File,
+  maxSide = IMAGE_MAX_SIDE,
 ): Promise<{ blob: Blob; name: string; type: string }> {
   const img = await loadImage(file);
-  const scale = Math.min(1, IMAGE_MAX_SIDE / Math.max(img.width, img.height));
+  const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
   const width = Math.max(1, Math.round(img.width * scale));
   const height = Math.max(1, Math.round(img.height * scale));
   const canvas = document.createElement('canvas');
@@ -179,15 +180,17 @@ export async function composeMosaic(srcs: string[]): Promise<Blob | null> {
 }
 
 /** Pick → compress (images) → upload → returns an Attachment with a `url` or
- *  an inline `dataUrl` fallback. Throws on oversized / unreadable files. */
-export async function fileToAttachment(file: File): Promise<Attachment> {
+ *  an inline `dataUrl` fallback. Throws on oversized / unreadable files.
+ *  `maxSide` lets callers keep more resolution (camera shots) — the result
+ *  still has to fit the server's 3 МБ upload cap. */
+export async function fileToAttachment(file: File, maxSide = IMAGE_MAX_SIDE): Promise<Attachment> {
   const isImage = file.type.startsWith('image/');
   if (isImage && file.size > MAX_IMAGE_SOURCE_SIZE) throw new Error('image-source-too-large');
   if (!isImage && file.size > MAX_ATTACHMENT_SIZE) throw new Error('file-too-large');
 
   const prepared =
     isImage && file.type !== 'image/svg+xml' && file.type !== 'image/gif'
-      ? await compressImage(file)
+      ? await compressImage(file, maxSide)
       : { blob: file, name: file.name, type: file.type || 'application/octet-stream' };
   if (prepared.blob.size > MAX_ATTACHMENT_SIZE) throw new Error('file-too-large');
 

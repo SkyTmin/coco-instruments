@@ -103,6 +103,9 @@ const CalculatorPage = lazy(() =>
 const CameraPage = lazy(() =>
   import('@/pages/CameraPage').then((m) => ({ default: m.CameraPage })),
 );
+const CameraGalleryPage = lazy(() =>
+  import('@/pages/CameraGalleryPage').then((m) => ({ default: m.CameraGalleryPage })),
+);
 const FormulasPage = lazy(() =>
   import('@/pages/FormulasPage').then((m) => ({ default: m.FormulasPage })),
 );
@@ -514,6 +517,7 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
                 <Route path="/people/:id" element={<PersonDetailPage />} />
                 <Route path="/people/:id/edit" element={<PersonFormPage />} />
                 <Route path="/camera" element={<CameraPage />} />
+                <Route path="/camera/gallery" element={<CameraGalleryPage />} />
                 <Route path="/calculator" element={<CalculatorPage />} />
                 <Route path="/calculator/formulas" element={<FormulasPage />} />
                 <Route path="/calculator/formulas/:id" element={<FormulaDetailPage />} />

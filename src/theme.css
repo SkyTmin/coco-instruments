@@ -9883,13 +9883,17 @@ input[type='datetime-local'] {
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: 42px 1fr 42px;
+  grid-template-columns: 42px 1fr auto;
   align-items: center;
   gap: 10px;
   padding: 0 14px;
 }
 .camera-top .camera-btn:not(.camera-btn--icon) {
   justify-self: center;
+}
+.camera-top__cluster {
+  display: inline-flex;
+  gap: 8px;
 }
 .camera-bottom {
   position: absolute;
@@ -10089,4 +10093,103 @@ input[type='datetime-local'] {
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.6);
   text-wrap: pretty;
+}
+
+/* Фильтры эскиза (Цвет / Серый / Ч-Б) — чипы над ползунком прозрачности. */
+.camera-filters {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.camera-filters__opt {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  cursor: pointer;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 650;
+  transition: transform 0.12s ease;
+}
+.camera-filters__opt:active {
+  transform: scale(0.95);
+}
+.camera-filters__opt.is-active {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
+}
+
+/* Сохранённые эскизы в шторке выбора. */
+.sketch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.sketch-cell {
+  position: relative;
+}
+.sketch-cell__pick {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--surface-2);
+}
+.sketch-cell__pick img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sketch-cell__pick.is-active {
+  border-color: var(--accent);
+}
+.sketch-cell__del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+/* Панель действий в лайтбоксе галереи камеры. */
+.lightbox__bar {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(var(--safe-bottom) + 14px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lightbox__meta {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  font-weight: 600;
+}
+.lightbox__msg {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(var(--safe-bottom) + 72px);
+  margin: 0;
+  text-align: center;
+  color: #fff;
+  font-size: 13.5px;
 }

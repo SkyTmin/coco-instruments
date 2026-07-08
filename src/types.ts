@@ -769,3 +769,29 @@ export interface WardrobeSizesBlob {
   version: 1;
   items: SizeEntry[];
 }
+
+// ---- Camera (сетки и эскизы для портретов) --------------------------------
+
+/** Display filter applied to a sketch overlay (and editable by the user). */
+export type SketchFilter = 'none' | 'gray' | 'bw';
+
+/** A saved reference sketch: uploaded photo + chosen filter. */
+export interface CameraSketch {
+  id: string;
+  photo: Attachment;
+  filter: SketchFilter;
+  createdAt: number;
+}
+
+/** A photo taken with the camera tool, kept in the in-app gallery. */
+export interface CameraShotItem {
+  id: string;
+  photo: Attachment;
+  createdAt: number;
+}
+
+export interface CameraBlob {
+  version: 1;
+  sketches: CameraSketch[];
+  shots: CameraShotItem[];
+}
