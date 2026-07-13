@@ -9885,7 +9885,7 @@ input[type='datetime-local'] {
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: 42px 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 10px;
   padding: 0 14px;
@@ -10188,4 +10188,175 @@ input[type='datetime-local'] {
   text-align: center;
   color: #fff;
   font-size: 13.5px;
+}
+
+/* ===========================================================================
+   Суфлёр (телесуфлёр) — прокручивающийся текст у верха видоискателя,
+   рядом с фронтальной камерой, чтобы взгляд оставался «в объектив».
+   =========================================================================== */
+.prompter {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--content-top) + 62px);
+  left: 10px;
+  right: 10px;
+  height: 38dvh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.62);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+}
+.prompter__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.prompter__spacer {
+  flex: 1;
+}
+.prompter__btn {
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.prompter__btn:active {
+  transform: scale(0.92);
+}
+.prompter__btn:disabled {
+  opacity: 0.4;
+}
+.prompter__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px 55% 16px; /* хвост, чтобы конец текста дошёл до верха */
+  -webkit-overflow-scrolling: touch;
+}
+.prompter__scroll.is-playing {
+  overflow-y: hidden; /* во время чтения прокрутку ведёт автоскролл */
+}
+.prompter__text {
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  text-wrap: pretty;
+}
+/* Линия-указатель: строку на этом уровне сейчас читаем. */
+.prompter__line {
+  position: absolute;
+  top: calc(46px + 22%);
+  left: 6px;
+  width: 3px;
+  height: 26px;
+  border-radius: 2px;
+  background: var(--accent, #f4a96a);
+  opacity: 0.9;
+  pointer-events: none;
+}
+.prompter__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px;
+  text-align: center;
+}
+.prompter__empty p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* Кнопка суфлёра в топ-баре подсвечивается, когда панель открыта. */
+.camera-btn--icon.is-on {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
+}
+
+/* Список текстов в шторке. */
+.script-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.script-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 6px 8px 6px 12px;
+  background: var(--surface);
+}
+.script-row.is-active {
+  border-color: var(--accent);
+}
+.script-row__pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 6px 0;
+  cursor: pointer;
+}
+.script-row__title {
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.script-row__preview {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.script-row__act {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+/* Редактор текста суфлёра. */
+.script-editor {
+  resize: vertical;
+  min-height: 140px;
+  line-height: 1.5;
 }

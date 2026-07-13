@@ -794,4 +794,22 @@ export interface CameraBlob {
   version: 1;
   sketches: CameraSketch[];
   shots: CameraShotItem[];
+  scripts?: CameraScript[];
+  prompter?: PrompterPrefs;
+}
+
+/** A teleprompter script (суфлёр): stored per user like sketches. */
+export interface CameraScript {
+  id: string;
+  title: string;
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Teleprompter view preferences (persisted so setup survives reopen). */
+export interface PrompterPrefs {
+  speed: number; // px/сек автопрокрутки
+  fontSize: number; // px
+  scriptId?: string; // последний выбранный текст
 }

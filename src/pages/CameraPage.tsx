@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sheet } from '@/components/ui';
-import { IconBack, IconImage, IconSwap, IconTrash } from '@/components/icons';
+import { ConfirmDialog, Sheet } from '@/components/ui';
+import { IconBack, IconImage, IconList, IconPencil, IconSwap, IconTrash } from '@/components/icons';
+import { registerEscape } from '@/lib/escape-stack';
 import { attachmentHref, fileToAttachment } from '@/lib/images';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 import { useFinanceStore } from '@/store';
@@ -91,6 +92,12 @@ export function CameraPage() {
   const updateSketch = useFinanceStore((s) => s.updateCameraSketch);
   const removeSketch = useFinanceStore((s) => s.removeCameraSketch);
   const addShot = useFinanceStore((s) => s.addCameraShot);
+  const scripts = useFinanceStore((s) => s.cameraScripts);
+  const addScript = useFinanceStore((s) => s.addCameraScript);
+  const updateScript = useFinanceStore((s) => s.updateCameraScript);
+  const removeScript = useFinanceStore((s) => s.removeCameraScript);
+  const prompterPrefs = useFinanceStore((s) => s.prompterPrefs);
+  const setPrompterPrefs = useFinanceStore((s) => s.setPrompterPrefs);
   const hydrated = useFinanceStore((s) => s.hydrated);
 
   const [status, setStatus] = useState<CamStatus>('starting');
@@ -108,6 +115,21 @@ export function CameraPage() {
   const [lastThumb, setLastThumb] = useState<string | null>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const hdRef = useRef<HTMLInputElement>(null);
+
+  // ---- суфлёр ---------------------------------------------------------------
+  const [prompterOpen, setPrompterOpen] = useState(false);
+  const [prompterPlaying, setPrompterPlaying] = useState(false);
+  const [scriptsSheet, setScriptsSheet] = useState(false);
+  const [editingScript, setEditingScript] = useState<{
+    id?: string;
+    title: string;
+    text: string;
+  } | null>(null);
+  const [pendingScriptDelete, setPendingScriptDelete] = useState<string | null>(null);
+  const prompterScrollRef = useRef<HTMLDivElement>(null);
+
+  const activeScript =
+    scripts.find((s) => s.id === prompterPrefs.scriptId) ?? scripts[0];
 
   const activeSketch: CameraSketch | undefined = sketches.find((s) => s.id === activeSketchId);
 
@@ -216,6 +238,103 @@ export function CameraPage() {
     updateSketch(activeSketch.id, { filter });
   };
 
+  // ---- суфлёр: автопрокрутка ------------------------------------------------
+
+  // rAF-цикл: копим позицию в float (scrollTop округляется браузером) и
+  // авто-пауза, когда текст дочитан. На паузе панель листается пальцем.
+  useEffect(() => {
+    if (!prompterPlaying) return undefined;
+    const el = prompterScrollRef.current;
+    if (!el) return undefined;
+    let raf = 0;
+    let pos = el.scrollTop;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = (now - last) / 1000;
+      last = now;
+      pos = Math.min(pos + prompterPrefs.speed * dt, el.scrollHeight - el.clientHeight);
+      el.scrollTop = pos;
+      if (pos >= el.scrollHeight - el.clientHeight - 0.5) {
+        setPrompterPlaying(false);
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [prompterPlaying, prompterPrefs.speed]);
+
+  // Telegram back/Esc закрывает суфлёр раньше, чем уводит со страницы.
+  useEffect(() => {
+    if (!prompterOpen) return undefined;
+    return registerEscape(() => {
+      setPrompterPlaying(false);
+      setPrompterOpen(false);
+    });
+  }, [prompterOpen]);
+
+  // Смена текста — начинаем с начала.
+  useEffect(() => {
+    setPrompterPlaying(false);
+    if (prompterScrollRef.current) prompterScrollRef.current.scrollTop = 0;
+  }, [activeScript?.id]);
+
+  const togglePrompter = () => {
+    tapLight();
+    setPrompterPlaying(false);
+    setPrompterOpen((v) => !v);
+  };
+
+  const togglePlaying = () => {
+    if (!activeScript) return;
+    selectionChanged();
+    setPrompterPlaying((v) => !v);
+  };
+
+  const restartPrompter = () => {
+    tapLight();
+    if (prompterScrollRef.current) prompterScrollRef.current.scrollTop = 0;
+    setPrompterPlaying(false);
+  };
+
+  const bumpSpeed = (d: number) => {
+    selectionChanged();
+    setPrompterPrefs({ speed: Math.max(10, Math.min(150, prompterPrefs.speed + d)) });
+  };
+
+  const bumpFont = (d: number) => {
+    selectionChanged();
+    setPrompterPrefs({ fontSize: Math.max(16, Math.min(40, prompterPrefs.fontSize + d)) });
+  };
+
+  const chooseScript = (id: string) => {
+    selectionChanged();
+    setPrompterPrefs({ scriptId: id });
+    setScriptsSheet(false);
+  };
+
+  const saveScript = () => {
+    const e = editingScript;
+    if (!e || !e.text.trim()) return;
+    tapLight();
+    const title = e.title.trim() || e.text.trim().slice(0, 30);
+    if (e.id) {
+      updateScript(e.id, { title, text: e.text });
+    } else {
+      const created = addScript(title, e.text);
+      setPrompterPrefs({ scriptId: created.id });
+    }
+    setEditingScript(null);
+    notifySuccess();
+  };
+
+  const deleteScript = (id: string) => {
+    notifyWarning();
+    removeScript(id);
+    if (prompterPrefs.scriptId === id) setPrompterPrefs({ scriptId: undefined });
+    setPendingScriptDelete(null);
+  };
+
   // ---- съёмка ---------------------------------------------------------------
 
   // Как на камере iPhone: снимок молча уходит в галерею приложения, видоискатель
@@ -275,7 +394,7 @@ export function CameraPage() {
   // плюс Enter/Пробел на десктопе.
   const takePhotoRef = useRef<() => void>(() => {});
   takePhotoRef.current = () => {
-    if (status !== 'on' || sketchSheet || pendingDelete) return;
+    if (status !== 'on' || sketchSheet || pendingDelete || scriptsSheet || editingScript) return;
     void takePhoto();
   };
   useEffect(() => {
@@ -338,9 +457,20 @@ export function CameraPage() {
       )}
 
       <div className="camera-top">
-        <button className="camera-btn camera-btn--icon" onClick={goBack} aria-label="Назад">
-          <IconBack size={20} />
-        </button>
+        <span className="camera-top__cluster">
+          <button className="camera-btn camera-btn--icon" onClick={goBack} aria-label="Назад">
+            <IconBack size={20} />
+          </button>
+          {status === 'on' && (
+            <button
+              className={`camera-btn camera-btn--icon${prompterOpen ? ' is-on' : ''}`}
+              onClick={togglePrompter}
+              aria-label="Суфлёр"
+            >
+              <IconList size={19} />
+            </button>
+          )}
+        </span>
         {status === 'on' && (
           <>
             <button className="camera-btn" onClick={cycleGrid}>
@@ -370,6 +500,80 @@ export function CameraPage() {
           </>
         )}
       </div>
+
+      {/* Суфлёр: панель у верха экрана — глаза остаются рядом с фронталкой.
+          Тап по тексту — старт/пауза, на паузе текст листается пальцем. */}
+      {status === 'on' && prompterOpen && (
+        <div className="prompter">
+          <div className="prompter__bar">
+            <button
+              className="prompter__btn"
+              onClick={togglePlaying}
+              disabled={!activeScript}
+              aria-label={prompterPlaying ? 'Пауза' : 'Читать'}
+            >
+              {prompterPlaying ? '❚❚' : '▶'}
+            </button>
+            <button className="prompter__btn" onClick={restartPrompter} aria-label="Сначала">
+              ⟲
+            </button>
+            <span className="prompter__spacer" />
+            <button className="prompter__btn" onClick={() => bumpFont(-2)} aria-label="Шрифт меньше">
+              A−
+            </button>
+            <button className="prompter__btn" onClick={() => bumpFont(2)} aria-label="Шрифт больше">
+              A+
+            </button>
+            <button
+              className="prompter__btn"
+              onClick={() => bumpSpeed(-10)}
+              aria-label="Медленнее"
+            >
+              −
+            </button>
+            <button className="prompter__btn" onClick={() => bumpSpeed(10)} aria-label="Быстрее">
+              +
+            </button>
+            <button
+              className="prompter__btn"
+              onClick={() => {
+                tapLight();
+                setPrompterPlaying(false);
+                setScriptsSheet(true);
+              }}
+              aria-label="Тексты"
+            >
+              <IconPencil size={14} />
+            </button>
+          </div>
+          {activeScript ? (
+            <div
+              ref={prompterScrollRef}
+              className={`prompter__scroll${prompterPlaying ? ' is-playing' : ''}`}
+              onClick={togglePlaying}
+            >
+              <div className="prompter__text" style={{ fontSize: prompterPrefs.fontSize }}>
+                {activeScript.text}
+              </div>
+            </div>
+          ) : (
+            <div className="prompter__empty">
+              <p>Добавьте текст — он будет плавно прокручиваться, пока вы говорите в камеру.</p>
+              <button
+                className="btn btn--primary"
+                type="button"
+                onClick={() => {
+                  tapLight();
+                  setScriptsSheet(true);
+                }}
+              >
+                Выбрать текст
+              </button>
+            </div>
+          )}
+          {activeScript && <div className="prompter__line" aria-hidden="true" />}
+        </div>
+      )}
 
       {status === 'starting' && (
         <div className="camera-state">
@@ -553,6 +757,102 @@ export function CameraPage() {
             </button>
           </div>
         </Sheet>
+      )}
+
+      {scriptsSheet && (
+        <Sheet title="Тексты суфлёра" onClose={() => setScriptsSheet(false)}>
+          <div className="stack">
+            {scripts.length > 0 ? (
+              <div className="script-list">
+                {scripts.map((s) => (
+                  <div
+                    key={s.id}
+                    className={`script-row${s.id === activeScript?.id ? ' is-active' : ''}`}
+                  >
+                    <button className="script-row__pick" onClick={() => chooseScript(s.id)}>
+                      <span className="script-row__title">{s.title}</span>
+                      <span className="script-row__preview">{s.text.slice(0, 60)}</span>
+                    </button>
+                    <button
+                      className="script-row__act"
+                      onClick={() => {
+                        tapLight();
+                        setEditingScript({ id: s.id, title: s.title, text: s.text });
+                      }}
+                      aria-label="Редактировать"
+                    >
+                      <IconPencil size={16} />
+                    </button>
+                    <button
+                      className="script-row__act"
+                      onClick={() => setPendingScriptDelete(s.id)}
+                      aria-label="Удалить"
+                    >
+                      <IconTrash size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>
+                Текстов пока нет. Напишите речь для видео или подсказки для съёмки — они
+                сохранятся и будут доступны с любого устройства.
+              </p>
+            )}
+            <button
+              className="btn btn--primary btn--block"
+              type="button"
+              onClick={() => {
+                tapLight();
+                setEditingScript({ title: '', text: '' });
+              }}
+            >
+              Новый текст
+            </button>
+          </div>
+        </Sheet>
+      )}
+
+      {editingScript && (
+        <Sheet
+          title={editingScript.id ? 'Редактировать текст' : 'Новый текст'}
+          onClose={() => setEditingScript(null)}
+        >
+          <div className="stack">
+            <input
+              className="input"
+              placeholder="Название (необязательно)"
+              value={editingScript.title}
+              onChange={(e) =>
+                setEditingScript({ ...editingScript, title: e.target.value })
+              }
+            />
+            <textarea
+              className="input script-editor"
+              placeholder="Текст, который будет прокручиваться в суфлёре…"
+              rows={8}
+              value={editingScript.text}
+              onChange={(e) => setEditingScript({ ...editingScript, text: e.target.value })}
+            />
+            <button
+              className="btn btn--primary btn--block"
+              type="button"
+              disabled={!editingScript.text.trim()}
+              onClick={saveScript}
+            >
+              Сохранить
+            </button>
+          </div>
+        </Sheet>
+      )}
+
+      {pendingScriptDelete && (
+        <ConfirmDialog
+          title="Удалить текст?"
+          message="Текст суфлёра будет удалён с сервера. Это действие необратимо."
+          onClose={() => setPendingScriptDelete(null)}
+          onConfirm={() => deleteScript(pendingScriptDelete)}
+        />
       )}
 
       {flash && <div className="camera-flash" onAnimationEnd={() => setFlash(false)} />}

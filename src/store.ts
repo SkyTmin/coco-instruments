@@ -3,6 +3,7 @@ import type {
   Attachment,
   CalculatorBlob,
   CameraBlob,
+  CameraScript,
   CameraShotItem,
   CameraSketch,
   CalculatorHistoryEntry,
@@ -39,6 +40,7 @@ import type {
   PersonPromise,
   PersonRelation,
   Preference,
+  PrompterPrefs,
   RecurringPayment,
   ReminderPrefs,
   SavingsGoal,
@@ -59,6 +61,10 @@ export const DEFAULT_REMINDER_PREFS: ReminderPrefs = {
   leads: [0],
   hour: 9,
   minute: 0,
+};
+export const DEFAULT_PROMPTER_PREFS: PrompterPrefs = {
+  speed: 40,
+  fontSize: 24,
 };
 export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
   angleMode: 'DEG',
@@ -204,8 +210,19 @@ const persistInspiration = (items: InspirationImage[]) => writeInspiration({ ver
 const persistFitting = (itemIds: string[]) => writeFitting({ version: 1, itemIds });
 const persistWishlist = (items: WishItem[]) => writeWishlist({ version: 1, items });
 const persistSizes = (items: SizeEntry[]) => writeSizes({ version: 1, items });
-const persistCamera = (sketches: CameraSketch[], shots: CameraShotItem[]) =>
-  writeCamera({ version: 1, sketches, shots });
+const persistCamera = (s: {
+  cameraSketches: CameraSketch[];
+  cameraShots: CameraShotItem[];
+  cameraScripts: CameraScript[];
+  prompterPrefs: PrompterPrefs;
+}) =>
+  writeCamera({
+    version: 1,
+    sketches: s.cameraSketches,
+    shots: s.cameraShots,
+    scripts: s.cameraScripts,
+    prompter: s.prompterPrefs,
+  });
 
 // ---- Full data export / import (user-controlled backup) -------------------
 interface ExportData {
@@ -230,6 +247,8 @@ interface ExportData {
   sizes?: SizeEntry[];
   cameraSketches?: CameraSketch[];
   cameraShots?: CameraShotItem[];
+  cameraScripts?: CameraScript[];
+  prompterPrefs?: Partial<PrompterPrefs>;
   reminderPrefs?: Partial<ReminderPrefs>;
 }
 export interface ExportBundle {
@@ -269,6 +288,8 @@ interface FinanceState {
   sizes: SizeEntry[];
   cameraSketches: CameraSketch[];
   cameraShots: CameraShotItem[];
+  cameraScripts: CameraScript[];
+  prompterPrefs: PrompterPrefs;
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -424,6 +445,10 @@ interface FinanceState {
   removeCameraSketch: (id: string) => void;
   addCameraShot: (photo: Attachment) => CameraShotItem;
   removeCameraShot: (id: string) => void;
+  addCameraScript: (title: string, text: string) => CameraScript;
+  updateCameraScript: (id: string, patch: Partial<Pick<CameraScript, 'title' | 'text'>>) => void;
+  removeCameraScript: (id: string) => void;
+  setPrompterPrefs: (patch: Partial<PrompterPrefs>) => void;
 
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
@@ -471,6 +496,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   sizes: [],
   cameraSketches: [],
   cameraShots: [],
+  cameraScripts: [],
+  prompterPrefs: DEFAULT_PROMPTER_PREFS,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -547,6 +574,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       sizes: sizes?.items ?? [],
       cameraSketches: camera?.sketches ?? [],
       cameraShots: camera?.shots ?? [],
+      cameraScripts: camera?.scripts ?? [],
+      prompterPrefs: { ...DEFAULT_PROMPTER_PREFS, ...(camera?.prompter ?? {}) },
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -1391,6 +1420,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         sizes: s.sizes,
         cameraSketches: s.cameraSketches,
         cameraShots: s.cameraShots,
+        cameraScripts: s.cameraScripts,
+        prompterPrefs: s.prompterPrefs,
         reminderPrefs: s.reminderPrefs,
       },
     };
@@ -1431,6 +1462,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       sizes: d.sizes ?? [],
       cameraSketches: d.cameraSketches ?? [],
       cameraShots: d.cameraShots ?? [],
+      cameraScripts: d.cameraScripts ?? [],
+      prompterPrefs: { ...DEFAULT_PROMPTER_PREFS, ...(d.prompterPrefs ?? {}) },
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -1451,7 +1484,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistFitting(st.fitting);
     persistWishlist(st.wishlist);
     persistSizes(st.sizes);
-    persistCamera(st.cameraSketches, st.cameraShots);
+    persistCamera(st);
     persistReminderPrefs(st.reminderPrefs);
     return true;
   },
@@ -1618,7 +1651,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const sketch: CameraSketch = { id: genId(), photo, filter: 'none', createdAt: Date.now() };
     const cameraSketches = [sketch, ...get().cameraSketches];
     set({ cameraSketches });
-    persistCamera(cameraSketches, get().cameraShots);
+    persistCamera(get());
     return sketch;
   },
 
@@ -1627,14 +1660,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       s.id === id ? { ...s, ...patch, id: s.id } : s,
     );
     set({ cameraSketches });
-    persistCamera(cameraSketches, get().cameraShots);
+    persistCamera(get());
   },
 
   removeCameraSketch: (id) => {
     const gone = get().cameraSketches.find((s) => s.id === id);
     const cameraSketches = get().cameraSketches.filter((s) => s.id !== id);
     set({ cameraSketches });
-    persistCamera(cameraSketches, get().cameraShots);
+    persistCamera(get());
     if (gone) deleteAttachmentFile(gone.photo); // чистим файл на сервере
   },
 
@@ -1642,7 +1675,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const shot: CameraShotItem = { id: genId(), photo, createdAt: Date.now() };
     const cameraShots = [shot, ...get().cameraShots];
     set({ cameraShots });
-    persistCamera(get().cameraSketches, cameraShots);
+    persistCamera(get());
     return shot;
   },
 
@@ -1650,8 +1683,34 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const gone = get().cameraShots.find((s) => s.id === id);
     const cameraShots = get().cameraShots.filter((s) => s.id !== id);
     set({ cameraShots });
-    persistCamera(get().cameraSketches, cameraShots);
+    persistCamera(get());
     if (gone) deleteAttachmentFile(gone.photo); // чистим файл на сервере
+  },
+
+  addCameraScript: (title, text) => {
+    const now = Date.now();
+    const script: CameraScript = { id: genId(), title, text, createdAt: now, updatedAt: now };
+    set({ cameraScripts: [script, ...get().cameraScripts] });
+    persistCamera(get());
+    return script;
+  },
+
+  updateCameraScript: (id, patch) => {
+    const cameraScripts = get().cameraScripts.map((s) =>
+      s.id === id ? { ...s, ...patch, updatedAt: Date.now() } : s,
+    );
+    set({ cameraScripts });
+    persistCamera(get());
+  },
+
+  removeCameraScript: (id) => {
+    set({ cameraScripts: get().cameraScripts.filter((s) => s.id !== id) });
+    persistCamera(get());
+  },
+
+  setPrompterPrefs: (patch) => {
+    set({ prompterPrefs: { ...get().prompterPrefs, ...patch } });
+    persistCamera(get());
   },
 
   setReminderPrefs: (patch) => {
