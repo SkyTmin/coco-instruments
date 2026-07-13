@@ -82,6 +82,16 @@ const SHOT_MAX_SIDE = 2560;
 const shotName = () =>
   `coco-photo-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.jpg`;
 
+const fmtSecs = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+const pluralWords = (n: number) => {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return 'слово';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'слова';
+  return 'слов';
+};
+
 export function CameraPage() {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -116,6 +126,23 @@ export function CameraPage() {
   const galleryRef = useRef<HTMLInputElement>(null);
   const hdRef = useRef<HTMLInputElement>(null);
 
+  // ---- видео ----------------------------------------------------------------
+  const [mode, setMode] = useState<'photo' | 'video'>('photo');
+  const [recording, setRecording] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [recSecs, setRecSecs] = useState(0);
+  const [micOk, setMicOk] = useState<boolean | null>(null); // null = ещё не спрашивали
+  const [videoResult, setVideoResult] = useState<{
+    blob: Blob;
+    url: string;
+    secs: number;
+  } | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recSecsRef = useRef(0);
+
   // ---- суфлёр ---------------------------------------------------------------
   const [prompterOpen, setPrompterOpen] = useState(false);
   const [prompterPlaying, setPrompterPlaying] = useState(false);
@@ -127,6 +154,10 @@ export function CameraPage() {
   } | null>(null);
   const [pendingScriptDelete, setPendingScriptDelete] = useState<string | null>(null);
   const prompterScrollRef = useRef<HTMLDivElement>(null);
+  // Палец на тексте приостанавливает автопрокрутку: можно подтянуть пропущенное
+  // назад прямо во время чтения, отпустил — суфлёр продолжает с нового места.
+  const prompterDragRef = useRef(false);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
 
   const activeScript =
     scripts.find((s) => s.id === prompterPrefs.scriptId) ?? scripts[0];
@@ -199,6 +230,189 @@ export function CameraPage() {
     void startStream(next);
   };
 
+  // Экран не должен гаснуть, пока открыта камера (особенно во время записи).
+  useEffect(() => {
+    let lock: WakeLockSentinel | null = null;
+    let alive = true;
+    const acquire = () => {
+      navigator.wakeLock
+        ?.request('screen')
+        .then((l) => {
+          if (!alive) void l.release();
+          else lock = l;
+        })
+        .catch(() => {});
+    };
+    acquire();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') acquire();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      alive = false;
+      void lock?.release().catch(() => {});
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+
+  // ---- видео: запись ----------------------------------------------------------
+
+  // Микрофон запрашиваем лениво — при первом входе в режим «Видео», чтобы
+  // фотографы никогда не видели лишний запрос.
+  const ensureAudio = async (): Promise<MediaStreamTrack | null> => {
+    const existing = audioStreamRef.current?.getAudioTracks()[0];
+    if (existing && existing.readyState === 'live') return existing;
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = s;
+      setMicOk(true);
+      return s.getAudioTracks()[0];
+    } catch {
+      setMicOk(false);
+      return null;
+    }
+  };
+
+  useEffect(
+    () => () => {
+      audioStreamRef.current?.getTracks().forEach((t) => t.stop());
+      if (recTimerRef.current) clearInterval(recTimerRef.current);
+    },
+    [],
+  );
+
+  const switchMode = (next: 'photo' | 'video') => {
+    if (recording || countdown !== null) return;
+    selectionChanged();
+    setMode(next);
+    if (next === 'video' && micOk === null) void ensureAudio();
+  };
+
+  // iOS отдаёт mp4 (H.264), Android/Chrome — webm; берём первое поддержанное.
+  const pickMime = (): string | null => {
+    if (typeof MediaRecorder === 'undefined') return null;
+    const candidates = [
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      'video/mp4',
+      'video/webm;codecs=vp9,opus',
+      'video/webm',
+    ];
+    return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
+  };
+
+  const beginRecording = async () => {
+    if (recording || countdown !== null) return;
+    const mime = pickMime();
+    if (mime === null) {
+      notifyWarning();
+      return;
+    }
+    tapMedium();
+    const aTrack = await ensureAudio(); // запрос до отсчёта, не во время
+    // Отсчёт 3-2-1 — время принять позу и найти первую строку суфлёра.
+    for (let i = 3; i >= 1; i -= 1) {
+      setCountdown(i);
+      await new Promise((r) => setTimeout(r, 900));
+    }
+    setCountdown(null);
+    const vTrack = streamRef.current?.getVideoTracks()[0];
+    if (!vTrack || vTrack.readyState !== 'live') {
+      notifyWarning();
+      return;
+    }
+    try {
+      const rec = new MediaRecorder(
+        new MediaStream(aTrack ? [vTrack, aTrack] : [vTrack]),
+        mime ? { mimeType: mime } : undefined,
+      );
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size) chunksRef.current.push(e.data);
+      };
+      rec.onstop = () => {
+        if (recTimerRef.current) clearInterval(recTimerRef.current);
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'video/mp4' });
+        chunksRef.current = [];
+        setVideoResult((prev) => {
+          if (prev) URL.revokeObjectURL(prev.url);
+          return { blob, url: URL.createObjectURL(blob), secs: recSecsRef.current };
+        });
+        setRecording(false);
+        setPrompterPlaying(false);
+        notifySuccess();
+      };
+      recorderRef.current = rec;
+      rec.start(1000);
+      recSecsRef.current = 0;
+      setRecSecs(0);
+      recTimerRef.current = setInterval(() => {
+        recSecsRef.current += 1;
+        setRecSecs(recSecsRef.current);
+      }, 1000);
+      setRecording(true);
+      // Суфлёр стартует вместе с записью — читать и записывать одним жестом.
+      if (prompterOpen && activeScript) {
+        const el = prompterScrollRef.current;
+        if (el && el.scrollTop >= el.scrollHeight - el.clientHeight - 1) el.scrollTop = 0;
+        setPrompterPlaying(true);
+      }
+    } catch {
+      notifyWarning();
+    }
+  };
+
+  const stopRecording = () => {
+    tapMedium();
+    recorderRef.current?.stop();
+    recorderRef.current = null;
+  };
+
+  const closeVideo = () => {
+    tapLight();
+    setVideoResult((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+  };
+
+  const videoOpen = !!videoResult;
+  useEffect(() => {
+    if (!videoOpen) return undefined;
+    return registerEscape(() =>
+      setVideoResult((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url);
+        return null;
+      }),
+    );
+  }, [videoOpen]);
+
+  // Видео не помещается в серверный лимит (3 МБ) — сохраняем сразу на телефон
+  // или в чат через системное меню, как экспорт данных.
+  const saveVideo = async () => {
+    if (!videoResult) return;
+    tapLight();
+    const isMp4 = (videoResult.blob.type || '').includes('mp4');
+    const file = new File(
+      [videoResult.blob],
+      `coco-video-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.${isMp4 ? 'mp4' : 'webm'}`,
+      { type: videoResult.blob.type || (isMp4 ? 'video/mp4' : 'video/webm') },
+    );
+    if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Coco Камера' });
+        return;
+      } catch (err) {
+        if ((err as DOMException)?.name === 'AbortError') return;
+      }
+    }
+    const a = document.createElement('a');
+    a.href = videoResult.url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   // ---- эскизы ---------------------------------------------------------------
 
   const pickSketchFile = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -252,6 +466,12 @@ export function CameraPage() {
     const tick = (now: number) => {
       const dt = (now - last) / 1000;
       last = now;
+      if (prompterDragRef.current) {
+        // Пользователь перематывает пальцем — не мешаем, только следим за позицией.
+        pos = el.scrollTop;
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       pos = Math.min(pos + prompterPrefs.speed * dt, el.scrollHeight - el.clientHeight);
       el.scrollTop = pos;
       if (pos >= el.scrollHeight - el.clientHeight - 0.5) {
@@ -297,9 +517,16 @@ export function CameraPage() {
     setPrompterPlaying(false);
   };
 
+  // Скорость показываем множителем от «обычного темпа речи» (×1 = 40 пикс/сек):
+  // ×0.75 медленнее, ×1.5 быстрее — как скорость воспроизведения в плеерах.
+  const BASE_SPEED = 40;
+  const speedLabel = `${(prompterPrefs.speed / BASE_SPEED).toLocaleString('ru-RU', {
+    maximumFractionDigits: 2,
+  })}×`;
+
   const bumpSpeed = (d: number) => {
     selectionChanged();
-    setPrompterPrefs({ speed: Math.max(10, Math.min(150, prompterPrefs.speed + d)) });
+    setPrompterPrefs({ speed: Math.max(10, Math.min(120, prompterPrefs.speed + d)) });
   };
 
   const bumpFont = (d: number) => {
@@ -312,6 +539,25 @@ export function CameraPage() {
     setPrompterPrefs({ scriptId: id });
     setScriptsSheet(false);
   };
+
+  // Поле текста растёт под содержимое (до ~половины экрана) — длинную речь
+  // видно целиком, ничего не приходится листать в три строки.
+  const growEditor = () => {
+    const el = editorRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight + 2, window.innerHeight * 0.45)}px`;
+  };
+  const editorOpen = !!editingScript;
+  useEffect(() => {
+    if (editorOpen) requestAnimationFrame(growEditor);
+  }, [editorOpen]);
+
+  const editorWords = editingScript
+    ? editingScript.text.trim().split(/\s+/).filter(Boolean).length
+    : 0;
+  // ~150 слов в минуту — средний темп речи на камеру.
+  const editorSecs = Math.round(editorWords / 2.5);
 
   const saveScript = () => {
     const e = editingScript;
@@ -473,9 +719,16 @@ export function CameraPage() {
         </span>
         {status === 'on' && (
           <>
-            <button className="camera-btn" onClick={cycleGrid}>
-              {GRID_LABELS[gridMode]}
-            </button>
+            {recording ? (
+              <div className="camera-rec">
+                <span className="camera-rec__dot" />
+                {fmtSecs(recSecs)}
+              </div>
+            ) : (
+              <button className="camera-btn" onClick={cycleGrid}>
+                {GRID_LABELS[gridMode]}
+              </button>
+            )}
             <span className="camera-top__cluster">
               <button
                 className={`camera-btn camera-btn--icon${lastThumb ? ' camera-btn--shot' : ''}`}
@@ -491,6 +744,7 @@ export function CameraPage() {
                 <button
                   className="camera-btn camera-btn--icon"
                   onClick={flipCamera}
+                  disabled={recording || countdown !== null}
                   aria-label="Сменить камеру"
                 >
                   <IconSwap size={20} />
@@ -531,6 +785,9 @@ export function CameraPage() {
             >
               −
             </button>
+            <span className="prompter__speed" title="Скорость прокрутки">
+              {speedLabel}
+            </span>
             <button className="prompter__btn" onClick={() => bumpSpeed(10)} aria-label="Быстрее">
               +
             </button>
@@ -549,8 +806,11 @@ export function CameraPage() {
           {activeScript ? (
             <div
               ref={prompterScrollRef}
-              className={`prompter__scroll${prompterPlaying ? ' is-playing' : ''}`}
+              className="prompter__scroll"
               onClick={togglePlaying}
+              onTouchStart={() => (prompterDragRef.current = true)}
+              onTouchEnd={() => (prompterDragRef.current = false)}
+              onTouchCancel={() => (prompterDragRef.current = false)}
             >
               <div className="prompter__text" style={{ fontSize: prompterPrefs.fontSize }}>
                 {activeScript.text}
@@ -637,6 +897,29 @@ export function CameraPage() {
               </div>
             </>
           )}
+          {!recording && countdown === null && (
+            <div className="camera-mode" role="tablist" aria-label="Режим съёмки">
+              <button
+                className={`camera-mode__opt${mode === 'photo' ? ' is-active' : ''}`}
+                onClick={() => switchMode('photo')}
+                role="tab"
+                aria-selected={mode === 'photo'}
+              >
+                Фото
+              </button>
+              <button
+                className={`camera-mode__opt${mode === 'video' ? ' is-active' : ''}`}
+                onClick={() => switchMode('video')}
+                role="tab"
+                aria-selected={mode === 'video'}
+              >
+                Видео
+              </button>
+              {mode === 'video' && micOk === false && (
+                <span className="camera-mode__mic">без звука 🎤✕</span>
+              )}
+            </div>
+          )}
           <div className="camera-controls">
             {activeSketch ? (
               <button
@@ -660,24 +943,76 @@ export function CameraPage() {
                 Эскиз
               </button>
             )}
+            {mode === 'photo' ? (
+              <button
+                className="camera-shutter"
+                onClick={() => void takePhoto()}
+                disabled={capturing}
+                aria-label="Сделать снимок"
+              >
+                <span className="camera-shutter__inner" />
+              </button>
+            ) : (
+              <button
+                className={`camera-shutter camera-shutter--video${recording ? ' is-recording' : ''}`}
+                onClick={() => (recording ? stopRecording() : void beginRecording())}
+                disabled={countdown !== null}
+                aria-label={recording ? 'Остановить запись' : 'Начать запись'}
+              >
+                <span className="camera-shutter__inner" />
+              </button>
+            )}
+            {mode === 'photo' ? (
+              <button
+                className="camera-btn"
+                onClick={() => {
+                  tapLight();
+                  hdRef.current?.click();
+                }}
+                aria-label="HD-снимок нативной камерой"
+              >
+                HD
+              </button>
+            ) : (
+              <span className="camera-btn-slot" aria-hidden="true" />
+            )}
+          </div>
+        </div>
+      )}
+
+      {countdown !== null && <div className="camera-countdown">{countdown}</div>}
+
+      {videoResult && (
+        <div className="video-result">
+          <video
+            className="video-result__player"
+            src={videoResult.url}
+            controls
+            playsInline
+            preload="metadata"
+          />
+          <div className="video-result__panel">
+            <p className="video-result__meta">
+              {fmtSecs(videoResult.secs)} ·{' '}
+              {videoResult.blob.size >= 1024 * 1024
+                ? `${(videoResult.blob.size / 1024 / 1024).toFixed(1)} МБ`
+                : `${Math.round(videoResult.blob.size / 1024)} КБ`}
+              {micOk === false ? ' · без звука' : ''}
+            </p>
             <button
-              className="camera-shutter"
-              onClick={() => void takePhoto()}
-              disabled={capturing}
-              aria-label="Сделать снимок"
+              className="btn btn--primary btn--block"
+              type="button"
+              onClick={() => void saveVideo()}
             >
-              <span className="camera-shutter__inner" />
+              Сохранить / отправить
             </button>
-            <button
-              className="camera-btn"
-              onClick={() => {
-                tapLight();
-                hdRef.current?.click();
-              }}
-              aria-label="HD-снимок нативной камерой"
-            >
-              HD
+            <button className="camera-btn camera-btn--wide" type="button" onClick={closeVideo}>
+              Записать ещё
             </button>
+            <p className="video-result__hint">
+              Видео сохраняется на телефон или уходит в чат через системное меню — в галерее
+              приложения хранятся только фото.
+            </p>
           </div>
         </div>
       )}
@@ -828,12 +1163,21 @@ export function CameraPage() {
               }
             />
             <textarea
+              ref={editorRef}
               className="input script-editor"
               placeholder="Текст, который будет прокручиваться в суфлёре…"
-              rows={8}
+              rows={6}
               value={editingScript.text}
-              onChange={(e) => setEditingScript({ ...editingScript, text: e.target.value })}
+              onChange={(e) => {
+                setEditingScript({ ...editingScript, text: e.target.value });
+                growEditor();
+              }}
             />
+            {editorWords > 0 && (
+              <p className="script-editor__meta">
+                {editorWords} {pluralWords(editorWords)} · ≈ {fmtSecs(editorSecs)} чтения
+              </p>
+            )}
             <button
               className="btn btn--primary btn--block"
               type="button"
