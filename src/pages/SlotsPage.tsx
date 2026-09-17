@@ -222,6 +222,9 @@ export function SlotsPage() {
   // На табло — копилка плюс то, что заплатит сама линия семёрок.
   const jackpotPrize = jackpotPool + lineBet(bet) * symbolOf('seven').three;
 
+  const theme = skinOf(skin);
+  const rainSrc = symbolSrc(skin, theme.rain);
+
   const finish = useCallback((res: SpinResult & { jackpotWin: number }) => {
     if (tickRef.current) clearInterval(tickRef.current);
     setResult(res);
@@ -232,21 +235,21 @@ export function SlotsPage() {
     if (res.kind === 'jackpot') {
       notifySuccess();
       jackpotFanfare();
-      burstConfetti(180);
-      rainCoins(40);
+      burstConfetti(180, theme.confetti);
+      rainCoins(40, rainSrc);
       setShake(true);
       setCelebration({ tier: 'jackpot', amount: res.total });
     } else if (res.kind === 'big') {
       notifySuccess();
       winChime('big');
-      rainCoins(22);
-      burstConfetti(70);
+      rainCoins(22, rainSrc);
+      burstConfetti(70, theme.confetti);
       setCelebration({ tier: 'big', amount: res.total });
     } else if (res.kind === 'small') {
       tapLight();
       winChime('small');
     }
-  }, []);
+  }, [theme.confetti, rainSrc]);
 
   const spin = useCallback(() => {
     if (!hydrated || spinning || balance < bet) return;
@@ -328,7 +331,7 @@ export function SlotsPage() {
     claimBonus(amount);
     coinDing();
     coinDing(0.12);
-    rainCoins(14);
+    rainCoins(14, rainSrc);
     notifySuccess();
     setNow(Date.now());
   };
@@ -374,8 +377,9 @@ export function SlotsPage() {
 
   return (
     <Screen
-      title="Слоты"
-      subtitle="Мини-игра на удачу"
+      title={skinOf(skin).title}
+      subtitle={skinOf(skin).subtitle}
+      className={`slots-screen slots-screen--${skin}`}
       action={
         <div className="row" style={{ gap: 8 }}>
           <button
@@ -402,6 +406,10 @@ export function SlotsPage() {
       }
     >
       <div className="stack slots" data-skin={skin}>
+        {/* Сцена темы: фон и декор за всем содержимым страницы */}
+        <div className="slots-scene" aria-hidden="true">
+          <span className="slots-scene__decor" />
+        </div>
         <SlotArtDefs />
         {/* Табло: баланс и текущий джекпот */}
         <div className="slot-hud">

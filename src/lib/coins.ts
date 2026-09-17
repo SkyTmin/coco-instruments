@@ -15,7 +15,8 @@ const COIN_SVG = `<svg viewBox="0 0 64 64" width="30" height="30" aria-hidden="t
   <ellipse cx="23" cy="21" rx="6" ry="3.6" fill="#fff" opacity="0.5" transform="rotate(-35 23 21)"/>
 </svg>`;
 
-export function rainCoins(count = 24): void {
+/** `src` — путь к символу темы; по умолчанию сыплется монета. */
+export function rainCoins(count = 24, src?: string): void {
   if (typeof document === 'undefined') return;
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
 
@@ -24,7 +25,16 @@ export function rainCoins(count = 24): void {
 
   for (let i = 0; i < count; i++) {
     const coin = document.createElement('i');
-    coin.innerHTML = COIN_SVG;
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src;
+      img.width = 30;
+      img.height = 30;
+      img.alt = '';
+      coin.appendChild(img);
+    } else {
+      coin.innerHTML = COIN_SVG;
+    }
     coin.style.left = `${Math.random() * 100}%`;
     coin.style.setProperty('--d', `${(1.1 + Math.random() * 0.9).toFixed(2)}s`);
     coin.style.setProperty('--x', `${(Math.random() * 2 - 1).toFixed(2)}`);

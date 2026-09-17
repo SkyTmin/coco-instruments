@@ -4,7 +4,7 @@
 
 const COLORS = ['#7b4b2a', '#b8814a', '#2e9e6b', '#d79a2b', '#e0b078', '#4cc18a', '#ef7d54'];
 
-export function burstConfetti(count = 90): void {
+export function burstConfetti(count = 90, palette?: string[]): void {
   if (typeof document === 'undefined') return;
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
 
@@ -14,7 +14,8 @@ export function burstConfetti(count = 90): void {
   for (let i = 0; i < count; i++) {
     const piece = document.createElement('i');
     piece.style.left = `${Math.random() * 100}%`;
-    piece.style.background = COLORS[i % COLORS.length];
+    const colors = palette?.length ? palette : COLORS;
+    piece.style.background = colors[i % colors.length];
     piece.style.setProperty('--x', `${(Math.random() * 2 - 1).toFixed(2)}`);
     piece.style.setProperty('--r', `${Math.round(Math.random() * 360)}deg`);
     piece.style.setProperty('--d', `${(0.9 + Math.random() * 0.8).toFixed(2)}s`);

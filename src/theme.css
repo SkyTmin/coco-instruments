@@ -10541,6 +10541,13 @@ input[type='datetime-local'] {
   --bezel-2: #c9922c;
   --bezel-3: #7a5510;
   --bezel-4: #e8c475;
+  --btn-1: #ffd884;
+  --btn-2: #ff9f52;
+  --btn-3: #f2703f;
+  --btn-4: #d8462f;
+  --btn-fg: #3a1704;
+  --scene-1: #201309;
+  --scene-2: #100a06;
   position: relative;
 }
 
@@ -10555,6 +10562,13 @@ input[type='datetime-local'] {
   --reel-hi: #fff6e8;
   --reel-mid: #f0dcc2;
   --reel-lo: #bf9a72;
+  --btn-1: #ffdd7a;
+  --btn-2: #ffb020;
+  --btn-3: #e2452c;
+  --btn-4: #9e0f14;
+  --btn-fg: #4a0505;
+  --scene-1: #3d060a;
+  --scene-2: #150204;
 }
 .slots[data-skin='space'],
 .skin-card[data-skin='space'] {
@@ -10570,6 +10584,13 @@ input[type='datetime-local'] {
   --bezel-2: #9fb0c6;
   --bezel-3: #48576b;
   --bezel-4: #d6e2f0;
+  --btn-1: #bcd8ff;
+  --btn-2: #6f9cff;
+  --btn-3: #5b5ce0;
+  --btn-4: #2d2a85;
+  --btn-fg: #0b1030;
+  --scene-1: #0d1236;
+  --scene-2: #04050f;
 }
 .slots[data-skin='pirate'],
 .skin-card[data-skin='pirate'] {
@@ -10585,6 +10606,13 @@ input[type='datetime-local'] {
   --bezel-2: #b98b3c;
   --bezel-3: #6a4a14;
   --bezel-4: #dcc07e;
+  --btn-1: #9ff0e2;
+  --btn-2: #3fc4b0;
+  --btn-3: #1d8b84;
+  --btn-4: #0c4f52;
+  --btn-fg: #04231f;
+  --scene-1: #07312f;
+  --scene-2: #03151a;
 }
 .slots[data-skin='egypt'],
 .skin-card[data-skin='egypt'] {
@@ -10596,6 +10624,13 @@ input[type='datetime-local'] {
   --reel-hi: #fdf3dc;
   --reel-mid: #efdfba;
   --reel-lo: #bda880;
+  --btn-1: #ffe9a8;
+  --btn-2: #ffc94d;
+  --btn-3: #d79326;
+  --btn-4: #8a5a10;
+  --btn-fg: #3a2405;
+  --scene-1: #3a2c0c;
+  --scene-2: #140f04;
 }
 .slots[data-skin='candy'],
 .skin-card[data-skin='candy'] {
@@ -10611,6 +10646,13 @@ input[type='datetime-local'] {
   --bezel-2: #e88fb8;
   --bezel-3: #a44b76;
   --bezel-4: #ffc9e2;
+  --btn-1: #ffd1ec;
+  --btn-2: #ff8ad4;
+  --btn-3: #f0569f;
+  --btn-4: #a5215f;
+  --btn-fg: #4a0b2e;
+  --scene-1: #45093a;
+  --scene-2: #1a0316;
 }
 /* Свет за автоматом: отделяет корпус от фона страницы, как софит в зале */
 .slots::before {
@@ -10649,10 +10691,10 @@ input[type='datetime-local'] {
   padding: 9px 13px;
   border-radius: 14px;
   /* Ламповое табло: тёмное стекло, точечная сетка и светящиеся цифры */
-  border: 1px solid rgba(255, 190, 120, 0.3);
+  border: 1px solid color-mix(in srgb, var(--neon) 32%, transparent);
   background:
     repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.25) 0 1px, transparent 1px 3px),
-    linear-gradient(180deg, #170e09, #241610);
+    linear-gradient(180deg, color-mix(in srgb, var(--cab-2) 90%, #000), var(--cab-3));
   box-shadow:
     inset 0 2px 8px rgba(0, 0, 0, 0.75),
     0 6px 16px rgba(0, 0, 0, 0.35);
@@ -10669,7 +10711,8 @@ input[type='datetime-local'] {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255, 214, 170, 0.6);
+  color: color-mix(in srgb, var(--neon) 40%, #fff);
+  opacity: 0.7;
 }
 .slot-hud__value {
   font-family: ui-monospace, 'SF Mono', 'Menlo', monospace;
@@ -10677,8 +10720,8 @@ input[type='datetime-local'] {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
-  color: #ffe2ab;
-  text-shadow: 0 0 10px rgba(255, 190, 110, 0.55);
+  color: color-mix(in srgb, var(--neon) 45%, #fff8e2);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--neon) 60%, transparent);
 }
 .slot-hud__value--jackpot {
   color: var(--neon);
@@ -11131,11 +11174,16 @@ input[type='datetime-local'] {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: radial-gradient(circle at 33% 27%, #ffa3a3, #d1394a 58%, #7d1522);
+  background: radial-gradient(
+    circle at 33% 27%,
+    color-mix(in srgb, var(--btn-1) 75%, #fff),
+    var(--btn-3) 58%,
+    var(--btn-4)
+  );
   box-shadow:
     0 6px 14px rgba(0, 0, 0, 0.55),
     inset 0 2px 5px rgba(255, 255, 255, 0.5),
-    0 0 12px rgba(214, 60, 74, 0.35);
+    0 0 12px color-mix(in srgb, var(--btn-3) 45%, transparent);
 }
 .lever__rod {
   flex: 1;
@@ -11231,12 +11279,12 @@ input[type='datetime-local'] {
 }
 .slot-bet {
   flex: 1;
-  border: 1px solid var(--glass-border);
+  border: 1px solid color-mix(in srgb, var(--neon) 22%, transparent);
   cursor: pointer;
   padding: 11px 4px;
   border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--text);
+  background: color-mix(in srgb, var(--cab-1) 70%, #000);
+  color: #fff2e0;
   font-size: 14px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -11246,9 +11294,10 @@ input[type='datetime-local'] {
   transform: scale(0.94);
 }
 .slot-bet.is-active {
-  background: var(--chip-active-bg);
-  color: var(--chip-active-fg);
-  border-color: transparent;
+  background: linear-gradient(180deg, var(--btn-1), var(--btn-2));
+  color: #2a1206;
+  border-color: color-mix(in srgb, var(--btn-1) 70%, #fff);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--btn-3) 45%, transparent);
 }
 .slot-bet:disabled {
   opacity: 0.4;
@@ -11267,13 +11316,19 @@ input[type='datetime-local'] {
   font-weight: 900;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: #3a1704;
+  color: var(--btn-fg, #3a1704);
   /* Выпуклая кнопка: светлая фаска сверху, тёмная снизу, золотой кант */
-  border: 2px solid rgba(255, 226, 170, 0.75);
-  background: linear-gradient(180deg, #ffd884 0%, #ff9f52 45%, #f2703f 70%, #d8462f 100%);
+  border: 2px solid color-mix(in srgb, var(--btn-1) 70%, #fff);
+  background: linear-gradient(
+    180deg,
+    var(--btn-1) 0%,
+    var(--btn-2) 45%,
+    var(--btn-3) 72%,
+    var(--btn-4) 100%
+  );
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
   box-shadow:
-    0 12px 26px rgba(226, 92, 46, 0.5),
+    0 12px 26px color-mix(in srgb, var(--btn-3) 55%, transparent),
     inset 0 2px 0 rgba(255, 255, 255, 0.65),
     inset 0 -4px 10px rgba(120, 30, 10, 0.5);
   transition:
@@ -11305,11 +11360,11 @@ input[type='datetime-local'] {
 .slot-mini {
   flex: none;
   min-width: 52px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid color-mix(in srgb, var(--neon) 22%, transparent);
   cursor: pointer;
   border-radius: 16px;
-  background: var(--surface-2);
-  color: var(--text);
+  background: color-mix(in srgb, var(--cab-1) 70%, #000);
+  color: #fff2e0;
   font-size: 15px;
   font-weight: 800;
   transition: transform 0.12s ease;
@@ -11321,16 +11376,16 @@ input[type='datetime-local'] {
   opacity: 0.4;
 }
 .slot-mini.is-on {
-  background: var(--chip-active-bg);
-  color: var(--chip-active-fg);
-  border-color: transparent;
+  background: linear-gradient(180deg, var(--btn-1), var(--btn-2));
+  color: #2a1206;
+  border-color: color-mix(in srgb, var(--btn-1) 70%, #fff);
 }
 
 .slot-bonus-hint {
   margin: -4px 0 0;
   text-align: center;
   font-size: 12.5px;
-  color: var(--muted);
+  color: rgba(255, 240, 220, 0.6);
 }
 
 /* ---- История и статистика ----------------------------------------------- */
@@ -11339,7 +11394,8 @@ input[type='datetime-local'] {
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--neon) 40%, #fff);
+  opacity: 0.7;
   margin-bottom: 8px;
 }
 .slot-history__row {
@@ -11360,12 +11416,13 @@ input[type='datetime-local'] {
   gap: 2px;
   padding: 7px 10px;
   border-radius: 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--cab-1) 68%, #000);
+  border: 1px solid color-mix(in srgb, var(--neon) 18%, transparent);
+  color: #fff2e0;
 }
 .slot-chip.is-win {
   border-color: color-mix(in srgb, var(--pos) 55%, transparent);
-  background: color-mix(in srgb, var(--pos) 12%, var(--surface-2));
+  background: color-mix(in srgb, var(--pos) 16%, var(--cab-1));
 }
 .slot-chip__reels {
   font-size: 15px;
@@ -11375,7 +11432,7 @@ input[type='datetime-local'] {
 .slot-chip__sum {
   font-size: 11.5px;
   font-weight: 800;
-  color: var(--muted);
+  color: rgba(255, 240, 220, 0.7);
   font-variant-numeric: tabular-nums;
 }
 .slot-chip.is-win .slot-chip__sum {
@@ -11390,8 +11447,9 @@ input[type='datetime-local'] {
 .slot-stat {
   padding: 12px 14px;
   border-radius: 16px;
-  background: var(--surface-2);
-  border: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--cab-1) 68%, #000);
+  border: 1px solid color-mix(in srgb, var(--neon) 18%, transparent);
+  color: #fff2e0;
   text-align: center;
 }
 .slot-stat__num {
@@ -11401,7 +11459,7 @@ input[type='datetime-local'] {
 }
 .slot-stat__lbl {
   font-size: 12px;
-  color: var(--muted);
+  color: rgba(255, 240, 220, 0.62);
   margin-top: 2px;
 }
 
@@ -11867,4 +11925,165 @@ input[type='datetime-local'] {
   display: grid;
   place-items: center;
   padding: 0;
+}
+
+/* ===========================================================================
+   Сцена темы: фон всей страницы и декор за автоматом.
+   Слой fixed с z-index:-1 — он перекрывает фон приложения, но остаётся
+   под содержимым экрана.
+   =========================================================================== */
+.slots-scene {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--neon) 20%, transparent), transparent 62%),
+    linear-gradient(180deg, var(--scene-1), var(--scene-2));
+}
+/* Шапка экрана всегда на затемнении — иначе декор съедает заголовок */
+.slots-scene::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 190px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.18) 55%, transparent);
+}
+.slots-scene__decor {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+/* Классика: тёплое боке ламп зала */
+.slots[data-skin='classic'] .slots-scene__decor {
+  background:
+    radial-gradient(circle 70px at 12% 18%, rgba(255, 190, 110, 0.14), transparent 70%),
+    radial-gradient(circle 50px at 84% 26%, rgba(255, 160, 90, 0.12), transparent 70%),
+    radial-gradient(circle 90px at 70% 82%, rgba(255, 210, 140, 0.1), transparent 70%);
+}
+
+/* Дракон: бумажные фонари по краям и красное зарево */
+.slots[data-skin='asia'] .slots-scene__decor {
+  background:
+    radial-gradient(circle 120px at 50% 8%, rgba(255, 90, 60, 0.22), transparent 70%),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 210, 120, 0.035) 0 2px,
+      transparent 2px 14px
+    );
+}
+.slots[data-skin='asia'] .slots-scene__decor::before,
+.slots[data-skin='asia'] .slots-scene__decor::after {
+  content: '';
+  position: absolute;
+  top: -12px;
+  width: 44px;
+  height: 66px;
+  background: url('/slots/asia/cherry.svg') center/contain no-repeat;
+  opacity: 0.6;
+  filter: drop-shadow(0 6px 14px rgba(255, 60, 40, 0.45));
+  transform-origin: 50% 0;
+  animation: lantern-sway 4.5s ease-in-out infinite;
+}
+.slots[data-skin='asia'] .slots-scene__decor::before {
+  left: -8px;
+}
+.slots[data-skin='asia'] .slots-scene__decor::after {
+  right: -8px;
+  animation-delay: -2.2s;
+}
+@keyframes lantern-sway {
+  50% {
+    transform: rotate(6deg);
+  }
+}
+
+/* Космос: звёздное поле с мерцанием и туманность */
+.slots[data-skin='space'] .slots-scene__decor {
+  background:
+    radial-gradient(circle 1.6px at 12% 14%, #fff 99%, transparent),
+    radial-gradient(circle 1.2px at 28% 42%, #cfe3ff 99%, transparent),
+    radial-gradient(circle 1.8px at 47% 9%, #fff 99%, transparent),
+    radial-gradient(circle 1.3px at 63% 30%, #e7d6ff 99%, transparent),
+    radial-gradient(circle 1.5px at 81% 17%, #fff 99%, transparent),
+    radial-gradient(circle 1.2px at 91% 52%, #bcd8ff 99%, transparent),
+    radial-gradient(circle 1.7px at 18% 68%, #fff 99%, transparent),
+    radial-gradient(circle 1.3px at 38% 86%, #d9c8ff 99%, transparent),
+    radial-gradient(circle 1.5px at 72% 74%, #fff 99%, transparent),
+    radial-gradient(circle 1.2px at 58% 94%, #a9c6ff 99%, transparent),
+    radial-gradient(ellipse 60% 30% at 80% 78%, rgba(150, 90, 255, 0.18), transparent 70%),
+    radial-gradient(ellipse 50% 26% at 18% 30%, rgba(60, 140, 255, 0.16), transparent 70%);
+  animation: starfield 6s ease-in-out infinite;
+}
+@keyframes starfield {
+  50% {
+    opacity: 0.72;
+  }
+}
+
+/* Пираты: доски палубы снизу и морской туман */
+.slots[data-skin='pirate'] .slots-scene__decor {
+  background:
+    linear-gradient(180deg, transparent 62%, rgba(58, 36, 16, 0.55) 62%, rgba(32, 19, 8, 0.85) 100%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.22) 0 2px,
+      transparent 2px 46px
+    ),
+    radial-gradient(ellipse 80% 30% at 50% 100%, rgba(87, 214, 196, 0.18), transparent 70%);
+}
+.slots[data-skin='pirate'] .slots-scene__decor::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 34%;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(233, 216, 166, 0.35) 0 10px,
+    transparent 10px 18px
+  );
+}
+
+/* Египет: песчаные дюны и солнечный диск */
+.slots[data-skin='egypt'] .slots-scene__decor {
+  background:
+    radial-gradient(circle 60px at 82% 12%, rgba(255, 201, 77, 0.35), transparent 70%),
+    linear-gradient(180deg, transparent 68%, rgba(120, 88, 30, 0.45) 100%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 220, 150, 0.05) 0 1px,
+      transparent 1px 12px
+    );
+}
+
+/* Сладости: глазурь сверху и сахарная посыпка */
+.slots[data-skin='candy'] .slots-scene__decor {
+  background:
+    radial-gradient(circle 4px at 14% 22%, rgba(255, 224, 102, 0.55), transparent 60%),
+    radial-gradient(circle 3px at 32% 12%, rgba(126, 224, 255, 0.6), transparent 60%),
+    radial-gradient(circle 4px at 68% 18%, rgba(255, 93, 143, 0.55), transparent 60%),
+    radial-gradient(circle 3px at 88% 34%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(circle 4px at 22% 74%, rgba(126, 224, 255, 0.45), transparent 60%),
+    radial-gradient(circle 3px at 78% 84%, rgba(255, 224, 102, 0.5), transparent 60%),
+    radial-gradient(ellipse 120% 26% at 50% 0%, rgba(255, 138, 212, 0.35), transparent 72%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slots-scene__decor,
+  .slots[data-skin='asia'] .slots-scene__decor::before,
+  .slots[data-skin='asia'] .slots-scene__decor::after {
+    animation: none;
+  }
+}
+
+/* Кнопка бонуса тоже в палитре темы, а не в общем акценте приложения. */
+.slots .btn--ghost {
+  border-color: color-mix(in srgb, var(--neon) 45%, transparent);
+  background: color-mix(in srgb, var(--cab-1) 60%, transparent);
+  color: color-mix(in srgb, var(--neon) 55%, #fff);
 }
