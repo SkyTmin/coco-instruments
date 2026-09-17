@@ -58,7 +58,7 @@ describe('slot machine', () => {
     expect(win.symbol).toBe('seven');
     expect(res.kind).toBe('jackpot');
     expect(win.payout).toBe(8000); // 10 × 800
-    expect(outcomeLabel(res)).toContain('ДЖЕКПОТ');
+    expect(outcomeLabel(res).text).toContain('ДЖЕКПОТ');
   });
 
   it('pays two matching symbols from the left, but not from the right', () => {
@@ -83,7 +83,7 @@ describe('slot machine', () => {
     const res = evaluateGrid(grid([[C, L, B], [C, L, B], [C, L, B]]), 50);
     expect(res.total).toBe(0);
     expect(res.kind).toBe('none');
-    expect(outcomeLabel(res)).toContain('Мимо');
+    expect(outcomeLabel(res).text).toContain('Мимо');
   });
 
   it('detects a near miss on premium symbols', () => {

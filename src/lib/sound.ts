@@ -115,6 +115,11 @@ export function jackpotFanfare(): void {
   );
 }
 
+/** Тик счётчика во время подсчёта выигрыша. */
+export function counterTick(): void {
+  tone(1600, { dur: 0.035, type: 'square', gain: 0.05 });
+}
+
 /** Звон монеты — для дождя монет и получения бонуса. */
 export function coinDing(at = 0): void {
   tone(1318.5, { at, dur: 0.16, type: 'sine', gain: 0.12 });

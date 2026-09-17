@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
+import { CoinIcon, SlotArtDefs, SymbolArt } from '@/components/slot-art';
 import { IconInfo } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import {
   BETS,
   BONUS_COOLDOWN_MS,
   DAILY_BONUS,
-  emojiOf,
   hasAnticipation,
   lineBet,
   outcomeLabel,
@@ -24,6 +24,7 @@ import { rainCoins } from '@/lib/coins';
 import {
   anticipation as antiSound,
   coinDing,
+  counterTick,
   jackpotFanfare,
   leverPull,
   primeAudio,
@@ -36,7 +37,7 @@ import { notifySuccess, selectionChanged, tapLight, tapMedium } from '@/lib/hapt
 
 // Высота ячейки барабана — та же величина в CSS (--cell): лента двигается на
 // целое число ячеек, поэтому символы всегда встают ровно в окно.
-const CELL = 64;
+const CELL = 74;
 /** Сколько случайных «пролетающих» символов между стартом и результатом. */
 const FILLER = 18;
 const BASE_MS = 900;
@@ -106,7 +107,7 @@ function Reel({
       <div className="reel__strip" ref={ref}>
         {strip.map((id, i) => (
           <span className="reel__cell" key={`${id}-${i}`}>
-            {emojiOf(id)}
+            <SymbolArt id={id} size={58} />
           </span>
         ))}
       </div>
@@ -161,6 +162,9 @@ export function SlotsPage() {
   const [lever, setLever] = useState(0);
   const [shake, setShake] = useState(false);
   const [streak, setStreak] = useState(0);
+  const [celebration, setCelebration] = useState<{ tier: 'big' | 'jackpot'; amount: number } | null>(
+    null,
+  );
   const [jackpotWin, setJackpotWin] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
@@ -209,13 +213,15 @@ export function SlotsPage() {
       notifySuccess();
       jackpotFanfare();
       burstConfetti(180);
-      rainCoins(36);
+      rainCoins(40);
       setShake(true);
+      setCelebration({ tier: 'jackpot', amount: res.total });
     } else if (res.kind === 'big') {
       notifySuccess();
       winChime('big');
-      rainCoins(18);
+      rainCoins(22);
       burstConfetti(70);
+      setCelebration({ tier: 'big', amount: res.total });
     } else if (res.kind === 'small') {
       tapLight();
       winChime('small');
@@ -246,6 +252,7 @@ export function SlotsPage() {
     setStopped(0);
     setResult(null);
     setShake(false);
+    setCelebration(null);
     setJackpotWin(0);
     setPending(res.total);
     setSpinId((n) => n + 1);
@@ -261,6 +268,19 @@ export function SlotsPage() {
     timers.current.push(setTimeout(() => finish(res), durs[2] + 40));
   }, [hydrated, spinning, balance, bet, playSlots, strips, turbo, finish]);
 
+  // Баннер крупного выигрыша живёт ~4 секунды: вспышка → лучи → счёт с тиканьем.
+  useEffect(() => {
+    if (!celebration) return undefined;
+    const ticks = setInterval(() => counterTick(), 70);
+    const stopTicks = setTimeout(() => clearInterval(ticks), 1500);
+    const hide = setTimeout(() => setCelebration(null), 4200);
+    return () => {
+      clearInterval(ticks);
+      clearTimeout(stopTicks);
+      clearTimeout(hide);
+    };
+  }, [celebration]);
+
   // Автоспин: очередь вращений, прерывается кнопкой или нехваткой монет.
   useEffect(() => {
     if (auto <= 0 || spinning) return;
@@ -268,12 +288,13 @@ export function SlotsPage() {
       setAuto(0);
       return;
     }
+    // Во время большого выигрыша пауза длиннее — дать досмотреть празднование.
     const t = setTimeout(() => {
       setAuto((n) => n - 1);
       spin();
-    }, 700);
+    }, celebration ? 3200 : 700);
     return () => clearTimeout(t);
-  }, [auto, spinning, balance, bet, spin]);
+  }, [auto, spinning, balance, bet, spin, celebration]);
 
   const onReelStop = (index: number) => {
     setStopped((n) => Math.max(n, index + 1));
@@ -349,18 +370,26 @@ export function SlotsPage() {
       }
     >
       <div className="stack slots">
+        <SlotArtDefs />
         {/* Табло: баланс и текущий джекпот */}
         <div className="slot-hud">
           <div className="slot-hud__cell">
             <span className="slot-hud__label">Баланс</span>
             <span className="slot-hud__value">
-              <AnimatedNumber value={shownBalance} format={(n) => fmt(n)} duration={450} /> 🪙
+              <AnimatedNumber value={shownBalance} format={(n) => fmt(n)} duration={450} />
+              <CoinIcon size={18} />
             </span>
           </div>
           <div className="slot-hud__cell slot-hud__cell--jackpot">
-            <span className="slot-hud__label">Джекпот 7️⃣7️⃣7️⃣</span>
+            <span className="slot-hud__label">
+              Джекпот
+              <SymbolArt id="seven" size={13} />
+              <SymbolArt id="seven" size={13} />
+              <SymbolArt id="seven" size={13} />
+            </span>
             <span className="slot-hud__value slot-hud__value--jackpot">
-              <AnimatedNumber value={jackpotPrize} format={(n) => fmt(n)} duration={600} /> 🪙
+              <AnimatedNumber value={jackpotPrize} format={(n) => fmt(n)} duration={600} />
+              <CoinIcon size={18} />
             </span>
           </div>
         </div>
@@ -385,6 +414,10 @@ export function SlotsPage() {
 
           <div className="cabinet__body">
             <div className="cabinet__window">
+              <span className="cabinet__bolts" aria-hidden="true">
+                <i />
+                <i />
+              </span>
               <div className="reels">
                 {strips.map((strip, i) => (
                   <Reel
@@ -395,6 +428,9 @@ export function SlotsPage() {
                     onStop={() => onReelStop(i)}
                   />
                 ))}
+                {!spinning && result && result.wins.length > 0 && (
+                  <div className="reels__dim" aria-hidden="true" />
+                )}
                 {!spinning && result && result.wins.length > 0 && (
                   <div className="reels__marks" aria-hidden="true">
                     {[0, 1, 2].map((col) =>
@@ -444,6 +480,11 @@ export function SlotsPage() {
             </div>
           </div>
 
+          <div className="cabinet__tray" aria-hidden="true">
+            <span className="cabinet__slot-in" />
+            <span className="cabinet__vent" />
+          </div>
+
           <div className="cabinet__status">
             {spinning ? (
               <span className="status status--spin">
@@ -451,10 +492,16 @@ export function SlotsPage() {
               </span>
             ) : result ? (
               <>
-                <span className="status">{outcomeLabel(result)}</span>
+                <span className="status">
+                  {outcomeLabel(result).symbol && (
+                    <SymbolArt id={outcomeLabel(result).symbol!} size={22} />
+                  )}
+                  {outcomeLabel(result).text}
+                </span>
                 {result.total > 0 && (
                   <span className={`status__win${result.kind === 'jackpot' ? ' is-jackpot' : ''}`}>
-                    +<AnimatedNumber value={result.total} format={(n) => fmt(n)} duration={700} /> 🪙
+                    +<AnimatedNumber value={result.total} format={(n) => fmt(n)} duration={700} />
+                    <CoinIcon size={20} />
                   </span>
                 )}
                 {result.multiplier >= 3 && (
@@ -501,7 +548,7 @@ export function SlotsPage() {
                 ? 'Крутится…'
                 : broke
                   ? 'Монеты кончились'
-                  : `Крутить · ${fmt(bet)} 🪙`}
+                  : `Крутить · ${fmt(bet)}`}
           </button>
           <button
             className="slot-mini"
@@ -544,8 +591,8 @@ export function SlotsPage() {
             onClick={() => takeBonus(dailyReady ? DAILY_BONUS : RESCUE_BONUS)}
           >
             {dailyReady
-              ? `🎁 Ежедневный бонус +${fmt(DAILY_BONUS)} 🪙`
-              : `🍀 Спасательные +${fmt(RESCUE_BONUS)} 🪙`}
+              ? `🎁 Ежедневный бонус +${fmt(DAILY_BONUS)}`
+              : `🍀 Спасательные +${fmt(RESCUE_BONUS)}`}
           </button>
         )}
         {!dailyReady && !broke && (
@@ -563,7 +610,11 @@ export function SlotsPage() {
             <div className="slot-history__row">
               {history.map((h) => (
                 <div key={h.id} className={`slot-chip${h.payout > 0 ? ' is-win' : ''}`}>
-                  <span className="slot-chip__reels">{h.reels.map(emojiOf).join('')}</span>
+                  <span className="slot-chip__reels">
+                    {h.reels.map((id, i) => (
+                      <SymbolArt key={i} id={id} size={17} />
+                    ))}
+                  </span>
                   <span className="slot-chip__sum">
                     {h.payout > 0 ? `+${fmt(h.payout)}` : `−${fmt(h.bet)}`}
                   </span>
@@ -579,7 +630,9 @@ export function SlotsPage() {
             <div className="slot-stat__lbl">спинов</div>
           </div>
           <div className="slot-stat">
-            <div className="slot-stat__num">{fmt(best)} 🪙</div>
+            <div className="slot-stat__num">
+              {fmt(best)} <CoinIcon size={15} />
+            </div>
             <div className="slot-stat__lbl">лучший выигрыш</div>
           </div>
         </div>
@@ -589,16 +642,16 @@ export function SlotsPage() {
         <Sheet title="Выплаты и линии" onClose={() => setSheet(false)}>
           <div className="stack">
             <p className="muted" style={{ margin: 0 }}>
-              Ставка делится между пятью линиями (по {fmt(lineBet(bet))} 🪙). Линия платит слева
+              Ставка делится между пятью линиями (по {fmt(lineBet(bet))} монет). Линия платит слева
               направо: три одинаковых — главный выигрыш, два первых — небольшой возврат.
             </p>
             <div className="paytable">
               {[...SLOT_SYMBOLS].reverse().map((s) => (
                 <div className="paytable__row" key={s.id}>
                   <span className="paytable__syms">
-                    {s.emoji}
-                    {s.emoji}
-                    {s.emoji}
+                    <SymbolArt id={s.id} size={26} />
+                    <SymbolArt id={s.id} size={26} />
+                    <SymbolArt id={s.id} size={26} />
                   </span>
                   <span className="paytable__mult">×{s.three}</span>
                   <span className="paytable__pair">пара ×{s.pair}</span>
@@ -633,6 +686,27 @@ export function SlotsPage() {
             </p>
           </div>
         </Sheet>
+      )}
+
+      {celebration && (
+        <div
+          className={`bigwin bigwin--${celebration.tier}`}
+          onClick={() => setCelebration(null)}
+          role="presentation"
+        >
+          <div className="bigwin__flash" />
+          <div className="bigwin__rays" />
+          <div className="bigwin__card">
+            <div className="bigwin__title">
+              {celebration.tier === 'jackpot' ? 'ДЖЕКПОТ!' : 'БОЛЬШОЙ ВЫИГРЫШ'}
+            </div>
+            <div className="bigwin__amount">
+              <AnimatedNumber value={celebration.amount} format={(n) => fmt(n)} duration={1400} />
+              <CoinIcon size={30} />
+            </div>
+            <div className="bigwin__hint">нажмите, чтобы продолжить</div>
+          </div>
+        </div>
       )}
     </Screen>
   );

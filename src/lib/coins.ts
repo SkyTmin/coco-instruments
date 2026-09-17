@@ -2,7 +2,18 @@
 // Создаёт недолговечные DOM-элементы и сам за собой убирает; уважает
 // prefers-reduced-motion.
 
-const FACES = ['🪙', '💰', '🪙', '✨'];
+/** Монета того же рисунка, что и в интерфейсе (components/slot-art). */
+const COIN_SVG = `<svg viewBox="0 0 64 64" width="30" height="30" aria-hidden="true">
+  <defs><linearGradient id="cr-g" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0%" stop-color="#ffe9a3"/><stop offset="45%" stop-color="#ffc53c"/>
+    <stop offset="100%" stop-color="#b97a05"/></linearGradient></defs>
+  <circle cx="32" cy="32" r="27" fill="url(#cr-g)" stroke="#8a5a02" stroke-width="3"/>
+  <circle cx="32" cy="32" r="20" fill="none" stroke="#8a5a02" stroke-width="2" opacity="0.55"/>
+  <path d="M32 17c-6 0-10 3.4-10 8 0 8.6 16 5.4 16 12 0 3.2-2.8 5-6 5s-6-1.8-6-5" fill="none"
+    stroke="#7a4f02" stroke-width="4" stroke-linecap="round"/>
+  <path d="M32 13v38" stroke="#7a4f02" stroke-width="4" stroke-linecap="round"/>
+  <ellipse cx="23" cy="21" rx="6" ry="3.6" fill="#fff" opacity="0.5" transform="rotate(-35 23 21)"/>
+</svg>`;
 
 export function rainCoins(count = 24): void {
   if (typeof document === 'undefined') return;
@@ -13,7 +24,7 @@ export function rainCoins(count = 24): void {
 
   for (let i = 0; i < count; i++) {
     const coin = document.createElement('i');
-    coin.textContent = FACES[i % FACES.length];
+    coin.innerHTML = COIN_SVG;
     coin.style.left = `${Math.random() * 100}%`;
     coin.style.setProperty('--d', `${(1.1 + Math.random() * 0.9).toFixed(2)}s`);
     coin.style.setProperty('--x', `${(Math.random() * 2 - 1).toFixed(2)}`);

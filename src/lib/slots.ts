@@ -179,15 +179,24 @@ export function hasAnticipation(grid: SlotGrid): boolean {
   });
 }
 
-/** Человеческая подпись результата для строки статуса. */
-export function outcomeLabel(result: SpinResult): string {
-  if (result.kind === 'none') return 'Мимо. Ещё разок?';
-  if (result.kind === 'jackpot') return 'ДЖЕКПОТ! ТРИ СЕМЁРКИ!';
+/** Подпись результата: текст и символ, который рисуется рядом. */
+export interface OutcomeLabel {
+  text: string;
+  symbol?: SlotSymbolId;
+}
+
+export function outcomeLabel(result: SpinResult): OutcomeLabel {
+  if (result.kind === 'none') return { text: 'Мимо. Ещё разок?' };
+  if (result.kind === 'jackpot') return { text: 'ДЖЕКПОТ! ТРИ СЕМЁРКИ!' };
   const best = [...result.wins].sort((x, y) => y.payout - x.payout)[0];
   const line = PAYLINES[best.line];
-  if (best.count === 3) return `Три ${emojiOf(best.symbol)} — ${line.name.toLowerCase()}!`;
-  if (result.wins.length > 1) return `${result.wins.length} линии сыграли`;
-  return `Пара ${emojiOf(best.symbol)} — ${line.name.toLowerCase()}`;
+  if (result.wins.length > 1) {
+    return { text: `${result.wins.length} линии сыграли`, symbol: best.symbol };
+  }
+  if (best.count === 3) {
+    return { text: `три в ряд — ${line.name.toLowerCase()}!`, symbol: best.symbol };
+  }
+  return { text: `пара — ${line.name.toLowerCase()}`, symbol: best.symbol };
 }
 
 /**

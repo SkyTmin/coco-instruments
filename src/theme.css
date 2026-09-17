@@ -10527,9 +10527,32 @@ input[type='datetime-local'] {
    Монеты виртуальные, покупка не предусмотрена.
    =========================================================================== */
 .slots {
-  --cell: 64px;
+  --cell: 74px;
   --neon: #ffb459;
   --neon-2: #ff6b8b;
+  position: relative;
+}
+/* Свет за автоматом: отделяет корпус от фона страницы, как софит в зале */
+.slots::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 96px;
+  width: 132%;
+  height: 460px;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    closest-side,
+    rgba(255, 170, 90, 0.22),
+    rgba(255, 120, 80, 0.08) 55%,
+    transparent 78%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+.slots > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* Табло: баланс и текущий джекпот */
@@ -10539,33 +10562,43 @@ input[type='datetime-local'] {
   gap: 10px;
 }
 .slot-hud__cell {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--glass-border);
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(14px) saturate(1.3);
-  backdrop-filter: blur(14px) saturate(1.3);
-  box-shadow: inset 0 1px 0 var(--glass-hi);
+  gap: 3px;
+  padding: 9px 13px;
+  border-radius: 14px;
+  /* Ламповое табло: тёмное стекло, точечная сетка и светящиеся цифры */
+  border: 1px solid rgba(255, 190, 120, 0.3);
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.25) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #170e09, #241610);
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, 0.75),
+    0 6px 16px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
 }
 .slot-hud__cell--jackpot {
-  background: linear-gradient(135deg, rgba(255, 107, 139, 0.16), rgba(255, 180, 89, 0.16));
-  border-color: color-mix(in srgb, var(--neon) 40%, transparent);
+  border-color: color-mix(in srgb, var(--neon) 55%, transparent);
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, 0.75),
+    0 0 18px color-mix(in srgb, var(--neon) 28%, transparent);
 }
 .slot-hud__label {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: rgba(255, 214, 170, 0.6);
 }
 .slot-hud__value {
-  font-size: 20px;
-  font-weight: 900;
+  font-family: ui-monospace, 'SF Mono', 'Menlo', monospace;
+  font-size: 21px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.02em;
+  color: #ffe2ab;
+  text-shadow: 0 0 10px rgba(255, 190, 110, 0.55);
 }
 .slot-hud__value--jackpot {
   color: var(--neon);
@@ -10581,16 +10614,25 @@ input[type='datetime-local'] {
 /* ---- Корпус автомата ---------------------------------------------------- */
 .cabinet {
   position: relative;
-  padding: 14px 12px 12px;
+  padding: 12px 10px 10px;
   border-radius: 26px;
+  /* Боковые грани светлее центра — корпус читается объёмным, а не плоским */
   background:
-    radial-gradient(120% 80% at 50% -10%, rgba(255, 180, 89, 0.22), transparent 60%),
-    linear-gradient(180deg, #2a1a12, #150d09 60%, #1d120c);
-  border: 1px solid rgba(255, 190, 120, 0.28);
+    linear-gradient(
+      90deg,
+      rgba(255, 196, 130, 0.16) 0%,
+      transparent 14%,
+      transparent 86%,
+      rgba(255, 196, 130, 0.16) 100%
+    ),
+    radial-gradient(120% 70% at 50% -8%, rgba(255, 180, 89, 0.3), transparent 62%),
+    linear-gradient(180deg, #3a2417, #1a100b 55%, #241710);
+  border: 1px solid rgba(255, 190, 120, 0.38);
   box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 220, 180, 0.22),
-    inset 0 -18px 40px rgba(0, 0, 0, 0.5);
+    0 26px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 230, 195, 0.3),
+    inset 0 -22px 44px rgba(0, 0, 0, 0.55);
   overflow: hidden;
   transition: box-shadow 0.35s ease;
 }
@@ -10629,11 +10671,12 @@ input[type='datetime-local'] {
   pointer-events: none;
 }
 .cabinet__bulbs i {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: rgba(255, 210, 160, 0.25);
-  animation: bulb-chase 1.6s linear infinite;
+  background: rgba(255, 210, 160, 0.22);
+  /* steps() — лампочки щёлкают, плавная анимация убивает иллюзию ламп */
+  animation: bulb-chase 1.5s steps(1, end) infinite;
 }
 @keyframes bulb-chase {
   0%,
@@ -10655,11 +10698,22 @@ input[type='datetime-local'] {
 
 /* Неоновая вывеска */
 .cabinet__sign {
+  position: relative;
   display: flex;
   align-items: baseline;
   justify-content: center;
   gap: 8px;
-  margin: 10px 0 12px;
+  margin: 4px 6px 10px;
+  padding: 7px 10px 8px;
+  border-radius: 14px;
+  /* «Корона» автомата: подсвеченная панель с вывеской */
+  background:
+    linear-gradient(180deg, rgba(90, 44, 24, 0.9), rgba(38, 20, 12, 0.9)),
+    radial-gradient(60% 120% at 50% 0%, rgba(255, 180, 90, 0.45), transparent 70%);
+  border: 1px solid rgba(255, 190, 120, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 230, 190, 0.35),
+    0 6px 14px rgba(0, 0, 0, 0.45);
   font-weight: 900;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -10669,12 +10723,26 @@ input[type='datetime-local'] {
   color: rgba(255, 226, 194, 0.75);
 }
 .cabinet__sign b {
-  font-size: 19px;
-  color: #fff3e2;
-  text-shadow:
-    0 0 6px var(--neon),
-    0 0 18px color-mix(in srgb, var(--neon) 70%, transparent),
-    0 0 34px color-mix(in srgb, var(--neon-2) 55%, transparent);
+  font-size: 21px;
+  /* Жёсткий переход на 46→52% — та самая линия отражения, без неё это просто жёлтый текст */
+  background: linear-gradient(
+    180deg,
+    #fff8d9 0%,
+    #ffe07a 20%,
+    #f5c542 44%,
+    #b87911 50%,
+    #ffd35c 64%,
+    #e0a518 80%,
+    #8c5a08 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 1.4px #3b2205;
+  filter:
+    drop-shadow(0 1px 0 #7a4e08) drop-shadow(0 2px 0 #533305)
+    drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6))
+    drop-shadow(0 0 12px rgba(255, 190, 90, 0.5));
   animation: neon-flicker 4.5s infinite;
 }
 @keyframes neon-flicker {
@@ -10699,29 +10767,132 @@ input[type='datetime-local'] {
 
 /* Окно с барабанами */
 .cabinet__window {
+  position: relative;
   flex: 1;
   min-width: 0;
-  padding: 8px;
+  padding: 9px;
   border-radius: 18px;
-  background: linear-gradient(180deg, #120a06, #241610);
+  /* Безель — не одна рамка, а металл с несколькими сменами света и тени */
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.04) 0 1px, transparent 1px 7px),
+    linear-gradient(
+      160deg,
+      #ffe9a8 0%,
+      #c9922c 17%,
+      #7a5510 34%,
+      #e8c475 50%,
+      #8e6417 68%,
+      #5a3c0a 86%,
+      #c79a3a 100%
+    );
   box-shadow:
-    inset 0 2px 10px rgba(0, 0, 0, 0.75),
-    0 0 0 1px rgba(255, 190, 120, 0.22);
+    0 0 0 3px #1a1208,
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.55),
+    0 10px 24px rgba(0, 0, 0, 0.65);
+}
+/* Болты по углам безеля — деталь, которая стоит копейки, а читается сразу */
+.cabinet__window::before,
+.cabinet__window::after,
+.cabinet__bolts i {
+  content: '';
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #f7eac0 0%, #d8b45c 30%, #a97f24 58%, #4b3208 100%);
+  box-shadow:
+    inset 0 -1px 2px rgba(0, 0, 0, 0.65),
+    inset 0 1px 1px rgba(255, 255, 255, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.75);
+  z-index: 3;
+}
+.cabinet__window::before {
+  left: 5px;
+  top: 5px;
+}
+.cabinet__window::after {
+  right: 5px;
+  top: 5px;
+}
+.cabinet__bolts i:first-child {
+  left: 5px;
+  bottom: 5px;
+}
+.cabinet__bolts i:last-child {
+  right: 5px;
+  bottom: 5px;
 }
 .reels {
   position: relative;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  /* Барабаны стоят вплотную: три отдельные «карточки» выглядели бы как список */
+  gap: 3px;
   height: calc(var(--cell) * 3);
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: 10px;
+  background: #0d0704;
+  /* Ниша: окно утоплено в корпус */
+  box-shadow:
+    inset 0 4px 12px rgba(0, 0, 0, 0.85),
+    inset 0 -3px 8px rgba(0, 0, 0, 0.6);
+}
+/* Цилиндр: края барабана уходят в тень, по центру — световая полоса */
+.reels::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.78) 0%,
+      rgba(0, 0, 0, 0.42) 9%,
+      rgba(0, 0, 0, 0.1) 20%,
+      rgba(0, 0, 0, 0) 33%,
+      rgba(0, 0, 0, 0) 67%,
+      rgba(0, 0, 0, 0.1) 80%,
+      rgba(0, 0, 0, 0.45) 91%,
+      rgba(0, 0, 0, 0.82) 100%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.06) 42%,
+      rgba(255, 255, 255, 0.14) 49%,
+      rgba(255, 255, 255, 0.05) 58%,
+      transparent 68%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.4) 0%,
+      rgba(0, 0, 0, 0) 16%,
+      rgba(0, 0, 0, 0) 84%,
+      rgba(0, 0, 0, 0.4) 100%
+    );
 }
 .reel {
+  position: relative;
   overflow: hidden;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #fdf4e7, #efe0cc);
-  box-shadow: inset 0 0 0 1px rgba(90, 50, 20, 0.18);
+  border-radius: 2px;
+  /* Светлая полоса в центре и затемнение к краям — иллюзия круглого барабана */
+  background:
+    linear-gradient(
+      180deg,
+      #b9a68d 0%,
+      #e8dac4 12%,
+      #fffaf1 46%,
+      #f3e6d2 62%,
+      #c9b79c 88%,
+      #a8937a 100%
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(90, 50, 20, 0.25),
+    inset 0 10px 14px rgba(60, 30, 10, 0.28),
+    inset 0 -10px 14px rgba(60, 30, 10, 0.3);
 }
 .reel__strip {
   will-change: transform;
@@ -10729,30 +10900,23 @@ input[type='datetime-local'] {
 .reel__strip.is-blur {
   filter: blur(1.4px);
 }
-.reel__cell {
-  display: grid;
-  place-items: center;
-  height: var(--cell);
-  font-size: 34px;
-  line-height: 1;
-  user-select: none;
-}
+
 
 /* Стеклянный блик и затемнение краёв — эффект цилиндра под стеклом */
 .reels__glass {
   position: absolute;
   inset: 0;
-  border-radius: 12px;
+  z-index: 4;
+  border-radius: 10px;
   pointer-events: none;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.5),
-      rgba(0, 0, 0, 0) 22%,
-      rgba(0, 0, 0, 0) 78%,
-      rgba(0, 0, 0, 0.5)
-    ),
-    linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.16) 46%, transparent 54%);
+  background: linear-gradient(
+    112deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.1) 46%,
+    rgba(255, 255, 255, 0.17) 50%,
+    rgba(255, 255, 255, 0.06) 55%,
+    transparent 62%
+  );
 }
 
 /* Подсветка выигрышных ячеек */
@@ -10765,17 +10929,30 @@ input[type='datetime-local'] {
   position: absolute;
   width: calc(100% / 3);
   height: calc(100% / 3);
-  border-radius: 10px;
+  border-radius: 6px;
+  /* Рамка с тёмным кантом: золото читается даже на светлом поле барабана */
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 196, 80, 0.26),
+    rgba(255, 170, 60, 0.06) 62%,
+    transparent 74%
+  );
   box-shadow:
-    inset 0 0 0 2px var(--neon),
-    0 0 18px color-mix(in srgb, var(--neon) 60%, transparent);
-  animation: mark-pulse 1s ease-in-out infinite;
+    inset 0 0 0 1px rgba(90, 40, 0, 0.9),
+    inset 0 0 0 4px #ffb43c,
+    inset 0 0 0 5px rgba(90, 40, 0, 0.55),
+    inset 0 0 20px rgba(255, 160, 40, 0.5),
+    0 0 26px color-mix(in srgb, var(--neon) 85%, transparent);
+  animation: mark-pulse 0.85s ease-in-out infinite;
 }
 @keyframes mark-pulse {
   50% {
     box-shadow:
-      inset 0 0 0 3px #fff1dd,
-      0 0 26px var(--neon);
+      inset 0 0 0 1px rgba(90, 40, 0, 0.9),
+      inset 0 0 0 4px #fff0c0,
+      inset 0 0 0 5px rgba(90, 40, 0, 0.55),
+      inset 0 0 26px rgba(255, 210, 120, 0.8),
+      0 0 38px var(--neon);
   }
 }
 
@@ -10789,12 +10966,12 @@ input[type='datetime-local'] {
 }
 .payline {
   fill: none;
-  stroke: var(--neon);
-  stroke-width: 1.6;
+  stroke: #fff3d0;
+  stroke-width: 3.4;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 0 4px var(--neon));
+  filter: drop-shadow(0 0 3px #ff9a3c) drop-shadow(0 1px 2px rgba(60, 20, 0, 0.9));
   stroke-dasharray: 200;
   stroke-dashoffset: 200;
   animation: payline-draw 0.5s ease forwards;
@@ -10818,6 +10995,18 @@ input[type='datetime-local'] {
 .lever.is-off {
   opacity: 0.45;
   cursor: default;
+}
+.lever::before {
+  content: '';
+  position: absolute;
+  top: 26px;
+  width: 30px;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #5a3620, #23150d);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 180, 0.35),
+    0 2px 6px rgba(0, 0, 0, 0.5);
 }
 .lever__slot {
   position: absolute;
@@ -10987,21 +11176,31 @@ input[type='datetime-local'] {
 }
 .spin-btn {
   flex: 1;
-  border: 0;
   cursor: pointer;
-  padding: 17px 12px;
+  padding: 16px 12px;
   border-radius: 18px;
   font-size: 17px;
   font-weight: 900;
-  letter-spacing: 0.01em;
-  color: #2a1206;
-  background: linear-gradient(135deg, #ffd06a, #ff8e5e 55%, #ff6b8b);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #3a1704;
+  /* Выпуклая кнопка: светлая фаска сверху, тёмная снизу, золотой кант */
+  border: 2px solid rgba(255, 226, 170, 0.75);
+  background: linear-gradient(180deg, #ffd884 0%, #ff9f52 45%, #f2703f 70%, #d8462f 100%);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
   box-shadow:
-    0 10px 26px rgba(255, 140, 90, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    0 12px 26px rgba(226, 92, 46, 0.5),
+    inset 0 2px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -4px 10px rgba(120, 30, 10, 0.5);
   transition:
     transform 0.12s ease,
-    filter 0.2s ease;
+    filter 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.spin-btn:active:not(:disabled) {
+  box-shadow:
+    0 4px 10px rgba(226, 92, 46, 0.4),
+    inset 0 2px 8px rgba(120, 30, 10, 0.55);
 }
 .spin-btn:active {
   transform: scale(0.97);
@@ -11210,5 +11409,303 @@ input[type='datetime-local'] {
   .reels__mark,
   .spin-btn.is-busy {
     animation: none;
+  }
+}
+
+/* ---- Рисованные символы автомата (components/slot-art.tsx) --------------- */
+/* Общие градиенты живут в одном скрытом <svg>: он не должен занимать место. */
+.slot-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.sym {
+  display: block;
+  pointer-events: none;
+}
+.coin-ico {
+  display: inline-block;
+  vertical-align: -0.16em;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+/* Ячейка барабана: объём цилиндра задаёт фон, символ — по центру. */
+.reel__cell {
+  display: grid;
+  place-items: center;
+  height: var(--cell);
+}
+.reel__cell .sym {
+  filter: drop-shadow(0 2px 3px rgba(60, 30, 10, 0.3));
+}
+
+/* Значения HUD и статуса встают в строку вместе с монетой/символом. */
+.slot-hud__value,
+.status,
+.status__win,
+.slot-stat__num {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.slot-hud__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.slot-hud__label .sym {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+}
+.status .sym {
+  flex: none;
+}
+.slot-chip__reels {
+  display: inline-flex;
+  gap: 2px;
+}
+.paytable__syms {
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* Планка под окном: прорезь монетоприёмника и решётка — «низ» автомата. */
+.cabinet__tray {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 4px 0;
+  padding: 7px 12px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #120b07, #2a1a12);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.7),
+    0 1px 0 rgba(255, 210, 160, 0.14);
+}
+.cabinet__slot-in {
+  flex: none;
+  width: 58px;
+  height: 7px;
+  border-radius: 4px;
+  background: #060402;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.9),
+    0 1px 0 rgba(255, 210, 160, 0.22);
+}
+.cabinet__vent {
+  flex: 1;
+  height: 7px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 210, 160, 0.16) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+/* ---- Празднование крупного выигрыша -------------------------------------
+   Последовательность из практики слотов: вспышка (60мс) → лучи (500мс) →
+   баннер с отскоком (240мс) → счёт с тиканьем (1400мс) → пауза → уход.      */
+.reels__dim {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: rgba(6, 4, 2, 0.26);
+  animation: dim-in 0.2s ease both;
+}
+@keyframes dim-in {
+  from {
+    opacity: 0;
+  }
+}
+.reels__marks {
+  z-index: 5;
+}
+
+.bigwin {
+  position: fixed;
+  inset: 0;
+  z-index: 96;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.bigwin__flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  mix-blend-mode: screen;
+  animation: bw-flash 0.24s ease-out forwards;
+}
+@keyframes bw-flash {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+/* Лучи: конический градиент из 24 клиньев, маскированный к центру */
+.bigwin__rays {
+  position: absolute;
+  width: 96vmax;
+  height: 96vmax;
+  will-change: transform;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 7.5deg,
+    rgba(255, 238, 190, 0.28) 7.5deg 15deg
+  );
+  -webkit-mask-image: radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.9) 34%, transparent 70%);
+  mask-image: radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.9) 34%, transparent 70%);
+  animation:
+    bw-rays-in 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both,
+    bw-rays-spin 14s linear 0.5s infinite;
+}
+@keyframes bw-rays-in {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1.25);
+    opacity: 0.85;
+  }
+}
+@keyframes bw-rays-spin {
+  to {
+    transform: scale(1.25) rotate(360deg);
+  }
+}
+.bigwin--jackpot .bigwin__rays {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 7.5deg,
+    rgba(255, 190, 120, 0.22) 7.5deg 15deg
+  );
+}
+.bigwin__card {
+  position: relative;
+  padding: 26px 30px 20px;
+  border-radius: 26px;
+  min-width: 74vw;
+  text-align: center;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(255, 190, 90, 0.35), transparent 70%),
+    linear-gradient(180deg, rgba(58, 30, 16, 0.96), rgba(22, 12, 7, 0.96));
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  box-shadow:
+    0 0 0 3px #b8860b,
+    0 0 0 5px #3b2205,
+    0 24px 70px rgba(0, 0, 0, 0.7),
+    0 0 60px rgba(255, 170, 70, 0.35),
+    inset 0 1px 0 rgba(255, 235, 200, 0.45);
+  animation:
+    bw-card-in 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) 0.26s both,
+    bw-card-glow 1.6s ease-in-out 0.7s infinite;
+}
+@keyframes bw-card-glow {
+  50% {
+    box-shadow:
+      0 0 0 3px #ffd35c,
+      0 0 0 5px #3b2205,
+      0 24px 70px rgba(0, 0, 0, 0.7),
+      0 0 90px rgba(255, 190, 90, 0.55),
+      inset 0 1px 0 rgba(255, 235, 200, 0.45);
+  }
+}
+@keyframes bw-card-in {
+  from {
+    transform: scale(0.2) rotate(-5deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.18) rotate(1.5deg);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+  }
+}
+.bigwin__title {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: linear-gradient(
+    180deg,
+    #fff8d9 0%,
+    #ffe07a 20%,
+    #f5c542 44%,
+    #b87911 50%,
+    #ffd35c 64%,
+    #e0a518 80%,
+    #8c5a08 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 1.2px #3b2205;
+  filter: drop-shadow(0 2px 0 #533305) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.65));
+}
+.bigwin__amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 44px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  /* Без прозрачной заливки градиент под текстом не виден — цифры остаются белыми */
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  /* Тот же металл, что и на вывеске: жёсткая линия отражения по центру */
+  background: linear-gradient(
+    180deg,
+    #fff3c4 0%,
+    #ffd75e 18%,
+    #f0b41f 44%,
+    #9c6206 52%,
+    #ffcf58 66%,
+    #d99a12 84%,
+    #7a5008 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 1.6px #3b2205;
+  filter:
+    drop-shadow(0 2px 0 #6a4307) drop-shadow(0 4px 0 #3d2604)
+    drop-shadow(0 8px 12px rgba(0, 0, 0, 0.65));
+  animation: bw-pulse 0.25s ease-in-out 9;
+}
+.bigwin__amount .coin-ico {
+  -webkit-text-fill-color: initial;
+}
+@keyframes bw-pulse {
+  50% {
+    transform: scale(1.06);
+  }
+}
+.bigwin__hint {
+  margin-top: 10px;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: rgba(255, 226, 190, 0.6);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bigwin__flash,
+  .bigwin__rays,
+  .bigwin__card,
+  .bigwin__amount {
+    animation: none;
+  }
+  .bigwin__rays {
+    opacity: 0.3;
   }
 }
