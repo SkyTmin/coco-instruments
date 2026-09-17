@@ -1,0 +1,6 @@
+Символы барабанов — Twemoji (https://github.com/jdecked/twemoji)
+Графика: Copyright 2020 Twitter, Inc and other contributors
+Лицензия: CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+
+Файлы не изменялись; используются как символы игрового автомата
+в разделе «Слоты» приложения Coco Instruments.

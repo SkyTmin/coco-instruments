@@ -840,6 +840,8 @@ export interface SlotsBlob {
   history: SlotSpin[];
   /** Накопительный джекпот: растёт с каждой ставки, срывается тремя семёрками. */
   jackpot?: number;
+  /** Выбранный скин автомата (набор символов и палитра). */
+  skin?: string;
   /** Звук автомата (Web Audio) и ускоренные вращения. */
   sound?: boolean;
   turbo?: boolean;

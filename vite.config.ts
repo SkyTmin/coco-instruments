@@ -18,7 +18,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['icons/*.png'],
+      includeAssets: ['icons/*.png', 'slots/**/*.svg'],
       manifest: {
         name: 'Coco',
         short_name: 'Coco',

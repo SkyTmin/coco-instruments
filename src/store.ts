@@ -77,6 +77,7 @@ export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { deleteAttachmentFile } from '@/lib/images';
+import type { SkinId } from '@/lib/skins';
 import {
   evaluateGrid,
   JACKPOT_BASE,
@@ -243,6 +244,7 @@ const persistSlots = (s: {
   slotsBonusAt?: number;
   slotsHistory: SlotSpin[];
   slotsJackpot: number;
+  slotsSkin: SkinId;
   slotsSound: boolean;
   slotsTurbo: boolean;
 }) =>
@@ -255,6 +257,7 @@ const persistSlots = (s: {
     lastBonusAt: s.slotsBonusAt,
     history: s.slotsHistory,
     jackpot: s.slotsJackpot,
+    skin: s.slotsSkin,
     sound: s.slotsSound,
     turbo: s.slotsTurbo,
   });
@@ -333,6 +336,7 @@ interface FinanceState {
   slotsBonusAt?: number;
   slotsHistory: SlotSpin[];
   slotsJackpot: number;
+  slotsSkin: SkinId;
   slotsSound: boolean;
   slotsTurbo: boolean;
   reminderPrefs: ReminderPrefs;
@@ -498,7 +502,7 @@ interface FinanceState {
   setSlotsBet: (bet: number) => void;
   playSlots: () => (SpinResult & { jackpotWin: number }) | null;
   claimSlotsBonus: (amount: number) => void;
-  setSlotsPrefs: (patch: { sound?: boolean; turbo?: boolean }) => void;
+  setSlotsPrefs: (patch: { sound?: boolean; turbo?: boolean; skin?: SkinId }) => void;
 
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
@@ -554,6 +558,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   slotsBest: 0,
   slotsHistory: [],
   slotsJackpot: JACKPOT_BASE,
+  slotsSkin: 'classic',
   slotsSound: true,
   slotsTurbo: false,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
@@ -643,6 +648,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsBonusAt: slots?.lastBonusAt,
       slotsHistory: slots?.history ?? [],
       slotsJackpot: slots?.jackpot ?? JACKPOT_BASE,
+      slotsSkin: (slots?.skin as SkinId) ?? 'classic',
       slotsSound: slots?.sound ?? true,
       slotsTurbo: slots?.turbo ?? false,
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
@@ -1499,6 +1505,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
           lastBonusAt: s.slotsBonusAt,
           history: s.slotsHistory,
           jackpot: s.slotsJackpot,
+          skin: s.slotsSkin,
           sound: s.slotsSound,
           turbo: s.slotsTurbo,
         },
@@ -1551,6 +1558,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsBonusAt: d.slots?.lastBonusAt,
       slotsHistory: d.slots?.history ?? [],
       slotsJackpot: d.slots?.jackpot ?? JACKPOT_BASE,
+      slotsSkin: (d.slots?.skin as SkinId) ?? 'classic',
       slotsSound: d.slots?.sound ?? true,
       slotsTurbo: d.slots?.turbo ?? false,
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
@@ -1851,6 +1859,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({
       slotsSound: patch.sound ?? get().slotsSound,
       slotsTurbo: patch.turbo ?? get().slotsTurbo,
+      slotsSkin: patch.skin ?? get().slotsSkin,
     });
     persistSlots(get());
   },

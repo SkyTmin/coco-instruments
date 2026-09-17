@@ -10528,9 +10528,89 @@ input[type='datetime-local'] {
    =========================================================================== */
 .slots {
   --cell: 74px;
+  /* Палитра по умолчанию (скин «Классика»); скины переопределяют её ниже. */
   --neon: #ffb459;
   --neon-2: #ff6b8b;
+  --cab-1: #3a2417;
+  --cab-2: #1a100b;
+  --cab-3: #241710;
+  --reel-hi: #fffaf1;
+  --reel-mid: #e8dac4;
+  --reel-lo: #a8937a;
+  --bezel-1: #ffe9a8;
+  --bezel-2: #c9922c;
+  --bezel-3: #7a5510;
+  --bezel-4: #e8c475;
   position: relative;
+}
+
+/* ---- Скины: символы берутся из public/slots/<id>, палитра — отсюда ------- */
+.slots[data-skin='asia'],
+.skin-card[data-skin='asia'] {
+  --neon: #ffd24d;
+  --neon-2: #ff5a4d;
+  --cab-1: #6d1114;
+  --cab-2: #2a0608;
+  --cab-3: #43090c;
+  --reel-hi: #fff6e8;
+  --reel-mid: #f0dcc2;
+  --reel-lo: #bf9a72;
+}
+.slots[data-skin='space'],
+.skin-card[data-skin='space'] {
+  --neon: #86b8ff;
+  --neon-2: #c78bff;
+  --cab-1: #1b2350;
+  --cab-2: #080b1e;
+  --cab-3: #121838;
+  --reel-hi: #f2f6ff;
+  --reel-mid: #d8e1f6;
+  --reel-lo: #93a3c8;
+  --bezel-1: #f2f7ff;
+  --bezel-2: #9fb0c6;
+  --bezel-3: #48576b;
+  --bezel-4: #d6e2f0;
+}
+.slots[data-skin='pirate'],
+.skin-card[data-skin='pirate'] {
+  --neon: #57d6c4;
+  --neon-2: #ffd166;
+  --cab-1: #3a2410;
+  --cab-2: #140c05;
+  --cab-3: #251607;
+  --reel-hi: #f9f0da;
+  --reel-mid: #e6d5b4;
+  --reel-lo: #ab9370;
+  --bezel-1: #f6e3b0;
+  --bezel-2: #b98b3c;
+  --bezel-3: #6a4a14;
+  --bezel-4: #dcc07e;
+}
+.slots[data-skin='egypt'],
+.skin-card[data-skin='egypt'] {
+  --neon: #4fd0e0;
+  --neon-2: #ffc94d;
+  --cab-1: #4a3312;
+  --cab-2: #1a1206;
+  --cab-3: #2e2009;
+  --reel-hi: #fdf3dc;
+  --reel-mid: #efdfba;
+  --reel-lo: #bda880;
+}
+.slots[data-skin='candy'],
+.skin-card[data-skin='candy'] {
+  --neon: #ff8ad4;
+  --neon-2: #7ee0ff;
+  --cab-1: #5a1246;
+  --cab-2: #24071c;
+  --cab-3: #3d0c30;
+  --reel-hi: #fff4fb;
+  --reel-mid: #ffe1f1;
+  --reel-lo: #d9a8c6;
+  --bezel-1: #ffe4f2;
+  --bezel-2: #e88fb8;
+  --bezel-3: #a44b76;
+  --bezel-4: #ffc9e2;
 }
 /* Свет за автоматом: отделяет корпус от фона страницы, как софит в зале */
 .slots::before {
@@ -10625,8 +10705,8 @@ input[type='datetime-local'] {
       transparent 86%,
       rgba(255, 196, 130, 0.16) 100%
     ),
-    radial-gradient(120% 70% at 50% -8%, rgba(255, 180, 89, 0.3), transparent 62%),
-    linear-gradient(180deg, #3a2417, #1a100b 55%, #241710);
+    radial-gradient(120% 70% at 50% -8%, color-mix(in srgb, var(--neon) 34%, transparent), transparent 62%),
+    linear-gradient(180deg, var(--cab-1), var(--cab-2) 55%, var(--cab-3));
   border: 1px solid rgba(255, 190, 120, 0.38);
   box-shadow:
     0 26px 60px rgba(0, 0, 0, 0.55),
@@ -10708,9 +10788,13 @@ input[type='datetime-local'] {
   border-radius: 14px;
   /* «Корона» автомата: подсвеченная панель с вывеской */
   background:
-    linear-gradient(180deg, rgba(90, 44, 24, 0.9), rgba(38, 20, 12, 0.9)),
-    radial-gradient(60% 120% at 50% 0%, rgba(255, 180, 90, 0.45), transparent 70%);
-  border: 1px solid rgba(255, 190, 120, 0.35);
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--cab-1) 80%, #000),
+      color-mix(in srgb, var(--cab-2) 70%, #000)
+    ),
+    radial-gradient(60% 120% at 50% 0%, color-mix(in srgb, var(--neon) 45%, transparent), transparent 70%);
+  border: 1px solid color-mix(in srgb, var(--neon) 38%, transparent);
   box-shadow:
     inset 0 1px 0 rgba(255, 230, 190, 0.35),
     0 6px 14px rgba(0, 0, 0, 0.45);
@@ -10720,7 +10804,8 @@ input[type='datetime-local'] {
 }
 .cabinet__sign span {
   font-size: 13px;
-  color: rgba(255, 226, 194, 0.75);
+  color: color-mix(in srgb, var(--neon) 55%, #fff);
+  opacity: 0.85;
 }
 .cabinet__sign b {
   font-size: 21px;
@@ -10778,13 +10863,13 @@ input[type='datetime-local'] {
     repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.04) 0 1px, transparent 1px 7px),
     linear-gradient(
       160deg,
-      #ffe9a8 0%,
-      #c9922c 17%,
-      #7a5510 34%,
-      #e8c475 50%,
-      #8e6417 68%,
-      #5a3c0a 86%,
-      #c79a3a 100%
+      var(--bezel-1) 0%,
+      var(--bezel-2) 17%,
+      var(--bezel-3) 34%,
+      var(--bezel-4) 50%,
+      var(--bezel-2) 68%,
+      var(--bezel-3) 86%,
+      var(--bezel-4) 100%
     );
   box-shadow:
     0 0 0 3px #1a1208,
@@ -10879,16 +10964,15 @@ input[type='datetime-local'] {
   overflow: hidden;
   border-radius: 2px;
   /* Светлая полоса в центре и затемнение к краям — иллюзия круглого барабана */
-  background:
-    linear-gradient(
-      180deg,
-      #b9a68d 0%,
-      #e8dac4 12%,
-      #fffaf1 46%,
-      #f3e6d2 62%,
-      #c9b79c 88%,
-      #a8937a 100%
-    );
+  background: linear-gradient(
+    180deg,
+    var(--reel-lo) 0%,
+    var(--reel-mid) 12%,
+    var(--reel-hi) 46%,
+    var(--reel-mid) 62%,
+    var(--reel-lo) 88%,
+    var(--reel-lo) 100%
+  );
   box-shadow:
     inset 0 0 0 1px rgba(90, 50, 20, 0.25),
     inset 0 10px 14px rgba(60, 30, 10, 0.28),
@@ -11423,6 +11507,14 @@ input[type='datetime-local'] {
 .sym {
   display: block;
   pointer-events: none;
+  user-select: none;
+  /* Плоская картинка + тень = объём, которого не хватает эмодзи-графике */
+  filter: drop-shadow(0 2px 2px rgba(40, 20, 5, 0.35));
+}
+.reel__cell .sym {
+  filter:
+    drop-shadow(0 2px 3px rgba(40, 20, 5, 0.4))
+    drop-shadow(0 0 1px rgba(60, 30, 10, 0.55));
 }
 .coin-ico {
   display: inline-block;
@@ -11708,4 +11800,71 @@ input[type='datetime-local'] {
   .bigwin__rays {
     opacity: 0.3;
   }
+}
+
+/* Выбор скина */
+.slot-mini--skin {
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.skin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.skin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 16px;
+  cursor: pointer;
+  text-align: left;
+  border: 2px solid transparent;
+  color: #fff;
+  /* Карточка красится палитрой своего скина — видно, что выбираешь */
+  background: linear-gradient(160deg, var(--cab-1), var(--cab-2));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: transform 0.12s ease;
+}
+.skin-card:active {
+  transform: scale(0.96);
+}
+.skin-card.is-active {
+  border-color: var(--neon);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--neon) 35%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.skin-card__reels {
+  display: inline-flex;
+  gap: 3px;
+  padding: 5px 7px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, var(--reel-mid), var(--reel-hi) 50%, var(--reel-lo));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+.skin-card__reels img {
+  display: block;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+.skin-card__name {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 850;
+}
+.skin-card__hint {
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.72);
+  text-wrap: pretty;
+}
+
+/* Кнопка смены скина в шапке показывает символ текущего набора. */
+.icon-btn--skin {
+  display: grid;
+  place-items: center;
+  padding: 0;
 }

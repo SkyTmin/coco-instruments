@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
-import { CoinIcon, SlotArtDefs, SymbolArt } from '@/components/slot-art';
+import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
+import { SKINS, skinOf, symbolSrc } from '@/lib/skins';
+import type { SkinId } from '@/lib/skins';
 import { IconInfo } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import {
@@ -63,13 +65,29 @@ function makeStrip(from: SlotSymbolId[], to: SlotSymbolId[]): SlotSymbolId[] {
 
 const startGrid = (): SlotGrid => [randomColumn(), randomColumn(), randomColumn()];
 
+/** Символ выбранного скина. Картинка одна и та же на любом телефоне. */
+function Sym({ id, skin, size = 58 }: { id: SlotSymbolId; skin: SkinId; size?: number }) {
+  return (
+    <img
+      className="sym"
+      src={symbolSrc(skin, id)}
+      width={size}
+      height={size}
+      alt=""
+      draggable={false}
+    />
+  );
+}
+
 function Reel({
   strip,
+  skin,
   spinId,
   duration,
   onStop,
 }: {
   strip: SlotSymbolId[];
+  skin: SkinId;
   spinId: number;
   duration: number;
   onStop: () => void;
@@ -107,7 +125,7 @@ function Reel({
       <div className="reel__strip" ref={ref}>
         {strip.map((id, i) => (
           <span className="reel__cell" key={`${id}-${i}`}>
-            <SymbolArt id={id} size={58} />
+            <Sym id={id} skin={skin} />
           </span>
         ))}
       </div>
@@ -143,6 +161,7 @@ export function SlotsPage() {
   const bonusAt = useFinanceStore((s) => s.slotsBonusAt);
   const history = useFinanceStore((s) => s.slotsHistory);
   const jackpotPool = useFinanceStore((s) => s.slotsJackpot);
+  const skin = useFinanceStore((s) => s.slotsSkin);
   const sound = useFinanceStore((s) => s.slotsSound);
   const turbo = useFinanceStore((s) => s.slotsTurbo);
   const setBet = useFinanceStore((s) => s.setSlotsBet);
@@ -159,6 +178,7 @@ export function SlotsPage() {
   const [pending, setPending] = useState(0);
   const [auto, setAuto] = useState(0);
   const [sheet, setSheet] = useState(false);
+  const [skinSheet, setSkinSheet] = useState(false);
   const [lever, setLever] = useState(0);
   const [shake, setShake] = useState(false);
   const [streak, setStreak] = useState(0);
@@ -357,19 +377,31 @@ export function SlotsPage() {
       title="Слоты"
       subtitle="Мини-игра на удачу"
       action={
-        <button
-          className="icon-btn"
-          onClick={() => {
-            tapLight();
-            setSheet(true);
-          }}
-          aria-label="Правила и выплаты"
-        >
-          <IconInfo size={21} />
-        </button>
+        <div className="row" style={{ gap: 8 }}>
+          <button
+            className="icon-btn icon-btn--skin"
+            onClick={() => {
+              tapLight();
+              setSkinSheet(true);
+            }}
+            aria-label="Сменить скин"
+          >
+            <Sym id={skinOf(skin).preview} skin={skin} size={22} />
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => {
+              tapLight();
+              setSheet(true);
+            }}
+            aria-label="Правила и выплаты"
+          >
+            <IconInfo size={21} />
+          </button>
+        </div>
       }
     >
-      <div className="stack slots">
+      <div className="stack slots" data-skin={skin}>
         <SlotArtDefs />
         {/* Табло: баланс и текущий джекпот */}
         <div className="slot-hud">
@@ -383,9 +415,9 @@ export function SlotsPage() {
           <div className="slot-hud__cell slot-hud__cell--jackpot">
             <span className="slot-hud__label">
               Джекпот
-              <SymbolArt id="seven" size={13} />
-              <SymbolArt id="seven" size={13} />
-              <SymbolArt id="seven" size={13} />
+              <Sym id="seven" skin={skin} size={14} />
+              <Sym id="seven" skin={skin} size={14} />
+              <Sym id="seven" skin={skin} size={14} />
             </span>
             <span className="slot-hud__value slot-hud__value--jackpot">
               <AnimatedNumber value={jackpotPrize} format={(n) => fmt(n)} duration={600} />
@@ -408,8 +440,8 @@ export function SlotsPage() {
           </div>
 
           <div className="cabinet__sign">
-            <span>COCO</span>
-            <b>SLOTS</b>
+            <span>{skinOf(skin).sign[0]}</span>
+            <b>{skinOf(skin).sign[1]}</b>
           </div>
 
           <div className="cabinet__body">
@@ -423,6 +455,7 @@ export function SlotsPage() {
                   <Reel
                     key={i}
                     strip={strip}
+                    skin={skin}
                     spinId={spinId}
                     duration={durations[i]}
                     onStop={() => onReelStop(i)}
@@ -494,7 +527,7 @@ export function SlotsPage() {
               <>
                 <span className="status">
                   {outcomeLabel(result).symbol && (
-                    <SymbolArt id={outcomeLabel(result).symbol!} size={22} />
+                    <Sym id={outcomeLabel(result).symbol!} skin={skin} size={22} />
                   )}
                   {outcomeLabel(result).text}
                 </span>
@@ -612,7 +645,7 @@ export function SlotsPage() {
                 <div key={h.id} className={`slot-chip${h.payout > 0 ? ' is-win' : ''}`}>
                   <span className="slot-chip__reels">
                     {h.reels.map((id, i) => (
-                      <SymbolArt key={i} id={id} size={17} />
+                      <Sym key={i} id={id} skin={skin} size={17} />
                     ))}
                   </span>
                   <span className="slot-chip__sum">
@@ -649,9 +682,9 @@ export function SlotsPage() {
               {[...SLOT_SYMBOLS].reverse().map((s) => (
                 <div className="paytable__row" key={s.id}>
                   <span className="paytable__syms">
-                    <SymbolArt id={s.id} size={26} />
-                    <SymbolArt id={s.id} size={26} />
-                    <SymbolArt id={s.id} size={26} />
+                    <Sym id={s.id} skin={skin} size={26} />
+                    <Sym id={s.id} skin={skin} size={26} />
+                    <Sym id={s.id} skin={skin} size={26} />
                   </span>
                   <span className="paytable__mult">×{s.three}</span>
                   <span className="paytable__pair">пара ×{s.pair}</span>
@@ -685,6 +718,36 @@ export function SlotsPage() {
               автомата — около 93%.
             </p>
           </div>
+        </Sheet>
+      )}
+
+      {skinSheet && (
+        <Sheet title="Скины автомата" onClose={() => setSkinSheet(false)}>
+          <div className="skin-grid">
+            {SKINS.map((sk) => (
+              <button
+                key={sk.id}
+                className={`skin-card${sk.id === skin ? ' is-active' : ''}`}
+                data-skin={sk.id}
+                onClick={() => {
+                  selectionChanged();
+                  setPrefs({ skin: sk.id });
+                  setSkinSheet(false);
+                }}
+              >
+                <span className="skin-card__reels">
+                  <img src={symbolSrc(sk.id, 'seven')} width={26} height={26} alt="" />
+                  <img src={symbolSrc(sk.id, 'star')} width={26} height={26} alt="" />
+                  <img src={symbolSrc(sk.id, 'bell')} width={26} height={26} alt="" />
+                </span>
+                <span className="skin-card__name">{sk.name}</span>
+                <span className="skin-card__hint">{sk.hint}</span>
+              </button>
+            ))}
+          </div>
+          <p className="muted" style={{ marginTop: 14, marginBottom: 0, fontSize: 12 }}>
+            Символы — Twemoji (CC-BY 4.0, Twitter Inc. и контрибьюторы).
+          </p>
         </Sheet>
       )}
 
