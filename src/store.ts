@@ -47,7 +47,6 @@ import type {
   SizeEntry,
   SlotSpin,
   SlotsBlob,
-  SlotSymbolId,
   WardrobeCollectionsBlob,
   WardrobeFittingBlob,
   WardrobeInspirationBlob,
@@ -78,7 +77,14 @@ export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { deleteAttachmentFile } from '@/lib/images';
-import { evaluateSpin, spinReels, START_BALANCE } from '@/lib/slots';
+import {
+  evaluateGrid,
+  JACKPOT_BASE,
+  JACKPOT_RATE,
+  spinGrid,
+  START_BALANCE,
+} from '@/lib/slots';
+import type { SpinResult } from '@/lib/slots';
 import { genId } from '@/lib/id';
 import { normalizeNoteTitle } from '@/lib/notes-graph';
 import { deriveFromMessages, makeMessage, materializeMessages } from '@/lib/notes-messages';
@@ -236,6 +242,9 @@ const persistSlots = (s: {
   slotsBest: number;
   slotsBonusAt?: number;
   slotsHistory: SlotSpin[];
+  slotsJackpot: number;
+  slotsSound: boolean;
+  slotsTurbo: boolean;
 }) =>
   writeSlots({
     version: 1,
@@ -245,6 +254,9 @@ const persistSlots = (s: {
     best: s.slotsBest,
     lastBonusAt: s.slotsBonusAt,
     history: s.slotsHistory,
+    jackpot: s.slotsJackpot,
+    sound: s.slotsSound,
+    turbo: s.slotsTurbo,
   });
 
 // ---- Full data export / import (user-controlled backup) -------------------
@@ -320,6 +332,9 @@ interface FinanceState {
   slotsBest: number;
   slotsBonusAt?: number;
   slotsHistory: SlotSpin[];
+  slotsJackpot: number;
+  slotsSound: boolean;
+  slotsTurbo: boolean;
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -481,8 +496,9 @@ interface FinanceState {
   setPrompterPrefs: (patch: Partial<PrompterPrefs>) => void;
 
   setSlotsBet: (bet: number) => void;
-  playSlots: () => { reels: SlotSymbolId[]; payout: number } | null;
+  playSlots: () => (SpinResult & { jackpotWin: number }) | null;
   claimSlotsBonus: (amount: number) => void;
+  setSlotsPrefs: (patch: { sound?: boolean; turbo?: boolean }) => void;
 
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
@@ -537,6 +553,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   slotsSpins: 0,
   slotsBest: 0,
   slotsHistory: [],
+  slotsJackpot: JACKPOT_BASE,
+  slotsSound: true,
+  slotsTurbo: false,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -623,6 +642,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsBest: slots?.best ?? 0,
       slotsBonusAt: slots?.lastBonusAt,
       slotsHistory: slots?.history ?? [],
+      slotsJackpot: slots?.jackpot ?? JACKPOT_BASE,
+      slotsSound: slots?.sound ?? true,
+      slotsTurbo: slots?.turbo ?? false,
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -1476,6 +1498,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
           best: s.slotsBest,
           lastBonusAt: s.slotsBonusAt,
           history: s.slotsHistory,
+          jackpot: s.slotsJackpot,
+          sound: s.slotsSound,
+          turbo: s.slotsTurbo,
         },
         reminderPrefs: s.reminderPrefs,
       },
@@ -1525,6 +1550,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsBest: d.slots?.best ?? 0,
       slotsBonusAt: d.slots?.lastBonusAt,
       slotsHistory: d.slots?.history ?? [],
+      slotsJackpot: d.slots?.jackpot ?? JACKPOT_BASE,
+      slotsSound: d.slots?.sound ?? true,
+      slotsTurbo: d.slots?.turbo ?? false,
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -1780,32 +1808,50 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistSlots(get());
   },
 
-  // Один спин: списываем ставку, крутим, начисляем выигрыш. Вся математика
-  // живёт в lib/slots (и покрыта тестами) — стор только ведёт счёт.
+  // Один спин: списываем ставку, крутим поле 3×3, начисляем выигрыш по линиям.
+  // Вся математика живёт в lib/slots (и покрыта тестами) — стор ведёт счёт.
   playSlots: () => {
     const s = get();
     if (s.slotsBalance < s.slotsBet) return null;
-    const reels = spinReels();
-    const { payout } = evaluateSpin(reels, s.slotsBet);
+    const result = evaluateGrid(spinGrid(), s.slotsBet);
+    // Часть ставки уходит в копилку джекпота; три семёрки забирают её целиком.
+    const grown = s.slotsJackpot + Math.round(s.slotsBet * JACKPOT_RATE);
+    const jackpotWin = result.kind === 'jackpot' ? grown : 0;
+    const total = result.total + jackpotWin;
     const entry: SlotSpin = {
       id: genId(),
-      reels,
+      // В историю кладём центральную линию — она и рисуется на чипе.
+      reels: result.grid.map((col) => col[1]),
       bet: s.slotsBet,
-      payout,
+      payout: total,
       at: Date.now(),
     };
     set({
-      slotsBalance: s.slotsBalance - s.slotsBet + payout,
+      slotsBalance: s.slotsBalance - s.slotsBet + total,
       slotsSpins: s.slotsSpins + 1,
-      slotsBest: Math.max(s.slotsBest, payout),
+      slotsBest: Math.max(s.slotsBest, total),
       slotsHistory: [entry, ...s.slotsHistory].slice(0, 12),
+      slotsJackpot: jackpotWin ? JACKPOT_BASE : grown,
     });
     persistSlots(get());
-    return { reels, payout };
+    return {
+      ...result,
+      total,
+      multiplier: s.slotsBet > 0 ? total / s.slotsBet : 0,
+      jackpotWin,
+    };
   },
 
   claimSlotsBonus: (amount) => {
     set({ slotsBalance: get().slotsBalance + amount, slotsBonusAt: Date.now() });
+    persistSlots(get());
+  },
+
+  setSlotsPrefs: (patch) => {
+    set({
+      slotsSound: patch.sound ?? get().slotsSound,
+      slotsTurbo: patch.turbo ?? get().slotsTurbo,
+    });
     persistSlots(get());
   },
 

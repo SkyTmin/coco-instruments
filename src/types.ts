@@ -838,4 +838,9 @@ export interface SlotsBlob {
   /** Когда забирали ежедневный бонус. */
   lastBonusAt?: number;
   history: SlotSpin[];
+  /** Накопительный джекпот: растёт с каждой ставки, срывается тремя семёрками. */
+  jackpot?: number;
+  /** Звук автомата (Web Audio) и ускоренные вращения. */
+  sound?: boolean;
+  turbo?: boolean;
 }

@@ -10523,131 +10523,435 @@ input[type='datetime-local'] {
 }
 
 /* ===========================================================================
-   Слоты — мини-игра. Виртуальные монеты, никакой реальной валюты.
+   Слоты — настоящий автомат: неон, лампочки, стекло и рычаг.
+   Монеты виртуальные, покупка не предусмотрена.
    =========================================================================== */
-.slot-balance {
+.slots {
+  --cell: 64px;
+  --neon: #ffb459;
+  --neon-2: #ff6b8b;
+}
+
+/* Табло: баланс и текущий джекпот */
+.slot-hud {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.slot-hud__cell {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-radius: 18px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 16px;
   border: 1px solid var(--glass-border);
   background: var(--glass);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
   backdrop-filter: blur(14px) saturate(1.3);
-  box-shadow:
-    var(--shadow-sm),
-    inset 0 1px 0 var(--glass-hi);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
-.slot-balance__label {
-  font-size: 11.5px;
+.slot-hud__cell--jackpot {
+  background: linear-gradient(135deg, rgba(255, 107, 139, 0.16), rgba(255, 180, 89, 0.16));
+  border-color: color-mix(in srgb, var(--neon) 40%, transparent);
+}
+.slot-hud__label {
+  font-size: 10.5px;
   font-weight: 800;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.slot-balance__value {
-  font-size: 24px;
-  font-weight: 850;
+.slot-hud__value {
+  font-size: 20px;
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
+.slot-hud__value--jackpot {
+  color: var(--neon);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--neon) 60%, transparent);
+  animation: jackpot-glow 2.4s ease-in-out infinite;
+}
+@keyframes jackpot-glow {
+  50% {
+    text-shadow: 0 0 22px color-mix(in srgb, var(--neon-2) 75%, transparent);
+  }
+}
 
-/* Корпус машины */
-.slot-machine {
-  --slot-cell: 76px;
-  padding: 16px 14px 12px;
-  border-radius: 24px;
-  border: 1px solid var(--glass-border);
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--accent-grad-1) 22%, var(--surface)),
-    var(--surface-2)
-  );
+/* ---- Корпус автомата ---------------------------------------------------- */
+.cabinet {
+  position: relative;
+  padding: 14px 12px 12px;
+  border-radius: 26px;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(255, 180, 89, 0.22), transparent 60%),
+    linear-gradient(180deg, #2a1a12, #150d09 60%, #1d120c);
+  border: 1px solid rgba(255, 190, 120, 0.28);
   box-shadow:
-    var(--shadow),
-    inset 0 1px 0 var(--glass-hi);
-  transition: box-shadow 0.3s ease;
+    0 20px 50px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 220, 180, 0.22),
+    inset 0 -18px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  transition: box-shadow 0.35s ease;
 }
-.slot-machine.is-jackpot {
+.cabinet.is-jackpot {
+  border-color: var(--neon);
   box-shadow:
-    var(--glow-shadow),
-    0 0 0 2px var(--accent),
-    inset 0 1px 0 var(--glass-hi);
+    0 0 0 2px color-mix(in srgb, var(--neon) 70%, transparent),
+    0 22px 60px rgba(255, 140, 80, 0.45),
+    inset 0 1px 0 rgba(255, 220, 180, 0.3);
 }
-.slot-machine__reels {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.cabinet.is-shake {
+  animation: cabinet-shake 0.55s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+@keyframes cabinet-shake {
+  10%,
+  90% {
+    transform: translate3d(-2px, 0, 0) rotate(-0.25deg);
+  }
+  30%,
+  70% {
+    transform: translate3d(4px, 0, 0) rotate(0.35deg);
+  }
+  50% {
+    transform: translate3d(-5px, 0, 0) rotate(-0.4deg);
+  }
+}
+
+/* Бегущие лампочки по верхней кромке */
+.cabinet__bulbs {
+  position: absolute;
+  top: 8px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.cabinet__bulbs i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 210, 160, 0.25);
+  animation: bulb-chase 1.6s linear infinite;
+}
+@keyframes bulb-chase {
+  0%,
+  70% {
+    background: rgba(255, 210, 160, 0.22);
+    box-shadow: none;
+  }
+  20% {
+    background: #ffd9a3;
+    box-shadow: 0 0 10px #ffb459;
+  }
+}
+.cabinet.is-spinning .cabinet__bulbs i {
+  animation-duration: 0.7s;
+}
+.cabinet.is-jackpot .cabinet__bulbs i {
+  animation-duration: 0.35s;
+}
+
+/* Неоновая вывеска */
+.cabinet__sign {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 12px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.cabinet__sign span {
+  font-size: 13px;
+  color: rgba(255, 226, 194, 0.75);
+}
+.cabinet__sign b {
+  font-size: 19px;
+  color: #fff3e2;
+  text-shadow:
+    0 0 6px var(--neon),
+    0 0 18px color-mix(in srgb, var(--neon) 70%, transparent),
+    0 0 34px color-mix(in srgb, var(--neon-2) 55%, transparent);
+  animation: neon-flicker 4.5s infinite;
+}
+@keyframes neon-flicker {
+  0%,
+  96%,
+  100% {
+    opacity: 1;
+  }
+  97% {
+    opacity: 0.55;
+  }
+  98.5% {
+    opacity: 0.85;
+  }
+}
+
+.cabinet__body {
+  display: flex;
+  align-items: stretch;
   gap: 10px;
 }
 
-/* Одно окно барабана: показываем ровно одну ячейку, остальное скрыто. */
-.slot-reel {
-  height: var(--slot-cell);
-  overflow: hidden;
-  border-radius: 16px;
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  box-shadow: inset 0 6px 14px rgba(0, 0, 0, 0.16);
-  transition:
-    box-shadow 0.25s ease,
-    border-color 0.25s ease;
-}
-.slot-reel.is-win {
-  border-color: var(--accent);
+/* Окно с барабанами */
+.cabinet__window {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #120a06, #241610);
   box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent),
-    inset 0 6px 14px rgba(0, 0, 0, 0.12);
+    inset 0 2px 10px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 190, 120, 0.22);
 }
-.slot-reel__strip {
+.reels {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  height: calc(var(--cell) * 3);
+  overflow: hidden;
+  border-radius: 12px;
+}
+.reel {
+  overflow: hidden;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fdf4e7, #efe0cc);
+  box-shadow: inset 0 0 0 1px rgba(90, 50, 20, 0.18);
+}
+.reel__strip {
   will-change: transform;
 }
-.slot-reel__cell {
+.reel__strip.is-blur {
+  filter: blur(1.4px);
+}
+.reel__cell {
   display: grid;
   place-items: center;
-  height: var(--slot-cell);
-  font-size: 40px;
+  height: var(--cell);
+  font-size: 34px;
   line-height: 1;
   user-select: none;
 }
 
-/* Строка результата под барабанами */
-.slot-machine__status {
+/* Стеклянный блик и затемнение краёв — эффект цилиндра под стеклом */
+.reels__glass {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.5),
+      rgba(0, 0, 0, 0) 22%,
+      rgba(0, 0, 0, 0) 78%,
+      rgba(0, 0, 0, 0.5)
+    ),
+    linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.16) 46%, transparent 54%);
+}
+
+/* Подсветка выигрышных ячеек */
+.reels__marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.reels__mark {
+  position: absolute;
+  width: calc(100% / 3);
+  height: calc(100% / 3);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 0 0 2px var(--neon),
+    0 0 18px color-mix(in srgb, var(--neon) 60%, transparent);
+  animation: mark-pulse 1s ease-in-out infinite;
+}
+@keyframes mark-pulse {
+  50% {
+    box-shadow:
+      inset 0 0 0 3px #fff1dd,
+      0 0 26px var(--neon);
+  }
+}
+
+/* Линии выплат */
+.paylines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.payline {
+  fill: none;
+  stroke: var(--neon);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px var(--neon));
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: payline-draw 0.5s ease forwards;
+}
+@keyframes payline-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Рычаг сбоку */
+.lever {
+  position: relative;
+  flex: none;
+  width: 34px;
   display: flex;
+  justify-content: center;
+  touch-action: none;
+  cursor: grab;
+}
+.lever.is-off {
+  opacity: 0.45;
+  cursor: default;
+}
+.lever__slot {
+  position: absolute;
+  top: 30px;
+  bottom: 18px;
+  width: 8px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #0c0704, #241610);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 190, 120, 0.22),
+    inset 0 3px 6px rgba(0, 0, 0, 0.8);
+}
+/* Шайба-основание, в которую уходит шток */
+.lever__base {
+  position: absolute;
+  bottom: 6px;
+  width: 26px;
+  height: 12px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #4a2d1d, #1b100a);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 210, 160, 0.35),
+    0 3px 8px rgba(0, 0, 0, 0.5);
+}
+/* Подвижная часть: шар + шток, уходящий в канавку */
+.lever__arm {
+  position: absolute;
+  top: 4px;
+  bottom: 12px;
+  width: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  will-change: transform;
+}
+.lever__knob {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 33% 27%, #ffa3a3, #d1394a 58%, #7d1522);
+  box-shadow:
+    0 6px 14px rgba(0, 0, 0, 0.55),
+    inset 0 2px 5px rgba(255, 255, 255, 0.5),
+    0 0 12px rgba(214, 60, 74, 0.35);
+}
+.lever__rod {
+  flex: 1;
+  width: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #6b6f76, #cfd6de 45%, #7c828b);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+.lever:active .lever__knob {
+  filter: brightness(1.12);
+}
+
+/* Строка статуса */
+.cabinet__status {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-height: 34px;
-  margin-top: 12px;
-  padding: 0 4px;
+  gap: 6px 10px;
+  min-height: 30px;
+  margin-top: 10px;
+  padding: 0 6px;
   text-align: center;
 }
-.slot-status__text {
+.status {
   font-size: 13.5px;
-  font-weight: 700;
-  color: var(--text);
+  font-weight: 750;
+  color: #ffe9d2;
   text-wrap: balance;
 }
-.slot-status__spin {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--muted);
+.status--hint,
+.status--spin {
+  color: rgba(255, 226, 194, 0.6);
 }
-.slot-status__win {
-  font-size: 17px;
+.status__win {
+  font-size: 18px;
   font-weight: 900;
-  color: var(--pos);
+  color: #6ee7a8;
   font-variant-numeric: tabular-nums;
   animation: slot-pop 0.35s ease;
 }
+.status__mult {
+  font-size: 12px;
+  font-weight: 900;
+  color: #2a1206;
+  background: linear-gradient(135deg, #ffd06a, #ff8e5e);
+  padding: 3px 8px;
+  border-radius: 999px;
+  animation: slot-pop 0.35s ease 0.1s backwards;
+}
+.status__streak {
+  font-size: 12px;
+  font-weight: 900;
+  color: #ffd9a3;
+  background: rgba(255, 140, 80, 0.2);
+  border: 1px solid rgba(255, 180, 120, 0.4);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.status__pool {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #2a1206;
+  background: linear-gradient(135deg, #ffe08a, #ffb459);
+  padding: 3px 8px;
+  border-radius: 999px;
+  animation: slot-pop 0.4s ease 0.15s backwards;
+}
+.status__win.is-jackpot {
+  color: var(--neon);
+  font-size: 20px;
+  text-shadow: 0 0 16px var(--neon);
+}
+/* Длинные суммы и подпись джекпота должны переноситься, а не уезжать за корпус. */
+.cabinet__status .status,
+.cabinet__status .status__win {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
 @keyframes slot-pop {
   from {
-    transform: scale(0.7);
+    transform: scale(0.6);
     opacity: 0;
   }
 }
 
-/* Ставки */
+/* ---- Управление --------------------------------------------------------- */
 .slot-bets {
   display: flex;
   gap: 8px;
@@ -10676,11 +10980,69 @@ input[type='datetime-local'] {
 .slot-bet:disabled {
   opacity: 0.4;
 }
-.slot-spin {
-  font-size: 17px;
-  padding-top: 16px;
-  padding-bottom: 16px;
+
+.slot-actions {
+  display: flex;
+  gap: 8px;
 }
+.spin-btn {
+  flex: 1;
+  border: 0;
+  cursor: pointer;
+  padding: 17px 12px;
+  border-radius: 18px;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  color: #2a1206;
+  background: linear-gradient(135deg, #ffd06a, #ff8e5e 55%, #ff6b8b);
+  box-shadow:
+    0 10px 26px rgba(255, 140, 90, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition:
+    transform 0.12s ease,
+    filter 0.2s ease;
+}
+.spin-btn:active {
+  transform: scale(0.97);
+}
+.spin-btn:disabled {
+  filter: grayscale(0.6);
+  opacity: 0.55;
+  box-shadow: none;
+}
+.spin-btn.is-busy {
+  animation: spin-pulse 0.9s ease-in-out infinite;
+}
+@keyframes spin-pulse {
+  50% {
+    filter: brightness(1.12);
+  }
+}
+.slot-mini {
+  flex: none;
+  min-width: 52px;
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  border-radius: 16px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+  transition: transform 0.12s ease;
+}
+.slot-mini:active {
+  transform: scale(0.94);
+}
+.slot-mini:disabled {
+  opacity: 0.4;
+}
+.slot-mini.is-on {
+  background: var(--chip-active-bg);
+  color: var(--chip-active-fg);
+  border-color: transparent;
+}
+
 .slot-bonus-hint {
   margin: -4px 0 0;
   text-align: center;
@@ -10688,7 +11050,7 @@ input[type='datetime-local'] {
   color: var(--muted);
 }
 
-/* Лента последних спинов */
+/* ---- История и статистика ----------------------------------------------- */
 .slot-history__label {
   font-size: 11.5px;
   font-weight: 800;
@@ -10737,7 +11099,6 @@ input[type='datetime-local'] {
   color: var(--pos);
 }
 
-/* Статистика */
 .slot-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -10761,7 +11122,7 @@ input[type='datetime-local'] {
   margin-top: 2px;
 }
 
-/* Таблица выплат */
+/* ---- Таблица выплат и схемы линий --------------------------------------- */
 .paytable {
   display: flex;
   flex-direction: column;
@@ -10790,4 +11151,64 @@ input[type='datetime-local'] {
   font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
+}
+.lines-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.line-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+.line-card svg {
+  width: 34px;
+  height: 34px;
+}
+.line-card rect {
+  fill: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.line-card rect.is-on {
+  fill: var(--accent);
+}
+
+/* Дождь монет при крупном выигрыше (lib/coins.ts) */
+.coinrain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 95;
+  overflow: hidden;
+}
+.coinrain i {
+  position: absolute;
+  top: -8%;
+  font-size: 26px;
+  font-style: normal;
+  animation: coin-fall var(--d, 1.4s) cubic-bezier(0.3, 0.1, 0.6, 1) forwards;
+  transform: scale(var(--s, 1));
+}
+@keyframes coin-fall {
+  to {
+    transform: translate3d(calc(var(--x, 0) * 90px), 115vh, 0) rotate(var(--r, 360deg))
+      scale(var(--s, 1));
+    opacity: 0.85;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cabinet__bulbs i,
+  .cabinet__sign b,
+  .slot-hud__value--jackpot,
+  .reels__mark,
+  .spin-btn.is-busy {
+    animation: none;
+  }
 }
