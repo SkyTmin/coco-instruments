@@ -45,6 +45,9 @@ import type {
   ReminderPrefs,
   SavingsGoal,
   SizeEntry,
+  SlotSpin,
+  SlotsBlob,
+  SlotSymbolId,
   WardrobeCollectionsBlob,
   WardrobeFittingBlob,
   WardrobeInspirationBlob,
@@ -75,6 +78,7 @@ export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { deleteAttachmentFile } from '@/lib/images';
+import { evaluateSpin, spinReels, START_BALANCE } from '@/lib/slots';
 import { genId } from '@/lib/id';
 import { normalizeNoteTitle } from '@/lib/notes-graph';
 import { deriveFromMessages, makeMessage, materializeMessages } from '@/lib/notes-messages';
@@ -188,6 +192,7 @@ const writeFitting = makePersister<WardrobeFittingBlob>(STORAGE_KEYS.fitting);
 const writeWishlist = makePersister<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist);
 const writeSizes = makePersister<WardrobeSizesBlob>(STORAGE_KEYS.sizes);
 const writeCamera = makePersister<CameraBlob>(STORAGE_KEYS.camera);
+const writeSlots = makePersister<SlotsBlob>(STORAGE_KEYS.slots);
 
 const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, items });
 const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, items });
@@ -224,6 +229,24 @@ const persistCamera = (s: {
     prompter: s.prompterPrefs,
   });
 
+const persistSlots = (s: {
+  slotsBalance: number;
+  slotsBet: number;
+  slotsSpins: number;
+  slotsBest: number;
+  slotsBonusAt?: number;
+  slotsHistory: SlotSpin[];
+}) =>
+  writeSlots({
+    version: 1,
+    balance: s.slotsBalance,
+    bet: s.slotsBet,
+    spins: s.slotsSpins,
+    best: s.slotsBest,
+    lastBonusAt: s.slotsBonusAt,
+    history: s.slotsHistory,
+  });
+
 // ---- Full data export / import (user-controlled backup) -------------------
 interface ExportData {
   expenses?: Obligation[];
@@ -249,6 +272,7 @@ interface ExportData {
   cameraShots?: CameraShotItem[];
   cameraScripts?: CameraScript[];
   prompterPrefs?: Partial<PrompterPrefs>;
+  slots?: Partial<Omit<SlotsBlob, 'version'>>;
   reminderPrefs?: Partial<ReminderPrefs>;
 }
 export interface ExportBundle {
@@ -290,6 +314,12 @@ interface FinanceState {
   cameraShots: CameraShotItem[];
   cameraScripts: CameraScript[];
   prompterPrefs: PrompterPrefs;
+  slotsBalance: number;
+  slotsBet: number;
+  slotsSpins: number;
+  slotsBest: number;
+  slotsBonusAt?: number;
+  slotsHistory: SlotSpin[];
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -450,6 +480,10 @@ interface FinanceState {
   removeCameraScript: (id: string) => void;
   setPrompterPrefs: (patch: Partial<PrompterPrefs>) => void;
 
+  setSlotsBet: (bet: number) => void;
+  playSlots: () => { reels: SlotSymbolId[]; payout: number } | null;
+  claimSlotsBonus: (amount: number) => void;
+
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
 
@@ -498,6 +532,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   cameraShots: [],
   cameraScripts: [],
   prompterPrefs: DEFAULT_PROMPTER_PREFS,
+  slotsBalance: START_BALANCE,
+  slotsBet: 25,
+  slotsSpins: 0,
+  slotsBest: 0,
+  slotsHistory: [],
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -523,6 +562,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       wish,
       sizes,
       camera,
+      slots,
     ] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
@@ -543,6 +583,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       storage.get<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist),
       storage.get<WardrobeSizesBlob>(STORAGE_KEYS.sizes),
       storage.get<CameraBlob>(STORAGE_KEYS.camera),
+      storage.get<SlotsBlob>(STORAGE_KEYS.slots),
     ]);
     set({
       expenses: exp?.items ?? [],
@@ -576,6 +617,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       cameraShots: camera?.shots ?? [],
       cameraScripts: camera?.scripts ?? [],
       prompterPrefs: { ...DEFAULT_PROMPTER_PREFS, ...(camera?.prompter ?? {}) },
+      slotsBalance: slots?.balance ?? START_BALANCE,
+      slotsBet: slots?.bet ?? 25,
+      slotsSpins: slots?.spins ?? 0,
+      slotsBest: slots?.best ?? 0,
+      slotsBonusAt: slots?.lastBonusAt,
+      slotsHistory: slots?.history ?? [],
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -1422,6 +1469,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         cameraShots: s.cameraShots,
         cameraScripts: s.cameraScripts,
         prompterPrefs: s.prompterPrefs,
+        slots: {
+          balance: s.slotsBalance,
+          bet: s.slotsBet,
+          spins: s.slotsSpins,
+          best: s.slotsBest,
+          lastBonusAt: s.slotsBonusAt,
+          history: s.slotsHistory,
+        },
         reminderPrefs: s.reminderPrefs,
       },
     };
@@ -1464,6 +1519,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       cameraShots: d.cameraShots ?? [],
       cameraScripts: d.cameraScripts ?? [],
       prompterPrefs: { ...DEFAULT_PROMPTER_PREFS, ...(d.prompterPrefs ?? {}) },
+      slotsBalance: d.slots?.balance ?? START_BALANCE,
+      slotsBet: d.slots?.bet ?? 25,
+      slotsSpins: d.slots?.spins ?? 0,
+      slotsBest: d.slots?.best ?? 0,
+      slotsBonusAt: d.slots?.lastBonusAt,
+      slotsHistory: d.slots?.history ?? [],
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -1485,6 +1546,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistWishlist(st.wishlist);
     persistSizes(st.sizes);
     persistCamera(st);
+    persistSlots(st);
     persistReminderPrefs(st.reminderPrefs);
     return true;
   },
@@ -1711,6 +1773,40 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   setPrompterPrefs: (patch) => {
     set({ prompterPrefs: { ...get().prompterPrefs, ...patch } });
     persistCamera(get());
+  },
+
+  setSlotsBet: (bet) => {
+    set({ slotsBet: bet });
+    persistSlots(get());
+  },
+
+  // Один спин: списываем ставку, крутим, начисляем выигрыш. Вся математика
+  // живёт в lib/slots (и покрыта тестами) — стор только ведёт счёт.
+  playSlots: () => {
+    const s = get();
+    if (s.slotsBalance < s.slotsBet) return null;
+    const reels = spinReels();
+    const { payout } = evaluateSpin(reels, s.slotsBet);
+    const entry: SlotSpin = {
+      id: genId(),
+      reels,
+      bet: s.slotsBet,
+      payout,
+      at: Date.now(),
+    };
+    set({
+      slotsBalance: s.slotsBalance - s.slotsBet + payout,
+      slotsSpins: s.slotsSpins + 1,
+      slotsBest: Math.max(s.slotsBest, payout),
+      slotsHistory: [entry, ...s.slotsHistory].slice(0, 12),
+    });
+    persistSlots(get());
+    return { reels, payout };
+  },
+
+  claimSlotsBonus: (amount) => {
+    set({ slotsBalance: get().slotsBalance + amount, slotsBonusAt: Date.now() });
+    persistSlots(get());
   },
 
   setReminderPrefs: (patch) => {

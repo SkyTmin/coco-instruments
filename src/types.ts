@@ -813,3 +813,29 @@ export interface PrompterPrefs {
   fontSize: number; // px
   scriptId?: string; // последний выбранный текст
 }
+
+// ---- Слоты (мини-игра) ----------------------------------------------------
+
+/** Символ на барабане мини слот-машины. */
+export type SlotSymbolId = 'cherry' | 'lemon' | 'grape' | 'bell' | 'star' | 'diamond' | 'seven';
+
+/** Один сыгранный спин — лента «последние» под машиной. */
+export interface SlotSpin {
+  id: string;
+  reels: SlotSymbolId[];
+  bet: number;
+  payout: number;
+  at: number;
+}
+
+export interface SlotsBlob {
+  version: 1;
+  /** Виртуальные монеты (никакой реальной валюты — игра бесплатная). */
+  balance: number;
+  bet: number;
+  spins: number;
+  best: number;
+  /** Когда забирали ежедневный бонус. */
+  lastBonusAt?: number;
+  history: SlotSpin[];
+}

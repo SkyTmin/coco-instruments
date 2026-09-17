@@ -4,6 +4,7 @@ import { AnimatedNumber, ConfirmDialog, Screen, Sheet, Skeleton } from '@/compon
 import {
   IconCalculator,
   IconCamera,
+  IconSlots,
   IconGear,
   IconHeart,
   IconNotes,
@@ -26,6 +27,8 @@ const dateFmt = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
   month: 'long',
 });
+
+const fmtCoins = (n: number) => n.toLocaleString('ru-RU');
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -54,6 +57,8 @@ export function HomePage() {
   const meetIdeas = useFinanceStore((s) => s.meetIdeas);
   const wardrobe = useFinanceStore((s) => s.wardrobe);
   const outfits = useFinanceStore((s) => s.outfits);
+  const slotsBalance = useFinanceStore((s) => s.slotsBalance);
+  const slotsSpins = useFinanceStore((s) => s.slotsSpins);
   const hydrated = useFinanceStore((s) => s.hydrated);
   const exportAll = useFinanceStore((s) => s.exportAll);
   const importAll = useFinanceStore((s) => s.importAll);
@@ -377,12 +382,21 @@ export function HomePage() {
         </div>
 
         <div className="home-pair">
-          <button className="home-tile home-tile--wide" onClick={() => go('/camera')}>
+          <button className="home-tile" onClick={() => go('/camera')}>
             <span className="home-tile__icon">
               <IconCamera />
             </span>
             <span className="home-tile__title">Камера</span>
-            <span className="home-tile__fact">Сетки и эскизы для портретов</span>
+            <span className="home-tile__fact">Сетки, эскизы и суфлёр</span>
+          </button>
+          <button className="home-tile" onClick={() => go('/slots')}>
+            <span className="home-tile__icon">
+              <IconSlots />
+            </span>
+            <span className="home-tile__title">Слоты</span>
+            <span className="home-tile__fact">
+              {slotsSpins ? `${fmtCoins(slotsBalance)} 🪙 · ${slotsSpins} спинов` : 'Мини-игра на удачу'}
+            </span>
           </button>
         </div>
         <div className="home-version">{versionLabel()}</div>

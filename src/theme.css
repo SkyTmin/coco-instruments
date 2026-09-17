@@ -10521,3 +10521,273 @@ input[type='datetime-local'] {
 .camera-btn-slot {
   min-width: 104px;
 }
+
+/* ===========================================================================
+   Слоты — мини-игра. Виртуальные монеты, никакой реальной валюты.
+   =========================================================================== */
+.slot-balance {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow:
+    var(--shadow-sm),
+    inset 0 1px 0 var(--glass-hi);
+}
+.slot-balance__label {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.slot-balance__value {
+  font-size: 24px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Корпус машины */
+.slot-machine {
+  --slot-cell: 76px;
+  padding: 16px 14px 12px;
+  border-radius: 24px;
+  border: 1px solid var(--glass-border);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--accent-grad-1) 22%, var(--surface)),
+    var(--surface-2)
+  );
+  box-shadow:
+    var(--shadow),
+    inset 0 1px 0 var(--glass-hi);
+  transition: box-shadow 0.3s ease;
+}
+.slot-machine.is-jackpot {
+  box-shadow:
+    var(--glow-shadow),
+    0 0 0 2px var(--accent),
+    inset 0 1px 0 var(--glass-hi);
+}
+.slot-machine__reels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+/* Одно окно барабана: показываем ровно одну ячейку, остальное скрыто. */
+.slot-reel {
+  height: var(--slot-cell);
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  box-shadow: inset 0 6px 14px rgba(0, 0, 0, 0.16);
+  transition:
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+.slot-reel.is-win {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent),
+    inset 0 6px 14px rgba(0, 0, 0, 0.12);
+}
+.slot-reel__strip {
+  will-change: transform;
+}
+.slot-reel__cell {
+  display: grid;
+  place-items: center;
+  height: var(--slot-cell);
+  font-size: 40px;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Строка результата под барабанами */
+.slot-machine__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 34px;
+  margin-top: 12px;
+  padding: 0 4px;
+  text-align: center;
+}
+.slot-status__text {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  text-wrap: balance;
+}
+.slot-status__spin {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.slot-status__win {
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--pos);
+  font-variant-numeric: tabular-nums;
+  animation: slot-pop 0.35s ease;
+}
+@keyframes slot-pop {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+}
+
+/* Ставки */
+.slot-bets {
+  display: flex;
+  gap: 8px;
+}
+.slot-bet {
+  flex: 1;
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  padding: 11px 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.12s ease;
+}
+.slot-bet:active {
+  transform: scale(0.94);
+}
+.slot-bet.is-active {
+  background: var(--chip-active-bg);
+  color: var(--chip-active-fg);
+  border-color: transparent;
+}
+.slot-bet:disabled {
+  opacity: 0.4;
+}
+.slot-spin {
+  font-size: 17px;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+.slot-bonus-hint {
+  margin: -4px 0 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Лента последних спинов */
+.slot-history__label {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.slot-history__row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.slot-history__row::-webkit-scrollbar {
+  display: none;
+}
+.slot-chip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 10px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+}
+.slot-chip.is-win {
+  border-color: color-mix(in srgb, var(--pos) 55%, transparent);
+  background: color-mix(in srgb, var(--pos) 12%, var(--surface-2));
+}
+.slot-chip__reels {
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.slot-chip__sum {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.slot-chip.is-win .slot-chip__sum {
+  color: var(--pos);
+}
+
+/* Статистика */
+.slot-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.slot-stat {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  text-align: center;
+}
+.slot-stat__num {
+  font-size: 18px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+.slot-stat__lbl {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Таблица выплат */
+.paytable {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.paytable__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.paytable__syms {
+  font-size: 20px;
+  letter-spacing: -2px;
+}
+.paytable__mult {
+  font-size: 16px;
+  font-weight: 850;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.paytable__pair {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}

@@ -38,6 +38,7 @@ export const STORAGE_KEYS = {
   wishlist: 'wardrobe.wishlist',
   sizes: 'wardrobe.sizes',
   camera: 'camera.items',
+  slots: 'slots.state',
   meta: 'app.meta',
 } as const;
 

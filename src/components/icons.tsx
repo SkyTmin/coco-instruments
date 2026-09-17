@@ -261,6 +261,14 @@ export const IconCamera = (p: IconProps) => (
   </svg>
 );
 
+export const IconSlots = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="5" width="18" height="14" rx="3" />
+    <path d="M9 5v14M15 5v14" />
+    <path d="M6 12h.01M12 12h.01M18 12h.01" />
+  </svg>
+);
+
 export const IconLock = ({ open = false, ...p }: IconProps & { open?: boolean }) => (
   <svg {...base(p)}>
     <rect x="5" y="11" width="14" height="10" rx="2" />
