@@ -1,17 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   BETS,
+  clampBet,
   COMBO_LADDER,
   collapse,
   comboMultiplier,
   evaluateGrid,
   hasAnticipation,
   lineBet,
+  MAX_BET,
   MAX_CASCADES,
+  MIN_BET,
   outcomeLabel,
   PAYLINES,
   randomSymbol,
   resolveSpin,
+  roundWin,
   SLOT_SYMBOLS,
   spinGrid,
   theoreticalRtp,
@@ -39,10 +43,25 @@ const S: SlotSymbolId = 'seven';
 const D: SlotSymbolId = 'diamond';
 
 describe('slot machine', () => {
-  it('keeps the line unit whole for every allowed bet', () => {
+  it('keeps the payline unit tied to the bet', () => {
     expect(PAYLINES).toHaveLength(5);
     expect(lineBet(50)).toBe(2);
-    for (const bet of BETS) expect(Number.isInteger(lineBet(bet))).toBe(true);
+    expect(lineBet(25)).toBe(1);
+  });
+
+  it('clamps a custom bet to the allowed range and step', () => {
+    expect(clampBet(1)).toBe(MIN_BET);
+    expect(clampBet(0)).toBe(MIN_BET);
+    expect(clampBet(99999)).toBe(MAX_BET);
+    expect(clampBet(37)).toBe(35);
+    expect(clampBet(Number.NaN)).toBe(BETS[0]);
+    for (const bet of BETS) expect(clampBet(bet)).toBe(bet);
+  });
+
+  it('never turns a win into zero coins', () => {
+    expect(roundWin(0)).toBe(0);
+    expect(roundWin(0.2)).toBe(1); // пара вишен на ставке 5
+    expect(roundWin(2.4)).toBe(2);
   });
 
   it('pays three of a kind on the centre line', () => {
@@ -220,13 +239,22 @@ describe('каскады и комбо', () => {
     }
   });
 
-  it('выплаты остаются целыми на любой разрешённой ставке', () => {
+  it('выплаты остаются целыми на любой ставке, включая произвольную', () => {
     const rng = seeded(4242);
-    for (const bet of BETS) {
+    for (const bet of [...BETS, MIN_BET, 15, 35, 185, MAX_BET]) {
       for (let i = 0; i < 300; i++) {
         const out = resolveSpin(bet, rng);
         expect(Number.isInteger(out.total)).toBe(true);
+        out.steps.forEach((step) => expect(Number.isInteger(step.payout)).toBe(true));
       }
+    }
+  });
+
+  it('на минимальной ставке выигрыш никогда не равен нулю', () => {
+    const rng = seeded(88);
+    for (let i = 0; i < 2000; i++) {
+      const out = resolveSpin(MIN_BET, rng);
+      if (out.steps.length) expect(out.total).toBeGreaterThan(0);
     }
   });
 

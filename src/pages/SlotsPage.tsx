@@ -24,11 +24,15 @@ import {
 } from '@/lib/slots-meta';
 import type { WheelSector } from '@/lib/slots-meta';
 import {
+  BET_STEP,
   BETS,
+  clampBet,
   COMBO_LADDER,
   hasAnticipation,
   LINE_UNIT,
   lineBet,
+  MAX_BET,
+  MIN_BET,
   outcomeLabel,
   PAYLINES,
   randomSymbol,
@@ -38,7 +42,9 @@ import {
   SLOT_SYMBOLS,
   symbolOf,
 } from '@/lib/slots';
-import type { LineWin, SlotGrid, SlotSymbolId, SpinResult } from '@/lib/slots';
+import type { CascadeStep, LineWin, SlotGrid, SlotSymbolId, SpinResult } from '@/lib/slots';
+import { DUST_MS, dustBurst } from '@/lib/dust';
+import type { DustCell } from '@/lib/dust';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import {
@@ -55,7 +61,14 @@ import {
   symbolBurst,
   winChime,
 } from '@/lib/sound';
-import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
+import {
+  notifySuccess,
+  notifyWarning,
+  selectionChanged,
+  setHapticsMuted,
+  tapLight,
+  tapMedium,
+} from '@/lib/haptics';
 
 // Высота ячейки барабана — та же величина в CSS (--cell): лента двигается на
 // целое число ячеек, поэтому символы всегда встают ровно в окно.
@@ -73,10 +86,10 @@ const AUTO_OPTIONS: { value: number; label: string; hint: string }[] = [
   { value: 50, label: '50', hint: 'пятьдесят' },
   { value: Infinity, label: '∞', hint: 'пока не кончатся монеты' },
 ];
-/** Каскад: показать выигрыш → взорвать символы → уронить новые. */
-const SHOW_MS = 780;
-const BURST_MS = 280;
-const DROP_MS = 420;
+/** Каскад: подсветить выигрыш → рассыпать символы в пыль → уронить верхние. */
+const SHOW_MS = 700;
+const BURST_MS = 320;
+const DROP_MS = 430;
 /** Сдвиг падения по колонкам — столбцы приземляются не разом. */
 const DROP_STAGGER = 70;
 
@@ -103,11 +116,52 @@ function makeStrip(from: SlotSymbolId[], to: SlotSymbolId[]): SlotSymbolId[] {
 const startGrid = (): SlotGrid => [randomColumn(), randomColumn(), randomColumn()];
 
 /**
- * Лента для каскада: сверху новое поле, снизу текущее. Барабан едет вниз —
- * старые символы уходят за нижний край, новые приходят сверху.
+ * Одна ячейка поля во время каскада. Поле здесь не лента, а сетка: исчезают
+ * ровно сыгравшие символы, остальные съезжают вниз в освободившиеся места —
+ * именно это и читается как «каскад», а не как новое вращение.
  */
-function makeDropStrip(from: SlotSymbolId[], to: SlotSymbolId[]): SlotSymbolId[] {
-  return [...to, ...from];
+interface BoardCell {
+  key: string;
+  id: SlotSymbolId;
+  /** Ряд, в котором ячейка стоит после падения. */
+  row: number;
+  /** На сколько ячеек она падает (0 — стоит на месте). */
+  fall: number;
+}
+
+type Board = BoardCell[][];
+
+/** Неподвижное поле: всё уже на местах. */
+function gridToBoard(grid: SlotGrid, tag: string): Board {
+  return grid.map((col, c) =>
+    col.map((id, row) => ({ key: `${tag}-${c}-${row}`, id, row, fall: 0 })),
+  );
+}
+
+/**
+ * Поле после схлопывания. Для каждой колонки: уцелевшие символы съезжают вниз
+ * ровно на число исчезнувших под ними, а сверху досыпаются новые — они падают
+ * из-за верхнего края.
+ */
+function collapseBoard(step: CascadeStep, tag: string): Board {
+  const dead = new Set(step.wins.flatMap((w) => w.cells.map(([c, r]) => `${c}:${r}`)));
+  return step.grid.map((col, c) => {
+    const survivors: BoardCell[] = [];
+    col.forEach((id, row) => {
+      if (dead.has(`${c}:${row}`)) return;
+      survivors.push({ key: `${tag}-s-${c}-${row}`, id, row, fall: 0 });
+    });
+    const gone = ROWS - survivors.length;
+    const cells: BoardCell[] = survivors.map((cell, i) => {
+      const row = gone + i;
+      return { ...cell, row, fall: row - cell.row };
+    });
+    // Новые символы берём из уже посчитанного поля — они стоят сверху.
+    for (let row = 0; row < gone; row++) {
+      cells.unshift({ key: `${tag}-n-${c}-${row}`, id: step.next[c][row], row, fall: gone });
+    }
+    return cells.sort((a, b) => a.row - b.row);
+  });
 }
 
 /** Ступень эффектов по длине цепочки — чем длиннее комбо, тем громче праздник. */
@@ -133,24 +187,18 @@ function Sym({ id, skin, size = 58 }: { id: SlotSymbolId; skin: SkinId; size?: n
   );
 }
 
-/**
- * Барабан. Два режима:
- * - `spin` — лента едет вверх, символы приходят снизу (обычное вращение);
- * - `drop` — лента едет вниз, символы падают сверху (каскад после схлопывания).
- */
+/** Барабан: лента едет вверх, символы приходят снизу. */
 function Reel({
   strip,
   skin,
   spinId,
   duration,
-  mode = 'spin',
   onStop,
 }: {
   strip: SlotSymbolId[];
   skin: SkinId;
   spinId: number;
   duration: number;
-  mode?: 'spin' | 'drop';
   onStop: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -160,10 +208,7 @@ function Reel({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || spinId === 0) return;
-    const drop = mode === 'drop';
-    // spin: 0 → -(лента минус окно и хвост); drop: -окно → 0.
-    const from = drop ? -ROWS * CELL : 0;
-    const to = drop ? 0 : -(strip.length - ROWS - 1) * CELL;
+    const to = -(strip.length - ROWS - 1) * CELL;
     if (reduceMotion()) {
       el.style.transition = 'none';
       el.style.transform = `translateY(${to}px)`;
@@ -171,20 +216,18 @@ function Reel({
       return;
     }
     el.style.transition = 'none';
-    el.style.transform = `translateY(${from}px)`;
-    if (!drop) el.classList.add('is-blur');
+    el.style.transform = 'translateY(0)';
+    el.classList.add('is-blur');
     void el.offsetHeight; // reflow, иначе браузер склеит оба присваивания
-    // Вращение с «перелётом», падение — с мягким приземлением.
-    el.style.transition = `transform ${duration}ms ${
-      drop ? 'cubic-bezier(.34,1.42,.5,1)' : 'cubic-bezier(.18,.76,.24,1.06)'
-    }`;
+    // Небольшой «перелёт» в конце — барабан отскакивает, как механический.
+    el.style.transition = `transform ${duration}ms cubic-bezier(.18,.76,.24,1.06)`;
     el.style.transform = `translateY(${to}px)`;
     const t = setTimeout(() => {
       el.classList.remove('is-blur');
       stopRef.current();
     }, duration);
     return () => clearTimeout(t);
-  }, [spinId, strip, duration, mode]);
+  }, [spinId, strip, duration]);
 
   return (
     <div className="reel">
@@ -198,6 +241,68 @@ function Reel({
     </div>
   );
 }
+
+/**
+ * Поле каскада. Каждая ячейка стоит на своём ряду и при необходимости
+ * «прилетает» сверху: анимация стартует со смещения вверх на `--dy` ячеек.
+ */
+function BoardView({
+  board,
+  skin,
+  dying,
+  duration,
+}: {
+  board: Board;
+  skin: SkinId;
+  dying: Set<string>;
+  duration: number;
+}) {
+  return (
+    <div className="board">
+      {board.map((col, c) => (
+        <div className="board__col" key={c}>
+          {col.map((cell) => {
+            const doomed = dying.has(`${c}-${cell.row}`);
+            return (
+              <span
+                key={cell.key}
+                className={`bcell${cell.fall ? ' is-fall' : ''}${doomed ? ' is-dust' : ''}`}
+                style={
+                  {
+                    top: `${cell.row * CELL}px`,
+                    '--dy': cell.fall,
+                    '--dur': `${duration}ms`,
+                    '--delay': `${c * DROP_STAGGER}ms`,
+                  } as React.CSSProperties
+                }
+                data-cell={`${c}-${cell.row}`}
+              >
+                <Sym id={cell.id} skin={skin} />
+              </span>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Баннер крупного выигрыша в духе тотема бессмертия из Minecraft: символ
+ * вырастает в центре, качается и уходит вверх, а вокруг разлетаются
+ * зелёно-золотые квадратные искры — там частицы тоже пиксельные.
+ */
+const SPARKS = Array.from({ length: 46 }, (_, i) => {
+  const angle = (i / 46) * 360 + (i % 3) * 7;
+  return {
+    angle,
+    dist: 120 + ((i * 37) % 130),
+    delay: ((i * 53) % 360) / 1000,
+    size: 5 + ((i * 17) % 7),
+    gold: i % 3 === 0,
+    dur: 900 + ((i * 71) % 500),
+  };
+});
 
 /** Прочерченные линии выплат поверх поля. */
 function PaylineOverlay({ wins }: { wins: SpinResult['wins'] }) {
@@ -310,6 +415,7 @@ export function SlotsPage() {
   const jackpotPool = useFinanceStore((s) => s.slotsJackpot);
   const skin = useFinanceStore((s) => s.slotsSkin);
   const sound = useFinanceStore((s) => s.slotsSound);
+  const haptics = useFinanceStore((s) => s.slotsHaptics);
   const turbo = useFinanceStore((s) => s.slotsTurbo);
   const xp = useFinanceStore((s) => s.slotsXp);
   const dayStreak = useFinanceStore((s) => s.slotsStreak);
@@ -329,8 +435,10 @@ export function SlotsPage() {
   const [spinId, setSpinId] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [durations, setDurations] = useState([BASE_MS, BASE_MS, BASE_MS]);
-  const [reelMode, setReelMode] = useState<'spin' | 'drop'>('spin');
   const [stopped, setStopped] = useState(3);
+  // Поле каскада: не null — значит на экране сетка, а не крутящиеся ленты.
+  const [board, setBoard] = useState<Board | null>(null);
+  const [dropDur, setDropDur] = useState(DROP_MS);
   const [result, setResult] = useState<SlotsSpinOutcome | null>(null);
   // Каскад: какое звено сейчас на экране и в какой фазе.
   const [cascade, setCascade] = useState<{ step: number; phase: 'show' | 'burst' | 'drop' } | null>(
@@ -346,6 +454,9 @@ export function SlotsPage() {
   const [sheet, setSheet] = useState(false);
   const [skinSheet, setSkinSheet] = useState(false);
   const [rewards, setRewards] = useState(false);
+  const [settings, setSettings] = useState(false);
+  const [betSheet, setBetSheet] = useState(false);
+  const [betDraft, setBetDraft] = useState(BETS[0]);
   const [wheelAngle, setWheelAngle] = useState(0);
   const [wheelBusy, setWheelBusy] = useState(false);
   const [wheelPrize, setWheelPrize] = useState<{ coins: number; freeSpins: number } | null>(null);
@@ -361,18 +472,23 @@ export function SlotsPage() {
   const [jackpotWin, setJackpotWin] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
+  const reelsRef = useRef<HTMLDivElement>(null);
+  const dustRef = useRef<HTMLCanvasElement>(null);
+  const dustStop = useRef<(() => void) | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wheelTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const dragRef = useRef<{ y: number; id: number } | null>(null);
 
   useEffect(() => setMuted(!sound), [sound]);
+  useEffect(() => setHapticsMuted(!haptics), [haptics]);
 
   useEffect(
     () => () => {
       timers.current.forEach(clearTimeout);
       if (tickRef.current) clearInterval(tickRef.current);
       if (wheelTickRef.current) clearInterval(wheelTickRef.current);
+      dustStop.current?.();
     },
     [],
   );
@@ -458,6 +574,34 @@ export function SlotsPage() {
     return () => clearTimeout(t);
   }, [levelUp]);
 
+  /** Рассыпать сыгравшие ячейки в пыль (эффект удаления сообщения в Telegram). */
+  const startDust = useCallback((wins: LineWin[]) => {
+    const host = reelsRef.current;
+    const canvas = dustRef.current;
+    if (!host || !canvas || reduceMotion()) return;
+    const base = host.getBoundingClientRect();
+    const seen = new Set<string>();
+    const cells: DustCell[] = [];
+    for (const w of wins) {
+      for (const [c, r] of w.cells) {
+        const key = `${c}-${r}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const img = host.querySelector<HTMLImageElement>(`[data-cell="${key}"] img`);
+        if (!img) continue;
+        const rect = img.getBoundingClientRect();
+        cells.push({
+          img,
+          x: rect.left - base.left,
+          y: rect.top - base.top,
+          size: rect.width,
+        });
+      }
+    }
+    dustStop.current?.();
+    dustStop.current = dustBurst(canvas, cells);
+  }, []);
+
   // Каскад по звеньям: показать выигрыш → взорвать символы → уронить новые.
   // Порядок и суммы уже посчитаны в lib/slots — страница только проигрывает.
   const stepRef = useRef<(res: SlotsSpinOutcome, i: number) => void>(() => {});
@@ -474,6 +618,7 @@ export function SlotsPage() {
       const tier = comboTier(chainN);
 
       setCascade({ step: i, phase: 'show' });
+      setBoard(gridToBoard(step.grid, `${res.steps.length}-${i}-g`));
       setStepWins(step.wins);
       setStepCombo(step.combo);
       setChain(chainN);
@@ -494,21 +639,22 @@ export function SlotsPage() {
         setShake(true);
       }
 
+      // Пыль: сыгравшие символы рассыпаются на пиксели (эффект как в Telegram).
       timers.current.push(
         setTimeout(() => {
           setCascade({ step: i, phase: 'burst' });
           symbolBurst();
+          startDust(step.wins);
         }, show),
       );
 
+      // Падение: уцелевшие съезжают вниз, сверху приходят новые.
       timers.current.push(
         setTimeout(() => {
-          setStrips(step.next.map((col, c) => makeDropStrip(step.grid[c], col)));
-          setDurations([0, 1, 2].map((c) => drop + c * stagger));
-          setReelMode('drop');
+          setDropDur(drop);
+          setBoard(collapseBoard(step, `${res.steps.length}-${i}`));
           setCascade({ step: i, phase: 'drop' });
           setStepWins([]);
-          setSpinId((n) => n + 1);
         }, show + burst),
       );
 
@@ -519,6 +665,8 @@ export function SlotsPage() {
             else {
               setCascade(null);
               setChain(0);
+              // Следующее вращение должно стартовать с того, что сейчас на поле.
+              setStrips(res.steps[i].next.map((col) => [...col, randomSymbol()]));
               finish(res);
             }
           },
@@ -526,7 +674,7 @@ export function SlotsPage() {
         ),
       );
     },
-    [turbo, theme.confetti, rainSrc, finish],
+    [turbo, theme.confetti, rainSrc, finish, startDust],
   );
   stepRef.current = runStep;
 
@@ -551,7 +699,8 @@ export function SlotsPage() {
 
     setStrips(next);
     setDurations(durs);
-    setReelMode('spin');
+    setBoard(null);
+    dustStop.current?.();
     setStopped(0);
     setResult(null);
     setShake(false);
@@ -614,9 +763,7 @@ export function SlotsPage() {
   const onReelStop = (index: number) => {
     setStopped((n) => Math.max(n, index + 1));
     reelStop(index);
-    // На падениях каскада вибрация не нужна: за такт их три, телефон трясло бы
-    // без остановки. Тактильный отклик даёт само звено комбо.
-    if (reelMode === 'spin') selectionChanged();
+    selectionChanged();
   };
 
   const takeRescue = () => {
@@ -749,6 +896,10 @@ export function SlotsPage() {
   const shownWins = marking ? stepWins : [];
   const winCells = new Set(shownWins.flatMap((w) => w.cells.map(([c, r]) => `${c}-${r}`)));
   const bursting = cascade?.phase === 'burst';
+  // Ячейки, которые прямо сейчас рассыпаются в пыль.
+  const dyingCells = new Set(
+    bursting ? stepWins.flatMap((w) => w.cells.map(([c, r]) => `${c}-${r}`)) : [],
+  );
   const tier = comboTier(chain);
 
   return (
@@ -851,18 +1002,23 @@ export function SlotsPage() {
                 <i />
                 <i />
               </span>
-              <div className="reels">
-                {strips.map((strip, i) => (
-                  <Reel
-                    key={i}
-                    strip={strip}
-                    skin={skin}
-                    spinId={spinId}
-                    duration={durations[i]}
-                    mode={reelMode}
-                    onStop={() => onReelStop(i)}
-                  />
-                ))}
+              <div className="reels" ref={reelsRef}>
+                {/* Вращение рисуют ленты, каскад — сетка: в каскаде исчезают
+                    ровно сыгравшие ячейки, а верхние съезжают в их места. */}
+                {board ? (
+                  <BoardView board={board} skin={skin} dying={dyingCells} duration={dropDur} />
+                ) : (
+                  strips.map((strip, i) => (
+                    <Reel
+                      key={i}
+                      strip={strip}
+                      skin={skin}
+                      spinId={spinId}
+                      duration={durations[i]}
+                      onStop={() => onReelStop(i)}
+                    />
+                  ))
+                )}
                 {shownWins.length > 0 && <div className="reels__dim" aria-hidden="true" />}
                 {shownWins.length > 0 && (
                   <div className="reels__marks" aria-hidden="true">
@@ -883,13 +1039,22 @@ export function SlotsPage() {
                   </div>
                 )}
                 {shownWins.length > 0 && <PaylineOverlay wins={shownWins} />}
+                {/* Канва пыли: поверх поля, чтобы пиксели летели над символами */}
+                <canvas className="dust" ref={dustRef} aria-hidden="true" />
+                {/* Множитель звена крупно в центре — чтобы комбо читалось сразу.
+                    На первом звене множителя нет, и «×1» был бы шумом. */}
+                {cascade && cascade.phase !== 'drop' && stepCombo > 1 && (
+                  <div className={`stamp stamp--t${tier}`} key={`st-${chain}`} aria-hidden="true">
+                    ×{stepCombo}
+                  </div>
+                )}
                 <div className="reels__glass" aria-hidden="true" />
               </div>
               {/* Счётчик комбо — над окном, чтобы не закрывать сыгравший ряд */}
-              {chain >= 2 && cascade && (
+              {chain >= 1 && cascade && (
                 <div className={`combo combo--t${tier}`} key={chain}>
-                  <b>КОМБО ×{chain}</b>
-                  <i>×{stepCombo}</i>
+                  <b>{chain >= 2 ? `КОМБО ×${chain}` : 'ЕСТЬ ВЫИГРЫШ'}</b>
+                  {stepCombo > 1 && <i>выплата ×{stepCombo}</i>}
                 </div>
               )}
             </div>
@@ -969,7 +1134,7 @@ export function SlotsPage() {
           </div>
         </div>
 
-        {/* Ставки */}
+        {/* Ставки: быстрые кнопки и «⋯» для любой другой */}
         <div className="slot-bets">
           {BETS.map((b) => (
             <button
@@ -984,6 +1149,18 @@ export function SlotsPage() {
               {fmt(b)}
             </button>
           ))}
+          <button
+            className={`slot-bet slot-bet--more${BETS.includes(bet) ? '' : ' is-active'}`}
+            disabled={spinning}
+            onClick={() => {
+              tapLight();
+              setBetDraft(bet);
+              setBetSheet(true);
+            }}
+            aria-label="Своя ставка"
+          >
+            {BETS.includes(bet) ? '⋯' : fmt(bet)}
+          </button>
         </div>
 
         {/* Кнопки управления */}
@@ -1033,15 +1210,15 @@ export function SlotsPage() {
             ⚡
           </button>
           <button
-            className={`slot-mini${sound ? ' is-on' : ''}`}
+            className="slot-mini"
             onClick={() => {
-              selectionChanged();
+              tapLight();
               primeAudio();
-              setPrefs({ sound: !sound });
+              setSettings(true);
             }}
-            aria-label="Звук"
+            aria-label="Настройки"
           >
-            {sound ? '🔊' : '🔇'}
+            ⚙
           </button>
         </div>
 
@@ -1235,6 +1412,117 @@ export function SlotsPage() {
               ставку. Бесплатные вращения тратятся первыми. Режим «∞» удобно включать вместе с
               турбо — тогда барабаны крутятся вдвое быстрее.
             </p>
+          </div>
+        </Sheet>
+      )}
+
+      {settings && (
+        <Sheet title="Настройки" onClose={() => setSettings(false)}>
+          <div className="stack slots" data-skin={skin}>
+            <div className="toggles">
+              {[
+                {
+                  key: 'sound' as const,
+                  on: sound,
+                  icon: sound ? '🔊' : '🔇',
+                  name: 'Звук',
+                  hint: 'Барабаны, комбо и выигрыши',
+                },
+                {
+                  key: 'haptics' as const,
+                  on: haptics,
+                  icon: haptics ? '📳' : '📴',
+                  name: 'Вибрация',
+                  hint: 'Отклик на остановку и выигрыш',
+                },
+                {
+                  key: 'turbo' as const,
+                  on: turbo,
+                  icon: '⚡',
+                  name: 'Турбо',
+                  hint: 'Вращения и каскады вдвое быстрее',
+                },
+              ].map((t) => (
+                <button
+                  key={t.key}
+                  className={`toggle${t.on ? ' is-on' : ''}`}
+                  onClick={() => {
+                    primeAudio();
+                    // Вибрацию выключаем после отклика, включаем — до него.
+                    if (t.key === 'haptics' && !t.on) setHapticsMuted(false);
+                    selectionChanged();
+                    setPrefs({ [t.key]: !t.on });
+                  }}
+                  aria-pressed={t.on}
+                >
+                  <span className="toggle__icon">{t.icon}</span>
+                  <span className="toggle__text">
+                    <b>{t.name}</b>
+                    <i>{t.hint}</i>
+                  </span>
+                  <span className="toggle__switch" aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </Sheet>
+      )}
+
+      {betSheet && (
+        <Sheet title="Своя ставка" onClose={() => setBetSheet(false)}>
+          <div className="stack slots bet-sheet" data-skin={skin}>
+            <div className="bet-sheet__value">
+              {fmt(betDraft)}
+              <CoinIcon size={26} />
+            </div>
+            <div className="bet-sheet__row">
+              <button
+                className="bet-step"
+                onClick={() => {
+                  selectionChanged();
+                  setBetDraft((v) => clampBet(v - BET_STEP));
+                }}
+                aria-label="Меньше"
+              >
+                −
+              </button>
+              <input
+                className="bet-slider"
+                type="range"
+                min={MIN_BET}
+                max={MAX_BET}
+                step={BET_STEP}
+                value={betDraft}
+                onChange={(e) => setBetDraft(clampBet(Number(e.target.value)))}
+              />
+              <button
+                className="bet-step"
+                onClick={() => {
+                  selectionChanged();
+                  setBetDraft((v) => clampBet(v + BET_STEP));
+                }}
+                aria-label="Больше"
+              >
+                +
+              </button>
+            </div>
+            <p className="reward-block__hint" style={{ textAlign: 'center' }}>
+              От {MIN_BET} до {MAX_BET} монет шагом {BET_STEP}. Выплата линии считается от ставки ÷{' '}
+              {LINE_UNIT} — сейчас это {fmt(betDraft / LINE_UNIT)}.
+            </p>
+            <button
+              className="btn btn--block rewards-cta"
+              disabled={betDraft > balance && freeSpins <= 0}
+              onClick={() => {
+                tapMedium();
+                setBet(betDraft);
+                setBetSheet(false);
+              }}
+            >
+              {betDraft > balance && freeSpins <= 0
+                ? 'Не хватает монет'
+                : `Играть по ${fmt(betDraft)}`}
+            </button>
           </div>
         </Sheet>
       )}
@@ -1435,23 +1723,45 @@ export function SlotsPage() {
         </div>
       )}
 
+      {/* Крупный выигрыш — в духе тотема бессмертия: символ вырастает в центре,
+          качается и уходит вверх, вокруг разлетаются квадратные искры. */}
       {celebration && (
         <div
-          className={`bigwin bigwin--${celebration.tier}`}
+          className={`totem totem--${celebration.tier}`}
           onClick={() => setCelebration(null)}
           role="presentation"
         >
-          <div className="bigwin__flash" />
-          <div className="bigwin__rays" />
-          <div className="bigwin__card">
-            <div className="bigwin__title">
+          <div className="totem__flash" />
+          <div className="totem__glow" />
+          <div className="totem__sparks" aria-hidden="true">
+            {SPARKS.map((sp, i) => (
+              <i
+                key={i}
+                className={sp.gold ? 'is-gold' : ''}
+                style={
+                  {
+                    '--a': `${sp.angle}deg`,
+                    '--d': `${sp.dist}px`,
+                    '--s': `${sp.size}px`,
+                    animationDelay: `${sp.delay}s`,
+                    animationDuration: `${sp.dur}ms`,
+                  } as React.CSSProperties
+                }
+              />
+            ))}
+          </div>
+          <div className="totem__item">
+            <Sym id={theme.preview} skin={skin} size={140} />
+          </div>
+          <div className="totem__card">
+            <div className="totem__title">
               {celebration.tier === 'jackpot' ? 'ДЖЕКПОТ!' : 'БОЛЬШОЙ ВЫИГРЫШ'}
             </div>
-            <div className="bigwin__amount">
+            <div className="totem__amount">
               <AnimatedNumber value={celebration.amount} format={(n) => fmt(n)} duration={1400} />
               <CoinIcon size={30} />
             </div>
-            <div className="bigwin__hint">нажмите, чтобы продолжить</div>
+            <div className="totem__hint">нажмите, чтобы продолжить</div>
           </div>
         </div>
       )}

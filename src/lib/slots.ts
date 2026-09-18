@@ -68,12 +68,36 @@ export const PAYLINES: { id: number; rows: number[]; name: string }[] = [
 ];
 
 /**
- * Делитель ставки для выплат линии. Все ставки кратны ему, поэтому выплаты
- * всегда целые: 25→1, 50→2, 100→4, 250→10, 500→20.
+ * Делитель ставки для выплат линии. Ставка может быть любой от MIN_BET до
+ * MAX_BET, поэтому выплата звена округляется до целой монеты (см. roundWin) —
+ * иначе на мелких ставках в балансе заводились бы дробные монеты.
  */
 export const LINE_UNIT = 25;
 
-export const BETS = [25, 50, 100, 250, 500];
+/** Быстрые ставки на экране; кнопка «⋯» открывает выбор любой другой. */
+export const BETS = [10, 25, 50, 100, 250, 500];
+
+export const MIN_BET = 5;
+export const MAX_BET = 500;
+/** Шаг произвольной ставки — чтобы ползунок не давал 37 монет. */
+export const BET_STEP = 5;
+
+/** Ставка в допустимых границах и кратная шагу. */
+export function clampBet(bet: number): number {
+  if (!Number.isFinite(bet)) return BETS[0];
+  const stepped = Math.round(bet / BET_STEP) * BET_STEP;
+  return Math.min(MAX_BET, Math.max(MIN_BET, stepped));
+}
+
+/**
+ * Округление выплаты до целых монет. Любой выигрыш платит хотя бы монету:
+ * на ставке 5 пара вишен стоила бы 0,2 монеты и превращалась бы в ноль —
+ * «выигрыш за ноль» выглядит как обман, хотя это просто округление.
+ */
+export function roundWin(raw: number): number {
+  if (raw <= 0) return 0;
+  return Math.max(1, Math.round(raw));
+}
 
 /** Стартовый банк нового игрока. */
 export const START_BALANCE = 1000;
@@ -83,9 +107,13 @@ export const START_BALANCE = 1000;
  * минимальную ставку, игрок берёт бесплатные вращения и играет дальше —
  * из игры нельзя выпасть совсем. Ставка при этом опускается до минимальной,
  * иначе бесплатные вращения уходили бы по последней (возможно, крупной).
+ *
+ * Кулдауна нет: монеты виртуальные и не продаются, поэтому упереться в стену
+ * и ждать — бессмысленное наказание. Брать можно только в настоящем тупике
+ * (баланс меньше минимальной ставки и бесплатных вращений не осталось).
  */
 export const RESCUE_SPINS = 10;
-export const RESCUE_COOLDOWN_MS = 60 * 60 * 1000;
+export const RESCUE_COOLDOWN_MS = 0;
 
 /**
  * Накопительный джекпот: к базе прибавляется доля каждой ставки, и весь банк
@@ -248,7 +276,7 @@ export function resolveSpin(bet: number, rng: Rng = Math.random): SpinOutcome {
     const res = evaluateGrid(grid, bet);
     if (!res.wins.length) break;
     const combo = comboMultiplier(i);
-    const payout = res.total * combo;
+    const payout = roundWin(res.total * combo);
     total += payout;
     if (res.kind === 'jackpot') jackpot = true;
     const next = collapse(grid, res.wins, rng);

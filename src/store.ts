@@ -81,6 +81,7 @@ import { deleteAttachmentFile } from '@/lib/images';
 import type { SkinId } from '@/lib/skins';
 import {
   BETS,
+  clampBet,
   JACKPOT_BASE,
   JACKPOT_RATE,
   RESCUE_COOLDOWN_MS,
@@ -275,6 +276,7 @@ interface SlotsSnapshot {
   slotsJackpot: number;
   slotsSkin: SkinId;
   slotsSound: boolean;
+  slotsHaptics: boolean;
   slotsTurbo: boolean;
   slotsXp: number;
   slotsRewardedLevel: number;
@@ -296,6 +298,7 @@ const slotsBlob = (s: SlotsSnapshot): SlotsBlob => ({
   jackpot: s.slotsJackpot,
   skin: s.slotsSkin,
   sound: s.slotsSound,
+  haptics: s.slotsHaptics,
   turbo: s.slotsTurbo,
   xp: s.slotsXp,
   rewardedLevel: s.slotsRewardedLevel,
@@ -320,12 +323,9 @@ const missionsForToday = (m: SlotsMissions | undefined, day = dayKey()): SlotsMi
   m && m.day === day ? m : freshMissions(day);
 
 /** Читаем прогрессию из сохранённого блоба (со всеми умолчаниями). */
-/** Ставка из сохранения могла исчезнуть из BETS — подтягиваем к ближайшей. */
-const snapBet = (bet?: number): number => {
-  if (typeof bet !== 'number' || !Number.isFinite(bet)) return BETS[0];
-  if (BETS.includes(bet)) return bet;
-  return BETS.reduce((best, b) => (Math.abs(b - bet) < Math.abs(best - bet) ? b : best), BETS[0]);
-};
+/** Ставка из сохранения могла выйти за границы — возвращаем в диапазон. */
+const snapBet = (bet?: number): number =>
+  typeof bet === 'number' ? clampBet(bet) : BETS[0];
 
 const slotsProgress = (blob?: Partial<SlotsBlob> | null) => ({
   slotsXp: blob?.xp ?? 0,
@@ -413,6 +413,7 @@ interface FinanceState {
   slotsJackpot: number;
   slotsSkin: SkinId;
   slotsSound: boolean;
+  slotsHaptics: boolean;
   slotsTurbo: boolean;
   slotsXp: number;
   slotsRewardedLevel: number;
@@ -591,7 +592,12 @@ interface FinanceState {
   claimSlotsMission: (id: string) => number;
   /** Крутнуть колесо: возвращает индекс сектора или null, если рано. */
   spinSlotsWheel: () => { index: number; coins: number; freeSpins: number } | null;
-  setSlotsPrefs: (patch: { sound?: boolean; turbo?: boolean; skin?: SkinId }) => void;
+  setSlotsPrefs: (patch: {
+    sound?: boolean;
+    haptics?: boolean;
+    turbo?: boolean;
+    skin?: SkinId;
+  }) => void;
 
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
@@ -649,6 +655,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   slotsJackpot: JACKPOT_BASE,
   slotsSkin: 'classic',
   slotsSound: true,
+  slotsHaptics: true,
   slotsTurbo: false,
   slotsXp: 0,
   slotsRewardedLevel: 1,
@@ -744,6 +751,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsJackpot: slots?.jackpot ?? JACKPOT_BASE,
       slotsSkin: (slots?.skin as SkinId) ?? 'classic',
       slotsSound: slots?.sound ?? true,
+      slotsHaptics: slots?.haptics ?? true,
       slotsTurbo: slots?.turbo ?? false,
       ...slotsProgress(slots),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
@@ -1644,6 +1652,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsJackpot: d.slots?.jackpot ?? JACKPOT_BASE,
       slotsSkin: (d.slots?.skin as SkinId) ?? 'classic',
       slotsSound: d.slots?.sound ?? true,
+      slotsHaptics: d.slots?.haptics ?? true,
       slotsTurbo: d.slots?.turbo ?? false,
       ...slotsProgress(d.slots),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
@@ -1897,7 +1906,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   setSlotsBet: (bet) => {
-    set({ slotsBet: bet });
+    set({ slotsBet: clampBet(bet) });
     persistSlots(get());
   },
 
@@ -2034,6 +2043,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   setSlotsPrefs: (patch) => {
     set({
       slotsSound: patch.sound ?? get().slotsSound,
+      slotsHaptics: patch.haptics ?? get().slotsHaptics,
       slotsTurbo: patch.turbo ?? get().slotsTurbo,
       slotsSkin: patch.skin ?? get().slotsSkin,
     });

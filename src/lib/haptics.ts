@@ -1,9 +1,18 @@
 import { hapticFeedback } from '@tma.js/sdk-react';
 
 // Thin, crash-proof wrappers around Telegram haptics. Each is a no-op when the
-// feature isn't available (e.g. desktop, or in the browser mock).
+// feature isn't available (e.g. desktop, or in the browser mock) — или когда
+// игрок выключил вибрацию в настройках.
+
+let muted = false;
+
+/** Глобальный выключатель вибрации (настройка в слотах). */
+export function setHapticsMuted(value: boolean): void {
+  muted = value;
+}
 
 export function tapLight(): void {
+  if (muted) return;
   try {
     if (hapticFeedback.impactOccurred.isAvailable()) hapticFeedback.impactOccurred('light');
   } catch {
@@ -12,6 +21,7 @@ export function tapLight(): void {
 }
 
 export function tapMedium(): void {
+  if (muted) return;
   try {
     if (hapticFeedback.impactOccurred.isAvailable()) hapticFeedback.impactOccurred('medium');
   } catch {
@@ -20,6 +30,7 @@ export function tapMedium(): void {
 }
 
 export function notifySuccess(): void {
+  if (muted) return;
   try {
     if (hapticFeedback.notificationOccurred.isAvailable())
       hapticFeedback.notificationOccurred('success');
@@ -29,6 +40,7 @@ export function notifySuccess(): void {
 }
 
 export function notifyWarning(): void {
+  if (muted) return;
   try {
     if (hapticFeedback.notificationOccurred.isAvailable())
       hapticFeedback.notificationOccurred('warning');
@@ -38,6 +50,7 @@ export function notifyWarning(): void {
 }
 
 export function selectionChanged(): void {
+  if (muted) return;
   try {
     if (hapticFeedback.selectionChanged.isAvailable()) hapticFeedback.selectionChanged();
   } catch {
