@@ -13338,20 +13338,22 @@ input[type='datetime-local'] {
     inset 0 0 0 1px rgba(80, 40, 0, 0.85),
     inset 0 0 0 3px #ffc23c,
     0 0 18px color-mix(in srgb, var(--neon) 85%, transparent);
-  animation: sb-frame 0.42s cubic-bezier(0.2, 1.6, 0.4, 1) calc(var(--wi, 0) * 55ms) both;
+  animation: sb-frame 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) calc(var(--wi, 0) * 26ms) both;
 }
 .sbcell.is-win img {
   position: relative;
   z-index: 1;
   filter: drop-shadow(0 0 10px rgba(255, 220, 150, 0.9));
   animation:
-    sb-pop 0.42s cubic-bezier(0.2, 1.8, 0.4, 1) calc(var(--wi, 0) * 55ms) both,
-    sb-pulse 0.9s ease-in-out calc(var(--wi, 0) * 55ms + 420ms) infinite;
+    sb-pop 0.4s cubic-bezier(0.2, 1.8, 0.4, 1) calc(var(--wi, 0) * 26ms) both,
+    sb-pulse 0.9s ease-in-out calc(var(--wi, 0) * 26ms + 400ms) infinite;
 }
 @keyframes sb-frame {
+  /* Не с нуля: пока волна до ячейки не дошла, рамка уже слабо светится —
+     иначе хвост группы выглядит непобедившим. */
   from {
-    opacity: 0;
-    transform: scale(0.6);
+    opacity: 0.5;
+    transform: scale(0.84);
   }
   to {
     opacity: 1;
@@ -13378,9 +13380,33 @@ input[type='datetime-local'] {
     transform: scale(1.24);
   }
 }
+/* Несыгравшие НЕ гасим прозрачностью: на светлом барабане символ пропадал
+   совсем. Вместо этого кладём тёмную вуаль на всё поле, а победителей
+   поднимаем над ней — так каждый символ остаётся виден. */
 .sbcell.is-dim {
-  opacity: 0.26;
-  filter: grayscale(0.85) brightness(0.8);
+  filter: saturate(0.5);
+}
+.sboard__dim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 10px;
+  pointer-events: none;
+  background: rgba(6, 3, 12, 0.56);
+  animation: fade 0.18s ease;
+}
+.sbcell.is-win {
+  z-index: 3;
+}
+/* Стекло — под вуалью, иначе оно высветляет погашенное поле */
+.sboard .reels__glass {
+  z-index: 1;
+}
+.sboard .dust {
+  z-index: 4;
+}
+.sboard .stamp {
+  z-index: 5;
 }
 
 /* Что сыграло: символ, его количество и выплата — вместо линий выплат */
@@ -13424,13 +13450,6 @@ input[type='datetime-local'] {
   opacity: 0;
   transition: opacity 90ms linear;
 }
-.sboard .dust {
-  z-index: 3;
-}
-.sboard .stamp {
-  z-index: 4;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .sbcell.is-fall,
   .sbcell.is-win::before,

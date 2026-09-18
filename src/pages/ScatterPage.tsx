@@ -593,6 +593,7 @@ export function ScatterPage() {
                       }}
                     />
                   ))}
+              {shownWins.length > 0 && <div className="sboard__dim" aria-hidden="true" />}
               <canvas className="dust" ref={dustRef} aria-hidden="true" />
               <div className="reels__glass" aria-hidden="true" />
               {cascade && cascade.phase !== 'drop' && stepCombo > 1 && (
