@@ -8,15 +8,19 @@ import { IconGift, IconInfo } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import type { ScatterSpinOutcome } from '@/store';
 import {
+  ANTE_COST,
+  BUY_BONUS_COST,
   CLUSTER_MIN,
+  FREE_SPINS,
   SCATTER_COLS,
-  SCATTER_LADDER,
+  SCATTER_PAYOUTS,
   SCATTER_PAYS,
   SCATTER_ROWS,
+  SCATTER_TRIGGER,
   scatterLabel,
   scatterSymbol,
 } from '@/lib/scatter';
-import type { ScatterGrid, ScatterStep, ScatterWin } from '@/lib/scatter';
+import type { Orb, ScatterCell, ScatterGrid, ScatterStep, ScatterWin } from '@/lib/scatter';
 import { BET_STEP, BETS, clampBet, MAX_BET, MIN_BET } from '@/lib/slots';
 import type { SlotSymbolId } from '@/lib/slots';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
@@ -80,7 +84,7 @@ function tierOf(chain: number): number {
   return 0;
 }
 
-function Sym({ id, skin, size = 40 }: { id: SlotSymbolId; skin: SkinId; size?: number }) {
+function Sym({ id, skin, size = 40 }: { id: ScatterCell; skin: SkinId; size?: number }) {
   return (
     <img className="sym" src={symbolSrc(skin, id)} width={size} height={size} alt="" draggable={false} />
   );
@@ -93,7 +97,7 @@ function Sym({ id, skin, size = 40 }: { id: SlotSymbolId; skin: SkinId; size?: n
 
 interface BoardCell {
   key: string;
-  id: SlotSymbolId;
+  id: ScatterCell;
   row: number;
   fall: number;
 }
@@ -124,7 +128,7 @@ function collapseBoard(step: ScatterStep, tag: string): Board {
 }
 
 /** Лента для обычного вращения одной колонки. */
-function makeStrip(to: SlotSymbolId[]): SlotSymbolId[] {
+function makeStrip(to: ScatterCell[]): ScatterCell[] {
   return [...Array.from({ length: FILLER }, () => scatterSymbol()), ...to];
 }
 
@@ -135,7 +139,7 @@ function SpinCol({
   duration,
   onStop,
 }: {
-  strip: SlotSymbolId[];
+  strip: ScatterCell[];
   skin: SkinId;
   spinId: number;
   duration: number;
@@ -197,9 +201,13 @@ export function ScatterPage() {
   const setBet = useFinanceStore((s) => s.setSlotsBet);
   const setPrefs = useFinanceStore((s) => s.setSlotsPrefs);
   const playScatter = useFinanceStore((s) => s.playScatter);
+  const buyBonus = useFinanceStore((s) => s.buyScatterBonus);
+  const ante = useFinanceStore((s) => s.scatterAnte);
+  const setAnte = useFinanceStore((s) => s.setScatterAnte);
+  const fs = useFinanceStore((s) => s.scatterFs);
   const claimRescue = useFinanceStore((s) => s.claimSlotsRescue);
 
-  const [strips, setStrips] = useState<SlotSymbolId[][]>(() =>
+  const [strips, setStrips] = useState<ScatterCell[][]>(() =>
     Array.from({ length: SCATTER_COLS }, () =>
       Array.from({ length: SCATTER_ROWS }, () => scatterSymbol()),
     ),
@@ -215,6 +223,7 @@ export function ScatterPage() {
     null,
   );
   const [stepWins, setStepWins] = useState<ScatterWin[]>([]);
+  const [stepOrbs, setStepOrbs] = useState<Orb[]>([]);
   const [stepCombo, setStepCombo] = useState(1);
   const [chain, setChain] = useState(0);
   const [runWin, setRunWin] = useState(0);
@@ -261,8 +270,12 @@ export function ScatterPage() {
   const level = levelFromXp(xp);
   const theme = skinOf(skin);
   const rainSrc = symbolSrc(skin, theme.rain);
-  const broke = balance < MIN_BET && freeSpins <= 0;
-  const canSpin = hydrated && !spinning && (freeSpins > 0 || balance >= bet);
+  const inBonus = !!fs && fs.left > 0;
+  // Ante дороже на четверть; в бонусе вращения бесплатные.
+  const stake = inBonus || freeSpins > 0 ? 0 : Math.round(bet * (ante ? ANTE_COST : 1));
+  const buyCost = Math.round(bet * BUY_BONUS_COST);
+  const broke = balance < MIN_BET && freeSpins <= 0 && !inBonus;
+  const canSpin = hydrated && !spinning && balance >= stake;
   const tier = tierOf(chain);
   const marking = cascade?.phase === 'show' || cascade?.phase === 'burst';
   const shownWins = marking ? stepWins : [];
@@ -361,7 +374,8 @@ export function ScatterPage() {
       setCascade({ step: i, phase: 'show' });
       setBoard(gridToBoard(step.grid, `${res.steps.length}-${i}-g`));
       setStepWins(step.wins);
-      setStepCombo(step.combo);
+      setStepOrbs(step.orbs);
+      setStepCombo(res.fs ? Math.max(1, step.totalMult) : Math.max(1, step.orbMult));
       setChain(chainN);
       setRunWin((w) => w + step.payout);
       setPending((p) => Math.max(0, p - step.payout));
@@ -393,6 +407,7 @@ export function ScatterPage() {
           setBoard(collapseBoard(step, `${res.steps.length}-${i}`));
           setCascade({ step: i, phase: 'drop' });
           setStepWins([]);
+          setStepOrbs([]);
         }, show + burst),
       );
 
@@ -416,7 +431,7 @@ export function ScatterPage() {
   stepRef.current = runStep;
 
   const spin = useCallback(() => {
-    if (!hydrated || spinning || (freeSpins <= 0 && balance < bet)) return;
+    if (!hydrated || spinning || balance < stake) return;
     primeAudio();
     const res = playScatter();
     if (!res) return;
@@ -434,6 +449,7 @@ export function ScatterPage() {
     setCelebration(null);
     setCascade(null);
     setStepWins([]);
+    setStepOrbs([]);
     setChain(0);
     setRunWin(0);
     setPending(res.total);
@@ -453,12 +469,19 @@ export function ScatterPage() {
         durs[durs.length - 1] + 60,
       ),
     );
-  }, [hydrated, spinning, balance, bet, freeSpins, playScatter, turbo, finish]);
+  }, [hydrated, spinning, balance, stake, playScatter, turbo, finish]);
+
+  // Бонус крутится сам: вращения бесплатные, ждать нажатия незачем.
+  useEffect(() => {
+    if (!inBonus || spinning || celebration) return;
+    const t = setTimeout(() => spin(), 700);
+    return () => clearTimeout(t);
+  }, [inBonus, spinning, celebration, spin]);
 
   // Автоспин
   useEffect(() => {
-    if (auto <= 0 || spinning) return;
-    if (freeSpins <= 0 && balance < bet) {
+    if (auto <= 0 || spinning || inBonus) return;
+    if (balance < stake) {
       setAuto(0);
       notifyWarning();
       return;
@@ -471,7 +494,7 @@ export function ScatterPage() {
       celebration ? 3200 : 620,
     );
     return () => clearTimeout(t);
-  }, [auto, spinning, balance, bet, freeSpins, spin, celebration]);
+  }, [auto, spinning, balance, stake, inBonus, spin, celebration]);
 
   const stopAuto = () => {
     tapLight();
@@ -541,7 +564,22 @@ export function ScatterPage() {
           </span>
         </button>
 
-        <div className={`cabinet cabinet--wide${shake ? ' is-shake' : ''}`} onAnimationEnd={() => setShake(false)}>
+        {inBonus && fs && (
+          <div className="bonus-bar">
+            <span className="bonus-bar__label">БОНУС</span>
+            <span className="bonus-bar__left">осталось {fs.left}</span>
+            <span className="bonus-bar__mult">×{Math.max(1, fs.totalMult)}</span>
+            <span className="bonus-bar__won">
+              {fmt(fs.won)}
+              <CoinIcon size={13} />
+            </span>
+          </div>
+        )}
+
+        <div
+          className={`cabinet cabinet--wide${shake ? ' is-shake' : ''}${inBonus ? ' is-bonus' : ''}`}
+          onAnimationEnd={() => setShake(false)}
+        >
           <div className="cabinet__bulbs" aria-hidden="true">
             {Array.from({ length: 16 }, (_, i) => (
               <i key={i} style={{ animationDelay: `${i * 0.09}s` }} />
@@ -562,7 +600,13 @@ export function ScatterPage() {
                           className={`sbcell${cell.fall ? ' is-fall' : ''}${
                             dying.has(`${c}-${cell.row}`) ? ' is-dust' : ''
                           }${winCells.has(`${c}-${cell.row}`) ? ' is-win' : ''}${
-                            shownWins.length && !winCells.has(`${c}-${cell.row}`) ? ' is-dim' : ''
+                            cell.id === 'scatter' ? ' is-scatter' : ''
+                          }${
+                            shownWins.length &&
+                            !winCells.has(`${c}-${cell.row}`) &&
+                            cell.id !== 'scatter'
+                              ? ' is-dim'
+                              : ''
                           }`}
                           style={
                             {
@@ -594,6 +638,19 @@ export function ScatterPage() {
                     />
                   ))}
               {shownWins.length > 0 && <div className="sboard__dim" aria-hidden="true" />}
+              {/* Сферы-множители: лежат поверх символов и складываются */}
+              {stepOrbs.map((o) => (
+                <span
+                  className="orb"
+                  key={`${o.col}-${o.row}-${o.value}`}
+                  style={{
+                    left: `calc(${o.col} * (100% / ${SCATTER_COLS}))`,
+                    top: `${o.row * SCELL}px`,
+                  }}
+                >
+                  ×{o.value}
+                </span>
+              ))}
               <canvas className="dust" ref={dustRef} aria-hidden="true" />
               <div className="reels__glass" aria-hidden="true" />
               {cascade && cascade.phase !== 'drop' && stepCombo > 1 && (
@@ -703,11 +760,13 @@ export function ScatterPage() {
                   : 'Каскад…'
                 : spinning
                   ? 'Крутится…'
-                  : broke
-                    ? 'Монеты кончились'
-                    : freeSpins > 0
-                      ? `Бесплатно · ${freeSpins}`
-                      : `Крутить · ${fmt(bet)}`}
+                  : inBonus && fs
+                    ? `Бонус · ${fs.left}`
+                    : broke
+                      ? 'Монеты кончились'
+                      : freeSpins > 0
+                        ? `Бесплатно · ${freeSpins}`
+                        : `Крутить · ${fmt(stake)}`}
           </button>
           <button
             className={`slot-mini${auto > 0 ? ' is-on' : ''}`}
@@ -751,14 +810,50 @@ export function ScatterPage() {
           </button>
         )}
 
+        {/* Ставка Ante и покупка бонуса — оба пути к фриспинам */}
+        {!inBonus && (
+          <div className="bonus-row">
+            <button
+              className={`ante${ante ? ' is-on' : ''}`}
+              disabled={spinning}
+              onClick={() => {
+                selectionChanged();
+                setAnte(!ante);
+              }}
+              aria-pressed={ante}
+            >
+              <b>Ante</b>
+              <i>ставка ×{ANTE_COST} — бонус чаще</i>
+              <span className="toggle__switch" aria-hidden="true" />
+            </button>
+            <button
+              className="buy-bonus"
+              disabled={spinning || balance < buyCost}
+              onClick={() => {
+                if (!buyBonus()) return;
+                tapMedium();
+                primeAudio();
+                jackpotFanfare();
+                burstConfetti(80, theme.confetti);
+              }}
+            >
+              <b>Купить бонус</b>
+              <i>
+                {fmt(buyCost)}
+                <CoinIcon size={13} />
+              </i>
+            </button>
+          </div>
+        )}
+
         <div className="slot-stats">
           <div className="slot-stat">
             <div className="slot-stat__num">{fmt(spins)}</div>
             <div className="slot-stat__lbl">вращений</div>
           </div>
           <div className="slot-stat">
-            <div className="slot-stat__num">×{SCATTER_LADDER[SCATTER_LADDER.length - 1]}</div>
-            <div className="slot-stat__lbl">максимум цепочки</div>
+            <div className="slot-stat__num">{fmt(best)}</div>
+            <div className="slot-stat__lbl">лучший спин</div>
           </div>
         </div>
       </div>
@@ -769,19 +864,50 @@ export function ScatterPage() {
             <div className="combo-rules">
               <div className="combo-rules__title">Восемь одинаковых где угодно</div>
               <p className="combo-rules__text">
-                Линий нет: считается, сколько одинаковых символов оказалось на всём поле
-                {' '}{SCATTER_COLS}×{SCATTER_ROWS}. От {CLUSTER_MIN} штук — выигрыш, неважно, где они
-                стоят. Символы исчезают, верхние падают на их места, поле считается заново, и общий
-                множитель растёт:
+                Линий нет: считается, сколько одинаковых символов оказалось на всём поле{' '}
+                {SCATTER_COLS}×{SCATTER_ROWS}. От {CLUSTER_MIN} штук — выигрыш, неважно, где они
+                стоят. Сыгравшие исчезают, верхние падают на их места, поле считается заново — и так,
+                пока выпадают выигрыши.
+              </p>
+            </div>
+            <div className="combo-rules">
+              <div className="combo-rules__title">Сферы-множители</div>
+              <p className="combo-rules__text">
+                На поле случайно падают золотые сферы с числом от ×2 до ×500. Если это звено
+                сыграло, все сферы складываются и умножают выплату. Сферы не участвуют в сборе
+                восьмёрок — они только множат.
+              </p>
+            </div>
+            <div className="combo-rules">
+              <div className="combo-rules__title">Скаттер и бонус</div>
+              <p className="combo-rules__text">
+                {SCATTER_TRIGGER} и больше скаттеров где угодно платят ×{SCATTER_PAYOUTS[4]} / ×
+                {SCATTER_PAYOUTS[5]} / ×{SCATTER_PAYOUTS[6]} ставки и дают {FREE_SPINS} бесплатных
+                вращений. В бонусе сферы не сгорают: их значения копятся в общий множитель, который
+                держится до конца бонуса. Три скаттера внутри бонуса добавляют ещё вращения.
               </p>
               <div className="combo-rules__ladder">
-                {SCATTER_LADDER.map((m, i) => (
-                  <span key={i} className="combo-rules__step">
-                    <b>{i + 1 === SCATTER_LADDER.length ? `${i + 1}+` : i + 1}</b>
-                    <i>×{m}</i>
-                  </span>
-                ))}
+                <span className="combo-rules__step">
+                  <b>{SCATTER_TRIGGER}</b>
+                  <i>×{SCATTER_PAYOUTS[4]}</i>
+                </span>
+                <span className="combo-rules__step">
+                  <b>5</b>
+                  <i>×{SCATTER_PAYOUTS[5]}</i>
+                </span>
+                <span className="combo-rules__step">
+                  <b>6</b>
+                  <i>×{SCATTER_PAYOUTS[6]}</i>
+                </span>
               </div>
+            </div>
+            <div className="combo-rules">
+              <div className="combo-rules__title">Ante и покупка</div>
+              <p className="combo-rules__text">
+                Ante поднимает ставку в {ANTE_COST} раза и делает бонус примерно вдвое чаще — это
+                выбор стиля, а не бесплатный плюс: отдача при нём чуть ниже. Покупка бонуса стоит{' '}
+                {BUY_BONUS_COST} ставок и сразу запускает {FREE_SPINS} вращений.
+              </p>
             </div>
             <div className="paytable">
               {[...SCATTER_PAYS].reverse().map((p) => (

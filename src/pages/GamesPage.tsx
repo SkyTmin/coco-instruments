@@ -5,7 +5,7 @@ import { IconGift } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import { levelFromXp } from '@/lib/slots-meta';
-import { CLUSTER_MIN, SCATTER_COLS, SCATTER_LADDER, SCATTER_ROWS } from '@/lib/scatter';
+import { CLUSTER_MIN, FREE_SPINS, SCATTER_COLS, SCATTER_ROWS } from '@/lib/scatter';
 import { COMBO_LADDER } from '@/lib/slots';
 import type { SlotSymbolId } from '@/lib/slots';
 import { tapLight } from '@/lib/haptics';
@@ -83,8 +83,8 @@ export function GamesPage() {
           <span className="game-card__body">
             <b>Каскад</b>
             <i>
-              Поле {SCATTER_COLS}×{SCATTER_ROWS}, {CLUSTER_MIN} одинаковых где угодно, цепочки до ×
-              {SCATTER_LADDER[SCATTER_LADDER.length - 1]}
+              Поле {SCATTER_COLS}×{SCATTER_ROWS}, {CLUSTER_MIN} одинаковых где угодно, сферы до ×500
+              и {FREE_SPINS} фриспинов
             </i>
             <em>
               {scatterSpins

@@ -865,6 +865,18 @@ export interface SlotsBlob {
   /** Вторая игра («Каскад», поле 6×5) — кошелёк и прогресс общие. */
   scatterSpins?: number;
   scatterBest?: number;
+  /** Ставка Ante во второй игре. */
+  scatterAnte?: boolean;
+  /** Незавершённая бонусная сессия — переживает выход из приложения. */
+  scatterFs?: ScatterFsState | null;
+}
+
+/** Бонус «Каскада»: сколько вращений осталось и какой множитель накоплен. */
+export interface ScatterFsState {
+  left: number;
+  totalMult: number;
+  won: number;
+  spins: number;
 }
 
 /** Счётчики дня для ежедневных миссий и уже забранные награды. */

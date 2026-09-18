@@ -132,7 +132,7 @@ export function skinOf(id: SkinId): Skin {
   return BY_ID.get(id) ?? SKINS[0];
 }
 
-/** Путь к символу выбранного скина. */
-export function symbolSrc(skin: SkinId, symbol: SlotSymbolId): string {
+/** Путь к символу выбранного скина. `scatter` — «Зевс» темы из «Каскада». */
+export function symbolSrc(skin: SkinId, symbol: SlotSymbolId | 'scatter'): string {
   return `/slots/${skin}/${symbol}.svg`;
 }
