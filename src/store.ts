@@ -83,6 +83,8 @@ import {
   BETS,
   JACKPOT_BASE,
   JACKPOT_RATE,
+  RESCUE_COOLDOWN_MS,
+  RESCUE_SPINS,
   resolveSpin,
   START_BALANCE,
 } from '@/lib/slots';
@@ -581,7 +583,8 @@ interface FinanceState {
 
   setSlotsBet: (bet: number) => void;
   playSlots: () => SlotsSpinOutcome | null;
-  claimSlotsBonus: (amount: number) => void;
+  /** Спасательные вращения, когда монет не хватает даже на минимальную ставку. */
+  claimSlotsRescue: () => number;
   /** Ежедневная лесенка: возвращает начисленное и новую длину серии. */
   claimSlotsDaily: () => { reward: number; streak: number } | null;
   /** Забрать награду за выполненную миссию дня. */
@@ -1967,9 +1970,20 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     };
   },
 
-  claimSlotsBonus: (amount) => {
-    set({ slotsBalance: get().slotsBalance + amount, slotsBonusAt: Date.now() });
+  // Из игры нельзя выпасть: когда монет не хватает даже на минимальную ставку,
+  // даём бесплатные вращения и опускаем ставку до минимума.
+  claimSlotsRescue: () => {
+    const s = get();
+    const now = Date.now();
+    if (s.slotsBalance >= BETS[0] || s.slotsFreeSpins > 0) return 0;
+    if (s.slotsBonusAt && now - s.slotsBonusAt < RESCUE_COOLDOWN_MS) return 0;
+    set({
+      slotsFreeSpins: s.slotsFreeSpins + RESCUE_SPINS,
+      slotsBet: BETS[0],
+      slotsBonusAt: now,
+    });
     persistSlots(get());
+    return RESCUE_SPINS;
   },
 
   claimSlotsDaily: () => {

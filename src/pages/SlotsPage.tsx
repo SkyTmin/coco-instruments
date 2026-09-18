@@ -25,7 +25,6 @@ import {
 import type { WheelSector } from '@/lib/slots-meta';
 import {
   BETS,
-  BONUS_COOLDOWN_MS,
   COMBO_LADDER,
   hasAnticipation,
   LINE_UNIT,
@@ -33,7 +32,8 @@ import {
   outcomeLabel,
   PAYLINES,
   randomSymbol,
-  RESCUE_BONUS,
+  RESCUE_COOLDOWN_MS,
+  RESCUE_SPINS,
   ROWS,
   SLOT_SYMBOLS,
   symbolOf,
@@ -319,7 +319,7 @@ export function SlotsPage() {
   const freeSpins = useFinanceStore((s) => s.slotsFreeSpins);
   const setBet = useFinanceStore((s) => s.setSlotsBet);
   const playSlots = useFinanceStore((s) => s.playSlots);
-  const claimBonus = useFinanceStore((s) => s.claimSlotsBonus);
+  const claimRescue = useFinanceStore((s) => s.claimSlotsRescue);
   const claimDaily = useFinanceStore((s) => s.claimSlotsDaily);
   const claimMission = useFinanceStore((s) => s.claimSlotsMission);
   const spinTheWheel = useFinanceStore((s) => s.spinSlotsWheel);
@@ -402,15 +402,16 @@ export function SlotsPage() {
   const missionsReady = missions.filter(
     (m) => missionDone(m, { ...EMPTY_COUNTERS, ...counters }) && !claimedIds.includes(m.id),
   ).length;
+  const rescueLeft = bonusAt ? bonusAt + RESCUE_COOLDOWN_MS - now : 0;
+  const broke = balance < Math.min(...BETS) && freeSpins <= 0;
+  const rescueReady = broke && rescueLeft <= 0;
   // Сколько наград ждут прямо сейчас — это число и зовёт вернуться.
-  const readyCount = (daily.ready ? 1 : 0) + (wheelReady ? 1 : 0) + missionsReady;
+  const readyCount =
+    (daily.ready ? 1 : 0) + (wheelReady ? 1 : 0) + missionsReady + (rescueReady ? 1 : 0);
   // До полуночи: тогда обновятся цели дня и откроется следующая ступень.
   const midnight = new Date(now);
   midnight.setHours(24, 0, 0, 0);
   const tillMidnight = midnight.getTime() - now;
-
-  const rescueLeft = bonusAt ? bonusAt + BONUS_COOLDOWN_MS - now : 0;
-  const broke = balance < Math.min(...BETS) && freeSpins <= 0;
   const canSpin = hydrated && !spinning && (freeSpins > 0 || balance >= bet);
   // На табло — копилка плюс то, что заплатит сама линия семёрок.
   const jackpotPrize = jackpotPool + lineBet(bet) * symbolOf('seven').three;
@@ -618,12 +619,14 @@ export function SlotsPage() {
     if (reelMode === 'spin') selectionChanged();
   };
 
-  const takeBonus = (amount: number) => {
+  const takeRescue = () => {
     primeAudio();
-    tapLight();
-    claimBonus(amount);
+    const got = claimRescue();
+    if (!got) return;
+    tapMedium();
     coinDing();
     coinDing(0.12);
+    winChime('small');
     rainCoins(14, rainSrc);
     notifySuccess();
     setNow(Date.now());
@@ -1048,11 +1051,18 @@ export function SlotsPage() {
             Забрать награды · {readyCount}
           </button>
         )}
-        {broke && rescueLeft <= 0 && (
-          <button className="btn btn--ghost btn--block" onClick={() => takeBonus(RESCUE_BONUS)}>
-            🍀 Спасательные +{fmt(RESCUE_BONUS)}
-          </button>
-        )}
+        {/* Тупик: монет не хватает даже на минимальную ставку */}
+        {broke &&
+          (rescueReady ? (
+            <button className="btn btn--block rewards-cta" onClick={takeRescue}>
+              🍀 Спасательные вращения · {RESCUE_SPINS}
+            </button>
+          ) : (
+            <p className="slot-bonus-hint">
+              Спасательные вращения — через {fmtLeft(rescueLeft)}
+              {wheelReady ? ' · или крутите колесо прямо сейчас' : ''}
+            </p>
+          ))}
         {readyCount === 0 && (
           <p className="slot-bonus-hint">
             {daily.ready
@@ -1372,6 +1382,32 @@ export function SlotsPage() {
                   );
                 })}
               </div>
+            </div>
+
+            {/* Страховка от тупика */}
+            <div className="reward-block">
+              <div className="reward-block__head">
+                <span className="reward-block__title">Спасательные вращения</span>
+                <span className="reward-block__meta">
+                  {!broke ? 'пока не нужны' : rescueReady ? 'готовы' : `через ${fmtLeft(rescueLeft)}`}
+                </span>
+              </div>
+              <p className="reward-block__hint">
+                Если монет не хватит даже на минимальную ставку, под барабанами появится кнопка на{' '}
+                {RESCUE_SPINS} бесплатных вращений — раз в час. Ставка при этом опустится до{' '}
+                {fmt(BETS[0])}. Застрять в игре насовсем нельзя.
+              </p>
+              {rescueReady && (
+                <button
+                  className="btn btn--block rewards-cta"
+                  onClick={() => {
+                    takeRescue();
+                    setRewards(false);
+                  }}
+                >
+                  🍀 Взять {RESCUE_SPINS} вращений
+                </button>
+              )}
             </div>
 
             <p className="muted" style={{ margin: 0, fontSize: 12 }}>
