@@ -82,6 +82,7 @@ import type { SkinId } from '@/lib/skins';
 import {
   BETS,
   clampBet,
+  MIN_BET,
   JACKPOT_BASE,
   JACKPOT_RATE,
   RESCUE_COOLDOWN_MS,
@@ -2048,7 +2049,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   claimSlotsRescue: () => {
     const s = get();
     const now = Date.now();
-    if (s.slotsBalance >= BETS[0] || s.slotsFreeSpins > 0) return 0;
+    // Тупик — это «не хватает даже на самую маленькую ставку», а не «меньше
+    // быстрой ставки»: иначе с 8 монетами в кармане игрок застревал молча.
+    if (s.slotsBalance >= MIN_BET || s.slotsFreeSpins > 0) return 0;
     if (s.slotsBonusAt && now - s.slotsBonusAt < RESCUE_COOLDOWN_MS) return 0;
     set({
       slotsFreeSpins: s.slotsFreeSpins + RESCUE_SPINS,

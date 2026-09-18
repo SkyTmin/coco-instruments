@@ -4,7 +4,6 @@ import { AnimatedNumber, ConfirmDialog, Screen, Sheet, Skeleton } from '@/compon
 import {
   IconCalculator,
   IconCamera,
-  IconShapes,
   IconSlots,
   IconGear,
   IconHeart,
@@ -416,27 +415,18 @@ export function HomePage() {
             <span className="home-tile__title">Камера</span>
             <span className="home-tile__fact">Сетки, эскизы и суфлёр</span>
           </button>
-          <button className="home-tile" onClick={() => go('/scatter')}>
-            <span className="home-tile__icon">
-              <IconShapes />
-            </span>
-            <span className="home-tile__title">Каскад</span>
-            <span className="home-tile__fact">
-              {scatterSpins ? `Поле 6×5 · ${scatterSpins} вращений` : 'Большое поле и цепочки'}
-            </span>
-          </button>
-          <button className="home-tile" onClick={() => go('/slots')}>
+          <button className="home-tile" onClick={() => go('/games')}>
             <span className="home-tile__icon">
               <IconSlots />
               {slotsRewards > 0 && <span className="home-tile__dot">{slotsRewards}</span>}
             </span>
-            <span className="home-tile__title">Слоты</span>
+            <span className="home-tile__title">Игры</span>
             <span className="home-tile__fact">
               {slotsRewards > 0
                 ? `Награды ждут · ${slotsRewards}`
-                : slotsSpins
-                  ? `${fmtCoins(slotsBalance)} 🪙 · ${slotsSpins} спинов`
-                  : 'Мини-игра на удачу'}
+                : slotsSpins + scatterSpins
+                  ? `${fmtCoins(slotsBalance)} 🪙 · ${slotsSpins + scatterSpins} вращений`
+                  : 'Слоты и Каскад'}
             </span>
           </button>
         </div>

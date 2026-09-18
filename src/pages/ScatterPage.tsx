@@ -252,8 +252,10 @@ export function ScatterPage() {
   // Ставка всегда по карману.
   useEffect(() => {
     if (!hydrated || spinning || balance >= bet) return;
-    const affordable = [...BETS].reverse().find((b) => b <= balance);
-    if (affordable && affordable !== bet) setBet(affordable);
+    // Сначала пробуем быструю ставку, иначе опускаемся к любой посильной —
+    // с восемью монетами в кармане игрок всё ещё должен мочь крутить.
+    const affordable = [...BETS].reverse().find((b) => b <= balance) ?? clampBet(balance);
+    if (affordable <= balance && affordable !== bet) setBet(affordable);
   }, [hydrated, spinning, balance, bet, setBet]);
 
   const level = levelFromXp(xp);
@@ -265,6 +267,11 @@ export function ScatterPage() {
   const marking = cascade?.phase === 'show' || cascade?.phase === 'burst';
   const shownWins = marking ? stepWins : [];
   const winCells = new Set(shownWins.flatMap((w) => w.cells.map(([c, r]) => `${c}-${r}`)));
+  const winOrder = new Map<string, number>();
+  shownWins
+    .flatMap((w) => w.cells)
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    .forEach(([c, r], i) => winOrder.set(`${c}-${r}`, i));
   const dying = new Set(
     cascade?.phase === 'burst' ? stepWins.flatMap((w) => w.cells.map(([c, r]) => `${c}-${r}`)) : [],
   );
@@ -540,6 +547,10 @@ export function ScatterPage() {
               <i key={i} style={{ animationDelay: `${i * 0.09}s` }} />
             ))}
           </div>
+          <div className="cabinet__sign cabinet__sign--wide">
+            <span>{theme.sign[0]}</span>
+            <b>CASCADE</b>
+          </div>
           <div className="cabinet__window">
             <div className="sboard" ref={boardRef}>
               {board
@@ -559,6 +570,7 @@ export function ScatterPage() {
                               '--dy': cell.fall,
                               '--dur': `${dropDur}ms`,
                               '--delay': `${c * DROP_STAGGER}ms`,
+                              '--wi': winOrder.get(`${c}-${cell.row}`) ?? 0,
                             } as React.CSSProperties
                           }
                           data-cell={`${c}-${cell.row}`}
@@ -582,6 +594,7 @@ export function ScatterPage() {
                     />
                   ))}
               <canvas className="dust" ref={dustRef} aria-hidden="true" />
+              <div className="reels__glass" aria-hidden="true" />
               {cascade && cascade.phase !== 'drop' && stepCombo > 1 && (
                 <div className={`stamp stamp--t${tier}`} key={`st-${chain}`} aria-hidden="true">
                   ×{stepCombo}
@@ -595,6 +608,23 @@ export function ScatterPage() {
               </div>
             )}
           </div>
+
+          {/* Что именно сыграло: символ, сколько его на поле и сколько платит.
+              Линий здесь нет, поэтому объясняем выигрыш словами и числами. */}
+          {shownWins.length > 0 && (
+            <div className="hits" key={`h-${chain}`}>
+              {shownWins.map((w) => (
+                <span className="hit" key={w.symbol}>
+                  <Sym id={w.symbol} skin={skin} size={22} />
+                  <b>×{w.count}</b>
+                  <i>
+                    +{fmt(w.pay * bet * stepCombo)}
+                    <CoinIcon size={13} />
+                  </i>
+                </span>
+              ))}
+            </div>
+          )}
 
           <div className="cabinet__status">
             {cascade ? (

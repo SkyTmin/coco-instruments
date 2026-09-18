@@ -502,8 +502,10 @@ export function SlotsPage() {
   // максимальной доступной — иначе кнопка «Крутить» мертва без объяснений.
   useEffect(() => {
     if (!hydrated || spinning || balance >= bet) return;
-    const affordable = [...BETS].reverse().find((b) => b <= balance);
-    if (affordable && affordable !== bet) setBet(affordable);
+    // Сначала пробуем быструю ставку, иначе опускаемся к любой посильной —
+    // с восемью монетами в кармане игрок всё ещё должен мочь крутить.
+    const affordable = [...BETS].reverse().find((b) => b <= balance) ?? clampBet(balance);
+    if (affordable <= balance && affordable !== bet) setBet(affordable);
   }, [hydrated, spinning, balance, bet, setBet]);
 
   // ---- прогрессия ----------------------------------------------------------
@@ -519,7 +521,7 @@ export function SlotsPage() {
     (m) => missionDone(m, { ...EMPTY_COUNTERS, ...counters }) && !claimedIds.includes(m.id),
   ).length;
   const rescueLeft = bonusAt ? bonusAt + RESCUE_COOLDOWN_MS - now : 0;
-  const broke = balance < Math.min(...BETS) && freeSpins <= 0;
+  const broke = balance < MIN_BET && freeSpins <= 0;
   const rescueReady = broke && rescueLeft <= 0;
   // Сколько наград ждут прямо сейчас — это число и зовёт вернуться.
   const readyCount =

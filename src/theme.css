@@ -13322,20 +13322,103 @@ input[type='datetime-local'] {
 .sbcell.is-fall {
   animation: tumble-fall var(--dur, 460ms) cubic-bezier(0.34, 1.34, 0.5, 1) var(--delay, 0ms) both;
 }
-/* Сыгравшие символы подсвечиваются, остальные уходят в тень */
-.sbcell.is-win {
-  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--neon) 90%, transparent))
-    drop-shadow(0 0 20px rgba(255, 210, 120, 0.7));
-  animation: sb-pulse 0.7s ease-in-out infinite;
+/* Сыгравшие символы: золотая рамка + вспышка волной слева направо.
+   Линий тут нет, поэтому группу собирает именно очерёдность загорания. */
+.sbcell.is-win::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 8px;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--neon) 36%, transparent),
+    transparent 72%
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(80, 40, 0, 0.85),
+    inset 0 0 0 3px #ffc23c,
+    0 0 18px color-mix(in srgb, var(--neon) 85%, transparent);
+  animation: sb-frame 0.42s cubic-bezier(0.2, 1.6, 0.4, 1) calc(var(--wi, 0) * 55ms) both;
+}
+.sbcell.is-win img {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 0 10px rgba(255, 220, 150, 0.9));
+  animation:
+    sb-pop 0.42s cubic-bezier(0.2, 1.8, 0.4, 1) calc(var(--wi, 0) * 55ms) both,
+    sb-pulse 0.9s ease-in-out calc(var(--wi, 0) * 55ms + 420ms) infinite;
+}
+@keyframes sb-frame {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes sb-pop {
+  0% {
+    transform: scale(1);
+  }
+  55% {
+    transform: scale(1.34);
+  }
+  100% {
+    transform: scale(1.14);
+  }
 }
 @keyframes sb-pulse {
+  0%,
+  100% {
+    transform: scale(1.14);
+  }
   50% {
-    transform: scale(1.12);
+    transform: scale(1.24);
   }
 }
 .sbcell.is-dim {
-  opacity: 0.32;
-  filter: grayscale(0.7);
+  opacity: 0.26;
+  filter: grayscale(0.85) brightness(0.8);
+}
+
+/* Что сыграло: символ, его количество и выплата — вместо линий выплат */
+.hits {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px 4px 0;
+  animation: combo-in 0.3s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+.hit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px 4px 5px;
+  border-radius: 99px;
+  background: color-mix(in srgb, #000 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neon) 45%, transparent);
+}
+.hit b {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--reel-hi);
+}
+.hit i {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--bezel-1) 88%, #fff);
+}
+
+/* Вывеска широкого корпуса */
+.cabinet__sign--wide {
+  margin-bottom: 2px;
 }
 .sbcell.is-dust {
   opacity: 0;
@@ -13350,7 +13433,68 @@ input[type='datetime-local'] {
 
 @media (prefers-reduced-motion: reduce) {
   .sbcell.is-fall,
-  .sbcell.is-win {
+  .sbcell.is-win::before,
+  .sbcell.is-win img,
+  .hits {
     animation: none;
   }
+}
+
+/* ---- Зал игр: общая кнопка на главной ведёт сюда ------------------------ */
+.game-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--neon) 26%, transparent);
+  border-radius: 20px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--cab-1) 62%, transparent),
+    color-mix(in srgb, var(--cab-2) 70%, transparent)
+  );
+  color: var(--reel-hi);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.game-card:active {
+  transform: scale(0.99);
+}
+.game-card__reels {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--reel-hi), var(--reel-mid) 60%, var(--reel-lo));
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 0 0 1px color-mix(in srgb, var(--bezel-2) 70%, transparent);
+}
+.game-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.game-card__body b {
+  font-size: 17px;
+  font-weight: 800;
+}
+.game-card__body i {
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.68;
+}
+.game-card__body em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.5;
 }
