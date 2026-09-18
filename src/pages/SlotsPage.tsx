@@ -5,6 +5,7 @@ import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
 import { SKINS, skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
 import { IconGift, IconInfo, IconLock } from '@/components/icons';
+import { CashDesk } from '@/components/CashDesk';
 import { useFinanceStore } from '@/store';
 import type { SlotsSpinOutcome } from '@/store';
 import {
@@ -1466,6 +1467,7 @@ export function SlotsPage() {
                 </button>
               ))}
             </div>
+            <CashDesk />
           </div>
         </Sheet>
       )}

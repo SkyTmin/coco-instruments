@@ -620,6 +620,8 @@ interface FinanceState {
   /** Купить бонус сразу за сто ставок. */
   buyScatterBonus: () => boolean;
   setScatterAnte: (on: boolean) => void;
+  /** Касса: закинуть себе монет. Монеты виртуальные и не продаются. */
+  addSlotsCoins: (amount: number) => void;
   /** Спасательные вращения, когда монет не хватает даже на минимальную ставку. */
   claimSlotsRescue: () => number;
   /** Ежедневная лесенка: возвращает начисленное и новую длину серии. */
@@ -2104,6 +2106,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   setScatterAnte: (on) => {
     set({ scatterAnte: on });
+    persistSlots(get());
+  },
+
+  addSlotsCoins: (amount) => {
+    const add = Math.max(0, Math.round(amount));
+    if (!add) return;
+    set({ slotsBalance: get().slotsBalance + add });
     persistSlots(get());
   },
 

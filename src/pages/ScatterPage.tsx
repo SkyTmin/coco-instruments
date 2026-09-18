@@ -5,6 +5,7 @@ import { CoinIcon } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
 import { IconGift, IconInfo } from '@/components/icons';
+import { CashDesk } from '@/components/CashDesk';
 import { useFinanceStore } from '@/store';
 import type { ScatterSpinOutcome } from '@/store';
 import {
@@ -1036,6 +1037,7 @@ export function ScatterPage() {
                 </button>
               ))}
             </div>
+            <CashDesk />
           </div>
         </Sheet>
       )}

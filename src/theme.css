@@ -13717,3 +13717,29 @@ input[type='datetime-local'] {
     animation: none;
   }
 }
+
+/* ---- Касса: быстрый долив монет из настроек ----------------------------- */
+.cash-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.cash-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 4px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--btn-1), var(--btn-2) 45%, var(--btn-3));
+  color: var(--btn-fg);
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--btn-3) 35%, transparent);
+}
+.cash-btn:active {
+  transform: scale(0.96);
+}
