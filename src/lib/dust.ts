@@ -13,9 +13,9 @@ interface Particle {
   /** Задержка старта: левый край осыпается первым — это и даёт «распад». */
   delay: number;
   size: number;
-  r: number;
-  g: number;
-  b: number;
+  /** Цвет строкой считается один раз: на каждом кадре это были бы тысячи
+      склеек `rgb(...)` — главный расход этого эффекта. */
+  color: string;
   a: number;
 }
 
@@ -94,9 +94,7 @@ export function dustBurst(canvas: HTMLCanvasElement, cells: DustCell[]): () => v
           // Чем левее пиксель, тем раньше он срывается.
           delay: (px / n) * 0.42 + Math.random() * 0.12,
           size: Math.max(1, STEP * scale * 0.9),
-          r: data[i],
-          g: data[i + 1],
-          b: data[i + 2],
+          color: `rgb(${data[i]},${data[i + 1]},${data[i + 2]})`,
           a: a / 255,
         });
       }
@@ -111,6 +109,9 @@ export function dustBurst(canvas: HTMLCanvasElement, cells: DustCell[]): () => v
   }
 
   if (!particles.length) return () => {};
+  // Один раз сортируем по цвету: в кадре fillStyle будет переключаться
+  // столько раз, сколько в символе разных оттенков, а не по разу на пиксель.
+  particles.sort((a, b) => (a.color < b.color ? -1 : a.color > b.color ? 1 : 0));
 
   let raf = 0;
   const start = performance.now();
@@ -123,21 +124,32 @@ export function dustBurst(canvas: HTMLCanvasElement, cells: DustCell[]): () => v
       raf = 0;
       return;
     }
+    // Прозрачность округляем до шага 1/16 и группируем: смена globalAlpha и
+    // fillStyle — самые дорогие вызовы канвы, а на глаз ступень незаметна.
+    let lastAlpha = -1;
+    let lastColor = '';
     for (const p of particles) {
       const life = (t - p.delay) / (1 - p.delay);
-      if (life <= 0) {
-        // Ещё не сорвался — пиксель стоит на месте.
-        ctx.globalAlpha = p.a;
-        ctx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
-        ctx.fillRect(p.x, p.y, p.size, p.size);
-        continue;
-      }
       if (life >= 1) continue;
-      const s = life * (dur / 1000);
-      const x = p.x + p.vx * s;
-      const y = p.y + p.vy * s + 120 * s * s; // лёгкая гравитация
-      ctx.globalAlpha = p.a * (1 - life) ** 1.4;
-      ctx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+      let x = p.x;
+      let y = p.y;
+      let alpha = p.a;
+      if (life > 0) {
+        const s = life * (dur / 1000);
+        x += p.vx * s;
+        y += p.vy * s + 120 * s * s; // лёгкая гравитация
+        alpha = p.a * (1 - life) ** 1.4;
+      }
+      const stepped = Math.round(alpha * 16) / 16;
+      if (stepped <= 0) continue;
+      if (stepped !== lastAlpha) {
+        ctx.globalAlpha = stepped;
+        lastAlpha = stepped;
+      }
+      if (p.color !== lastColor) {
+        ctx.fillStyle = p.color;
+        lastColor = p.color;
+      }
       ctx.fillRect(x, y, p.size, p.size);
     }
     ctx.globalAlpha = 1;

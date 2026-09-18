@@ -10916,17 +10916,21 @@ input[type='datetime-local'] {
   border-radius: 50%;
   background: rgba(255, 210, 160, 0.22);
   /* steps() — лампочки щёлкают, плавная анимация убивает иллюзию ламп */
+  background: #ffd9a3;
+  box-shadow: 0 0 10px #ffb459;
+  opacity: 0.22;
+  will-change: opacity;
   animation: bulb-chase 1.5s steps(1, end) infinite;
 }
+/* Лампы горят всегда, бежит только прозрачность: цвет и свечение растеризуются
+   один раз, а opacity считает композитор — шестнадцать ламп больше не тормозят. */
 @keyframes bulb-chase {
   0%,
   70% {
-    background: rgba(255, 210, 160, 0.22);
-    box-shadow: none;
+    opacity: 0.22;
   }
   20% {
-    background: #ffd9a3;
-    box-shadow: 0 0 10px #ffb459;
+    opacity: 1;
   }
 }
 .cabinet.is-spinning .cabinet__bulbs i {
@@ -11473,7 +11477,7 @@ input[type='datetime-local'] {
 }
 @keyframes spin-pulse {
   50% {
-    filter: brightness(1.12);
+    opacity: 0.86;
   }
 }
 .slot-mini {
@@ -12224,12 +12228,19 @@ input[type='datetime-local'] {
     radial-gradient(circle 1.6px at 70% 88%, rgba(255, 255, 255, 0.55), transparent 60%),
     linear-gradient(180deg, transparent 72%, rgba(230, 245, 255, 0.16) 100%),
     radial-gradient(ellipse 70% 26% at 50% 0%, rgba(143, 216, 255, 0.2), transparent 72%);
+  /* Слой выше экрана и просто едет вниз: transform вместо background-position,
+     иначе каждый кадр перерисовывались все десять градиентов. */
+  background-repeat: repeat;
+  background-size: 100% 50%;
+  top: -50%;
+  bottom: -50%;
+  will-change: transform;
   animation: snowfall 9s linear infinite;
 }
 @keyframes snowfall {
   to {
-    background-position:
-      0 120px, 0 150px, 0 100px, 0 170px, 0 130px, 0 160px, 0 110px, 0 140px, 0 0, 0 0;
+    /* Слой вдвое выше сцены, плитка — половина слоя: 25% = ровно одна плитка. */
+    transform: translateY(25%);
   }
 }
 
@@ -13589,10 +13600,7 @@ input[type='datetime-local'] {
 }
 @keyframes orb-throb {
   50% {
-    box-shadow:
-      0 0 0 2px rgba(120, 70, 0, 0.75),
-      0 0 26px rgba(255, 216, 61, 1),
-      0 4px 10px rgba(0, 0, 0, 0.45);
+    transform: scale(1.08);
   }
 }
 
@@ -13777,42 +13785,35 @@ input[type='datetime-local'] {
 /* Сцена: лучи из-за горы + золотая дымка */
 .slots[data-skin='olympus'] .slots-scene {
   background:
-    radial-gradient(120% 80% at 50% 8%, rgba(255, 216, 61, 0.22), transparent 58%),
-    radial-gradient(90% 60% at 50% 100%, rgba(127, 212, 255, 0.12), transparent 62%),
-    linear-gradient(180deg, var(--scene-1), var(--scene-2));
-}
-.slots[data-skin='olympus'] .slots-scene__decor {
-  background:
-    /* божественные лучи */
-    conic-gradient(
-      from 0deg at 50% 12%,
-      rgba(255, 216, 61, 0.14) 0deg 6deg,
-      transparent 6deg 22deg,
-      rgba(255, 216, 61, 0.1) 22deg 27deg,
-      transparent 27deg 46deg,
-      rgba(255, 244, 190, 0.12) 46deg 51deg,
-      transparent 51deg 72deg
-    ),
-    /* искры золота */
     radial-gradient(circle 2px at 14% 30%, rgba(255, 232, 150, 0.9), transparent 60%),
     radial-gradient(circle 1.6px at 33% 62%, rgba(255, 216, 61, 0.8), transparent 60%),
     radial-gradient(circle 2.2px at 58% 24%, rgba(255, 244, 190, 0.9), transparent 60%),
     radial-gradient(circle 1.8px at 78% 54%, rgba(255, 216, 61, 0.75), transparent 60%),
     radial-gradient(circle 2px at 88% 18%, rgba(255, 232, 150, 0.85), transparent 60%),
-    radial-gradient(circle 1.6px at 22% 84%, rgba(255, 216, 61, 0.7), transparent 60%);
+    radial-gradient(circle 1.6px at 22% 84%, rgba(255, 216, 61, 0.7), transparent 60%),
+    radial-gradient(120% 80% at 50% 8%, rgba(255, 216, 61, 0.22), transparent 58%),
+    radial-gradient(90% 60% at 50% 100%, rgba(127, 212, 255, 0.12), transparent 62%),
+    linear-gradient(180deg, var(--scene-1), var(--scene-2));
+}
+/* Лучи крутятся одним transform. Искры переехали в статичный фон сцены:
+   анимировать background-position семи градиентов — это полная перерисовка
+   полноэкранного слоя каждый кадр. */
+.slots[data-skin='olympus'] .slots-scene__decor {
+  background: conic-gradient(
+    from 0deg at 50% 12%,
+    rgba(255, 216, 61, 0.14) 0deg 6deg,
+    transparent 6deg 22deg,
+    rgba(255, 216, 61, 0.1) 22deg 27deg,
+    transparent 27deg 46deg,
+    rgba(255, 244, 190, 0.12) 46deg 51deg,
+    transparent 51deg 72deg
+  );
+  will-change: transform;
   animation: olymp-rays 26s linear infinite;
 }
 @keyframes olymp-rays {
   to {
     transform: rotate(360deg);
-    background-position:
-      0 0,
-      0 -260px,
-      0 -300px,
-      0 -220px,
-      0 -280px,
-      0 -240px,
-      0 -320px;
   }
 }
 /* Облака — два слоя, плывут в разные стороны */
@@ -13851,6 +13852,7 @@ input[type='datetime-local'] {
     /* и общая вспышка неба */
     radial-gradient(80% 55% at 50% 0%, rgba(255, 255, 230, 0.85), transparent 72%);
   opacity: 0;
+  will-change: opacity;
   animation: olymp-bolt 7.5s ease-out infinite;
 }
 @keyframes olymp-clouds {
@@ -13878,39 +13880,57 @@ input[type='datetime-local'] {
 }
 
 /* Корпус дышит золотом, а лампы бегут по кругу заметнее обычного */
+/* Свечение и отблеск молнии — отдельные накладки с анимацией только по
+   opacity. Анимировать box-shadow или filter на целом корпусе означало
+   перерисовывать его вместе с барабанами каждый кадр. */
 .slots[data-skin='olympus'] .cabinet {
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--bezel-2) 70%, transparent),
     0 0 46px rgba(255, 200, 60, 0.28),
     0 18px 50px rgba(0, 0, 0, 0.6);
-  /* Второй анимацией корпус ловит отблеск молнии: тот же период 7,5 с,
-     поэтому вспышка и отблеск идут одновременно. */
-  animation:
-    olymp-breathe 4.2s ease-in-out infinite,
-    olymp-strike 7.5s ease-out infinite;
+}
+.slots[data-skin='olympus'] .cabinet::before,
+.slots[data-skin='olympus'] .cabinet::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  will-change: opacity;
+}
+/* дыхание золотом */
+.slots[data-skin='olympus'] .cabinet::before {
+  box-shadow:
+    0 0 0 1px var(--bezel-1),
+    0 0 70px rgba(255, 216, 61, 0.5);
+  opacity: 0;
+  animation: olymp-breathe 4.2s ease-in-out infinite;
+}
+/* отблеск разряда: тот же период 7,5 с, что и у молнии в небе */
+.slots[data-skin='olympus'] .cabinet::after {
+  background: linear-gradient(180deg, rgba(255, 255, 235, 0.55), rgba(190, 230, 255, 0.28));
+  opacity: 0;
+  animation: olymp-strike 7.5s ease-out infinite;
 }
 @keyframes olymp-strike {
   0%,
   86%,
   100% {
-    filter: none;
+    opacity: 0;
   }
   88% {
-    filter: brightness(1.6) saturate(1.2);
+    opacity: 0.55;
   }
   90% {
-    filter: brightness(1.02);
+    opacity: 0.04;
   }
   92% {
-    filter: brightness(1.45) saturate(1.15);
+    opacity: 0.4;
   }
 }
 @keyframes olymp-breathe {
   50% {
-    box-shadow:
-      0 0 0 1px var(--bezel-1),
-      0 0 70px rgba(255, 216, 61, 0.5),
-      0 18px 50px rgba(0, 0, 0, 0.6);
+    opacity: 1;
   }
 }
 
@@ -13931,6 +13951,7 @@ input[type='datetime-local'] {
     transparent 62%
   );
   transform: translateX(-130%);
+  will-change: transform;
   animation: olymp-sheen 5.5s ease-in-out infinite;
 }
 @keyframes olymp-sheen {
@@ -13998,7 +14019,8 @@ input[type='datetime-local'] {
   .slots[data-skin='olympus'] .slots-scene__decor,
   .slots[data-skin='olympus'] .slots-scene__decor::before,
   .slots[data-skin='olympus'] .slots-scene__decor::after,
-  .slots[data-skin='olympus'] .cabinet,
+  .slots[data-skin='olympus'] .cabinet::before,
+  .slots[data-skin='olympus'] .cabinet::after,
   .slots[data-skin='olympus'] .reels::after,
   .slots[data-skin='olympus'] .sboard::after,
   .slots[data-skin='olympus'] .cabinet__sign b,
