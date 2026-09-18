@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
 import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
@@ -189,59 +189,68 @@ function Sym({ id, skin, size = 58 }: { id: SlotSymbolId; skin: SkinId; size?: n
 }
 
 /** Барабан: лента едет вверх, символы приходят снизу. */
-function Reel({
-  strip,
-  skin,
-  spinId,
-  duration,
-  onStop,
-}: {
+interface ReelProps {
   strip: SlotSymbolId[];
   skin: SkinId;
   spinId: number;
   duration: number;
   onStop: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const stopRef = useRef(onStop);
-  stopRef.current = onStop;
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || spinId === 0) return;
-    const to = -(strip.length - ROWS - 1) * CELL;
-    if (reduceMotion()) {
-      el.style.transition = 'none';
-      el.style.transform = `translateY(${to}px)`;
-      stopRef.current();
-      return;
-    }
-    el.style.transition = 'none';
-    el.style.transform = 'translateY(0)';
-    el.classList.add('is-blur');
-    void el.offsetHeight; // reflow, иначе браузер склеит оба присваивания
-    // Небольшой «перелёт» в конце — барабан отскакивает, как механический.
-    el.style.transition = `transform ${duration}ms cubic-bezier(.18,.76,.24,1.06)`;
-    el.style.transform = `translateY(${to}px)`;
-    const t = setTimeout(() => {
-      el.classList.remove('is-blur');
-      stopRef.current();
-    }, duration);
-    return () => clearTimeout(t);
-  }, [spinId, strip, duration]);
-
-  return (
-    <div className="reel">
-      <div className="reel__strip" ref={ref}>
-        {strip.map((id, i) => (
-          <span className="reel__cell" key={`${id}-${i}`}>
-            <Sym id={id} skin={skin} />
-          </span>
-        ))}
-      </div>
-    </div>
-  );
 }
+
+/**
+ * Барабан живёт своей жизнью: пока лента та же, перерисовывать его незачем.
+ * Во время каскада страница обновляется десятки раз (счётчики, комбо, монеты),
+ * и без memo каждое такое обновление заново сверяло бы сотню картинок.
+ * `onStop` в сравнении не участвует — он и так читается через ref.
+ */
+const Reel = memo(
+  function Reel({ strip, skin, spinId, duration, onStop }: ReelProps) {
+    const ref = useRef<HTMLDivElement>(null);
+    const stopRef = useRef(onStop);
+    stopRef.current = onStop;
+
+    useLayoutEffect(() => {
+      const el = ref.current;
+      if (!el || spinId === 0) return;
+      const to = -(strip.length - ROWS - 1) * CELL;
+      if (reduceMotion()) {
+        el.style.transition = 'none';
+        el.style.transform = `translateY(${to}px)`;
+        stopRef.current();
+        return;
+      }
+      el.style.transition = 'none';
+      el.style.transform = 'translateY(0)';
+      el.classList.add('is-blur');
+      void el.offsetHeight; // reflow, иначе браузер склеит оба присваивания
+      // Небольшой «перелёт» в конце — барабан отскакивает, как механический.
+      el.style.transition = `transform ${duration}ms cubic-bezier(.18,.76,.24,1.06)`;
+      el.style.transform = `translateY(${to}px)`;
+      const t = setTimeout(() => {
+        el.classList.remove('is-blur');
+        stopRef.current();
+      }, duration);
+      return () => clearTimeout(t);
+    }, [spinId, strip, duration]);
+
+    return (
+      <div className="reel">
+        <div className="reel__strip" ref={ref}>
+          {/* Ключ — позиция в ленте, а не символ: так React переиспользует те же
+            элементы и лишь меняет src, вместо того чтобы каждое вращение
+            создавать и выбрасывать по сотне картинок. */}
+          {strip.map((id, i) => (
+            <span className="reel__cell" key={i}>
+              <Sym id={id} skin={skin} />
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  },
+  (a, b) =>
+    a.strip === b.strip && a.skin === b.skin && a.spinId === b.spinId && a.duration === b.duration,
+);
 
 /**
  * Поле каскада. Каждая ячейка стоит на своём ряду и при необходимости
@@ -461,15 +470,19 @@ export function SlotsPage() {
   const [wheelAngle, setWheelAngle] = useState(0);
   const [wheelBusy, setWheelBusy] = useState(false);
   const [wheelPrize, setWheelPrize] = useState<{ coins: number; freeSpins: number } | null>(null);
-  const [levelUp, setLevelUp] = useState<{ level: number; coins: number; freeSpins: number; skin?: string } | null>(
-    null,
-  );
+  const [levelUp, setLevelUp] = useState<{
+    level: number;
+    coins: number;
+    freeSpins: number;
+    skin?: string;
+  } | null>(null);
   const [lever, setLever] = useState(0);
   const [shake, setShake] = useState(false);
   const [streak, setStreak] = useState(0);
-  const [celebration, setCelebration] = useState<{ tier: 'big' | 'jackpot'; amount: number } | null>(
-    null,
-  );
+  const [celebration, setCelebration] = useState<{
+    tier: 'big' | 'jackpot';
+    amount: number;
+  } | null>(null);
   const [jackpotWin, setJackpotWin] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
@@ -538,36 +551,39 @@ export function SlotsPage() {
   const theme = skinOf(skin);
   const rainSrc = symbolSrc(skin, theme.rain);
 
-  const finish = useCallback((res: SlotsSpinOutcome) => {
-    if (tickRef.current) clearInterval(tickRef.current);
-    setResult(res);
-    setPending(0);
-    setSpinning(false);
-    setJackpotWin(res.jackpotWin);
-    setStreak((n) => (res.total > 0 ? n + 1 : 0));
-    if (res.kind === 'jackpot') {
-      notifySuccess();
-      jackpotFanfare();
-      burstConfetti(180, theme.confetti);
-      rainCoins(40, rainSrc);
-      setShake(true);
-      setCelebration({ tier: 'jackpot', amount: res.total });
-    } else if (res.kind === 'big') {
-      notifySuccess();
-      winChime('big');
-      rainCoins(22, rainSrc);
-      burstConfetti(70, theme.confetti);
-      setCelebration({ tier: 'big', amount: res.total });
-    } else if (res.kind === 'small') {
-      tapLight();
-      winChime('small');
-    }
-    // Новый уровень — отдельная плашка: награда уже начислена стором.
-    if (res.levelUps.length) {
-      const lvl = res.levelUps[res.levelUps.length - 1];
-      setLevelUp({ level: lvl, ...levelReward(lvl) });
-    }
-  }, [theme.confetti, rainSrc]);
+  const finish = useCallback(
+    (res: SlotsSpinOutcome) => {
+      if (tickRef.current) clearInterval(tickRef.current);
+      setResult(res);
+      setPending(0);
+      setSpinning(false);
+      setJackpotWin(res.jackpotWin);
+      setStreak((n) => (res.total > 0 ? n + 1 : 0));
+      if (res.kind === 'jackpot') {
+        notifySuccess();
+        jackpotFanfare();
+        burstConfetti(180, theme.confetti);
+        rainCoins(40, rainSrc);
+        setShake(true);
+        setCelebration({ tier: 'jackpot', amount: res.total });
+      } else if (res.kind === 'big') {
+        notifySuccess();
+        winChime('big');
+        rainCoins(22, rainSrc);
+        burstConfetti(70, theme.confetti);
+        setCelebration({ tier: 'big', amount: res.total });
+      } else if (res.kind === 'small') {
+        tapLight();
+        winChime('small');
+      }
+      // Новый уровень — отдельная плашка: награда уже начислена стором.
+      if (res.levelUps.length) {
+        const lvl = res.levelUps[res.levelUps.length - 1];
+        setLevelUp({ level: lvl, ...levelReward(lvl) });
+      }
+    },
+    [theme.confetti, rainSrc],
+  );
 
   // Плашка уровня живёт 6 секунд — успеть прочитать, но не мешать игре.
   useEffect(() => {
@@ -756,10 +772,13 @@ export function SlotsPage() {
       return;
     }
     // Во время большого выигрыша пауза длиннее — дать досмотреть празднование.
-    const t = setTimeout(() => {
-      setAuto((n) => n - 1);
-      spin();
-    }, celebration ? 3200 : 700);
+    const t = setTimeout(
+      () => {
+        setAuto((n) => n - 1);
+        spin();
+      },
+      celebration ? 3200 : 700,
+    );
     return () => clearTimeout(t);
   }, [auto, spinning, balance, bet, freeSpins, spin, celebration]);
 
@@ -837,7 +856,7 @@ export function SlotsPage() {
     const mod = ((wheelAngle % 360) + 360) % 360;
     const needed = (360 - (got.index + 0.5) * SECTOR) % 360;
     const quick = reduceMotion();
-    const delta = quick ? needed - mod : (((needed - mod) % 360) + 360) % 360 + 360 * 5;
+    const delta = quick ? needed - mod : ((((needed - mod) % 360) + 360) % 360) + 360 * 5;
     setWheelAngle(wheelAngle + delta);
 
     if (!quick) wheelTickRef.current = setInterval(() => reelTick(), 95);
@@ -1115,7 +1134,9 @@ export function SlotsPage() {
                   {outcomeLabel(result).symbol && (
                     <Sym id={outcomeLabel(result).symbol!} skin={skin} size={22} />
                   )}
-                  {result.combo >= 2 ? `комбо из ${result.combo} звеньев!` : outcomeLabel(result).text}
+                  {result.combo >= 2
+                    ? `комбо из ${result.combo} звеньев!`
+                    : outcomeLabel(result).text}
                 </span>
                 {result.total > 0 && (
                   <span className={`status__win${result.kind === 'jackpot' ? ' is-jackpot' : ''}`}>
@@ -1184,10 +1205,10 @@ export function SlotsPage() {
                 : spinning
                   ? 'Крутится…'
                   : broke
-                  ? 'Монеты кончились'
-                  : freeSpins > 0
-                    ? `Бесплатно · ${freeSpins}`
-                    : `Крутить · ${fmt(bet)}`}
+                    ? 'Монеты кончились'
+                    : freeSpins > 0
+                      ? `Бесплатно · ${freeSpins}`
+                      : `Крутить · ${fmt(bet)}`}
           </button>
           <button
             className={`slot-mini${auto > 0 ? ' is-on' : ''}`}
@@ -1290,9 +1311,9 @@ export function SlotsPage() {
         <Sheet title="Выплаты и линии" onClose={() => setSheet(false)}>
           <div className="stack">
             <p className="muted" style={{ margin: 0 }}>
-              Пять линий, каждая платит слева направо: три одинаковых — главный выигрыш, два
-              первых — небольшой возврат. Множитель из таблицы умножается на ставку ÷ {LINE_UNIT} —
-              при ставке {fmt(bet)} это {fmt(lineBet(bet))}.
+              Пять линий, каждая платит слева направо: три одинаковых — главный выигрыш, два первых
+              — небольшой возврат. Множитель из таблицы умножается на ставку ÷ {LINE_UNIT} — при
+              ставке {fmt(bet)} это {fmt(lineBet(bet))}.
             </p>
             {/* Каскады — главная механика: объясняем её до таблицы выплат */}
             <div className="combo-rules">
@@ -1412,8 +1433,8 @@ export function SlotsPage() {
             </div>
             <p className="muted" style={{ margin: 0, fontSize: 12 }}>
               Автоспин останавливается кнопкой «Стоп» и сам замирает, когда монет не хватает на
-              ставку. Бесплатные вращения тратятся первыми. Режим «∞» удобно включать вместе с
-              турбо — тогда барабаны крутятся вдвое быстрее.
+              ставку. Бесплатные вращения тратятся первыми. Режим «∞» удобно включать вместе с турбо
+              — тогда барабаны крутятся вдвое быстрее.
             </p>
           </div>
         </Sheet>
@@ -1591,9 +1612,11 @@ export function SlotsPage() {
                 </button>
               ) : (
                 <p className="reward-block__hint">
-                  Сегодня забрано. Завтра ступень {daily.step === DAILY_LADDER.length ? 1 : daily.step + 1}
+                  Сегодня забрано. Завтра ступень{' '}
+                  {daily.step === DAILY_LADDER.length ? 1 : daily.step + 1}
                   {' — '}
-                  {fmt(ladderReward(dayStreak + 1))} монет. Обновление через {fmtLeft(tillMidnight)}.
+                  {fmt(ladderReward(dayStreak + 1))} монет. Обновление через {fmtLeft(tillMidnight)}
+                  .
                 </p>
               )}
             </div>
@@ -1624,7 +1647,11 @@ export function SlotsPage() {
                 disabled={!wheelReady || wheelBusy}
                 onClick={turnWheel}
               >
-                {wheelBusy ? 'Крутится…' : wheelReady ? 'Крутить колесо' : `Через ${fmtLeft(wheelLeft)}`}
+                {wheelBusy
+                  ? 'Крутится…'
+                  : wheelReady
+                    ? 'Крутить колесо'
+                    : `Через ${fmtLeft(wheelLeft)}`}
               </button>
               <p className="reward-block__hint">
                 Бесплатно раз в 4 часа. Сектор выбирается до вращения — колесо доезжает ровно до
@@ -1681,7 +1708,11 @@ export function SlotsPage() {
               <div className="reward-block__head">
                 <span className="reward-block__title">Спасательные вращения</span>
                 <span className="reward-block__meta">
-                  {!broke ? 'пока не нужны' : rescueReady ? 'готовы' : `через ${fmtLeft(rescueLeft)}`}
+                  {!broke
+                    ? 'пока не нужны'
+                    : rescueReady
+                      ? 'готовы'
+                      : `через ${fmtLeft(rescueLeft)}`}
                 </span>
               </div>
               <p className="reward-block__hint">
@@ -1712,7 +1743,12 @@ export function SlotsPage() {
       )}
 
       {levelUp && (
-        <div className="levelup" data-skin={skin} onClick={() => setLevelUp(null)} role="presentation">
+        <div
+          className="levelup"
+          data-skin={skin}
+          onClick={() => setLevelUp(null)}
+          role="presentation"
+        >
           <div className="levelup__card">
             <div className="levelup__lvl">Уровень {levelUp.level}</div>
             <div className="levelup__gain">
@@ -1721,7 +1757,9 @@ export function SlotsPage() {
               {levelUp.freeSpins > 0 && <span> · 🎟 {levelUp.freeSpins}</span>}
             </div>
             {levelUp.skin && (
-              <div className="levelup__skin">Открыт скин «{skinOf(levelUp.skin as SkinId).name}»</div>
+              <div className="levelup__skin">
+                Открыт скин «{skinOf(levelUp.skin as SkinId).name}»
+              </div>
             )}
           </div>
         </div>

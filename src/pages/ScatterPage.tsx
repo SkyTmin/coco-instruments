@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
 import { CoinIcon } from '@/components/slot-art';
@@ -87,7 +87,14 @@ function tierOf(chain: number): number {
 
 function Sym({ id, skin, size = 40 }: { id: ScatterCell; skin: SkinId; size?: number }) {
   return (
-    <img className="sym" src={symbolSrc(skin, id)} width={size} height={size} alt="" draggable={false} />
+    <img
+      className="sym"
+      src={symbolSrc(skin, id)}
+      width={size}
+      height={size}
+      alt=""
+      draggable={false}
+    />
   );
 }
 
@@ -105,7 +112,9 @@ interface BoardCell {
 type Board = BoardCell[][];
 
 function gridToBoard(grid: ScatterGrid, tag: string): Board {
-  return grid.map((col, c) => col.map((id, row) => ({ key: `${tag}-${c}-${row}`, id, row, fall: 0 })));
+  return grid.map((col, c) =>
+    col.map((id, row) => ({ key: `${tag}-${c}-${row}`, id, row, fall: 0 })),
+  );
 }
 
 function collapseBoard(step: ScatterStep, tag: string): Board {
@@ -133,58 +142,61 @@ function makeStrip(to: ScatterCell[]): ScatterCell[] {
   return [...Array.from({ length: FILLER }, () => scatterSymbol()), ...to];
 }
 
-function SpinCol({
-  strip,
-  skin,
-  spinId,
-  duration,
-  onStop,
-}: {
+interface SpinColProps {
   strip: ScatterCell[];
   skin: SkinId;
   spinId: number;
   duration: number;
   onStop: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const stopRef = useRef(onStop);
-  stopRef.current = onStop;
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || spinId === 0) return;
-    const to = -(strip.length - SCATTER_ROWS) * SCELL;
-    if (reduceMotion()) {
-      el.style.transition = 'none';
-      el.style.transform = `translateY(${to}px)`;
-      stopRef.current();
-      return;
-    }
-    el.style.transition = 'none';
-    el.style.transform = 'translateY(0)';
-    el.classList.add('is-blur');
-    void el.offsetHeight;
-    el.style.transition = `transform ${duration}ms cubic-bezier(.18,.76,.24,1.06)`;
-    el.style.transform = `translateY(${to}px)`;
-    const t = setTimeout(() => {
-      el.classList.remove('is-blur');
-      stopRef.current();
-    }, duration);
-    return () => clearTimeout(t);
-  }, [spinId, strip, duration]);
-
-  return (
-    <div className="sboard__col">
-      <div className="sboard__strip" ref={ref}>
-        {strip.map((id, i) => (
-          <span className="sbcell sbcell--flow" key={`${id}-${i}`}>
-            <Sym id={id} skin={skin} />
-          </span>
-        ))}
-      </div>
-    </div>
-  );
 }
+
+/** Колонка перерисовывается только при новой ленте — см. `Reel` в «Слотах». */
+const SpinCol = memo(
+  function SpinCol({ strip, skin, spinId, duration, onStop }: SpinColProps) {
+    const ref = useRef<HTMLDivElement>(null);
+    const stopRef = useRef(onStop);
+    stopRef.current = onStop;
+
+    useEffect(() => {
+      const el = ref.current;
+      if (!el || spinId === 0) return;
+      const to = -(strip.length - SCATTER_ROWS) * SCELL;
+      if (reduceMotion()) {
+        el.style.transition = 'none';
+        el.style.transform = `translateY(${to}px)`;
+        stopRef.current();
+        return;
+      }
+      el.style.transition = 'none';
+      el.style.transform = 'translateY(0)';
+      el.classList.add('is-blur');
+      void el.offsetHeight;
+      el.style.transition = `transform ${duration}ms cubic-bezier(.18,.76,.24,1.06)`;
+      el.style.transform = `translateY(${to}px)`;
+      const t = setTimeout(() => {
+        el.classList.remove('is-blur');
+        stopRef.current();
+      }, duration);
+      return () => clearTimeout(t);
+    }, [spinId, strip, duration]);
+
+    return (
+      <div className="sboard__col">
+        <div className="sboard__strip" ref={ref}>
+          {/* Ключ — позиция в ленте, а не символ: элементы переиспользуются,
+            меняется только src (см. тот же приём в «Слотах»). */}
+          {strip.map((id, i) => (
+            <span className="sbcell sbcell--flow" key={i}>
+              <Sym id={id} skin={skin} />
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  },
+  (a, b) =>
+    a.strip === b.strip && a.skin === b.skin && a.spinId === b.spinId && a.duration === b.duration,
+);
 
 export function ScatterPage() {
   const nav = useNavigate();
@@ -238,9 +250,11 @@ export function ScatterPage() {
   const [rules, setRules] = useState(false);
   const [shake, setShake] = useState(false);
   const [celebration, setCelebration] = useState<{ tier: string; amount: number } | null>(null);
-  const [levelUp, setLevelUp] = useState<{ level: number; coins: number; freeSpins: number } | null>(
-    null,
-  );
+  const [levelUp, setLevelUp] = useState<{
+    level: number;
+    coins: number;
+    freeSpins: number;
+  } | null>(null);
 
   const boardRef = useRef<HTMLDivElement>(null);
   const dustRef = useRef<HTMLCanvasElement>(null);
@@ -867,8 +881,8 @@ export function ScatterPage() {
               <p className="combo-rules__text">
                 Линий нет: считается, сколько одинаковых символов оказалось на всём поле{' '}
                 {SCATTER_COLS}×{SCATTER_ROWS}. От {CLUSTER_MIN} штук — выигрыш, неважно, где они
-                стоят. Сыгравшие исчезают, верхние падают на их места, поле считается заново — и так,
-                пока выпадают выигрыши.
+                стоят. Сыгравшие исчезают, верхние падают на их места, поле считается заново — и
+                так, пока выпадают выигрыши.
               </p>
             </div>
             <div className="combo-rules">
@@ -1002,7 +1016,9 @@ export function ScatterPage() {
                 setBetSheet(false);
               }}
             >
-              {betDraft > balance && freeSpins <= 0 ? 'Не хватает монет' : `Играть по ${fmt(betDraft)}`}
+              {betDraft > balance && freeSpins <= 0
+                ? 'Не хватает монет'
+                : `Играть по ${fmt(betDraft)}`}
             </button>
           </div>
         </Sheet>
@@ -1013,9 +1029,27 @@ export function ScatterPage() {
           <div className="stack slots" data-skin={skin}>
             <div className="toggles">
               {[
-                { key: 'sound' as const, on: sound, icon: sound ? '🔊' : '🔇', name: 'Звук', hint: 'Барабаны, цепочки и выигрыши' },
-                { key: 'haptics' as const, on: haptics, icon: haptics ? '📳' : '📴', name: 'Вибрация', hint: 'Отклик на остановку и выигрыш' },
-                { key: 'turbo' as const, on: turbo, icon: '⚡', name: 'Турбо', hint: 'Вращения и каскады вдвое быстрее' },
+                {
+                  key: 'sound' as const,
+                  on: sound,
+                  icon: sound ? '🔊' : '🔇',
+                  name: 'Звук',
+                  hint: 'Барабаны, цепочки и выигрыши',
+                },
+                {
+                  key: 'haptics' as const,
+                  on: haptics,
+                  icon: haptics ? '📳' : '📴',
+                  name: 'Вибрация',
+                  hint: 'Отклик на остановку и выигрыш',
+                },
+                {
+                  key: 'turbo' as const,
+                  on: turbo,
+                  icon: '⚡',
+                  name: 'Турбо',
+                  hint: 'Вращения и каскады вдвое быстрее',
+                },
               ].map((t) => (
                 <button
                   key={t.key}
@@ -1043,7 +1077,12 @@ export function ScatterPage() {
       )}
 
       {levelUp && (
-        <div className="levelup" data-skin={skin} onClick={() => setLevelUp(null)} role="presentation">
+        <div
+          className="levelup"
+          data-skin={skin}
+          onClick={() => setLevelUp(null)}
+          role="presentation"
+        >
           <div className="levelup__card">
             <div className="levelup__lvl">Уровень {levelUp.level}</div>
             <div className="levelup__gain">

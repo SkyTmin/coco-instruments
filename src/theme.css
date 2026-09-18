@@ -10842,12 +10842,17 @@ input[type='datetime-local'] {
 }
 .slot-hud__value--jackpot {
   color: var(--neon);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--neon) 60%, transparent);
+  text-shadow: 0 0 20px color-mix(in srgb, var(--neon-2) 70%, transparent);
+  will-change: opacity;
   animation: jackpot-glow 2.4s ease-in-out infinite;
 }
 @keyframes jackpot-glow {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
   50% {
-    text-shadow: 0 0 22px color-mix(in srgb, var(--neon-2) 75%, transparent);
+    opacity: 1;
   }
 }
 
@@ -10988,6 +10993,9 @@ input[type='datetime-local'] {
   background-clip: text;
   color: transparent;
   -webkit-text-stroke: 1.4px #3b2205;
+  /* Свой слой: четыре drop-shadow растеризуются один раз, мерцание считает
+     композитор. Без этого текст с тенями перерисовывался каждый кадр. */
+  will-change: opacity;
   filter:
     drop-shadow(0 1px 0 #7a4e08) drop-shadow(0 2px 0 #533305)
     drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6))
@@ -11144,6 +11152,7 @@ input[type='datetime-local'] {
 }
 .reel__strip {
   will-change: transform;
+  will-change: transform;
 }
 .reel__strip.is-blur {
   filter: blur(1.4px);
@@ -11191,16 +11200,16 @@ input[type='datetime-local'] {
     inset 0 0 0 5px rgba(90, 40, 0, 0.55),
     inset 0 0 20px rgba(255, 160, 40, 0.5),
     0 0 26px color-mix(in srgb, var(--neon) 85%, transparent);
+  will-change: opacity;
   animation: mark-pulse 0.85s ease-in-out infinite;
 }
 @keyframes mark-pulse {
+  0%,
+  100% {
+    opacity: 0.74;
+  }
   50% {
-    box-shadow:
-      inset 0 0 0 1px rgba(90, 40, 0, 0.9),
-      inset 0 0 0 4px #fff0c0,
-      inset 0 0 0 5px rgba(90, 40, 0, 0.55),
-      inset 0 0 26px rgba(255, 210, 120, 0.8),
-      0 0 38px var(--neon);
+    opacity: 1;
   }
 }
 
@@ -12109,6 +12118,7 @@ input[type='datetime-local'] {
   opacity: 0.6;
   filter: drop-shadow(0 6px 14px rgba(255, 60, 40, 0.45));
   transform-origin: 50% 0;
+  will-change: transform;
   animation: lantern-sway 4.5s ease-in-out infinite;
 }
 .slots[data-skin='asia'] .slots-scene__decor::before {
@@ -12139,6 +12149,7 @@ input[type='datetime-local'] {
     radial-gradient(circle 1.2px at 58% 94%, #a9c6ff 99%, transparent),
     radial-gradient(ellipse 60% 30% at 80% 78%, rgba(150, 90, 255, 0.18), transparent 70%),
     radial-gradient(ellipse 50% 26% at 18% 30%, rgba(60, 140, 255, 0.16), transparent 70%);
+  will-change: opacity;
   animation: starfield 6s ease-in-out infinite;
 }
 @keyframes starfield {
@@ -13348,7 +13359,10 @@ input[type='datetime-local'] {
   height: var(--scell);
   display: grid;
   place-items: center;
-  transition: opacity 0.16s ease, filter 0.16s ease;
+  /* Только opacity: анимировать filter на трёх десятках клеток — это тридцать
+     перерисовок в каждом кадре. Обесцвечивание проступает мгновенно, но его
+     всё равно не видно: сверху в этот момент разворачивается вуаль. */
+  transition: opacity 0.16s ease;
 }
 /* В ленте ячейки идут потоком, а не по абсолютным рядам */
 .sbcell--flow {
@@ -13378,7 +13392,8 @@ input[type='datetime-local'] {
 .sbcell.is-win img {
   position: relative;
   z-index: 1;
-  filter: drop-shadow(0 0 10px rgba(255, 220, 150, 0.9));
+  /* Свечение даёт рамка ::before — тень на самой картинке пересчитывалась бы
+     на каждом кадре пульсации, а таких картинок бывает до тридцати. */
   animation:
     sb-pop 0.4s cubic-bezier(0.2, 1.8, 0.4, 1) calc(var(--wi, 0) * 26ms) both,
     sb-pulse 0.9s ease-in-out calc(var(--wi, 0) * 26ms + 400ms) infinite;
@@ -13608,9 +13623,22 @@ input[type='datetime-local'] {
 .sbcell.is-scatter {
   z-index: 3;
 }
+/* Скаттер светится статичной подложкой, а пульсирует только сам символ */
+.sbcell.is-scatter::after {
+  content: '';
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 216, 61, 0.55),
+    rgba(120, 255, 140, 0.28) 55%,
+    transparent 72%
+  );
+}
 .sbcell.is-scatter img {
-  filter: drop-shadow(0 0 10px rgba(120, 255, 140, 0.95))
-    drop-shadow(0 0 20px rgba(255, 216, 61, 0.7));
+  position: relative;
+  z-index: 1;
   animation: sb-pulse 1.4s ease-in-out infinite;
 }
 
