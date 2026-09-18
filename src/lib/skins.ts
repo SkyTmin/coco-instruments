@@ -6,7 +6,15 @@
 
 import type { SlotSymbolId } from '@/types';
 
-export type SkinId = 'classic' | 'asia' | 'space' | 'pirate' | 'egypt' | 'candy';
+export type SkinId =
+  | 'classic'
+  | 'asia'
+  | 'space'
+  | 'pirate'
+  | 'egypt'
+  | 'candy'
+  | 'neon'
+  | 'winter';
 
 export interface Skin {
   id: SkinId;
@@ -93,6 +101,28 @@ export const SKINS: Skin[] = [
     subtitle: 'Крутите на леденцы',
     rain: 'cherry',
     confetti: ['#ff8ad4', '#7ee0ff', '#ffe066', '#ff5d8f', '#ffffff'],
+  },
+  {
+    id: 'neon',
+    name: 'Неон',
+    hint: 'Ночной аркадный зал — открывается на 5 уровне',
+    sign: ['ARCADE', 'NEON'],
+    preview: 'seven',
+    title: 'Неоновый зал',
+    subtitle: 'Аркада, которая не закрывается',
+    rain: 'star',
+    confetti: ['#ff2fb9', '#00e5ff', '#9d4bff', '#ffe66d', '#ff5f9e'],
+  },
+  {
+    id: 'winter',
+    name: 'Зима',
+    hint: 'Снег, подарки и какао — открывается на 9 уровне',
+    sign: ['FROST', 'NIGHT'],
+    preview: 'star',
+    title: 'Морозная ночь',
+    subtitle: 'Снег, огни и подарки',
+    rain: 'star',
+    confetti: ['#ffffff', '#bfe9ff', '#7fc7ff', '#e7f6ff', '#ffd76a'],
   },
 ];
 

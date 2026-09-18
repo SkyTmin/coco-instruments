@@ -17,6 +17,14 @@ import { collectPayments, computeObligation, computeRecurring } from '@/lib/fina
 import { toISO, todayISO } from '@/lib/date';
 import { formatRUB, pluralizeRu, relativeDay } from '@/lib/format';
 import { nextBirthday, peopleUpcomingEvents, peopleWord } from '@/lib/people';
+import {
+  EMPTY_COUNTERS,
+  WHEEL_COOLDOWN_MS,
+  dailyMissions,
+  dailyStatus,
+  dayKey,
+  missionDone,
+} from '@/lib/slots-meta';
 import { getBackupStatus, requestTelegramBackup } from '@/lib/backup';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { setThemePref, useThemePref } from '@/lib/theme';
@@ -59,9 +67,26 @@ export function HomePage() {
   const outfits = useFinanceStore((s) => s.outfits);
   const slotsBalance = useFinanceStore((s) => s.slotsBalance);
   const slotsSpins = useFinanceStore((s) => s.slotsSpins);
+  const slotsDailyAt = useFinanceStore((s) => s.slotsDailyAt);
+  const slotsStreak = useFinanceStore((s) => s.slotsStreak);
+  const slotsMissions = useFinanceStore((s) => s.slotsMissions);
+  const slotsWheelAt = useFinanceStore((s) => s.slotsWheelAt);
   const hydrated = useFinanceStore((s) => s.hydrated);
   const exportAll = useFinanceStore((s) => s.exportAll);
   const importAll = useFinanceStore((s) => s.importAll);
+
+  // Сколько наград в слотах ждут прямо сейчас — точка на плитке зовёт зайти.
+  const slotsRewards = useMemo(() => {
+    const today = dayKey();
+    const counters = slotsMissions.day === today ? slotsMissions.counters : EMPTY_COUNTERS;
+    const claimed = slotsMissions.day === today ? slotsMissions.claimed : [];
+    const missions = dailyMissions(today).filter(
+      (m) => missionDone(m, { ...EMPTY_COUNTERS, ...counters }) && !claimed.includes(m.id),
+    ).length;
+    const daily = dailyStatus({ streak: slotsStreak, lastClaim: slotsDailyAt }, today).ready ? 1 : 0;
+    const wheel = !slotsWheelAt || Date.now() - slotsWheelAt >= WHEEL_COOLDOWN_MS ? 1 : 0;
+    return daily + wheel + missions;
+  }, [slotsDailyAt, slotsStreak, slotsMissions, slotsWheelAt]);
 
   const fin = useMemo(() => {
     let monthly = 0;
@@ -392,10 +417,15 @@ export function HomePage() {
           <button className="home-tile" onClick={() => go('/slots')}>
             <span className="home-tile__icon">
               <IconSlots />
+              {slotsRewards > 0 && <span className="home-tile__dot">{slotsRewards}</span>}
             </span>
             <span className="home-tile__title">Слоты</span>
             <span className="home-tile__fact">
-              {slotsSpins ? `${fmtCoins(slotsBalance)} 🪙 · ${slotsSpins} спинов` : 'Мини-игра на удачу'}
+              {slotsRewards > 0
+                ? `Награды ждут · ${slotsRewards}`
+                : slotsSpins
+                  ? `${fmtCoins(slotsBalance)} 🪙 · ${slotsSpins} спинов`
+                  : 'Мини-игра на удачу'}
             </span>
           </button>
         </div>

@@ -4,12 +4,28 @@ import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
 import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
 import { SKINS, skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
-import { IconInfo } from '@/components/icons';
+import { IconGift, IconInfo, IconLock } from '@/components/icons';
 import { useFinanceStore } from '@/store';
+import type { SlotsSpinOutcome } from '@/store';
+import {
+  DAILY_LADDER,
+  EMPTY_COUNTERS,
+  SKIN_UNLOCK,
+  WHEEL,
+  WHEEL_COOLDOWN_MS,
+  dailyMissions,
+  dailyStatus,
+  dayKey,
+  isSkinUnlocked,
+  ladderReward,
+  levelFromXp,
+  levelReward,
+  missionDone,
+} from '@/lib/slots-meta';
+import type { WheelSector } from '@/lib/slots-meta';
 import {
   BETS,
   BONUS_COOLDOWN_MS,
-  DAILY_BONUS,
   hasAnticipation,
   lineBet,
   outcomeLabel,
@@ -47,6 +63,10 @@ const STEP_MS = 280;
 /** Пауза перед последним барабаном, когда на линии уже два премиума. */
 const ANTICIPATION_MS = 900;
 const AUTO_SPINS = 10;
+/** Один сектор колеса удачи в градусах. */
+const SECTOR = 360 / WHEEL.length;
+/** Сколько крутится колесо до остановки. */
+const WHEEL_MS = 4200;
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
@@ -152,6 +172,87 @@ function PaylineOverlay({ wins }: { wins: SpinResult['wins'] }) {
   );
 }
 
+/** «3 ч 20 мин» — сколько ждать до следующей бесплатной награды. */
+function fmtLeft(ms: number): string {
+  const mins = Math.max(1, Math.ceil(ms / 60_000));
+  if (mins < 60) return `${mins} мин`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h} ч ${m} мин` : `${h} ч`;
+}
+
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+/** Точка на окружности по углу, отсчитанному по часовой стрелке от «12 часов». */
+function polar(deg: number, r: number): string {
+  const a = (deg * Math.PI) / 180;
+  return `${(Math.sin(a) * r).toFixed(2)} ${(-Math.cos(a) * r).toFixed(2)}`;
+}
+
+/** Короткая надпись сектора — в 45° дуги длинный текст не помещается. */
+function sectorFace(s: WheelSector): string {
+  return s.freeSpins ? `${s.freeSpins} вращ.` : fmt(s.coins);
+}
+
+/**
+ * Колесо удачи. Диск поворачивается ровно к тому сектору, который выбрал
+ * spinWheel() — картинка всегда показывает настоящий результат.
+ */
+function WheelArt({ angle, instant }: { angle: number; instant: boolean }) {
+  return (
+    <div className="wheel">
+      <span className="wheel__pin" aria-hidden="true" />
+      <svg
+        className="wheel__disc"
+        viewBox="-50 -50 100 100"
+        style={{
+          transform: `rotate(${angle}deg)`,
+          transition: instant ? 'none' : `transform ${WHEEL_MS}ms cubic-bezier(.12,.72,.15,1)`,
+        }}
+        aria-hidden="true"
+      >
+        <circle className="wheel__rim" cx="0" cy="0" r="47" />
+        {WHEEL.map((s, i) => {
+          const a0 = i * SECTOR;
+          const a1 = a0 + SECTOR;
+          const top = s.coins >= 2500;
+          return (
+            <path
+              key={s.label}
+              className={`wheel__sec${i % 2 ? ' is-alt' : ''}${top ? ' is-top' : ''}`}
+              d={`M 0 0 L ${polar(a0, 44)} A 44 44 0 0 1 ${polar(a1, 44)} Z`}
+            />
+          );
+        })}
+        {WHEEL.map((s, i) => {
+          const face = sectorFace(s);
+          const at = (i + 0.5) * SECTOR;
+          // Левая половина колеса: без разворота надпись читалась бы вверх ногами.
+          const flip = at > 90 && at < 270;
+          return (
+            <text
+              key={s.label}
+              className={`wheel__label${s.freeSpins ? ' is-small' : ''}`}
+              transform={`rotate(${at}) translate(0 -30)${flip ? ' rotate(180)' : ''}`}
+              textAnchor="middle"
+              dy={flip ? -2 : 2}
+            >
+              {face}
+            </text>
+          );
+        })}
+        <circle className="wheel__hub" cx="0" cy="0" r="9" />
+      </svg>
+    </div>
+  );
+}
+
 export function SlotsPage() {
   const hydrated = useFinanceStore((s) => s.hydrated);
   const balance = useFinanceStore((s) => s.slotsBalance);
@@ -164,9 +265,18 @@ export function SlotsPage() {
   const skin = useFinanceStore((s) => s.slotsSkin);
   const sound = useFinanceStore((s) => s.slotsSound);
   const turbo = useFinanceStore((s) => s.slotsTurbo);
+  const xp = useFinanceStore((s) => s.slotsXp);
+  const dayStreak = useFinanceStore((s) => s.slotsStreak);
+  const dailyAt = useFinanceStore((s) => s.slotsDailyAt);
+  const missionState = useFinanceStore((s) => s.slotsMissions);
+  const wheelAt = useFinanceStore((s) => s.slotsWheelAt);
+  const freeSpins = useFinanceStore((s) => s.slotsFreeSpins);
   const setBet = useFinanceStore((s) => s.setSlotsBet);
   const playSlots = useFinanceStore((s) => s.playSlots);
   const claimBonus = useFinanceStore((s) => s.claimSlotsBonus);
+  const claimDaily = useFinanceStore((s) => s.claimSlotsDaily);
+  const claimMission = useFinanceStore((s) => s.claimSlotsMission);
+  const spinTheWheel = useFinanceStore((s) => s.spinSlotsWheel);
   const setPrefs = useFinanceStore((s) => s.setSlotsPrefs);
 
   const [strips, setStrips] = useState<SlotSymbolId[][]>(() => startGrid());
@@ -179,6 +289,13 @@ export function SlotsPage() {
   const [auto, setAuto] = useState(0);
   const [sheet, setSheet] = useState(false);
   const [skinSheet, setSkinSheet] = useState(false);
+  const [rewards, setRewards] = useState(false);
+  const [wheelAngle, setWheelAngle] = useState(0);
+  const [wheelBusy, setWheelBusy] = useState(false);
+  const [wheelPrize, setWheelPrize] = useState<{ coins: number; freeSpins: number } | null>(null);
+  const [levelUp, setLevelUp] = useState<{ level: number; coins: number; freeSpins: number; skin?: string } | null>(
+    null,
+  );
   const [lever, setLever] = useState(0);
   const [shake, setShake] = useState(false);
   const [streak, setStreak] = useState(0);
@@ -189,6 +306,7 @@ export function SlotsPage() {
   const [now, setNow] = useState(() => Date.now());
 
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wheelTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const dragRef = useRef<{ y: number; id: number } | null>(null);
 
@@ -198,6 +316,7 @@ export function SlotsPage() {
     () => () => {
       timers.current.forEach(clearTimeout);
       if (tickRef.current) clearInterval(tickRef.current);
+      if (wheelTickRef.current) clearInterval(wheelTickRef.current);
     },
     [],
   );
@@ -215,17 +334,35 @@ export function SlotsPage() {
     if (affordable && affordable !== bet) setBet(affordable);
   }, [hydrated, spinning, balance, bet, setBet]);
 
-  const bonusLeft = bonusAt ? bonusAt + BONUS_COOLDOWN_MS - now : 0;
-  const dailyReady = bonusLeft <= 0;
-  const broke = balance < Math.min(...BETS);
-  const canSpin = hydrated && !spinning && balance >= bet;
+  // ---- прогрессия ----------------------------------------------------------
+  const today = dayKey(now);
+  const level = levelFromXp(xp);
+  const daily = dailyStatus({ streak: dayStreak, lastClaim: dailyAt }, today);
+  const missions = dailyMissions(today);
+  const counters = missionState.day === today ? missionState.counters : EMPTY_COUNTERS;
+  const claimedIds = missionState.day === today ? missionState.claimed : [];
+  const wheelLeft = wheelAt ? wheelAt + WHEEL_COOLDOWN_MS - now : 0;
+  const wheelReady = wheelLeft <= 0;
+  const missionsReady = missions.filter(
+    (m) => missionDone(m, { ...EMPTY_COUNTERS, ...counters }) && !claimedIds.includes(m.id),
+  ).length;
+  // Сколько наград ждут прямо сейчас — это число и зовёт вернуться.
+  const readyCount = (daily.ready ? 1 : 0) + (wheelReady ? 1 : 0) + missionsReady;
+  // До полуночи: тогда обновятся цели дня и откроется следующая ступень.
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const tillMidnight = midnight.getTime() - now;
+
+  const rescueLeft = bonusAt ? bonusAt + BONUS_COOLDOWN_MS - now : 0;
+  const broke = balance < Math.min(...BETS) && freeSpins <= 0;
+  const canSpin = hydrated && !spinning && (freeSpins > 0 || balance >= bet);
   // На табло — копилка плюс то, что заплатит сама линия семёрок.
   const jackpotPrize = jackpotPool + lineBet(bet) * symbolOf('seven').three;
 
   const theme = skinOf(skin);
   const rainSrc = symbolSrc(skin, theme.rain);
 
-  const finish = useCallback((res: SpinResult & { jackpotWin: number }) => {
+  const finish = useCallback((res: SlotsSpinOutcome) => {
     if (tickRef.current) clearInterval(tickRef.current);
     setResult(res);
     setPending(0);
@@ -249,10 +386,23 @@ export function SlotsPage() {
       tapLight();
       winChime('small');
     }
+    // Новый уровень — отдельная плашка: награда уже начислена стором.
+    if (res.levelUps.length) {
+      const lvl = res.levelUps[res.levelUps.length - 1];
+      setLevelUp({ level: lvl, ...levelReward(lvl) });
+    }
   }, [theme.confetti, rainSrc]);
 
+  // Плашка уровня живёт 6 секунд — успеть прочитать, но не мешать игре.
+  useEffect(() => {
+    if (!levelUp) return undefined;
+    coinDing(0.1);
+    const t = setTimeout(() => setLevelUp(null), 6000);
+    return () => clearTimeout(t);
+  }, [levelUp]);
+
   const spin = useCallback(() => {
-    if (!hydrated || spinning || balance < bet) return;
+    if (!hydrated || spinning || (freeSpins <= 0 && balance < bet)) return;
     primeAudio();
     const res = playSlots();
     if (!res) return;
@@ -289,7 +439,7 @@ export function SlotsPage() {
     }
 
     timers.current.push(setTimeout(() => finish(res), durs[2] + 40));
-  }, [hydrated, spinning, balance, bet, playSlots, strips, turbo, finish]);
+  }, [hydrated, spinning, balance, bet, freeSpins, playSlots, strips, turbo, finish]);
 
   // Баннер крупного выигрыша живёт ~4 секунды: вспышка → лучи → счёт с тиканьем.
   useEffect(() => {
@@ -307,7 +457,7 @@ export function SlotsPage() {
   // Автоспин: очередь вращений, прерывается кнопкой или нехваткой монет.
   useEffect(() => {
     if (auto <= 0 || spinning) return;
-    if (balance < bet) {
+    if (freeSpins <= 0 && balance < bet) {
       setAuto(0);
       return;
     }
@@ -317,7 +467,7 @@ export function SlotsPage() {
       spin();
     }, celebration ? 3200 : 700);
     return () => clearTimeout(t);
-  }, [auto, spinning, balance, bet, spin, celebration]);
+  }, [auto, spinning, balance, bet, freeSpins, spin, celebration]);
 
   const onReelStop = (index: number) => {
     setStopped((n) => Math.max(n, index + 1));
@@ -334,6 +484,70 @@ export function SlotsPage() {
     rainCoins(14, rainSrc);
     notifySuccess();
     setNow(Date.now());
+  };
+
+  const openRewards = () => {
+    tapLight();
+    primeAudio();
+    setWheelPrize(null);
+    setRewards(true);
+  };
+
+  const takeDaily = () => {
+    const got = claimDaily();
+    if (!got) return;
+    tapMedium();
+    coinDing();
+    coinDing(0.12);
+    winChime(got.streak >= 5 ? 'big' : 'small');
+    burstConfetti(60, theme.confetti);
+    rainCoins(18, rainSrc);
+    notifySuccess();
+    setNow(Date.now());
+  };
+
+  const takeMission = (id: string) => {
+    const got = claimMission(id);
+    if (!got) return;
+    tapLight();
+    coinDing();
+    rainCoins(10, rainSrc);
+    notifySuccess();
+  };
+
+  // Колесо честное: стор уже выбрал сектор, диск просто доезжает до него.
+  const turnWheel = () => {
+    if (wheelBusy || !wheelReady) return;
+    primeAudio();
+    const got = spinTheWheel();
+    if (!got) return;
+    tapMedium();
+    leverPull();
+    setWheelPrize(null);
+    setWheelBusy(true);
+
+    const mod = ((wheelAngle % 360) + 360) % 360;
+    const needed = (360 - (got.index + 0.5) * SECTOR) % 360;
+    const quick = reduceMotion();
+    const delta = quick ? needed - mod : (((needed - mod) % 360) + 360) % 360 + 360 * 5;
+    setWheelAngle(wheelAngle + delta);
+
+    if (!quick) wheelTickRef.current = setInterval(() => reelTick(), 95);
+    timers.current.push(
+      setTimeout(
+        () => {
+          if (wheelTickRef.current) clearInterval(wheelTickRef.current);
+          setWheelBusy(false);
+          setWheelPrize({ coins: got.coins, freeSpins: got.freeSpins });
+          winChime(got.coins >= 1000 || got.freeSpins >= 10 ? 'big' : 'small');
+          burstConfetti(50, theme.confetti);
+          rainCoins(14, rainSrc);
+          notifySuccess();
+          setNow(Date.now());
+        },
+        quick ? 30 : WHEEL_MS,
+      ),
+    );
   };
 
   // ---- рычаг ---------------------------------------------------------------
@@ -433,6 +647,23 @@ export function SlotsPage() {
             </span>
           </div>
         </div>
+
+        {/* Полоса уровня — она же вход в награды */}
+        <button className="slot-level" onClick={openRewards}>
+          <span className="slot-level__lvl">Ур. {level.level}</span>
+          <span className="slot-level__bar">
+            <i style={{ width: `${Math.min(100, (level.into / level.need) * 100)}%` }} />
+          </span>
+          {freeSpins > 0 && (
+            <span className="slot-level__free" title="Бесплатные вращения">
+              🎟 {freeSpins}
+            </span>
+          )}
+          <span className="slot-level__gift">
+            <IconGift size={17} />
+            {readyCount > 0 && <span className="slot-level__badge">{readyCount}</span>}
+          </span>
+        </button>
 
         {/* Корпус автомата */}
         <div
@@ -589,7 +820,9 @@ export function SlotsPage() {
                 ? 'Крутится…'
                 : broke
                   ? 'Монеты кончились'
-                  : `Крутить · ${fmt(bet)}`}
+                  : freeSpins > 0
+                    ? `Бесплатно · ${freeSpins}`
+                    : `Крутить · ${fmt(bet)}`}
           </button>
           <button
             className="slot-mini"
@@ -626,22 +859,23 @@ export function SlotsPage() {
           </button>
         </div>
 
-        {(dailyReady || broke) && (
-          <button
-            className="btn btn--ghost btn--block"
-            onClick={() => takeBonus(dailyReady ? DAILY_BONUS : RESCUE_BONUS)}
-          >
-            {dailyReady
-              ? `🎁 Ежедневный бонус +${fmt(DAILY_BONUS)}`
-              : `🍀 Спасательные +${fmt(RESCUE_BONUS)}`}
+        {readyCount > 0 && (
+          <button className="btn btn--block rewards-cta" onClick={openRewards}>
+            <IconGift size={18} />
+            Забрать награды · {readyCount}
           </button>
         )}
-        {!dailyReady && !broke && (
+        {broke && rescueLeft <= 0 && (
+          <button className="btn btn--ghost btn--block" onClick={() => takeBonus(RESCUE_BONUS)}>
+            🍀 Спасательные +{fmt(RESCUE_BONUS)}
+          </button>
+        )}
+        {readyCount === 0 && (
           <p className="slot-bonus-hint">
-            Следующий бонус через{' '}
-            {bonusLeft > 60 * 60 * 1000
-              ? `${Math.ceil(bonusLeft / (60 * 60 * 1000))} ч`
-              : `${Math.max(1, Math.ceil(bonusLeft / 60_000))} мин`}
+            {daily.ready
+              ? ''
+              : `Завтра — ${fmt(ladderReward(dayStreak + 1))} монет за ${dayStreak + 1}-й день серии`}
+            {!wheelReady && ` · колесо через ${fmtLeft(wheelLeft)}`}
           </p>
         )}
 
@@ -732,31 +966,212 @@ export function SlotsPage() {
       {skinSheet && (
         <Sheet title="Скины автомата" onClose={() => setSkinSheet(false)}>
           <div className="skin-grid">
-            {SKINS.map((sk) => (
-              <button
-                key={sk.id}
-                className={`skin-card${sk.id === skin ? ' is-active' : ''}`}
-                data-skin={sk.id}
-                onClick={() => {
-                  selectionChanged();
-                  setPrefs({ skin: sk.id });
-                  setSkinSheet(false);
-                }}
-              >
-                <span className="skin-card__reels">
-                  <img src={symbolSrc(sk.id, 'seven')} width={26} height={26} alt="" />
-                  <img src={symbolSrc(sk.id, 'star')} width={26} height={26} alt="" />
-                  <img src={symbolSrc(sk.id, 'bell')} width={26} height={26} alt="" />
-                </span>
-                <span className="skin-card__name">{sk.name}</span>
-                <span className="skin-card__hint">{sk.hint}</span>
-              </button>
-            ))}
+            {SKINS.map((sk) => {
+              const unlocked = isSkinUnlocked(sk.id, level.level);
+              return (
+                <button
+                  key={sk.id}
+                  className={`skin-card${sk.id === skin ? ' is-active' : ''}${
+                    unlocked ? '' : ' is-locked'
+                  }`}
+                  data-skin={sk.id}
+                  disabled={!unlocked}
+                  onClick={() => {
+                    selectionChanged();
+                    setPrefs({ skin: sk.id });
+                    setSkinSheet(false);
+                  }}
+                >
+                  <span className="skin-card__reels">
+                    <img src={symbolSrc(sk.id, 'seven')} width={26} height={26} alt="" />
+                    <img src={symbolSrc(sk.id, 'star')} width={26} height={26} alt="" />
+                    <img src={symbolSrc(sk.id, 'bell')} width={26} height={26} alt="" />
+                  </span>
+                  <span className="skin-card__name">{sk.name}</span>
+                  <span className="skin-card__hint">{sk.hint}</span>
+                  {!unlocked && (
+                    <span className="skin-card__lock">
+                      <IconLock size={15} />с {SKIN_UNLOCK[sk.id]} уровня
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
           <p className="muted" style={{ marginTop: 14, marginBottom: 0, fontSize: 12 }}>
             Символы — Twemoji (CC-BY 4.0, Twitter Inc. и контрибьюторы).
           </p>
         </Sheet>
+      )}
+
+      {rewards && (
+        <Sheet title="Награды" onClose={() => setRewards(false)}>
+          <div className="stack rewards" data-skin={skin}>
+            {/* Уровень */}
+            <div className="reward-block">
+              <div className="reward-block__head">
+                <span className="reward-block__title">Уровень {level.level}</span>
+                <span className="reward-block__meta">
+                  {fmt(level.into)} / {fmt(level.need)} XP
+                </span>
+              </div>
+              <div className="xpbar">
+                <i style={{ width: `${Math.min(100, (level.into / level.need) * 100)}%` }} />
+              </div>
+              <p className="reward-block__hint">
+                Опыт капает за каждое вращение — выигрыш ускоряет, но не решает. За уровень дают
+                монеты, каждый третий добавляет бесплатные вращения, а уровни 5 и 9 открывают новые
+                скины.
+              </p>
+            </div>
+
+            {/* Ежедневная лесенка */}
+            <div className="reward-block">
+              <div className="reward-block__head">
+                <span className="reward-block__title">Ежедневный бонус</span>
+                <span className="reward-block__meta">
+                  {dayStreak > 0
+                    ? `серия ${dayStreak} ${plural(dayStreak, 'день', 'дня', 'дней')}`
+                    : 'серия ещё не начата'}
+                </span>
+              </div>
+              <div className="ladder">
+                {DAILY_LADDER.map((coins, i) => {
+                  const step = i + 1;
+                  const done = daily.ready ? step < daily.step : step <= daily.step;
+                  const next = daily.ready && step === daily.step;
+                  return (
+                    <div
+                      key={step}
+                      className={`ladder__day${done ? ' is-done' : ''}${next ? ' is-next' : ''}`}
+                    >
+                      <span className="ladder__num">{step}</span>
+                      <span className="ladder__sum">{fmt(coins)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {daily.broken && (
+                <p className="reward-block__warn">
+                  Серия прервалась — начинаем с первой ступени. Ничего страшного, за неделю снова
+                  дойдём до {fmt(DAILY_LADDER[DAILY_LADDER.length - 1])}.
+                </p>
+              )}
+              {daily.ready ? (
+                <button className="btn btn--block rewards-cta" onClick={takeDaily}>
+                  Забрать +{fmt(daily.reward)}
+                  <CoinIcon size={17} />
+                </button>
+              ) : (
+                <p className="reward-block__hint">
+                  Сегодня забрано. Завтра ступень {daily.step === DAILY_LADDER.length ? 1 : daily.step + 1}
+                  {' — '}
+                  {fmt(ladderReward(dayStreak + 1))} монет. Обновление через {fmtLeft(tillMidnight)}.
+                </p>
+              )}
+            </div>
+
+            {/* Колесо удачи */}
+            <div className="reward-block">
+              <div className="reward-block__head">
+                <span className="reward-block__title">Колесо удачи</span>
+                <span className="reward-block__meta">
+                  {wheelReady ? 'готово' : `через ${fmtLeft(wheelLeft)}`}
+                </span>
+              </div>
+              <WheelArt angle={wheelAngle} instant={false} />
+              {wheelPrize && (
+                <p className="wheel__prize">
+                  {wheelPrize.coins > 0
+                    ? `+${fmt(wheelPrize.coins)} монет`
+                    : `+${wheelPrize.freeSpins} ${plural(
+                        wheelPrize.freeSpins,
+                        'бесплатное вращение',
+                        'бесплатных вращения',
+                        'бесплатных вращений',
+                      )}`}
+                </p>
+              )}
+              <button
+                className="btn btn--block rewards-cta"
+                disabled={!wheelReady || wheelBusy}
+                onClick={turnWheel}
+              >
+                {wheelBusy ? 'Крутится…' : wheelReady ? 'Крутить колесо' : `Через ${fmtLeft(wheelLeft)}`}
+              </button>
+              <p className="reward-block__hint">
+                Бесплатно раз в 4 часа. Сектор выбирается до вращения — колесо доезжает ровно до
+                него и никогда не «доворачивает» мимо.
+              </p>
+            </div>
+
+            {/* Цели дня */}
+            <div className="reward-block">
+              <div className="reward-block__head">
+                <span className="reward-block__title">Цели дня</span>
+                <span className="reward-block__meta">обновятся через {fmtLeft(tillMidnight)}</span>
+              </div>
+              <div className="missions">
+                {missions.map((m) => {
+                  const have = Math.min(counters[m.kind] ?? 0, m.goal);
+                  const done = have >= m.goal;
+                  const taken = claimedIds.includes(m.id);
+                  return (
+                    <div
+                      key={m.id}
+                      className={`mission${taken ? ' is-taken' : done ? ' is-done' : ''}`}
+                    >
+                      <div className="mission__top">
+                        <span className="mission__title">{m.title}</span>
+                        <span className="mission__reward">
+                          +{fmt(m.reward)}
+                          <CoinIcon size={13} />
+                        </span>
+                      </div>
+                      <div className="mission__bar">
+                        <i style={{ width: `${(have / m.goal) * 100}%` }} />
+                      </div>
+                      <div className="mission__foot">
+                        <span>
+                          {fmt(have)} / {fmt(m.goal)}
+                        </span>
+                        {taken ? (
+                          <span className="mission__ok">забрано</span>
+                        ) : done ? (
+                          <button className="mission__btn" onClick={() => takeMission(m.id)}>
+                            Забрать
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <p className="muted" style={{ margin: 0, fontSize: 12 }}>
+              Награды добавляют монет, но не трогают барабаны: шанс выигрыша всегда один и тот же.
+              Никаких подкрученных «почти выигрышей» и проигрышей под видом победы — только честный
+              ГСЧ и отдача около 93%.
+            </p>
+          </div>
+        </Sheet>
+      )}
+
+      {levelUp && (
+        <div className="levelup" data-skin={skin} onClick={() => setLevelUp(null)} role="presentation">
+          <div className="levelup__card">
+            <div className="levelup__lvl">Уровень {levelUp.level}</div>
+            <div className="levelup__gain">
+              +{fmt(levelUp.coins)}
+              <CoinIcon size={18} />
+              {levelUp.freeSpins > 0 && <span> · 🎟 {levelUp.freeSpins}</span>}
+            </div>
+            {levelUp.skin && (
+              <div className="levelup__skin">Открыт скин «{skinOf(levelUp.skin as SkinId).name}»</div>
+            )}
+          </div>
+        </div>
       )}
 
       {celebration && (

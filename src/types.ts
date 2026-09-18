@@ -845,4 +845,25 @@ export interface SlotsBlob {
   /** Звук автомата (Web Audio) и ускоренные вращения. */
   sound?: boolean;
   turbo?: boolean;
+  // --- прогрессия (lib/slots-meta) ---------------------------------------
+  /** Накопленный опыт: уровень считается из него. */
+  xp?: number;
+  /** Уровень, за который награда уже выдана — защита от повторной выдачи. */
+  rewardedLevel?: number;
+  /** День (YYYY-MM-DD) последнего ежедневного бонуса и длина серии. */
+  dailyAt?: string;
+  dailyStreak?: number;
+  /** Прогресс миссий текущего дня. */
+  missions?: SlotsMissions;
+  /** Когда последний раз крутили колесо удачи. */
+  wheelAt?: number;
+  /** Бесплатные вращения: спин не списывает ставку, выплата обычная. */
+  freeSpins?: number;
+}
+
+/** Счётчики дня для ежедневных миссий и уже забранные награды. */
+export interface SlotsMissions {
+  day: string;
+  counters: Record<string, number>;
+  claimed: string[];
 }

@@ -543,6 +543,23 @@ select {
   place-items: center;
   background: var(--tag-bg);
   color: var(--accent);
+  position: relative;
+}
+/* Счётчик готовых наград поверх иконки — зовёт заглянуть в раздел */
+.home-tile__dot {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--neg);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 17px;
+  text-align: center;
 }
 .home-tile__icon svg {
   width: 22px;
@@ -10526,7 +10543,9 @@ input[type='datetime-local'] {
    Слоты — настоящий автомат: неон, лампочки, стекло и рычаг.
    Монеты виртуальные, покупка не предусмотрена.
    =========================================================================== */
-.slots {
+.slots,
+.rewards,
+.levelup {
   --cell: 74px;
   /* Палитра по умолчанию (скин «Классика»); скины переопределяют её ниже. */
   --neon: #ffb459;
@@ -10553,6 +10572,8 @@ input[type='datetime-local'] {
 
 /* ---- Скины: символы берутся из public/slots/<id>, палитра — отсюда ------- */
 .slots[data-skin='asia'],
+.rewards[data-skin='asia'],
+.levelup[data-skin='asia'],
 .skin-card[data-skin='asia'] {
   --neon: #ffd24d;
   --neon-2: #ff5a4d;
@@ -10571,6 +10592,8 @@ input[type='datetime-local'] {
   --scene-2: #150204;
 }
 .slots[data-skin='space'],
+.rewards[data-skin='space'],
+.levelup[data-skin='space'],
 .skin-card[data-skin='space'] {
   --neon: #86b8ff;
   --neon-2: #c78bff;
@@ -10593,6 +10616,8 @@ input[type='datetime-local'] {
   --scene-2: #04050f;
 }
 .slots[data-skin='pirate'],
+.rewards[data-skin='pirate'],
+.levelup[data-skin='pirate'],
 .skin-card[data-skin='pirate'] {
   --neon: #57d6c4;
   --neon-2: #ffd166;
@@ -10615,6 +10640,8 @@ input[type='datetime-local'] {
   --scene-2: #03151a;
 }
 .slots[data-skin='egypt'],
+.rewards[data-skin='egypt'],
+.levelup[data-skin='egypt'],
 .skin-card[data-skin='egypt'] {
   --neon: #4fd0e0;
   --neon-2: #ffc94d;
@@ -10633,6 +10660,8 @@ input[type='datetime-local'] {
   --scene-2: #140f04;
 }
 .slots[data-skin='candy'],
+.rewards[data-skin='candy'],
+.levelup[data-skin='candy'],
 .skin-card[data-skin='candy'] {
   --neon: #ff8ad4;
   --neon-2: #7ee0ff;
@@ -10653,6 +10682,54 @@ input[type='datetime-local'] {
   --btn-fg: #4a0b2e;
   --scene-1: #45093a;
   --scene-2: #1a0316;
+}
+.slots[data-skin='neon'],
+.rewards[data-skin='neon'],
+.levelup[data-skin='neon'],
+.skin-card[data-skin='neon'] {
+  --neon: #ff2fb9;
+  --neon-2: #00e5ff;
+  --cab-1: #241048;
+  --cab-2: #0a0418;
+  --cab-3: #170a30;
+  --reel-hi: #f6efff;
+  --reel-mid: #ddd0f0;
+  --reel-lo: #9b86bd;
+  --bezel-1: #ffd6f4;
+  --bezel-2: #b04ce0;
+  --bezel-3: #5a1c7a;
+  --bezel-4: #7de7ff;
+  --btn-1: #ff9ae0;
+  --btn-2: #ff2fb9;
+  --btn-3: #9d4bff;
+  --btn-4: #4a1080;
+  --btn-fg: #1a0330;
+  --scene-1: #1b0b3a;
+  --scene-2: #05020f;
+}
+.slots[data-skin='winter'],
+.rewards[data-skin='winter'],
+.levelup[data-skin='winter'],
+.skin-card[data-skin='winter'] {
+  --neon: #8fd8ff;
+  --neon-2: #ffd76a;
+  --cab-1: #16406b;
+  --cab-2: #06111f;
+  --cab-3: #0d2743;
+  --reel-hi: #f7fcff;
+  --reel-mid: #dcedfa;
+  --reel-lo: #93b2c8;
+  --bezel-1: #eaf7ff;
+  --bezel-2: #8fb8d6;
+  --bezel-3: #3d6786;
+  --bezel-4: #cfe9ff;
+  --btn-1: #d6f0ff;
+  --btn-2: #7fc7ff;
+  --btn-3: #3f8ed0;
+  --btn-4: #1b4f80;
+  --btn-fg: #06243f;
+  --scene-1: #0b2c4d;
+  --scene-2: #030a14;
 }
 /* Свет за автоматом: отделяет корпус от фона страницы, как софит в зале */
 .slots::before {
@@ -11141,7 +11218,7 @@ input[type='datetime-local'] {
   bottom: 18px;
   width: 8px;
   border-radius: 4px;
-  background: linear-gradient(180deg, #0c0704, #241610);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cab-2) 70%, #000), var(--cab-3));
   box-shadow:
     inset 0 0 0 1px rgba(255, 190, 120, 0.22),
     inset 0 3px 6px rgba(0, 0, 0, 0.8);
@@ -11153,7 +11230,7 @@ input[type='datetime-local'] {
   width: 26px;
   height: 12px;
   border-radius: 8px;
-  background: linear-gradient(180deg, #4a2d1d, #1b100a);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cab-1) 88%, #fff), var(--cab-2));
   box-shadow:
     inset 0 1px 0 rgba(255, 210, 160, 0.35),
     0 3px 8px rgba(0, 0, 0, 0.5);
@@ -11627,7 +11704,7 @@ input[type='datetime-local'] {
   margin: 10px 4px 0;
   padding: 7px 12px;
   border-radius: 12px;
-  background: linear-gradient(180deg, #120b07, #2a1a12);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cab-2) 80%, #000), var(--cab-3));
   box-shadow:
     inset 0 2px 6px rgba(0, 0, 0, 0.7),
     0 1px 0 rgba(255, 210, 160, 0.14);
@@ -11637,7 +11714,7 @@ input[type='datetime-local'] {
   width: 58px;
   height: 7px;
   border-radius: 4px;
-  background: #060402;
+  background: color-mix(in srgb, var(--cab-2) 45%, #000);
   box-shadow:
     inset 0 1px 2px rgba(0, 0, 0, 0.9),
     0 1px 0 rgba(255, 210, 160, 0.22);
@@ -12073,6 +12150,47 @@ input[type='datetime-local'] {
     radial-gradient(ellipse 120% 26% at 50% 0%, rgba(255, 138, 212, 0.35), transparent 72%);
 }
 
+/* Неон: вывески ночного зала и сетка «синтвейв» у пола */
+.slots[data-skin='neon'] .slots-scene__decor {
+  background:
+    radial-gradient(circle 90px at 14% 16%, rgba(255, 47, 185, 0.25), transparent 70%),
+    radial-gradient(circle 80px at 86% 24%, rgba(0, 229, 255, 0.22), transparent 70%),
+    linear-gradient(180deg, transparent 64%, rgba(157, 75, 255, 0.18) 100%),
+    repeating-linear-gradient(0deg, rgba(0, 229, 255, 0.07) 0 1px, transparent 1px 30px),
+    repeating-linear-gradient(90deg, rgba(255, 47, 185, 0.07) 0 1px, transparent 1px 30px);
+  animation: neon-buzz 3.4s ease-in-out infinite;
+}
+@keyframes neon-buzz {
+  45% {
+    opacity: 0.82;
+  }
+  47% {
+    opacity: 1;
+  }
+}
+
+/* Зима: снегопад в два слоя и сугроб у нижнего края */
+.slots[data-skin='winter'] .slots-scene__decor {
+  background:
+    radial-gradient(circle 2px at 10% 12%, rgba(255, 255, 255, 0.9), transparent 60%),
+    radial-gradient(circle 1.6px at 26% 38%, rgba(255, 255, 255, 0.7), transparent 60%),
+    radial-gradient(circle 2.2px at 44% 20%, rgba(255, 255, 255, 0.85), transparent 60%),
+    radial-gradient(circle 1.5px at 62% 52%, rgba(255, 255, 255, 0.65), transparent 60%),
+    radial-gradient(circle 2px at 78% 28%, rgba(255, 255, 255, 0.8), transparent 60%),
+    radial-gradient(circle 1.7px at 92% 66%, rgba(255, 255, 255, 0.6), transparent 60%),
+    radial-gradient(circle 2px at 34% 78%, rgba(255, 255, 255, 0.7), transparent 60%),
+    radial-gradient(circle 1.6px at 70% 88%, rgba(255, 255, 255, 0.55), transparent 60%),
+    linear-gradient(180deg, transparent 72%, rgba(230, 245, 255, 0.16) 100%),
+    radial-gradient(ellipse 70% 26% at 50% 0%, rgba(143, 216, 255, 0.2), transparent 72%);
+  animation: snowfall 9s linear infinite;
+}
+@keyframes snowfall {
+  to {
+    background-position:
+      0 120px, 0 150px, 0 100px, 0 170px, 0 130px, 0 160px, 0 110px, 0 140px, 0 0, 0 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .slots-scene__decor,
   .slots[data-skin='asia'] .slots-scene__decor::before,
@@ -12086,4 +12204,416 @@ input[type='datetime-local'] {
   border-color: color-mix(in srgb, var(--neon) 45%, transparent);
   background: color-mix(in srgb, var(--cab-1) 60%, transparent);
   color: color-mix(in srgb, var(--neon) 55%, #fff);
+}
+
+/* =========================================================================
+   Прогрессия: полоса уровня, лист наград, лесенка, колесо и цели дня.
+   Всё в палитре текущего скина — награды выглядят частью того же зала.
+   ========================================================================= */
+
+/* ---- Полоса уровня на главном экране ----------------------------------- */
+.slot-level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--neon) 30%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--cab-1) 55%, transparent);
+  color: var(--reel-hi);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.slot-level:active {
+  transform: scale(0.99);
+}
+.slot-level__lvl {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--neon) 70%, #fff);
+  white-space: nowrap;
+}
+.slot-level__bar {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  min-width: 40px;
+  border-radius: 99px;
+  background: color-mix(in srgb, #000 45%, var(--cab-2));
+  overflow: hidden;
+}
+.slot-level__bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--neon-2), var(--neon));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--neon) 60%, transparent);
+  transition: width 0.5s ease;
+}
+.slot-level__free {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bezel-1);
+  white-space: nowrap;
+}
+.slot-level__gift {
+  position: relative;
+  display: inline-flex;
+  color: color-mix(in srgb, var(--neon) 75%, #fff);
+}
+.slot-level__badge {
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--neg, #e5484d);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  animation: badge-pop 1.8s ease-in-out infinite;
+}
+@keyframes badge-pop {
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+/* Главный призыв «забрать» — та же кнопка, что и внутри листа наград */
+.rewards-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  background: linear-gradient(180deg, var(--btn-1), var(--btn-2) 45%, var(--btn-3));
+  color: var(--btn-fg);
+  font-weight: 800;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--btn-3) 40%, transparent);
+}
+.rewards-cta:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+/* ---- Лист наград -------------------------------------------------------- */
+.reward-block {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--neon) 22%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--cab-1) 30%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.reward-block__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.reward-block__title {
+  font-size: 15px;
+  font-weight: 800;
+}
+.reward-block__meta {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.reward-block__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0.66;
+}
+.reward-block__warn {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--neg, #e5484d) 70%, #fff);
+}
+.xpbar {
+  position: relative;
+  height: 10px;
+  border-radius: 99px;
+  background: color-mix(in srgb, #000 40%, var(--cab-2));
+  overflow: hidden;
+}
+.xpbar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--neon-2), var(--neon));
+  transition: width 0.5s ease;
+}
+
+/* ---- Недельная лесенка -------------------------------------------------- */
+.ladder {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+.ladder__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 2px;
+  border: 1px solid color-mix(in srgb, var(--neon) 16%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, #000 30%, transparent);
+  opacity: 0.55;
+}
+.ladder__day.is-done {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--neon) 45%, transparent);
+  background: color-mix(in srgb, var(--neon) 14%, transparent);
+}
+.ladder__day.is-next {
+  opacity: 1;
+  border-color: var(--bezel-2);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--btn-1) 30%, transparent), transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bezel-1) 45%, transparent);
+  animation: badge-pop 1.8s ease-in-out infinite;
+}
+.ladder__num {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.65;
+}
+.ladder__sum {
+  font-size: 11px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--bezel-1) 80%, #fff);
+}
+
+/* ---- Колесо удачи ------------------------------------------------------- */
+.wheel {
+  position: relative;
+  width: min(260px, 74vw);
+  margin: 2px auto 0;
+  aspect-ratio: 1;
+}
+.wheel__disc {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.45));
+}
+.wheel__rim {
+  fill: none;
+  stroke: var(--bezel-2);
+  stroke-width: 4;
+}
+.wheel__sec {
+  fill: color-mix(in srgb, var(--btn-4) 72%, #000);
+  stroke: color-mix(in srgb, var(--bezel-1) 30%, transparent);
+  stroke-width: 0.6;
+}
+.wheel__sec.is-alt {
+  fill: color-mix(in srgb, var(--neon-2) 30%, var(--cab-2));
+}
+.wheel__sec.is-top {
+  fill: color-mix(in srgb, var(--neon) 55%, var(--btn-3));
+}
+.wheel__label.is-small {
+  font-size: 4.4px;
+}
+.wheel__label {
+  fill: var(--reel-hi);
+  font-size: 5.6px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 1.2;
+}
+.wheel__hub {
+  fill: var(--bezel-2);
+  stroke: var(--bezel-1);
+  stroke-width: 1.5;
+}
+.wheel__pin {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 16px solid var(--bezel-1);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+}
+.wheel__prize {
+  margin: 0;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--bezel-1) 85%, #fff);
+  animation: prize-in 0.4s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+@keyframes prize-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+
+/* ---- Цели дня ----------------------------------------------------------- */
+.missions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mission {
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--neon) 16%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, #000 24%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mission.is-done {
+  border-color: color-mix(in srgb, var(--bezel-2) 65%, transparent);
+  background: color-mix(in srgb, var(--neon) 10%, transparent);
+}
+.mission.is-taken {
+  opacity: 0.5;
+}
+.mission__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mission__title {
+  font-size: 13px;
+  font-weight: 700;
+}
+.mission__reward {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--bezel-1) 80%, #fff);
+  white-space: nowrap;
+}
+.mission__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, #000 45%, var(--cab-2));
+  overflow: hidden;
+}
+.mission__bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--neon-2), var(--neon));
+  transition: width 0.4s ease;
+}
+.mission__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+.mission__ok {
+  font-weight: 700;
+}
+.mission__btn {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 99px;
+  background: linear-gradient(180deg, var(--btn-1), var(--btn-3));
+  color: var(--btn-fg);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* ---- Заблокированные скины --------------------------------------------- */
+.skin-card.is-locked {
+  opacity: 0.55;
+  cursor: default;
+}
+.skin-card__lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* ---- Плашка нового уровня ---------------------------------------------- */
+.levelup {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 150px);
+  /* Плашка не должна перехватывать тапы по «Крутить» во время автоспина */
+  pointer-events: none;
+  background: transparent;
+}
+.levelup__card {
+  pointer-events: auto;
+  padding: 14px 22px;
+  border: 1px solid color-mix(in srgb, var(--bezel-1) 45%, transparent);
+  border-radius: 18px;
+  text-align: center;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cab-1) 96%, #000), var(--cab-2));
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  animation: levelup-in 0.45s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+@keyframes levelup-in {
+  from {
+    opacity: 0;
+    transform: translateY(-24px) scale(0.9);
+  }
+}
+.levelup__lvl {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--neon) 75%, #fff);
+}
+.levelup__gain {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--bezel-1);
+}
+.levelup__skin {
+  margin-top: 5px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slot-level__badge,
+  .ladder__day.is-next {
+    animation: none;
+  }
 }

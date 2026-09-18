@@ -275,3 +275,11 @@ export const IconLock = ({ open = false, ...p }: IconProps & { open?: boolean })
     <path d={open ? 'M8 11V7a4 4 0 0 1 7-1.6' : 'M8 11V7a4 4 0 0 1 8 0v4'} />
   </svg>
 );
+
+export const IconGift = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="9" width="18" height="12" rx="2" />
+    <path d="M3 13h18M12 9v12" />
+    <path d="M12 9S9.5 9 8.3 7.8A2 2 0 0 1 11 5c1 .7 1 4 1 4zM12 9s2.5 0 3.7-1.2A2 2 0 0 0 13 5c-1 .7-1 4-1 4z" />
+  </svg>
+);

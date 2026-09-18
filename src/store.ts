@@ -47,6 +47,7 @@ import type {
   SizeEntry,
   SlotSpin,
   SlotsBlob,
+  SlotsMissions,
   WardrobeCollectionsBlob,
   WardrobeFittingBlob,
   WardrobeInspirationBlob,
@@ -86,7 +87,32 @@ import {
   START_BALANCE,
 } from '@/lib/slots';
 import type { SpinResult } from '@/lib/slots';
+import {
+  BIG_BET,
+  EMPTY_COUNTERS,
+  WHEEL,
+  WHEEL_COOLDOWN_MS,
+  dailyMissions,
+  dailyStatus,
+  dayKey,
+  levelFromXp,
+  levelReward,
+  missionDone,
+  spinWheel,
+  xpForSpin,
+} from '@/lib/slots-meta';
+import type { MissionCounters } from '@/lib/slots-meta';
 import { genId } from '@/lib/id';
+
+/** Результат спина + всё, что странице нужно показать сверху. */
+export interface SlotsSpinOutcome extends SpinResult {
+  /** Сколько сорвано из копилки джекпота. */
+  jackpotWin: number;
+  /** Спин был бесплатным — ставка не списывалась. */
+  freeSpin: boolean;
+  /** Уровни, взятые этим спином (награды уже начислены). */
+  levelUps: number[];
+}
 import { normalizeNoteTitle } from '@/lib/notes-graph';
 import { deriveFromMessages, makeMessage, materializeMessages } from '@/lib/notes-messages';
 import type { MessageExtra } from '@/lib/notes-messages';
@@ -236,7 +262,8 @@ const persistCamera = (s: {
     prompter: s.prompterPrefs,
   });
 
-const persistSlots = (s: {
+/** Всё, что относится к слотам, — один снимок состояния для записи и экспорта. */
+interface SlotsSnapshot {
   slotsBalance: number;
   slotsBet: number;
   slotsSpins: number;
@@ -247,20 +274,59 @@ const persistSlots = (s: {
   slotsSkin: SkinId;
   slotsSound: boolean;
   slotsTurbo: boolean;
-}) =>
-  writeSlots({
-    version: 1,
-    balance: s.slotsBalance,
-    bet: s.slotsBet,
-    spins: s.slotsSpins,
-    best: s.slotsBest,
-    lastBonusAt: s.slotsBonusAt,
-    history: s.slotsHistory,
-    jackpot: s.slotsJackpot,
-    skin: s.slotsSkin,
-    sound: s.slotsSound,
-    turbo: s.slotsTurbo,
-  });
+  slotsXp: number;
+  slotsRewardedLevel: number;
+  slotsDailyAt?: string;
+  slotsStreak: number;
+  slotsMissions: SlotsMissions;
+  slotsWheelAt?: number;
+  slotsFreeSpins: number;
+}
+
+const slotsBlob = (s: SlotsSnapshot): SlotsBlob => ({
+  version: 1,
+  balance: s.slotsBalance,
+  bet: s.slotsBet,
+  spins: s.slotsSpins,
+  best: s.slotsBest,
+  lastBonusAt: s.slotsBonusAt,
+  history: s.slotsHistory,
+  jackpot: s.slotsJackpot,
+  skin: s.slotsSkin,
+  sound: s.slotsSound,
+  turbo: s.slotsTurbo,
+  xp: s.slotsXp,
+  rewardedLevel: s.slotsRewardedLevel,
+  dailyAt: s.slotsDailyAt,
+  dailyStreak: s.slotsStreak,
+  missions: s.slotsMissions,
+  wheelAt: s.slotsWheelAt,
+  freeSpins: s.slotsFreeSpins,
+});
+
+const persistSlots = (s: SlotsSnapshot) => writeSlots(slotsBlob(s));
+
+/** Пустой прогресс миссий на сегодня. */
+const freshMissions = (day = dayKey()): SlotsMissions => ({
+  day,
+  counters: { ...EMPTY_COUNTERS },
+  claimed: [],
+});
+
+/** Счётчики дня: если наступил новый день, начинаем с нуля. */
+const missionsForToday = (m: SlotsMissions | undefined, day = dayKey()): SlotsMissions =>
+  m && m.day === day ? m : freshMissions(day);
+
+/** Читаем прогрессию из сохранённого блоба (со всеми умолчаниями). */
+const slotsProgress = (blob?: Partial<SlotsBlob> | null) => ({
+  slotsXp: blob?.xp ?? 0,
+  slotsRewardedLevel: blob?.rewardedLevel ?? 1,
+  slotsDailyAt: blob?.dailyAt,
+  slotsStreak: blob?.dailyStreak ?? 0,
+  slotsMissions: missionsForToday(blob?.missions),
+  slotsWheelAt: blob?.wheelAt,
+  slotsFreeSpins: blob?.freeSpins ?? 0,
+});
 
 // ---- Full data export / import (user-controlled backup) -------------------
 interface ExportData {
@@ -339,6 +405,13 @@ interface FinanceState {
   slotsSkin: SkinId;
   slotsSound: boolean;
   slotsTurbo: boolean;
+  slotsXp: number;
+  slotsRewardedLevel: number;
+  slotsDailyAt?: string;
+  slotsStreak: number;
+  slotsMissions: SlotsMissions;
+  slotsWheelAt?: number;
+  slotsFreeSpins: number;
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -500,8 +573,14 @@ interface FinanceState {
   setPrompterPrefs: (patch: Partial<PrompterPrefs>) => void;
 
   setSlotsBet: (bet: number) => void;
-  playSlots: () => (SpinResult & { jackpotWin: number }) | null;
+  playSlots: () => SlotsSpinOutcome | null;
   claimSlotsBonus: (amount: number) => void;
+  /** Ежедневная лесенка: возвращает начисленное и новую длину серии. */
+  claimSlotsDaily: () => { reward: number; streak: number } | null;
+  /** Забрать награду за выполненную миссию дня. */
+  claimSlotsMission: (id: string) => number;
+  /** Крутнуть колесо: возвращает индекс сектора или null, если рано. */
+  spinSlotsWheel: () => { index: number; coins: number; freeSpins: number } | null;
   setSlotsPrefs: (patch: { sound?: boolean; turbo?: boolean; skin?: SkinId }) => void;
 
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
@@ -561,6 +640,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   slotsSkin: 'classic',
   slotsSound: true,
   slotsTurbo: false,
+  slotsXp: 0,
+  slotsRewardedLevel: 1,
+  slotsStreak: 0,
+  slotsMissions: freshMissions(),
+  slotsFreeSpins: 0,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -651,6 +735,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsSkin: (slots?.skin as SkinId) ?? 'classic',
       slotsSound: slots?.sound ?? true,
       slotsTurbo: slots?.turbo ?? false,
+      ...slotsProgress(slots),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -1497,18 +1582,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         cameraShots: s.cameraShots,
         cameraScripts: s.cameraScripts,
         prompterPrefs: s.prompterPrefs,
-        slots: {
-          balance: s.slotsBalance,
-          bet: s.slotsBet,
-          spins: s.slotsSpins,
-          best: s.slotsBest,
-          lastBonusAt: s.slotsBonusAt,
-          history: s.slotsHistory,
-          jackpot: s.slotsJackpot,
-          skin: s.slotsSkin,
-          sound: s.slotsSound,
-          turbo: s.slotsTurbo,
-        },
+        slots: slotsBlob(s),
         reminderPrefs: s.reminderPrefs,
       },
     };
@@ -1561,6 +1635,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsSkin: (d.slots?.skin as SkinId) ?? 'classic',
       slotsSound: d.slots?.sound ?? true,
       slotsTurbo: d.slots?.turbo ?? false,
+      ...slotsProgress(d.slots),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -1818,9 +1893,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   // Один спин: списываем ставку, крутим поле 3×3, начисляем выигрыш по линиям.
   // Вся математика живёт в lib/slots (и покрыта тестами) — стор ведёт счёт.
+  // Здесь же капает опыт и двигаются счётчики дневных миссий: прогрессия ничего
+  // не подкручивает, она просто считает то, что уже выпало.
   playSlots: () => {
     const s = get();
-    if (s.slotsBalance < s.slotsBet) return null;
+    const free = s.slotsFreeSpins > 0;
+    if (!free && s.slotsBalance < s.slotsBet) return null;
     const result = evaluateGrid(spinGrid(), s.slotsBet);
     // Часть ставки уходит в копилку джекпота; три семёрки забирают её целиком.
     const grown = s.slotsJackpot + Math.round(s.slotsBet * JACKPOT_RATE);
@@ -1834,12 +1912,40 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       payout: total,
       at: Date.now(),
     };
+
+    // Миссии дня: счётчики живут ровно сутки и сбрасываются вместе с датой.
+    const missions = missionsForToday(s.slotsMissions);
+    const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
+    counters.spins += 1;
+    if (total > 0) counters.wins += 1;
+    if (result.wins.some((w) => w.count === 3)) counters.triple += 1;
+    counters.coins += total;
+    if (s.slotsBet >= BIG_BET) counters.bigbet += 1;
+
+    // Опыт и, если хватило, уровни. Награда за уровень выдаётся сразу.
+    const before = levelFromXp(s.slotsXp).level;
+    const xp = s.slotsXp + xpForSpin(total, s.slotsBet, result.kind);
+    const after = levelFromXp(xp).level;
+    const levelUps: number[] = [];
+    let bonusCoins = 0;
+    let bonusSpins = 0;
+    for (let lvl = Math.max(before, s.slotsRewardedLevel) + 1; lvl <= after; lvl++) {
+      const reward = levelReward(lvl);
+      bonusCoins += reward.coins;
+      bonusSpins += reward.freeSpins;
+      levelUps.push(lvl);
+    }
+
     set({
-      slotsBalance: s.slotsBalance - s.slotsBet + total,
+      slotsBalance: s.slotsBalance - (free ? 0 : s.slotsBet) + total + bonusCoins,
+      slotsFreeSpins: Math.max(0, s.slotsFreeSpins - (free ? 1 : 0)) + bonusSpins,
       slotsSpins: s.slotsSpins + 1,
       slotsBest: Math.max(s.slotsBest, total),
       slotsHistory: [entry, ...s.slotsHistory].slice(0, 12),
       slotsJackpot: jackpotWin ? JACKPOT_BASE : grown,
+      slotsXp: xp,
+      slotsRewardedLevel: Math.max(s.slotsRewardedLevel, after),
+      slotsMissions: { ...missions, counters },
     });
     persistSlots(get());
     return {
@@ -1847,12 +1953,59 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       total,
       multiplier: s.slotsBet > 0 ? total / s.slotsBet : 0,
       jackpotWin,
+      freeSpin: free,
+      levelUps,
     };
   },
 
   claimSlotsBonus: (amount) => {
     set({ slotsBalance: get().slotsBalance + amount, slotsBonusAt: Date.now() });
     persistSlots(get());
+  },
+
+  claimSlotsDaily: () => {
+    const s = get();
+    const today = dayKey();
+    const status = dailyStatus({ streak: s.slotsStreak, lastClaim: s.slotsDailyAt }, today);
+    if (!status.ready) return null;
+    set({
+      slotsBalance: s.slotsBalance + status.reward,
+      slotsDailyAt: today,
+      slotsStreak: status.nextStreak,
+    });
+    persistSlots(get());
+    return { reward: status.reward, streak: status.nextStreak };
+  },
+
+  claimSlotsMission: (id) => {
+    const s = get();
+    const today = dayKey();
+    const missions = missionsForToday(s.slotsMissions, today);
+    const mission = dailyMissions(today).find((m) => m.id === id);
+    if (!mission || missions.claimed.includes(id)) return 0;
+    const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
+    if (!missionDone(mission, counters)) return 0;
+    set({
+      slotsBalance: s.slotsBalance + mission.reward,
+      slotsMissions: { ...missions, counters, claimed: [...missions.claimed, id] },
+    });
+    persistSlots(get());
+    return mission.reward;
+  },
+
+  spinSlotsWheel: () => {
+    const s = get();
+    const now = Date.now();
+    if (s.slotsWheelAt && now - s.slotsWheelAt < WHEEL_COOLDOWN_MS) return null;
+    const index = spinWheel();
+    const sector = WHEEL[index];
+    set({
+      slotsBalance: s.slotsBalance + sector.coins,
+      slotsFreeSpins: s.slotsFreeSpins + sector.freeSpins,
+      slotsWheelAt: now,
+    });
+    persistSlots(get());
+    return { index, coins: sector.coins, freeSpins: sector.freeSpins };
   },
 
   setSlotsPrefs: (patch) => {
