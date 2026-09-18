@@ -826,6 +826,8 @@ export interface SlotSpin {
   bet: number;
   payout: number;
   at: number;
+  /** Длина каскадной цепочки: 2 и больше — это комбо. */
+  combo?: number;
 }
 
 export interface SlotsBlob {

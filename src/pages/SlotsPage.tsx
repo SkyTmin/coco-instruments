@@ -26,7 +26,9 @@ import type { WheelSector } from '@/lib/slots-meta';
 import {
   BETS,
   BONUS_COOLDOWN_MS,
+  COMBO_LADDER,
   hasAnticipation,
+  LINE_UNIT,
   lineBet,
   outcomeLabel,
   PAYLINES,
@@ -36,12 +38,13 @@ import {
   SLOT_SYMBOLS,
   symbolOf,
 } from '@/lib/slots';
-import type { SlotGrid, SlotSymbolId, SpinResult } from '@/lib/slots';
+import type { LineWin, SlotGrid, SlotSymbolId, SpinResult } from '@/lib/slots';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import {
   anticipation as antiSound,
   coinDing,
+  comboHit,
   counterTick,
   jackpotFanfare,
   leverPull,
@@ -49,6 +52,7 @@ import {
   reelStop,
   reelTick,
   setMuted,
+  symbolBurst,
   winChime,
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
@@ -69,6 +73,13 @@ const AUTO_OPTIONS: { value: number; label: string; hint: string }[] = [
   { value: 50, label: '50', hint: 'пятьдесят' },
   { value: Infinity, label: '∞', hint: 'пока не кончатся монеты' },
 ];
+/** Каскад: показать выигрыш → взорвать символы → уронить новые. */
+const SHOW_MS = 780;
+const BURST_MS = 280;
+const DROP_MS = 420;
+/** Сдвиг падения по колонкам — столбцы приземляются не разом. */
+const DROP_STAGGER = 70;
+
 /** Один сектор колеса удачи в градусах. */
 const SECTOR = 360 / WHEEL.length;
 /** Сколько крутится колесо до остановки. */
@@ -91,6 +102,23 @@ function makeStrip(from: SlotSymbolId[], to: SlotSymbolId[]): SlotSymbolId[] {
 
 const startGrid = (): SlotGrid => [randomColumn(), randomColumn(), randomColumn()];
 
+/**
+ * Лента для каскада: сверху новое поле, снизу текущее. Барабан едет вниз —
+ * старые символы уходят за нижний край, новые приходят сверху.
+ */
+function makeDropStrip(from: SlotSymbolId[], to: SlotSymbolId[]): SlotSymbolId[] {
+  return [...to, ...from];
+}
+
+/** Ступень эффектов по длине цепочки — чем длиннее комбо, тем громче праздник. */
+function comboTier(chain: number): number {
+  if (chain >= 5) return 4;
+  if (chain >= 4) return 3;
+  if (chain >= 3) return 2;
+  if (chain >= 2) return 1;
+  return 0;
+}
+
 /** Символ выбранного скина. Картинка одна и та же на любом телефоне. */
 function Sym({ id, skin, size = 58 }: { id: SlotSymbolId; skin: SkinId; size?: number }) {
   return (
@@ -105,17 +133,24 @@ function Sym({ id, skin, size = 58 }: { id: SlotSymbolId; skin: SkinId; size?: n
   );
 }
 
+/**
+ * Барабан. Два режима:
+ * - `spin` — лента едет вверх, символы приходят снизу (обычное вращение);
+ * - `drop` — лента едет вниз, символы падают сверху (каскад после схлопывания).
+ */
 function Reel({
   strip,
   skin,
   spinId,
   duration,
+  mode = 'spin',
   onStop,
 }: {
   strip: SlotSymbolId[];
   skin: SkinId;
   spinId: number;
   duration: number;
+  mode?: 'spin' | 'drop';
   onStop: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -125,26 +160,31 @@ function Reel({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || spinId === 0) return;
-    const distance = (strip.length - ROWS - 1) * CELL;
+    const drop = mode === 'drop';
+    // spin: 0 → -(лента минус окно и хвост); drop: -окно → 0.
+    const from = drop ? -ROWS * CELL : 0;
+    const to = drop ? 0 : -(strip.length - ROWS - 1) * CELL;
     if (reduceMotion()) {
       el.style.transition = 'none';
-      el.style.transform = `translateY(-${distance}px)`;
+      el.style.transform = `translateY(${to}px)`;
       stopRef.current();
       return;
     }
     el.style.transition = 'none';
-    el.style.transform = 'translateY(0)';
-    el.classList.add('is-blur');
+    el.style.transform = `translateY(${from}px)`;
+    if (!drop) el.classList.add('is-blur');
     void el.offsetHeight; // reflow, иначе браузер склеит оба присваивания
-    // Небольшой «перелёт» в конце — барабан отскакивает, как механический.
-    el.style.transition = `transform ${duration}ms cubic-bezier(.18,.76,.24,1.06)`;
-    el.style.transform = `translateY(-${distance}px)`;
+    // Вращение с «перелётом», падение — с мягким приземлением.
+    el.style.transition = `transform ${duration}ms ${
+      drop ? 'cubic-bezier(.34,1.42,.5,1)' : 'cubic-bezier(.18,.76,.24,1.06)'
+    }`;
+    el.style.transform = `translateY(${to}px)`;
     const t = setTimeout(() => {
       el.classList.remove('is-blur');
       stopRef.current();
     }, duration);
     return () => clearTimeout(t);
-  }, [spinId, strip, duration]);
+  }, [spinId, strip, duration, mode]);
 
   return (
     <div className="reel">
@@ -289,8 +329,17 @@ export function SlotsPage() {
   const [spinId, setSpinId] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [durations, setDurations] = useState([BASE_MS, BASE_MS, BASE_MS]);
+  const [reelMode, setReelMode] = useState<'spin' | 'drop'>('spin');
   const [stopped, setStopped] = useState(3);
-  const [result, setResult] = useState<SpinResult | null>(null);
+  const [result, setResult] = useState<SlotsSpinOutcome | null>(null);
+  // Каскад: какое звено сейчас на экране и в какой фазе.
+  const [cascade, setCascade] = useState<{ step: number; phase: 'show' | 'burst' | 'drop' } | null>(
+    null,
+  );
+  const [stepWins, setStepWins] = useState<LineWin[]>([]);
+  const [stepCombo, setStepCombo] = useState(1);
+  const [chain, setChain] = useState(0);
+  const [runWin, setRunWin] = useState(0);
   const [pending, setPending] = useState(0);
   const [auto, setAuto] = useState(0);
   const [autoSheet, setAutoSheet] = useState(false);
@@ -408,6 +457,78 @@ export function SlotsPage() {
     return () => clearTimeout(t);
   }, [levelUp]);
 
+  // Каскад по звеньям: показать выигрыш → взорвать символы → уронить новые.
+  // Порядок и суммы уже посчитаны в lib/slots — страница только проигрывает.
+  const stepRef = useRef<(res: SlotsSpinOutcome, i: number) => void>(() => {});
+
+  const runStep = useCallback(
+    (res: SlotsSpinOutcome, i: number) => {
+      const step = res.steps[i];
+      const scale = turbo ? 0.55 : 1;
+      const show = SHOW_MS * scale;
+      const burst = BURST_MS * scale;
+      const drop = DROP_MS * scale;
+      const stagger = DROP_STAGGER * scale;
+      const chainN = i + 1;
+      const tier = comboTier(chainN);
+
+      setCascade({ step: i, phase: 'show' });
+      setStepWins(step.wins);
+      setStepCombo(step.combo);
+      setChain(chainN);
+      setRunWin((w) => w + step.payout);
+      setPending((p) => Math.max(0, p - step.payout));
+
+      // Эффекты растут ступенями: звук выше, тряска и конфетти — только на длинных.
+      comboHit(chainN);
+      if (tier === 0) tapLight();
+      else if (tier === 1) selectionChanged();
+      else if (tier === 2) {
+        tapMedium();
+        burstConfetti(28, theme.confetti);
+      } else {
+        notifySuccess();
+        burstConfetti(tier >= 4 ? 90 : 55, theme.confetti);
+        rainCoins(tier >= 4 ? 22 : 12, rainSrc);
+        setShake(true);
+      }
+
+      timers.current.push(
+        setTimeout(() => {
+          setCascade({ step: i, phase: 'burst' });
+          symbolBurst();
+        }, show),
+      );
+
+      timers.current.push(
+        setTimeout(() => {
+          setStrips(step.next.map((col, c) => makeDropStrip(step.grid[c], col)));
+          setDurations([0, 1, 2].map((c) => drop + c * stagger));
+          setReelMode('drop');
+          setCascade({ step: i, phase: 'drop' });
+          setStepWins([]);
+          setSpinId((n) => n + 1);
+        }, show + burst),
+      );
+
+      timers.current.push(
+        setTimeout(
+          () => {
+            if (i + 1 < res.steps.length) stepRef.current(res, i + 1);
+            else {
+              setCascade(null);
+              setChain(0);
+              finish(res);
+            }
+          },
+          show + burst + drop + stagger * 2 + 80,
+        ),
+      );
+    },
+    [turbo, theme.confetti, rainSrc, finish],
+  );
+  stepRef.current = runStep;
+
   const spin = useCallback(() => {
     if (!hydrated || spinning || (freeSpins <= 0 && balance < bet)) return;
     primeAudio();
@@ -429,12 +550,17 @@ export function SlotsPage() {
 
     setStrips(next);
     setDurations(durs);
+    setReelMode('spin');
     setStopped(0);
     setResult(null);
     setShake(false);
     setCelebration(null);
     setJackpotWin(0);
     setPending(res.total);
+    setCascade(null);
+    setStepWins([]);
+    setChain(0);
+    setRunWin(0);
     setSpinId((n) => n + 1);
     setSpinning(true);
 
@@ -445,7 +571,13 @@ export function SlotsPage() {
       if (drama) timers.current.push(setTimeout(() => antiSound(), durs[1]));
     }
 
-    timers.current.push(setTimeout(() => finish(res), durs[2] + 40));
+    timers.current.push(
+      setTimeout(() => {
+        if (tickRef.current) clearInterval(tickRef.current);
+        if (res.steps.length) stepRef.current(res, 0);
+        else finish(res);
+      }, durs[2] + 40),
+    );
   }, [hydrated, spinning, balance, bet, freeSpins, playSlots, strips, turbo, finish]);
 
   // Баннер крупного выигрыша живёт ~4 секунды: вспышка → лучи → счёт с тиканьем.
@@ -481,7 +613,9 @@ export function SlotsPage() {
   const onReelStop = (index: number) => {
     setStopped((n) => Math.max(n, index + 1));
     reelStop(index);
-    selectionChanged();
+    // На падениях каскада вибрация не нужна: за такт их три, телефон трясло бы
+    // без остановки. Тактильный отклик даёт само звено комбо.
+    if (reelMode === 'spin') selectionChanged();
   };
 
   const takeBonus = (amount: number) => {
@@ -606,9 +740,13 @@ export function SlotsPage() {
   }, [spin]);
 
   const shownBalance = Math.max(0, balance - pending);
-  const winCells = new Set(
-    (result?.wins ?? []).flatMap((w) => w.cells.map(([c, r]) => `${c}-${r}`)),
-  );
+  // Подсветка живёт только на фазе показа звена: после схлопывания этих
+  // символов на поле уже нет, и рисовать по ним линии было бы враньём.
+  const marking = cascade?.phase === 'show' || cascade?.phase === 'burst';
+  const shownWins = marking ? stepWins : [];
+  const winCells = new Set(shownWins.flatMap((w) => w.cells.map(([c, r]) => `${c}-${r}`)));
+  const bursting = cascade?.phase === 'burst';
+  const tier = comboTier(chain);
 
   return (
     <Screen
@@ -718,20 +856,19 @@ export function SlotsPage() {
                     skin={skin}
                     spinId={spinId}
                     duration={durations[i]}
+                    mode={reelMode}
                     onStop={() => onReelStop(i)}
                   />
                 ))}
-                {!spinning && result && result.wins.length > 0 && (
-                  <div className="reels__dim" aria-hidden="true" />
-                )}
-                {!spinning && result && result.wins.length > 0 && (
+                {shownWins.length > 0 && <div className="reels__dim" aria-hidden="true" />}
+                {shownWins.length > 0 && (
                   <div className="reels__marks" aria-hidden="true">
                     {[0, 1, 2].map((col) =>
                       [0, 1, 2].map((row) =>
                         winCells.has(`${col}-${row}`) ? (
                           <span
                             key={`${col}-${row}`}
-                            className="reels__mark"
+                            className={`reels__mark${bursting ? ' is-burst' : ''}`}
                             style={{
                               left: `calc(${col} * (100% / 3))`,
                               top: `calc(${row} * (100% / 3))`,
@@ -742,9 +879,16 @@ export function SlotsPage() {
                     )}
                   </div>
                 )}
-                {!spinning && result && <PaylineOverlay wins={result.wins} />}
+                {shownWins.length > 0 && <PaylineOverlay wins={shownWins} />}
                 <div className="reels__glass" aria-hidden="true" />
               </div>
+              {/* Счётчик комбо — над окном, чтобы не закрывать сыгравший ряд */}
+              {chain >= 2 && cascade && (
+                <div className={`combo combo--t${tier}`} key={chain}>
+                  <b>КОМБО ×{chain}</b>
+                  <i>×{stepCombo}</i>
+                </div>
+              )}
             </div>
 
             {/* Рычаг */}
@@ -779,7 +923,18 @@ export function SlotsPage() {
           </div>
 
           <div className="cabinet__status">
-            {spinning ? (
+            {cascade ? (
+              <>
+                <span className={`status status--combo status--t${tier}`}>
+                  {chain >= 2 ? `Комбо ×${chain}!` : 'Есть выигрыш!'}
+                </span>
+                <span className="status__win">
+                  +<AnimatedNumber value={runWin} format={(n) => fmt(n)} duration={400} />
+                  <CoinIcon size={20} />
+                </span>
+                {stepCombo > 1 && <span className="status__mult">выплата ×{stepCombo}</span>}
+              </>
+            ) : spinning ? (
               <span className="status status--spin">
                 {stopped === 2 ? 'Последний барабан…' : 'Крутится…'}
               </span>
@@ -789,7 +944,7 @@ export function SlotsPage() {
                   {outcomeLabel(result).symbol && (
                     <Sym id={outcomeLabel(result).symbol!} skin={skin} size={22} />
                   )}
-                  {outcomeLabel(result).text}
+                  {result.combo >= 2 ? `комбо из ${result.combo} звеньев!` : outcomeLabel(result).text}
                 </span>
                 {result.total > 0 && (
                   <span className={`status__win${result.kind === 'jackpot' ? ' is-jackpot' : ''}`}>
@@ -839,9 +994,13 @@ export function SlotsPage() {
               ? auto === Infinity
                 ? 'Стоп · ∞'
                 : `Стоп (${auto})`
-              : spinning
-                ? 'Крутится…'
-                : broke
+              : cascade
+                ? chain >= 2
+                  ? `Комбо ×${chain}…`
+                  : 'Каскад…'
+                : spinning
+                  ? 'Крутится…'
+                  : broke
                   ? 'Монеты кончились'
                   : freeSpins > 0
                     ? `Бесплатно · ${freeSpins}`
@@ -941,9 +1100,26 @@ export function SlotsPage() {
         <Sheet title="Выплаты и линии" onClose={() => setSheet(false)}>
           <div className="stack">
             <p className="muted" style={{ margin: 0 }}>
-              Ставка делится между пятью линиями (по {fmt(lineBet(bet))} монет). Линия платит слева
-              направо: три одинаковых — главный выигрыш, два первых — небольшой возврат.
+              Пять линий, каждая платит слева направо: три одинаковых — главный выигрыш, два
+              первых — небольшой возврат. Множитель из таблицы умножается на ставку ÷ {LINE_UNIT} —
+              при ставке {fmt(bet)} это {fmt(lineBet(bet))}.
             </p>
+            {/* Каскады — главная механика: объясняем её до таблицы выплат */}
+            <div className="combo-rules">
+              <div className="combo-rules__title">Каскады и комбо</div>
+              <p className="combo-rules__text">
+                Сыгравшие символы исчезают, оставшиеся падают вниз, сверху приходят новые — и поле
+                считается заново. Пока выпадают выигрыши, цепочка продолжается, а множитель растёт:
+              </p>
+              <div className="combo-rules__ladder">
+                {COMBO_LADDER.map((m, i) => (
+                  <span key={i} className="combo-rules__step">
+                    <b>{i + 1 === COMBO_LADDER.length ? `${i + 1}+` : i + 1}</b>
+                    <i>×{m}</i>
+                  </span>
+                ))}
+              </div>
+            </div>
             <div className="paytable">
               {[...SLOT_SYMBOLS].reverse().map((s) => (
                 <div className="paytable__row" key={s.id}>
@@ -980,8 +1156,9 @@ export function SlotsPage() {
               ))}
             </div>
             <p className="muted" style={{ margin: 0 }}>
-              Монеты виртуальные: купить их нельзя, пополняются ежедневным бонусом. Отдача
-              автомата — около 93%.
+              Монеты виртуальные: купить их нельзя, пополняются ежедневным бонусом. Отдача автомата
+              с учётом каскадов — около 91%, и она не меняется ни от ставки, ни от серии: каждый
+              символ каждый раз берётся одним и тем же взвешенным ГСЧ.
             </p>
           </div>
         </Sheet>

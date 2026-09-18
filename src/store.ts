@@ -80,13 +80,13 @@ import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { deleteAttachmentFile } from '@/lib/images';
 import type { SkinId } from '@/lib/skins';
 import {
-  evaluateGrid,
+  BETS,
   JACKPOT_BASE,
   JACKPOT_RATE,
-  spinGrid,
+  resolveSpin,
   START_BALANCE,
 } from '@/lib/slots';
-import type { SpinResult } from '@/lib/slots';
+import type { SpinOutcome } from '@/lib/slots';
 import {
   BIG_BET,
   EMPTY_COUNTERS,
@@ -105,7 +105,7 @@ import type { MissionCounters } from '@/lib/slots-meta';
 import { genId } from '@/lib/id';
 
 /** Результат спина + всё, что странице нужно показать сверху. */
-export interface SlotsSpinOutcome extends SpinResult {
+export interface SlotsSpinOutcome extends SpinOutcome {
   /** Сколько сорвано из копилки джекпота. */
   jackpotWin: number;
   /** Спин был бесплатным — ставка не списывалась. */
@@ -318,6 +318,13 @@ const missionsForToday = (m: SlotsMissions | undefined, day = dayKey()): SlotsMi
   m && m.day === day ? m : freshMissions(day);
 
 /** Читаем прогрессию из сохранённого блоба (со всеми умолчаниями). */
+/** Ставка из сохранения могла исчезнуть из BETS — подтягиваем к ближайшей. */
+const snapBet = (bet?: number): number => {
+  if (typeof bet !== 'number' || !Number.isFinite(bet)) return BETS[0];
+  if (BETS.includes(bet)) return bet;
+  return BETS.reduce((best, b) => (Math.abs(b - bet) < Math.abs(best - bet) ? b : best), BETS[0]);
+};
+
 const slotsProgress = (blob?: Partial<SlotsBlob> | null) => ({
   slotsXp: blob?.xp ?? 0,
   slotsRewardedLevel: blob?.rewardedLevel ?? 1,
@@ -726,7 +733,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       cameraScripts: camera?.scripts ?? [],
       prompterPrefs: { ...DEFAULT_PROMPTER_PREFS, ...(camera?.prompter ?? {}) },
       slotsBalance: slots?.balance ?? START_BALANCE,
-      slotsBet: slots?.bet ?? 25,
+      slotsBet: snapBet(slots?.bet),
       slotsSpins: slots?.spins ?? 0,
       slotsBest: slots?.best ?? 0,
       slotsBonusAt: slots?.lastBonusAt,
@@ -1626,7 +1633,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       cameraScripts: d.cameraScripts ?? [],
       prompterPrefs: { ...DEFAULT_PROMPTER_PREFS, ...(d.prompterPrefs ?? {}) },
       slotsBalance: d.slots?.balance ?? START_BALANCE,
-      slotsBet: d.slots?.bet ?? 25,
+      slotsBet: snapBet(d.slots?.bet),
       slotsSpins: d.slots?.spins ?? 0,
       slotsBest: d.slots?.best ?? 0,
       slotsBonusAt: d.slots?.lastBonusAt,
@@ -1899,7 +1906,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const s = get();
     const free = s.slotsFreeSpins > 0;
     if (!free && s.slotsBalance < s.slotsBet) return null;
-    const result = evaluateGrid(spinGrid(), s.slotsBet);
+    const result = resolveSpin(s.slotsBet);
     // Часть ставки уходит в копилку джекпота; три семёрки забирают её целиком.
     const grown = s.slotsJackpot + Math.round(s.slotsBet * JACKPOT_RATE);
     const jackpotWin = result.kind === 'jackpot' ? grown : 0;
@@ -1908,6 +1915,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       id: genId(),
       // В историю кладём центральную линию — она и рисуется на чипе.
       reels: result.grid.map((col) => col[1]),
+      combo: result.combo,
       bet: s.slotsBet,
       payout: total,
       at: Date.now(),
@@ -1918,7 +1926,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
     counters.spins += 1;
     if (total > 0) counters.wins += 1;
-    if (result.wins.some((w) => w.count === 3)) counters.triple += 1;
+    // Тройка в любом звене каскада засчитывается в цель дня.
+    if (result.steps.some((step) => step.wins.some((w) => w.count === 3))) counters.triple += 1;
     counters.coins += total;
     if (s.slotsBet >= BIG_BET) counters.bigbet += 1;
 

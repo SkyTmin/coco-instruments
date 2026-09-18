@@ -125,3 +125,21 @@ export function coinDing(at = 0): void {
   tone(1318.5, { at, dur: 0.16, type: 'sine', gain: 0.12 });
   tone(1975.5, { at: at + 0.03, dur: 0.12, type: 'sine', gain: 0.07 });
 }
+
+/**
+ * Звук звена каскада. Высота тона растёт с длиной цепочки — тот самый приём
+ * из аркад: чем длиннее комбо, тем выше «дзынь», и ухо само считает звенья.
+ */
+export function comboHit(step: number): void {
+  const n = Math.max(1, Math.min(step, 8));
+  // Мажорная гамма вверх: 523 Гц (до) и дальше по полутонам лестницы.
+  const base = 523.25 * Math.pow(2, (n - 1) / 6);
+  tone(base, { dur: 0.1, type: 'triangle', gain: 0.13 });
+  tone(base * 1.5, { at: 0.05, dur: 0.12, type: 'sine', gain: 0.1 });
+  if (n >= 3) tone(base * 2, { at: 0.1, dur: 0.14, type: 'sine', gain: 0.08 });
+}
+
+/** Хлопок исчезающих символов — короткий «пшик» перед падением новых. */
+export function symbolBurst(): void {
+  tone(880, { dur: 0.07, type: 'square', gain: 0.05, sweepTo: 300 });
+}

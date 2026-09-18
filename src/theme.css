@@ -12680,3 +12680,169 @@ input[type='datetime-local'] {
 .auto-card.is-endless .auto-card__num {
   font-size: 40px;
 }
+
+/* =========================================================================
+   Каскады и комбо: взрыв сыгравших символов и счётчик цепочки.
+   Эффекты растут ступенями (--t0…--t4) — длинное комбо должно ощущаться
+   заметно громче короткого, иначе счётчик ничего не значит.
+   ========================================================================= */
+
+/* Фаза «взрыв»: ячейка вспыхивает и схлопывается перед падением новых */
+.reels__mark.is-burst {
+  animation: mark-burst 0.28s cubic-bezier(0.3, 0, 0.7, 1) forwards;
+}
+@keyframes mark-burst {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  45% {
+    transform: scale(1.18);
+    opacity: 1;
+    filter: brightness(2.2);
+  }
+  100% {
+    transform: scale(0.35);
+    opacity: 0;
+    filter: brightness(3);
+  }
+}
+
+.combo {
+  position: absolute;
+  left: 50%;
+  top: -17px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 12px;
+  border-radius: 99px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.62));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--neon) 55%, transparent);
+  animation: combo-in 0.34s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+@keyframes combo-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.6) translateY(-8px);
+  }
+}
+.combo b {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  color: var(--bezel-1);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--neon) 70%, transparent);
+}
+.combo i {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--neon) 80%, #000);
+  color: var(--btn-fg);
+}
+/* Ступени: размер, цвет и свечение растут с длиной цепочки */
+.combo--t2 b {
+  font-size: 15px;
+}
+.combo--t3 {
+  box-shadow: 0 0 0 1px var(--bezel-2), 0 0 24px color-mix(in srgb, var(--neon) 45%, transparent);
+}
+.combo--t3 b {
+  font-size: 16px;
+  color: #ffe9a3;
+}
+.combo--t4 {
+  box-shadow: 0 0 0 2px var(--bezel-1), 0 0 36px color-mix(in srgb, var(--neon) 70%, transparent);
+  animation:
+    combo-in 0.34s cubic-bezier(0.2, 1.6, 0.4, 1),
+    combo-throb 0.6s ease-in-out infinite 0.34s;
+}
+.combo--t4 b {
+  font-size: 18px;
+  background: linear-gradient(180deg, #fff6d5, #ffc53c 55%, #ff8a3c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+@keyframes combo-throb {
+  50% {
+    transform: translateX(-50%) scale(1.07);
+  }
+}
+
+/* Строка статуса во время каскада */
+.status--combo {
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--neon) 60%, #fff);
+}
+.status--t3,
+.status--t4 {
+  color: var(--bezel-1);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--neon) 60%, transparent);
+}
+
+/* Правила каскадов в листе выплат */
+.combo-rules {
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--neon) 26%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--cab-1) 35%, transparent);
+}
+.combo-rules__title {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.combo-rules__text {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0.72;
+}
+.combo-rules__ladder {
+  display: flex;
+  gap: 6px;
+}
+.combo-rules__step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 2px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #000 28%, transparent);
+}
+.combo-rules__step b {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.6;
+}
+.combo-rules__step i {
+  font-style: normal;
+  font-size: 15px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--bezel-1) 85%, #fff);
+}
+.combo-rules__step:last-child i {
+  color: #ffd76a;
+  text-shadow: 0 0 10px rgba(255, 190, 60, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .combo,
+  .combo--t4,
+  .reels__mark.is-burst {
+    animation: none;
+  }
+}

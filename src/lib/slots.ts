@@ -5,10 +5,11 @@
 // слева направо, как в настоящих автоматах: три одинаковых — главный выигрыш,
 // два первых одинаковых — небольшой возврат.
 //
-// Экономика: веса символов в сумме дают 100 (вероятность = weight/100), ставка
-// делится поровну между пятью линиями, поэтому общий RTP ≈ RTP одной линии
-// ≈ 93% (см. slots.test.ts): играть приятно, но банк тает — иначе ежедневный
-// бонус не имел бы смысла.
+// Экономика: веса символов в сумме дают 100 (вероятность = weight/100).
+// Выплата линии считается от единицы `ставка ÷ 25` — делитель такой большой
+// потому, что каскады платят по нескольку раз за один спин (см. resolveSpin).
+// Итоговая отдача с каскадами ≈ 91% (см. slots.test.ts): играть приятно, но
+// банк тает — иначе ежедневный бонус не имел бы смысла.
 
 import type { SlotSymbolId } from '@/types';
 
@@ -66,7 +67,13 @@ export const PAYLINES: { id: number; rows: number[]; name: string }[] = [
   { id: 4, rows: [2, 1, 0], name: 'Диагональ ↗' },
 ];
 
-export const BETS = [10, 25, 50, 100, 250];
+/**
+ * Делитель ставки для выплат линии. Все ставки кратны ему, поэтому выплаты
+ * всегда целые: 25→1, 50→2, 100→4, 250→10, 500→20.
+ */
+export const LINE_UNIT = 25;
+
+export const BETS = [25, 50, 100, 250, 500];
 
 /** Стартовый банк нового игрока и размеры бонусов. */
 export const START_BALANCE = 1000;
@@ -82,9 +89,9 @@ export const BONUS_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 export const JACKPOT_BASE = 5000;
 export const JACKPOT_RATE = 0.05;
 
-/** Ставка делится поровну между линиями — выигрыши считаются от неё. */
+/** Единица выплаты линии. Умножается на множитель символа из таблицы. */
 export function lineBet(bet: number): number {
-  return bet / PAYLINES.length;
+  return bet / LINE_UNIT;
 }
 
 type Rng = () => number;
@@ -166,6 +173,97 @@ export function evaluateGrid(grid: SlotGrid, bet: number): SpinResult {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Каскады и комбо (tumble / cascading reels — как в Sweet Bonanza и Gates of
+// Olympus). Выигравшие символы исчезают, оставшиеся падают вниз, сверху
+// приходят новые, и поле считается заново. Каждое следующее звено цепочки
+// платит с бóльшим множителем.
+//
+// Честность: множитель известен заранее и написан в таблице выплат, символы
+// всегда берутся тем же взвешенным ГСЧ, ничего не «подкручивается». Каскады
+// умножают отдачу примерно в 4,9 раза, поэтому единица выплаты линии сделана
+// в пять раз меньше — итог те же ~91%, см. slots.test.ts.
+// ---------------------------------------------------------------------------
+
+/** Множитель по номеру звена: первое попадание ×1, дальше — больше. */
+export const COMBO_LADDER = [1, 2, 3, 5, 10];
+
+/** Страховка от бесконечной цепочки: дальше каскад обрывается принудительно. */
+export const MAX_CASCADES = 12;
+
+export function comboMultiplier(step: number): number {
+  return COMBO_LADDER[Math.min(Math.max(step, 0), COMBO_LADDER.length - 1)];
+}
+
+/** Одно звено каскада — ровно то, что игрок видит на экране за один такт. */
+export interface CascadeStep {
+  /** Поле на этом звене (ещё с выигрышными символами). */
+  grid: SlotGrid;
+  wins: LineWin[];
+  /** Множитель комбо, применённый к выплате звена. */
+  combo: number;
+  /** Выплата звена — уже с множителем. */
+  payout: number;
+  /** Поле после схлопывания: его игрок увидит следующим. */
+  next: SlotGrid;
+}
+
+/** Схлопывание: выигрышные ячейки исчезают, столбец падает, сверху новые. */
+export function collapse(grid: SlotGrid, wins: LineWin[], rng: Rng = Math.random): SlotGrid {
+  const dead = new Set(wins.flatMap((w) => w.cells.map(([c, r]) => `${c}:${r}`)));
+  return grid.map((column, col) => {
+    const kept = column.filter((_, row) => !dead.has(`${col}:${row}`));
+    const fresh = Array.from({ length: ROWS - kept.length }, () => randomSymbol(rng));
+    return [...fresh, ...kept];
+  });
+}
+
+export interface SpinOutcome extends SpinResult {
+  /** Звенья каскада по порядку; пусто, если спин не сыграл. */
+  steps: CascadeStep[];
+  /** Длина цепочки — сколько раз подряд поле сыграло. */
+  combo: number;
+  /** Лучший множитель комбо, достигнутый в спине. */
+  bestCombo: number;
+}
+
+/**
+ * Полный спин с каскадами: крутим поле, платим, схлопываем и повторяем, пока
+ * выпадают выигрыши. Возвращаем всю цепочку — страница проигрывает её по шагам.
+ */
+export function resolveSpin(bet: number, rng: Rng = Math.random): SpinOutcome {
+  const steps: CascadeStep[] = [];
+  let grid = spinGrid(rng);
+  const first = grid;
+  let total = 0;
+  let jackpot = false;
+
+  for (let i = 0; i < MAX_CASCADES; i++) {
+    const res = evaluateGrid(grid, bet);
+    if (!res.wins.length) break;
+    const combo = comboMultiplier(i);
+    const payout = res.total * combo;
+    total += payout;
+    if (res.kind === 'jackpot') jackpot = true;
+    const next = collapse(grid, res.wins, rng);
+    steps.push({ grid, wins: res.wins, combo, payout, next });
+    grid = next;
+  }
+
+  const multiplier = bet > 0 ? total / bet : 0;
+  return {
+    // Показываем первое поле: именно на нём останавливаются барабаны.
+    grid: first,
+    wins: steps.length ? steps[steps.length - 1].wins : [],
+    steps,
+    total,
+    combo: steps.length,
+    bestCombo: steps.length ? steps[steps.length - 1].combo : 1,
+    multiplier,
+    kind: jackpot ? 'jackpot' : multiplier >= 5 ? 'big' : total > 0 ? 'small' : 'none',
+  };
+}
+
 /**
  * «Почти выиграл»: на первых двух барабанах уже стоят два премиальных символа
  * на одной линии. Страница тормозит последний барабан — тот самый момент
@@ -200,9 +298,10 @@ export function outcomeLabel(result: SpinResult): OutcomeLabel {
 }
 
 /**
- * Теоретическая отдача (RTP): доля ставки, возвращаемая игроку в среднем.
- * Считается аналитически по весам — страховка от правки выплат, которая
- * превратит игру в «вечный банкомат» или в обдираловку.
+ * Теоретическая отдача одного выпадения (без каскадов): доля ставки, которую
+ * в среднем возвращает одна оценка поля. Считается аналитически по весам —
+ * страховка от правки выплат. Полную отдачу с каскадами меряет симуляция
+ * в slots.test.ts: каскады умножают это число примерно в 4,9 раза.
  */
 export function theoreticalRtp(): number {
   let perLine = 0;
@@ -211,6 +310,6 @@ export function theoreticalRtp(): number {
     perLine += p ** 3 * s.three; // три одинаковых
     perLine += p ** 2 * (1 - p) * s.pair; // ровно два слева
   }
-  // Каждая из линий получает bet/5, линий — пять: общий RTP равен линейному.
-  return perLine;
+  // Линий пять, каждая платит от bet/LINE_UNIT.
+  return (perLine * PAYLINES.length) / LINE_UNIT;
 }
