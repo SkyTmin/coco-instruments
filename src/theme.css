@@ -10870,7 +10870,11 @@ input[type='datetime-local'] {
       transparent 86%,
       rgba(255, 196, 130, 0.16) 100%
     ),
-    radial-gradient(120% 70% at 50% -8%, color-mix(in srgb, var(--neon) 34%, transparent), transparent 62%),
+    radial-gradient(
+      120% 70% at 50% -8%,
+      color-mix(in srgb, var(--neon) 34%, transparent),
+      transparent 62%
+    ),
     linear-gradient(180deg, var(--cab-1), var(--cab-2) 55%, var(--cab-3));
   border: 1px solid rgba(255, 190, 120, 0.38);
   box-shadow:
@@ -10962,7 +10966,11 @@ input[type='datetime-local'] {
       color-mix(in srgb, var(--cab-1) 80%, #000),
       color-mix(in srgb, var(--cab-2) 70%, #000)
     ),
-    radial-gradient(60% 120% at 50% 0%, color-mix(in srgb, var(--neon) 45%, transparent), transparent 70%);
+    radial-gradient(
+      60% 120% at 50% 0%,
+      color-mix(in srgb, var(--neon) 45%, transparent),
+      transparent 70%
+    );
   border: 1px solid color-mix(in srgb, var(--neon) 38%, transparent);
   box-shadow:
     inset 0 1px 0 rgba(255, 230, 190, 0.35),
@@ -10996,10 +11004,8 @@ input[type='datetime-local'] {
   /* Свой слой: четыре drop-shadow растеризуются один раз, мерцание считает
      композитор. Без этого текст с тенями перерисовывался каждый кадр. */
   will-change: opacity;
-  filter:
-    drop-shadow(0 1px 0 #7a4e08) drop-shadow(0 2px 0 #533305)
-    drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6))
-    drop-shadow(0 0 12px rgba(255, 190, 90, 0.5));
+  filter: drop-shadow(0 1px 0 #7a4e08) drop-shadow(0 2px 0 #533305)
+    drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 12px rgba(255, 190, 90, 0.5));
   animation: neon-flicker 4.5s infinite;
 }
 @keyframes neon-flicker {
@@ -11058,7 +11064,13 @@ input[type='datetime-local'] {
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: radial-gradient(circle at 34% 28%, #f7eac0 0%, #d8b45c 30%, #a97f24 58%, #4b3208 100%);
+  background: radial-gradient(
+    circle at 34% 28%,
+    #f7eac0 0%,
+    #d8b45c 30%,
+    #a97f24 58%,
+    #4b3208 100%
+  );
   box-shadow:
     inset 0 -1px 2px rgba(0, 0, 0, 0.65),
     inset 0 1px 1px rgba(255, 255, 255, 0.55),
@@ -11157,7 +11169,6 @@ input[type='datetime-local'] {
 .reel__strip.is-blur {
   filter: blur(1.4px);
 }
-
 
 /* Стеклянный блик и затемнение краёв — эффект цилиндра под стеклом */
 .reels__glass {
@@ -11702,9 +11713,7 @@ input[type='datetime-local'] {
   filter: drop-shadow(0 2px 2px rgba(40, 20, 5, 0.35));
 }
 .reel__cell .sym {
-  filter:
-    drop-shadow(0 2px 3px rgba(40, 20, 5, 0.4))
-    drop-shadow(0 0 1px rgba(60, 30, 10, 0.55));
+  filter: drop-shadow(0 2px 3px rgba(40, 20, 5, 0.4)) drop-shadow(0 0 1px rgba(60, 30, 10, 0.55));
 }
 .coin-ico {
   display: inline-block;
@@ -11842,7 +11851,12 @@ input[type='datetime-local'] {
     transparent 0deg 7.5deg,
     rgba(255, 238, 190, 0.28) 7.5deg 15deg
   );
-  -webkit-mask-image: radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.9) 34%, transparent 70%);
+  -webkit-mask-image: radial-gradient(
+    closest-side,
+    #000 8%,
+    rgba(0, 0, 0, 0.9) 34%,
+    transparent 70%
+  );
   mask-image: radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.9) 34%, transparent 70%);
   animation:
     bw-rays-in 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both,
@@ -11961,8 +11975,7 @@ input[type='datetime-local'] {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-stroke: 1.6px #3b2205;
-  filter:
-    drop-shadow(0 2px 0 #6a4307) drop-shadow(0 4px 0 #3d2604)
+  filter: drop-shadow(0 2px 0 #6a4307) drop-shadow(0 4px 0 #3d2604)
     drop-shadow(0 8px 12px rgba(0, 0, 0, 0.65));
   animation: bw-pulse 0.25s ease-in-out 9;
 }
@@ -12070,7 +12083,11 @@ input[type='datetime-local'] {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--neon) 20%, transparent), transparent 62%),
+    radial-gradient(
+      120% 70% at 50% 0%,
+      color-mix(in srgb, var(--neon) 20%, transparent),
+      transparent 62%
+    ),
     linear-gradient(180deg, var(--scene-1), var(--scene-2));
 }
 /* Шапка экрана всегда на затемнении — иначе декор съедает заголовок */
@@ -12101,11 +12118,7 @@ input[type='datetime-local'] {
 .slots[data-skin='asia'] .slots-scene__decor {
   background:
     radial-gradient(circle 120px at 50% 8%, rgba(255, 90, 60, 0.22), transparent 70%),
-    repeating-linear-gradient(
-      45deg,
-      rgba(255, 210, 120, 0.035) 0 2px,
-      transparent 2px 14px
-    );
+    repeating-linear-gradient(45deg, rgba(255, 210, 120, 0.035) 0 2px, transparent 2px 14px);
 }
 .slots[data-skin='asia'] .slots-scene__decor::before,
 .slots[data-skin='asia'] .slots-scene__decor::after {
@@ -12161,12 +12174,13 @@ input[type='datetime-local'] {
 /* Пираты: доски палубы снизу и морской туман */
 .slots[data-skin='pirate'] .slots-scene__decor {
   background:
-    linear-gradient(180deg, transparent 62%, rgba(58, 36, 16, 0.55) 62%, rgba(32, 19, 8, 0.85) 100%),
-    repeating-linear-gradient(
-      90deg,
-      rgba(0, 0, 0, 0.22) 0 2px,
-      transparent 2px 46px
+    linear-gradient(
+      180deg,
+      transparent 62%,
+      rgba(58, 36, 16, 0.55) 62%,
+      rgba(32, 19, 8, 0.85) 100%
     ),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.22) 0 2px, transparent 2px 46px),
     radial-gradient(ellipse 80% 30% at 50% 100%, rgba(87, 214, 196, 0.18), transparent 70%);
 }
 .slots[data-skin='pirate'] .slots-scene__decor::after {
@@ -12188,11 +12202,7 @@ input[type='datetime-local'] {
   background:
     radial-gradient(circle 60px at 82% 12%, rgba(255, 201, 77, 0.35), transparent 70%),
     linear-gradient(180deg, transparent 68%, rgba(120, 88, 30, 0.45) 100%),
-    repeating-linear-gradient(
-      0deg,
-      rgba(255, 220, 150, 0.05) 0 1px,
-      transparent 1px 12px
-    );
+    repeating-linear-gradient(0deg, rgba(255, 220, 150, 0.05) 0 1px, transparent 1px 12px);
 }
 
 /* Сладости: глазурь сверху и сахарная посыпка */
@@ -12444,7 +12454,11 @@ input[type='datetime-local'] {
 .ladder__day.is-next {
   opacity: 1;
   border-color: var(--bezel-2);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--btn-1) 30%, transparent), transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--btn-1) 30%, transparent),
+    transparent
+  );
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--bezel-1) 45%, transparent);
   animation: badge-pop 1.8s ease-in-out infinite;
 }
@@ -12801,14 +12815,18 @@ input[type='datetime-local'] {
   font-size: 15px;
 }
 .combo--t3 {
-  box-shadow: 0 0 0 1px var(--bezel-2), 0 0 24px color-mix(in srgb, var(--neon) 45%, transparent);
+  box-shadow:
+    0 0 0 1px var(--bezel-2),
+    0 0 24px color-mix(in srgb, var(--neon) 45%, transparent);
 }
 .combo--t3 b {
   font-size: 16px;
   color: #ffe9a3;
 }
 .combo--t4 {
-  box-shadow: 0 0 0 2px var(--bezel-1), 0 0 36px color-mix(in srgb, var(--neon) 70%, transparent);
+  box-shadow:
+    0 0 0 2px var(--bezel-1),
+    0 0 36px color-mix(in srgb, var(--neon) 70%, transparent);
   animation:
     combo-in 0.34s cubic-bezier(0.2, 1.6, 0.4, 1),
     combo-throb 0.6s ease-in-out infinite 0.34s;
@@ -13595,8 +13613,7 @@ input[type='datetime-local'] {
   width: 78%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 34% 28%, #fff8d0, #ffd83d 42%, #f0a01e 72%, #a35f05);
+  background: radial-gradient(circle at 34% 28%, #fff8d0, #ffd83d 42%, #f0a01e 72%, #a35f05);
   box-shadow:
     0 0 0 2px rgba(120, 70, 0, 0.75),
     0 0 18px rgba(255, 200, 60, 0.9),
@@ -13757,7 +13774,11 @@ input[type='datetime-local'] {
   align-items: center;
   text-align: center;
   border-color: var(--bezel-2);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--btn-1) 30%, transparent), transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--btn-1) 30%, transparent),
+    transparent
+  );
 }
 .buy-bonus:disabled {
   opacity: 0.45;
@@ -13995,7 +14016,14 @@ input[type='datetime-local'] {
 
 /* Вывеска светится и переливается */
 .slots[data-skin='olympus'] .cabinet__sign b {
-  background: linear-gradient(100deg, #fff6cf 20%, #ffd83d 40%, #fffdf3 50%, #e8b93c 62%, #fff6cf 80%);
+  background: linear-gradient(
+    100deg,
+    #fff6cf 20%,
+    #ffd83d 40%,
+    #fffdf3 50%,
+    #e8b93c 62%,
+    #fff6cf 80%
+  );
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;

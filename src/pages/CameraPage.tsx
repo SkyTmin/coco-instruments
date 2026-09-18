@@ -159,8 +159,7 @@ export function CameraPage() {
   const prompterDragRef = useRef(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
-  const activeScript =
-    scripts.find((s) => s.id === prompterPrefs.scriptId) ?? scripts[0];
+  const activeScript = scripts.find((s) => s.id === prompterPrefs.scriptId) ?? scripts[0];
 
   const activeSketch: CameraSketch | undefined = sketches.find((s) => s.id === activeSketchId);
 
@@ -623,9 +622,7 @@ export function CameraPage() {
         ctx.scale(-1, 1);
       }
       ctx.drawImage(v, 0, 0);
-      const blob = await new Promise<Blob | null>((res) =>
-        canvas.toBlob(res, 'image/jpeg', 0.92),
-      );
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.92));
       if (!blob) throw new Error('toBlob');
       registerShot(blob);
     } catch {
@@ -645,12 +642,9 @@ export function CameraPage() {
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const volume = ['AudioVolumeUp', 'AudioVolumeDown', 'VolumeUp', 'VolumeDown'].includes(
-        e.key,
-      );
+      const volume = ['AudioVolumeUp', 'AudioVolumeDown', 'VolumeUp', 'VolumeDown'].includes(e.key);
       const t = e.target as HTMLElement | null;
-      const onControl =
-        !!t && ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName);
+      const onControl = !!t && ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName);
       if (volume || ((e.key === 'Enter' || e.key === ' ') && !onControl)) {
         e.preventDefault();
         takePhotoRef.current();
@@ -772,17 +766,17 @@ export function CameraPage() {
               ⟲
             </button>
             <span className="prompter__spacer" />
-            <button className="prompter__btn" onClick={() => bumpFont(-2)} aria-label="Шрифт меньше">
+            <button
+              className="prompter__btn"
+              onClick={() => bumpFont(-2)}
+              aria-label="Шрифт меньше"
+            >
               A−
             </button>
             <button className="prompter__btn" onClick={() => bumpFont(2)} aria-label="Шрифт больше">
               A+
             </button>
-            <button
-              className="prompter__btn"
-              onClick={() => bumpSpeed(-10)}
-              aria-label="Медленнее"
-            >
+            <button className="prompter__btn" onClick={() => bumpSpeed(-10)} aria-label="Медленнее">
               −
             </button>
             <span className="prompter__speed" title="Скорость прокрутки">
@@ -846,7 +840,9 @@ export function CameraPage() {
         <div className="camera-state">
           <div className="camera-state__icon">📷</div>
           <h2>
-            {status === 'unsupported' ? 'Камера недоступна в этом окружении' : 'Нужен доступ к камере'}
+            {status === 'unsupported'
+              ? 'Камера недоступна в этом окружении'
+              : 'Нужен доступ к камере'}
           </h2>
           <p>
             {status === 'denied' &&
@@ -1059,8 +1055,8 @@ export function CameraPage() {
             )}
             {sketches.length === 0 && (
               <p className="muted" style={{ margin: 0 }}>
-                Сохранённых эскизов пока нет. Добавьте референс-портрет из галереи — он
-                останется здесь и будет доступен с любого устройства.
+                Сохранённых эскизов пока нет. Добавьте референс-портрет из галереи — он останется
+                здесь и будет доступен с любого устройства.
               </p>
             )}
             <button
@@ -1130,8 +1126,8 @@ export function CameraPage() {
               </div>
             ) : (
               <p className="muted" style={{ margin: 0 }}>
-                Текстов пока нет. Напишите речь для видео или подсказки для съёмки — они
-                сохранятся и будут доступны с любого устройства.
+                Текстов пока нет. Напишите речь для видео или подсказки для съёмки — они сохранятся
+                и будут доступны с любого устройства.
               </p>
             )}
             <button
@@ -1158,9 +1154,7 @@ export function CameraPage() {
               className="input"
               placeholder="Название (необязательно)"
               value={editingScript.title}
-              onChange={(e) =>
-                setEditingScript({ ...editingScript, title: e.target.value })
-              }
+              onChange={(e) => setEditingScript({ ...editingScript, title: e.target.value })}
             />
             <textarea
               ref={editorRef}

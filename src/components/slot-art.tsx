@@ -84,7 +84,13 @@ export function SlotArtDefs() {
           <stop offset="100%" stopColor="#8f5a02" />
         </linearGradient>
         <filter id="sg-drop" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="1.6" stdDeviation="1.4" floodColor="#2a1206" floodOpacity="0.5" />
+          <feDropShadow
+            dx="0"
+            dy="1.6"
+            stdDeviation="1.4"
+            floodColor="#2a1206"
+            floodOpacity="0.5"
+          />
         </filter>
       </defs>
     </svg>
@@ -111,13 +117,47 @@ function Cherry() {
         strokeLinecap="round"
         fill="none"
       />
-      <path d="M31 12c5-5 12-6 16-3-3 6-9 8-16 3z" fill="url(#sg-leaf)" stroke={OUTLINE} strokeWidth="1.6" />
+      <path
+        d="M31 12c5-5 12-6 16-3-3 6-9 8-16 3z"
+        fill="url(#sg-leaf)"
+        stroke={OUTLINE}
+        strokeWidth="1.6"
+      />
       <circle cx="44" cy="46" r="12" fill="url(#sg-cherry-r)" stroke={O_CHERRY} strokeWidth="2.6" />
-      <circle cx="21" cy="43" r="13.5" fill="url(#sg-cherry-r)" stroke={O_CHERRY} strokeWidth="2.6" />
+      <circle
+        cx="21"
+        cy="43"
+        r="13.5"
+        fill="url(#sg-cherry-r)"
+        stroke={O_CHERRY}
+        strokeWidth="2.6"
+      />
       {/* блик и отражённый свет снизу — ягода становится шаром */}
-      <ellipse cx="16" cy="37" rx="5" ry="3.4" fill="#fff" opacity="0.75" transform="rotate(-28 16 37)" />
-      <ellipse cx="39" cy="41" rx="3.6" ry="2.5" fill="#fff" opacity="0.6" transform="rotate(-28 39 41)" />
-      <path d="M13 50a13.5 13.5 0 0 0 15 4" stroke="#ff9aa4" strokeWidth="2" opacity="0.35" fill="none" />
+      <ellipse
+        cx="16"
+        cy="37"
+        rx="5"
+        ry="3.4"
+        fill="#fff"
+        opacity="0.75"
+        transform="rotate(-28 16 37)"
+      />
+      <ellipse
+        cx="39"
+        cy="41"
+        rx="3.6"
+        ry="2.5"
+        fill="#fff"
+        opacity="0.6"
+        transform="rotate(-28 39 41)"
+      />
+      <path
+        d="M13 50a13.5 13.5 0 0 0 15 4"
+        stroke="#ff9aa4"
+        strokeWidth="2"
+        opacity="0.35"
+        fill="none"
+      />
     </g>
   );
 }
@@ -134,12 +174,43 @@ function Lemon() {
           strokeWidth="2.6"
           strokeLinejoin="round"
         />
-        <ellipse cx="23" cy="27" rx="9.5" ry="5" fill="#fff" opacity="0.6" transform="rotate(-18 23 27)" />
-        <path d="M16 44c7 4 18 4 27 0" stroke="#b86c06" strokeWidth="2.2" opacity="0.28" fill="none" />
-        <path d="M48 24c3 2.6 5 5.8 6 8.6" stroke="#fff" strokeWidth="2" opacity="0.25" fill="none" />
+        <ellipse
+          cx="23"
+          cy="27"
+          rx="9.5"
+          ry="5"
+          fill="#fff"
+          opacity="0.6"
+          transform="rotate(-18 23 27)"
+        />
+        <path
+          d="M16 44c7 4 18 4 27 0"
+          stroke="#b86c06"
+          strokeWidth="2.2"
+          opacity="0.28"
+          fill="none"
+        />
+        <path
+          d="M48 24c3 2.6 5 5.8 6 8.6"
+          stroke="#fff"
+          strokeWidth="2"
+          opacity="0.25"
+          fill="none"
+        />
       </g>
-      <path d="M18 18c4-3 8-2 10 1" stroke="#3f7d2a" strokeWidth="3" strokeLinecap="round" fill="none" />
-      <path d="M28 19c5-4 11-4 14-1-4 5-10 5-14 1z" fill="url(#sg-leaf)" stroke={OUTLINE} strokeWidth="1.6" />
+      <path
+        d="M18 18c4-3 8-2 10 1"
+        stroke="#3f7d2a"
+        strokeWidth="3"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M28 19c5-4 11-4 14-1-4 5-10 5-14 1z"
+        fill="url(#sg-leaf)"
+        stroke={OUTLINE}
+        strokeWidth="1.6"
+      />
     </g>
   );
 }
@@ -158,11 +229,29 @@ function Grape() {
   ];
   return (
     <g filter="url(#sg-drop)">
-      <path d="M32 18c0-6 4-9 9-10" stroke="#3f7d2a" strokeWidth="3" strokeLinecap="round" fill="none" />
-      <path d="M40 9c6-3 12-1 14 2-5 5-11 4-14-2z" fill="url(#sg-leaf)" stroke={OUTLINE} strokeWidth="1.6" />
+      <path
+        d="M32 18c0-6 4-9 9-10"
+        stroke="#3f7d2a"
+        strokeWidth="3"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M40 9c6-3 12-1 14 2-5 5-11 4-14-2z"
+        fill="url(#sg-leaf)"
+        stroke={OUTLINE}
+        strokeWidth="1.6"
+      />
       {berries.map(([cx, cy], i) => (
         <g key={i}>
-          <circle cx={cx} cy={cy} r="8.4" fill="url(#sg-grape-r)" stroke={O_GRAPE} strokeWidth="2.2" />
+          <circle
+            cx={cx}
+            cy={cy}
+            r="8.4"
+            fill="url(#sg-grape-r)"
+            stroke={O_GRAPE}
+            strokeWidth="2.2"
+          />
           <ellipse cx={cx - 2.8} cy={cy - 3.2} rx="2.8" ry="1.9" fill="#fff" opacity="0.6" />
         </g>
       ))}
@@ -191,8 +280,22 @@ function Bell() {
         strokeWidth="2.6"
         strokeLinejoin="round"
       />
-      <path d="M24 22c-4 4.6-6 10-6 15.6" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" opacity="0.6" fill="none" />
-      <path d="M43 25c2 3.4 3.2 7.4 3.2 11.4" stroke="#8f5a02" strokeWidth="2.6" strokeLinecap="round" opacity="0.45" fill="none" />
+      <path
+        d="M24 22c-4 4.6-6 10-6 15.6"
+        stroke="#fff"
+        strokeWidth="3.6"
+        strokeLinecap="round"
+        opacity="0.6"
+        fill="none"
+      />
+      <path
+        d="M43 25c2 3.4 3.2 7.4 3.2 11.4"
+        stroke="#8f5a02"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        opacity="0.45"
+        fill="none"
+      />
       <circle cx="32" cy="55" r="5.2" fill="url(#sg-gold)" stroke={OUTLINE} strokeWidth="2.2" />
       <ellipse cx="30" cy="53" rx="2" ry="1.3" fill="#fff" opacity="0.65" />
     </g>
@@ -215,12 +318,28 @@ function Star() {
   });
   return (
     <g filter="url(#sg-drop)">
-      <polygon points={pts} fill="url(#sg-gold-deep)" stroke={O_GOLD} strokeWidth="2.6" strokeLinejoin="round" />
+      <polygon
+        points={pts}
+        fill="url(#sg-gold-deep)"
+        stroke={O_GOLD}
+        strokeWidth="2.6"
+        strokeLinejoin="round"
+      />
       {facets.map(({ k, tip, left }) => (
-        <polygon key={k} points={`32,33 ${tip[0]},${tip[1]} ${left[0]},${left[1]}`} fill="#fff6c8" opacity="0.55" />
+        <polygon
+          key={k}
+          points={`32,33 ${tip[0]},${tip[1]} ${left[0]},${left[1]}`}
+          fill="#fff6c8"
+          opacity="0.55"
+        />
       ))}
       {facets.map(({ k, tip, right }) => (
-        <polygon key={`r${k}`} points={`32,33 ${tip[0]},${tip[1]} ${right[0]},${right[1]}`} fill="#a86a02" opacity="0.28" />
+        <polygon
+          key={`r${k}`}
+          points={`32,33 ${tip[0]},${tip[1]} ${right[0]},${right[1]}`}
+          fill="#a86a02"
+          opacity="0.28"
+        />
       ))}
       <polygon points={pts} fill="none" stroke={O_GOLD} strokeWidth="2.6" strokeLinejoin="round" />
       <circle cx="32" cy="33" r="3.2" fill="#fff8d6" opacity="0.8" />
@@ -232,15 +351,37 @@ function Diamond() {
   return (
     <g filter="url(#sg-drop)">
       {/* корона */}
-      <polygon points="32,10 52,26 12,26" fill="url(#sg-ice-top)" stroke={O_ICE} strokeWidth="2.4" strokeLinejoin="round" />
+      <polygon
+        points="32,10 52,26 12,26"
+        fill="url(#sg-ice-top)"
+        stroke={O_ICE}
+        strokeWidth="2.4"
+        strokeLinejoin="round"
+      />
       <polygon points="32,10 41,26 23,26" fill="#d8f4ff" stroke={O_ICE} strokeWidth="1.4" />
       {/* павильон */}
-      <polygon points="12,26 32,56 32,26" fill="url(#sg-ice-left)" stroke={O_ICE} strokeWidth="2.4" strokeLinejoin="round" />
-      <polygon points="52,26 32,56 32,26" fill="url(#sg-ice-right)" stroke={O_ICE} strokeWidth="2.4" strokeLinejoin="round" />
+      <polygon
+        points="12,26 32,56 32,26"
+        fill="url(#sg-ice-left)"
+        stroke={O_ICE}
+        strokeWidth="2.4"
+        strokeLinejoin="round"
+      />
+      <polygon
+        points="52,26 32,56 32,26"
+        fill="url(#sg-ice-right)"
+        stroke={O_ICE}
+        strokeWidth="2.4"
+        strokeLinejoin="round"
+      />
       <polygon points="23,26 32,56 41,26" fill="#8ad6f7" opacity="0.75" />
       <path d="M17 20l6-5" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" opacity="0.85" />
       {/* искра — обязательный атрибут «дорогого» камня */}
-      <path d="M48 12l1.6 4.4L54 18l-4.4 1.6L48 24l-1.6-4.4L42 18l4.4-1.6z" fill="#fff" opacity="0.9" />
+      <path
+        d="M48 12l1.6 4.4L54 18l-4.4 1.6L48 24l-1.6-4.4L42 18l4.4-1.6z"
+        fill="#fff"
+        opacity="0.9"
+      />
       <path d="M14 34l1 2.8L18 38l-3 1-1 2.8-1-2.8-3-1 3-1.2z" fill="#fff" opacity="0.6" />
     </g>
   );
@@ -318,7 +459,15 @@ export function CoinIcon({ size = 18 }: { size?: number }) {
         strokeLinecap="round"
       />
       <path d="M32 13v38" stroke="#7a4f02" strokeWidth="4" strokeLinecap="round" />
-      <ellipse cx="23" cy="21" rx="6" ry="3.6" fill="#fff" opacity="0.5" transform="rotate(-35 23 21)" />
+      <ellipse
+        cx="23"
+        cy="21"
+        rx="6"
+        ry="3.6"
+        fill="#fff"
+        opacity="0.5"
+        transform="rotate(-35 23 21)"
+      />
     </svg>
   );
 }

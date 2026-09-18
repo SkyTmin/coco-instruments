@@ -69,9 +69,12 @@ describe('поле и выплаты', () => {
   });
 
   it('семь одинаковых не платят, восемь — платят', () => {
-    expect(findWins(gridWith('seven', CLUSTER_MIN - 1, 'cherry'))
-      .find((w) => w.symbol === 'seven')).toBeUndefined();
-    const win = findWins(gridWith('seven', CLUSTER_MIN, 'cherry')).find((w) => w.symbol === 'seven')!;
+    expect(
+      findWins(gridWith('seven', CLUSTER_MIN - 1, 'cherry')).find((w) => w.symbol === 'seven'),
+    ).toBeUndefined();
+    const win = findWins(gridWith('seven', CLUSTER_MIN, 'cherry')).find(
+      (w) => w.symbol === 'seven',
+    )!;
     expect(win.count).toBe(CLUSTER_MIN);
     expect(win.pay).toBeGreaterThan(0);
   });

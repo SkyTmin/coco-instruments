@@ -239,7 +239,9 @@ export function scatterCollapse(
   const dead = new Set(wins.flatMap((w) => w.cells.map(([c, r]) => `${c}:${r}`)));
   return grid.map((column, col) => {
     const kept = column.filter((_, row) => !dead.has(`${col}:${row}`));
-    const fresh = Array.from({ length: SCATTER_ROWS - kept.length }, () => cell(rng, scatterChance));
+    const fresh = Array.from({ length: SCATTER_ROWS - kept.length }, () =>
+      cell(rng, scatterChance),
+    );
     return [...fresh, ...kept];
   });
 }

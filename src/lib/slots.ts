@@ -144,9 +144,7 @@ export function randomSymbol(rng: Rng = Math.random): SlotSymbolId {
 export type SlotGrid = SlotSymbolId[][];
 
 export function spinGrid(rng: Rng = Math.random): SlotGrid {
-  return Array.from({ length: REELS }, () =>
-    Array.from({ length: ROWS }, () => randomSymbol(rng)),
-  );
+  return Array.from({ length: REELS }, () => Array.from({ length: ROWS }, () => randomSymbol(rng)));
 }
 
 export interface LineWin {

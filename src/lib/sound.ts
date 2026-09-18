@@ -107,9 +107,7 @@ export function winChime(level: 'small' | 'big'): void {
 /** Джекпот: фанфара с повторами и басом. */
 export function jackpotFanfare(): void {
   const melody = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5, 1318.5];
-  melody.forEach((f, i) =>
-    tone(f, { at: i * 0.11, dur: 0.3, type: 'square', gain: 0.1 }),
-  );
+  melody.forEach((f, i) => tone(f, { at: i * 0.11, dur: 0.3, type: 'square', gain: 0.1 }));
   [130.81, 130.81, 196, 261.63].forEach((f, i) =>
     tone(f, { at: i * 0.22, dur: 0.4, type: 'triangle', gain: 0.16 }),
   );

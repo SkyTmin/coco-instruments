@@ -347,8 +347,7 @@ const missionsForToday = (m: SlotsMissions | undefined, day = dayKey()): SlotsMi
 
 /** Читаем прогрессию из сохранённого блоба (со всеми умолчаниями). */
 /** Ставка из сохранения могла выйти за границы — возвращаем в диапазон. */
-const snapBet = (bet?: number): number =>
-  typeof bet === 'number' ? clampBet(bet) : BETS[0];
+const snapBet = (bet?: number): number => (typeof bet === 'number' ? clampBet(bet) : BETS[0]);
 
 const slotsProgress = (blob?: Partial<SlotsBlob> | null) => ({
   slotsXp: blob?.xp ?? 0,

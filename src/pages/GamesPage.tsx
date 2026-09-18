@@ -44,7 +44,11 @@ export function GamesPage() {
   );
 
   return (
-    <Screen title="Игры" subtitle="Один кошелёк на оба автомата" className={`slots-screen slots-screen--${skin}`}>
+    <Screen
+      title="Игры"
+      subtitle="Один кошелёк на оба автомата"
+      className={`slots-screen slots-screen--${skin}`}
+    >
       <div className="stack slots games" data-skin={skin}>
         <div className="slots-scene" aria-hidden="true">
           <span className="slots-scene__decor" />

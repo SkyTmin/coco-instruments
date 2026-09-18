@@ -65,7 +65,14 @@ describe('slot machine', () => {
   });
 
   it('pays three of a kind on the centre line', () => {
-    const res = evaluateGrid(grid([[C, L, B], [B, B, B], [L, C, C]]), 50);
+    const res = evaluateGrid(
+      grid([
+        [C, L, B],
+        [B, B, B],
+        [L, C, C],
+      ]),
+      50,
+    );
     const win = res.wins.find((w) => w.line === 0)!;
     expect(win.count).toBe(3);
     expect(win.symbol).toBe('bell');
@@ -79,7 +86,14 @@ describe('slot machine', () => {
 
   it('pays the diagonals too', () => {
     // ↘ диагональ: [0,0], [1,1], [2,2]
-    const res = evaluateGrid(grid([[S, C, L], [C, S, B], [L, B, S]]), 50);
+    const res = evaluateGrid(
+      grid([
+        [S, C, L],
+        [C, S, B],
+        [L, B, S],
+      ]),
+      50,
+    );
     const win = res.wins.find((w) => w.line === 3)!;
     expect(win.symbol).toBe('seven');
     expect(res.kind).toBe('jackpot');
@@ -88,15 +102,36 @@ describe('slot machine', () => {
   });
 
   it('pays two matching symbols from the left, but not from the right', () => {
-    const left = evaluateGrid(grid([[C, C, L], [L, L, C], [B, B, B]]), 50);
+    const left = evaluateGrid(
+      grid([
+        [C, C, L],
+        [L, L, C],
+        [B, B, B],
+      ]),
+      50,
+    );
     expect(left.wins.find((w) => w.line === 1)).toMatchObject({ count: 2, payout: 2 });
     // Пара справа (колонки 2 и 3) не считается.
-    const right = evaluateGrid(grid([[L, C, C], [C, L, L], [B, B, B]]), 50);
+    const right = evaluateGrid(
+      grid([
+        [L, C, C],
+        [C, L, L],
+        [B, B, B],
+      ]),
+      50,
+    );
     expect(right.wins.find((w) => w.line === 1 && w.symbol === 'cherry')).toBeUndefined();
   });
 
   it('adds up several winning lines', () => {
-    const res = evaluateGrid(grid([[B, B, B], [B, B, B], [B, B, B]]), 50);
+    const res = evaluateGrid(
+      grid([
+        [B, B, B],
+        [B, B, B],
+        [B, B, B],
+      ]),
+      50,
+    );
     // Все пять линий — тройки колоколов: 5 × (2 × 40).
     expect(res.wins).toHaveLength(5);
     expect(res.total).toBe(400);
@@ -106,7 +141,14 @@ describe('slot machine', () => {
 
   it('reports nothing when no line matches', () => {
     // Первая колонка — вишни, вторая — лимоны: ни одна линия не совпадает слева.
-    const res = evaluateGrid(grid([[C, L, B], [C, L, B], [C, L, B]]), 50);
+    const res = evaluateGrid(
+      grid([
+        [C, L, B],
+        [C, L, B],
+        [C, L, B],
+      ]),
+      50,
+    );
     expect(res.total).toBe(0);
     expect(res.kind).toBe('none');
     expect(outcomeLabel(res).text).toContain('Мимо');
@@ -114,11 +156,35 @@ describe('slot machine', () => {
 
   it('detects a near miss on premium symbols', () => {
     // Две семёрки на центральной линии, третий барабан — мимо.
-    expect(hasAnticipation(grid([[C, L, B], [S, S, C], [L, B, D]]))).toBe(true);
+    expect(
+      hasAnticipation(
+        grid([
+          [C, L, B],
+          [S, S, C],
+          [L, B, D],
+        ]),
+      ),
+    ).toBe(true);
     // Два алмаза по диагонали — тоже повод затаить дыхание.
-    expect(hasAnticipation(grid([[D, C, L], [C, D, B], [B, L, C]]))).toBe(true);
+    expect(
+      hasAnticipation(
+        grid([
+          [D, C, L],
+          [C, D, B],
+          [B, L, C],
+        ]),
+      ),
+    ).toBe(true);
     // Две вишни — обычное дело, драмы нет.
-    expect(hasAnticipation(grid([[C, C, L], [C, C, B], [B, L, C]]))).toBe(false);
+    expect(
+      hasAnticipation(
+        grid([
+          [C, C, L],
+          [C, C, B],
+          [B, L, C],
+        ]),
+      ),
+    ).toBe(false);
   });
 
   it('one evaluation returns only a fraction — остальное добирают каскады', () => {

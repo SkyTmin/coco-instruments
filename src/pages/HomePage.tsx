@@ -84,7 +84,9 @@ export function HomePage() {
     const missions = dailyMissions(today).filter(
       (m) => missionDone(m, { ...EMPTY_COUNTERS, ...counters }) && !claimed.includes(m.id),
     ).length;
-    const daily = dailyStatus({ streak: slotsStreak, lastClaim: slotsDailyAt }, today).ready ? 1 : 0;
+    const daily = dailyStatus({ streak: slotsStreak, lastClaim: slotsDailyAt }, today).ready
+      ? 1
+      : 0;
     const wheel = !slotsWheelAt || Date.now() - slotsWheelAt >= WHEEL_COOLDOWN_MS ? 1 : 0;
     return daily + wheel + missions;
   }, [slotsDailyAt, slotsStreak, slotsMissions, slotsWheelAt]);
