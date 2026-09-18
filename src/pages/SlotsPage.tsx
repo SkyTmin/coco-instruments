@@ -51,7 +51,7 @@ import {
   setMuted,
   winChime,
 } from '@/lib/sound';
-import { notifySuccess, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
+import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 
 // Высота ячейки барабана — та же величина в CSS (--cell): лента двигается на
 // целое число ячеек, поэтому символы всегда встают ровно в окно.
@@ -62,7 +62,13 @@ const BASE_MS = 900;
 const STEP_MS = 280;
 /** Пауза перед последним барабаном, когда на линии уже два премиума. */
 const ANTICIPATION_MS = 900;
-const AUTO_SPINS = 10;
+/** Варианты автоспина. Infinity — крутить, пока не кончатся монеты. */
+const AUTO_OPTIONS: { value: number; label: string; hint: string }[] = [
+  { value: 10, label: '10', hint: 'десять вращений' },
+  { value: 25, label: '25', hint: 'двадцать пять' },
+  { value: 50, label: '50', hint: 'пятьдесят' },
+  { value: Infinity, label: '∞', hint: 'пока не кончатся монеты' },
+];
 /** Один сектор колеса удачи в градусах. */
 const SECTOR = 360 / WHEEL.length;
 /** Сколько крутится колесо до остановки. */
@@ -287,6 +293,7 @@ export function SlotsPage() {
   const [result, setResult] = useState<SpinResult | null>(null);
   const [pending, setPending] = useState(0);
   const [auto, setAuto] = useState(0);
+  const [autoSheet, setAutoSheet] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [skinSheet, setSkinSheet] = useState(false);
   const [rewards, setRewards] = useState(false);
@@ -457,8 +464,10 @@ export function SlotsPage() {
   // Автоспин: очередь вращений, прерывается кнопкой или нехваткой монет.
   useEffect(() => {
     if (auto <= 0 || spinning) return;
+    // Бесконечный автоспин сам останавливается, когда крутить уже не на что.
     if (freeSpins <= 0 && balance < bet) {
       setAuto(0);
+      notifyWarning();
       return;
     }
     // Во время большого выигрыша пауза длиннее — дать досмотреть празднование.
@@ -484,6 +493,18 @@ export function SlotsPage() {
     rainCoins(14, rainSrc);
     notifySuccess();
     setNow(Date.now());
+  };
+
+  const startAuto = (count: number) => {
+    selectionChanged();
+    primeAudio();
+    setAutoSheet(false);
+    setAuto(count);
+  };
+
+  const stopAuto = () => {
+    tapLight();
+    setAuto(0);
   };
 
   const openRewards = () => {
@@ -812,10 +833,12 @@ export function SlotsPage() {
           <button
             className={`spin-btn${spinning ? ' is-busy' : ''}`}
             disabled={!canSpin && auto === 0}
-            onClick={() => (auto > 0 ? setAuto(0) : spin())}
+            onClick={() => (auto > 0 ? stopAuto() : spin())}
           >
             {auto > 0
-              ? `Стоп (${auto})`
+              ? auto === Infinity
+                ? 'Стоп · ∞'
+                : `Стоп (${auto})`
               : spinning
                 ? 'Крутится…'
                 : broke
@@ -825,16 +848,17 @@ export function SlotsPage() {
                     : `Крутить · ${fmt(bet)}`}
           </button>
           <button
-            className="slot-mini"
+            className={`slot-mini${auto > 0 ? ' is-on' : ''}`}
             disabled={!canSpin && auto === 0}
             onClick={() => {
               tapLight();
               primeAudio();
-              setAuto((n) => (n > 0 ? 0 : AUTO_SPINS));
+              if (auto > 0) stopAuto();
+              else setAutoSheet(true);
             }}
-            aria-label="Автоспин 10 раз"
+            aria-label={auto > 0 ? 'Остановить автоспин' : 'Автоспин'}
           >
-            ↻10
+            {auto > 0 ? (auto === Infinity ? '↻∞' : `↻${auto}`) : '↻'}
           </button>
           <button
             className={`slot-mini${turbo ? ' is-on' : ''}`}
@@ -1001,6 +1025,30 @@ export function SlotsPage() {
           <p className="muted" style={{ marginTop: 14, marginBottom: 0, fontSize: 12 }}>
             Символы — Twemoji (CC-BY 4.0, Twitter Inc. и контрибьюторы).
           </p>
+        </Sheet>
+      )}
+
+      {autoSheet && (
+        <Sheet title="Автоспин" onClose={() => setAutoSheet(false)}>
+          <div className="stack slots" data-skin={skin}>
+            <div className="auto-grid">
+              {AUTO_OPTIONS.map((o) => (
+                <button
+                  key={o.label}
+                  className={`auto-card${o.value === Infinity ? ' is-endless' : ''}`}
+                  onClick={() => startAuto(o.value)}
+                >
+                  <span className="auto-card__num">{o.label}</span>
+                  <span className="auto-card__hint">{o.hint}</span>
+                </button>
+              ))}
+            </div>
+            <p className="muted" style={{ margin: 0, fontSize: 12 }}>
+              Автоспин останавливается кнопкой «Стоп» и сам замирает, когда монет не хватает на
+              ставку. Бесплатные вращения тратятся первыми. Режим «∞» удобно включать вместе с
+              турбо — тогда барабаны крутятся вдвое быстрее.
+            </p>
+          </div>
         </Sheet>
       )}
 

@@ -12617,3 +12617,50 @@ input[type='datetime-local'] {
     animation: none;
   }
 }
+
+/* ---- Выбор автоспина ---------------------------------------------------- */
+.auto-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.auto-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 10px;
+  border: 1px solid color-mix(in srgb, var(--neon) 28%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--cab-1) 45%, transparent);
+  color: var(--reel-hi);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.auto-card:active {
+  transform: scale(0.98);
+}
+.auto-card.is-endless {
+  border-color: var(--bezel-2);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--btn-1) 26%, transparent),
+    color-mix(in srgb, var(--cab-1) 45%, transparent)
+  );
+}
+.auto-card__num {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  color: color-mix(in srgb, var(--bezel-1) 85%, #fff);
+}
+.auto-card__hint {
+  font-size: 12px;
+  text-align: center;
+  opacity: 0.7;
+}
+/* Знак бесконечности рисуется мельче цифр — выравниваем на глаз */
+.auto-card.is-endless .auto-card__num {
+  font-size: 40px;
+}
