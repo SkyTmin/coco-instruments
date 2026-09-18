@@ -1,11 +1,12 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
 import { CoinIcon } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
 import { IconGift, IconInfo } from '@/components/icons';
 import { CashDesk } from '@/components/CashDesk';
+import { SkinSheet } from '@/components/SkinSheet';
+import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { useFinanceStore } from '@/store';
 import type { ScatterSpinOutcome } from '@/store';
 import {
@@ -23,9 +24,8 @@ import {
 } from '@/lib/scatter';
 import type { Orb, ScatterCell, ScatterGrid, ScatterStep, ScatterWin } from '@/lib/scatter';
 import { BET_STEP, BETS, clampBet, MAX_BET, MIN_BET } from '@/lib/slots';
-import type { SlotSymbolId } from '@/lib/slots';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
-import { DUST_MS, dustBurst } from '@/lib/dust';
+import { dustBurst } from '@/lib/dust';
 import type { DustCell } from '@/lib/dust';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
@@ -199,7 +199,6 @@ const SpinCol = memo(
 );
 
 export function ScatterPage() {
-  const nav = useNavigate();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const bet = useFinanceStore((s) => s.slotsBet);
@@ -248,6 +247,10 @@ export function ScatterPage() {
   const [betDraft, setBetDraft] = useState(bet);
   const [settings, setSettings] = useState(false);
   const [rules, setRules] = useState(false);
+  const [skinSheet, setSkinSheet] = useState(false);
+  const [rewards, setRewards] = useState(false);
+  // Тикает раз в полминуты — только чтобы счётчик наград на кнопке не залипал.
+  const [now, setNow] = useState(() => Date.now());
   const [shake, setShake] = useState(false);
   const [celebration, setCelebration] = useState<{ tier: string; amount: number } | null>(null);
   const [levelUp, setLevelUp] = useState<{
@@ -282,7 +285,16 @@ export function ScatterPage() {
     if (affordable <= balance && affordable !== bet) setBet(affordable);
   }, [hydrated, spinning, balance, bet, setBet]);
 
+  // Счётчик наград на кнопке уровня: без этого «колесо готово» появлялось бы
+  // только после перезахода на страницу.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const level = levelFromXp(xp);
+  // Прогрессия общая с «Слотами» — считаем её тем же хуком, что и там.
+  const readyCount = useReadyRewards(now);
   const theme = skinOf(skin);
   const rainSrc = symbolSrc(skin, theme.rain);
   const inBonus = !!fs && fs.left > 0;
@@ -524,6 +536,13 @@ export function ScatterPage() {
     winChime('small');
     rainCoins(14, rainSrc);
     notifySuccess();
+    setNow(Date.now());
+  };
+
+  const openRewards = () => {
+    tapLight();
+    primeAudio();
+    setRewards(true);
   };
 
   const label = result ? scatterLabel(result) : null;
@@ -534,16 +553,28 @@ export function ScatterPage() {
       subtitle={`Поле ${SCATTER_COLS}×${SCATTER_ROWS} · ${CLUSTER_MIN} одинаковых где угодно`}
       className={`slots-screen slots-screen--${skin}`}
       action={
-        <button
-          className="icon-btn"
-          onClick={() => {
-            tapLight();
-            setRules(true);
-          }}
-          aria-label="Правила и выплаты"
-        >
-          <IconInfo size={21} />
-        </button>
+        <div className="row" style={{ gap: 8 }}>
+          <button
+            className="icon-btn icon-btn--skin"
+            onClick={() => {
+              tapLight();
+              setSkinSheet(true);
+            }}
+            aria-label="Сменить скин"
+          >
+            <Sym id={skinOf(skin).preview} skin={skin} size={22} />
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => {
+              tapLight();
+              setRules(true);
+            }}
+            aria-label="Правила и выплаты"
+          >
+            <IconInfo size={21} />
+          </button>
+        </div>
       }
     >
       <div className="stack slots scatter" data-skin={skin}>
@@ -568,14 +599,19 @@ export function ScatterPage() {
           </div>
         </div>
 
-        <button className="slot-level" onClick={() => nav('/slots')}>
+        <button className="slot-level" onClick={openRewards}>
           <span className="slot-level__lvl">Ур. {level.level}</span>
           <span className="slot-level__bar">
             <i style={{ width: `${Math.min(100, (level.into / level.need) * 100)}%` }} />
           </span>
-          {freeSpins > 0 && <span className="slot-level__free">🎟 {freeSpins}</span>}
+          {freeSpins > 0 && (
+            <span className="slot-level__free" title="Бесплатные вращения">
+              🎟 {freeSpins}
+            </span>
+          )}
           <span className="slot-level__gift">
             <IconGift size={17} />
+            {readyCount > 0 && <span className="slot-level__badge">{readyCount}</span>}
           </span>
         </button>
 
@@ -1074,6 +1110,18 @@ export function ScatterPage() {
             <CashDesk />
           </div>
         </Sheet>
+      )}
+
+      {skinSheet && <SkinSheet onClose={() => setSkinSheet(false)} />}
+
+      {rewards && (
+        <RewardsSheet
+          skin={skin}
+          onClose={() => {
+            setRewards(false);
+            setNow(Date.now());
+          }}
+        />
       )}
 
       {levelUp && (
