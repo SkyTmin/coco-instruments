@@ -481,7 +481,9 @@ export function Sheet({
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet__handle" />
         {title && <h3 className="sheet__title">{title}</h3>}
-        {children}
+        {/* Содержимое прокручивается внутри листа: длинный список (награды,
+            скины) иначе уезжает за верх экрана под шапку Telegram. */}
+        <div className="sheet__body">{children}</div>
       </div>
     </div>
   );
