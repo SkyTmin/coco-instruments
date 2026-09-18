@@ -30,8 +30,11 @@ Production is a VPS, deployed **automatically by GitHub Actions**.
 - **To ship a change, get it onto `prod`.** Each web session is given its own working
   branch (e.g. `claude/<name>`). That branch does **not** auto-deploy. When the work is
   approved, fast-forward / merge it into `prod` and push `prod` — the Action does the
-  rest. Always confirm with the user before pushing to `prod` (it deploys to production
-  and retargets the bot).
+  rest.
+- **Ship without asking.** The owner has no other way to try a change than on the live
+  bot, so every finished piece of work goes straight to `prod`: build, test, bump the
+  version, commit to the session branch, fast-forward `prod`, push. Do **not** stop to
+  ask for confirmation — that is a standing instruction from the owner.
 - Required GitHub Actions secrets (already configured): `VPS_HOST`, `VPS_PASSWORD`,
   `BOT_TOKEN` (optional: `VPS_USER`, `DOMAIN`, `GH_TOKEN`, `ADMIN_CHAT_ID`). Without
   them the workflow stays green and simply skips.
@@ -51,7 +54,8 @@ Production is a VPS, deployed **automatically by GitHub Actions**.
 > Action «Deploy to VPS» — собирает на сервере и перенацеливает кнопку бота). Ветка
 > **`main` — это СТАРОЕ приложение** (Coco на чистом HTML/JS), её не трогаем. Любая
 > рабочая ветка сессии в прод НЕ едет — чтобы задеплоить, изменения нужно влить в
-> `prod` и запушить её. Перед пушем в `prod` спрашивай подтверждение — это деплой в прод.
+> `prod` и запушить её. **Подтверждения спрашивать не надо** — владелец проверяет
+> только в проде, поэтому готовую работу сразу катим туда.
 
 ## Conventions
 
