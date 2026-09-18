@@ -104,6 +104,9 @@ const CameraPage = lazy(() =>
   import('@/pages/CameraPage').then((m) => ({ default: m.CameraPage })),
 );
 const SlotsPage = lazy(() => import('@/pages/SlotsPage').then((m) => ({ default: m.SlotsPage })));
+const ScatterPage = lazy(() =>
+  import('@/pages/ScatterPage').then((m) => ({ default: m.ScatterPage })),
+);
 const CameraGalleryPage = lazy(() =>
   import('@/pages/CameraGalleryPage').then((m) => ({ default: m.CameraGalleryPage })),
 );
@@ -518,6 +521,7 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
                 <Route path="/people/:id" element={<PersonDetailPage />} />
                 <Route path="/people/:id/edit" element={<PersonFormPage />} />
                 <Route path="/slots" element={<SlotsPage />} />
+                <Route path="/scatter" element={<ScatterPage />} />
                 <Route path="/camera" element={<CameraPage />} />
                 <Route path="/camera/gallery" element={<CameraGalleryPage />} />
                 <Route path="/calculator" element={<CalculatorPage />} />

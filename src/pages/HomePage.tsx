@@ -4,6 +4,7 @@ import { AnimatedNumber, ConfirmDialog, Screen, Sheet, Skeleton } from '@/compon
 import {
   IconCalculator,
   IconCamera,
+  IconShapes,
   IconSlots,
   IconGear,
   IconHeart,
@@ -67,6 +68,7 @@ export function HomePage() {
   const outfits = useFinanceStore((s) => s.outfits);
   const slotsBalance = useFinanceStore((s) => s.slotsBalance);
   const slotsSpins = useFinanceStore((s) => s.slotsSpins);
+  const scatterSpins = useFinanceStore((s) => s.scatterSpins);
   const slotsDailyAt = useFinanceStore((s) => s.slotsDailyAt);
   const slotsStreak = useFinanceStore((s) => s.slotsStreak);
   const slotsMissions = useFinanceStore((s) => s.slotsMissions);
@@ -413,6 +415,15 @@ export function HomePage() {
             </span>
             <span className="home-tile__title">Камера</span>
             <span className="home-tile__fact">Сетки, эскизы и суфлёр</span>
+          </button>
+          <button className="home-tile" onClick={() => go('/scatter')}>
+            <span className="home-tile__icon">
+              <IconShapes />
+            </span>
+            <span className="home-tile__title">Каскад</span>
+            <span className="home-tile__fact">
+              {scatterSpins ? `Поле 6×5 · ${scatterSpins} вращений` : 'Большое поле и цепочки'}
+            </span>
           </button>
           <button className="home-tile" onClick={() => go('/slots')}>
             <span className="home-tile__icon">

@@ -90,6 +90,8 @@ import {
   START_BALANCE,
 } from '@/lib/slots';
 import type { SpinOutcome } from '@/lib/slots';
+import { resolveScatter } from '@/lib/scatter';
+import type { ScatterOutcome } from '@/lib/scatter';
 import {
   BIG_BET,
   EMPTY_COUNTERS,
@@ -106,6 +108,12 @@ import {
 } from '@/lib/slots-meta';
 import type { MissionCounters } from '@/lib/slots-meta';
 import { genId } from '@/lib/id';
+
+/** Результат спина «Каскада» + то, что страница показывает сверху. */
+export interface ScatterSpinOutcome extends ScatterOutcome {
+  freeSpin: boolean;
+  levelUps: number[];
+}
 
 /** Результат спина + всё, что странице нужно показать сверху. */
 export interface SlotsSpinOutcome extends SpinOutcome {
@@ -285,6 +293,8 @@ interface SlotsSnapshot {
   slotsMissions: SlotsMissions;
   slotsWheelAt?: number;
   slotsFreeSpins: number;
+  scatterSpins: number;
+  scatterBest: number;
 }
 
 const slotsBlob = (s: SlotsSnapshot): SlotsBlob => ({
@@ -307,6 +317,8 @@ const slotsBlob = (s: SlotsSnapshot): SlotsBlob => ({
   missions: s.slotsMissions,
   wheelAt: s.slotsWheelAt,
   freeSpins: s.slotsFreeSpins,
+  scatterSpins: s.scatterSpins,
+  scatterBest: s.scatterBest,
 });
 
 const persistSlots = (s: SlotsSnapshot) => writeSlots(slotsBlob(s));
@@ -335,6 +347,8 @@ const slotsProgress = (blob?: Partial<SlotsBlob> | null) => ({
   slotsMissions: missionsForToday(blob?.missions),
   slotsWheelAt: blob?.wheelAt,
   slotsFreeSpins: blob?.freeSpins ?? 0,
+  scatterSpins: blob?.scatterSpins ?? 0,
+  scatterBest: blob?.scatterBest ?? 0,
 });
 
 // ---- Full data export / import (user-controlled backup) -------------------
@@ -422,6 +436,8 @@ interface FinanceState {
   slotsMissions: SlotsMissions;
   slotsWheelAt?: number;
   slotsFreeSpins: number;
+  scatterSpins: number;
+  scatterBest: number;
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -584,6 +600,8 @@ interface FinanceState {
 
   setSlotsBet: (bet: number) => void;
   playSlots: () => SlotsSpinOutcome | null;
+  /** Спин второй игры («Каскад»): кошелёк, опыт и цели общие со слотами. */
+  playScatter: () => ScatterSpinOutcome | null;
   /** Спасательные вращения, когда монет не хватает даже на минимальную ставку. */
   claimSlotsRescue: () => number;
   /** Ежедневная лесенка: возвращает начисленное и новую длину серии. */
@@ -662,6 +680,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   slotsStreak: 0,
   slotsMissions: freshMissions(),
   slotsFreeSpins: 0,
+  scatterSpins: 0,
+  scatterBest: 0,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -1981,6 +2001,50 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   // Из игры нельзя выпасть: когда монет не хватает даже на минимальную ставку,
   // даём бесплатные вращения и опускаем ставку до минимума.
+  // Спин «Каскада». Кошелёк, опыт, цели дня и бесплатные вращения — общие со
+  // слотами: это две игры одного зала, а не два независимых счёта.
+  playScatter: () => {
+    const s = get();
+    const free = s.slotsFreeSpins > 0;
+    if (!free && s.slotsBalance < s.slotsBet) return null;
+    const result = resolveScatter(s.slotsBet);
+
+    const missions = missionsForToday(s.slotsMissions);
+    const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
+    counters.spins += 1;
+    if (result.total > 0) counters.wins += 1;
+    // Большая гроздь из двенадцати символов идёт в цель «три в ряд».
+    if (result.steps.some((step) => step.wins.some((w) => w.count >= 12))) counters.triple += 1;
+    counters.coins += result.total;
+    if (s.slotsBet >= BIG_BET) counters.bigbet += 1;
+
+    const before = levelFromXp(s.slotsXp).level;
+    const kind = result.kind === 'mega' ? 'jackpot' : result.kind;
+    const xp = s.slotsXp + xpForSpin(result.total, s.slotsBet, kind);
+    const after = levelFromXp(xp).level;
+    const levelUps: number[] = [];
+    let bonusCoins = 0;
+    let bonusSpins = 0;
+    for (let lvl = Math.max(before, s.slotsRewardedLevel) + 1; lvl <= after; lvl++) {
+      const reward = levelReward(lvl);
+      bonusCoins += reward.coins;
+      bonusSpins += reward.freeSpins;
+      levelUps.push(lvl);
+    }
+
+    set({
+      slotsBalance: s.slotsBalance - (free ? 0 : s.slotsBet) + result.total + bonusCoins,
+      slotsFreeSpins: Math.max(0, s.slotsFreeSpins - (free ? 1 : 0)) + bonusSpins,
+      slotsXp: xp,
+      slotsRewardedLevel: Math.max(s.slotsRewardedLevel, after),
+      slotsMissions: { ...missions, counters },
+      scatterSpins: s.scatterSpins + 1,
+      scatterBest: Math.max(s.scatterBest, result.total),
+    });
+    persistSlots(get());
+    return { ...result, freeSpin: free, levelUps };
+  },
+
   claimSlotsRescue: () => {
     const s = get();
     const now = Date.now();
