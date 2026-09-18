@@ -10747,6 +10747,30 @@ input[type='datetime-local'] {
   --scene-1: #0b2c4d;
   --scene-2: #030a14;
 }
+.slots[data-skin='olympus'],
+.rewards[data-skin='olympus'],
+.levelup[data-skin='olympus'],
+.skin-card[data-skin='olympus'] {
+  --neon: #ffd83d;
+  --neon-2: #7fd4ff;
+  --cab-1: #1b2a63;
+  --cab-2: #070c22;
+  --cab-3: #101a44;
+  --reel-hi: #fffdf3;
+  --reel-mid: #f3e6c2;
+  --reel-lo: #c9ab68;
+  --bezel-1: #fff6cf;
+  --bezel-2: #e8b93c;
+  --bezel-3: #8a6410;
+  --bezel-4: #ffe9a3;
+  --btn-1: #fff0b8;
+  --btn-2: #ffd046;
+  --btn-3: #e29a18;
+  --btn-4: #8a5a06;
+  --btn-fg: #3a2600;
+  --scene-1: #101a46;
+  --scene-2: #04060f;
+}
 /* Свет за автоматом: отделяет корпус от фона страницы, как софит в зале */
 .slots::before {
   content: '';
@@ -13742,4 +13766,243 @@ input[type='datetime-local'] {
 }
 .cash-btn:active {
   transform: scale(0.96);
+}
+
+/* =========================================================================
+   «Олимп» — скин за 12 уровень. Единственная тема со своими анимациями:
+   вращающиеся лучи, плывущие облака, падающие искры и молнии Зевса,
+   которые бьют по всему экрану. Всё на CSS, без картинок и скриптов.
+   ========================================================================= */
+
+/* Сцена: лучи из-за горы + золотая дымка */
+.slots[data-skin='olympus'] .slots-scene {
+  background:
+    radial-gradient(120% 80% at 50% 8%, rgba(255, 216, 61, 0.22), transparent 58%),
+    radial-gradient(90% 60% at 50% 100%, rgba(127, 212, 255, 0.12), transparent 62%),
+    linear-gradient(180deg, var(--scene-1), var(--scene-2));
+}
+.slots[data-skin='olympus'] .slots-scene__decor {
+  background:
+    /* божественные лучи */
+    conic-gradient(
+      from 0deg at 50% 12%,
+      rgba(255, 216, 61, 0.14) 0deg 6deg,
+      transparent 6deg 22deg,
+      rgba(255, 216, 61, 0.1) 22deg 27deg,
+      transparent 27deg 46deg,
+      rgba(255, 244, 190, 0.12) 46deg 51deg,
+      transparent 51deg 72deg
+    ),
+    /* искры золота */
+    radial-gradient(circle 2px at 14% 30%, rgba(255, 232, 150, 0.9), transparent 60%),
+    radial-gradient(circle 1.6px at 33% 62%, rgba(255, 216, 61, 0.8), transparent 60%),
+    radial-gradient(circle 2.2px at 58% 24%, rgba(255, 244, 190, 0.9), transparent 60%),
+    radial-gradient(circle 1.8px at 78% 54%, rgba(255, 216, 61, 0.75), transparent 60%),
+    radial-gradient(circle 2px at 88% 18%, rgba(255, 232, 150, 0.85), transparent 60%),
+    radial-gradient(circle 1.6px at 22% 84%, rgba(255, 216, 61, 0.7), transparent 60%);
+  animation: olymp-rays 26s linear infinite;
+}
+@keyframes olymp-rays {
+  to {
+    transform: rotate(360deg);
+    background-position:
+      0 0,
+      0 -260px,
+      0 -300px,
+      0 -220px,
+      0 -280px,
+      0 -240px,
+      0 -320px;
+  }
+}
+/* Облака — два слоя, плывут в разные стороны */
+.slots[data-skin='olympus'] .slots-scene__decor::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 34% 9% at 18% 22%, rgba(255, 250, 230, 0.16), transparent 70%),
+    radial-gradient(ellipse 28% 7% at 72% 34%, rgba(255, 244, 205, 0.13), transparent 70%),
+    radial-gradient(ellipse 40% 10% at 46% 72%, rgba(210, 232, 255, 0.11), transparent 70%);
+  animation: olymp-clouds 34s ease-in-out infinite alternate;
+}
+/* Молния Зевса: долгая пауза, потом две вспышки подряд */
+.slots[data-skin='olympus'] .slots-scene__decor::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background:
+    /* два разряда под разными углами */
+    linear-gradient(
+      104deg,
+      transparent 40%,
+      rgba(127, 212, 255, 0.7) 45%,
+      rgba(255, 255, 245, 1) 48%,
+      rgba(127, 212, 255, 0.7) 51%,
+      transparent 56%
+    ),
+    linear-gradient(
+      68deg,
+      transparent 58%,
+      rgba(255, 255, 240, 0.85) 63%,
+      rgba(180, 230, 255, 0.6) 66%,
+      transparent 70%
+    ),
+    /* и общая вспышка неба */
+    radial-gradient(80% 55% at 50% 0%, rgba(255, 255, 230, 0.85), transparent 72%);
+  opacity: 0;
+  animation: olymp-bolt 7.5s ease-out infinite;
+}
+@keyframes olymp-clouds {
+  to {
+    transform: translateX(26px);
+  }
+}
+@keyframes olymp-bolt {
+  0%,
+  86% {
+    opacity: 0;
+  }
+  88% {
+    opacity: 0.85;
+  }
+  90% {
+    opacity: 0.1;
+  }
+  92% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Корпус дышит золотом, а лампы бегут по кругу заметнее обычного */
+.slots[data-skin='olympus'] .cabinet {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--bezel-2) 70%, transparent),
+    0 0 46px rgba(255, 200, 60, 0.28),
+    0 18px 50px rgba(0, 0, 0, 0.6);
+  /* Второй анимацией корпус ловит отблеск молнии: тот же период 7,5 с,
+     поэтому вспышка и отблеск идут одновременно. */
+  animation:
+    olymp-breathe 4.2s ease-in-out infinite,
+    olymp-strike 7.5s ease-out infinite;
+}
+@keyframes olymp-strike {
+  0%,
+  86%,
+  100% {
+    filter: none;
+  }
+  88% {
+    filter: brightness(1.6) saturate(1.2);
+  }
+  90% {
+    filter: brightness(1.02);
+  }
+  92% {
+    filter: brightness(1.45) saturate(1.15);
+  }
+}
+@keyframes olymp-breathe {
+  50% {
+    box-shadow:
+      0 0 0 1px var(--bezel-1),
+      0 0 70px rgba(255, 216, 61, 0.5),
+      0 18px 50px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Золотой блик пробегает по барабанам раз в несколько секунд */
+.slots[data-skin='olympus'] .reels::after,
+.slots[data-skin='olympus'] .sboard::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 245, 200, 0.55) 46%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(255, 245, 200, 0.55) 54%,
+    transparent 62%
+  );
+  transform: translateX(-130%);
+  animation: olymp-sheen 5.5s ease-in-out infinite;
+}
+@keyframes olymp-sheen {
+  0%,
+  72% {
+    transform: translateX(-130%);
+  }
+  88%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+/* Вывеска светится и переливается */
+.slots[data-skin='olympus'] .cabinet__sign b {
+  background: linear-gradient(100deg, #fff6cf 20%, #ffd83d 40%, #fffdf3 50%, #e8b93c 62%, #fff6cf 80%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: olymp-shine 3.4s linear infinite;
+}
+@keyframes olymp-shine {
+  to {
+    background-position: -220% 0;
+  }
+}
+
+/* Выигрышные ячейки получают золотой ореол вместо обычной подсветки */
+.slots[data-skin='olympus'] .sbcell.is-win::before {
+  box-shadow:
+    inset 0 0 0 1px rgba(90, 60, 0, 0.9),
+    inset 0 0 0 3px #ffd83d,
+    0 0 26px rgba(255, 216, 61, 1),
+    0 0 46px rgba(255, 216, 61, 0.55);
+}
+.slots[data-skin='olympus'] .reels__mark {
+  box-shadow:
+    inset 0 0 0 1px rgba(90, 60, 0, 0.9),
+    inset 0 0 0 4px #ffd83d,
+    inset 0 0 0 5px rgba(90, 60, 0, 0.5),
+    inset 0 0 24px rgba(255, 216, 61, 0.6),
+    0 0 34px rgba(255, 216, 61, 0.85);
+}
+
+/* Карточка скина в списке тоже переливается — её видно до открытия */
+.skin-card[data-skin='olympus'] {
+  background:
+    linear-gradient(140deg, rgba(255, 216, 61, 0.18), transparent 55%),
+    linear-gradient(180deg, var(--cab-1), var(--cab-2));
+  box-shadow: inset 0 0 0 1px rgba(255, 216, 61, 0.45);
+}
+.skin-card[data-skin='olympus'] .skin-card__name {
+  background: linear-gradient(100deg, #fff6cf, #ffd83d 45%, #fffdf3 55%, #e8b93c);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: olymp-shine 3.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slots[data-skin='olympus'] .slots-scene__decor,
+  .slots[data-skin='olympus'] .slots-scene__decor::before,
+  .slots[data-skin='olympus'] .slots-scene__decor::after,
+  .slots[data-skin='olympus'] .cabinet,
+  .slots[data-skin='olympus'] .reels::after,
+  .slots[data-skin='olympus'] .sboard::after,
+  .slots[data-skin='olympus'] .cabinet__sign b,
+  .skin-card[data-skin='olympus'] .skin-card__name {
+    animation: none;
+  }
 }

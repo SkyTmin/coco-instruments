@@ -14,7 +14,8 @@ export type SkinId =
   | 'egypt'
   | 'candy'
   | 'neon'
-  | 'winter';
+  | 'winter'
+  | 'olympus';
 
 export interface Skin {
   id: SkinId;
@@ -123,6 +124,17 @@ export const SKINS: Skin[] = [
     subtitle: 'Снег, огни и подарки',
     rain: 'star',
     confetti: ['#ffffff', '#bfe9ff', '#7fc7ff', '#e7f6ff', '#ffd76a'],
+  },
+  {
+    id: 'olympus',
+    name: 'Олимп',
+    hint: 'Золото богов и молнии Зевса — открывается на 12 уровне',
+    sign: ['GATES OF', 'OLYMPUS'],
+    preview: 'seven',
+    title: 'Врата Олимпа',
+    subtitle: 'Золото богов и молнии Зевса',
+    rain: 'seven',
+    confetti: ['#ffd83d', '#fff3c4', '#7fd4ff', '#f0a01e', '#ffffff'],
   },
 ];
 

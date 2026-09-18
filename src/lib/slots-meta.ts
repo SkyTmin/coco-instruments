@@ -299,6 +299,7 @@ export const SKIN_UNLOCK: Record<string, number> = {
   candy: 1,
   neon: 5,
   winter: 9,
+  olympus: 12,
 };
 
 export function isSkinUnlocked(skin: string, level: number): boolean {

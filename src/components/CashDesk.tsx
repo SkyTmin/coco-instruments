@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { useFinanceStore } from '@/store';
+import { getBackupStatus } from '@/lib/backup';
 import { CoinIcon } from '@/components/slot-art';
 import { rainCoins } from '@/lib/coins';
 import { coinDing, primeAudio } from '@/lib/sound';
@@ -10,10 +12,20 @@ const fmt = (n: number) => n.toLocaleString('ru-RU');
 /**
  * Касса: кнопка «закинуть себе монет». Монеты виртуальные, не продаются и ни
  * на что вне игры не влияют — это не покупка, а способ не ждать бонусов.
- * Живёт в настройках обеих игр, чтобы не мозолить глаза на главном экране.
+ * Видна только владельцу приложения (тому же, кому доступен бэкап): для
+ * остальных игра должна оставаться игрой.
  */
 export function CashDesk() {
   const add = useFinanceStore((s) => s.addSlotsCoins);
+  const [owner, setOwner] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void getBackupStatus().then((s) => alive && setOwner(s.owner));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const give = (amount: number) => {
     primeAudio();
@@ -24,6 +36,8 @@ export function CashDesk() {
     rainCoins(20);
     notifySuccess();
   };
+
+  if (!owner) return null;
 
   return (
     <div className="reward-block">
