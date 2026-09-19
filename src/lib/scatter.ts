@@ -69,13 +69,13 @@ export interface ScatterPay {
  * ничего не платит, а событием является сфера.
  */
 export const SCATTER_PAYS: ScatterPay[] = [
-  { id: 'cherry', tiers: [0.03, 0.07, 0.19] },
-  { id: 'lemon', tiers: [0.04, 0.1, 0.25] },
-  { id: 'grape', tiers: [0.07, 0.15, 0.35] },
-  { id: 'bell', tiers: [0.1, 0.22, 0.55] },
-  { id: 'star', tiers: [0.16, 0.38, 1.15] },
-  { id: 'diamond', tiers: [0.28, 0.68, 2.1] },
-  { id: 'seven', tiers: [0.55, 1.45, 4.9] },
+  { id: 'cherry', tiers: [0.035, 0.08, 0.22] },
+  { id: 'lemon', tiers: [0.05, 0.12, 0.29] },
+  { id: 'grape', tiers: [0.08, 0.17, 0.41] },
+  { id: 'bell', tiers: [0.12, 0.26, 0.64] },
+  { id: 'star', tiers: [0.19, 0.44, 1.34] },
+  { id: 'diamond', tiers: [0.33, 0.79, 2.45] },
+  { id: 'seven', tiers: [0.64, 1.7, 5.7] },
 ];
 
 const PAY_BY_ID = new Map(SCATTER_PAYS.map((p) => [p.id, p]));
@@ -409,7 +409,12 @@ export function resolveScatter(bet: number, opts: RoundOptions | Rng = {}): Scat
   const orbSum = orbs.reduce((s, orb) => s + orb.value, 0);
   // В бонусе сферы копятся в общий множитель на всю сессию; в базовой игре
   // работают в пределах одной последовательности.
-  if (free && orbSum) totalMult += orbSum;
+  //
+  // Но копятся ТОЛЬКО если последовательность что-то выиграла. Сфера, рядом
+  // с которой не собралось ни одной восьмёрки, просто гаснет — у Олимпа
+  // так же: множитель влияет на выплату лишь того падения, которое сыграло.
+  // Раньше она молча прибавлялась к бонусу, и это выглядело как ошибка счёта.
+  if (free && orbSum && base > 0) totalMult += orbSum;
   const applied = base > 0 ? (free ? Math.max(1, totalMult) : Math.max(1, orbSum)) : 1;
   const total = Math.min(bet * MAX_WIN, scatterPay + (base > 0 ? roundWin(base * applied) : 0));
 

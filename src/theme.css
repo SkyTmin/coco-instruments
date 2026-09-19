@@ -11352,16 +11352,19 @@ input[type='datetime-local'] {
 }
 
 /* Строка статуса */
+/* Тоже фиксированная высота: содержимое меняется каждый спин, а перенос на
+   вторую строку двигал кнопки. */
 .cabinet__status {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
   gap: 6px 10px;
-  min-height: 30px;
+  height: 34px;
   margin-top: 10px;
   padding: 0 6px;
   text-align: center;
+  overflow: hidden;
 }
 .status {
   font-size: 13.5px;
@@ -13676,12 +13679,21 @@ input[type='datetime-local'] {
 }
 
 /* Что сыграло: символ, его количество и выплата — вместо линий выплат */
+/* Высота фиксирована и место занято всегда — даже когда показывать нечего.
+   Раньше строка появлялась и исчезала вместе с выигрышем, и всё, что ниже
+   (статус, кнопки), ездило на полсотни пикселей каждый спин. Перенос
+   запрещён по той же причине: вторая строка чипов снова сдвинула бы всё. */
 .hits {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   justify-content: center;
   gap: 6px;
+  height: 30px;
   margin: 10px 4px 0;
+  overflow: hidden;
+}
+.hits:not(:empty) {
   animation: combo-in 0.3s cubic-bezier(0.2, 1.5, 0.4, 1);
 }
 .hit {
@@ -13734,6 +13746,49 @@ input[type='datetime-local'] {
   .hit__mult {
     animation: none;
   }
+}
+
+/* Вывеска в режиме бонуса: та же панель, другое содержимое. Геометрия
+   не меняется — поле из-за бонуса больше никуда не едет. */
+.cabinet__sign.is-bonus {
+  align-items: center;
+  gap: 7px;
+  letter-spacing: normal;
+  border-color: color-mix(in srgb, var(--neon) 70%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 230, 190, 0.35),
+    0 0 20px color-mix(in srgb, var(--neon) 40%, transparent);
+}
+.sign-bonus__label {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: var(--neon);
+}
+.sign-bonus__left {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+  opacity: 0.85;
+}
+.sign-bonus__mult {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #2a1400;
+  background: linear-gradient(180deg, #ffe9a3, #ffc53c);
+}
+.sign-bonus__won {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: normal;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Вывеска широкого корпуса */

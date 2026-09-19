@@ -96,6 +96,7 @@ const AUTO_OPTIONS: { value: number; label: string; hint: string }[] = [
 
 /** Общая «никто не тянет» — константа, чтобы не плодить массивы каждый спин. */
 const EMPTY_ANTI: boolean[] = Array(SCATTER_COLS).fill(false);
+const EMPTY_CELLS: ReadonlySet<string> = new Set();
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
@@ -283,6 +284,20 @@ export function ScatterPage() {
     step: number;
     phase: 'show' | 'collect' | 'burst' | 'drop';
   } | null>(null);
+  /**
+   * Клетки, занятые сферами за эту последовательность. Живут до СЛЕДУЮЩЕГО
+   * спина, а не до улёта сферы: иначе на её месте снова проступал символ —
+   * и сразу становилось видно, что сфера была просто картинкой сверху, а не
+   * частью поля. Клетка, которую заняла сфера, пустует до конца раунда.
+   */
+  const [coveredCells, setCoveredCells] = useState<ReadonlySet<string>>(() => new Set());
+  /**
+   * Что показывает плашка бонуса. Стор обновляется в момент НАЖАТИЯ — там
+   * уже известны и новый множитель, и выигрыш, — а поле показывает это
+   * секунды спустя. Плашка проговаривала результат вперёд поля, то есть
+   * спойлерила спин. Здесь лежит состояние «как на поле прямо сейчас».
+   */
+  const [shownFs, setShownFs] = useState<{ left: number; mult: number; won: number } | null>(null);
   /** Сумма сфер, которую счётчик показывает прямо сейчас (тикает вверх). */
   const [collectSum, setCollectSum] = useState(0);
   /** Множитель «припечатался» к выплате — короткая вспышка на счётчике. */
@@ -382,9 +397,6 @@ export function ScatterPage() {
   const dying = new Set(
     cascade?.phase === 'burst' ? stepWins.flatMap((w) => w.cells.map(([c, r]) => `${c}-${r}`)) : [],
   );
-  // Клетки, занятые сферами: символ под сферой прячем — он не лежит «под»
-  // ней, его там нет. Сфера ЗАНИМАЕТ клетку и в восьмёрку не считается.
-  const orbCells = new Set(stepOrbs.map((o) => `${o.col}-${o.row}`));
   const shownBalance = Math.max(0, balance - pending);
 
   const finish = useCallback(
@@ -395,6 +407,8 @@ export function ScatterPage() {
       setSpinning(false);
       // Напряжение снято — гасим подсветку тянущих колонок.
       setAnti(EMPTY_ANTI);
+      // Плашка бонуса обновляется только теперь, когда поле всё показало.
+      setShownFs(res.fs ? { left: res.fs.left, mult: res.fs.totalMult, won: res.fs.won } : null);
       // Порядок такта важен: сначала всё замирает, потом вспышка, и только
       // за ней взрыв. Пауза читается как удар, вспышка прячет склейку — и
       // три эффекта сливаются в одно событие вместо трёх подряд.
@@ -509,6 +523,7 @@ export function ScatterPage() {
       setStepWins(step.wins);
       // Накопленные сферы — они лежат до конца последовательности.
       setStepOrbs(step.orbs);
+      setCoveredCells(new Set(step.orbs.map((o) => `${o.col}-${o.row}`)));
       setChain(chainN);
       // Только база: множитель применяется ОДИН раз, в самом конце.
       setRunWin((w) => w + step.base);
@@ -619,6 +634,8 @@ export function ScatterPage() {
           // Тот самый кадр, в котором видно, что бонус сработал: выплата
           // растёт с базы до настоящей прямо на глазах.
           setRunWin(res.total);
+          // Плашка бонуса догоняет поле ровно здесь: множитель уже виден.
+          if (res.fs) setShownFs((v) => ({ ...(v ?? { left: 0, won: 0 }), mult: res.totalMult }));
           squashPop(winRef.current, 0.6);
           addTrauma(cabinetRef.current, loudest.beats >= 3 ? TRAUMA.big : TRAUMA.small);
           if (loudest.beats >= 2) tapMedium();
@@ -684,6 +701,7 @@ export function ScatterPage() {
     setStepCombo(1);
     setCollectSum(0);
     setCollectDone(false);
+    setCoveredCells(EMPTY_CELLS);
     if (collectRef.current) clearInterval(collectRef.current);
     setPending(res.total);
     setSpinId((n) => n + 1);
@@ -703,6 +721,7 @@ export function ScatterPage() {
           const landed = res.steps[0]?.orbs ?? res.orbs;
           if (landed.length) {
             setStepOrbs(landed);
+            setCoveredCells(new Set(landed.map((o) => `${o.col}-${o.row}`)));
             playOrbs(landed);
           }
           const pause = landed.length ? 460 * (turbo ? TURBO : 1) : 0;
@@ -723,9 +742,12 @@ export function ScatterPage() {
   // Бонус крутится сам: вращения бесплатные, ждать нажатия незачем.
   useEffect(() => {
     if (!inBonus || spinning || celebration) return;
-    const t = setTimeout(() => spin(), 700);
+    // Пауза между вращениями бонуса. Было 700 мс — и следующий спин начинался
+    // раньше, чем досчитывался предыдущий: счётчик выигрыша анимируется до
+    // 900 мс, и его срезало на середине. Ждём, пока счёт договорит.
+    const t = setTimeout(() => spin(), turbo ? 520 : 1000);
     return () => clearTimeout(t);
-  }, [inBonus, spinning, celebration, spin]);
+  }, [inBonus, spinning, celebration, spin, turbo]);
 
   // Автоспин
   useEffect(() => {
@@ -844,18 +866,6 @@ export function ScatterPage() {
           </span>
         </button>
 
-        {inBonus && fs && (
-          <div className="bonus-bar">
-            <span className="bonus-bar__label">БОНУС</span>
-            <span className="bonus-bar__left">осталось {fs.left}</span>
-            <span className="bonus-bar__mult">×{Math.max(1, fs.totalMult)}</span>
-            <span className="bonus-bar__won">
-              {fmt(fs.won)}
-              <CoinIcon size={13} />
-            </span>
-          </div>
-        )}
-
         {/* Трясёт корпус автомата, а не всю страницу: внутри Telegram дёрганье
             всего экрана читается как баг вебвью, а не как удар. */}
         <div className={`cabinet cabinet--wide${inBonus ? ' is-bonus' : ''}`} ref={cabinetRef}>
@@ -864,9 +874,38 @@ export function ScatterPage() {
               <i key={i} style={{ animationDelay: `${i * 0.09}s` }} />
             ))}
           </div>
-          <div className="cabinet__sign cabinet__sign--wide">
-            <span>{theme.sign[0]}</span>
-            <b>CASCADE</b>
+          {/* Состояние бонуса живёт в «короне» автомата — на месте вывески,
+              а не отдельной плашкой над корпусом. Отдельная плашка появлялась
+              и исчезала вместе с бонусом и каждый раз сдвигала всё поле вниз
+              на свою высоту. Здесь же меняется только содержимое, геометрия
+              остаётся та же, и поле стоит на месте. */}
+          <div className={`cabinet__sign cabinet__sign--wide${inBonus ? ' is-bonus' : ''}`}>
+            {inBonus && fs ? (
+              <>
+                <span className="sign-bonus__label">БОНУС</span>
+                {/* Числа — состояние ПОЛЯ, а не стора: пока крутится, они
+                    держат прошлые значения и не выдают результат вперёд
+                    барабанов. Раньше плашка успевала показать новый множитель
+                    до того, как сферы появлялись на поле. */}
+                <span className="sign-bonus__left">ещё {shownFs?.left ?? fs.left}</span>
+                <span className="sign-bonus__mult">
+                  ×{Math.max(1, shownFs?.mult ?? fs.totalMult)}
+                </span>
+                <span className="sign-bonus__won">
+                  <AnimatedNumber
+                    value={shownFs?.won ?? fs.won}
+                    format={(n) => fmt(n)}
+                    duration={500}
+                  />
+                  <CoinIcon size={13} />
+                </span>
+              </>
+            ) : (
+              <>
+                <span>{theme.sign[0]}</span>
+                <b>CASCADE</b>
+              </>
+            )}
           </div>
           <div className="cabinet__window">
             <div className="sboard" ref={boardRef}>
@@ -880,7 +919,7 @@ export function ScatterPage() {
                             dying.has(`${c}-${cell.row}`) ? ' is-dust' : ''
                           }${winCells.has(`${c}-${cell.row}`) ? ' is-win' : ''}${
                             cell.id === 'scatter' ? ' is-scatter' : ''
-                          }${orbCells.has(`${c}-${cell.row}`) ? ' is-covered' : ''}${
+                          }${coveredCells.has(`${c}-${cell.row}`) ? ' is-covered' : ''}${
                             shownWins.length &&
                             !winCells.has(`${c}-${cell.row}`) &&
                             cell.id !== 'scatter'
@@ -980,10 +1019,14 @@ export function ScatterPage() {
           </div>
 
           {/* Что именно сыграло: символ, сколько его на поле и сколько платит.
-              Линий здесь нет, поэтому объясняем выигрыш словами и числами. */}
-          {shownWins.length > 0 && (
-            <div className="hits" key={`h-${chain}`}>
-              {shownWins.map((w) => (
+              Линий здесь нет, поэтому объясняем выигрыш словами и числами.
+
+              Контейнер рендерится ВСЕГДА, даже пустым: иначе он то появлялся,
+              то пропадал, и вместе с ним на полсотни пикселей ездило всё,
+              что ниже, — поле выглядело прыгающим. */}
+          <div className="hits" key={`h-${chain}`}>
+            {shownWins.length > 0 &&
+              shownWins.map((w) => (
                 <span className="hit" key={w.symbol}>
                   <Sym id={w.symbol} skin={skin} size={22} />
                   <b>×{w.count}</b>
@@ -997,8 +1040,7 @@ export function ScatterPage() {
                   </i>
                 </span>
               ))}
-            </div>
-          )}
+          </div>
 
           <div className="cabinet__status">
             {cascade ? (
@@ -1147,6 +1189,8 @@ export function ScatterPage() {
               disabled={spinning || balance < buyCost}
               onClick={() => {
                 if (!buyBonus()) return;
+                // Новый бонус — плашка начинает с чистого листа.
+                setShownFs(null);
                 tapMedium();
                 primeAudio();
                 jackpotFanfare();
