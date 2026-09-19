@@ -1,0 +1,102 @@
+name: Server check (связь с Telegram)
+
+# Диагностика на самом VPS. Только чтение: ничего не чинит и не перезапускает.
+#
+# Что выясняем:
+#   1. Ходит ли сервер НАРУЖУ к api.telegram.org (от этого зависят напоминания
+#      и ежедневные бэкапы — они оборвались 12 сентября).
+#   2. Доставляется ли вебхук ВНУТРЬ (getWebhookInfo говорит
+#      «Connection timed out»; без вебхука не работает вход на сайте, потому
+#      что он подтверждается командой /start боту).
+#   3. Жив ли сам сервис, слушается ли 443, цел ли сертификат.
+#
+# Запуск: Actions → «Server check (связь с Telegram)» → Run workflow.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Что видно с сервера
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            TOK="$(grep -E '^BOT_TOKEN=' /etc/coco.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '[:space:]')"
+            DOM="$(grep -E '^PUBLIC_URL=' /etc/coco.env 2>/dev/null | head -1 | cut -d= -f2- | sed 's#https\?://##')"
+
+            echo "=== 1. Наружу: достаёт ли сервер Telegram ==="
+            for H in api.telegram.org core.telegram.org; do
+              printf '  %-20s ' "$H"
+              getent ahosts "$H" | awk 'NR==1{printf "DNS %s  ", $1}' || printf 'DNS нет  '
+              curl -sS -o /dev/null -w 'HTTP %{http_code} за %{time_total}s\n' \
+                --max-time 15 "https://$H/" 2>&1 | tail -1
+            done
+            echo "  --- getMe (реальный вызов Bot API) ---"
+            if [ -n "$TOK" ]; then
+              curl -sS --max-time 20 "https://api.telegram.org/bot$TOK/getMe" 2>&1 \
+                | sed "s/$TOK/***/g" | head -c 300; echo
+            else
+              echo "  BOT_TOKEN в /etc/coco.env не найден"
+            fi
+
+            echo
+            echo "=== 2. Внутрь: слушается ли 443 и отвечает ли приложение ==="
+            (ss -lntp 2>/dev/null || netstat -lntp 2>/dev/null) | grep -E ':(80|443|3000)\b' | sed 's/^/  /'
+            printf '  локально /api/health: '
+            curl -sS --max-time 10 http://127.0.0.1:3000/api/health 2>&1 | head -c 120; echo
+            if [ -n "$DOM" ]; then
+              printf '  снаружи по имени:    '
+              curl -sS -o /dev/null -w 'HTTP %{http_code}\n' --max-time 15 "https://$DOM/api/health" 2>&1 | tail -1
+            fi
+
+            echo
+            echo "=== 3. Фаервол ==="
+            (ufw status 2>/dev/null | head -12 || echo "  ufw не установлен") | sed 's/^/  /'
+            echo "  --- iptables INPUT ---"
+            (iptables -S INPUT 2>/dev/null | head -15 || echo "  недоступно") | sed 's/^/  /'
+            echo "  --- fail2ban ---"
+            (fail2ban-client status 2>/dev/null | head -5 || echo "  не установлен") | sed 's/^/  /'
+
+            echo
+            echo "=== 4. Сертификат ==="
+            if [ -n "$DOM" ]; then
+              echo | openssl s_client -connect "127.0.0.1:443" -servername "$DOM" 2>/dev/null \
+                | openssl x509 -noout -issuer -dates 2>/dev/null | sed 's/^/  /' \
+                || echo "  не прочитать"
+            fi
+
+            echo
+            echo "=== 5. Службы ==="
+            for S in coco caddy coco-backup.timer; do
+              printf '  %-20s %s\n' "$S" "$(systemctl is-active $S 2>/dev/null) / $(systemctl is-enabled $S 2>/dev/null)"
+            done
+            echo "  --- когда последний раз срабатывал бэкап ---"
+            systemctl list-timers coco-backup.timer --all 2>/dev/null | head -4 | sed 's/^/  /'
+            echo "  --- последние строки журнала бэкапа ---"
+            journalctl -u coco-backup --no-pager -n 12 2>/dev/null | sed "s/${TOK:-__none__}/***/g" | sed 's/^/  /' || echo "  журнала нет"
+
+            echo
+            echo "=== 6. Ошибки приложения (хвост) ==="
+            tail -n 15 /var/lib/coco/errors.log 2>/dev/null | cut -c1-200 | sed 's/^/  /' || echo "  errors.log пуст или отсутствует"
+
+            echo
+            echo "=== 7. Журнал сервиса coco ==="
+            journalctl -u coco --no-pager -n 15 2>/dev/null | cut -c1-200 | sed 's/^/  /' || echo "  нет"
+
+      - name: Что видит Telegram
+        if: always()
+        run: |
+          set -u
+          curl -sS --max-time 20 "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/getWebhookInfo" \
+            | jq -r '.result
+                | "  адрес вебхука задан: " + (if (.url|length)>0 then "да" else "НЕТ" end)
+                + "\n  последняя ошибка:    " + (.last_error_message // "нет")
+                + "\n  ждут доставки:       " + (.pending_update_count|tostring)
+                + "\n  максимум соединений: " + (.max_connections|tostring)' || true
