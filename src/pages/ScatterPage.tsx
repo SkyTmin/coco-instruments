@@ -452,6 +452,10 @@ export function ScatterPage() {
       setChain(chainN);
       setRunWin((w) => w + baseWin);
       setPending((p) => Math.max(0, p - step.payout));
+      // Если собирать нечего (в бонусе множитель уже накоплен, а новых сфер
+      // не выпало), множитель считается показанным сразу — иначе строка
+      // «что сыграло» осталась бы на базе, а счётчик ушёл бы на итог.
+      setCollectDone(!collecting);
 
       comboHit(chainN);
 
@@ -508,8 +512,10 @@ export function ScatterPage() {
 
       timers.current.push(
         setTimeout(() => {
+          // Сбрасывать «множитель показан» здесь нельзя: строка «что сыграло»
+          // видна и в этой фазе и мигнула бы обратно на базу. Сбрасывает его
+          // начало следующего звена.
           setCascade({ step: i, phase: 'burst' });
-          setCollectDone(false);
           symbolBurst();
           startDust(step.wins);
         }, show + collect),
