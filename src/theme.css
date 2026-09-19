@@ -14666,3 +14666,247 @@ input[type='datetime-local'] {
   color: #e2603f;
   word-break: break-word;
 }
+
+/* ===========================================================================
+   Итог захода
+   ---------------------------------------------------------------------------
+   Впечатление от эпизода — это примерно самый яркий момент плюс последний,
+   а длительность почти не учитывается. Значит, у захода должен быть КОНЕЦ,
+   и в этом конце должен лежать пик. Вся вёрстка подчинена одному: пик здесь
+   единственное, что по-настоящему крупно.
+   =========================================================================== */
+.ses {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 20px 16px;
+  background: rgba(6, 3, 12, 0.82);
+  animation: fade 0.24s ease both;
+}
+.ses__card {
+  position: relative;
+  width: min(360px, 100%);
+  max-height: 100%;
+  overflow: hidden auto;
+  display: grid;
+  gap: 14px;
+  padding: 22px 20px 18px;
+  border-radius: 24px;
+  text-align: center;
+  background: linear-gradient(180deg, #241633, #150c20 60%, #0e0716);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 220, 190, 0.16);
+  border: 1px solid rgba(255, 200, 140, 0.22);
+  animation: ses-in 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+@keyframes ses-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+/* Чем ярче был заход, тем теплее рамка. Тихий не подсвечиваем вовсе —
+   иначе подсветка перестаёт что-либо значить. */
+.ses__card--good {
+  border-color: rgba(120, 200, 255, 0.4);
+}
+.ses__card--great {
+  border-color: rgba(255, 176, 58, 0.55);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.6),
+    0 0 44px rgba(255, 160, 40, 0.22),
+    inset 0 1px 0 rgba(255, 220, 190, 0.16);
+}
+.ses__card--unforgettable {
+  border-color: rgba(255, 94, 199, 0.65);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.6),
+    0 0 58px rgba(255, 94, 199, 0.3),
+    inset 0 1px 0 rgba(255, 220, 190, 0.2);
+}
+/* Лучи — только у незабываемого. Градиент рисуется один раз, крутится
+   трансформ: анимировать угол внутри conic-gradient значит перерисовывать
+   кадр целиком. */
+.ses__rays {
+  position: absolute;
+  left: 50%;
+  top: 26%;
+  width: 190%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  opacity: 0.32;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 180, 230, 0.8) 0deg 5deg,
+    transparent 5deg 25deg
+  );
+  -webkit-mask-image: radial-gradient(circle, #000 8%, transparent 58%);
+  mask-image: radial-gradient(circle, #000 8%, transparent 58%);
+  contain: paint;
+  will-change: transform;
+  animation: ses-rays 11s linear infinite;
+}
+@keyframes ses-rays {
+  to {
+    rotate: 360deg;
+  }
+}
+
+.ses__grade {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.68;
+}
+
+.ses__peak {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  padding: 14px 12px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--pk, #ffd83d) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pk, #ffd83d) 30%, transparent);
+}
+.ses__peak-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pk, #ffd83d);
+  opacity: 0.85;
+}
+.ses__peak-title {
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--pk, #ffd83d);
+}
+.ses__peak-detail {
+  font-size: 12.5px;
+  opacity: 0.72;
+}
+.ses__peak--plain {
+  --pk: #b9a7cc;
+}
+.ses__peak--rare {
+  --pk: #58b7ff;
+}
+.ses__peak--epic {
+  --pk: #c078ff;
+}
+.ses__peak--legendary {
+  --pk: #ffb03a;
+}
+/* Реликвия переливается: фон едет, а не пересчитывается — самая дешёвая
+   из «радужных» уловок. */
+.ses__peak--mythic {
+  --pk: #ff5ec7;
+}
+.ses__peak--mythic .ses__peak-title {
+  background: linear-gradient(100deg, #ff5ec7, #ffd83d 25%, #5ee7ff 50%, #a06bff 75%, #ff5ec7);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: ses-holo 2s linear infinite;
+}
+@keyframes ses-holo {
+  to {
+    background-position: 300% 0;
+  }
+}
+
+.ses__net {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 27px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.ses__net.is-up {
+  color: #7ee0a8;
+}
+.ses__net.is-down {
+  color: #e2856f;
+}
+
+.ses__rank {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffd489;
+}
+
+.ses__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 220, 190, 0.12);
+  border-bottom: 1px solid rgba(255, 220, 190, 0.12);
+}
+.ses__stats span {
+  display: grid;
+  gap: 2px;
+}
+.ses__stats b {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ses__stats i {
+  font-style: normal;
+  font-size: 10.5px;
+  opacity: 0.6;
+}
+
+.ses__hook {
+  font-size: 12.5px;
+  opacity: 0.72;
+}
+
+.ses__actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+.ses__btn {
+  padding: 13px 16px;
+  border: 0;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #f3e9ff;
+  background: rgba(255, 255, 255, 0.09);
+  cursor: pointer;
+}
+.ses__btn--go {
+  color: #2a1400;
+  background: linear-gradient(180deg, #ffe9a3, #ffc53c 60%, #f0a01e);
+  box-shadow: 0 8px 22px rgba(255, 180, 60, 0.32);
+}
+.ses__btn:active {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ses,
+  .ses__card,
+  .ses__rays,
+  .ses__peak--mythic .ses__peak-title {
+    animation: none;
+  }
+}

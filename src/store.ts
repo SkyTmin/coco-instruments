@@ -109,7 +109,12 @@ import {
   xpForSpin,
 } from '@/lib/slots-meta';
 import type { MissionCounters } from '@/lib/slots-meta';
+import { advance, SESSION_GAP_MS, worthShowing } from '@/lib/session';
+import type { Session, SpinRecord } from '@/lib/session';
 import { genId } from '@/lib/id';
+
+/** Сколько прошлых заходов держим: хватает на «лучший за месяц». */
+const SESSION_KEEP = 20;
 
 /** Результат спина «Каскада» + то, что страница показывает сверху. */
 export interface ScatterSpinOutcome extends ScatterRound {
@@ -304,6 +309,8 @@ interface SlotsSnapshot {
   scatterBest: number;
   scatterAnte: boolean;
   scatterFs: ScatterFsState | null;
+  sessionNow: Session | null;
+  sessionPast: Session[];
 }
 
 const slotsBlob = (s: SlotsSnapshot): SlotsBlob => ({
@@ -330,6 +337,8 @@ const slotsBlob = (s: SlotsSnapshot): SlotsBlob => ({
   scatterBest: s.scatterBest,
   scatterAnte: s.scatterAnte,
   scatterFs: s.scatterFs,
+  session: s.sessionNow,
+  sessionPast: s.sessionPast,
 });
 
 const persistSlots = (s: SlotsSnapshot) => writeSlots(slotsBlob(s));
@@ -361,7 +370,33 @@ const slotsProgress = (blob?: Partial<SlotsBlob> | null) => ({
   scatterBest: blob?.scatterBest ?? 0,
   scatterAnte: blob?.scatterAnte ?? false,
   scatterFs: blob?.scatterFs ?? null,
+  sessionNow: blob?.session ?? null,
+  // Двадцати прошлых заходов хватает, чтобы сказать «лучший за месяц»,
+  // и они не раздувают сохранение.
+  sessionPast: (blob?.sessionPast ?? []).slice(0, SESSION_KEEP),
 });
+
+/**
+ * Заход из сохранения, к которому давно не возвращались, считается
+ * законченным: показываем его итог прямо на входе.
+ *
+ * Это не редкий случай, а ОСНОВНОЙ: мини-приложение в Telegram чаще всего
+ * закрывают резко, а не «выходят из игры». Без этого заход почти всегда
+ * утекал бы в никуда, и вспоминать было бы нечего.
+ */
+function staleSession(p: {
+  sessionNow: Session | null;
+  sessionPast: Session[];
+}): Partial<{ sessionNow: Session | null; sessionPast: Session[]; sessionCard: Session | null }> {
+  const now = p.sessionNow;
+  if (!now || Date.now() - now.lastAt <= SESSION_GAP_MS) return {};
+  if (!worthShowing(now)) return { sessionNow: null };
+  return {
+    sessionNow: null,
+    sessionPast: [now, ...p.sessionPast].slice(0, SESSION_KEEP),
+    sessionCard: now,
+  };
+}
 
 // ---- Full data export / import (user-controlled backup) -------------------
 interface ExportData {
@@ -452,6 +487,11 @@ interface FinanceState {
   scatterBest: number;
   scatterAnte: boolean;
   scatterFs: ScatterFsState | null;
+  /** Текущий заход за играми и последние завершённые. */
+  sessionNow: Session | null;
+  sessionPast: Session[];
+  /** Заход, по которому надо показать итог; null — показывать нечего. */
+  sessionCard: Session | null;
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -619,6 +659,12 @@ interface FinanceState {
   /** Купить бонус сразу за сто ставок. */
   buyScatterBonus: () => boolean;
   setScatterAnte: (on: boolean) => void;
+  /** Записать спин в текущий заход (вызывается самими играми). */
+  recordSpin: (rec: SpinRecord) => void;
+  /** Закрыть заход и показать итог, если он того стоит. */
+  closeSession: () => void;
+  /** Убрать карточку итога. */
+  dismissSession: () => void;
   /** Касса: закинуть себе монет. Монеты виртуальные и не продаются. */
   addSlotsCoins: (amount: number) => void;
   /** Спасательные вращения, когда монет не хватает даже на минимальную ставку. */
@@ -703,6 +749,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   scatterBest: 0,
   scatterAnte: false,
   scatterFs: null,
+  sessionNow: null,
+  sessionPast: [],
+  sessionCard: null,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -795,6 +844,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsHaptics: slots?.haptics ?? true,
       slotsTurbo: slots?.turbo ?? false,
       ...slotsProgress(slots),
+      ...staleSession(slotsProgress(slots)),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -1696,6 +1746,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsHaptics: d.slots?.haptics ?? true,
       slotsTurbo: d.slots?.turbo ?? false,
       ...slotsProgress(d.slots),
+      // Восстановление из копии — не повод показывать чей-то давний итог.
+      sessionCard: null,
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -2009,6 +2061,19 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsRewardedLevel: Math.max(s.slotsRewardedLevel, after),
       slotsMissions: { ...missions, counters },
     });
+    get().recordSpin({
+      game: 'slots',
+      at: entry.at,
+      staked: free ? 0 : s.slotsBet,
+      won: total,
+      bet: s.slotsBet,
+      chain: result.combo,
+      // Сфер в «Слотах» нет, бонусной сессии тоже — джекпот приходит просто
+      // очень крупным выигрышем и пиком станет именно как выигрыш.
+      orb: 0,
+      bonus: false,
+      levels: levelUps,
+    });
     persistSlots(get());
     return {
       ...result,
@@ -2086,6 +2151,21 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       scatterBest: Math.max(s.scatterBest, result.total),
       scatterFs: fs && fs.left > 0 ? fs : null,
     });
+    get().recordSpin({
+      game: 'scatter',
+      at: Date.now(),
+      staked: stake,
+      won: result.total,
+      bet: s.slotsBet,
+      chain: result.combo,
+      // Самая дорогая сфера спина — из неё потом получится пик захода.
+      orb: result.steps.reduce(
+        (best, step) => Math.max(best, ...step.orbs.map((o) => o.value), 0),
+        0,
+      ),
+      bonus: fsStarted,
+      levels: levelUps,
+    });
     persistSlots(get());
     return { ...result, freeSpin: stake === 0, levelUps, fs, fsStarted };
   },
@@ -2107,6 +2187,42 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ scatterAnte: on });
     persistSlots(get());
   },
+
+  // --- Заход ---------------------------------------------------------------
+  // Заход общий для обеих игр: это один присест за автоматами, а не за одним
+  // из них. Запись не персистится отдельно — её подхватывает persistSlots,
+  // который игры и так зовут в конце спина.
+  recordSpin: (rec) => {
+    const s = get();
+    const { session, ended } = advance(s.sessionNow, rec);
+    set({
+      sessionNow: session,
+      sessionPast: ended ? [ended, ...s.sessionPast].slice(0, SESSION_KEEP) : s.sessionPast,
+      // Перерыв сам закрыл прошлый заход — значит, пора показать его итог.
+      sessionCard: ended ?? s.sessionCard,
+    });
+  },
+
+  closeSession: () => {
+    const s = get();
+    const now = s.sessionNow;
+    if (!worthShowing(now)) {
+      // Заглянул на пару вращений — закрываем молча, показывать нечего.
+      if (now) {
+        set({ sessionNow: null });
+        persistSlots(get());
+      }
+      return;
+    }
+    set({
+      sessionCard: now,
+      sessionPast: [now, ...s.sessionPast].slice(0, SESSION_KEEP),
+      sessionNow: null,
+    });
+    persistSlots(get());
+  },
+
+  dismissSession: () => set({ sessionCard: null }),
 
   addSlotsCoins: (amount) => {
     const add = Math.max(0, Math.round(amount));

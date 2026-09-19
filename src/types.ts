@@ -1,3 +1,5 @@
+import type { Session } from '@/lib/session';
+
 // ---------------------------------------------------------------------------
 // Domain types for the Coco finance feature.
 // The Obligation shape intentionally reuses the proven legacy `debts.js` model
@@ -869,6 +871,13 @@ export interface SlotsBlob {
   scatterAnte?: boolean;
   /** Незавершённая бонусная сессия — переживает выход из приложения. */
   scatterFs?: ScatterFsState | null;
+  /**
+   * Текущий заход и последние завершённые — для карточки «итог захода».
+   * Живут вместе с прогрессом, потому что заход переживает закрытие
+   * приложения: именно на возврате и показывается итог прошлого.
+   */
+  session?: Session | null;
+  sessionPast?: Session[];
 }
 
 /** Бонус «Каскада»: сколько вращений осталось и какой множитель накоплен. */

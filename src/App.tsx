@@ -28,6 +28,7 @@ import { tapLight } from '@/lib/haptics';
 import { HomePage } from '@/pages/HomePage';
 import { CropProvider } from '@/components/CropProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { SessionCard } from '@/components/SessionCard';
 import { SyncIndicator } from '@/components/SyncIndicator';
 import { ToastHost } from '@/components/Toast';
 
@@ -557,6 +558,9 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
           </Suspense>
         </CropProvider>
         <ToastHost />
+        {/* Итог захода живёт над всем приложением: заход закрывают откуда
+            угодно, а чаще всего — просто закрыв Telegram. */}
+        <SessionCard />
         <SyncIndicator />
       </HashRouter>
     </AppRoot>
