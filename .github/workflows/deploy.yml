@@ -24,7 +24,40 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write # чтобы снова включать отключённые workflow, см. шаг ниже
     steps:
+      # GitHub сам отключает workflow с расписанием, если в репозитории долго
+      # не было коммитов, и делает это молча. 12.09.2026 так умерли сразу два:
+      # ночной бэкап и отправка напоминаний — их хватились только через неделю.
+      # Деплой случается часто, поэтому пусть он и возвращает их в строй.
+      - name: Вернуть в строй workflow, отключённые GitHub'ом
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          api() { curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+                   -H "Accept: application/vnd.github+json" "$@"; }
+          for WF in backup.yml reminders.yml; do
+            ST="$(api "https://api.github.com/repos/$REPO/actions/workflows/$WF" \
+                  | jq -r '.state // "?"')"
+            if [ "$ST" = "active" ]; then
+              echo "  $WF — активен"
+              continue
+            fi
+            echo "  $WF — $ST, включаю"
+            if api -X PUT -o /dev/null -w '%{http_code}\n' \
+                 "https://api.github.com/repos/$REPO/actions/workflows/$WF/enable" \
+                 | grep -q '^204$'; then
+              echo "  $WF — включён ✅"
+            else
+              echo "::warning::Не удалось включить $WF — сделайте это вручную: Actions → workflow → Enable."
+            fi
+          done
+
       - name: Check that secrets are configured
         id: gate
         env:
@@ -44,12 +77,6 @@ jobs:
           if [ -n "$BOT_TOKEN" ]; then echo "has_bot=true" >> "$GITHUB_OUTPUT"; else echo "has_bot=false" >> "$GITHUB_OUTPUT"; fi
           if [ -n "$CF_API_TOKEN" ]; then echo "has_cf=true" >> "$GITHUB_OUTPUT"; else echo "has_cf=false" >> "$GITHUB_OUTPUT"; fi
 
-      # Russia (since 2025-06) throttles Cloudflare's proxy to ~16 KB per asset,
-      # so a Cloudflare-fronted site never finishes loading there. Take the domain
-      # OUT of the proxy (grey-cloud / "DNS only") so users connect STRAIGHT to the
-      # VPS IP — which, for a Russian VPS, isn't throttled like Cloudflare is.
-      # Caddy keeps serving a real Let's Encrypt cert, so HTTPS stays valid.
-      # Best-effort + idempotent: a token/zone problem only prints a warning.
       # Режим прокси Cloudflare деплой больше НЕ меняет.
       #
       # Раньше здесь домен принудительно переводился в серый режим: считалось,
