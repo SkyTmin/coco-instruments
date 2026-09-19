@@ -768,28 +768,19 @@ app.get('/api/reminders/health', (req, res) => {
 
 // Telegram webhook → greet on /start (and any message). Sending this reply also
 // confirms the user is reachable, so scheduled reminders can be delivered.
-// One-time tokens for serving a backup archive to Telegram by URL (the VPS often
-// can't reach Telegram outbound, so we answer the webhook with a method and let
-// Telegram FETCH the file from our public domain).
-const backupTokens = new Map();
-// The backup archive is fetched by Telegram from this base URL, so it must be a
-// trusted, configured value — never the client-controlled Host header (a spoofed
-// Host could point Telegram at an attacker origin). Returns null if unset.
-function publicBase() {
-  const url = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
-  return url || null;
-}
+// Раздачи архива по ссылке больше нет. Идея была такая: раз VPS не достаёт
+// Telegram, пусть Telegram сам скачает файл с нашего домена. На деле он
+// резолвит домен самостоятельно и упирается в ту же недоступность, что и
+// вебхук, — проверено 19.09.2026, файл так и не пришёл ни разу. Доставку
+// делает раннер GitHub (workflow backup.yml): он забирает архив по SSH и
+// отправляет его в Telegram сам.
 
-// Periodic sweep so the in-memory maps can't grow forever: drop rate-limit
-// buckets that have gone quiet and backup tokens past their TTL.
+// Periodic sweep so the rate-limit buckets can't grow forever.
 const RATE_SWEEP_WINDOW_MS = 10 * 60_000;
 setInterval(() => {
   const now = Date.now();
   for (const [key, hits] of rateBuckets) {
     if (!hits.length || now - hits[hits.length - 1] > RATE_SWEEP_WINDOW_MS) rateBuckets.delete(key);
-  }
-  for (const [token, entry] of backupTokens) {
-    if (entry.exp < now) backupTokens.delete(token);
   }
 }, RATE_SWEEP_WINDOW_MS).unref();
 
@@ -867,33 +858,27 @@ app.post('/api/bot/webhook', async (req, res) => {
       })();
       return;
     }
-    // Исходящие закрыты — остаётся попросить Telegram скачать архив самому.
-    // Отправить сообщение мы уже не сможем, поэтому всё делаем в ответе на
-    // вебхук: это единственный канал, который сейчас работает.
-    const base = publicBase();
-    if (!base) {
-      return reply('Бэкап не настроен: не задан PUBLIC_URL на сервере.');
+    // Исходящие закрыты. Просить Telegram скачать файл по ссылке с нашего
+    // домена бесполезно: он резолвит имя сам и упирается в ту же стену.
+    // Зато до GitHub сервер дотягивается, а раннер достаёт и нас, и Telegram —
+    // поэтому перекладываем доставку на него (workflow backup.yml).
+    const relay = await triggerBackup();
+    if (relay.ok) {
+      return reply(
+        'Связи с Telegram у сервера сейчас нет, поэтому копию соберёт и пришлёт GitHub — ' +
+          'обычно это занимает минуту-две.',
+      );
     }
-    try {
-      const archive = await createBackupArchive();
-      pruneBackups();
-      const token = crypto.randomBytes(24).toString('hex');
-      backupTokens.set(token, { file: archive, exp: Date.now() + 10 * 60_000 });
-      const sizeMb = (fs.statSync(archive).size / 1048576).toFixed(2);
-      return res.json({
-        method: 'sendDocument',
-        chat_id: chatId,
-        document: `${base}/api/backup/file/${token}`,
-        caption: `🗄 Резервная копия Coco · ${sizeMb} МБ · ${new Date().toLocaleString('ru-RU')}`,
-      });
-    } catch (e) {
-      lastBackupError = {
-        at: new Date().toISOString(),
-        stage: 'archive',
-        error: String(e?.message || e),
-      };
-      return reply(`Не удалось сделать бэкап (${escapeHtml(String(e?.message || e))}).`);
-    }
+    lastBackupError = {
+      at: new Date().toISOString(),
+      stage: 'relay',
+      error: String(relay.error || relay.detail || relay.status || 'unknown'),
+    };
+    return reply(
+      'Сервер не достаёт Telegram, а запустить доставку через GitHub не вышло ' +
+        `(${escapeHtml(String(relay.error || relay.status || 'неизвестно'))}). ` +
+        'Копия на сервере собрана — посмотрите диагностику в настройках игр.',
+    );
   }
 
   return reply(
@@ -1096,13 +1081,20 @@ app.post('/api/backup/run', async (req, res) => {
   // Ночной запуск никто не видит, поэтому неудачу надо не только записать, но
   // и попытаться показать. Если файл не ушёл, но наружу мы ходим — шлём хотя бы
   // строчку с причиной: пропажа копий на неделю началась именно с тихого сбоя.
-  if (admin && result.ok && !result.sent && (await outboundWorks())) {
-    await sendTelegram(
-      admin,
-      `⚠️ Ночная резервная копия собрана, но не отправилась: ${escapeHtml(
-        String(result.deliverError || 'причина неизвестна'),
-      )}`,
-    );
+  if (admin && result.ok && !result.sent) {
+    // Файл собрался, но не ушёл. Чаще всего это значит, что сервер не достаёт
+    // api.telegram.org — тогда доставку берёт на себя раннер GitHub. Так копии
+    // приходят, даже когда наружу с VPS хода нет.
+    const relay = await triggerBackup();
+    if (!relay.ok && (await outboundWorks())) {
+      await sendTelegram(
+        admin,
+        `⚠️ Ночная копия собрана, но не отправилась: ${escapeHtml(
+          String(result.deliverError || 'причина неизвестна'),
+        )}`,
+      );
+    }
+    result.relayed = relay.ok;
   }
   res.json(result);
 });
@@ -1216,15 +1208,6 @@ app.post('/api/log', (req, res) => {
 
 // Telegram fetches a freshly-made backup here via a single-use, short-lived
 // token (handed to it in the /backup webhook reply). Random token + 10-min TTL.
-app.get('/api/backup/file/:token', (req, res) => {
-  const entry = backupTokens.get(req.params.token);
-  if (!entry || entry.exp < Date.now() || !fs.existsSync(entry.file)) {
-    return res.sendStatus(404);
-  }
-  backupTokens.delete(req.params.token); // truly single-use
-  res.download(entry.file, path.basename(entry.file));
-});
-
 // Generic liveness probe (used by deploy verification).
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
