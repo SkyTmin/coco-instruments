@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
-import { CoinIcon } from '@/components/slot-art';
+import { CoinIcon, OrbGem } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
 import { IconGift, IconInfo } from '@/components/icons';
@@ -67,7 +67,9 @@ import {
 } from '@/lib/haptics';
 
 /** Высота ячейки; та же величина в CSS (--scell). */
-const SCELL = 54;
+const SCELL = 68;
+/** Размер символа в клетке. */
+const SYM = 50;
 /** Сколько «пролетающих» символов между стартом и результатом. */
 const FILLER = 14;
 const BASE_MS = 780;
@@ -126,7 +128,7 @@ function tierOf(chain: number): number {
   return 0;
 }
 
-function Sym({ id, skin, size = 40 }: { id: ScatterCell; skin: SkinId; size?: number }) {
+function Sym({ id, skin, size = SYM }: { id: ScatterCell; skin: SkinId; size?: number }) {
   return (
     <img
       className="sym"
@@ -636,6 +638,30 @@ export function ScatterPage() {
           setRunWin(res.total);
           // Плашка бонуса догоняет поле ровно здесь: множитель уже виден.
           if (res.fs) setShownFs((v) => ({ ...(v ?? { left: 0, won: 0 }), mult: res.totalMult }));
+          // Сферы улетели — в опустевшие клетки ПАДАЮТ символы, как после
+          // выигрыша. Раньше там до самого следующего спина зияла дыра, и
+          // именно она выдавала, что сфера была наклейкой поверх поля, а не
+          // его клеткой. Символы здесь чисто внешние: раунд уже посчитан,
+          // следующий спин всё равно перекрутит поле целиком.
+          const holes = new Set(res.orbs.map((o) => `${o.col}-${o.row}`));
+          setDropDur(DROP_MS * scale);
+          setBoard((b) =>
+            b
+              ? b.map((col, c) =>
+                  col.map((cell) =>
+                    holes.has(`${c}-${cell.row}`)
+                      ? {
+                          ...cell,
+                          key: `refill-${res.steps.length}-${c}-${cell.row}`,
+                          id: scatterSymbol(),
+                          fall: 1,
+                        }
+                      : { ...cell, fall: 0 },
+                  ),
+                )
+              : b,
+          );
+          setCoveredCells(EMPTY_CELLS);
           squashPop(winRef.current, 0.6);
           addTrauma(cabinetRef.current, loudest.beats >= 3 ? TRAUMA.big : TRAUMA.small);
           if (loudest.beats >= 2) tapMedium();
@@ -986,7 +1012,9 @@ export function ScatterPage() {
                       }
                     >
                       {t.beats >= 1 && <i className="orb__shock" aria-hidden="true" />}
-                      {t.beats >= 2 && <i className="orb__ring" aria-hidden="true" />}×{o.value}
+                      {t.beats >= 2 && <i className="orb__ring" aria-hidden="true" />}
+                      <OrbGem />
+                      <b className="orb__num">×{o.value}</b>
                       {t.beats >= 2 && <b className="orb__tag">{t.name}</b>}
                     </span>
                   );

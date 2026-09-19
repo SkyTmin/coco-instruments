@@ -471,3 +471,78 @@ export function CoinIcon({ size = 18 }: { size?: number }) {
     </svg>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Сфера-множитель
+// ---------------------------------------------------------------------------
+
+/** Точка восьмиугольника: центр (50,50), радиус r, угол в градусах. */
+function oct(r: number): string {
+  return [-90, -45, 0, 45, 90, 135, 180, 225]
+    .map((deg) => {
+      const a = (deg * Math.PI) / 180;
+      return `${(50 + r * Math.cos(a)).toFixed(1)},${(50 + r * Math.sin(a)).toFixed(1)}`;
+    })
+    .join(' ');
+}
+
+/** Одна грань: от двух соседних точек внешнего контура к двум точкам стола. */
+function facet(i: number, R: number, r: number): string {
+  const p = (deg: number, rad: number) => {
+    const a = (deg * Math.PI) / 180;
+    return `${(50 + rad * Math.cos(a)).toFixed(1)},${(50 + rad * Math.sin(a)).toFixed(1)}`;
+  };
+  const a0 = -90 + i * 45;
+  const a1 = a0 + 45;
+  return `${p(a0, R)} ${p(a1, R)} ${p(a1, r)} ${p(a0, r)}`;
+}
+
+const GEM_R = 46;
+const GEM_TABLE = 22;
+
+/**
+ * Огранённый самоцвет для сферы-множителя.
+ *
+ * Рисуется кодом, а не картинкой: цвета берутся из токенов ступени редкости
+ * (`--orb-hi`, `--orb-mid`, `--orb-lo`, `--orb-deep`), поэтому одна фигура
+ * обслуживает все шесть ступеней и остаётся резкой на любом размере клетки —
+ * растровая иконка на ретине при 68 px поплыла бы.
+ *
+ * Форма — восьмиугольная огранка «под бриллиант»: стол посередине, на котором
+ * читается число, и восемь граней вокруг него, через одну светлее и темнее.
+ * Читается как камень именно чередование граней; один блик на круге давал
+ * ощущение пластикового шарика.
+ */
+export function OrbGem() {
+  return (
+    <svg className="orb__gem" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+      {/* Корпус камня */}
+      <polygon
+        points={oct(GEM_R)}
+        fill="var(--orb-lo, #f0a01e)"
+        stroke="var(--orb-edge, rgba(120,70,0,.75))"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      {/* Грани: чётные ловят свет, нечётные уходят в тень */}
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+        <polygon
+          key={i}
+          points={facet(i, GEM_R, GEM_TABLE)}
+          fill={i % 2 === 0 ? 'var(--orb-hi, #fff8d0)' : 'var(--orb-deep, #a35f05)'}
+          opacity={i % 2 === 0 ? 0.55 : 0.5}
+        />
+      ))}
+      {/* Стол — на нём лежит число, поэтому он самый светлый и ровный */}
+      <polygon
+        points={oct(GEM_TABLE)}
+        fill="var(--orb-mid, #ffd83d)"
+        stroke="var(--orb-hi, #fff8d0)"
+        strokeWidth="1.5"
+        opacity="0.95"
+      />
+      {/* Верхний левый блик — единственная «неправильность», она и оживляет */}
+      <polygon points={facet(6, GEM_R, GEM_TABLE)} fill="#fff" opacity="0.38" />
+    </svg>
+  );
+}
