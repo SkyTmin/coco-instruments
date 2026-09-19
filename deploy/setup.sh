@@ -60,7 +60,12 @@ if ! command -v caddy >/dev/null 2>&1; then
 fi
 
 echo "==> Fetching app ($BRANCH)"
-if [ -d "$APP_DIR/.git" ]; then
+# SKIP_FETCH=1 — код уже доставлен (деплой обновил checkout сам или принёс
+# архив с раннера). Без этого скрипт лез в git повторно и на недоступном
+# из России github висел по 130 секунд, заваливая весь деплой.
+if [ "${SKIP_FETCH:-0}" = "1" ]; then
+  echo "    код уже на месте, git не трогаем"
+elif [ -d "$APP_DIR/.git" ]; then
   git -C "$APP_DIR" fetch origin "$BRANCH"
   git -C "$APP_DIR" checkout "$BRANCH"
   git -C "$APP_DIR" reset --hard "origin/$BRANCH"

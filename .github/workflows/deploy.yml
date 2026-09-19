@@ -118,6 +118,38 @@ jobs:
       # Cloudflare DNS plugin here (the runner has open internet) and ship it over.
       # Both steps are best-effort: if either fails, setup.sh just keeps the
       # current Caddy and cert (DNS-01 stays off) — the deploy still succeeds.
+      # --- Запасной путь доставки кода ------------------------------------
+      # Обычно сервер сам забирает код с GitHub. Но 19.09.2026 деплой упал:
+      # «Failed to connect to github.com port 443 after 129563 ms» — с
+      # российского IP GitHub достучаться не удалось, и прод остался на
+      # прошлой версии, хотя ветка уже уехала вперёд. Тот же класс беды, что
+      # с api.telegram.org, и лечится тем же: не сервер идёт за кодом, а
+      # раннер приносит код сам. Архив кладётся рядом всегда, а разворачивается
+      # только если git на сервере не смог.
+      - name: Забрать код на раннер (для запасной доставки)
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - name: Упаковать код для доставки по SSH
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          tar --exclude=./.git --exclude=./node_modules --exclude=./dist \
+            -czf /tmp/coco-src.tar.gz -C "$GITHUB_WORKSPACE" .
+          ls -la /tmp/coco-src.tar.gz
+
+      - name: Положить архив кода на VPS
+        if: steps.gate.outputs.ready == 'true'
+        continue-on-error: true
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          source: /tmp/coco-src.tar.gz
+          target: /tmp/
+          strip_components: 1
+
       - name: Fetch Caddy + Cloudflare DNS plugin (for cert auto-renewal)
         id: caddycf
         if: steps.gate.outputs.ready == 'true' && steps.gate.outputs.has_cf == 'true'
@@ -164,18 +196,49 @@ jobs:
             export GH_DISPATCH_TOKEN='${{ secrets.GH_TOKEN }}'
             export ADMIN_CHAT_ID='${{ secrets.ADMIN_CHAT_ID }}'
             export CF_API_TOKEN='${{ secrets.CF_API_TOKEN }}'
-            # After the first provisioning the repo is checked out at /opt/coco.
-            # Update it via git and run the CHECKED-OUT setup.sh instead of piping a
-            # freshly-fetched script into bash as root (avoids curl|bash RCE/MITM).
-            # Only the very first install still bootstraps over the network.
+            # После первой установки репозиторий лежит в /opt/coco. Обновляем
+            # его git'ом и запускаем УЖЕ ЛЕЖАЩИЙ setup.sh, а не скачанный на
+            # лету в bash от рута (это был бы curl|bash со всеми известными
+            # последствиями).
+            #
+            # git пробуем трижды и с коротким таймаутом: висеть по 130 секунд
+            # на недоступном github бессмысленно, а сеть из России до него
+            # бывает моргающей.
+            ok=0
             if [ -d /opt/coco/.git ]; then
-              git -C /opt/coco fetch --depth 1 origin "$BRANCH"
-              git -C /opt/coco reset --hard "origin/$BRANCH"
-              bash /opt/coco/deploy/setup.sh
-            else
-              curl -fsSL --proto '=https' --tlsv1.2 \
-                "https://raw.githubusercontent.com/SkyTmin/coco-instruments/${BRANCH}/deploy/setup.sh" | bash
+              for try in 1 2 3; do
+                if timeout 45 git -C /opt/coco fetch --depth 1 origin "$BRANCH" \
+                   && git -C /opt/coco reset --hard "origin/$BRANCH"; then
+                  ok=1; break
+                fi
+                echo "!! git не достучался до github (попытка $try из 3)"
+                sleep $((try * 8))
+              done
             fi
+
+            # Не вышло — берём архив, который принёс раннер. Он уже здесь.
+            if [ "$ok" = 0 ] && [ -f /tmp/coco-src.tar.gz ]; then
+              echo "==> GitHub с сервера недоступен, разворачиваем код от раннера"
+              command -v rsync >/dev/null || apt-get install -y rsync
+              rm -rf /tmp/coco-src && mkdir -p /tmp/coco-src /opt/coco
+              tar -xzf /tmp/coco-src.tar.gz -C /tmp/coco-src
+              # --delete, чтобы удалённые в репозитории файлы исчезли и здесь:
+              # простая распаковка поверх оставила бы их лежать.
+              rsync -a --delete \
+                --exclude .git --exclude node_modules \
+                --exclude dist --exclude dist-next --exclude dist-old \
+                /tmp/coco-src/ /opt/coco/
+              ok=1
+            fi
+
+            if [ "$ok" = 0 ]; then
+              echo "!! Код обновить нечем: ни github, ни архива от раннера" >&2
+              exit 1
+            fi
+
+            # SKIP_FETCH: код уже на месте, второй заход в git не нужен —
+            # раньше setup.sh ходил туда ещё раз и падал на том же таймауте.
+            SKIP_FETCH=1 bash /opt/coco/deploy/setup.sh
 
       - name: Verify the app is up
         if: steps.gate.outputs.ready == 'true'
