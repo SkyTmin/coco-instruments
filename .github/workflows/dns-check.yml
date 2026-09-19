@@ -3,22 +3,23 @@ name: DNS check (Cloudflare grey cloud)
 # Ручная диагностика доступности приложения.
 #
 # Зачем: прокси Cloudflare в России режет каждый ответ примерно на 16 КБ —
-# страница не догружается, и мини-приложение навсегда застревает на заставке
+# страница тогда не догружается, и мини-приложение застревает на заставке
 # Telegram. Поэтому домен должен быть в «сером» режиме (DNS only), то есть
-# смотреть прямо на VPS. Этот workflow показывает, как обстоят дела сейчас,
-# и по кнопке переводит записи в серый режим.
+# смотреть прямо на VPS.
+#
+# ВАЖНО: workflow трогает ТОЛЬКО домен приложения (секрет DOMAIN) и его www.
+# Другие зоны аккаунта он читать и менять не должен — на аккаунте могут жить
+# посторонние домены, к этому проекту не относящиеся.
 #
 # Запуск: Actions → «DNS check (Cloudflare grey cloud)» → Run workflow.
-#   apply=false (по умолчанию) — только посмотреть, ничего не менять.
-#   apply=true — ещё и переключить оранжевые записи в серые.
-#
-# Токен нужен с правами Zone:Read + DNS:Edit на зону (секрет CF_API_TOKEN).
+#   apply=false (по умолчанию) — только посмотреть.
+#   apply=true — ещё и переключить оранжевые записи домена в серые.
 
 on:
   workflow_dispatch:
     inputs:
       apply:
-        description: 'Переключить проксируемые записи в серый режим'
+        description: 'Переключить проксируемые записи домена в серый режим'
         type: boolean
         default: false
 
@@ -26,64 +27,53 @@ jobs:
   dns:
     runs-on: ubuntu-latest
     steps:
-      - name: Что видит токен
+      - name: Записи домена и режим прокси
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-        run: |
-          set -u
-          if [ -z "${CF_API_TOKEN:-}" ]; then
-            echo "::error::Секрет CF_API_TOKEN не задан."; exit 1
-          fi
-          api() { curl -sS -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" "$@"; }
-
-          echo "== Проверка токена =="
-          V="$(api https://api.cloudflare.com/client/v4/user/tokens/verify || true)"
-          printf '%s\n' "$V" | jq -r '"  success=" + (.success|tostring) + "  status=" + (.result.status // "?")' || echo "  не разобрать ответ"
-          printf '%s\n' "$V" | jq -r '.errors[]? | "  ошибка " + (.code|tostring) + ": " + .message' || true
-
-          echo
-          echo "== Зоны, доступные токену =="
-          Z="$(api 'https://api.cloudflare.com/client/v4/zones?per_page=50' || true)"
-          if [ "$(printf '%s' "$Z" | jq -r '.success' 2>/dev/null)" != "true" ]; then
-            printf '%s\n' "$Z" | jq -r '.errors[]? | "  ошибка " + (.code|tostring) + ": " + .message' || true
-            echo "::error::Токен не может перечислить зоны. Нужны права Zone:Read + DNS:Edit на зону приложения."
-            exit 1
-          fi
-          printf '%s\n' "$Z" | jq -r '.result[]? | "  " + .name + "  (id " + .id + ", " + .status + ")"'
-          printf '%s' "$Z" | jq -r '.result[]?.id' > /tmp/zone_ids
-          printf '%s' "$Z" | jq -r '.result[]?.name' > /tmp/zone_names
-          echo "  всего: $(wc -l < /tmp/zone_ids)"
-
-      - name: Записи и режим прокси
-        env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
           APPLY: ${{ inputs.apply }}
         run: |
           set -u
+          D="${DOMAIN:-${VPS_HOST}.nip.io}"
+          if [ -z "${CF_API_TOKEN:-}" ]; then
+            echo "Секрет CF_API_TOKEN не задан — пропускаем часть про Cloudflare."; exit 0
+          fi
           api() { curl -sS -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" "$@"; }
-          ORANGE=0
-          paste -d' ' /tmp/zone_ids /tmp/zone_names | while read -r ZID ZNAME; do
-            [ -n "$ZID" ] || continue
-            echo
-            echo "== Зона $ZNAME =="
-            R="$(api "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records?per_page=100&type=A,AAAA,CNAME" || true)"
-            printf '%s\n' "$R" | jq -r '.result[]? | select(.type=="A" or .type=="AAAA" or .type=="CNAME")
-              | "  " + (if .proxied then "🟠 ОРАНЖЕВАЯ" else "⚪ серая  " end) + "  " + .type + "  " + .name + " → " + .content'
-            if [ "$APPLY" = "true" ]; then
-              for RID in $(printf '%s' "$R" | jq -r '.result[]? | select((.type=="A" or .type=="AAAA" or .type=="CNAME") and .proxied==true) | .id'); do
-                api -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records/$RID" \
-                  --data '{"proxied":false}' \
-                  | jq -r 'if .success then "  ==> " + .result.type + " " + .result.name + " переведена в серый режим"
-                           else "  ==> НЕ УДАЛОСЬ: " + ([.errors[]?.message] | join("; ")) end'
-              done
-            fi
+
+          # Зона ровно для нашего домена: сам домен, затем родители
+          # (app.x.ru → x.ru). Чужие зоны аккаунта не перебираем.
+          ZID=""; CAND="$D"
+          while [ -n "$CAND" ]; do
+            R="$(api "https://api.cloudflare.com/client/v4/zones?name=$CAND" || true)"
+            ZID="$(printf '%s' "$R" | jq -r '.result[0].id // empty' 2>/dev/null || true)"
+            [ -n "$ZID" ] && break
+            case "$CAND" in *.*.*) CAND="${CAND#*.}" ;; *) CAND="" ;; esac
           done
-          if [ "$APPLY" != "true" ]; then
-            echo
-            echo "Это был просмотр. Чтобы переключить оранжевые записи — Run workflow с apply=true."
+          if [ -z "$ZID" ]; then
+            echo "::warning::Зона для домена приложения не найдена — проверьте права токена (Zone:Read + DNS:Edit)."
+            exit 0
           fi
 
-      - name: Доходит ли страница до пользователя
+          echo "== Записи домена приложения =="
+          REC="$(api "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records?per_page=100" || true)"
+          # Только сам домен и www — остальные поддомены зоны нас не касаются.
+          SEL='.result[]? | select((.type=="A" or .type=="AAAA" or .type=="CNAME") and (.name==$d or .name==("www."+$d)))'
+          printf '%s\n' "$REC" | jq -r --arg d "$D" "$SEL
+            | \"  \" + (if .proxied then \"🟠 ОРАНЖЕВАЯ\" else \"⚪ серая  \" end) + \"  \" + .type + \"  \" + .name"
+          ORANGE="$(printf '%s' "$REC" | jq -r --arg d "$D" "[$SEL | select(.proxied==true)] | length")"
+          echo "  проксируемых: $ORANGE"
+
+          if [ "$APPLY" = "true" ] && [ "$ORANGE" != "0" ]; then
+            for RID in $(printf '%s' "$REC" | jq -r --arg d "$D" "$SEL | select(.proxied==true) | .id"); do
+              api -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records/$RID" \
+                --data '{"proxied":false}' \
+                | jq -r 'if .success then "  ==> " + .result.type + " " + .result.name + " переведена в серый режим"
+                         else "  ==> НЕ УДАЛОСЬ: " + ([.errors[]?.message] | join("; ")) end'
+            done
+          fi
+
+      - name: Что реально доходит до пользователя
         if: always()
         env:
           DOMAIN: ${{ secrets.DOMAIN }}
@@ -91,18 +81,39 @@ jobs:
         run: |
           set -u
           D="${DOMAIN:-${VPS_HOST}.nip.io}"
-          echo "== Запрашиваем https://$D/ =="
+
+          echo "== Куда указывает домен =="
+          getent ahosts "$D" | awk '{print "  " $1}' | sort -u || true
+
+          echo
+          echo "== Ответ сервера =="
           H="$(curl -sS -D - -o /tmp/page.html --max-time 30 "https://$D/" || true)"
-          printf '%s\n' "$H" | grep -iE '^(HTTP/|server|cf-ray|content-length|content-encoding):' || true
+          printf '%s\n' "$H" | sed -n '1,12p' | sed 's/^/  /'
           N="$(wc -c < /tmp/page.html || echo 0)"
-          echo "  получено: $N байт"
+          echo "  тело: $N байт"
           if printf '%s' "$H" | grep -qi '^cf-ray:'; then
-            echo "::error::Домен ОТДАЁТСЯ ЧЕРЕЗ ПРОКСИ CLOUDFLARE — в России ответ обрежется примерно на 16 КБ, приложение не загрузится. Переключите записи в серый режим (этот workflow с apply=true)."
+            echo "::error::Домен отдаётся ЧЕРЕЗ прокси Cloudflare — в России ответ обрежется примерно на 16 КБ."
           else
-            echo "  прокси Cloudflare не участвует — соединение прямое ✅"
+            echo "  прокси Cloudflare не участвует — соединение прямое"
           fi
           if [ "$N" -lt 4000 ]; then
-            echo "::error::Страница пришла обрезанной ($N байт) — запуститься она не сможет."
+            echo "::error::Страница пришла обрезанной ($N байт)."
           elif grep -q 'Telegram.WebApp' /tmp/page.html; then
-            echo "  index.html целый: инлайн-скрипт запуска на месте ✅"
+            echo "  index.html целый, инлайн-скрипт запуска на месте"
           fi
+
+          # Просроченный или неполный сертификат = пустой экран в вебвью
+          # Telegram (он, в отличие от Safari, ничего не спрашивает).
+          echo
+          echo "== Сертификат =="
+          echo | openssl s_client -connect "$D:443" -servername "$D" 2>/dev/null \
+            | openssl x509 -noout -issuer -subject -dates 2>/dev/null | sed 's/^/  /' \
+            || echo "  не удалось прочитать сертификат"
+
+          # Тот же адрес глазами Telegram: сюда он шлёт вебхук, и если тут
+          # «Connection timed out», проблема в доступности хоста, а не в коде.
+          echo
+          echo "== Как видит сервер Telegram =="
+          curl -sS --max-time 20 "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/getWebhookInfo" \
+            | jq -r '.result | "  последняя ошибка: " + (.last_error_message // "нет")
+                              + "\n  ожидает доставки: " + (.pending_update_count|tostring)' || true
