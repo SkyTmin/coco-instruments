@@ -3,6 +3,7 @@ import {
   ANTE_COST,
   CLUSTER_MIN,
   FREE_SPINS,
+  MAX_WIN,
   SCATTER_CHANCE,
   SCATTER_COLS,
   SCATTER_PAYOUTS,
@@ -137,19 +138,58 @@ describe('сферы-множители', () => {
     }
   });
 
-  it('в базовой игре сферы умножают выплату звена', () => {
+  it('сферы копятся всю последовательность и не исчезают', () => {
     const rng = seeded(909);
     let checked = 0;
-    for (let i = 0; i < 6000 && checked < 5; i++) {
+    for (let i = 0; i < 6000 && checked < 20; i++) {
       const out = resolveScatter(100, { rng });
-      for (const step of out.steps) {
-        if (!step.orbMult) continue;
-        const base = step.wins.reduce((s, w) => s + w.pay, 0) * 100;
-        expect(step.payout).toBe(Math.max(1, Math.round(base * step.orbMult)));
-        checked += 1;
+      if (out.steps.length < 2) continue;
+      // Набор сфер каждого звена включает в себя набор предыдущего.
+      for (let s = 1; s < out.steps.length; s++) {
+        const before = out.steps[s - 1].orbs;
+        const after = out.steps[s].orbs;
+        expect(after.length).toBeGreaterThanOrEqual(before.length);
+        expect(after.slice(0, before.length)).toEqual(before);
       }
+      checked += 1;
     }
     expect(checked).toBeGreaterThan(0);
+  });
+
+  it('множитель применяется один раз, ко всей базе', () => {
+    const rng = seeded(4242);
+    let checked = 0;
+    for (let i = 0; i < 9000 && checked < 10; i++) {
+      const out = resolveScatter(100, { rng });
+      if (!out.orbMult || !out.base || out.scatterPay) continue;
+      const base = out.steps.reduce((s, st) => s + st.wins.reduce((a, w) => a + w.pay, 0), 0) * 100;
+      expect(out.total).toBe(Math.min(100 * MAX_WIN, Math.max(1, Math.round(base * out.orbMult))));
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  it('сферы выпадают и тогда, когда спин не сыграл', () => {
+    // Главное свойство: раньше сферы на непобедившем спине просто
+    // выбрасывались, и увидеть их было почти нельзя.
+    const rng = seeded(31337);
+    let dry = 0;
+    let dryWithOrbs = 0;
+    for (let i = 0; i < 20000; i++) {
+      const out = resolveScatter(100, { rng });
+      if (out.steps.length) continue;
+      dry += 1;
+      if (out.orbs.length) dryWithOrbs += 1;
+    }
+    expect(dry).toBeGreaterThan(1000);
+    expect(dryWithOrbs / dry).toBeGreaterThan(0.1);
+  });
+
+  it('выигрыш за спин не превышает предела', () => {
+    const rng = seeded(8080);
+    for (let i = 0; i < 20000; i++) {
+      expect(resolveScatter(100, { rng }).total).toBeLessThanOrEqual(100 * MAX_WIN);
+    }
   });
 });
 
@@ -210,7 +250,7 @@ describe('экономика', () => {
       for (let i = 0; i < 150; i++) {
         const out = resolveScatter(bet, { rng });
         expect(Number.isInteger(out.total)).toBe(true);
-        out.steps.forEach((s) => expect(Number.isInteger(s.payout)).toBe(true));
+        out.steps.forEach((s) => expect(Number.isInteger(s.base)).toBe(true));
       }
     }
   });

@@ -2159,10 +2159,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       bet: s.slotsBet,
       chain: result.combo,
       // Самая дорогая сфера спина — из неё потом получится пик захода.
-      orb: result.steps.reduce(
-        (best, step) => Math.max(best, ...step.orbs.map((o) => o.value), 0),
-        0,
-      ),
+      // Берём из общего списка: сферы теперь падают и на непобедивший спин.
+      orb: result.orbs.reduce((best, o) => Math.max(best, o.value), 0),
       bonus: fsStarted,
       levels: levelUps,
     });

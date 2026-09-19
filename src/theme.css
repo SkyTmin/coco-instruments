@@ -12995,7 +12995,7 @@ input[type='datetime-local'] {
   text-shadow:
     0 0 18px color-mix(in srgb, var(--neon) 85%, transparent),
     0 4px 10px rgba(0, 0, 0, 0.6);
-  animation: stamp-in 0.5s cubic-bezier(0.2, 1.7, 0.4, 1) both;
+  animation: stamp-in calc(0.5s * var(--speed, 1)) cubic-bezier(0.2, 1.7, 0.4, 1) both;
 }
 .stamp--t2 {
   font-size: 66px;
@@ -13580,7 +13580,8 @@ input[type='datetime-local'] {
     inset 0 0 0 1px rgba(80, 40, 0, 0.85),
     inset 0 0 0 3px #ffc23c,
     0 0 18px color-mix(in srgb, var(--neon) 85%, transparent);
-  animation: sb-frame 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) calc(var(--wi, 0) * 26ms) both;
+  animation: sb-frame calc(0.4s * var(--speed, 1)) cubic-bezier(0.2, 1.6, 0.4, 1)
+    calc(var(--wi, 0) * 26ms * var(--speed, 1)) both;
 }
 .sbcell.is-win img {
   position: relative;
@@ -13588,8 +13589,10 @@ input[type='datetime-local'] {
   /* Свечение даёт рамка ::before — тень на самой картинке пересчитывалась бы
      на каждом кадре пульсации, а таких картинок бывает до тридцати. */
   animation:
-    sb-pop 0.4s cubic-bezier(0.2, 1.8, 0.4, 1) calc(var(--wi, 0) * 26ms) both,
-    sb-pulse 0.9s ease-in-out calc(var(--wi, 0) * 26ms + 400ms) infinite;
+    sb-pop calc(0.4s * var(--speed, 1)) cubic-bezier(0.2, 1.8, 0.4, 1)
+      calc(var(--wi, 0) * 26ms * var(--speed, 1)) both,
+    sb-pulse calc(0.9s * var(--speed, 1)) ease-in-out
+      calc((var(--wi, 0) * 26ms + 400ms) * var(--speed, 1)) infinite;
 }
 @keyframes sb-frame {
   /* Не с нуля: пока волна до ячейки не дошла, рамка уже слабо светится —
@@ -13658,8 +13661,9 @@ input[type='datetime-local'] {
 .sboard .dust {
   z-index: 4;
 }
+/* Счётчик множителя — над всем, включая сферы: к нему они и слетаются. */
 .sboard .stamp {
-  z-index: 5;
+  z-index: 6;
 }
 
 /* Что сыграло: символ, его количество и выплата — вместо линий выплат */
@@ -13705,7 +13709,7 @@ input[type='datetime-local'] {
   color: #2a1400;
   background: linear-gradient(180deg, #ffe9a3, #ffc53c);
   box-shadow: 0 0 10px rgba(255, 190, 60, 0.7);
-  animation: hit-mult-in 0.34s cubic-bezier(0.2, 1.8, 0.4, 1) both;
+  animation: hit-mult-in calc(0.34s * var(--speed, 1)) cubic-bezier(0.2, 1.8, 0.4, 1) both;
 }
 @keyframes hit-mult-in {
   from {
@@ -13817,7 +13821,10 @@ input[type='datetime-local'] {
  */
 .orb {
   position: absolute;
-  z-index: 3;
+  /* Выше подсвеченных клеток и выше пыли: сфера — отдельный предмет на поле,
+     а не украшение символа. Раньше она делила z-index с выигравшими
+     клетками и тонула среди них. */
+  z-index: 5;
   width: calc(100% / 6);
   height: var(--scell);
   display: grid;
@@ -13835,7 +13842,8 @@ input[type='datetime-local'] {
   --orb-edge: rgba(120, 70, 0, 0.75);
   --orb-glow: rgba(255, 200, 60, 0.9);
   /* Сферы влетают волной, а не разом: глаз успевает заметить каждую. */
-  animation: orb-in 0.46s cubic-bezier(0.2, 1.7, 0.4, 1) calc(var(--i, 0) * 90ms) both;
+  animation: orb-in calc(0.46s * var(--speed, 1)) cubic-bezier(0.2, 1.7, 0.4, 1)
+    calc(var(--i, 0) * 90ms * var(--speed, 1)) both;
 }
 .orb::before {
   content: '';
@@ -13856,7 +13864,8 @@ input[type='datetime-local'] {
     0 0 0 2px var(--orb-edge),
     0 0 18px var(--orb-glow),
     0 4px 10px rgba(0, 0, 0, 0.45);
-  animation: orb-throb 1.1s ease-in-out infinite calc(var(--i, 0) * 90ms + 0.46s);
+  animation: orb-throb 1.1s ease-in-out infinite
+    calc((var(--i, 0) * 90ms + 0.46s) * var(--speed, 1));
 }
 @keyframes orb-in {
   from {
@@ -13969,6 +13978,20 @@ input[type='datetime-local'] {
   }
 }
 
+/* Тёмная подложка под сферой. Без неё символ просвечивал из-под шарика, и
+   сфера читалась как блик на фрукте, а не как самостоятельный предмет.
+   В Олимпе множитель занимает клетку целиком — здесь тот же смысл. */
+.orb::after {
+  content: '';
+  position: absolute;
+  /* Ниже самого шарика (-1) и ниже орбиты (-2), но выше ударной волны. */
+  z-index: -4;
+  width: 96%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(8, 4, 14, 0.92) 55%, rgba(8, 4, 14, 0) 78%);
+}
+
 /* Имя редкости — только там, где оно что-то добавляет. Обычной и необычной
    подпись не нужна: они и так две трети всех сфер. */
 .orb__tag {
@@ -13983,7 +14006,8 @@ input[type='datetime-local'] {
   white-space: nowrap;
   color: var(--orb-hi);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
-  animation: fade 0.3s ease calc(var(--i, 0) * 90ms + 0.3s) both;
+  animation: fade calc(0.3s * var(--speed, 1)) ease
+    calc((var(--i, 0) * 90ms + 0.3s) * var(--speed, 1)) both;
 }
 
 /* Ударная волна при появлении редкой и выше: расходящееся кольцо. Живёт
@@ -13995,7 +14019,8 @@ input[type='datetime-local'] {
   aspect-ratio: 1;
   border-radius: 50%;
   border: 2px solid var(--orb-glow);
-  animation: orb-shock 0.62s cubic-bezier(0.15, 0.8, 0.3, 1) calc(var(--i, 0) * 90ms) both;
+  animation: orb-shock calc(0.62s * var(--speed, 1)) cubic-bezier(0.15, 0.8, 0.3, 1)
+    calc(var(--i, 0) * 90ms * var(--speed, 1)) both;
 }
 @keyframes orb-shock {
   from {
@@ -14013,7 +14038,8 @@ input[type='datetime-local'] {
    Цель задана в собственных клетках сферы (--fx) и пикселях (--fy), поэтому
    ничего не надо мерить в DOM. */
 .orb.is-collect {
-  animation: orb-fly 0.52s cubic-bezier(0.5, -0.45, 0.3, 1) calc(var(--i, 0) * 70ms) forwards;
+  animation: orb-fly calc(0.52s * var(--speed, 1)) cubic-bezier(0.5, -0.45, 0.3, 1)
+    calc(var(--i, 0) * 70ms * var(--speed, 1)) forwards;
 }
 @keyframes orb-fly {
   0% {
@@ -14115,7 +14141,7 @@ input[type='datetime-local'] {
  * сложившись в ×12, красятся как редкая находка — и это честно.
  */
 .stamp.is-collect {
-  animation: stamp-armed 0.5s ease-in-out infinite alternate;
+  animation: stamp-armed calc(0.5s * var(--speed, 1)) ease-in-out infinite alternate;
 }
 @keyframes stamp-armed {
   from {
@@ -14127,7 +14153,7 @@ input[type='datetime-local'] {
 }
 /* Удар: множитель припечатался к выплате. Резкий наезд с отскоком. */
 .stamp.is-slam {
-  animation: stamp-slam 0.44s cubic-bezier(0.2, 1.9, 0.35, 1) both;
+  animation: stamp-slam calc(0.44s * var(--speed, 1)) cubic-bezier(0.2, 1.9, 0.35, 1) both;
 }
 @keyframes stamp-slam {
   0% {

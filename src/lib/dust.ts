@@ -39,7 +39,12 @@ const MAX_PARTICLES = 2600;
  * Рассыпает переданные ячейки на канве. Возвращает функцию отмены.
  * Канва должна покрывать те же координаты, в которых заданы ячейки.
  */
-export function dustBurst(canvas: HTMLCanvasElement, cells: DustCell[]): () => void {
+export function dustBurst(
+  canvas: HTMLCanvasElement,
+  cells: DustCell[],
+  /** Ускорение: в турбо каскад идёт быстрее, и распад обязан успевать. */
+  speed = 1,
+): () => void {
   const ctx = canvas.getContext('2d');
   if (!ctx || !cells.length) return () => {};
 
@@ -115,7 +120,7 @@ export function dustBurst(canvas: HTMLCanvasElement, cells: DustCell[]): () => v
 
   let raf = 0;
   const start = performance.now();
-  const dur = DUST_MS;
+  const dur = DUST_MS * Math.max(0.2, speed);
 
   const frame = (now: number) => {
     const t = (now - start) / dur;
