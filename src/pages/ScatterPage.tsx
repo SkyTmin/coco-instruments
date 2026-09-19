@@ -26,6 +26,15 @@ import type { Orb, ScatterCell, ScatterGrid, ScatterStep, ScatterWin } from '@/l
 import { BET_STEP, BETS, clampBet, MAX_BET, MIN_BET } from '@/lib/slots';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
 import { loudestTier, multRarity, ORB_TIERS, orbTier } from '@/lib/orb-rarity';
+import {
+  addTrauma,
+  flashFrame,
+  HIT_STOP,
+  hitStop,
+  squashPop,
+  stopShake,
+  TRAUMA,
+} from '@/lib/juice';
 import { dustBurst } from '@/lib/dust';
 import type { DustCell } from '@/lib/dust';
 import { burstConfetti } from '@/lib/confetti';
@@ -272,7 +281,6 @@ export function ScatterPage() {
   const [rewards, setRewards] = useState(false);
   // Тикает раз в полминуты — только чтобы счётчик наград на кнопке не залипал.
   const [now, setNow] = useState(() => Date.now());
-  const [shake, setShake] = useState(false);
   const [celebration, setCelebration] = useState<{ tier: string; amount: number } | null>(null);
   const [levelUp, setLevelUp] = useState<{
     level: number;
@@ -281,6 +289,10 @@ export function ScatterPage() {
   } | null>(null);
 
   const boardRef = useRef<HTMLDivElement>(null);
+  /** Корпус автомата — его и трясёт, а не всю страницу. */
+  const cabinetRef = useRef<HTMLDivElement>(null);
+  /** Счётчик выигрыша: его толкает удар множителя. */
+  const winRef = useRef<HTMLSpanElement>(null);
   const dustRef = useRef<HTMLCanvasElement>(null);
   const dustStop = useRef<(() => void) | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -295,6 +307,7 @@ export function ScatterPage() {
       if (tickRef.current) clearInterval(tickRef.current);
       if (collectRef.current) clearInterval(collectRef.current);
       dustStop.current?.();
+      stopShake();
     },
     [],
   );
@@ -349,22 +362,40 @@ export function ScatterPage() {
       setSpinning(false);
       // Напряжение снято — гасим подсветку тянущих колонок.
       setAnti(EMPTY_ANTI);
+      // Порядок такта важен: сначала всё замирает, потом вспышка, и только
+      // за ней взрыв. Пауза читается как удар, вспышка прячет склейку — и
+      // три эффекта сливаются в одно событие вместо трёх подряд.
+      const payoff = (tier: 'small' | 'big' | 'mega', after: () => void) => {
+        hitStop(cabinetRef.current, HIT_STOP[tier]);
+        timers.current.push(
+          setTimeout(() => {
+            flashFrame(tier);
+            addTrauma(cabinetRef.current, TRAUMA[tier]);
+            after();
+          }, HIT_STOP[tier]),
+        );
+      };
+
       if (res.kind === 'mega') {
         notifySuccess();
-        jackpotFanfare();
-        burstConfetti(180, theme.confetti);
-        rainCoins(40, rainSrc);
-        setShake(true);
-        setCelebration({ tier: 'mega', amount: res.total });
+        payoff('mega', () => {
+          jackpotFanfare();
+          burstConfetti(180, theme.confetti);
+          rainCoins(40, rainSrc);
+          setCelebration({ tier: 'mega', amount: res.total });
+        });
       } else if (res.kind === 'big') {
         notifySuccess();
-        winChime('big');
-        rainCoins(22, rainSrc);
-        burstConfetti(70, theme.confetti);
-        setCelebration({ tier: 'big', amount: res.total });
+        payoff('big', () => {
+          winChime('big');
+          rainCoins(22, rainSrc);
+          burstConfetti(70, theme.confetti);
+          setCelebration({ tier: 'big', amount: res.total });
+        });
       } else if (res.kind === 'small') {
         tapLight();
         winChime('small');
+        flashFrame('small');
       }
       if (res.levelUps.length) {
         const lvl = res.levelUps[res.levelUps.length - 1];
@@ -477,7 +508,9 @@ export function ScatterPage() {
         notifySuccess();
         burstConfetti(t >= 4 ? 90 : 55, theme.confetti);
         rainCoins(t >= 4 ? 22 : 12, rainSrc);
-        setShake(true);
+        // Травма копится: длинная цепочка трясёт всё сильнее звено за звеном.
+        addTrauma(cabinetRef.current, t >= 4 ? TRAUMA.big : TRAUMA.small);
+        if (t >= 4) flashFrame('small');
       }
 
       if (collecting) {
@@ -503,6 +536,9 @@ export function ScatterPage() {
                 // на глазах с базы до настоящей. Это тот самый кадр, в
                 // котором видно, что бонус сработал.
                 setRunWin((w) => w + (step.payout - baseWin));
+                // Счётчик получает толчок в тот же кадр: число не просто
+                // меняется, а отскакивает от удара.
+                squashPop(winRef.current, 0.6);
                 if (loudest.beats >= 2) tapMedium();
               }
             }, 55);
@@ -596,7 +632,7 @@ export function ScatterPage() {
     setBoard(null);
     dustStop.current?.();
     setResult(null);
-    setShake(false);
+    stopShake();
     setCelebration(null);
     setCascade(null);
     setStepWins([]);
@@ -754,10 +790,9 @@ export function ScatterPage() {
           </div>
         )}
 
-        <div
-          className={`cabinet cabinet--wide${shake ? ' is-shake' : ''}${inBonus ? ' is-bonus' : ''}`}
-          onAnimationEnd={() => setShake(false)}
-        >
+        {/* Трясёт корпус автомата, а не всю страницу: внутри Telegram дёрганье
+            всего экрана читается как баг вебвью, а не как удар. */}
+        <div className={`cabinet cabinet--wide${inBonus ? ' is-bonus' : ''}`} ref={cabinetRef}>
           <div className="cabinet__bulbs" aria-hidden="true">
             {Array.from({ length: 16 }, (_, i) => (
               <i key={i} style={{ animationDelay: `${i * 0.09}s` }} />
@@ -900,7 +935,7 @@ export function ScatterPage() {
                 <span className={`status status--combo status--t${tier}`}>
                   {chain >= 2 ? `Цепочка ×${chain}!` : 'Есть выигрыш!'}
                 </span>
-                <span className="status__win">
+                <span className="status__win" ref={winRef}>
                   +<AnimatedNumber value={runWin} format={(n) => fmt(n)} duration={400} />
                   <CoinIcon size={20} />
                 </span>
