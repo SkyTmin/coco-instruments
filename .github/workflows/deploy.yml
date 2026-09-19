@@ -50,75 +50,41 @@ jobs:
       # VPS IP — which, for a Russian VPS, isn't throttled like Cloudflare is.
       # Caddy keeps serving a real Let's Encrypt cert, so HTTPS stays valid.
       # Best-effort + idempotent: a token/zone problem only prints a warning.
-      - name: Take domain out of the Cloudflare proxy (DNS-only, so Russia can reach it)
-        id: greycloud
-        if: steps.gate.outputs.ready == 'true' && steps.gate.outputs.has_cf == 'true'
-        continue-on-error: true
-        env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          DOMAIN: ${{ steps.gate.outputs.domain }}
-        run: |
-          set -u
-          api() { curl -sS -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" "$@"; }
-          # Ищем зону по имени: DOMAIN, затем каждый родитель (app.x.ru → x.ru).
-          # Если токен умеет листинг — пробуем и его: у части токенов поиск по
-          # ?name= не работает, а список зон отдаётся.
-          ZID=""; ZONE=""; CAND="$DOMAIN"
-          while [ -n "$CAND" ]; do
-            R="$(api "https://api.cloudflare.com/client/v4/zones?name=$CAND" || true)"
-            ZID="$(printf '%s' "$R" | jq -r '.result[0].id // empty' 2>/dev/null || true)"
-            if [ -n "$ZID" ]; then ZONE="$CAND"; break; fi
-            case "$CAND" in *.*.*) CAND="${CAND#*.}" ;; *) CAND="" ;; esac
-          done
-          if [ -z "$ZID" ]; then
-            ALL="$(api "https://api.cloudflare.com/client/v4/zones?per_page=50" || true)"
-            ZID="$(printf '%s' "$ALL" | jq -r --arg d "$DOMAIN" \
-              '[.result[]? | select($d == .name or ($d | endswith("." + .name)))] | .[0].id // empty' 2>/dev/null || true)"
-            ZONE="$(printf '%s' "$ALL" | jq -r --arg d "$DOMAIN" \
-              '[.result[]? | select($d == .name or ($d | endswith("." + .name)))] | .[0].name // empty' 2>/dev/null || true)"
-          fi
-          if [ -z "$ZID" ]; then
-            echo "::error::CF_API_TOKEN не видит зону для $DOMAIN — серый режим НЕ включён. Домен, скорее всего, всё ещё проксируется Cloudflare, а в России её прокси режет ответ на ~16 КБ, и приложение не догружается. Почините вручную: Cloudflare → DNS → облачко у записи в серое (DNS only). Либо выдайте токену права Zone:Read + DNS:Edit на эту зону."
-            exit 0
-          fi
-          # Перебираем ВСЕ записи, а не только первую: у домена обычно есть и A,
-          # и AAAA. Раньше проверялась только [0] — и если серой была она, шаг
-          # рапортовал «нечего делать», а вторая запись оставалась оранжевой.
-          # Мобильный интернет ходит по IPv6, поэтому телефон попадал именно
-          # на проксируемую AAAA и получал вечную заставку Telegram.
-          REC="$(api "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records?name=$DOMAIN" || true)"
-          echo "Зона $ZONE, записи для $DOMAIN:"
-          printf '%s' "$REC" | jq -r '.result[]? | "  " + .type + " " + .name + " → " + .content + "  proxied=" + (.proxied|tostring)' || true
-          LEFT=0
-          for RID in $(printf '%s' "$REC" | jq -r '.result[]? | select((.type=="A" or .type=="AAAA" or .type=="CNAME") and .proxied==true) | .id' 2>/dev/null); do
-            api -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records/$RID" \
-              --data '{"proxied":false}' \
-              | jq -r '"==> " + .result.type + " " + .result.name + " теперь proxied=" + (.result.proxied|tostring)' || LEFT=1
-          done
-          [ "$LEFT" = 0 ] || echo "::warning::Не все записи удалось перевести в серый режим."
+      # Режим прокси Cloudflare деплой больше НЕ меняет.
+      #
+      # Раньше здесь домен принудительно переводился в серый режим: считалось,
+      # что люди ходят из России напрямую, а прокси Cloudflare Россия режет
+      # примерно на 16 КБ. Но Telegram в России заблокирован, поэтому все
+      # пользователи сидят через VPN с заграничными выходами — для них прокси
+      # как раз работает, а вот до российского IP напрямую доходят не все.
+      # Что выгоднее, серый режим или оранжевый, теперь решает владелец в
+      # панели Cloudflare; переключить вручную можно workflow «DNS check».
+      # Деплою остаётся только доложить, как дела сейчас.
 
-      # Прямая проверка того, что на самом деле отдаётся пользователю. Если
-      # ответ идёт через прокси Cloudflare (заголовок cf-ray), в России он
-      # обрежется на ~16 КБ и приложение не загрузится — это ровно тот случай,
-      # когда у человека висит заставка Telegram и пустой экран.
-      - name: Check the domain is NOT behind the Cloudflare proxy
+      # Что на самом деле отдаётся пользователю. Оба режима допустимы, поэтому
+      # это отчёт, а не приговор: оранжевый выручает тех, кто приходит через
+      # заграничный VPN (а так приходят все, раз Telegram в России закрыт),
+      # серый — тех, кто ходит из России напрямую.
+      - name: Как домен отдаётся снаружи
         if: steps.gate.outputs.ready == 'true'
         continue-on-error: true
         env:
           DOMAIN: ${{ steps.gate.outputs.domain }}
         run: |
-          H="$(curl -sS -D - -o /dev/null --max-time 25 "https://${DOMAIN}/" || true)"
+          H="$(curl -sS -D - -o /tmp/idx.html --max-time 25 "https://${DOMAIN}/" || true)"
           if printf '%s' "$H" | grep -qi '^cf-ray:'; then
-            echo "$H" | grep -iE '^(server|cf-ray):' || true
-            echo "::error::$DOMAIN отдаётся ЧЕРЕЗ прокси Cloudflare. В России её прокси режет каждый ответ примерно на 16 КБ — страница не догружается, и мини-приложение висит на заставке Telegram. Cloudflare → DNS → переключите облачко у записи (и A, и AAAA) в серое «DNS only»."
-            exit 0
+            echo "режим: ОРАНЖЕВЫЙ (через прокси Cloudflare)"
+            echo "  плюс:  доступен с заграничных VPN, которыми пользуются все в Telegram"
+            echo "  минус: из России напрямую ответы режутся примерно на 16 КБ"
+          else
+            echo "режим: СЕРЫЙ (напрямую до VPS)"
+            echo "  плюс:  из России напрямую всё быстро и целиком"
+            echo "  минус: часть заграничных VPN до этого IP не доходит"
           fi
-          echo "OK: прямое соединение с VPS, прокси Cloudflare не участвует."
-          # Заодно убеждаемся, что HTML доезжает целиком, а не обрывается.
-          N="$(curl -sS --max-time 25 "https://${DOMAIN}/" | wc -c)"
+          N="$(wc -c < /tmp/idx.html || echo 0)"
           echo "index.html: $N байт"
           if [ "$N" -lt 4000 ]; then
-            echo "::error::index.html пришёл обрезанным ($N байт) — страница не сможет запуститься."
+            echo "::error::index.html пришёл обрезанным ($N байт) — страница не запустится."
           fi
 
       # The VPS can't reach caddyserver.com, so fetch the Caddy build that has the
