@@ -933,6 +933,9 @@ export function ScatterPage() {
                           left: `calc(${o.col} * (100% / ${SCATTER_COLS}))`,
                           top: `${o.row * SCELL}px`,
                           '--i': i,
+                          // Длина числа: «×500» втрое шире «×2», и без этого
+                          // трёхзначный номинал вылезал за края шарика.
+                          '--len': String(o.value).length,
                           // Куда лететь при сборе: в центр поля. Считаем в
                           // собственных клетках, чтобы не мерить DOM.
                           '--fx': (SCATTER_COLS - 1) / 2 - o.col,
