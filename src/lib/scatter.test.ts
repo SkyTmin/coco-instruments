@@ -185,6 +185,29 @@ describe('сферы-множители', () => {
     expect(dryWithOrbs / dry).toBeGreaterThan(0.1);
   });
 
+  it('сфера занимает клетку: символ под ней в восьмёрку не идёт', () => {
+    // Ровно восемь семёрок — поле играет.
+    const g = gridWith('seven', CLUSTER_MIN, 'cherry');
+    expect(findWins(g).find((w) => w.symbol === 'seven')).toBeDefined();
+    // Накрываем одну из них сферой: семёрок остаётся семь, выигрыша нет.
+    const covered = findWins(g, new Set(['0:0']));
+    expect(covered.find((w) => w.symbol === 'seven')).toBeUndefined();
+  });
+
+  it('закрытая сфера клетка не попадает ни в один выигрыш', () => {
+    const rng = seeded(555);
+    for (let i = 0; i < 4000; i++) {
+      const out = resolveScatter(100, { rng });
+      if (!out.orbs.length || !out.steps.length) continue;
+      for (const step of out.steps) {
+        const busy = new Set(step.orbs.map((o) => `${o.col}:${o.row}`));
+        for (const w of step.wins) {
+          for (const [c, r] of w.cells) expect(busy.has(`${c}:${r}`)).toBe(false);
+        }
+      }
+    }
+  });
+
   it('выигрыш за спин не превышает предела', () => {
     const rng = seeded(8080);
     for (let i = 0; i < 20000; i++) {

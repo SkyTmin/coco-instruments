@@ -69,13 +69,13 @@ export interface ScatterPay {
  * ничего не платит, а событием является сфера.
  */
 export const SCATTER_PAYS: ScatterPay[] = [
-  { id: 'cherry', tiers: [0.02, 0.05, 0.13] },
-  { id: 'lemon', tiers: [0.03, 0.07, 0.17] },
-  { id: 'grape', tiers: [0.05, 0.1, 0.24] },
-  { id: 'bell', tiers: [0.07, 0.15, 0.38] },
-  { id: 'star', tiers: [0.11, 0.26, 0.78] },
-  { id: 'diamond', tiers: [0.19, 0.47, 1.45] },
-  { id: 'seven', tiers: [0.38, 1.0, 3.4] },
+  { id: 'cherry', tiers: [0.03, 0.07, 0.19] },
+  { id: 'lemon', tiers: [0.04, 0.1, 0.25] },
+  { id: 'grape', tiers: [0.07, 0.15, 0.35] },
+  { id: 'bell', tiers: [0.1, 0.22, 0.55] },
+  { id: 'star', tiers: [0.16, 0.38, 1.15] },
+  { id: 'diamond', tiers: [0.28, 0.68, 2.1] },
+  { id: 'seven', tiers: [0.55, 1.45, 4.9] },
 ];
 
 const PAY_BY_ID = new Map(SCATTER_PAYS.map((p) => [p.id, p]));
@@ -253,11 +253,19 @@ export interface ScatterWin {
   cells: [number, number][];
 }
 
-/** Что сыграло на поле прямо сейчас. Скаттеры в счёт не идут. */
-export function findWins(grid: ScatterGrid): ScatterWin[] {
+/**
+ * Что сыграло на поле прямо сейчас. Скаттеры в счёт не идут.
+ *
+ * `blocked` — клетки, занятые сферами. Сфера не лежит поверх символа, а
+ * ЗАНИМАЕТ клетку: закрытый ею символ в восьмёрку не считается. Так это
+ * устроено в Олимпе, и отсюда же честный размен — сфера платит, но
+ * загромождает поле и укорачивает цепочку.
+ */
+export function findWins(grid: ScatterGrid, blocked?: ReadonlySet<string>): ScatterWin[] {
   const cells = new Map<ScatterCell, [number, number][]>();
   grid.forEach((col, c) =>
     col.forEach((id, r) => {
+      if (blocked?.has(`${c}:${r}`)) return;
       const list = cells.get(id);
       if (list) list.push([c, r]);
       else cells.set(id, [[c, r]]);
@@ -385,7 +393,9 @@ export function resolveScatter(bet: number, opts: RoundOptions | Rng = {}): Scat
     const newOrbs = spawnOrbs(grid, rng, orbs);
     orbs.push(...newOrbs);
 
-    const wins = findWins(grid);
+    // Клетки под сферами выпадают из подсчёта: сфера занимает место символа.
+    const blocked = new Set(orbs.map((o) => `${o.col}:${o.row}`));
+    const wins = findWins(grid, blocked);
     if (!wins.length) break;
 
     const stepBase = wins.reduce((sum, w) => sum + w.pay, 0) * bet;
