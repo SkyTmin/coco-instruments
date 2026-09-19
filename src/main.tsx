@@ -16,9 +16,25 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { init } from '@/init';
 import { setWebAuth } from '@/lib/storage';
 import { setWebMode } from '@/lib/runtime';
-import { installGlobalErrorLogging } from '@/lib/log';
+import { installGlobalErrorLogging, logError } from '@/lib/log';
 
 installGlobalErrorLogging();
+
+/**
+ * Снять заставку Telegram. Пока её не снять, поверх окна висит загрузчик
+ * клиента и человек не видит ни приложения, ни экрана ошибки. Дублирует
+ * инлайн-скрипт из index.html: зовём в каждой ветке запуска, лишний вызов
+ * безвреден.
+ */
+function telegramReady(): void {
+  try {
+    const w = (window as unknown as { Telegram?: { WebApp?: { ready?: () => void } } }).Telegram
+      ?.WebApp;
+    w?.ready?.();
+  } catch {
+    /* вне Telegram звать нечего */
+  }
+}
 
 // --- App freshness (fixes stale PWA + "not a valid JS MIME type" on iOS) -----
 // Home-screen PWAs can hold an old app shell across deploys. Nudge the service
@@ -108,6 +124,13 @@ if (lp) {
       </StrictMode>,
     );
   } catch (e) {
+    // Сюда попадаем, только если рухнул сам рендер: init() больше не бросает.
+    logError({
+      kind: 'boot.render',
+      message: e instanceof Error ? e.message : String(e),
+      stack: e instanceof Error ? e.stack : undefined,
+    });
+    telegramReady();
     root.render(
       <div className="screen">
         <div className="empty">
@@ -130,6 +153,12 @@ if (lp) {
 } else {
   // --- Website (a normal browser): log in with Telegram, then run on the web -
   setWebMode(true);
+  telegramReady();
+  if (inTelegramClient) {
+    // Внутри Telegram, но без launch params — раньше это давало вечную
+    // заставку поверх экрана логина. Теперь хотя бы видно, что происходит.
+    logError({ kind: 'boot.no_launch_params', message: `hash=${location.hash.slice(0, 80)}` });
+  }
   let authed = false;
   try {
     authed = (await fetch('/api/auth/me', { credentials: 'include' })).ok;

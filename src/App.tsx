@@ -563,12 +563,26 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
   );
 }
 
+/** Сырая initData прямо от клиента — запасной путь, если SDK её не разобрал. */
+function rawInitDataFromClient(): string | undefined {
+  try {
+    const w = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram
+      ?.WebApp;
+    return w?.initData || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Telegram Mini App entry — identity & theme come from the Telegram SDK. */
 export function App() {
   const lp = useLaunchParams();
   const systemDark = useSignal(miniApp.isDark);
   const pref = useThemePref();
-  const rawInitData = useRawInitData();
+  // Если initData.restore() не удался, хук вернёт пустоту — и всё перестало бы
+  // сохраняться на сервере. Берём строку у самого клиента: сервер проверяет
+  // подпись сам, так что доверять тут нечему.
+  const rawInitData = useRawInitData() || rawInitDataFromClient();
   return (
     <AppShell
       platform={['macos', 'ios'].includes(lp.tgWebAppPlatform) ? 'ios' : 'base'}

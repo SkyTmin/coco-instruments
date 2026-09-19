@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
@@ -76,6 +76,37 @@
       </button>
     </div>
 
+    <script>
+      // Снять заставку Telegram НЕМЕДЛЕННО, до загрузки бандла.
+      //
+      // Пока мини-приложение не сказало ready(), Telegram держит поверх окна
+      // свою заставку — и за ней не видно ни приложения, ни ошибки, ни
+      // запасного экрана ниже. Раньше ready() звался один раз, в глубине
+      // init(), после разбора initData: стоило чему-то там бросить исключение
+      // (например, у аккаунта непривычный профиль) — и человек навсегда
+      // оставался с крутящейся заставкой. Здесь ES5 без единой зависимости:
+      // этот код не может не выполниться.
+      (function () {
+        function wake() {
+          try {
+            var w = window.Telegram && window.Telegram.WebApp;
+            if (!w) return false;
+            if (w.ready) w.ready();
+            if (w.expand) w.expand();
+            return true;
+          } catch (e) {
+            return false;
+          }
+        }
+        if (!wake()) {
+          // Клиент мог ещё не подставить свой объект — подождём немного.
+          var tries = 0;
+          var t = setInterval(function () {
+            if (wake() || ++tries > 40) clearInterval(t);
+          }, 50);
+        }
+      })();
+    </script>
     <script>
       (function () {
         function mounted() {
