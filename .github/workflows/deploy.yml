@@ -173,6 +173,18 @@ jobs:
             -d "{\"menu_button\":{\"type\":\"web_app\",\"text\":\"Coco\",\"web_app\":{\"url\":\"https://${DOMAIN}/\"}}}"
           echo
           # Register the webhook so /start works and users become reachable.
+          #
+          # Сначала УДАЛЯЕМ. Telegram запоминает IP, к которому резолвился
+          # домен в момент регистрации, и сам его не перечитывает: setWebhook с
+          # тем же адресом отвечает «Webhook is already set» и ничего не
+          # меняет. После переключения домена на прокси Cloudflare он из-за
+          # этого продолжал ломиться на старый IP сервера и получать
+          # «Connection timed out». deleteWebhook + setWebhook заставляют
+          # перечитать DNS. drop_pending_updates не ставим — накопившиеся
+          # сообщения должны дойти.
+          curl -fsS "https://api.telegram.org/bot${TOK}/deleteWebhook" \
+            -H "Content-Type: application/json" -d '{"drop_pending_updates":false}'
+          echo
           SECRET=$(printf '%s' "$TOK" | sha256sum | cut -c1-48)
           curl -fsS "https://api.telegram.org/bot${TOK}/setWebhook" \
             -H "Content-Type: application/json" \
