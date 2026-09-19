@@ -98,8 +98,12 @@ export interface Orb {
   value: number;
 }
 
-/** Номиналы сфер и их веса: мелкие часто, ×500 — событие на всю жизнь. */
-const ORB_TABLE: [value: number, weight: number][] = [
+/**
+ * Номиналы сфер и их веса: мелкие часто, ×500 — событие на всю жизнь.
+ * Экспортируется, чтобы orb-rarity.test.ts считал проценты редкости по
+ * настоящей таблице, а не по её копии.
+ */
+export const ORB_TABLE: [value: number, weight: number][] = [
   [2, 300],
   [3, 220],
   [4, 140],

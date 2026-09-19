@@ -25,16 +25,21 @@ import {
 import type { Orb, ScatterCell, ScatterGrid, ScatterStep, ScatterWin } from '@/lib/scatter';
 import { BET_STEP, BETS, clampBet, MAX_BET, MIN_BET } from '@/lib/slots';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
+import { loudestTier, multRarity, ORB_TIERS, orbTier } from '@/lib/orb-rarity';
 import { dustBurst } from '@/lib/dust';
 import type { DustCell } from '@/lib/dust';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import {
+  anticipation as antiSound,
   coinDing,
   comboHit,
   counterTick,
   jackpotFanfare,
   leverPull,
+  multSlam,
+  multTick,
+  orbDrop,
   primeAudio,
   reelStop,
   reelTick,
@@ -69,6 +74,9 @@ const AUTO_OPTIONS: { value: number; label: string; hint: string }[] = [
   { value: 50, label: '50', hint: 'пятьдесят' },
   { value: Infinity, label: '∞', hint: 'пока не кончатся монеты' },
 ];
+
+/** Общая «никто не тянет» — константа, чтобы не плодить массивы каждый спин. */
+const EMPTY_ANTI: boolean[] = Array(SCATTER_COLS).fill(false);
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
@@ -147,12 +155,14 @@ interface SpinColProps {
   skin: SkinId;
   spinId: number;
   duration: number;
+  /** Колонка решает судьбу бонуса: тянет время и светится. */
+  anticipate: boolean;
   onStop: () => void;
 }
 
 /** Колонка перерисовывается только при новой ленте — см. `Reel` в «Слотах». */
 const SpinCol = memo(
-  function SpinCol({ strip, skin, spinId, duration, onStop }: SpinColProps) {
+  function SpinCol({ strip, skin, spinId, duration, anticipate, onStop }: SpinColProps) {
     const ref = useRef<HTMLDivElement>(null);
     const stopRef = useRef(onStop);
     stopRef.current = onStop;
@@ -181,7 +191,7 @@ const SpinCol = memo(
     }, [spinId, strip, duration]);
 
     return (
-      <div className="sboard__col">
+      <div className={`sboard__col${anticipate ? ' is-anticipate' : ''}`}>
         <div className="sboard__strip" ref={ref}>
           {/* Ключ — позиция в ленте, а не символ: элементы переиспользуются,
             меняется только src (см. тот же приём в «Слотах»). */}
@@ -195,7 +205,11 @@ const SpinCol = memo(
     );
   },
   (a, b) =>
-    a.strip === b.strip && a.skin === b.skin && a.spinId === b.spinId && a.duration === b.duration,
+    a.strip === b.strip &&
+    a.skin === b.skin &&
+    a.spinId === b.spinId &&
+    a.duration === b.duration &&
+    a.anticipate === b.anticipate,
 );
 
 export function ScatterPage() {
@@ -229,11 +243,18 @@ export function ScatterPage() {
   const [durations, setDurations] = useState<number[]>(() =>
     Array.from({ length: SCATTER_COLS }, (_, i) => BASE_MS + i * STEP_MS),
   );
+  /** Какие колонки тянут время: на поле уже три скаттера из четырёх. */
+  const [anti, setAnti] = useState<boolean[]>(EMPTY_ANTI);
   const [board, setBoard] = useState<Board | null>(null);
   const [dropDur, setDropDur] = useState(DROP_MS);
-  const [cascade, setCascade] = useState<{ step: number; phase: 'show' | 'burst' | 'drop' } | null>(
-    null,
-  );
+  const [cascade, setCascade] = useState<{
+    step: number;
+    phase: 'show' | 'collect' | 'burst' | 'drop';
+  } | null>(null);
+  /** Сумма сфер, которую счётчик показывает прямо сейчас (тикает вверх). */
+  const [collectSum, setCollectSum] = useState(0);
+  /** Множитель «припечатался» к выплате — короткая вспышка на счётчике. */
+  const [collectDone, setCollectDone] = useState(false);
   const [stepWins, setStepWins] = useState<ScatterWin[]>([]);
   const [stepOrbs, setStepOrbs] = useState<Orb[]>([]);
   const [stepCombo, setStepCombo] = useState(1);
@@ -263,6 +284,7 @@ export function ScatterPage() {
   const dustRef = useRef<HTMLCanvasElement>(null);
   const dustStop = useRef<(() => void) | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const collectRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => setMuted(!sound), [sound]);
@@ -271,6 +293,7 @@ export function ScatterPage() {
     () => () => {
       timers.current.forEach(clearTimeout);
       if (tickRef.current) clearInterval(tickRef.current);
+      if (collectRef.current) clearInterval(collectRef.current);
       dustStop.current?.();
     },
     [],
@@ -304,7 +327,8 @@ export function ScatterPage() {
   const broke = balance < MIN_BET && freeSpins <= 0 && !inBonus;
   const canSpin = hydrated && !spinning && balance >= stake;
   const tier = tierOf(chain);
-  const marking = cascade?.phase === 'show' || cascade?.phase === 'burst';
+  const marking =
+    cascade?.phase === 'show' || cascade?.phase === 'collect' || cascade?.phase === 'burst';
   const shownWins = marking ? stepWins : [];
   const winCells = new Set(shownWins.flatMap((w) => w.cells.map(([c, r]) => `${c}-${r}`)));
   const winOrder = new Map<string, number>();
@@ -323,6 +347,8 @@ export function ScatterPage() {
       setResult(res);
       setPending(0);
       setSpinning(false);
+      // Напряжение снято — гасим подсветку тянущих колонок.
+      setAnti(EMPTY_ANTI);
       if (res.kind === 'mega') {
         notifySuccess();
         jackpotFanfare();
@@ -398,16 +424,46 @@ export function ScatterPage() {
       const chainN = i + 1;
       const t = tierOf(chainN);
 
+      // Самая редкая сфера звена задаёт, насколько громко его праздновать.
+      const loudest = loudestTier(step.orbs.map((o) => o.value));
+
+      // Такт сбора: сферы слетаются в счётчик, сумма тикает вверх, множитель
+      // бьёт по выплате. Нужен только когда есть что умножать — иначе звено
+      // не удлиняется ни на миллисекунду.
+      const target = res.fs ? Math.max(1, step.totalMult) : step.orbMult;
+      const collecting = step.orbs.length > 0 && target > 1;
+      // Легендарная и выше получают лишнюю паузу перед вспышкой. Тишина —
+      // тоже такт: без неё находка читается как уведомление, а не как событие.
+      const hold = loudest.beats >= 3 ? (turbo ? 260 : 520) : 0;
+      const collect = collecting ? (turbo ? 460 : 820) + hold : 0;
+      // Арифметику показываем в два приёма: сначала база, потом множитель
+      // врезается в число и оно пересчитывается. Пока выплата приходила одним
+      // готовым числом, бонус существовал только внутри выражения — игрок
+      // видел итог и не видел, что его на что-то умножили.
+      // Базу берём делением, а добавку — вычитанием из настоящей выплаты:
+      // сумма двух тактов тогда точно равна step.payout, без расхождений.
+      const baseWin = collecting ? Math.round(step.payout / target) : step.payout;
+
       setCascade({ step: i, phase: 'show' });
       setBoard(gridToBoard(step.grid, `${res.steps.length}-${i}-g`));
       setStepWins(step.wins);
       setStepOrbs(step.orbs);
       setStepCombo(res.fs ? Math.max(1, step.totalMult) : Math.max(1, step.orbMult));
       setChain(chainN);
-      setRunWin((w) => w + step.payout);
+      setRunWin((w) => w + baseWin);
       setPending((p) => Math.max(0, p - step.payout));
 
       comboHit(chainN);
+
+      // Сферы звучат той же волной, какой появляются: от дешёвой к дорогой,
+      // по 90 мс на шаг. Редкая находка слышна раньше, чем прочитано число.
+      [...step.orbs]
+        .sort((a, b) => a.value - b.value)
+        .forEach((o, k) => orbDrop(orbTier(o.value).beats, k * 0.09));
+      if (loudest.beats >= 3) notifySuccess();
+      else if (loudest.beats === 2) tapMedium();
+      else if (loudest.beats === 1) selectionChanged();
+
       if (t === 0) tapLight();
       else if (t === 1) selectionChanged();
       else if (t === 2) {
@@ -420,22 +476,56 @@ export function ScatterPage() {
         setShake(true);
       }
 
-      timers.current.push(
-        setTimeout(() => {
-          setCascade({ step: i, phase: 'burst' });
-          symbolBurst();
-          startDust(step.wins);
-        }, show),
-      );
+      if (collecting) {
+        timers.current.push(
+          setTimeout(() => {
+            setCascade({ step: i, phase: 'collect' });
+            setCollectSum(res.fs ? Math.max(1, step.totalMult - step.orbMult) : 0);
+            // Счёт занимает 60% такта, остаток — пауза на «припечатывание».
+            const count = collect * 0.6;
+            const from = res.fs ? Math.max(1, step.totalMult - step.orbMult) : 0;
+            const started = performance.now();
+            if (collectRef.current) clearInterval(collectRef.current);
+            collectRef.current = setInterval(() => {
+              const k = Math.min(1, (performance.now() - started) / count);
+              setCollectSum(Math.round(from + (target - from) * k));
+              multTick(k);
+              if (k >= 1 && collectRef.current) {
+                clearInterval(collectRef.current);
+                collectRef.current = null;
+                setCollectDone(true);
+                multSlam();
+                // Второй такт арифметики: множитель ударил — выплата растёт
+                // на глазах с базы до настоящей. Это тот самый кадр, в
+                // котором видно, что бонус сработал.
+                setRunWin((w) => w + (step.payout - baseWin));
+                if (loudest.beats >= 2) tapMedium();
+              }
+            }, 55);
+          }, show),
+        );
+      }
 
       timers.current.push(
         setTimeout(() => {
-          setDropDur(drop);
-          setBoard(collapseBoard(step, `${res.steps.length}-${i}`));
-          setCascade({ step: i, phase: 'drop' });
-          setStepWins([]);
-          setStepOrbs([]);
-        }, show + burst),
+          setCascade({ step: i, phase: 'burst' });
+          setCollectDone(false);
+          symbolBurst();
+          startDust(step.wins);
+        }, show + collect),
+      );
+
+      timers.current.push(
+        setTimeout(
+          () => {
+            setDropDur(drop);
+            setBoard(collapseBoard(step, `${res.steps.length}-${i}`));
+            setCascade({ step: i, phase: 'drop' });
+            setStepWins([]);
+            setStepOrbs([]);
+          },
+          show + collect + burst,
+        ),
       );
 
       timers.current.push(
@@ -449,7 +539,7 @@ export function ScatterPage() {
               finish(res);
             }
           },
-          show + burst + drop + stagger * (SCATTER_COLS - 1) + 80,
+          show + collect + burst + drop + stagger * (SCATTER_COLS - 1) + 80,
         ),
       );
     },
@@ -466,9 +556,37 @@ export function ScatterPage() {
     leverPull();
 
     const scale = turbo ? 0.5 : 1;
-    const durs = res.grid.map((_, i) => (BASE_MS + i * STEP_MS) * scale);
+    // Предвкушение: как только на уже вставших колонках набралось три
+    // скаттера, каждая следующая тянется заметно дольше — до бонуса не
+    // хватает ровно одного, и это надо дать прожить. Приём из Олимпа и
+    // Sweet Bonanza; без него четвёртый скаттер просто «случается».
+    const durs: number[] = [];
+    const antiCols: boolean[] = [];
+    let seen = 0;
+    let extra = 0;
+    for (let c = 0; c < SCATTER_COLS; c++) {
+      const tense = seen >= SCATTER_TRIGGER - 1;
+      if (tense) extra += turbo ? 620 : 1150;
+      antiCols.push(tense);
+      durs.push((BASE_MS + c * STEP_MS) * scale + extra);
+      seen += res.grid[c].filter((id) => id === 'scatter').length;
+    }
     setStrips(res.grid.map((col) => makeStrip(col)));
     setDurations(durs);
+    setAnti(antiCols);
+    // Нарастающий вой начинается ровно тогда, когда тормозит колонка.
+    antiCols.forEach((on, c) => {
+      if (!on) return;
+      timers.current.push(
+        setTimeout(
+          () => {
+            antiSound();
+            tapLight();
+          },
+          c === 0 ? 0 : durs[c - 1],
+        ),
+      );
+    });
     setBoard(null);
     dustStop.current?.();
     setResult(null);
@@ -479,6 +597,9 @@ export function ScatterPage() {
     setStepOrbs([]);
     setChain(0);
     setRunWin(0);
+    setCollectSum(0);
+    setCollectDone(false);
+    if (collectRef.current) clearInterval(collectRef.current);
     setPending(res.total);
     setSpinId((n) => n + 1);
     setSpinning(true);
@@ -682,6 +803,7 @@ export function ScatterPage() {
                       skin={skin}
                       spinId={spinId}
                       duration={durations[i]}
+                      anticipate={anti[i] ?? false}
                       onStop={() => {
                         reelStop(i);
                         if (i === SCATTER_COLS - 1) selectionChanged();
@@ -689,24 +811,51 @@ export function ScatterPage() {
                     />
                   ))}
               {shownWins.length > 0 && <div className="sboard__dim" aria-hidden="true" />}
-              {/* Сферы-множители: лежат поверх символов и складываются */}
-              {stepOrbs.map((o) => (
-                <span
-                  className="orb"
-                  key={`${o.col}-${o.row}-${o.value}`}
-                  style={{
-                    left: `calc(${o.col} * (100% / ${SCATTER_COLS}))`,
-                    top: `${o.row * SCELL}px`,
-                  }}
-                >
-                  ×{o.value}
-                </span>
-              ))}
+              {/* Сферы-множители: лежат поверх символов и складываются.
+                  Появляются волной от дешёвой к дорогой — так самая редкая
+                  падает последней, на пике внимания, а не теряется в куче. */}
+              {[...stepOrbs]
+                .sort((a, b) => a.value - b.value)
+                .map((o, i) => {
+                  const t = orbTier(o.value);
+                  return (
+                    <span
+                      className={`orb orb--${t.id}${
+                        cascade?.phase === 'collect' ? ' is-collect' : ''
+                      }`}
+                      key={`${o.col}-${o.row}-${o.value}`}
+                      style={
+                        {
+                          left: `calc(${o.col} * (100% / ${SCATTER_COLS}))`,
+                          top: `${o.row * SCELL}px`,
+                          '--i': i,
+                          // Куда лететь при сборе: в центр поля. Считаем в
+                          // собственных клетках, чтобы не мерить DOM.
+                          '--fx': (SCATTER_COLS - 1) / 2 - o.col,
+                          '--fy': `${((SCATTER_ROWS - 1) / 2 - o.row) * SCELL}px`,
+                        } as React.CSSProperties
+                      }
+                    >
+                      {t.beats >= 1 && <i className="orb__shock" aria-hidden="true" />}
+                      {t.beats >= 2 && <i className="orb__ring" aria-hidden="true" />}×{o.value}
+                      {t.beats >= 2 && <b className="orb__tag">{t.name}</b>}
+                    </span>
+                  );
+                })}
               <canvas className="dust" ref={dustRef} aria-hidden="true" />
               <div className="reels__glass" aria-hidden="true" />
-              {cascade && cascade.phase !== 'drop' && stepCombo > 1 && (
-                <div className={`stamp stamp--t${tier}`} key={`st-${chain}`} aria-hidden="true">
-                  ×{stepCombo}
+              {/* Счётчик множителя. В такте сбора он же принимает слетающиеся
+                  сферы и отсчитывает сумму вслух — именно здесь видно, что
+                  бонус сработал, а не просто «где-то посчиталось». */}
+              {cascade && cascade.phase !== 'drop' && (stepCombo > 1 || collectSum > 0) && (
+                <div
+                  className={`stamp stamp--t${tier} stamp--${multRarity(stepCombo)}${
+                    cascade.phase === 'collect' ? ' is-collect' : ''
+                  }${collectDone ? ' is-slam' : ''}`}
+                  key={`st-${chain}`}
+                  aria-hidden="true"
+                >
+                  ×{cascade.phase === 'collect' ? collectSum : stepCombo}
                 </div>
               )}
             </div>
@@ -726,10 +875,14 @@ export function ScatterPage() {
                 <span className="hit" key={w.symbol}>
                   <Sym id={w.symbol} skin={skin} size={22} />
                   <b>×{w.count}</b>
+                  {/* До удара множителя показываем базу, после — итог. Иначе
+                      строка проговаривала результат раньше, чем счётчик его
+                      посчитал, и множитель выглядел ни на что не влияющим. */}
                   <i>
-                    +{fmt(w.pay * bet * stepCombo)}
+                    +{fmt(w.pay * bet * (collectDone ? stepCombo : 1))}
                     <CoinIcon size={13} />
                   </i>
+                  {stepCombo > 1 && collectDone && <u className="hit__mult">×{stepCombo}</u>}
                 </span>
               ))}
             </div>
@@ -924,10 +1077,26 @@ export function ScatterPage() {
             <div className="combo-rules">
               <div className="combo-rules__title">Сферы-множители</div>
               <p className="combo-rules__text">
-                На поле случайно падают золотые сферы с числом от ×2 до ×500. Если это звено
-                сыграло, все сферы складываются и умножают выплату. Сферы не участвуют в сборе
-                восьмёрок — они только множат.
+                На поле случайно падают сферы с числом от ×2 до ×500. Если это звено сыграло, все
+                сферы складываются и умножают выплату. Сферы не участвуют в сборе восьмёрок — они
+                только множат.
               </p>
+              <p className="combo-rules__text">
+                Чем крупнее номинал, тем реже сфера и тем громче она приходит: у каждой ступени свой
+                цвет, свой звук и своя отдача. Проценты — доля ступени среди всех выпавших сфер.
+              </p>
+              <div className="rarity-ladder">
+                {ORB_TIERS.map((t) => (
+                  <div className={`rarity-row rarity-row--${t.id}`} key={t.id}>
+                    <i className="rarity-row__dot" aria-hidden="true" />
+                    <b className="rarity-row__name">{t.name}</b>
+                    <span className="rarity-row__range">
+                      {t.id === 'mythic' ? '×250 — ×500' : `от ×${t.min}`}
+                    </span>
+                    <span className="rarity-row__odds">{t.chance}%</span>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="combo-rules">
               <div className="combo-rules__title">Скаттер и бонус</div>

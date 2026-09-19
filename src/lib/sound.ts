@@ -141,3 +141,52 @@ export function comboHit(step: number): void {
 export function symbolBurst(): void {
   tone(880, { dur: 0.07, type: 'square', gain: 0.05, sweepTo: 300 });
 }
+
+/**
+ * Падение сферы-множителя. Раньше сферы падали молча — и ×500 звучал ровно
+ * так же, как ×2, то есть никак. Теперь у каждой ступени редкости свой звук,
+ * и ухо узнаёт находку раньше, чем глаз успевает прочитать число.
+ *
+ * `beats` — «вес события» из lib/orb-rarity (0…3).
+ */
+export function orbDrop(beats: number, at = 0): void {
+  if (beats <= 0) {
+    // Обычная и необычная: короткое стеклянное «тюк», чтобы сфера не была немой.
+    tone(880, { at, dur: 0.07, type: 'sine', gain: 0.07 });
+    return;
+  }
+  if (beats === 1) {
+    // Редкая: чистая квинта — звук «нашлось что-то приятное».
+    tone(1046.5, { at, dur: 0.14, type: 'triangle', gain: 0.11 });
+    tone(1568, { at: at + 0.05, dur: 0.14, type: 'sine', gain: 0.08 });
+    return;
+  }
+  if (beats === 2) {
+    // Эпическая: мажорное трезвучие с подъёмом.
+    [783.99, 987.77, 1174.66].forEach((f, i) =>
+      tone(f, { at: at + i * 0.045, dur: 0.22, type: 'triangle', gain: 0.11 }),
+    );
+    tone(392, { at, dur: 0.3, type: 'sine', gain: 0.1 });
+    return;
+  }
+  // Легендарная и мифическая: колокол с басом и долгим хвостом.
+  [523.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) =>
+    tone(f, { at: at + i * 0.05, dur: 0.5, type: 'sine', gain: 0.1 }),
+  );
+  tone(130.81, { at, dur: 0.7, type: 'triangle', gain: 0.17 });
+  tone(2093, { at: at + 0.24, dur: 0.6, type: 'sine', gain: 0.06 });
+}
+
+/**
+ * Счёт суммы множителей: тик, высота которого ползёт вверх вместе с суммой.
+ * `k` — доля пути от нуля к итогу (0…1).
+ */
+export function multTick(k: number): void {
+  tone(700 + 900 * Math.min(1, Math.max(0, k)), { dur: 0.04, type: 'square', gain: 0.06 });
+}
+
+/** Множитель применился к выплате — глухой удар «печати». */
+export function multSlam(): void {
+  tone(196, { dur: 0.26, type: 'triangle', gain: 0.2, sweepTo: 98 });
+  tone(784, { dur: 0.14, type: 'square', gain: 0.08, sweepTo: 392 });
+}

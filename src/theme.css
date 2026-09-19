@@ -13362,6 +13362,38 @@ input[type='datetime-local'] {
   overflow: hidden;
   background: linear-gradient(180deg, var(--reel-hi), var(--reel-mid) 60%, var(--reel-lo));
 }
+/* Колонка, от которой зависит бонус: до четырёх скаттеров не хватает одного.
+   Она крутится дольше остальных, и её надо выделить — иначе игрок решит,
+   что приложение подвисло. Горит только накладка, сами символы не трогаем. */
+.sboard__col.is-anticipate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 190, 40, 0.42),
+    rgba(255, 120, 20, 0.14) 45%,
+    rgba(255, 190, 40, 0.42)
+  );
+  box-shadow: inset 0 0 0 2px rgba(255, 205, 70, 0.9);
+  animation: anti-throb 0.42s ease-in-out infinite alternate;
+}
+@keyframes anti-throb {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sboard__col.is-anticipate::after {
+    animation: none;
+    opacity: 0.7;
+  }
+}
 .sboard__strip {
   position: absolute;
   inset: 0 0 auto 0;
@@ -13509,6 +13541,34 @@ input[type='datetime-local'] {
   font-weight: 800;
   color: color-mix(in srgb, var(--bezel-1) 88%, #fff);
 }
+/* Множитель прилетает в строку сразу после удара по счётчику: маленькая
+   копия того же события, чтобы связь «сферы → выплата» была видна и здесь. */
+.hit__mult {
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 1px 6px;
+  border-radius: 99px;
+  color: #2a1400;
+  background: linear-gradient(180deg, #ffe9a3, #ffc53c);
+  box-shadow: 0 0 10px rgba(255, 190, 60, 0.7);
+  animation: hit-mult-in 0.34s cubic-bezier(0.2, 1.8, 0.4, 1) both;
+}
+@keyframes hit-mult-in {
+  from {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hit__mult {
+    animation: none;
+  }
+}
 
 /* Вывеска широкого корпуса */
 .cabinet__sign--wide {
@@ -13591,6 +13651,17 @@ input[type='datetime-local'] {
    ========================================================================= */
 
 /* Сфера-множитель: золотой шар с числом, лежит поверх символа */
+/* ---- Сферы-множители и их редкость ------------------------------------- *
+ * Номиналы расходятся на порядок по редкости (см. lib/orb-rarity.ts), но
+ * рисовались одинаковым золотым шариком — и ×500 проходил незамеченным.
+ * Теперь тир задаёт четыре токена, а всё остальное наследуется. Лестница
+ * цветов — та самая, к которой игроков приучили RPG: бронза → зелёный →
+ * синий → фиолетовый → огонь → радуга. Читается без единой подписи.
+ *
+ * Бюджет: дорогие эффекты (вращение conic-градиента, drop-shadow, радужный
+ * перелив) включаются только у легендарной и мифической — вместе это 0,8 %
+ * сфер. На обычных, которых две трети, не появляется ни одного нового слоя.
+ */
 .orb {
   position: absolute;
   z-index: 3;
@@ -13603,7 +13674,15 @@ input[type='datetime-local'] {
   font-weight: 900;
   color: #3a2000;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
-  animation: orb-in 0.46s cubic-bezier(0.2, 1.7, 0.4, 1) both;
+  /* Токены по умолчанию = обычная сфера. Тиры ниже переопределяют их. */
+  --orb-hi: #fff8d0;
+  --orb-mid: #ffd83d;
+  --orb-lo: #f0a01e;
+  --orb-deep: #a35f05;
+  --orb-edge: rgba(120, 70, 0, 0.75);
+  --orb-glow: rgba(255, 200, 60, 0.9);
+  /* Сферы влетают волной, а не разом: глаз успевает заметить каждую. */
+  animation: orb-in 0.46s cubic-bezier(0.2, 1.7, 0.4, 1) calc(var(--i, 0) * 90ms) both;
 }
 .orb::before {
   content: '';
@@ -13613,12 +13692,18 @@ input[type='datetime-local'] {
   width: 78%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: radial-gradient(circle at 34% 28%, #fff8d0, #ffd83d 42%, #f0a01e 72%, #a35f05);
+  background: radial-gradient(
+    circle at 34% 28%,
+    var(--orb-hi),
+    var(--orb-mid) 42%,
+    var(--orb-lo) 72%,
+    var(--orb-deep)
+  );
   box-shadow:
-    0 0 0 2px rgba(120, 70, 0, 0.75),
-    0 0 18px rgba(255, 200, 60, 0.9),
+    0 0 0 2px var(--orb-edge),
+    0 0 18px var(--orb-glow),
     0 4px 10px rgba(0, 0, 0, 0.45);
-  animation: orb-throb 1.1s ease-in-out infinite 0.46s;
+  animation: orb-throb 1.1s ease-in-out infinite calc(var(--i, 0) * 90ms + 0.46s);
 }
 @keyframes orb-in {
   from {
@@ -13633,6 +13718,314 @@ input[type='datetime-local'] {
 @keyframes orb-throb {
   50% {
     transform: scale(1.08);
+  }
+}
+
+/* Необычная: зелень. Первый шаг вверх — заметный, но ещё будничный. */
+.orb--uncommon {
+  --orb-hi: #e8ffd9;
+  --orb-mid: #8ee34a;
+  --orb-lo: #3f9e2b;
+  --orb-deep: #1d5c18;
+  --orb-edge: rgba(20, 70, 15, 0.8);
+  --orb-glow: rgba(140, 230, 80, 0.9);
+  color: #10330c;
+}
+/* Редкая: синий. С этого тира сфера крупнее прочих — размер читается раньше цвета. */
+.orb--rare {
+  --orb-hi: #dff2ff;
+  --orb-mid: #58b7ff;
+  --orb-lo: #1f6fd0;
+  --orb-deep: #12386f;
+  --orb-edge: rgba(10, 45, 95, 0.85);
+  --orb-glow: rgba(90, 185, 255, 0.95);
+  color: #06213f;
+  font-size: 16px;
+}
+/* Эпическая: фиолет и кольцо — вокруг сферы появляется орбита. */
+.orb--epic {
+  --orb-hi: #f3e2ff;
+  --orb-mid: #c078ff;
+  --orb-lo: #7b32c9;
+  --orb-deep: #401470;
+  --orb-edge: rgba(45, 10, 85, 0.85);
+  --orb-glow: rgba(190, 120, 255, 0.95);
+  color: #2a0a4d;
+  font-size: 17px;
+}
+/* Легендарная: огонь. Плюс вращающийся блик — 0,6 % сфер, можно себе позволить. */
+.orb--legendary {
+  --orb-hi: #fff4d2;
+  --orb-mid: #ffb03a;
+  --orb-lo: #ef6a12;
+  --orb-deep: #8a2f02;
+  --orb-edge: rgba(90, 30, 0, 0.9);
+  --orb-glow: rgba(255, 150, 40, 1);
+  color: #451400;
+  font-size: 19px;
+}
+/* Мифическая: радуга. Одна на пятьсот — должна останавливать взгляд. */
+.orb--mythic {
+  --orb-hi: #ffffff;
+  --orb-mid: #ff5ec7;
+  --orb-lo: #6a5bff;
+  --orb-deep: #2a0b5e;
+  --orb-edge: rgba(255, 255, 255, 0.9);
+  --orb-glow: rgba(255, 120, 220, 1);
+  color: #fff;
+  font-size: 20px;
+  text-shadow:
+    0 0 8px rgba(255, 120, 220, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+/* Орбита вокруг эпической и выше: отдельный слой, крутится трансформом —
+   анимировать сам градиент означало бы перерисовку каждый кадр. */
+.orb--epic .orb__ring,
+.orb--legendary .orb__ring,
+.orb--mythic .orb__ring {
+  position: absolute;
+  z-index: -2;
+  width: 108%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--orb-glow) 40deg,
+    transparent 90deg,
+    transparent 180deg,
+    var(--orb-glow) 220deg,
+    transparent 270deg
+  );
+  opacity: 0.75;
+  animation: orb-ring 2.4s linear infinite;
+}
+.orb--legendary .orb__ring {
+  width: 124%;
+  animation-duration: 1.8s;
+}
+.orb--mythic .orb__ring {
+  width: 140%;
+  opacity: 0.95;
+  animation-duration: 1.2s;
+}
+@keyframes orb-ring {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Имя редкости — только там, где оно что-то добавляет. Обычной и необычной
+   подпись не нужна: они и так две трети всех сфер. */
+.orb__tag {
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--orb-hi);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  animation: fade 0.3s ease calc(var(--i, 0) * 90ms + 0.3s) both;
+}
+
+/* Ударная волна при появлении редкой и выше: расходящееся кольцо. Живёт
+   полсекунды и снимается вместе со сферой — ничего не копится. */
+.orb__shock {
+  position: absolute;
+  z-index: -3;
+  width: 78%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid var(--orb-glow);
+  animation: orb-shock 0.62s cubic-bezier(0.15, 0.8, 0.3, 1) calc(var(--i, 0) * 90ms) both;
+}
+@keyframes orb-shock {
+  from {
+    opacity: 0.9;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+
+/* Сбор: сферы слетаются в счётчик посередине поля. Сначала короткий замах
+   в противоход — без него полёт читается как «пропали», а не «собрались».
+   Цель задана в собственных клетках сферы (--fx) и пикселях (--fy), поэтому
+   ничего не надо мерить в DOM. */
+.orb.is-collect {
+  animation: orb-fly 0.52s cubic-bezier(0.5, -0.45, 0.3, 1) calc(var(--i, 0) * 70ms) forwards;
+}
+@keyframes orb-fly {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  22% {
+    opacity: 1;
+    transform: translate(calc(var(--fx, 0) * -7%), -7px) scale(1.16);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--fx, 0) * 100%), var(--fy, 0)) scale(0.22);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .orb::before,
+  .orb__ring,
+  .orb__shock,
+  .orb__tag,
+  .orb.is-collect {
+    animation: none;
+  }
+  .orb__shock {
+    opacity: 0;
+  }
+  .orb.is-collect {
+    opacity: 0;
+  }
+}
+
+/* ---- Лестница редкости в правилах --------------------------------------
+ * Шансы показываем честно и цифрами. Без этого «мифическая сфера» — пустое
+ * слово: охота имеет смысл, только когда видно, за чем охотишься.
+ */
+.rarity-ladder {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+}
+.rarity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--rar, #ffd83d) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rar, #ffd83d) 34%, transparent);
+  font-size: 12.5px;
+}
+.rarity-row__dot {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--rar, #ffd83d);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--rar, #ffd83d) 80%, transparent);
+}
+.rarity-row__name {
+  color: var(--rar, #ffd83d);
+  font-weight: 800;
+}
+.rarity-row__range {
+  margin-left: auto;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.rarity-row__odds {
+  min-width: 42px;
+  text-align: right;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.95;
+}
+.rarity-row--common {
+  --rar: #ffd83d;
+}
+.rarity-row--uncommon {
+  --rar: #8ee34a;
+}
+.rarity-row--rare {
+  --rar: #58b7ff;
+}
+.rarity-row--epic {
+  --rar: #c078ff;
+}
+.rarity-row--legendary {
+  --rar: #ffb03a;
+}
+.rarity-row--mythic {
+  --rar: #ff5ec7;
+}
+
+/* ---- Счётчик множителя --------------------------------------------------
+ * Тот же элемент, что раньше был просто крупной цифрой, теперь принимает
+ * слетающиеся сферы. Цвет берёт от редкости САМОЙ СУММЫ: три обычные сферы,
+ * сложившись в ×12, красятся как редкая находка — и это честно.
+ */
+.stamp.is-collect {
+  animation: stamp-armed 0.5s ease-in-out infinite alternate;
+}
+@keyframes stamp-armed {
+  from {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1.07);
+  }
+}
+/* Удар: множитель припечатался к выплате. Резкий наезд с отскоком. */
+.stamp.is-slam {
+  animation: stamp-slam 0.44s cubic-bezier(0.2, 1.9, 0.35, 1) both;
+}
+@keyframes stamp-slam {
+  0% {
+    transform: translate(-50%, -50%) scale(1.75);
+  }
+  55% {
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}
+.stamp--uncommon {
+  color: #b9f08a;
+}
+.stamp--rare {
+  color: #9bd4ff;
+}
+.stamp--epic {
+  color: #dcaaff;
+}
+.stamp--legendary {
+  background: linear-gradient(180deg, #fff6d5, #ffb03a 55%, #ef6a12);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 24px rgba(255, 160, 50, 0.85));
+}
+/* Мифическая сумма: перелив. Градиент едет фоном, а не пересчитывается —
+   анимируется background-position, самая дешёвая из «радужных» уловок. */
+.stamp--mythic {
+  background: linear-gradient(100deg, #ff5ec7, #ffd83d 25%, #5ee7ff 50%, #a06bff 75%, #ff5ec7);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 26px rgba(255, 120, 220, 0.9));
+  animation: stamp-holo 1.6s linear infinite;
+}
+@keyframes stamp-holo {
+  to {
+    background-position: 300% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stamp.is-collect,
+  .stamp.is-slam,
+  .stamp--mythic {
+    animation: none;
   }
 }
 
