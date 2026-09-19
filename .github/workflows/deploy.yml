@@ -60,8 +60,9 @@ jobs:
         run: |
           set -u
           api() { curl -sS -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" "$@"; }
-          # ACME-scoped tokens can't LIST zones (that returns 400/403), so find the
-          # zone by NAME: try DOMAIN, then each parent (app.x.ru → x.ru), keep the hit.
+          # Ищем зону по имени: DOMAIN, затем каждый родитель (app.x.ru → x.ru).
+          # Если токен умеет листинг — пробуем и его: у части токенов поиск по
+          # ?name= не работает, а список зон отдаётся.
           ZID=""; ZONE=""; CAND="$DOMAIN"
           while [ -n "$CAND" ]; do
             R="$(api "https://api.cloudflare.com/client/v4/zones?name=$CAND" || true)"
@@ -70,20 +71,55 @@ jobs:
             case "$CAND" in *.*.*) CAND="${CAND#*.}" ;; *) CAND="" ;; esac
           done
           if [ -z "$ZID" ]; then
-            echo "::warning::API token can't find the zone — turn the cloud GREY (DNS only) for the app's DNS record manually in the Cloudflare dashboard."
+            ALL="$(api "https://api.cloudflare.com/client/v4/zones?per_page=50" || true)"
+            ZID="$(printf '%s' "$ALL" | jq -r --arg d "$DOMAIN" \
+              '[.result[]? | select($d == .name or ($d | endswith("." + .name)))] | .[0].id // empty' 2>/dev/null || true)"
+            ZONE="$(printf '%s' "$ALL" | jq -r --arg d "$DOMAIN" \
+              '[.result[]? | select($d == .name or ($d | endswith("." + .name)))] | .[0].name // empty' 2>/dev/null || true)"
+          fi
+          if [ -z "$ZID" ]; then
+            echo "::error::CF_API_TOKEN не видит зону для $DOMAIN — серый режим НЕ включён. Домен, скорее всего, всё ещё проксируется Cloudflare, а в России её прокси режет ответ на ~16 КБ, и приложение не догружается. Почините вручную: Cloudflare → DNS → облачко у записи в серое (DNS only). Либо выдайте токену права Zone:Read + DNS:Edit на эту зону."
             exit 0
           fi
+          # Перебираем ВСЕ записи, а не только первую: у домена обычно есть и A,
+          # и AAAA. Раньше проверялась только [0] — и если серой была она, шаг
+          # рапортовал «нечего делать», а вторая запись оставалась оранжевой.
+          # Мобильный интернет ходит по IPv6, поэтому телефон попадал именно
+          # на проксируемую AAAA и получал вечную заставку Telegram.
           REC="$(api "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records?name=$DOMAIN" || true)"
-          SEL='[.result[]? | select(.type=="A" or .type=="AAAA" or .type=="CNAME")][0]'
-          RID="$(printf '%s' "$REC" | jq -r "$SEL.id // empty" 2>/dev/null || true)"
-          PROXIED="$(printf '%s' "$REC" | jq -r "$SEL.proxied // empty" 2>/dev/null || true)"
-          if [ -z "$RID" ]; then
-            echo "::warning::No A/AAAA/CNAME record for $DOMAIN in zone $ZONE — flip the cloud to grey manually."; exit 0
+          echo "Зона $ZONE, записи для $DOMAIN:"
+          printf '%s' "$REC" | jq -r '.result[]? | "  " + .type + " " + .name + " → " + .content + "  proxied=" + (.proxied|tostring)' || true
+          LEFT=0
+          for RID in $(printf '%s' "$REC" | jq -r '.result[]? | select((.type=="A" or .type=="AAAA" or .type=="CNAME") and .proxied==true) | .id' 2>/dev/null); do
+            api -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records/$RID" \
+              --data '{"proxied":false}' \
+              | jq -r '"==> " + .result.type + " " + .result.name + " теперь proxied=" + (.result.proxied|tostring)' || LEFT=1
+          done
+          [ "$LEFT" = 0 ] || echo "::warning::Не все записи удалось перевести в серый режим."
+
+      # Прямая проверка того, что на самом деле отдаётся пользователю. Если
+      # ответ идёт через прокси Cloudflare (заголовок cf-ray), в России он
+      # обрежется на ~16 КБ и приложение не загрузится — это ровно тот случай,
+      # когда у человека висит заставка Telegram и пустой экран.
+      - name: Check the domain is NOT behind the Cloudflare proxy
+        if: steps.gate.outputs.ready == 'true'
+        continue-on-error: true
+        env:
+          DOMAIN: ${{ steps.gate.outputs.domain }}
+        run: |
+          H="$(curl -sS -D - -o /dev/null --max-time 25 "https://${DOMAIN}/" || true)"
+          if printf '%s' "$H" | grep -qi '^cf-ray:'; then
+            echo "$H" | grep -iE '^(server|cf-ray):' || true
+            echo "::error::$DOMAIN отдаётся ЧЕРЕЗ прокси Cloudflare. В России её прокси режет каждый ответ примерно на 16 КБ — страница не догружается, и мини-приложение висит на заставке Telegram. Cloudflare → DNS → переключите облачко у записи (и A, и AAAA) в серое «DNS only»."
+            exit 0
           fi
-          echo "Zone $ZONE: record $DOMAIN proxied=$PROXIED"
-          if [ "$PROXIED" = "false" ]; then echo "Already DNS-only (grey) — nothing to do."; exit 0; fi
-          api -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records/$RID" \
-            --data '{"proxied":false}' | jq -r '"==> now proxied=" + (.result.proxied|tostring) + " (DNS-only, direct to the VPS)"'
+          echo "OK: прямое соединение с VPS, прокси Cloudflare не участвует."
+          # Заодно убеждаемся, что HTML доезжает целиком, а не обрывается.
+          N="$(curl -sS --max-time 25 "https://${DOMAIN}/" | wc -c)"
+          echo "index.html: $N байт"
+          if [ "$N" -lt 4000 ]; then
+            echo "::error::index.html пришёл обрезанным ($N байт) — страница не сможет запуститься."
+          fi
 
       # The VPS can't reach caddyserver.com, so fetch the Caddy build that has the
       # Cloudflare DNS plugin here (the runner has open internet) and ship it over.
