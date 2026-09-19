@@ -186,9 +186,22 @@ jobs:
             -H "Content-Type: application/json" -d '{"drop_pending_updates":false}'
           echo
           SECRET=$(printf '%s' "$TOK" | sha256sum | cut -c1-48)
-          curl -fsS "https://api.telegram.org/bot${TOK}/setWebhook" \
-            -H "Content-Type: application/json" \
-            -d "{\"url\":\"https://${DOMAIN}/api/bot/webhook\",\"secret_token\":\"${SECRET}\",\"allowed_updates\":[\"message\"]}"
+          # Явно передаём адрес, в который домен резолвится ПРЯМО СЕЙЧАС.
+          # Иначе Telegram берёт его из своего кэша: после переключения домена
+          # на прокси Cloudflare он продолжал ходить на старый IP сервера, до
+          # которого из-за границы не достучаться. Раз адрес вычисляется на
+          # каждом деплое, он не устареет и при смене хостинга.
+          WHIP="$(getent ahosts "$DOMAIN" | awk '$1 ~ /\./ {print $1; exit}')"
+          echo "домен резолвится в: ${WHIP:-не определился}"
+          if [ -n "$WHIP" ]; then
+            curl -fsS "https://api.telegram.org/bot${TOK}/setWebhook" \
+              -H "Content-Type: application/json" \
+              -d "{\"url\":\"https://${DOMAIN}/api/bot/webhook\",\"ip_address\":\"${WHIP}\",\"secret_token\":\"${SECRET}\",\"allowed_updates\":[\"message\"]}"
+          else
+            curl -fsS "https://api.telegram.org/bot${TOK}/setWebhook" \
+              -H "Content-Type: application/json" \
+              -d "{\"url\":\"https://${DOMAIN}/api/bot/webhook\",\"secret_token\":\"${SECRET}\",\"allowed_updates\":[\"message\"]}"
+          fi
           echo
           echo "== getWebhookInfo (after) =="
           curl -fsS "https://api.telegram.org/bot${TOK}/getWebhookInfo" || true
