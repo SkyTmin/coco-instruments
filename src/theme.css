@@ -13073,6 +13073,59 @@ input[type='datetime-local'] {
     opacity: 0.92;
   }
 }
+/* Лучи за тотемом. Вращение implies свечение — это самый узнаваемый сигнал
+   «легендарное» во всех играх. Градиент рисуется ОДИН раз, а крутится
+   трансформ: анимировать угол внутри conic-gradient значит перерисовывать
+   кадр целиком, и это главная ошибка на мобильных в этой категории. */
+.totem__rays {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  width: 150vw;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 214, 102, 0.85) 0deg 6deg,
+    transparent 6deg 24deg
+  );
+  -webkit-mask-image: radial-gradient(circle, #000 14%, transparent 62%);
+  mask-image: radial-gradient(circle, #000 14%, transparent 62%);
+  mix-blend-mode: screen;
+  contain: paint;
+  will-change: transform;
+  animation:
+    totem-rays-spin 9s linear infinite,
+    totem-rays-in 0.52s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@supports (mix-blend-mode: plus-lighter) {
+  .totem__rays {
+    mix-blend-mode: plus-lighter;
+  }
+}
+@keyframes totem-rays-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes totem-rays-in {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+  to {
+    opacity: 0.6;
+    scale: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .totem__rays {
+    animation: none;
+    opacity: 0.35;
+  }
+}
+
 /* Сам «тотем»: вырастает, качается и уходит вверх, растворяясь */
 /* Тотем висит в верхней трети — под ним ещё поместится сумма выигрыша */
 .totem__item {
@@ -13109,6 +13162,82 @@ input[type='datetime-local'] {
     opacity: 0;
   }
 }
+/* Мега-выигрыш получает настоящую огибающую «тотема бессмертия» из
+   Minecraft: 40 тиков = ровно 2 с. Числа сняты с игровой квинтики и взяты
+   как факт о поведении — код здесь свой.
+
+   Читается так: хлопок до 83% размера за 200 мс с двумя оборотами и рывком
+   в случайный угол → выход в центр на полный размер к 600 мс → ЗАСТЫВАЕТ
+   почти на секунду → раскрутка обратно и схлопывание за последние 250 мс.
+   Вся сила — в этой паузе посередине; без неё остаётся просто вертушка.
+
+   Покачивание ±6° по X и Z на частоте cos(8t) — «дыхание» во время замирания.
+   Easing намеренно linear: квинтика уже зашита в сами отметки кадров, и
+   любое сглаживание сверху применило бы её дважды. */
+.totem--mega .totem__item {
+  animation: totem-mc 2s linear forwards;
+}
+@keyframes totem-mc {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4) rotateY(0deg) rotateX(6deg) rotateZ(6deg);
+  }
+  5% {
+    transform: translate(calc(-50% + var(--ox, 0px) * 0.87), calc(-50% + var(--oy, 0px) * 0.87))
+      scale(1.107) rotateY(455deg) rotateX(5.53deg) rotateZ(5.53deg);
+  }
+  10% {
+    transform: translate(calc(-50% + var(--ox, 0px) * 0.98), calc(-50% + var(--oy, 0px) * 0.98))
+      scale(1.492) rotateY(703deg) rotateX(4.18deg) rotateZ(4.18deg);
+  }
+  15% {
+    transform: translate(calc(-50% + var(--ox, 0px) * 0.76), calc(-50% + var(--oy, 0px) * 0.76))
+      scale(1.674) rotateY(819deg) rotateX(2.17deg) rotateZ(2.17deg);
+  }
+  20% {
+    transform: translate(calc(-50% + var(--ox, 0px) * 0.51), calc(-50% + var(--oy, 0px) * 0.51))
+      scale(1.751) rotateY(868deg) rotateX(-0.17deg) rotateZ(-0.17deg);
+  }
+  30% {
+    transform: translate(calc(-50% + var(--ox, 0px) * 0.19), calc(-50% + var(--oy, 0px) * 0.19))
+      scale(1.793) rotateY(896deg) rotateX(-4.42deg) rotateZ(-4.42deg);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.8) rotateY(900deg) rotateX(-3.92deg) rotateZ(-3.92deg);
+  }
+  80% {
+    transform: translate(calc(-50% + var(--ox, 0px) * 0.39), calc(-50% + var(--oy, 0px) * 0.39))
+      scale(1.773) rotateY(882deg) rotateX(5.96deg) rotateZ(5.96deg);
+  }
+  85% {
+    transform: translate(calc(-50% + var(--ox, 0px) * 0.65), calc(-50% + var(--oy, 0px) * 0.65))
+      scale(1.712) rotateY(843deg) rotateX(5.21deg) rotateZ(5.21deg);
+  }
+  90% {
+    transform: translate(calc(-50% + var(--ox, 0px) * 0.94), calc(-50% + var(--oy, 0px) * 0.94))
+      scale(1.548) rotateY(737deg) rotateX(3.65deg) rotateZ(3.65deg);
+  }
+  95% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--ox, 0px) * 0.91), calc(-50% + var(--oy, 0px) * 0.91))
+      scale(1.157) rotateY(487deg) rotateX(1.51deg) rotateZ(1.51deg);
+  }
+  100% {
+    /* В игре тотем не растворяется, а схлопывается — уход делает масштаб.
+       Прозрачность добавлена только в самом хвосте, чтобы не было щелчка. */
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4) rotateY(0deg) rotateX(-0.87deg) rotateZ(-0.87deg);
+  }
+}
+/* Без перспективы 900° по Y читались бы как плоское сплющивание. */
+.totem--mega {
+  perspective: 900px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .totem--mega .totem__item {
+    animation: fade 0.3s ease both;
+  }
+}
+
 /* Частицы квадратные — в Minecraft они пиксельные, это и читается */
 .totem__sparks {
   position: absolute;

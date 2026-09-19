@@ -93,6 +93,19 @@ const reduceMotion = () =>
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 
+/**
+ * Рывок тотема в случайный угол — в игре смещение берётся как четверть
+ * экрана в каждую сторону со случайным знаком.
+ */
+function dart(): { ox: number; oy: number } {
+  const w = typeof window === 'undefined' ? 360 : window.innerWidth;
+  const h = typeof window === 'undefined' ? 640 : window.innerHeight;
+  return {
+    ox: Math.round((Math.random() * 2 - 1) * (w / 4)),
+    oy: Math.round((Math.random() * 2 - 1) * (h / 4)),
+  };
+}
+
 /** Ступень эффектов по длине цепочки. */
 function tierOf(chain: number): number {
   if (chain >= 5) return 4;
@@ -281,7 +294,14 @@ export function ScatterPage() {
   const [rewards, setRewards] = useState(false);
   // Тикает раз в полминуты — только чтобы счётчик наград на кнопке не залипал.
   const [now, setNow] = useState(() => Date.now());
-  const [celebration, setCelebration] = useState<{ tier: string; amount: number } | null>(null);
+  // ox/oy — тот самый рывок тотема в случайный угол. Выбирается один раз при
+  // показе: если считать его в разметке, он бы менялся на каждой перерисовке.
+  const [celebration, setCelebration] = useState<{
+    tier: string;
+    amount: number;
+    ox: number;
+    oy: number;
+  } | null>(null);
   const [levelUp, setLevelUp] = useState<{
     level: number;
     coins: number;
@@ -382,7 +402,7 @@ export function ScatterPage() {
           jackpotFanfare();
           burstConfetti(180, theme.confetti);
           rainCoins(40, rainSrc);
-          setCelebration({ tier: 'mega', amount: res.total });
+          setCelebration({ tier: 'mega', amount: res.total, ...dart() });
         });
       } else if (res.kind === 'big') {
         notifySuccess();
@@ -390,7 +410,7 @@ export function ScatterPage() {
           winChime('big');
           rainCoins(22, rainSrc);
           burstConfetti(70, theme.confetti);
-          setCelebration({ tier: 'big', amount: res.total });
+          setCelebration({ tier: 'big', amount: res.total, ...dart() });
         });
       } else if (res.kind === 'small') {
         tapLight();
@@ -1355,18 +1375,26 @@ export function ScatterPage() {
       {celebration && (
         <div
           className={`totem totem--${celebration.tier}`}
+          style={
+            { '--ox': `${celebration.ox}px`, '--oy': `${celebration.oy}px` } as React.CSSProperties
+          }
           onClick={() => setCelebration(null)}
           role="presentation"
         >
           <div className="totem__flash" />
           <div className="totem__glow" />
+          {/* Лучи — только у мега-выигрыша: если крутить их каждый раз,
+              они перестают что-либо значить. */}
+          {celebration.tier === 'mega' && <div className="totem__rays" aria-hidden="true" />}
           <div className="totem__sparks" aria-hidden="true">
             {Array.from({ length: 46 }, (_, i) => {
               const angle = (i / 46) * 360 + (i % 3) * 7;
               return (
                 <i
                   key={i}
-                  className={i % 3 === 0 ? 'is-gold' : ''}
+                  /* Четверть частиц золотые, три четверти зелёные — как в
+                     самой игре: там цвет выбирается random.nextInt(4) == 0. */
+                  className={i % 4 === 0 ? 'is-gold' : ''}
                   style={
                     {
                       '--a': `${angle}deg`,
