@@ -14084,3 +14084,39 @@ input[type='datetime-local'] {
     animation: none;
   }
 }
+
+/* Состояние бэкапов — видно только владельцу, в кассе */
+.backup-health {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(128, 128, 128, 0.22);
+  display: grid;
+  gap: 7px;
+}
+.backup-health__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.backup-health__row span {
+  opacity: 0.7;
+}
+.backup-health__row b {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.backup-health__row b.is-ok {
+  color: #4caf7d;
+}
+.backup-health__row b.is-bad {
+  color: #e2603f;
+}
+.backup-health__err {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #e2603f;
+  word-break: break-word;
+}

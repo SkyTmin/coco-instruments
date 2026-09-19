@@ -91,11 +91,19 @@ describe('backup ownership', () => {
     const owner = await request(app)
       .post('/api/backup/status')
       .send({ initData: initDataFor(USER_ID) });
-    expect(owner.body).toEqual({ owner: true, configured: true });
+    expect(owner.body.owner).toBe(true);
+    expect(owner.body.configured).toBe(true);
+    // Владельцу вдобавок отдаётся диагностика: связь с Telegram, место на
+    // диске и последняя копия. Именно её отсутствие когда-то позволило
+    // бэкапам тихо пропасть на неделю, поэтому поля обязаны быть.
+    expect(owner.body).toHaveProperty('outbound');
+    expect(owner.body).toHaveProperty('freeMb');
+    expect(owner.body).toHaveProperty('lastBackup');
 
     const other = await request(app)
       .post('/api/backup/status')
       .send({ initData: initDataFor(4242) });
+    // Посторонний не должен видеть ничего, кроме факта чужого владения.
     expect(other.body).toEqual({ owner: false, configured: true });
     clearAdmin();
   });

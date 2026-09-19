@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'url';
 import { validate as validateInitDataSig } from '@telegram-apps/init-data-node';
 
@@ -529,6 +529,32 @@ async function sendDocument(chatId, filePath, caption) {
 }
 
 // ---- Backups: archive all data, keep a rotated copy, deliver to the admin ----
+// Почему упал прошлый бэкап. Ежедневный запуск идёт по таймеру, никто его не
+// видит, и без этой записи неудача остаётся незамеченной — ровно так копии и
+// пропали на неделю. Отдаётся владельцу в /api/backup/status.
+let lastBackupError = null;
+
+/**
+ * Достаёт ли сервер api.telegram.org. От этого зависит всё, что сервер шлёт
+ * сам: напоминания, бэкапы, сообщения об ошибках. Ответ живёт минуту — чаще
+ * проверять незачем, а на каждый чих ходить наружу дорого.
+ */
+let outboundCache = { at: 0, ok: false };
+async function outboundWorks() {
+  if (!BOT_TOKEN) return false;
+  if (Date.now() - outboundCache.at < 60_000) return outboundCache.ok;
+  let ok = false;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`, {
+      signal: AbortSignal.timeout(6000),
+    });
+    ok = !!(await r.json().catch(() => ({}))).ok;
+  } catch {
+    ok = false;
+  }
+  outboundCache = { at: Date.now(), ok };
+  return ok;
+}
 function createBackupArchive() {
   return new Promise((resolve, reject) => {
     const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
@@ -570,6 +596,11 @@ async function runBackup(deliverTo) {
   try {
     archive = await createBackupArchive();
   } catch (e) {
+    lastBackupError = {
+      at: new Date().toISOString(),
+      stage: 'archive',
+      error: String(e?.message || e),
+    };
     return { ok: false, error: String(e?.message || e) };
   }
   pruneBackups();
@@ -581,6 +612,9 @@ async function runBackup(deliverTo) {
     `🗄 Резервная копия Coco · ${sizeMb} МБ · ${new Date().toLocaleString('ru-RU')}\n` +
       `Перенос на новый сервер: положи файл рядом и запусти deploy/restore.sh <файл>.`,
   );
+  lastBackupError = sent.ok
+    ? null
+    : { at: new Date().toISOString(), stage: 'send', error: String(sent.error || 'unknown') };
   return { ok: true, archive, size: sizeMb, sent: sent.ok, deliverError: sent.error };
 }
 
@@ -813,6 +847,29 @@ app.post('/api/bot/webhook', async (req, res) => {
     if (String(admin) !== String(chatId)) {
       return reply('Бэкапы доступны только администратору бота.');
     }
+    // Путей доставки два, и какой сработает — зависит от того, достаёт ли
+    // сервер api.telegram.org. Поэтому сначала спрашиваем, а потом решаем.
+    if (await outboundWorks()) {
+      // Исходящие живы: отвечаем сразу, архив собираем после и грузим файл
+      // multipart'ом. Раньше tar крутился ДО ответа на вебхук, и на больших
+      // данных Telegram успевал отвалиться по таймауту — человек не получал
+      // ничего вообще, даже сообщения об ошибке.
+      res.json({
+        method: 'sendMessage',
+        chat_id: chatId,
+        text: '🗄 Собираю резервную копию, это займёт несколько секунд…',
+      });
+      void (async () => {
+        const r = await runBackup(chatId);
+        if (r.ok && r.sent) return;
+        const why = r.ok ? r.deliverError || 'не удалось отправить файл' : r.error;
+        await sendTelegram(chatId, `Не удалось прислать копию: ${escapeHtml(String(why))}`);
+      })();
+      return;
+    }
+    // Исходящие закрыты — остаётся попросить Telegram скачать архив самому.
+    // Отправить сообщение мы уже не сможем, поэтому всё делаем в ответе на
+    // вебхук: это единственный канал, который сейчас работает.
     const base = publicBase();
     if (!base) {
       return reply('Бэкап не настроен: не задан PUBLIC_URL на сервере.');
@@ -830,6 +887,11 @@ app.post('/api/bot/webhook', async (req, res) => {
         caption: `🗄 Резервная копия Coco · ${sizeMb} МБ · ${new Date().toLocaleString('ru-RU')}`,
       });
     } catch (e) {
+      lastBackupError = {
+        at: new Date().toISOString(),
+        stage: 'archive',
+        error: String(e?.message || e),
+      };
       return reply(`Не удалось сделать бэкап (${escapeHtml(String(e?.message || e))}).`);
     }
   }
@@ -1029,7 +1091,19 @@ app.post('/api/backup/run', async (req, res) => {
   if (!BACKUP_SECRET || req.get('X-Backup-Secret') !== BACKUP_SECRET) {
     return res.status(401).json({ error: 'unauthorized' });
   }
-  const result = await runBackup(getAdminChatId());
+  const admin = getAdminChatId();
+  const result = await runBackup(admin);
+  // Ночной запуск никто не видит, поэтому неудачу надо не только записать, но
+  // и попытаться показать. Если файл не ушёл, но наружу мы ходим — шлём хотя бы
+  // строчку с причиной: пропажа копий на неделю началась именно с тихого сбоя.
+  if (admin && result.ok && !result.sent && (await outboundWorks())) {
+    await sendTelegram(
+      admin,
+      `⚠️ Ночная резервная копия собрана, но не отправилась: ${escapeHtml(
+        String(result.deliverError || 'причина неизвестна'),
+      )}`,
+    );
+  }
   res.json(result);
 });
 
@@ -1061,14 +1135,56 @@ app.post('/api/backup/request', async (req, res) => {
 // Is this user the backup owner? (Used to show the backup control only to the
 // owner.) Owner = the configured admin. When none is configured yet, nobody is
 // the owner (bootstrap happens through the bot's /backup command).
-app.post('/api/backup/status', (req, res) => {
+app.post('/api/backup/status', async (req, res) => {
   const user = authUser(req, res);
   if (!user) return;
   if (!rateLimit(`backup-stat:${user.id}`, 30, 60_000)) {
     return res.status(429).json({ error: 'rate_limited' });
   }
   const admin = getAdminChatId();
-  res.json({ owner: !!admin && String(admin) === String(user.id), configured: !!admin });
+  const owner = !!admin && String(admin) === String(user.id);
+  if (!owner) return res.json({ owner, configured: !!admin });
+
+  // Владельцу отдаём ещё и диагностику. Бэкап ломается снаружи приложения —
+  // то интернет до Telegram, то место на диске, — и без этих цифр причину
+  // приходится угадывать. Живая проверка стоит пары секунд.
+  const diag = { outbound: null, freeMb: null, lastBackup: null, lastError: lastBackupError };
+  try {
+    const t0 = Date.now();
+    const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    const j = await r.json().catch(() => ({}));
+    diag.outbound = { ok: !!j.ok, ms: Date.now() - t0 };
+  } catch (e) {
+    diag.outbound = { ok: false, error: String(e?.message || e).slice(0, 120) };
+  }
+  try {
+    const out = spawnSync('df', ['-Pm', DATA_ROOT], { encoding: 'utf8' });
+    const line =
+      String(out.stdout || '')
+        .trim()
+        .split('\n')
+        .pop() || '';
+    const free = Number(line.split(/\s+/)[3]);
+    if (Number.isFinite(free)) diag.freeMb = free;
+  } catch {
+    /* df недоступен — не критично */
+  }
+  try {
+    const files = fs
+      .readdirSync(BACKUP_DIR)
+      .filter((f) => f.startsWith('coco-backup-') && f.endsWith('.tar.gz'))
+      .sort();
+    const last = files[files.length - 1];
+    if (last) {
+      const st = fs.statSync(path.join(BACKUP_DIR, last));
+      diag.lastBackup = { at: st.mtime.toISOString(), sizeMb: +(st.size / 1048576).toFixed(2) };
+    }
+  } catch {
+    /* каталога может не быть */
+  }
+  res.json({ owner, configured: true, ...diag });
 });
 
 // Client error reports → rotating errors.log (ships in backups). Rate-limited.
