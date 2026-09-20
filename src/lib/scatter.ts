@@ -11,13 +11,22 @@
 //   • фриспины — общий множитель копится всю сессию и не сбрасывается;
 //   • ставка Ante — +25% к ставке за удвоенный шанс скаттеров.
 //
-// Про сферы важно знать вот что. Сначала они были устроены иначе: умножали
-// одно звено и выбрасывались, если оно не сыграло. Выглядело это так, будто
-// их нет вовсе — половина спинов не выигрывает, и сферу там было не увидеть;
-// цветная попадалась раз в три десятка спинов. Теперь они падают всегда,
-// видны и без выигрыша, и срабатывают один раз — как в самом Олимпе. Цена
-// этого — втрое меньшая таблица выплат (см. SCATTER_PAYS): средний множитель
-// вырос почти в двадцать раз, и старые выплаты давали отдачу за 250%.
+// Про сферы важно знать вот что. СФЕРА — ЭТО СОДЕРЖИМОЕ КЛЕТКИ, ровно такое
+// же, как символ или скаттер: `ScatterCell` может быть `orb:25`, и рождается
+// такая клетка там же, где все остальные, — в `cell()`, когда собирается поле.
+// Отдельного слоя сфер в движке нет и быть не должно.
+//
+// Так было не всегда, и обе прошлые попытки читались как наклейка поверх поля.
+// Сначала сферы умножали одно звено и выбрасывались, если оно не сыграло, —
+// их будто не существовало: половина спинов не выигрывает. Потом они стали
+// копиться, но по-прежнему ДОСЫПАЛИСЬ поверх готового поля отдельной функцией
+// `spawnOrbs` и держались за свои координаты, пока вокруг ссыпались символы.
+// Теперь сфера выпадает на барабане вместе со всеми, едет в ленте, встаёт в
+// клетку, съезжает вниз при каскаде — потому что она и есть клетка.
+//
+// Цена того, что сферы видны и копятся, — втрое меньшая таблица выплат
+// (см. SCATTER_PAYS): средний множитель вырос почти в двадцать раз, и старые
+// выплаты давали отдачу за 250%.
 //
 // Честность: всё случайное берётся одним взвешенным ГСЧ, множители сфер
 // написаны на них самих, ничего не подкручивается. Отдача сведена к ~92%
@@ -33,9 +42,19 @@ export const CLUSTER_MIN = 8;
 
 type Rng = () => number;
 
-/** Клетка поля: обычный символ или скаттер (он не собирается в восьмёрки). */
-export type ScatterCell = SlotSymbolId | 'scatter';
+/**
+ * Клетка со сферой. Номинал записан в саму клетку — отдельной таблицы сфер
+ * нет, и «сфера на поле» означает ровно одно: на поле есть такая клетка.
+ */
+export type OrbCell = `orb:${number}`;
+/** Клетка поля: символ, скаттер или сфера-множитель. */
+export type ScatterCell = SlotSymbolId | 'scatter' | OrbCell;
 export type ScatterGrid = ScatterCell[][];
+
+export const mkOrb = (value: number): OrbCell => `orb:${value}`;
+export const isOrb = (id: ScatterCell): id is OrbCell => id.startsWith('orb:');
+/** Номинал сферы в клетке; 0 — клетка не сфера. */
+export const orbOf = (id: ScatterCell): number => (isOrb(id) ? Number(id.slice(4)) : 0);
 
 /**
  * Веса символов. Ровнее, чем у классических слотов: на 30 клетках
@@ -154,19 +173,21 @@ export const ORB_TABLE: [value: number, weight: number][] = [
 const ORB_TOTAL = ORB_TABLE.reduce((s, [, w]) => s + w, 0);
 
 /**
- * Сколько сфер падает за одно падение символов. Раньше здесь было 18% на
- * «хоть одну», и сферы вдобавок выбрасывались, если звено не сыграло, —
- * цветную сферу можно было не увидеть за сотню спинов. Теперь они падают
- * и без выигрыша, и заметно чаще: сфера должна быть привычным гостем, иначе
- * вся лестница редкости — украшение, которого никто не видит.
+ * Шанс, что отдельная КЛЕТКА окажется сферой. Именно клетка, а не «поле»:
+ * сфера выпадает на барабане наравне с вишней и скаттером, поэтому у неё
+ * такой же вид вероятности, как у них.
+ *
+ * На поле 6×5 это около 0,57 сферы на первое поле и ещё понемногу с каждым
+ * падением: сфера видна примерно в половине вращений, цветная — каждое
+ * двенадцатое, ×50 и выше — раз в полторы сотни. Меньше нельзя: сфера должна
+ * быть привычным гостем, иначе вся лестница редкости — украшение, которого
+ * никто не видит.
+ *
+ * Величина подобрана измерением, а не на глаз: отдача почти линейна по ней
+ * (≈3 процентных пункта на каждую тысячную), и 0,019 даёт ~92% на 300 тысячах
+ * сессий. Правите — перемеряйте.
  */
-const ORB_COUNT: [count: number, weight: number][] = [
-  [0, 780],
-  [1, 175],
-  [2, 37],
-  [3, 8],
-];
-const ORB_COUNT_TOTAL = ORB_COUNT.reduce((s, [, w]) => s + w, 0);
+export const ORB_CHANCE = 0.019;
 
 function pickWeighted(table: [number, number][], total: number, rng: Rng): number {
   let roll = rng() * total;
@@ -182,27 +203,34 @@ export function orbValue(rng: Rng = Math.random): number {
 }
 
 /**
- * Сферы на свободных клетках поля. Скаттеры они не перекрывают, и на клетку,
- * где сфера уже лежит, вторая не падает: сферы держатся до конца
- * последовательности, а не исчезают вместе с символами.
+ * Сферы, лежащие на поле прямо сейчас, — просто перечень клеток-сфер.
+ * Отдельного списка сфер нигде не хранится: поле само и есть список.
  */
-export function spawnOrbs(grid: ScatterGrid, rng: Rng = Math.random, taken: Orb[] = []): Orb[] {
-  const count = pickWeighted(ORB_COUNT, ORB_COUNT_TOTAL, rng);
-  if (!count) return [];
-  const busy = new Set(taken.map((o) => `${o.col}:${o.row}`));
-  const free: [number, number][] = [];
-  grid.forEach((col, c) =>
-    col.forEach((id, r) => {
-      if (id !== 'scatter' && !busy.has(`${c}:${r}`)) free.push([c, r]);
+export function gridOrbs(grid: ScatterGrid): Orb[] {
+  const orbs: Orb[] = [];
+  grid.forEach((column, col) =>
+    column.forEach((id, row) => {
+      const value = orbOf(id);
+      if (value) orbs.push({ col, row, value });
     }),
   );
-  const orbs: Orb[] = [];
-  for (let i = 0; i < count && free.length; i++) {
-    const idx = Math.floor(rng() * free.length);
-    const [col, row] = free.splice(idx, 1)[0];
-    orbs.push({ col, row, value: orbValue(rng) });
-  }
   return orbs;
+}
+
+/**
+ * Какие сферы этого поля — новые по сравнению с прошлым звеном. Сравниваем
+ * по номиналам, а не по координатам: сфера съезжает вниз вместе с колонкой,
+ * так что её место меняется, а она сама — нет.
+ */
+function newcomers(now: Orb[], before: Orb[]): Orb[] {
+  const left = before.map((o) => o.value);
+  const fresh: Orb[] = [];
+  for (const orb of now) {
+    const i = left.indexOf(orb.value);
+    if (i >= 0) left.splice(i, 1);
+    else fresh.push(orb);
+  }
+  return fresh;
 }
 
 // ---------------------------------------------------------------------------
@@ -230,15 +258,27 @@ export function scatterSymbol(rng: Rng = Math.random): SlotSymbolId {
   return IDS[IDS.length - 1];
 }
 
-/** Одна клетка: обычно символ, иногда скаттер. */
-function cell(rng: Rng, scatterChance: number): ScatterCell {
-  return rng() < scatterChance ? 'scatter' : scatterSymbol(rng);
+/**
+ * Одна клетка барабана: обычно символ, иногда скаттер, иногда сфера. Всё
+ * содержимое поля рождается ЗДЕСЬ — другого места, где на поле что-то
+ * появляется, в движке нет.
+ */
+function cell(rng: Rng, scatterChance: number, orbChance: number): ScatterCell {
+  const roll = rng();
+  if (roll < scatterChance) return 'scatter';
+  if (roll < scatterChance + orbChance) return mkOrb(orbValue(rng));
+  return scatterSymbol(rng);
 }
 
-export function scatterGrid(rng: Rng = Math.random, scatterChance = 0): ScatterGrid {
+export function scatterGrid(rng: Rng = Math.random, scatterChance = 0, orbChance = 0): ScatterGrid {
   return Array.from({ length: SCATTER_COLS }, () =>
-    Array.from({ length: SCATTER_ROWS }, () => cell(rng, scatterChance)),
+    Array.from({ length: SCATTER_ROWS }, () => cell(rng, scatterChance, orbChance)),
   );
+}
+
+/** Лента вращения: те же клетки, что и на поле, — и сферы в ней тоже есть. */
+export function fillerCell(rng: Rng = Math.random): ScatterCell {
+  return rng() < ORB_CHANCE * 3 ? mkOrb(orbValue(rng)) : scatterSymbol(rng);
 }
 
 export function countScatters(grid: ScatterGrid): number {
@@ -254,18 +294,15 @@ export interface ScatterWin {
 }
 
 /**
- * Что сыграло на поле прямо сейчас. Скаттеры в счёт не идут.
- *
- * `blocked` — клетки, занятые сферами. Сфера не лежит поверх символа, а
- * ЗАНИМАЕТ клетку: закрытый ею символ в восьмёрку не считается. Так это
- * устроено в Олимпе, и отсюда же честный размен — сфера платит, но
- * загромождает поле и укорачивает цепочку.
+ * Что сыграло на поле прямо сейчас. Ни скаттеры, ни сферы в восьмёрки не
+ * собираются: клетка занята ими, и символа в ней просто нет. Отсюда честный
+ * размен — сфера платит, но загромождает поле и укорачивает цепочку.
  */
-export function findWins(grid: ScatterGrid, blocked?: ReadonlySet<string>): ScatterWin[] {
+export function findWins(grid: ScatterGrid): ScatterWin[] {
   const cells = new Map<ScatterCell, [number, number][]>();
   grid.forEach((col, c) =>
     col.forEach((id, r) => {
-      if (blocked?.has(`${c}:${r}`)) return;
+      if (id === 'scatter' || isOrb(id)) return;
       const list = cells.get(id);
       if (list) list.push([c, r]);
       else cells.set(id, [[c, r]]);
@@ -273,28 +310,32 @@ export function findWins(grid: ScatterGrid, blocked?: ReadonlySet<string>): Scat
   );
   const wins: ScatterWin[] = [];
   for (const [symbol, list] of cells) {
-    if (symbol === 'scatter') continue;
-    const pay = payFor(symbol, list.length);
-    if (pay > 0) wins.push({ symbol, count: list.length, pay, cells: list });
+    const pay = payFor(symbol as SlotSymbolId, list.length);
+    if (pay > 0)
+      wins.push({ symbol: symbol as SlotSymbolId, count: list.length, pay, cells: list });
   }
   return wins.sort((a, b) => b.pay - a.pay);
 }
 
 /**
  * Схлопывание: сыгравшие клетки исчезают, верхние падают, сверху новые.
- * Скаттеры остаются на месте — они не участвуют в каскаде.
+ * Скаттеры и сферы никогда не выигрывают, поэтому и не исчезают — они просто
+ * съезжают вниз вместе с колонкой, как всё, что осталось. Так сферы и копятся
+ * до конца последовательности: не потому, что их кто-то бережёт, а потому что
+ * убирать их нечему.
  */
 export function scatterCollapse(
   grid: ScatterGrid,
   wins: ScatterWin[],
   rng: Rng = Math.random,
   scatterChance = 0,
+  orbChance = 0,
 ): ScatterGrid {
   const dead = new Set(wins.flatMap((w) => w.cells.map(([c, r]) => `${c}:${r}`)));
   return grid.map((column, col) => {
     const kept = column.filter((_, row) => !dead.has(`${col}:${row}`));
     const fresh = Array.from({ length: SCATTER_ROWS - kept.length }, () =>
-      cell(rng, scatterChance),
+      cell(rng, scatterChance, orbChance),
     );
     return [...fresh, ...kept];
   });
@@ -307,9 +348,9 @@ export function scatterCollapse(
 export interface ScatterStep {
   grid: ScatterGrid;
   wins: ScatterWin[];
-  /** Сферы, прилетевшие именно в этом звене. */
+  /** Сферы, приехавшие на барабанах именно в этом звене, — им и звучать. */
   newOrbs: Orb[];
-  /** Все сферы, лежащие на поле к концу звена: они копятся, а не исчезают. */
+  /** Все сферы поля этого звена: прошлые съехали вниз, новые добавились. */
   orbs: Orb[];
   /** Выплата звена БЕЗ множителя. Множитель применяется один раз, в конце. */
   base: number;
@@ -364,7 +405,7 @@ export function resolveScatter(bet: number, opts: RoundOptions | Rng = {}): Scat
   // В бонусе скаттеры тоже падают — они добавляют вращения.
   const chance = SCATTER_CHANCE * (o.ante ? ANTE_SCATTER_FACTOR : 1);
 
-  let grid = scatterGrid(rng, chance);
+  let grid = scatterGrid(rng, chance, ORB_CHANCE);
   const first = grid;
   const scatters = countScatters(grid);
 
@@ -380,29 +421,27 @@ export function resolveScatter(bet: number, opts: RoundOptions | Rng = {}): Scat
   const steps: ScatterStep[] = [];
   let totalMult = free ? (o.totalMult ?? 0) : 0;
 
-  // Сферы копятся всю последовательность и не исчезают вместе с символами —
-  // так они устроены в Олимпе. Множитель применяется ОДИН раз, в конце, ко
-  // всей базе сразу; раньше он применялся к каждому звену по отдельности, и
-  // «сработал бонус» было не разглядеть.
-  const orbs: Orb[] = [];
+  // Сферы никуда не собираются отдельно: они лежат на поле, и «все сферы
+  // последовательности» — это просто сферы того поля, на котором каскад
+  // остановился. Множитель применяется ОДИН раз, в конце, ко всей базе сразу;
+  // раньше он применялся к каждому звену по отдельности, и «сработал бонус»
+  // было не разглядеть.
+  let orbs: Orb[] = [];
   let base = 0;
 
   for (let i = 0; i < SCATTER_MAX_CASCADES; i++) {
-    // Сферы падают вместе с символами: и на первом поле, и на каждом падении,
-    // независимо от того, сыграет ли звено. Без выигрыша они просто лежат.
-    const newOrbs = spawnOrbs(grid, rng, orbs);
-    orbs.push(...newOrbs);
+    const now = gridOrbs(grid);
+    const newOrbs = newcomers(now, orbs);
+    orbs = now;
 
-    // Клетки под сферами выпадают из подсчёта: сфера занимает место символа.
-    const blocked = new Set(orbs.map((o) => `${o.col}:${o.row}`));
-    const wins = findWins(grid, blocked);
+    const wins = findWins(grid);
     if (!wins.length) break;
 
     const stepBase = wins.reduce((sum, w) => sum + w.pay, 0) * bet;
     base += stepBase;
 
-    const next = scatterCollapse(grid, wins, rng, chance);
-    steps.push({ grid, wins, newOrbs, orbs: [...orbs], base: roundWin(stepBase), next });
+    const next = scatterCollapse(grid, wins, rng, chance, ORB_CHANCE);
+    steps.push({ grid, wins, newOrbs, orbs: now, base: roundWin(stepBase), next });
     grid = next;
   }
 

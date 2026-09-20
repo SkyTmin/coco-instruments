@@ -20,10 +20,13 @@ import {
   SCATTER_ROWS,
   MAX_WIN,
   SCATTER_TRIGGER,
+  fillerCell,
+  orbOf,
   scatterLabel,
   scatterSymbol,
 } from '@/lib/scatter';
 import type { Orb, ScatterCell, ScatterGrid, ScatterStep, ScatterWin } from '@/lib/scatter';
+import type { SlotSymbolId } from '@/types';
 import { BET_STEP, BETS, clampBet, MAX_BET, MIN_BET } from '@/lib/slots';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
 import { loudestTier, multRarity, ORB_TIERS, orbTier } from '@/lib/orb-rarity';
@@ -127,7 +130,15 @@ function tierOf(chain: number): number {
   return 0;
 }
 
-function Sym({ id, skin, size = SYM }: { id: ScatterCell; skin: SkinId; size?: number }) {
+function Sym({
+  id,
+  skin,
+  size = SYM,
+}: {
+  id: SlotSymbolId | 'scatter';
+  skin: SkinId;
+  size?: number;
+}) {
   return (
     <img
       className="sym"
@@ -140,6 +151,31 @@ function Sym({ id, skin, size = SYM }: { id: ScatterCell; skin: SkinId; size?: n
   );
 }
 
+/**
+ * Содержимое клетки — по самой клетке, и больше ни по чему. Если в клетке
+ * `orb:25`, она показывает самоцвет с числом; иначе — картинку символа.
+ * Одним и тем же рисуются и лента вращения, и поле: сфера едет на барабане
+ * вместе со всеми и встаёт в клетку, потому что она и есть клетка.
+ */
+function CellFace({ id, skin, size = SYM }: { id: ScatterCell; skin: SkinId; size?: number }) {
+  const value = orbOf(id);
+  if (!value) return <Sym id={id as SlotSymbolId | 'scatter'} skin={skin} size={size} />;
+  const t = orbTier(value);
+  return (
+    <>
+      {t.beats >= 2 && <i className="orb__ring" aria-hidden="true" />}
+      <OrbGem />
+      <b className="orb__num">×{value}</b>
+      {t.beats >= 2 && <b className="orb__tag">{t.name}</b>}
+    </>
+  );
+}
+
+/** Классы и переменные клетки-сферы — одни и те же в ленте и на поле. */
+function orbClass(value: number): string {
+  return value ? ` sbcell--orb orb--${orbTier(value).id}` : '';
+}
+
 // ---------------------------------------------------------------------------
 // Поле. Вне каскада колонки крутятся лентой, в каскаде — это сетка, где
 // исчезают ровно сыгравшие клетки, а верхние съезжают на их места.
@@ -147,93 +183,76 @@ function Sym({ id, skin, size = SYM }: { id: ScatterCell; skin: SkinId; size?: n
 
 interface BoardCell {
   key: string;
+  /**
+   * Что в клетке. Символ, скаттер или сфера — различать их отдельными полями
+   * не нужно и нельзя: любое такое поле снова сделало бы сферу чем-то, что
+   * лежит НА клетке, а не ею самой. Сфера съезжает, падает и гаснет вместе
+   * со всем полем просто потому, что она обычная клетка.
+   */
   id: ScatterCell;
   row: number;
   fall: number;
-  /**
-   * Номинал самоцвета на этой клетке. Сфера — не отдельный предмет поверх
-   * поля, а СВОЙСТВО клетки: если оно есть, клетка показывает камень вместо
-   * символа. Пока сфера была отдельным слоем, она и выглядела наклейкой —
-   * сколько её ни подгоняй по координатам.
-   */
-  orb?: number;
   /** Порядок в волне сбора: от дешёвого камня к дорогому. */
   orbIdx?: number;
 }
 type Board = BoardCell[][];
 
-/** Раскладка сфер по клеткам: ключ «колонка:ряд» → номинал и место в волне. */
-function orbMap(orbs: Orb[]): Map<string, { value: number; idx: number }> {
-  const m = new Map<string, { value: number; idx: number }>();
-  [...orbs]
-    .sort((a, b) => a.value - b.value)
-    .forEach((o, idx) => m.set(`${o.col}:${o.row}`, { value: o.value, idx }));
-  return m;
-}
-
 /**
- * Накладывает самоцветы на готовые клетки колонки.
- *
- * Два важных свойства. Ключ клетки с камнем зависит только от МЕСТА и
- * номинала — React поэтому не пересоздаёт её между звеньями, и камень не
- * дёргается и не проигрывает появление заново: он просто лежит, пока вокруг
- * ссыпаются символы. И `fall` у неё всегда ноль: колонка съезжает, камень
- * остаётся на своей клетке.
+ * Раздаёт клеткам-сферам место в волне сбора: дешёвые улетают первыми,
+ * дорогая — последней, чтобы её номинал остался на поле дольше всех.
  */
-function withOrbs(cells: BoardCell[], c: number, m: ReturnType<typeof orbMap>): BoardCell[] {
-  if (!m.size) return cells;
-  return cells.map((cell) => {
-    const o = m.get(`${c}:${cell.row}`);
-    if (!o) return cell;
-    return {
-      ...cell,
-      key: `orb-${c}-${cell.row}-${o.value}`,
-      fall: 0,
-      orb: o.value,
-      orbIdx: o.idx,
-    };
+function orderOrbs(board: Board): Board {
+  const found: { c: number; i: number; value: number }[] = [];
+  board.forEach((col, c) =>
+    col.forEach((cell, i) => {
+      const value = orbOf(cell.id);
+      if (value) found.push({ c, i, value });
+    }),
+  );
+  if (!found.length) return board;
+  found.sort((a, b) => a.value - b.value);
+  const next = board.map((col) => [...col]);
+  found.forEach((o, orbIdx) => {
+    next[o.c][o.i] = { ...next[o.c][o.i], orbIdx };
   });
+  return next;
 }
 
-function gridToBoard(grid: ScatterGrid, tag: string, orbs: Orb[] = []): Board {
-  const m = orbMap(orbs);
-  return grid.map((col, c) =>
-    withOrbs(
-      col.map((id, row) => ({ key: `${tag}-${c}-${row}`, id, row, fall: 0 })),
-      c,
-      m,
-    ),
+function gridToBoard(grid: ScatterGrid, tag: string): Board {
+  return orderOrbs(
+    grid.map((col, c) => col.map((id, row) => ({ key: `${tag}-${c}-${row}`, id, row, fall: 0 }))),
   );
 }
 
-function collapseBoard(step: ScatterStep, tag: string, orbs: Orb[] = []): Board {
+function collapseBoard(step: ScatterStep, tag: string): Board {
   const dead = new Set(step.wins.flatMap((w) => w.cells.map(([c, r]) => `${c}:${r}`)));
-  const m = orbMap(orbs);
-  return step.grid.map((col, c) => {
-    const survivors: BoardCell[] = [];
-    col.forEach((id, row) => {
-      if (dead.has(`${c}:${row}`)) return;
-      survivors.push({ key: `${tag}-s-${c}-${row}`, id, row, fall: 0 });
-    });
-    const gone = SCATTER_ROWS - survivors.length;
-    const cells: BoardCell[] = survivors.map((cell, i) => {
-      const row = gone + i;
-      return { ...cell, row, fall: row - cell.row };
-    });
-    for (let row = 0; row < gone; row++) {
-      cells.unshift({ key: `${tag}-n-${c}-${row}`, id: step.next[c][row], row, fall: gone });
-    }
-    return withOrbs(
-      cells.sort((a, b) => a.row - b.row),
-      c,
-      m,
-    );
-  });
+  return orderOrbs(
+    step.grid.map((col, c) => {
+      const survivors: BoardCell[] = [];
+      col.forEach((id, row) => {
+        if (dead.has(`${c}:${row}`)) return;
+        survivors.push({ key: `${tag}-s-${c}-${row}`, id, row, fall: 0 });
+      });
+      const gone = SCATTER_ROWS - survivors.length;
+      const cells: BoardCell[] = survivors.map((cell, i) => {
+        const row = gone + i;
+        return { ...cell, row, fall: row - cell.row };
+      });
+      for (let row = 0; row < gone; row++) {
+        cells.unshift({ key: `${tag}-n-${c}-${row}`, id: step.next[c][row], row, fall: gone });
+      }
+      return cells.sort((a, b) => a.row - b.row);
+    }),
+  );
 }
 
-/** Лента для обычного вращения одной колонки. */
+/**
+ * Лента для обычного вращения одной колонки. Пролетающие клетки берутся тем
+ * же генератором, что и поле, — поэтому мимо глаза проносятся и сферы, и
+ * остановка барабана ничем не отличается от остановки на символе.
+ */
 function makeStrip(to: ScatterCell[]): ScatterCell[] {
-  return [...Array.from({ length: FILLER }, () => scatterSymbol()), ...to];
+  return [...Array.from({ length: FILLER }, () => fillerCell()), ...to];
 }
 
 interface SpinColProps {
@@ -280,12 +299,19 @@ const SpinCol = memo(
       <div className={`sboard__col${anticipate ? ' is-anticipate' : ''}`}>
         <div className="sboard__strip" ref={ref}>
           {/* Ключ — позиция в ленте, а не символ: элементы переиспользуются,
-            меняется только src (см. тот же приём в «Слотах»). */}
-          {strip.map((id, i) => (
-            <span className="sbcell sbcell--flow" key={i}>
-              <Sym id={id} skin={skin} />
-            </span>
-          ))}
+            меняется только содержимое (см. тот же приём в «Слотах»). */}
+          {strip.map((id, i) => {
+            const value = orbOf(id);
+            return (
+              <span
+                className={`sbcell sbcell--flow${orbClass(value)}`}
+                key={i}
+                style={{ '--len': value ? String(value).length : 1 } as React.CSSProperties}
+              >
+                <CellFace id={id} skin={skin} />
+              </span>
+            );
+          })}
         </div>
       </div>
     );
@@ -321,7 +347,7 @@ export function ScatterPage() {
 
   const [strips, setStrips] = useState<ScatterCell[][]>(() =>
     Array.from({ length: SCATTER_COLS }, () =>
-      Array.from({ length: SCATTER_ROWS }, () => scatterSymbol()),
+      Array.from({ length: SCATTER_ROWS }, () => fillerCell()),
     ),
   );
   const [spinId, setSpinId] = useState(0);
@@ -564,7 +590,7 @@ export function ScatterPage() {
       const t = tierOf(chainN);
 
       setCascade({ step: i, phase: 'show' });
-      setBoard(gridToBoard(step.grid, `${res.steps.length}-${i}-g`, step.orbs));
+      setBoard(gridToBoard(step.grid, `${res.steps.length}-${i}-g`));
       setStepWins(step.wins);
       setChain(chainN);
       // Только база: множитель применяется ОДИН раз, в самом конце.
@@ -602,10 +628,11 @@ export function ScatterPage() {
       timers.current.push(
         setTimeout(() => {
           setDropDur(drop);
-          setBoard(collapseBoard(step, `${res.steps.length}-${i}`, step.orbs));
+          setBoard(collapseBoard(step, `${res.steps.length}-${i}`));
           setCascade({ step: i, phase: 'drop' });
           setStepWins([]);
-          // Сферы НЕ убираем: они остаются на поле до конца последовательности.
+          // Сферы убирать нечем: они не выигрывают, значит и не исчезают —
+          // просто съезжают вниз вместе с колонкой, как любая уцелевшая клетка.
         }, show + burst),
       );
 
@@ -692,10 +719,10 @@ export function ScatterPage() {
                       ? {
                           ...cell,
                           key: `refill-${res.steps.length}-${c}-${cell.row}`,
+                          // В клетке снова обычный символ — самоцвет улетел,
+                          // а место осталось. Ровно так же, как символ
+                          // сменяется символом после выигрыша.
                           id: scatterSymbol(),
-                          // Свойство «на клетке самоцвет» снимается — клетка
-                          // снова обычная, и в неё падает символ.
-                          orb: undefined,
                           orbIdx: undefined,
                           fall: 1,
                         }
@@ -780,17 +807,12 @@ export function ScatterPage() {
       setTimeout(
         () => {
           if (tickRef.current) clearInterval(tickRef.current);
-          // Сферы показываем СРАЗУ, как встали барабаны, — и на спине, который
-          // не сыграл, тоже. Раньше они существовали только внутри выигравшего
-          // звена, поэтому цветную сферу можно было не увидеть за сотню
-          // спинов: половина спинов не выигрывает вовсе.
+          // Подменять поле на сетку здесь больше НЕ НУЖНО и не нужно снова:
+          // сферы приехали в самой ленте и уже стоят в своих клетках — это те
+          // же клетки, которые только что крутились. Остаётся озвучить находку
+          // и дать её разглядеть, прежде чем начнётся каскад.
           const landed = res.steps[0]?.orbs ?? res.orbs;
-          if (landed.length) {
-            // Барабаны встали — переходим с лент на сетку, чтобы самоцветы
-            // легли в свои клетки. Координаты совпадают, подмены не видно.
-            setBoard(gridToBoard(res.grid, `${res.steps.length}-land`, landed));
-            playOrbs(landed);
-          }
+          if (landed.length) playOrbs(landed);
           const pause = landed.length ? 460 * (turbo ? TURBO : 1) : 0;
           if (res.steps.length) {
             timers.current.push(setTimeout(() => stepRef.current(res, 0), pause));
@@ -984,21 +1006,21 @@ export function ScatterPage() {
                         // содержимое другое. Ни отдельного слоя, ни подгонки
                         // координат: падает, съезжает и гаснет она вместе со
                         // всем полем, потому что она и есть поле.
-                        const t = cell.orb ? orbTier(cell.orb) : null;
+                        const value = orbOf(cell.id);
                         return (
                           <span
                             key={cell.key}
                             className={`sbcell${cell.fall ? ' is-fall' : ''}${
                               dying.has(`${c}-${cell.row}`) ? ' is-dust' : ''
                             }${winCells.has(`${c}-${cell.row}`) ? ' is-win' : ''}${
-                              cell.id === 'scatter' && !t ? ' is-scatter' : ''
-                            }${t ? ` sbcell--orb orb--${t.id}` : ''}${
-                              t && cascade?.phase === 'collect' ? ' is-collect' : ''
+                              cell.id === 'scatter' ? ' is-scatter' : ''
+                            }${orbClass(value)}${
+                              value && cascade?.phase === 'collect' ? ' is-collect' : ''
                             }${
                               shownWins.length &&
                               !winCells.has(`${c}-${cell.row}`) &&
                               cell.id !== 'scatter' &&
-                              !t
+                              !value
                                 ? ' is-dim'
                                 : ''
                             }`}
@@ -1010,7 +1032,7 @@ export function ScatterPage() {
                                 '--delay': `${c * DROP_STAGGER}ms`,
                                 '--wi': winOrder.get(`${c}-${cell.row}`) ?? 0,
                                 '--i': cell.orbIdx ?? 0,
-                                '--len': cell.orb ? String(cell.orb).length : 1,
+                                '--len': value ? String(value).length : 1,
                                 // Куда лететь при сборе — в центр поля.
                                 // Считаем в собственных клетках, без замеров DOM.
                                 '--fx': (SCATTER_COLS - 1) / 2 - c,
@@ -1019,17 +1041,7 @@ export function ScatterPage() {
                             }
                             data-cell={`${c}-${cell.row}`}
                           >
-                            {t ? (
-                              <>
-                                {t.beats >= 1 && <i className="orb__shock" aria-hidden="true" />}
-                                {t.beats >= 2 && <i className="orb__ring" aria-hidden="true" />}
-                                <OrbGem />
-                                <b className="orb__num">×{cell.orb}</b>
-                                {t.beats >= 2 && <b className="orb__tag">{t.name}</b>}
-                              </>
-                            ) : (
-                              <Sym id={cell.id} skin={skin} />
-                            )}
+                            <CellFace id={cell.id} skin={skin} />
                           </span>
                         );
                       })}
@@ -1292,12 +1304,12 @@ export function ScatterPage() {
             <div className="combo-rules">
               <div className="combo-rules__title">Сферы-множители</div>
               <p className="combo-rules__text">
-                Сферы с числом от ×2 до ×500 падают вместе с символами — и на первом поле, и при
-                каждом падении, независимо от того, сыграло звено или нет. Сфера{' '}
-                <b>занимает клетку</b>: символа под ней нет, и в восьмёрку эта клетка не идёт. В
-                этом и размен — сфера платит, но загромождает поле. Сферы остаются лежать до конца
-                цепочки, а в самом конце складываются и разом умножают весь её выигрыш.
-                Складываются, а не перемножаются: ×20 и ×50 дают ×70.
+                Сфера с числом от ×2 до ×500 — это <b>такая же клетка барабана</b>, как вишня или
+                скаттер: она крутится вместе со всеми, встаёт в поле и съезжает вниз при каскаде.
+                Символа под ней нет, поэтому в восьмёрку эта клетка не идёт — в этом и размен: сфера
+                платит, но загромождает поле. Выигрышем сфера не бывает, а значит и не исчезает: она
+                остаётся на поле до конца цепочки. В самом конце все сферы поля складываются и разом
+                умножают весь её выигрыш. Складываются, а не перемножаются: ×20 и ×50 дают ×70.
               </p>
               <p className="combo-rules__text">
                 Чем крупнее номинал, тем реже сфера и тем громче она приходит: у каждой ступени свой

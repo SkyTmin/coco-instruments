@@ -11,8 +11,13 @@ import {
   SCATTER_ROWS,
   SCATTER_TRIGGER,
   SCATTER_WEIGHTS,
+  ORB_CHANCE,
   countScatters,
   findWins,
+  gridOrbs,
+  isOrb,
+  mkOrb,
+  orbOf,
   orbValue,
   payFor,
   resolveScatter,
@@ -20,7 +25,6 @@ import {
   scatterGrid,
   scatterLabel,
   scatterSymbol,
-  spawnOrbs,
 } from './scatter';
 import { BETS, MIN_BET } from './slots';
 import type { ScatterCell, ScatterGrid } from './scatter';
@@ -124,18 +128,33 @@ describe('сферы-множители', () => {
     }
   });
 
-  it('сферы не ложатся на скаттеры и не дублируют клетку', () => {
+  it('сфера — это содержимое клетки, а не список поверх поля', () => {
+    // Поле само и есть перечень сфер: gridOrbs только читает клетки.
+    const g = gridWith('cherry', 30, 'cherry');
+    expect(gridOrbs(g)).toEqual([]);
+    g[2][3] = mkOrb(25);
+    expect(isOrb(g[2][3])).toBe(true);
+    expect(orbOf(g[2][3])).toBe(25);
+    expect(orbOf(g[0][0])).toBe(0);
+    expect(gridOrbs(g)).toEqual([{ col: 2, row: 3, value: 25 }]);
+  });
+
+  it('сфера выпадает на барабане наравне с символом и скаттером', () => {
     const rng = seeded(3);
-    const g = gridWith('scatter', 25, 'cherry');
-    for (let i = 0; i < 400; i++) {
-      const orbs = spawnOrbs(g, rng);
-      const seen = new Set<string>();
-      for (const o of orbs) {
-        expect(g[o.col][o.row]).not.toBe('scatter');
-        expect(seen.has(`${o.col}:${o.row}`)).toBe(false);
-        seen.add(`${o.col}:${o.row}`);
-      }
+    let orbs = 0;
+    let scatters = 0;
+    const N = 4000;
+    for (let i = 0; i < N; i++) {
+      const g = scatterGrid(rng, SCATTER_CHANCE, ORB_CHANCE);
+      orbs += gridOrbs(g).length;
+      scatters += countScatters(g);
     }
+    const cells = N * SCATTER_COLS * SCATTER_ROWS;
+    expect(orbs / cells).toBeGreaterThan(ORB_CHANCE * 0.85);
+    expect(orbs / cells).toBeLessThan(ORB_CHANCE * 1.15);
+    // Сфера не съедает шанс скаттера: у каждой свой отрезок броска.
+    expect(scatters / cells).toBeGreaterThan(SCATTER_CHANCE * 0.85);
+    expect(scatters / cells).toBeLessThan(SCATTER_CHANCE * 1.15);
   });
 
   it('сферы копятся всю последовательность и не исчезают', () => {
@@ -144,16 +163,34 @@ describe('сферы-множители', () => {
     for (let i = 0; i < 6000 && checked < 20; i++) {
       const out = resolveScatter(100, { rng });
       if (out.steps.length < 2) continue;
-      // Набор сфер каждого звена включает в себя набор предыдущего.
+      // Сферы не выигрывают, значит и не удаляются: их номиналы копятся.
+      // Места при этом меняются — сфера съезжает вниз вместе с колонкой.
       for (let s = 1; s < out.steps.length; s++) {
-        const before = out.steps[s - 1].orbs;
-        const after = out.steps[s].orbs;
+        const before = out.steps[s - 1].orbs.map((o) => o.value);
+        const after = out.steps[s].orbs.map((o) => o.value);
         expect(after.length).toBeGreaterThanOrEqual(before.length);
-        expect(after.slice(0, before.length)).toEqual(before);
+        for (const value of before) {
+          const at = after.indexOf(value);
+          expect(at).toBeGreaterThanOrEqual(0);
+          after.splice(at, 1);
+        }
       }
       checked += 1;
     }
     expect(checked).toBeGreaterThan(0);
+  });
+
+  it('сфера уцелевшей клетки съезжает вниз, как всё живое на поле', () => {
+    // Сфера — на самом верху первой колонки, под ней и рядом сплошь семёрки.
+    const g = gridWith('cherry', 0, 'cherry');
+    for (let r = 1; r < SCATTER_ROWS; r++) g[0][r] = 'seven';
+    for (let r = 0; r < 4; r++) g[1][r] = 'seven';
+    g[0][0] = mkOrb(10);
+    const wins = findWins(g);
+    expect(wins.find((w) => w.symbol === 'seven')).toBeDefined();
+    // Сфера в колонке осталась одна на семь ушедших клеток — она внизу.
+    const next = scatterCollapse(g, wins);
+    expect(orbOf(next[0][SCATTER_ROWS - 1])).toBe(10);
   });
 
   it('множитель применяется один раз, ко всей базе', () => {
@@ -185,16 +222,19 @@ describe('сферы-множители', () => {
     expect(dryWithOrbs / dry).toBeGreaterThan(0.1);
   });
 
-  it('сфера занимает клетку: символ под ней в восьмёрку не идёт', () => {
+  it('сфера занимает клетку: символа под ней нет', () => {
     // Ровно восемь семёрок — поле играет.
     const g = gridWith('seven', CLUSTER_MIN, 'cherry');
     expect(findWins(g).find((w) => w.symbol === 'seven')).toBeDefined();
-    // Накрываем одну из них сферой: семёрок остаётся семь, выигрыша нет.
-    const covered = findWins(g, new Set(['0:0']));
-    expect(covered.find((w) => w.symbol === 'seven')).toBeUndefined();
+    // Одна из них выпала сферой: семёрок осталось семь, выигрыша нет.
+    g[0][0] = mkOrb(50);
+    expect(findWins(g).find((w) => w.symbol === 'seven')).toBeUndefined();
+    // И сама сфера в восьмёрки не собирается, сколько бы их ни было.
+    const all = gridWith(mkOrb(50), SCATTER_COLS * SCATTER_ROWS, 'cherry');
+    expect(findWins(all)).toEqual([]);
   });
 
-  it('закрытая сфера клетка не попадает ни в один выигрыш', () => {
+  it('клетка со сферой не попадает ни в один выигрыш', () => {
     const rng = seeded(555);
     for (let i = 0; i < 4000; i++) {
       const out = resolveScatter(100, { rng });

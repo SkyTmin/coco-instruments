@@ -13919,8 +13919,9 @@ input[type='datetime-local'] {
  * сфер. На обычных, которых две трети, не появляется ни одного нового слоя.
  */
 .sbcell--orb {
-  /* Клетка с камнем поднята над соседями: он выпуклый и светится. */
-  z-index: 5;
+  /* Чуть выше соседей — ровно настолько, чтобы свечение камня не срезалось
+     краем соседней клетки. Не слой поверх поля: клетка как клетка. */
+  z-index: 2;
   /* Токены ступени. По умолчанию — обычная; тиры ниже их переопределяют,
      и от них же красится сам самоцвет (см. OrbGem в slot-art.tsx). */
   --orb-hi: #fff8d0;
@@ -13930,10 +13931,10 @@ input[type='datetime-local'] {
   --orb-edge: rgba(120, 70, 0, 0.75);
   --orb-glow: rgba(255, 200, 60, 0.9);
   --gem: 92%;
-  /* Сфера ПАДАЕТ в клетку сверху, как символ, а не всплывает из ниоткуда.
-     Всплытие и выдавало в ней наклейку поверх поля. */
-  animation: orb-drop calc(0.44s * var(--speed, 1)) cubic-bezier(0.34, 1.4, 0.5, 1)
-    calc(var(--i, 0) * 90ms * var(--speed, 1)) both;
+  /* Своей анимации появления у сферы НЕТ — и не должно быть. Она приезжает
+     на барабане и съезжает при каскаде тем же `tumble-fall`, что и любая
+     клетка (см. .sbcell.is-fall). Любое собственное «всплытие» здесь снова
+     превратит её в наклейку поверх поля: ни один символ так не приходит. */
 }
 /* Сам камень занимает почти всю клетку — как плитка символа, а не шарик
    поверх неё. Размер тоже ступень редкости. */
@@ -13942,8 +13943,7 @@ input[type='datetime-local'] {
   width: var(--gem);
   height: var(--gem);
   filter: drop-shadow(0 0 10px var(--orb-glow)) drop-shadow(0 3px 6px rgba(0, 0, 0, 0.5));
-  animation: orb-throb 1.6s ease-in-out infinite
-    calc((var(--i, 0) * 90ms + 0.44s) * var(--speed, 1));
+  animation: orb-throb 1.6s ease-in-out infinite calc(var(--i, 0) * 90ms * var(--speed, 1));
 }
 /* Число лежит на столе камня. Обводка — чтобы читалось на любой огранке. */
 .sbcell--orb .orb__num {
@@ -13958,16 +13958,6 @@ input[type='datetime-local'] {
   text-shadow:
     0 1px 2px rgba(0, 0, 0, 0.75),
     0 0 8px var(--orb-glow);
-}
-@keyframes orb-drop {
-  from {
-    opacity: 0;
-    transform: translateY(calc(var(--scell) * -0.9)) scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
 }
 @keyframes orb-throb {
   50% {
@@ -14071,14 +14061,16 @@ input[type='datetime-local'] {
    подпись не нужна: они и так две трети всех сфер. */
 .orb__tag {
   position: absolute;
-  bottom: -2px;
+  /* Внутри клетки, а не под ней: в нижнем ряду подпись вылезала за край
+     поля и срезалась вместе с буквой. */
+  bottom: 1px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 7px;
+  font-size: 6.5px;
   font-weight: 800;
   /* Тесно нарочно: «ЛЕГЕНДАРНАЯ» должна влезать в ширину клетки даже в
      крайней колонке — поле обрезает всё, что за неё вылезло. */
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--orb-hi);
@@ -14087,29 +14079,10 @@ input[type='datetime-local'] {
     calc((var(--i, 0) * 90ms + 0.3s) * var(--speed, 1)) both;
 }
 
-/* Ударная волна при появлении редкой и выше: расходящееся кольцо. Живёт
-   полсекунды и снимается вместе со сферой — ничего не копится. */
-.orb__shock {
-  position: absolute;
-  z-index: -3;
-  width: 78%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  border: 2px solid var(--orb-glow);
-  animation: orb-shock calc(0.62s * var(--speed, 1)) cubic-bezier(0.15, 0.8, 0.3, 1)
-    calc(var(--i, 0) * 90ms * var(--speed, 1)) both;
-}
-@keyframes orb-shock {
-  from {
-    opacity: 0.9;
-    transform: scale(0.5);
-  }
-  to {
-    opacity: 0;
-    /* Дальше 2.4 волна упирается в край поля и обрезается. */
-    transform: scale(2.4);
-  }
-}
+/* Ударной волны при появлении здесь больше нет: клетки поля пересоздаются
+   на каждом такте каскада, и разовая анимация появления переигрывалась бы
+   по два раза за звено — мигание вместо события. Приход сферы теперь
+   отмечают звук и вибрация (см. playOrbs), они такту не подчиняются. */
 
 /* Сбор: сферы слетаются в счётчик посередине поля. Сначала короткий замах
    в противоход — без него полёт читается как «пропали», а не «собрались».
@@ -14138,13 +14111,9 @@ input[type='datetime-local'] {
   .sbcell--orb,
   .orb__gem,
   .orb__ring,
-  .orb__shock,
   .orb__tag,
   .sbcell--orb.is-collect {
     animation: none;
-  }
-  .orb__shock {
-    opacity: 0;
   }
   .sbcell--orb.is-collect {
     opacity: 0;
