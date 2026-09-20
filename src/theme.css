@@ -13526,7 +13526,10 @@ input[type='datetime-local'] {
 }
 .sboard__col {
   position: relative;
-  overflow: hidden;
+  /* overflow здесь НЕТ намеренно: клипает само поле (.sboard), а колонке
+     это мешало бы — самоцвет при сборе летит из своей клетки к счётчику в
+     центре поля и пересекает границу колонки. Именно из-за этого клипания
+     сферы раньше и жили отдельным слоем поверх поля. */
   background: linear-gradient(180deg, var(--reel-hi), var(--reel-mid) 60%, var(--reel-lo));
 }
 /* Колонка, от которой зависит бонус: до четырёх скаттеров не хватает одного.
@@ -13660,15 +13663,6 @@ input[type='datetime-local'] {
     transform: scale(1.24);
   }
 }
-/* Клетка занята сферой: символа там больше нет. Прячем его совсем, а не
-   притемняем — сфера не лежит поверх фрукта, она стоит ВМЕСТО него, и в
-   восьмёрку эта клетка не идёт. Раньше фрукт торчал из-под шарика, и
-   выходило, будто сфера — просто блик на нём. */
-.sbcell.is-covered img {
-  opacity: 0;
-  transition: opacity 0.18s ease;
-}
-
 /* Несыгравшие НЕ гасим прозрачностью: на светлом барабане символ пропадал
    совсем. Вместо этого кладём тёмную вуаль на всё поле, а победителей
    поднимаем над ней — так каждый символ остаётся виден. */
@@ -13924,16 +13918,9 @@ input[type='datetime-local'] {
  * перелив) включаются только у легендарной и мифической — вместе это 0,8 %
  * сфер. На обычных, которых две трети, не появляется ни одного нового слоя.
  */
-.orb {
-  position: absolute;
-  /* Выше подсвеченных клеток и выше пыли: сфера — предмет НА поле, а не
-     украшение символа. */
+.sbcell--orb {
+  /* Клетка с камнем поднята над соседями: он выпуклый и светится. */
   z-index: 5;
-  width: calc(100% / 6);
-  height: var(--scell);
-  display: grid;
-  place-items: center;
-  pointer-events: none;
   /* Токены ступени. По умолчанию — обычная; тиры ниже их переопределяют,
      и от них же красится сам самоцвет (см. OrbGem в slot-art.tsx). */
   --orb-hi: #fff8d0;
@@ -13950,7 +13937,7 @@ input[type='datetime-local'] {
 }
 /* Сам камень занимает почти всю клетку — как плитка символа, а не шарик
    поверх неё. Размер тоже ступень редкости. */
-.orb__gem {
+.sbcell--orb .orb__gem {
   position: absolute;
   width: var(--gem);
   height: var(--gem);
@@ -13959,7 +13946,7 @@ input[type='datetime-local'] {
     calc((var(--i, 0) * 90ms + 0.44s) * var(--speed, 1));
 }
 /* Число лежит на столе камня. Обводка — чтобы читалось на любой огранке. */
-.orb__num {
+.sbcell--orb .orb__num {
   position: relative;
   z-index: 1;
   font-weight: 900;
@@ -13989,7 +13976,7 @@ input[type='datetime-local'] {
 }
 
 /* Необычная: зелень. Первый шаг вверх — заметный, но ещё будничный. */
-.orb--uncommon {
+.sbcell--orb.orb--uncommon {
   --orb-hi: #e8ffd9;
   --orb-mid: #8ee34a;
   --orb-lo: #3f9e2b;
@@ -13999,7 +13986,7 @@ input[type='datetime-local'] {
   --gem: 94%;
 }
 /* Редкая: синий. С этого тира сфера крупнее прочих — размер читается раньше цвета. */
-.orb--rare {
+.sbcell--orb.orb--rare {
   --orb-hi: #dff2ff;
   --orb-mid: #58b7ff;
   --orb-lo: #1f6fd0;
@@ -14010,7 +13997,7 @@ input[type='datetime-local'] {
   --gem: 96%;
 }
 /* Эпическая: фиолет и кольцо — вокруг сферы появляется орбита. */
-.orb--epic {
+.sbcell--orb.orb--epic {
   --orb-hi: #f3e2ff;
   --orb-mid: #c078ff;
   --orb-lo: #7b32c9;
@@ -14021,7 +14008,7 @@ input[type='datetime-local'] {
   --gem: 98%;
 }
 /* Легендарная: огонь. Плюс вращающийся блик — 0,6 % сфер, можно себе позволить. */
-.orb--legendary {
+.sbcell--orb.orb--legendary {
   --orb-hi: #fff4d2;
   --orb-mid: #ffb03a;
   --orb-lo: #ef6a12;
@@ -14032,7 +14019,7 @@ input[type='datetime-local'] {
   --gem: 100%;
 }
 /* Мифическая: радуга. Одна на пятьсот — должна останавливать взгляд. */
-.orb--mythic {
+.sbcell--orb.orb--mythic {
   --orb-hi: #ffffff;
   --orb-mid: #ff5ec7;
   --orb-lo: #6a5bff;
@@ -14128,7 +14115,7 @@ input[type='datetime-local'] {
    в противоход — без него полёт читается как «пропали», а не «собрались».
    Цель задана в собственных клетках сферы (--fx) и пикселях (--fy), поэтому
    ничего не надо мерить в DOM. */
-.orb.is-collect {
+.sbcell--orb.is-collect {
   animation: orb-fly calc(0.52s * var(--speed, 1)) cubic-bezier(0.5, -0.45, 0.3, 1)
     calc(var(--i, 0) * 70ms * var(--speed, 1)) forwards;
 }
@@ -14148,18 +14135,18 @@ input[type='datetime-local'] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .orb,
+  .sbcell--orb,
   .orb__gem,
   .orb__ring,
   .orb__shock,
   .orb__tag,
-  .orb.is-collect {
+  .sbcell--orb.is-collect {
     animation: none;
   }
   .orb__shock {
     opacity: 0;
   }
-  .orb.is-collect {
+  .sbcell--orb.is-collect {
     opacity: 0;
   }
 }
@@ -14460,7 +14447,7 @@ input[type='datetime-local'] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .orb,
+  .sbcell--orb,
   .orb__gem,
   .sbcell.is-scatter img,
   .bonus-bar {
