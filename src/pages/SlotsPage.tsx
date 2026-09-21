@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
+import { Odometer } from '@/components/Odometer';
+import type { OdometerHandle } from '@/components/Odometer';
 import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
@@ -38,6 +40,8 @@ import {
   symbolOf,
 } from '@/lib/slots';
 import type { CascadeStep, LineWin, SlotGrid, SlotSymbolId, SpinResult } from '@/lib/slots';
+import { plainPlan, rollupPlan, runRollup, winTier } from '@/lib/rollup';
+import type { WinTier } from '@/lib/rollup';
 import { dustBurst } from '@/lib/dust';
 import type { DustCell } from '@/lib/dust';
 import { burstConfetti } from '@/lib/confetti';
@@ -49,11 +53,14 @@ import {
   counterTick,
   jackpotFanfare,
   leverPull,
+  payoutEnd,
   primeAudio,
   reelStop,
   reelTick,
+  rollupTick,
   setMuted,
   symbolBurst,
+  tierBreak,
   winChime,
 } from '@/lib/sound';
 import {
@@ -361,7 +368,10 @@ export function SlotsPage() {
   const [stepWins, setStepWins] = useState<LineWin[]>([]);
   const [stepCombo, setStepCombo] = useState(1);
   const [chain, setChain] = useState(0);
-  const [runWin, setRunWin] = useState(0);
+  /** Идёт подсчёт выплаты — см. lib/rollup.ts. */
+  const [counting, setCounting] = useState(false);
+  /** Ступень, которую счёт пробил последней: она даёт титул. */
+  const [winStep, setWinStep] = useState<WinTier | null>(null);
   const [pending, setPending] = useState(0);
   const [auto, setAuto] = useState(0);
   const [autoSheet, setAutoSheet] = useState(false);
@@ -392,6 +402,13 @@ export function SlotsPage() {
   const dustStop = useRef<(() => void) | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // Счётчики обновляются императивно: счёт идёт каждый кадр (см. Odometer).
+  const winOdo = useRef<OdometerHandle>(null);
+  const totemOdo = useRef<OdometerHandle>(null);
+  const balOdo = useRef<OdometerHandle>(null);
+  /** Сколько монет счётчик показывает прямо сейчас — отсюда стартует счёт. */
+  const wonRef = useRef(0);
+  const rollStop = useRef<(() => void) | null>(null);
   const dragRef = useRef<{ y: number; id: number } | null>(null);
 
   useEffect(() => setMuted(!sound), [sound]);
@@ -441,39 +458,136 @@ export function SlotsPage() {
   const theme = skinOf(skin);
   const rainSrc = symbolSrc(skin, theme.rain);
 
-  const finish = useCallback(
-    (res: SlotsSpinOutcome) => {
-      if (tickRef.current) clearInterval(tickRef.current);
-      setResult(res);
-      setPending(0);
-      setSpinning(false);
-      setJackpotWin(res.jackpotWin);
-      setStreak((n) => (res.total > 0 ? n + 1 : 0));
-      if (res.kind === 'jackpot') {
-        notifySuccess();
-        jackpotFanfare();
-        burstConfetti(180, theme.confetti);
-        rainCoins(40, rainSrc);
-        setShake(true);
-        setCelebration({ tier: 'jackpot', amount: res.total });
-      } else if (res.kind === 'big') {
-        notifySuccess();
-        winChime('big');
-        rainCoins(22, rainSrc);
-        burstConfetti(70, theme.confetti);
-        setCelebration({ tier: 'big', amount: res.total });
-      } else if (res.kind === 'small') {
-        tapLight();
-        winChime('small');
+  /** Спин закончен окончательно — после того, как деньги досчитаны. */
+  const finish = useCallback((res: SlotsSpinOutcome) => {
+    if (tickRef.current) clearInterval(tickRef.current);
+    setCounting(false);
+    setResult(res);
+    setPending(0);
+    setSpinning(false);
+    setJackpotWin(res.jackpotWin);
+    setStreak((n) => (res.total > 0 ? n + 1 : 0));
+    // Новый уровень — отдельная плашка: награда уже начислена стором.
+    if (res.levelUps.length) {
+      const lvl = res.levelUps[res.levelUps.length - 1];
+      setLevelUp({ level: lvl, ...levelReward(lvl) });
+    }
+  }, []);
+
+  /**
+   * Подсчёт выплаты — тот же ролл-ап, что и в «Каскаде» (см. lib/rollup.ts):
+   * длительность от величины выигрыша, ступени с паузами, титул от пробитой
+   * ступени. Счёт один на обе игры нарочно — деньги должны считаться
+   * одинаково, иначе одна из игр ощущается дешевле другой.
+   */
+  const payout = useCallback(
+    (res: SlotsSpinOutcome, from: number) => {
+      const to = res.total;
+      rollStop.current?.();
+      // Крупный выигрыш считается С НУЛЯ, как в любом автомате: счёт — это
+      // не «дописать остаток», а отдельная сцена, и она обязана пройти всю
+      // лестницу целиком, от «ВЕРНУЛОСЬ» до своей вершины. Без этого в
+      // «Слотах» торжественного счёта не было вовсе: там вся сумма уже
+      // набежала за каскад, и дописывать было нечего.
+      //
+      // Сброс счётчика на ноль прячется вспышкой открывающего удара — тот
+      // самый кадр-вспышка из juice.ts: всё, что меняется во время неё,
+      // читается как ею вызванное.
+      // Порог церемонии — «ХОРОШИЙ ВЫИГРЫШ» (10 ставок). Не 25: там, где
+      // церемония начинается с «КРУПНОГО», в «Слотах» она выпадала бы раз в
+      // 355 вращений, потому что звенья каскада дают ровно 100% итога и
+      // дописывать после них нечего. На десятке это раз в шестьдесят — своя
+      // редкость есть, но её успеваешь увидеть.
+      const top = winTier(to / Math.max(1, bet));
+      const ceremony = (top?.beats ?? 0) >= 1;
+      const start = ceremony ? 0 : from;
+      if (!(to > start)) {
+        wonRef.current = to;
+        winOdo.current?.set(to);
+        finish(res);
+        return;
       }
-      // Новый уровень — отдельная плашка: награда уже начислена стором.
-      if (res.levelUps.length) {
-        const lvl = res.levelUps[res.levelUps.length - 1];
-        setLevelUp({ level: lvl, ...levelReward(lvl) });
-      }
+      const plan = rollupPlan(start, to, Math.max(1, bet));
+      const speed = turbo ? 0.55 : 1;
+      const topBeats = plan.top?.beats ?? 0;
+
+      setCounting(true);
+      setWinStep(null);
+      wonRef.current = start;
+      winOdo.current?.set(start);
+      tapLight();
+      winChime('small');
+
+      // См. «Каскад»: при синхронном плане (reduce-motion) `done` проходит
+      // до присваивания, и в `rollStop` осталась бы отработавшая функция.
+      let live = true;
+      const stop = runRollup(
+        plan,
+        {
+          value: (n) => {
+            wonRef.current = n;
+            winOdo.current?.set(n);
+            totemOdo.current?.set(n);
+            // Баланс растёт в один ход с выигрышем.
+            balOdo.current?.set(Math.max(0, balance - (to - n)));
+          },
+          tick: rollupTick,
+          tier: (t) => {
+            setWinStep(t);
+            tierBreak(t.beats);
+            if (t.beats >= 3) {
+              notifySuccess();
+              setShake(true);
+              burstConfetti(t.beats >= 4 ? 200 : 140, theme.confetti);
+              rainCoins(t.beats >= 4 ? 44 : 30, rainSrc);
+            } else if (t.beats === 2) {
+              notifySuccess();
+              setShake(true);
+              burstConfetti(70, theme.confetti);
+              rainCoins(20, rainSrc);
+            } else if (t.beats === 1) {
+              tapMedium();
+            } else {
+              selectionChanged();
+            }
+            // Со ступени «КРУПНЫЙ» сцену забирает баннер, и счёт продолжается
+            // уже в нём — число не сбрасывается и не начинается заново.
+            if (t.beats >= 2) {
+              setCelebration(
+                (c) =>
+                  c ?? {
+                    tier: res.kind === 'jackpot' || t.beats >= 3 ? 'jackpot' : 'big',
+                    amount: to,
+                  },
+              );
+            }
+          },
+          done: () => {
+            live = false;
+            rollStop.current = null;
+            wonRef.current = to;
+            balOdo.current?.set(balance);
+            payoutEnd(topBeats);
+            if (topBeats >= 3 || res.kind === 'jackpot') jackpotFanfare();
+            finish(res);
+          },
+        },
+        speed,
+      );
+      if (live) rollStop.current = stop;
     },
-    [theme.confetti, rainSrc],
+    [bet, turbo, balance, finish, theme.confetti, rainSrc],
   );
+  const payoutRef = useRef(payout);
+  payoutRef.current = payout;
+
+  /** Досчитать немедленно — по тапу. Длинный счёт обязан быть пропускаемым. */
+  const skipCount = useCallback(() => {
+    if (!rollStop.current) return false;
+    tapLight();
+    rollStop.current();
+    return true;
+  }, []);
 
   // Плашка уровня живёт 6 секунд — успеть прочитать, но не мешать игре.
   useEffect(() => {
@@ -531,7 +645,33 @@ export function SlotsPage() {
       setStepWins(step.wins);
       setStepCombo(step.combo);
       setChain(chainN);
-      setRunWin((w) => w + step.payout);
+      // Выплата звена: короткий ровный ход без ступеней — у каскада свой
+      // ритм, и паузы с титулами посреди него сбивали бы его.
+      rollStop.current?.();
+      const fromBase = wonRef.current;
+      const toBase = fromBase + step.payout;
+      // Даже у звена длина хода зависит от суммы: крупное звено считается
+      // заметно дольше мелкого. Фиксированная длительность — та же ошибка,
+      // что и в большом счёте, просто в миниатюре.
+      const legMs = 240 + Math.min(900, ((toBase - fromBase) / Math.max(1, bet)) * 420);
+      let legLive = true;
+      const legStop = runRollup(
+        plainPlan(fromBase, toBase, legMs),
+        {
+          value: (n) => {
+            wonRef.current = n;
+            winOdo.current?.set(n);
+          },
+          tick: rollupTick,
+          done: () => {
+            legLive = false;
+            rollStop.current = null;
+            wonRef.current = toBase;
+          },
+        },
+        scale,
+      );
+      if (legLive) rollStop.current = legStop;
       setPending((p) => Math.max(0, p - step.payout));
 
       // Эффекты растут ступенями: звук выше, тряска и конфетти — только на длинных.
@@ -576,14 +716,16 @@ export function SlotsPage() {
               setChain(0);
               // Следующее вращение должно стартовать с того, что сейчас на поле.
               setStrips(res.steps[i].next.map((col) => [...col, randomSymbol()]));
-              finish(res);
+              // Каскад отыграл — дальше деньги, и счёт стартует ровно с той
+              // суммы, которую счётчик показывает прямо сейчас.
+              payoutRef.current(res, wonRef.current);
             }
           },
           show + burst + drop + stagger * 2 + 80,
         ),
       );
     },
-    [turbo, theme.confetti, rainSrc, finish, startDust],
+    [turbo, bet, theme.confetti, rainSrc, startDust],
   );
   stepRef.current = runStep;
 
@@ -619,7 +761,13 @@ export function SlotsPage() {
     setCascade(null);
     setStepWins([]);
     setChain(0);
-    setRunWin(0);
+    setCounting(false);
+    setWinStep(null);
+    // Счётчик обнуляем и в рефе, и в самом одометре: от него стартует счёт.
+    rollStop.current?.();
+    rollStop.current = null;
+    wonRef.current = 0;
+    winOdo.current?.set(0);
     setSpinId((n) => n + 1);
     setSpinning(true);
 
@@ -634,14 +782,16 @@ export function SlotsPage() {
       setTimeout(() => {
         if (tickRef.current) clearInterval(tickRef.current);
         if (res.steps.length) stepRef.current(res, 0);
-        else finish(res);
+        else payoutRef.current(res, 0);
       }, durs[2] + 40),
     );
-  }, [hydrated, spinning, balance, bet, freeSpins, playSlots, strips, turbo, finish]);
+  }, [hydrated, spinning, balance, bet, freeSpins, playSlots, strips, turbo]);
 
   // Баннер крупного выигрыша живёт ~4 секунды: вспышка → лучи → счёт с тиканьем.
   useEffect(() => {
-    if (!celebration) return undefined;
+    // Пока идёт счёт, баннер не убираем и не торопим: в нём и происходит
+    // самое интересное.
+    if (!celebration || counting) return undefined;
     const ticks = setInterval(() => counterTick(), 70);
     const stopTicks = setTimeout(() => clearInterval(ticks), 1500);
     const hide = setTimeout(() => setCelebration(null), 4200);
@@ -650,7 +800,7 @@ export function SlotsPage() {
       clearTimeout(stopTicks);
       clearTimeout(hide);
     };
-  }, [celebration]);
+  }, [celebration, counting]);
 
   // Автоспин: очередь вращений, прерывается кнопкой или нехваткой монет.
   useEffect(() => {
@@ -797,7 +947,9 @@ export function SlotsPage() {
           <div className="slot-hud__cell">
             <span className="slot-hud__label">Баланс</span>
             <span className="slot-hud__value">
-              <AnimatedNumber value={shownBalance} format={(n) => fmt(n)} duration={450} />
+              {/* Баланс — тот же механический счётчик, и во время выплаты он
+                  крутится В ОДИН ХОД с выигрышем. */}
+              <Odometer ref={balOdo} value={shownBalance} />
               <CoinIcon size={18} />
             </span>
           </div>
@@ -838,6 +990,10 @@ export function SlotsPage() {
             shake ? ' is-shake' : ''
           }${spinning ? ' is-spinning' : ''}`}
           onAnimationEnd={() => setShake(false)}
+          // Тап по автомату досчитывает выплату: длинный счёт обязан быть
+          // пропускаемым, иначе награда превращается в ожидание.
+          onClick={() => skipCount()}
+          role="presentation"
         >
           <div className="cabinet__bulbs" aria-hidden="true">
             {Array.from({ length: 14 }, (_, i) => (
@@ -903,6 +1059,17 @@ export function SlotsPage() {
                   </div>
                 )}
                 <div className="reels__glass" aria-hidden="true" />
+                {/* Титул ступени. Он не появляется и не исчезает — он
+                    СМЕНЯЕТСЯ: по нему видно, что счёт пошёл выше. */}
+                {counting && winStep && (
+                  <div
+                    className={`win-title win-title--b${winStep.beats}`}
+                    key={winStep.id}
+                    aria-hidden="true"
+                  >
+                    {winStep.name}
+                  </div>
+                )}
               </div>
               {/* Счётчик комбо — над окном, чтобы не закрывать сыгравший ряд */}
               {chain >= 1 && cascade && (
@@ -945,16 +1112,24 @@ export function SlotsPage() {
           </div>
 
           <div className="cabinet__status">
-            {cascade ? (
+            {cascade || counting ? (
               <>
                 <span className={`status status--combo status--t${tier}`}>
-                  {chain >= 2 ? `Комбо ×${chain}!` : 'Есть выигрыш!'}
+                  {/* Во время счёта строка говорит только, что идёт счёт.
+                      Название ступени несёт плашка над полем — дублировать
+                      его здесь значит забивать узкую строку длинным словом
+                      и сжимать сам счётчик. */}
+                  {counting ? 'Считаем…' : chain >= 2 ? `Комбо ×${chain}!` : 'Есть выигрыш!'}
                 </span>
-                <span className="status__win">
-                  +<AnimatedNumber value={runWin} format={(n) => fmt(n)} duration={400} />
+                {/* Один счётчик на весь спин: набирает базу за каскад, а
+                    потом с неё же уезжает к итогу. */}
+                <span className={`status__win${counting ? ' is-counting' : ''}`}>
+                  +<Odometer ref={winOdo} value={0} />
                   <CoinIcon size={20} />
                 </span>
-                {stepCombo > 1 && <span className="status__mult">выплата ×{stepCombo}</span>}
+                {!counting && stepCombo > 1 && (
+                  <span className="status__mult">выплата ×{stepCombo}</span>
+                )}
               </>
             ) : spinning ? (
               <span className="status status--spin">
@@ -972,7 +1147,7 @@ export function SlotsPage() {
                 </span>
                 {result.total > 0 && (
                   <span className={`status__win${result.kind === 'jackpot' ? ' is-jackpot' : ''}`}>
-                    +<AnimatedNumber value={result.total} format={(n) => fmt(n)} duration={700} />
+                    {/* Без анимации: сумму только что досчитали на глазах. */}+{fmt(result.total)}
                     <CoinIcon size={20} />
                   </span>
                 )}
@@ -1374,8 +1549,11 @@ export function SlotsPage() {
           качается и уходит вверх, вокруг разлетаются квадратные искры. */}
       {celebration && (
         <div
-          className={`totem totem--${celebration.tier}`}
-          onClick={() => setCelebration(null)}
+          className={`totem totem--${winStep && winStep.beats >= 3 ? 'jackpot' : celebration.tier}`}
+          onClick={() => {
+            // Пока идут деньги — тап досчитывает их, а не закрывает карточку.
+            if (!skipCount()) setCelebration(null);
+          }}
           role="presentation"
         >
           <div className="totem__flash" />
@@ -1401,14 +1579,24 @@ export function SlotsPage() {
             <Sym id={theme.preview} skin={skin} size={140} />
           </div>
           <div className="totem__card">
-            <div className="totem__title">
-              {celebration.tier === 'jackpot' ? 'ДЖЕКПОТ!' : 'БОЛЬШОЙ ВЫИГРЫШ'}
+            {/* Титул живёт ступенью счёта и меняется прямо на глазах:
+                карточка открывается «КРУПНЫМ», а через пару секунд на ней
+                уже «МЕГА». Ключ по ступени — чтобы каждый титул прилетал
+                своим кадром, а не подменялся текстом. */}
+            <div className="totem__title" key={winStep?.id ?? celebration.tier}>
+              {celebration.tier === 'jackpot' && !winStep
+                ? 'ДЖЕКПОТ!'
+                : (winStep?.name ?? 'КРУПНЫЙ ВЫИГРЫШ')}
             </div>
             <div className="totem__amount">
-              <AnimatedNumber value={celebration.amount} format={(n) => fmt(n)} duration={1400} />
+              {/* Счёт НЕ начинается заново: он продолжает тот же ход, что
+                  шёл в автомате, просто теперь на крупном плане. */}
+              <Odometer ref={totemOdo} value={wonRef.current} />
               <CoinIcon size={30} />
             </div>
-            <div className="totem__hint">нажмите, чтобы продолжить</div>
+            <div className="totem__hint">
+              {counting ? 'нажмите, чтобы досчитать' : 'нажмите, чтобы продолжить'}
+            </div>
           </div>
         </div>
       )}

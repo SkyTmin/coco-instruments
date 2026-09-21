@@ -13321,6 +13321,16 @@ input[type='datetime-local'] {
 .totem__amount svg {
   -webkit-text-fill-color: initial;
 }
+/* Сумма в тотеме — тот же одометр. Общий градиент по тексту здесь не годится:
+   background-clip: text клипает по ВСЕМ цифрам ленты, включая те одиннадцать,
+   что спрятаны за окном колеса, и золото расползается на них вниз. Красим
+   каждую цифру отдельно — заодно градиент у всех разрядов одинаковый. */
+.totem__amount .odo i {
+  background: linear-gradient(180deg, #fffbe6, #ffd83d 55%, #ff9e2c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 .totem__hint {
   margin-top: 10px;
   font-size: 12px;
@@ -13922,8 +13932,16 @@ input[type='datetime-local'] {
   /* Чуть выше соседей — ровно настолько, чтобы свечение камня не срезалось
      краем соседней клетки. Не слой поверх поля: клетка как клетка. */
   z-index: 2;
-  /* Токены ступени. По умолчанию — обычная; тиры ниже их переопределяют,
-     и от них же красится сам самоцвет (см. OrbGem в slot-art.tsx). */
+}
+/* Токены ступени. По умолчанию — обычная; тиры ниже их переопределяют, и от
+   них же красится сам самоцвет (см. OrbGem в slot-art.tsx).
+
+   Селектор нарочно НЕ привязан к клетке поля: тот же камень рисуется на
+   сольном выходе, вне доски, и, пока токены висели на `.sbcell--orb.orb--*`,
+   легендарная сфера выходила туда в цветах обычной — все переменные были
+   не определены. */
+.sbcell--orb,
+.solo {
   --orb-hi: #fff8d0;
   --orb-mid: #ffd83d;
   --orb-lo: #f0a01e;
@@ -13966,7 +13984,7 @@ input[type='datetime-local'] {
 }
 
 /* Необычная: зелень. Первый шаг вверх — заметный, но ещё будничный. */
-.sbcell--orb.orb--uncommon {
+.orb--uncommon {
   --orb-hi: #e8ffd9;
   --orb-mid: #8ee34a;
   --orb-lo: #3f9e2b;
@@ -13976,7 +13994,7 @@ input[type='datetime-local'] {
   --gem: 94%;
 }
 /* Редкая: синий. С этого тира сфера крупнее прочих — размер читается раньше цвета. */
-.sbcell--orb.orb--rare {
+.orb--rare {
   --orb-hi: #dff2ff;
   --orb-mid: #58b7ff;
   --orb-lo: #1f6fd0;
@@ -13987,7 +14005,7 @@ input[type='datetime-local'] {
   --gem: 96%;
 }
 /* Эпическая: фиолет и кольцо — вокруг сферы появляется орбита. */
-.sbcell--orb.orb--epic {
+.orb--epic {
   --orb-hi: #f3e2ff;
   --orb-mid: #c078ff;
   --orb-lo: #7b32c9;
@@ -13998,7 +14016,7 @@ input[type='datetime-local'] {
   --gem: 98%;
 }
 /* Легендарная: огонь. Плюс вращающийся блик — 0,6 % сфер, можно себе позволить. */
-.sbcell--orb.orb--legendary {
+.orb--legendary {
   --orb-hi: #fff4d2;
   --orb-mid: #ffb03a;
   --orb-lo: #ef6a12;
@@ -14009,7 +14027,7 @@ input[type='datetime-local'] {
   --gem: 100%;
 }
 /* Мифическая: радуга. Одна на пятьсот — должна останавливать взгляд. */
-.sbcell--orb.orb--mythic {
+.orb--mythic {
   --orb-hi: #ffffff;
   --orb-mid: #ff5ec7;
   --orb-lo: #6a5bff;
@@ -14059,25 +14077,6 @@ input[type='datetime-local'] {
 
 /* Имя редкости — только там, где оно что-то добавляет. Обычной и необычной
    подпись не нужна: они и так две трети всех сфер. */
-.orb__tag {
-  position: absolute;
-  /* Внутри клетки, а не под ней: в нижнем ряду подпись вылезала за край
-     поля и срезалась вместе с буквой. */
-  bottom: 1px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 6.5px;
-  font-weight: 800;
-  /* Тесно нарочно: «ЛЕГЕНДАРНАЯ» должна влезать в ширину клетки даже в
-     крайней колонке — поле обрезает всё, что за неё вылезло. */
-  letter-spacing: 0;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: var(--orb-hi);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
-  animation: fade calc(0.3s * var(--speed, 1)) ease
-    calc((var(--i, 0) * 90ms + 0.3s) * var(--speed, 1)) both;
-}
 
 /* Ударной волны при появлении здесь больше нет: клетки поля пересоздаются
    на каждом такте каскада, и разовая анимация появления переигрывалась бы
@@ -14111,12 +14110,201 @@ input[type='datetime-local'] {
   .sbcell--orb,
   .orb__gem,
   .orb__ring,
-  .orb__tag,
   .sbcell--orb.is-collect {
     animation: none;
   }
   .sbcell--orb.is-collect {
     opacity: 0;
+  }
+}
+
+/* =========================================================================
+   Подсчёт выигрыша: механический счётчик и пробой порогов.
+   Логика — в lib/rollup.ts, здесь только как это выглядит.
+   ========================================================================= */
+
+/* Колесо разряда. Высота колеса и высота одной цифры обязаны совпадать:
+   лента сдвигается на долю СВОЕЙ высоты (одиннадцать цифр), и если цифра
+   окажется выше окна, счётчик поедет мимо разметки. */
+.odo {
+  display: inline-flex;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.odo__w {
+  display: inline-block;
+  height: 1.15em;
+  overflow: hidden;
+}
+.odo__s {
+  display: block;
+  /* Только transform — колёса крутятся на компози́торе, а не перерисовкой. */
+  will-change: transform;
+}
+.odo__s i {
+  display: block;
+  height: 1.15em;
+  line-height: 1.15em;
+  font-style: normal;
+  text-align: center;
+}
+.odo__sep {
+  display: inline-block;
+  width: 0.26em;
+}
+/* Число стало длиннее — счётчик толкает сам себя. Момент, когда прибавляется
+   разряд, читается сильнее любого значения: «оно уже четырёхзначное». */
+.odo--grew {
+  animation: odo-grew calc(0.34s * var(--speed, 1)) cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+@keyframes odo-grew {
+  35% {
+    transform: scale(1.18);
+  }
+}
+
+/* Счётчик в табло автомата: считает — значит светится. */
+.status__win {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.status__win.is-counting {
+  color: #b9ffd4;
+  text-shadow: 0 0 14px rgba(110, 231, 168, 0.75);
+}
+
+/* Титул ступени. Он не появляется и исчезает, а СМЕНЯЕТСЯ — поэтому каждый
+   новый прилетает своим кадром (key по ступени) и припечатывается. */
+.win-title {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+  z-index: 6;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: #2a1206;
+  background: linear-gradient(135deg, #ffe9a8, #ffc23c 55%, #ff9020);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+  animation: win-title calc(0.46s * var(--speed, 1)) cubic-bezier(0.2, 1.5, 0.35, 1) both;
+}
+@keyframes win-title {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(1.7);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-50%) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+/* Чем выше ступень, тем горячее плашка. Цвет — не украшение, а разметка:
+   по нему видно, на какой высоте идёт счёт, не читая слов. */
+.win-title--b2 {
+  background: linear-gradient(135deg, #ffd7f2, #ff6fc4 55%, #b93cff);
+  color: #2a0636;
+}
+.win-title--b3 {
+  background: linear-gradient(135deg, #fff1cf, #ff9a3c 55%, #ff3d2e);
+  color: #2a0a02;
+}
+.win-title--b4 {
+  background: linear-gradient(135deg, #ffffff, #7ce7ff 30%, #b478ff 60%, #ff5ec7);
+  color: #1a0630;
+  box-shadow:
+    0 6px 22px rgba(180, 120, 255, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+
+/* Сольный выход редкой сферы: поле гаснет, камень выходит в центр.
+   Включается только у ступеней, которые встречаются реже чем в 3% случаев —
+   иначе это не выход, а задержка. */
+.solo {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  /* Поле гасим сильно: камень должен остаться один. При лёгком затемнении
+     символы читались сквозь него и выход превращался в «что-то всплыло». */
+  background: radial-gradient(circle at 50% 45%, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.93));
+  animation: fade calc(0.26s * var(--speed, 1)) ease both;
+}
+.solo__gem {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  animation: solo-rise calc(0.62s * var(--speed, 1)) cubic-bezier(0.18, 1.5, 0.4, 1) both;
+}
+.solo__gem .orb__gem {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 26px var(--orb-glow)) drop-shadow(0 6px 14px rgba(0, 0, 0, 0.6));
+}
+.solo__num {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 40px;
+  font-weight: 900;
+  color: #fff;
+  -webkit-text-stroke: 1px rgba(40, 20, 0, 0.7);
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.8),
+    0 0 18px var(--orb-glow);
+}
+/* Имя ступени стоит ПОД камнем в общем потоке, а не поверх поля: когда оно
+   висело абсолютом у нижнего края, оно ложилось на символы и не читалось. */
+.solo__name {
+  padding: 5px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--orb-hi);
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 0 0 1px var(--orb-edge);
+  text-shadow: 0 0 18px var(--orb-glow);
+  animation: fade calc(0.3s * var(--speed, 1)) ease calc(0.34s * var(--speed, 1)) both;
+}
+@keyframes solo-rise {
+  from {
+    opacity: 0;
+    transform: scale(0.3) rotate(-24deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .odo--grew,
+  .win-title,
+  .solo,
+  .solo__gem,
+  .solo__name {
+    animation: none;
   }
 }
 

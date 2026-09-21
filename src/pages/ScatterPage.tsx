@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
+import { Odometer } from '@/components/Odometer';
+import type { OdometerHandle } from '@/components/Odometer';
 import { CoinIcon, OrbGem } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
@@ -30,6 +32,9 @@ import type { SlotSymbolId } from '@/types';
 import { BET_STEP, BETS, clampBet, MAX_BET, MIN_BET } from '@/lib/slots';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
 import { loudestTier, multRarity, ORB_TIERS, orbTier } from '@/lib/orb-rarity';
+import type { OrbTier } from '@/lib/orb-rarity';
+import { plainPlan, rollupPlan, runRollup, winTier } from '@/lib/rollup';
+import type { WinTier } from '@/lib/rollup';
 import {
   addTrauma,
   flashFrame,
@@ -47,17 +52,19 @@ import {
   anticipation as antiSound,
   coinDing,
   comboHit,
-  counterTick,
   jackpotFanfare,
   leverPull,
   multSlam,
   multTick,
   orbDrop,
+  payoutEnd,
   primeAudio,
   reelStop,
   reelTick,
+  rollupTick,
   setMuted,
   symbolBurst,
+  tierBreak,
   winChime,
 } from '@/lib/sound';
 import {
@@ -166,7 +173,10 @@ function CellFace({ id, skin, size = SYM }: { id: ScatterCell; skin: SkinId; siz
       {t.beats >= 2 && <i className="orb__ring" aria-hidden="true" />}
       <OrbGem />
       <b className="orb__num">×{value}</b>
-      {t.beats >= 2 && <b className="orb__tag">{t.name}</b>}
+      {/* Подписи ступени на самой клетке нет. «ЛЕГЕНДАРНАЯ» в 7 px не влезала
+          в крайнюю колонку и срезалась полем, а главное — она тут и не нужна:
+          имя называет сольный выход, крупно и целиком. На клетке о редкости
+          говорят цвет и орбита. */}
     </>
   );
 }
@@ -377,7 +387,16 @@ export function ScatterPage() {
   const [stepWins, setStepWins] = useState<ScatterWin[]>([]);
   const [stepCombo, setStepCombo] = useState(1);
   const [chain, setChain] = useState(0);
-  const [runWin, setRunWin] = useState(0);
+  /**
+   * Идёт подсчёт выплаты. Отдельно от `cascade`: счёт начинается ПОСЛЕ
+   * каскада и живёт своей жизнью — секунду на мелочи и полтора десятка
+   * секунд на максимуме.
+   */
+  const [counting, setCounting] = useState(false);
+  /** Ступень, которую счёт пробил последней. Она же даёт титул. */
+  const [winStep, setWinStep] = useState<WinTier | null>(null);
+  /** Сольный выход редкой сферы перед сбором: камень крупно и по имени. */
+  const [solo, setSolo] = useState<{ value: number; tier: OrbTier } | null>(null);
   const [pending, setPending] = useState(0);
   const [result, setResult] = useState<ScatterSpinOutcome | null>(null);
   const [auto, setAuto] = useState(0);
@@ -414,6 +433,16 @@ export function ScatterPage() {
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const collectRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // Счётчики обновляются ИМПЕРАТИВНО: счёт идёт каждый кадр, и гонять через
+  // него состояние React значило бы перерисовывать половину страницы
+  // шестьдесят раз в секунду. См. components/Odometer.
+  const winOdo = useRef<OdometerHandle>(null);
+  const totemOdo = useRef<OdometerHandle>(null);
+  const balOdo = useRef<OdometerHandle>(null);
+  /** Сколько монет счётчик показывает прямо сейчас — отсюда стартует счёт. */
+  const wonRef = useRef(0);
+  /** «Оборвать счёт» — и по тапу игрока, и при уходе со страницы. */
+  const rollStop = useRef<(() => void) | null>(null);
 
   useEffect(() => setMuted(!sound), [sound]);
   useEffect(() => setHapticsMuted(!haptics), [haptics]);
@@ -422,6 +451,7 @@ export function ScatterPage() {
       timers.current.forEach(clearTimeout);
       if (tickRef.current) clearInterval(tickRef.current);
       if (collectRef.current) clearInterval(collectRef.current);
+      rollStop.current?.();
       dustStop.current?.();
       stopShake();
     },
@@ -470,58 +500,166 @@ export function ScatterPage() {
   );
   const shownBalance = Math.max(0, balance - pending);
 
-  const finish = useCallback(
-    (res: ScatterSpinOutcome) => {
-      if (tickRef.current) clearInterval(tickRef.current);
-      setResult(res);
-      setPending(0);
-      setSpinning(false);
-      // Напряжение снято — гасим подсветку тянущих колонок.
-      setAnti(EMPTY_ANTI);
-      // Плашка бонуса обновляется только теперь, когда поле всё показало.
-      setShownFs(res.fs ? { left: res.fs.left, mult: res.fs.totalMult, won: res.fs.won } : null);
-      // Порядок такта важен: сначала всё замирает, потом вспышка, и только
-      // за ней взрыв. Пауза читается как удар, вспышка прячет склейку — и
-      // три эффекта сливаются в одно событие вместо трёх подряд.
-      const payoff = (tier: 'small' | 'big' | 'mega', after: () => void) => {
-        hitStop(cabinetRef.current, HIT_STOP[tier]);
-        timers.current.push(
-          setTimeout(() => {
-            flashFrame(tier);
-            addTrauma(cabinetRef.current, TRAUMA[tier]);
-            after();
-          }, HIT_STOP[tier]),
-        );
-      };
+  /**
+   * Один удар: стоп-кадр → вспышка → тряска. Порядок важен — пауза читается
+   * как удар, вспышка прячет склейку, и три эффекта сливаются в одно событие
+   * вместо трёх подряд.
+   */
+  const beat = useCallback((level: 'small' | 'big' | 'mega', after?: () => void) => {
+    hitStop(cabinetRef.current, HIT_STOP[level]);
+    timers.current.push(
+      setTimeout(() => {
+        flashFrame(level);
+        addTrauma(cabinetRef.current, TRAUMA[level]);
+        after?.();
+      }, HIT_STOP[level]),
+    );
+  }, []);
 
-      if (res.kind === 'mega') {
-        notifySuccess();
-        payoff('mega', () => {
-          jackpotFanfare();
-          burstConfetti(180, theme.confetti);
-          rainCoins(40, rainSrc);
-          setCelebration({ tier: 'mega', amount: res.total, ...dart() });
-        });
-      } else if (res.kind === 'big') {
-        notifySuccess();
-        payoff('big', () => {
-          winChime('big');
-          rainCoins(22, rainSrc);
-          burstConfetti(70, theme.confetti);
-          setCelebration({ tier: 'big', amount: res.total, ...dart() });
-        });
-      } else if (res.kind === 'small') {
-        tapLight();
-        winChime('small');
-        flashFrame('small');
+  /** Спин закончен окончательно — после того, как деньги досчитаны. */
+  const finish = useCallback((res: ScatterSpinOutcome) => {
+    if (tickRef.current) clearInterval(tickRef.current);
+    setCounting(false);
+    setResult(res);
+    setPending(0);
+    setSpinning(false);
+    // Напряжение снято — гасим подсветку тянущих колонок.
+    setAnti(EMPTY_ANTI);
+    // Плашка бонуса обновляется только теперь, когда поле всё показало.
+    setShownFs(res.fs ? { left: res.fs.left, mult: res.fs.totalMult, won: res.fs.won } : null);
+    if (res.levelUps.length) {
+      const lvl = res.levelUps[res.levelUps.length - 1];
+      setLevelUp({ level: lvl, ...levelReward(lvl) });
+    }
+  }, []);
+
+  /**
+   * Подсчёт выплаты — главная сцена спина.
+   *
+   * Что здесь важно и чего раньше не было. Счёт идёт ОТ уже показанной суммы
+   * (базы каскада) К итогу, ровным ходом, и по дороге пробивает ступени. На
+   * каждой он замирает, звучит удар, меняется титул — и продолжается дальше.
+   * Именно «не остановился» и есть то, ради чего на это смотрят: пока число
+   * просто доезжало до итога за фиксированные 400 мс, размер выигрыша ничем
+   * не ощущался — ×500 проскакивал за то же время, что и мелочь.
+   *
+   * Со ступени «КРУПНЫЙ ВЫИГРЫШ» сцену забирает тотем, и счёт продолжается
+   * уже в нём: счётчик не сбрасывается и не начинается заново, он просто
+   * переезжает на крупный план.
+   */
+  const payout = useCallback(
+    (res: ScatterSpinOutcome, from: number) => {
+      const to = res.total;
+      rollStop.current?.();
+      // Крупный выигрыш считается С НУЛЯ, как в любом автомате: счёт — это
+      // не «дописать остаток», а отдельная сцена, и она обязана пройти всю
+      // лестницу целиком, от «ВЕРНУЛОСЬ» до своей вершины. Без этого в
+      // «Слотах» торжественного счёта не было вовсе: там вся сумма уже
+      // набежала за каскад, и дописывать было нечего.
+      //
+      // Сброс счётчика на ноль прячется вспышкой открывающего удара — тот
+      // самый кадр-вспышка из juice.ts: всё, что меняется во время неё,
+      // читается как ею вызванное.
+      // Порог церемонии — «ХОРОШИЙ ВЫИГРЫШ» (10 ставок). Не 25: там, где
+      // церемония начинается с «КРУПНОГО», в «Слотах» она выпадала бы раз в
+      // 355 вращений, потому что звенья каскада дают ровно 100% итога и
+      // дописывать после них нечего. На десятке это раз в шестьдесят — своя
+      // редкость есть, но её успеваешь увидеть.
+      const top = winTier(to / Math.max(1, bet));
+      const ceremony = (top?.beats ?? 0) >= 1;
+      const start = ceremony ? 0 : from;
+      if (!(to > start)) {
+        wonRef.current = to;
+        winOdo.current?.set(to);
+        finish(res);
+        return;
       }
-      if (res.levelUps.length) {
-        const lvl = res.levelUps[res.levelUps.length - 1];
-        setLevelUp({ level: lvl, ...levelReward(lvl) });
-      }
+      const plan = rollupPlan(start, to, Math.max(1, bet));
+      const speed = turbo ? TURBO : 1;
+      const topBeats = plan.top?.beats ?? 0;
+
+      setCounting(true);
+      setWinStep(null);
+      wonRef.current = start;
+      winOdo.current?.set(start);
+      tapLight();
+      beat('small', () => winChime('small'));
+
+      // `live` — не перестраховка. Если план отыгрывается синхронно (пустой
+      // ход или prefers-reduced-motion), `done` проходит ДО присваивания, и
+      // в `rollStop` осталась бы уже отработавшая функция: `skipCount` после
+      // этого возвращал бы «да, прервал», и тап по тотему перестал бы его
+      // закрывать.
+      let live = true;
+      const stop = runRollup(
+        plan,
+        {
+          value: (n) => {
+            wonRef.current = n;
+            winOdo.current?.set(n);
+            totemOdo.current?.set(n);
+            // Баланс растёт ВМЕСТЕ со счётчиком. Деньги не «начисляются
+            // потом» — видно, как они прибывают в карман прямо сейчас.
+            balOdo.current?.set(Math.max(0, balance - (to - n)));
+          },
+          tick: rollupTick,
+          tier: (t) => {
+            setWinStep(t);
+            tierBreak(t.beats);
+            // Эскалация неравномерная: ступень отличается не цветом плашки,
+            // а числом тактов, которое ей отводят.
+            if (t.beats >= 3) {
+              notifySuccess();
+              beat('mega', () => {
+                burstConfetti(t.beats >= 4 ? 200 : 140, theme.confetti);
+                rainCoins(t.beats >= 4 ? 44 : 30, rainSrc);
+              });
+            } else if (t.beats === 2) {
+              notifySuccess();
+              beat('big', () => {
+                burstConfetti(70, theme.confetti);
+                rainCoins(20, rainSrc);
+              });
+            } else if (t.beats === 1) {
+              tapMedium();
+              flashFrame('small');
+              addTrauma(cabinetRef.current, TRAUMA.small);
+            } else {
+              selectionChanged();
+            }
+            if (t.beats >= 2) {
+              setCelebration(
+                (c) => c ?? { tier: t.beats >= 3 ? 'mega' : 'big', amount: to, ...dart() },
+              );
+            }
+          },
+          done: () => {
+            live = false;
+            rollStop.current = null;
+            wonRef.current = to;
+            balOdo.current?.set(balance);
+            payoutEnd(topBeats);
+            if (topBeats >= 3) jackpotFanfare();
+            squashPop(winRef.current, 0.5);
+            finish(res);
+          },
+        },
+        speed,
+      );
+      if (live) rollStop.current = stop;
     },
-    [theme.confetti, rainSrc],
+    [bet, turbo, balance, beat, finish, theme.confetti, rainSrc],
   );
+  const payoutRef = useRef(payout);
+  payoutRef.current = payout;
+
+  /** Досчитать немедленно — по тапу. Длинный счёт обязан быть пропускаемым. */
+  const skipCount = useCallback(() => {
+    if (!rollStop.current) return false;
+    tapLight();
+    rollStop.current();
+    return true;
+  }, []);
 
   useEffect(() => {
     if (!levelUp) return undefined;
@@ -531,16 +669,13 @@ export function ScatterPage() {
   }, [levelUp]);
 
   useEffect(() => {
-    if (!celebration) return undefined;
-    const ticks = setInterval(() => counterTick(), 70);
-    const stop = setTimeout(() => clearInterval(ticks), 1500);
+    // Пока идёт счёт, тотем не убираем и не торопим: в нём и происходит
+    // самое интересное. Таймер скрытия заводится только после того, как
+    // деньги досчитаны.
+    if (!celebration || counting) return undefined;
     const hide = setTimeout(() => setCelebration(null), 4200);
-    return () => {
-      clearInterval(ticks);
-      clearTimeout(stop);
-      clearTimeout(hide);
-    };
-  }, [celebration]);
+    return () => clearTimeout(hide);
+  }, [celebration, counting]);
 
   const startDust = useCallback((wins: ScatterWin[], speed = 1) => {
     const host = boardRef.current;
@@ -593,8 +728,34 @@ export function ScatterPage() {
       setBoard(gridToBoard(step.grid, `${res.steps.length}-${i}-g`));
       setStepWins(step.wins);
       setChain(chainN);
-      // Только база: множитель применяется ОДИН раз, в самом конце.
-      setRunWin((w) => w + step.base);
+      // Выплата звена: только база — множитель применяется ОДИН раз, в самом
+      // конце. Ход короткий и без ступеней: у каскада свой ритм, и титулы с
+      // паузами посреди него сбивали бы его, а не украшали.
+      rollStop.current?.();
+      const fromBase = wonRef.current;
+      const toBase = fromBase + step.base;
+      // Даже у звена длина хода зависит от суммы: крупное звено считается
+      // заметно дольше мелкого. Фиксированная длительность — та же ошибка,
+      // что и в большом счёте, просто в миниатюре.
+      const legMs = 240 + Math.min(900, ((toBase - fromBase) / Math.max(1, bet)) * 420);
+      let legLive = true;
+      const legStop = runRollup(
+        plainPlan(fromBase, toBase, legMs),
+        {
+          value: (n) => {
+            wonRef.current = n;
+            winOdo.current?.set(n);
+          },
+          tick: rollupTick,
+          done: () => {
+            legLive = false;
+            rollStop.current = null;
+            wonRef.current = toBase;
+          },
+        },
+        scale,
+      );
+      if (legLive) rollStop.current = legStop;
       setPending((p) => Math.max(0, p - step.base));
 
       comboHit(chainN);
@@ -649,7 +810,7 @@ export function ScatterPage() {
         ),
       );
     },
-    [turbo, theme.confetti, rainSrc, startDust, playOrbs],
+    [turbo, bet, theme.confetti, rainSrc, startDust, playOrbs],
   );
   stepRef.current = runStep;
 
@@ -662,18 +823,20 @@ export function ScatterPage() {
   const finale = useCallback(
     (res: ScatterSpinOutcome) => {
       const scale = turbo ? TURBO : 1;
-      const done = () => {
+      // Каскад отыграл — дальше деньги. Счёт стартует ровно с той суммы,
+      // которую счётчик показывает прямо сейчас.
+      const toPayout = () => {
         setCascade(null);
         setChain(0);
-        setPending(0);
-        finish(res);
+        payoutRef.current(res, wonRef.current);
       };
       if (!res.orbs.length || res.applied <= 1 || res.base <= 0) {
-        done();
+        toPayout();
         return;
       }
 
       const loudest = loudestTier(res.orbs.map((o) => o.value));
+      const topOrb = res.orbs.reduce((m, o) => Math.max(m, o.value), 0);
       // Легендарная и выше получают лишнюю паузу перед ударом. Тишина — тоже
       // такт: без неё находка читается как уведомление, а не как событие.
       const hold = loudest.beats >= 3 ? 520 * scale : 0;
@@ -682,64 +845,90 @@ export function ScatterPage() {
       // что уже было, чтобы виден был именно прирост.
       const from = res.fs ? Math.max(1, res.applied - res.orbMult) : 0;
 
-      setCascade({ step: Math.max(0, res.steps.length - 1), phase: 'collect' });
-      setStepCombo(res.applied);
-      setCollectSum(from);
-      setCollectDone(false);
+      const collect = () => {
+        setCascade({ step: Math.max(0, res.steps.length - 1), phase: 'collect' });
+        setStepCombo(res.applied);
+        setCollectSum(from);
+        setCollectDone(false);
 
-      const count = dur * 0.6;
-      const started = performance.now();
-      if (collectRef.current) clearInterval(collectRef.current);
-      collectRef.current = setInterval(() => {
-        const k = Math.min(1, (performance.now() - started) / count);
-        setCollectSum(Math.round(from + (res.applied - from) * k));
-        multTick(k);
-        if (k >= 1 && collectRef.current) {
-          clearInterval(collectRef.current);
-          collectRef.current = null;
-          setCollectDone(true);
-          multSlam();
-          // Тот самый кадр, в котором видно, что бонус сработал: выплата
-          // растёт с базы до настоящей прямо на глазах.
-          setRunWin(res.total);
-          // Плашка бонуса догоняет поле ровно здесь: множитель уже виден.
-          if (res.fs) setShownFs((v) => ({ ...(v ?? { left: 0, won: 0 }), mult: res.totalMult }));
-          // Сферы улетели — в опустевшие клетки ПАДАЮТ символы, как после
-          // выигрыша. Раньше там до самого следующего спина зияла дыра, и
-          // именно она выдавала, что сфера была наклейкой поверх поля, а не
-          // его клеткой. Символы здесь чисто внешние: раунд уже посчитан,
-          // следующий спин всё равно перекрутит поле целиком.
-          const holes = new Set(res.orbs.map((o) => `${o.col}-${o.row}`));
-          setDropDur(DROP_MS * scale);
-          setBoard((b) =>
-            b
-              ? b.map((col, c) =>
-                  col.map((cell) =>
-                    holes.has(`${c}-${cell.row}`)
-                      ? {
-                          ...cell,
-                          key: `refill-${res.steps.length}-${c}-${cell.row}`,
-                          // В клетке снова обычный символ — самоцвет улетел,
-                          // а место осталось. Ровно так же, как символ
-                          // сменяется символом после выигрыша.
-                          id: scatterSymbol(),
-                          orbIdx: undefined,
-                          fall: 1,
-                        }
-                      : { ...cell, fall: 0 },
-                  ),
-                )
-              : b,
-          );
-          squashPop(winRef.current, 0.6);
-          addTrauma(cabinetRef.current, loudest.beats >= 3 ? TRAUMA.big : TRAUMA.small);
-          if (loudest.beats >= 2) tapMedium();
-        }
-      }, 55);
+        const count = dur * 0.6;
+        const started = performance.now();
+        if (collectRef.current) clearInterval(collectRef.current);
+        collectRef.current = setInterval(() => {
+          const k = Math.min(1, (performance.now() - started) / count);
+          setCollectSum(Math.round(from + (res.applied - from) * k));
+          multTick(k);
+          if (k >= 1 && collectRef.current) {
+            clearInterval(collectRef.current);
+            collectRef.current = null;
+            setCollectDone(true);
+            multSlam();
+            // Множитель припечатался. Саму выплату отсюда НЕ подставляем:
+            // за неё отвечает счёт (payout), и он поедет от базы к итогу со
+            // всеми ступенями. Раньше здесь стояло одно присваивание итога —
+            // и весь множитель существовал ровно один кадр.
+            // Плашка бонуса догоняет поле ровно здесь: множитель уже виден.
+            if (res.fs) setShownFs((v) => ({ ...(v ?? { left: 0, won: 0 }), mult: res.totalMult }));
+            // Сферы улетели — в опустевшие клетки ПАДАЮТ символы, как после
+            // выигрыша. Раньше там до самого следующего спина зияла дыра, и
+            // именно она выдавала, что сфера была наклейкой поверх поля, а не
+            // его клеткой. Символы здесь чисто внешние: раунд уже посчитан,
+            // следующий спин всё равно перекрутит поле целиком.
+            const holes = new Set(res.orbs.map((o) => `${o.col}-${o.row}`));
+            setDropDur(DROP_MS * scale);
+            setBoard((b) =>
+              b
+                ? b.map((col, c) =>
+                    col.map((cell) =>
+                      holes.has(`${c}-${cell.row}`)
+                        ? {
+                            ...cell,
+                            key: `refill-${res.steps.length}-${c}-${cell.row}`,
+                            // В клетке снова обычный символ — самоцвет улетел,
+                            // а место осталось. Ровно так же, как символ
+                            // сменяется символом после выигрыша.
+                            id: scatterSymbol(),
+                            orbIdx: undefined,
+                            fall: 1,
+                          }
+                        : { ...cell, fall: 0 },
+                    ),
+                  )
+                : b,
+            );
+            squashPop(winRef.current, 0.6);
+            addTrauma(cabinetRef.current, loudest.beats >= 3 ? TRAUMA.big : TRAUMA.small);
+            if (loudest.beats >= 2) tapMedium();
+          }
+        }, 55);
 
-      timers.current.push(setTimeout(done, dur + 300 * scale));
+        timers.current.push(setTimeout(toPayout, dur + 300 * scale));
+      };
+
+      // Сольный выход. Редкая сфера и выше сначала показывается крупно и
+      // названа по имени — и только потом уходит в общую волну сбора.
+      // Ступени ниже этого выходят молча: выход, который случается каждый
+      // второй спин, перестаёт быть выходом и становится задержкой.
+      if (loudest.beats >= 2) {
+        setSolo({ value: topOrb, tier: loudest });
+        orbDrop(loudest.beats);
+        if (loudest.beats >= 3) notifySuccess();
+        else tapMedium();
+        addTrauma(cabinetRef.current, loudest.beats >= 3 ? TRAUMA.big : TRAUMA.small);
+        timers.current.push(
+          setTimeout(
+            () => {
+              setSolo(null);
+              collect();
+            },
+            (loudest.beats >= 3 ? 1500 : 1050) * scale,
+          ),
+        );
+      } else {
+        collect();
+      }
     },
-    [turbo, finish],
+    [turbo],
   );
   finaleRef.current = finale;
 
@@ -789,12 +978,19 @@ export function ScatterPage() {
     stopShake();
     setCelebration(null);
     setCascade(null);
+    setSolo(null);
     setStepWins([]);
     setChain(0);
-    setRunWin(0);
     setStepCombo(1);
     setCollectSum(0);
     setCollectDone(false);
+    setCounting(false);
+    setWinStep(null);
+    // Счётчик обнуляем и в рефе, и в самом одометре: от него стартует счёт.
+    rollStop.current?.();
+    rollStop.current = null;
+    wonRef.current = 0;
+    winOdo.current?.set(0);
     if (collectRef.current) clearInterval(collectRef.current);
     setPending(res.total);
     setSpinId((n) => n + 1);
@@ -817,16 +1013,19 @@ export function ScatterPage() {
           if (res.steps.length) {
             timers.current.push(setTimeout(() => stepRef.current(res, 0), pause));
           } else {
-            // Спин не сыграл — камень просто остаётся лежать на поле до
-            // следующего вращения. Убирать его раньше незачем: он честно
-            // выпал, просто рядом ничего не собралось.
-            finish(res);
+            // Каскада не было — но скаттеры могли заплатить, и это тоже
+            // деньги: считаем их тем же ходом. Если платить нечего, payout
+            // сам сведёт спин к `finish`.
+            //
+            // Камень при этом просто остаётся лежать на поле до следующего
+            // вращения: он честно выпал, просто рядом ничего не собралось.
+            payoutRef.current(res, 0);
           }
         },
         durs[durs.length - 1] + 60,
       ),
     );
-  }, [hydrated, spinning, balance, stake, playScatter, turbo, finish, playOrbs]);
+  }, [hydrated, spinning, balance, stake, playScatter, turbo, playOrbs]);
 
   // Бонус крутится сам: вращения бесплатные, ждать нажатия незачем.
   useEffect(() => {
@@ -926,7 +1125,10 @@ export function ScatterPage() {
           <div className="slot-hud__cell">
             <span className="slot-hud__label">Баланс</span>
             <span className="slot-hud__value">
-              <AnimatedNumber value={shownBalance} format={(n) => fmt(n)} duration={450} />
+              {/* Баланс — тот же механический счётчик, и во время выплаты он
+                  крутится В ОДИН ХОД с выигрышем: видно, как деньги прибывают
+                  в карман, а не появляются там задним числом. */}
+              <Odometer ref={balOdo} value={shownBalance} />
               <CoinIcon size={18} />
             </span>
           </div>
@@ -957,7 +1159,15 @@ export function ScatterPage() {
 
         {/* Трясёт корпус автомата, а не всю страницу: внутри Telegram дёрганье
             всего экрана читается как баг вебвью, а не как удар. */}
-        <div className={`cabinet cabinet--wide${inBonus ? ' is-bonus' : ''}`} ref={cabinetRef}>
+        {/* Тап по автомату досчитывает выплату. Длинный счёт обязан быть
+            пропускаемым — иначе награда за крупный выигрыш превращается в
+            наказание ожиданием, особенно в автоспине. */}
+        <div
+          className={`cabinet cabinet--wide${inBonus ? ' is-bonus' : ''}`}
+          ref={cabinetRef}
+          onClick={() => skipCount()}
+          role="presentation"
+        >
           <div className="cabinet__bulbs" aria-hidden="true">
             {Array.from({ length: 16 }, (_, i) => (
               <i key={i} style={{ animationDelay: `${i * 0.09}s` }} />
@@ -1080,6 +1290,31 @@ export function ScatterPage() {
                   ×{collectSum}
                 </div>
               )}
+              {/* Сольный выход редкой сферы: поле гаснет, камень выходит
+                  крупно и назван по имени. До этого ×500 улетал в общей
+                  волне вместе с ×2 — редкость была написана на нём, но
+                  ничем не подтверждалась. */}
+              {solo && (
+                <div className={`solo orb--${solo.tier.id}`} aria-hidden="true">
+                  <div className="solo__gem">
+                    <OrbGem />
+                    <b className="solo__num">×{solo.value}</b>
+                  </div>
+                  <div className="solo__name">{solo.tier.name}</div>
+                </div>
+              )}
+              {/* Титул ступени. Он не появляется и не исчезает — он
+                  СМЕНЯЕТСЯ: каждый новый прилетает своим кадром, и по нему
+                  видно, что счёт пошёл выше, а не остановился. */}
+              {counting && winStep && (
+                <div
+                  className={`win-title win-title--b${winStep.beats}`}
+                  key={winStep.id}
+                  aria-hidden="true"
+                >
+                  {winStep.name}
+                </div>
+              )}
             </div>
             {chain >= 1 && cascade && (
               <div className={`combo combo--t${tier}`} key={chain}>
@@ -1114,13 +1349,21 @@ export function ScatterPage() {
           </div>
 
           <div className="cabinet__status">
-            {cascade ? (
+            {cascade || counting ? (
               <>
                 <span className={`status status--combo status--t${tier}`}>
-                  {chain >= 2 ? `Цепочка ×${chain}!` : 'Есть выигрыш!'}
+                  {/* Во время счёта строка говорит только, что идёт счёт.
+                      Название ступени несёт плашка над полем — дублировать
+                      его здесь значит забивать узкую строку длинным словом
+                      и сжимать сам счётчик. */}
+                  {counting ? 'Считаем…' : chain >= 2 ? `Цепочка ×${chain}!` : 'Есть выигрыш!'}
                 </span>
-                <span className="status__win" ref={winRef}>
-                  +<AnimatedNumber value={runWin} format={(n) => fmt(n)} duration={400} />
+                {/* Один и тот же счётчик на весь спин: он набирает базу за
+                    каскад, а потом с неё же уезжает к итогу. Раньше здесь
+                    сменялись три разных числа с тремя разными анимациями —
+                    отсюда и ощущение «проскакивает». */}
+                <span className={`status__win${counting ? ' is-counting' : ''}`} ref={winRef}>
+                  +<Odometer ref={winOdo} value={0} />
                   <CoinIcon size={20} />
                 </span>
               </>
@@ -1134,7 +1377,9 @@ export function ScatterPage() {
                 </span>
                 {result.total > 0 && (
                   <span className="status__win">
-                    +<AnimatedNumber value={result.total} format={(n) => fmt(n)} duration={700} />
+                    {/* Без анимации: сумму только что досчитали на глазах,
+                        считать её заново было бы враньём. */}
+                    +{fmt(result.total)}
                     <CoinIcon size={20} />
                   </span>
                 )}
@@ -1544,18 +1789,26 @@ export function ScatterPage() {
 
       {celebration && (
         <div
-          className={`totem totem--${celebration.tier}`}
+          className={`totem totem--${winStep && winStep.beats >= 3 ? 'mega' : celebration.tier}`}
           style={
             { '--ox': `${celebration.ox}px`, '--oy': `${celebration.oy}px` } as React.CSSProperties
           }
-          onClick={() => setCelebration(null)}
+          onClick={() => {
+            // Пока идут деньги — тап досчитывает их, а не закрывает карточку.
+            // Закрыть недосчитанный выигрыш нельзя: это выглядело бы как
+            // «отобрали».
+            if (!skipCount()) setCelebration(null);
+          }}
           role="presentation"
         >
           <div className="totem__flash" />
           <div className="totem__glow" />
           {/* Лучи — только у мега-выигрыша: если крутить их каждый раз,
-              они перестают что-либо значить. */}
-          {celebration.tier === 'mega' && <div className="totem__rays" aria-hidden="true" />}
+              они перестают что-либо значить. Ступень берём из счёта, поэтому
+              лучи включаются ровно в тот момент, когда он до них добирается. */}
+          {(winStep ? winStep.beats >= 3 : celebration.tier === 'mega') && (
+            <div className="totem__rays" aria-hidden="true" />
+          )}
           <div className="totem__sparks" aria-hidden="true">
             {Array.from({ length: 46 }, (_, i) => {
               const angle = (i / 46) * 360 + (i % 3) * 7;
@@ -1582,14 +1835,22 @@ export function ScatterPage() {
             <Sym id={theme.preview} skin={skin} size={140} />
           </div>
           <div className="totem__card">
-            <div className="totem__title">
-              {celebration.tier === 'mega' ? 'МЕГА-ЦЕПОЧКА!' : 'БОЛЬШОЙ ВЫИГРЫШ'}
+            {/* Титул живёт ступенью счёта и меняется прямо на глазах: карточка
+                открывается «КРУПНЫМ ВЫИГРЫШЕМ», а через пару секунд на ней
+                уже «МЕГА». Ключ по ступени — чтобы каждый титул прилетал
+                своим кадром, а не подменялся текстом. */}
+            <div className="totem__title" key={winStep?.id ?? celebration.tier}>
+              {winStep?.name ?? (celebration.tier === 'mega' ? 'МЕГА-ВЫИГРЫШ' : 'КРУПНЫЙ ВЫИГРЫШ')}
             </div>
             <div className="totem__amount">
-              <AnimatedNumber value={celebration.amount} format={(n) => fmt(n)} duration={1400} />
+              {/* Счётчик НЕ начинается заново: он продолжает тот же счёт,
+                  что шёл в автомате, просто теперь на крупном плане. */}
+              <Odometer ref={totemOdo} value={wonRef.current} />
               <CoinIcon size={30} />
             </div>
-            <div className="totem__hint">нажмите, чтобы продолжить</div>
+            <div className="totem__hint">
+              {counting ? 'нажмите, чтобы досчитать' : 'нажмите, чтобы продолжить'}
+            </div>
           </div>
         </div>
       )}

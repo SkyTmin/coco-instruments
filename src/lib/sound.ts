@@ -190,3 +190,68 @@ export function multSlam(): void {
   tone(196, { dur: 0.26, type: 'triangle', gain: 0.2, sweepTo: 98 });
   tone(784, { dur: 0.14, type: 'square', gain: 0.08, sweepTo: 392 });
 }
+
+// ---------------------------------------------------------------------------
+// Подсчёт выигрыша. Голос счёта — половина его убедительности: ровная дробь
+// и то, что она НЕ кончается, работают сильнее, чем само число на экране.
+// ---------------------------------------------------------------------------
+
+/**
+ * Тик счётчика. Частота ровная (её задаёт rollup.ts), а высота ползёт вверх
+ * отрезок за отрезком: ухо слышит, что счёт забирается всё выше, даже когда
+ * глаз не успевает читать цифры. Тихий нарочно — их двадцать в секунду.
+ */
+export function rollupTick(leg: number, k: number): void {
+  const f = Math.min(3400, 700 * Math.pow(1.11, leg) * (1 + 0.2 * k));
+  tone(f, { dur: 0.03, type: 'square', gain: 0.045 });
+}
+
+/**
+ * Пробой ступени. Здесь эскалация обязана быть НЕРАВНОМЕРНОЙ: обычный порог
+ * — щелчок, а легендарный — бас с фанфарой. Если объявлять их одинаково,
+ * верхние ступени перестают быть верхними.
+ */
+export function tierBreak(beats: number): void {
+  if (beats <= 0) {
+    tone(880, { dur: 0.09, type: 'triangle', gain: 0.12 });
+    tone(1318.5, { at: 0.04, dur: 0.1, type: 'sine', gain: 0.08 });
+    return;
+  }
+  if (beats === 1) {
+    [783.99, 1046.5].forEach((f, i) =>
+      tone(f, { at: i * 0.055, dur: 0.18, type: 'triangle', gain: 0.13 }),
+    );
+    tone(261.63, { dur: 0.22, type: 'sine', gain: 0.12 });
+    return;
+  }
+  if (beats === 2) {
+    [659.25, 830.61, 987.77].forEach((f, i) =>
+      tone(f, { at: i * 0.05, dur: 0.26, type: 'triangle', gain: 0.13 }),
+    );
+    tone(164.81, { dur: 0.34, type: 'triangle', gain: 0.18, sweepTo: 110 });
+    return;
+  }
+  if (beats === 3) {
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
+      tone(f, { at: i * 0.05, dur: 0.34, type: 'square', gain: 0.1 }),
+    );
+    tone(130.81, { dur: 0.45, type: 'triangle', gain: 0.2, sweepTo: 87 });
+    tone(1568, { at: 0.2, dur: 0.3, type: 'sine', gain: 0.07 });
+    return;
+  }
+  // Легендарный порог и максимум: колокол, бас и долгий хвост.
+  [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) =>
+    tone(f, { at: i * 0.055, dur: 0.6, type: 'sine', gain: 0.1 }),
+  );
+  tone(65.41, { dur: 0.8, type: 'triangle', gain: 0.22 });
+  tone(2093, { at: 0.3, dur: 0.7, type: 'sine', gain: 0.06 });
+}
+
+/** Счёт договорил. Разрешение аккорда — «всё, это твоё». */
+export function payoutEnd(beats: number): void {
+  const chord = beats >= 3 ? [523.25, 659.25, 783.99, 1046.5] : [523.25, 659.25, 783.99];
+  chord.forEach((f, i) =>
+    tone(f, { at: i * 0.02, dur: 0.5 + beats * 0.1, type: 'triangle', gain: 0.11 }),
+  );
+  tone(130.81, { dur: 0.5, type: 'sine', gain: 0.14 });
+}
