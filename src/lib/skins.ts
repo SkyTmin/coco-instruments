@@ -5,6 +5,7 @@
 // системных эмодзи, у каждой платформы своих).
 
 import type { SlotSymbolId } from '@/types';
+import type { SkinWindow } from './skin-limits';
 
 export type SkinId =
   | 'classic'
@@ -15,7 +16,9 @@ export type SkinId =
   | 'candy'
   | 'neon'
   | 'winter'
-  | 'olympus';
+  | 'olympus'
+  | 'pumpkin'
+  | 'abyss';
 
 export interface Skin {
   id: SkinId;
@@ -34,6 +37,12 @@ export interface Skin {
   rain: SlotSymbolId;
   /** Цвета конфетти под палитру темы. */
   confetti: string[];
+  /**
+   * Окно, в которое скин можно ЗАБРАТЬ. Взял — остался твоим навсегда
+   * (см. lib/skin-limits.ts). Обычные скины открываются уровнем и окна не
+   * имеют.
+   */
+  limited?: SkinWindow;
 }
 
 export const SKINS: Skin[] = [
@@ -135,6 +144,35 @@ export const SKINS: Skin[] = [
     subtitle: 'Золото богов и молнии Зевса',
     rain: 'seven',
     confetti: ['#ffd83d', '#fff3c4', '#7fd4ff', '#f0a01e', '#ffffff'],
+  },
+  {
+    // Сезонный: приезжает каждый год к концу сентября и уходит после
+    // Хэллоуина. Пропустил — вернётся, но ждать целый год.
+    id: 'pumpkin',
+    name: 'Тыквенная ночь',
+    hint: 'Паутина, призраки и фонарь из тыквы',
+    sign: ['PUMPKIN', 'NIGHT'],
+    preview: 'seven',
+    title: 'Тыквенная ночь',
+    subtitle: 'Сладость или гадость',
+    rain: 'seven',
+    confetti: ['#ff8c1a', '#7b2ff7', '#ffd166', '#2b2b3d', '#ffffff'],
+    limited: { from: '09-20', until: '11-05' },
+  },
+  {
+    // Разовый дроп: окно короче сезонного и обратно НЕ возвращается.
+    // Ради этой разницы оба вида окна и сделаны — иначе «лимитированный»
+    // ничем не отличается от «сезонного».
+    id: 'abyss',
+    name: 'Из глубины',
+    hint: 'Кораллы, медузы и кит на большой глубине',
+    sign: ['THE', 'ABYSS'],
+    preview: 'seven',
+    title: 'Из глубины',
+    subtitle: 'Там, куда не доходит свет',
+    rain: 'star',
+    confetti: ['#33e0d4', '#1b7fd4', '#8ef0ff', '#0a2b4a', '#c8fff6'],
+    limited: { from: '09-21', until: '10-19', year: 2026 },
   },
 ];
 

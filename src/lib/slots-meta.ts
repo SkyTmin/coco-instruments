@@ -9,6 +9,8 @@
 // прогресс только начисляет монеты сверху.
 
 import type { SlotSymbolId } from '@/types';
+import type { Skin } from './skins';
+import { windowState } from './skin-limits';
 
 // ---------------------------------------------------------------------------
 // Ежедневная лесенка: чем дольше серия, тем крупнее награда. Пропустил день —
@@ -300,10 +302,31 @@ export const SKIN_UNLOCK: Record<string, number> = {
   neon: 5,
   winter: 9,
   olympus: 12,
+  // Лимитированные уровнем не закрыты: их «замок» — календарь, а не прогресс.
+  pumpkin: 1,
+  abyss: 1,
 };
 
 export function isSkinUnlocked(skin: string, level: number): boolean {
   return level >= (SKIN_UNLOCK[skin] ?? 1);
+}
+
+/**
+ * Можно ли выбрать скин прямо сейчас.
+ *
+ * Для обычных скинов это уровень. Для лимитированного — открытое окно ИЛИ
+ * то, что игрок его уже забрал: **взял, пока давали, — остался твоим
+ * навсегда**. Скин, который отбирают обратно по календарю, был бы не
+ * наградой, а подлостью.
+ */
+export function isSkinAvailable(
+  skin: Skin,
+  level: number,
+  owned: readonly string[],
+  now: number = Date.now(),
+): boolean {
+  if (skin.limited) return owned.includes(skin.id) || windowState(skin.limited, now).open;
+  return isSkinUnlocked(skin.id, level);
 }
 
 /** Символ-«награда» для превью в списке — чтобы было видно, за что бороться. */

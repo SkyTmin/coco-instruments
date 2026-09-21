@@ -79,6 +79,7 @@ export const DEFAULT_CALCULATOR_PREFS: CalculatorPrefs = {
 };
 import { getStorage, STORAGE_KEYS } from '@/lib/storage';
 import { deleteAttachmentFile } from '@/lib/images';
+import { skinOf } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
 import {
   BETS,
@@ -295,6 +296,8 @@ interface SlotsSnapshot {
   slotsHistory: SlotSpin[];
   slotsJackpot: number;
   slotsSkin: SkinId;
+  /** Лимитированные скины, уже забранные игроком. */
+  slotsSkinsOwned: SkinId[];
   slotsSound: boolean;
   slotsHaptics: boolean;
   slotsTurbo: boolean;
@@ -323,6 +326,7 @@ const slotsBlob = (s: SlotsSnapshot): SlotsBlob => ({
   history: s.slotsHistory,
   jackpot: s.slotsJackpot,
   skin: s.slotsSkin,
+  skinsOwned: s.slotsSkinsOwned,
   sound: s.slotsSound,
   haptics: s.slotsHaptics,
   turbo: s.slotsTurbo,
@@ -473,6 +477,7 @@ interface FinanceState {
   slotsHistory: SlotSpin[];
   slotsJackpot: number;
   slotsSkin: SkinId;
+  slotsSkinsOwned: SkinId[];
   slotsSound: boolean;
   slotsHaptics: boolean;
   slotsTurbo: boolean;
@@ -737,6 +742,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   slotsHistory: [],
   slotsJackpot: JACKPOT_BASE,
   slotsSkin: 'classic',
+  slotsSkinsOwned: [],
   slotsSound: true,
   slotsHaptics: true,
   slotsTurbo: false,
@@ -840,6 +846,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsHistory: slots?.history ?? [],
       slotsJackpot: slots?.jackpot ?? JACKPOT_BASE,
       slotsSkin: (slots?.skin as SkinId) ?? 'classic',
+      slotsSkinsOwned: (slots?.skinsOwned as SkinId[]) ?? [],
       slotsSound: slots?.sound ?? true,
       slotsHaptics: slots?.haptics ?? true,
       slotsTurbo: slots?.turbo ?? false,
@@ -1742,6 +1749,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsHistory: d.slots?.history ?? [],
       slotsJackpot: d.slots?.jackpot ?? JACKPOT_BASE,
       slotsSkin: (d.slots?.skin as SkinId) ?? 'classic',
+      slotsSkinsOwned: (d.slots?.skinsOwned as SkinId[]) ?? [],
       slotsSound: d.slots?.sound ?? true,
       slotsHaptics: d.slots?.haptics ?? true,
       slotsTurbo: d.slots?.turbo ?? false,
@@ -2291,11 +2299,19 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   setSlotsPrefs: (patch) => {
+    const owned = get().slotsSkinsOwned;
+    // Выбрал лимитированный, пока окно открыто, — записали навсегда. Именно
+    // этот момент и делает лимит наградой, а не таймером на отъём.
+    const claimed =
+      patch.skin && !owned.includes(patch.skin) && skinOf(patch.skin).limited
+        ? [...owned, patch.skin]
+        : owned;
     set({
       slotsSound: patch.sound ?? get().slotsSound,
       slotsHaptics: patch.haptics ?? get().slotsHaptics,
       slotsTurbo: patch.turbo ?? get().slotsTurbo,
       slotsSkin: patch.skin ?? get().slotsSkin,
+      slotsSkinsOwned: claimed,
     });
     persistSlots(get());
   },
