@@ -10,7 +10,6 @@
 
 import type { SlotSymbolId } from '@/types';
 import type { Skin } from './skins';
-import { windowState } from './skin-limits';
 
 // ---------------------------------------------------------------------------
 // Ежедневная лесенка: чем дольше серия, тем крупнее награда. Пропустил день —
@@ -302,9 +301,10 @@ export const SKIN_UNLOCK: Record<string, number> = {
   neon: 5,
   winter: 9,
   olympus: 12,
-  // Лимитированные уровнем не закрыты: их «замок» — календарь, а не прогресс.
   pumpkin: 1,
   abyss: 1,
+  // «Реликвию» уровень не открывает вовсе — см. isSkinAvailable.
+  relic: 1,
 };
 
 export function isSkinUnlocked(skin: string, level: number): boolean {
@@ -314,18 +314,16 @@ export function isSkinUnlocked(skin: string, level: number): boolean {
 /**
  * Можно ли выбрать скин прямо сейчас.
  *
- * Для обычных скинов это уровень. Для лимитированного — открытое окно ИЛИ
- * то, что игрок его уже забрал: **взял, пока давали, — остался твоим
- * навсегда**. Скин, который отбирают обратно по календарю, был бы не
- * наградой, а подлостью.
+ * Обычные открывает уровень — то есть время за игрой. «Реликвию» уровень не
+ * открывает никогда: её условие — один крупный спин. Разница принципиальная:
+ * уровень набивается усидчивостью, а `topX` нужно ВЗЯТЬ. Только поэтому
+ * скин и может что-то значить.
+ *
+ * `topX` — лучший множитель за всё время (в ставках, не в монетах): в
+ * монетах «лучший спин» зависит от ставки и не говорит ни о чём.
  */
-export function isSkinAvailable(
-  skin: Skin,
-  level: number,
-  owned: readonly string[],
-  now: number = Date.now(),
-): boolean {
-  if (skin.limited) return owned.includes(skin.id) || windowState(skin.limited, now).open;
+export function isSkinAvailable(skin: Skin, level: number, topX: number): boolean {
+  if (skin.earn) return topX >= skin.earn.topX;
   return isSkinUnlocked(skin.id, level);
 }
 

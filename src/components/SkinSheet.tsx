@@ -1,32 +1,30 @@
 // Выбор скина. Скин общий для обеих игр (лежит в сторе как `slotsSkin`),
 // поэтому и лист один на всех — «Слоты» и «Каскад» показывают его одинаково.
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Sheet } from '@/components/ui';
 import { IconLock } from '@/components/icons';
 import { SKINS, symbolSrc } from '@/lib/skins';
 import type { Skin, SkinId } from '@/lib/skins';
 import { SKIN_UNLOCK, isSkinAvailable } from '@/lib/slots-meta';
-import { limitLabel, windowState } from '@/lib/skin-limits';
 import { useFinanceStore } from '@/store';
 import { levelFromXp } from '@/lib/slots-meta';
 import { selectionChanged } from '@/lib/haptics';
 
-/** Лимитированные — вперёд: окно закроется, а уровень подождёт. */
-function order(a: Skin, b: Skin, now: number): number {
-  const live = (s: Skin) => (s.limited && windowState(s.limited, now).open ? 0 : 1);
-  return live(a) - live(b);
+/** Заработанный скин — первым: он тут главный приз, а не строчка списка. */
+function order(a: Skin, b: Skin): number {
+  return (a.earn ? 0 : 1) - (b.earn ? 0 : 1);
 }
+
+/** «×83 из ×200» — сколько ещё до «Реликвии». */
+const fmtX = (x: number) => `×${x >= 10 ? Math.round(x) : x.toFixed(1)}`;
 
 export function SkinSheet({ onClose }: { onClose: () => void }) {
   const skin = useFinanceStore((s) => s.slotsSkin);
   const xp = useFinanceStore((s) => s.slotsXp);
-  const owned = useFinanceStore((s) => s.slotsSkinsOwned);
+  const topX = useFinanceStore((s) => s.slotsTopX);
   const setPrefs = useFinanceStore((s) => s.setSlotsPrefs);
   const level = levelFromXp(xp).level;
-  // Дата берётся один раз за открытие листа: пересчитывать её каждую секунду
-  // незачем, окна меряются днями.
-  const [now] = useState(() => Date.now());
 
   const pick = (id: SkinId) => {
     selectionChanged();
@@ -34,67 +32,79 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
     onClose();
   };
 
-  // Если окно лимитированного скина закрылось, пока им играли, и забрать его
-  // не успели — тихо возвращаем на классику. Иначе автомат остался бы с
-  // символами, которых игрок уже не может выбрать заново.
+  // Страховка: если выбранный скин почему-то стал недоступен, возвращаем
+  // автомат на «Классику», а не оставляем с символами, которых не выбрать.
   useEffect(() => {
     const cur = SKINS.find((s) => s.id === skin);
-    if (cur && !isSkinAvailable(cur, level, owned, now)) setPrefs({ skin: 'classic' });
-  }, [skin, level, owned, now, setPrefs]);
+    if (cur && !isSkinAvailable(cur, level, topX)) setPrefs({ skin: 'classic' });
+  }, [skin, level, topX, setPrefs]);
 
   return (
     <Sheet title="Скины автомата" onClose={onClose}>
       <div className="skin-grid">
-        {[...SKINS]
-          .sort((a, b) => order(a, b, now))
-          .map((sk) => {
-            const available = isSkinAvailable(sk, level, owned, now);
-            const has = owned.includes(sk.id);
-            const win = sk.limited ? windowState(sk.limited, now) : null;
-            return (
-              <button
-                key={sk.id}
-                className={`skin-card${sk.id === skin ? ' is-active' : ''}${
-                  available ? '' : ' is-locked'
-                }${sk.limited ? ' is-limited' : ''}`}
-                data-skin={sk.id}
-                disabled={!available}
-                onClick={() => pick(sk.id)}
-              >
-                {/* Метка лимита стоит над карточкой и видна до всего
-                    остального: она объясняет, почему этот скин надо брать
-                    сейчас, а не когда-нибудь. */}
-                {sk.limited && (
-                  <span className={`skin-card__limit${win?.open ? ' is-live' : ''}`}>
-                    {has ? 'ваш' : win?.open ? 'лимит' : win?.gone ? 'ушёл' : 'ждёт'}
-                  </span>
-                )}
-                <span className="skin-card__reels">
-                  <img src={symbolSrc(sk.id, 'seven')} width={26} height={26} alt="" />
-                  <img src={symbolSrc(sk.id, 'star')} width={26} height={26} alt="" />
-                  <img src={symbolSrc(sk.id, 'bell')} width={26} height={26} alt="" />
+        {[...SKINS].sort(order).map((sk) => {
+          const available = isSkinAvailable(sk, level, topX);
+          return (
+            <button
+              key={sk.id}
+              className={`skin-card${sk.id === skin ? ' is-active' : ''}${
+                available ? '' : ' is-locked'
+              }${sk.earn ? ' is-relic' : ''}`}
+              data-skin={sk.id}
+              disabled={!available}
+              onClick={() => pick(sk.id)}
+            >
+              {/* У заработанного скина карточка живёт своей жизнью: ореол
+                  крутится, имя переливается. Всё это — только здесь: если
+                  так выглядит каждая карточка, ни одна не выглядит редкой. */}
+              {sk.earn && <i className="skin-card__halo" aria-hidden="true" />}
+              {sk.earn && (
+                <span className="skin-card__limit is-relic">
+                  {available ? 'добыто' : 'реликвия'}
                 </span>
-                <span className="skin-card__name">{sk.name}</span>
-                <span className="skin-card__hint">{sk.hint}</span>
-                {sk.limited ? (
-                  <span className={`skin-card__clock${win?.open && !has ? ' is-hot' : ''}`}>
-                    {limitLabel(sk.limited, has, now)}
+              )}
+              <span className="skin-card__reels">
+                <img src={symbolSrc(sk.id, 'seven')} width={26} height={26} alt="" />
+                <img src={symbolSrc(sk.id, 'star')} width={26} height={26} alt="" />
+                <img src={symbolSrc(sk.id, 'bell')} width={26} height={26} alt="" />
+              </span>
+              <span className="skin-card__name">{sk.name}</span>
+              <span className="skin-card__hint">{sk.hint}</span>
+              {sk.earn ? (
+                <span className={`skin-card__quest${available ? ' is-done' : ''}`}>
+                  {available ? (
+                    `добыт спином ${fmtX(topX)}`
+                  ) : (
+                    <>
+                      {sk.earn.what}
+                      {/* Прогресс обязателен: условие без «сколько уже» — это
+                          не цель, а отказ. */}
+                      <i
+                        className="skin-card__bar"
+                        style={{ '--p': Math.min(1, topX / sk.earn.topX) } as React.CSSProperties}
+                      >
+                        <b />
+                      </i>
+                      <em>
+                        ваш лучший — {fmtX(topX)} из ×{sk.earn.topX}
+                      </em>
+                    </>
+                  )}
+                </span>
+              ) : (
+                !available && (
+                  <span className="skin-card__lock">
+                    <IconLock size={15} />с {SKIN_UNLOCK[sk.id]} уровня
                   </span>
-                ) : (
-                  !available && (
-                    <span className="skin-card__lock">
-                      <IconLock size={15} />с {SKIN_UNLOCK[sk.id]} уровня
-                    </span>
-                  )
-                )}
-              </button>
-            );
-          })}
+                )
+              )}
+            </button>
+          );
+        })}
       </div>
       <p className="muted" style={{ marginTop: 14, marginBottom: 0, fontSize: 12 }}>
-        Лимитированный скин остаётся вашим навсегда, если успеть выбрать его, пока открыто окно.
-        Сезонный вернётся через год, дроп — больше никогда. Символы — Twemoji (CC-BY 4.0, Twitter
-        Inc. и контрибьюторы).
+        «Реликвию» не открывает уровень — её зарабатывают одним крупным спином, и она остаётся
+        навсегда. Символы — Twemoji (CC-BY 4.0, Twitter Inc. и контрибьюторы).
       </p>
     </Sheet>
   );
