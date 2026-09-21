@@ -1,8 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
-import { Odometer } from '@/components/Odometer';
-import type { OdometerHandle } from '@/components/Odometer';
+import { MoneyCounter } from '@/components/MoneyCounter';
+import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
@@ -402,10 +402,10 @@ export function SlotsPage() {
   const dustStop = useRef<(() => void) | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  // Счётчики обновляются императивно: счёт идёт каждый кадр (см. Odometer).
-  const winOdo = useRef<OdometerHandle>(null);
-  const totemOdo = useRef<OdometerHandle>(null);
-  const balOdo = useRef<OdometerHandle>(null);
+  // Счётчики обновляются императивно: счёт идёт каждый кадр (см. MoneyCounter).
+  const winOdo = useRef<MoneyHandle>(null);
+  const totemOdo = useRef<MoneyHandle>(null);
+  const balOdo = useRef<MoneyHandle>(null);
   /** Сколько монет счётчик показывает прямо сейчас — отсюда стартует счёт. */
   const wonRef = useRef(0);
   const rollStop = useRef<(() => void) | null>(null);
@@ -949,7 +949,7 @@ export function SlotsPage() {
             <span className="slot-hud__value">
               {/* Баланс — тот же механический счётчик, и во время выплаты он
                   крутится В ОДИН ХОД с выигрышем. */}
-              <Odometer ref={balOdo} value={shownBalance} />
+              <MoneyCounter ref={balOdo} value={shownBalance} />
               <CoinIcon size={18} />
             </span>
           </div>
@@ -1055,7 +1055,8 @@ export function SlotsPage() {
                     На первом звене множителя нет, и «×1» был бы шумом. */}
                 {cascade && cascade.phase !== 'drop' && stepCombo > 1 && (
                   <div className={`stamp stamp--t${tier}`} key={`st-${chain}`} aria-hidden="true">
-                    ×{stepCombo}
+                    <i className="stamp__cap">выплата</i>
+                    <b className="stamp__n">×{stepCombo}</b>
                   </div>
                 )}
                 <div className="reels__glass" aria-hidden="true" />
@@ -1124,7 +1125,7 @@ export function SlotsPage() {
                 {/* Один счётчик на весь спин: набирает базу за каскад, а
                     потом с неё же уезжает к итогу. */}
                 <span className={`status__win${counting ? ' is-counting' : ''}`}>
-                  +<Odometer ref={winOdo} value={0} />
+                  +<MoneyCounter ref={winOdo} value={0} />
                   <CoinIcon size={20} />
                 </span>
                 {!counting && stepCombo > 1 && (
@@ -1591,7 +1592,7 @@ export function SlotsPage() {
             <div className="totem__amount">
               {/* Счёт НЕ начинается заново: он продолжает тот же ход, что
                   шёл в автомате, просто теперь на крупном плане. */}
-              <Odometer ref={totemOdo} value={wonRef.current} />
+              <MoneyCounter ref={totemOdo} value={wonRef.current} />
               <CoinIcon size={30} />
             </div>
             <div className="totem__hint">

@@ -10846,6 +10846,9 @@ input[type='datetime-local'] {
   opacity: 0.7;
 }
 .slot-hud__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: ui-monospace, 'SF Mono', 'Menlo', monospace;
   font-size: 21px;
   font-weight: 800;
@@ -10853,6 +10856,12 @@ input[type='datetime-local'] {
   letter-spacing: 0.02em;
   color: color-mix(in srgb, var(--neon) 45%, #fff8e2);
   text-shadow: 0 0 10px color-mix(in srgb, var(--neon) 60%, transparent);
+}
+/* Монета — иконка, а не текст: под девятизначным балансом flex сплющивал
+   её вдвое, и она превращалась в неопознаваемое пятнышко. */
+.slot-hud__value svg,
+.status__win svg {
+  flex: none;
 }
 .slot-hud__value--jackpot {
   color: var(--neon);
@@ -11364,7 +11373,9 @@ input[type='datetime-local'] {
   align-items: center;
   justify-content: center;
   gap: 6px 10px;
-  height: 34px;
+  /* Выше, чем было: в табло теперь живёт крупный счётчик выигрыша, и на
+     34 пикселях он упирался в края. */
+  height: 44px;
   margin: 8px 2px 0;
   padding: 0 10px;
   border-radius: 12px;
@@ -13003,26 +13014,75 @@ input[type='datetime-local'] {
   top: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  display: grid;
+  place-items: center;
+  /* Оправа. Без неё множитель был светлой цифрой поверх светлых символов —
+     самый важный момент спина не читался вовсе. Оправа даёт контраст, вес и
+     границу: это не надпись на поле, это ЖЕТОН, который на поле лёг. */
+  min-width: 2.1em;
+  padding: 0.08em 0.24em 0.12em;
+  border-radius: 0.28em;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(60, 30, 0, 0.55), rgba(0, 0, 0, 0.88) 70%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.95));
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 210, 110, 0.9),
+    inset 0 0 22px rgba(255, 180, 60, 0.35),
+    0 10px 28px rgba(0, 0, 0, 0.7),
+    0 0 40px color-mix(in srgb, var(--neon) 55%, transparent);
   font-size: 62px;
   font-weight: 900;
   letter-spacing: -0.02em;
+  line-height: 1;
   /* Отдельный слой: иначе текст пересобирается вместе с полем под ним. */
   will-change: transform, opacity;
   color: #fff;
   text-shadow:
     0 0 18px color-mix(in srgb, var(--neon) 85%, transparent),
-    0 4px 10px rgba(0, 0, 0, 0.6);
+    0 4px 10px rgba(0, 0, 0, 0.75);
   animation: stamp-in calc(0.5s * var(--speed, 1)) cubic-bezier(0.2, 1.7, 0.4, 1) both;
+}
+/* Под жетоном поле гаснет: пока множитель считается, смотреть больше не на
+   что. Гасим САМО поле, а не страницу — прямоугольник вуали лежит в доске. */
+.sboard__veil {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.82));
+  animation: fade calc(0.24s * var(--speed, 1)) ease both;
 }
 .stamp--t2 {
   font-size: 74px;
 }
+/* Подпись внутри жетона: мелко, золотом, вразрядку — она объясняет число,
+   но не спорит с ним за внимание. */
+.stamp__cap {
+  display: block;
+  margin-bottom: -0.04em;
+  font-size: 0.17em;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  text-transform: uppercase;
+  color: #ffd98a;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+.stamp__n {
+  display: block;
+  line-height: 1;
+}
 .stamp--t3 {
   font-size: 86px;
+}
+.stamp--t3 .stamp__n {
   color: #ffe9a3;
 }
 .stamp--t4 {
   font-size: 98px;
+}
+.stamp--t4 .stamp__n {
   background: linear-gradient(180deg, #fff6d5, #ffc53c 55%, #ff7a2f);
   -webkit-background-clip: text;
   background-clip: text;
@@ -13036,10 +13096,12 @@ input[type='datetime-local'] {
     transform: translate(-50%, -50%) scale(2.2) rotate(-12deg);
   }
   60% {
-    opacity: 0.95;
+    opacity: 1;
   }
   to {
-    opacity: 0.92;
+    /* Жетон непрозрачен. Полупрозрачным он просвечивал символами, и вес,
+       ради которого оправа и заводилась, пропадал. */
+    opacity: 1;
     transform: translate(-50%, -50%) scale(1) rotate(0deg);
   }
 }
@@ -13320,16 +13382,6 @@ input[type='datetime-local'] {
 }
 .totem__amount svg {
   -webkit-text-fill-color: initial;
-}
-/* Сумма в тотеме — тот же одометр. Общий градиент по тексту здесь не годится:
-   background-clip: text клипает по ВСЕМ цифрам ленты, включая те одиннадцать,
-   что спрятаны за окном колеса, и золото расползается на них вниз. Красим
-   каждую цифру отдельно — заодно градиент у всех разрядов одинаковый. */
-.totem__amount .odo i {
-  background: linear-gradient(180deg, #fffbe6, #ffd83d 55%, #ff9e2c);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 .totem__hint {
   margin-top: 10px;
@@ -14123,56 +14175,52 @@ input[type='datetime-local'] {
    Логика — в lib/rollup.ts, здесь только как это выглядит.
    ========================================================================= */
 
-/* Колесо разряда. Высота колеса и высота одной цифры обязаны совпадать:
-   лента сдвигается на долю СВОЕЙ высоты (одиннадцать цифр), и если цифра
-   окажется выше окна, счётчик поедет мимо разметки. */
-.odo {
-  display: inline-flex;
-  align-items: center;
+/* Счётчик денег. Цифры крупные, целые и без собственных «окон»: у колёсного
+   одометра каждому разряду нужен свой overflow, а он обрезает и свечение —
+   вокруг каждой цифры вырастала светящаяся прямоугольная коробка, и число
+   рассыпалось на плитки. Сочность даёт темп счёта (lib/rollup.ts), а цифрам
+   достаточно быть читаемыми на любом кадре. */
+.mnum {
   font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.odo__w {
-  display: inline-block;
-  height: 1.15em;
-  overflow: hidden;
-}
-.odo__s {
-  display: block;
-  /* Только transform — колёса крутятся на компози́торе, а не перерисовкой. */
-  will-change: transform;
-}
-.odo__s i {
-  display: block;
-  height: 1.15em;
-  line-height: 1.15em;
-  font-style: normal;
-  text-align: center;
-}
-.odo__sep {
-  display: inline-block;
-  width: 0.26em;
+  font-weight: 900;
+  /* Чуть плотнее: длинные суммы должны влезать в узкое табло. */
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 /* Число стало длиннее — счётчик толкает сам себя. Момент, когда прибавляется
-   разряд, читается сильнее любого значения: «оно уже четырёхзначное». */
-.odo--grew {
-  animation: odo-grew calc(0.34s * var(--speed, 1)) cubic-bezier(0.2, 1.6, 0.4, 1);
+   разряд, читается сильнее, чем любое его значение. */
+.mnum--grew {
+  display: inline-block;
+  animation: mnum-grew calc(0.34s * var(--speed, 1)) cubic-bezier(0.2, 1.6, 0.4, 1);
 }
-@keyframes odo-grew {
+@keyframes mnum-grew {
   35% {
-    transform: scale(1.18);
+    transform: scale(1.16);
   }
 }
 
-/* Счётчик в табло автомата: считает — значит светится. */
+/* Табло выигрыша. Пока идёт счёт, оно и есть главное на экране: крупнее
+   всего остального в строке, золотое и светящееся. */
 .status__win {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  font-size: 26px;
 }
-.status__win.is-counting {
-  color: #b9ffd4;
-  text-shadow: 0 0 14px rgba(110, 231, 168, 0.75);
+.status__win .mnum {
+  background: linear-gradient(180deg, #ffffff, #b6ffd6 45%, #3fd98a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.status__win.is-counting .mnum {
+  background: linear-gradient(180deg, #fffdf0, #ffe37a 45%, #ffae2b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 10px rgba(255, 200, 70, 0.85));
 }
 
 /* Титул ступени. Он не появляется и исчезает, а СМЕНЯЕТСЯ — поэтому каждый
@@ -14299,7 +14347,7 @@ input[type='datetime-local'] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .odo--grew,
+  .mnum--grew,
   .win-title,
   .solo,
   .solo__gem,
@@ -14407,16 +14455,16 @@ input[type='datetime-local'] {
     transform: translate(-50%, -50%) scale(1);
   }
 }
-.stamp--uncommon {
+.stamp--uncommon .stamp__n {
   color: #b9f08a;
 }
-.stamp--rare {
+.stamp--rare .stamp__n {
   color: #9bd4ff;
 }
-.stamp--epic {
+.stamp--epic .stamp__n {
   color: #dcaaff;
 }
-.stamp--legendary {
+.stamp--legendary .stamp__n {
   background: linear-gradient(180deg, #fff6d5, #ffb03a 55%, #ef6a12);
   -webkit-background-clip: text;
   background-clip: text;
@@ -14426,7 +14474,7 @@ input[type='datetime-local'] {
 }
 /* Мифическая сумма: перелив. Градиент едет фоном, а не пересчитывается —
    анимируется background-position, самая дешёвая из «радужных» уловок. */
-.stamp--mythic {
+.stamp--mythic .stamp__n {
   background: linear-gradient(100deg, #ff5ec7, #ffd83d 25%, #5ee7ff 50%, #a06bff 75%, #ff5ec7);
   background-size: 300% 100%;
   -webkit-background-clip: text;
@@ -14444,7 +14492,7 @@ input[type='datetime-local'] {
 @media (prefers-reduced-motion: reduce) {
   .stamp.is-collect,
   .stamp.is-slam,
-  .stamp--mythic {
+  .stamp--mythic .stamp__n {
     animation: none;
   }
 }

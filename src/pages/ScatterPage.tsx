@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
-import { Odometer } from '@/components/Odometer';
-import type { OdometerHandle } from '@/components/Odometer';
+import { MoneyCounter } from '@/components/MoneyCounter';
+import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon, OrbGem } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
@@ -435,10 +435,10 @@ export function ScatterPage() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   // Счётчики обновляются ИМПЕРАТИВНО: счёт идёт каждый кадр, и гонять через
   // него состояние React значило бы перерисовывать половину страницы
-  // шестьдесят раз в секунду. См. components/Odometer.
-  const winOdo = useRef<OdometerHandle>(null);
-  const totemOdo = useRef<OdometerHandle>(null);
-  const balOdo = useRef<OdometerHandle>(null);
+  // шестьдесят раз в секунду. См. components/MoneyCounter.
+  const winOdo = useRef<MoneyHandle>(null);
+  const totemOdo = useRef<MoneyHandle>(null);
+  const balOdo = useRef<MoneyHandle>(null);
   /** Сколько монет счётчик показывает прямо сейчас — отсюда стартует счёт. */
   const wonRef = useRef(0);
   /** «Оборвать счёт» — и по тапу игрока, и при уходе со страницы. */
@@ -863,6 +863,15 @@ export function ScatterPage() {
             collectRef.current = null;
             setCollectDone(true);
             multSlam();
+            // Удар множителя = деньги. Раньше в этот кадр не падало ни одной
+            // монеты: число менялось, а «начислилось» было не видно. Сколько
+            // монет — по номиналу, который сложился: ×3 это горсть, ×200 —
+            // ливень.
+            burstConfetti(loudest.beats >= 2 ? 70 : 34, theme.confetti);
+            rainCoins(Math.round(Math.min(46, 10 + res.applied * 0.6)), rainSrc);
+            coinDing();
+            coinDing(0.09);
+            flashFrame(loudest.beats >= 3 ? 'big' : 'small');
             // Множитель припечатался. Саму выплату отсюда НЕ подставляем:
             // за неё отвечает счёт (payout), и он поедет от базы к итогу со
             // всеми ступенями. Раньше здесь стояло одно присваивание итога —
@@ -928,7 +937,7 @@ export function ScatterPage() {
         collect();
       }
     },
-    [turbo],
+    [turbo, theme.confetti, rainSrc],
   );
   finaleRef.current = finale;
 
@@ -1128,7 +1137,7 @@ export function ScatterPage() {
               {/* Баланс — тот же механический счётчик, и во время выплаты он
                   крутится В ОДИН ХОД с выигрышем: видно, как деньги прибывают
                   в карман, а не появляются там задним числом. */}
-              <Odometer ref={balOdo} value={shownBalance} />
+              <MoneyCounter ref={balOdo} value={shownBalance} />
               <CoinIcon size={18} />
             </span>
           </div>
@@ -1272,6 +1281,9 @@ export function ScatterPage() {
                     />
                   ))}
               {shownWins.length > 0 && <div className="sboard__dim" aria-hidden="true" />}
+              {/* Пока считается множитель, поле гаснет: смотреть в этот момент
+                  надо на жетон, а не на символы под ним. */}
+              {cascade?.phase === 'collect' && <div className="sboard__veil" aria-hidden="true" />}
               <canvas className="dust" ref={dustRef} aria-hidden="true" />
               <div className="reels__glass" aria-hidden="true" />
               {/* Счётчик множителя. В такте сбора он же принимает слетающиеся
@@ -1287,7 +1299,14 @@ export function ScatterPage() {
                   key={`st-${chain}`}
                   aria-hidden="true"
                 >
-                  ×{collectSum}
+                  {/* Число — отдельным элементом: у жетона собственный фон, а
+                      градиентные ступени красятся через background-clip: text
+                      и съели бы оправу, будь они на нём самом. */}
+                  {/* Подпись внутри жетона: без неё «×15» посреди поля —
+                      просто число. Игрок должен видеть, что это множитель
+                      ВЫПЛАТЫ, а не длины цепочки и не чего-то ещё. */}
+                  <i className="stamp__cap">выплата</i>
+                  <b className="stamp__n">×{collectSum}</b>
                 </div>
               )}
               {/* Сольный выход редкой сферы: поле гаснет, камень выходит
@@ -1319,7 +1338,8 @@ export function ScatterPage() {
             {chain >= 1 && cascade && (
               <div className={`combo combo--t${tier}`} key={chain}>
                 <b>{chain >= 2 ? `ЦЕПОЧКА ×${chain}` : 'ЕСТЬ ВЫИГРЫШ'}</b>
-                {cascade?.phase === 'collect' && stepCombo > 1 && <i>выплата ×{stepCombo}</i>}
+                {/* «выплата ×N» здесь больше нет: в такте сбора её и так
+                    показывает жетон посреди поля, вдесятеро крупнее. */}
               </div>
             )}
           </div>
@@ -1363,7 +1383,7 @@ export function ScatterPage() {
                     сменялись три разных числа с тремя разными анимациями —
                     отсюда и ощущение «проскакивает». */}
                 <span className={`status__win${counting ? ' is-counting' : ''}`} ref={winRef}>
-                  +<Odometer ref={winOdo} value={0} />
+                  +<MoneyCounter ref={winOdo} value={0} />
                   <CoinIcon size={20} />
                 </span>
               </>
@@ -1845,7 +1865,7 @@ export function ScatterPage() {
             <div className="totem__amount">
               {/* Счётчик НЕ начинается заново: он продолжает тот же счёт,
                   что шёл в автомате, просто теперь на крупном плане. */}
-              <Odometer ref={totemOdo} value={wonRef.current} />
+              <MoneyCounter ref={totemOdo} value={wonRef.current} />
               <CoinIcon size={30} />
             </div>
             <div className="totem__hint">
