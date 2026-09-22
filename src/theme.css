@@ -10761,6 +10761,74 @@ input[type='datetime-local'] {
   --scene-1: #0b2c4d;
   --scene-2: #030a14;
 }
+/* Купальская ночь: чёрный лак, латунь и перламутр — палехская шкатулка,
+   внутри которой ночной лес. Ведущий цвет — светлячковый лайм: зелёного нет
+   ни в одном из остальных скинов, и новинку видно в списке до того, как
+   разобраны символы. Барабаны ТЁМНЫЕ (второй такой скин после «Реликвии»):
+   символы здесь светятся сами, на кремовой ленте это пропадает. */
+.slots[data-skin='kupala'],
+.rewards[data-skin='kupala'],
+.levelup[data-skin='kupala'],
+.skin-card[data-skin='kupala'] {
+  --neon: #9dff57;
+  --neon-2: #ffb23d;
+  --cab-1: #173a28;
+  --cab-2: #050d09;
+  --cab-3: #0e2418;
+  --reel-hi: #1c3325;
+  --reel-mid: #112015;
+  --reel-lo: #060d09;
+  --bezel-1: #f0e0ae;
+  --bezel-2: #a1852f;
+  --bezel-3: #3d3208;
+  --bezel-4: #d6c48a;
+  --btn-1: #e6ffb0;
+  --btn-2: #9dff57;
+  --btn-3: #4fbf3a;
+  --btn-4: #17682f;
+  --btn-fg: #08240f;
+  --scene-1: #0d2a1c;
+  --scene-2: #020704;
+
+  /* --- Производные материалы. Живут только у этого скина. ---------------
+     Перламутр: конический градиент от нижнего левого угла, как слои
+     раковины, а не вертушка из середины. Рисуется ОДИН раз. */
+  --nacre: repeating-conic-gradient(
+    from 210deg at 30% 120%,
+    color-mix(in srgb, var(--neon) 60%, #fff) 0deg,
+    color-mix(in srgb, var(--neon-2) 62%, #fff) 13deg,
+    color-mix(in srgb, var(--bezel-1) 78%, #fff) 25deg,
+    color-mix(in srgb, var(--neon-2) 42%, #fff) 38deg,
+    color-mix(in srgb, var(--neon) 60%, #fff) 52deg
+  );
+  /* Латунь. Один резкий переход на 44→47% — это точёная фаска. Именно
+     резкость отличает металл от жёлтого градиента. */
+  --brass: linear-gradient(
+    177deg,
+    color-mix(in srgb, var(--bezel-1) 92%, #fff) 0%,
+    var(--bezel-4) 22%,
+    var(--bezel-2) 44%,
+    var(--bezel-3) 47%,
+    var(--bezel-2) 58%,
+    var(--bezel-4) 76%,
+    var(--bezel-3) 100%
+  );
+  /* Жёсткий лаковый блик: ширина 2% и обрыв в прозрачность — это кромка.
+     Размажете стопы — станет подсветкой, и материал пропадёт. */
+  --spec: linear-gradient(
+    104deg,
+    transparent 7%,
+    rgba(255, 255, 255, 0.1) 10%,
+    rgba(255, 255, 255, 0.2) 11.5%,
+    rgba(255, 255, 255, 0.06) 13%,
+    transparent 15%
+  );
+  /* Светлый текст скина. Брать его из --reel-hi, как у скинов со светлой
+     лентой, здесь нельзя: лента тёмная, и надписи ушли бы в тёмное по
+     тёмному. */
+  --ink: #dff7e4;
+}
+
 /* Реликвия: музейное золото на чёрном. Никаких вторых цветов — всё, что
    не золото, здесь темнота. */
 .slots[data-skin='relic'],
@@ -15578,4 +15646,1052 @@ input[type='datetime-local'] {
   .ses__peak--mythic .ses__peak-title {
     animation: none;
   }
+}
+
+/* =========================================================================
+   «Купальская ночь» — корпус, поле, фон.
+
+   Материал: палехская лаковая шкатулка. Три материала вместо одного —
+   корпус чёрный лак (жёсткий узкий блик, глубокий чёрный), вся фурнитура
+   латунь (`--bezel-*`), вставки перламутр (`--nacre`, нарисован ОДИН раз).
+   Лак не светится сам, он ОТРАЖАЕТ — поэтому цвет на корпус приходит снизу,
+   от «пола» сцены, а не сверху, как у остальных скинов.
+
+   Закон движения: МЕТАЛЛ ЩЁЛКАЕТ, СВЕТ ТЕЧЁТ. Всё, что железное (лампы,
+   блик по латунной табличке), перещёлкивает между положениями через
+   `steps()` и стоит один композиторский такт за щелчок. Всё, что светится
+   (перламутр, светляки), движется плавно. Это единственное деление, и оно
+   держит весь скин: механизм неподвижен, живёт только свет.
+
+   Постоянно анимируемых слоёв — три: инкрустация корпуса (opacity),
+   блик по вывеске (transform, 8 остановок) и светляки в сцене (transform).
+   Ни `blur()`, ни `background-position`, ни `box-shadow` не анимируются.
+   ========================================================================= */
+
+/* --- 1. Корпус: плита чёрного лака --------------------------------------- */
+.slots[data-skin='kupala'] .cabinet {
+  border-radius: 22px; /* лак не бывает пухлым — грань жёстче базовых 26 */
+  border-color: color-mix(in srgb, var(--bezel-3) 60%, transparent);
+  background:
+    /* (1) главный блик: жёсткая кромка = твёрдая поверхность */
+    var(--spec),
+    /* (2) кант по правой грани — 1.5px чистого света, как на крышке рояля */
+    linear-gradient(268deg, rgba(255, 255, 255, 0.14) 0 1.5px, transparent 1.5px),
+    /* (3) то же слева и слабее: свет один, значит грани не равны */
+    linear-gradient(88deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px),
+    /* (4) отражение пола в нижней трети */
+    linear-gradient(0deg, color-mix(in srgb, var(--neon) 20%, transparent) 0%, transparent 28%),
+    /* (5) тёплое ядро наверху — это глубина, а не подсветка */
+    radial-gradient(
+        140% 85% at 50% -6%,
+        color-mix(in srgb, var(--cab-1) 55%, transparent),
+        transparent 56%
+      ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--cab-2) 88%, #000) 0%,
+      var(--cab-2) 42%,
+      color-mix(in srgb, var(--cab-3) 80%, #000) 100%
+    );
+  box-shadow:
+    /* латунная волосяная линия по контуру — корпус окантован */
+    0 0 0 1px color-mix(in srgb, var(--bezel-2) 55%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -30px 50px rgba(0, 0, 0, 0.7),
+    0 28px 64px rgba(0, 0, 0, 0.65);
+}
+/* Джекпот: лак не меняет цвет, у него просто прибывает отражение. Внешний
+   ореол только через box-shadow — `overflow: hidden` съест псевдоэлемент. */
+.slots[data-skin='kupala'] .cabinet.is-jackpot {
+  border-color: color-mix(in srgb, var(--bezel-1) 80%, transparent);
+  box-shadow:
+    0 0 0 1px var(--bezel-1),
+    0 0 44px color-mix(in srgb, var(--neon) 45%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 28px 64px rgba(0, 0, 0, 0.65);
+}
+
+/* --- 1a. Перламутровая инкрустация ---------------------------------------
+   Единственный анимируемый слой ВНУТРИ корпуса, и анимируется только
+   `opacity`. Ни поворота, ни смещения: у `.cabinet` скруглённый
+   `overflow: hidden`, а вращающийся потомок под таким клипом на части
+   Android WebView снимается с композитора. Вращать — только в сцене. */
+.slots[data-skin='kupala'] .cabinet::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: var(--nacre);
+  /* Маска: перламутр лежит по канту, а не заливает корпус — иначе он спорит
+     с барабанами. */
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 50%, transparent 38%, #000 96%);
+  mask-image: radial-gradient(120% 90% at 50% 50%, transparent 38%, #000 96%);
+  opacity: 0.16;
+  will-change: opacity;
+  animation: kup-breathe calc(9s * var(--speed, 1)) ease-in-out infinite;
+}
+@keyframes kup-breathe {
+  50% {
+    opacity: 0.3;
+  }
+}
+/* Содержимое корпуса — над инкрустацией. */
+.slots[data-skin='kupala'] .cabinet > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- 2. Лампы: латунные гвоздики двух калибров ---------------------------
+   База красит их захардкоженным оранжевым (#ffd9a3 / #ffb459) — палитру
+   лампы игнорируют у всех скинов. Здесь они наконец из токенов.
+   Вспышка вдвое короче базовой: искра обегает корпус, а не подсвечивает
+   его широким полумесяцем. */
+.slots[data-skin='kupala'] .cabinet__bulbs {
+  top: 7px;
+  left: 16px;
+  right: 16px;
+}
+.slots[data-skin='kupala'] .cabinet__bulbs i {
+  width: 5px;
+  height: 5px;
+  background:
+    radial-gradient(circle at 36% 30%, #fff 0%, transparent 46%),
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--neon) 40%, #fff) 0%,
+      var(--neon) 60%,
+      color-mix(in srgb, var(--neon-2) 70%, #000) 100%
+    );
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--bezel-3) 85%, #000),
+    0 0 8px color-mix(in srgb, var(--neon) 80%, transparent);
+  opacity: 0.18;
+  animation-name: kup-bulb;
+}
+/* Каждая вторая крупнее: ритм «лампа — заклёпка — лампа». JSX не трогаем. */
+.slots[data-skin='kupala'] .cabinet__bulbs i:nth-child(even) {
+  width: 8px;
+  height: 8px;
+  margin-top: -1.5px;
+}
+@keyframes kup-bulb {
+  0%,
+  62%,
+  100% {
+    opacity: 0.18;
+  }
+  12% {
+    opacity: 1;
+  }
+}
+
+/* --- 3. Вывеска: латунная табличка на винтах -----------------------------
+   Мелкая часть ВЫГРАВИРОВАНА в латуни, крупная — перламутровая. Базовый
+   `neon-flicker` выключен намеренно: мигает неон, лак отражает. Жизнь даёт
+   редкий проход блика — и он идёт остановками, как отражение, перескакивающее
+   с грани на грань. */
+.slots[data-skin='kupala'] .cabinet__sign {
+  margin: 6px 10px 12px;
+  padding: 8px 34px 9px; /* место под винты по краям */
+  border-radius: 6px 6px 10px 10px; /* табличка, а не пилюля */
+  background: var(--brass);
+  border: 1px solid color-mix(in srgb, var(--bezel-3) 90%, #000);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.45),
+    0 3px 0 rgba(0, 0, 0, 0.5),
+    0 8px 18px rgba(0, 0, 0, 0.55);
+  overflow: hidden; /* нужно блику в ::after */
+}
+/* Два винта одним псевдоэлементом. `circle closest-side` в квадратной плитке
+   11×11 обязателен: без него радиальный градиент считается по
+   farthest-corner и залил бы плитку — головка стала бы квадратной. */
+.slots[data-skin='kupala'] .cabinet__sign::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(28deg, transparent 45%, rgba(0, 0, 0, 0.55) 45% 55%, transparent 55%) left 12px
+      center / 11px 11px no-repeat,
+    radial-gradient(circle closest-side at 36% 30%, #fff8e2 0%, transparent 72%) left 12px center /
+      11px 11px no-repeat,
+    radial-gradient(
+        circle closest-side at 50% 50%,
+        var(--bezel-2) 0 92%,
+        color-mix(in srgb, var(--bezel-3) 90%, #000) 96%,
+        transparent 98%
+      )
+      left 12px center / 11px 11px no-repeat,
+    /* у правого винта угол шлица другой — настоящие винты не выровнены */
+    linear-gradient(-64deg, transparent 45%, rgba(0, 0, 0, 0.55) 45% 55%, transparent 55%) right
+      12px center / 11px 11px no-repeat,
+    radial-gradient(circle closest-side at 36% 30%, #fff8e2 0%, transparent 72%) right 12px center /
+      11px 11px no-repeat,
+    radial-gradient(
+        circle closest-side at 50% 50%,
+        var(--bezel-2) 0 92%,
+        color-mix(in srgb, var(--bezel-3) 90%, #000) 96%,
+        transparent 98%
+      )
+      right 12px center / 11px 11px no-repeat;
+  /* Тень идёт по альфе, то есть по кругам, а не по всей плитке. */
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7));
+}
+.slots[data-skin='kupala'] .cabinet__sign span {
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: color-mix(in srgb, var(--bezel-3) 80%, #000);
+  opacity: 1;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.5),
+    0 -1px 0 rgba(0, 0, 0, 0.35);
+}
+/* Крупная часть ГОРИТ лаймом, а не переливается перламутром: табличка
+   латунная, и светлый перламутр на ней сливался с фоном — самая заметная
+   надпись автомата читалась хуже мелкой. Жёсткий тёмный разрыв на 50% —
+   та же линия отражения, что в базовом `.cabinet__sign b`. */
+.slots[data-skin='kupala'] .cabinet__sign b {
+  font-size: 22px;
+  background: linear-gradient(
+    176deg,
+    #f4ffe0 0%,
+    color-mix(in srgb, var(--neon) 55%, #fff) 20%,
+    var(--neon) 44%,
+    #0d2a14 50%,
+    color-mix(in srgb, var(--neon) 80%, #fff) 62%,
+    var(--neon) 80%,
+    #123f1c 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 1.4px #0b2110;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.7))
+    drop-shadow(0 0 12px color-mix(in srgb, var(--neon) 45%, transparent));
+  animation: none; /* базовый neon-flicker — выключен намеренно */
+}
+/* Блик по табличке. Проход раз в 7 с и ВОСЕМЬ остановок вместо плавного
+   проезда: плавный — это роскошь («Реликвия»), ступенчатый — это отражение
+   на гранёном металле. Восемь кадров за проход вместо шестидесяти. */
+.slots[data-skin='kupala'] .cabinet__sign::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -55%;
+  width: 40%;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgba(255, 255, 255, 0.32) 44%,
+    rgba(255, 255, 255, 0.72) 50%,
+    rgba(255, 255, 255, 0.32) 56%,
+    transparent
+  );
+  will-change: transform;
+  animation: kup-sheen calc(7s * var(--speed, 1)) steps(8, end) infinite;
+}
+@keyframes kup-sheen {
+  0%,
+  86% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(380%);
+  }
+}
+
+/* --- 4. Безель: три кольца и точёная фаска -------------------------------
+   Было — одна латунная плита и чёрный кант. Стало — латунная фаска, лаковый
+   кант, латунная нить снаружи и перламутровая нить по внутренней кромке:
+   она отделяет металл от поля. */
+.slots[data-skin='kupala'] .cabinet__window {
+  padding: 10px;
+  border-radius: 14px; /* оправа точёная, а не литая */
+  background:
+    /* токарный след, шаг 4px. Контраст очень низкий — на DPR 3 не даёт муара */
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.05) 0 1px,
+      transparent 1px 2px,
+      rgba(0, 0, 0, 0.05) 2px 3px,
+      transparent 3px 4px
+    ),
+    var(--brass);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--neon-2) 45%, #fff),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.55),
+    0 0 0 2px color-mix(in srgb, var(--cab-2) 85%, #000),
+    0 0 0 3px color-mix(in srgb, var(--bezel-2) 70%, #000),
+    0 0 0 4px rgba(0, 0, 0, 0.55),
+    0 12px 26px rgba(0, 0, 0, 0.7);
+}
+/* --- 4a. Углы: винты со шлицем -------------------------------------------
+   Ровно четыре свободные точки: ::before/::after окна и два
+   `.cabinet__bolts i`. Угол шлица у каждого свой — выровненные винты
+   выглядят напечатанными. */
+.slots[data-skin='kupala'] .cabinet__window::before,
+.slots[data-skin='kupala'] .cabinet__window::after,
+.slots[data-skin='kupala'] .cabinet__bolts i {
+  width: 12px;
+  height: 12px;
+  background:
+    linear-gradient(
+      var(--sa, 30deg),
+      transparent 42%,
+      rgba(0, 0, 0, 0.6) 42% 50%,
+      rgba(255, 255, 255, 0.3) 50% 58%,
+      transparent 58%
+    ),
+    radial-gradient(
+      circle at 34% 28%,
+      #fffdf2 0%,
+      color-mix(in srgb, var(--bezel-4) 90%, #fff) 26%,
+      var(--bezel-2) 58%,
+      color-mix(in srgb, var(--bezel-3) 90%, #000) 100%
+    );
+  box-shadow:
+    inset 0 -1px 2px rgba(0, 0, 0, 0.7),
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    0 1px 2px rgba(0, 0, 0, 0.85);
+}
+.slots[data-skin='kupala'] .cabinet__window::before {
+  --sa: 22deg;
+  left: 5px;
+  top: 5px;
+}
+.slots[data-skin='kupala'] .cabinet__window::after {
+  --sa: -58deg;
+  right: 5px;
+  top: 5px;
+}
+.slots[data-skin='kupala'] .cabinet__bolts i:first-child {
+  --sa: 74deg;
+  left: 5px;
+  bottom: 5px;
+}
+.slots[data-skin='kupala'] .cabinet__bolts i:last-child {
+  --sa: -14deg;
+  right: 5px;
+  bottom: 5px;
+}
+
+/* --- 5. Лента барабана и решётка клеток ----------------------------------
+   Два пункта списка — «лента» и «границы клетки» — но фон у элемента один,
+   поэтому правило одно: раздельные `background` и `background-image` молча
+   затирают друг друга.
+   Слои сверху вниз: решётка (шаг ровно в клетку) → перламутровый перелив
+   поперёк ленты → сама лента. Решётка нарисована на КОЛОНКЕ, а не на
+   символах, поэтому при вращении она стоит на месте: движение читается как
+   «за решёткой», что и нужно. */
+.slots[data-skin='kupala'] .reel {
+  border-radius: 1px;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 calc(var(--cell) - 1px),
+      color-mix(in srgb, var(--bezel-2) 30%, transparent) calc(var(--cell) - 1px) var(--cell)
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--neon-2) 9%, transparent) 0%,
+      transparent 32%,
+      transparent 64%,
+      color-mix(in srgb, var(--neon) 8%, transparent) 100%
+    ),
+    linear-gradient(
+      180deg,
+      var(--reel-lo) 0%,
+      var(--reel-mid) 10%,
+      var(--reel-hi) 42%,
+      var(--reel-hi) 50%,
+      var(--reel-mid) 64%,
+      var(--reel-lo) 92%,
+      color-mix(in srgb, var(--reel-lo) 80%, #000) 100%
+    );
+  /* Базовые inset-тени захардкожены коричневым (rgba(90,50,20,…)) — на
+     ночной ленте это грязь. Тонируем латунью. */
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--bezel-3) 35%, transparent),
+    inset 0 12px 16px rgba(0, 0, 0, 0.45),
+    inset 0 -12px 16px rgba(0, 0, 0, 0.5);
+}
+.slots[data-skin='kupala'] .sboard__col {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 calc(var(--scell) - 1px),
+      color-mix(in srgb, var(--bezel-2) 28%, transparent) calc(var(--scell) - 1px) var(--scell)
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--neon-2) 9%, transparent) 0%,
+      transparent 32%,
+      transparent 64%,
+      color-mix(in srgb, var(--neon) 8%, transparent) 100%
+    ),
+    linear-gradient(
+      180deg,
+      var(--reel-lo) 0%,
+      var(--reel-mid) 10%,
+      var(--reel-hi) 42%,
+      var(--reel-hi) 50%,
+      var(--reel-mid) 64%,
+      var(--reel-lo) 92%,
+      color-mix(in srgb, var(--reel-lo) 80%, #000) 100%
+    );
+}
+/* --- 5a. Цилиндр: барабан меньшего радиуса и жёсткая линия света --------- */
+.slots[data-skin='kupala'] .reels::before {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.88) 0%,
+      rgba(0, 0, 0, 0.5) 11%,
+      rgba(0, 0, 0, 0.12) 24%,
+      rgba(0, 0, 0, 0) 38%,
+      rgba(0, 0, 0, 0) 62%,
+      rgba(0, 0, 0, 0.12) 76%,
+      rgba(0, 0, 0, 0.52) 89%,
+      rgba(0, 0, 0, 0.9) 100%
+    ),
+    /* жёсткая линия света ровно по оси — блик на полированном барабане */
+    linear-gradient(
+        180deg,
+        transparent 47.6%,
+        rgba(255, 255, 255, 0.34) 47.6% 48.4%,
+        transparent 48.4%
+      ),
+    linear-gradient(
+      180deg,
+      transparent 32%,
+      rgba(255, 255, 255, 0.04) 41%,
+      rgba(255, 255, 255, 0.1) 49%,
+      rgba(255, 255, 255, 0.03) 58%,
+      transparent 68%
+    ),
+    linear-gradient(0deg, color-mix(in srgb, var(--neon) 16%, transparent) 0%, transparent 18%),
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.5) 0%,
+      rgba(0, 0, 0, 0) 14%,
+      rgba(0, 0, 0, 0) 86%,
+      rgba(0, 0, 0, 0.5) 100%
+    );
+}
+/* --- 5b. Стекло: две полосы разной ширины и угла — у стекла есть толщина */
+.slots[data-skin='kupala'] .reels__glass {
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0 1px, transparent 1px),
+    linear-gradient(
+      108deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.06) 38%,
+      rgba(255, 255, 255, 0.13) 42%,
+      rgba(255, 255, 255, 0.04) 47%,
+      transparent 54%
+    ),
+    linear-gradient(
+      96deg,
+      transparent 62%,
+      rgba(255, 255, 255, 0.08) 66%,
+      rgba(255, 255, 255, 0.03) 69%,
+      transparent 73%
+    );
+}
+/* Зазор между колонками — лак, а не бурый #0d0704 базы. */
+.slots[data-skin='kupala'] .reels,
+.slots[data-skin='kupala'] .sboard {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cab-2) 70%, #000), #000);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.9),
+    inset 0 5px 14px rgba(0, 0, 0, 0.9),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.7);
+}
+
+/* --- 6. Выигрышная клетка ------------------------------------------------
+   В базе подсветка захардкожена золотом (#ffb43c / #ffc23c) — его не менял
+   ни один скин, кроме «Олимпа». На ночной ленте золото читается как ещё
+   один жёлтый символ; здесь рамка идёт перламутром и светляковым лаймом. */
+.slots[data-skin='kupala'] .reels__mark {
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--neon) 24%, transparent),
+    transparent 70%
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.9),
+    inset 0 0 0 3px color-mix(in srgb, var(--bezel-1) 90%, #fff),
+    inset 0 0 0 4px color-mix(in srgb, var(--neon) 70%, transparent),
+    inset 0 0 0 5px rgba(0, 0, 0, 0.5),
+    0 0 28px color-mix(in srgb, var(--neon) 70%, transparent);
+}
+.slots[data-skin='kupala'] .sbcell.is-win::before {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.9),
+    inset 0 0 0 2px color-mix(in srgb, var(--bezel-1) 90%, #fff),
+    inset 0 0 0 3px color-mix(in srgb, var(--neon) 65%, transparent),
+    0 0 20px color-mix(in srgb, var(--neon) 75%, transparent);
+}
+
+/* --- 7. Табло: латунная обойма и утопленное стекло ------------------------
+   ЭЛТ-сетки базы здесь нет: у лакового автомата табло — это прибор со
+   стеклом, а не монитор. Подпись выгравирована, цифры остаются
+   светящимися: их читаемость важнее материала. */
+.slots[data-skin='kupala'] .slot-hud__cell {
+  border: none;
+  border-radius: 10px;
+  padding: 9px 13px 10px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cab-2) 92%, #000),
+    color-mix(in srgb, var(--cab-3) 70%, #000)
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--bezel-3) 75%, #000),
+    inset 0 2px 7px rgba(0, 0, 0, 0.85),
+    /* латунная полка по нижней кромке — обойма прибора */ 0 1px 0
+      color-mix(in srgb, var(--bezel-2) 60%, transparent),
+    0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.slots[data-skin='kupala'] .slot-hud__cell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    116deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 26%,
+    transparent 44%
+  );
+}
+.slots[data-skin='kupala'] .slot-hud__cell--jackpot {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--bezel-1) 85%, transparent),
+    inset 0 2px 7px rgba(0, 0, 0, 0.85),
+    0 1px 0 color-mix(in srgb, var(--bezel-1) 70%, transparent),
+    0 0 18px color-mix(in srgb, var(--neon) 24%, transparent);
+}
+.slots[data-skin='kupala'] .slot-hud__label {
+  color: color-mix(in srgb, var(--bezel-4) 80%, #fff);
+  opacity: 0.55;
+  letter-spacing: 0.14em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+}
+.slots[data-skin='kupala'] .slot-hud__value {
+  color: color-mix(in srgb, var(--neon) 24%, #fff);
+  text-shadow:
+    0 0 12px color-mix(in srgb, var(--neon) 50%, transparent),
+    0 1px 0 rgba(0, 0, 0, 0.9);
+}
+
+/* --- 7a. Статус: прорезь в лаке ------------------------------------------
+   Рельеф ПЕРЕВЁРНУТ относительно базы: свет по нижней кромке, тень по
+   верхней. Это и отличает выфрезерованную канавку от наклеенной плашки. */
+.slots[data-skin='kupala'] .cabinet__status {
+  margin: 10px 4px 0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.3));
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 0 color-mix(in srgb, var(--bezel-2) 55%, transparent),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.7),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+}
+/* Латунные губки по торцам прорези. */
+.slots[data-skin='kupala'] .cabinet__status::before,
+.slots[data-skin='kupala'] .cabinet__status::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--brass);
+  opacity: 0.7;
+}
+.slots[data-skin='kupala'] .cabinet__status::before {
+  left: 5px;
+}
+.slots[data-skin='kupala'] .cabinet__status::after {
+  right: 5px;
+}
+/* Базовый цвет строки (#ffe9d2) захардкожен тёплым. Берём `--ink`, а НЕ
+   `--reel-hi`, как скины со светлой лентой: здесь лента тёмная, и строка
+   ушла бы в тёмное по тёмному. */
+.slots[data-skin='kupala'] .status {
+  color: var(--ink);
+}
+.slots[data-skin='kupala'] .status--hint,
+.slots[data-skin='kupala'] .status--spin {
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+/* --- 8. Главная кнопка: латунная клавиша с лаковой лицевой ---------------
+   Нажатие — ПРОВАЛ, а не уменьшение: базовый `scale(.97)` перекрыт.
+   «Кнопка стала меньше» и «кнопка нажалась» — разные сообщения. */
+.slots[data-skin='kupala'] .spin-btn {
+  position: relative;
+  overflow: hidden;
+  border: none;
+  border-radius: 12px;
+  padding: 17px 12px;
+  letter-spacing: 0.14em;
+  color: var(--btn-fg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--btn-1) 92%, #fff) 0%,
+    var(--btn-2) 34%,
+    var(--btn-2) 48%,
+    var(--btn-3) 52%,
+    var(--btn-4) 100%
+  );
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.55),
+    0 -1px 0 rgba(0, 0, 0, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.35),
+    /* обойма: латунь → лак → тень */ 0 0 0 1.5px color-mix(in srgb, var(--bezel-1) 85%, #fff),
+    0 0 0 3.5px color-mix(in srgb, var(--cab-2) 90%, #000),
+    0 0 0 4.5px color-mix(in srgb, var(--bezel-3) 80%, #000),
+    /* «ход» клавиши: жёсткая тень, а не размытое свечение */ 0 5px 0
+      color-mix(in srgb, var(--btn-4) 70%, #000),
+    0 14px 26px rgba(0, 0, 0, 0.55);
+  transition:
+    transform 0.1s steps(2, end),
+    box-shadow 0.1s ease;
+}
+.slots[data-skin='kupala'] .spin-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 44%;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.04));
+  border-radius: 12px 12px 40% 40%;
+}
+.slots[data-skin='kupala'] .spin-btn:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, 0.5),
+    0 0 0 1.5px color-mix(in srgb, var(--bezel-1) 85%, #fff),
+    0 0 0 3.5px color-mix(in srgb, var(--cab-2) 90%, #000),
+    0 0 0 4.5px color-mix(in srgb, var(--bezel-3) 80%, #000),
+    0 1px 0 color-mix(in srgb, var(--btn-4) 70%, #000);
+}
+.slots[data-skin='kupala'] .spin-btn:active {
+  transform: translateY(4px); /* перекрывает базовый scale(.97) */
+}
+/* Занята: по клавише бежит блик. Слой живёт ТОЛЬКО в этом состоянии —
+   в постоянные не считается. Базовый пульс прозрачности выключен. */
+.slots[data-skin='kupala'] .spin-btn.is-busy {
+  animation: none;
+}
+.slots[data-skin='kupala'] .spin-btn.is-busy::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 34%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55) 50%, transparent);
+  will-change: transform;
+  animation: kup-key-run calc(1.1s * var(--speed, 1)) linear infinite;
+}
+@keyframes kup-key-run {
+  to {
+    transform: translateX(420%);
+  }
+}
+
+/* --- 8a. Мини-кнопки: тумблеры с латунной юбкой -------------------------- */
+.slots[data-skin='kupala'] .slot-mini {
+  border: none;
+  border-radius: 10px;
+  color: var(--ink);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cab-1) 80%, #000),
+    color-mix(in srgb, var(--cab-2) 90%, #000)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 0 1px color-mix(in srgb, var(--bezel-3) 80%, #000),
+    0 3px 0 rgba(0, 0, 0, 0.6),
+    0 6px 12px rgba(0, 0, 0, 0.45);
+  transition:
+    transform 0.1s steps(2, end),
+    box-shadow 0.1s ease;
+}
+/* Включено = тумблер УТОПЛЕН и подсвечен изнутри, а не «покрашен ярче»:
+   у настоящего пульта включённая клавиша стоит ниже выключенных. */
+.slots[data-skin='kupala'] .slot-mini.is-on {
+  color: var(--btn-fg);
+  background: var(--brass);
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.45),
+    inset 0 0 12px color-mix(in srgb, var(--neon) 40%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--bezel-1) 80%, #fff),
+    0 1px 0 rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+/* ПОРЯДОК ВАЖЕН: `:active` и `.is-on` имеют одинаковую специфичность,
+   поэтому `:active` обязан идти ПОСЛЕ `.is-on` — иначе нажатие включённой
+   клавиши не даёт никакой отдачи. */
+.slots[data-skin='kupala'] .slot-mini:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.6),
+    0 0 0 1px color-mix(in srgb, var(--bezel-3) 80%, #000),
+    0 0 0 rgba(0, 0, 0, 0.6);
+}
+
+/* --- 8b. Ставки: латунные жетоны с рифлёным гуртом ----------------------- */
+.slots[data-skin='kupala'] .slot-bet {
+  position: relative;
+  overflow: hidden;
+  border: none;
+  border-radius: 999px;
+  color: var(--ink);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cab-1) 75%, #000),
+    color-mix(in srgb, var(--cab-2) 92%, #000)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 1px color-mix(in srgb, var(--bezel-3) 70%, #000),
+    0 2px 0 rgba(0, 0, 0, 0.55);
+}
+/* Рифление гурта живёт ТОЛЬКО в ::before: маска гасит середину, и поле под
+   цифрой остаётся чистым. Штрихи в фоне самого жетона были бы под цифрой. */
+.slots[data-skin='kupala'] .slot-bet::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.22) 0 1px,
+    transparent 1px 4px
+  );
+  -webkit-mask-image: radial-gradient(120% 120% at 50% 50%, transparent 52%, #000 86%);
+  mask-image: radial-gradient(120% 120% at 50% 50%, transparent 52%, #000 86%);
+  opacity: 0.6;
+}
+.slots[data-skin='kupala'] .slot-bet.is-active {
+  color: var(--btn-fg);
+  background: var(--brass);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.4),
+    inset 0 0 10px color-mix(in srgb, var(--neon-2) 45%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--bezel-1) 85%, #fff);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.slots[data-skin='kupala'] .slot-bet.is-active::before {
+  opacity: 0.25;
+}
+
+/* --- 8c. Ante и «Купить бонус» -------------------------------------------
+   Ante — гравированная пластина: это НАСТРОЙКА, она не должна зазывать.
+   «Купить бонус» — единственная кнопка в другом цвете, потому что это
+   единственная кнопка, которая тратит много. */
+.slots[data-skin='kupala'] .ante {
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cab-1) 70%, #000),
+    color-mix(in srgb, var(--cab-2) 90%, #000)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 1px color-mix(in srgb, var(--bezel-3) 70%, #000);
+  color: var(--ink);
+}
+.slots[data-skin='kupala'] .ante b {
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+}
+.slots[data-skin='kupala'] .ante.is-on {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--btn-2) 26%, var(--cab-1)),
+    color-mix(in srgb, var(--cab-2) 88%, #000)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 1px color-mix(in srgb, var(--bezel-1) 70%, transparent),
+    0 0 16px color-mix(in srgb, var(--neon) 20%, transparent);
+}
+.slots[data-skin='kupala'] .ante.is-on .toggle__switch {
+  background: var(--brass);
+}
+.slots[data-skin='kupala'] .ante .toggle__switch::after {
+  background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--neon-2) 35%, #fff));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.slots[data-skin='kupala'] .buy-bonus {
+  position: relative;
+  overflow: hidden;
+  border: none;
+  border-radius: 10px;
+  color: #2a1700;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--neon-2) 55%, #fff) 0%,
+    var(--neon-2) 40%,
+    color-mix(in srgb, var(--neon-2) 60%, #000) 52%,
+    color-mix(in srgb, var(--neon-2) 35%, #000) 100%
+  );
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 0 0 1.5px color-mix(in srgb, var(--bezel-1) 80%, #fff),
+    0 0 0 3px color-mix(in srgb, var(--cab-2) 90%, #000),
+    0 4px 0 rgba(0, 0, 0, 0.6),
+    0 10px 20px rgba(0, 0, 0, 0.5);
+}
+/* Статичный лаковый блик по лицевой — та же кромка, что на корпусе. */
+.slots[data-skin='kupala'] .buy-bonus::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--spec);
+}
+/* Цена — та же гравировка, что и надпись, только тише. Светлить её здесь
+   нельзя: лицевая панель янтарная, и светлая цифра на ней пропадает. */
+.slots[data-skin='kupala'] .buy-bonus i {
+  color: rgba(42, 23, 0, 0.7);
+}
+
+/* --- 9. Поддон: латунь на лаке («Слоты») --------------------------------- */
+.slots[data-skin='kupala'] .cabinet__tray {
+  position: relative;
+  margin: 12px 6px 2px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cab-1) 45%, #000),
+    color-mix(in srgb, var(--cab-2) 95%, #000)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.7),
+    0 0 0 1px color-mix(in srgb, var(--bezel-3) 60%, #000),
+    0 -1px 0 color-mix(in srgb, var(--bezel-2) 40%, transparent);
+}
+/* Прорезь монетоприёмника с латунной губой: нижняя кромка ловит свет, и
+   щель читается как сквозная. */
+.slots[data-skin='kupala'] .cabinet__slot-in {
+  width: 64px;
+  height: 8px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #000 0 60%, color-mix(in srgb, var(--cab-3) 60%, #000));
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 1),
+    0 1px 0 color-mix(in srgb, var(--bezel-1) 70%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--bezel-3) 85%, #000);
+}
+/* Вентиляция → перламутровая вставка между двух латунных нитей. */
+.slots[data-skin='kupala'] .cabinet__vent {
+  height: 9px;
+  border-radius: 2px;
+  background: var(--nacre);
+  opacity: 0.28;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 -1px 0 color-mix(in srgb, var(--bezel-2) 70%, transparent),
+    0 1px 0 color-mix(in srgb, var(--bezel-2) 70%, transparent);
+}
+
+/* --- 10. Рычаг: латунь и перламутровый шар («Слоты») ----------------------
+   Хрома в лаковом автомате нет нигде, поэтому шток тоже латунный. */
+.slots[data-skin='kupala'] .lever::before {
+  top: 24px;
+  width: 30px;
+  height: 13px;
+  border-radius: 3px;
+  background: var(--brass);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.7);
+}
+.slots[data-skin='kupala'] .lever__slot {
+  width: 7px;
+  background: linear-gradient(180deg, #000, color-mix(in srgb, var(--cab-3) 50%, #000));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--bezel-3) 70%, #000),
+    inset 0 3px 7px rgba(0, 0, 0, 1),
+    0 1px 0 color-mix(in srgb, var(--bezel-2) 45%, transparent);
+}
+/* Шайба основания с четырьмя микровинтами — одним фоном. */
+.slots[data-skin='kupala'] .lever__base {
+  width: 28px;
+  height: 13px;
+  border-radius: 3px;
+  background:
+    radial-gradient(
+      circle 1.6px at 4px 4px,
+      color-mix(in srgb, var(--bezel-3) 90%, #000) 60%,
+      transparent 62%
+    ),
+    radial-gradient(
+      circle 1.6px at calc(100% - 4px) 4px,
+      color-mix(in srgb, var(--bezel-3) 90%, #000) 60%,
+      transparent 62%
+    ),
+    radial-gradient(
+      circle 1.6px at 4px calc(100% - 4px),
+      color-mix(in srgb, var(--bezel-3) 90%, #000) 60%,
+      transparent 62%
+    ),
+    radial-gradient(
+      circle 1.6px at calc(100% - 4px) calc(100% - 4px),
+      color-mix(in srgb, var(--bezel-3) 90%, #000) 60%,
+      transparent 62%
+    ),
+    var(--brass);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 3px 8px rgba(0, 0, 0, 0.6);
+}
+.slots[data-skin='kupala'] .lever__rod {
+  width: 7px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bezel-3) 90%, #000) 0%,
+    var(--bezel-2) 26%,
+    color-mix(in srgb, var(--bezel-1) 90%, #fff) 44%,
+    var(--bezel-2) 62%,
+    color-mix(in srgb, var(--bezel-3) 85%, #000) 100%
+  );
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+/* Шар — перламутровый. Три статичных слоя: жёсткий блик, перелив, тело. */
+.slots[data-skin='kupala'] .lever__knob {
+  width: 30px;
+  height: 30px;
+  background:
+    radial-gradient(circle 4px at 34% 26%, rgba(255, 255, 255, 0.95), transparent 70%),
+    radial-gradient(circle at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.45) 100%), var(--nacre);
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--bezel-2) 85%, #000),
+    0 7px 16px rgba(0, 0, 0, 0.65),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* --- 11. Сцена: ночь, луна и светляки ------------------------------------
+   Статичного тут почти всё: луна, зарево костра у нижнего края и тёмный
+   горизонт. Движется ровно один слой — светляки, и он движется ПЛАВНО.
+   Это вторая половина закона: металл щёлкает, свет течёт.
+   Приём тот же, что у снега «Зимы» и пыли «Реликвии»: слой вдвое выше
+   сцены едет трансформом, плитка — половина слоя, поэтому 25% = ровно одна
+   плитка и стык не виден. `background-position` не анимируется. */
+.slots[data-skin='kupala'] .slots-scene {
+  background:
+    /* Луна. Маленькая, с ОЧЕРЧЕННЫМ краем: крупное мягкое пятно читалось
+       смазом поверх заголовка, а не предметом. */
+    radial-gradient(
+      circle 22px at 86% 6%,
+      rgba(255, 252, 232, 0.82) 0 56%,
+      rgba(255, 250, 220, 0.22) 72%,
+      transparent 90%
+    ),
+    /* её холодный ореол */
+    radial-gradient(120% 46% at 84% 2%, rgba(157, 255, 87, 0.1), transparent 62%),
+    /* зарево костра снизу — единственный тёплый свет в сцене */
+    radial-gradient(90% 34% at 50% 104%, rgba(255, 150, 45, 0.3), transparent 68%),
+    linear-gradient(180deg, var(--scene-1) 0%, var(--scene-2) 64%, #000 100%);
+}
+.slots[data-skin='kupala'] .slots-scene__decor {
+  background:
+    radial-gradient(circle 2.2px at 12% 84%, rgba(190, 255, 130, 0.95), transparent 60%),
+    radial-gradient(circle 1.4px at 27% 52%, rgba(255, 213, 74, 0.7), transparent 60%),
+    radial-gradient(circle 2px at 44% 71%, rgba(190, 255, 130, 0.8), transparent 60%),
+    radial-gradient(circle 1.3px at 61% 33%, rgba(255, 213, 74, 0.6), transparent 60%),
+    radial-gradient(circle 2.4px at 80% 63%, rgba(190, 255, 130, 0.85), transparent 60%),
+    radial-gradient(circle 1.2px at 93% 24%, rgba(255, 213, 74, 0.55), transparent 60%),
+    radial-gradient(circle 1.6px at 35% 15%, rgba(190, 255, 130, 0.5), transparent 60%),
+    radial-gradient(circle 1.8px at 69% 90%, rgba(190, 255, 130, 0.6), transparent 60%),
+    /* папоротник по нижней кромке — три пологих тёмных гребня */
+    radial-gradient(ellipse 34% 9% at 14% 100%, rgba(0, 0, 0, 0.75), transparent 72%),
+    radial-gradient(ellipse 40% 7% at 56% 101%, rgba(0, 0, 0, 0.7), transparent 72%),
+    radial-gradient(ellipse 30% 8% at 90% 100%, rgba(0, 0, 0, 0.72), transparent 72%);
+  background-repeat: repeat;
+  background-size: 100% 50%;
+  top: -50%;
+  bottom: -50%;
+  will-change: transform;
+  animation: kup-fireflies calc(19s * var(--speed, 1)) linear infinite;
+}
+@keyframes kup-fireflies {
+  to {
+    transform: translateY(-25%);
+  }
+}
+
+/* --- 12. Выключение движения --------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .slots[data-skin='kupala'] .cabinet::before,
+  .slots[data-skin='kupala'] .cabinet__sign::after,
+  .slots[data-skin='kupala'] .slots-scene__decor,
+  .slots[data-skin='kupala'] .spin-btn.is-busy::after,
+  .slots[data-skin='kupala'] .cabinet__bulbs i {
+    animation: none;
+  }
+  /* Блик замирает за кадром, а не посередине вывески. */
+  .slots[data-skin='kupala'] .cabinet__sign::after,
+  .slots[data-skin='kupala'] .spin-btn.is-busy::after {
+    opacity: 0;
+  }
+  /* Инкрустация остаётся видимой — она часть материала, а не движение. */
+  .slots[data-skin='kupala'] .cabinet::before {
+    opacity: 0.22;
+  }
+  /* Лампы без бега просто горят вполсилы: ряд погасших ламп выглядит
+     поломкой, а не спокойствием. */
+  .slots[data-skin='kupala'] .cabinet__bulbs i {
+    opacity: 0.55;
+  }
+}
+
+/* --- 13. Карточка в листе скинов -----------------------------------------
+   Флагман обязан отличаться и в списке, иначе про материал узнают только
+   те, кто его уже открыл. Сам материал, без анимации: своя анимация есть
+   только у «Реликвии», и второй такой карточки быть не должно. */
+.skin-card[data-skin='kupala'] {
+  border-color: color-mix(in srgb, var(--bezel-2) 55%, transparent);
+  background:
+    var(--spec),
+    linear-gradient(0deg, color-mix(in srgb, var(--neon) 18%, transparent) 0%, transparent 30%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--cab-2) 88%, #000),
+      color-mix(in srgb, var(--cab-3) 80%, #000)
+    );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--bezel-2) 45%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.skin-card[data-skin='kupala'] .skin-card__name {
+  color: color-mix(in srgb, var(--neon) 30%, #fff);
 }

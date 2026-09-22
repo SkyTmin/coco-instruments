@@ -303,6 +303,8 @@ export const SKIN_UNLOCK: Record<string, number> = {
   olympus: 12,
   pumpkin: 1,
   abyss: 1,
+  // Флагман: самый высокий уровневый порог в проекте.
+  kupala: 15,
   // «Реликвию» уровень не открывает вовсе — см. isSkinAvailable.
   relic: 1,
 };
