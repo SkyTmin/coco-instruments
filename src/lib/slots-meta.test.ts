@@ -139,6 +139,15 @@ describe('ежедневные миссии', () => {
     }
   });
 
+  it('каждый день ровно одна цель — в шахте, две — в автоматах', () => {
+    const prison = new Set(['blocks', 'streak', 'ore']);
+    for (let d = 1; d <= 30; d++) {
+      const kinds = dailyMissions(`2026-06-${String(d).padStart(2, '0')}`).map((m) => m.kind);
+      expect(kinds.filter((k) => prison.has(k))).toHaveLength(1);
+      expect(kinds.slice(0, 2).every((k) => !prison.has(k))).toBe(true);
+    }
+  });
+
   it('за месяц набор успевает поменяться', () => {
     const seen = new Set<string>();
     for (let d = 1; d <= 30; d++) {
@@ -159,9 +168,11 @@ describe('ежедневные миссии', () => {
   });
 
   it('награда за миссию заметна, но не ломает экономику', () => {
-    for (const m of dailyMissions('2026-03-10')) {
-      expect(m.reward).toBeGreaterThan(100);
-      expect(m.reward).toBeLessThanOrEqual(1500);
+    for (let d = 1; d <= 30; d++) {
+      for (const m of dailyMissions(`2026-06-${String(d).padStart(2, '0')}`)) {
+        expect(m.reward).toBeGreaterThan(100);
+        expect(m.reward).toBeLessThanOrEqual(1500);
+      }
     }
   });
 });

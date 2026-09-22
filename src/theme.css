@@ -17222,15 +17222,18 @@ input[type='datetime-local'] {
 }
 .prison {
   /* Клетка — по ширине экрана, но так, чтобы поле влезало по высоте без
-     прокрутки: 7×9 клеток, сверху шапка и табло, снизу рюкзак. */
+     прокрутки: 7×9 клеток, сверху шапка и табло, снизу рюкзак и строка
+     пород (или проводника). Меньше 32 px клетка не бывает: на совсем низком экране
+     пусть лучше чуть прокрутится, чем поле станет с ноготь. */
+  --below: 356px;
   --cell: min(
     calc((min(100vw, 560px) - 48px) / 7),
-    calc((100vh - var(--safe-top) - var(--content-top) - 340px) / 9),
+    max(32px, calc((100vh - var(--safe-top) - var(--content-top) - var(--below)) / 9)),
     60px
   );
   --cell: min(
     calc((min(100vw, 560px) - 48px) / 7),
-    calc((100dvh - var(--safe-top) - var(--content-top) - 340px) / 9),
+    max(32px, calc((100dvh - var(--safe-top) - var(--content-top) - var(--below)) / 9)),
     60px
   );
   display: flex;
@@ -17240,13 +17243,17 @@ input[type='datetime-local'] {
   user-select: none;
   -webkit-user-select: none;
 }
+/* Проводник выше строки пород — пока он идёт, полю нужно на 30 px меньше. */
+.prison.has-guide {
+  --below: 386px;
+}
 
 /* ---- Табло ---------------------------------------------------------------- */
 .phud {
   display: grid;
   grid-template-columns: 1.25fr 0.85fr 1.2fr;
   gap: 6px;
-  width: calc(var(--cell) * 7 + 16px);
+  width: max(calc(var(--cell) * 7 + 16px), min(100%, 336px));
   max-width: 100%;
 }
 .phud__cell,
@@ -17352,6 +17359,8 @@ input[type='datetime-local'] {
 /* ---- Поле ------------------------------------------------------------------ */
 .pmine-frame {
   position: relative;
+  /* Сверху на кромке сидит полоса запала — ей нужен зазор до табло. */
+  margin-top: 8px;
   padding: 8px;
   border-radius: 10px;
   /* Крепь: брус с волокнами и четыре болта по углам. */
@@ -17583,7 +17592,7 @@ input[type='datetime-local'] {
 .pbar {
   display: flex;
   gap: 8px;
-  width: calc(var(--cell) * 7 + 16px);
+  width: max(calc(var(--cell) * 7 + 16px), min(100%, 336px));
   max-width: 100%;
 }
 .pbag,
@@ -17632,6 +17641,7 @@ input[type='datetime-local'] {
   font-size: 15px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .pbag__sell {
   display: flex;
@@ -17718,14 +17728,6 @@ input[type='datetime-local'] {
   height: 16px;
   image-rendering: pixelated;
   border-radius: 2px;
-}
-.prison-hint {
-  margin: 0;
-  max-width: calc(var(--cell) * 7 + 16px);
-  font-size: 12px;
-  line-height: 1.4;
-  text-align: center;
-  color: rgba(241, 228, 210, 0.62);
 }
 .pmine-btn {
   display: grid;
@@ -18009,7 +18011,7 @@ input[type='datetime-local'] {
 .pitems {
   display: flex;
   gap: 6px;
-  width: calc(var(--cell) * 7 + 16px);
+  width: max(calc(var(--cell) * 7 + 16px), min(100%, 336px));
   max-width: 100%;
 }
 .pitem {
@@ -18126,7 +18128,7 @@ input[type='datetime-local'] {
 .pbuffs {
   position: absolute;
   left: 10px;
-  top: -11px;
+  bottom: -11px;
   z-index: 9;
   display: flex;
   gap: 5px;
@@ -18625,6 +18627,567 @@ input[type='datetime-local'] {
   gap: 5px;
 }
 
+/* ==========================================================================
+   Смена (v2.48): запал, уровень кирки, норма выработки, проводник.
+   Всё новое — статичные слои: полоски двигаются scaleX, мигание запала —
+   прозрачностью. Метка нужной породы на клетке не анимируется вовсе: их
+   бывает два десятка на поле.
+   ========================================================================== */
+.pstrip {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: -14px;
+  z-index: 9;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  padding: 0 9px 0 3px;
+  border-radius: 11px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 200, 130, 0.14);
+  background: linear-gradient(180deg, rgba(40, 28, 20, 0.92), rgba(22, 16, 12, 0.94));
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(241, 214, 176, 0.7);
+  font-variant-numeric: tabular-nums;
+}
+.pstrip__pick {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pstrip__pick b {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 20px;
+  height: 17px;
+  padding: 0 5px 0 3px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #7a5a3a, #3f2c1a);
+  border: 1px solid rgba(255, 220, 160, 0.35);
+  color: #ffe9c4;
+  font-size: 11px;
+}
+.pstrip__xp,
+.pstrip__bar {
+  position: relative;
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.5);
+}
+.pstrip__xp {
+  width: 30px;
+}
+/* Узкая рама: темп не влезает — остаются кирка и запал. */
+@media (max-width: 350px) {
+  .pstrip__pace {
+    display: none;
+  }
+  .pstrip {
+    grid-template-columns: auto 1fr;
+  }
+}
+.pstrip__xp i,
+.pstrip__bar i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #8c6a44, #e8c48a);
+  transition: transform 0.2s linear;
+}
+.pstrip__streak {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pstrip__name {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: 1;
+}
+.pstrip__name em {
+  font-style: normal;
+  color: #9be38a;
+}
+.pstrip__pace {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+  color: #f1dcbc;
+}
+.pstrip__pace small {
+  font-size: 10px;
+  color: rgba(241, 214, 176, 0.55);
+}
+/* Ступени запала: полоска теплеет, от углей к белому огню. */
+.pstrip.is-t0 .pstrip__bar i {
+  background: linear-gradient(90deg, #8a3a14, #ff8a3a);
+}
+.pstrip.is-t1 .pstrip__bar i {
+  background: linear-gradient(90deg, #b8501a, #ffb347);
+}
+.pstrip.is-t2 .pstrip__bar i {
+  background: linear-gradient(90deg, #d8761e, #ffd35a);
+}
+.pstrip.is-t3 .pstrip__bar i {
+  background: linear-gradient(90deg, #f0a030, #fff0a0);
+}
+.pstrip.is-t4 .pstrip__bar i {
+  background: linear-gradient(90deg, #ffd35a, #ffffff);
+}
+.pstrip.is-t0 .pstrip__name,
+.pstrip.is-t1 .pstrip__name {
+  color: #ffb070;
+}
+.pstrip.is-t2 .pstrip__name,
+.pstrip.is-t3 .pstrip__name {
+  color: #ffd98a;
+}
+.pstrip.is-t4 .pstrip__name {
+  color: #fff4d0;
+}
+.pstrip.is-t2,
+.pstrip.is-t3,
+.pstrip.is-t4 {
+  border-color: rgba(255, 190, 90, 0.45);
+}
+/* Простой: запал гаснет — полоска мигает, пока не поздно. */
+.pstrip.is-cooling .pstrip__bar {
+  animation: pstrip-cool 0.7s ease-in-out infinite;
+}
+@keyframes pstrip-cool {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Порода в норму: точка в углу клетки. Статична. */
+.pcell__need {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  z-index: 3;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a6f08e;
+  box-shadow:
+    0 0 0 1.5px rgba(10, 30, 8, 0.85),
+    0 0 5px rgba(166, 240, 142, 0.8);
+  pointer-events: none;
+}
+
+.pfloat--streak {
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  color: #ffb347;
+}
+.pfloat--level {
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  color: #ffe9c4;
+}
+.pfloat--norm {
+  font-size: 12px;
+  color: #b8f7a4;
+}
+.pfloat--norm.is-done {
+  font-size: 15px;
+  color: #d9ffc9;
+}
+
+/* Норма в табло ранга. */
+.phud__rank .phud__cost {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.phud__ok {
+  color: #9be38a;
+}
+.pquota {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+.pquota__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #f1dcbc;
+  white-space: nowrap;
+}
+.pquota__chip img {
+  width: 13px;
+  height: 13px;
+  image-rendering: pixelated;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.pquota__chip.is-done {
+  color: #9be38a;
+}
+
+/* Подарок в шапке шахты — награды дня общие с автоматами. */
+.pmine-btn--gift {
+  position: relative;
+}
+.pmine-btn__badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--neg, #e5484d);
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 17px;
+  text-align: center;
+}
+
+/* Проводник. */
+.pguide {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max(calc(var(--cell) * 7 + 16px), min(100%, 336px));
+  max-width: 100%;
+  min-height: 40px;
+  padding: 5px 10px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 200, 130, 0.28);
+  background: rgba(30, 21, 15, 0.8);
+  color: #f1e4d2;
+}
+.pguide.is-ready {
+  border-style: solid;
+  border-color: rgba(155, 227, 138, 0.6);
+  background: linear-gradient(180deg, rgba(38, 56, 30, 0.92), rgba(20, 30, 16, 0.94));
+}
+.pguide__n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 10.5px;
+  font-weight: 900;
+  color: rgba(241, 214, 176, 0.75);
+  font-variant-numeric: tabular-nums;
+}
+.pguide__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pguide__body b {
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+.pguide__body i {
+  font-style: normal;
+  font-size: 10.5px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(241, 228, 210, 0.62);
+}
+.pguide.is-ready .pguide__body i {
+  color: #c9f5b8;
+}
+.pguide__prog {
+  flex: none;
+  max-width: 34%;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+  color: #ffd98a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Сводка смены — карточкой внизу поля, сама уходит. */
+.pshift {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 11px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 210, 120, 0.45);
+  background: linear-gradient(180deg, rgba(58, 38, 20, 0.95), rgba(24, 16, 10, 0.95));
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+  color: #f7e6cc;
+  pointer-events: none;
+  animation: pshift-in 0.36s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.pshift.is-out {
+  animation: pcard-out 0.26s ease both;
+}
+.pshift i {
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffcf7a;
+}
+.pshift b {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+}
+.pshift em {
+  font-style: normal;
+  font-size: 12px;
+  color: #b8f4e6;
+}
+@keyframes pshift-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* Лист нормы. */
+.pnorm__lead,
+.pnorm__note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.pnorm__note {
+  font-size: 12px;
+}
+.pnorm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pnorm__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.pnorm__row > img,
+.pnorm__coin {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+.pnorm__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pnorm__info b {
+  font-size: 14px;
+}
+.pnorm__info > i {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pnorm__bar {
+  position: relative;
+  height: 5px;
+  margin-top: 3px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.pnorm__bar i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #b8762e, #ffcf5a);
+}
+.pnorm__row.is-done .pnorm__bar i {
+  background: linear-gradient(90deg, #4f9a3a, #9be38a);
+}
+.pnorm__n {
+  flex: none;
+  font-size: 14px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.pnorm__row.is-done .pnorm__n {
+  color: #5fbf4a;
+}
+.prank__norm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(247, 230, 204, 0.8);
+}
+.prank__norm .pquota {
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Лагерь → Чары: уровень кирки, покупка пачкой, выключатели. */
+.pench-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 12px;
+}
+.pench-pick__lv {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.pench-pick__bar {
+  position: relative;
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.pench-pick__bar i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #8c6a44, #e8c48a);
+}
+.pench-pick__txt {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pench-bulk {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.pench-bulk__b {
+  height: 30px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.pench-bulk__b.is-on {
+  background: #1f3a36;
+  color: #d8fff6;
+}
+.pforge__row.is-locked {
+  opacity: 0.55;
+}
+.pforge__row.is-off .pench-glyph {
+  opacity: 0.4;
+}
+.pench-cap {
+  color: #ffb070;
+}
+.pench-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 3px;
+}
+.pench-tools .pench-reset {
+  margin-left: 0;
+}
+.pench-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.pench-switch i {
+  position: relative;
+  width: 26px;
+  height: 15px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+  transition: background 0.15s ease;
+}
+.pench-switch i::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+.pench-switch.is-on {
+  color: #5fbf4a;
+}
+.pench-switch.is-on i {
+  background: #4f9a3a;
+}
+.pench-switch.is-on i::after {
+  transform: translateX(11px);
+}
+.pforge__k {
+  font-style: normal;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pmine-frame::after,
   .pfindcard,
@@ -18635,7 +19198,9 @@ input[type='datetime-local'] {
   .prank,
   .prank__card,
   .prank__letter,
-  .pmine__toast {
+  .pmine__toast,
+  .pstrip.is-cooling .pstrip__bar,
+  .pshift {
     animation: none;
   }
 }

@@ -22,8 +22,11 @@ import {
   crewRate,
   crewYield,
   ENCHANTS,
+  enchantCap,
   enchantCost,
   enchantRefund,
+  ENCHANT_TOGGLE,
+  ENCHANT_UNLOCK,
   FINDS,
   findsFound,
   findsMult,
@@ -32,6 +35,7 @@ import {
   modsOf,
   PERKS,
   perkPointsFree,
+  pickLevelOf,
   PICKS,
   PRESTIGE_KEYS,
   rankLetter,
@@ -289,7 +293,9 @@ function ForgeTab({ onSpend }: { onSpend: () => void }) {
       <div className="pforge__now">
         <PickIcon pick={p.pick} size={40} />
         <span>
-          <b>{cur.name} кирка</b>
+          <b>
+            {cur.name} кирка · ур. {pickLevelOf(p.pickXp).level}
+          </b>
           <i>
             урон {dmg.toFixed(dmg < 10 ? 1 : 0)} · {(cur.rate * m.rate).toFixed(1)} удара в секунду
             · крит {Math.round(CRIT_CHANCE * 100)}% ×{CRIT_MULT}
@@ -397,79 +403,183 @@ function enchantNow(id: EnchantId, p: PrisonState): string {
   }
 }
 
+/** Сколько уровней чары возьмёт кнопка и во что это встанет. */
+function enchantPlan(
+  id: EnchantId,
+  p: PrisonState,
+  want: number,
+): { k: number; price: number; next: number } {
+  const cap = enchantCap(id, pickLevelOf(p.pickXp).level);
+  let l = p.ench[id];
+  let tokens = p.tokens;
+  let k = 0;
+  let price = 0;
+  const next = l < cap ? enchantCost(id, l) : 0;
+  while (k < want && l < cap) {
+    const c = enchantCost(id, l);
+    if (tokens < c) break;
+    tokens -= c;
+    price += c;
+    l += 1;
+    k += 1;
+  }
+  return { k, price, next };
+}
+
+const BULK: { n: number; label: string }[] = [
+  { n: 1, label: '+1' },
+  { n: 5, label: '+5' },
+  { n: 25, label: '+25' },
+  { n: 1e9, label: 'Макс' },
+];
+
 function EnchantTab() {
   const p = useFinanceStore((s) => s.prison);
   const prisonEnchant = useFinanceStore((s) => s.prisonEnchant);
   const prisonEnchantReset = useFinanceStore((s) => s.prisonEnchantReset);
+  const prisonEnchantToggle = useFinanceStore((s) => s.prisonEnchantToggle);
   const [confirm, setConfirm] = useState<EnchantId | null>(null);
+  const [bulk, setBulk] = useState(1);
+  const lvl = pickLevelOf(p.pickXp);
   return (
     <div className="pforge">
       <div className="pcamp-purse">
         <TokenIcon size={18} /> <b>{fmt(p.tokens)}</b> токенов
         <span>падают с блоков, Токенист — чаще</span>
       </div>
+      <div className="pench-pick">
+        <span className="pench-pick__lv">
+          <PickIcon pick={p.pick} size={20} /> Кирка ур. {lvl.level}
+        </span>
+        <span className="pench-pick__bar">
+          <i style={{ transform: `scaleX(${lvl.need ? lvl.into / lvl.need : 1})` }} />
+        </span>
+        <span className="pench-pick__txt">
+          {lvl.need ? `ещё ${fmt(lvl.need - lvl.into)} блоков` : 'максимум'}
+        </span>
+      </div>
+      <div className="pench-bulk" role="radiogroup" aria-label="Сколько уровней брать">
+        {BULK.map((b) => (
+          <button
+            key={b.n}
+            type="button"
+            role="radio"
+            aria-checked={bulk === b.n}
+            className={`pench-bulk__b${bulk === b.n ? ' is-on' : ''}`}
+            onClick={() => {
+              selectionChanged();
+              setBulk(b.n);
+            }}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
       {ENCHANTS.map((e) => {
         const l = p.ench[e.id];
-        const cost = enchantCost(e.id, l);
+        const cap = enchantCap(e.id, lvl.level);
+        const locked = cap === 0;
         const maxed = l >= e.max;
+        const plan = enchantPlan(e.id, p, bulk);
+        const off = p.off.includes(e.id);
+        const toggle = ENCHANT_TOGGLE.includes(e.id) && l > 0;
         return (
-          <Row
+          <div
             key={e.id}
-            icon={<span className="pforge__glyph pench-glyph">{e.glyph}</span>}
-            title={
-              <>
+            className={`pforge__row${locked ? ' is-locked' : ''}${off ? ' is-off' : ''}`}
+          >
+            <span className="pforge__ico">
+              <span className="pforge__glyph pench-glyph">{locked ? '🔒' : e.glyph}</span>
+            </span>
+            <span className="pforge__info">
+              <b>
                 {e.name}{' '}
                 <span className="pench-lvl">
-                  {l}/{e.max}
+                  {l}/{maxed || locked ? e.max : cap}
                 </span>
-              </>
-            }
-            text={
-              <>
-                {l ? enchantNow(e.id, p) : e.per}
-                {l > 0 && (
-                  <button
-                    type="button"
-                    className={`pench-reset${confirm === e.id ? ' is-armed' : ''}`}
-                    onClick={() => {
-                      if (confirm !== e.id) {
-                        setConfirm(e.id);
-                        return;
-                      }
-                      setConfirm(null);
-                      prisonEnchantReset(e.id);
-                      notifySuccess();
-                    }}
-                  >
-                    {confirm === e.id ? `вернуть ${fmt(enchantRefund(e.id, l))}?` : 'сбросить'}
-                  </button>
+              </b>
+              <i>
+                {locked
+                  ? `Откроется на ${ENCHANT_UNLOCK[e.id]} уровне кирки`
+                  : l
+                    ? off
+                      ? 'отключено — не срабатывает'
+                      : enchantNow(e.id, p)
+                    : e.per}
+                {!locked && !maxed && l >= cap && (
+                  <span className="pench-cap"> · потолок растёт с уровнем кирки</span>
                 )}
-              </>
-            }
-            action={
-              maxed ? (
-                <Done>Макс.</Done>
-              ) : (
-                <Buy
-                  token
-                  price={cost}
-                  can={p.tokens >= cost}
-                  onClick={() => {
-                    primeAudio();
-                    if (!prisonEnchant(e.id)) {
-                      notifyWarning();
-                      return;
-                    }
-                    tierBreak(l + 1 >= e.max ? 2 : 0);
-                    notifySuccess();
-                  }}
-                />
-              )
-            }
-          />
+              </i>
+              {(toggle || l > 0) && (
+                <span className="pench-tools">
+                  {toggle && (
+                    <button
+                      type="button"
+                      className={`pench-switch${off ? '' : ' is-on'}`}
+                      aria-pressed={!off}
+                      onClick={() => {
+                        selectionChanged();
+                        prisonEnchantToggle(e.id);
+                      }}
+                    >
+                      <i />
+                      {off ? 'выкл' : 'вкл'}
+                    </button>
+                  )}
+                  {l > 0 && (
+                    <button
+                      type="button"
+                      className={`pench-reset${confirm === e.id ? ' is-armed' : ''}`}
+                      onClick={() => {
+                        if (confirm !== e.id) {
+                          setConfirm(e.id);
+                          return;
+                        }
+                        setConfirm(null);
+                        prisonEnchantReset(e.id);
+                        notifySuccess();
+                      }}
+                    >
+                      {confirm === e.id ? `вернуть ${fmt(enchantRefund(e.id, l))}?` : 'сбросить'}
+                    </button>
+                  )}
+                </span>
+              )}
+            </span>
+            {maxed ? (
+              <Done>Макс.</Done>
+            ) : locked ? (
+              <Done>ур. {ENCHANT_UNLOCK[e.id]}</Done>
+            ) : l >= cap ? (
+              <Done>Потолок</Done>
+            ) : (
+              <button
+                type="button"
+                className="btn btn--sm pforge__buy"
+                disabled={plan.k === 0}
+                onClick={() => {
+                  primeAudio();
+                  const got = prisonEnchant(e.id, bulk);
+                  if (!got) {
+                    notifyWarning();
+                    return;
+                  }
+                  tierBreak(l + got >= e.max ? 2 : got >= 5 ? 1 : 0);
+                  notifySuccess();
+                }}
+              >
+                {plan.k > 1 && <em className="pforge__k">+{plan.k}</em>}
+                {shortMoney(plan.k ? plan.price : plan.next)} <TokenIcon size={12} />
+              </button>
+            )}
+          </div>
         );
       })}
-      <p className="pcamp-note">Сброс возвращает половину токенов, потраченных на чары.</p>
+      <p className="pcamp-note">
+        Уровень кирки растёт от каждого сломанного блока: открывает новые чары и поднимает их
+        потолок. Жилу, взрыв, отбойник и кураж можно выключить, не теряя уровней. Сброс возвращает
+        половину токенов.
+      </p>
     </div>
   );
 }

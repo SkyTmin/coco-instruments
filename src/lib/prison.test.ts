@@ -39,13 +39,36 @@ import {
   SHARP_MAX,
 } from './prison';
 import type { EnchantId, Enchants } from './prison';
+import {
+  decayStreak,
+  enchantCap,
+  pickLevelOf,
+  quotaBuyout,
+  quotaDone,
+  rankQuota,
+  rockShare,
+  STREAK_GRACE_MS,
+  STREAK_DECAY_MS,
+  STREAK_TIERS,
+  streakLoot,
+  streakTier,
+} from './prison';
 import { MAX_BET } from './slots';
+
+/** Средняя прибавка запала за смену в 8 минут при `bps` блоков в секунду. */
+function sessionStreak(bps: number, sec = 480): number {
+  let sum = 0;
+  for (let t = 0; t < sec; t++) sum += streakLoot(bps * t);
+  return sum / sec;
+}
 
 /**
  * Игрок, который держит палец на клетке и тратит деньги разумно: кирку
  * берёт, когда она не дороже двух с половиной рангов, заточку — когда она
  * не дороже трети ранга. Токены тратит на зачарование, которое сильнее
- * всего поднимает доход за токен. 8% времени уходит на продажу и переходы.
+ * всего поднимает доход за токен. Копает сменами по 8 минут (запал), 8%
+ * времени уходит на продажу и переходы. Породу НЕ выбирает — копает вслепую,
+ * поэтому норму добирает в среднем по доле породы в шахте.
  */
 function run(opts: { buyPicks?: boolean; until?: number; enchants?: boolean } = {}) {
   const until = opts.until ?? LAST_RANK;
@@ -54,15 +77,36 @@ function run(opts: { buyPicks?: boolean; until?: number; enchants?: boolean } = 
   let rank = 0;
   let pick = 0;
   let sharp = 0;
+  let xp = 0;
+  let inRank = 0;
   const ench: Enchants = { ...NO_ENCHANTS };
   let t = 0;
   let last = 0;
   const took: number[] = [];
-  const income = (e: Enchants) => incomeRate(rank, pick, sharp, modsOf({ ench: e, prestige: 0 }));
+  /**
+   * Во сколько раз добыть норму вслепую дольше, чем накопить на ранг с нуля
+   * (мерится в момент входа в ранг, без переноса денег с прошлого).
+   */
+  const quotaLag: number[] = [];
+  let measured = -1;
+  const mods = (e: Enchants) => modsOf({ ench: e, prestige: 0, pickXp: xp });
+  const income = (e: Enchants) => incomeRate(rank, pick, sharp, mods(e));
   while (rank < until && t < 30 * 3600) {
-    const m = modsOf({ ench, prestige: 0 });
-    money += income(ench) * 0.92;
-    tokens += blockRate(rank, pick, sharp, m) * 0.92 * m.tokenChance * 2;
+    const m = mods(ench);
+    const bps = blockRate(rank, pick, sharp, m) * 0.92;
+    const perSec = income(ench) * 0.92 * (1 + sessionStreak(bps));
+    if (measured !== rank) {
+      measured = rank;
+      const coinTime = rankCost(rank) / perSec;
+      const quotaTime = Math.max(
+        ...rankQuota(rank).map((q) => q.n / (bps * rockShare(rank, q.rock))),
+      );
+      quotaLag.push(quotaTime / coinTime);
+    }
+    money += perSec;
+    tokens += bps * m.tokenChance * 2;
+    xp += bps;
+    inRank += bps;
     t += 1;
     if (opts.enchants !== false && t % 20 === 0) {
       // Лучшее зачарование за токен из тех, что двигают доход; Токенист —
@@ -99,14 +143,16 @@ function run(opts: { buyPicks?: boolean; until?: number; enchants?: boolean } = 
       sharp += 1;
       continue;
     }
-    if (money >= cost) {
+    const quotaMet = rankQuota(rank).every((q) => inRank * rockShare(rank, q.rock) >= q.n);
+    if (money >= cost && quotaMet) {
       money -= cost;
       rank += 1;
       took.push(t - last);
       last = t;
+      inRank = 0;
     }
   }
-  return { t, took, pick, rank, ench };
+  return { t, took, pick, rank, ench, quotaLag, xp };
 }
 
 describe('темп каторги', () => {
@@ -117,10 +163,23 @@ describe('темп каторги', () => {
   });
 
   it('A→Z — вечер-другой, а не неделя и не полчаса', () => {
+    // Игрок из симуляции копает вслепую; кто ищет редкую породу прицельно,
+    // добирает норму раньше. Поэтому нижняя граница — 1,8 часа, а не два.
     const { t, rank } = run();
     expect(rank).toBe(LAST_RANK);
-    expect(t / 3600).toBeGreaterThan(2);
+    expect(t / 3600).toBeGreaterThan(1.8);
     expect(t / 3600).toBeLessThan(5);
+  });
+
+  it('норма ощутима, но не стена', () => {
+    const { quotaLag } = run();
+    // Хотя бы в трети рангов норма добирается ПОСЛЕ денег — она правда
+    // задаёт, что копать, а не отмечается сама собой.
+    const felt = quotaLag.filter((x) => x > 1).length;
+    expect(felt).toBeGreaterThanOrEqual(Math.floor(quotaLag.length / 3));
+    // И нигде копание вслепую не тянет ранг вдвое дольше денег.
+    expect(Math.max(...quotaLag)).toBeLessThan(2);
+    expect(Math.min(...quotaLag)).toBeGreaterThan(0.5);
   });
 
   it('ни один ранг не тянется дольше получаса', () => {
@@ -336,5 +395,60 @@ describe('сундуки, находки, бригада, перки', () => {
     const p = norm({ ...PRISON_START, prestige: 3 });
     expect(perkPointsFree(p)).toBe(6);
     expect(perkPointsFree({ ...p, perks: { ...p.perks, dealer: 2, blat: 1 } })).toBe(3);
+  });
+});
+
+describe('запал, уровень кирки, норма', () => {
+  it('запал держится паузу и гаснет по ступени', () => {
+    const s = STREAK_TIERS[3].at + 50;
+    expect(streakTier(s)).toBe(3);
+    expect(decayStreak(s, STREAK_GRACE_MS)).toBe(s);
+    expect(decayStreak(s, STREAK_GRACE_MS + 1)).toBe(STREAK_TIERS[2].at);
+    expect(decayStreak(s, STREAK_GRACE_MS + STREAK_DECAY_MS + 1)).toBe(STREAK_TIERS[1].at);
+    expect(decayStreak(s, 60_000)).toBe(0);
+    expect(streakLoot(0)).toBe(0);
+  });
+
+  it('запал множит добычу вместе с Удачей', () => {
+    let seed = 3;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+    const m = modsOf({ ench: { ...NO_ENCHANTS, fortune: 5 }, prestige: 0 });
+    const n = 20000;
+    const d = rollDrops(new Array<number>(n).fill(2), m, rnd, { streak: 0.28 });
+    const expect_ = (1 + m.fortune) * 1.28;
+    expect(d.units.length / n).toBeGreaterThan(expect_ - 0.04);
+    expect(d.units.length / n).toBeLessThan(expect_ + 0.04);
+  });
+
+  it('уровень кирки растёт от блоков и открывает чары ветками', () => {
+    expect(pickLevelOf(0).level).toBe(1);
+    expect(pickLevelOf(100).level).toBe(2);
+    expect(enchantCap('hammer', 17)).toBe(0);
+    expect(enchantCap('hammer', 18)).toBeGreaterThan(0);
+    for (const e of ENCHANTS) expect(enchantCap(e.id, 40)).toBe(e.max);
+    // Первый круг A→Z доводит кирку примерно до середины лестницы.
+    const { xp } = run();
+    const lvl = pickLevelOf(xp).level;
+    expect(lvl).toBeGreaterThan(20);
+    expect(lvl).toBeLessThan(40);
+  });
+
+  it('норма — самая новая порода шахты и та, что перед ней', () => {
+    const q = rankQuota(10);
+    expect(q.map((x) => x.rock)).toEqual([10, 9]);
+    expect(rankQuota(0)).toEqual([{ rock: 0, n: rankQuota(0)[0].n }]);
+    expect(quotaDone(q, { 10: q[0].n, 9: q[1].n })).toBe(true);
+    expect(quotaDone(q, { 10: q[0].n })).toBe(false);
+  });
+
+  it('откуп пропорционален недобору', () => {
+    const q = rankQuota(8);
+    const none = quotaBuyout(8, 0, {});
+    const half = quotaBuyout(8, 0, { 8: Math.ceil(q[0].n / 2), 7: Math.ceil(q[1].n / 2) });
+    expect(half).toBeLessThan(none);
+    expect(half).toBeGreaterThan(0);
+    expect(quotaBuyout(8, 0, { 8: q[0].n, 7: q[1].n })).toBe(0);
+    expect(none).toBeLessThanOrEqual(rankCost(8));
+    expect(rockShare(8, 8)).toBeGreaterThan(0.05);
   });
 });

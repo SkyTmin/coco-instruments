@@ -10,6 +10,7 @@
 
 import type { SlotSymbolId } from '@/types';
 import type { Skin } from './skins';
+import { STREAK_TIERS } from './prison';
 
 // ---------------------------------------------------------------------------
 // Ежедневная лесенка: чем дольше серия, тем крупнее награда. Пропустил день —
@@ -148,9 +149,19 @@ export function levelReward(level: number): LevelReward {
 // ---------------------------------------------------------------------------
 // Ежедневные миссии: три цели в день, одинаковые на любом устройстве —
 // генерируются детерминированно от даты, поэтому их не нужно хранить.
+// Две цели — автоматы, третья — «Каторга»: деньги в зале общие, и задания
+// дня тоже общие, поэтому шахта не живёт отдельной игрой.
 // ---------------------------------------------------------------------------
 
-export type MissionKind = 'spins' | 'wins' | 'triple' | 'coins' | 'bigbet';
+export type MissionKind =
+  | 'spins'
+  | 'wins'
+  | 'triple'
+  | 'coins'
+  | 'bigbet'
+  | 'blocks'
+  | 'streak'
+  | 'ore';
 
 export interface Mission {
   id: string;
@@ -168,17 +179,22 @@ export const EMPTY_COUNTERS: MissionCounters = {
   triple: 0,
   coins: 0,
   bigbet: 0,
+  blocks: 0,
+  streak: 0,
+  ore: 0,
 };
 
 /** Ставка, с которой спин считается «крупным» для миссии bigbet. */
 export const BIG_BET = 100;
 
-const MISSION_POOL: {
+interface MissionDef {
   kind: MissionKind;
   goals: number[];
   reward: (g: number) => number;
   title: (g: number) => string;
-}[] = [
+}
+
+const MISSION_POOL: MissionDef[] = [
   {
     kind: 'spins',
     goals: [20, 30, 50],
@@ -211,6 +227,28 @@ const MISSION_POOL: {
   },
 ];
 
+/** Задания шахты: одно в день. `streak` — номер ступени запала (2 — «Раж»). */
+const PRISON_POOL: MissionDef[] = [
+  {
+    kind: 'blocks',
+    goals: [200, 400, 700],
+    reward: (g) => Math.round(g * 1.5),
+    title: (g) => `Сломать ${g} блоков в «Каторге»`,
+  },
+  {
+    kind: 'streak',
+    goals: [2, 3, 4],
+    reward: (g) => [0, 150, 300, 600, 1200][g],
+    title: (g) => `Разжечь запал до «${STREAK_TIERS[g - 1].name}»`,
+  },
+  {
+    kind: 'ore',
+    goals: [500, 1500, 4000],
+    reward: (g) => Math.round(g * 0.3),
+    title: (g) => `Продать добычи на ${g.toLocaleString('ru-RU')} монет`,
+  },
+];
+
 /** Простой детерминированный хеш строки — из даты получаем «случайный» набор. */
 function hash(str: string): number {
   let h = 2166136261;
@@ -221,12 +259,19 @@ function hash(str: string): number {
   return h >>> 0;
 }
 
-/** Три миссии на календарный день. */
+/** `n` определений из пула, перемешанных хешем даты. */
+function pickFor(today: string, pool: MissionDef[], n: number, salt = ''): MissionDef[] {
+  return pool
+    .map((m, i) => ({ m, k: hash(`${today}#${salt}${i}`) }))
+    .sort((a, b) => a.k - b.k)
+    .slice(0, n)
+    .map(({ m }) => m);
+}
+
+/** Три миссии на календарный день: две в автоматах, одна в шахте. */
 export function dailyMissions(today = dayKey()): Mission[] {
-  const order = MISSION_POOL.map((m, i) => ({ m, i, k: hash(`${today}#${i}`) })).sort(
-    (a, b) => a.k - b.k,
-  );
-  return order.slice(0, 3).map(({ m }) => {
+  const picked = [...pickFor(today, MISSION_POOL, 2), ...pickFor(today, PRISON_POOL, 1, 'p')];
+  return picked.map((m) => {
     const goal = m.goals[hash(`${today}/${m.kind}`) % m.goals.length];
     return {
       id: `${today}:${m.kind}`,

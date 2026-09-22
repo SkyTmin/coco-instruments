@@ -443,7 +443,7 @@ export function minedShare(dug: number[]): number {
 // ---------------------------------------------------------------------------
 
 export const RANK_BASE = 250;
-export const RANK_GROWTH = 1.36;
+export const RANK_GROWTH = 1.37;
 /** Престиж: сброс на A с сохранением кирки и +25% к продаже за каждый. */
 export const PRESTIGE_BASE = 400_000;
 export const PRESTIGE_SELL = 0.25;
@@ -760,24 +760,37 @@ export function modsOf(p: {
   prestige: number;
   perks?: Perks;
   finds?: Finds;
+  pickXp?: number;
+  off?: EnchantId[];
 }): Mods {
-  const e = p.ench;
+  // Отключённая чара (игрок выключил её в мастерской) не срабатывает, но и
+  // не теряет уровни: включил — и она снова в деле.
+  const off = p.off ?? [];
+  const lv = (id: EnchantId) => (off.includes(id) ? 0 : p.ench[id]);
   const k = p.perks ?? NO_PERKS;
   const nose = 1 + 0.2 * k.nose;
+  const level = pickLevelOf(p.pickXp ?? 0).level;
   return {
-    dmg: 1 + 0.1 * e.power,
+    // Сноровка: каждый уровень кирки — ещё процент к урону.
+    dmg: (1 + 0.1 * lv('power')) * (1 + PICK_LEVEL_DMG * (level - 1)),
     rate: 1 + 0.08 * k.grip,
     sell: sellMult(p.prestige) * (1 + 0.06 * k.dealer) * findsMult(p.finds ?? {}),
-    fortune: 0.06 * e.fortune,
-    vein: 0.025 * e.vein,
-    veinMax: 3 + Math.floor(e.vein / 4),
-    blast: 0.01 * e.blast,
-    hammer: 0.002 * e.hammer,
-    frenzy: 0.0008 * e.frenzy,
-    tokenChance: TOKEN_CHANCE * (1 + 0.15 * e.token) * (1 + 0.1 * k.lucky),
-    keyChance: (KEY_CHANCE + 0.0005 * e.key) * nose,
+    fortune: 0.06 * lv('fortune'),
+    vein: 0.025 * lv('vein'),
+    veinMax: 3 + Math.floor(lv('vein') / 4),
+    blast: 0.01 * lv('blast'),
+    hammer: 0.002 * lv('hammer'),
+    frenzy: 0.0008 * lv('frenzy'),
+    tokenChance: TOKEN_CHANCE * (1 + 0.15 * lv('token')) * (1 + 0.1 * k.lucky),
+    keyChance: (KEY_CHANCE + 0.0005 * lv('key')) * nose,
     findChance: FIND_CHANCE * nose,
   };
+}
+
+/** Целое число с вероятностным остатком: 2,3 → 2 или 3 (с шансом 30%). */
+function rollCount(x: number, rnd: () => number): number {
+  const whole = Math.floor(x);
+  return whole + (rnd() < x - whole ? 1 : 0);
 }
 
 export interface Drops {
@@ -793,7 +806,7 @@ export function rollDrops(
   rocks: number[],
   m: Mods,
   rnd: () => number,
-  opts: { frenzy?: boolean; mine?: number } = {},
+  opts: { frenzy?: boolean; mine?: number; streak?: number } = {},
 ): Drops {
   const units: number[] = [];
   let tokens = 0;
@@ -801,8 +814,12 @@ export function rollDrops(
   const finds: FindId[] = [];
   const whole = Math.floor(m.fortune);
   const frac = m.fortune - whole;
+  const streak = Math.max(0, opts.streak ?? 0);
   for (const rock of rocks) {
     let n = 1 + whole + (rnd() < frac ? 1 : 0);
+    // Запал множит уже посчитанную Удачу: серия и чара складываются как
+    // множители, а не как проценты.
+    if (streak > 0) n = rollCount(n * (1 + streak), rnd);
     if (opts.frenzy) n *= FRENZY_LOOT;
     for (let i = 0; i < n; i++) units.push(rock);
     if (rnd() < m.tokenChance)
@@ -814,6 +831,206 @@ export function rollDrops(
     }
   }
   return { units, tokens, keys, finds };
+}
+
+// ---------------------------------------------------------------------------
+// Запал — серия копания, как Momentum на присон-серверах. Каждый сломанный
+// блок подбрасывает счётчик, ступени дают прибавку к добыче. Перестал бить —
+// через несколько секунд запал гаснет по ступени. Хранится только в странице:
+// это награда за то, что ты копаешь СЕЙЧАС, её не накопить впрок.
+//
+// Ступени названы по-шахтёрски, и четвёртая не случайно «Стахановец»: норма
+// выработки — главная механика рангов, а Стаханов вошёл в историю тем, что
+// перекрыл её в четырнадцать раз.
+// ---------------------------------------------------------------------------
+
+export interface StreakTier {
+  name: string;
+  /** С какого счёта серии открывается ступень. */
+  at: number;
+  /** Прибавка к добыче: 0,25 — четверть блоков сверху. */
+  loot: number;
+}
+
+export const STREAK_TIERS: StreakTier[] = [
+  { name: 'Разогрев', at: 40, loot: 0.04 },
+  { name: 'Раж', at: 150, loot: 0.1 },
+  { name: 'В ударе', at: 400, loot: 0.18 },
+  { name: 'Стахановец', at: 1000, loot: 0.28 },
+  { name: 'Легенда забоя', at: 2500, loot: 0.4 },
+];
+
+/** Пауза, после которой запал начинает гаснуть, и шаг угасания. */
+export const STREAK_GRACE_MS = 4000;
+export const STREAK_DECAY_MS = 2500;
+
+/** Номер ступени (−1 — запала нет). */
+export function streakTier(streak: number): number {
+  let t = -1;
+  for (let i = 0; i < STREAK_TIERS.length; i++) if (streak >= STREAK_TIERS[i].at) t = i;
+  return t;
+}
+
+export function streakLoot(streak: number): number {
+  const t = streakTier(streak);
+  return t < 0 ? 0 : STREAK_TIERS[t].loot;
+}
+
+/**
+ * Серия после простоя `idleMs`. Первые STREAK_GRACE_MS ничего не теряется
+ * (продать рюкзак и вернуться — не повод гасить), дальше каждые
+ * STREAK_DECAY_MS — минус ступень, и счёт встаёт на её нижнюю границу.
+ */
+export function decayStreak(streak: number, idleMs: number): number {
+  if (idleMs <= STREAK_GRACE_MS || streak <= 0) return streak;
+  const steps = Math.floor((idleMs - STREAK_GRACE_MS) / STREAK_DECAY_MS) + 1;
+  const t = streakTier(streak) - steps;
+  return t >= 0 ? STREAK_TIERS[t].at : 0;
+}
+
+// ---------------------------------------------------------------------------
+// Уровень кирки. Опыт — сломанные блоки (любые: удар, жила, взрыв). Уровень
+// открывает чары по веткам (Отбойник не купишь с новенькой киркой) и
+// поднимает их потолок; каждый уровень — ещё процент к урону. Так у каждого
+// удара появляется смысл: даже мелкий блок двигает полоску.
+// ---------------------------------------------------------------------------
+
+export const PICK_LEVEL_MAX = 50;
+export const PICK_LEVEL_DMG = 0.005;
+
+/** Опыта, чтобы уйти с уровня `level` на следующий. */
+export function pickXpFor(level: number): number {
+  return Math.round(100 * Math.pow(1.13, level - 1));
+}
+
+export function pickLevelOf(xp: number): { level: number; into: number; need: number } {
+  let level = 1;
+  let rest = Math.max(0, Math.floor(xp || 0));
+  for (;;) {
+    const need = pickXpFor(level);
+    if (level >= PICK_LEVEL_MAX) return { level, into: 0, need: 0 };
+    if (rest < need) return { level, into: rest, need };
+    rest -= need;
+    level += 1;
+  }
+}
+
+/** С какого уровня кирки открывается чара. */
+export const ENCHANT_UNLOCK: Record<EnchantId, number> = {
+  power: 1,
+  fortune: 1,
+  token: 1,
+  vein: 3,
+  key: 5,
+  blast: 8,
+  frenzy: 12,
+  hammer: 18,
+};
+
+/** Потолок уровня чары при данном уровне кирки: к 40-му открыт весь. */
+export function enchantCap(id: EnchantId, pickLevel: number): number {
+  const e = enchantOf(id);
+  if (pickLevel < ENCHANT_UNLOCK[id]) return 0;
+  return Math.min(e.max, 3 + Math.floor((pickLevel * e.max) / 40));
+}
+
+/**
+ * Чары, которые можно выключить, не сбрасывая: те, что меняют САМО копание
+ * (ломают соседей, ускоряют кирку). Иногда нужен точный удар — например,
+ * добрать норму в одном месте, не сметя всё вокруг.
+ */
+export const ENCHANT_TOGGLE: EnchantId[] = ['vein', 'blast', 'hammer', 'frenzy'];
+
+/** Награда за новый уровень кирки: токены, а каждый пятый — ещё ключ. */
+export function pickLevelReward(level: number): { tokens: number; keys: number } {
+  return { tokens: 10 * level, keys: level % 5 === 0 ? 1 : 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Норма выработки — как на русских присонах (VimeWorld, Mineland): для ранга
+// мало денег, нужно ещё добыть определённые породы. Норма берёт самую новую,
+// редкую породу шахты и ту, что перед ней. Из-за этого деньгами одними не
+// обойтись: занос в автомате даёт монеты, а редкую породу надо выкопать —
+// искать её на глубине, водить лупой.
+//
+// Но деньги общие, и в этом прикол игры — поэтому норму можно ОТКУПИТЬ.
+// Цена откупа пропорциональна недобору: почти выполненная норма стоит
+// копейки, нетронутая — больше половины цены ранга.
+//
+// Размер нормы не на глаз: тест темпа гоняет игрока, который копает
+// вслепую, и проверяет, что к моменту, когда накоплены деньги, редкая
+// порода у него добрана на две трети–полностью. Кто ищет её прицельно —
+// успевает раньше.
+// ---------------------------------------------------------------------------
+
+export interface Quota {
+  rock: number;
+  n: number;
+}
+
+/** Доля породы `rock` среди всех блоков шахты `mine`, по всем ярусам. */
+export function rockShare(mine: number, rock: number): number {
+  let share = 0;
+  for (let d = 0; d < DEPTH; d++) {
+    for (const s of mineMix(mine)) {
+      const up = s.rock < mine ? DEPTH_BOOST[d] : 0;
+      if (s.rock === rock) share += (s.share * (1 - up)) / DEPTH;
+      if (s.rock + 1 === rock && up > 0) share += (s.share * up) / DEPTH;
+    }
+  }
+  return share;
+}
+
+/**
+ * «Объём работы» ранга в блоках — сколько блоков нужно продать, чтобы
+ * набрать его цену. Норма берёт долю от этого объёма. Удача и запал
+ * множат ДОБЫЧУ, а норма считает БЛОКИ: деньги они ускоряют, норму — нет.
+ * Так норма ощутима на любом ранге, а не только в начале.
+ */
+export const QUOTA_WORK = 1;
+/**
+ * Чары и запал множат добычу с блока, поэтому к концу круга на ранг нужно
+ * всё меньше БЛОКОВ. Норма стареет с той же скоростью — иначе к рангу X
+ * она тянула бы вдвое дольше денег, и слепое копание превращалось в стену.
+ */
+export const QUOTA_FADE = 1.021;
+/** Норма на редкую породу чуть выше того, что даёт копание вслепую. */
+export const QUOTA_NEW = 1.1;
+export const QUOTA_OLD = 0.8;
+/** Откуп всей нормы целиком — такая доля цены ранга. */
+export const QUOTA_BUYOUT = 0.6;
+
+/** Норма для перехода с ранга `rank` на следующий. */
+export function rankQuota(rank: number, prestige = 0): Quota[] {
+  const blocks =
+    ((rankCost(rank, prestige) / avgValue(rank)) * QUOTA_WORK) / Math.pow(QUOTA_FADE, rank);
+  if (rank === 0) return [{ rock: 0, n: nice(blocks * 0.5) }];
+  return [
+    { rock: rank, n: Math.max(5, nice(blocks * rockShare(rank, rank) * QUOTA_NEW)) },
+    { rock: rank - 1, n: Math.max(10, nice(blocks * rockShare(rank, rank - 1) * QUOTA_OLD)) },
+  ];
+}
+
+/** Сколько нормы выполнено, доля от 0 до 1 (среднее по строкам). */
+export function quotaProgress(q: Quota[], counts: Record<number, number>): number {
+  if (!q.length) return 1;
+  return q.reduce((s, x) => s + Math.min(1, (counts[x.rock] ?? 0) / x.n), 0) / q.length;
+}
+
+export function quotaDone(q: Quota[], counts: Record<number, number>): boolean {
+  return q.every((x) => (counts[x.rock] ?? 0) >= x.n);
+}
+
+/** Цена откупа оставшейся нормы. 0 — норма уже выполнена. */
+export function quotaBuyout(
+  rank: number,
+  prestige: number,
+  counts: Record<number, number>,
+): number {
+  const q = rankQuota(rank, prestige);
+  const left = 1 - quotaProgress(q, counts);
+  if (left <= 0) return 0;
+  return Math.max(10, nice(rankCost(rank, prestige) * QUOTA_BUYOUT * left));
 }
 
 // ---------------------------------------------------------------------------
@@ -1295,6 +1512,19 @@ export interface PrisonState {
   perks: Perks;
   /** Открыто сундуков — для статистики. */
   cases: number;
+  /** Опыт кирки — сломанные блоки (v2.48). */
+  pickXp: number;
+  /** Норма: сколько блоков каждой породы добыто на текущем ранге. */
+  norm: Record<number, number>;
+  /** Шаг проводника; GUIDE.length — пройден. */
+  guide: number;
+  /** Сколько раз продавал рюкзак, сколько бомб взорвал. */
+  sells: number;
+  bombs: number;
+  /** Лучшая ступень запала за всё время: 0 — не было, 1…5 — ступень. */
+  bestStreak: number;
+  /** Чары, выключенные игроком: не срабатывают, уровни целы. */
+  off: EnchantId[];
 }
 
 export function freshMine(id: number, seed = Math.floor(Math.random() * 2 ** 31)): PrisonMine {
@@ -1324,6 +1554,13 @@ export const PRISON_START: PrisonState = {
   crewFrom: 0,
   perks: NO_PERKS,
   cases: 0,
+  pickXp: 0,
+  norm: {},
+  guide: 0,
+  sells: 0,
+  bombs: 0,
+  bestStreak: 0,
+  off: [],
 };
 
 const int = (v: unknown, lo: number, hi: number, dflt: number): number =>
@@ -1376,7 +1613,145 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
       PERKS.map((k) => [k.id, int(raw.perks?.[k.id], 0, k.max, 0)]),
     ) as Perks,
     cases: int(raw.cases, 0, 1e9, 0),
+    // Кирка из прошлых версий не начинает с нуля: весь её опыт — это уже
+    // сломанные блоки.
+    pickXp: int(raw.pickXp, 0, 1e12, int(raw.mined, 0, 1e12, 0)),
+    norm: Object.fromEntries(
+      Object.entries(raw.norm ?? {})
+        .map(([k, v]) => [Number(k), int(v, 0, 1e9, 0)] as const)
+        .filter(([k, v]) => Number.isInteger(k) && k >= 0 && k < MINES && v > 0),
+    ),
+    guide: int(raw.guide, 0, GUIDE.length, 0),
+    sells: int(raw.sells, 0, 1e9, (raw.earned ?? 0) > 0 ? 1 : 0),
+    bombs: int(raw.bombs, 0, 1e9, 0),
+    bestStreak: int(raw.bestStreak, 0, STREAK_TIERS.length, 0),
+    off: Array.isArray(raw.off)
+      ? (raw.off.filter((id) => ENCHANTS.some((e) => e.id === id)) as EnchantId[])
+      : [],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Проводник — как квесты проводника на VimeWorld: первые шаги цепочкой
+// заданий, каждое учит одной механике и платит за неё. Условия читаются из
+// состояния, поэтому игрок из прошлых версий просто забирает то, что уже
+// сделал, и идёт дальше.
+// ---------------------------------------------------------------------------
+
+export interface GuideReward {
+  coins?: number;
+  tokens?: number;
+  keys?: number;
+  item?: [ItemId, number];
+}
+
+export interface GuideStep {
+  id: string;
+  title: string;
+  hint: string;
+  progress: (p: PrisonState) => [number, number];
+  reward: GuideReward;
+}
+
+const upTo = (v: number, goal: number): [number, number] => [Math.min(v, goal), goal];
+const enchSum = (p: PrisonState) => ENCHANTS.reduce((s, e) => s + p.ench[e.id], 0);
+
+export const GUIDE: GuideStep[] = [
+  {
+    id: 'mine',
+    title: 'Сломай 20 блоков',
+    hint: 'Тапай по блоку или держи палец — кирка бьёт сама',
+    progress: (p) => upTo(p.mined, 20),
+    reward: { coins: 40 },
+  },
+  {
+    id: 'sell',
+    title: 'Продай добычу',
+    hint: 'Кнопка с рюкзаком под полем',
+    progress: (p) => upTo(p.sells, 1),
+    reward: { coins: 60 },
+  },
+  {
+    id: 'rankB',
+    title: 'Выполни норму и возьми ранг B',
+    hint: 'Одних денег мало: норма — это блоки, которые надо добыть. Жми на ранг',
+    progress: (p) => upTo(p.rank, 1),
+    reward: { keys: 1 },
+  },
+  {
+    id: 'case',
+    title: 'Открой сундук',
+    hint: 'Лагерь → Сундуки. Ключ дали за ранг',
+    progress: (p) => upTo(p.cases, 1),
+    reward: { tokens: 25 },
+  },
+  {
+    id: 'steel',
+    title: 'Купи стальную кирку',
+    hint: 'Лагерь → Кузница',
+    progress: (p) => upTo(p.pick, 1),
+    reward: { coins: 150 },
+  },
+  {
+    id: 'enchant',
+    title: 'Возьми первую чару',
+    hint: 'Лагерь → Чары, платишь токенами',
+    progress: (p) => upTo(enchSum(p), 1),
+    reward: { tokens: 30 },
+  },
+  {
+    id: 'streak',
+    title: `Разожги запал до «${STREAK_TIERS[1].name}»`,
+    hint: `${STREAK_TIERS[1].at} блоков без перерыва — полоска над полем`,
+    progress: (p) => upTo(p.bestStreak, 2),
+    reward: { item: ['bomb3', 1] },
+  },
+  {
+    id: 'bomb',
+    title: 'Взорви бомбу',
+    hint: 'Кнопка 💣 под полем, потом тап по клетке',
+    progress: (p) => upTo(p.bombs, 1),
+    reward: { tokens: 40 },
+  },
+  {
+    id: 'level',
+    title: 'Доведи кирку до 5 уровня',
+    hint: 'Опыт кирки — каждый сломанный блок',
+    progress: (p) => upTo(pickLevelOf(p.pickXp).level, 5),
+    reward: { item: ['energy', 1] },
+  },
+  {
+    id: 'rankE',
+    title: 'Возьми ранг E',
+    hint: 'Редкая порода чаще на глубине, лупа показывает её под верхним блоком',
+    progress: (p) => upTo(p.rank, 4),
+    reward: { keys: 2 },
+  },
+  {
+    id: 'bag',
+    title: 'Прокачай рюкзак',
+    hint: 'Лагерь → Кузница',
+    progress: (p) => upTo(p.bagLevel, 1),
+    reward: { item: ['lens', 1] },
+  },
+  {
+    id: 'rankH',
+    title: 'Возьми ранг H',
+    hint: 'Дальше — сам: ранги до Z и престиж',
+    progress: (p) => upTo(p.rank, 7),
+    reward: { keys: 3, tokens: 150 },
+  },
+];
+
+export function guideStep(p: PrisonState): GuideStep | null {
+  return GUIDE[p.guide] ?? null;
+}
+
+export function guideReady(p: PrisonState): boolean {
+  const step = guideStep(p);
+  if (!step) return false;
+  const [v, goal] = step.progress(p);
+  return v >= goal;
 }
 
 // ---------------------------------------------------------------------------

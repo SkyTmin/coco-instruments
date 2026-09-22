@@ -124,7 +124,6 @@ import {
   crewYield,
   DEPTH,
   enchantCost,
-  enchantOf,
   enchantRefund,
   ENERGY_MS,
   freshMine,
@@ -151,12 +150,24 @@ import {
   rankXp,
   sharpCost,
   SHARP_MAX,
+  enchantCap,
+  ENCHANT_TOGGLE,
+  GUIDE,
+  guideReady,
+  pickLevelOf,
+  pickLevelReward,
+  quotaBuyout,
+  quotaDone,
+  rankQuota,
+  STREAK_TIERS,
+  streakLoot,
 } from '@/lib/prison';
 import type {
   CaseRoll,
   CrewYield,
   EnchantId,
   FindId,
+  GuideReward,
   ItemId,
   PerkId,
   PrisonState,
@@ -297,6 +308,22 @@ const writeFitting = makePersister<WardrobeFittingBlob>(STORAGE_KEYS.fitting);
 const writeWishlist = makePersister<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist);
 const writeSizes = makePersister<WardrobeSizesBlob>(STORAGE_KEYS.sizes);
 const writeCamera = makePersister<CameraBlob>(STORAGE_KEYS.camera);
+// Шахта трогает слоты на каждом блоке (миссии дня, тачка продаёт сама), и
+// запись слотов с задержкой 300 мс превратилась бы в запрос на каждый удар.
+// Ленивая запись берёт снимок В МОМЕНТ записи, а не в момент вызова, поэтому
+// не затрёт более свежую запись спина. Флашер стоит раньше writeSlots: при
+// сворачивании он кладёт снимок, а writeSlots следом его отправляет.
+let slotsLazyTimer: ReturnType<typeof setTimeout> | undefined;
+const flushSlotsLazy = () => {
+  if (!slotsLazyTimer) return;
+  clearTimeout(slotsLazyTimer);
+  slotsLazyTimer = undefined;
+  persistSlots(useFinanceStore.getState());
+};
+flushers.push(flushSlotsLazy);
+const persistSlotsLazy = () => {
+  if (!slotsLazyTimer) slotsLazyTimer = setTimeout(flushSlotsLazy, 2000);
+};
 const writeSlots = makePersister<SlotsBlob>(STORAGE_KEYS.slots);
 // Шахта пишется реже: блок ломается раз в полсекунды, и запрос на сервер на
 // каждый блок — это кликер, который долбит сервер. При сворачивании всё
@@ -353,12 +380,20 @@ export interface PrisonLoot {
   tokens: number;
   keys: number;
   finds: { id: FindId; fresh: boolean }[];
+  /** Новые уровни кирки этим ударом, с наградой за каждый. */
+  pickUps: { level: number; tokens: number; keys: number }[];
+  /** Этим ударом норма ранга выполнена целиком. */
+  normDone: boolean;
+  /** Сколько блоков каждой породы легло в норму. */
+  normAdd: Record<number, number>;
 }
 
 /** Итог нового ранга: для сцены на странице. */
 export interface PrisonRankUp {
   rank: number;
   cost: number;
+  /** Сколько из цены ушло на откуп нормы. */
+  buyout: number;
   levelUps: number[];
 }
 
@@ -772,9 +807,15 @@ interface FinanceState {
    * ключи — в карман. Места нет, а вагонетка куплена — она продаёт рюкзак
    * сама.
    */
-  prisonBreak: (breaks: { cell: number; rock: number }[]) => PrisonLoot;
+  prisonBreak: (breaks: { cell: number; rock: number }[], opts?: { streak?: number }) => PrisonLoot;
+  /** Запал дошёл до ступени `tier` (0…4): рекорд и миссия дня. */
+  prisonStreak: (tier: number) => void;
+  /** Проводник: забрать награду за выполненный шаг. */
+  prisonGuideClaim: () => GuideReward | null;
+  prisonEnchantToggle: (id: EnchantId) => void;
   /** Зачарование: взять уровень за токены или сбросить с возвратом половины. */
-  prisonEnchant: (id: EnchantId) => boolean;
+  /** Купить до `count` уровней чары (сколько хватит токенов и потолка). */
+  prisonEnchant: (id: EnchantId, count?: number) => number;
   prisonEnchantReset: (id: EnchantId) => number;
   /** Лавка: расходник за токены. */
   prisonBuyItem: (id: ItemId) => boolean;
@@ -795,7 +836,8 @@ interface FinanceState {
   /** Продать рюкзак в общий кошелёк. */
   prisonSell: () => number;
   /** Купить следующий ранг за общие монеты. */
-  prisonRankUp: () => PrisonRankUp | null;
+  /** Новый ранг. Без выполненной нормы — только с `buyout`, за доплату. */
+  prisonRankUp: (buyout?: boolean) => PrisonRankUp | null;
   prisonBuy: (what: 'pick' | 'sharp' | 'bag' | 'cart') => boolean;
   /** Престиж: ранг и шахта — на A, кирка остаётся, продажа дороже. */
   prisonPrestige: () => boolean;
@@ -2430,7 +2472,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistSlots(get());
   },
 
-  prisonBreak: (breaks) => {
+  prisonBreak: (breaks, opts = {}) => {
     const s = get();
     const p = s.prison;
     const dug = p.mine.dug.slice();
@@ -2441,12 +2483,24 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       rocks.push(b.rock);
     }
     if (!rocks.length)
-      return { broken: 0, taken: 0, lost: 0, sold: 0, tokens: 0, keys: 0, finds: [] };
+      return {
+        broken: 0,
+        taken: 0,
+        lost: 0,
+        sold: 0,
+        tokens: 0,
+        keys: 0,
+        finds: [],
+        pickUps: [],
+        normDone: false,
+        normAdd: {},
+      };
     const now = Date.now();
     const m = modsOf(p);
     const drops = rollDrops(rocks, m, Math.random, {
       frenzy: now < p.frenzyUntil,
       mine: p.mine.id,
+      streak: streakLoot(opts.streak ?? 0),
     });
     const put = stash(p.bag, drops.units, bagCapacity(p.bagLevel), p.cart, m.sell);
     // Находка: новая идёт в коллекцию, дубликат сдаётся за токены.
@@ -2459,19 +2513,49 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       if (!fresh) dupTokens += FIND_DUP_TOKENS;
       found.push({ id: f, fresh });
     }
+    // Норма считает БЛОКИ, а не добычу: Удача и запал множат деньги, но
+    // руду за тебя не выкопают.
+    const quota = p.rank < LAST_RANK ? rankQuota(p.rank, p.prestige) : [];
+    const wasDone = quotaDone(quota, p.norm);
+    const norm = { ...p.norm };
+    const normAdd: Record<number, number> = {};
+    for (const r of rocks) {
+      norm[r] = (norm[r] ?? 0) + 1;
+      if (quota.some((q) => q.rock === r)) normAdd[r] = (normAdd[r] ?? 0) + 1;
+    }
+    const normDone = quota.length > 0 && !wasDone && quotaDone(quota, norm);
+    // Опыт кирки — каждый сломанный блок; награда за каждый новый уровень.
+    const pickXp = p.pickXp + rocks.length;
+    const lvBefore = pickLevelOf(p.pickXp).level;
+    const lvAfter = pickLevelOf(pickXp).level;
+    const pickUps: PrisonLoot['pickUps'] = [];
+    for (let l = lvBefore + 1; l <= lvAfter; l++) pickUps.push({ level: l, ...pickLevelReward(l) });
+    const upTokens = pickUps.reduce((a, u) => a + u.tokens, 0);
+    const upKeys = pickUps.reduce((a, u) => a + u.keys, 0);
     const prison: PrisonState = {
       ...p,
       mine: { ...p.mine, dug },
       bag: put.bag,
       mined: p.mined + rocks.length,
       earned: p.earned + put.sold,
-      tokens: p.tokens + drops.tokens + dupTokens,
-      keys: p.keys + drops.keys,
+      tokens: p.tokens + drops.tokens + dupTokens + upTokens,
+      keys: p.keys + drops.keys + upKeys,
       finds,
+      norm,
+      pickXp,
     };
-    set(put.sold ? { prison, slotsBalance: s.slotsBalance + put.sold } : { prison });
+    // Миссии дня общие с автоматами: счётчик блоков и проданного — там же.
+    const missions = missionsForToday(s.slotsMissions);
+    const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
+    counters.blocks += rocks.length;
+    counters.ore += put.sold;
+    set({
+      prison,
+      slotsMissions: { ...missions, counters },
+      ...(put.sold ? { slotsBalance: s.slotsBalance + put.sold } : {}),
+    });
     persistPrison(prison);
-    if (put.sold) persistSlots(get());
+    persistSlotsLazy();
     return {
       broken: rocks.length,
       taken: put.taken,
@@ -2480,19 +2564,73 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       tokens: drops.tokens + dupTokens,
       keys: drops.keys,
       finds: found,
+      pickUps,
+      normDone,
+      normAdd,
     };
   },
 
-  prisonEnchant: (id) => {
+  prisonStreak: (tier) => {
+    const s = get();
+    const p = s.prison;
+    const step = Math.max(0, Math.min(STREAK_TIERS.length - 1, Math.floor(tier))) + 1;
+    const missions = missionsForToday(s.slotsMissions);
+    const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
+    if (step <= p.bestStreak && step <= counters.streak) return;
+    counters.streak = Math.max(counters.streak, step);
+    const prison = { ...p, bestStreak: Math.max(p.bestStreak, step) };
+    set({ prison, slotsMissions: { ...missions, counters } });
+    persistPrison(prison);
+    persistSlotsLazy();
+  },
+
+  prisonGuideClaim: () => {
+    const s = get();
+    const p = s.prison;
+    if (!guideReady(p)) return null;
+    const r = GUIDE[p.guide].reward;
+    const items = { ...p.items };
+    if (r.item) items[r.item[0]] += r.item[1];
+    const prison: PrisonState = {
+      ...p,
+      guide: p.guide + 1,
+      tokens: p.tokens + (r.tokens ?? 0),
+      keys: p.keys + (r.keys ?? 0),
+      items,
+    };
+    set(r.coins ? { prison, slotsBalance: s.slotsBalance + r.coins } : { prison });
+    persistPrison(prison);
+    if (r.coins) persistSlots(get());
+    return r;
+  },
+
+  prisonEnchant: (id, count = 1) => {
     const p = get().prison;
-    const level = p.ench[id];
-    if (level >= enchantOf(id).max) return false;
-    const cost = enchantCost(id, level);
-    if (p.tokens < cost) return false;
-    const prison = { ...p, tokens: p.tokens - cost, ench: { ...p.ench, [id]: level + 1 } };
+    const cap = enchantCap(id, pickLevelOf(p.pickXp).level);
+    let level = p.ench[id];
+    let tokens = p.tokens;
+    let bought = 0;
+    while (bought < count && level < cap) {
+      const cost = enchantCost(id, level);
+      if (tokens < cost) break;
+      tokens -= cost;
+      level += 1;
+      bought += 1;
+    }
+    if (!bought) return 0;
+    const prison = { ...p, tokens, ench: { ...p.ench, [id]: level } };
     set({ prison });
     persistPrison(prison);
-    return true;
+    return bought;
+  },
+
+  prisonEnchantToggle: (id) => {
+    const p = get().prison;
+    if (!ENCHANT_TOGGLE.includes(id)) return;
+    const off = p.off.includes(id) ? p.off.filter((x) => x !== id) : [...p.off, id];
+    const prison = { ...p, off };
+    set({ prison });
+    persistPrison(prison);
   },
 
   prisonEnchantReset: (id) => {
@@ -2521,6 +2659,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (p.items[id] <= 0) return false;
     const now = Date.now();
     const prison: PrisonState = { ...p, items: { ...p.items, [id]: p.items[id] - 1 } };
+    if (id === 'bomb3' || id === 'bomb5' || id === 'charge') prison.bombs = p.bombs + 1;
     // Второй энергетик подряд продлевает, а не сгорает впустую.
     if (id === 'energy') prison.energyUntil = Math.max(now, p.energyUntil) + ENERGY_MS;
     if (id === 'lens') prison.lensUntil = Math.max(now, p.lensUntil) + LENS_MS;
@@ -2627,18 +2766,30 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const p = s.prison;
     const value = bagValue(p.bag, modsOf(p).sell);
     if (!bagCount(p.bag)) return 0;
-    const prison = { ...p, bag: {}, earned: p.earned + value };
-    set({ prison, slotsBalance: s.slotsBalance + value });
+    const prison = { ...p, bag: {}, earned: p.earned + value, sells: p.sells + 1 };
+    const missions = missionsForToday(s.slotsMissions);
+    const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
+    counters.ore += value;
+    set({
+      prison,
+      slotsBalance: s.slotsBalance + value,
+      slotsMissions: { ...missions, counters },
+    });
     persistPrison(prison);
     persistSlots(get());
     return value;
   },
 
-  prisonRankUp: () => {
+  prisonRankUp: (buyout = false) => {
     const s = get();
     const p = s.prison;
     if (p.rank >= LAST_RANK) return null;
-    const cost = rankCost(p.rank, p.prestige);
+    // Норма выработки: без неё ранг только за доплату — деньги общие, и
+    // занос в автомате вправе закрыть недобор. Но ровно на ту долю, что
+    // не выкопана.
+    const extra = quotaBuyout(p.rank, p.prestige, p.norm);
+    if (extra > 0 && !buyout) return null;
+    const cost = rankCost(p.rank, p.prestige) + extra;
     if (s.slotsBalance < cost) return null;
     const rank = p.rank + 1;
     // Опыт — в ОБЩИЙ уровень, с теми же наградами, что за спины.
@@ -2660,6 +2811,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       rank,
       mine: freshMine(rank),
       keys: p.keys + RANK_KEYS,
+      norm: {},
     };
     set({
       prison,
@@ -2670,7 +2822,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     });
     persistPrison(prison);
     persistSlots(get());
-    return { rank, cost, levelUps };
+    return { rank, cost, buyout: extra, levelUps };
   },
 
   prisonBuy: (what) => {
@@ -2727,6 +2879,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       prestige: p.prestige + 1,
       mine: freshMine(start),
       keys: p.keys + PRESTIGE_KEYS,
+      norm: {},
     };
     set({
       prison,

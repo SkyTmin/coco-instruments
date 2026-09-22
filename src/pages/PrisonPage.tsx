@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { Screen, Sheet } from '@/components/ui';
+import { IconGift } from '@/components/icons';
+import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon } from '@/components/slot-art';
@@ -17,10 +19,16 @@ import {
   CRIT_CHANCE,
   CRIT_MULT,
   crewYield,
+  decayStreak,
   DEPTH,
+  ENCHANT_UNLOCK,
+  ENCHANTS,
   ENERGY_RATE,
   findOf,
   FRENZY_RATE,
+  GUIDE,
+  guideReady,
+  guideStep,
   hitDamage,
   ITEMS,
   LAST_RANK,
@@ -32,17 +40,26 @@ import {
   minedShare,
   modsOf,
   perkPointsFree,
+  pickLevelOf,
   PICKS,
   prestigeCost,
+  quotaBuyout,
+  quotaDone,
+  quotaProgress,
   rankCost,
+  rankQuota,
   rankLetter,
   rockAt,
   ROCKS,
   sellMult,
   shortMoney,
+  STREAK_GRACE_MS,
+  STREAK_DECAY_MS,
+  STREAK_TIERS,
+  streakTier,
   veinCells,
 } from '@/lib/prison';
-import type { FindId, ItemId, PrisonState } from '@/lib/prison';
+import type { FindId, GuideReward, ItemId, PrisonState, Quota } from '@/lib/prison';
 import {
   bedrockTexture,
   crackTexture,
@@ -126,6 +143,8 @@ interface CellProps {
   crack: number;
   /** Лупа: порода ярусом ниже, если она ценнее верхней (−1 — не показывать). */
   peek: number;
+  /** Сверху порода, которой не хватает в норме ранга. */
+  need: boolean;
   wt: number;
   wl: number;
   wb: number;
@@ -140,6 +159,7 @@ const MineCell = memo(function MineCell({
   depth,
   crack,
   peek,
+  need,
   wt,
   wl,
   wb,
@@ -171,6 +191,7 @@ const MineCell = memo(function MineCell({
         )}
       </span>
       {peek >= 0 && <img className="pcell__peek" src={rockTexture(peek)} alt="" />}
+      {need && <i className="pcell__need" />}
     </div>
   );
 });
@@ -198,7 +219,42 @@ function rings(center: number, cells: number[]): number[][] {
 
 type BreakKind = 'hit' | 'crit' | 'vein' | 'blast' | 'hammer';
 
-type Sheetname = 'mines' | 'prestige' | null;
+type Sheetname = 'mines' | 'prestige' | 'norm' | null;
+
+/** Сколько секунд простоя до того, как полоска запала начинает мигать. */
+const STREAK_WARN_MS = 1500;
+/** Сводка смены — раз в столько минут копания. */
+const SHIFT_MS = 5 * 60_000;
+
+/** Награда проводника одной строкой. */
+function rewardText(r: GuideReward): string {
+  const out: string[] = [];
+  if (r.coins) out.push(`+${fmt(r.coins)} монет`);
+  if (r.tokens) out.push(`+${fmt(r.tokens)} ✦`);
+  if (r.keys) out.push(r.keys > 1 ? `+${r.keys} ключа` : '+ключ');
+  if (r.item) {
+    const it = ITEMS.find((i) => i.id === r.item![0])!;
+    out.push(`${it.glyph} ${it.name.toLowerCase()}${r.item[1] > 1 ? ` ×${r.item[1]}` : ''}`);
+  }
+  return out.join(' · ');
+}
+
+/** Норма фишками: порода, сколько сдано из скольких. */
+function QuotaChips({ quota, norm }: { quota: Quota[]; norm: Record<number, number> }) {
+  return (
+    <span className="pquota">
+      {quota.map((q) => {
+        const have = Math.min(q.n, norm[q.rock] ?? 0);
+        return (
+          <span key={q.rock} className={`pquota__chip${have >= q.n ? ' is-done' : ''}`}>
+            <img src={rockTexture(q.rock)} alt={ROCKS[q.rock].name} />
+            {have >= q.n ? '✓' : `${have}/${q.n}`}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 export function PrisonPage() {
   const hydrated = useFinanceStore((s) => s.hydrated);
@@ -214,6 +270,9 @@ export function PrisonPage() {
   const prisonUseItem = useFinanceStore((s) => s.prisonUseItem);
   const prisonFrenzy = useFinanceStore((s) => s.prisonFrenzy);
   const prisonCrewCollect = useFinanceStore((s) => s.prisonCrewCollect);
+  const prisonStreak = useFinanceStore((s) => s.prisonStreak);
+  const prisonGuideClaim = useFinanceStore((s) => s.prisonGuideClaim);
+  const skin = useFinanceStore((s) => s.slotsSkin);
 
   useEffect(() => setMuted(!sound), [sound]);
   useEffect(() => setHapticsMuted(!haptics), [haptics]);
@@ -233,6 +292,17 @@ export function PrisonPage() {
   const [aiming, setAiming] = useState(false);
   const [arming, setArming] = useState<ItemId | null>(null);
   const [crewNote, setCrewNote] = useState(false);
+  const [rewards, setRewards] = useState(false);
+  const [shift, setShift] = useState<{
+    blocks: number;
+    coins: number;
+    tokens: number;
+    keys: number;
+  } | null>(null);
+  const [shiftShown, shiftLeaving] = useExit(shift, 260);
+  // Запал живёт в странице: это награда за то, что копаешь СЕЙЧАС.
+  const [streak, setStreak] = useState(0);
+  const [cooling, setCooling] = useState(false);
 
   // Баффы: страница перерисовывается раз в секунду, только пока хоть один
   // идёт, — ради таймеров на плашках и чтобы лупа погасла вовремя.
@@ -244,6 +314,13 @@ export function PrisonPage() {
   };
   const anyBuff = buffs.energy > 0 || buffs.frenzy > 0 || buffs.lens > 0;
   useTicker(anyBuff);
+  // Подарок в шапке: награды дня общие с автоматами, счётчик — тот же.
+  const [rewardsNow, setRewardsNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setRewardsNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const readyRewards = useReadyRewards(rewardsNow);
 
   const fieldRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -266,6 +343,13 @@ export function PrisonPage() {
   const toastSeq = useRef(0);
   const mineKeyRef = useRef(mineKey);
   mineKeyRef.current = mineKey;
+  const stripRef = useRef<HTMLDivElement>(null);
+  const streakBase = useRef({ n: 0, at: 0 });
+  const streakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Темп: что сломано и сколько это стоит за последнюю минуту.
+  const paceLog = useRef<{ t: number; blocks: number; coins: number }[]>([]);
+  // Смена: итог каждые пять минут копания.
+  const shiftAcc = useRef({ from: 0, blocks: 0, coins: 0, tokens: 0, keys: 0 });
   // Баланс на табло: во время счёта продажи его ведёт ролл-ап, а не стор.
   const [shownBalance, setShownBalance] = useState(balance);
   useEffect(() => {
@@ -303,6 +387,7 @@ export function PrisonPage() {
     () => () => {
       if (holdTimer.current) clearTimeout(holdTimer.current);
       if (resetTimer.current) clearTimeout(resetTimer.current);
+      if (streakTimer.current) clearTimeout(streakTimer.current);
       waveTimers.current.forEach(clearTimeout);
       rolling.current?.();
       stopShake();
@@ -340,6 +425,11 @@ export function PrisonPage() {
     const t = setTimeout(() => setFindCard(null), 2600);
     return () => clearTimeout(t);
   }, [findCard]);
+  useEffect(() => {
+    if (!shift) return undefined;
+    const t = setTimeout(() => setShift(null), 4200);
+    return () => clearTimeout(t);
+  }, [shift]);
 
   // Счёт денег на табло — тот же ролл-ап, что у выигрышей в автоматах.
   const rollBalance = useCallback((from: number, to: number) => {
@@ -542,6 +632,95 @@ export function PrisonPage() {
     }, 650);
   };
 
+  // ---- Запал --------------------------------------------------------------
+
+  /** Запал прямо сейчас, с учётом простоя с последнего блока. */
+  const streakNow = () => {
+    const b = streakBase.current;
+    return decayStreak(b.n, Date.now() - b.at);
+  };
+
+  /**
+   * Следующий такт угасания. Таймер спит до ближайшей границы: сначала
+   * полоска начинает мигать (предупреждение), потом ступень гаснет.
+   */
+  const armDecay = () => {
+    if (streakTimer.current) clearTimeout(streakTimer.current);
+    streakTimer.current = null;
+    const b = streakBase.current;
+    if (b.n <= 0) return;
+    const idle = Date.now() - b.at;
+    let wake: number;
+    if (idle < STREAK_WARN_MS) wake = STREAK_WARN_MS;
+    else if (idle <= STREAK_GRACE_MS) wake = STREAK_GRACE_MS + 1;
+    else
+      wake =
+        STREAK_GRACE_MS +
+        (Math.floor((idle - STREAK_GRACE_MS) / STREAK_DECAY_MS) + 1) * STREAK_DECAY_MS +
+        1;
+    streakTimer.current = setTimeout(() => {
+      const n = streakNow();
+      setStreak(n);
+      setCooling(n > 0);
+      if (n <= 0) {
+        streakBase.current = { n: 0, at: 0 };
+        return;
+      }
+      armDecay();
+    }, wake - idle);
+  };
+
+  /** Запал поднялся на ступень: надпись, удар, рекорд и миссия дня. */
+  const streakUp = (t: number, c: number) => {
+    const tier = STREAK_TIERS[t];
+    const first = t + 1 > useFinanceStore.getState().prison.bestStreak;
+    prisonStreak(t);
+    floatText(c, `${tier.name.toUpperCase()}!`, 'pfloat--streak');
+    tierBreak(Math.min(3, t));
+    tapMedium();
+    squashPop(stripRef.current, 0.35 + 0.1 * t);
+    if (t >= 3) addTrauma(fieldRef.current, 0.2);
+    if (first)
+      say(`«${tier.name}»: +${Math.round(tier.loot * 100)}% к добыче, пока бьёшь без пауз`);
+  };
+
+  const bumpStreak = (blocks: number, c: number) => {
+    const now = Date.now();
+    const n0 = decayStreak(streakBase.current.n, now - streakBase.current.at);
+    const n = n0 + blocks;
+    streakBase.current = { n, at: now };
+    setStreak(n);
+    setCooling(false);
+    const t0 = streakTier(n0);
+    const t1 = streakTier(n);
+    if (t1 > t0) streakUp(t1, c);
+    armDecay();
+  };
+
+  /** Темп и смена: копим, что сломано и сколько стоит. */
+  const logPace = (blocks: number, coins: number, res: PrisonLoot) => {
+    const now = Date.now();
+    const log = paceLog.current;
+    log.push({ t: now, blocks, coins });
+    while (log.length && now - log[0].t > 60_000) log.shift();
+    const acc = shiftAcc.current;
+    // Больше минуты без блоков — прошлая смена закончилась, начинаем новую.
+    const last = log.length > 1 ? log[log.length - 2].t : 0;
+    if (!acc.from || (last && now - last > 60_000)) {
+      shiftAcc.current = { from: now, blocks: 0, coins: 0, tokens: 0, keys: 0 };
+    }
+    const a = shiftAcc.current;
+    a.blocks += blocks;
+    a.coins += coins;
+    a.tokens += res.tokens + res.pickUps.reduce((x, u) => x + u.tokens, 0);
+    a.keys += res.keys + res.pickUps.reduce((x, u) => x + u.keys, 0);
+    if (now - a.from >= SHIFT_MS && a.blocks >= 50) {
+      setShift({ blocks: a.blocks, coins: a.coins, tokens: a.tokens, keys: a.keys });
+      notifySuccess();
+      shiftAcc.current = { from: now, blocks: 0, coins: 0, tokens: 0, keys: 0 };
+    }
+  };
+
   /** Что сказать и показать по итогам слома: токены, ключи, находки, рюкзак. */
   const announce = (c: number, res: PrisonLoot) => {
     const now = performance.now();
@@ -560,6 +739,28 @@ export function PrisonPage() {
         burstConfetti(50, ['#ffe08a', '#b8f4e6', '#fff']);
         notifySuccess();
       } else coinDing();
+    }
+    if (res.pickUps.length) {
+      const up = res.pickUps[res.pickUps.length - 1];
+      const opened = ENCHANTS.filter((e) =>
+        res.pickUps.some((u) => ENCHANT_UNLOCK[e.id] === u.level),
+      );
+      floatText(c, `КИРКА ${up.level}`, 'pfloat--level', 180);
+      tierBreak(1);
+      notifySuccess();
+      const tokens = res.pickUps.reduce((x, u) => x + u.tokens, 0);
+      const keys = res.pickUps.reduce((x, u) => x + u.keys, 0);
+      say(
+        opened.length
+          ? `Кирка ${up.level} ур. · открыта чара «${opened[opened.length - 1].name}»`
+          : `Кирка ${up.level} ур. · +${fmt(tokens)} ✦${keys ? ' · +ключ' : ''}`,
+      );
+    }
+    if (res.normDone) {
+      tierBreak(2);
+      notifySuccess();
+      burstConfetti(40, ['#9be38a', '#ffe08a', '#fff']);
+      say('Норма выполнена — бери ранг');
     }
     if (res.lost > 0 && now - fullWarnAt.current > 1400) {
       fullWarnAt.current = now;
@@ -597,8 +798,27 @@ export function PrisonPage() {
       for (const b of list) next[b.cell] = 0;
       return next;
     });
-    const res = prisonBreak(list);
+    const valueBefore = bagValue(st.bag, modsOf(st).sell);
+    const res = prisonBreak(list, { streak: streakNow() });
+    const after = useFinanceStore.getState().prison;
+    const gained = bagValue(after.bag, modsOf(after).sell) - valueBefore + res.sold;
+    bumpStreak(res.broken, list[0].cell);
+    logPace(res.broken, gained, res);
     const single = kind === 'hit' || kind === 'crit';
+    // Порода в норму: счёт над клеткой, пока норма по ней не закрыта.
+    const q = after.rank < LAST_RANK ? rankQuota(after.rank, after.prestige) : [];
+    const qb = list.find((b) => res.normAdd[b.rock] && q.some((x) => x.rock === b.rock));
+    if (qb && !res.normDone) {
+      const row = q.find((x) => x.rock === qb.rock)!;
+      const have = after.norm[qb.rock] ?? 0;
+      if (have <= row.n)
+        floatText(
+          qb.cell,
+          `${have}/${row.n}`,
+          `pfloat--norm${have >= row.n ? ' is-done' : ''}`,
+          60,
+        );
+    }
     list.forEach((b, i) => {
       const { x, y } = cellCenter(b.cell);
       const colors = rockColors(b.rock);
@@ -964,18 +1184,44 @@ export function PrisonPage() {
       setSheet('prestige');
       return;
     }
-    const res = prisonRankUp();
-    if (!res) {
-      notifyWarning();
-      say(`Не хватает ${fmt(rankCost(rank, prestige) - balance)} монет`);
+    const st = useFinanceStore.getState();
+    const q = rankQuota(st.prison.rank, st.prison.prestige);
+    // Не готово — лист нормы: что сдано, чего не хватает, сколько стоит откуп.
+    if (!quotaDone(q, st.prison.norm) || st.slotsBalance < rankCost(rank, prestige)) {
+      tapLight();
+      setSheet('norm');
       return;
     }
+    takeRank(false);
+  };
+
+  /** Взять ранг: по выполненной норме или с откупом недобора. */
+  const takeRank = (buyout: boolean) => {
+    const res = prisonRankUp(buyout);
+    if (!res) {
+      notifyWarning();
+      return;
+    }
+    setSheet(null);
     settleBalance();
     tierBreak(3);
     notifySuccess();
     burstConfetti(80);
     addTrauma(fieldRef.current, 0.35);
     setRankScene(res);
+  };
+
+  const claimGuide = () => {
+    primeAudio();
+    const from = useFinanceStore.getState().slotsBalance;
+    const r = prisonGuideClaim();
+    if (!r) return;
+    if (r.coins) rollBalance(from, from + r.coins);
+    coinDing();
+    tierBreak(1);
+    notifySuccess();
+    burstConfetti(36, ['#ffe08a', '#b8f4e6', '#fff']);
+    if (r.keys) keyFound();
   };
 
   const collectCrew = () => {
@@ -1022,6 +1268,40 @@ export function PrisonPage() {
   const atTop = rank >= LAST_RANK;
   const cost = atTop ? prestigeCost(prestige) : rankCost(rank, prestige);
   const progress = Math.max(0, Math.min(1, balance / cost));
+  const quota = atTop ? [] : rankQuota(rank, prestige);
+  const qDone = quotaDone(quota, prison.norm);
+  const buyout = atTop ? 0 : quotaBuyout(rank, prestige, prison.norm);
+  const rankReady = progress >= 1 && qDone;
+  // Точка — только на редкой породе нормы: ходовая лежит на каждом шагу, и
+  // точки на половине поля ничего не подсказывают.
+  const needRocks = new Set(
+    quota
+      .filter((q) => q.rock === rank && rank > 0 && (prison.norm[q.rock] ?? 0) < q.n)
+      .map((q) => q.rock),
+  );
+  const pickLv = pickLevelOf(prison.pickXp);
+  const sTier = streakTier(streak);
+  const sNext = STREAK_TIERS[sTier + 1];
+  const sFrom = sTier >= 0 ? STREAK_TIERS[sTier].at : 0;
+  const sFill = sNext ? (streak - sFrom) / (sNext.at - sFrom) : 1;
+  // Темп за последнюю минуту — только пока копаешь.
+  const pace = (() => {
+    const log = paceLog.current;
+    if (!log.length || streak <= 0 || nowTick - log[log.length - 1].t > 8000) return null;
+    const span = Math.max(10_000, Math.min(60_000, nowTick - log[0].t));
+    if (nowTick - log[0].t < 6000) return null;
+    let b = 0;
+    let c = 0;
+    for (const e of log) {
+      if (nowTick - e.t > 60_000) continue;
+      b += e.blocks;
+      c += e.coins;
+    }
+    return { blocks: (b * 60_000) / span, coins: (c * 60_000) / span };
+  })();
+  const guide = guideStep(prison);
+  const guideOk = guideReady(prison);
+  const [guideV, guideGoal] = guide ? guide.progress(prison) : [0, 0];
   const mix = mineMix(mine.id);
   const newest = ROCKS[mine.id];
   const crewNow = crewYield(prison, nowTick);
@@ -1045,6 +1325,7 @@ export function PrisonPage() {
         depth={d}
         crack={cracks[c]}
         peek={peek}
+        need={needRocks.has(top)}
         wt={wall(mine.dug, c, 0, -1)}
         wl={wall(mine.dug, c, -1, 0)}
         wb={wall(mine.dug, c, 0, 1)}
@@ -1070,21 +1351,35 @@ export function PrisonPage() {
       subtitle={`Шахта ${rankLetter(mine.id)} · до ${newest.value} монет за блок${prestige ? ` · престиж ${prestige}` : ''}`}
       className="prison-screen"
       action={
-        <button
-          className="pmine-btn"
-          type="button"
-          aria-label="Шахты"
-          onClick={() => {
-            tapLight();
-            setSheet('mines');
-          }}
-        >
-          <span>{rankLetter(mine.id)}</span>
-        </button>
+        <div className="row" style={{ gap: 8 }}>
+          <button
+            className="pmine-btn pmine-btn--gift"
+            type="button"
+            aria-label="Награды дня"
+            onClick={() => {
+              tapLight();
+              setRewards(true);
+            }}
+          >
+            <IconGift size={19} />
+            {readyRewards > 0 && <i className="pmine-btn__badge">{readyRewards}</i>}
+          </button>
+          <button
+            className="pmine-btn"
+            type="button"
+            aria-label="Шахты"
+            onClick={() => {
+              tapLight();
+              setSheet('mines');
+            }}
+          >
+            <span>{rankLetter(mine.id)}</span>
+          </button>
+        </div>
       }
     >
       <div className="prison-scene" aria-hidden="true" />
-      <div className="prison">
+      <div className={`prison${guide ? ' has-guide' : ''}`}>
         <div className="phud">
           <div className="phud__cell">
             <span className="phud__label">Кошелёк</span>
@@ -1108,7 +1403,7 @@ export function PrisonPage() {
           </button>
           <button
             type="button"
-            className={`phud__rank${progress >= 1 ? ' is-ready' : ''}`}
+            className={`phud__rank${(atTop ? progress >= 1 : rankReady) ? ' is-ready' : ''}`}
             onClick={rankUp}
           >
             <span className="phud__label">
@@ -1117,11 +1412,30 @@ export function PrisonPage() {
                 : `Ранг ${rankLetter(rank)} → ${rankLetter(rank + 1)}`}
             </span>
             <span className="phud__cost">
-              {progress >= 1 ? (atTop ? 'Престиж' : 'Взять') : shortMoney(cost)}
-              {progress < 1 && <CoinIcon size={12} />}
+              {atTop ? (
+                progress >= 1 ? (
+                  'Престиж'
+                ) : (
+                  <>
+                    {shortMoney(cost)} <CoinIcon size={12} />
+                  </>
+                )
+              ) : rankReady ? (
+                'Взять'
+              ) : (
+                <>
+                  <span className={progress >= 1 ? 'phud__ok' : undefined}>{shortMoney(cost)}</span>
+                  <CoinIcon size={12} />
+                  <QuotaChips quota={quota} norm={prison.norm} />
+                </>
+              )}
             </span>
             <span className="phud__bar">
-              <i style={{ transform: `scaleX(${progress})` }} />
+              <i
+                style={{
+                  transform: `scaleX(${atTop ? progress : Math.min(progress, quotaProgress(quota, prison.norm))})`,
+                }}
+              />
             </span>
           </button>
         </div>
@@ -1129,6 +1443,44 @@ export function PrisonPage() {
         <div
           className={`pmine-frame${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}`}
         >
+          {/* Полоса запала сидит на верхней кромке рамы: отдельной строкой
+              она отнимала бы у поля высоту. */}
+          <div
+            className={`pstrip${sTier >= 0 ? ` is-t${sTier}` : ''}${cooling ? ' is-cooling' : ''}`}
+            ref={stripRef}
+          >
+            <span className="pstrip__pick" title="Уровень кирки">
+              <b>
+                <PickIcon pick={pick} size={13} />
+                {pickLv.level}
+              </b>
+              <span className="pstrip__xp">
+                <i
+                  style={{ transform: `scaleX(${pickLv.need ? pickLv.into / pickLv.need : 1})` }}
+                />
+              </span>
+            </span>
+            <span className="pstrip__streak">
+              <span className="pstrip__name">
+                {sTier >= 0 ? STREAK_TIERS[sTier].name : 'Запал'}
+                {sTier >= 0 && <em>+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
+              </span>
+              <span className="pstrip__bar">
+                <i style={{ transform: `scaleX(${Math.max(0, Math.min(1, sFill))})` }} />
+              </span>
+            </span>
+            <span className="pstrip__pace">
+              {pace ? (
+                <>
+                  {fmt(pace.blocks)} бл · {shortMoney(pace.coins)}
+                  <CoinIcon size={10} />
+                  <small>/мин</small>
+                </>
+              ) : (
+                <small>{streak > 0 ? `${fmt(streak)} подряд` : 'бей без пауз'}</small>
+              )}
+            </span>
+          </div>
           {anyBuff && (
             <div className="pbuffs">
               {buffs.frenzy > 0 && (
@@ -1176,6 +1528,21 @@ export function PrisonPage() {
                   <b>{findOf(cardShown.id).name}</b>
                   <em>{cardShown.fresh ? '+1% к продаже навсегда' : '+40 токенов'}</em>
                 </span>
+              </div>
+            )}
+            {shiftShown && (
+              <div className={`pshift${shiftLeaving ? ' is-out' : ''}`}>
+                <i>Смена · 5 минут</i>
+                <b>
+                  {fmt(shiftShown.blocks)} блоков · +{shortMoney(shiftShown.coins)}{' '}
+                  <CoinIcon size={12} />
+                </b>
+                <em>
+                  +{fmt(shiftShown.tokens)} ✦
+                  {shiftShown.keys
+                    ? ` · +${shiftShown.keys} ${shiftShown.keys > 1 ? 'ключа' : 'ключ'}`
+                    : ''}
+                </em>
               </div>
             )}
             {crewNote && crewNow.blocks > 0 && (
@@ -1270,21 +1637,37 @@ export function PrisonPage() {
           </button>
         </div>
 
-        {/* Породы этой шахты и цена блока — чтобы знать, что почём. */}
-        <div className="pmix" aria-label="Породы шахты">
-          {mix.map((s) => (
-            <span key={s.rock} className="pmix__rock">
-              <img src={rockTexture(s.rock)} alt="" />
-              <b>{Math.round(ROCKS[s.rock].value * m.sell)}</b>
+        {/* Проводник, пока он не пройден, стоит на месте строки с ценами
+            пород: высота под полем на счету, а цены есть и в листе шахт. */}
+        {guide ? (
+          <div className={`pguide${guideOk ? ' is-ready' : ''}`}>
+            <span className="pguide__n">
+              {prison.guide + 1}/{GUIDE.length}
             </span>
-          ))}
-        </div>
-
-        {prison.mined < 12 && (
-          <p className="prison-hint">
-            Тапни по блоку. Держи палец — кирка бьёт сама. Веди пальцем — ломаешь по жиле. Добычу
-            продавай: деньги те же, что в автоматах.
-          </p>
+            <span className="pguide__body">
+              <b>{guide.title}</b>
+              <i>{guideOk ? `Награда: ${rewardText(guide.reward)}` : guide.hint}</i>
+            </span>
+            {guideOk ? (
+              <button type="button" className="btn btn--sm pmines__go" onClick={claimGuide}>
+                Забрать
+              </button>
+            ) : (
+              <span className="pguide__prog">
+                {guideGoal > 1 ? `${fmt(guideV)}/${fmt(guideGoal)}` : rewardText(guide.reward)}
+              </span>
+            )}
+          </div>
+        ) : (
+          /* Породы этой шахты и цена блока — чтобы знать, что почём. */
+          <div className="pmix" aria-label="Породы шахты">
+            {mix.map((s) => (
+              <span key={s.rock} className="pmix__rock">
+                <img src={rockTexture(s.rock)} alt="" />
+                <b>{Math.round(ROCKS[s.rock].value * m.sell)}</b>
+              </span>
+            ))}
+          </div>
         )}
       </div>
 
@@ -1341,6 +1724,98 @@ export function PrisonPage() {
         </Sheet>
       )}
 
+      {sheet === 'norm' && !atTop && (
+        <Sheet title={`Ранг ${rankLetter(rank + 1)}`} onClose={() => setSheet(null)}>
+          <div className="stack">
+            <p className="pnorm__lead">
+              Норма выработки: одних денег мало — сдай породу. Считаются блоки, сломанные своими
+              руками, в любой шахте.
+            </p>
+            <div className="pnorm">
+              {quota.map((q) => {
+                const have = Math.min(q.n, prison.norm[q.rock] ?? 0);
+                const done = have >= q.n;
+                return (
+                  <div key={q.rock} className={`pnorm__row${done ? ' is-done' : ''}`}>
+                    <img src={rockTexture(q.rock)} alt="" />
+                    <span className="pnorm__info">
+                      <b>{ROCKS[q.rock].name}</b>
+                      <i>
+                        {done
+                          ? 'сдано'
+                          : q.rock === rank
+                            ? 'редкая порода шахты — её больше на глубине'
+                            : 'ходовая порода — встречается на каждом ярусе'}
+                      </i>
+                      <span className="pnorm__bar">
+                        <i style={{ transform: `scaleX(${have / q.n})` }} />
+                      </span>
+                    </span>
+                    <span className="pnorm__n">{done ? '✓' : `${have}/${q.n}`}</span>
+                  </div>
+                );
+              })}
+              <div className={`pnorm__row${balance >= cost ? ' is-done' : ''}`}>
+                <span className="pnorm__coin">
+                  <CoinIcon size={26} />
+                </span>
+                <span className="pnorm__info">
+                  <b>Цена ранга</b>
+                  <i>{balance >= cost ? 'хватает' : `не хватает ${fmt(cost - balance)}`}</i>
+                  <span className="pnorm__bar">
+                    <i style={{ transform: `scaleX(${progress})` }} />
+                  </span>
+                </span>
+                <span className="pnorm__n">{shortMoney(cost)}</span>
+              </div>
+            </div>
+            <button
+              className="btn btn--primary btn--block"
+              disabled={!qDone || balance < cost}
+              onClick={() => takeRank(false)}
+            >
+              {!qDone
+                ? `Не хватает: ${quota
+                    .filter((q) => (prison.norm[q.rock] ?? 0) < q.n)
+                    .map(
+                      (q) =>
+                        `${q.n - (prison.norm[q.rock] ?? 0)} × ${ROCKS[q.rock].name.toLowerCase()}`,
+                    )
+                    .join(', ')}`
+                : balance < cost
+                  ? `Не хватает ${fmt(cost - balance)} монет`
+                  : `Взять ранг за ${fmt(cost)} монет`}
+            </button>
+            {!qDone && (
+              <>
+                <button
+                  className="btn btn--ghost btn--block"
+                  disabled={balance < cost + buyout}
+                  onClick={() => takeRank(true)}
+                >
+                  Откупить норму: {fmt(cost)} + {fmt(buyout)} монет
+                </button>
+                <p className="pnorm__note">
+                  Откуп дешевеет с каждым сданным блоком: сейчас выполнено{' '}
+                  {Math.round(quotaProgress(quota, prison.norm) * 100)}%. Блоки с нужной породой в
+                  шахте помечены точкой.
+                </p>
+              </>
+            )}
+          </div>
+        </Sheet>
+      )}
+
+      {rewards && (
+        <RewardsSheet
+          skin={skin}
+          onClose={() => {
+            setRewards(false);
+            setRewardsNow(Date.now());
+          }}
+        />
+      )}
+
       {sheet === 'prestige' && (
         <Sheet title={`Престиж ${prestige + 1}`} onClose={() => setSheet(null)}>
           <div className="stack">
@@ -1383,6 +1858,15 @@ export function PrisonPage() {
             <span className="prank__key">
               <KeyIcon size={13} /> +1 ключ от сундука
             </span>
+            {sceneShown.buyout > 0 && (
+              <span className="prank__lvl">Норма откуплена за {fmt(sceneShown.buyout)} монет</span>
+            )}
+            {sceneShown.rank < LAST_RANK && (
+              <span className="prank__norm">
+                Норма на {rankLetter(sceneShown.rank + 1)}:
+                <QuotaChips quota={rankQuota(sceneShown.rank, prestige)} norm={{}} />
+              </span>
+            )}
             {sceneShown.levelUps.length > 0 && (
               <span className="prank__lvl">
                 Уровень {sceneShown.levelUps[sceneShown.levelUps.length - 1]} — награда в кошельке
