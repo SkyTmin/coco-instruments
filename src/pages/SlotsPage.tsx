@@ -11,6 +11,7 @@ import { CashDesk } from '@/components/CashDesk';
 import { SkinSheet } from '@/components/SkinSheet';
 import { RewardsSheet, fmtLeft, useReadyRewards } from '@/components/RewardsSheet';
 import { useFinanceStore } from '@/store';
+import { useExit } from '@/lib/use-exit';
 import type { SlotsSpinOutcome } from '@/store';
 import {
   WHEEL_COOLDOWN_MS,
@@ -41,7 +42,18 @@ import {
 } from '@/lib/slots';
 import type { CascadeStep, LineWin, SlotGrid, SlotSymbolId, SpinResult } from '@/lib/slots';
 import { plainPlan, rollupPlan, runRollup, winTier } from '@/lib/rollup';
+import { planReel, restReel, spinReel } from '@/lib/reel-motion';
+import type { ReelPlan } from '@/lib/reel-motion';
 import type { WinTier } from '@/lib/rollup';
+import {
+  addTrauma,
+  flashFrame,
+  HIT_STOP,
+  hitStop,
+  squashPop,
+  stopShake,
+  TRAUMA,
+} from '@/lib/juice';
 import { dustBurst } from '@/lib/dust';
 import type { DustCell } from '@/lib/dust';
 import { burstConfetti } from '@/lib/confetti';
@@ -75,8 +87,6 @@ import {
 // Высота ячейки барабана — та же величина в CSS (--cell): лента двигается на
 // целое число ячеек, поэтому символы всегда встают ровно в окно.
 const CELL = 74;
-/** Сколько случайных «пролетающих» символов между стартом и результатом. */
-const FILLER = 18;
 const BASE_MS = 900;
 const STEP_MS = 280;
 /** Пауза перед последним барабаном, когда на линии уже два премиума. */
@@ -103,14 +113,11 @@ const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 
 const randomColumn = () => Array.from({ length: ROWS }, () => randomSymbol());
 
-/** Лента одного барабана: [видимое сейчас, …мусор, результат, хвост]. */
-function makeStrip(from: SlotSymbolId[], to: SlotSymbolId[]): SlotSymbolId[] {
-  const filler = Array.from({ length: FILLER }, () => randomSymbol());
-  // Хвост нужен, чтобы «отскок» в конце анимации не открыл пустоту.
-  return [...from, ...filler, ...to, randomSymbol()];
-}
-
 const startGrid = (): SlotGrid => [randomColumn(), randomColumn(), randomColumn()];
+
+/** Темп вращения в турбо: фазы вдвое короче, ровный ход чуть быстрее. */
+const TURBO_TEMPO = 0.5;
+const TURBO_SPEEDUP = 1.2;
 
 /**
  * Одна ячейка поля во время каскада. Поле здесь не лента, а сетка: исчезают
@@ -186,10 +193,10 @@ function Sym({ id, skin, size = 58 }: { id: SlotSymbolId; skin: SkinId; size?: n
 
 /** Барабан: лента едет вверх, символы приходят снизу. */
 interface ReelProps {
-  strip: SlotSymbolId[];
+  /** План вращения (lib/reel-motion.ts): лента, кадры, моменты размытия и удара. */
+  plan: ReelPlan<SlotSymbolId>;
   skin: SkinId;
   spinId: number;
-  duration: number;
   onStop: () => void;
 }
 
@@ -200,34 +207,15 @@ interface ReelProps {
  * `onStop` в сравнении не участвует — он и так читается через ref.
  */
 const Reel = memo(
-  function Reel({ strip, skin, spinId, duration, onStop }: ReelProps) {
+  function Reel({ plan, skin, spinId, onStop }: ReelProps) {
     const ref = useRef<HTMLDivElement>(null);
     const stopRef = useRef(onStop);
     stopRef.current = onStop;
 
-    useLayoutEffect(() => {
-      const el = ref.current;
-      if (!el || spinId === 0) return;
-      const to = -(strip.length - ROWS - 1) * CELL;
-      if (reduceMotion()) {
-        el.style.transition = 'none';
-        el.style.transform = `translateY(${to}px)`;
-        stopRef.current();
-        return;
-      }
-      el.style.transition = 'none';
-      el.style.transform = 'translateY(0)';
-      el.classList.add('is-blur');
-      void el.offsetHeight; // reflow, иначе браузер склеит оба присваивания
-      // Небольшой «перелёт» в конце — барабан отскакивает, как механический.
-      el.style.transition = `transform ${duration}ms cubic-bezier(.18,.76,.24,1.06)`;
-      el.style.transform = `translateY(${to}px)`;
-      const t = setTimeout(() => {
-        el.classList.remove('is-blur');
-        stopRef.current();
-      }, duration);
-      return () => clearTimeout(t);
-    }, [spinId, strip, duration]);
+    useLayoutEffect(
+      () => spinReel(ref.current, plan, spinId, () => stopRef.current()),
+      [spinId, plan],
+    );
 
     return (
       <div className="reel">
@@ -235,7 +223,7 @@ const Reel = memo(
           {/* Ключ — позиция в ленте, а не символ: так React переиспользует те же
             элементы и лишь меняет src, вместо того чтобы каждое вращение
             создавать и выбрасывать по сотне картинок. */}
-          {strip.map((id, i) => (
+          {plan.strip.map((id, i) => (
             <span className="reel__cell" key={i}>
               <Sym id={id} skin={skin} />
             </span>
@@ -244,8 +232,7 @@ const Reel = memo(
       </div>
     );
   },
-  (a, b) =>
-    a.strip === b.strip && a.skin === b.skin && a.spinId === b.spinId && a.duration === b.duration,
+  (a, b) => a.plan === b.plan && a.skin === b.skin && a.spinId === b.spinId,
 );
 
 /**
@@ -277,6 +264,8 @@ function BoardView({
                   {
                     top: `${cell.row * CELL}px`,
                     '--dy': cell.fall,
+                    // Время падения ∝ √высоты — см. .sbcell.is-fall в theme.css.
+                    '--fk': Math.sqrt(cell.fall / ROWS).toFixed(3),
                     '--dur': `${duration}ms`,
                     '--delay': `${c * DROP_STAGGER}ms`,
                   } as React.CSSProperties
@@ -310,13 +299,48 @@ const SPARKS = Array.from({ length: 46 }, (_, i) => {
   };
 });
 
-/** Прочерченные линии выплат поверх поля. */
+/**
+ * Прочерченные линии выплат поверх поля.
+ *
+ * Длину штриха задаём В ПИКСЕЛЯХ ЭКРАНА, по каждой линии. Раньше стоял
+ * общий `stroke-dasharray: 200`, но при `vector-effect: non-scaling-stroke`
+ * штрих меряется на экране, а не в единицах viewBox: V-образная линия длиной
+ * ~350 px рисовалась на 200 и обрывалась — правое плечо не появлялось вовсе.
+ * `pathLength` тут не спасает: с тем же non-scaling-stroke Chromium делит
+ * штрих неверно. Поэтому считаем длину сами, до первой отрисовки.
+ */
 function PaylineOverlay({ wins }: { wins: SpinResult['wins'] }) {
-  if (!wins.length) return null;
+  const ref = useRef<SVGSVGElement>(null);
   const x = (col: number) => ((col + 0.5) / 3) * 100;
   const y = (row: number) => ((row + 0.5) / 3) * 100;
+
+  useLayoutEffect(() => {
+    const svg = ref.current;
+    if (!svg) return;
+    const { width, height } = svg.getBoundingClientRect();
+    svg.querySelectorAll<SVGPolylineElement>('.payline').forEach((line, i) => {
+      const cells = wins[i]?.cells ?? [];
+      let len = 0;
+      for (let k = 1; k < cells.length; k++) {
+        const dx = ((x(cells[k][0]) - x(cells[k - 1][0])) / 100) * width;
+        const dy = ((y(cells[k][1]) - y(cells[k - 1][1])) / 100) * height;
+        len += Math.hypot(dx, dy);
+      }
+      const dash = `${Math.ceil(len) + 4}`;
+      line.style.strokeDasharray = dash;
+      line.style.strokeDashoffset = dash;
+    });
+  }, [wins]);
+
+  if (!wins.length) return null;
   return (
-    <svg className="paylines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <svg
+      className="paylines"
+      ref={ref}
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
       {wins.map((w, i) => (
         <polyline
           key={`${w.line}-${i}`}
@@ -352,10 +376,11 @@ export function SlotsPage() {
   const claimRescue = useFinanceStore((s) => s.claimSlotsRescue);
   const setPrefs = useFinanceStore((s) => s.setSlotsPrefs);
 
-  const [strips, setStrips] = useState<SlotSymbolId[][]>(() => startGrid());
+  const [plans, setPlans] = useState<ReelPlan<SlotSymbolId>[]>(() =>
+    startGrid().map((col) => restReel(col, randomSymbol, CELL)),
+  );
   const [spinId, setSpinId] = useState(0);
   const [spinning, setSpinning] = useState(false);
-  const [durations, setDurations] = useState([BASE_MS, BASE_MS, BASE_MS]);
   const [stopped, setStopped] = useState(3);
   // Поле каскада: не null — значит на экране сетка, а не крутящиеся ленты.
   const [board, setBoard] = useState<Board | null>(null);
@@ -387,17 +412,31 @@ export function SlotsPage() {
     freeSpins: number;
     skin?: string;
   } | null>(null);
+  // Оверлеи уходят, а не обрываются (lib/use-exit.ts): состояние уже null,
+  // а разметка ещё доигрывает уход.
+  const [lvlShown, lvlLeaving] = useExit(levelUp, 240);
   const [lever, setLever] = useState(0);
-  const [shake, setShake] = useState(false);
   const [streak, setStreak] = useState(0);
   const [celebration, setCelebration] = useState<{
     tier: 'big' | 'jackpot';
     amount: number;
   } | null>(null);
+  const [totem, totemLeaving] = useExit(celebration, 300);
   const [jackpotWin, setJackpotWin] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
   const reelsRef = useRef<HTMLDivElement>(null);
+  /**
+   * Корпус автомата — его и трясёт (lib/juice.ts), как в «Каскаде». Раньше
+   * здесь была CSS-тряска классом, и снимал её `onAnimationEnd` на корпусе —
+   * а это событие всплывает от КАЖДОЙ дочерней анимации: первая же упавшая
+   * клетка обрывала тряску посреди размаха, и корпус щёлкал на место.
+   */
+  const cabinetRef = useRef<HTMLDivElement>(null);
+  /** Счётчик выигрыша: его толкает конец счёта. */
+  const winRef = useRef<HTMLSpanElement>(null);
+  /** Шток рычага: его дёргает и кнопка «Крутить», а не только палец. */
+  const armRef = useRef<HTMLSpanElement>(null);
   const dustRef = useRef<HTMLCanvasElement>(null);
   const dustStop = useRef<(() => void) | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -410,6 +449,14 @@ export function SlotsPage() {
   const wonRef = useRef(0);
   const rollStop = useRef<(() => void) | null>(null);
   const dragRef = useRef<{ y: number; id: number } | null>(null);
+  const leverVal = useRef(0);
+  /**
+   * Что стоит на поле прямо сейчас. С этого начинается следующее вращение:
+   * лента обязана стартовать с того, что игрок видит, иначе в первый кадр
+   * спина всё поле подменяется другими символами.
+   */
+  const shownGrid = useRef<SlotGrid | null>(null);
+  if (!shownGrid.current) shownGrid.current = plans.map((p) => p.strip.slice(1, 1 + ROWS));
 
   useEffect(() => setMuted(!sound), [sound]);
   useEffect(() => setHapticsMuted(!haptics), [haptics]);
@@ -418,10 +465,27 @@ export function SlotsPage() {
     () => () => {
       timers.current.forEach(clearTimeout);
       if (tickRef.current) clearInterval(tickRef.current);
+      rollStop.current?.();
       dustStop.current?.();
+      stopShake();
     },
     [],
   );
+
+  /**
+   * Один удар: стоп-кадр → вспышка → тряска — тот же, что в «Каскаде».
+   * Эффекты у обеих игр обязаны быть одними: иначе одна ощущается дешевле.
+   */
+  const beat = useCallback((level: 'small' | 'big' | 'mega', after?: () => void) => {
+    hitStop(cabinetRef.current, HIT_STOP[level]);
+    timers.current.push(
+      setTimeout(() => {
+        flashFrame(level);
+        addTrauma(cabinetRef.current, TRAUMA[level]);
+        after?.();
+      }, HIT_STOP[level]),
+    );
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000);
@@ -516,7 +580,11 @@ export function SlotsPage() {
       wonRef.current = start;
       winOdo.current?.set(start);
       tapLight();
-      winChime('small');
+      // Церемония начинается с нуля — сброс счётчика прячет вспышка
+      // открывающего удара. Мелкому выигрышу сбрасывать нечего, и вспышка
+      // на каждом «ВЕРНУЛОСЬ» только обесценила бы её.
+      if (ceremony) beat('small', () => winChime('small'));
+      else winChime('small');
 
       // См. «Каскад»: при синхронном плане (reduce-motion) `done` проходит
       // до присваивания, и в `rollStop` осталась бы отработавшая функция.
@@ -537,16 +605,20 @@ export function SlotsPage() {
             tierBreak(t.beats);
             if (t.beats >= 3) {
               notifySuccess();
-              setShake(true);
-              burstConfetti(t.beats >= 4 ? 200 : 140, theme.confetti);
-              rainCoins(t.beats >= 4 ? 44 : 30, rainSrc);
+              beat('mega', () => {
+                burstConfetti(t.beats >= 4 ? 200 : 140, theme.confetti);
+                rainCoins(t.beats >= 4 ? 44 : 30, rainSrc);
+              });
             } else if (t.beats === 2) {
               notifySuccess();
-              setShake(true);
-              burstConfetti(70, theme.confetti);
-              rainCoins(20, rainSrc);
+              beat('big', () => {
+                burstConfetti(70, theme.confetti);
+                rainCoins(20, rainSrc);
+              });
             } else if (t.beats === 1) {
               tapMedium();
+              flashFrame('small');
+              addTrauma(cabinetRef.current, TRAUMA.small);
             } else {
               selectionChanged();
             }
@@ -569,6 +641,7 @@ export function SlotsPage() {
             balOdo.current?.set(balance);
             payoutEnd(topBeats);
             if (topBeats >= 3 || res.kind === 'jackpot') jackpotFanfare();
+            squashPop(winRef.current, 0.5);
             finish(res);
           },
         },
@@ -576,7 +649,7 @@ export function SlotsPage() {
       );
       if (live) rollStop.current = stop;
     },
-    [bet, turbo, balance, finish, theme.confetti, rainSrc],
+    [bet, turbo, balance, beat, finish, theme.confetti, rainSrc],
   );
   const payoutRef = useRef(payout);
   payoutRef.current = payout;
@@ -690,7 +763,9 @@ export function SlotsPage() {
         notifySuccess();
         burstConfetti(tier >= 4 ? 90 : 55, theme.confetti);
         rainCoins(tier >= 4 ? 22 : 12, rainSrc);
-        setShake(true);
+        // Травма копится: длинная цепочка трясёт всё сильнее звено за звеном.
+        addTrauma(cabinetRef.current, tier >= 4 ? TRAUMA.big : TRAUMA.small);
+        if (tier >= 4) flashFrame('small');
       }
 
       // Пыль: сыгравшие символы рассыпаются на пиксели (эффект как в Telegram).
@@ -720,7 +795,7 @@ export function SlotsPage() {
               setCascade(null);
               setChain(0);
               // Следующее вращение должно стартовать с того, что сейчас на поле.
-              setStrips(res.steps[i].next.map((col) => [...col, randomSymbol()]));
+              shownGrid.current = res.steps[i].next;
               // Каскад отыграл — дальше деньги, и счёт стартует ровно с той
               // суммы, которую счётчик показывает прямо сейчас.
               payoutRef.current(res, wonRef.current);
@@ -734,63 +809,100 @@ export function SlotsPage() {
   );
   stepRef.current = runStep;
 
-  const spin = useCallback(() => {
-    if (!hydrated || spinning || (freeSpins <= 0 && balance < bet)) return;
-    primeAudio();
-    const res = playSlots();
-    if (!res) return;
-    tapMedium();
-    leverPull();
-
-    const from: SlotSymbolId[][] = strips.map((s) => s.slice(-ROWS - 1, -1));
-    const next = res.grid.map((col, i) =>
-      makeStrip(from[i]?.length === ROWS ? from[i] : randomColumn(), col),
-    );
-    // Драма «почти выиграл»: два премиума на линии — третий барабан тормозит.
-    const drama = hasAnticipation(res.grid);
-    const scale = turbo ? 0.5 : 1;
-    const durs = [0, 1, 2].map(
-      (i) => (BASE_MS + i * STEP_MS + (drama && i === 2 ? ANTICIPATION_MS : 0)) * scale,
-    );
-
-    setStrips(next);
-    setDurations(durs);
-    setBoard(null);
-    dustStop.current?.();
-    setStopped(0);
-    setResult(null);
-    setShake(false);
-    setCelebration(null);
-    setJackpotWin(0);
-    setPending(res.total);
-    setCascade(null);
-    setStepWins([]);
-    setChain(0);
-    setCounting(false);
-    setWinStep(null);
-    // Счётчик обнуляем и в рефе, и в самом одометре: от него стартует счёт.
-    rollStop.current?.();
-    rollStop.current = null;
-    wonRef.current = 0;
-    winOdo.current?.set(0);
-    setSpinId((n) => n + 1);
-    setSpinning(true);
-
-    // Пока барабаны в движении — дробный стрёкот механики.
-    if (tickRef.current) clearInterval(tickRef.current);
-    if (!reduceMotion()) {
-      tickRef.current = setInterval(() => reelTick(), turbo ? 55 : 80);
-      if (drama) timers.current.push(setTimeout(() => antiSound(), durs[1]));
+  /**
+   * Рычаг дёргается и от кнопки, и от автоспина, и от пробела. Раньше он
+   * стоял мёртвым всегда, кроме случая, когда его тянули пальцем, — и звук
+   * `leverPull` звучал при неподвижном рычаге.
+   */
+  const pullLever = useCallback(() => {
+    const el = armRef.current;
+    if (!el || reduceMotion()) return;
+    try {
+      el.animate(
+        [
+          { transform: 'translateY(0)', easing: 'cubic-bezier(0.5, 0, 0.9, 0.6)' },
+          { transform: 'translateY(44px)', offset: 0.3, easing: 'cubic-bezier(0.3, 1.5, 0.5, 1)' },
+          { transform: 'translateY(0)' },
+        ],
+        { duration: 560 * (turbo ? 0.7 : 1) },
+      );
+    } catch {
+      /* движок без WAAPI — рычаг просто постоит */
     }
+  }, [turbo]);
 
-    timers.current.push(
-      setTimeout(() => {
-        if (tickRef.current) clearInterval(tickRef.current);
-        if (res.steps.length) stepRef.current(res, 0);
-        else payoutRef.current(res, 0);
-      }, durs[2] + 40),
-    );
-  }, [hydrated, spinning, balance, bet, freeSpins, playSlots, strips, turbo]);
+  const spin = useCallback(
+    (byHand = false) => {
+      if (!hydrated || spinning || (freeSpins <= 0 && balance < bet)) return;
+      primeAudio();
+      const res = playSlots();
+      if (!res) return;
+      tapMedium();
+      leverPull();
+      // Тянули пальцем — рычаг уже внизу и сам пружинит назад.
+      if (!byHand) pullLever();
+
+      // Драма «почти выиграл»: два премиума на линии — третий барабан тормозит.
+      const drama = hasAnticipation(res.grid);
+      const scale = turbo ? TURBO_TEMPO : 1;
+      const durs = [0, 1, 2].map(
+        (i) => (BASE_MS + i * STEP_MS + (drama && i === 2 ? ANTICIPATION_MS : 0)) * scale,
+      );
+      // Путь каждой ленты считается из её длительности, а скорость у всех одна:
+      // последний барабан не медленнее первого, он просто дольше крутится.
+      const from = shownGrid.current ?? startGrid();
+      const next = res.grid.map((col, i) =>
+        planReel({
+          from: from[i]?.length === ROWS ? from[i] : randomColumn(),
+          to: col,
+          filler: randomSymbol,
+          cell: CELL,
+          duration: durs[i],
+          tempo: scale,
+          speedup: turbo ? TURBO_SPEEDUP : 1,
+        }),
+      );
+      shownGrid.current = res.grid;
+
+      setPlans(next);
+      setBoard(null);
+      dustStop.current?.();
+      setStopped(0);
+      setResult(null);
+      stopShake();
+      setCelebration(null);
+      setJackpotWin(0);
+      setPending(res.total);
+      setCascade(null);
+      setStepWins([]);
+      setChain(0);
+      setCounting(false);
+      setWinStep(null);
+      // Счётчик обнуляем и в рефе, и в самом одометре: от него стартует счёт.
+      rollStop.current?.();
+      rollStop.current = null;
+      wonRef.current = 0;
+      winOdo.current?.set(0);
+      setSpinId((n) => n + 1);
+      setSpinning(true);
+
+      // Пока барабаны в движении — дробный стрёкот механики.
+      if (tickRef.current) clearInterval(tickRef.current);
+      if (!reduceMotion()) {
+        tickRef.current = setInterval(() => reelTick(), turbo ? 55 : 80);
+        if (drama) timers.current.push(setTimeout(() => antiSound(), durs[1]));
+      }
+
+      timers.current.push(
+        setTimeout(() => {
+          if (tickRef.current) clearInterval(tickRef.current);
+          if (res.steps.length) stepRef.current(res, 0);
+          else payoutRef.current(res, 0);
+        }, durs[2] + 40),
+      );
+    },
+    [hydrated, spinning, balance, bet, freeSpins, playSlots, turbo, pullLever],
+  );
 
   // Баннер крупного выигрыша живёт ~4 секунды: вспышка → лучи → счёт с тиканьем.
   useEffect(() => {
@@ -873,15 +985,18 @@ export function SlotsPage() {
   const leverMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = dragRef.current;
     if (!d) return;
-    setLever(Math.max(0, Math.min(1, (e.clientY - d.y) / 72)));
+    leverVal.current = Math.max(0, Math.min(1, (e.clientY - d.y) / 72));
+    setLever(leverVal.current);
   };
   const leverUp = () => {
     if (!dragRef.current) return;
     dragRef.current = null;
-    setLever((v) => {
-      if (v > 0.55) spin();
-      return 0;
-    });
+    // Решение — по рефу, а не внутри updater'а setState: побочный эффект
+    // (целый спин) в updater'е React вправе вызвать дважды.
+    const pulled = leverVal.current > 0.55;
+    leverVal.current = 0;
+    setLever(0);
+    if (pulled) spin(true);
   };
 
   // Пробел/Enter — крутить (десктопный Telegram и браузер).
@@ -1001,9 +1116,9 @@ export function SlotsPage() {
         {/* Корпус автомата */}
         <div
           className={`cabinet${result?.kind === 'jackpot' ? ' is-jackpot' : ''}${
-            shake ? ' is-shake' : ''
-          }${spinning ? ' is-spinning' : ''}`}
-          onAnimationEnd={() => setShake(false)}
+            spinning ? ' is-spinning' : ''
+          }`}
+          ref={cabinetRef}
           // Тап по автомату досчитывает выплату: длинный счёт обязан быть
           // пропускаемым, иначе награда превращается в ожидание.
           onClick={() => skipCount()}
@@ -1032,18 +1147,21 @@ export function SlotsPage() {
                 {board ? (
                   <BoardView board={board} skin={skin} dying={dyingCells} duration={dropDur} />
                 ) : (
-                  strips.map((strip, i) => (
+                  plans.map((plan, i) => (
                     <Reel
                       key={i}
-                      strip={strip}
+                      plan={plan}
                       skin={skin}
                       spinId={spinId}
-                      duration={durations[i]}
                       onStop={() => onReelStop(i)}
                     />
                   ))
                 )}
-                {shownWins.length > 0 && <div className="reels__dim" aria-hidden="true" />}
+                {/* Живёт всегда и лишь гаснет — см. тот же приём в «Каскаде». */}
+                <div
+                  className={`reels__dim${shownWins.length ? ' is-on' : ''}`}
+                  aria-hidden="true"
+                />
                 {shownWins.length > 0 && (
                   <div className="reels__marks" aria-hidden="true">
                     {[0, 1, 2].map((col) =>
@@ -1110,6 +1228,7 @@ export function SlotsPage() {
               <span className="lever__base" />
               <span
                 className="lever__arm"
+                ref={armRef}
                 style={{
                   transform: `translateY(${lever * 44}px)`,
                   transition: dragRef.current ? 'none' : 'transform .35s cubic-bezier(.3,1.5,.5,1)',
@@ -1138,7 +1257,7 @@ export function SlotsPage() {
                 </span>
                 {/* Один счётчик на весь спин: набирает базу за каскад, а
                     потом с неё же уезжает к итогу. */}
-                <span className={`status__win${counting ? ' is-counting' : ''}`}>
+                <span className={`status__win${counting ? ' is-counting' : ''}`} ref={winRef}>
                   +<MoneyCounter ref={winOdo} value={0} />
                   <CoinIcon size={20} />
                 </span>
@@ -1537,23 +1656,23 @@ export function SlotsPage() {
 
       {rewards && <RewardsSheet skin={skin} onClose={() => setRewards(false)} />}
 
-      {levelUp && (
+      {lvlShown && (
         <div
-          className="levelup"
+          className={`levelup${lvlLeaving ? ' is-leaving' : ''}`}
           data-skin={skin}
           onClick={() => setLevelUp(null)}
           role="presentation"
         >
           <div className="levelup__card">
-            <div className="levelup__lvl">Уровень {levelUp.level}</div>
+            <div className="levelup__lvl">Уровень {lvlShown.level}</div>
             <div className="levelup__gain">
-              +{fmt(levelUp.coins)}
+              +{fmt(lvlShown.coins)}
               <CoinIcon size={18} />
-              {levelUp.freeSpins > 0 && <span> · 🎟 {levelUp.freeSpins}</span>}
+              {lvlShown.freeSpins > 0 && <span> · 🎟 {lvlShown.freeSpins}</span>}
             </div>
-            {levelUp.skin && (
+            {lvlShown.skin && (
               <div className="levelup__skin">
-                Открыт скин «{skinOf(levelUp.skin as SkinId).name}»
+                Открыт скин «{skinOf(lvlShown.skin as SkinId).name}»
               </div>
             )}
           </div>
@@ -1562,9 +1681,9 @@ export function SlotsPage() {
 
       {/* Крупный выигрыш — в духе тотема бессмертия: символ вырастает в центре,
           качается и уходит вверх, вокруг разлетаются квадратные искры. */}
-      {celebration && (
+      {totem && (
         <div
-          className={`totem totem--${winStep && winStep.beats >= 3 ? 'jackpot' : celebration.tier}`}
+          className={`totem${totemLeaving ? ' is-leaving' : ''} totem--${winStep && winStep.beats >= 3 ? 'jackpot' : totem.tier}`}
           onClick={() => {
             // Пока идут деньги — тап досчитывает их, а не закрывает карточку.
             if (!skipCount()) setCelebration(null);
@@ -1598,8 +1717,8 @@ export function SlotsPage() {
                 карточка открывается «КРУПНЫМ», а через пару секунд на ней
                 уже «МЕГА». Ключ по ступени — чтобы каждый титул прилетал
                 своим кадром, а не подменялся текстом. */}
-            <div className="totem__title" key={winStep?.id ?? celebration.tier}>
-              {celebration.tier === 'jackpot' && !winStep
+            <div className="totem__title" key={winStep?.id ?? totem.tier}>
+              {totem.tier === 'jackpot' && !winStep
                 ? 'ДЖЕКПОТ!'
                 : (winStep?.name ?? 'КРУПНЫЙ ВЫИГРЫШ')}
             </div>

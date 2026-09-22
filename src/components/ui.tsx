@@ -120,25 +120,29 @@ export function AnimatedNumber({
   duration?: number;
 }) {
   const [display, setDisplay] = useState(prefersReducedMotion() ? value : 0);
-  const fromRef = useRef(prefersReducedMotion() ? value : 0);
+  // Что показано ПРЯМО СЕЙЧАС. Новый ход стартует отсюда, а не с прошлой
+  // цели: иначе число, сменившееся посреди анимации, прыгало назад к старому
+  // началу и ехало заново.
+  const shownRef = useRef(prefersReducedMotion() ? value : 0);
   const rafRef = useRef(0);
 
   useEffect(() => {
     if (prefersReducedMotion()) {
       setDisplay(value);
-      fromRef.current = value;
+      shownRef.current = value;
       return;
     }
-    const from = fromRef.current;
+    const from = shownRef.current;
     const to = value;
     if (from === to) return;
     const start = performance.now();
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
-      setDisplay(from + (to - from) * eased);
+      const n = from + (to - from) * eased;
+      shownRef.current = n;
+      setDisplay(n);
       if (t < 1) rafRef.current = requestAnimationFrame(tick);
-      else fromRef.current = to;
     };
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(tick);

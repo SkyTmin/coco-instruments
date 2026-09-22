@@ -11065,22 +11065,6 @@ input[type='datetime-local'] {
     0 22px 60px rgba(255, 140, 80, 0.45),
     inset 0 1px 0 rgba(255, 220, 180, 0.3);
 }
-.cabinet.is-shake {
-  animation: cabinet-shake 0.55s cubic-bezier(0.36, 0.07, 0.19, 0.97);
-}
-@keyframes cabinet-shake {
-  10%,
-  90% {
-    transform: translate3d(-2px, 0, 0) rotate(-0.25deg);
-  }
-  30%,
-  70% {
-    transform: translate3d(4px, 0, 0) rotate(0.35deg);
-  }
-  50% {
-    transform: translate3d(-5px, 0, 0) rotate(-0.4deg);
-  }
-}
 
 /* Бегущие лампочки по верхней кромке */
 .cabinet__bulbs {
@@ -11427,13 +11411,24 @@ input[type='datetime-local'] {
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
   filter: drop-shadow(0 0 3px #ff9a3c) drop-shadow(0 1px 2px rgba(60, 20, 0, 0.9));
-  stroke-dasharray: 200;
-  stroke-dashoffset: 200;
-  animation: payline-draw 0.5s ease forwards;
+  /* Длина штриха — в пикселях экрана, её ставит PaylineOverlay по каждой
+     линии. Здесь только запас на первый кадр: линия не видна, пока длина
+     не посчитана. */
+  stroke-dasharray: 2000;
+  stroke-dashoffset: 2000;
+  animation: payline-draw calc(0.5s * var(--speed, 1)) cubic-bezier(0.3, 0, 0.2, 1) both;
 }
 @keyframes payline-draw {
   to {
     stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Без движения линия обязана быть видна целиком сразу. Длину штриха
+     страница ставит инлайн, поэтому здесь нужен !important. */
+  .payline {
+    animation: none;
+    stroke-dashoffset: 0 !important;
   }
 }
 
@@ -11878,7 +11873,10 @@ input[type='datetime-local'] {
   top: -8%;
   font-size: 26px;
   font-style: normal;
-  animation: coin-fall var(--d, 1.4s) cubic-bezier(0.3, 0.1, 0.6, 1) forwards;
+  /* Монета тяжёлая и падает с ускорением. Прежняя кривая тормозила к низу
+     экрана — монеты «парковались», как конфетти, хотя сквозняком их не
+     держит. Конфетти (lib/confetti) пусть парит, монета — падает. */
+  animation: coin-fall var(--d, 1.4s) cubic-bezier(0.45, 0.05, 0.8, 0.55) forwards;
   transform: scale(var(--s, 1));
 }
 @keyframes coin-fall {
@@ -12004,12 +12002,11 @@ input[type='datetime-local'] {
   z-index: 3;
   pointer-events: none;
   background: rgba(6, 4, 2, 0.26);
-  animation: dim-in 0.2s ease both;
+  opacity: 0;
+  transition: opacity calc(0.2s * var(--speed, 1)) ease;
 }
-@keyframes dim-in {
-  from {
-    opacity: 0;
-  }
+.reels__dim.is-on {
+  opacity: 1;
 }
 .reels__marks {
   z-index: 5;
@@ -12704,10 +12701,22 @@ input[type='datetime-local'] {
   margin: 2px auto 0;
   aspect-ratio: 1;
 }
+/* Тень — отдельным неподвижным слоем. На самом диске `drop-shadow` крутилась
+   бы вместе с ним: фильтр рисуется в собственных координатах элемента, до
+   поворота, и тень смещением вниз ходила бы вокруг колеса по кругу. */
+.wheel::before {
+  content: '';
+  position: absolute;
+  inset: 6% 4% -2%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.5), transparent);
+  pointer-events: none;
+}
 .wheel__disc {
+  position: relative;
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.45));
+  will-change: transform;
 }
 .wheel__rim {
   fill: none;
@@ -12746,6 +12755,8 @@ input[type='datetime-local'] {
   top: -4px;
   left: 50%;
   z-index: 2;
+  /* Язычок качается от щелчков сектора вокруг своего крепления. */
+  transform-origin: 50% 0;
   width: 0;
   height: 0;
   transform: translateX(-50%);
@@ -12890,6 +12901,15 @@ input[type='datetime-local'] {
     transform: translateY(-24px) scale(0.9);
   }
 }
+.levelup.is-leaving .levelup__card {
+  animation: levelup-out calc(0.24s * var(--speed, 1)) ease-in both;
+}
+@keyframes levelup-out {
+  to {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.94);
+  }
+}
 .levelup__lvl {
   font-size: 15px;
   font-weight: 800;
@@ -12973,9 +12993,26 @@ input[type='datetime-local'] {
    заметно громче короткого, иначе счётчик ничего не значит.
    ========================================================================= */
 
-/* Фаза «взрыв»: ячейка вспыхивает и схлопывается перед падением новых */
+/* Фаза «взрыв»: ячейка вспыхивает и схлопывается перед падением новых.
+   Вспышка — отдельным белым слоем по прозрачности, а не `filter:
+   brightness()` в кадрах: фильтр в анимации перерисовывает рамку с её
+   тенями каждый кадр, а прозрачность считает композитор. */
 .reels__mark.is-burst {
-  animation: mark-burst 0.28s cubic-bezier(0.3, 0, 0.7, 1) forwards;
+  animation: mark-burst calc(0.28s * var(--speed, 1)) cubic-bezier(0.3, 0, 0.7, 1) forwards;
+}
+.reels__mark.is-burst::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle,
+    rgba(255, 252, 235, 0.95),
+    color-mix(in srgb, var(--neon) 45%, rgba(255, 255, 255, 0.5)) 55%,
+    transparent 75%
+  );
+  opacity: 0;
+  animation: mark-flash calc(0.28s * var(--speed, 1)) ease-out forwards;
 }
 @keyframes mark-burst {
   0% {
@@ -12985,12 +13022,18 @@ input[type='datetime-local'] {
   45% {
     transform: scale(1.18);
     opacity: 1;
-    filter: brightness(2.2);
   }
   100% {
     transform: scale(0.35);
     opacity: 0;
-    filter: brightness(3);
+  }
+}
+@keyframes mark-flash {
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
   }
 }
 
@@ -13071,6 +13114,20 @@ input[type='datetime-local'] {
     transform: translateX(-50%) scale(1.07);
   }
 }
+/* Вход плашки цепочки. Эти кадры были потеряны в v2.35.0 вместе с прежней
+   плашкой: правило `animation: combo-in …` осталось, а самих @keyframes не
+   стало, и плашка «ЦЕПОЧКА ×N» возникала одним кадром. translateX(-50%)
+   обязателен — плашка центрируется им, и без него она уезжала бы вбок. */
+@keyframes combo-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
 
 /* Строка статуса во время каскада */
 .status--combo {
@@ -13135,7 +13192,8 @@ input[type='datetime-local'] {
 @media (prefers-reduced-motion: reduce) {
   .combo,
   .combo--t4,
-  .reels__mark.is-burst {
+  .reels__mark.is-burst,
+  .reels__mark.is-burst::after {
     animation: none;
   }
 }
@@ -13169,14 +13227,15 @@ input[type='datetime-local'] {
 /* Падение: ячейка стоит на конечном месте, а стартует на --dy клеток выше.
  *
  * Профиль и длительность — общие для обеих игр, см. `.sbcell.is-fall`.
- * Коротко: НИКАКОГО перелёта и длительность ПРОПОРЦИОНАЛЬНА высоте падения.
+ * Коротко: свободное падение без перелёта, приземление — сплющиванием.
  */
 .bcell.is-fall {
-  animation-name: tumble-fall;
-  animation-duration: calc(var(--dur, 430ms) * (0.55 + 0.09 * var(--dy, 1)));
-  animation-timing-function: cubic-bezier(0.62, 0.02, 0.36, 1);
-  animation-delay: var(--delay, 0ms);
-  animation-fill-mode: both;
+  transform-origin: 50% 100%;
+  animation:
+    tumble-fall calc(var(--dur, 430ms) * var(--fk, 1)) cubic-bezier(0.11, 0, 0.5, 0)
+      var(--delay, 0ms) both,
+    tumble-land calc(150ms * var(--speed, 1)) cubic-bezier(0.2, 0.8, 0.4, 1)
+      calc(var(--delay, 0ms) + var(--dur, 430ms) * var(--fk, 1));
 }
 @keyframes tumble-fall {
   from {
@@ -13184,6 +13243,21 @@ input[type='datetime-local'] {
   }
   to {
     transform: translateY(0);
+  }
+}
+/* Приземление. Клетка сплющивается о дно своего гнезда и выпрямляется —
+   ОТ НИЖНЕГО КРАЯ, поэтому ни на пиксель не заходит к соседу снизу: это не
+   отскок, которого здесь быть не должно, а вес. Сила — от высоты падения:
+   с одного ряда еле заметно, с пяти — отчётливо. */
+@keyframes tumble-land {
+  0% {
+    transform: scale(1, 1);
+  }
+  30% {
+    transform: scale(calc(1 + 0.06 * var(--fk, 1)), calc(1 - 0.1 * var(--fk, 1)));
+  }
+  100% {
+    transform: scale(1, 1);
   }
 }
 /* Символ рассыпается в пыль: сам элемент прячем, пиксели рисует канва */
@@ -13310,6 +13384,25 @@ input[type='datetime-local'] {
   place-items: center;
   overflow: hidden;
   animation: fade 0.18s ease;
+}
+/* Уход тотема. Раньше полноэкранная тёмная сцена снималась одним кадром —
+   игра под ней появлялась рывком. Теперь сцена гаснет, а карточка с суммой
+   чуть уменьшается: «убрали в карман». Тапы сквозь уходящий тотем уже идут
+   к автомату. */
+.totem.is-leaving {
+  pointer-events: none;
+  animation: fade-out calc(0.3s * var(--speed, 1)) ease-in both;
+}
+.totem.is-leaving .totem__card {
+  animation: totem-card-out calc(0.3s * var(--speed, 1)) cubic-bezier(0.5, 0, 0.9, 0.5) both;
+}
+@keyframes totem-card-out {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: translateY(16px) scale(0.9);
+  }
 }
 .totem__flash {
   position: absolute;
@@ -13509,6 +13602,11 @@ input[type='datetime-local'] {
 @media (prefers-reduced-motion: reduce) {
   .totem--mega .totem__item {
     animation: fade 0.3s ease both;
+  }
+  .totem.is-leaving,
+  .totem.is-leaving .totem__card,
+  .levelup.is-leaving .levelup__card {
+    animation: none;
   }
 }
 
@@ -13866,7 +13964,7 @@ input[type='datetime-local'] {
 .sbcell--flow {
   position: relative;
 }
-/* Падение клетки. Два правила, и оба нарушались одновременно:
+/* Падение клетки. Три правила, и все три нарушались:
  *
  * 1. ПЕРЕЛЁТА НЕТ. Здесь стояла пружина `cubic-bezier(.34,1.34,.5,1)`: она
  *    выносит клетку примерно на 3,7% ПУТИ ниже её гнезда, и та возвращается
@@ -13875,20 +13973,25 @@ input[type='datetime-local'] {
  *    «некоторые символы прыгают и возвращаются на место». Все четыре
  *    контрольные точки кривой обязаны лежать в [0,1] — тогда перелёт
  *    невозможен в принципе, а не «почти незаметен».
- * 2. ДЛИТЕЛЬНОСТЬ ПРОПОРЦИОНАЛЬНА ВЫСОТЕ. Раньше все клетки летели ровно
- *    `--dur` независимо от того, падали они на ряд или на пять: ближняя
- *    ползла, дальняя телепортировалась, и тридцать таких вместе читались
- *    как желе. Это самый пропускаемый физический сигнал в каскадных играх.
- *    Коэффициент подобран так, чтобы при максимальном падении (5 рядов)
- *    множитель был ровно 1 — иначе клетка не успела бы сесть до того, как
- *    страница запускает следующее звено.
+ * 2. ЭТО ПАДЕНИЕ, А НЕ ЛИФТ. Кривая `ease-in-out` разгоняла клетку и
+ *    плавно парковала её в гнезде — так ездит лифт, а не падает камень.
+ *    Теперь это свободное падение: квадратичный разгон
+ *    (`cubic-bezier(.11,0,.5,0)` — ровно y = t²) и удар о дно.
+ * 3. ВРЕМЯ ∝ КОРНЮ ИЗ ВЫСОТЫ (`--fk` = √(dy / рядов), считает страница).
+ *    Так падает всё под одной гравитацией, и из этого следует главное:
+ *    клетки одной колонки, сорвавшись разом, держат дистанцию, пока нижняя
+ *    не сядет, — верхняя не наезжает на нижнюю. При прежней линейной
+ *    формуле `0.55 + 0.09·dy` в середине падения они налезали друг на друга
+ *    на треть клетки. Самое длинное падение (все ряды) длится ровно `--dur`:
+ *    иначе клетка не успела бы сесть до следующего звена.
  */
 .sbcell.is-fall {
-  animation-name: tumble-fall;
-  animation-duration: calc(var(--dur, 460ms) * (0.55 + 0.09 * var(--dy, 1)));
-  animation-timing-function: cubic-bezier(0.62, 0.02, 0.36, 1);
-  animation-delay: var(--delay, 0ms);
-  animation-fill-mode: both;
+  transform-origin: 50% 100%;
+  animation:
+    tumble-fall calc(var(--dur, 460ms) * var(--fk, 1)) cubic-bezier(0.11, 0, 0.5, 0)
+      var(--delay, 0ms) both,
+    tumble-land calc(150ms * var(--speed, 1)) cubic-bezier(0.2, 0.8, 0.4, 1)
+      calc(var(--delay, 0ms) + var(--dur, 460ms) * var(--fk, 1));
 }
 /* Сыгравшие символы: золотая рамка + вспышка волной слева направо.
    Линий тут нет, поэтому группу собирает именно очерёдность загорания. */
@@ -13978,7 +14081,11 @@ input[type='datetime-local'] {
   border-radius: 10px;
   pointer-events: none;
   background: rgba(6, 3, 12, 0.56);
-  animation: fade 0.18s ease;
+  opacity: 0;
+  transition: opacity calc(0.2s * var(--speed, 1)) ease;
+}
+.sboard__dim.is-on {
+  opacity: 1;
 }
 .sbcell.is-win {
   z-index: 3;
@@ -14011,7 +14118,15 @@ input[type='datetime-local'] {
   overflow: hidden;
 }
 .hits:not(:empty) {
-  animation: combo-in 0.3s cubic-bezier(0.2, 1.5, 0.4, 1);
+  /* Своя анимация, а не плашки цепочки: у той в кадрах translateX(-50%),
+     и строка уезжала бы на полширины влево. */
+  animation: hits-in calc(0.3s * var(--speed, 1)) cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+@keyframes hits-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.9);
+  }
 }
 .hit {
   display: inline-flex;
@@ -14378,23 +14493,39 @@ input[type='datetime-local'] {
 /* Сбор: сферы слетаются в счётчик посередине поля. Сначала короткий замах
    в противоход — без него полёт читается как «пропали», а не «собрались».
    Цель задана в собственных клетках сферы (--fx) и пикселях (--fy), поэтому
-   ничего не надо мерить в DOM. */
+   ничего не надо мерить в DOM.
+
+   Что было не так. (1) Сфера летела ПОД вуалью: у вуали z-index 3, у клетки
+   со сферой 2, и весь полёт шёл в полутьме. Летящая сфера — над вуалью, но
+   под жетоном: она в него входит. (2) Кривая с отрицательной точкой
+   (`.5,-.45,.3,1`) действовала на каждый отрезок, а не на весь полёт: замах
+   получался двойной, а прозрачность падала с середины пути — сфера таяла,
+   не долетев. Теперь она долетает целой и гаснет только в самом жетоне, на
+   последних 14% пути. Доля 0.86 — та же, что ORB_ARRIVE в ScatterPage: по
+   ней счётчик прибавляет номинал. */
 .sbcell--orb.is-collect {
-  animation: orb-fly calc(0.52s * var(--speed, 1)) cubic-bezier(0.5, -0.45, 0.3, 1)
-    calc(var(--i, 0) * 70ms * var(--speed, 1)) forwards;
+  z-index: 5;
+  animation: orb-fly calc(var(--orb-fly, 560ms) * var(--speed, 1)) linear
+    calc(var(--i, 0) * var(--orb-stagger, 70ms) * var(--speed, 1)) forwards;
 }
 @keyframes orb-fly {
   0% {
-    opacity: 1;
     transform: translate(0, 0) scale(1);
+    animation-timing-function: cubic-bezier(0.3, 0, 0.4, 1);
   }
-  22% {
+  20% {
+    transform: translate(calc(var(--fx, 0) * -8%), -8px) scale(1.14);
+    /* Втягивание: разгон к жетону, удар на полной скорости. */
+    animation-timing-function: cubic-bezier(0.5, 0, 0.85, 0.5);
+  }
+  86% {
     opacity: 1;
-    transform: translate(calc(var(--fx, 0) * -7%), -7px) scale(1.16);
+    transform: translate(calc(var(--fx, 0) * 100%), var(--fy, 0)) scale(0.46);
+    animation-timing-function: ease-out;
   }
   100% {
     opacity: 0;
-    transform: translate(calc(var(--fx, 0) * 100%), var(--fy, 0)) scale(0.22);
+    transform: translate(calc(var(--fx, 0) * 100%), var(--fy, 0)) scale(0.2);
   }
 }
 
@@ -14585,13 +14716,37 @@ input[type='datetime-local'] {
     transform: scale(1) rotate(0deg);
   }
 }
+/* Уход соло. Раньше выход снимался одним кадром — камень пропадал, и тут же
+   начинался сбор. Теперь камень уходит в центр поля, туда же, где через миг
+   вырастет жетон, а подложка гаснет; под ней уже лежит вуаль сбора. */
+.solo.is-leaving {
+  animation: solo-out calc(0.26s * var(--speed, 1)) ease-in both;
+}
+.solo.is-leaving .solo__gem,
+.solo.is-leaving .solo__name {
+  animation: solo-gem-out calc(0.26s * var(--speed, 1)) cubic-bezier(0.5, 0, 0.9, 0.5) both;
+}
+@keyframes solo-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes solo-gem-out {
+  to {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .mnum--grew,
   .win-title,
   .solo,
   .solo__gem,
-  .solo__name {
+  .solo__name,
+  .solo.is-leaving,
+  .solo.is-leaving .solo__gem,
+  .solo.is-leaving .solo__name {
     animation: none;
   }
 }
@@ -14904,7 +15059,50 @@ input[type='datetime-local'] {
  * сложившись в ×12, красятся как редкая находка — и это честно.
  */
 .stamp.is-collect {
-  animation: stamp-armed calc(0.5s * var(--speed, 1)) ease-in-out infinite alternate;
+  /* Вход обязателен. Раньше это правило целиком заменяло анимацию жетона, и
+     `stamp-in` из базы не играл вовсе: жетон в «Каскаде» возникал одним
+     кадром. Здесь он вырастает из точки, куда вошла первая сфера, — камень
+     становится жетоном. */
+  animation:
+    stamp-grow calc(0.42s * var(--speed, 1)) cubic-bezier(0.2, 1.5, 0.4, 1) both,
+    stamp-armed calc(0.5s * var(--speed, 1)) ease-in-out calc(0.42s * var(--speed, 1)) infinite
+      alternate;
+}
+/* Уход: множитель «падает» в табло выигрыша под полем — счёт как раз
+   пошёл там. Вуаль гаснет тем же тактом. */
+.stamp.is-out {
+  animation: stamp-out calc(0.28s * var(--speed, 1)) cubic-bezier(0.5, 0, 0.9, 0.5) both;
+}
+.sboard__veil.is-out {
+  animation: fade-out calc(0.28s * var(--speed, 1)) ease both;
+}
+@keyframes stamp-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, 40%) scale(0.45);
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes stamp-grow {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+  40% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 /* Ожидание дышит прозрачностью, а не масштабом — по той же причине. */
 @keyframes stamp-armed {
@@ -14972,6 +15170,8 @@ input[type='datetime-local'] {
 @media (prefers-reduced-motion: reduce) {
   .stamp.is-collect,
   .stamp.is-slam,
+  .stamp.is-out,
+  .sboard__veil.is-out,
   .stamp--mythic .stamp__n {
     animation: none;
   }

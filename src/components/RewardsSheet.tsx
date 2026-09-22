@@ -4,7 +4,8 @@
 // хоть в «Слотах», хоть в «Каскаде». Поэтому лист один и тот же: он сам берёт
 // всё из стора, и странице достаточно его открыть.
 
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
+import type { Ref } from 'react';
 import { Sheet } from '@/components/ui';
 import { CoinIcon } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
@@ -67,57 +68,166 @@ function sectorFace(s: WheelSector): string {
 }
 
 /**
+ * Ход колеса. Раньше диск ехал одной кривой `(.12,.72,.15,1)`: она
+ * стартует в шесть раз быстрее средней скорости — это 47° за кадр, ровно
+ * сектор. Восемь секторов по 45° на такой скорости стоят на месте или
+ * дёргаются назад (эффект колеса в кино), и первые полсекунды колесо не
+ * крутилось, а мерцало. Теперь как у настоящего: рывок назад, разгон до
+ * ~19° за кадр — меньше половины сектора, глаз видит направление, — и
+ * длинное торможение. Кривые фаз стыкуются по скорости.
+ */
+const WHEEL_KICK = -9;
+const WHEEL_KICK_MS = 110;
+const WHEEL_ACCEL_MS = 360;
+/** Торможение: в начале наклон 2,4 — ровно скорость разгона, в конце 0. */
+const WHEEL_DECEL = 'cubic-bezier(0.25, 0.6, 0.3, 1)';
+const WHEEL_DECEL_SLOPE = 0.6 / 0.25;
+
+/**
+ * Прокрутить диск от `from` до `to` градусов. Каждый сектор, прошедший под
+ * язычком, — щелчок и толчок язычка: щелчки редеют вместе со скоростью, и
+ * слышно, как колесо выдыхается. По таймеру (как было) щелчки шли ровной
+ * дробью до самого конца, будто колесо не тормозит вовсе.
+ */
+function spinDisc(
+  disc: SVGSVGElement | null,
+  pin: HTMLElement | null,
+  from: number,
+  to: number,
+  onDone: () => void,
+): () => void {
+  if (!disc) {
+    onDone();
+    return () => {};
+  }
+  disc.style.transform = `rotate(${to}deg)`;
+  if (reduceMotion()) {
+    onDone();
+    return () => {};
+  }
+  const decel = WHEEL_MS - WHEEL_KICK_MS - WHEEL_ACCEL_MS;
+  // Скорость на стыке разгона и торможения: путь разгона v·A/2, торможения
+  // v·D/наклон, вместе — весь путь от точки замаха до цели.
+  const v = (to - from - WHEEL_KICK) / (WHEEL_ACCEL_MS / 2 + decel / WHEEL_DECEL_SLOPE);
+  const a = from + WHEEL_KICK + (v * WHEEL_ACCEL_MS) / 2;
+  let anim: Animation | null = null;
+  try {
+    anim = disc.animate(
+      [
+        { transform: `rotate(${from}deg)`, easing: 'cubic-bezier(0.2, 0.7, 0.4, 1)' },
+        {
+          transform: `rotate(${from + WHEEL_KICK}deg)`,
+          offset: WHEEL_KICK_MS / WHEEL_MS,
+          easing: 'cubic-bezier(0.11, 0, 0.5, 0)',
+        },
+        {
+          transform: `rotate(${a}deg)`,
+          offset: (WHEEL_KICK_MS + WHEEL_ACCEL_MS) / WHEEL_MS,
+          easing: WHEEL_DECEL,
+        },
+        { transform: `rotate(${to}deg)` },
+      ],
+      { duration: WHEEL_MS },
+    );
+  } catch {
+    anim = null;
+  }
+  let raf = 0;
+  // Развёртка угла: матрица отдаёт угол по модулю круга, а считать щелчки
+  // надо по пройденному пути.
+  let prevMod = ((from % 360) + 360) % 360;
+  let angle = from;
+  let last = Math.floor(from / SECTOR);
+  const frame = () => {
+    const m = new DOMMatrix(getComputedStyle(disc).transform);
+    const mod = ((Math.atan2(m.b, m.a) * 180) / Math.PI + 360) % 360;
+    let d = mod - prevMod;
+    if (d < -180) d += 360;
+    if (d > 180) d -= 360;
+    prevMod = mod;
+    angle += d;
+    const cur = Math.floor(angle / SECTOR);
+    if (cur !== last) {
+      last = cur;
+      reelTick();
+      try {
+        pin?.animate(
+          [
+            { transform: 'translateX(-50%) rotate(-22deg)' },
+            { transform: 'translateX(-50%) rotate(0deg)' },
+          ],
+          { duration: 140, easing: 'cubic-bezier(0.2, 0.8, 0.4, 1)' },
+        );
+      } catch {
+        /* без WAAPI язычок просто стоит */
+      }
+    }
+    raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+  const t = setTimeout(() => {
+    cancelAnimationFrame(raf);
+    onDone();
+  }, WHEEL_MS);
+  return () => {
+    cancelAnimationFrame(raf);
+    clearTimeout(t);
+    anim?.cancel();
+  };
+}
+
+/**
  * Колесо удачи. Диск поворачивается ровно к тому сектору, который выбрал
  * spinWheel() — картинка всегда показывает настоящий результат.
  */
-function WheelArt({ angle, instant }: { angle: number; instant: boolean }) {
-  return (
-    <div className="wheel">
-      <span className="wheel__pin" aria-hidden="true" />
-      <svg
-        className="wheel__disc"
-        viewBox="-50 -50 100 100"
-        style={{
-          transform: `rotate(${angle}deg)`,
-          transition: instant ? 'none' : `transform ${WHEEL_MS}ms cubic-bezier(.12,.72,.15,1)`,
-        }}
-        aria-hidden="true"
-      >
-        <circle className="wheel__rim" cx="0" cy="0" r="47" />
-        {WHEEL.map((s, i) => {
-          const a0 = i * SECTOR;
-          const a1 = a0 + SECTOR;
-          const top = s.coins >= 2500;
-          return (
-            <path
-              key={s.label}
-              className={`wheel__sec${i % 2 ? ' is-alt' : ''}${top ? ' is-top' : ''}`}
-              d={`M 0 0 L ${polar(a0, 44)} A 44 44 0 0 1 ${polar(a1, 44)} Z`}
-            />
-          );
-        })}
-        {WHEEL.map((s, i) => {
-          const face = sectorFace(s);
-          const at = (i + 0.5) * SECTOR;
-          // Левая половина колеса: без разворота надпись читалась бы вверх ногами.
-          const flip = at > 90 && at < 270;
-          return (
-            <text
-              key={s.label}
-              className={`wheel__label${s.freeSpins ? ' is-small' : ''}`}
-              transform={`rotate(${at}) translate(0 -30)${flip ? ' rotate(180)' : ''}`}
-              textAnchor="middle"
-              dy={flip ? -2 : 2}
-            >
-              {face}
-            </text>
-          );
-        })}
-        <circle className="wheel__hub" cx="0" cy="0" r="9" />
-      </svg>
-    </div>
-  );
-}
+const WheelArt = forwardRef<SVGSVGElement, { angle: number; pinRef: Ref<HTMLSpanElement> }>(
+  function WheelArt({ angle, pinRef }, ref) {
+    return (
+      <div className="wheel">
+        <span className="wheel__pin" ref={pinRef} aria-hidden="true" />
+        <svg
+          className="wheel__disc"
+          ref={ref}
+          viewBox="-50 -50 100 100"
+          style={{ transform: `rotate(${angle}deg)` }}
+          aria-hidden="true"
+        >
+          <circle className="wheel__rim" cx="0" cy="0" r="47" />
+          {WHEEL.map((s, i) => {
+            const a0 = i * SECTOR;
+            const a1 = a0 + SECTOR;
+            const top = s.coins >= 2500;
+            return (
+              <path
+                key={s.label}
+                className={`wheel__sec${i % 2 ? ' is-alt' : ''}${top ? ' is-top' : ''}`}
+                d={`M 0 0 L ${polar(a0, 44)} A 44 44 0 0 1 ${polar(a1, 44)} Z`}
+              />
+            );
+          })}
+          {WHEEL.map((s, i) => {
+            const face = sectorFace(s);
+            const at = (i + 0.5) * SECTOR;
+            // Левая половина колеса: без разворота надпись читалась бы вверх ногами.
+            const flip = at > 90 && at < 270;
+            return (
+              <text
+                key={s.label}
+                className={`wheel__label${s.freeSpins ? ' is-small' : ''}`}
+                transform={`rotate(${at}) translate(0 -30)${flip ? ' rotate(180)' : ''}`}
+                textAnchor="middle"
+                dy={flip ? -2 : 2}
+              >
+                {face}
+              </text>
+            );
+          })}
+          <circle className="wheel__hub" cx="0" cy="0" r="9" />
+        </svg>
+      </div>
+    );
+  },
+);
 
 /**
  * Сколько наград ждут прямо сейчас — число на кнопке «Награды».
@@ -164,8 +274,9 @@ export function RewardsSheet({ skin, onClose }: { skin: SkinId; onClose: () => v
   const [wheelAngle, setWheelAngle] = useState(0);
   const [wheelBusy, setWheelBusy] = useState(false);
   const [wheelPrize, setWheelPrize] = useState<{ coins: number; freeSpins: number } | null>(null);
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const discRef = useRef<SVGSVGElement>(null);
+  const pinRef = useRef<HTMLSpanElement>(null);
+  const spinStop = useRef<(() => void) | null>(null);
 
   // Обратные отсчёты идут, пока лист открыт.
   useEffect(() => {
@@ -173,13 +284,7 @@ export function RewardsSheet({ skin, onClose }: { skin: SkinId; onClose: () => v
     return () => clearInterval(id);
   }, []);
 
-  useEffect(
-    () => () => {
-      if (tickRef.current) clearInterval(tickRef.current);
-      timers.current.forEach(clearTimeout);
-    },
-    [],
-  );
+  useEffect(() => () => spinStop.current?.(), []);
 
   const theme = skinOf(skin);
   const rainSrc = symbolSrc(skin, theme.rain);
@@ -248,24 +353,20 @@ export function RewardsSheet({ skin, onClose }: { skin: SkinId; onClose: () => v
     const needed = (360 - (got.index + 0.5) * SECTOR) % 360;
     const quick = reduceMotion();
     const delta = quick ? needed - mod : ((((needed - mod) % 360) + 360) % 360) + 360 * 5;
-    setWheelAngle(wheelAngle + delta);
+    const to = wheelAngle + delta;
+    setWheelAngle(to);
 
-    if (!quick) tickRef.current = setInterval(() => reelTick(), 95);
-    timers.current.push(
-      setTimeout(
-        () => {
-          if (tickRef.current) clearInterval(tickRef.current);
-          setWheelBusy(false);
-          setWheelPrize({ coins: got.coins, freeSpins: got.freeSpins });
-          winChime(got.coins >= 1000 || got.freeSpins >= 10 ? 'big' : 'small');
-          burstConfetti(50, theme.confetti);
-          rainCoins(14, rainSrc);
-          notifySuccess();
-          setNow(Date.now());
-        },
-        quick ? 30 : WHEEL_MS,
-      ),
-    );
+    spinStop.current?.();
+    spinStop.current = spinDisc(discRef.current, pinRef.current, wheelAngle, to, () => {
+      spinStop.current = null;
+      setWheelBusy(false);
+      setWheelPrize({ coins: got.coins, freeSpins: got.freeSpins });
+      winChime(got.coins >= 1000 || got.freeSpins >= 10 ? 'big' : 'small');
+      burstConfetti(50, theme.confetti);
+      rainCoins(14, rainSrc);
+      notifySuccess();
+      setNow(Date.now());
+    });
   };
 
   return (
@@ -344,7 +445,7 @@ export function RewardsSheet({ skin, onClose }: { skin: SkinId; onClose: () => v
               {wheelReady ? 'готово' : `через ${fmtLeft(wheelLeft)}`}
             </span>
           </div>
-          <WheelArt angle={wheelAngle} instant={false} />
+          <WheelArt angle={wheelAngle} ref={discRef} pinRef={pinRef} />
           {wheelPrize && (
             <p className="wheel__prize">
               {wheelPrize.coins > 0

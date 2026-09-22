@@ -35,6 +35,11 @@ export function hitStop(root: Element | null, ms: number): void {
   } catch {
     return; // движок не умеет — обойдёмся без паузы
   }
+  // Только идущие. Законченная анимация с заливкой (`fill: both`) тоже
+  // числится у элемента, а `play()` законченной перематывает её в начало:
+  // стоп-кадр во время выплаты заново ронял уже упавшие клетки, заново
+  // впечатывал жетон и заново выкатывал титул.
+  anims = anims.filter((a) => a.playState === 'running');
   if (!anims.length) return;
   for (const a of anims) {
     try {
