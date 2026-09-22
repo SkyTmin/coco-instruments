@@ -1,9 +1,10 @@
 // Выбор скина. Скин общий для обеих игр (лежит в сторе как `slotsSkin`),
 // поэтому и лист один на всех — «Слоты» и «Каскад» показывают его одинаково.
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Sheet } from '@/components/ui';
 import { IconLock } from '@/components/icons';
+import { cachedOwner, getBackupStatus } from '@/lib/backup';
 import { SKINS, symbolSrc } from '@/lib/skins';
 import type { Skin, SkinId } from '@/lib/skins';
 import { SKIN_UNLOCK, isSkinAvailable } from '@/lib/slots-meta';
@@ -26,6 +27,21 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
   const setPrefs = useFinanceStore((s) => s.setSlotsPrefs);
   const level = levelFromXp(xp).level;
 
+  // Владелец автомата получает заработанные скины без условия. `null` —
+  // «сервер ещё не ответил»: до ответа ничего не решаем, иначе на первом
+  // кадре скин выглядел бы запертым, а страховка ниже успела бы сбросить
+  // автомат на «Классику».
+  const [owner, setOwner] = useState<boolean | null>(cachedOwner());
+  useEffect(() => {
+    if (owner !== null) return;
+    let alive = true;
+    void getBackupStatus().then((s) => alive && setOwner(!!s.owner));
+    return () => {
+      alive = false;
+    };
+  }, [owner]);
+  const granted = owner === true;
+
   const pick = (id: SkinId) => {
     selectionChanged();
     setPrefs({ skin: id });
@@ -34,16 +50,21 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
 
   // Страховка: если выбранный скин почему-то стал недоступен, возвращаем
   // автомат на «Классику», а не оставляем с символами, которых не выбрать.
+  // Ждём ответа сервера: до него мы не знаем, выдан ли заработанный скин.
   useEffect(() => {
+    if (owner === null) return;
     const cur = SKINS.find((s) => s.id === skin);
-    if (cur && !isSkinAvailable(cur, level, topX)) setPrefs({ skin: 'classic' });
-  }, [skin, level, topX, setPrefs]);
+    if (cur && !isSkinAvailable(cur, level, topX, granted)) setPrefs({ skin: 'classic' });
+  }, [skin, level, topX, granted, owner, setPrefs]);
 
   return (
     <Sheet title="Скины автомата" onClose={onClose}>
       <div className="skin-grid">
         {[...SKINS].sort(order).map((sk) => {
-          const available = isSkinAvailable(sk, level, topX);
+          const available = isSkinAvailable(sk, level, topX, granted);
+          // Выдан владельцу, а не добыт спином: подпись должна говорить
+          // правду, иначе карточка приписывает игроку чужой рекорд.
+          const byGrant = !!sk.earn && granted && topX < sk.earn.topX;
           return (
             <button
               key={sk.id}
@@ -60,7 +81,7 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
               {sk.earn && <i className="skin-card__halo" aria-hidden="true" />}
               {sk.earn && (
                 <span className="skin-card__limit is-relic">
-                  {available ? 'добыто' : 'реликвия'}
+                  {byGrant ? 'выдано' : available ? 'добыто' : 'реликвия'}
                 </span>
               )}
               <span className="skin-card__reels">
@@ -72,7 +93,9 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
               <span className="skin-card__hint">{sk.hint}</span>
               {sk.earn ? (
                 <span className={`skin-card__quest${available ? ' is-done' : ''}`}>
-                  {available ? (
+                  {byGrant ? (
+                    'выдан владельцу автомата'
+                  ) : available ? (
                     `добыт спином ${fmtX(topX)}`
                   ) : (
                     <>

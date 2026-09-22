@@ -323,9 +323,17 @@ export function isSkinUnlocked(skin: string, level: number): boolean {
  *
  * `topX` — лучший множитель за всё время (в ставках, не в монетах): в
  * монетах «лучший спин» зависит от ставки и не говорит ни о чём.
+ *
+ * `granted` — владелец автомата. Заработанные скины он получает без условия:
+ * это его витрина, и она должна быть ему доступна. Условие при этом НЕ
+ * трогаем — порог остаётся прежним для всех остальных. Разница важная:
+ * опустить порог значит обесценить скин навсегда, а выдать владельцу — это
+ * ровно один аккаунт, и он же его и заказывал. Флаг приходит с сервера
+ * (`/api/backup/status`, сверка id из подписанного `initData` с админом),
+ * так что подделать его из приложения нельзя.
  */
-export function isSkinAvailable(skin: Skin, level: number, topX: number): boolean {
-  if (skin.earn) return topX >= skin.earn.topX;
+export function isSkinAvailable(skin: Skin, level: number, topX: number, granted = false): boolean {
+  if (skin.earn) return granted || topX >= skin.earn.topX;
   return isSkinUnlocked(skin.id, level);
 }
 

@@ -14,6 +14,19 @@ export interface BackupStatus {
   lastError?: { at: string; stage: string; error: string } | null;
 }
 
+/**
+ * Владелец, как его уже знает сервер: сравнение id из подписанного `initData`
+ * с настроенным админом. Ответ запоминаем на время жизни вкладки — статус за
+ * сессию не меняется, а спрашивать его теперь хочет не только «Касса», но и
+ * лист скинов, и лишний запрос на каждое открытие листа ни к чему.
+ */
+let ownerSeen: boolean | null = null;
+
+/** Что сервер ответил про владельца раньше; `null` — ещё не спрашивали. */
+export function cachedOwner(): boolean | null {
+  return ownerSeen;
+}
+
 /** Whether the current Telegram account is the backup owner (controls UI). */
 export async function getBackupStatus(): Promise<BackupStatus> {
   try {
@@ -24,8 +37,13 @@ export async function getBackupStatus(): Promise<BackupStatus> {
       body: JSON.stringify({ initData: getServerAuth() }),
     });
     if (!res.ok) return { owner: false };
-    return (await res.json()) as BackupStatus;
+    const status = (await res.json()) as BackupStatus;
+    ownerSeen = !!status.owner;
+    return status;
   } catch {
+    // Сети нет — прошлый ответ не отменяем: «не дозвонились» не значит
+    // «не владелец», а скин, который пропадает при моргнувшем интернете,
+    // хуже, чем скин, выданный на слово сервера минуту назад.
     return { owner: false };
   }
 }
