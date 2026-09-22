@@ -17193,3 +17193,792 @@ input[type='datetime-local'] {
 .skin-card[data-skin='kupala'] .skin-card__name {
   color: color-mix(in srgb, var(--neon) 30%, #fff);
 }
+
+/* =========================================================================
+   Каторга — шахта сверху (pages/PrisonPage.tsx, lib/prison*.ts).
+   Своя палитра: тёмная выработка и крепь из бруса, от темы приложения и
+   скинов автоматов не зависит. Бюджет кадра тот же, что у автоматов:
+   анимируются только transform и opacity; тени стенок статичны и меняются
+   только когда ломается блок.
+   ========================================================================= */
+.prison-screen {
+  color: #f1e4d2;
+}
+.prison-screen .page-title {
+  color: #fff1dc;
+}
+.prison-screen .page-sub {
+  color: rgba(241, 228, 210, 0.66);
+}
+.prison-scene {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 55% at 50% -6%, rgba(255, 168, 76, 0.2), transparent 62%),
+    radial-gradient(60% 40% at 50% 108%, rgba(120, 80, 40, 0.28), transparent 70%),
+    linear-gradient(180deg, #1e1612, #0c0908 70%);
+}
+.prison {
+  /* Клетка — по ширине экрана, но так, чтобы поле влезало по высоте без
+     прокрутки: 7×9 клеток, сверху шапка и табло, снизу рюкзак. */
+  --cell: min(
+    calc((min(100vw, 560px) - 48px) / 7),
+    calc((100vh - var(--safe-top) - var(--content-top) - 292px) / 9),
+    60px
+  );
+  --cell: min(
+    calc((min(100vw, 560px) - 48px) / 7),
+    calc((100dvh - var(--safe-top) - var(--content-top) - 292px) / 9),
+    60px
+  );
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---- Табло ---------------------------------------------------------------- */
+.phud {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: calc(var(--cell) * 7 + 16px);
+  max-width: 100%;
+}
+.phud__cell,
+.phud__rank {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 11px 9px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 200, 130, 0.16);
+  background: linear-gradient(180deg, rgba(58, 40, 28, 0.92), rgba(28, 20, 15, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.12),
+    0 6px 16px rgba(0, 0, 0, 0.35);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.phud__label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(241, 214, 176, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.phud__value {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 20px;
+  font-weight: 900;
+  color: #ffe1a0;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+.phud__rank {
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.phud__rank:active {
+  transform: scale(0.97);
+}
+.phud__cost {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 16px;
+  font-weight: 900;
+  color: #f7e6cc;
+  font-variant-numeric: tabular-nums;
+}
+.phud__bar {
+  position: relative;
+  height: 5px;
+  margin-top: 3px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.45);
+}
+.phud__bar i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #b8762e, #ffcf5a);
+  transition: transform 0.35s ease;
+}
+.phud__rank.is-ready {
+  border-color: rgba(255, 210, 90, 0.7);
+  background: linear-gradient(180deg, #8a5a14, #4f300b);
+}
+.phud__rank.is-ready .phud__cost {
+  color: #fff3c4;
+}
+/* Готовый ранг зовёт — мягким дыханием рамки, прозрачностью, не тенью. */
+.phud__rank.is-ready::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 16px;
+  border: 2px solid #ffd35a;
+  opacity: 0;
+  animation: prank-call 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes prank-call {
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* ---- Поле ------------------------------------------------------------------ */
+.pmine-frame {
+  position: relative;
+  padding: 8px;
+  border-radius: 10px;
+  /* Крепь: брус с волокнами и четыре болта по углам. */
+  background:
+    radial-gradient(circle at 7px 7px, #d7b27a 0 2px, #5a3a1c 2.6px, transparent 3.4px),
+    radial-gradient(
+      circle at calc(100% - 7px) 7px,
+      #d7b27a 0 2px,
+      #5a3a1c 2.6px,
+      transparent 3.4px
+    ),
+    radial-gradient(
+      circle at 7px calc(100% - 7px),
+      #d7b27a 0 2px,
+      #5a3a1c 2.6px,
+      transparent 3.4px
+    ),
+    radial-gradient(
+      circle at calc(100% - 7px) calc(100% - 7px),
+      #d7b27a 0 2px,
+      #5a3a1c 2.6px,
+      transparent 3.4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.08) 0 2px,
+      transparent 2px 9px,
+      rgba(255, 220, 170, 0.05) 9px 10px,
+      transparent 10px 17px
+    ),
+    linear-gradient(180deg, #74502f, #4c321d);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.28),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 12px 28px rgba(0, 0, 0, 0.55);
+}
+.pmine {
+  position: relative;
+  width: calc(var(--cell) * 7);
+  height: calc(var(--cell) * 9);
+  background: #0b0807;
+  outline: 2px solid #1c120b;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+}
+.pmine__grid {
+  display: grid;
+  grid-template-columns: repeat(7, var(--cell));
+  grid-auto-rows: var(--cell);
+}
+.pcell {
+  position: relative;
+  overflow: hidden;
+  background: #0b0807;
+}
+.pcell__face {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+  /* Яма уходит вниз: чем глубже, тем меньше торец. Свойство `scale`, а не
+     transform — трансформ занят ударом (WAAPI) и подъёмом шахты. */
+  scale: calc(1 - var(--d) * 0.05);
+  animation: pcell-rise 0.42s cubic-bezier(0.2, 0.8, 0.3, 1) var(--rd) backwards;
+}
+.pcell__crack {
+  position: absolute;
+  inset: 0;
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+}
+/* Глубина — темнее. */
+.pcell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(8, 5, 3, calc(var(--d) * 0.13));
+  pointer-events: none;
+}
+/* Стенки соседей: сверху и слева — тень внутрь ямы, снизу и справа — блик
+   освещённой стенки. Высота стены = разница раскопа. */
+.pcell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  box-shadow:
+    inset 0 calc(var(--wt) * 4.6px) calc(var(--wt) * 3.6px) calc(var(--wt) * -0.8px)
+      rgba(0, 0, 0, 0.66),
+    inset calc(var(--wl) * 4.6px) 0 calc(var(--wl) * 3.6px) calc(var(--wl) * -0.8px)
+      rgba(0, 0, 0, 0.54),
+    inset 0 calc(var(--wb) * -1.2px) 0 0 rgba(255, 226, 180, 0.1),
+    inset calc(var(--wr) * -1.2px) 0 0 0 rgba(255, 226, 180, 0.07);
+}
+.pcell.is-bottom .pcell__face {
+  opacity: 0.85;
+}
+@keyframes pcell-rise {
+  from {
+    transform: scale(0.45);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.pmine__fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+}
+.pmine__aim {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  box-sizing: border-box;
+  border: 2px solid rgba(255, 228, 160, 0.9);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease,
+    transform 0.06s linear;
+}
+.pmine.is-aiming .pmine__aim {
+  opacity: 1;
+}
+/* Кирка: остриё — в центре клетки, рукоять уходит вниз-влево, как в руке. */
+.pmine__pick {
+  position: absolute;
+  left: var(--px, 0);
+  top: var(--py, 0);
+  z-index: 5;
+  width: 38px;
+  height: 38px;
+  margin: -22px 0 0 -30px;
+  transform-origin: 20% 86%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.pmine__pick.is-on {
+  opacity: 1;
+}
+.pmine__pick svg {
+  display: block;
+}
+.pmine__layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.ploot {
+  position: absolute;
+  image-rendering: pixelated;
+  border-radius: 2px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+.pfloat {
+  position: absolute;
+  z-index: 7;
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff;
+  white-space: nowrap;
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.7),
+    0 0 6px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+.pfloat--crit {
+  font-size: 17px;
+  letter-spacing: 0.06em;
+  color: #ffd23a;
+}
+.pfloat--find {
+  color: #a8f2ff;
+}
+.pfloat--coin {
+  color: #ffe08a;
+  font-size: 16px;
+}
+.pmine__toast {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  z-index: 8;
+  padding: 9px 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 210, 140, 0.3);
+  background: rgba(14, 10, 8, 0.9);
+  color: #ffe7c2;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: ptoast 1.6s ease both;
+}
+@keyframes ptoast {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  12%,
+  78% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+/* ---- Рюкзак и кузница ------------------------------------------------------ */
+.pbar {
+  display: flex;
+  gap: 8px;
+  width: calc(var(--cell) * 7 + 16px);
+  max-width: 100%;
+}
+.pbag,
+.pforge-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 200, 130, 0.18);
+  background: linear-gradient(180deg, #5a3c24, #34220f);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.2),
+    0 6px 16px rgba(0, 0, 0, 0.35);
+  color: #f7e6cc;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.pbag:active,
+.pforge-btn:active {
+  transform: scale(0.97);
+}
+.pbag {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.pbag svg {
+  flex: none;
+}
+.pbag__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.pbag__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.pbag__top b {
+  font-size: 15px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.pbag__sell {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffd98a;
+  white-space: nowrap;
+}
+.pbag__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.45);
+}
+.pbag__bar i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #6f9d3a, #d9c24a);
+  transition: transform 0.2s ease;
+}
+.pbag.is-full {
+  border-color: rgba(255, 120, 80, 0.7);
+}
+.pbag.is-full .pbag__bar i {
+  background: linear-gradient(90deg, #d0602e, #ff9b4a);
+}
+.pbag.is-full .pbag__sell {
+  color: #ffb38a;
+}
+.pforge-btn {
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.pmix {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pmix__rock {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(247, 230, 204, 0.72);
+}
+.pmix__rock img {
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+  border-radius: 2px;
+}
+.prison-hint {
+  margin: 0;
+  max-width: calc(var(--cell) * 7 + 16px);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  color: rgba(241, 228, 210, 0.62);
+}
+.pmine-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 200, 130, 0.3);
+  background: linear-gradient(180deg, #5a3c24, #34220f);
+  color: #ffe1a0;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+/* ---- Листы: шахты и кузница ----------------------------------------------- */
+.pmines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pmines__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.pmines__row.is-here {
+  outline: 2px solid var(--accent);
+}
+.pmines__row.is-locked {
+  opacity: 0.55;
+}
+.pmines__letter {
+  flex: none;
+  width: 30px;
+  font-size: 22px;
+  font-weight: 900;
+  text-align: center;
+}
+.pmines__rocks {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+.pmines__rocks img,
+.pforge__row img {
+  width: 18px;
+  height: 18px;
+  image-rendering: pixelated;
+  border-radius: 2px;
+}
+.pmines__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pmines__info b {
+  font-size: 14px;
+}
+.pmines__info i {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pmines__go,
+.pforge__buy {
+  background: linear-gradient(180deg, #e0a23c, #b0701c);
+  color: #2e1a06;
+}
+.pforge__buy:disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+  opacity: 1;
+}
+.pforge {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pforge__now {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #3a2819, #231710);
+  color: #f7e6cc;
+}
+.pforge__now span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pforge__now i {
+  font-style: normal;
+  font-size: 12px;
+  opacity: 0.72;
+}
+.pforge__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.pforge__ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #2a1c12;
+}
+.pforge__glyph {
+  font-size: 18px;
+  color: #ffd98a;
+}
+.pforge__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pforge__info b {
+  font-size: 14px;
+}
+.pforge__info i {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pforge__buy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  white-space: nowrap;
+}
+.pforge__done {
+  flex: none;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+/* ---- Сцена нового ранга ----------------------------------------------------- */
+.prank {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 5, 3, 0.72);
+  animation: prank-veil 0.24s ease both;
+}
+.prank.is-out {
+  animation: prank-veil-out 0.26s ease both;
+}
+.prank__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(320px, 100%);
+  padding: 22px 18px 18px;
+  border-radius: 22px;
+  border: 2px solid #c8923a;
+  background:
+    radial-gradient(90% 60% at 50% 0%, rgba(255, 190, 90, 0.25), transparent 70%),
+    linear-gradient(180deg, #4a3020, #1e140d);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 230, 180, 0.3),
+    0 18px 50px rgba(0, 0, 0, 0.6);
+  color: #f7e6cc;
+  text-align: center;
+  animation: prank-in 0.52s cubic-bezier(0.34, 1.4, 0.5, 1) both;
+}
+.prank.is-out .prank__card {
+  animation: prank-out 0.26s ease both;
+}
+.prank__label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ffcf7a;
+}
+.prank__letter {
+  font-size: 96px;
+  line-height: 1;
+  font-weight: 900;
+  color: #ffe08a;
+  text-shadow:
+    0 4px 0 #7a4a10,
+    0 10px 24px rgba(0, 0, 0, 0.6);
+  animation: prank-slam 0.5s 0.12s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.prank__mine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.prank__mine img {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  image-rendering: pixelated;
+  border-radius: 3px;
+}
+.prank__lvl {
+  font-size: 13px;
+  font-weight: 800;
+  color: #a8f0a0;
+}
+.prank__cta {
+  margin-top: 6px;
+  padding: 10px 22px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffcf5a, #d38f1c);
+  color: #3a2208;
+  font-weight: 900;
+}
+@keyframes prank-veil {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes prank-veil-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes prank-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7) translateY(20px);
+  }
+}
+@keyframes prank-out {
+  to {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+@keyframes prank-slam {
+  from {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
+/* Карточка в зале игр. */
+.game-card__rocks {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  background: #120d0a;
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.6),
+    0 0 0 2px #6a4628;
+}
+.game-card__rocks img {
+  image-rendering: pixelated;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcell__face,
+  .phud__rank.is-ready::after,
+  .prank,
+  .prank__card,
+  .prank__letter,
+  .pmine__toast {
+    animation: none;
+  }
+}

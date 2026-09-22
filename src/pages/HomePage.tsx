@@ -428,7 +428,7 @@ export function HomePage() {
                 ? `Награды ждут · ${slotsRewards}`
                 : slotsSpins + scatterSpins
                   ? `${fmtCoins(slotsBalance)} 🪙 · ${slotsSpins + scatterSpins} вращений`
-                  : 'Слоты и Каскад'}
+                  : 'Слоты, Каскад и Каторга'}
             </span>
           </button>
         </div>

@@ -39,6 +39,7 @@ export const STORAGE_KEYS = {
   sizes: 'wardrobe.sizes',
   camera: 'camera.items',
   slots: 'slots.state',
+  prison: 'prison.state',
   meta: 'app.meta',
 } as const;
 

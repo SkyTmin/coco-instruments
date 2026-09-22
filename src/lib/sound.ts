@@ -282,3 +282,108 @@ export function payoutEnd(beats: number): void {
   );
   tone(130.81, { dur: 0.5, type: 'sine', gain: 0.14 });
 }
+
+// ---------------------------------------------------------------------------
+// Каторга: удары кирки. Камень без шума не звучит — чистый тон даёт «пик», а
+// не «тук», — поэтому здесь есть короткий шумовой всплеск через полосовой
+// фильтр. Материал слышен по полосе фильтра и по звонкому хвосту: земля
+// глухая, камень сухой, металл звенит, кристалл поёт.
+// ---------------------------------------------------------------------------
+
+let noiseBuf: AudioBuffer | null = null;
+
+/** Шумовой всплеск: полоса `freq`, добротность `q`. */
+function noise(freq: number, { at = 0, dur = 0.06, gain = 0.2, q = 1.2 } = {}): void {
+  if (muted || !ctx) return;
+  try {
+    if (!noiseBuf) {
+      const len = Math.floor(ctx.sampleRate * 0.25);
+      noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t0 = ctx.currentTime + at;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.setValueAtTime(freq, t0);
+    band.Q.setValueAtTime(q, t0);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.exponentialRampToValueAtTime(gain, t0 + 0.004);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(band).connect(env).connect(ctx.destination);
+    src.start(t0, Math.random() * 0.15);
+    src.stop(t0 + dur + 0.02);
+  } catch {
+    /* звук не критичен */
+  }
+}
+
+export type MineSound = 'soil' | 'stone' | 'metal' | 'crystal' | 'star';
+
+/** Удар кирки. Высота чуть гуляет — сорок одинаковых ударов подряд режут ухо. */
+export function pickHit(kind: MineSound, crit = false): void {
+  const v = 0.94 + Math.random() * 0.12;
+  if (kind === 'soil') {
+    noise(420 * v, { dur: 0.07, gain: 0.26, q: 0.8 });
+    tone(120 * v, { dur: 0.07, type: 'triangle', gain: 0.12, sweepTo: 70 });
+  } else if (kind === 'stone') {
+    noise(1500 * v, { dur: 0.05, gain: 0.24, q: 1.4 });
+    tone(260 * v, { dur: 0.05, type: 'triangle', gain: 0.1, sweepTo: 150 });
+  } else if (kind === 'metal') {
+    noise(2600 * v, { dur: 0.035, gain: 0.18, q: 2 });
+    tone(1180 * v, { dur: 0.16, type: 'sine', gain: 0.06 });
+    tone(1770 * v, { at: 0.004, dur: 0.12, type: 'sine', gain: 0.035 });
+  } else if (kind === 'crystal') {
+    noise(3600 * v, { dur: 0.03, gain: 0.14, q: 2.5 });
+    tone(2093 * v, { dur: 0.14, type: 'sine', gain: 0.05 });
+    tone(3136 * v, { at: 0.01, dur: 0.1, type: 'sine', gain: 0.03 });
+  } else {
+    noise(3000 * v, { dur: 0.03, gain: 0.12, q: 2 });
+    tone(1568 * v, { dur: 0.18, type: 'sine', gain: 0.05, sweepTo: 2349 });
+  }
+  if (crit) {
+    tone(98, { dur: 0.16, type: 'triangle', gain: 0.18, sweepTo: 55 });
+    noise(900, { at: 0.01, dur: 0.09, gain: 0.22, q: 0.7 });
+  }
+}
+
+/** Блок развалился. Громче удара и с хвостом: это событие, а не такт. */
+export function blockBreak(kind: MineSound): void {
+  const v = 0.95 + Math.random() * 0.1;
+  noise(kind === 'soil' ? 320 : 900 * v, { dur: 0.14, gain: 0.3, q: 0.6 });
+  noise(2200 * v, { at: 0.02, dur: 0.08, gain: 0.12, q: 1.1 });
+  tone(90 * v, { dur: 0.12, type: 'triangle', gain: 0.14, sweepTo: 50 });
+  if (kind === 'metal') {
+    tone(880 * v, { at: 0.02, dur: 0.3, type: 'sine', gain: 0.06 });
+    tone(1320 * v, { at: 0.03, dur: 0.24, type: 'sine', gain: 0.04 });
+  } else if (kind === 'crystal') {
+    [1568, 2093, 2637].forEach((f, i) =>
+      tone(f * v, { at: 0.02 + i * 0.035, dur: 0.18, type: 'sine', gain: 0.045 }),
+    );
+  } else if (kind === 'star') {
+    [1760, 2217, 2637, 3520].forEach((f, i) =>
+      tone(f, { at: 0.02 + i * 0.04, dur: 0.3, type: 'sine', gain: 0.04 }),
+    );
+  }
+}
+
+/** По дну: кирка не берёт коренную породу. */
+export function bedrockClink(): void {
+  tone(2400, { dur: 0.05, type: 'square', gain: 0.03 });
+  noise(3200, { dur: 0.03, gain: 0.08, q: 3 });
+}
+
+/** Рюкзак полон — короткий глухой «нет». */
+export function bagFull(): void {
+  tone(196, { dur: 0.09, type: 'square', gain: 0.07 });
+  tone(165, { at: 0.1, dur: 0.12, type: 'square', gain: 0.07 });
+}
+
+/** Шахта обновляется: гул снизу и перестук поднимающихся блоков. */
+export function mineRumble(): void {
+  tone(62, { dur: 0.7, type: 'triangle', gain: 0.2, sweepTo: 45 });
+  for (let i = 0; i < 7; i++) noise(500 + i * 140, { at: 0.08 + i * 0.07, dur: 0.05, gain: 0.12 });
+}

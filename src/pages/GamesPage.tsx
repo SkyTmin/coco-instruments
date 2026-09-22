@@ -9,8 +9,11 @@ import { CLUSTER_MIN, FREE_SPINS, SCATTER_COLS, SCATTER_ROWS } from '@/lib/scatt
 import { COMBO_LADDER } from '@/lib/slots';
 import type { SlotSymbolId } from '@/lib/slots';
 import { tapLight } from '@/lib/haptics';
+import { rankLetter, ROCKS } from '@/lib/prison';
+import { rockTexture } from '@/lib/prison-art';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const prestige = (n: number) => n.toLocaleString('ru-RU');
 
 /**
  * Зал игр. Кошелёк, уровень и награды общие, поэтому баланс живёт здесь —
@@ -26,6 +29,7 @@ export function GamesPage() {
   const slotsBest = useFinanceStore((s) => s.slotsBest);
   const scatterSpins = useFinanceStore((s) => s.scatterSpins);
   const scatterBest = useFinanceStore((s) => s.scatterBest);
+  const prison = useFinanceStore((s) => s.prison);
 
   const level = levelFromXp(xp);
   const theme = skinOf(skin);
@@ -46,7 +50,7 @@ export function GamesPage() {
   return (
     <Screen
       title="Игры"
-      subtitle="Один кошелёк на оба автомата"
+      subtitle="Один кошелёк на все игры"
       className={`slots-screen slots-screen--${skin}`}
     >
       <div className="stack slots games" data-skin={skin}>
@@ -98,14 +102,34 @@ export function GamesPage() {
           </span>
         </button>
 
+        <button className="game-card game-card--prison" onClick={() => go('/prison')}>
+          <span className="game-card__rocks">
+            {[14, 23, 25].map((r) => (
+              <img key={r} src={rockTexture(r)} width={30} height={30} alt="" />
+            ))}
+          </span>
+          <span className="game-card__body">
+            <b>Каторга</b>
+            <i>
+              Шахта сверху: ломай породу, продавай добычу, бери ранги A–Z. Деньги те же, что в
+              автоматах
+            </i>
+            <em>
+              {prison.mined
+                ? `Ранг ${rankLetter(prison.rank)}${prison.prestige ? ` · престиж ${prestige(prison.prestige)}` : ''} · ${ROCKS[prison.rank].name.toLowerCase()}`
+                : 'Новая игра'}
+            </em>
+          </span>
+        </button>
+
         <button className="btn btn--block rewards-cta" onClick={() => go('/slots')}>
           <IconGift size={18} />
           Награды, уровень и скины
         </button>
 
         <p className="muted" style={{ margin: 0, fontSize: 12, textAlign: 'center' }}>
-          Монеты виртуальные: купить их нельзя. Баланс, опыт, цели дня и бесплатные вращения общие
-          для обеих игр.
+          Монеты виртуальные: купить их нельзя. Баланс, опыт и цели дня общие для всех игр: добыча
+          из шахты идёт в тот же кошелёк, из которого ставят в автоматах.
         </p>
       </div>
     </Screen>

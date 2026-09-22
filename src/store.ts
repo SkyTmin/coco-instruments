@@ -112,6 +112,27 @@ import type { MissionCounters } from '@/lib/slots-meta';
 import { advance, SESSION_GAP_MS, worthShowing } from '@/lib/session';
 import type { Session, SpinRecord } from '@/lib/session';
 import { genId } from '@/lib/id';
+import {
+  bagCapacity,
+  bagCost,
+  bagCount,
+  bagValue,
+  BAG_MAX,
+  CART_PRICE,
+  DEPTH,
+  freshMine,
+  LAST_RANK,
+  normalizePrison,
+  PICKS,
+  prestigeCost,
+  PRESTIGE_XP,
+  PRISON_START,
+  rankCost,
+  rankXp,
+  sharpCost,
+  SHARP_MAX,
+} from '@/lib/prison';
+import type { PrisonState } from '@/lib/prison';
 
 /** Сколько прошлых заходов держим: хватает на «лучший за месяц». */
 const SESSION_KEEP = 20;
@@ -202,7 +223,7 @@ function touchPeople(people: Person[], personId: string): Person[] {
 // lost if the user swipes the app away right after editing.
 const flushers: Array<() => void> = [];
 
-function makePersister<T>(key: string) {
+function makePersister<T>(key: string, delay = 300) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pending: T | undefined;
   const write = () => {
@@ -215,7 +236,7 @@ function makePersister<T>(key: string) {
   return (blob: T) => {
     pending = blob;
     clearTimeout(timer);
-    timer = setTimeout(write, 300);
+    timer = setTimeout(write, delay);
   };
 }
 
@@ -249,6 +270,11 @@ const writeWishlist = makePersister<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist)
 const writeSizes = makePersister<WardrobeSizesBlob>(STORAGE_KEYS.sizes);
 const writeCamera = makePersister<CameraBlob>(STORAGE_KEYS.camera);
 const writeSlots = makePersister<SlotsBlob>(STORAGE_KEYS.slots);
+// Шахта пишется реже: блок ломается раз в полсекунды, и запрос на сервер на
+// каждый блок — это кликер, который долбит сервер. При сворачивании всё
+// равно сбрасывается сразу (flushAll выше).
+const writePrison = makePersister<PrisonBlob>(STORAGE_KEYS.prison, 2000);
+const persistPrison = (p: PrisonState) => writePrison({ version: 1, ...p });
 
 const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, items });
 const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, items });
@@ -284,6 +310,18 @@ const persistCamera = (s: {
     scripts: s.cameraScripts,
     prompter: s.prompterPrefs,
   });
+
+/** Сохранение каторги: состояние шахты целиком, деньги — в кошельке слотов. */
+interface PrisonBlob extends PrisonState {
+  version: 1;
+}
+
+/** Итог нового ранга: для сцены на странице. */
+export interface PrisonRankUp {
+  rank: number;
+  cost: number;
+  levelUps: number[];
+}
 
 /** Всё, что относится к слотам, — один снимок состояния для записи и экспорта. */
 interface SlotsSnapshot {
@@ -427,6 +465,7 @@ interface ExportData {
   cameraScripts?: CameraScript[];
   prompterPrefs?: Partial<PrompterPrefs>;
   slots?: Partial<Omit<SlotsBlob, 'version'>>;
+  prison?: Partial<PrisonState>;
   reminderPrefs?: Partial<ReminderPrefs>;
 }
 export interface ExportBundle {
@@ -496,6 +535,8 @@ interface FinanceState {
   sessionPast: Session[];
   /** Заход, по которому надо показать итог; null — показывать нечего. */
   sessionCard: Session | null;
+  /** Каторга: ранг, кирка, рюкзак, шахта. Деньги — общие, в `slotsBalance`. */
+  prison: PrisonState;
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -686,6 +727,22 @@ interface FinanceState {
     skin?: SkinId;
   }) => void;
 
+  /**
+   * Блок сломан: клетка стала на ярус глубже, добыча — в рюкзак. Если места
+   * нет, а вагонетка куплена, она продаёт рюкзак сама. Возвращает, взят ли
+   * блок и сколько выручено автопродажей.
+   */
+  prisonBreak: (cell: number, rock: number) => { taken: boolean; sold: number };
+  /** Спуститься в другую открытую шахту — или обновить эту. */
+  prisonGoMine: (id: number) => void;
+  /** Продать рюкзак в общий кошелёк. */
+  prisonSell: () => number;
+  /** Купить следующий ранг за общие монеты. */
+  prisonRankUp: () => PrisonRankUp | null;
+  prisonBuy: (what: 'pick' | 'sharp' | 'bag' | 'cart') => boolean;
+  /** Престиж: ранг и шахта — на A, кирка остаётся, продажа дороже. */
+  prisonPrestige: () => boolean;
+
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
 
@@ -757,6 +814,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   sessionNow: null,
   sessionPast: [],
   sessionCard: null,
+  prison: PRISON_START,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -783,6 +841,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       sizes,
       camera,
       slots,
+      prison,
     ] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
@@ -804,6 +863,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       storage.get<WardrobeSizesBlob>(STORAGE_KEYS.sizes),
       storage.get<CameraBlob>(STORAGE_KEYS.camera),
       storage.get<SlotsBlob>(STORAGE_KEYS.slots),
+      storage.get<PrisonBlob>(STORAGE_KEYS.prison),
     ]);
     set({
       expenses: exp?.items ?? [],
@@ -851,6 +911,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsTurbo: slots?.turbo ?? false,
       ...slotsProgress(slots),
       ...staleSession(slotsProgress(slots)),
+      prison: normalizePrison(prison),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -1698,6 +1759,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         cameraScripts: s.cameraScripts,
         prompterPrefs: s.prompterPrefs,
         slots: slotsBlob(s),
+        prison: s.prison,
         reminderPrefs: s.reminderPrefs,
       },
     };
@@ -1755,6 +1817,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       ...slotsProgress(d.slots),
       // Восстановление из копии — не повод показывать чей-то давний итог.
       sessionCard: null,
+      prison: normalizePrison(d.prison),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -1777,6 +1840,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistSizes(st.sizes);
     persistCamera(st);
     persistSlots(st);
+    persistPrison(st.prison);
     persistReminderPrefs(st.reminderPrefs);
     return true;
   },
@@ -2307,6 +2371,158 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsSkin: patch.skin ?? get().slotsSkin,
     });
     persistSlots(get());
+  },
+
+  prisonBreak: (cell, rock) => {
+    const s = get();
+    const p = s.prison;
+    if (cell < 0 || cell >= p.mine.dug.length || p.mine.dug[cell] >= DEPTH) {
+      return { taken: false, sold: 0 };
+    }
+    const dug = p.mine.dug.slice();
+    dug[cell] += 1;
+    const mine = { ...p.mine, dug };
+    let bag = p.bag;
+    let sold = 0;
+    let taken = true;
+    if (bagCount(bag) >= bagCapacity(p.bagLevel)) {
+      if (p.cart) {
+        sold = bagValue(bag, p.prestige);
+        bag = {};
+      } else {
+        // Рюкзак полон, вагонетки нет: блок сломан, добыча осталась в шахте.
+        taken = false;
+      }
+    }
+    const prison: PrisonState = {
+      ...p,
+      mine,
+      bag: taken ? { ...bag, [rock]: (bag[rock] ?? 0) + 1 } : bag,
+      mined: p.mined + 1,
+      earned: p.earned + sold,
+    };
+    set(sold ? { prison, slotsBalance: s.slotsBalance + sold } : { prison });
+    persistPrison(prison);
+    if (sold) persistSlots(get());
+    return { taken, sold };
+  },
+
+  prisonGoMine: (id) => {
+    const p = get().prison;
+    if (id < 0 || id > p.rank) return;
+    const prison = { ...p, mine: freshMine(id) };
+    set({ prison });
+    persistPrison(prison);
+  },
+
+  prisonSell: () => {
+    const s = get();
+    const p = s.prison;
+    const value = bagValue(p.bag, p.prestige);
+    if (!bagCount(p.bag)) return 0;
+    const prison = { ...p, bag: {}, earned: p.earned + value };
+    set({ prison, slotsBalance: s.slotsBalance + value });
+    persistPrison(prison);
+    persistSlots(get());
+    return value;
+  },
+
+  prisonRankUp: () => {
+    const s = get();
+    const p = s.prison;
+    if (p.rank >= LAST_RANK) return null;
+    const cost = rankCost(p.rank, p.prestige);
+    if (s.slotsBalance < cost) return null;
+    const rank = p.rank + 1;
+    // Опыт — в ОБЩИЙ уровень, с теми же наградами, что за спины.
+    const before = levelFromXp(s.slotsXp).level;
+    const xp = s.slotsXp + rankXp(rank);
+    const after = levelFromXp(xp).level;
+    const levelUps: number[] = [];
+    let bonusCoins = 0;
+    let bonusTickets = 0;
+    for (let lvl = Math.max(before, s.slotsRewardedLevel) + 1; lvl <= after; lvl++) {
+      const reward = levelReward(lvl);
+      bonusCoins += reward.coins;
+      bonusTickets += reward.freeSpins;
+      levelUps.push(lvl);
+    }
+    // Новый ранг сразу ведёт в новую шахту: ради неё его и брали.
+    const prison: PrisonState = { ...p, rank, mine: freshMine(rank) };
+    set({
+      prison,
+      slotsBalance: s.slotsBalance - cost + bonusCoins,
+      slotsFreeSpins: s.slotsFreeSpins + bonusTickets,
+      slotsXp: xp,
+      slotsRewardedLevel: Math.max(s.slotsRewardedLevel, after),
+    });
+    persistPrison(prison);
+    persistSlots(get());
+    return { rank, cost, levelUps };
+  },
+
+  prisonBuy: (what) => {
+    const s = get();
+    const p = s.prison;
+    let price = 0;
+    let next: PrisonState = p;
+    if (what === 'pick') {
+      const pick = PICKS[p.pick + 1];
+      if (!pick) return false;
+      price = pick.price;
+      next = { ...p, pick: p.pick + 1 };
+    } else if (what === 'sharp') {
+      if (p.sharp >= SHARP_MAX) return false;
+      price = sharpCost(p.sharp);
+      next = { ...p, sharp: p.sharp + 1 };
+    } else if (what === 'bag') {
+      if (p.bagLevel >= BAG_MAX) return false;
+      price = bagCost(p.bagLevel);
+      next = { ...p, bagLevel: p.bagLevel + 1 };
+    } else {
+      if (p.cart) return false;
+      price = CART_PRICE;
+      next = { ...p, cart: true };
+    }
+    if (s.slotsBalance < price) return false;
+    set({ prison: next, slotsBalance: s.slotsBalance - price });
+    persistPrison(next);
+    persistSlots(get());
+    return true;
+  },
+
+  prisonPrestige: () => {
+    const s = get();
+    const p = s.prison;
+    if (p.rank < LAST_RANK) return false;
+    const cost = prestigeCost(p.prestige);
+    if (s.slotsBalance < cost) return false;
+    const before = levelFromXp(s.slotsXp).level;
+    const xp = s.slotsXp + PRESTIGE_XP;
+    const after = levelFromXp(xp).level;
+    let bonusCoins = 0;
+    let bonusTickets = 0;
+    for (let lvl = Math.max(before, s.slotsRewardedLevel) + 1; lvl <= after; lvl++) {
+      const reward = levelReward(lvl);
+      bonusCoins += reward.coins;
+      bonusTickets += reward.freeSpins;
+    }
+    const prison: PrisonState = {
+      ...p,
+      rank: 0,
+      prestige: p.prestige + 1,
+      mine: freshMine(0),
+    };
+    set({
+      prison,
+      slotsBalance: s.slotsBalance - cost + bonusCoins,
+      slotsFreeSpins: s.slotsFreeSpins + bonusTickets,
+      slotsXp: xp,
+      slotsRewardedLevel: Math.max(s.slotsRewardedLevel, after),
+    });
+    persistPrison(prison);
+    persistSlots(get());
+    return true;
   },
 
   setReminderPrefs: (patch) => {
