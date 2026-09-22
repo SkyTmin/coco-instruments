@@ -5,9 +5,17 @@ name: Daily backup to Telegram
 # backup on the VPS, pulls it, and sends it to the admin. Recipient = the chat
 # that requested a backup from the app (stored in /var/lib/coco/admin.json) or
 # the ADMIN_CHAT_ID secret.
+#
+# ЭТО ЕДИНСТВЕННЫЙ ЕЖЕДНЕВНЫЙ ОТПРАВИТЕЛЬ КОПИИ. Ночной systemd-таймер на VPS
+# только собирает и ротирует архив на диске: доставку он не делает и этот
+# workflow не дёргает. Если вернуть ему диспатч, копий снова станет несколько
+# в день — а раньше получалась и петля, потому что первый шаг ниже сам зовёт
+# `deploy/backup.sh`.
 on:
   schedule:
-    - cron: '30 0 * * *' # 03:30 MSK
+    # Задумано на 00:30 UTC, по факту GitHub стабильно откладывает запуск часов
+    # на пять (для копии это неважно, но не удивляйтесь времени в Telegram).
+    - cron: '30 0 * * *'
   workflow_dispatch:
 
 concurrency:

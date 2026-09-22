@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -75,6 +76,23 @@ describe('backup ownership', () => {
     expect(res.status).toBe(409);
     // The request must NOT have claimed ownership as a side effect.
     expect(fs.existsSync(adminFile())).toBe(false);
+  });
+
+  // Регрессия: пять копий в день вместо одной. `/api/backup/run` дёргает не
+  // только ночной systemd-таймер, но и первый шаг самого workflow
+  // `backup.yml` (через `deploy/backup.sh`). Пока эта ручка «досылала копию
+  // через GitHub», прогон заказывал новый прогон, тот — следующий, и круг
+  // обрывался только о 30-секундный троттл диспатча. Здесь закреплено, что
+  // ручка ТОЛЬКО собирает архив: ничего не шлёт и ничего не диспатчит.
+  it('ночной запуск только собирает архив — не шлёт и не диспатчит', async () => {
+    fs.writeFileSync(adminFile(), JSON.stringify({ chatId: String(USER_ID), at: Date.now() }));
+    const secret = createHash('sha256').update(`backup:${BOT_TOKEN}`).digest('hex').slice(0, 48);
+    const res = await request(app).post('/api/backup/run').set('X-Backup-Secret', secret).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.sent).toBe(false);
+    expect(res.body.relayed).toBeUndefined();
+    clearAdmin();
   });
 
   it('refuses backup requests from a non-owner', async () => {

@@ -45,9 +45,7 @@ describe('план счёта', () => {
     const stops = plan.legs.filter((l) => l.tier).map((l) => l.tier!.id);
     expect(stops).toEqual(['back', 'nice', 'good', 'big', 'huge', 'mega']);
     // На каждой ступени сумма ровно пороговая — иначе титул врёт.
-    plan.legs
-      .filter((l) => l.tier)
-      .forEach((l) => expect(l.to).toBe(l.tier!.at * bet));
+    plan.legs.filter((l) => l.tier).forEach((l) => expect(l.to).toBe(l.tier!.at * bet));
     expect(plan.top?.id).toBe('mega');
     // Последний отрезок доводит до итога и ступени не пробивает.
     expect(plan.legs[plan.legs.length - 1].to).toBe(300 * bet);

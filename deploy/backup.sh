@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Daily backup trigger. Asks the running server to archive all data
-# (/var/lib/coco/{store,uploads,reminders.json,admin.json}), keep a rotated copy
-# under /var/lib/coco/backups, and deliver it to the admin in Telegram.
-# Invoked by the systemd timer `coco-backup.timer`.
+# Backup trigger. Asks the running server to archive all data
+# (/var/lib/coco/{store,uploads,reminders.json,admin.json}) and keep a rotated
+# copy under /var/lib/coco/backups. It does NOT deliver anything: the VPS can't
+# reach api.telegram.org, and sending is the job of the `backup.yml` workflow,
+# which is the only daily sender. Invoked by the systemd timer
+# `coco-backup.timer` and by the first step of that same workflow.
 set -euo pipefail
 
 ENV_FILE="${ENV_FILE:-/etc/coco.env}"
