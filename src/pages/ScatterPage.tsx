@@ -24,6 +24,7 @@ import {
   MAX_WIN,
   SCATTER_TRIGGER,
   fillerCell,
+  mkOrb,
   orbOf,
   scatterLabel,
   scatterSymbol,
@@ -36,6 +37,7 @@ import { loudestTier, multRarity, ORB_TIERS, orbTier } from '@/lib/orb-rarity';
 import type { OrbTier } from '@/lib/orb-rarity';
 import { plainPlan, rollupPlan, runRollup, winTier } from '@/lib/rollup';
 import { planReel, restReel, spinReel } from '@/lib/reel-motion';
+import { MERGE, planMerge } from '@/lib/orb-merge';
 import type { ReelPlan } from '@/lib/reel-motion';
 import type { WinTier } from '@/lib/rollup';
 import {
@@ -53,6 +55,9 @@ import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import {
   anticipation as antiSound,
+  bubbleForm,
+  bubbleMerge,
+  bubblePop,
   coinDing,
   comboHit,
   jackpotFanfare,
@@ -174,21 +179,109 @@ function Sym({
  * Одним и тем же рисуются и лента вращения, и поле: сфера едет на барабане
  * вместе со всеми и встаёт в клетку, потому что она и есть клетка.
  */
-function CellFace({ id, skin, size = SYM }: { id: ScatterCell; skin: SkinId; size?: number }) {
+function CellFace({
+  id,
+  skin,
+  size = SYM,
+  bubble = false,
+}: {
+  id: ScatterCell;
+  skin: SkinId;
+  size?: number;
+  /** Сфера сейчас сливается с другими — вокруг камня надут пузырь. */
+  bubble?: boolean;
+}) {
   const value = orbOf(id);
   if (!value) return <Sym id={id as SlotSymbolId | 'scatter'} skin={skin} size={size} />;
   const t = orbTier(value);
+  // Тело — отдельной обёрткой: клетку двигает план слияния, а тело внутри
+  // колышется от ударов. Два трансформа на одном элементе дрались бы.
   return (
-    <>
+    <span className="orb__body">
       {t.beats >= 2 && <i className="orb__ring" aria-hidden="true" />}
       <OrbGem />
       <b className="orb__num">×{value}</b>
+      {bubble && <Bubble />}
       {/* Подписи ступени на самой клетке нет. «ЛЕГЕНДАРНАЯ» в 7 px не влезала
           в крайнюю колонку и срезалась полем, а главное — она тут и не нужна:
           имя называет сольный выход, крупно и целиком. На клетке о редкости
           говорят цвет и орбита. */}
-    </>
+    </span>
   );
+}
+
+/** Брызги лопнувшего пузыря: углы и дальность разные — чтобы не звездой. */
+const DROPS = Array.from({ length: 11 }, (_, i) => ({
+  a: i * 33 + ((i * 47) % 19),
+  d: 0.7 + ((i * 37) % 10) / 22,
+  s: 3 + ((i * 29) % 4),
+}));
+
+/**
+ * Мыльный пузырь вокруг камня. Плёнка — два неподвижных конических слоя,
+ * перелив — их встречная смена прозрачности: вращать внутри корпуса нельзя
+ * (скруглённый overflow снимает вращение с композитора на части Android
+ * WebView, см. CLAUDE.md), а прозрачность считает композитор всегда.
+ */
+function Bubble() {
+  return (
+    <i className="bubble" aria-hidden="true">
+      <i className="bubble__film" />
+      <i className="bubble__film bubble__film--b" />
+      <i className="bubble__shine" />
+      {DROPS.map((d, i) => (
+        <i
+          key={i}
+          className="bubble__drop"
+          style={
+            {
+              '--a': `${d.a}deg`,
+              '--d': d.d,
+              '--s': `${d.s}px`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </i>
+  );
+}
+
+/** Поглощаемый пузырь вытягивается к цели — его втягивает общая плёнка. */
+function stretch(el: Element | null | undefined, angle: number, k: number): void {
+  if (!el || reduceMotion()) return;
+  const r = `${angle.toFixed(3)}rad`;
+  try {
+    el.animate(
+      [
+        { transform: `rotate(${r}) scale(1, 1) rotate(-${r})` },
+        { transform: `rotate(${r}) scale(1.28, 0.8) rotate(-${r})` },
+      ],
+      { duration: MERGE.absorbMs * k, easing: 'ease-in', fill: 'forwards' },
+    );
+  } catch {
+    /* без WAAPI — просто вольётся */
+  }
+}
+
+/**
+ * Колыхание общего пузыря после слияния: удар приходит с той стороны, откуда
+ * влился поглощённый, и плёнка затухающе качается по этой оси. Объём
+ * сохраняется (sx·sy ≈ 1) — отсюда «жидкое», а не «резиновое».
+ */
+function wobble(el: Element | null | undefined, angle: number, k: number): void {
+  if (!el || reduceMotion()) return;
+  const r = `${angle.toFixed(3)}rad`;
+  const f = (sx: number, sy: number) => ({
+    transform: `rotate(${r}) scale(${sx}, ${sy}) rotate(-${r})`,
+  });
+  try {
+    el.animate([f(1, 1), f(0.8, 1.22), f(1.14, 0.88), f(0.95, 1.05), f(1.02, 0.98), f(1, 1)], {
+      duration: 460 * Math.max(0.6, k),
+      easing: 'cubic-bezier(0.3, 0.7, 0.4, 1)',
+    });
+  } catch {
+    /* без WAAPI — без колыхания */
+  }
 }
 
 /** Классы и переменные клетки-сферы — одни и те же в ленте и на поле. */
@@ -419,6 +512,14 @@ export function ScatterPage() {
    * снимались одним кадром: тёмное поле мгновенно становилось светлым.
    */
   const [collectOut, setCollectOut] = useState(false);
+  /**
+   * Слияние пузырями: `on` — сферы надуты и плывут, `pop` — общий лопнул.
+   * Класс висит на всём поле, а не на клетках: поглощённые к этому времени
+   * уже невидимы, и лопается ровно тот, кто остался.
+   */
+  const [merging, setMerging] = useState<'on' | 'pop' | null>(null);
+  /** «Дожать слияние» — по тапу, пока пузыри ещё плывут. */
+  const mergeSkip = useRef<(() => void) | null>(null);
   const [stepWins, setStepWins] = useState<ScatterWin[]>([]);
   const [chain, setChain] = useState(0);
   /**
@@ -704,6 +805,13 @@ export function ScatterPage() {
 
   /** Досчитать немедленно — по тапу. Длинный счёт обязан быть пропускаемым. */
   const skipCount = useCallback(() => {
+    if (mergeSkip.current) {
+      const fast = mergeSkip.current;
+      mergeSkip.current = null;
+      tapLight();
+      fast();
+      return true;
+    }
     if (!rollStop.current) return false;
     tapLight();
     rollStop.current();
@@ -909,7 +1017,7 @@ export function ScatterPage() {
       const hold = loudest.beats >= 3 ? 520 * scale : 0;
       const slamAt = arrive(order.length - 1) + 170 * scale + hold;
 
-      const slam = () => {
+      const slam = (refillDelay = 0) => {
         setCollectSum(res.applied);
         setCollectDone(true);
         multSlam();
@@ -929,17 +1037,24 @@ export function ScatterPage() {
         // Раньше в дыру падал символ ровно из соседней клетки сверху — он
         // проезжал поверх неё, и вся колонка на миг двоилась. Символы здесь
         // чисто внешние: раунд посчитан, следующий спин перекрутит поле.
-        const holes = new Set(res.orbs.map((o) => `${o.col}-${o.row}`));
-        setDropDur(DROP_MS * scale);
-        // Считаем снаружи, а не в updater'е setBoard: в StrictMode React
-        // зовёт updater дважды, и случайные символы досыпки разошлись бы с
-        // тем, что запомнено как «на поле сейчас».
-        const now = boardNow.current;
-        if (now) {
-          const next = dropHoles(now, holes, `refill-${res.steps.length}`);
-          shownGrid.current = next.map((col) => col.map((cell) => cell.id));
-          setBoard(next);
-        }
+        const refill = () => {
+          const holes = new Set(res.orbs.map((o) => `${o.col}-${o.row}`));
+          setDropDur(DROP_MS * scale);
+          setMerging(null);
+          // Считаем снаружи, а не в updater'е setBoard: в StrictMode React
+          // зовёт updater дважды, и случайные символы досыпки разошлись бы с
+          // тем, что запомнено как «на поле сейчас».
+          const now = boardNow.current;
+          if (now) {
+            const next = dropHoles(now, holes, `refill-${res.steps.length}`);
+            shownGrid.current = next.map((col) => col.map((cell) => cell.id));
+            setBoard(next);
+          }
+        };
+        // После пузыря досыпка ждёт, пока доиграют брызги: клетка лопнувшего
+        // пузыря уходит с поля вместе с ними.
+        if (refillDelay > 0) timers.current.push(setTimeout(refill, refillDelay));
+        else refill();
         squashPop(winRef.current, 0.6);
         addTrauma(cabinetRef.current, loudest.beats >= 3 ? TRAUMA.big : TRAUMA.small);
         if (loudest.beats >= 2) tapMedium();
@@ -975,6 +1090,145 @@ export function ScatterPage() {
         );
       };
 
+      /**
+       * Слияние пузырями — когда сфер на поле больше одной (lib/orb-merge.ts).
+       * План двигает сами клетки-сферы: они надуваются пузырями, плывут,
+       * вливаются друг в друга, и число на общем пузыре растёт с каждым
+       * слиянием. Общий лопается — и из брызг встаёт жетон с ударом.
+       *
+       * Тап по автомату дожимает слияние до конца: как и счёт, оно обязано
+       * быть пропускаемым — в автоспине и бонусе особенно.
+       */
+      const mergeCollect = () => {
+        const host = boardRef.current;
+        const found = res.orbs
+          .map((o) => {
+            const el = host?.querySelector<HTMLElement>(`[data-cell="${o.col}-${o.row}"]`);
+            const col = el?.parentElement;
+            if (!el || !col) return null;
+            // offset*, а не getBoundingClientRect: корпус в этот миг может
+            // трястись (juice), и повёрнутая рамка сдвинула бы замер.
+            return {
+              id: `${o.col}-${o.row}`,
+              x: col.offsetLeft + el.offsetLeft + el.offsetWidth / 2,
+              y: col.offsetTop + el.offsetTop + el.offsetHeight / 2,
+              value: o.value,
+              el,
+            };
+          })
+          .filter((o): o is NonNullable<typeof o> => !!o);
+        if (!host || found.length < 2) {
+          collect();
+          return;
+        }
+
+        const plan = planMerge(found, {
+          width: host.clientWidth,
+          height: host.clientHeight,
+          radius: Math.min(found[0].el.offsetWidth, found[0].el.offsetHeight) / 2,
+          speed: scale,
+          stampShown: start > 0,
+        });
+        const k = plan.timeScale;
+        const byId = new Map(found.map((o) => [o.id, o]));
+        const body = (id: string) => byId.get(id)?.el.querySelector<HTMLElement>('.orb__body');
+        const local: ReturnType<typeof setTimeout>[] = [];
+        const at = (ms: number, fn: () => void) => {
+          const t = setTimeout(fn, ms);
+          local.push(t);
+          timers.current.push(t);
+        };
+
+        setCascade({ step: Math.max(0, res.steps.length - 1), phase: 'collect' });
+        setCollectSum(start);
+        setCollectDone(false);
+        setMerging('on');
+        bubbleForm();
+
+        // Пути: клетка едет от своего гнезда, поэтому сдвиг — от него.
+        const anims: Animation[] = [];
+        for (const o of found) {
+          const frames = plan.tracks[o.id];
+          if (!frames?.length) continue;
+          try {
+            anims.push(
+              o.el.animate(
+                frames.map((f) => ({
+                  offset: Math.min(1, f.t / plan.end),
+                  transform: `translate(${(f.x - o.x).toFixed(1)}px, ${(f.y - o.y).toFixed(1)}px) scale(${f.s.toFixed(3)})`,
+                  opacity: f.o,
+                })),
+                { duration: plan.end, fill: 'forwards' },
+              ),
+            );
+          } catch {
+            /* движок без WAAPI — пузыри постоят, суммы всё равно сложатся */
+          }
+        }
+
+        const showSum = (id: string, sum: number) => {
+          const [c, r] = id.split('-').map(Number);
+          setBoard((b) =>
+            b
+              ? b.map((col, ci) =>
+                  ci !== c
+                    ? col
+                    : col.map((cell) => (cell.row === r ? { ...cell, id: mkOrb(sum) } : cell)),
+                )
+              : b,
+          );
+        };
+
+        for (const m of plan.merges) {
+          // Поглощаемый вытягивается к цели — его втягивает плёнка.
+          at(Math.max(0, m.at - MERGE.absorbMs * k), () => stretch(body(m.from), m.angle, k));
+          at(m.at, () => {
+            showSum(m.into, m.sum);
+            bubbleMerge(m.k);
+            selectionChanged();
+            wobble(body(m.into), m.angle, k);
+          });
+        }
+
+        // Легендарная и выше: общий пузырь висит лишний такт — тишина перед ударом.
+        const hold = loudest.beats >= 3 ? 520 * scale : 0;
+        const pop = (delay: number) => {
+          at(delay, () => {
+            // Лопнул — дожимать больше нечего. Иначе тап во время удара
+            // перезапустил бы лопание, и жетон ударил бы дважды.
+            mergeSkip.current = null;
+            setMerging('pop');
+            bubblePop();
+            tapLight();
+          });
+          at(delay + 70 * scale, () => slam(240 * scale));
+          at(delay + 70 * scale + 420 * scale, () => {
+            setCollectOut(true);
+            toPayout();
+            timers.current.push(setTimeout(() => setCollectOut(false), 300 * scale));
+          });
+        };
+        pop(plan.end + hold);
+
+        mergeSkip.current = () => {
+          local.forEach(clearTimeout);
+          local.length = 0;
+          anims.forEach((a) => {
+            try {
+              a.finish();
+            } catch {
+              /* уже снята */
+            }
+          });
+          const last = plan.merges[plan.merges.length - 1];
+          if (last) showSum(last.into, last.sum);
+          pop(0);
+        };
+      };
+
+      // Сфер больше одной — сливаются пузырями; одна улетает в жетон, как раньше.
+      const run = order.length >= 2 && !reduceMotion() ? mergeCollect : collect;
+
       // Сольный выход. Редкая сфера и выше сначала показывается крупно и
       // названа по имени — и только потом уходит в общую волну сбора.
       // Ступени ниже этого выходят молча: выход, который случается каждый
@@ -992,12 +1246,12 @@ export function ScatterPage() {
           // соло с самого начала, поэтому между ними нет светлого кадра.
           setTimeout(() => {
             setSolo((v) => (v ? { ...v, leaving: true } : v));
-            collect();
+            run();
           }, shown),
           setTimeout(() => setSolo(null), shown + 260 * scale),
         );
       } else {
-        collect();
+        run();
       }
     },
     [turbo, theme.confetti, rainSrc],
@@ -1069,6 +1323,8 @@ export function ScatterPage() {
     setCollectSum(0);
     setCollectDone(false);
     setCollectOut(false);
+    setMerging(null);
+    mergeSkip.current = null;
     setCounting(false);
     setWinStep(null);
     // Счётчик обнуляем и в рефе, и в самом одометре: от него стартует счёт.
@@ -1292,7 +1548,7 @@ export function ScatterPage() {
           </div>
           <div className="cabinet__window">
             <div
-              className="sboard"
+              className={`sboard${merging ? ' is-merging' : ''}${merging === 'pop' ? ' is-popping' : ''}`}
               ref={boardRef}
               style={
                 {
@@ -1318,7 +1574,7 @@ export function ScatterPage() {
                             }${winCells.has(`${c}-${cell.row}`) ? ' is-win' : ''}${
                               cell.id === 'scatter' ? ' is-scatter' : ''
                             }${orbClass(value)}${
-                              value && cascade?.phase === 'collect' ? ' is-collect' : ''
+                              value && cascade?.phase === 'collect' && !merging ? ' is-collect' : ''
                             }${
                               shownWins.length &&
                               !winCells.has(`${c}-${cell.row}`) &&
@@ -1346,7 +1602,7 @@ export function ScatterPage() {
                             }
                             data-cell={`${c}-${cell.row}`}
                           >
-                            <CellFace id={cell.id} skin={skin} />
+                            <CellFace id={cell.id} skin={skin} bubble={!!merging && !!value} />
                           </span>
                         );
                       })}

@@ -14361,6 +14361,15 @@ input[type='datetime-local'] {
      клетка (см. .sbcell.is-fall). Любое собственное «всплытие» здесь снова
      превратит её в наклейку поверх поля: ни один символ так не приходит. */
 }
+/* Тело сферы — обёртка камня, числа и орбиты. Клетку целиком двигает план
+   слияния (lib/orb-merge.ts), а тело внутри колышется от ударов: два
+   трансформа на одном элементе дрались бы. В покое тело — ровно клетка. */
+.orb__body {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
 /* Сам камень занимает почти всю клетку — как плитка символа, а не шарик
    поверх неё. Размер тоже ступень редкости. */
 .sbcell--orb .orb__gem {
@@ -14505,6 +14514,8 @@ input[type='datetime-local'] {
    ней счётчик прибавляет номинал. */
 .sbcell--orb.is-collect {
   z-index: 5;
+  /* От центра — см. тот же пункт у пузырей: у упавшей клетки опора внизу. */
+  transform-origin: 50% 50%;
   animation: orb-fly calc(var(--orb-fly, 560ms) * var(--speed, 1)) linear
     calc(var(--i, 0) * var(--orb-stagger, 70ms) * var(--speed, 1)) forwards;
 }
@@ -14526,6 +14537,226 @@ input[type='datetime-local'] {
   100% {
     opacity: 0;
     transform: translate(calc(var(--fx, 0) * 100%), var(--fy, 0)) scale(0.2);
+  }
+}
+
+/* =========================================================================
+   Пузыри: сферы сливаются в одну (lib/orb-merge.ts, ScatterPage → finale).
+   Пузырь — не слой поверх поля, а то, во что клетка-сфера превращается на
+   время слияния: плёнка рисуется ВНУТРИ тела сферы и едет вместе с ним.
+
+   Бюджет кадра. Всё движение — transform клетки (план) и тела (колыхание).
+   Плёнка переливается сменой прозрачности двух НЕПОДВИЖНЫХ конических
+   слоёв: вращать что-либо внутри скруглённого overflow корпуса нельзя, а
+   анимировать сам градиент — перерисовка кадра. Маска кольца статична.
+   ========================================================================= */
+.sboard.is-merging .sbcell--orb {
+  /* Над вуалью сбора (3) и пылью (4), под жетоном (6). */
+  z-index: 5;
+  /* Масштаб — от центра. У упавшей клетки точка опоры внизу (там она
+     сплющивается о дно), и раздутый в полтора раза пузырь уезжал от своей
+     точки на пол-клетки вверх: общий пузырь лопался мимо жетона. */
+  transform-origin: 50% 50%;
+}
+/* Камень уменьшается ВНУТРИ пузыря: без зазора между камнем и плёнкой
+   пузырь читался ореолом вокруг сферы, а не шаром, в котором она плывёт.
+   Отдельное свойство `scale`, а не transform: трансформ у камня уже занят
+   его собственным «дыханием» (orb-throb). */
+.orb__gem,
+.orb__num,
+.orb__ring {
+  transition: scale calc(0.28s * var(--speed, 1)) cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.sboard.is-merging .sbcell--orb .orb__gem {
+  scale: 0.66;
+}
+.sboard.is-merging .sbcell--orb .orb__ring {
+  scale: 0.72;
+}
+.sboard.is-merging .sbcell--orb .orb__num {
+  scale: 0.86;
+}
+.bubble {
+  position: absolute;
+  width: 122%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  pointer-events: none;
+  /* Тонкая плёнка: прозрачная середина, кромка светлее — так выглядит
+     шар, а не диск. Свечение — цветом ступени сферы. */
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.03) 44%,
+    rgba(255, 255, 255, 0.1) 58%,
+    rgba(205, 232, 255, 0.3) 66%,
+    rgba(255, 255, 255, 0.72) 70%,
+    rgba(255, 255, 255, 0) 71.5%
+  );
+  box-shadow: 0 0 16px color-mix(in srgb, var(--orb-glow) 38%, transparent);
+  animation:
+    bubble-in calc(0.28s * var(--speed, 1)) cubic-bezier(0.2, 1.5, 0.4, 1) both,
+    bubble-breathe calc(1.5s * var(--speed, 1)) ease-in-out calc(0.28s * var(--speed, 1)) infinite;
+}
+/* Радужная плёнка: кольцо по кромке, два набора оттенков навстречу друг
+   другу. Перелив — только прозрачностью. */
+.bubble__film {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 20deg,
+    rgba(255, 110, 200, 0.55),
+    rgba(255, 225, 110, 0.5),
+    rgba(120, 255, 190, 0.5),
+    rgba(110, 185, 255, 0.58),
+    rgba(210, 130, 255, 0.52),
+    rgba(255, 110, 200, 0.55)
+  );
+  -webkit-mask-image: radial-gradient(
+    circle,
+    transparent 50%,
+    #000 62%,
+    #000 69%,
+    transparent 71.5%
+  );
+  mask-image: radial-gradient(circle, transparent 50%, #000 62%, #000 69%, transparent 71.5%);
+  opacity: 0.9;
+  animation: bubble-film calc(1.9s * var(--speed, 1)) ease-in-out infinite alternate;
+}
+.bubble__film--b {
+  background: conic-gradient(
+    from 200deg,
+    rgba(110, 185, 255, 0.55),
+    rgba(255, 110, 200, 0.5),
+    rgba(255, 225, 110, 0.52),
+    rgba(120, 255, 190, 0.5),
+    rgba(210, 130, 255, 0.55),
+    rgba(110, 185, 255, 0.55)
+  );
+  opacity: 0.2;
+  animation-direction: alternate-reverse;
+}
+/* Окно, отражённое в плёнке: блик сверху слева и слабый снизу справа. */
+.bubble__shine {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse 16% 10% at 30% 23%, rgba(255, 255, 255, 0.95), transparent 70%),
+    radial-gradient(ellipse 6% 4% at 43% 16%, rgba(255, 255, 255, 0.85), transparent 75%),
+    radial-gradient(ellipse 12% 7% at 71% 79%, rgba(255, 255, 255, 0.4), transparent 72%);
+}
+/* Изогнутое отражение по внутренней кромке — дуга, по которой глаз и
+   узнаёт шар из плёнки. Рисуется бортом круга, развёрнутым к свету. */
+.bubble__shine::before {
+  content: '';
+  position: absolute;
+  inset: 11%;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: rgba(255, 255, 255, 0.6);
+  border-left-color: rgba(255, 255, 255, 0.22);
+  rotate: -28deg;
+}
+/* Брызги лопнувшего пузыря — ждут в центре невидимыми. */
+.bubble__drop {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--s, 4px);
+  height: var(--s, 4px);
+  margin: calc(var(--s, 4px) / -2);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    #fff,
+    rgba(190, 225, 255, 0.85) 60%,
+    transparent 75%
+  );
+  opacity: 0;
+}
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+/* Пузырь в воздухе не бывает идеальным шаром: он «дышит», перетекая из
+   сплюснутого в вытянутый. Объём сохраняется. */
+@keyframes bubble-breathe {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  25% {
+    transform: scale(1.035, 0.965);
+  }
+  75% {
+    transform: scale(0.97, 1.03);
+  }
+}
+@keyframes bubble-film {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0.25;
+  }
+}
+
+/* Лопнул: плёнка рывком расходится кольцом и гаснет, брызги летят во все
+   стороны, камень с числом уходит в жетон, который в этот миг встаёт. */
+.sboard.is-popping .bubble {
+  animation: bubble-pop calc(0.2s * var(--speed, 1)) cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+.sboard.is-popping .bubble__drop {
+  animation: bubble-drop calc(0.38s * var(--speed, 1)) cubic-bezier(0.1, 0.7, 0.3, 1) forwards;
+}
+.sboard.is-popping .sbcell--orb .orb__gem,
+.sboard.is-popping .sbcell--orb .orb__num,
+.sboard.is-popping .sbcell--orb .orb__ring {
+  animation: orb-sink calc(0.2s * var(--speed, 1)) cubic-bezier(0.5, 0, 0.9, 0.5) forwards;
+}
+@keyframes bubble-pop {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+@keyframes bubble-drop {
+  0% {
+    opacity: 1;
+    transform: rotate(var(--a)) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(calc(var(--d, 1) * -62px)) scale(0.4);
+  }
+}
+@keyframes orb-sink {
+  to {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bubble,
+  .bubble__film,
+  .sboard.is-popping .bubble,
+  .sboard.is-popping .bubble__drop,
+  .sboard.is-popping .sbcell--orb .orb__gem,
+  .sboard.is-popping .sbcell--orb .orb__num,
+  .sboard.is-popping .sbcell--orb .orb__ring {
+    animation: none;
   }
 }
 

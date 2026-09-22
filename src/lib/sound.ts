@@ -185,6 +185,33 @@ export function multTick(k: number): void {
   tone(700 + 900 * Math.min(1, Math.max(0, k)), { dur: 0.04, type: 'square', gain: 0.06 });
 }
 
+// ---------------------------------------------------------------------------
+// Пузыри: сферы сливаются в одну (lib/orb-merge.ts). Звук мягкий и влажный —
+// синус с подъёмом тона, без квадратных волн: это плёнка, а не металл.
+// ---------------------------------------------------------------------------
+
+/** Пузыри надуваются вокруг камней — тихое «вдох» перед слиянием. */
+export function bubbleForm(): void {
+  tone(420, { dur: 0.18, type: 'sine', gain: 0.05, sweepTo: 760 });
+}
+
+/**
+ * Два пузыря слились — «блоп». `k` — какое по счёту слияние: тон
+ * забирается выше, и ухо слышит, что общий пузырь растёт.
+ */
+export function bubbleMerge(k: number): void {
+  const f = 300 * Math.pow(1.1, Math.min(12, Math.max(0, k)));
+  tone(f, { dur: 0.13, type: 'sine', gain: 0.13, sweepTo: f * 2.2 });
+  tone(f * 3.1, { at: 0.03, dur: 0.05, type: 'sine', gain: 0.035 });
+}
+
+/** Общий пузырь лопнул — сухой щелчок плёнки и брызги. */
+export function bubblePop(): void {
+  tone(1500, { dur: 0.05, type: 'triangle', gain: 0.1, sweepTo: 520 });
+  tone(2800, { at: 0.012, dur: 0.035, type: 'sine', gain: 0.05 });
+  tone(3900, { at: 0.03, dur: 0.03, type: 'sine', gain: 0.03 });
+}
+
 /** Множитель применился к выплате — глухой удар «печати». */
 export function multSlam(): void {
   tone(196, { dur: 0.26, type: 'triangle', gain: 0.2, sweepTo: 98 });
