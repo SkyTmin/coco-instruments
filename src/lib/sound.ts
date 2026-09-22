@@ -387,3 +387,46 @@ export function mineRumble(): void {
   tone(62, { dur: 0.7, type: 'triangle', gain: 0.2, sweepTo: 45 });
   for (let i = 0; i < 7; i++) noise(500 + i * 140, { at: 0.08 + i * 0.07, dur: 0.05, gain: 0.12 });
 }
+
+/** Взрыв: бомба, Взрыв-зачарование, заряд, отбойник. `power` 1…3. */
+export function boom(power = 1): void {
+  const p = Math.max(1, Math.min(3, power));
+  noise(180, { dur: 0.35 + 0.15 * p, gain: 0.35, q: 0.5 });
+  noise(700, { at: 0.01, dur: 0.18, gain: 0.2, q: 0.7 });
+  tone(70, { dur: 0.4 + 0.15 * p, type: 'triangle', gain: 0.24, sweepTo: 35 });
+  if (p >= 2) {
+    for (let i = 0; i < 5; i++)
+      noise(1400 + i * 300, { at: 0.12 + i * 0.06, dur: 0.05, gain: 0.08 });
+  }
+}
+
+/** Фитиль шипит, бомба тикает. */
+export function fuseTick(k = 0): void {
+  tone(1200 + 200 * k, { dur: 0.04, type: 'square', gain: 0.05 });
+  noise(5000, { dur: 0.05, gain: 0.05, q: 1.5 });
+}
+
+/** Звено жилы: тон забирается вверх — ухо считает, сколько ушло разом. */
+export function chainTick(k: number): void {
+  const f = 520 * Math.pow(2, Math.min(k, 12) / 12);
+  tone(f, { dur: 0.08, type: 'triangle', gain: 0.08 });
+  noise(2400, { dur: 0.04, gain: 0.1, q: 1.4 });
+}
+
+/** Кураж: короткий фанфарный подъём. */
+export function frenzyStart(): void {
+  [392, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
+    tone(f, { at: i * 0.05, dur: 0.18, type: 'square', gain: 0.07 }),
+  );
+}
+
+/** Щелчок ленты сундука, как у колеса удачи. */
+export function caseTick(): void {
+  tone(1900, { dur: 0.025, type: 'square', gain: 0.045 });
+}
+
+/** Нашёлся ключ — звонкий «дзынь» металла. */
+export function keyFound(): void {
+  tone(1568, { dur: 0.2, type: 'sine', gain: 0.09 });
+  tone(2349, { at: 0.04, dur: 0.18, type: 'sine', gain: 0.06 });
+}

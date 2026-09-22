@@ -119,8 +119,28 @@ import {
   bagValue,
   BAG_MAX,
   CART_PRICE,
+  CREW_MAX,
+  crewCost,
+  crewYield,
   DEPTH,
+  enchantCost,
+  enchantOf,
+  enchantRefund,
+  ENERGY_MS,
   freshMine,
+  FIND_DUP_TOKENS,
+  FRENZY_MS,
+  itemOf,
+  NO_PERKS,
+  perkPointsFree,
+  PERKS,
+  PRESTIGE_KEYS,
+  RANK_KEYS,
+  rollCase,
+  LENS_MS,
+  modsOf,
+  rollDrops,
+  stash,
   LAST_RANK,
   normalizePrison,
   PICKS,
@@ -132,7 +152,15 @@ import {
   sharpCost,
   SHARP_MAX,
 } from '@/lib/prison';
-import type { PrisonState } from '@/lib/prison';
+import type {
+  CaseRoll,
+  CrewYield,
+  EnchantId,
+  FindId,
+  ItemId,
+  PerkId,
+  PrisonState,
+} from '@/lib/prison';
 
 /** Сколько прошлых заходов держим: хватает на «лучший за месяц». */
 const SESSION_KEEP = 20;
@@ -314,6 +342,17 @@ const persistCamera = (s: {
 /** Сохранение каторги: состояние шахты целиком, деньги — в кошельке слотов. */
 interface PrisonBlob extends PrisonState {
   version: 1;
+}
+
+/** Что принёс удар (или пачка блоков). */
+export interface PrisonLoot {
+  broken: number;
+  taken: number;
+  lost: number;
+  sold: number;
+  tokens: number;
+  keys: number;
+  finds: { id: FindId; fresh: boolean }[];
 }
 
 /** Итог нового ранга: для сцены на странице. */
@@ -728,11 +767,29 @@ interface FinanceState {
   }) => void;
 
   /**
-   * Блок сломан: клетка стала на ярус глубже, добыча — в рюкзак. Если места
-   * нет, а вагонетка куплена, она продаёт рюкзак сама. Возвращает, взят ли
-   * блок и сколько выручено автопродажей.
+   * Блоки сломаны (один ударом или пачкой — взрыв, жила, отбойник): клетки
+   * стали на ярус глубже, добыча с Удачей и Куражом — в рюкзак, токены и
+   * ключи — в карман. Места нет, а вагонетка куплена — она продаёт рюкзак
+   * сама.
    */
-  prisonBreak: (cell: number, rock: number) => { taken: boolean; sold: number };
+  prisonBreak: (breaks: { cell: number; rock: number }[]) => PrisonLoot;
+  /** Зачарование: взять уровень за токены или сбросить с возвратом половины. */
+  prisonEnchant: (id: EnchantId) => boolean;
+  prisonEnchantReset: (id: EnchantId) => number;
+  /** Лавка: расходник за токены. */
+  prisonBuyItem: (id: ItemId) => boolean;
+  /** Потратить расходник. Энергетик и лупа включаются сразу. */
+  prisonUseItem: (id: ItemId) => boolean;
+  /** Кураж сработал на ударе. */
+  prisonFrenzy: () => void;
+  /** Открыть сундук: ключ уходит, награда начисляется сразу. */
+  prisonOpenCase: () => CaseRoll | null;
+  /** Бригада: нанять или поднять уровень за монеты, забрать добычу. */
+  prisonCrewUp: () => boolean;
+  prisonCrewCollect: () => CrewYield | null;
+  /** Перки престижа: взять уровень за очко или сбросить все. */
+  prisonPerk: (id: PerkId) => boolean;
+  prisonPerksReset: () => void;
   /** Спуститься в другую открытую шахту — или обновить эту. */
   prisonGoMine: (id: number) => void;
   /** Продать рюкзак в общий кошелёк. */
@@ -2373,38 +2430,188 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistSlots(get());
   },
 
-  prisonBreak: (cell, rock) => {
+  prisonBreak: (breaks) => {
     const s = get();
     const p = s.prison;
-    if (cell < 0 || cell >= p.mine.dug.length || p.mine.dug[cell] >= DEPTH) {
-      return { taken: false, sold: 0 };
-    }
     const dug = p.mine.dug.slice();
-    dug[cell] += 1;
-    const mine = { ...p.mine, dug };
-    let bag = p.bag;
-    let sold = 0;
-    let taken = true;
-    if (bagCount(bag) >= bagCapacity(p.bagLevel)) {
-      if (p.cart) {
-        sold = bagValue(bag, p.prestige);
-        bag = {};
-      } else {
-        // Рюкзак полон, вагонетки нет: блок сломан, добыча осталась в шахте.
-        taken = false;
-      }
+    const rocks: number[] = [];
+    for (const b of breaks) {
+      if (b.cell < 0 || b.cell >= dug.length || dug[b.cell] >= DEPTH || b.rock < 0) continue;
+      dug[b.cell] += 1;
+      rocks.push(b.rock);
+    }
+    if (!rocks.length)
+      return { broken: 0, taken: 0, lost: 0, sold: 0, tokens: 0, keys: 0, finds: [] };
+    const now = Date.now();
+    const m = modsOf(p);
+    const drops = rollDrops(rocks, m, Math.random, {
+      frenzy: now < p.frenzyUntil,
+      mine: p.mine.id,
+    });
+    const put = stash(p.bag, drops.units, bagCapacity(p.bagLevel), p.cart, m.sell);
+    // Находка: новая идёт в коллекцию, дубликат сдаётся за токены.
+    const finds = { ...p.finds };
+    let dupTokens = 0;
+    const found: { id: FindId; fresh: boolean }[] = [];
+    for (const f of drops.finds) {
+      const fresh = !(finds[f] ?? 0);
+      finds[f] = (finds[f] ?? 0) + 1;
+      if (!fresh) dupTokens += FIND_DUP_TOKENS;
+      found.push({ id: f, fresh });
     }
     const prison: PrisonState = {
       ...p,
-      mine,
-      bag: taken ? { ...bag, [rock]: (bag[rock] ?? 0) + 1 } : bag,
-      mined: p.mined + 1,
-      earned: p.earned + sold,
+      mine: { ...p.mine, dug },
+      bag: put.bag,
+      mined: p.mined + rocks.length,
+      earned: p.earned + put.sold,
+      tokens: p.tokens + drops.tokens + dupTokens,
+      keys: p.keys + drops.keys,
+      finds,
     };
-    set(sold ? { prison, slotsBalance: s.slotsBalance + sold } : { prison });
+    set(put.sold ? { prison, slotsBalance: s.slotsBalance + put.sold } : { prison });
     persistPrison(prison);
-    if (sold) persistSlots(get());
-    return { taken, sold };
+    if (put.sold) persistSlots(get());
+    return {
+      broken: rocks.length,
+      taken: put.taken,
+      lost: put.lost,
+      sold: put.sold,
+      tokens: drops.tokens + dupTokens,
+      keys: drops.keys,
+      finds: found,
+    };
+  },
+
+  prisonEnchant: (id) => {
+    const p = get().prison;
+    const level = p.ench[id];
+    if (level >= enchantOf(id).max) return false;
+    const cost = enchantCost(id, level);
+    if (p.tokens < cost) return false;
+    const prison = { ...p, tokens: p.tokens - cost, ench: { ...p.ench, [id]: level + 1 } };
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  prisonEnchantReset: (id) => {
+    const p = get().prison;
+    const level = p.ench[id];
+    if (!level) return 0;
+    const back = enchantRefund(id, level);
+    const prison = { ...p, tokens: p.tokens + back, ench: { ...p.ench, [id]: 0 } };
+    set({ prison });
+    persistPrison(prison);
+    return back;
+  },
+
+  prisonBuyItem: (id) => {
+    const p = get().prison;
+    const price = itemOf(id).price;
+    if (p.tokens < price) return false;
+    const prison = { ...p, tokens: p.tokens - price, items: { ...p.items, [id]: p.items[id] + 1 } };
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  prisonUseItem: (id) => {
+    const p = get().prison;
+    if (p.items[id] <= 0) return false;
+    const now = Date.now();
+    const prison: PrisonState = { ...p, items: { ...p.items, [id]: p.items[id] - 1 } };
+    // Второй энергетик подряд продлевает, а не сгорает впустую.
+    if (id === 'energy') prison.energyUntil = Math.max(now, p.energyUntil) + ENERGY_MS;
+    if (id === 'lens') prison.lensUntil = Math.max(now, p.lensUntil) + LENS_MS;
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  prisonFrenzy: () => {
+    const p = get().prison;
+    const prison = { ...p, frenzyUntil: Math.max(Date.now(), p.frenzyUntil) + FRENZY_MS };
+    set({ prison });
+    persistPrison(prison);
+  },
+
+  prisonOpenCase: () => {
+    const s = get();
+    const p = s.prison;
+    if (p.keys <= 0) return null;
+    const roll = rollCase(p, Math.random);
+    const r = roll.reward;
+    let prison: PrisonState = { ...p, keys: p.keys - 1, cases: p.cases + 1 };
+    let balance = s.slotsBalance;
+    if (r.kind === 'coins') balance += r.amount;
+    else if (r.kind === 'tokens') prison = { ...prison, tokens: prison.tokens + r.amount };
+    else if (r.kind === 'item')
+      prison = { ...prison, items: { ...prison.items, [r.id]: prison.items[r.id] + r.amount } };
+    else prison = { ...prison, finds: { ...prison.finds, [r.id]: (prison.finds[r.id] ?? 0) + 1 } };
+    set({ prison, slotsBalance: balance });
+    persistPrison(prison);
+    if (balance !== s.slotsBalance) persistSlots(get());
+    return roll;
+  },
+
+  prisonCrewUp: () => {
+    const s = get();
+    const p = s.prison;
+    if (p.crew >= CREW_MAX) return false;
+    const price = crewCost(p.crew);
+    if (s.slotsBalance < price) return false;
+    const now = Date.now();
+    // Нанятая бригада начинает копить с этой минуты. Подъём уровня сперва
+    // отдаёт накопленное по старой ставке — иначе новый уровень задним
+    // числом переоценил бы прошлые часы.
+    const y = crewYield(p, now);
+    const prison: PrisonState = {
+      ...p,
+      crew: p.crew + 1,
+      crewFrom: now,
+      tokens: p.tokens + y.tokens,
+      earned: p.earned + y.coins,
+    };
+    set({ prison, slotsBalance: s.slotsBalance - price + y.coins });
+    persistPrison(prison);
+    persistSlots(get());
+    return true;
+  },
+
+  prisonCrewCollect: () => {
+    const s = get();
+    const p = s.prison;
+    const now = Date.now();
+    const y = crewYield(p, now);
+    if (!y.blocks) return null;
+    const prison: PrisonState = {
+      ...p,
+      crewFrom: now,
+      tokens: p.tokens + y.tokens,
+      earned: p.earned + y.coins,
+    };
+    set({ prison, slotsBalance: s.slotsBalance + y.coins });
+    persistPrison(prison);
+    persistSlots(get());
+    return y;
+  },
+
+  prisonPerk: (id) => {
+    const p = get().prison;
+    const perk = PERKS.find((k) => k.id === id);
+    if (!perk || p.perks[id] >= perk.max || perkPointsFree(p) <= 0) return false;
+    const prison = { ...p, perks: { ...p.perks, [id]: p.perks[id] + 1 } };
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  prisonPerksReset: () => {
+    const p = get().prison;
+    const prison = { ...p, perks: { ...NO_PERKS } };
+    set({ prison });
+    persistPrison(prison);
   },
 
   prisonGoMine: (id) => {
@@ -2418,7 +2625,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   prisonSell: () => {
     const s = get();
     const p = s.prison;
-    const value = bagValue(p.bag, p.prestige);
+    const value = bagValue(p.bag, modsOf(p).sell);
     if (!bagCount(p.bag)) return 0;
     const prison = { ...p, bag: {}, earned: p.earned + value };
     set({ prison, slotsBalance: s.slotsBalance + value });
@@ -2448,7 +2655,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       levelUps.push(lvl);
     }
     // Новый ранг сразу ведёт в новую шахту: ради неё его и брали.
-    const prison: PrisonState = { ...p, rank, mine: freshMine(rank) };
+    const prison: PrisonState = {
+      ...p,
+      rank,
+      mine: freshMine(rank),
+      keys: p.keys + RANK_KEYS,
+    };
     set({
       prison,
       slotsBalance: s.slotsBalance - cost + bonusCoins,
@@ -2507,11 +2719,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       bonusCoins += reward.coins;
       bonusTickets += reward.freeSpins;
     }
+    // Блат: после престижа начинаешь не с A, а на пару рангов выше.
+    const start = Math.min(LAST_RANK - 1, p.perks.blat);
     const prison: PrisonState = {
       ...p,
-      rank: 0,
+      rank: start,
       prestige: p.prestige + 1,
-      mine: freshMine(0),
+      mine: freshMine(start),
+      keys: p.keys + PRESTIGE_KEYS,
     };
     set({
       prison,

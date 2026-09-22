@@ -1,29 +1,37 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { Screen, Sheet } from '@/components/ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon } from '@/components/slot-art';
+import { BagIcon, KeyIcon, PickIcon, PrisonCamp, TokenIcon } from '@/components/PrisonCamp';
+import type { CampTab } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
-import type { PrisonRankUp } from '@/store';
+import type { PrisonLoot, PrisonRankUp } from '@/store';
 import {
   bagCapacity,
-  bagCost,
   bagCount,
   bagValue,
-  BAG_MAX,
+  blastCells,
   buildMine,
-  CART_PRICE,
   CRIT_CHANCE,
   CRIT_MULT,
+  crewYield,
+  DEPTH,
+  ENERGY_RATE,
+  findOf,
+  FRENZY_RATE,
   hitDamage,
+  ITEMS,
   LAST_RANK,
-  MINE_COLS,
   MINE_CELLS,
+  MINE_COLS,
   MINE_RESET_AT,
   MINE_ROWS,
   mineMix,
   minedShare,
+  modsOf,
+  perkPointsFree,
   PICKS,
   prestigeCost,
   rankCost,
@@ -31,15 +39,14 @@ import {
   rockAt,
   ROCKS,
   sellMult,
-  sharpCost,
-  SHARP_MAX,
-  SHARP_STEP,
   shortMoney,
-  tapGapMs,
+  veinCells,
 } from '@/lib/prison';
+import type { FindId, ItemId, PrisonState } from '@/lib/prison';
 import {
   bedrockTexture,
   crackTexture,
+  findTexture,
   rockColors,
   rockTexture,
   rockVariant,
@@ -47,7 +54,7 @@ import {
 import { createFx } from '@/lib/prison-fx';
 import type { Fx } from '@/lib/prison-fx';
 import { plainPlan, runRollup } from '@/lib/rollup';
-import { addTrauma, squashPop, stopShake } from '@/lib/juice';
+import { addTrauma, flashFrame, squashPop, stopShake } from '@/lib/juice';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import { useExit } from '@/lib/use-exit';
@@ -55,7 +62,12 @@ import {
   bagFull as bagFullSound,
   bedrockClink,
   blockBreak,
+  boom,
+  chainTick,
   coinDing,
+  frenzyStart,
+  fuseTick,
+  keyFound,
   mineRumble,
   payoutEnd,
   pickHit,
@@ -74,69 +86,31 @@ import {
 } from '@/lib/haptics';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+/** Коротко для узкой ячейки табло: 12 345 → «12,3к». */
+const shortCount = (n: number) =>
+  n < 1e4
+    ? fmt(n)
+    : n < 1e6
+      ? `${(Math.floor(n / 100) / 10).toLocaleString('ru-RU')}к`
+      : `${(Math.floor(n / 1e5) / 10).toLocaleString('ru-RU')}м`;
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
-// ---------------------------------------------------------------------------
-// Кирка: рисунок один, цвет головки — от материала.
-// ---------------------------------------------------------------------------
-
-function PickIcon({ pick, size = 30 }: { pick: number; size?: number }) {
-  const p = PICKS[Math.max(0, Math.min(PICKS.length - 1, pick))];
-  return (
-    <svg className="ppick-ico" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
-      <path d="M6.5 27.5 L20 14" stroke="#4a2d16" strokeWidth="4.2" strokeLinecap="round" />
-      <path d="M6.5 27.5 L20 14" stroke="#a36d3c" strokeWidth="2" strokeLinecap="round" />
-      <path
-        d="M11 5.5 C18.5 4.8 25.6 10.4 27.2 20 L24.6 20.6 C22.6 13.6 17.6 9.6 10.6 8.4 Z"
-        fill={p.head}
-        stroke="rgba(0,0,0,.55)"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12.4 6.6 C18 6.4 23 9.8 25.2 15.6"
-        fill="none"
-        stroke="rgba(255,255,255,.55)"
-        strokeWidth="1.1"
-        strokeLinecap="round"
-      />
-      <rect
-        x="17.2"
-        y="10.8"
-        width="5"
-        height="5"
-        rx="1"
-        transform="rotate(45 19.7 13.3)"
-        fill="#3a2414"
-      />
-    </svg>
-  );
+/** Скорость кирки прямо сейчас: перки, энергетик, кураж. */
+function liveRate(p: PrisonState): number {
+  const now = Date.now();
+  const base = PICKS[p.pick].rate * modsOf(p).rate;
+  let r = base;
+  if (now < p.energyUntil) r *= ENERGY_RATE;
+  if (now < p.frenzyUntil) r *= FRENZY_RATE;
+  // Потолок: иначе энергетик в кураже превращал бы удержание в пулемёт.
+  return Math.min(r, base * 2.5);
 }
 
-function BagIcon({ size = 26 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
-      <path d="M11 9 C11 4.5 21 4.5 21 9" fill="none" stroke="#6a4424" strokeWidth="2.4" />
-      <path
-        d="M7 12 C7 9.6 9 8.6 11 8.6 H21 C23 8.6 25 9.6 25 12 L26.4 25 C26.6 27.6 24.8 29 22.6 29 H9.4 C7.2 29 5.4 27.6 5.6 25 Z"
-        fill="#9a6a3c"
-        stroke="#3f2612"
-        strokeWidth="1.4"
-      />
-      <path d="M8.6 14.5 H23.4" stroke="#6a4424" strokeWidth="2" />
-      <rect x="14" y="13" width="4" height="4" rx="1" fill="#d9b35a" stroke="#6a4424" />
-      <path
-        d="M9 18 C9 24 10 26 12 27"
-        fill="none"
-        stroke="rgba(255,255,255,.2)"
-        strokeWidth="1.4"
-      />
-    </svg>
-  );
-}
+/** Минимальный промежуток между ударами тапом — 1,8 скорости удержания. */
+const gapMs = (p: PrisonState) => 1000 / (liveRate(p) * 1.8);
 
 // ---------------------------------------------------------------------------
 // Клетка шахты. Сверху видно торец верхнего блока; чем глубже раскоп, тем
@@ -150,6 +124,8 @@ interface CellProps {
   variant: number;
   depth: number;
   crack: number;
+  /** Лупа: порода ярусом ниже, если она ценнее верхней (−1 — не показывать). */
+  peek: number;
   wt: number;
   wl: number;
   wb: number;
@@ -163,6 +139,7 @@ const MineCell = memo(function MineCell({
   variant,
   depth,
   crack,
+  peek,
   wt,
   wl,
   wb,
@@ -193,6 +170,7 @@ const MineCell = memo(function MineCell({
           <i className="pcell__crack" style={{ backgroundImage: `url(${crackTexture(crack)})` }} />
         )}
       </span>
+      {peek >= 0 && <img className="pcell__peek" src={rockTexture(peek)} alt="" />}
     </div>
   );
 });
@@ -206,7 +184,21 @@ function wall(dug: number[], c: number, dx: number, dy: number): number {
   return Math.max(0, dug[c] - other);
 }
 
-type Sheetname = 'forge' | 'mines' | 'prestige' | null;
+/** Кольца вокруг клетки: для волн отбойника и взрыва (по Чебышёву). */
+function rings(center: number, cells: number[]): number[][] {
+  const cx = center % MINE_COLS;
+  const cy = Math.floor(center / MINE_COLS);
+  const out: number[][] = [];
+  for (const c of cells) {
+    const d = Math.max(Math.abs((c % MINE_COLS) - cx), Math.abs(Math.floor(c / MINE_COLS) - cy));
+    (out[d] ??= []).push(c);
+  }
+  return out.filter(Boolean);
+}
+
+type BreakKind = 'hit' | 'crit' | 'vein' | 'blast' | 'hammer';
+
+type Sheetname = 'mines' | 'prestige' | null;
 
 export function PrisonPage() {
   const hydrated = useFinanceStore((s) => s.hydrated);
@@ -217,9 +209,11 @@ export function PrisonPage() {
   const prisonBreak = useFinanceStore((s) => s.prisonBreak);
   const prisonSell = useFinanceStore((s) => s.prisonSell);
   const prisonRankUp = useFinanceStore((s) => s.prisonRankUp);
-  const prisonBuy = useFinanceStore((s) => s.prisonBuy);
   const prisonGoMine = useFinanceStore((s) => s.prisonGoMine);
   const prisonPrestige = useFinanceStore((s) => s.prisonPrestige);
+  const prisonUseItem = useFinanceStore((s) => s.prisonUseItem);
+  const prisonFrenzy = useFinanceStore((s) => s.prisonFrenzy);
+  const prisonCrewCollect = useFinanceStore((s) => s.prisonCrewCollect);
 
   useEffect(() => setMuted(!sound), [sound]);
   useEffect(() => setHapticsMuted(!haptics), [haptics]);
@@ -230,10 +224,26 @@ export function PrisonPage() {
 
   const [cracks, setCracks] = useState<number[]>(() => new Array<number>(MINE_CELLS).fill(0));
   const [sheet, setSheet] = useState<Sheetname>(null);
+  const [camp, setCamp] = useState<CampTab | null>(null);
   const [rankScene, setRankScene] = useState<PrisonRankUp | null>(null);
   const [sceneShown, sceneLeaving] = useExit(rankScene, 260);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+  const [findCard, setFindCard] = useState<{ id: FindId; fresh: boolean; n: number } | null>(null);
+  const [cardShown, cardLeaving] = useExit(findCard, 260);
   const [aiming, setAiming] = useState(false);
+  const [arming, setArming] = useState<ItemId | null>(null);
+  const [crewNote, setCrewNote] = useState(false);
+
+  // Баффы: страница перерисовывается раз в секунду, только пока хоть один
+  // идёт, — ради таймеров на плашках и чтобы лупа погасла вовремя.
+  const nowTick = Date.now();
+  const buffs = {
+    energy: Math.max(0, prison.energyUntil - nowTick),
+    frenzy: Math.max(0, prison.frenzyUntil - nowTick),
+    lens: Math.max(0, prison.lensUntil - nowTick),
+  };
+  const anyBuff = buffs.energy > 0 || buffs.frenzy > 0 || buffs.lens > 0;
+  useTicker(anyBuff);
 
   const fieldRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -247,12 +257,15 @@ export function PrisonPage() {
   const hp = useRef<Float32Array>(new Float32Array(MINE_CELLS).fill(-1));
   const lastHit = useRef(0);
   const pointer = useRef<{ id: number; cell: number } | null>(null);
-  const holdTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rect = useRef<DOMRect | null>(null);
   const rolling = useRef<(() => void) | null>(null);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const waveTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const fullWarnAt = useRef(0);
   const toastSeq = useRef(0);
+  const mineKeyRef = useRef(mineKey);
+  mineKeyRef.current = mineKey;
   // Баланс на табло: во время счёта продажи его ведёт ролл-ап, а не стор.
   const [shownBalance, setShownBalance] = useState(balance);
   useEffect(() => {
@@ -263,10 +276,13 @@ export function PrisonPage() {
     faces.current[i] = el;
   }, []);
 
-  // Новая шахта (ранг, обновление, переход): трещины и урон — с нуля.
+  // Новая шахта (ранг, обновление, переход): трещины и урон — с нуля, волны
+  // прошлого поля не доигрываются.
   useEffect(() => {
     hp.current.fill(-1);
     setCracks(new Array<number>(MINE_CELLS).fill(0));
+    waveTimers.current.forEach(clearTimeout);
+    waveTimers.current = [];
   }, [mineKey]);
 
   // Канва крошки живёт вместе с полем.
@@ -285,13 +301,30 @@ export function PrisonPage() {
 
   useEffect(
     () => () => {
-      if (holdTimer.current) clearInterval(holdTimer.current);
+      if (holdTimer.current) clearTimeout(holdTimer.current);
       if (resetTimer.current) clearTimeout(resetTimer.current);
+      waveTimers.current.forEach(clearTimeout);
       rolling.current?.();
       stopShake();
     },
     [],
   );
+
+  // Вернулся после смены — бригада уже накопала: сказать об этом сразу.
+  useEffect(() => {
+    if (!hydrated) return;
+    const y = crewYield(useFinanceStore.getState().prison, Date.now());
+    if (y.blocks > 0 && y.minutes >= 15) setCrewNote(true);
+  }, [hydrated]);
+
+  // Свернули приложение посреди удержания — кирка не должна бить в фоне.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') stopHold();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, []);
 
   const say = useCallback((text: string) => {
     toastSeq.current += 1;
@@ -302,6 +335,11 @@ export function PrisonPage() {
     const t = setTimeout(() => setToast(null), 1600);
     return () => clearTimeout(t);
   }, [toast]);
+  useEffect(() => {
+    if (!findCard) return undefined;
+    const t = setTimeout(() => setFindCard(null), 2600);
+    return () => clearTimeout(t);
+  }, [findCard]);
 
   // Счёт денег на табло — тот же ролл-ап, что у выигрышей в автоматах.
   const rollBalance = useCallback((from: number, to: number) => {
@@ -326,6 +364,11 @@ export function PrisonPage() {
     };
   }, []);
 
+  const settleBalance = useCallback(() => {
+    rolling.current?.();
+    setShownBalance(useFinanceStore.getState().slotsBalance);
+  }, []);
+
   const cellCenter = (c: number) => {
     const field = fieldRef.current;
     if (!field) return { x: 0, y: 0, size: 0 };
@@ -337,8 +380,8 @@ export function PrisonPage() {
     };
   };
 
-  /** Всплывающая надпись над клеткой: «КРИТ», «+120». */
-  const floatText = (c: number, text: string, cls: string) => {
+  /** Всплывающая надпись над клеткой: «КРИТ», «ВЗРЫВ», «+3 токена». */
+  const floatText = (c: number, text: string, cls: string, delay = 0) => {
     const layer = layerRef.current;
     const field = fieldRef.current;
     if (!layer || !field || reduceMotion()) return;
@@ -348,6 +391,7 @@ export function PrisonPage() {
     el.textContent = text;
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
+    el.style.opacity = '0';
     layer.appendChild(el);
     const done = () => el.remove();
     try {
@@ -357,14 +401,14 @@ export function PrisonPage() {
           { transform: 'translate(-50%, -110%) scale(1.15)', opacity: 1, offset: 0.2 },
           { transform: 'translate(-50%, -190%) scale(1)', opacity: 0 },
         ],
-        { duration: 700, easing: 'cubic-bezier(.2,.7,.3,1)' },
+        { duration: 760, delay, easing: 'cubic-bezier(.2,.7,.3,1)' },
       );
       a.onfinish = done;
       a.oncancel = done;
     } catch {
       done();
     }
-    setTimeout(done, 1200);
+    setTimeout(done, 1400 + delay);
   };
 
   /** Добыча летит дугой из клетки в рюкзак. */
@@ -454,6 +498,36 @@ export function PrisonPage() {
     el.style.height = `${size}px`;
   };
 
+  /** Ударная волна: кольцо по полю от точки. Только прозрачность и масштаб. */
+  const shockwave = (c: number, cells: number, hot = false) => {
+    const layer = layerRef.current;
+    if (!layer || reduceMotion()) return;
+    const { x, y, size } = cellCenter(c);
+    const el = document.createElement('i');
+    el.className = `pwave${hot ? ' pwave--hot' : ''}`;
+    const d = size * cells;
+    el.style.width = `${d}px`;
+    el.style.height = `${d}px`;
+    el.style.left = `${x - d / 2}px`;
+    el.style.top = `${y - d / 2}px`;
+    layer.appendChild(el);
+    const done = () => el.remove();
+    try {
+      const a = el.animate(
+        [
+          { transform: 'scale(.2)', opacity: 1 },
+          { transform: 'scale(1.15)', opacity: 0 },
+        ],
+        { duration: 420 + cells * 25, easing: 'cubic-bezier(.2,.7,.3,1)' },
+      );
+      a.onfinish = done;
+      a.oncancel = done;
+    } catch {
+      done();
+    }
+    setTimeout(done, 1200);
+  };
+
   const scheduleReset = () => {
     if (resetTimer.current) return;
     resetTimer.current = setTimeout(() => {
@@ -468,26 +542,185 @@ export function PrisonPage() {
     }, 650);
   };
 
+  /** Что сказать и показать по итогам слома: токены, ключи, находки, рюкзак. */
+  const announce = (c: number, res: PrisonLoot) => {
+    const now = performance.now();
+    if (res.tokens > 0) floatText(c, `+${res.tokens} ✦`, 'pfloat--token', 120);
+    if (res.keys > 0) {
+      floatText(c, res.keys > 1 ? `+${res.keys} ключа` : '+ключ', 'pfloat--key', 240);
+      keyFound();
+      tapMedium();
+    }
+    if (res.finds.length) {
+      const f = res.finds[res.finds.length - 1];
+      const n = useFinanceStore.getState().prison.finds[f.id] ?? 1;
+      setFindCard({ id: f.id, fresh: f.fresh, n });
+      if (f.fresh) {
+        tierBreak(2);
+        burstConfetti(50, ['#ffe08a', '#b8f4e6', '#fff']);
+        notifySuccess();
+      } else coinDing();
+    }
+    if (res.lost > 0 && now - fullWarnAt.current > 1400) {
+      fullWarnAt.current = now;
+      bagFullSound();
+      notifyWarning();
+      say('Рюкзак полон — продай добычу');
+      squashPop(bagRef.current, 0.5);
+    }
+    if (res.sold) {
+      // Вагонетка сама отвезла рюкзак.
+      const to = useFinanceStore.getState().slotsBalance;
+      rollBalance(to - res.sold, to);
+      coinDing();
+      floatText(c, `+${shortMoney(res.sold)}`, 'pfloat--coin');
+    }
+    const dug = useFinanceStore.getState().prison.mine.dug;
+    if (minedShare(dug) >= MINE_RESET_AT) scheduleReset();
+  };
+
+  /**
+   * Сломать верхние блоки клеток разом. Порода берётся с поля В ЭТОТ МИГ —
+   * волны отбойника идут кольцами, и к третьему кольцу первое уже на ярус
+   * глубже.
+   */
+  const breakCells = (cells: number[], kind: BreakKind): PrisonLoot | null => {
+    const st = useFinanceStore.getState().prison;
+    const list = cells
+      .map((cell) => ({ cell, rock: rockAt(rocks, cell, st.mine.dug[cell]) }))
+      .filter((b) => b.rock >= 0);
+    if (!list.length) return null;
+    for (const b of list) hp.current[b.cell] = -1;
+    setCracks((prev) => {
+      if (!list.some((b) => prev[b.cell])) return prev;
+      const next = prev.slice();
+      for (const b of list) next[b.cell] = 0;
+      return next;
+    });
+    const res = prisonBreak(list);
+    const single = kind === 'hit' || kind === 'crit';
+    list.forEach((b, i) => {
+      const { x, y } = cellCenter(b.cell);
+      const colors = rockColors(b.rock);
+      if (single) {
+        fx.current?.chips(x, y, colors, kind === 'crit' ? 22 : 14, kind === 'crit' ? 1.6 : 1.1);
+        fx.current?.puff(x, y, 'rgba(210,190,160,1)', 5);
+      } else {
+        fx.current?.chips(x, y, colors, kind === 'hammer' ? 5 : 9, kind === 'vein' ? 1 : 1.35);
+        if (i < 12) fx.current?.puff(x, y, 'rgba(210,190,160,1)', 3);
+      }
+      const face = faces.current[b.cell];
+      if (face && !reduceMotion()) {
+        // Под сломанным блоком открылся следующий: он «проступает» из ямы.
+        try {
+          face.animate(
+            [
+              { transform: 'scale(.72)', opacity: 0.2 },
+              { transform: 'scale(1.03)', opacity: 1, offset: 0.7 },
+              { transform: 'scale(1)', opacity: 1 },
+            ],
+            { duration: 200, easing: 'cubic-bezier(.2,.8,.3,1)' },
+          );
+        } catch {
+          /* не страшно */
+        }
+      }
+      if (res.taken > 0 && i < (single ? 1 : 4)) flyLoot(b.cell, b.rock);
+      // Порода следующей шахты на дне — находка, о ней стоит сказать.
+      if (single && b.rock > st.mine.id) floatText(b.cell, ROCKS[b.rock].name, 'pfloat--find');
+    });
+    if (single) blockBreak(ROCKS[list[0].rock].kind);
+    announce(list[0].cell, res);
+    return res;
+  };
+  const breakRef = useRef(breakCells);
+  breakRef.current = breakCells;
+
+  /** Волна колец: каждое кольцо ломается в свой такт, от центра наружу. */
+  const wave = (groups: number[][], kind: BreakKind, stepMs: number) => {
+    const key = mineKeyRef.current;
+    groups.forEach((g, i) => {
+      const t = setTimeout(() => {
+        // Шахта сменилась посреди волны — прошлое поле не доламываем.
+        if (mineKeyRef.current !== key) return;
+        breakRef.current(g, kind);
+      }, i * stepMs);
+      waveTimers.current.push(t);
+    });
+  };
+
+  const blastAt = (c: number, r: number, label: string) => {
+    const cells = blastCells(c, r);
+    boom(r);
+    flashFrame(r >= 2 ? 'big' : 'small');
+    addTrauma(fieldRef.current, 0.3 + 0.15 * r);
+    tapMedium();
+    shockwave(c, 2 * r + 1.6, true);
+    floatText(c, label, 'pfloat--blast');
+    wave(rings(c, cells), 'blast', 45);
+  };
+
+  const hammerFrom = (c: number, label: string, power = 2) => {
+    const all = Array.from({ length: MINE_CELLS }, (_, i) => i);
+    boom(power);
+    mineRumble();
+    flashFrame('big');
+    addTrauma(fieldRef.current, 0.65);
+    tapMedium();
+    shockwave(c, 16);
+    floatText(c, label, 'pfloat--blast');
+    wave(rings(c, all), 'hammer', 34);
+  };
+
+  const veinFrom = (c: number, rock: number, max: number) => {
+    const st = useFinanceStore.getState().prison;
+    const cells = veinCells(rocks, st.mine.dug, c, rock, max);
+    if (!cells.length) return;
+    floatText(c, `ЖИЛА ×${cells.length + 1}`, 'pfloat--vein');
+    const key = mineKeyRef.current;
+    cells.forEach((cell, i) => {
+      const t = setTimeout(
+        () => {
+          if (mineKeyRef.current !== key) return;
+          chainTick(i + 1);
+          breakRef.current([cell], 'vein');
+        },
+        (i + 1) * 60,
+      );
+      waveTimers.current.push(t);
+    });
+  };
+
+  const startFrenzy = (c: number) => {
+    prisonFrenzy();
+    frenzyStart();
+    notifySuccess();
+    floatText(c, 'КУРАЖ!', 'pfloat--frenzy');
+    say('Кураж: 15 секунд двойной добычи');
+  };
+
   /** Один удар кирки по клетке. Весь «кликер» — здесь. */
   const hit = (c: number) => {
     if (c < 0 || c >= MINE_CELLS) return;
     const now = performance.now();
     const st = useFinanceStore.getState().prison;
-    if (now - lastHit.current < tapGapMs(st.pick) - 4) return;
+    if (now - lastHit.current < gapMs(st) - 4) return;
     lastHit.current = now;
 
     const depth = st.mine.dug[c];
     const rock = rockAt(rocks, c, depth);
     const { x, y } = cellCenter(c);
-    swing(c, false);
     if (rock < 0) {
+      swing(c, false);
       bedrockClink();
       fx.current?.chips(x, y, ['#3a3432', '#1f1b1b'], 2, 0.5);
       return;
     }
     const r = ROCKS[rock];
+    const m = modsOf(st);
     const crit = Math.random() < CRIT_CHANCE;
-    const dmg = hitDamage(st.pick, st.sharp) * (crit ? CRIT_MULT : 1);
+    swing(c, crit);
+    const dmg = hitDamage(st.pick, st.sharp) * m.dmg * (crit ? CRIT_MULT : 1);
     const left = (hp.current[c] < 0 ? r.hp : hp.current[c]) - dmg;
     const face = faces.current[c];
 
@@ -528,54 +761,16 @@ export function PrisonPage() {
     }
 
     // Блок развалился.
-    hp.current[c] = -1;
-    setCracks((prev) => {
-      if (!prev[c]) return prev;
-      const next = prev.slice();
-      next[c] = 0;
-      return next;
-    });
-    const res = prisonBreak(c, rock);
-    blockBreak(r.kind);
     if (crit) pickHit(r.kind, true);
     else tapLight();
-    fx.current?.chips(x, y, rockColors(rock), crit ? 22 : 14, crit ? 1.6 : 1.1);
-    fx.current?.puff(x, y, 'rgba(210,190,160,1)', 5);
-    if (face && !reduceMotion()) {
-      // Под сломанным блоком открылся следующий: он «проступает» из ямы.
-      try {
-        face.animate(
-          [
-            { transform: 'scale(.72)', opacity: 0.2 },
-            { transform: 'scale(1.03)', opacity: 1, offset: 0.7 },
-            { transform: 'scale(1)', opacity: 1 },
-          ],
-          { duration: 200, easing: 'cubic-bezier(.2,.8,.3,1)' },
-        );
-      } catch {
-        /* не страшно */
-      }
-    }
-    if (res.taken) {
-      flyLoot(c, rock);
-      // Порода следующей шахты на дне — находка, о ней стоит сказать.
-      if (rock > st.mine.id) floatText(c, r.name, 'pfloat--find');
-    } else if (now - fullWarnAt.current > 1400) {
-      fullWarnAt.current = now;
-      bagFullSound();
-      notifyWarning();
-      say(cart ? 'Рюкзак полон' : 'Рюкзак полон — продай добычу');
-      squashPop(bagRef.current, 0.5);
-    }
-    if (res.sold) {
-      // Вагонетка сама отвезла рюкзак.
-      const to = useFinanceStore.getState().slotsBalance;
-      rollBalance(to - res.sold, to);
-      coinDing();
-      floatText(c, `+${shortMoney(res.sold)}`, 'pfloat--coin');
-    }
-    const dug = useFinanceStore.getState().prison.mine.dug;
-    if (minedShare(dug) >= MINE_RESET_AT) scheduleReset();
+    breakCells([c], crit ? 'crit' : 'hit');
+
+    // Зачарования. Срабатывает одно, старшее: отбойник, взрыв или жила —
+    // три сразу превращают поле в кашу, в которой не видно ни одного.
+    if (Math.random() < m.hammer) hammerFrom(c, 'ОТБОЙНИК');
+    else if (Math.random() < m.blast) blastAt(c, 1, 'ВЗРЫВ');
+    else if (Math.random() < m.vein) veinFrom(c, rock, m.veinMax);
+    if (Math.random() < m.frenzy) startFrenzy(c);
   };
 
   // Удержание бьёт из таймера, заведённого при касании. Зовёт оно ВСЕГДА
@@ -583,6 +778,86 @@ export function PrisonPage() {
   // породу прошлой шахты — у того замыкания своё поле.
   const hitRef = useRef(hit);
   hitRef.current = hit;
+
+  // ---- Расходники --------------------------------------------------------
+
+  /** Бомба ложится в клетку, фитиль шипит, потом взрыв. */
+  const dropBomb = (c: number, id: ItemId) => {
+    if (!prisonUseItem(id)) {
+      notifyWarning();
+      return;
+    }
+    const r = id === 'bomb5' ? 2 : 1;
+    const layer = layerRef.current;
+    const { x, y, size } = cellCenter(c);
+    let sprite: HTMLElement | null = null;
+    if (layer && !reduceMotion()) {
+      sprite = document.createElement('span');
+      sprite.className = 'pbomb';
+      sprite.textContent = ITEMS.find((i) => i.id === id)!.glyph;
+      sprite.style.left = `${x}px`;
+      sprite.style.top = `${y}px`;
+      sprite.style.fontSize = `${size * 0.8}px`;
+      layer.appendChild(sprite);
+      try {
+        sprite.animate(
+          [
+            { transform: 'translate(-50%,-50%) scale(1.8)', opacity: 0 },
+            { transform: 'translate(-50%,-50%) scale(1)', opacity: 1, offset: 0.2 },
+            { transform: 'translate(-50%,-50%) scale(1.12)', offset: 0.45 },
+            { transform: 'translate(-50%,-50%) scale(1)', offset: 0.6 },
+            { transform: 'translate(-50%,-50%) scale(1.22)', offset: 0.85 },
+            { transform: 'translate(-50%,-50%) scale(1.35)', opacity: 1 },
+          ],
+          { duration: 760, fill: 'forwards' },
+        );
+      } catch {
+        /* не страшно */
+      }
+    }
+    tapLight();
+    const key = mineKeyRef.current;
+    [0, 260, 520].forEach((ms, k) => waveTimers.current.push(setTimeout(() => fuseTick(k), ms)));
+    waveTimers.current.push(
+      setTimeout(() => {
+        sprite?.remove();
+        if (mineKeyRef.current !== key) return;
+        blastAt(c, r, r > 1 ? 'ДИНАМИТ' : 'БУМ');
+      }, 760),
+    );
+  };
+
+  const applyItem = (id: ItemId) => {
+    primeAudio();
+    const st = useFinanceStore.getState().prison;
+    if (st.items[id] <= 0) {
+      tapLight();
+      setCamp('shop');
+      return;
+    }
+    if (id === 'bomb3' || id === 'bomb5') {
+      selectionChanged();
+      setArming((cur) => (cur === id ? null : id));
+      return;
+    }
+    if (id === 'charge') {
+      if (!prisonUseItem('charge')) return;
+      say('Заряд заложен');
+      fuseTick(0);
+      const key = mineKeyRef.current;
+      waveTimers.current.push(
+        setTimeout(() => {
+          if (mineKeyRef.current !== key) return;
+          hammerFrom(Math.floor(MINE_CELLS / 2), 'ЗАРЯД', 3);
+        }, 450),
+      );
+      return;
+    }
+    if (!prisonUseItem(id)) return;
+    notifySuccess();
+    tierBreak(1);
+    say(id === 'energy' ? 'Энергетик: кирка вдвое быстрее' : 'Лупа: видно, что лежит ярусом ниже');
+  };
 
   // ---- Пальцы: тап, удержание, ведение по жиле ---------------------------
 
@@ -595,12 +870,21 @@ export function PrisonPage() {
     return y * MINE_COLS + x;
   };
 
-  const stopHold = () => {
-    if (holdTimer.current) clearInterval(holdTimer.current);
+  function stopHold() {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
     holdTimer.current = null;
     pointer.current = null;
     setAiming(false);
     pickRef.current?.classList.remove('is-on');
+  }
+
+  // Шаг удержания пересчитывается на каждом ударе: энергетик или кураж,
+  // начавшиеся под пальцем, ускоряют кирку сразу, без повторного касания.
+  const holdTick = () => {
+    const p = pointer.current;
+    if (!p) return;
+    if (p.cell >= 0) hitRef.current(p.cell);
+    holdTimer.current = setTimeout(holdTick, 1000 / liveRate(useFinanceStore.getState().prison));
   };
 
   const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -608,6 +892,14 @@ export function PrisonPage() {
     primeAudio();
     rect.current = e.currentTarget.getBoundingClientRect();
     const c = cellAt(e.clientX, e.clientY);
+    if (arming) {
+      if (c >= 0) {
+        const id = arming;
+        setArming(null);
+        dropBomb(c, id);
+      }
+      return;
+    }
     if (pointer.current) {
       // Второй палец — просто лишний удар, удержание ведёт первый.
       hit(c);
@@ -622,12 +914,8 @@ export function PrisonPage() {
     if (c >= 0) aimAt(c);
     setAiming(true);
     hit(c);
-    const rate = PICKS[useFinanceStore.getState().prison.pick].rate;
-    if (holdTimer.current) clearInterval(holdTimer.current);
-    holdTimer.current = setInterval(() => {
-      const p = pointer.current;
-      if (p && p.cell >= 0) hitRef.current(p.cell);
-    }, 1000 / rate);
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = setTimeout(holdTick, 1000 / liveRate(useFinanceStore.getState().prison));
   };
 
   const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -638,7 +926,7 @@ export function PrisonPage() {
     p.cell = c;
     if (c >= 0) {
       aimAt(c);
-      // Провёл на новую клетку — удар сразу, если кирка успела (см. tapGapMs).
+      // Провёл на новую клетку — удар сразу, если кирка успела (см. gapMs).
       hit(c);
     }
   };
@@ -647,7 +935,7 @@ export function PrisonPage() {
     if (pointer.current?.id === e.pointerId) stopHold();
   };
 
-  // ---- Деньги: продажа, ранг, кузница ------------------------------------
+  // ---- Деньги: продажа, ранг, бригада -----------------------------------
 
   const sell = () => {
     primeAudio();
@@ -663,7 +951,7 @@ export function PrisonPage() {
     coinDing(0.08);
     notifySuccess();
     squashPop(bagRef.current, 0.6);
-    const cost = rankCost(rank, prestige);
+    const cost = rankCost(Math.min(rank, LAST_RANK - 1), prestige);
     if (value >= cost * 0.3) {
       rainCoins(Math.min(30, 8 + Math.round((value / cost) * 20)));
       setTimeout(() => payoutEnd(1), 300);
@@ -682,8 +970,7 @@ export function PrisonPage() {
       say(`Не хватает ${fmt(rankCost(rank, prestige) - balance)} монет`);
       return;
     }
-    rolling.current?.();
-    setShownBalance(useFinanceStore.getState().slotsBalance);
+    settleBalance();
     tierBreak(3);
     notifySuccess();
     burstConfetti(80);
@@ -691,17 +978,16 @@ export function PrisonPage() {
     setRankScene(res);
   };
 
-  const buy = (what: 'pick' | 'sharp' | 'bag' | 'cart') => {
+  const collectCrew = () => {
     primeAudio();
-    if (!prisonBuy(what)) {
-      notifyWarning();
-      return;
-    }
-    rolling.current?.();
-    setShownBalance(useFinanceStore.getState().slotsBalance);
+    const from = useFinanceStore.getState().slotsBalance;
+    const got = prisonCrewCollect();
+    setCrewNote(false);
+    if (!got) return;
+    rollBalance(from, from + got.coins);
     coinDing();
-    tierBreak(0);
     notifySuccess();
+    say(`Бригада: +${shortMoney(got.coins)} монет, +${fmt(got.tokens)} токенов`);
   };
 
   const goMine = (id: number) => {
@@ -717,38 +1003,48 @@ export function PrisonPage() {
       notifyWarning();
       return;
     }
-    rolling.current?.();
-    setShownBalance(useFinanceStore.getState().slotsBalance);
+    settleBalance();
     tierBreak(4);
     notifySuccess();
     burstConfetti(140);
     setSheet(null);
-    say(`Престиж ${prestige + 1}: продажа ×${sellMult(prestige + 1).toFixed(2)}`);
+    const st = useFinanceStore.getState().prison;
+    say(`Престиж ${st.prestige}: +2 очка перков, продажа ×${sellMult(st.prestige).toFixed(2)}`);
   };
 
   // ---- Разметка ----------------------------------------------------------
 
+  const m = modsOf(prison);
   const cap = bagCapacity(bagLevel);
   const count = bagCount(bag);
-  const value = bagValue(bag, prestige);
+  const value = bagValue(bag, m.sell);
   const full = count >= cap;
   const atTop = rank >= LAST_RANK;
   const cost = atTop ? prestigeCost(prestige) : rankCost(rank, prestige);
   const progress = Math.max(0, Math.min(1, balance / cost));
   const mix = mineMix(mine.id);
   const newest = ROCKS[mine.id];
+  const crewNow = crewYield(prison, nowTick);
+  const campBadge = perkPointsFree(prison) > 0 || crewNow.minutes >= 60;
 
   const cells = [];
   for (let c = 0; c < MINE_CELLS; c++) {
     const d = mine.dug[c];
+    const top = rockAt(rocks, c, d);
+    let peek = -1;
+    if (buffs.lens > 0 && top >= 0 && d + 1 < DEPTH) {
+      const below = rockAt(rocks, c, d + 1);
+      if (ROCKS[below].value > ROCKS[top].value) peek = below;
+    }
     cells.push(
       <MineCell
         key={c}
         index={c}
-        rock={rockAt(rocks, c, d)}
+        rock={top}
         variant={rockVariant(mine.seed, c, d)}
         depth={d}
         crack={cracks[c]}
+        peek={peek}
         wt={wall(mine.dug, c, 0, -1)}
         wl={wall(mine.dug, c, -1, 0)}
         wb={wall(mine.dug, c, 0, 1)}
@@ -765,6 +1061,8 @@ export function PrisonPage() {
       </Screen>
     );
   }
+
+  const sec = (ms: number) => `${Math.ceil(ms / 1000)} с`;
 
   return (
     <Screen
@@ -789,12 +1087,25 @@ export function PrisonPage() {
       <div className="prison">
         <div className="phud">
           <div className="phud__cell">
-            <span className="phud__label">Кошелёк · общий</span>
+            <span className="phud__label">Кошелёк</span>
             <span className="phud__value">
               <MoneyCounter ref={moneyRef} value={shownBalance} />
-              <CoinIcon size={17} />
+              <CoinIcon size={16} />
             </span>
           </div>
+          <button
+            type="button"
+            className="phud__cell phud__purse"
+            onClick={() => {
+              tapLight();
+              setCamp('enchant');
+            }}
+          >
+            <span className="phud__label">Токены</span>
+            <span className="phud__value phud__value--token">
+              {shortCount(prison.tokens)} <TokenIcon size={14} />
+            </span>
+          </button>
           <button
             type="button"
             className={`phud__rank${progress >= 1 ? ' is-ready' : ''}`}
@@ -802,12 +1113,12 @@ export function PrisonPage() {
           >
             <span className="phud__label">
               {atTop
-                ? `Ранг Z · престиж ${prestige + 1}`
+                ? `Z · престиж ${prestige + 1}`
                 : `Ранг ${rankLetter(rank)} → ${rankLetter(rank + 1)}`}
             </span>
             <span className="phud__cost">
-              {progress >= 1 ? (atTop ? 'Престиж' : 'Взять ранг') : shortMoney(cost)}
-              {progress < 1 && <CoinIcon size={13} />}
+              {progress >= 1 ? (atTop ? 'Престиж' : 'Взять') : shortMoney(cost)}
+              {progress < 1 && <CoinIcon size={12} />}
             </span>
             <span className="phud__bar">
               <i style={{ transform: `scaleX(${progress})` }} />
@@ -815,9 +1126,22 @@ export function PrisonPage() {
           </button>
         </div>
 
-        <div className="pmine-frame">
+        <div
+          className={`pmine-frame${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}`}
+        >
+          {anyBuff && (
+            <div className="pbuffs">
+              {buffs.frenzy > 0 && (
+                <span className="pbuff pbuff--frenzy">✺ {sec(buffs.frenzy)}</span>
+              )}
+              {buffs.energy > 0 && (
+                <span className="pbuff pbuff--energy">⚡ {sec(buffs.energy)}</span>
+              )}
+              {buffs.lens > 0 && <span className="pbuff pbuff--lens">🔍 {sec(buffs.lens)}</span>}
+            </div>
+          )}
           <div
-            className={`pmine${aiming ? ' is-aiming' : ''}`}
+            className={`pmine${aiming ? ' is-aiming' : ''}${arming ? ' is-arming' : ''}`}
             ref={fieldRef}
             onPointerDown={onDown}
             onPointerMove={onMove}
@@ -834,12 +1158,67 @@ export function PrisonPage() {
               <PickIcon pick={pick} size={38} />
             </div>
             <div className="pmine__layer" ref={layerRef} />
+            {arming && (
+              <div className="pmine__arm">
+                {ITEMS.find((i) => i.id === arming)!.glyph} Куда положить? Тапни по клетке
+              </div>
+            )}
             {toast && (
               <div className="pmine__toast" key={toast.id}>
                 {toast.text}
               </div>
             )}
+            {cardShown && (
+              <div className={`pfindcard${cardLeaving ? ' is-out' : ''}`}>
+                <img src={findTexture(cardShown.id)} alt="" />
+                <span>
+                  <i>{cardShown.fresh ? 'Находка!' : `Дубликат ×${cardShown.n}`}</i>
+                  <b>{findOf(cardShown.id).name}</b>
+                  <em>{cardShown.fresh ? '+1% к продаже навсегда' : '+40 токенов'}</em>
+                </span>
+              </div>
+            )}
+            {crewNote && crewNow.blocks > 0 && (
+              <div className="pcrewnote">
+                <span>
+                  <b>Бригада накопала {fmt(crewNow.blocks)} блоков</b>
+                  <i>
+                    +{shortMoney(crewNow.coins)} монет · +{fmt(crewNow.tokens)} токенов
+                    {crewNow.capped ? ' · смена кончилась' : ''}
+                  </i>
+                </span>
+                <button type="button" className="btn btn--sm pmines__go" onClick={collectCrew}>
+                  Забрать
+                </button>
+                <button
+                  type="button"
+                  className="pcrewnote__x"
+                  aria-label="Позже"
+                  onClick={() => setCrewNote(false)}
+                >
+                  ×
+                </button>
+              </div>
+            )}
           </div>
+        </div>
+
+        <div className="pitems">
+          {ITEMS.map((it) => {
+            const n = prison.items[it.id];
+            return (
+              <button
+                key={it.id}
+                type="button"
+                className={`pitem${n ? '' : ' is-empty'}${arming === it.id ? ' is-armed' : ''}`}
+                aria-label={`${it.name}: ${n}`}
+                onClick={() => applyItem(it.id)}
+              >
+                <span className="pitem__glyph">{it.glyph}</span>
+                <i className="pitem__n">{n || '+'}</i>
+              </button>
+            );
+          })}
         </div>
 
         <div className="pbar">
@@ -875,20 +1254,28 @@ export function PrisonPage() {
             className="pforge-btn"
             onClick={() => {
               tapLight();
-              setSheet('forge');
+              setCamp('forge');
             }}
           >
             <PickIcon pick={pick} size={28} />
-            <span>Кузница</span>
+            <span>Лагерь</span>
+            {prison.keys > 0 ? (
+              <i className="pforge-btn__dot pforge-btn__dot--n">
+                <KeyIcon size={9} />
+                {prison.keys}
+              </i>
+            ) : (
+              campBadge && <i className="pforge-btn__dot" />
+            )}
           </button>
         </div>
 
         {/* Породы этой шахты и цена блока — чтобы знать, что почём. */}
         <div className="pmix" aria-label="Породы шахты">
-          {mix.map((m) => (
-            <span key={m.rock} className="pmix__rock">
-              <img src={rockTexture(m.rock)} alt="" />
-              <b>{ROCKS[m.rock].value}</b>
+          {mix.map((s) => (
+            <span key={s.rock} className="pmix__rock">
+              <img src={rockTexture(s.rock)} alt="" />
+              <b>{Math.round(ROCKS[s.rock].value * m.sell)}</b>
             </span>
           ))}
         </div>
@@ -901,10 +1288,14 @@ export function PrisonPage() {
         )}
       </div>
 
-      {sheet === 'forge' && (
-        <Sheet title="Кузница" onClose={() => setSheet(null)}>
-          <Forge balance={balance} onBuy={buy} />
-        </Sheet>
+      {camp && (
+        <PrisonCamp
+          tab={camp}
+          onTab={setCamp}
+          onClose={() => setCamp(null)}
+          onGain={rollBalance}
+          onSpend={settleBalance}
+        />
       )}
 
       {sheet === 'mines' && (
@@ -920,8 +1311,8 @@ export function PrisonPage() {
                 >
                   <span className="pmines__letter">{rankLetter(id)}</span>
                   <span className="pmines__rocks">
-                    {mineMix(id).map((m) => (
-                      <img key={m.rock} src={rockTexture(m.rock)} alt={ROCKS[m.rock].name} />
+                    {mineMix(id).map((s) => (
+                      <img key={s.rock} src={rockTexture(s.rock)} alt={ROCKS[s.rock].name} />
                     ))}
                   </span>
                   <span className="pmines__info">
@@ -954,9 +1345,10 @@ export function PrisonPage() {
         <Sheet title={`Престиж ${prestige + 1}`} onClose={() => setSheet(null)}>
           <div className="stack">
             <p style={{ margin: 0 }}>
-              Ранг и шахта вернутся на A. Кирка, заточка, рюкзак и вагонетка останутся. Продажа
-              станет дороже: ×{sellMult(prestige + 1).toFixed(2)} вместо ×
-              {sellMult(prestige).toFixed(2)}. Ранги на новом круге дороже на треть.
+              Ранг и шахта вернутся на {rankLetter(Math.min(LAST_RANK - 1, prison.perks.blat))}.
+              Кирка, чары, токены, рюкзак, вагонетка, бригада и коллекция останутся. Продажа станет
+              дороже: ×{sellMult(prestige + 1).toFixed(2)} вместо ×{sellMult(prestige).toFixed(2)},
+              ранги на новом круге — на треть. За престиж — два очка перков и пять ключей.
             </p>
             <button
               className="btn btn--primary btn--block"
@@ -988,6 +1380,9 @@ export function PrisonPage() {
               Открыта шахта {rankLetter(sceneShown.rank)}:{' '}
               {ROCKS[sceneShown.rank].name.toLowerCase()}, {ROCKS[sceneShown.rank].value} за блок
             </span>
+            <span className="prank__key">
+              <KeyIcon size={13} /> +1 ключ от сундука
+            </span>
             {sceneShown.levelUps.length > 0 && (
               <span className="prank__lvl">
                 Уровень {sceneShown.levelUps[sceneShown.levelUps.length - 1]} — награда в кошельке
@@ -1001,105 +1396,12 @@ export function PrisonPage() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Кузница: всё покупается за общие монеты.
-// ---------------------------------------------------------------------------
-
-function Forge({
-  balance,
-  onBuy,
-}: {
-  balance: number;
-  onBuy: (what: 'pick' | 'sharp' | 'bag' | 'cart') => void;
-}) {
-  const p = useFinanceStore((s) => s.prison);
-  const cur = PICKS[p.pick];
-  const next = PICKS[p.pick + 1];
-  const dmg = hitDamage(p.pick, p.sharp);
-
-  const row = (
-    key: string,
-    icon: ReactNode,
-    title: string,
-    text: string,
-    price: number | null,
-    what: 'pick' | 'sharp' | 'bag' | 'cart',
-  ) => (
-    <div className="pforge__row" key={key}>
-      <span className="pforge__ico">{icon}</span>
-      <span className="pforge__info">
-        <b>{title}</b>
-        <i>{text}</i>
-      </span>
-      {price === null ? (
-        <span className="pforge__done">Есть</span>
-      ) : (
-        <button
-          type="button"
-          className="btn btn--sm pforge__buy"
-          disabled={balance < price}
-          onClick={() => onBuy(what)}
-        >
-          {shortMoney(price)} <CoinIcon size={12} />
-        </button>
-      )}
-    </div>
-  );
-
-  return (
-    <div className="pforge">
-      <div className="pforge__now">
-        <PickIcon pick={p.pick} size={40} />
-        <span>
-          <b>{cur.name} кирка</b>
-          <i>
-            урон {dmg.toFixed(dmg < 10 ? 1 : 0)} · {cur.rate} удара в секунду · крит{' '}
-            {Math.round(CRIT_CHANCE * 100)}% ×{CRIT_MULT}
-          </i>
-        </span>
-      </div>
-      {row(
-        'pick',
-        <PickIcon pick={next ? p.pick + 1 : p.pick} size={30} />,
-        next ? `${next.name} кирка` : 'Лучшая кирка',
-        next
-          ? `урон ${cur.dmg} → ${next.dmg}, скорость ${cur.rate} → ${next.rate}`
-          : 'Сильнее кирки нет',
-        next ? next.price : null,
-        'pick',
-      )}
-      {row(
-        'sharp',
-        <span className="pforge__glyph">⟋</span>,
-        `Заточка ${p.sharp}/${SHARP_MAX}`,
-        p.sharp < SHARP_MAX
-          ? `+${Math.round(SHARP_STEP * 100)}% урона любой кирке`
-          : 'Острее некуда',
-        p.sharp < SHARP_MAX ? sharpCost(p.sharp) : null,
-        'sharp',
-      )}
-      {row(
-        'bag',
-        <BagIcon size={28} />,
-        `Рюкзак ${bagCapacity(p.bagLevel)}`,
-        p.bagLevel < BAG_MAX
-          ? `${bagCapacity(p.bagLevel)} → ${bagCapacity(p.bagLevel + 1)} блоков`
-          : 'Больше не унести',
-        p.bagLevel < BAG_MAX ? bagCost(p.bagLevel) : null,
-        'bag',
-      )}
-      {row(
-        'cart',
-        <span className="pforge__glyph">🛒</span>,
-        'Вагонетка',
-        'Сама продаёт рюкзак, когда он полон',
-        p.cart ? null : CART_PRICE,
-        'cart',
-      )}
-      <p className="muted" style={{ fontSize: 12, margin: '12px 0 0' }}>
-        Сломано блоков: {fmt(p.mined)} · выручено: {fmt(p.earned)} монет
-        {p.prestige ? ` · продажа ×${sellMult(p.prestige).toFixed(2)}` : ''}
-      </p>
-    </div>
-  );
+/** Перерисовка раз в секунду, пока `on` — для таймеров баффов. */
+function useTicker(on: boolean): void {
+  const [, setT] = useState(0);
+  useEffect(() => {
+    if (!on) return undefined;
+    const t = setInterval(() => setT((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [on]);
 }

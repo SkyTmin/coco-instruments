@@ -362,3 +362,243 @@ export function rockColors(rock: number): string[] {
   if (!r) return ['#444', '#222'];
   return [r.base, r.dark, r.fleck, r.base, r.shine];
 }
+
+// ---------------------------------------------------------------------------
+// Находки: маленькие спрайты 12×12 по буквенной карте, как в старых играх.
+// Буква — цвет из палитры спрайта, точка — прозрачно. Рисуются в тот же
+// квадрат 16×16, что и породы, с полем в два пикселя.
+// ---------------------------------------------------------------------------
+
+interface Sprite {
+  pal: Record<string, string>;
+  map: string[];
+}
+
+const FIND_SPRITES: Record<string, Sprite> = {
+  coin: {
+    pal: { a: '#6e4a0c', b: '#e8b43a', c: '#ffe08a', d: '#b8861c' },
+    map: [
+      '....aaaa....',
+      '..aabbbbaa..',
+      '.abbccccbba.',
+      '.abcbbbbcba.',
+      'abcbbddbbcba',
+      'abcbddddbcba',
+      'abcbddddbcba',
+      'abcbbddbbcba',
+      '.abcbbbbcba.',
+      '.abbccccbba.',
+      '..aabbbbaa..',
+      '....aaaa....',
+    ],
+  },
+  key: {
+    pal: { a: '#2e2a28', b: '#9a8f86', c: '#a0522d' },
+    map: [
+      '...aaaa.....',
+      '..abbbba....',
+      '..ab..ca....',
+      '..abbbba....',
+      '...abba.....',
+      '....ab......',
+      '....ac......',
+      '....abaa....',
+      '....abba....',
+      '....ac......',
+      '....abaa....',
+      '....aaa.....',
+    ],
+  },
+  fern: {
+    pal: { a: '#4a4644', b: '#9a948c', c: '#4f6b45' },
+    map: [
+      '.aaaaaaaaaa.',
+      'abbbbbbbbbba',
+      'abbbbcbbbbba',
+      'abbcbcbcbbba',
+      'abbbccbbbbba',
+      'abcbbcbbcbba',
+      'abbccccbbbba',
+      'abcbbcbbcbba',
+      'abbbccbbbbba',
+      'abbbbcbbbbba',
+      'abbbbbbbbbba',
+      '.aaaaaaaaaa.',
+    ],
+  },
+  ammonite: {
+    pal: { a: '#5a3a1c', b: '#c08a4a', c: '#e8c08a' },
+    map: [
+      '...aaaaaa...',
+      '..abbbbbba..',
+      '.abccccccba.',
+      'abcbbbbbbcba',
+      'abcbaaaabcba',
+      'abcbabbabcba',
+      'abcbabcabcba',
+      'abcbabaabcba',
+      'abcbbaabbcba',
+      '.abccbbbcba.',
+      '..abbbbbba..',
+      '...aaaaaa...',
+    ],
+  },
+  trilobite: {
+    pal: { a: '#3e3530', b: '#8a7a68', c: '#b8a68e' },
+    map: [
+      '....aaaa....',
+      '..aabbbbaa..',
+      '.abbcbbcbba.',
+      '.abbbbbbbba.',
+      '.aaaaaaaaaa.',
+      '.abcbbbbcba.',
+      '.aaaaaaaaaa.',
+      '.abcbbbbcba.',
+      '.aaaaaaaaaa.',
+      '..abcbbcba..',
+      '...abbbba...',
+      '....aaaa....',
+    ],
+  },
+  nugget: {
+    pal: { a: '#6e4a0c', b: '#f0b830', c: '#fff0a0', d: '#c08a18' },
+    map: [
+      '............',
+      '....aaa.....',
+      '...abbbaa...',
+      '..abccbbba..',
+      '.abccbbbbba.',
+      '.abcbbbbdba.',
+      'abbbbbbbdba.',
+      'abbbbbbddba.',
+      '.abbbbdddba.',
+      '..aabbddaa..',
+      '....aaaa....',
+      '............',
+    ],
+  },
+  tooth: {
+    pal: { a: '#6e5a40', b: '#efe4c8', c: '#c8b690' },
+    map: [
+      '............',
+      '..aaaaaaaa..',
+      '.abbcbbcbba.',
+      '.abbcbbcbba.',
+      '.abbcbbcbba.',
+      '.abbbbbbbba.',
+      '.abbbbbbbba.',
+      '..abbbbbba..',
+      '..abba.abba.',
+      '..abba..aba.',
+      '...aa....a..',
+      '............',
+    ],
+  },
+  geode: {
+    pal: { a: '#3a3634', b: '#8a847e', c: '#e8e0f0', d: '#9b6ad8', e: '#e0c8ff' },
+    map: [
+      '....aaaa....',
+      '..aabbbbaa..',
+      '.abbccccbba.',
+      '.abcddddcba.',
+      'abcdeddedcba',
+      'abcddeeddcba',
+      'abcdeddedcba',
+      'abcddddddcba',
+      '.abcddddcba.',
+      '.abbccccbba.',
+      '..aabbbbaa..',
+      '....aaaa....',
+    ],
+  },
+  amber: {
+    pal: { a: '#7a3e06', b: '#f09a20', c: '#ffd070', d: '#3a2410', e: '#9ab0c0' },
+    map: [
+      '.....aa.....',
+      '....abba....',
+      '...abccba...',
+      '..abccccba..',
+      '..abcbbcba..',
+      '.abcbddbcba.',
+      '.abbdeedbba.',
+      '.abbbddbbba.',
+      '.abbbbbbbba.',
+      '..abbbbbba..',
+      '...aabbaa...',
+      '.....aa.....',
+    ],
+  },
+  medal: {
+    pal: { a: '#4a2e08', b: '#c83a30', c: '#b8861c', d: '#f0c040', e: '#fff0a0' },
+    map: [
+      '..abba.abba.',
+      '..abbaabba..',
+      '...abbbba...',
+      '....abba....',
+      '....abba....',
+      '....aaaa....',
+      '...acccca...',
+      '..acddddca..',
+      '..acdedeca..',
+      '..acddddca..',
+      '...acccca...',
+      '....aaaa....',
+    ],
+  },
+  core: {
+    pal: { a: '#2a2624', b: '#9a948c', c: '#c9b89a', d: '#6a5a8a', e: '#b8583a', f: '#d8d2c8' },
+    map: [
+      '...aaaaaa...',
+      '..affffffa..',
+      '..acccccca..',
+      '..acccccca..',
+      '..adddddda..',
+      '..adddddda..',
+      '..aeeeeeea..',
+      '..aeeeeeea..',
+      '..abbbbbba..',
+      '..adddddda..',
+      '..acccccca..',
+      '...aaaaaa...',
+    ],
+  },
+  lamp: {
+    pal: { a: '#2e261c', b: '#8a6a3a', c: '#ffd070', d: '#fff6d0' },
+    map: [
+      '....aaaa....',
+      '...a....a...',
+      '...a....a...',
+      '..aaaaaaaa..',
+      '..abbbbbba..',
+      '..abccccba..',
+      '..abcddcba..',
+      '..abcddcba..',
+      '..abccccba..',
+      '..abbbbbba..',
+      '..aaaaaaaa..',
+      '...aaaaaa...',
+    ],
+  },
+};
+
+const findCache = new Map<string, string>();
+
+/** Картинка находки. `ghost` — силуэт ещё не найденной (для коллекции). */
+export function findTexture(id: string, ghost = false): string {
+  const key = `${id}:${ghost ? 1 : 0}`;
+  const hit = findCache.get(key);
+  if (hit !== undefined) return hit;
+  const sp = FIND_SPRITES[id];
+  if (!sp) return '';
+  const px = new Pixels();
+  sp.map.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const ch = row[x];
+      if (ch === '.' || !sp.pal[ch]) continue;
+      px.set(x + 2, y + 2, ghost ? [40, 34, 30] : hex(sp.pal[ch]), ghost ? 200 : 255);
+    }
+  });
+  const url = px.toUrl();
+  findCache.set(key, url);
+  return url;
+}
