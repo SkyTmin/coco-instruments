@@ -725,7 +725,13 @@ export function ScatterPage() {
       const t = tierOf(chainN);
 
       setCascade({ step: i, phase: 'show' });
-      setBoard(gridToBoard(step.grid, `${res.steps.length}-${i}-g`));
+      // Поле пересобираем ТОЛЬКО на первом звене. Дальше на экране уже стоит
+      // результат прошлого схлопывания, а он в точности равен `step.grid`
+      // (движок берёт следующее поле из `step.next`). Пересборка меняла всем
+      // тридцати клеткам React-ключ, то есть уничтожала и создавала заново
+      // тридцать span'ов с картинками — ровно в тот кадр, когда начинают
+      // играть рамки выигрыша. Именно это и дёргалось.
+      if (i === 0) setBoard(gridToBoard(step.grid, `${res.steps.length}-0-g`));
       setStepWins(step.wins);
       setChain(chainN);
       // Выплата звена: только база — множитель применяется ОДИН раз, в самом

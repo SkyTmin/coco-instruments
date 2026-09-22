@@ -641,7 +641,12 @@ export function SlotsPage() {
       const tier = comboTier(chainN);
 
       setCascade({ step: i, phase: 'show' });
-      setBoard(gridToBoard(step.grid, `${res.steps.length}-${i}-g`));
+      // Поле пересобираем ТОЛЬКО на первом звене — дальше на экране уже стоит
+      // результат прошлого схлопывания, и он в точности равен `step.grid`.
+      // Пересборка меняла всем клеткам React-ключ, то есть уничтожала и
+      // создавала заново каждый span с картинкой. См. тот же комментарий в
+      // «Каскаде».
+      if (i === 0) setBoard(gridToBoard(step.grid, `${res.steps.length}-0-g`));
       setStepWins(step.wins);
       setStepCombo(step.combo);
       setChain(chainN);
@@ -936,7 +941,16 @@ export function SlotsPage() {
         </div>
       }
     >
-      <div className="stack slots" data-skin={skin}>
+      {/* --speed уезжает во ВСЕ CSS-анимации страницы. Без него турбо сжимал
+          только паузы на таймерах, а жетон, титул ступени, счётчик и рамки
+          выигрыша шли в полную длину и обрывались на середине следующим
+          звеном. 0.55 — та же доля, что и у таймеров этой страницы
+          (`scale` в runStep и `speed` в выплате), иначе CSS и JS разъедутся. */}
+      <div
+        className="stack slots"
+        data-skin={skin}
+        style={{ '--speed': turbo ? 0.55 : 1 } as React.CSSProperties}
+      >
         {/* Сцена темы: фон и декор за всем содержимым страницы */}
         <div className="slots-scene" aria-hidden="true">
           <span className="slots-scene__decor" />
