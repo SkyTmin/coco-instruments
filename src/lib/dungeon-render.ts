@@ -26,7 +26,6 @@ import {
   liftFloorTile,
   lightBlob,
   minePortal,
-  mobArt,
   propArt,
   puddleTile,
   railTile,
@@ -36,15 +35,31 @@ import {
   wallTile,
   weaponArt,
 } from './dungeon-art';
-import type { Dir, HeroAnim, MobAnim, PropArt } from './dungeon-art';
+import type { Dir, HeroAnim, PropArt } from './dungeon-art';
+import { Px } from './dungeon-art';
 import { SKILL, SWORD } from './dungeon-sim';
 import type { Mob, Sim, SimEvent } from './dungeon-sim';
 import { bandAt, fogGet, Tile, walkableTile } from './dungeon-world';
 import type { World } from './dungeon-world';
 import { bladeSprite, fxCount, fxFrame, heroSprite, ROW, spritesReady } from './dungeon-sprites';
+import { ratEye, ratFrame, ratSize } from './dungeon-rats';
+import { boardX72, burrowX72, minePortalX72, propX72, wallLampX72 } from './dungeon-props';
+import type { RatAnim } from './dungeon-rats';
+import {
+  blit,
+  floorCell,
+  floorLookOf,
+  railCell,
+  rimOverFloor,
+  wallCell,
+  waterCell,
+  x72Ready,
+} from './dungeon-tiles';
 import type { Dir4, FxId } from './dungeon-sprites';
 
 const CHUNK = 16;
+/** Сколько кусков карты держать в памяти (кусок — 256×256 точек). */
+const CHUNK_KEEP = 40;
 
 /**
  * Насколько снимается темнота с разведанного. Владелец: «прошёлся один раз —
@@ -164,7 +179,10 @@ export class DungeonRenderer {
   camX = 0;
   camY = 0;
   private camReady = false;
-  private chunks = new Map<number, { c: HTMLCanvasElement; snap: Uint8Array; sig: string }>();
+  private chunks = new Map<
+    number,
+    { c: HTMLCanvasElement; snap: Uint8Array; sig: string; used: number }
+  >();
   /** Трещины по куску карты — их стадия меняет картинку стены. */
   private crackObjs = new Map<number, { id: string; x: number; y: number }[]>();
   private crackWorld: World | null = null;
@@ -185,6 +203,8 @@ export class DungeonRenderer {
   private ghosts: Ghost[] = [];
   private ghostT = 0;
   private dt = 0;
+  /** Куски карты нарисованы плитками 0x72 (иначе — прежними). */
+  private x72 = false;
   /** Маска разведанного: точка на клетку, на свет ложится со сглаживанием. */
   private fogCv: HTMLCanvasElement | null = null;
   /** Упреждение камеры по ходу — сглажено отдельно от самой камеры. */
@@ -569,6 +589,10 @@ export class DungeonRenderer {
         const c = this.chunk(sim, cx, cy);
         g.drawImage(c, cx * CHUNK * TS - left, cy * CHUNK * TS - top);
       }
+    // Заготовка: один ещё не нарисованный кусок вокруг кадра — за кадр.
+    // Иначе кусок рисовался в тот кадр, когда въезжал в экран, и шаг
+    // запинался.
+    this.prefetch(sim, c0 - 1, c1 + 1, r0 - 1, r1 + 1);
 
     // Метки угроз на полу.
     this.drawTelegraphs(sim, left, top);
@@ -592,7 +616,7 @@ export class DungeonRenderer {
           : p.kind === 'unlit' && p.on
             ? 'lantern'
             : (p.kind as PropArt);
-      const img = propArt(art, p.flash > 0);
+      const img = (this.x72 && propX72(art, p.flash > 0)) || propArt(art, p.flash > 0);
       const bottom = p.kind === 'cart' ? p.y + 0.45 : Math.floor(p.y) + 1;
       list.push({
         y: bottom - (p.kind === 'pillar' ? 0.05 : 0),
@@ -708,6 +732,17 @@ export class DungeonRenderer {
     this.drawFloats(dt, left, top);
   }
 
+  private prefetch(sim: Sim, c0: number, c1: number, r0: number, r1: number): void {
+    const w = sim.world;
+    for (let cy = r0; cy <= r1; cy++)
+      for (let cx = c0; cx <= c1; cx++) {
+        if (cx < 0 || cy < 0 || cx * CHUNK >= w.w || cy * CHUNK >= w.h) continue;
+        if (this.chunks.has(cy * 1000 + cx)) continue;
+        this.chunk(sim, cx, cy);
+        return;
+      }
+  }
+
   // ---- Куски карты -------------------------------------------------------
 
   private chunk(sim: Sim, cx: number, cy: number): HTMLCanvasElement {
@@ -728,6 +763,11 @@ export class DungeonRenderer {
         this.crackObjs.set(k, list);
       }
     }
+    // Пришёл атлас — куски, нарисованные прежними плитками, перерисовать.
+    if (this.x72 !== x72Ready()) {
+      this.x72 = x72Ready();
+      this.chunks.clear();
+    }
     const cracks = this.crackObjs.get(key) ?? [];
     const sig = cracks.map((c) => sim.cracks.get(c.id) ?? 0).join(',');
     let hit = this.chunks.get(key);
@@ -744,7 +784,10 @@ export class DungeonRenderer {
           }
         }
     }
-    if (!stale && hit) return hit.c;
+    if (!stale && hit) {
+      hit.used = this.time;
+      return hit.c;
+    }
     const c = hit?.c ?? document.createElement('canvas');
     c.width = CHUNK * TS;
     c.height = CHUNK * TS;
@@ -752,6 +795,11 @@ export class DungeonRenderer {
     g.imageSmoothingEnabled = false;
     g.clearRect(0, 0, c.width, c.height);
     const snap = new Uint8Array(CHUNK * CHUNK);
+    // Плитки 0x72 собираются в одном буфере пикселей и выводятся одной
+    // операцией; то, что рисуется холстами (площадка клети, решётка,
+    // трещины, завал), — следом, поверх.
+    const buf = this.x72 ? new Px(CHUNK * TS, CHUNK * TS) : null;
+    const late: (() => void)[] = [];
     const t = (x: number, y: number) => {
       if (x < 0 || y < 0 || x >= w.w || y >= w.h) return Tile.Wall;
       return sim.tiles[y * w.w + x];
@@ -768,6 +816,7 @@ export class DungeonRenderer {
         const deco = w.deco[ty * w.w + tx];
         const px = x * TS;
         const py = y * TS;
+        if (buf && this.cellX72(buf, late, g, sim, area, tx, ty, px, py, v, cracks)) continue;
         if (open(v) || v === Tile.Lift) {
           g.drawImage(v === Tile.Lift ? liftFloorTile() : floorTile(area, deco), px, py);
           if (v === Tile.RailV) g.drawImage(railTile(area, 'v'), px, py);
@@ -805,29 +854,130 @@ export class DungeonRenderer {
             );
         }
       }
+    if (buf) {
+      // Клетки прежним путём (если атласа не хватило) уже на холсте — буфер
+      // кладём под них: прозрачное в буфере их не трогает.
+      g.globalCompositeOperation = 'destination-over';
+      g.drawImage(buf.canvas(), 0, 0);
+      g.globalCompositeOperation = 'source-over';
+      for (const f of late) f();
+    }
     // Настенное: норы, лампы, шахты, доска; открытая решётка.
     for (const o of w.objs) {
       if (o.x < x0 || o.x >= x0 + CHUNK || o.y < y0 || o.y >= y0 + CHUNK) continue;
       const px = (o.x - x0) * TS;
       const py = (o.y - y0) * TS;
       if (o.kind === 'burrow' && o.out) {
-        if (o.face === 'front') g.drawImage(burrowFront(), px, py);
+        if (o.face === 'front') g.drawImage(this.x72 ? burrowX72() : burrowFront(), px, py);
         else {
           const right = o.out[0] < o.x;
           g.drawImage(burrowSide(right), (o.out[0] - x0) * TS, (o.out[1] - y0) * TS);
         }
       }
-      if (o.kind === 'lamp') g.drawImage(wallLamp(true), px, py);
-      if (o.kind === 'board') g.drawImage(boardTile(), px, py);
-      if (o.kind === 'mine') g.drawImage(minePortal(), px - TS, py);
+      if (o.kind === 'lamp') g.drawImage(this.x72 ? wallLampX72() : wallLamp(true), px, py);
+      if (o.kind === 'board') g.drawImage(this.x72 ? boardX72() : boardTile(), px, py);
+      if (o.kind === 'mine') g.drawImage(this.x72 ? minePortalX72() : minePortal(), px - TS, py);
       if (o.kind === 'grate' && sim.tiles[o.y * w.w + o.x] !== Tile.Grate) {
         g.drawImage(floorTile(bandAt(w, o.y).def.id, 1), px, py);
         g.drawImage(grateTile(true), px, py);
       }
     }
-    hit = { c, snap, sig };
+    hit = { c, snap, sig, used: this.time };
     this.chunks.set(key, hit);
+    // Мир теперь в 100+ кусков по 256 КБ: держим в памяти ближние, дальние
+    // выбрасываем — нарисуются снова, когда герой вернётся.
+    if (this.chunks.size > CHUNK_KEEP) {
+      let old = -1;
+      let at = Infinity;
+      for (const [k, v] of this.chunks)
+        if (v.used < at && k !== key) {
+          at = v.used;
+          old = k;
+        }
+      if (old >= 0) this.chunks.delete(old);
+    }
     return c;
+  }
+
+  /**
+   * Клетка плитками 0x72. false — клетку этим способом не нарисовать (её
+   * рисует прежний путь).
+   */
+  private cellX72(
+    buf: Px,
+    late: (() => void)[],
+    g: CanvasRenderingContext2D,
+    sim: Sim,
+    area: AreaId,
+    tx: number,
+    ty: number,
+    px: number,
+    py: number,
+    v: number,
+    cracks: { id: string; x: number; y: number }[],
+  ): boolean {
+    const w = sim.world;
+    const t = (x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= w.w || y >= w.h) return Tile.Wall;
+      return sim.tiles[y * w.w + x];
+    };
+    const open = (x: number, y: number) => {
+      const k = t(x, y);
+      return walkableTile(k) || k === Tile.Gate || k === Tile.Grate || k === Tile.Lift;
+    };
+    const put = (p: Px | null) => {
+      if (p) blit(buf, p, px, py);
+      return p !== null;
+    };
+    const around = { open: (dx: number, dy: number) => open(tx + dx, ty + dy) };
+    if (open(tx, ty)) {
+      if (v === Tile.Lift) late.push(() => g.drawImage(liftFloorTile(), px, py));
+      else {
+        const alt = w.alt[ty * w.w + tx] === 1;
+        const base = floorLookOf(area);
+        const look = alt ? (base === 'slab' ? 'ground' : 'slab') : base;
+        const f = floorCell(
+          area,
+          tx,
+          ty,
+          !open(tx, ty - 1),
+          !open(tx - 1, ty),
+          !open(tx + 1, ty),
+          look,
+          v !== Tile.Floor,
+        );
+        if (!put(f)) return false;
+      }
+      if (v === Tile.RailV) put(railCell('v', tx, ty));
+      if (v === Tile.RailH) put(railCell('h', tx, ty));
+      if (v === Tile.Puddle) {
+        const wet = (dx: number, dy: number) => t(tx + dx, ty + dy) === Tile.Puddle;
+        put(waterCell(wet, tx, ty));
+      }
+      if (v === Tile.Grate) late.push(() => g.drawImage(grateTile(false), px, py));
+      // Стена в одну клетку толщиной: кромка её верха ложится на пол.
+      if (!open(tx, ty + 1) && open(tx, ty + 2)) put(rimOverFloor(tx));
+      return true;
+    }
+    if (v === Tile.Rubble) {
+      if (!put(floorCell(area, tx, ty, false, false, false))) return false;
+      late.push(() => g.drawImage(rubbleTile(area, w.deco[ty * w.w + tx]), px, py));
+      return true;
+    }
+    // Лицо стены — по полу под ней: над плитами кирпичная крепь, над грунтом
+    // дикая порода. Иначе в природной пещере Устья вырастал кирпич.
+    const below = ty + 1 < w.h ? ty + 1 : ty;
+    const alt = w.alt[below * w.w + tx] === 1;
+    const base = floorLookOf(bandAt(w, below).def.id);
+    const floorBelow = alt ? (base === 'slab' ? 'ground' : 'slab') : base;
+    if (!put(wallCell(around, floorBelow === 'slab' ? 'brick' : 'rock', tx, ty))) return false;
+    if (v === Tile.Crack) {
+      const o = cracks.find((k) => k.x === tx && k.y === ty);
+      late.push(() =>
+        g.drawImage(crackWallTile(area, o ? (sim.cracks.get(o.id) ?? 0) : 0), px, py),
+      );
+    }
+    return true;
   }
 
   // ---- Герой ------------------------------------------------------------
@@ -1076,27 +1226,54 @@ export class DungeonRenderer {
 
   // ---- Мобы -------------------------------------------------------------
 
+  /** Какое действие крысы рисовать и какой кадр — по режиму ИИ. */
+  private ratAnim(m: Mob): { anim: RatAnim; frame: number } {
+    const speed = Math.hypot(m.vx, m.vy);
+    const t = this.time + m.id * 0.37;
+    switch (m.mode) {
+      case 'dying':
+      case 'escape':
+        return { anim: 'dead', frame: 0 };
+      case 'sleep':
+        return { anim: 'sleep', frame: Math.floor(t * 1.5) };
+      case 'windup':
+      case 'rollAim':
+      case 'whipAim':
+      case 'plant':
+      case 'summon':
+      case 'roar':
+        return { anim: 'wind', frame: m.t < 0.12 ? 0 : 1 };
+      case 'recover':
+        return m.t < 0.18
+          ? { anim: 'bite', frame: m.t < 0.09 ? 0 : 1 }
+          : { anim: 'idle', frame: Math.floor(t * 5) };
+      case 'stun':
+      case 'dizzy':
+        return { anim: 'hurt', frame: 0 };
+      case 'roll':
+        return { anim: 'sleep', frame: 0 };
+      default:
+        // Бег — по скорости: быстрый галоп чаще перебирает лапами.
+        if (speed > 0.4 || m.mode === 'emerge' || m.mode === 'drop')
+          return { anim: 'run', frame: Math.floor(t * (8 + speed * 2.2)) };
+        return { anim: 'idle', frame: Math.floor(t * 4) };
+    }
+  }
+
   private drawMob(sim: Sim, m: Mob, left: number, top: number): void {
     const g = this.bctx;
     const px = this.q(m.x * TS - left);
     const py = this.q(m.y * TS - top);
     const boss = m.kind === 'king' || m.kind === 'kinglet';
     const leftFace = Math.cos(m.face) < 0;
-    let anim: MobAnim = 'run0';
-    if (m.mode === 'dying' || m.mode === 'escape') anim = 'dead';
-    else if (m.mode === 'sleep') anim = 'sleep';
-    else if (
-      m.mode === 'windup' ||
-      m.mode === 'rollAim' ||
-      m.mode === 'whipAim' ||
-      m.mode === 'plant' ||
-      m.mode === 'summon'
-    )
-      anim = 'wind';
-    else if (m.mode === 'recover' && m.t < 0.12) anim = 'bite';
-    else anim = Math.floor((this.time + m.id) * 10) % 2 === 0 ? 'run0' : 'run1';
+    const { anim, frame } = this.ratAnim(m);
     const look = m.albino ? 'albino' : m.elite ? 'elite' : 'normal';
-    const img = mobArt(m.kind, look, anim, leftFace, m.flash > 0);
+    // Вспышка удара — белым; сразу после — поза «ушибленной» ещё миг.
+    const hurtNow = m.flash > 0 && m.mode !== 'dying' && anim !== 'wind' && anim !== 'bite';
+    const img = ratFrame(m.kind, look, hurtNow ? 'hurt' : anim, frame, leftFace, m.flash > 0.05);
+    const size = ratSize(m.kind);
+    // Середина тела — в точке моба; земля кадра — на два пикселя ниже.
+    const ax = leftFace ? size.w - size.body : size.body;
     // Появление: из норы выползает, со свода падает.
     let dy = 0;
     let alpha = 1;
@@ -1110,58 +1287,62 @@ export class DungeonRenderer {
       // отрицательным (канва на нём падает).
       const k = Math.max(0, Math.min(1, m.t / 0.55));
       dy = -(1 - k * k) * 40;
-      // Тень под падающей растёт.
       g.fillStyle = `rgba(0,0,0,${0.15 + 0.3 * k})`;
       g.beginPath();
       g.ellipse(px, py + 2, 2 + 4 * k, 1 + 1.5 * k, 0, 0, Math.PI * 2);
       g.fill();
       if (m.t < 0) return;
     } else {
-      g.fillStyle = 'rgba(0,0,0,0.3)';
+      g.fillStyle = 'rgba(0,0,0,0.32)';
       g.beginPath();
-      g.ellipse(px, py + 2, img.width * 0.32, boss ? 4 : 2, 0, 0, Math.PI * 2);
+      g.ellipse(px, py + 2, (boss ? 0.36 : 0.3) * size.w * 0.7, boss ? 4 : 2, 0, 0, Math.PI * 2);
       g.fill();
     }
     if (m.mode === 'dying') alpha = Math.max(0, 1 - Math.max(0, m.t - 0.35) / 0.35);
-    // Замах: мелкая дрожь, красный отсвет.
+    // Замах: мелкая дрожь.
     let jx = 0;
     if (m.mode === 'windup' || m.mode === 'rollAim' || m.mode === 'whipAim')
-      jx = Math.round(Math.sin(this.time * 70 + m.id) * (boss ? 1.4 : 0.8));
-    // Король катится — клубок вращается.
+      jx = Math.round(Math.sin(this.time * 70 + m.id) * (boss ? 1.4 : 0.6));
+    const x0 = px - ax + jx;
+    const y0 = py + 4 - size.h + dy;
     g.globalAlpha = alpha;
     if (m.mode === 'roll') {
+      // Король катится — клубок вращается вокруг своей середины.
       g.save();
-      g.translate(px, py - img.height / 2 + 2);
+      g.translate(px, py - size.h * 0.3);
       g.rotate(this.time * 14 * (Math.cos(m.dir) >= 0 ? 1 : -1));
-      g.drawImage(img, -img.width / 2, -img.height / 2);
+      g.drawImage(img, -ax, -size.h * 0.55);
       g.restore();
-    } else {
-      g.drawImage(img, px - Math.round(img.width / 2) + jx, py + 3 - img.height + dy);
-    }
+    } else g.drawImage(img, x0, y0);
     g.globalAlpha = 1;
+    // Глаза светятся поверх темноты — видно, откуда лезут.
     if (
-      !boss &&
       m.mode !== 'dying' &&
       m.mode !== 'sleep' &&
       m.mode !== 'escape' &&
-      m.mode !== 'drop'
+      m.mode !== 'drop' &&
+      m.mode !== 'roll'
     ) {
-      const fat = m.kind === 'fatrat';
-      const ex = fat ? 14 : 11;
-      const ey = (fat ? 6 : 5) + (anim === 'wind' ? 1 : 0);
-      const sx0 = px - Math.round(img.width / 2) + jx;
-      const sy0 = py + 3 - img.height + dy;
+      const [ex, ey] = ratEye(m.kind, hurtNow ? 'hurt' : anim, frame);
       this.eyes.push({
-        x: sx0 + (leftFace ? img.width - 1 - ex : ex),
-        y: sy0 + ey,
-        c: m.kind === 'goldrat' ? '#ffe070' : m.albino ? '#ff9cb0' : '#ff3a28',
+        x: x0 + (leftFace ? size.w - 1 - ex : ex),
+        y: y0 + ey,
+        c: boss
+          ? '#ffcc30'
+          : m.kind === 'goldrat'
+            ? '#fff0a0'
+            : m.albino
+              ? '#ff6a88'
+              : m.elite
+                ? '#ffb020'
+                : '#ff3a28',
       });
     }
-    // Полоска здоровья — только у раненых, и у элиты с именем.
+    // Полоска здоровья — только у раненых.
     if (!boss && m.hp < m.maxHp && m.hp > 0) {
       const w = m.kind === 'fatrat' ? 14 : 10;
       const x = px - w / 2;
-      const y = py + 3 - img.height - 3 + dy;
+      const y = y0 + 2;
       g.fillStyle = 'rgba(0,0,0,0.7)';
       g.fillRect(x - 1, y - 1, w + 2, 3);
       g.fillStyle = m.elite ? '#ffcc40' : '#e04a3a';

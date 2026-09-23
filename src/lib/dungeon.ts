@@ -1138,7 +1138,18 @@ export interface DungeonState {
   run: RunState | null;
   /** Видел ли вступление. */
   intro: boolean;
+  /** Для какой планировки записаны разведка, фонари и место вылазки. */
+  mapVer: number;
 }
+
+/**
+ * Версия планировки подземелья. Разведка — биты клеток, фонари и решётки —
+ * номера по координатам, вылазка — место в районе: на другой карте всё это
+ * указывает мимо. Поменяли карту — поднимите номер, и сохранение сбросит
+ * привязанное к клеткам (сидор, снаряжение и прогресс не трогаются).
+ * 2 — мир 64×410 (v2.61).
+ */
+export const MAP_VERSION = 2;
 
 export const DUNGEON_START: DungeonState = {
   gear: START_GEAR,
@@ -1157,6 +1168,7 @@ export const DUNGEON_START: DungeonState = {
   sackLevel: 0,
   run: null,
   intro: false,
+  mapVer: MAP_VERSION,
 };
 
 /** Подземелье открывается с этого ранга шахты (или после престижа). */
@@ -1202,6 +1214,9 @@ export function normalizeDungeon(v: unknown): DungeonState {
   const o = v as Partial<DungeonState>;
   const g = (o.gear ?? {}) as Partial<Gear>;
   const run = o.run as Partial<RunState> | null | undefined;
+  // Другая планировка: привязанное к клеткам — с нуля, вылазка — у её клети.
+  const sameMap = num(o.mapVer, 1) === MAP_VERSION;
+  const norm = normalizeCoords(o, sameMap);
   return {
     gear: {
       weapon: normPiece(g.weapon),
@@ -1214,13 +1229,10 @@ export function normalizeDungeon(v: unknown): DungeonState {
     stats: normCounts<StatId>(o.stats),
     stash: normCounts<MatId>(o.stash),
     lifts: Array.from(new Set(['mouth', ...strs(o.lifts)])),
-    opened: strs(o.opened),
-    lamps: strs(o.lamps),
-    secrets: strs(o.secrets),
-    fog:
-      o.fog && typeof o.fog === 'object'
-        ? Object.fromEntries(Object.entries(o.fog).filter(([, s]) => typeof s === 'string'))
-        : {},
+    opened: norm.opened,
+    lamps: norm.lamps,
+    secrets: norm.secrets,
+    fog: norm.fog,
     bosses:
       o.bosses && typeof o.bosses === 'object'
         ? Object.fromEntries(
@@ -1258,9 +1270,14 @@ export function normalizeDungeon(v: unknown): DungeonState {
       run && typeof run === 'object' && typeof run.area === 'string'
         ? {
             lift: typeof run.lift === 'string' ? run.lift : 'mouth',
-            area: (AREAS.some((a) => a.id === run.area) ? run.area : 'mouth') as AreaId,
-            x: num(run.x),
-            y: num(run.y),
+            area: (sameMap && AREAS.some((a) => a.id === run.area)
+              ? run.area
+              : AREAS.some((a) => a.id === run.lift)
+                ? run.lift
+                : 'mouth') as AreaId,
+            // x < 0 — «у клети спуска»: так мир ставит героя на новой карте.
+            x: sameMap ? num(run.x) : -1,
+            y: sameMap ? num(run.y) : 0,
             hp: num(run.hp, 1),
             sack: normalizeSack(run.sack),
             started: num(run.started),
@@ -1268,6 +1285,22 @@ export function normalizeDungeon(v: unknown): DungeonState {
           }
         : null,
     intro: o.intro === true,
+    mapVer: MAP_VERSION,
+  };
+}
+
+function normalizeCoords(o: Partial<DungeonState>, sameMap: boolean) {
+  if (!sameMap) return { opened: [], lamps: [], secrets: [], fog: {} };
+  return {
+    opened: strs(o.opened),
+    lamps: strs(o.lamps),
+    secrets: strs(o.secrets),
+    fog:
+      o.fog && typeof o.fog === 'object'
+        ? (Object.fromEntries(
+            Object.entries(o.fog).filter(([, s]) => typeof s === 'string'),
+          ) as Partial<Record<AreaId, string>>)
+        : {},
   };
 }
 

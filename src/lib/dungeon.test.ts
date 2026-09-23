@@ -38,6 +38,7 @@ import {
   smellOf,
   SLOTS,
   xpFor,
+  MAP_VERSION,
   minusMats,
   payFromBoth,
 } from './dungeon';
@@ -306,5 +307,38 @@ describe('подземелье: правила', () => {
     expect(payFromBoth(d, { coins: 0, mats: { crown: 1 } }, { crown: 1 })!.fromSack).toEqual({
       crown: 1,
     });
+  });
+
+  it('другая планировка карты: разведка и фонари с нуля, вылазка — у клети, сидор цел', () => {
+    const old = {
+      ...DUNGEON_START,
+      mapVer: 1,
+      fog: { mouth: 'AAAA' },
+      lamps: ['mouth:3:4'],
+      opened: ['mouth:35:59'],
+      secrets: ['mouth:4:59'],
+      run: {
+        lift: 'mouth',
+        area: 'haul' as const,
+        x: 20,
+        y: 40,
+        hp: 50,
+        sack: { ...EMPTY_SACK, coins: 77 },
+        started: 1,
+        killed: 3,
+      },
+    };
+    const d = normalizeDungeon(old);
+    expect(d.mapVer).toBe(MAP_VERSION);
+    expect(d.fog).toEqual({});
+    expect(d.lamps).toEqual([]);
+    expect(d.opened).toEqual([]);
+    expect(d.run!.x).toBeLessThan(0);
+    expect(d.run!.area).toBe('mouth');
+    expect(d.run!.sack.coins).toBe(77);
+    // Та же планировка — ничего не трогаем.
+    const same = normalizeDungeon({ ...old, mapVer: MAP_VERSION });
+    expect(same.lamps).toEqual(['mouth:3:4']);
+    expect(same.run!.x).toBe(20);
   });
 });

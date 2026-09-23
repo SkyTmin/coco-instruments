@@ -1,0 +1,6 @@
+16x16 DungeonTileset II v1.7 — Robert (0x72) (https://0x72.itch.io/dungeontileset-ii)
+License: CC0 1.0 Universal (public domain). Attribution not required, given anyway.
+Source used: the original archive as vendored in a public GitHub mirror
+(degtyarikup-ui/emberdeep, vendor/0x72-dungeon-tileset-ii), identical to the itch.io release.
+Used here: floors, wall faces and rims, wall holes, columns, doors, crates, chests, skull,
+spikes, coins. Mine props (rails, carts, timbering, lamps) are drawn in code in this palette.

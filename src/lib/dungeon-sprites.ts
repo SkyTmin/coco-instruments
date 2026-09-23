@@ -17,6 +17,7 @@
 
 import { useEffect, useSyncExternalStore } from 'react';
 import { setOf } from './dungeon';
+import { loadX72 } from './dungeon-tiles';
 import type { Gear } from './dungeon';
 
 export type Dir4 = 'down' | 'up' | 'left' | 'right';
@@ -93,6 +94,8 @@ export function onSpritesReady(f: () => void): () => void {
 export function useDungeonSprites(): boolean {
   useEffect(() => {
     void loadDungeonSprites();
+    // Плитки мира грузятся тем же заходом: к спуску клетью они уже есть.
+    void loadX72();
   }, []);
   return useSyncExternalStore(onSpritesReady, spritesReady, () => false);
 }

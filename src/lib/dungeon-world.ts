@@ -14,7 +14,7 @@ import { AREAS } from './dungeon';
 import type { AreaDef, AreaId, DeepMineId } from './dungeon';
 import { MAP_HAUL, MAP_MOUTH } from './dungeon-maps';
 
-export const WORLD_W = 40;
+export const WORLD_W = 64;
 
 /** Вид клетки. Обычный объект, а не `const enum`: сборщик собирает файлы
  * поодиночке и чужой `const enum` не подставил бы. */
@@ -112,6 +112,8 @@ export interface World {
   tiles: Uint8Array;
   /** Узор клетки 0…255 — постоянный, от координат. */
   deco: Uint8Array;
+  /** Пол другого вида (`,` на карте): грунт в Устье, плиты в Откатке. */
+  alt: Uint8Array;
   bands: AreaBand[];
   /** Район мирового ряда. */
   rowArea: AreaId[];
@@ -142,6 +144,7 @@ export function buildWorld(): World {
   const w = WORLD_W;
   const tiles = new Uint8Array(w * h);
   const deco = new Uint8Array(w * h);
+  const alt = new Uint8Array(w * h);
   const bands: AreaBand[] = [];
   const rowArea: AreaId[] = [];
   const objs: WorldObj[] = [];
@@ -256,8 +259,10 @@ export function buildWorld(): World {
           case 'R':
             obj('group');
             break;
-          case '.':
           case ',':
+            alt[i] = 1;
+            break;
+          case '.':
           case '@':
             break;
           default:
@@ -269,7 +274,28 @@ export function buildWorld(): World {
     top += a.rows.length;
   }
 
-  const world: World = { w, h, tiles, deco, bands, rowArea, objs, rails: [], lights };
+  // Под предметом пол того вида, что вокруг: большинство соседей.
+  for (let y = 0; y < h; y++)
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      if (tiles[i] === Tile.Wall || !objs.length) continue;
+      let a = 0;
+      let n = 0;
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const j = (y + dy) * w + x + dx;
+        if (j < 0 || j >= w * h || tiles[j] === Tile.Wall) continue;
+        n++;
+        a += alt[j];
+      }
+      if (n && a * 2 > n) alt[i] = 1;
+    }
+
+  const world: World = { w, h, tiles, deco, alt, bands, rowArea, objs, rails: [], lights };
 
   // Площадка клети — три на три пола вокруг центра.
   for (const o of objs) {

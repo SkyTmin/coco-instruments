@@ -191,9 +191,12 @@ describe('подземелье: бой', () => {
     const lift = liftOf(world, 'mouth')!;
     const s = sim(1, 0, lift.x + 0.5, lift.y + 0.5);
     for (let i = 0; i < 240; i++) stepSim(s, DT, { ...NO_INPUT, mx: 1, my: 0 });
-    // Справа от двора — стена на x = 28.
-    expect(s.hero.x).toBeLessThan(28);
-    expect(s.hero.x).toBeGreaterThan(26);
+    // Справа от клети в её ряду — стена двора.
+    let wall = lift.x;
+    while (walkableTile(world.tiles[lift.y * world.w + wall + 1])) wall++;
+    wall += 1;
+    expect(s.hero.x).toBeLessThan(wall);
+    expect(s.hero.x).toBeGreaterThan(wall - 1);
   });
 
   it('пасюк Устья падает с двух ударов первого комплекта', () => {
@@ -239,8 +242,9 @@ describe('подземелье: бой', () => {
   });
 
   it('рывок под укус — уклон в последний миг: замедление и крит', () => {
+    // В главном штреке, подальше от клети: у клети крысы не кусают.
     const lift = liftOf(world, 'mouth')!;
-    const s = sim(1, 0, lift.x + 0.5, lift.y - 8, 11);
+    const s = sim(1, 0, lift.x + 0.5, lift.y - 22, 11);
     const rat = spawnMob(s, 'rat', s.hero.x + 0.7, s.hero.y, { mode: 'chase' });
     rat.cd = 0;
     let dodged = false;
@@ -263,8 +267,8 @@ describe('подземелье: бой', () => {
     let kills = 0;
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const s = sim(1, 2, lift.x + 0.5, lift.y + 0.5, seed);
-      // Туда и обратно: к верху Устья и к клети.
-      const up = field(18, top.top + 2);
+      // Туда и обратно: к верху Устья (верхний штрек) и к клети.
+      const up = field(lift.x, top.top + 2);
       const down = field(lift.x, lift.y);
       run(s, 120, up, (e) => e.t === 'kill' && (kills += 1));
       if (s.hero.mode !== 'dead') run(s, 120, down, (e) => e.t === 'kill' && (kills += 1));
@@ -276,9 +280,11 @@ describe('подземелье: бой', () => {
 
   it('Откатка просит следующий комплект: на +0 без еды опасно, к +5 — спокойно', () => {
     const b = bandOf(world, 'haul')!;
-    const start = { x: 19.5, y: b.top + b.h - 3 };
-    const up = field(19, b.top + 19);
-    const down = field(19, b.top + b.h - 3);
+    const hl = liftOf(world, 'haul')!;
+    // От стыка с Устьем — к верхней клети и обратно.
+    const start = { x: hl.x + 0.5, y: b.top + b.h - 3 };
+    const up = field(hl.x, hl.y);
+    const down = field(hl.x, b.top + b.h - 3);
     const deaths = (plus: number) => {
       let n = 0;
       for (const seed of [1, 2, 3, 4, 5, 6]) {
