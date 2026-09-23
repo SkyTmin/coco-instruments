@@ -177,6 +177,28 @@ import {
   seidsOf,
   seidTop,
 } from '@/lib/prison';
+import {
+  buildTree,
+  dropHit,
+  fellBonus,
+  FOREST_START,
+  forestMods,
+  forestRankCost,
+  LAST_PLOT,
+  newTreeSeed,
+  normalizeForest,
+  pileCapacity,
+  pileCost,
+  PILE_MAX,
+  planBuyout,
+  forestPlan as forestPlanNeed,
+  AXES,
+  AXE_SHARP_MAX,
+  axeSharpCost,
+  rollChop,
+  TRUCK_PRICE,
+} from '@/lib/forest';
+import type { Chop, ForestState, Side, Tree } from '@/lib/forest';
 import type {
   CaseRoll,
   CaseTier,
@@ -350,6 +372,45 @@ const writeSlots = makePersister<SlotsBlob>(STORAGE_KEYS.slots);
 // равно сбрасывается сразу (flushAll выше).
 const writePrison = makePersister<PrisonBlob>(STORAGE_KEYS.prison, 2000);
 const persistPrison = (p: PrisonState) => writePrison({ version: 1, ...p });
+// Лес пишется так же редко, как шахта: бревно — это несколько ударов в
+// секунду, а запрос на каждое — кликер, который долбит сервер.
+const writeForest = makePersister<ForestBlob>(STORAGE_KEYS.forest, 2000);
+const persistForest = (f: ForestState) => writeForest({ version: 1, ...f });
+
+/**
+ * Передачки зреют от любой добычи — блоков шахты и брёвен леса. Новая
+ * ложится на свободное место; мест нет — сдаётся за токены.
+ */
+function tickParcels(
+  p: PrisonState,
+  n: number,
+  fresh: CaseTier[],
+): { parcels: PrisonState['parcels']; ready: number; added: CaseTier[]; tokens: number } {
+  let ready = 0;
+  const parcels = p.parcels.map((x) => {
+    const left = Math.max(0, x.left - n);
+    if (x.left > 0 && left === 0) ready += 1;
+    return { ...x, left };
+  });
+  let tokens = 0;
+  const added: CaseTier[] = [];
+  for (const tier of fresh) {
+    if (parcels.length < PARCEL_SLOTS) {
+      parcels.push({ tier, left: PARCEL_NEED[tier] });
+      added.push(tier);
+    } else tokens += PARCEL_OVERFLOW[tier];
+  }
+  return { parcels, ready, added, tokens };
+}
+
+/** Питомец растёт от каждого блока и бревна, пока он с собой. */
+function feedPet(p: PrisonState, n: number): { pets: PrisonState['pets']; up: number } {
+  if (!p.pet || p.pets[p.pet] === undefined) return { pets: p.pets, up: 0 };
+  const before = petLevelOf(p.pets[p.pet] ?? 0).level;
+  const xp = (p.pets[p.pet] ?? 0) + n;
+  const after = petLevelOf(xp).level;
+  return { pets: { ...p.pets, [p.pet]: xp }, up: after > before ? after : 0 };
+}
 
 const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, items });
 const persistSavings = (items: SavingsGoal[]) => writeSavings({ version: 1, items });
@@ -386,6 +447,11 @@ const persistCamera = (s: {
     prompter: s.prompterPrefs,
   });
 
+/** Сохранение лесоповала — отдельным ключом, чтобы шахта не распухала. */
+interface ForestBlob extends ForestState {
+  version: 1;
+}
+
 /** Сохранение каторги: состояние шахты целиком, деньги — в кошельке слотов. */
 interface PrisonBlob extends PrisonState {
   version: 1;
@@ -414,6 +480,25 @@ export interface PrisonLoot {
   /** Сколько передачек дозрело этим ударом. */
   parcelsReady: number;
   /** Питомец дорос до этого уровня (0 — нет). */
+  petUp: number;
+}
+
+/** Что принесло срубленное бревно. */
+export interface ForestCut {
+  chop: Chop;
+  /** Дерево, с которого рубили, и номер срубленного бревна. */
+  tree: Tree;
+  index: number;
+  /** На твою сторону опустился сучок. */
+  hit: boolean;
+  /** Дерево повалено: бонус с кроны и токены сейд-сосны. */
+  felled: { value: number; tokens: number } | null;
+  /** Лесовоз увёз штабель; без лесовоза лишнее осталось в снегу. */
+  sold: number;
+  lost: number;
+  planDone: boolean;
+  parcels: CaseTier[];
+  parcelsReady: number;
   petUp: number;
 }
 
@@ -585,6 +670,7 @@ interface ExportData {
   prompterPrefs?: Partial<PrompterPrefs>;
   slots?: Partial<Omit<SlotsBlob, 'version'>>;
   prison?: Partial<PrisonState>;
+  forest?: Partial<ForestState>;
   reminderPrefs?: Partial<ReminderPrefs>;
 }
 export interface ExportBundle {
@@ -656,6 +742,7 @@ interface FinanceState {
   sessionCard: Session | null;
   /** Каторга: ранг, кирка, рюкзак, шахта. Деньги — общие, в `slotsBalance`. */
   prison: PrisonState;
+  forest: ForestState;
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -862,6 +949,15 @@ interface FinanceState {
   prisonRuneFuse: (runeId: number) => Rune | null;
   prisonRuneShatter: (runeId: number) => number;
   prisonPetSet: (id: PetId | null) => void;
+  /**
+   * Лесоповал: срублено нижнее бревно текущего дерева со стороны `side`.
+   * Урон по бревну живёт в странице, как урон по блоку в шахте.
+   */
+  forestCut: (side: Side, streak: number) => ForestCut;
+  forestSell: () => number;
+  forestBuy: (what: 'axe' | 'sharp' | 'pile' | 'truck') => boolean;
+  /** Новый разряд лесоруба. Без плана — только с `buyout`, за доплату. */
+  forestRankUp: (buyout?: boolean) => { rank: number; cost: number; buyout: number } | null;
   /** Касса владельца: токены каторги пачкой. */
   prisonAddTokens: (amount: number) => void;
   /** Начать Каторгу заново. Кошелёк и уровень общие — остаются. */
@@ -978,6 +1074,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   sessionPast: [],
   sessionCard: null,
   prison: PRISON_START,
+  forest: FOREST_START,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -1005,6 +1102,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       camera,
       slots,
       prison,
+      forest,
     ] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
@@ -1027,6 +1125,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       storage.get<CameraBlob>(STORAGE_KEYS.camera),
       storage.get<SlotsBlob>(STORAGE_KEYS.slots),
       storage.get<PrisonBlob>(STORAGE_KEYS.prison),
+      storage.get<ForestBlob>(STORAGE_KEYS.forest),
     ]);
     set({
       expenses: exp?.items ?? [],
@@ -1075,6 +1174,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       ...slotsProgress(slots),
       ...staleSession(slotsProgress(slots)),
       prison: normalizePrison(prison),
+      forest: normalizeForest(forest),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -1923,6 +2023,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         prompterPrefs: s.prompterPrefs,
         slots: slotsBlob(s),
         prison: s.prison,
+        forest: s.forest,
         reminderPrefs: s.reminderPrefs,
       },
     };
@@ -1981,6 +2082,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       // Восстановление из копии — не повод показывать чей-то давний итог.
       sessionCard: null,
       prison: normalizePrison(d.prison),
+      forest: normalizeForest(d.forest),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -2004,6 +2106,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistCamera(st);
     persistSlots(st);
     persistPrison(st.prison);
+    persistForest(st.forest);
     persistReminderPrefs(st.reminderPrefs);
     return true;
   },
@@ -2605,32 +2708,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     for (let l = lvBefore + 1; l <= lvAfter; l++) pickUps.push({ level: l, ...pickLevelReward(l) });
     const upTokens = pickUps.reduce((a, u) => a + u.tokens, 0);
     const upKeys = pickUps.reduce((a, u) => a + u.keys, 0);
-    // Передачки зреют все разом; новая ложится на свободное место, мест нет
-    // — сдаётся за токены.
-    let parcelsReady = 0;
-    const parcels = p.parcels.map((x) => {
-      const left = Math.max(0, x.left - rocks.length);
-      if (x.left > 0 && left === 0) parcelsReady += 1;
-      return { ...x, left };
-    });
-    let parcelTokens = 0;
-    const parcelsNew: CaseTier[] = [];
-    for (const tier of drops.parcels) {
-      if (parcels.length < PARCEL_SLOTS) {
-        parcels.push({ tier, left: PARCEL_NEED[tier] });
-        parcelsNew.push(tier);
-      } else parcelTokens += PARCEL_OVERFLOW[tier];
-    }
-    // Питомец растёт от каждого блока, пока он с собой.
-    let pets = p.pets;
-    let petUp = 0;
-    if (p.pet && p.pets[p.pet] !== undefined) {
-      const before = petLevelOf(p.pets[p.pet] ?? 0).level;
-      const xp2 = (p.pets[p.pet] ?? 0) + rocks.length;
-      pets = { ...p.pets, [p.pet]: xp2 };
-      const after = petLevelOf(xp2).level;
-      if (after > before) petUp = after;
-    }
+    const tick = tickParcels(p, rocks.length, drops.parcels);
+    const parcels = tick.parcels;
+    const parcelsReady = tick.ready;
+    const parcelTokens = tick.tokens;
+    const parcelsNew = tick.added;
+    const fed = feedPet(p, rocks.length);
+    const pets = fed.pets;
+    const petUp = fed.up;
     const prison: PrisonState = {
       ...p,
       mine: { ...p.mine, dug },
@@ -2737,6 +2822,188 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return got;
   },
 
+  forestCut: (side, streak) => {
+    const s = get();
+    const f = s.forest;
+    const p = s.prison;
+    const tree = buildTree(f.rank, f.tree.seed);
+    const index = Math.min(f.tree.cut, tree.logs.length - 1);
+    const fm = forestMods(p);
+    const chop = rollChop(tree, index, fm, Math.random, streakLoot(streak));
+    // Штабель: не влезло — лесовоз увозит и продаёт, без него лишнее в снегу.
+    const cap = pileCapacity(f.pileLevel);
+    let pile = { ...f.pile };
+    let sold = 0;
+    let lost = 0;
+    const per = chop.units ? chop.value / chop.units : 0;
+    for (let k = 0; k < chop.units; k++) {
+      if (pile.n >= cap) {
+        if (!f.truck) {
+          lost += 1;
+          continue;
+        }
+        sold += Math.round(pile.value * fm.sell);
+        pile = { n: 0, value: 0 };
+      }
+      pile = { n: pile.n + 1, value: pile.value + per };
+    }
+    // План — брёвна СВОЕЙ породы делянки, считанные руками, а не добычей.
+    const own = tree.species === f.rank;
+    const need = forestPlanNeed(f.rank);
+    const planDone = own && f.plan < need && f.plan + 1 >= need;
+    const plan = f.plan + (own ? 1 : 0);
+    // Дерево: срубил последнее — повалено, выезжает следующее.
+    let cut = index + 1;
+    let seed = f.tree.seed;
+    let felled: ForestCut['felled'] = null;
+    if (cut >= tree.logs.length) {
+      felled = fellBonus(tree, f.rank);
+      pile = { ...pile, value: pile.value + felled.value };
+      cut = 0;
+      seed = newTreeSeed();
+    }
+    const hit = !felled && dropHit(tree, index, side);
+    const forest: ForestState = {
+      ...f,
+      pile,
+      plan,
+      tree: { seed, cut },
+      felled: f.felled + (felled ? 1 : 0),
+      seids: f.seids + (felled && tree.seid ? 1 : 0),
+      logs: f.logs + 1,
+      earned: f.earned + sold,
+    };
+    // Общее с шахтой: токены, ключи, передачки, питомец.
+    const hollow = chop.hollow;
+    const fresh = [...chop.parcels, ...(hollow?.kind === 'parcel' ? [hollow.tier] : [])];
+    const tick = tickParcels(p, 1, fresh);
+    const fed = feedPet(p, 1);
+    const prison: PrisonState = {
+      ...p,
+      tokens:
+        p.tokens +
+        chop.tokens +
+        chop.chaga +
+        (hollow?.kind === 'tokens' ? hollow.amount : 0) +
+        (felled?.tokens ?? 0) +
+        tick.tokens,
+      keys: p.keys + chop.keys + (hollow?.kind === 'keys' ? hollow.amount : 0),
+      parcels: tick.parcels,
+      pets: fed.pets,
+    };
+    const missions = missionsForToday(s.slotsMissions);
+    const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
+    if (felled) counters.trees += 1;
+    counters.ore += sold;
+    set({
+      forest,
+      prison,
+      slotsMissions: { ...missions, counters },
+      ...(sold ? { slotsBalance: s.slotsBalance + sold } : {}),
+    });
+    persistForest(forest);
+    persistPrison(prison);
+    persistSlotsLazy();
+    return {
+      chop,
+      tree,
+      index,
+      hit,
+      felled,
+      sold,
+      lost,
+      planDone,
+      parcels: tick.added,
+      parcelsReady: tick.ready,
+      petUp: fed.up,
+    };
+  },
+
+  forestSell: () => {
+    const s = get();
+    const f = s.forest;
+    if (!f.pile.n) return 0;
+    const value = Math.round(f.pile.value * forestMods(s.prison).sell);
+    const forest = { ...f, pile: { n: 0, value: 0 }, earned: f.earned + value };
+    const missions = missionsForToday(s.slotsMissions);
+    const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
+    counters.ore += value;
+    set({
+      forest,
+      slotsBalance: s.slotsBalance + value,
+      slotsMissions: { ...missions, counters },
+    });
+    persistForest(forest);
+    persistSlots(get());
+    return value;
+  },
+
+  forestBuy: (what) => {
+    const s = get();
+    const f = s.forest;
+    let price = 0;
+    let next: ForestState = f;
+    if (what === 'axe') {
+      const axe = AXES[f.axe + 1];
+      if (!axe) return false;
+      price = axe.price;
+      next = { ...f, axe: f.axe + 1 };
+    } else if (what === 'sharp') {
+      if (f.sharp >= AXE_SHARP_MAX) return false;
+      price = axeSharpCost(f.sharp);
+      next = { ...f, sharp: f.sharp + 1 };
+    } else if (what === 'pile') {
+      if (f.pileLevel >= PILE_MAX) return false;
+      price = pileCost(f.pileLevel);
+      next = { ...f, pileLevel: f.pileLevel + 1 };
+    } else {
+      if (f.truck) return false;
+      price = TRUCK_PRICE;
+      next = { ...f, truck: true };
+    }
+    if (s.slotsBalance < price) return false;
+    set({ forest: next, slotsBalance: s.slotsBalance - price });
+    persistForest(next);
+    persistSlots(get());
+    return true;
+  },
+
+  forestRankUp: (buyout = false) => {
+    const s = get();
+    const f = s.forest;
+    if (f.rank >= LAST_PLOT) return null;
+    const extra = planBuyout(f.rank, f.plan);
+    if (extra > 0 && !buyout) return null;
+    const cost = forestRankCost(f.rank) + extra;
+    if (s.slotsBalance < cost) return null;
+    const rank = f.rank + 1;
+    // Опыт — в ОБЩИЙ уровень, как за ранг шахты.
+    const before = levelFromXp(s.slotsXp).level;
+    const xp = s.slotsXp + rankXp(rank * 2);
+    const after = levelFromXp(xp).level;
+    let bonusCoins = 0;
+    let bonusTickets = 0;
+    for (let lvl = Math.max(before, s.slotsRewardedLevel) + 1; lvl <= after; lvl++) {
+      const reward = levelReward(lvl);
+      bonusCoins += reward.coins;
+      bonusTickets += reward.freeSpins;
+    }
+    const forest: ForestState = { ...f, rank, plan: 0, tree: { seed: newTreeSeed(), cut: 0 } };
+    const prison = { ...s.prison, keys: s.prison.keys + RANK_KEYS };
+    set({
+      forest,
+      prison,
+      slotsBalance: s.slotsBalance - cost + bonusCoins,
+      slotsFreeSpins: s.slotsFreeSpins + bonusTickets,
+      slotsXp: xp,
+      slotsRewardedLevel: Math.max(s.slotsRewardedLevel, after),
+    });
+    persistForest(forest);
+    persistPrison(prison);
+    persistSlots(get());
+    return { rank, cost, buyout: extra };
+  },
+
   prisonAddTokens: (amount) => {
     const add = Math.max(0, Math.round(amount));
     if (!add) return;
@@ -2748,13 +3015,18 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   prisonReset: () => {
     const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
-    set({ prison });
+    const forest: ForestState = { ...FOREST_START, tree: { seed: newTreeSeed(), cut: 0 } };
+    set({ prison, forest });
     persistPrison(prison);
+    persistForest(forest);
   },
 
   gamesReset: () => {
     const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
+    const forest: ForestState = { ...FOREST_START, tree: { seed: newTreeSeed(), cut: 0 } };
+    persistForest(forest);
     set({
+      forest,
       prison,
       slotsBalance: START_BALANCE,
       slotsBet: 25,

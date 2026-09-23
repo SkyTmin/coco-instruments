@@ -40,6 +40,7 @@ export const STORAGE_KEYS = {
   camera: 'camera.items',
   slots: 'slots.state',
   prison: 'prison.state',
+  forest: 'forest.state',
   meta: 'app.meta',
 } as const;
 

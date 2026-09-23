@@ -10,6 +10,7 @@
 // с первого взгляда.
 
 import { rng32, ROCKS } from './prison';
+import { SPECIES } from './forest';
 import type { Rock } from './prison';
 
 const N = 16;
@@ -887,4 +888,264 @@ export function seidTexture(): string {
   });
   seidUrl = px.toUrl();
   return seidUrl;
+}
+
+// ---------------------------------------------------------------------------
+// Лесоповал. Кора — плитка 16×16, повторяется вдоль бревна; у берёз — белая
+// с чёрными чечевичками, у сосны — рыжие пластины, у остальных — продольные
+// трещины. Крона — 24×24: хвойные ёлочкой со снегом на лапах, лиственные
+// шапкой. Всё рисуется один раз за сессию и лежит в кеше.
+// ---------------------------------------------------------------------------
+
+const barkCache = new Map<number, string>();
+
+export function barkTexture(species: number): string {
+  const hit = barkCache.get(species);
+  if (hit !== undefined) return hit;
+  const sp = SPECIES[species];
+  if (!sp) return '';
+  const rnd = rng32(species * 7919 + 11);
+  const base = hex(sp.bark);
+  const dark = hex(sp.dark);
+  const light = hex(sp.light);
+  const px = new Pixels();
+  const birch = sp.id === 'birch' || sp.id === 'karelian';
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) px.set(x, y, mix(base, rnd() < 0.5 ? light : dark, rnd() * 0.18));
+  if (birch) {
+    // Чечевички — короткие горизонтальные чёрточки.
+    for (let k = 0; k < 9; k++) {
+      const y = Math.floor(rnd() * N);
+      const x0 = Math.floor(rnd() * N);
+      const len = 2 + Math.floor(rnd() * 4);
+      for (let i = 0; i < len; i++) px.set((x0 + i) % N, y, mix(dark, BLACK, 0.3));
+    }
+    if (sp.id === 'karelian') {
+      // Узор карельской берёзы проступает бурыми завитками.
+      for (let k = 0; k < 5; k++) {
+        const cx = Math.floor(rnd() * N);
+        const cy = Math.floor(rnd() * N);
+        px.set(cx, cy, hex('#8a5a32'));
+        px.set((cx + 1) % N, cy, hex('#a06a3a'));
+        px.set(cx, (cy + 1) % N, hex('#6a4024'));
+      }
+    }
+  } else if (sp.id === 'pine' || sp.id === 'larch') {
+    // Пластины коры: горизонтальные тёмные швы со сдвигом.
+    for (let y = 0; y < N; y += 4) {
+      const off = Math.floor(rnd() * 8);
+      for (let x = 0; x < N; x++) if ((x + off) % 8 !== 0) px.set(x, y, mix(dark, BLACK, 0.2));
+      for (let x = 0; x < N; x++)
+        if ((x + off) % 8 === 0) for (let d = 1; d < 4; d++) px.set(x, y + d, dark);
+      for (let x = 0; x < N; x += 3) px.set((x + off) % N, y + 1, light);
+    }
+  } else {
+    // Продольные трещины: коротко, но по всей высоте — кора читается ростом.
+    for (let k = 0; k < 6; k++) {
+      let x = Math.floor(rnd() * N);
+      for (let y = 0; y < N; y++) {
+        px.set(x, y, dark);
+        if (rnd() < 0.25) x = (x + (rnd() < 0.5 ? 1 : N - 1)) % N;
+      }
+    }
+    for (let k = 0; k < 10; k++) px.set(Math.floor(rnd() * N), Math.floor(rnd() * N), light);
+  }
+  const url = px.toUrl();
+  barkCache.set(species, url);
+  return url;
+}
+
+const crownCache = new Map<string, string>();
+
+/** Крона. `seid` — сейд-сосна: хвоя с бирюзовым светом. */
+export function crownTexture(species: number, seid = false): string {
+  const key = `${species}:${seid ? 1 : 0}`;
+  const hit = crownCache.get(key);
+  if (hit !== undefined) return hit;
+  const sp = SPECIES[species];
+  if (!sp) return '';
+  const S = 24;
+  const px = new Pixels(S);
+  const rnd = rng32(species * 131 + (seid ? 7 : 1));
+  const leaf = hex(seid ? '#2a8a7a' : sp.leaf);
+  const dark = mix(leaf, BLACK, 0.35);
+  const lite = mix(leaf, WHITE, 0.25);
+  const snow: RGB = [236, 242, 248];
+  if (sp.conifer) {
+    // Три яруса лап, снизу шире; снег на верхнем крае каждого.
+    const tiers = [
+      [4, 12, 11],
+      [9, 17, 8],
+      [14, 23, 5],
+    ];
+    for (const [y0, y1, half] of tiers) {
+      for (let y = y0; y <= y1; y++) {
+        const w = Math.round(((y - y0 + 1) / (y1 - y0 + 1)) * half) + 1;
+        for (let x = 12 - w; x <= 11 + w; x++) {
+          const edge = x === 12 - w || x === 11 + w;
+          px.set(x, y, edge ? dark : rnd() < 0.2 ? lite : leaf);
+        }
+        if (y === y0 + 1) for (let x = 13 - w; x <= 10 + w; x += 2) px.set(x, y - 1, snow);
+      }
+    }
+    px.set(11, 3, dark);
+    px.set(12, 3, dark);
+    px.set(11, 2, snow);
+    px.set(12, 2, snow);
+  } else {
+    // Шапка: несколько кругов листвы внахлёст.
+    const blobs = [
+      [12, 13, 9],
+      [7, 12, 6],
+      [17, 12, 6],
+      [12, 7, 6],
+    ];
+    for (let y = 0; y < S; y++)
+      for (let x = 0; x < S; x++) {
+        let inside = false;
+        let edge = false;
+        for (const [cx, cy, r] of blobs) {
+          const d = Math.hypot(x - cx, y - cy);
+          if (d <= r) inside = true;
+          if (d > r - 1.2 && d <= r) edge = true;
+        }
+        if (!inside) continue;
+        px.set(x, y, edge ? dark : rnd() < 0.22 ? lite : rnd() < 0.15 ? dark : leaf);
+      }
+    if (sp.id === 'rowan')
+      // Гроздья рябины.
+      for (let k = 0; k < 7; k++) {
+        const x = 5 + Math.floor(rnd() * 14);
+        const y = 8 + Math.floor(rnd() * 10);
+        px.set(x, y, hex('#e8402a'));
+        px.set(x + 1, y, hex('#c82a1a'));
+      }
+    // Снег на макушке.
+    for (let x = 8; x <= 15; x++) if (rnd() < 0.7) px.set(x, 2, snow);
+  }
+  if (seid)
+    for (let k = 0; k < 10; k++)
+      px.set(4 + Math.floor(rnd() * 16), 4 + Math.floor(rnd() * 18), hex('#c8fff6'));
+  const url = px.toUrl();
+  crownCache.set(key, url);
+  return url;
+}
+
+const branchCache = new Map<number, string>();
+
+/** Сучок, растущий ВПРАВО; левый — тот же, зеркально (CSS). */
+export function branchTexture(species: number): string {
+  const hit = branchCache.get(species);
+  if (hit !== undefined) return hit;
+  const sp = SPECIES[species];
+  if (!sp) return '';
+  const px = new Pixels(12);
+  const bark = hex(sp.dark);
+  const leaf = hex(sp.leaf);
+  const snow: RGB = [236, 242, 248];
+  // Ветка чуть вверх от ствола, на конце — пучок листвы или хвои.
+  for (let x = 0; x < 9; x++) {
+    const y = 7 - Math.floor(x / 3);
+    px.set(x, y, bark);
+    px.set(x, y + 1, mix(bark, BLACK, 0.3));
+  }
+  for (let y = 2; y <= 6; y++)
+    for (let x = 6; x <= 11; x++) if (Math.hypot(x - 9, y - 4) <= 2.6) px.set(x, y, leaf);
+  px.set(8, 2, snow);
+  px.set(9, 2, snow);
+  px.set(10, 2, snow);
+  const url = px.toUrl();
+  branchCache.set(species, url);
+  return url;
+}
+
+const MARKS: Record<string, Sprite> = {
+  burl: {
+    pal: { a: '#3a2414', b: '#7a4a28', c: '#a86a3a', d: '#c88a52' },
+    map: [
+      '............',
+      '....aaaa....',
+      '..aabbcbaa..',
+      '.abccbdcbba.',
+      '.abcdccbcba.',
+      'abcbcdcbccba',
+      'abccbccdcbba',
+      '.abcbdcbcba.',
+      '.abbccbccba.',
+      '..aabbbbaa..',
+      '....aaaa....',
+      '............',
+    ],
+  },
+  hollow: {
+    pal: { a: '#2a1a10', b: '#120a06', c: '#4a3222' },
+    map: [
+      '............',
+      '............',
+      '....cccc....',
+      '...caaaac...',
+      '..caabbaac..',
+      '..cabbbbac..',
+      '..cabbbbac..',
+      '..caabbaac..',
+      '...caaaac...',
+      '....cccc....',
+      '............',
+      '............',
+    ],
+  },
+  chaga: {
+    pal: { a: '#0e0a08', b: '#2a1e16', c: '#5a3a22', d: '#8a5a32' },
+    map: [
+      '............',
+      '...aa.......',
+      '..abba.aa...',
+      '.abcbbaaba..',
+      '.abbcbbbba..',
+      'abbbbcbbbba.',
+      'abcbbbbcbba.',
+      '.abbbdbbba..',
+      '..abbbbba...',
+      '...aaaaa....',
+      '............',
+      '............',
+    ],
+  },
+  figured: {
+    pal: { a: '#8a5a32', b: '#c88a52' },
+    map: [
+      '............',
+      '..aa....aa..',
+      '.a..a..a..a.',
+      '.a.b.a.a.b.a',
+      '..a..a..a.a.',
+      '...aa....a..',
+      '....a..aa...',
+      '...a.b.a....',
+      '..a...a..aa.',
+      '...aaa..a..a',
+      '.........aa.',
+      '............',
+    ],
+  },
+};
+
+const markCache = new Map<string, string>();
+
+/** Метка особого бревна: капокорень, дупло, чага, свиль. */
+export function logMarkTexture(kind: string): string {
+  const hit = markCache.get(kind);
+  if (hit !== undefined) return hit;
+  const sp = MARKS[kind];
+  if (!sp) return '';
+  const px = new Pixels(12);
+  sp.map.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const ch = row[x];
+      if (ch !== '.' && sp.pal[ch]) px.set(x, y, hex(sp.pal[ch]));
+    }
+  });
+  const url = px.toUrl();
+  markCache.set(kind, url);
+  return url;
 }

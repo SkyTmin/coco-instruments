@@ -430,3 +430,51 @@ export function keyFound(): void {
   tone(1568, { dur: 0.2, type: 'sine', gain: 0.09 });
   tone(2349, { at: 0.04, dur: 0.18, type: 'sine', gain: 0.06 });
 }
+
+// ---------------------------------------------------------------------------
+// Лесоповал.
+// ---------------------------------------------------------------------------
+
+/**
+ * Удар топора — глухой деревянный «тук» с щелчком щепы. У пил вместо удара
+ * короткое жужжание: пила не бьёт, а грызёт.
+ */
+export function axeChop(saw = false, crit = false): void {
+  const v = 0.94 + Math.random() * 0.12;
+  if (saw) {
+    tone(92 * v, { dur: 0.13, type: 'sawtooth', gain: 0.05, sweepTo: 118 * v });
+    noise(2600 * v, { dur: 0.11, gain: 0.1, q: 0.8 });
+  } else {
+    noise(620 * v, { dur: 0.07, gain: 0.28, q: 1.2 });
+    tone(170 * v, { dur: 0.08, type: 'triangle', gain: 0.15, sweepTo: 105 });
+    noise(3000 * v, { at: 0.012, dur: 0.03, gain: 0.07, q: 2.2 });
+  }
+  if (crit) {
+    tone(104, { dur: 0.15, type: 'triangle', gain: 0.17, sweepTo: 58 });
+    noise(800, { at: 0.01, dur: 0.09, gain: 0.2, q: 0.8 });
+  }
+}
+
+/** Бревно отлетело в штабель: стук дерева о дерево. */
+export function logOff(): void {
+  const v = 0.95 + Math.random() * 0.1;
+  noise(480 * v, { dur: 0.1, gain: 0.2, q: 0.9 });
+  tone(210 * v, { dur: 0.06, type: 'triangle', gain: 0.1 });
+  tone(160 * v, { at: 0.07, dur: 0.07, type: 'triangle', gain: 0.08 });
+}
+
+/** «Бойся!»: скрип ствола, свист и глухой удар о снег. */
+export function treeFall(): void {
+  tone(260, { dur: 0.45, type: 'sawtooth', gain: 0.035, sweepTo: 150 });
+  noise(1200, { at: 0.3, dur: 0.25, gain: 0.08, q: 0.5 });
+  noise(160, { at: 0.5, dur: 0.5, gain: 0.34, q: 0.5 });
+  tone(62, { at: 0.5, dur: 0.5, type: 'triangle', gain: 0.24, sweepTo: 34 });
+  for (let i = 0; i < 4; i++) noise(2400 + i * 400, { at: 0.56 + i * 0.05, dur: 0.05, gain: 0.05 });
+}
+
+/** Сучок по лбу: тупой удар и «ой». */
+export function branchHit(): void {
+  noise(700, { dur: 0.08, gain: 0.24, q: 0.9 });
+  tone(240, { dur: 0.08, type: 'square', gain: 0.07 });
+  tone(170, { at: 0.07, dur: 0.14, type: 'square', gain: 0.07, sweepTo: 120 });
+}

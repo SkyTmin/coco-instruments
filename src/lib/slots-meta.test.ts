@@ -140,7 +140,7 @@ describe('ежедневные миссии', () => {
   });
 
   it('каждый день ровно одна цель — в шахте, две — в автоматах', () => {
-    const prison = new Set(['blocks', 'streak', 'ore']);
+    const prison = new Set(['blocks', 'streak', 'ore', 'trees']);
     for (let d = 1; d <= 30; d++) {
       const kinds = dailyMissions(`2026-06-${String(d).padStart(2, '0')}`).map((m) => m.kind);
       expect(kinds.filter((k) => prison.has(k))).toHaveLength(1);

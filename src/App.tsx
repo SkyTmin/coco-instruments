@@ -112,6 +112,9 @@ const GamesPage = lazy(() => import('@/pages/GamesPage').then((m) => ({ default:
 const PrisonPage = lazy(() =>
   import('@/pages/PrisonPage').then((m) => ({ default: m.PrisonPage })),
 );
+const ForestPage = lazy(() =>
+  import('@/pages/ForestPage').then((m) => ({ default: m.ForestPage })),
+);
 const CameraGalleryPage = lazy(() =>
   import('@/pages/CameraGalleryPage').then((m) => ({ default: m.CameraGalleryPage })),
 );
@@ -529,6 +532,7 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
                 <Route path="/scatter" element={<ScatterPage />} />
                 <Route path="/games" element={<GamesPage />} />
                 <Route path="/prison" element={<PrisonPage />} />
+                <Route path="/forest" element={<ForestPage />} />
                 <Route path="/camera" element={<CameraPage />} />
                 <Route path="/camera/gallery" element={<CameraGalleryPage />} />
                 <Route path="/calculator" element={<CalculatorPage />} />

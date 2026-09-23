@@ -3,6 +3,9 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { Screen, Sheet } from '@/components/ui';
 import { IconGear, IconGift } from '@/components/icons';
 import { CashDesk } from '@/components/CashDesk';
+import { useNavigate } from 'react-router-dom';
+import { FOREST_UNLOCK_RANK } from '@/lib/forest';
+import { crownTexture } from '@/lib/prison-art';
 import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
@@ -85,7 +88,6 @@ import {
   parcelTexture,
   petTexture,
   seidTexture,
-  tearTexture,
   rockColors,
   rockTexture,
   rockVariant,
@@ -97,6 +99,7 @@ import { addTrauma, flashFrame, squashPop, stopShake } from '@/lib/juice';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import { useExit } from '@/lib/use-exit';
+import { playTotem } from '@/lib/totem';
 import {
   bagFull as bagFullSound,
   bedrockClink,
@@ -295,6 +298,7 @@ function QuotaChips({ quota, norm }: { quota: Quota[]; norm: Record<number, numb
 }
 
 export function PrisonPage() {
+  const nav = useNavigate();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const prison = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
@@ -397,7 +401,6 @@ export function PrisonPage() {
   const stripRef = useRef<HTMLDivElement>(null);
   const parcelsRef = useRef<HTMLDivElement>(null);
   const campRef = useRef<HTMLButtonElement>(null);
-  const totemAt = useRef(0);
   const petRef = useRef<HTMLImageElement>(null);
   const streakBase = useRef({ n: 0, at: 0 });
   const streakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -789,107 +792,16 @@ export function PrisonPage() {
     notifySuccess();
     const { x, y } = cellCenter(c);
     fx.current?.chips(x, y, ['#4fd04a', '#a6ec3a', '#f2e64a', '#ffffff'], 18, 1.4);
-    const now = performance.now();
-    if (reduceMotion() || now - totemAt.current < 2300) {
+    const played = playTotem(campRef.current, () => {
+      squashPop(campRef.current, 0.6);
+      coinDing();
+    });
+    if (!played) {
       floatText(c, n > 1 ? `+${n} ключа` : '+ключ', 'pfloat--key', 120);
       return;
     }
-    totemAt.current = now;
     tierBreak(2);
     tapMedium();
-    const host = document.createElement('div');
-    host.className = 'ptotem';
-    document.body.appendChild(host);
-    const cx = window.innerWidth / 2;
-    const cy = window.innerHeight * 0.42;
-    const colors = ['#3fbf3f', '#6fdc3a', '#a6ec3a', '#f2e64a', '#e8c23a', '#58d06a'];
-    for (let i = 0; i < 48; i++) {
-      const p = document.createElement('i');
-      p.className = 'ptotem__p';
-      p.style.background = colors[i % colors.length];
-      p.style.left = `${cx}px`;
-      p.style.top = `${cy}px`;
-      host.appendChild(p);
-      const ang = Math.random() * Math.PI * 2;
-      const sp = 80 + Math.random() * 160;
-      const dx = Math.cos(ang) * sp;
-      const dy = Math.sin(ang) * sp * 0.75 - 30;
-      const fall = 90 + Math.random() * 110;
-      try {
-        p.animate(
-          [
-            { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
-            {
-              transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`,
-              opacity: 1,
-              offset: 0.45,
-            },
-            {
-              transform: `translate(calc(-50% + ${dx * 1.1}px), calc(-50% + ${dy + fall}px)) scale(.3)`,
-              opacity: 0,
-            },
-          ],
-          {
-            duration: 1100 + Math.random() * 600,
-            delay: 150 + Math.random() * 250,
-            easing: 'cubic-bezier(.2,.6,.4,1)',
-            fill: 'both',
-          },
-        );
-      } catch {
-        /* без WAAPI — без искр */
-      }
-    }
-    const img = document.createElement('img');
-    img.className = 'ptotem__item';
-    img.src = tearTexture();
-    img.alt = '';
-    img.style.left = `${cx}px`;
-    img.style.top = `${cy}px`;
-    host.appendChild(img);
-    const cr = campRef.current?.getBoundingClientRect();
-    const tx = cr ? cr.left + cr.width / 2 - cx : 0;
-    const ty = cr ? cr.top + cr.height / 2 - cy : window.innerHeight * 0.4;
-    const done = () => host.remove();
-    try {
-      const a = img.animate(
-        [
-          {
-            transform: 'translate(-50%, -50%) scale(.3) rotateY(0deg) rotateZ(-14deg)',
-            opacity: 0,
-          },
-          {
-            transform: 'translate(-50%, -50%) scale(3.4) rotateY(200deg) rotateZ(9deg)',
-            opacity: 1,
-            offset: 0.3,
-          },
-          {
-            transform: 'translate(-50%, -50%) scale(2.8) rotateY(360deg) rotateZ(-5deg)',
-            opacity: 1,
-            offset: 0.52,
-          },
-          {
-            transform: 'translate(-50%, -50%) scale(2.7) rotateY(360deg) rotateZ(0deg)',
-            opacity: 1,
-            offset: 0.72,
-          },
-          {
-            transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(.45) rotateY(360deg)`,
-            opacity: 0.9,
-          },
-        ],
-        { duration: 2000, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' },
-      );
-      a.onfinish = () => {
-        done();
-        squashPop(campRef.current, 0.6);
-        coinDing();
-      };
-      a.oncancel = done;
-    } catch {
-      done();
-    }
-    setTimeout(done, 3200);
     if (n > 1) say(`${n} ключа от сундука!`);
   };
 
@@ -1781,6 +1693,22 @@ export function PrisonPage() {
             {readyRewards > 0 && <i className="pmine-btn__badge">{readyRewards}</i>}
           </button>
           <button
+            className={`pmine-btn pmine-btn--forest${rank < FOREST_UNLOCK_RANK ? ' is-locked' : ''}`}
+            type="button"
+            aria-label="Лесоповал"
+            onClick={() => {
+              if (rank < FOREST_UNLOCK_RANK) {
+                notifyWarning();
+                say(`Лесоповал откроется с ранга ${rankLetter(FOREST_UNLOCK_RANK)}`);
+                return;
+              }
+              tapLight();
+              nav('/forest');
+            }}
+          >
+            <img src={crownTexture(5)} alt="" />
+          </button>
+          <button
             className="pmine-btn pmine-btn--gear"
             type="button"
             aria-label="Настройки"
@@ -2370,6 +2298,9 @@ export function PrisonPage() {
             <span className="prank__key">
               <KeyIcon size={13} /> +1 ключ от сундука
             </span>
+            {sceneShown.rank === FOREST_UNLOCK_RANK && (
+              <span className="prank__lvl">Открыт лесоповал — ёлка в шапке шахты</span>
+            )}
             {sceneShown.buyout > 0 && (
               <span className="prank__lvl">Норма откуплена за {fmt(sceneShown.buyout)} монет</span>
             )}

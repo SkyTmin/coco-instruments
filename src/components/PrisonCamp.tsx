@@ -77,6 +77,18 @@ import type {
   RuneKind,
 } from '@/lib/prison';
 import type { ParcelOpen } from '@/store';
+import {
+  AXES,
+  axeDamage,
+  axeSharpCost,
+  AXE_SHARP_MAX,
+  AXE_SHARP_STEP,
+  forestMods,
+  pileCapacity,
+  pileCost,
+  PILE_MAX,
+  TRUCK_PRICE,
+} from '@/lib/forest';
 import { findTexture, parcelTexture, petTexture, tearTexture } from '@/lib/prison-art';
 import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
@@ -181,6 +193,7 @@ export function KeyIcon({ size = 14 }: { size?: number }) {
 
 export type CampTab =
   | 'forge'
+  | 'axes'
   | 'enchant'
   | 'runes'
   | 'pets'
@@ -193,6 +206,7 @@ export type CampTab =
 
 const TABS: { id: CampTab; name: string }[] = [
   { id: 'forge', name: 'Кузница' },
+  { id: 'axes', name: 'Топоры' },
   { id: 'enchant', name: 'Чары' },
   { id: 'runes', name: 'Руны' },
   { id: 'pets', name: 'Питомцы' },
@@ -252,6 +266,7 @@ export function PrisonCamp({
       </div>
       <div className="pcamp-body">
         {tab === 'forge' && <ForgeTab onSpend={onSpend} />}
+        {tab === 'axes' && <AxesTab onSpend={onSpend} />}
         {tab === 'enchant' && <EnchantTab />}
         {tab === 'runes' && <RunesTab />}
         {tab === 'pets' && <PetsTab />}
@@ -1761,3 +1776,182 @@ export function ParcelReveal({ open, onClose }: { open: ParcelOpen; onClose: () 
 }
 
 export type { Rune };
+
+// ---- Топоры: лесоповал -----------------------------------------------------
+
+/** Топор или пила. Цвет лезвия — ступень; у пил свой силуэт. */
+export function AxeIcon({ axe, size = 30 }: { axe: number; size?: number }) {
+  const a = AXES[Math.max(0, Math.min(AXES.length - 1, axe))];
+  if (a.id === 'bowsaw')
+    return (
+      <svg className="paxe-ico" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+        <path d="M5 22 Q16 2 27 22" fill="none" stroke="#7a4a24" strokeWidth="2.6" />
+        <path d="M5 22 H27" stroke={a.head} strokeWidth="2.4" />
+        <path
+          d="M6 24 L8 22 L10 24 L12 22 L14 24 L16 22 L18 24 L20 22 L22 24 L24 22 L26 24"
+          fill="none"
+          stroke="#5a6068"
+          strokeWidth=".9"
+        />
+      </svg>
+    );
+  if (a.saw)
+    return (
+      <svg className="paxe-ico" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+        <rect
+          x="14"
+          y="13"
+          width="17"
+          height="5"
+          rx="2.5"
+          fill="#7a8088"
+          stroke="#2a2e34"
+          strokeWidth=".8"
+        />
+        <path
+          d="M15 12.5 H30 M15 18.5 H30"
+          stroke="#2a2e34"
+          strokeWidth=".8"
+          strokeDasharray="1.2 1"
+        />
+        <rect
+          x="3"
+          y="10"
+          width="13"
+          height="11"
+          rx="2.5"
+          fill={a.head}
+          stroke="#2a1a10"
+          strokeWidth="1"
+        />
+        <path d="M5 10 Q9 5 14 10" fill="none" stroke="#2a2e34" strokeWidth="1.6" />
+        <rect x="6" y="13" width="6" height="3" rx="1" fill="rgba(255,255,255,.35)" />
+      </svg>
+    );
+  return (
+    <svg className="paxe-ico" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+      <path d="M8 29 L21 7" stroke="#4a2d16" strokeWidth="4.2" strokeLinecap="round" />
+      <path d="M8 29 L21 7" stroke="#b07a44" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M17 4 C21 2.6 26 4.4 28.6 8.6 L27 15.6 C24.6 12.6 21.6 11.4 18.4 11.6 Z"
+        fill={a.head}
+        stroke="rgba(0,0,0,.55)"
+        strokeWidth="1.1"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M27.6 9 L26.4 14.4"
+        stroke="rgba(255,255,255,.6)"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function AxesTab({ onSpend }: { onSpend: () => void }) {
+  const f = useFinanceStore((s) => s.forest);
+  const p = useFinanceStore((s) => s.prison);
+  const balance = useFinanceStore((s) => s.slotsBalance);
+  const forestBuy = useFinanceStore((s) => s.forestBuy);
+  const cur = AXES[f.axe];
+  const next = AXES[f.axe + 1];
+  const fm = forestMods(p);
+  const dmg = axeDamage(f.axe, f.sharp) * fm.dmg;
+  const buy = (what: 'axe' | 'sharp' | 'pile' | 'truck') => {
+    primeAudio();
+    if (!forestBuy(what)) {
+      notifyWarning();
+      return;
+    }
+    onSpend();
+    coinDing();
+    tierBreak(what === 'axe' ? 1 : 0);
+    notifySuccess();
+  };
+  return (
+    <div className="pforge">
+      <div className="pforge__now">
+        <AxeIcon axe={f.axe} size={40} />
+        <span>
+          <b>{cur.name}</b>
+          <i>
+            урон {dmg.toFixed(dmg < 10 ? 1 : 0)} · {(cur.rate * fm.rate).toFixed(1)} удара в секунду
+          </i>
+        </span>
+      </div>
+      <Row
+        icon={<AxeIcon axe={next ? f.axe + 1 : f.axe} size={30} />}
+        title={next ? next.name : 'Лучше не бывает'}
+        text={
+          next
+            ? `урон ${cur.dmg} → ${next.dmg}, скорость ${cur.rate} → ${next.rate}`
+            : '«Урал» — вершина'
+        }
+        action={
+          next ? (
+            <Buy price={next.price} can={balance >= next.price} onClick={() => buy('axe')} />
+          ) : (
+            <Done />
+          )
+        }
+      />
+      <Row
+        icon={<span className="pforge__glyph">⟋</span>}
+        title={`Правка ${f.sharp}/${AXE_SHARP_MAX}`}
+        text={
+          f.sharp < AXE_SHARP_MAX
+            ? `+${Math.round(AXE_SHARP_STEP * 100)}% урона топору и пиле`
+            : 'Острее некуда'
+        }
+        action={
+          f.sharp < AXE_SHARP_MAX ? (
+            <Buy
+              price={axeSharpCost(f.sharp)}
+              can={balance >= axeSharpCost(f.sharp)}
+              onClick={() => buy('sharp')}
+            />
+          ) : (
+            <Done />
+          )
+        }
+      />
+      <Row
+        icon={<span className="pforge__glyph">🪵</span>}
+        title={`Штабель ${pileCapacity(f.pileLevel)}`}
+        text={
+          f.pileLevel < PILE_MAX
+            ? `${pileCapacity(f.pileLevel)} → ${pileCapacity(f.pileLevel + 1)} брёвен`
+            : 'Больше не уложить'
+        }
+        action={
+          f.pileLevel < PILE_MAX ? (
+            <Buy
+              price={pileCost(f.pileLevel)}
+              can={balance >= pileCost(f.pileLevel)}
+              onClick={() => buy('pile')}
+            />
+          ) : (
+            <Done />
+          )
+        }
+      />
+      <Row
+        icon={<span className="pforge__glyph">🚛</span>}
+        title="Лесовоз"
+        text="Сам увозит штабель, когда он полон"
+        action={
+          f.truck ? (
+            <Done />
+          ) : (
+            <Buy price={TRUCK_PRICE} can={balance >= TRUCK_PRICE} onClick={() => buy('truck')} />
+          )
+        }
+      />
+      <p className="pcamp-note">
+        Повалено деревьев: {fmt(f.felled)} · срублено брёвен: {fmt(f.logs)} · выручено:{' '}
+        {fmt(f.earned)} монет
+      </p>
+    </div>
+  );
+}

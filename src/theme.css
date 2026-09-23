@@ -19741,6 +19741,312 @@ input[type='datetime-local'] {
   color: var(--muted);
 }
 
+/* ==========================================================================
+   Лесоповал (v2.52): вид сбоку. Полярное небо со статичным сиянием, дальний
+   ельник, снег. Двигаются только transform и opacity: ствол оседает,
+   топор машет, снежинки падают одним слоем, крона валится.
+   ========================================================================== */
+.forest-scene-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(80% 40% at 30% 0%, rgba(80, 220, 170, 0.16), transparent 70%),
+    linear-gradient(180deg, #0b1226, #0a0e18 70%);
+}
+.prison.forest {
+  --cell: calc((min(100vw, 560px) - 48px) / 7);
+}
+.forest-lock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 24px 16px;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(20, 28, 44, 0.92);
+  color: #e6eef8;
+  text-align: center;
+}
+.forest-lock p {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+.pmine-btn--forest img {
+  width: 26px;
+  height: 26px;
+  image-rendering: pixelated;
+}
+.pmine-btn--forest.is-locked {
+  opacity: 0.45;
+}
+.fframe {
+  position: relative;
+  width: max(calc(var(--cell) * 7 + 16px), min(100%, 336px));
+  max-width: 100%;
+  margin: 8px 0 6px;
+  padding: 7px;
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.08) 0 2px,
+      transparent 2px 9px,
+      rgba(255, 220, 170, 0.05) 9px 10px,
+      transparent 10px 17px
+    ),
+    linear-gradient(180deg, #6a4526, #3e2715);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.2),
+    0 10px 26px rgba(0, 0, 0, 0.5);
+}
+.fscene {
+  position: relative;
+  height: calc(100vh - var(--safe-top) - var(--content-top) - 330px);
+  height: calc(100dvh - var(--safe-top) - var(--content-top) - 330px);
+  min-height: 300px;
+  max-height: 560px;
+  overflow: hidden;
+  border-radius: 7px;
+  touch-action: none;
+  cursor: pointer;
+  background:
+    radial-gradient(70% 28% at 65% 12%, rgba(90, 230, 170, 0.22), transparent 70%),
+    radial-gradient(50% 20% at 25% 20%, rgba(120, 140, 255, 0.16), transparent 70%),
+    linear-gradient(180deg, #121c3a 0%, #1d2b52 55%, #2c3d66 100%);
+}
+/* Дальний ельник — статичная картинка, рисуется один раз. */
+.fscene__far {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--gh) - 2px);
+  height: 34%;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 60' preserveAspectRatio='none'%3E%3Cg fill='%2317224a'%3E%3Cpath d='M0 60 L8 22 L16 60Z M12 60 L22 10 L32 60Z M28 60 L36 30 L44 60Z M40 60 L50 16 L60 60Z M56 60 L64 26 L72 60Z M68 60 L79 8 L90 60Z M86 60 L94 28 L102 60Z M98 60 L108 14 L118 60Z M112 60 L120 30 L128 60Z'/%3E%3C/g%3E%3Cg fill='%23101838'%3E%3Cpath d='M-4 60 L4 36 L12 60Z M18 60 L27 30 L36 60Z M46 60 L55 34 L64 60Z M74 60 L83 28 L92 60Z M102 60 L111 38 L120 60Z'/%3E%3C/g%3E%3C/svg%3E")
+    bottom / 100% 100% no-repeat;
+  pointer-events: none;
+}
+.fscene__ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--gh);
+  background: linear-gradient(180deg, #dfe8f2, #b8c6d8 70%, #9aabc2);
+  box-shadow: 0 -6px 12px rgba(220, 232, 244, 0.35);
+  pointer-events: none;
+}
+/* Снег идёт одним слоем по трансформу: слой вдвое выше сцены и едет вниз. */
+.fscene__snow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -100%;
+  height: 200%;
+  z-index: 3;
+  background:
+    radial-gradient(circle 1.4px at 20px 30px, rgba(255, 255, 255, 0.85), transparent 60%),
+    radial-gradient(circle 1px at 70px 80px, rgba(255, 255, 255, 0.7), transparent 60%),
+    radial-gradient(circle 1.8px at 110px 20px, rgba(255, 255, 255, 0.8), transparent 60%),
+    radial-gradient(circle 1.1px at 150px 110px, rgba(255, 255, 255, 0.6), transparent 60%);
+  background-size: 180px 140px;
+  opacity: 0.55;
+  pointer-events: none;
+  animation: fsnow 14s linear infinite;
+}
+@keyframes fsnow {
+  to {
+    transform: translateY(50%);
+  }
+}
+.ftree {
+  position: absolute;
+  bottom: var(--gh);
+  top: 0;
+  width: var(--lw);
+  z-index: 2;
+  pointer-events: none;
+}
+.ftree__aura {
+  position: absolute;
+  left: -90%;
+  right: -90%;
+  bottom: 0;
+  height: 110%;
+  background: radial-gradient(40% 50% at 50% 60%, rgba(63, 230, 208, 0.35), transparent 70%);
+  animation: pseid-glow 1.8s ease-in-out infinite;
+}
+.ftrunk {
+  position: absolute;
+  inset: 0;
+}
+.flog {
+  position: absolute;
+  left: 0;
+  width: var(--lw);
+  height: var(--lh);
+  background-size: var(--lh) var(--lh);
+  image-rendering: pixelated;
+  box-shadow:
+    inset 7px 0 9px rgba(0, 0, 0, 0.38),
+    inset -7px 0 9px rgba(0, 0, 0, 0.42),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+}
+.flog.is-bottom {
+  box-shadow:
+    inset 7px 0 9px rgba(0, 0, 0, 0.38),
+    inset -7px 0 9px rgba(0, 0, 0, 0.42),
+    0 3px 0 rgba(0, 0, 0, 0.25);
+}
+.flog__branch {
+  position: absolute;
+  top: 50%;
+  width: calc(var(--lw) * 0.95);
+  height: calc(var(--lw) * 0.95);
+  margin-top: calc(var(--lw) * -0.58);
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+}
+.flog__branch.is-R {
+  left: calc(100% - 4px);
+}
+.flog__branch.is-L {
+  right: calc(100% - 4px);
+  transform: scaleX(-1);
+}
+.flog__mark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--lh) * 0.86);
+  height: calc(var(--lh) * 0.86);
+  transform: translate(-50%, -50%);
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+}
+.flog__mark.is-burl {
+  width: var(--lh);
+  height: var(--lh);
+  left: 18%;
+}
+.flog__mark.is-chaga {
+  left: 84%;
+}
+.flog__mark.is-figured {
+  width: 70%;
+  height: 90%;
+  opacity: 0.8;
+}
+.flog__crack {
+  position: absolute;
+  inset: 0;
+  background-size: var(--lh) var(--lh);
+  image-rendering: pixelated;
+  opacity: 0.85;
+}
+.fcrown {
+  position: absolute;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.35));
+}
+.faxe {
+  position: absolute;
+  z-index: 4;
+  transform-origin: 30% 85%;
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.5));
+  pointer-events: none;
+}
+.faxe.is-R {
+  transform: scaleX(-1);
+}
+.faxe .paxe-ico {
+  width: 100%;
+  height: 100%;
+}
+.fscene.is-stunned .faxe {
+  opacity: 0.45;
+}
+.fscene.is-stunned::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: radial-gradient(60% 50% at 50% 80%, rgba(255, 60, 40, 0.28), transparent 70%);
+  pointer-events: none;
+}
+.flog-fly {
+  position: absolute;
+  z-index: 6;
+  border-radius: 4px;
+  background-size: var(--lh) var(--lh);
+  image-rendering: pixelated;
+  box-shadow:
+    inset 6px 0 8px rgba(0, 0, 0, 0.4),
+    inset -6px 0 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.fcrown-fall {
+  position: absolute;
+  z-index: 5;
+  transform-origin: 50% 96%;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.pfloat--fell {
+  font-size: 30px;
+  letter-spacing: 0.08em;
+  color: #fff4c8;
+}
+.pfloat--branch {
+  font-size: 17px;
+  color: #ff7a5a;
+}
+.pfloat--burl {
+  font-size: 18px;
+  color: #ffc86a;
+}
+.pfloat--figured {
+  font-size: 15px;
+  color: #ffe0a8;
+}
+.fpile__ico {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 26px;
+}
+.fpile__ico img {
+  position: absolute;
+  width: 26px;
+  height: 11px;
+  object-fit: cover;
+  image-rendering: pixelated;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+.fpile__ico img:first-child {
+  top: 2px;
+  left: 2px;
+}
+.fpile__ico img:last-child {
+  top: 13px;
+  left: 0;
+}
+.forest-note {
+  margin: 0;
+  max-width: 336px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-align: center;
+  color: rgba(226, 234, 246, 0.6);
+}
+.paxe-ico {
+  display: block;
+  flex: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pmine-frame::after,
   .pfindcard,
@@ -19759,7 +20065,9 @@ input[type='datetime-local'] {
   .preveal,
   .preveal__box,
   .preveal__card,
-  .pcell__glow {
+  .pcell__glow,
+  .fscene__snow,
+  .ftree__aura {
     animation: none;
   }
 }

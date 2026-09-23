@@ -161,7 +161,8 @@ export type MissionKind =
   | 'bigbet'
   | 'blocks'
   | 'streak'
-  | 'ore';
+  | 'ore'
+  | 'trees';
 
 export interface Mission {
   id: string;
@@ -182,6 +183,7 @@ export const EMPTY_COUNTERS: MissionCounters = {
   blocks: 0,
   streak: 0,
   ore: 0,
+  trees: 0,
 };
 
 /** Ставка, с которой спин считается «крупным» для миссии bigbet. */
@@ -246,6 +248,12 @@ const PRISON_POOL: MissionDef[] = [
     goals: [500, 1500, 4000],
     reward: (g) => Math.round(g * 0.3),
     title: (g) => `Продать добычи на ${g.toLocaleString('ru-RU')} монет`,
+  },
+  {
+    kind: 'trees',
+    goals: [10, 20, 40],
+    reward: (g) => g * 25,
+    title: (g) => `Повалить ${g} деревьев на лесоповале`,
   },
 ];
 
