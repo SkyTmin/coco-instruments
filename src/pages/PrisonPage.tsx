@@ -1557,8 +1557,10 @@ export function PrisonPage() {
     const st = useFinanceStore.getState().prison;
     if (st.items[id] <= 0) {
       tapLight();
-      // Крепь не продаётся — её сбивают на лесопилке.
-      setCamp(id === 'prop' ? 'mill' : 'shop');
+      // Крепь не продаётся — её сбивают на лесопилке, а она в лесу: лагерь
+      // шахты про лес не знает.
+      if (id === 'prop') say('Крепь сбивают из досок на лесопилке — это на лесоповале');
+      else setCamp('shop');
       return;
     }
     if (id === 'bomb3' || id === 'bomb5') {
@@ -2375,6 +2377,7 @@ export function PrisonPage() {
 
       {camp && (
         <PrisonCamp
+          place="mine"
           tab={camp}
           onTab={setCamp}
           onClose={() => setCamp(null)}

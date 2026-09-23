@@ -106,6 +106,12 @@ const reduceMotion = () =>
 
 /** Предупреждение, что запал гаснет, — как в шахте. */
 const STREAK_WARN_MS = 1500;
+/**
+ * Тапать можно быстрее удержания во столько раз. Тап раньше срока НЕ
+ * выбрасывается, а ждёт своей очереди (`pendingTap`): выброшенный тап на
+ * ритмичной рубке читается как «не сработало».
+ */
+const TAP_BOOST = 2.4;
 
 /** Сколько брёвен рисуем над нижним: ровно столько, сколько влезает. */
 const LOG_ASPECT = 0.46;
@@ -130,7 +136,6 @@ export function ForestPage() {
   const forestCut = useFinanceStore((s) => s.forestCut);
   const forestSell = useFinanceStore((s) => s.forestSell);
   const forestRankUp = useFinanceStore((s) => s.forestRankUp);
-  const forestMillLoad = useFinanceStore((s) => s.forestMillLoad);
   const prisonStreak = useFinanceStore((s) => s.prisonStreak);
   const prisonParcelOpen = useFinanceStore((s) => s.prisonParcelOpen);
 
@@ -178,6 +183,7 @@ export function ForestPage() {
   const sideRef = useRef<Side>('L');
   const stunUntil = useRef(0);
   const lastHit = useRef(0);
+  const pendingTap = useRef<{ side: Side; timer: ReturnType<typeof setTimeout> } | null>(null);
   const pointer = useRef<{ id: number; side: Side } | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rolling = useRef<(() => void) | null>(null);
@@ -185,7 +191,6 @@ export function ForestPage() {
   const streakBase = useRef({ n: 0, at: 0 });
   const streakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevCut = useRef(cut);
-  const falling = useRef(false);
   const fullWarnAt = useRef(0);
 
   // Баланс на табло: во время счёта продажи его ведёт ролл-ап, а не стор.
@@ -227,6 +232,7 @@ export function ForestPage() {
     () => () => {
       if (holdTimer.current) clearTimeout(holdTimer.current);
       if (streakTimer.current) clearTimeout(streakTimer.current);
+      if (pendingTap.current) clearTimeout(pendingTap.current.timer);
       rolling.current?.();
       stopShake();
     },
@@ -291,14 +297,16 @@ export function ForestPage() {
         /* без WAAPI просто встанет */
       }
     } else if (cut === 0 && was > 0 && treeRef.current) {
+      // Новое дерево въезжает сразу и быстро: рубить его можно с первого
+      // кадра. Раньше оно 0,37 с стояло невидимым и ещё 0,45 с ехало — это
+      // читалось как «тап не сработал».
       try {
         treeRef.current.animate(
           [
-            { transform: 'translateX(115%)', opacity: 0 },
-            { transform: 'translateX(115%)', opacity: 0, offset: 0.45 },
+            { transform: 'translateX(45%)', opacity: 0.2 },
             { transform: 'translateX(0)', opacity: 1 },
           ],
-          { duration: 820, easing: 'cubic-bezier(.2,.7,.3,1)' },
+          { duration: 260, easing: 'cubic-bezier(.2,.8,.3,1)' },
         );
       } catch {
         /* не страшно */
@@ -511,7 +519,6 @@ export function ForestPage() {
     floatAt(size.w / 2, size.h * 0.34, label, cls);
     const layer = layerRef.current;
     if (!layer || reduceMotion()) return;
-    falling.current = true;
     const cw = logW * 2.4;
     const ch = cw;
     const el = document.createElement('img');
@@ -526,7 +533,6 @@ export function ForestPage() {
     const dir = s === 'L' ? 1 : -1;
     const done = () => {
       el.remove();
-      falling.current = false;
     };
     try {
       const a = el.animate(
@@ -567,6 +573,10 @@ export function ForestPage() {
   const strike = (s: Side) => {
     const now = performance.now();
     stunUntil.current = now + BRANCH_STUN_MS;
+    if (pendingTap.current) {
+      clearTimeout(pendingTap.current.timer);
+      pendingTap.current = null;
+    }
     setStunned(true);
     setTimeout(() => setStunned(false), BRANCH_STUN_MS);
     breakStreak();
@@ -733,20 +743,51 @@ export function ForestPage() {
 
   // ---- Удар ------------------------------------------------------------------
 
+  /**
+   * Топор на сторону — сразу, в этом же кадре, а не после перерисовки React:
+   * иначе замах играл бы кадр-другой на старом месте.
+   */
+  const placeAxe = (s: Side) => {
+    if (sideRef.current === s) return;
+    sideRef.current = s;
+    const el = axeRef.current;
+    if (el) {
+      el.style.left = `${s === 'L' ? trunkLeft - logW * 0.72 : trunkLeft + logW * 1.02}px`;
+      el.classList.toggle('is-L', s === 'L');
+      el.classList.toggle('is-R', s === 'R');
+    }
+    setSide(s);
+  };
+
   const hit = (s: Side) => {
     const now = performance.now();
-    if (now < stunUntil.current || falling.current) return;
+    // Оглушение — единственное, что глушит тапы. Падающая крона больше не
+    // глушит: она живёт своим слоем, а новое дерево уже стоит.
+    if (now < stunUntil.current) return;
     const st = useFinanceStore.getState();
     const f = st.forest;
     if (st.prison.rank < FOREST_UNLOCK_RANK) return;
     const fm = forestMods(st.prison, f);
     const rate = AXES[f.axe].rate * fm.rate;
-    if (now - lastHit.current < 1000 / (rate * 1.8) - 4) return;
-    lastHit.current = now;
-    if (sideRef.current !== s) {
-      sideRef.current = s;
-      setSide(s);
+    const wait = 1000 / (rate * TAP_BOOST) - (now - lastHit.current);
+    if (wait > 4) {
+      // Рано: топор ещё не вернулся. Встаём на сторону сразу, а удар — в
+      // очередь; второй ранний тап только меняет сторону у ждущего.
+      placeAxe(s);
+      if (pendingTap.current) pendingTap.current.side = s;
+      else
+        pendingTap.current = {
+          side: s,
+          timer: setTimeout(() => {
+            const q = pendingTap.current;
+            pendingTap.current = null;
+            if (q) hitRef.current(q.side);
+          }, wait),
+        };
+      return;
     }
+    lastHit.current = now;
+    placeAxe(s);
     const t = buildTree(f.rank, f.tree.seed);
     const i = f.tree.cut;
     // Встал туда, где у нижнего бревна сучок, — сам на него и налетел.
@@ -912,25 +953,15 @@ export function ForestPage() {
     }
   };
 
-  /** Штабель — в пилораму. Пусто или очередь полна — открыть лесопилку. */
+  /**
+   * Пилорама — открыть её сцену. Раньше кнопка молча перекладывала штабель
+   * в очередь, и было непонятно, что куда ушло; теперь штабель грузят там,
+   * где видно ленту, пилу и доски.
+   */
   const toMill = () => {
     primeAudio();
-    const from = useFinanceStore.getState().slotsBalance;
-    const r = forestMillLoad();
-    if (!r.loaded) {
-      tapLight();
-      setCamp('mill');
-      return;
-    }
-    if (r.premium) rollBalance(from, from + r.premium);
-    tapMedium();
-    squashPop(millRef.current, 0.5);
-    squashPop(pileRef.current, 0.4);
-    say(
-      r.premium
-        ? `${r.loaded} брёвен на пилораму, за особые +${shortMoney(r.premium)}`
-        : `${r.loaded} брёвен на пилораму`,
-    );
+    tapLight();
+    setCamp('mill');
   };
 
   const takeRank = (buyout: boolean) => {
@@ -1078,7 +1109,7 @@ export function ForestPage() {
               className="phud__cell phud__purse"
               onClick={() => {
                 tapLight();
-                setCamp('axes');
+                setCamp('axench');
               }}
             >
               <span className="phud__label">Токены</span>
@@ -1333,7 +1364,7 @@ export function ForestPage() {
                 onClick={toMill}
               >
                 <MillIcon size={24} />
-                <span>{forest.pile.n ? 'На пилу' : 'Пилорама'}</span>
+                <span>Пилорама</span>
                 <span className="fmill-btn__bar">
                   <i
                     style={{
@@ -1388,6 +1419,7 @@ export function ForestPage() {
 
       {camp && (
         <PrisonCamp
+          place="forest"
           tab={camp}
           onTab={setCamp}
           onClose={() => setCamp(null)}

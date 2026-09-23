@@ -225,8 +225,10 @@ import {
   freshForest,
   emptyPile as emptyPileOf,
   millCost,
+  millFeedOne,
   millLoad,
   MILL_MAX,
+  sumRow,
   millTick,
   planCut,
   sumChops,
@@ -1098,6 +1100,11 @@ interface FinanceState {
   forestMillLoad: () => { loaded: number; premium: number };
   /** Продать доски (кроме запаса на следующую рукоять). */
   forestMillSell: () => number;
+  /**
+   * Подать бревно в пилу рукой. Очередь пуста — сперва ложится штабель.
+   * Возвращает породу распиленного бревна (для картинки) и что загрузилось.
+   */
+  forestMillFeed: () => { species: number; loaded: number; premium: number } | null;
   /** Сбить крепь для шахты из досок. */
   forestCraftProp: () => boolean;
   /** Выточить следующую рукоять. */
@@ -3371,6 +3378,31 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistForest(forest);
     persistSlots(get());
     return value;
+  },
+
+  forestMillFeed: () => {
+    const s = get();
+    const f = s.forest;
+    if (f.mill.level <= 0) return null;
+    let mill = millTick(f.mill, Date.now());
+    let pile = f.pile;
+    let loaded = 0;
+    let premium = 0;
+    if (sumRow(mill.queue) === 0) {
+      const r = millLoad(pile, mill);
+      if (!r.loaded) return null;
+      mill = r.mill;
+      pile = r.pile;
+      loaded = r.loaded;
+      premium = Math.round(r.premium * forestMods(s.prison).sell);
+    }
+    const cut = millFeedOne(mill);
+    if (!cut) return null;
+    const forest = { ...f, pile, mill: cut.mill, earned: f.earned + premium };
+    set({ forest, ...(premium ? { slotsBalance: s.slotsBalance + premium } : {}) });
+    persistForest(forest);
+    if (premium) persistSlots(get());
+    return { species: cut.species, loaded, premium };
   },
 
   forestCraftProp: () => {

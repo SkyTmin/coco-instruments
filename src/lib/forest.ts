@@ -833,6 +833,28 @@ export function millTick(m: Mill, now: number): Mill {
   return { ...m, queue, boards, at: now, part: sumRow(queue) > 0 ? can : 0 };
 }
 
+/**
+ * Подать бревно в пилу рукой: одно, самое дорогое из очереди, — сразу в
+ * доску. Пила и так режет сама; тап — чтобы у пилорамы было что делать
+ * пальцем, а не только ждать. Больше, чем нарублено, не распилишь: выгода
+ * от рук упирается в штабель, а не в скорость тапа.
+ */
+export function millFeedOne(m: Mill): { mill: Mill; species: number } | null {
+  if (m.level <= 0) return null;
+  for (let i = m.queue.length - 1; i >= 0; i--) {
+    if (m.queue[i] <= 0) continue;
+    const queue = [...m.queue];
+    const boards = [...m.boards];
+    queue[i] -= 1;
+    boards[i] += 1;
+    return {
+      mill: { ...m, queue, boards, part: sumRow(queue) > 0 ? m.part : 0 },
+      species: i,
+    };
+  }
+  return null;
+}
+
 /** Цена досок до множителей продажи. */
 export function boardsValue(boards: number[]): number {
   return boards.reduce((sum, k, i) => sum + k * SPECIES[i].value * BOARD_MULT, 0);

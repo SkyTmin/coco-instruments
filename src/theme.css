@@ -20063,47 +20063,11 @@ input[type='datetime-local'] {
   display: block;
   flex: none;
 }
-.pmill-queue {
-  display: grid;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: var(--surface-2);
-}
-.pmill-queue__top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 13px;
-}
-.pmill-queue__top i {
-  font-style: normal;
-  font-size: 11px;
-  color: var(--muted);
-}
-.pmill-queue__bar {
-  position: relative;
-  height: 6px;
-  border-radius: 3px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--text) 12%, transparent);
-}
-.pmill-queue__bar i {
-  position: absolute;
-  inset: 0;
-  transform-origin: 0 50%;
-  background: linear-gradient(90deg, #b07a44, #f0d49a);
-}
 .pmill-boards {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   padding: 4px 0;
-}
-.pmill-boards__empty {
-  font-size: 12px;
-  color: var(--muted);
 }
 .pmill-board {
   display: inline-flex;
@@ -20145,6 +20109,215 @@ input[type='datetime-local'] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* ---- Пилорама-сцена (v2.56): брёвна → лента → диск → лента → доски -------- */
+.msaw {
+  --beat: 1.5s;
+  display: grid;
+  grid-template-columns: 58px 1fr 84px 1fr 58px;
+  align-items: center;
+  gap: 0;
+  padding: 12px 8px 10px;
+  border-radius: 16px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.12) 0 2px,
+      transparent 2px 11px,
+      rgba(255, 220, 170, 0.04) 11px 12px,
+      transparent 12px 20px
+    ),
+    linear-gradient(180deg, #3e2a1a, #24170d);
+  border: 1px solid rgba(255, 200, 130, 0.18);
+  color: #f7e6cc;
+}
+.msaw.is-off {
+  filter: grayscale(0.7);
+  opacity: 0.75;
+}
+.msaw__stock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+.msaw__stock b {
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.msaw__stock i {
+  font-size: 10px;
+  font-style: normal;
+  color: rgba(247, 230, 204, 0.62);
+}
+.msaw__pile {
+  position: relative;
+  width: 40px;
+  height: 30px;
+}
+.msaw__pile img {
+  position: absolute;
+  width: 30px;
+  height: 11px;
+  object-fit: cover;
+  image-rendering: pixelated;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.45),
+    0 2px 3px rgba(0, 0, 0, 0.4);
+}
+.msaw__pile img:nth-child(1) {
+  left: 0;
+  bottom: 0;
+}
+.msaw__pile img:nth-child(2) {
+  left: 10px;
+  bottom: 0;
+}
+.msaw__pile img:nth-child(3) {
+  left: 5px;
+  bottom: 10px;
+}
+.msaw__stock.is-out .msaw__pile img {
+  height: 30px;
+  width: 30px;
+  box-shadow: none;
+  object-fit: contain;
+}
+.msaw__stock.is-out .msaw__pile img:nth-child(1) {
+  left: 2px;
+}
+.msaw__stock.is-out .msaw__pile img:nth-child(2) {
+  left: 9px;
+  bottom: 4px;
+}
+/* Лента: ролики нарисованы статичным градиентом, едет только груз. */
+.msaw__belt {
+  position: relative;
+  height: 16px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 3px;
+  background:
+    radial-gradient(circle at 50% 50%, #6a6e74 0 2px, #2a2c30 2.5px 3.5px, transparent 4px) 0 0 /
+      10px 16px repeat-x,
+    linear-gradient(180deg, #1a1b1e, #2a2c30);
+}
+.msaw__mover {
+  position: absolute;
+  inset: 0;
+  animation: msaw-go var(--beat) linear infinite;
+}
+.msaw__mover.is-late {
+  animation-delay: calc(var(--beat) / -2);
+}
+@keyframes msaw-go {
+  from {
+    transform: translateX(-30%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.msaw__log,
+.msaw__plank {
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 26px;
+  height: 12px;
+  object-fit: cover;
+  image-rendering: pixelated;
+  border-radius: 3px;
+}
+.msaw__plank {
+  top: -3px;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+.msaw__plank.is-hand {
+  z-index: 2;
+}
+.msaw__blade {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #ffd98a;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.msaw__blade:disabled {
+  cursor: default;
+  color: rgba(247, 230, 204, 0.5);
+}
+.msaw__blade:active:not(:disabled) .msaw__spin {
+  scale: 0.94;
+}
+.msaw__spin {
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 220, 170, 0.12), transparent 70%);
+}
+.msaw.is-busy .msaw__spin {
+  animation: msaw-spin 0.7s linear infinite;
+}
+@keyframes msaw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.msaw__disc {
+  display: grid;
+  place-items: center;
+}
+.msaw__blade em {
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.msaw__chip {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  pointer-events: none;
+}
+.msaw__status,
+.msaw__how {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.msaw__how b {
+  color: var(--text);
+}
+.msaw__note {
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(240, 212, 154, 0.12);
+  color: #f0d49a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 /* Кнопка пилорамы на делянке: между штабелем и лагерем. */
 .fmill-btn {
   position: relative;
@@ -20841,6 +21014,8 @@ input[type='datetime-local'] {
   .fscene__snow,
   .ftree__aura,
   .fmill-btn.is-busy .pmill-ico,
+  .msaw.is-busy .msaw__spin,
+  .msaw__mover,
   .flog__branch.is-danger::after,
   .yannounce,
   .ymeteor,

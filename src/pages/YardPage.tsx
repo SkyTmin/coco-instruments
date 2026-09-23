@@ -7,11 +7,12 @@ import {
   KeyIcon,
   MillIcon,
   PickIcon,
+  campPlaceOf,
   PrisonCamp,
   TokenIcon,
   useNow,
 } from '@/components/PrisonCamp';
-import type { CampTab } from '@/components/PrisonCamp';
+import type { CampPlace, CampTab } from '@/components/PrisonCamp';
 import { BarygaSheet } from '@/components/YardBits';
 import { useFinanceStore } from '@/store';
 import {
@@ -59,6 +60,9 @@ export function YardPage() {
   const balance = useFinanceStore((s) => s.slotsBalance);
   const prisonZoneEnter = useFinanceStore((s) => s.prisonZoneEnter);
   const [camp, setCamp] = useState<CampTab | null>(null);
+  // Место лагеря фиксируется зданием: общая вкладка (сундуки) внутри лесного
+  // лагеря не должна перебрасывать его в шахтный.
+  const [campPlace, setCampPlace] = useState<CampPlace>('mine');
   const [baryga, setBaryga] = useState(false);
   const now = useNow(1000);
 
@@ -91,6 +95,7 @@ export function YardPage() {
   };
   const open = (tab: CampTab) => {
     tapLight();
+    setCampPlace(campPlaceOf(tab));
     setCamp(tab);
   };
 
@@ -260,6 +265,7 @@ export function YardPage() {
 
       {camp && (
         <PrisonCamp
+          place={campPlace}
           tab={camp}
           onTab={setCamp}
           onClose={() => setCamp(null)}

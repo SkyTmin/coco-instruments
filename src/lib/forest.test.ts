@@ -22,6 +22,7 @@ import {
   FOREST_START,
   freshForest,
   millCost,
+  millFeedOne,
   millLoad,
   MILL_MAX,
   millQueueCap,
@@ -397,6 +398,26 @@ describe('лесопилка', () => {
     const done = millTick(mill, 1_000 + 3_600_000);
     expect(sumRow(done.queue)).toBe(0);
     expect(done.part).toBe(0);
+  });
+
+  it('тап по пиле режет одно бревно — самое дорогое, и не больше, чем в очереди', () => {
+    const mill = {
+      level: 1,
+      queue: [3, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+      boards: new Array(10).fill(0),
+      at: 1,
+      part: 0.5,
+    };
+    const a = millFeedOne(mill)!;
+    expect(a.species).toBe(3);
+    expect(a.mill.boards[3]).toBe(1);
+    expect(sumRow(a.mill.queue)).toBe(3);
+    let m = a.mill;
+    for (let k = 0; k < 3; k++) m = millFeedOne(m)!.mill;
+    expect(sumRow(m.queue)).toBe(0);
+    expect(m.part).toBe(0);
+    expect(millFeedOne(m)).toBeNull();
+    expect(millFeedOne({ ...mill, level: 0 })).toBeNull();
   });
 
   it('в пилораму уходит голая цена пород, надбавка за особые брёвна — сразу', () => {

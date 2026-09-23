@@ -125,8 +125,16 @@ import {
   tearTexture,
 } from '@/lib/prison-art';
 import { burstConfetti } from '@/lib/confetti';
-import { flashFrame } from '@/lib/juice';
-import { caseTick, coinDing, keyFound, payoutEnd, primeAudio, tierBreak } from '@/lib/sound';
+import { flashFrame, squashPop } from '@/lib/juice';
+import {
+  axeChop,
+  caseTick,
+  coinDing,
+  keyFound,
+  payoutEnd,
+  primeAudio,
+  tierBreak,
+} from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
@@ -228,6 +236,7 @@ export function KeyIcon({ size = 14 }: { size?: number }) {
 export type CampTab =
   | 'forge'
   | 'axes'
+  | 'axench'
   | 'mill'
   | 'enchant'
   | 'runes'
@@ -239,28 +248,48 @@ export type CampTab =
   | 'miles'
   | 'perks';
 
-const TABS: { id: CampTab; name: string }[] = [
-  { id: 'forge', name: 'Кузница' },
-  { id: 'axes', name: 'Топоры' },
-  { id: 'mill', name: 'Лесопилка' },
-  { id: 'enchant', name: 'Чары' },
-  { id: 'runes', name: 'Руны' },
-  { id: 'pets', name: 'Питомцы' },
-  { id: 'shop', name: 'Лавка' },
-  { id: 'cases', name: 'Сундуки' },
-  { id: 'crew', name: 'Бригада' },
-  { id: 'finds', name: 'Коллекция' },
-  { id: 'miles', name: 'Вехи' },
-  { id: 'perks', name: 'Перки' },
-];
+const TAB_NAMES: Record<CampTab, string> = {
+  forge: 'Кузница',
+  axes: 'Топоры',
+  axench: 'Чары',
+  mill: 'Лесопилка',
+  enchant: 'Чары',
+  runes: 'Руны',
+  pets: 'Питомцы',
+  shop: 'Лавка',
+  cases: 'Сундуки',
+  crew: 'Бригада',
+  finds: 'Коллекция',
+  miles: 'Вехи',
+  perks: 'Перки',
+};
+
+export type CampPlace = 'mine' | 'forest';
+
+/**
+ * Лагерь у шахты и у леса — РАЗНЫЙ. В шахте топоры и пилорама — чужое, в
+ * лесу кирка и бригада — чужое (владелец: «если я в шахте, лагерь должен
+ * быть про шахту»). Общее — сундуки, питомцы и руны: оно работает в обоих
+ * местах, поэтому есть в обоих, но в лесу стоит после лесного.
+ */
+const PLACE_TABS: Record<CampPlace, CampTab[]> = {
+  mine: ['forge', 'enchant', 'runes', 'pets', 'shop', 'cases', 'crew', 'finds', 'miles', 'perks'],
+  forest: ['axes', 'axench', 'mill', 'cases', 'pets', 'runes'],
+};
+
+/** Где живёт вкладка: для двора, который открывает лагерь со своих зданий. */
+export const campPlaceOf = (tab: CampTab): CampPlace =>
+  PLACE_TABS.mine.includes(tab) ? 'mine' : 'forest';
 
 export function PrisonCamp({
-  tab,
+  place = 'mine',
+  tab: asked,
   onTab,
   onClose,
   onGain,
   onSpend,
 }: {
+  place?: CampPlace;
   tab: CampTab;
   onTab: (t: CampTab) => void;
   onClose: () => void;
@@ -272,6 +301,8 @@ export function PrisonCamp({
   const p = useFinanceStore((s) => s.prison);
   const f = useFinanceStore((s) => s.forest);
   const now = useNow(1000);
+  const tabs = PLACE_TABS[place];
+  const tab = tabs.includes(asked) ? asked : tabs[0];
   const crew = crewYield(p, now);
   const miles = milesReady(p);
   const mill = millTick(f.mill, now);
@@ -284,28 +315,29 @@ export function PrisonCamp({
     runes: runesIdle(p) ? '•' : null,
   };
   return (
-    <Sheet title="Лагерь" onClose={onClose}>
+    <Sheet title={place === 'forest' ? 'Лагерь лесоруба' : 'Лагерь шахтёра'} onClose={onClose}>
       <div className="pcamp-tabs" role="tablist">
-        {TABS.map((t) => (
+        {tabs.map((id) => (
           <button
-            key={t.id}
+            key={id}
             type="button"
             role="tab"
-            aria-selected={tab === t.id}
-            className={`pcamp-tab${tab === t.id ? ' is-on' : ''}`}
+            aria-selected={tab === id}
+            className={`pcamp-tab${tab === id ? ' is-on' : ''}`}
             onClick={() => {
               selectionChanged();
-              onTab(t.id);
+              onTab(id);
             }}
           >
-            {t.name}
-            {badge[t.id] != null && <i className="pcamp-tab__badge">{badge[t.id]}</i>}
+            {TAB_NAMES[id]}
+            {badge[id] != null && <i className="pcamp-tab__badge">{badge[id]}</i>}
           </button>
         ))}
       </div>
       <div className="pcamp-body">
         {tab === 'forge' && <ForgeTab onSpend={onSpend} />}
         {tab === 'axes' && <AxesTab onSpend={onSpend} />}
+        {tab === 'axench' && <AxeEnchSection f={f} p={p} />}
         {tab === 'mill' && <MillTab now={now} onGain={onGain} onSpend={onSpend} />}
         {tab === 'enchant' && <EnchantTab />}
         {tab === 'runes' && <RunesTab />}
@@ -2026,7 +2058,6 @@ function AxesTab({ onSpend }: { onSpend: () => void }) {
           )
         }
       />
-      <AxeEnchSection f={f} p={p} />
       <p className="pcamp-note">
         Повалено деревьев: {fmt(f.felled)} · срублено брёвен: {fmt(f.logs)} · выручено:{' '}
         {fmt(f.earned)} монет
@@ -2060,11 +2091,10 @@ function AxeEnchSection({ f, p }: { f: ForestState; p: PrisonState }) {
   const [bulk, setBulk] = useState(1);
   const lvl = axeLevelOf(f.logs);
   return (
-    <>
-      <h4 className="pcamp-h">Чары топора</h4>
+    <div className="pforge">
       <div className="pcamp-purse">
         <TokenIcon size={18} /> <b>{fmt(p.tokens)}</b> токенов
-        <span>общие с киркой</span>
+        <span>общие с киркой: падают и с брёвен, Живица — чаще</span>
       </div>
       <div className="pench-pick">
         <span className="pench-pick__lv">
@@ -2163,7 +2193,11 @@ function AxeEnchSection({ f, p }: { f: ForestState; p: PrisonState }) {
           </div>
         );
       })}
-    </>
+      <p className="pcamp-note">
+        Уровень топора растёт от каждого срубленного бревна: открывает новые чары и поднимает их
+        потолок. Токены общие с киркой — решай, куда их вложить.
+      </p>
+    </div>
   );
 }
 
@@ -2196,6 +2230,186 @@ const minutes = (m: number) =>
       ? `${Math.ceil(m)} мин`
       : `${Math.floor(m / 60)} ч ${Math.ceil(m % 60)} мин`;
 
+/** Самая дорогая порода в ряду (пила берёт её первой), −1 — ряд пуст. */
+const topOf = (row: number[]): number => {
+  for (let i = row.length - 1; i >= 0; i--) if (row[i] > 0) return i;
+  return -1;
+};
+
+/**
+ * Пилорама как сцена, а не как список цифр: слева брёвна в очереди, по
+ * ленте они едут в диск, справа выходят доски. Пока очередь не пуста, лента
+ * идёт в темпе пилы (но не чаще раза в полсекунды — быстрее глаз не видит).
+ * Тап по диску подаёт бревно рукой: диск рвётся, летят опилки, справа
+ * выскакивает доска. Так понятно, что куда уходит и зачем.
+ */
+function MillScene({
+  level,
+  queue,
+  boards,
+  pileTop,
+  onFeed,
+  stockRef,
+}: {
+  level: number;
+  queue: number[];
+  boards: number[];
+  pileTop: number;
+  onFeed: () => { species: number } | null;
+  stockRef?: React.Ref<HTMLSpanElement>;
+}) {
+  const discRef = useRef<HTMLSpanElement>(null);
+  const outRef = useRef<HTMLSpanElement>(null);
+  const bladeRef = useRef<HTMLButtonElement>(null);
+  const lastFeed = useRef(0);
+  const queued = sumRow(queue);
+  const made = sumRow(boards);
+  const busy = level > 0 && queued > 0;
+  const inTop = topOf(queue) >= 0 ? topOf(queue) : Math.max(0, pileTop);
+  const outTop = topOf(boards) >= 0 ? topOf(boards) : inTop;
+  const beat = Math.max(0.5, 60 / Math.max(1, millRate(level)));
+
+  const feed = () => {
+    const now = performance.now();
+    if (now - lastFeed.current < 110) return;
+    lastFeed.current = now;
+    primeAudio();
+    const got = onFeed();
+    if (!got) {
+      notifyWarning();
+      return;
+    }
+    axeChop(true, false);
+    tapLight();
+    const still =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (still) return;
+    // Рывок диска — на вложенном слое: у внешнего своё вечное вращение.
+    try {
+      discRef.current?.animate(
+        [
+          { transform: 'rotate(0deg) scale(1)' },
+          { transform: 'rotate(200deg) scale(1.08)' },
+          { transform: 'rotate(360deg) scale(1)' },
+        ],
+        { duration: 260, easing: 'cubic-bezier(.2,.7,.3,1)' },
+      );
+    } catch {
+      /* не страшно */
+    }
+    // Опилки веером вверх из-под диска.
+    const blade = bladeRef.current;
+    if (blade) {
+      for (let k = 0; k < 7; k++) {
+        const d = document.createElement('i');
+        d.className = 'msaw__chip';
+        d.style.background = SPECIES[got.species]?.wood ?? '#e8c89a';
+        blade.appendChild(d);
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.8;
+        const r = 26 + Math.random() * 26;
+        const gone = () => d.remove();
+        try {
+          const an = d.animate(
+            [
+              { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
+              {
+                transform: `translate(calc(-50% + ${Math.cos(a) * r}px), calc(-50% + ${Math.sin(a) * r}px)) scale(.4)`,
+                opacity: 0,
+              },
+            ],
+            { duration: 380 + Math.random() * 200, easing: 'cubic-bezier(.2,.7,.4,1)' },
+          );
+          an.onfinish = gone;
+          an.oncancel = gone;
+        } catch {
+          gone();
+        }
+        setTimeout(gone, 900);
+      }
+    }
+    // Доска выскакивает на выходную ленту.
+    const out = outRef.current;
+    if (out) {
+      const b = document.createElement('img');
+      b.className = 'msaw__plank is-hand';
+      b.src = boardTexture(got.species);
+      b.alt = '';
+      out.appendChild(b);
+      const gone = () => b.remove();
+      try {
+        const an = b.animate(
+          [
+            { transform: 'translate(-40%, 0) scale(.6)', opacity: 0 },
+            { transform: 'translate(10%, -30%) scale(1.1)', opacity: 1, offset: 0.35 },
+            { transform: 'translate(120%, 0) scale(.9)', opacity: 0 },
+          ],
+          { duration: 520, easing: 'cubic-bezier(.3,.7,.4,1)' },
+        );
+        an.onfinish = gone;
+        an.oncancel = gone;
+      } catch {
+        gone();
+      }
+      setTimeout(gone, 900);
+    }
+  };
+
+  return (
+    <div
+      className={`msaw${busy ? ' is-busy' : ''}${level <= 0 ? ' is-off' : ''}`}
+      style={{ '--beat': `${beat}s` } as CSSProperties}
+    >
+      <span className="msaw__stock" ref={stockRef}>
+        <span className="msaw__pile" aria-hidden="true">
+          <img src={barkTexture(inTop)} alt="" />
+          <img src={barkTexture(inTop)} alt="" />
+          <img src={barkTexture(inTop)} alt="" />
+        </span>
+        <b>{fmt(queued)}</b>
+        <i>брёвен</i>
+      </span>
+      <span className="msaw__belt" aria-hidden="true">
+        {busy && (
+          <span className="msaw__mover">
+            <img className="msaw__log" src={barkTexture(inTop)} alt="" />
+          </span>
+        )}
+      </span>
+      <button
+        type="button"
+        className="msaw__blade"
+        ref={bladeRef}
+        onClick={feed}
+        disabled={level <= 0}
+        aria-label="Подать бревно в пилу"
+      >
+        <span className="msaw__spin">
+          <span className="msaw__disc" ref={discRef}>
+            <MillIcon size={58} />
+          </span>
+        </span>
+        <em>{level > 0 ? 'тапни' : 'нет пилы'}</em>
+      </button>
+      <span className="msaw__belt is-out" aria-hidden="true" ref={outRef}>
+        {busy && (
+          <span className="msaw__mover is-late">
+            <img className="msaw__plank" src={boardTexture(inTop)} alt="" />
+          </span>
+        )}
+      </span>
+      <span className="msaw__stock is-out">
+        <span className="msaw__pile" aria-hidden="true">
+          <img src={boardTexture(outTop)} alt="" />
+          <img src={boardTexture(outTop)} alt="" />
+        </span>
+        <b>{fmt(made)}</b>
+        <i>досок</i>
+      </span>
+    </div>
+  );
+}
+
 function MillTab({
   now,
   onGain,
@@ -2211,6 +2425,9 @@ function MillTab({
   const forestMillUp = useFinanceStore((s) => s.forestMillUp);
   const forestMillLoad = useFinanceStore((s) => s.forestMillLoad);
   const forestMillSell = useFinanceStore((s) => s.forestMillSell);
+  const forestMillFeed = useFinanceStore((s) => s.forestMillFeed);
+  const stockRef = useRef<HTMLSpanElement>(null);
+  const [note, setNote] = useState<string | null>(null);
   const forestCraftProp = useFinanceStore((s) => s.forestCraftProp);
   const forestCraftHandle = useFinanceStore((s) => s.forestCraftHandle);
   const mill = millTick(f.mill, now);
@@ -2248,7 +2465,28 @@ function MillTab({
     if (r.premium) onGain(from, from + r.premium);
     tapLight();
     notifySuccess();
+    squashPop(stockRef.current, 0.6);
+    setNote(
+      r.premium
+        ? `${fmt(r.loaded)} брёвен легли в очередь. За свиль, капокорень и дрова с кроны — сразу +${shortMoney(r.premium)}`
+        : `${fmt(r.loaded)} брёвен легли в очередь — пила режет их сама`,
+    );
   };
+  const feed = () => {
+    const from = useFinanceStore.getState().slotsBalance;
+    const r = forestMillFeed();
+    if (!r) {
+      setNote('Пилить нечего: сруби брёвен и загрузи штабель');
+      return null;
+    }
+    if (r.loaded) {
+      squashPop(stockRef.current, 0.6);
+      setNote(`Штабель лёг в очередь: ${fmt(r.loaded)} брёвен`);
+    }
+    if (r.premium) onGain(from, from + r.premium);
+    return r;
+  };
+  const pileTop = topOf(f.pile.sp);
   const sell = () => {
     primeAudio();
     const from = useFinanceStore.getState().slotsBalance;
@@ -2266,13 +2504,18 @@ function MillTab({
   if (mill.level <= 0) {
     return (
       <div className="pforge">
-        <div className="pforge__now">
-          <MillIcon size={40} />
-          <span>
-            <b>Пилорамы нет</b>
-            <i>Брёвна пока уходят кругляком</i>
-          </span>
-        </div>
+        <MillScene
+          level={0}
+          queue={mill.queue}
+          boards={mill.boards}
+          pileTop={pileTop}
+          onFeed={() => null}
+        />
+        <p className="msaw__how">
+          <b>Как это работает.</b> Брёвна из штабеля ложатся в очередь, пила сама режет их в доски —
+          и пока ты в шахте, и пока телефон в кармане. Доска в {BOARD_MULT.toLocaleString('ru-RU')}{' '}
+          раза дороже бревна, а ещё из досок делают крепь для шахты и рукояти.
+        </p>
         <Row
           icon={<MillIcon size={30} />}
           title="Поставить пилораму"
@@ -2289,49 +2532,46 @@ function MillTab({
 
   return (
     <div className="pforge">
-      <div className="pforge__now">
-        <MillIcon size={40} />
-        <span>
-          <b>Пилорама {mill.level} ур.</b>
-          <i>
-            {Math.round(rate)} брёвен в минуту
-            {curH ? ` · ${curH.name.toLowerCase()} +${Math.round(curH.rate * 100)}%` : ''}
-          </i>
-        </span>
-      </div>
-      <div className="pmill-queue">
-        <span className="pmill-queue__top">
-          <b>
-            В очереди {fmt(queued)} / {fmt(cap)}
-          </b>
-          <i>{queued ? `допилит через ${minutes(queued / rate)}` : 'стоит без дела'}</i>
-        </span>
-        <span className="pmill-queue__bar">
-          <i style={{ transform: `scaleX(${Math.min(1, queued / cap)})` }} />
-        </span>
-        <button
-          type="button"
-          className="btn btn--sm btn--block"
-          disabled={!f.pile.n || queued >= cap}
-          onClick={load}
-        >
-          {f.pile.n ? `Загрузить штабель · ${fmt(f.pile.n)} брёвен` : 'Штабель пуст'}
-        </button>
-      </div>
-      <div className="pmill-boards">
-        {mill.boards.every((k) => k === 0) ? (
-          <span className="pmill-boards__empty">Досок пока нет</span>
-        ) : (
-          mill.boards.map((k, i) =>
+      <MillScene
+        level={mill.level}
+        queue={mill.queue}
+        boards={mill.boards}
+        pileTop={pileTop}
+        onFeed={feed}
+        stockRef={stockRef}
+      />
+      <p className="msaw__status">
+        Пилорама {mill.level} ур. режет сама {Math.round(rate)} брёвен в минуту
+        {queued ? ` · всё допилит через ${minutes(queued / rate)}` : ' · сейчас стоит'}. Тап по
+        диску — подать бревно рукой.
+      </p>
+      <button
+        type="button"
+        className="btn btn--block msaw__load"
+        disabled={!f.pile.n || queued >= cap}
+        onClick={load}
+      >
+        {!f.pile.n
+          ? 'Штабель пуст — сначала сруби'
+          : queued >= cap
+            ? 'Очередь полна — пусть пила догонит'
+            : `Штабель → в пилу · ${fmt(f.pile.n)} брёвен`}
+      </button>
+      {note && <p className="msaw__note">{note}</p>}
+      {/* Разбивка по породам — только когда пород больше одной: одну и так
+          показывает сцена, а для рукоятей важно, чьи именно доски. */}
+      {mill.boards.filter((k) => k > 0).length > 1 && (
+        <div className="pmill-boards">
+          {mill.boards.map((k, i) =>
             k > 0 ? (
               <span key={i} className="pmill-board" title={SPECIES[i].name}>
                 <img src={boardTexture(i)} alt="" />
-                {fmt(k)}
+                {fmt(k)} · {SPECIES[i].name.toLowerCase()}
               </span>
             ) : null,
-          )
-        )}
-      </div>
+          )}
+        </div>
+      )}
       <button
         type="button"
         className="btn btn--primary btn--block"
