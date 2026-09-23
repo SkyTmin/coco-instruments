@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   AXE_ENCHANTS,
+  benchCan,
+  benchOrder,
+  benchOrders,
+  BENCH_SLOTS,
   axeEnchCap,
   axeEnchCost,
   axeLevelOf,
@@ -470,5 +474,46 @@ describe('лесопилка', () => {
     const withHandle = { ...p, handle: 3 };
     expect(forestMods(withHandle).rate).toBeCloseTo(forestMods(p).rate * (1 + HANDLES[2].rate));
     expect(modsOf(withHandle).rate).toBeCloseTo(modsOf(p).rate * (1 + HANDLES[2].rate));
+  });
+});
+
+describe('верстак', () => {
+  it('заказ из зерна одинаков, порода — из открытых делянок, платит дороже досок', () => {
+    expect(benchOrder(7, 3)).toEqual(benchOrder(7, 3));
+    // Делянка 3 — четвёртый разряд.
+    for (let seq = 1; seq < 300; seq++) {
+      const o = benchOrder(seq, 3);
+      expect(o.species).toBeGreaterThanOrEqual(-1);
+      expect(o.species).toBeLessThanOrEqual(3);
+      const unit = SPECIES[o.species < 0 ? 2 : o.species].value * BOARD_MULT;
+      expect(o.coins).toBeGreaterThan(o.boards * unit);
+      expect(o.tokens).toBeGreaterThan(0);
+      // Карбас — только с пятого разряда.
+      expect(o.item).not.toBe('boat');
+    }
+    expect([...Array(300)].some((_, k) => benchOrder(k, 6).item === 'boat')).toBe(true);
+  });
+
+  it('заказов всегда три, «любые» доски не трогают запас на рукоять', () => {
+    const { orders, bench } = benchOrders({ seq: 10, orders: [] }, 2);
+    expect(orders).toHaveLength(BENCH_SLOTS);
+    expect(bench.seq).toBe(13);
+    const any = { item: 'box', species: -1, boards: 10, coins: 100, tokens: 3, at: 0 };
+    const reserve = boardsReserve(0);
+    // 40 берёзовых отложены на рукоять — на «любые» их не хватит.
+    expect(benchCan([0, 0, 0, 40, 0, 0, 0, 0, 0, 0], any, reserve)).toBe(false);
+    expect(benchCan([10, 0, 0, 40, 0, 0, 0, 0, 0, 0], any, reserve)).toBe(true);
+  });
+
+  it('битые заказы в сохранении чинятся', () => {
+    const s = normalizeForest({
+      rank: 2,
+      bench: {
+        seq: 5,
+        orders: [{ item: 'нет', species: 1 } as never, { item: 'box', species: 99 } as never],
+      },
+    });
+    expect(s.bench.orders).toHaveLength(1);
+    expect(s.bench.orders[0].species).toBe(LAST_PLOT);
   });
 });

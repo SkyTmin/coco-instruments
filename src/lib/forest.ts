@@ -619,10 +619,11 @@ export function forestMods(p: PrisonState, f?: { ench?: AxeEnchants }): ForestMo
     keyChance: m.keyChance,
     parcelChance: m.parcelChance,
     dodge: Math.min(0.8, 0.08 * e.sense),
-    swing: 0.02 * e.swing,
-    fell: 0.004 * e.fell,
+    // Совило множит шансы чар и топора, не только кирки: оберег один.
+    swing: 0.02 * e.swing * (1 + b.proc),
+    fell: 0.004 * e.fell * (1 + b.proc),
     // Буря во дворе: каждое поваленное дерево тянет соседнее.
-    storm: liveEvent(p)?.id === 'blizzard' ? 1 : 0.02 * e.storm,
+    storm: liveEvent(p)?.id === 'blizzard' ? 1 : 0.02 * e.storm * (1 + b.proc),
   };
 }
 
@@ -928,6 +929,109 @@ export function boardsForSale(boards: number[], reserve: number[]): number[] {
 export { PROP_BOARDS };
 
 // ---------------------------------------------------------------------------
+// Верстак (v2.57). Из досок собирают три рода вещей, и у каждой видно, КУДА
+// она уходит: крепь — в ряд расходников шахты, рукоять — на кирку и топор,
+// заказ — заказчику за деньги. Владелец спросил «а потом что с ними? они
+// продаются? почему не видно?» — поэтому заказы и есть «продажа вещей», а
+// собирают всё молотком, ударами по верстаку.
+// ---------------------------------------------------------------------------
+
+export interface BenchItem {
+  id: string;
+  name: string;
+  /** Кому и зачем — одна строка на заказе. */
+  who: string;
+  boards: [number, number];
+  /** Сколько ударов молотком. */
+  strikes: number;
+}
+
+export const BENCH_ITEMS: BenchItem[] = [
+  { id: 'box', name: 'Ящик', who: 'для рыбзавода', boards: [6, 10], strikes: 4 },
+  { id: 'stool', name: 'Табурет', who: 'в барак', boards: [5, 8], strikes: 4 },
+  { id: 'skis', name: 'Лыжи', who: 'охотнику-промысловику', boards: [8, 12], strikes: 5 },
+  { id: 'barrel', name: 'Бочка', who: 'под засол трески', boards: [12, 18], strikes: 6 },
+  { id: 'frame', name: 'Оконная рама', who: 'в новый дом', boards: [10, 16], strikes: 5 },
+  { id: 'sled', name: 'Сани-волокуши', who: 'оленеводу', boards: [16, 24], strikes: 6 },
+  { id: 'boat', name: 'Карбас', who: 'поморам на Белое море', boards: [30, 44], strikes: 8 },
+];
+
+export const benchItemOf = (id: string): BenchItem =>
+  BENCH_ITEMS.find((b) => b.id === id) ?? BENCH_ITEMS[0];
+
+export interface BenchOrder {
+  item: string;
+  /** Порода досок; −1 — любые. */
+  species: number;
+  boards: number;
+  coins: number;
+  tokens: number;
+  /** С какого момента заказ можно сдать (после прошлого — пауза). */
+  at: number;
+}
+
+export const BENCH_SLOTS = 3;
+/** Новый заказ после сданного — через десять минут. */
+export const BENCH_COOLDOWN_MS = 10 * 60_000;
+/** Заказ платит больше продажи тех же досок: работа стоит денег. */
+export const BENCH_MULT = 1.6;
+
+/** Ударов молотком на крепь и рукоять. */
+export const PROP_STRIKES = 4;
+export const HANDLE_STRIKES = 8;
+
+/**
+ * Заказ номер `seq`: из зерна, поэтому одинаков при каждом открытии. Порода —
+ * чаще своя делянка, иногда «любые доски», иногда прошлая порода (у кого
+ * запасы). Большие вещи (карбас) — только с пятого разряда.
+ */
+export function benchOrder(seq: number, forestRank: number): Omit<BenchOrder, 'at'> {
+  const rnd = rng32(seq * 7919 + 29);
+  const pool = BENCH_ITEMS.filter((b) => b.id !== 'boat' || forestRank >= 4);
+  const item = pool[Math.floor(rnd() * pool.length)];
+  const x = rnd();
+  const species =
+    x < 0.5 ? forestRank : x < 0.8 ? -1 : Math.max(0, forestRank - 1 - Math.floor(rnd() * 2));
+  const [lo, hi] = item.boards;
+  const boards = lo + Math.floor(rnd() * (hi - lo + 1));
+  const unit = SPECIES[species < 0 ? Math.max(0, forestRank - 1) : species].value * BOARD_MULT;
+  return {
+    item: item.id,
+    species,
+    boards,
+    coins: nice(boards * unit * BENCH_MULT),
+    tokens: 2 + Math.floor(boards / 4),
+  };
+}
+
+/** Заказы на верстаке, дозаполненные до трёх. */
+export function benchOrders(
+  bench: Bench,
+  forestRank: number,
+): { bench: Bench; orders: BenchOrder[] } {
+  if (bench.orders.length >= BENCH_SLOTS) return { bench, orders: bench.orders };
+  let seq = bench.seq;
+  const orders = [...bench.orders];
+  while (orders.length < BENCH_SLOTS) {
+    seq += 1;
+    orders.push({ ...benchOrder(seq, forestRank), at: 0 });
+  }
+  const next = { seq, orders };
+  return { bench: next, orders };
+}
+
+/** Хватает ли досок на заказ (любые — с учётом запаса на рукоять). */
+export function benchCan(boards: number[], o: BenchOrder, reserve: number[]): boolean {
+  if (o.species >= 0) return boards[o.species] >= o.boards;
+  return sumRow(boardsForSale(boards, reserve)) >= o.boards;
+}
+
+export interface Bench {
+  seq: number;
+  orders: BenchOrder[];
+}
+
+// ---------------------------------------------------------------------------
 // Сохранение.
 // ---------------------------------------------------------------------------
 
@@ -952,6 +1056,8 @@ export interface ForestState {
   ench: AxeEnchants;
   /** Пилорама (v2.53). */
   mill: Mill;
+  /** Верстак: заказы (v2.57). */
+  bench: Bench;
 }
 
 export const newTreeSeed = (): number => Math.floor(Math.random() * 2 ** 31);
@@ -977,6 +1083,7 @@ export const FOREST_START: ForestState = {
     at: 0,
     part: 0,
   },
+  bench: { seq: 0, orders: [] },
 };
 
 /** Новый лес с нуля: своё зерно дерева, пустые массивы (не общие со стартом). */
@@ -985,6 +1092,7 @@ export function freshForest(): ForestState {
     ...FOREST_START,
     pile: emptyPile(),
     mill: { ...FOREST_START.mill, queue: emptyRow(), boards: emptyRow() },
+    bench: { seq: Math.floor(Math.random() * 1e6), orders: [] },
     tree: { seed: newTreeSeed(), cut: 0 },
   };
 }
@@ -1033,7 +1141,24 @@ export function normalizeForest(raw: Partial<ForestState> | null | undefined): F
       at: int(m?.at, 0, 1e14, 0),
       part: typeof m?.part === 'number' && m.part >= 0 && m.part < 1 ? m.part : 0,
     },
+    bench: normalizeBench(raw.bench),
   };
+}
+
+function normalizeBench(raw: unknown): Bench {
+  const b = raw as Partial<Bench> | null | undefined;
+  const orders = (Array.isArray(b?.orders) ? b.orders : [])
+    .filter((o) => o && BENCH_ITEMS.some((i) => i.id === o.item))
+    .slice(0, BENCH_SLOTS)
+    .map((o) => ({
+      item: o.item,
+      species: int(o.species, -1, LAST_PLOT, -1),
+      boards: int(o.boards, 1, 999, 10),
+      coins: int(o.coins, 0, 1e12, 0),
+      tokens: int(o.tokens, 0, 1e6, 0),
+      at: int(o.at, 0, 1e14, 0),
+    }));
+  return { seq: int(b?.seq, 0, 1e12, 0), orders };
 }
 
 /** С какого ранга шахты пускают на лесоповал: сначала — шахта. */

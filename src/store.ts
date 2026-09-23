@@ -144,6 +144,12 @@ import {
   liveEvent,
   PICK_LEVEL_MAX,
   PICK_STARS_MAX,
+  crewShiftOf,
+  crewFeedCost,
+  CREW_FEED_WINDOW_MIN,
+  SCOUT_KEYS_PER_H,
+  SCOUT_PARCELS_PER_H,
+  rollTier,
   STAR_KEYS,
   STAR_TOKENS,
   ZONE_BONUS_MS,
@@ -228,6 +234,10 @@ import {
   millFeedOne,
   millLoad,
   MILL_MAX,
+  benchCan,
+  benchOrder,
+  benchOrders,
+  BENCH_COOLDOWN_MS,
   sumRow,
   millTick,
   planCut,
@@ -258,6 +268,7 @@ import type {
 import type {
   CaseRoll,
   CaseTier,
+  CrewShift,
   CrewYield,
   EnchantId,
   EventId,
@@ -511,6 +522,37 @@ function givePrize(p: PrisonState, x: YardPrize, now: number): PrisonState {
   };
 }
 
+/**
+ * Сдать смену бригады: деньги, токены, у разведки — ключи и передачки.
+ * Новая смена начинается сразу, тем же нарядом, но голодной.
+ */
+function collectCrew(p: PrisonState, now: number): { prison: PrisonState; y: CrewCollect } | null {
+  const y = crewYield(p, now);
+  if (!y.blocks) return null;
+  const sh = crewShiftOf(p.crewShift);
+  const hours = y.minutes / 60;
+  const roll = (mean: number) =>
+    Math.floor(mean) + (Math.random() < mean - Math.floor(mean) ? 1 : 0);
+  const keys = sh.scout ? roll(hours * SCOUT_KEYS_PER_H) : 0;
+  const found: CaseTier[] = [];
+  if (sh.scout)
+    for (let k = roll(hours * SCOUT_PARCELS_PER_H); k > 0; k--) found.push(rollTier(Math.random));
+  const tick = tickParcels(p, 0, found);
+  const prison: PrisonState = {
+    ...p,
+    crewFrom: now,
+    crewFed: false,
+    tokens: p.tokens + y.tokens + tick.tokens,
+    keys: p.keys + keys,
+    parcels: tick.parcels,
+    earned: p.earned + y.coins,
+  };
+  return {
+    prison,
+    y: { ...y, keys, parcels: tick.added, parcelTokens: tick.tokens, shift: sh.id },
+  };
+}
+
 /** Питомец растёт от каждого блока и бревна, пока он с собой. */
 function feedPet(p: PrisonState, n: number): { pets: PrisonState['pets']; up: number } {
   if (!p.pet || p.pets[p.pet] === undefined) return { pets: p.pets, up: 0 };
@@ -634,6 +676,23 @@ export interface ForestCut {
   eventStarted: YardEvent | null;
   eventDone: YardPrize | null;
   eventEnded: YardEnd | null;
+}
+
+/** Принятая смена бригады: добыча и находки разведки. */
+export interface CrewCollect extends CrewYield {
+  keys: number;
+  parcels: CaseTier[];
+  parcelTokens: number;
+  shift: CrewShift;
+}
+
+/** Сундуки, открытые разом. */
+export interface CasesOpened {
+  rolls: CaseRoll[];
+  coins: number;
+  /** Руны, разбитые на токены: мешочек был полон. */
+  shattered: number;
+  newPets: PetId[];
 }
 
 /** Вскрытая передачка — для сцены на странице. */
@@ -1109,6 +1168,8 @@ interface FinanceState {
   forestCraftProp: () => boolean;
   /** Выточить следующую рукоять. */
   forestCraftHandle: () => boolean;
+  /** Верстак: сдать заказ `i` — доски уходят, монеты и токены приходят. */
+  forestOrderFill: (i: number) => { coins: number; tokens: number; item: string } | null;
   /** Двор: закрыть событие, чьё время вышло (медведь уносит штабель). */
   yardExpire: () => YardEnd | null;
   /** Разбит метеорит / повержен Куйва: забрать награду. */
@@ -1143,9 +1204,18 @@ interface FinanceState {
   prisonFrenzy: () => void;
   /** Открыть сундук: ключ уходит, награда начисляется сразу. */
   prisonOpenCase: () => CaseRoll | null;
+  /**
+   * Открыть до `count` сундуков разом. По одному, подряд: каждая находка
+   * уже лежит в коллекции к следующему сундуку, поэтому не повторится.
+   */
+  prisonOpenCases: (count: number) => CasesOpened | null;
   /** Бригада: нанять или поднять уровень за монеты, забрать добычу. */
   prisonCrewUp: () => boolean;
-  prisonCrewCollect: () => CrewYield | null;
+  prisonCrewCollect: () => CrewCollect | null;
+  /** Наряд на следующую смену. Накопленное по старому наряду сдаётся сразу. */
+  prisonCrewShift: (shift: CrewShift) => CrewCollect | null;
+  /** Пайка — только в первые минуты смены. */
+  prisonCrewFeed: () => boolean;
   /** Перки престижа: взять уровень за очко или сбросить все. */
   prisonPerk: (id: PerkId) => boolean;
   prisonPerksReset: () => void;
@@ -3005,7 +3075,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   prisonRuneSocket: (slot, runeId) => {
     const p = get().prison;
-    if (slot < 0 || slot >= socketsOpen(p)) return;
+    if (slot < 0 || slot >= socketsOpen(p, axeLevelOf(get().forest.logs).level)) return;
     if (runeId && !p.runes.some((r) => r.id === runeId)) return;
     // Руна носится в одном гнезде: переставил — старое место освободилось.
     const sockets = p.sockets.map((id, i) => (i === slot ? runeId : id === runeId ? 0 : id));
@@ -3420,6 +3490,47 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return true;
   },
 
+  forestOrderFill: (i) => {
+    const s = get();
+    const f = s.forest;
+    const now = Date.now();
+    const mill = millTick(f.mill, now);
+    const { bench, orders } = benchOrders(f.bench, f.rank);
+    const o = orders[i];
+    if (!o || now < o.at) return null;
+    const reserve = boardsReserve(s.prison.handle);
+    if (!benchCan(mill.boards, o, reserve)) return null;
+    let boards: number[] | null;
+    if (o.species >= 0) {
+      boards = [...mill.boards];
+      boards[o.species] -= o.boards;
+    } else boards = takeBoards(mill.boards, o.boards, reserve);
+    if (!boards) return null;
+    const coins = Math.round(o.coins * forestMods(s.prison).sell);
+    const seq = bench.seq + 1;
+    const fresh = { ...benchOrder(seq, f.rank), at: now + BENCH_COOLDOWN_MS };
+    const forest: ForestState = {
+      ...f,
+      mill: { ...mill, boards },
+      bench: { seq, orders: orders.map((x, k) => (k === i ? fresh : x)) },
+      earned: f.earned + coins,
+    };
+    const prison = { ...s.prison, tokens: s.prison.tokens + o.tokens };
+    const missions = missionsForToday(s.slotsMissions);
+    const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
+    counters.ore += coins;
+    set({
+      forest,
+      prison,
+      slotsBalance: s.slotsBalance + coins,
+      slotsMissions: { ...missions, counters },
+    });
+    persistForest(forest);
+    persistPrison(prison);
+    persistSlots(get());
+    return { coins, tokens: o.tokens, item: o.item };
+  },
+
   forestCraftHandle: () => {
     const s = get();
     const f = s.forest;
@@ -3727,6 +3838,30 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return roll;
   },
 
+  prisonOpenCases: (count) => {
+    const s = get();
+    let p = s.prison;
+    const n = Math.min(Math.max(0, Math.floor(count)), p.keys, 500);
+    if (n <= 0) return null;
+    const rolls: CaseRoll[] = [];
+    let coins = 0;
+    let shattered = 0;
+    const newPets: PetId[] = [];
+    for (let i = 0; i < n; i++) {
+      const roll = rollCase(p, Math.random);
+      const a = applyReward({ ...p, keys: p.keys - 1, cases: p.cases + 1 }, roll.reward);
+      p = a.p;
+      coins += a.coins;
+      shattered += a.shattered;
+      if (a.newPet) newPets.push(a.newPet);
+      rolls.push(roll);
+    }
+    set({ prison: p, slotsBalance: s.slotsBalance + coins });
+    persistPrison(p);
+    if (coins) persistSlots(get());
+    return { rolls, coins, shattered, newPets };
+  },
+
   prisonCrewUp: () => {
     const s = get();
     const p = s.prison;
@@ -3753,20 +3888,43 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   prisonCrewCollect: () => {
     const s = get();
-    const p = s.prison;
     const now = Date.now();
-    const y = crewYield(p, now);
-    if (!y.blocks) return null;
-    const prison: PrisonState = {
-      ...p,
-      crewFrom: now,
-      tokens: p.tokens + y.tokens,
-      earned: p.earned + y.coins,
-    };
-    set({ prison, slotsBalance: s.slotsBalance + y.coins });
+    const got = collectCrew(s.prison, now);
+    if (!got) return null;
+    set({ prison: got.prison, slotsBalance: s.slotsBalance + got.y.coins });
+    persistPrison(got.prison);
+    persistSlots(get());
+    return got.y;
+  },
+
+  prisonCrewShift: (shift) => {
+    const s = get();
+    const now = Date.now();
+    const p = s.prison;
+    if (!p.crew || p.crewShift === shift) return null;
+    // Накопленное по старому наряду — сдаётся по старой ставке.
+    const got = collectCrew(p, now);
+    const base = got ? got.prison : p;
+    const prison: PrisonState = { ...base, crewShift: shift, crewFrom: now, crewFed: false };
+    set({ prison, ...(got ? { slotsBalance: s.slotsBalance + got.y.coins } : {}) });
+    persistPrison(prison);
+    if (got) persistSlots(get());
+    return got?.y ?? null;
+  },
+
+  prisonCrewFeed: () => {
+    const s = get();
+    const p = s.prison;
+    if (!p.crew || p.crewFed) return false;
+    const y = crewYield(p, Date.now());
+    if (y.minutes > CREW_FEED_WINDOW_MIN) return false;
+    const price = crewFeedCost(p);
+    if (s.slotsBalance < price) return false;
+    const prison = { ...p, crewFed: true };
+    set({ prison, slotsBalance: s.slotsBalance - price });
     persistPrison(prison);
     persistSlots(get());
-    return y;
+    return true;
   },
 
   prisonPerk: (id) => {

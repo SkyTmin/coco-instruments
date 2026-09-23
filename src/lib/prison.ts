@@ -1453,10 +1453,10 @@ export interface RuneDef {
 export const RUNES: RuneDef[] = [
   { id: 'sell', name: 'Феху', text: 'к продаже', unit: 0.016 },
   { id: 'dmg', name: 'Уруз', text: 'к урону', unit: 0.024 },
-  { id: 'rate', name: 'Райдо', text: 'к скорости кирки', unit: 0.01 },
+  { id: 'rate', name: 'Райдо', text: 'к скорости удара', unit: 0.01 },
   { id: 'loot', name: 'Йера', text: 'к добыче', unit: 0.016 },
   { id: 'token', name: 'Гебо', text: 'к токенам', unit: 0.032 },
-  { id: 'proc', name: 'Совило', text: 'к шансам чар поля', unit: 0.024 },
+  { id: 'proc', name: 'Совило', text: 'к шансам чар кирки и топора', unit: 0.024 },
 ];
 
 export const runeOf = (kind: RuneKind): RuneDef => RUNES.find((r) => r.id === kind)!;
@@ -1509,9 +1509,13 @@ export function rollRune(
   };
 }
 
-/** Сколько гнёзд открыто: по уровню кирки плюс веха «Престиж 10». */
-export function socketsOpen(p: { pickXp: number; miles?: string[] }): number {
-  const level = pickLevelOf(p.pickXp).level;
+/**
+ * Сколько гнёзд оберега открыто: по уровню кирки ИЛИ топора (что выше) плюс
+ * веха «Престиж 10». Оберег один на шахту и лес, поэтому и открывать его
+ * можно любым инструментом — лесоруб не должен ради гнезда идти в забой.
+ */
+export function socketsOpen(p: { pickXp: number; miles?: string[] }, axeLevel = 0): number {
+  const level = Math.max(pickLevelOf(p.pickXp).level, axeLevel);
   return SOCKET_UNLOCK.filter((l) => level >= l).length + (p.miles?.includes('p10') ? 1 : 0);
 }
 
@@ -2209,8 +2213,74 @@ export function crewCost(level: number): number {
   return nice(5000 * Math.pow(2.6, level));
 }
 
-export function crewCapHours(p: { perks: Perks }): number {
-  return CREW_CAP_H + p.perks.shift;
+/**
+ * Наряд на смену (v2.57). Раньше бригада только копила и ждала кнопки —
+ * владелец попросил «механики побольше». Три наряда — три способа
+ * возвращаться: раз в день (норма), каждые два часа (ударная) или ради
+ * находок (разведка).
+ */
+export type CrewShift = 'norm' | 'rush' | 'scout';
+
+export interface CrewShiftDef {
+  id: CrewShift;
+  name: string;
+  text: string;
+  /** Длина смены без перка и сколько часов добавляет каждый уровень перка. */
+  hours: number;
+  perHour: number;
+  rate: number;
+  /** Ищут ли ключи и передачки. */
+  scout: boolean;
+}
+
+export const CREW_SHIFTS: CrewShiftDef[] = [
+  {
+    id: 'norm',
+    name: 'Норма',
+    text: 'Спокойно копают всю смену',
+    hours: CREW_CAP_H,
+    perHour: 1,
+    rate: 1,
+    scout: false,
+  },
+  {
+    id: 'rush',
+    name: 'Ударная',
+    text: 'В 2,5 раза быстрее, но всего два часа',
+    hours: 2,
+    perHour: 0.25,
+    rate: 2.5,
+    scout: false,
+  },
+  {
+    id: 'scout',
+    name: 'Разведка',
+    text: 'Копают вполсилы, зато ищут ключи и передачки',
+    hours: 6,
+    perHour: 0.5,
+    rate: 0.5,
+    scout: true,
+  },
+];
+
+export const crewShiftOf = (id: CrewShift | undefined): CrewShiftDef =>
+  CREW_SHIFTS.find((c) => c.id === id) ?? CREW_SHIFTS[0];
+
+/** Пайка: +30% ко всей смене, если накормить в первые 10 минут. */
+export const CREW_FED_BOOST = 0.3;
+export const CREW_FEED_WINDOW_MIN = 10;
+
+export function crewFeedCost(p: { rank: number; prestige: number }): number {
+  return nice(rankCost(Math.min(p.rank, LAST_RANK - 1), p.prestige) * 0.12);
+}
+
+/** Разведка: ключей и передачек в среднем за час смены. */
+export const SCOUT_KEYS_PER_H = 0.3;
+export const SCOUT_PARCELS_PER_H = 0.08;
+
+export function crewCapHours(p: { perks: Perks; crewShift?: CrewShift }): number {
+  const sh = crewShiftOf(p.crewShift);
+  return sh.hours + sh.perHour * p.perks.shift;
 }
 
 export interface CrewYield {
@@ -2228,7 +2298,9 @@ export function crewYield(p: PrisonState, now: number): CrewYield {
   const cap = crewCapHours(p) * 60;
   const raw = Math.max(0, (now - p.crewFrom) / 60000);
   const minutes = Math.min(cap, raw);
-  const blocks = Math.floor(crewRate(p.crew) * minutes);
+  const sh = crewShiftOf(p.crewShift);
+  const fed = p.crewFed ? 1 + CREW_FED_BOOST : 1;
+  const blocks = Math.floor(crewRate(p.crew) * sh.rate * fed * minutes);
   const m = modsOf(p);
   return {
     minutes,
@@ -2520,6 +2592,9 @@ export interface PrisonState {
   /** Бригада: уровень и с какого момента она копит добычу. */
   crew: number;
   crewFrom: number;
+  /** Наряд текущей смены и накормлена ли бригада (v2.57). */
+  crewShift: CrewShift;
+  crewFed: boolean;
   perks: Perks;
   /** Открыто сундуков — для статистики. */
   cases: number;
@@ -2593,6 +2668,8 @@ export const PRISON_START: PrisonState = {
   finds: {},
   crew: 0,
   crewFrom: 0,
+  crewShift: 'norm',
+  crewFed: false,
   perks: NO_PERKS,
   cases: 0,
   pickXp: 0,
@@ -2677,6 +2754,10 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     ) as Finds,
     crew: int(raw.crew, 0, CREW_MAX, 0),
     crewFrom: int(raw.crewFrom, 0, 1e14, 0),
+    crewShift: CREW_SHIFTS.some((c) => c.id === raw.crewShift)
+      ? (raw.crewShift as CrewShift)
+      : 'norm',
+    crewFed: raw.crewFed === true,
     perks: Object.fromEntries(
       PERKS.map((k) => [k.id, int(raw.perks?.[k.id], 0, k.max, 0)]),
     ) as Perks,

@@ -1218,6 +1218,26 @@ function outline(px: Pixels, line: RGB): void {
   for (const [x, y] of edge) px.set(x, y, line);
 }
 
+/**
+ * Контур СНАРУЖИ фигуры: пустые пиксели рядом с залитыми. `outline` красит
+ * крайние пиксели самой фигуры, и деталь в два пикселя (ножка табурета)
+ * целиком уходила в чёрное.
+ */
+function outlineOut(px: Pixels, line: RGB): void {
+  const n = px.n;
+  const solid = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < n && y < n && px.data[(y * n + x) * 4 + 3] > 0;
+  const add: [number, number][] = [];
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++)
+      if (
+        !solid(x, y) &&
+        (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))
+      )
+        add.push([x, y]);
+  for (const [x, y] of add) px.set(x, y, line);
+}
+
 let meteorUrl: string | undefined;
 
 /** Метеорит: обугленный камень с раскалёнными трещинами. */
@@ -1396,4 +1416,492 @@ export function barygaTexture(): string {
   outline(px, hex('#120e0a'));
   barygaUrl = px.toUrl();
   return barygaUrl;
+}
+
+// ---------------------------------------------------------------------------
+// Рунные камни (v2.57): 32×32. Сланцевая плита с аркой сверху, свет слева
+// сверху — светлая фаска там, тёмная внизу справа. Знак ВЫСЕЧЕН: жёлоб
+// темнее камня, верхняя-левая стенка жёлоба в тени, нижний-правый край
+// камня у жёлоба светлый — так резьба читается глубиной, а не краской.
+// Со второй ступени в жёлобе залита светящаяся смальта цвета ступени, с
+// третьей вокруг знака ореол, у пятой — искры. Раньше руна была тремя
+// линиями на плитке, и владелец назвал её «ужасно и непонятно».
+// ---------------------------------------------------------------------------
+
+/** Знаки старшего футарка ломаными в поле 20×28 (как в SVG прежней иконки). */
+const RUNE_STROKES: Record<string, [number, number][][]> = {
+  sell: [
+    [
+      [7, 4],
+      [7, 24],
+    ],
+    [
+      [7, 11],
+      [14, 5],
+    ],
+    [
+      [7, 17],
+      [14, 11],
+    ],
+  ],
+  dmg: [
+    [
+      [6, 24],
+      [6, 4],
+      [14, 10],
+      [14, 24],
+    ],
+  ],
+  rate: [
+    [
+      [6, 24],
+      [6, 4],
+      [13, 8],
+      [6, 13],
+      [14, 24],
+    ],
+  ],
+  loot: [
+    [
+      [9, 5],
+      [4, 11],
+      [9, 17],
+    ],
+    [
+      [11, 11],
+      [16, 17],
+      [11, 23],
+    ],
+  ],
+  token: [
+    [
+      [4, 5],
+      [16, 23],
+    ],
+    [
+      [16, 5],
+      [4, 23],
+    ],
+  ],
+  proc: [
+    [
+      [13, 3],
+      [6, 11],
+      [14, 17],
+      [7, 25],
+    ],
+  ],
+};
+
+const RUNE_TIER_COLORS = ['#9aa7b4', '#4f8cff', '#b36cff', '#ffb020', '#ff5a6a'];
+
+const runeCache = new Map<string, string>();
+
+export function runeTexture(kind: string, tier: number): string {
+  const t = Math.max(1, Math.min(5, Math.round(tier)));
+  const key = `${kind}:${t}`;
+  const hit = runeCache.get(key);
+  if (hit !== undefined) return hit;
+  const n = 40;
+  const px = new Pixels(n);
+  const rnd = rng32(kind.length * 131 + t * 17 + kind.charCodeAt(0) * 7);
+  // Плита: высокая арка сверху, сколотые нижние углы.
+  const inside = (x: number, y: number): boolean => {
+    if (x < 5 || x > 34 || y < 2 || y > 38) return false;
+    if (y < 14) return ((x - 19.5) / 15) ** 2 + ((y - 14) / 12) ** 2 <= 1;
+    if (y >= 37 && (x < 7 || x > 32)) return false;
+    if (y >= 38 && (x < 8 || x > 31)) return false;
+    return true;
+  };
+  const stone = hex('#5d626b');
+  const lightS = hex('#9aa0aa');
+  const darkS = hex('#2e3137');
+  // Крупные пятна (сетка 5×5) плюс зерно — поверхность живого камня.
+  const blot = Array.from({ length: 81 }, () => rnd() * 0.22 - 0.11);
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      if (!inside(x, y)) continue;
+      const lit = 0.55 - ((x - 20) / 30 + (y - 20) / 36);
+      let c = mix(mix(darkS, lightS, Math.max(0, Math.min(1, lit))), stone, 0.4);
+      const b = blot[Math.floor(y / 5) * 9 + Math.floor(x / 5)];
+      c = b > 0 ? mix(c, WHITE, b) : mix(c, BLACK, -b);
+      c = mix(c, rnd() < 0.5 ? WHITE : BLACK, rnd() * 0.08);
+      px.set(x, y, c);
+    }
+  // Лишайник на простых камнях: они лежали в поле, не в сокровищнице.
+  if (t <= 2)
+    for (let k = 0; k < 5; k++) {
+      const cx = 8 + Math.floor(rnd() * 24);
+      const cy = 22 + Math.floor(rnd() * 14);
+      for (let i = 0; i < 4; i++) {
+        const x = cx + Math.floor(rnd() * 3) - 1;
+        const y = cy + Math.floor(rnd() * 3) - 1;
+        if (inside(x, y)) px.set(x, y, mix(hex('#7c8c52'), hex('#a8b870'), rnd()));
+      }
+    }
+  // Трещины.
+  for (let k = 0; k < 3; k++) {
+    let x = 8 + Math.floor(rnd() * 24);
+    let y = 26 + Math.floor(rnd() * 10);
+    for (let i = 0; i < 6; i++) {
+      if (inside(x, y)) px.set(x, y, mix(darkS, BLACK, 0.35));
+      x += rnd() < 0.5 ? 1 : -1;
+      y += rnd() < 0.65 ? -1 : 0;
+    }
+  }
+  // Двойная фаска: внешний ряд ярче/темнее, внутренний — вполсилы.
+  const edge = (x: number, y: number, d: number) =>
+    !inside(x - d, y) || !inside(x, y - d)
+      ? 'lit'
+      : !inside(x + d, y) || !inside(x, y + d)
+        ? 'dark'
+        : null;
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      if (!inside(x, y)) continue;
+      const e1 = edge(x, y, 1);
+      const e2 = edge(x, y, 2);
+      if (e1 === 'lit') px.set(x, y, mix(lightS, WHITE, 0.35));
+      else if (e1 === 'dark') px.set(x, y, mix(darkS, BLACK, 0.4));
+      else if (e2 === 'lit') px.set(x, y, mix(px.get(x, y), WHITE, 0.18));
+      else if (e2 === 'dark') px.set(x, y, mix(px.get(x, y), BLACK, 0.22));
+    }
+  // Жёлоб знака: ломаные в масштабе 1,3, толщиной 2–3 пикселя.
+  const groove = new Set<number>();
+  const put = (x: number, y: number) => {
+    if (x >= 0 && y >= 0 && x < n && y < n) groove.add(y * n + x);
+  };
+  for (const line of RUNE_STROKES[kind] ?? []) {
+    for (let s2 = 1; s2 < line.length; s2++) {
+      const [x0, y0] = line[s2 - 1];
+      const [x1, y1] = line[s2];
+      const steps = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 3);
+      for (let i = 0; i <= steps; i++) {
+        const gx = 19.5 + (x0 + ((x1 - x0) * i) / steps - 10) * 1.3;
+        const gy = 20 + (y0 + ((y1 - y0) * i) / steps - 14) * 1.3;
+        const x = Math.round(gx - 0.5);
+        const y = Math.round(gy - 0.5);
+        put(x, y);
+        put(x + 1, y);
+        put(x, y + 1);
+        put(x + 1, y + 1);
+      }
+    }
+  }
+  const glow = hex(RUNE_TIER_COLORS[t - 1]);
+  const has = (x: number, y: number) => groove.has(y * n + x);
+  // Ореол с третьей ступени.
+  if (t >= 3)
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++) {
+        if (!inside(x, y) || has(x, y)) continue;
+        let near = 0;
+        for (let dy = -3; dy <= 3; dy++)
+          for (let dx = -3; dx <= 3; dx++) if (has(x + dx, y + dy)) near += 1;
+        if (near)
+          px.set(x, y, mix(px.get(x, y), glow, Math.min(0.6, near * 0.025 + (t - 3) * 0.06)));
+      }
+  for (const idx of groove) {
+    const x = idx % n;
+    const y = Math.floor(idx / n);
+    if (!inside(x, y)) continue;
+    const shade = !has(x - 1, y) || !has(x, y - 1);
+    const core = has(x + 1, y) && has(x, y + 1) && has(x - 1, y) && has(x, y - 1);
+    if (t === 1) px.set(x, y, shade ? hex('#121418') : hex('#24272d'));
+    else
+      px.set(
+        x,
+        y,
+        shade ? mix(glow, BLACK, 0.5) : core ? mix(glow, WHITE, 0.55) : mix(glow, WHITE, 0.12),
+      );
+    for (const [dx, dy] of [
+      [1, 0],
+      [0, 1],
+    ] as const)
+      if (inside(x + dx, y + dy) && !has(x + dx, y + dy))
+        px.set(x + dx, y + dy, mix(px.get(x + dx, y + dy), WHITE, 0.32));
+  }
+  // Оковка с четвёртой ступени: металлические уголки с заклёпками внизу.
+  if (t >= 4) {
+    const metal = t === 4 ? hex('#d8a23a') : hex('#e8c060');
+    const metalD = mix(metal, BLACK, 0.45);
+    const metalL = mix(metal, WHITE, 0.45);
+    for (const side of [0, 1]) {
+      for (let i = 0; i < 6; i++) {
+        const xa = side ? 33 - i : 6 + i;
+        const ya = 36;
+        if (inside(xa, ya)) px.set(xa, ya, i === 0 ? metalL : metal);
+        if (inside(xa, ya + 1)) px.set(xa, ya + 1, metalD);
+        const xb = side ? 33 : 6;
+        const yb = 36 - i;
+        if (inside(xb, yb)) px.set(xb, yb, metal);
+        if (inside(xb + (side ? -1 : 1), yb)) px.set(xb + (side ? -1 : 1), yb, metalD);
+      }
+      const rx = side ? 32 : 7;
+      px.set(rx, 35, metalL);
+    }
+  }
+  // Пятая ступень: самоцвет в вершине арки и искры по камню.
+  if (t === 5) {
+    const gem = hex('#ff3a52');
+    for (const [x, y, c] of [
+      [19, 4, mix(gem, WHITE, 0.5)],
+      [20, 4, gem],
+      [19, 5, gem],
+      [20, 5, mix(gem, BLACK, 0.4)],
+    ] as const)
+      px.set(x, y, c);
+    for (let k = 0; k < 9; k++) {
+      const x = 7 + Math.floor(rnd() * 26);
+      const y = 5 + Math.floor(rnd() * 31);
+      if (inside(x, y) && !has(x, y)) px.set(x, y, mix(glow, WHITE, 0.75));
+    }
+  }
+  outline(px, t >= 2 ? mix(glow, BLACK, 0.72) : hex('#101216'));
+  const url = px.toUrl();
+  runeCache.set(key, url);
+  return url;
+}
+
+// ---------------------------------------------------------------------------
+// Верстак (v2.57): вещи из досок. 20×20, цвет дерева — от породы досок,
+// чтобы заказ на берёзовые лыжи и был берёзовым. Крепь — рама забоя: две
+// стойки и верхняк; рукоять — обструганная палка с оплёткой.
+// ---------------------------------------------------------------------------
+
+const benchCache = new Map<string, string>();
+
+/** Строганая доска: светлый верх, тёмный низ, волокно штрихами. */
+function plank(
+  px: Pixels,
+  x0: number,
+  y0: number,
+  w: number,
+  h: number,
+  wood: RGB,
+  rnd: () => number,
+) {
+  const light = mix(wood, WHITE, 0.3);
+  const dark = mix(wood, hex('#3a2410'), 0.55);
+  for (let y = y0; y < y0 + h; y++)
+    for (let x = x0; x < x0 + w; x++) {
+      const edge = y === y0 ? light : y === y0 + h - 1 || x === x0 + w - 1 ? dark : null;
+      px.set(x, y, edge ?? mix(wood, rnd() < 0.5 ? light : dark, rnd() * 0.18));
+    }
+  if (w > 4)
+    for (let k = 0; k < Math.max(1, Math.floor(w / 6)); k++) {
+      const y = y0 + 1 + Math.floor(rnd() * Math.max(1, h - 2));
+      const x = x0 + 1 + Math.floor(rnd() * (w - 4));
+      for (let i = 0; i < 3; i++) px.set(x + i, y, mix(wood, dark, 0.5));
+    }
+}
+
+export function benchTexture(item: string, species: number): string {
+  const key = `${item}:${species}`;
+  const hit = benchCache.get(key);
+  if (hit !== undefined) return hit;
+  const sp = SPECIES[Math.max(0, species)];
+  const wood = hex(species < 0 ? '#e0b878' : sp.wood);
+  const dark = mix(wood, hex('#2a1808'), 0.6);
+  const iron = hex('#5a6068');
+  const px = new Pixels(20);
+  const rnd = rng32(item.length * 977 + species * 13 + 5);
+  switch (item) {
+    case 'box':
+      for (let i = 0; i < 4; i++) plank(px, 2, 5 + i * 3, 16, 3, wood, rnd);
+      plank(px, 2, 4, 2, 13, mix(wood, BLACK, 0.15), rnd);
+      plank(px, 16, 4, 2, 13, mix(wood, BLACK, 0.15), rnd);
+      break;
+    case 'stool':
+      plank(px, 2, 5, 16, 3, wood, rnd);
+      plank(px, 4, 8, 2, 10, mix(wood, BLACK, 0.12), rnd);
+      plank(px, 14, 8, 2, 10, mix(wood, BLACK, 0.12), rnd);
+      plank(px, 5, 13, 10, 2, mix(wood, BLACK, 0.2), rnd);
+      break;
+    case 'skis':
+      for (const x of [5, 12]) {
+        plank(px, x, 3, 3, 15, wood, rnd);
+        px.set(x, 2, mix(wood, WHITE, 0.3));
+        px.set(x + 1, 1, mix(wood, WHITE, 0.3));
+        for (let i = 0; i < 3; i++) px.set(x + i, 10, hex('#8a3a2a'));
+      }
+      break;
+    case 'barrel':
+      for (let i = 0; i < 5; i++) {
+        const bulge = i === 0 || i === 4 ? 1 : 0;
+        plank(
+          px,
+          4 + i * 2 + (i > 2 ? 1 : 0) - (i < 2 ? 0 : 0),
+          3 + bulge,
+          3,
+          15 - bulge * 2,
+          wood,
+          rnd,
+        );
+      }
+      for (const y of [6, 14])
+        for (let x = 3; x <= 16; x++) px.set(x, y, mix(iron, WHITE, x < 7 ? 0.3 : 0));
+      break;
+    case 'frame':
+      plank(px, 2, 2, 16, 2, wood, rnd);
+      plank(px, 2, 16, 16, 2, wood, rnd);
+      plank(px, 2, 2, 2, 16, wood, rnd);
+      plank(px, 16, 2, 2, 16, wood, rnd);
+      plank(px, 9, 4, 2, 12, wood, rnd);
+      plank(px, 4, 9, 12, 2, wood, rnd);
+      for (const [x, y] of [
+        [5, 5],
+        [12, 5],
+        [5, 12],
+        [12, 12],
+      ])
+        for (let dy = 0; dy < 3; dy++)
+          for (let dx = 0; dx < 3; dx++)
+            px.set(x + dx, y + dy, mix(hex('#9ac8e8'), WHITE, dy === 0 ? 0.4 : 0));
+      break;
+    case 'sled':
+      plank(px, 3, 8, 14, 3, wood, rnd);
+      plank(px, 3, 11, 14, 2, mix(wood, BLACK, 0.15), rnd);
+      for (let x = 2; x <= 18; x++) px.set(x, 15, dark);
+      px.set(18, 14, dark);
+      px.set(19, 13, dark);
+      plank(px, 5, 12, 2, 3, dark, rnd);
+      plank(px, 13, 12, 2, 3, dark, rnd);
+      break;
+    case 'boat':
+      for (let x = 1; x <= 18; x++) {
+        const d = Math.abs(x - 9.5);
+        const top = 9;
+        const bottom = Math.round(15 - d * 0.35);
+        for (let y = top; y <= bottom; y++)
+          px.set(x, y, y === top ? mix(wood, WHITE, 0.3) : y % 2 ? wood : mix(wood, BLACK, 0.12));
+      }
+      for (let y = 1; y < 9; y++) px.set(9, y, dark);
+      for (let y = 2; y < 8; y++)
+        for (let x = 10; x < 10 + (y - 1); x++) px.set(x, y, hex('#e8dcc0'));
+      break;
+    case 'prop':
+      // Рама забоя: две стойки и верхняк, под ним тень свода.
+      plank(px, 2, 3, 16, 3, wood, rnd);
+      plank(px, 3, 6, 3, 12, mix(wood, BLACK, 0.1), rnd);
+      plank(px, 14, 6, 3, 12, mix(wood, BLACK, 0.1), rnd);
+      for (let x = 6; x < 14; x++)
+        for (let y = 6; y < 18; y++) px.set(x, y, mix(hex('#1a120c'), BLACK, (y - 6) / 24));
+      break;
+    case 'handle':
+      // Обструганная рукоять наискось, толщиной три пикселя, с оплёткой.
+      for (let i = 0; i < 15; i++) {
+        const x = 3 + i;
+        const y = 16 - i;
+        px.set(x, y, mix(wood, WHITE, 0.35));
+        px.set(x + 1, y, wood);
+        px.set(x + 1, y + 1, mix(wood, BLACK, 0.12));
+        px.set(x, y + 1, wood);
+        px.set(x + 1, y + 2, dark);
+      }
+      for (let i = 1; i < 5; i++) {
+        const x = 3 + i;
+        const y = 16 - i;
+        const c = i % 2 ? hex('#3a2a1a') : hex('#7a5232');
+        px.set(x, y, c);
+        px.set(x + 1, y, c);
+        px.set(x, y + 1, c);
+        px.set(x + 1, y + 1, c);
+      }
+      break;
+  }
+  outlineOut(px, hex('#1a0e06'));
+  const url = px.toUrl();
+  benchCache.set(key, url);
+  return url;
+}
+
+// ---------------------------------------------------------------------------
+// Бригада (v2.57): рабочий у забоя и вагонетка с породой. 16×16, рубаха у
+// каждого своя — шестеро одинаковых читались бы кляксой.
+// ---------------------------------------------------------------------------
+
+const SHIRTS = ['#3a5a8a', '#8a3a3a', '#4a6a3a', '#7a5a2a', '#5a3a7a', '#2a6a6a'];
+const workerCache = new Map<number, string>();
+
+export function workerTexture(i: number): string {
+  const hit = workerCache.get(i);
+  if (hit !== undefined) return hit;
+  const px = new Pixels();
+  const shirt = hex(SHIRTS[i % SHIRTS.length]);
+  const skin = hex('#e0b48a');
+  const helmet = hex('#e8b830');
+  const pants = hex('#2a2e38');
+  // Каска с фонарём.
+  for (let x = 5; x <= 10; x++) px.set(x, 2, helmet);
+  for (let x = 4; x <= 11; x++) px.set(x, 3, mix(helmet, BLACK, x > 8 ? 0.2 : 0));
+  px.set(7, 1, hex('#fff6c0'));
+  px.set(8, 1, hex('#fff6c0'));
+  // Лицо.
+  for (let y = 4; y <= 6; y++) for (let x = 5; x <= 10; x++) px.set(x, y, skin);
+  px.set(6, 5, hex('#1a1210'));
+  px.set(9, 5, hex('#1a1210'));
+  for (let x = 6; x <= 9; x++) px.set(x, 7, mix(skin, hex('#6a4a2a'), 0.5));
+  // Рубаха и штаны.
+  for (let y = 8; y <= 11; y++)
+    for (let x = 4; x <= 11; x++)
+      px.set(x, y, mix(shirt, y === 8 ? WHITE : BLACK, y === 8 ? 0.2 : (y - 8) * 0.05));
+  for (let y = 12; y <= 14; y++) {
+    for (let x = 5; x <= 7; x++) px.set(x, y, pants);
+    for (let x = 8; x <= 10; x++) px.set(x, y, pants);
+  }
+  for (let x = 4; x <= 7; x++) px.set(x, 15, hex('#3a2616'));
+  for (let x = 8; x <= 11; x++) px.set(x, 15, hex('#3a2616'));
+  // Кирка на плече.
+  for (let k = 0; k < 6; k++) px.set(12 - Math.floor(k / 2), 5 + k, hex('#8a5a2a'));
+  for (let x = 11; x <= 15; x++) px.set(x, 4, hex('#9aa4ae'));
+  px.set(15, 5, hex('#9aa4ae'));
+  outline(px, hex('#120e0a'));
+  const url = px.toUrl();
+  workerCache.set(i, url);
+  return url;
+}
+
+const cartCache = new Map<number, string>();
+
+/** Вагонетка, полная породы `rock`. */
+export function cartTexture(rock: number): string {
+  const hit = cartCache.get(rock);
+  if (hit !== undefined) return hit;
+  const r = ROCKS[Math.max(0, Math.min(ROCKS.length - 1, rock))];
+  const px = new Pixels();
+  const rnd = rng32(rock * 211 + 3);
+  const iron = hex('#6a727c');
+  const ironD = hex('#3a4048');
+  // Горка породы — кусками 2×2 с бликом, чтобы читалась порода, а не каша.
+  for (let y = 1; y <= 7; y += 2)
+    for (let x = 2; x <= 12; x += 2) {
+      const d = Math.abs(x + 0.5 - 7.5) / 7.5 + (7 - y) / 8;
+      if (d > 1) continue;
+      const c = rnd() < 0.3 ? hex(r.fleck) : hex(r.base);
+      px.set(x, y, mix(c, WHITE, 0.35));
+      px.set(x + 1, y, c);
+      px.set(x, y + 1, c);
+      px.set(x + 1, y + 1, hex(r.dark));
+    }
+  // Кузов — трапеция с рёбрами.
+  for (let y = 7; y <= 11; y++) {
+    const inset = Math.floor((y - 7) / 2);
+    for (let x = 2 + inset; x <= 13 - inset; x++)
+      px.set(
+        x,
+        y,
+        y === 7 ? mix(iron, WHITE, 0.3) : x === 2 + inset || x === 13 - inset ? ironD : iron,
+      );
+  }
+  for (let y = 8; y <= 10; y++) px.set(7, y, ironD);
+  // Колёса.
+  for (const cx of [4, 11])
+    for (let y = 11; y <= 13; y++)
+      for (let x = cx - 1; x <= cx + 1; x++)
+        px.set(x, y, x === cx && y === 12 ? hex('#c8ccd0') : hex('#1e2126'));
+  outline(px, hex('#101216'));
+  const url = px.toUrl();
+  cartCache.set(rock, url);
+  return url;
 }

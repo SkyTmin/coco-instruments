@@ -19,6 +19,12 @@ import {
   CRIT_MULT,
   crewCapHours,
   crewCost,
+  crewFeedCost,
+  crewShiftOf,
+  CREW_FED_BOOST,
+  CREW_FEED_WINDOW_MIN,
+  CREW_SHARE,
+  CREW_SHIFTS,
   crewRate,
   crewYield,
   bonusOf,
@@ -47,7 +53,6 @@ import {
   runeOf,
   runePower,
   SOCKET_UNLOCK,
-  SOCKETS_MAX,
   socketsOpen,
   enchantRefund,
   ENCHANT_TOGGLE,
@@ -60,7 +65,6 @@ import {
   hitDamage,
   ITEMS,
   modsOf,
-  PROP_MS,
   PERKS,
   perkPointsFree,
   pickLevelOf,
@@ -77,8 +81,10 @@ import {
 import type {
   Bonus,
   CaseRoll,
+  CrewShift,
   CaseTier,
   EnchantId,
+  ItemId,
   PerkId,
   PetId,
   PrisonState,
@@ -86,7 +92,7 @@ import type {
   Rune,
   RuneKind,
 } from '@/lib/prison';
-import type { ParcelOpen } from '@/store';
+import type { CasesOpened, CrewCollect, ParcelOpen } from '@/store';
 import {
   AXE_ENCHANTS,
   axeEnchCap,
@@ -98,6 +104,11 @@ import {
   AXE_SHARP_MAX,
   AXE_SHARP_STEP,
   BOARD_MULT,
+  benchCan,
+  benchItemOf,
+  benchOrders,
+  HANDLE_STRIKES,
+  PROP_STRIKES,
   boardsForSale,
   boardsReserve,
   boardsValue,
@@ -118,8 +129,12 @@ import {
 import type { AxeEnchId, ForestState } from '@/lib/forest';
 import {
   barkTexture,
+  benchTexture,
   boardTexture,
+  cartTexture,
+  workerTexture,
   findTexture,
+  runeTexture,
   parcelTexture,
   petTexture,
   tearTexture,
@@ -132,6 +147,7 @@ import {
   coinDing,
   keyFound,
   payoutEnd,
+  pickHit,
   primeAudio,
   tierBreak,
 } from '@/lib/sound';
@@ -238,6 +254,7 @@ export type CampTab =
   | 'axes'
   | 'axench'
   | 'mill'
+  | 'bench'
   | 'enchant'
   | 'runes'
   | 'pets'
@@ -253,6 +270,7 @@ const TAB_NAMES: Record<CampTab, string> = {
   axes: 'Топоры',
   axench: 'Чары',
   mill: 'Лесопилка',
+  bench: 'Верстак',
   enchant: 'Чары',
   runes: 'Руны',
   pets: 'Питомцы',
@@ -274,7 +292,7 @@ export type CampPlace = 'mine' | 'forest';
  */
 const PLACE_TABS: Record<CampPlace, CampTab[]> = {
   mine: ['forge', 'enchant', 'runes', 'pets', 'shop', 'cases', 'crew', 'finds', 'miles', 'perks'],
-  forest: ['axes', 'axench', 'mill', 'cases', 'pets', 'runes'],
+  forest: ['axes', 'axench', 'mill', 'bench', 'cases', 'pets', 'runes'],
 };
 
 /** Где живёт вкладка: для двора, который открывает лагерь со своих зданий. */
@@ -305,14 +323,13 @@ export function PrisonCamp({
   const tab = tabs.includes(asked) ? asked : tabs[0];
   const crew = crewYield(p, now);
   const miles = milesReady(p);
-  const mill = millTick(f.mill, now);
   const badge: Partial<Record<CampTab, ReactNode>> = {
-    mill: mill.level > 0 && sumRow(mill.boards) >= PROP_BOARDS ? '•' : null,
+    bench: benchReady(f, p, now) ? '•' : null,
     cases: p.keys > 0 ? p.keys : null,
     crew: crew.blocks > 0 && crew.minutes >= 10 ? '•' : null,
     perks: perkPointsFree(p) > 0 ? perkPointsFree(p) : null,
     miles: miles > 0 ? miles : null,
-    runes: runesIdle(p) ? '•' : null,
+    runes: runesIdle(p, axeLevelOf(f.logs).level) ? '•' : null,
   };
   return (
     <Sheet title={place === 'forest' ? 'Лагерь лесоруба' : 'Лагерь шахтёра'} onClose={onClose}>
@@ -338,9 +355,12 @@ export function PrisonCamp({
         {tab === 'forge' && <ForgeTab onSpend={onSpend} />}
         {tab === 'axes' && <AxesTab onSpend={onSpend} />}
         {tab === 'axench' && <AxeEnchSection f={f} p={p} />}
-        {tab === 'mill' && <MillTab now={now} onGain={onGain} onSpend={onSpend} />}
+        {tab === 'mill' && (
+          <MillTab now={now} onGain={onGain} onSpend={onSpend} onBench={() => onTab('bench')} />
+        )}
+        {tab === 'bench' && <BenchTab now={now} onGain={onGain} />}
         {tab === 'enchant' && <EnchantTab />}
-        {tab === 'runes' && <RunesTab />}
+        {tab === 'runes' && <RunesTab axeLevel={axeLevelOf(f.logs).level} />}
         {tab === 'pets' && <PetsTab />}
         {tab === 'miles' && <MilesTab onGain={onGain} />}
         {tab === 'shop' && <ShopTab />}
@@ -822,7 +842,9 @@ function ShopTab() {
 
 function CasesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
   const p = useFinanceStore((s) => s.prison);
+  const prisonOpenCases = useFinanceStore((s) => s.prisonOpenCases);
   const [open, setOpen] = useState<OpenedCase | null>(null);
+  const [batch, setBatch] = useState<CasesOpened | null>(null);
   return (
     <div className="pforge">
       <div className="pchest">
@@ -847,6 +869,27 @@ function CasesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
           >
             Открыть сундук
           </button>
+          {p.keys >= 2 && (
+            <button
+              type="button"
+              className="btn btn--block pchest__all"
+              onClick={() => {
+                primeAudio();
+                tapLight();
+                const from = useFinanceStore.getState().slotsBalance;
+                const got = prisonOpenCases(p.keys);
+                if (!got) {
+                  notifyWarning();
+                  return;
+                }
+                const to = useFinanceStore.getState().slotsBalance;
+                if (to > from) onGain(from, to);
+                setBatch(got);
+              }}
+            >
+              Открыть все · {fmt(p.keys)}
+            </button>
+          )}
         </div>
       </div>
       <div className="pchest__odds">
@@ -861,7 +904,180 @@ function CasesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
         Находка из сундука — всегда та, которой в коллекции ещё нет. Открыто: {fmt(p.cases)}.
       </p>
       {open && <CaseRoller first={open} onClose={() => setOpen(null)} onGain={onGain} />}
+      {batch && <CasesSummary got={batch} onClose={() => setBatch(null)} />}
     </div>
+  );
+}
+
+// ---- Сундуки разом: плитки и итог ------------------------------------------
+
+interface CaseSum {
+  tiers: Record<CaseTier, number>;
+  /** Что складывается — одной строкой на вид. */
+  summed: Reward[];
+  /** Что не складывается — каждое отдельно. */
+  single: Reward[];
+}
+
+/** Сложить награды сундуков: монеты к монетам, бомбы к бомбам. */
+function sumCases(rolls: CaseRoll[]): CaseSum {
+  const tiers: Record<CaseTier, number> = { common: 0, rare: 0, epic: 0, legend: 0 };
+  let coins = 0;
+  let tokens = 0;
+  let keys = 0;
+  let treats = 0;
+  const items = new Map<ItemId, number>();
+  const single: Reward[] = [];
+  for (const r of rolls) {
+    tiers[r.tier] += 1;
+    const x = r.reward;
+    if (x.kind === 'coins') coins += x.amount;
+    else if (x.kind === 'tokens') tokens += x.amount;
+    else if (x.kind === 'keys') keys += x.amount;
+    else if (x.kind === 'treat') treats += 1;
+    else if (x.kind === 'item') items.set(x.id, (items.get(x.id) ?? 0) + x.amount);
+    else single.push(x);
+  }
+  const summed: Reward[] = [];
+  if (coins) summed.push({ kind: 'coins', amount: coins });
+  if (tokens) summed.push({ kind: 'tokens', amount: tokens });
+  if (keys) summed.push({ kind: 'keys', amount: keys });
+  for (const [id, amount] of items) summed.push({ kind: 'item', id, amount });
+  if (treats) summed.push({ kind: 'treat', amount: treats });
+  // Старшие руны — вперёд: их ищут глазами первыми.
+  single.sort((a, b) =>
+    a.kind === 'rune' && b.kind === 'rune' ? b.rune.tier - a.rune.tier : a.kind < b.kind ? -1 : 1,
+  );
+  return { tiers, summed, single };
+}
+
+/** Сколько плиток показываем; остальные — «и ещё N». */
+const CASES_TILES = 48;
+
+function CasesSummary({ got, onClose }: { got: CasesOpened; onClose: () => void }) {
+  const [done, setDone] = useState(false);
+  const sum = sumCases(got.rolls);
+  const shown = got.rolls.slice(0, CASES_TILES);
+  const best = [...CASE_TIERS].reverse().find((t) => sum.tiers[t.id] > 0) ?? CASE_TIERS[0];
+  // Плитки открываются очередью, итог — после последней.
+  const step = Math.min(60, 1400 / Math.max(1, shown.length));
+  const total = step * shown.length + 250;
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const ticks = Math.min(12, shown.length);
+    for (let i = 0; i < ticks; i++)
+      timers.push(setTimeout(() => caseTick(), (i * total) / Math.max(1, ticks)));
+    timers.push(
+      setTimeout(() => {
+        setDone(true);
+      }, total),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [shown.length, total]);
+  useEffect(() => {
+    if (!done) return;
+    tierBreak(best.beats);
+    flashFrame(best.beats >= 2 ? 'big' : 'small');
+    burstConfetti(30 + best.beats * 30, [best.color, '#ffe08a', '#fff']);
+    coinDing();
+    notifySuccess();
+  }, [done, best]);
+  const count = (n: number) =>
+    n % 10 === 1 && n % 100 !== 11
+      ? 'сундук'
+      : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)
+        ? 'сундука'
+        : 'сундуков';
+  return createPortal(
+    <div
+      className={`pcases${done ? ' is-done' : ''}`}
+      style={{ '--tier': best.color, '--step': `${step}ms` } as CSSProperties}
+      onClick={() => {
+        if (!done) {
+          setDone(true);
+          return;
+        }
+        tapLight();
+        onClose();
+      }}
+    >
+      <div className="pcases__card" onClick={(e) => done && e.stopPropagation()}>
+        <span className="pcases__title">
+          Открыто {fmt(got.rolls.length)} {count(got.rolls.length)}
+        </span>
+        <span className="pcases__tiers">
+          {CASE_TIERS.filter((t) => sum.tiers[t.id] > 0).map((t) => (
+            <i key={t.id} style={{ color: t.color }}>
+              {t.name} ×{sum.tiers[t.id]}
+            </i>
+          ))}
+        </span>
+        <div className="pcases__grid">
+          {shown.map((r, i) => {
+            const t = CASE_TIERS.find((x) => x.id === r.tier)!;
+            return (
+              <span
+                key={i}
+                className="pcases__tile"
+                style={{ '--c': t.color, '--i': i } as CSSProperties}
+                title={rewardLabel(r.reward)}
+              >
+                <RewardIcon r={r.reward} size={26} />
+              </span>
+            );
+          })}
+          {got.rolls.length > shown.length && (
+            <span className="pcases__more">+{got.rolls.length - shown.length}</span>
+          )}
+        </div>
+        {done && (
+          <div className="pcases__sum">
+            <b>Итого</b>
+            {sum.summed.map((r, i) => (
+              <span key={i} className="pcases__row">
+                <RewardIcon r={r} size={24} />
+                <em>
+                  {r.kind === 'treat'
+                    ? `Лакомство питомцу ×${r.amount}`
+                    : r.kind === 'keys'
+                      ? `${r.amount} ${r.amount === 1 ? 'ключ' : r.amount < 5 ? 'ключа' : 'ключей'}`
+                      : rewardLabel(r)}
+                </em>
+              </span>
+            ))}
+            {sum.single.length > 0 && (
+              <span className="pcases__singles">
+                {sum.single.map((r, i) => (
+                  <span key={i} className="pcases__single" title={rewardLabel(r)}>
+                    <RewardIcon r={r} size={r.kind === 'rune' ? 40 : 28} />
+                    <i>
+                      {r.kind === 'rune'
+                        ? `${runeOf(r.rune.kind).name} ${RUNE_ROMAN[r.rune.tier - 1]}`
+                        : rewardLabel(r)}
+                    </i>
+                  </span>
+                ))}
+              </span>
+            )}
+            {got.newPets.length > 0 && (
+              <span className="pcases__note">
+                Новый питомец: {got.newPets.map((id) => petOf(id).name).join(', ')}
+              </span>
+            )}
+            {got.shattered > 0 && (
+              <span className="pcases__note">
+                Мешочек рун полон — лишние разбиты на {fmt(got.shattered)} ✦
+              </span>
+            )}
+            <button type="button" className="btn btn--primary btn--block" onClick={onClose}>
+              Забрать всё
+            </button>
+          </div>
+        )}
+        {!done && <span className="pcases__skip">тап — показать итог</span>}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1171,31 +1387,79 @@ function CrewTab({
   const balance = useFinanceStore((s) => s.slotsBalance);
   const prisonCrewUp = useFinanceStore((s) => s.prisonCrewUp);
   const prisonCrewCollect = useFinanceStore((s) => s.prisonCrewCollect);
+  const prisonCrewShift = useFinanceStore((s) => s.prisonCrewShift);
+  const prisonCrewFeed = useFinanceStore((s) => s.prisonCrewFeed);
+  const [unload, setUnload] = useState<CrewCollect | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const y = crewYield(p, now);
+  const sh = crewShiftOf(p.crewShift);
   const cap = crewCapHours(p);
   const price = p.crew < CREW_MAX ? crewCost(p.crew) : 0;
+  const feed = crewFeedCost(p);
+  const canFeed = p.crew > 0 && !p.crewFed && y.minutes <= CREW_FEED_WINDOW_MIN;
   const hh = Math.floor(y.minutes / 60);
   const mm = Math.floor(y.minutes % 60);
+  const rate = crewRate(p.crew) * sh.rate * (p.crewFed ? 1 + CREW_FED_BOOST : 1);
+
+  const collect = () => {
+    primeAudio();
+    const from = useFinanceStore.getState().slotsBalance;
+    const got = prisonCrewCollect();
+    if (!got) {
+      notifyWarning();
+      return;
+    }
+    onGain(from, from + got.coins);
+    setNote(null);
+    setUnload(got);
+  };
+
+  const pickShift = (id: CrewShift) => {
+    if (id === p.crewShift) return;
+    primeAudio();
+    selectionChanged();
+    const from = useFinanceStore.getState().slotsBalance;
+    const got = prisonCrewShift(id);
+    if (got) {
+      onGain(from, from + got.coins);
+      setNote(`Прошлая смена сдана: +${shortMoney(got.coins)} монет, +${fmt(got.tokens)} ✦`);
+    } else setNote(null);
+  };
+
   return (
     <div className="pforge">
-      <div className="pcrew">
-        <span className="pcrew__art" aria-hidden="true">
-          {p.crew ? '👷'.repeat(Math.min(3, p.crew)) : '🪧'}
+      <div className={`pcrew-scene${p.crew ? '' : ' is-empty'}${y.capped ? ' is-idle' : ''}`}>
+        <span className="pcrew-scene__adit" aria-hidden="true" />
+        <span className="pcrew-scene__row">
+          {p.crew ? (
+            Array.from({ length: Math.min(CREW_MAX, p.crew) }, (_, i) => (
+              <img
+                key={i}
+                className="pcrew-scene__man"
+                src={workerTexture(i)}
+                alt=""
+                style={{ animationDelay: `${i * -0.17}s` }}
+              />
+            ))
+          ) : (
+            <span className="pcrew-scene__sign">Бригады нет</span>
+          )}
         </span>
-        <div className="pcrew__info">
-          <b>{p.crew ? `Бригада · уровень ${p.crew}` : 'Бригады нет'}</b>
-          <i>
-            {p.crew
-              ? `${crewRate(p.crew).toFixed(1)} блока в минуту в шахте ${rankLetter(p.rank)}, копит до ${cap} ч`
-              : `Копает в лучшей шахте, пока тебя нет, до ${cap} часов. Отдаёт 60% добытого.`}
-          </i>
-        </div>
+        {y.capped && <span className="pcrew-scene__zzz">смена кончилась — ждут</span>}
+      </div>
+      <div className="pcrew__info pcrew__head">
+        <b>{p.crew ? `Бригада · ${p.crew} ур. · наряд «${sh.name}»` : 'Нанять бригаду'}</b>
+        <i>
+          {p.crew
+            ? `${rate.toFixed(1)} блока в минуту в шахте ${rankLetter(p.rank)}, смена ${cap.toLocaleString('ru-RU')} ч${p.crewFed ? ' · сыты, +30%' : ''}`
+            : `Копает в лучшей шахте и когда ты в игре, и когда нет. Отдаёт ${Math.round(CREW_SHARE * 100)}% добытого.`}
+        </i>
       </div>
       {p.crew > 0 && (
         <div className="pcrew__yield">
           <div className="pcrew__row">
             <span>
-              {hh} ч {String(mm).padStart(2, '0')} мин {y.capped ? '· смена кончилась' : ''}
+              {hh} ч {String(mm).padStart(2, '0')} мин из {cap.toLocaleString('ru-RU')}
             </span>
             <b>
               +{shortMoney(y.coins)} <CoinIcon size={13} /> · +{fmt(y.tokens)}{' '}
@@ -1209,28 +1473,71 @@ function CrewTab({
             type="button"
             className="btn btn--primary btn--block"
             disabled={y.blocks <= 0}
-            onClick={() => {
-              primeAudio();
-              const from = useFinanceStore.getState().slotsBalance;
-              const got = prisonCrewCollect();
-              if (!got) {
-                notifyWarning();
-                return;
-              }
-              onGain(from, from + got.coins);
-              coinDing();
-              notifySuccess();
-            }}
+            onClick={collect}
           >
-            Забрать {fmt(y.blocks)} блоков
+            {y.blocks > 0 ? `Принять смену · ${fmt(y.blocks)} блоков` : 'Смена только началась'}
           </button>
         </div>
       )}
+      {note && <p className="msaw__note">{note}</p>}
+      {p.crew > 0 && (
+        <>
+          <h4 className="pcamp-h">Наряд на смену</h4>
+          <div className="pcrew-shifts">
+            {CREW_SHIFTS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={`pcrew-shift${c.id === p.crewShift ? ' is-on' : ''}`}
+                onClick={() => pickShift(c.id)}
+              >
+                <b>{c.name}</b>
+                <i>{c.text}</i>
+                <em>
+                  {(c.hours + c.perHour * p.perks.shift).toLocaleString('ru-RU')} ч · ×
+                  {c.rate.toLocaleString('ru-RU')}
+                </em>
+              </button>
+            ))}
+          </div>
+          <Row
+            icon={<span className="pforge__glyph">🍲</span>}
+            title={p.crewFed ? 'Бригада сыта' : 'Пайка'}
+            text={
+              p.crewFed
+                ? '+30% выработки до конца этой смены'
+                : canFeed
+                  ? '+30% выработки на всю смену — кормят в начале смены'
+                  : `Кормят в первые ${CREW_FEED_WINDOW_MIN} минут смены: прими смену — и накорми`
+            }
+            action={
+              p.crewFed ? (
+                <Done>Сыты</Done>
+              ) : (
+                <Buy
+                  price={feed}
+                  can={canFeed && balance >= feed}
+                  onClick={() => {
+                    primeAudio();
+                    if (!prisonCrewFeed()) {
+                      notifyWarning();
+                      return;
+                    }
+                    onSpend();
+                    tierBreak(1);
+                    notifySuccess();
+                  }}
+                />
+              )
+            }
+          />
+        </>
+      )}
       {p.crew < CREW_MAX ? (
         <Row
-          icon={<span className="pforge__glyph">⛏</span>}
-          title={p.crew ? `Уровень ${p.crew + 1}` : 'Нанять бригаду'}
-          text={`${crewRate(p.crew + 1).toFixed(1)} блока в минуту${p.crew ? `, сейчас ${crewRate(p.crew).toFixed(1)}` : ''}`}
+          icon={<img className="pmill-hico" src={workerTexture(p.crew)} alt="" />}
+          title={p.crew ? `Ещё один в бригаду · ${p.crew + 1} ур.` : 'Нанять бригаду'}
+          text={`${crewRate(p.crew + 1).toFixed(1)} блока в минуту на норме${p.crew ? `, сейчас ${crewRate(p.crew).toFixed(1)}` : ''}`}
           action={
             <Buy
               price={price}
@@ -1252,10 +1559,168 @@ function CrewTab({
         <p className="pcamp-note">Бригада полная.</p>
       )}
       <p className="pcamp-note">
-        Бригада работает всегда — и когда ты в игре, и когда нет. Смена кончилась — бригада стоит,
-        пока не заберёшь добычу. Перк «Длинная смена» продлевает её до 12 часов.
+        Норма — если заходишь раз в день, ударная — если каждые два часа, разведка — когда нужны
+        ключи и передачки. Смена кончилась — бригада сидит, пока не примешь. Перк «Длинная смена»
+        удлиняет любой наряд.
       </p>
+      {unload && <CrewUnload got={unload} rock={p.rank} onClose={() => setUnload(null)} />}
     </div>
+  );
+}
+
+/**
+ * Приём смены: добыча приезжает вагонетками, тап опрокидывает вагонетку, и
+ * её доля падает в кошелёк. В последней — находки разведки. Деньги уже
+ * начислены в сторе; сцена только показывает, из чего они сложились.
+ */
+function CrewUnload({
+  got,
+  rock,
+  onClose,
+}: {
+  got: CrewCollect;
+  rock: number;
+  onClose: () => void;
+}) {
+  const carts = Math.max(3, Math.min(6, Math.ceil(got.blocks / 150)));
+  const [tipped, setTipped] = useState<boolean[]>(() => new Array(carts).fill(false));
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const n = tipped.filter(Boolean).length;
+  const all = n >= carts;
+  const coinsShown = all ? got.coins : Math.round((got.coins * n) / carts);
+  const tokensShown = all ? got.tokens : Math.round((got.tokens * n) / carts);
+  const sh = crewShiftOf(got.shift);
+
+  const tip = (i: number) => {
+    if (tipped[i]) return;
+    primeAudio();
+    // Кренится вагонетка, а не плитка с рамкой.
+    const el = refs.current[i]?.querySelector('img');
+    if (el && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      try {
+        el.animate(
+          [
+            { transform: 'rotate(0deg)' },
+            { transform: 'rotate(-38deg) translateY(-4px)', offset: 0.5 },
+            { transform: 'rotate(-30deg)' },
+          ],
+          { duration: 360, easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'forwards' },
+        );
+      } catch {
+        /* не страшно */
+      }
+    }
+    pickHit('stone', i === carts - 1);
+    coinDing();
+    tapLight();
+    const next = tipped.map((t, k) => t || k === i);
+    setTipped(next);
+    if (next.every(Boolean)) {
+      tierBreak(2);
+      notifySuccess();
+      burstConfetti(40, ['#ffe08a', '#b8f4e6', '#fff']);
+      if (got.keys) keyFound();
+    }
+  };
+
+  return createPortal(
+    <div
+      className="pcases pcrew-unload"
+      style={{ '--tier': '#ffd98a' } as CSSProperties}
+      onClick={() => all && onClose()}
+    >
+      <div className="pcases__card" onClick={(e) => e.stopPropagation()}>
+        <span className="pcases__title">Приём смены</span>
+        <span className="pcases__tiers">
+          <i>
+            Наряд «{sh.name}» · {fmt(got.blocks)} блоков за {Math.floor(got.minutes / 60)} ч{' '}
+            {String(Math.floor(got.minutes % 60)).padStart(2, '0')} мин
+          </i>
+        </span>
+        <div className="pcrew-carts">
+          {Array.from({ length: carts }, (_, i) => (
+            <button
+              key={i}
+              type="button"
+              ref={(el) => {
+                refs.current[i] = el;
+              }}
+              className={`pcrew-cart${tipped[i] ? ' is-tipped' : ''}`}
+              onClick={() => tip(i)}
+              aria-label="Разгрузить вагонетку"
+            >
+              <img src={cartTexture(rock)} alt="" />
+            </button>
+          ))}
+        </div>
+        <div className="pcrew-count">
+          <b>
+            +{shortMoney(coinsShown)} <CoinIcon size={16} />
+          </b>
+          <b>
+            +{fmt(tokensShown)} <TokenIcon size={15} />
+          </b>
+        </div>
+        {!all ? (
+          <>
+            <span className="pcases__skip">Тапай по вагонеткам — разгружай</span>
+            <button
+              type="button"
+              className="btn btn--block"
+              onClick={() => {
+                primeAudio();
+                setTipped(new Array(carts).fill(true));
+                tierBreak(1);
+                coinDing();
+                if (got.keys) keyFound();
+              }}
+            >
+              Разгрузить всё
+            </button>
+          </>
+        ) : (
+          <div className="pcases__sum">
+            {(got.keys > 0 || got.parcels.length > 0) && (
+              <>
+                <b>Разведка нашла</b>
+                {got.keys > 0 && (
+                  <span className="pcases__row">
+                    <KeyIcon size={22} />
+                    <em>
+                      {got.keys} {got.keys === 1 ? 'ключ' : got.keys < 5 ? 'ключа' : 'ключей'}
+                    </em>
+                  </span>
+                )}
+                {got.parcels.map((t, i) => {
+                  const tier = CASE_TIERS.find((x) => x.id === t)!;
+                  return (
+                    <span key={i} className="pcases__row">
+                      <img
+                        src={parcelTexture(tier.color)}
+                        alt=""
+                        width={24}
+                        height={24}
+                        style={{ imageRendering: 'pixelated' }}
+                      />
+                      <em>Передачка · {tier.name.toLowerCase()} — легла под поле шахты</em>
+                    </span>
+                  );
+                })}
+              </>
+            )}
+            {got.parcelTokens > 0 && (
+              <span className="pcases__note">
+                Мест под передачки нет — сданы за {fmt(got.parcelTokens)} ✦
+              </span>
+            )}
+            <button type="button" className="btn btn--primary btn--block" onClick={onClose}>
+              Бригаду — снова в забой
+            </button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1366,55 +1831,34 @@ function PerksTab() {
 }
 
 // ---------------------------------------------------------------------------
-// Руны. Знак вырезан на плитке сланца, цвет — ступень (как у сундуков, плюс
-// пятая — красная). Рисуется линиями: символы старшего футарка есть не в
-// каждом шрифте телефона, а квадрат вместо руны хуже, чем никакой руны.
+// Руны. Рунный камень рисует `runeTexture` (пиксели 40×40: высеченный знак,
+// светящаяся смальта по ступени, оковка у старших). Символы футарка шрифтом
+// не берём: их нет в половине шрифтов телефона. Цвет ступени — как у
+// сундуков, плюс пятая — красная.
 // ---------------------------------------------------------------------------
 
 export const RUNE_COLORS = ['#9aa7b4', '#4f8cff', '#b36cff', '#ffb020', '#ff5a6a'];
 
-const RUNE_PATHS: Record<RuneKind, string> = {
-  sell: 'M7 4 V24 M7 11 L14 5 M7 17 L14 11',
-  dmg: 'M6 24 V4 L14 10 V24',
-  rate: 'M6 24 V4 L13 8 L6 13 L14 24',
-  loot: 'M9 5 L4 11 L9 17 M11 11 L16 17 L11 23',
-  token: 'M4 5 L16 23 M16 5 L4 23',
-  proc: 'M13 3 L6 11 L14 17 L7 25',
-};
-
 export function RuneIcon({
   kind,
   tier,
-  size = 28,
+  size = 40,
 }: {
   kind: RuneKind;
   tier: number;
   size?: number;
 }) {
-  const c = RUNE_COLORS[Math.max(1, Math.min(5, tier)) - 1];
   return (
-    <svg
+    <img
       className="prune-ico"
-      viewBox="0 0 20 28"
-      width={(size * 20) / 28}
+      src={runeTexture(kind, tier)}
+      width={size}
       height={size}
+      // Инлайн — чтобы общие правила строк (картинки по 18 px) не сжали камень.
+      style={{ width: size, height: size }}
+      alt=""
       aria-hidden="true"
-    >
-      <path
-        d="M3.5 1.5 H16.5 Q18.5 1.5 18.5 4 V23.5 Q18.5 26.5 15.5 26.5 H4.5 Q1.5 26.5 1.5 23.5 V4 Q1.5 1.5 3.5 1.5Z"
-        fill="#272320"
-        stroke={c}
-        strokeWidth="1.3"
-      />
-      <path
-        d={RUNE_PATHS[kind]}
-        fill="none"
-        stroke={c}
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    />
   );
 }
 
@@ -1427,8 +1871,8 @@ export function runeLine(r: { kind: RuneKind; tier: number; roll: number }): str
 }
 
 /** Есть свободное гнездо и руна, которую можно в него вставить. */
-function runesIdle(p: PrisonState): boolean {
-  const open = socketsOpen(p);
+function runesIdle(p: PrisonState, axeLevel = 0): boolean {
+  const open = socketsOpen(p, axeLevel);
   const empty = p.sockets.slice(0, open).some((id) => !id);
   return empty && p.runes.some((r) => !p.sockets.includes(r.id));
 }
@@ -1448,15 +1892,148 @@ function bonusSummary(b: Bonus): string {
   return parts.length ? parts.join(' · ') : 'пока ничего';
 }
 
-function RunesTab() {
+/**
+ * Оберег — то, КУДА ставятся руны. Раньше вкладка писала «Кирка» и ничего
+ * не рисовала, хотя руны работают и на топоре. Теперь это бронзовый оберег
+ * на шнурке: четыре гнезда крестом, в середине скрещены кирка и топор — он
+ * один на шахту и лес. Сами гнёзда — кнопки поверх рисунка.
+ */
+function AmuletArt() {
+  const rivets = Array.from({ length: 12 }, (_, i) => {
+    const a = (i / 12) * Math.PI * 2 + Math.PI / 12;
+    return [110 + Math.cos(a) * 88, 118 + Math.sin(a) * 88];
+  });
+  return (
+    <svg className="pamulet__art" viewBox="0 0 220 236" aria-hidden="true">
+      <defs>
+        <radialGradient id="amBronze" cx="38%" cy="32%" r="75%">
+          <stop offset="0" stopColor="#f0c878" />
+          <stop offset="0.45" stopColor="#b8803a" />
+          <stop offset="1" stopColor="#5a3614" />
+        </radialGradient>
+        <radialGradient id="amInner" cx="45%" cy="40%" r="70%">
+          <stop offset="0" stopColor="#5a3e24" />
+          <stop offset="1" stopColor="#2a1a0e" />
+        </radialGradient>
+        <linearGradient id="amCord" x1="0" x2="1">
+          <stop offset="0" stopColor="#3a2412" />
+          <stop offset="0.5" stopColor="#7a5230" />
+          <stop offset="1" stopColor="#3a2412" />
+        </linearGradient>
+      </defs>
+      {/* Шнурок и петля */}
+      <path
+        d="M70 0 C80 22 96 26 104 30 M150 0 C140 22 124 26 116 30"
+        stroke="url(#amCord)"
+        strokeWidth="7"
+        fill="none"
+        strokeLinecap="round"
+      />
+      <path
+        d="M70 0 C80 22 96 26 104 30 M150 0 C140 22 124 26 116 30"
+        stroke="rgba(255,230,190,.25)"
+        strokeWidth="1.2"
+        strokeDasharray="3 4"
+        fill="none"
+      />
+      <rect
+        x="99"
+        y="24"
+        width="22"
+        height="14"
+        rx="5"
+        fill="url(#amBronze)"
+        stroke="#3a220c"
+        strokeWidth="1.5"
+      />
+      {/* Диск: внешний обод, гравировка, заклёпки */}
+      <circle cx="110" cy="118" r="100" fill="url(#amBronze)" stroke="#3a220c" strokeWidth="2.5" />
+      <circle
+        cx="110"
+        cy="118"
+        r="94"
+        fill="none"
+        stroke="rgba(255,240,200,.55)"
+        strokeWidth="1.2"
+      />
+      <circle
+        cx="110"
+        cy="118"
+        r="80"
+        fill="none"
+        stroke="#5a3614"
+        strokeWidth="5"
+        strokeDasharray="7 5"
+        opacity=".75"
+      />
+      <circle
+        cx="110"
+        cy="118"
+        r="80"
+        fill="none"
+        stroke="rgba(255,236,190,.35)"
+        strokeWidth="1"
+        strokeDasharray="7 5"
+        strokeDashoffset="-1"
+      />
+      {rivets.map(([x, y], i) => (
+        <g key={i}>
+          <circle cx={x} cy={y} r="4" fill="#6a4418" />
+          <circle cx={x - 1} cy={y - 1} r="2.2" fill="#f4d48a" />
+        </g>
+      ))}
+      <circle cx="110" cy="118" r="72" fill="url(#amInner)" stroke="#2a180a" strokeWidth="2" />
+      {/* Резьба: крест, связывающий гнёзда, и ромб */}
+      <path
+        d="M110 58 V178 M50 118 H170"
+        stroke="#1a0e06"
+        strokeWidth="6"
+        strokeLinecap="round"
+        opacity=".6"
+      />
+      <path
+        d="M110 58 V178 M50 118 H170"
+        stroke="rgba(255,210,150,.25)"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <path
+        d="M110 76 L152 118 L110 160 L68 118 Z"
+        fill="none"
+        stroke="rgba(255,210,150,.3)"
+        strokeWidth="1.4"
+      />
+      {/* Середина: кирка и топор накрест — оберег на оба инструмента */}
+      <g transform="translate(110 118)">
+        <circle r="17" fill="#3a2614" stroke="#c8903e" strokeWidth="2" />
+        <g stroke="#e8c070" strokeWidth="2.4" strokeLinecap="round" fill="none">
+          <path d="M-8 9 L8 -9" />
+          <path d="M-12 -6 Q-2 -14 9 -10" />
+          <path d="M8 9 L-8 -9" />
+        </g>
+        <path d="M-10 -12 Q-15 -7 -12 -2 L-6 -8 Z" fill="#e8c070" />
+      </g>
+    </svg>
+  );
+}
+
+/** Где на оберег встают гнёзда: верх, лево, право, низ (в долях рисунка). */
+const AMULET_SLOTS: [number, number][] = [
+  [50, 25.4],
+  [23.6, 50],
+  [76.4, 50],
+  [50, 74.6],
+];
+
+function RunesTab({ axeLevel }: { axeLevel: number }) {
   const p = useFinanceStore((s) => s.prison);
   const socket = useFinanceStore((s) => s.prisonRuneSocket);
   const fuse = useFinanceStore((s) => s.prisonRuneFuse);
   const shatter = useFinanceStore((s) => s.prisonRuneShatter);
   const [sel, setSel] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const open = socketsOpen(p);
-  const level = pickLevelOf(p.pickXp).level;
+  const open = socketsOpen(p, axeLevel);
+  const level = Math.max(pickLevelOf(p.pickXp).level, axeLevel);
   const rune = p.runes.find((r) => r.id === sel) ?? null;
   const worn = rune ? p.sockets.includes(rune.id) : false;
   const plan = rune ? fusePlan(p.runes, p.sockets, rune.id) : null;
@@ -1495,7 +2072,7 @@ function RunesTab() {
       setNote(
         open
           ? 'Гнёзда заняты — тапни по гнезду, чтобы заменить'
-          : 'Первое гнездо — с 5 уровня кирки',
+          : `Первое гнездо откроется с ${SOCKET_UNLOCK[0]} уровня кирки или топора`,
       );
       return;
     }
@@ -1530,44 +2107,54 @@ function RunesTab() {
 
   return (
     <div className="pforge">
-      <div className="prunes-head">
-        <b>Кирка</b>
-        <span>{bonusSummary(bonusOf(p))}</span>
-      </div>
-      <div className="prunes-sockets">
-        {Array.from({ length: SOCKETS_MAX }, (_, i) => {
+      <div className="pamulet">
+        <AmuletArt />
+        {AMULET_SLOTS.map(([x, y], i) => {
           const id = p.sockets[i];
-          const r = id ? p.runes.find((x) => x.id === id) : null;
+          const r = id ? p.runes.find((z) => z.id === id) : null;
           const locked = i >= open;
           return (
             <button
               key={i}
               type="button"
-              className={`prune-socket${locked ? ' is-locked' : ''}${r ? ' is-full' : ''}${
+              style={{ left: `${x}%`, top: `${y}%` }}
+              className={`pamulet__slot${locked ? ' is-locked' : ''}${r ? ' is-full' : ''}${
                 r && sel === r.id ? ' is-sel' : ''
               }${rune && !worn && !locked ? ' is-target' : ''}`}
+              aria-label={
+                r
+                  ? `${runeOf(r.kind).name}, ${runeLine(r)}`
+                  : locked
+                    ? 'Гнездо закрыто'
+                    : 'Пустое гнездо'
+              }
               onClick={() => tapSocket(i)}
             >
               {r ? (
-                <>
-                  <RuneIcon kind={r.kind} tier={r.tier} size={30} />
-                  <i>{pctText(runePower(r))}</i>
-                </>
+                <RuneIcon kind={r.kind} tier={r.tier} size={40} />
               ) : locked ? (
-                <>
-                  <span className="prune-socket__lock">🔒</span>
-                  <i>{i < SOCKET_UNLOCK.length ? `ур. ${SOCKET_UNLOCK[i]}` : 'престиж 10'}</i>
-                </>
-              ) : (
-                <i>пусто</i>
-              )}
+                <span className="pamulet__lock">🔒</span>
+              ) : null}
+              <i>
+                {r
+                  ? pctText(runePower(r))
+                  : locked
+                    ? i < SOCKET_UNLOCK.length
+                      ? `${SOCKET_UNLOCK[i]} ур.`
+                      : 'престиж 10'
+                    : 'пусто'}
+              </i>
             </button>
           );
         })}
       </div>
+      <div className="prunes-head">
+        <b>Оберег — и в шахте, и в лесу</b>
+        <span>{bonusSummary(bonusOf(p)) || 'Руны не вставлены — оберег пока пустой'}</span>
+      </div>
       {rune ? (
         <div className="prune-card">
-          <RuneIcon kind={rune.kind} tier={rune.tier} size={44} />
+          <RuneIcon kind={rune.kind} tier={rune.tier} size={80} />
           <span className="prune-card__info">
             <b>
               {runeOf(rune.kind).name} {RUNE_ROMAN[rune.tier - 1]}
@@ -1577,7 +2164,7 @@ function RunesTab() {
           </span>
           <span className="prune-card__btns">
             <button type="button" className="btn btn--sm pforge__buy" onClick={wear}>
-              {worn ? 'Вынуть' : 'В кирку'}
+              {worn ? 'Вынуть' : 'В оберег'}
             </button>
             <button
               type="button"
@@ -1612,8 +2199,8 @@ function RunesTab() {
       ) : (
         <p className="pcamp-note" style={{ margin: 0 }}>
           {p.runes.length
-            ? 'Выбери руну: вставить в кирку, сплавить или разбить на токены'
-            : `Рун пока нет. Они приходят в передачках и сундуках${level < SOCKET_UNLOCK[0] ? '; первое гнездо откроется на 5 уровне кирки' : ''}`}
+            ? 'Выбери руну в мешочке: вставить в оберег, сплавить или разбить на токены'
+            : `Рун пока нет. Они приходят в передачках, сундуках и у Барыги${level < SOCKET_UNLOCK[0] ? `; первое гнездо откроется на ${SOCKET_UNLOCK[0]} уровне кирки или топора` : ''}`}
         </p>
       )}
       {note && <p className="pcamp-note prune-note">{note}</p>}
@@ -1632,13 +2219,14 @@ function RunesTab() {
                 setSel(sel === r.id ? null : r.id);
               }}
             >
-              <RuneIcon kind={r.kind} tier={r.tier} size={30} />
+              <RuneIcon kind={r.kind} tier={r.tier} size={40} />
               <i>{RUNE_ROMAN[r.tier - 1]}</i>
             </button>
           ))}
         </div>
       )}
       <p className="pcamp-note">
+        Гнёзда открываются уровнем кирки или топора — 5, 15 и 30, четвёртое за веху «Престиж 10».
         Мешочек: {p.runes.length} из {RUNE_BAG}. Три руны одной ступени сплавляются в руну ступенью
         выше — вид у выбранной, сила не ниже средней. Лишние разбивай на токены: в полный мешочек
         новая руна не ляжет и разобьётся сама.
@@ -2201,6 +2789,327 @@ function AxeEnchSection({ f, p }: { f: ForestState; p: PrisonState }) {
   );
 }
 
+// ---- Верстак: вещи из досок --------------------------------------------------
+
+/** Молоток — рукоять и боёк, как на иконке кирки. */
+function HammerIcon({ size = 44 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+      <path d="M9 29 L20 11" stroke="#4a2d16" strokeWidth="4.4" strokeLinecap="round" />
+      <path d="M9 29 L20 11" stroke="#b07a44" strokeWidth="2.2" strokeLinecap="round" />
+      <rect
+        x="12"
+        y="3"
+        width="17"
+        height="8"
+        rx="1.5"
+        transform="rotate(31 20.5 7)"
+        fill="#8a939e"
+        stroke="#2a2e34"
+        strokeWidth="1.2"
+      />
+      <path d="M15 4.5 L26 11" stroke="rgba(255,255,255,.55)" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+/** Есть что сдать или собрать — точка на вкладке. */
+function benchReady(f: ForestState, p: PrisonState, now: number): boolean {
+  if (f.mill.level <= 0) return false;
+  const mill = millTick(f.mill, now);
+  const reserve = boardsReserve(p.handle);
+  const { orders } = benchOrders(f.bench, f.rank);
+  return orders.some((o) => now >= o.at && benchCan(mill.boards, o, reserve));
+}
+
+type Craft = { kind: 'prop' } | { kind: 'handle' } | { kind: 'order'; i: number };
+
+/**
+ * Верстак. Вещь собирают молотком: выбрал — и бьёшь по верстаку, гвоздь за
+ * гвоздём, вещь проявляется. Под каждой вещью написано, куда она уйдёт:
+ * владелец не понимал, что делается из досок и что с этим потом.
+ */
+function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: number) => void }) {
+  const f = useFinanceStore((s) => s.forest);
+  const p = useFinanceStore((s) => s.prison);
+  const forestCraftProp = useFinanceStore((s) => s.forestCraftProp);
+  const forestCraftHandle = useFinanceStore((s) => s.forestCraftHandle);
+  const forestOrderFill = useFinanceStore((s) => s.forestOrderFill);
+  const [craft, setCraft] = useState<Craft | null>(null);
+  const [hits, setHits] = useState(0);
+  const [done, setDone] = useState<{ tex: string; title: string; where: string } | null>(null);
+  const hammerRef = useRef<HTMLSpanElement>(null);
+  const itemRef = useRef<HTMLImageElement>(null);
+  const mill = millTick(f.mill, now);
+  const reserve = boardsReserve(p.handle);
+  const { orders } = benchOrders(f.bench, f.rank);
+  const boards = sumRow(mill.boards);
+  const nextH = HANDLES[p.handle];
+  const curH = HANDLES[p.handle - 1];
+  const propSpecies = topOf(boardsForSale(mill.boards, reserve));
+
+  /** Что собираем: картинка, имя, сколько ударов, хватает ли досок, куда уйдёт. */
+  const meta = (c: Craft) => {
+    if (c.kind === 'prop')
+      return {
+        tex: benchTexture('prop', Math.max(0, propSpecies)),
+        name: 'Крепь',
+        need: PROP_STRIKES,
+        can: boards >= PROP_BOARDS,
+        where: `Легла в шахту, в ряд расходников (теперь ×${p.items.prop + 1}). Тапни её там — 10 минут каждый второй блок считается породой выше.`,
+        finish: () => forestCraftProp(),
+      };
+    if (c.kind === 'handle')
+      return {
+        tex: benchTexture('handle', nextH?.species ?? 3),
+        name: nextH?.name ?? 'Рукоять',
+        need: HANDLE_STRIKES,
+        can: !!nextH && mill.boards[nextH.species] >= nextH.boards,
+        where: nextH
+          ? `Надета на кирку и топор навсегда: удар быстрее на ${Math.round(nextH.rate * 100)}%.`
+          : '',
+        finish: () => forestCraftHandle(),
+      };
+    const o = orders[c.i];
+    const item = benchItemOf(o.item);
+    return {
+      tex: benchTexture(o.item, o.species),
+      name: `${item.name} ${item.who}`,
+      need: item.strikes,
+      can: now >= o.at && benchCan(mill.boards, o, reserve),
+      where: '',
+      finish: () => {
+        const from = useFinanceStore.getState().slotsBalance;
+        const r = forestOrderFill(c.i);
+        if (!r) return false;
+        onGain(from, from + r.coins);
+        setDone({
+          tex: benchTexture(o.item, o.species),
+          title: `${item.name} сдан заказчику`,
+          where: `+${shortMoney(r.coins)} монет и +${r.tokens} ✦ — уже в кошельке. Новый заказ появится через 10 минут.`,
+        });
+        return true;
+      },
+    };
+  };
+
+  const start = (c: Craft) => {
+    primeAudio();
+    const m = meta(c);
+    if (!m.can) {
+      notifyWarning();
+      return;
+    }
+    selectionChanged();
+    setCraft(c);
+    setHits(0);
+    setDone(null);
+  };
+
+  const strike = () => {
+    if (!craft) return;
+    primeAudio();
+    const m = meta(craft);
+    const n = hits + 1;
+    const still =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!still) {
+      try {
+        hammerRef.current?.animate(
+          [
+            { transform: 'rotate(-35deg)' },
+            { transform: 'rotate(18deg)', offset: 0.45 },
+            { transform: 'rotate(0deg)' },
+          ],
+          { duration: 170, easing: 'cubic-bezier(.5,0,.3,1)' },
+        );
+        itemRef.current?.animate(
+          [{ transform: 'scale(1)' }, { transform: 'scale(.92, 1.06)' }, { transform: 'scale(1)' }],
+          { duration: 150 },
+        );
+      } catch {
+        /* не страшно */
+      }
+    }
+    pickHit('metal', n >= m.need);
+    tapLight();
+    if (n < m.need) {
+      setHits(n);
+      return;
+    }
+    const ok = m.finish();
+    setCraft(null);
+    setHits(0);
+    if (!ok) {
+      notifyWarning();
+      return;
+    }
+    tierBreak(2);
+    notifySuccess();
+    burstConfetti(40, ['#e8c89a', '#ffe08a', '#fff']);
+    if (craft.kind !== 'order') setDone({ tex: m.tex, title: `${m.name} готова`, where: m.where });
+  };
+
+  const cur = craft ? meta(craft) : null;
+  const clock = (ms: number) => {
+    const t = Math.max(0, Math.ceil(ms / 1000));
+    return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  };
+
+  if (f.mill.level <= 0)
+    return (
+      <div className="pforge">
+        <p className="msaw__how">
+          <b>Верстак ждёт досок.</b> Доски даёт пилорама — поставь её на вкладке «Лесопилка». Из
+          досок здесь собирают крепь для шахты, рукояти для кирки и топора и вещи на заказ за
+          деньги.
+        </p>
+      </div>
+    );
+
+  return (
+    <div className="pforge">
+      <div className="bench">
+        <span className="bench__top">
+          {cur ? (
+            <>
+              <img
+                ref={itemRef}
+                className="bench__item"
+                src={cur.tex}
+                alt=""
+                style={{ opacity: 0.25 + (0.75 * hits) / cur.need }}
+              />
+              <span className="bench__nails">
+                {Array.from({ length: cur.need }, (_, k) => (
+                  <i key={k} className={k < hits ? 'is-in' : undefined} />
+                ))}
+              </span>
+            </>
+          ) : done ? (
+            <img className="bench__item is-done" src={done.tex} alt="" />
+          ) : (
+            <span className="bench__idle">Выбери ниже, что собрать</span>
+          )}
+        </span>
+        <button
+          type="button"
+          className="bench__hammer"
+          disabled={!cur}
+          onClick={strike}
+          aria-label="Ударить молотком"
+        >
+          <span ref={hammerRef} className="bench__hammerart">
+            <HammerIcon size={46} />
+          </span>
+          <em>{cur ? `Бей! ${hits}/${cur.need}` : 'молоток'}</em>
+        </button>
+      </div>
+      {cur && <p className="msaw__status">Собираешь: {cur.name}. Каждый удар — гвоздь.</p>}
+      {done && (
+        <p className="msaw__note">
+          <b>{done.title}.</b> {done.where}
+        </p>
+      )}
+      <div className="pcamp-purse bench__purse">
+        <img
+          src={boardTexture(Math.max(0, topOf(mill.boards)))}
+          alt=""
+          className="bench__purseimg"
+        />
+        <b>{fmt(boards)}</b> досок на складе
+        <span>доски режет пилорама; здесь они становятся вещами</span>
+      </div>
+
+      <h4 className="pcamp-h">Для себя</h4>
+      <Row
+        icon={
+          <img className="pmill-hico" src={benchTexture('prop', Math.max(0, propSpecies))} alt="" />
+        }
+        title={
+          <>
+            Крепь {p.items.prop > 0 && <span className="pench-lvl">в шахте ×{p.items.prop}</span>}
+          </>
+        }
+        text={`${PROP_BOARDS} досок любых → в ряд расходников шахты: 10 минут каждый второй блок — порода выше`}
+        action={
+          <button
+            type="button"
+            className="btn btn--sm pforge__buy"
+            disabled={boards < PROP_BOARDS || !!craft}
+            onClick={() => start({ kind: 'prop' })}
+          >
+            Собрать
+          </button>
+        }
+      />
+      {nextH ? (
+        <Row
+          icon={<img className="pmill-hico" src={benchTexture('handle', nextH.species)} alt="" />}
+          title={nextH.name}
+          text={`${fmt(Math.min(mill.boards[nextH.species], nextH.boards))}/${nextH.boards} досок ${SPECIES[nextH.species].gen} → на кирку и топор навсегда, +${Math.round(nextH.rate * 100)}% к скорости${curH ? ` (сейчас ${curH.name.toLowerCase()}, +${Math.round(handleRate(p.handle) * 100)}%)` : ''}`}
+          action={
+            <button
+              type="button"
+              className="btn btn--sm pforge__buy"
+              disabled={mill.boards[nextH.species] < nextH.boards || !!craft}
+              onClick={() => start({ kind: 'handle' })}
+            >
+              Собрать
+            </button>
+          }
+        />
+      ) : (
+        <Row
+          icon={<img className="pmill-hico" src={benchTexture('handle', 9)} alt="" />}
+          title="Рукоять из карельской берёзы"
+          text="Надета — лучше рукояти не бывает"
+          action={<Done />}
+        />
+      )}
+
+      <h4 className="pcamp-h">Заказы на продажу</h4>
+      {orders.map((o, i) => {
+        const item = benchItemOf(o.item);
+        const wait = o.at - now;
+        const have =
+          o.species >= 0 ? mill.boards[o.species] : sumRow(boardsForSale(mill.boards, reserve));
+        const can = wait <= 0 && have >= o.boards;
+        return (
+          <div key={i} className={`pforge__row bench__order${wait > 0 ? ' is-wait' : ''}`}>
+            <span className="pforge__ico">
+              <img className="pmill-hico" src={benchTexture(o.item, o.species)} alt="" />
+            </span>
+            <span className="pforge__info">
+              <b>
+                {item.name} <span className="bench__who">{item.who}</span>
+              </b>
+              <i>
+                {wait > 0
+                  ? `Заказчик придёт через ${clock(wait)}`
+                  : `${fmt(Math.min(have, o.boards))}/${o.boards} досок ${o.species >= 0 ? SPECIES[o.species].gen : 'любых'} · заплатит ${shortMoney(o.coins)} монет и ${o.tokens} ✦`}
+              </i>
+            </span>
+            <button
+              type="button"
+              className="btn btn--sm pforge__buy"
+              disabled={!can || !!craft}
+              onClick={() => start({ kind: 'order', i })}
+            >
+              {wait > 0 ? clock(wait) : 'Собрать'}
+            </button>
+          </div>
+        );
+      })}
+      <p className="pcamp-note">
+        Заказ платит дороже, чем стоят те же доски на продаже: работа стоит денег. Сдал — через 10
+        минут придёт новый заказчик. Доски на следующую рукоять в «любые» не идут.
+      </p>
+    </div>
+  );
+}
+
 // ---- Лесопилка: пилорама, доски, верстак -------------------------------------
 
 /** Дисковая пила: зубья по кругу, ступица. */
@@ -2414,10 +3323,12 @@ function MillTab({
   now,
   onGain,
   onSpend,
+  onBench,
 }: {
   now: number;
   onGain: (from: number, to: number) => void;
   onSpend: () => void;
+  onBench: () => void;
 }) {
   const f = useFinanceStore((s) => s.forest);
   const p = useFinanceStore((s) => s.prison);
@@ -2428,19 +3339,15 @@ function MillTab({
   const forestMillFeed = useFinanceStore((s) => s.forestMillFeed);
   const stockRef = useRef<HTMLSpanElement>(null);
   const [note, setNote] = useState<string | null>(null);
-  const forestCraftProp = useFinanceStore((s) => s.forestCraftProp);
-  const forestCraftHandle = useFinanceStore((s) => s.forestCraftHandle);
   const mill = millTick(f.mill, now);
   const fm = forestMods(p, f);
   const reserve = boardsReserve(p.handle);
   const sale = boardsForSale(mill.boards, reserve);
   const saleValue = Math.round(boardsValue(sale) * fm.sell);
   const queued = sumRow(mill.queue);
-  const boards = sumRow(mill.boards);
   const cap = millQueueCap(mill.level);
   const rate = millRate(mill.level);
   const nextH = HANDLES[p.handle];
-  const curH = HANDLES[p.handle - 1];
   const kept = reserve.reduce((a, k, i) => a + Math.min(k, mill.boards[i]), 0);
 
   const up = () => {
@@ -2609,63 +3516,9 @@ function MillTab({
         />
       )}
 
-      <h4 className="pcamp-h">Верстак</h4>
-      <Row
-        icon={<span className="pforge__glyph">⛩</span>}
-        title={<>Крепь {p.items.prop > 0 && <span className="pench-lvl">×{p.items.prop}</span>}</>}
-        text={`${PROP_BOARDS} досок любых пород: в шахте ${Math.round(PROP_MS / 60_000)} минут каждый второй блок — порода выше`}
-        action={
-          <button
-            type="button"
-            className="btn btn--sm pforge__buy"
-            disabled={boards < PROP_BOARDS}
-            onClick={() => {
-              primeAudio();
-              if (!forestCraftProp()) {
-                notifyWarning();
-                return;
-              }
-              tierBreak(0);
-              notifySuccess();
-            }}
-          >
-            Сбить
-          </button>
-        }
-      />
-      {nextH ? (
-        <Row
-          icon={<img className="pmill-hico" src={boardTexture(nextH.species)} alt="" />}
-          title={nextH.name}
-          text={`${fmt(Math.min(mill.boards[nextH.species], nextH.boards))}/${nextH.boards} досок ${SPECIES[nextH.species].gen} · +${Math.round(nextH.rate * 100)}% к скорости кирки и топора${curH ? ` (вместо ${Math.round(handleRate(p.handle) * 100)}%)` : ''}`}
-          action={
-            <button
-              type="button"
-              className="btn btn--sm pforge__buy"
-              disabled={mill.boards[nextH.species] < nextH.boards}
-              onClick={() => {
-                primeAudio();
-                if (!forestCraftHandle()) {
-                  notifyWarning();
-                  return;
-                }
-                tierBreak(2);
-                burstConfetti(40, ['#e8c89a', '#ffe08a', '#fff']);
-                notifySuccess();
-              }}
-            >
-              Выточить
-            </button>
-          }
-        />
-      ) : (
-        <Row
-          icon={<img className="pmill-hico" src={barkTexture(9)} alt="" />}
-          title="Рукоять из карельской берёзы"
-          text="Лучше рукояти не бывает"
-          action={<Done />}
-        />
-      )}
+      <button type="button" className="btn btn--block msaw__tobench" onClick={onBench}>
+        Из досок — вещи на верстаке: крепь, рукояти, заказы на продажу →
+      </button>
       <p className="pcamp-note">
         Пилит дорогие породы вперёд. Лесовоз везёт полный штабель сюда, пока в очереди есть место;
         свиль, капокорень и дрова с кроны оплачиваются сразу при загрузке.
