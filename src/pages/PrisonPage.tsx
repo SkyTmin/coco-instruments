@@ -72,6 +72,9 @@ import {
   petOf,
   ROCKFALL_HITS,
   RUNE_ROMAN,
+  SEID_HITS,
+  seidsOf,
+  seidTop,
 } from '@/lib/prison';
 import type { FindId, GuideReward, ItemId, PrisonState, Quota } from '@/lib/prison';
 import {
@@ -80,6 +83,8 @@ import {
   findTexture,
   parcelTexture,
   petTexture,
+  seidTexture,
+  tearTexture,
   rockColors,
   rockTexture,
   rockVariant,
@@ -161,6 +166,10 @@ interface CellProps {
   peek: number;
   /** Сверху порода, которой не хватает в норме ранга. */
   need: boolean;
+  /** Сверху сейд-камень. */
+  seid: boolean;
+  /** Лупа: сейд в этой клетке на столько ярусов ниже (−1 — нет). */
+  seidBelow: number;
   wt: number;
   wl: number;
   wb: number;
@@ -176,13 +185,15 @@ const MineCell = memo(function MineCell({
   crack,
   peek,
   need,
+  seid,
+  seidBelow,
   wt,
   wl,
   wb,
   wr,
   faceRef,
 }: CellProps) {
-  const tex = rock < 0 ? bedrockTexture() : rockTexture(rock, variant);
+  const tex = seid ? seidTexture() : rock < 0 ? bedrockTexture() : rockTexture(rock, variant);
   const x = index % MINE_COLS;
   const y = Math.floor(index / MINE_COLS);
   // Задержка подъёма при обновлении шахты: волна от центра к краям.
@@ -196,7 +207,7 @@ const MineCell = memo(function MineCell({
     '--rd': `${Math.round(rise * 34)}ms`,
   } as CSSProperties;
   return (
-    <div className={`pcell${rock < 0 ? ' is-bottom' : ''}`} style={style}>
+    <div className={`pcell${rock < 0 ? ' is-bottom' : ''}${seid ? ' is-seid' : ''}`} style={style}>
       <span
         className="pcell__face"
         ref={(el) => faceRef(index, el)}
@@ -206,8 +217,16 @@ const MineCell = memo(function MineCell({
           <i className="pcell__crack" style={{ backgroundImage: `url(${crackTexture(crack)})` }} />
         )}
       </span>
-      {peek >= 0 && <img className="pcell__peek" src={rockTexture(peek)} alt="" />}
-      {need && <i className="pcell__need" />}
+      {seid && <i className="pcell__glow" />}
+      {seidBelow > 0 ? (
+        <span className="pcell__seidmark">
+          <img src={seidTexture()} alt="" />
+          <b>↓{seidBelow}</b>
+        </span>
+      ) : (
+        peek >= 0 && <img className="pcell__peek" src={rockTexture(peek)} alt="" />
+      )}
+      {need && !seid && <i className="pcell__need" />}
     </div>
   );
 });
@@ -291,6 +310,7 @@ export function PrisonPage() {
   const prisonStreak = useFinanceStore((s) => s.prisonStreak);
   const prisonGuideClaim = useFinanceStore((s) => s.prisonGuideClaim);
   const prisonParcelOpen = useFinanceStore((s) => s.prisonParcelOpen);
+  const prisonSeid = useFinanceStore((s) => s.prisonSeid);
   const skin = useFinanceStore((s) => s.slotsSkin);
 
   useEffect(() => setMuted(!sound), [sound]);
@@ -298,6 +318,7 @@ export function PrisonPage() {
 
   const { mine, rank, prestige, pick, bagLevel, cart, bag } = prison;
   const rocks = useMemo(() => buildMine(mine.id, mine.seed), [mine.id, mine.seed]);
+  const seids = useMemo(() => seidsOf(mine.id, mine.seed), [mine.id, mine.seed]);
   const mineKey = `${mine.id}:${mine.seed}`;
 
   const [cracks, setCracks] = useState<number[]>(() => new Array<number>(MINE_CELLS).fill(0));
@@ -365,6 +386,8 @@ export function PrisonPage() {
   mineKeyRef.current = mineKey;
   const stripRef = useRef<HTMLDivElement>(null);
   const parcelsRef = useRef<HTMLDivElement>(null);
+  const campRef = useRef<HTMLButtonElement>(null);
+  const totemAt = useRef(0);
   const petRef = useRef<HTMLImageElement>(null);
   const streakBase = useRef({ n: 0, at: 0 });
   const streakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -743,15 +766,128 @@ export function PrisonPage() {
     }
   };
 
+  /**
+   * Выпал ключ — сцена тотема бессмертия из Майнкрафта: слеза гаста
+   * вылетает в центр экрана, растёт и проворачивается, вокруг брызжут
+   * зелёно-жёлтые искры, потом она улетает в лагерь, где лежат ключи.
+   * Слой на весь экран, но в нём только transform и opacity; живёт две
+   * секунды и убирает себя сам. Второй ключ, пока играет первый, — просто
+   * надпись: две сцены подряд друг друга съедают.
+   */
+  const totemKey = (c: number, n: number) => {
+    keyFound();
+    notifySuccess();
+    const { x, y } = cellCenter(c);
+    fx.current?.chips(x, y, ['#4fd04a', '#a6ec3a', '#f2e64a', '#ffffff'], 18, 1.4);
+    const now = performance.now();
+    if (reduceMotion() || now - totemAt.current < 2300) {
+      floatText(c, n > 1 ? `+${n} ключа` : '+ключ', 'pfloat--key', 120);
+      return;
+    }
+    totemAt.current = now;
+    tierBreak(2);
+    tapMedium();
+    const host = document.createElement('div');
+    host.className = 'ptotem';
+    document.body.appendChild(host);
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight * 0.42;
+    const colors = ['#3fbf3f', '#6fdc3a', '#a6ec3a', '#f2e64a', '#e8c23a', '#58d06a'];
+    for (let i = 0; i < 48; i++) {
+      const p = document.createElement('i');
+      p.className = 'ptotem__p';
+      p.style.background = colors[i % colors.length];
+      p.style.left = `${cx}px`;
+      p.style.top = `${cy}px`;
+      host.appendChild(p);
+      const ang = Math.random() * Math.PI * 2;
+      const sp = 80 + Math.random() * 160;
+      const dx = Math.cos(ang) * sp;
+      const dy = Math.sin(ang) * sp * 0.75 - 30;
+      const fall = 90 + Math.random() * 110;
+      try {
+        p.animate(
+          [
+            { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+            {
+              transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`,
+              opacity: 1,
+              offset: 0.45,
+            },
+            {
+              transform: `translate(calc(-50% + ${dx * 1.1}px), calc(-50% + ${dy + fall}px)) scale(.3)`,
+              opacity: 0,
+            },
+          ],
+          {
+            duration: 1100 + Math.random() * 600,
+            delay: 150 + Math.random() * 250,
+            easing: 'cubic-bezier(.2,.6,.4,1)',
+            fill: 'both',
+          },
+        );
+      } catch {
+        /* без WAAPI — без искр */
+      }
+    }
+    const img = document.createElement('img');
+    img.className = 'ptotem__item';
+    img.src = tearTexture();
+    img.alt = '';
+    img.style.left = `${cx}px`;
+    img.style.top = `${cy}px`;
+    host.appendChild(img);
+    const cr = campRef.current?.getBoundingClientRect();
+    const tx = cr ? cr.left + cr.width / 2 - cx : 0;
+    const ty = cr ? cr.top + cr.height / 2 - cy : window.innerHeight * 0.4;
+    const done = () => host.remove();
+    try {
+      const a = img.animate(
+        [
+          {
+            transform: 'translate(-50%, -50%) scale(.3) rotateY(0deg) rotateZ(-14deg)',
+            opacity: 0,
+          },
+          {
+            transform: 'translate(-50%, -50%) scale(3.4) rotateY(200deg) rotateZ(9deg)',
+            opacity: 1,
+            offset: 0.3,
+          },
+          {
+            transform: 'translate(-50%, -50%) scale(2.8) rotateY(360deg) rotateZ(-5deg)',
+            opacity: 1,
+            offset: 0.52,
+          },
+          {
+            transform: 'translate(-50%, -50%) scale(2.7) rotateY(360deg) rotateZ(0deg)',
+            opacity: 1,
+            offset: 0.72,
+          },
+          {
+            transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(.45) rotateY(360deg)`,
+            opacity: 0.9,
+          },
+        ],
+        { duration: 2000, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' },
+      );
+      a.onfinish = () => {
+        done();
+        squashPop(campRef.current, 0.6);
+        coinDing();
+      };
+      a.oncancel = done;
+    } catch {
+      done();
+    }
+    setTimeout(done, 3200);
+    if (n > 1) say(`${n} ключа от сундука!`);
+  };
+
   /** Что сказать и показать по итогам слома: токены, ключи, находки, рюкзак. */
   const announce = (c: number, res: PrisonLoot) => {
     const now = performance.now();
     if (res.tokens > 0) floatText(c, `+${res.tokens} ✦`, 'pfloat--token', 120);
-    if (res.keys > 0) {
-      floatText(c, res.keys > 1 ? `+${res.keys} ключа` : '+ключ', 'pfloat--key', 240);
-      keyFound();
-      tapMedium();
-    }
+    if (res.keys > 0) totemKey(c, res.keys);
     if (res.finds.length) {
       const f = res.finds[res.finds.length - 1];
       const n = useFinanceStore.getState().prison.finds[f.id] ?? 1;
@@ -827,7 +963,9 @@ export function PrisonPage() {
    */
   const breakCells = (cells: number[], kind: BreakKind): PrisonLoot | null => {
     const st = useFinanceStore.getState().prison;
+    // Сейд-камень площадные чары не берут: его ломают только руками.
     const list = cells
+      .filter((cell) => !seidTop(seids, cell, st.mine.dug[cell]))
       .map((cell) => ({ cell, rock: rockAt(rocks, cell, st.mine.dug[cell]) }))
       .filter((b) => b.rock >= 0);
     if (!list.length) return null;
@@ -1007,7 +1145,7 @@ export function PrisonPage() {
     const staged: [number, number][] = [];
     for (const n of nb) {
       const rock = rockAt(rocks, n, st.mine.dug[n]);
-      if (rock < 0) continue;
+      if (rock < 0 || seidTop(seids, n, st.mine.dug[n])) continue;
       const hpMax = ROCKS[rock].hp;
       const left = (hp.current[n] < 0 ? hpMax : hp.current[n]) - dmg;
       if (left <= 1e-6) broken.push(n);
@@ -1066,6 +1204,69 @@ export function PrisonPage() {
     say('Кураж: 15 секунд двойной добычи');
   };
 
+  /**
+   * Удар по сейд-камню. Считаются УДАРЫ, а не урон: сколько бы ни била
+   * кирка, нужно несколько попаданий, крит — за два. Счёт живёт в том же
+   * `hp`, что и урон породы: сейд сверху — значит, это его запас.
+   */
+  const seidHit = (c: number, crit: boolean) => {
+    swing(c, crit);
+    const { x, y } = cellCenter(c);
+    const left = (hp.current[c] < 0 ? SEID_HITS : hp.current[c]) - (crit ? 2 : 1);
+    fx.current?.chips(x, y, ['#3fe6d0', '#c8fff6', '#262b33'], crit ? 12 : 6, crit ? 1.4 : 0.9);
+    if (left > 0) {
+      hp.current[c] = left;
+      const stage = Math.min(3, 1 + Math.floor((1 - left / SEID_HITS) * 3));
+      setCracks((prev) => {
+        if (prev[c] === stage) return prev;
+        const next = prev.slice();
+        next[c] = stage;
+        return next;
+      });
+      pickHit('crystal', crit);
+      tapMedium();
+      if (crit) floatText(c, 'КРИТ', 'pfloat--crit');
+      const face = faces.current[c];
+      if (face && !reduceMotion()) {
+        try {
+          face.animate(
+            [
+              { transform: 'scale(1)' },
+              { transform: 'scale(.86) rotate(-3deg)', offset: 0.3 },
+              { transform: 'scale(1.04) rotate(2deg)', offset: 0.7 },
+              { transform: 'scale(1)' },
+            ],
+            { duration: 200, easing: 'ease-out' },
+          );
+        } catch {
+          /* не страшно */
+        }
+      }
+      return;
+    }
+    hp.current[c] = -1;
+    setCracks((prev) => {
+      if (!prev[c]) return prev;
+      const next = prev.slice();
+      next[c] = 0;
+      return next;
+    });
+    const from = useFinanceStore.getState().slotsBalance;
+    const got = prisonSeid(c);
+    if (!got) return;
+    rollBalance(from, from + got.coins);
+    tierBreak(3);
+    flashFrame('big');
+    addTrauma(fieldRef.current, 0.45);
+    notifySuccess();
+    shockwave(c, 5, false);
+    fx.current?.chips(x, y, ['#3fe6d0', '#c8fff6', '#ffffff', '#8ff5e6'], 40, 2);
+    burstConfetti(70, ['#3fe6d0', '#c8fff6', '#ffe08a']);
+    floatText(c, `+${got.tokens} ✦`, 'pfloat--seid');
+    say(`Сейд-камень: +${fmt(got.tokens)} токенов, +${shortMoney(got.coins)} монет`);
+    bumpStreak(1, c);
+  };
+
   /** Один удар кирки по клетке. Весь «кликер» — здесь. */
   const hit = (c: number) => {
     if (c < 0 || c >= MINE_CELLS) return;
@@ -1075,6 +1276,10 @@ export function PrisonPage() {
     lastHit.current = now;
 
     const depth = st.mine.dug[c];
+    if (seidTop(seids, c, depth)) {
+      seidHit(c, Math.random() < CRIT_CHANCE);
+      return;
+    }
     const rock = rockAt(rocks, c, depth);
     const { x, y } = cellCenter(c);
     if (rock < 0) {
@@ -1497,6 +1702,10 @@ export function PrisonPage() {
         crack={cracks[c]}
         peek={peek}
         need={needRocks.has(top)}
+        seid={seidTop(seids, c, d)}
+        seidBelow={
+          buffs.lens > 0 ? (seids.find((x) => x.cell === c && x.depth > d)?.depth ?? d) - d : 0
+        }
         wt={wall(mine.dug, c, 0, -1)}
         wl={wall(mine.dug, c, -1, 0)}
         wb={wall(mine.dug, c, 0, 1)}
@@ -1815,6 +2024,7 @@ export function PrisonPage() {
           <button
             type="button"
             className="pforge-btn"
+            ref={campRef}
             onClick={() => {
               tapLight();
               setCamp('forge');

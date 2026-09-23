@@ -37,6 +37,7 @@ import {
   ROCKS,
   sharpCost,
   SHARP_MAX,
+  TOKEN_CHANCE,
 } from './prison';
 import type { CaseTier, EnchantId, Enchants, Parcel, PetId, Pets, Rune } from './prison';
 import {
@@ -59,6 +60,11 @@ import {
   RUNE_TIERS,
   RUNES,
   runePower,
+  seidPerBlock,
+  seidReward,
+  seidsOf,
+  seidTop,
+  SEID_HITS,
   socketsOpen,
 } from './prison';
 import {
@@ -223,6 +229,12 @@ function run(
     }
     money += perSec;
     tokens += bps * m.tokenChance * 2;
+    // Сейд-камни: в среднем меньше одного на шахту, но токенами платят щедро.
+    if (loot) {
+      const seid = seidReward(rank, 0);
+      money += bps * seidPerBlock() * seid.coins;
+      tokens += bps * seidPerBlock() * seid.tokens;
+    }
     xp += bps;
     inRank += bps;
     t += 1;
@@ -306,7 +318,11 @@ describe('темп каторги', () => {
 
   it('A→Z — вечер-другой, а не неделя и не полчаса', () => {
     // Игрок из симуляции копает вслепую; кто ищет редкую породу прицельно,
-    // добирает норму раньше. Поэтому нижняя граница — 1,8 часа, а не два.
+    // добирает норму раньше. Граница была 1,8 часа; сейд-камень владелец
+    // заказал ровно ради токенов («токены у нас сложно добиваются»), и круг
+    // идеального игрока стал ≈1,5 часа. Это решение, а не утечка: НЕ
+    // возвращайте его ценами чар. Следующая добавка силы (двор, события)
+    // обязана окупаться сама, а не опускать границу снова.
     const r = run();
     const { t, rank } = r;
     if (process.env.PACE)
@@ -331,7 +347,7 @@ describe('темп каторги', () => {
         [1, 2, 3, 4, 5, 6, 7, 8].map((seed) => (run({ seed }).t / 3600).toFixed(2)).join(' '),
       );
     expect(rank).toBe(LAST_RANK);
-    expect(t / 3600).toBeGreaterThan(1.8);
+    expect(t / 3600).toBeGreaterThan(1.4);
     expect(t / 3600).toBeLessThan(5);
   });
 
@@ -793,5 +809,44 @@ describe('добыча: передачки, руны, питомцы, вехи',
     expect(s.parcels).toEqual([{ tier: 'epic', left: PARCEL_NEED.epic }]);
     expect(s.miles).toEqual(['b1k']);
     expect(s.runeSeq).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('сейд-камень', () => {
+  it('на поле 0, 1 или 2, только в глубине, в разных клетках', () => {
+    const counts = [0, 0, 0];
+    for (let seed = 1; seed <= 3000; seed++) {
+      const list = seidsOf(7, seed);
+      expect(list.length).toBeLessThanOrEqual(2);
+      counts[list.length] += 1;
+      for (const x of list) {
+        expect(x.depth).toBeGreaterThanOrEqual(1);
+        expect(x.depth).toBeLessThan(DEPTH);
+      }
+      if (list.length === 2) expect(list[0].cell).not.toBe(list[1].cell);
+    }
+    // Чаще всего сейда нет вовсе — он редкий всегда.
+    expect(counts[0]).toBeGreaterThan(counts[1]);
+    expect(counts[1]).toBeGreaterThan(counts[2]);
+    expect(counts[2]).toBeGreaterThan(0);
+    // Одно зерно — одни и те же места.
+    expect(seidsOf(3, 42)).toEqual(seidsOf(3, 42));
+  });
+
+  it('сверху он только на своём ярусе', () => {
+    const s = [{ cell: 10, depth: 2 }];
+    expect(seidTop(s, 10, 2)).toBe(true);
+    expect(seidTop(s, 10, 1)).toBe(false);
+    expect(seidTop(s, 11, 2)).toBe(false);
+  });
+
+  it('платит токенами больше, чем шахта даёт за сотню блоков', () => {
+    for (const rank of [0, 10, 24]) {
+      const r = seidReward(rank, 0);
+      expect(r.tokens).toBeGreaterThan(100 * TOKEN_CHANCE * 2);
+      expect(r.coins).toBeGreaterThan(0);
+      expect(r.coins).toBeLessThan(rankCost(rank));
+    }
+    expect(SEID_HITS).toBeGreaterThan(1);
   });
 });

@@ -804,3 +804,87 @@ export function parcelTexture(seal: string): string {
   parcelCache.set(seal, url);
   return url;
 }
+
+// ---------------------------------------------------------------------------
+// Слеза гаста — так выглядит ключ от сундука. Бледно-голубая капля с белым
+// бликом слева, как предмет в Майнкрафте: узнаётся с первого взгляда.
+// ---------------------------------------------------------------------------
+
+const TEAR_MAP = [
+  '.....aa.....',
+  '....abca....',
+  '....abca....',
+  '...abccda...',
+  '...abccda...',
+  '..abcccdda..',
+  '..abcccdda..',
+  '.abccccddda.',
+  '.abccccddda.',
+  '.abbcccddda.',
+  '..abbcddda..',
+  '...aaaaaa...',
+];
+
+let tearUrl: string | undefined;
+
+export function tearTexture(): string {
+  if (tearUrl !== undefined) return tearUrl;
+  const pal: Record<string, string> = {
+    a: '#4f8490',
+    b: '#ffffff',
+    c: '#d8f6fa',
+    d: '#8fd0da',
+  };
+  const px = new Pixels(12);
+  TEAR_MAP.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const ch = row[x];
+      if (ch !== '.') px.set(x, y, hex(pal[ch]));
+    }
+  });
+  tearUrl = px.toUrl();
+  return tearUrl;
+}
+
+// ---------------------------------------------------------------------------
+// Сейд-камень: тёмный базальт с резным светящимся знаком — два кольца и
+// ядро. Ни одна порода так не светится, поэтому его не спутать ни с чем.
+// ---------------------------------------------------------------------------
+
+const SEID_MAP = [
+  'abbbbcbbbbbbcbba',
+  'bbcbbbbbbbbbbbbb',
+  'bbbbbddddddbbbcb',
+  'bbbddbbbbbbddbbb',
+  'bbdbbbbddbbbbdbb',
+  'bcdbbbdbbdbbbdcb',
+  'bdbbbdbeebdbbbdb',
+  'bdbbdbeeeebdbbdb',
+  'bdbbdbeeeebdbbdb',
+  'bdbbbdbeebdbbbdb',
+  'bcdbbbdbbdbbbdcb',
+  'bbdbbbbddbbbbdbb',
+  'bbbddbbbbbbddbbb',
+  'bcbbbddddddbbbbb',
+  'bbbbbbbbbbbbbcbb',
+  'abbcbbbbbbbbbbba',
+];
+
+let seidUrl: string | undefined;
+
+export function seidTexture(): string {
+  if (seidUrl !== undefined) return seidUrl;
+  const pal: Record<string, string> = {
+    a: '#15181c',
+    b: '#262b33',
+    c: '#3a414c',
+    d: '#3fe6d0',
+    e: '#c8fff6',
+  };
+  const px = new Pixels();
+  SEID_MAP.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) px.set(x, y, hex(pal[row[x]]));
+  });
+  seidUrl = px.toUrl();
+  return seidUrl;
+}

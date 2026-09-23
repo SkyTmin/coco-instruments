@@ -425,6 +425,57 @@ export function buildMine(mine: number, seed: number): number[] {
   return rocks;
 }
 
+// ---------------------------------------------------------------------------
+// Сейд-камень — священный камень саамов, самая редкая вещь в шахте. На поле
+// их 0, 1 или 2, и лежат они только в глубине: сверху не видно, находит лупа
+// или случай. Бьётся не уроном, а УДАРАМИ — сколько бы ни била кирка, нужно
+// несколько попаданий (крит считается за два). Взрывы, жилы и отбойник его не
+// берут: иначе редкость уходила бы сама, мимо рук. Платит токенами — их на
+// каторге добывать тяжелее всего — и монетами в общий кошелёк.
+// ---------------------------------------------------------------------------
+
+export const SEID_HITS = 4;
+/** Сколько сейдов на поле: 0 — в 70% шахт, 1 — в 25%, 2 — в 5%. */
+const SEID_ODDS = [0.7, 0.95];
+
+export interface Seid {
+  cell: number;
+  depth: number;
+}
+
+/** Где лежат сейды шахты: из того же зерна, что и порода. */
+export function seidsOf(mine: number, seed: number): Seid[] {
+  const rnd = rng32(seed * 131 + mine * 17 + 7);
+  const x = rnd();
+  const n = x < SEID_ODDS[0] ? 0 : x < SEID_ODDS[1] ? 1 : 2;
+  const out: Seid[] = [];
+  while (out.length < n) {
+    const cell = Math.floor(rnd() * MINE_CELLS);
+    const depth = 1 + Math.floor(rnd() * (DEPTH - 1));
+    if (!out.some((s) => s.cell === cell)) out.push({ cell, depth });
+  }
+  return out;
+}
+
+/** Сверху клетки сейчас сейд. */
+export function seidTop(seids: Seid[], cell: number, dug: number): boolean {
+  return seids.some((s) => s.cell === cell && s.depth === dug);
+}
+
+/** Награда за сейд: токены растут с рангом, монеты — доля цены ранга. */
+export function seidReward(rank: number, prestige: number): { tokens: number; coins: number } {
+  return {
+    tokens: 30 + 6 * rank,
+    coins: nice(rankCost(Math.min(rank, LAST_RANK - 1), prestige) * 0.05),
+  };
+}
+
+/** Средний выход сейдов на один блок шахты — для теста темпа. */
+export function seidPerBlock(): number {
+  const mean = 1 * (SEID_ODDS[1] - SEID_ODDS[0]) + 2 * (1 - SEID_ODDS[1]);
+  return mean / (MINE_CELLS * DEPTH * MINE_RESET_AT);
+}
+
 /** Порода верхнего блока клетки при раскопе `dug`; −1 — дно. */
 export function rockAt(rocks: number[], cell: number, dug: number): number {
   if (dug >= DEPTH) return -1;
@@ -2132,6 +2183,13 @@ export const MILES: Mile[] = [
     reward: { rune: 3, tokens: 500 },
   },
   {
+    id: 'seid',
+    title: 'Хранитель сейдов',
+    text: 'Разбить десять сейд-камней',
+    progress: (p) => upToM(p.seids, 10),
+    reward: { tokens: 600, rune: 3 },
+  },
+  {
     id: 'parcels',
     title: 'Сто передачек',
     text: 'Вскрыть',
@@ -2215,6 +2273,8 @@ export interface PrisonState {
   pet: PetId | null;
   /** Забранные вехи. */
   miles: string[];
+  /** Сколько сейд-камней разбито за всё время. */
+  seids: number;
 }
 
 export function freshMine(id: number, seed = Math.floor(Math.random() * 2 ** 31)): PrisonMine {
@@ -2259,6 +2319,7 @@ export const PRISON_START: PrisonState = {
   pets: {},
   pet: null,
   miles: [],
+  seids: 0,
 };
 
 const int = (v: unknown, lo: number, hi: number, dflt: number): number =>
@@ -2327,6 +2388,7 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
       ? (raw.off.filter((id) => ENCHANTS.some((e) => e.id === id)) as EnchantId[])
       : [],
     ...normalizeLoot(raw),
+    seids: int(raw.seids, 0, 1e9, 0),
   };
 }
 

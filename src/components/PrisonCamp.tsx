@@ -77,7 +77,7 @@ import type {
   RuneKind,
 } from '@/lib/prison';
 import type { ParcelOpen } from '@/store';
-import { findTexture, parcelTexture, petTexture } from '@/lib/prison-art';
+import { findTexture, parcelTexture, petTexture, tearTexture } from '@/lib/prison-art';
 import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
 import { caseTick, coinDing, keyFound, payoutEnd, primeAudio, tierBreak } from '@/lib/sound';
@@ -161,12 +161,17 @@ export function TokenIcon({ size = 14 }: { size?: number }) {
   );
 }
 
+/** Ключ от сундука — слеза гаста, как в Майнкрафте. */
 export function KeyIcon({ size = 14 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true">
-      <circle cx="5" cy="8" r="3.4" fill="none" stroke="#e8b43a" strokeWidth="2" />
-      <path d="M8 8 H15 M12.5 8 V11 M14.5 8 V10.4" stroke="#e8b43a" strokeWidth="2" />
-    </svg>
+    <img
+      className="ptear"
+      src={tearTexture()}
+      width={size}
+      height={size}
+      alt=""
+      aria-hidden="true"
+    />
   );
 }
 

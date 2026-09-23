@@ -173,6 +173,9 @@ import {
   rollRune,
   RUNE_SHATTER,
   socketsOpen,
+  seidReward,
+  seidsOf,
+  seidTop,
 } from '@/lib/prison';
 import type {
   CaseRoll,
@@ -859,6 +862,8 @@ interface FinanceState {
   prisonRuneFuse: (runeId: number) => Rune | null;
   prisonRuneShatter: (runeId: number) => number;
   prisonPetSet: (id: PetId | null) => void;
+  /** Разбит сейд-камень в клетке `cell`: токены и монеты. */
+  prisonSeid: (cell: number) => { tokens: number; coins: number } | null;
   prisonMileClaim: (id: string) => MileClaim | null;
   /** Проводник: забрать награду за выполненный шаг. */
   prisonGuideClaim: () => GuideReward | null;
@@ -2721,6 +2726,29 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ prison });
     persistPrison(prison);
     return got;
+  },
+
+  prisonSeid: (cell) => {
+    const s = get();
+    const p = s.prison;
+    const dug0 = p.mine.dug[cell];
+    if (dug0 === undefined || !seidTop(seidsOf(p.mine.id, p.mine.seed), cell, dug0)) return null;
+    const dug = p.mine.dug.slice();
+    dug[cell] += 1;
+    const r = seidReward(p.rank, p.prestige);
+    const prison: PrisonState = {
+      ...p,
+      mine: { ...p.mine, dug },
+      tokens: p.tokens + r.tokens,
+      earned: p.earned + r.coins,
+      seids: p.seids + 1,
+      mined: p.mined + 1,
+      pickXp: p.pickXp + 1,
+    };
+    set({ prison, slotsBalance: s.slotsBalance + r.coins });
+    persistPrison(prison);
+    persistSlots(get());
+    return r;
   },
 
   prisonPetSet: (id) => {

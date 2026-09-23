@@ -19607,6 +19607,90 @@ input[type='datetime-local'] {
   font-weight: 900;
 }
 
+/* ==========================================================================
+   Слеза гаста (ключ) и сейд-камень (v2.50).
+   ========================================================================== */
+.ptear {
+  display: inline-block;
+  vertical-align: middle;
+  image-rendering: pixelated;
+}
+
+/* Сцена тотема: слой на весь экран, только transform и opacity. */
+.ptotem {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  perspective: 600px;
+}
+.ptotem__item {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 6px rgba(160, 240, 250, 0.9));
+  will-change: transform, opacity;
+}
+.ptotem__p {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  will-change: transform, opacity;
+}
+
+/* Сейд-камень светится изнутри — единственный блок, который так умеет.
+   Свечение — отдельный слой по прозрачности, текстура стоит. */
+.pcell__glow {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: radial-gradient(circle, rgba(63, 230, 208, 0.55), transparent 70%);
+  box-shadow: inset 0 0 0 1.5px rgba(160, 255, 240, 0.8);
+  pointer-events: none;
+  animation: pseid-glow 1.6s ease-in-out infinite;
+}
+@keyframes pseid-glow {
+  50% {
+    opacity: 0.35;
+  }
+}
+.pcell.is-seid .pcell__face {
+  scale: 1;
+}
+/* Лупа: сейд в глубине — знак в углу и сколько ярусов до него. */
+.pcell__seidmark {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 1px 3px 1px 1px;
+  border-radius: 4px;
+  background: rgba(10, 30, 28, 0.85);
+  box-shadow:
+    0 0 0 1.5px #3fe6d0,
+    0 0 8px rgba(63, 230, 208, 0.8);
+  pointer-events: none;
+}
+.pcell__seidmark img {
+  width: 13px;
+  height: 13px;
+  image-rendering: pixelated;
+}
+.pcell__seidmark b {
+  font-size: 10px;
+  font-weight: 900;
+  color: #c8fff6;
+}
+.pfloat--seid {
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  color: #8ff5e6;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pmine-frame::after,
   .pfindcard,
@@ -19624,7 +19708,8 @@ input[type='datetime-local'] {
   .ppet-perch,
   .preveal,
   .preveal__box,
-  .preveal__card {
+  .preveal__card,
+  .pcell__glow {
     animation: none;
   }
 }
