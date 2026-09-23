@@ -862,6 +862,15 @@ interface FinanceState {
   prisonRuneFuse: (runeId: number) => Rune | null;
   prisonRuneShatter: (runeId: number) => number;
   prisonPetSet: (id: PetId | null) => void;
+  /** Касса владельца: токены каторги пачкой. */
+  prisonAddTokens: (amount: number) => void;
+  /** Начать Каторгу заново. Кошелёк и уровень общие — остаются. */
+  prisonReset: () => void;
+  /**
+   * Сбросить всё в зале игр: Каторгу, кошелёк, уровень, серию бонусов,
+   * рекорды и историю. Звук, вибрация, турбо и скин остаются.
+   */
+  gamesReset: () => void;
   /** Разбит сейд-камень в клетке `cell`: токены и монеты. */
   prisonSeid: (cell: number) => { tokens: number; coins: number } | null;
   prisonMileClaim: (id: string) => MileClaim | null;
@@ -2726,6 +2735,52 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ prison });
     persistPrison(prison);
     return got;
+  },
+
+  prisonAddTokens: (amount) => {
+    const add = Math.max(0, Math.round(amount));
+    if (!add) return;
+    const p = get().prison;
+    const prison = { ...p, tokens: p.tokens + add };
+    set({ prison });
+    persistPrison(prison);
+  },
+
+  prisonReset: () => {
+    const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
+    set({ prison });
+    persistPrison(prison);
+  },
+
+  gamesReset: () => {
+    const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
+    set({
+      prison,
+      slotsBalance: START_BALANCE,
+      slotsBet: 25,
+      slotsSpins: 0,
+      slotsBest: 0,
+      slotsBonusAt: undefined,
+      slotsHistory: [],
+      slotsJackpot: JACKPOT_BASE,
+      slotsTopX: 0,
+      slotsXp: 0,
+      slotsRewardedLevel: 1,
+      slotsDailyAt: undefined,
+      slotsStreak: 0,
+      slotsMissions: freshMissions(),
+      slotsWheelAt: undefined,
+      slotsFreeSpins: 0,
+      scatterSpins: 0,
+      scatterBest: 0,
+      scatterAnte: false,
+      scatterFs: null,
+      sessionNow: null,
+      sessionPast: [],
+      sessionCard: null,
+    });
+    persistPrison(prison);
+    persistSlots(get());
   },
 
   prisonSeid: (cell) => {

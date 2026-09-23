@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { Screen, Sheet } from '@/components/ui';
-import { IconGift } from '@/components/icons';
+import { IconGear, IconGift } from '@/components/icons';
+import { CashDesk } from '@/components/CashDesk';
 import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
@@ -254,7 +255,7 @@ function rings(center: number, cells: number[]): number[][] {
 
 type BreakKind = 'hit' | 'crit' | 'vein' | 'blast' | 'hammer';
 
-type Sheetname = 'mines' | 'prestige' | 'norm' | null;
+type Sheetname = 'mines' | 'prestige' | 'norm' | 'settings' | null;
 
 /** Сколько секунд простоя до того, как полоска запала начинает мигать. */
 const STREAK_WARN_MS = 1500;
@@ -311,6 +312,8 @@ export function PrisonPage() {
   const prisonGuideClaim = useFinanceStore((s) => s.prisonGuideClaim);
   const prisonParcelOpen = useFinanceStore((s) => s.prisonParcelOpen);
   const prisonSeid = useFinanceStore((s) => s.prisonSeid);
+  const prisonReset = useFinanceStore((s) => s.prisonReset);
+  const gamesReset = useFinanceStore((s) => s.gamesReset);
   const skin = useFinanceStore((s) => s.slotsSkin);
 
   useEffect(() => setMuted(!sound), [sound]);
@@ -334,6 +337,13 @@ export function PrisonPage() {
   const [crewNote, setCrewNote] = useState(false);
   const [rewards, setRewards] = useState(false);
   const [reveal, setReveal] = useState<ParcelOpen | null>(null);
+  /** Какой сброс взведён: первый тап взводит, второй — сбрасывает. */
+  const [wipe, setWipe] = useState<'prison' | 'all' | null>(null);
+  useEffect(() => {
+    if (!wipe) return undefined;
+    const t = setTimeout(() => setWipe(null), 5000);
+    return () => clearTimeout(t);
+  }, [wipe]);
   const [shift, setShift] = useState<{
     blocks: number;
     coins: number;
@@ -1587,6 +1597,32 @@ export function PrisonPage() {
     setReveal(got);
   };
 
+  /**
+   * Сброс необратим, поэтому в два касания: первое взводит кнопку и пишет,
+   * что пропадёт, второе — сбрасывает. Взведённая сама гаснет через 5 с.
+   */
+  const doWipe = (what: 'prison' | 'all') => {
+    primeAudio();
+    if (wipe !== what) {
+      notifyWarning();
+      setWipe(what);
+      return;
+    }
+    setWipe(null);
+    if (what === 'all') gamesReset();
+    else prisonReset();
+    streakBase.current = { n: 0, at: 0 };
+    if (streakTimer.current) clearTimeout(streakTimer.current);
+    setStreak(0);
+    setCooling(false);
+    paceLog.current = [];
+    settleBalance();
+    setSheet(null);
+    mineRumble();
+    tapMedium();
+    say(what === 'all' ? 'Всё в играх начато заново' : 'Каторга начата заново');
+  };
+
   const claimGuide = () => {
     primeAudio();
     const from = useFinanceStore.getState().slotsBalance;
@@ -1743,6 +1779,17 @@ export function PrisonPage() {
           >
             <IconGift size={19} />
             {readyRewards > 0 && <i className="pmine-btn__badge">{readyRewards}</i>}
+          </button>
+          <button
+            className="pmine-btn pmine-btn--gear"
+            type="button"
+            aria-label="Настройки"
+            onClick={() => {
+              tapLight();
+              setSheet('settings');
+            }}
+          >
+            <IconGear size={19} />
           </button>
           <button
             className="pmine-btn"
@@ -2141,6 +2188,49 @@ export function PrisonPage() {
             В шахте пять пород: самая новая — редкая, глубже её больше. На дне изредка попадается
             порода следующей шахты. Выработал 85% — шахта обновится сама.
           </p>
+        </Sheet>
+      )}
+
+      {sheet === 'settings' && (
+        <Sheet
+          title="Настройки"
+          onClose={() => {
+            setSheet(null);
+            setWipe(null);
+          }}
+        >
+          <div className="stack">
+            <div className="pcash">
+              <CashDesk />
+            </div>
+            <div className="pwipe">
+              <b className="pwipe__title">Начать заново</b>
+              <button
+                type="button"
+                className={`btn btn--block pwipe__btn${wipe === 'prison' ? ' is-armed' : ''}`}
+                onClick={() => doWipe('prison')}
+              >
+                {wipe === 'prison' ? 'Точно? Нажми ещё раз' : 'Сбросить Каторгу'}
+              </button>
+              <p className="pwipe__text">
+                Пропадут ранги, кирка, заточка, чары, руны, питомцы, токены, ключи, сундуки,
+                коллекция, бригада, перки и вехи. Кошелёк и уровень останутся — они общие с
+                автоматами.
+              </p>
+              <button
+                type="button"
+                className={`btn btn--block pwipe__btn${wipe === 'all' ? ' is-armed' : ''}`}
+                onClick={() => doWipe('all')}
+              >
+                {wipe === 'all' ? 'Точно всё? Нажми ещё раз' : 'Сбросить всё в играх'}
+              </button>
+              <p className="pwipe__text">
+                Каторга и автоматы с нуля: кошелёк вернётся к стартовой тысяче, уровень, серия
+                бонусов, цели дня, рекорды и прогресс скинов — тоже. Звук, вибрация и выбранный скин
+                останутся. Вернуть прогресс после сброса нельзя.
+              </p>
+            </div>
+          </div>
         </Sheet>
       )}
 

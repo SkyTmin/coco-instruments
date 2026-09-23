@@ -8,16 +8,20 @@ import { coinDing, primeAudio } from '@/lib/sound';
 import { notifySuccess, tapMedium } from '@/lib/haptics';
 
 const AMOUNTS = [10_000, 100_000, 1_000_000];
+/** Токены каторги: их в игре добывать тяжелее всего. */
+const TOKENS = [1_000, 10_000, 100_000];
 const fmt = (n: number) => n.toLocaleString('ru-RU');
 
 /**
- * Касса: кнопка «закинуть себе монет». Монеты виртуальные, не продаются и ни
- * на что вне игры не влияют — это не покупка, а способ не ждать бонусов.
+ * Касса: кнопка «закинуть себе монет» — и токенов каторги. Монеты и токены
+ * виртуальные, не продаются и ни на что вне игры не влияют — это не покупка,
+ * а способ не ждать бонусов.
  * Видна только владельцу приложения (тому же, кому доступен бэкап): для
  * остальных игра должна оставаться игрой.
  */
 export function CashDesk() {
   const add = useFinanceStore((s) => s.addSlotsCoins);
+  const addTokens = useFinanceStore((s) => s.prisonAddTokens);
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const owner = !!status?.owner;
 
@@ -39,6 +43,14 @@ export function CashDesk() {
     notifySuccess();
   };
 
+  const giveTokens = (amount: number) => {
+    primeAudio();
+    tapMedium();
+    addTokens(amount);
+    coinDing();
+    notifySuccess();
+  };
+
   if (!owner) return null;
 
   return (
@@ -52,6 +64,13 @@ export function CashDesk() {
           <button key={n} className="cash-btn" onClick={() => give(n)}>
             +{fmt(n)}
             <CoinIcon size={14} />
+          </button>
+        ))}
+      </div>
+      <div className="cash-row">
+        {TOKENS.map((n) => (
+          <button key={n} className="cash-btn cash-btn--token" onClick={() => giveTokens(n)}>
+            +{fmt(n)} ✦
           </button>
         ))}
       </div>

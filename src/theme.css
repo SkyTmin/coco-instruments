@@ -19691,6 +19691,56 @@ input[type='datetime-local'] {
   color: #8ff5e6;
 }
 
+/* ==========================================================================
+   Настройки каторги: касса владельца и сброс.
+   ========================================================================== */
+.pmine-btn--gear {
+  color: #f1dcbc;
+}
+/* Касса нарисована на переменных скина автоматов — даём ей свои. */
+.pcash {
+  --neon: #ffcf5a;
+  --cab-1: #3a2819;
+  --btn-1: #ffe08a;
+  --btn-2: #f0b43a;
+  --btn-3: #b8761c;
+  --btn-fg: #3a2408;
+}
+.pcash:empty {
+  display: none;
+}
+.cash-btn--token {
+  background: linear-gradient(180deg, #b8f4e6, #5fd1bd 45%, #2a8f80);
+  color: #0e2e29;
+}
+.pwipe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--neg, #e5484d) 35%, transparent);
+  background: color-mix(in srgb, var(--neg, #e5484d) 7%, transparent);
+}
+.pwipe__title {
+  font-size: 15px;
+}
+.pwipe__btn {
+  border: 1px solid color-mix(in srgb, var(--neg, #e5484d) 55%, transparent);
+  color: color-mix(in srgb, var(--neg, #e5484d) 80%, #fff);
+  background: transparent;
+}
+.pwipe__btn.is-armed {
+  background: var(--neg, #e5484d);
+  color: #fff;
+}
+.pwipe__text {
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pmine-frame::after,
   .pfindcard,
