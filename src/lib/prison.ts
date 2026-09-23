@@ -611,7 +611,12 @@ export type EnchantId =
   | 'hammer'
   | 'token'
   | 'key'
-  | 'frenzy';
+  | 'frenzy'
+  | 'crack'
+  | 'beam'
+  | 'reforge'
+  | 'rockfall'
+  | 'echo';
 
 export interface Enchant {
   id: EnchantId;
@@ -673,6 +678,52 @@ export const ENCHANTS: Enchant[] = [
     inc: 80,
     glyph: '✺',
   },
+  // Пять чар v2.49 — с серверов (X-Prison, Cosmic), под нашу сетку 7×9.
+  {
+    id: 'crack',
+    name: 'Трещина',
+    per: '+2% ударить и по соседям',
+    max: 20,
+    base: 60,
+    inc: 35,
+    glyph: '╳',
+  },
+  {
+    id: 'beam',
+    name: 'Луч',
+    per: '+0,6% снести весь ряд',
+    max: 15,
+    base: 110,
+    inc: 70,
+    glyph: '═',
+  },
+  {
+    id: 'reforge',
+    name: 'Перековка',
+    per: '+1,5% блоку стать породой выше',
+    max: 20,
+    base: 90,
+    inc: 60,
+    glyph: '⚙',
+  },
+  {
+    id: 'rockfall',
+    name: 'Камнепад',
+    per: '+0,15% обрушить град взрывов',
+    max: 15,
+    base: 260,
+    inc: 140,
+    glyph: '☄',
+  },
+  {
+    id: 'echo',
+    name: 'Эхо',
+    per: '+5% к шансам чар поля',
+    max: 20,
+    base: 200,
+    inc: 120,
+    glyph: '◎',
+  },
 ];
 
 export const enchantOf = (id: EnchantId): Enchant => ENCHANTS.find((e) => e.id === id)!;
@@ -688,6 +739,11 @@ export const NO_ENCHANTS: Enchants = {
   token: 0,
   key: 0,
   frenzy: 0,
+  crack: 0,
+  beam: 0,
+  reforge: 0,
+  rockfall: 0,
+  echo: 0,
 };
 
 /** Цена следующего уровня (с уровня `level` на `level + 1`). */
@@ -721,6 +777,13 @@ export const LENS_MS = 90_000;
 export const VEIN_EXTRA = 1.3;
 export const BLAST_EXTRA = 7;
 export const HAMMER_EXTRA = 55;
+/** Луч — ряд из семи клеток; камнепад — четыре взрыва 3×3 внахлёст. */
+export const BEAM_EXTRA = 5;
+export const ROCKFALL_EXTRA = 24;
+/** Трещина бьёт четырёх соседей одним ударом: ломается в среднем один. */
+export const CRACK_EXTRA = 1.2;
+/** Камнепад: сколько взрывов и через сколько мс друг за другом. */
+export const ROCKFALL_HITS = 4;
 
 /** Всё, что меняют зачарования, престиж, перки и коллекция, — в одном месте. */
 export interface Mods {
@@ -735,9 +798,15 @@ export interface Mods {
   blast: number;
   hammer: number;
   frenzy: number;
+  crack: number;
+  beam: number;
+  rockfall: number;
+  /** Шанс, что сломанный блок засчитается породой выше (Перековка). */
+  reforge: number;
   tokenChance: number;
   keyChance: number;
   findChance: number;
+  parcelChance: number;
 }
 
 export const BASE_MODS: Mods = {
@@ -750,40 +819,65 @@ export const BASE_MODS: Mods = {
   blast: 0,
   hammer: 0,
   frenzy: 0,
+  crack: 0,
+  beam: 0,
+  rockfall: 0,
+  reforge: 0,
   tokenChance: TOKEN_CHANCE,
   keyChance: KEY_CHANCE,
   findChance: 0,
+  parcelChance: 0,
 };
 
-export function modsOf(p: {
+/** Что нужно `modsOf` из состояния: всё необязательное — для тестов и темпа. */
+export interface ModsSource {
   ench: Enchants;
   prestige: number;
   perks?: Perks;
   finds?: Finds;
   pickXp?: number;
   off?: EnchantId[];
-}): Mods {
+  runes?: Rune[];
+  sockets?: number[];
+  pet?: PetId | null;
+  pets?: Pets;
+  miles?: string[];
+}
+
+export function modsOf(p: ModsSource): Mods {
   // Отключённая чара (игрок выключил её в мастерской) не срабатывает, но и
   // не теряет уровни: включил — и она снова в деле.
   const off = p.off ?? [];
-  const lv = (id: EnchantId) => (off.includes(id) ? 0 : p.ench[id]);
+  const lv = (id: EnchantId) => (off.includes(id) ? 0 : (p.ench[id] ?? 0));
   const k = p.perks ?? NO_PERKS;
   const nose = 1 + 0.2 * k.nose;
   const level = pickLevelOf(p.pickXp ?? 0).level;
+  // Руны и питомец — прибавки v2.49. Складываются между собой и упираются
+  // в потолок (`BONUS_CAP`): иначе к концу игры шахта печатала бы деньги, и
+  // ставка в автоматах стала бы мелочью, ради которой незачем крутить.
+  const b = bonusOf(p);
+  // Эхо и руна Совило множат шансы чар поля: жилы, взрыва, отбойника, луча,
+  // камнепада и трещины. Перековку не трогают — она про цену, а не про поле.
+  const proc = (1 + 0.05 * lv('echo')) * (1 + b.proc);
   return {
-    // Сноровка: каждый уровень кирки — ещё процент к урону.
-    dmg: (1 + 0.1 * lv('power')) * (1 + PICK_LEVEL_DMG * (level - 1)),
-    rate: 1 + 0.08 * k.grip,
-    sell: sellMult(p.prestige) * (1 + 0.06 * k.dealer) * findsMult(p.finds ?? {}),
-    fortune: 0.06 * lv('fortune'),
-    vein: 0.025 * lv('vein'),
+    // Сноровка: каждый уровень кирки — ещё полпроцента к урону.
+    dmg: (1 + 0.1 * lv('power')) * (1 + PICK_LEVEL_DMG * (level - 1)) * (1 + b.dmg),
+    rate: (1 + 0.08 * k.grip) * (1 + b.rate),
+    sell: sellMult(p.prestige) * (1 + 0.06 * k.dealer) * findsMult(p.finds ?? {}) * (1 + b.sell),
+    fortune: 0.06 * lv('fortune') + b.loot,
+    vein: 0.025 * lv('vein') * proc,
     veinMax: 3 + Math.floor(lv('vein') / 4),
-    blast: 0.01 * lv('blast'),
-    hammer: 0.002 * lv('hammer'),
+    blast: 0.01 * lv('blast') * proc,
+    hammer: 0.002 * lv('hammer') * proc,
     frenzy: 0.0008 * lv('frenzy'),
-    tokenChance: TOKEN_CHANCE * (1 + 0.15 * lv('token')) * (1 + 0.1 * k.lucky),
-    keyChance: (KEY_CHANCE + 0.0005 * lv('key')) * nose,
-    findChance: FIND_CHANCE * nose,
+    crack: 0.02 * lv('crack') * proc,
+    beam: 0.006 * lv('beam') * proc,
+    rockfall: 0.0015 * lv('rockfall') * proc,
+    reforge: 0.015 * lv('reforge'),
+    tokenChance: TOKEN_CHANCE * (1 + 0.15 * lv('token')) * (1 + 0.1 * k.lucky) * (1 + b.token),
+    keyChance: (KEY_CHANCE + 0.0005 * lv('key')) * nose * (1 + b.luck),
+    findChance: FIND_CHANCE * nose * (1 + b.luck),
+    parcelChance: PARCEL_CHANCE * nose * (1 + b.luck),
   };
 }
 
@@ -796,9 +890,15 @@ function rollCount(x: number, rnd: () => number): number {
 export interface Drops {
   /** Порода каждой единицы добычи (с учётом Удачи и Куража). */
   units: number[];
+  /** Порода каждого сломанного блока ПОСЛЕ перековки — она идёт в норму. */
+  rocks: number[];
+  /** Индексы блоков (в порядке `rocks`), которые перековались. */
+  reforged: number[];
   tokens: number;
   keys: number;
   finds: FindId[];
+  /** Выпавшие передачки — по редкости. */
+  parcels: CaseTier[];
 }
 
 /** Бросок добычи за сломанные блоки. Чистая функция: `rnd` передаёт вызвавший. */
@@ -809,13 +909,23 @@ export function rollDrops(
   opts: { frenzy?: boolean; mine?: number; streak?: number } = {},
 ): Drops {
   const units: number[] = [];
+  const out: number[] = [];
+  const reforged: number[] = [];
   let tokens = 0;
   let keys = 0;
   const finds: FindId[] = [];
+  const parcels: CaseTier[] = [];
   const whole = Math.floor(m.fortune);
   const frac = m.fortune - whole;
   const streak = Math.max(0, opts.streak ?? 0);
-  for (const rock of rocks) {
+  for (let i = 0; i < rocks.length; i++) {
+    let rock = rocks[i];
+    // Перековка: блок засчитывается породой выше — и в цене, и в норме.
+    if (m.reforge > 0 && rock < LAST_RANK && rnd() < m.reforge) {
+      rock += 1;
+      reforged.push(i);
+    }
+    out.push(rock);
     let n = 1 + whole + (rnd() < frac ? 1 : 0);
     // Запал множит уже посчитанную Удачу: серия и чара складываются как
     // множители, а не как проценты.
@@ -829,8 +939,9 @@ export function rollDrops(
       const f = rollFind(opts.mine ?? LAST_RANK, rnd);
       if (f) finds.push(f);
     }
+    if (m.parcelChance > 0 && rnd() < m.parcelChance) parcels.push(rollTier(rnd));
   }
-  return { units, tokens, keys, finds };
+  return { units, rocks: out, reforged, tokens, keys, finds, parcels };
 }
 
 // ---------------------------------------------------------------------------
@@ -922,9 +1033,14 @@ export const ENCHANT_UNLOCK: Record<EnchantId, number> = {
   token: 1,
   vein: 3,
   key: 5,
+  crack: 6,
   blast: 8,
+  beam: 10,
   frenzy: 12,
+  reforge: 14,
   hammer: 18,
+  rockfall: 22,
+  echo: 26,
 };
 
 /** Потолок уровня чары при данном уровне кирки: к 40-му открыт весь. */
@@ -939,7 +1055,15 @@ export function enchantCap(id: EnchantId, pickLevel: number): number {
  * (ломают соседей, ускоряют кирку). Иногда нужен точный удар — например,
  * добрать норму в одном месте, не сметя всё вокруг.
  */
-export const ENCHANT_TOGGLE: EnchantId[] = ['vein', 'blast', 'hammer', 'frenzy'];
+export const ENCHANT_TOGGLE: EnchantId[] = [
+  'vein',
+  'blast',
+  'hammer',
+  'frenzy',
+  'crack',
+  'beam',
+  'rockfall',
+];
 
 /** Награда за новый уровень кирки: токены, а каждый пятый — ещё ключ. */
 export function pickLevelReward(level: number): { tokens: number; keys: number } {
@@ -1034,6 +1158,294 @@ export function quotaBuyout(
 }
 
 // ---------------------------------------------------------------------------
+// Руны — как кристаллы Cosmic и руны VimeWorld. Три гнезда на кирке (четвёртое
+// — за десятый престиж), шесть видов. Сила выпадает ВНУТРИ полосы ступени,
+// поэтому две руны одной ступени не равны — есть что искать. Три руны одной
+// ступени сплавляются в руну ступенью выше; вид берётся у той, которую
+// сплавляешь, а сила не ниже средней из трёх: хорошие руны не пропадают.
+//
+// Руны названы по-настоящему (старший футарк), и смысл знака совпадает с
+// действием: Феху — богатство, Уруз — сила, Райдо — дорога, Йера — урожай,
+// Гебо — дар, Совило — солнце.
+// ---------------------------------------------------------------------------
+
+export type RuneKind = 'sell' | 'dmg' | 'rate' | 'loot' | 'token' | 'proc';
+
+export interface RuneDef {
+  id: RuneKind;
+  name: string;
+  /** Что даёт: «+4% к продаже». */
+  text: string;
+  /** Сколько даёт одна «единица» силы. */
+  unit: number;
+}
+
+export const RUNES: RuneDef[] = [
+  { id: 'sell', name: 'Феху', text: 'к продаже', unit: 0.016 },
+  { id: 'dmg', name: 'Уруз', text: 'к урону', unit: 0.024 },
+  { id: 'rate', name: 'Райдо', text: 'к скорости кирки', unit: 0.01 },
+  { id: 'loot', name: 'Йера', text: 'к добыче', unit: 0.016 },
+  { id: 'token', name: 'Гебо', text: 'к токенам', unit: 0.032 },
+  { id: 'proc', name: 'Совило', text: 'к шансам чар поля', unit: 0.024 },
+];
+
+export const runeOf = (kind: RuneKind): RuneDef => RUNES.find((r) => r.id === kind)!;
+
+export const RUNE_TIERS = 5;
+/** Полоса силы каждой ступени, в единицах руны. */
+export const RUNE_BAND: [number, number][] = [
+  [1, 2],
+  [2, 3.5],
+  [3.5, 5.5],
+  [5.5, 8],
+  [8, 11],
+];
+/** Римские цифры ступеней — так руны подписаны на кирке. */
+export const RUNE_ROMAN = ['I', 'II', 'III', 'IV', 'V'];
+/** Сколько токенов даёт разбитая руна. */
+export const RUNE_SHATTER = [8, 25, 70, 200, 600];
+/** Мешочек для рун: лишние разбиваются сами. */
+export const RUNE_BAG = 40;
+/** С какого уровня кирки открывается гнездо. Четвёртое — веха «Престиж 10». */
+export const SOCKET_UNLOCK = [5, 15, 30];
+export const SOCKETS_MAX = 4;
+
+export interface Rune {
+  id: number;
+  kind: RuneKind;
+  /** Ступень 1…5. */
+  tier: number;
+  /** Где внутри полосы ступени: 0…100. */
+  roll: number;
+}
+
+/** Сколько даёт руна: доля, 0,05 — пять процентов. */
+export function runePower(r: { kind: RuneKind; tier: number; roll: number }): number {
+  const [lo, hi] = RUNE_BAND[Math.max(1, Math.min(RUNE_TIERS, r.tier)) - 1];
+  return runeOf(r.kind).unit * (lo + ((hi - lo) * r.roll) / 100);
+}
+
+/** Новая руна: вид случайный (если не задан), сила — внутри полосы. */
+export function rollRune(
+  tier: number,
+  rnd: () => number,
+  kind?: RuneKind,
+  floor = 0,
+): Omit<Rune, 'id'> {
+  return {
+    kind: kind ?? RUNES[Math.floor(rnd() * RUNES.length)].id,
+    tier: Math.max(1, Math.min(RUNE_TIERS, tier)),
+    roll: Math.max(Math.round(floor), Math.floor(rnd() * 101)),
+  };
+}
+
+/** Сколько гнёзд открыто: по уровню кирки плюс веха «Престиж 10». */
+export function socketsOpen(p: { pickXp: number; miles?: string[] }): number {
+  const level = pickLevelOf(p.pickXp).level;
+  return SOCKET_UNLOCK.filter((l) => level >= l).length + (p.miles?.includes('p10') ? 1 : 0);
+}
+
+/**
+ * Сплавить руну `baseId` с двумя другими той же ступени. Берутся самые
+ * слабые свободные (не в гнезде) — чтобы сплав не съел то, что носишь.
+ */
+export function fusePlan(
+  runes: Rune[],
+  sockets: number[],
+  baseId: number,
+): { base: Rune; with: Rune[] } | null {
+  const base = runes.find((r) => r.id === baseId);
+  if (!base || base.tier >= RUNE_TIERS) return null;
+  const others = runes
+    .filter((r) => r.id !== baseId && r.tier === base.tier && !sockets.includes(r.id))
+    .sort((a, b) => runePower(a) - runePower(b));
+  if (others.length < 2) return null;
+  return { base, with: others.slice(0, 2) };
+}
+
+// ---------------------------------------------------------------------------
+// Питомцы — кольская фауна. Растут, пока копаешь (опыт — сломанные блоки),
+// с собой водишь одного. Каждый даёт одну прибавку, растущую с уровнем.
+// Приходят из передачек; второй такой же — лакомство, опыт текущему.
+// ---------------------------------------------------------------------------
+
+export type PetId = 'lemming' | 'fox' | 'wolverine' | 'raven' | 'owl' | 'calf';
+
+/** Что умеет питомец. `luck` — ключи, находки и передачки. */
+export type PetStat = 'loot' | 'sell' | 'dmg' | 'token' | 'luck' | 'rate';
+
+export interface PetDef {
+  id: PetId;
+  name: string;
+  stat: PetStat;
+  /** Прибавка за уровень. */
+  per: number;
+  text: string;
+  lore: string;
+}
+
+export const PETS: PetDef[] = [
+  {
+    id: 'lemming',
+    name: 'Лемминг',
+    stat: 'loot',
+    per: 0.012,
+    text: 'к добыче',
+    lore: 'Их в тундре тысячи, и все копают',
+  },
+  {
+    id: 'fox',
+    name: 'Песец',
+    stat: 'sell',
+    per: 0.01,
+    text: 'к продаже',
+    lore: 'Торгуется за каждый камешек',
+  },
+  {
+    id: 'wolverine',
+    name: 'Росомаха',
+    stat: 'dmg',
+    per: 0.02,
+    text: 'к урону',
+    lore: 'Грызёт мёрзлый гранит',
+  },
+  {
+    id: 'raven',
+    name: 'Ворон',
+    stat: 'token',
+    per: 0.03,
+    text: 'к токенам',
+    lore: 'Тащит всё, что блестит',
+  },
+  {
+    id: 'owl',
+    name: 'Полярная сова',
+    stat: 'luck',
+    per: 0.03,
+    text: 'к ключам, находкам и передачкам',
+    lore: 'Видит сквозь пургу',
+  },
+  {
+    id: 'calf',
+    name: 'Оленёнок',
+    stat: 'rate',
+    per: 0.008,
+    text: 'к скорости кирки',
+    lore: 'Тянет волокушу с рудой',
+  },
+];
+
+export const petOf = (id: PetId): PetDef => PETS.find((x) => x.id === id)!;
+
+/** Опыт каждого приручённого питомца. Нет ключа — не приручён. */
+export type Pets = Partial<Record<PetId, number>>;
+
+export const PET_LEVEL_MAX = 25;
+/** Лакомство (второй такой же питомец) — опыт текущему. */
+export const PET_TREAT_XP = 400;
+
+export function petXpFor(level: number): number {
+  return Math.round(150 * Math.pow(1.2, level - 1));
+}
+
+export function petLevelOf(xp: number): { level: number; into: number; need: number } {
+  let level = 1;
+  let rest = Math.max(0, Math.floor(xp || 0));
+  for (;;) {
+    if (level >= PET_LEVEL_MAX) return { level, into: 0, need: 0 };
+    const need = petXpFor(level);
+    if (rest < need) return { level, into: rest, need };
+    rest -= need;
+    level += 1;
+  }
+}
+
+/** Прибавка питомца на уровне `level`. */
+export function petPower(id: PetId, level: number): number {
+  return petOf(id).per * level;
+}
+
+// ---------------------------------------------------------------------------
+// Потолок прибавок. Руны и питомец складываются по виду и упираются в
+// потолок: общий кошелёк не переживёт шахту, которая к престижу печатает
+// миллионы, — ставка 500 в автоматах перестала бы что-то значить.
+// ---------------------------------------------------------------------------
+
+export interface Bonus {
+  sell: number;
+  dmg: number;
+  rate: number;
+  loot: number;
+  token: number;
+  proc: number;
+  luck: number;
+}
+
+export const NO_BONUS: Bonus = { sell: 0, dmg: 0, rate: 0, loot: 0, token: 0, proc: 0, luck: 0 };
+
+export const BONUS_CAP: Bonus = {
+  sell: 1,
+  dmg: 1,
+  rate: 0.5,
+  loot: 1,
+  token: 1.5,
+  proc: 1,
+  luck: 1,
+};
+
+/** Прибавки рун в гнёздах и питомца — уже с потолком. */
+export function bonusOf(p: {
+  runes?: Rune[];
+  sockets?: number[];
+  pet?: PetId | null;
+  pets?: Pets;
+}): Bonus {
+  const b: Bonus = { ...NO_BONUS };
+  const runes = p.runes ?? [];
+  for (const id of p.sockets ?? []) {
+    if (!id) continue;
+    const r = runes.find((x) => x.id === id);
+    if (r) b[r.kind] += runePower(r);
+  }
+  if (p.pet && p.pets && p.pets[p.pet] !== undefined) {
+    const def = petOf(p.pet);
+    b[def.stat] += petPower(p.pet, petLevelOf(p.pets[p.pet] ?? 0).level);
+  }
+  for (const k of Object.keys(b) as (keyof Bonus)[]) b[k] = Math.min(BONUS_CAP[k], b[k]);
+  return b;
+}
+
+// ---------------------------------------------------------------------------
+// Передачки — Lucky Blocks присон-серверов, по-нашему «передачка с воли».
+// Падает с блока, ложится в одно из трёх мест и вскрывается, когда ты добудешь
+// ещё N блоков: чем реже передачка, тем дольше ждать. Копятся все сразу.
+// Главный источник рун и питомцев.
+// ---------------------------------------------------------------------------
+
+export interface Parcel {
+  tier: CaseTier;
+  /** Сколько блоков ещё добыть до вскрытия. */
+  left: number;
+}
+
+export const PARCEL_SLOTS = 3;
+/** Шанс передачки с блока: примерно одна на полторы тысячи. */
+export const PARCEL_CHANCE = 0.0012;
+export const PARCEL_NEED: Record<CaseTier, number> = {
+  common: 150,
+  rare: 400,
+  epic: 900,
+  legend: 2000,
+};
+/** Мест нет — передачку сдают за токены. */
+export const PARCEL_OVERFLOW: Record<CaseTier, number> = {
+  common: 10,
+  rare: 25,
+  epic: 60,
+  legend: 150,
+};
+
+// ---------------------------------------------------------------------------
 // Расходники: за токены в лавке, позже — из сундуков.
 // ---------------------------------------------------------------------------
 
@@ -1125,7 +1537,14 @@ export function hitsFor(rock: number, dmg: number): number {
 
 /** Сколько блоков в среднем ломается за удар, который сломал один. */
 export function extraBlocks(m: Mods): number {
-  return m.vein * VEIN_EXTRA + m.blast * BLAST_EXTRA + m.hammer * HAMMER_EXTRA;
+  return (
+    m.vein * VEIN_EXTRA +
+    m.blast * BLAST_EXTRA +
+    m.hammer * HAMMER_EXTRA +
+    m.beam * BEAM_EXTRA +
+    m.rockfall * ROCKFALL_EXTRA +
+    m.crack * CRACK_EXTRA
+  );
 }
 
 /**
@@ -1133,7 +1552,9 @@ export function extraBlocks(m: Mods): number {
  * урон от Силы, лишние блоки от жил и взрывов, лишнюю добычу от Удачи.
  */
 export function incomeRate(mine: number, pick: number, sharp: number, m: Mods = BASE_MODS): number {
-  return blockRate(mine, pick, sharp, m) * (1 + m.fortune) * avgValue(mine) * m.sell;
+  // Перековка поднимает блок на породу выше — в среднем на шаг цены породы.
+  const reforge = 1 + m.reforge * (VALUE_GROWTH - 1);
+  return blockRate(mine, pick, sharp, m) * (1 + m.fortune) * avgValue(mine) * m.sell * reforge;
 }
 
 /** Средняя цена блока шахты по всем ярусам. */
@@ -1284,7 +1705,11 @@ export type Reward =
   | { kind: 'coins'; amount: number }
   | { kind: 'tokens'; amount: number }
   | { kind: 'item'; id: ItemId; amount: number }
-  | { kind: 'find'; id: FindId };
+  | { kind: 'find'; id: FindId }
+  | { kind: 'keys'; amount: number }
+  | { kind: 'rune'; rune: Omit<Rune, 'id'> }
+  | { kind: 'pet'; id: PetId }
+  | { kind: 'treat'; amount: number };
 
 export interface CaseRoll {
   tier: CaseTier;
@@ -1302,6 +1727,12 @@ const tokens = (lo: number, hi: number) => (rnd: () => number) =>
   ({ kind: 'tokens', amount: Math.round(lo + (hi - lo) * rnd()) }) as Reward;
 const item = (id: ItemId, amount: number) => () => ({ kind: 'item', id, amount }) as Reward;
 const FIND_SLOT = () => ({ kind: 'find', id: 'coin' }) as Reward;
+/** Руна ступени `lo`, с шансом `pHi` — ступени `hi`. */
+const rune = (lo: number, hi: number, pHi: number) => (rnd: () => number) =>
+  ({ kind: 'rune', rune: rollRune(rnd() < pHi ? hi : lo, rnd) }) as Reward;
+const keysOf = (amount: number) => () => ({ kind: 'keys', amount }) as Reward;
+/** Место под питомца: кто именно — решается по тому, кого ещё нет. */
+const PET_SLOT = () => ({ kind: 'pet', id: 'lemming' }) as Reward;
 
 const CASE_TABLE: Record<CaseTier, Slot[]> = {
   common: [
@@ -1317,6 +1748,7 @@ const CASE_TABLE: Record<CaseTier, Slot[]> = {
     { w: 15, make: item('bomb3', 2) },
     { w: 10, make: item('energy', 2) },
     { w: 15, make: item('bomb5', 1) },
+    { w: 12, make: rune(1, 2, 0.3) },
   ],
   epic: [
     { w: 30, make: coins(0.3, 0.45) },
@@ -1324,12 +1756,46 @@ const CASE_TABLE: Record<CaseTier, Slot[]> = {
     { w: 15, make: item('charge', 1) },
     { w: 10, make: item('bomb5', 2) },
     { w: 20, make: FIND_SLOT },
+    { w: 15, make: rune(2, 3, 0.3) },
   ],
   legend: [
     { w: 35, make: coins(0.9, 1.3) },
     { w: 25, make: tokens(500, 800) },
     { w: 15, make: item('charge', 2) },
     { w: 25, make: FIND_SLOT },
+    { w: 15, make: rune(3, 4, 0.3) },
+  ],
+};
+
+/** Передачка: руны и питомцы — её главное, монеты и токены — подкладка. */
+const PARCEL_TABLE: Record<CaseTier, Slot[]> = {
+  common: [
+    { w: 30, make: coins(0.03, 0.06) },
+    { w: 30, make: tokens(15, 40) },
+    { w: 25, make: rune(1, 1, 0) },
+    { w: 5, make: item('bomb3', 1) },
+    { w: 5, make: item('energy', 1) },
+    { w: 5, make: item('lens', 1) },
+  ],
+  rare: [
+    { w: 22, make: coins(0.08, 0.15) },
+    { w: 22, make: tokens(50, 120) },
+    { w: 32, make: rune(1, 2, 0.4) },
+    { w: 12, make: keysOf(1) },
+    { w: 12, make: PET_SLOT },
+  ],
+  epic: [
+    { w: 18, make: coins(0.25, 0.4) },
+    { w: 18, make: tokens(150, 300) },
+    { w: 36, make: rune(2, 3, 0.4) },
+    { w: 12, make: keysOf(2) },
+    { w: 16, make: PET_SLOT },
+  ],
+  legend: [
+    { w: 18, make: coins(0.8, 1.2) },
+    { w: 14, make: tokens(400, 700) },
+    { w: 40, make: rune(3, 4, 0.35) },
+    { w: 28, make: PET_SLOT },
   ],
 };
 
@@ -1347,14 +1813,37 @@ function pickWeighted<T extends { w: number }>(list: T[], rnd: () => number): T 
  * Что лежит в сундуке. Находка в сундуке — только НЕДОСТАЮЩАЯ из доступных
  * по шахте; если таких нет, вместо неё токены.
  */
+/** Редкость сундука или передачки. */
+export function rollTier(rnd: () => number): CaseTier {
+  return pickWeighted(
+    CASE_TIERS.map((t) => ({ ...t, w: t.weight })),
+    rnd,
+  ).id;
+}
+
+/** Питомец из передачки: тот, кого ещё нет; все есть — лакомство текущему. */
+function resolvePet(pets: Pets, tier: CaseTier, rnd: () => number): Reward {
+  const missing = PETS.filter((x) => pets[x.id] === undefined);
+  if (missing.length) return { kind: 'pet', id: missing[Math.floor(rnd() * missing.length)].id };
+  const k = tier === 'legend' ? 3 : tier === 'epic' ? 2 : 1;
+  return { kind: 'treat', amount: PET_TREAT_XP * k };
+}
+
+/** Что лежит в передачке редкости `tier`. */
+export function rollParcel(
+  p: { rank: number; prestige: number; pets: Pets },
+  tier: CaseTier,
+  rnd: () => number,
+): Reward {
+  const r = pickWeighted(PARCEL_TABLE[tier], rnd).make(rnd, p.rank, p.prestige);
+  return r.kind === 'pet' ? resolvePet(p.pets, tier, rnd) : r;
+}
+
 export function rollCase(
   p: { rank: number; prestige: number; finds: Finds },
   rnd: () => number,
 ): CaseRoll {
-  const tier = pickWeighted(
-    CASE_TIERS.map((t) => ({ ...t, w: t.weight })),
-    rnd,
-  ).id;
+  const tier = rollTier(rnd);
   let reward = pickWeighted(CASE_TABLE[tier], rnd).make(rnd, p.rank, p.prestige);
   if (reward.kind === 'find') {
     const missing = FINDS.filter((f) => f.from <= p.rank && !(p.finds[f.id] ?? 0));
@@ -1473,6 +1962,195 @@ export function perkPointsFree(p: { prestige: number; perks: Perks }): number {
 }
 
 // ---------------------------------------------------------------------------
+// Награда в состояние. Одна функция на сундук, передачку, веху и проводника:
+// раньше каждая раздавала награды сама, и руна из сундука легла бы мимо
+// мешочка. Монеты возвращаются отдельно — они идут в ОБЩИЙ кошелёк.
+// ---------------------------------------------------------------------------
+
+export interface Applied {
+  p: PrisonState;
+  coins: number;
+  /** Руна не влезла в мешочек и разбилась на столько токенов. */
+  shattered: number;
+  /** Новый питомец пришёл (а не лакомство). */
+  newPet: PetId | null;
+}
+
+export function applyReward(p: PrisonState, r: Reward): Applied {
+  const out: Applied = { p, coins: 0, shattered: 0, newPet: null };
+  switch (r.kind) {
+    case 'coins':
+      out.coins = r.amount;
+      break;
+    case 'tokens':
+      out.p = { ...p, tokens: p.tokens + r.amount };
+      break;
+    case 'keys':
+      out.p = { ...p, keys: p.keys + r.amount };
+      break;
+    case 'item':
+      out.p = { ...p, items: { ...p.items, [r.id]: p.items[r.id] + r.amount } };
+      break;
+    case 'find':
+      out.p = { ...p, finds: { ...p.finds, [r.id]: (p.finds[r.id] ?? 0) + 1 } };
+      break;
+    case 'rune':
+      if (p.runes.length >= RUNE_BAG) {
+        out.shattered = RUNE_SHATTER[r.rune.tier - 1];
+        out.p = { ...p, tokens: p.tokens + out.shattered };
+      } else {
+        const id = p.runeSeq + 1;
+        out.p = { ...p, runeSeq: id, runes: [...p.runes, { ...r.rune, id }] };
+      }
+      break;
+    case 'pet':
+      if (p.pets[r.id] !== undefined)
+        return applyReward(p, { kind: 'treat', amount: PET_TREAT_XP });
+      out.newPet = r.id;
+      out.p = { ...p, pets: { ...p.pets, [r.id]: 0 }, pet: p.pet ?? r.id };
+      break;
+    case 'treat':
+      out.p = p.pet
+        ? { ...p, pets: { ...p.pets, [p.pet]: (p.pets[p.pet] ?? 0) + r.amount } }
+        : { ...p, tokens: p.tokens + 50 };
+      break;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Вехи — разовые награды за большое: тысячи блоков, первый Z, престижи.
+// На Mineland престиж без бонусов был неинтересен 99,9% игроков — поэтому
+// 1-й, 5-й, 10-й и 20-й престиж дают весомое, а десятый — четвёртое гнездо
+// для руны: такое не купишь ничем.
+// ---------------------------------------------------------------------------
+
+export interface MileReward {
+  tokens?: number;
+  keys?: number;
+  /** Передачка вскрывается сразу — места под полем она не ждёт. */
+  parcel?: CaseTier;
+  /** Руна этой ступени, вид случайный. */
+  rune?: number;
+  /** Четвёртое гнездо для руны. */
+  socket?: boolean;
+}
+
+export interface Mile {
+  id: string;
+  title: string;
+  text: string;
+  progress: (p: PrisonState) => [number, number];
+  reward: MileReward;
+}
+
+const upToM = (v: number, goal: number): [number, number] => [Math.min(v, goal), goal];
+
+export const MILES: Mile[] = [
+  {
+    id: 'b1k',
+    title: 'Тысяча блоков',
+    text: 'Сломать своими руками',
+    progress: (p) => upToM(p.mined, 1e3),
+    reward: { tokens: 50, parcel: 'common' },
+  },
+  {
+    id: 'b10k',
+    title: 'Десять тысяч',
+    text: 'Сломать своими руками',
+    progress: (p) => upToM(p.mined, 1e4),
+    reward: { tokens: 200, keys: 2, parcel: 'rare' },
+  },
+  {
+    id: 'b100k',
+    title: 'Сто тысяч',
+    text: 'Сломать своими руками',
+    progress: (p) => upToM(p.mined, 1e5),
+    reward: { tokens: 800, keys: 5, parcel: 'epic' },
+  },
+  {
+    id: 'b1m',
+    title: 'Миллион',
+    text: 'Сломать своими руками',
+    progress: (p) => upToM(p.mined, 1e6),
+    reward: { tokens: 3000, keys: 10, parcel: 'legend', rune: 5 },
+  },
+  {
+    id: 'z',
+    title: 'Первый Z',
+    text: 'Дойти до последнего ранга',
+    progress: (p) => upToM(p.prestige > 0 ? LAST_RANK : p.rank, LAST_RANK),
+    reward: { keys: 5, parcel: 'legend' },
+  },
+  {
+    id: 'p1',
+    title: 'Престиж 1',
+    text: 'Начать второй срок',
+    progress: (p) => upToM(p.prestige, 1),
+    reward: { keys: 10, parcel: 'legend', rune: 3 },
+  },
+  {
+    id: 'p5',
+    title: 'Престиж 5',
+    text: 'Пятый срок',
+    progress: (p) => upToM(p.prestige, 5),
+    reward: { keys: 15, rune: 4, tokens: 2000 },
+  },
+  {
+    id: 'p10',
+    title: 'Престиж 10',
+    text: 'Четвёртое гнездо для руны',
+    progress: (p) => upToM(p.prestige, 10),
+    reward: { keys: 20, socket: true, rune: 4 },
+  },
+  {
+    id: 'p20',
+    title: 'Престиж 20',
+    text: 'Двадцать сроков',
+    progress: (p) => upToM(p.prestige, 20),
+    reward: { keys: 30, rune: 5, tokens: 10000 },
+  },
+  {
+    id: 'legend',
+    title: 'Легенда забоя',
+    text: `Разжечь запал до «${STREAK_TIERS[STREAK_TIERS.length - 1].name}»`,
+    progress: (p) => upToM(p.bestStreak, STREAK_TIERS.length),
+    reward: { keys: 3, parcel: 'epic' },
+  },
+  {
+    id: 'zoo',
+    title: 'Кольская фауна',
+    text: 'Приручить всех шестерых',
+    progress: (p) => upToM(Object.keys(p.pets).length, PETS.length),
+    reward: { tokens: 1000, rune: 4 },
+  },
+  {
+    id: 'cases',
+    title: 'Сто сундуков',
+    text: 'Открыть ключами',
+    progress: (p) => upToM(p.cases, 100),
+    reward: { rune: 3, tokens: 500 },
+  },
+  {
+    id: 'parcels',
+    title: 'Сто передачек',
+    text: 'Вскрыть',
+    progress: (p) => upToM(p.parcelsOpened, 100),
+    reward: { rune: 4, keys: 5 },
+  },
+];
+
+export function mileReady(p: PrisonState, m: Mile): boolean {
+  if (p.miles.includes(m.id)) return false;
+  const [v, goal] = m.progress(p);
+  return v >= goal;
+}
+
+export function milesReady(p: PrisonState): number {
+  return MILES.filter((m) => mileReady(p, m)).length;
+}
+
+// ---------------------------------------------------------------------------
 // Сохранение.
 // ---------------------------------------------------------------------------
 
@@ -1525,6 +2203,18 @@ export interface PrisonState {
   bestStreak: number;
   /** Чары, выключенные игроком: не срабатывают, уровни целы. */
   off: EnchantId[];
+  /** Передачки под полем (v2.49) и сколько вскрыто за всё время. */
+  parcels: Parcel[];
+  parcelsOpened: number;
+  /** Мешочек рун, счётчик их номеров и гнёзда кирки (0 — пусто). */
+  runes: Rune[];
+  runeSeq: number;
+  sockets: number[];
+  /** Приручённые питомцы (опыт каждого) и тот, что с собой. */
+  pets: Pets;
+  pet: PetId | null;
+  /** Забранные вехи. */
+  miles: string[];
 }
 
 export function freshMine(id: number, seed = Math.floor(Math.random() * 2 ** 31)): PrisonMine {
@@ -1561,6 +2251,14 @@ export const PRISON_START: PrisonState = {
   bombs: 0,
   bestStreak: 0,
   off: [],
+  parcels: [],
+  parcelsOpened: 0,
+  runes: [],
+  runeSeq: 0,
+  sockets: [0, 0, 0, 0],
+  pets: {},
+  pet: null,
+  miles: [],
 };
 
 const int = (v: unknown, lo: number, hi: number, dflt: number): number =>
@@ -1628,6 +2326,66 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     off: Array.isArray(raw.off)
       ? (raw.off.filter((id) => ENCHANTS.some((e) => e.id === id)) as EnchantId[])
       : [],
+    ...normalizeLoot(raw),
+  };
+}
+
+const TIER_IDS: CaseTier[] = ['common', 'rare', 'epic', 'legend'];
+
+/** Передачки, руны, питомцы и вехи (v2.49) — отдельно, чтобы не раздувать. */
+interface LootState {
+  parcels: Parcel[];
+  parcelsOpened: number;
+  runes: Rune[];
+  runeSeq: number;
+  sockets: number[];
+  pets: Pets;
+  pet: PetId | null;
+  miles: string[];
+}
+
+function normalizeLoot(raw: Partial<PrisonState>): LootState {
+  const parcels = (Array.isArray(raw.parcels) ? raw.parcels : [])
+    .filter((x) => x && TIER_IDS.includes(x.tier))
+    .slice(0, PARCEL_SLOTS)
+    .map((x) => ({ tier: x.tier, left: int(x.left, 0, PARCEL_NEED[x.tier], PARCEL_NEED[x.tier]) }));
+  const seen = new Set<number>();
+  const runes: Rune[] = [];
+  for (const r of Array.isArray(raw.runes) ? raw.runes : []) {
+    if (!r || !RUNES.some((d) => d.id === r.kind)) continue;
+    const id = int(r.id, 1, 1e9, 0);
+    if (!id || seen.has(id) || runes.length >= RUNE_BAG) continue;
+    seen.add(id);
+    runes.push({
+      id,
+      kind: r.kind,
+      tier: int(r.tier, 1, RUNE_TIERS, 1),
+      roll: int(r.roll, 0, 100, 0),
+    });
+  }
+  const maxId = runes.reduce((m, r) => Math.max(m, r.id), 0);
+  const used = new Set<number>();
+  const sockets = Array.from({ length: SOCKETS_MAX }, (_, i) => {
+    const id = int(raw.sockets?.[i], 0, 1e9, 0);
+    if (!id || !seen.has(id) || used.has(id)) return 0;
+    used.add(id);
+    return id;
+  });
+  const pets: Pets = {};
+  for (const d of PETS) {
+    const xp = raw.pets?.[d.id];
+    if (typeof xp === 'number') pets[d.id] = int(xp, 0, 1e12, 0);
+  }
+  const pet = raw.pet && pets[raw.pet] !== undefined ? raw.pet : null;
+  return {
+    parcels,
+    parcelsOpened: int(raw.parcelsOpened, 0, 1e9, 0),
+    runes,
+    runeSeq: Math.max(maxId, int(raw.runeSeq, 0, 1e9, 0)),
+    sockets,
+    pets,
+    pet,
+    miles: Array.isArray(raw.miles) ? raw.miles.filter((id) => MILES.some((m) => m.id === id)) : [],
   };
 }
 
@@ -1643,6 +2401,9 @@ export interface GuideReward {
   tokens?: number;
   keys?: number;
   item?: [ItemId, number];
+  /** Руна этой ступени (вид случайный). */
+  rune?: number;
+  pet?: PetId;
 }
 
 export interface GuideStep {
@@ -1740,6 +2501,29 @@ export const GUIDE: GuideStep[] = [
     hint: 'Дальше — сам: ранги до Z и престиж',
     progress: (p) => upTo(p.rank, 7),
     reward: { keys: 3, tokens: 150 },
+  },
+  // v2.49: добыча. Игрок, прошедший первые двенадцать, увидит проводник
+  // снова — ровно ради этих трёх шагов.
+  {
+    id: 'parcel',
+    title: 'Вскрой передачку',
+    hint: 'Передачки падают с блоков и зреют под полем, пока копаешь',
+    progress: (p) => upTo(p.parcelsOpened, 1),
+    reward: { rune: 2 },
+  },
+  {
+    id: 'rune',
+    title: 'Вставь руну в кирку',
+    hint: 'Лагерь → Руны. Первое гнездо открывается на 5 уровне кирки',
+    progress: (p) => upTo(p.sockets.filter(Boolean).length, 1),
+    reward: { pet: 'lemming' },
+  },
+  {
+    id: 'pet',
+    title: 'Дорасти питомца до 3 уровня',
+    hint: 'Питомец растёт, пока ты копаешь',
+    progress: (p) => upTo(p.pet ? petLevelOf(p.pets[p.pet] ?? 0).level : 0, 3),
+    reward: { keys: 2, tokens: 100 },
   },
 ];
 

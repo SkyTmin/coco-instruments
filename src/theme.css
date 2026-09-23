@@ -17225,7 +17225,7 @@ input[type='datetime-local'] {
      прокрутки: 7×9 клеток, сверху шапка и табло, снизу рюкзак и строка
      пород (или проводника). Меньше 32 px клетка не бывает: на совсем низком экране
      пусть лучше чуть прокрутится, чем поле станет с ноготь. */
-  --below: 356px;
+  --below: 362px;
   --cell: min(
     calc((min(100vw, 560px) - 48px) / 7),
     max(32px, calc((100vh - var(--safe-top) - var(--content-top) - var(--below)) / 9)),
@@ -17245,7 +17245,7 @@ input[type='datetime-local'] {
 }
 /* Проводник выше строки пород — пока он идёт, полю нужно на 30 px меньше. */
 .prison.has-guide {
-  --below: 386px;
+  --below: 392px;
 }
 
 /* ---- Табло ---------------------------------------------------------------- */
@@ -19188,6 +19188,425 @@ input[type='datetime-local'] {
   opacity: 0.8;
 }
 
+/* ==========================================================================
+   Добыча (v2.49): передачки, руны, питомцы, вехи, чары поля.
+   ========================================================================== */
+.pmine-frame {
+  /* Снизу на кромке — баффы слева и передачки справа. */
+  margin-bottom: 6px;
+}
+.pparcels {
+  position: absolute;
+  right: 10px;
+  bottom: -15px;
+  z-index: 9;
+  display: flex;
+  gap: 5px;
+}
+.pparcel {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1.5px solid color-mix(in srgb, var(--tier) 55%, #3a2814);
+  background: #1a120c;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+.pparcel img {
+  width: 24px;
+  height: 24px;
+  image-rendering: pixelated;
+}
+.pparcel__bar {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 2px;
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.6);
+}
+.pparcel__bar i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: var(--tier);
+}
+/* Дозрела — зовёт: подпрыгивает и светится рамкой. Только transform. */
+.pparcel.is-ready {
+  border-color: var(--tier);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--tier) 35%, transparent),
+    0 0 12px color-mix(in srgb, var(--tier) 70%, transparent);
+  animation: pparcel-call 1.1s ease-in-out infinite;
+}
+@keyframes pparcel-call {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-5px) rotate(-6deg);
+  }
+  45% {
+    transform: translateY(-2px) rotate(4deg);
+  }
+}
+
+/* Питомец сидит на кнопке лагеря и дышит. */
+.ppet-perch {
+  position: absolute;
+  left: -12px;
+  top: -22px;
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  /* Светлый ободок: тёмный зверёк на тёмной кнопке иначе читается пятном.
+     Фильтр статичный — дыхание идёт трансформом по готовому слою. */
+  filter: drop-shadow(0 0 1px rgba(255, 240, 210, 0.85)) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.6));
+  animation: ppet-bob 2.6s ease-in-out infinite;
+  cursor: pointer;
+}
+@keyframes ppet-bob {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+/* Луч — полоса света по ряду. */
+.pbeam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  border-radius: 99px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(255, 244, 200, 0.9) 35%,
+    #fffbe8 50%,
+    rgba(255, 244, 200, 0.9) 65%,
+    transparent
+  );
+  box-shadow: 0 0 14px rgba(255, 220, 120, 0.8);
+  pointer-events: none;
+}
+.pfloat--parcel {
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: #ffd98a;
+}
+.pfloat--reforge {
+  font-size: 13px;
+  color: #ffe08a;
+}
+.pfloat--beam {
+  font-size: 19px;
+  letter-spacing: 0.1em;
+  color: #fff3c0;
+}
+.pfloat--crack {
+  font-size: 12px;
+  color: #d8c8b0;
+}
+
+/* ---- Лагерь → Руны ---------------------------------------------------------- */
+.prune-ico,
+.ppet-img {
+  display: block;
+  flex: none;
+}
+.ppet-img {
+  image-rendering: pixelated;
+}
+.prunes-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #2c2438, #1a1522);
+  color: #ece4ff;
+}
+.prunes-head b {
+  font-size: 14px;
+}
+.prunes-head span {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.prunes-sockets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.prune-socket {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 64px;
+  padding: 6px 2px;
+  border-radius: 12px;
+  border: 1.5px dashed color-mix(in srgb, var(--text) 25%, transparent);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.prune-socket i {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+}
+.prune-socket.is-full {
+  border-style: solid;
+  color: var(--text);
+}
+.prune-socket.is-locked {
+  opacity: 0.55;
+}
+.prune-socket__lock {
+  font-size: 16px;
+}
+.prune-socket.is-sel,
+.prune-tile.is-sel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.prune-socket.is-target {
+  border-color: var(--accent);
+}
+.prune-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.prune-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.prune-card__info b {
+  font-size: 15px;
+}
+.prune-card__info i,
+.prune-card__info em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--muted);
+}
+.prune-card__btns {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+}
+.prune-card__btns .btn {
+  flex: 1;
+  justify-content: center;
+}
+.prune-card__hint {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.prune-note {
+  margin: 0;
+  color: #ffb070;
+}
+.prunes-bag {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px;
+}
+.prune-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 0 3px;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.prune-tile i {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 900;
+}
+.prune-tile.is-worn::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5fbf4a;
+}
+
+/* ---- Лагерь → Питомцы и Вехи ----------------------------------------------- */
+.ppet-ico {
+  width: 44px;
+  height: 44px;
+  background: #3a4a52;
+}
+.pforge__row .ppet-img {
+  width: 34px;
+  height: 34px;
+  border-radius: 0;
+}
+.preveal__icon .pfind-img {
+  width: 72px;
+  height: 72px;
+}
+.ppet-row.is-here {
+  outline: 2px solid #5fbf4a;
+  outline-offset: -2px;
+}
+.ppet-row.is-ghost .pforge__info b {
+  color: var(--muted);
+}
+.ppet-bar {
+  position: relative;
+  display: block;
+  height: 4px;
+  margin: 3px 0 1px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.ppet-bar i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #4f9a3a, #9be38a);
+}
+.ppet-lore {
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+}
+.pmile.is-done {
+  opacity: 0.6;
+}
+.pmile.is-ready {
+  outline: 2px solid #ffd35a;
+  outline-offset: -2px;
+}
+.pmile.is-ready .pforge__glyph {
+  color: #ffd35a;
+}
+
+/* ---- Вскрытие передачки ---------------------------------------------------- */
+.preveal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(
+      60% 45% at 50% 45%,
+      color-mix(in srgb, var(--tier) 30%, transparent),
+      transparent 70%
+    ),
+    rgba(8, 5, 3, 0.8);
+  animation: prank-veil 0.22s ease both;
+}
+.preveal__box {
+  width: 128px;
+  height: 128px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 18px var(--tier));
+  animation: preveal-shake 0.26s ease-in-out calc(var(--shakes) * 1) both;
+}
+@keyframes preveal-shake {
+  0%,
+  100% {
+    transform: rotate(0) scale(1);
+  }
+  25% {
+    transform: rotate(-9deg) scale(1.04);
+  }
+  60% {
+    transform: rotate(8deg) scale(1.08);
+  }
+}
+.preveal__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: min(300px, 100%);
+  padding: 20px 18px 16px;
+  border-radius: 20px;
+  border: 2px solid var(--tier);
+  background: linear-gradient(180deg, #3a2819, #1c130c);
+  box-shadow:
+    0 0 40px color-mix(in srgb, var(--tier) 55%, transparent),
+    0 20px 50px rgba(0, 0, 0, 0.6);
+  color: #f7e6cc;
+  text-align: center;
+  animation: preveal-in 0.42s cubic-bezier(0.34, 1.4, 0.5, 1) both;
+}
+@keyframes preveal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+.preveal__tier {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tier);
+}
+.preveal__icon {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  image-rendering: pixelated;
+}
+.preveal__icon img {
+  image-rendering: pixelated;
+}
+.preveal__name {
+  font-size: 20px;
+}
+.preveal__sub {
+  font-style: normal;
+  font-size: 13px;
+  opacity: 0.8;
+}
+.preveal__cta {
+  margin-top: 6px;
+  padding: 9px 22px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffd35a, #d99a1c);
+  color: #3a2408;
+  font-weight: 900;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pmine-frame::after,
   .pfindcard,
@@ -19200,7 +19619,12 @@ input[type='datetime-local'] {
   .prank__letter,
   .pmine__toast,
   .pstrip.is-cooling .pstrip__bar,
-  .pshift {
+  .pshift,
+  .pparcel.is-ready,
+  .ppet-perch,
+  .preveal,
+  .preveal__box,
+  .preveal__card {
     animation: none;
   }
 }

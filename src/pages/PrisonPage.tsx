@@ -6,10 +6,17 @@ import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon } from '@/components/slot-art';
-import { BagIcon, KeyIcon, PickIcon, PrisonCamp, TokenIcon } from '@/components/PrisonCamp';
+import {
+  BagIcon,
+  KeyIcon,
+  ParcelReveal,
+  PickIcon,
+  PrisonCamp,
+  TokenIcon,
+} from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
-import type { PrisonLoot, PrisonRankUp } from '@/store';
+import type { ParcelOpen, PrisonLoot, PrisonRankUp } from '@/store';
 import {
   bagCapacity,
   bagCount,
@@ -58,12 +65,21 @@ import {
   STREAK_TIERS,
   streakTier,
   veinCells,
+  CASE_TIERS,
+  milesReady,
+  PARCEL_NEED,
+  petLevelOf,
+  petOf,
+  ROCKFALL_HITS,
+  RUNE_ROMAN,
 } from '@/lib/prison';
 import type { FindId, GuideReward, ItemId, PrisonState, Quota } from '@/lib/prison';
 import {
   bedrockTexture,
   crackTexture,
   findTexture,
+  parcelTexture,
+  petTexture,
   rockColors,
   rockTexture,
   rockVariant,
@@ -236,6 +252,8 @@ function rewardText(r: GuideReward): string {
     const it = ITEMS.find((i) => i.id === r.item![0])!;
     out.push(`${it.glyph} ${it.name.toLowerCase()}${r.item[1] > 1 ? ` ×${r.item[1]}` : ''}`);
   }
+  if (r.rune) out.push(`руна ${RUNE_ROMAN[r.rune - 1]}`);
+  if (r.pet) out.push(petOf(r.pet).name.toLowerCase());
   return out.join(' · ');
 }
 
@@ -272,6 +290,7 @@ export function PrisonPage() {
   const prisonCrewCollect = useFinanceStore((s) => s.prisonCrewCollect);
   const prisonStreak = useFinanceStore((s) => s.prisonStreak);
   const prisonGuideClaim = useFinanceStore((s) => s.prisonGuideClaim);
+  const prisonParcelOpen = useFinanceStore((s) => s.prisonParcelOpen);
   const skin = useFinanceStore((s) => s.slotsSkin);
 
   useEffect(() => setMuted(!sound), [sound]);
@@ -293,6 +312,7 @@ export function PrisonPage() {
   const [arming, setArming] = useState<ItemId | null>(null);
   const [crewNote, setCrewNote] = useState(false);
   const [rewards, setRewards] = useState(false);
+  const [reveal, setReveal] = useState<ParcelOpen | null>(null);
   const [shift, setShift] = useState<{
     blocks: number;
     coins: number;
@@ -344,6 +364,8 @@ export function PrisonPage() {
   const mineKeyRef = useRef(mineKey);
   mineKeyRef.current = mineKey;
   const stripRef = useRef<HTMLDivElement>(null);
+  const parcelsRef = useRef<HTMLDivElement>(null);
+  const petRef = useRef<HTMLImageElement>(null);
   const streakBase = useRef({ n: 0, at: 0 });
   const streakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Темп: что сломано и сколько это стоит за последнюю минуту.
@@ -756,6 +778,24 @@ export function PrisonPage() {
           : `Кирка ${up.level} ур. · +${fmt(tokens)} ✦${keys ? ' · +ключ' : ''}`,
       );
     }
+    if (res.parcels.length) {
+      floatText(c, 'ПЕРЕДАЧКА', 'pfloat--parcel', 200);
+      tierBreak(1);
+      tapMedium();
+      squashPop(parcelsRef.current, 0.5);
+    }
+    if (res.parcelTokens) floatText(c, `+${res.parcelTokens} ✦`, 'pfloat--token', 260);
+    if (res.parcelsReady) {
+      notifySuccess();
+      keyFound();
+      say('Передачка дозрела — вскрой её');
+    }
+    if (res.petUp) {
+      const st = useFinanceStore.getState().prison;
+      if (st.pet) say(`${petOf(st.pet).name}: ${res.petUp} уровень`);
+      tierBreak(1);
+      squashPop(petRef.current, 0.6);
+    }
     if (res.normDone) {
       tierBreak(2);
       notifySuccess();
@@ -805,6 +845,13 @@ export function PrisonPage() {
     bumpStreak(res.broken, list[0].cell);
     logPace(res.broken, gained, res);
     const single = kind === 'hit' || kind === 'crit';
+    // Перековка: блок засчитан породой выше — золотые искры и её имя.
+    if (res.reforged.length) {
+      const f = res.reforged[0];
+      const { x, y } = cellCenter(f.cell);
+      fx.current?.chips(x, y, ['#ffd35a', '#fff3b0', '#ffae3a'], single ? 12 : 6, 1.2);
+      if (single) floatText(f.cell, `⚙ ${ROCKS[f.rock].name}`, 'pfloat--reforge', 120);
+    }
     // Порода в норму: счёт над клеткой, пока норма по ней не закрыта.
     const q = after.rank < LAST_RANK ? rankQuota(after.rank, after.prestige) : [];
     const qb = list.find((b) => res.normAdd[b.rock] && q.some((x) => x.rock === b.rock));
@@ -872,12 +919,112 @@ export function PrisonPage() {
   const blastAt = (c: number, r: number, label: string) => {
     const cells = blastCells(c, r);
     boom(r);
-    flashFrame(r >= 2 ? 'big' : 'small');
+    // Без надписи — это не первый взрыв серии (камнепад): вспышка на каждом
+    // превратила бы град в стробоскоп.
+    if (label) flashFrame(r >= 2 ? 'big' : 'small');
     addTrauma(fieldRef.current, 0.3 + 0.15 * r);
     tapMedium();
     shockwave(c, 2 * r + 1.6, true);
-    floatText(c, label, 'pfloat--blast');
+    if (label) floatText(c, label, 'pfloat--blast');
     wave(rings(c, cells), 'blast', 45);
+  };
+
+  /** Луч: весь ряд, от места удара к краям. Полоса света — одним слоем. */
+  const beamFrom = (c: number) => {
+    const row = Math.floor(c / MINE_COLS);
+    const cells = Array.from({ length: MINE_COLS }, (_, x) => row * MINE_COLS + x);
+    const layer = layerRef.current;
+    if (layer && !reduceMotion()) {
+      const { y, size } = cellCenter(c);
+      const el = document.createElement('i');
+      el.className = 'pbeam';
+      el.style.top = `${y - size * 0.32}px`;
+      el.style.height = `${size * 0.64}px`;
+      el.style.transformOrigin = `${cellCenter(c).x}px 50%`;
+      layer.appendChild(el);
+      const done = () => el.remove();
+      try {
+        const a = el.animate(
+          [
+            { transform: 'scaleX(0)', opacity: 1 },
+            { transform: 'scaleX(1)', opacity: 1, offset: 0.35 },
+            { transform: 'scaleX(1) scaleY(.2)', opacity: 0 },
+          ],
+          { duration: 420, easing: 'cubic-bezier(.2,.7,.3,1)' },
+        );
+        a.onfinish = done;
+        a.oncancel = done;
+      } catch {
+        done();
+      }
+      setTimeout(done, 900);
+    }
+    boom(1);
+    tierBreak(1);
+    addTrauma(fieldRef.current, 0.3);
+    tapMedium();
+    floatText(c, 'ЛУЧ', 'pfloat--beam');
+    wave(rings(c, cells), 'blast', 40);
+  };
+
+  /** Камнепад: град взрывов по полю, друг за другом. */
+  const rockfallAt = (c: number) => {
+    const key = mineKeyRef.current;
+    const picked = new Set<number>();
+    while (picked.size < ROCKFALL_HITS) picked.add(Math.floor(Math.random() * MINE_CELLS));
+    floatText(c, 'КАМНЕПАД', 'pfloat--blast');
+    mineRumble();
+    flashFrame('big');
+    [...picked].forEach((cell, i) => {
+      waveTimers.current.push(
+        setTimeout(
+          () => {
+            if (mineKeyRef.current !== key) return;
+            blastAt(cell, 1, '');
+          },
+          140 + i * 190,
+        ),
+      );
+    });
+  };
+
+  /**
+   * Трещина: удар расходится по четырём соседям тем же уроном. Слабые
+   * соседи ломаются, крепкие — трескаются: урон живёт в странице, как и
+   * у обычного удара.
+   */
+  const crackFrom = (c: number, dmg: number) => {
+    const st = useFinanceStore.getState().prison;
+    const x = c % MINE_COLS;
+    const y = Math.floor(c / MINE_COLS);
+    const nb = [
+      x > 0 ? c - 1 : -1,
+      x < MINE_COLS - 1 ? c + 1 : -1,
+      y > 0 ? c - MINE_COLS : -1,
+      y < MINE_ROWS - 1 ? c + MINE_COLS : -1,
+    ].filter((n) => n >= 0);
+    const broken: number[] = [];
+    const staged: [number, number][] = [];
+    for (const n of nb) {
+      const rock = rockAt(rocks, n, st.mine.dug[n]);
+      if (rock < 0) continue;
+      const hpMax = ROCKS[rock].hp;
+      const left = (hp.current[n] < 0 ? hpMax : hp.current[n]) - dmg;
+      if (left <= 1e-6) broken.push(n);
+      else {
+        hp.current[n] = left;
+        staged.push([n, Math.min(3, 1 + Math.floor((1 - left / hpMax) * 3))]);
+      }
+    }
+    if (staged.length)
+      setCracks((prev) => {
+        const next = prev.slice();
+        for (const [n, stage] of staged) next[n] = stage;
+        return next;
+      });
+    floatText(c, 'ТРЕЩИНА', 'pfloat--crack');
+    chainTick(2);
+    if (broken.length) breakCells(broken, 'vein');
   };
 
   const hammerFrom = (c: number, label: string, power = 2) => {
@@ -985,11 +1132,15 @@ export function PrisonPage() {
     else tapLight();
     breakCells([c], crit ? 'crit' : 'hit');
 
-    // Зачарования. Срабатывает одно, старшее: отбойник, взрыв или жила —
-    // три сразу превращают поле в кашу, в которой не видно ни одного.
+    // Зачарования. Срабатывает одно, старшее: отбойник, камнепад, луч,
+    // взрыв, жила, трещина — несколько сразу превращают поле в кашу, в
+    // которой не видно ни одного.
     if (Math.random() < m.hammer) hammerFrom(c, 'ОТБОЙНИК');
+    else if (Math.random() < m.rockfall) rockfallAt(c);
+    else if (Math.random() < m.beam) beamFrom(c);
     else if (Math.random() < m.blast) blastAt(c, 1, 'ВЗРЫВ');
     else if (Math.random() < m.vein) veinFrom(c, rock, m.veinMax);
+    else if (Math.random() < m.crack) crackFrom(c, dmg);
     if (Math.random() < m.frenzy) startFrenzy(c);
   };
 
@@ -1211,6 +1362,26 @@ export function PrisonPage() {
     setRankScene(res);
   };
 
+  const openParcel = (i: number) => {
+    primeAudio();
+    const x = useFinanceStore.getState().prison.parcels[i];
+    if (!x) return;
+    if (x.left > 0) {
+      tapLight();
+      say(
+        `Вскроется через ${fmt(x.left)} ${x.left % 10 === 1 && x.left % 100 !== 11 ? 'блок' : 'блоков'}`,
+      );
+      return;
+    }
+    const from = useFinanceStore.getState().slotsBalance;
+    const got = prisonParcelOpen(i);
+    if (!got) return;
+    const to = useFinanceStore.getState().slotsBalance;
+    if (to > from) rollBalance(from, to);
+    tapMedium();
+    setReveal(got);
+  };
+
   const claimGuide = () => {
     primeAudio();
     const from = useFinanceStore.getState().slotsBalance;
@@ -1305,7 +1476,7 @@ export function PrisonPage() {
   const mix = mineMix(mine.id);
   const newest = ROCKS[mine.id];
   const crewNow = crewYield(prison, nowTick);
-  const campBadge = perkPointsFree(prison) > 0 || crewNow.minutes >= 60;
+  const campBadge = perkPointsFree(prison) > 0 || crewNow.minutes >= 60 || milesReady(prison) > 0;
 
   const cells = [];
   for (let c = 0; c < MINE_CELLS; c++) {
@@ -1472,7 +1643,7 @@ export function PrisonPage() {
             <span className="pstrip__pace">
               {pace ? (
                 <>
-                  {fmt(pace.blocks)} бл · {shortMoney(pace.coins)}
+                  {shortCount(pace.blocks)} бл · {shortMoney(pace.coins)}
                   <CoinIcon size={10} />
                   <small>/мин</small>
                 </>
@@ -1490,6 +1661,31 @@ export function PrisonPage() {
                 <span className="pbuff pbuff--energy">⚡ {sec(buffs.energy)}</span>
               )}
               {buffs.lens > 0 && <span className="pbuff pbuff--lens">🔍 {sec(buffs.lens)}</span>}
+            </div>
+          )}
+          {prison.parcels.length > 0 && (
+            <div className="pparcels" ref={parcelsRef}>
+              {prison.parcels.map((x, i) => {
+                const tier = CASE_TIERS.find((t) => t.id === x.tier)!;
+                const ready = x.left <= 0;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    className={`pparcel${ready ? ' is-ready' : ''}`}
+                    style={{ '--tier': tier.color } as CSSProperties}
+                    aria-label={`Передачка, ${tier.name.toLowerCase()}${ready ? ', готова' : ''}`}
+                    onClick={() => openParcel(i)}
+                  >
+                    <img src={parcelTexture(tier.color)} alt="" />
+                    {!ready && (
+                      <span className="pparcel__bar">
+                        <i style={{ transform: `scaleX(${1 - x.left / PARCEL_NEED[x.tier]})` }} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
           <div
@@ -1626,6 +1822,20 @@ export function PrisonPage() {
           >
             <PickIcon pick={pick} size={28} />
             <span>Лагерь</span>
+            {prison.pet && (
+              <img
+                ref={petRef}
+                className="ppet-perch"
+                src={petTexture(prison.pet)}
+                alt={petOf(prison.pet).name}
+                title={`${petOf(prison.pet).name}, ${petLevelOf(prison.pets[prison.pet] ?? 0).level} ур.`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  tapLight();
+                  setCamp('pets');
+                }}
+              />
+            )}
             {prison.keys > 0 ? (
               <i className="pforge-btn__dot pforge-btn__dot--n">
                 <KeyIcon size={9} />
@@ -1805,6 +2015,8 @@ export function PrisonPage() {
           </div>
         </Sheet>
       )}
+
+      {reveal && <ParcelReveal open={reveal} onClose={() => setReveal(null)} />}
 
       {rewards && (
         <RewardsSheet

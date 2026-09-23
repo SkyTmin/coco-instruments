@@ -29,27 +29,34 @@ const BLACK: RGB = [0, 0, 0];
 const WHITE: RGB = [255, 255, 255];
 
 class Pixels {
-  data = new Uint8ClampedArray(N * N * 4);
+  readonly n: number;
+  data: Uint8ClampedArray;
+  constructor(n = N) {
+    this.n = n;
+    this.data = new Uint8ClampedArray(n * n * 4);
+  }
   set(x: number, y: number, c: RGB, a = 255): void {
-    if (x < 0 || y < 0 || x >= N || y >= N) return;
-    const i = (y * N + x) * 4;
+    const n = this.n;
+    if (x < 0 || y < 0 || x >= n || y >= n) return;
+    const i = (y * n + x) * 4;
     this.data[i] = c[0];
     this.data[i + 1] = c[1];
     this.data[i + 2] = c[2];
     this.data[i + 3] = a;
   }
   get(x: number, y: number): RGB {
-    const i = (y * N + x) * 4;
+    const i = (y * this.n + x) * 4;
     return [this.data[i], this.data[i + 1], this.data[i + 2]];
   }
   toUrl(): string {
     if (typeof document === 'undefined') return '';
+    const n = this.n;
     const c = document.createElement('canvas');
-    c.width = N;
-    c.height = N;
+    c.width = n;
+    c.height = n;
     const g = c.getContext('2d');
     if (!g) return '';
-    const img = g.createImageData(N, N);
+    const img = g.createImageData(n, n);
     img.data.set(this.data);
     g.putImageData(img, 0, 0);
     return c.toDataURL();
@@ -600,5 +607,200 @@ export function findTexture(id: string, ghost = false): string {
   });
   const url = px.toUrl();
   findCache.set(key, url);
+  return url;
+}
+
+// ---------------------------------------------------------------------------
+// Питомцы — кольская фауна, 12×12, мордой вправо (сова — анфас: так её и
+// знают). Контур `a` у всех один и тот же, тёмный: на тёмной кнопке лагеря
+// зверёк читается силуэтом, а не пятном.
+// ---------------------------------------------------------------------------
+
+const PET_SPRITES: Record<string, Sprite> = {
+  lemming: {
+    // Норвежский лемминг: чёрная голова и спина, золотые бока, светлое брюхо.
+    pal: {
+      a: '#1c120c',
+      b: '#2e241e',
+      c: '#d0913e',
+      d: '#f0d4a4',
+      e: '#ffffff',
+      n: '#e89a9a',
+    },
+    map: [
+      '............',
+      '............',
+      '...aaaaa....',
+      '..abbbbbaa..',
+      '.abbbbbbbba.',
+      '.abbbbbbbeba',
+      'acccbbbbbbbn',
+      'accccccccba.',
+      'acccccccccca',
+      '.addddddddda',
+      '..aa.a..aa..',
+      '............',
+    ],
+  },
+  fox: {
+    pal: { a: '#3a3a46', b: '#f4f6fa', c: '#c8d0dc', d: '#1c1c22', e: '#1c1c22' },
+    map: [
+      '........a.a.',
+      '.......abab.',
+      '.......abbba',
+      '......abbeba',
+      'aa....abbbbd',
+      'abca.abbbbaa',
+      'abbbabbbbba.',
+      '.abbbbbbbca.',
+      '..abbbbbbca.',
+      '..abcabcabca',
+      '..aa.aa.aa..',
+      '............',
+    ],
+  },
+  wolverine: {
+    pal: { a: '#140c08', b: '#4a3222', c: '#c8a070', d: '#2a1a10', e: '#000000' },
+    map: [
+      '............',
+      '............',
+      '.......aa...',
+      '.aa..aabbaa.',
+      'abba.abbbbba',
+      'abbbabcccbeb',
+      '.abbbbbbbbbd',
+      '.abccccccbba',
+      '..abbbbbbba.',
+      '..abdabdabda',
+      '..aa.aa.aa..',
+      '............',
+    ],
+  },
+  raven: {
+    pal: { a: '#05060a', b: '#22242e', c: '#4a4e5c', d: '#6a6e7c', e: '#e8e8f0' },
+    map: [
+      '............',
+      '......aaa...',
+      '.....abbba..',
+      '.....abebbaa',
+      '.....abbbacc',
+      '...aabbbba..',
+      '..abbccbbba.',
+      '.abbccccbba.',
+      'abbbbbbbba..',
+      'aaabbbbba...',
+      '.....d.d....',
+      '....dd.dd...',
+    ],
+  },
+  owl: {
+    pal: {
+      a: '#3a3a46',
+      b: '#f6f7fb',
+      c: '#2a2a30',
+      d: '#8a8e9a',
+      e: '#ffd23a',
+      f: '#000000',
+      g: '#c89a3a',
+    },
+    map: [
+      '............',
+      '...aaaaaa...',
+      '..abbbbbba..',
+      '.abbbbbbbba.',
+      '.abeebbeeba.',
+      '.abefbbfeba.',
+      '.abbbbcbbba.',
+      '.abdbbbbdba.',
+      '.abbbdbdbba.',
+      '.abdbbbbdba.',
+      '..abbbbbba..',
+      '...agaaga...',
+    ],
+  },
+  calf: {
+    pal: { a: '#1e120a', b: '#8a5a32', c: '#d8b890', d: '#5a3a1e', e: '#000000', g: '#e8dcc8' },
+    map: [
+      '.......g.g..',
+      '.......gag..',
+      '........abba',
+      '.......abbeb',
+      '.......abbbd',
+      '.aaaaaaabba.',
+      'abbbbbbbbba.',
+      'abbbbbbbbba.',
+      '.acccccccba.',
+      '..ab.ab.ab..',
+      '..ab.ab.ab..',
+      '..dd.dd.dd..',
+    ],
+  },
+};
+
+const petCache = new Map<string, string>();
+
+/** Питомец. `ghost` — силуэт того, кого ещё нет. */
+export function petTexture(id: string, ghost = false): string {
+  const key = `${id}:${ghost ? 1 : 0}`;
+  const hit = petCache.get(key);
+  if (hit !== undefined) return hit;
+  const sp = PET_SPRITES[id];
+  if (!sp) return '';
+  // Без полей: зверёк занимает всю картинку — на кнопке он маленький.
+  const px = new Pixels(12);
+  sp.map.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const ch = row[x];
+      if (ch === '.' || !sp.pal[ch]) continue;
+      px.set(x, y, ghost ? [40, 34, 30] : hex(sp.pal[ch]), ghost ? 200 : 255);
+    }
+  });
+  const url = px.toUrl();
+  petCache.set(key, url);
+  return url;
+}
+
+// ---------------------------------------------------------------------------
+// Передачка: коробка в крафтовой бумаге, перевязанная бечёвкой, с сургучной
+// печатью цвета редкости — редкость видна с первого взгляда, как у сундука.
+// ---------------------------------------------------------------------------
+
+const PARCEL_MAP = [
+  '............',
+  '...cc.cc....',
+  '.aaaacaaaaa.',
+  '.abbbcbbbda.',
+  '.abbbcbbbda.',
+  '.acccecccca.',
+  '.abbeeebbda.',
+  '.abbbebbbda.',
+  '.abbbcbbbda.',
+  '.adddcdddda.',
+  '.aaaaaaaaaa.',
+  '............',
+];
+
+const parcelCache = new Map<string, string>();
+
+export function parcelTexture(seal: string): string {
+  const hit = parcelCache.get(seal);
+  if (hit !== undefined) return hit;
+  const pal: Record<string, string> = {
+    a: '#3a2814',
+    b: '#b58a58',
+    c: '#efe2c2',
+    d: '#8a6638',
+    e: seal,
+  };
+  const px = new Pixels();
+  PARCEL_MAP.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const ch = row[x];
+      if (ch === '.') continue;
+      px.set(x + 2, y + 2, hex(pal[ch]));
+    }
+  });
+  const url = px.toUrl();
+  parcelCache.set(seal, url);
   return url;
 }

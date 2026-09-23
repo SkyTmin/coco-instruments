@@ -161,16 +161,33 @@ import {
   rankQuota,
   STREAK_TIERS,
   streakLoot,
+  applyReward,
+  fusePlan,
+  MILES,
+  mileReady,
+  PARCEL_NEED,
+  PARCEL_OVERFLOW,
+  PARCEL_SLOTS,
+  petLevelOf,
+  rollParcel,
+  rollRune,
+  RUNE_SHATTER,
+  socketsOpen,
 } from '@/lib/prison';
 import type {
   CaseRoll,
+  CaseTier,
   CrewYield,
   EnchantId,
   FindId,
   GuideReward,
   ItemId,
+  Mile,
   PerkId,
+  PetId,
   PrisonState,
+  Reward,
+  Rune,
 } from '@/lib/prison';
 
 /** Сколько прошлых заходов держим: хватает на «лучший за месяц». */
@@ -386,6 +403,31 @@ export interface PrisonLoot {
   normDone: boolean;
   /** Сколько блоков каждой породы легло в норму. */
   normAdd: Record<number, number>;
+  /** Перекованные блоки: клетка и порода, которой он засчитан. */
+  reforged: { cell: number; rock: number }[];
+  /** Новые передачки под полем; не влезли — сданы за столько токенов. */
+  parcels: CaseTier[];
+  parcelTokens: number;
+  /** Сколько передачек дозрело этим ударом. */
+  parcelsReady: number;
+  /** Питомец дорос до этого уровня (0 — нет). */
+  petUp: number;
+}
+
+/** Вскрытая передачка — для сцены на странице. */
+export interface ParcelOpen {
+  tier: CaseTier;
+  reward: Reward;
+  /** Руна не влезла в мешочек — разбита на токены. */
+  shattered: number;
+  newPet: PetId | null;
+}
+
+/** Забранная веха: что пришло сверху токенов и ключей. */
+export interface MileClaim {
+  mile: Mile;
+  parcel: ParcelOpen | null;
+  rune: Rune | null;
 }
 
 /** Итог нового ранга: для сцены на странице. */
@@ -810,6 +852,14 @@ interface FinanceState {
   prisonBreak: (breaks: { cell: number; rock: number }[], opts?: { streak?: number }) => PrisonLoot;
   /** Запал дошёл до ступени `tier` (0…4): рекорд и миссия дня. */
   prisonStreak: (tier: number) => void;
+  /** Вскрыть дозревшую передачку под номером `index`. */
+  prisonParcelOpen: (index: number) => ParcelOpen | null;
+  /** Руна в гнездо `slot` (0 — вынуть). */
+  prisonRuneSocket: (slot: number, runeId: number) => void;
+  prisonRuneFuse: (runeId: number) => Rune | null;
+  prisonRuneShatter: (runeId: number) => number;
+  prisonPetSet: (id: PetId | null) => void;
+  prisonMileClaim: (id: string) => MileClaim | null;
   /** Проводник: забрать награду за выполненный шаг. */
   prisonGuideClaim: () => GuideReward | null;
   prisonEnchantToggle: (id: EnchantId) => void;
@@ -2477,10 +2527,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const p = s.prison;
     const dug = p.mine.dug.slice();
     const rocks: number[] = [];
+    const cells: number[] = [];
     for (const b of breaks) {
       if (b.cell < 0 || b.cell >= dug.length || dug[b.cell] >= DEPTH || b.rock < 0) continue;
       dug[b.cell] += 1;
       rocks.push(b.rock);
+      cells.push(b.cell);
     }
     if (!rocks.length)
       return {
@@ -2494,6 +2546,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         pickUps: [],
         normDone: false,
         normAdd: {},
+        reforged: [],
+        parcels: [],
+        parcelTokens: 0,
+        parcelsReady: 0,
+        petUp: 0,
       };
     const now = Date.now();
     const m = modsOf(p);
@@ -2519,7 +2576,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const wasDone = quotaDone(quota, p.norm);
     const norm = { ...p.norm };
     const normAdd: Record<number, number> = {};
-    for (const r of rocks) {
+    // В норму идёт порода ПОСЛЕ перековки: так Перековка помогает добрать
+    // редкую породу, и в этом её смысл на русском присоне.
+    for (const r of drops.rocks) {
       norm[r] = (norm[r] ?? 0) + 1;
       if (quota.some((q) => q.rock === r)) normAdd[r] = (normAdd[r] ?? 0) + 1;
     }
@@ -2532,17 +2591,45 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     for (let l = lvBefore + 1; l <= lvAfter; l++) pickUps.push({ level: l, ...pickLevelReward(l) });
     const upTokens = pickUps.reduce((a, u) => a + u.tokens, 0);
     const upKeys = pickUps.reduce((a, u) => a + u.keys, 0);
+    // Передачки зреют все разом; новая ложится на свободное место, мест нет
+    // — сдаётся за токены.
+    let parcelsReady = 0;
+    const parcels = p.parcels.map((x) => {
+      const left = Math.max(0, x.left - rocks.length);
+      if (x.left > 0 && left === 0) parcelsReady += 1;
+      return { ...x, left };
+    });
+    let parcelTokens = 0;
+    const parcelsNew: CaseTier[] = [];
+    for (const tier of drops.parcels) {
+      if (parcels.length < PARCEL_SLOTS) {
+        parcels.push({ tier, left: PARCEL_NEED[tier] });
+        parcelsNew.push(tier);
+      } else parcelTokens += PARCEL_OVERFLOW[tier];
+    }
+    // Питомец растёт от каждого блока, пока он с собой.
+    let pets = p.pets;
+    let petUp = 0;
+    if (p.pet && p.pets[p.pet] !== undefined) {
+      const before = petLevelOf(p.pets[p.pet] ?? 0).level;
+      const xp2 = (p.pets[p.pet] ?? 0) + rocks.length;
+      pets = { ...p.pets, [p.pet]: xp2 };
+      const after = petLevelOf(xp2).level;
+      if (after > before) petUp = after;
+    }
     const prison: PrisonState = {
       ...p,
       mine: { ...p.mine, dug },
       bag: put.bag,
       mined: p.mined + rocks.length,
       earned: p.earned + put.sold,
-      tokens: p.tokens + drops.tokens + dupTokens + upTokens,
+      tokens: p.tokens + drops.tokens + dupTokens + upTokens + parcelTokens,
       keys: p.keys + drops.keys + upKeys,
       finds,
       norm,
       pickXp,
+      parcels,
+      pets,
     };
     // Миссии дня общие с автоматами: счётчик блоков и проданного — там же.
     const missions = missionsForToday(s.slotsMissions);
@@ -2567,7 +2654,113 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       pickUps,
       normDone,
       normAdd,
+      reforged: drops.reforged.map((i) => ({ cell: cells[i], rock: drops.rocks[i] })),
+      parcels: parcelsNew,
+      parcelTokens,
+      parcelsReady,
+      petUp,
     };
+  },
+
+  prisonParcelOpen: (index) => {
+    const s = get();
+    const p = s.prison;
+    const x = p.parcels[index];
+    if (!x || x.left > 0) return null;
+    const reward = rollParcel(p, x.tier, Math.random);
+    const base = {
+      ...p,
+      parcels: p.parcels.filter((_, i) => i !== index),
+      parcelsOpened: p.parcelsOpened + 1,
+    };
+    const a = applyReward(base, reward);
+    set(a.coins ? { prison: a.p, slotsBalance: s.slotsBalance + a.coins } : { prison: a.p });
+    persistPrison(a.p);
+    if (a.coins) persistSlots(get());
+    return { tier: x.tier, reward, shattered: a.shattered, newPet: a.newPet };
+  },
+
+  prisonRuneSocket: (slot, runeId) => {
+    const p = get().prison;
+    if (slot < 0 || slot >= socketsOpen(p)) return;
+    if (runeId && !p.runes.some((r) => r.id === runeId)) return;
+    // Руна носится в одном гнезде: переставил — старое место освободилось.
+    const sockets = p.sockets.map((id, i) => (i === slot ? runeId : id === runeId ? 0 : id));
+    const prison = { ...p, sockets };
+    set({ prison });
+    persistPrison(prison);
+  },
+
+  prisonRuneFuse: (runeId) => {
+    const p = get().prison;
+    const plan = fusePlan(p.runes, p.sockets, runeId);
+    if (!plan) return null;
+    // Сила не ниже средней из трёх — сплав хороших рун не проваливается.
+    const floor = (plan.base.roll + plan.with[0].roll + plan.with[1].roll) / 3;
+    const made = rollRune(plan.base.tier + 1, Math.random, plan.base.kind, floor);
+    const rune: Rune = { ...made, id: p.runeSeq + 1 };
+    const gone = new Set([plan.base.id, ...plan.with.map((r) => r.id)]);
+    const prison: PrisonState = {
+      ...p,
+      runeSeq: rune.id,
+      runes: [...p.runes.filter((r) => !gone.has(r.id)), rune],
+      // Сплавленная из надетой руна остаётся в том же гнезде.
+      sockets: p.sockets.map((id) => (id === plan.base.id ? rune.id : id)),
+    };
+    set({ prison });
+    persistPrison(prison);
+    return rune;
+  },
+
+  prisonRuneShatter: (runeId) => {
+    const p = get().prison;
+    const r = p.runes.find((x) => x.id === runeId);
+    if (!r || p.sockets.includes(runeId)) return 0;
+    const got = RUNE_SHATTER[r.tier - 1];
+    const prison = { ...p, runes: p.runes.filter((x) => x.id !== runeId), tokens: p.tokens + got };
+    set({ prison });
+    persistPrison(prison);
+    return got;
+  },
+
+  prisonPetSet: (id) => {
+    const p = get().prison;
+    if (id && p.pets[id] === undefined) return;
+    const prison = { ...p, pet: id };
+    set({ prison });
+    persistPrison(prison);
+  },
+
+  prisonMileClaim: (id) => {
+    const s = get();
+    const mile = MILES.find((m) => m.id === id);
+    if (!mile || !mileReady(s.prison, mile)) return null;
+    const r = mile.reward;
+    let p: PrisonState = {
+      ...s.prison,
+      miles: [...s.prison.miles, id],
+      tokens: s.prison.tokens + (r.tokens ?? 0),
+      keys: s.prison.keys + (r.keys ?? 0),
+    };
+    let coins = 0;
+    let rune: Rune | null = null;
+    if (r.rune) {
+      const a = applyReward(p, { kind: 'rune', rune: rollRune(r.rune, Math.random) });
+      p = a.p;
+      rune = a.shattered ? null : p.runes[p.runes.length - 1];
+    }
+    let parcel: ParcelOpen | null = null;
+    if (r.parcel) {
+      const reward = rollParcel(p, r.parcel, Math.random);
+      const a = applyReward({ ...p, parcelsOpened: p.parcelsOpened + 1 }, reward);
+      p = a.p;
+      coins += a.coins;
+      parcel = { tier: r.parcel, reward, shattered: a.shattered, newPet: a.newPet };
+    }
+    set(coins ? { prison: p, slotsBalance: s.slotsBalance + coins } : { prison: p });
+    persistPrison(p);
+    if (coins) persistSlots(get());
+    return { mile, parcel, rune };
   },
 
   prisonStreak: (tier) => {
@@ -2591,13 +2784,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const r = GUIDE[p.guide].reward;
     const items = { ...p.items };
     if (r.item) items[r.item[0]] += r.item[1];
-    const prison: PrisonState = {
+    let prison: PrisonState = {
       ...p,
       guide: p.guide + 1,
       tokens: p.tokens + (r.tokens ?? 0),
       keys: p.keys + (r.keys ?? 0),
       items,
     };
+    if (r.rune)
+      prison = applyReward(prison, { kind: 'rune', rune: rollRune(r.rune, Math.random) }).p;
+    if (r.pet) prison = applyReward(prison, { kind: 'pet', id: r.pet }).p;
     set(r.coins ? { prison, slotsBalance: s.slotsBalance + r.coins } : { prison });
     persistPrison(prison);
     if (r.coins) persistSlots(get());
@@ -2680,14 +2876,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const p = s.prison;
     if (p.keys <= 0) return null;
     const roll = rollCase(p, Math.random);
-    const r = roll.reward;
-    let prison: PrisonState = { ...p, keys: p.keys - 1, cases: p.cases + 1 };
-    let balance = s.slotsBalance;
-    if (r.kind === 'coins') balance += r.amount;
-    else if (r.kind === 'tokens') prison = { ...prison, tokens: prison.tokens + r.amount };
-    else if (r.kind === 'item')
-      prison = { ...prison, items: { ...prison.items, [r.id]: prison.items[r.id] + r.amount } };
-    else prison = { ...prison, finds: { ...prison.finds, [r.id]: (prison.finds[r.id] ?? 0) + 1 } };
+    const a = applyReward({ ...p, keys: p.keys - 1, cases: p.cases + 1 }, roll.reward);
+    const prison = a.p;
+    const balance = s.slotsBalance + a.coins;
     set({ prison, slotsBalance: balance });
     persistPrison(prison);
     if (balance !== s.slotsBalance) persistSlots(get());
