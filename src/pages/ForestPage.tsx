@@ -10,6 +10,7 @@ import { CoinIcon } from '@/components/slot-art';
 import {
   AxeIcon,
   KeyIcon,
+  MillIcon,
   ParcelReveal,
   PickIcon,
   PrisonCamp,
@@ -31,10 +32,13 @@ import {
   forestRankCost,
   LAST_PLOT,
   logHp,
+  millQueueCap,
+  millTick,
   pileCapacity,
   planBuyout,
   SPECIES,
   standHit,
+  sumRow,
   toM3,
 } from '@/lib/forest';
 import type { Side, Tree } from '@/lib/forest';
@@ -123,6 +127,7 @@ export function ForestPage() {
   const forestCut = useFinanceStore((s) => s.forestCut);
   const forestSell = useFinanceStore((s) => s.forestSell);
   const forestRankUp = useFinanceStore((s) => s.forestRankUp);
+  const forestMillLoad = useFinanceStore((s) => s.forestMillLoad);
   const prisonStreak = useFinanceStore((s) => s.prisonStreak);
   const prisonParcelOpen = useFinanceStore((s) => s.prisonParcelOpen);
 
@@ -159,6 +164,7 @@ export function ForestPage() {
   const layerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pileRef = useRef<HTMLButtonElement>(null);
+  const millRef = useRef<HTMLButtonElement>(null);
   const campRef = useRef<HTMLButtonElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const parcelsRef = useRef<HTMLDivElement>(null);
@@ -254,11 +260,13 @@ export function ForestPage() {
     const was = prevCut.current;
     prevCut.current = cut;
     if (reduceMotion()) return;
-    if (cut === was + 1 && trunkRef.current) {
+    if (cut > was && trunkRef.current) {
+      // Замах снимает два бревна — ствол оседает на два, чуть дольше.
+      const d = cut - was;
       try {
         trunkRef.current.animate(
-          [{ transform: `translateY(${-logH}px)` }, { transform: 'translateY(0)' }],
-          { duration: 120, easing: 'cubic-bezier(.5,0,1,1)' },
+          [{ transform: `translateY(${-logH * d}px)` }, { transform: 'translateY(0)' }],
+          { duration: 120 * Math.sqrt(d), easing: 'cubic-bezier(.5,0,1,1)' },
         );
       } catch {
         /* без WAAPI просто встанет */
@@ -425,7 +433,7 @@ export function ForestPage() {
   };
 
   /** Срубленное бревно улетает в штабель дугой, крутясь. */
-  const flyLog = (t: Tree, s: Side) => {
+  const flyLog = (t: Tree, s: Side, delay = 0) => {
     const layer = layerRef.current;
     const scene = sceneRef.current;
     const pile = pileRef.current;
@@ -462,7 +470,7 @@ export function ForestPage() {
             opacity: 0.85,
           },
         ],
-        { duration: 560, easing: 'cubic-bezier(.45,0,.55,1)' },
+        { duration: 560, delay, easing: 'cubic-bezier(.45,0,.55,1)', fill: 'backwards' },
       );
       a.onfinish = () => {
         done();
@@ -472,16 +480,16 @@ export function ForestPage() {
     } catch {
       done();
     }
-    setTimeout(done, 1100);
+    setTimeout(done, 1100 + delay);
   };
 
   /** «Бойся!»: крона валится в сторону от топора, снег из неё — облаком. */
-  const fellScene = (t: Tree, s: Side) => {
+  const fellScene = (t: Tree, s: Side, label = 'БОЙСЯ!', cls = 'pfloat--fell') => {
     treeFall();
     addTrauma(sceneRef.current, 0.5);
     flashFrame('small');
     notifySuccess();
-    floatAt(size.w / 2, size.h * 0.34, 'БОЙСЯ!', 'pfloat--fell');
+    floatAt(size.w / 2, size.h * 0.34, label, cls);
     const layer = layerRef.current;
     if (!layer || reduceMotion()) return;
     falling.current = true;
@@ -551,24 +559,48 @@ export function ForestPage() {
     fx.current?.chips(x, y, [species.leaf, species.dark, '#ffffff'], 10, 1.1);
   };
 
+  /** Чутьё: сучок пролетел мимо. */
+  const dodge = (s: Side) => {
+    const { x, y } = bottomAt(s);
+    floatAt(x, y - logH, 'УВЕРНУЛСЯ', 'pfloat--dodge');
+    tapLight();
+    const el = axeRef.current;
+    if (!el || reduceMotion()) return;
+    try {
+      el.animate(
+        [
+          { translate: '0 0' },
+          { translate: `${s === 'L' ? -10 : 10}px 4px`, offset: 0.4 },
+          { translate: '0 0' },
+        ],
+        { duration: 260, easing: 'cubic-bezier(.3,.7,.3,1)' },
+      );
+    } catch {
+      /* стоит */
+    }
+  };
+
   const announce = (res: ForestCut, s: Side) => {
     const { x, y } = bottomAt(s);
-    const kind = res.tree.logs[res.index]?.kind;
-    if (kind === 'burl') {
+    // Замах и валка снимают несколько брёвен: показываем самое ценное.
+    const kinds = res.tree.logs.slice(res.index, res.index + res.take).map((l) => l.kind);
+    if (kinds.includes('burl')) {
       floatAt(x, y - 20, 'КАПОКОРЕНЬ ×10', 'pfloat--burl');
       tierBreak(2);
       burstConfetti(40, ['#c88a52', '#ffe08a', '#fff']);
-    } else if (kind === 'figured') floatAt(x, y - 20, 'СВИЛЬ ×3', 'pfloat--figured');
+    } else if (kinds.includes('figured')) floatAt(x, y - 20, 'СВИЛЬ ×3', 'pfloat--figured');
     const h = res.chop.hollow;
     if (h) {
       tierBreak(1);
-      if (h.kind === 'tokens') floatAt(x, y - 34, `ДУПЛО: +${h.amount} ✦`, 'pfloat--token', 120);
+      const hTokens = res.hollows.reduce((a, z) => a + (z.kind === 'tokens' ? z.amount : 0), 0);
+      if (hTokens) floatAt(x, y - 34, `ДУПЛО: +${hTokens} ✦`, 'pfloat--token', 120);
       else if (h.kind === 'parcel') floatAt(x, y - 34, 'ДУПЛО: ПЕРЕДАЧКА', 'pfloat--parcel', 120);
     }
     const tokens = res.chop.tokens + res.chop.chaga;
     if (res.chop.chaga) floatAt(x, y - 46, `ЧАГА +${res.chop.chaga} ✦`, 'pfloat--token', 200);
     else if (tokens) floatAt(x, y - 46, `+${tokens} ✦`, 'pfloat--token', 200);
-    const keys = res.chop.keys + (h?.kind === 'keys' ? h.amount : 0);
+    const keys =
+      res.chop.keys + res.hollows.reduce((a, z) => a + (z.kind === 'keys' ? z.amount : 0), 0);
     if (keys) {
       keyFound();
       notifySuccess();
@@ -588,8 +620,9 @@ export function ForestPage() {
       if (st.pet) say(`${petOf(st.pet).name}: ${res.petUp} уровень`);
       tierBreak(1);
     }
-    if (res.felled?.tokens) {
-      floatAt(size.w / 2, size.h * 0.24, `СЕЙД-СОСНА +${res.felled.tokens} ✦`, 'pfloat--seid', 300);
+    const seidTokens = (res.felled?.tokens ?? 0) + (res.storm?.tokens ?? 0);
+    if (seidTokens) {
+      floatAt(size.w / 2, size.h * 0.24, `СЕЙД-СОСНА +${seidTokens} ✦`, 'pfloat--seid', 300);
       burstConfetti(60, ['#3fe6d0', '#c8fff6', '#ffe08a']);
       tierBreak(3);
     }
@@ -604,6 +637,10 @@ export function ForestPage() {
       rollBalance(to - res.sold, to);
       coinDing();
       floatAt(x, y - 70, `+${shortMoney(res.sold)}`, 'pfloat--coin');
+    }
+    if (res.toMill) {
+      floatAt(x, y - 84, `${res.toMill} → НА ПИЛОРАМУ`, 'pfloat--mill', 80);
+      squashPop(millRef.current, 0.45);
     }
     const now = performance.now();
     if (res.lost > 0 && now - fullWarnAt.current > 1500) {
@@ -623,7 +660,7 @@ export function ForestPage() {
     const st = useFinanceStore.getState();
     const f = st.forest;
     if (st.prison.rank < FOREST_UNLOCK_RANK) return;
-    const fm = forestMods(st.prison);
+    const fm = forestMods(st.prison, f);
     const rate = AXES[f.axe].rate * fm.rate;
     if (now - lastHit.current < 1000 / (rate * 1.8) - 4) return;
     lastHit.current = now;
@@ -634,7 +671,12 @@ export function ForestPage() {
     const t = buildTree(f.rank, f.tree.seed);
     const i = f.tree.cut;
     // Встал туда, где у нижнего бревна сучок, — сам на него и налетел.
+    // Чутьё иногда уводит голову: не оглушён, но и не срубил.
     if (standHit(t, i, s)) {
+      if (Math.random() < fm.dodge) {
+        dodge(s);
+        return;
+      }
       strike(s);
       return;
     }
@@ -680,11 +722,31 @@ export function ForestPage() {
     logOff();
     fx.current?.chips(x, y, woodColors, crit ? 18 : 12, crit ? 1.5 : 1.15);
     const res = forestCut(s, streakNow());
-    flyLog(res.tree, s);
+    const flying = Math.min(3, res.take);
+    for (let k = 0; k < flying; k++) flyLog(res.tree, s, k * 90);
     bumpStreak();
     announce(res, s);
-    if (res.felled) fellScene(res.tree, s);
-    else if (res.hit) strike(s);
+    if (res.how === 'swing') {
+      floatAt(size.w / 2, y - logH * 1.6, 'ЗАМАХ ×2', 'pfloat--swing');
+      addTrauma(sceneRef.current, 0.18);
+      tapMedium();
+    }
+    if (res.felled) {
+      if (res.how === 'fell') {
+        tierBreak(2);
+        fellScene(res.tree, s, 'ВАЛКА!', 'pfloat--fellx');
+      } else fellScene(res.tree, s);
+    } else if (res.hit) strike(s);
+    else if (res.dodged) dodge(s);
+    if (res.storm) {
+      const t2 = res.storm.tree;
+      setTimeout(() => {
+        tierBreak(3);
+        burstConfetti(50, ['#bfe4ff', '#ffffff', SPECIES[t2.species].leaf]);
+        fellScene(t2, s === 'L' ? 'R' : 'L', 'БУРЕЛОМ!', 'pfloat--storm');
+        say(`Бурелом: ещё ${res.storm!.logs} брёвен ${SPECIES[t2.species].gen}`);
+      }, 700);
+    }
   };
   const hitRef = useRef(hit);
   hitRef.current = hit;
@@ -707,7 +769,7 @@ export function ForestPage() {
     if (!p) return;
     hitRef.current(p.side);
     const st = useFinanceStore.getState();
-    const rate = AXES[st.forest.axe].rate * forestMods(st.prison).rate;
+    const rate = AXES[st.forest.axe].rate * forestMods(st.prison, st.forest).rate;
     holdTimer.current = setTimeout(holdTick, 1000 / rate);
   };
 
@@ -728,7 +790,7 @@ export function ForestPage() {
     pointer.current = { id: e.pointerId, side: s };
     hit(s);
     const st = useFinanceStore.getState();
-    const rate = AXES[st.forest.axe].rate * forestMods(st.prison).rate;
+    const rate = AXES[st.forest.axe].rate * forestMods(st.prison, st.forest).rate;
     if (holdTimer.current) clearTimeout(holdTimer.current);
     holdTimer.current = setTimeout(holdTick, 1000 / rate);
   };
@@ -768,6 +830,27 @@ export function ForestPage() {
       rainCoins(Math.min(30, 8 + Math.round((value / cost) * 20)));
       setTimeout(() => payoutEnd(1), 300);
     }
+  };
+
+  /** Штабель — в пилораму. Пусто или очередь полна — открыть лесопилку. */
+  const toMill = () => {
+    primeAudio();
+    const from = useFinanceStore.getState().slotsBalance;
+    const r = forestMillLoad();
+    if (!r.loaded) {
+      tapLight();
+      setCamp('mill');
+      return;
+    }
+    if (r.premium) rollBalance(from, from + r.premium);
+    tapMedium();
+    squashPop(millRef.current, 0.5);
+    squashPop(pileRef.current, 0.4);
+    say(
+      r.premium
+        ? `${r.loaded} брёвен на пилораму, за особые +${shortMoney(r.premium)}`
+        : `${r.loaded} брёвен на пилораму`,
+    );
   };
 
   const takeRank = (buyout: boolean) => {
@@ -840,7 +923,11 @@ export function ForestPage() {
   const buyout = atTop ? 0 : planBuyout(forest.rank, forest.plan);
   const cap = pileCapacity(forest.pileLevel);
   const pileFull = forest.pile.n >= cap;
-  const pileValue = Math.round(forest.pile.value * forestMods(prison).sell);
+  const pileValue = Math.round(forest.pile.value * forestMods(prison, forest).sell);
+  const mill = millTick(forest.mill, Date.now());
+  const millQueued = sumRow(mill.queue);
+  const millBoards = sumRow(mill.boards);
+  const sense = forest.ench.sense > 0;
   const campBadge = perkPointsFree(prison) > 0;
   const sTier = streakTier(streak);
   const sNext = STREAK_TIERS[sTier + 1];
@@ -1041,7 +1128,7 @@ export function ForestPage() {
                     >
                       {log.branch && (
                         <i
-                          className={`flog__branch is-${log.branch}`}
+                          className={`flog__branch is-${log.branch}${sense && k < 2 && log.branch === side ? ' is-danger' : ''}`}
                           style={{ backgroundImage: `url(${branchTexture(tree.species)})` }}
                         />
                       )}
@@ -1096,7 +1183,7 @@ export function ForestPage() {
             </div>
           </div>
 
-          <div className="pbar">
+          <div className={`pbar${mill.level > 0 ? ' has-mill' : ''}`}>
             <button
               type="button"
               ref={pileRef}
@@ -1127,6 +1214,26 @@ export function ForestPage() {
                 </span>
               </span>
             </button>
+            {mill.level > 0 && (
+              <button
+                type="button"
+                ref={millRef}
+                className={`fmill-btn${millQueued > 0 ? ' is-busy' : ''}`}
+                aria-label="Пилорама"
+                onClick={toMill}
+              >
+                <MillIcon size={24} />
+                <span>{forest.pile.n ? 'На пилу' : 'Пилорама'}</span>
+                <span className="fmill-btn__bar">
+                  <i
+                    style={{
+                      transform: `scaleX(${Math.min(1, millQueued / millQueueCap(mill.level))})`,
+                    }}
+                  />
+                </span>
+                {millBoards > 0 && <i className="fmill-btn__n">{shortCount(millBoards)}</i>}
+              </button>
+            )}
             <button
               type="button"
               className="pforge-btn"

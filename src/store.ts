@@ -137,6 +137,10 @@ import {
   RANK_KEYS,
   rollCase,
   LENS_MS,
+  HANDLES,
+  PROP_BOARDS,
+  PROP_MS,
+  PROP_REFORGE,
   modsOf,
   rollDrops,
   stash,
@@ -197,8 +201,32 @@ import {
   axeSharpCost,
   rollChop,
   TRUCK_PRICE,
+  axeEnchCap,
+  axeEnchCost,
+  axeLevelOf,
+  boardsForSale,
+  boardsReserve,
+  boardsValue,
+  freshForest,
+  emptyPile as emptyPileOf,
+  millCost,
+  millLoad,
+  MILL_MAX,
+  millTick,
+  planCut,
+  sumChops,
+  takeBoards,
 } from '@/lib/forest';
-import type { Chop, ForestState, Side, Tree } from '@/lib/forest';
+import type {
+  AxeEnchId,
+  Chop,
+  CutPlan,
+  ForestState,
+  HollowPrize,
+  Pile,
+  Side,
+  Tree,
+} from '@/lib/forest';
 import type {
   CaseRoll,
   CaseTier,
@@ -483,19 +511,29 @@ export interface PrisonLoot {
   petUp: number;
 }
 
-/** Что принесло срубленное бревно. */
+/** Что принёс удар топором: одно бревно, два (замах) или всё дерево. */
 export interface ForestCut {
+  /** Всё срубленное этим ударом, сложенное вместе. */
   chop: Chop;
-  /** Дерево, с которого рубили, и номер срубленного бревна. */
+  hollows: HollowPrize[];
+  /** Дерево, с которого рубили, номер нижнего бревна и сколько ушло. */
   tree: Tree;
   index: number;
+  take: number;
+  how: CutPlan['how'];
   /** На твою сторону опустился сучок. */
   hit: boolean;
+  /** Сучок падал на голову, но Чутьё увело. */
+  dodged: boolean;
   /** Дерево повалено: бонус с кроны и токены сейд-сосны. */
   felled: { value: number; tokens: number } | null;
+  /** Бурелом: следующее дерево легло следом, целиком. */
+  storm: { tree: Tree; logs: number; tokens: number } | null;
   /** Лесовоз увёз штабель; без лесовоза лишнее осталось в снегу. */
   sold: number;
   lost: number;
+  /** Сколько брёвен лесовоз отвёз на пилораму. */
+  toMill: number;
   planDone: boolean;
   parcels: CaseTier[];
   parcelsReady: number;
@@ -958,6 +996,18 @@ interface FinanceState {
   forestBuy: (what: 'axe' | 'sharp' | 'pile' | 'truck') => boolean;
   /** Новый разряд лесоруба. Без плана — только с `buyout`, за доплату. */
   forestRankUp: (buyout?: boolean) => { rank: number; cost: number; buyout: number } | null;
+  /** Чары топора за общие токены: до `count` уровней. */
+  forestEnchant: (id: AxeEnchId, count?: number) => number;
+  /** Пилорама: купить или поднять уровень за монеты. */
+  forestMillUp: () => boolean;
+  /** Штабель — в очередь пилорамы; надбавка за особые брёвна — сразу в кошелёк. */
+  forestMillLoad: () => { loaded: number; premium: number };
+  /** Продать доски (кроме запаса на следующую рукоять). */
+  forestMillSell: () => number;
+  /** Сбить крепь для шахты из досок. */
+  forestCraftProp: () => boolean;
+  /** Выточить следующую рукоять. */
+  forestCraftHandle: () => boolean;
   /** Касса владельца: токены каторги пачкой. */
   prisonAddTokens: (amount: number) => void;
   /** Начать Каторгу заново. Кошелёк и уровень общие — остаются. */
@@ -2670,7 +2720,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         petUp: 0,
       };
     const now = Date.now();
-    const m = modsOf(p);
+    const m0 = modsOf(p);
+    // Крепь: пока стоит, Перековка сильнее — лезешь в забой, куда без неё не пускают.
+    const m = now < p.propUntil ? { ...m0, reforge: Math.min(0.9, m0.reforge + PROP_REFORGE) } : m0;
     const drops = rollDrops(rocks, m, Math.random, {
       frenzy: now < p.frenzyUntil,
       mine: p.mine.id,
@@ -2828,72 +2880,125 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const p = s.prison;
     const tree = buildTree(f.rank, f.tree.seed);
     const index = Math.min(f.tree.cut, tree.logs.length - 1);
-    const fm = forestMods(p);
-    const chop = rollChop(tree, index, fm, Math.random, streakLoot(streak));
-    // Штабель: не влезло — лесовоз увозит и продаёт, без него лишнее в снегу.
+    const fm = forestMods(p, f);
+    const loot = streakLoot(streak);
+    // Брёвна этого удара: нижнее, при замахе — и следующее, при валке — все.
+    const cut = planCut(tree, index, fm, Math.random);
+    const chops: Chop[] = [];
+    for (let k = 0; k < cut.take; k++) chops.push(rollChop(tree, index + k, fm, Math.random, loot));
+    // Штабель: не влезло — лесовоз увозит на пилораму (пока там есть место)
+    // или продаёт; без лесовоза лишнее остаётся в снегу.
     const cap = pileCapacity(f.pileLevel);
-    let pile = { ...f.pile };
+    let pile: Pile = { ...f.pile, sp: [...f.pile.sp] };
+    let mill = f.mill;
     let sold = 0;
     let lost = 0;
-    const per = chop.units ? chop.value / chop.units : 0;
-    for (let k = 0; k < chop.units; k++) {
-      if (pile.n >= cap) {
-        if (!f.truck) {
-          lost += 1;
-          continue;
+    let toMill = 0;
+    const stack = (c: Chop, species: number) => {
+      const per = c.units ? c.value / c.units : 0;
+      for (let k = 0; k < c.units; k++) {
+        if (pile.n >= cap) {
+          if (!f.truck) {
+            lost += 1;
+            continue;
+          }
+          const load = mill.level > 0 ? millLoad(pile, millTick(mill, Date.now())) : null;
+          if (load && load.loaded > 0) {
+            sold += Math.round(load.premium * fm.sell);
+            toMill += load.loaded;
+            mill = load.mill;
+            pile = { ...load.pile, sp: [...load.pile.sp] };
+          } else {
+            sold += Math.round(pile.value * fm.sell);
+            pile = emptyPileOf();
+          }
         }
-        sold += Math.round(pile.value * fm.sell);
-        pile = { n: 0, value: 0 };
+        pile.n += 1;
+        pile.value += per;
+        pile.sp[species] += 1;
       }
-      pile = { n: pile.n + 1, value: pile.value + per };
-    }
-    // План — брёвна СВОЕЙ породы делянки, считанные руками, а не добычей.
-    const own = tree.species === f.rank;
+    };
+    for (const c of chops) stack(c, tree.species);
+    // План — брёвна СВОЕЙ породы делянки, срубленные топором (замах и валка
+    // тоже топор), а не лишние от добычи.
     const need = forestPlanNeed(f.rank);
-    const planDone = own && f.plan < need && f.plan + 1 >= need;
-    const plan = f.plan + (own ? 1 : 0);
+    let plan = f.plan + (tree.species === f.rank ? cut.take : 0);
     // Дерево: срубил последнее — повалено, выезжает следующее.
-    let cut = index + 1;
+    let next = index + cut.take;
     let seed = f.tree.seed;
     let felled: ForestCut['felled'] = null;
-    if (cut >= tree.logs.length) {
+    let storm: ForestCut['storm'] = null;
+    let logs = cut.take;
+    let trees = 0;
+    let seids = 0;
+    if (next >= tree.logs.length) {
       felled = fellBonus(tree, f.rank);
-      pile = { ...pile, value: pile.value + felled.value };
-      cut = 0;
+      pile.value += felled.value;
+      trees += 1;
+      if (tree.seid) seids += 1;
+      next = 0;
       seed = newTreeSeed();
+      // Бурелом: падающее дерево валит соседнее — целиком, со всеми брёвнами.
+      if (cut.storm) {
+        const t2 = buildTree(f.rank, seed);
+        const extra: Chop[] = t2.logs.map((_, i) => rollChop(t2, i, fm, Math.random, loot));
+        for (const c of extra) stack(c, t2.species);
+        chops.push(...extra);
+        const fb = fellBonus(t2, f.rank);
+        pile.value += fb.value;
+        if (t2.species === f.rank) plan += t2.logs.length;
+        logs += t2.logs.length;
+        trees += 1;
+        if (t2.seid) seids += 1;
+        storm = { tree: t2, logs: t2.logs.length, tokens: fb.tokens };
+        seed = newTreeSeed();
+      }
     }
-    const hit = !felled && dropHit(tree, index, side);
+    const planDone = f.plan < need && plan >= need;
+    let hit = !felled && dropHit(tree, next - 1, side);
+    let dodged = false;
+    if (hit && Math.random() < fm.dodge) {
+      hit = false;
+      dodged = true;
+    }
     const forest: ForestState = {
       ...f,
       pile,
+      mill,
       plan,
-      tree: { seed, cut },
-      felled: f.felled + (felled ? 1 : 0),
-      seids: f.seids + (felled && tree.seid ? 1 : 0),
-      logs: f.logs + 1,
+      tree: { seed, cut: next },
+      felled: f.felled + trees,
+      seids: f.seids + seids,
+      logs: f.logs + logs,
       earned: f.earned + sold,
     };
     // Общее с шахтой: токены, ключи, передачки, питомец.
-    const hollow = chop.hollow;
-    const fresh = [...chop.parcels, ...(hollow?.kind === 'parcel' ? [hollow.tier] : [])];
-    const tick = tickParcels(p, 1, fresh);
-    const fed = feedPet(p, 1);
+    const { chop, hollows } = sumChops(chops);
+    const fresh = [
+      ...chop.parcels,
+      ...hollows.flatMap((h) => (h.kind === 'parcel' ? [h.tier] : [])),
+    ];
+    const tick = tickParcels(p, logs, fresh);
+    const fed = feedPet(p, logs);
+    const hollowSum = (kind: 'tokens' | 'keys') =>
+      hollows.reduce((a, h) => a + (h.kind === kind ? h.amount : 0), 0);
     const prison: PrisonState = {
       ...p,
       tokens:
         p.tokens +
         chop.tokens +
         chop.chaga +
-        (hollow?.kind === 'tokens' ? hollow.amount : 0) +
+        hollowSum('tokens') +
         (felled?.tokens ?? 0) +
+        (storm?.tokens ?? 0) +
         tick.tokens,
-      keys: p.keys + chop.keys + (hollow?.kind === 'keys' ? hollow.amount : 0),
+      keys: p.keys + chop.keys + hollowSum('keys'),
       parcels: tick.parcels,
       pets: fed.pets,
     };
     const missions = missionsForToday(s.slotsMissions);
     const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
-    if (felled) counters.trees += 1;
+    counters.trees += trees;
     counters.ore += sold;
     set({
       forest,
@@ -2906,12 +3011,18 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistSlotsLazy();
     return {
       chop,
+      hollows,
       tree,
       index,
+      take: cut.take,
+      how: cut.how,
       hit,
+      dodged,
       felled,
+      storm,
       sold,
       lost,
+      toMill,
       planDone,
       parcels: tick.added,
       parcelsReady: tick.ready,
@@ -2924,7 +3035,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const f = s.forest;
     if (!f.pile.n) return 0;
     const value = Math.round(f.pile.value * forestMods(s.prison).sell);
-    const forest = { ...f, pile: { n: 0, value: 0 }, earned: f.earned + value };
+    const forest = { ...f, pile: emptyPileOf(), earned: f.earned + value };
     const missions = missionsForToday(s.slotsMissions);
     const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
     counters.ore += value;
@@ -3004,6 +3115,114 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return { rank, cost, buyout: extra };
   },
 
+  forestEnchant: (id, count = 1) => {
+    const s = get();
+    const f = s.forest;
+    const p = s.prison;
+    const cap = axeEnchCap(id, axeLevelOf(f.logs).level);
+    let l = f.ench[id];
+    let tokens = p.tokens;
+    let got = 0;
+    while (got < count && l < cap) {
+      const c = axeEnchCost(id, l);
+      if (tokens < c) break;
+      tokens -= c;
+      l += 1;
+      got += 1;
+    }
+    if (!got) return 0;
+    const forest = { ...f, ench: { ...f.ench, [id]: l } };
+    const prison = { ...p, tokens };
+    set({ forest, prison });
+    persistForest(forest);
+    persistPrison(prison);
+    return got;
+  },
+
+  forestMillUp: () => {
+    const s = get();
+    const f = s.forest;
+    if (f.mill.level >= MILL_MAX) return false;
+    const price = millCost(f.mill.level);
+    if (s.slotsBalance < price) return false;
+    // Сперва допилить по старой скорости, потом поднять уровень.
+    const now = Date.now();
+    const mill = { ...millTick(f.mill, now), level: f.mill.level + 1 };
+    const forest = { ...f, mill };
+    set({ forest, slotsBalance: s.slotsBalance - price });
+    persistForest(forest);
+    persistSlots(get());
+    return true;
+  },
+
+  forestMillLoad: () => {
+    const s = get();
+    const f = s.forest;
+    const res = millLoad(f.pile, millTick(f.mill, Date.now()));
+    if (!res.loaded) return { loaded: 0, premium: 0 };
+    const premium = Math.round(res.premium * forestMods(s.prison).sell);
+    const forest = { ...f, pile: res.pile, mill: res.mill, earned: f.earned + premium };
+    set({ forest, ...(premium ? { slotsBalance: s.slotsBalance + premium } : {}) });
+    persistForest(forest);
+    if (premium) persistSlots(get());
+    return { loaded: res.loaded, premium };
+  },
+
+  forestMillSell: () => {
+    const s = get();
+    const f = s.forest;
+    const mill = millTick(f.mill, Date.now());
+    const sale = boardsForSale(mill.boards, boardsReserve(s.prison.handle));
+    const value = Math.round(boardsValue(sale) * forestMods(s.prison).sell);
+    if (!value) return 0;
+    const boards = mill.boards.map((k, i) => k - sale[i]);
+    const forest = { ...f, mill: { ...mill, boards }, earned: f.earned + value };
+    const missions = missionsForToday(s.slotsMissions);
+    const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
+    counters.ore += value;
+    set({
+      forest,
+      slotsBalance: s.slotsBalance + value,
+      slotsMissions: { ...missions, counters },
+    });
+    persistForest(forest);
+    persistSlots(get());
+    return value;
+  },
+
+  forestCraftProp: () => {
+    const s = get();
+    const f = s.forest;
+    const p = s.prison;
+    const mill = millTick(f.mill, Date.now());
+    const boards = takeBoards(mill.boards, PROP_BOARDS, boardsReserve(p.handle));
+    if (!boards) return false;
+    const forest = { ...f, mill: { ...mill, boards } };
+    const prison = { ...p, items: { ...p.items, prop: p.items.prop + 1 } };
+    set({ forest, prison });
+    persistForest(forest);
+    persistPrison(prison);
+    return true;
+  },
+
+  forestCraftHandle: () => {
+    const s = get();
+    const f = s.forest;
+    const p = s.prison;
+    const h = HANDLES[p.handle];
+    if (!h) return false;
+    const mill = millTick(f.mill, Date.now());
+    if (mill.boards[h.species] < h.boards) return false;
+    const boards = [...mill.boards];
+    boards[h.species] -= h.boards;
+    const forest = { ...f, mill: { ...mill, boards } };
+    const prison = { ...p, handle: p.handle + 1 };
+    set({ forest, prison });
+    persistForest(forest);
+    persistPrison(prison);
+    return true;
+  },
+
   prisonAddTokens: (amount) => {
     const add = Math.max(0, Math.round(amount));
     if (!add) return;
@@ -3015,7 +3234,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   prisonReset: () => {
     const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
-    const forest: ForestState = { ...FOREST_START, tree: { seed: newTreeSeed(), cut: 0 } };
+    const forest = freshForest();
     set({ prison, forest });
     persistPrison(prison);
     persistForest(forest);
@@ -3023,7 +3242,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   gamesReset: () => {
     const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
-    const forest: ForestState = { ...FOREST_START, tree: { seed: newTreeSeed(), cut: 0 } };
+    const forest = freshForest();
     persistForest(forest);
     set({
       forest,
@@ -3214,6 +3433,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     // Второй энергетик подряд продлевает, а не сгорает впустую.
     if (id === 'energy') prison.energyUntil = Math.max(now, p.energyUntil) + ENERGY_MS;
     if (id === 'lens') prison.lensUntil = Math.max(now, p.lensUntil) + LENS_MS;
+    if (id === 'prop') prison.propUntil = Math.max(now, p.propUntil) + PROP_MS;
     set({ prison });
     persistPrison(prison);
     return true;

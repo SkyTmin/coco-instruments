@@ -48,9 +48,12 @@ import {
   FINDS,
   findsFound,
   findsMult,
+  handleRate,
+  HANDLES,
   hitDamage,
   ITEMS,
   modsOf,
+  PROP_MS,
   PERKS,
   perkPointsFree,
   pickLevelOf,
@@ -78,18 +81,42 @@ import type {
 } from '@/lib/prison';
 import type { ParcelOpen } from '@/store';
 import {
+  AXE_ENCHANTS,
+  axeEnchCap,
+  axeEnchCost,
+  axeLevelOf,
   AXES,
   axeDamage,
   axeSharpCost,
   AXE_SHARP_MAX,
   AXE_SHARP_STEP,
+  BOARD_MULT,
+  boardsForSale,
+  boardsReserve,
+  boardsValue,
   forestMods,
+  millCost,
+  MILL_MAX,
+  millQueueCap,
+  millRate,
+  millTick,
   pileCapacity,
   pileCost,
   PILE_MAX,
+  PROP_BOARDS,
+  SPECIES,
+  sumRow,
   TRUCK_PRICE,
 } from '@/lib/forest';
-import { findTexture, parcelTexture, petTexture, tearTexture } from '@/lib/prison-art';
+import type { AxeEnchId, ForestState } from '@/lib/forest';
+import {
+  barkTexture,
+  boardTexture,
+  findTexture,
+  parcelTexture,
+  petTexture,
+  tearTexture,
+} from '@/lib/prison-art';
 import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
 import { caseTick, coinDing, keyFound, payoutEnd, primeAudio, tierBreak } from '@/lib/sound';
@@ -194,6 +221,7 @@ export function KeyIcon({ size = 14 }: { size?: number }) {
 export type CampTab =
   | 'forge'
   | 'axes'
+  | 'mill'
   | 'enchant'
   | 'runes'
   | 'pets'
@@ -207,6 +235,7 @@ export type CampTab =
 const TABS: { id: CampTab; name: string }[] = [
   { id: 'forge', name: 'Кузница' },
   { id: 'axes', name: 'Топоры' },
+  { id: 'mill', name: 'Лесопилка' },
   { id: 'enchant', name: 'Чары' },
   { id: 'runes', name: 'Руны' },
   { id: 'pets', name: 'Питомцы' },
@@ -234,10 +263,13 @@ export function PrisonCamp({
   onSpend: () => void;
 }) {
   const p = useFinanceStore((s) => s.prison);
+  const f = useFinanceStore((s) => s.forest);
   const now = useNow(1000);
   const crew = crewYield(p, now);
   const miles = milesReady(p);
+  const mill = millTick(f.mill, now);
   const badge: Partial<Record<CampTab, ReactNode>> = {
+    mill: mill.level > 0 && sumRow(mill.boards) >= PROP_BOARDS ? '•' : null,
     cases: p.keys > 0 ? p.keys : null,
     crew: crew.blocks > 0 && crew.minutes >= 10 ? '•' : null,
     perks: perkPointsFree(p) > 0 ? perkPointsFree(p) : null,
@@ -267,6 +299,7 @@ export function PrisonCamp({
       <div className="pcamp-body">
         {tab === 'forge' && <ForgeTab onSpend={onSpend} />}
         {tab === 'axes' && <AxesTab onSpend={onSpend} />}
+        {tab === 'mill' && <MillTab now={now} onGain={onGain} onSpend={onSpend} />}
         {tab === 'enchant' && <EnchantTab />}
         {tab === 'runes' && <RunesTab />}
         {tab === 'pets' && <PetsTab />}
@@ -673,7 +706,7 @@ function ShopTab() {
       <div className="pcamp-purse">
         <TokenIcon size={18} /> <b>{fmt(p.tokens)}</b> токенов
       </div>
-      {ITEMS.map((it) => (
+      {ITEMS.filter((it) => it.price > 0).map((it) => (
         <Row
           key={it.id}
           icon={<span className="pforge__glyph">{it.glyph}</span>}
@@ -1856,7 +1889,7 @@ function AxesTab({ onSpend }: { onSpend: () => void }) {
   const forestBuy = useFinanceStore((s) => s.forestBuy);
   const cur = AXES[f.axe];
   const next = AXES[f.axe + 1];
-  const fm = forestMods(p);
+  const fm = forestMods(p, f);
   const dmg = axeDamage(f.axe, f.sharp) * fm.dmg;
   const buy = (what: 'axe' | 'sharp' | 'pile' | 'truck') => {
     primeAudio();
@@ -1948,9 +1981,409 @@ function AxesTab({ onSpend }: { onSpend: () => void }) {
           )
         }
       />
+      <AxeEnchSection f={f} p={p} />
       <p className="pcamp-note">
         Повалено деревьев: {fmt(f.felled)} · срублено брёвен: {fmt(f.logs)} · выручено:{' '}
         {fmt(f.earned)} монет
+      </p>
+    </div>
+  );
+}
+
+function axeEnchNow(id: AxeEnchId, f: ForestState, p: PrisonState): string {
+  const l = f.ench[id];
+  const fm = forestMods(p, f);
+  switch (id) {
+    case 'chips':
+      return `+${4 * l}% лишних брёвен`;
+    case 'resin':
+      return `токен с ${pct(fm.tokenChance)} брёвен`;
+    case 'sense':
+      return `${pct(fm.dodge)} увернуться · опасный сучок светится`;
+    case 'swing':
+      return `${pct(fm.swing)} · два бревна разом`;
+    case 'fell':
+      return `${pct(fm.fell)} · дерево с одного удара`;
+    case 'storm':
+      return `${pct(fm.storm)} · падающее валит соседнее`;
+  }
+}
+
+/** Чары топора: те же токены, что у кирки, свой уровень — от брёвен. */
+function AxeEnchSection({ f, p }: { f: ForestState; p: PrisonState }) {
+  const forestEnchant = useFinanceStore((s) => s.forestEnchant);
+  const [bulk, setBulk] = useState(1);
+  const lvl = axeLevelOf(f.logs);
+  return (
+    <>
+      <h4 className="pcamp-h">Чары топора</h4>
+      <div className="pcamp-purse">
+        <TokenIcon size={18} /> <b>{fmt(p.tokens)}</b> токенов
+        <span>общие с киркой</span>
+      </div>
+      <div className="pench-pick">
+        <span className="pench-pick__lv">
+          <AxeIcon axe={f.axe} size={20} /> Топор ур. {lvl.level}
+        </span>
+        <span className="pench-pick__bar">
+          <i style={{ transform: `scaleX(${lvl.need ? lvl.into / lvl.need : 1})` }} />
+        </span>
+        <span className="pench-pick__txt">
+          {lvl.need ? `ещё ${fmt(lvl.need - lvl.into)} брёвен` : 'максимум'}
+        </span>
+      </div>
+      <div className="pench-bulk" role="radiogroup" aria-label="Сколько уровней брать">
+        {BULK.map((b) => (
+          <button
+            key={b.n}
+            type="button"
+            role="radio"
+            aria-checked={bulk === b.n}
+            className={`pench-bulk__b${bulk === b.n ? ' is-on' : ''}`}
+            onClick={() => {
+              selectionChanged();
+              setBulk(b.n);
+            }}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+      {AXE_ENCHANTS.map((e) => {
+        const l = f.ench[e.id];
+        const cap = axeEnchCap(e.id, lvl.level);
+        const locked = cap === 0;
+        const maxed = l >= e.max;
+        // Сколько уровней возьмёт кнопка и во что встанет.
+        let k = 0;
+        let price = 0;
+        let tokens = p.tokens;
+        for (let x = l; k < bulk && x < cap; x++) {
+          const c = axeEnchCost(e.id, x);
+          if (tokens < c) break;
+          tokens -= c;
+          price += c;
+          k += 1;
+        }
+        const nextCost = l < cap ? axeEnchCost(e.id, l) : 0;
+        return (
+          <div key={e.id} className={`pforge__row${locked ? ' is-locked' : ''}`}>
+            <span className="pforge__ico">
+              <span className="pforge__glyph pench-glyph">{locked ? '🔒' : e.glyph}</span>
+            </span>
+            <span className="pforge__info">
+              <b>
+                {e.name}{' '}
+                <span className="pench-lvl">
+                  {l}/{maxed || locked ? e.max : cap}
+                </span>
+              </b>
+              <i>
+                {locked
+                  ? `Откроется на ${e.unlock} уровне топора`
+                  : l
+                    ? axeEnchNow(e.id, f, p)
+                    : e.per}
+                {!locked && !maxed && l >= cap && (
+                  <span className="pench-cap"> · потолок растёт с уровнем топора</span>
+                )}
+              </i>
+            </span>
+            {maxed ? (
+              <Done>Макс.</Done>
+            ) : locked ? (
+              <Done>ур. {e.unlock}</Done>
+            ) : l >= cap ? (
+              <Done>Потолок</Done>
+            ) : (
+              <button
+                type="button"
+                className="btn btn--sm pforge__buy"
+                disabled={k === 0}
+                onClick={() => {
+                  primeAudio();
+                  const got = forestEnchant(e.id, bulk);
+                  if (!got) {
+                    notifyWarning();
+                    return;
+                  }
+                  tierBreak(l + got >= e.max ? 2 : got >= 5 ? 1 : 0);
+                  notifySuccess();
+                }}
+              >
+                {k > 1 && <em className="pforge__k">+{k}</em>}
+                {shortMoney(k ? price : nextCost)} <TokenIcon size={12} />
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+// ---- Лесопилка: пилорама, доски, верстак -------------------------------------
+
+/** Дисковая пила: зубья по кругу, ступица. */
+export function MillIcon({ size = 30 }: { size?: number }) {
+  const teeth = Array.from({ length: 12 }, (_, i) => {
+    const a = (i / 12) * Math.PI * 2;
+    const b = a + Math.PI / 12;
+    const p = (r: number, t: number) =>
+      `${(16 + r * Math.cos(t)).toFixed(2)} ${(16 + r * Math.sin(t)).toFixed(2)}`;
+    return `M${p(11, a)} L${p(14.5, a + 0.12)} L${p(11, b)}`;
+  }).join(' ');
+  return (
+    <svg className="pmill-ico" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
+      <path d={teeth} fill="#c8ccd0" stroke="#2a2e34" strokeWidth=".7" strokeLinejoin="round" />
+      <circle cx="16" cy="16" r="11.2" fill="#aeb4ba" stroke="#2a2e34" strokeWidth=".9" />
+      <circle cx="16" cy="16" r="7" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="1" />
+      <circle cx="16" cy="16" r="3.4" fill="#d8402a" stroke="#2a1a10" strokeWidth=".8" />
+      <path d="M9 11 L12 9" stroke="rgba(255,255,255,.7)" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+const minutes = (m: number) =>
+  m < 1
+    ? 'меньше минуты'
+    : m < 60
+      ? `${Math.ceil(m)} мин`
+      : `${Math.floor(m / 60)} ч ${Math.ceil(m % 60)} мин`;
+
+function MillTab({
+  now,
+  onGain,
+  onSpend,
+}: {
+  now: number;
+  onGain: (from: number, to: number) => void;
+  onSpend: () => void;
+}) {
+  const f = useFinanceStore((s) => s.forest);
+  const p = useFinanceStore((s) => s.prison);
+  const balance = useFinanceStore((s) => s.slotsBalance);
+  const forestMillUp = useFinanceStore((s) => s.forestMillUp);
+  const forestMillLoad = useFinanceStore((s) => s.forestMillLoad);
+  const forestMillSell = useFinanceStore((s) => s.forestMillSell);
+  const forestCraftProp = useFinanceStore((s) => s.forestCraftProp);
+  const forestCraftHandle = useFinanceStore((s) => s.forestCraftHandle);
+  const mill = millTick(f.mill, now);
+  const fm = forestMods(p, f);
+  const reserve = boardsReserve(p.handle);
+  const sale = boardsForSale(mill.boards, reserve);
+  const saleValue = Math.round(boardsValue(sale) * fm.sell);
+  const queued = sumRow(mill.queue);
+  const boards = sumRow(mill.boards);
+  const cap = millQueueCap(mill.level);
+  const rate = millRate(mill.level);
+  const nextH = HANDLES[p.handle];
+  const curH = HANDLES[p.handle - 1];
+  const kept = reserve.reduce((a, k, i) => a + Math.min(k, mill.boards[i]), 0);
+
+  const up = () => {
+    primeAudio();
+    if (!forestMillUp()) {
+      notifyWarning();
+      return;
+    }
+    onSpend();
+    coinDing();
+    tierBreak(1);
+    notifySuccess();
+  };
+  const load = () => {
+    primeAudio();
+    const from = useFinanceStore.getState().slotsBalance;
+    const r = forestMillLoad();
+    if (!r.loaded) {
+      notifyWarning();
+      return;
+    }
+    if (r.premium) onGain(from, from + r.premium);
+    tapLight();
+    notifySuccess();
+  };
+  const sell = () => {
+    primeAudio();
+    const from = useFinanceStore.getState().slotsBalance;
+    const v = forestMillSell();
+    if (!v) {
+      notifyWarning();
+      return;
+    }
+    onGain(from, from + v);
+    coinDing();
+    coinDing(0.08);
+    notifySuccess();
+  };
+
+  if (mill.level <= 0) {
+    return (
+      <div className="pforge">
+        <div className="pforge__now">
+          <MillIcon size={40} />
+          <span>
+            <b>Пилорамы нет</b>
+            <i>Брёвна пока уходят кругляком</i>
+          </span>
+        </div>
+        <Row
+          icon={<MillIcon size={30} />}
+          title="Поставить пилораму"
+          text={`${Math.round(millRate(1))} брёвен в минуту, доска в ${BOARD_MULT.toLocaleString('ru-RU')} раза дороже бревна`}
+          action={<Buy price={millCost(0)} can={balance >= millCost(0)} onClick={up} />}
+        />
+        <p className="pcamp-note">
+          Пилорама пилит брёвна в доски сама — и пока ты в шахте, и пока телефон в кармане. Из досок
+          сбивают крепь для шахты и точат рукояти для кирки и топора.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pforge">
+      <div className="pforge__now">
+        <MillIcon size={40} />
+        <span>
+          <b>Пилорама {mill.level} ур.</b>
+          <i>
+            {Math.round(rate)} брёвен в минуту
+            {curH ? ` · ${curH.name.toLowerCase()} +${Math.round(curH.rate * 100)}%` : ''}
+          </i>
+        </span>
+      </div>
+      <div className="pmill-queue">
+        <span className="pmill-queue__top">
+          <b>
+            В очереди {fmt(queued)} / {fmt(cap)}
+          </b>
+          <i>{queued ? `допилит через ${minutes(queued / rate)}` : 'стоит без дела'}</i>
+        </span>
+        <span className="pmill-queue__bar">
+          <i style={{ transform: `scaleX(${Math.min(1, queued / cap)})` }} />
+        </span>
+        <button
+          type="button"
+          className="btn btn--sm btn--block"
+          disabled={!f.pile.n || queued >= cap}
+          onClick={load}
+        >
+          {f.pile.n ? `Загрузить штабель · ${fmt(f.pile.n)} брёвен` : 'Штабель пуст'}
+        </button>
+      </div>
+      <div className="pmill-boards">
+        {mill.boards.every((k) => k === 0) ? (
+          <span className="pmill-boards__empty">Досок пока нет</span>
+        ) : (
+          mill.boards.map((k, i) =>
+            k > 0 ? (
+              <span key={i} className="pmill-board" title={SPECIES[i].name}>
+                <img src={boardTexture(i)} alt="" />
+                {fmt(k)}
+              </span>
+            ) : null,
+          )
+        )}
+      </div>
+      <button
+        type="button"
+        className="btn btn--primary btn--block"
+        disabled={!saleValue}
+        onClick={sell}
+      >
+        {saleValue ? (
+          <>
+            Продать доски · {shortMoney(saleValue)} <CoinIcon size={13} />
+          </>
+        ) : (
+          'Продавать пока нечего'
+        )}
+      </button>
+      {kept > 0 && nextH && (
+        <p className="pmill-keep">
+          {fmt(kept)} досок {SPECIES[nextH.species].gen} отложено на рукоять — продажа их не трогает
+        </p>
+      )}
+      {mill.level < MILL_MAX ? (
+        <Row
+          icon={<MillIcon size={30} />}
+          title={`Пилорама ${mill.level + 1} ур.`}
+          text={`${Math.round(rate)} → ${Math.round(millRate(mill.level + 1))} брёвен в минуту`}
+          action={
+            <Buy price={millCost(mill.level)} can={balance >= millCost(mill.level)} onClick={up} />
+          }
+        />
+      ) : (
+        <Row
+          icon={<MillIcon size={30} />}
+          title="Пилорама на пределе"
+          text="Быстрее пилит только «Урал» в руках"
+          action={<Done />}
+        />
+      )}
+
+      <h4 className="pcamp-h">Верстак</h4>
+      <Row
+        icon={<span className="pforge__glyph">⛩</span>}
+        title={<>Крепь {p.items.prop > 0 && <span className="pench-lvl">×{p.items.prop}</span>}</>}
+        text={`${PROP_BOARDS} досок любых пород: в шахте ${Math.round(PROP_MS / 60_000)} минут каждый второй блок — порода выше`}
+        action={
+          <button
+            type="button"
+            className="btn btn--sm pforge__buy"
+            disabled={boards < PROP_BOARDS}
+            onClick={() => {
+              primeAudio();
+              if (!forestCraftProp()) {
+                notifyWarning();
+                return;
+              }
+              tierBreak(0);
+              notifySuccess();
+            }}
+          >
+            Сбить
+          </button>
+        }
+      />
+      {nextH ? (
+        <Row
+          icon={<img className="pmill-hico" src={boardTexture(nextH.species)} alt="" />}
+          title={nextH.name}
+          text={`${fmt(Math.min(mill.boards[nextH.species], nextH.boards))}/${nextH.boards} досок ${SPECIES[nextH.species].gen} · +${Math.round(nextH.rate * 100)}% к скорости кирки и топора${curH ? ` (вместо ${Math.round(handleRate(p.handle) * 100)}%)` : ''}`}
+          action={
+            <button
+              type="button"
+              className="btn btn--sm pforge__buy"
+              disabled={mill.boards[nextH.species] < nextH.boards}
+              onClick={() => {
+                primeAudio();
+                if (!forestCraftHandle()) {
+                  notifyWarning();
+                  return;
+                }
+                tierBreak(2);
+                burstConfetti(40, ['#e8c89a', '#ffe08a', '#fff']);
+                notifySuccess();
+              }}
+            >
+              Выточить
+            </button>
+          }
+        />
+      ) : (
+        <Row
+          icon={<img className="pmill-hico" src={barkTexture(9)} alt="" />}
+          title="Рукоять из карельской берёзы"
+          text="Лучше рукояти не бывает"
+          action={<Done />}
+        />
+      )}
+      <p className="pcamp-note">
+        Пилит дорогие породы вперёд. Лесовоз везёт полный штабель сюда, пока в очереди есть место;
+        свиль, капокорень и дрова с кроны оплачиваются сразу при загрузке.
       </p>
     </div>
   );

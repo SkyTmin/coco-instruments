@@ -366,8 +366,11 @@ export function PrisonPage() {
     energy: Math.max(0, prison.energyUntil - nowTick),
     frenzy: Math.max(0, prison.frenzyUntil - nowTick),
     lens: Math.max(0, prison.lensUntil - nowTick),
+    prop: Math.max(0, prison.propUntil - nowTick),
   };
-  const anyBuff = buffs.energy > 0 || buffs.frenzy > 0 || buffs.lens > 0;
+  // Крепь в ряду расходников — только когда её есть из чего сбить.
+  const millLevel = useFinanceStore((s) => s.forest.mill.level);
+  const anyBuff = buffs.energy > 0 || buffs.frenzy > 0 || buffs.lens > 0 || buffs.prop > 0;
   useTicker(anyBuff);
   // Подарок в шапке: награды дня общие с автоматами, счётчик — тот же.
   const [rewardsNow, setRewardsNow] = useState(() => Date.now());
@@ -1330,7 +1333,8 @@ export function PrisonPage() {
     const st = useFinanceStore.getState().prison;
     if (st.items[id] <= 0) {
       tapLight();
-      setCamp('shop');
+      // Крепь не продаётся — её сбивают на лесопилке.
+      setCamp(id === 'prop' ? 'mill' : 'shop');
       return;
     }
     if (id === 'bomb3' || id === 'bomb5') {
@@ -1354,7 +1358,13 @@ export function PrisonPage() {
     if (!prisonUseItem(id)) return;
     notifySuccess();
     tierBreak(1);
-    say(id === 'energy' ? 'Энергетик: кирка вдвое быстрее' : 'Лупа: видно, что лежит ярусом ниже');
+    say(
+      id === 'energy'
+        ? 'Энергетик: кирка вдвое быстрее'
+        : id === 'prop'
+          ? 'Крепь: каждый второй блок — выше'
+          : 'Лупа: видно, что лежит ярусом ниже',
+    );
   };
 
   // ---- Пальцы: тап, удержание, ведение по жиле ---------------------------
@@ -1671,7 +1681,10 @@ export function PrisonPage() {
     );
   }
 
-  const sec = (ms: number) => `${Math.ceil(ms / 1000)} с`;
+  const sec = (ms: number) => {
+    const t = Math.ceil(ms / 1000);
+    return t < 100 ? `${t} с` : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  };
 
   return (
     <Screen
@@ -1845,6 +1858,7 @@ export function PrisonPage() {
                 <span className="pbuff pbuff--energy">⚡ {sec(buffs.energy)}</span>
               )}
               {buffs.lens > 0 && <span className="pbuff pbuff--lens">🔍 {sec(buffs.lens)}</span>}
+              {buffs.prop > 0 && <span className="pbuff pbuff--prop">⛩ {sec(buffs.prop)}</span>}
             </div>
           )}
           {prison.parcels.length > 0 && (
@@ -1951,21 +1965,23 @@ export function PrisonPage() {
         </div>
 
         <div className="pitems">
-          {ITEMS.map((it) => {
-            const n = prison.items[it.id];
-            return (
-              <button
-                key={it.id}
-                type="button"
-                className={`pitem${n ? '' : ' is-empty'}${arming === it.id ? ' is-armed' : ''}`}
-                aria-label={`${it.name}: ${n}`}
-                onClick={() => applyItem(it.id)}
-              >
-                <span className="pitem__glyph">{it.glyph}</span>
-                <i className="pitem__n">{n || '+'}</i>
-              </button>
-            );
-          })}
+          {ITEMS.filter((it) => it.id !== 'prop' || prison.items.prop > 0 || millLevel > 0).map(
+            (it) => {
+              const n = prison.items[it.id];
+              return (
+                <button
+                  key={it.id}
+                  type="button"
+                  className={`pitem${n ? '' : ' is-empty'}${arming === it.id ? ' is-armed' : ''}`}
+                  aria-label={`${it.name}: ${n}`}
+                  onClick={() => applyItem(it.id)}
+                >
+                  <span className="pitem__glyph">{it.glyph}</span>
+                  <i className="pitem__n">{n || '+'}</i>
+                </button>
+              );
+            },
+          )}
         </div>
 
         <div className="pbar">

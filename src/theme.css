@@ -20047,6 +20047,209 @@ input[type='datetime-local'] {
   flex: none;
 }
 
+/* ---- Лесопилка (v2.53) ---------------------------------------------------- */
+.pcamp-h {
+  margin: 16px 0 2px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pmill-ico {
+  display: block;
+  flex: none;
+}
+.pmill-queue {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.pmill-queue__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.pmill-queue__top i {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+}
+.pmill-queue__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.pmill-queue__bar i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #b07a44, #f0d49a);
+}
+.pmill-boards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+}
+.pmill-boards__empty {
+  font-size: 12px;
+  color: var(--muted);
+}
+.pmill-board {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.pmill-board img,
+.pforge__row .pmill-hico {
+  width: 22px;
+  height: 22px;
+  image-rendering: pixelated;
+}
+.pmill-keep {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+.pbuff--prop {
+  border-color: #e8c48a;
+  color: #ffe7c2;
+}
+
+/* С пилорамой в баре три кнопки: штабель теряет картинку, но не цену. */
+.pbar.has-mill .fpile__ico {
+  display: none;
+}
+.pbar.has-mill .pbag {
+  padding-inline: 11px;
+}
+.pbar.has-mill .pbag__sell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Кнопка пилорамы на делянке: между штабелем и лагерем. */
+.fmill-btn {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 58px;
+  padding: 5px 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 200, 130, 0.18);
+  background: linear-gradient(180deg, #4a3a2a, #2a2016);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.18),
+    0 6px 16px rgba(0, 0, 0, 0.35);
+  color: #f7e6cc;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.fmill-btn:active {
+  transform: scale(0.97);
+}
+.fmill-btn__bar {
+  position: relative;
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.14);
+}
+.fmill-btn__bar i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: #f0d49a;
+}
+/* Пила крутится только пока в очереди есть брёвна: вращение — трансформом. */
+.fmill-btn.is-busy .pmill-ico {
+  animation: fmill-spin 0.9s linear infinite;
+}
+@keyframes fmill-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fmill-btn__n {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 9px;
+  background: #e8c48a;
+  color: #2a1a0c;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  box-shadow: 0 0 0 2px #2a2016;
+}
+
+/* Чутьё: опасный сучок подсвечен. Свечение — статичная тень, дышит
+   прозрачностью отдельного слоя. */
+.flog__branch.is-danger {
+  filter: drop-shadow(0 0 2px #ff5a3a) drop-shadow(0 0 1px #ff5a3a);
+}
+.flog__branch.is-danger::after {
+  content: '';
+  position: absolute;
+  inset: 10%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 90, 58, 0.55), rgba(255, 90, 58, 0) 70%);
+  animation: fdanger 0.8s ease-in-out infinite alternate;
+}
+@keyframes fdanger {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.pfloat--swing {
+  font-size: 20px;
+  color: #ffe08a;
+}
+.pfloat--fellx {
+  font-size: 30px;
+  letter-spacing: 0.06em;
+  color: #9be38a;
+}
+.pfloat--storm {
+  font-size: 26px;
+  letter-spacing: 0.06em;
+  color: #bfe4ff;
+}
+.pfloat--dodge {
+  font-size: 16px;
+  color: #b8f4e6;
+}
+.pfloat--mill {
+  font-size: 14px;
+  color: #f0d49a;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pmine-frame::after,
   .pfindcard,
@@ -20067,7 +20270,9 @@ input[type='datetime-local'] {
   .preveal__card,
   .pcell__glow,
   .fscene__snow,
-  .ftree__aura {
+  .ftree__aura,
+  .fmill-btn.is-busy .pmill-ico,
+  .flog__branch.is-danger::after {
     animation: none;
   }
 }

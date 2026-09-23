@@ -955,6 +955,52 @@ export function barkTexture(species: number): string {
   return url;
 }
 
+const boardCache = new Map<number, string>();
+
+/**
+ * Доски породы: три строганые плахи стопкой, срез — цвет древесины, торцы
+ * темнее, волокно продольными штрихами. Строганое дерево светлее коры —
+ * так доски и брёвна не путаются в одном списке.
+ */
+export function boardTexture(species: number): string {
+  const hit = boardCache.get(species);
+  if (hit !== undefined) return hit;
+  const sp = SPECIES[species];
+  if (!sp) return '';
+  const rnd = rng32(species * 4219 + 5);
+  const wood = hex(sp.wood);
+  const dark = mix(wood, hex('#5a3a1e'), 0.55);
+  const light = mix(wood, WHITE, 0.35);
+  const px = new Pixels();
+  const planks = [
+    { y: 3, x0: 2, x1: 13 },
+    { y: 7, x0: 1, x1: 14 },
+    { y: 11, x0: 2, x1: 15 },
+  ];
+  for (const pl of planks) {
+    for (let y = pl.y; y < pl.y + 4; y++)
+      for (let x = pl.x0; x <= pl.x1; x++) {
+        const edge = y === pl.y + 3 || x === pl.x0 || x === pl.x1;
+        const top = y === pl.y;
+        px.set(
+          x,
+          y,
+          edge ? dark : top ? light : mix(wood, rnd() < 0.5 ? light : dark, rnd() * 0.2),
+        );
+      }
+    // Волокно: два штриха вдоль плахи.
+    for (let k = 0; k < 2; k++) {
+      const y = pl.y + 1 + k;
+      const x0 = pl.x0 + 1 + Math.floor(rnd() * 4);
+      for (let x = x0; x < Math.min(pl.x1, x0 + 4 + Math.floor(rnd() * 5)); x++)
+        px.set(x, y, mix(wood, dark, 0.45));
+    }
+  }
+  const url = px.toUrl();
+  boardCache.set(species, url);
+  return url;
+}
+
 const crownCache = new Map<string, string>();
 
 /** Крона. `seid` — сейд-сосна: хвоя с бирюзовым светом. */

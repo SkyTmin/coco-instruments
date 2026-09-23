@@ -893,6 +893,7 @@ export interface ModsSource {
   pet?: PetId | null;
   pets?: Pets;
   miles?: string[];
+  handle?: number;
 }
 
 export function modsOf(p: ModsSource): Mods {
@@ -913,7 +914,7 @@ export function modsOf(p: ModsSource): Mods {
   return {
     // Сноровка: каждый уровень кирки — ещё полпроцента к урону.
     dmg: (1 + 0.1 * lv('power')) * (1 + PICK_LEVEL_DMG * (level - 1)) * (1 + b.dmg),
-    rate: (1 + 0.08 * k.grip) * (1 + b.rate),
+    rate: (1 + 0.08 * k.grip) * (1 + b.rate) * (1 + handleRate(p.handle)),
     sell: sellMult(p.prestige) * (1 + 0.06 * k.dealer) * findsMult(p.finds ?? {}) * (1 + b.sell),
     fortune: 0.06 * lv('fortune') + b.loot,
     vein: 0.025 * lv('vein') * proc,
@@ -1500,7 +1501,7 @@ export const PARCEL_OVERFLOW: Record<CaseTier, number> = {
 // Расходники: за токены в лавке, позже — из сундуков.
 // ---------------------------------------------------------------------------
 
-export type ItemId = 'bomb3' | 'bomb5' | 'charge' | 'energy' | 'lens';
+export type ItemId = 'bomb3' | 'bomb5' | 'charge' | 'energy' | 'lens' | 'prop';
 
 export interface Item {
   id: ItemId;
@@ -1517,13 +1518,55 @@ export const ITEMS: Item[] = [
   { id: 'charge', name: 'Заряд', text: 'Снимает весь верхний ярус', glyph: '💥', price: 180 },
   { id: 'energy', name: 'Энергетик', text: 'Кирка вдвое быстрее минуту', glyph: '⚡', price: 40 },
   { id: 'lens', name: 'Лупа', text: 'Полторы минуты видно ярус ниже', glyph: '🔍', price: 20 },
+  // Крепь в лавке не продаётся (цена 0): её сбивают на лесопилке из досок.
+  {
+    id: 'prop',
+    name: 'Крепь',
+    text: 'Десять минут каждый второй блок — порода выше',
+    glyph: '⛩',
+    price: 0,
+  },
 ];
 
 export const itemOf = (id: ItemId): Item => ITEMS.find((i) => i.id === id)!;
 
 export type Items = Record<ItemId, number>;
 
-export const NO_ITEMS: Items = { bomb3: 0, bomb5: 0, charge: 0, energy: 0, lens: 0 };
+export const NO_ITEMS: Items = { bomb3: 0, bomb5: 0, charge: 0, energy: 0, lens: 0, prop: 0 };
+
+/**
+ * Крепь — брёвна, которыми подпирают свод. С ней лезут в забой, куда без
+ * неё не пускают: десять минут Перековка сильнее на `PROP_REFORGE`.
+ * Делается из досок лесопилки — первый мост из леса в шахту.
+ */
+export const PROP_MS = 10 * 60_000;
+export const PROP_REFORGE = 0.5;
+export const PROP_BOARDS = 20;
+
+/**
+ * Рукояти — второй мост: из досок редких пород. Ставятся на кирку и топор
+ * разом и ускоряют удар. Каждая следующая заменяет прошлую, а не
+ * складывается с ней. `species` — номер породы в лесу (`forest.ts`).
+ */
+export interface Handle {
+  id: string;
+  name: string;
+  species: number;
+  boards: number;
+  rate: number;
+}
+
+export const HANDLES: Handle[] = [
+  { id: 'birch', name: 'Берёзовая рукоять', species: 3, boards: 40, rate: 0.03 },
+  { id: 'larch', name: 'Лиственничная рукоять', species: 7, boards: 60, rate: 0.06 },
+  { id: 'karelian', name: 'Рукоять из карельской берёзы', species: 9, boards: 80, rate: 0.1 },
+];
+
+/** Прибавка к скорости от рукояти: 0 — родная. */
+export function handleRate(handle: number | undefined): number {
+  const h = HANDLES[(handle ?? 0) - 1];
+  return h ? h.rate : 0;
+}
 
 /** Клетки, которые снесёт бомба радиуса `r` с центром в `cell`. */
 export function blastCells(cell: number, r: number): number[] {
@@ -2239,6 +2282,10 @@ export interface PrisonState {
   energyUntil: number;
   lensUntil: number;
   frenzyUntil: number;
+  /** До какого времени стоит крепь (v2.53). */
+  propUntil: number;
+  /** Рукоять из досок: 0 — родная, иначе номер в `HANDLES` + 1. */
+  handle: number;
   keys: number;
   /** Коллекция: сколько экземпляров каждой находки нашлось. */
   finds: Finds;
@@ -2298,6 +2345,8 @@ export const PRISON_START: PrisonState = {
   energyUntil: 0,
   lensUntil: 0,
   frenzyUntil: 0,
+  propUntil: 0,
+  handle: 0,
   keys: 0,
   finds: {},
   crew: 0,
@@ -2362,6 +2411,8 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     energyUntil: int(raw.energyUntil, 0, 1e14, 0),
     lensUntil: int(raw.lensUntil, 0, 1e14, 0),
     frenzyUntil: int(raw.frenzyUntil, 0, 1e14, 0),
+    propUntil: int(raw.propUntil, 0, 1e14, 0),
+    handle: int(raw.handle, 0, HANDLES.length, 0),
     keys: int(raw.keys, 0, 1e7, 0),
     finds: Object.fromEntries(
       FINDS.map((f) => [f.id, int(raw.finds?.[f.id], 0, 1e6, 0)]).filter(([, n]) => n),
