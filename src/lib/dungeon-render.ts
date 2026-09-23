@@ -1,7 +1,9 @@
-// Рисовальщик подземелья. Мир рисуется в маленький буфер «игровых пикселей»
-// (клетка — 16), потом один раз растягивается на экран ЦЕЛЫМ множителем:
-// пиксели ровные, как в шахте, и рисовать нужно в десятки раз меньше точек.
-// Текст (цифры урона) — уже на экранной канве, чтобы был чётким.
+// Рисовальщик подземелья. Мир меряется «игровыми пикселями» (клетка — 16), а
+// рисуется СРАЗУ на экран с целым множителем: пиксель спрайта — ровный
+// квадрат из нескольких точек экрана, но сдвигаться он может на одну точку.
+// Первая сборка рисовала в маленький буфер и растягивала его: камера и
+// спрайты прыгали целыми игровыми пикселями (7 точек на телефоне), и при
+// ходьбе всё тряслось — владелец: «очень быстро, очень сильно трясёт».
 //
 // Порядок кадра: куски карты из кеша → метки угроз на полу → предметы, мобы
 // и герой по глубине → частицы и следы ударов → свет → растяжка → цифры.
@@ -106,10 +108,17 @@ function noise(t: number, seed: number): number {
   return h(i) * (1 - u) + h(i + 1) * u;
 }
 
+interface Ghost {
+  x: number;
+  y: number;
+  img: HTMLCanvasElement;
+  life: number;
+}
+
 export class DungeonRenderer {
   readonly view: HTMLCanvasElement;
   private vctx: CanvasRenderingContext2D;
-  private buf: HTMLCanvasElement;
+  /** Контекст рисования мира — экранная канва с масштабом. */
   private bctx: CanvasRenderingContext2D;
   private light: HTMLCanvasElement;
   private lctx: CanvasRenderingContext2D;
@@ -140,12 +149,18 @@ export class DungeonRenderer {
   private blasts: { x: number; y: number; r: number; life: number }[] = [];
   /** Глаза крыс светятся поверх темноты — видно, откуда лезут. */
   private eyes: { x: number; y: number; c: string }[] = [];
+  /** Шлейф рывка: силуэты героя, тающие за ним. */
+  private ghosts: Ghost[] = [];
+  private ghostT = 0;
+  private dt = 0;
+  /** Упреждение камеры по ходу — сглажено отдельно от самой камеры. */
+  private leadX = 0;
+  private leadY = 0;
 
   constructor(view: HTMLCanvasElement) {
     this.view = view;
     this.vctx = view.getContext('2d')!;
-    this.buf = document.createElement('canvas');
-    this.bctx = this.buf.getContext('2d')!;
+    this.bctx = this.vctx;
     this.light = document.createElement('canvas');
     this.lctx = this.light.getContext('2d')!;
   }
@@ -158,17 +173,17 @@ export class DungeonRenderer {
     this.view.width = w;
     this.view.height = h;
     this.scale = Math.max(1, Math.floor(w / 150));
-    this.gw = Math.ceil(w / this.scale);
-    this.gh = Math.ceil(h / this.scale);
-    this.buf.width = this.gw;
-    this.buf.height = this.gh;
-    this.light.width = this.gw;
-    this.light.height = this.gh;
-    this.ox = Math.floor((w - this.gw * this.scale) / 2);
-    this.oy = Math.floor((h - this.gh * this.scale) / 2);
-    this.bctx.imageSmoothingEnabled = false;
+    this.gw = w / this.scale;
+    this.gh = h / this.scale;
+    this.light.width = Math.ceil(this.gw) + 2;
+    this.light.height = Math.ceil(this.gh) + 2;
+    this.ox = 0;
+    this.oy = 0;
     this.vctx.imageSmoothingEnabled = false;
   }
+
+  /** Координата в игровых пикселях, прижатая к точке экрана. */
+  private q = (v: number) => Math.round(v * this.scale) / this.scale;
 
   /** Экранные CSS-координаты точки мира — для тапа по мобу. */
   toScreen(x: number, y: number): { x: number; y: number } {
@@ -404,19 +419,26 @@ export class DungeonRenderer {
 
   frame(sim: Sim, gear: Gear, dt: number): void {
     this.time += dt;
+    this.dt = dt;
     const w = sim.world;
     const h = sim.hero;
     const g = this.bctx;
     // Камера: впереди по ходу, герой чуть ниже середины — вглубь смотрим вверх.
-    const lead = 0.35;
-    const tx = (h.x + h.vx * lead) * TS;
-    const ty = (h.y + h.vy * lead) * TS - this.gh * 0.1;
+    // Упреждение сглажено само по себе и не берёт скорость рывка: иначе каждый
+    // рывок и каждое скольжение вдоль стены дёргали бы весь кадр.
+    if (h.mode !== 'dash') {
+      const kl = 1 - Math.exp(-2.5 * dt);
+      this.leadX += (h.vx * 0.3 * TS - this.leadX) * kl;
+      this.leadY += (h.vy * 0.3 * TS - this.leadY) * kl;
+    }
+    const tx = h.x * TS + this.leadX;
+    const ty = h.y * TS + this.leadY - this.gh * 0.1;
     if (!this.camReady) {
       this.camX = tx;
       this.camY = ty;
       this.camReady = true;
     }
-    const k = 1 - Math.exp(-7 * dt);
+    const k = 1 - Math.exp(-6 * dt);
     this.camX += (tx - this.camX) * k;
     this.camY += (ty - this.camY) * k;
     const maxX = w.w * TS - this.gw / 2;
@@ -430,13 +452,16 @@ export class DungeonRenderer {
     this.trauma = Math.max(0, this.trauma - dt * 1.4);
     this.shakeT += dt * 30;
     const sh = reduce() ? 0 : this.trauma * this.trauma;
-    const sx = Math.round(noise(this.shakeT, 1) * 5 * sh);
-    const sy = Math.round(noise(this.shakeT, 2) * 5 * sh);
-    const left = Math.round(this.camX - this.gw / 2) + sx;
-    const top = Math.round(this.camY - this.gh / 2) + sy;
+    const sx = noise(this.shakeT, 1) * 4 * sh;
+    const sy = noise(this.shakeT, 2) * 4 * sh;
+    const left = this.q(this.camX - this.gw / 2 + sx);
+    const top = this.q(this.camY - this.gh / 2 + sy);
 
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.imageSmoothingEnabled = false;
     g.fillStyle = '#07060a';
-    g.fillRect(0, 0, this.gw, this.gh);
+    g.fillRect(0, 0, this.view.width, this.view.height);
+    g.setTransform(this.scale, 0, 0, this.scale, 0, 0);
 
     // Куски карты.
     const c0 = Math.floor(left / (CHUNK * TS));
@@ -491,8 +516,8 @@ export class DungeonRenderer {
           g.fill();
           g.drawImage(
             img,
-            Math.round(p.x * TS - left - img.width / 2),
-            Math.round(bottom * TS - top - img.height),
+            this.q(p.x * TS - left - img.width / 2),
+            this.q(bottom * TS - top - img.height),
           );
         },
       });
@@ -506,8 +531,8 @@ export class DungeonRenderer {
           draw: () =>
             g.drawImage(
               img,
-              Math.round((o.x + 0.5) * TS - left - img.width / 2),
-              Math.round((o.y + 2) * TS - top - img.height),
+              this.q((o.x + 0.5) * TS - left - img.width / 2),
+              this.q((o.y + 2) * TS - top - img.height),
             ),
         });
       }
@@ -516,11 +541,7 @@ export class DungeonRenderer {
         list.push({
           y: o.y + 1,
           draw: () =>
-            g.drawImage(
-              img,
-              Math.round(o.x * TS - left),
-              Math.round((o.y + 1) * TS - top - img.height),
-            ),
+            g.drawImage(img, this.q(o.x * TS - left), this.q((o.y + 1) * TS - top - img.height)),
         });
       }
     }
@@ -534,11 +555,11 @@ export class DungeonRenderer {
         y: b.y,
         draw: () => {
           const img = propArt('bomb');
-          g.drawImage(img, Math.round(b.x * TS - left - 4), Math.round(b.y * TS - top - 5));
+          g.drawImage(img, this.q(b.x * TS - left - 4), this.q(b.y * TS - top - 5));
           // Фитиль искрит, тем чаще, чем меньше осталось.
           if (Math.sin(this.time * (8 + (1.6 - b.fuse) * 20)) > 0) {
             g.fillStyle = '#fff3b0';
-            g.fillRect(Math.round(b.x * TS - left + 3), Math.round(b.y * TS - top - 6), 1, 1);
+            g.fillRect(this.q(b.x * TS - left + 3), this.q(b.y * TS - top - 6), 1, 1);
           }
         },
       });
@@ -551,12 +572,8 @@ export class DungeonRenderer {
           const img = itemArt(d.kind);
           const bob = d.z <= 0 ? Math.sin(this.time * 4 + d.id) * 0.8 : 0;
           g.fillStyle = 'rgba(0,0,0,0.3)';
-          g.fillRect(Math.round(d.x * TS - left - 3), Math.round(d.y * TS - top + 2), 6, 1);
-          g.drawImage(
-            img,
-            Math.round(d.x * TS - left - 5),
-            Math.round((d.y - d.z) * TS - top - 8 + bob),
-          );
+          g.fillRect(this.q(d.x * TS - left - 3), this.q(d.y * TS - top + 2), 6, 1);
+          g.drawImage(img, this.q(d.x * TS - left - 5), this.q((d.y - d.z) * TS - top - 8 + bob));
         },
       });
     }
@@ -590,22 +607,8 @@ export class DungeonRenderer {
       g.fillRect(0, 0, this.gw, this.gh);
     }
 
-    // На экран.
-    const v = this.vctx;
-    v.imageSmoothingEnabled = false;
-    v.fillStyle = '#07060a';
-    v.fillRect(0, 0, this.view.width, this.view.height);
-    v.drawImage(
-      this.buf,
-      0,
-      0,
-      this.gw,
-      this.gh,
-      this.ox,
-      this.oy,
-      this.gw * this.scale,
-      this.gh * this.scale,
-    );
+    // Цифры — уже в точках экрана.
+    g.setTransform(1, 0, 0, 1, 0, 0);
     this.drawFloats(dt, left, top);
   }
 
@@ -736,8 +739,8 @@ export class DungeonRenderer {
   private drawHero(sim: Sim, gear: Gear, left: number, top: number): void {
     const g = this.bctx;
     const h = sim.hero;
-    const px = Math.round(h.x * TS - left);
-    const py = Math.round(h.y * TS - top);
+    const px = this.q(h.x * TS - left);
+    const py = this.q(h.y * TS - top);
     // Тень.
     g.fillStyle = 'rgba(0,0,0,0.35)';
     g.beginPath();
@@ -767,11 +770,41 @@ export class DungeonRenderer {
               ? 0
               : 1
             : 0;
-    const blink = h.inv > 0 && h.inv < 0.5 && Math.floor(this.time * 20) % 2 === 0;
+    // Мигает только неуязвимость после укуса. Рывок тоже даёт неуязвимость,
+    // и мигание на нём выглядело как исчезновение — отсюда «телепорт».
+    const blink =
+      h.mode !== 'dash' && h.inv > 0.08 && h.inv < 0.5 && Math.floor(this.time * 20) % 2 === 0;
     const img =
       h.flash > 0
         ? heroFlash(gear, dir, anim, frame, leftFace)
         : heroFrame(gear, dir, anim, frame, leftFace);
+    // Шлейф рывка: силуэты остаются на пути и тают — глаз видит, КУДА
+    // пролетел герой, а не что он пропал в одном месте и возник в другом.
+    if (h.mode === 'dash') {
+      this.ghostT -= this.dt;
+      if (this.ghostT <= 0) {
+        this.ghostT = 0.03;
+        this.ghosts.push({
+          x: h.x,
+          y: h.y,
+          img: heroFlash(gear, dir, anim, frame, leftFace),
+          life: 0,
+        });
+        this.puff(h.x, h.y + 0.25, 'rgba(170,150,125,0.55)', 1);
+      }
+    } else this.ghostT = 0;
+    if (this.ghosts.length) {
+      const keep: Ghost[] = [];
+      for (const gh of this.ghosts) {
+        gh.life += this.dt;
+        if (gh.life >= 0.24) continue;
+        keep.push(gh);
+        g.globalAlpha = 0.38 * (1 - gh.life / 0.24);
+        g.drawImage(gh.img, this.q(gh.x * TS - left) - 8, this.q(gh.y * TS - top) - 19);
+      }
+      g.globalAlpha = 1;
+      this.ghosts = keep;
+    }
     // Оружие: за спиной, если смотрит вверх.
     const behind = dir === 'up';
     if (behind) this.drawWeapon(sim, gear, px, py);
@@ -820,8 +853,8 @@ export class DungeonRenderer {
 
   private drawMob(sim: Sim, m: Mob, left: number, top: number): void {
     const g = this.bctx;
-    const px = Math.round(m.x * TS - left);
-    const py = Math.round(m.y * TS - top);
+    const px = this.q(m.x * TS - left);
+    const py = this.q(m.y * TS - top);
     const boss = m.kind === 'king' || m.kind === 'kinglet';
     const leftFace = Math.cos(m.face) < 0;
     let anim: MobAnim = 'run0';
@@ -990,8 +1023,8 @@ export class DungeonRenderer {
         g.globalAlpha = a * 0.5;
         g.fillStyle = p.color;
         g.fillRect(
-          Math.round(p.x * TS - left - p.size / 2),
-          Math.round(p.y * TS - top - p.size / 2),
+          this.q(p.x * TS - left - p.size / 2),
+          this.q(p.y * TS - top - p.size / 2),
           Math.round(p.size),
           Math.round(p.size),
         );
@@ -1010,8 +1043,8 @@ export class DungeonRenderer {
         g.globalAlpha = a;
         g.fillStyle = p.color;
         g.fillRect(
-          Math.round(p.x * TS - left),
-          Math.round((p.y - p.z * 0.5) * TS - top - 4),
+          this.q(p.x * TS - left),
+          this.q((p.y - p.z * 0.5) * TS - top - 4),
           p.size,
           p.size,
         );
@@ -1076,16 +1109,23 @@ export class DungeonRenderer {
     const l = this.lctx;
     const band = bandAt(sim.world, sim.hero.y);
     const amb = areaOf(band.def.id).ambient;
+    // Маска света — целыми игровыми пикселями, на пиксель шире кадра; на
+    // экран она ложится со сдвигом и сглаживанием: свет мягкий, а не лесенкой.
+    const lx = Math.floor(left) - 1;
+    const ly = Math.floor(top) - 1;
+    const LW = this.light.width;
+    const LH = this.light.height;
     l.globalCompositeOperation = 'source-over';
+    l.clearRect(0, 0, LW, LH);
     l.fillStyle = `rgba(6,4,10,${1 - amb})`;
-    l.fillRect(0, 0, this.gw, this.gh);
+    l.fillRect(0, 0, LW, LH);
     l.globalCompositeOperation = 'destination-out';
     const blob = lightBlob();
     const hole = (x: number, y: number, r: number, a = 1) => {
-      const px = x * TS - left;
-      const py = y * TS - top;
+      const px = x * TS - lx;
+      const py = y * TS - ly;
       const rr = r * TS;
-      if (px + rr < 0 || py + rr < 0 || px - rr > this.gw || py - rr > this.gh) return;
+      if (px + rr < 0 || py + rr < 0 || px - rr > LW || py - rr > LH) return;
       l.globalAlpha = a;
       l.drawImage(blob, px - rr, py - rr, rr * 2, rr * 2);
     };
@@ -1110,7 +1150,9 @@ export class DungeonRenderer {
     l.globalAlpha = 1;
     l.globalCompositeOperation = 'source-over';
     const g = this.bctx;
-    g.drawImage(this.light, 0, 0);
+    g.imageSmoothingEnabled = true;
+    g.drawImage(this.light, lx - left, ly - top);
+    g.imageSmoothingEnabled = false;
     // Тёплый подсвет от ламп — сложением, слабый.
     g.globalCompositeOperation = 'lighter';
     const tints: Record<string, HTMLCanvasElement> = {

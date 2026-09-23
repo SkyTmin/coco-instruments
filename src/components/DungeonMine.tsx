@@ -14,13 +14,16 @@ import {
   DEEP_DONE_AT,
   DEEP_MINES,
   DEEP_NOISE_BLOCKS,
+  DEEP_NOISE_MAX,
+  canTake,
   deepField,
   deepHp,
   deepMineNow,
   deepRock,
   mineNextAt,
   mineWindow,
-  sackCount,
+  sackSlots,
+  slotsUsed,
 } from '@/lib/dungeon';
 import type { DeepMineId, DeepMineState } from '@/lib/dungeon';
 import type { Sim } from '@/lib/dungeon-sim';
@@ -72,7 +75,7 @@ export function DungeonMine({
   const sackRef = useRef<HTMLDivElement>(null);
   const noise = useRef(0);
   const [packs, setPacks] = useState(0);
-  const [sackN, setSackN] = useState(() => sackCount(sim.sack));
+  const [sackN, setSackN] = useState(() => slotsUsed(sim.sack));
   const [ore, setOre] = useState(() => sim.sack.mats.pyrite ?? 0);
   const share = minedShare(m.dug);
   const done = share >= DEEP_DONE_AT;
@@ -99,7 +102,7 @@ export function DungeonMine({
       dug[b.cell] = Math.min(DEPTH, dug[b.cell] + 1);
       const mat = deepRock(b.rock).mat;
       if (!mat) continue;
-      if (sackCount(sim.sack) < sim.sackCap) {
+      if (canTake(sim.sack, mat, 1, sim.sackLevel)) {
         sim.sack.mats[mat] = (sim.sack.mats[mat] ?? 0) + 1;
         got += 1;
         if (got <= 6) field.current?.fly(b.cell, deepRockTexture(b.rock), sackRef.current);
@@ -108,10 +111,12 @@ export function DungeonMine({
     const next = { window: cur.window, dug };
     mRef.current = next;
     setM(next);
-    useFinanceStore.getState().dungeonMineSave(id, next, first);
+    // Добытая руда идёт в условие каски сразу: прогресс не пропадает и при
+    // смерти, как убийства.
+    useFinanceStore.getState().dungeonMineSave(id, next, first, got);
     if (got) {
       setOre(sim.sack.mats.pyrite ?? 0);
-      setSackN(sackCount(sim.sack));
+      setSackN(slotsUsed(sim.sack));
       if (got > 1) field.current?.float(list[0].cell, `+${got}`, 'pfloat--vein');
     }
     if (lost) {
@@ -120,7 +125,7 @@ export function DungeonMine({
       onToast('Сидор полон — руда осыпается мимо');
     }
     noise.current += list.length;
-    const p = Math.floor(noise.current / DEEP_NOISE_BLOCKS);
+    const p = Math.min(DEEP_NOISE_MAX, Math.floor(noise.current / DEEP_NOISE_BLOCKS));
     if (p > packs) {
       setPacks(p);
       ratSqueak(0);
@@ -212,11 +217,13 @@ export function DungeonMine({
           <img src={itemUrl('pyrite')} alt="" />
           <b>{ore}</b>
           <span>
-            сидор {sackN}/{sim.sackCap}
+            сидор {sackN}/{sackSlots(sim.sackLevel)} ячеек
           </span>
         </div>
         <div className={`dgmine__noise${packs > 0 ? ' is-loud' : ''}`}>
-          {packs > 0 ? (
+          {packs >= DEEP_NOISE_MAX ? (
+            <>У входа {packs} стаи — больше не соберётся</>
+          ) : packs > 0 ? (
             <>
               У входа {packs > 1 ? `${packs} стаи` : 'стая'} · ещё {left} бл. — и подойдёт ещё одна
             </>

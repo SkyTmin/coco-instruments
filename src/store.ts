@@ -1259,8 +1259,8 @@ interface FinanceState {
   dungeonUpgrade: (slot: Slot) => 'plus' | 'reforge' | null;
   dungeonSackUp: () => boolean;
   dungeonLiftRepair: (area: AreaId) => boolean;
-  /** Раскоп подземной шахты. `opened` — первый блок в этом окне. */
-  dungeonMineSave: (id: DeepMineId, m: DeepMineState, opened: boolean) => void;
+  /** Раскоп подземной шахты. `opened` — первый блок в этом окне, `ore` — руды в сидор. */
+  dungeonMineSave: (id: DeepMineId, m: DeepMineState, opened: boolean, ore?: number) => void;
   dungeonIntroSeen: () => void;
   /** Заколотил нору: одна крепь из запаса каторги. */
   dungeonSpendProp: () => boolean;
@@ -4344,13 +4344,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return true;
   },
 
-  dungeonMineSave: (id, m, opened) => {
+  dungeonMineSave: (id, m, opened, ore = 0) => {
     const d = get().dungeon;
-    const dungeon: DungeonState = {
-      ...d,
-      mines: { ...d.mines, [id]: m },
-      stats: opened ? { ...d.stats, mines: (d.stats.mines ?? 0) + 1 } : d.stats,
-    };
+    const stats = { ...d.stats };
+    if (opened) stats.mines = (stats.mines ?? 0) + 1;
+    if (ore > 0) stats.ore = (stats.ore ?? 0) + ore;
+    const dungeon: DungeonState = { ...d, mines: { ...d.mines, [id]: m }, stats };
     set({ dungeon });
     persistDungeon(dungeon);
   },

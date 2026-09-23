@@ -317,7 +317,7 @@ export function pieceStats(slot: Slot, g: GearPiece): Record<string, number> {
   if (slot === 'robe') return { armor: 10 * k, hp: 25 * k };
   return {
     speed: 4.4 * (1 + 0.04 * (g.tier - 1) + 0.008 * g.plus),
-    dash: 3 + 0.3 * (g.tier - 1) + 0.04 * g.plus,
+    dash: 2.5 + 0.25 * (g.tier - 1) + 0.04 * g.plus,
   };
 }
 
@@ -713,11 +713,68 @@ export interface Sack {
 
 export const EMPTY_SACK: Sack = { meat: {}, mats: {}, tokens: 0, keys: 0, coins: 0, meatBy: {} };
 
-export const SACK_BASE = 60;
+/**
+ * Сидор устроен как инвентарь Майнкрафта: ячейки, в ячейке — стопка одного
+ * вида. Владелец: «16 мяса забирать — бред… инвентарь, как в Майнкрафте».
+ * Ряд — девять ячеек; сидор без карманов — один ряд, карманы добавляют ряды
+ * до четырёх (36 ячеек, как основной инвентарь игры). Монеты, токены и ключи
+ * ячеек не занимают — они в кошельке на поясе.
+ */
+export type ItemId = MeatId | MatId;
 
-/** Сколько предметов влезает в сидор. Монеты, токены и ключи места не занимают. */
-export function sackCap(level: number): number {
-  return Math.round(SACK_BASE * Math.pow(1.3, level));
+/** Порядок ячеек в сидоре: мясо, потом материалы, трофей последним. */
+export const ITEM_ORDER: ItemId[] = ['meat', 'fatmeat', 'skin', 'tail', 'pyrite', 'crown'];
+
+/** Сколько штук в одной ячейке. Корона — трофей, одна на ячейку. */
+export const STACK: Record<ItemId, number> = {
+  meat: 32,
+  fatmeat: 32,
+  skin: 32,
+  tail: 32,
+  pyrite: 32,
+  crown: 1,
+};
+
+export const SACK_ROW = 9;
+/** Карманы: 0…3 — от одного ряда до четырёх. */
+export const SACK_MAX = 3;
+
+export const sackSlots = (level: number) => SACK_ROW * (1 + Math.max(0, Math.min(SACK_MAX, level)));
+
+const isMeat = (id: ItemId): id is MeatId => id === 'meat' || id === 'fatmeat';
+
+/** Сколько штук вида лежит в сидоре. */
+export function itemCount(s: Sack, id: ItemId): number {
+  return (isMeat(id) ? s.meat[id] : s.mats[id as MatId]) ?? 0;
+}
+
+/** Занятые ячейки: каждый вид — своими стопками. */
+export function slotsUsed(s: Sack, extra?: { id: ItemId; n: number }): number {
+  let n = 0;
+  for (const id of ITEM_ORDER) {
+    const k = itemCount(s, id) + (extra?.id === id ? extra.n : 0);
+    if (k > 0) n += Math.ceil(k / STACK[id]);
+  }
+  return n;
+}
+
+/** Влезет ли ещё `n` штук: в неполную стопку или в свободную ячейку. */
+export function canTake(s: Sack, id: ItemId, n: number, level: number): boolean {
+  return slotsUsed(s, { id, n }) <= sackSlots(level);
+}
+
+/** Ячейки по порядку — для сетки инвентаря. */
+export function sackStacks(s: Sack): { id: ItemId; n: number }[] {
+  const out: { id: ItemId; n: number }[] = [];
+  for (const id of ITEM_ORDER) {
+    let left = itemCount(s, id);
+    while (left > 0) {
+      const n = Math.min(STACK[id], left);
+      out.push({ id, n });
+      left -= n;
+    }
+  }
+  return out;
 }
 
 export function sackCount(s: Sack): number {
@@ -733,7 +790,11 @@ export function meatCount(s: Sack): number {
   return n;
 }
 
-/** Запах мяса: каждые 10 кусков — +10% к появлению крыс, до +100%. */
+/**
+ * Запах мяса: каждые 10 кусков — +10% к появлению крыс, до +100% со ста.
+ * Сидор в ячейках держит сотни кусков, и это и есть размен: несёшь много —
+ * идёт вдвое больше крыс, а смерть заберёт всё.
+ */
 export function smellOf(s: Sack): number {
   return Math.min(1, Math.floor(meatCount(s) / 10) * 0.1);
 }
@@ -800,6 +861,7 @@ export interface Condition {
 }
 
 export type StatId =
+  | 'ore'
   | 'meters'
   | 'dodges'
   | 'extracts'
@@ -813,14 +875,20 @@ export type StatId =
 const kills = (id: MobId) => (d: DungeonState) => d.kills[id] ?? 0;
 const stat = (id: StatId) => (d: DungeonState) => d.stats[id] ?? 0;
 
-/** Условия перековки со ступени `tier` на следующую — у каждого слота свои. */
+const bossKills = (id: BossId) => (d: DungeonState) => d.bosses[id]?.kills ?? 0;
+
+/**
+ * Условия перековки со ступени `tier` на следующую — у каждого слота свои.
+ * Только убийства и добыча: владелец отверг «выйти живым» как условие —
+ * прокачку должна давать работа клинком и киркой, а не удачный подъём.
+ */
 export function reforgeConditions(slot: Slot, tier: number): Condition[] {
   if (tier === 1) {
     if (slot === 'weapon') return [{ label: 'Убить пасюков', have: kills('rat'), need: 300 }];
-    if (slot === 'helm') return [{ label: 'Вскрыть подземных шахт', have: stat('mines'), need: 3 }];
-    if (slot === 'robe')
-      return [{ label: 'Выйти живым с добычей', have: stat('extracts'), need: 5 }];
-    return [{ label: 'Пройти метров', have: stat('meters'), need: 2000 }];
+    if (slot === 'helm')
+      return [{ label: 'Добыть пирита в шахтах подземелья', have: stat('ore'), need: 60 }];
+    if (slot === 'robe') return [{ label: 'Убить жирных крыс', have: kills('fatrat'), need: 60 }];
+    return [{ label: 'Убить подрывников', have: kills('bomber'), need: 30 }];
   }
   if (tier === 2) {
     if (slot === 'weapon')
@@ -830,14 +898,17 @@ export function reforgeConditions(slot: Slot, tier: number): Condition[] {
       ];
     if (slot === 'helm')
       return [
-        { label: 'Вскрыть подземных шахт', have: stat('mines'), need: 10 },
-        { label: 'Найти тайников', have: stat('secrets'), need: 3 },
+        { label: 'Добыть пирита в шахтах подземелья', have: stat('ore'), need: 250 },
+        { label: 'Поймать золотых крыс', have: kills('goldrat'), need: 5 },
       ];
     if (slot === 'robe')
-      return [{ label: 'Выйти живым с полным сидором', have: stat('fullExtracts'), need: 10 }];
+      return [
+        { label: 'Убить жирных крыс', have: kills('fatrat'), need: 250 },
+        { label: 'Убить Крысиного короля', have: bossKills('king'), need: 3 },
+      ];
     return [
-      { label: 'Пройти метров', have: stat('meters'), need: 5000 },
-      { label: 'Уклониться в последний миг', have: stat('dodges'), need: 30 },
+      { label: 'Убить подрывников', have: kills('bomber'), need: 120 },
+      { label: 'Убить пасюков', have: kills('rat'), need: 600 },
     ];
   }
   return [];
@@ -988,8 +1059,13 @@ export const mineNextAt = (id: DeepMineId, now: number) =>
 
 /** Выработано до этой доли — шахта закрыта до следующего окна. */
 export const DEEP_DONE_AT = 0.85;
-/** Каждые столько блоков у входа собирается стая. */
-export const DEEP_NOISE_BLOCKS = 20;
+/**
+ * Каждые столько блоков у входа собирается стая, но не больше `DEEP_NOISE_MAX`
+ * стай за один заход. Было 20 блоков и без потолка: владелец вышел из шахты в
+ * толпу («их было очень много») — шум должен пугать, а не хоронить.
+ */
+export const DEEP_NOISE_BLOCKS = 35;
+export const DEEP_NOISE_MAX = 3;
 
 /**
  * Поле подземной шахты в окне: те же 7×9×5, что у каторги. Зерно — от
@@ -1177,7 +1253,7 @@ export function normalizeDungeon(v: unknown): DungeonState {
       hour: num(o.market?.hour),
       sold: Math.max(0, num(o.market?.sold)),
     },
-    sackLevel: Math.max(0, Math.min(20, Math.floor(num(o.sackLevel)))),
+    sackLevel: Math.max(0, Math.min(SACK_MAX, Math.floor(num(o.sackLevel)))),
     run:
       run && typeof run === 'object' && typeof run.area === 'string'
         ? {
@@ -1304,7 +1380,7 @@ function haulOf(d: DungeonState, sack: Sack, econ: number, now: number, killed: 
     mats: { ...sack.mats },
     killed,
     ms: d.run ? Math.max(0, now - d.run.started) : 0,
-    full: sackCount(sack) >= Math.floor(sackCap(d.sackLevel) * 0.9),
+    full: slotsUsed(sack) >= sackSlots(d.sackLevel),
   };
 }
 
@@ -1352,13 +1428,11 @@ export function dieRun(
   return { d: { ...d, stats, run: null }, lost };
 }
 
-/** Сидор: уровней немного, каждый — ощутимый шаг и настоящий сток шкурок. */
-export const SACK_MAX = 12;
-
+/** Карман — целый ряд ячеек: уровней три, каждый — ощутимый шаг и сток шкурок. */
 export function sackCost(level: number, econ: number): Cost {
   return {
-    coins: Math.round(econ * 2 * Math.pow(1.7, level)),
-    mats: { skin: Math.round(10 * Math.pow(1.45, level)) },
+    coins: Math.round(econ * 5 * Math.pow(2.4, level)),
+    mats: { skin: Math.round(24 * Math.pow(1.9, level)) },
   };
 }
 

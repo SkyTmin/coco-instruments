@@ -26,8 +26,8 @@ import {
   levelOf,
   MATS,
   mineNextAt,
-  sackCap,
-  sackCount,
+  sackSlots,
+  slotsUsed,
   setOf,
   SLOTS,
 } from '@/lib/dungeon';
@@ -190,7 +190,7 @@ export function DungeonPage() {
           </div>
           <p className="dg-after__meta">
             Убито: {fmt(h.killed)} · внизу {minutes(h.ms)}
-            {h.full ? ' · сидор полный — засчитано в условие робы' : ''}
+            {h.full ? ' · сидор был полон' : ''}
           </p>
           <div className="stack">
             <button
@@ -368,7 +368,7 @@ export function DungeonPage() {
               <i>
                 здоровье {hero.maxHp} · урон {hero.dmg.toFixed(0)} · броня {hero.armor.toFixed(0)}
               </i>
-              <i>сидор на {sackCap(d.sackLevel)} мест</i>
+              <i>сидор на {sackSlots(d.sackLevel)} ячеек</i>
             </div>
             <button
               type="button"
@@ -401,8 +401,8 @@ export function DungeonPage() {
             <div className="dg-resume">
               <b>Вылазка ждёт внизу</b>
               <span>
-                {areaOf(run.area).name} · здоровье {Math.ceil(run.hp)} · сидор {sackCount(run.sack)}
-                /{sackCap(d.sackLevel)} · убито {run.killed}
+                {areaOf(run.area).name} · здоровье {Math.ceil(run.hp)} · сидор {slotsUsed(run.sack)}
+                /{sackSlots(d.sackLevel)} ячеек · убито {run.killed}
               </span>
               <button className="btn btn--primary btn--block" onClick={() => descend(run.area)}>
                 Вернуться вниз

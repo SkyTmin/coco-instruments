@@ -28,8 +28,8 @@ import {
   levelOf,
   mobStats,
   MOBS,
-  sackCap,
-  sackCount,
+  canTake,
+  DEEP_NOISE_MAX,
   smellOf,
   ALBINO_CHANCE,
 } from './dungeon';
@@ -42,6 +42,7 @@ import type {
   MatId,
   MeatId,
   MobId,
+  ItemId,
   Sack,
   StatId,
 } from './dungeon';
@@ -387,7 +388,8 @@ export interface Sim {
   director: Director;
   boss: BossFight | null;
   sack: Sack;
-  sackCap: number;
+  /** Карманы сидора: сколько рядов ячеек. */
+  sackLevel: number;
   /** Сколько убито всего — для прибавок бестиария. */
   beast: Partial<Record<MobId, number>>;
   xp: number;
@@ -466,7 +468,15 @@ export const SWORD = {
   },
 };
 
-export const DASH = { dur: 0.18, inv: 0.27, cd: 1.0 };
+/**
+ * Рывок — выпад, а не телепорт. Был 3 клетки за 0,18 с (17 клеток в
+ * секунду), и владелец описал его «как будто телепортируюсь». Теперь 0,3 с
+ * с торможением: старт втрое быстрее бега, к концу — скорость бега, и шаг
+ * продолжается без рывка на остановке. Неуязвимость — почти весь выпад:
+ * последние 30 мс уязвим, иначе короля на слабом снаряжении било бы легко
+ * (это держит тест «король на Лагерном без заточки»).
+ */
+export const DASH = { dur: 0.3, inv: 0.27, cd: 1.0, end: 0.3 };
 /** Окно «уклона в последний миг»: удар врага придёт не позже, чем через это. */
 export const DODGE_WINDOW = 0.2;
 export const SLOWMO = { dur: 0.45, scale: 0.35 };
@@ -641,7 +651,7 @@ export function createSim(o: SimOptions): Sim {
           meatBy: { ...o.sack.meatBy },
         }
       : { meat: {}, mats: {}, tokens: 0, keys: 0, coins: 0, meatBy: {} },
-    sackCap: sackCap(d.sackLevel),
+    sackLevel: d.sackLevel,
     beast: { ...d.kills },
     xp: d.xp,
     level: lvl,
@@ -2273,14 +2283,17 @@ function stepHero(sim: Sim, dt: number, input: SimInput): void {
       break;
     }
     case 'dash': {
-      const v = st.dash / DASH.dur;
+      // Скорость падает линейно от v0 до v0·end: путь = v0·dur·(1+end)/2.
+      const v0 = (2 * st.dash) / (DASH.dur * (1 + DASH.end));
+      const k = Math.min(1, h.t / DASH.dur);
+      const v = v0 * (1 - (1 - DASH.end) * k);
       h.vx = Math.cos(h.dashDir) * v;
       h.vy = Math.sin(h.dashDir) * v;
       if (h.t >= DASH.dur) {
         h.mode = 'free';
         h.t = 0;
-        h.vx *= 0.3;
-        h.vy *= 0.3;
+        h.vx *= 0.6;
+        h.vy *= 0.6;
       }
       moveHero(sim, dt);
       return;
@@ -2650,7 +2663,7 @@ function stepDrops(sim: Sim, dt: number): void {
     const dist = Math.hypot(h.x - d.x, h.y - d.y);
     const alive = h.mode !== 'dying' && h.mode !== 'dead';
     const takesRoom = d.kind !== 'coin' && d.kind !== 'token' && d.kind !== 'key';
-    const room = !takesRoom || sackCount(sim.sack) + d.n <= sim.sackCap;
+    const room = !takesRoom || canTake(sim.sack, d.kind as ItemId, d.n, sim.sackLevel);
     if (alive && d.age > 0.45 && dist < MAGNET && room) {
       const pull = 7 + (MAGNET - dist) * 10;
       d.vx += ((h.x - d.x) / (dist || 1)) * pull * dt * 6;
@@ -2818,6 +2831,7 @@ export function useObject(sim: Sim, u: Usable): boolean {
 
 /** Пока копал в шахте, у входа собрались крысы: `packs` стай по 2–3. */
 export function packAtMine(sim: Sim, mine: WorldObj, packs: number): void {
+  packs = Math.min(packs, DEEP_NOISE_MAX);
   if (packs <= 0) return;
   const holes = sim.burrows
     .filter((b) => b.obj.out && Math.hypot(b.obj.x - mine.x, b.obj.y - mine.y) < 12)
@@ -2827,7 +2841,8 @@ export function packAtMine(sim: Sim, mine: WorldObj, packs: number): void {
         Math.hypot(b.obj.x - mine.x, b.obj.y - mine.y),
     );
   for (let p = 0; p < packs; p++) {
-    const n = 2 + Math.floor(sim.rng() * 2);
+    // Первая стая — пара, дальше по три: шум растёт, но не хоронит.
+    const n = p === 0 ? 2 : 3;
     for (let i = 0; i < n; i++) {
       if (holes.length) {
         const b = holes[(p + i) % holes.length];
@@ -2868,6 +2883,57 @@ export function snapshot(sim: Sim): RunSnap {
     },
     killed: sim.killed,
   };
+}
+
+/**
+ * Выбросить из сидора: вещь ложится на пол у ног и первые две секунды не
+ * тянется обратно — иначе магнит подобрал бы её в тот же миг. Место в
+ * сидоре освобождается сразу: так выкидывают шкурки ради пирита.
+ */
+export function dropFromSack(sim: Sim, id: ItemId, n: number): number {
+  const s = sim.sack;
+  const meat = id === 'meat' || id === 'fatmeat';
+  const have = (meat ? s.meat[id as MeatId] : s.mats[id as MatId]) ?? 0;
+  const k = Math.min(have, Math.max(0, Math.floor(n)));
+  if (k <= 0) return 0;
+  if (meat) {
+    s.meat[id as MeatId] = have - k;
+    if (!s.meat[id as MeatId]) delete s.meat[id as MeatId];
+    // Район мяса — пропорционально: выброшенное уносит свою долю цены.
+    const total = Object.values(s.meatBy).reduce((a, b) => a + (b ?? 0), 0);
+    if (total > 0) {
+      let left = k;
+      for (const [a, v] of Object.entries(s.meatBy) as [AreaId, number][]) {
+        const cut = Math.min(v, Math.round((k * v) / total), left);
+        s.meatBy[a] = v - cut;
+        left -= cut;
+        if (!s.meatBy[a]) delete s.meatBy[a];
+      }
+    }
+  } else {
+    s.mats[id as MatId] = have - k;
+    if (!s.mats[id as MatId]) delete s.mats[id as MatId];
+  }
+  const h = sim.hero;
+  const piles = Math.min(k, 6);
+  for (let i = 0; i < piles; i++) {
+    const n1 = Math.floor(k / piles) + (i < k % piles ? 1 : 0);
+    const a = h.face + Math.PI + (i - piles / 2) * 0.35;
+    sim.drops.push({
+      id: sim.nextId++,
+      kind: id,
+      n: n1,
+      x: h.x + Math.cos(a) * 0.5,
+      y: h.y + Math.sin(a) * 0.5,
+      z: 0.3,
+      vx: Math.cos(a) * 1.4,
+      vy: Math.sin(a) * 1.4,
+      vz: 2.4,
+      age: -1.6,
+      area: sim.area,
+    });
+  }
+  return k;
 }
 
 /** Забрать накопленное для стора и начать копить заново. */

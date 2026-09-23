@@ -31,7 +31,10 @@ import {
   PRISON_ROCKS,
   reforgeConditions,
   SETS,
-  sackCap,
+  canTake,
+  sackSlots,
+  sackStacks,
+  slotsUsed,
   smellOf,
   SLOTS,
   xpFor,
@@ -91,6 +94,12 @@ describe('подземелье: правила', () => {
     // У каждого слота свои условия.
     const labels = SLOTS.map((s) => reforgeConditions(s, 1)[0].label);
     expect(new Set(labels).size).toBe(4);
+    // Прокачку дают убийства и добыча, а не удачный подъём (просьба владельца).
+    for (const t of [1, 2])
+      for (const s of SLOTS)
+        for (const c of reforgeConditions(s, t)) expect(c.label).not.toMatch(/Выйти|выход/i);
+    const miner = { ...d, stats: { ore: 60 } };
+    expect(conditionsMet(miner, 'helm', 1)).toBe(true);
   });
 
   it('монеты не открывают ступень: нужны материалы со склада', () => {
@@ -128,7 +137,31 @@ describe('подземелье: правила', () => {
     expect(smellOf({ ...EMPTY_SACK, meat: { meat: 9 } })).toBe(0);
     expect(smellOf({ ...EMPTY_SACK, meat: { meat: 25 } })).toBeCloseTo(0.2);
     expect(smellOf({ ...EMPTY_SACK, meat: { meat: 500 } })).toBe(1);
-    expect(sackCap(1)).toBeGreaterThan(sackCap(0));
+  });
+
+  it('сидор — ячейки со стопками, как в Майнкрафте', () => {
+    expect(sackSlots(0)).toBe(9);
+    expect(sackSlots(3)).toBe(36);
+    expect(sackSlots(99)).toBe(36);
+    // Девять полных стопок мяса — сидор без карманов полон.
+    const full: Sack = { ...EMPTY_SACK, meat: { meat: 32 * 9 } };
+    expect(slotsUsed(full)).toBe(9);
+    expect(canTake(full, 'meat', 1, 0)).toBe(false);
+    expect(canTake(full, 'skin', 1, 0)).toBe(false);
+    expect(canTake(full, 'skin', 1, 1)).toBe(true);
+    // Неполная стопка добирается, пока не кончились ячейки.
+    const part: Sack = { ...EMPTY_SACK, meat: { meat: 32 * 8 + 5 } };
+    expect(canTake(part, 'meat', 27, 0)).toBe(true);
+    expect(canTake(part, 'meat', 28, 0)).toBe(false);
+    // Порядок ячеек: мясо, материалы; корона — по одной.
+    const mixed: Sack = { ...EMPTY_SACK, meat: { meat: 40 }, mats: { skin: 3, crown: 2 } };
+    expect(sackStacks(mixed)).toEqual([
+      { id: 'meat', n: 32 },
+      { id: 'meat', n: 8 },
+      { id: 'skin', n: 3 },
+      { id: 'crown', n: 1 },
+      { id: 'crown', n: 1 },
+    ]);
   });
 
   it('подземная шахта одинакова в одном окне и меняется в следующем', () => {

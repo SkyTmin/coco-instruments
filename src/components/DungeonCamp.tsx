@@ -26,8 +26,9 @@ import {
   pieceStats,
   reforgeConditions,
   SACK_MAX,
-  sackCap,
+  SACK_ROW,
   sackCost,
+  sackSlots,
   setOf,
   SETS,
   SLOT_NAMES,
@@ -344,14 +345,19 @@ export function StashTab({ onSpend }: { onSpend: () => void }) {
         <div className="dgc-slot__head">
           <img className="dgc-slot__ico" src={itemUrl('skin')} alt="" />
           <span className="dgc-slot__name">
-            <b>Сидор · ур. {d.sackLevel}</b>
-            <i>{sackCap(d.sackLevel)} мест · мясо и материалы, монеты и токены места не занимают</i>
+            <b>
+              Сидор · {d.sackLevel + 1} {d.sackLevel === 0 ? 'ряд' : 'ряда'} по {SACK_ROW}
+            </b>
+            <i>
+              {sackSlots(d.sackLevel)} ячеек, в ячейке до 32 штук одного вида · монеты, токены и
+              ключи места не занимают
+            </i>
           </span>
         </div>
         {d.sackLevel < SACK_MAX ? (
           <div className="dgc-step">
             <span className="dgc-step__what">
-              Нашить карманы: {sackCap(d.sackLevel + 1)} мест
+              Нашить карман: ещё ряд, {sackSlots(d.sackLevel + 1)} ячеек
               {d.run ? ' · сперва выйди из вылазки' : ''}
             </span>
             <CostLine cost={cost} balance={balance} stash={d.stash} />

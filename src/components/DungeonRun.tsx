@@ -10,6 +10,7 @@ import { Sheet } from '@/components/ui';
 import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, TokenIcon } from '@/components/PrisonCamp';
 import { DungeonMine } from '@/components/DungeonMine';
+import { DungeonInventory } from '@/components/DungeonInventory';
 import { useFinanceStore } from '@/store';
 import type { DungeonExit } from '@/store';
 import {
@@ -25,12 +26,14 @@ import {
   meatCount,
   meatValue,
   marketSold,
-  sackCount,
+  sackSlots,
+  slotsUsed,
   smellOf,
 } from '@/lib/dungeon';
 import type { AreaId, DeepMineId, Haul, MatId } from '@/lib/dungeon';
 import {
   createSim,
+  dropFromSack,
   fogOf,
   heroStuck,
   NO_INPUT,
@@ -115,7 +118,7 @@ interface Hud {
 
 type Banner = { key: number; big: string; small?: string; tone: string };
 type Toast = { key: number; text: string };
-type SheetKind = 'pause' | 'lift' | 'board' | 'plaque' | 'map' | null;
+type SheetKind = 'pause' | 'lift' | 'board' | 'plaque' | 'map' | 'inv' | null;
 
 /** Ключ, по которому видно, что табло поменялось. */
 const hudKey = (h: Hud) =>
@@ -250,8 +253,9 @@ export function DungeonRun({
     if (run.x >= 0) sim.hero.inv = 2;
     simRef.current = sim;
     // Стенд разработки водит героя ботом — ему нужен мир.
-    if (import.meta.env.DEV) (window as unknown as { __dg?: Sim }).__dg = sim;
     const r = new DungeonRenderer(canvas);
+    if (import.meta.env.DEV)
+      Object.assign(window as unknown as Record<string, unknown>, { __dg: sim, __dgr: r });
     rendRef.current = r;
     const fit = () => {
       const el = rootRef.current;
@@ -267,7 +271,6 @@ export function DungeonRun({
 
     let raf = 0;
     let last = performance.now();
-    let acc = 0;
     let hudT = 0;
     let mapT = 0;
     const loop = (t: number) => {
@@ -275,11 +278,14 @@ export function DungeonRun({
       // бывает отрицательным.
       const dt = Math.max(0, Math.min(0.1, (t - last) / 1000));
       last = t;
-      if (!paused.current) {
-        acc += dt;
-        let n = 0;
-        while (acc >= STEP && n < 5) {
-          stepSim(sim, STEP, input.current);
+      if (!paused.current && dt > 0) {
+        // Шаг боя — под каждый кадр, а не фиксированный 1/60 с накопителем:
+        // на экранах 90–120 Гц накопитель давал то ноль шагов за кадр, то
+        // два, и мир ехал рывками. Длинный кадр делится на куски не больше
+        // 1/60 с — бой считается так же точно.
+        const n = Math.max(1, Math.ceil(dt / STEP - 1e-6));
+        for (let j = 0; j < n; j++) {
+          stepSim(sim, dt / n, input.current);
           // Разовые нажатия съедены шагом.
           const i = input.current;
           i.attack = false;
@@ -292,10 +298,7 @@ export function DungeonRun({
             r.onEvents(sim, sim.events);
             onEvents(sim, sim.events);
           }
-          acc -= STEP;
-          n += 1;
         }
-        if (n === 5) acc = 0;
         if (t - lastSave.current > SAVE_MS) save();
       }
       r.frame(sim, useFinanceStore.getState().dungeon.gear, paused.current ? 0 : dt);
@@ -391,8 +394,8 @@ export function DungeonRun({
       maxHp: sim.stats.maxHp,
       level: lv.level,
       xp: lv.need > 0 ? lv.into / lv.need : 1,
-      sackN: sackCount(sim.sack),
-      cap: sim.sackCap,
+      sackN: slotsUsed(sim.sack),
+      cap: sackSlots(sim.sackLevel),
       meat: meatCount(sim.sack),
       smell: smellOf(sim.sack),
       coins: sim.sack.coins,
@@ -991,7 +994,7 @@ export function DungeonRun({
             className={`dg-sack${hud && hud.sackN >= hud.cap ? ' is-full' : ''}`}
             onClick={() => {
               tapLight();
-              setSheet('pause');
+              setSheet('inv');
             }}
           >
             <img src={itemUrl('meat')} alt="" />
@@ -1157,6 +1160,23 @@ export function DungeonRun({
             </button>
           </div>
         </Sheet>
+      )}
+
+      {sheet === 'inv' && simRef.current && (
+        <DungeonInventory
+          sim={simRef.current}
+          onClose={() => setSheet(null)}
+          onEat={() => {
+            setSheet(null);
+            input.current.eat = true;
+          }}
+          onDrop={(id, n) => {
+            const sim = simRef.current;
+            if (!sim) return;
+            if (dropFromSack(sim, id, n) > 0) crateBreak();
+            pushHud(sim);
+          }}
+        />
       )}
 
       {sheet === 'lift' && (
