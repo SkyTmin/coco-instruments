@@ -1,8 +1,10 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { Screen, Sheet } from '@/components/ui';
 import { IconGear, IconGift } from '@/components/icons';
 import { CashDesk } from '@/components/CashDesk';
+import { crackStage, MineCell, MineField, useMineDig, wall } from '@/components/MineField';
+import type { BreakKind, DigBlock, MineFieldHandle } from '@/components/MineField';
 import { useNavigate } from 'react-router-dom';
 import { FOREST_UNLOCK_RANK } from '@/lib/forest';
 import { crownTexture } from '@/lib/prison-art';
@@ -32,7 +34,6 @@ import {
   bagCapacity,
   bagCount,
   bagValue,
-  blastCells,
   buildMine,
   CRIT_CHANCE,
   CRIT_MULT,
@@ -81,7 +82,6 @@ import {
   PARCEL_NEED,
   petLevelOf,
   petOf,
-  ROCKFALL_HITS,
   RUNE_ROMAN,
   SEID_HITS,
   seidsOf,
@@ -90,7 +90,6 @@ import {
 import type { FindId, GuideReward, ItemId, PrisonState, Quota } from '@/lib/prison';
 import {
   bedrockTexture,
-  crackTexture,
   findTexture,
   kuivaTexture,
   meteorTexture,
@@ -101,10 +100,8 @@ import {
   rockTexture,
   rockVariant,
 } from '@/lib/prison-art';
-import { createFx } from '@/lib/prison-fx';
-import type { Fx } from '@/lib/prison-fx';
 import { plainPlan, runRollup } from '@/lib/rollup';
-import { addTrauma, flashFrame, squashPop, stopShake } from '@/lib/juice';
+import { flashFrame, squashPop, stopShake } from '@/lib/juice';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import { useExit } from '@/lib/use-exit';
@@ -113,11 +110,8 @@ import { kuivaCells, METEOR_HITS } from '@/lib/yard';
 import type { YardPrize } from '@/lib/yard';
 import {
   bagFull as bagFullSound,
-  bedrockClink,
-  blockBreak,
   boom,
   treeFall,
-  chainTick,
   coinDing,
   frenzyStart,
   fuseTick,
@@ -171,110 +165,6 @@ function liveRate(p: PrisonState): number {
 
 /** Минимальный промежуток между ударами тапом — 1,8 скорости удержания. */
 const gapMs = (p: PrisonState) => 1000 / (liveRate(p) * 1.8);
-
-// ---------------------------------------------------------------------------
-// Клетка шахты. Сверху видно торец верхнего блока; чем глубже раскоп, тем
-// темнее и чуть меньше торец (яма уходит вниз), а стенки соседей отбрасывают
-// тень внутрь — свет падает сверху-слева.
-// ---------------------------------------------------------------------------
-
-interface CellProps {
-  index: number;
-  rock: number;
-  variant: number;
-  depth: number;
-  crack: number;
-  /** Лупа: порода ярусом ниже, если она ценнее верхней (−1 — не показывать). */
-  peek: number;
-  /** Сверху порода, которой не хватает в норме ранга. */
-  need: boolean;
-  /** Сверху сейд-камень. */
-  seid: boolean;
-  /** Лупа: сейд в этой клетке на столько ярусов ниже (−1 — нет). */
-  seidBelow: number;
-  wt: number;
-  wl: number;
-  wb: number;
-  wr: number;
-  faceRef: (index: number, el: HTMLSpanElement | null) => void;
-}
-
-const MineCell = memo(function MineCell({
-  index,
-  rock,
-  variant,
-  depth,
-  crack,
-  peek,
-  need,
-  seid,
-  seidBelow,
-  wt,
-  wl,
-  wb,
-  wr,
-  faceRef,
-}: CellProps) {
-  const tex = seid ? seidTexture() : rock < 0 ? bedrockTexture() : rockTexture(rock, variant);
-  const x = index % MINE_COLS;
-  const y = Math.floor(index / MINE_COLS);
-  // Задержка подъёма при обновлении шахты: волна от центра к краям.
-  const rise = Math.hypot(x - (MINE_COLS - 1) / 2, y - (MINE_ROWS - 1) / 2);
-  const style = {
-    '--d': depth,
-    '--wt': wt,
-    '--wl': wl,
-    '--wb': wb,
-    '--wr': wr,
-    '--rd': `${Math.round(rise * 34)}ms`,
-  } as CSSProperties;
-  return (
-    <div className={`pcell${rock < 0 ? ' is-bottom' : ''}${seid ? ' is-seid' : ''}`} style={style}>
-      <span
-        className="pcell__face"
-        ref={(el) => faceRef(index, el)}
-        style={{ backgroundImage: `url(${tex})` }}
-      >
-        {crack > 0 && (
-          <i className="pcell__crack" style={{ backgroundImage: `url(${crackTexture(crack)})` }} />
-        )}
-      </span>
-      {seid && <i className="pcell__glow" />}
-      {seidBelow > 0 ? (
-        <span className="pcell__seidmark">
-          <img src={seidTexture()} alt="" />
-          <b>↓{seidBelow}</b>
-        </span>
-      ) : (
-        peek >= 0 && <img className="pcell__peek" src={rockTexture(peek)} alt="" />
-      )}
-      {need && !seid && <i className="pcell__need" />}
-    </div>
-  );
-});
-
-/** Высота стены между клеткой и соседом: сосед выше — тень глубже. */
-function wall(dug: number[], c: number, dx: number, dy: number): number {
-  const x = (c % MINE_COLS) + dx;
-  const y = Math.floor(c / MINE_COLS) + dy;
-  // За краем шахты — нетронутая порода: стена в полную глубину раскопа.
-  const other = x < 0 || y < 0 || x >= MINE_COLS || y >= MINE_ROWS ? 0 : dug[y * MINE_COLS + x];
-  return Math.max(0, dug[c] - other);
-}
-
-/** Кольца вокруг клетки: для волн отбойника и взрыва (по Чебышёву). */
-function rings(center: number, cells: number[]): number[][] {
-  const cx = center % MINE_COLS;
-  const cy = Math.floor(center / MINE_COLS);
-  const out: number[][] = [];
-  for (const c of cells) {
-    const d = Math.max(Math.abs((c % MINE_COLS) - cx), Math.abs(Math.floor(c / MINE_COLS) - cy));
-    (out[d] ??= []).push(c);
-  }
-  return out.filter(Boolean);
-}
-
-type BreakKind = 'hit' | 'crit' | 'vein' | 'blast' | 'hammer';
 
 type Sheetname = 'mines' | 'prestige' | 'norm' | 'settings' | null;
 
@@ -346,7 +236,6 @@ export function PrisonPage() {
   const seids = useMemo(() => seidsOf(mine.id, mine.seed), [mine.id, mine.seed]);
   const mineKey = `${mine.id}:${mine.seed}`;
 
-  const [cracks, setCracks] = useState<number[]>(() => new Array<number>(MINE_CELLS).fill(0));
   const [sheet, setSheet] = useState<Sheetname>(null);
   const [camp, setCamp] = useState<CampTab | null>(null);
   const [rankScene, setRankScene] = useState<PrisonRankUp | null>(null);
@@ -354,7 +243,6 @@ export function PrisonPage() {
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const [findCard, setFindCard] = useState<{ id: FindId; fresh: boolean; n: number } | null>(null);
   const [cardShown, cardLeaving] = useExit(findCard, 260);
-  const [aiming, setAiming] = useState(false);
   const [arming, setArming] = useState<ItemId | null>(null);
   const [crewNote, setCrewNote] = useState(false);
   const [rewards, setRewards] = useState(false);
@@ -398,27 +286,37 @@ export function PrisonPage() {
   }, []);
   const readyRewards = useReadyRewards(rewardsNow);
 
-  const fieldRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const field = useRef<MineFieldHandle>(null);
   const bagRef = useRef<HTMLButtonElement>(null);
-  const aimRef = useRef<HTMLDivElement>(null);
-  const pickRef = useRef<HTMLDivElement>(null);
   const moneyRef = useRef<MoneyHandle>(null);
-  const layerRef = useRef<HTMLDivElement>(null);
-  const fx = useRef<Fx | null>(null);
-  const faces = useRef<(HTMLSpanElement | null)[]>([]);
-  const hp = useRef<Float32Array>(new Float32Array(MINE_CELLS).fill(-1));
-  const lastHit = useRef(0);
-  const pointer = useRef<{ id: number; cell: number } | null>(null);
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const rect = useRef<DOMRect | null>(null);
   const rolling = useRef<(() => void) | null>(null);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const waveTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const fullWarnAt = useRef(0);
   const toastSeq = useRef(0);
-  const mineKeyRef = useRef(mineKey);
-  mineKeyRef.current = mineKey;
+  // Удар по полю: урон, трещины, чары — общие с шахтами подземелья. Правила
+  // зовут функции страницы через стрелки: в миг удара они уже объявлены.
+  const dig = useMineDig(field, {
+    key: mineKey,
+    rockAt: (c) => rockAt(rocks, c, useFinanceStore.getState().prison.mine.dug[c]),
+    rock: (r) => ({ hp: ROCKS[r].hp, kind: ROCKS[r].kind, colors: rockColors(r) }),
+    // Сейд-камень площадные чары не берут: его ломают только руками. Под
+    // метеоритом и Куйвой порода закрыта, пока они на поле.
+    shut: (c) => {
+      const st = useFinanceStore.getState().prison;
+      return yardShut(st).has(c) || seidTop(seids, c, st.mine.dug[c]);
+    },
+    special: (c) => specialHit(c),
+    gapMs: () => gapMs(useFinanceStore.getState().prison),
+    damage: () => {
+      const st = useFinanceStore.getState().prison;
+      return hitDamage(st.pick, st.sharp) * modsOf(st).dmg;
+    },
+    procs: () => modsOf(useFinanceStore.getState().prison),
+    vein: (c, rock, max) =>
+      veinCells(rocks, useFinanceStore.getState().prison.mine.dug, c, rock, max),
+    onBreak: (list, kind) => onBreak(list, kind),
+    onFrenzy: (c) => startFrenzy(c),
+  });
   const stripRef = useRef<HTMLDivElement>(null);
   const parcelsRef = useRef<HTMLDivElement>(null);
   const campRef = useRef<HTMLButtonElement>(null);
@@ -435,39 +333,10 @@ export function PrisonPage() {
     if (!rolling.current) setShownBalance(balance);
   }, [balance]);
 
-  const faceRef = useCallback((i: number, el: HTMLSpanElement | null) => {
-    faces.current[i] = el;
-  }, []);
-
-  // Новая шахта (ранг, обновление, переход): трещины и урон — с нуля, волны
-  // прошлого поля не доигрываются.
-  useEffect(() => {
-    hp.current.fill(-1);
-    setCracks(new Array<number>(MINE_CELLS).fill(0));
-    waveTimers.current.forEach(clearTimeout);
-    waveTimers.current = [];
-  }, [mineKey]);
-
-  // Канва крошки живёт вместе с полем.
-  useLayoutEffect(() => {
-    const c = canvasRef.current;
-    if (!c) return undefined;
-    fx.current = createFx(c);
-    const onResize = () => fx.current?.resize();
-    window.addEventListener('resize', onResize);
-    return () => {
-      window.removeEventListener('resize', onResize);
-      fx.current?.destroy();
-      fx.current = null;
-    };
-  }, [hydrated]);
-
   useEffect(
     () => () => {
-      if (holdTimer.current) clearTimeout(holdTimer.current);
       if (resetTimer.current) clearTimeout(resetTimer.current);
       if (streakTimer.current) clearTimeout(streakTimer.current);
-      waveTimers.current.forEach(clearTimeout);
       rolling.current?.();
       stopShake();
     },
@@ -480,15 +349,6 @@ export function PrisonPage() {
     const y = crewYield(useFinanceStore.getState().prison, Date.now());
     if (y.blocks > 0 && y.minutes >= 15) setCrewNote(true);
   }, [hydrated]);
-
-  // Свернули приложение посреди удержания — кирка не должна бить в фоне.
-  useEffect(() => {
-    const onHide = () => {
-      if (document.visibilityState === 'hidden') stopHold();
-    };
-    document.addEventListener('visibilitychange', onHide);
-    return () => document.removeEventListener('visibilitychange', onHide);
-  }, []);
 
   const say = useCallback((text: string) => {
     toastSeq.current += 1;
@@ -563,164 +423,13 @@ export function PrisonPage() {
     setShownBalance(useFinanceStore.getState().slotsBalance);
   }, []);
 
-  const cellCenter = (c: number) => {
-    const field = fieldRef.current;
-    if (!field) return { x: 0, y: 0, size: 0 };
-    const size = field.clientWidth / MINE_COLS;
-    return {
-      x: ((c % MINE_COLS) + 0.5) * size,
-      y: (Math.floor(c / MINE_COLS) + 0.5) * size,
-      size,
-    };
-  };
-
   /** Всплывающая надпись над клеткой: «КРИТ», «ВЗРЫВ», «+3 токена». */
-  const floatText = (c: number, text: string, cls: string, delay = 0) => {
-    const layer = layerRef.current;
-    const field = fieldRef.current;
-    if (!layer || !field || reduceMotion()) return;
-    const { x, y } = cellCenter(c);
-    const el = document.createElement('span');
-    el.className = `pfloat ${cls}`;
-    el.textContent = text;
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-    el.style.opacity = '0';
-    layer.appendChild(el);
-    const done = () => el.remove();
-    try {
-      const a = el.animate(
-        [
-          { transform: 'translate(-50%, -50%) scale(.6)', opacity: 0 },
-          { transform: 'translate(-50%, -110%) scale(1.15)', opacity: 1, offset: 0.2 },
-          { transform: 'translate(-50%, -190%) scale(1)', opacity: 0 },
-        ],
-        { duration: 760, delay, easing: 'cubic-bezier(.2,.7,.3,1)' },
-      );
-      a.onfinish = done;
-      a.oncancel = done;
-    } catch {
-      done();
-    }
-    setTimeout(done, 1400 + delay);
-  };
+  const floatText = (c: number, text: string, cls: string, delay = 0) =>
+    field.current?.float(c, text, cls, delay);
 
   /** Добыча летит дугой из клетки в рюкзак. */
-  const flyLoot = (c: number, rock: number) => {
-    const layer = layerRef.current;
-    const field = fieldRef.current;
-    const bagEl = bagRef.current;
-    if (!layer || !field || !bagEl) return;
-    if (reduceMotion() || layer.childElementCount > 14) {
-      squashPop(bagEl, 0.25);
-      return;
-    }
-    const { x, y, size } = cellCenter(c);
-    const fr = field.getBoundingClientRect();
-    const br = bagEl.getBoundingClientRect();
-    const tx = br.left + 26 - fr.left;
-    const ty = br.top + br.height / 2 - fr.top;
-    const img = document.createElement('img');
-    img.className = 'ploot';
-    img.src = rockTexture(rock);
-    img.alt = '';
-    const s = size * 0.46;
-    img.style.width = `${s}px`;
-    img.style.height = `${s}px`;
-    img.style.left = `${x - s / 2}px`;
-    img.style.top = `${y - s / 2}px`;
-    layer.appendChild(img);
-    const dx = tx - x;
-    const dy = ty - y;
-    // Дуга: сначала вверх и в сторону, потом вниз в рюкзак.
-    const mx = dx * 0.35 + (Math.random() - 0.5) * 30;
-    const my = Math.min(dy, 0) - 50;
-    const done = () => img.remove();
-    try {
-      const a = img.animate(
-        [
-          { transform: 'translate(0,0) scale(1) rotate(0deg)', opacity: 1 },
-          {
-            transform: `translate(${mx}px, ${my}px) scale(1.2) rotate(${Math.random() * 60 - 30}deg)`,
-            opacity: 1,
-            offset: 0.38,
-          },
-          { transform: `translate(${dx}px, ${dy}px) scale(.55) rotate(0deg)`, opacity: 0.9 },
-        ],
-        { duration: 520, easing: 'cubic-bezier(.45,0,.55,1)' },
-      );
-      a.onfinish = () => {
-        done();
-        squashPop(bagEl, 0.22);
-      };
-      a.oncancel = done;
-    } catch {
-      done();
-    }
-    setTimeout(done, 1000);
-  };
-
-  /** Кирка на клетке: качнулась и ударила. Одна на всё поле. */
-  const swing = (c: number, crit: boolean) => {
-    const el = pickRef.current;
-    if (!el || reduceMotion()) return;
-    const { x, y, size } = cellCenter(c);
-    el.style.setProperty('--px', `${x}px`);
-    el.style.setProperty('--py', `${y}px`);
-    el.style.setProperty('--ps', `${size}px`);
-    el.classList.add('is-on');
-    try {
-      el.animate(
-        [
-          { transform: 'rotate(-38deg)' },
-          { transform: `rotate(${crit ? 16 : 10}deg)`, offset: 0.45 },
-          { transform: 'rotate(0deg)' },
-        ],
-        { duration: 170, easing: 'cubic-bezier(.5,0,.3,1)' },
-      );
-    } catch {
-      /* без WAAPI просто стоит */
-    }
-  };
-
-  const aimAt = (c: number) => {
-    const el = aimRef.current;
-    if (!el) return;
-    const { x, y, size } = cellCenter(c);
-    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
-    el.style.width = `${size}px`;
-    el.style.height = `${size}px`;
-  };
-
-  /** Ударная волна: кольцо по полю от точки. Только прозрачность и масштаб. */
-  const shockwave = (c: number, cells: number, hot = false) => {
-    const layer = layerRef.current;
-    if (!layer || reduceMotion()) return;
-    const { x, y, size } = cellCenter(c);
-    const el = document.createElement('i');
-    el.className = `pwave${hot ? ' pwave--hot' : ''}`;
-    const d = size * cells;
-    el.style.width = `${d}px`;
-    el.style.height = `${d}px`;
-    el.style.left = `${x - d / 2}px`;
-    el.style.top = `${y - d / 2}px`;
-    layer.appendChild(el);
-    const done = () => el.remove();
-    try {
-      const a = el.animate(
-        [
-          { transform: 'scale(.2)', opacity: 1 },
-          { transform: 'scale(1.15)', opacity: 0 },
-        ],
-        { duration: 420 + cells * 25, easing: 'cubic-bezier(.2,.7,.3,1)' },
-      );
-      a.onfinish = done;
-      a.oncancel = done;
-    } catch {
-      done();
-    }
-    setTimeout(done, 1200);
-  };
+  const flyLoot = (c: number, rock: number) =>
+    field.current?.fly(c, rockTexture(rock), bagRef.current, () => squashPop(bagRef.current, 0.22));
 
   const scheduleReset = () => {
     if (resetTimer.current) return;
@@ -730,7 +439,7 @@ export function PrisonPage() {
       if (minedShare(st.mine.dug) < MINE_RESET_AT) return;
       mineRumble();
       tapMedium();
-      addTrauma(fieldRef.current, 0.3);
+      field.current?.trauma(0.3);
       say('Шахта обновилась');
       prisonGoMine(st.mine.id);
     }, 650);
@@ -783,7 +492,7 @@ export function PrisonPage() {
     tierBreak(Math.min(3, t));
     tapMedium();
     squashPop(stripRef.current, 0.35 + 0.1 * t);
-    if (t >= 3) addTrauma(fieldRef.current, 0.2);
+    if (t >= 3) field.current?.trauma(0.2);
     if (first)
       say(`«${tier.name}»: +${Math.round(tier.loot * 100)}% к добыче, пока бьёшь без пауз`);
   };
@@ -836,8 +545,7 @@ export function PrisonPage() {
   const totemKey = (c: number, n: number) => {
     keyFound();
     notifySuccess();
-    const { x, y } = cellCenter(c);
-    fx.current?.chips(x, y, ['#4fd04a', '#a6ec3a', '#f2e64a', '#ffffff'], 18, 1.4);
+    field.current?.chips(c, ['#4fd04a', '#a6ec3a', '#f2e64a', '#ffffff'], 18, 1.4);
     const played = playTotem(campRef.current, () => {
       squashPop(campRef.current, 0.6);
       coinDing();
@@ -925,27 +633,11 @@ export function PrisonPage() {
   };
 
   /**
-   * Сломать верхние блоки клеток разом. Порода берётся с поля В ЭТОТ МИГ —
-   * волны отбойника идут кольцами, и к третьему кольцу первое уже на ярус
-   * глубже.
+   * Блоки сломаны (крошку и подъём торцов рисует поле): стор, запал, темп,
+   * перековка, норма, добыча в рюкзак и всё, что надо сказать.
    */
-  const breakCells = (cells: number[], kind: BreakKind): PrisonLoot | null => {
+  const onBreak = (list: DigBlock[], kind: BreakKind) => {
     const st = useFinanceStore.getState().prison;
-    // Сейд-камень площадные чары не берут: его ломают только руками. Под
-    // метеоритом и Куйвой порода закрыта, пока они на поле.
-    const shut = yardShut(st);
-    const list = cells
-      .filter((cell) => !shut.has(cell) && !seidTop(seids, cell, st.mine.dug[cell]))
-      .map((cell) => ({ cell, rock: rockAt(rocks, cell, st.mine.dug[cell]) }))
-      .filter((b) => b.rock >= 0);
-    if (!list.length) return null;
-    for (const b of list) hp.current[b.cell] = -1;
-    setCracks((prev) => {
-      if (!list.some((b) => prev[b.cell])) return prev;
-      const next = prev.slice();
-      for (const b of list) next[b.cell] = 0;
-      return next;
-    });
     const valueBefore = bagValue(st.bag, modsOf(st).sell);
     const res = prisonBreak(list, { streak: streakNow() });
     const after = useFinanceStore.getState().prison;
@@ -956,8 +648,7 @@ export function PrisonPage() {
     // Перековка: блок засчитан породой выше — золотые искры и её имя.
     if (res.reforged.length) {
       const f = res.reforged[0];
-      const { x, y } = cellCenter(f.cell);
-      fx.current?.chips(x, y, ['#ffd35a', '#fff3b0', '#ffae3a'], single ? 12 : 6, 1.2);
+      field.current?.chips(f.cell, ['#ffd35a', '#fff3b0', '#ffae3a'], single ? 12 : 6, 1.2);
       if (single) floatText(f.cell, `⚙ ${ROCKS[f.rock].name}`, 'pfloat--reforge', 120);
     }
     // Порода в норму: счёт над клеткой, пока норма по ней не закрыта.
@@ -975,196 +666,12 @@ export function PrisonPage() {
         );
     }
     list.forEach((b, i) => {
-      const { x, y } = cellCenter(b.cell);
-      const colors = rockColors(b.rock);
-      if (single) {
-        fx.current?.chips(x, y, colors, kind === 'crit' ? 22 : 14, kind === 'crit' ? 1.6 : 1.1);
-        fx.current?.puff(x, y, 'rgba(210,190,160,1)', 5);
-      } else {
-        fx.current?.chips(x, y, colors, kind === 'hammer' ? 5 : 9, kind === 'vein' ? 1 : 1.35);
-        if (i < 12) fx.current?.puff(x, y, 'rgba(210,190,160,1)', 3);
-      }
-      const face = faces.current[b.cell];
-      if (face && !reduceMotion()) {
-        // Под сломанным блоком открылся следующий: он «проступает» из ямы.
-        try {
-          face.animate(
-            [
-              { transform: 'scale(.72)', opacity: 0.2 },
-              { transform: 'scale(1.03)', opacity: 1, offset: 0.7 },
-              { transform: 'scale(1)', opacity: 1 },
-            ],
-            { duration: 200, easing: 'cubic-bezier(.2,.8,.3,1)' },
-          );
-        } catch {
-          /* не страшно */
-        }
-      }
       if (res.taken > 0 && i < (single ? 1 : 4)) flyLoot(b.cell, b.rock);
       // Порода следующей шахты на дне — находка, о ней стоит сказать.
       if (single && b.rock > st.mine.id) floatText(b.cell, ROCKS[b.rock].name, 'pfloat--find');
     });
-    if (single) blockBreak(ROCKS[list[0].rock].kind);
     announce(list[0].cell, res);
     yardLoot(list[0].cell, res);
-    return res;
-  };
-  const breakRef = useRef(breakCells);
-  breakRef.current = breakCells;
-
-  /** Волна колец: каждое кольцо ломается в свой такт, от центра наружу. */
-  const wave = (groups: number[][], kind: BreakKind, stepMs: number) => {
-    const key = mineKeyRef.current;
-    groups.forEach((g, i) => {
-      const t = setTimeout(() => {
-        // Шахта сменилась посреди волны — прошлое поле не доламываем.
-        if (mineKeyRef.current !== key) return;
-        breakRef.current(g, kind);
-      }, i * stepMs);
-      waveTimers.current.push(t);
-    });
-  };
-
-  const blastAt = (c: number, r: number, label: string) => {
-    const cells = blastCells(c, r);
-    boom(r);
-    // Без надписи — это не первый взрыв серии (камнепад): вспышка на каждом
-    // превратила бы град в стробоскоп.
-    if (label) flashFrame(r >= 2 ? 'big' : 'small');
-    addTrauma(fieldRef.current, 0.3 + 0.15 * r);
-    tapMedium();
-    shockwave(c, 2 * r + 1.6, true);
-    if (label) floatText(c, label, 'pfloat--blast');
-    wave(rings(c, cells), 'blast', 45);
-  };
-
-  /** Луч: весь ряд, от места удара к краям. Полоса света — одним слоем. */
-  const beamFrom = (c: number) => {
-    const row = Math.floor(c / MINE_COLS);
-    const cells = Array.from({ length: MINE_COLS }, (_, x) => row * MINE_COLS + x);
-    const layer = layerRef.current;
-    if (layer && !reduceMotion()) {
-      const { y, size } = cellCenter(c);
-      const el = document.createElement('i');
-      el.className = 'pbeam';
-      el.style.top = `${y - size * 0.32}px`;
-      el.style.height = `${size * 0.64}px`;
-      el.style.transformOrigin = `${cellCenter(c).x}px 50%`;
-      layer.appendChild(el);
-      const done = () => el.remove();
-      try {
-        const a = el.animate(
-          [
-            { transform: 'scaleX(0)', opacity: 1 },
-            { transform: 'scaleX(1)', opacity: 1, offset: 0.35 },
-            { transform: 'scaleX(1) scaleY(.2)', opacity: 0 },
-          ],
-          { duration: 420, easing: 'cubic-bezier(.2,.7,.3,1)' },
-        );
-        a.onfinish = done;
-        a.oncancel = done;
-      } catch {
-        done();
-      }
-      setTimeout(done, 900);
-    }
-    boom(1);
-    tierBreak(1);
-    addTrauma(fieldRef.current, 0.3);
-    tapMedium();
-    floatText(c, 'ЛУЧ', 'pfloat--beam');
-    wave(rings(c, cells), 'blast', 40);
-  };
-
-  /** Камнепад: град взрывов по полю, друг за другом. */
-  const rockfallAt = (c: number) => {
-    const key = mineKeyRef.current;
-    const picked = new Set<number>();
-    while (picked.size < ROCKFALL_HITS) picked.add(Math.floor(Math.random() * MINE_CELLS));
-    floatText(c, 'КАМНЕПАД', 'pfloat--blast');
-    mineRumble();
-    flashFrame('big');
-    [...picked].forEach((cell, i) => {
-      waveTimers.current.push(
-        setTimeout(
-          () => {
-            if (mineKeyRef.current !== key) return;
-            blastAt(cell, 1, '');
-          },
-          140 + i * 190,
-        ),
-      );
-    });
-  };
-
-  /**
-   * Трещина: удар расходится по четырём соседям тем же уроном. Слабые
-   * соседи ломаются, крепкие — трескаются: урон живёт в странице, как и
-   * у обычного удара.
-   */
-  const crackFrom = (c: number, dmg: number) => {
-    const st = useFinanceStore.getState().prison;
-    const x = c % MINE_COLS;
-    const y = Math.floor(c / MINE_COLS);
-    const nb = [
-      x > 0 ? c - 1 : -1,
-      x < MINE_COLS - 1 ? c + 1 : -1,
-      y > 0 ? c - MINE_COLS : -1,
-      y < MINE_ROWS - 1 ? c + MINE_COLS : -1,
-    ].filter((n) => n >= 0);
-    const broken: number[] = [];
-    const staged: [number, number][] = [];
-    for (const n of nb) {
-      const rock = rockAt(rocks, n, st.mine.dug[n]);
-      if (rock < 0 || seidTop(seids, n, st.mine.dug[n])) continue;
-      const hpMax = ROCKS[rock].hp;
-      const left = (hp.current[n] < 0 ? hpMax : hp.current[n]) - dmg;
-      if (left <= 1e-6) broken.push(n);
-      else {
-        hp.current[n] = left;
-        staged.push([n, Math.min(3, 1 + Math.floor((1 - left / hpMax) * 3))]);
-      }
-    }
-    if (staged.length)
-      setCracks((prev) => {
-        const next = prev.slice();
-        for (const [n, stage] of staged) next[n] = stage;
-        return next;
-      });
-    floatText(c, 'ТРЕЩИНА', 'pfloat--crack');
-    chainTick(2);
-    if (broken.length) breakCells(broken, 'vein');
-  };
-
-  const hammerFrom = (c: number, label: string, power = 2) => {
-    const all = Array.from({ length: MINE_CELLS }, (_, i) => i);
-    boom(power);
-    mineRumble();
-    flashFrame('big');
-    addTrauma(fieldRef.current, 0.65);
-    tapMedium();
-    shockwave(c, 16);
-    floatText(c, label, 'pfloat--blast');
-    wave(rings(c, all), 'hammer', 34);
-  };
-
-  const veinFrom = (c: number, rock: number, max: number) => {
-    const st = useFinanceStore.getState().prison;
-    const cells = veinCells(rocks, st.mine.dug, c, rock, max);
-    if (!cells.length) return;
-    floatText(c, `ЖИЛА ×${cells.length + 1}`, 'pfloat--vein');
-    const key = mineKeyRef.current;
-    cells.forEach((cell, i) => {
-      const t = setTimeout(
-        () => {
-          if (mineKeyRef.current !== key) return;
-          chainTick(i + 1);
-          breakRef.current([cell], 'vein');
-        },
-        (i + 1) * 60,
-      );
-      waveTimers.current.push(t);
-    });
   };
 
   const startFrenzy = (c: number) => {
@@ -1181,57 +688,32 @@ export function PrisonPage() {
    * `hp`, что и урон породы: сейд сверху — значит, это его запас.
    */
   const seidHit = (c: number, crit: boolean) => {
-    swing(c, crit);
-    const { x, y } = cellCenter(c);
-    const left = (hp.current[c] < 0 ? SEID_HITS : hp.current[c]) - (crit ? 2 : 1);
-    fx.current?.chips(x, y, ['#3fe6d0', '#c8fff6', '#262b33'], crit ? 12 : 6, crit ? 1.4 : 0.9);
+    const f = field.current;
+    f?.swing(c, crit);
+    const hp = dig.hp.current;
+    const left = (hp[c] < 0 ? SEID_HITS : hp[c]) - (crit ? 2 : 1);
+    f?.chips(c, ['#3fe6d0', '#c8fff6', '#262b33'], crit ? 12 : 6, crit ? 1.4 : 0.9);
     if (left > 0) {
-      hp.current[c] = left;
-      const stage = Math.min(3, 1 + Math.floor((1 - left / SEID_HITS) * 3));
-      setCracks((prev) => {
-        if (prev[c] === stage) return prev;
-        const next = prev.slice();
-        next[c] = stage;
-        return next;
-      });
+      hp[c] = left;
+      dig.setCrack(c, crackStage(left, SEID_HITS));
       pickHit('crystal', crit);
       tapMedium();
       if (crit) floatText(c, 'КРИТ', 'pfloat--crit');
-      const face = faces.current[c];
-      if (face && !reduceMotion()) {
-        try {
-          face.animate(
-            [
-              { transform: 'scale(1)' },
-              { transform: 'scale(.86) rotate(-3deg)', offset: 0.3 },
-              { transform: 'scale(1.04) rotate(2deg)', offset: 0.7 },
-              { transform: 'scale(1)' },
-            ],
-            { duration: 200, easing: 'ease-out' },
-          );
-        } catch {
-          /* не страшно */
-        }
-      }
+      f?.wobble(c);
       return;
     }
-    hp.current[c] = -1;
-    setCracks((prev) => {
-      if (!prev[c]) return prev;
-      const next = prev.slice();
-      next[c] = 0;
-      return next;
-    });
+    hp[c] = -1;
+    dig.setCrack(c, 0);
     const from = useFinanceStore.getState().slotsBalance;
     const got = prisonSeid(c);
     if (!got) return;
     rollBalance(from, from + got.coins);
     tierBreak(3);
     flashFrame('big');
-    addTrauma(fieldRef.current, 0.45);
+    f?.trauma(0.45);
     notifySuccess();
-    shockwave(c, 5, false);
-    fx.current?.chips(x, y, ['#3fe6d0', '#c8fff6', '#ffffff', '#8ff5e6'], 40, 2);
+    f?.shockwave(c, 5, false);
+    f?.chips(c, ['#3fe6d0', '#c8fff6', '#ffffff', '#8ff5e6'], 40, 2);
     burstConfetti(70, ['#3fe6d0', '#c8fff6', '#ffe08a']);
     floatText(c, `+${got.tokens} ✦`, 'pfloat--seid');
     say(`Сейд-камень: +${fmt(got.tokens)} токенов, +${shortMoney(got.coins)} монет`);
@@ -1290,34 +772,30 @@ export function PrisonPage() {
     notifyWarning();
     if (ev.id === 'meteor') {
       // Удар о поле — когда камень долетел (CSS `ymeteor-drop`, 650 мс).
-      const key = mineKeyRef.current;
-      waveTimers.current.push(
-        setTimeout(
-          () => {
-            if (mineKeyRef.current !== key) return;
-            const { x, y } = cellCenter(ev.cell);
-            treeFall();
-            flashFrame('small');
-            addTrauma(fieldRef.current, 0.55);
-            fx.current?.puff(x, y, 'rgba(255,170,90,1)', 14);
-            fx.current?.chips(x, y, ['#ff6a1a', '#ffd35a', '#4a3a30', '#fff3b0'], 30, 1.8);
-            shockwave(ev.cell, 3, true);
-          },
-          reduceMotion() ? 0 : 650,
-        ),
+      dig.later(
+        () => {
+          const f = field.current;
+          treeFall();
+          flashFrame('small');
+          f?.trauma(0.55);
+          f?.puff(ev.cell, 'rgba(255,170,90,1)', 14);
+          f?.chips(ev.cell, ['#ff6a1a', '#ffd35a', '#4a3a30', '#fff3b0'], 30, 1.8);
+          f?.shockwave(ev.cell, 3, true);
+        },
+        reduceMotion() ? 0 : 650,
       );
     } else if (ev.id === 'kuiva') {
       mineRumble();
-      addTrauma(fieldRef.current, 0.6);
+      field.current?.trauma(0.6);
     }
   };
 
   /** Метеорит: считаются удары, крит — за два, как у сейда. */
   const meteorHit = (c: number, crit: boolean) => {
-    swing(c, crit);
-    const { x, y } = cellCenter(c);
+    const f = field.current;
+    f?.swing(c, crit);
     const left = (meteorLeft.current < 0 ? METEOR_HITS : meteorLeft.current) - (crit ? 2 : 1);
-    fx.current?.chips(x, y, ['#ff6a1a', '#ffd35a', '#4a3a30'], crit ? 14 : 7, crit ? 1.5 : 1);
+    f?.chips(c, ['#ff6a1a', '#ffd35a', '#4a3a30'], crit ? 14 : 7, crit ? 1.5 : 1);
     const el = meteorRef.current;
     if (el && !reduceMotion()) {
       try {
@@ -1348,19 +826,19 @@ export function PrisonPage() {
     if (!got) return;
     boom(1);
     flashFrame('big');
-    addTrauma(fieldRef.current, 0.5);
-    shockwave(c, 5, true);
-    fx.current?.chips(x, y, ['#ff6a1a', '#ffd35a', '#ffffff', '#4a3a30'], 44, 2.1);
+    f?.trauma(0.5);
+    f?.shockwave(c, 5, true);
+    f?.chips(c, ['#ff6a1a', '#ffd35a', '#ffffff', '#4a3a30'], 44, 2.1);
     yardPrize(got, c);
   };
 
   /** Куйва: урон как по породе, здоровье — полоской над ним. */
   const kuivaHit = (c: number, crit: boolean, st: PrisonState, ev: YardEvent) => {
-    swing(c, crit);
-    const { x, y } = cellCenter(c);
+    const f = field.current;
+    f?.swing(c, crit);
     const dmg = hitDamage(st.pick, st.sharp) * modsOf(st).dmg * (crit ? CRIT_MULT : 1);
     const left = (bossHp.current < 0 ? ev.hp : bossHp.current) - dmg;
-    fx.current?.chips(x, y, ['#6a727c', '#9aa4ae', '#3fe6d0'], crit ? 12 : 5, crit ? 1.4 : 0.9);
+    f?.chips(c, ['#6a727c', '#9aa4ae', '#3fe6d0'], crit ? 12 : 5, crit ? 1.4 : 0.9);
     const el = bossRef.current;
     if (el && !reduceMotion()) {
       const dx = ((c % MINE_COLS) - ((ev.cell % MINE_COLS) + 1)) * 3;
@@ -1383,7 +861,7 @@ export function PrisonPage() {
       pickHit('stone', crit);
       if (crit) {
         floatText(c, 'КРИТ', 'pfloat--crit');
-        addTrauma(fieldRef.current, 0.2);
+        f?.trauma(0.2);
         tapMedium();
       } else selectionChanged();
       return;
@@ -1393,116 +871,39 @@ export function PrisonPage() {
     const got = yardKuiva();
     if (!got) return;
     const mid = ev.cell + MINE_COLS + 1;
-    const m = cellCenter(mid);
     boom(2);
     flashFrame('big');
-    addTrauma(fieldRef.current, 0.8);
-    shockwave(mid, 7, false);
-    fx.current?.chips(m.x, m.y, ['#6a727c', '#9aa4ae', '#3fe6d0', '#c8fff6'], 70, 2.4);
-    fx.current?.puff(m.x, m.y, 'rgba(180,190,200,1)', 20);
+    f?.trauma(0.8);
+    f?.shockwave(mid, 7, false);
+    f?.chips(mid, ['#6a727c', '#9aa4ae', '#3fe6d0', '#c8fff6'], 70, 2.4);
+    f?.puff(mid, 'rgba(180,190,200,1)', 20);
     floatText(mid, 'КУЙВА ПОВЕРЖЕН', 'pfloat--fell');
     yardPrize(got, mid);
   };
 
-  /** Один удар кирки по клетке. Весь «кликер» — здесь. */
-  const hit = (c: number) => {
-    if (c < 0 || c >= MINE_CELLS) return;
-    const now = performance.now();
+  /**
+   * Клетка забирает удар себе: метеорит и Куйва лежат поверх поля, сейд
+   * бьётся ударами, а не уроном. Остальное — обычный удар поля.
+   */
+  const specialHit = (c: number): boolean => {
     const st = useFinanceStore.getState().prison;
-    if (now - lastHit.current < gapMs(st) - 4) return;
-    lastHit.current = now;
-
     const ev = liveEvent(st);
     if (ev?.place === 'mine') {
       if (ev.id === 'meteor' && c === ev.cell) {
         meteorHit(c, Math.random() < CRIT_CHANCE);
-        return;
+        return true;
       }
       if (ev.id === 'kuiva' && kuivaCells(ev.cell).includes(c)) {
         kuivaHit(c, Math.random() < CRIT_CHANCE, st, ev);
-        return;
+        return true;
       }
     }
-
-    const depth = st.mine.dug[c];
-    if (seidTop(seids, c, depth)) {
+    if (seidTop(seids, c, st.mine.dug[c])) {
       seidHit(c, Math.random() < CRIT_CHANCE);
-      return;
+      return true;
     }
-    const rock = rockAt(rocks, c, depth);
-    const { x, y } = cellCenter(c);
-    if (rock < 0) {
-      swing(c, false);
-      bedrockClink();
-      fx.current?.chips(x, y, ['#3a3432', '#1f1b1b'], 2, 0.5);
-      return;
-    }
-    const r = ROCKS[rock];
-    const m = modsOf(st);
-    const crit = Math.random() < CRIT_CHANCE;
-    swing(c, crit);
-    const dmg = hitDamage(st.pick, st.sharp) * m.dmg * (crit ? CRIT_MULT : 1);
-    const left = (hp.current[c] < 0 ? r.hp : hp.current[c]) - dmg;
-    const face = faces.current[c];
-
-    if (crit) {
-      floatText(c, 'КРИТ', 'pfloat--crit');
-      addTrauma(fieldRef.current, 0.16);
-      tapMedium();
-    }
-
-    if (left > 1e-6) {
-      hp.current[c] = left;
-      const stage = Math.min(3, 1 + Math.floor((1 - left / r.hp) * 3));
-      setCracks((prev) => {
-        if (prev[c] === stage) return prev;
-        const next = prev.slice();
-        next[c] = stage;
-        return next;
-      });
-      pickHit(r.kind, crit);
-      if (!crit) selectionChanged();
-      fx.current?.chips(x, y, rockColors(rock), crit ? 9 : 3, crit ? 1.3 : 0.7);
-      if (face && !reduceMotion()) {
-        try {
-          face.animate(
-            [
-              { transform: 'scale(1)' },
-              { transform: `scale(${crit ? 0.84 : 0.91})`, offset: 0.3 },
-              { transform: 'scale(1.02)', offset: 0.7 },
-              { transform: 'scale(1)' },
-            ],
-            { duration: 150, easing: 'ease-out' },
-          );
-        } catch {
-          /* не страшно */
-        }
-      }
-      return;
-    }
-
-    // Блок развалился.
-    if (crit) pickHit(r.kind, true);
-    else tapLight();
-    breakCells([c], crit ? 'crit' : 'hit');
-
-    // Зачарования. Срабатывает одно, старшее: отбойник, камнепад, луч,
-    // взрыв, жила, трещина — несколько сразу превращают поле в кашу, в
-    // которой не видно ни одного.
-    if (Math.random() < m.hammer) hammerFrom(c, 'ОТБОЙНИК');
-    else if (Math.random() < m.rockfall) rockfallAt(c);
-    else if (Math.random() < m.beam) beamFrom(c);
-    else if (Math.random() < m.blast) blastAt(c, 1, 'ВЗРЫВ');
-    else if (Math.random() < m.vein) veinFrom(c, rock, m.veinMax);
-    else if (Math.random() < m.crack) crackFrom(c, dmg);
-    if (Math.random() < m.frenzy) startFrenzy(c);
+    return false;
   };
-
-  // Удержание бьёт из таймера, заведённого при касании. Зовёт оно ВСЕГДА
-  // свежий `hit`: иначе после обновления шахты под пальцем таймер ломал бы
-  // породу прошлой шахты — у того замыкания своё поле.
-  const hitRef = useRef(hit);
-  hitRef.current = hit;
 
   // ---- Расходники --------------------------------------------------------
 
@@ -1513,8 +914,8 @@ export function PrisonPage() {
       return;
     }
     const r = id === 'bomb5' ? 2 : 1;
-    const layer = layerRef.current;
-    const { x, y, size } = cellCenter(c);
+    const layer = field.current?.layer;
+    const { x, y, size } = field.current?.center(c) ?? { x: 0, y: 0, size: 0 };
     let sprite: HTMLElement | null = null;
     if (layer && !reduceMotion()) {
       sprite = document.createElement('span');
@@ -1541,15 +942,10 @@ export function PrisonPage() {
       }
     }
     tapLight();
-    const key = mineKeyRef.current;
-    [0, 260, 520].forEach((ms, k) => waveTimers.current.push(setTimeout(() => fuseTick(k), ms)));
-    waveTimers.current.push(
-      setTimeout(() => {
-        sprite?.remove();
-        if (mineKeyRef.current !== key) return;
-        blastAt(c, r, r > 1 ? 'ДИНАМИТ' : 'БУМ');
-      }, 760),
-    );
+    [0, 260, 520].forEach((ms, k) => dig.later(() => fuseTick(k), ms));
+    // Спрайт убирается всегда, взрыв — только если шахта та же.
+    setTimeout(() => sprite?.remove(), 760);
+    dig.later(() => dig.blastAt(c, r, r > 1 ? 'ДИНАМИТ' : 'БУМ'), 760);
   };
 
   const applyItem = (id: ItemId) => {
@@ -1572,13 +968,7 @@ export function PrisonPage() {
       if (!prisonUseItem('charge')) return;
       say('Заряд заложен');
       fuseTick(0);
-      const key = mineKeyRef.current;
-      waveTimers.current.push(
-        setTimeout(() => {
-          if (mineKeyRef.current !== key) return;
-          hammerFrom(Math.floor(MINE_CELLS / 2), 'ЗАРЯД', 3);
-        }, 450),
-      );
+      dig.later(() => dig.hammerFrom(Math.floor(MINE_CELLS / 2), 'ЗАРЯД', 3), 450);
       return;
     }
     if (!prisonUseItem(id)) return;
@@ -1593,80 +983,16 @@ export function PrisonPage() {
     );
   };
 
-  // ---- Пальцы: тап, удержание, ведение по жиле ---------------------------
+  // ---- Пальцы: бомба забирает тап себе ------------------------------------
 
-  const cellAt = (cx: number, cy: number): number => {
-    const r = rect.current;
-    if (!r) return -1;
-    const x = Math.floor(((cx - r.left) / r.width) * MINE_COLS);
-    const y = Math.floor(((cy - r.top) / r.height) * MINE_ROWS);
-    if (x < 0 || y < 0 || x >= MINE_COLS || y >= MINE_ROWS) return -1;
-    return y * MINE_COLS + x;
-  };
-
-  function stopHold() {
-    if (holdTimer.current) clearTimeout(holdTimer.current);
-    holdTimer.current = null;
-    pointer.current = null;
-    setAiming(false);
-    pickRef.current?.classList.remove('is-on');
-  }
-
-  // Шаг удержания пересчитывается на каждом ударе: энергетик или кураж,
-  // начавшиеся под пальцем, ускоряют кирку сразу, без повторного касания.
-  const holdTick = () => {
-    const p = pointer.current;
-    if (!p) return;
-    if (p.cell >= 0) hitRef.current(p.cell);
-    holdTimer.current = setTimeout(holdTick, 1000 / liveRate(useFinanceStore.getState().prison));
-  };
-
-  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
-    primeAudio();
-    rect.current = e.currentTarget.getBoundingClientRect();
-    const c = cellAt(e.clientX, e.clientY);
-    if (arming) {
-      if (c >= 0) {
-        const id = arming;
-        setArming(null);
-        dropBomb(c, id);
-      }
-      return;
-    }
-    if (pointer.current) {
-      // Второй палец — просто лишний удар, удержание ведёт первый.
-      hit(c);
-      return;
-    }
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* без захвата тоже работает, пока палец над полем */
-    }
-    pointer.current = { id: e.pointerId, cell: c };
-    if (c >= 0) aimAt(c);
-    setAiming(true);
-    hit(c);
-    if (holdTimer.current) clearTimeout(holdTimer.current);
-    holdTimer.current = setTimeout(holdTick, 1000 / liveRate(useFinanceStore.getState().prison));
-  };
-
-  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const p = pointer.current;
-    if (!p || p.id !== e.pointerId) return;
-    const c = cellAt(e.clientX, e.clientY);
-    if (c === p.cell) return;
-    p.cell = c;
+  const onFieldTap = (c: number): boolean => {
+    if (!arming) return false;
     if (c >= 0) {
-      aimAt(c);
-      // Провёл на новую клетку — удар сразу, если кирка успела (см. gapMs).
-      hit(c);
+      const id = arming;
+      setArming(null);
+      dropBomb(c, id);
     }
-  };
-
-  const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (pointer.current?.id === e.pointerId) stopHold();
+    return true;
   };
 
   // ---- Деньги: продажа, ранг, бригада -----------------------------------
@@ -1721,7 +1047,7 @@ export function PrisonPage() {
     tierBreak(3);
     notifySuccess();
     burstConfetti(80);
-    addTrauma(fieldRef.current, 0.35);
+    field.current?.trauma(0.35);
     setRankScene(res);
   };
 
@@ -1869,37 +1195,48 @@ export function PrisonPage() {
   const crewNow = crewYield(prison, nowTick);
   const campBadge = perkPointsFree(prison) > 0 || crewNow.minutes >= 60 || milesReady(prison) > 0;
 
-  const cells = [];
-  for (let c = 0; c < MINE_CELLS; c++) {
-    const d = mine.dug[c];
-    const top = rockAt(rocks, c, d);
-    let peek = -1;
-    if (buffs.lens > 0 && top >= 0 && d + 1 < DEPTH) {
-      const below = rockAt(rocks, c, d + 1);
-      if (ROCKS[below].value > ROCKS[top].value) peek = below;
+  const renderCells = (faceRef: (i: number, el: HTMLSpanElement | null) => void) => {
+    const cells = [];
+    for (let c = 0; c < MINE_CELLS; c++) {
+      const d = mine.dug[c];
+      const top = rockAt(rocks, c, d);
+      const seid = seidTop(seids, c, d);
+      let peek = -1;
+      if (buffs.lens > 0 && top >= 0 && d + 1 < DEPTH) {
+        const below = rockAt(rocks, c, d + 1);
+        if (ROCKS[below].value > ROCKS[top].value) peek = below;
+      }
+      cells.push(
+        <MineCell
+          key={c}
+          index={c}
+          tex={
+            seid
+              ? seidTexture()
+              : top < 0
+                ? bedrockTexture()
+                : rockTexture(top, rockVariant(mine.seed, c, d))
+          }
+          bottom={top < 0}
+          depth={d}
+          crack={dig.cracks[c]}
+          peek={peek >= 0 ? rockTexture(peek) : ''}
+          need={needRocks.has(top)}
+          seid={seid}
+          seidBelow={
+            buffs.lens > 0 ? (seids.find((x) => x.cell === c && x.depth > d)?.depth ?? d) - d : 0
+          }
+          seidTex={seidTexture()}
+          wt={wall(mine.dug, c, 0, -1)}
+          wl={wall(mine.dug, c, -1, 0)}
+          wb={wall(mine.dug, c, 0, 1)}
+          wr={wall(mine.dug, c, 1, 0)}
+          faceRef={faceRef}
+        />,
+      );
     }
-    cells.push(
-      <MineCell
-        key={c}
-        index={c}
-        rock={top}
-        variant={rockVariant(mine.seed, c, d)}
-        depth={d}
-        crack={cracks[c]}
-        peek={peek}
-        need={needRocks.has(top)}
-        seid={seidTop(seids, c, d)}
-        seidBelow={
-          buffs.lens > 0 ? (seids.find((x) => x.cell === c && x.depth > d)?.depth ?? d) - d : 0
-        }
-        wt={wall(mine.dug, c, 0, -1)}
-        wl={wall(mine.dug, c, -1, 0)}
-        wb={wall(mine.dug, c, 0, 1)}
-        wr={wall(mine.dug, c, 1, 0)}
-        faceRef={faceRef}
-      />,
-    );
-  }
+    return cells;
+  };
 
   if (!hydrated) {
     return (
@@ -2140,63 +1477,59 @@ export function PrisonPage() {
               })}
             </div>
           )}
-          <div
-            className={`pmine${aiming ? ' is-aiming' : ''}${arming ? ' is-arming' : ''}`}
-            ref={fieldRef}
-            onPointerDown={onDown}
-            onPointerMove={onMove}
-            onPointerUp={onUp}
-            onPointerCancel={onUp}
-            onContextMenu={(e) => e.preventDefault()}
+          <MineField
+            ref={field}
+            gridKey={mineKey}
+            cells={renderCells}
+            pick={<PickIcon pick={pick} size={38} />}
+            rate={() => liveRate(useFinanceStore.getState().prison)}
+            onHit={dig.strike}
+            onTap={onFieldTap}
+            className={arming ? 'is-arming' : undefined}
+            under={
+              <>
+                {yardEv?.id === 'meteor' && (
+                  <div
+                    className="ymeteor"
+                    ref={meteorRef}
+                    key={yardEv.from}
+                    style={{
+                      left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                      top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                      width: `${100 / MINE_COLS}%`,
+                      height: `${100 / MINE_ROWS}%`,
+                    }}
+                  >
+                    <i className="ymeteor__glow" />
+                    <img src={meteorTexture()} alt="Метеорит" />
+                    <span className="ymeteor__pips">
+                      {Array.from({ length: METEOR_HITS }, (_, k) => (
+                        <i key={k} className={k < meteorN ? 'is-on' : undefined} />
+                      ))}
+                    </span>
+                  </div>
+                )}
+                {yardEv?.id === 'kuiva' && (
+                  <div
+                    className="ykuiva"
+                    ref={bossRef}
+                    key={yardEv.from}
+                    style={{
+                      left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                      top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                      width: `${(3 / MINE_COLS) * 100}%`,
+                      height: `${(3 / MINE_ROWS) * 100}%`,
+                    }}
+                  >
+                    <img src={kuivaTexture()} alt="Куйва" />
+                    <span className="ykuiva__hp">
+                      <i style={{ transform: `scaleX(${bossFill})` }} />
+                    </span>
+                  </div>
+                )}
+              </>
+            }
           >
-            <div className="pmine__grid" key={mineKey}>
-              {cells}
-            </div>
-            {yardEv?.id === 'meteor' && (
-              <div
-                className="ymeteor"
-                ref={meteorRef}
-                key={yardEv.from}
-                style={{
-                  left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
-                  top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
-                  width: `${100 / MINE_COLS}%`,
-                  height: `${100 / MINE_ROWS}%`,
-                }}
-              >
-                <i className="ymeteor__glow" />
-                <img src={meteorTexture()} alt="Метеорит" />
-                <span className="ymeteor__pips">
-                  {Array.from({ length: METEOR_HITS }, (_, k) => (
-                    <i key={k} className={k < meteorN ? 'is-on' : undefined} />
-                  ))}
-                </span>
-              </div>
-            )}
-            {yardEv?.id === 'kuiva' && (
-              <div
-                className="ykuiva"
-                ref={bossRef}
-                key={yardEv.from}
-                style={{
-                  left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
-                  top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
-                  width: `${(3 / MINE_COLS) * 100}%`,
-                  height: `${(3 / MINE_ROWS) * 100}%`,
-                }}
-              >
-                <img src={kuivaTexture()} alt="Куйва" />
-                <span className="ykuiva__hp">
-                  <i style={{ transform: `scaleX(${bossFill})` }} />
-                </span>
-              </div>
-            )}
-            <canvas className="pmine__fx" ref={canvasRef} />
-            <div className="pmine__aim" ref={aimRef} />
-            <div className="pmine__pick" ref={pickRef}>
-              <PickIcon pick={pick} size={38} />
-            </div>
-            <div className="pmine__layer" ref={layerRef} />
             {arming && (
               <div className="pmine__arm">
                 {ITEMS.find((i) => i.id === arming)!.glyph} Куда положить? Тапни по клетке
@@ -2254,7 +1587,7 @@ export function PrisonPage() {
                 </button>
               </div>
             )}
-          </div>
+          </MineField>
         </div>
 
         <div className="pitems">
