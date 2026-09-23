@@ -102,7 +102,7 @@ export function GamesPage() {
           </span>
         </button>
 
-        <button className="game-card game-card--prison" onClick={() => go('/prison')}>
+        <button className="game-card game-card--prison" onClick={() => go('/yard')}>
           <span className="game-card__rocks">
             {[14, 23, 25].map((r) => (
               <img key={r} src={rockTexture(r)} width={30} height={30} alt="" />
@@ -111,8 +111,8 @@ export function GamesPage() {
           <span className="game-card__body">
             <b>Каторга</b>
             <i>
-              Шахта сверху и лесоповал сбоку: ломай породу, вали лес, бери ранги A–Z и разряды
-              лесоруба. Деньги те же, что в автоматах
+              Двор, шахта и лесоповал: ломай породу, вали лес, лови метеориты и медведя, торгуй с
+              Барыгой. Деньги те же, что в автоматах
             </i>
             <em>
               {prison.mined

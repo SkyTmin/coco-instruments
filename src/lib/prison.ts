@@ -894,6 +894,50 @@ export interface ModsSource {
   pets?: Pets;
   miles?: string[];
   handle?: number;
+  event?: YardEvent | null;
+}
+
+// ---------------------------------------------------------------------------
+// События двора (v2.54). Правила и награды — в `lib/yard.ts`; здесь только
+// то, что нужно состоянию и множителям, иначе модули замкнулись бы друг на
+// друга.
+// ---------------------------------------------------------------------------
+
+export type EventId = 'meteor' | 'kuiva' | 'convoy' | 'gold' | 'payday' | 'blizzard' | 'bear';
+export const EVENT_IDS: EventId[] = [
+  'meteor',
+  'kuiva',
+  'convoy',
+  'gold',
+  'payday',
+  'blizzard',
+  'bear',
+];
+
+export interface YardEvent {
+  id: EventId;
+  /** Где началось: страница показывает событие только у себя. */
+  place: 'mine' | 'forest';
+  from: number;
+  until: number;
+  /** Метеорит — клетка; Куйва — левый верхний угол квадрата 3×3. */
+  cell: number;
+  /** Куйва: запас здоровья в единицах урона. */
+  hp: number;
+  /** Конвой — порода; медведь — не нужна (−1). */
+  rock: number;
+  /** Конвой и медведь: сколько сдать и сколько сдано. */
+  need: number;
+  have: number;
+}
+
+/** Получка платит вдвое, золотая жила — втрое больше добычи с блока. */
+export const PAYDAY_SELL = 2;
+export const GOLD_FORTUNE = 2;
+
+/** Событие, которое идёт прямо сейчас (null — тихо). */
+export function liveEvent(p: { event?: YardEvent | null }, now = Date.now()): YardEvent | null {
+  return p.event && p.event.until > now ? p.event : null;
 }
 
 export function modsOf(p: ModsSource): Mods {
@@ -911,12 +955,18 @@ export function modsOf(p: ModsSource): Mods {
   // Эхо и руна Совило множат шансы чар поля: жилы, взрыва, отбойника, луча,
   // камнепада и трещины. Перековку не трогают — она про цену, а не про поле.
   const proc = (1 + 0.05 * lv('echo')) * (1 + b.proc);
+  const ev = liveEvent(p)?.id;
   return {
     // Сноровка: каждый уровень кирки — ещё полпроцента к урону.
     dmg: (1 + 0.1 * lv('power')) * (1 + PICK_LEVEL_DMG * (level - 1)) * (1 + b.dmg),
     rate: (1 + 0.08 * k.grip) * (1 + b.rate) * (1 + handleRate(p.handle)),
-    sell: sellMult(p.prestige) * (1 + 0.06 * k.dealer) * findsMult(p.finds ?? {}) * (1 + b.sell),
-    fortune: 0.06 * lv('fortune') + b.loot,
+    sell:
+      sellMult(p.prestige) *
+      (1 + 0.06 * k.dealer) *
+      findsMult(p.finds ?? {}) *
+      (1 + b.sell) *
+      (ev === 'payday' ? PAYDAY_SELL : 1),
+    fortune: 0.06 * lv('fortune') + b.loot + (ev === 'gold' ? GOLD_FORTUNE : 0),
     vein: 0.025 * lv('vein') * proc,
     veinMax: 3 + Math.floor(lv('vein') / 4),
     blast: 0.01 * lv('blast') * proc,
@@ -2286,6 +2336,12 @@ export interface PrisonState {
   propUntil: number;
   /** Рукоять из досок: 0 — родная, иначе номер в `HANDLES` + 1. */
   handle: number;
+  /** Событие двора (v2.54) и не раньше какого времени следующее. */
+  event: YardEvent | null;
+  eventNext: number;
+  eventsDone: number;
+  /** Барыга: окно ассортимента и сколько взято каждого лота. */
+  baryga: { window: number; bought: number[] };
   keys: number;
   /** Коллекция: сколько экземпляров каждой находки нашлось. */
   finds: Finds;
@@ -2347,6 +2403,10 @@ export const PRISON_START: PrisonState = {
   frenzyUntil: 0,
   propUntil: 0,
   handle: 0,
+  event: null,
+  eventNext: 0,
+  eventsDone: 0,
+  baryga: { window: 0, bought: [] },
   keys: 0,
   finds: {},
   crew: 0,
@@ -2413,6 +2473,15 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     frenzyUntil: int(raw.frenzyUntil, 0, 1e14, 0),
     propUntil: int(raw.propUntil, 0, 1e14, 0),
     handle: int(raw.handle, 0, HANDLES.length, 0),
+    event: normalizeEvent(raw.event),
+    eventNext: int(raw.eventNext, 0, 1e14, 0),
+    eventsDone: int(raw.eventsDone, 0, 1e9, 0),
+    baryga: {
+      window: int(raw.baryga?.window, 0, 1e12, 0),
+      bought: (Array.isArray(raw.baryga?.bought) ? raw.baryga.bought : [])
+        .slice(0, 8)
+        .map((n) => int(n, 0, 99, 0)),
+    },
     keys: int(raw.keys, 0, 1e7, 0),
     finds: Object.fromEntries(
       FINDS.map((f) => [f.id, int(raw.finds?.[f.id], 0, 1e6, 0)]).filter(([, n]) => n),
@@ -2444,6 +2513,22 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
 }
 
 const TIER_IDS: CaseTier[] = ['common', 'rare', 'epic', 'legend'];
+
+function normalizeEvent(raw: unknown): YardEvent | null {
+  const e = raw as Partial<YardEvent> | null | undefined;
+  if (!e || typeof e !== 'object' || !EVENT_IDS.includes(e.id as EventId)) return null;
+  return {
+    id: e.id as EventId,
+    place: e.place === 'forest' ? 'forest' : 'mine',
+    from: int(e.from, 0, 1e14, 0),
+    until: int(e.until, 0, 1e14, 0),
+    cell: int(e.cell, 0, MINE_CELLS - 1, 0),
+    hp: typeof e.hp === 'number' && Number.isFinite(e.hp) && e.hp > 0 ? e.hp : 0,
+    rock: int(e.rock, -1, MINES - 1, -1),
+    need: int(e.need, 0, 1e6, 0),
+    have: int(e.have, 0, 1e6, 0),
+  };
+}
 
 /** Передачки, руны, питомцы и вехи (v2.49) — отдельно, чтобы не раздувать. */
 interface LootState {

@@ -17,6 +17,7 @@ import {
   bonusOf,
   handleRate,
   HANDLES,
+  liveEvent,
   modsOf,
   nice,
   NO_PERKS,
@@ -620,7 +621,8 @@ export function forestMods(p: PrisonState, f?: { ench?: AxeEnchants }): ForestMo
     dodge: Math.min(0.8, 0.08 * e.sense),
     swing: 0.02 * e.swing,
     fell: 0.004 * e.fell,
-    storm: 0.02 * e.storm,
+    // Буря во дворе: каждое поваленное дерево тянет соседнее.
+    storm: liveEvent(p)?.id === 'blizzard' ? 1 : 0.02 * e.storm,
   };
 }
 

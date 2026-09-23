@@ -17568,7 +17568,10 @@ input[type='datetime-local'] {
   color: #ffe7c2;
   font-size: 14px;
   font-weight: 800;
-  white-space: nowrap;
+  /* Длинный тост (приз события) переносится, а не вылезает за поле. */
+  width: max-content;
+  max-width: calc(100% - 20px);
+  text-align: center;
   pointer-events: none;
   animation: ptoast 1.6s ease both;
 }
@@ -20250,6 +20253,506 @@ input[type='datetime-local'] {
   color: #f0d49a;
 }
 
+/* ---- Двор (v2.54) ----------------------------------------------------------- */
+.yannounce {
+  position: fixed;
+  left: 50%;
+  top: calc(18% + env(safe-area-inset-top, 0px));
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: min(330px, calc(100vw - 32px));
+  padding: 12px 16px 14px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--ev) 60%, transparent);
+  background: rgba(12, 10, 10, 0.94);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 14px 40px rgba(0, 0, 0, 0.6),
+    0 0 36px color-mix(in srgb, var(--ev) 30%, transparent);
+  color: #fff4e0;
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: yannounce-in 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.yannounce.is-out {
+  animation: yannounce-out 0.32s ease both;
+}
+@keyframes yannounce-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-18px) scale(0.86);
+  }
+}
+@keyframes yannounce-out {
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px) scale(0.96);
+  }
+}
+.yannounce__tag {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ev);
+}
+.yannounce__name {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+.yannounce__name i {
+  font-style: normal;
+  color: var(--ev);
+}
+.yannounce__lead {
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(255, 244, 224, 0.82);
+}
+.pbuff--event {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-color: var(--ev);
+  color: var(--ev);
+}
+.pbuff--event.is-ending {
+  animation: pbuff-end 0.5s ease-in-out infinite alternate;
+}
+@keyframes pbuff-end {
+  to {
+    opacity: 0.45;
+  }
+}
+.pbuff__rock {
+  width: 12px;
+  height: 12px;
+  image-rendering: pixelated;
+  border-radius: 2px;
+}
+.pmine-frame.is-gold::after {
+  border-color: #ffd35a;
+  animation: pframe-glow 0.7s ease-in-out infinite;
+}
+
+/* Метеорит лежит на клетке поверх породы; падает сверху-справа. */
+.ymeteor {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: ymeteor-drop 0.65s cubic-bezier(0.55, 0, 1, 0.45) both;
+}
+@keyframes ymeteor-drop {
+  from {
+    transform: translate(260%, -420%) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+}
+.ymeteor img {
+  position: relative;
+  width: 92%;
+  height: 92%;
+  image-rendering: pixelated;
+}
+.ymeteor__glow {
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 140, 50, 0.65), rgba(255, 90, 20, 0) 68%);
+  animation: ymeteor-glow 0.9s ease-in-out infinite alternate;
+}
+@keyframes ymeteor-glow {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.ymeteor__pips {
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  display: flex;
+  gap: 2px;
+  transform: translateX(-50%);
+}
+.ymeteor__pips i {
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  background: rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+.ymeteor__pips i.is-on {
+  background: #ffb03a;
+}
+
+/* Куйва — квадрат 3×3, выходит из породы. */
+.ykuiva {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: ykuiva-rise 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@keyframes ykuiva-rise {
+  from {
+    transform: translateY(18%) scale(0.7);
+    opacity: 0;
+  }
+}
+.ykuiva img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.7));
+}
+.ykuiva__hp {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: -8px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.7);
+  box-shadow: 0 0 0 1px rgba(159, 180, 200, 0.5);
+}
+.ykuiva__hp i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #3fe6d0, #c8fff6);
+  transition: transform 0.12s ease-out;
+}
+
+/* Медведь на делянке: идёт по снегу к штабелю, шаг — секунда. */
+.fbear {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  transition: left 1s linear;
+}
+.fbear img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  transform: scaleX(-1);
+  animation: fbear-step 0.5s steps(2) infinite;
+}
+@keyframes fbear-step {
+  50% {
+    transform: scaleX(-1) translateY(-3px);
+  }
+}
+.fbear__n {
+  position: absolute;
+  left: 50%;
+  top: -16px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: rgba(20, 12, 6, 0.9);
+  border: 1px solid #c88a52;
+  color: #ffd9a8;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.fbear-flee {
+  position: absolute;
+  z-index: 6;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+/* Буря: второй слой снега наискось, ветер — прозрачностью штрихов. */
+.fscene__wind {
+  position: absolute;
+  inset: -20% -40%;
+  z-index: 3;
+  background: repeating-linear-gradient(
+    -18deg,
+    transparent 0 26px,
+    rgba(230, 240, 255, 0.16) 26px 28px,
+    transparent 28px 60px
+  );
+  pointer-events: none;
+  animation: fwind 0.7s linear infinite;
+}
+@keyframes fwind {
+  to {
+    transform: translate(-60px, 18px);
+  }
+}
+.fscene.is-blizzard .fscene__snow {
+  opacity: 0.9;
+  animation-duration: 4s;
+}
+
+/* ---- Страница двора ------------------------------------------------------ */
+.yard-scene-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, transparent 72%, rgba(230, 238, 248, 0.08) 72% 73%, transparent 73%),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 38px,
+      rgba(0, 0, 0, 0.45) 38px 42px,
+      transparent 42px 80px
+    ),
+    radial-gradient(70% 36% at 70% 0%, rgba(255, 200, 120, 0.12), transparent 70%),
+    linear-gradient(180deg, #0f1220, #0b0c12 70%, #14161c);
+}
+.prison.yard {
+  --cell: calc((min(100vw, 560px) - 48px) / 7);
+  gap: 10px;
+}
+.yhud {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: max(calc(var(--cell) * 7 + 16px), min(100%, 336px));
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(24, 18, 14, 0.92);
+  border: 1px solid rgba(255, 210, 140, 0.16);
+  color: #f7e6cc;
+  font-size: 14px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.yhud span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.yhud__token {
+  color: #b8f4e6;
+}
+.yboard {
+  --ev: #e8c48a;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: max(calc(var(--cell) * 7 + 16px), min(100%, 336px));
+  max-width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.1) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, #4a3622, #33241a);
+  border: 1px solid rgba(255, 210, 140, 0.24);
+  color: #f7e6cc;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+.yboard.is-live {
+  border-color: var(--ev);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.4),
+    0 0 24px color-mix(in srgb, var(--ev) 25%, transparent);
+}
+.yboard__tag {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(247, 230, 204, 0.6);
+}
+.yboard__name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 20px;
+  font-weight: 900;
+}
+.yboard__name i {
+  font-style: normal;
+  color: var(--ev);
+}
+.yboard__name em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ev);
+}
+.yboard__lead {
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(247, 230, 204, 0.85);
+}
+.yboard__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.45);
+}
+.yboard__bar i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  background: var(--ev);
+}
+.yboard__all {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.yboard__all i {
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ev);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 800;
+}
+.yboard__done {
+  font-size: 11px;
+  color: rgba(247, 230, 204, 0.55);
+}
+.ybuildings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: max(calc(var(--cell) * 7 + 16px), min(100%, 336px));
+  max-width: 100%;
+}
+.ybuilding {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 200, 130, 0.18);
+  background: linear-gradient(180deg, #3e2a1a, #281a10);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.14),
+    0 6px 14px rgba(0, 0, 0, 0.35);
+  color: #f7e6cc;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.ybuilding:active {
+  transform: scale(0.97);
+}
+.ybuilding.is-locked {
+  opacity: 0.55;
+  cursor: default;
+}
+.ybuilding__ico {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+}
+.ybuilding__ico img {
+  width: 30px;
+  height: 30px;
+  image-rendering: pixelated;
+  border-radius: 4px;
+}
+.ybuilding__glyph {
+  font-size: 22px;
+}
+.ybuilding b {
+  font-size: 14px;
+  font-weight: 900;
+}
+.ybuilding i {
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.25;
+  color: rgba(247, 230, 204, 0.62);
+}
+.ybuilding__badge {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #ff6a4a;
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  text-align: center;
+  box-shadow: 0 0 0 2px #1a120c;
+}
+.ybaryga {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.ybaryga img {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  image-rendering: pixelated;
+}
+.ybaryga span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ybaryga b {
+  font-size: 13px;
+}
+.ybaryga i {
+  font-size: 11.5px;
+  font-style: normal;
+  color: var(--muted);
+}
+.ylot.is-hot {
+  box-shadow: inset 0 0 0 1px #ff8a3a;
+}
+.ylot__hot {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 7px;
+  background: #ff6a3a;
+  color: #fff;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 900;
+}
+.ybaryga__note {
+  margin: 0;
+  font-size: 12px;
+  text-align: center;
+  color: var(--muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pmine-frame::after,
   .pfindcard,
@@ -20272,7 +20775,17 @@ input[type='datetime-local'] {
   .fscene__snow,
   .ftree__aura,
   .fmill-btn.is-busy .pmill-ico,
-  .flog__branch.is-danger::after {
+  .flog__branch.is-danger::after,
+  .yannounce,
+  .ymeteor,
+  .ymeteor__glow,
+  .ykuiva,
+  .fbear img,
+  .fscene__wind,
+  .pbuff--event.is-ending {
     animation: none;
+  }
+  .fbear {
+    transition: none;
   }
 }

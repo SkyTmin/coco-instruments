@@ -19,9 +19,12 @@ import {
   TokenIcon,
 } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
+import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { useFinanceStore } from '@/store';
 import type { ParcelOpen, PrisonLoot, PrisonRankUp } from '@/store';
+import type { YardEvent } from '@/lib/prison';
 import {
+  liveEvent,
   bagCapacity,
   bagCount,
   bagValue,
@@ -85,6 +88,8 @@ import {
   bedrockTexture,
   crackTexture,
   findTexture,
+  kuivaTexture,
+  meteorTexture,
   parcelTexture,
   petTexture,
   seidTexture,
@@ -100,11 +105,14 @@ import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import { useExit } from '@/lib/use-exit';
 import { playTotem } from '@/lib/totem';
+import { kuivaCells, METEOR_HITS } from '@/lib/yard';
+import type { YardPrize } from '@/lib/yard';
 import {
   bagFull as bagFullSound,
   bedrockClink,
   blockBreak,
   boom,
+  treeFall,
   chainTick,
   coinDing,
   frenzyStart,
@@ -476,6 +484,30 @@ export function PrisonPage() {
     toastSeq.current += 1;
     setToast({ id: toastSeq.current, text });
   }, []);
+
+  // ---- Двор: события в шахте ------------------------------------------------
+  const yardMeteor = useFinanceStore((s) => s.yardMeteor);
+  const yardKuiva = useFinanceStore((s) => s.yardKuiva);
+  const [yardSplash, setYardSplash] = useState<YardEvent | null>(null);
+  const closeSplash = useCallback(() => setYardSplash(null), []);
+  const { ev: yardEv, now: yardNow } = useYardEvent('mine', (end) => {
+    const t = endText(end);
+    if (t) say(t);
+  });
+  // Удары по метеориту и здоровье Куйвы живут в странице, как урон по блоку.
+  const meteorLeft = useRef(-1);
+  const bossHp = useRef(-1);
+  const [meteorN, setMeteorN] = useState(METEOR_HITS);
+  const [bossFill, setBossFill] = useState(1);
+  const meteorRef = useRef<HTMLDivElement>(null);
+  const bossRef = useRef<HTMLDivElement>(null);
+  const yardFrom = yardEv?.from ?? 0;
+  useEffect(() => {
+    meteorLeft.current = -1;
+    bossHp.current = -1;
+    setMeteorN(METEOR_HITS);
+    setBossFill(1);
+  }, [yardFrom]);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(null), 1600);
@@ -888,9 +920,11 @@ export function PrisonPage() {
    */
   const breakCells = (cells: number[], kind: BreakKind): PrisonLoot | null => {
     const st = useFinanceStore.getState().prison;
-    // Сейд-камень площадные чары не берут: его ломают только руками.
+    // Сейд-камень площадные чары не берут: его ломают только руками. Под
+    // метеоритом и Куйвой порода закрыта, пока они на поле.
+    const shut = yardShut(st);
     const list = cells
-      .filter((cell) => !seidTop(seids, cell, st.mine.dug[cell]))
+      .filter((cell) => !shut.has(cell) && !seidTop(seids, cell, st.mine.dug[cell]))
       .map((cell) => ({ cell, rock: rockAt(rocks, cell, st.mine.dug[cell]) }))
       .filter((b) => b.rock >= 0);
     if (!list.length) return null;
@@ -961,6 +995,7 @@ export function PrisonPage() {
     });
     if (single) blockBreak(ROCKS[list[0].rock].kind);
     announce(list[0].cell, res);
+    yardLoot(list[0].cell, res);
     return res;
   };
   const breakRef = useRef(breakCells);
@@ -1192,6 +1227,157 @@ export function PrisonPage() {
     bumpStreak(1, c);
   };
 
+  // ---- Двор ---------------------------------------------------------------
+
+  /** Клетки, закрытые событием: под метеоритом и под Куйвой. */
+  const yardShut = (st: PrisonState): Set<number> => {
+    const ev = liveEvent(st);
+    if (!ev || ev.place !== 'mine') return new Set();
+    if (ev.id === 'meteor') return new Set([ev.cell]);
+    if (ev.id === 'kuiva') return new Set(kuivaCells(ev.cell));
+    return new Set();
+  };
+
+  /** Приз события: деньги досчитываются, слеза — сценой тотема. */
+  const yardPrize = (x: YardPrize, c: number) => {
+    const to = useFinanceStore.getState().slotsBalance;
+    if (x.coins) rollBalance(to - x.coins, to);
+    tierBreak(3);
+    notifySuccess();
+    burstConfetti(60, ['#ffe08a', '#b8f4e6', '#fff']);
+    if (x.tokens) floatText(c, `+${x.tokens} ✦`, 'pfloat--seid');
+    if (x.keys) totemKey(c, x.keys);
+    say(prizeSay(x));
+  };
+
+  /** Что двор сказал по итогам удара: событие началось, выполнено, ушло. */
+  const yardLoot = (c: number, res: PrisonLoot) => {
+    if (res.eventEnded) {
+      const t = endText(res.eventEnded);
+      if (t) say(t);
+    }
+    if (res.eventDone) yardPrize(res.eventDone, c);
+    const ev = res.eventStarted;
+    if (!ev) return;
+    setYardSplash(ev);
+    tierBreak(2);
+    notifyWarning();
+    if (ev.id === 'meteor') {
+      // Удар о поле — когда камень долетел (CSS `ymeteor-drop`, 650 мс).
+      const key = mineKeyRef.current;
+      waveTimers.current.push(
+        setTimeout(
+          () => {
+            if (mineKeyRef.current !== key) return;
+            const { x, y } = cellCenter(ev.cell);
+            treeFall();
+            flashFrame('small');
+            addTrauma(fieldRef.current, 0.55);
+            fx.current?.puff(x, y, 'rgba(255,170,90,1)', 14);
+            fx.current?.chips(x, y, ['#ff6a1a', '#ffd35a', '#4a3a30', '#fff3b0'], 30, 1.8);
+            shockwave(ev.cell, 3, true);
+          },
+          reduceMotion() ? 0 : 650,
+        ),
+      );
+    } else if (ev.id === 'kuiva') {
+      mineRumble();
+      addTrauma(fieldRef.current, 0.6);
+    }
+  };
+
+  /** Метеорит: считаются удары, крит — за два, как у сейда. */
+  const meteorHit = (c: number, crit: boolean) => {
+    swing(c, crit);
+    const { x, y } = cellCenter(c);
+    const left = (meteorLeft.current < 0 ? METEOR_HITS : meteorLeft.current) - (crit ? 2 : 1);
+    fx.current?.chips(x, y, ['#ff6a1a', '#ffd35a', '#4a3a30'], crit ? 14 : 7, crit ? 1.5 : 1);
+    const el = meteorRef.current;
+    if (el && !reduceMotion()) {
+      try {
+        el.animate(
+          [
+            { transform: 'scale(1)' },
+            { transform: `scale(.84) rotate(${crit ? -8 : -4}deg)`, offset: 0.3 },
+            { transform: 'scale(1.05)', offset: 0.7 },
+            { transform: 'scale(1)' },
+          ],
+          { duration: 190, easing: 'ease-out' },
+        );
+      } catch {
+        /* не страшно */
+      }
+    }
+    if (left > 0) {
+      meteorLeft.current = left;
+      setMeteorN(left);
+      pickHit('crystal', crit);
+      tapMedium();
+      if (crit) floatText(c, 'КРИТ', 'pfloat--crit');
+      return;
+    }
+    meteorLeft.current = -1;
+    setMeteorN(0);
+    const got = yardMeteor();
+    if (!got) return;
+    boom(1);
+    flashFrame('big');
+    addTrauma(fieldRef.current, 0.5);
+    shockwave(c, 5, true);
+    fx.current?.chips(x, y, ['#ff6a1a', '#ffd35a', '#ffffff', '#4a3a30'], 44, 2.1);
+    yardPrize(got, c);
+  };
+
+  /** Куйва: урон как по породе, здоровье — полоской над ним. */
+  const kuivaHit = (c: number, crit: boolean, st: PrisonState, ev: YardEvent) => {
+    swing(c, crit);
+    const { x, y } = cellCenter(c);
+    const dmg = hitDamage(st.pick, st.sharp) * modsOf(st).dmg * (crit ? CRIT_MULT : 1);
+    const left = (bossHp.current < 0 ? ev.hp : bossHp.current) - dmg;
+    fx.current?.chips(x, y, ['#6a727c', '#9aa4ae', '#3fe6d0'], crit ? 12 : 5, crit ? 1.4 : 0.9);
+    const el = bossRef.current;
+    if (el && !reduceMotion()) {
+      const dx = ((c % MINE_COLS) - ((ev.cell % MINE_COLS) + 1)) * 3;
+      try {
+        el.animate(
+          [
+            { transform: 'translate(0,0)' },
+            { transform: `translate(${-dx}px, ${crit ? 5 : 2}px)`, offset: 0.3 },
+            { transform: 'translate(0,0)' },
+          ],
+          { duration: crit ? 220 : 140, easing: 'ease-out' },
+        );
+      } catch {
+        /* не страшно */
+      }
+    }
+    if (left > 1e-6) {
+      bossHp.current = left;
+      setBossFill(left / ev.hp);
+      pickHit('stone', crit);
+      if (crit) {
+        floatText(c, 'КРИТ', 'pfloat--crit');
+        addTrauma(fieldRef.current, 0.2);
+        tapMedium();
+      } else selectionChanged();
+      return;
+    }
+    bossHp.current = -1;
+    setBossFill(0);
+    const got = yardKuiva();
+    if (!got) return;
+    const mid = ev.cell + MINE_COLS + 1;
+    const m = cellCenter(mid);
+    boom(2);
+    flashFrame('big');
+    addTrauma(fieldRef.current, 0.8);
+    shockwave(mid, 7, false);
+    fx.current?.chips(m.x, m.y, ['#6a727c', '#9aa4ae', '#3fe6d0', '#c8fff6'], 70, 2.4);
+    fx.current?.puff(m.x, m.y, 'rgba(180,190,200,1)', 20);
+    floatText(mid, 'КУЙВА ПОВЕРЖЕН', 'pfloat--fell');
+    yardPrize(got, mid);
+  };
+
   /** Один удар кирки по клетке. Весь «кликер» — здесь. */
   const hit = (c: number) => {
     if (c < 0 || c >= MINE_CELLS) return;
@@ -1199,6 +1385,18 @@ export function PrisonPage() {
     const st = useFinanceStore.getState().prison;
     if (now - lastHit.current < gapMs(st) - 4) return;
     lastHit.current = now;
+
+    const ev = liveEvent(st);
+    if (ev?.place === 'mine') {
+      if (ev.id === 'meteor' && c === ev.cell) {
+        meteorHit(c, Math.random() < CRIT_CHANCE);
+        return;
+      }
+      if (ev.id === 'kuiva' && kuivaCells(ev.cell).includes(c)) {
+        kuivaHit(c, Math.random() < CRIT_CHANCE, st, ev);
+        return;
+      }
+    }
 
     const depth = st.mine.dug[c];
     if (seidTop(seids, c, depth)) {
@@ -1613,6 +1811,8 @@ export function PrisonPage() {
       .filter((q) => q.rock === rank && rank > 0 && (prison.norm[q.rock] ?? 0) < q.n)
       .map((q) => q.rock),
   );
+  // Конвой: та же точка на породе, которую он ждёт.
+  if (yardEv?.id === 'convoy') needRocks.add(yardEv.rock);
   const pickLv = pickLevelOf(prison.pickXp);
   const sTier = streakTier(streak);
   const sNext = STREAK_TIERS[sTier + 1];
@@ -1809,7 +2009,7 @@ export function PrisonPage() {
         </div>
 
         <div
-          className={`pmine-frame${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}`}
+          className={`pmine-frame${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}${yardEv?.id === 'gold' ? ' is-gold' : ''}`}
         >
           {/* Полоса запала сидит на верхней кромке рамы: отдельной строкой
               она отнимала бы у поля высоту. */}
@@ -1849,8 +2049,9 @@ export function PrisonPage() {
               )}
             </span>
           </div>
-          {anyBuff && (
+          {(anyBuff || yardEv) && (
             <div className="pbuffs">
+              {yardEv && <EventPill ev={yardEv} now={yardNow} />}
               {buffs.frenzy > 0 && (
                 <span className="pbuff pbuff--frenzy">✺ {sec(buffs.frenzy)}</span>
               )}
@@ -1898,6 +2099,45 @@ export function PrisonPage() {
             <div className="pmine__grid" key={mineKey}>
               {cells}
             </div>
+            {yardEv?.id === 'meteor' && (
+              <div
+                className="ymeteor"
+                ref={meteorRef}
+                key={yardEv.from}
+                style={{
+                  left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                  top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                  width: `${100 / MINE_COLS}%`,
+                  height: `${100 / MINE_ROWS}%`,
+                }}
+              >
+                <i className="ymeteor__glow" />
+                <img src={meteorTexture()} alt="Метеорит" />
+                <span className="ymeteor__pips">
+                  {Array.from({ length: METEOR_HITS }, (_, k) => (
+                    <i key={k} className={k < meteorN ? 'is-on' : undefined} />
+                  ))}
+                </span>
+              </div>
+            )}
+            {yardEv?.id === 'kuiva' && (
+              <div
+                className="ykuiva"
+                ref={bossRef}
+                key={yardEv.from}
+                style={{
+                  left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                  top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                  width: `${(3 / MINE_COLS) * 100}%`,
+                  height: `${(3 / MINE_ROWS) * 100}%`,
+                }}
+              >
+                <img src={kuivaTexture()} alt="Куйва" />
+                <span className="ykuiva__hp">
+                  <i style={{ transform: `scaleX(${bossFill})` }} />
+                </span>
+              </div>
+            )}
             <canvas className="pmine__fx" ref={canvasRef} />
             <div className="pmine__aim" ref={aimRef} />
             <div className="pmine__pick" ref={pickRef}>
@@ -2335,6 +2575,7 @@ export function PrisonPage() {
           </div>
         </div>
       )}
+      <EventAnnounce ev={yardSplash} onDone={closeSplash} />
     </Screen>
   );
 }

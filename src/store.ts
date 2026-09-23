@@ -141,6 +141,7 @@ import {
   PROP_BOARDS,
   PROP_MS,
   PROP_REFORGE,
+  liveEvent,
   modsOf,
   rollDrops,
   stash,
@@ -217,6 +218,17 @@ import {
   sumChops,
   takeBoards,
 } from '@/lib/forest';
+import {
+  barygaBought,
+  barygaLots,
+  barygaWindow,
+  BEAR_TAKES,
+  eventDue,
+  eventGap,
+  eventPrize,
+  spawnEvent,
+} from '@/lib/yard';
+import type { Lot, YardPrize } from '@/lib/yard';
 import type {
   AxeEnchId,
   Chop,
@@ -232,6 +244,7 @@ import type {
   CaseTier,
   CrewYield,
   EnchantId,
+  EventId,
   FindId,
   GuideReward,
   ItemId,
@@ -241,6 +254,7 @@ import type {
   PrisonState,
   Reward,
   Rune,
+  YardEvent,
 } from '@/lib/prison';
 
 /** Сколько прошлых заходов держим: хватает на «лучший за месяц». */
@@ -431,6 +445,56 @@ function tickParcels(
   return { parcels, ready, added, tokens };
 }
 
+/**
+ * Событие двора кончилось по часам. Медведь, которого не отогнали, уносит
+ * половину штабеля; метеорит остывает, Куйва уходит в скалу, конвой уезжает.
+ */
+function settleEvent(
+  p: PrisonState,
+  f: ForestState,
+  now: number,
+): { p: PrisonState; f: ForestState; end: YardEnd | null } {
+  const ev = p.event;
+  if (!ev || ev.until > now) return { p, f, end: null };
+  let forest = f;
+  let lost = 0;
+  if (ev.id === 'bear' && ev.have < ev.need && f.pile.n > 0) {
+    const sp = f.pile.sp.map((n) => Math.ceil(n * (1 - BEAR_TAKES)));
+    const n = sp.reduce((a, b) => a + b, 0);
+    lost = f.pile.n - n;
+    forest = { ...f, pile: { n, value: (f.pile.value * n) / f.pile.n, sp } };
+  }
+  const failed = ['meteor', 'kuiva', 'convoy', 'bear'].includes(ev.id);
+  return { p: { ...p, event: null }, f: forest, end: { id: ev.id, failed, lost } };
+}
+
+/** Пора — начать событие. Первое после установки — через обычную паузу. */
+function maybeStart(
+  p: PrisonState,
+  place: 'mine' | 'forest',
+  now: number,
+): { p: PrisonState; started: YardEvent | null } {
+  if (!p.eventNext) return { p: { ...p, eventNext: now + eventGap(Math.random) }, started: null };
+  if (!eventDue(p, now)) return { p, started: null };
+  const ev = spawnEvent(place, p, now, Math.random);
+  return { p: { ...p, event: ev, eventNext: ev.until + eventGap(Math.random) }, started: ev };
+}
+
+/** Приз события — в состояние; монеты кладёт вызывающий, в кошелёк. */
+function givePrize(p: PrisonState, x: YardPrize, now: number): PrisonState {
+  const tick = tickParcels(p, 0, x.parcel ? [x.parcel] : []);
+  return {
+    ...p,
+    event: null,
+    eventNext: now + eventGap(Math.random),
+    eventsDone: p.eventsDone + 1,
+    tokens: p.tokens + x.tokens + tick.tokens,
+    keys: p.keys + x.keys,
+    parcels: tick.parcels,
+    items: x.item ? { ...p.items, [x.item.id]: p.items[x.item.id] + x.item.n } : p.items,
+  };
+}
+
 /** Питомец растёт от каждого блока и бревна, пока он с собой. */
 function feedPet(p: PrisonState, n: number): { pets: PrisonState['pets']; up: number } {
   if (!p.pet || p.pets[p.pet] === undefined) return { pets: p.pets, up: 0 };
@@ -509,6 +573,17 @@ export interface PrisonLoot {
   parcelsReady: number;
   /** Питомец дорос до этого уровня (0 — нет). */
   petUp: number;
+  /** Двор: событие началось, выполнено этим ударом или кончилось по часам. */
+  eventStarted: YardEvent | null;
+  eventDone: YardPrize | null;
+  eventEnded: YardEnd | null;
+}
+
+/** Событие кончилось по часам. `lost` — сколько брёвен унёс медведь. */
+export interface YardEnd {
+  id: EventId;
+  failed: boolean;
+  lost: number;
 }
 
 /** Что принёс удар топором: одно бревно, два (замах) или всё дерево. */
@@ -538,6 +613,9 @@ export interface ForestCut {
   parcels: CaseTier[];
   parcelsReady: number;
   petUp: number;
+  eventStarted: YardEvent | null;
+  eventDone: YardPrize | null;
+  eventEnded: YardEnd | null;
 }
 
 /** Вскрытая передачка — для сцены на странице. */
@@ -1008,6 +1086,13 @@ interface FinanceState {
   forestCraftProp: () => boolean;
   /** Выточить следующую рукоять. */
   forestCraftHandle: () => boolean;
+  /** Двор: закрыть событие, чьё время вышло (медведь уносит штабель). */
+  yardExpire: () => YardEnd | null;
+  /** Разбит метеорит / повержен Куйва: забрать награду. */
+  yardMeteor: () => YardPrize | null;
+  yardKuiva: () => YardPrize | null;
+  /** Барыга: купить лот `i` текущего окна за монеты. */
+  barygaBuy: (i: number) => { lot: Lot; shattered: number; newPet: PetId | null } | null;
   /** Касса владельца: токены каторги пачкой. */
   prisonAddTokens: (amount: number) => void;
   /** Начать Каторгу заново. Кошелёк и уровень общие — остаются. */
@@ -2691,7 +2776,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   prisonBreak: (breaks, opts = {}) => {
     const s = get();
-    const p = s.prison;
+    const settled = settleEvent(s.prison, s.forest, Date.now());
+    const p = settled.p;
     const dug = p.mine.dug.slice();
     const rocks: number[] = [];
     const cells: number[] = [];
@@ -2718,6 +2804,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         parcelTokens: 0,
         parcelsReady: 0,
         petUp: 0,
+        eventStarted: null,
+        eventDone: null,
+        eventEnded: null,
       };
     const now = Date.now();
     const m0 = modsOf(p);
@@ -2768,7 +2857,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const fed = feedPet(p, rocks.length);
     const pets = fed.pets;
     const petUp = fed.up;
-    const prison: PrisonState = {
+    let prison: PrisonState = {
       ...p,
       mine: { ...p.mine, dug },
       bag: put.bag,
@@ -2782,17 +2871,32 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       parcels,
       pets,
     };
+    // Двор: конвой считает сданную породу (как сломана, до перековки).
+    let eventDone: YardPrize | null = null;
+    const live = liveEvent(prison, now);
+    if (live?.id === 'convoy') {
+      const have = live.have + rocks.filter((r) => r === live.rock).length;
+      if (have >= live.need) {
+        eventDone = eventPrize('convoy', prison, Math.random);
+        prison = givePrize(prison, eventDone, now);
+      } else prison = { ...prison, event: { ...live, have } };
+    }
+    const start = maybeStart(prison, 'mine', now);
+    prison = start.p;
     // Миссии дня общие с автоматами: счётчик блоков и проданного — там же.
     const missions = missionsForToday(s.slotsMissions);
     const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
     counters.blocks += rocks.length;
     counters.ore += put.sold;
+    const coins = put.sold + (eventDone?.coins ?? 0);
     set({
       prison,
       slotsMissions: { ...missions, counters },
-      ...(put.sold ? { slotsBalance: s.slotsBalance + put.sold } : {}),
+      ...(coins ? { slotsBalance: s.slotsBalance + coins } : {}),
+      ...(settled.f !== s.forest ? { forest: settled.f } : {}),
     });
     persistPrison(prison);
+    if (settled.f !== s.forest) persistForest(settled.f);
     persistSlotsLazy();
     return {
       broken: rocks.length,
@@ -2810,6 +2914,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       parcelTokens,
       parcelsReady,
       petUp,
+      eventStarted: start.started,
+      eventDone,
+      eventEnded: settled.end,
     };
   },
 
@@ -2876,8 +2983,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   forestCut: (side, streak) => {
     const s = get();
-    const f = s.forest;
-    const p = s.prison;
+    const now = Date.now();
+    const settled = settleEvent(s.prison, s.forest, now);
+    const f = settled.f;
+    const p = settled.p;
     const tree = buildTree(f.rank, f.tree.seed);
     const index = Math.min(f.tree.cut, tree.logs.length - 1);
     const fm = forestMods(p, f);
@@ -2982,7 +3091,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const fed = feedPet(p, logs);
     const hollowSum = (kind: 'tokens' | 'keys') =>
       hollows.reduce((a, h) => a + (h.kind === kind ? h.amount : 0), 0);
-    const prison: PrisonState = {
+    let prison: PrisonState = {
       ...p,
       tokens:
         p.tokens +
@@ -2996,15 +3105,28 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       parcels: tick.parcels,
       pets: fed.pets,
     };
+    // Двор: медведя отгоняет работа — каждое срубленное бревно.
+    let eventDone: YardPrize | null = null;
+    const live = liveEvent(prison, now);
+    if (live?.id === 'bear') {
+      const have = live.have + logs;
+      if (have >= live.need) {
+        eventDone = eventPrize('bear', prison, Math.random);
+        prison = givePrize(prison, eventDone, now);
+      } else prison = { ...prison, event: { ...live, have } };
+    }
+    const start = maybeStart(prison, 'forest', now);
+    prison = start.p;
     const missions = missionsForToday(s.slotsMissions);
     const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
     counters.trees += trees;
     counters.ore += sold;
+    const coins = sold + (eventDone?.coins ?? 0);
     set({
       forest,
       prison,
       slotsMissions: { ...missions, counters },
-      ...(sold ? { slotsBalance: s.slotsBalance + sold } : {}),
+      ...(coins ? { slotsBalance: s.slotsBalance + coins } : {}),
     });
     persistForest(forest);
     persistPrison(prison);
@@ -3027,6 +3149,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       parcels: tick.added,
       parcelsReady: tick.ready,
       petUp: fed.up,
+      eventStarted: start.started,
+      eventDone,
+      eventEnded: settled.end,
     };
   },
 
@@ -3221,6 +3346,58 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistForest(forest);
     persistPrison(prison);
     return true;
+  },
+
+  yardExpire: () => {
+    const s = get();
+    const r = settleEvent(s.prison, s.forest, Date.now());
+    if (!r.end) return null;
+    set({ prison: r.p, forest: r.f });
+    persistPrison(r.p);
+    if (r.f !== s.forest) persistForest(r.f);
+    return r.end;
+  },
+
+  yardMeteor: () => {
+    const s = get();
+    const now = Date.now();
+    if (liveEvent(s.prison, now)?.id !== 'meteor') return null;
+    const x = eventPrize('meteor', s.prison, Math.random);
+    const prison = givePrize(s.prison, x, now);
+    set({ prison, slotsBalance: s.slotsBalance + x.coins });
+    persistPrison(prison);
+    persistSlots(get());
+    return x;
+  },
+
+  yardKuiva: () => {
+    const s = get();
+    const now = Date.now();
+    if (liveEvent(s.prison, now)?.id !== 'kuiva') return null;
+    const x = eventPrize('kuiva', s.prison, Math.random);
+    const prison = givePrize(s.prison, x, now);
+    set({ prison, slotsBalance: s.slotsBalance + x.coins });
+    persistPrison(prison);
+    persistSlots(get());
+    return x;
+  },
+
+  barygaBuy: (i) => {
+    const s = get();
+    const p = s.prison;
+    const w = barygaWindow(Date.now());
+    const lot = barygaLots(w, p)[i];
+    if (!lot) return null;
+    const bought = [...barygaBought(p, w)];
+    if ((bought[i] ?? 0) >= lot.stock || s.slotsBalance < lot.price) return null;
+    while (bought.length <= i) bought.push(0);
+    bought[i] += 1;
+    const a = applyReward(p, lot.reward);
+    const prison = { ...a.p, baryga: { window: w, bought } };
+    set({ prison, slotsBalance: s.slotsBalance - lot.price + a.coins });
+    persistPrison(prison);
+    persistSlots(get());
+    return { lot, shattered: a.shattered, newPet: a.newPet };
   },
 
   prisonAddTokens: (amount) => {

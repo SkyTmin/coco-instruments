@@ -1195,3 +1195,205 @@ export function logMarkTexture(kind: string): string {
   markCache.set(kind, url);
   return url;
 }
+
+// ---------------------------------------------------------------------------
+// Двор (v2.54): метеорит, Куйва, медведь и Барыга. Фигуры собираются из
+// простых форм, контур — там, где пиксель граничит с пустотой: так силуэт
+// читается на любом фоне поля и сцены.
+// ---------------------------------------------------------------------------
+
+/** Обвести залитые пиксели: граничащий с пустотой темнеет до `line`. */
+function outline(px: Pixels, line: RGB): void {
+  const n = px.n;
+  const solid = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < n && y < n && px.data[(y * n + x) * 4 + 3] > 0;
+  const edge: [number, number][] = [];
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++)
+      if (
+        solid(x, y) &&
+        (!solid(x - 1, y) || !solid(x + 1, y) || !solid(x, y - 1) || !solid(x, y + 1))
+      )
+        edge.push([x, y]);
+  for (const [x, y] of edge) px.set(x, y, line);
+}
+
+let meteorUrl: string | undefined;
+
+/** Метеорит: обугленный камень с раскалёнными трещинами. */
+export function meteorTexture(): string {
+  if (meteorUrl !== undefined) return meteorUrl;
+  const px = new Pixels();
+  const rnd = rng32(1908);
+  const rock = hex('#4a3a30');
+  const dark = hex('#2a1e18');
+  const hot = hex('#ff6a1a');
+  const core = hex('#ffd35a');
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const dx = (x - 7.5) / 6.6;
+      const dy = (y - 8) / 6;
+      const r = dx * dx + dy * dy + (rnd() - 0.5) * 0.18;
+      if (r > 1) continue;
+      px.set(x, y, mix(rock, rnd() < 0.5 ? dark : WHITE, rnd() * 0.16));
+    }
+  // Трещины: две ломаные от центра, у центра — жёлтое ядро.
+  for (const [ax, ay] of [
+    [1, 1],
+    [-1, 0.6],
+    [0.4, -1],
+  ]) {
+    let x = 7.5;
+    let y = 8;
+    for (let k = 0; k < 6; k++) {
+      px.set(Math.round(x), Math.round(y), k < 2 ? core : hot);
+      x += ax + (rnd() - 0.5) * 0.8;
+      y += ay + (rnd() - 0.5) * 0.8;
+    }
+  }
+  px.set(7, 8, core);
+  px.set(8, 8, core);
+  px.set(7, 7, hex('#fff3b0'));
+  outline(px, hex('#140c08'));
+  meteorUrl = px.toUrl();
+  return meteorUrl;
+}
+
+let kuivaUrl: string | undefined;
+
+/**
+ * Куйва — каменный великан с Сейдозера: лицо, проступившее в скале.
+ * Глаза светятся тем же бирюзовым, что сейд-камни, — это их хозяин.
+ */
+export function kuivaTexture(): string {
+  if (kuivaUrl !== undefined) return kuivaUrl;
+  const n = 24;
+  const px = new Pixels(n);
+  const rnd = rng32(1973);
+  const stone = hex('#6a727c');
+  const dark = hex('#3a4048');
+  const light = hex('#9aa4ae');
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const dx = (x - 11.5) / 11.2;
+      const dy = (y - 12.5) / 11.4;
+      if (dx * dx * (y > 16 ? 1.25 : 1) + dy * dy > 1) continue;
+      // Свет сверху-слева: скала объёмная.
+      const lit = 0.5 - (dx + dy) * 0.35;
+      px.set(x, y, mix(mix(dark, light, Math.max(0, Math.min(1, lit))), stone, rnd() * 0.35));
+    }
+  // Трещины по скале.
+  for (let k = 0; k < 5; k++) {
+    let x = 2 + Math.floor(rnd() * 20);
+    let y = 1 + Math.floor(rnd() * 4);
+    for (let i = 0; i < 6; i++) {
+      // Трещина — только по скале: за контуром лица она висела бы в воздухе.
+      if (x >= 0 && x < n && px.data[(y * n + x) * 4 + 3] > 0) px.set(x, y, dark);
+      y += 1;
+      x += rnd() < 0.5 ? -1 : 1;
+    }
+  }
+  // Брови — тяжёлый выступ.
+  for (let x = 4; x <= 19; x++) if (x < 11 || x > 12) px.set(x, 7, light);
+  for (let x = 5; x <= 18; x++) if (x < 11 || x > 12) px.set(x, 8, dark);
+  // Глаза.
+  const eye = hex('#3fe6d0');
+  const glow = hex('#c8fff6');
+  for (const ex of [7, 15]) {
+    for (let y = 9; y <= 11; y++) for (let x = ex - 1; x <= ex + 2; x++) px.set(x, y, dark);
+    px.set(ex, 10, eye);
+    px.set(ex + 1, 10, eye);
+    px.set(ex, 9, glow);
+  }
+  // Нос — светлая грань.
+  for (let y = 9; y <= 15; y++) px.set(11, y, light);
+  for (let y = 12; y <= 15; y++) px.set(12, y, dark);
+  // Рот — тёмная щель со скошенными краями.
+  for (let x = 7; x <= 16; x++) px.set(x, 18, hex('#1a1c20'));
+  px.set(6, 17, dark);
+  px.set(17, 17, dark);
+  outline(px, hex('#15181c'));
+  kuivaUrl = px.toUrl();
+  return kuivaUrl;
+}
+
+let bearUrl: string | undefined;
+
+/**
+ * Медведь сбоку, мордой вправо. Медведя от собаки и лошади отличают горб на
+ * холке, короткие толстые лапы почти под брюхом и круглые уши — на этом и
+ * держится силуэт.
+ */
+export function bearTexture(): string {
+  if (bearUrl !== undefined) return bearUrl;
+  // 20×20: на шестнадцати пикселях контур съедал голову, и выходила капибара.
+  const n = 20;
+  const px = new Pixels(n);
+  const fur = hex('#6a4428');
+  const dark = hex('#3e2614');
+  const light = hex('#8e6440');
+  const snout = hex('#b08a5e');
+  const inE = (x: number, y: number, cx: number, cy: number, rx: number, ry: number) =>
+    ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+  // Горб выше головы, голова опущена и вынесена вперёд — медвежья посадка.
+  const body = (x: number, y: number) => inE(x, y, 8, 12.4, 7, 3.8);
+  const hump = (x: number, y: number) => inE(x, y, 9.4, 9.2, 4, 2.7);
+  const head = (x: number, y: number) => inE(x, y, 15.4, 12.2, 3, 2.8);
+  const ear = (x: number, y: number) =>
+    inE(x, y, 13.9, 9.3, 1.1, 1.1) || inE(x, y, 16.6, 9.5, 1.1, 1.1);
+  const muzzle = (x: number, y: number) => x >= 17 && x <= 19 && y >= 12 && y <= 14;
+  const leg = (x: number, y: number) =>
+    y >= 14 && y <= 18 && ((x >= 2 && x <= 5) || (x >= 11 && x <= 14));
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      if (!(body(x, y) || hump(x, y) || head(x, y) || ear(x, y) || muzzle(x, y) || leg(x, y)))
+        continue;
+      let c = fur;
+      if (y >= 16) c = dark;
+      else if (!head(x, y) && !ear(x, y) && y <= 9) c = light;
+      if (muzzle(x, y)) c = snout;
+      px.set(x, y, c);
+    }
+  outline(px, hex('#1a0e06'));
+  px.set(14, 9, dark);
+  px.set(16, 10, dark);
+  px.set(19, 12, hex('#120a06')); // нос
+  px.set(16, 11, hex('#120a06')); // глаз
+  bearUrl = px.toUrl();
+  return bearUrl;
+}
+
+let barygaUrl: string | undefined;
+
+/** Барыга: ушанка, телогрейка, мешок за плечом. */
+export function barygaTexture(): string {
+  if (barygaUrl !== undefined) return barygaUrl;
+  const px = new Pixels();
+  const hat = hex('#5a4a3e');
+  const fur = hex('#8a7662');
+  const skin = hex('#e0b48a');
+  const coat = hex('#3a4438');
+  const seam = hex('#27302a');
+  const sack = hex('#b09060');
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      // Мешок за левым плечом.
+      if (x >= 1 && x <= 5 && y >= 7 && y <= 12 && (x - 3) ** 2 / 6 + (y - 9.5) ** 2 / 9 <= 1)
+        px.set(x, y, sack);
+      // Ушанка с опущенными ушами.
+      if (y >= 1 && y <= 4 && x >= 5 && x <= 11) px.set(x, y, y === 4 ? fur : hat);
+      if (y >= 4 && y <= 7 && (x === 4 || x === 12)) px.set(x, y, fur);
+      // Лицо.
+      if (y >= 5 && y <= 8 && x >= 5 && x <= 11) px.set(x, y, skin);
+      // Телогрейка стёжкой.
+      if (y >= 9 && y <= 15 && x >= 4 + (y > 13 ? 0 : 0) && x <= 12)
+        px.set(x, y, y % 2 === 0 ? seam : coat);
+    }
+  // Глаза прищуром и щетина.
+  px.set(6, 6, hex('#1a1210'));
+  px.set(9, 6, hex('#1a1210'));
+  for (let x = 6; x <= 10; x++) px.set(x, 8, hex('#9a7a5a'));
+  outline(px, hex('#120e0a'));
+  barygaUrl = px.toUrl();
+  return barygaUrl;
+}

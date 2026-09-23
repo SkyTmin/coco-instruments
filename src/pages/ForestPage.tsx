@@ -17,6 +17,7 @@ import {
   TokenIcon,
 } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
+import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { useFinanceStore } from '@/store';
 import type { ForestCut, ParcelOpen } from '@/store';
 import {
@@ -56,8 +57,10 @@ import {
   STREAK_TIERS,
   streakTier,
 } from '@/lib/prison';
+import type { YardEvent } from '@/lib/prison';
 import {
   barkTexture,
+  bearTexture,
   branchTexture,
   crackTexture,
   crownTexture,
@@ -165,6 +168,7 @@ export function ForestPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pileRef = useRef<HTMLButtonElement>(null);
   const millRef = useRef<HTMLButtonElement>(null);
+  const bearRef = useRef<HTMLDivElement>(null);
   const campRef = useRef<HTMLButtonElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const parcelsRef = useRef<HTMLDivElement>(null);
@@ -247,6 +251,21 @@ export function ForestPage() {
     toastSeq.current += 1;
     setToast({ id: toastSeq.current, text });
   }, []);
+
+  // ---- Двор: события на делянке ------------------------------------------
+  const [yardSplash, setYardSplash] = useState<YardEvent | null>(null);
+  const closeSplash = useCallback(() => setYardSplash(null), []);
+  const { ev: yardEv, now: yardNow } = useYardEvent('forest', (end) => {
+    const t = endText(end);
+    if (!t) return;
+    say(t);
+    if (end.lost > 0) {
+      branchHit();
+      notifyWarning();
+      addTrauma(sceneRef.current, 0.4);
+      squashPop(pileRef.current, 0.6);
+    }
+  });
 
   const logW = Math.round(Math.min(size.w * 0.3, 150));
   const logH = Math.round(logW * LOG_ASPECT);
@@ -580,6 +599,66 @@ export function ForestPage() {
     }
   };
 
+  /** Что двор сказал по итогам рубки: событие началось, выполнено, ушло. */
+  const yardLoot = (res: ForestCut) => {
+    if (res.eventEnded) {
+      const t = endText(res.eventEnded);
+      if (t) say(t);
+      if (res.eventEnded.lost > 0) squashPop(pileRef.current, 0.6);
+    }
+    const x = res.eventDone;
+    if (x) {
+      if (x.id === 'bear') bearFlee();
+      tierBreak(3);
+      notifySuccess();
+      burstConfetti(50, ['#ffe08a', '#c88a52', '#fff']);
+      floatAt(size.w / 2, size.h * 0.3, x.id === 'bear' ? 'ОТОГНАЛ!' : 'ГОТОВО', 'pfloat--fellx');
+      if (x.keys) {
+        keyFound();
+        playTotem(campRef.current, () => squashPop(campRef.current, 0.6));
+      }
+      say(prizeSay(x));
+    }
+    if (res.eventStarted) {
+      setYardSplash(res.eventStarted);
+      tierBreak(2);
+      notifyWarning();
+      if (res.eventStarted.id === 'blizzard') addTrauma(sceneRef.current, 0.3);
+    }
+  };
+
+  /** Медведь удирает туда, откуда пришёл, — отдельным слоем: события уже нет. */
+  const bearFlee = () => {
+    const layer = layerRef.current;
+    const from = bearRef.current;
+    if (!layer || !from || reduceMotion()) return;
+    const el = document.createElement('img');
+    el.className = 'fbear-flee';
+    el.src = bearTexture();
+    el.alt = '';
+    el.style.left = from.style.left;
+    el.style.width = `${from.offsetWidth}px`;
+    el.style.height = `${from.offsetHeight}px`;
+    el.style.bottom = `${ground - 8}px`;
+    layer.appendChild(el);
+    const done = () => el.remove();
+    try {
+      const a = el.animate(
+        [
+          { transform: 'translateX(0) translateY(0)' },
+          { transform: 'translateX(20px) translateY(-10px)', offset: 0.15 },
+          { transform: `translateX(${size.w}px) translateY(0)` },
+        ],
+        { duration: 900, easing: 'cubic-bezier(.4,0,.8,.6)' },
+      );
+      a.onfinish = done;
+      a.oncancel = done;
+    } catch {
+      done();
+    }
+    setTimeout(done, 1400);
+  };
+
   const announce = (res: ForestCut, s: Side) => {
     const { x, y } = bottomAt(s);
     // Замах и валка снимают несколько брёвен: показываем самое ценное.
@@ -726,6 +805,7 @@ export function ForestPage() {
     for (let k = 0; k < flying; k++) flyLog(res.tree, s, k * 90);
     bumpStreak();
     announce(res, s);
+    yardLoot(res);
     if (res.how === 'swing') {
       floatAt(size.w / 2, y - logH * 1.6, 'ЗАМАХ ×2', 'pfloat--swing');
       addTrauma(sceneRef.current, 0.18);
@@ -1095,8 +1175,13 @@ export function ForestPage() {
               </div>
             )}
 
+            {yardEv && (
+              <div className="pbuffs">
+                <EventPill ev={yardEv} now={yardNow} />
+              </div>
+            )}
             <div
-              className={`fscene${stunned ? ' is-stunned' : ''}${tree.seid ? ' is-seid' : ''}`}
+              className={`fscene${stunned ? ' is-stunned' : ''}${tree.seid ? ' is-seid' : ''}${yardEv?.id === 'blizzard' ? ' is-blizzard' : ''}`}
               ref={sceneRef}
               style={
                 {
@@ -1114,6 +1199,31 @@ export function ForestPage() {
               <div className="fscene__far" aria-hidden="true" />
               <div className="fscene__ground" aria-hidden="true" />
               <div className="fscene__snow" aria-hidden="true" />
+              {yardEv?.id === 'blizzard' && <div className="fscene__wind" aria-hidden="true" />}
+              {yardEv?.id === 'bear' && (
+                <div
+                  className="fbear"
+                  ref={bearRef}
+                  style={{
+                    // Идёт от правого края к штабелю: по доле прошедшего времени.
+                    left: `${Math.round(
+                      size.w -
+                        logW * 0.72 -
+                        6 -
+                        (size.w - logW * 0.72 - 12) *
+                          Math.min(1, (yardNow - yardEv.from) / (yardEv.until - yardEv.from)),
+                    )}px`,
+                    bottom: ground - 8,
+                    width: logW * 0.72,
+                    height: logW * 0.72,
+                  }}
+                >
+                  <img src={bearTexture()} alt="Медведь" />
+                  <b className="fbear__n">
+                    {Math.min(yardEv.have, yardEv.need)}/{yardEv.need}
+                  </b>
+                </div>
+              )}
               <div className="ftree" ref={treeRef} style={{ left: trunkLeft }}>
                 {tree.seid && <i className="ftree__aura" />}
                 <div className="ftrunk" ref={trunkRef}>
@@ -1395,6 +1505,7 @@ export function ForestPage() {
           </div>
         </div>
       )}
+      <EventAnnounce ev={yardSplash} onDone={closeSplash} />
     </Screen>
   );
 }
