@@ -313,6 +313,60 @@ const ROCK_DEFS: RockDef[] = [
     fleck: '#a6d6ff',
     shine: '#ffffff',
   },
+  // Престижные породы (v2.55) — выше Z, только в спецзоне. Родонит — уральский
+  // «орлец»; ловчоррит — хибинский, с Кольского; чароит — сиреневый, с
+  // одного-единственного месторождения; демантоид и александрит — самые
+  // дорогие камни Урала. Александрит меняет цвет — в текстуре бирюза и малина.
+  {
+    id: 'rhodonite',
+    name: 'Родонит',
+    kind: 'crystal',
+    pattern: 'veins',
+    base: '#c86a86',
+    dark: '#5a2232',
+    fleck: '#2a1a1e',
+    shine: '#ffd6e2',
+  },
+  {
+    id: 'lovchorrite',
+    name: 'Ловчоррит',
+    kind: 'crystal',
+    pattern: 'bands',
+    base: '#c8a060',
+    dark: '#6a4a24',
+    fleck: '#f0dca8',
+    shine: '#fff4d8',
+  },
+  {
+    id: 'charoite',
+    name: 'Чароит',
+    kind: 'crystal',
+    pattern: 'flakes',
+    base: '#8a4ab8',
+    dark: '#3e1a5a',
+    fleck: '#e6c8ff',
+    shine: '#ffffff',
+  },
+  {
+    id: 'demantoid',
+    name: 'Демантоид',
+    kind: 'crystal',
+    pattern: 'crystal',
+    base: '#4ab83a',
+    dark: '#16461a',
+    fleck: '#d8ff7a',
+    shine: '#ffffff',
+  },
+  {
+    id: 'alexandrite',
+    name: 'Александрит',
+    kind: 'star',
+    pattern: 'crystal',
+    base: '#1e8a86',
+    dark: '#3a0e2a',
+    fleck: '#e0407a',
+    shine: '#ffffff',
+  },
 ];
 
 /** Прочность растёт медленнее цены: кирка обязана догонять породу. */
@@ -327,8 +381,11 @@ export const ROCKS: Rock[] = ROCK_DEFS.map((d, j) => ({
   value: Math.round(VALUE_BASE * Math.pow(VALUE_GROWTH, j)),
 }));
 
-/** Шахт и рангов столько же, сколько пород: A…Z. */
-export const MINES = ROCKS.length;
+/**
+ * Шахт и рангов — 26, A…Z. Пород больше: пять престижных лежат только в
+ * спецзоне, их шахты не открываются рангом.
+ */
+export const MINES = 26;
 export const LAST_RANK = MINES - 1;
 
 /** Буква ранга или шахты. */
@@ -895,6 +952,7 @@ export interface ModsSource {
   miles?: string[];
   handle?: number;
   event?: YardEvent | null;
+  pickStars?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -935,6 +993,95 @@ export interface YardEvent {
 export const PAYDAY_SELL = 2;
 export const GOLD_FORTUNE = 2;
 
+// ---------------------------------------------------------------------------
+// Спецзона (v2.55) — после первого престижа. Шахта из престижных пород,
+// десять минут в день, норма зоны даёт ещё десять (до получаса). Платит НЕ
+// монетами, а токенами: богатая порода за монеты обесценила бы всю лестницу
+// рангов, а токенов не хватает всегда. Время идёт только за работой — между
+// ударами засчитывается не больше трёх секунд, простой бесплатен.
+// ---------------------------------------------------------------------------
+
+export interface Zone {
+  /** День по местному времени, к которому относится счёт. */
+  day: string;
+  /** Потрачено сегодня, мс. */
+  used: number;
+  /** Добавлено за нормы сегодня, мс. */
+  bonus: number;
+  /** Блоков сегодня в зачёт нормы. */
+  have: number;
+  /** Сейчас в спецзоне. */
+  on: boolean;
+  /** Когда засчитан последний удар. */
+  tick: number;
+  /** Шахта, в которую вернуться. */
+  back: PrisonMine | null;
+}
+
+export const ZONE_MS = 10 * 60_000;
+export const ZONE_BONUS_MS = 10 * 60_000;
+export const ZONE_MAX_MS = 30 * 60_000;
+export const ZONE_QUOTA = 400;
+export const ZONE_IDLE_MS = 3_000;
+/** С какого престижа открывается ступень спецзоны: новая порода сверху. */
+export const ZONE_TIERS = [1, 3, 6, 10, 15];
+
+export function zoneTier(prestige: number): number {
+  return ZONE_TIERS.filter((t) => prestige >= t).length;
+}
+
+/** Шахта спецзоны: самая новая престижная порода, что открыта. */
+export function zoneMineId(prestige: number): number {
+  return LAST_RANK + zoneTier(prestige);
+}
+
+export function zoneDay(now: number): string {
+  const d = new Date(now);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+/** Счёт на сегодня: новый день — время и норма заново, но из зоны не выкидывает. */
+export function zoneToday(z: Zone, now: number): Zone {
+  const day = zoneDay(now);
+  return z.day === day ? z : { ...z, day, used: 0, bonus: 0, have: 0 };
+}
+
+export function zoneLeft(z: Zone, now: number): number {
+  const t = zoneToday(z, now);
+  return Math.max(0, ZONE_MS + t.bonus - t.used);
+}
+
+/**
+ * Сколько токенов даёт блок в спецзоне. Престижная порода — от полутора и
+ * выше, обычная (она лежит в зоне основой) — половина. На стенде первая
+ * прикидка (1 и 0,35) давала треть токена с блока — поход в зону того не
+ * стоил: обычная шахта даёт десятую, и разница не ощущалась.
+ */
+export function zoneTokens(rock: number): number {
+  return rock >= MINES ? 1.5 + (rock - MINES) * 0.5 : 0.5;
+}
+
+function normalizeZone(raw: unknown): Zone {
+  const z = raw as Partial<Zone> | null | undefined;
+  const back = z?.back;
+  return {
+    day: typeof z?.day === 'string' ? z.day.slice(0, 12) : '',
+    used: int(z?.used, 0, ZONE_MAX_MS * 2, 0),
+    bonus: int(z?.bonus, 0, ZONE_MAX_MS, 0),
+    have: int(z?.have, 0, 1e7, 0),
+    on: z?.on === true,
+    tick: int(z?.tick, 0, 1e14, 0),
+    back:
+      back && Array.isArray(back.dug) && back.dug.length === MINE_CELLS
+        ? {
+            id: int(back.id, 0, LAST_RANK, 0),
+            seed: int(back.seed, 0, 2 ** 31, 1),
+            dug: back.dug.map((d) => int(d, 0, DEPTH, 0)),
+          }
+        : null,
+  };
+}
+
 /** Событие, которое идёт прямо сейчас (null — тихо). */
 export function liveEvent(p: { event?: YardEvent | null }, now = Date.now()): YardEvent | null {
   return p.event && p.event.until > now ? p.event : null;
@@ -958,7 +1105,11 @@ export function modsOf(p: ModsSource): Mods {
   const ev = liveEvent(p)?.id;
   return {
     // Сноровка: каждый уровень кирки — ещё полпроцента к урону.
-    dmg: (1 + 0.1 * lv('power')) * (1 + PICK_LEVEL_DMG * (level - 1)) * (1 + b.dmg),
+    dmg:
+      (1 + 0.1 * lv('power')) *
+      (1 + PICK_LEVEL_DMG * (level - 1)) *
+      (1 + b.dmg) *
+      (1 + STAR_DMG * (p.pickStars ?? 0)),
     rate: (1 + 0.08 * k.grip) * (1 + b.rate) * (1 + handleRate(p.handle)),
     sell:
       sellMult(p.prestige) *
@@ -1145,11 +1296,28 @@ export const ENCHANT_UNLOCK: Record<EnchantId, number> = {
   echo: 26,
 };
 
+/**
+ * Престиж кирки (v2.55). На 50-м уровне кирку можно перековать: опыт — в
+ * ноль, зато звезда. Каждая звезда поднимает потолок КАЖДОЙ чары на 20% и
+ * даёт +10% урона. Уровни чар, купленные раньше, не срезаются — как и при
+ * обычном потолке, он ограничивает только покупку.
+ */
+export const PICK_STARS_MAX = 5;
+export const STAR_CAP = 0.2;
+export const STAR_DMG = 0.1;
+export const STAR_TOKENS = 500;
+export const STAR_KEYS = 3;
+
+/** Предел чары с учётом звёзд кирки. */
+export function enchantMax(id: EnchantId, stars = 0): number {
+  return Math.round(enchantOf(id).max * (1 + STAR_CAP * Math.max(0, stars)));
+}
+
 /** Потолок уровня чары при данном уровне кирки: к 40-му открыт весь. */
-export function enchantCap(id: EnchantId, pickLevel: number): number {
-  const e = enchantOf(id);
+export function enchantCap(id: EnchantId, pickLevel: number, stars = 0): number {
+  const max = enchantMax(id, stars);
   if (pickLevel < ENCHANT_UNLOCK[id]) return 0;
-  return Math.min(e.max, 3 + Math.floor((pickLevel * e.max) / 40));
+  return Math.min(max, 3 + Math.floor((pickLevel * max) / 40));
 }
 
 /**
@@ -2342,6 +2510,10 @@ export interface PrisonState {
   eventsDone: number;
   /** Барыга: окно ассортимента и сколько взято каждого лота. */
   baryga: { window: number; bought: number[] };
+  /** Спецзона (v2.55): дневное время и где был до неё. */
+  zone: Zone;
+  /** Престиж кирки: звёзды, 0…5. */
+  pickStars: number;
   keys: number;
   /** Коллекция: сколько экземпляров каждой находки нашлось. */
   finds: Finds;
@@ -2407,6 +2579,16 @@ export const PRISON_START: PrisonState = {
   eventNext: 0,
   eventsDone: 0,
   baryga: { window: 0, bought: [] },
+  zone: {
+    day: '',
+    used: 0,
+    bonus: 0,
+    have: 0,
+    on: false,
+    tick: 0,
+    back: null,
+  },
+  pickStars: 0,
   keys: 0,
   finds: {},
   crew: 0,
@@ -2443,11 +2625,13 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     for (const [k, v] of Object.entries(raw.bag)) {
       const i = Number(k);
       const n = int(v, 0, 1e7, 0);
-      if (Number.isInteger(i) && i >= 0 && i < MINES && n > 0) bag[i] = n;
+      if (Number.isInteger(i) && i >= 0 && i < ROCKS.length && n > 0) bag[i] = n;
     }
   }
   const m = raw.mine;
-  const mineId = int(m?.id, 0, rank, rank);
+  const zone = normalizeZone(raw.zone);
+  // В спецзоне шахта — престижная, её номер выше ранга.
+  const mineId = zone.on ? int(m?.id, 0, ROCKS.length - 1, rank) : int(m?.id, 0, rank, rank);
   const dug =
     m && Array.isArray(m.dug) && m.dug.length === MINE_CELLS
       ? m.dug.map((d) => int(d, 0, DEPTH, 0))
@@ -2465,7 +2649,10 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     earned: int(raw.earned, 0, 1e15, 0),
     tokens: int(raw.tokens, 0, 1e12, 0),
     ench: Object.fromEntries(
-      ENCHANTS.map((e) => [e.id, int(raw.ench?.[e.id], 0, e.max, 0)]),
+      ENCHANTS.map((e) => [
+        e.id,
+        int(raw.ench?.[e.id], 0, enchantMax(e.id, int(raw.pickStars, 0, PICK_STARS_MAX, 0)), 0),
+      ]),
     ) as Enchants,
     items: Object.fromEntries(ITEMS.map((i) => [i.id, int(raw.items?.[i.id], 0, 1e6, 0)])) as Items,
     energyUntil: int(raw.energyUntil, 0, 1e14, 0),
@@ -2474,6 +2661,8 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     propUntil: int(raw.propUntil, 0, 1e14, 0),
     handle: int(raw.handle, 0, HANDLES.length, 0),
     event: normalizeEvent(raw.event),
+    zone,
+    pickStars: int(raw.pickStars, 0, PICK_STARS_MAX, 0),
     eventNext: int(raw.eventNext, 0, 1e14, 0),
     eventsDone: int(raw.eventsDone, 0, 1e9, 0),
     baryga: {

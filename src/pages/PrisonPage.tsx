@@ -25,6 +25,10 @@ import type { ParcelOpen, PrisonLoot, PrisonRankUp } from '@/store';
 import type { YardEvent } from '@/lib/prison';
 import {
   liveEvent,
+  ZONE_MAX_MS,
+  ZONE_MS,
+  ZONE_QUOTA,
+  zoneLeft,
   bagCapacity,
   bagCount,
   bagValue,
@@ -143,6 +147,12 @@ const shortCount = (n: number) =>
     : n < 1e6
       ? `${(Math.floor(n / 100) / 10).toLocaleString('ru-RU')}к`
       : `${(Math.floor(n / 1e5) / 10).toLocaleString('ru-RU')}м`;
+
+/** Минуты и секунды: 7:05. */
+const clockMs = (ms: number) => {
+  const t = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+};
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
@@ -487,6 +497,7 @@ export function PrisonPage() {
 
   // ---- Двор: события в шахте ------------------------------------------------
   const yardMeteor = useFinanceStore((s) => s.yardMeteor);
+  const prisonZoneExit = useFinanceStore((s) => s.prisonZoneExit);
   const yardKuiva = useFinanceStore((s) => s.yardKuiva);
   const [yardSplash, setYardSplash] = useState<YardEvent | null>(null);
   const closeSplash = useCallback(() => setYardSplash(null), []);
@@ -1252,6 +1263,21 @@ export function PrisonPage() {
 
   /** Что двор сказал по итогам удара: событие началось, выполнено, ушло. */
   const yardLoot = (c: number, res: PrisonLoot) => {
+    const z = res.zone;
+    if (z) {
+      if (z.tokens > 0) floatText(c, `+${z.tokens} ✦`, 'pfloat--token', 60);
+      if (z.bonus) {
+        tierBreak(2);
+        notifySuccess();
+        burstConfetti(40, ['#c89aff', '#e6c8ff', '#fff']);
+        say('Норма спецзоны: +10 минут');
+      }
+      if (z.ended) {
+        mineRumble();
+        notifyWarning();
+        say('Время в спецзоне вышло — завтра ещё');
+      }
+    }
     if (res.eventEnded) {
       const t = endText(res.eventEnded);
       if (t) say(t);
@@ -1889,7 +1915,11 @@ export function PrisonPage() {
   return (
     <Screen
       title="Каторга"
-      subtitle={`Шахта ${rankLetter(mine.id)} · до ${newest.value} монет за блок${prestige ? ` · престиж ${prestige}` : ''}`}
+      subtitle={
+        prison.zone.on
+          ? `Спецзона · ${newest.name.toLowerCase()} · платят токенами`
+          : `Шахта ${rankLetter(mine.id)} · до ${newest.value} монет за блок${prestige ? ` · престиж ${prestige}` : ''}`
+      }
       className="prison-screen"
       action={
         <div className="row" style={{ gap: 8 }}>
@@ -1941,7 +1971,7 @@ export function PrisonPage() {
               setSheet('mines');
             }}
           >
-            <span>{rankLetter(mine.id)}</span>
+            <span>{prison.zone.on ? '⛓' : rankLetter(mine.id)}</span>
           </button>
         </div>
       }
@@ -2009,7 +2039,7 @@ export function PrisonPage() {
         </div>
 
         <div
-          className={`pmine-frame${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}${yardEv?.id === 'gold' ? ' is-gold' : ''}`}
+          className={`pmine-frame${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}${yardEv?.id === 'gold' ? ' is-gold' : ''}${prison.zone.on ? ' is-zone' : ''}`}
         >
           {/* Полоса запала сидит на верхней кромке рамы: отдельной строкой
               она отнимала бы у поля высоту. */}
@@ -2049,8 +2079,29 @@ export function PrisonPage() {
               )}
             </span>
           </div>
-          {(anyBuff || yardEv) && (
+          {prison.zone.on && (
+            <button
+              type="button"
+              className="pzone-exit"
+              onClick={() => {
+                tapLight();
+                prisonZoneExit();
+                say('Вышел из спецзоны');
+              }}
+            >
+              Выйти
+            </button>
+          )}
+          {(anyBuff || yardEv || prison.zone.on) && (
             <div className="pbuffs">
+              {prison.zone.on && (
+                <span className="pbuff pbuff--zone">
+                  ⛓ {clockMs(zoneLeft(prison.zone, Date.now()))} ·{' '}
+                  {ZONE_MS + prison.zone.bonus >= ZONE_MAX_MS
+                    ? 'норма ✓'
+                    : `норма ${prison.zone.have % ZONE_QUOTA}/${ZONE_QUOTA}`}
+                </span>
+              )}
               {yardEv && <EventPill ev={yardEv} now={yardNow} />}
               {buffs.frenzy > 0 && (
                 <span className="pbuff pbuff--frenzy">✺ {sec(buffs.frenzy)}</span>

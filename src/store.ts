@@ -142,6 +142,20 @@ import {
   PROP_MS,
   PROP_REFORGE,
   liveEvent,
+  PICK_LEVEL_MAX,
+  PICK_STARS_MAX,
+  STAR_KEYS,
+  STAR_TOKENS,
+  ZONE_BONUS_MS,
+  ZONE_IDLE_MS,
+  ZONE_MAX_MS,
+  ZONE_MS,
+  ZONE_QUOTA,
+  zoneLeft,
+  zoneMineId,
+  zoneTier,
+  zoneToday,
+  zoneTokens,
   modsOf,
   rollDrops,
   stash,
@@ -577,6 +591,8 @@ export interface PrisonLoot {
   eventStarted: YardEvent | null;
   eventDone: YardPrize | null;
   eventEnded: YardEnd | null;
+  /** Спецзона: токены за удар, норма зоны добавила время, время вышло. */
+  zone: { tokens: number; bonus: boolean; ended: boolean } | null;
 }
 
 /** Событие кончилось по часам. `lost` — сколько брёвен унёс медведь. */
@@ -1136,6 +1152,11 @@ interface FinanceState {
   prisonBuy: (what: 'pick' | 'sharp' | 'bag' | 'cart') => boolean;
   /** Престиж: ранг и шахта — на A, кирка остаётся, продажа дороже. */
   prisonPrestige: () => boolean;
+  /** Спецзона: войти (после престижа, пока есть время сегодня) и выйти. */
+  prisonZoneEnter: () => boolean;
+  prisonZoneExit: () => void;
+  /** Престиж кирки на 50-м уровне: опыт в ноль, звезда. */
+  prisonPickStar: () => boolean;
 
   setReminderPrefs: (patch: Partial<ReminderPrefs>) => void;
 }
@@ -2807,6 +2828,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         eventStarted: null,
         eventDone: null,
         eventEnded: null,
+        zone: null,
       };
     const now = Date.now();
     const m0 = modsOf(p);
@@ -2817,7 +2839,17 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       mine: p.mine.id,
       streak: streakLoot(opts.streak ?? 0),
     });
-    const put = stash(p.bag, drops.units, bagCapacity(p.bagLevel), p.cart, m.sell);
+    // Спецзона платит токенами: добыча не в рюкзак, а сразу в токены.
+    const inZone = p.zone.on;
+    let zoneGot = 0;
+    if (inZone)
+      for (const rock of drops.units) {
+        const t = zoneTokens(rock);
+        zoneGot += Math.floor(t) + (Math.random() < t - Math.floor(t) ? 1 : 0);
+      }
+    const put = inZone
+      ? { bag: p.bag, taken: 0, lost: 0, sold: 0 }
+      : stash(p.bag, drops.units, bagCapacity(p.bagLevel), p.cart, m.sell);
     // Находка: новая идёт в коллекцию, дубликат сдаётся за токены.
     const finds = { ...p.finds };
     let dupTokens = 0;
@@ -2863,7 +2895,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       bag: put.bag,
       mined: p.mined + rocks.length,
       earned: p.earned + put.sold,
-      tokens: p.tokens + drops.tokens + dupTokens + upTokens + parcelTokens,
+      tokens: p.tokens + drops.tokens + dupTokens + upTokens + parcelTokens + zoneGot,
       keys: p.keys + drops.keys + upKeys,
       finds,
       norm,
@@ -2871,6 +2903,31 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       parcels,
       pets,
     };
+    // Спецзона: время идёт только за работой, норма добавляет десять минут.
+    let zoneOut: PrisonLoot['zone'] = null;
+    if (inZone) {
+      const z0 = zoneToday(p.zone, now);
+      const used = z0.used + Math.min(ZONE_IDLE_MS, Math.max(0, now - (z0.tick || now)));
+      const have = z0.have + rocks.length;
+      const reached = Math.floor(have / ZONE_QUOTA) > Math.floor(z0.have / ZONE_QUOTA);
+      const extra = reached && ZONE_MS + z0.bonus < ZONE_MAX_MS;
+      const zone = {
+        ...z0,
+        used,
+        have,
+        tick: now,
+        bonus: extra ? z0.bonus + ZONE_BONUS_MS : z0.bonus,
+      };
+      const over = zoneLeft(zone, now) <= 0;
+      prison = over
+        ? {
+            ...prison,
+            zone: { ...zone, on: false, back: null },
+            mine: zone.back ?? freshMine(prison.rank),
+          }
+        : { ...prison, zone };
+      zoneOut = { tokens: zoneGot, bonus: extra, ended: over };
+    }
     // Двор: конвой считает сданную породу (как сломана, до перековки).
     let eventDone: YardPrize | null = null;
     const live = liveEvent(prison, now);
@@ -2917,6 +2974,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       eventStarted: start.started,
       eventDone,
       eventEnded: settled.end,
+      zone: zoneOut,
     };
   },
 
@@ -3553,7 +3611,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   prisonEnchant: (id, count = 1) => {
     const p = get().prison;
-    const cap = enchantCap(id, pickLevelOf(p.pickXp).level);
+    const cap = enchantCap(id, pickLevelOf(p.pickXp).level, p.pickStars);
     let level = p.ench[id];
     let tokens = p.tokens;
     let bought = 0;
@@ -3698,10 +3756,61 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   prisonGoMine: (id) => {
     const p = get().prison;
+    // Шахта спецзоны выработана — новая шахта той же зоны, из неё не выкидывает.
+    if (p.zone.on && id === p.mine.id && id > LAST_RANK) {
+      const prison = { ...p, mine: freshMine(id) };
+      set({ prison });
+      persistPrison(prison);
+      return;
+    }
     if (id < 0 || id > p.rank) return;
-    const prison = { ...p, mine: freshMine(id) };
+    // Ушёл в другую шахту из спецзоны — зона закрыта, время сохранено.
+    const prison = {
+      ...p,
+      mine: freshMine(id),
+      zone: p.zone.on ? { ...p.zone, on: false, back: null } : p.zone,
+    };
     set({ prison });
     persistPrison(prison);
+  },
+
+  prisonZoneEnter: () => {
+    const p = get().prison;
+    const now = Date.now();
+    if (!zoneTier(p.prestige) || p.zone.on || zoneLeft(p.zone, now) <= 0) return false;
+    const zone = { ...zoneToday(p.zone, now), on: true, tick: now, back: p.mine };
+    const prison = { ...p, zone, mine: freshMine(zoneMineId(p.prestige)) };
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  prisonZoneExit: () => {
+    const p = get().prison;
+    if (!p.zone.on) return;
+    const prison = {
+      ...p,
+      zone: { ...p.zone, on: false, back: null },
+      mine: p.zone.back ?? freshMine(p.rank),
+    };
+    set({ prison });
+    persistPrison(prison);
+  },
+
+  prisonPickStar: () => {
+    const p = get().prison;
+    if (p.pickStars >= PICK_STARS_MAX) return false;
+    if (pickLevelOf(p.pickXp).level < PICK_LEVEL_MAX) return false;
+    const prison = {
+      ...p,
+      pickXp: 0,
+      pickStars: p.pickStars + 1,
+      tokens: p.tokens + STAR_TOKENS * (p.pickStars + 1),
+      keys: p.keys + STAR_KEYS,
+    };
+    set({ prison });
+    persistPrison(prison);
+    return true;
   },
 
   prisonSell: () => {
@@ -3755,6 +3864,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       mine: freshMine(rank),
       keys: p.keys + RANK_KEYS,
       norm: {},
+      zone: { ...p.zone, on: false, back: null },
     };
     set({
       prison,
@@ -3823,6 +3933,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       mine: freshMine(start),
       keys: p.keys + PRESTIGE_KEYS,
       norm: {},
+      zone: { ...p.zone, on: false, back: null },
     };
     set({
       prison,

@@ -14,7 +14,17 @@ import {
 import type { CampTab } from '@/components/PrisonCamp';
 import { BarygaSheet } from '@/components/YardBits';
 import { useFinanceStore } from '@/store';
-import { crewYield, liveEvent, rankLetter, ROCKS, shortMoney } from '@/lib/prison';
+import {
+  crewYield,
+  liveEvent,
+  rankLetter,
+  ROCKS,
+  shortMoney,
+  ZONE_TIERS,
+  zoneLeft,
+  zoneMineId,
+  zoneTier,
+} from '@/lib/prison';
 import { FOREST_UNLOCK_RANK, millTick, PROP_BOARDS, SPECIES, sumRow } from '@/lib/forest';
 import {
   barygaBought,
@@ -47,6 +57,7 @@ export function YardPage() {
   const prison = useFinanceStore((s) => s.prison);
   const forest = useFinanceStore((s) => s.forest);
   const balance = useFinanceStore((s) => s.slotsBalance);
+  const prisonZoneEnter = useFinanceStore((s) => s.prisonZoneEnter);
   const [camp, setCamp] = useState<CampTab | null>(null);
   const [baryga, setBaryga] = useState(false);
   const now = useNow(1000);
@@ -71,6 +82,8 @@ export function YardPage() {
   const crew = crewYield(prison, now);
   const quiet = prison.rank < EVENTS_FROM_RANK && !prison.prestige;
   const nextMin = Math.max(1, Math.ceil((prison.eventNext - now) / 60_000));
+  const zoneOpen = zoneTier(prison.prestige) > 0;
+  const zoneMs = zoneLeft(prison.zone, now);
 
   const go = (path: string) => {
     tapLight();
@@ -169,6 +182,31 @@ export function YardPage() {
             locked={!forestOpen}
             badge={ev?.place === 'forest' ? def?.glyph : null}
             onClick={() => go('/forest')}
+          />
+          <Building
+            icon={
+              zoneOpen ? (
+                <img src={rockTexture(zoneMineId(prison.prestige))} alt="" />
+              ) : (
+                <span className="ybuilding__glyph">⛓</span>
+              )
+            }
+            name="Спецзона"
+            text={
+              !zoneOpen
+                ? `После ${ZONE_TIERS[0]}-го престижа`
+                : prison.zone.on
+                  ? `Ты там · осталось ${Math.ceil(zoneMs / 60_000)} мин`
+                  : zoneMs > 0
+                    ? `${ROCKS[zoneMineId(prison.prestige)].name}, ${Math.ceil(zoneMs / 60_000)} мин сегодня`
+                    : 'Время на сегодня вышло'
+            }
+            locked={!zoneOpen || (!prison.zone.on && zoneMs <= 0)}
+            badge={zoneOpen && zoneMs > 0 && !prison.zone.on ? '✦' : null}
+            onClick={() => {
+              tapLight();
+              if (prison.zone.on || prisonZoneEnter()) nav('/prison');
+            }}
           />
           <Building
             icon={<img src={barygaTexture()} alt="" />}

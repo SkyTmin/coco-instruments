@@ -20502,6 +20502,72 @@ input[type='datetime-local'] {
   animation-duration: 4s;
 }
 
+/* ---- Спецзона и звёзды кирки (v2.55) ---------------------------------------- */
+.pmine-frame.is-zone {
+  box-shadow:
+    0 0 0 2px #7a4ab8,
+    0 0 26px rgba(160, 100, 230, 0.45),
+    0 10px 24px rgba(0, 0, 0, 0.5);
+}
+.pbuff--zone {
+  border-color: #b98aff;
+  color: #e6c8ff;
+}
+.pzone-exit {
+  position: absolute;
+  right: 10px;
+  bottom: -12px;
+  z-index: 9;
+  padding: 3px 10px;
+  border-radius: 9px;
+  border: 1px solid #b98aff;
+  background: #1c1228;
+  color: #e6c8ff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.pzone-exit:active {
+  transform: scale(0.95);
+}
+.pench-stars {
+  margin-left: 2px;
+  font-style: normal;
+  color: #ffd35a;
+  letter-spacing: -1px;
+}
+.pstar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #3a2e14, #241c0c);
+  border: 1px solid rgba(255, 211, 90, 0.5);
+  color: #fff0c8;
+}
+.pstar span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.pstar b {
+  font-size: 13px;
+}
+.pstar i {
+  font-size: 11.5px;
+  font-style: normal;
+  line-height: 1.35;
+  color: rgba(255, 240, 200, 0.75);
+}
+.pforge__buy.is-armed {
+  background: #ff6a4a;
+  color: #fff;
+}
+
 /* ---- Страница двора ------------------------------------------------------ */
 .yard-scene-bg {
   position: fixed;

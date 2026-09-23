@@ -26,6 +26,13 @@ import {
   ENCHANTS,
   enchantCap,
   enchantCost,
+  enchantMax,
+  PICK_LEVEL_MAX,
+  PICK_STARS_MAX,
+  STAR_CAP,
+  STAR_DMG,
+  STAR_KEYS,
+  STAR_TOKENS,
   fusePlan,
   MILES,
   mileReady,
@@ -521,7 +528,7 @@ function enchantPlan(
   p: PrisonState,
   want: number,
 ): { k: number; price: number; next: number } {
-  const cap = enchantCap(id, pickLevelOf(p.pickXp).level);
+  const cap = enchantCap(id, pickLevelOf(p.pickXp).level, p.pickStars);
   let l = p.ench[id];
   let tokens = p.tokens;
   let k = 0;
@@ -550,7 +557,9 @@ function EnchantTab() {
   const prisonEnchant = useFinanceStore((s) => s.prisonEnchant);
   const prisonEnchantReset = useFinanceStore((s) => s.prisonEnchantReset);
   const prisonEnchantToggle = useFinanceStore((s) => s.prisonEnchantToggle);
+  const prisonPickStar = useFinanceStore((s) => s.prisonPickStar);
   const [confirm, setConfirm] = useState<EnchantId | null>(null);
+  const [starArmed, setStarArmed] = useState(false);
   const [bulk, setBulk] = useState(1);
   const lvl = pickLevelOf(p.pickXp);
   return (
@@ -562,6 +571,7 @@ function EnchantTab() {
       <div className="pench-pick">
         <span className="pench-pick__lv">
           <PickIcon pick={p.pick} size={20} /> Кирка ур. {lvl.level}
+          {p.pickStars > 0 && <em className="pench-stars">{'★'.repeat(p.pickStars)}</em>}
         </span>
         <span className="pench-pick__bar">
           <i style={{ transform: `scaleX(${lvl.need ? lvl.into / lvl.need : 1})` }} />
@@ -570,6 +580,40 @@ function EnchantTab() {
           {lvl.need ? `ещё ${fmt(lvl.need - lvl.into)} блоков` : 'максимум'}
         </span>
       </div>
+      {lvl.level >= PICK_LEVEL_MAX && p.pickStars < PICK_STARS_MAX && (
+        <div className="pstar">
+          <span>
+            <b>Перековать кирку ★{p.pickStars + 1}</b>
+            <i>
+              Уровень кирки — в ноль, зато потолок каждой чары +{Math.round(STAR_CAP * 100)}%, урон
+              +{Math.round(STAR_DMG * 100)}%, {fmt(STAR_TOKENS * (p.pickStars + 1))} токенов и{' '}
+              {STAR_KEYS} ключа. Купленные уровни чар остаются.
+            </i>
+          </span>
+          <button
+            type="button"
+            className={`btn btn--sm pforge__buy${starArmed ? ' is-armed' : ''}`}
+            onClick={() => {
+              primeAudio();
+              if (!starArmed) {
+                setStarArmed(true);
+                return;
+              }
+              setStarArmed(false);
+              if (!prisonPickStar()) {
+                notifyWarning();
+                return;
+              }
+              tierBreak(3);
+              burstConfetti(80, ['#ffe08a', '#ffffff', '#b8f4e6']);
+              flashFrame('big');
+              notifySuccess();
+            }}
+          >
+            {starArmed ? 'Точно?' : 'Перековать'}
+          </button>
+        </div>
+      )}
       <div className="pench-bulk" role="radiogroup" aria-label="Сколько уровней брать">
         {BULK.map((b) => (
           <button
@@ -589,9 +633,10 @@ function EnchantTab() {
       </div>
       {ENCHANTS.map((e) => {
         const l = p.ench[e.id];
-        const cap = enchantCap(e.id, lvl.level);
+        const cap = enchantCap(e.id, lvl.level, p.pickStars);
+        const max = enchantMax(e.id, p.pickStars);
         const locked = cap === 0;
-        const maxed = l >= e.max;
+        const maxed = l >= max;
         const plan = enchantPlan(e.id, p, bulk);
         const off = p.off.includes(e.id);
         const toggle = ENCHANT_TOGGLE.includes(e.id) && l > 0;
@@ -607,7 +652,7 @@ function EnchantTab() {
               <b>
                 {e.name}{' '}
                 <span className="pench-lvl">
-                  {l}/{maxed || locked ? e.max : cap}
+                  {l}/{maxed || locked ? max : cap}
                 </span>
               </b>
               <i>
@@ -676,7 +721,7 @@ function EnchantTab() {
                     notifyWarning();
                     return;
                   }
-                  tierBreak(l + got >= e.max ? 2 : got >= 5 ? 1 : 0);
+                  tierBreak(l + got >= max ? 2 : got >= 5 ? 1 : 0);
                   notifySuccess();
                 }}
               >
