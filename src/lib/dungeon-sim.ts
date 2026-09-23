@@ -1931,7 +1931,8 @@ function stepMob(sim: Sim, m: Mob, dt: number): void {
   switch (m.mode) {
     case 'emerge': {
       // Из стены на пол: полсекунды выползает.
-      const k = Math.min(1, m.t / 0.45);
+      // До своей очереди (t < 0) сидит в норе, а не выезжает назад в стену.
+      const k = Math.max(0, Math.min(1, m.t / 0.45));
       const b = sim.burrows[m.burrow];
       if (b) {
         m.x = b.obj.x + 0.5 + (m.hx - b.obj.x - 0.5) * k;

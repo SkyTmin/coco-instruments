@@ -1220,3 +1220,194 @@ export const goldBag = (econ: number) => Math.round(econ * 1.5);
 
 /** Сколько ROCKS в каторге — для проверок, что подземные номера не пересекаются. */
 export const PRISON_ROCKS = ROCKS.length;
+
+// ---------------------------------------------------------------------------
+// Вылазка: запись прогресса, выход живым, смерть. Прогресс (убийства,
+// опыт, пройденное, открытое) остаётся ВСЕГДА — умер ты или вышел: это
+// работа руками. Пропадает только сидор — так на присонах: умер в шахте
+// PvP — лут у того, кто тебя убил, а здесь его растаскивают крысы.
+// ---------------------------------------------------------------------------
+
+export const hourOf = (now: number) => Math.floor(now / 3_600_000);
+
+/** Сколько мяса Барыга уже взял в этот час. */
+export const marketSold = (d: DungeonState, now: number) =>
+  d.market.hour === hourOf(now) ? d.market.sold : 0;
+
+/** То, что вылазка добавила к сохранению (форма `SimDelta`). */
+export interface DeltaIn {
+  kills: Partial<Record<MobId, number>>;
+  stats: Partial<Record<StatId, number>>;
+  xp: number;
+  lamps: string[];
+  opened: string[];
+  secrets: string[];
+  bosses: { id: BossId; at: number }[];
+}
+
+const addCounts = <K extends string>(
+  a: Partial<Record<K, number>>,
+  b: Partial<Record<K, number>>,
+): Partial<Record<K, number>> => {
+  const out = { ...a };
+  for (const [k, n] of Object.entries(b) as [K, number][]) if (n) out[k] = (out[k] ?? 0) + n;
+  return out;
+};
+
+const union = (a: string[], b: string[]) => (b.length ? Array.from(new Set([...a, ...b])) : a);
+
+/** Сложить дельту вылазки с сохранением. Разведка — строками по районам. */
+export function applyDelta(
+  d: DungeonState,
+  x: DeltaIn,
+  fog?: Partial<Record<AreaId, string>>,
+): DungeonState {
+  const bosses = { ...d.bosses };
+  for (const b of x.bosses) {
+    const prev = bosses[b.id];
+    bosses[b.id] = { at: Math.max(prev?.at ?? 0, b.at), kills: (prev?.kills ?? 0) + 1 };
+  }
+  return {
+    ...d,
+    kills: addCounts(d.kills, x.kills),
+    stats: addCounts(d.stats, x.stats),
+    xp: d.xp + x.xp,
+    lamps: union(d.lamps, x.lamps),
+    opened: union(d.opened, x.opened),
+    secrets: union(d.secrets, x.secrets),
+    bosses,
+    fog: fog ? { ...d.fog, ...fog } : d.fog,
+  };
+}
+
+export interface Haul {
+  meat: number;
+  meatValue: number;
+  coins: number;
+  tokens: number;
+  keys: number;
+  mats: Partial<Record<MatId, number>>;
+  killed: number;
+  ms: number;
+  /** Сидор был почти полон — засчитывается в условия робы. */
+  full: boolean;
+}
+
+function haulOf(d: DungeonState, sack: Sack, econ: number, now: number, killed: number): Haul {
+  const mv = meatValue(sack, econ, marketSold(d, now));
+  return {
+    meat: mv.pieces,
+    meatValue: mv.value,
+    coins: sack.coins,
+    tokens: sack.tokens,
+    keys: sack.keys,
+    mats: { ...sack.mats },
+    killed,
+    ms: d.run ? Math.max(0, now - d.run.started) : 0,
+    full: sackCount(sack) >= Math.floor(sackCap(d.sackLevel) * 0.9),
+  };
+}
+
+/**
+ * Вышел клетью: мясо Барыге (рынок насыщается), монеты в общий кошелёк,
+ * материалы на склад. Токены и ключи страница кладёт в каторгу — они общие.
+ * `pay` — сколько монет всего прибавить в кошелёк.
+ */
+export function extractRun(
+  d: DungeonState,
+  sack: Sack,
+  econ: number,
+  now: number,
+  killed: number,
+): { d: DungeonState; haul: Haul; pay: number } {
+  const haul = haulOf(d, sack, econ, now, killed);
+  const hour = hourOf(now);
+  const sold = marketSold(d, now) + haul.meat;
+  const stats = { ...d.stats };
+  stats.extracts = (stats.extracts ?? 0) + 1;
+  if (haul.full) stats.fullExtracts = (stats.fullExtracts ?? 0) + 1;
+  return {
+    d: {
+      ...d,
+      stash: addCounts(d.stash, sack.mats),
+      market: { hour, sold },
+      stats,
+      run: null,
+    },
+    haul,
+    pay: haul.meatValue + haul.coins,
+  };
+}
+
+/** Умер: сидор пропал целиком. Что было в нём — для экрана «Растащили». */
+export function dieRun(
+  d: DungeonState,
+  sack: Sack,
+  econ: number,
+  now: number,
+  killed: number,
+): { d: DungeonState; lost: Haul } {
+  const lost = haulOf(d, sack, econ, now, killed);
+  const stats = { ...d.stats, deaths: (d.stats.deaths ?? 0) + 1 };
+  return { d: { ...d, stats, run: null }, lost };
+}
+
+/** Сидор: уровней немного, каждый — ощутимый шаг и настоящий сток шкурок. */
+export const SACK_MAX = 12;
+
+export function sackCost(level: number, econ: number): Cost {
+  return {
+    coins: Math.round(econ * 2 * Math.pow(1.7, level)),
+    mats: { skin: Math.round(10 * Math.pow(1.45, level)) },
+  };
+}
+
+/** Починить клеть района — новая точка спуска и выхода. */
+export function liftCost(area: AreaId, econ: number): Cost {
+  const lvl = areaOf(area).level;
+  return {
+    coins: Math.round(econ * 5 * Math.pow(1.8, lvl)),
+    mats: { skin: Math.round(20 * Math.pow(1.6, lvl)) },
+  };
+}
+
+/** Списать со склада то, что стоит `cost` (монеты — не здесь). */
+export function payMats(d: DungeonState, cost: Cost): DungeonState {
+  const stash = { ...d.stash };
+  for (const [id, n] of Object.entries(cost.mats) as [MatId, number][]) {
+    const left = (stash[id] ?? 0) - n;
+    if (left > 0) stash[id] = left;
+    else delete stash[id];
+  }
+  return { ...d, stash };
+}
+
+/**
+ * Прочность подземной руды — от породы шахты игрока: кирка каторги бьёт
+ * здесь с тем же уроном, и блок пирита держит столько же ударов, сколько
+ * хорошая порода его ранга. Иначе на алмазной кирке шахта подземелья
+ * сдувалась бы за секунды, а на ржавой — не копалась бы вовсе.
+ */
+export function deepHp(rock: number, p: Pick<PrisonState, 'rank'>): number {
+  const base = ROCKS[Math.min(Math.max(0, p.rank), LAST_RANK)]?.hp ?? 4;
+  return Math.max(1, Math.round((base * deepRock(rock).hp) / 10));
+}
+
+/** Раскоп шахты в ТЕКУЩЕМ окне: старое окно — нетронутое поле. */
+export function deepMineNow(
+  d: DungeonState,
+  id: DeepMineId,
+  now: number,
+  cells: number,
+): DeepMineState {
+  const w = mineWindow(id, now);
+  const m = d.mines[id];
+  if (m && m.window === w && m.dug.length === cells) return m;
+  return { window: w, dug: new Array<number>(cells).fill(0) };
+}
+
+/** Доля выработки: сколько блоков из всех сломано. */
+export function deepShare(m: DeepMineState, depth: number): number {
+  if (!m.dug.length) return 0;
+  return m.dug.reduce((a, b) => a + b, 0) / (m.dug.length * depth);
+}

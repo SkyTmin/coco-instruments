@@ -8,6 +8,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Sheet } from '@/components/ui';
 import { CoinIcon } from '@/components/slot-art';
 import { useFinanceStore } from '@/store';
+import { BeastTab, GearTab, StashTab } from '@/components/DungeonCamp';
 import {
   bagCapacity,
   bagCost,
@@ -250,6 +251,9 @@ export function KeyIcon({ size = 14 }: { size?: number }) {
 // ---------------------------------------------------------------------------
 
 export type CampTab =
+  | 'gear'
+  | 'beasts'
+  | 'stash'
   | 'forge'
   | 'axes'
   | 'axench'
@@ -266,6 +270,9 @@ export type CampTab =
   | 'perks';
 
 const TAB_NAMES: Record<CampTab, string> = {
+  gear: 'Снаряжение',
+  beasts: 'Бестиарий',
+  stash: 'Склад',
   forge: 'Кузница',
   axes: 'Топоры',
   axench: 'Чары',
@@ -282,7 +289,7 @@ const TAB_NAMES: Record<CampTab, string> = {
   perks: 'Перки',
 };
 
-export type CampPlace = 'mine' | 'forest';
+export type CampPlace = 'mine' | 'forest' | 'dungeon';
 
 /**
  * Лагерь у шахты и у леса — РАЗНЫЙ. В шахте топоры и пилорама — чужое, в
@@ -293,11 +300,12 @@ export type CampPlace = 'mine' | 'forest';
 const PLACE_TABS: Record<CampPlace, CampTab[]> = {
   mine: ['forge', 'enchant', 'runes', 'pets', 'shop', 'cases', 'crew', 'finds', 'miles', 'perks'],
   forest: ['axes', 'axench', 'mill', 'bench', 'cases', 'pets', 'runes'],
+  dungeon: ['gear', 'beasts', 'stash', 'cases', 'runes', 'pets'],
 };
 
 /** Где живёт вкладка: для двора, который открывает лагерь со своих зданий. */
 export const campPlaceOf = (tab: CampTab): CampPlace =>
-  PLACE_TABS.mine.includes(tab) ? 'mine' : 'forest';
+  PLACE_TABS.mine.includes(tab) ? 'mine' : PLACE_TABS.forest.includes(tab) ? 'forest' : 'dungeon';
 
 export function PrisonCamp({
   place = 'mine',
@@ -332,7 +340,16 @@ export function PrisonCamp({
     runes: runesIdle(p, axeLevelOf(f.logs).level) ? '•' : null,
   };
   return (
-    <Sheet title={place === 'forest' ? 'Лагерь лесоруба' : 'Лагерь шахтёра'} onClose={onClose}>
+    <Sheet
+      title={
+        place === 'forest'
+          ? 'Лагерь лесоруба'
+          : place === 'dungeon'
+            ? 'Лагерь у клети'
+            : 'Лагерь шахтёра'
+      }
+      onClose={onClose}
+    >
       <div className="pcamp-tabs" role="tablist">
         {tabs.map((id) => (
           <button
@@ -352,6 +369,9 @@ export function PrisonCamp({
         ))}
       </div>
       <div className="pcamp-body">
+        {tab === 'gear' && <GearTab onSpend={onSpend} />}
+        {tab === 'beasts' && <BeastTab />}
+        {tab === 'stash' && <StashTab onSpend={onSpend} />}
         {tab === 'forge' && <ForgeTab onSpend={onSpend} />}
         {tab === 'axes' && <AxesTab onSpend={onSpend} />}
         {tab === 'axench' && <AxeEnchSection f={f} p={p} />}

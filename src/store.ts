@@ -255,6 +255,31 @@ import {
   spawnEvent,
 } from '@/lib/yard';
 import type { Lot, YardPrize } from '@/lib/yard';
+import {
+  applyDelta,
+  canPay,
+  conditionsMet,
+  dieRun,
+  DUNGEON_START,
+  econOf,
+  extractRun,
+  liftCost,
+  nextStep,
+  normalizeDungeon,
+  payMats,
+  SACK_MAX,
+  sackCost,
+} from '@/lib/dungeon';
+import type {
+  AreaId,
+  DeepMineId,
+  DeepMineState,
+  DeltaIn,
+  DungeonState,
+  Haul,
+  Sack,
+  Slot,
+} from '@/lib/dungeon';
 import type {
   AxeEnchId,
   Chop,
@@ -445,6 +470,10 @@ const persistPrison = (p: PrisonState) => writePrison({ version: 1, ...p });
 // секунду, а запрос на каждое — кликер, который долбит сервер.
 const writeForest = makePersister<ForestBlob>(STORAGE_KEYS.forest, 2000);
 const persistForest = (f: ForestState) => writeForest({ version: 1, ...f });
+// Подземелье пишется ещё реже: в бою страница сбрасывает дельту раз в
+// несколько секунд, а не на каждую крысу.
+const writeDungeon = makePersister<DungeonBlob>(STORAGE_KEYS.dungeon, 3000);
+const persistDungeon = (d: DungeonState) => writeDungeon({ version: 1, ...d });
 
 /**
  * Передачки зреют от любой добычи — блоков шахты и брёвен леса. Новая
@@ -600,6 +629,27 @@ const persistCamera = (s: {
 /** Сохранение лесоповала — отдельным ключом, чтобы шахта не распухала. */
 interface ForestBlob extends ForestState {
   version: 1;
+}
+
+/** Сохранение подземелья — своим ключом: снаряжение, счётчики, вылазка. */
+interface DungeonBlob extends DungeonState {
+  version: 1;
+}
+
+/** Итог выхода клетью — для экрана «Поднялся». */
+export interface DungeonExit {
+  haul: Haul;
+  pay: number;
+}
+
+/** Снимок вылазки для записи — форма `RunSnap` симуляции. */
+export interface DungeonSnap {
+  area: AreaId;
+  x: number;
+  ly: number;
+  hp: number;
+  sack: Sack;
+  killed: number;
 }
 
 /** Сохранение каторги: состояние шахты целиком, деньги — в кошельке слотов. */
@@ -864,6 +914,7 @@ interface ExportData {
   slots?: Partial<Omit<SlotsBlob, 'version'>>;
   prison?: Partial<PrisonState>;
   forest?: Partial<ForestState>;
+  dungeon?: Partial<DungeonState>;
   reminderPrefs?: Partial<ReminderPrefs>;
 }
 export interface ExportBundle {
@@ -936,6 +987,8 @@ interface FinanceState {
   /** Каторга: ранг, кирка, рюкзак, шахта. Деньги — общие, в `slotsBalance`. */
   prison: PrisonState;
   forest: ForestState;
+  /** Подземелье: снаряжение, счётчики, склад, текущая вылазка. */
+  dungeon: DungeonState;
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
 
@@ -1186,6 +1239,31 @@ interface FinanceState {
    * рекорды и историю. Звук, вибрация, турбо и скин остаются.
    */
   gamesReset: () => void;
+  /** Спуститься клетью района. Недосиженная вылазка продолжается как есть. */
+  dungeonEnter: (lift: AreaId, hp: number) => void;
+  /** Запись вылазки на ходу: дельта прогресса и где стоишь. */
+  dungeonSave: (snap: DungeonSnap, delta: DeltaIn, fog: Partial<Record<AreaId, string>>) => void;
+  /** Поднялся клетью: мясо — Барыге, монеты — в кошелёк, токены и ключи — в каторгу. */
+  dungeonExtract: (
+    snap: DungeonSnap,
+    delta: DeltaIn,
+    fog: Partial<Record<AreaId, string>>,
+  ) => DungeonExit | null;
+  /** Погиб: сидор растащили, прогресс остался. */
+  dungeonDie: (
+    snap: DungeonSnap,
+    delta: DeltaIn,
+    fog: Partial<Record<AreaId, string>>,
+  ) => Haul | null;
+  /** Заточка или перековка слота — что вышло. */
+  dungeonUpgrade: (slot: Slot) => 'plus' | 'reforge' | null;
+  dungeonSackUp: () => boolean;
+  dungeonLiftRepair: (area: AreaId) => boolean;
+  /** Раскоп подземной шахты. `opened` — первый блок в этом окне. */
+  dungeonMineSave: (id: DeepMineId, m: DeepMineState, opened: boolean) => void;
+  dungeonIntroSeen: () => void;
+  /** Заколотил нору: одна крепь из запаса каторги. */
+  dungeonSpendProp: () => boolean;
   /** Разбит сейд-камень в клетке `cell`: токены и монеты. */
   prisonSeid: (cell: number) => { tokens: number; coins: number } | null;
   prisonMileClaim: (id: string) => MileClaim | null;
@@ -1308,6 +1386,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   sessionCard: null,
   prison: PRISON_START,
   forest: FOREST_START,
+  dungeon: DUNGEON_START,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -1336,6 +1415,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slots,
       prison,
       forest,
+      dungeon,
     ] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
@@ -1359,6 +1439,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       storage.get<SlotsBlob>(STORAGE_KEYS.slots),
       storage.get<PrisonBlob>(STORAGE_KEYS.prison),
       storage.get<ForestBlob>(STORAGE_KEYS.forest),
+      storage.get<DungeonBlob>(STORAGE_KEYS.dungeon),
     ]);
     set({
       expenses: exp?.items ?? [],
@@ -1408,6 +1489,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       ...staleSession(slotsProgress(slots)),
       prison: normalizePrison(prison),
       forest: normalizeForest(forest),
+      dungeon: normalizeDungeon(dungeon),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -2257,6 +2339,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         slots: slotsBlob(s),
         prison: s.prison,
         forest: s.forest,
+        dungeon: s.dungeon,
         reminderPrefs: s.reminderPrefs,
       },
     };
@@ -2316,6 +2399,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       sessionCard: null,
       prison: normalizePrison(d.prison),
       forest: normalizeForest(d.forest),
+      dungeon: normalizeDungeon(d.dungeon),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -2340,6 +2424,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistSlots(st);
     persistPrison(st.prison);
     persistForest(st.forest);
+    persistDungeon(st.dungeon);
     persistReminderPrefs(st.reminderPrefs);
     return true;
   },
@@ -3613,16 +3698,21 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   prisonReset: () => {
     const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
     const forest = freshForest();
-    set({ prison, forest });
+    const dungeon = { ...DUNGEON_START };
+    set({ prison, forest, dungeon });
     persistPrison(prison);
     persistForest(forest);
+    persistDungeon(dungeon);
   },
 
   gamesReset: () => {
     const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
     const forest = freshForest();
+    const dungeon = { ...DUNGEON_START };
     persistForest(forest);
+    persistDungeon(dungeon);
     set({
+      dungeon,
       forest,
       prison,
       slotsBalance: START_BALANCE,
@@ -4135,6 +4225,151 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistPrison(prison);
     persistSlots(get());
     return true;
+  },
+
+  dungeonEnter: (lift, hp) => {
+    const d = get().dungeon;
+    if (d.run || !d.lifts.includes(lift)) return;
+    const dungeon: DungeonState = {
+      ...d,
+      run: {
+        lift,
+        area: lift,
+        x: -1,
+        y: -1,
+        hp,
+        sack: { meat: {}, mats: {}, tokens: 0, keys: 0, coins: 0, meatBy: {} },
+        started: Date.now(),
+        killed: 0,
+      },
+      stats: { ...d.stats, runs: (d.stats.runs ?? 0) + 1 },
+    };
+    set({ dungeon });
+    persistDungeon(dungeon);
+  },
+
+  dungeonSave: (snap, delta, fog) => {
+    const d = get().dungeon;
+    if (!d.run) return;
+    const next = applyDelta(d, delta, fog);
+    const dungeon: DungeonState = {
+      ...next,
+      run: {
+        ...d.run,
+        area: snap.area,
+        x: snap.x,
+        y: snap.ly,
+        hp: snap.hp,
+        sack: snap.sack,
+        killed: snap.killed,
+      },
+    };
+    set({ dungeon });
+    persistDungeon(dungeon);
+  },
+
+  dungeonExtract: (snap, delta, fog) => {
+    const s = get();
+    if (!s.dungeon.run) return null;
+    const now = Date.now();
+    const d0 = applyDelta(s.dungeon, delta, fog);
+    const r = extractRun(d0, snap.sack, econOf(s.prison), now, snap.killed);
+    const prison =
+      snap.sack.tokens || snap.sack.keys
+        ? {
+            ...s.prison,
+            tokens: s.prison.tokens + snap.sack.tokens,
+            keys: s.prison.keys + snap.sack.keys,
+          }
+        : s.prison;
+    set({ dungeon: r.d, prison, slotsBalance: s.slotsBalance + r.pay });
+    persistDungeon(r.d);
+    if (prison !== s.prison) persistPrison(prison);
+    if (r.pay) persistSlots(get());
+    return { haul: r.haul, pay: r.pay };
+  },
+
+  dungeonDie: (snap, delta, fog) => {
+    const s = get();
+    if (!s.dungeon.run) return null;
+    const d0 = applyDelta(s.dungeon, delta, fog);
+    const r = dieRun(d0, snap.sack, econOf(s.prison), Date.now(), snap.killed);
+    set({ dungeon: r.d });
+    persistDungeon(r.d);
+    return r.lost;
+  },
+
+  dungeonUpgrade: (slot) => {
+    const s = get();
+    const d = s.dungeon;
+    const econ = econOf(s.prison);
+    const step = nextStep(d, slot, econ);
+    if (step.kind !== 'plus' && step.kind !== 'reforge') return null;
+    if (step.kind === 'reforge' && !conditionsMet(d, slot, d.gear[slot].tier)) return null;
+    if (!canPay(d, step.cost, s.slotsBalance)) return null;
+    const paid = payMats(d, step.cost);
+    const g = d.gear[slot];
+    const piece =
+      step.kind === 'plus' ? { tier: g.tier, plus: g.plus + 1 } : { tier: g.tier + 1, plus: 0 };
+    const dungeon: DungeonState = { ...paid, gear: { ...d.gear, [slot]: piece } };
+    set({ dungeon, slotsBalance: s.slotsBalance - step.cost.coins });
+    persistDungeon(dungeon);
+    persistSlots(get());
+    return step.kind;
+  },
+
+  dungeonSackUp: () => {
+    const s = get();
+    const d = s.dungeon;
+    if (d.sackLevel >= SACK_MAX || d.run) return false;
+    const cost = sackCost(d.sackLevel, econOf(s.prison));
+    if (!canPay(d, cost, s.slotsBalance)) return false;
+    const dungeon: DungeonState = { ...payMats(d, cost), sackLevel: d.sackLevel + 1 };
+    set({ dungeon, slotsBalance: s.slotsBalance - cost.coins });
+    persistDungeon(dungeon);
+    persistSlots(get());
+    return true;
+  },
+
+  dungeonLiftRepair: (area) => {
+    const s = get();
+    const d = s.dungeon;
+    if (d.lifts.includes(area)) return false;
+    const cost = liftCost(area, econOf(s.prison));
+    if (!canPay(d, cost, s.slotsBalance)) return false;
+    const dungeon: DungeonState = { ...payMats(d, cost), lifts: [...d.lifts, area] };
+    set({ dungeon, slotsBalance: s.slotsBalance - cost.coins });
+    persistDungeon(dungeon);
+    persistSlots(get());
+    return true;
+  },
+
+  dungeonMineSave: (id, m, opened) => {
+    const d = get().dungeon;
+    const dungeon: DungeonState = {
+      ...d,
+      mines: { ...d.mines, [id]: m },
+      stats: opened ? { ...d.stats, mines: (d.stats.mines ?? 0) + 1 } : d.stats,
+    };
+    set({ dungeon });
+    persistDungeon(dungeon);
+  },
+
+  dungeonSpendProp: () => {
+    const p = get().prison;
+    if (p.items.prop <= 0) return false;
+    const prison = { ...p, items: { ...p.items, prop: p.items.prop - 1 } };
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  dungeonIntroSeen: () => {
+    const d = get().dungeon;
+    if (d.intro) return;
+    const dungeon = { ...d, intro: true };
+    set({ dungeon });
+    persistDungeon(dungeon);
   },
 
   setReminderPrefs: (patch) => {

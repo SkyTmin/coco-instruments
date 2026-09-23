@@ -478,3 +478,154 @@ export function branchHit(): void {
   tone(240, { dur: 0.08, type: 'square', gain: 0.07 });
   tone(170, { at: 0.07, dur: 0.14, type: 'square', gain: 0.07, sweepTo: 120 });
 }
+
+// ---------------------------------------------------------------------------
+// Подземелье. Бой — самый частый звук игры: каждый такт чуть гуляет по
+// высоте, иначе серия из трёх ударов звучит, как заевшая пластинка.
+// ---------------------------------------------------------------------------
+
+/** Свист клинка. Тяжёлый — ниже и дольше. `step` — номер удара серии. */
+export function swordSwing(step = 0, heavy = false): void {
+  const v = 0.92 + Math.random() * 0.16;
+  const up = 1 + step * 0.08;
+  noise((heavy ? 1500 : 2600) * v * up, {
+    dur: heavy ? 0.16 : 0.09,
+    gain: heavy ? 0.2 : 0.13,
+    q: 0.9,
+  });
+  if (heavy) tone(160 * v, { dur: 0.2, type: 'triangle', gain: 0.08, sweepTo: 90 });
+}
+
+/** Клинок вошёл: мягкий шлепок и хруст. Крит — с низом и звоном. */
+export function swordHit(crit = false, boss = false): void {
+  const v = 0.9 + Math.random() * 0.2;
+  noise(boss ? 520 * v : 900 * v, { dur: 0.07, gain: 0.26, q: 0.8 });
+  tone((boss ? 90 : 140) * v, { dur: 0.08, type: 'triangle', gain: 0.14, sweepTo: 60 });
+  if (crit) {
+    tone(1318 * v, { at: 0.01, dur: 0.16, type: 'sine', gain: 0.07 });
+    tone(80, { dur: 0.18, type: 'triangle', gain: 0.2, sweepTo: 42 });
+    noise(3200, { at: 0.01, dur: 0.05, gain: 0.12, q: 1.8 });
+  }
+}
+
+/** Крысиный писк — выползла из норы, заметила, сдохла (`k` 0…2). */
+export function ratSqueak(k = 0): void {
+  const v = 0.9 + Math.random() * 0.25;
+  const f = [2300, 2700, 1900][k] * v;
+  tone(f, { dur: 0.06, type: 'square', gain: 0.025, sweepTo: f * 1.35 });
+  tone(f * 1.2, { at: 0.07, dur: 0.05, type: 'square', gain: 0.02, sweepTo: f * 0.9 });
+}
+
+/** Крыса убита: писк обрывается глухим шлепком. */
+export function ratDie(big = false): void {
+  ratSqueak(2);
+  noise(big ? 260 : 380, { at: 0.03, dur: 0.12, gain: big ? 0.3 : 0.22, q: 0.7 });
+  tone(big ? 70 : 100, { at: 0.03, dur: 0.12, type: 'triangle', gain: 0.14, sweepTo: 45 });
+}
+
+/** Укус по герою: хруст и тупая боль. */
+export function heroHurt(): void {
+  noise(600, { dur: 0.1, gain: 0.26, q: 0.8 });
+  tone(180, { dur: 0.14, type: 'sawtooth', gain: 0.06, sweepTo: 110 });
+}
+
+/** Рывок: шорох сапог по щебню. */
+export function dashWhoosh(): void {
+  const v = 0.95 + Math.random() * 0.1;
+  noise(1100 * v, { dur: 0.16, gain: 0.16, q: 0.5 });
+  noise(3000 * v, { at: 0.02, dur: 0.08, gain: 0.06, q: 1.2 });
+}
+
+/** Уклон в последний миг: время замерло — звон и вдох. */
+export function perfectDodge(): void {
+  tone(1760, { dur: 0.35, type: 'sine', gain: 0.07, sweepTo: 2637 });
+  tone(880, { at: 0.02, dur: 0.4, type: 'sine', gain: 0.05, sweepTo: 1318 });
+  noise(5200, { dur: 0.2, gain: 0.05, q: 1 });
+}
+
+/** Подобрал: мясо чавкает, монета звякает, токен поёт. */
+export function pickUp(what: string): void {
+  if (what === 'coin') tone(1975, { dur: 0.08, type: 'square', gain: 0.03 });
+  else if (what === 'token') {
+    tone(1318, { dur: 0.08, type: 'sine', gain: 0.06 });
+    tone(1976, { at: 0.05, dur: 0.1, type: 'sine', gain: 0.05 });
+  } else if (what === 'key' || what === 'crown') keyFound();
+  else noise(700, { dur: 0.05, gain: 0.12, q: 1.2 });
+}
+
+/** Ящик или бочка разлетелись. */
+export function crateBreak(): void {
+  noise(520, { dur: 0.12, gain: 0.28, q: 0.9 });
+  noise(1800, { at: 0.02, dur: 0.06, gain: 0.12, q: 1.4 });
+  tone(150, { at: 0.03, dur: 0.07, type: 'triangle', gain: 0.1 });
+  tone(115, { at: 0.08, dur: 0.07, type: 'triangle', gain: 0.08 });
+}
+
+/** Вагонетка: стальной скрежет колёс по рельсу. */
+export function cartRoll(v = 1): void {
+  const k = Math.min(1.5, Math.max(0.4, v / 6));
+  tone(210 * k, { dur: 0.3, type: 'sawtooth', gain: 0.03, sweepTo: 180 * k });
+  noise(3400, { dur: 0.25, gain: 0.05 * k, q: 3 });
+}
+
+/** Гул из глубины: орда или вагонетка сорвалась. */
+export function deepRumble(): void {
+  tone(48, { dur: 1.1, type: 'triangle', gain: 0.22, sweepTo: 38 });
+  for (let i = 0; i < 6; i++)
+    noise(260 + i * 60, { at: 0.1 + i * 0.12, dur: 0.12, gain: 0.08, q: 0.6 });
+}
+
+/** Крысиный король: рёв — тысяча писков разом, над ними низ. */
+export function kingRoar(): void {
+  tone(70, { dur: 0.9, type: 'sawtooth', gain: 0.12, sweepTo: 44 });
+  for (let i = 0; i < 9; i++) {
+    const f = 1600 + Math.random() * 1600;
+    tone(f, { at: i * 0.05, dur: 0.12, type: 'square', gain: 0.018, sweepTo: f * 1.3 });
+  }
+  noise(300, { dur: 0.8, gain: 0.2, q: 0.5 });
+}
+
+/** Ворота арены: цепь, лязг решётки об пол. */
+export function gateSlam(): void {
+  for (let i = 0; i < 5; i++)
+    tone(900 + i * 40, { at: i * 0.05, dur: 0.04, type: 'square', gain: 0.03 });
+  noise(240, { at: 0.28, dur: 0.3, gain: 0.32, q: 0.6 });
+  tone(62, { at: 0.28, dur: 0.35, type: 'triangle', gain: 0.22, sweepTo: 40 });
+  tone(1180, { at: 0.3, dur: 0.4, type: 'sine', gain: 0.04 });
+}
+
+/** Съел: чавк и глоток. */
+export function eatChomp(): void {
+  noise(500, { dur: 0.07, gain: 0.18, q: 1 });
+  noise(420, { at: 0.13, dur: 0.07, gain: 0.16, q: 1 });
+  tone(220, { at: 0.26, dur: 0.12, type: 'sine', gain: 0.06, sweepTo: 160 });
+}
+
+/** Новый уровень героя — короткая лесенка вверх. */
+export function levelUp(): void {
+  [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) =>
+    tone(f, { at: i * 0.06, dur: 0.22, type: 'triangle', gain: 0.08 }),
+  );
+}
+
+/** Серия убийств выросла: удар барабана с подъёмом тона по ступени. */
+export function streakUp(tier: number): void {
+  const f = 392 * Math.pow(2, Math.min(tier, 5) / 6);
+  tone(f, { dur: 0.16, type: 'square', gain: 0.06 });
+  tone(f * 1.5, { at: 0.07, dur: 0.2, type: 'square', gain: 0.05 });
+  noise(200, { dur: 0.12, gain: 0.2, q: 0.6 });
+}
+
+/** Клеть: скрип троса, лязг защёлки. */
+export function liftClank(): void {
+  tone(340, { dur: 0.5, type: 'sawtooth', gain: 0.025, sweepTo: 260 });
+  noise(1400, { at: 0.45, dur: 0.1, gain: 0.2, q: 1.2 });
+  tone(700, { at: 0.46, dur: 0.2, type: 'square', gain: 0.03 });
+}
+
+/** Смерть героя: гулкий удар и спуск вниз. */
+export function heroDeath(): void {
+  noise(200, { dur: 0.5, gain: 0.3, q: 0.5 });
+  tone(220, { dur: 1.2, type: 'triangle', gain: 0.12, sweepTo: 55 });
+  tone(330, { at: 0.1, dur: 1.1, type: 'triangle', gain: 0.07, sweepTo: 82 });
+}

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyDelta,
   AREAS,
+  deepHp,
+  deepMineNow,
+  dieRun,
+  extractRun,
+  liftCost,
+  payMats,
+  sackCost,
   beastBonus,
   canPay,
   conditionsMet,
@@ -154,5 +162,97 @@ describe('подземелье: правила', () => {
     for (let i = 1; i < AREAS.length; i++) {
       expect(AREAS[i].level).toBeGreaterThanOrEqual(AREAS[i - 1].level);
     }
+  });
+
+  it('дельта вылазки складывается, босс считает убийства', () => {
+    const d = applyDelta(
+      { ...DUNGEON_START, kills: { rat: 5 }, lamps: ['a'] },
+      {
+        kills: { rat: 3, fatrat: 1 },
+        stats: { meters: 40 },
+        xp: 120,
+        lamps: ['a', 'b'],
+        opened: ['g'],
+        secrets: [],
+        bosses: [{ id: 'king', at: 1000 }],
+      },
+      { mouth: 'AAAA' },
+    );
+    expect(d.kills).toEqual({ rat: 8, fatrat: 1 });
+    expect(d.stats.meters).toBe(40);
+    expect(d.xp).toBe(120);
+    expect(d.lamps).toEqual(['a', 'b']);
+    expect(d.bosses.king).toEqual({ at: 1000, kills: 1 });
+    expect(d.fog.mouth).toBe('AAAA');
+  });
+
+  it('выход клетью: мясо в кошелёк, материалы на склад, рынок помнит час', () => {
+    const now = 5 * 3_600_000 + 10;
+    const sack: Sack = {
+      ...EMPTY_SACK,
+      meat: { meat: 20 },
+      meatBy: { mouth: 20 },
+      mats: { skin: 7 },
+      coins: 300,
+      tokens: 4,
+    };
+    const run = {
+      lift: 'mouth',
+      area: 'mouth' as const,
+      x: 1,
+      y: 1,
+      hp: 50,
+      sack,
+      started: now - 60_000,
+      killed: 9,
+    };
+    const r = extractRun({ ...DUNGEON_START, run, stash: { skin: 3 } }, sack, 1000, now, 9);
+    expect(r.d.run).toBeNull();
+    expect(r.d.stash.skin).toBe(10);
+    expect(r.d.market).toEqual({ hour: 5, sold: 20 });
+    expect(r.d.stats.extracts).toBe(1);
+    expect(r.haul.meat).toBe(20);
+    expect(r.pay).toBe(r.haul.meatValue + 300);
+    expect(r.haul.ms).toBe(60_000);
+    // Новый час — рынок снова берёт по полной.
+    const again = extractRun(r.d, sack, 1000, now + 3_600_000, 0);
+    expect(again.d.market.sold).toBe(20);
+  });
+
+  it('смерть забирает сидор, но не прогресс', () => {
+    const sack: Sack = {
+      ...EMPTY_SACK,
+      meat: { meat: 5 },
+      meatBy: { haul: 5 },
+      mats: { pyrite: 4 },
+    };
+    const d = { ...DUNGEON_START, kills: { rat: 40 }, xp: 500, stash: { pyrite: 1 } };
+    const r = dieRun(d, sack, 1000, 1e9, 3);
+    expect(r.d.stash.pyrite).toBe(1);
+    expect(r.d.kills.rat).toBe(40);
+    expect(r.d.xp).toBe(500);
+    expect(r.d.stats.deaths).toBe(1);
+    expect(r.lost.mats.pyrite).toBe(4);
+    expect(r.lost.meat).toBe(5);
+  });
+
+  it('сидор и клеть стоят шкурки со склада и дорожают', () => {
+    expect(sackCost(3, 1000).coins).toBeGreaterThan(sackCost(2, 1000).coins);
+    expect(sackCost(3, 1000).mats.skin!).toBeGreaterThan(sackCost(0, 1000).mats.skin!);
+    expect(liftCost('haul', 1000).coins).toBeGreaterThan(liftCost('mouth', 1000).coins);
+    const d = payMats(
+      { ...DUNGEON_START, stash: { skin: 12, pyrite: 2 } },
+      { coins: 0, mats: { skin: 12 } },
+    );
+    expect(d.stash).toEqual({ pyrite: 2 });
+  });
+
+  it('руда подземелья крепче с рангом, окно шахты сбрасывает раскоп', () => {
+    expect(deepHp(DEEP_BASE + 1, { rank: 20 })).toBeGreaterThan(deepHp(DEEP_BASE + 1, { rank: 5 }));
+    expect(deepHp(DEEP_BASE + 1, { rank: 5 })).toBeGreaterThan(deepHp(DEEP_BASE, { rank: 5 }));
+    const hour = 3_600_000;
+    const d = { ...DUNGEON_START, mines: { pyrite1: { window: 7, dug: new Array(63).fill(2) } } };
+    expect(deepMineNow(d, 'pyrite1', 7 * hour + 5, 63).dug[0]).toBe(2);
+    expect(deepMineNow(d, 'pyrite1', 8 * hour + 5, 63).dug[0]).toBe(0);
   });
 });

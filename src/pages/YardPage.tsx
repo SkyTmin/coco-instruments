@@ -37,6 +37,8 @@ import {
   EVENTS_FROM_RANK,
 } from '@/lib/yard';
 import { barygaTexture, crownTexture, rockTexture } from '@/lib/prison-art';
+import { areaOf, bossReadyAt, dungeonOpen, DUNGEON_UNLOCK_RANK, sackCount } from '@/lib/dungeon';
+import { gearIcon } from '@/lib/dungeon-art';
 import { tapLight } from '@/lib/haptics';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
@@ -57,6 +59,7 @@ export function YardPage() {
   const hydrated = useFinanceStore((s) => s.hydrated);
   const prison = useFinanceStore((s) => s.prison);
   const forest = useFinanceStore((s) => s.forest);
+  const dungeon = useFinanceStore((s) => s.dungeon);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const prisonZoneEnter = useFinanceStore((s) => s.prisonZoneEnter);
   const [camp, setCamp] = useState<CampTab | null>(null);
@@ -88,6 +91,8 @@ export function YardPage() {
   const nextMin = Math.max(1, Math.ceil((prison.eventNext - now) / 60_000));
   const zoneOpen = zoneTier(prison.prestige) > 0;
   const zoneMs = zoneLeft(prison.zone, now);
+  const dgOpen = dungeonOpen(prison);
+  const kingAt = bossReadyAt(dungeon, 'king');
 
   const go = (path: string) => {
     tapLight();
@@ -187,6 +192,22 @@ export function YardPage() {
             locked={!forestOpen}
             badge={ev?.place === 'forest' ? def?.glyph : null}
             onClick={() => go('/forest')}
+          />
+          <Building
+            icon={<img src={gearIcon('helm', dungeon.gear.helm.tier)} alt="" />}
+            name="Клеть"
+            text={
+              !dgOpen
+                ? `С ранга ${rankLetter(DUNGEON_UNLOCK_RANK)}`
+                : dungeon.run
+                  ? `Вылазка ждёт: ${areaOf(dungeon.run.area).name}, сидор ${sackCount(dungeon.run.sack)}`
+                  : kingAt > now
+                    ? `Подземелье · король вернётся через ${Math.ceil((kingAt - now) / 60_000)} мин`
+                    : 'Подземелье · король в логове'
+            }
+            locked={!dgOpen}
+            badge={dungeon.run ? '!' : null}
+            onClick={() => go('/dungeon')}
           />
           <Building
             icon={

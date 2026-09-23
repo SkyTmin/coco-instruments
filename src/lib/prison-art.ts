@@ -10,6 +10,7 @@
 // с первого взгляда.
 
 import { rng32, ROCKS } from './prison';
+import { DEEP_BASE, DEEP_ROCKS } from './dungeon';
 import { SPECIES } from './forest';
 import type { Rock } from './prison';
 
@@ -246,6 +247,28 @@ export function rockVariant(seed: number, cell: number, depth: number): number {
   let h = (seed ^ (cell * 374761393) ^ (depth * 668265263)) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
   return (h ^ (h >>> 16)) % ROCK_VARIANTS;
+}
+
+/**
+ * Руда шахт подземелья: тот же рисовальщик, что у пород каторги, — поле
+ * подземелья должно выглядеть той же шахтой. Номера — после пород каторги
+ * (`DEEP_BASE`), поэтому зерно рисунка не совпадёт ни с одной породой.
+ */
+export function deepRockTexture(rock: number, variant = 0): string {
+  const key = rock * ROCK_VARIANTS + (variant % ROCK_VARIANTS);
+  let url = rockCache.get(key);
+  if (url === undefined) {
+    const r = DEEP_ROCKS[rock - DEEP_BASE];
+    url = r ? paintRock(r, rock, variant % ROCK_VARIANTS) : '';
+    rockCache.set(key, url);
+  }
+  return url;
+}
+
+export function deepRockColors(rock: number): string[] {
+  const r = DEEP_ROCKS[rock - DEEP_BASE];
+  if (!r) return ['#444', '#222'];
+  return [r.base, r.dark, r.fleck, r.base, r.shine];
 }
 
 let bedrock = '';
