@@ -39,10 +39,19 @@ import {
 import type { Dir, HeroAnim, MobAnim, PropArt } from './dungeon-art';
 import { SKILL, SWORD } from './dungeon-sim';
 import type { Mob, Sim, SimEvent } from './dungeon-sim';
-import { bandAt, Tile, walkableTile } from './dungeon-world';
+import { bandAt, fogGet, Tile, walkableTile } from './dungeon-world';
 import type { World } from './dungeon-world';
+import { bladeSprite, fxCount, fxFrame, heroSprite, ROW, spritesReady } from './dungeon-sprites';
+import type { Dir4, FxId } from './dungeon-sprites';
 
 const CHUNK = 16;
+
+/**
+ * Насколько снимается темнота с разведанного. Владелец: «прошёлся один раз —
+ * туман исчезает и там больше не появляется». Не 1: чуть сумрака оставляет
+ * лампам и фонарю героя работу — светлое пятно вокруг всё ещё видно.
+ */
+const EXPLORED_LIT = 0.82;
 
 interface Particle {
   x: number;
@@ -81,6 +90,26 @@ interface Slash {
   max: number;
   heavy: boolean;
   flip: boolean;
+  step: number;
+}
+
+/** Рисованный эффект из набора: кадры листа по времени жизни. */
+interface Fx {
+  id: FxId;
+  x: number;
+  y: number;
+  life: number;
+  max: number;
+  ang: number;
+  scale: number;
+  /** Отражение по вертикали — серп, идущий сверху вниз. */
+  flip: boolean;
+  /** Идёт за героем: след клинка и кольцо уровня не висят в воздухе. */
+  follow: boolean;
+  /** Смещение от героя в мировых пикселях — для тех, что идут за ним. */
+  dx: number;
+  dy: number;
+  alpha: number;
 }
 
 interface Ring {
@@ -113,6 +142,8 @@ interface Ghost {
   y: number;
   img: HTMLCanvasElement;
   life: number;
+  /** Где верх картинки относительно ног: у старого героя и у спрайта разный. */
+  top: number;
 }
 
 export class DungeonRenderer {
@@ -141,6 +172,7 @@ export class DungeonRenderer {
   private floats: Float[] = [];
   private slashes: Slash[] = [];
   private rings: Ring[] = [];
+  private fx: Fx[] = [];
   private trauma = 0;
   private shakeT = 0;
   private flash = 0;
@@ -153,6 +185,8 @@ export class DungeonRenderer {
   private ghosts: Ghost[] = [];
   private ghostT = 0;
   private dt = 0;
+  /** Маска разведанного: точка на клетку, на свет ложится со сглаживанием. */
+  private fogCv: HTMLCanvasElement | null = null;
   /** Упреждение камеры по ходу — сглажено отдельно от самой камеры. */
   private leadX = 0;
   private leadY = 0;
@@ -221,6 +255,7 @@ export class DungeonRenderer {
             max: e.heavy ? 0.24 : 0.16,
             heavy: e.heavy,
             flip: e.step % 2 === 1,
+            step: e.step,
           });
           break;
         case 'hit': {
@@ -243,6 +278,17 @@ export class DungeonRenderer {
               max: e.crit ? 0.9 : 0.7,
               vx: (Math.random() - 0.5) * 0.8,
             });
+          // Искра попадания — звезда набора; крит — крест, его видно издалека.
+          this.addFx(
+            e.crit ? 7 : 5,
+            e.x + (Math.random() - 0.5) * 0.3,
+            e.y - 0.35,
+            e.crit ? 0.26 : 0.18,
+            {
+              scale: e.crit ? 0.85 : 0.55,
+              ang: e.crit ? 0 : (Math.random() - 0.5) * 0.6,
+            },
+          );
           if (e.crit) this.addTrauma(0.18);
           if (e.boss) this.addTrauma(0.08);
           break;
@@ -254,8 +300,18 @@ export class DungeonRenderer {
               : e.albino
                 ? ['#ebe4de', '#ffffff', '#b3a79f']
                 : ['#6b6158', '#978b80', '#3d3630', '#c68d84'];
-          this.burst(e.x, e.y, colors, e.mob === 'king' || e.mob === 'kinglet' ? 40 : 14, 1.8);
-          this.puff(e.x, e.y, 'rgba(160,140,120,0.8)', 5);
+          const big = e.mob === 'king' || e.mob === 'kinglet';
+          this.burst(e.x, e.y, colors, big ? 40 : 14, 1.8);
+          // Клуб дыма набора на месте крысы: тело не «исчезает», а лопается.
+          // Небольшой и полупрозрачный: четыре крысы одним ударом — это четыре
+          // клуба, и крупные сливались в белую кляксу поверх выпавшего мяса.
+          if (
+            !this.addFx(18, e.x, e.y - 0.25, big ? 0.6 : 0.36, {
+              scale: big ? 1.5 : 0.6,
+              alpha: big ? 0.9 : 0.7,
+            })
+          )
+            this.puff(e.x, e.y, 'rgba(160,140,120,0.8)', 5);
           if (e.elite || e.albino) {
             this.rings.push({ x: e.x, y: e.y, r: 2.2, life: 0, max: 0.4, color: '#ffd24a' });
             this.addTrauma(0.25);
@@ -281,7 +337,8 @@ export class DungeonRenderer {
             this.addTrauma(0.55);
             this.flash = Math.max(this.flash, 0.1);
             this.blasts.push({ x: e.x, y: e.y, r: e.r * 2.2, life: 0.35 });
-            this.rings.push({ x: e.x, y: e.y, r: e.r, life: 0, max: 0.35, color: '#ffb040' });
+            if (!this.addFx(12, e.x, e.y - 0.3, 0.4, { scale: (e.r * TS) / 14 }))
+              this.rings.push({ x: e.x, y: e.y, r: e.r, life: 0, max: 0.35, color: '#ffb040' });
             this.burst(e.x, e.y, ['#ffd24a', '#ff7a2a', '#fff3b0', '#5a4a3e'], 30, 2.4, true);
             this.puff(e.x, e.y, 'rgba(70,60,52,0.9)', 12);
           } else {
@@ -309,7 +366,8 @@ export class DungeonRenderer {
           this.puff(e.x, e.y + 0.3, 'rgba(160,140,120,0.7)', 5);
           break;
         case 'dodge':
-          this.rings.push({ x: e.x, y: e.y, r: 1.6, life: 0, max: 0.45, color: '#8fd6ff' });
+          if (!this.addFx(1, e.x, e.y - 0.3, 0.3, { scale: 1.2 }))
+            this.rings.push({ x: e.x, y: e.y, r: 1.6, life: 0, max: 0.45, color: '#8fd6ff' });
           break;
         case 'pick':
           this.floatPick(e.x, e.y, e.what, e.n);
@@ -327,18 +385,33 @@ export class DungeonRenderer {
           });
           break;
         case 'level':
-          this.rings.push({
-            x: sim.hero.x,
-            y: sim.hero.y,
-            r: 2.6,
-            life: 0,
-            max: 0.7,
-            color: '#ffe08a',
-          });
+          if (!this.addFx(4, 0, 0, 0.6, { scale: 1.4, follow: true, dy: -5 }))
+            this.rings.push({
+              x: sim.hero.x,
+              y: sim.hero.y,
+              r: 2.6,
+              life: 0,
+              max: 0.7,
+              color: '#ffe08a',
+            });
           this.burst(sim.hero.x, sim.hero.y, ['#ffe08a', '#fff6c8', '#ffb040'], 24, 1.8, true);
           break;
         case 'skill':
-          this.rings.push({ x: e.x, y: e.y, r: SKILL.reach, life: 0, max: 0.5, color: '#ffffff' });
+          if (
+            !this.addFx(9, 0, 0, SKILL.dur * 0.8, {
+              scale: (SKILL.reach * TS) / 14,
+              follow: true,
+              dy: -5,
+            })
+          )
+            this.rings.push({
+              x: e.x,
+              y: e.y,
+              r: SKILL.reach,
+              life: 0,
+              max: 0.5,
+              color: '#ffffff',
+            });
           break;
         case 'boss':
           if (e.what === 'wake' || e.what === 'split') this.addTrauma(0.6);
@@ -349,9 +422,31 @@ export class DungeonRenderer {
           break;
         case 'clank':
           this.burst(e.x, e.y, ['#ffd24a', '#ffffff'], 6, 1.2, true);
+          this.addFx(5, e.x, e.y - 0.35, 0.16, { scale: 0.45 });
           break;
       }
     }
+  }
+
+  /** Эффект из набора. false — картинки ещё не пришли, пусть рисуется прежний. */
+  private addFx(id: FxId, x: number, y: number, max: number, o: Partial<Fx> = {}): boolean {
+    if (!fxCount(id)) return false;
+    this.fx.push({
+      id,
+      x,
+      y,
+      life: 0,
+      max,
+      ang: 0,
+      scale: 1,
+      flip: false,
+      follow: false,
+      dx: 0,
+      dy: 0,
+      alpha: 1,
+      ...o,
+    });
+    return true;
   }
 
   private burst(
@@ -585,6 +680,7 @@ export class DungeonRenderer {
     this.drawParticles(dt, left, top);
     this.drawSlashes(sim, dt, left, top);
     this.drawRings(dt, left, top);
+    this.drawFx(sim, dt, left, top);
 
     // Свет.
     this.drawLight(sim, left, top, dt);
@@ -742,10 +838,12 @@ export class DungeonRenderer {
     const px = this.q(h.x * TS - left);
     const py = this.q(h.y * TS - top);
     // Тень.
+    const sprite = spritesReady();
     g.fillStyle = 'rgba(0,0,0,0.35)';
     g.beginPath();
-    g.ellipse(px, py + 3, 6, 2.5, 0, 0, Math.PI * 2);
+    g.ellipse(px, py + (sprite ? 2 : 3), sprite ? 5 : 6, 2, 0, 0, Math.PI * 2);
     g.fill();
+    if (sprite && this.drawHeroSprite(sim, gear, px, py, left, top)) return;
     if (h.mode === 'dead' || h.mode === 'dying') {
       const img = heroFrame(gear, 'down', 'dead', 0, false);
       g.drawImage(img, px - 8, py - 18);
@@ -789,22 +887,12 @@ export class DungeonRenderer {
           y: h.y,
           img: heroFlash(gear, dir, anim, frame, leftFace),
           life: 0,
+          top: 19,
         });
         this.puff(h.x, h.y + 0.25, 'rgba(170,150,125,0.55)', 1);
       }
     } else this.ghostT = 0;
-    if (this.ghosts.length) {
-      const keep: Ghost[] = [];
-      for (const gh of this.ghosts) {
-        gh.life += this.dt;
-        if (gh.life >= 0.24) continue;
-        keep.push(gh);
-        g.globalAlpha = 0.38 * (1 - gh.life / 0.24);
-        g.drawImage(gh.img, this.q(gh.x * TS - left) - 8, this.q(gh.y * TS - top) - 19);
-      }
-      g.globalAlpha = 1;
-      this.ghosts = keep;
-    }
+    this.drawGhosts(left, top);
     // Оружие: за спиной, если смотрит вверх.
     const behind = dir === 'up';
     if (behind) this.drawWeapon(sim, gear, px, py);
@@ -818,6 +906,143 @@ export class DungeonRenderer {
       g.arc(px + 0.5, py - 6.5, 4 + h.charge * 7, 0, Math.PI * 2);
       g.stroke();
     }
+  }
+
+  private drawGhosts(left: number, top: number): void {
+    if (!this.ghosts.length) return;
+    const g = this.bctx;
+    const keep: Ghost[] = [];
+    for (const gh of this.ghosts) {
+      gh.life += this.dt;
+      if (gh.life >= 0.24) continue;
+      keep.push(gh);
+      g.globalAlpha = 0.38 * (1 - gh.life / 0.24);
+      g.drawImage(gh.img, this.q(gh.x * TS - left) - 8, this.q(gh.y * TS - top) - gh.top);
+    }
+    g.globalAlpha = 1;
+    this.ghosts = keep;
+  }
+
+  /** Сторона взгляда с запасом: по диагонали герой не мигает между боком и спиной. */
+  private heroDir: Dir4 = 'down';
+
+  private dir4(ang: number): Dir4 {
+    const c = Math.cos(ang);
+    const s = Math.sin(ang);
+    const side = Math.abs(c) > Math.abs(s);
+    const prevSide = this.heroDir === 'left' || this.heroDir === 'right';
+    // Меняем ось, только когда новая перевесила заметно.
+    const keepAxis = side === prevSide || Math.abs(Math.abs(c) - Math.abs(s)) < 0.18;
+    const useSide = keepAxis ? prevSide : side;
+    this.heroDir = useSide ? (c < 0 ? 'left' : 'right') : s < 0 ? 'up' : 'down';
+    return this.heroDir;
+  }
+
+  /**
+   * Герой из набора: четыре стороны, шаг в 4 кадра по ПРОЙДЕННОМУ пути (ноги
+   * не скользят по полу при любой скорости), поза удара, прыжок на рывке.
+   * false — кадра нет, пусть рисует прежний герой.
+   */
+  private drawHeroSprite(
+    sim: Sim,
+    gear: Gear,
+    px: number,
+    py: number,
+    left: number,
+    top: number,
+  ): boolean {
+    const g = this.bctx;
+    const h = sim.hero;
+    const tier = gear.robe.tier;
+    if (h.mode === 'dead' || h.mode === 'dying') {
+      const img = heroSprite(tier, 'down', 0, h.flash > 0);
+      if (!img) return false;
+      // Лёг на бок: головой в сторону, лицом к нам.
+      g.save();
+      g.translate(px, py - 3);
+      g.rotate(-Math.PI / 2);
+      g.drawImage(img, -8, -8);
+      g.restore();
+      return true;
+    }
+    const attacking = h.mode === 'attack' || h.mode === 'heavy' || h.mode === 'skill';
+    let dir = this.dir4(h.face);
+    // Вихрь — оборот на месте: сторона меняется восемь раз за умение.
+    if (h.mode === 'skill') {
+      const spin: Dir4[] = ['down', 'left', 'up', 'right'];
+      dir = spin[Math.floor((h.t / SKILL.dur) * 8) % 4];
+    }
+    const speed = Math.hypot(h.vx, h.vy);
+    let row = speed > 0.6 ? ((Math.floor(h.walk / 0.36) % 4) + 4) % 4 : 0;
+    if (attacking) row = ROW.attack;
+    if (h.mode === 'dash') row = ROW.jump;
+    const img = heroSprite(tier, dir, row, h.flash > 0);
+    if (!img) return false;
+    if (h.mode === 'dash') {
+      this.ghostT -= this.dt;
+      if (this.ghostT <= 0) {
+        this.ghostT = 0.03;
+        const ghost = heroSprite(tier, dir, row, true);
+        if (ghost) this.ghosts.push({ x: h.x, y: h.y, img: ghost, life: 0, top: 13 });
+        this.puff(h.x, h.y + 0.25, 'rgba(170,150,125,0.55)', 1);
+      }
+    } else this.ghostT = 0;
+    this.drawGhosts(left, top);
+    const blink =
+      h.mode !== 'dash' && h.inv > 0.08 && h.inv < 0.5 && Math.floor(this.time * 20) % 2 === 0;
+    const blade = this.bladeAngle(h);
+    // Клинок, поднятый вверх, — за головой; остальное — перед телом.
+    const behind = blade !== null && (Math.sin(blade) < -0.35 || dir === 'up');
+    // Кулак — там, куда тянется рука в позе удара: по ходу удара от груди.
+    const aim = h.mode === 'charge' ? h.face + Math.PI : h.aim;
+    const hx = px + Math.cos(aim) * 5;
+    const hy = py - 4 + Math.sin(aim) * 4;
+    if (blade !== null && behind) this.drawBlade(gear, hx, hy, blade);
+    if (!blink || h.flash > 0) g.drawImage(img, px - 8, py - 13);
+    if (blade !== null && !behind) this.drawBlade(gear, hx, hy, blade);
+    if (h.mode === 'charge') {
+      g.strokeStyle = h.charge >= 1 ? '#ffe08a' : 'rgba(255,255,255,0.7)';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.arc(px + 0.5, py - 4.5, 4 + h.charge * 7, 0, Math.PI * 2);
+      g.stroke();
+    }
+    return true;
+  }
+
+  /** Куда смотрит остриё; null — клинок убран (в покое и на ходу его нет). */
+  private bladeAngle(h: Sim['hero']): number | null {
+    if (h.mode === 'attack' || h.mode === 'heavy') {
+      const heavy = h.mode === 'heavy';
+      const st = heavy ? SWORD.heavy : SWORD.steps[Math.max(0, Math.min(2, h.step))];
+      const arc = heavy ? SWORD.heavy.arc : SWORD.arc * (st as { arc: number }).arc;
+      // Замах до задевающей фазы, дальше — до конца дуги с торможением.
+      const k = Math.min(1, Math.max(0, h.t / st.to));
+      const dir = heavy ? -1 : h.step % 2 === 1 ? -1 : 1;
+      return h.aim - (dir * arc) / 2 + dir * arc * (1 - Math.pow(1 - k, 3));
+    }
+    if (h.mode === 'skill') return h.aim + (h.t / SKILL.dur) * Math.PI * 2;
+    if (h.mode === 'charge') {
+      // Замах за плечо: назад и вверх, за головой — лицо не закрыто.
+      const back = h.face + Math.PI;
+      const a = Math.atan2(Math.sin(back) - 0.8, Math.cos(back));
+      return a + Math.sin(this.time * 40) * 0.04 * h.charge;
+    }
+    return null;
+  }
+
+  /** Клинок в кулаке (hx, hy): рукоять в руке, остриё по углу `a`. */
+  private drawBlade(gear: Gear, hx: number, hy: number, a: number): void {
+    const img = bladeSprite(gear.weapon.tier);
+    if (!img) return;
+    const g = this.bctx;
+    g.save();
+    // Клинки набора нарисованы остриём ВНИЗ (удар по умолчанию — к нам), так
+    // что «вниз» картинки поворачиваем на угол удара; навершие — за кулаком.
+    g.translate(hx, hy);
+    g.rotate(a - Math.PI / 2);
+    g.drawImage(img, -Math.floor(img.width / 2), -3);
+    g.restore();
   }
 
   private drawWeapon(sim: Sim, gear: Gear, px: number, py: number): void {
@@ -1063,6 +1288,24 @@ export class DungeonRenderer {
       if (s.life >= s.max) continue;
       keep.push(s);
       const k = s.life / s.max;
+      // Серп из набора: смотрит вправо и идёт снизу вверх — поворачиваем на
+      // угол удара и отражаем, если удар идёт сверху вниз. Третий удар серии —
+      // двойной серп, тяжёлый — тройной.
+      const id: FxId = s.heavy ? 11 : s.step === 2 ? 10 : 8;
+      const img = fxFrame(id, k * fxCount(id));
+      if (img) {
+        const sc = (s.reach * TS) / 16;
+        g.save();
+        g.translate(
+          this.q(sim.hero.x * TS - left + Math.cos(s.ang) * 2),
+          this.q(sim.hero.y * TS - top - 5 + Math.sin(s.ang) * 2),
+        );
+        g.rotate(s.ang);
+        g.scale(sc, s.flip ? sc : -sc);
+        g.drawImage(img, -16, -16);
+        g.restore();
+        continue;
+      }
       // След клинка идёт за героем, а не висит в воздухе.
       const hx = sim.hero.x * TS - left;
       const hy = sim.hero.y * TS - top - 6;
@@ -1103,6 +1346,29 @@ export class DungeonRenderer {
     this.rings = keep;
   }
 
+  private drawFx(sim: Sim, dt: number, left: number, top: number): void {
+    if (!this.fx.length) return;
+    const g = this.bctx;
+    const keep: Fx[] = [];
+    for (const f of this.fx) {
+      f.life += dt;
+      if (f.life >= f.max) continue;
+      keep.push(f);
+      const img = fxFrame(f.id, (f.life / f.max) * fxCount(f.id));
+      if (!img) continue;
+      const bx = f.follow ? sim.hero.x * TS + f.dx : f.x * TS;
+      const by = f.follow ? sim.hero.y * TS + f.dy : f.y * TS;
+      g.save();
+      g.globalAlpha = f.alpha;
+      g.translate(this.q(bx - left), this.q(by - top));
+      if (f.ang) g.rotate(f.ang);
+      g.scale(f.scale, f.flip ? -f.scale : f.scale);
+      g.drawImage(img, -16, -16);
+      g.restore();
+    }
+    this.fx = keep;
+  }
+
   // ---- Свет -------------------------------------------------------------
 
   private drawLight(sim: Sim, left: number, top: number, dt: number): void {
@@ -1120,6 +1386,7 @@ export class DungeonRenderer {
     l.fillStyle = `rgba(6,4,10,${1 - amb})`;
     l.fillRect(0, 0, LW, LH);
     l.globalCompositeOperation = 'destination-out';
+    this.cutExplored(sim, lx, ly);
     const blob = lightBlob();
     const hole = (x: number, y: number, r: number, a = 1) => {
       const px = x * TS - lx;
@@ -1180,6 +1447,48 @@ export class DungeonRenderer {
       );
     }
     g.globalCompositeOperation = 'source-over';
+  }
+
+  /**
+   * Разведанное — светлым. Маска по клеткам рисуется в крошечную канву (точка
+   * на клетку) и растягивается на свет со сглаживанием: край разведанного
+   * плавный, а не лесенкой из квадратов 16×16.
+   */
+  private cutExplored(sim: Sim, lx: number, ly: number): void {
+    const w = sim.world;
+    const tx0 = Math.floor(lx / TS) - 1;
+    const ty0 = Math.floor(ly / TS) - 1;
+    const tw = Math.ceil(this.light.width / TS) + 3;
+    const th = Math.ceil(this.light.height / TS) + 3;
+    const c = (this.fogCv ??= document.createElement('canvas'));
+    if (c.width !== tw || c.height !== th) {
+      c.width = tw;
+      c.height = th;
+    }
+    const fx = c.getContext('2d')!;
+    const img = fx.createImageData(tw, th);
+    const d = img.data;
+    let any = false;
+    for (let j = 0; j < th; j++) {
+      const y = ty0 + j;
+      if (y < 0 || y >= w.h) continue;
+      const band = bandAt(w, y);
+      const bits = sim.fog[band.def.id];
+      if (!bits) continue;
+      for (let i = 0; i < tw; i++) {
+        const x = tx0 + i;
+        if (x < 0 || x >= w.w || !fogGet(bits, x, y - band.top, w.w)) continue;
+        d[(j * tw + i) * 4 + 3] = 255;
+        any = true;
+      }
+    }
+    if (!any) return;
+    fx.putImageData(img, 0, 0);
+    const l = this.lctx;
+    l.globalAlpha = EXPLORED_LIT;
+    l.imageSmoothingEnabled = true;
+    l.drawImage(c, tx0 * TS - lx, ty0 * TS - ly, tw * TS, th * TS);
+    l.globalAlpha = 1;
   }
 
   // ---- Цифры — на экранной канве, чёткие -------------------------------

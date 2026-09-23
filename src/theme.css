@@ -23309,6 +23309,28 @@ input[type='datetime-local'] {
 .mcinv__hint {
   color: #aaaaaa;
 }
+.mcinv__cost {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 2px;
+  color: #ffffff;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.mcinv__cost > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.mcinv__cost img {
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+}
+.mcinv__cost .is-short {
+  color: #ff5555;
+}
 .mcinv__acts {
   display: flex;
   flex-wrap: wrap;

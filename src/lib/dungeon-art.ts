@@ -9,6 +9,7 @@
 
 import { SETS, setOf } from './dungeon';
 import type { AreaId, Gear, MobId, SetMotif } from './dungeon';
+import { bladeSprite, spritesReady } from './dungeon-sprites';
 
 export const TS = 16;
 
@@ -1587,7 +1588,9 @@ export function glowBlob(color: string): HTMLCanvasElement {
 
 /** Иконка вещи комплекта для листа снаряжения: картинка слота в цвет ступени. */
 export function gearIcon(slot: 'helm' | 'robe' | 'boots' | 'weapon', tier: number): string {
-  const key = `gearicon:${slot}:${tier}`;
+  // Клинок в сидоре — тот же, что в руке внизу (из набора, когда он пришёл).
+  const na = slot === 'weapon' && spritesReady();
+  const key = `gearicon:${slot}:${tier}${na ? ':na' : ''}`;
   const hitUrl = urls.get(key);
   if (hitUrl) return hitUrl;
   const url = gearIconCanvas(slot, tier, key).toDataURL();
@@ -1609,14 +1612,16 @@ function gearIconCanvas(
     boots: { tier, plus: 0 },
   };
   if (slot === 'weapon') {
-    const w = weaponArt(tier);
+    // Клинок набора стоит остриём вниз, нарисованный кодом — смотрит вправо.
+    const blade = key.endsWith(':na') ? bladeSprite(tier) : null;
+    const w = blade ?? weaponArt(tier);
     const c = document.createElement('canvas');
     c.width = 20;
     c.height = 20;
     const g = c.getContext('2d')!;
     g.imageSmoothingEnabled = false;
     g.translate(10, 10);
-    g.rotate(-Math.PI / 4);
+    g.rotate(blade ? Math.PI * 1.25 : -Math.PI / 4);
     g.drawImage(w, -w.width / 2, -w.height / 2);
     cache.set(key, c);
     return c;

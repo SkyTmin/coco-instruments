@@ -1176,6 +1176,21 @@ export function DungeonRun({
             if (dropFromSack(sim, id, n) > 0) crateBreak();
             pushHud(sim);
           }}
+          onSave={save}
+          onGear={() => {
+            // Заточил внизу — сильнее сразу, как при новом уровне; нашил
+            // карман — ряд открыт сразу. И сразу запись: сидор уже отдал
+            // материалы, перезапуск не должен их вернуть.
+            const sim = simRef.current;
+            if (!sim) return;
+            const st = useFinanceStore.getState();
+            const hpK = sim.hero.hp / sim.stats.maxHp;
+            sim.stats = heroOf({ gear: st.dungeon.gear, xp: sim.xp }, st.prison);
+            sim.hero.hp = Math.min(sim.stats.maxHp, Math.max(sim.hero.hp, hpK * sim.stats.maxHp));
+            sim.sackLevel = st.dungeon.sackLevel;
+            save();
+            pushHud(sim);
+          }}
         />
       )}
 

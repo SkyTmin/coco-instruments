@@ -266,6 +266,7 @@ import {
   liftCost,
   nextStep,
   normalizeDungeon,
+  payFromBoth,
   payMats,
   SACK_MAX,
   sackCost,
@@ -277,6 +278,7 @@ import type {
   DeltaIn,
   DungeonState,
   Haul,
+  MatId,
   Sack,
   Slot,
 } from '@/lib/dungeon';
@@ -1258,6 +1260,18 @@ interface FinanceState {
   /** Заточка или перековка слота — что вышло. */
   dungeonUpgrade: (slot: Slot) => 'plus' | 'reforge' | null;
   dungeonSackUp: () => boolean;
+  /**
+   * Заточка или перековка прямо в вылазке: материалы со склада, недостающее —
+   * из сидора `sack`. Возвращает, что взять из сидора (его держит мир, а не стор).
+   */
+  dungeonUpgradeHere: (
+    slot: Slot,
+    sack: Partial<Record<MatId, number>>,
+  ) => { kind: 'plus' | 'reforge'; fromSack: Partial<Record<MatId, number>> } | null;
+  /** Нашить карман в вылазке — платёж так же, склад и сидор. */
+  dungeonSackUpHere: (
+    sack: Partial<Record<MatId, number>>,
+  ) => { fromSack: Partial<Record<MatId, number>> } | null;
   dungeonLiftRepair: (area: AreaId) => boolean;
   /** Раскоп подземной шахты. `opened` — первый блок в этом окне, `ore` — руды в сидор. */
   dungeonMineSave: (id: DeepMineId, m: DeepMineState, opened: boolean, ore?: number) => void;
@@ -4321,7 +4335,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   dungeonSackUp: () => {
     const s = get();
     const d = s.dungeon;
-    if (d.sackLevel >= SACK_MAX || d.run) return false;
+    // Вылазка, ждущая внизу, возьмёт новый размер при возвращении: мир
+    // собирается заново из стора.
+    if (d.sackLevel >= SACK_MAX) return false;
     const cost = sackCost(d.sackLevel, econOf(s.prison));
     if (!canPay(d, cost, s.slotsBalance)) return false;
     const dungeon: DungeonState = { ...payMats(d, cost), sackLevel: d.sackLevel + 1 };
@@ -4329,6 +4345,40 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistDungeon(dungeon);
     persistSlots(get());
     return true;
+  },
+
+  dungeonUpgradeHere: (slot, sack) => {
+    const s = get();
+    const d = s.dungeon;
+    const step = nextStep(d, slot, econOf(s.prison));
+    if (step.kind !== 'plus' && step.kind !== 'reforge') return null;
+    if (step.kind === 'reforge' && !conditionsMet(d, slot, d.gear[slot].tier)) return null;
+    if (s.slotsBalance < step.cost.coins) return null;
+    const paid = payFromBoth(d, step.cost, sack);
+    if (!paid) return null;
+    const g = d.gear[slot];
+    const piece =
+      step.kind === 'plus' ? { tier: g.tier, plus: g.plus + 1 } : { tier: g.tier + 1, plus: 0 };
+    const dungeon: DungeonState = { ...paid.d, gear: { ...d.gear, [slot]: piece } };
+    set({ dungeon, slotsBalance: s.slotsBalance - step.cost.coins });
+    persistDungeon(dungeon);
+    persistSlots(get());
+    return { kind: step.kind, fromSack: paid.fromSack };
+  },
+
+  dungeonSackUpHere: (sack) => {
+    const s = get();
+    const d = s.dungeon;
+    if (d.sackLevel >= SACK_MAX) return null;
+    const cost = sackCost(d.sackLevel, econOf(s.prison));
+    if (s.slotsBalance < cost.coins) return null;
+    const paid = payFromBoth(d, cost, sack);
+    if (!paid) return null;
+    const dungeon: DungeonState = { ...paid.d, sackLevel: d.sackLevel + 1 };
+    set({ dungeon, slotsBalance: s.slotsBalance - cost.coins });
+    persistDungeon(dungeon);
+    persistSlots(get());
+    return { fromSack: paid.fromSack };
   },
 
   dungeonLiftRepair: (area) => {

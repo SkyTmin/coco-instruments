@@ -35,6 +35,7 @@ import {
   SLOTS,
 } from '@/lib/dungeon';
 import type { Cost, MatId, MobId, Slot } from '@/lib/dungeon';
+import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
 import { gearIcon, heroFrame, itemUrl, mobArt } from '@/lib/dungeon-art';
 import { shortMoney } from '@/lib/prison';
 import { coinDing, primeAudio, tierBreak } from '@/lib/sound';
@@ -95,12 +96,17 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
   const hero = heroOf(d, p);
   const lv = levelOf(d.xp);
   const set = fullSet(d.gear);
+  const sprites = useDungeonSprites();
   const gearKey = SLOTS.map((s) => `${d.gear[s].tier}.${d.gear[s].plus}`).join(',');
   const heroUrl = useMemo(
-    () => spriteUrl(`hero:${gearKey}`, () => heroFrame(d.gear, 'down', 'idle', 0, false)),
+    () =>
+      spriteUrl(
+        `hero:${gearKey}:${sprites ? 1 : 0}`,
+        () => heroPortrait(d.gear) ?? heroFrame(d.gear, 'down', 'idle', 0, false),
+      ),
     // gearKey — вся разница снаряжения.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gearKey],
+    [gearKey, sprites],
   );
   const go = (slot: Slot) => {
     primeAudio();
@@ -327,7 +333,7 @@ export function StashTab({ onSpend }: { onSpend: () => void }) {
   const sackUp = useFinanceStore((s) => s.dungeonSackUp);
   const econ = econOf(p);
   const cost = sackCost(d.sackLevel, econ);
-  const can = d.sackLevel < SACK_MAX && !d.run && canPay(d, cost, balance);
+  const can = d.sackLevel < SACK_MAX && canPay(d, cost, balance);
   const mats = Object.keys(MATS) as MatId[];
   const stats: [string, number, ReactNode?][] = [
     ['Вылазок', d.stats.runs ?? 0],
@@ -358,7 +364,6 @@ export function StashTab({ onSpend }: { onSpend: () => void }) {
           <div className="dgc-step">
             <span className="dgc-step__what">
               Нашить карман: ещё ряд, {sackSlots(d.sackLevel + 1)} ячеек
-              {d.run ? ' · сперва выйди из вылазки' : ''}
             </span>
             <CostLine cost={cost} balance={balance} stash={d.stash} />
             <button

@@ -2,7 +2,8 @@
 // человечке, справа клинок и что он даёт, ниже сидор ячейками со стопками.
 // Открывается кнопкой сидора прямо в бою, мир на это время стоит. Тап по
 // ячейке — подробности и действия (съесть, выбросить); тап по вещи на
-// человечке — её сила и что нужно для перековки.
+// человечке — её сила, заточка и перековка ПРЯМО ЗДЕСЬ (владелец: «качать
+// вещи можно прям в подземелье»); тап по тёмному ряду — нашить карман.
 
 import { useEffect, useMemo, useState } from 'react';
 import { CoinIcon } from '@/components/slot-art';
@@ -21,11 +22,14 @@ import {
   MATS,
   MEAT_NAMES,
   MEAT_SHARE,
+  minusMats,
   nextStep,
+  payFromBoth,
   pieceStats,
   reforgeConditions,
   SACK_MAX,
   SACK_ROW,
+  sackCost,
   sackSlots,
   sackStacks,
   setOf,
@@ -34,11 +38,14 @@ import {
   slotsUsed,
   STACK,
 } from '@/lib/dungeon';
-import type { AreaId, ItemId, MatId, MeatId, Slot } from '@/lib/dungeon';
+import type { AreaId, Cost, DungeonState, ItemId, MatId, MeatId, Slot } from '@/lib/dungeon';
 import type { Sim } from '@/lib/dungeon-sim';
+import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
 import { gearIcon, heroFrame, itemUrl } from '@/lib/dungeon-art';
 import { registerEscape } from '@/lib/escape-stack';
-import { selectionChanged, tapLight } from '@/lib/haptics';
+import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
+import { coinDing, tierBreak } from '@/lib/sound';
+import { shortMoney } from '@/lib/prison';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 
@@ -55,7 +62,40 @@ const spriteUrl = (key: string, make: () => HTMLCanvasElement) => {
   return u;
 };
 
-type Pick = { kind: 'gear'; slot: Slot } | { kind: 'stack'; id: ItemId; i: number } | null;
+type Pick =
+  | { kind: 'gear'; slot: Slot }
+  | { kind: 'stack'; id: ItemId; i: number }
+  | { kind: 'pocket' }
+  | null;
+
+/** Цена: монеты из кошелька, материалы — склад лагеря плюс сидор. */
+function CostRow({
+  cost,
+  balance,
+  d,
+  sack,
+}: {
+  cost: Cost;
+  balance: number;
+  d: DungeonState;
+  sack: Partial<Record<MatId, number>>;
+}) {
+  return (
+    <span className="mcinv__cost">
+      <span className={balance >= cost.coins ? '' : 'is-short'}>
+        <CoinIcon size={11} /> {shortMoney(cost.coins)}
+      </span>
+      {(Object.entries(cost.mats) as [MatId, number][]).map(([id, n]) => {
+        const have = (d.stash[id] ?? 0) + (sack[id] ?? 0);
+        return (
+          <span key={id} className={have >= n ? '' : 'is-short'} title={MATS[id].name}>
+            <img src={itemUrl(id)} alt={MATS[id].name} /> {fmt(have)}/{fmt(n)}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 function statLine(slot: Slot, tier: number, plus: number): string[] {
   const s = pieceStats(slot, { tier, plus });
@@ -70,26 +110,40 @@ export function DungeonInventory({
   onClose,
   onEat,
   onDrop,
+  onSave,
+  onGear,
 }: {
   sim: Sim;
   onClose: () => void;
   /** Съесть кусок: лист закрывается, герой ест в бою. */
   onEat: () => void;
   onDrop: (id: ItemId, n: number) => void;
+  /** Записать сделанное в вылазке — условия перековки считаются по стору. */
+  onSave: () => void;
+  /** Снаряжение или сидор изменились — пересчитать героя в бою. */
+  onGear: () => void;
 }) {
   const d = useFinanceStore((s) => s.dungeon);
   const prison = useFinanceStore((s) => s.prison);
+  const balance = useFinanceStore((s) => s.slotsBalance);
+  const upgradeHere = useFinanceStore((s) => s.dungeonUpgradeHere);
+  const sackUpHere = useFinanceStore((s) => s.dungeonSackUpHere);
   const [pick, setPick] = useState<Pick>(null);
   // Сидор живёт в мире, а не в сторе: после «выбросить» перерисовываемся сами.
   const [, bump] = useState(0);
   useEffect(() => registerEscape(onClose), [onClose]);
 
+  const sprites = useDungeonSprites();
   const gearKey = SLOTS.map((s) => `${d.gear[s].tier}`).join('');
   const heroUrl = useMemo(
-    () => spriteUrl(`inv:${gearKey}`, () => heroFrame(d.gear, 'down', 'idle', 0, false)),
+    () =>
+      spriteUrl(
+        `inv:${gearKey}:${sprites ? 1 : 0}`,
+        () => heroPortrait(d.gear) ?? heroFrame(d.gear, 'down', 'idle', 0, false),
+      ),
     // Картинка меняется только со ступенями.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gearKey],
+    [gearKey, sprites],
   );
   const st = sim.stats;
   const lv = levelOf(sim.xp);
@@ -115,6 +169,54 @@ export function DungeonInventory({
   const choose = (p: Pick) => {
     selectionChanged();
     setPick(p);
+  };
+
+  // Сделанное в этой вылазке ещё не записано в стор — прибавляем для показа.
+  const live: DungeonState = { ...d, kills: { ...d.kills }, stats: { ...d.stats } };
+  for (const [k, v] of Object.entries(sim.delta.kills))
+    live.kills[k as keyof typeof live.kills] =
+      (live.kills[k as keyof typeof live.kills] ?? 0) + (v ?? 0);
+  for (const [k, v] of Object.entries(sim.delta.stats))
+    live.stats[k as keyof typeof live.stats] =
+      (live.stats[k as keyof typeof live.stats] ?? 0) + (v ?? 0);
+
+  const canAfford = (cost: Cost) =>
+    balance >= cost.coins && payFromBoth(d, cost, sim.sack.mats) !== null;
+
+  /** Сидор отдал материалы в уплату — мир держит сидор, стор его не знает. */
+  const tookFromSack = (from: Partial<Record<MatId, number>>) => {
+    sim.sack.mats = minusMats(sim.sack.mats, from);
+  };
+
+  const upgrade = (slot: Slot) => {
+    // Убийства и руда этой вылазки — в стор, иначе перековка их не увидит.
+    onSave();
+    const r = upgradeHere(slot, sim.sack.mats);
+    if (!r) {
+      notifyWarning();
+      return;
+    }
+    tookFromSack(r.fromSack);
+    onGear();
+    if (r.kind === 'reforge') tierBreak(3);
+    else coinDing();
+    notifySuccess();
+    bump((x) => x + 1);
+  };
+
+  const pocket = () => {
+    onSave();
+    const r = sackUpHere(sim.sack.mats);
+    if (!r) {
+      notifyWarning();
+      return;
+    }
+    tookFromSack(r.fromSack);
+    onGear();
+    coinDing();
+    notifySuccess();
+    setPick(null);
+    bump((x) => x + 1);
   };
 
   const slotBtn = (slot: Slot) => {
@@ -159,23 +261,30 @@ export function DungeonInventory({
           {set === g.tier ? ' — действует' : ''}
         </span>
         {step.kind === 'plus' && (
-          <span className="mcinv__sub">Заточка до +{g.plus + 1} — в лагере у клети.</span>
+          <>
+            <span className="mcinv__sub">
+              Заточка до +{g.plus + 1}: {statLine(pick.slot, g.tier, g.plus + 1).join(', ')}
+            </span>
+            <CostRow cost={step.cost} balance={balance} d={d} sack={sim.sack.mats} />
+            <div className="mcinv__acts">
+              <button
+                type="button"
+                className="mcbtn mcbtn--ok"
+                disabled={!canAfford(step.cost)}
+                onClick={() => upgrade(pick.slot)}
+              >
+                Заточить до +{g.plus + 1}
+              </button>
+            </div>
+          </>
         )}
         {step.kind === 'reforge' && (
           <>
             <span className="mcinv__sub">
               Перековка в «{setOf(g.tier + 1).items[pick.slot]}»
-              {conditionsMet(d, pick.slot, g.tier) ? ' — условия выполнены, иди в лагерь' : ':'}
+              {conditionsMet(live, pick.slot, g.tier) ? ' — условия выполнены' : ':'}
             </span>
             {conds.map((c) => {
-              // Сделанное в этой вылазке ещё не записано — прибавляем.
-              const live = { ...d, kills: { ...d.kills }, stats: { ...d.stats } };
-              for (const [k, v] of Object.entries(sim.delta.kills))
-                live.kills[k as keyof typeof live.kills] =
-                  (live.kills[k as keyof typeof live.kills] ?? 0) + (v ?? 0);
-              for (const [k, v] of Object.entries(sim.delta.stats))
-                live.stats[k as keyof typeof live.stats] =
-                  (live.stats[k as keyof typeof live.stats] ?? 0) + (v ?? 0);
               const have = Math.min(c.need, c.have(live));
               return (
                 <span key={c.label} className={`mcinv__cond${have >= c.need ? ' is-done' : ''}`}>
@@ -191,6 +300,17 @@ export function DungeonInventory({
                 </span>
               );
             })}
+            <CostRow cost={step.cost} balance={balance} d={d} sack={sim.sack.mats} />
+            <div className="mcinv__acts">
+              <button
+                type="button"
+                className="mcbtn mcbtn--ok"
+                disabled={!conditionsMet(live, pick.slot, g.tier) || !canAfford(step.cost)}
+                onClick={() => upgrade(pick.slot)}
+              >
+                Перековать
+              </button>
+            </div>
           </>
         )}
         {(step.kind === 'soon' || step.kind === 'max') && (
@@ -266,11 +386,33 @@ export function DungeonInventory({
         </div>
       </>
     );
+  } else if (pick?.kind === 'pocket' && sim.sackLevel < SACK_MAX) {
+    const cost = sackCost(sim.sackLevel, econ);
+    info = (
+      <>
+        <b className="mcinv__name">Карман</b>
+        <span className="mcinv__sub">
+          Ещё ряд сидора: {sackSlots(sim.sackLevel + 1)} ячеек вместо {slots}. Нашивается сразу,
+          прямо здесь. Шкурки — со склада лагеря, недостающие — из сидора.
+        </span>
+        <CostRow cost={cost} balance={balance} d={d} sack={sim.sack.mats} />
+        <div className="mcinv__acts">
+          <button
+            type="button"
+            className="mcbtn mcbtn--ok"
+            disabled={!canAfford(cost)}
+            onClick={pocket}
+          >
+            Нашить карман
+          </button>
+        </div>
+      </>
+    );
   } else {
     info = (
       <span className="mcinv__hint">
-        Тапни по вещи на человечке или по ячейке сидора. Монеты, токены и ключи лежат в кошельке на
-        поясе и места не занимают.
+        Тапни по вещи на человечке — заточить её можно прямо здесь. Тап по ячейке — съесть или
+        выбросить. Монеты, токены и ключи лежат в кошельке на поясе и места не занимают.
       </span>
     );
   }
@@ -324,14 +466,20 @@ export function DungeonInventory({
           {Array.from({ length: rows * SACK_ROW }, (_, i) => {
             const locked = i >= slots;
             const sk = locked ? undefined : stacks[i];
-            const on = pick?.kind === 'stack' && pick.i === i;
+            const on =
+              (pick?.kind === 'stack' && pick.i === i) ||
+              (pick?.kind === 'pocket' && locked && i < slots + SACK_ROW);
             return (
               <button
                 key={i}
                 type="button"
                 className={`mcslot${locked ? ' is-locked' : ''}${on ? ' is-on' : ''}`}
-                disabled={locked || !sk}
-                onClick={() => sk && choose({ kind: 'stack', id: sk.id, i })}
+                disabled={!locked && !sk}
+                onClick={() =>
+                  locked
+                    ? choose({ kind: 'pocket' })
+                    : sk && choose({ kind: 'stack', id: sk.id, i })
+                }
               >
                 {sk && <img src={itemUrl(sk.id)} alt={itemName(sk.id)} />}
                 {sk && sk.n > 1 && <b className="mcslot__n">{sk.n}</b>}
@@ -340,7 +488,7 @@ export function DungeonInventory({
           })}
         </div>
         {slots < rows * SACK_ROW && (
-          <span className="mcinv__lock">Тёмные ряды — карманы, их нашивают в лагере у клети.</span>
+          <span className="mcinv__lock">Тёмные ряды — карманы: тапни, чтобы нашить.</span>
         )}
 
         <div className="mcinv__purse">

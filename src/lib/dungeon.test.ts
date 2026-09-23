@@ -38,6 +38,8 @@ import {
   smellOf,
   SLOTS,
   xpFor,
+  minusMats,
+  payFromBoth,
 } from './dungeon';
 import type { DungeonState, Gear, Sack } from './dungeon';
 import { PRISON_START } from './prison';
@@ -287,5 +289,22 @@ describe('подземелье: правила', () => {
     const d = { ...DUNGEON_START, mines: { pyrite1: { window: 7, dug: new Array(63).fill(2) } } };
     expect(deepMineNow(d, 'pyrite1', 7 * hour + 5, 63).dug[0]).toBe(2);
     expect(deepMineNow(d, 'pyrite1', 8 * hour + 5, 63).dug[0]).toBe(0);
+  });
+
+  it('платёж внизу: сперва склад, недостающее — из сидора, не хватает — отказ', () => {
+    const d = { ...DUNGEON_START, stash: { skin: 5, pyrite: 4 } };
+    const cost = { coins: 100, mats: { skin: 8, pyrite: 2 } };
+    const r = payFromBoth(d, cost, { skin: 10 })!;
+    // Шкурок на складе 5 — все ушли, ещё 3 из сидора; пирит только со склада.
+    expect(r.d.stash).toEqual({ pyrite: 2 });
+    expect(r.fromSack).toEqual({ skin: 3 });
+    expect(minusMats({ skin: 10, tail: 1 }, r.fromSack)).toEqual({ skin: 7, tail: 1 });
+    expect(minusMats({ skin: 3 }, { skin: 3 })).toEqual({});
+    // Вместе не хватает — ничего не списывается.
+    expect(payFromBoth(d, cost, { skin: 2 })).toBeNull();
+    expect(payFromBoth(d, { coins: 0, mats: { crown: 1 } }, {})).toBeNull();
+    expect(payFromBoth(d, { coins: 0, mats: { crown: 1 } }, { crown: 1 })!.fromSack).toEqual({
+      crown: 1,
+    });
   });
 });

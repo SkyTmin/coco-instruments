@@ -1457,6 +1457,46 @@ export function payMats(d: DungeonState, cost: Cost): DungeonState {
 }
 
 /**
+ * Платёж внизу, прямо в вылазке (владелец: «качать вещи можно прям в
+ * подземелье»): сперва склад лагеря, недостающее — из сидора. Сидором платить
+ * честно: вещь, вложенную в заточку, крысы уже не растащат, но и Барыге её не
+ * продашь. null — не хватает даже вместе. Монеты — отдельно, общий кошелёк.
+ */
+export function payFromBoth(
+  d: DungeonState,
+  cost: Cost,
+  sack: Partial<Record<MatId, number>>,
+): { d: DungeonState; fromSack: Partial<Record<MatId, number>> } | null {
+  const stash = { ...d.stash };
+  const fromSack: Partial<Record<MatId, number>> = {};
+  for (const [id, n] of Object.entries(cost.mats) as [MatId, number][]) {
+    if (!n) continue;
+    const have = stash[id] ?? 0;
+    const take = Math.min(have, n);
+    const rest = n - take;
+    if (rest > (sack[id] ?? 0)) return null;
+    if (have - take > 0) stash[id] = have - take;
+    else delete stash[id];
+    if (rest > 0) fromSack[id] = rest;
+  }
+  return { d: { ...d, stash }, fromSack };
+}
+
+/** Материалы после вычета (сидор после платежа). */
+export function minusMats(
+  a: Partial<Record<MatId, number>>,
+  b: Partial<Record<MatId, number>>,
+): Partial<Record<MatId, number>> {
+  const out = { ...a };
+  for (const [id, n] of Object.entries(b) as [MatId, number][]) {
+    const left = (out[id] ?? 0) - n;
+    if (left > 0) out[id] = left;
+    else delete out[id];
+  }
+  return out;
+}
+
+/**
  * Прочность подземной руды — от породы шахты игрока: кирка каторги бьёт
  * здесь с тем же уроном, и блок пирита держит столько же ударов, сколько
  * хорошая порода его ранга. Иначе на алмазной кирке шахта подземелья

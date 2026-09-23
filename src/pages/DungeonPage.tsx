@@ -34,6 +34,7 @@ import {
 import type { AreaId, DeepMineId, MatId } from '@/lib/dungeon';
 import { buildWorld } from '@/lib/dungeon-world';
 import { gearIcon, heroFrame, itemUrl, propArt } from '@/lib/dungeon-art';
+import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
 import { MINE_CELLS, minedShare, rankLetter, shortMoney } from '@/lib/prison';
 import { liftClank, primeAudio } from '@/lib/sound';
 import { tapLight } from '@/lib/haptics';
@@ -83,6 +84,8 @@ export function DungeonPage() {
   const [shaftArea, setShaftArea] = useState<AreaId>('mouth');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const now = useNow(1000);
+  // Картинки героя грузятся, пока игрок в клети: к спуску они уже есть.
+  const sprites = useDungeonSprites();
 
   useEffect(
     () => () => {
@@ -328,7 +331,10 @@ export function DungeonPage() {
   const hero = heroOf(d, prison);
   const lv = levelOf(d.xp);
   const gearKey = SLOTS.map((s) => `${d.gear[s].tier}.${d.gear[s].plus}`).join(',');
-  const heroUrl = once(`lobby:${gearKey}`, () => heroFrame(d.gear, 'down', 'idle', 0, false));
+  const heroUrl = once(
+    `lobby:${gearKey}:${sprites ? 1 : 0}`,
+    () => heroPortrait(d.gear) ?? heroFrame(d.gear, 'down', 'idle', 0, false),
+  );
   const run = d.run;
   const kingAt = bossReadyAt(d, 'king');
   const lifts = AREAS.filter((a) => a.built);
@@ -499,7 +505,7 @@ function cageArt(gear: Parameters<typeof heroFrame>[0]): HTMLCanvasElement {
   for (let x = 6; x < W - 5; x += 4) g.fillRect(x, 8, 1, H - 12);
   for (let y = 11; y < H - 4; y += 5) g.fillRect(4, y, W - 8, 1);
   // Шахтёр.
-  const hero = heroFrame(gear, 'down', 'idle', 0, false);
+  const hero = heroPortrait(gear) ?? heroFrame(gear, 'down', 'idle', 0, false);
   g.drawImage(hero, Math.round(W / 2 - hero.width / 2), H - 4 - hero.height);
   // Пол: рифлёный лист.
   g.fillStyle = '#4a5058';
@@ -520,8 +526,9 @@ function cageArt(gear: Parameters<typeof heroFrame>[0]): HTMLCanvasElement {
  */
 function Shaft({ dir, area }: { dir: 'down' | 'up'; area: AreaId }) {
   const gear = useFinanceStore((s) => s.dungeon.gear);
+  const sprites = useDungeonSprites();
   const gearKey = SLOTS.map((s) => gear[s].tier).join('');
-  const cage = once(`shaft:cage:${gearKey}`, () => cageArt(gear));
+  const cage = once(`shaft:cage:${gearKey}:${sprites ? 1 : 0}`, () => cageArt(gear));
   const a = areaOf(area);
   return (
     <div className={`dg-shaft dg-shaft--${dir}`}>
