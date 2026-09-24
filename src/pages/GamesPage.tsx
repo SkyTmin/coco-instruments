@@ -9,6 +9,8 @@ import { levelFromXp } from '@/lib/slots-meta';
 import { SCATTER_COLS, SCATTER_ROWS } from '@/lib/scatter';
 import type { SlotSymbolId } from '@/lib/slots';
 import { tapLight } from '@/lib/haptics';
+import { useGameAudio } from '@/lib/use-game-audio';
+import { AudioToggles } from '@/components/AudioToggles';
 import { rankLetter } from '@/lib/prison';
 import { rockTexture } from '@/lib/prison-art';
 
@@ -30,6 +32,7 @@ export function GamesPage() {
   const scatterBest = useFinanceStore((s) => s.scatterBest);
   const prison = useFinanceStore((s) => s.prison);
 
+  useGameAudio('hall');
   const level = levelFromXp(xp);
   const theme = skinOf(skin);
 
@@ -48,6 +51,7 @@ export function GamesPage() {
         <GameTop
           title="Игры"
           onBack={() => nav(-1)}
+          right={<AudioToggles />}
           chips={
             <>
               <span className="gx-chip">

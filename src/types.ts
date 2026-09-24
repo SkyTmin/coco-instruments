@@ -854,6 +854,8 @@ export interface SlotsBlob {
   topX?: number;
   /** Звук автомата (Web Audio), вибрация и ускоренные вращения. */
   sound?: boolean;
+  /** Музыка в играх — отдельно от звуков: её выключают чаще. */
+  music?: boolean;
   haptics?: boolean;
   turbo?: boolean;
   // --- прогрессия (lib/slots-meta) ---------------------------------------

@@ -785,6 +785,7 @@ interface SlotsSnapshot {
   /** Лучший множитель за всё время, в ставках: он открывает «Реликвию». */
   slotsTopX: number;
   slotsSound: boolean;
+  slotsMusic: boolean;
   slotsHaptics: boolean;
   slotsTurbo: boolean;
   slotsXp: number;
@@ -814,6 +815,7 @@ const slotsBlob = (s: SlotsSnapshot): SlotsBlob => ({
   skin: s.slotsSkin,
   topX: s.slotsTopX,
   sound: s.slotsSound,
+  music: s.slotsMusic,
   haptics: s.slotsHaptics,
   turbo: s.slotsTurbo,
   xp: s.slotsXp,
@@ -968,6 +970,7 @@ interface FinanceState {
   slotsSkin: SkinId;
   slotsTopX: number;
   slotsSound: boolean;
+  slotsMusic: boolean;
   slotsHaptics: boolean;
   slotsTurbo: boolean;
   slotsXp: number;
@@ -1176,6 +1179,7 @@ interface FinanceState {
   spinSlotsWheel: () => { index: number; coins: number; freeSpins: number } | null;
   setSlotsPrefs: (patch: {
     sound?: boolean;
+    music?: boolean;
     haptics?: boolean;
     turbo?: boolean;
     skin?: SkinId;
@@ -1384,6 +1388,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   slotsSkin: 'classic',
   slotsTopX: 0,
   slotsSound: true,
+  slotsMusic: true,
   slotsHaptics: true,
   slotsTurbo: false,
   slotsXp: 0,
@@ -1497,6 +1502,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsSkin: (slots?.skin as SkinId) ?? 'classic',
       slotsTopX: slots?.topX ?? 0,
       slotsSound: slots?.sound ?? true,
+      slotsMusic: slots?.music ?? true,
       slotsHaptics: slots?.haptics ?? true,
       slotsTurbo: slots?.turbo ?? false,
       ...slotsProgress(slots),
@@ -2406,6 +2412,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       slotsSkin: (d.slots?.skin as SkinId) ?? 'classic',
       slotsTopX: d.slots?.topX ?? 0,
       slotsSound: d.slots?.sound ?? true,
+      slotsMusic: d.slots?.music ?? true,
       slotsHaptics: d.slots?.haptics ?? true,
       slotsTurbo: d.slots?.turbo ?? false,
       ...slotsProgress(d.slots),
@@ -2964,6 +2971,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   setSlotsPrefs: (patch) => {
     set({
       slotsSound: patch.sound ?? get().slotsSound,
+      slotsMusic: patch.music ?? get().slotsMusic,
       slotsHaptics: patch.haptics ?? get().slotsHaptics,
       slotsTurbo: patch.turbo ?? get().slotsTurbo,
       slotsSkin: patch.skin ?? get().slotsSkin,

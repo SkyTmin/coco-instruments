@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import type { CSSProperties, PropsWithChildren, ReactNode } from 'react';
 import { registerEscape } from '@/lib/escape-stack';
 import { tapLight } from '@/lib/haptics';
+import { uiClose, uiOpen, uiTap } from '@/lib/sound';
 
 /** Иконки game-icons.net — имена файлов в public/ui/icons. */
 export type GxIconName =
@@ -125,6 +126,8 @@ export type KIconName =
   | 'trophy'
   | 'audioOn'
   | 'audioOff'
+  | 'musicOn'
+  | 'musicOff'
   | 'singleplayer'
   | 'warning';
 
@@ -219,7 +222,14 @@ export function GxModal({
 }>) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  useEffect(() => registerEscape(() => closeRef.current()), []);
+  useEffect(() => {
+    uiOpen();
+    const off = registerEscape(() => closeRef.current());
+    return () => {
+      off();
+      uiClose();
+    };
+  }, []);
   return (
     <div className="gx gx-modal" onClick={onClose}>
       <div className="gx-modal__box" onClick={(e) => e.stopPropagation()}>
@@ -264,7 +274,14 @@ export function GxSheet({
 }>) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  useEffect(() => registerEscape(() => closeRef.current()), []);
+  useEffect(() => {
+    uiOpen();
+    const off = registerEscape(() => closeRef.current());
+    return () => {
+      off();
+      uiClose();
+    };
+  }, []);
   return (
     <div className="gx gx-sheet" onClick={onClose}>
       <div
@@ -314,6 +331,7 @@ export function GameTop({
             aria-label="Назад"
             onClick={() => {
               tapLight();
+              uiTap();
               onBack();
             }}
           >

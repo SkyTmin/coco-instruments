@@ -102,6 +102,8 @@ import { flashFrame, squashPop, stopShake } from '@/lib/juice';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import { useExit } from '@/lib/use-exit';
+import { useGameAudio } from '@/lib/use-game-audio';
+import { AudioToggles } from '@/components/AudioToggles';
 import { playTotem } from '@/lib/totem';
 import { kuivaCells, METEOR_HITS } from '@/lib/yard';
 import type { YardPrize } from '@/lib/yard';
@@ -118,7 +120,6 @@ import {
   pickHit,
   primeAudio,
   rollupTick,
-  setMuted,
   tierBreak,
 } from '@/lib/sound';
 import {
@@ -207,7 +208,6 @@ export function PrisonPage() {
   const hydrated = useFinanceStore((s) => s.hydrated);
   const prison = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
-  const sound = useFinanceStore((s) => s.slotsSound);
   const haptics = useFinanceStore((s) => s.slotsHaptics);
   const prisonBreak = useFinanceStore((s) => s.prisonBreak);
   const prisonSell = useFinanceStore((s) => s.prisonSell);
@@ -225,7 +225,7 @@ export function PrisonPage() {
   const gamesReset = useFinanceStore((s) => s.gamesReset);
   const skin = useFinanceStore((s) => s.slotsSkin);
 
-  useEffect(() => setMuted(!sound), [sound]);
+  useGameAudio(prison.zone.on ? 'depths' : 'mine', 'mine');
   useEffect(() => setHapticsMuted(!haptics), [haptics]);
 
   const { mine, rank, prestige, pick, bagLevel, cart, bag } = prison;
@@ -1788,6 +1788,9 @@ export function PrisonPage() {
           }}
           className="pmx-settings"
         >
+          <div className="pmx-sound">
+            <AudioToggles />
+          </div>
           <div className="pcash">
             <CashDesk />
           </div>

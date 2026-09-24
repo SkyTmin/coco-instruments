@@ -10,6 +10,8 @@ import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { DungeonRun } from '@/components/DungeonRun';
+import { AudioToggles } from '@/components/AudioToggles';
+import { useGameAudio } from '@/lib/use-game-audio';
 import type { RunEnd } from '@/components/DungeonRun';
 import { useFinanceStore } from '@/store';
 import {
@@ -93,6 +95,13 @@ export function DungeonPage() {
       if (timer.current) clearTimeout(timer.current);
     },
     [],
+  );
+
+  // Внизу — тревожная музыка (у короля своя, её ставит вылазка), наверху — тихая.
+  useGameAudio(
+    view === 'down' || view === 'play' || view === 'up' ? 'depths' : 'lobby',
+    'dungeon',
+    'mine',
   );
 
   const descend = (area: AreaId) => {
@@ -360,7 +369,12 @@ export function DungeonPage() {
     <div className="gx dgl">
       <div className="dg-shaft-bg" aria-hidden="true" />
       <div className="dgl__wrap">
-        <GameTop title="Подземелье" onBack={() => nav(-1)} chips={open ? chips : undefined} />
+        <GameTop
+          title="Подземелье"
+          onBack={() => nav(-1)}
+          chips={open ? chips : undefined}
+          right={<AudioToggles />}
+        />
         {!open ? (
           <div className="gx-panel gx-panel--wood-fancy dgl-lock">
             <GxIcon name="gate" size={64} />

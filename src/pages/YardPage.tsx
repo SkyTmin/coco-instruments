@@ -31,6 +31,8 @@ import {
 } from '@/lib/yard';
 import { areaOf, bossReadyAt, dungeonOpen, DUNGEON_UNLOCK_RANK } from '@/lib/dungeon';
 import { tapLight } from '@/lib/haptics';
+import { useGameAudio } from '@/lib/use-game-audio';
+import { AudioToggles } from '@/components/AudioToggles';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 
@@ -59,6 +61,7 @@ export function YardPage() {
   const [campPlace, setCampPlace] = useState<CampPlace>('mine');
   const [baryga, setBaryga] = useState(false);
   const now = useNow(1000);
+  useGameAudio('yard');
 
   if (!hydrated) {
     return (
@@ -102,6 +105,7 @@ export function YardPage() {
         <GameTop
           title="Двор"
           onBack={() => nav(-1)}
+          right={<AudioToggles />}
           chips={
             <>
               <span className="gx-chip">

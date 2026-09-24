@@ -151,6 +151,8 @@ import {
   pickHit,
   primeAudio,
   tierBreak,
+  uiBuy,
+  uiTab,
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 
@@ -376,6 +378,7 @@ export function PrisonCamp({
               className={`gx-tab${tab === id ? ' is-on' : ''}`}
               onClick={() => {
                 selectionChanged();
+                uiTab();
                 onTab(id);
               }}
             >
@@ -457,7 +460,15 @@ function Buy({
   token?: boolean;
 }) {
   return (
-    <button type="button" className="btn btn--sm pforge__buy" disabled={!can} onClick={onClick}>
+    <button
+      type="button"
+      className="btn btn--sm pforge__buy"
+      disabled={!can}
+      onClick={() => {
+        uiBuy();
+        onClick();
+      }}
+    >
       {shortMoney(price)} {token ? <TokenIcon size={12} /> : <CoinIcon size={12} />}
     </button>
   );

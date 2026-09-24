@@ -12,6 +12,7 @@ import type { GxIconName } from '@/components/gx';
 import { KeyIcon, TokenIcon } from '@/components/PrisonCamp';
 import { DungeonMine } from '@/components/DungeonMine';
 import { DungeonInventory } from '@/components/DungeonInventory';
+import { AudioToggles } from '@/components/AudioToggles';
 import { useFinanceStore } from '@/store';
 import type { DungeonExit } from '@/store';
 import {
@@ -82,6 +83,7 @@ import {
   streakUp,
   swordHit,
   swordSwing,
+  setMusicScene,
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 
@@ -279,6 +281,9 @@ export function DungeonRun({
   const lastFull = useRef(0);
   const lastCart = useRef(0);
   const [hud, setHud] = useState<Hud | null>(null);
+  // Король на арене — своя музыка; пал или ушли — снова глубина.
+  const bossOn = hud?.bossHp != null;
+  useEffect(() => setMusicScene(bossOn ? 'boss' : 'depths'), [bossOn]);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [sheet, setSheet] = useState<SheetKind>(null);
@@ -1393,6 +1398,7 @@ export function DungeonRun({
         <GxModal title="Пауза" onClose={() => setSheet(null)}>
           <SackList sack={simRef.current?.sack} econ={econ} sold={marketSold(d, Date.now())} />
           <div className="dgx-menu">
+            <AudioToggles className="dgx-menu__audio" />
             <button
               className="gx-btn gx-btn--red gx-btn--big gx-btn--block"
               onClick={() => setSheet(null)}

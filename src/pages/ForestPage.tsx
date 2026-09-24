@@ -66,6 +66,8 @@ import { addTrauma, flashFrame, squashPop, stopShake } from '@/lib/juice';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import { useExit } from '@/lib/use-exit';
+import { useGameAudio } from '@/lib/use-game-audio';
+import { AudioToggles } from '@/components/AudioToggles';
 import { playTotem } from '@/lib/totem';
 import {
   axeChop,
@@ -77,7 +79,6 @@ import {
   payoutEnd,
   primeAudio,
   rollupTick,
-  setMuted,
   tierBreak,
   treeFall,
 } from '@/lib/sound';
@@ -121,7 +122,6 @@ export function ForestPage() {
   const prison = useFinanceStore((s) => s.prison);
   const forest = useFinanceStore((s) => s.forest);
   const balance = useFinanceStore((s) => s.slotsBalance);
-  const sound = useFinanceStore((s) => s.slotsSound);
   const haptics = useFinanceStore((s) => s.slotsHaptics);
   const skin = useFinanceStore((s) => s.slotsSkin);
   const forestCut = useFinanceStore((s) => s.forestCut);
@@ -130,7 +130,7 @@ export function ForestPage() {
   const prisonStreak = useFinanceStore((s) => s.prisonStreak);
   const prisonParcelOpen = useFinanceStore((s) => s.prisonParcelOpen);
 
-  useEffect(() => setMuted(!sound), [sound]);
+  useGameAudio('forest', 'forest');
   useEffect(() => setHapticsMuted(!haptics), [haptics]);
 
   const tree = useMemo(
@@ -1092,6 +1092,7 @@ export function ForestPage() {
               <KIcon name="arrowLeft" />
             </button>
             <div className="gx-ribbon pmx-top__title">Лес · {plotSpecies.name.toLowerCase()}</div>
+            <AudioToggles />
             <button
               type="button"
               className="gx-round gx-round--dark pmx-top__btn"

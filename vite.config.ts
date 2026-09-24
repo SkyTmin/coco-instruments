@@ -58,6 +58,16 @@ export default defineConfig({
             },
           },
           {
+            // Звуки и музыка игр: 9 МБ не качаем заново на каждом заходе. Путь
+            // несёт ?v=<ревизия сборки> — пересобранный звук кладётся рядом.
+            urlPattern: ({ url }) => url.pathname.startsWith('/audio/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'coco-audio',
+              expiration: { maxEntries: 320, maxAgeSeconds: 60 * 60 * 24 * 90 },
+            },
+          },
+          {
             urlPattern: ({ url }) => url.pathname.startsWith('/emoji/'),
             handler: 'CacheFirst',
             options: {

@@ -11,6 +11,7 @@ import { SkinSheet } from '@/components/SkinSheet';
 import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { useFinanceStore } from '@/store';
 import { useExit } from '@/lib/use-exit';
+import { useGameAudio } from '@/lib/use-game-audio';
 import type { ScatterSpinOutcome } from '@/store';
 import {
   ANTE_COST,
@@ -68,9 +69,8 @@ import {
   payoutEnd,
   primeAudio,
   reelStop,
-  reelTick,
+  reelSpin,
   rollupTick,
-  setMuted,
   symbolBurst,
   tierBreak,
   winChime,
@@ -466,6 +466,8 @@ export function ScatterPage() {
   const freeSpins = useFinanceStore((s) => s.slotsFreeSpins);
   const skin = useFinanceStore((s) => s.slotsSkin);
   const sound = useFinanceStore((s) => s.slotsSound);
+  const music = useFinanceStore((s) => s.slotsMusic);
+  useGameAudio('cascade', 'slots');
   const haptics = useFinanceStore((s) => s.slotsHaptics);
   const turbo = useFinanceStore((s) => s.slotsTurbo);
   const xp = useFinanceStore((s) => s.slotsXp);
@@ -572,6 +574,17 @@ export function ScatterPage() {
   const dustRef = useRef<HTMLCanvasElement>(null);
   const dustStop = useRef<(() => void) | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Вращение звучит петлёй; интервал лишь подстраховывает старт, если
+  // петля ещё грузилась в миг нажатия.
+  const stopReelSound = () => {
+    if (tickRef.current) clearInterval(tickRef.current);
+    tickRef.current = null;
+    reelSpin(false);
+  };
+  const startReelSound = (fast: boolean) => {
+    reelSpin(true, fast);
+    tickRef.current = setInterval(() => reelSpin(true, fast), 300);
+  };
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   // Счётчики обновляются ИМПЕРАТИВНО: счёт идёт каждый кадр, и гонять через
   // него состояние React значило бы перерисовывать половину страницы
@@ -591,12 +604,11 @@ export function ScatterPage() {
   const shownGrid = useRef<ScatterGrid | null>(null);
   if (!shownGrid.current) shownGrid.current = plans.map((p) => p.strip.slice(1, 1 + SCATTER_ROWS));
 
-  useEffect(() => setMuted(!sound), [sound]);
   useEffect(() => setHapticsMuted(!haptics), [haptics]);
   useEffect(
     () => () => {
       timers.current.forEach(clearTimeout);
-      if (tickRef.current) clearInterval(tickRef.current);
+      stopReelSound();
       rollStop.current?.();
       dustStop.current?.();
       stopShake();
@@ -664,7 +676,7 @@ export function ScatterPage() {
 
   /** Спин закончен окончательно — после того, как деньги досчитаны. */
   const finish = useCallback((res: ScatterSpinOutcome) => {
-    if (tickRef.current) clearInterval(tickRef.current);
+    stopReelSound();
     setCounting(false);
     setResult(res);
     setPending(0);
@@ -1336,13 +1348,13 @@ export function ScatterPage() {
     setSpinId((n) => n + 1);
     setSpinning(true);
 
-    if (tickRef.current) clearInterval(tickRef.current);
-    if (!reduceMotion()) tickRef.current = setInterval(() => reelTick(), turbo ? 55 : 80);
+    stopReelSound();
+    if (!reduceMotion()) startReelSound(turbo);
 
     timers.current.push(
       setTimeout(
         () => {
-          if (tickRef.current) clearInterval(tickRef.current);
+          stopReelSound();
           // Подменять поле на сетку здесь больше НЕ НУЖНО и не нужно снова:
           // сферы приехали в самой ленте и уже стоят в своих клетках — это те
           // же клетки, которые только что крутились. Остаётся озвучить находку
@@ -2097,6 +2109,13 @@ export function ScatterPage() {
                   icon: sound ? '🔊' : '🔇',
                   name: 'Звук',
                   hint: 'Барабаны, цепочки и выигрыши',
+                },
+                {
+                  key: 'music' as const,
+                  on: music,
+                  icon: music ? '🎵' : '🔕',
+                  name: 'Музыка',
+                  hint: 'Фоновая мелодия игры',
                 },
                 {
                   key: 'haptics' as const,

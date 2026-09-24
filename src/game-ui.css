@@ -3026,3 +3026,30 @@
   width: 44px;
   margin-left: 2px;
 }
+
+/* Звук и музыка — две круглые кнопки (components/AudioToggles). */
+.gx-audio {
+  display: inline-flex;
+  gap: 6px;
+}
+.gx-audio__btn {
+  --gx-size: 40px;
+}
+.gx-audio__btn .gx-icon {
+  width: 50%;
+  height: 50%;
+}
+.gx-audio__btn.is-off .gx-icon {
+  opacity: 0.55;
+}
+.gx-top .gx-audio .gx-audio__btn {
+  --gx-size: 38px;
+}
+.dgx-menu__audio {
+  align-self: center;
+}
+.pmx-sound {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}

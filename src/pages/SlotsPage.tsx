@@ -12,6 +12,7 @@ import { SkinSheet } from '@/components/SkinSheet';
 import { RewardsSheet, fmtLeft, useReadyRewards } from '@/components/RewardsSheet';
 import { useFinanceStore } from '@/store';
 import { useExit } from '@/lib/use-exit';
+import { useGameAudio } from '@/lib/use-game-audio';
 import type { SlotsSpinOutcome } from '@/store';
 import {
   WHEEL_COOLDOWN_MS,
@@ -68,9 +69,8 @@ import {
   payoutEnd,
   primeAudio,
   reelStop,
-  reelTick,
+  reelSpin,
   rollupTick,
-  setMuted,
   symbolBurst,
   tierBreak,
   winChime,
@@ -364,6 +364,8 @@ export function SlotsPage() {
   const jackpotPool = useFinanceStore((s) => s.slotsJackpot);
   const skin = useFinanceStore((s) => s.slotsSkin);
   const sound = useFinanceStore((s) => s.slotsSound);
+  const music = useFinanceStore((s) => s.slotsMusic);
+  useGameAudio('slots', 'slots');
   const haptics = useFinanceStore((s) => s.slotsHaptics);
   const turbo = useFinanceStore((s) => s.slotsTurbo);
   const xp = useFinanceStore((s) => s.slotsXp);
@@ -440,6 +442,17 @@ export function SlotsPage() {
   const dustRef = useRef<HTMLCanvasElement>(null);
   const dustStop = useRef<(() => void) | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Вращение звучит петлёй; интервал лишь подстраховывает старт, если
+  // петля ещё грузилась в миг нажатия.
+  const stopReelSound = () => {
+    if (tickRef.current) clearInterval(tickRef.current);
+    tickRef.current = null;
+    reelSpin(false);
+  };
+  const startReelSound = (fast: boolean) => {
+    reelSpin(true, fast);
+    tickRef.current = setInterval(() => reelSpin(true, fast), 300);
+  };
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   // Счётчики обновляются императивно: счёт идёт каждый кадр (см. MoneyCounter).
   const winOdo = useRef<MoneyHandle>(null);
@@ -458,13 +471,12 @@ export function SlotsPage() {
   const shownGrid = useRef<SlotGrid | null>(null);
   if (!shownGrid.current) shownGrid.current = plans.map((p) => p.strip.slice(1, 1 + ROWS));
 
-  useEffect(() => setMuted(!sound), [sound]);
   useEffect(() => setHapticsMuted(!haptics), [haptics]);
 
   useEffect(
     () => () => {
       timers.current.forEach(clearTimeout);
-      if (tickRef.current) clearInterval(tickRef.current);
+      stopReelSound();
       rollStop.current?.();
       dustStop.current?.();
       stopShake();
@@ -524,7 +536,7 @@ export function SlotsPage() {
 
   /** Спин закончен окончательно — после того, как деньги досчитаны. */
   const finish = useCallback((res: SlotsSpinOutcome) => {
-    if (tickRef.current) clearInterval(tickRef.current);
+    stopReelSound();
     setCounting(false);
     setResult(res);
     setPending(0);
@@ -887,15 +899,15 @@ export function SlotsPage() {
       setSpinning(true);
 
       // Пока барабаны в движении — дробный стрёкот механики.
-      if (tickRef.current) clearInterval(tickRef.current);
+      stopReelSound();
       if (!reduceMotion()) {
-        tickRef.current = setInterval(() => reelTick(), turbo ? 55 : 80);
+        startReelSound(turbo);
         if (drama) timers.current.push(setTimeout(() => antiSound(), durs[1]));
       }
 
       timers.current.push(
         setTimeout(() => {
-          if (tickRef.current) clearInterval(tickRef.current);
+          stopReelSound();
           if (res.steps.length) stepRef.current(res, 0);
           else payoutRef.current(res, 0);
         }, durs[2] + 40),
@@ -1553,6 +1565,13 @@ export function SlotsPage() {
                   icon: sound ? '🔊' : '🔇',
                   name: 'Звук',
                   hint: 'Барабаны, комбо и выигрыши',
+                },
+                {
+                  key: 'music' as const,
+                  on: music,
+                  icon: music ? '🎵' : '🔕',
+                  name: 'Музыка',
+                  hint: 'Фоновая мелодия игры',
                 },
                 {
                   key: 'haptics' as const,

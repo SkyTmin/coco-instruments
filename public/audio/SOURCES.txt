@@ -1,0 +1,198 @@
+sfx/ui.tap.1.mp3	ui-audio/click1.ogg
+sfx/ui.tap.2.mp3	ui-audio/click2.ogg
+sfx/ui.tap.3.mp3	ui-audio/click3.ogg
+sfx/ui.open.1.mp3	rpg-audio/bookOpen.ogg
+sfx/ui.close.1.mp3	rpg-audio/bookClose.ogg
+sfx/ui.tab.1.mp3	rpg-audio/bookFlip1.ogg
+sfx/ui.tab.2.mp3	rpg-audio/bookFlip2.ogg
+sfx/ui.tab.3.mp3	rpg-audio/bookFlip3.ogg
+sfx/ui.buy.1.mp3	rpg-audio/handleCoins2.ogg
+sfx/ui.error.1.mp3	interface-sounds/error_004.ogg
+sfx/ui.ok.1.mp3	interface-sounds/confirmation_001.ogg
+sfx/reel.stop.1.mp3	impact-sounds/impactGeneric_light_000.ogg
+sfx/reel.stop.2.mp3	impact-sounds/impactGeneric_light_001.ogg
+sfx/reel.stop.3.mp3	impact-sounds/impactGeneric_light_002.ogg
+sfx/reel.stop.4.mp3	impact-sounds/impactGeneric_light_003.ogg
+sfx/reel.stop.5.mp3	impact-sounds/impactGeneric_light_004.ogg
+sfx/reel.lever.1.mp3	rpg-audio/metalLatch.ogg
+sfx/reel.lever.2.mp3	rpg-audio/metalClick.ogg
+sfx/slot.tension.1.mp3	music-jingles/jingles_STEEL03.ogg
+sfx/slot.win.s.1.mp3	music-jingles/jingles_STEEL10.ogg
+sfx/slot.win.b.1.mp3	music-jingles/jingles_STEEL02.ogg
+sfx/slot.win.m.1.mp3	music-jingles/jingles_STEEL12.ogg
+sfx/slot.win.e.1.mp3	music-jingles/jingles_STEEL15.ogg
+sfx/slot.win.l.1.mp3	music-jingles/jingles_STEEL08.ogg
+sfx/slot.drum.1.1.mp3	music-jingles/jingles_HIT07.ogg
+sfx/slot.drum.2.1.mp3	music-jingles/jingles_HIT13.ogg
+sfx/slot.drum.3.1.mp3	music-jingles/jingles_HIT10.ogg
+sfx/slot.drum.4.1.mp3	music-jingles/jingles_HIT11.ogg
+sfx/slot.drum.5.1.mp3	music-jingles/jingles_HIT15.ogg
+sfx/chip.1.mp3	casino-audio/chips-collide-1.ogg
+sfx/chip.2.mp3	casino-audio/chips-collide-2.ogg
+sfx/chip.3.mp3	casino-audio/chips-collide-3.ogg
+sfx/chip.4.mp3	casino-audio/chips-collide-4.ogg
+sfx/chip.lay.1.mp3	casino-audio/chip-lay-1.ogg
+sfx/chip.lay.2.mp3	casino-audio/chip-lay-2.ogg
+sfx/chip.lay.3.mp3	casino-audio/chip-lay-3.ogg
+sfx/chips.stack.1.mp3	casino-audio/chips-stack-1.ogg
+sfx/chips.stack.2.mp3	casino-audio/chips-stack-3.ogg
+sfx/chips.stack.3.mp3	casino-audio/chips-stack-5.ogg
+sfx/gem.chime.1.mp3	interface-sounds/glass_001.ogg
+sfx/gem.chime.2.mp3	interface-sounds/glass_002.ogg
+sfx/gem.burst.1.mp3	impact-sounds/impactGlass_light_000.ogg
+sfx/gem.burst.2.mp3	impact-sounds/impactGlass_light_001.ogg
+sfx/gem.burst.3.mp3	impact-sounds/impactGlass_light_002.ogg
+sfx/gem.burst.4.mp3	impact-sounds/impactGlass_light_003.ogg
+sfx/gem.burst.5.mp3	impact-sounds/impactGlass_light_004.ogg
+sfx/pluck.1.mp3	interface-sounds/pluck_001.ogg
+sfx/pluck.2.mp3	interface-sounds/pluck_002.ogg
+sfx/bubble.1.mp3	interface-sounds/drop_001.ogg
+sfx/bubble.2.mp3	interface-sounds/drop_004.ogg
+sfx/bubble.low.1.mp3	interface-sounds/drop_002.ogg
+sfx/bubble.low.2.mp3	interface-sounds/drop_003.ogg
+sfx/bubble.pop.1.mp3	interface-sounds/drop_004.ogg
+sfx/bubble.pop.2.mp3	interface-sounds/glass_003.ogg
+sfx/orb.ring.1.mp3	interface-sounds/glass_004.ogg
+sfx/slam.1.mp3	impact-sounds/impactPunch_heavy_000.ogg
+sfx/slam.2.mp3	impact-sounds/impactPunch_heavy_001.ogg
+sfx/slam.3.mp3	impact-sounds/impactPunch_heavy_002.ogg
+sfx/pick.soil.1.mp3	impact-sounds/impactSoft_medium_000.ogg
+sfx/pick.soil.2.mp3	impact-sounds/impactSoft_medium_001.ogg
+sfx/pick.soil.3.mp3	impact-sounds/impactSoft_medium_002.ogg
+sfx/pick.soil.4.mp3	impact-sounds/impactSoft_medium_003.ogg
+sfx/pick.soil.5.mp3	impact-sounds/impactSoft_medium_004.ogg
+sfx/pick.stone.1.mp3	impact-sounds/impactMining_000.ogg
+sfx/pick.stone.2.mp3	impact-sounds/impactMining_001.ogg
+sfx/pick.stone.3.mp3	impact-sounds/impactMining_002.ogg
+sfx/pick.stone.4.mp3	impact-sounds/impactMining_003.ogg
+sfx/pick.stone.5.mp3	impact-sounds/impactMining_004.ogg
+sfx/pick.metal.1.mp3	impact-sounds/impactMetal_light_000.ogg
+sfx/pick.metal.2.mp3	impact-sounds/impactMetal_light_001.ogg
+sfx/pick.metal.3.mp3	impact-sounds/impactMetal_light_002.ogg
+sfx/pick.metal.4.mp3	impact-sounds/impactMetal_light_003.ogg
+sfx/pick.metal.5.mp3	impact-sounds/impactMetal_light_004.ogg
+sfx/pick.crystal.1.mp3	impact-sounds/impactGlass_light_000.ogg
+sfx/pick.crystal.2.mp3	impact-sounds/impactGlass_light_001.ogg
+sfx/pick.crystal.3.mp3	impact-sounds/impactGlass_light_002.ogg
+sfx/pick.crystal.4.mp3	impact-sounds/impactGlass_light_003.ogg
+sfx/pick.crystal.5.mp3	impact-sounds/impactGlass_light_004.ogg
+sfx/pick.star.1.mp3	interface-sounds/glass_001.ogg
+sfx/pick.star.2.mp3	interface-sounds/glass_002.ogg
+sfx/pick.star.3.mp3	interface-sounds/glass_005.ogg
+sfx/crit.thud.1.mp3	impact-sounds/impactPunch_medium_000.ogg
+sfx/crit.thud.2.mp3	impact-sounds/impactPunch_medium_001.ogg
+sfx/crit.thud.3.mp3	impact-sounds/impactPunch_medium_002.ogg
+sfx/break.soil.1.mp3	impact-sounds/impactSoft_heavy_000.ogg
+sfx/break.soil.2.mp3	impact-sounds/impactSoft_heavy_001.ogg
+sfx/break.soil.3.mp3	impact-sounds/impactSoft_heavy_002.ogg
+sfx/break.soil.4.mp3	impact-sounds/impactSoft_heavy_003.ogg
+sfx/break.stone.1.mp3	impact-sounds/footstep_concrete_000.ogg
+sfx/break.stone.2.mp3	impact-sounds/footstep_concrete_001.ogg
+sfx/break.stone.3.mp3	impact-sounds/footstep_concrete_002.ogg
+sfx/break.stone.4.mp3	impact-sounds/footstep_concrete_003.ogg
+sfx/break.stone.5.mp3	impact-sounds/footstep_concrete_004.ogg
+sfx/break.metal.1.mp3	impact-sounds/impactMetal_medium_000.ogg
+sfx/break.metal.2.mp3	impact-sounds/impactMetal_medium_001.ogg
+sfx/break.metal.3.mp3	impact-sounds/impactMetal_medium_002.ogg
+sfx/break.metal.4.mp3	impact-sounds/impactMetal_medium_003.ogg
+sfx/break.crystal.1.mp3	impact-sounds/impactGlass_medium_000.ogg
+sfx/break.crystal.2.mp3	impact-sounds/impactGlass_medium_001.ogg
+sfx/break.crystal.3.mp3	impact-sounds/impactGlass_medium_002.ogg
+sfx/break.crystal.4.mp3	impact-sounds/impactGlass_medium_003.ogg
+sfx/bag.full.1.mp3	rpg-audio/dropLeather.ogg
+sfx/rumble.1.mp3	sci-fi-sounds/spaceEngineLow_000.ogg
+sfx/boom.1.1.mp3	sci-fi-sounds/lowFrequency_explosion_001.ogg
+sfx/boom.2.1.mp3	sci-fi-sounds/lowFrequency_explosion_000.ogg
+sfx/boom.3.1.mp3	sci-fi-sounds/explosionCrunch_003.ogg
+sfx/fuse.1.mp3	interface-sounds/scratch_001.ogg
+sfx/tick.1.mp3	interface-sounds/tick_001.ogg
+sfx/tick.2.mp3	interface-sounds/tick_002.ogg
+sfx/case.tick.1.mp3	ui-audio/click1.ogg
+sfx/case.tick.2.mp3	ui-audio/click3.ogg
+sfx/case.tick.3.mp3	ui-audio/click5.ogg
+sfx/jingle.found.1.mp3	music-jingles/jingles_PIZZI04.ogg
+sfx/jingle.up.1.mp3	music-jingles/jingles_PIZZI02.ogg
+sfx/jingle.go.1.mp3	music-jingles/jingles_PIZZI10.ogg
+sfx/jingle.down.1.mp3	music-jingles/jingles_PIZZI01.ogg
+sfx/jingle.nope.1.mp3	music-jingles/jingles_PIZZI05.ogg
+sfx/jingle.win.1.mp3	music-jingles/jingles_PIZZI15.ogg
+sfx/jingle.end.1.mp3	music-jingles/jingles_PIZZI12.ogg
+sfx/jingle.small.1.mp3	music-jingles/jingles_PIZZI08.ogg
+sfx/axe.chop.1.mp3	rpg-audio/chop.ogg
+sfx/axe.chop.2.mp3	impact-sounds/impactWood_medium_000.ogg
+sfx/axe.chop.3.mp3	impact-sounds/impactWood_medium_001.ogg
+sfx/axe.chop.4.mp3	impact-sounds/impactWood_medium_002.ogg
+sfx/axe.chop.5.mp3	impact-sounds/impactWood_medium_003.ogg
+sfx/saw.bite.1.mp3	sci-fi-sounds/spaceEngine_002.ogg
+sfx/log.drop.1.mp3	impact-sounds/impactWood_light_000.ogg
+sfx/log.drop.2.mp3	impact-sounds/impactWood_light_001.ogg
+sfx/log.drop.3.mp3	impact-sounds/impactWood_light_002.ogg
+sfx/log.drop.4.mp3	impact-sounds/impactWood_light_003.ogg
+sfx/log.drop.5.mp3	impact-sounds/impactWood_light_004.ogg
+sfx/tree.creak.1.mp3	rpg-audio/creak1.ogg
+sfx/tree.creak.2.mp3	rpg-audio/creak2.ogg
+sfx/tree.thud.1.mp3	impact-sounds/impactWood_heavy_000.ogg
+sfx/tree.thud.2.mp3	impact-sounds/impactWood_heavy_001.ogg
+sfx/tree.thud.3.mp3	impact-sounds/impactWood_heavy_002.ogg
+sfx/snow.thud.1.mp3	impact-sounds/footstep_snow_000.ogg
+sfx/snow.thud.2.mp3	impact-sounds/footstep_snow_001.ogg
+sfx/snow.thud.3.mp3	impact-sounds/footstep_snow_002.ogg
+sfx/swing.1.mp3	oga-rpg-pack/RPG Sound Pack/battle/swing.wav
+sfx/swing.2.mp3	oga-rpg-pack/RPG Sound Pack/battle/swing2.wav
+sfx/swing.3.mp3	oga-rpg-pack/RPG Sound Pack/battle/swing3.wav
+sfx/swing.4.mp3	oga-battle/battle_sound_effects/swish_2.wav
+sfx/swing.5.mp3	oga-battle/battle_sound_effects/swish_4.wav
+sfx/hit.1.mp3	oga-hits-punches/hits/hit01.mp3.flac
+sfx/hit.2.mp3	oga-hits-punches/hits/hit04.mp3.flac
+sfx/hit.3.mp3	oga-hits-punches/hits/hit07.mp3.flac
+sfx/hit.4.mp3	oga-hits-punches/hits/hit13.mp3.flac
+sfx/hit.5.mp3	oga-hits-punches/hits/hit16.mp3.flac
+sfx/hit.6.mp3	oga-hits-punches/hits/hit22.mp3.flac
+sfx/hit.7.mp3	oga-hits-punches/hits/hit28.mp3.flac
+sfx/hit.8.mp3	oga-hits-punches/hits/hit31.mp3.flac
+sfx/bite.1.mp3	oga-rpg-pack/RPG Sound Pack/NPC/beetle/bite-small.wav
+sfx/bite.2.mp3	oga-rpg-pack/RPG Sound Pack/NPC/beetle/bite-small2.wav
+sfx/bite.3.mp3	oga-rpg-pack/RPG Sound Pack/NPC/beetle/bite-small3.wav
+sfx/dash.1.mp3	oga-battle/battle_sound_effects/swish_3.wav
+sfx/crate.1.mp3	impact-sounds/impactPlank_medium_000.ogg
+sfx/crate.2.mp3	impact-sounds/impactPlank_medium_002.ogg
+sfx/coins.1.mp3	rpg-audio/handleCoins.ogg
+sfx/coins.2.mp3	rpg-audio/handleCoins2.ogg
+sfx/cloth.1.mp3	rpg-audio/cloth1.ogg
+sfx/cloth.2.mp3	rpg-audio/cloth2.ogg
+sfx/cloth.3.mp3	rpg-audio/cloth3.ogg
+sfx/gate.1.mp3	rpg-audio/doorClose_1.ogg
+sfx/gate.2.mp3	rpg-audio/doorClose_3.ogg
+sfx/clang.1.mp3	impact-sounds/impactMetal_heavy_000.ogg
+sfx/clang.2.mp3	impact-sounds/impactMetal_heavy_001.ogg
+sfx/clang.3.mp3	impact-sounds/impactMetal_heavy_002.ogg
+sfx/latch.1.mp3	rpg-audio/metalLatch.ogg
+sfx/winch.1.mp3	rpg-audio/creak3.ogg
+sfx/roar.1.mp3	oga-rpg-pack/RPG Sound Pack/NPC/giant/giant1.wav
+sfx/roar.2.mp3	oga-rpg-pack/RPG Sound Pack/NPC/giant/giant2.wav
+sfx/rat.call.1.mp3	SqueakyRatkin Call/call_01
+sfx/rat.call.2.mp3	SqueakyRatkin Call/call_01
+sfx/rat.call.3.mp3	SqueakyRatkin Call/call_03
+sfx/rat.call.4.mp3	SqueakyRatkin Select/select_01
+sfx/rat.call.5.mp3	SqueakyRatkin Move/move_02
+sfx/rat.attack.1.mp3	SqueakyRatkin Attack/attack_01
+sfx/rat.attack.2.mp3	SqueakyRatkin Attack/attack_01
+sfx/rat.attack.3.mp3	SqueakyRatkin Attack/attack_03
+sfx/rat.attack.4.mp3	SqueakyRatkin Wounded/wounded_02
+sfx/rat.attack.5.mp3	SqueakyRatkin Wounded/wounded_02
+sfx/rat.die.1.mp3	SqueakyRatkin Death/death_01
+sfx/rat.die.2.mp3	SqueakyRatkin Death/death_01
+sfx/rat.die.3.mp3	SqueakyRatkin Wounded/wounded_01
+sfx/rat.die.4.mp3	SqueakyRatkin Wounded/wounded_01
+sfx/rat.die.5.mp3	SqueakyRatkin Wounded/wounded_03
+sfx/rat.die.6.mp3	SqueakyRatkin Call/call_04
+sfx/reel.spin.1.mp3	ui-audio/click1-3 (собрано в петлю)
+music/hall.mp3	«Sketchbook 2024-12-04» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
+music/slots.mp3	«Sketchbook 2024-09-12» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
+music/cascade.mp3	«Sketchbook 2024-09-22» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
+music/yard.mp3	«Sketchbook 2024-05-29» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
+music/mine.mp3	«Sketchbook 2024-10-16» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
+music/forest.mp3	«Sketchbook 2024-06-26» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
+music/lobby.mp3	«Shrine» — yd, CC0-1.0, https://opengameart.org/content/shrine
+music/depths.mp3	«Patreon Challenge 04» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
+music/boss.mp3	«Ludum Dare 30 03» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle

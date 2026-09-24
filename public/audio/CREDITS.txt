@@ -1,0 +1,42 @@
+Звук и музыка игр — откуда взято
+
+Все файлы переработаны (обрезка тишины и хвоста, выравнивание громкости,
+иногда сдвиг высоты и срез верхов, перекодирование в MP3) скриптом
+scripts/audio-build.py. Какой файл из какого исходника — SOURCES.txt рядом.
+
+ЭФФЕКТЫ — sfx/
+
+Kenney (www.kenney.nl), лицензия CC0 1.0 (общественное достояние):
+  «Impact Sounds», «Interface Sounds», «UI Audio», «RPG Audio»,
+  «Casino Audio», «Sci-fi Sounds», «Music Jingles».
+  Копия наборов с проверенным происхождением: github.com/Mcamento8/open-game-sfx-index.
+
+OpenGameArt.org, лицензия CC0 1.0 (через тот же индекс):
+  «RPG Sound Pack» — artisticdude (взмахи клинка, укус, великан);
+  «Battle Sound Effects» — Ogrebane (свист);
+  «37 Hits/Punches» — qubodup (удары клинка).
+
+Писк крыс — примеры голосов мода Squeaky Ratkin для RimWorld
+  (github.com/Coahuilite/SqueakyRatkin, Extras/SqueakyRatkinExampleVoices).
+  В файле AUDIO_RIGHTS.txt авторы объявляют эти записи общественным
+  достоянием: права не заявлены, использовать, менять и распространять
+  можно. Происхождение самих записей авторы не гарантируют.
+
+МУЗЫКА — music/  (все треки CC0 1.0)
+
+  hall.mp3    «Sketchbook 2024-12-04»   — Abstraction / Tallbeard Studios (Benjamin Burnes)
+  slots.mp3   «Sketchbook 2024-09-12»   — Abstraction / Tallbeard Studios
+  cascade.mp3 «Sketchbook 2024-09-22»   — Abstraction / Tallbeard Studios
+  yard.mp3    «Sketchbook 2024-05-29»   — Abstraction / Tallbeard Studios
+  mine.mp3    «Sketchbook 2024-10-16»   — Abstraction / Tallbeard Studios
+  forest.mp3  «Sketchbook 2024-06-26»   — Abstraction / Tallbeard Studios
+  depths.mp3  «Patreon Challenge 04»    — Abstraction / Tallbeard Studios
+  boss.mp3    «Ludum Dare 30 03»        — Abstraction / Tallbeard Studios
+  lobby.mp3   «Shrine»                  — yd (opengameart.org/content/shrine)
+
+  Треки Abstraction — из «Music Loop Bundle» (tallbeard.itch.io/music-loop-bundle,
+  abstractionmusic.com), CC0.
+  Авторы просят не использовать их в проектах про NFT, ИИ/машинное обучение
+  и для перепродажи файлов без изменений — это пожелание, а не условие
+  лицензии. Сборка треков с проверкой хешей: github.com/jfpx/cc0-media-library
+  (релиз music-v1).

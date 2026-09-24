@@ -1,631 +1,817 @@
-// Звук для слотов, синтезированный на лету через Web Audio — ни одного
-// аудиофайла в бандле. Всё обёрнуто в try/catch: звук никогда не должен
-// ломать игру (в Telegram WebView контекст может быть недоступен или
-// заморожен до первого касания экрана).
+// Звук игр: записанные эффекты и музыка из свободных наборов (public/audio,
+// источники — public/audio/CREDITS.txt, сборка — scripts/audio-build.py).
+//
+// Раньше всё синтезировалось осцилляторами — квадратной и пилообразной
+// волной на высоких частотах, и владелец описал это одной фразой: «из ушей
+// кровь идёт». Теперь каждое событие — настоящая запись, у частых событий
+// по несколько вариантов и лёгкий разброс высоты, а выход идёт через
+// компрессор: тридцать монет разом не складываются в перегруз.
+//
+// Всё обёрнуто в try/catch: звук никогда не должен ломать игру (в Telegram
+// WebView контекст может быть недоступен или заморожен до первого касания).
 
-let ctx: AudioContext | null = null;
+import { AUDIO_REV, MUSIC_TRACKS, SFX_VARIANTS } from '@/lib/audio-manifest';
+
+type Ctx = AudioContext;
+
+let ctx: Ctx | null = null;
+let sfxBus: GainNode | null = null;
+let musicBus: GainNode | null = null;
 let muted = false;
+let musicOn = true;
+/** Было касание экрана: без него iOS не даст контексту играть. */
+let primed = false;
 
-/** Создаёт/размораживает контекст. Вызывается из обработчика жеста (iOS). */
-export function primeAudio(): void {
+/** Громкость музыки относительно эффектов: подложка, а не солист. */
+const MUSIC_LEVEL = 0.42;
+const SFX_LEVEL = 0.9;
+
+function ensureCtx(): Ctx | null {
+  if (ctx) return ctx;
   try {
-    if (!ctx) {
-      const Ctor =
-        window.AudioContext ??
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!Ctor) return;
-      ctx = new Ctor();
-    }
-    if (ctx.state === 'suspended') void ctx.resume();
+    const Ctor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return null;
+    ctx = new Ctor();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14;
+    comp.knee.value = 10;
+    comp.ratio.value = 6;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.2;
+    comp.connect(ctx.destination);
+    sfxBus = ctx.createGain();
+    sfxBus.gain.value = muted ? 0 : SFX_LEVEL;
+    sfxBus.connect(comp);
+    musicBus = ctx.createGain();
+    musicBus.gain.value = muted || !musicOn ? 0 : MUSIC_LEVEL;
+    musicBus.connect(comp);
+    document.addEventListener('visibilitychange', () => {
+      if (!ctx) return;
+      // Свернули Telegram — музыка молчит и не тратит батарею.
+      if (document.hidden) void ctx.suspend().catch(() => undefined);
+      else if (primed) void ctx.resume().catch(() => undefined);
+    });
   } catch {
     ctx = null;
   }
+  return ctx;
+}
+
+/** Создаёт/размораживает контекст. Вызывается из обработчика жеста (iOS). */
+export function primeAudio(): void {
+  const c = ensureCtx();
+  if (!c) return;
+  primed = true;
+  try {
+    if (c.state !== 'running' && !document.hidden) void c.resume().catch(() => undefined);
+  } catch {
+    /* no-op */
+  }
+  if (wantScene && !current) void startScene(wantScene);
+}
+
+// Первое касание где угодно размораживает звук: музыка сцены начинается
+// сама, а не ждёт первого удара кирки.
+if (typeof window !== 'undefined') {
+  const once = () => primeAudio();
+  window.addEventListener('pointerdown', once, { capture: true, passive: true });
+  window.addEventListener('keydown', once, { capture: true, passive: true });
+}
+
+function applyLevels(): void {
+  if (!ctx || !sfxBus || !musicBus) return;
+  const t = ctx.currentTime;
+  sfxBus.gain.setTargetAtTime(muted ? 0 : SFX_LEVEL, t, 0.03);
+  musicBus.gain.setTargetAtTime(muted || !musicOn ? 0 : MUSIC_LEVEL, t, 0.15);
 }
 
 export function setMuted(value: boolean): void {
   muted = value;
+  applyLevels();
 }
 
-/** Одна нота: осциллятор + огибающая громкости. */
-function tone(
-  freq: number,
-  {
-    at = 0,
-    dur = 0.12,
-    type = 'sine',
-    gain = 0.14,
-    sweepTo,
-  }: { at?: number; dur?: number; type?: OscillatorType; gain?: number; sweepTo?: number } = {},
-): void {
-  if (muted || !ctx) return;
+export function setMusicOn(value: boolean): void {
+  musicOn = value;
+  applyLevels();
+}
+
+// ---------------------------------------------------------------------------
+// Загрузка сэмплов. Каждый звук — несколько вариантов `name.k.mp3`.
+// ---------------------------------------------------------------------------
+
+type Loaded = { buf: AudioBuffer; lead: number };
+const bank = new Map<string, Loaded[]>();
+const pending = new Map<string, Promise<void>>();
+
+function decode(c: Ctx, data: ArrayBuffer): Promise<AudioBuffer> {
+  // Старый Safari знает только форму с колбэками.
+  return new Promise((ok, fail) => {
+    try {
+      const p = c.decodeAudioData(data, ok, fail);
+      if (p && typeof p.then === 'function') p.then(ok, fail);
+    } catch (e) {
+      fail(e);
+    }
+  });
+}
+
+/**
+ * Тишина в начале MP3 (задержка кодера, если браузер её не срезал):
+ * удар обязан прозвучать в тот же кадр, что и картинка.
+ */
+function leadOf(buf: AudioBuffer): number {
+  const d = buf.getChannelData(0);
+  const lim = Math.min(d.length, Math.floor(buf.sampleRate * 0.06));
+  for (let i = 0; i < lim; i++) if (Math.abs(d[i]) > 0.004) return i / buf.sampleRate;
+  return 0;
+}
+
+function load(name: string): Promise<void> {
+  const have = pending.get(name);
+  if (have) return have;
+  const c = ensureCtx();
+  const n = SFX_VARIANTS[name] ?? 0;
+  if (!c || !n) return Promise.resolve();
+  const p = Promise.all(
+    Array.from({ length: n }, (_, i) =>
+      fetch(`/audio/sfx/${name}.${i + 1}.mp3?v=${AUDIO_REV}`)
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+        .then((b) => decode(c, b))
+        .then((buf) => ({ buf, lead: leadOf(buf) }))
+        .catch(() => null),
+    ),
+  ).then((list) => {
+    const ok = list.filter((x): x is Loaded => !!x);
+    if (ok.length) bank.set(name, ok);
+    else pending.delete(name); // не вышло — попробуем при следующем вызове
+  });
+  pending.set(name, p);
+  return p;
+}
+
+/** Наборы звуков по местам: грузятся, когда игрок туда пришёл. */
+export type SoundGroup = 'ui' | 'slots' | 'mine' | 'forest' | 'dungeon';
+
+const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
+  ui: (n) => /^(ui\.|chip|coins|cloth|jingle\.|slot\.drum|slot\.win|tick|case\.tick)/.test(n),
+  slots: (n) => /^(reel\.|slot\.|gem\.|pluck|bubble|orb\.|slam|chips)/.test(n),
+  mine: (n) => /^(pick\.|crit\.|break\.|bag\.|rumble|boom\.|fuse|gem\.chime|pluck)/.test(n),
+  forest: (n) => /^(axe\.|saw\.|log\.|tree\.|snow\.|crit\.|bag\.)/.test(n),
+  dungeon: (n) =>
+    /^(swing|hit|bite|dash|crate|gate|clang|latch|winch|roar|rat\.|rumble|boom\.|pick\.|break\.|crit\.|bag\.|gem\.chime)/.test(
+      n,
+    ),
+};
+
+export function preloadSounds(...groups: SoundGroup[]): void {
+  for (const name of Object.keys(SFX_VARIANTS))
+    if (groups.some((g) => GROUPS[g](name))) void load(name);
+}
+
+// ---------------------------------------------------------------------------
+// Проигрывание.
+// ---------------------------------------------------------------------------
+
+type PlayOpts = {
+  /** Громкость 0…1+ относительно выровненного сэмпла. */
+  gain?: number;
+  /** Высота: 2 — октава вверх. */
+  rate?: number;
+  /** Через сколько секунд. */
+  at?: number;
+  /** Случайный разброс высоты, доля (0,04 = ±4%). */
+  vary?: number;
+  /** Номер варианта вместо случайного. */
+  pick?: number;
+};
+
+/** Сколько раз подряд событие может звучать одновременно. */
+const VOICES: Record<string, number> = {
+  chip: 5,
+  'chip.lay': 3,
+  tick: 2,
+  'case.tick': 2,
+  pluck: 3,
+  'gem.burst': 3,
+  swing: 2,
+  hit: 3,
+};
+/** Минимальный промежуток между двумя запусками, с: пулемёт режет ухо. */
+const GAP: Record<string, number> = {
+  chip: 0.035,
+  'chip.lay': 0.045,
+  tick: 0.04,
+  'case.tick': 0.03,
+  'pick.soil': 0.04,
+  'pick.stone': 0.04,
+  'pick.metal': 0.04,
+  'pick.crystal': 0.04,
+  'pick.star': 0.04,
+  'gem.burst': 0.05,
+  'rat.call': 0.12,
+  'rat.attack': 0.1,
+  'rat.die': 0.06,
+  hit: 0.03,
+};
+
+const voices = new Map<string, AudioBufferSourceNode[]>();
+const lastAt = new Map<string, number>();
+const lastPick = new Map<string, number>();
+
+function play(name: string, opts: PlayOpts = {}): void {
+  if (muted) return;
+  const c = ctx;
+  if (!c || !sfxBus || c.state !== 'running') {
+    void load(name);
+    return;
+  }
+  const list = bank.get(name);
+  if (!list) {
+    void load(name);
+    return;
+  }
   try {
-    const t0 = ctx.currentTime + at;
-    const osc = ctx.createOscillator();
-    const env = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t0);
-    if (sweepTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, sweepTo), t0 + dur);
-    // Мягкая атака и экспоненциальный спад — без щелчков на краях.
-    env.gain.setValueAtTime(0.0001, t0);
-    env.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
-    env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    osc.connect(env).connect(ctx.destination);
-    osc.start(t0);
-    osc.stop(t0 + dur + 0.02);
+    const at = opts.at ?? 0;
+    const t0 = c.currentTime + at;
+    const gap = GAP[name];
+    if (gap && at === 0) {
+      const prev = lastAt.get(name) ?? -1;
+      if (t0 - prev < gap) return;
+      lastAt.set(name, t0);
+    }
+    let k = opts.pick ?? Math.floor(Math.random() * list.length);
+    if (opts.pick == null && list.length > 1 && k === lastPick.get(name)) k = (k + 1) % list.length;
+    lastPick.set(name, k);
+    const { buf, lead } = list[Math.min(k, list.length - 1)];
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const vary = opts.vary ?? 0.04;
+    src.playbackRate.value = (opts.rate ?? 1) * (1 + (Math.random() * 2 - 1) * vary);
+    const g = c.createGain();
+    g.gain.value = opts.gain ?? 1;
+    src.connect(g).connect(sfxBus);
+    src.start(t0, lead);
+    const max = VOICES[name] ?? 6;
+    const live = voices.get(name) ?? [];
+    live.push(src);
+    while (live.length > max) {
+      const old = live.shift();
+      try {
+        old?.stop();
+      } catch {
+        /* уже остановлен */
+      }
+    }
+    voices.set(name, live);
+    src.onended = () => {
+      const l = voices.get(name);
+      if (l) l.splice(l.indexOf(src) >>> 0, 1);
+    };
   } catch {
     /* звук не критичен */
   }
 }
 
-/** Короткий шумовой щелчок — символ проскочил мимо окна барабана. */
-export function reelTick(): void {
-  if (muted || !ctx) return;
+// ---------------------------------------------------------------------------
+// Музыка сцены: петля, смена через кроссфейд, приглушение под джинглы.
+// ---------------------------------------------------------------------------
+
+export type MusicScene = keyof typeof MUSIC_TRACKS;
+
+type Playing = { scene: MusicScene; src: AudioBufferSourceNode; gain: GainNode };
+let current: Playing | null = null;
+let wantScene: MusicScene | null = null;
+const tracks = new Map<MusicScene, Promise<AudioBuffer | null>>();
+
+function loadTrack(scene: MusicScene): Promise<AudioBuffer | null> {
+  const have = tracks.get(scene);
+  if (have) return have;
+  const c = ensureCtx();
+  if (!c) return Promise.resolve(null);
+  const p = fetch(`/audio/music/${scene}.mp3?v=${AUDIO_REV}`)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+    .then((b) => decode(c, b))
+    .catch(() => {
+      tracks.delete(scene);
+      return null;
+    });
+  tracks.set(scene, p);
+  // В памяти держим не больше трёх расшифрованных треков.
+  if (tracks.size > 3) {
+    for (const key of tracks.keys()) {
+      if (key !== scene && key !== current?.scene) {
+        tracks.delete(key);
+        break;
+      }
+    }
+  }
+  return p;
+}
+
+async function startScene(scene: MusicScene): Promise<void> {
+  const buf = await loadTrack(scene);
+  const c = ctx;
+  if (!buf || !c || !musicBus || wantScene !== scene || current?.scene === scene) return;
+  if (c.state !== 'running') return; // начнёт primeAudio после касания
   try {
-    const t0 = ctx.currentTime;
-    const buffer = ctx.createBuffer(1, 256, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-    const src = ctx.createBufferSource();
-    src.buffer = buffer;
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0.08, t0);
-    env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 2200;
-    src.connect(filter).connect(env).connect(ctx.destination);
-    src.start(t0);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    // Точки петли — по настоящей длине трека: если браузер не срезал
+    // задержку MP3-кодера, лишние сэмплы по краям в петлю не попадут.
+    const dur = MUSIC_TRACKS[scene].dur;
+    const extra = buf.duration - dur;
+    const lead = extra > 0.002 ? Math.min(extra, 0.026) : 0;
+    src.loopStart = lead;
+    src.loopEnd = Math.min(buf.duration, lead + dur);
+    const gain = c.createGain();
+    const t = c.currentTime;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(1, t + 1.4);
+    src.connect(gain).connect(musicBus);
+    src.start(t, lead);
+    fadeOut(current);
+    current = { scene, src, gain };
   } catch {
     /* no-op */
   }
 }
 
-/** Глухой «тук» — барабан встал на место. */
-export function reelStop(index = 0): void {
-  tone(180 - index * 18, { dur: 0.12, type: 'triangle', gain: 0.22, sweepTo: 90 });
-}
-
-/** Свист опускающегося рычага. */
-export function leverPull(): void {
-  tone(520, { dur: 0.22, type: 'sawtooth', gain: 0.08, sweepTo: 130 });
-}
-
-/** Нарастающее напряжение: на двух премиальных символах третий барабан тормозит. */
-export function anticipation(): void {
-  tone(300, { dur: 0.9, type: 'sine', gain: 0.07, sweepTo: 900 });
-  tone(302, { dur: 0.9, type: 'sine', gain: 0.05, sweepTo: 905 }); // лёгкий бит
-}
-
-const SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5]; // C5 D5 E5 G5 A5 C6
-
-/** Выигрыш: арпеджио, длина которого зависит от размера выигрыша. */
-export function winChime(level: 'small' | 'big'): void {
-  const notes = level === 'big' ? SCALE : SCALE.slice(0, 3);
-  notes.forEach((f, i) => tone(f, { at: i * 0.07, dur: 0.2, type: 'triangle', gain: 0.13 }));
-}
-
-/** Джекпот: фанфара с повторами и басом. */
-export function jackpotFanfare(): void {
-  const melody = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5, 1318.5];
-  melody.forEach((f, i) => tone(f, { at: i * 0.11, dur: 0.3, type: 'square', gain: 0.1 }));
-  [130.81, 130.81, 196, 261.63].forEach((f, i) =>
-    tone(f, { at: i * 0.22, dur: 0.4, type: 'triangle', gain: 0.16 }),
-  );
-}
-
-/** Тик счётчика во время подсчёта выигрыша. */
-export function counterTick(): void {
-  tone(1600, { dur: 0.035, type: 'square', gain: 0.05 });
-}
-
-/** Звон монеты — для дождя монет и получения бонуса. */
-export function coinDing(at = 0): void {
-  tone(1318.5, { at, dur: 0.16, type: 'sine', gain: 0.12 });
-  tone(1975.5, { at: at + 0.03, dur: 0.12, type: 'sine', gain: 0.07 });
+function fadeOut(p: Playing | null): void {
+  if (!p || !ctx) return;
+  try {
+    const t = ctx.currentTime;
+    p.gain.gain.cancelScheduledValues(t);
+    p.gain.gain.setValueAtTime(Math.max(0.0001, p.gain.gain.value), t);
+    p.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+    p.src.stop(t + 1);
+  } catch {
+    /* no-op */
+  }
 }
 
 /**
- * Звук звена каскада. Высота тона растёт с длиной цепочки — тот самый приём
- * из аркад: чем длиннее комбо, тем выше «дзынь», и ухо само считает звенья.
+ * Чей голос у джинглов: в зале и автоматах — стил-драм, в каторге —
+ * пиццикато. Та же мелодия, но стил-драм в шахте звучит казино.
+ */
+let flavor: 'casino' | 'camp' = 'casino';
+const CAMP: Record<string, string> = {
+  'slot.win.s': 'jingle.go',
+  'slot.win.b': 'jingle.up',
+  'slot.win.m': 'jingle.end',
+  'slot.win.e': 'jingle.win',
+  'slot.win.l': 'jingle.small',
+};
+const voice = (name: string) => (flavor === 'camp' ? (CAMP[name] ?? name) : name);
+
+/** Музыка сцены; `null` — тишина (ушли из игр). */
+export function setMusicScene(scene: MusicScene | null): void {
+  if (scene)
+    flavor = scene === 'hall' || scene === 'slots' || scene === 'cascade' ? 'casino' : 'camp';
+  wantScene = scene;
+  if (!scene) {
+    fadeOut(current);
+    current = null;
+    return;
+  }
+  if (current?.scene === scene) return;
+  void startScene(scene);
+}
+
+let duckUntil = 0;
+/** Приглушить музыку на время джингла, чтобы выигрыш не тонул в подложке. */
+function duck(sec: number): void {
+  if (!ctx || !musicBus || muted || !musicOn) return;
+  try {
+    const t = ctx.currentTime;
+    const until = t + sec;
+    if (until <= duckUntil) return;
+    duckUntil = until;
+    musicBus.gain.cancelScheduledValues(t);
+    musicBus.gain.setTargetAtTime(MUSIC_LEVEL * 0.35, t, 0.05);
+    musicBus.gain.setTargetAtTime(MUSIC_LEVEL, until, 0.4);
+  } catch {
+    /* no-op */
+  }
+}
+
+/** Джингл: музыка уходит в тень на его длину. */
+function jingle(name: string, sec: number, opts: PlayOpts = {}): void {
+  duck(sec + (opts.at ?? 0));
+  play(name, { vary: 0, ...opts });
+}
+
+// ---------------------------------------------------------------------------
+// Интерфейс.
+// ---------------------------------------------------------------------------
+
+export function uiTap(): void {
+  play('ui.tap', { gain: 0.5, vary: 0.06 });
+}
+export function uiOpen(): void {
+  play('ui.open', { gain: 0.55 });
+}
+export function uiClose(): void {
+  play('ui.close', { gain: 0.5 });
+}
+export function uiTab(): void {
+  play('ui.tab', { gain: 0.45 });
+}
+export function uiBuy(): void {
+  play('ui.buy', { gain: 0.8 });
+}
+export function uiError(): void {
+  play('ui.error', { gain: 0.5, vary: 0 });
+}
+
+// ---------------------------------------------------------------------------
+// Автоматы.
+// ---------------------------------------------------------------------------
+
+let spin: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+
+/**
+ * Вращение барабанов — одна петля мягких щелчков, а не отдельный шумовой
+ * щелчок каждые 55–80 мс (так было, и это было половиной «крови из ушей»).
+ */
+export function reelSpin(on: boolean, fast = false): void {
+  const c = ctx;
+  if (!on) {
+    if (spin && c) {
+      try {
+        const t = c.currentTime;
+        spin.gain.gain.setTargetAtTime(0.0001, t, 0.05);
+        spin.src.stop(t + 0.3);
+      } catch {
+        /* no-op */
+      }
+    }
+    spin = null;
+    return;
+  }
+  if (spin || muted || !c || !sfxBus || c.state !== 'running') return;
+  const l = bank.get('reel.spin');
+  if (!l) {
+    void load('reel.spin');
+    return;
+  }
+  try {
+    const src = c.createBufferSource();
+    src.buffer = l[0].buf;
+    src.loop = true;
+    src.playbackRate.value = fast ? 1.35 : 1;
+    const gain = c.createGain();
+    gain.gain.value = 0.55;
+    src.connect(gain).connect(sfxBus);
+    src.start(c.currentTime, Math.random() * 1.5);
+    spin = { src, gain };
+  } catch {
+    spin = null;
+  }
+}
+
+/** Оставлен ради старых вызовов: одиночный тихий щелчок. */
+export function reelTick(): void {
+  play('case.tick', { gain: 0.25, rate: 0.9 });
+}
+
+/** Барабан встал: глухой «тук», каждый следующий чуть ниже. */
+export function reelStop(index = 0): void {
+  play('reel.stop', { gain: 0.8, rate: 1 - index * 0.04 });
+}
+
+/** Рычаг: лязг защёлки. */
+export function leverPull(): void {
+  play('reel.lever', { gain: 0.7 });
+}
+
+/** Нарастающее напряжение: трель, пока третий барабан тормозит. */
+export function anticipation(): void {
+  jingle('slot.tension', 1.4, { gain: 0.6 });
+}
+
+/** Выигрыш: короткая фраза стил-драм; крупный — восходящий пассаж. */
+export function winChime(level: 'small' | 'big'): void {
+  if (level === 'big') jingle(voice('slot.win.b'), 1.4, { gain: 0.8 });
+  else jingle(voice('slot.win.s'), 0.9, { gain: 0.65 });
+}
+
+/** Джекпот: пассаж и барабанная дробь поверх. */
+export function jackpotFanfare(): void {
+  jingle(voice('slot.win.b'), 1.6, { gain: 0.9 });
+  play('slot.drum.5', { gain: 0.7, vary: 0 });
+  play('chips.stack', { gain: 0.7, at: 0.35 });
+}
+
+/** Тик счётчика во время подсчёта выигрыша: фишка ложится на стол. */
+export function counterTick(): void {
+  play('chip.lay', { gain: 0.35, vary: 0.08 });
+}
+
+/** Монета — звон фишек. Для дождя монет, продажи и наград. */
+export function coinDing(at = 0): void {
+  play('chip', { at, gain: 0.55, vary: 0.08 });
+}
+
+/**
+ * Звено каскада: стеклянный «дзынь», который забирается вверх по тонам —
+ * ухо само считает звенья.
  */
 export function comboHit(step: number): void {
   const n = Math.max(1, Math.min(step, 8));
-  // Мажорная гамма вверх: 523 Гц (до) и дальше по полутонам лестницы.
-  const base = 523.25 * Math.pow(2, (n - 1) / 6);
-  tone(base, { dur: 0.1, type: 'triangle', gain: 0.13 });
-  tone(base * 1.5, { at: 0.05, dur: 0.12, type: 'sine', gain: 0.1 });
-  if (n >= 3) tone(base * 2, { at: 0.1, dur: 0.14, type: 'sine', gain: 0.08 });
+  play('gem.chime', { gain: 0.6, rate: Math.pow(2, ((n - 1) * 2) / 12), vary: 0 });
 }
 
-/** Хлопок исчезающих символов — короткий «пшик» перед падением новых. */
+/** Символы рассыпались: хруст стекла. */
 export function symbolBurst(): void {
-  tone(880, { dur: 0.07, type: 'square', gain: 0.05, sweepTo: 300 });
+  play('gem.burst', { gain: 0.45 });
 }
 
 /**
- * Падение сферы-множителя. Раньше сферы падали молча — и ×500 звучал ровно
- * так же, как ×2, то есть никак. Теперь у каждой ступени редкости свой звук,
- * и ухо узнаёт находку раньше, чем глаз успевает прочитать число.
- *
+ * Падение сферы-множителя. Ухо узнаёт редкость раньше, чем глаз прочитает
+ * число: обычная — капля, редкая — звон, эпическая и выше — джингл.
  * `beats` — «вес события» из lib/orb-rarity (0…3).
  */
 export function orbDrop(beats: number, at = 0): void {
-  if (beats <= 0) {
-    // Обычная и необычная: короткое стеклянное «тюк», чтобы сфера не была немой.
-    tone(880, { at, dur: 0.07, type: 'sine', gain: 0.07 });
-    return;
+  if (beats <= 0) play('bubble.low', { at, gain: 0.5 });
+  else if (beats === 1) play('gem.chime', { at, gain: 0.6, rate: 1.19 });
+  else if (beats === 2) jingle(voice('slot.win.e'), 1, { at, gain: 0.7 });
+  else {
+    jingle(voice('slot.win.b'), 1.5, { at, gain: 0.85 });
+    play('orb.ring', { at: at + 0.25, gain: 0.35, rate: 0.8, vary: 0 });
   }
-  if (beats === 1) {
-    // Редкая: чистая квинта — звук «нашлось что-то приятное».
-    tone(1046.5, { at, dur: 0.14, type: 'triangle', gain: 0.11 });
-    tone(1568, { at: at + 0.05, dur: 0.14, type: 'sine', gain: 0.08 });
-    return;
-  }
-  if (beats === 2) {
-    // Эпическая: мажорное трезвучие с подъёмом.
-    [783.99, 987.77, 1174.66].forEach((f, i) =>
-      tone(f, { at: at + i * 0.045, dur: 0.22, type: 'triangle', gain: 0.11 }),
-    );
-    tone(392, { at, dur: 0.3, type: 'sine', gain: 0.1 });
-    return;
-  }
-  // Легендарная и мифическая: колокол с басом и долгим хвостом.
-  [523.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) =>
-    tone(f, { at: at + i * 0.05, dur: 0.5, type: 'sine', gain: 0.1 }),
-  );
-  tone(130.81, { at, dur: 0.7, type: 'triangle', gain: 0.17 });
-  tone(2093, { at: at + 0.24, dur: 0.6, type: 'sine', gain: 0.06 });
 }
 
-/**
- * Счёт суммы множителей: тик, высота которого ползёт вверх вместе с суммой.
- * `k` — доля пути от нуля к итогу (0…1).
- */
+/** Счёт суммы множителей: щипок, высота ползёт вверх вместе с суммой. */
 export function multTick(k: number): void {
-  tone(700 + 900 * Math.min(1, Math.max(0, k)), { dur: 0.04, type: 'square', gain: 0.06 });
+  const x = Math.min(1, Math.max(0, k));
+  play('pluck', { gain: 0.45, rate: Math.pow(2, (x * 12) / 12), vary: 0 });
 }
 
-// ---------------------------------------------------------------------------
-// Пузыри: сферы сливаются в одну (lib/orb-merge.ts). Звук мягкий и влажный —
-// синус с подъёмом тона, без квадратных волн: это плёнка, а не металл.
-// ---------------------------------------------------------------------------
-
-/** Пузыри надуваются вокруг камней — тихое «вдох» перед слиянием. */
+/** Пузыри надуваются вокруг камней. */
 export function bubbleForm(): void {
-  tone(420, { dur: 0.18, type: 'sine', gain: 0.05, sweepTo: 760 });
+  play('bubble.low', { gain: 0.35, rate: 0.9 });
 }
 
-/**
- * Два пузыря слились — «блоп». `k` — какое по счёту слияние: тон
- * забирается выше, и ухо слышит, что общий пузырь растёт.
- */
+/** Два пузыря слились — «блоп», каждый следующий выше. */
 export function bubbleMerge(k: number): void {
-  const f = 300 * Math.pow(1.1, Math.min(12, Math.max(0, k)));
-  tone(f, { dur: 0.13, type: 'sine', gain: 0.13, sweepTo: f * 2.2 });
-  tone(f * 3.1, { at: 0.03, dur: 0.05, type: 'sine', gain: 0.035 });
+  play('bubble', { gain: 0.6, rate: Math.pow(2, Math.min(12, Math.max(0, k)) / 12), vary: 0.02 });
 }
 
-/** Общий пузырь лопнул — сухой щелчок плёнки и брызги. */
+/** Общий пузырь лопнул. */
 export function bubblePop(): void {
-  tone(1500, { dur: 0.05, type: 'triangle', gain: 0.1, sweepTo: 520 });
-  tone(2800, { at: 0.012, dur: 0.035, type: 'sine', gain: 0.05 });
-  tone(3900, { at: 0.03, dur: 0.03, type: 'sine', gain: 0.03 });
+  play('bubble.pop', { gain: 0.6 });
 }
 
-/** Множитель применился к выплате — глухой удар «печати». */
+/** Множитель применился к выплате — глухой удар «печати» и фишки. */
 export function multSlam(): void {
-  tone(196, { dur: 0.26, type: 'triangle', gain: 0.2, sweepTo: 98 });
-  tone(784, { dur: 0.14, type: 'square', gain: 0.08, sweepTo: 392 });
+  play('slam', { gain: 0.8 });
+  play('chips.stack', { gain: 0.6, at: 0.04 });
 }
-
-// ---------------------------------------------------------------------------
-// Подсчёт выигрыша. Голос счёта — половина его убедительности: ровная дробь
-// и то, что она НЕ кончается, работают сильнее, чем само число на экране.
-// ---------------------------------------------------------------------------
 
 /**
- * Тик счётчика. Частота ровная (её задаёт rollup.ts), а высота ползёт вверх
- * отрезок за отрезком: ухо слышит, что счёт забирается всё выше, даже когда
- * глаз не успевает читать цифры. Тихий нарочно — их двадцать в секунду.
+ * Тик счётчика выигрыша. Частота ровная (её задаёт rollup.ts), высота
+ * ползёт вверх отрезок за отрезком — ухо слышит, что счёт забирается выше.
  */
 export function rollupTick(leg: number, k: number): void {
-  const f = Math.min(3400, 700 * Math.pow(1.11, leg) * (1 + 0.2 * k));
-  tone(f, { dur: 0.03, type: 'square', gain: 0.045 });
+  const semis = Math.min(14, leg * 2 + k * 2);
+  play('chip.lay', { gain: 0.32, rate: Math.pow(2, semis / 12), vary: 0.03 });
 }
 
 /**
- * Пробой ступени. Здесь эскалация обязана быть НЕРАВНОМЕРНОЙ: обычный порог
- * — щелчок, а легендарный — бас с фанфарой. Если объявлять их одинаково,
- * верхние ступени перестают быть верхними.
+ * Пробой ступени. Эскалация обязана быть НЕРАВНОМЕРНОЙ: обычный порог —
+ * короткий удар барабана, а легендарный — дробь с пассажем.
  */
 export function tierBreak(beats: number): void {
-  if (beats <= 0) {
-    tone(880, { dur: 0.09, type: 'triangle', gain: 0.12 });
-    tone(1318.5, { at: 0.04, dur: 0.1, type: 'sine', gain: 0.08 });
-    return;
+  if (beats <= 0) play('slot.drum.1', { gain: 0.55, vary: 0 });
+  else if (beats === 1) play('slot.drum.2', { gain: 0.65, vary: 0 });
+  else if (beats === 2) jingle('slot.drum.3', 0.8, { gain: 0.75 });
+  else if (beats === 3) {
+    jingle('slot.drum.4', 1, { gain: 0.8 });
+    play(voice('slot.win.e'), { gain: 0.6, at: 0.1, vary: 0 });
+  } else {
+    jingle('slot.drum.5', 1.3, { gain: 0.85 });
+    play(voice('slot.win.b'), { gain: 0.75, at: 0.12, vary: 0 });
   }
-  if (beats === 1) {
-    [783.99, 1046.5].forEach((f, i) =>
-      tone(f, { at: i * 0.055, dur: 0.18, type: 'triangle', gain: 0.13 }),
-    );
-    tone(261.63, { dur: 0.22, type: 'sine', gain: 0.12 });
-    return;
-  }
-  if (beats === 2) {
-    [659.25, 830.61, 987.77].forEach((f, i) =>
-      tone(f, { at: i * 0.05, dur: 0.26, type: 'triangle', gain: 0.13 }),
-    );
-    tone(164.81, { dur: 0.34, type: 'triangle', gain: 0.18, sweepTo: 110 });
-    return;
-  }
-  if (beats === 3) {
-    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
-      tone(f, { at: i * 0.05, dur: 0.34, type: 'square', gain: 0.1 }),
-    );
-    tone(130.81, { dur: 0.45, type: 'triangle', gain: 0.2, sweepTo: 87 });
-    tone(1568, { at: 0.2, dur: 0.3, type: 'sine', gain: 0.07 });
-    return;
-  }
-  // Легендарный порог и максимум: колокол, бас и долгий хвост.
-  [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) =>
-    tone(f, { at: i * 0.055, dur: 0.6, type: 'sine', gain: 0.1 }),
-  );
-  tone(65.41, { dur: 0.8, type: 'triangle', gain: 0.22 });
-  tone(2093, { at: 0.3, dur: 0.7, type: 'sine', gain: 0.06 });
 }
 
-/** Счёт договорил. Разрешение аккорда — «всё, это твоё». */
+/** Счёт договорил: фраза-разрешение «всё, это твоё». */
 export function payoutEnd(beats: number): void {
-  const chord = beats >= 3 ? [523.25, 659.25, 783.99, 1046.5] : [523.25, 659.25, 783.99];
-  chord.forEach((f, i) =>
-    tone(f, { at: i * 0.02, dur: 0.5 + beats * 0.1, type: 'triangle', gain: 0.11 }),
-  );
-  tone(130.81, { dur: 0.5, type: 'sine', gain: 0.14 });
+  if (beats >= 3) jingle(voice('slot.win.m'), 1.3, { gain: 0.75 });
+  else if (beats >= 1) jingle(voice('slot.win.s'), 1, { gain: 0.65 });
+  else jingle(voice('slot.win.l'), 0.8, { gain: 0.5 });
+  play('chips.stack', { gain: 0.5, at: 0.05 });
 }
 
 // ---------------------------------------------------------------------------
-// Каторга: удары кирки. Камень без шума не звучит — чистый тон даёт «пик», а
-// не «тук», — поэтому здесь есть короткий шумовой всплеск через полосовой
-// фильтр. Материал слышен по полосе фильтра и по звонкому хвосту: земля
-// глухая, камень сухой, металл звенит, кристалл поёт.
+// Шахта: материал слышен по удару — земля глухая, камень звонкий, металл
+// звенит, кристалл поёт.
 // ---------------------------------------------------------------------------
-
-let noiseBuf: AudioBuffer | null = null;
-
-/** Шумовой всплеск: полоса `freq`, добротность `q`. */
-function noise(freq: number, { at = 0, dur = 0.06, gain = 0.2, q = 1.2 } = {}): void {
-  if (muted || !ctx) return;
-  try {
-    if (!noiseBuf) {
-      const len = Math.floor(ctx.sampleRate * 0.25);
-      noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
-      const d = noiseBuf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    }
-    const t0 = ctx.currentTime + at;
-    const src = ctx.createBufferSource();
-    src.buffer = noiseBuf;
-    const band = ctx.createBiquadFilter();
-    band.type = 'bandpass';
-    band.frequency.setValueAtTime(freq, t0);
-    band.Q.setValueAtTime(q, t0);
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0.0001, t0);
-    env.gain.exponentialRampToValueAtTime(gain, t0 + 0.004);
-    env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    src.connect(band).connect(env).connect(ctx.destination);
-    src.start(t0, Math.random() * 0.15);
-    src.stop(t0 + dur + 0.02);
-  } catch {
-    /* звук не критичен */
-  }
-}
 
 export type MineSound = 'soil' | 'stone' | 'metal' | 'crystal' | 'star';
 
-/** Удар кирки. Высота чуть гуляет — сорок одинаковых ударов подряд режут ухо. */
+/** Удар кирки. Вариант и высота гуляют — сорок одинаковых ударов режут ухо. */
 export function pickHit(kind: MineSound, crit = false): void {
-  const v = 0.94 + Math.random() * 0.12;
-  if (kind === 'soil') {
-    noise(420 * v, { dur: 0.07, gain: 0.26, q: 0.8 });
-    tone(120 * v, { dur: 0.07, type: 'triangle', gain: 0.12, sweepTo: 70 });
-  } else if (kind === 'stone') {
-    noise(1500 * v, { dur: 0.05, gain: 0.24, q: 1.4 });
-    tone(260 * v, { dur: 0.05, type: 'triangle', gain: 0.1, sweepTo: 150 });
-  } else if (kind === 'metal') {
-    noise(2600 * v, { dur: 0.035, gain: 0.18, q: 2 });
-    tone(1180 * v, { dur: 0.16, type: 'sine', gain: 0.06 });
-    tone(1770 * v, { at: 0.004, dur: 0.12, type: 'sine', gain: 0.035 });
-  } else if (kind === 'crystal') {
-    noise(3600 * v, { dur: 0.03, gain: 0.14, q: 2.5 });
-    tone(2093 * v, { dur: 0.14, type: 'sine', gain: 0.05 });
-    tone(3136 * v, { at: 0.01, dur: 0.1, type: 'sine', gain: 0.03 });
-  } else {
-    noise(3000 * v, { dur: 0.03, gain: 0.12, q: 2 });
-    tone(1568 * v, { dur: 0.18, type: 'sine', gain: 0.05, sweepTo: 2349 });
-  }
-  if (crit) {
-    tone(98, { dur: 0.16, type: 'triangle', gain: 0.18, sweepTo: 55 });
-    noise(900, { at: 0.01, dur: 0.09, gain: 0.22, q: 0.7 });
-  }
+  play(`pick.${kind}`, { gain: kind === 'soil' ? 0.7 : 0.55, vary: 0.06 });
+  if (crit) play('crit.thud', { gain: 0.6 });
 }
 
-/** Блок развалился. Громче удара и с хвостом: это событие, а не такт. */
+/** Блок развалился — громче удара и с хвостом: это событие, а не такт. */
 export function blockBreak(kind: MineSound): void {
-  const v = 0.95 + Math.random() * 0.1;
-  noise(kind === 'soil' ? 320 : 900 * v, { dur: 0.14, gain: 0.3, q: 0.6 });
-  noise(2200 * v, { at: 0.02, dur: 0.08, gain: 0.12, q: 1.1 });
-  tone(90 * v, { dur: 0.12, type: 'triangle', gain: 0.14, sweepTo: 50 });
-  if (kind === 'metal') {
-    tone(880 * v, { at: 0.02, dur: 0.3, type: 'sine', gain: 0.06 });
-    tone(1320 * v, { at: 0.03, dur: 0.24, type: 'sine', gain: 0.04 });
-  } else if (kind === 'crystal') {
-    [1568, 2093, 2637].forEach((f, i) =>
-      tone(f * v, { at: 0.02 + i * 0.035, dur: 0.18, type: 'sine', gain: 0.045 }),
-    );
-  } else if (kind === 'star') {
-    [1760, 2217, 2637, 3520].forEach((f, i) =>
-      tone(f, { at: 0.02 + i * 0.04, dur: 0.3, type: 'sine', gain: 0.04 }),
-    );
-  }
+  if (kind === 'soil') play('break.soil', { gain: 0.55 });
+  else if (kind === 'metal') play('break.metal', { gain: 0.5 });
+  else if (kind === 'crystal' || kind === 'star') play('break.crystal', { gain: 0.5 });
+  else play('break.stone', { gain: 0.6 });
 }
 
 /** По дну: кирка не берёт коренную породу. */
 export function bedrockClink(): void {
-  tone(2400, { dur: 0.05, type: 'square', gain: 0.03 });
-  noise(3200, { dur: 0.03, gain: 0.08, q: 3 });
+  play('pick.metal', { gain: 0.35, rate: 1.5 });
 }
 
-/** Рюкзак полон — короткий глухой «нет». */
+/** Рюкзак полон — мешок шлёпнулся. */
 export function bagFull(): void {
-  tone(196, { dur: 0.09, type: 'square', gain: 0.07 });
-  tone(165, { at: 0.1, dur: 0.12, type: 'square', gain: 0.07 });
+  play('bag.full', { gain: 0.8 });
+  play('ui.error', { gain: 0.3, at: 0.08, vary: 0 });
 }
 
 /** Шахта обновляется: гул снизу и перестук поднимающихся блоков. */
 export function mineRumble(): void {
-  tone(62, { dur: 0.7, type: 'triangle', gain: 0.2, sweepTo: 45 });
-  for (let i = 0; i < 7; i++) noise(500 + i * 140, { at: 0.08 + i * 0.07, dur: 0.05, gain: 0.12 });
+  play('rumble', { gain: 0.8 });
+  for (let i = 0; i < 4; i++) play('break.stone', { gain: 0.3, at: 0.25 + i * 0.12 });
 }
 
 /** Взрыв: бомба, Взрыв-зачарование, заряд, отбойник. `power` 1…3. */
 export function boom(power = 1): void {
-  const p = Math.max(1, Math.min(3, power));
-  noise(180, { dur: 0.35 + 0.15 * p, gain: 0.35, q: 0.5 });
-  noise(700, { at: 0.01, dur: 0.18, gain: 0.2, q: 0.7 });
-  tone(70, { dur: 0.4 + 0.15 * p, type: 'triangle', gain: 0.24, sweepTo: 35 });
-  if (p >= 2) {
-    for (let i = 0; i < 5; i++)
-      noise(1400 + i * 300, { at: 0.12 + i * 0.06, dur: 0.05, gain: 0.08 });
-  }
+  const p = Math.max(1, Math.min(3, Math.round(power)));
+  play(`boom.${p}`, { gain: 0.9, vary: 0.05 });
+  if (p >= 2) for (let i = 0; i < 3; i++) play('break.stone', { gain: 0.35, at: 0.15 + i * 0.09 });
 }
 
 /** Фитиль шипит, бомба тикает. */
 export function fuseTick(k = 0): void {
-  tone(1200 + 200 * k, { dur: 0.04, type: 'square', gain: 0.05 });
-  noise(5000, { dur: 0.05, gain: 0.05, q: 1.5 });
+  play('fuse', { gain: 0.5 });
+  play('tick', { gain: 0.4, rate: 1 + k * 0.08 });
 }
 
 /** Звено жилы: тон забирается вверх — ухо считает, сколько ушло разом. */
 export function chainTick(k: number): void {
-  const f = 520 * Math.pow(2, Math.min(k, 12) / 12);
-  tone(f, { dur: 0.08, type: 'triangle', gain: 0.08 });
-  noise(2400, { dur: 0.04, gain: 0.1, q: 1.4 });
+  play('pluck', { gain: 0.35, rate: Math.pow(2, Math.min(k, 12) / 12), vary: 0 });
 }
 
-/** Кураж: короткий фанфарный подъём. */
+/** Кураж: короткий восходящий пассаж. */
 export function frenzyStart(): void {
-  [392, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
-    tone(f, { at: i * 0.05, dur: 0.18, type: 'square', gain: 0.07 }),
-  );
+  jingle('jingle.go', 0.9, { gain: 0.7 });
 }
 
 /** Щелчок ленты сундука, как у колеса удачи. */
 export function caseTick(): void {
-  tone(1900, { dur: 0.025, type: 'square', gain: 0.045 });
+  play('case.tick', { gain: 0.5 });
 }
 
-/** Нашёлся ключ — звонкий «дзынь» металла. */
+/** Нашёлся ключ — «нашёл!». */
 export function keyFound(): void {
-  tone(1568, { dur: 0.2, type: 'sine', gain: 0.09 });
-  tone(2349, { at: 0.04, dur: 0.18, type: 'sine', gain: 0.06 });
+  jingle('jingle.found', 0.7, { gain: 0.7 });
 }
 
 // ---------------------------------------------------------------------------
-// Лесоповал.
+// Лес.
 // ---------------------------------------------------------------------------
 
-/**
- * Удар топора — глухой деревянный «тук» с щелчком щепы. У пил вместо удара
- * короткое жужжание: пила не бьёт, а грызёт.
- */
+/** Удар топора; у пил вместо удара — рык мотора: пила не бьёт, а грызёт. */
 export function axeChop(saw = false, crit = false): void {
-  const v = 0.94 + Math.random() * 0.12;
-  if (saw) {
-    tone(92 * v, { dur: 0.13, type: 'sawtooth', gain: 0.05, sweepTo: 118 * v });
-    noise(2600 * v, { dur: 0.11, gain: 0.1, q: 0.8 });
-  } else {
-    noise(620 * v, { dur: 0.07, gain: 0.28, q: 1.2 });
-    tone(170 * v, { dur: 0.08, type: 'triangle', gain: 0.15, sweepTo: 105 });
-    noise(3000 * v, { at: 0.012, dur: 0.03, gain: 0.07, q: 2.2 });
-  }
-  if (crit) {
-    tone(104, { dur: 0.15, type: 'triangle', gain: 0.17, sweepTo: 58 });
-    noise(800, { at: 0.01, dur: 0.09, gain: 0.2, q: 0.8 });
-  }
+  if (saw) play('saw.bite', { gain: 0.55, vary: 0.05 });
+  else play('axe.chop', { gain: 0.75, vary: 0.06 });
+  if (crit) play('crit.thud', { gain: 0.6 });
 }
 
-/** Бревно отлетело в штабель: стук дерева о дерево. */
+/** Бревно отлетело в штабель. */
 export function logOff(): void {
-  const v = 0.95 + Math.random() * 0.1;
-  noise(480 * v, { dur: 0.1, gain: 0.2, q: 0.9 });
-  tone(210 * v, { dur: 0.06, type: 'triangle', gain: 0.1 });
-  tone(160 * v, { at: 0.07, dur: 0.07, type: 'triangle', gain: 0.08 });
+  play('log.drop', { gain: 0.55 });
 }
 
-/** «Бойся!»: скрип ствола, свист и глухой удар о снег. */
+/** «Бойся!»: скрип ствола и глухой удар о снег. */
 export function treeFall(): void {
-  tone(260, { dur: 0.45, type: 'sawtooth', gain: 0.035, sweepTo: 150 });
-  noise(1200, { at: 0.3, dur: 0.25, gain: 0.08, q: 0.5 });
-  noise(160, { at: 0.5, dur: 0.5, gain: 0.34, q: 0.5 });
-  tone(62, { at: 0.5, dur: 0.5, type: 'triangle', gain: 0.24, sweepTo: 34 });
-  for (let i = 0; i < 4; i++) noise(2400 + i * 400, { at: 0.56 + i * 0.05, dur: 0.05, gain: 0.05 });
+  play('tree.creak', { gain: 0.6 });
+  play('tree.thud', { gain: 0.85, at: 0.5 });
+  play('snow.thud', { gain: 0.6, at: 0.52 });
 }
 
-/** Сучок по лбу: тупой удар и «ой». */
+/** Сучок по лбу. */
 export function branchHit(): void {
-  noise(700, { dur: 0.08, gain: 0.24, q: 0.9 });
-  tone(240, { dur: 0.08, type: 'square', gain: 0.07 });
-  tone(170, { at: 0.07, dur: 0.14, type: 'square', gain: 0.07, sweepTo: 120 });
+  play('crit.thud', { gain: 0.75, rate: 1.1 });
+  play('log.drop', { gain: 0.4, at: 0.03 });
 }
 
 // ---------------------------------------------------------------------------
-// Подземелье. Бой — самый частый звук игры: каждый такт чуть гуляет по
-// высоте, иначе серия из трёх ударов звучит, как заевшая пластинка.
+// Подземелье.
 // ---------------------------------------------------------------------------
 
-/** Свист клинка. Тяжёлый — ниже и дольше. `step` — номер удара серии. */
+/** Свист клинка. Тяжёлый — ниже. `step` — номер удара серии. */
 export function swordSwing(step = 0, heavy = false): void {
-  const v = 0.92 + Math.random() * 0.16;
-  const up = 1 + step * 0.08;
-  noise((heavy ? 1500 : 2600) * v * up, {
-    dur: heavy ? 0.16 : 0.09,
-    gain: heavy ? 0.2 : 0.13,
-    q: 0.9,
-  });
-  if (heavy) tone(160 * v, { dur: 0.2, type: 'triangle', gain: 0.08, sweepTo: 90 });
+  play('swing', { gain: heavy ? 0.7 : 0.5, rate: heavy ? 0.82 : 1 + step * 0.05 });
 }
 
-/** Клинок вошёл: мягкий шлепок и хруст. Крит — с низом и звоном. */
+/** Клинок вошёл. Крит — со звоном стали, по боссу — ниже. */
 export function swordHit(crit = false, boss = false): void {
-  const v = 0.9 + Math.random() * 0.2;
-  noise(boss ? 520 * v : 900 * v, { dur: 0.07, gain: 0.26, q: 0.8 });
-  tone((boss ? 90 : 140) * v, { dur: 0.08, type: 'triangle', gain: 0.14, sweepTo: 60 });
-  if (crit) {
-    tone(1318 * v, { at: 0.01, dur: 0.16, type: 'sine', gain: 0.07 });
-    tone(80, { dur: 0.18, type: 'triangle', gain: 0.2, sweepTo: 42 });
-    noise(3200, { at: 0.01, dur: 0.05, gain: 0.12, q: 1.8 });
-  }
+  play('hit', { gain: 0.6, rate: boss ? 0.85 : 1.05, vary: 0.08 });
+  if (crit) play('pick.metal', { gain: 0.35, at: 0.01 });
 }
 
 /** Крысиный писк — выползла из норы, заметила, сдохла (`k` 0…2). */
 export function ratSqueak(k = 0): void {
-  const v = 0.9 + Math.random() * 0.25;
-  const f = [2300, 2700, 1900][k] * v;
-  tone(f, { dur: 0.06, type: 'square', gain: 0.025, sweepTo: f * 1.35 });
-  tone(f * 1.2, { at: 0.07, dur: 0.05, type: 'square', gain: 0.02, sweepTo: f * 0.9 });
+  const name = k === 0 ? 'rat.call' : k === 1 ? 'rat.attack' : 'rat.die';
+  play(name, { gain: 0.45, vary: 0.1 });
 }
 
-/** Крыса убита: писк обрывается глухим шлепком. */
+/** Крыса убита: предсмертный писк и мягкий шлепок. */
 export function ratDie(big = false): void {
-  ratSqueak(2);
-  noise(big ? 260 : 380, { at: 0.03, dur: 0.12, gain: big ? 0.3 : 0.22, q: 0.7 });
-  tone(big ? 70 : 100, { at: 0.03, dur: 0.12, type: 'triangle', gain: 0.14, sweepTo: 45 });
+  play('rat.die', { gain: big ? 0.6 : 0.45, rate: big ? 0.75 : 1, vary: 0.1 });
+  play('break.soil', { gain: big ? 0.6 : 0.4, at: 0.03 });
 }
 
-/** Укус по герою: хруст и тупая боль. */
+/** Укус по герою. */
 export function heroHurt(): void {
-  noise(600, { dur: 0.1, gain: 0.26, q: 0.8 });
-  tone(180, { dur: 0.14, type: 'sawtooth', gain: 0.06, sweepTo: 110 });
+  play('bite', { gain: 0.6 });
+  play('crit.thud', { gain: 0.45, at: 0.02 });
 }
 
-/** Рывок: шорох сапог по щебню. */
+/** Рывок: свист и шорох. */
 export function dashWhoosh(): void {
-  const v = 0.95 + Math.random() * 0.1;
-  noise(1100 * v, { dur: 0.16, gain: 0.16, q: 0.5 });
-  noise(3000 * v, { at: 0.02, dur: 0.08, gain: 0.06, q: 1.2 });
+  play('dash', { gain: 0.5 });
 }
 
-/** Уклон в последний миг: время замерло — звон и вдох. */
+/** Уклон в последний миг: время замерло — звон. */
 export function perfectDodge(): void {
-  tone(1760, { dur: 0.35, type: 'sine', gain: 0.07, sweepTo: 2637 });
-  tone(880, { at: 0.02, dur: 0.4, type: 'sine', gain: 0.05, sweepTo: 1318 });
-  noise(5200, { dur: 0.2, gain: 0.05, q: 1 });
+  play('orb.ring', { gain: 0.3, rate: 0.9, vary: 0 });
+  play('gem.chime', { gain: 0.4, rate: 1.5, vary: 0 });
 }
 
-/** Подобрал: мясо чавкает, монета звякает, токен поёт. */
+/** Подобрал: монета звякает, токен поёт, мясо шуршит. */
 export function pickUp(what: string): void {
-  if (what === 'coin') tone(1975, { dur: 0.08, type: 'square', gain: 0.03 });
-  else if (what === 'token') {
-    tone(1318, { dur: 0.08, type: 'sine', gain: 0.06 });
-    tone(1976, { at: 0.05, dur: 0.1, type: 'sine', gain: 0.05 });
-  } else if (what === 'key' || what === 'crown') keyFound();
-  else noise(700, { dur: 0.05, gain: 0.12, q: 1.2 });
+  if (what === 'coin') play('coins', { gain: 0.45 });
+  else if (what === 'token') play('gem.chime', { gain: 0.45, rate: 1.33 });
+  else if (what === 'key' || what === 'crown') keyFound();
+  else play('cloth', { gain: 0.5 });
 }
 
 /** Ящик или бочка разлетелись. */
 export function crateBreak(): void {
-  noise(520, { dur: 0.12, gain: 0.28, q: 0.9 });
-  noise(1800, { at: 0.02, dur: 0.06, gain: 0.12, q: 1.4 });
-  tone(150, { at: 0.03, dur: 0.07, type: 'triangle', gain: 0.1 });
-  tone(115, { at: 0.08, dur: 0.07, type: 'triangle', gain: 0.08 });
+  play('crate', { gain: 0.7 });
 }
 
-/** Вагонетка: стальной скрежет колёс по рельсу. */
+/** Вагонетка покатилась: гул колёс. */
 export function cartRoll(v = 1): void {
-  const k = Math.min(1.5, Math.max(0.4, v / 6));
-  tone(210 * k, { dur: 0.3, type: 'sawtooth', gain: 0.03, sweepTo: 180 * k });
-  noise(3400, { dur: 0.25, gain: 0.05 * k, q: 3 });
+  const k = Math.min(1.5, Math.max(0.5, v / 6));
+  play('rumble', { gain: 0.3 * k, rate: 1.4 + k * 0.3 });
 }
 
 /** Гул из глубины: орда или вагонетка сорвалась. */
 export function deepRumble(): void {
-  tone(48, { dur: 1.1, type: 'triangle', gain: 0.22, sweepTo: 38 });
-  for (let i = 0; i < 6; i++)
-    noise(260 + i * 60, { at: 0.1 + i * 0.12, dur: 0.12, gain: 0.08, q: 0.6 });
+  play('rumble', { gain: 0.8, rate: 0.85 });
 }
 
-/** Крысиный король: рёв — тысяча писков разом, над ними низ. */
+/** Крысиный король: рёв великана, над ним писк свиты. */
 export function kingRoar(): void {
-  tone(70, { dur: 0.9, type: 'sawtooth', gain: 0.12, sweepTo: 44 });
-  for (let i = 0; i < 9; i++) {
-    const f = 1600 + Math.random() * 1600;
-    tone(f, { at: i * 0.05, dur: 0.12, type: 'square', gain: 0.018, sweepTo: f * 1.3 });
-  }
-  noise(300, { dur: 0.8, gain: 0.2, q: 0.5 });
+  play('roar', { gain: 0.9, rate: 1.1 });
+  play('rat.attack', { gain: 0.45, at: 0.1, rate: 0.8 });
+  play('rat.call', { gain: 0.35, at: 0.25, rate: 0.9 });
 }
 
-/** Ворота арены: цепь, лязг решётки об пол. */
+/** Ворота арены: лязг решётки об пол. */
 export function gateSlam(): void {
-  for (let i = 0; i < 5; i++)
-    tone(900 + i * 40, { at: i * 0.05, dur: 0.04, type: 'square', gain: 0.03 });
-  noise(240, { at: 0.28, dur: 0.3, gain: 0.32, q: 0.6 });
-  tone(62, { at: 0.28, dur: 0.35, type: 'triangle', gain: 0.22, sweepTo: 40 });
-  tone(1180, { at: 0.3, dur: 0.4, type: 'sine', gain: 0.04 });
+  play('gate', { gain: 0.8 });
+  play('clang', { gain: 0.5, at: 0.05 });
 }
 
-/** Съел: чавк и глоток. */
+/** Съел. */
 export function eatChomp(): void {
-  noise(500, { dur: 0.07, gain: 0.18, q: 1 });
-  noise(420, { at: 0.13, dur: 0.07, gain: 0.16, q: 1 });
-  tone(220, { at: 0.26, dur: 0.12, type: 'sine', gain: 0.06, sweepTo: 160 });
+  play('bite', { gain: 0.6 });
+  play('bite', { gain: 0.45, at: 0.18 });
 }
 
-/** Новый уровень героя — короткая лесенка вверх. */
+/** Новый уровень героя — восходящий пассаж. */
 export function levelUp(): void {
-  [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) =>
-    tone(f, { at: i * 0.06, dur: 0.22, type: 'triangle', gain: 0.08 }),
-  );
+  jingle('jingle.up', 1.1, { gain: 0.8 });
 }
 
-/** Серия убийств выросла: удар барабана с подъёмом тона по ступени. */
+/** Серия убийств выросла: удар барабана, выше с каждой ступенью. */
 export function streakUp(tier: number): void {
-  const f = 392 * Math.pow(2, Math.min(tier, 5) / 6);
-  tone(f, { dur: 0.16, type: 'square', gain: 0.06 });
-  tone(f * 1.5, { at: 0.07, dur: 0.2, type: 'square', gain: 0.05 });
-  noise(200, { dur: 0.12, gain: 0.2, q: 0.6 });
+  const t = Math.max(1, Math.min(tier, 3));
+  play(`slot.drum.${t}`, { gain: 0.55, vary: 0 });
 }
 
-/** Клеть: скрип троса, лязг защёлки. */
+/** Лифт: скрип троса, лязг защёлки. */
 export function liftClank(): void {
-  tone(340, { dur: 0.5, type: 'sawtooth', gain: 0.025, sweepTo: 260 });
-  noise(1400, { at: 0.45, dur: 0.1, gain: 0.2, q: 1.2 });
-  tone(700, { at: 0.46, dur: 0.2, type: 'square', gain: 0.03 });
+  play('winch', { gain: 0.6 });
+  play('latch', { gain: 0.8, at: 0.4 });
+  play('clang', { gain: 0.4, at: 0.42 });
 }
 
-/** Смерть героя: гулкий удар и спуск вниз. */
+/** Смерть героя: удар и нисходящий пассаж. */
 export function heroDeath(): void {
-  noise(200, { dur: 0.5, gain: 0.3, q: 0.5 });
-  tone(220, { dur: 1.2, type: 'triangle', gain: 0.12, sweepTo: 55 });
-  tone(330, { at: 0.1, dur: 1.1, type: 'triangle', gain: 0.07, sweepTo: 82 });
+  play('break.soil', { gain: 0.8 });
+  jingle('jingle.down', 1.3, { gain: 0.8, at: 0.2 });
 }
