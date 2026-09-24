@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Screen, Sheet } from '@/components/ui';
-import { IconGear, IconGift } from '@/components/icons';
+import { GxBar, GxIcon, GxModal, KIcon } from '@/components/gx';
 import { CashDesk } from '@/components/CashDesk';
 import { crackStage, MineCell, MineField, useMineDig, wall } from '@/components/MineField';
 import type { BreakKind, DigBlock, MineFieldHandle } from '@/components/MineField';
 import { useNavigate } from 'react-router-dom';
 import { FOREST_UNLOCK_RANK } from '@/lib/forest';
-import { crownTexture } from '@/lib/prison-art';
 import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon } from '@/components/slot-art';
 import {
-  BagIcon,
+  ItemIcon,
   KeyIcon,
   ParcelReveal,
   PickIcon,
@@ -45,7 +43,6 @@ import {
   ENERGY_RATE,
   findOf,
   FRENZY_RATE,
-  GUIDE,
   guideReady,
   guideStep,
   hitDamage,
@@ -177,11 +174,11 @@ const SHIFT_MS = 5 * 60_000;
 function rewardText(r: GuideReward): string {
   const out: string[] = [];
   if (r.coins) out.push(`+${fmt(r.coins)} монет`);
-  if (r.tokens) out.push(`+${fmt(r.tokens)} ✦`);
+  if (r.tokens) out.push(`+${fmt(r.tokens)} токенов`);
   if (r.keys) out.push(r.keys > 1 ? `+${r.keys} ключа` : '+ключ');
   if (r.item) {
     const it = ITEMS.find((i) => i.id === r.item![0])!;
-    out.push(`${it.glyph} ${it.name.toLowerCase()}${r.item[1] > 1 ? ` ×${r.item[1]}` : ''}`);
+    out.push(`${it.name.toLowerCase()}${r.item[1] > 1 ? ` ×${r.item[1]}` : ''}`);
   }
   if (r.rune) out.push(`руна ${RUNE_ROMAN[r.rune - 1]}`);
   if (r.pet) out.push(petOf(r.pet).name.toLowerCase());
@@ -600,7 +597,7 @@ export function PrisonPage() {
     if (res.parcelsReady) {
       notifySuccess();
       keyFound();
-      say('Передачка дозрела — вскрой её');
+      say('Посылка дозрела — вскрой её');
     }
     if (res.petUp) {
       const st = useFinanceStore.getState().prison;
@@ -955,7 +952,7 @@ export function PrisonPage() {
       tapLight();
       // Крепь не продаётся — её сбивают на лесопилке, а она в лесу: лагерь
       // шахты про лес не знает.
-      if (id === 'prop') say('Крепь сбивают из досок на лесопилке — это на лесоповале');
+      if (id === 'prop') say('Крепь делают из досок на лесопилке — она в лесу');
       else setCamp('shop');
       return;
     }
@@ -1119,7 +1116,7 @@ export function PrisonPage() {
     rollBalance(from, from + got.coins);
     coinDing();
     notifySuccess();
-    say(`Бригада: +${shortMoney(got.coins)} монет, +${fmt(got.tokens)} токенов`);
+    say(`Рабочие: +${shortMoney(got.coins)} монет, +${fmt(got.tokens)} токенов`);
   };
 
   const goMine = (id: number) => {
@@ -1141,7 +1138,7 @@ export function PrisonPage() {
     burstConfetti(140);
     setSheet(null);
     const st = useFinanceStore.getState().prison;
-    say(`Престиж ${st.prestige}: +2 очка перков, продажа ×${sellMult(st.prestige).toFixed(2)}`);
+    say(`Престиж ${st.prestige}: +2 очка навыков, продажа ×${sellMult(st.prestige).toFixed(2)}`);
   };
 
   // ---- Разметка ----------------------------------------------------------
@@ -1191,7 +1188,6 @@ export function PrisonPage() {
   const guideOk = guideReady(prison);
   const [guideV, guideGoal] = guide ? guide.progress(prison) : [0, 0];
   const mix = mineMix(mine.id);
-  const newest = ROCKS[mine.id];
   const crewNow = crewYield(prison, nowTick);
   const campBadge = perkPointsFree(prison) > 0 || crewNow.minutes >= 60 || milesReady(prison) > 0;
 
@@ -1240,9 +1236,9 @@ export function PrisonPage() {
 
   if (!hydrated) {
     return (
-      <Screen title="Каторга" className="prison-screen">
+      <div className="gx pmx">
         <div className="prison-scene" aria-hidden="true" />
-      </Screen>
+      </div>
     );
   }
 
@@ -1251,131 +1247,126 @@ export function PrisonPage() {
     return t < 100 ? `${t} с` : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
   };
 
+  const openSheet = (which: 'mines' | 'settings') => {
+    tapLight();
+    setSheet(which);
+  };
+  const goForest = () => {
+    if (rank < FOREST_UNLOCK_RANK && !prestige) {
+      notifyWarning();
+      say(`Лес откроется с ранга ${rankLetter(FOREST_UNLOCK_RANK)}`);
+      return;
+    }
+    tapLight();
+    nav('/forest');
+  };
+  const rankFill = atTop ? progress : Math.min(progress, quotaProgress(quota, prison.norm));
+
   return (
-    <Screen
-      title="Каторга"
-      subtitle={
-        prison.zone.on
-          ? `Спецзона · ${newest.name.toLowerCase()} · платят токенами`
-          : `Шахта ${rankLetter(mine.id)} · до ${newest.value} монет за блок${prestige ? ` · престиж ${prestige}` : ''}`
-      }
-      className="prison-screen"
-      action={
-        <div className="row" style={{ gap: 8 }}>
+    <div className="gx pmx">
+      <div className="prison-scene" aria-hidden="true" />
+      <div className={`prison${guide ? ' has-guide' : ''}`}>
+        <div className="pmx-top">
           <button
-            className="pmine-btn pmine-btn--gift"
             type="button"
+            className="gx-round gx-round--dark pmx-top__btn"
+            aria-label="Назад"
+            onClick={() => {
+              tapLight();
+              nav(-1);
+            }}
+          >
+            <KIcon name="arrowLeft" />
+          </button>
+          <div className="gx-ribbon pmx-top__title">
+            {prison.zone.on ? 'Особая шахта' : `Шахта ${rankLetter(mine.id)}`}
+          </div>
+          <button
+            type="button"
+            className="gx-round gx-round--dark pmx-top__btn"
             aria-label="Награды дня"
             onClick={() => {
               tapLight();
               setRewards(true);
             }}
           >
-            <IconGift size={19} />
-            {readyRewards > 0 && <i className="pmine-btn__badge">{readyRewards}</i>}
+            <GxIcon name="gift" />
+            {readyRewards > 0 && <i className="gx-badge">{readyRewards}</i>}
           </button>
           <button
-            className={`pmine-btn pmine-btn--forest${rank < FOREST_UNLOCK_RANK ? ' is-locked' : ''}`}
             type="button"
-            aria-label="Лесоповал"
-            onClick={() => {
-              if (rank < FOREST_UNLOCK_RANK) {
-                notifyWarning();
-                say(`Лесоповал откроется с ранга ${rankLetter(FOREST_UNLOCK_RANK)}`);
-                return;
-              }
-              tapLight();
-              nav('/forest');
-            }}
-          >
-            <img src={crownTexture(5)} alt="" />
-          </button>
-          <button
-            className="pmine-btn pmine-btn--gear"
-            type="button"
+            className="gx-round gx-round--dark pmx-top__btn"
             aria-label="Настройки"
-            onClick={() => {
-              tapLight();
-              setSheet('settings');
-            }}
+            onClick={() => openSheet('settings')}
           >
-            <IconGear size={19} />
-          </button>
-          <button
-            className="pmine-btn"
-            type="button"
-            aria-label="Шахты"
-            onClick={() => {
-              tapLight();
-              setSheet('mines');
-            }}
-          >
-            <span>{prison.zone.on ? '⛓' : rankLetter(mine.id)}</span>
+            <KIcon name="gear" />
           </button>
         </div>
-      }
-    >
-      <div className="prison-scene" aria-hidden="true" />
-      <div className={`prison${guide ? ' has-guide' : ''}`}>
-        <div className="phud">
-          <div className="phud__cell">
-            <span className="phud__label">Кошелёк</span>
-            <span className="phud__value">
-              <MoneyCounter ref={moneyRef} value={shownBalance} />
-              <CoinIcon size={16} />
-            </span>
-          </div>
+
+        <div className="pmx-chips">
+          <span className="gx-chip pmx-chip--coins">
+            <CoinIcon size={18} />
+            <MoneyCounter ref={moneyRef} value={shownBalance} />
+          </span>
           <button
             type="button"
-            className="phud__cell phud__purse"
+            className="gx-chip pmx-chip--btn"
+            aria-label="Токены — чары"
             onClick={() => {
               tapLight();
               setCamp('enchant');
             }}
           >
-            <span className="phud__label">Токены</span>
-            <span className="phud__value phud__value--token">
-              {shortCount(prison.tokens)} <TokenIcon size={14} />
-            </span>
+            <TokenIcon size={17} /> {shortCount(prison.tokens)}
+          </button>
+          <span className="pmx-chips__gap" />
+          <button
+            type="button"
+            className="gx-chip pmx-chip--btn"
+            onClick={() => openSheet('mines')}
+          >
+            <GxIcon name="stairs" /> Шахты
           </button>
           <button
             type="button"
-            className={`phud__rank${(atTop ? progress >= 1 : rankReady) ? ' is-ready' : ''}`}
-            onClick={rankUp}
+            className={`gx-chip pmx-chip--btn${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
+            onClick={goForest}
           >
-            <span className="phud__label">
-              {atTop
-                ? `Z · престиж ${prestige + 1}`
-                : `Ранг ${rankLetter(rank)} → ${rankLetter(rank + 1)}`}
-            </span>
-            <span className="phud__cost">
-              {atTop ? (
-                progress >= 1 ? (
-                  'Престиж'
-                ) : (
-                  <>
-                    {shortMoney(cost)} <CoinIcon size={12} />
-                  </>
-                )
-              ) : rankReady ? (
-                'Взять'
-              ) : (
-                <>
-                  <span className={progress >= 1 ? 'phud__ok' : undefined}>{shortMoney(cost)}</span>
-                  <CoinIcon size={12} />
-                  <QuotaChips quota={quota} norm={prison.norm} />
-                </>
-              )}
-            </span>
-            <span className="phud__bar">
-              <i
-                style={{
-                  transform: `scaleX(${atTop ? progress : Math.min(progress, quotaProgress(quota, prison.norm))})`,
-                }}
-              />
-            </span>
+            <GxIcon name="forest" /> Лес
           </button>
         </div>
+
+        <button
+          type="button"
+          className={`gx-panel gx-panel--wood pmx-rank${(atTop ? progress >= 1 : rankReady) ? ' is-ready' : ''}`}
+          onClick={rankUp}
+          aria-label={atTop ? `Престиж ${prestige + 1}` : `Ранг ${rankLetter(rank + 1)}`}
+        >
+          <span className="gx-hex pmx-rank__hex">{rankLetter(rank)}</span>
+          <span className="pmx-rank__mid">
+            <GxBar
+              value={rankFill}
+              tone="gold"
+              label={
+                (atTop ? progress >= 1 : rankReady) ? (
+                  atTop ? (
+                    'Престиж — жми!'
+                  ) : (
+                    'Новый ранг — жми!'
+                  )
+                ) : (
+                  <span className={`pmx-rank__cost${progress >= 1 ? ' is-ok' : ''}`}>
+                    {shortMoney(cost)} <CoinIcon size={12} />
+                  </span>
+                )
+              }
+            />
+            {!atTop && !rankReady && <QuotaChips quota={quota} norm={prison.norm} />}
+          </span>
+          <span className="gx-hex gx-hex--dark pmx-rank__hex">
+            {atTop ? <GxIcon name="stairs" size={16} /> : rankLetter(rank + 1)}
+          </span>
+        </button>
 
         <div
           className={`pmine-frame${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}${yardEv?.id === 'gold' ? ' is-gold' : ''}${prison.zone.on ? ' is-zone' : ''}`}
@@ -1399,7 +1390,8 @@ export function PrisonPage() {
             </span>
             <span className="pstrip__streak">
               <span className="pstrip__name">
-                {sTier >= 0 ? STREAK_TIERS[sTier].name : 'Запал'}
+                <GxIcon name="flame" size={13} />
+                {sTier >= 0 && STREAK_TIERS[sTier].name}
                 {sTier >= 0 && <em>+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
               </span>
               <span className="pstrip__bar">
@@ -1414,7 +1406,7 @@ export function PrisonPage() {
                   <small>/мин</small>
                 </>
               ) : (
-                <small>{streak > 0 ? `${fmt(streak)} подряд` : 'бей без пауз'}</small>
+                streak > 0 && <small>{fmt(streak)} подряд</small>
               )}
             </span>
           </div>
@@ -1435,21 +1427,32 @@ export function PrisonPage() {
             <div className="pbuffs">
               {prison.zone.on && (
                 <span className="pbuff pbuff--zone">
-                  ⛓ {clockMs(zoneLeft(prison.zone, Date.now()))} ·{' '}
-                  {ZONE_MS + prison.zone.bonus >= ZONE_MAX_MS
-                    ? 'норма ✓'
-                    : `норма ${prison.zone.have % ZONE_QUOTA}/${ZONE_QUOTA}`}
+                  <GxIcon name="hourglass" size={12} /> {clockMs(zoneLeft(prison.zone, Date.now()))}
+                  {ZONE_MS + prison.zone.bonus < ZONE_MAX_MS &&
+                    ` · +10 мин через ${ZONE_QUOTA - (prison.zone.have % ZONE_QUOTA)}`}
                 </span>
               )}
               {yardEv && <EventPill ev={yardEv} now={yardNow} />}
               {buffs.frenzy > 0 && (
-                <span className="pbuff pbuff--frenzy">✺ {sec(buffs.frenzy)}</span>
+                <span className="pbuff pbuff--frenzy">
+                  <GxIcon name="sparkles" size={12} /> {sec(buffs.frenzy)}
+                </span>
               )}
               {buffs.energy > 0 && (
-                <span className="pbuff pbuff--energy">⚡ {sec(buffs.energy)}</span>
+                <span className="pbuff pbuff--energy">
+                  <ItemIcon id="energy" size={12} /> {sec(buffs.energy)}
+                </span>
               )}
-              {buffs.lens > 0 && <span className="pbuff pbuff--lens">🔍 {sec(buffs.lens)}</span>}
-              {buffs.prop > 0 && <span className="pbuff pbuff--prop">⛩ {sec(buffs.prop)}</span>}
+              {buffs.lens > 0 && (
+                <span className="pbuff pbuff--lens">
+                  <ItemIcon id="lens" size={12} /> {sec(buffs.lens)}
+                </span>
+              )}
+              {buffs.prop > 0 && (
+                <span className="pbuff pbuff--prop">
+                  <ItemIcon id="prop" size={12} /> {sec(buffs.prop)}
+                </span>
+              )}
             </div>
           )}
           {prison.parcels.length > 0 && (
@@ -1463,7 +1466,7 @@ export function PrisonPage() {
                     type="button"
                     className={`pparcel${ready ? ' is-ready' : ''}`}
                     style={{ '--tier': tier.color } as CSSProperties}
-                    aria-label={`Передачка, ${tier.name.toLowerCase()}${ready ? ', готова' : ''}`}
+                    aria-label={`Посылка, ${tier.name.toLowerCase()}${ready ? ', готова' : ''}`}
                     onClick={() => openParcel(i)}
                   >
                     <img src={parcelTexture(tier.color)} alt="" />
@@ -1532,7 +1535,7 @@ export function PrisonPage() {
           >
             {arming && (
               <div className="pmine__arm">
-                {ITEMS.find((i) => i.id === arming)!.glyph} Куда положить? Тапни по клетке
+                <ItemIcon id={arming} size={18} /> Тапни, куда бросить
               </div>
             )}
             {toast && (
@@ -1568,7 +1571,7 @@ export function PrisonPage() {
             {crewNote && crewNow.blocks > 0 && (
               <div className="pcrewnote">
                 <span>
-                  <b>Бригада накопала {fmt(crewNow.blocks)} блоков</b>
+                  <b>Рабочие накопали {fmt(crewNow.blocks)} блоков</b>
                   <i>
                     +{shortMoney(crewNow.coins)} монет · +{fmt(crewNow.tokens)} токенов
                     {crewNow.capped ? ' · смена кончилась' : ''}
@@ -1590,7 +1593,7 @@ export function PrisonPage() {
           </MineField>
         </div>
 
-        <div className="pitems">
+        <div className="pmx-items">
           {ITEMS.filter((it) => it.id !== 'prop' || prison.items.prop > 0 || millLevel > 0).map(
             (it) => {
               const n = prison.items[it.id];
@@ -1598,57 +1601,54 @@ export function PrisonPage() {
                 <button
                   key={it.id}
                   type="button"
-                  className={`pitem${n ? '' : ' is-empty'}${arming === it.id ? ' is-armed' : ''}`}
+                  className={`gx-round pmx-item${n ? '' : ' is-empty'}${arming === it.id ? ' is-armed' : ''}`}
                   aria-label={`${it.name}: ${n}`}
                   onClick={() => applyItem(it.id)}
                 >
-                  <span className="pitem__glyph">{it.glyph}</span>
-                  <i className="pitem__n">{n || '+'}</i>
+                  <ItemIcon id={it.id} />
+                  <i className={`pmx-item__n${n ? '' : ' is-buy'}`}>{n || '+'}</i>
                 </button>
               );
             },
           )}
         </div>
 
-        <div className="pbar">
+        <div className="pmx-foot">
           <button
             type="button"
             ref={bagRef}
-            className={`pbag${full ? ' is-full' : ''}${cart ? ' has-cart' : ''}`}
+            className={`gx-panel gx-panel--wood pmx-bag${full ? ' is-full' : ''}${cart ? ' has-cart' : ''}`}
             onClick={sell}
           >
-            <BagIcon />
-            <span className="pbag__body">
-              <span className="pbag__top">
-                <b>
-                  {count} / {cap}
-                </b>
-                <span className="pbag__sell">
-                  {count ? (
-                    <>
-                      Продать · {shortMoney(value)} <CoinIcon size={12} />
-                    </>
-                  ) : (
-                    'Рюкзак пуст'
-                  )}
-                </span>
-              </span>
-              <span className="pbag__bar">
-                <i style={{ transform: `scaleX(${Math.min(1, count / cap)})` }} />
+            <GxIcon name="backpack" className="pmx-bag__ico" />
+            <span className="pmx-bag__body">
+              <GxBar
+                value={count / cap}
+                tone={full ? 'red' : 'green'}
+                label={full ? `${count} / ${cap} — полный` : `${count} / ${cap}`}
+              />
+              <span className={`gx-btn gx-btn--sm${count ? ' gx-btn--red' : ''} pmx-bag__sell`}>
+                {count ? (
+                  <>
+                    Продать {shortMoney(value)} <CoinIcon size={13} />
+                  </>
+                ) : (
+                  'Пусто'
+                )}
               </span>
             </span>
           </button>
           <button
             type="button"
-            className="pforge-btn"
+            className="gx-panel gx-panel--wood pmx-camp"
             ref={campRef}
             onClick={() => {
               tapLight();
               setCamp('forge');
             }}
           >
-            <PickIcon pick={pick} size={28} />
-            <span>Лагерь</span>
+            <PickIcon pick={pick} size={30} />
+            <b>Лагерь</b>
             {prison.pet && (
               <img
                 ref={petRef}
@@ -1664,44 +1664,58 @@ export function PrisonPage() {
               />
             )}
             {prison.keys > 0 ? (
-              <i className="pforge-btn__dot pforge-btn__dot--n">
-                <KeyIcon size={9} />
+              <i className="gx-badge gx-badge--gold pmx-camp__keys">
+                <KeyIcon size={10} />
                 {prison.keys}
               </i>
             ) : (
-              campBadge && <i className="pforge-btn__dot" />
+              campBadge && <i className="gx-badge">!</i>
             )}
           </button>
         </div>
 
-        {/* Проводник, пока он не пройден, стоит на месте строки с ценами
-            пород: высота под полем на счету, а цены есть и в листе шахт. */}
+        {/* Задание, пока они не пройдены, стоит на месте строки с ценами
+            пород: высота под полем на счету, а цены есть и в окне шахт.
+            Подсказка к заданию — по тапу, а не строкой под ним. */}
         {guide ? (
-          <div className={`pguide${guideOk ? ' is-ready' : ''}`}>
-            <span className="pguide__n">
-              {prison.guide + 1}/{GUIDE.length}
-            </span>
-            <span className="pguide__body">
+          <button
+            type="button"
+            className={`gx-panel pmx-quest${guideOk ? ' is-ready' : ''}`}
+            onClick={() => {
+              if (guideOk) {
+                claimGuide();
+                return;
+              }
+              tapLight();
+              say(guide.hint);
+            }}
+          >
+            <span className="gx-hex gx-hex--dark pmx-quest__n">{prison.guide + 1}</span>
+            <span className="pmx-quest__body">
               <b>{guide.title}</b>
-              <i>{guideOk ? `Награда: ${rewardText(guide.reward)}` : guide.hint}</i>
+              {guideOk ? (
+                <em>{rewardText(guide.reward)}</em>
+              ) : guideGoal > 1 ? (
+                <GxBar thin tone="green" value={guideV / guideGoal} className="pmx-quest__bar" />
+              ) : (
+                <em>{rewardText(guide.reward)}</em>
+              )}
             </span>
             {guideOk ? (
-              <button type="button" className="btn btn--sm pmines__go" onClick={claimGuide}>
-                Забрать
-              </button>
+              <span className="gx-btn gx-btn--red gx-btn--sm">Забрать</span>
             ) : (
-              <span className="pguide__prog">
-                {guideGoal > 1 ? `${fmt(guideV)}/${fmt(guideGoal)}` : rewardText(guide.reward)}
+              <span className="pmx-quest__n2">
+                {guideGoal > 1 ? `${fmt(guideV)}/${fmt(guideGoal)}` : <KIcon name="question" />}
               </span>
             )}
-          </div>
+          </button>
         ) : (
           /* Породы этой шахты и цена блока — чтобы знать, что почём. */
-          <div className="pmix" aria-label="Породы шахты">
+          <div className="pmx-mix" aria-label="Породы шахты">
             {mix.map((s) => (
-              <span key={s.rock} className="pmix__rock">
+              <span key={s.rock} className="gx-chip pmx-mix__rock">
                 <img src={rockTexture(s.rock)} alt="" />
-                <b>{Math.round(ROCKS[s.rock].value * m.sell)}</b>
+                {Math.round(ROCKS[s.rock].value * m.sell)}
               </span>
             ))}
           </div>
@@ -1720,171 +1734,145 @@ export function PrisonPage() {
       )}
 
       {sheet === 'mines' && (
-        <Sheet title="Шахты" onClose={() => setSheet(null)}>
-          <div className="pmines">
-            {Array.from({ length: Math.min(LAST_RANK, rank + 1) + 1 }, (_, id) => {
-              const locked = id > rank;
-              const here = id === mine.id;
-              return (
-                <div
-                  key={id}
-                  className={`pmines__row${here ? ' is-here' : ''}${locked ? ' is-locked' : ''}`}
-                >
-                  <span className="pmines__letter">{rankLetter(id)}</span>
-                  <span className="pmines__rocks">
-                    {mineMix(id).map((s) => (
-                      <img key={s.rock} src={rockTexture(s.rock)} alt={ROCKS[s.rock].name} />
+        <GxModal title="Шахты" onClose={() => setSheet(null)} className="pmx-mines">
+          {Array.from({ length: Math.min(LAST_RANK, rank + 1) + 1 }, (_, id) => {
+            const locked = id > rank;
+            const here = id === mine.id && !prison.zone.on;
+            return (
+              <div
+                key={id}
+                className={`pmx-mines__row${here ? ' is-here' : ''}${locked ? ' is-locked' : ''}`}
+              >
+                <span className={`gx-hex${locked ? '' : ' gx-hex--dark'}`}>{rankLetter(id)}</span>
+                <span className="pmx-mines__info">
+                  <b>{ROCKS[id].name}</b>
+                  <span className="pmx-mines__rocks">
+                    {mineMix(id).map((x) => (
+                      <img key={x.rock} src={rockTexture(x.rock)} alt={ROCKS[x.rock].name} />
                     ))}
                   </span>
-                  <span className="pmines__info">
-                    <b>{ROCKS[id].name}</b>
-                    <i>
-                      {locked ? `Нужен ранг ${rankLetter(id)}` : `до ${ROCKS[id].value} за блок`}
-                    </i>
+                </span>
+                {locked ? (
+                  <span className="pmx-mines__lock">
+                    <KIcon name="locked" size={18} />
                   </span>
-                  {!locked && (
-                    <button
-                      type="button"
-                      className="btn btn--sm pmines__go"
-                      onClick={() => goMine(id)}
-                    >
-                      {here ? 'Обновить' : 'Спуститься'}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <p className="muted" style={{ fontSize: 12, margin: '10px 0 0' }}>
-            В шахте пять пород: самая новая — редкая, глубже её больше. На дне изредка попадается
-            порода следующей шахты. Выработал 85% — шахта обновится сама.
-          </p>
-        </Sheet>
+                ) : (
+                  <button
+                    type="button"
+                    className={`gx-btn gx-btn--sm${here ? '' : ' gx-btn--red'}`}
+                    onClick={() => goMine(id)}
+                  >
+                    {here ? (
+                      <>
+                        <GxIcon name="cycle" size={14} /> Заново
+                      </>
+                    ) : (
+                      <>
+                        до {ROCKS[id].value} <CoinIcon size={12} />
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </GxModal>
       )}
 
       {sheet === 'settings' && (
-        <Sheet
+        <GxModal
           title="Настройки"
           onClose={() => {
             setSheet(null);
             setWipe(null);
           }}
+          className="pmx-settings"
         >
-          <div className="stack">
-            <div className="pcash">
-              <CashDesk />
-            </div>
-            <div className="pwipe">
-              <b className="pwipe__title">Начать заново</b>
-              <button
-                type="button"
-                className={`btn btn--block pwipe__btn${wipe === 'prison' ? ' is-armed' : ''}`}
-                onClick={() => doWipe('prison')}
-              >
-                {wipe === 'prison' ? 'Точно? Нажми ещё раз' : 'Сбросить Каторгу'}
-              </button>
-              <p className="pwipe__text">
-                Пропадут ранги, кирка, заточка, чары, руны, питомцы, токены, ключи, сундуки,
-                коллекция, бригада, перки и вехи. Кошелёк и уровень останутся — они общие с
-                автоматами.
-              </p>
-              <button
-                type="button"
-                className={`btn btn--block pwipe__btn${wipe === 'all' ? ' is-armed' : ''}`}
-                onClick={() => doWipe('all')}
-              >
-                {wipe === 'all' ? 'Точно всё? Нажми ещё раз' : 'Сбросить всё в играх'}
-              </button>
-              <p className="pwipe__text">
-                Каторга и автоматы с нуля: кошелёк вернётся к стартовой тысяче, уровень, серия
-                бонусов, цели дня, рекорды и прогресс скинов — тоже. Звук, вибрация и выбранный скин
-                останутся. Вернуть прогресс после сброса нельзя.
-              </p>
-            </div>
+          <div className="pcash">
+            <CashDesk />
           </div>
-        </Sheet>
+          <div className="pmx-wipe">
+            <button
+              type="button"
+              className={`gx-btn gx-btn--block${wipe === 'prison' ? ' gx-btn--red' : ''}`}
+              onClick={() => doWipe('prison')}
+            >
+              {wipe === 'prison' ? 'Точно? Нажми ещё раз' : 'Начать шахту заново'}
+            </button>
+            <p>Монеты и уровень останутся — они общие с автоматами.</p>
+            <button
+              type="button"
+              className={`gx-btn gx-btn--block${wipe === 'all' ? ' gx-btn--red' : ''}`}
+              onClick={() => doWipe('all')}
+            >
+              {wipe === 'all' ? 'Точно всё? Нажми ещё раз' : 'Сбросить все игры'}
+            </button>
+            <p>Шахта, лес и автоматы с нуля, монет — снова тысяча. Отменить нельзя.</p>
+          </div>
+        </GxModal>
       )}
 
       {sheet === 'norm' && !atTop && (
-        <Sheet title={`Ранг ${rankLetter(rank + 1)}`} onClose={() => setSheet(null)}>
-          <div className="stack">
-            <p className="pnorm__lead">
-              Норма выработки: одних денег мало — сдай породу. Считаются блоки, сломанные своими
-              руками, в любой шахте.
-            </p>
-            <div className="pnorm">
-              {quota.map((q) => {
-                const have = Math.min(q.n, prison.norm[q.rock] ?? 0);
-                const done = have >= q.n;
-                return (
-                  <div key={q.rock} className={`pnorm__row${done ? ' is-done' : ''}`}>
-                    <img src={rockTexture(q.rock)} alt="" />
-                    <span className="pnorm__info">
-                      <b>{ROCKS[q.rock].name}</b>
-                      <i>
-                        {done
-                          ? 'сдано'
-                          : q.rock === rank
-                            ? 'редкая порода шахты — её больше на глубине'
-                            : 'ходовая порода — встречается на каждом ярусе'}
-                      </i>
-                      <span className="pnorm__bar">
-                        <i style={{ transform: `scaleX(${have / q.n})` }} />
-                      </span>
-                    </span>
-                    <span className="pnorm__n">{done ? '✓' : `${have}/${q.n}`}</span>
-                  </div>
-                );
-              })}
-              <div className={`pnorm__row${balance >= cost ? ' is-done' : ''}`}>
-                <span className="pnorm__coin">
-                  <CoinIcon size={26} />
+        <GxModal
+          title={`Ранг ${rankLetter(rank + 1)}`}
+          onClose={() => setSheet(null)}
+          className="pmx-norm"
+        >
+          {quota.map((q) => {
+            const have = Math.min(q.n, prison.norm[q.rock] ?? 0);
+            const done = have >= q.n;
+            return (
+              <div key={q.rock} className={`pmx-norm__row${done ? ' is-done' : ''}`}>
+                <img src={rockTexture(q.rock)} alt="" />
+                <span className="pmx-norm__info">
+                  <b>{ROCKS[q.rock].name}</b>
+                  <GxBar
+                    tone={done ? 'green' : 'gold'}
+                    value={have / q.n}
+                    label={done ? <KIcon name="checkmark" size={12} /> : `${have} / ${q.n}`}
+                  />
                 </span>
-                <span className="pnorm__info">
-                  <b>Цена ранга</b>
-                  <i>{balance >= cost ? 'хватает' : `не хватает ${fmt(cost - balance)}`}</i>
-                  <span className="pnorm__bar">
-                    <i style={{ transform: `scaleX(${progress})` }} />
-                  </span>
-                </span>
-                <span className="pnorm__n">{shortMoney(cost)}</span>
               </div>
-            </div>
+            );
+          })}
+          <div className={`pmx-norm__row${balance >= cost ? ' is-done' : ''}`}>
+            <CoinIcon size={32} />
+            <span className="pmx-norm__info">
+              <b>Монеты</b>
+              <GxBar
+                tone={balance >= cost ? 'green' : 'gold'}
+                value={progress}
+                label={
+                  balance >= cost ? (
+                    <KIcon name="checkmark" size={12} />
+                  ) : (
+                    `${shortMoney(balance)} / ${shortMoney(cost)}`
+                  )
+                }
+              />
+            </span>
+          </div>
+          <div className="pmx-norm__actions">
             <button
-              className="btn btn--primary btn--block"
+              type="button"
+              className="gx-btn gx-btn--red gx-btn--block gx-btn--big"
               disabled={!qDone || balance < cost}
               onClick={() => takeRank(false)}
             >
-              {!qDone
-                ? `Не хватает: ${quota
-                    .filter((q) => (prison.norm[q.rock] ?? 0) < q.n)
-                    .map(
-                      (q) =>
-                        `${q.n - (prison.norm[q.rock] ?? 0)} × ${ROCKS[q.rock].name.toLowerCase()}`,
-                    )
-                    .join(', ')}`
-                : balance < cost
-                  ? `Не хватает ${fmt(cost - balance)} монет`
-                  : `Взять ранг за ${fmt(cost)} монет`}
+              Взять ранг {rankLetter(rank + 1)}
             </button>
             {!qDone && (
-              <>
-                <button
-                  className="btn btn--ghost btn--block"
-                  disabled={balance < cost + buyout}
-                  onClick={() => takeRank(true)}
-                >
-                  Откупить норму: {fmt(cost)} + {fmt(buyout)} монет
-                </button>
-                <p className="pnorm__note">
-                  Откуп дешевеет с каждым сданным блоком: сейчас выполнено{' '}
-                  {Math.round(quotaProgress(quota, prison.norm) * 100)}%. Блоки с нужной породой в
-                  шахте помечены точкой.
-                </p>
-              </>
+              <button
+                type="button"
+                className="gx-btn gx-btn--block"
+                disabled={balance < cost + buyout}
+                onClick={() => takeRank(true)}
+              >
+                Докупить породу · {shortMoney(buyout)} <CoinIcon size={13} />
+              </button>
             )}
           </div>
-        </Sheet>
+        </GxModal>
       )}
 
       {reveal && <ParcelReveal open={reveal} onClose={() => setReveal(null)} />}
@@ -1900,26 +1888,53 @@ export function PrisonPage() {
       )}
 
       {sheet === 'prestige' && (
-        <Sheet title={`Престиж ${prestige + 1}`} onClose={() => setSheet(null)}>
-          <div className="stack">
-            <p style={{ margin: 0 }}>
-              Ранг и шахта вернутся на {rankLetter(Math.min(LAST_RANK - 1, prison.perks.blat))}.
-              Кирка, чары, токены, рюкзак, вагонетка, бригада и коллекция останутся. Продажа станет
-              дороже: ×{sellMult(prestige + 1).toFixed(2)} вместо ×{sellMult(prestige).toFixed(2)},
-              ранги на новом круге — на треть. За престиж — два очка перков и пять ключей.
-            </p>
-            <button
-              className="btn btn--primary btn--block"
-              disabled={balance < prestigeCost(prestige)}
-              onClick={prestigeNow}
-            >
-              Престиж за {fmt(prestigeCost(prestige))} монет
-            </button>
-            <button className="btn btn--ghost btn--block" onClick={() => setSheet(null)}>
-              Пока нет
-            </button>
+        <GxModal
+          title={`Престиж ${prestige + 1}`}
+          onClose={() => setSheet(null)}
+          className="pmx-pres"
+        >
+          <div className="pmx-pres__swap">
+            <span className="gx-hex">Z</span>
+            <KIcon name="arrowRight" size={20} />
+            <span className="gx-hex gx-hex--dark">
+              {rankLetter(Math.min(LAST_RANK - 1, prison.perks.blat))}
+            </span>
           </div>
-        </Sheet>
+          <div className="gx-row">
+            <GxIcon name="coins-pile" />
+            <span>Продажа дороже</span>
+            <b>
+              ×{sellMult(prestige).toFixed(2)} → ×{sellMult(prestige + 1).toFixed(2)}
+            </b>
+          </div>
+          <div className="gx-row">
+            <GxIcon name="upgrade" />
+            <span>Очки навыков</span>
+            <b>+2</b>
+          </div>
+          <div className="gx-row">
+            <KeyIcon size={26} />
+            <span>Ключи</span>
+            <b>+5</b>
+          </div>
+          <div className="pmx-pres__keep">
+            <span>Останутся:</span>
+            <GxIcon name="pick" size={20} />
+            <GxIcon name="magic" size={20} />
+            <TokenIcon size={18} />
+            <GxIcon name="backpack" size={20} />
+            <GxIcon name="miner" size={20} />
+            <GxIcon name="trophy" size={20} />
+          </div>
+          <button
+            type="button"
+            className="gx-btn gx-btn--red gx-btn--block gx-btn--big"
+            disabled={balance < prestigeCost(prestige)}
+            onClick={prestigeNow}
+          >
+            Престиж · {shortMoney(prestigeCost(prestige))} <CoinIcon size={14} />
+          </button>
+        </GxModal>
       )}
 
       {sceneShown && (
@@ -1935,21 +1950,21 @@ export function PrisonPage() {
             <b className="prank__letter">{rankLetter(sceneShown.rank)}</b>
             <span className="prank__mine">
               <img src={rockTexture(sceneShown.rank)} alt="" />
-              Открыта шахта {rankLetter(sceneShown.rank)}:{' '}
-              {ROCKS[sceneShown.rank].name.toLowerCase()}, {ROCKS[sceneShown.rank].value} за блок
+              Шахта {rankLetter(sceneShown.rank)} · {ROCKS[sceneShown.rank].name.toLowerCase()} · до{' '}
+              {ROCKS[sceneShown.rank].value} за блок
             </span>
             <span className="prank__key">
               <KeyIcon size={13} /> +1 ключ от сундука
             </span>
             {sceneShown.rank === FOREST_UNLOCK_RANK && (
-              <span className="prank__lvl">Открыт лесоповал — ёлка в шапке шахты</span>
+              <span className="prank__lvl">Открыт лес — кнопка «Лес» над полем</span>
             )}
             {sceneShown.buyout > 0 && (
-              <span className="prank__lvl">Норма откуплена за {fmt(sceneShown.buyout)} монет</span>
+              <span className="prank__lvl">Порода докуплена за {fmt(sceneShown.buyout)} монет</span>
             )}
             {sceneShown.rank < LAST_RANK && (
               <span className="prank__norm">
-                Норма на {rankLetter(sceneShown.rank + 1)}:
+                Для ранга {rankLetter(sceneShown.rank + 1)}:
                 <QuotaChips quota={rankQuota(sceneShown.rank, prestige)} norm={{}} />
               </span>
             )}
@@ -1963,7 +1978,7 @@ export function PrisonPage() {
         </div>
       )}
       <EventAnnounce ev={yardSplash} onDone={closeSplash} />
-    </Screen>
+    </div>
   );
 }
 

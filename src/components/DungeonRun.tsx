@@ -6,8 +6,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
-import { Sheet } from '@/components/ui';
 import { CoinIcon } from '@/components/slot-art';
+import { GxBar, GxIcon, GxModal, KIcon } from '@/components/gx';
+import type { GxIconName } from '@/components/gx';
 import { KeyIcon, TokenIcon } from '@/components/PrisonCamp';
 import { DungeonMine } from '@/components/DungeonMine';
 import { DungeonInventory } from '@/components/DungeonInventory';
@@ -29,6 +30,7 @@ import {
   sackSlots,
   slotsUsed,
   smellOf,
+  upgradable,
 } from '@/lib/dungeon';
 import type { AreaId, DeepMineId, Haul, MatId } from '@/lib/dungeon';
 import {
@@ -36,6 +38,7 @@ import {
   dropFromSack,
   fogOf,
   heroStuck,
+  nearLair,
   NO_INPUT,
   packAtMine,
   snapshot,
@@ -49,7 +52,7 @@ import {
 import type { Sim, SimEvent, SimInput, Usable } from '@/lib/dungeon-sim';
 import { DungeonRenderer } from '@/lib/dungeon-render';
 import { bandAt, bandOf, fogEncode, fogGet, liftOf, Tile, walkableTile } from '@/lib/dungeon-world';
-import type { World } from '@/lib/dungeon-world';
+import type { World, WorldObj } from '@/lib/dungeon-world';
 import { itemUrl } from '@/lib/dungeon-art';
 import { registerEscape } from '@/lib/escape-stack';
 import { playTotem } from '@/lib/totem';
@@ -114,7 +117,98 @@ interface Hud {
   use: Usable | null;
   bossHp: number | null;
   plaque: number | null;
+  /** Есть что улучшить прямо сейчас — «!» на рюкзаке. */
+  up: boolean;
+  sign: Sign | null;
+  coach: CoachStep | null;
 }
+
+/** Указатель у дороги: куда идти, в какую сторону и сколько шагов. */
+interface SignRow {
+  icon: GxIconName;
+  label: string;
+  /** Направление стрелки, градусы от «вверх» по часовой. */
+  angle: number;
+  dist: number;
+}
+interface Sign {
+  id: string;
+  rows: SignRow[];
+}
+
+/**
+ * Подсказки первого раза: игра показывает пальцем, а не пишет правила.
+ * Каждая — один раз на телефон (localStorage: удобство, не прогресс).
+ */
+type CoachStep = 'move' | 'attack' | 'bag' | 'dash' | 'spin' | 'eat';
+const COACH_KEY = 'dg.coach.v1';
+const COACH_TEXT: Record<CoachStep, string> = {
+  move: 'Веди пальцем — идти',
+  attack: 'Бей!',
+  bag: 'Добыча — в рюкзаке',
+  dash: 'Рывок — увернуться',
+  spin: 'Вихрь готов!',
+  eat: 'Съешь — лечит',
+};
+function coachDone(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(COACH_KEY) ?? '[]') as string[]);
+  } catch {
+    return new Set();
+  }
+}
+function coachSave(done: Set<string>) {
+  try {
+    localStorage.setItem(COACH_KEY, JSON.stringify([...done]));
+  } catch {
+    /* приватный режим — подсказки покажутся ещё раз, не беда */
+  }
+}
+
+/** Что показывает указатель: ближайшие лифт, шахта и логово. */
+function signRows(sim: Sim, o: WorldObj, lifts: readonly string[]): SignRow[] {
+  const nearest = (kind: WorldObj['kind']) => {
+    let best: WorldObj | null = null;
+    let bd = 1e9;
+    for (const t of sim.world.objs) {
+      if (t.kind !== kind) continue;
+      const dd = Math.hypot(t.x - o.x, t.y - o.y);
+      if (dd < bd) {
+        bd = dd;
+        best = t;
+      }
+    }
+    return best;
+  };
+  const rows: SignRow[] = [];
+  const add = (t: WorldObj | null, icon: GxIconName, label: string) => {
+    if (!t) return;
+    const dx = t.x - o.x;
+    const dy = t.y - o.y;
+    rows.push({
+      icon,
+      label,
+      angle: (Math.atan2(dx, -dy) * 180) / Math.PI,
+      dist: Math.max(1, Math.round(Math.hypot(dx, dy))),
+    });
+  };
+  const lift = nearest('lift');
+  add(lift, 'lift', lift && !lifts.includes(lift.area) ? 'Лифт (сломан)' : 'Лифт');
+  add(nearest('mine'), 'minecart', 'Шахта');
+  if (sim.boss) add(sim.boss.obj, 'crown', 'Логово короля');
+  return rows;
+}
+
+const USE_ICON: Record<Usable['kind'], GxIconName> = {
+  lift: 'lift',
+  mine: 'minecart',
+  light: 'lantern',
+  grate: 'gate',
+  secret: 'chest',
+  board: 'joystick',
+  seal: 'hammer',
+  plaque: 'crown',
+};
 
 type Banner = { key: number; big: string; small?: string; tone: string };
 type Toast = { key: number; text: string };
@@ -140,6 +234,9 @@ const hudKey = (h: Hud) =>
     h.use ? `${h.use.kind}:${h.use.obj.id}` : '',
     h.bossHp === null ? -1 : Math.round(h.bossHp * 100),
     h.plaque === null ? -1 : Math.ceil(h.plaque / 1000),
+    h.up,
+    h.sign?.id ?? '',
+    h.coach ?? '',
   ].join('|');
 
 export function DungeonRun({
@@ -158,6 +255,16 @@ export function DungeonRun({
   const stickRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLElement>(null);
   const sackRef = useRef<HTMLButtonElement>(null);
+  const atkRef = useRef<HTMLButtonElement>(null);
+  const dashRef = useRef<HTMLButtonElement>(null);
+  const spinRef = useRef<HTMLButtonElement>(null);
+  const eatRef = useRef<HTMLButtonElement>(null);
+  const coach = useRef<{ done: Set<string>; walk0: number | null; bagAt: number; dashAt: number }>({
+    done: coachDone(),
+    walk0: null,
+    bagAt: 0,
+    dashAt: 0,
+  });
   const hurtRef = useRef<HTMLDivElement>(null);
   const simRef = useRef<Sim | null>(null);
   const rendRef = useRef<DungeonRenderer | null>(null);
@@ -266,7 +373,7 @@ export function DungeonRun({
     const ro = new ResizeObserver(fit);
     if (rootRef.current) ro.observe(rootRef.current);
     const a = areaOf(sim.area);
-    say(a.name, run.x >= 0 ? 'Вылазка продолжается' : a.lead);
+    say(a.name, run.x >= 0 ? 'Продолжаем' : a.lead);
     lastSave.current = performance.now();
 
     let raf = 0;
@@ -344,6 +451,24 @@ export function DungeonRun({
     [],
   );
 
+  // Джойстик в покое стоит внизу слева полупрозрачным: видно, чем ходить.
+  // Коснулся левой половины — встаёт под палец; отпустил — возвращается.
+  const parkStick = useCallback(() => {
+    const s = stickRef.current;
+    const el = rootRef.current;
+    if (!s || !el) return;
+    const h = el.clientHeight;
+    s.style.transform = `translate(${36}px, ${Math.max(120, h - 210)}px)`;
+    s.classList.remove('is-on');
+    s.classList.add('is-idle');
+    if (knobRef.current) knobRef.current.style.transform = 'translate(0px, 0px)';
+  }, []);
+  useEffect(() => {
+    parkStick();
+    window.addEventListener('resize', parkStick);
+    return () => window.removeEventListener('resize', parkStick);
+  }, [parkStick]);
+
   // Пауза, пока открыт любой лист или шахта. «Назад» Telegram — сперва пауза.
   const sheetOpen = useRef(false);
   useEffect(() => {
@@ -352,9 +477,9 @@ export function DungeonRun({
     if (sheetOpen.current) {
       input.current = { ...NO_INPUT };
       stick.current = null;
-      stickRef.current?.classList.remove('is-on');
+      parkStick();
     }
-  }, [sheet, mine]);
+  }, [sheet, mine, parkStick]);
   useEffect(() => {
     if (sheet || mine || dying) return undefined;
     return registerEscape(() => setSheet('pause'));
@@ -389,6 +514,39 @@ export function DungeonRun({
       const d = Math.hypot(boss.obj.x - h.x, boss.obj.y - h.y);
       if (d < 16) plaque = Math.max(0, boss.readyAt - Date.now());
     }
+    // Указатель у дороги: читается сам, когда стоишь рядом.
+    let sign: Sign | null = null;
+    const st = useFinanceStore.getState();
+    for (const o of sim.world.objs) {
+      if (o.kind !== 'plaque' || nearLair(sim, o)) continue;
+      if (Math.hypot(o.x + 0.5 - h.x, o.y + 0.5 - h.y) > 2.4) continue;
+      sign = { id: o.id, rows: signRows(sim, o, st.dungeon.lifts) };
+      break;
+    }
+    const up = upgradable(st.dungeon, econOf(st.prison), st.slotsBalance, sim.sack.mats).length > 0;
+    // Подсказка первого раза: одна за раз, по порядку важности.
+    const c = coach.current;
+    if (c.walk0 === null) c.walk0 = h.walk;
+    const now = Date.now();
+    const mark = (k: CoachStep) => {
+      if (c.done.has(k)) return;
+      c.done.add(k);
+      coachSave(c.done);
+    };
+    if (h.walk - c.walk0 > 3) mark('move');
+    if (c.bagAt && now - c.bagAt > 6000) mark('bag');
+    if (c.dashAt && now - c.dashAt > 5000) mark('dash');
+    const meatN = meatCount(sim.sack);
+    const ratNear = sim.mobs.some(
+      (m) => m.mode !== 'dying' && m.mode !== 'sleep' && Math.hypot(m.x - h.x, m.y - h.y) < 3.5,
+    );
+    let step: CoachStep | null = null;
+    if (!c.done.has('move')) step = 'move';
+    else if (!c.done.has('attack') && ratNear) step = 'attack';
+    else if (!c.done.has('eat') && meatN > 0 && h.hp < sim.stats.maxHp * 0.45) step = 'eat';
+    else if (!c.done.has('spin') && h.skill >= 1) step = 'spin';
+    else if (!c.done.has('dash') && c.dashAt) step = 'dash';
+    else if (!c.done.has('bag') && c.bagAt) step = 'bag';
     const next: Hud = {
       hp: Math.max(0, h.hp),
       maxHp: sim.stats.maxHp,
@@ -407,6 +565,9 @@ export function DungeonRun({
       use: usableNear(sim, props),
       bossHp,
       plaque,
+      up,
+      sign,
+      coach: step,
     };
     const k = hudKey(next);
     if (k !== hudKeyRef.current) {
@@ -423,60 +584,67 @@ export function DungeonRun({
     if (!c) return;
     const g = c.getContext('2d');
     if (!g) return;
-    const W = sim.world.w;
-    const rows = 44;
-    const s = 2;
-    if (c.width !== W * s) {
-      c.width = W * s;
-      c.height = rows * s;
+    // Радар: 16 клеток вокруг героя, герой всегда в центре круга.
+    const R = 16;
+    const s = 4;
+    const N = R * 2 + 1;
+    if (c.width !== N * s) {
+      c.width = N * s;
+      c.height = N * s;
     }
     g.clearRect(0, 0, c.width, c.height);
+    const W = sim.world.w;
+    const hx = Math.floor(sim.hero.x);
     const hy = Math.floor(sim.hero.y);
-    const y0 = Math.max(0, Math.min(sim.world.h - rows, hy - Math.floor(rows / 2)));
-    for (let y = y0; y < y0 + rows; y++) {
+    for (let y = hy - R; y <= hy + R; y++) {
+      if (y < 0 || y >= sim.world.h) continue;
       const band = bandAt(sim.world, y);
       const bits = sim.fog[band.def.id];
       if (!bits) continue;
-      for (let x = 0; x < W; x++) {
-        if (!fogGet(bits, x, y - band.top, W)) continue;
+      for (let x = hx - R; x <= hx + R; x++) {
+        if (x < 0 || x >= W || !fogGet(bits, x, y - band.top, W)) continue;
         const t = sim.tiles[y * W + x];
         const open = walkableTile(t) || t === Tile.Lift || t === Tile.Gate || t === Tile.Grate;
         g.fillStyle = open
           ? t === Tile.RailV || t === Tile.RailH
-            ? 'rgba(170,160,150,0.8)'
-            : 'rgba(190,168,140,0.55)'
-          : 'rgba(60,48,40,0.7)';
-        g.fillRect(x * s, (y - y0) * s, s, s);
+            ? '#c9b8a0'
+            : '#a78d6c'
+          : '#4a331b';
+        g.fillRect((x - hx + R) * s, (y - hy + R) * s, s, s);
       }
     }
     for (const o of sim.world.objs) {
-      if (o.y < y0 || o.y >= y0 + rows) continue;
+      if (Math.abs(o.x - hx) > R || Math.abs(o.y - hy) > R) continue;
       const band = bandAt(sim.world, o.y);
       const bits = sim.fog[band.def.id];
       if (!bits || !fogGet(bits, o.x, o.y - band.top, W)) continue;
       const col =
         o.kind === 'lift'
-          ? '#6fe0ff'
+          ? '#5ca2e0'
           : o.kind === 'mine'
-            ? '#ffd24a'
+            ? '#ffd257'
             : o.kind === 'boss'
-              ? '#ff4a3a'
-              : o.kind === 'secret' && !sim.props.find((p) => p.obj === o)?.on
-                ? null
-                : null;
+              ? '#e2665b'
+              : null;
       if (!col) continue;
+      g.fillStyle = '#1c130c';
+      g.fillRect((o.x - hx + R) * s - 3, (o.y - hy + R) * s - 3, s + 6, s + 6);
       g.fillStyle = col;
-      g.fillRect(o.x * s - 1, (o.y - y0) * s - 1, s + 2, s + 2);
+      g.fillRect((o.x - hx + R) * s - 2, (o.y - hy + R) * s - 2, s + 4, s + 4);
     }
     // Крысы рядом — красные точки, как на радаре.
     g.fillStyle = '#ff5a4a';
     for (const m of sim.mobs) {
       if (m.mode === 'dying' || m.mode === 'sleep') continue;
-      if (Math.hypot(m.x - sim.hero.x, m.y - sim.hero.y) > 9) continue;
-      g.fillRect(Math.floor(m.x) * s, (Math.floor(m.y) - y0) * s, s, s);
+      const mx = Math.floor(m.x) - hx + R;
+      const my = Math.floor(m.y) - hy + R;
+      if (mx < 0 || my < 0 || mx >= N || my >= N) continue;
+      g.fillRect(mx * s, my * s, s, s);
     }
+    g.fillStyle = '#1c130c';
+    g.fillRect(R * s - 3, R * s - 3, s + 6, s + 6);
     g.fillStyle = '#ffffff';
-    g.fillRect(Math.floor(sim.hero.x) * s - 1, (hy - y0) * s - 1, s + 2, s + 2);
+    g.fillRect(R * s - 1, R * s - 1, s + 2, s + 2);
   };
 
   // ---- События боя → звук, вибрация, надписи ------------------------------
@@ -487,6 +655,7 @@ export function DungeonRun({
       switch (e.t) {
         case 'swing':
           swordSwing(e.step, e.heavy);
+          coachMark('attack');
           break;
         case 'hit':
           swordHit(e.crit, e.boss);
@@ -507,11 +676,13 @@ export function DungeonRun({
           heroHurt();
           tapMedium();
           flashHurt();
+          if (!coach.current.dashAt) coach.current.dashAt = Date.now();
           break;
         case 'die':
           break;
         case 'pick':
           pickUp(e.what);
+          if (!coach.current.bagAt) coach.current.bagAt = Date.now();
           if (e.what === 'key') playTotem(sackRef.current);
           if (e.what === 'crown') say('КОРОНА', 'трофей Крысиного короля', 'gold', 2200);
           break;
@@ -520,11 +691,12 @@ export function DungeonRun({
             lastFull.current = now;
             bagFull();
             notifyWarning();
-            note('Сидор полон — выносить к клети');
+            note('Рюкзак полон — неси добычу к лифту');
           }
           break;
         case 'dash':
           dashWhoosh();
+          coachMark('dash');
           break;
         case 'dodge':
           perfectDodge();
@@ -570,6 +742,7 @@ export function DungeonRun({
         }
         case 'eat':
           eatChomp();
+          coachMark('eat');
           break;
         case 'rumble':
           deepRumble();
@@ -618,6 +791,7 @@ export function DungeonRun({
           );
           break;
         case 'skill':
+          coachMark('spin');
           swordSwing(2, true);
           boom(1);
           tapMedium();
@@ -664,6 +838,13 @@ export function DungeonRun({
     }
   };
 
+  const coachMark = (k: CoachStep) => {
+    const c = coach.current;
+    if (c.done.has(k)) return;
+    c.done.add(k);
+    coachSave(c.done);
+  };
+
   const flashHurt = () => {
     const el = hurtRef.current;
     if (!el) return;
@@ -692,6 +873,7 @@ export function DungeonRun({
       const s = stickRef.current;
       if (s) {
         s.style.transform = `translate(${x - 60}px, ${y - 60}px)`;
+        s.classList.remove('is-idle');
         s.classList.add('is-on');
       }
       if (knobRef.current) knobRef.current.style.transform = 'translate(0px, 0px)';
@@ -759,7 +941,7 @@ export function DungeonRun({
     stick.current = null;
     input.current.mx = 0;
     input.current.my = 0;
-    stickRef.current?.classList.remove('is-on');
+    parkStick();
   };
 
   // Удар: тап — удар серии, держать — тяжёлый, свайп с кнопки — удар туда.
@@ -876,7 +1058,7 @@ export function DungeonRun({
     }
     if (u.kind === 'seal') {
       if (!st.dungeonSpendProp()) {
-        note('Нечем заколотить: крепь сбивают на лесопилке');
+        note('Нужна крепь — её делают на лесопилке в лесу');
         return;
       }
       if (interact(sim, u)) {
@@ -939,10 +1121,42 @@ export function DungeonRun({
   const econ = econOf(prison);
   const u = hud?.use ?? null;
   const skillReady = (hud?.skill ?? 0) >= 1;
+  const stop = (e: ReactPointerEvent) => e.stopPropagation();
+
+  // Палец-подсказка встаёт над своей кнопкой: мерим её на экране.
+  const [hintAt, setHintAt] = useState<{ x: number; y: number; r: number } | null>(null);
+  const step = hud?.coach ?? null;
+  useEffect(() => {
+    if (!step || sheet || mine) {
+      setHintAt(null);
+      return;
+    }
+    const target =
+      step === 'move'
+        ? stickRef.current
+        : step === 'attack'
+          ? atkRef.current
+          : step === 'bag'
+            ? sackRef.current
+            : step === 'dash'
+              ? dashRef.current
+              : step === 'spin'
+                ? spinRef.current
+                : eatRef.current;
+    const root = rootRef.current;
+    if (!target || !root) return;
+    const a = target.getBoundingClientRect();
+    const b = root.getBoundingClientRect();
+    setHintAt({
+      x: a.left - b.left + a.width / 2,
+      y: a.top - b.top + a.height / 2,
+      r: Math.max(a.width, a.height) / 2 + 6,
+    });
+  }, [step, sheet, mine]);
 
   return (
     <div
-      className={`dg${dying ? ' is-dying' : ''}${lowHp ? ' is-low' : ''}`}
+      className={`dg gx${dying ? ' is-dying' : ''}${lowHp ? ' is-low' : ''}`}
       ref={rootRef}
       onPointerDown={onRootDown}
       onPointerMove={onRootMove}
@@ -954,82 +1168,79 @@ export function DungeonRun({
       <div className="dg__hurt" ref={hurtRef} />
       <div className="dg__low" />
 
-      {/* Табло: здоровье, уровень, сидор, мини-карта. */}
-      <div className="dg-top" onPointerDown={(e) => e.stopPropagation()}>
+      {/* Табло: пауза, здоровье и уровень, рюкзак, карта. */}
+      <div className="dgx-top" onPointerDown={stop}>
         <button
           type="button"
-          className="dg-btn dg-btn--pause"
+          className="gx-round gx-round--steel dgx-pause"
           aria-label="Пауза"
           onClick={() => {
             tapLight();
             setSheet('pause');
           }}
         >
-          <i />
-          <i />
+          <KIcon name="pause" />
         </button>
-        <div className="dg-vitals">
-          <div className="dg-hp">
-            <i
-              className="dg-hp__ghost"
-              style={{ transform: `scaleX(${hud ? hud.hp / hud.maxHp : 1})` }}
+        <div className="dgx-vitals">
+          <div className="dgx-hp">
+            <GxIcon name="heart" className="dgx-hp__icon" />
+            <GxBar
+              value={hud ? hud.hp / hud.maxHp : 1}
+              label={hud ? `${Math.ceil(hud.hp)} / ${hud.maxHp}` : ''}
             />
-            <i
-              className="dg-hp__fill"
-              style={{ transform: `scaleX(${hud ? hud.hp / hud.maxHp : 1})` }}
-            />
-            <b>
-              {hud ? Math.ceil(hud.hp) : ''} / {hud?.maxHp ?? ''}
-            </b>
           </div>
-          <div className="dg-xp">
-            <em>{hud?.level ?? 1}</em>
-            <span>
-              <i style={{ transform: `scaleX(${hud?.xp ?? 0})` }} />
-            </span>
+          <div className="dgx-lv">
+            <span className="gx-hex gx-hex--dark">{hud?.level ?? 1}</span>
+            <GxBar value={hud?.xp ?? 0} tone="gold" thin />
           </div>
-          <button
-            type="button"
-            ref={sackRef}
-            className={`dg-sack${hud && hud.sackN >= hud.cap ? ' is-full' : ''}`}
-            onClick={() => {
-              tapLight();
-              setSheet('inv');
-            }}
-          >
-            <img src={itemUrl('meat')} alt="" />
-            <b>
-              {hud?.sackN ?? 0}/{hud?.cap ?? 0}
-            </b>
-            {hud && hud.smell > 0 && (
-              <em className="dg-sack__smell" title="Запах мяса манит крыс">
-                +{Math.round(hud.smell * 100)}%
-              </em>
-            )}
-            {hud && (hud.coins > 0 || hud.tokens > 0) && (
-              <span className="dg-sack__loot">
-                {hud.coins > 0 && (
-                  <>
-                    <CoinIcon size={11} /> {fmt(hud.coins)}
-                  </>
-                )}
-                {hud.tokens > 0 && (
-                  <>
-                    <TokenIcon size={11} /> {hud.tokens}
-                  </>
-                )}
-                {hud.keys > 0 && (
-                  <>
-                    <KeyIcon size={11} /> {hud.keys}
-                  </>
-                )}
-              </span>
-            )}
-          </button>
+          {hud && (hud.coins > 0 || hud.tokens > 0 || hud.keys > 0) && (
+            <div className="dgx-loot">
+              {hud.coins > 0 && (
+                <span>
+                  <CoinIcon size={12} /> {fmt(hud.coins)}
+                </span>
+              )}
+              {hud.tokens > 0 && (
+                <span>
+                  <TokenIcon size={12} /> {hud.tokens}
+                </span>
+              )}
+              {hud.keys > 0 && (
+                <span>
+                  <KeyIcon size={12} /> {hud.keys}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <button
           type="button"
-          className="dg-mini"
+          ref={sackRef}
+          className={`gx-round gx-round--grey dgx-bag${hud && hud.sackN >= hud.cap ? ' is-full' : ''}`}
+          aria-label="Рюкзак"
+          onClick={() => {
+            tapLight();
+            if (coach.current.bagAt) {
+              coach.current.done.add('bag');
+              coachSave(coach.current.done);
+            }
+            setSheet('inv');
+          }}
+        >
+          <GxIcon name="backpack" />
+          <b className="dgx-bag__n">
+            {hud?.sackN ?? 0}/{hud?.cap ?? 0}
+          </b>
+          {hud?.up && <span className="gx-badge gx-badge--gold">!</span>}
+          {hud && hud.smell > 0 && (
+            <em className="dgx-bag__smell">
+              <GxIcon name="rat" size={11} />+{Math.round(hud.smell * 100)}%
+            </em>
+          )}
+        </button>
+        <button
+          type="button"
+          className="dgx-mini"
           aria-label="Карта"
           onClick={() => {
             tapLight();
@@ -1041,21 +1252,35 @@ export function DungeonRun({
       </div>
 
       {hud?.bossHp != null && (
-        <div className="dg-boss">
+        <div className="dgx-boss">
+          <GxIcon name="crown" />
           <b>{BOSSES.king.name}</b>
-          <span>
-            <i style={{ transform: `scaleX(${hud.bossHp})` }} />
-          </span>
+          <GxBar value={hud.bossHp} />
         </div>
       )}
       {hud?.plaque != null && hud.bossHp == null && (
-        <div className="dg-plaque">
-          <b>Логово пусто</b>
+        <div className="gx-panel gx-panel--wood dgx-card">
+          <GxIcon name="crown" size={28} />
           <span>
-            {hud.plaque > 0
-              ? `король вернётся через ${clock(hud.plaque)}`
-              : 'король вот-вот вернётся'}
+            <b>Логово пусто</b>
+            <i>
+              {hud.plaque > 0
+                ? `король вернётся через ${clock(hud.plaque)}`
+                : 'король вот-вот вернётся'}
+            </i>
           </span>
+        </div>
+      )}
+      {hud?.sign && hud.plaque == null && hud.bossHp == null && (
+        <div key={hud.sign.id} className="gx-panel gx-panel--wood dgx-card dgx-sign">
+          {hud.sign.rows.map((r) => (
+            <div key={r.label} className="dgx-sign__row">
+              <GxIcon name={r.icon} size={22} />
+              <span>{r.label}</span>
+              <KIcon name="arrowUp" size={18} style={{ transform: `rotate(${r.angle}deg)` }} />
+              <b>{r.dist} м</b>
+            </div>
+          ))}
         </div>
       )}
 
@@ -1071,95 +1296,138 @@ export function DungeonRun({
         </div>
       )}
 
-      <div className="dg-stick" ref={stickRef} aria-hidden="true">
+      <div className="dg-stick is-idle" ref={stickRef} aria-hidden="true">
         <i ref={knobRef} />
       </div>
 
       {/* Кнопки под правый большой палец. */}
-      <div className="dg-pad" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="dgx-pad" onPointerDown={stop}>
         {u && (
           <button
             type="button"
-            className={`dg-use dg-use--${u.kind}`}
+            className={`gx-btn dgx-use dgx-use--${u.kind}`}
             onClick={(e) => {
               e.stopPropagation();
               actNear();
             }}
           >
+            <GxIcon name={USE_ICON[u.kind]} />
             {u.label}
           </button>
         )}
         <button
           type="button"
-          className={`dg-btn dg-btn--eat${hud?.eat ? '' : ' is-off'}`}
-          aria-label="Съесть"
+          ref={eatRef}
+          className={`gx-round gx-round--green dgx-eat${hud?.eat ? '' : ' is-off'}`}
+          aria-label="Съесть мясо"
           onPointerDown={press('eat')}
         >
-          <img src={itemUrl('meat')} alt="" />
-          <em>{hud?.meat ?? 0}</em>
+          <GxIcon name="eat" />
+          {(hud?.meat ?? 0) > 0 && <span className="gx-badge">{hud?.meat}</span>}
         </button>
         <button
           type="button"
-          className={`dg-btn dg-btn--skill${skillReady ? ' is-ready' : ''}`}
+          ref={spinRef}
+          className={`gx-round gx-round--dark dgx-spin${skillReady ? ' is-ready' : ''}`}
           aria-label="Вихрь"
           style={{ '--fill': hud?.skill ?? 0 } as CSSProperties}
           onPointerDown={press('skill')}
         >
-          <span>ВИХРЬ</span>
+          <i className="dgx-spin__ring" />
+          <GxIcon name="spin" />
         </button>
         <button
           type="button"
-          className={`dg-btn dg-btn--dash${hud?.dash === false ? ' is-off' : ''}`}
+          ref={dashRef}
+          className={`gx-round gx-round--steel dgx-dash${hud?.dash === false ? ' is-off' : ''}`}
           aria-label="Рывок"
           onPointerDown={press('dash')}
         >
-          <span>РЫВОК</span>
+          <GxIcon name="dash" />
         </button>
         <button
           type="button"
-          className="dg-btn dg-btn--atk"
+          ref={atkRef}
+          className="gx-round dgx-atk"
           aria-label="Удар"
           onPointerDown={atkDown}
           onPointerMove={atkMove}
           onPointerUp={atkUp}
           onPointerCancel={atkUp}
         >
-          <span>УДАР</span>
+          <GxIcon name="sword" />
         </button>
       </div>
 
+      {hintAt && step && (
+        <>
+          <i
+            className="gx-hint-ring"
+            style={{
+              left: hintAt.x - hintAt.r,
+              top: hintAt.y - hintAt.r,
+              width: hintAt.r * 2,
+              height: hintAt.r * 2,
+            }}
+          />
+          <div
+            className={`gx-hint dgx-hint dgx-hint--${step}`}
+            style={{ left: hintAt.x, top: hintAt.y }}
+          >
+            <GxIcon name="pointing" />
+            <b>{COACH_TEXT[step]}</b>
+          </div>
+        </>
+      )}
+
       {dying && (
         <div className="dg-dying">
-          <b>Тебя растащили крысы</b>
+          <GxIcon name="skull" size={64} />
+          <b>Ты погиб</b>
         </div>
       )}
 
       {mine && <DungeonMine id={mine.id} sim={simRef.current!} onExit={leaveMine} onToast={note} />}
 
       {sheet === 'pause' && (
-        <Sheet title="Привал" onClose={() => setSheet(null)}>
+        <GxModal title="Пауза" onClose={() => setSheet(null)}>
           <SackList sack={simRef.current?.sack} econ={econ} sold={marketSold(d, Date.now())} />
-          <p className="dg-note">
-            Добыча в сидоре — твоя, только пока ты жив. Вынести её можно клетью: у клети спуска или
-            у починенной. Умрёшь — растащат всё, что несёшь. Убийства, опыт и открытые места
-            остаются всегда.
-          </p>
-          <div className="stack">
-            <button className="btn btn--primary btn--block" onClick={() => setSheet(null)}>
-              Дальше
-            </button>
+          <div className="dgx-menu">
             <button
-              className="btn btn--ghost btn--block"
+              className="gx-btn gx-btn--red gx-btn--big gx-btn--block"
+              onClick={() => setSheet(null)}
+            >
+              <KIcon name="arrowRight" />
+              Продолжить
+            </button>
+            <div className="dgx-menu__row">
+              <button className="gx-btn" onClick={() => setSheet('inv')}>
+                <GxIcon name="backpack" />
+                Рюкзак
+              </button>
+              <button className="gx-btn" onClick={() => setSheet('map')}>
+                <GxIcon name="map" />
+                Карта
+              </button>
+              <button className="gx-btn" onClick={() => setSheet('board')}>
+                <GxIcon name="joystick" />
+                Кнопки
+              </button>
+            </div>
+            <button
+              className="gx-btn gx-btn--grey gx-btn--block"
               onClick={() => {
                 save();
                 setSheet(null);
                 onLeave();
               }}
             >
-              Наверх без клети — вылазка подождёт внизу
+              <KIcon name="exitLeft" />
+              Выйти из игры
+              <small>вернёшься на это же место</small>
             </button>
           </div>
-        </Sheet>
+        </GxModal>
       )}
 
       {sheet === 'inv' && simRef.current && (
@@ -1179,7 +1447,7 @@ export function DungeonRun({
           onSave={save}
           onGear={() => {
             // Заточил внизу — сильнее сразу, как при новом уровне; нашил
-            // карман — ряд открыт сразу. И сразу запись: сидор уже отдал
+            // карман — ряд открыт сразу. И сразу запись: рюкзак уже отдал
             // материалы, перезапуск не должен их вернуть.
             const sim = simRef.current;
             if (!sim) return;
@@ -1208,7 +1476,7 @@ export function DungeonRun({
             if (useFinanceStore.getState().dungeonLiftRepair(liftArea)) {
               liftClank();
               notifySuccess();
-              note('Клеть починена — теперь здесь можно спускаться и подниматься');
+              note('Лифт починен — теперь можно спускаться прямо сюда');
             }
           }}
           onUp={() => {
@@ -1220,58 +1488,31 @@ export function DungeonRun({
       )}
 
       {sheet === 'board' && (
-        <Sheet title="Доска у клети" onClose={() => setSheet(null)}>
-          <ul className="dg-rules">
-            <li>
-              <b>Левая половина экрана</b> — ходить: палец ставит джойстик там, где коснулся.
-            </li>
-            <li>
-              <b>УДАР</b> — серия из трёх. Держи — тяжёлый удар, он сбивает замах. Смахни с кнопки —
-              удар в ту сторону. Тап по крысе — взять её целью.
-            </li>
-            <li>
-              <b>РЫВОК</b> проходит сквозь укус. Рывок в последний миг перед укусом — время
-              замирает, следующий удар — крит.
-            </li>
-            <li>
-              <b>ВИХРЬ</b> копится от ударов: круговой удар по всем вокруг.
-            </li>
-            <li>Мясо лечит (кнопка с куском), но пахнет: чем больше в сидоре, тем больше крыс.</li>
-            <li>Всё, что бьёт, сперва краснеет. Красное на полу — отойди.</li>
-            <li>Фонари держат крыс поодаль. Треснувшую стену можно обрушить ударами.</li>
-          </ul>
-          <button className="btn btn--primary btn--block" onClick={() => setSheet(null)}>
-            Понял
-          </button>
-        </Sheet>
+        <GxModal title="Управление" onClose={() => setSheet(null)}>
+          <Controls />
+        </GxModal>
       )}
 
       {sheet === 'plaque' && (
-        <Sheet title="Табличка у логова" onClose={() => setSheet(null)}>
+        <GxModal title="Логово короля" kind="wood" onClose={() => setSheet(null)}>
           <PlaqueBody />
-          <button className="btn btn--primary btn--block" onClick={() => setSheet(null)}>
-            Ясно
-          </button>
-        </Sheet>
+        </GxModal>
       )}
 
       {sheet === 'map' && simRef.current && (
-        <Sheet title="Карта подземелья" onClose={() => setSheet(null)}>
+        <GxModal title="Карта" onClose={() => setSheet(null)}>
           <BigMap sim={simRef.current} />
-          <button className="btn btn--primary btn--block" onClick={() => setSheet(null)}>
-            Закрыть
-          </button>
-        </Sheet>
+        </GxModal>
       )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Листы.
+// Окна.
 // ---------------------------------------------------------------------------
 
-/** Что в сидоре и сколько за это дадут наверху. */
+/** Что в рюкзаке и сколько за это дадут наверху — картинками. */
 function SackList({
   sack,
   econ,
@@ -1285,33 +1526,46 @@ function SackList({
   const mv = meatValue(sack, econ, sold);
   const mats = Object.entries(sack.mats) as [MatId, number][];
   const empty = !mv.pieces && !mats.length && !sack.coins && !sack.tokens && !sack.keys;
+  if (empty)
+    return (
+      <div className="dgx-sack dgx-sack--empty">
+        <GxIcon name="backpack" size={26} />
+        Рюкзак пока пуст
+      </div>
+    );
   return (
-    <div className="dg-sacklist">
-      {empty && <span className="dg-sacklist__empty">Сидор пуст</span>}
+    <div className="dgx-sack">
       {mv.pieces > 0 && (
-        <span>
-          <img src={itemUrl('meat')} alt="" /> Мясо: {mv.pieces} шт. ≈ {fmt(mv.value)}{' '}
-          <CoinIcon size={12} />
+        <span title="Мясо">
+          <img src={itemUrl('meat')} alt="Мясо" />
+          <b>{mv.pieces}</b>
+          <i>
+            ≈{fmt(mv.value)} <CoinIcon size={10} />
+          </i>
         </span>
       )}
       {mats.map(([id, n]) => (
-        <span key={id}>
-          <img src={itemUrl(id)} alt="" /> {MATS[id].name}: {n}
+        <span key={id} title={MATS[id].name}>
+          <img src={itemUrl(id)} alt={MATS[id].name} />
+          <b>{n}</b>
         </span>
       ))}
       {sack.coins > 0 && (
-        <span>
-          <CoinIcon size={14} /> Монеты: {fmt(sack.coins)}
+        <span title="Монеты">
+          <CoinIcon size={24} />
+          <b>{fmt(sack.coins)}</b>
         </span>
       )}
       {sack.tokens > 0 && (
-        <span>
-          <TokenIcon size={14} /> Токены: {sack.tokens}
+        <span title="Токены">
+          <TokenIcon size={24} />
+          <b>{sack.tokens}</b>
         </span>
       )}
       {sack.keys > 0 && (
-        <span>
-          <KeyIcon size={14} /> Ключи: {sack.keys}
+        <span title="Ключи">
+          <KeyIcon size={24} />
+          <b>{sack.keys}</b>
         </span>
       )}
     </div>
@@ -1348,50 +1602,75 @@ function LiftSheet({
     const cost = liftCost(area, econ);
     const ok = canRepair(cost);
     return (
-      <Sheet title={`Клеть · ${a.name}`} onClose={onClose}>
-        <p className="dg-note">
-          Трос оборван, лебёдка ржавая. Почини — и эта клеть станет твоей точкой спуска и выхода:
-          сюда можно будет спускаться сразу, а не топать от Устья.
-        </p>
-        <div className="dg-cost">
-          <span className={balance >= cost.coins ? '' : 'is-short'}>
-            <CoinIcon size={14} /> {fmt(cost.coins)}
-          </span>
-          <span className={(stash.skin ?? 0) >= (cost.mats.skin ?? 0) ? '' : 'is-short'}>
-            <img src={itemUrl('skin')} alt="" /> {cost.mats.skin} шкурок на складе (есть{' '}
-            {stash.skin ?? 0})
-          </span>
+      <GxModal title="Лифт сломан" kind="iron" onClose={onClose}>
+        <div className="dgx-lift">
+          <GxIcon name="lift" size={56} />
+          <p>Почини — и сможешь спускаться сразу в «{a.name}» и подниматься отсюда с добычей.</p>
         </div>
-        <p className="dg-note dg-note--dim">
-          Шкурки берутся со склада наверху — те, что в сидоре, ещё не вынесены.
-        </p>
-        <div className="stack">
-          <button className="btn btn--primary btn--block" disabled={!ok} onClick={onRepair}>
-            Починить клеть
-          </button>
-          <button className="btn btn--ghost btn--block" onClick={onClose}>
-            Потом
-          </button>
+        <div className="gx-panel dgx-cost">
+          <div className={`gx-row${balance >= cost.coins ? '' : ' is-short'}`}>
+            <CoinIcon size={26} />
+            <span>Монеты</span>
+            <b>{fmt(cost.coins)}</b>
+          </div>
+          <div className={`gx-row${(stash.skin ?? 0) >= (cost.mats.skin ?? 0) ? '' : ' is-short'}`}>
+            <img src={itemUrl('skin')} alt="" />
+            <span>Шкурки со склада</span>
+            <b>
+              {stash.skin ?? 0} / {cost.mats.skin}
+            </b>
+          </div>
         </div>
-      </Sheet>
+        <button
+          className="gx-btn gx-btn--red gx-btn--big gx-btn--block dgx-cta"
+          disabled={!ok}
+          onClick={onRepair}
+        >
+          <GxIcon name="hammer" />
+          Починить
+        </button>
+      </GxModal>
     );
   }
   return (
-    <Sheet title="Подняться наверх?" onClose={onClose}>
+    <GxModal title="Лифт" kind="iron" onClose={onClose}>
       <SackList sack={sack} econ={econ} sold={sold} />
-      <p className="dg-note">
-        Мясо сразу уйдёт Барыге, монеты — в кошелёк, материалы — на склад, токены и ключи — в
-        каторгу. Вылазка на этом кончится.
-      </p>
-      <div className="stack">
-        <button className="btn btn--primary btn--block" onClick={onUp}>
-          Подняться клетью
-        </button>
-        <button className="btn btn--ghost btn--block" onClick={onClose}>
-          Ещё побегаю
-        </button>
-      </div>
-    </Sheet>
+      <button className="gx-btn gx-btn--red gx-btn--big gx-btn--block dgx-cta" onClick={onUp}>
+        <KIcon name="arrowUp" />
+        Подняться с добычей
+      </button>
+      <button className="gx-btn gx-btn--block dgx-cta2" onClick={onClose}>
+        Остаться внизу
+      </button>
+    </GxModal>
+  );
+}
+
+/** Кнопки игры картинками: что нажать — и что будет. */
+function Controls() {
+  const rows: [GxIconName, string, string][] = [
+    ['move', 'Левая половина экрана', 'веди пальцем — идти'],
+    ['sword', 'Удар', 'жми — серия; держи — сильный удар'],
+    ['dash', 'Рывок', 'проскакивает сквозь укус'],
+    ['spin', 'Вихрь', 'копится от ударов, бьёт всех вокруг'],
+    ['eat', 'Мясо', 'лечит; запах мяса зовёт крыс'],
+    ['backpack', 'Рюкзак', 'добыча и улучшение снаряжения'],
+    ['lift', 'Лифт', 'только им можно вынести добычу'],
+  ];
+  return (
+    <div className="dgx-controls">
+      {rows.map(([icon, name, what]) => (
+        <div key={name} className="gx-row">
+          <span className="dgx-controls__ico">
+            <GxIcon name={icon} size={26} />
+          </span>
+          <span>
+            <b>{name}</b>
+            <i>{what}</i>
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1404,27 +1683,27 @@ function PlaqueBody() {
   }, []);
   const b = d.bosses.king;
   const ready = (b?.at ?? 0) + BOSSES.king.restMs;
+  const home = ready <= now;
   return (
-    <div className="dg-plaquebody">
-      <b>{BOSSES.king.name}</b>
-      <p>
-        Сорок крыс, сросшихся хвостами. Катится клубком, хлещет хвостами по кругу, зовёт стаю. На
-        половине здоровья раскалывается на двух принцев.
-      </p>
-      <p className="dg-plaquebody__time">
-        {ready > now
-          ? `Вернётся в логово через ${clock(ready - now)}`
-          : 'Сейчас в логове. Ворота закроются за тобой.'}
-      </p>
-      {b && <p className="dg-note--dim">Повержен раз: {b.kills}</p>}
-      <p className="dg-note--dim">
-        С него: корона (для перековки во второй комплект), шкурки, токены, монеты и изредка ключ.
-      </p>
+    <div className="dgx-lair">
+      <GxIcon name="crown" size={64} className={home ? 'is-home' : ''} />
+      <b>{home ? 'Король в логове' : 'Логово пусто'}</b>
+      <span>
+        {home ? 'Войдёшь — ворота закроются за тобой' : `вернётся через ${clock(ready - now)}`}
+      </span>
+      <div className="dgx-lair__loot">
+        <img src={itemUrl('crown')} alt="Корона" />
+        <img src={itemUrl('skin')} alt="Шкурки" />
+        <TokenIcon size={24} />
+        <CoinIcon size={24} />
+        <KeyIcon size={24} />
+      </div>
+      {b && b.kills > 0 && <i>Побеждён: {b.kills}</i>}
     </div>
   );
 }
 
-/** Вся карта, разведанное — светлым. Масштаб — по ширине листа. */
+/** Вся карта, разведанное — светлым. Масштаб — по ширине окна. */
 function BigMap({ sim }: { sim: Sim }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -1437,7 +1716,7 @@ function BigMap({ sim }: { sim: Sim }) {
     const s = 4;
     c.width = W * s;
     c.height = H * s;
-    g.fillStyle = '#0c0908';
+    g.fillStyle = '#1c130c';
     g.fillRect(0, 0, c.width, c.height);
     for (const band of sim.world.bands) {
       const bits = sim.fog[band.def.id];
@@ -1448,16 +1727,16 @@ function BigMap({ sim }: { sim: Sim }) {
           const y = band.top + ly;
           const t = sim.tiles[y * W + x];
           const open = walkableTile(t) || t === Tile.Lift || t === Tile.Gate || t === Tile.Grate;
-          g.fillStyle = open ? '#9a8870' : '#3a2e26';
+          g.fillStyle = open ? '#e8d0ac' : '#6d4b27';
           g.fillRect(x * s, y * s, s, s);
         }
     }
-    g.font = 'bold 22px system-ui, sans-serif';
+    g.font = 'bold 22px GxRubik, system-ui, sans-serif';
     g.textAlign = 'center';
     for (const band of sim.world.bands) {
-      g.fillStyle = 'rgba(255,230,190,0.5)';
+      g.fillStyle = 'rgba(255,241,210,0.7)';
       g.fillText(band.def.name, (W * s) / 2, band.top * s + 28);
-      g.fillStyle = 'rgba(255,230,190,0.15)';
+      g.fillStyle = 'rgba(255,241,210,0.2)';
       g.fillRect(0, band.top * s, W * s, 2);
     }
     for (const o of sim.world.objs) {
@@ -1466,38 +1745,49 @@ function BigMap({ sim }: { sim: Sim }) {
       if (!bits || !fogGet(bits, o.x, o.y - band.top, W)) continue;
       const col =
         o.kind === 'lift'
-          ? '#6fe0ff'
+          ? '#5ca2e0'
           : o.kind === 'mine'
-            ? '#ffd24a'
+            ? '#ffd257'
             : o.kind === 'boss'
-              ? '#ff4a3a'
+              ? '#e2665b'
               : null;
       if (!col) continue;
+      g.fillStyle = '#3d2a16';
+      g.fillRect(o.x * s - 5, o.y * s - 5, s + 10, s + 10);
       g.fillStyle = col;
       g.fillRect(o.x * s - 3, o.y * s - 3, s + 6, s + 6);
     }
+    g.fillStyle = '#3d2a16';
+    g.beginPath();
+    g.arc(sim.hero.x * s, sim.hero.y * s, 9, 0, Math.PI * 2);
+    g.fill();
     g.fillStyle = '#fff';
     g.beginPath();
     g.arc(sim.hero.x * s, sim.hero.y * s, 6, 0, Math.PI * 2);
     g.fill();
-    // Лист открывается на герое.
+    // Окно открывается на герое.
     const wrap = c.parentElement;
     if (wrap) wrap.scrollTop = Math.max(0, (sim.hero.y * s * wrap.clientWidth) / c.width - 160);
   }, [sim]);
   return (
-    <div className="dg-bigmap">
-      <canvas ref={ref} />
-      <div className="dg-bigmap__legend">
+    <>
+      <div className="dgx-bigmap">
+        <canvas ref={ref} />
+      </div>
+      <div className="dgx-bigmap__legend">
         <span>
-          <i style={{ background: '#6fe0ff' }} /> клеть
+          <i style={{ background: '#fff' }} /> ты
         </span>
         <span>
-          <i style={{ background: '#ffd24a' }} /> шахта
+          <i style={{ background: '#5ca2e0' }} /> лифт
         </span>
         <span>
-          <i style={{ background: '#ff4a3a' }} /> логово
+          <i style={{ background: '#ffd257' }} /> шахта
+        </span>
+        <span>
+          <i style={{ background: '#e2665b' }} /> логово
         </span>
       </div>
-    </div>
+    </>
   );
 }

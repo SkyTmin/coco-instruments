@@ -6,6 +6,7 @@
 // и выйдешь ты к ней.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { GxBar, GxIcon } from '@/components/gx';
 import { MineCell, MineField, useMineDig, wall } from '@/components/MineField';
 import type { BreakKind, DigBlock, MineFieldHandle } from '@/components/MineField';
 import { PickIcon } from '@/components/PrisonCamp';
@@ -72,7 +73,7 @@ export function DungeonMine({
   mRef.current = m;
   const rocks = useMemo(() => deepField(id, m.window, MINE_CELLS, DEPTH), [id, m.window]);
   const field = useRef<MineFieldHandle>(null);
-  const sackRef = useRef<HTMLDivElement>(null);
+  const sackRef = useRef<HTMLSpanElement>(null);
   const noise = useRef(0);
   const [packs, setPacks] = useState(0);
   const [sackN, setSackN] = useState(() => slotsUsed(sim.sack));
@@ -122,7 +123,7 @@ export function DungeonMine({
     if (lost) {
       bagFull();
       notifyWarning();
-      onToast('Сидор полон — руда осыпается мимо');
+      onToast('Рюкзак полон — руда осыпается мимо');
     }
     noise.current += list.length;
     const p = Math.min(DEEP_NOISE_MAX, Math.floor(noise.current / DEEP_NOISE_BLOCKS));
@@ -188,17 +189,12 @@ export function DungeonMine({
   const left = packs * DEEP_NOISE_BLOCKS + DEEP_NOISE_BLOCKS - noise.current;
 
   return (
-    <div className="dgmine">
+    <div className="gx dgmine">
       <div className="dgmine__head">
-        <div className="dgmine__title">
-          <b>{def.name}</b>
-          <span>
-            {done ? 'выработана · ' : ''}новая порода через {clock(mineNextAt(id, now) - now)}
-          </span>
-        </div>
         <button
           type="button"
-          className="btn btn--primary dgmine__out"
+          className="gx-round gx-round--red dgmine__out"
+          aria-label="Выйти из шахты"
           onClick={() => {
             tapLight();
             field.current?.stop();
@@ -206,31 +202,32 @@ export function DungeonMine({
             onExit(packs);
           }}
         >
-          Выйти
+          <GxIcon name="exit" />
         </button>
+        <div className="gx-ribbon dgmine__title">{def.name}</div>
+        <span className="gx-chip dgmine__clock" title="Новая порода">
+          <GxIcon name="hourglass" size={15} /> {clock(mineNextAt(id, now) - now)}
+        </span>
       </div>
-      <div className="dgmine__bar" title="Выработка">
-        <i style={{ transform: `scaleX(${Math.min(1, share / DEEP_DONE_AT)})` }} />
-      </div>
+      <GxBar
+        tone="green"
+        value={share / DEEP_DONE_AT}
+        label={`${Math.min(100, Math.round((share / DEEP_DONE_AT) * 100))}%`}
+        className="dgmine__bar"
+      />
       <div className="dgmine__info">
-        <div className="dgmine__sack" ref={sackRef}>
-          <img src={itemUrl('pyrite')} alt="" />
-          <b>{ore}</b>
-          <span>
-            сидор {sackN}/{sackSlots(sim.sackLevel)} ячеек
-          </span>
-        </div>
-        <div className={`dgmine__noise${packs > 0 ? ' is-loud' : ''}`}>
-          {packs >= DEEP_NOISE_MAX ? (
-            <>У входа {packs} стаи — больше не соберётся</>
-          ) : packs > 0 ? (
-            <>
-              У входа {packs > 1 ? `${packs} стаи` : 'стая'} · ещё {left} бл. — и подойдёт ещё одна
-            </>
-          ) : (
-            <>Тихо · через {left} бл. у входа соберётся стая</>
+        <span className="gx-chip" ref={sackRef}>
+          <img src={itemUrl('pyrite')} alt="" /> {ore}
+        </span>
+        <span className="gx-chip">
+          <GxIcon name="backpack" size={16} /> {sackN}/{sackSlots(sim.sackLevel)}
+        </span>
+        <span className={`gx-chip dgmine__noise${packs > 0 ? ' is-loud' : ''}`}>
+          <GxIcon name="rat" size={16} /> {packs}
+          {packs < DEEP_NOISE_MAX && (
+            <GxBar thin value={1 - left / DEEP_NOISE_BLOCKS} className="dgmine__noisebar" />
           )}
-        </div>
+        </span>
       </div>
       <div className="prison dgmine__wrap">
         <MineField
@@ -252,10 +249,6 @@ export function DungeonMine({
           )}
         </MineField>
       </div>
-      <p className="dgmine__hint">
-        Золотые жилки — пирит: он для каски и перековки. Пустая порода ничего не даёт, но под ней
-        лежит следующий ярус.
-      </p>
     </div>
   );
 }

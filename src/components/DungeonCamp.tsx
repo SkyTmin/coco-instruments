@@ -9,6 +9,7 @@
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { CoinIcon } from '@/components/slot-art';
+import { GxBar, GxIcon, KIcon } from '@/components/gx';
 import { useFinanceStore } from '@/store';
 import {
   beastStep,
@@ -66,11 +67,11 @@ function CostLine({
   return (
     <span className="dgc-cost">
       <span className={balance >= cost.coins ? '' : 'is-short'}>
-        <CoinIcon size={12} /> {shortMoney(cost.coins)}
+        <CoinIcon size={16} /> {shortMoney(cost.coins)}
       </span>
       {(Object.entries(cost.mats) as [MatId, number][]).map(([id, n]) => (
         <span key={id} className={(stash[id] ?? 0) >= n ? '' : 'is-short'} title={MATS[id].name}>
-          <img src={itemUrl(id)} alt="" /> {stash[id] ?? 0}/{n}
+          <img src={itemUrl(id)} alt={MATS[id].name} /> {stash[id] ?? 0}/{n}
         </span>
       ))}
     </span>
@@ -121,27 +122,38 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
     notifySuccess();
   };
   return (
-    <div className="pforge dgc">
-      <div className="dgc-hero">
-        <img className="dgc-hero__img" src={heroUrl} alt="" />
-        <span className="dgc-hero__info">
-          <b>
-            Уровень {lv.level}
-            <em>
-              {fmt(lv.into)} / {fmt(lv.need)}
-            </em>
-          </b>
-          <span className="dgc-xp">
-            <i style={{ transform: `scaleX(${lv.need ? lv.into / lv.need : 1})` }} />
-          </span>
-          <i>
-            здоровье {hero.maxHp} · урон {hero.dmg.toFixed(0)} · броня {hero.armor.toFixed(0)} ·
-            крит {Math.round(hero.crit * 100)}%
+    <div className="dgc">
+      <div className="dgc-top">
+        <div className="dgc-top__pic">
+          <img src={heroUrl} alt="" />
+          <span className="gx-hex">{lv.level}</span>
+        </div>
+        <div className="dgc-top__info">
+          <GxBar
+            value={lv.need ? lv.into / lv.need : 1}
+            tone="gold"
+            label={`опыт ${fmt(lv.into)} / ${fmt(lv.need)}`}
+          />
+          <div className="dgc-top__stats">
+            <span>
+              <GxIcon name="heart" size={18} /> {hero.maxHp}
+            </span>
+            <span>
+              <GxIcon name="sword" size={18} /> {hero.dmg.toFixed(0)}
+            </span>
+            <span>
+              <GxIcon name="shield" size={18} /> {hero.armor.toFixed(0)}
+            </span>
+            <span>
+              <GxIcon name="explosion" size={18} /> {Math.round(hero.crit * 100)}%
+            </span>
+          </div>
+          <i className="dgc-top__set">
+            {set
+              ? `Весь комплект «${setOf(set).name}»: ${setOf(set).bonus}`
+              : 'Собери 4 вещи одного комплекта — будет бонус'}
           </i>
-          <i>
-            Комплект: {set ? `${setOf(set).name} — ${setOf(set).bonus}` : 'разный — бонуса нет'}
-          </i>
-        </span>
+        </div>
       </div>
 
       {SLOTS.map((slot) => {
@@ -154,100 +166,94 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
         const can =
           (step.kind === 'plus' || (step.kind === 'reforge' && met)) &&
           canPay(d, step.cost, balance);
+        const nowStat = statLine(slot, g.tier, g.plus);
         return (
-          <div key={slot} className={`dgc-slot dgc-slot--t${g.tier}`}>
-            <div className="dgc-slot__head">
-              <img className="dgc-slot__ico" src={gearIcon(slot, g.tier)} alt="" />
-              <span className="dgc-slot__name">
-                <b>
-                  {cur.items[slot]}
-                  {g.plus > 0 && <em> +{g.plus}</em>}
-                </b>
+          <div key={slot} className={`dgc-item${can ? ' is-ready' : ''}`}>
+            <div className="dgc-item__head">
+              <span className="dgc-item__ico">
+                <img src={gearIcon(slot, g.tier)} alt="" />
+                {g.plus > 0 && <em>+{g.plus}</em>}
+              </span>
+              <span className="dgc-item__name">
+                <b>{cur.items[slot]}</b>
                 <i>
-                  {SLOT_NAMES[slot]} · {cur.name} · {statLine(slot, g.tier, g.plus)}
+                  {SLOT_NAMES[slot]} · {nowStat}
                 </i>
               </span>
+              {can && <span className="gx-badge gx-badge--gold dgc-item__bang">!</span>}
             </div>
             {step.kind === 'plus' && (
-              <div className="dgc-step">
-                <span className="dgc-step__what">
-                  Заточка до +{g.plus + 1}: {statLine(slot, g.tier, g.plus + 1)}
-                </span>
+              <div className="dgc-item__step">
+                <div className="dgc-item__arrow">
+                  <b>+{g.plus}</b>
+                  <KIcon name="arrowRight" size={16} />
+                  <b className="is-next">+{g.plus + 1}</b>
+                  <span>{statLine(slot, g.tier, g.plus + 1)}</span>
+                </div>
                 <CostLine cost={step.cost} balance={balance} stash={d.stash} />
                 <button
                   type="button"
-                  className="btn btn--sm pforge__buy"
+                  className="gx-btn gx-btn--red gx-btn--block"
                   disabled={!can}
                   onClick={() => go(slot)}
                 >
+                  <GxIcon name="anvil" />
                   Заточить
                 </button>
               </div>
             )}
             {step.kind === 'reforge' && next && (
-              <div className="dgc-step dgc-step--reforge">
-                <span className="dgc-step__what">
-                  <img src={gearIcon(slot, g.tier + 1)} alt="" /> Перековка в «{next.items[slot]}» ·{' '}
-                  {statLine(slot, g.tier + 1, 0)}
-                </span>
+              <div className="dgc-item__step">
+                <div className="dgc-item__arrow">
+                  <img src={gearIcon(slot, g.tier)} alt="" />
+                  <KIcon name="arrowRight" size={16} />
+                  <img src={gearIcon(slot, g.tier + 1)} alt="" />
+                  <span>
+                    «{next.items[slot]}» · {statLine(slot, g.tier + 1, 0)}
+                  </span>
+                </div>
                 {conds.map((c) => {
                   const have = Math.min(c.need, c.have(d));
                   return (
-                    <span key={c.label} className={`dgc-cond${have >= c.need ? ' is-done' : ''}`}>
-                      <b>{c.label}</b>
-                      <em>
-                        {fmt(have)} / {fmt(c.need)}
-                      </em>
+                    <div key={c.label} className="dgc-cond">
                       <span>
-                        <i style={{ transform: `scaleX(${have / c.need})` }} />
+                        {have >= c.need && <KIcon name="checkmark" size={14} />}
+                        {c.label}
                       </span>
-                    </span>
+                      <GxBar
+                        value={have / c.need}
+                        tone={have >= c.need ? 'green' : 'blue'}
+                        label={`${fmt(have)} / ${fmt(c.need)}`}
+                      />
+                    </div>
                   );
                 })}
                 <CostLine cost={step.cost} balance={balance} stash={d.stash} />
                 <button
                   type="button"
-                  className="btn btn--sm btn--primary pforge__buy"
+                  className="gx-btn gx-btn--red gx-btn--block"
                   disabled={!can}
                   onClick={() => go(slot)}
                 >
-                  {met ? 'Перековать' : 'Условия не выполнены'}
+                  <GxIcon name="upgrade" />
+                  {met ? `Улучшить до «${next.name}»` : 'Сначала выполни задания'}
                 </button>
               </div>
             )}
             {step.kind === 'soon' && (
-              <div className="dgc-step dgc-step--soon">
-                Заточено до предела. Следующая ступень — «{SETS[g.tier]?.name ?? '…'}» — откроется с
-                новыми районами.
+              <div className="dgc-item__done">
+                <KIcon name="checkmark" size={16} /> Заточено до предела. Дальше — с новыми уровнями
+                подземелья.
               </div>
             )}
             {step.kind === 'max' && (
-              <div className="dgc-step dgc-step--soon">Лучшее, что есть.</div>
+              <div className="dgc-item__done">
+                <KIcon name="star" size={16} /> Лучшее, что есть.
+              </div>
             )}
           </div>
         );
       })}
-
-      <div className="dgc-sets">
-        <b>Комплекты</b>
-        <p>
-          Вещи одной ступени выглядят как одна вещь — каска, роба, сапоги и клинок в одной отделке.
-          Все четыре одной ступени — бонус комплекта.
-        </p>
-        <div className="dgc-sets__row">
-          {SETS.slice(0, 4).map((s) => (
-            <span key={s.tier} className={`dgc-set${s.tier <= 2 ? '' : ' is-soon'}`}>
-              <span className="dgc-set__icons">
-                {SLOTS.map((slot) => (
-                  <img key={slot} src={gearIcon(slot, s.tier)} alt="" />
-                ))}
-              </span>
-              <b>{s.name}</b>
-              <i>{s.tier <= 2 ? s.bonus : 'скоро'}</i>
-            </span>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -317,7 +323,7 @@ export function BeastTab() {
             {BOSSES.king.name}
             <em>{d.bosses.king?.kills ?? 0}</em>
           </b>
-          <i>Логово — в конце Откатки. Возвращается через 20 минут после смерти.</i>
+          <i>Логово — в конце Рельсовых туннелей. Возвращается через 20 минут после смерти.</i>
         </span>
       </div>
     </div>
@@ -338,7 +344,7 @@ export function StashTab({ onSpend }: { onSpend: () => void }) {
   const stats: [string, number, ReactNode?][] = [
     ['Вылазок', d.stats.runs ?? 0],
     ['Вышел живым', d.stats.extracts ?? 0],
-    ['С полным сидором', d.stats.fullExtracts ?? 0],
+    ['С полным рюкзаком', d.stats.fullExtracts ?? 0],
     ['Погиб', d.stats.deaths ?? 0],
     ['Пройдено, м', d.stats.meters ?? 0],
     ['Уклонов в последний миг', d.stats.dodges ?? 0],
@@ -352,7 +358,7 @@ export function StashTab({ onSpend }: { onSpend: () => void }) {
           <img className="dgc-slot__ico" src={itemUrl('skin')} alt="" />
           <span className="dgc-slot__name">
             <b>
-              Сидор · {d.sackLevel + 1} {d.sackLevel === 0 ? 'ряд' : 'ряда'} по {SACK_ROW}
+              Рюкзак · {d.sackLevel + 1} {d.sackLevel === 0 ? 'ряд' : 'ряда'} по {SACK_ROW}
             </b>
             <i>
               {sackSlots(d.sackLevel)} ячеек, в ячейке до 32 штук одного вида · монеты, токены и

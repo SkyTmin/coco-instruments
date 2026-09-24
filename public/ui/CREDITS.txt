@@ -1,0 +1,16 @@
+Игровой интерфейс — откуда взято
+
+kenney/  — Kenney, «UI Pack - Adventure» и «Game Icons» (www.kenney.nl).
+           Лицензия CC0 1.0 (общественное достояние). Файлы взяты как есть;
+           копия библиотеки Kenney: github.com/shorepine/kenney.
+
+icons/   — game-icons.net, лицензия CC BY 3.0
+           (https://creativecommons.org/licenses/by/3.0/). Авторы:
+           Lorc (lorcblog.blogspot.com), Delapouite (delapouite.com),
+           Skoll, Faithtoken, Sbed, Caro Asercion, Willdabeast, Zeromancer.
+           Источник: github.com/game-icons/icons. Изменения: убран чёрный
+           фон-квадрат; цвет задаётся в интерфейсе (иконка — маска).
+
+fonts/rubik.woff2 — Rubik (Hubert & Fischer, Meir Sadan, Cyreal),
+           SIL Open Font License 1.1 (fonts/OFL.txt). Изменения: оставлены
+           только латиница, кириллица и знаки; формат woff2.

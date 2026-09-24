@@ -1150,7 +1150,7 @@ export interface Drops {
   tokens: number;
   keys: number;
   finds: FindId[];
-  /** Выпавшие передачки — по редкости. */
+  /** Выпавшие посылки — по редкости. */
   parcels: CaseTier[];
 }
 
@@ -1540,12 +1540,12 @@ export function fusePlan(
 // ---------------------------------------------------------------------------
 // Питомцы — кольская фауна. Растут, пока копаешь (опыт — сломанные блоки),
 // с собой водишь одного. Каждый даёт одну прибавку, растущую с уровнем.
-// Приходят из передачек; второй такой же — лакомство, опыт текущему.
+// Приходят из посылок; второй такой же — лакомство, опыт текущему.
 // ---------------------------------------------------------------------------
 
 export type PetId = 'lemming' | 'fox' | 'wolverine' | 'raven' | 'owl' | 'calf';
 
-/** Что умеет питомец. `luck` — ключи, находки и передачки. */
+/** Что умеет питомец. `luck` — ключи, находки и посылки. */
 export type PetStat = 'loot' | 'sell' | 'dmg' | 'token' | 'luck' | 'rate';
 
 export interface PetDef {
@@ -1596,7 +1596,7 @@ export const PETS: PetDef[] = [
     name: 'Полярная сова',
     stat: 'luck',
     per: 0.03,
-    text: 'к ключам, находкам и передачкам',
+    text: 'к ключам, находкам и посылкам',
     lore: 'Видит сквозь пургу',
   },
   {
@@ -1690,9 +1690,9 @@ export function bonusOf(p: {
 }
 
 // ---------------------------------------------------------------------------
-// Передачки — Lucky Blocks присон-серверов, по-нашему «передачка с воли».
+// Посылки — Lucky Blocks присон-серверов, по-нашему «посылка с воли».
 // Падает с блока, ложится в одно из трёх мест и вскрывается, когда ты добудешь
-// ещё N блоков: чем реже передачка, тем дольше ждать. Копятся все сразу.
+// ещё N блоков: чем реже посылка, тем дольше ждать. Копятся все сразу.
 // Главный источник рун и питомцев.
 // ---------------------------------------------------------------------------
 
@@ -1703,7 +1703,7 @@ export interface Parcel {
 }
 
 export const PARCEL_SLOTS = 3;
-/** Шанс передачки с блока: примерно одна на полторы тысячи. */
+/** Шанс посылки с блока: примерно одна на полторы тысячи. */
 export const PARCEL_CHANCE = 0.0012;
 export const PARCEL_NEED: Record<CaseTier, number> = {
   common: 150,
@@ -1711,7 +1711,7 @@ export const PARCEL_NEED: Record<CaseTier, number> = {
   epic: 900,
   legend: 2000,
 };
-/** Мест нет — передачку сдают за токены. */
+/** Мест нет — посылку сдают за токены. */
 export const PARCEL_OVERFLOW: Record<CaseTier, number> = {
   common: 10,
   rare: 25,
@@ -2083,7 +2083,7 @@ const CASE_TABLE: Record<CaseTier, Slot[]> = {
   ],
 };
 
-/** Передачка: руны и питомцы — её главное, монеты и токены — подкладка. */
+/** Посылка: руны и питомцы — её главное, монеты и токены — подкладка. */
 const PARCEL_TABLE: Record<CaseTier, Slot[]> = {
   common: [
     { w: 30, make: coins(0.03, 0.06) },
@@ -2129,7 +2129,7 @@ function pickWeighted<T extends { w: number }>(list: T[], rnd: () => number): T 
  * Что лежит в сундуке. Находка в сундуке — только НЕДОСТАЮЩАЯ из доступных
  * по шахте; если таких нет, вместо неё токены.
  */
-/** Редкость сундука или передачки. */
+/** Редкость сундука или посылки. */
 export function rollTier(rnd: () => number): CaseTier {
   return pickWeighted(
     CASE_TIERS.map((t) => ({ ...t, w: t.weight })),
@@ -2137,7 +2137,7 @@ export function rollTier(rnd: () => number): CaseTier {
   ).id;
 }
 
-/** Питомец из передачки: тот, кого ещё нет; все есть — лакомство текущему. */
+/** Питомец из посылки: тот, кого ещё нет; все есть — лакомство текущему. */
 function resolvePet(pets: Pets, tier: CaseTier, rnd: () => number): Reward {
   const missing = PETS.filter((x) => pets[x.id] === undefined);
   if (missing.length) return { kind: 'pet', id: missing[Math.floor(rnd() * missing.length)].id };
@@ -2145,7 +2145,7 @@ function resolvePet(pets: Pets, tier: CaseTier, rnd: () => number): Reward {
   return { kind: 'treat', amount: PET_TREAT_XP * k };
 }
 
-/** Что лежит в передачке редкости `tier`. */
+/** Что лежит в посылке редкости `tier`. */
 export function rollParcel(
   p: { rank: number; prestige: number; pets: Pets },
   tier: CaseTier,
@@ -2229,7 +2229,7 @@ export interface CrewShiftDef {
   hours: number;
   perHour: number;
   rate: number;
-  /** Ищут ли ключи и передачки. */
+  /** Ищут ли ключи и посылки. */
   scout: boolean;
 }
 
@@ -2255,7 +2255,7 @@ export const CREW_SHIFTS: CrewShiftDef[] = [
   {
     id: 'scout',
     name: 'Разведка',
-    text: 'Копают вполсилы, зато ищут ключи и передачки',
+    text: 'Копают вполсилы, зато ищут ключи и посылки',
     hours: 6,
     perHour: 0.5,
     rate: 0.5,
@@ -2274,7 +2274,7 @@ export function crewFeedCost(p: { rank: number; prestige: number }): number {
   return nice(rankCost(Math.min(p.rank, LAST_RANK - 1), p.prestige) * 0.12);
 }
 
-/** Разведка: ключей и передачек в среднем за час смены. */
+/** Разведка: ключей и посылок в среднем за час смены. */
 export const SCOUT_KEYS_PER_H = 0.3;
 export const SCOUT_PARCELS_PER_H = 0.08;
 
@@ -2330,7 +2330,7 @@ export const PERKS: Perk[] = [
   { id: 'grip', name: 'Хватка', per: '+8% к скорости кирки', max: 5 },
   { id: 'lucky', name: 'Везунчик', per: '+10% токенов', max: 5 },
   { id: 'nose', name: 'Нюх', per: '+20% ключей и находок', max: 5 },
-  { id: 'shift', name: 'Длинная смена', per: '+1 час бригаде', max: 4 },
+  { id: 'shift', name: 'Длинная смена', per: '+1 час рабочим', max: 4 },
   { id: 'blat', name: 'Блат', per: 'после престижа — на ранг выше', max: 3 },
 ];
 
@@ -2346,7 +2346,7 @@ export function perkPointsFree(p: { prestige: number; perks: Perks }): number {
 }
 
 // ---------------------------------------------------------------------------
-// Награда в состояние. Одна функция на сундук, передачку, веху и проводника:
+// Награда в состояние. Одна функция на сундук, посылку, веху и проводника:
 // раньше каждая раздавала награды сама, и руна из сундука легла бы мимо
 // мешочка. Монеты возвращаются отдельно — они идут в ОБЩИЙ кошелёк.
 // ---------------------------------------------------------------------------
@@ -2412,7 +2412,7 @@ export function applyReward(p: PrisonState, r: Reward): Applied {
 export interface MileReward {
   tokens?: number;
   keys?: number;
-  /** Передачка вскрывается сразу — места под полем она не ждёт. */
+  /** Посылка вскрывается сразу — места под полем она не ждёт. */
   parcel?: CaseTier;
   /** Руна этой ступени, вид случайный. */
   rune?: number;
@@ -2497,7 +2497,7 @@ export const MILES: Mile[] = [
   {
     id: 'legend',
     title: 'Легенда забоя',
-    text: `Разжечь запал до «${STREAK_TIERS[STREAK_TIERS.length - 1].name}»`,
+    text: `Набрать серию до «${STREAK_TIERS[STREAK_TIERS.length - 1].name}»`,
     progress: (p) => upToM(p.bestStreak, STREAK_TIERS.length),
     reward: { keys: 3, parcel: 'epic' },
   },
@@ -2524,7 +2524,7 @@ export const MILES: Mile[] = [
   },
   {
     id: 'parcels',
-    title: 'Сто передачек',
+    title: 'Сто посылок',
     text: 'Вскрыть',
     progress: (p) => upToM(p.parcelsOpened, 100),
     reward: { rune: 4, keys: 5 },
@@ -2611,7 +2611,7 @@ export interface PrisonState {
   bestStreak: number;
   /** Чары, выключенные игроком: не срабатывают, уровни целы. */
   off: EnchantId[];
-  /** Передачки под полем (v2.49) и сколько вскрыто за всё время. */
+  /** Посылки под полем (v2.49) и сколько вскрыто за всё время. */
   parcels: Parcel[];
   parcelsOpened: number;
   /** Мешочек рун, счётчик их номеров и гнёзда кирки (0 — пусто). */
@@ -2800,7 +2800,7 @@ function normalizeEvent(raw: unknown): YardEvent | null {
   };
 }
 
-/** Передачки, руны, питомцы и вехи (v2.49) — отдельно, чтобы не раздувать. */
+/** Посылки, руны, питомцы и вехи (v2.49) — отдельно, чтобы не раздувать. */
 interface LootState {
   parcels: Parcel[];
   parcelsOpened: number;
@@ -2902,8 +2902,8 @@ export const GUIDE: GuideStep[] = [
   },
   {
     id: 'rankB',
-    title: 'Выполни норму и возьми ранг B',
-    hint: 'Одних денег мало: норма — это блоки, которые надо добыть. Жми на ранг',
+    title: 'Добудь породу и возьми ранг B',
+    hint: 'Для ранга нужны монеты и порода. Жми на полосу ранга',
     progress: (p) => upTo(p.rank, 1),
     reward: { keys: 1 },
   },
@@ -2930,7 +2930,7 @@ export const GUIDE: GuideStep[] = [
   },
   {
     id: 'streak',
-    title: `Разожги запал до «${STREAK_TIERS[1].name}»`,
+    title: `Набери серию до «${STREAK_TIERS[1].name}»`,
     hint: `${STREAK_TIERS[1].at} блоков без перерыва — полоска над полем`,
     progress: (p) => upTo(p.bestStreak, 2),
     reward: { item: ['bomb3', 1] },
@@ -2938,7 +2938,7 @@ export const GUIDE: GuideStep[] = [
   {
     id: 'bomb',
     title: 'Взорви бомбу',
-    hint: 'Кнопка 💣 под полем, потом тап по клетке',
+    hint: 'Кнопка с бомбой под полем, потом тап по клетке',
     progress: (p) => upTo(p.bombs, 1),
     reward: { tokens: 40 },
   },
@@ -2974,14 +2974,14 @@ export const GUIDE: GuideStep[] = [
   // снова — ровно ради этих трёх шагов.
   {
     id: 'parcel',
-    title: 'Вскрой передачку',
-    hint: 'Передачки падают с блоков и зреют под полем, пока копаешь',
+    title: 'Вскрой посылку',
+    hint: 'Посылки падают с блоков и зреют под полем, пока копаешь',
     progress: (p) => upTo(p.parcelsOpened, 1),
     reward: { rune: 2 },
   },
   {
     id: 'rune',
-    title: 'Вставь руну в кирку',
+    title: 'Вставь руну в оберег',
     hint: 'Лагерь → Руны. Первое гнездо открывается на 5 уровне кирки',
     progress: (p) => upTo(p.sockets.filter(Boolean).length, 1),
     reward: { pet: 'lemming' },

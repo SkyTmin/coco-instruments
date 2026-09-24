@@ -55,20 +55,20 @@ export interface AreaDef {
 export const AREAS: AreaDef[] = [
   {
     id: 'mouth',
-    name: 'Устье',
+    name: 'Вход в шахты',
     tier: 1,
     level: 0,
     ambient: 0.62,
-    lead: 'Вход в старые выработки. Лампы ещё горят.',
+    lead: 'Пещеры у лифта. Фонари горят, крыс немного.',
     built: true,
   },
   {
     id: 'haul',
-    name: 'Откатка',
+    name: 'Рельсовые туннели',
     tier: 2,
     level: 1,
     ambient: 0.4,
-    lead: 'Рельсы, вагонетки и крысиные гнёзда в них.',
+    lead: 'Вагонетки, гнёзда и логово Крысиного короля.',
     built: true,
   },
   { id: 'old', name: 'Старые выработки', tier: 3, level: 2, ambient: 0.3, lead: '', built: false },
@@ -149,7 +149,7 @@ export interface GearSet {
 export const SETS: GearSet[] = [
   {
     tier: 1,
-    name: 'Лагерный',
+    name: 'Простой',
     items: { weapon: 'Тесак из рессоры', helm: 'Ушанка', robe: 'Ватник', boots: 'Кирзачи' },
     base: '#5b5a55',
     dark: '#34332f',
@@ -161,7 +161,7 @@ export const SETS: GearSet[] = [
   },
   {
     tier: 2,
-    name: 'Забойный',
+    name: 'Шахтёрский',
     items: {
       weapon: 'Палаш забойщика',
       helm: 'Каска с фонарём',
@@ -382,8 +382,8 @@ export interface MobDef {
 export const MOBS: Record<MobId, MobDef> = {
   rat: {
     id: 'rat',
-    name: 'Пасюк',
-    many: 'пасюков',
+    name: 'Серая крыса',
+    many: 'серых крыс',
     hp: 14,
     dmg: 9,
     speed: 3.7,
@@ -414,7 +414,7 @@ export const MOBS: Record<MobId, MobDef> = {
   },
   bomber: {
     id: 'bomber',
-    name: 'Подрывник',
+    name: 'Крыса-подрывник',
     many: 'подрывников',
     hp: 16,
     dmg: 30,
@@ -687,13 +687,13 @@ export const MATS: Record<MatId, MatDef> = {
     id: 'pyrite',
     name: 'Пирит',
     share: 0.05,
-    lead: '«Кошачье золото» из подземных шахт — для каски и перековки.',
+    lead: '«Кошачье золото» из подземных шахт — для каски и улучшений.',
   },
   crown: {
     id: 'crown',
     name: 'Корона Крысиного короля',
     share: 3,
-    lead: 'Трофей. Понадобится для перековки в Кованый комплект.',
+    lead: 'Трофей. Нужен, чтобы улучшить снаряжение до Кованого.',
   },
 };
 
@@ -884,7 +884,7 @@ const bossKills = (id: BossId) => (d: DungeonState) => d.bosses[id]?.kills ?? 0;
  */
 export function reforgeConditions(slot: Slot, tier: number): Condition[] {
   if (tier === 1) {
-    if (slot === 'weapon') return [{ label: 'Убить пасюков', have: kills('rat'), need: 300 }];
+    if (slot === 'weapon') return [{ label: 'Убить серых крыс', have: kills('rat'), need: 300 }];
     if (slot === 'helm')
       return [{ label: 'Добыть пирита в шахтах подземелья', have: stat('ore'), need: 60 }];
     if (slot === 'robe') return [{ label: 'Убить жирных крыс', have: kills('fatrat'), need: 60 }];
@@ -893,7 +893,7 @@ export function reforgeConditions(slot: Slot, tier: number): Condition[] {
   if (tier === 2) {
     if (slot === 'weapon')
       return [
-        { label: 'Убить пасюков', have: kills('rat'), need: 900 },
+        { label: 'Убить серых крыс', have: kills('rat'), need: 900 },
         { label: 'Убить жирных крыс', have: kills('fatrat'), need: 200 },
       ];
     if (slot === 'helm')
@@ -908,7 +908,7 @@ export function reforgeConditions(slot: Slot, tier: number): Condition[] {
       ];
     return [
       { label: 'Убить подрывников', have: kills('bomber'), need: 120 },
-      { label: 'Убить пасюков', have: kills('rat'), need: 600 },
+      { label: 'Убить серых крыс', have: kills('rat'), need: 600 },
     ];
   }
   return [];
@@ -949,6 +949,27 @@ export function nextStep(
   if (g.plus < PLUS_SAFE) return { kind: 'plus', cost: plusCost(slot, g.tier, g.plus + 1, econ) };
   if (g.tier >= TIER_OPEN) return g.tier >= SETS.length ? { kind: 'max' } : { kind: 'soon' };
   return { kind: 'reforge', cost: reforgeCost(slot, g.tier, econ) };
+}
+
+/**
+ * Слоты, которые можно улучшить прямо сейчас: хватает монет, материалов
+ * (склад плюс рюкзак) и, для перековки, выполнены условия. По этому списку
+ * горит «!» на кнопке рюкзака и на снаряжении — без него улучшение находили
+ * только тыканьем наугад.
+ */
+export function upgradable(
+  d: DungeonState,
+  econ: number,
+  coins: number,
+  sack: Partial<Record<MatId, number>> = {},
+): Slot[] {
+  return SLOTS.filter((slot) => {
+    const step = nextStep(d, slot, econ);
+    if (step.kind !== 'plus' && step.kind !== 'reforge') return false;
+    if (step.kind === 'reforge' && !conditionsMet(d, slot, d.gear[slot].tier)) return false;
+    if (coins < step.cost.coins) return false;
+    return payFromBoth(d, step.cost, sack) !== null;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1035,7 +1056,7 @@ export const deepRock = (r: number): DeepRock => DEEP_ROCKS[r - DEEP_BASE] ?? DE
 export const DEEP_MINES: Record<DeepMineId, DeepMineDef> = {
   pyrite1: {
     id: 'pyrite1',
-    name: 'Пиритовая штольня',
+    name: 'Пиритовая шахта',
     area: 'mouth',
     windowMs: 60 * 60_000,
     ore: DEEP_BASE + 1,
@@ -1043,7 +1064,7 @@ export const DEEP_MINES: Record<DeepMineId, DeepMineDef> = {
   },
   pyrite2: {
     id: 'pyrite2',
-    name: 'Богатая пиритовая',
+    name: 'Богатая пиритовая шахта',
     area: 'haul',
     windowMs: 3 * 60 * 60_000,
     ore: DEEP_BASE + 1,

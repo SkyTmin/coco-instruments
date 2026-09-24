@@ -217,14 +217,24 @@ function make(kind: PropArt): Px | null {
       return px;
     }
     case 'plaque': {
-      // Указатель: доска на столбе, строчки надписи.
-      const px = new Px(16, 18);
-      px.rect(7, 8, 8, 17, W.base);
-      px.rect(7, 8, 7, 17, W.light);
-      px.rect(0, 1, 15, 9, W.mid);
-      px.rect(0, 1, 15, 1, W.hi);
-      px.rect(0, 9, 15, 9, W.dark);
-      for (const y of [3, 5, 7]) px.rect(2, y, 12 - (y % 3) * 2, y, W.dark);
+      // Указатель на перекрёстке: столб и две доски-стрелки. Без букв: что
+      // где, табло пишет само, когда подходишь (буквы в 16 точек — каша).
+      const px = new Px(18, 20);
+      px.rect(8, 4, 9, 19, W.base);
+      px.rect(8, 4, 8, 19, W.light);
+      // Верхняя доска смотрит вправо.
+      px.rect(2, 2, 13, 6, W.mid);
+      px.rect(2, 2, 13, 2, W.hi);
+      px.rect(2, 6, 13, 6, W.dark);
+      for (let i = 0; i < 3; i++) px.rect(14 + i, 2 + i, 14 + i, 6 - i, i === 0 ? W.mid : W.dark);
+      // Нижняя — влево.
+      px.rect(4, 9, 15, 13, W.mid);
+      px.rect(4, 9, 15, 9, W.hi);
+      px.rect(4, 13, 15, 13, W.dark);
+      for (let i = 0; i < 3; i++) px.rect(3 - i, 9 + i, 3 - i, 13 - i, i === 0 ? W.mid : W.dark);
+      // Гвозди.
+      px.set(8, 4, P.ink);
+      px.set(9, 11, P.ink);
       px.outline(P.ink);
       return px;
     }

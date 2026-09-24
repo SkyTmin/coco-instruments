@@ -102,7 +102,7 @@ const lcg = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) /
  * переходы. Породу НЕ выбирает — копает вслепую, поэтому норму добирает в
  * среднем по доле породы в шахте.
  *
- * С v2.49 он ещё вскрывает передачки, носит лучшие руны (сплавляя тройки)
+ * С v2.49 он ещё вскрывает посылки, носит лучшие руны (сплавляя тройки)
  * и водит самого выгодного питомца — всё, что множит доход, обязано
  * пройти через этот прогон, иначе темп в тесте врёт.
  */
@@ -331,7 +331,7 @@ describe('темп каторги', () => {
         (t / 3600).toFixed(2),
         'ч; кирка',
         pickLevelOf(r.xp).level,
-        'передачек',
+        'посылок',
         r.opened,
         'руны',
         JSON.stringify(r.runes.map((x) => x.kind + x.tier)),
@@ -633,7 +633,7 @@ describe('запал, уровень кирки, норма', () => {
   });
 });
 
-describe('добыча: передачки, руны, питомцы, вехи', () => {
+describe('добыча: посылки, руны, питомцы, вехи', () => {
   it('руна ступенью выше никогда не слабее нижней', () => {
     for (const d of RUNES) {
       for (let t = 1; t < RUNE_TIERS; t++) {
@@ -688,7 +688,7 @@ describe('добыча: передачки, руны, питомцы, вехи',
     expect(socketsOpen({ pickXp: 1e9, miles: ['p10'] })).toBe(4);
   });
 
-  it('питомец из передачки — только тот, кого ещё нет; все есть — лакомство', () => {
+  it('питомец из посылки — только тот, кого ещё нет; все есть — лакомство', () => {
     const rnd = lcg(11);
     const have = { lemming: 0, fox: 0, wolverine: 0, raven: 0, owl: 0 };
     let pets = 0;
@@ -758,7 +758,7 @@ describe('добыча: передачки, руны, питомцы, вехи',
     expect(b.reforge).toBe(a.reforge);
   });
 
-  it('передачка ждёт тем дольше, чем реже; мест три', () => {
+  it('посылка ждёт тем дольше, чем реже; мест три', () => {
     expect(PARCEL_NEED.legend).toBeGreaterThan(PARCEL_NEED.epic);
     expect(PARCEL_NEED.epic).toBeGreaterThan(PARCEL_NEED.rare);
     expect(PARCEL_NEED.rare).toBeGreaterThan(PARCEL_NEED.common);
@@ -770,7 +770,7 @@ describe('добыча: передачки, руны, питомцы, вехи',
     expect(n.legend).toBeGreaterThan(0);
   });
 
-  it('первый круг даёт десятки передачек и хотя бы пару рун', () => {
+  it('первый круг даёт десятки посылок и хотя бы пару рун', () => {
     const r = run();
     expect(r.opened).toBeGreaterThan(15);
     expect(r.runes.length).toBeGreaterThanOrEqual(2);

@@ -1,23 +1,22 @@
 import { useNavigate } from 'react-router-dom';
-import { AnimatedNumber, Screen } from '@/components/ui';
+import type { ReactNode } from 'react';
+import { AnimatedNumber } from '@/components/ui';
+import { GameTop, GxIcon, KIcon } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
-import { IconGift } from '@/components/icons';
 import { useFinanceStore } from '@/store';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import { levelFromXp } from '@/lib/slots-meta';
-import { CLUSTER_MIN, FREE_SPINS, SCATTER_COLS, SCATTER_ROWS } from '@/lib/scatter';
-import { COMBO_LADDER } from '@/lib/slots';
+import { SCATTER_COLS, SCATTER_ROWS } from '@/lib/scatter';
 import type { SlotSymbolId } from '@/lib/slots';
 import { tapLight } from '@/lib/haptics';
-import { rankLetter, ROCKS } from '@/lib/prison';
+import { rankLetter } from '@/lib/prison';
 import { rockTexture } from '@/lib/prison-art';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
-const prestige = (n: number) => n.toLocaleString('ru-RU');
 
 /**
  * Зал игр. Кошелёк, уровень и награды общие, поэтому баланс живёт здесь —
- * над обеими играми, а не дублируется на каждой плитке главного экрана.
+ * над всеми играми, а не дублируется на каждой плитке главного экрана.
  */
 export function GamesPage() {
   const nav = useNavigate();
@@ -39,99 +38,106 @@ export function GamesPage() {
     nav(path);
   };
 
-  const preview = (ids: SlotSymbolId[]) => (
-    <span className="game-card__reels">
-      {ids.map((id) => (
-        <img key={id} src={symbolSrc(skin, id)} width={30} height={30} alt="" />
-      ))}
-    </span>
-  );
+  const reels = (ids: SlotSymbolId[]) =>
+    ids.map((id) => <img key={id} src={symbolSrc(skin, id)} alt="" />);
 
   return (
-    <Screen
-      title="Игры"
-      subtitle="Один кошелёк на все игры"
-      className={`slots-screen slots-screen--${skin}`}
-    >
-      <div className="stack slots games" data-skin={skin}>
-        <div className="slots-scene" aria-hidden="true">
-          <span className="slots-scene__decor" />
-        </div>
+    <div className="gx gxh">
+      <div className="yard-scene-bg" aria-hidden="true" />
+      <div className="gxh__wrap">
+        <GameTop
+          title="Игры"
+          onBack={() => nav(-1)}
+          chips={
+            <>
+              <span className="gx-chip">
+                <CoinIcon size={18} />
+                <AnimatedNumber value={balance} format={(n) => fmt(n)} duration={450} />
+              </span>
+              <span className="gx-chip">
+                <KIcon name="star" size={16} /> {level.level} ур.
+              </span>
+              {freeSpins > 0 && (
+                <span className="gx-chip">
+                  <GxIcon name="slots" size={16} /> {freeSpins}
+                </span>
+              )}
+            </>
+          }
+        />
 
-        <div className="slot-hud">
-          <div className="slot-hud__cell">
-            <span className="slot-hud__label">Баланс</span>
-            <span className="slot-hud__value">
-              <AnimatedNumber value={balance} format={(n) => fmt(n)} duration={450} />
-              <CoinIcon size={18} />
+        <GameCard
+          title={theme.title}
+          art={<span className="gxh-card__reels">{reels(['seven', 'star', 'bell'])}</span>}
+          tags={['3 барабана', '5 линий']}
+          stat={slotsSpins ? `${fmt(slotsSpins)} спинов · лучший ${fmt(slotsBest)}` : null}
+          onClick={() => go('/slots')}
+        />
+        <GameCard
+          title="Каскад"
+          art={<span className="gxh-card__reels">{reels(['diamond', 'grape', 'cherry'])}</span>}
+          tags={[`Поле ${SCATTER_COLS}×${SCATTER_ROWS}`, 'Сферы до ×500']}
+          stat={scatterSpins ? `${fmt(scatterSpins)} спинов · лучший ${fmt(scatterBest)}` : null}
+          onClick={() => go('/scatter')}
+        />
+        <GameCard
+          title="Каторга"
+          dark
+          art={
+            <span className="gxh-card__reels gxh-card__reels--rocks">
+              {[14, 23, 25].map((r) => (
+                <img key={r} src={rockTexture(r)} alt="" />
+              ))}
             </span>
-          </div>
-          <div className="slot-hud__cell">
-            <span className="slot-hud__label">Уровень</span>
-            <span className="slot-hud__value">
-              {level.level}
-              {freeSpins > 0 && <span className="slot-level__free">🎟 {freeSpins}</span>}
-            </span>
-          </div>
-        </div>
+          }
+          tags={['Шахта', 'Лес', 'Подземелье']}
+          stat={prison.mined ? `Ранг ${rankLetter(prison.rank)}` : null}
+          onClick={() => go('/yard')}
+        />
 
-        <button className="game-card" onClick={() => go('/slots')}>
-          {preview(['seven', 'star', 'bell'])}
-          <span className="game-card__body">
-            <b>{theme.title}</b>
-            <i>Три барабана, пять линий, каскады до ×{COMBO_LADDER[COMBO_LADDER.length - 1]}</i>
-            <em>
-              {slotsSpins ? `${fmt(slotsSpins)} вращений · лучший ${fmt(slotsBest)}` : 'Классика'}
-            </em>
-          </span>
+        <button
+          type="button"
+          className="gx-btn gx-btn--red gx-btn--big gx-btn--block"
+          onClick={() => go('/slots')}
+        >
+          <GxIcon name="gift" /> Награды и скины
         </button>
-
-        <button className="game-card" onClick={() => go('/scatter')}>
-          {preview(['diamond', 'grape', 'cherry'])}
-          <span className="game-card__body">
-            <b>Каскад</b>
-            <i>
-              Поле {SCATTER_COLS}×{SCATTER_ROWS}, {CLUSTER_MIN} одинаковых где угодно, сферы до ×500
-              и {FREE_SPINS} фриспинов
-            </i>
-            <em>
-              {scatterSpins
-                ? `${fmt(scatterSpins)} вращений · лучший ${fmt(scatterBest)}`
-                : 'Большое поле'}
-            </em>
-          </span>
-        </button>
-
-        <button className="game-card game-card--prison" onClick={() => go('/yard')}>
-          <span className="game-card__rocks">
-            {[14, 23, 25].map((r) => (
-              <img key={r} src={rockTexture(r)} width={30} height={30} alt="" />
-            ))}
-          </span>
-          <span className="game-card__body">
-            <b>Каторга</b>
-            <i>
-              Двор, шахта и лесоповал: ломай породу, вали лес, лови метеориты и медведя, торгуй с
-              Барыгой. Деньги те же, что в автоматах
-            </i>
-            <em>
-              {prison.mined
-                ? `Ранг ${rankLetter(prison.rank)}${prison.prestige ? ` · престиж ${prestige(prison.prestige)}` : ''} · ${ROCKS[prison.rank].name.toLowerCase()}`
-                : 'Новая игра'}
-            </em>
-          </span>
-        </button>
-
-        <button className="btn btn--block rewards-cta" onClick={() => go('/slots')}>
-          <IconGift size={18} />
-          Награды, уровень и скины
-        </button>
-
-        <p className="muted" style={{ margin: 0, fontSize: 12, textAlign: 'center' }}>
-          Монеты виртуальные: купить их нельзя. Баланс, опыт и цели дня общие для всех игр: добыча
-          из шахты идёт в тот же кошелёк, из которого ставят в автоматах.
-        </p>
+        <p className="gxh__note">Монеты виртуальные — купить их нельзя</p>
       </div>
-    </Screen>
+    </div>
+  );
+}
+
+function GameCard({
+  title,
+  art,
+  tags,
+  stat,
+  dark,
+  onClick,
+}: {
+  title: string;
+  art: ReactNode;
+  tags: string[];
+  stat: string | null;
+  dark?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="gx-panel gx-panel--wood-fancy gxh-card" onClick={onClick}>
+      <span className={`gxh-card__art${dark ? ' is-dark' : ''}`}>{art}</span>
+      <span className="gxh-card__body">
+        <b>{title}</b>
+        <span className="gxh-card__tags">
+          {tags.map((t) => (
+            <i key={t}>{t}</i>
+          ))}
+        </span>
+        {stat && <em>{stat}</em>}
+      </span>
+      <span className="gx-round gx-round--red gxh-card__go" aria-hidden="true">
+        <KIcon name="arrowRight" />
+      </span>
+    </button>
   );
 }

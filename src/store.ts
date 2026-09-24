@@ -478,7 +478,7 @@ const writeDungeon = makePersister<DungeonBlob>(STORAGE_KEYS.dungeon, 3000);
 const persistDungeon = (d: DungeonState) => writeDungeon({ version: 1, ...d });
 
 /**
- * Передачки зреют от любой добычи — блоков шахты и брёвен леса. Новая
+ * Посылки зреют от любой добычи — блоков шахты и брёвен леса. Новая
  * ложится на свободное место; мест нет — сдаётся за токены.
  */
 function tickParcels(
@@ -554,7 +554,7 @@ function givePrize(p: PrisonState, x: YardPrize, now: number): PrisonState {
 }
 
 /**
- * Сдать смену бригады: деньги, токены, у разведки — ключи и передачки.
+ * Сдать смену бригады: деньги, токены, у разведки — ключи и посылки.
  * Новая смена начинается сразу, тем же нарядом, но голодной.
  */
 function collectCrew(p: PrisonState, now: number): { prison: PrisonState; y: CrewCollect } | null {
@@ -676,10 +676,10 @@ export interface PrisonLoot {
   normAdd: Record<number, number>;
   /** Перекованные блоки: клетка и порода, которой он засчитан. */
   reforged: { cell: number; rock: number }[];
-  /** Новые передачки под полем; не влезли — сданы за столько токенов. */
+  /** Новые посылки под полем; не влезли — сданы за столько токенов. */
   parcels: CaseTier[];
   parcelTokens: number;
-  /** Сколько передачек дозрело этим ударом. */
+  /** Сколько посылок дозрело этим ударом. */
   parcelsReady: number;
   /** Питомец дорос до этого уровня (0 — нет). */
   petUp: number;
@@ -747,7 +747,7 @@ export interface CasesOpened {
   newPets: PetId[];
 }
 
-/** Вскрытая передачка — для сцены на странице. */
+/** Вскрытая посылка — для сцены на странице. */
 export interface ParcelOpen {
   tier: CaseTier;
   reward: Reward;
@@ -1190,7 +1190,7 @@ interface FinanceState {
   prisonBreak: (breaks: { cell: number; rock: number }[], opts?: { streak?: number }) => PrisonLoot;
   /** Запал дошёл до ступени `tier` (0…4): рекорд и миссия дня. */
   prisonStreak: (tier: number) => void;
-  /** Вскрыть дозревшую передачку под номером `index`. */
+  /** Вскрыть дозревшую посылку под номером `index`. */
   prisonParcelOpen: (index: number) => ParcelOpen | null;
   /** Руна в гнездо `slot` (0 — вынуть). */
   prisonRuneSocket: (slot: number, runeId: number) => void;
@@ -3315,7 +3315,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       logs: f.logs + logs,
       earned: f.earned + sold,
     };
-    // Общее с шахтой: токены, ключи, передачки, питомец.
+    // Общее с шахтой: токены, ключи, посылки, питомец.
     const { chop, hollows } = sumChops(chops);
     const fresh = [
       ...chop.parcels,

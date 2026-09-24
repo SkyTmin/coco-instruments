@@ -276,7 +276,7 @@ export function prizeText(x: YardPrize): string {
   if (x.coins) parts.push(`+${x.coins.toLocaleString('ru-RU')} монет`);
   if (x.tokens) parts.push(`+${x.tokens} ✦`);
   if (x.keys) parts.push(x.keys > 1 ? `+${x.keys} ключа` : '+ключ');
-  if (x.parcel) parts.push('передачка');
+  if (x.parcel) parts.push('посылка');
   return parts.join(' · ');
 }
 

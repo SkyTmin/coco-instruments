@@ -2745,6 +2745,15 @@ export interface Usable {
 }
 
 /** Что можно сделать рядом с героем — для контекстной кнопки. */
+/**
+ * Табличка у логова рассказывает про короля; остальные — указатели дороги
+ * (их читает табло само, без нажатия).
+ */
+export function nearLair(sim: Sim, o: WorldObj): boolean {
+  const b = sim.boss;
+  return !!b && Math.hypot(b.obj.x - o.x, b.obj.y - o.y) < 14;
+}
+
 export function usableNear(sim: Sim, props = 0): Usable | null {
   const h = sim.hero;
   if (h.mode === 'dying' || h.mode === 'dead') return null;
@@ -2763,10 +2772,11 @@ export function usableNear(sim: Sim, props = 0): Usable | null {
     const cy = onWall ? o.y + 1.3 : o.y + 0.5;
     const d = Math.hypot(cx - h.x, cy - h.y);
     if (d > 1.6) continue;
-    if (o.kind === 'lift') consider({ kind: 'lift', obj: o, label: 'Клеть' }, d);
+    if (o.kind === 'lift') consider({ kind: 'lift', obj: o, label: 'Лифт' }, d);
     else if (o.kind === 'mine') consider({ kind: 'mine', obj: o, label: 'В шахту' }, d);
-    else if (o.kind === 'board') consider({ kind: 'board', obj: o, label: 'Доска' }, d);
-    else if (o.kind === 'plaque') consider({ kind: 'plaque', obj: o, label: 'Табличка' }, d + 0.3);
+    else if (o.kind === 'board') consider({ kind: 'board', obj: o, label: 'Управление' }, d);
+    else if (o.kind === 'plaque' && nearLair(sim, o))
+      consider({ kind: 'plaque', obj: o, label: 'Логово' }, d + 0.3);
     else if (o.kind === 'unlit' && !sim.lit.has(o.id))
       consider({ kind: 'light', obj: o, label: 'Зажечь' }, d);
     else if (o.kind === 'secret') {

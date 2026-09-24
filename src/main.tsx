@@ -1,6 +1,7 @@
 // Telegram UI styles first so our theme.css can override where needed.
 import '@telegram-apps/telegram-ui/dist/styles.css';
 import './theme.css';
+import './game-ui.css';
 
 // Mock the Telegram env in dev (no-op / tree-shaken in production).
 import './mockEnv';

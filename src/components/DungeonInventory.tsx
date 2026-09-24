@@ -37,6 +37,7 @@ import {
   SLOTS,
   slotsUsed,
   STACK,
+  upgradable,
 } from '@/lib/dungeon';
 import type { AreaId, Cost, DungeonState, ItemId, MatId, MeatId, Slot } from '@/lib/dungeon';
 import type { Sim } from '@/lib/dungeon-sim';
@@ -180,6 +181,9 @@ export function DungeonInventory({
     live.stats[k as keyof typeof live.stats] =
       (live.stats[k as keyof typeof live.stats] ?? 0) + (v ?? 0);
 
+  // «!» на вещи, которую можно улучшить прямо сейчас (склад плюс рюкзак).
+  const ups = upgradable(live, econ, balance, sim.sack.mats);
+
   const canAfford = (cost: Cost) =>
     balance >= cost.coins && payFromBoth(d, cost, sim.sack.mats) !== null;
 
@@ -232,6 +236,7 @@ export function DungeonInventory({
       >
         <img src={gearIcon(slot, g.tier)} alt="" />
         {g.plus > 0 && <b className="mcslot__n">+{g.plus}</b>}
+        {ups.includes(slot) && <span className="gx-badge gx-badge--gold">!</span>}
       </button>
     );
   };
@@ -281,7 +286,7 @@ export function DungeonInventory({
         {step.kind === 'reforge' && (
           <>
             <span className="mcinv__sub">
-              Перековка в «{setOf(g.tier + 1).items[pick.slot]}»
+              Улучшение до «{setOf(g.tier + 1).items[pick.slot]}»
               {conditionsMet(live, pick.slot, g.tier) ? ' — условия выполнены' : ':'}
             </span>
             {conds.map((c) => {
@@ -308,7 +313,7 @@ export function DungeonInventory({
                 disabled={!conditionsMet(live, pick.slot, g.tier) || !canAfford(step.cost)}
                 onClick={() => upgrade(pick.slot)}
               >
-                Перековать
+                Улучшить
               </button>
             </div>
           </>
@@ -339,8 +344,8 @@ export function DungeonInventory({
             : MATS[sk.id as MatId].lead}
         </span>
         <span className="mcinv__stat">
-          {meat ? 'Барыга даст' : 'Цена лишнего'} ≈ {fmt(each)} <CoinIcon size={11} /> за штуку ·
-          всего в сидоре {fmt(total)}
+          {meat ? 'Торговец даст' : 'Цена лишнего'} ≈ {fmt(each)} <CoinIcon size={11} /> за штуку ·
+          всего в рюкзаке {fmt(total)}
         </span>
         <span className="mcinv__sub">
           В ячейке до {STACK[sk.id]} шт.
@@ -392,8 +397,8 @@ export function DungeonInventory({
       <>
         <b className="mcinv__name">Карман</b>
         <span className="mcinv__sub">
-          Ещё ряд сидора: {sackSlots(sim.sackLevel + 1)} ячеек вместо {slots}. Нашивается сразу,
-          прямо здесь. Шкурки — со склада лагеря, недостающие — из сидора.
+          Рюкзак побольше: {sackSlots(sim.sackLevel + 1)} ячеек вместо {slots}. Готов сразу, прямо
+          здесь. Шкурки — со склада, недостающие — из рюкзака.
         </span>
         <CostRow cost={cost} balance={balance} d={d} sack={sim.sack.mats} />
         <div className="mcinv__acts">
@@ -403,7 +408,7 @@ export function DungeonInventory({
             disabled={!canAfford(cost)}
             onClick={pocket}
           >
-            Нашить карман
+            Увеличить рюкзак
           </button>
         </div>
       </>
@@ -457,7 +462,7 @@ export function DungeonInventory({
         </div>
 
         <div className="mcinv__label">
-          Сидор{' '}
+          Рюкзак{' '}
           <em>
             {used}/{slots} ячеек
           </em>
@@ -488,7 +493,7 @@ export function DungeonInventory({
           })}
         </div>
         {slots < rows * SACK_ROW && (
-          <span className="mcinv__lock">Тёмные ряды — карманы: тапни, чтобы нашить.</span>
+          <span className="mcinv__lock">Тёмные ряды — место под рюкзак побольше: нажми.</span>
         )}
 
         <div className="mcinv__purse">

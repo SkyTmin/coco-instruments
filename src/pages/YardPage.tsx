@@ -1,17 +1,10 @@
 import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Screen } from '@/components/ui';
+import { GameTop, GxBar, GxIcon, KIcon } from '@/components/gx';
+import type { GxIconName } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
-import {
-  KeyIcon,
-  MillIcon,
-  PickIcon,
-  campPlaceOf,
-  PrisonCamp,
-  TokenIcon,
-  useNow,
-} from '@/components/PrisonCamp';
+import { KeyIcon, campPlaceOf, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
 import type { CampPlace, CampTab } from '@/components/PrisonCamp';
 import { BarygaSheet } from '@/components/YardBits';
 import { useFinanceStore } from '@/store';
@@ -36,9 +29,7 @@ import {
   EVENTS,
   EVENTS_FROM_RANK,
 } from '@/lib/yard';
-import { barygaTexture, crownTexture, rockTexture } from '@/lib/prison-art';
-import { areaOf, bossReadyAt, dungeonOpen, DUNGEON_UNLOCK_RANK, sackCount } from '@/lib/dungeon';
-import { gearIcon } from '@/lib/dungeon-art';
+import { areaOf, bossReadyAt, dungeonOpen, DUNGEON_UNLOCK_RANK } from '@/lib/dungeon';
 import { tapLight } from '@/lib/haptics';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
@@ -71,9 +62,9 @@ export function YardPage() {
 
   if (!hydrated) {
     return (
-      <Screen title="Двор" className="prison-screen yard-screen">
+      <div className="gx yardx">
         <div className="yard-scene-bg" aria-hidden="true" />
-      </Screen>
+      </div>
     );
   }
 
@@ -105,88 +96,102 @@ export function YardPage() {
   };
 
   return (
-    <Screen
-      title="Двор"
-      subtitle={`Лагпункт · ранг ${rankLetter(prison.rank)}${forestOpen ? ` · разряд ${forest.rank + 1}` : ''}`}
-      className="prison-screen yard-screen"
-    >
+    <div className="gx yardx">
       <div className="yard-scene-bg" aria-hidden="true" />
-      <div className="prison yard">
-        <div className="yhud">
-          <span>
-            <CoinIcon size={15} /> {shortMoney(balance)}
-          </span>
-          <span className="yhud__token">
-            <TokenIcon size={14} /> {fmt(prison.tokens)}
-          </span>
-          <span>
-            <KeyIcon size={14} /> {prison.keys}
-          </span>
-        </div>
+      <div className="yardx__wrap">
+        <GameTop
+          title="Двор"
+          onBack={() => nav(-1)}
+          chips={
+            <>
+              <span className="gx-chip">
+                <CoinIcon size={18} /> {shortMoney(balance)}
+              </span>
+              <span className="gx-chip">
+                <TokenIcon size={17} /> {fmt(prison.tokens)}
+              </span>
+              <span className="gx-chip">
+                <KeyIcon size={17} /> {prison.keys}
+              </span>
+              <span className="gx-chip yardx__rank" title="Ранг в шахте">
+                <GxIcon name="pick" size={16} /> {rankLetter(prison.rank)}
+              </span>
+            </>
+          }
+        />
 
         <section
-          className={`yboard${ev ? ' is-live' : ''}`}
+          className={`gx-panel gx-panel--wood-fancy yardx-board${ev ? ' is-live' : ''}`}
           style={def ? ({ '--ev': def.color } as CSSProperties) : undefined}
         >
-          <span className="yboard__tag">Доска объявлений</span>
-          {ev && def ? (
-            <>
-              <b className="yboard__name">
-                <i>{def.glyph}</i> {def.name}
-                <em>{clock(ev.until - now)}</em>
-              </b>
-              <span className="yboard__lead">{def.lead}</span>
-              {ev.need > 0 && (
-                <span className="yboard__bar">
-                  <i style={{ transform: `scaleX(${Math.min(1, ev.have / ev.need)})` }} />
+          <div className="gx-panel yardx-note">
+            {ev && def ? (
+              <>
+                <div className="yardx-note__head">
+                  <span className="yardx-note__glyph">{def.glyph}</span>
+                  <b>{def.name}</b>
+                  <em>
+                    <GxIcon name="hourglass" size={14} /> {clock(ev.until - now)}
+                  </em>
+                </div>
+                <span className="yardx-note__lead">{def.lead}</span>
+                {ev.need > 0 && (
+                  <GxBar
+                    value={Math.min(1, ev.have / ev.need)}
+                    tone="gold"
+                    label={`${fmt(ev.have)} / ${fmt(ev.need)}`}
+                  />
+                )}
+                <button
+                  type="button"
+                  className="gx-btn gx-btn--red gx-btn--block"
+                  onClick={() => go(ev.place === 'forest' ? '/forest' : '/prison')}
+                >
+                  <GxIcon name={ev.place === 'forest' ? 'axe' : 'pick'} />
+                  {ev.place === 'forest' ? 'В лес' : 'В шахту'}
+                </button>
+              </>
+            ) : (
+              <div className="yardx-note__quiet">
+                <GxIcon name="scroll" size={30} />
+                <span>
+                  {quiet
+                    ? `События во дворе начнутся с ранга ${rankLetter(EVENTS_FROM_RANK)}`
+                    : prison.eventNext > now
+                      ? `Тихо. Следующее событие — через ${nextMin} мин, пока работаешь`
+                      : 'Событие вот-вот — начни копать или рубить'}
                 </span>
-              )}
-              <button
-                type="button"
-                className="btn btn--primary btn--block"
-                onClick={() => go(ev.place === 'forest' ? '/forest' : '/prison')}
-              >
-                {ev.place === 'forest' ? 'На делянку' : 'В шахту'}
-              </button>
-            </>
-          ) : quiet ? (
-            <span className="yboard__lead">
-              Двор оживёт с ранга {rankLetter(EVENTS_FROM_RANK)}: метеориты, конвои, Куйва, медведь.
-            </span>
-          ) : (
-            <span className="yboard__lead">
-              Тихо.{' '}
-              {prison.eventNext > now
-                ? `Следующее событие — не раньше чем через ${nextMin} мин, за работой в шахте или на делянке.`
-                : 'Событие вот-вот: начни копать или рубить.'}
-            </span>
-          )}
-          <span className="yboard__all">
+              </div>
+            )}
+          </div>
+          <div className="yardx-board__all">
             {EVENTS.map((e) => (
-              <i key={e.id} title={e.name} style={{ '--ev': e.color } as CSSProperties}>
-                {e.glyph} {e.name}
-              </i>
+              <span
+                key={e.id}
+                title={e.name}
+                className={ev?.id === e.id ? 'is-on' : ''}
+                style={{ '--ev': e.color } as CSSProperties}
+              >
+                {e.glyph}
+              </span>
             ))}
-          </span>
-          {prison.eventsDone > 0 && (
-            <span className="yboard__done">Событий закрыто: {fmt(prison.eventsDone)}</span>
-          )}
+          </div>
         </section>
 
-        <div className="ybuildings">
+        <div className="yardx-grid">
           <Building
-            icon={<img src={rockTexture(prison.mine.id)} alt="" />}
+            icon="gold-mine"
             name="Шахта"
-            text={`${ROCKS[prison.mine.id].name}, ранг ${rankLetter(prison.rank)}`}
+            text={`${ROCKS[prison.mine.id].name} · ранг ${rankLetter(prison.rank)}`}
             badge={ev?.place === 'mine' ? def?.glyph : null}
             onClick={() => go('/prison')}
           />
           <Building
-            icon={<img src={crownTexture(forest.rank)} alt="" />}
-            name="Лесоповал"
+            icon="forest"
+            name="Лес"
             text={
               forestOpen
-                ? `Делянка ${forest.rank + 1}: ${SPECIES[forest.rank].name.toLowerCase()}`
+                ? `${SPECIES[forest.rank].name} · разряд ${forest.rank + 1}`
                 : `С ранга ${rankLetter(FOREST_UNLOCK_RANK)}`
             }
             locked={!forestOpen}
@@ -194,38 +199,32 @@ export function YardPage() {
             onClick={() => go('/forest')}
           />
           <Building
-            icon={<img src={gearIcon('helm', dungeon.gear.helm.tier)} alt="" />}
-            name="Клеть"
+            icon="cave"
+            name="Подземелье"
             text={
               !dgOpen
                 ? `С ранга ${rankLetter(DUNGEON_UNLOCK_RANK)}`
                 : dungeon.run
-                  ? `Вылазка ждёт: ${areaOf(dungeon.run.area).name}, сидор ${sackCount(dungeon.run.sack)}`
+                  ? `Ты внизу: ${areaOf(dungeon.run.area).name}`
                   : kingAt > now
-                    ? `Подземелье · король вернётся через ${Math.ceil((kingAt - now) / 60_000)} мин`
-                    : 'Подземелье · король в логове'
+                    ? `Король вернётся через ${Math.ceil((kingAt - now) / 60_000)} мин`
+                    : 'Крысиный король в логове'
             }
             locked={!dgOpen}
             badge={dungeon.run ? '!' : null}
             onClick={() => go('/dungeon')}
           />
           <Building
-            icon={
-              zoneOpen ? (
-                <img src={rockTexture(zoneMineId(prison.prestige))} alt="" />
-              ) : (
-                <span className="ybuilding__glyph">⛓</span>
-              )
-            }
-            name="Спецзона"
+            icon="crystal"
+            name="Особая шахта"
             text={
               !zoneOpen
                 ? `После ${ZONE_TIERS[0]}-го престижа`
                 : prison.zone.on
-                  ? `Ты там · осталось ${Math.ceil(zoneMs / 60_000)} мин`
+                  ? `Ты там · ${Math.ceil(zoneMs / 60_000)} мин`
                   : zoneMs > 0
-                    ? `${ROCKS[zoneMineId(prison.prestige)].name}, ${Math.ceil(zoneMs / 60_000)} мин сегодня`
-                    : 'Время на сегодня вышло'
+                    ? `${ROCKS[zoneMineId(prison.prestige)].name} · ${Math.ceil(zoneMs / 60_000)} мин`
+                    : 'На сегодня всё'
             }
             locked={!zoneOpen || (!prison.zone.on && zoneMs <= 0)}
             badge={zoneOpen && zoneMs > 0 && !prison.zone.on ? '✦' : null}
@@ -235,9 +234,9 @@ export function YardPage() {
             }}
           />
           <Building
-            icon={<img src={barygaTexture()} alt="" />}
-            name="Барыга"
-            text={`Товар сменится через ${Math.floor(barygaNext / 3_600_000)} ч ${Math.ceil((barygaNext % 3_600_000) / 60_000)} мин`}
+            icon="shop"
+            name="Торговец"
+            text={`Новый товар через ${Math.floor(barygaNext / 3_600_000)} ч ${Math.ceil((barygaNext % 3_600_000) / 60_000)} мин`}
             badge={hotLeft ? '%' : null}
             onClick={() => {
               tapLight();
@@ -245,38 +244,38 @@ export function YardPage() {
             }}
           />
           <Building
-            icon={<PickIcon pick={prison.pick} size={30} />}
+            icon="anvil"
             name="Кузница"
             text="Кирка, заточка, рюкзак, чары"
             onClick={() => open('forge')}
           />
           <Building
-            icon={<MillIcon size={30} />}
+            icon="saw"
             name="Лесопилка"
             text={
               mill.level > 0
-                ? `Досок: ${fmt(sumRow(mill.boards))}, в очереди ${fmt(sumRow(mill.queue))}`
+                ? `Досок ${fmt(sumRow(mill.boards))}, в очереди ${fmt(sumRow(mill.queue))}`
                 : 'Пилорамы ещё нет'
             }
             badge={mill.level > 0 && sumRow(mill.boards) >= PROP_BOARDS ? '•' : null}
             onClick={() => open('mill')}
           />
           <Building
-            icon={<KeyIcon size={28} />}
-            name="Каптёрка"
-            text="Сундуки под ключ-слезу"
+            icon="chest-open"
+            name="Сундуки"
+            text={prison.keys > 0 ? `Ключей: ${prison.keys}` : 'Ключи падают в шахте'}
             badge={prison.keys > 0 ? prison.keys : null}
             onClick={() => open('cases')}
           />
           <Building
-            icon={<span className="ybuilding__glyph">⚒</span>}
-            name="Бригада"
-            text={crew.blocks > 0 ? `Накопала ${fmt(crew.blocks)} блоков` : 'Копает, пока тебя нет'}
+            icon="miner"
+            name="Рабочие"
+            text={crew.blocks > 0 ? `Накопали ${fmt(crew.blocks)} блоков` : 'Копают, пока тебя нет'}
             badge={crew.blocks > 0 && crew.minutes >= 10 ? '•' : null}
             onClick={() => open('crew')}
           />
           <Building
-            icon={<span className="ybuilding__glyph">🎰</span>}
+            icon="slots"
             name="Автоматы"
             text="Тот же кошелёк"
             onClick={() => go('/games')}
@@ -295,7 +294,7 @@ export function YardPage() {
         />
       )}
       {baryga && <BarygaSheet onClose={() => setBaryga(false)} />}
-    </Screen>
+    </div>
   );
 }
 
@@ -307,7 +306,7 @@ function Building({
   locked = false,
   onClick,
 }: {
-  icon: ReactNode;
+  icon: GxIconName;
   name: string;
   text: string;
   badge?: ReactNode;
@@ -317,14 +316,17 @@ function Building({
   return (
     <button
       type="button"
-      className={`ybuilding${locked ? ' is-locked' : ''}`}
+      className={`yardx-b${locked ? ' is-locked' : ''}`}
       onClick={onClick}
       disabled={locked}
     >
-      <span className="ybuilding__ico">{icon}</span>
+      <span className="yardx-b__medal">
+        <GxIcon name={icon} />
+        {locked && <KIcon name="locked" size={18} className="yardx-b__lock" />}
+      </span>
       <b>{name}</b>
       <i>{text}</i>
-      {badge != null && <em className="ybuilding__badge">{badge}</em>}
+      {badge != null && <span className="gx-badge">{badge}</span>}
     </button>
   );
 }

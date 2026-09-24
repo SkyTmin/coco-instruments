@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Sheet } from '@/components/ui';
+import { GxIcon, GxSheet } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { RewardIcon, rewardLabel } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
@@ -132,7 +132,7 @@ export function prizeSay(x: YardPrize): string {
   return `${name}: ${prizeText(x)}${item}`;
 }
 
-// ---- Барыга -----------------------------------------------------------------
+// ---- Торговец (в коде — Барыга) -----------------------------------------------------------------
 
 export function BarygaSheet({
   onClose,
@@ -159,15 +159,15 @@ export function BarygaSheet({
   const m = Math.ceil((next % 3_600_000) / 60_000);
 
   return (
-    <Sheet title="Барыга" onClose={onClose}>
+    <GxSheet title="Торговец" className="gx-camp" onClose={onClose}>
       <div className="stack">
         <div className="ybaryga">
           <img src={barygaTexture()} alt="" />
           <span>
-            <b>«Чего надо? Всё есть, всё за наличные».</b>
+            <b>«Всё есть, всё за монеты».</b>
             <i>
-              Новый товар через {h ? `${h} ч ` : ''}
-              {m} мин. Токены — только тут за монеты.
+              <GxIcon name="hourglass" size={14} /> Новый товар через {h ? `${h} ч ` : ''}
+              {m} мин
             </i>
           </span>
         </div>
@@ -221,11 +221,10 @@ export function BarygaSheet({
         })}
         {note && <p className="ybaryga__note">{note}</p>}
         <p className="pcamp-note">
-          Барыга берёт только монеты — это единственный, кто меняет деньги на токены и ключи.
-          Горячий лот — со скидкой, пока не разобрали.
+          Только здесь монеты меняются на токены и ключи. Товар со скидкой — пока не разобрали.
         </p>
       </div>
-    </Sheet>
+    </GxSheet>
   );
 }
 

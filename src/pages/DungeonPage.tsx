@@ -1,11 +1,11 @@
-// Подземелье: клеть наверху (выбор спуска, снаряжение, вести снизу), сама
+// Подземелье: лобби наверху (снаряжение, выбор спуска, король и шахты), сама
 // вылазка (`components/DungeonRun`) и то, что после неё — итог подъёма или
 // «растащили». Мир внизу цельный: переходов между районами нет, экран
-// загрузки — только у клети, при спуске и при подъёме (так решил владелец).
+// загрузки — только у лифта, при спуске и при подъёме (так решил владелец).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Screen } from '@/components/ui';
+import { GameTop, GxBar, GxIcon, KIcon } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
@@ -15,13 +15,13 @@ import { useFinanceStore } from '@/store';
 import {
   AREAS,
   areaOf,
-  BOSSES,
   bossReadyAt,
   DEEP_DONE_AT,
   DEEP_MINES,
   deepMineNow,
   dungeonOpen,
   DUNGEON_UNLOCK_RANK,
+  econOf,
   heroOf,
   levelOf,
   MATS,
@@ -30,6 +30,7 @@ import {
   slotsUsed,
   setOf,
   SLOTS,
+  upgradable,
 } from '@/lib/dungeon';
 import type { AreaId, DeepMineId, MatId } from '@/lib/dungeon';
 import { buildWorld } from '@/lib/dungeon-world';
@@ -116,9 +117,9 @@ export function DungeonPage() {
 
   if (!hydrated) {
     return (
-      <Screen title="Клеть" className="prison-screen dg-screen">
+      <div className="gx dgl">
         <div className="dg-shaft-bg" aria-hidden="true" />
-      </Screen>
+      </div>
     );
   }
 
@@ -136,100 +137,109 @@ export function DungeonPage() {
 
   // ---- После -------------------------------------------------------------
 
+  const campSheet = camp && (
+    <PrisonCamp
+      place="dungeon"
+      tab={camp}
+      onTab={setCamp}
+      onClose={() => setCamp(null)}
+      onGain={() => undefined}
+      onSpend={() => undefined}
+    />
+  );
+
   if (view === 'summary' && end?.kind === 'extract') {
     const h = end.exit.haul;
     const mats = Object.entries(h.mats) as [MatId, number][];
+    const nothing = !h.meat && !h.coins && !mats.length && !h.tokens && !h.keys;
     return (
-      <Screen title="Поднялся" className="prison-screen dg-screen">
+      <div className="gx dgl dgl--after">
         <div className="dg-shaft-bg" aria-hidden="true" />
-        <div className="dg-after">
-          <div className="dg-after__pay">
-            <span>В кошелёк</span>
-            <b>
-              +{fmt(end.exit.pay)} <CoinIcon size={22} />
-            </b>
-          </div>
-          <div className="dg-after__list">
+        <div className="dgl__wrap">
+          <div className="gx-ribbon gx-ribbon--curtain dgl__big">Добыча</div>
+          <div className="gx-panel gx-panel--fancy dgl-after">
+            <div className="dgl-after__pay">
+              <CoinIcon size={34} />
+              <b>+{fmt(end.exit.pay)}</b>
+            </div>
             {h.meat > 0 && (
-              <span>
+              <div className="gx-row">
                 <img src={itemUrl('meat')} alt="" />
-                Мясо Барыге: {h.meat} шт.
+                <span>Мясо продано · {h.meat} шт.</span>
                 <b>
-                  {fmt(h.meatValue)} <CoinIcon size={13} />
+                  {fmt(h.meatValue)} <CoinIcon size={14} />
                 </b>
-              </span>
+              </div>
             )}
             {h.coins > 0 && (
-              <span>
-                <CoinIcon size={18} />
-                Монеты из сидора
+              <div className="gx-row">
+                <CoinIcon size={26} />
+                <span>Монеты из рюкзака</span>
                 <b>{fmt(h.coins)}</b>
-              </span>
+              </div>
             )}
             {mats.map(([id, n]) => (
-              <span key={id}>
+              <div key={id} className="gx-row">
                 <img src={itemUrl(id)} alt="" />
-                {MATS[id].name} — на склад
-                <b>{n}</b>
-              </span>
+                <span>{MATS[id].name} → склад</span>
+                <b>+{n}</b>
+              </div>
             ))}
             {h.tokens > 0 && (
-              <span>
-                <TokenIcon size={18} />
-                Токены — в каторгу
-                <b>{h.tokens}</b>
-              </span>
+              <div className="gx-row">
+                <TokenIcon size={26} />
+                <span>Токены</span>
+                <b>+{h.tokens}</b>
+              </div>
             )}
             {h.keys > 0 && (
+              <div className="gx-row">
+                <KeyIcon size={26} />
+                <span>Ключи от сундуков</span>
+                <b>+{h.keys}</b>
+              </div>
+            )}
+            {nothing && <p className="dgl-after__empty">Рюкзак пустой — зато живой.</p>}
+            <div className="dgl-after__meta">
               <span>
-                <KeyIcon size={18} />
-                Ключи
-                <b>{h.keys}</b>
+                <GxIcon name="rat" size={18} /> {fmt(h.killed)}
               </span>
-            )}
-            {!h.meat && !h.coins && !mats.length && !h.tokens && !h.keys && (
-              <span className="dg-after__empty">Сидор пустой — зато живой.</span>
-            )}
+              <span>
+                <GxIcon name="hourglass" size={18} /> {minutes(h.ms)}
+              </span>
+            </div>
           </div>
-          <p className="dg-after__meta">
-            Убито: {fmt(h.killed)} · внизу {minutes(h.ms)}
-            {h.full ? ' · сидор был полон' : ''}
-          </p>
-          <div className="stack">
+          <div className="dgl__actions">
             <button
-              className="btn btn--primary btn--block"
+              className="gx-btn gx-btn--red gx-btn--big gx-btn--block"
               onClick={() => {
                 setEnd(null);
                 setView('lobby');
               }}
             >
-              К клети
+              <GxIcon name="lift" />
+              Ещё раз вниз
             </button>
-            <button
-              className="btn btn--ghost btn--block"
-              onClick={() => {
-                tapLight();
-                setCamp('gear');
-              }}
-            >
-              Снаряжение
-            </button>
-            <button className="btn btn--ghost btn--block" onClick={() => nav('/yard')}>
-              Во двор
-            </button>
+            <div className="dgl__pair">
+              <button
+                className="gx-btn"
+                onClick={() => {
+                  tapLight();
+                  setCamp('gear');
+                }}
+              >
+                <GxIcon name="anvil" />
+                Снаряжение
+              </button>
+              <button className="gx-btn" onClick={() => nav('/yard')}>
+                <GxIcon name="village" />
+                Во двор
+              </button>
+            </div>
           </div>
         </div>
-        {camp && (
-          <PrisonCamp
-            place="dungeon"
-            tab={camp}
-            onTab={setCamp}
-            onClose={() => setCamp(null)}
-            onGain={() => undefined}
-            onSpend={() => undefined}
-          />
-        )}
-      </Screen>
+        {campSheet}
+      </div>
     );
   }
 
@@ -238,94 +248,87 @@ export function DungeonPage() {
     const mats = Object.entries(l.mats) as [MatId, number][];
     const any = l.meat || l.coins || mats.length || l.tokens || l.keys;
     return (
-      <Screen title="Растащили" className="prison-screen dg-screen dg-screen--dead">
+      <div className="gx dgl dgl--dead">
         <div className="dg-shaft-bg dg-shaft-bg--dead" aria-hidden="true" />
-        <div className="dg-after dg-after--dead">
-          <b className="dg-after__skull">Тебя вынесли без сознания</b>
-          <p className="dg-after__meta">Всё, что было в сидоре, крысы растащили по норам:</p>
-          <div className="dg-after__list dg-after__list--lost">
+        <div className="dgl__wrap">
+          <div className="dgl-dead__skull">
+            <GxIcon name="skull" size={72} />
+          </div>
+          <div className="gx-ribbon gx-ribbon--curtain dgl__big">Ты погиб</div>
+          <div className="gx-panel gx-panel--wood dgl-after">
+            <p className="dgl-after__lead">Крысы растащили рюкзак:</p>
             {l.meat > 0 && (
-              <span>
+              <div className="gx-row">
                 <img src={itemUrl('meat')} alt="" />
-                Мясо: {l.meat} шт.
-                <b>
-                  −{fmt(l.meatValue)} <CoinIcon size={13} />
-                </b>
-              </span>
+                <span>Мясо · {l.meat} шт.</span>
+                <b>−{fmt(l.meatValue)}</b>
+              </div>
             )}
             {l.coins > 0 && (
-              <span>
-                <CoinIcon size={18} />
-                Монеты
+              <div className="gx-row">
+                <CoinIcon size={26} />
+                <span>Монеты</span>
                 <b>−{fmt(l.coins)}</b>
-              </span>
+              </div>
             )}
             {mats.map(([id, n]) => (
-              <span key={id}>
+              <div key={id} className="gx-row">
                 <img src={itemUrl(id)} alt="" />
-                {MATS[id].name}
+                <span>{MATS[id].name}</span>
                 <b>−{n}</b>
-              </span>
+              </div>
             ))}
             {l.tokens > 0 && (
-              <span>
-                <TokenIcon size={18} />
-                Токены
+              <div className="gx-row">
+                <TokenIcon size={26} />
+                <span>Токены</span>
                 <b>−{l.tokens}</b>
-              </span>
+              </div>
             )}
             {l.keys > 0 && (
-              <span>
-                <KeyIcon size={18} />
-                Ключи
+              <div className="gx-row">
+                <KeyIcon size={26} />
+                <span>Ключи</span>
                 <b>−{l.keys}</b>
+              </div>
+            )}
+            {!any && <p className="dgl-after__empty">Нести было нечего.</p>}
+            <div className="dgl-after__kept">
+              <GxIcon name="shield" size={20} />
+              <span>
+                Остались опыт{l.killed > 0 ? `, ${fmt(l.killed)} убитых` : ''} и открытые места
               </span>
-            )}
-            {!any && (
-              <span className="dg-after__empty">Нести было нечего — потерял только время.</span>
-            )}
+            </div>
           </div>
-          <p className="dg-after__meta">
-            Осталось с тобой:{' '}
-            {l.killed > 0 ? `${fmt(l.killed)} убитых — в бестиарии и в условиях перековки, ` : ''}
-            опыт, открытые решётки и фонари. Внизу ты пробыл {minutes(l.ms)}.
-          </p>
-          <div className="stack">
+          <div className="dgl__actions">
             <button
-              className="btn btn--primary btn--block"
+              className="gx-btn gx-btn--red gx-btn--big gx-btn--block"
               onClick={() => {
                 setEnd(null);
                 setView('lobby');
               }}
             >
-              К клети
+              <GxIcon name="lift" />
+              Снова вниз
             </button>
             <button
-              className="btn btn--ghost btn--block"
+              className="gx-btn gx-btn--block"
               onClick={() => {
                 tapLight();
                 setCamp('gear');
               }}
             >
-              Снаряжение
+              <GxIcon name="anvil" />
+              Улучшить снаряжение
             </button>
           </div>
         </div>
-        {camp && (
-          <PrisonCamp
-            place="dungeon"
-            tab={camp}
-            onTab={setCamp}
-            onClose={() => setCamp(null)}
-            onGain={() => undefined}
-            onSpend={() => undefined}
-          />
-        )}
-      </Screen>
+        {campSheet}
+      </div>
     );
   }
 
-  // ---- Клеть наверху -------------------------------------------------------
+  // ---- Лобби наверху ------------------------------------------------------
 
   const open = dungeonOpen(prison);
   const hero = heroOf(d, prison);
@@ -338,150 +341,188 @@ export function DungeonPage() {
   const run = d.run;
   const kingAt = bossReadyAt(d, 'king');
   const lifts = AREAS.filter((a) => a.built);
+  const ups = upgradable(d, econOf(prison), balance);
+  const chips = (
+    <>
+      <span className="gx-chip">
+        <CoinIcon size={18} /> {shortMoney(balance)}
+      </span>
+      <span className="gx-chip" title={MATS.skin.name}>
+        <img src={itemUrl('skin')} alt="" /> {fmt(d.stash.skin ?? 0)}
+      </span>
+      <span className="gx-chip" title={MATS.pyrite.name}>
+        <img src={itemUrl('pyrite')} alt="" /> {fmt(d.stash.pyrite ?? 0)}
+      </span>
+    </>
+  );
 
   return (
-    <Screen
-      title="Клеть"
-      subtitle={open ? `Спуск в подземелье · ур. ${lv.level}` : 'Подземелье под лагерем'}
-      className="prison-screen dg-screen"
-    >
+    <div className="gx dgl">
       <div className="dg-shaft-bg" aria-hidden="true" />
-      {!open ? (
-        <div className="forest-lock">
-          <b>Клеть пустят с ранга {rankLetter(DUNGEON_UNLOCK_RANK)}</b>
-          <p>
-            Под лагерем — старые выработки, и там крысы. Сперва шахта: возьми ранг{' '}
-            {rankLetter(DUNGEON_UNLOCK_RANK)}, и тебя допустят к клети.
-          </p>
-          <button className="btn btn--primary btn--block" onClick={() => nav('/prison')}>
-            В шахту
-          </button>
-        </div>
-      ) : (
-        <div className="dg-lobby">
-          <div className="dg-lobby__hero">
-            <img className="dg-lobby__sprite" src={heroUrl} alt="" />
-            <div className="dg-lobby__stats">
-              <b>{setOf(d.gear.weapon.tier).name} комплект</b>
-              <span className="dg-lobby__gear">
-                {SLOTS.map((s) => (
-                  <span key={s} title={setOf(d.gear[s].tier).items[s]}>
-                    <img src={gearIcon(s, d.gear[s].tier)} alt="" />
-                    {d.gear[s].plus > 0 && <em>+{d.gear[s].plus}</em>}
-                  </span>
-                ))}
-              </span>
-              <i>
-                здоровье {hero.maxHp} · урон {hero.dmg.toFixed(0)} · броня {hero.armor.toFixed(0)}
-              </i>
-              <i>сидор на {sackSlots(d.sackLevel)} ячеек</i>
-            </div>
-            <button
-              type="button"
-              className="btn btn--sm dg-lobby__camp"
-              onClick={() => {
-                tapLight();
-                setCamp('gear');
-              }}
-            >
-              Лагерь
+      <div className="dgl__wrap">
+        <GameTop title="Подземелье" onBack={() => nav(-1)} chips={open ? chips : undefined} />
+        {!open ? (
+          <div className="gx-panel gx-panel--wood-fancy dgl-lock">
+            <GxIcon name="gate" size={64} />
+            <b>Откроется на ранге {rankLetter(DUNGEON_UNLOCK_RANK)}</b>
+            <span>Под лагерем старые шахты, и там крысы. Сначала поднимись в шахте.</span>
+            <button className="gx-btn gx-btn--red gx-btn--block" onClick={() => nav('/prison')}>
+              <GxIcon name="pick" />В шахту
             </button>
           </div>
-
-          {!d.intro && !run && (
-            <div className="dg-intro">
-              <b>Что внизу</b>
-              <p>
-                Под лагерем — выработки, брошенные ещё при старой власти. Там крысы: пасюки, жирные,
-                подрывники с шашками, а в конце Откатки — Крысиный король.
-              </p>
-              <p>
-                С крыс падает мясо — Барыга берёт его за монеты. Шкурки, хвосты и пирит — на
-                снаряжение. Добыча твоя, только пока жив: <b>умрёшь — растащат весь сидор</b>.
-                Вынести — только клетью.
-              </p>
-            </div>
-          )}
-
-          {run ? (
-            <div className="dg-resume">
-              <b>Вылазка ждёт внизу</b>
-              <span>
-                {areaOf(run.area).name} · здоровье {Math.ceil(run.hp)} · сидор {slotsUsed(run.sack)}
-                /{sackSlots(d.sackLevel)} ячеек · убито {run.killed}
-              </span>
-              <button className="btn btn--primary btn--block" onClick={() => descend(run.area)}>
-                Вернуться вниз
+        ) : (
+          <>
+            <div className="gx-panel gx-panel--wood-fancy dgl-hero">
+              <div className="dgl-hero__pic">
+                <img src={heroUrl} alt="" />
+                <span className="gx-hex">{lv.level}</span>
+              </div>
+              <div className="dgl-hero__info">
+                <b>{setOf(d.gear.weapon.tier).name} комплект</b>
+                <div className="dgl-hero__stats">
+                  <span title="Здоровье">
+                    <GxIcon name="heart" size={18} /> {hero.maxHp}
+                  </span>
+                  <span title="Урон">
+                    <GxIcon name="sword" size={18} /> {hero.dmg.toFixed(0)}
+                  </span>
+                  <span title="Броня">
+                    <GxIcon name="shield" size={18} /> {hero.armor.toFixed(0)}
+                  </span>
+                  <span title="Рюкзак">
+                    <GxIcon name="backpack" size={18} /> {sackSlots(d.sackLevel)}
+                  </span>
+                </div>
+                <div className="dgl-hero__gear">
+                  {SLOTS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      title={setOf(d.gear[s].tier).items[s]}
+                      onClick={() => {
+                        tapLight();
+                        setCamp('gear');
+                      }}
+                    >
+                      <img src={gearIcon(s, d.gear[s].tier)} alt="" />
+                      {d.gear[s].plus > 0 && <em>+{d.gear[s].plus}</em>}
+                      {ups.includes(s) && <span className="gx-badge gx-badge--gold">!</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="gx-btn gx-btn--sm dgl-hero__up"
+                onClick={() => {
+                  tapLight();
+                  setCamp('gear');
+                }}
+              >
+                <GxIcon name="anvil" />
+                Улучшить снаряжение
+                {ups.length > 0 && <span className="gx-badge gx-badge--gold">!</span>}
               </button>
             </div>
-          ) : (
-            <div className="dg-lifts">
-              {lifts.map((a) => {
-                const ok = d.lifts.includes(a.id);
+
+            {run ? (
+              <div className="gx-panel gx-panel--iron dgl-resume">
+                <GxIcon name="miner" size={40} />
+                <div>
+                  <b>Ты остался внизу</b>
+                  <span>
+                    {areaOf(run.area).name} · рюкзак {slotsUsed(run.sack)}/{sackSlots(d.sackLevel)}
+                  </span>
+                  <GxBar
+                    value={run.hp / Math.max(1, hero.maxHp)}
+                    label={`${Math.ceil(run.hp)} / ${hero.maxHp}`}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="dgl-areas">
+                {lifts.map((a, i) => {
+                  const ok = d.lifts.includes(a.id);
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      className={`dgl-area${lift === a.id ? ' is-on' : ''}${ok ? '' : ' is-locked'}`}
+                      disabled={!ok}
+                      onClick={() => {
+                        tapLight();
+                        setLift(a.id);
+                      }}
+                    >
+                      <img src={`/ui/areas/${a.id}.png`} alt="" />
+                      <span className="dgl-area__info">
+                        <b>{a.name}</b>
+                        <span className="dgl-area__stars" aria-label={`сложность ${i + 1}`}>
+                          {Array.from({ length: 3 }, (_, k) => (
+                            <KIcon
+                              key={k}
+                              name="star"
+                              size={14}
+                              className={k <= i ? 'is-on' : ''}
+                            />
+                          ))}
+                        </span>
+                        <i>{ok ? a.lead : 'Лифт сломан — дойди пешком и почини'}</i>
+                      </span>
+                      {!ok && (
+                        <span className="dgl-area__lock">
+                          <KIcon name="locked" size={26} />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              className="gx-btn gx-btn--red gx-btn--big gx-btn--block dgl-go"
+              onClick={() => descend(run ? run.area : lift)}
+            >
+              <GxIcon name="lift" />
+              {run ? 'Вернуться вниз' : 'Спуститься'}
+            </button>
+            <p className="dgl-warn">
+              <GxIcon name="skull" size={16} /> Погибнешь — добыча из рюкзака пропадёт
+            </p>
+
+            <div className="dgl-status">
+              <div className="gx-panel gx-panel--wood dgl-tile">
+                <GxIcon name="crown" size={28} className={kingAt > now ? '' : 'is-gold'} />
+                <b>Король</b>
+                <span>{kingAt > now ? `через ${clock(kingAt - now)}` : 'в логове'}</span>
+              </div>
+              {(Object.keys(DEEP_MINES) as DeepMineId[]).map((id) => {
+                const m = deepMineNow(d, id, now, MINE_CELLS);
+                const share = minedShare(m.dug);
+                const def = DEEP_MINES[id];
+                const left = clock(mineNextAt(id, now) - now);
                 return (
-                  <button
-                    key={a.id}
-                    type="button"
-                    className={`dg-lift${lift === a.id ? ' is-on' : ''}${ok ? '' : ' is-broken'}`}
-                    disabled={!ok}
-                    onClick={() => {
-                      tapLight();
-                      setLift(a.id);
-                    }}
-                  >
-                    <b>{a.name}</b>
-                    <i>{ok ? a.lead : 'клеть сломана — почини её внизу'}</i>
-                  </button>
+                  <div key={id} className="gx-panel gx-panel--wood dgl-tile">
+                    <GxIcon name="minecart" size={28} className={share > 0 ? '' : 'is-gold'} />
+                    <b>{id === 'pyrite1' ? 'Шахта' : 'Богатая шахта'}</b>
+                    <span>
+                      {share >= DEEP_DONE_AT
+                        ? `новая через ${left}`
+                        : share > 0
+                          ? `выкопано ${Math.round((share / DEEP_DONE_AT) * 100)}%`
+                          : 'полная'}
+                    </span>
+                    <i>{areaOf(def.area).name}</i>
+                  </div>
                 );
               })}
-              <button className="btn btn--primary btn--block dg-go" onClick={() => descend(lift)}>
-                Спуститься
-              </button>
             </div>
-          )}
-
-          <div className="dg-news">
-            <b>Вести снизу</b>
-            <span>
-              <i className="dg-dot dg-dot--red" />
-              {BOSSES.king.name}:{' '}
-              {kingAt > now ? `вернётся через ${clock(kingAt - now)}` : 'в логове, в конце Откатки'}
-            </span>
-            {(Object.keys(DEEP_MINES) as DeepMineId[]).map((id) => {
-              const m = deepMineNow(d, id, now, MINE_CELLS);
-              const share = minedShare(m.dug);
-              const def = DEEP_MINES[id];
-              return (
-                <span key={id}>
-                  <i className="dg-dot dg-dot--gold" />
-                  {def.name} ({areaOf(def.area).name}):{' '}
-                  {share >= DEEP_DONE_AT
-                    ? `выработана, новая через ${clock(mineNextAt(id, now) - now)}`
-                    : share > 0
-                      ? `выработано ${Math.round((share / DEEP_DONE_AT) * 100)}%, обновится через ${clock(mineNextAt(id, now) - now)}`
-                      : `нетронута, обновится через ${clock(mineNextAt(id, now) - now)}`}
-                </span>
-              );
-            })}
-            <span>
-              <i className="dg-dot" />
-              Кошелёк: {shortMoney(balance)} · склад: шкурок {d.stash.skin ?? 0}, пирита{' '}
-              {d.stash.pyrite ?? 0}
-            </span>
-          </div>
-        </div>
-      )}
-      {camp && (
-        <PrisonCamp
-          place="dungeon"
-          tab={camp}
-          onTab={setCamp}
-          onClose={() => setCamp(null)}
-          onGain={() => undefined}
-          onSpend={() => undefined}
-        />
-      )}
-    </Screen>
+          </>
+        )}
+      </div>
+      {campSheet}
+    </div>
   );
 }
 
@@ -536,7 +577,7 @@ function Shaft({ dir, area }: { dir: 'down' | 'up'; area: AreaId }) {
       <img className="dg-shaft__cage" src={cage} alt="" />
       <div className="dg-shaft__text">
         <b>{dir === 'down' ? a.name : 'Наверх'}</b>
-        <span>{dir === 'down' ? 'клеть идёт вниз…' : 'клеть идёт наверх — Барыга уже ждёт'}</span>
+        <span>{dir === 'down' ? 'лифт едет вниз…' : 'лифт едет наверх с добычей…'}</span>
       </div>
     </div>
   );

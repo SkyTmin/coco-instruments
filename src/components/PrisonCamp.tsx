@@ -5,7 +5,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CSSProperties, ReactNode } from 'react';
-import { Sheet } from '@/components/ui';
+import { GxIcon, GxSheet } from '@/components/gx';
+import type { GxIconName } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { useFinanceStore } from '@/store';
 import { BeastTab, GearTab, StashTab } from '@/components/DungeonCamp';
@@ -73,7 +74,6 @@ import {
   PRESTIGE_KEYS,
   rankLetter,
   rollCase,
-  ROCKS,
   sharpCost,
   SHARP_MAX,
   SHARP_STEP,
@@ -271,7 +271,7 @@ export type CampTab =
 
 const TAB_NAMES: Record<CampTab, string> = {
   gear: 'Снаряжение',
-  beasts: 'Бестиарий',
+  beasts: 'Враги',
   stash: 'Склад',
   forge: 'Кузница',
   axes: 'Топоры',
@@ -283,10 +283,31 @@ const TAB_NAMES: Record<CampTab, string> = {
   pets: 'Питомцы',
   shop: 'Лавка',
   cases: 'Сундуки',
-  crew: 'Бригада',
+  crew: 'Рабочие',
   finds: 'Коллекция',
-  miles: 'Вехи',
-  perks: 'Перки',
+  miles: 'Достижения',
+  perks: 'Навыки',
+};
+
+/** Картинка вкладки: вкладку узнают по ней раньше, чем прочтут. */
+const TAB_ICONS: Record<CampTab, GxIconName> = {
+  gear: 'helmet',
+  beasts: 'rat',
+  stash: 'chest',
+  forge: 'anvil',
+  axes: 'axe',
+  axench: 'magic',
+  mill: 'saw',
+  bench: 'hammer',
+  enchant: 'magic',
+  runes: 'rune',
+  pets: 'paw',
+  shop: 'shop',
+  cases: 'chest-open',
+  crew: 'miner',
+  finds: 'gems',
+  miles: 'trophy',
+  perks: 'sparkles',
 };
 
 export type CampPlace = 'mine' | 'forest' | 'dungeon';
@@ -340,34 +361,32 @@ export function PrisonCamp({
     runes: runesIdle(p, axeLevelOf(f.logs).level) ? '•' : null,
   };
   return (
-    <Sheet
-      title={
-        place === 'forest'
-          ? 'Лагерь лесоруба'
-          : place === 'dungeon'
-            ? 'Лагерь у клети'
-            : 'Лагерь шахтёра'
-      }
+    <GxSheet
+      className="gx-camp"
+      title={place === 'forest' ? 'Лагерь лесоруба' : place === 'dungeon' ? 'Снаряжение' : 'Лагерь'}
       onClose={onClose}
+      tabs={
+        <div className="gx-tabs" role="tablist">
+          {tabs.map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              className={`gx-tab${tab === id ? ' is-on' : ''}`}
+              onClick={() => {
+                selectionChanged();
+                onTab(id);
+              }}
+            >
+              <GxIcon name={TAB_ICONS[id]} />
+              {TAB_NAMES[id]}
+              {badge[id] != null && <span className="gx-badge">{badge[id]}</span>}
+            </button>
+          ))}
+        </div>
+      }
     >
-      <div className="pcamp-tabs" role="tablist">
-        {tabs.map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            className={`pcamp-tab${tab === id ? ' is-on' : ''}`}
-            onClick={() => {
-              selectionChanged();
-              onTab(id);
-            }}
-          >
-            {TAB_NAMES[id]}
-            {badge[id] != null && <i className="pcamp-tab__badge">{badge[id]}</i>}
-          </button>
-        ))}
-      </div>
       <div className="pcamp-body">
         {tab === 'gear' && <GearTab onSpend={onSpend} />}
         {tab === 'beasts' && <BeastTab />}
@@ -389,7 +408,7 @@ export function PrisonCamp({
         {tab === 'finds' && <FindsTab />}
         {tab === 'perks' && <PerksTab />}
       </div>
-    </Sheet>
+    </GxSheet>
   );
 }
 
@@ -804,13 +823,32 @@ function EnchantTab() {
           </div>
         );
       })}
-      <p className="pcamp-note">
-        Уровень кирки растёт от каждого сломанного блока: открывает новые чары и поднимает их
-        потолок. Жилу, взрыв, отбойник и кураж можно выключить, не теряя уровней. Сброс возвращает
-        половину токенов.
-      </p>
     </div>
   );
+}
+
+// ---- Иконки расходников -------------------------------------------------------
+
+const ITEM_ICON: Record<ItemId, GxIconName> = {
+  bomb3: 'bomb',
+  bomb5: 'dynamite',
+  charge: 'explosion',
+  energy: 'energy',
+  lens: 'lens',
+  prop: 'beam',
+};
+const ITEM_TONE: Record<ItemId, string> = {
+  bomb3: '#3a3f55',
+  bomb5: '#c0392b',
+  charge: '#d35400',
+  energy: '#1f6fc2',
+  lens: '#1d7a68',
+  prop: '#7a4a1e',
+};
+
+/** Расходник картинкой, а не эмодзи: цвет — свой у каждого. */
+export function ItemIcon({ id, size }: { id: ItemId; size?: number }) {
+  return <GxIcon name={ITEM_ICON[id]} size={size} style={{ color: ITEM_TONE[id] }} />;
 }
 
 // ---- Лавка: расходники за токены --------------------------------------------
@@ -826,7 +864,7 @@ function ShopTab() {
       {ITEMS.filter((it) => it.price > 0).map((it) => (
         <Row
           key={it.id}
-          icon={<span className="pforge__glyph">{it.glyph}</span>}
+          icon={<ItemIcon id={it.id} size={30} />}
           title={
             <>
               {it.name} {p.items[it.id] > 0 && <span className="pench-lvl">×{p.items[it.id]}</span>}
@@ -851,9 +889,6 @@ function ShopTab() {
           }
         />
       ))}
-      <p className="pcamp-note">
-        Расходники лежат под полем шахты: бомбу — тапом по кнопке, потом по клетке.
-      </p>
     </div>
   );
 }
@@ -919,10 +954,6 @@ function CasesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
           </span>
         ))}
       </div>
-      <p className="pcamp-note">
-        Монеты в сундуке — доля цены твоего ранга, поэтому сундук одинаково приятен и на C, и на X.
-        Находка из сундука — всегда та, которой в коллекции ещё нет. Открыто: {fmt(p.cases)}.
-      </p>
       {open && <CaseRoller first={open} onClose={() => setOpen(null)} onGain={onGain} />}
       {batch && <CasesSummary got={batch} onClose={() => setBatch(null)} />}
     </div>
@@ -1145,11 +1176,7 @@ export function RewardIcon({ r, size = 30 }: { r: Reward; size?: number }) {
     case 'tokens':
       return <TokenIcon size={size} />;
     case 'item':
-      return (
-        <span className="preward__emoji" style={{ fontSize: size * 0.9 }}>
-          {ITEMS.find((i) => i.id === r.id)!.glyph}
-        </span>
-      );
+      return <ItemIcon id={r.id} size={size} />;
     case 'find':
       return (
         <img className="pfind-img" src={findTexture(r.id)} width={size} height={size} alt="" />
@@ -1462,13 +1489,13 @@ function CrewTab({
               />
             ))
           ) : (
-            <span className="pcrew-scene__sign">Бригады нет</span>
+            <span className="pcrew-scene__sign">Рабочих нет</span>
           )}
         </span>
         {y.capped && <span className="pcrew-scene__zzz">смена кончилась — ждут</span>}
       </div>
       <div className="pcrew__info pcrew__head">
-        <b>{p.crew ? `Бригада · ${p.crew} ур. · наряд «${sh.name}»` : 'Нанять бригаду'}</b>
+        <b>{p.crew ? `Рабочие · ${p.crew} ур. · смена «${sh.name}»` : 'Нанять рабочих'}</b>
         <i>
           {p.crew
             ? `${rate.toFixed(1)} блока в минуту в шахте ${rankLetter(p.rank)}, смена ${cap.toLocaleString('ru-RU')} ч${p.crewFed ? ' · сыты, +30%' : ''}`
@@ -1522,7 +1549,7 @@ function CrewTab({
           </div>
           <Row
             icon={<span className="pforge__glyph">🍲</span>}
-            title={p.crewFed ? 'Бригада сыта' : 'Пайка'}
+            title={p.crewFed ? 'Рабочие сыты' : 'Накормить'}
             text={
               p.crewFed
                 ? '+30% выработки до конца этой смены'
@@ -1556,7 +1583,7 @@ function CrewTab({
       {p.crew < CREW_MAX ? (
         <Row
           icon={<img className="pmill-hico" src={workerTexture(p.crew)} alt="" />}
-          title={p.crew ? `Ещё один в бригаду · ${p.crew + 1} ур.` : 'Нанять бригаду'}
+          title={p.crew ? `Нанять ещё одного · ${p.crew + 1} ур.` : 'Нанять рабочих'}
           text={`${crewRate(p.crew + 1).toFixed(1)} блока в минуту на норме${p.crew ? `, сейчас ${crewRate(p.crew).toFixed(1)}` : ''}`}
           action={
             <Buy
@@ -1576,13 +1603,8 @@ function CrewTab({
           }
         />
       ) : (
-        <p className="pcamp-note">Бригада полная.</p>
+        <p className="pcamp-note">Все места заняты.</p>
       )}
-      <p className="pcamp-note">
-        Норма — если заходишь раз в день, ударная — если каждые два часа, разведка — когда нужны
-        ключи и передачки. Смена кончилась — бригада сидит, пока не примешь. Перк «Длинная смена»
-        удлиняет любой наряд.
-      </p>
       {unload && <CrewUnload got={unload} rock={p.rank} onClose={() => setUnload(null)} />}
     </div>
   );
@@ -1722,7 +1744,7 @@ function CrewUnload({
                         height={24}
                         style={{ imageRendering: 'pixelated' }}
                       />
-                      <em>Передачка · {tier.name.toLowerCase()} — легла под поле шахты</em>
+                      <em>Посылка · {tier.name.toLowerCase()} — легла под поле шахты</em>
                     </span>
                   );
                 })}
@@ -1730,7 +1752,7 @@ function CrewUnload({
             )}
             {got.parcelTokens > 0 && (
               <span className="pcases__note">
-                Мест под передачки нет — сданы за {fmt(got.parcelTokens)} ✦
+                Мест под посылки нет — сданы за {fmt(got.parcelTokens)} ✦
               </span>
             )}
             <button type="button" className="btn btn--primary btn--block" onClick={onClose}>
@@ -1769,11 +1791,6 @@ function FindsTab() {
           );
         })}
       </div>
-      <p className="pcamp-note">
-        Каждая новая находка — +1% к продаже навсегда, вся коллекция — ещё +10%. Дубликат сдаётся за
-        40 токенов. Находки падают с блоков редко, одна на пару тысяч; сундук всегда кладёт
-        недостающую.
-      </p>
     </div>
   );
 }
@@ -1788,10 +1805,11 @@ function PerksTab() {
   if (!p.prestige) {
     return (
       <div className="pforge">
-        <p className="pcamp-note" style={{ marginTop: 4 }}>
-          Перки открывает престиж: дойди до ранга Z и начни круг заново. За каждый престиж — два
-          очка. Ранг сейчас: {rankLetter(p.rank)}, до Z ещё {ROCKS.length - 1 - p.rank}.
-        </p>
+        <div className="pcamp-lock">
+          <GxIcon name="upgrade" size={40} />
+          <b>Откроются после престижа</b>
+          <span>Ранг {rankLetter(p.rank)} → Z</span>
+        </div>
       </div>
     );
   }
@@ -1904,7 +1922,7 @@ const BONUS_TEXT: { k: keyof Bonus; text: string }[] = [
   { k: 'loot', text: 'к добыче' },
   { k: 'token', text: 'к токенам' },
   { k: 'proc', text: 'к шансам чар' },
-  { k: 'luck', text: 'к ключам и передачкам' },
+  { k: 'luck', text: 'к ключам и посылкам' },
 ];
 
 function bonusSummary(b: Bonus): string {
@@ -2053,7 +2071,6 @@ function RunesTab({ axeLevel }: { axeLevel: number }) {
   const [sel, setSel] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const open = socketsOpen(p, axeLevel);
-  const level = Math.max(pickLevelOf(p.pickXp).level, axeLevel);
   const rune = p.runes.find((r) => r.id === sel) ?? null;
   const worn = rune ? p.sockets.includes(rune.id) : false;
   const plan = rune ? fusePlan(p.runes, p.sockets, rune.id) : null;
@@ -2218,9 +2235,7 @@ function RunesTab({ axeLevel }: { axeLevel: number }) {
         </div>
       ) : (
         <p className="pcamp-note" style={{ margin: 0 }}>
-          {p.runes.length
-            ? 'Выбери руну в мешочке: вставить в оберег, сплавить или разбить на токены'
-            : `Рун пока нет. Они приходят в передачках, сундуках и у Барыги${level < SOCKET_UNLOCK[0] ? `; первое гнездо откроется на ${SOCKET_UNLOCK[0]} уровне кирки или топора` : ''}`}
+          {p.runes.length ? `Мешочек ${p.runes.length}/${RUNE_BAG} · тапни руну` : 'Рун пока нет'}
         </p>
       )}
       {note && <p className="pcamp-note prune-note">{note}</p>}
@@ -2245,12 +2260,6 @@ function RunesTab({ axeLevel }: { axeLevel: number }) {
           ))}
         </div>
       )}
-      <p className="pcamp-note">
-        Гнёзда открываются уровнем кирки или топора — 5, 15 и 30, четвёртое за веху «Престиж 10».
-        Мешочек: {p.runes.length} из {RUNE_BAG}. Три руны одной ступени сплавляются в руну ступенью
-        выше — вид у выбранной, сила не ниже средней. Лишние разбивай на токены: в полный мешочек
-        новая руна не ляжет и разобьётся сама.
-      </p>
     </div>
   );
 }
@@ -2302,7 +2311,7 @@ function PetsTab() {
               <i>
                 {have
                   ? `${pctText(petPower(d.id, lv.level))} ${d.text}`
-                  : `Придёт в передачке · ${d.text}`}
+                  : `Придёт в посылке · ${d.text}`}
               </i>
               {have && lv.need > 0 && (
                 <span className="ppet-bar">
@@ -2331,10 +2340,6 @@ function PetsTab() {
           </div>
         );
       })}
-      <p className="pcamp-note">
-        С собой ходит один. Растёт от каждого блока, пока он с тобой. Второй такой же из передачки —
-        лакомство: опыт тому, кто с тобой.
-      </p>
     </div>
   );
 }
@@ -2347,7 +2352,7 @@ function mileRewardText(m: (typeof MILES)[number]): string {
   if (r.tokens) out.push(`+${fmt(r.tokens)} ✦`);
   if (r.keys) out.push(`${r.keys} ключ${r.keys === 1 ? '' : r.keys < 5 ? 'а' : 'ей'}`);
   if (r.parcel)
-    out.push(`передачка «${TIERS_OF.find((t) => t.id === r.parcel)!.name.toLowerCase()}»`);
+    out.push(`посылка «${TIERS_OF.find((t) => t.id === r.parcel)!.name.toLowerCase()}»`);
   if (r.rune) out.push(`руна ${RUNE_ROMAN[r.rune - 1]}`);
   if (r.socket) out.push('четвёртое гнездо');
   return out.join(' · ');
@@ -2421,7 +2426,7 @@ function MilesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
 }
 
 // ---------------------------------------------------------------------------
-// Вскрытие передачки. Коробка трясётся три удара (редкая — дольше), потом
+// Вскрытие посылки. Коробка трясётся три удара (редкая — дольше), потом
 // вспышка — и под ней уже награда: склейка прячется во вспышке, как у жетона
 // в автоматах. Награда начислена ДО сцены, в обработчике нажатия; тап
 // досматривать не заставляет.
@@ -2472,7 +2477,7 @@ export function ParcelReveal({ open, onClose }: { open: ParcelOpen; onClose: () 
         <img className="preveal__box" src={parcelTexture(tier.color)} alt="" />
       ) : (
         <div className="preveal__card">
-          <span className="preveal__tier">Передачка · {tier.name.toLowerCase()}</span>
+          <span className="preveal__tier">Посылка · {tier.name.toLowerCase()}</span>
           <span className="preveal__icon">
             <RewardIcon r={open.reward} size={64} />
           </span>
@@ -2801,10 +2806,6 @@ function AxeEnchSection({ f, p }: { f: ForestState; p: PrisonState }) {
           </div>
         );
       })}
-      <p className="pcamp-note">
-        Уровень топора растёт от каждого срубленного бревна: открывает новые чары и поднимает их
-        потолок. Токены общие с киркой — решай, куда их вложить.
-      </p>
     </div>
   );
 }
@@ -2980,11 +2981,11 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
   if (f.mill.level <= 0)
     return (
       <div className="pforge">
-        <p className="msaw__how">
-          <b>Верстак ждёт досок.</b> Доски даёт пилорама — поставь её на вкладке «Лесопилка». Из
-          досок здесь собирают крепь для шахты, рукояти для кирки и топора и вещи на заказ за
-          деньги.
-        </p>
+        <div className="pcamp-lock">
+          <GxIcon name="saw" size={40} />
+          <b>Нужна пилорама</b>
+          <span>Доски для верстака пилит она</span>
+        </div>
       </div>
     );
 
@@ -3026,7 +3027,7 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
           <em>{cur ? `Бей! ${hits}/${cur.need}` : 'молоток'}</em>
         </button>
       </div>
-      {cur && <p className="msaw__status">Собираешь: {cur.name}. Каждый удар — гвоздь.</p>}
+      {cur && <p className="msaw__status">Собираешь: {cur.name}</p>}
       {done && (
         <p className="msaw__note">
           <b>{done.title}.</b> {done.where}
@@ -3122,10 +3123,6 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
           </div>
         );
       })}
-      <p className="pcamp-note">
-        Заказ платит дороже, чем стоят те же доски на продаже: работа стоит денег. Сдал — через 10
-        минут придёт новый заказчик. Доски на следующую рукоять в «любые» не идут.
-      </p>
     </div>
   );
 }
@@ -3438,21 +3435,12 @@ function MillTab({
           pileTop={pileTop}
           onFeed={() => null}
         />
-        <p className="msaw__how">
-          <b>Как это работает.</b> Брёвна из штабеля ложатся в очередь, пила сама режет их в доски —
-          и пока ты в шахте, и пока телефон в кармане. Доска в {BOARD_MULT.toLocaleString('ru-RU')}{' '}
-          раза дороже бревна, а ещё из досок делают крепь для шахты и рукояти.
-        </p>
         <Row
           icon={<MillIcon size={30} />}
           title="Поставить пилораму"
           text={`${Math.round(millRate(1))} брёвен в минуту, доска в ${BOARD_MULT.toLocaleString('ru-RU')} раза дороже бревна`}
           action={<Buy price={millCost(0)} can={balance >= millCost(0)} onClick={up} />}
         />
-        <p className="pcamp-note">
-          Пилорама пилит брёвна в доски сама — и пока ты в шахте, и пока телефон в кармане. Из досок
-          сбивают крепь для шахты и точат рукояти для кирки и топора.
-        </p>
       </div>
     );
   }
@@ -3468,9 +3456,8 @@ function MillTab({
         stockRef={stockRef}
       />
       <p className="msaw__status">
-        Пилорама {mill.level} ур. режет сама {Math.round(rate)} брёвен в минуту
-        {queued ? ` · всё допилит через ${minutes(queued / rate)}` : ' · сейчас стоит'}. Тап по
-        диску — подать бревно рукой.
+        {Math.round(rate)} брёвен/мин
+        {queued ? ` · готово через ${minutes(queued / rate)}` : ' · стоит'}
       </p>
       <button
         type="button"
@@ -3539,10 +3526,6 @@ function MillTab({
       <button type="button" className="btn btn--block msaw__tobench" onClick={onBench}>
         Из досок — вещи на верстаке: крепь, рукояти, заказы на продажу →
       </button>
-      <p className="pcamp-note">
-        Пилит дорогие породы вперёд. Лесовоз везёт полный штабель сюда, пока в очереди есть место;
-        свиль, капокорень и дрова с кроны оплачиваются сразу при загрузке.
-      </p>
     </div>
   );
 }

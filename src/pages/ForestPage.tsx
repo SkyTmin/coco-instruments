@@ -1,21 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Screen, Sheet } from '@/components/ui';
-import { IconGift } from '@/components/icons';
+import { GxBar, GxIcon, GxModal, KIcon } from '@/components/gx';
 import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon } from '@/components/slot-art';
-import {
-  AxeIcon,
-  KeyIcon,
-  MillIcon,
-  ParcelReveal,
-  PickIcon,
-  PrisonCamp,
-  TokenIcon,
-} from '@/components/PrisonCamp';
+import { AxeIcon, KeyIcon, ParcelReveal, PrisonCamp, TokenIcon } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { useFinanceStore } from '@/store';
@@ -703,7 +694,7 @@ export function ForestPage() {
       squashPop(parcelsRef.current, 0.5);
       if (!h || h.kind !== 'parcel') floatAt(x, y - 60, 'ПЕРЕДАЧКА', 'pfloat--parcel', 160);
     }
-    if (res.parcelsReady) say('Передачка дозрела — вскрой её');
+    if (res.parcelsReady) say('Посылка дозрела — вскрой её');
     if (res.petUp) {
       const st = useFinanceStore.getState().prison;
       if (st.pet) say(`${petOf(st.pet).name}: ${res.petUp} уровень`);
@@ -930,7 +921,7 @@ export function ForestPage() {
     if (pointer.current?.id === e.pointerId) stopHold();
   };
 
-  // ---- Деньги: сдать штабель, разряд, передачки ------------------------
+  // ---- Деньги: сдать штабель, разряд, посылки ------------------------
 
   const sell = () => {
     primeAudio();
@@ -1017,9 +1008,9 @@ export function ForestPage() {
 
   if (!hydrated) {
     return (
-      <Screen title="Лесоповал" className="prison-screen forest-screen">
+      <div className="gx pmx fmx">
         <div className="forest-scene-bg" aria-hidden="true" />
-      </Screen>
+      </div>
     );
   }
 
@@ -1049,111 +1040,130 @@ export function ForestPage() {
   const crownBottom = (tree.logs.length - cut) * logH;
   const crownW = logW * 2.4;
 
+  const toMine = () => {
+    tapLight();
+    nav('/prison');
+  };
+  const rankFill = atTop ? 1 : Math.min(progress, planHave / need);
+
   return (
-    <Screen
-      title="Лесоповал"
-      subtitle={`Делянка ${forest.rank + 1} · ${plotSpecies.name.toLowerCase()} · до ${plotSpecies.value} за бревно`}
-      className="prison-screen forest-screen"
-      action={
-        <div className="row" style={{ gap: 8 }}>
-          <button
-            className="pmine-btn pmine-btn--gift"
-            type="button"
-            aria-label="Награды дня"
-            onClick={() => {
-              tapLight();
-              setRewards(true);
-            }}
-          >
-            <IconGift size={19} />
-            {readyRewards > 0 && <i className="pmine-btn__badge">{readyRewards}</i>}
-          </button>
-          <button
-            className="pmine-btn"
-            type="button"
-            aria-label="В шахту"
-            onClick={() => {
-              tapLight();
-              nav('/prison');
-            }}
-          >
-            <PickIcon pick={prison.pick} size={24} />
-          </button>
-        </div>
-      }
-    >
+    <div className="gx pmx fmx">
       <div className="forest-scene-bg" aria-hidden="true" />
       {locked ? (
-        <div className="forest-lock">
-          <b>Лесоповал откроется с ранга {rankLetter(FOREST_UNLOCK_RANK)}</b>
-          <p>
-            Сначала шахта: возьми ранг {rankLetter(FOREST_UNLOCK_RANK)} — и тебя поставят на делянку
-            с топором.
-          </p>
-          <button className="btn btn--primary btn--block" onClick={() => nav('/prison')}>
-            В шахту
-          </button>
+        <div className="prison forest">
+          <div className="pmx-top">
+            <button
+              type="button"
+              className="gx-round gx-round--dark pmx-top__btn"
+              aria-label="Назад"
+              onClick={() => {
+                tapLight();
+                nav(-1);
+              }}
+            >
+              <KIcon name="arrowLeft" />
+            </button>
+            <div className="gx-ribbon pmx-top__title">Лес</div>
+            <span className="pmx-top__btn" />
+          </div>
+          <div className="gx-panel gx-panel--wood-fancy fmx-lock">
+            <span className="fmx-lock__ico">
+              <GxIcon name="forest" size={54} />
+              <KIcon name="locked" size={24} />
+            </span>
+            <b>Откроется с ранга {rankLetter(FOREST_UNLOCK_RANK)}</b>
+            <button type="button" className="gx-btn gx-btn--red gx-btn--block" onClick={toMine}>
+              <GxIcon name="pick" size={18} /> В шахту
+            </button>
+          </div>
         </div>
       ) : (
         <div className="prison forest">
-          <div className="phud">
-            <div className="phud__cell">
-              <span className="phud__label">Кошелёк</span>
-              <span className="phud__value">
-                <MoneyCounter ref={moneyRef} value={shownBalance} />
-                <CoinIcon size={16} />
-              </span>
-            </div>
+          <div className="pmx-top">
             <button
               type="button"
-              className="phud__cell phud__purse"
+              className="gx-round gx-round--dark pmx-top__btn"
+              aria-label="Назад"
+              onClick={() => {
+                tapLight();
+                nav(-1);
+              }}
+            >
+              <KIcon name="arrowLeft" />
+            </button>
+            <div className="gx-ribbon pmx-top__title">Лес · {plotSpecies.name.toLowerCase()}</div>
+            <button
+              type="button"
+              className="gx-round gx-round--dark pmx-top__btn"
+              aria-label="Награды дня"
+              onClick={() => {
+                tapLight();
+                setRewards(true);
+              }}
+            >
+              <GxIcon name="gift" />
+              {readyRewards > 0 && <i className="gx-badge">{readyRewards}</i>}
+            </button>
+          </div>
+
+          <div className="pmx-chips">
+            <span className="gx-chip pmx-chip--coins">
+              <CoinIcon size={18} />
+              <MoneyCounter ref={moneyRef} value={shownBalance} />
+            </span>
+            <button
+              type="button"
+              className="gx-chip pmx-chip--btn"
+              aria-label="Токены — чары топора"
               onClick={() => {
                 tapLight();
                 setCamp('axench');
               }}
             >
-              <span className="phud__label">Токены</span>
-              <span className="phud__value phud__value--token">
-                {shortCount(prison.tokens)} <TokenIcon size={14} />
-              </span>
+              <TokenIcon size={17} /> {shortCount(prison.tokens)}
             </button>
-            <button
-              type="button"
-              className={`phud__rank${ready ? ' is-ready' : ''}`}
-              onClick={rankUp}
-            >
-              <span className="phud__label">
-                {atTop ? 'Высший разряд' : `Разряд ${forest.rank + 1} → ${forest.rank + 2}`}
-              </span>
-              <span className="phud__cost">
-                {atTop ? (
-                  '★'
-                ) : ready ? (
-                  'Взять'
-                ) : (
-                  <>
-                    <span className={progress >= 1 ? 'phud__ok' : undefined}>
-                      {shortMoney(cost)}
-                    </span>
-                    <CoinIcon size={12} />
-                    <span className="pquota">
-                      <span className={`pquota__chip${planOk ? ' is-done' : ''}`}>
-                        <img src={barkTexture(forest.rank)} alt={plotSpecies.name} />
-                        {planOk ? '✓' : `${toM3(planHave)}/${toM3(need)} м³`}
-                      </span>
-                    </span>
-                  </>
-                )}
-              </span>
-              <span className="phud__bar">
-                <i
-                  style={{
-                    transform: `scaleX(${atTop ? 1 : Math.min(progress, planHave / need)})`,
-                  }}
-                />
-              </span>
+            <span className="pmx-chips__gap" />
+            <button type="button" className="gx-chip pmx-chip--btn" onClick={toMine}>
+              <GxIcon name="pick" /> Шахта
             </button>
           </div>
+
+          <button
+            type="button"
+            className={`gx-panel gx-panel--wood pmx-rank${ready ? ' is-ready' : ''}`}
+            onClick={rankUp}
+            aria-label={atTop ? 'Высший разряд' : `Разряд ${forest.rank + 2}`}
+          >
+            <span className="gx-hex pmx-rank__hex">{forest.rank + 1}</span>
+            <span className="pmx-rank__mid">
+              <GxBar
+                value={rankFill}
+                tone="gold"
+                label={
+                  atTop ? (
+                    'Высший разряд'
+                  ) : ready ? (
+                    'Новый разряд — жми!'
+                  ) : (
+                    <span className={`pmx-rank__cost${progress >= 1 ? ' is-ok' : ''}`}>
+                      {shortMoney(cost)} <CoinIcon size={12} />
+                    </span>
+                  )
+                }
+              />
+              {!atTop && !ready && (
+                <span className="pquota">
+                  <span className={`pquota__chip${planOk ? ' is-done' : ''}`}>
+                    <img src={barkTexture(forest.rank)} alt={plotSpecies.name} />
+                    {planOk ? '✓' : `${toM3(planHave)}/${toM3(need)} м³`}
+                  </span>
+                </span>
+              )}
+            </span>
+            <span className="gx-hex gx-hex--dark pmx-rank__hex">
+              {atTop ? <KIcon name="star" size={16} /> : forest.rank + 2}
+            </span>
+          </button>
 
           <div className="fframe">
             <div
@@ -1168,7 +1178,8 @@ export function ForestPage() {
               </span>
               <span className="pstrip__streak">
                 <span className="pstrip__name">
-                  {sTier >= 0 ? STREAK_TIERS[sTier].name : 'Запал'}
+                  <GxIcon name="flame" size={13} />
+                  {sTier >= 0 && STREAK_TIERS[sTier].name}
                   {sTier >= 0 && <em>+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
                 </span>
                 <span className="pstrip__bar">
@@ -1176,7 +1187,7 @@ export function ForestPage() {
                 </span>
               </span>
               <span className="pstrip__pace">
-                <small>{streak > 0 ? `${fmt(streak)} подряд` : 'руби в ритм'}</small>
+                {streak > 0 && <small>{fmt(streak)} подряд</small>}
               </span>
             </div>
 
@@ -1191,7 +1202,7 @@ export function ForestPage() {
                       type="button"
                       className={`pparcel${done ? ' is-ready' : ''}`}
                       style={{ '--tier': tier.color } as CSSProperties}
-                      aria-label={`Передачка, ${tier.name.toLowerCase()}${done ? ', готова' : ''}`}
+                      aria-label={`Посылка, ${tier.name.toLowerCase()}${done ? ', готова' : ''}`}
                       onClick={() => openParcel(i)}
                     >
                       <img src={parcelTexture(tier.color)} alt="" />
@@ -1314,6 +1325,13 @@ export function ForestPage() {
               >
                 <AxeIcon axe={forest.axe} size={Math.round(logW * 0.7)} />
               </div>
+              {forest.logs === 0 && (
+                <div className="fmx-tap" aria-hidden="true">
+                  <GxIcon name="pointing" />
+                  <b>Тапай слева или справа</b>
+                  <GxIcon name="pointing" />
+                </div>
+              )}
               <canvas className="pmine__fx" ref={canvasRef} />
               <div className="pmine__layer" ref={layerRef} />
               {toast && (
@@ -1324,34 +1342,30 @@ export function ForestPage() {
             </div>
           </div>
 
-          <div className={`pbar${mill.level > 0 ? ' has-mill' : ''}`}>
+          <div className={`pmx-foot${mill.level > 0 ? ' is-tight' : ''}`}>
             <button
               type="button"
               ref={pileRef}
-              className={`pbag fpile${pileFull ? ' is-full' : ''}${forest.truck ? ' has-cart' : ''}`}
+              className={`gx-panel gx-panel--wood pmx-bag${pileFull ? ' is-full' : ''}${forest.truck ? ' has-cart' : ''}`}
               onClick={sell}
             >
-              <span className="fpile__ico" aria-hidden="true">
-                <img src={barkTexture(forest.rank)} alt="" />
-                <img src={barkTexture(Math.max(0, forest.rank - 1))} alt="" />
-              </span>
-              <span className="pbag__body">
-                <span className="pbag__top">
-                  <b>
-                    {forest.pile.n} / {cap}
-                  </b>
-                  <span className="pbag__sell">
-                    {forest.pile.n ? (
-                      <>
-                        Сдать · {shortMoney(pileValue)} <CoinIcon size={12} />
-                      </>
-                    ) : (
-                      'Штабель пуст'
-                    )}
-                  </span>
-                </span>
-                <span className="pbag__bar">
-                  <i style={{ transform: `scaleX(${Math.min(1, forest.pile.n / cap)})` }} />
+              <GxIcon name="wood-pile" className="pmx-bag__ico" />
+              <span className="pmx-bag__body">
+                <GxBar
+                  value={forest.pile.n / cap}
+                  tone={pileFull ? 'red' : 'green'}
+                  label={`${forest.pile.n} / ${cap}`}
+                />
+                <span
+                  className={`gx-btn gx-btn--sm${forest.pile.n ? ' gx-btn--red' : ''} pmx-bag__sell`}
+                >
+                  {forest.pile.n ? (
+                    <>
+                      {shortMoney(pileValue)} <CoinIcon size={13} />
+                    </>
+                  ) : (
+                    'Пусто'
+                  )}
                 </span>
               </span>
             </button>
@@ -1359,33 +1373,29 @@ export function ForestPage() {
               <button
                 type="button"
                 ref={millRef}
-                className={`fmill-btn${millQueued > 0 ? ' is-busy' : ''}`}
+                className={`gx-panel gx-panel--wood pmx-camp fmx-mill${millQueued > 0 ? ' is-busy' : ''}`}
                 aria-label="Пилорама"
                 onClick={toMill}
               >
-                <MillIcon size={24} />
-                <span>Пилорама</span>
-                <span className="fmill-btn__bar">
-                  <i
-                    style={{
-                      transform: `scaleX(${Math.min(1, millQueued / millQueueCap(mill.level))})`,
-                    }}
-                  />
-                </span>
-                {millBoards > 0 && <i className="fmill-btn__n">{shortCount(millBoards)}</i>}
+                <GxIcon name="saw" size={28} className="fmx-mill__saw" />
+                <b>Пилорама</b>
+                <GxBar thin tone="blue" value={millQueued / millQueueCap(mill.level)} />
+                {millBoards > 0 && (
+                  <i className="gx-badge gx-badge--gold">{shortCount(millBoards)}</i>
+                )}
               </button>
             )}
             <button
               type="button"
-              className="pforge-btn"
+              className="gx-panel gx-panel--wood pmx-camp"
               ref={campRef}
               onClick={() => {
                 tapLight();
                 setCamp('axes');
               }}
             >
-              <AxeIcon axe={forest.axe} size={28} />
-              <span>Лагерь</span>
+              <AxeIcon axe={forest.axe} size={30} />
+              <b>Лагерь</b>
               {prison.pet && (
                 <img
                   className="ppet-perch"
@@ -1400,20 +1410,15 @@ export function ForestPage() {
                 />
               )}
               {prison.keys > 0 ? (
-                <i className="pforge-btn__dot pforge-btn__dot--n">
-                  <KeyIcon size={9} />
+                <i className="gx-badge gx-badge--gold pmx-camp__keys">
+                  <KeyIcon size={10} />
                   {prison.keys}
                 </i>
               ) : (
-                campBadge && <i className="pforge-btn__dot" />
+                campBadge && <i className="gx-badge">!</i>
               )}
             </button>
           </div>
-
-          <p className="forest-note">
-            Тапай по той стороне ствола, откуда рубить. Сучок на твоей стороне бьёт по лбу — смотри
-            на бревно выше и вставай с другой стороны.
-          </p>
         </div>
       )}
 
@@ -1441,68 +1446,66 @@ export function ForestPage() {
       )}
 
       {sheet === 'plan' && !atTop && (
-        <Sheet title={`Разряд ${forest.rank + 2}`} onClose={() => setSheet(null)}>
-          <div className="stack">
-            <p className="pnorm__lead">
-              План в кубометрах: одних денег мало — сдай {plotSpecies.gen}. Считаются брёвна,
-              срубленные своими руками.
-            </p>
-            <div className="pnorm">
-              <div className={`pnorm__row${planOk ? ' is-done' : ''}`}>
-                <img src={barkTexture(forest.rank)} alt="" />
-                <span className="pnorm__info">
-                  <b>{plotSpecies.name}</b>
-                  <i>{planOk ? 'сдано' : 'растёт на этой делянке чаще прочих'}</i>
-                  <span className="pnorm__bar">
-                    <i style={{ transform: `scaleX(${planHave / need})` }} />
-                  </span>
-                </span>
-                <span className="pnorm__n">
-                  {planOk ? '✓' : `${toM3(planHave)}/${toM3(need)} м³`}
-                </span>
-              </div>
-              <div className={`pnorm__row${balance >= cost ? ' is-done' : ''}`}>
-                <span className="pnorm__coin">
-                  <CoinIcon size={26} />
-                </span>
-                <span className="pnorm__info">
-                  <b>Цена разряда</b>
-                  <i>{balance >= cost ? 'хватает' : `не хватает ${fmt(cost - balance)}`}</i>
-                  <span className="pnorm__bar">
-                    <i style={{ transform: `scaleX(${progress})` }} />
-                  </span>
-                </span>
-                <span className="pnorm__n">{shortMoney(cost)}</span>
-              </div>
-            </div>
+        <GxModal
+          title={`Разряд ${forest.rank + 2}`}
+          onClose={() => setSheet(null)}
+          className="pmx-norm"
+        >
+          <div className={`pmx-norm__row${planOk ? ' is-done' : ''}`}>
+            <img src={barkTexture(forest.rank)} alt="" />
+            <span className="pmx-norm__info">
+              <b>{plotSpecies.name}</b>
+              <GxBar
+                tone={planOk ? 'green' : 'gold'}
+                value={planHave / need}
+                label={
+                  planOk ? (
+                    <KIcon name="checkmark" size={12} />
+                  ) : (
+                    `${toM3(planHave)} / ${toM3(need)} м³`
+                  )
+                }
+              />
+            </span>
+          </div>
+          <div className={`pmx-norm__row${balance >= cost ? ' is-done' : ''}`}>
+            <CoinIcon size={32} />
+            <span className="pmx-norm__info">
+              <b>Монеты</b>
+              <GxBar
+                tone={balance >= cost ? 'green' : 'gold'}
+                value={progress}
+                label={
+                  balance >= cost ? (
+                    <KIcon name="checkmark" size={12} />
+                  ) : (
+                    `${shortMoney(balance)} / ${shortMoney(cost)}`
+                  )
+                }
+              />
+            </span>
+          </div>
+          <div className="pmx-norm__actions">
             <button
-              className="btn btn--primary btn--block"
+              type="button"
+              className="gx-btn gx-btn--red gx-btn--block gx-btn--big"
               disabled={!planOk || balance < cost}
               onClick={() => takeRank(false)}
             >
-              {!planOk
-                ? `Не хватает ${toM3(need - planHave)} м³ ${plotSpecies.gen}`
-                : balance < cost
-                  ? `Не хватает ${fmt(cost - balance)} монет`
-                  : `Взять разряд за ${fmt(cost)} монет`}
+              Взять разряд {forest.rank + 2}
             </button>
             {!planOk && (
-              <>
-                <button
-                  className="btn btn--ghost btn--block"
-                  disabled={balance < cost + buyout}
-                  onClick={() => takeRank(true)}
-                >
-                  Откупить план: {fmt(cost)} + {fmt(buyout)} монет
-                </button>
-                <p className="pnorm__note">
-                  Откуп дешевеет с каждым сданным бревном: сейчас выполнено{' '}
-                  {Math.round((planHave / need) * 100)}%.
-                </p>
-              </>
+              <button
+                type="button"
+                className="gx-btn gx-btn--block"
+                disabled={balance < cost + buyout}
+                onClick={() => takeRank(true)}
+              >
+                Докупить брёвна · {shortMoney(buyout)} <CoinIcon size={13} />
+              </button>
             )}
           </div>
-        </Sheet>
+        </GxModal>
       )}
 
       {sceneShown && (
@@ -1514,30 +1517,29 @@ export function ForestPage() {
           }}
         >
           <div className="prank__card">
-            <span className="prank__label">Новый разряд лесоруба</span>
+            <span className="prank__label">Новый разряд</span>
             <b className="prank__letter">{sceneShown.rank + 1}</b>
             <span className="prank__mine">
               <img src={barkTexture(sceneShown.rank)} alt="" />
-              Открыта делянка: {SPECIES[sceneShown.rank].name.toLowerCase()},{' '}
-              {SPECIES[sceneShown.rank].value} за бревно
+              {SPECIES[sceneShown.rank].name} · до {SPECIES[sceneShown.rank].value} за бревно
             </span>
             <span className="prank__key">
               <KeyIcon size={13} /> +1 ключ от сундука
             </span>
             {sceneShown.buyout > 0 && (
-              <span className="prank__lvl">План откуплен за {fmt(sceneShown.buyout)} монет</span>
+              <span className="prank__lvl">Брёвна докуплены за {fmt(sceneShown.buyout)} монет</span>
             )}
             {sceneShown.rank < LAST_PLOT && (
               <span className="prank__norm">
-                План на разряд {sceneShown.rank + 2}: {toM3(forestPlan(sceneShown.rank))} м³{' '}
+                Для разряда {sceneShown.rank + 2}: {toM3(forestPlan(sceneShown.rank))} м³{' '}
                 {SPECIES[sceneShown.rank].gen}
               </span>
             )}
-            <span className="prank__cta">На делянку</span>
+            <span className="prank__cta">Рубить</span>
           </div>
         </div>
       )}
       <EventAnnounce ev={yardSplash} onDone={closeSplash} />
-    </Screen>
+    </div>
   );
 }

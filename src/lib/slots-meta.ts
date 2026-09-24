@@ -241,7 +241,7 @@ const PRISON_POOL: MissionDef[] = [
     kind: 'streak',
     goals: [2, 3, 4],
     reward: (g) => [0, 150, 300, 600, 1200][g],
-    title: (g) => `Разжечь запал до «${STREAK_TIERS[g - 1].name}»`,
+    title: (g) => `Набрать серию до «${STREAK_TIERS[g - 1].name}»`,
   },
   {
     kind: 'ore',
@@ -253,7 +253,7 @@ const PRISON_POOL: MissionDef[] = [
     kind: 'trees',
     goals: [10, 20, 40],
     reward: (g) => g * 25,
-    title: (g) => `Повалить ${g} деревьев на лесоповале`,
+    title: (g) => `Повалить ${g} деревьев в лесу`,
   },
 ];
 
