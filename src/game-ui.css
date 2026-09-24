@@ -3053,3 +3053,467 @@
   justify-content: center;
   margin-bottom: 10px;
 }
+
+/* ==========================================================================
+   Живность шахты (v2.64): летучая мышь, сорока, блестяшки, сундучок и риск.
+   Двигается только transform (позицию пишет rAF, центровка — свойством
+   translate, чтобы анимации удара не затирали её) и opacity.
+   ========================================================================== */
+
+.pbat,
+.pmag,
+.pbat-shadow,
+.pmag-shadow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -50%;
+  will-change: transform;
+}
+.pbat {
+  z-index: 7;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.pbat__sprite {
+  display: block;
+  background: url('/ui/critters/bat.png') 0 0 no-repeat;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 1px rgba(255, 236, 200, 0.55));
+}
+/* Синяя — редкая: светится, чтобы её узнавали издали. */
+.pbat.is-rare .pbat__sprite {
+  filter: drop-shadow(0 0 2px #9fd8ff) drop-shadow(0 0 6px rgba(120, 190, 255, 0.7));
+}
+.pbat-shadow,
+.pmag-shadow {
+  z-index: 4;
+  display: block;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
+  pointer-events: none;
+}
+
+.pmag {
+  z-index: 7;
+  pointer-events: none;
+}
+.pmag__sprite {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: url('/ui/critters/magpie.png') 0 0 no-repeat;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
+}
+
+/* Блестяшка: падает в клетку, лежит, мигает перед тем как пропасть. */
+.pshiny {
+  position: absolute;
+  z-index: 4;
+  translate: -50% -50%;
+  display: grid;
+  place-items: center;
+  width: calc(var(--cell) * 0.9);
+  height: calc(var(--cell) * 0.9);
+  padding: 0;
+  border: 0;
+  background: radial-gradient(closest-side, rgba(255, 236, 160, 0.45), transparent 70%);
+  cursor: pointer;
+  touch-action: none;
+  animation:
+    pshiny-drop 0.36s cubic-bezier(0.3, 0, 0.6, 1) both,
+    pshiny-blink 0.18s steps(1) calc(var(--life) - 900ms) infinite;
+}
+.pshiny > * {
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.55));
+  animation: pshiny-glint 1.1s ease-in-out 0.36s infinite;
+}
+.pshiny--ring {
+  background: radial-gradient(closest-side, rgba(170, 235, 255, 0.55), transparent 70%);
+}
+.pshiny--key {
+  background: radial-gradient(closest-side, rgba(150, 255, 150, 0.5), transparent 70%);
+}
+@keyframes pshiny-drop {
+  0% {
+    transform: translateY(calc(var(--cell) * -0.9)) scale(0.5);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(0) scale(1.05, 0.9);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+@keyframes pshiny-blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes pshiny-glint {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* ---- Сундучок ------------------------------------------------------------ */
+
+.ptreasure {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  cursor: default;
+}
+.ptreasure__veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 45%, rgba(12, 8, 5, 0.72), rgba(4, 3, 2, 0.9));
+  animation: ptreasure-veil 0.25s ease both;
+}
+@keyframes ptreasure-veil {
+  from {
+    opacity: 0;
+  }
+}
+.ptreasure__box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0 10px;
+}
+.ptreasure__title {
+  animation: ptreasure-title 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@keyframes ptreasure-title {
+  from {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+}
+.ptreasure__cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+.ptcard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: calc(var(--cell) * 2.6);
+  padding: 10px 4px 8px;
+  font: inherit;
+  cursor: pointer;
+  animation: ptcard-in 0.42s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  animation-delay: calc(var(--i) * 120ms + 80ms);
+  transition:
+    transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1),
+    opacity 0.3s ease;
+}
+.ptcard:active {
+  transform: scale(0.96);
+}
+.ptcard__ico {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 210, 87, 0.35), transparent);
+}
+.ptcard b {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--gx-ink);
+  line-height: 1.1;
+}
+.ptcard i {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gx-ink-soft);
+  text-align: center;
+}
+.ptcard.is-taken {
+  transform: translateY(-10px) scale(1.12);
+}
+.ptcard.is-gone {
+  transform: translateY(24px) scale(0.85);
+  opacity: 0;
+}
+@keyframes ptcard-in {
+  from {
+    transform: translateY(-40px) rotateY(80deg) scale(0.7);
+    opacity: 0;
+  }
+}
+
+.ptreasure__decide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.ptreasure__stake {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 8px solid transparent;
+  border-image: url('/ui/kenney/panel_brown.png') 8 fill / 8px stretch;
+  image-rendering: pixelated;
+  color: var(--gx-ink);
+  animation: ptreasure-title 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.ptreasure__stake b {
+  font-size: 28px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  animation: pstake-pop 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.ptreasure__stake em {
+  font-style: normal;
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--gx-red);
+}
+@keyframes pstake-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+}
+.ptreasure__flash {
+  font-size: 15px;
+  font-weight: 900;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+  animation: ptreasure-title 0.3s ease both;
+}
+.ptreasure__flash.is-win {
+  color: var(--gx-gold);
+}
+.ptreasure__flash.is-draw {
+  color: #cfe3f5;
+}
+.ptreasure__btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+.ptreasure__btns .gx-btn:only-child {
+  grid-column: 1 / -1;
+}
+.ptreasure__risk small {
+  margin-left: 4px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+.ptreasure__hint,
+.prisk__hint {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 241, 210, 0.75);
+  text-align: center;
+}
+
+/* ---- Риск: стол, карты с переворотом ------------------------------------- */
+
+.prisk {
+  --cw: min(72px, calc(var(--cell) * 1.45));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.prisk__stake {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gx-paper);
+  font-weight: 900;
+}
+.prisk__stake b {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.prisk__stake em {
+  font-style: normal;
+  font-size: 15px;
+  color: var(--gx-gold);
+}
+.prisk__table {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 50% 40%, #2f6b3f, #1b4127 70%),
+    #1b4127;
+  box-shadow:
+    inset 0 0 0 3px #7a5328,
+    inset 0 0 0 5px #3d2a16,
+    0 6px 16px rgba(0, 0, 0, 0.5);
+}
+.prisk__dealer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.prisk__dealer i {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 241, 210, 0.85);
+}
+.prisk__dealer .pcard {
+  animation: pcard-deal 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.prisk__dealer .pcard__in {
+  animation: pcard-turn 0.4s ease 0.2s both;
+}
+.prisk__four {
+  display: grid;
+  grid-template-columns: repeat(2, var(--cw));
+  gap: 8px;
+}
+.prisk__slot {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: transform 0.15s ease;
+}
+.prisk__slot:not(:disabled):active {
+  transform: scale(0.94);
+}
+.prisk__slot .pcard {
+  animation: pcard-deal 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  animation-delay: calc(var(--k) * 90ms + 250ms);
+}
+.prisk__slot.is-other {
+  opacity: 0.55;
+  transition: opacity 0.3s ease 0.45s;
+}
+.prisk__slot.is-mine .pcard {
+  box-shadow: 0 0 0 3px var(--gx-gold), 0 0 14px rgba(255, 210, 87, 0.8);
+  border-radius: 4px;
+}
+.prisk__verdict {
+  font-size: 18px;
+  font-weight: 900;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7);
+  animation: pstake-pop 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) 0.5s both;
+}
+.prisk__verdict.is-win {
+  color: var(--gx-gold);
+}
+.prisk__verdict.is-lose {
+  color: var(--gx-red-l);
+}
+.prisk__verdict.is-draw {
+  color: #cfe3f5;
+}
+
+.pcard {
+  display: block;
+  width: var(--cw, 60px);
+  height: calc(var(--cw, 60px) * 60 / 42);
+  perspective: 500px;
+}
+.pcard__in {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateY(180deg);
+  transition: transform 0.34s cubic-bezier(0.3, 0.1, 0.3, 1);
+}
+.pcard.is-open .pcard__in {
+  transform: rotateY(0deg);
+}
+/* Остальные три открываются следом за выбранной. */
+.pcard.is-late .pcard__in {
+  transition-delay: 0.42s;
+}
+.pcard__back,
+.pcard__face {
+  position: absolute;
+  inset: 0;
+  background: url('/ui/cards/deck.png') 0 0 / 1400% 400% no-repeat;
+  image-rendering: pixelated;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.35));
+}
+.pcard__back {
+  background-position: 100% 0;
+  transform: rotateY(180deg);
+}
+@keyframes pcard-deal {
+  from {
+    transform: translate(40px, -60px) rotate(-12deg);
+    opacity: 0;
+  }
+}
+@keyframes pcard-turn {
+  from {
+    transform: rotateY(180deg);
+  }
+  to {
+    transform: rotateY(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pshiny,
+  .pshiny > *,
+  .ptcard,
+  .ptreasure__title,
+  .ptreasure__stake,
+  .ptreasure__stake b,
+  .prisk__slot .pcard,
+  .prisk__dealer .pcard,
+  .prisk__dealer .pcard__in,
+  .prisk__verdict {
+    animation: none;
+  }
+  .pcard__in {
+    transition: none;
+  }
+}

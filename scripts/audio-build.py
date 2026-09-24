@@ -265,6 +265,14 @@ SOUNDS = {
     'latch': [(RPG('metalLatch'), {})],
     'winch': [(RPG('creak3'), {'rms': -21})],
     'roar': [(OGR('NPC', 'giant', f'giant{i}.wav'), {'dur': 0.9, 'out': 300}) for i in (1, 2)],
+
+    # ---- Живность шахты и риск-игра (v2.64).
+    'card.deal': [(CAS(f'card-slide-{i}'), {'dur': 0.3, 'rms': -20}) for i in (1, 3, 5, 7)],
+    'card.flip': [(CAS(f'card-place-{i}'), {'dur': 0.22}) for i in range(1, 5)],
+    'card.shuffle': [(CAS('card-shuffle'), {'dur': 0.8, 'out': 250, 'rms': -20})],
+    'card.fan': [(CAS('card-fan-1'), {'dur': 0.5, 'out': 150}), (CAS('card-fan-2'), {'dur': 0.5, 'out': 150})],
+    'flap': [(RPG(f'cloth{i}'), {'dur': 0.16, 'rate': 1.35, 'out': 60, 'rms': -22}) for i in (1, 2, 3, 4)],
+    'shiny': [(IFC(f'glass_00{i}'), {'dur': 0.25, 'rate': 1.25, 'out': 120}) for i in (1, 2, 5, 6)],
 }
 
 # Писки крыс: одиночные, вырезанные из серий (частое событие не должно звучать
@@ -273,7 +281,11 @@ RAT_SETS = {
     'rat.call': ['Call/call_01', 'Call/call_03', 'Select/select_01', 'Move/move_02', 'Joy/joy_03'],
     'rat.attack': ['Attack/attack_01', 'Attack/attack_03', 'Draft/draft_03', 'Wounded/wounded_02'],
     'rat.die': ['Death/death_01', 'Wounded/wounded_01', 'Wounded/wounded_03', 'Call/call_04'],
+    # Летучая мышь пищит тоньше крысы: те же писки на кварту выше.
+    'bat.squeak': ['Joy/joy_01', 'Select/select_02', 'Call/call_02'],
 }
+# Сдвиг высоты для набора писков (по умолчанию — как есть).
+RAT_RATE = {'bat.squeak': 1.4}
 
 # Музыка по сценам. Выбрана по замерам (без прослушивания): тёплые треки с
 # ровной динамикой и малой долей резкой середины 2–6 кГц (`harsh` < 0,13).
@@ -332,6 +344,7 @@ def build_sfx():
         for f in files:
             path = [os.path.join(RAT, f + '.ogg')][0]
             for c in chirps(trim_head(load(path)))[:2]:
+                c = resample(c, RAT_RATE.get(name, 1))
                 c = fade(c, ms_out=25)
                 c = normalize(c, rms_db=-20)
                 k += 1

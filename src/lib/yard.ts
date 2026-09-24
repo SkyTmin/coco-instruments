@@ -90,6 +90,16 @@ export const EVENTS: EventDef[] = [
     color: '#9be38a',
   },
   {
+    id: 'magpie',
+    name: 'Сорока-воровка',
+    lead: 'Несёт краденое и роняет в шахту. Подбирай, пока лежит',
+    place: 'mine',
+    ms: 24_000,
+    weight: 3,
+    glyph: '✦',
+    color: '#b7d4ff',
+  },
+  {
     id: 'blizzard',
     name: 'Буря',
     lead: 'Ветер валит лес: каждое поваленное дерево тянет соседнее',

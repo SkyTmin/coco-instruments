@@ -961,7 +961,15 @@ export interface ModsSource {
 // друга.
 // ---------------------------------------------------------------------------
 
-export type EventId = 'meteor' | 'kuiva' | 'convoy' | 'gold' | 'payday' | 'blizzard' | 'bear';
+export type EventId =
+  | 'meteor'
+  | 'kuiva'
+  | 'convoy'
+  | 'gold'
+  | 'payday'
+  | 'blizzard'
+  | 'bear'
+  | 'magpie';
 export const EVENT_IDS: EventId[] = [
   'meteor',
   'kuiva',
@@ -970,6 +978,7 @@ export const EVENT_IDS: EventId[] = [
   'payday',
   'blizzard',
   'bear',
+  'magpie',
 ];
 
 export interface YardEvent {
@@ -984,9 +993,58 @@ export interface YardEvent {
   hp: number;
   /** Конвой — порода; медведь — не нужна (−1). */
   rock: number;
-  /** Конвой и медведь: сколько сдать и сколько сдано. */
+  /** Конвой и медведь: сколько сдать и сколько сдано. Сорока: `have` —
+   *  монеты в мешочке, `need` — сколько ключей она уже уронила. */
   need: number;
   have: number;
+}
+
+// ---------------------------------------------------------------------------
+// Сундучок живности (v2.64): награда, которая ждёт решения игрока — какую
+// карту взять и рискнуть ли. Правила — в `critters.ts`; здесь только то, что
+// лежит в сохранении: закрыл приложение посреди выбора — вернёшься к нему же.
+// ---------------------------------------------------------------------------
+
+export type TreasureFrom = 'bat' | 'batRare' | 'magpie';
+
+export interface Treasure {
+  from: TreasureFrom;
+  options: Reward[];
+  /** Выбранная карта; −1 — ещё не выбрал. */
+  pick: number;
+  /** Ставка риска: монеты или токены выбранной карты. */
+  stake: number;
+  /** Сколько раз уже удвоено. */
+  step: number;
+  /** Открытая карта сдающего (0…51); −1 — раздачи нет. */
+  dealer: number;
+}
+
+/** Больше четырёх удвоений (×16) не бывает: дальше — чистая лотерея. */
+export const RISK_STEPS = 4;
+
+/** Сохранение могло прийти битым — чиним по полям, иначе выбрасываем. */
+export function normalizeTreasure(raw: unknown): Treasure | null {
+  const t = raw as Partial<Treasure> | null | undefined;
+  if (!t || typeof t !== 'object' || !Array.isArray(t.options) || !t.options.length) return null;
+  const from: TreasureFrom = t.from === 'batRare' || t.from === 'magpie' ? t.from : 'bat';
+  const options = t.options.filter(
+    (r): r is Reward =>
+      !!r &&
+      typeof r === 'object' &&
+      ['coins', 'tokens', 'keys', 'item', 'rune'].includes((r as Reward).kind),
+  );
+  if (!options.length) return null;
+  const num = (v: unknown, lo: number, hi: number, d: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : d;
+  return {
+    from,
+    options,
+    pick: num(t.pick, -1, options.length - 1, -1),
+    stake: num(t.stake, 0, 1e13, 0),
+    step: num(t.step, 0, RISK_STEPS, 0),
+    dealer: num(t.dealer, -1, 51, -1),
+  };
 }
 
 /** Получка платит вдвое, золотая жила — втрое больше добычи с блока. */
@@ -2523,6 +2581,13 @@ export const MILES: Mile[] = [
     reward: { tokens: 600, rune: 3 },
   },
   {
+    id: 'bats',
+    title: 'Ловец мышей',
+    text: 'Поймать тридцать летучих мышей',
+    progress: (p) => upToM(p.bats ?? 0, 30),
+    reward: { tokens: 400, keys: 3, rune: 2 },
+  },
+  {
     id: 'parcels',
     title: 'Сто посылок',
     text: 'Вскрыть',
@@ -2625,6 +2690,10 @@ export interface PrisonState {
   miles: string[];
   /** Сколько сейд-камней разбито за всё время. */
   seids: number;
+  /** Сундучок живности, ждущий решения (v2.64). */
+  treasure: Treasure | null;
+  /** Сколько летучих мышей поймано — для статистики и вех. */
+  bats: number;
 }
 
 export function freshMine(id: number, seed = Math.floor(Math.random() * 2 ** 31)): PrisonMine {
@@ -2688,6 +2757,8 @@ export const PRISON_START: PrisonState = {
   pet: null,
   miles: [],
   seids: 0,
+  treasure: null,
+  bats: 0,
 };
 
 const int = (v: unknown, lo: number, hi: number, dflt: number): number =>
@@ -2779,6 +2850,8 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
       : [],
     ...normalizeLoot(raw),
     seids: int(raw.seids, 0, 1e9, 0),
+    treasure: normalizeTreasure(raw.treasure),
+    bats: int(raw.bats, 0, 1e9, 0),
   };
 }
 
@@ -2796,7 +2869,7 @@ function normalizeEvent(raw: unknown): YardEvent | null {
     hp: typeof e.hp === 'number' && Number.isFinite(e.hp) && e.hp > 0 ? e.hp : 0,
     rock: int(e.rock, -1, MINES - 1, -1),
     need: int(e.need, 0, 1e6, 0),
-    have: int(e.have, 0, 1e6, 0),
+    have: int(e.have, 0, 1e13, 0),
   };
 }
 

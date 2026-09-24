@@ -256,6 +256,17 @@ import {
 } from '@/lib/yard';
 import type { Lot, YardPrize } from '@/lib/yard';
 import {
+  batOffers,
+  MAGPIE_KEYS,
+  newTreasure,
+  RISK_STEPS,
+  riskable,
+  riskDeal,
+  riskReveal,
+  shinyValue,
+} from '@/lib/critters';
+import type { RiskReveal, ShinyKind } from '@/lib/critters';
+import {
   applyDelta,
   canPay,
   conditionsMet,
@@ -308,6 +319,7 @@ import type {
   PrisonState,
   Reward,
   Rune,
+  Treasure,
   YardEvent,
 } from '@/lib/prison';
 
@@ -511,9 +523,9 @@ function settleEvent(
   p: PrisonState,
   f: ForestState,
   now: number,
-): { p: PrisonState; f: ForestState; end: YardEnd | null } {
+): { p: PrisonState; f: ForestState; end: YardEnd | null; paid: number } {
   const ev = p.event;
-  if (!ev || ev.until > now) return { p, f, end: null };
+  if (!ev || ev.until > now) return { p, f, end: null, paid: 0 };
   let forest = f;
   let lost = 0;
   if (ev.id === 'bear' && ev.have < ev.need && f.pile.n > 0) {
@@ -522,8 +534,23 @@ function settleEvent(
     lost = f.pile.n - n;
     forest = { ...f, pile: { n, value: (f.pile.value * n) / f.pile.n, sp } };
   }
-  const failed = ['meteor', 'kuiva', 'convoy', 'bear'].includes(ev.id);
-  return { p: { ...p, event: null }, f: forest, end: { id: ev.id, failed, lost } };
+  // Сорока улетела: мешочек с монетами — в сундучок, им можно рискнуть. Если
+  // сундучок уже ждёт решения (мышь), мешочек платится сразу: второй сундучок
+  // затёр бы первый.
+  let treasure = p.treasure;
+  let paid = 0;
+  const pouch = ev.id === 'magpie' ? ev.have : 0;
+  if (pouch > 0) {
+    if (!treasure) treasure = newTreasure('magpie', [{ kind: 'coins', amount: pouch }]);
+    else paid = pouch;
+  }
+  const failed = ['meteor', 'kuiva', 'convoy', 'bear'].includes(ev.id) || (ev.id === 'magpie' && !pouch);
+  return {
+    p: { ...p, event: null, treasure, earned: p.earned + paid },
+    f: forest,
+    end: { id: ev.id, failed, lost, pouch },
+    paid,
+  };
 }
 
 /** Пора — начать событие. Первое после установки — через обычную паузу. */
@@ -691,11 +718,28 @@ export interface PrisonLoot {
   zone: { tokens: number; bonus: boolean; ended: boolean } | null;
 }
 
-/** Событие кончилось по часам. `lost` — сколько брёвен унёс медведь. */
+/** Событие кончилось по часам. `lost` — сколько брёвен унёс медведь,
+ *  `pouch` — сколько монет в мешочке сороки. */
 export interface YardEnd {
   id: EventId;
   failed: boolean;
   lost: number;
+  pouch: number;
+}
+
+/** Что выдал сундучок живности: награда и монеты (они идут в кошелёк). */
+export interface TreasureGot {
+  reward: Reward;
+  coins: number;
+  shattered: number;
+  newPet: PetId | null;
+}
+
+/** Открыта карта риска: что на столе и сколько теперь на кону (0 — сгорело). */
+export interface RiskOpen extends RiskReveal {
+  dealer: number;
+  stake: number;
+  step: number;
 }
 
 /** Что принёс удар топором: одно бревно, два (замах) или всё дерево. */
@@ -1231,6 +1275,21 @@ interface FinanceState {
   forestOrderFill: (i: number) => { coins: number; tokens: number; item: string } | null;
   /** Двор: закрыть событие, чьё время вышло (медведь уносит штабель). */
   yardExpire: () => YardEnd | null;
+  /** Поймана летучая мышь: в сундучок легли три карты. */
+  prisonBatCatch: (rare: boolean) => Treasure | null;
+  /**
+   * Выбрана карта сундучка. Монеты и токены ждут решения «забрать или
+   * рискнуть» (вернёт null), остальное выдаётся сразу.
+   */
+  prisonTreasurePick: (i: number) => TreasureGot | null;
+  /** Забрать то, что на кону, и закрыть сундучок. */
+  prisonTreasureTake: () => TreasureGot | null;
+  /** Риск: открыть карту сдающего. После неё отказаться нельзя. */
+  prisonRiskDeal: () => number | null;
+  /** Риск: открыть одну из четырёх закрытых карт. */
+  prisonRiskPick: (slot: number) => RiskOpen | null;
+  /** Сорока: подобрана блестяшка. */
+  yardShiny: (kind: ShinyKind) => { coins: number; tokens: number; keys: number } | null;
   /** Разбит метеорит / повержен Куйва: забрать награду. */
   yardMeteor: () => YardPrize | null;
   yardKuiva: () => YardPrize | null;
@@ -3129,7 +3188,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
     counters.blocks += rocks.length;
     counters.ore += put.sold;
-    const coins = put.sold + (eventDone?.coins ?? 0);
+    const coins = put.sold + (eventDone?.coins ?? 0) + settled.paid;
     set({
       prison,
       slotsMissions: { ...missions, counters },
@@ -3363,7 +3422,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
     counters.trees += trees;
     counters.ore += sold;
-    const coins = sold + (eventDone?.coins ?? 0);
+    const coins = sold + (eventDone?.coins ?? 0) + settled.paid;
     set({
       forest,
       prison,
@@ -3660,10 +3719,117 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const s = get();
     const r = settleEvent(s.prison, s.forest, Date.now());
     if (!r.end) return null;
-    set({ prison: r.p, forest: r.f });
+    set({
+      prison: r.p,
+      forest: r.f,
+      ...(r.paid ? { slotsBalance: s.slotsBalance + r.paid } : {}),
+    });
     persistPrison(r.p);
     if (r.f !== s.forest) persistForest(r.f);
+    if (r.paid) persistSlots(get());
     return r.end;
+  },
+
+  // ---- Живность шахты (v2.64) ----------------------------------------------
+
+  prisonBatCatch: (rare) => {
+    const p = get().prison;
+    // Сундучок ждёт решения — второй его затёр бы. Страница в это время мышь
+    // и не выпускает.
+    if (p.treasure) return null;
+    const treasure = newTreasure(rare ? 'batRare' : 'bat', batOffers(p, rare, Math.random));
+    const prison = { ...p, treasure, bats: p.bats + 1 };
+    set({ prison });
+    persistPrison(prison);
+    return treasure;
+  },
+
+  prisonTreasurePick: (i) => {
+    const s = get();
+    const t = s.prison.treasure;
+    if (!t || t.pick >= 0 || i < 0 || i >= t.options.length) return null;
+    const r = t.options[i];
+    // Монеты и токены ждут: ими можно рискнуть. Остальное выдаётся сразу.
+    if (riskable(r)) {
+      const prison = {
+        ...s.prison,
+        treasure: { ...t, pick: i, stake: (r as { amount: number }).amount },
+      };
+      set({ prison });
+      persistPrison(prison);
+      return null;
+    }
+    const a = applyReward({ ...s.prison, treasure: null }, r);
+    set({ prison: a.p });
+    persistPrison(a.p);
+    return { reward: r, coins: 0, shattered: a.shattered, newPet: a.newPet };
+  },
+
+  prisonTreasureTake: () => {
+    const s = get();
+    const t = s.prison.treasure;
+    if (!t || t.pick < 0 || t.dealer >= 0) return null;
+    const r = t.options[t.pick];
+    if (!riskable(r)) return null;
+    const reward = { kind: r.kind, amount: t.stake } as Reward;
+    const a = applyReward({ ...s.prison, treasure: null }, reward);
+    const prison = a.coins ? { ...a.p, earned: a.p.earned + a.coins } : a.p;
+    set(a.coins ? { prison, slotsBalance: s.slotsBalance + a.coins } : { prison });
+    persistPrison(prison);
+    if (a.coins) persistSlots(get());
+    return { reward, coins: a.coins, shattered: 0, newPet: null };
+  },
+
+  prisonRiskDeal: () => {
+    const p = get().prison;
+    const t = p.treasure;
+    if (!t || t.pick < 0 || t.dealer >= 0 || t.stake <= 0 || t.step >= RISK_STEPS) return null;
+    if (!riskable(t.options[t.pick])) return null;
+    // Карта сдающего открыта — ставка на кону. Запись сразу: закрыл
+    // приложение, увидев туза, — вернёшься к тому же тузу.
+    const dealer = riskDeal(Math.random);
+    const prison = { ...p, treasure: { ...t, dealer } };
+    set({ prison });
+    persistPrison(prison);
+    flushers.forEach((f) => f());
+    return dealer;
+  },
+
+  prisonRiskPick: (slot) => {
+    const p = get().prison;
+    const t = p.treasure;
+    if (!t || t.dealer < 0 || slot < 0 || slot > 3) return null;
+    const rev = riskReveal(t.dealer, slot, Math.random);
+    let treasure: Treasure | null;
+    if (rev.outcome === 'win') treasure = { ...t, stake: t.stake * 2, step: t.step + 1, dealer: -1 };
+    else if (rev.outcome === 'lose') treasure = null;
+    else treasure = { ...t, dealer: -1 };
+    const prison = { ...p, treasure };
+    set({ prison });
+    persistPrison(prison);
+    return {
+      ...rev,
+      dealer: t.dealer,
+      stake: treasure ? treasure.stake : 0,
+      step: treasure ? treasure.step : t.step,
+    };
+  },
+
+  yardShiny: (kind) => {
+    const p = get().prison;
+    const ev = liveEvent(p);
+    if (ev?.id !== 'magpie' || ev.place !== 'mine') return null;
+    if (kind === 'key' && ev.need >= MAGPIE_KEYS) return null;
+    const v = shinyValue(kind, p);
+    const prison: PrisonState = {
+      ...p,
+      tokens: p.tokens + v.tokens,
+      keys: p.keys + v.keys,
+      event: { ...ev, have: ev.have + v.coins, need: ev.need + v.keys },
+    };
+    set({ prison });
+    persistPrison(prison);
+    return v;
   },
 
   yardMeteor: () => {

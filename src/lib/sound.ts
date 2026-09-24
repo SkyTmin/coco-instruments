@@ -157,7 +157,10 @@ export type SoundGroup = 'ui' | 'slots' | 'mine' | 'forest' | 'dungeon';
 const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
   ui: (n) => /^(ui\.|chip|coins|cloth|jingle\.|slot\.drum|slot\.win|tick|case\.tick)/.test(n),
   slots: (n) => /^(reel\.|slot\.|gem\.|pluck|bubble|orb\.|slam|chips)/.test(n),
-  mine: (n) => /^(pick\.|crit\.|break\.|bag\.|rumble|boom\.|fuse|gem\.chime|pluck)/.test(n),
+  mine: (n) =>
+    /^(pick\.|crit\.|break\.|bag\.|rumble|boom\.|fuse|gem\.chime|pluck|card\.|flap|shiny|bat\.)/.test(
+      n,
+    ),
   forest: (n) => /^(axe\.|saw\.|log\.|tree\.|snow\.|crit\.|bag\.)/.test(n),
   dungeon: (n) =>
     /^(swing|hit|bite|dash|crate|gate|clang|latch|winch|roar|rat\.|rumble|boom\.|pick\.|break\.|crit\.|bag\.|gem\.chime)/.test(
@@ -214,6 +217,8 @@ const GAP: Record<string, number> = {
   'rat.attack': 0.1,
   'rat.die': 0.06,
   hit: 0.03,
+  flap: 0.07,
+  shiny: 0.04,
 };
 
 const voices = new Map<string, AudioBufferSourceNode[]>();
@@ -814,4 +819,56 @@ export function liftClank(): void {
 export function heroDeath(): void {
   play('break.soil', { gain: 0.8 });
   jingle('jingle.down', 1.3, { gain: 0.8, at: 0.2 });
+}
+
+// ---------------------------------------------------------------------------
+// Живность шахты и риск-игра (v2.64).
+// ---------------------------------------------------------------------------
+
+/** Взмах крыльев: мышь и сорока. Тише у дальних — `gain`. */
+export function wingFlap(gain = 0.35): void {
+  play('flap', { gain, vary: 0.08 });
+}
+
+/** Летучая мышь пискнула: заметили или поймали. */
+export function batSqueak(caught = false): void {
+  play('bat.squeak', { gain: caught ? 0.7 : 0.4, rate: caught ? 1.1 : 1, vary: 0.06 });
+  if (caught) play('crit.thud', { gain: 0.35, at: 0.02 });
+}
+
+/** Блестяшка подобрана: звон стекла, выше с каждой подряд. */
+export function shinyPick(k = 0): void {
+  play('shiny', { gain: 0.5, rate: Math.pow(2, Math.min(k, 12) / 24), vary: 0 });
+  play('coins', { gain: 0.25, at: 0.03 });
+}
+
+/** Карты: сдать на стол, открыть, перетасовать, раскрыть веером. */
+export function cardDeal(at = 0): void {
+  play('card.deal', { gain: 0.55, at });
+}
+export function cardFlip(): void {
+  play('card.flip', { gain: 0.7 });
+}
+export function cardShuffle(): void {
+  play('card.shuffle', { gain: 0.6 });
+}
+export function cardFan(): void {
+  play('card.fan', { gain: 0.6 });
+}
+
+/** Риск: угадал — пассаж выше с каждым удвоением; мимо — вниз; ничья — вопрос. */
+export function riskWin(step: number): void {
+  jingle(step >= 3 ? 'jingle.win' : step >= 2 ? 'jingle.up' : 'jingle.go', 1, { gain: 0.75 });
+  play('chips.stack', { gain: 0.45, at: 0.08 });
+}
+export function riskLose(): void {
+  jingle('jingle.down', 1.2, { gain: 0.7 });
+}
+export function riskDraw(): void {
+  jingle('jingle.nope', 0.8, { gain: 0.6 });
+}
+
+/** Сорока уронила блестяшку: тихий звон, чтобы слышно было, куда смотреть. */
+export function shinyDrop(): void {
+  play('shiny', { gain: 0.16, rate: 0.9 });
 }

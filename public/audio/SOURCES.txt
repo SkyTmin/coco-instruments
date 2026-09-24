@@ -170,6 +170,25 @@ sfx/latch.1.mp3	rpg-audio/metalLatch.ogg
 sfx/winch.1.mp3	rpg-audio/creak3.ogg
 sfx/roar.1.mp3	oga-rpg-pack/RPG Sound Pack/NPC/giant/giant1.wav
 sfx/roar.2.mp3	oga-rpg-pack/RPG Sound Pack/NPC/giant/giant2.wav
+sfx/card.deal.1.mp3	casino-audio/card-slide-1.ogg
+sfx/card.deal.2.mp3	casino-audio/card-slide-3.ogg
+sfx/card.deal.3.mp3	casino-audio/card-slide-5.ogg
+sfx/card.deal.4.mp3	casino-audio/card-slide-7.ogg
+sfx/card.flip.1.mp3	casino-audio/card-place-1.ogg
+sfx/card.flip.2.mp3	casino-audio/card-place-2.ogg
+sfx/card.flip.3.mp3	casino-audio/card-place-3.ogg
+sfx/card.flip.4.mp3	casino-audio/card-place-4.ogg
+sfx/card.shuffle.1.mp3	casino-audio/card-shuffle.ogg
+sfx/card.fan.1.mp3	casino-audio/card-fan-1.ogg
+sfx/card.fan.2.mp3	casino-audio/card-fan-2.ogg
+sfx/flap.1.mp3	rpg-audio/cloth1.ogg
+sfx/flap.2.mp3	rpg-audio/cloth2.ogg
+sfx/flap.3.mp3	rpg-audio/cloth3.ogg
+sfx/flap.4.mp3	rpg-audio/cloth4.ogg
+sfx/shiny.1.mp3	interface-sounds/glass_001.ogg
+sfx/shiny.2.mp3	interface-sounds/glass_002.ogg
+sfx/shiny.3.mp3	interface-sounds/glass_005.ogg
+sfx/shiny.4.mp3	interface-sounds/glass_006.ogg
 sfx/rat.call.1.mp3	SqueakyRatkin Call/call_01
 sfx/rat.call.2.mp3	SqueakyRatkin Call/call_01
 sfx/rat.call.3.mp3	SqueakyRatkin Call/call_03
@@ -186,6 +205,10 @@ sfx/rat.die.3.mp3	SqueakyRatkin Wounded/wounded_01
 sfx/rat.die.4.mp3	SqueakyRatkin Wounded/wounded_01
 sfx/rat.die.5.mp3	SqueakyRatkin Wounded/wounded_03
 sfx/rat.die.6.mp3	SqueakyRatkin Call/call_04
+sfx/bat.squeak.1.mp3	SqueakyRatkin Joy/joy_01
+sfx/bat.squeak.2.mp3	SqueakyRatkin Joy/joy_01
+sfx/bat.squeak.3.mp3	SqueakyRatkin Select/select_02
+sfx/bat.squeak.4.mp3	SqueakyRatkin Call/call_02
 sfx/reel.spin.1.mp3	ui-audio/click1-3 (собрано в петлю)
 music/hall.mp3	«Sketchbook 2024-12-04» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
 music/slots.mp3	«Sketchbook 2024-09-12» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle

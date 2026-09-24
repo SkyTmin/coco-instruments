@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BAT_COINS,
+  BAT_GAP_MS,
+  BAT_PER_BLOCK,
+  BAT_RARE,
+  BAT_RARE_MULT,
+  batTokens,
+} from './critters';
+import {
   bagValue,
   blockRate,
   buildMine,
@@ -234,6 +242,12 @@ function run(
       const seid = seidReward(rank, 0);
       money += bps * seidPerBlock() * seid.coins;
       tokens += bps * seidPerBlock() * seid.tokens;
+      // Летучая мышь (v2.64): ловит четыре из пяти, берёт монеты или токены
+      // поровну. Синяя щедрее — это в среднем множителе.
+      const bats = 1 / (BAT_GAP_MS / 1000 + 1 / (bps * BAT_PER_BLOCK));
+      const k = process.env.NOBAT ? 0 : bats * 0.8 * 0.5 * (1 + BAT_RARE * (BAT_RARE_MULT - 1));
+      money += k * rankCost(rank) * BAT_COINS;
+      tokens += k * batTokens(rank);
     }
     xp += bps;
     inRank += bps;
@@ -322,7 +336,9 @@ describe('темп каторги', () => {
     // заказал ровно ради токенов («токены у нас сложно добиваются»), и круг
     // идеального игрока стал ≈1,5 часа. Это решение, а не утечка: НЕ
     // возвращайте его ценами чар. Следующая добавка силы (двор, события)
-    // обязана окупаться сама, а не опускать границу снова.
+    // обязана окупаться сама, а не опускать границу снова. Летучая мышь
+    // (v2.64) стоит ≈4% круга (1,53 → 1,47 ч, худшее зерно 1,42): её
+    // сундучок урезан до этого нарочно — сделаете щедрее, граница упадёт.
     const r = run();
     const { t, rank } = r;
     if (process.env.PACE)

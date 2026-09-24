@@ -14,3 +14,15 @@ icons/   — game-icons.net, лицензия CC BY 3.0
 fonts/rubik.woff2 — Rubik (Hubert & Fischer, Meir Sadan, Cyreal),
            SIL Open Font License 1.1 (fonts/OFL.txt). Изменения: оставлены
            только латиница, кириллица и знаки; формат woff2.
+
+cards/deck.png — Kenney, «Playing Cards Pack» (www.kenney.nl), CC0 1.0.
+           Копия: github.com/shorepine/kenney. Изменения: карты собраны
+           в один лист, рубашка перекрашена в цвета лагеря (своя сетка и
+           медальон). Сборка — scripts/critters-assets.py.
+
+critters/bat.png — Pixel-boy, «Prehistoric Platformer» из Superpowers Asset
+           Packs (github.com/sparklinlabs/superpowers-asset-packs), CC0 1.0.
+           Взяты 5 кадров из bat-1.png и bat-2.png.
+
+critters/magpie.png — нарисована для игры по пикселям (scripts/critters-assets.py).
+

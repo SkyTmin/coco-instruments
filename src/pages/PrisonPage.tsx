@@ -16,12 +16,17 @@ import {
   ParcelReveal,
   PickIcon,
   PrisonCamp,
+  rewardLabel,
   TokenIcon,
 } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
+import { BatLayer, MagpieLayer, TreasurePanel } from '@/components/Critters';
+import type { BatHandle, MagpieHandle } from '@/components/Critters';
+import { BAT_GAP_MS, BAT_RARE, batRoll } from '@/lib/critters';
+import type { ShinyKind } from '@/lib/critters';
 import { useFinanceStore } from '@/store';
-import type { ParcelOpen, PrisonLoot, PrisonRankUp } from '@/store';
+import type { ParcelOpen, PrisonLoot, PrisonRankUp, TreasureGot } from '@/store';
 import type { YardEvent } from '@/lib/prison';
 import {
   liveEvent,
@@ -120,6 +125,7 @@ import {
   pickHit,
   primeAudio,
   rollupTick,
+  shinyPick,
   tierBreak,
 } from '@/lib/sound';
 import {
@@ -221,6 +227,8 @@ export function PrisonPage() {
   const prisonGuideClaim = useFinanceStore((s) => s.prisonGuideClaim);
   const prisonParcelOpen = useFinanceStore((s) => s.prisonParcelOpen);
   const prisonSeid = useFinanceStore((s) => s.prisonSeid);
+  const prisonBatCatch = useFinanceStore((s) => s.prisonBatCatch);
+  const yardShiny = useFinanceStore((s) => s.yardShiny);
   const prisonReset = useFinanceStore((s) => s.prisonReset);
   const gamesReset = useFinanceStore((s) => s.gamesReset);
   const skin = useFinanceStore((s) => s.slotsSkin);
@@ -285,6 +293,14 @@ export function PrisonPage() {
 
   const field = useRef<MineFieldHandle>(null);
   const bagRef = useRef<HTMLButtonElement>(null);
+  const tokenRef = useRef<HTMLButtonElement>(null);
+  // Живность (v2.64): мышь, сорока и когда последний раз была мышь. Первая —
+  // не раньше чем через полминуты после входа в шахту.
+  const batRef = useRef<BatHandle>(null);
+  const magRef = useRef<MagpieHandle>(null);
+  const lastBat = useRef(Date.now() - BAT_GAP_MS + 30_000);
+  const shinyRun = useRef({ n: 0, at: 0 });
+  const fieldEl = useCallback(() => field.current?.el ?? null, []);
   const moneyRef = useRef<MoneyHandle>(null);
   const rolling = useRef<(() => void) | null>(null);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -339,6 +355,22 @@ export function PrisonPage() {
     },
     [],
   );
+
+  // Стенд: в разработке мышь можно выпустить руками (`__mine.bat(true)`).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return undefined;
+    const w = window as unknown as { __mine?: { bat: (rare?: boolean) => void } };
+    w.__mine = { bat: (rare = false) => batRef.current?.launch(rare) };
+    return () => {
+      delete w.__mine;
+    };
+  }, []);
+
+  // Сундучок поверх поля: удержание под ним не должно долбить породу.
+  const hasTreasure = !!prison.treasure;
+  useEffect(() => {
+    if (hasTreasure) field.current?.stop();
+  }, [hasTreasure]);
 
   // Вернулся после смены — бригада уже накопала: сказать об этом сразу.
   useEffect(() => {
@@ -669,6 +701,109 @@ export function PrisonPage() {
     });
     announce(list[0].cell, res);
     yardLoot(list[0].cell, res);
+    maybeBat(res.broken);
+  };
+
+  // ---- Живность ------------------------------------------------------------
+
+  /**
+   * Удар мог вспугнуть летучую мышь. Не летает, пока ждёт сундучок, пока на
+   * поле метеорит, Куйва или сорока: две вещи в воздухе — это уже каша.
+   */
+  const maybeBat = (blocks: number) => {
+    const now = Date.now();
+    const st = useFinanceStore.getState().prison;
+    if (st.treasure || batRef.current?.busy()) return;
+    const ev = liveEvent(st);
+    if (ev?.place === 'mine' && (ev.id === 'meteor' || ev.id === 'kuiva' || ev.id === 'magpie'))
+      return;
+    if (!batRoll(blocks, now - lastBat.current, Math.random)) return;
+    lastBat.current = now;
+    batRef.current?.launch(Math.random() < BAT_RARE);
+  };
+
+  /** Клетка под точкой поля. */
+  const cellAtPx = (x: number, y: number) => {
+    const w = field.current?.el?.clientWidth ?? 1;
+    const size = w / MINE_COLS;
+    const col = Math.max(0, Math.min(MINE_COLS - 1, Math.floor(x / size)));
+    const row = Math.max(0, Math.min(MINE_ROWS - 1, Math.floor(y / size)));
+    return row * MINE_COLS + col;
+  };
+
+  /** Мышь поймана: пух и искры там, где её сбили, потом — сундучок. */
+  const onBatCatch = (rare: boolean, x: number, y: number) => {
+    const f = field.current;
+    f?.stop();
+    const c = cellAtPx(x, y);
+    f?.chips(
+      c,
+      rare ? ['#9fd8ff', '#e0f4ff', '#4a6aa0', '#ffffff'] : ['#c8905a', '#f0d0a0', '#5a3a20'],
+      rare ? 26 : 16,
+      1.3,
+    );
+    f?.puff(c, 'rgba(230,220,200,1)', 10);
+    f?.trauma(rare ? 0.3 : 0.18);
+    floatText(c, rare ? 'СИНЯЯ!' : 'ПОЙМАЛ', rare ? 'pfloat--seid' : 'pfloat--streak');
+    tierBreak(rare ? 2 : 1);
+    dig.later(() => {
+      if (prisonBatCatch(rare)) notifySuccess();
+    }, 420);
+  };
+
+  /** Блестяшка сороки подобрана: подряд — звон выше. */
+  const pickShiny = (kind: ShinyKind, c: number) => {
+    const v = yardShiny(kind);
+    if (!v) return;
+    const now = performance.now();
+    const k = now - shinyRun.current.at < 1200 ? shinyRun.current.n + 1 : 0;
+    shinyRun.current = { n: k, at: now };
+    shinyPick(k);
+    tapLight();
+    field.current?.chips(c, ['#ffe08a', '#fff6c8', '#ffd257'], 8, 1);
+    if (v.coins) floatText(c, `+${shortMoney(v.coins)}`, 'pfloat--coin');
+    if (v.tokens) {
+      floatText(c, `+${v.tokens} ✦`, 'pfloat--token');
+      squashPop(tokenRef.current, 0.3);
+    }
+    if (v.keys) totemKey(c, v.keys);
+  };
+
+  /** Сундучок выдал своё: монеты досчитываются на табло, прочее — тостом. */
+  const onTreasureGot = (got: TreasureGot) => {
+    const r = got.reward;
+    notifySuccess();
+    if (got.coins) {
+      const to = useFinanceStore.getState().slotsBalance;
+      rollBalance(to - got.coins, to);
+      coinDing();
+      payoutEnd(1);
+      return;
+    }
+    if (r.kind === 'tokens') {
+      coinDing();
+      squashPop(tokenRef.current, 0.6);
+      say(`+${fmt(r.amount)} токенов`);
+    } else if (r.kind === 'keys') {
+      keyFound();
+      squashPop(campRef.current, 0.6);
+      say(r.amount > 1 ? `+${r.amount} ключа от сундука` : '+ключ от сундука');
+    } else if (r.kind === 'rune') {
+      tierBreak(2);
+      say(
+        got.shattered
+          ? `Мешочек рун полон — руна разбита на ${got.shattered} ✦`
+          : `${rewardLabel(r)} — в мешочке рун`,
+      );
+    } else {
+      tierBreak(1);
+      say(`${rewardLabel(r)} — в ряду расходников`);
+    }
+  };
+
+  const onRiskLost = (stake: number) => {
+    field.current?.trauma(0.25);
+    say(`Сгорело: ${shortMoney(stake)}. В другой раз повезёт`);
   };
 
   const startFrenzy = (c: number) => {
@@ -883,6 +1018,13 @@ export function PrisonPage() {
    * бьётся ударами, а не уроном. Остальное — обычный удар поля.
    */
   const specialHit = (c: number): boolean => {
+    // Блестяшка сороки лежит поверх породы — удар подбирает её.
+    const shiny = magRef.current?.takeAt(c);
+    if (shiny) {
+      field.current?.swing(c, false);
+      pickShiny(shiny, c);
+      return true;
+    }
     const st = useFinanceStore.getState().prison;
     const ev = liveEvent(st);
     if (ev?.place === 'mine') {
@@ -1310,6 +1452,7 @@ export function PrisonPage() {
           </span>
           <button
             type="button"
+            ref={tokenRef}
             className="gx-chip pmx-chip--btn"
             aria-label="Токены — чары"
             onClick={() => {
@@ -1533,6 +1676,18 @@ export function PrisonPage() {
               </>
             }
           >
+            <BatLayer ref={batRef} host={fieldEl} onCatch={onBatCatch} />
+            {yardEv?.id === 'magpie' && (
+              <MagpieLayer
+                key={yardEv.from}
+                ref={magRef}
+                ev={yardEv}
+                host={fieldEl}
+                canDrop={(c) => !yardShut(useFinanceStore.getState().prison).has(c)}
+                onPick={pickShiny}
+              />
+            )}
+            <TreasurePanel onGot={onTreasureGot} onLost={onRiskLost} />
             {arming && (
               <div className="pmine__arm">
                 <ItemIcon id={arming} size={18} /> Тапни, куда бросить

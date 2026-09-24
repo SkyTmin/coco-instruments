@@ -74,6 +74,8 @@ export function endText(end: YardEnd): string | null {
       return 'Конвой уехал без груза';
     case 'bear':
       return end.lost > 0 ? `Медведь унёс ${end.lost} брёвен` : 'Медведь ушёл ни с чем';
+    case 'magpie':
+      return 'Сорока улетела — ничего не подобрал';
     default:
       return null;
   }
@@ -108,7 +110,13 @@ export function EventAnnounce({ ev, onDone }: { ev: YardEvent | null; onDone: ()
 export function EventPill({ ev, now }: { ev: YardEvent; now: number }) {
   const def = eventOf(ev.id);
   const left = ev.until - now;
-  const part = ev.need ? `${Math.min(ev.have, ev.need)}/${ev.need} · ` : '';
+  // У сороки `have` — монеты в мешочке, а не счёт сданного.
+  const part =
+    ev.id === 'magpie'
+      ? `${shortMoney(ev.have)} · `
+      : ev.need
+        ? `${Math.min(ev.have, ev.need)}/${ev.need} · `
+        : '';
   return (
     <span
       className={`pbuff pbuff--event${left < 10_000 ? ' is-ending' : ''}`}
