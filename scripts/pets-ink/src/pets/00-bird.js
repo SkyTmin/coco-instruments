@@ -330,7 +330,7 @@
     const S = R.S, C = S.colors, sd = sdOf(S), pose = R.pose, F = S.face;
     if (S.hooks.face) S.hooks.face(ctx, R, B);
     const E = F.eye;
-    K.eye(ctx, R.Mh, E.x, E.y, { r: E.r, style: E.style, iris: E.iris, look: (pose.fx && pose.fx.look) || E.look, lid: pose.eyeMode === 'happy' ? 0 : E.lid, lidColor: E.lidColor || C.fur, white: E.white, mode: pose.eyeMode, open: pose.eye, color: C.eye }, B, sd('eye'));
+    K.eye(ctx, R.Mh, E.x, E.y, { r: E.r, style: E.style, iris: E.iris, look: (pose.fx && pose.fx.look) || E.look, lid: pose.eyeMode === 'happy' ? 0 : E.lid, lidColor: E.lidColor || C.fur, white: E.white, mode: pose.eyeMode, open: pose.eye, color: C.eye, lineColor: C.eyeLine }, B, sd('eye'));
     if (E.ring) L.inkPath(ctx, M.all(R.Mh, L.ellipsePts(E.x, E.y, E.r * 1.35, E.r * 1.45, 24)), { closed: true, width: 4, color: E.ring, seed: sd('eyeRing'), boil: B, wobble: 0.4 });
   }
 

@@ -33,6 +33,7 @@
     leg: '#26272E',
     legDeep: '#0E0E12',
     eye: '#1A110E',
+    eyeLine: '#C9CEDC',
     gold: '#E2B54A',
     goldDeep: '#96701E',
     iron: '#6A6E75',
@@ -108,20 +109,7 @@
     }
   }
 
-  /** A key: bow (ring), shaft and bit; s scale, turn 0..1 for the twist in the lock. */
-  function key(ctx, x, y, rot, s, fill, deep, B, seed, turn = 0) {
-    const T = M.chain(M.tr(x, y), M.rot(rot), M.sc(s, s));
-    const tw = Math.max(0.2, Math.abs(Math.cos(Math.PI * turn)));
-    const bow = M.all(T, L.ellipsePts(0, 0, 16 * tw, 16, 18));
-    K.form(ctx, bow, { fill, deep, width: 4, seed, boil: B, shade: 0.6, spacing: 4, hatchW: 1.6 });
-    K.fill(ctx, M.all(T, L.ellipsePts(0, 0, 6 * tw, 6, 10)), P.ink);
-    const shaft = M.all(T, [[14, -4], [KEY_LEN, -4], [KEY_LEN, 4], [14, 4]]);
-    K.fill(ctx, shaft, fill);
-    L.inkPath(ctx, shaft, { closed: true, width: 3.4, seed: seed + 1, boil: B, smooth: false, taper: 0, wobble: 0.3 });
-    const bit = M.all(T, [[KEY_LEN - 22, 4], [KEY_LEN - 22, 4 + 16 * tw], [KEY_LEN - 12, 4 + 16 * tw], [KEY_LEN - 12, 10 * tw + 4], [KEY_LEN - 4, 10 * tw + 4], [KEY_LEN - 4, 4]]);
-    K.fill(ctx, bit, fill);
-    L.inkPath(ctx, bit, { closed: true, width: 3.2, seed: seed + 2, boil: B, smooth: false, taper: 0, wobble: 0.3 });
-  }
+  const key = (ctx, x, y, rot, s, fill, deep, B, seed, turn = 0) => K.key(ctx, x, y, rot, s, fill, deep, B, seed, turn, KEY_LEN);
 
   function keyring(ctx, R, B) {
     const S = R.skin;

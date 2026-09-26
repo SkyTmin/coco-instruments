@@ -162,7 +162,7 @@
     if (F.blush) L.stipple(ctx, M.all(H, L.ellipsePts(F.blush[0], F.blush[1], 28, 17, 24)), { spacing: 7, r: [1.6, 2.8], color: C.blush || C.skinDeep, alpha: 0.75, seed: sd('blush'), boil: B });
     if (S.hooks.face) S.hooks.face(ctx, R, B);
     const E = F.eye;
-    K.eye(ctx, H, E.x, E.y, { r: E.r, style: E.style, iris: E.iris, slit: E.slit, look: E.look, lid: pose.eyeMode === 'happy' ? 0 : E.lid, lidColor: E.lidColor || C.fur, mode: pose.eyeMode, open: pose.eye, color: C.eye }, B, sd('eye'));
+    K.eye(ctx, H, E.x, E.y, { r: E.r, style: E.style, iris: E.iris, slit: E.slit, look: E.look, lid: pose.eyeMode === 'happy' ? 0 : E.lid, lidColor: E.lidColor || C.fur, mode: pose.eyeMode, open: pose.eye, color: C.eye, lineColor: C.eyeLine }, B, sd('eye'));
     // mouth
     const m = F.mouth;
     if (pose.mouth > 0.3) {

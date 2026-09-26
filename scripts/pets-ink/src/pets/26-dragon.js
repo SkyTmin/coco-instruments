@@ -29,6 +29,7 @@
     nose: '#1E1A1A',
     noseDeep: '#0A0808',
     eye: '#1A110E',
+    eyeLine: '#E8D9C4',
     mouth: '#5E1A10',
     tongue: '#E0574A',
     horn: '#DCCDB0',

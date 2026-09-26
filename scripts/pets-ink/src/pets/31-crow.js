@@ -30,6 +30,7 @@
     beak: '#26272C',
     beakDeep: '#0E0E10',
     eye: '#1A110E',
+    eyeLine: '#C9CEDC',
     leg: '#2E2F35',
     legDeep: '#101014',
     rust: '#B4602E',

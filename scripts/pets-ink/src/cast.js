@@ -250,12 +250,17 @@
     const r = o.r || 16;
     const mode = o.mode || 'open';
     const open = o.open == null ? 1 : o.open;
+    // on a dark head an ink line vanishes: o.lineColor draws the shut eye light
+    const shut = (pts, w) => {
+      if (o.lineColor) K.line(ctx, pts, { width: w + 4, color: P.ink, seed, boil: B, taper: [4, 4] });
+      K.line(ctx, pts, Object.assign({ width: w, seed, boil: B, taper: [4, 4] }, o.lineColor ? { color: o.lineColor } : {}));
+    };
     if (mode === 'happy') {
-      K.line(ctx, M.all(T, [[x - r, y + r * 0.35], [x, y - r * 0.55], [x + r, y + r * 0.35]]), { width: Math.max(4, r * 0.38), seed, boil: B, taper: [4, 4] });
+      shut(M.all(T, [[x - r, y + r * 0.35], [x, y - r * 0.55], [x + r, y + r * 0.35]]), Math.max(4, r * 0.38));
       return;
     }
     if (mode === 'closed' || open < 0.2) {
-      K.line(ctx, M.all(T, [[x - r, y - r * 0.1], [x, y + r * 0.45], [x + r, y - r * 0.1]]), { width: Math.max(3.6, r * 0.34), seed, boil: B, taper: [4, 4] });
+      shut(M.all(T, [[x - r, y - r * 0.1], [x, y + r * 0.45], [x + r, y - r * 0.1]]), Math.max(3.6, r * 0.34));
       return;
     }
     const ry = r * 1.15 * open;
@@ -408,6 +413,21 @@
       K.fill(ctx, M.all(T, L.ellipsePts(cx - r * 0.2, y - r * 0.22, r * 0.2, r * 0.14, 10)), P.white, 0.85);
       L.inkPath(ctx, lens, { closed: true, width: 3, seed: sd('lens' + k), boil: B, wobble: 0.3 });
     }
+  };
+
+  /** A key: bow (ring), shaft and bit; s scale, turn 0..1 for the twist in the lock. */
+  K.key = (ctx, x, y, rot, s, fill, deep, B, seed, turn = 0, KEY_LEN = 70) => {
+    const T = M.chain(M.tr(x, y), M.rot(rot), M.sc(s, s));
+    const tw = Math.max(0.2, Math.abs(Math.cos(Math.PI * turn)));
+    const bow = M.all(T, L.ellipsePts(0, 0, 16 * tw, 16, 18));
+    K.form(ctx, bow, { fill, deep, width: 4, seed, boil: B, shade: 0.6, spacing: 4, hatchW: 1.6 });
+    K.fill(ctx, M.all(T, L.ellipsePts(0, 0, 6 * tw, 6, 10)), P.ink);
+    const shaft = M.all(T, [[14, -4], [KEY_LEN, -4], [KEY_LEN, 4], [14, 4]]);
+    K.fill(ctx, shaft, fill);
+    L.inkPath(ctx, shaft, { closed: true, width: 3.4, seed: seed + 1, boil: B, smooth: false, taper: 0, wobble: 0.3 });
+    const bit = M.all(T, [[KEY_LEN - 22, 4], [KEY_LEN - 22, 4 + 16 * tw], [KEY_LEN - 12, 4 + 16 * tw], [KEY_LEN - 12, 10 * tw + 4], [KEY_LEN - 4, 10 * tw + 4], [KEY_LEN - 4, 4]]);
+    K.fill(ctx, bit, fill);
+    L.inkPath(ctx, bit, { closed: true, width: 3.2, seed: seed + 2, boil: B, smooth: false, taper: 0, wobble: 0.3 });
   };
 
   // ---------------------------------------------------------------- ground
