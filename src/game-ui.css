@@ -5634,6 +5634,197 @@ button.fg-slot {
   opacity: 0.7;
 }
 
+/* Чародей: портрет из ChatGPT (public/ui/books/enchanter.webp, 3:2). Глаза
+   на картинке — 46,9% и 52,2% по ширине, 26,4% по высоте; огни в ладонях —
+   10% и 90%, 43%. Живое — только прозрачность и масштаб. */
+.pbk-mage {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0b0612;
+  box-shadow:
+    inset 0 0 0 2px #e6b84c,
+    0 0 0 3px var(--gx-wood-dd),
+    0 4px 0 3px rgba(61, 42, 22, 0.45);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.pbk-mage > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}
+/* Кант рамки поверх картинки. */
+.pbk-mage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 0 0 2px #e6b84c,
+    inset 0 0 18px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.pbk-mage__eye {
+  position: absolute;
+  top: 26.4%;
+  width: 7%;
+  height: 4.5%;
+  margin: -2.25% 0 0 -3.5%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(236, 214, 255, 0.95), rgba(170, 100, 255, 0.5) 45%, transparent);
+  animation: pbk-eye 4.2s ease-in-out infinite;
+}
+.pbk-mage__eye.is-l {
+  left: 46.9%;
+}
+.pbk-mage__eye.is-r {
+  left: 52.2%;
+}
+/* Глаза разгораются и гаснут; раз в цикл — моргание (тень капюшона
+   накрывает их на долю секунды). */
+@keyframes pbk-eye {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  45% {
+    opacity: 0.95;
+    transform: scale(1.12);
+  }
+  88% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  90.5%,
+  93.5% {
+    opacity: 0;
+    transform: scaleY(0.2);
+  }
+  95% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+}
+/* Моргание: тень капюшона на миг накрывает нарисованные глаза. */
+.pbk-mage__lid {
+  position: absolute;
+  top: 26.4%;
+  width: 6%;
+  height: 4.4%;
+  margin: -2.2% 0 0 -3%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #07040b 70%, transparent);
+  opacity: 0;
+  animation: pbk-lid 4.2s linear infinite;
+}
+.pbk-mage__lid.is-l {
+  left: 46.9%;
+}
+.pbk-mage__lid.is-r {
+  left: 52.2%;
+}
+@keyframes pbk-lid {
+  0%,
+  89.5%,
+  94.5%,
+  100% {
+    opacity: 0;
+  }
+  91%,
+  93% {
+    opacity: 1;
+  }
+}
+.pbk-mage__fire {
+  position: absolute;
+  top: 43%;
+  width: 22%;
+  aspect-ratio: 1;
+  margin: -11% 0 0 -11%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    rgba(240, 220, 255, 0.55),
+    rgba(170, 100, 255, 0.28) 45%,
+    transparent
+  );
+  animation: pbk-fire 2.6s ease-in-out infinite;
+}
+.pbk-mage__fire.is-l {
+  left: 10%;
+}
+.pbk-mage__fire.is-r {
+  left: 90%;
+  animation-delay: -1.3s;
+}
+@keyframes pbk-fire {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85) translateY(4%);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.1) translateY(-4%);
+  }
+}
+/* Тап по Чародею: огни вспыхивают разом. */
+.pbk-mage__flare {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(18% 27% at 10% 43%, rgba(230, 200, 255, 0.9), transparent),
+    radial-gradient(18% 27% at 90% 43%, rgba(230, 200, 255, 0.9), transparent),
+    radial-gradient(10% 6% at 49.5% 26.4%, rgba(236, 214, 255, 0.9), transparent);
+  opacity: 0;
+  animation: pbk-flare 700ms ease-out;
+  pointer-events: none;
+}
+@keyframes pbk-flare {
+  15% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.pbk-mage__cap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 26px 12px 9px;
+  background: linear-gradient(180deg, transparent, rgba(8, 4, 12, 0.88) 55%);
+  color: var(--gx-paper);
+}
+.pbk-mage__cap b {
+  font-size: 15px;
+  color: #ffd98a;
+  text-shadow: 0 1px 0 #000;
+}
+.pbk-mage__say {
+  font-size: 12.5px;
+  font-weight: 600;
+  font-style: italic;
+  animation: gx-fade 260ms ease-out;
+}
+
 .pbk-tiers {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -6225,6 +6416,10 @@ button.fg-slot {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pbk-mage__eye,
+  .pbk-mage__lid,
+  .pbk-mage__fire,
+  .pbk-mage__flare,
   .pbks__shake,
   .pbks__pair span,
   .pbks__book,

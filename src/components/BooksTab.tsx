@@ -277,10 +277,7 @@ export function BooksTab() {
 
       {/* ---- Чародей ---- */}
       <section className="pbk-seller">
-        <h4>
-          <GxIcon name="magic" size={18} /> Чародей
-          <i>чара внутри — сюрприз</i>
-        </h4>
+        <MageCard poor={p.tokens < BOOK_TIERS[0].price} />
         <div className="pbk-tiers">
           {BOOK_TIERS.map((t) => {
             const can = p.tokens >= t.price && !full;
@@ -382,6 +379,60 @@ export function BooksTab() {
           document.body,
         )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Чародей: портрет над ярусами. Лица нет — капюшон, светятся глаза (так он
+// же будет выглядеть спрайтом во дворе, см. CLAUDE.md «План двора»).
+// ---------------------------------------------------------------------------
+
+/**
+ * Реплики Чародея — одна строка, тап по портрету даёт следующую. Это его
+ * голос, а не подсказка интерфейса: механику книг он рассказывает сам.
+ */
+const MAGE_LINES = [
+  'Какая чара внутри — узнаешь, когда купишь.',
+  'Не вписалась — не беда: пыль поднимет шанс.',
+  'Две одинаковые книги? Неси на наковальню.',
+  'Кирка редче — больше книг в неё войдёт.',
+  'Лишнюю книгу не выбрасывай — разбери в пыль.',
+  'Легендарные книги пишут для тех, кто копит.',
+];
+
+function MageCard({ poor }: { poor: boolean }) {
+  const [k, setK] = useState(0);
+  const line =
+    poor && k === 0
+      ? 'Приходи с токенами — они падают с блоков.'
+      : MAGE_LINES[(poor ? k - 1 : k) % MAGE_LINES.length];
+  return (
+    <button
+      type="button"
+      className="pbk-mage"
+      aria-label="Чародей"
+      onClick={() => {
+        primeAudio();
+        softChime(1);
+        tapLight();
+        setK(k + 1);
+      }}
+    >
+      <img src="/ui/books/enchanter.webp" alt="" draggable={false} />
+      <i className="pbk-mage__eye is-l" aria-hidden="true" />
+      <i className="pbk-mage__eye is-r" aria-hidden="true" />
+      <i className="pbk-mage__lid is-l" aria-hidden="true" />
+      <i className="pbk-mage__lid is-r" aria-hidden="true" />
+      <i className="pbk-mage__fire is-l" aria-hidden="true" />
+      <i className="pbk-mage__fire is-r" aria-hidden="true" />
+      {k > 0 && <i key={k} className="pbk-mage__flare" aria-hidden="true" />}
+      <span className="pbk-mage__cap">
+        <b>Чародей</b>
+        <span key={k} className="pbk-mage__say">
+          {line}
+        </span>
+      </span>
+    </button>
   );
 }
 
