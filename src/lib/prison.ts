@@ -802,9 +802,13 @@ export function pickOpen(pick: number, rank: number, prestige: number): boolean 
   return d.prestige ? prestige >= d.prestige : rank >= d.floor || prestige > 0;
 }
 
-/** Следующая кирка лестницы (−1 — лучше нет или она за престижем, которого нет). */
-export function nextPick(p: { pick: number; prestige: number }): number {
-  const n = p.pick + 1;
+/**
+ * Следующая кирка лестницы (−1 — лучше нет или она за престижем, которого
+ * нет). Считается от лучшей ВЫКОВАННОЙ (`pickMax`), а не от той, что в руке:
+ * взял в руку старую — кузница не предлагает перековать её заново.
+ */
+export function nextPick(p: { pickMax: number; prestige: number }): number {
+  const n = p.pickMax + 1;
   const d = PICKS[n];
   if (!d) return -1;
   return d.prestige && p.prestige < d.prestige ? -1 : n;
@@ -844,7 +848,7 @@ export interface ForgeCheck {
 }
 
 export function forgeCheck(p: {
-  pick: number;
+  pickMax: number;
   rank: number;
   prestige: number;
   forgeBox: Bag;
@@ -1782,7 +1786,8 @@ export function rankNeeds(p: {
   rank: number;
   norm: Record<number, number>;
   oreBlocks: number;
-  pick: number;
+  /** Ранг просит кирку, которая ЕСТЬ, а не ту, что сейчас в руке. */
+  pickMax: number;
 }): RankNeeds {
   const r = Math.min(p.rank, LAST_RANK - 1);
   const blocksNeed = rankBlocks(r);
@@ -1796,7 +1801,7 @@ export function rankNeeds(p: {
     blocksNeed,
     buyout: missing * BLOCK_PRICE[r] * BLOCK_BUYOUT,
     power,
-    pickOk: pickPower(p.pick) >= power,
+    pickOk: pickPower(p.pickMax) >= power,
   };
 }
 
@@ -2946,7 +2951,10 @@ export interface PrisonMine {
 export interface PrisonState {
   rank: number;
   prestige: number;
+  /** Кирка в руке (v2.69: любую выкованную можно взять снова). */
   pick: number;
+  /** Лучшая выкованная кирка: от неё кузница и условие ранга. */
+  pickMax: number;
   bagLevel: number;
   cart: boolean;
   bag: Bag;
@@ -3039,6 +3047,7 @@ export const PRISON_START: PrisonState = {
   rank: 0,
   prestige: 0,
   pick: 0,
+  pickMax: 0,
   bagLevel: 0,
   cart: false,
   bag: {},
@@ -3128,13 +3137,26 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
   // v2.67: этаж копается только киркой, что берёт его руду. Сохранение
   // из прошлых версий могло стоять на этаже со слабой киркой — кузнец
   // выдаёт нужную: иначе поле встало бы стеной, а старый путь этого не знал.
-  const pick = Math.max(int(raw.pick, 0, PICKS.length - 1, 0), minPickFor(rank));
-  const old = normalizeOldOrder((raw as { forge?: unknown }).forge, pick);
+  //
+  // v2.69: кирка в руке (`pick`) и лучшая выкованная (`pickMax`) — разные
+  // вещи. До v2.69 это было одно поле, поэтому у старого сохранения лучшая
+  // = та, что в руке, и слабая поднимается до нужной этажу. В руке можно
+  // держать и слабую — это выбор игрока, её не поднимаем.
+  const rawPick = int(raw.pick, 0, PICKS.length - 1, 0);
+  const hasMax = typeof raw.pickMax === 'number';
+  const pickMax = Math.max(
+    hasMax ? int(raw.pickMax, 0, PICKS.length - 1, 0) : rawPick,
+    rawPick,
+    minPickFor(rank),
+  );
+  const pick = hasMax ? Math.min(rawPick, pickMax) : pickMax;
+  const old = normalizeOldOrder((raw as { forge?: unknown }).forge, pickMax);
   const box = normalizeBag(raw.forgeBox ?? old?.have);
   return {
     rank,
     prestige,
     pick,
+    pickMax,
     bagLevel: int(raw.bagLevel, 0, BAG_MAX, 0),
     cart: raw.cart === true,
     bag,
@@ -3211,10 +3233,10 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     forgeBox: box,
     // Заказ v2.66 был оплачен вперёд: за эту кирку монеты второй раз не берём.
     forgePaid:
-      old && old.pick === nextPick({ pick, prestige })
+      old && old.pick === nextPick({ pickMax, prestige })
         ? old.pick
-        : int(raw.forgePaid, -1, PICKS.length - 1, -1) === pick + 1
-          ? pick + 1
+        : int(raw.forgePaid, -1, PICKS.length - 1, -1) === pickMax + 1
+          ? pickMax + 1
           : -1,
     pity: int(raw.pity, 0, 1e7, 0),
   };
@@ -3391,7 +3413,7 @@ export const GUIDE: GuideStep[] = [
     id: 'steel',
     title: 'Выкуй каменную кирку',
     hint: 'На этаже C, в кузнице: известняк, песчаник и монеты',
-    progress: (p) => upTo(p.pick, 1),
+    progress: (p) => upTo(p.pickMax, 1),
     reward: { coins: 150 },
   },
   {

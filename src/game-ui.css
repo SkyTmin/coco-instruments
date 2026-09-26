@@ -5029,6 +5029,24 @@ button.fg-slot {
 .fg-rung.is-next {
   box-shadow: inset 0 0 0 2px var(--gx-gold);
 }
+/* Кирка в руке (v2.69): любую выкованную можно взять тапом по ней. */
+.fg-rung__hand {
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  translate: -50% 0;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--rc);
+  color: var(--rd);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
 .fg-rung.is-next img {
   filter: brightness(0) drop-shadow(0 0 4px var(--rc));
 }

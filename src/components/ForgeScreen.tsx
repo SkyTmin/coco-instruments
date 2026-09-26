@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom';
 import { GxIcon, KIcon } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { BagIcon, OreIcon, TokenIcon } from '@/components/PrisonCamp';
-import { PickArt, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
+import { PickArt, pickSrc, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
 import { useFinanceStore } from '@/store';
 import {
   AUTOSELL_TOKENS,
@@ -45,6 +45,7 @@ import {
   uiBuy,
   uiClose,
   uiOpen,
+  uiTap,
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, tapLight, tapMedium } from '@/lib/haptics';
 
@@ -73,6 +74,7 @@ export function ForgeScreen({
   const balance = useFinanceStore((s) => s.slotsBalance);
   const prisonForge = useFinanceStore((s) => s.prisonForge);
   const prisonBuy = useFinanceStore((s) => s.prisonBuy);
+  const prisonEquip = useFinanceStore((s) => s.prisonEquip);
   const [note, setNote] = useState<{ id: number; text: string } | null>(null);
   const [reveal, setReveal] = useState<number | null>(null);
   const noteSeq = useRef(0);
@@ -113,7 +115,7 @@ export function ForgeScreen({
   const ready = !!check && check.open && check.ore && balance >= coins;
   // Лучше этой кирки сейчас нет: либо конец лестницы, либо следующая — за
   // престижем, которого ещё нет.
-  const lockedByPrestige = n < 0 && PICKS[p.pick + 1] ? PICKS[p.pick + 1] : null;
+  const lockedByPrestige = n < 0 && PICKS[p.pickMax + 1] ? PICKS[p.pickMax + 1] : null;
 
   const forge = () => {
     primeAudio();
@@ -170,14 +172,25 @@ export function ForgeScreen({
     onSpend?.();
   };
 
+  // Любую выкованную кирку можно взять в руку снова (v2.69): тап по ней на
+  // лестнице. Лучшая при этом никуда не девается — от неё кузница и ранг.
   const ladderTap = (i: number) => {
-    tapLight();
     const d = PICKS[i];
     const r = rarityOf(d.rarity).name.toLowerCase();
-    if (i <= p.pick) {
-      say(`${d.name} кирка · ${r} · ⛏${d.power}`);
+    if (i === p.pick) {
+      tapLight();
+      say(`${d.name} кирка в руке · ${r} · ⛏${d.power}`);
       return;
     }
+    if (i <= p.pickMax) {
+      primeAudio();
+      if (!prisonEquip(i)) return;
+      tapMedium();
+      uiTap();
+      say(`В руке: ${d.name.toLowerCase()} кирка · ⛏${d.power}`);
+      return;
+    }
+    tapLight();
     say(
       d.prestige
         ? `${d.name} · ${r} · после ${d.prestige}-го престижа, из руды особой шахты`
@@ -220,7 +233,7 @@ export function ForgeScreen({
         {/* Пьедестал: кирка в руке, крупно и в цвете своей редкости. */}
         <div className={`fg-hero r${cur.rarity}`} style={rarityVars(cur.rarity)}>
           <div className="fg-hero__stand">
-            <PickArt pick={p.pick} size={132} />
+            <PickArt pick={p.pick} size={164} />
             <i className="fg-hero__plinth" aria-hidden="true" />
           </div>
           <RarityName rarity={cur.rarity}>{cur.name} кирка</RarityName>
@@ -248,8 +261,8 @@ export function ForgeScreen({
               <RarityName rarity={next.rarity}>{next.name} кирка</RarityName>
             </div>
             <div className="fg-recipe__row">
-              <span className="fg-slot" title={cur.name}>
-                <PickArt pick={p.pick} size={40} fx={false} />
+              <span className="fg-slot" title={PICKS[p.pickMax].name}>
+                <PickArt pick={p.pickMax} size={40} fx={false} />
               </span>
               <i className="fg-recipe__plus">+</i>
               {ores.map((o) => {
@@ -352,13 +365,21 @@ export function ForgeScreen({
               key={d.id}
               type="button"
               role="listitem"
-              className={`fg-rung r${d.rarity}${i <= p.pick ? ' is-have' : ''}${i === p.pick ? ' is-cur' : ''}${i === n ? ' is-next' : ''}`}
+              className={`fg-rung r${d.rarity}${i <= p.pickMax ? ' is-have' : ''}${i === p.pick ? ' is-cur' : ''}${i === n ? ' is-next' : ''}`}
               style={rarityVars(d.rarity)}
               onClick={() => ladderTap(i)}
-              aria-label={d.name}
+              aria-label={
+                i === p.pick
+                  ? `${d.name}, в руке`
+                  : i <= p.pickMax
+                    ? `${d.name}, взять в руку`
+                    : d.name
+              }
+              aria-pressed={i <= p.pickMax ? i === p.pick : undefined}
             >
-              <img src={`/ui/picks/p${i}.png`} alt="" draggable={false} />
+              <img src={pickSrc(i)} alt="" draggable={false} />
               <b>{d.prestige ? `П${d.prestige}` : `⛏${d.power}`}</b>
+              {i === p.pick && <i className="fg-rung__hand">в руке</i>}
             </button>
           ))}
         </div>
@@ -629,4 +650,4 @@ export function forgeReadyNow(p: Parameters<typeof forgeCheck>[0], balance: numb
 }
 
 /** Есть ли вообще следующая кирка (без престижа, которого нет). */
-export const hasNextPick = (p: { pick: number; prestige: number }) => nextPick(p) >= 0;
+export const hasNextPick = (p: { pickMax: number; prestige: number }) => nextPick(p) >= 0;

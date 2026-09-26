@@ -883,8 +883,12 @@ export function PrisonPage() {
     if (now - hardSayAt.current < 6000) return;
     hardSayAt.current = now;
     const need = PICKS.find((x) => !x.prestige && x.power >= power);
+    // Нужная кирка уже выкована, просто в руке слабая — так и скажем.
+    const have = useFinanceStore.getState().prison.pickMax;
     say(
-      `Не берёт! Нужна ${need ? need.name.toLowerCase() : 'кирка сильнее'} кирка ⛏${power} — кузница внизу`,
+      PICKS[have].power >= power && need
+        ? `Не берёт! Возьми в руку ${need.name.toLowerCase()} кирку ⛏${power} — в кузнице`
+        : `Не берёт! Нужна ${need ? need.name.toLowerCase() : 'кирка сильнее'} кирка ⛏${power} — кузница внизу`,
     );
   };
 
@@ -2361,7 +2365,12 @@ export function PrisonPage() {
               <span className="prank__norm">
                 Для ранга {rankLetter(sceneShown.rank + 1)}:
                 <RankChips
-                  need={rankNeeds({ rank: sceneShown.rank, norm: {}, oreBlocks: 0, pick })}
+                  need={rankNeeds({
+                    rank: sceneShown.rank,
+                    norm: {},
+                    oreBlocks: 0,
+                    pickMax: prison.pickMax,
+                  })}
                   floor={sceneShown.rank}
                 />
               </span>

@@ -39,7 +39,9 @@ import {
   mineMix,
   minedShare,
   nice,
+  nextPick,
   normalizePrison,
+  pickPower,
   PICKS,
   pickOpen,
   rankCost,
@@ -364,7 +366,12 @@ function run(
       }
     }
     const cost = rankCost(rank);
-    const need = rankNeeds({ rank, norm: { 0: work }, oreBlocks: Math.floor(oreBlocks), pick });
+    const need = rankNeeds({
+      rank,
+      norm: { 0: work },
+      oreBlocks: Math.floor(oreBlocks),
+      pickMax: pick,
+    });
     if (tCoin[rank] === undefined && money >= cost) tCoin[rank] = t - last;
     if (tWork[rank] === undefined && work >= rankWork(rank)) tWork[rank] = t - last;
     // Кирка: выковать, как только открыта, руда в ящике и монеты есть.
@@ -673,7 +680,7 @@ describe('сила кирки и твёрдость руды', () => {
 
   it('с E ранг просит кирку под следующий этаж, и её всегда можно выковать', () => {
     for (let r = 0; r < LAST_RANK; r++) {
-      const n = rankNeeds({ rank: r, norm: {}, oreBlocks: 0, pick: minPickFor(r) });
+      const n = rankNeeds({ rank: r, norm: {}, oreBlocks: 0, pickMax: minPickFor(r) });
       const best = PICKS.findIndex((p) => !p.prestige && p.power >= n.power);
       // Кирка под следующий этаж куётся на этом или на прошлом этаже.
       expect(PICKS[best].floor).toBeLessThanOrEqual(r);
@@ -721,7 +728,7 @@ describe('кузница и ящик', () => {
   it('выковать можно из ящика и рюкзака вместе, монеты — один раз', () => {
     const [[a, na], [b, nb]] = PICKS[4].ore;
     const p = {
-      pick: 3,
+      pickMax: 3,
       rank: PICKS[4].floor,
       prestige: 0,
       forgeBox: { [a]: na - 10 },
@@ -1007,28 +1014,28 @@ describe('запал, уровень кирки, норма', () => {
 
   it('A–D — только деньги, с E — выработка и блоки этажа', () => {
     for (let r = 0; r < 4; r++) {
-      const n = rankNeeds({ rank: r, norm: {}, oreBlocks: 0, pick: 0 });
+      const n = rankNeeds({ rank: r, norm: {}, oreBlocks: 0, pickMax: 0 });
       expect(n.workNeed).toBe(0);
       expect(n.blocksNeed).toBe(0);
       expect(n.buyout).toBe(0);
     }
     for (let r = 4; r < LAST_RANK; r++) {
-      const n = rankNeeds({ rank: r, norm: {}, oreBlocks: 0, pick: 0 });
+      const n = rankNeeds({ rank: r, norm: {}, oreBlocks: 0, pickMax: 0 });
       expect(n.workNeed).toBeGreaterThan(0);
       expect(n.blocksNeed).toBeGreaterThan(0);
     }
   });
 
   it('выработка считает блоки любых шахт, докупается только блок этажа', () => {
-    const n = rankNeeds({ rank: 10, norm: { 10: 300, 3: 400 }, oreBlocks: 0, pick: 4 });
+    const n = rankNeeds({ rank: 10, norm: { 10: 300, 3: 400 }, oreBlocks: 0, pickMax: 4 });
     expect(n.work).toBe(Math.min(700, n.workNeed));
     // Недостающий блок — втрое дороже блока этажа.
     expect(n.buyout).toBe(n.blocksNeed * BLOCK_PRICE[10] * 3);
-    expect(rankNeeds({ rank: 10, norm: {}, oreBlocks: n.blocksNeed, pick: 4 }).buyout).toBe(0);
+    expect(rankNeeds({ rank: 10, norm: {}, oreBlocks: n.blocksNeed, pickMax: 4 }).buyout).toBe(0);
     // Кирка — отдельное условие: на L нужна кварцевая.
     expect(PICKS[5].name).toBe('Кварцевая');
     expect(n.pickOk).toBe(false);
-    expect(rankNeeds({ rank: 10, norm: {}, oreBlocks: 0, pick: 5 }).pickOk).toBe(true);
+    expect(rankNeeds({ rank: 10, norm: {}, oreBlocks: 0, pickMax: 5 }).pickOk).toBe(true);
     expect(rockShare(8, 8)).toBeGreaterThan(0.4);
   });
 
@@ -1262,5 +1269,30 @@ describe('сейд-камень', () => {
       expect(r.coins).toBeLessThan(rankCost(rank));
     }
     expect(SEID_HITS).toBeGreaterThan(1);
+  });
+});
+
+describe('кирка в руке и лучшая выкованная (v2.69)', () => {
+  it('старое сохранение: лучшая — та, что была в руке, слабая поднимается до этажа', () => {
+    const s = normalizePrison({ rank: 13, pick: 2 });
+    expect(s.pickMax).toBe(minPickFor(13));
+    expect(s.pick).toBe(s.pickMax);
+  });
+
+  it('в руке можно держать слабую, но не лучше выкованной', () => {
+    const a = normalizePrison({ rank: 13, pick: 2, pickMax: 12 });
+    expect(a.pickMax).toBe(Math.max(12, minPickFor(13)));
+    expect(a.pick).toBe(2);
+    // Кирка в руке всегда выкована: лучшая не бывает ниже неё.
+    const b = normalizePrison({ rank: 3, pick: 9, pickMax: 5 });
+    expect(b.pickMax).toBe(9);
+    expect(b.pick).toBe(9);
+  });
+
+  it('кузница и ранг считают от лучшей, а не от той, что в руке', () => {
+    expect(nextPick({ pickMax: 5, prestige: 0 })).toBe(6);
+    const r = PICKS[12].floor;
+    const hand = rankNeeds({ rank: r, norm: {}, oreBlocks: 0, pickMax: 12 });
+    expect(hand.pickOk).toBe(pickPower(12) >= hand.power);
   });
 });

@@ -39,7 +39,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // webp — только кирки (public/ui/picks/v2, 17 файлов, ~400 КБ): в
+        // прекеше у каждого ревизия по содержимому, и перерисованная кирка
+        // приходит к игроку сама, без смены адреса.
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
         // Don't precache the debug bundle, the (large) emoji packs, or the heavy
         // pdf.js bundle. Emoji are optional decorations; pdf.js is only pulled in
         // lazily when importing a payslip. Precaching them bloated the service

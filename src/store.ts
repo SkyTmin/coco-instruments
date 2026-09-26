@@ -1453,6 +1453,8 @@ interface FinanceState {
   prisonRankUp: (buyout?: boolean) => PrisonRankUp | null;
   /** Выковать следующую кирку: руда из ящика и рюкзака, монеты из кошелька. */
   prisonForge: () => number;
+  /** Взять в руку выкованную кирку (не лучше `pickMax`). */
+  prisonEquip: (pick: number) => boolean;
   prisonBuy: (what: 'bag' | 'cart') => boolean;
   /** Престиж: ранг и шахта — на A, кирка остаётся, продажа дороже. */
   prisonPrestige: () => boolean;
@@ -4592,9 +4594,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const c = forgeCheck(p);
     if (!c || !c.open || !c.ore || s.slotsBalance < c.coins) return -1;
     const took = forgeTake(c.pick, p.forgeBox, p.bag);
+    // Новая кирка сразу в руке — ради неё и ковали.
     const prison: PrisonState = {
       ...p,
       pick: c.pick,
+      pickMax: c.pick,
       forgeBox: took.box,
       bag: took.bag,
       forgePaid: -1,
@@ -4603,6 +4607,15 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistPrison(prison);
     if (c.coins) persistSlots(get());
     return c.pick;
+  },
+
+  prisonEquip: (pick) => {
+    const p = get().prison;
+    if (!Number.isInteger(pick) || pick < 0 || pick > p.pickMax || pick === p.pick) return false;
+    const prison: PrisonState = { ...p, pick };
+    set({ prison });
+    persistPrison(prison);
+    return true;
   },
 
   prisonBuy: (what) => {

@@ -7,6 +7,14 @@ import type { CSSProperties, ReactNode } from 'react';
 import { PICKS } from '@/lib/prison';
 import { FX_AURA, FX_PILLAR, FX_RAYS, FX_SHINE, FX_SPARKS, rarityOf } from '@/lib/rarity';
 
+/**
+ * Картинка кирки. v2.69 — рендер 3D-модели 640 px (scripts/picks-render):
+ * прежние 64 px из Kenney Voxel Pack на пьедестале растягивались вдесятеро.
+ * Новый каталог, а не те же имена: старые картинки сидят в прекеше
+ * service worker, и телефон показывал бы их до переустановки воркера.
+ */
+export const pickSrc = (i: number) => `/ui/picks/v2/p${i}.webp`;
+
 /** Переменные цвета ступени для CSS: рамка, свет, тень. */
 export function rarityVars(rarity: number): CSSProperties {
   const r = rarityOf(rarity);
@@ -42,7 +50,7 @@ export function PickArt({
           ...rarityVars(rar),
           width: size,
           height: size,
-          '--pkimg': `url(/ui/picks/p${i}.png)`,
+          '--pkimg': `url(${pickSrc(i)})`,
         } as CSSProperties
       }
       aria-hidden="true"
@@ -57,7 +65,7 @@ export function PickArt({
           ))}
         </i>
       )}
-      <img src={`/ui/picks/p${i}.png`} alt="" draggable={false} />
+      <img src={pickSrc(i)} alt="" draggable={false} />
       {live && rar >= FX_SHINE && <i className="pkart__shine" />}
       {live && rar >= FX_SPARKS && (
         <i className="pkart__sparks">

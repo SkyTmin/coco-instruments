@@ -12,6 +12,7 @@ import { rarityOf } from '@/lib/rarity';
 import { useFinanceStore } from '@/store';
 import { BeastTab, GearTab, StashTab } from '@/components/DungeonCamp';
 import { RodsTab, TrophiesTab } from '@/components/FishingCamp';
+import { pickSrc } from '@/components/PickArt';
 import {
   CASE_TIERS,
   CREW_MAX,
@@ -170,7 +171,7 @@ export function PickIcon({ pick, size = 30 }: { pick: number; size?: number }) {
       style={{ width: size, height: size, '--rc': rarityOf(rar).color } as CSSProperties}
       aria-hidden="true"
     >
-      <img src={`/ui/picks/p${i}.png`} alt="" draggable={false} />
+      <img src={pickSrc(i)} alt="" draggable={false} />
     </span>
   );
 }

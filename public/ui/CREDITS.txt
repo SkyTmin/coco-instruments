@@ -40,6 +40,6 @@ ores/b*.png — блоки этажа: кристальные стены из т
            Soup (github.com/crawl/tiles, выпуск Nov-2015), CC0 1.0 — авторы
            в ARTISTS.md того репозитория. Изменения: перекрашены в цвет
            породы, 32 → 64 точки. Сборка — scripts/ores-assets.py.
-picks/p*.png — кирки кузницы: Kenney, «Voxel Pack» (www.kenney.nl), CC0 1.0,
-           Items/pick_silver.png с перекрашенной головкой. Сборка —
-           scripts/picks-assets.py.
+picks/v2/p*.webp — кирки кузницы: собственный рендер 3D-моделей, собранных
+           кодом (three.js, MIT — только инструмент, в картинках нет чужой
+           графики). Сборка — scripts/picks-render/.
