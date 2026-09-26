@@ -132,17 +132,20 @@ describe('Барыга', () => {
     expect(JSON.stringify(barygaLots(101, p))).not.toEqual(JSON.stringify(barygaLots(100, p)));
   });
 
-  it('четыре лота, один горячий, цены — от цены ранга', () => {
+  it('четыре лота, один горячий, цены постоянные', () => {
     for (let w = 1; w < 60; w++) {
       const lots = barygaLots(w, player(8));
       expect(lots).toHaveLength(BARYGA_LOTS);
       expect(lots.filter((l) => l.hot)).toHaveLength(1);
+      // Ранг игрока цену не двигает — тот же товар стоит так же на A и на Y.
+      expect(barygaLots(w, player(20)).map((l) => l.price)).toEqual(lots.map((l) => l.price));
       for (const l of lots) {
-        expect(l.price).toBeGreaterThan(0);
         expect(l.stock).toBeGreaterThan(0);
-        // Ни один лот не дороже двух рангов и не копеечный.
-        expect(l.price).toBeLessThan(rankCost(8) * 2);
-        expect(l.price).toBeGreaterThan(rankCost(8) * 0.02);
+        expect(l.price).toBeGreaterThanOrEqual(2_400);
+        expect(l.price).toBeLessThanOrEqual(20_000);
+        // Горячий — видимая скидка от прежней цены.
+        if (l.hot) expect(l.price).toBeLessThan(l.was);
+        else expect(l.price).toBe(l.was);
       }
     }
   });

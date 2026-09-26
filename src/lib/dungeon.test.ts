@@ -17,11 +17,12 @@ import {
   DEEP_MINES,
   DEEP_ROCKS,
   DUNGEON_START,
-  econOf,
   EMPTY_SACK,
   heroOf,
   levelOf,
-  MARKET_FULL,
+  MEAT_BASE,
+  meatPrice,
+  KING_COINS,
   meatValue,
   mobStats,
   nextStep,
@@ -52,21 +53,17 @@ const withGear = (tier: number, plus: number): DungeonState => {
 };
 
 describe('подземелье: правила', () => {
-  it('деньги считаются от шахты игрока и растут с рангом', () => {
-    const low = econOf({ ...PRISON_START, rank: 5, pick: 1 });
-    const high = econOf({ ...PRISON_START, rank: 20, pick: 4, sharp: 10 });
-    expect(low).toBeGreaterThanOrEqual(120);
-    expect(high).toBeGreaterThan(low * 10);
-  });
-
-  it('мясо дороже из глубины, рынок насыщается', () => {
+  it('цены постоянные: мясо не зависит от кирки и не дешевеет', () => {
+    // Владелец: «цены на товар всегда одинаковые». Вход — 25 и 45.
+    expect(meatPrice('meat', 0)).toBe(25);
+    expect(meatPrice('fatmeat', 0)).toBe(45);
     const shallow: Sack = { ...EMPTY_SACK, meat: { meat: 10 }, meatBy: { mouth: 10 } };
     const deep: Sack = { ...EMPTY_SACK, meat: { meat: 10 }, meatBy: { haul: 10 } };
-    const a = meatValue(shallow, 1000, 0).value;
-    const b = meatValue(deep, 1000, 0).value;
-    expect(b).toBeGreaterThan(a);
-    const tired = meatValue(shallow, 1000, MARKET_FULL).value;
-    expect(tired).toBeCloseTo(a / 2, 0);
+    expect(meatValue(shallow).value).toBe(10 * MEAT_BASE.meat);
+    // Глубже — дороже, и это единственное, что двигает цену.
+    expect(meatValue(deep).value).toBe(10 * meatPrice('meat', 1));
+    expect(meatValue(deep).value).toBeGreaterThan(meatValue(shallow).value);
+    expect(KING_COINS).toBe(8_000);
   });
 
   it('следующая ступень заметно сильнее предыдущей, заточка — шаг внутри', () => {
@@ -82,15 +79,14 @@ describe('подземелье: правила', () => {
   });
 
   it('заточка дорожает, перековка ждёт условий', () => {
-    const e = 1000;
     for (let p = 1; p < 5; p++) {
-      const a = plusCost('weapon', 1, p, e);
-      const b = plusCost('weapon', 1, p + 1, e);
+      const a = plusCost('weapon', 1, p);
+      const b = plusCost('weapon', 1, p + 1);
       expect(b.coins).toBeGreaterThan(a.coins);
       expect(b.mats.skin!).toBeGreaterThan(a.mats.skin!);
     }
     const d = withGear(1, 5);
-    expect(nextStep(d, 'weapon', e).kind).toBe('reforge');
+    expect(nextStep(d, 'weapon').kind).toBe('reforge');
     expect(conditionsMet(d, 'weapon', 1)).toBe(false);
     const done = { ...d, kills: { rat: 300 } };
     expect(conditionsMet(done, 'weapon', 1)).toBe(true);
@@ -107,9 +103,9 @@ describe('подземелье: правила', () => {
 
   it('монеты не открывают ступень: нужны материалы со склада', () => {
     const d = withGear(1, 0);
-    expect(canPay(d, plusCost('weapon', 1, 1, 1000), 1e12)).toBe(false);
+    expect(canPay(d, plusCost('weapon', 1, 1), 1e12)).toBe(false);
     const rich = { ...d, stash: { skin: 999 } };
-    expect(canPay(rich, plusCost('weapon', 1, 1, 1000), 1e12)).toBe(true);
+    expect(canPay(rich, plusCost('weapon', 1, 1), 1e12)).toBe(true);
   });
 
   it('уровень героя долгий: сотый — это сотни тысяч опыта', () => {
@@ -242,17 +238,16 @@ describe('подземелье: правила', () => {
       started: now - 60_000,
       killed: 9,
     };
-    const r = extractRun({ ...DUNGEON_START, run, stash: { skin: 3 } }, sack, 1000, now, 9);
+    const r = extractRun({ ...DUNGEON_START, run, stash: { skin: 3 } }, sack, now, 9);
     expect(r.d.run).toBeNull();
     expect(r.d.stash.skin).toBe(10);
-    expect(r.d.market).toEqual({ hour: 5, sold: 20 });
     expect(r.d.stats.extracts).toBe(1);
     expect(r.haul.meat).toBe(20);
     expect(r.pay).toBe(r.haul.meatValue + 300);
     expect(r.haul.ms).toBe(60_000);
-    // Новый час — рынок снова берёт по полной.
-    const again = extractRun(r.d, sack, 1000, now + 3_600_000, 0);
-    expect(again.d.market.sold).toBe(20);
+    // Рынок не насыщается: вторая такая же вылазка платит столько же.
+    const again = extractRun(r.d, sack, now + 60_000, 0);
+    expect(again.haul.meatValue).toBe(r.haul.meatValue);
   });
 
   it('смерть забирает сидор, но не прогресс', () => {
@@ -263,7 +258,7 @@ describe('подземелье: правила', () => {
       mats: { pyrite: 4 },
     };
     const d = { ...DUNGEON_START, kills: { rat: 40 }, xp: 500, stash: { pyrite: 1 } };
-    const r = dieRun(d, sack, 1000, 1e9, 3);
+    const r = dieRun(d, sack, 1e9, 3);
     expect(r.d.stash.pyrite).toBe(1);
     expect(r.d.kills.rat).toBe(40);
     expect(r.d.xp).toBe(500);
@@ -273,9 +268,11 @@ describe('подземелье: правила', () => {
   });
 
   it('сидор и клеть стоят шкурки со склада и дорожают', () => {
-    expect(sackCost(3, 1000).coins).toBeGreaterThan(sackCost(2, 1000).coins);
-    expect(sackCost(3, 1000).mats.skin!).toBeGreaterThan(sackCost(0, 1000).mats.skin!);
-    expect(liftCost('haul', 1000).coins).toBeGreaterThan(liftCost('mouth', 1000).coins);
+    expect(sackCost(2).coins).toBeGreaterThan(sackCost(1).coins);
+    expect(sackCost(1).coins).toBeGreaterThan(sackCost(0).coins);
+    expect(sackCost(2).mats.skin!).toBeGreaterThan(sackCost(0).mats.skin!);
+    expect(liftCost('haul').coins).toBe(8_000);
+    expect(liftCost('old').coins).toBeGreaterThan(liftCost('haul').coins);
     const d = payMats(
       { ...DUNGEON_START, stash: { skin: 12, pyrite: 2 } },
       { coins: 0, mats: { skin: 12 } },

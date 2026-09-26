@@ -75,6 +75,8 @@ export interface MineCellProps {
   need: boolean;
   /** Сверху сейд-камень: светится. */
   seid: boolean;
+  /** Сверху блок этажа (цельный куб руды): блестит. */
+  block?: boolean;
   /** Лупа: сейд в этой клетке на столько ярусов ниже (0 — нет). */
   seidBelow: number;
   /** Картинка сейда для метки лупы. */
@@ -95,6 +97,7 @@ export const MineCell = memo(function MineCell({
   peek,
   need,
   seid,
+  block = false,
   seidBelow,
   seidTex,
   wt,
@@ -116,7 +119,10 @@ export const MineCell = memo(function MineCell({
     '--rd': `${Math.round(rise * 34)}ms`,
   } as CSSProperties;
   return (
-    <div className={`pcell${bottom ? ' is-bottom' : ''}${seid ? ' is-seid' : ''}`} style={style}>
+    <div
+      className={`pcell${bottom ? ' is-bottom' : ''}${seid ? ' is-seid' : ''}${block ? ' is-block' : ''}${tex.startsWith('/') ? ' is-hd' : ''}`}
+      style={style}
+    >
       <span
         className="pcell__face"
         ref={(el) => faceRef(index, el)}
@@ -127,6 +133,7 @@ export const MineCell = memo(function MineCell({
         )}
       </span>
       {seid && <i className="pcell__glow" />}
+      {block && <i className="pcell__shine" />}
       {seidBelow > 0 && seidTex ? (
         <span className="pcell__seidmark">
           <img src={seidTex} alt="" />

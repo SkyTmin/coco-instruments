@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GxBar, GxIcon, GxModal, KIcon } from '@/components/gx';
-import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon } from '@/components/slot-art';
@@ -19,6 +18,8 @@ import {
   BRANCH_STUN_MS,
   buildTree,
   FOREST_UNLOCK_RANK,
+  PLOT_GATE,
+  plotOpen,
   forestMods,
   forestPlan,
   forestRankCost,
@@ -123,7 +124,6 @@ export function ForestPage() {
   const forest = useFinanceStore((s) => s.forest);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const haptics = useFinanceStore((s) => s.slotsHaptics);
-  const skin = useFinanceStore((s) => s.slotsSkin);
   const forestCut = useFinanceStore((s) => s.forestCut);
   const forestSell = useFinanceStore((s) => s.forestSell);
   const forestRankUp = useFinanceStore((s) => s.forestRankUp);
@@ -145,7 +145,6 @@ export function ForestPage() {
   const [stunned, setStunned] = useState(false);
   const [camp, setCamp] = useState<CampTab | null>(null);
   const [sheet, setSheet] = useState<Sheetname>(null);
-  const [rewards, setRewards] = useState(false);
   const [reveal, setReveal] = useState<ParcelOpen | null>(null);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
   const [rankScene, setRankScene] = useState<{ rank: number; buyout: number } | null>(null);
@@ -153,8 +152,6 @@ export function ForestPage() {
   const [size, setSize] = useState({ w: 360, h: 420 });
   const [streak, setStreak] = useState(0);
   const [cooling, setCooling] = useState(false);
-  const [rewardsNow, setRewardsNow] = useState(() => Date.now());
-  const readyRewards = useReadyRewards(rewardsNow);
 
   const sceneRef = useRef<HTMLDivElement>(null);
   const trunkRef = useRef<HTMLDivElement>(null);
@@ -189,11 +186,6 @@ export function ForestPage() {
   useEffect(() => {
     if (!rolling.current) setShownBalance(balance);
   }, [balance]);
-
-  useEffect(() => {
-    const id = setInterval(() => setRewardsNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
 
   // Размер сцены — от него размер бревна: дерево обязано влезать по ширине.
   useLayoutEffect(() => {
@@ -975,6 +967,11 @@ export function ForestPage() {
     primeAudio();
     if (forest.rank >= LAST_PLOT) return;
     const st = useFinanceStore.getState();
+    if (!plotOpen(st.forest.rank + 1, st.prison.rank, st.prison.prestige)) {
+      notifyWarning();
+      say(`Следующая делянка откроется с ранга шахты ${rankLetter(PLOT_GATE[st.forest.rank + 1])}`);
+      return;
+    }
     if (
       st.forest.plan < forestPlan(st.forest.rank) ||
       st.slotsBalance < forestRankCost(st.forest.rank)
@@ -1021,7 +1018,8 @@ export function ForestPage() {
   const planHave = Math.min(need, forest.plan);
   const planOk = planHave >= need;
   const progress = atTop ? 1 : Math.max(0, Math.min(1, balance / cost));
-  const ready = !atTop && planOk && progress >= 1;
+  const gated = !atTop && !plotOpen(forest.rank + 1, prison.rank, prison.prestige);
+  const ready = !atTop && !gated && planOk && progress >= 1;
   const buyout = atTop ? 0 : planBuyout(forest.rank, forest.plan);
   const cap = pileCapacity(forest.pileLevel);
   const pileFull = forest.pile.n >= cap;
@@ -1093,18 +1091,6 @@ export function ForestPage() {
             </button>
             <div className="gx-ribbon pmx-top__title">Лес · {plotSpecies.name.toLowerCase()}</div>
             <AudioToggles />
-            <button
-              type="button"
-              className="gx-round gx-round--dark pmx-top__btn"
-              aria-label="Награды дня"
-              onClick={() => {
-                tapLight();
-                setRewards(true);
-              }}
-            >
-              <GxIcon name="gift" />
-              {readyRewards > 0 && <i className="gx-badge">{readyRewards}</i>}
-            </button>
           </div>
 
           <div className="pmx-chips">
@@ -1143,6 +1129,11 @@ export function ForestPage() {
                 label={
                   atTop ? (
                     'Высший разряд'
+                  ) : gated ? (
+                    <span className="pmx-rank__cost">
+                      <KIcon name="locked" size={12} /> шахта{' '}
+                      {rankLetter(PLOT_GATE[forest.rank + 1])}
+                    </span>
                   ) : ready ? (
                     'Новый разряд — жми!'
                   ) : (
@@ -1435,16 +1426,6 @@ export function ForestPage() {
       )}
 
       {reveal && <ParcelReveal open={reveal} onClose={() => setReveal(null)} />}
-
-      {rewards && (
-        <RewardsSheet
-          skin={skin}
-          onClose={() => {
-            setRewards(false);
-            setRewardsNow(Date.now());
-          }}
-        />
-      )}
 
       {sheet === 'plan' && !atTop && (
         <GxModal

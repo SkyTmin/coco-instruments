@@ -291,11 +291,11 @@ export function prizeText(x: YardPrize): string {
 }
 
 // ---------------------------------------------------------------------------
-// Барыга — чёрный рынок двора. Раз в шесть часов новый товар, у каждого лота
-// свой запас; один лот «горячий» — со скидкой. Берёт МОНЕТЫ: это главный
-// сток общего кошелька и единственный способ обменять деньги на токены.
-// Цены — от цены следующего ранга, чтобы Барыга не стал ни копеечным, ни
-// недоступным.
+// Торговец (Барыга) — чёрный рынок двора. Раз в шесть часов новый товар, у
+// каждого лота свой запас; один лот «горячий» — со скидкой −40%, и старая
+// цена видна зачёркнутой. Берёт МОНЕТЫ: главный сток общего кошелька и
+// единственный обмен денег на токены. Цены постоянные (v2.66): лот стоит
+// одинаково на любом ранге — так просил владелец.
 // ---------------------------------------------------------------------------
 
 export const BARYGA_MS = 6 * 3_600_000;
@@ -305,59 +305,66 @@ export const BARYGA_HOT = 0.4;
 export interface Lot {
   reward: Reward;
   price: number;
+  /** Цена без скидки — у горячего лота она видна зачёркнутой. */
+  was: number;
   stock: number;
   hot: boolean;
 }
 
 export const barygaWindow = (now: number): number => Math.floor(now / BARYGA_MS);
 
-type LotMaker = (rnd: () => number, p: PrisonState, base: number) => Omit<Lot, 'hot'>;
+type LotMaker = (rnd: () => number) => Omit<Lot, 'hot' | 'was'>;
 
-/** Монет за один токен у Барыги — дорого, но честно растёт с рангом. */
-const tokenPrice = (base: number) => base * 0.006;
+/** Постоянные цены лотов. */
+export const LOT_PRICE = {
+  tokens100: 12_000,
+  key: 6_000,
+  treat: 4_000,
+  rune1: 8_000,
+  rune2: 20_000,
+} as const;
+/** Контрабанда: пачка и её цена. */
+const LOT_ITEMS: { id: ItemId; n: number; price: number }[] = [
+  { id: 'bomb3', n: 3, price: 6_000 },
+  { id: 'bomb5', n: 2, price: 9_000 },
+  { id: 'charge', n: 1, price: 8_000 },
+  { id: 'energy', n: 2, price: 5_000 },
+  { id: 'lens', n: 3, price: 4_000 },
+];
 
 const LOT_POOL: LotMaker[] = [
-  (rnd, p, base) => {
-    const n = 40 + 12 * (p.rank + p.prestige);
-    return {
-      reward: { kind: 'tokens', amount: n },
-      price: nice(n * tokenPrice(base)),
-      stock: 1 + Math.floor(rnd() * 2),
-    };
-  },
-  (rnd, _p, base) => ({
-    reward: { kind: 'keys', amount: 1 },
-    price: nice(base * 0.35),
+  (rnd) => ({
+    reward: { kind: 'tokens', amount: 100 },
+    price: LOT_PRICE.tokens100,
     stock: 1 + Math.floor(rnd() * 2),
   }),
-  (rnd, _p, base) => {
-    const c = CONTRABAND[Math.floor(rnd() * CONTRABAND.length)];
-    const tokens = { bomb3: 25, bomb5: 70, charge: 180, energy: 40, lens: 20, prop: 0 }[c.id];
-    return {
-      reward: { kind: 'item', id: c.id, amount: c.n },
-      price: nice(tokens * c.n * tokenPrice(base) * 0.8),
-      stock: 2,
-    };
+  (rnd) => ({
+    reward: { kind: 'keys', amount: 1 },
+    price: LOT_PRICE.key,
+    stock: 1 + Math.floor(rnd() * 2),
+  }),
+  (rnd) => {
+    const c = LOT_ITEMS[Math.floor(rnd() * LOT_ITEMS.length)];
+    return { reward: { kind: 'item', id: c.id, amount: c.n }, price: c.price, stock: 2 };
   },
-  (_rnd, _p, base) => ({
+  () => ({
     reward: { kind: 'treat', amount: PET_TREAT_XP },
-    price: nice(base * 0.25),
+    price: LOT_PRICE.treat,
     stock: 2,
   }),
-  (rnd, _p, base) => {
+  (rnd) => {
     const tier = rnd() < 0.7 ? 1 : 2;
     return {
       reward: { kind: 'rune', rune: rollRune(tier, rnd) },
-      price: nice(base * (tier === 1 ? 0.4 : 0.9)),
+      price: tier === 1 ? LOT_PRICE.rune1 : LOT_PRICE.rune2,
       stock: 1,
     };
   },
 ];
 
-/** Товар окна `window` для этого игрока. Одинаков при каждом открытии. */
-export function barygaLots(window: number, p: PrisonState): Lot[] {
+/** Товар окна `window`. Одинаков при каждом открытии и у всех игроков. */
+export function barygaLots(window: number, _p?: PrisonState): Lot[] {
   const rnd = rng32(window * 7 + 3);
-  const base = priceBase(p);
   // Перемешать пул честно (Фишер — Йейтс), а не сортировкой со случайным
   // сравнением: та тянет лоты к своим местам.
   const order = LOT_POOL.map((_, i) => i);
@@ -367,9 +374,10 @@ export function barygaLots(window: number, p: PrisonState): Lot[] {
   }
   const hot = Math.floor(rnd() * BARYGA_LOTS);
   return order.slice(0, BARYGA_LOTS).map((k, i) => {
-    const lot = LOT_POOL[k](rnd, p, base);
+    const lot = LOT_POOL[k](rnd);
     return {
       ...lot,
+      was: lot.price,
       hot: i === hot,
       price: i === hot ? nice(lot.price * (1 - BARYGA_HOT)) : lot.price,
     };

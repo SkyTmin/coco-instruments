@@ -218,6 +218,7 @@ export function BarygaSheet({
               >
                 {left > 0 ? (
                   <>
+                    {lot.hot && <s className="ylot__was">{shortMoney(lot.was)}</s>}
                     {shortMoney(lot.price)} <CoinIcon size={12} />
                   </>
                 ) : (

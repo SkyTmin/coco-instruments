@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GameTop, GxBar, GxIcon, KIcon } from '@/components/gx';
+import { GameTop, GxBar, GxIcon, GxModal, KIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, campPlaceOf, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
@@ -49,6 +49,8 @@ const clock = (ms: number) => {
  * осталось.
  */
 export function YardPage() {
+  const newTerm = useFinanceStore((s) => s.newTerm);
+  const dismissNewTerm = useFinanceStore((s) => s.dismissNewTerm);
   const nav = useNavigate();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const prison = useFinanceStore((s) => s.prison);
@@ -298,8 +300,8 @@ export function YardPage() {
           />
           <Building
             icon="slots"
-            name="Автоматы"
-            text="Тот же кошелёк"
+            name="Казино"
+            text="Слоты и Каскад на те же монеты"
             onClick={() => go('/games')}
           />
         </div>
@@ -316,6 +318,35 @@ export function YardPage() {
         />
       )}
       {baryga && <BarygaSheet onClose={() => setBaryga(false)} />}
+      {newTerm && (
+        <GxModal title="Новый срок" onClose={dismissNewTerm} className="yard-term">
+          <ul className="yard-term__list">
+            <li>
+              <GxIcon name="coins" size={20} /> Цены постоянные: руда, блоки, ранги, кирки
+            </li>
+            <li>
+              <GxIcon name="gold-mine" size={20} /> С ранга E — выработка и блок этажа
+            </li>
+            <li>
+              <GxIcon name="anvil" size={20} /> Кирки куются из руды
+            </li>
+            <li>
+              <GxIcon name="slots" size={20} /> Наград за вход больше нет — монеты только за работу
+            </li>
+          </ul>
+          <p className="yard-term__note">Все игры начаты заново.</p>
+          <button
+            type="button"
+            className="gx-btn gx-btn--red gx-btn--big gx-btn--block"
+            onClick={() => {
+              dismissNewTerm();
+              nav('/prison');
+            }}
+          >
+            В шахту
+          </button>
+        </GxModal>
+      )}
     </div>
   );
 }

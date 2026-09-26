@@ -5,10 +5,9 @@ import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon, OrbGem } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
-import { IconGift, IconInfo } from '@/components/icons';
+import { IconInfo } from '@/components/icons';
 import { CashDesk } from '@/components/CashDesk';
 import { SkinSheet } from '@/components/SkinSheet';
-import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { useFinanceStore } from '@/store';
 import { useExit } from '@/lib/use-exit';
 import { useGameAudio } from '@/lib/use-game-audio';
@@ -480,7 +479,6 @@ export function ScatterPage() {
   const ante = useFinanceStore((s) => s.scatterAnte);
   const setAnte = useFinanceStore((s) => s.setScatterAnte);
   const fs = useFinanceStore((s) => s.scatterFs);
-  const claimRescue = useFinanceStore((s) => s.claimSlotsRescue);
 
   const [plans, setPlans] = useState<ReelPlan<ScatterCell>[]>(() =>
     startGrid().map((col) => restReel(col, () => fillerCell(), SCELL)),
@@ -543,9 +541,6 @@ export function ScatterPage() {
   const [settings, setSettings] = useState(false);
   const [rules, setRules] = useState(false);
   const [skinSheet, setSkinSheet] = useState(false);
-  const [rewards, setRewards] = useState(false);
-  // Тикает раз в полминуты — только чтобы счётчик наград на кнопке не залипал.
-  const [now, setNow] = useState(() => Date.now());
   // ox/oy — тот самый рывок тотема в случайный угол. Выбирается один раз при
   // показе: если считать его в разметке, он бы менялся на каждой перерисовке.
   const [celebration, setCelebration] = useState<{
@@ -625,16 +620,7 @@ export function ScatterPage() {
     if (affordable <= balance && affordable !== bet) setBet(affordable);
   }, [hydrated, spinning, balance, bet, setBet]);
 
-  // Счётчик наград на кнопке уровня: без этого «колесо готово» появлялось бы
-  // только после перезахода на страницу.
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
   const level = levelFromXp(xp);
-  // Прогрессия общая с «Слотами» — считаем её тем же хуком, что и там.
-  const readyCount = useReadyRewards(now);
   const theme = skinOf(skin);
   const rainSrc = symbolSrc(skin, theme.rain);
   const inBonus = !!fs && fs.left > 0;
@@ -1412,23 +1398,6 @@ export function ScatterPage() {
     setAuto(0);
   };
 
-  const takeRescue = () => {
-    primeAudio();
-    if (!claimRescue()) return;
-    tapMedium();
-    coinDing();
-    winChime('small');
-    rainCoins(14, rainSrc);
-    notifySuccess();
-    setNow(Date.now());
-  };
-
-  const openRewards = () => {
-    tapLight();
-    primeAudio();
-    setRewards(true);
-  };
-
   const label = result ? scatterLabel(result) : null;
 
   return (
@@ -1493,7 +1462,7 @@ export function ScatterPage() {
           </div>
         </div>
 
-        <button className="slot-level" onClick={openRewards}>
+        <div className="slot-level">
           <span className="slot-level__lvl">Ур. {level.level}</span>
           <span className="slot-level__bar">
             <i style={{ width: `${Math.min(100, (level.into / level.need) * 100)}%` }} />
@@ -1503,11 +1472,7 @@ export function ScatterPage() {
               🎟 {freeSpins}
             </span>
           )}
-          <span className="slot-level__gift">
-            <IconGift size={17} />
-            {readyCount > 0 && <span className="slot-level__badge">{readyCount}</span>}
-          </span>
-        </button>
+        </div>
 
         {/* Трясёт корпус автомата, а не всю страницу: внутри Telegram дёрганье
             всего экрана читается как баг вебвью, а не как удар. */}
@@ -1872,9 +1837,9 @@ export function ScatterPage() {
         </div>
 
         {broke && (
-          <button className="btn btn--block rewards-cta" onClick={takeRescue}>
-            🍀 Спасательные вращения · 10
-          </button>
+          <p className="slot-bonus-hint">
+            Монеты кончились — заработай в шахте, лесу или на рыбалке
+          </p>
         )}
 
         {/* Ставка Ante и покупка бонуса — оба пути к фриспинам */}
@@ -2159,16 +2124,6 @@ export function ScatterPage() {
 
       {skinSheet && <SkinSheet onClose={() => setSkinSheet(false)} />}
 
-      {rewards && (
-        <RewardsSheet
-          skin={skin}
-          onClose={() => {
-            setRewards(false);
-            setNow(Date.now());
-          }}
-        />
-      )}
-
       {lvlShown && (
         <div
           className={`levelup${lvlLeaving ? ' is-leaving' : ''}`}
@@ -2178,11 +2133,12 @@ export function ScatterPage() {
         >
           <div className="levelup__card">
             <div className="levelup__lvl">Уровень {lvlShown.level}</div>
-            <div className="levelup__gain">
-              +{fmt(lvlShown.coins)}
-              <CoinIcon size={18} />
-              {lvlShown.freeSpins > 0 && <span> · 🎟 {lvlShown.freeSpins}</span>}
-            </div>
+            {lvlShown.coins > 0 && (
+              <div className="levelup__gain">
+                +{fmt(lvlShown.coins)}
+                <CoinIcon size={18} />
+              </div>
+            )}
           </div>
         </div>
       )}

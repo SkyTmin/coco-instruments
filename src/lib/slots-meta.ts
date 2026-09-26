@@ -136,14 +136,14 @@ export interface LevelReward {
   skin?: string;
 }
 
-/** Награда за достижение уровня. Каждый третий уровень даёт ещё и вращения. */
+/**
+ * Что даёт новый уровень. С v2.66 — только скин на своём уровне: денег из
+ * ничего нет (владелец: «ежедневные награды и колесо убираем полностью»),
+ * монеты зарабатываются работой в Каторге.
+ */
 export function levelReward(level: number): LevelReward {
   const skin = Object.keys(SKIN_UNLOCK).find((id) => SKIN_UNLOCK[id] === level);
-  return {
-    coins: 250 + level * 150,
-    freeSpins: level % 3 === 0 ? 5 : 0,
-    skin,
-  };
+  return { coins: 0, freeSpins: 0, skin };
 }
 
 // ---------------------------------------------------------------------------

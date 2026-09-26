@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CSSProperties, ReactNode } from 'react';
-import { GxIcon, GxSheet } from '@/components/gx';
+import { GxBar, GxIcon, GxSheet, KIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { useFinanceStore } from '@/store';
@@ -15,8 +15,12 @@ import {
   bagCapacity,
   bagCost,
   BAG_MAX,
-  CART_PRICE,
+  AUTOSELL_TOKENS,
   CASE_TIERS,
+  forgeLeft,
+  pickOpen,
+  ROCKS,
+  rankLetter as letterOf,
   CREW_MAX,
   CRIT_CHANCE,
   CRIT_MULT,
@@ -126,7 +130,7 @@ import {
   PROP_BOARDS,
   SPECIES,
   sumRow,
-  TRUCK_PRICE,
+  TRUCK_TOKENS,
 } from '@/lib/forest';
 import type { AxeEnchId, ForestState } from '@/lib/forest';
 import {
@@ -165,36 +169,30 @@ const pct = (x: number) =>
 // Иконки.
 // ---------------------------------------------------------------------------
 
-export function PickIcon({ pick, size = 30 }: { pick: number; size?: number }) {
-  const p = PICKS[Math.max(0, Math.min(PICKS.length - 1, pick))];
+/**
+ * Кирка — готовая картинка Kenney (CC0) с перекрашенной головкой
+ * (`scripts/picks-assets.py`). С золотой и выше головка светится: дорогую
+ * кирку видно издалека. `sharp` — заточка уголком.
+ */
+export function PickIcon({
+  pick,
+  size = 30,
+  sharp = 0,
+}: {
+  pick: number;
+  size?: number;
+  sharp?: number;
+}) {
+  const i = Math.max(0, Math.min(PICKS.length - 1, pick));
   return (
-    <svg className="ppick-ico" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
-      <path d="M6.5 27.5 L20 14" stroke="#4a2d16" strokeWidth="4.2" strokeLinecap="round" />
-      <path d="M6.5 27.5 L20 14" stroke="#a36d3c" strokeWidth="2" strokeLinecap="round" />
-      <path
-        d="M11 5.5 C18.5 4.8 25.6 10.4 27.2 20 L24.6 20.6 C22.6 13.6 17.6 9.6 10.6 8.4 Z"
-        fill={p.head}
-        stroke="rgba(0,0,0,.55)"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12.4 6.6 C18 6.4 23 9.8 25.2 15.6"
-        fill="none"
-        stroke="rgba(255,255,255,.55)"
-        strokeWidth="1.1"
-        strokeLinecap="round"
-      />
-      <rect
-        x="17.2"
-        y="10.8"
-        width="5"
-        height="5"
-        rx="1"
-        transform="rotate(45 19.7 13.3)"
-        fill="#3a2414"
-      />
-    </svg>
+    <span
+      className={`ppick-ico${i >= 7 ? ' is-rich' : ''}`}
+      style={{ width: size, height: size, '--pk': PICKS[i].head } as CSSProperties}
+      aria-hidden="true"
+    >
+      <img src={`/ui/picks/p${i}.png`} alt="" draggable={false} />
+      {sharp > 0 && <b>+{sharp}</b>}
+    </span>
   );
 }
 
@@ -505,32 +503,73 @@ const Done = ({ children = 'Есть' }: { children?: ReactNode }) => (
 
 // ---- Кузница: за монеты ------------------------------------------------------
 
+/** Руда породы (кусок в камне) или цельный блок этажа — готовые картинки. */
+export function OreIcon({
+  rock,
+  size = 24,
+  block = false,
+}: {
+  rock: number;
+  size?: number;
+  block?: boolean;
+}) {
+  return (
+    <img
+      className="pore-ico"
+      src={block ? `/ui/ores/b${rock}.png` : `/ui/ores/r${rock}-0.png`}
+      width={size}
+      height={size}
+      alt=""
+      draggable={false}
+    />
+  );
+}
+
 function ForgeTab({ onSpend }: { onSpend: () => void }) {
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const prisonBuy = useFinanceStore((s) => s.prisonBuy);
   const cur = PICKS[p.pick];
-  const next = PICKS[p.pick + 1];
+  const n = p.pick + 1;
+  const next = PICKS[n];
   const m = modsOf(p);
   const dmg = hitDamage(p.pick, p.sharp) * m.dmg;
-  const buy = (what: 'pick' | 'sharp' | 'bag' | 'cart') => {
+  const buy = (what: 'pick' | 'sharp' | 'bag' | 'cart', times = 1) => {
     primeAudio();
-    if (!prisonBuy(what)) {
+    let k = 0;
+    while (k < times && prisonBuy(what)) k += 1;
+    if (!k) {
       notifyWarning();
       return;
     }
     onSpend();
     coinDing();
-    tierBreak(0);
+    tierBreak(what === 'pick' ? 2 : 0);
     notifySuccess();
   };
+  // Сколько уровней заточки возьмёт «Макс» на те деньги, что есть.
+  let sharpK = 0;
+  let sharpSum = 0;
+  for (let l = p.sharp; l < SHARP_MAX; l++) {
+    const c = sharpCost(p.pick, l);
+    if (sharpSum + c > balance) break;
+    sharpSum += c;
+    sharpK += 1;
+  }
+  const order = p.forge;
+  const open = next ? pickOpen(n, p.rank, p.prestige) : false;
+  const lock = next
+    ? next.prestige
+      ? `после ${next.prestige}-го престижа`
+      : `с ранга ${letterOf(next.floor)}`
+    : '';
   return (
     <div className="pforge">
       <div className="pforge__now">
-        <PickIcon pick={p.pick} size={40} />
+        <PickIcon pick={p.pick} size={44} sharp={p.sharp} />
         <span>
           <b>
-            {cur.name} кирка · ур. {pickLevelOf(p.pickXp).level}
+            {cur.name} кирка{p.sharp ? ` +${p.sharp}` : ''} · ур. {pickLevelOf(p.pickXp).level}
           </b>
           <i>
             урон {dmg.toFixed(dmg < 10 ? 1 : 0)} · {(cur.rate * m.rate).toFixed(1)} удара в секунду
@@ -538,37 +577,106 @@ function ForgeTab({ onSpend }: { onSpend: () => void }) {
           </i>
         </span>
       </div>
-      <Row
-        icon={<PickIcon pick={next ? p.pick + 1 : p.pick} size={30} />}
-        title={next ? `${next.name} кирка` : 'Лучшая кирка'}
-        text={
-          next
-            ? `урон ${cur.dmg} → ${next.dmg}, скорость ${cur.rate} → ${next.rate}`
-            : 'Сильнее кирки нет'
-        }
-        action={
-          next ? (
-            <Buy price={next.price} can={balance >= next.price} onClick={() => buy('pick')} />
+      {order ? (
+        <div className="pforge-order">
+          <div className="pforge-order__head">
+            <PickIcon pick={order.pick} size={40} />
+            <span>
+              <b>{PICKS[order.pick].name} кирка в работе</b>
+              <i>руда идёт в заказ сама, пока копаешь</i>
+            </span>
+          </div>
+          {forgeLeft(order).map(([rock, left]) => {
+            const need = PICKS[order.pick].ore.find(([r]) => r === rock)![1];
+            return (
+              <div key={rock} className="pforge-order__ore">
+                <OreIcon rock={rock} size={26} />
+                <span className="pforge-order__name">{ROCKS[rock].name}</span>
+                <GxBar value={(need - left) / need} tone={left ? 'gold' : 'green'} thin />
+                <b>
+                  {fmt(need - left)}/{fmt(need)}
+                </b>
+              </div>
+            );
+          })}
+        </div>
+      ) : next ? (
+        <div className={`pforge-order is-offer${open ? '' : ' is-locked'}`}>
+          <div className="pforge-order__head">
+            <PickIcon pick={n} size={40} />
+            <span>
+              <b>{next.name} кирка</b>
+              <i>
+                урон {cur.dmg.toFixed(1)} → {next.dmg.toFixed(1)} · скорость {cur.rate.toFixed(1)} →{' '}
+                {next.rate.toFixed(1)}
+              </i>
+            </span>
+          </div>
+          <div className="pforge-order__need">
+            <span className="pforge-order__chip">
+              <CoinIcon size={14} /> {fmt(next.coins)}
+            </span>
+            {next.ore.map(([rock, k]) => (
+              <span key={rock} className="pforge-order__chip">
+                <OreIcon rock={rock} size={18} /> {fmt(k)} {ROCKS[rock].name.toLowerCase()}
+              </span>
+            ))}
+          </div>
+          {open ? (
+            <button
+              type="button"
+              className="btn pforge-order__go"
+              disabled={balance < next.coins}
+              onClick={() => {
+                uiBuy();
+                buy('pick');
+              }}
+            >
+              Заказать кузнецу
+            </button>
           ) : (
-            <Done />
-          )
-        }
-      />
+            <span className="pforge-order__lock">
+              <KIcon name="locked" size={12} /> {lock}
+            </span>
+          )}
+        </div>
+      ) : (
+        <Row
+          icon={<PickIcon pick={p.pick} size={30} />}
+          title="Лучшая кирка"
+          text="Сильнее кирки нет"
+          action={<Done />}
+        />
+      )}
       <Row
         icon={<span className="pforge__glyph">⟋</span>}
-        title={`Заточка ${p.sharp}/${SHARP_MAX}`}
+        title={`Заточка +${p.sharp} из ${SHARP_MAX}`}
         text={
           p.sharp < SHARP_MAX
-            ? `+${Math.round(SHARP_STEP * 100)}% урона любой кирке`
+            ? `+${(SHARP_STEP * 100).toLocaleString('ru-RU')}% урона за уровень · у новой кирки заново`
             : 'Острее некуда'
         }
         action={
           p.sharp < SHARP_MAX ? (
-            <Buy
-              price={sharpCost(p.sharp)}
-              can={balance >= sharpCost(p.sharp)}
-              onClick={() => buy('sharp')}
-            />
+            <span className="pforge__pair">
+              <Buy
+                price={sharpCost(p.pick, p.sharp)}
+                can={balance >= sharpCost(p.pick, p.sharp)}
+                onClick={() => buy('sharp')}
+              />
+              {sharpK > 1 && (
+                <button
+                  type="button"
+                  className="btn btn--sm pforge__buy"
+                  onClick={() => {
+                    uiBuy();
+                    buy('sharp', sharpK);
+                  }}
+                >
+                  +{sharpK} · {shortMoney(sharpSum)}
+                </button>
+              )}
+            </span>
           ) : (
             <Done />
           )
@@ -602,12 +710,17 @@ function ForgeTab({ onSpend }: { onSpend: () => void }) {
           p.cart ? (
             <Done />
           ) : (
-            <Buy price={CART_PRICE} can={balance >= CART_PRICE} onClick={() => buy('cart')} />
+            <Buy
+              price={AUTOSELL_TOKENS}
+              token
+              can={p.tokens >= AUTOSELL_TOKENS}
+              onClick={() => buy('cart')}
+            />
           )
         }
       />
       <p className="pcamp-note">
-        Сломано блоков: {fmt(p.mined)} · выручено: {fmt(p.earned)} монет · продажа ×
+        Сломано блоков: {fmt(p.mined)} · блоков этажа: {fmt(p.oreBlocksAll)} · продажа ×
         {m.sell.toFixed(2)}
       </p>
     </div>
@@ -2703,7 +2816,12 @@ function AxesTab({ onSpend }: { onSpend: () => void }) {
           f.truck ? (
             <Done />
           ) : (
-            <Buy price={TRUCK_PRICE} can={balance >= TRUCK_PRICE} onClick={() => buy('truck')} />
+            <Buy
+              price={TRUCK_TOKENS}
+              token
+              can={p.tokens >= TRUCK_TOKENS}
+              onClick={() => buy('truck')}
+            />
           )
         }
       />

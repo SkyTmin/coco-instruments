@@ -3379,9 +3379,7 @@
   gap: 14px;
   padding: 12px;
   border-radius: 14px;
-  background:
-    radial-gradient(ellipse at 50% 40%, #2f6b3f, #1b4127 70%),
-    #1b4127;
+  background: radial-gradient(ellipse at 50% 40%, #2f6b3f, #1b4127 70%), #1b4127;
   box-shadow:
     inset 0 0 0 3px #7a5328,
     inset 0 0 0 5px #3d2a16,
@@ -3430,7 +3428,9 @@
   transition: opacity 0.3s ease 0.45s;
 }
 .prisk__slot.is-mine .pcard {
-  box-shadow: 0 0 0 3px var(--gx-gold), 0 0 14px rgba(255, 210, 87, 0.8);
+  box-shadow:
+    0 0 0 3px var(--gx-gold),
+    0 0 14px rgba(255, 210, 87, 0.8);
   border-radius: 4px;
 }
 .prisk__verdict {
@@ -3566,7 +3566,10 @@
     inset 0 0 0 2px rgba(120, 170, 210, 0.22),
     0 3px 0 rgba(0, 0, 0, 0.35);
   color: #cfe2f1;
-  font: 800 11px/1.1 'GxRubik', system-ui, sans-serif;
+  font:
+    800 11px/1.1 'GxRubik',
+    system-ui,
+    sans-serif;
   cursor: pointer;
   transition: transform 70ms ease-out;
 }
@@ -3784,7 +3787,10 @@
   top: -22px;
   translate: -50% 0;
   color: #ffd84a;
-  font: 900 22px/1 'GxRubik', system-ui, sans-serif;
+  font:
+    900 22px/1 'GxRubik',
+    system-ui,
+    sans-serif;
   text-shadow:
     0 2px 0 #7a4a00,
     0 0 10px rgba(255, 200, 60, 0.8);
@@ -3809,7 +3815,10 @@
   border-radius: 8px;
   background: rgba(8, 16, 24, 0.66);
   color: #d7f2ff;
-  font: 800 11px/1 'GxRubik', system-ui, sans-serif;
+  font:
+    800 11px/1 'GxRubik',
+    system-ui,
+    sans-serif;
   pointer-events: none;
 }
 .fsx-bite .gx-icon {
@@ -3860,7 +3869,11 @@
   right: 2px;
   width: 16.7%;
   border-radius: 0 6px 6px 0;
-  background: repeating-linear-gradient(135deg, rgba(255, 70, 50, 0.55) 0 4px, rgba(255, 70, 50, 0.25) 4px 8px);
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(255, 70, 50, 0.55) 0 4px,
+    rgba(255, 70, 50, 0.25) 4px 8px
+  );
 }
 .fsx-tense i {
   position: absolute;
@@ -3888,7 +3901,10 @@
   border-radius: 10px;
   background: rgba(8, 14, 20, 0.72);
   color: #f2f7fb;
-  font: 800 13px/1.2 'GxRubik', system-ui, sans-serif;
+  font:
+    800 13px/1.2 'GxRubik',
+    system-ui,
+    sans-serif;
   text-align: center;
   white-space: nowrap;
   pointer-events: none;
@@ -3944,7 +3960,11 @@
 .fsx-card__glow {
   position: absolute;
   inset: 0;
-  background: radial-gradient(60% 50% at 50% 30%, color-mix(in srgb, var(--tier) 38%, transparent), transparent 70%);
+  background: radial-gradient(
+    60% 50% at 50% 30%,
+    color-mix(in srgb, var(--tier) 38%, transparent),
+    transparent 70%
+  );
   pointer-events: none;
 }
 .fsx-card > * {
@@ -3978,7 +3998,10 @@
   border-radius: 7px;
   background: #3a2a0c;
   color: #ffd257;
-  font: 800 12px/1.1 'GxRubik', system-ui, sans-serif;
+  font:
+    800 12px/1.1 'GxRubik',
+    system-ui,
+    sans-serif;
   font-style: normal;
 }
 .fsx-card__tag.is-new {
@@ -4110,4 +4133,246 @@
   .fsx-card {
     animation: none;
   }
+}
+
+/* ==== Экономика и шахта (v2.66) =========================================== */
+
+/* Кирка — готовая картинка; с золотой и выше головка светится (статичная тень). */
+.ppick-ico {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+.ppick-ico img {
+  width: 100%;
+  height: 100%;
+  image-rendering: auto;
+  pointer-events: none;
+}
+.ppick-ico.is-rich img {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--pk) 80%, transparent));
+}
+.ppick-ico b {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  padding: 0 3px;
+  border-radius: 5px;
+  background: #1b120b;
+  color: #ffd98a;
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 800;
+}
+.pore-ico {
+  flex: none;
+  image-rendering: pixelated;
+  border-radius: 3px;
+}
+
+.pforge__pair {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+
+/* Заказ кузнице. */
+.pforge-order {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #34251a, #20150e);
+  color: #f7e6cc;
+  box-shadow: inset 0 0 0 2px rgba(255, 196, 92, 0.35);
+}
+.pforge-order.is-locked {
+  box-shadow: none;
+  opacity: 0.8;
+}
+.pforge-order__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pforge-order__head span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pforge-order__head i {
+  font-style: normal;
+  font-size: 12px;
+  opacity: 0.72;
+}
+.pforge-order__ore {
+  display: grid;
+  grid-template-columns: 26px 88px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.pforge-order__ore b {
+  font-variant-numeric: tabular-nums;
+}
+.pforge-order__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pforge-order__need {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pforge-order__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+  font-weight: 700;
+}
+.pforge-order__go {
+  align-self: stretch;
+}
+.pforge-order__lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+/* Клетки с готовыми текстурами (64×64, гладкие) — без пиксельной резкости. */
+.pcell.is-hd .pcell__face,
+.pcell.is-hd .pcell__peek {
+  image-rendering: auto;
+}
+/* Блок этажа: торец не уходит вглубь, по кромке — блик. Блик — отдельный
+   слой, бежит трансформом раз в три секунды. */
+.pcell.is-block .pcell__face {
+  scale: 1;
+}
+.pcell__shine {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.75),
+    0 0 10px rgba(255, 240, 190, 0.55);
+  pointer-events: none;
+}
+.pcell__shine::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 40%;
+  height: 200%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  transform: translateX(-120%) rotate(20deg);
+  animation: pblock-shine 3s ease-in-out infinite;
+}
+@keyframes pblock-shine {
+  0%,
+  60% {
+    transform: translateX(-60%) rotate(20deg);
+  }
+  100% {
+    transform: translateX(460%) rotate(20deg);
+  }
+}
+.pfloat--block {
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  color: #fff3b0;
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.8),
+    0 0 10px rgba(255, 210, 90, 0.9);
+}
+.pquota__chip .gx-icon {
+  flex: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pcell__shine::before {
+    animation: none;
+  }
+}
+.ylot__was {
+  margin-right: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.6;
+  text-decoration-thickness: 1.5px;
+}
+
+/* Лестница этажей (v2.66): горизонты, цельный блок руды, цена руды и блока. */
+.pmx-mines__item + .pmx-mines__item .pmx-mines__row {
+  border-top: 2px dashed rgba(109, 75, 39, 0.25);
+}
+.pmx-mines__band {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gx-wood-d);
+  opacity: 0.8;
+}
+.pmx-mines__item:first-child .pmx-mines__band {
+  margin-top: 0;
+}
+.pmx-mines__ore {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 1.5px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.pmx-mines__row.is-locked .pmx-mines__ore {
+  filter: brightness(0.15) saturate(0);
+}
+.pmx-mines__price {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.75;
+}
+.pmx-norm__row > img {
+  image-rendering: auto;
+}
+
+/* «Новый срок» (v2.66) — одно окно при первом входе после сброса. */
+.yard-term__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 700;
+}
+.yard-term__list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.yard-term__note {
+  margin: 0 0 12px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+.pmx-mines__price {
+  white-space: nowrap;
 }

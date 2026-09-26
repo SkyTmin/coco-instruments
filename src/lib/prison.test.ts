@@ -41,7 +41,9 @@ import {
   nice,
   normalizePrison,
   PICKS,
+  pickOpen,
   rankCost,
+  rankLetter,
   ROCKS,
   sharpCost,
   SHARP_MAX,
@@ -79,9 +81,13 @@ import {
   decayStreak,
   enchantCap,
   pickLevelOf,
-  quotaBuyout,
-  quotaDone,
-  rankQuota,
+  rankWork,
+  rankBlocks,
+  rankNeeds,
+  blocksOf,
+  feedForge,
+  forgeFromBag,
+  forgeReady,
   rockShare,
   STREAK_GRACE_MS,
   STREAK_DECAY_MS,
@@ -89,7 +95,7 @@ import {
   streakLoot,
   streakTier,
 } from './prison';
-import { MAX_BET } from './slots';
+import { BLOCK_PRICE, blocksPerField, RANK_PRICE, RANK_WORK } from './economy';
 
 /** Средняя прибавка запала за смену в 8 минут при `bps` блоков в секунду. */
 function sessionStreak(bps: number, sec = 480): number {
@@ -103,8 +109,9 @@ const lcg = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) /
 
 /**
  * Игрок, который держит палец на клетке и тратит деньги разумно: кирку
- * берёт, когда она не дороже двух с половиной рангов, заточку — когда она
- * не дороже трети ранга. Токены тратит на зачарование, которое сильнее
+ * заказывает, как только кузня её откроет и монеты на неё есть (руду
+ * заказа добирает в той шахте, где её больше всего), заточку берёт, когда
+ * она не дороже трети ранга. Токены тратит на зачарование, которое сильнее
  * всего поднимает доход за токен, — из тех, что уже открыл уровень кирки.
  * Копает сменами по 8 минут (запал), 8% времени уходит на продажу и
  * переходы. Породу НЕ выбирает — копает вслепую, поэтому норму добирает в
@@ -145,10 +152,24 @@ function run(
   let last = 0;
   const took: number[] = [];
   /**
-   * Во сколько раз добыть норму вслепую дольше, чем накопить на ранг с нуля
+   * Во сколько раз набрать выработку дольше, чем накопить на ранг с нуля
    * (мерится в момент входа в ранг, без переноса денег с прошлого).
    */
   const quotaLag: number[] = [];
+  let work = 0;
+  let oreBlocks = 0;
+  let order: { pick: number; have: Record<number, number> } | null = null;
+  let oldMineSec = 0;
+  const pickAt: string[] = [];
+  /** Сколько секунд от входа в ранг до денег и до выработки. */
+  const tCoin: number[] = [];
+  const tWork: number[] = [];
+  /** Сколько монет пришло за ранг (без трат) — средний доход ранга. */
+  const gained: number[] = [];
+  const workBy: number[] = [];
+  /** Заказ кирки: когда оплачен и когда готов (секунды). */
+  const orderAt: number[] = [];
+  const readyAt: number[] = [];
   let measured = -1;
   const src = (e: Enchants) => ({
     ench: e,
@@ -160,7 +181,7 @@ function run(
     pet,
   });
   const mods = (e: Enchants) => modsOf(src(e));
-  const income = (e: Enchants) => incomeRate(rank, pick, sharp, mods(e));
+  const income = (e: Enchants, mine = rank) => incomeRate(mine, pick, sharp, mods(e));
   /** Руны в гнёзда: жадно, по приросту дохода; питомец — самый выгодный. */
   const equip = () => {
     const open = socketsOpen({ pickXp: xp });
@@ -225,21 +246,54 @@ function run(
   };
   while (rank < until && t < 30 * 3600) {
     const m = mods(ench);
-    const bps = blockRate(rank, pick, sharp, m) * 0.92;
-    const perSec = income(ench) * 0.92 * (1 + sessionStreak(bps));
+    // Заказ кузнице просит руду, которой на этом этаже нет, — идём за ней
+    // на её этаж (там её больше всего), доход и выработка идут и там.
+    let mine = rank;
+    let want = -1;
+    if (order) {
+      const left = PICKS[order.pick].ore.filter(([r, n]) => (order!.have[r] ?? 0) < n);
+      const here = left.find(([r]) => rockShare(rank, r) >= 0.5);
+      want = (here ?? left[0])?.[0] ?? -1;
+      // Своя руда этажа — копаем здесь; руда прошлых этажей — на её этаже,
+      // где её больше всего и порода мягче.
+      if (want >= 0 && rockShare(rank, want) < 0.5) mine = want;
+    }
+    if (mine !== rank) oldMineSec += 1;
+    const bps = blockRate(mine, pick, sharp, m) * 0.92;
+    let perSec = income(ench, mine) * 0.92 * (1 + sessionStreak(bps));
+    if (order && want >= 0) {
+      // Руда заказа идёт мимо рюкзака — её цена выпадает из дохода.
+      const need = PICKS[order.pick].ore.find(([r]) => r === want)![1];
+      const units = bps * (1 + m.fortune) * rockShare(mine, want);
+      const take = Math.min(units, need - (order.have[want] ?? 0));
+      order.have[want] = (order.have[want] ?? 0) + take;
+      perSec -= take * ROCKS[want].value * m.sell;
+      if (PICKS[order.pick].ore.every(([r, n]) => (order!.have[r] ?? 0) >= n - 1e-9)) {
+        pick = order.pick;
+        sharp = 0;
+        order = null;
+        pickAt.push(`${pick}@${rank}`);
+        readyAt[pick] = t;
+      }
+    }
     if (measured !== rank) {
       measured = rank;
       const coinTime = rankCost(rank) / perSec;
-      const quotaTime = Math.max(
-        ...rankQuota(rank).map((q) => q.n / (bps * rockShare(rank, q.rock))),
-      );
-      quotaLag.push(quotaTime / coinTime);
+      quotaLag.push(rankWork(rank) / bps / coinTime);
     }
     money += perSec;
+    gained[rank] = (gained[rank] ?? 0) + perSec;
+    work += bps;
+    workBy[rank] = (workBy[rank] ?? 0) + bps;
+    // Блоки этажа: платят сразу; в условие ранга — только своего этажа.
+    const fb = (bps * blocksPerField(mine)) / MINE_CELLS / DEPTH;
+    money += fb * BLOCK_PRICE[mine] * m.sell;
+    gained[rank] += fb * BLOCK_PRICE[mine] * m.sell;
+    if (mine === rank) oreBlocks += fb;
     tokens += bps * m.tokenChance * 2;
     // Сейд-камни: в среднем меньше одного на шахту, но токенами платят щедро.
     if (loot) {
-      const seid = seidReward(rank, 0);
+      const seid = seidReward(mine, 0);
       money += bps * seidPerBlock() * seid.coins;
       tokens += bps * seidPerBlock() * seid.tokens;
       // Летучая мышь (v2.64): ловит четыре из пяти, берёт монеты или токены
@@ -299,31 +353,136 @@ function run(
       }
     }
     const cost = rankCost(rank);
+    if (tCoin[rank] === undefined && money >= cost) tCoin[rank] = t - last;
+    if (tWork[rank] === undefined && work >= rankWork(rank)) tWork[rank] = t - last;
     const next = PICKS[pick + 1];
-    if (opts.buyPicks !== false && next && money >= next.price && next.price <= cost * 2.5) {
-      money -= next.price;
-      pick += 1;
+    if (
+      opts.buyPicks !== false &&
+      !order &&
+      next &&
+      pickOpen(pick + 1, rank, 0) &&
+      money >= next.coins
+    ) {
+      money -= next.coins;
+      order = { pick: pick + 1, have: {} };
+      orderAt[pick + 1] = t;
       continue;
     }
-    if (sharp < SHARP_MAX && money >= sharpCost(sharp) && sharpCost(sharp) <= cost * 0.35) {
-      money -= sharpCost(sharp);
+    if (
+      sharp < SHARP_MAX &&
+      money >= sharpCost(pick, sharp) &&
+      sharpCost(pick, sharp) <= cost * 0.35
+    ) {
+      money -= sharpCost(pick, sharp);
       sharp += 1;
       continue;
     }
-    const quotaMet = rankQuota(rank).every((q) => inRank * rockShare(rank, q.rock) >= q.n);
-    if (money >= cost && quotaMet) {
-      money -= cost;
-      rank += 1;
-      took.push(t - last);
-      last = t;
-      inRank = 0;
+    if (money >= cost && work >= rankWork(rank)) {
+      // Недостающий блок этажа докупается по двойной цене — так делает и
+      // живой игрок, когда блок не попался.
+      const missing = Math.max(0, rankBlocks(rank) - Math.floor(oreBlocks + 1e-9));
+      const extra = missing * BLOCK_PRICE[rank] * 2;
+      if (money >= cost + extra) {
+        money -= cost + extra;
+        rank += 1;
+        took.push(t - last);
+        last = t;
+        inRank = 0;
+        work = 0;
+        oreBlocks = 0;
+      }
     }
   }
   const bonus = bonusOf({ runes, sockets, pet, pets });
-  return { t, took, pick, rank, ench, quotaLag, xp, runes, pets, pet, bonus, opened };
+  return {
+    t,
+    took,
+    pick,
+    rank,
+    ench,
+    quotaLag,
+    xp,
+    runes,
+    pets,
+    pet,
+    bonus,
+    opened,
+    oldMineSec,
+    pickAt,
+    tCoin,
+    tWork,
+    gained,
+    orderAt,
+    readyAt,
+    work: workBy,
+  };
 }
 
 describe('темп каторги', () => {
+  // Подгонка таблиц economy.ts под нужный темп: TUNE=1 npx vitest run
+  // src/lib/prison.test.ts -t подгонка. Печатает новые RANK_PRICE,
+  // RANK_WORK и руду кирок; вставьте их в economy.ts и перезапустите тест.
+  it.runIf(!!process.env.DUMP)('разбивка', () => {
+    const r = run();
+    const rows = r.took.map((d, k) =>
+      [
+        rankLetter(k),
+        (d / 60).toFixed(1) + 'м',
+        'цена ' + rankCost(k),
+        'доход/мин ' + Math.round((r.gained[k] / d) * 60),
+        'цена/доход ' + (rankCost(k) / ((r.gained[k] / d) * 60)).toFixed(1) + 'м',
+        'выработка ' + rankWork(k),
+        'блоков/мин ' + Math.round((r.work[k] / d) * 60),
+      ].join(' '),
+    );
+    console.log('DUMP\n' + rows.join('\n'));
+  });
+
+  it.runIf(!!process.env.TUNE)('подгонка таблиц', () => {
+    const W0 = Number(process.env.W0 ?? 3.2);
+    const W1 = Number(process.env.W1 ?? 5.2);
+    const LAG = Number(process.env.LAG ?? 1.15);
+    const ORE = Number(process.env.ORE ?? 0.8);
+    for (let it = 0; it < 10; it++) {
+      const r = run();
+      const dur = r.took;
+      for (let k = 4; k < LAST_RANK; k++) {
+        const w = (W0 + ((W1 - W0) * (k - 4)) / (LAST_RANK - 5)) * 60;
+        const tw = r.tWork[k] ?? dur[k];
+        RANK_WORK[k] = RANK_WORK[k] * Math.pow(w / Math.max(1, tw), 0.8);
+        const income = r.gained[k] / Math.max(1, dur[k]);
+        const want = income * (w / LAG);
+        RANK_PRICE[k] = RANK_PRICE[k] * Math.pow(want / RANK_PRICE[k], 0.5);
+      }
+      for (let i = 1; i < PICKS.length; i++) {
+        if (PICKS[i].prestige || r.readyAt[i] === undefined) continue;
+        const took = r.readyAt[i] - r.orderAt[i];
+        const rankLen = dur[PICKS[i].floor] ?? 240;
+        const k = Math.pow((ORE * rankLen) / Math.max(1, took), 0.6);
+        for (const o of PICKS[i].ore) o[1] = o[1] * k;
+      }
+    }
+    const r = run();
+    console.log(
+      'TUNE',
+      (r.t / 3600).toFixed(2),
+      'ч\nRANK_PRICE',
+      RANK_PRICE.map((x) => nice(x)).join(', '),
+      '\nRANK_WORK',
+      RANK_WORK.map((x) => nice(x)).join(', '),
+      '\nORE',
+      PICKS.map((p) => JSON.stringify(p.ore.map(([a, n]) => [a, nice(n)]))).join(' '),
+      '\nранги',
+      r.took.map((x) => (x / 60).toFixed(1)).join(' '),
+      '\nденьги/выработка',
+      r.tCoin
+        .map((x, i) => `${(x / 60).toFixed(1)}/${((r.tWork[i] ?? 0) / 60).toFixed(1)}`)
+        .join(' '),
+      '\nкирки',
+      r.pickAt.join(' '),
+    );
+  });
+
   it('первый ранг — за минуту-две', () => {
     const { took } = run({ until: 1 });
     expect(took[0]).toBeGreaterThan(30);
@@ -331,8 +490,9 @@ describe('темп каторги', () => {
   });
 
   it('A→Z — вечер-другой, а не неделя и не полчаса', () => {
-    // Игрок из симуляции копает вслепую; кто ищет редкую породу прицельно,
-    // добирает норму раньше. Граница была 1,8 часа; сейд-камень владелец
+    // v2.66: цены постоянные, с E ранг просит выработку и блок этажа —
+    // владелец хотел круг длиннее на 10–15%: было ≈1,47 ч, стало ≈1,7 ч в
+    // среднем по зёрнам (1,5–1,85). Раньше: граница была 1,8 часа; сейд-камень владелец
     // заказал ровно ради токенов («токены у нас сложно добиваются»), и круг
     // идеального игрока стал ≈1,5 часа. Это решение, а не утечка: НЕ
     // возвращайте его ценами чар. Следующая добавка силы (двор, события)
@@ -359,23 +519,42 @@ describe('темп каторги', () => {
         JSON.stringify(r.ench),
         'без добычи',
         (run({ loot: false }).t / 3600).toFixed(2),
+        'ранги, мин',
+        r.took.map((x) => (x / 60).toFixed(1)).join(' '),
+        'выработка/деньги',
+        r.quotaLag.map((x) => x.toFixed(2)).join(' '),
+        'деньги/выработка, мин',
+        r.tCoin
+          .map((x, i) => `${(x / 60).toFixed(1)}/${((r.tWork[i] ?? 0) / 60).toFixed(1)}`)
+          .join(' '),
+        'в старых шахтах, мин',
+        (r.oldMineSec / 60).toFixed(0),
+        'кирки',
+        r.pickAt.join(' '),
+        'заказ, мин',
+        r.readyAt
+          .map((x, i) => (x === undefined ? '' : `${i}:${((x - r.orderAt[i]) / 60).toFixed(1)}`))
+          .filter(Boolean)
+          .join(' '),
         'зёрна',
         [1, 2, 3, 4, 5, 6, 7, 8].map((seed) => (run({ seed }).t / 3600).toFixed(2)).join(' '),
       );
     expect(rank).toBe(LAST_RANK);
-    expect(t / 3600).toBeGreaterThan(1.4);
+    expect(t / 3600).toBeGreaterThan(1.5);
     expect(t / 3600).toBeLessThan(5);
   });
 
-  it('норма ощутима, но не стена', () => {
+  it('выработка ощутима, но не стена', () => {
     const { quotaLag } = run();
-    // Хотя бы в трети рангов норма добирается ПОСЛЕ денег — она правда
-    // задаёт, что копать, а не отмечается сама собой.
-    const felt = quotaLag.filter((x) => x > 1).length;
-    expect(felt).toBeGreaterThanOrEqual(Math.floor(quotaLag.length / 3));
-    // И нигде копание вслепую не тянет ранг вдвое дольше денег.
-    expect(Math.max(...quotaLag)).toBeLessThan(2);
-    expect(Math.min(...quotaLag)).toBeGreaterThan(0.5);
+    // С E выработка правда держит ранг: хотя бы в трети рангов её
+    // добирают ПОСЛЕ денег — «сначала поработай», как просил владелец.
+    const lag = quotaLag.slice(4);
+    const felt = lag.filter((x) => x > 1).length;
+    expect(felt).toBeGreaterThanOrEqual(Math.floor(lag.length / 3));
+    // Но нигде не тянет ранг больше чем вдвое против денег.
+    expect(Math.max(...lag)).toBeLessThan(2);
+    // A–D — только деньги.
+    expect(quotaLag.slice(0, 4).every((x) => x === 0)).toBe(true);
   });
 
   it('ни один ранг не тянется дольше получаса', () => {
@@ -386,26 +565,47 @@ describe('темп каторги', () => {
   it('без кузницы глубокие шахты не потянуть', () => {
     // Честная кирка обязана быть выгоднее, чем «докопаться ржавой».
     const rusty = incomeRate(20, 0, 0);
-    const good = incomeRate(20, 3, 10, BASE_MODS);
+    const good = incomeRate(20, 10, 10, BASE_MODS);
     expect(good / rusty).toBeGreaterThan(10);
   });
 
-  it('ранг Z соразмерен мега-выигрышу на максимальной ставке', () => {
-    // Деньги общие с автоматами: крупный занос должен ощущаться рывком в
-    // шахте, а не мелочью и не всем её прохождением.
-    const z = rankCost(LAST_RANK - 1);
-    expect(z).toBeGreaterThanOrEqual(MAX_BET * 200);
-    expect(z).toBeLessThanOrEqual(MAX_BET * 1000);
+  it('цены постоянные и без миллионов', () => {
+    // Владелец: «все фиксированным, чтобы не было миллиардов». Престиж цену
+    // ранга не меняет, и ни одна цена шахты не доходит до миллиона.
+    for (let r = 0; r < LAST_RANK; r++) expect(rankCost(r, 7)).toBe(rankCost(r, 0));
+    for (let r = 0; r < LAST_RANK; r++) expect(rankCost(r)).toBeLessThan(1_000_000);
+    for (const p of PICKS) expect(p.coins).toBeLessThan(1_000_000);
+    for (const r of ROCKS) expect(r.block).toBeLessThan(1_000_000);
+    // Цена руды растёт по этажам, блок стоит заметно дороже руды.
+    for (let i = 1; i < ROCKS.length; i++)
+      expect(ROCKS[i].value).toBeGreaterThan(ROCKS[i - 1].value);
+    for (const r of ROCKS) expect(r.block).toBeGreaterThanOrEqual(r.value * 30);
+  });
+
+  it('кирки идут лестницей и все куются', () => {
+    for (let i = 1; i < PICKS.length; i++) {
+      expect(PICKS[i].dmg).toBeGreaterThan(PICKS[i - 1].dmg);
+      expect(PICKS[i].ore.length).toBeGreaterThan(0);
+      for (const [rock] of PICKS[i].ore) expect(ROCKS[rock]).toBeDefined();
+    }
+    // Порода заказа — с этажа, который уже открыт к моменту заказа.
+    for (const p of PICKS.slice(1))
+      if (!p.prestige) for (const [rock] of p.ore) expect(rock).toBeLessThanOrEqual(p.floor);
+    // Лестница проходится: к Z идеальный игрок держит звёздную кирку.
+    expect(run().pick).toBeGreaterThanOrEqual(12);
   });
 });
 
 describe('состав шахты', () => {
-  it('доли складываются в единицу, пород не больше пяти, новая — редкая', () => {
-    for (let m = 0; m <= LAST_RANK; m++) {
+  it('на этаже своя руда и прошлая, своя — главная', () => {
+    // Владелец: «на каждом этаже только один или два вида руд». Третья —
+    // порода следующего этажа, изредка на дне, как подсказка.
+    for (let m = 1; m <= LAST_RANK; m++) {
       const mix = mineMix(m);
-      expect(mix.length).toBeLessThanOrEqual(5);
+      expect(mix.length).toBeLessThanOrEqual(3);
       expect(mix.reduce((s, x) => s + x.share, 0)).toBeCloseTo(1, 9);
-      if (m >= 4) expect(mix.find((x) => x.rock === m)?.share).toBeCloseTo(0.05, 9);
+      expect(rockShare(m, m)).toBeGreaterThan(0.6);
+      expect(rockShare(m, m - 1)).toBeGreaterThan(0.25);
     }
   });
 
@@ -437,7 +637,8 @@ describe('состав шахты', () => {
         bottom += ROCKS[rocks[(DEPTH - 1) * MINE_CELLS + c]].value;
       }
     }
-    expect(bottom / top).toBeGreaterThan(1.12);
+    // Глубже своей руды больше: 50% сверху, 85% на дне.
+    expect(bottom / top).toBeGreaterThan(1.03);
   });
 
   it('выработка считается по ярусам', () => {
@@ -460,7 +661,9 @@ describe('цены и сохранение', () => {
     const bag = { 0: 10, 5: 2 };
     const base = ROCKS[0].value * 10 + ROCKS[5].value * 2;
     expect(bagValue(bag)).toBe(base);
-    expect(bagValue(bag, sellMult(2))).toBe(Math.round(base * 1.5));
+    expect(bagValue(bag, sellMult(2))).toBe(Math.round(base * 1.1));
+    // Не больше +50%, сколько престижей ни бери.
+    expect(sellMult(40)).toBe(1.5);
   });
 
   it('битое сохранение чинится по полям', () => {
@@ -629,23 +832,56 @@ describe('запал, уровень кирки, норма', () => {
     expect(lvl).toBeLessThan(40);
   });
 
-  it('норма — самая новая порода шахты и та, что перед ней', () => {
-    const q = rankQuota(10);
-    expect(q.map((x) => x.rock)).toEqual([10, 9]);
-    expect(rankQuota(0)).toEqual([{ rock: 0, n: rankQuota(0)[0].n }]);
-    expect(quotaDone(q, { 10: q[0].n, 9: q[1].n })).toBe(true);
-    expect(quotaDone(q, { 10: q[0].n })).toBe(false);
+  it('A–D — только деньги, с E — выработка и блоки этажа', () => {
+    for (let r = 0; r < 4; r++) {
+      const n = rankNeeds({ rank: r, norm: {}, oreBlocks: 0 });
+      expect(n.workNeed).toBe(0);
+      expect(n.blocksNeed).toBe(0);
+      expect(n.buyout).toBe(0);
+    }
+    for (let r = 4; r < LAST_RANK; r++) {
+      const n = rankNeeds({ rank: r, norm: {}, oreBlocks: 0 });
+      expect(n.workNeed).toBeGreaterThan(0);
+      expect(n.blocksNeed).toBeGreaterThan(0);
+    }
   });
 
-  it('откуп пропорционален недобору', () => {
-    const q = rankQuota(8);
-    const none = quotaBuyout(8, 0, {});
-    const half = quotaBuyout(8, 0, { 8: Math.ceil(q[0].n / 2), 7: Math.ceil(q[1].n / 2) });
-    expect(half).toBeLessThan(none);
-    expect(half).toBeGreaterThan(0);
-    expect(quotaBuyout(8, 0, { 8: q[0].n, 7: q[1].n })).toBe(0);
-    expect(none).toBeLessThanOrEqual(rankCost(8));
-    expect(rockShare(8, 8)).toBeGreaterThan(0.05);
+  it('выработка считает блоки любых шахт, докупается только блок этажа', () => {
+    const n = rankNeeds({ rank: 10, norm: { 10: 300, 3: 400 }, oreBlocks: 0 });
+    expect(n.work).toBe(Math.min(700, n.workNeed));
+    // Недостающий блок — по двойной цене блока этажа.
+    expect(n.buyout).toBe(n.blocksNeed * BLOCK_PRICE[10] * 2);
+    expect(rankNeeds({ rank: 10, norm: {}, oreBlocks: n.blocksNeed }).buyout).toBe(0);
+    expect(rockShare(8, 8)).toBeGreaterThan(0.4);
+  });
+
+  it('блоки этажа лежат в поле из зерна, не под сейдом и не в спецзоне', () => {
+    let total = 0;
+    for (let seed = 1; seed <= 200; seed++) {
+      const b = blocksOf(12, seed);
+      expect(blocksOf(12, seed)).toEqual(b);
+      const sd = seidsOf(12, seed);
+      for (const x of b)
+        expect(sd.some((q) => q.cell === x.cell && q.depth === x.depth)).toBe(false);
+      total += b.length;
+    }
+    expect(total / 200).toBeCloseTo(blocksPerField(12), 0);
+    expect(blocksOf(LAST_RANK + 1, 5)).toEqual([]);
+  });
+
+  it('заказ кузнице берёт только нужную руду и не больше нужного', () => {
+    const pick = PICKS.findIndex((p) => p.ore.length === 2);
+    const [[a, na], [b]] = PICKS[pick].ore;
+    const units = [...Array(na + 5).fill(a), b, 0, 0];
+    const fed = feedForge({ pick, have: {} }, units);
+    expect(fed.order!.have[a]).toBe(na);
+    expect(fed.order!.have[b]).toBe(1);
+    expect(fed.rest.filter((r) => r === a).length).toBe(5);
+    expect(fed.rest.filter((r) => r === 0).length).toBe(2);
+    expect(forgeReady(fed.order!)).toBe(false);
+    const fromBag = forgeFromBag({ pick, have: {} }, { [a]: na + 3, [b]: 10_000 });
+    expect(forgeReady(fromBag.order)).toBe(true);
+    expect(fromBag.bag[a]).toBe(3);
   });
 });
 

@@ -10,18 +10,14 @@ import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
 import {
+  areaMeat,
   areaOf,
-  AREA_PAY,
+  MEAT_BASE,
   conditionsMet,
-  econOf,
   fullSet,
   levelOf,
-  marketSold,
-  MARKET_CUT,
-  MARKET_FULL,
   MATS,
   MEAT_NAMES,
-  MEAT_SHARE,
   minusMats,
   nextStep,
   payFromBoth,
@@ -125,7 +121,6 @@ export function DungeonInventory({
   onGear: () => void;
 }) {
   const d = useFinanceStore((s) => s.dungeon);
-  const prison = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const upgradeHere = useFinanceStore((s) => s.dungeonUpgradeHere);
   const sackUpHere = useFinanceStore((s) => s.dungeonSackUpHere);
@@ -153,19 +148,16 @@ export function DungeonInventory({
   const used = slotsUsed(sim.sack);
   const rows = SACK_MAX + 1;
   const set = fullSet(d.gear);
-  const econ = econOf(prison);
-
-  // Цена куска: средний район мяса в сидоре, рынок этого часа.
+  // Цена куска: средний район мяса в сидоре.
   const areaMul = (() => {
     let k = 0;
     let n = 0;
     for (const [id, c] of Object.entries(sim.sack.meatBy) as [AreaId, number][]) {
-      k += c * Math.pow(AREA_PAY, areaOf(id).level);
+      k += c * areaMeat(areaOf(id).level);
       n += c;
     }
     return n > 0 ? k / n : 1;
   })();
-  const cut = marketSold(d, Date.now()) >= MARKET_FULL ? MARKET_CUT : 1;
 
   const choose = (p: Pick) => {
     selectionChanged();
@@ -182,7 +174,7 @@ export function DungeonInventory({
       (live.stats[k as keyof typeof live.stats] ?? 0) + (v ?? 0);
 
   // «!» на вещи, которую можно улучшить прямо сейчас (склад плюс рюкзак).
-  const ups = upgradable(live, econ, balance, sim.sack.mats);
+  const ups = upgradable(live, balance, sim.sack.mats);
 
   const canAfford = (cost: Cost) =>
     balance >= cost.coins && payFromBoth(d, cost, sim.sack.mats) !== null;
@@ -245,7 +237,7 @@ export function DungeonInventory({
   if (pick?.kind === 'gear') {
     const g = d.gear[pick.slot];
     const s = setOf(g.tier);
-    const step = nextStep(d, pick.slot, econ);
+    const step = nextStep(d, pick.slot);
     const conds = step.kind === 'reforge' ? reforgeConditions(pick.slot, g.tier) : [];
     info = (
       <>
@@ -327,8 +319,8 @@ export function DungeonInventory({
     const sk = stacks[pick.i];
     const meat = isMeat(sk.id);
     const each = meat
-      ? econ * MEAT_SHARE[sk.id as MeatId] * areaMul * cut
-      : econ * MATS[sk.id as MatId].share;
+      ? Math.round(MEAT_BASE[sk.id as MeatId] * areaMul)
+      : MATS[sk.id as MatId].price;
     const total = meat
       ? (sim.sack.meat[sk.id as MeatId] ?? 0)
       : (sim.sack.mats[sk.id as MatId] ?? 0);
@@ -344,13 +336,10 @@ export function DungeonInventory({
             : MATS[sk.id as MatId].lead}
         </span>
         <span className="mcinv__stat">
-          {meat ? 'Торговец даст' : 'Цена лишнего'} ≈ {fmt(each)} <CoinIcon size={11} /> за штуку ·
+          {meat ? 'Торговец даст' : 'Цена лишнего'} {fmt(each)} <CoinIcon size={11} /> за штуку ·
           всего в рюкзаке {fmt(total)}
         </span>
-        <span className="mcinv__sub">
-          В ячейке до {STACK[sk.id]} шт.
-          {meat && cut < 1 ? ' Рынок этого часа насыщен — цена вдвое ниже.' : ''}
-        </span>
+        <span className="mcinv__sub">В ячейке до {STACK[sk.id]} шт.</span>
         <div className="mcinv__acts">
           {meat && (
             <button
@@ -392,7 +381,7 @@ export function DungeonInventory({
       </>
     );
   } else if (pick?.kind === 'pocket' && sim.sackLevel < SACK_MAX) {
-    const cost = sackCost(sim.sackLevel, econ);
+    const cost = sackCost(sim.sackLevel);
     info = (
       <>
         <b className="mcinv__name">Карман</b>

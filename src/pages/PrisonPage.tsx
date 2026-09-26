@@ -6,7 +6,6 @@ import { crackStage, MineCell, MineField, useMineDig, wall } from '@/components/
 import type { BreakKind, DigBlock, MineFieldHandle } from '@/components/MineField';
 import { useNavigate } from 'react-router-dom';
 import { FOREST_UNLOCK_RANK } from '@/lib/forest';
-import { RewardsSheet, useReadyRewards } from '@/components/RewardsSheet';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon } from '@/components/slot-art';
@@ -64,12 +63,16 @@ import {
   pickLevelOf,
   PICKS,
   prestigeCost,
-  quotaBuyout,
-  quotaDone,
-  quotaProgress,
   rankCost,
-  rankQuota,
+  rankNeeds,
   rankLetter,
+  blocksOf,
+  blockTop,
+  forgeLeft,
+  blockValue,
+  BLOCK_HITS,
+  HORIZONS,
+  horizonOf,
   rockAt,
   ROCKS,
   sellMult,
@@ -89,9 +92,10 @@ import {
   seidsOf,
   seidTop,
 } from '@/lib/prison';
-import type { FindId, GuideReward, ItemId, PrisonState, Quota } from '@/lib/prison';
+import type { FindId, GuideReward, ItemId, PrisonState, RankNeeds } from '@/lib/prison';
 import {
   bedrockTexture,
+  blockTexture,
   findTexture,
   kuivaTexture,
   meteorTexture,
@@ -192,19 +196,24 @@ function rewardText(r: GuideReward): string {
   return out.join(' · ');
 }
 
-/** Норма фишками: порода, сколько сдано из скольких. */
-function QuotaChips({ quota, norm }: { quota: Quota[]; norm: Record<number, number> }) {
+/** Условия ранга фишками: выработка (блоков сломано) и блоки этажа. */
+function RankChips({ need, floor }: { need: RankNeeds; floor: number }) {
+  const workOk = need.work >= need.workNeed;
+  const blocksOk = need.blocks >= need.blocksNeed;
   return (
     <span className="pquota">
-      {quota.map((q) => {
-        const have = Math.min(q.n, norm[q.rock] ?? 0);
-        return (
-          <span key={q.rock} className={`pquota__chip${have >= q.n ? ' is-done' : ''}`}>
-            <img src={rockTexture(q.rock)} alt={ROCKS[q.rock].name} />
-            {have >= q.n ? '✓' : `${have}/${q.n}`}
-          </span>
-        );
-      })}
+      {need.workNeed > 0 && (
+        <span className={`pquota__chip${workOk ? ' is-done' : ''}`}>
+          <GxIcon name="pick" size={12} />
+          {workOk ? '✓' : `${shortMoney(need.work)}/${shortMoney(need.workNeed)}`}
+        </span>
+      )}
+      {need.blocksNeed > 0 && (
+        <span className={`pquota__chip${blocksOk ? ' is-done' : ''}`}>
+          <img src={blockTexture(floor)} alt={ROCKS[floor].blockName} />
+          {blocksOk ? '✓' : `${need.blocks}/${need.blocksNeed}`}
+        </span>
+      )}
     </span>
   );
 }
@@ -227,11 +236,11 @@ export function PrisonPage() {
   const prisonGuideClaim = useFinanceStore((s) => s.prisonGuideClaim);
   const prisonParcelOpen = useFinanceStore((s) => s.prisonParcelOpen);
   const prisonSeid = useFinanceStore((s) => s.prisonSeid);
+  const prisonOreBlock = useFinanceStore((s) => s.prisonOreBlock);
   const prisonBatCatch = useFinanceStore((s) => s.prisonBatCatch);
   const yardShiny = useFinanceStore((s) => s.yardShiny);
   const prisonReset = useFinanceStore((s) => s.prisonReset);
   const gamesReset = useFinanceStore((s) => s.gamesReset);
-  const skin = useFinanceStore((s) => s.slotsSkin);
 
   useGameAudio(prison.zone.on ? 'depths' : 'mine', 'mine');
   useEffect(() => setHapticsMuted(!haptics), [haptics]);
@@ -239,6 +248,7 @@ export function PrisonPage() {
   const { mine, rank, prestige, pick, bagLevel, cart, bag } = prison;
   const rocks = useMemo(() => buildMine(mine.id, mine.seed), [mine.id, mine.seed]);
   const seids = useMemo(() => seidsOf(mine.id, mine.seed), [mine.id, mine.seed]);
+  const blocks = useMemo(() => blocksOf(mine.id, mine.seed), [mine.id, mine.seed]);
   const mineKey = `${mine.id}:${mine.seed}`;
 
   const [sheet, setSheet] = useState<Sheetname>(null);
@@ -250,7 +260,6 @@ export function PrisonPage() {
   const [cardShown, cardLeaving] = useExit(findCard, 260);
   const [arming, setArming] = useState<ItemId | null>(null);
   const [crewNote, setCrewNote] = useState(false);
-  const [rewards, setRewards] = useState(false);
   const [reveal, setReveal] = useState<ParcelOpen | null>(null);
   /** Какой сброс взведён: первый тап взводит, второй — сбрасывает. */
   const [wipe, setWipe] = useState<'prison' | 'all' | null>(null);
@@ -283,13 +292,6 @@ export function PrisonPage() {
   const millLevel = useFinanceStore((s) => s.forest.mill.level);
   const anyBuff = buffs.energy > 0 || buffs.frenzy > 0 || buffs.lens > 0 || buffs.prop > 0;
   useTicker(anyBuff);
-  // Подарок в шапке: награды дня общие с автоматами, счётчик — тот же.
-  const [rewardsNow, setRewardsNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setRewardsNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-  const readyRewards = useReadyRewards(rewardsNow);
 
   const field = useRef<MineFieldHandle>(null);
   const bagRef = useRef<HTMLButtonElement>(null);
@@ -316,7 +318,11 @@ export function PrisonPage() {
     // метеоритом и Куйвой порода закрыта, пока они на поле.
     shut: (c) => {
       const st = useFinanceStore.getState().prison;
-      return yardShut(st).has(c) || seidTop(seids, c, st.mine.dug[c]);
+      return (
+        yardShut(st).has(c) ||
+        seidTop(seids, c, st.mine.dug[c]) ||
+        blockTop(blocks, c, st.mine.dug[c])
+      );
     },
     special: (c) => specialHit(c),
     gapMs: () => gapMs(useFinanceStore.getState().prison),
@@ -641,7 +647,14 @@ export function PrisonPage() {
       tierBreak(2);
       notifySuccess();
       burstConfetti(40, ['#9be38a', '#ffe08a', '#fff']);
-      say('Норма выполнена — бери ранг');
+      say('Выработка набрана');
+    }
+    if (res.forged >= 0) {
+      // Заказ кузнице набрался — новая кирка сразу в руке.
+      tierBreak(3);
+      notifySuccess();
+      burstConfetti(60, [PICKS[res.forged].head, '#ffe08a', '#fff']);
+      say(`${PICKS[res.forged].name} кирка готова!`);
     }
     if (res.lost > 0 && now - fullWarnAt.current > 1400) {
       fullWarnAt.current = now;
@@ -670,6 +683,17 @@ export function PrisonPage() {
     const valueBefore = bagValue(st.bag, modsOf(st).sell);
     const res = prisonBreak(list, { streak: streakNow() });
     const after = useFinanceStore.getState().prison;
+    // Под сломанным открылся блок этажа — это надо увидеть сразу.
+    const opened = list.find(
+      (b) => after.mine.id === st.mine.id && blockTop(blocks, b.cell, after.mine.dug[b.cell]),
+    );
+    if (opened) {
+      const name = ROCKS[after.mine.id].blockName;
+      floatText(opened.cell, `${name.toUpperCase()}!`, 'pfloat--block', 80);
+      field.current?.chips(opened.cell, [...rockColors(after.mine.id), '#ffffff'], 16, 1.4);
+      tierBreak(2);
+      notifySuccess();
+    }
     const gained = bagValue(after.bag, modsOf(after).sell) - valueBefore + res.sold;
     bumpStreak(res.broken, list[0].cell);
     logPace(res.broken, gained, res);
@@ -680,19 +704,11 @@ export function PrisonPage() {
       field.current?.chips(f.cell, ['#ffd35a', '#fff3b0', '#ffae3a'], single ? 12 : 6, 1.2);
       if (single) floatText(f.cell, `⚙ ${ROCKS[f.rock].name}`, 'pfloat--reforge', 120);
     }
-    // Порода в норму: счёт над клеткой, пока норма по ней не закрыта.
-    const q = after.rank < LAST_RANK ? rankQuota(after.rank, after.prestige) : [];
-    const qb = list.find((b) => res.normAdd[b.rock] && q.some((x) => x.rock === b.rock));
-    if (qb && !res.normDone) {
-      const row = q.find((x) => x.rock === qb.rock)!;
-      const have = after.norm[qb.rock] ?? 0;
-      if (have <= row.n)
-        floatText(
-          qb.cell,
-          `${have}/${row.n}`,
-          `pfloat--norm${have >= row.n ? ' is-done' : ''}`,
-          60,
-        );
+    // Руда ушла в заказ кузнице — показать, сколько осталось, не на каждом блоке.
+    if (res.forgeTook > 0 && after.forge && single) {
+      const left = forgeLeft(after.forge).reduce((a, [, n]) => a + n, 0);
+      if (left > 0 && (left % 25 === 0 || left <= 10))
+        floatText(list[0].cell, `⚒ ещё ${left}`, 'pfloat--norm', 60);
     }
     list.forEach((b, i) => {
       if (res.taken > 0 && i < (single ? 1 : 4)) flyLoot(b.cell, b.rock);
@@ -849,6 +865,50 @@ export function PrisonPage() {
     burstConfetti(70, ['#3fe6d0', '#c8fff6', '#ffe08a']);
     floatText(c, `+${got.tokens} ✦`, 'pfloat--seid');
     say(`Сейд-камень: +${fmt(got.tokens)} токенов, +${shortMoney(got.coins)} монет`);
+    bumpStreak(1, c);
+  };
+
+  /**
+   * Удар по блоку этажа — цельному кубу руды. Как сейд, считаются УДАРЫ
+   * (`BLOCK_HITS`, крит — за два), площадные чары его не берут: такой блок
+   * добывают руками. Сломал — деньги сразу, крупно и с дождём монет.
+   */
+  const oreBlockHit = (c: number, crit: boolean) => {
+    const f = field.current;
+    const floor = useFinanceStore.getState().prison.mine.id;
+    const colors = rockColors(floor);
+    f?.swing(c, crit);
+    const hp = dig.hp.current;
+    const left = (hp[c] < 0 ? BLOCK_HITS : hp[c]) - (crit ? 2 : 1);
+    f?.chips(c, [...colors, '#ffffff'], crit ? 14 : 8, crit ? 1.4 : 1);
+    if (left > 0) {
+      hp[c] = left;
+      dig.setCrack(c, crackStage(left, BLOCK_HITS));
+      pickHit('crystal', crit);
+      tapMedium();
+      if (crit) floatText(c, 'КРИТ', 'pfloat--crit');
+      f?.wobble(c);
+      return;
+    }
+    hp[c] = -1;
+    dig.setCrack(c, 0);
+    const from = useFinanceStore.getState().slotsBalance;
+    const got = prisonOreBlock(c);
+    if (!got) return;
+    rollBalance(from, from + got.coins);
+    tierBreak(4);
+    flashFrame('big');
+    f?.trauma(0.55);
+    notifySuccess();
+    f?.shockwave(c, 5, false);
+    f?.chips(c, [...colors, '#ffffff', '#ffe08a'], 48, 2.2);
+    burstConfetti(80, [...colors.slice(0, 3), '#ffe08a', '#ffffff']);
+    rainCoins(Math.min(40, 14 + Math.round(Math.log2(1 + got.coins / 100) * 3)));
+    setTimeout(() => payoutEnd(2), 350);
+    floatText(c, `+${shortMoney(got.coins)}`, 'pfloat--block', 0);
+    say(
+      `${ROCKS[floor].blockName}: +${fmt(got.coins)} монет${got.own ? '' : ' (для ранга — блок своего этажа)'}`,
+    );
     bumpStreak(1, c);
   };
 
@@ -1041,6 +1101,10 @@ export function PrisonPage() {
       seidHit(c, Math.random() < CRIT_CHANCE);
       return true;
     }
+    if (blockTop(blocks, c, st.mine.dug[c])) {
+      oreBlockHit(c, Math.random() < CRIT_CHANCE);
+      return true;
+    }
     return false;
   };
 
@@ -1164,9 +1228,9 @@ export function PrisonPage() {
       return;
     }
     const st = useFinanceStore.getState();
-    const q = rankQuota(st.prison.rank, st.prison.prestige);
-    // Не готово — лист нормы: что сдано, чего не хватает, сколько стоит откуп.
-    if (!quotaDone(q, st.prison.norm) || st.slotsBalance < rankCost(rank, prestige)) {
+    const nd = rankNeeds(st.prison);
+    // Не готово — лист условий: что сделано, чего не хватает, что можно докупить.
+    if (nd.work < nd.workNeed || nd.buyout > 0 || st.slotsBalance < nd.coins) {
       tapLight();
       setSheet('norm');
       return;
@@ -1293,17 +1357,12 @@ export function PrisonPage() {
   const atTop = rank >= LAST_RANK;
   const cost = atTop ? prestigeCost(prestige) : rankCost(rank, prestige);
   const progress = Math.max(0, Math.min(1, balance / cost));
-  const quota = atTop ? [] : rankQuota(rank, prestige);
-  const qDone = quotaDone(quota, prison.norm);
-  const buyout = atTop ? 0 : quotaBuyout(rank, prestige, prison.norm);
+  const need = rankNeeds(prison);
+  const workOk = atTop || need.work >= need.workNeed;
+  const buyout = atTop ? 0 : need.buyout;
+  const qDone = workOk && buyout === 0;
   const rankReady = progress >= 1 && qDone;
-  // Точка — только на редкой породе нормы: ходовая лежит на каждом шагу, и
-  // точки на половине поля ничего не подсказывают.
-  const needRocks = new Set(
-    quota
-      .filter((q) => q.rock === rank && rank > 0 && (prison.norm[q.rock] ?? 0) < q.n)
-      .map((q) => q.rock),
-  );
+  const needRocks = new Set<number>();
   // Конвой: та же точка на породе, которую он ждёт.
   if (yardEv?.id === 'convoy') needRocks.add(yardEv.rock);
   const pickLv = pickLevelOf(prison.pickXp);
@@ -1333,12 +1392,24 @@ export function PrisonPage() {
   const crewNow = crewYield(prison, nowTick);
   const campBadge = perkPointsFree(prison) > 0 || crewNow.minutes >= 60 || milesReady(prison) > 0;
 
+  /** Лупа: метка ближайшей редкости под клеткой — сейда или блока этажа. */
+  const lensMark = (c: number, d: number): { seidBelow: number; seidTex?: string } => {
+    if (buffs.lens <= 0) return { seidBelow: 0 };
+    const sd = seids.find((x) => x.cell === c && x.depth > d);
+    const bl = blocks.find((x) => x.cell === c && x.depth > d);
+    if (sd && (!bl || sd.depth <= bl.depth))
+      return { seidBelow: sd.depth - d, seidTex: seidTexture() };
+    if (bl) return { seidBelow: bl.depth - d, seidTex: blockTexture(mine.id) };
+    return { seidBelow: 0 };
+  };
+
   const renderCells = (faceRef: (i: number, el: HTMLSpanElement | null) => void) => {
     const cells = [];
     for (let c = 0; c < MINE_CELLS; c++) {
       const d = mine.dug[c];
       const top = rockAt(rocks, c, d);
       const seid = seidTop(seids, c, d);
+      const oreBlock = !seid && blockTop(blocks, c, d);
       let peek = -1;
       if (buffs.lens > 0 && top >= 0 && d + 1 < DEPTH) {
         const below = rockAt(rocks, c, d + 1);
@@ -1351,9 +1422,11 @@ export function PrisonPage() {
           tex={
             seid
               ? seidTexture()
-              : top < 0
-                ? bedrockTexture()
-                : rockTexture(top, rockVariant(mine.seed, c, d))
+              : oreBlock
+                ? blockTexture(mine.id)
+                : top < 0
+                  ? bedrockTexture()
+                  : rockTexture(top, rockVariant(mine.seed, c, d))
           }
           bottom={top < 0}
           depth={d}
@@ -1361,10 +1434,8 @@ export function PrisonPage() {
           peek={peek >= 0 ? rockTexture(peek) : ''}
           need={needRocks.has(top)}
           seid={seid}
-          seidBelow={
-            buffs.lens > 0 ? (seids.find((x) => x.cell === c && x.depth > d)?.depth ?? d) - d : 0
-          }
-          seidTex={seidTexture()}
+          block={oreBlock}
+          {...lensMark(c, d)}
           wt={wall(mine.dug, c, 0, -1)}
           wl={wall(mine.dug, c, -1, 0)}
           wb={wall(mine.dug, c, 0, 1)}
@@ -1402,7 +1473,14 @@ export function PrisonPage() {
     tapLight();
     nav('/forest');
   };
-  const rankFill = atTop ? progress : Math.min(progress, quotaProgress(quota, prison.norm));
+  // Полоса ранга — самое отстающее из условий.
+  const rankFill = atTop
+    ? progress
+    : Math.min(
+        progress,
+        need.workNeed ? need.work / need.workNeed : 1,
+        need.blocksNeed ? need.blocks / need.blocksNeed : 1,
+      );
 
   return (
     <div className="gx pmx">
@@ -1421,20 +1499,10 @@ export function PrisonPage() {
             <KIcon name="arrowLeft" />
           </button>
           <div className="gx-ribbon pmx-top__title">
-            {prison.zone.on ? 'Особая шахта' : `Шахта ${rankLetter(mine.id)}`}
+            {prison.zone.on
+              ? 'Особая шахта'
+              : `Этаж ${rankLetter(mine.id)} · ${ROCKS[mine.id].name}`}
           </div>
-          <button
-            type="button"
-            className="gx-round gx-round--dark pmx-top__btn"
-            aria-label="Награды дня"
-            onClick={() => {
-              tapLight();
-              setRewards(true);
-            }}
-          >
-            <GxIcon name="gift" />
-            {readyRewards > 0 && <i className="gx-badge">{readyRewards}</i>}
-          </button>
           <button
             type="button"
             className="gx-round gx-round--dark pmx-top__btn"
@@ -1504,7 +1572,7 @@ export function PrisonPage() {
                 )
               }
             />
-            {!atTop && !rankReady && <QuotaChips quota={quota} norm={prison.norm} />}
+            {!atTop && !rankReady && <RankChips need={need} floor={rank} />}
           </span>
           <span className="gx-hex gx-hex--dark pmx-rank__hex">
             {atTop ? <GxIcon name="stairs" size={16} /> : rankLetter(rank + 1)}
@@ -1889,45 +1957,45 @@ export function PrisonPage() {
       )}
 
       {sheet === 'mines' && (
-        <GxModal title="Шахты" onClose={() => setSheet(null)} className="pmx-mines">
+        <GxModal title="Этажи" onClose={() => setSheet(null)} className="pmx-mines">
           {Array.from({ length: Math.min(LAST_RANK, rank + 1) + 1 }, (_, id) => {
             const locked = id > rank;
             const here = id === mine.id && !prison.zone.on;
+            const band = HORIZONS.find((h) => h.from === id);
             return (
-              <div
-                key={id}
-                className={`pmx-mines__row${here ? ' is-here' : ''}${locked ? ' is-locked' : ''}`}
-              >
-                <span className={`gx-hex${locked ? '' : ' gx-hex--dark'}`}>{rankLetter(id)}</span>
-                <span className="pmx-mines__info">
-                  <b>{ROCKS[id].name}</b>
-                  <span className="pmx-mines__rocks">
-                    {mineMix(id).map((x) => (
-                      <img key={x.rock} src={rockTexture(x.rock)} alt={ROCKS[x.rock].name} />
-                    ))}
+              <div key={id} className="pmx-mines__item">
+                {band && <div className="pmx-mines__band">{band.name}</div>}
+                <div
+                  className={`pmx-mines__row${here ? ' is-here' : ''}${locked ? ' is-locked' : ''}`}
+                >
+                  <span className={`gx-hex${locked ? '' : ' gx-hex--dark'}`}>{rankLetter(id)}</span>
+                  <img className="pmx-mines__ore" src={blockTexture(id)} alt="" />
+                  <span className="pmx-mines__info">
+                    <b>{ROCKS[id].name}</b>
+                    <span className="pmx-mines__price">
+                      руда {ROCKS[id].value} · блок {shortMoney(ROCKS[id].block)}
+                    </span>
                   </span>
-                </span>
-                {locked ? (
-                  <span className="pmx-mines__lock">
-                    <KIcon name="locked" size={18} />
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className={`gx-btn gx-btn--sm${here ? '' : ' gx-btn--red'}`}
-                    onClick={() => goMine(id)}
-                  >
-                    {here ? (
-                      <>
-                        <GxIcon name="cycle" size={14} /> Заново
-                      </>
-                    ) : (
-                      <>
-                        до {ROCKS[id].value} <CoinIcon size={12} />
-                      </>
-                    )}
-                  </button>
-                )}
+                  {locked ? (
+                    <span className="pmx-mines__lock">
+                      <KIcon name="locked" size={18} />
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`gx-btn gx-btn--sm${here ? '' : ' gx-btn--red'}`}
+                      onClick={() => goMine(id)}
+                    >
+                      {here ? (
+                        <>
+                          <GxIcon name="cycle" size={14} /> Заново
+                        </>
+                      ) : (
+                        'Вниз'
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -1976,23 +2044,46 @@ export function PrisonPage() {
           onClose={() => setSheet(null)}
           className="pmx-norm"
         >
-          {quota.map((q) => {
-            const have = Math.min(q.n, prison.norm[q.rock] ?? 0);
-            const done = have >= q.n;
-            return (
-              <div key={q.rock} className={`pmx-norm__row${done ? ' is-done' : ''}`}>
-                <img src={rockTexture(q.rock)} alt="" />
-                <span className="pmx-norm__info">
-                  <b>{ROCKS[q.rock].name}</b>
-                  <GxBar
-                    tone={done ? 'green' : 'gold'}
-                    value={have / q.n}
-                    label={done ? <KIcon name="checkmark" size={12} /> : `${have} / ${q.n}`}
-                  />
-                </span>
-              </div>
-            );
-          })}
+          {need.workNeed > 0 && (
+            <div className={`pmx-norm__row${workOk ? ' is-done' : ''}`}>
+              <PickIcon pick={pick} size={40} />
+              <span className="pmx-norm__info">
+                <b>Выработка — сломать блоков</b>
+                <GxBar
+                  tone={workOk ? 'green' : 'gold'}
+                  value={need.work / need.workNeed}
+                  label={
+                    workOk ? (
+                      <KIcon name="checkmark" size={12} />
+                    ) : (
+                      `${fmt(need.work)} / ${fmt(need.workNeed)}`
+                    )
+                  }
+                />
+              </span>
+            </div>
+          )}
+          {need.blocksNeed > 0 && (
+            <div className={`pmx-norm__row${need.blocks >= need.blocksNeed ? ' is-done' : ''}`}>
+              <img src={blockTexture(rank)} alt="" />
+              <span className="pmx-norm__info">
+                <b>
+                  {ROCKS[rank].blockName} · {shortMoney(blockValue(rank))}
+                </b>
+                <GxBar
+                  tone={need.blocks >= need.blocksNeed ? 'green' : 'gold'}
+                  value={need.blocks / need.blocksNeed}
+                  label={
+                    need.blocks >= need.blocksNeed ? (
+                      <KIcon name="checkmark" size={12} />
+                    ) : (
+                      `${need.blocks} / ${need.blocksNeed}`
+                    )
+                  }
+                />
+              </span>
+            </div>
+          )}
           <div className={`pmx-norm__row${balance >= cost ? ' is-done' : ''}`}>
             <CoinIcon size={32} />
             <span className="pmx-norm__info">
@@ -2019,14 +2110,15 @@ export function PrisonPage() {
             >
               Взять ранг {rankLetter(rank + 1)}
             </button>
-            {!qDone && (
+            {workOk && buyout > 0 && (
               <button
                 type="button"
                 className="gx-btn gx-btn--block"
                 disabled={balance < cost + buyout}
                 onClick={() => takeRank(true)}
               >
-                Докупить породу · {shortMoney(buyout)} <CoinIcon size={13} />
+                Докупить {need.blocksNeed - need.blocks > 1 ? 'блоки' : 'блок'} ·{' '}
+                {shortMoney(buyout)} <CoinIcon size={13} />
               </button>
             )}
           </div>
@@ -2034,16 +2126,6 @@ export function PrisonPage() {
       )}
 
       {reveal && <ParcelReveal open={reveal} onClose={() => setReveal(null)} />}
-
-      {rewards && (
-        <RewardsSheet
-          skin={skin}
-          onClose={() => {
-            setRewards(false);
-            setRewardsNow(Date.now());
-          }}
-        />
-      )}
 
       {sheet === 'prestige' && (
         <GxModal
@@ -2104,12 +2186,17 @@ export function PrisonPage() {
           }}
         >
           <div className="prank__card">
-            <span className="prank__label">Новый ранг</span>
+            <span className="prank__label">
+              {horizonOf(sceneShown.rank).from === sceneShown.rank
+                ? `Новый горизонт · ${horizonOf(sceneShown.rank).name}`
+                : 'Новый ранг'}
+            </span>
             <b className="prank__letter">{rankLetter(sceneShown.rank)}</b>
             <span className="prank__mine">
-              <img src={rockTexture(sceneShown.rank)} alt="" />
-              Шахта {rankLetter(sceneShown.rank)} · {ROCKS[sceneShown.rank].name.toLowerCase()} · до{' '}
-              {ROCKS[sceneShown.rank].value} за блок
+              <img src={blockTexture(sceneShown.rank)} alt="" />
+              Этаж {rankLetter(sceneShown.rank)} · {ROCKS[sceneShown.rank].name.toLowerCase()} ·{' '}
+              {ROCKS[sceneShown.rank].value} за руду · блок{' '}
+              {shortMoney(ROCKS[sceneShown.rank].block)}
             </span>
             <span className="prank__key">
               <KeyIcon size={13} /> +1 ключ от сундука
@@ -2118,17 +2205,20 @@ export function PrisonPage() {
               <span className="prank__lvl">Открыт лес — кнопка «Лес» над полем</span>
             )}
             {sceneShown.buyout > 0 && (
-              <span className="prank__lvl">Порода докуплена за {fmt(sceneShown.buyout)} монет</span>
+              <span className="prank__lvl">Блок докуплен за {fmt(sceneShown.buyout)} монет</span>
             )}
             {sceneShown.rank < LAST_RANK && (
               <span className="prank__norm">
                 Для ранга {rankLetter(sceneShown.rank + 1)}:
-                <QuotaChips quota={rankQuota(sceneShown.rank, prestige)} norm={{}} />
+                <RankChips
+                  need={rankNeeds({ rank: sceneShown.rank, norm: {}, oreBlocks: 0 })}
+                  floor={sceneShown.rank}
+                />
               </span>
             )}
             {sceneShown.levelUps.length > 0 && (
               <span className="prank__lvl">
-                Уровень {sceneShown.levelUps[sceneShown.levelUps.length - 1]} — награда в кошельке
+                Уровень {sceneShown.levelUps[sceneShown.levelUps.length - 1]}
               </span>
             )}
             <span className="prank__cta">В шахту</span>

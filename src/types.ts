@@ -834,6 +834,8 @@ export interface SlotSpin {
 
 export interface SlotsBlob {
   version: 1;
+  /** Эпоха экономики (`ECONOMY_ERA`), в которой записано сохранение. */
+  era?: number;
   /** Виртуальные монеты (никакой реальной валюты — игра бесплатная). */
   balance: number;
   bet: number;

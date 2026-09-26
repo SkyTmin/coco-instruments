@@ -44,6 +44,7 @@ import {
   skillOf,
   SPOTS,
   spotOpen,
+  SPOT_GATE,
   startFight,
   stepFight,
 } from '@/lib/fishing';
@@ -135,10 +136,12 @@ function farPath(spot: number, w: number, h: number): string {
   for (let x = 0; x <= w; x += step) {
     const t = x / w;
     let y = base;
-    if (spot === 0) y = base - 10 - 8 * Math.abs(Math.sin(t * 23)) - 16 * Math.max(0, Math.sin(t * 5 + 1));
+    if (spot === 0)
+      y = base - 10 - 8 * Math.abs(Math.sin(t * 23)) - 16 * Math.max(0, Math.sin(t * 5 + 1));
     else if (spot === 1) y = base - 18 - 10 * Math.abs(Math.sin(t * 17)) - 6 * Math.sin(t * 41);
     else if (spot === 2) y = base - 14 - 26 * Math.max(0, Math.sin(t * 3.2 + 0.4));
-    else if (spot === 3) y = base - 12 - 70 * Math.max(0, 1 - Math.abs(((t * 3.4) % 1) - 0.5) * 2.4);
+    else if (spot === 3)
+      y = base - 12 - 70 * Math.max(0, 1 - Math.abs(((t * 3.4) % 1) - 0.5) * 2.4);
     else y = base - 2;
     pts.push(`L${x} ${Math.round(y / step) * step}`);
   }
@@ -189,7 +192,10 @@ function FarDecor({ spot, w, h }: { spot: number; w: number; h: number }) {
             fill="rgba(255,255,255,0.8)"
           />
         ))}
-      {(spot === 1 || spot === 3) && [cloud(w * 0.08, h * 0.08, 1.1, 'a'), cloud(w * 0.5, h * 0.18, 0.8, 'b')]}
+      {(spot === 1 || spot === 3) && [
+        cloud(w * 0.08, h * 0.08, 1.1, 'a'),
+        cloud(w * 0.5, h * 0.18, 0.8, 'b'),
+      ]}
       {spot === 0 && cloud(w * 0.12, h * 0.14, 0.9, 'a')}
       <path className="fsx-far__shore" d={farPath(spot, w, h)} />
       {spot === 3 && <path d={farPath(spot, w, h)} fill="#f2f6fb" clipPath="url(#fsx-snow)" />}
@@ -237,7 +243,10 @@ function NearDecor({ spot, w, h }: { spot: number; w: number; h: number }) {
         ].map(([x, y, r], i) => (
           <g key={i}>
             <ellipse cx={x * w} cy={y * h} rx={r} ry={r * 0.38} fill="#3d7a3a" />
-            <path d={`M${x * w} ${y * h} l${r} ${-r * 0.12} l0 ${r * 0.24} z`} fill="rgba(20,50,30,0.8)" />
+            <path
+              d={`M${x * w} ${y * h} l${r} ${-r * 0.12} l0 ${r * 0.24} z`}
+              fill="rgba(20,50,30,0.8)"
+            />
           </g>
         ))
       : null;
@@ -388,10 +397,16 @@ export function FishingPage() {
   /** Нарисовать удочку, леску и поплавок для текущего кадра. */
   const paint = (floatX: number, floatY: number, tension: number, bend: number, under = 0) => {
     const g = geoRef.current;
-    const tip = { x: g.tip.x - bend * g.w * 0.08, y: g.tip.y + bend * g.h * 0.04 + tension * g.h * 0.05 };
+    const tip = {
+      x: g.tip.x - bend * g.w * 0.08,
+      y: g.tip.y + bend * g.h * 0.04 + tension * g.h * 0.05,
+    };
     const midX = (g.base.x + tip.x) / 2 + tension * g.w * 0.05;
     const midY = (g.base.y + tip.y) / 2 - g.h * 0.02;
-    rodRef.current?.setAttribute('d', `M${g.base.x} ${g.base.y} Q${midX} ${midY} ${tip.x} ${tip.y}`);
+    rodRef.current?.setAttribute(
+      'd',
+      `M${g.base.x} ${g.base.y} Q${midX} ${midY} ${tip.x} ${tip.y}`,
+    );
     // Рукоять — первая пятая удилища (кусок той же кривой), катушка на ней.
     const at = (k: number) => ({
       x: (1 - k) * (1 - k) * g.base.x + 2 * (1 - k) * k * midX + k * k * tip.x,
@@ -467,7 +482,14 @@ export function FishingPage() {
       }
       paint(r.fx, r.fy, 0.15, 0, under);
     } else if (r.phase === 'fight' && r.fight) {
-      const res = stepFight(r.fight, dt, r.hold, r.pull, RODS[useFinanceStore.getState().fishing.rod].reel, Math.random);
+      const res = stepFight(
+        r.fight,
+        dt,
+        r.hold,
+        r.pull,
+        RODS[useFinanceStore.getState().fishing.rod].reel,
+        Math.random,
+      );
       r.fight = res.f;
       const f = res.f;
       // Поплавок едет к берегу вместе с рыбой.
@@ -491,7 +513,13 @@ export function FishingPage() {
       if (f.burst > 0 && t - r.splashAt > 380) {
         r.splashAt = t;
         fishSplash(r.pull);
-        fx.current?.chips(x * g.w, y * g.h, ['#cfe8ff', '#ffffff', '#7fb8e0'], 6 + Math.round(r.pull * 4), 1);
+        fx.current?.chips(
+          x * g.w,
+          y * g.h,
+          ['#cfe8ff', '#ffffff', '#7fb8e0'],
+          6 + Math.round(r.pull * 4),
+          1,
+        );
       }
       if (res.end) {
         endFight(res.end);
@@ -510,7 +538,8 @@ export function FishingPage() {
 
   // Покой: удочка и поплавок у ног, ничего не крутится.
   useEffect(() => {
-    if (run.current.phase === 'idle' || run.current.phase === 'result') paint(0.36, 0.86, 0.3, 0, 0);
+    if (run.current.phase === 'idle' || run.current.phase === 'result')
+      paint(0.36, 0.86, 0.3, 0, 0);
   }, [geo, phase, sceneOn]);
 
   // ---- Фазы --------------------------------------------------------------
@@ -518,7 +547,12 @@ export function FishingPage() {
   const startBite = () => {
     const r = run.current;
     const f = useFinanceStore.getState().fishing;
-    const b = rollBite(f.spot, biteNow(f.bite[f.spot], f.biteAt[f.spot], Date.now()), r.dist, Math.random);
+    const b = rollBite(
+      f.spot,
+      biteNow(f.bite[f.spot], f.biteAt[f.spot], Date.now()),
+      r.dist,
+      Math.random,
+    );
     r.bite = b;
     r.hookUntil = Date.now() + hookWindow(b.kind === 'fish' ? b.fish : null);
     setPh('bite');
@@ -570,13 +604,20 @@ export function FishingPage() {
     }
     setPh('result');
     setCard({ bite, got });
+    if (got.sold) {
+      const to = useFinanceStore.getState().slotsBalance;
+      rollBalance(to - got.sold, to);
+      coinDing();
+      say(`Садок полон — продан сам: +${shortMoney(got.sold)}`);
+    }
     const g = geoRef.current;
     fx.current?.chips(g.near.x, g.near.y, ['#cfe8ff', '#ffffff', '#ffd257'], 20, 1.4);
     if (bite.kind === 'fish') {
       const beats = rarityBeats(bite.fish);
       fishLanded(beats);
       notifySuccess();
-      if (beats >= 2) burstConfetti(40 + beats * 20, [rarityColor(bite.fish), '#ffffff', '#ffd257']);
+      if (beats >= 2)
+        burstConfetti(40 + beats * 20, [rarityColor(bite.fish), '#ffffff', '#ffd257']);
       if (got.firstTokens) squashPop(tokenRef.current, 0.6);
       squashPop(netRef.current, 0.4);
       if (got.levelUp) tierBreak(2);
@@ -609,7 +650,10 @@ export function FishingPage() {
     }
     if (r.phase === 'idle') {
       if (useFinanceStore.getState().prison.treasure) return;
-      if (useFinanceStore.getState().fishing.net.n >= netCapacity(useFinanceStore.getState().fishing.netLevel)) {
+      if (
+        useFinanceStore.getState().fishing.net.n >=
+        netCapacity(useFinanceStore.getState().fishing.netLevel)
+      ) {
         notifyWarning();
         squashPop(netRef.current, 0.6);
         say('Садок полон — продай улов или покорми питомца');
@@ -726,9 +770,13 @@ export function FishingPage() {
       say('Сначала вытащи, что на крючке');
       return;
     }
-    if (!spotOpen(i, skill.level)) {
+    if (!spotOpen(i, skill.level, prison.rank, prison.prestige)) {
       notifyWarning();
-      say(`${SPOTS[i].name} откроется с ${SPOTS[i].skill} уровня мастерства`);
+      say(
+        skill.level < SPOTS[i].skill
+          ? `${SPOTS[i].name} откроется с ${SPOTS[i].skill} уровня мастерства`
+          : `${SPOTS[i].name} откроется с ранга шахты ${rankLetter(SPOT_GATE[i])}`,
+      );
       return;
     }
     if (fishSpot(i)) {
@@ -801,7 +849,11 @@ export function FishingPage() {
               <KIcon name="locked" size={24} />
             </span>
             <b>Откроется с ранга {rankLetter(FISH_UNLOCK_RANK)}</b>
-            <button type="button" className="gx-btn gx-btn--red gx-btn--block" onClick={() => nav('/prison')}>
+            <button
+              type="button"
+              className="gx-btn gx-btn--red gx-btn--block"
+              onClick={() => nav('/prison')}
+            >
               <GxIcon name="pick" size={18} /> В шахту
             </button>
           </div>
@@ -844,7 +896,8 @@ export function FishingPage() {
             <TokenIcon size={17} /> {fmt(prison.tokens)}
           </span>
           <span className="gx-chip fsx-pearls" title="Жемчуг: +0,5% к продаже везде">
-            <FishSprite index={PEARL_TILE} scale={1} /> {Math.min(PEARL_MAX, prison.pearls)}/{PEARL_MAX}
+            <FishSprite index={PEARL_TILE} scale={1} /> {Math.min(PEARL_MAX, prison.pearls)}/
+            {PEARL_MAX}
           </span>
         </div>
 
@@ -872,7 +925,9 @@ export function FishingPage() {
 
         <div className="fsx-spots" role="tablist" aria-label="Места">
           {SPOTS.map((s, i) => {
-            const open = spotOpen(i, skill.level);
+            const open = spotOpen(i, skill.level, prison.rank, prison.prestige);
+            const lockText =
+              skill.level < s.skill ? `${s.skill} ур.` : `шахта ${rankLetter(SPOT_GATE[i])}`;
             return (
               <button
                 key={s.id}
@@ -882,7 +937,7 @@ export function FishingPage() {
                 className={`fsx-spot${spot === i ? ' is-on' : ''}${open ? '' : ' is-locked'}`}
                 onClick={() => goSpot(i)}
               >
-                <b>{open ? s.name : `${s.skill} ур.`}</b>
+                <b>{open ? s.name : lockText}</b>
                 {open ? (
                   <span className="fsx-spot__bite" title="Клёв">
                     <i style={{ transform: `scaleX(${bites[i]})` }} />
@@ -951,12 +1006,17 @@ export function FishingPage() {
               <div
                 className="fsx-card"
                 role="status"
-                style={cardFish ? ({ '--tier': rarityColor(cardFish.fish) } as CSSProperties) : undefined}
+                style={
+                  cardFish ? ({ '--tier': rarityColor(cardFish.fish) } as CSSProperties) : undefined
+                }
               >
                 {cardFish ? (
                   <>
                     <span className="fsx-card__glow" />
-                    <FishSprite index={fishIndex(cardFish.fish)} scale={Math.max(3, Math.floor(size.w / 100))} />
+                    <FishSprite
+                      index={fishIndex(cardFish.fish)}
+                      scale={Math.max(3, Math.floor(size.w / 100))}
+                    />
                     <b>{cardFish.fish.name}</b>
                     <span className="fsx-card__kg">{kgText(cardFish.kg)}</span>
                     <span className="fsx-card__price">
@@ -1007,7 +1067,10 @@ export function FishingPage() {
               </div>
             )}
             {phase === 'idle' && (
-              <TreasurePanel onGot={onTreasureGot} onLost={() => say('Сгорело. В другой раз повезёт')} />
+              <TreasurePanel
+                onGot={onTreasureGot}
+                onLost={() => say('Сгорело. В другой раз повезёт')}
+              />
             )}
           </div>
         </div>
@@ -1026,7 +1089,9 @@ export function FishingPage() {
                 tone={netFull ? 'red' : 'green'}
                 label={`${fishing.net.n} / ${cap}`}
               />
-              <span className={`gx-btn gx-btn--sm${fishing.net.n ? ' gx-btn--red' : ''} pmx-bag__sell`}>
+              <span
+                className={`gx-btn gx-btn--sm${fishing.net.n ? ' gx-btn--red' : ''} pmx-bag__sell`}
+              >
                 {fishing.net.n ? (
                   <>
                     {shortMoney(Math.round(fishing.net.value * sellMult))} <CoinIcon size={13} />
@@ -1079,4 +1144,3 @@ export function FishingPage() {
     </div>
   );
 }
-

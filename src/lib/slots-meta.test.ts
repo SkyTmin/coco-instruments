@@ -109,10 +109,11 @@ describe('уровни', () => {
     expect(xpForSpin(0, 100_000, 'none')).toBeLessThanOrEqual(base * 2 + 1);
   });
 
-  it('награда за уровень растёт, каждый третий даёт вращения', () => {
-    expect(levelReward(4).coins).toBeGreaterThan(levelReward(3).coins);
-    expect(levelReward(3).freeSpins).toBe(5);
-    expect(levelReward(4).freeSpins).toBe(0);
+  it('уровень не платит: денег из ничего нет (v2.66)', () => {
+    for (let l = 1; l <= 60; l++) {
+      expect(levelReward(l).coins).toBe(0);
+      expect(levelReward(l).freeSpins).toBe(0);
+    }
   });
 
   it('уровни 5 и 9 открывают скины', () => {

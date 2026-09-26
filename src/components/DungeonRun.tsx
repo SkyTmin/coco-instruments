@@ -20,14 +20,12 @@ import {
   BOSSES,
   canPay,
   DEEP_MINES,
-  econOf,
   heroOf,
   levelOf,
   liftCost,
   MATS,
   meatCount,
   meatValue,
-  marketSold,
   sackSlots,
   slotsUsed,
   smellOf,
@@ -346,7 +344,6 @@ export function DungeonRun({
       world,
       dungeon: d,
       stats,
-      econ: econOf(st.prison),
       x,
       y,
       hp: run.hp > 0 ? run.hp : stats.maxHp,
@@ -528,7 +525,7 @@ export function DungeonRun({
       sign = { id: o.id, rows: signRows(sim, o, st.dungeon.lifts) };
       break;
     }
-    const up = upgradable(st.dungeon, econOf(st.prison), st.slotsBalance, sim.sack.mats).length > 0;
+    const up = upgradable(st.dungeon, st.slotsBalance, sim.sack.mats).length > 0;
     // Подсказка первого раза: одна за раз, по порядку важности.
     const c = coach.current;
     if (c.walk0 === null) c.walk0 = h.walk;
@@ -1121,9 +1118,7 @@ export function DungeonRun({
   };
 
   const d = useFinanceStore((s) => s.dungeon);
-  const prison = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
-  const econ = econOf(prison);
   const u = hud?.use ?? null;
   const skillReady = (hud?.skill ?? 0) >= 1;
   const stop = (e: ReactPointerEvent) => e.stopPropagation();
@@ -1396,7 +1391,7 @@ export function DungeonRun({
 
       {sheet === 'pause' && (
         <GxModal title="Пауза" onClose={() => setSheet(null)}>
-          <SackList sack={simRef.current?.sack} econ={econ} sold={marketSold(d, Date.now())} />
+          <SackList sack={simRef.current?.sack} />
           <div className="dgx-menu">
             <AudioToggles className="dgx-menu__audio" />
             <button
@@ -1472,12 +1467,10 @@ export function DungeonRun({
         <LiftSheet
           area={liftArea}
           repaired={d.lifts.includes(liftArea)}
-          econ={econ}
           balance={balance}
           canRepair={(cost) => canPay(d, cost, balance)}
           stash={d.stash}
           sack={simRef.current?.sack}
-          sold={marketSold(d, Date.now())}
           onRepair={() => {
             if (useFinanceStore.getState().dungeonLiftRepair(liftArea)) {
               liftClank();
@@ -1519,17 +1512,9 @@ export function DungeonRun({
 // ---------------------------------------------------------------------------
 
 /** Что в рюкзаке и сколько за это дадут наверху — картинками. */
-function SackList({
-  sack,
-  econ,
-  sold,
-}: {
-  sack: Sim['sack'] | undefined;
-  econ: number;
-  sold: number;
-}) {
+function SackList({ sack }: { sack: Sim['sack'] | undefined }) {
   if (!sack) return null;
-  const mv = meatValue(sack, econ, sold);
+  const mv = meatValue(sack);
   const mats = Object.entries(sack.mats) as [MatId, number][];
   const empty = !mv.pieces && !mats.length && !sack.coins && !sack.tokens && !sack.keys;
   if (empty)
@@ -1581,31 +1566,27 @@ function SackList({
 function LiftSheet({
   area,
   repaired,
-  econ,
   balance,
   canRepair,
   stash,
   sack,
-  sold,
   onRepair,
   onUp,
   onClose,
 }: {
   area: AreaId;
   repaired: boolean;
-  econ: number;
   balance: number;
   canRepair: (c: ReturnType<typeof liftCost>) => boolean;
   stash: Partial<Record<MatId, number>>;
   sack: Sim['sack'] | undefined;
-  sold: number;
   onRepair: () => void;
   onUp: () => void;
   onClose: () => void;
 }) {
   const a = areaOf(area);
   if (!repaired) {
-    const cost = liftCost(area, econ);
+    const cost = liftCost(area);
     const ok = canRepair(cost);
     return (
       <GxModal title="Лифт сломан" kind="iron" onClose={onClose}>
@@ -1640,7 +1621,7 @@ function LiftSheet({
   }
   return (
     <GxModal title="Лифт" kind="iron" onClose={onClose}>
-      <SackList sack={sack} econ={econ} sold={sold} />
+      <SackList sack={sack} />
       <button className="gx-btn gx-btn--red gx-btn--big gx-btn--block dgx-cta" onClick={onUp}>
         <KIcon name="arrowUp" />
         Подняться с добычей

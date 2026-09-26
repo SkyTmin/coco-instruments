@@ -6,22 +6,14 @@ import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
-import { IconGift, IconInfo } from '@/components/icons';
+import { IconInfo } from '@/components/icons';
 import { CashDesk } from '@/components/CashDesk';
 import { SkinSheet } from '@/components/SkinSheet';
-import { RewardsSheet, fmtLeft, useReadyRewards } from '@/components/RewardsSheet';
 import { useFinanceStore } from '@/store';
 import { useExit } from '@/lib/use-exit';
 import { useGameAudio } from '@/lib/use-game-audio';
 import type { SlotsSpinOutcome } from '@/store';
-import {
-  WHEEL_COOLDOWN_MS,
-  dailyStatus,
-  dayKey,
-  levelFromXp,
-  ladderReward,
-  levelReward,
-} from '@/lib/slots-meta';
+import { levelFromXp, levelReward } from '@/lib/slots-meta';
 import {
   BET_STEP,
   BETS,
@@ -35,8 +27,6 @@ import {
   outcomeLabel,
   PAYLINES,
   randomSymbol,
-  RESCUE_COOLDOWN_MS,
-  RESCUE_SPINS,
   ROWS,
   SLOT_SYMBOLS,
   symbolOf,
@@ -359,7 +349,6 @@ export function SlotsPage() {
   const bet = useFinanceStore((s) => s.slotsBet);
   const spins = useFinanceStore((s) => s.slotsSpins);
   const best = useFinanceStore((s) => s.slotsBest);
-  const bonusAt = useFinanceStore((s) => s.slotsBonusAt);
   const history = useFinanceStore((s) => s.slotsHistory);
   const jackpotPool = useFinanceStore((s) => s.slotsJackpot);
   const skin = useFinanceStore((s) => s.slotsSkin);
@@ -369,13 +358,9 @@ export function SlotsPage() {
   const haptics = useFinanceStore((s) => s.slotsHaptics);
   const turbo = useFinanceStore((s) => s.slotsTurbo);
   const xp = useFinanceStore((s) => s.slotsXp);
-  const dayStreak = useFinanceStore((s) => s.slotsStreak);
-  const dailyAt = useFinanceStore((s) => s.slotsDailyAt);
-  const wheelAt = useFinanceStore((s) => s.slotsWheelAt);
   const freeSpins = useFinanceStore((s) => s.slotsFreeSpins);
   const setBet = useFinanceStore((s) => s.setSlotsBet);
   const playSlots = useFinanceStore((s) => s.playSlots);
-  const claimRescue = useFinanceStore((s) => s.claimSlotsRescue);
   const setPrefs = useFinanceStore((s) => s.setSlotsPrefs);
 
   const [plans, setPlans] = useState<ReelPlan<SlotSymbolId>[]>(() =>
@@ -404,7 +389,6 @@ export function SlotsPage() {
   const [autoSheet, setAutoSheet] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [skinSheet, setSkinSheet] = useState(false);
-  const [rewards, setRewards] = useState(false);
   const [settings, setSettings] = useState(false);
   const [betSheet, setBetSheet] = useState(false);
   const [betDraft, setBetDraft] = useState(BETS[0]);
@@ -425,7 +409,6 @@ export function SlotsPage() {
   } | null>(null);
   const [totem, totemLeaving] = useExit(celebration, 300);
   const [jackpotWin, setJackpotWin] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
 
   const reelsRef = useRef<HTMLDivElement>(null);
   /**
@@ -499,11 +482,6 @@ export function SlotsPage() {
     );
   }, []);
 
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(id);
-  }, []);
-
   // Ставка всегда по карману: если монет на текущую не хватает, опускаемся к
   // максимальной доступной — иначе кнопка «Крутить» мертва без объяснений.
   useEffect(() => {
@@ -515,18 +493,9 @@ export function SlotsPage() {
   }, [hydrated, spinning, balance, bet, setBet]);
 
   // ---- прогрессия ----------------------------------------------------------
-  // Она общая на обе игры и живёт в RewardsSheet; странице нужно лишь то, что
-  // она показывает сама: уровень, готовность бонусов и тупик по монетам.
-  const today = dayKey(now);
+  // Уровень — только знак и скины (v2.66): денег за него больше нет.
   const level = levelFromXp(xp);
-  const daily = dailyStatus({ streak: dayStreak, lastClaim: dailyAt }, today);
-  const wheelLeft = wheelAt ? wheelAt + WHEEL_COOLDOWN_MS - now : 0;
-  const wheelReady = wheelLeft <= 0;
-  const rescueLeft = bonusAt ? bonusAt + RESCUE_COOLDOWN_MS - now : 0;
   const broke = balance < MIN_BET && freeSpins <= 0;
-  const rescueReady = broke && rescueLeft <= 0;
-  // Сколько наград ждут прямо сейчас — это число и зовёт вернуться.
-  const readyCount = useReadyRewards(now);
   const canSpin = hydrated && !spinning && (freeSpins > 0 || balance >= bet);
   // На табло — копилка плюс то, что заплатит сама линия семёрок.
   const jackpotPrize = jackpotPool + lineBet(bet) * symbolOf('seven').three;
@@ -957,19 +926,6 @@ export function SlotsPage() {
     selectionChanged();
   };
 
-  const takeRescue = () => {
-    primeAudio();
-    const got = claimRescue();
-    if (!got) return;
-    tapMedium();
-    coinDing();
-    coinDing(0.12);
-    winChime('small');
-    rainCoins(14, rainSrc);
-    notifySuccess();
-    setNow(Date.now());
-  };
-
   const startAuto = (count: number) => {
     selectionChanged();
     primeAudio();
@@ -980,12 +936,6 @@ export function SlotsPage() {
   const stopAuto = () => {
     tapLight();
     setAuto(0);
-  };
-
-  const openRewards = () => {
-    tapLight();
-    primeAudio();
-    setRewards(true);
   };
 
   // ---- рычаг ---------------------------------------------------------------
@@ -1108,8 +1058,8 @@ export function SlotsPage() {
           </div>
         </div>
 
-        {/* Полоса уровня — она же вход в награды */}
-        <button className="slot-level" onClick={openRewards}>
+        {/* Полоса уровня. Наград за уровень больше нет — только знак и скины. */}
+        <div className="slot-level">
           <span className="slot-level__lvl">Ур. {level.level}</span>
           <span className="slot-level__bar">
             <i style={{ width: `${Math.min(100, (level.into / level.need) * 100)}%` }} />
@@ -1119,11 +1069,7 @@ export function SlotsPage() {
               🎟 {freeSpins}
             </span>
           )}
-          <span className="slot-level__gift">
-            <IconGift size={17} />
-            {readyCount > 0 && <span className="slot-level__badge">{readyCount}</span>}
-          </span>
-        </button>
+        </div>
 
         {/* Корпус автомата */}
         <div
@@ -1399,30 +1345,9 @@ export function SlotsPage() {
           </button>
         </div>
 
-        {readyCount > 0 && (
-          <button className="btn btn--block rewards-cta" onClick={openRewards}>
-            <IconGift size={18} />
-            Забрать награды · {readyCount}
-          </button>
-        )}
-        {/* Тупик: монет не хватает даже на минимальную ставку */}
-        {broke &&
-          (rescueReady ? (
-            <button className="btn btn--block rewards-cta" onClick={takeRescue}>
-              🍀 Спасательные вращения · {RESCUE_SPINS}
-            </button>
-          ) : (
-            <p className="slot-bonus-hint">
-              Спасательные вращения — через {fmtLeft(rescueLeft)}
-              {wheelReady ? ' · или крутите колесо прямо сейчас' : ''}
-            </p>
-          ))}
-        {readyCount === 0 && (
+        {broke && (
           <p className="slot-bonus-hint">
-            {daily.ready
-              ? ''
-              : `Завтра — ${fmt(ladderReward(dayStreak + 1))} монет за ${dayStreak + 1}-й день серии`}
-            {!wheelReady && ` · колесо через ${fmtLeft(wheelLeft)}`}
+            Монеты кончились — заработай в шахте, лесу или на рыбалке
           </p>
         )}
 
@@ -1673,8 +1598,6 @@ export function SlotsPage() {
         </Sheet>
       )}
 
-      {rewards && <RewardsSheet skin={skin} onClose={() => setRewards(false)} />}
-
       {lvlShown && (
         <div
           className={`levelup${lvlLeaving ? ' is-leaving' : ''}`}
@@ -1684,11 +1607,12 @@ export function SlotsPage() {
         >
           <div className="levelup__card">
             <div className="levelup__lvl">Уровень {lvlShown.level}</div>
-            <div className="levelup__gain">
-              +{fmt(lvlShown.coins)}
-              <CoinIcon size={18} />
-              {lvlShown.freeSpins > 0 && <span> · 🎟 {lvlShown.freeSpins}</span>}
-            </div>
+            {lvlShown.coins > 0 && (
+              <div className="levelup__gain">
+                +{fmt(lvlShown.coins)}
+                <CoinIcon size={18} />
+              </div>
+            )}
             {lvlShown.skin && (
               <div className="levelup__skin">
                 Открыт скин «{skinOf(lvlShown.skin as SkinId).name}»

@@ -1,19 +1,40 @@
 // «Каторга» — присон с видом сверху. Здесь все правила; страница только
 // показывает и ловит пальцы.
 //
-// ДЕНЬГИ ОБЩИЕ С АВТОМАТАМИ (`slotsBalance`) — в этом весь смысл: шахта
-// кормит автоматы, а крупный занос в автомате покупает ранг. Отсюда масштаб
-// чисел. На серверах цены уходят в миллиарды; у нас ставка 10–500 монет, и
-// ранг Z стоит примерно столько же, сколько мега-выигрыш на максимальной
-// ставке. Сделать шахту в миллиардах — и автоматы станут мелочью, которую
-// незачем крутить; сделать её в копейках — и ранги покупались бы стартовой
-// тысячей. Темп подобран тестом-симуляцией (`prison.test.ts`), не на глаз.
+// С v2.66 Каторга — главная игра, автоматы — казино внутри неё. Все цены
+// ПОСТОЯННЫЕ и лежат таблицами в `economy.ts`: руда, блок этажа, ранг,
+// кирка, заточка — одно число навсегда, без множителей от ранга и престижа,
+// без миллионов. Темп подобран тестом-симуляцией (`prison.test.ts`).
 //
 // Как устроено поле. Шахта — яма, а не плоскость: 7×9 клеток, в каждой пять
-// ярусов. Сломал верхний блок — под ним следующий. Чем глубже, тем богаче
-// порода, а на дне изредка попадается порода СЛЕДУЮЩЕЙ шахты — подсказка,
-// за чем идти. Поле собирается из зерна (`seed`): сохранять нужно только
-// зерно и глубину раскопа по клеткам, а не триста пятнадцать блоков.
+// ярусов. Сломал верхний блок — под ним следующий. На этаже две руды: своя
+// и прошлого этажа, к дну своей больше. Редкие блоки этажа — цельные кубы
+// руды — лежат в поле из того же зерна. Поле собирается из зерна (`seed`):
+// сохранять нужно только зерно и глубину раскопа по клеткам.
+
+import {
+  BAG_PRICE,
+  BLOCK_BUYOUT,
+  BLOCK_PRICE,
+  blocksPerField,
+  CREW_PRICE,
+  nice,
+  ORE_PRICE,
+  PICKS,
+  PRESTIGE_PRICE,
+  PRESTIGE_SELL_MAX,
+  PRESTIGE_SELL_STEP,
+  RANK_BLOCKS,
+  RANK_PRICE,
+  RANK_WORK,
+  SELL_BONUS_CAP,
+  SHARP_MAX,
+  SHARP_STEP,
+} from './economy';
+
+export { nice, PICKS, SHARP_MAX, SHARP_STEP } from './economy';
+export { sharpCost, AUTOSELL_TOKENS, BLOCK_HITS } from './economy';
+export type { PickDef as Pick } from './economy';
 
 export const MINE_COLS = 7;
 export const MINE_ROWS = 9;
@@ -24,361 +45,376 @@ export const DEPTH = 5;
 export const MINE_RESET_AT = 0.85;
 
 // ---------------------------------------------------------------------------
-// Породы. Настоящие минералы, в том числе кольские (апатит, эвдиалит — это
-// Хибины). Индекс породы = буква шахты, в которой она впервые появляется.
+// Породы. Индекс породы = буква этажа, на котором она впервые появляется;
+// пять последних — престижные, только в спецзоне. Картинки — готовые
+// (`public/ui/ores`, сборка `scripts/ores-assets.py`), палитра здесь нужна
+// для крошки и оттенков: основа — пустая порода, вкрапления — руда.
 // ---------------------------------------------------------------------------
 
 /** Материал — от него звук удара и характер крошки. */
 export type RockKind = 'soil' | 'stone' | 'metal' | 'crystal' | 'star';
 
-/** Узор процедурной текстуры. */
+/** Узор — остался для процедурных текстур подземелья. */
 export type RockPattern = 'grain' | 'bands' | 'specks' | 'veins' | 'crystal' | 'flakes' | 'stars';
 
 export interface Rock {
   id: string;
   name: string;
+  /** «Золотой блок», «Алмазный блок» — цельный куб этой руды. */
+  blockName: string;
   kind: RockKind;
   pattern: RockPattern;
-  /** Основа, тень, вкрапления, блик — палитра текстуры. */
+  /** Основа, тень, вкрапления, блик — палитра крошки. */
   base: string;
   dark: string;
   fleck: string;
   shine: string;
   /** Прочность: сколько урона выдержит блок. */
   hp: number;
-  /** Цена продажи одного блока, монет. */
+  /** Цена продажи одного блока руды, монет. */
   value: number;
+  /** Цена блока этажа. */
+  block: number;
 }
 
-type RockDef = Omit<Rock, 'hp' | 'value'>;
+type RockDef = Omit<Rock, 'hp' | 'value' | 'block'>;
+
+const R = (
+  id: string,
+  name: string,
+  blockName: string,
+  kind: RockKind,
+  pattern: RockPattern,
+  base: string,
+  dark: string,
+  fleck: string,
+  shine: string,
+): RockDef => ({ id, name, blockName, kind, pattern, base, dark, fleck, shine });
 
 const ROCK_DEFS: RockDef[] = [
-  {
-    id: 'clay',
-    name: 'Глина',
-    kind: 'soil',
-    pattern: 'grain',
-    base: '#9c6b4a',
-    dark: '#74492f',
-    fleck: '#b98464',
-    shine: '#d2a582',
-  },
-  {
-    id: 'sandstone',
-    name: 'Песчаник',
-    kind: 'stone',
-    pattern: 'bands',
-    base: '#d6b27a',
-    dark: '#b08a55',
-    fleck: '#e6c992',
-    shine: '#f3e0b6',
-  },
-  {
-    id: 'limestone',
-    name: 'Известняк',
-    kind: 'stone',
-    pattern: 'specks',
-    base: '#c9c4b3',
-    dark: '#9f9985',
-    fleck: '#e8e4d6',
-    shine: '#f7f4ea',
-  },
-  {
-    id: 'granite',
-    name: 'Гранит',
-    kind: 'stone',
-    pattern: 'specks',
-    base: '#8f8987',
-    dark: '#5f5957',
-    fleck: '#d49a8a',
-    shine: '#ececec',
-  },
-  {
-    id: 'coal',
-    name: 'Уголь',
-    kind: 'stone',
-    pattern: 'specks',
-    base: '#76746f',
-    dark: '#52504c',
-    fleck: '#18181c',
-    shine: '#5c5d6a',
-  },
-  {
-    id: 'copper',
-    name: 'Медь',
-    kind: 'metal',
-    pattern: 'specks',
-    base: '#80796f',
-    dark: '#58524a',
-    fleck: '#e0864a',
-    shine: '#7fd6b8',
-  },
-  {
-    id: 'ironstone',
-    name: 'Железняк',
-    kind: 'metal',
-    pattern: 'veins',
-    base: '#85736a',
-    dark: '#5a4a43',
-    fleck: '#b8583a',
-    shine: '#e2a58c',
-  },
-  {
-    id: 'nickel',
-    name: 'Никель',
-    kind: 'metal',
-    pattern: 'specks',
-    base: '#747c76',
-    dark: '#4e5550',
-    fleck: '#cfd8c6',
-    shine: '#f2f7ea',
-  },
-  {
-    id: 'apatite',
-    name: 'Апатит',
-    kind: 'crystal',
-    pattern: 'crystal',
-    base: '#6c7a7a',
-    dark: '#475454',
-    fleck: '#3fc4ad',
-    shine: '#b8f4e6',
-  },
-  {
-    id: 'mica',
-    name: 'Слюда',
-    kind: 'stone',
-    pattern: 'flakes',
-    base: '#7c7262',
-    dark: '#554d40',
-    fleck: '#dcc99a',
-    shine: '#fff6d6',
-  },
-  {
-    id: 'quartz',
-    name: 'Кварц',
-    kind: 'crystal',
-    pattern: 'crystal',
-    base: '#cfd6dd',
-    dark: '#a2adb9',
-    fleck: '#f4f7fa',
-    shine: '#ffffff',
-  },
-  {
-    id: 'silver',
-    name: 'Серебро',
-    kind: 'metal',
-    pattern: 'veins',
-    base: '#696d77',
-    dark: '#464a53',
-    fleck: '#e2e7ef',
-    shine: '#ffffff',
-  },
-  {
-    id: 'fluorite',
-    name: 'Флюорит',
-    kind: 'crystal',
-    pattern: 'bands',
-    base: '#6b5a90',
-    dark: '#463a66',
-    fleck: '#7fdcb4',
-    shine: '#dccbff',
-  },
-  {
-    id: 'malachite',
-    name: 'Малахит',
-    kind: 'stone',
-    pattern: 'bands',
-    base: '#1f8d5c',
-    dark: '#11603d',
-    fleck: '#52d192',
-    shine: '#a2f2c8',
-  },
-  {
-    id: 'gold',
-    name: 'Золото',
-    kind: 'metal',
-    pattern: 'veins',
-    base: '#6f665a',
-    dark: '#4a4339',
-    fleck: '#ffc93a',
-    shine: '#fff3a8',
-  },
-  {
-    id: 'amethyst',
-    name: 'Аметист',
-    kind: 'crystal',
-    pattern: 'crystal',
-    base: '#5d4a7a',
-    dark: '#3d2f54',
-    fleck: '#b682ec',
-    shine: '#f0dcff',
-  },
-  {
-    id: 'lapis',
-    name: 'Лазурит',
-    kind: 'stone',
-    pattern: 'specks',
-    base: '#2344a0',
-    dark: '#162d70',
-    fleck: '#e0bc4c',
-    shine: '#7898ee',
-  },
-  {
-    id: 'jade',
-    name: 'Нефрит',
-    kind: 'stone',
-    pattern: 'grain',
-    base: '#3f9c6c',
-    dark: '#2a704c',
-    fleck: '#80d8a2',
-    shine: '#cbf6dc',
-  },
-  {
-    id: 'garnet',
-    name: 'Гранат',
-    kind: 'crystal',
-    pattern: 'crystal',
-    base: '#5c4b4b',
-    dark: '#3a2e2e',
-    fleck: '#c4531f',
-    shine: '#ffa070',
-  },
-  {
-    id: 'eudialyte',
-    name: 'Эвдиалит',
-    kind: 'crystal',
-    pattern: 'specks',
-    base: '#6f6a66',
-    dark: '#494542',
-    fleck: '#e0448f',
-    shine: '#ffc2e2',
-  },
-  {
-    id: 'sapphire',
-    name: 'Сапфир',
-    kind: 'crystal',
-    pattern: 'crystal',
-    base: '#4a5272',
-    dark: '#2d3350',
-    fleck: '#2e6aff',
-    shine: '#b0caff',
-  },
-  {
-    id: 'emerald',
-    name: 'Изумруд',
-    kind: 'crystal',
-    pattern: 'crystal',
-    base: '#4c5a50',
-    dark: '#2e3a32',
-    fleck: '#1fd47c',
-    shine: '#b4ffda',
-  },
-  {
-    id: 'ruby',
-    name: 'Рубин',
-    kind: 'crystal',
-    pattern: 'crystal',
-    base: '#5b4d53',
-    dark: '#3a2f35',
-    fleck: '#ff2a4c',
-    shine: '#ffb6c2',
-  },
-  {
-    id: 'diamond',
-    name: 'Алмаз',
-    kind: 'crystal',
-    pattern: 'crystal',
-    base: '#3f4652',
-    dark: '#262b34',
-    fleck: '#c2f6ff',
-    shine: '#ffffff',
-  },
-  {
-    id: 'meteorite',
-    name: 'Метеорит',
-    kind: 'metal',
-    pattern: 'veins',
-    base: '#3b3735',
-    dark: '#1f1c1b',
-    fleck: '#a3acb6',
-    shine: '#ff9a48',
-  },
-  {
-    id: 'starstone',
-    name: 'Звёздный кристалл',
-    kind: 'star',
-    pattern: 'stars',
-    base: '#1d1646',
-    dark: '#0e0a2a',
-    fleck: '#a6d6ff',
-    shine: '#ffffff',
-  },
-  // Престижные породы (v2.55) — выше Z, только в спецзоне. Родонит — уральский
-  // «орлец»; ловчоррит — хибинский, с Кольского; чароит — сиреневый, с
-  // одного-единственного месторождения; демантоид и александрит — самые
-  // дорогие камни Урала. Александрит меняет цвет — в текстуре бирюза и малина.
-  {
-    id: 'rhodonite',
-    name: 'Родонит',
-    kind: 'crystal',
-    pattern: 'veins',
-    base: '#c86a86',
-    dark: '#5a2232',
-    fleck: '#2a1a1e',
-    shine: '#ffd6e2',
-  },
-  {
-    id: 'lovchorrite',
-    name: 'Ловчоррит',
-    kind: 'crystal',
-    pattern: 'bands',
-    base: '#c8a060',
-    dark: '#6a4a24',
-    fleck: '#f0dca8',
-    shine: '#fff4d8',
-  },
-  {
-    id: 'charoite',
-    name: 'Чароит',
-    kind: 'crystal',
-    pattern: 'flakes',
-    base: '#8a4ab8',
-    dark: '#3e1a5a',
-    fleck: '#e6c8ff',
-    shine: '#ffffff',
-  },
-  {
-    id: 'demantoid',
-    name: 'Демантоид',
-    kind: 'crystal',
-    pattern: 'crystal',
-    base: '#4ab83a',
-    dark: '#16461a',
-    fleck: '#d8ff7a',
-    shine: '#ffffff',
-  },
-  {
-    id: 'alexandrite',
-    name: 'Александрит',
-    kind: 'star',
-    pattern: 'crystal',
-    base: '#1e8a86',
-    dark: '#3a0e2a',
-    fleck: '#e0407a',
-    shine: '#ffffff',
-  },
+  R('clay', 'Глина', 'Глиняный блок', 'soil', 'grain', '#b87a44', '#7a4a24', '#d89a5a', '#f0c08a'),
+  R(
+    'sandstone',
+    'Песчаник',
+    'Песчаниковый блок',
+    'stone',
+    'bands',
+    '#e8d4a2',
+    '#b89a6a',
+    '#f4e4c0',
+    '#fff4dc',
+  ),
+  R(
+    'limestone',
+    'Известняк',
+    'Известняковый блок',
+    'stone',
+    'specks',
+    '#e6e8e0',
+    '#a8aca4',
+    '#ffffff',
+    '#ffffff',
+  ),
+  R(
+    'granite',
+    'Гранит',
+    'Гранитный блок',
+    'stone',
+    'specks',
+    '#a8989a',
+    '#6a5e60',
+    '#d0a8a8',
+    '#f0dcdc',
+  ),
+  R(
+    'coal',
+    'Уголь',
+    'Угольный блок',
+    'stone',
+    'specks',
+    '#9aa8ac',
+    '#5a6468',
+    '#2a2a30',
+    '#6a6a78',
+  ),
+  R('copper', 'Медь', 'Медный блок', 'metal', 'specks', '#9aa8ac', '#5a6468', '#e07a3a', '#ffb07a'),
+  R(
+    'iron',
+    'Железо',
+    'Железный блок',
+    'metal',
+    'veins',
+    '#9aa8ac',
+    '#5a6468',
+    '#b8421e',
+    '#e0805a',
+  ),
+  R(
+    'cobalt',
+    'Кобальт',
+    'Кобальтовый блок',
+    'metal',
+    'specks',
+    '#9aa8ac',
+    '#5a6468',
+    '#2a6aff',
+    '#8ab0ff',
+  ),
+  R(
+    'turquoise',
+    'Бирюза',
+    'Бирюзовый блок',
+    'crystal',
+    'specks',
+    '#9aa8ac',
+    '#5a6468',
+    '#2ab8a0',
+    '#8af0e0',
+  ),
+  R(
+    'amber',
+    'Янтарь',
+    'Янтарный блок',
+    'crystal',
+    'crystal',
+    '#9aa8ac',
+    '#5a6468',
+    '#ffa82a',
+    '#ffe08a',
+  ),
+  R(
+    'quartz',
+    'Кварц',
+    'Кварцевый блок',
+    'crystal',
+    'crystal',
+    '#6a7478',
+    '#3a4246',
+    '#f4f8ff',
+    '#ffffff',
+  ),
+  R(
+    'silver',
+    'Серебро',
+    'Серебряный блок',
+    'metal',
+    'veins',
+    '#6a7478',
+    '#3a4246',
+    '#c8d4e4',
+    '#ffffff',
+  ),
+  R(
+    'opal',
+    'Опал',
+    'Опаловый блок',
+    'crystal',
+    'crystal',
+    '#6a7478',
+    '#3a4246',
+    '#ffc8e8',
+    '#ffffff',
+  ),
+  R(
+    'malachite',
+    'Малахит',
+    'Малахитовый блок',
+    'stone',
+    'bands',
+    '#6a7478',
+    '#3a4246',
+    '#1ab86a',
+    '#8af0b8',
+  ),
+  R('gold', 'Золото', 'Золотой блок', 'metal', 'veins', '#6a7478', '#3a4246', '#ffcc1a', '#fff29a'),
+  R(
+    'amethyst',
+    'Аметист',
+    'Аметистовый блок',
+    'crystal',
+    'crystal',
+    '#6a7478',
+    '#3a4246',
+    '#b05aff',
+    '#e0b8ff',
+  ),
+  R(
+    'lapis',
+    'Лазурит',
+    'Лазуритовый блок',
+    'stone',
+    'specks',
+    '#3a3e44',
+    '#1e2024',
+    '#2a4aff',
+    '#9ab0ff',
+  ),
+  R(
+    'jade',
+    'Нефрит',
+    'Нефритовый блок',
+    'stone',
+    'grain',
+    '#3a3e44',
+    '#1e2024',
+    '#8ae0a0',
+    '#d0ffe0',
+  ),
+  R(
+    'garnet',
+    'Гранат',
+    'Гранатовый блок',
+    'crystal',
+    'crystal',
+    '#3a3e44',
+    '#1e2024',
+    '#c01a3a',
+    '#ff7a90',
+  ),
+  R(
+    'topaz',
+    'Топаз',
+    'Топазовый блок',
+    'crystal',
+    'crystal',
+    '#3a3e44',
+    '#1e2024',
+    '#ff8a1a',
+    '#ffd08a',
+  ),
+  R(
+    'sapphire',
+    'Сапфир',
+    'Сапфировый блок',
+    'crystal',
+    'crystal',
+    '#3a3e44',
+    '#1e2024',
+    '#2a6aff',
+    '#a0c0ff',
+  ),
+  R(
+    'emerald',
+    'Изумруд',
+    'Изумрудный блок',
+    'crystal',
+    'crystal',
+    '#3a3e44',
+    '#1e2024',
+    '#1ad060',
+    '#9affb8',
+  ),
+  R(
+    'ruby',
+    'Рубин',
+    'Рубиновый блок',
+    'crystal',
+    'crystal',
+    '#3a2a4a',
+    '#1e1428',
+    '#ff1a3a',
+    '#ff9aa8',
+  ),
+  R(
+    'diamond',
+    'Алмаз',
+    'Алмазный блок',
+    'crystal',
+    'crystal',
+    '#3a2a4a',
+    '#1e1428',
+    '#9af0ff',
+    '#ffffff',
+  ),
+  R(
+    'meteorite',
+    'Метеорит',
+    'Метеоритный блок',
+    'metal',
+    'veins',
+    '#e0621a',
+    '#8a2a0a',
+    '#2a2020',
+    '#ffb04a',
+  ),
+  R(
+    'starstone',
+    'Звёздный кристалл',
+    'Звёздный блок',
+    'star',
+    'stars',
+    '#1e1e4a',
+    '#0e0e2a',
+    '#bff4ff',
+    '#ffffff',
+  ),
+  // Престижные — только в спецзоне.
+  R(
+    'rhodonite',
+    'Родонит',
+    'Родонитовый блок',
+    'crystal',
+    'veins',
+    '#6a7478',
+    '#3a4246',
+    '#ff7aa0',
+    '#ffd0dc',
+  ),
+  R(
+    'lovchorrite',
+    'Ловчоррит',
+    'Ловчорритовый блок',
+    'crystal',
+    'bands',
+    '#e8d4a2',
+    '#b89a6a',
+    '#c08a3a',
+    '#f0d0a0',
+  ),
+  R(
+    'charoite',
+    'Чароит',
+    'Чароитовый блок',
+    'crystal',
+    'flakes',
+    '#3a2a4a',
+    '#1e1428',
+    '#d08aff',
+    '#f4d8ff',
+  ),
+  R(
+    'demantoid',
+    'Демантоид',
+    'Демантоидовый блок',
+    'crystal',
+    'crystal',
+    '#3a2a4a',
+    '#1e1428',
+    '#b0ff3a',
+    '#eaffb0',
+  ),
+  R(
+    'alexandrite',
+    'Александрит',
+    'Александритовый блок',
+    'star',
+    'crystal',
+    '#3a2a4a',
+    '#1e1428',
+    '#1ad0b0',
+    '#ff5a9a',
+  ),
 ];
 
 /** Прочность растёт медленнее цены: кирка обязана догонять породу. */
 export const HP_BASE = 2;
 export const HP_GROWTH = 1.165;
-export const VALUE_BASE = 3;
-export const VALUE_GROWTH = 1.19;
 
 export const ROCKS: Rock[] = ROCK_DEFS.map((d, j) => ({
   ...d,
   hp: Math.max(2, Math.round(HP_BASE * Math.pow(HP_GROWTH, j))),
-  value: Math.round(VALUE_BASE * Math.pow(VALUE_GROWTH, j)),
+  value: ORE_PRICE[j],
+  block: BLOCK_PRICE[j],
 }));
 
 /**
@@ -393,34 +429,48 @@ export const rankLetter = (r: number): string =>
   String.fromCharCode(65 + Math.max(0, Math.min(LAST_RANK, Math.round(r))));
 
 // ---------------------------------------------------------------------------
-// Состав шахты. Как лестница шахт в плагине Prison: каждая следующая шахта
-// прибавляет новую породу понемногу и вытесняет самую дешёвую. В шахте пять
-// пород; самая новая — редкая (5%), старые — основа.
+// Состав шахты (v2.66). На этаже ДВЕ руды: своя и прошлого этажа. Сверху
+// поровну, к дну своей до 85%; на дне изредка руда следующего этажа —
+// подсказка, за чем идти. Было пять пород вперемешку, новая — 5% поля: этаж
+// не запоминался, «как будто пофиг, что копаешь».
 // ---------------------------------------------------------------------------
 
-/** Вес породы по её «возрасту» в шахте: 0 — самая новая. */
-const AGE_WEIGHTS = [5, 12, 20, 28, 35];
-/** Глубже — богаче: шанс, что блок сдвинется на породу новее. */
-const DEPTH_BOOST = [0, 0.15, 0.3, 0.45, 0.6];
-/** На дне изредка попадается порода следующей шахты. */
-export const NEXT_ROCK_CHANCE = 0.03;
+/** Доля руды этажа по ярусам (0 — верхний). */
+export const OWN_SHARE = [0.5, 0.5875, 0.675, 0.7625, 0.85];
+/** На дне изредка попадается руда следующего этажа. */
+export const NEXT_ROCK_CHANCE = 0.02;
 
 export interface MineShare {
   rock: number;
   share: number;
 }
 
-/** Состав шахты на верхнем ярусе: какие породы и в какой доле. */
+/** Состав яруса `depth` шахты `mine`. */
+export function layerMix(mine: number, depth = 0): MineShare[] {
+  if (mine <= 0) return [{ rock: 0, share: 1 }];
+  const own = OWN_SHARE[Math.max(0, Math.min(DEPTH - 1, depth))];
+  const next = depth === DEPTH - 1 && mine < LAST_RANK ? NEXT_ROCK_CHANCE : 0;
+  const out: MineShare[] = [
+    { rock: mine - 1, share: (1 - own) * (1 - next) },
+    { rock: mine, share: own * (1 - next) },
+  ];
+  if (next) out.push({ rock: mine + 1, share: next });
+  return out;
+}
+
+/** Состав верхнего яруса — что видно, едва спустился. */
 export function mineMix(mine: number): MineShare[] {
-  const out: MineShare[] = [];
-  let total = 0;
-  for (let age = 0; age < AGE_WEIGHTS.length; age++) {
-    const rock = mine - age;
-    if (rock < 0) break;
-    out.push({ rock, share: AGE_WEIGHTS[age] });
-    total += AGE_WEIGHTS[age];
-  }
-  return out.map((m) => ({ ...m, share: m.share / total })).sort((a, b) => a.rock - b.rock);
+  return layerMix(mine, 0);
+}
+
+/** Средний состав шахты по всем ярусам. */
+export function mineShares(mine: number): MineShare[] {
+  const acc = new Map<number, number>();
+  for (let d = 0; d < DEPTH; d++)
+    for (const m of layerMix(mine, d)) acc.set(m.rock, (acc.get(m.rock) ?? 0) + m.share / DEPTH);
+  return [...acc.entries()]
+    .map(([rock, share]) => ({ rock, share }))
+    .sort((a, b) => a.rock - b.rock);
 }
 
 /** Детерминированный генератор: одно зерно — одно и то же поле везде. */
@@ -437,19 +487,13 @@ export function rng32(seed: number): () => number {
 
 /** Порода одного блока на ярусе `depth`, без учёта соседей. */
 function rollRock(mine: number, depth: number, rnd: () => number): number {
-  const mix = mineMix(mine);
+  const mix = layerMix(mine, depth);
   let x = rnd();
-  let pick = mix[mix.length - 1].rock;
   for (const m of mix) {
     x -= m.share;
-    if (x <= 0) {
-      pick = m.rock;
-      break;
-    }
+    if (x <= 0) return m.rock;
   }
-  if (pick < mine && rnd() < DEPTH_BOOST[depth]) pick += 1;
-  if (depth === DEPTH - 1 && mine < LAST_RANK && rnd() < NEXT_ROCK_CHANCE) pick = mine + 1;
-  return pick;
+  return mix[mix.length - 1].rock;
 }
 
 /**
@@ -519,11 +563,11 @@ export function seidTop(seids: Seid[], cell: number, dug: number): boolean {
   return seids.some((s) => s.cell === cell && s.depth === dug);
 }
 
-/** Награда за сейд: токены растут с рангом, монеты — доля цены ранга. */
-export function seidReward(rank: number, prestige: number): { tokens: number; coins: number } {
+/** Награда за сейд: токены по этажу и цена одного блока этажа монетами. */
+export function seidReward(rank: number, _prestige = 0): { tokens: number; coins: number } {
   return {
     tokens: 30 + 6 * rank,
-    coins: nice(rankCost(Math.min(rank, LAST_RANK - 1), prestige) * 0.05),
+    coins: blockValue(Math.min(rank, LAST_RANK)),
   };
 }
 
@@ -531,6 +575,74 @@ export function seidReward(rank: number, prestige: number): { tokens: number; co
 export function seidPerBlock(): number {
   const mean = 1 * (SEID_ODDS[1] - SEID_ODDS[0]) + 2 * (1 - SEID_ODDS[1]);
   return mean / (MINE_CELLS * DEPTH * MINE_RESET_AT);
+}
+
+// ---------------------------------------------------------------------------
+// Блоки этажа (v2.66) — цельные кубы руды, как алмазный блок против
+// алмазной руды в Майнкрафте. Лежат в поле из того же зерна, чаще на
+// глубине; часть видна сверху. Бьются УДАРАМИ (`BLOCK_HITS`, крит за два),
+// площадные чары их не берут — такой блок копают руками. Платят сразу, в
+// кошелёк, и идут в условие ранга.
+// ---------------------------------------------------------------------------
+
+export interface OreBlock {
+  cell: number;
+  depth: number;
+}
+
+/** Ярус блока: сверху реже, к дну чаще. */
+const BLOCK_DEPTH = [0.15, 0.15, 0.2, 0.25, 0.25];
+
+/** Где лежат блоки этажа шахты. В спецзоне их нет — она платит токенами. */
+export function blocksOf(mine: number, seed: number): OreBlock[] {
+  if (mine > LAST_RANK) return [];
+  const rnd = rng32(seed * 197 + mine * 31 + 11);
+  const mean = blocksPerField(mine);
+  const n = Math.floor(mean) + (rnd() < mean - Math.floor(mean) ? 1 : 0);
+  const seids = seidsOf(mine, seed);
+  const out: OreBlock[] = [];
+  let guard = 0;
+  while (out.length < n && guard++ < 200) {
+    const cell = Math.floor(rnd() * MINE_CELLS);
+    let x = rnd();
+    let depth = DEPTH - 1;
+    for (let d = 0; d < DEPTH; d++) {
+      x -= BLOCK_DEPTH[d];
+      if (x <= 0) {
+        depth = d;
+        break;
+      }
+    }
+    if (out.some((b) => b.cell === cell)) continue;
+    if (seids.some((q) => q.cell === cell && q.depth === depth)) continue;
+    out.push({ cell, depth });
+  }
+  return out;
+}
+
+/** Сверху клетки сейчас блок этажа. */
+export function blockTop(blocks: OreBlock[], cell: number, dug: number): boolean {
+  return blocks.some((b) => b.cell === cell && b.depth === dug);
+}
+
+/**
+ * Горизонты — этажи группами по пять, у каждого свой характер: наверху
+ * простой камень, ниже металлы, потом самоцветы, на дне алмазы и звёзды.
+ * Название видно на лестнице этажей и в сцене нового ранга.
+ */
+export const HORIZONS: { from: number; name: string }[] = [
+  { from: 0, name: 'Верхние штольни' },
+  { from: 5, name: 'Рудный двор' },
+  { from: 10, name: 'Серебряный горизонт' },
+  { from: 15, name: 'Самоцветные штреки' },
+  { from: 20, name: 'Алмазное дно' },
+];
+export const horizonOf = (floor: number) =>
+  [...HORIZONS].reverse().find((h) => floor >= h.from) ?? HORIZONS[0];
+
+/** Цена блока этажа шахты `mine`. */
+export function blockValue(mine: number): number {
+  return BLOCK_PRICE[Math.max(0, Math.min(BLOCK_PRICE.length - 1, mine))];
 }
 
 /** Порода верхнего блока клетки при раскопе `dug`; −1 — дно. */
@@ -550,93 +662,48 @@ export function minedShare(dug: number[]): number {
 // Ранги и престиж.
 // ---------------------------------------------------------------------------
 
-export const RANK_BASE = 250;
-export const RANK_GROWTH = 1.37;
-/** Престиж: сброс на A с сохранением кирки и +25% к продаже за каждый. */
-export const PRESTIGE_BASE = 400_000;
-export const PRESTIGE_SELL = 0.25;
-/** Ранги дорожают с каждым престижем — иначе второй круг был бы прогулкой. */
-export const PRESTIGE_RANK_COST = 0.35;
-
-/** Две значащие цифры: цена «1 800», а не «1 793». */
-export function nice(x: number): number {
-  if (x < 100) return Math.round(x);
-  const p = Math.pow(10, Math.floor(Math.log10(x)) - 1);
-  return Math.round(x / p) * p;
+/** Цена перехода с ранга `rank` на следующий. Постоянная: престиж её не меняет. */
+export function rankCost(rank: number, _prestige = 0): number {
+  return RANK_PRICE[Math.max(0, Math.min(RANK_PRICE.length - 1, rank))];
 }
 
-/** Цена перехода с ранга `rank` на следующий. */
-export function rankCost(rank: number, prestige = 0): number {
-  return nice(RANK_BASE * Math.pow(RANK_GROWTH, rank) * (1 + PRESTIGE_RANK_COST * prestige));
+export function prestigeCost(_prestige = 0): number {
+  return PRESTIGE_PRICE;
 }
 
-export function prestigeCost(prestige: number): number {
-  return nice(PRESTIGE_BASE * (1 + prestige));
-}
-
-/** Множитель продажи от престижа. */
+/** Надбавка к продаже от престижа: +5% за каждый, не больше +50%. */
 export function sellMult(prestige: number): number {
-  return 1 + PRESTIGE_SELL * prestige;
+  return 1 + Math.min(PRESTIGE_SELL_MAX, PRESTIGE_SELL_STEP * prestige);
 }
 
-/** Опыт в ОБЩИЙ уровень за новый ранг: как и деньги, уровень один на всё. */
+/** Опыт в общий уровень за новый ранг — уровень теперь только украшение. */
 export function rankXp(newRank: number): number {
   return 25 + 15 * newRank;
 }
 export const PRESTIGE_XP = 2500;
 
 // ---------------------------------------------------------------------------
-// Кузница: кирки, заточка, рюкзак, вагонетка.
+// Кузница (v2.66): кирки куются из руды (`PICKS` в economy.ts), заточка —
+// своя на каждой кирке, рюкзак, автопродажа за токены.
 // ---------------------------------------------------------------------------
-
-export interface Pick {
-  id: string;
-  name: string;
-  /** Урон за удар. */
-  dmg: number;
-  /** Ударов в секунду, пока палец держит клетку. */
-  rate: number;
-  price: number;
-  /** Цвет головки кирки на иконке. */
-  head: string;
-}
-
-export const PICKS: Pick[] = [
-  { id: 'rusty', name: 'Ржавая', dmg: 1, rate: 3, price: 0, head: '#9a6a4a' },
-  { id: 'steel', name: 'Стальная', dmg: 2, rate: 3.4, price: 900, head: '#b8c2cc' },
-  { id: 'tempered', name: 'Закалённая', dmg: 4, rate: 3.8, price: 6_000, head: '#6f8fb0' },
-  { id: 'carbide', name: 'Твёрдосплавная', dmg: 8, rate: 4.2, price: 30_000, head: '#5b6470' },
-  { id: 'diamond', name: 'Алмазная', dmg: 15, rate: 4.6, price: 120_000, head: '#7fe6ff' },
-  { id: 'meteor', name: 'Метеоритная', dmg: 28, rate: 5.2, price: 400_000, head: '#ff8a3a' },
-];
-
-/** Заточка: +12% урона за уровень. */
-export const SHARP_STEP = 0.12;
-export const SHARP_MAX = 15;
-export function sharpCost(level: number): number {
-  return nice(150 * Math.pow(1.62, level));
-}
 
 /** Крит: редкий удар втрое — ради него и держат палец. */
 export const CRIT_CHANCE = 0.07;
 export const CRIT_MULT = 3;
 
 /** Рюкзак: сколько блоков влезает. */
-export const BAG_MAX = 12;
+export const BAG_MAX = BAG_PRICE.length;
 export function bagCapacity(level: number): number {
   return Math.round(40 * Math.pow(1.35, level));
 }
 export function bagCost(level: number): number {
-  return nice(200 * Math.pow(2, level));
+  return BAG_PRICE[Math.max(0, Math.min(BAG_PRICE.length - 1, level))];
 }
-
-/** Вагонетка: продаёт сама, когда рюкзак полон. */
-export const CART_PRICE = 2_500;
 
 /** Урон одного удара без крита. */
 export function hitDamage(pick: number, sharp: number): number {
   const p = PICKS[Math.max(0, Math.min(PICKS.length - 1, pick))];
-  return p.dmg * (1 + SHARP_STEP * sharp);
+  return p.dmg * (1 + SHARP_STEP * Math.min(SHARP_MAX, sharp));
 }
 
 /**
@@ -646,6 +713,78 @@ export function hitDamage(pick: number, sharp: number): number {
  */
 export function tapGapMs(pick: number): number {
   return 1000 / (PICKS[Math.max(0, Math.min(PICKS.length - 1, pick))].rate * 1.8);
+}
+
+/** Можно ли заказать кирку `pick` при ранге и престиже игрока. */
+export function pickOpen(pick: number, rank: number, prestige: number): boolean {
+  const d = PICKS[pick];
+  if (!d) return false;
+  return d.prestige ? prestige >= d.prestige : rank >= d.floor || prestige > 0;
+}
+
+/**
+ * Заказ кузнице: кирка оплачена монетами, руда нужного вида идёт в заказ
+ * прямо из-под кирки (мимо рюкзака), пока не наберётся. Набралась — кирка
+ * выдаётся сразу.
+ */
+export interface ForgeOrder {
+  pick: number;
+  /** Сколько руды уже в заказе, по породам. */
+  have: Record<number, number>;
+}
+
+/** Сколько руды каждой породы ещё нужно заказу. */
+export function forgeLeft(o: ForgeOrder): [number, number][] {
+  const d = PICKS[o.pick];
+  if (!d) return [];
+  return d.ore.map(([rock, n]) => [rock, Math.max(0, n - (o.have[rock] ?? 0))] as [number, number]);
+}
+
+export function forgeReady(o: ForgeOrder): boolean {
+  return forgeLeft(o).every(([, n]) => n <= 0);
+}
+
+/**
+ * Разложить добытые единицы руды: сперва в заказ кузнице (пока ему нужно),
+ * остальное — дальше, в рюкзак. Возвращает новый заказ и остаток.
+ */
+export function feedForge(
+  o: ForgeOrder | null,
+  units: number[],
+): { order: ForgeOrder | null; rest: number[]; took: number } {
+  if (!o) return { order: null, rest: units, took: 0 };
+  const need = new Map(forgeLeft(o));
+  const have = { ...o.have };
+  const rest: number[] = [];
+  let took = 0;
+  for (const rock of units) {
+    const left = need.get(rock) ?? 0;
+    if (left > 0) {
+      need.set(rock, left - 1);
+      have[rock] = (have[rock] ?? 0) + 1;
+      took += 1;
+    } else rest.push(rock);
+  }
+  return { order: took ? { ...o, have } : o, rest, took };
+}
+
+/** Заказ только что оплачен: руда нужного вида, что уже лежит в рюкзаке, идёт в него сразу. */
+export function forgeFromBag(
+  o: ForgeOrder,
+  bag: Bag,
+): { order: ForgeOrder; bag: Bag; took: number } {
+  const out: Bag = { ...bag };
+  const have = { ...o.have };
+  let took = 0;
+  for (const [rock, n] of forgeLeft(o)) {
+    const k = Math.min(n, out[rock] ?? 0);
+    if (k <= 0) continue;
+    have[rock] = (have[rock] ?? 0) + k;
+    out[rock] -= k;
+    if (!out[rock]) delete out[rock];
+    took += k;
+  }
+  return { order: { ...o, have }, bag: out, took };
 }
 
 // ---------------------------------------------------------------------------
@@ -1175,13 +1314,17 @@ export function modsOf(p: ModsSource): Mods {
       (1 + b.dmg) *
       (1 + STAR_DMG * (p.pickStars ?? 0)),
     rate: (1 + 0.08 * k.grip) * (1 + b.rate) * (1 + handleRate(p.handle)),
+    // Постоянные надбавки к продаже вместе упираются в +100%; «получка» —
+    // событие, она сверху.
     sell:
-      sellMult(p.prestige) *
-      (1 + 0.06 * k.dealer) *
-      findsMult(p.finds ?? {}) *
-      (1 + b.sell) *
-      (1 + PEARL_SELL * Math.min(PEARL_MAX, p.pearls ?? 0)) *
-      (ev === 'payday' ? PAYDAY_SELL : 1),
+      Math.min(
+        1 + SELL_BONUS_CAP,
+        sellMult(p.prestige) *
+          (1 + 0.06 * k.dealer) *
+          findsMult(p.finds ?? {}) *
+          (1 + b.sell) *
+          (1 + PEARL_SELL * Math.min(PEARL_MAX, p.pearls ?? 0)),
+      ) * (ev === 'payday' ? PAYDAY_SELL : 1),
     fortune: 0.06 * lv('fortune') + b.loot + (ev === 'gold' ? GOLD_FORTUNE : 0),
     vein: 0.025 * lv('vein') * proc,
     veinMax: 3 + Math.floor(lv('vein') / 4),
@@ -1367,7 +1510,7 @@ export const ENCHANT_UNLOCK: Record<EnchantId, number> = {
  * даёт +10% урона. Уровни чар, купленные раньше, не срезаются — как и при
  * обычном потолке, он ограничивает только покупку.
  */
-export const PICK_STARS_MAX = 5;
+export const PICK_STARS_MAX = 10;
 export const STAR_CAP = 0.2;
 export const STAR_DMG = 0.1;
 export const STAR_TOKENS = 500;
@@ -1406,90 +1549,62 @@ export function pickLevelReward(level: number): { tokens: number; keys: number }
 }
 
 // ---------------------------------------------------------------------------
-// Норма выработки — как на русских присонах (VimeWorld, Mineland): для ранга
-// мало денег, нужно ещё добыть определённые породы. Норма берёт самую новую,
-// редкую породу шахты и ту, что перед ней. Из-за этого деньгами одними не
-// обойтись: занос в автомате даёт монеты, а редкую породу надо выкопать —
-// искать её на глубине, водить лупой.
-//
-// Но деньги общие, и в этом прикол игры — поэтому норму можно ОТКУПИТЬ.
-// Цена откупа пропорциональна недобору: почти выполненная норма стоит
-// копейки, нетронутая — больше половины цены ранга.
-//
-// Размер нормы не на глаз: тест темпа гоняет игрока, который копает
-// вслепую, и проверяет, что к моменту, когда накоплены деньги, редкая
-// порода у него добрана на две трети–полностью. Кто ищет её прицельно —
-// успевает раньше.
+// Условия ранга (v2.66). Одних денег мало, как на русских присонах:
+// - ВЫРАБОТКА — сломать N блоков на этаже (удары и чары кирки; рабочие не в
+//   счёт). Докупить нельзя: это и есть «сначала поработай», и это держит
+//   второй круг после престижа — кирка сильнее, но работу всё равно делать.
+// - БЛОКИ ЭТАЖА — найти и расколоть 1–2 цельных блока руды. Недостающий
+//   можно докупить за две цены блока.
+// A–D — только деньги: там учатся копать. Счётчики — `norm` (блоки по
+// породам, сумма — выработка) и `oreBlocks`; сбрасываются на ранге.
 // ---------------------------------------------------------------------------
-
-export interface Quota {
-  rock: number;
-  n: number;
-}
 
 /** Доля породы `rock` среди всех блоков шахты `mine`, по всем ярусам. */
 export function rockShare(mine: number, rock: number): number {
-  let share = 0;
-  for (let d = 0; d < DEPTH; d++) {
-    for (const s of mineMix(mine)) {
-      const up = s.rock < mine ? DEPTH_BOOST[d] : 0;
-      if (s.rock === rock) share += (s.share * (1 - up)) / DEPTH;
-      if (s.rock + 1 === rock && up > 0) share += (s.share * up) / DEPTH;
-    }
-  }
-  return share;
+  return mineShares(mine).find((m) => m.rock === rock)?.share ?? 0;
 }
 
-/**
- * «Объём работы» ранга в блоках — сколько блоков нужно продать, чтобы
- * набрать его цену. Норма берёт долю от этого объёма. Удача и запал
- * множат ДОБЫЧУ, а норма считает БЛОКИ: деньги они ускоряют, норму — нет.
- * Так норма ощутима на любом ранге, а не только в начале.
- */
-export const QUOTA_WORK = 1;
-/**
- * Чары и запал множат добычу с блока, поэтому к концу круга на ранг нужно
- * всё меньше БЛОКОВ. Норма стареет с той же скоростью — иначе к рангу X
- * она тянула бы вдвое дольше денег, и слепое копание превращалось в стену.
- */
-export const QUOTA_FADE = 1.021;
-/** Норма на редкую породу чуть выше того, что даёт копание вслепую. */
-export const QUOTA_NEW = 1.1;
-export const QUOTA_OLD = 0.8;
-/** Откуп всей нормы целиком — такая доля цены ранга. */
-export const QUOTA_BUYOUT = 0.6;
-
-/** Норма для перехода с ранга `rank` на следующий. */
-export function rankQuota(rank: number, prestige = 0): Quota[] {
-  const blocks =
-    ((rankCost(rank, prestige) / avgValue(rank)) * QUOTA_WORK) / Math.pow(QUOTA_FADE, rank);
-  if (rank === 0) return [{ rock: 0, n: nice(blocks * 0.5) }];
-  return [
-    { rock: rank, n: Math.max(5, nice(blocks * rockShare(rank, rank) * QUOTA_NEW)) },
-    { rock: rank - 1, n: Math.max(10, nice(blocks * rockShare(rank, rank - 1) * QUOTA_OLD)) },
-  ];
+export function rankWork(rank: number): number {
+  return RANK_WORK[rank] ?? 0;
 }
 
-/** Сколько нормы выполнено, доля от 0 до 1 (среднее по строкам). */
-export function quotaProgress(q: Quota[], counts: Record<number, number>): number {
-  if (!q.length) return 1;
-  return q.reduce((s, x) => s + Math.min(1, (counts[x.rock] ?? 0) / x.n), 0) / q.length;
+export function rankBlocks(rank: number): number {
+  return RANK_BLOCKS[rank] ?? 0;
 }
 
-export function quotaDone(q: Quota[], counts: Record<number, number>): boolean {
-  return q.every((x) => (counts[x.rock] ?? 0) >= x.n);
+/** Сломано блоков на этаже с прошлого ранга. */
+export function workDone(norm: Record<number, number>): number {
+  let n = 0;
+  for (const k in norm) n += norm[k] || 0;
+  return n;
 }
 
-/** Цена откупа оставшейся нормы. 0 — норма уже выполнена. */
-export function quotaBuyout(
-  rank: number,
-  prestige: number,
-  counts: Record<number, number>,
-): number {
-  const q = rankQuota(rank, prestige);
-  const left = 1 - quotaProgress(q, counts);
-  if (left <= 0) return 0;
-  return Math.max(10, nice(rankCost(rank, prestige) * QUOTA_BUYOUT * left));
+export interface RankNeeds {
+  coins: number;
+  work: number;
+  workNeed: number;
+  blocks: number;
+  blocksNeed: number;
+  /** Цена докупки недостающих блоков этажа; 0 — докупать нечего. */
+  buyout: number;
+}
+
+export function rankNeeds(p: {
+  rank: number;
+  norm: Record<number, number>;
+  oreBlocks: number;
+}): RankNeeds {
+  const r = Math.min(p.rank, LAST_RANK - 1);
+  const blocksNeed = rankBlocks(r);
+  const missing = Math.max(0, blocksNeed - p.oreBlocks);
+  return {
+    coins: rankCost(r),
+    work: Math.min(workDone(p.norm), rankWork(r)),
+    workNeed: rankWork(r),
+    blocks: Math.min(p.oreBlocks, blocksNeed),
+    blocksNeed,
+    buyout: missing * BLOCK_PRICE[r] * BLOCK_BUYOUT,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1933,37 +2048,22 @@ export function extraBlocks(m: Mods): number {
  * урон от Силы, лишние блоки от жил и взрывов, лишнюю добычу от Удачи.
  */
 export function incomeRate(mine: number, pick: number, sharp: number, m: Mods = BASE_MODS): number {
-  // Перековка поднимает блок на породу выше — в среднем на шаг цены породы.
-  const reforge = 1 + m.reforge * (VALUE_GROWTH - 1);
+  // Перековка поднимает блок на породу выше — примерно на шаг цены руды.
+  const r = Math.max(0, Math.min(ORE_PRICE.length - 2, mine));
+  const reforge = 1 + m.reforge * (ORE_PRICE[r + 1] / ORE_PRICE[r] - 1);
   return blockRate(mine, pick, sharp, m) * (1 + m.fortune) * avgValue(mine) * m.sell * reforge;
 }
 
-/** Средняя цена блока шахты по всем ярусам. */
+/** Средняя цена обычного блока шахты по всем ярусам. */
 export function avgValue(mine: number): number {
-  let value = 0;
-  for (let d = 0; d < DEPTH; d++) {
-    for (const s of mineMix(mine)) {
-      const up = s.rock < mine ? DEPTH_BOOST[d] : 0;
-      value += (s.share * (1 - up) * ROCKS[s.rock].value) / DEPTH;
-      if (up > 0) value += (s.share * up * ROCKS[s.rock + 1].value) / DEPTH;
-    }
-  }
-  return value;
+  return mineShares(mine).reduce((v, s) => v + s.share * ROCKS[s.rock].value, 0);
 }
 
 /** Сколько блоков в секунду ломает кирка на удержании. */
 export function blockRate(mine: number, pick: number, sharp: number, m: Mods = BASE_MODS): number {
   const dmg = hitDamage(pick, sharp) * m.dmg;
   const rate = PICKS[pick].rate * m.rate;
-  // Средний блок по всем ярусам — с учётом того, что глубже порода новее.
-  let hits = 0;
-  for (let d = 0; d < DEPTH; d++) {
-    for (const s of mineMix(mine)) {
-      const up = s.rock < mine ? DEPTH_BOOST[d] : 0;
-      hits += (s.share * (1 - up) * hitsFor(s.rock, dmg)) / DEPTH;
-      if (up > 0) hits += (s.share * up * hitsFor(s.rock + 1, dmg)) / DEPTH;
-    }
-  }
+  const hits = mineShares(mine).reduce((h, s) => h + s.share * hitsFor(s.rock, dmg), 0);
   return (rate / hits) * (1 + extraBlocks(m));
 }
 
@@ -2275,7 +2375,7 @@ export function crewRate(level: number): number {
 
 /** Цена следующего уровня бригады (нанять — это уровень 1). */
 export function crewCost(level: number): number {
-  return nice(5000 * Math.pow(2.6, level));
+  return CREW_PRICE[Math.max(0, Math.min(CREW_PRICE.length - 1, level))];
 }
 
 /**
@@ -2703,6 +2803,11 @@ export interface PrisonState {
   bats: number;
   /** Жемчуг с рыбалки (v2.65): сколько найдено; действует не больше десяти. */
   pearls: number;
+  /** Блоки этажа (v2.66): расколото на этом ранге и за всё время. */
+  oreBlocks: number;
+  oreBlocksAll: number;
+  /** Заказ кузнице: кирка оплачена, руда набирается. */
+  forge: ForgeOrder | null;
 }
 
 export function freshMine(id: number, seed = Math.floor(Math.random() * 2 ** 31)): PrisonMine {
@@ -2769,6 +2874,9 @@ export const PRISON_START: PrisonState = {
   treasure: null,
   bats: 0,
   pearls: 0,
+  oreBlocks: 0,
+  oreBlocksAll: 0,
+  forge: null,
 };
 
 const int = (v: unknown, lo: number, hi: number, dflt: number): number =>
@@ -2863,7 +2971,20 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     treasure: normalizeTreasure(raw.treasure),
     bats: int(raw.bats, 0, 1e9, 0),
     pearls: int(raw.pearls, 0, 1e6, 0),
+    oreBlocks: int(raw.oreBlocks, 0, 1e6, 0),
+    oreBlocksAll: int(raw.oreBlocksAll, 0, 1e9, 0),
+    forge: normalizeForge(raw.forge, int(raw.pick, 0, PICKS.length - 1, 0)),
   };
+}
+
+function normalizeForge(raw: unknown, pick: number): ForgeOrder | null {
+  const o = raw as Partial<ForgeOrder> | null | undefined;
+  if (!o || typeof o !== 'object') return null;
+  const target = int(o.pick, 0, PICKS.length - 1, -1);
+  if (target <= pick) return null;
+  const have: Record<number, number> = {};
+  for (const [rock, n] of PICKS[target].ore) have[rock] = int(o.have?.[rock], 0, n, 0);
+  return { pick: target, have };
 }
 
 const TIER_IDS: CaseTier[] = ['common', 'rare', 'epic', 'legend'];

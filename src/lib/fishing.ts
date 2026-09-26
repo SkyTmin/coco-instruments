@@ -15,8 +15,6 @@
 // рыбу каждого вида), питомец (его можно кормить уловом), сундучок (в
 // шкатулке) и жемчуг — он поднимает цену продажи везде.
 
-import { nice } from './prison';
-
 // ---------------------------------------------------------------------------
 // Места и рыбы.
 // ---------------------------------------------------------------------------
@@ -59,36 +57,207 @@ export const SPOTS: Spot[] = [
 
 export const FISH: FishDef[] = [
   // Пруд
-  { id: 'crucian', name: 'Карась', spot: 0, w: 45, kg: [0.2, 0.9], mult: 0.8, power: 0.7, rarity: 'common' },
-  { id: 'roach', name: 'Плотва', spot: 0, w: 35, kg: [0.1, 0.5], mult: 0.7, power: 0.6, rarity: 'common' },
-  { id: 'perch', name: 'Окунь', spot: 0, w: 15, kg: [0.2, 1.2], mult: 1.3, power: 1.0, rarity: 'common' },
-  { id: 'tench', name: 'Линь', spot: 0, w: 4.5, kg: [0.5, 2.5], mult: 2.6, power: 1.4, rarity: 'rare' },
-  { id: 'goldfish', name: 'Золотая рыбка', spot: 0, w: 0.5, kg: [0.05, 0.2], mult: 12, power: 0.8, rarity: 'legend' },
+  {
+    id: 'crucian',
+    name: 'Карась',
+    spot: 0,
+    w: 45,
+    kg: [0.2, 0.9],
+    mult: 0.8,
+    power: 0.7,
+    rarity: 'common',
+  },
+  {
+    id: 'roach',
+    name: 'Плотва',
+    spot: 0,
+    w: 35,
+    kg: [0.1, 0.5],
+    mult: 0.7,
+    power: 0.6,
+    rarity: 'common',
+  },
+  {
+    id: 'perch',
+    name: 'Окунь',
+    spot: 0,
+    w: 15,
+    kg: [0.2, 1.2],
+    mult: 1.3,
+    power: 1.0,
+    rarity: 'common',
+  },
+  {
+    id: 'tench',
+    name: 'Линь',
+    spot: 0,
+    w: 4.5,
+    kg: [0.5, 2.5],
+    mult: 2.6,
+    power: 1.4,
+    rarity: 'rare',
+  },
+  {
+    id: 'goldfish',
+    name: 'Золотая рыбка',
+    spot: 0,
+    w: 0.5,
+    kg: [0.05, 0.2],
+    mult: 12,
+    power: 0.8,
+    rarity: 'legend',
+  },
   // Река
-  { id: 'chub', name: 'Голавль', spot: 1, w: 40, kg: [0.4, 2], mult: 0.8, power: 1.4, rarity: 'common' },
-  { id: 'ide', name: 'Язь', spot: 1, w: 30, kg: [0.5, 2.5], mult: 0.9, power: 1.6, rarity: 'common' },
+  {
+    id: 'chub',
+    name: 'Голавль',
+    spot: 1,
+    w: 40,
+    kg: [0.4, 2],
+    mult: 0.8,
+    power: 1.4,
+    rarity: 'common',
+  },
+  {
+    id: 'ide',
+    name: 'Язь',
+    spot: 1,
+    w: 30,
+    kg: [0.5, 2.5],
+    mult: 0.9,
+    power: 1.6,
+    rarity: 'common',
+  },
   { id: 'pike', name: 'Щука', spot: 1, w: 18, kg: [1, 8], mult: 1.5, power: 2.2, rarity: 'rare' },
-  { id: 'zander', name: 'Судак', spot: 1, w: 10, kg: [1, 6], mult: 2.2, power: 2.4, rarity: 'rare' },
+  {
+    id: 'zander',
+    name: 'Судак',
+    spot: 1,
+    w: 10,
+    kg: [1, 6],
+    mult: 2.2,
+    power: 2.4,
+    rarity: 'rare',
+  },
   { id: 'catfish', name: 'Сом', spot: 1, w: 2, kg: [5, 40], mult: 6, power: 3.4, rarity: 'epic' },
   // Озеро
-  { id: 'bream', name: 'Лещ', spot: 2, w: 42, kg: [0.5, 4], mult: 0.8, power: 2.0, rarity: 'common' },
+  {
+    id: 'bream',
+    name: 'Лещ',
+    spot: 2,
+    w: 42,
+    kg: [0.5, 4],
+    mult: 0.8,
+    power: 2.0,
+    rarity: 'common',
+  },
   { id: 'carp', name: 'Карп', spot: 2, w: 30, kg: [2, 12], mult: 1, power: 2.8, rarity: 'common' },
-  { id: 'burbot', name: 'Налим', spot: 2, w: 15, kg: [1, 6], mult: 1.6, power: 2.6, rarity: 'rare' },
+  {
+    id: 'burbot',
+    name: 'Налим',
+    spot: 2,
+    w: 15,
+    kg: [1, 6],
+    mult: 1.6,
+    power: 2.6,
+    rarity: 'rare',
+  },
   { id: 'eel', name: 'Угорь', spot: 2, w: 10, kg: [0.5, 3], mult: 2.5, power: 3.0, rarity: 'rare' },
-  { id: 'amur', name: 'Белый амур', spot: 2, w: 3, kg: [5, 25], mult: 4, power: 3.8, rarity: 'epic' },
+  {
+    id: 'amur',
+    name: 'Белый амур',
+    spot: 2,
+    w: 3,
+    kg: [5, 25],
+    mult: 4,
+    power: 3.8,
+    rarity: 'epic',
+  },
   // Горное озеро
-  { id: 'grayling', name: 'Хариус', spot: 3, w: 40, kg: [0.3, 2], mult: 0.8, power: 2.8, rarity: 'common' },
-  { id: 'trout', name: 'Форель', spot: 3, w: 32, kg: [0.5, 5], mult: 1, power: 3.2, rarity: 'common' },
+  {
+    id: 'grayling',
+    name: 'Хариус',
+    spot: 3,
+    w: 40,
+    kg: [0.3, 2],
+    mult: 0.8,
+    power: 2.8,
+    rarity: 'common',
+  },
+  {
+    id: 'trout',
+    name: 'Форель',
+    spot: 3,
+    w: 32,
+    kg: [0.5, 5],
+    mult: 1,
+    power: 3.2,
+    rarity: 'common',
+  },
   { id: 'char', name: 'Голец', spot: 3, w: 18, kg: [1, 6], mult: 1.5, power: 3.6, rarity: 'rare' },
   { id: 'lenok', name: 'Ленок', spot: 3, w: 8, kg: [1, 7], mult: 2.3, power: 4.2, rarity: 'rare' },
-  { id: 'taimen', name: 'Таймень', spot: 3, w: 2, kg: [8, 50], mult: 6, power: 5.6, rarity: 'epic' },
+  {
+    id: 'taimen',
+    name: 'Таймень',
+    spot: 3,
+    w: 2,
+    kg: [8, 50],
+    mult: 6,
+    power: 5.6,
+    rarity: 'epic',
+  },
   // Море
-  { id: 'mackerel', name: 'Скумбрия', spot: 4, w: 40, kg: [0.3, 1.5], mult: 0.7, power: 3.6, rarity: 'common' },
-  { id: 'flounder', name: 'Камбала', spot: 4, w: 30, kg: [0.5, 4], mult: 1, power: 4.0, rarity: 'common' },
+  {
+    id: 'mackerel',
+    name: 'Скумбрия',
+    spot: 4,
+    w: 40,
+    kg: [0.3, 1.5],
+    mult: 0.7,
+    power: 3.6,
+    rarity: 'common',
+  },
+  {
+    id: 'flounder',
+    name: 'Камбала',
+    spot: 4,
+    w: 30,
+    kg: [0.5, 4],
+    mult: 1,
+    power: 4.0,
+    rarity: 'common',
+  },
   { id: 'cod', name: 'Треска', spot: 4, w: 18, kg: [2, 15], mult: 1.4, power: 5.0, rarity: 'rare' },
-  { id: 'halibut', name: 'Палтус', spot: 4, w: 9, kg: [5, 60], mult: 2.4, power: 6.4, rarity: 'rare' },
-  { id: 'tuna', name: 'Тунец', spot: 4, w: 2.5, kg: [20, 200], mult: 6, power: 8.2, rarity: 'epic' },
-  { id: 'sturgeon', name: 'Осётр', spot: 4, w: 0.5, kg: [10, 80], mult: 15, power: 7.5, rarity: 'legend' },
+  {
+    id: 'halibut',
+    name: 'Палтус',
+    spot: 4,
+    w: 9,
+    kg: [5, 60],
+    mult: 2.4,
+    power: 6.4,
+    rarity: 'rare',
+  },
+  {
+    id: 'tuna',
+    name: 'Тунец',
+    spot: 4,
+    w: 2.5,
+    kg: [20, 200],
+    mult: 6,
+    power: 8.2,
+    rarity: 'epic',
+  },
+  {
+    id: 'sturgeon',
+    name: 'Осётр',
+    spot: 4,
+    w: 0.5,
+    kg: [10, 80],
+    mult: 15,
+    power: 7.5,
+    rarity: 'legend',
+  },
 ];
 
 export const fishOf = (id: string): FishDef | undefined => FISH.find((f) => f.id === id);
@@ -114,16 +283,21 @@ export interface Rod {
 
 export const RODS: Rod[] = [
   { name: 'Самоделка', power: 1, reel: 1, price: 0 },
-  { name: 'Бамбуковая', power: 1.5, reel: 1.15, price: 2_500 },
-  { name: 'Телескоп', power: 2.3, reel: 1.3, price: 15_000 },
-  { name: 'Карбон', power: 3.4, reel: 1.5, price: 70_000 },
-  { name: 'Морская', power: 5, reel: 1.75, price: 300_000 },
-  { name: 'Золотая', power: 7.2, reel: 2, price: 1_200_000 },
+  { name: 'Бамбуковая', power: 1.5, reel: 1.15, price: 1_500 },
+  { name: 'Телескоп', power: 2.3, reel: 1.3, price: 8_000 },
+  { name: 'Карбон', power: 3.4, reel: 1.5, price: 30_000 },
+  { name: 'Морская', power: 5, reel: 1.75, price: 90_000 },
+  { name: 'Золотая', power: 7.2, reel: 2, price: 200_000 },
 ];
 
 export const NET_MAX = 8;
 export const netCapacity = (level: number): number => 20 + 8 * level;
-export const netCost = (level: number): number => nice(900 * Math.pow(2.1, level));
+/** Садок: цена следующего уровня — постоянная таблица (v2.66). */
+export const NET_PRICE = [500, 900, 1_600, 2_900, 5_200, 9_400, 17_000, 31_000];
+export const netCost = (level: number): number =>
+  NET_PRICE[Math.max(0, Math.min(NET_PRICE.length - 1, level))];
+/** Садок, который продаёт сам, когда полон: одна цена автопродажи везде. */
+export { AUTOSELL_TOKENS as NET_AUTO_TOKENS } from './economy';
 
 // ---------------------------------------------------------------------------
 // Мастерство: опыт — от каждой рыбы, больше за редкую. Открывает места и
@@ -150,8 +324,17 @@ export function skillOf(xp: number): { level: number; into: number; need: number
   }
 }
 
-export const spotOpen = (spot: number, skill: number): boolean =>
+/**
+ * С какого ранга шахты открывается место (v2.66): пруд D, река H, озеро L,
+ * горное озеро P, море U. Хребет игры — шахта; мастерство — второе условие.
+ */
+export const SPOT_GATE = [3, 7, 11, 15, 20];
+
+const spotSkillOk = (spot: number, skill: number): boolean =>
   spot >= 0 && spot < SPOTS.length && skill >= SPOTS[spot].skill;
+
+export const spotOpen = (spot: number, skill: number, mineRank: number, prestige = 0): boolean =>
+  spotSkillOk(spot, skill) && (prestige > 0 || mineRank >= (SPOT_GATE[spot] ?? 99));
 
 /** С какого ранга шахты открыта рыбалка: сначала шахта и лес. */
 export const FISH_UNLOCK_RANK = 3;
@@ -347,7 +530,10 @@ export function stepFight(
   const away = bursting ? 1.6 * might * f.burstK : hold ? 0 : 0.3 * might;
   f.dist = Math.max(0, f.dist + (away - reelIn) * dt);
   // Силы тают, пока леска натянута: без этого сильную рыбу не вытащить.
-  f.stamina = Math.max(0, f.stamina - dt * (0.03 + 0.17 * f.tension) / Math.sqrt(Math.max(0.5, pull)));
+  f.stamina = Math.max(
+    0,
+    f.stamina - (dt * (0.03 + 0.17 * f.tension)) / Math.sqrt(Math.max(0.5, pull)),
+  );
   f.red = f.tension >= RED_AT ? f.red + dt : 0;
   f.slack = f.tension < SLACK_AT ? f.slack + dt : 0;
   if (f.red >= RED_SNAP_S) return { f, end: 'snap' };
@@ -374,6 +560,8 @@ export interface FishingState {
   records: Record<string, number>;
   caught: Record<string, number>;
   total: number;
+  /** Садок продаёт сам, когда полон (куплено за токены). */
+  auto: boolean;
 }
 
 export const FISHING_START: FishingState = {
@@ -387,6 +575,7 @@ export const FISHING_START: FishingState = {
   records: {},
   caught: {},
   total: 0,
+  auto: false,
 };
 
 const num = (v: unknown, lo: number, hi: number, d: number) =>
@@ -394,7 +583,8 @@ const num = (v: unknown, lo: number, hi: number, d: number) =>
 const int = (v: unknown, lo: number, hi: number, d: number) => Math.round(num(v, lo, hi, d));
 
 export function normalizeFishing(raw: Partial<FishingState> | null | undefined): FishingState {
-  if (!raw || typeof raw !== 'object') return { ...FISHING_START, bite: [...FISHING_START.bite], biteAt: [...FISHING_START.biteAt] };
+  if (!raw || typeof raw !== 'object')
+    return { ...FISHING_START, bite: [...FISHING_START.bite], biteAt: [...FISHING_START.biteAt] };
   const xp = int(raw.xp, 0, 1e9, 0);
   const skill = skillOf(xp).level;
   const spot = int(raw.spot, 0, SPOTS.length - 1, 0);
@@ -414,7 +604,7 @@ export function normalizeFishing(raw: Partial<FishingState> | null | undefined):
       kg: num(raw.net?.kg, 0, 1e9, 0),
       value: int(raw.net?.value, 0, 1e13, 0),
     },
-    spot: spotOpen(spot, skill) ? spot : 0,
+    spot: spotSkillOk(spot, skill) ? spot : 0,
     bite: SPOTS.map((_, i) => num(raw.bite?.[i], BITE_MIN, 1, 1)),
     biteAt: SPOTS.map((_, i) => int(raw.biteAt?.[i], 0, 1e14, 0)),
     records: pick(raw.records, 0, 1e4),
@@ -422,5 +612,6 @@ export function normalizeFishing(raw: Partial<FishingState> | null | undefined):
       Object.entries(pick(raw.caught, 0, 1e9)).map(([k, v]) => [k, Math.round(v)]),
     ),
     total: int(raw.total, 0, 1e9, 0),
+    auto: raw.auto === true,
   };
 }

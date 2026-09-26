@@ -8,6 +8,7 @@
 import type { CSSProperties } from 'react';
 import { CoinIcon } from '@/components/slot-art';
 import { GxIcon, KIcon } from '@/components/gx';
+import { TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
 import {
   FISH,
@@ -21,9 +22,11 @@ import {
   skillOf,
   SPOTS,
   spotOpen,
+  SPOT_GATE,
+  NET_AUTO_TOKENS,
 } from '@/lib/fishing';
 import type { FishDef } from '@/lib/fishing';
-import { CASE_TIERS, shortMoney } from '@/lib/prison';
+import { CASE_TIERS, rankLetter, shortMoney } from '@/lib/prison';
 import { coinDing, primeAudio, tierBreak, uiBuy } from '@/lib/sound';
 import { notifySuccess, notifyWarning } from '@/lib/haptics';
 
@@ -69,16 +72,26 @@ export const fishIndex = (f: FishDef) => FISH.indexOf(f);
 
 /** Цвет редкости — тот же, что у сундуков: редкость читается одинаково везде. */
 export const rarityColor = (f: FishDef) => CASE_TIERS.find((t) => t.id === f.rarity)!.color;
-export const RARITY_NAME = { common: 'обычная', rare: 'редкая', epic: 'эпическая', legend: 'легенда' };
+export const RARITY_NAME = {
+  common: 'обычная',
+  rare: 'редкая',
+  epic: 'эпическая',
+  legend: 'легенда',
+};
 
 const reachText = (rod: number) =>
-  rod === RODS.length - 1 ? 'тянет даже тунца и осетра' : `по силе — до места «${SPOTS[rodReach(rod)].name}»`;
+  rod === RODS.length - 1
+    ? 'тянет даже тунца и осетра'
+    : `по силе — до места «${SPOTS[rodReach(rod)].name}»`;
 
 function RodArt({ rod, size = 34 }: { rod: number; size?: number }) {
   // Удочка одна, ступени различает цвет удилища: от ветки до золота.
   const colors = ['#8a6a44', '#c9b27a', '#9aa6b0', '#3d3f47', '#2f6fa8', '#e2b23c'];
   return (
-    <span className="frod" style={{ '--rod': colors[rod] ?? colors[0], width: size, height: size } as CSSProperties}>
+    <span
+      className="frod"
+      style={{ '--rod': colors[rod] ?? colors[0], width: size, height: size } as CSSProperties}
+    >
       <GxIcon name="fishing" size={size} />
     </span>
   );
@@ -90,6 +103,7 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
   const balance = useFinanceStore((s) => s.slotsBalance);
   const fishBuyRod = useFinanceStore((s) => s.fishBuyRod);
   const fishNetUp = useFinanceStore((s) => s.fishNetUp);
+  const fishNetAuto = useFinanceStore((s) => s.fishNetAuto);
   const cur = RODS[f.rod];
   const next = RODS[f.rod + 1];
   const cap = netCapacity(f.netLevel);
@@ -148,7 +162,11 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
         </span>
         <span className="pforge__info">
           <b>Садок на {cap}</b>
-          <i>{f.netLevel < NET_MAX ? `${cap} → ${netCapacity(f.netLevel + 1)} рыб` : 'Больше не влезет'}</i>
+          <i>
+            {f.netLevel < NET_MAX
+              ? `${cap} → ${netCapacity(f.netLevel + 1)} рыб`
+              : 'Больше не влезет'}
+          </i>
         </span>
         {f.netLevel < NET_MAX ? (
           <button
@@ -165,6 +183,27 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
       </div>
       <div className="pforge__row">
         <span className="pforge__ico">
+          <GxIcon name="fish-bucket" size={28} />
+        </span>
+        <span className="pforge__info">
+          <b>Садок продаёт сам</b>
+          <i>Полный садок сам уходит торговцу — удочку не бросать</i>
+        </span>
+        {f.auto ? (
+          <span className="pforge__done">Есть</span>
+        ) : (
+          <button
+            type="button"
+            className="btn btn--sm pforge__buy"
+            disabled={p.tokens < NET_AUTO_TOKENS}
+            onClick={() => buy(fishNetAuto(), 1)}
+          >
+            {shortMoney(NET_AUTO_TOKENS)} <TokenIcon size={12} />
+          </button>
+        )}
+      </div>
+      <div className="pforge__row">
+        <span className="pforge__ico">
           <FishSprite index={PEARL_TILE} scale={1} />
         </span>
         <span className="pforge__info">
@@ -172,8 +211,8 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
             Жемчуг {pearls}/{PEARL_MAX}
           </b>
           <i>
-            +{(pearls * PEARL_SELL * 100).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}% к продаже везде — в шахте, в лесу и здесь. Прячется
-            в ракушках пруда, озера и моря
+            +{(pearls * PEARL_SELL * 100).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}% к
+            продаже везде — в шахте, в лесу и здесь. Прячется в ракушках пруда, озера и моря
           </i>
         </span>
       </div>
@@ -186,6 +225,7 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
 
 export function TrophiesTab() {
   const f = useFinanceStore((s) => s.fishing);
+  const p = useFinanceStore((s) => s.prison);
   const skill = skillOf(f.xp).level;
   const kinds = FISH.filter((x) => (f.caught[x.id] ?? 0) > 0).length;
   return (
@@ -197,14 +237,17 @@ export function TrophiesTab() {
         видов · первая рыба вида — токены
       </div>
       {SPOTS.map((s, si) => {
-        const open = spotOpen(si, skill);
+        const open = spotOpen(si, skill, p.rank, p.prestige);
         return (
           <section key={s.id} className={`ftrophy${open ? '' : ' is-locked'}`}>
             <h4 className="ftrophy__head">
               {s.name}
               {!open && (
                 <span>
-                  <KIcon name="locked" size={12} /> {s.skill} ур. мастерства
+                  <KIcon name="locked" size={12} />{' '}
+                  {skill < s.skill
+                    ? `${s.skill} ур. мастерства`
+                    : `ранг шахты ${rankLetter(SPOT_GATE[si])}`}
                 </span>
               )}
             </h4>
@@ -220,9 +263,7 @@ export function TrophiesTab() {
                   >
                     <FishSprite index={fishIndex(x)} scale={2} className={n ? '' : 'is-shadow'} />
                     <b>{n ? x.name : '???'}</b>
-                    <i>
-                      {n ? `${kgText(best)} · ×${fmt(n)}` : RARITY_NAME[x.rarity]}
-                    </i>
+                    <i>{n ? `${kgText(best)} · ×${fmt(n)}` : RARITY_NAME[x.rarity]}</i>
                   </div>
                 );
               })}

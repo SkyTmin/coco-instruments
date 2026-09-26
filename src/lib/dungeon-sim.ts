@@ -23,7 +23,9 @@ import {
   beastBonus,
   BOSSES,
   CRIT_X,
-  goldBag,
+  GOLD_BAG,
+  CRATE_COINS,
+  SECRET_COINS,
   kingLoot,
   levelOf,
   mobStats,
@@ -356,6 +358,8 @@ export interface BossFight {
   gates: number[];
   split: boolean;
   t: number;
+  /** Победитель уходит: ворота держатся открытыми, пока он не отошёл. */
+  exiting?: boolean;
 }
 
 /** То, что вылазка добавила к сохранению — сбрасывается страницей в стор. */
@@ -375,7 +379,6 @@ export interface Sim {
   time: number;
   rng: () => number;
   now: () => number;
-  econ: number;
   stats: Hero;
   hero: HeroState;
   mobs: Mob[];
@@ -427,7 +430,6 @@ export interface SimOptions {
   world: World;
   dungeon: DungeonState;
   stats: Hero;
-  econ: number;
   /** Где появиться: мировые координаты. */
   x: number;
   y: number;
@@ -589,7 +591,6 @@ export function createSim(o: SimOptions): Sim {
     time: 0,
     rng: lcg(o.seed ?? Date.now() & 0x7fffffff),
     now: o.now ?? (() => Date.now()),
-    econ: o.econ,
     stats: o.stats,
     hero: {
       x: o.x,
@@ -1550,10 +1551,9 @@ function dropAt(sim: Sim, kind: DropKind, n: number, x: number, y: number): void
 function breakProp(sim: Sim, p: Prop): void {
   p.alive = false;
   sim.events.push({ t: 'break', x: p.x, y: p.y, kind: p.kind });
-  const e = sim.econ;
   if (p.kind === 'crate' || p.kind === 'barrel') {
     if (sim.rng() < 0.55)
-      dropAt(sim, 'coin', Math.max(1, Math.round(e * 0.02 * (0.6 + sim.rng()))), p.x, p.y);
+      dropAt(sim, 'coin', Math.round(CRATE_COINS * (0.6 + sim.rng())), p.x, p.y);
     if (sim.rng() < 0.16) dropAt(sim, 'skin', 1, p.x, p.y);
     if (sim.rng() < 0.07) dropAt(sim, 'token', 1 + Math.floor(sim.rng() * 2), p.x, p.y);
   }
@@ -1685,7 +1685,7 @@ function killMob(sim: Sim, m: Mob): void {
   }
   if (m.elite && sim.rng() < 0.08) dropAt(sim, 'key', 1, m.x, m.y);
   if (m.kind === 'goldrat') {
-    const bag = goldBag(sim.econ);
+    const bag = GOLD_BAG;
     for (let i = 0; i < 6; i++) dropAt(sim, 'coin', Math.round(bag / 6), m.x, m.y);
   }
   if (m.kind === 'bomber' && planting) {
@@ -1708,12 +1708,29 @@ function killMob(sim: Sim, m: Mob): void {
 // Король.
 // ---------------------------------------------------------------------------
 
+/**
+ * Ворота логова. В бою закрыты. После победы — открыты, пока король
+ * отдыхает, а герой внутри или РЯДОМ с воротами: клетка ворот сама не
+ * входит в арену, и раньше ворота захлопывались, едва герой на неё
+ * наступал; его выталкивало назад, они снова открывались — дверь мигала
+ * невидимой стеной (владелец: «будто скрытая дверь»). Теперь закрываются,
+ * только когда герой ушёл дальше `GATE_CLEAR` клеток от всех ворот.
+ */
+const GATE_CLEAR = 2.5;
+
 function updateGates(sim: Sim): void {
   const b = sim.boss;
   if (!b) return;
   const h = sim.hero;
   const heroIn = inArena(sim, h.x, h.y);
-  const closed = b.state === 'fight' || (b.state === 'rest' && !heroIn);
+  const w = sim.world.w;
+  const near = b.gates.some(
+    (g) => Math.hypot((g % w) + 0.5 - h.x, Math.floor(g / w) + 0.5 - h.y) < GATE_CLEAR,
+  );
+  if (b.state === 'won') b.exiting = true;
+  if (b.exiting && !heroIn && !near) b.exiting = false;
+  // Снаружи к отдыхающему королю ворота не пускают; выходящего не запирают.
+  const closed = b.state === 'fight' || (b.state === 'rest' && !heroIn && !b.exiting);
   for (const g of b.gates) sim.tiles[g] = closed ? Tile.Gate : Tile.Floor;
 }
 
@@ -1756,7 +1773,7 @@ function onBossPartDown(sim: Sim, m: Mob): void {
   sim.delta.bosses.push({ id: b.id, at: sim.now() });
   sim.events.push({ t: 'boss', what: 'dead' });
   sim.slowmo = Math.max(sim.slowmo, 0.6);
-  const loot = kingLoot(sim.econ, sim.rng);
+  const loot = kingLoot(sim.rng);
   const cx = b.obj.x + 0.5;
   const cy = b.obj.y + 0.5;
   for (let i = 0; i < 8; i++) dropAt(sim, 'coin', Math.round(loot.coins / 8), cx, cy);
@@ -2819,8 +2836,7 @@ export function useObject(sim: Sim, u: Usable): boolean {
     p.on = true;
     sim.delta.secrets.push(o.id);
     bump(sim, 'secrets', 1);
-    const e = sim.econ;
-    for (let i = 0; i < 5; i++) dropAt(sim, 'coin', Math.round(e * 0.25), p.x, p.y + 0.4);
+    for (let i = 0; i < 5; i++) dropAt(sim, 'coin', SECRET_COINS, p.x, p.y + 0.4);
     for (let i = 0; i < 6; i++) dropAt(sim, 'token', 2 + Math.floor(sim.rng() * 3), p.x, p.y + 0.4);
     dropAt(sim, 'key', 1, p.x, p.y + 0.4);
     for (let i = 0; i < 4; i++) dropAt(sim, 'skin', 1, p.x, p.y + 0.4);

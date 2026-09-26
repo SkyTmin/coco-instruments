@@ -17,7 +17,6 @@ import {
   BOSSES,
   canPay,
   conditionsMet,
-  econOf,
   fullSet,
   heroOf,
   levelOf,
@@ -93,7 +92,6 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const upgrade = useFinanceStore((s) => s.dungeonUpgrade);
-  const econ = econOf(p);
   const hero = heroOf(d, p);
   const lv = levelOf(d.xp);
   const set = fullSet(d.gear);
@@ -159,7 +157,7 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
       {SLOTS.map((slot) => {
         const g = d.gear[slot];
         const cur = setOf(g.tier);
-        const step = nextStep(d, slot, econ);
+        const step = nextStep(d, slot);
         const conds = step.kind === 'reforge' ? reforgeConditions(slot, g.tier) : [];
         const met = step.kind === 'reforge' && conditionsMet(d, slot, g.tier);
         const next = SETS[g.tier];
@@ -334,11 +332,9 @@ export function BeastTab() {
 
 export function StashTab({ onSpend }: { onSpend: () => void }) {
   const d = useFinanceStore((s) => s.dungeon);
-  const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const sackUp = useFinanceStore((s) => s.dungeonSackUp);
-  const econ = econOf(p);
-  const cost = sackCost(d.sackLevel, econ);
+  const cost = sackCost(d.sackLevel);
   const can = d.sackLevel < SACK_MAX && canPay(d, cost, balance);
   const mats = Object.keys(MATS) as MatId[];
   const stats: [string, number, ReactNode?][] = [

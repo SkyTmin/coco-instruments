@@ -38,7 +38,6 @@ function sim(
     world,
     dungeon: d,
     stats: heroOf(d),
-    econ: 1000,
     x,
     y,
     seed,
@@ -323,6 +322,89 @@ describe('подземелье: бой', () => {
       expect(t).toBeGreaterThan(45);
       expect(t).toBeLessThan(240);
     }
+  });
+
+  it('после победы из логова выходят через ворота, и ворота не захлопываются на герое', () => {
+    // Владелец: «победил короля, но уйти не могу — будто скрытая дверь».
+    // Двести выходов из разных точек арены к каждым воротам.
+    const probe = sim(2, 3, 1, 1, 1);
+    const b0 = probe.boss!;
+    const W = world.w;
+    const cellsIn = [...b0.cells].filter((c) => walkableTile(world.tiles[c]));
+    // Цель за каждыми воротами — пол в пяти шагах снаружи арены.
+    const targets = b0.gates.map((g) => {
+      const dist = new Map<number, number>([[g, 0]]);
+      const q = [g];
+      let best = g;
+      while (q.length) {
+        const i = q.shift()!;
+        for (const d of [1, -1, W, -W]) {
+          const j = i + d;
+          if (dist.has(j) || b0.cells.has(j) || !walkableTile(world.tiles[j])) continue;
+          dist.set(j, dist.get(i)! + 1);
+          if (dist.get(j)! <= 5) best = j;
+          q.push(j);
+        }
+      }
+      return { gate: g, goal: best };
+    });
+    let exits = 0;
+    for (let k = 0; k < 200; k++) {
+      const { gate, goal } = targets[k % targets.length];
+      const from = cellsIn[(k * 37) % cellsIn.length];
+      const s = sim(2, 3, (from % W) + 0.5, Math.floor(from / W) + 0.5, 100 + k);
+      s.boss!.state = 'won';
+      s.mobs = [];
+      // Ящики и бочки арены живой игрок разбивает по пути; тест — про ворота.
+      for (const p of s.props)
+        if (b0.cells.has(Math.floor(p.y) * W + Math.floor(p.x))) p.alive = false;
+      const f = field(goal % W, Math.floor(goal / W));
+      for (let t = 0; t < 30 * 60; t++) {
+        const h = s.hero;
+        const i = Math.floor(h.y) * W + Math.floor(h.x);
+        let mx = 0;
+        let my = 0;
+        let bestD = f[i];
+        for (const [dx, dy] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ]) {
+          const j = i + dy * W + dx;
+          if (f[j] >= 0 && f[j] < bestD) {
+            bestD = f[j];
+            mx = (j % W) + 0.5 - h.x;
+            my = Math.floor(j / W) + 0.5 - h.y;
+          }
+        }
+        if (bestD === f[i]) {
+          mx = (goal % W) + 0.5 - h.x;
+          my = Math.floor(goal / W) + 0.5 - h.y;
+        }
+        const n = Math.hypot(mx, my) || 1;
+        stepSim(s, DT, { ...NO_INPUT, mx: mx / n, my: my / n });
+        s.mobs = [];
+        if (Math.hypot((goal % W) + 0.5 - h.x, Math.floor(goal / W) + 0.5 - h.y) < 0.6) break;
+      }
+      const h = s.hero;
+      const atGoal = Math.hypot((goal % W) + 0.5 - h.x, Math.floor(goal / W) + 0.5 - h.y) < 0.8;
+      if (atGoal) exits += 1;
+      // Ушёл — ворота за спиной закрыты, король отдыхает.
+      if (atGoal) expect(s.tiles[gate]).toBe(Tile.Gate);
+      // И снаружи к отдыхающему королю они не пускают.
+      if (atGoal && k % 20 === 0) {
+        for (let t = 0; t < 90; t++) {
+          const dx = (gate % W) + 0.5 - h.x;
+          const dy = Math.floor(gate / W) + 0.5 - h.y;
+          const n = Math.hypot(dx, dy) || 1;
+          stepSim(s, DT, { ...NO_INPUT, mx: dx / n, my: dy / n });
+        }
+        expect(s.tiles[gate]).toBe(Tile.Gate);
+        expect(s.boss!.cells.has(Math.floor(h.y) * W + Math.floor(h.x))).toBe(false);
+      }
+    }
+    expect(exits).toBe(200);
   });
 
   it('король на Лагерном без заточки — смерть чаще победы', () => {

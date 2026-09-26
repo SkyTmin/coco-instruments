@@ -23,7 +23,6 @@ import {
   deepMineNow,
   dungeonOpen,
   DUNGEON_UNLOCK_RANK,
-  econOf,
   heroOf,
   levelOf,
   MATS,
@@ -350,7 +349,7 @@ export function DungeonPage() {
   const run = d.run;
   const kingAt = bossReadyAt(d, 'king');
   const lifts = AREAS.filter((a) => a.built);
-  const ups = upgradable(d, econOf(prison), balance);
+  const ups = upgradable(d, balance);
   const chips = (
     <>
       <span className="gx-chip">

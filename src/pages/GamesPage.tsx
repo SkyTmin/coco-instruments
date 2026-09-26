@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { AnimatedNumber } from '@/components/ui';
-import { GameTop, GxIcon, KIcon } from '@/components/gx';
+import { GameTop, KIcon } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { useFinanceStore } from '@/store';
 import { skinOf, symbolSrc } from '@/lib/skins';
@@ -11,26 +11,23 @@ import type { SlotSymbolId } from '@/lib/slots';
 import { tapLight } from '@/lib/haptics';
 import { useGameAudio } from '@/lib/use-game-audio';
 import { AudioToggles } from '@/components/AudioToggles';
-import { rankLetter } from '@/lib/prison';
-import { rockTexture } from '@/lib/prison-art';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 
 /**
- * Зал игр. Кошелёк, уровень и награды общие, поэтому баланс живёт здесь —
- * над всеми играми, а не дублируется на каждой плитке главного экрана.
+ * Казино — здание двора (v2.66). Каторга — главная игра, автоматы — её
+ * дополнение на тех же монетах: сюда приходят рискнуть заработанным в шахте.
+ * Бесплатных денег здесь больше нет — ни лесенки, ни колеса, ни наград.
  */
 export function GamesPage() {
   const nav = useNavigate();
   const balance = useFinanceStore((s) => s.slotsBalance);
-  const freeSpins = useFinanceStore((s) => s.slotsFreeSpins);
   const xp = useFinanceStore((s) => s.slotsXp);
   const skin = useFinanceStore((s) => s.slotsSkin);
   const slotsSpins = useFinanceStore((s) => s.slotsSpins);
   const slotsBest = useFinanceStore((s) => s.slotsBest);
   const scatterSpins = useFinanceStore((s) => s.scatterSpins);
   const scatterBest = useFinanceStore((s) => s.scatterBest);
-  const prison = useFinanceStore((s) => s.prison);
 
   useGameAudio('hall');
   const level = levelFromXp(xp);
@@ -49,7 +46,7 @@ export function GamesPage() {
       <div className="yard-scene-bg" aria-hidden="true" />
       <div className="gxh__wrap">
         <GameTop
-          title="Игры"
+          title="Казино"
           onBack={() => nav(-1)}
           right={<AudioToggles />}
           chips={
@@ -61,11 +58,6 @@ export function GamesPage() {
               <span className="gx-chip">
                 <KIcon name="star" size={16} /> {level.level} ур.
               </span>
-              {freeSpins > 0 && (
-                <span className="gx-chip">
-                  <GxIcon name="slots" size={16} /> {freeSpins}
-                </span>
-              )}
             </>
           }
         />
@@ -84,29 +76,7 @@ export function GamesPage() {
           stat={scatterSpins ? `${fmt(scatterSpins)} спинов · лучший ${fmt(scatterBest)}` : null}
           onClick={() => go('/scatter')}
         />
-        <GameCard
-          title="Каторга"
-          dark
-          art={
-            <span className="gxh-card__reels gxh-card__reels--rocks">
-              {[14, 23, 25].map((r) => (
-                <img key={r} src={rockTexture(r)} alt="" />
-              ))}
-            </span>
-          }
-          tags={['Шахта', 'Лес', 'Подземелье']}
-          stat={prison.mined ? `Ранг ${rankLetter(prison.rank)}` : null}
-          onClick={() => go('/yard')}
-        />
-
-        <button
-          type="button"
-          className="gx-btn gx-btn--red gx-btn--big gx-btn--block"
-          onClick={() => go('/slots')}
-        >
-          <GxIcon name="gift" /> Награды и скины
-        </button>
-        <p className="gxh__note">Монеты виртуальные — купить их нельзя</p>
+        <p className="gxh__note">Те же монеты, что в шахте. Купить их нельзя — только заработать</p>
       </div>
     </div>
   );

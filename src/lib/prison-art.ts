@@ -230,23 +230,28 @@ export const ROCK_VARIANTS = 4;
 
 const rockCache = new Map<number, string>();
 
-/** Картинка породы (data-URL, 16×16). `variant` — какой из рисунков. */
+/**
+ * Картинка породы — готовая текстура (Kenney Voxel Pack, CC0), собранная
+ * `scripts/ores-assets.py`: вкрапления руды в камне, 64×64, 4 рисунка.
+ */
 export function rockTexture(rock: number, variant = 0): string {
-  const key = rock * ROCK_VARIANTS + (variant % ROCK_VARIANTS);
-  let url = rockCache.get(key);
-  if (url === undefined) {
-    const r = ROCKS[rock];
-    url = r ? paintRock(r, rock, variant % ROCK_VARIANTS) : '';
-    rockCache.set(key, url);
-  }
-  return url;
+  if (!ROCKS[rock]) return '';
+  // Остаток в JS бывает отрицательным: вариант приводим в 0…3.
+  const v = ((variant % ROCK_VARIANTS) + ROCK_VARIANTS) % ROCK_VARIANTS;
+  return `/ui/ores/r${rock}-${v}.png`;
+}
+
+/** Блок этажа — цельный куб руды (кристальная стена DCSS, CC0), 64×64. */
+export function blockTexture(rock: number): string {
+  if (!ROCKS[rock]) return '';
+  return `/ui/ores/b${rock}.png`;
 }
 
 /** Какой рисунок у блока: постоянен для клетки и яруса в этой шахте. */
 export function rockVariant(seed: number, cell: number, depth: number): number {
   let h = (seed ^ (cell * 374761393) ^ (depth * 668265263)) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
-  return (h ^ (h >>> 16)) % ROCK_VARIANTS;
+  return ((h ^ (h >>> 16)) >>> 0) % ROCK_VARIANTS;
 }
 
 /**

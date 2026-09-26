@@ -17,14 +17,7 @@ import { collectPayments, computeObligation, computeRecurring } from '@/lib/fina
 import { toISO, todayISO } from '@/lib/date';
 import { formatRUB, pluralizeRu, relativeDay } from '@/lib/format';
 import { nextBirthday, peopleUpcomingEvents, peopleWord } from '@/lib/people';
-import {
-  EMPTY_COUNTERS,
-  WHEEL_COOLDOWN_MS,
-  dailyMissions,
-  dailyStatus,
-  dayKey,
-  missionDone,
-} from '@/lib/slots-meta';
+import { rankLetter } from '@/lib/prison';
 import { getBackupStatus, requestTelegramBackup } from '@/lib/backup';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { setThemePref, useThemePref } from '@/lib/theme';
@@ -66,30 +59,11 @@ export function HomePage() {
   const wardrobe = useFinanceStore((s) => s.wardrobe);
   const outfits = useFinanceStore((s) => s.outfits);
   const slotsBalance = useFinanceStore((s) => s.slotsBalance);
-  const slotsSpins = useFinanceStore((s) => s.slotsSpins);
-  const scatterSpins = useFinanceStore((s) => s.scatterSpins);
-  const slotsDailyAt = useFinanceStore((s) => s.slotsDailyAt);
-  const slotsStreak = useFinanceStore((s) => s.slotsStreak);
-  const slotsMissions = useFinanceStore((s) => s.slotsMissions);
-  const slotsWheelAt = useFinanceStore((s) => s.slotsWheelAt);
+  const prisonRank = useFinanceStore((s) => s.prison.rank);
+  const prisonMined = useFinanceStore((s) => s.prison.mined);
   const hydrated = useFinanceStore((s) => s.hydrated);
   const exportAll = useFinanceStore((s) => s.exportAll);
   const importAll = useFinanceStore((s) => s.importAll);
-
-  // Сколько наград в слотах ждут прямо сейчас — точка на плитке зовёт зайти.
-  const slotsRewards = useMemo(() => {
-    const today = dayKey();
-    const counters = slotsMissions.day === today ? slotsMissions.counters : EMPTY_COUNTERS;
-    const claimed = slotsMissions.day === today ? slotsMissions.claimed : [];
-    const missions = dailyMissions(today).filter(
-      (m) => missionDone(m, { ...EMPTY_COUNTERS, ...counters }) && !claimed.includes(m.id),
-    ).length;
-    const daily = dailyStatus({ streak: slotsStreak, lastClaim: slotsDailyAt }, today).ready
-      ? 1
-      : 0;
-    const wheel = !slotsWheelAt || Date.now() - slotsWheelAt >= WHEEL_COOLDOWN_MS ? 1 : 0;
-    return daily + wheel + missions;
-  }, [slotsDailyAt, slotsStreak, slotsMissions, slotsWheelAt]);
 
   const fin = useMemo(() => {
     let monthly = 0;
@@ -417,18 +391,15 @@ export function HomePage() {
             <span className="home-tile__title">Камера</span>
             <span className="home-tile__fact">Сетки, эскизы и суфлёр</span>
           </button>
-          <button className="home-tile" onClick={() => go('/games')}>
+          <button className="home-tile" onClick={() => go('/yard')}>
             <span className="home-tile__icon">
               <IconSlots />
-              {slotsRewards > 0 && <span className="home-tile__dot">{slotsRewards}</span>}
             </span>
-            <span className="home-tile__title">Игры</span>
+            <span className="home-tile__title">Каторга</span>
             <span className="home-tile__fact">
-              {slotsRewards > 0
-                ? `Награды ждут · ${slotsRewards}`
-                : slotsSpins + scatterSpins
-                  ? `${fmtCoins(slotsBalance)} 🪙 · ${slotsSpins + scatterSpins} вращений`
-                  : 'Слоты, Каскад и Каторга'}
+              {prisonMined
+                ? `Ранг ${rankLetter(prisonRank)} · ${fmtCoins(slotsBalance)} 🪙`
+                : 'Шахта, лес, рыбалка, подземелье'}
             </span>
           </button>
         </div>

@@ -3,18 +3,17 @@
 // добыча, сидор, деньги, таймеры боссов и шахт. Мир — `dungeon-world.ts`,
 // бой — `dungeon-sim.ts`, картинки — `dungeon-art.ts`.
 //
-// ДЕНЬГИ СЧИТАЮТСЯ В «МИНУТАХ ШАХТЫ». Кошелёк общий с шахтой и автоматами,
-// а шахта на ранге F и на ранге Z платит в сотни раз разное. Цена мяса,
-// руды и сбора за заточку — доля того, что шахта игрока даёт за минуту
-// (`econ`), поэтому подземелье весит одинаково на любом ранге и платит
-// примерно 65% шахты — не больше: иначе шахта умрёт (так решено в плане).
+// ЦЕНЫ ПОСТОЯННЫЕ (v2.66). Раньше всё здесь считалось в «минутах шахты»
+// игрока, и мясо дорожало вместе с киркой. Владелец: «цены на товар не
+// должны меняться — мясо крыс, руды». Теперь кусок мяса, шкурка, сбор за
+// заточку, лифт и карман — одно число навсегда; дороже только глубже.
 //
 // МОНЕТЫ ПРОГРЕСС ЗДЕСЬ НЕ ПОКУПАЮТ. Один занос в автомате — это сотни
 // тысяч; если бы ступени снаряжения открывались деньгами, он проскакивал бы
 // десятки часов. Ступени открывают убийства, пройденный путь, выходы живым,
 // руда подземных шахт и трофеи боссов. Монеты — только сбор и расходники.
 
-import { bonusOf, incomeRate, LAST_RANK, modsOf, rng32, ROCKS } from './prison';
+import { bonusOf, LAST_RANK, rng32, ROCKS } from './prison';
 import type { Bonus, PrisonState, Rock } from './prison';
 
 // ---------------------------------------------------------------------------
@@ -646,53 +645,43 @@ export function heroOf(d: Pick<DungeonState, 'gear' | 'xp'>, p?: Partial<PrisonS
 export const armorCut = (armor: number) => 100 / (100 + Math.max(0, armor));
 
 // ---------------------------------------------------------------------------
-// Деньги. `econ` — сколько монет шахта игрока даёт за минуту: от неё цены.
+// Деньги: постоянные цены. Глубже — дороже, больше ничего цену не двигает.
 // ---------------------------------------------------------------------------
 
-/** Монет в минуту шахты — якорь всех цен подземелья. */
-export function econOf(p: PrisonState): number {
-  const mine = Math.min(p.rank, LAST_RANK);
-  const perSec = incomeRate(mine, p.pick, p.sharp, modsOf(p));
-  // Пол: на ржавой кирке шахта даёт копейки, а мясо всё равно должно стоить.
-  return Math.max(120, Math.round(perSec * 60));
-}
-
-/** Цена куска мяса — доля минуты шахты, дороже с глубиной. */
-export const MEAT_SHARE: Record<MeatId, number> = { meat: 0.03, fatmeat: 0.05 };
+/** Кусок мяса во Входе в шахты; глубже — дороже (`AREA_MEAT`). */
+export const MEAT_BASE: Record<MeatId, number> = { meat: 25, fatmeat: 45 };
 export const MEAT_NAMES: Record<MeatId, string> = {
   meat: 'Крысятина',
   fatmeat: 'Жирная крысятина',
 };
-export const AREA_PAY = 1.3;
-
-/**
- * Рынок насыщается: первые куски за час Барыга берёт по полной цене, дальше
- * — за полцены. Так фармить одно Устье вечно невыгодно — выгоднее вглубь.
- */
-export const MARKET_FULL = 400;
-export const MARKET_CUT = 0.5;
+/** Во сколько раз мясо района дороже входного, по уровню района. */
+export const AREA_MEAT = [1, 2.2, 3.6, 5.5, 8, 11, 15, 20, 26];
+export const areaMeat = (level: number) =>
+  AREA_MEAT[Math.max(0, Math.min(AREA_MEAT.length - 1, level))];
+/** Цена куска мяса вида `id` из района уровня `level`. */
+export const meatPrice = (id: MeatId, level: number) => Math.round(MEAT_BASE[id] * areaMeat(level));
 
 export interface MatDef {
   id: MatId;
   name: string;
-  /** Цена продажи лишнего — в минутах шахты. */
-  share: number;
+  /** Цена штуки у торговца, монет. */
+  price: number;
   lead: string;
 }
 
 export const MATS: Record<MatId, MatDef> = {
-  skin: { id: 'skin', name: 'Крысиная шкурка', share: 0.02, lead: 'На заточку снаряжения.' },
-  tail: { id: 'tail', name: 'Хвост подрывника', share: 0.03, lead: 'Фитиль в нём не догорел.' },
+  skin: { id: 'skin', name: 'Крысиная шкурка', price: 20, lead: 'На заточку снаряжения.' },
+  tail: { id: 'tail', name: 'Хвост подрывника', price: 35, lead: 'Фитиль в нём не догорел.' },
   pyrite: {
     id: 'pyrite',
     name: 'Пирит',
-    share: 0.05,
+    price: 70,
     lead: '«Кошачье золото» из подземных шахт — для каски и улучшений.',
   },
   crown: {
     id: 'crown',
     name: 'Корона Крысиного короля',
-    share: 3,
+    price: 6_000,
     lead: 'Трофей. Нужен, чтобы улучшить снаряжение до Кованого.',
   },
 };
@@ -800,33 +789,22 @@ export function smellOf(s: Sack): number {
 }
 
 /**
- * Цена мяса в сидоре при продаже сейчас. Средний район мяса берётся из
- * `meatBy`: глубокая крысятина дороже устьевой.
+ * Цена мяса в сидоре. Средний район мяса берётся из `meatBy`: глубокая
+ * крысятина дороже входной. Рынок не насыщается — цена всегда одна.
  */
-export function meatValue(
-  s: Sack,
-  econ: number,
-  soldThisHour: number,
-  sell = 1,
-): { value: number; pieces: number } {
+export function meatValue(s: Sack, sell = 1): { value: number; pieces: number } {
   const pieces = meatCount(s);
   if (!pieces) return { value: 0, pieces: 0 };
   let areaK = 0;
   let n = 0;
   for (const [id, k] of Object.entries(s.meatBy)) {
-    areaK += (k ?? 0) * Math.pow(AREA_PAY, areaOf(id as AreaId).level);
+    areaK += (k ?? 0) * areaMeat(areaOf(id as AreaId).level);
     n += k ?? 0;
   }
   const areaMul = n > 0 ? areaK / n : 1;
   let value = 0;
-  let sold = soldThisHour;
-  for (const [id, k] of Object.entries(s.meat) as [MeatId, number][]) {
-    for (let i = 0; i < (k ?? 0); i++) {
-      const cut = sold >= MARKET_FULL ? MARKET_CUT : 1;
-      value += econ * MEAT_SHARE[id] * areaMul * cut;
-      sold += 1;
-    }
-  }
+  for (const [id, k] of Object.entries(s.meat) as [MeatId, number][])
+    value += (k ?? 0) * Math.round(MEAT_BASE[id] * areaMul);
   return { value: Math.round(value * sell), pieces };
 }
 
@@ -841,10 +819,15 @@ export interface Cost {
   mats: Partial<Record<MatId, number>>;
 }
 
-/** Сбор за заточку до `plus` на ступени `tier` — минуты шахты. */
-export function plusCost(slot: Slot, tier: number, plus: number, econ: number): Cost {
+/** Сбор за заточку +1…+5, монет на первой ступени; дальше — × ступень. */
+export const PLUS_FEE = [700, 1_100, 1_500, 1_900, 2_200];
+/** Перековка на следующую ступень — × ступень. */
+export const REFORGE_FEE = 6_000;
+
+/** Сбор за заточку до `plus` на ступени `tier`. */
+export function plusCost(slot: Slot, tier: number, plus: number): Cost {
   const k = Math.pow(1.6, tier - 1);
-  const coins = Math.round(econ * 0.45 * k * (1 + 0.55 * (plus - 1)));
+  const coins = PLUS_FEE[Math.max(0, Math.min(PLUS_FEE.length - 1, plus - 1))] * tier;
   const skins = Math.round([0, 3, 5, 8, 12, 18][plus] * k);
   const mats: Partial<Record<MatId, number>> = { skin: skins };
   if (tier >= 2)
@@ -914,14 +897,14 @@ export function reforgeConditions(slot: Slot, tier: number): Condition[] {
   return [];
 }
 
-export function reforgeCost(slot: Slot, tier: number, econ: number): Cost {
+export function reforgeCost(slot: Slot, tier: number): Cost {
   const k = Math.pow(1.6, tier - 1);
   const mats: Partial<Record<MatId, number>> = {
     skin: Math.round(20 * k),
     pyrite: Math.round((slot === 'helm' ? 20 : 10) * k),
   };
   if (tier >= 2) mats.crown = 1;
-  return { coins: Math.round(econ * 4 * k), mats };
+  return { coins: REFORGE_FEE * tier, mats };
 }
 
 export function conditionsMet(d: DungeonState, slot: Slot, tier: number): boolean {
@@ -939,16 +922,15 @@ export function canPay(d: DungeonState, cost: Cost, coins: number): boolean {
 export function nextStep(
   d: DungeonState,
   slot: Slot,
-  econ: number,
 ):
   | { kind: 'plus'; cost: Cost }
   | { kind: 'reforge'; cost: Cost }
   | { kind: 'max' }
   | { kind: 'soon' } {
   const g = d.gear[slot];
-  if (g.plus < PLUS_SAFE) return { kind: 'plus', cost: plusCost(slot, g.tier, g.plus + 1, econ) };
+  if (g.plus < PLUS_SAFE) return { kind: 'plus', cost: plusCost(slot, g.tier, g.plus + 1) };
   if (g.tier >= TIER_OPEN) return g.tier >= SETS.length ? { kind: 'max' } : { kind: 'soon' };
-  return { kind: 'reforge', cost: reforgeCost(slot, g.tier, econ) };
+  return { kind: 'reforge', cost: reforgeCost(slot, g.tier) };
 }
 
 /**
@@ -959,12 +941,11 @@ export function nextStep(
  */
 export function upgradable(
   d: DungeonState,
-  econ: number,
   coins: number,
   sack: Partial<Record<MatId, number>> = {},
 ): Slot[] {
   return SLOTS.filter((slot) => {
-    const step = nextStep(d, slot, econ);
+    const step = nextStep(d, slot);
     if (step.kind !== 'plus' && step.kind !== 'reforge') return false;
     if (step.kind === 'reforge' && !conditionsMet(d, slot, d.gear[slot].tier)) return false;
     if (coins < step.cost.coins) return false;
@@ -1034,6 +1015,8 @@ export const DEEP_ROCKS: DeepRock[] = [
     shine: '#9a948c',
     hp: 6,
     value: 0,
+    block: 0,
+    blockName: '',
     mat: null,
   },
   {
@@ -1047,6 +1030,8 @@ export const DEEP_ROCKS: DeepRock[] = [
     shine: '#fff0a8',
     hp: 14,
     value: 0,
+    block: 0,
+    blockName: '',
     mat: 'pyrite',
   },
 ];
@@ -1152,8 +1137,6 @@ export interface DungeonState {
   bosses: Partial<Record<BossId, { at: number; kills: number }>>;
   /** Раскоп подземных шахт в текущем окне. */
   mines: Partial<Record<DeepMineId, DeepMineState>>;
-  /** Рынок мяса: час и сколько продано в этот час. */
-  market: { hour: number; sold: number };
   /** Уровень сидора. */
   sackLevel: number;
   run: RunState | null;
@@ -1185,7 +1168,6 @@ export const DUNGEON_START: DungeonState = {
   fog: {},
   bosses: {},
   mines: {},
-  market: { hour: 0, sold: 0 },
   sackLevel: 0,
   run: null,
   intro: false,
@@ -1282,10 +1264,6 @@ export function normalizeDungeon(v: unknown): DungeonState {
               ]),
           )
         : {},
-    market: {
-      hour: num(o.market?.hour),
-      sold: Math.max(0, num(o.market?.sold)),
-    },
     sackLevel: Math.max(0, Math.min(SACK_MAX, Math.floor(num(o.sackLevel)))),
     run:
       run && typeof run === 'object' && typeof run.area === 'string'
@@ -1336,17 +1314,22 @@ export interface BossLoot {
   mats: Partial<Record<MatId, number>>;
 }
 
-export function kingLoot(econ: number, rnd: () => number): BossLoot {
+/** Король платит постоянно: 8 000 монет, корона, шкурки. */
+export const KING_COINS = 8_000;
+/** Мешок золотой крысы. */
+export const GOLD_BAG = 1_500;
+/** Ящик и бочка — горсть монет; тайник — пять горстей побольше. */
+export const CRATE_COINS = 30;
+export const SECRET_COINS = 400;
+
+export function kingLoot(rnd: () => number): BossLoot {
   return {
     tokens: 20 + Math.floor(rnd() * 20),
     keys: rnd() < 0.4 ? 1 : 0,
-    coins: Math.round(econ * (1.5 + rnd())),
+    coins: KING_COINS,
     mats: { crown: 1, skin: 6 + Math.floor(rnd() * 6) },
   };
 }
-
-/** Мешок золотой крысы. */
-export const goldBag = (econ: number) => Math.round(econ * 1.5);
 
 /** Сколько ROCKS в каторге — для проверок, что подземные номера не пересекаются. */
 export const PRISON_ROCKS = ROCKS.length;
@@ -1357,12 +1340,6 @@ export const PRISON_ROCKS = ROCKS.length;
 // работа руками. Пропадает только сидор — так на присонах: умер в шахте
 // PvP — лут у того, кто тебя убил, а здесь его растаскивают крысы.
 // ---------------------------------------------------------------------------
-
-export const hourOf = (now: number) => Math.floor(now / 3_600_000);
-
-/** Сколько мяса Барыга уже взял в этот час. */
-export const marketSold = (d: DungeonState, now: number) =>
-  d.market.hour === hourOf(now) ? d.market.sold : 0;
 
 /** То, что вылазка добавила к сохранению (форма `SimDelta`). */
 export interface DeltaIn {
@@ -1423,8 +1400,8 @@ export interface Haul {
   full: boolean;
 }
 
-function haulOf(d: DungeonState, sack: Sack, econ: number, now: number, killed: number): Haul {
-  const mv = meatValue(sack, econ, marketSold(d, now));
+function haulOf(d: DungeonState, sack: Sack, now: number, killed: number): Haul {
+  const mv = meatValue(sack);
   return {
     meat: mv.pieces,
     meatValue: mv.value,
@@ -1439,20 +1416,17 @@ function haulOf(d: DungeonState, sack: Sack, econ: number, now: number, killed: 
 }
 
 /**
- * Вышел клетью: мясо Барыге (рынок насыщается), монеты в общий кошелёк,
+ * Вышел клетью: мясо торговцу, монеты в общий кошелёк,
  * материалы на склад. Токены и ключи страница кладёт в каторгу — они общие.
  * `pay` — сколько монет всего прибавить в кошелёк.
  */
 export function extractRun(
   d: DungeonState,
   sack: Sack,
-  econ: number,
   now: number,
   killed: number,
 ): { d: DungeonState; haul: Haul; pay: number } {
-  const haul = haulOf(d, sack, econ, now, killed);
-  const hour = hourOf(now);
-  const sold = marketSold(d, now) + haul.meat;
+  const haul = haulOf(d, sack, now, killed);
   const stats = { ...d.stats };
   stats.extracts = (stats.extracts ?? 0) + 1;
   if (haul.full) stats.fullExtracts = (stats.fullExtracts ?? 0) + 1;
@@ -1460,7 +1434,6 @@ export function extractRun(
     d: {
       ...d,
       stash: addCounts(d.stash, sack.mats),
-      market: { hour, sold },
       stats,
       run: null,
     },
@@ -1473,28 +1446,30 @@ export function extractRun(
 export function dieRun(
   d: DungeonState,
   sack: Sack,
-  econ: number,
   now: number,
   killed: number,
 ): { d: DungeonState; lost: Haul } {
-  const lost = haulOf(d, sack, econ, now, killed);
+  const lost = haulOf(d, sack, now, killed);
   const stats = { ...d.stats, deaths: (d.stats.deaths ?? 0) + 1 };
   return { d: { ...d, stats, run: null }, lost };
 }
 
 /** Карман — целый ряд ячеек: уровней три, каждый — ощутимый шаг и сток шкурок. */
-export function sackCost(level: number, econ: number): Cost {
+export const SACK_PRICE = [5_000, 12_000, 30_000];
+export function sackCost(level: number): Cost {
   return {
-    coins: Math.round(econ * 5 * Math.pow(2.4, level)),
+    coins: SACK_PRICE[Math.max(0, Math.min(SACK_PRICE.length - 1, level))],
     mats: { skin: Math.round(24 * Math.pow(1.9, level)) },
   };
 }
 
 /** Починить клеть района — новая точка спуска и выхода. */
-export function liftCost(area: AreaId, econ: number): Cost {
+/** Лифт Рельсовых туннелей — 8 000; каждый следующий район вдвое дороже. */
+export const LIFT_PRICE = 8_000;
+export function liftCost(area: AreaId): Cost {
   const lvl = areaOf(area).level;
   return {
-    coins: Math.round(econ * 5 * Math.pow(1.8, lvl)),
+    coins: Math.round(LIFT_PRICE * Math.pow(2, Math.max(0, lvl - 1))),
     mats: { skin: Math.round(20 * Math.pow(1.6, lvl)) },
   };
 }

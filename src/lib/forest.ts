@@ -318,17 +318,17 @@ export const AXES: Axe[] = [
     name: 'Лесорубный топор',
     dmg: 4,
     rate: 3.6,
-    price: 9_000,
+    price: 6_000,
     saw: false,
     head: '#8fa8c0',
   },
-  { id: 'cleaver', name: 'Колун', dmg: 7, rate: 3.9, price: 40_000, saw: false, head: '#5b6470' },
+  { id: 'cleaver', name: 'Колун', dmg: 7, rate: 3.9, price: 20_000, saw: false, head: '#5b6470' },
   {
     id: 'bowsaw',
     name: 'Лучковая пила',
     dmg: 12,
     rate: 4.3,
-    price: 55_000,
+    price: 45_000,
     saw: true,
     head: '#c8ccd0',
   },
@@ -337,7 +337,7 @@ export const AXES: Axe[] = [
     name: 'Бензопила «Дружба»',
     dmg: 20,
     rate: 5,
-    price: 180_000,
+    price: 90_000,
     saw: true,
     head: '#d8402a',
   },
@@ -346,7 +346,7 @@ export const AXES: Axe[] = [
     name: 'Бензопила «Урал»',
     dmg: 32,
     rate: 5.6,
-    price: 500_000,
+    price: 160_000,
     saw: true,
     head: '#e8a020',
   },
@@ -380,7 +380,8 @@ export function pileCapacity(level: number): number {
 export function pileCost(level: number): number {
   return nice(250 * Math.pow(2, level));
 }
-export const TRUCK_PRICE = 3_000;
+/** Лесовоз — автопродажа, как вагонетка: за токены, одна цена везде. */
+export { AUTOSELL_TOKENS as TRUCK_TOKENS } from './economy';
 
 export interface Pile {
   /** Брёвен в штабеле. */
@@ -1163,6 +1164,15 @@ function normalizeBench(raw: unknown): Bench {
 
 /** С какого ранга шахты пускают на лесоповал: сначала — шахта. */
 export const FOREST_UNLOCK_RANK = 2;
+/**
+ * С какого ранга шахты открывается каждая делянка (v2.66): хребет всей
+ * игры — ранг шахты, лес идёт за ним, а не мимо. Ива C, ольха E … карельская
+ * берёза X.
+ */
+export const PLOT_GATE = [2, 4, 6, 8, 10, 13, 15, 18, 20, 23];
+/** Пускает ли шахта на делянку `plot`. */
+export const plotOpen = (plot: number, mineRank: number, prestige = 0) =>
+  prestige > 0 || mineRank >= (PLOT_GATE[plot] ?? 99);
 
 /** Ступень запала по числу брёвен подряд — те же ступени, что в шахте. */
 export { STREAK_TIERS };
