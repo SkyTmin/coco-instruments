@@ -1,26 +1,27 @@
-// timeline.js : one shot per pet animation. Each shot is exactly one loop (art bible 6), drawn on
-// twos, so a contact sheet of a shot shows every drawing of its loop.
+// timeline.js : one shot per pet animation. Each shot is exactly one loop (art bible 6), so a
+// contact sheet of a shot shows every drawing of its loop. Mirrors FILM.pets.ANIMS in cast.js
+// (the timeline is evaluated by the tools without the page, so it keeps its own copy).
 (function () {
   'use strict';
   const FILM = window.FILM;
   const ANIMS = [
-    ['idle', 24],
-    ['walk', 8],
-    ['happy', 8],
-    ['dig', 8],
-    ['attack', 6],
-    ['sleep', 24],
+    ['idle', 12, 6],
+    ['walk', 8, 12],
+    ['happy', 8, 12],
+    ['work', 8, 12],
+    ['attack', 6, 12],
+    ['sleep', 12, 6],
   ];
-  const PETS = ['mole'];
+  const PETS = ['mole', 'mouse', 'badger', 'raccoon', 'cat', 'bulldog', 'ferret', 'shepherd'];
   const shots = [];
   let t = 0;
   let n = 1;
   for (const pet of PETS) {
-    for (const [anim, drawings] of ANIMS) {
-      const dur = drawings / 12;
+    for (const [anim, drawings, fps] of ANIMS) {
+      const dur = drawings / fps;
       shots.push({
         id: `${pet}-${anim}`,
-        file: `${String(n).padStart(2, '0')}-${pet}-${anim}.js`,
+        file: `${String(n).padStart(3, '0')}-${pet}-${anim}.js`,
         start: t,
         end: t + dur,
         mode: 'illustrated',

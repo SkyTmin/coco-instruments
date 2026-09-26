@@ -42,6 +42,8 @@
   FILM.only = null; // shot id when a tool loaded only that shot's file (snap --only); transitions from an unloaded shot are skipped
   FILM.canvas = null;
   FILM.ctx = null;
+  // Coco: ?transparent=1 renders pet sprites on alpha (tools/sprites.cjs)
+  FILM.transparent = typeof location !== 'undefined' && /[?&]transparent=1\b/.test(location.search);
 
   // Global time of the frame being drawn. Read-only for scenes (FILM.lib.T reads it); core sets it before each draw.
   let frameT = 0;
