@@ -55,10 +55,9 @@ chests/*.webp — сундуки по ярусам, закрытые и откр
 
 eggs/*.webp — яйца питомцев: 3D-рендер моделей, собранных кодом
            (scripts/eggs-render, three.js), без чужих файлов.
-icons/pet-*.svg, egg.svg — временные силуэты питомцев до портретов:
-           game-icons.net, CC BY 3.0 — Caro Asercion (mole, hedgehog, fox),
-           Delapouite (squirrel, mouse, sitting-dog, raccoon-head, panda,
-           penguin, beaver, tiger, fox-tail, dolphin, nest-eggs), Lorc
-           (cat, owl, wyvern, raven). Изменения: убран фон-квадрат.
-pets/*.webp — портреты питомцев нарисованы для игры владельцем (ChatGPT)
-           по нашим промптам; фон вырезан.
+icons/egg.svg — яйца в списках наград: game-icons.net, CC BY 3.0 —
+           Delapouite (nest-eggs). Изменения: убран фон-квадрат.
+pets/<вид>/*.webp — питомцы, рисунок тушью по кадрам: собственный код
+           (scripts/pets-ink). Каркас проекта, покадровый рантайм и
+           библиотека штриха — procedural-film, Dean Kuhn, лицензия MIT
+           (scripts/pets-ink/LICENSE-procedural-film). Чужих картинок нет.

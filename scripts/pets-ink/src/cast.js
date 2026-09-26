@@ -30,7 +30,8 @@
     idle: { n: 12, fps: 6, boil: 3 },
     walk: { n: 8, fps: 12, boil: 4 },
     happy: { n: 8, fps: 12, boil: 4 },
-    work: { n: 8, fps: 12, boil: 4 },
+    // the trick reads as a little story (the phoenix burns down and hatches again): slower
+    work: { n: 8, fps: 8, boil: 4 },
     attack: { n: 6, fps: 12, boil: 3 },
     sleep: { n: 12, fps: 6, boil: 3 },
   };

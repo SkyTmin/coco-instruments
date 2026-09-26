@@ -55,14 +55,16 @@ crosses a moving part) still boils.
 
 ## 6. Animations (every pet)
 
-| Id | Drawings | Loop | What reads |
+| Id | Drawings | fps | What reads |
 |---|---|---|---|
-| idle | 24 | yes | breathing, one blink, one small signature twitch |
-| walk | 8 | yes | two steps, feet alternate, body bobs lowest on contact |
-| happy | 8 | yes | crouch, jump, arms up, eyes shut in a smile, land |
-| dig | 8 | yes | the role's work pose (the mole scoops earth) |
-| attack | 6 | yes | wind-up, lunge, three slash marks, recover |
-| sleep | 24 | yes | lying down, slow breathing, rising Z's |
+| idle | 12 | 6 | breathing, one blink, one small signature twitch |
+| walk | 8 | 12 | two steps, feet alternate, body bobs lowest on contact |
+| happy | 8 | 12 | crouch, jump, eyes shut in a smile, land (plays once on a pat) |
+| work | 8 | 8 | the role's trick as a little story (plays once when the game's trick fires) |
+| attack | 6 | 12 | wind-up, lunge, the kit's hit effect, recover |
+| sleep | 12 | 6 | lying down, slow breathing, rising Z's |
+
+Loops close on themselves: boil is `d % period`, so the last drawing leads into the first.
 
 ## 7. Determinism
 

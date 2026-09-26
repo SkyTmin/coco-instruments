@@ -1,5 +1,6 @@
 // Отряд питомцев на кромке поля шахты (v2.72). Сидят и живут своей манерой,
-// тап — погладить (сердечки, раз в десять минут опыт). Каждый в отряде раз в
+// тап — погладить (радость и сердечки, раз в десять минут опыт); трюк играет
+// анимацию работы вида (v2.73). Каждый в отряде раз в
 // `TRICK_EVERY` сломанных блоков делает свой трюк: стор решает, что принёс
 // (`prisonPetTrick`), страница — что происходит на поле (`onTrick`).
 //
@@ -46,6 +47,7 @@ export function MinePets({
   const trick = useFinanceStore((s) => s.prisonPetTrick);
   const pat = useFinanceStore((s) => s.prisonPetPat);
   const [joy, setJoy] = useState<number[]>([0, 0, 0]);
+  const [tricks, setTricks] = useState<number[]>([0, 0, 0]);
   const [said, setSaid] = useState<(string | null)[]>([null, null, null]);
   const els = useRef<(HTMLSpanElement | null)[]>([]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -58,8 +60,8 @@ export function MinePets({
     [],
   );
 
-  const cheer = (i: number, text: string | null) => {
-    setJoy((j) => j.map((x, k) => (k === i ? x + 1 : x)));
+  const cheer = (i: number, text: string | null, happy = true) => {
+    if (happy) setJoy((j) => j.map((x, k) => (k === i ? x + 1 : x)));
     if (text) {
       setSaid((s) => s.map((x, k) => (k === i ? text : x)));
       timers.current.push(
@@ -78,7 +80,8 @@ export function MinePets({
       const t = trick(i);
       if (!t) return;
       petTrick();
-      cheer(i, bubble(t));
+      setTricks((j) => j.map((x, k) => (k === i ? x + 1 : x)));
+      cheer(i, bubble(t), false);
       cb.current(t, els.current[i]);
     });
     // Только по сломанным блокам.
@@ -97,8 +100,8 @@ export function MinePets({
               id={id}
               size={44}
               v={rec.v}
-              fx={false}
               joy={joy[i]}
+              trick={tricks[i]}
               onClick={() => {
                 primeAudio();
                 petPat();
@@ -109,7 +112,7 @@ export function MinePets({
               }}
             />
             {said[i] && (
-              <b key={joy[i]} className="ppets__say">
+              <b key={`${joy[i]}:${tricks[i]}`} className="ppets__say">
                 {said[i]}
               </b>
             )}

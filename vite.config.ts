@@ -39,7 +39,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // webp — только кирки (public/ui/picks/v2, 17 файлов, ~400 КБ): в
+        // webp — кирки, книги, сундуки, яйца (питомцы — нет, см. ниже): в
         // прекеше у каждого ревизия по содержимому, и перерисованная кирка
         // приходит к игроку сама, без смены адреса.
         globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
@@ -47,7 +47,9 @@ export default defineConfig({
         // pdf.js bundle. Emoji are optional decorations; pdf.js is only pulled in
         // lazily when importing a payslip. Precaching them bloated the service
         // worker and blew the build's memory on the small VPS — fetch on demand.
-        globIgnores: ['**/eruda-*.js', '**/emoji/**', '**/pdf-*.js', '**/pdf.worker*'],
+        // Питомцы (ui/pets, ~16 МБ полос кадров) — тоже по требованию: игрок
+        // видит троих из восемнадцати, а не всех разом.
+        globIgnores: ['**/eruda-*.js', '**/emoji/**', '**/pdf-*.js', '**/pdf.worker*', '**/ui/pets/**'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],
         cleanupOutdatedCaches: true,
@@ -68,6 +70,16 @@ export default defineConfig({
             options: {
               cacheName: 'coco-audio',
               expiration: { maxEntries: 320, maxAgeSeconds: 60 * 60 * 24 * 90 },
+            },
+          },
+          {
+            // Полосы кадров питомцев. В адресе ?v=PET_REV (lib/pet-sprites.ts) —
+            // перерисованный питомец не отдастся из старого кеша.
+            urlPattern: ({ url }) => url.pathname.startsWith('/ui/pets/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'coco-pets',
+              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 90 },
             },
           },
           {

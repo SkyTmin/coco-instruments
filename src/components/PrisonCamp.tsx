@@ -1487,7 +1487,7 @@ export function PetIcon({
   size?: number;
   ghost?: boolean;
 }) {
-  return <PetArt id={id} size={size} ghost={ghost} still fx={false} />;
+  return <PetArt id={id} size={size} ghost={ghost} still />;
 }
 
 // ---- Вехи ------------------------------------------------------------------------

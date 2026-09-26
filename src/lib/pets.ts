@@ -1,9 +1,12 @@
-// Питомцы v2.72 — состав, роли, яйца, гнёзда, золотые и радужные, отряд.
+// Питомцы v2.72–v2.73 — состав, роли, яйца, гнёзда, золотые и радужные, отряд.
 //
 // Владелец: «нарисуем новые, дадим им больше механик — в шахте, в подземелье
 // и во дворе… чтобы питомцы были милые и хотелось всех, особенно
-// легендарных». Прежние шесть (кольская фауна) переезжают в новых зверей с
-// тем же опытом (`LEGACY_PET`).
+// легендарных». С v2.73 питомцы нарисованы тушью по кадрам
+// (`scripts/pets-ink`, проект на procedural-film): у каждого шесть анимаций —
+// покой, ходьба, радость, трюк, атака, сон. Состав сменился вместе с
+// рисунком: вместо общих милых зверей — жители лагеря (`PETS_V`, перенос —
+// `normalizePets`).
 //
 // Образцы: Pet Simulator 99 (яйца, золотые и радужные из одинаковых),
 // Hypixel SkyBlock (питомец растёт от работы, у редкого больше силы),
@@ -18,51 +21,23 @@ export type PetStat = 'loot' | 'sell' | 'dmg' | 'token' | 'luck' | 'rate';
 
 export type PetId =
   | 'mole'
-  | 'hamster'
-  | 'hedgehog'
+  | 'roach'
   | 'mouse'
-  | 'corgi'
-  | 'kitten'
-  | 'owlet'
+  | 'pigeon'
+  | 'cat'
+  | 'bulldog'
+  | 'ferret'
+  | 'crow'
+  | 'badger'
+  | 'owl'
   | 'raccoon'
-  | 'panda'
-  | 'penguin'
-  | 'otter'
-  | 'crystalhog'
-  | 'snowcat'
-  | 'firefox'
+  | 'shepherd'
+  | 'fox'
+  | 'spider'
   | 'dragon'
-  | 'phoenix'
-  | 'kitsune'
-  | 'whale';
-
-/**
- * Манера движения — у каждого вида своя (`components/PetArt`). Портрет один,
- * лапами не пошевелить, поэтому движется фигура целиком: кто скачет, кто
- * переваливается, кто парит.
- */
-export type PetMotion =
-  | 'dig'
-  | 'puff'
-  | 'roll'
-  | 'sniff'
-  | 'hop'
-  | 'stretch'
-  | 'look'
-  | 'rub'
-  | 'stand'
-  | 'waddle'
-  | 'float'
-  | 'glint'
-  | 'pounce'
-  | 'flicker'
-  | 'hover'
-  | 'blaze'
-  | 'drift'
-  | 'swim';
-
-/** Частицы вокруг питомца — рисует код, а не картинка. */
-export type PetFx = 'fire' | 'frost' | 'sparks' | 'foxfire' | 'stars' | null;
+  | 'wolf'
+  | 'raven'
+  | 'phoenix';
 
 export interface PetDef {
   id: PetId;
@@ -70,12 +45,7 @@ export interface PetDef {
   /** 0 — Обычный … 5 — Мифический (цвета — `rarity.ts`). */
   rarity: number;
   stats: PetStat[];
-  motion: PetMotion;
-  fx: PetFx;
   lore: string;
-  /** Заглушка, пока нет портрета: иконка game-icons и её цвет. */
-  icon: string;
-  tint: string;
 }
 
 export const PET_RARITY_NAME = [
@@ -98,205 +68,34 @@ export const ROLE: Record<PetStat, { name: string; text: string }> = {
 
 export const ALL_STATS: PetStat[] = ['loot', 'sell', 'dmg', 'token', 'luck', 'rate'];
 
+const pet = (id: PetId, name: string, rarity: number, stats: PetStat[], lore: string): PetDef => ({
+  id,
+  name,
+  rarity,
+  stats,
+  lore,
+});
+
+/** Порядок — по редкости: так же идёт коллекция. */
 export const PETS: PetDef[] = [
-  {
-    id: 'mole',
-    name: 'Кротёнок',
-    rarity: 0,
-    stats: ['loot'],
-    motion: 'dig',
-    fx: null,
-    lore: 'Копает быстрее, чем видит',
-    icon: 'pet-mole',
-    tint: '#8a6a58',
-  },
-  {
-    id: 'hamster',
-    name: 'Хомячок',
-    rarity: 0,
-    stats: ['sell'],
-    motion: 'puff',
-    fx: null,
-    lore: 'Всё своё носит за щекой',
-    icon: 'pet-hamster',
-    tint: '#e0a060',
-  },
-  {
-    id: 'hedgehog',
-    name: 'Ёжик',
-    rarity: 0,
-    stats: ['dmg'],
-    motion: 'roll',
-    fx: null,
-    lore: 'Маленький, колючий и упрямый',
-    icon: 'pet-hedgehog',
-    tint: '#9a7a5a',
-  },
-  {
-    id: 'mouse',
-    name: 'Мышонок',
-    rarity: 0,
-    stats: ['luck'],
-    motion: 'sniff',
-    fx: null,
-    lore: 'Найдёт крошку в любой темноте',
-    icon: 'pet-mouse',
-    tint: '#b8b0b8',
-  },
-  {
-    id: 'corgi',
-    name: 'Щенок',
-    rarity: 1,
-    stats: ['rate'],
-    motion: 'hop',
-    fx: null,
-    lore: 'Шагом ходить не умеет',
-    icon: 'pet-corgi',
-    tint: '#e8a050',
-  },
-  {
-    id: 'kitten',
-    name: 'Котёнок',
-    rarity: 1,
-    stats: ['token'],
-    motion: 'stretch',
-    fx: null,
-    lore: 'Приносит всё, что блестит',
-    icon: 'pet-kitten',
-    tint: '#f09a48',
-  },
-  {
-    id: 'owlet',
-    name: 'Совёнок',
-    rarity: 1,
-    stats: ['luck'],
-    motion: 'look',
-    fx: null,
-    lore: 'Не спит, пока не найдёт',
-    icon: 'pet-owlet',
-    tint: '#c8a878',
-  },
-  {
-    id: 'raccoon',
-    name: 'Енотик',
-    rarity: 1,
-    stats: ['sell'],
-    motion: 'rub',
-    fx: null,
-    lore: 'Моет каждую монетку',
-    icon: 'pet-raccoon',
-    tint: '#9098a8',
-  },
-  {
-    id: 'panda',
-    name: 'Красная панда',
-    rarity: 2,
-    stats: ['dmg'],
-    motion: 'stand',
-    fx: null,
-    lore: 'Сильнее, чем кажется',
-    icon: 'pet-panda',
-    tint: '#d0602e',
-  },
-  {
-    id: 'penguin',
-    name: 'Пингвинёнок',
-    rarity: 2,
-    stats: ['rate'],
-    motion: 'waddle',
-    fx: null,
-    lore: 'Бегает вперевалку, но быстро',
-    icon: 'pet-penguin',
-    tint: '#9aa8bc',
-  },
-  {
-    id: 'otter',
-    name: 'Выдра',
-    rarity: 2,
-    stats: ['loot'],
-    motion: 'float',
-    fx: null,
-    lore: 'Каждый камешек — сокровище',
-    icon: 'pet-otter',
-    tint: '#9a6a48',
-  },
-  {
-    id: 'crystalhog',
-    name: 'Кристальный ёж',
-    rarity: 3,
-    stats: ['token'],
-    motion: 'glint',
-    fx: 'sparks',
-    lore: 'Иголки звенят, как хрусталь',
-    icon: 'pet-hedgehog',
-    tint: '#8fd8ff',
-  },
-  {
-    id: 'snowcat',
-    name: 'Снежный барс',
-    rarity: 3,
-    stats: ['dmg'],
-    motion: 'pounce',
-    fx: 'frost',
-    lore: 'Прыгает на руду из засады',
-    icon: 'pet-snowcat',
-    tint: '#dfe6ee',
-  },
-  {
-    id: 'firefox',
-    name: 'Лисёнок-огонёк',
-    rarity: 3,
-    stats: ['sell'],
-    motion: 'flicker',
-    fx: 'fire',
-    lore: 'Хвост греет лучше костра',
-    icon: 'pet-fox',
-    tint: '#ff8a3a',
-  },
-  {
-    id: 'dragon',
-    name: 'Дракончик',
-    rarity: 4,
-    stats: ['loot', 'dmg'],
-    motion: 'hover',
-    fx: 'fire',
-    lore: 'Дышит огнём на твёрдую руду',
-    icon: 'pet-dragon',
-    tint: '#3fc07a',
-  },
-  {
-    id: 'phoenix',
-    name: 'Феникс',
-    rarity: 4,
-    stats: ['luck', 'token'],
-    motion: 'blaze',
-    fx: 'fire',
-    lore: 'Где пролетел — там удача',
-    icon: 'pet-phoenix',
-    tint: '#ff5a3a',
-  },
-  {
-    id: 'kitsune',
-    name: 'Девятихвостая лиса',
-    rarity: 4,
-    stats: ['sell', 'rate'],
-    motion: 'drift',
-    fx: 'foxfire',
-    lore: 'Девять хвостов — девять хитростей',
-    icon: 'pet-kitsune',
-    tint: '#f2f4ff',
-  },
-  {
-    id: 'whale',
-    name: 'Звёздный кит',
-    rarity: 5,
-    stats: ALL_STATS,
-    motion: 'swim',
-    fx: 'stars',
-    lore: 'Плывёт по воздуху среди звёзд',
-    icon: 'pet-whale',
-    tint: '#3a5aa8',
-  },
+  pet('mole', 'Крот-забойщик', 0, ['loot'], 'Первым лезет в забой, последним вылезает'),
+  pet('roach', 'Таракан-бегун', 0, ['rate'], 'Чемпион тараканьих бегов, номер семь'),
+  pet('mouse', 'Мышь-воришка', 0, ['token'], 'Что плохо лежит — то её'),
+  pet('pigeon', 'Голубь-почтальон', 0, ['luck'], 'Носит вести с воли, иногда хорошие'),
+  pet('cat', 'Кот Шрам', 1, ['sell'], 'Торгуется до последней рыбьей косточки'),
+  pet('bulldog', 'Бульдог Кастет', 1, ['dmg'], 'Лбом пробивает породу'),
+  pet('ferret', 'Хорёк-шнырь', 1, ['rate'], 'Ни секунды на месте'),
+  pet('crow', 'Ворона-барахольщица', 1, ['token'], 'Тащит в гнездо всё, что блестит'),
+  pet('badger', 'Барсук-проходчик', 2, ['loot'], 'Ведёт штрек как по линейке'),
+  pet('owl', 'Сова-фонарщица', 2, ['luck'], 'Светит туда, где спрятано'),
+  pet('raccoon', 'Енот-медвежатник', 2, ['dmg'], 'Вскрывает руду, как сейф'),
+  pet('shepherd', 'Овчарка Верная', 3, ['dmg'], 'Бывшая конвойная, теперь своя'),
+  pet('fox', 'Лис-картёжник', 3, ['sell'], 'Туз всегда за ухом'),
+  pet('spider', 'Паук-отмычка', 3, ['rate'], 'Восемь лап — восемь отмычек'),
+  pet('dragon', 'Угольный дракон', 4, ['loot', 'sell'], 'Плавит камень в золото'),
+  pet('wolf', 'Волк-вожак', 4, ['dmg', 'rate'], 'Цепь порвал — стаю собрал'),
+  pet('raven', 'Ворон-ключник', 4, ['luck', 'token'], 'Ключи от всех дверей лагеря'),
+  pet('phoenix', 'Феникс свободы', 5, ALL_STATS, 'Сгорает и встаёт — и каждый раз свободнее'),
 ];
 
 export const petOf = (id: PetId): PetDef => PETS.find((x) => x.id === id)!;
@@ -647,11 +446,20 @@ export function trickRole(id: PetId, turn: number): PetStat {
 }
 
 // ---------------------------------------------------------------------------
-// Перенос сохранений v2.49–v2.71: шесть зверей кольской фауны → новые виды
-// той же роли, опыт сохраняется.
+// Перенос сохранений. Схема питомцев — `PETS_V` в сохранении:
+//   нет / 1 — v2.49–v2.71, шесть зверей кольской фауны (`LEGACY_PET`);
+//   2 — v2.72, общие милые звери (`V2_PET`);
+//   3 — v2.73, жители лагеря (`PETS`).
+// Версия обязательна: ключи `fox`, `raven`, `owl` в старой схеме значили
+// песца, ворона и сову, а теперь это эпический лис, легендарный ворон и
+// редкая сова — без версии старый песец стал бы бесплатным эпиком.
+// Переезд по редкости, роль — какая ближе; опыт и копии сохраняются.
 // ---------------------------------------------------------------------------
 
-export const LEGACY_PET: Record<string, PetId> = {
+export const PETS_V = 3;
+
+/** v2.49–v2.71 → v2.72. */
+export const LEGACY_PET: Record<string, string> = {
   lemming: 'mole',
   fox: 'hamster',
   wolverine: 'hedgehog',
@@ -660,30 +468,74 @@ export const LEGACY_PET: Record<string, PetId> = {
   calf: 'corgi',
 };
 
+/** v2.72 → v2.73: редкость та же, роль по возможности тоже. */
+export const V2_PET: Record<string, PetId> = {
+  mole: 'mole',
+  hamster: 'mouse',
+  hedgehog: 'roach',
+  mouse: 'pigeon',
+  corgi: 'ferret',
+  kitten: 'crow',
+  owlet: 'bulldog',
+  raccoon: 'cat',
+  panda: 'raccoon',
+  penguin: 'owl',
+  otter: 'badger',
+  crystalhog: 'spider',
+  snowcat: 'shepherd',
+  firefox: 'fox',
+  dragon: 'dragon',
+  phoenix: 'raven',
+  kitsune: 'wolf',
+  whale: 'phoenix',
+};
+
+/** Ключ сохранения → нынешний вид (или ничего). */
+export function petFromSave(key: unknown, ver: number): PetId | undefined {
+  if (typeof key !== 'string') return undefined;
+  if (ver >= PETS_V) return isPetId(key) ? key : undefined;
+  return V2_PET[LEGACY_PET[key] ?? key];
+}
+
 const num = (v: unknown, lo: number, hi: number, dflt: number): number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : dflt;
 
+/** Версия схемы из сохранения: v2.72 писал записи, но без номера. */
+export function petsVerOf(raw: { petsV?: unknown; pets?: unknown }): number {
+  const v = num(raw.petsV, 0, 99, 0);
+  if (v) return v;
+  const pets = raw.pets && typeof raw.pets === 'object' ? Object.values(raw.pets as object) : [];
+  return pets.some((x) => x && typeof x === 'object') ? 2 : 1;
+}
+
 /** Питомцы из сохранения любой версии: число (старый опыт) или запись. */
-export function normalizePets(raw: unknown): Pets {
+export function normalizePets(raw: unknown, ver: number = PETS_V): Pets {
   const out: Pets = {};
   if (!raw || typeof raw !== 'object') return out;
   for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
-    const id = isPetId(key) ? key : LEGACY_PET[key];
+    const id = petFromSave(key, ver);
     if (!id) continue;
-    if (typeof val === 'number') {
-      const xp = num(val, 0, 1e12, 0);
-      const had = out[id];
-      out[id] = had ? { ...had, xp: Math.max(had.xp, xp) } : { ...newPetRec(), xp };
-      continue;
-    }
-    if (!val || typeof val !== 'object') continue;
-    const r = val as Partial<PetRec>;
-    out[id] = {
-      xp: num(r.xp, 0, 1e12, 0),
-      dup: num(r.dup, 0, 1e6, 0),
-      v: num(r.v, 0, MERGE_NEED.length, 0),
-      pat: num(r.pat, 0, 1e15, 0),
-    };
+    let rec: PetRec;
+    if (typeof val === 'number') rec = { ...newPetRec(), xp: num(val, 0, 1e12, 0) };
+    else if (val && typeof val === 'object') {
+      const r = val as Partial<PetRec>;
+      rec = {
+        xp: num(r.xp, 0, 1e12, 0),
+        dup: num(r.dup, 0, 1e6, 0),
+        v: num(r.v, 0, MERGE_NEED.length, 0),
+        pat: num(r.pat, 0, 1e15, 0),
+      };
+    } else continue;
+    // два старых ключа в одном новом виде: берём лучшее, копии складываем
+    const had = out[id];
+    out[id] = had
+      ? {
+          xp: Math.max(had.xp, rec.xp),
+          dup: had.dup + rec.dup,
+          v: Math.max(had.v, rec.v),
+          pat: Math.max(had.pat, rec.pat),
+        }
+      : rec;
   }
   return out;
 }
@@ -694,11 +546,12 @@ export function normalizeSquad(
   legacyPet: unknown,
   pets: Pets,
   slots: number,
+  ver: number = PETS_V,
 ): PetId[] {
   const src = Array.isArray(raw) ? raw : legacyPet ? [legacyPet] : [];
   const out: PetId[] = [];
   for (const x of src) {
-    const id = isPetId(x) ? x : typeof x === 'string' ? LEGACY_PET[x] : undefined;
+    const id = petFromSave(x, ver);
     if (!id || !pets[id] || out.includes(id)) continue;
     if (out.length >= Math.min(SQUAD_MAX, slots)) break;
     out.push(id);

@@ -1112,7 +1112,7 @@ export function FishingPage() {
             aria-label="Покормить питомца уловом"
           >
             {petOn ? (
-              <PetArt id={petOn} size={30} v={prison.pets[petOn]?.v ?? 0} still fx={false} />
+              <PetArt id={petOn} size={30} v={prison.pets[petOn]?.v ?? 0} still />
             ) : (
               <GxIcon name="paw" size={28} />
             )}

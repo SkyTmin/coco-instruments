@@ -51,6 +51,8 @@ import {
   normalizeNest,
   normalizePets,
   normalizeSquad,
+  petsVerOf,
+  PETS_V,
   NO_EGGS,
   petBonus,
   petLevelOf,
@@ -3014,6 +3016,8 @@ export interface PrisonState {
   /** Приручённые питомцы и отряд — кто с собой (v2.72: до трёх). */
   pets: Pets;
   squad: PetId[];
+  /** Схема ключей `pets` (`PETS_V`): старые схемы переносятся при чтении. */
+  petsV: number;
   /** Яйца: корзина, гнёзда, счётчик гарантии, сколько вылупилось всего. */
   eggs: Eggs;
   nest: Nest[];
@@ -3104,6 +3108,7 @@ export const PRISON_START: PrisonState = {
   sockets: [0, 0, 0, 0],
   pets: {},
   squad: [],
+  petsV: PETS_V,
   eggs: NO_EGGS,
   nest: [],
   eggPity: 0,
@@ -3358,6 +3363,7 @@ interface LootState {
   sockets: number[];
   pets: Pets;
   squad: PetId[];
+  petsV: number;
   eggs: Eggs;
   nest: Nest[];
   eggPity: number;
@@ -3393,15 +3399,17 @@ function normalizeLoot(raw: Partial<PrisonState>): LootState {
     used.add(id);
     return id;
   });
-  // v2.72: питомцы — записи, а не числа; прежние шесть переезжают в новых
-  // зверей с тем же опытом, `pet` становится первым в отряде.
-  const pets = normalizePets(raw.pets);
+  // v2.72: питомцы — записи, а не числа, `pet` становится первым в отряде.
+  // v2.73: новый состав; старые схемы переезжают по редкости (`PETS_V`).
+  const ver = petsVerOf(raw);
+  const pets = normalizePets(raw.pets, ver);
   const legacy = (raw as { pet?: unknown }).pet;
   const squad = normalizeSquad(
     raw.squad,
     legacy,
     pets,
     squadSlots(int(raw.rank, 0, LAST_RANK, 0), int(raw.prestige, 0, 1e6, 0)),
+    ver,
   );
   return {
     parcels,
@@ -3411,6 +3419,7 @@ function normalizeLoot(raw: Partial<PrisonState>): LootState {
     sockets,
     pets,
     squad,
+    petsV: PETS_V,
     eggs: normalizeEggs(raw.eggs),
     nest: normalizeNest(raw.nest),
     eggPity: int(raw.eggPity, 0, EGG_PITY, 0),

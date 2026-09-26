@@ -1407,7 +1407,6 @@ export function ForestPage() {
                     id={prison.squad[0]}
                     size={30}
                     v={prison.pets[prison.squad[0]]?.v ?? 0}
-                    fx={false}
                   />
                 </span>
               )}

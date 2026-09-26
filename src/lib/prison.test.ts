@@ -1412,15 +1412,15 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
   it('прибавки рун и питомца упираются в потолок', () => {
     const runes = [1, 2, 3, 4].map((id) => ({ id, kind: 'token' as const, tier: 5, roll: 100 }));
     const big = { xp: 1e12, dup: 0, v: 2, pat: 0 };
-    const b = bonusOf({ runes, sockets: [1, 2, 3, 4], squad: ['kitten'], pets: { kitten: big } });
+    const b = bonusOf({ runes, sockets: [1, 2, 3, 4], squad: ['crow'], pets: { crow: big } });
     expect(b.token).toBe(BONUS_CAP.token);
     // Продажу даже полный набор не выводит за +100%: её потолок — край.
     const sell = [1, 2, 3, 4].map((id) => ({ id, kind: 'sell' as const, tier: 5, roll: 100 }));
     const s = bonusOf({
       runes: sell,
       sockets: [1, 2, 3, 4],
-      squad: ['hamster', 'raccoon', 'kitsune'],
-      pets: { hamster: big, raccoon: big, kitsune: big },
+      squad: ['cat', 'fox', 'dragon'],
+      pets: { cat: big, fox: big, dragon: big },
     });
     expect(s.sell).toBeLessThanOrEqual(BONUS_CAP.sell);
     // Без питомца и рун — ноль, а не NaN.
@@ -1469,13 +1469,13 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
     expect(a.p.runes.length).toBe(RUNE_BAG);
     expect(a.shattered).toBe(RUNE_SHATTER[2]);
     expect(a.p.tokens).toBe(full.tokens + RUNE_SHATTER[2]);
-    const b = applyReward(base, { kind: 'pet', id: 'kitten' });
-    expect(b.newPet).toBe('kitten');
-    expect(b.p.squad).toEqual(['kitten']);
+    const b = applyReward(base, { kind: 'pet', id: 'crow' });
+    expect(b.newPet).toBe('crow');
+    expect(b.p.squad).toEqual(['crow']);
     // Второй такой же — не новый питомец, а копия к золотому.
-    const c = applyReward(b.p, { kind: 'pet', id: 'kitten' });
+    const c = applyReward(b.p, { kind: 'pet', id: 'crow' });
     expect(c.newPet).toBeNull();
-    expect(c.p.pets.kitten?.dup).toBe(1);
+    expect(c.p.pets.crow?.dup).toBe(1);
     // Яйцо — в гнездо, пока есть место, потом в корзину.
     const e1 = applyReward(base, { kind: 'egg', egg: 'moss' });
     const e2 = applyReward(e1.p, { kind: 'egg', egg: 'stone' });
@@ -1548,8 +1548,8 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
     });
     expect(s.runes).toEqual([{ id: 3, kind: 'sell', tier: RUNE_TIERS, roll: 100 }]);
     expect(s.sockets).toEqual([3, 0, 0, 0]);
-    // Старая сова переехала в совёнка с тем же опытом.
-    expect(s.pets).toEqual({ owlet: { xp: 120, dup: 0, v: 0, pat: 0 } });
+    // Старая сова переехала (через совёнка v2.72) в бульдога той же редкости с тем же опытом.
+    expect(s.pets).toEqual({ bulldog: { xp: 120, dup: 0, v: 0, pat: 0 } });
     // Питомца, которого нет, с собой не водят.
     expect(s.squad).toEqual([]);
     expect(s.parcels).toEqual([{ tier: 'epic', left: PARCEL_NEED.epic }]);

@@ -7313,14 +7313,13 @@ button.fg-slot {
 }
 
 /* ============================================================================
-   Питомцы (v2.72) — components/PetArt.tsx. Движется только transform и
-   opacity. Портрет один, поэтому у каждого вида своя манера движения всей
-   фигуры; фаза — `--pd`, чтобы отряд не дышал хором.
+   Питомцы (v2.73) — components/PetArt.tsx. Кадры тушью полосой в одном WebP,
+   кадр сменяет `steps()` сдвигом полосы: только transform. Фаза — `--pd`,
+   чтобы отряд не дышал хором.
    ============================================================================ */
 .pet {
   position: relative;
-  display: inline-grid;
-  place-items: center;
+  display: inline-block;
   width: var(--ps);
   height: var(--ps);
   flex: none;
@@ -7329,90 +7328,41 @@ button.fg-slot {
 .pet[role='button'] {
   cursor: pointer;
 }
-.pet__joy,
-.pet__body,
-.pet__breath {
+/* Окно на один кадр: полоса едет внутри, клип — у окна (полоса без фильтров,
+   так что клип ничего не растеризует заново). */
+.pet__frame {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-}
-.pet__body {
-  transform-origin: 50% 92%;
-  animation: var(--pm, none) var(--pdur, 3s) ease-in-out var(--pd, 0s) infinite;
-}
-.pet__breath {
-  transform-origin: 50% 100%;
-  animation: pet-breath 2.9s ease-in-out var(--pd, 0s) infinite;
-}
-.pet.is-still .pet__body,
-.pet.is-still .pet__breath {
-  animation: none;
-}
-@keyframes pet-breath {
-  50% {
-    transform: scale(1.015, 1.035);
-  }
-}
-.pet__img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  filter: drop-shadow(0 calc(var(--ps) * 0.03) calc(var(--ps) * 0.03) rgba(0, 0, 0, 0.45));
+  overflow: hidden;
   pointer-events: none;
 }
-/* Второй кадр (глаза закрыты) — моргание раз в несколько секунд. */
-.pet__img--happy {
+.pet__strip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  max-width: none;
+  animation: pet-play var(--pt, 1s) steps(var(--n, 1)) var(--pd, 0s) infinite;
+  -webkit-user-drag: none;
+}
+.pet__strip.is-once {
+  animation-delay: 0s;
+  animation-iteration-count: 1;
+}
+@keyframes pet-play {
+  to {
+    transform: translateX(-100%);
+  }
+}
+.pet__thumb {
   position: absolute;
   inset: 0;
-  opacity: 0;
-  animation: pet-blink 4.6s steps(1) var(--pd, 0s) infinite;
-}
-@keyframes pet-blink {
-  0%,
-  95% {
-    opacity: 0;
-  }
-  96%,
-  98% {
-    opacity: 1;
-  }
-}
-.pet.is-joy .pet__img--happy {
-  animation: none;
-  opacity: 1;
-}
-/* Заглушка до портрета: силуэт вида в его цвете, с объёмом градиентом. */
-.pet__sil {
-  width: 84%;
-  height: 84%;
-  background: linear-gradient(
-    165deg,
-    color-mix(in srgb, var(--tint) 45%, #fff),
-    var(--tint) 55%,
-    color-mix(in srgb, var(--tint) 60%, #000)
-  );
-  -webkit-mask: var(--pimg) center / contain no-repeat;
-  mask: var(--pimg) center / contain no-repeat;
-}
-/* Обводка силуэта — на обёртке: маска срезала бы тень самого силуэта. Внутри
-   обёртки ничего не движется (см. «Под filter нельзя анимировать ничего»). */
-.pet__silw {
-  display: grid;
-  place-items: center;
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 0 1px rgba(30, 18, 8, 0.85)) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
-.pet.is-ghost .pet__silw {
-  filter: none;
-}
-.pet.is-ghost .pet__sil {
-  background: rgba(60, 40, 20, 0.22);
-  filter: none;
-}
-.pet.is-ghost.has-art .pet__img {
-  filter: brightness(0) opacity(0.5);
+.pet.is-ghost .pet__thumb {
+  filter: brightness(0) opacity(0.45);
 }
 /* Ореол редкости: статичный градиент, у легендарных и радужных — лучи,
    нарисованные один раз и крутящиеся трансформом. */
@@ -7452,225 +7402,18 @@ button.fg-slot {
 .pet.is-still .pet__rays {
   animation: none;
 }
-/* Золотой: статичный фильтр цвета и блик по силуэту раз в три секунды. */
-.pet.v1 .pet__img {
-  filter: sepia(0.85) saturate(2.4) hue-rotate(-12deg) brightness(1.08)
-    drop-shadow(0 0 calc(var(--ps) * 0.05) rgba(255, 200, 60, 0.8));
+/* Золотой и радужный — статичный фильтр на самой полосе: её трансформ
+   двигает готовый слой, фильтр не пересчитывается (а на родителе — пересчитывался бы). */
+.pet.v1 :is(.pet__strip, .pet__thumb) {
+  filter: sepia(0.8) saturate(2.2) hue-rotate(-12deg) brightness(1.06)
+    drop-shadow(0 0 calc(var(--ps) * 0.03) rgba(255, 200, 60, 0.85));
 }
-.pet.v1 .pet__silw {
-  filter: drop-shadow(0 0 1px #6a3c00) drop-shadow(0 0 calc(var(--ps) * 0.05) rgba(255, 200, 60, 0.8));
-}
-.pet.v1 .pet__sil {
-  background: linear-gradient(165deg, #fff4c0, #ffc53d 55%, #a86a08);
-}
-.pet__shine {
-  position: absolute;
-  inset: 0;
-  -webkit-mask: var(--pimg) center / contain no-repeat;
-  mask: var(--pimg) center / contain no-repeat;
-  overflow: hidden;
-  pointer-events: none;
-}
-.pet__shine::before {
-  content: '';
-  position: absolute;
-  top: -20%;
-  bottom: -20%;
-  left: 0;
-  width: 40%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.85), transparent);
-  transform: translateX(-120%) skewX(-18deg);
-  animation: pet-shine 3.2s ease-in-out var(--pd, 0s) infinite;
-}
-.pet.v2 .pet__shine::before {
-  background: linear-gradient(
-    100deg,
-    transparent,
-    rgba(255, 120, 200, 0.7),
-    rgba(120, 220, 255, 0.8),
-    rgba(255, 240, 120, 0.7),
-    transparent
-  );
-}
-@keyframes pet-shine {
-  0%,
-  55% {
-    transform: translateX(-120%) skewX(-18deg);
-  }
-  85%,
-  100% {
-    transform: translateX(300%) skewX(-18deg);
-  }
-}
-.pet.is-still .pet__shine::before {
-  animation: none;
+.pet.v2 :is(.pet__strip, .pet__thumb) {
+  filter: saturate(1.35) drop-shadow(0 0 calc(var(--ps) * 0.025) #ff6fd8)
+    drop-shadow(0 0 calc(var(--ps) * 0.04) #5fd3ff);
 }
 
-/* ---- Манеры движения видов ------------------------------------------------ */
-.pet--dig { --pm: pet-dig; --pdur: 2.8s; }
-.pet--puff { --pm: pet-puff; --pdur: 3.2s; }
-.pet--roll { --pm: pet-roll; --pdur: 6s; }
-.pet--sniff { --pm: pet-sniff; --pdur: 2.4s; }
-.pet--hop { --pm: pet-hop; --pdur: 1.9s; }
-.pet--stretch { --pm: pet-stretch; --pdur: 5s; }
-.pet--look { --pm: pet-look; --pdur: 4.2s; }
-.pet--rub { --pm: pet-rub; --pdur: 3s; }
-.pet--stand { --pm: pet-stand; --pdur: 4.6s; }
-.pet--waddle { --pm: pet-waddle; --pdur: 1.2s; }
-.pet--float { --pm: pet-float; --pdur: 4s; }
-.pet--glint { --pm: pet-glint; --pdur: 3.6s; }
-.pet--pounce { --pm: pet-pounce; --pdur: 5.2s; }
-.pet--flicker { --pm: pet-flicker; --pdur: 2.6s; }
-.pet--hover { --pm: pet-hover; --pdur: 2.2s; }
-.pet--blaze { --pm: pet-blaze; --pdur: 1.8s; }
-.pet--drift { --pm: pet-drift; --pdur: 7s; }
-.pet--swim { --pm: pet-swim; --pdur: 6s; }
-.pet--roll .pet__body { transform-origin: 50% 58%; }
-.pet--look .pet__body,
-.pet--hover .pet__body,
-.pet--blaze .pet__body,
-.pet--drift .pet__body,
-.pet--swim .pet__body,
-.pet--float .pet__body { transform-origin: 50% 50%; }
-
-/* Кротёнок: дважды клюёт носом в землю. */
-@keyframes pet-dig {
-  0%, 58%, 100% { transform: none; }
-  64% { transform: translateY(5%) rotate(11deg); }
-  70% { transform: translateY(0) rotate(-2deg); }
-  76% { transform: translateY(4%) rotate(9deg); }
-  84% { transform: none; }
-}
-/* Хомячок: надувает щёки — шире и ниже. */
-@keyframes pet-puff {
-  0%, 52%, 100% { transform: none; }
-  60% { transform: scale(1.1, 0.94); }
-  67% { transform: scale(1.05, 0.97); }
-  74% { transform: scale(1.1, 0.94); }
-  86% { transform: none; }
-}
-/* Ёжик: сворачивается клубком, прокатывается и разворачивается. */
-@keyframes pet-roll {
-  0%, 66%, 100% { transform: none; }
-  70% { transform: scale(0.86); }
-  80% { transform: translateX(16%) rotate(200deg) scale(0.82); }
-  88% { transform: translateX(0) rotate(360deg) scale(0.86); }
-  94% { transform: rotate(360deg) scale(1.04, 0.96); }
-}
-/* Мышонок: принюхивается — быстрые покачивания носом. */
-@keyframes pet-sniff {
-  0%, 48%, 100% { transform: none; }
-  52% { transform: translateY(-2%) rotate(-4deg); }
-  56% { transform: translateY(-1%) rotate(3deg); }
-  60% { transform: translateY(-2%) rotate(-4deg); }
-  64% { transform: translateY(-1%) rotate(3deg); }
-  70% { transform: none; }
-}
-/* Щенок: скачет — присел, взлетел, приземлился с отдачей. */
-@keyframes pet-hop {
-  0% { transform: scale(1.06, 0.94); }
-  16% { transform: translateY(-17%) scale(0.95, 1.06); }
-  32% { transform: scale(1.09, 0.91); }
-  42%, 100% { transform: none; }
-}
-/* Котёнок: потягивается. */
-@keyframes pet-stretch {
-  0%, 56%, 100% { transform: none; }
-  66% { transform: translateX(3%) scale(1.13, 0.9); }
-  80% { transform: translateX(3%) scale(1.13, 0.9); }
-  90% { transform: none; }
-}
-/* Совёнок: вертит головой — всей фигурой, с паузами. */
-@keyframes pet-look {
-  0%, 26%, 100% { transform: none; }
-  32%, 54% { transform: rotate(-11deg); }
-  60%, 82% { transform: rotate(10deg); }
-  88% { transform: none; }
-}
-/* Енотик: трёт лапки — мелкая дрожь влево-вправо. */
-@keyframes pet-rub {
-  0%, 56%, 100% { transform: none; }
-  60% { transform: translateX(-2%) rotate(-2deg); }
-  64% { transform: translateX(2%) rotate(2deg); }
-  68% { transform: translateX(-2%) rotate(-2deg); }
-  72% { transform: translateX(2%) rotate(2deg); }
-  76% { transform: translateX(-2%) rotate(-2deg); }
-  82% { transform: none; }
-}
-/* Красная панда: встаёт на задние лапы. */
-@keyframes pet-stand {
-  0%, 48%, 100% { transform: none; }
-  58%, 74% { transform: translateY(-7%) scale(0.95, 1.1); }
-  84% { transform: scale(1.04, 0.96); }
-  90% { transform: none; }
-}
-/* Пингвинёнок: переваливается без остановки. */
-@keyframes pet-waddle {
-  0%, 100% { transform: translateX(-2%) rotate(-6deg); }
-  50% { transform: translateX(2%) rotate(6deg); }
-}
-/* Выдра: покачивается на волне. */
-@keyframes pet-float {
-  0%, 100% { transform: translateY(0) rotate(-3deg); }
-  50% { transform: translateY(-5%) rotate(3deg); }
-}
-/* Кристальный ёж: дышит медленно, игру делают искры. */
-@keyframes pet-glint {
-  0%, 100% { transform: none; }
-  50% { transform: scale(1.03); }
-}
-/* Снежный барс: приседает, прыгает вперёд, приземляется. */
-@keyframes pet-pounce {
-  0%, 48%, 100% { transform: none; }
-  58% { transform: translateX(-4%) scale(1.06, 0.87); }
-  66% { transform: translateX(10%) translateY(-14%) rotate(-7deg); }
-  74% { transform: translateX(6%) scale(1.07, 0.93); }
-  88% { transform: none; }
-}
-/* Лисёнок-огонёк: пританцовывает, хвост горит. */
-@keyframes pet-flicker {
-  0%, 100% { transform: rotate(-3deg); }
-  25% { transform: translateY(-3%) rotate(0deg); }
-  50% { transform: rotate(3deg); }
-  75% { transform: translateY(-3%) rotate(0deg); }
-}
-/* Дракончик: висит в воздухе, подрагивая от взмахов крыльев. */
-@keyframes pet-hover {
-  0%, 100% { transform: translateY(3%) scale(1, 0.98); }
-  15% { transform: translateY(-2%) scale(0.98, 1.02); }
-  50% { transform: translateY(-7%) scale(1, 0.98); }
-  65% { transform: translateY(-4%) scale(0.98, 1.02); }
-}
-/* Феникс: резче и выше — горит. */
-@keyframes pet-blaze {
-  0%, 100% { transform: translateY(2%); }
-  30% { transform: translateY(-9%) scale(1.03); }
-  60% { transform: translateY(-4%); }
-}
-/* Девятихвостая лиса: плывёт по воздуху восьмёркой. */
-@keyframes pet-drift {
-  0%, 100% { transform: translate(0, 0) rotate(0deg); }
-  25% { transform: translate(6%, -5%) rotate(3deg); }
-  50% { transform: translate(0, -2%) rotate(0deg); }
-  75% { transform: translate(-6%, -5%) rotate(-3deg); }
-}
-/* Звёздный кит: плывёт, покачиваясь как в толще воды. */
-@keyframes pet-swim {
-  0%, 100% { transform: translate(-4%, 2%) rotate(-4deg); }
-  50% { transform: translate(4%, -4%) rotate(4deg); }
-}
-
-/* ---- Радость на ласку: прыжок и сердечки --------------------------------- */
-.pet.is-joy .pet__joy {
-  animation: pet-joy 700ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
-}
-@keyframes pet-joy {
-  0% { transform: none; }
-  18% { transform: scale(1.12, 0.86); }
-  45% { transform: translateY(-22%) scale(0.94, 1.08); }
-  72% { transform: scale(1.08, 0.92); }
-  100% { transform: none; }
-}
+/* ---- Сердечки на ласку ------------------------------------------------------ */
 .pet__hearts {
   position: absolute;
   inset: 0;
@@ -7679,10 +7422,10 @@ button.fg-slot {
 .pet__hearts i {
   position: absolute;
   left: 50%;
-  top: 30%;
-  width: calc(var(--ps) * 0.22);
-  height: calc(var(--ps) * 0.22);
-  margin-left: calc(var(--ps) * -0.11);
+  top: 22%;
+  width: calc(var(--ps) * 0.2);
+  height: calc(var(--ps) * 0.2);
+  margin-left: calc(var(--ps) * -0.1);
   background: #ff5a7a;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.3C6 16.8 2 13.2 2 8.7 2 5.6 4.4 3.3 7.3 3.3c1.9 0 3.6 1 4.7 2.5 1.1-1.5 2.8-2.5 4.7-2.5 2.9 0 5.3 2.3 5.3 5.4 0 4.5-4 8.1-10 12.6z'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.3C6 16.8 2 13.2 2 8.7 2 5.6 4.4 3.3 7.3 3.3c1.9 0 3.6 1 4.7 2.5 1.1-1.5 2.8-2.5 4.7-2.5 2.9 0 5.3 2.3 5.3 5.4 0 4.5-4 8.1-10 12.6z'/%3E%3C/svg%3E") center / contain no-repeat;
@@ -7702,76 +7445,6 @@ button.fg-slot {
   100% { opacity: 0; transform: translate(calc(var(--hx, 0) * 2), -140%) scale(1); }
 }
 
-/* ---- Частицы вида ------------------------------------------------------------ */
-.pet__fx {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.pet__fx i {
-  position: absolute;
-  width: calc(var(--ps) * 0.1);
-  height: calc(var(--ps) * 0.1);
-  border-radius: 50%;
-  opacity: 0;
-}
-.pet__fx i:nth-child(1) { left: 22%; top: 60%; animation-delay: 0s; }
-.pet__fx i:nth-child(2) { left: 68%; top: 52%; animation-delay: -0.5s; }
-.pet__fx i:nth-child(3) { left: 44%; top: 70%; animation-delay: -1s; }
-.pet__fx i:nth-child(4) { left: 78%; top: 30%; animation-delay: -1.4s; }
-.pet__fx i:nth-child(5) { left: 12%; top: 36%; animation-delay: -1.9s; }
-/* Огонь: язычки поднимаются и гаснут. */
-.pet__fx--fire i {
-  background: radial-gradient(closest-side, #fff3b0, #ffae3a 45%, rgba(255, 80, 20, 0) 75%);
-  animation: pet-fire 1.6s ease-out infinite;
-}
-@keyframes pet-fire {
-  0% { opacity: 0; transform: translateY(0) scale(0.6); }
-  20% { opacity: 0.95; }
-  100% { opacity: 0; transform: translateY(calc(var(--ps) * -0.4)) scale(0.2); }
-}
-/* Лисьи огоньки: голубые, кружат. */
-.pet__fx--foxfire i {
-  background: radial-gradient(closest-side, #ffffff, #8fd8ff 45%, rgba(60, 140, 255, 0) 75%);
-  animation: pet-foxfire 2.4s ease-in-out infinite;
-}
-@keyframes pet-foxfire {
-  0%, 100% { opacity: 0.2; transform: translate(0, 0) scale(0.7); }
-  50% { opacity: 1; transform: translate(calc(var(--ps) * 0.06), calc(var(--ps) * -0.12)) scale(1); }
-}
-/* Иней: снежинки опускаются. */
-.pet__fx--frost i {
-  width: calc(var(--ps) * 0.06);
-  height: calc(var(--ps) * 0.06);
-  background: #eef8ff;
-  box-shadow: 0 0 calc(var(--ps) * 0.04) #bfe6ff;
-  animation: pet-frost 3s linear infinite;
-}
-@keyframes pet-frost {
-  0% { opacity: 0; transform: translateY(calc(var(--ps) * -0.35)); }
-  20%, 70% { opacity: 0.9; }
-  100% { opacity: 0; transform: translateY(calc(var(--ps) * 0.15)); }
-}
-/* Искры и звёзды: мигают на месте четырёхлучевой звёздочкой. */
-.pet__fx--sparks i,
-.pet__fx--stars i {
-  border-radius: 0;
-  background: #ffffff;
-  -webkit-mask: url(/ui/icons/sparkles.svg) center / contain no-repeat;
-  mask: url(/ui/icons/sparkles.svg) center / contain no-repeat;
-  animation: pet-spark 2.2s ease-in-out infinite;
-}
-.pet__fx--sparks i {
-  background: #bfe8ff;
-}
-.pet__fx--stars i {
-  background: #fff3a0;
-}
-@keyframes pet-spark {
-  0%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
-  50% { opacity: 1; transform: scale(1) rotate(45deg); }
-}
-
 /* Яйцо */
 .pegg-img {
   display: block;
@@ -7781,12 +7454,9 @@ button.fg-slot {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pet__body,
-  .pet__breath,
+  .pet__strip,
   .pet__rays,
-  .pet__shine::before,
-  .pet__fx i,
-  .pet__img--happy {
+  .pet__hearts i {
     animation: none !important;
   }
 }
@@ -8136,6 +7806,12 @@ button.fg-slot {
   0% { opacity: 0; transform: translate(-50%, 10px); }
   20% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -18px); }
+}
+.ppn-sheet__acts {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .ppn-sheet__name {
   display: flex;

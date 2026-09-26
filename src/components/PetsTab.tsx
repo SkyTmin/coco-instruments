@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom';
 import { GxBar, GxModal, KIcon } from '@/components/gx';
 import { RarityName, rarityVars } from '@/components/PickArt';
 import { EggArt, PetArt } from '@/components/PetArt';
+import type { PetAnim } from '@/components/PetArt';
 import { CoinIcon } from '@/components/slot-art';
 import { useFinanceStore } from '@/store';
 import type { HatchResult } from '@/store';
@@ -348,6 +349,14 @@ export function PetsTab() {
 
 // ---- Карточка питомца --------------------------------------------------------
 
+/** Витрина в карточке: каждая анимация вида по кнопке. */
+const SHOWCASE: [PetAnim, string][] = [
+  ['happy', 'Радость'],
+  ['work', 'Трюк'],
+  ['attack', 'Атака'],
+  ['sleep', 'Сон'],
+];
+
 function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
   const p = useFinanceStore((s) => s.prison);
   const pat = useFinanceStore((s) => s.prisonPetPat);
@@ -355,6 +364,7 @@ function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
   const setSquad = useFinanceStore((s) => s.prisonSquadSet);
   const [joy, setJoy] = useState(0);
   const [xpPop, setXpPop] = useState(0);
+  const [show, setShow] = useState<{ anim: PetAnim; k: number } | null>(null);
   const def = petOf(id);
   const rec = p.pets[id];
   const r = def.rarity;
@@ -372,6 +382,7 @@ function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
           v={rec?.v ?? 0}
           ghost={!rec}
           joy={joy}
+          play={show}
           onClick={
             rec
               ? () => {
@@ -390,6 +401,23 @@ function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
           </b>
         )}
       </div>
+      {rec && (
+        <div className="ppn-sheet__acts">
+          {SHOWCASE.map(([anim, label]) => (
+            <button
+              key={anim}
+              type="button"
+              className="gx-btn gx-btn--sm"
+              onClick={() => {
+                tapLight();
+                setShow((s) => ({ anim, k: (s?.k ?? 0) + 1 }));
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="ppn-sheet__name">
         <RarityName rarity={r}>
           {rec && rec.v ? `${VARIANT_NAME[rec.v]} ` : ''}
@@ -671,7 +699,7 @@ function HatchScene({
         )}
         {shown && (
           <span className="phs__pet">
-            <PetArt id={res.id} size={190} v={rec?.v ?? 0} />
+            <PetArt id={res.id} size={190} v={rec?.v ?? 0} intro="happy" />
           </span>
         )}
       </div>

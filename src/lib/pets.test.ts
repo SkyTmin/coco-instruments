@@ -12,6 +12,9 @@ import {
   normalizePets,
   normalizeSquad,
   NO_EGGS,
+  petsVerOf,
+  PETS_V,
+  V2_PET,
   petBonus,
   PETS,
   petScore,
@@ -33,13 +36,13 @@ function lcg(seed: number) {
   };
 }
 
-describe('питомцы (v2.72)', () => {
+describe('питомцы (v2.72–v2.73)', () => {
   it('состав: 18 видов, у каждой редкости свои, мифический один', () => {
     expect(PETS.length).toBe(18);
     expect(new Set(PETS.map((p) => p.id)).size).toBe(18);
     const by = [0, 1, 2, 3, 4, 5].map((r) => PETS.filter((p) => p.rarity === r).length);
     expect(by).toEqual([4, 4, 3, 3, 3, 1]);
-    // У легендарных две роли, у кита — все шесть.
+    // У легендарных две роли, у феникса — все шесть.
     for (const p of PETS.filter((x) => x.rarity === 4)) expect(p.stats.length).toBe(2);
     expect(PETS.find((p) => p.rarity === 5)!.stats.length).toBe(6);
   });
@@ -56,14 +59,14 @@ describe('питомцы (v2.72)', () => {
     }
   });
 
-  it('кит — только из драконьего яйца', () => {
+  it('феникс — только из драконьего яйца', () => {
     const rnd = lcg(3);
     for (const id of ['moss', 'stone', 'crystal'] as EggId[])
-      for (let i = 0; i < 20_000; i++) expect(hatchRoll(id, 0, rnd).id).not.toBe('whale');
-    let whales = 0;
-    for (let i = 0; i < 40_000; i++) if (hatchRoll('dragon', 0, rnd).id === 'whale') whales += 1;
-    expect(whales).toBeGreaterThan(100);
-    expect(whales).toBeLessThan(320);
+      for (let i = 0; i < 20_000; i++) expect(hatchRoll(id, 0, rnd).id).not.toBe('phoenix');
+    let found = 0;
+    for (let i = 0; i < 40_000; i++) if (hatchRoll('dragon', 0, rnd).id === 'phoenix') found += 1;
+    expect(found).toBeGreaterThan(100);
+    expect(found).toBeLessThan(320);
   });
 
   it(`гарантия: ${EGG_PITY}-е яйцо без эпического — эпический или выше`, () => {
@@ -109,7 +112,7 @@ describe('питомцы (v2.72)', () => {
     };
     for (let r = 1; r <= 5; r++) expect(avg(r)).toBeGreaterThan(avg(r - 1));
     // Прибавки только своих ролей.
-    expect(Object.keys(petBonus('dragon', { xp: 0, v: 0 })).sort()).toEqual(['dmg', 'loot']);
+    expect(Object.keys(petBonus('dragon', { xp: 0, v: 0 })).sort()).toEqual(['loot', 'sell']);
   });
 
   it('отряд: одно место, второе с ранга J, третье после престижа', () => {
@@ -145,20 +148,69 @@ describe('питомцы (v2.72)', () => {
     expect(zooMult(all)).toBeCloseTo(1 + ZOO_EACH * PETS.length + ZOO_ALL);
   });
 
-  it('старые сохранения: кольская фауна переезжает с опытом, питомец — в отряд', () => {
-    const pets = normalizePets({ lemming: 900, owl: 30, calf: 5, junk: 3 });
+  it('старые сохранения: кольская фауна (v1) переезжает через v2.72 в жителей лагеря', () => {
+    const pets = normalizePets({ lemming: 900, owl: 30, calf: 5, junk: 3 }, 1);
+    // лемминг → кротёнок → крот; сова → совёнок → бульдог; оленёнок → щенок → хорёк
     expect(pets).toEqual({
       mole: { xp: 900, dup: 0, v: 0, pat: 0 },
-      owlet: { xp: 30, dup: 0, v: 0, pat: 0 },
-      corgi: { xp: 5, dup: 0, v: 0, pat: 0 },
+      bulldog: { xp: 30, dup: 0, v: 0, pat: 0 },
+      ferret: { xp: 5, dup: 0, v: 0, pat: 0 },
     });
-    expect(normalizeSquad(undefined, 'owl', pets, 1)).toEqual(['owlet']);
+    expect(normalizeSquad(undefined, 'owl', pets, 1, 1)).toEqual(['bulldog']);
     // Новое сохранение читается как есть; повторы и чужие выкидываются.
     expect(normalizePets(pets)).toEqual(pets);
-    expect(normalizeSquad(['mole', 'mole', 'dragon', 'corgi'], null, pets, 3)).toEqual([
+    expect(normalizeSquad(['mole', 'mole', 'dragon', 'ferret'], null, pets, 3)).toEqual([
       'mole',
-      'corgi',
+      'ferret',
     ]);
-    expect(normalizeSquad(['mole', 'corgi'], null, pets, 1)).toEqual(['mole']);
+    expect(normalizeSquad(['mole', 'ferret'], null, pets, 1)).toEqual(['mole']);
+  });
+
+  it('v2.72 → v2.73: каждый вид переезжает в вид той же редкости, один в один', () => {
+    const olds = Object.keys(V2_PET);
+    expect(olds.length).toBe(18);
+    expect(new Set(Object.values(V2_PET)).size).toBe(18);
+    const rarity72 = [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5];
+    const order72 = [
+      'mole',
+      'hamster',
+      'hedgehog',
+      'mouse',
+      'corgi',
+      'kitten',
+      'owlet',
+      'raccoon',
+      'panda',
+      'penguin',
+      'otter',
+      'crystalhog',
+      'snowcat',
+      'firefox',
+      'dragon',
+      'phoenix',
+      'kitsune',
+      'whale',
+    ];
+    order72.forEach((id, i) =>
+      expect(PETS.find((p) => p.id === V2_PET[id])!.rarity).toBe(rarity72[i]),
+    );
+    const rec = { xp: 1234, dup: 3, v: 1, pat: 7 };
+    const got = normalizePets({ whale: rec, raccoon: rec, panda: { ...rec, xp: 5 } }, 2);
+    expect(got).toEqual({ phoenix: rec, cat: rec, raccoon: { ...rec, xp: 5 } });
+    expect(normalizeSquad(['raccoon', 'panda'], null, got, 3, 2)).toEqual(['cat', 'raccoon']);
+  });
+
+  it('версия схемы: старый песец не становится эпическим лисом', () => {
+    // v1: `fox` — песец (обычный), v3: `fox` — лис-картёжник (эпический)
+    expect(petsVerOf({ pets: { fox: 100 } })).toBe(1);
+    expect(normalizePets({ fox: 100 }, petsVerOf({ pets: { fox: 100 } }))).toEqual({
+      mouse: { xp: 100, dup: 0, v: 0, pat: 0 },
+    });
+    expect(petsVerOf({ pets: { hamster: { xp: 1 } } })).toBe(2);
+    expect(petsVerOf({ petsV: PETS_V, pets: { fox: { xp: 1 } } })).toBe(PETS_V);
+    expect(Object.keys(normalizePets({ fox: { xp: 1 } }, PETS_V))).toEqual(['fox']);
+    // и повторное чтение ничего не меняет
+    const once = normalizePets({ owl: 30, fox: 7 }, 1);
+    expect(normalizePets(once, PETS_V)).toEqual(once);
   });
 });
