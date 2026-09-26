@@ -3361,7 +3361,6 @@ function MillTab({
     }
     onGain(from, from + v);
     coinDing();
-    coinDing(0.08);
     notifySuccess();
   };
 

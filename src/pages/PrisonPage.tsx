@@ -137,6 +137,7 @@ import {
   primeAudio,
   rollupTick,
   shinyPick,
+  softChime,
   tierBreak,
 } from '@/lib/sound';
 import {
@@ -627,15 +628,13 @@ export function PrisonPage() {
     keyFound();
     notifySuccess();
     field.current?.chips(c, ['#4fd04a', '#a6ec3a', '#f2e64a', '#ffffff'], 18, 1.4);
-    const played = playTotem(chestRef.current, () => {
-      squashPop(chestRef.current, 0.6);
-      coinDing();
-    });
+    // Слеза долетела до сундуков — только отскок кнопки, без звука: сцена
+    // и так громкая, а ключ падает раз в несколько минут.
+    const played = playTotem(chestRef.current, () => squashPop(chestRef.current, 0.6));
     if (!played) {
       floatText(c, n > 1 ? `+${n} ключа` : '+ключ', 'pfloat--key', 120);
       return;
     }
-    tierBreak(2);
     tapMedium();
     if (n > 1) say(`${n} ключа от сундука!`);
   };
@@ -661,7 +660,7 @@ export function PrisonPage() {
         res.pickUps.some((u) => ENCHANT_UNLOCK[e.id] === u.level),
       );
       floatText(c, `КИРКА ${up.level}`, 'pfloat--level', 180);
-      tierBreak(1);
+      softChime(2);
       notifySuccess();
       const tokens = res.pickUps.reduce((x, u) => x + u.tokens, 0);
       const keys = res.pickUps.reduce((x, u) => x + u.keys, 0);
@@ -672,8 +671,8 @@ export function PrisonPage() {
       );
     }
     if (res.parcels.length) {
-      floatText(c, 'ПЕРЕДАЧКА', 'pfloat--parcel', 200);
-      tierBreak(1);
+      floatText(c, 'ПОСЫЛКА', 'pfloat--parcel', 200);
+      softChime(1);
       tapMedium();
       squashPop(parcelsRef.current, 0.5);
     }
@@ -686,7 +685,7 @@ export function PrisonPage() {
     if (res.petUp) {
       const st = useFinanceStore.getState().prison;
       if (st.pet) say(`${petOf(st.pet).name}: ${res.petUp} уровень`);
-      tierBreak(1);
+      softChime(2);
       squashPop(petRef.current, 0.6);
     }
     if (res.normDone) {
@@ -695,7 +694,7 @@ export function PrisonPage() {
       burstConfetti(40, ['#9be38a', '#ffe08a', '#fff']);
       say('Выработка набрана');
     }
-    if (res.lost > 0 && now - fullWarnAt.current > 1400) {
+    if (res.lost > 0 && now - fullWarnAt.current > 4000) {
       fullWarnAt.current = now;
       bagFullSound();
       notifyWarning();
@@ -732,7 +731,7 @@ export function PrisonPage() {
       const name = ROCKS[after.mine.id].blockName;
       floatText(opened.cell, `${name.toUpperCase()}!`, 'pfloat--block', 80);
       field.current?.chips(opened.cell, [...rockColors(after.mine.id), '#ffffff'], 16, 1.4);
-      tierBreak(2);
+      softChime(0);
       notifySuccess();
     }
     const gained = bagValue(after.bag, modsOf(after).sell) - valueBefore + res.sold;
@@ -752,7 +751,7 @@ export function PrisonPage() {
       field.current?.chips(cb, [...rockColors(after.mine.id), '#ffffff', '#ffe08a'], 24, 1.6);
       field.current?.shockwave(cb, 2, false);
       field.current?.rise(cb);
-      tierBreak(3);
+      tierBreak(2);
       notifySuccess();
       say(`${ROCKS[after.mine.id].blockName} встал по гарантии — вон он, блестит`);
     }
@@ -954,7 +953,8 @@ export function PrisonPage() {
     const got = prisonOreBlock(c);
     if (!got) return;
     rollBalance(from, from + got.coins);
-    tierBreak(4);
+    // Блок этажа попадается раз в минуту: удар и фишки, без фанфары.
+    tierBreak(2);
     flashFrame('big');
     f?.trauma(0.55);
     notifySuccess();
@@ -962,7 +962,7 @@ export function PrisonPage() {
     f?.chips(c, [...colors, '#ffffff', '#ffe08a'], 48, 2.2);
     burstConfetti(80, [...colors.slice(0, 3), '#ffe08a', '#ffffff']);
     rainCoins(Math.min(40, 14 + Math.round(Math.log2(1 + got.coins / 100) * 3)));
-    setTimeout(() => payoutEnd(2), 350);
+    setTimeout(() => payoutEnd(0), 350);
     floatText(c, `+${shortMoney(got.coins)}`, 'pfloat--block', 0);
     say(
       `${ROCKS[floor].blockName}: +${fmt(got.coins)} монет${got.own ? '' : ' (для ранга — блок своего этажа)'}`,
@@ -1279,7 +1279,6 @@ export function PrisonPage() {
     }
     rollBalance(from, from + value);
     coinDing();
-    coinDing(0.08);
     notifySuccess();
     squashPop(bagRef.current, 0.6);
     const cost = rankCost(Math.min(rank, LAST_RANK - 1), prestige);
@@ -1315,7 +1314,8 @@ export function PrisonPage() {
     }
     setSheet(null);
     settleBalance();
-    tierBreak(3);
+    // Ранг — редкое событие: ему фраза положена (по бюджету мелодий).
+    tierBreak(4);
     notifySuccess();
     burstConfetti(80);
     field.current?.trauma(0.35);
@@ -1375,10 +1375,9 @@ export function PrisonPage() {
     if (!r) return;
     if (r.coins) rollBalance(from, from + r.coins);
     coinDing();
-    tierBreak(1);
+    softChime(2);
     notifySuccess();
     burstConfetti(36, ['#ffe08a', '#b8f4e6', '#fff']);
-    if (r.keys) keyFound();
   };
 
   const collectCrew = () => {

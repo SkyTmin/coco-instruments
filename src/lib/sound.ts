@@ -193,12 +193,25 @@ type PlayOpts = {
 
 /** Сколько раз подряд событие может звучать одновременно. */
 const VOICES: Record<string, number> = {
-  chip: 5,
+  chip: 3,
   'chip.lay': 3,
+  'chips.stack': 2,
+  coins: 2,
   tick: 2,
   'case.tick': 2,
   pluck: 3,
   'gem.burst': 3,
+  'gem.chime': 2,
+  shiny: 3,
+  'crit.thud': 2,
+  'break.soil': 3,
+  'break.stone': 3,
+  'break.metal': 3,
+  'break.crystal': 3,
+  'boom.1': 2,
+  'boom.2': 1,
+  'boom.3': 1,
+  rumble: 1,
   swing: 2,
   hit: 3,
 };
@@ -219,9 +232,25 @@ const GAP: Record<string, number> = {
   'rat.die': 0.06,
   hit: 0.03,
   flap: 0.07,
-  shiny: 0.04,
+  shiny: 0.06,
   plop: 0.05,
   splash: 0.08,
+  // v2.67.1: всё, что сыплется пачкой (взрыв, жила, дождь монет), — не чаще.
+  'crit.thud': 0.06,
+  'gem.chime': 0.07,
+  'chips.stack': 0.12,
+  coins: 0.1,
+  'break.soil': 0.03,
+  'break.stone': 0.03,
+  'break.metal': 0.03,
+  'break.crystal': 0.03,
+  'boom.1': 0.12,
+  'boom.2': 0.2,
+  'boom.3': 0.3,
+  rumble: 1.2,
+  'slot.drum.1': 0.12,
+  'slot.drum.2': 0.12,
+  'slot.drum.3': 0.4,
 };
 
 const voices = new Map<string, AudioBufferSourceNode[]>();
@@ -253,6 +282,11 @@ function play(name: string, opts: PlayOpts = {}): void {
     if (opts.pick == null && list.length > 1 && k === lastPick.get(name)) k = (k + 1) % list.length;
     lastPick.set(name, k);
     const { buf, lead } = list[Math.min(k, list.length - 1)];
+    // Все голоса заняты — новый не звучит. Раньше обрывался самый старый:
+    // оборванный сэмпл щёлкает, и пачка звуков превращалась в треск.
+    const max = VOICES[name] ?? 6;
+    const live = voices.get(name) ?? [];
+    if (live.length >= max) return;
     const src = c.createBufferSource();
     src.buffer = buf;
     const vary = opts.vary ?? 0.04;
@@ -261,17 +295,7 @@ function play(name: string, opts: PlayOpts = {}): void {
     g.gain.value = opts.gain ?? 1;
     src.connect(g).connect(sfxBus);
     src.start(t0, lead);
-    const max = VOICES[name] ?? 6;
-    const live = voices.get(name) ?? [];
     live.push(src);
-    while (live.length > max) {
-      const old = live.shift();
-      try {
-        old?.stop();
-      } catch {
-        /* уже остановлен */
-      }
-    }
     voices.set(name, live);
     src.onended = () => {
       const l = voices.get(name);
@@ -405,10 +429,41 @@ function duck(sec: number): void {
   }
 }
 
-/** Джингл: музыка уходит в тень на его длину. */
-function jingle(name: string, sec: number, opts: PlayOpts = {}): void {
+/**
+ * Бюджет мелодий в каторге (v2.67.1): не чаще одной фразы в `PHRASE_GAP`
+ * секунд. Владелец: «слишком много ненужных звуков… когда ключ выпадает,
+ * этот звук очень раздражает и похожие». Мелодия в игре, где бьёшь 5–10 раз
+ * в секунду, — это событие; когда их несколько в минуту, это шум. Частые
+ * события звучат тихим сигналом (`softChime`, `softThud`), фраза остаётся
+ * ранга, престижа, редкой выковки и смерти.
+ */
+const PHRASE_GAP = 10;
+let lastPhrase = -1e9;
+
+/** Джингл: музыка уходит в тень на его длину. В каторге — по бюджету. */
+function jingle(name: string, sec: number, opts: PlayOpts = {}): boolean {
+  const c = ctx;
+  if (flavor === 'camp' && c) {
+    const t = c.currentTime + (opts.at ?? 0);
+    if (t - lastPhrase < PHRASE_GAP) return false;
+    lastPhrase = t;
+  }
   duck(sec + (opts.at ?? 0));
   play(name, { vary: 0, ...opts });
+  return true;
+}
+
+/**
+ * Тихий стеклянный «дзынь» — для частых хороших новостей: ключ, уровень
+ * кирки, посылка, блок под сломанным. `k` поднимает тон на полтона за шаг.
+ */
+export function softChime(k = 0): void {
+  play('gem.chime', { gain: 0.26, rate: Math.pow(2, Math.min(k, 7) / 12), vary: 0.02 });
+}
+
+/** Тихий глухой удар — «готово», без мелодии. */
+export function softThud(gain = 0.32): void {
+  play('crit.thud', { gain, rate: 1.15, vary: 0.04 });
 }
 
 // ---------------------------------------------------------------------------
@@ -419,16 +474,16 @@ export function uiTap(): void {
   play('ui.tap', { gain: 0.5, vary: 0.06 });
 }
 export function uiOpen(): void {
-  play('ui.open', { gain: 0.55 });
+  play('ui.open', { gain: 0.4 });
 }
 export function uiClose(): void {
-  play('ui.close', { gain: 0.5 });
+  play('ui.close', { gain: 0.35 });
 }
 export function uiTab(): void {
   play('ui.tab', { gain: 0.45 });
 }
 export function uiBuy(): void {
-  play('ui.buy', { gain: 0.8 });
+  play('ui.buy', { gain: 0.55 });
 }
 export function uiError(): void {
   play('ui.error', { gain: 0.5, vary: 0 });
@@ -520,7 +575,7 @@ export function counterTick(): void {
 
 /** Монета — звон фишек. Для дождя монет, продажи и наград. */
 export function coinDing(at = 0): void {
-  play('chip', { at, gain: 0.55, vary: 0.08 });
+  play('chip', { at, gain: flavor === 'camp' ? 0.32 : 0.55, vary: 0.08 });
 }
 
 /**
@@ -585,7 +640,12 @@ export function multSlam(): void {
  */
 export function rollupTick(leg: number, k: number): void {
   const semis = Math.min(14, leg * 2 + k * 2);
-  play('chip.lay', { gain: 0.32, rate: Math.pow(2, semis / 12), vary: 0.03 });
+  // В каторге табло досчитывает каждую продажу — там тиканье еле слышно.
+  play('chip.lay', {
+    gain: flavor === 'camp' ? 0.14 : 0.32,
+    rate: Math.pow(2, semis / 12),
+    vary: 0.03,
+  });
 }
 
 /**
@@ -593,6 +653,23 @@ export function rollupTick(leg: number, k: number): void {
  * короткий удар барабана, а легендарный — дробь с пассажем.
  */
 export function tierBreak(beats: number): void {
+  // В каторге — без барабанной дроби и фраз: барабаны набора звонкие (у
+  // них 30–40% энергии в резкой середине 2–6 кГц), а зовут эту функцию
+  // двадцать мест шахты. Фраза — только от четвёртой ступени и по бюджету.
+  if (flavor === 'camp') {
+    if (beats <= 1) softThud(0.3);
+    else if (beats === 2) {
+      softThud(0.38);
+      softChime(4);
+    } else if (beats === 3) {
+      play('slot.drum.2', { gain: 0.32, vary: 0 });
+      softChime(7);
+    } else {
+      play('slot.drum.3', { gain: 0.4, vary: 0 });
+      jingle('jingle.up', 1.1, { gain: 0.6, at: 0.1 });
+    }
+    return;
+  }
   if (beats <= 0) play('slot.drum.1', { gain: 0.55, vary: 0 });
   else if (beats === 1) play('slot.drum.2', { gain: 0.65, vary: 0 });
   else if (beats === 2) jingle('slot.drum.3', 0.8, { gain: 0.75 });
@@ -607,6 +684,11 @@ export function tierBreak(beats: number): void {
 
 /** Счёт договорил: фраза-разрешение «всё, это твоё». */
 export function payoutEnd(beats: number): void {
+  if (flavor === 'camp') {
+    play('chips.stack', { gain: 0.35 });
+    if (beats >= 3) jingle('jingle.end', 1.3, { gain: 0.6, at: 0.05 });
+    return;
+  }
   if (beats >= 3) jingle(voice('slot.win.m'), 1.3, { gain: 0.75 });
   else if (beats >= 1) jingle(voice('slot.win.s'), 1, { gain: 0.65 });
   else jingle(voice('slot.win.l'), 0.8, { gain: 0.5 });
@@ -622,16 +704,16 @@ export type MineSound = 'soil' | 'stone' | 'metal' | 'crystal' | 'star';
 
 /** Удар кирки. Вариант и высота гуляют — сорок одинаковых ударов режут ухо. */
 export function pickHit(kind: MineSound, crit = false): void {
-  play(`pick.${kind}`, { gain: kind === 'soil' ? 0.7 : 0.55, vary: 0.06 });
-  if (crit) play('crit.thud', { gain: 0.6 });
+  play(`pick.${kind}`, { gain: kind === 'soil' ? 0.62 : 0.48, vary: 0.06 });
+  if (crit) play('crit.thud', { gain: 0.45 });
 }
 
 /** Блок развалился — громче удара и с хвостом: это событие, а не такт. */
 export function blockBreak(kind: MineSound): void {
-  if (kind === 'soil') play('break.soil', { gain: 0.55 });
-  else if (kind === 'metal') play('break.metal', { gain: 0.5 });
-  else if (kind === 'crystal' || kind === 'star') play('break.crystal', { gain: 0.5 });
-  else play('break.stone', { gain: 0.6 });
+  if (kind === 'soil') play('break.soil', { gain: 0.45 });
+  else if (kind === 'metal') play('break.metal', { gain: 0.4 });
+  else if (kind === 'crystal' || kind === 'star') play('break.crystal', { gain: 0.4 });
+  else play('break.stone', { gain: 0.48 });
 }
 
 /** По дну: кирка не берёт коренную породу. */
@@ -654,32 +736,28 @@ export function forgeStrike(i: number): void {
 
 /** Кирка проявилась: чем реже, тем длиннее фраза (эскалация неравномерна). */
 export function forgeReveal(rarity: number): void {
-  if (rarity >= 4) {
-    tierBreak(4);
-    jingle('jingle.win', 1.6, { gain: 0.8, at: 0.15 });
-  } else if (rarity >= 2) {
-    tierBreak(2);
-    jingle('jingle.up', 1.1, { gain: 0.75, at: 0.1 });
-  } else jingle('jingle.up', 1, { gain: 0.7 });
+  // Одна фраза, не две разом: раньше легендарная звучала дробью с фразой
+  // из tierBreak(4) и поверх ещё своей.
+  play('slot.drum.2', { gain: 0.35, vary: 0 });
+  softChime(rarity >= 4 ? 7 : 4);
+  if (rarity >= 4) jingle('jingle.win', 1.3, { gain: 0.65, at: 0.15 });
+  else if (rarity >= 2) jingle('jingle.up', 1.1, { gain: 0.55, at: 0.1 });
 }
 
 /** Рюкзак полон — мешок шлёпнулся. */
 export function bagFull(): void {
-  play('bag.full', { gain: 0.8 });
-  play('ui.error', { gain: 0.3, at: 0.08, vary: 0 });
+  play('bag.full', { gain: 0.55 });
 }
 
 /** Шахта обновляется: гул снизу и перестук поднимающихся блоков. */
 export function mineRumble(): void {
-  play('rumble', { gain: 0.8 });
-  for (let i = 0; i < 4; i++) play('break.stone', { gain: 0.3, at: 0.25 + i * 0.12 });
+  play('rumble', { gain: 0.45 });
 }
 
 /** Взрыв: бомба, Взрыв-зачарование, заряд, отбойник. `power` 1…3. */
 export function boom(power = 1): void {
   const p = Math.max(1, Math.min(3, Math.round(power)));
-  play(`boom.${p}`, { gain: 0.9, vary: 0.05 });
-  if (p >= 2) for (let i = 0; i < 3; i++) play('break.stone', { gain: 0.35, at: 0.15 + i * 0.09 });
+  play(`boom.${p}`, { gain: p === 1 ? 0.55 : 0.7, vary: 0.05 });
 }
 
 /** Фитиль шипит, бомба тикает. */
@@ -690,22 +768,27 @@ export function fuseTick(k = 0): void {
 
 /** Звено жилы: тон забирается вверх — ухо считает, сколько ушло разом. */
 export function chainTick(k: number): void {
-  play('pluck', { gain: 0.35, rate: Math.pow(2, Math.min(k, 12) / 12), vary: 0 });
+  play('pluck', { gain: 0.22, rate: Math.pow(2, Math.min(k, 12) / 12), vary: 0 });
 }
 
 /** Кураж: короткий восходящий пассаж. */
 export function frenzyStart(): void {
-  jingle('jingle.go', 0.9, { gain: 0.7 });
+  softThud(0.4);
+  softChime(5);
 }
 
 /** Щелчок ленты сундука, как у колеса удачи. */
 export function caseTick(): void {
-  play('case.tick', { gain: 0.5 });
+  play('case.tick', { gain: 0.32 });
 }
 
-/** Нашёлся ключ — «нашёл!». */
+/**
+ * Нашёлся ключ. Был джингл-пиццикато на 0,6 с — владелец: «очень
+ * раздражает». Ключ падает раз в несколько минут, и сцена тотема его и так
+ * показывает — хватает тихого «дзынь».
+ */
 export function keyFound(): void {
-  jingle('jingle.found', 0.7, { gain: 0.7 });
+  softChime(3);
 }
 
 // ---------------------------------------------------------------------------
@@ -721,14 +804,14 @@ export function axeChop(saw = false, crit = false): void {
 
 /** Бревно отлетело в штабель. */
 export function logOff(): void {
-  play('log.drop', { gain: 0.55 });
+  play('log.drop', { gain: 0.4 });
 }
 
 /** «Бойся!»: скрип ствола и глухой удар о снег. */
 export function treeFall(): void {
-  play('tree.creak', { gain: 0.6 });
-  play('tree.thud', { gain: 0.85, at: 0.5 });
-  play('snow.thud', { gain: 0.6, at: 0.52 });
+  play('tree.creak', { gain: 0.4 });
+  play('tree.thud', { gain: 0.6, at: 0.5 });
+  play('snow.thud', { gain: 0.35, at: 0.52 });
 }
 
 /** Сучок по лбу. */
@@ -755,7 +838,7 @@ export function swordHit(crit = false, boss = false): void {
 /** Крысиный писк — выползла из норы, заметила, сдохла (`k` 0…2). */
 export function ratSqueak(k = 0): void {
   const name = k === 0 ? 'rat.call' : k === 1 ? 'rat.attack' : 'rat.die';
-  play(name, { gain: 0.45, vary: 0.1 });
+  play(name, { gain: 0.32, vary: 0.1 });
 }
 
 /** Крыса убита: предсмертный писк и мягкий шлепок. */
@@ -865,8 +948,8 @@ export function batSqueak(caught = false): void {
 
 /** Блестяшка подобрана: звон стекла, выше с каждой подряд. */
 export function shinyPick(k = 0): void {
-  play('shiny', { gain: 0.5, rate: Math.pow(2, Math.min(k, 12) / 24), vary: 0 });
-  play('coins', { gain: 0.25, at: 0.03 });
+  // «shiny» почти целиком в резкой середине — тише и на тон ниже.
+  play('shiny', { gain: 0.28, rate: 0.85 * Math.pow(2, Math.min(k, 12) / 24), vary: 0 });
 }
 
 /** Карты: сдать на стол, открыть, перетасовать, раскрыть веером. */
@@ -892,7 +975,7 @@ export function riskLose(): void {
   jingle('jingle.down', 1.2, { gain: 0.7 });
 }
 export function riskDraw(): void {
-  jingle('jingle.nope', 0.8, { gain: 0.6 });
+  softThud(0.35);
 }
 
 /** Сорока уронила блестяшку: тихий звон, чтобы слышно было, куда смотреть. */
@@ -930,14 +1013,12 @@ export function fishSplash(power = 1): void {
 
 /** Леска лопнула. */
 export function lineSnap(): void {
-  play('snap', { gain: 0.8 });
-  jingle('jingle.nope', 0.8, { gain: 0.45, at: 0.1 });
+  play('snap', { gain: 0.7 });
 }
 
 /** Вытащил: плеск и звон, редкая — пассаж. `beats` — как у сундука. */
 export function fishLanded(beats: number): void {
-  play('splash', { gain: 0.5, rate: 1.2 });
-  if (beats >= 2) jingle('jingle.win', 1.2, { gain: 0.75, at: 0.1 });
-  else if (beats >= 1) jingle('jingle.found', 0.8, { gain: 0.65, at: 0.1 });
-  else play('coins', { gain: 0.4, at: 0.1 });
+  play('splash', { gain: 0.45, rate: 1.2 });
+  if (beats >= 2 && jingle('jingle.win', 1.2, { gain: 0.6, at: 0.1 })) return;
+  if (beats >= 1) softChime(beats >= 2 ? 7 : 4);
 }

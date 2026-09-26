@@ -668,7 +668,6 @@ export function DungeonRun({
           ratDie(e.mob === 'fatrat' || e.mob === 'king' || e.mob === 'kinglet');
           if (e.mob === 'goldrat') {
             coinDing();
-            coinDing(0.08);
             note('Золотая крыса — мешок монет!');
           }
           if (e.albino) say('АЛЬБИНОС', 'редкая крыса — добыча ×10', 'gold', 1800);
@@ -711,7 +710,9 @@ export function DungeonRun({
           break;
         case 'emerge':
         case 'squeak':
-          if (now - lastSqueak.current > 180) {
+          // Писк — не чаще раза в 0,7 с: у норы крысы лезут пачкой, и было
+          // до пяти писков в секунду поверх боя (v2.67.1).
+          if (now - lastSqueak.current > 700) {
             lastSqueak.current = now;
             ratSqueak(e.t === 'emerge' ? 0 : 1);
           }
@@ -1078,7 +1079,6 @@ export function DungeonRun({
         say('КОРОТКИЙ ПУТЬ', 'решётка открыта навсегда', 'area', 1800);
       } else if (u.kind === 'secret') {
         coinDing();
-        coinDing(0.06);
         say('ТАЙНИК', 'монеты, токены и ключ', 'gold', 1800);
       }
       save();

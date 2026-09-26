@@ -152,9 +152,11 @@ export const BatLayer = forwardRef<
       if (s) s.style.transform = `translate(${x}px, ${y + cur.size * 0.62}px)`;
       const f = still ? 0 : FLAP[Math.floor((now - cur.t0) / 80) % FLAP.length];
       if (sprite.current) sprite.current.style.backgroundPositionX = `${-f * w}px`;
-      if (!still && now - cur.flapAt > 330) {
+      // Хлопок крыльев — редкий и тихий: мышь видно, а постоянный шелест
+      // под ударами кирки — лишний звук (v2.67.1).
+      if (!still && now - cur.flapAt > 900) {
         cur.flapAt = now;
-        wingFlap(0.14);
+        wingFlap(0.09);
       }
       cur.raf = requestAnimationFrame(step);
     };
@@ -361,10 +363,13 @@ export const MagpieLayer = forwardRef<
         sprite.current.style.backgroundPositionX = `${-f * cellW * 1.7}px`;
         sprite.current.style.transform = `scaleX(${face})`;
       }
-      if (shadow.current) shadow.current.style.transform = `translate(${x}px, ${y + cellW * 0.9}px)`;
-      if (!still && now - flapAt > 420) {
+      if (shadow.current)
+        shadow.current.style.transform = `translate(${x}px, ${y + cellW * 0.9}px)`;
+      // Сорока летает 24 секунды: хлопок раз в полторы — слышно, что она
+      // здесь, но не шелест без остановки.
+      if (!still && now - flapAt > 1500) {
         flapAt = now;
-        wingFlap(0.12);
+        wingFlap(0.07);
       }
       // Роняет краденое в клетку под собой.
       if (now >= dropAt && !leaving && x > 0 && x < W && y > 0 && y < H) {
@@ -457,7 +462,10 @@ export function PlayingCard({
     backgroundPosition: `${(cardRank(card) * 100) / 13}% ${(SUIT_ROW[Math.floor(card / 13)] * 100) / 3}%`,
   };
   return (
-    <span className={`pcard${open ? ' is-open' : ''}${className ? ` ${className}` : ''}`} style={style}>
+    <span
+      className={`pcard${open ? ' is-open' : ''}${className ? ` ${className}` : ''}`}
+      style={style}
+    >
       <span className="pcard__in">
         <i className="pcard__back" />
         <i className="pcard__face" style={card >= 0 ? face : undefined} />
@@ -617,7 +625,12 @@ export function TreasurePanel({
     unit === 'coins' ? <CoinIcon size={size} /> : <TokenIcon size={size} />;
 
   return (
-    <div className="ptreasure" onPointerDown={swallow} role="dialog" aria-label={FROM_TITLE[t.from]}>
+    <div
+      className="ptreasure"
+      onPointerDown={swallow}
+      role="dialog"
+      aria-label={FROM_TITLE[t.from]}
+    >
       <div className="ptreasure__veil" />
       <div className={`ptreasure__box is-${stage}`}>
         <div className="gx-ribbon ptreasure__title">
@@ -670,7 +683,9 @@ export function TreasurePanel({
               )}
             </div>
             {t.step === 0 && !flash && (
-              <span className="ptreasure__hint">Старше карты сдающего — вдвое, младше — сгорит</span>
+              <span className="ptreasure__hint">
+                Старше карты сдающего — вдвое, младше — сгорит
+              </span>
             )}
           </div>
         )}

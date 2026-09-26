@@ -80,6 +80,7 @@ import {
   payoutEnd,
   primeAudio,
   rollupTick,
+  softChime,
   tierBreak,
   treeFall,
 } from '@/lib/sound';
@@ -663,7 +664,7 @@ export function ForestPage() {
     } else if (kinds.includes('figured')) floatAt(x, y - 20, 'СВИЛЬ ×3', 'pfloat--figured');
     const h = res.chop.hollow;
     if (h) {
-      tierBreak(1);
+      softChime(1);
       const hTokens = res.hollows.reduce((a, z) => a + (z.kind === 'tokens' ? z.amount : 0), 0);
       if (hTokens) floatAt(x, y - 34, `ДУПЛО: +${hTokens} ✦`, 'pfloat--token', 120);
       else if (h.kind === 'parcel') floatAt(x, y - 34, 'ДУПЛО: ПЕРЕДАЧКА', 'pfloat--parcel', 120);
@@ -676,10 +677,7 @@ export function ForestPage() {
     if (keys) {
       keyFound();
       notifySuccess();
-      const played = playTotem(campRef.current, () => {
-        squashPop(campRef.current, 0.6);
-        coinDing();
-      });
+      const played = playTotem(campRef.current, () => squashPop(campRef.current, 0.6));
       if (!played) floatAt(x, y - 60, keys > 1 ? `+${keys} ключа` : '+ключ', 'pfloat--key', 120);
     }
     if (res.parcels.length) {
@@ -690,7 +688,7 @@ export function ForestPage() {
     if (res.petUp) {
       const st = useFinanceStore.getState().prison;
       if (st.pet) say(`${petOf(st.pet).name}: ${res.petUp} уровень`);
-      tierBreak(1);
+      softChime(2);
     }
     const seidTokens = (res.felled?.tokens ?? 0) + (res.storm?.tokens ?? 0);
     if (seidTokens) {
@@ -715,7 +713,7 @@ export function ForestPage() {
       squashPop(millRef.current, 0.45);
     }
     const now = performance.now();
-    if (res.lost > 0 && now - fullWarnAt.current > 1500) {
+    if (res.lost > 0 && now - fullWarnAt.current > 4000) {
       fullWarnAt.current = now;
       pileFullSound();
       notifyWarning();
@@ -926,7 +924,6 @@ export function ForestPage() {
     }
     rollBalance(from, from + value);
     coinDing();
-    coinDing(0.08);
     notifySuccess();
     squashPop(pileRef.current, 0.6);
     const cost = forestRankCost(Math.min(forest.rank, LAST_PLOT - 1));
