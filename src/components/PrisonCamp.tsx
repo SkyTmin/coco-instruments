@@ -5,25 +5,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CSSProperties, ReactNode } from 'react';
-import { GxBar, GxIcon, GxSheet, KIcon } from '@/components/gx';
+import { GxIcon, GxSheet } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
+import { rarityOf } from '@/lib/rarity';
 import { useFinanceStore } from '@/store';
 import { BeastTab, GearTab, StashTab } from '@/components/DungeonCamp';
 import { RodsTab, TrophiesTab } from '@/components/FishingCamp';
 import {
-  bagCapacity,
-  bagCost,
-  BAG_MAX,
-  AUTOSELL_TOKENS,
   CASE_TIERS,
-  forgeLeft,
-  pickOpen,
-  ROCKS,
-  rankLetter as letterOf,
   CREW_MAX,
-  CRIT_CHANCE,
-  CRIT_MULT,
   crewCapHours,
   crewCost,
   crewFeedCost,
@@ -69,7 +60,6 @@ import {
   findsMult,
   handleRate,
   HANDLES,
-  hitDamage,
   ITEMS,
   modsOf,
   PERKS,
@@ -79,9 +69,6 @@ import {
   PRESTIGE_KEYS,
   rankLetter,
   rollCase,
-  sharpCost,
-  SHARP_MAX,
-  SHARP_STEP,
   shortMoney,
 } from '@/lib/prison';
 import type {
@@ -174,24 +161,16 @@ const pct = (x: number) =>
  * (`scripts/picks-assets.py`). С золотой и выше головка светится: дорогую
  * кирку видно издалека. `sharp` — заточка уголком.
  */
-export function PickIcon({
-  pick,
-  size = 30,
-  sharp = 0,
-}: {
-  pick: number;
-  size?: number;
-  sharp?: number;
-}) {
+export function PickIcon({ pick, size = 30 }: { pick: number; size?: number }) {
   const i = Math.max(0, Math.min(PICKS.length - 1, pick));
+  const rar = PICKS[i].rarity;
   return (
     <span
-      className={`ppick-ico${i >= 7 ? ' is-rich' : ''}`}
-      style={{ width: size, height: size, '--pk': PICKS[i].head } as CSSProperties}
+      className={`ppick-ico r${rar}`}
+      style={{ width: size, height: size, '--rc': rarityOf(rar).color } as CSSProperties}
       aria-hidden="true"
     >
       <img src={`/ui/picks/p${i}.png`} alt="" draggable={false} />
-      {sharp > 0 && <b>+{sharp}</b>}
     </span>
   );
 }
@@ -257,7 +236,6 @@ export type CampTab =
   | 'stash'
   | 'rods'
   | 'trophies'
-  | 'forge'
   | 'axes'
   | 'axench'
   | 'mill'
@@ -278,7 +256,6 @@ const TAB_NAMES: Record<CampTab, string> = {
   stash: 'Склад',
   rods: 'Снасти',
   trophies: 'Журнал',
-  forge: 'Кузница',
   axes: 'Топоры',
   axench: 'Чары',
   mill: 'Лесопилка',
@@ -301,7 +278,6 @@ const TAB_ICONS: Record<CampTab, GxIconName> = {
   stash: 'chest',
   rods: 'fishing',
   trophies: 'fish',
-  forge: 'anvil',
   axes: 'axe',
   axench: 'magic',
   mill: 'saw',
@@ -326,7 +302,8 @@ export type CampPlace = 'mine' | 'forest' | 'dungeon' | 'fish';
  * местах, поэтому есть в обоих, но в лесу стоит после лесного.
  */
 const PLACE_TABS: Record<CampPlace, CampTab[]> = {
-  mine: ['forge', 'enchant', 'runes', 'pets', 'shop', 'cases', 'crew', 'finds', 'miles', 'perks'],
+  // Кузница (v2.67) — отдельный экран `ForgeScreen`, а не вкладка.
+  mine: ['enchant', 'runes', 'pets', 'shop', 'cases', 'crew', 'finds', 'miles', 'perks'],
   forest: ['axes', 'axench', 'mill', 'bench', 'cases', 'pets', 'runes'],
   dungeon: ['gear', 'beasts', 'stash', 'cases', 'runes', 'pets'],
   // Руны рыбалке ничего не дают — их тут нет. Питомца здесь кормят уловом.
@@ -345,6 +322,8 @@ export const campPlaceOf = (tab: CampTab): CampPlace =>
 
 export function PrisonCamp({
   place = 'mine',
+  only,
+  title,
   tab: asked,
   onTab,
   onClose,
@@ -352,6 +331,13 @@ export function PrisonCamp({
   onSpend,
 }: {
   place?: CampPlace;
+  /**
+   * Только эти вкладки (v2.67: кнопки нижней панели шахты открывают свой
+   * экран, а не весь лагерь). Одна вкладка — без ряда вкладок.
+   */
+  only?: CampTab[];
+  /** Заголовок вместо «Лагерь». */
+  title?: string;
   tab: CampTab;
   onTab: (t: CampTab) => void;
   onClose: () => void;
@@ -363,7 +349,7 @@ export function PrisonCamp({
   const p = useFinanceStore((s) => s.prison);
   const f = useFinanceStore((s) => s.forest);
   const now = useNow(1000);
-  const tabs = PLACE_TABS[place];
+  const tabs = only?.length ? only : PLACE_TABS[place];
   const tab = tabs.includes(asked) ? asked : tabs[0];
   const crew = crewYield(p, now);
   const miles = milesReady(p);
@@ -377,38 +363,41 @@ export function PrisonCamp({
   };
   return (
     <GxSheet
-      className="gx-camp"
+      className={`gx-camp${tabs.length === 1 ? ' is-single' : ''}`}
       title={
-        place === 'forest'
+        title ??
+        (place === 'forest'
           ? 'Лагерь лесоруба'
           : place === 'dungeon'
             ? 'Снаряжение'
             : place === 'fish'
               ? 'Лагерь рыбака'
-              : 'Лагерь'
+              : 'Лагерь')
       }
       onClose={onClose}
       tabs={
-        <div className="gx-tabs" role="tablist">
-          {tabs.map((id) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              className={`gx-tab${tab === id ? ' is-on' : ''}`}
-              onClick={() => {
-                selectionChanged();
-                uiTab();
-                onTab(id);
-              }}
-            >
-              <GxIcon name={TAB_ICONS[id]} />
-              {TAB_NAMES[id]}
-              {badge[id] != null && <span className="gx-badge">{badge[id]}</span>}
-            </button>
-          ))}
-        </div>
+        tabs.length > 1 && (
+          <div className="gx-tabs" role="tablist">
+            {tabs.map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                className={`gx-tab${tab === id ? ' is-on' : ''}`}
+                onClick={() => {
+                  selectionChanged();
+                  uiTab();
+                  onTab(id);
+                }}
+              >
+                <GxIcon name={TAB_ICONS[id]} />
+                {TAB_NAMES[id]}
+                {badge[id] != null && <span className="gx-badge">{badge[id]}</span>}
+              </button>
+            ))}
+          </div>
+        )
       }
     >
       <div className="pcamp-body">
@@ -417,7 +406,6 @@ export function PrisonCamp({
         {tab === 'stash' && <StashTab onSpend={onSpend} />}
         {tab === 'rods' && <RodsTab onSpend={onSpend} />}
         {tab === 'trophies' && <TrophiesTab />}
-        {tab === 'forge' && <ForgeTab onSpend={onSpend} />}
         {tab === 'axes' && <AxesTab onSpend={onSpend} />}
         {tab === 'axench' && <AxeEnchSection f={f} p={p} />}
         {tab === 'mill' && (
@@ -525,208 +513,6 @@ export function OreIcon({
   );
 }
 
-function ForgeTab({ onSpend }: { onSpend: () => void }) {
-  const p = useFinanceStore((s) => s.prison);
-  const balance = useFinanceStore((s) => s.slotsBalance);
-  const prisonBuy = useFinanceStore((s) => s.prisonBuy);
-  const cur = PICKS[p.pick];
-  const n = p.pick + 1;
-  const next = PICKS[n];
-  const m = modsOf(p);
-  const dmg = hitDamage(p.pick, p.sharp) * m.dmg;
-  const buy = (what: 'pick' | 'sharp' | 'bag' | 'cart', times = 1) => {
-    primeAudio();
-    let k = 0;
-    while (k < times && prisonBuy(what)) k += 1;
-    if (!k) {
-      notifyWarning();
-      return;
-    }
-    onSpend();
-    coinDing();
-    tierBreak(what === 'pick' ? 2 : 0);
-    notifySuccess();
-  };
-  // Сколько уровней заточки возьмёт «Макс» на те деньги, что есть.
-  let sharpK = 0;
-  let sharpSum = 0;
-  for (let l = p.sharp; l < SHARP_MAX; l++) {
-    const c = sharpCost(p.pick, l);
-    if (sharpSum + c > balance) break;
-    sharpSum += c;
-    sharpK += 1;
-  }
-  const order = p.forge;
-  const open = next ? pickOpen(n, p.rank, p.prestige) : false;
-  const lock = next
-    ? next.prestige
-      ? `после ${next.prestige}-го престижа`
-      : `с ранга ${letterOf(next.floor)}`
-    : '';
-  return (
-    <div className="pforge">
-      <div className="pforge__now">
-        <PickIcon pick={p.pick} size={44} sharp={p.sharp} />
-        <span>
-          <b>
-            {cur.name} кирка{p.sharp ? ` +${p.sharp}` : ''} · ур. {pickLevelOf(p.pickXp).level}
-          </b>
-          <i>
-            урон {dmg.toFixed(dmg < 10 ? 1 : 0)} · {(cur.rate * m.rate).toFixed(1)} удара в секунду
-            · крит {Math.round(CRIT_CHANCE * 100)}% ×{CRIT_MULT}
-          </i>
-        </span>
-      </div>
-      {order ? (
-        <div className="pforge-order">
-          <div className="pforge-order__head">
-            <PickIcon pick={order.pick} size={40} />
-            <span>
-              <b>{PICKS[order.pick].name} кирка в работе</b>
-              <i>руда идёт в заказ сама, пока копаешь</i>
-            </span>
-          </div>
-          {forgeLeft(order).map(([rock, left]) => {
-            const need = PICKS[order.pick].ore.find(([r]) => r === rock)![1];
-            return (
-              <div key={rock} className="pforge-order__ore">
-                <OreIcon rock={rock} size={26} />
-                <span className="pforge-order__name">{ROCKS[rock].name}</span>
-                <GxBar value={(need - left) / need} tone={left ? 'gold' : 'green'} thin />
-                <b>
-                  {fmt(need - left)}/{fmt(need)}
-                </b>
-              </div>
-            );
-          })}
-        </div>
-      ) : next ? (
-        <div className={`pforge-order is-offer${open ? '' : ' is-locked'}`}>
-          <div className="pforge-order__head">
-            <PickIcon pick={n} size={40} />
-            <span>
-              <b>{next.name} кирка</b>
-              <i>
-                урон {cur.dmg.toFixed(1)} → {next.dmg.toFixed(1)} · скорость {cur.rate.toFixed(1)} →{' '}
-                {next.rate.toFixed(1)}
-              </i>
-            </span>
-          </div>
-          <div className="pforge-order__need">
-            <span className="pforge-order__chip">
-              <CoinIcon size={14} /> {fmt(next.coins)}
-            </span>
-            {next.ore.map(([rock, k]) => (
-              <span key={rock} className="pforge-order__chip">
-                <OreIcon rock={rock} size={18} /> {fmt(k)} {ROCKS[rock].name.toLowerCase()}
-              </span>
-            ))}
-          </div>
-          {open ? (
-            <button
-              type="button"
-              className="btn pforge-order__go"
-              disabled={balance < next.coins}
-              onClick={() => {
-                uiBuy();
-                buy('pick');
-              }}
-            >
-              Заказать кузнецу
-            </button>
-          ) : (
-            <span className="pforge-order__lock">
-              <KIcon name="locked" size={12} /> {lock}
-            </span>
-          )}
-        </div>
-      ) : (
-        <Row
-          icon={<PickIcon pick={p.pick} size={30} />}
-          title="Лучшая кирка"
-          text="Сильнее кирки нет"
-          action={<Done />}
-        />
-      )}
-      <Row
-        icon={<span className="pforge__glyph">⟋</span>}
-        title={`Заточка +${p.sharp} из ${SHARP_MAX}`}
-        text={
-          p.sharp < SHARP_MAX
-            ? `+${(SHARP_STEP * 100).toLocaleString('ru-RU')}% урона за уровень · у новой кирки заново`
-            : 'Острее некуда'
-        }
-        action={
-          p.sharp < SHARP_MAX ? (
-            <span className="pforge__pair">
-              <Buy
-                price={sharpCost(p.pick, p.sharp)}
-                can={balance >= sharpCost(p.pick, p.sharp)}
-                onClick={() => buy('sharp')}
-              />
-              {sharpK > 1 && (
-                <button
-                  type="button"
-                  className="btn btn--sm pforge__buy"
-                  onClick={() => {
-                    uiBuy();
-                    buy('sharp', sharpK);
-                  }}
-                >
-                  +{sharpK} · {shortMoney(sharpSum)}
-                </button>
-              )}
-            </span>
-          ) : (
-            <Done />
-          )
-        }
-      />
-      <Row
-        icon={<BagIcon size={28} />}
-        title={`Рюкзак ${bagCapacity(p.bagLevel)}`}
-        text={
-          p.bagLevel < BAG_MAX
-            ? `${bagCapacity(p.bagLevel)} → ${bagCapacity(p.bagLevel + 1)} блоков`
-            : 'Больше не унести'
-        }
-        action={
-          p.bagLevel < BAG_MAX ? (
-            <Buy
-              price={bagCost(p.bagLevel)}
-              can={balance >= bagCost(p.bagLevel)}
-              onClick={() => buy('bag')}
-            />
-          ) : (
-            <Done />
-          )
-        }
-      />
-      <Row
-        icon={<span className="pforge__glyph">🛒</span>}
-        title="Вагонетка"
-        text="Сама продаёт рюкзак, когда он полон"
-        action={
-          p.cart ? (
-            <Done />
-          ) : (
-            <Buy
-              price={AUTOSELL_TOKENS}
-              token
-              can={p.tokens >= AUTOSELL_TOKENS}
-              onClick={() => buy('cart')}
-            />
-          )
-        }
-      />
-      <p className="pcamp-note">
-        Сломано блоков: {fmt(p.mined)} · блоков этажа: {fmt(p.oreBlocksAll)} · продажа ×
-        {m.sell.toFixed(2)}
-      </p>
-    </div>
-  );
-}
-
 // ---- Чары: за токены ---------------------------------------------------------
 
 function enchantNow(id: EnchantId, p: PrisonState): string {
@@ -734,7 +520,7 @@ function enchantNow(id: EnchantId, p: PrisonState): string {
   const m = modsOf(p);
   switch (id) {
     case 'power':
-      return `+${10 * l}% урона`;
+      return `+${10 * l}% к скорости копки`;
     case 'fortune':
       return `+${6 * l}% лишних блоков`;
     case 'vein':
@@ -825,9 +611,9 @@ function EnchantTab() {
           <span>
             <b>Перековать кирку ★{p.pickStars + 1}</b>
             <i>
-              Уровень кирки — в ноль, зато потолок каждой чары +{Math.round(STAR_CAP * 100)}%, урон
-              +{Math.round(STAR_DMG * 100)}%, {fmt(STAR_TOKENS * (p.pickStars + 1))} токенов и{' '}
-              {STAR_KEYS} ключа. Купленные уровни чар остаются.
+              Уровень кирки — в ноль, зато потолок каждой чары +{Math.round(STAR_CAP * 100)}%,
+              скорость копки +{Math.round(STAR_DMG * 100)}%, {fmt(STAR_TOKENS * (p.pickStars + 1))}{' '}
+              токенов и {STAR_KEYS} ключа. Купленные уровни чар остаются.
             </i>
           </span>
           <button
@@ -2066,8 +1852,8 @@ function runesIdle(p: PrisonState, axeLevel = 0): boolean {
 
 const BONUS_TEXT: { k: keyof Bonus; text: string }[] = [
   { k: 'sell', text: 'к продаже' },
-  { k: 'dmg', text: 'к урону' },
-  { k: 'rate', text: 'к скорости' },
+  { k: 'dmg', text: 'к скорости копки' },
+  { k: 'rate', text: 'к частоте ударов' },
   { k: 'loot', text: 'к добыче' },
   { k: 'token', text: 'к токенам' },
   { k: 'proc', text: 'к шансам чар' },

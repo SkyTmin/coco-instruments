@@ -42,6 +42,7 @@ import { addTrauma, flashFrame } from '@/lib/juice';
 import {
   bedrockClink,
   blockBreak,
+  hardClang,
   boom,
   chainTick,
   mineRumble,
@@ -77,6 +78,11 @@ export interface MineCellProps {
   seid: boolean;
   /** Сверху блок этажа (цельный куб руды): блестит. */
   block?: boolean;
+  /**
+   * Руда твёрже кирки (v2.67): какая сила ⛏ нужна. 0 — кирка берёт. Метка в
+   * углу — это подсказка, за какой киркой идти.
+   */
+  hard?: number;
   /** Лупа: сейд в этой клетке на столько ярусов ниже (0 — нет). */
   seidBelow: number;
   /** Картинка сейда для метки лупы. */
@@ -98,6 +104,7 @@ export const MineCell = memo(function MineCell({
   need,
   seid,
   block = false,
+  hard = 0,
   seidBelow,
   seidTex,
   wt,
@@ -120,7 +127,7 @@ export const MineCell = memo(function MineCell({
   } as CSSProperties;
   return (
     <div
-      className={`pcell${bottom ? ' is-bottom' : ''}${seid ? ' is-seid' : ''}${block ? ' is-block' : ''}${tex.startsWith('/') ? ' is-hd' : ''}`}
+      className={`pcell${bottom ? ' is-bottom' : ''}${seid ? ' is-seid' : ''}${block ? ' is-block' : ''}${hard ? ' is-hard' : ''}${tex.startsWith('/') ? ' is-hd' : ''}`}
       style={style}
     >
       <span
@@ -143,6 +150,7 @@ export const MineCell = memo(function MineCell({
         peek && <img className="pcell__peek" src={peek} alt="" />
       )}
       {need && !seid && <i className="pcell__need" />}
+      {hard > 0 && <b className="pcell__hard">⛏{hard}</b>}
     </div>
   );
 });
@@ -651,6 +659,15 @@ export interface DigRules {
   rock(r: number): { hp: number; kind: RockKind; colors: string[] };
   /** Клетку не берут ни удар, ни площадные чары (сейд, событие поверх). */
   shut?(c: number): boolean;
+  /**
+   * Руда клетки твёрже кирки (v2.67): удар звенит и высекает искры, чары её
+   * не берут. Возвращает нужную силу ⛏ или 0.
+   */
+  hard?(c: number): number;
+  /** По звону о твёрдую руду — страница скажет, какая кирка нужна. */
+  onHard?(c: number, power: number): void;
+  /** Искры с каждого удара — у редких кирок (легендарная сыплет золотом). */
+  spark?(): { colors: string[]; n: number } | null;
   /** Особая клетка забирает удар себе целиком (метеорит, Куйва, сейд). */
   special?(c: number): boolean;
   /** Сколько мс минимум между ударами тапом. */
@@ -737,7 +754,7 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
   const breakCells = (cells: number[], kind: BreakKind) => {
     const r = R.current;
     const list = cells
-      .filter((cell) => !r.shut?.(cell))
+      .filter((cell) => !r.shut?.(cell) && !r.hard?.(cell))
       .map((cell) => ({ cell, rock: r.rockAt(cell) }))
       .filter((b) => b.rock >= 0);
     if (!list.length) return;
@@ -826,7 +843,7 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
     const staged: [number, number][] = [];
     for (const n of nb) {
       const rock = r.rockAt(n);
-      if (rock < 0 || r.shut?.(n)) continue;
+      if (rock < 0 || r.shut?.(n) || r.hard?.(n)) continue;
       const hpMax = r.rock(rock).hp;
       const left = (hp.current[n] < 0 ? hpMax : hp.current[n]) - dmg;
       if (left <= 1e-6) broken.push(n);
@@ -889,10 +906,23 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
       f?.chips(c, ['#3a3432', '#1f1b1b'], 2, 0.5);
       return;
     }
+    // Руда твёрже кирки: звон, искры и ничего — «нужна кирка получше».
+    const hard = r.hard?.(c) ?? 0;
+    if (hard > 0) {
+      f?.swing(c, false);
+      hardClang();
+      tapLight();
+      f?.chips(c, ['#fff3b0', '#ffd257', '#ffffff', '#ffb04a'], 7, 1.3);
+      f?.kick(c, false);
+      r.onHard?.(c, hard);
+      return;
+    }
     const def = r.rock(rock);
     const m = r.procs();
     const crit = Math.random() < CRIT_CHANCE;
     f?.swing(c, crit);
+    const sp = r.spark?.();
+    if (sp) f?.chips(c, sp.colors, sp.n, 1.1);
     const dmg = r.damage() * (crit ? CRIT_MULT : 1);
     const left = (hp.current[c] < 0 ? def.hp : hp.current[c]) - dmg;
 

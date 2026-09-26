@@ -28,12 +28,9 @@ import {
   RANK_PRICE,
   RANK_WORK,
   SELL_BONUS_CAP,
-  SHARP_MAX,
-  SHARP_STEP,
 } from './economy';
 
-export { nice, PICKS, SHARP_MAX, SHARP_STEP } from './economy';
-export { sharpCost, AUTOSELL_TOKENS, BLOCK_HITS } from './economy';
+export { nice, PICKS, AUTOSELL_TOKENS, BLOCK_HITS, blockPity } from './economy';
 export type { PickDef as Pick } from './economy';
 
 export const MINE_COLS = 7;
@@ -429,6 +426,58 @@ export const rankLetter = (r: number): string =>
   String.fromCharCode(65 + Math.max(0, Math.min(LAST_RANK, Math.round(r))));
 
 // ---------------------------------------------------------------------------
+// Твёрдость руды и сила кирки (v2.67), как Breaking Power в Hypixel SkyBlock
+// и сила кирки в Terraria. Руда твёрже кирки не ломается вовсе: удар звенит
+// и высекает искры. Кирка N куётся из руды, которую берёт кирка N−1, поэтому
+// лестница всегда проходима.
+//
+// Условие ранга: кирка, которая берёт руду следующего этажа. Так новый этаж
+// никогда не встречает игрока полем, которое он не может копать (шахта —
+// яма: твёрдый верхний блок закрыл бы всё под собой), а «звенит» только
+// руда следующего этажа на дне — подсказка, за какой киркой идти.
+// ---------------------------------------------------------------------------
+
+/** Сила ⛏ кирки `pick`. */
+export function pickPower(pick: number): number {
+  return PICKS[Math.max(0, Math.min(PICKS.length - 1, pick))].power;
+}
+
+/**
+ * Твёрдость руды: сила самой слабой кирки, которая её берёт. Этажи
+ * открываются киркой, выкованной на этаже ниже: кирка с этажа `floor` берёт
+ * руду с `floor + 1`. Руда спецзоны — под звёздную кирку.
+ */
+export function rockHardness(rock: number): number {
+  let h = 1;
+  for (const p of PICKS)
+    if (!p.prestige && p.power > 1 && rock >= Math.min(p.floor + 1, LAST_RANK))
+      h = Math.max(h, p.power);
+  return h;
+}
+
+/** Берёт ли кирка `pick` руду `rock`. */
+export function canMine(pick: number, rock: number): boolean {
+  return rock < 0 || pickPower(pick) >= rockHardness(rock);
+}
+
+/** Самая простая кирка, которой копается этаж `floor`. */
+export function minPickFor(floor: number): number {
+  const need = rockHardness(Math.max(0, Math.min(LAST_RANK, floor)));
+  return Math.max(
+    0,
+    PICKS.findIndex((p) => !p.prestige && p.power >= need),
+  );
+}
+
+/** Какие руды кирка `pick` берёт первой — её «открывает». */
+export function opensRocks(pick: number): number[] {
+  const pw = pickPower(pick);
+  const out: number[] = [];
+  for (let r = 0; r < MINES; r++) if (rockHardness(r) === pw) out.push(r);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Состав шахты (v2.66). На этаже ДВЕ руды: своя и прошлого этажа. Сверху
 // поровну, к дну своей до 85%; на дне изредка руда следующего этажа —
 // подсказка, за чем идти. Было пять пород вперемешку, новая — 5% поля: этаж
@@ -438,7 +487,7 @@ export const rankLetter = (r: number): string =>
 /** Доля руды этажа по ярусам (0 — верхний). */
 export const OWN_SHARE = [0.5, 0.5875, 0.675, 0.7625, 0.85];
 /** На дне изредка попадается руда следующего этажа. */
-export const NEXT_ROCK_CHANCE = 0.02;
+export const NEXT_ROCK_CHANCE = 0.05;
 
 export interface MineShare {
   rock: number;
@@ -625,6 +674,35 @@ export function blockTop(blocks: OreBlock[], cell: number, dug: number): boolean
   return blocks.some((b) => b.cell === cell && b.depth === dug);
 }
 
+/** Все блоки этажа поля: из зерна и блок гарантии, если он встал. */
+export function mineBlocks(m: { id: number; seed: number; bonus?: OreBlock | null }): OreBlock[] {
+  const out = blocksOf(m.id, m.seed);
+  return m.bonus ? [...out, m.bonus] : out;
+}
+
+/**
+ * Куда встанет блок гарантии: случайная клетка, где сверху руда самого
+ * этажа, а не сейд, не блок из зерна и не событие. −1 — некуда.
+ */
+export function pityCell(
+  m: { id: number; seed: number; dug: number[] },
+  rocks: number[],
+  rnd: () => number,
+  busy: (cell: number) => boolean = () => false,
+): number {
+  const seeded = blocksOf(m.id, m.seed);
+  const seids = seidsOf(m.id, m.seed);
+  const free: number[] = [];
+  for (let c = 0; c < MINE_CELLS; c++) {
+    const d = m.dug[c];
+    if (d >= DEPTH || busy(c)) continue;
+    if (rocks[d * MINE_CELLS + c] !== m.id) continue;
+    if (blockTop(seeded, c, d) || seidTop(seids, c, d)) continue;
+    free.push(c);
+  }
+  return free.length ? free[Math.floor(rnd() * free.length)] : -1;
+}
+
 /**
  * Горизонты — этажи группами по пять, у каждого свой характер: наверху
  * простой камень, ниже металлы, потом самоцветы, на дне алмазы и звёзды.
@@ -683,8 +761,11 @@ export function rankXp(newRank: number): number {
 export const PRESTIGE_XP = 2500;
 
 // ---------------------------------------------------------------------------
-// Кузница (v2.66): кирки куются из руды (`PICKS` в economy.ts), заточка —
-// своя на каждой кирке, рюкзак, автопродажа за токены.
+// Кузница (v2.67): кирка куётся одной кнопкой из руды и монет, без заказа.
+// Руда для следующей кирки копится в ЯЩИКЕ КУЗНЕЦА: при продаже рюкзака
+// (руками или вагонеткой) нужная руда не продаётся, а откладывается — как
+// запас досок на рукоять в лесу. Выковать можно и из рюкзака: кузнец берёт
+// сначала из ящика, потом из рюкзака.
 // ---------------------------------------------------------------------------
 
 /** Крит: редкий удар втрое — ради него и держат палец. */
@@ -700,10 +781,9 @@ export function bagCost(level: number): number {
   return BAG_PRICE[Math.max(0, Math.min(BAG_PRICE.length - 1, level))];
 }
 
-/** Урон одного удара без крита. */
-export function hitDamage(pick: number, sharp: number): number {
-  const p = PICKS[Math.max(0, Math.min(PICKS.length - 1, pick))];
-  return p.dmg * (1 + SHARP_STEP * Math.min(SHARP_MAX, sharp));
+/** Урон одного удара без крита — внутреннее число, игрок видит скорость. */
+export function hitDamage(pick: number): number {
+  return PICKS[Math.max(0, Math.min(PICKS.length - 1, pick))].dmg;
 }
 
 /**
@@ -715,76 +795,147 @@ export function tapGapMs(pick: number): number {
   return 1000 / (PICKS[Math.max(0, Math.min(PICKS.length - 1, pick))].rate * 1.8);
 }
 
-/** Можно ли заказать кирку `pick` при ранге и престиже игрока. */
+/** Можно ли ковать кирку `pick` при ранге и престиже игрока. */
 export function pickOpen(pick: number, rank: number, prestige: number): boolean {
   const d = PICKS[pick];
   if (!d) return false;
   return d.prestige ? prestige >= d.prestige : rank >= d.floor || prestige > 0;
 }
 
-/**
- * Заказ кузнице: кирка оплачена монетами, руда нужного вида идёт в заказ
- * прямо из-под кирки (мимо рюкзака), пока не наберётся. Набралась — кирка
- * выдаётся сразу.
- */
-export interface ForgeOrder {
-  pick: number;
-  /** Сколько руды уже в заказе, по породам. */
-  have: Record<number, number>;
+/** Следующая кирка лестницы (−1 — лучше нет или она за престижем, которого нет). */
+export function nextPick(p: { pick: number; prestige: number }): number {
+  const n = p.pick + 1;
+  const d = PICKS[n];
+  if (!d) return -1;
+  return d.prestige && p.prestige < d.prestige ? -1 : n;
 }
 
-/** Сколько руды каждой породы ещё нужно заказу. */
-export function forgeLeft(o: ForgeOrder): [number, number][] {
-  const d = PICKS[o.pick];
+export interface ForgeOre {
+  rock: number;
+  need: number;
+  /** Уже в ящике кузнеца. */
+  box: number;
+  /** Лежит в рюкзаке — кузнец возьмёт и оттуда. */
+  bag: number;
+}
+
+/** Руда рецепта кирки `pick`: сколько нужно и где что лежит. */
+export function forgeOres(pick: number, box: Bag, bag: Bag): ForgeOre[] {
+  const d = PICKS[pick];
   if (!d) return [];
-  return d.ore.map(([rock, n]) => [rock, Math.max(0, n - (o.have[rock] ?? 0))] as [number, number]);
+  return d.ore.map(([rock, need]) => ({
+    rock,
+    need,
+    box: Math.min(need, box[rock] ?? 0),
+    bag: Math.max(0, Math.min(need - Math.min(need, box[rock] ?? 0), bag[rock] ?? 0)),
+  }));
 }
 
-export function forgeReady(o: ForgeOrder): boolean {
-  return forgeLeft(o).every(([, n]) => n <= 0);
+export interface ForgeCheck {
+  pick: number;
+  /** Открыта ли кирка по этажу/престижу. */
+  open: boolean;
+  /** Руды хватает (ящик + рюкзак). */
+  ore: boolean;
+  /** Сколько монет просит (0 — оплачено старым заказом). */
+  coins: number;
+  /** Сколько руды не хватает, по породам. */
+  missing: [number, number][];
+}
+
+export function forgeCheck(p: {
+  pick: number;
+  rank: number;
+  prestige: number;
+  forgeBox: Bag;
+  bag: Bag;
+  forgePaid: number;
+}): ForgeCheck | null {
+  const n = nextPick(p);
+  if (n < 0) return null;
+  const ores = forgeOres(n, p.forgeBox, p.bag);
+  const missing = ores
+    .map((o) => [o.rock, o.need - o.box - o.bag] as [number, number])
+    .filter(([, k]) => k > 0);
+  return {
+    pick: n,
+    open: pickOpen(n, p.rank, p.prestige),
+    ore: !missing.length,
+    coins: p.forgePaid === n ? 0 : PICKS[n].coins,
+    missing,
+  };
+}
+
+/** Выковать: руда уходит из ящика, недостающая — из рюкзака. */
+export function forgeTake(pick: number, box: Bag, bag: Bag): { box: Bag; bag: Bag } {
+  const outBox: Bag = { ...box };
+  const outBag: Bag = { ...bag };
+  for (const [rock, need] of PICKS[pick]?.ore ?? []) {
+    const a = Math.min(need, outBox[rock] ?? 0);
+    const b = Math.min(need - a, outBag[rock] ?? 0);
+    if (a) outBox[rock] -= a;
+    if (b) outBag[rock] -= b;
+    if (!outBox[rock]) delete outBox[rock];
+    if (!outBag[rock]) delete outBag[rock];
+  }
+  return { box: outBox, bag: outBag };
+}
+
+/** Сколько руды каждой породы ящик ещё примет для кирки `pick`. */
+function boxRoom(pick: number, box: Bag): Map<number, number> {
+  const room = new Map<number, number>();
+  for (const [rock, need] of PICKS[pick]?.ore ?? [])
+    room.set(rock, Math.max(0, need - (box[rock] ?? 0)));
+  return room;
 }
 
 /**
- * Разложить добытые единицы руды: сперва в заказ кузнице (пока ему нужно),
- * остальное — дальше, в рюкзак. Возвращает новый заказ и остаток.
+ * Продажа: руда для следующей кирки не продаётся, а ложится в ящик кузнеца
+ * (ровно столько, сколько рецепту ещё не хватает).
  */
-export function feedForge(
-  o: ForgeOrder | null,
+export function reserveOre(
+  bag: Bag,
+  box: Bag,
+  pick: number,
+): { bag: Bag; box: Bag; moved: number } {
+  if (pick < 0) return { bag, box, moved: 0 };
+  const outBag: Bag = { ...bag };
+  const outBox: Bag = { ...box };
+  let moved = 0;
+  for (const [rock, room] of boxRoom(pick, box)) {
+    const k = Math.min(room, outBag[rock] ?? 0);
+    if (k <= 0) continue;
+    outBox[rock] = (outBox[rock] ?? 0) + k;
+    outBag[rock] -= k;
+    if (!outBag[rock]) delete outBag[rock];
+    moved += k;
+  }
+  return moved ? { bag: outBag, box: outBox, moved } : { bag, box, moved: 0 };
+}
+
+/**
+ * Спецзона платит токенами и рюкзака не знает: руда престижной кирки из неё
+ * идёт в ящик сразу, из-под кирки.
+ */
+export function feedBox(
+  box: Bag,
   units: number[],
-): { order: ForgeOrder | null; rest: number[]; took: number } {
-  if (!o) return { order: null, rest: units, took: 0 };
-  const need = new Map(forgeLeft(o));
-  const have = { ...o.have };
+  pick: number,
+): { box: Bag; rest: number[]; took: number } {
+  if (pick < 0) return { box, rest: units, took: 0 };
+  const room = boxRoom(pick, box);
+  const out: Bag = { ...box };
   const rest: number[] = [];
   let took = 0;
   for (const rock of units) {
-    const left = need.get(rock) ?? 0;
+    const left = room.get(rock) ?? 0;
     if (left > 0) {
-      need.set(rock, left - 1);
-      have[rock] = (have[rock] ?? 0) + 1;
+      room.set(rock, left - 1);
+      out[rock] = (out[rock] ?? 0) + 1;
       took += 1;
     } else rest.push(rock);
   }
-  return { order: took ? { ...o, have } : o, rest, took };
-}
-
-/** Заказ только что оплачен: руда нужного вида, что уже лежит в рюкзаке, идёт в него сразу. */
-export function forgeFromBag(
-  o: ForgeOrder,
-  bag: Bag,
-): { order: ForgeOrder; bag: Bag; took: number } {
-  const out: Bag = { ...bag };
-  const have = { ...o.have };
-  let took = 0;
-  for (const [rock, n] of forgeLeft(o)) {
-    const k = Math.min(n, out[rock] ?? 0);
-    if (k <= 0) continue;
-    have[rock] = (have[rock] ?? 0) + k;
-    out[rock] -= k;
-    if (!out[rock]) delete out[rock];
-    took += k;
-  }
-  return { order: { ...o, have }, bag: out, took };
+  return took ? { box: out, rest, took } : { box, rest, took: 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -810,6 +961,8 @@ export function bagValue(bag: Bag, mult = 1): number {
 /**
  * Разложить добычу по рюкзаку. Места нет — вагонетка (если куплена) продаёт
  * рюкзак и укладка продолжается; без вагонетки остаток пропадает в шахте.
+ * Вагонетка, как и продажа руками, сперва откладывает руду для следующей
+ * кирки в ящик кузнеца (`forge`).
  */
 export function stash(
   bag: Bag,
@@ -817,18 +970,25 @@ export function stash(
   cap: number,
   cart: boolean,
   mult: number,
-): { bag: Bag; taken: number; lost: number; sold: number } {
-  const out: Bag = { ...bag };
+  forge: { box: Bag; pick: number } = { box: {}, pick: -1 },
+): { bag: Bag; taken: number; lost: number; sold: number; box: Bag; boxed: number } {
+  let out: Bag = { ...bag };
+  let box = forge.box;
   let count = bagCount(out);
   let taken = 0;
   let lost = 0;
   let sold = 0;
+  let boxed = 0;
   for (const rock of units) {
     if (count >= cap) {
       if (!cart) {
         lost += 1;
         continue;
       }
+      const r = reserveOre(out, box, forge.pick);
+      out = { ...r.bag };
+      box = r.box;
+      boxed += r.moved;
       sold += bagValue(out, mult);
       for (const k in out) delete out[k];
       count = 0;
@@ -837,7 +997,7 @@ export function stash(
     count += 1;
     taken += 1;
   }
-  return { bag: out, taken, lost, sold };
+  return { bag: out, taken, lost, sold, box, boxed };
 }
 
 // ---------------------------------------------------------------------------
@@ -877,7 +1037,17 @@ export interface Enchant {
 }
 
 export const ENCHANTS: Enchant[] = [
-  { id: 'power', name: 'Сила', per: '+10% урона', max: 30, base: 50, inc: 30, glyph: '⚒' },
+  // «Сила» переименована в «Эффективность» (v2.67): у кирки теперь Сила ⛏ —
+  // какую руду она берёт, а урона игрок не видит вовсе.
+  {
+    id: 'power',
+    name: 'Эффективность',
+    per: '+10% к скорости копки',
+    max: 30,
+    base: 50,
+    inc: 30,
+    glyph: '⚒',
+  },
   {
     id: 'fortune',
     name: 'Удача',
@@ -996,8 +1166,15 @@ export const NO_ENCHANTS: Enchants = {
 /** Цена следующего уровня (с уровня `level` на `level + 1`). */
 export function enchantCost(id: EnchantId, level: number): number {
   const e = enchantOf(id);
-  return e.base + e.inc * level;
+  return Math.round((e.base + e.inc * level) * ENCHANT_PRICE);
 }
+
+/**
+ * Во сколько раз чары дороже, чем в v2.66. Круг A→Z стал в 2,6 раза
+ * длиннее, токенов за него падает столько же больше — без этого чары
+ * докачивались бы к середине круга, и поздние этажи пролетались бы.
+ */
+export const ENCHANT_PRICE = Number((typeof process !== 'undefined' && process.env?.EP) || 2.5);
 
 /** Сколько вернёт сброс: половина всего, что ушло на уровни. */
 export function enchantRefund(id: EnchantId, level: number): number {
@@ -1276,11 +1453,15 @@ function normalizeZone(raw: unknown): Zone {
     tick: int(z?.tick, 0, 1e14, 0),
     back:
       back && Array.isArray(back.dug) && back.dug.length === MINE_CELLS
-        ? {
-            id: int(back.id, 0, LAST_RANK, 0),
-            seed: int(back.seed, 0, 2 ** 31, 1),
-            dug: back.dug.map((d) => int(d, 0, DEPTH, 0)),
-          }
+        ? (() => {
+            const dug = back.dug.map((d) => int(d, 0, DEPTH, 0));
+            return {
+              id: int(back.id, 0, LAST_RANK, 0),
+              seed: int(back.seed, 0, 2 ** 31, 1),
+              dug,
+              bonus: normalizeBonus(back.bonus, dug),
+            };
+          })()
         : null,
   };
 }
@@ -1472,8 +1653,11 @@ export const PICK_LEVEL_DMG = 0.005;
 
 /** Опыта, чтобы уйти с уровня `level` на следующий. */
 export function pickXpFor(level: number): number {
-  return Math.round(100 * Math.pow(1.13, level - 1));
+  return Math.round(PICK_XP * Math.pow(1.13, level - 1));
 }
+
+/** Опыт первого уровня кирки (v2.67: круг длиннее — уровни реже). */
+export const PICK_XP = Number((typeof process !== 'undefined' && process.env?.PX) || 200);
 
 export function pickLevelOf(xp: number): { level: number; into: number; need: number } {
   let level = 1;
@@ -1549,14 +1733,16 @@ export function pickLevelReward(level: number): { tokens: number; keys: number }
 }
 
 // ---------------------------------------------------------------------------
-// Условия ранга (v2.66). Одних денег мало, как на русских присонах:
-// - ВЫРАБОТКА — сломать N блоков на этаже (удары и чары кирки; рабочие не в
-//   счёт). Докупить нельзя: это и есть «сначала поработай», и это держит
-//   второй круг после престижа — кирка сильнее, но работу всё равно делать.
-// - БЛОКИ ЭТАЖА — найти и расколоть 1–2 цельных блока руды. Недостающий
-//   можно докупить за две цены блока.
-// A–D — только деньги: там учатся копать. Счётчики — `norm` (блоки по
-// породам, сумма — выработка) и `oreBlocks`; сбрасываются на ранге.
+// Условия ранга (v2.67). Одних денег мало, как на русских присонах:
+// - КИРКА — берёт руду следующего этажа (с C: на D нужна каменная). Новый
+//   этаж без неё не копается: шахта — яма, твёрдый верх закрыл бы всё.
+// - ВЫРАБОТКА — сломать N блоков (удары и чары кирки; рабочие не в счёт).
+//   Докупить нельзя: это и есть «сначала поработай».
+// - БЛОКИ ЭТАЖА — 3…10 цельных блоков руды своего этажа. Недостающие
+//   докупаются втрое дороже блока; за долгую невезуху есть гарантия.
+// A–D — деньги (и каменная кирка на D): там учатся копать. Счётчики —
+// `norm` (блоки по породам, сумма — выработка), `oreBlocks` и `pity`;
+// сбрасываются на ранге.
 // ---------------------------------------------------------------------------
 
 /** Доля породы `rock` среди всех блоков шахты `mine`, по всем ярусам. */
@@ -1587,16 +1773,21 @@ export interface RankNeeds {
   blocksNeed: number;
   /** Цена докупки недостающих блоков этажа; 0 — докупать нечего. */
   buyout: number;
+  /** Сила кирки, которую просит следующий этаж, и есть ли она. */
+  power: number;
+  pickOk: boolean;
 }
 
 export function rankNeeds(p: {
   rank: number;
   norm: Record<number, number>;
   oreBlocks: number;
+  pick: number;
 }): RankNeeds {
   const r = Math.min(p.rank, LAST_RANK - 1);
   const blocksNeed = rankBlocks(r);
   const missing = Math.max(0, blocksNeed - p.oreBlocks);
+  const power = rockHardness(r + 1);
   return {
     coins: rankCost(r),
     work: Math.min(workDone(p.norm), rankWork(r)),
@@ -1604,6 +1795,8 @@ export function rankNeeds(p: {
     blocks: Math.min(p.oreBlocks, blocksNeed),
     blocksNeed,
     buyout: missing * BLOCK_PRICE[r] * BLOCK_BUYOUT,
+    power,
+    pickOk: pickPower(p.pick) >= power,
   };
 }
 
@@ -1632,8 +1825,8 @@ export interface RuneDef {
 
 export const RUNES: RuneDef[] = [
   { id: 'sell', name: 'Феху', text: 'к продаже', unit: 0.016 },
-  { id: 'dmg', name: 'Уруз', text: 'к урону', unit: 0.024 },
-  { id: 'rate', name: 'Райдо', text: 'к скорости удара', unit: 0.01 },
+  { id: 'dmg', name: 'Уруз', text: 'к скорости копки', unit: 0.024 },
+  { id: 'rate', name: 'Райдо', text: 'к частоте ударов', unit: 0.01 },
   { id: 'loot', name: 'Йера', text: 'к добыче', unit: 0.016 },
   { id: 'token', name: 'Гебо', text: 'к токенам', unit: 0.032 },
   { id: 'proc', name: 'Совило', text: 'к шансам чар кирки и топора', unit: 0.024 },
@@ -1760,7 +1953,7 @@ export const PETS: PetDef[] = [
     name: 'Росомаха',
     stat: 'dmg',
     per: 0.02,
-    text: 'к урону',
+    text: 'к скорости копки',
     lore: 'Грызёт мёрзлый гранит',
   },
   {
@@ -1784,7 +1977,7 @@ export const PETS: PetDef[] = [
     name: 'Оленёнок',
     stat: 'rate',
     per: 0.008,
-    text: 'к скорости кирки',
+    text: 'к частоте ударов',
     lore: 'Тянет волокушу с рудой',
   },
 ];
@@ -2045,26 +2238,46 @@ export function extraBlocks(m: Mods): number {
 
 /**
  * Средний доход шахты, монет в секунду, на удержании. Считает и зачарования:
- * урон от Силы, лишние блоки от жил и взрывов, лишнюю добычу от Удачи.
+ * урон от Эффективности, лишние блоки от жил и взрывов, лишнюю добычу от
+ * Удачи. Руда твёрже кирки не копается — её доля выпадает из дохода.
  */
-export function incomeRate(mine: number, pick: number, sharp: number, m: Mods = BASE_MODS): number {
+export function incomeRate(mine: number, pick: number, m: Mods = BASE_MODS): number {
   // Перековка поднимает блок на породу выше — примерно на шаг цены руды.
   const r = Math.max(0, Math.min(ORE_PRICE.length - 2, mine));
   const reforge = 1 + m.reforge * (ORE_PRICE[r + 1] / ORE_PRICE[r] - 1);
-  return blockRate(mine, pick, sharp, m) * (1 + m.fortune) * avgValue(mine) * m.sell * reforge;
+  return blockRate(mine, pick, m) * (1 + m.fortune) * avgValue(mine, pick) * m.sell * reforge;
 }
 
-/** Средняя цена обычного блока шахты по всем ярусам. */
-export function avgValue(mine: number): number {
-  return mineShares(mine).reduce((v, s) => v + s.share * ROCKS[s.rock].value, 0);
+/** Средняя цена блока шахты по всем ярусам — из тех, что кирка берёт. */
+export function avgValue(mine: number, pick = PICKS.length - 1): number {
+  const ok = mineShares(mine).filter((s) => canMine(pick, s.rock));
+  const sum = ok.reduce((v, s) => v + s.share, 0);
+  return sum ? ok.reduce((v, s) => v + s.share * ROCKS[s.rock].value, 0) / sum : 0;
 }
 
-/** Сколько блоков в секунду ломает кирка на удержании. */
-export function blockRate(mine: number, pick: number, sharp: number, m: Mods = BASE_MODS): number {
-  const dmg = hitDamage(pick, sharp) * m.dmg;
+/** Сколько блоков в секунду ломает кирка на удержании (с чарами поля). */
+export function blockRate(mine: number, pick: number, m: Mods = BASE_MODS): number {
+  return hitRate(mine, pick, m) * (1 + extraBlocks(m));
+}
+
+/** Блоков в секунду одними ударами, без взрывов и жил. */
+function hitRate(mine: number, pick: number, m: Mods): number {
+  const dmg = hitDamage(pick) * m.dmg;
   const rate = PICKS[pick].rate * m.rate;
-  const hits = mineShares(mine).reduce((h, s) => h + s.share * hitsFor(s.rock, dmg), 0);
-  return (rate / hits) * (1 + extraBlocks(m));
+  const ok = mineShares(mine).filter((s) => canMine(pick, s.rock));
+  const sum = ok.reduce((v, s) => v + s.share, 0);
+  if (!sum) return 0;
+  const hits = ok.reduce((h, s) => h + (s.share / sum) * hitsFor(s.rock, dmg), 0);
+  return rate / hits;
+}
+
+/**
+ * Скорость кирки для игрока: блоков в минуту на удержании в шахте `mine`,
+ * одними ударами (без взрывов и жил — они случай, а не скорость). Это
+ * цифра вместо урона: её видно в кузнице и на кирке.
+ */
+export function pickSpeed(mine: number, pick: number, m: Mods = BASE_MODS): number {
+  return Math.round(60 * hitRate(mine, pick, m));
 }
 
 // ---------------------------------------------------------------------------
@@ -2723,13 +2936,17 @@ export interface PrisonMine {
   seed: number;
   /** Глубина раскопа по клеткам, 0…DEPTH. */
   dug: number[];
+  /**
+   * Блок этажа по гарантии (v2.67): долго не везло — он встаёт на верх
+   * случайной клетки. Живёт вместе с полем: новая шахта — гарантии нет.
+   */
+  bonus?: OreBlock | null;
 }
 
 export interface PrisonState {
   rank: number;
   prestige: number;
   pick: number;
-  sharp: number;
   bagLevel: number;
   cart: boolean;
   bag: Bag;
@@ -2806,8 +3023,12 @@ export interface PrisonState {
   /** Блоки этажа (v2.66): расколото на этом ранге и за всё время. */
   oreBlocks: number;
   oreBlocksAll: number;
-  /** Заказ кузнице: кирка оплачена, руда набирается. */
-  forge: ForgeOrder | null;
+  /** Ящик кузнеца (v2.67): руда, отложенная для следующей кирки. */
+  forgeBox: Bag;
+  /** Кирка, за которую монеты уже внесены старым заказом (−1 — нет). */
+  forgePaid: number;
+  /** Гарантия блока этажа: сломано на своём этаже с прошлого блока. */
+  pity: number;
 }
 
 export function freshMine(id: number, seed = Math.floor(Math.random() * 2 ** 31)): PrisonMine {
@@ -2818,7 +3039,6 @@ export const PRISON_START: PrisonState = {
   rank: 0,
   prestige: 0,
   pick: 0,
-  sharp: 0,
   bagLevel: 0,
   cart: false,
   bag: {},
@@ -2876,7 +3096,9 @@ export const PRISON_START: PrisonState = {
   pearls: 0,
   oreBlocks: 0,
   oreBlocksAll: 0,
-  forge: null,
+  forgeBox: {},
+  forgePaid: -1,
+  pity: 0,
 };
 
 const int = (v: unknown, lo: number, hi: number, dflt: number): number =>
@@ -2902,15 +3124,28 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     m && Array.isArray(m.dug) && m.dug.length === MINE_CELLS
       ? m.dug.map((d) => int(d, 0, DEPTH, 0))
       : null;
+  const prestige = int(raw.prestige, 0, 999, 0);
+  // v2.67: этаж копается только киркой, что берёт его руду. Сохранение
+  // из прошлых версий могло стоять на этаже со слабой киркой — кузнец
+  // выдаёт нужную: иначе поле встало бы стеной, а старый путь этого не знал.
+  const pick = Math.max(int(raw.pick, 0, PICKS.length - 1, 0), minPickFor(rank));
+  const old = normalizeOldOrder((raw as { forge?: unknown }).forge, pick);
+  const box = normalizeBag(raw.forgeBox ?? old?.have);
   return {
     rank,
-    prestige: int(raw.prestige, 0, 999, 0),
-    pick: int(raw.pick, 0, PICKS.length - 1, 0),
-    sharp: int(raw.sharp, 0, SHARP_MAX, 0),
+    prestige,
+    pick,
     bagLevel: int(raw.bagLevel, 0, BAG_MAX, 0),
     cart: raw.cart === true,
     bag,
-    mine: dug ? { id: mineId, seed: int(m?.seed, 0, 2 ** 31, 1), dug } : freshMine(mineId),
+    mine: dug
+      ? {
+          id: mineId,
+          seed: int(m?.seed, 0, 2 ** 31, 1),
+          dug,
+          bonus: normalizeBonus(m?.bonus, dug),
+        }
+      : freshMine(mineId),
     mined: int(raw.mined, 0, 1e12, 0),
     earned: int(raw.earned, 0, 1e15, 0),
     tokens: int(raw.tokens, 0, 1e12, 0),
@@ -2973,18 +3208,51 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     pearls: int(raw.pearls, 0, 1e6, 0),
     oreBlocks: int(raw.oreBlocks, 0, 1e6, 0),
     oreBlocksAll: int(raw.oreBlocksAll, 0, 1e9, 0),
-    forge: normalizeForge(raw.forge, int(raw.pick, 0, PICKS.length - 1, 0)),
+    forgeBox: box,
+    // Заказ v2.66 был оплачен вперёд: за эту кирку монеты второй раз не берём.
+    forgePaid:
+      old && old.pick === nextPick({ pick, prestige })
+        ? old.pick
+        : int(raw.forgePaid, -1, PICKS.length - 1, -1) === pick + 1
+          ? pick + 1
+          : -1,
+    pity: int(raw.pity, 0, 1e7, 0),
   };
 }
 
-function normalizeForge(raw: unknown, pick: number): ForgeOrder | null {
-  const o = raw as Partial<ForgeOrder> | null | undefined;
+/** Рюкзак или ящик: породы — целые индексы, количества — неотрицательные. */
+function normalizeBag(raw: unknown): Bag {
+  const out: Bag = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [k, v] of Object.entries(raw)) {
+    const i = Number(k);
+    const n = int(v, 0, 1e7, 0);
+    if (Number.isInteger(i) && i >= 0 && i < ROCKS.length && n > 0) out[i] = n;
+  }
+  return out;
+}
+
+/** Заказ кузнице из v2.66: кирка оплачена, часть руды уже набрана. */
+function normalizeOldOrder(
+  raw: unknown,
+  pick: number,
+): { pick: number; have: Record<number, number> } | null {
+  const o = raw as { pick?: unknown; have?: Record<number, unknown> } | null | undefined;
   if (!o || typeof o !== 'object') return null;
   const target = int(o.pick, 0, PICKS.length - 1, -1);
   if (target <= pick) return null;
   const have: Record<number, number> = {};
   for (const [rock, n] of PICKS[target].ore) have[rock] = int(o.have?.[rock], 0, n, 0);
   return { pick: target, have };
+}
+
+function normalizeBonus(raw: unknown, dug: number[]): OreBlock | null {
+  const b = raw as Partial<OreBlock> | null | undefined;
+  if (!b || typeof b !== 'object') return null;
+  const cell = int(b.cell, 0, MINE_CELLS - 1, -1);
+  const depth = int(b.depth, 0, DEPTH - 1, -1);
+  // Блок гарантии лежит на верху клетки; клетку уже раскопали глубже — его нет.
+  return cell >= 0 && depth >= 0 && dug[cell] === depth ? { cell, depth } : null;
 }
 
 const TIER_IDS: CaseTier[] = ['common', 'rare', 'epic', 'legend'];
@@ -3107,29 +3375,29 @@ export const GUIDE: GuideStep[] = [
   },
   {
     id: 'rankB',
-    title: 'Добудь породу и возьми ранг B',
-    hint: 'Для ранга нужны монеты и порода. Жми на полосу ранга',
+    title: 'Возьми ранг B',
+    hint: 'Накопи монет и жми на полосу ранга',
     progress: (p) => upTo(p.rank, 1),
     reward: { keys: 1 },
   },
   {
     id: 'case',
     title: 'Открой сундук',
-    hint: 'Лагерь → Сундуки. Ключ дали за ранг',
+    hint: 'Кнопка «Сундуки» внизу. Ключ дали за ранг',
     progress: (p) => upTo(p.cases, 1),
     reward: { tokens: 25 },
   },
   {
     id: 'steel',
-    title: 'Купи стальную кирку',
-    hint: 'Лагерь → Кузница',
+    title: 'Выкуй каменную кирку',
+    hint: 'На этаже C, в кузнице: известняк, песчаник и монеты',
     progress: (p) => upTo(p.pick, 1),
     reward: { coins: 150 },
   },
   {
     id: 'enchant',
     title: 'Возьми первую чару',
-    hint: 'Лагерь → Чары, платишь токенами',
+    hint: 'Кнопка «Чары» внизу, платишь токенами',
     progress: (p) => upTo(enchSum(p), 1),
     reward: { tokens: 30 },
   },
@@ -3157,14 +3425,14 @@ export const GUIDE: GuideStep[] = [
   {
     id: 'rankE',
     title: 'Возьми ранг E',
-    hint: 'Редкая порода чаще на глубине, лупа показывает её под верхним блоком',
+    hint: 'Для ранга нужна кирка, которая берёт руду следующего этажа',
     progress: (p) => upTo(p.rank, 4),
     reward: { keys: 2 },
   },
   {
     id: 'bag',
     title: 'Прокачай рюкзак',
-    hint: 'Лагерь → Кузница',
+    hint: 'В кузнице, под киркой',
     progress: (p) => upTo(p.bagLevel, 1),
     reward: { item: ['lens', 1] },
   },
@@ -3187,7 +3455,7 @@ export const GUIDE: GuideStep[] = [
   {
     id: 'rune',
     title: 'Вставь руну в оберег',
-    hint: 'Лагерь → Руны. Первое гнездо открывается на 5 уровне кирки',
+    hint: '«Ещё» → Руны. Первое гнездо открывается на 5 уровне кирки',
     progress: (p) => upTo(p.sockets.filter(Boolean).length, 1),
     reward: { pet: 'lemming' },
   },

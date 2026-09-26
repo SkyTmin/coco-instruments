@@ -159,13 +159,10 @@ import {
   stash,
   LAST_RANK,
   normalizePrison,
-  PICKS,
   prestigeCost,
   PRESTIGE_XP,
   PRISON_START,
   rankXp,
-  sharpCost,
-  SHARP_MAX,
   enchantCap,
   ENCHANT_TOGGLE,
   GUIDE,
@@ -175,13 +172,18 @@ import {
   rankNeeds,
   rankWork,
   workDone,
-  feedForge,
-  forgeFromBag,
-  forgeReady,
-  pickOpen,
+  blockPity,
   blockValue,
-  blocksOf,
   blockTop,
+  buildMine,
+  canMine,
+  feedBox,
+  forgeCheck,
+  forgeTake,
+  mineBlocks,
+  nextPick,
+  pityCell,
+  reserveOre,
   STREAK_TIERS,
   streakLoot,
   applyReward,
@@ -251,6 +253,7 @@ import {
   eventDue,
   eventGap,
   eventPrize,
+  kuivaCells,
   spawnEvent,
 } from '@/lib/yard';
 import type { Lot, YardPrize } from '@/lib/yard';
@@ -747,10 +750,10 @@ export interface PrisonLoot {
   normDone: boolean;
   /** Не используется с v2.66 (раньше — сколько блоков легло в норму). */
   normAdd: Record<number, number>;
-  /** Заказ кузнице набрался: номер выданной кирки (−1 — нет). */
-  forged: number;
-  /** Сколько руды этим ударом ушло в заказ кузнице. */
-  forgeTook: number;
+  /** Сколько руды вагонетка (или спецзона) отложила в ящик кузнеца. */
+  boxed: number;
+  /** Гарантия сработала: клетка, где встал блок этажа (−1 — нет). */
+  pityBlock: number;
   /** Перекованные блоки: клетка и порода, которой он засчитан. */
   reforged: { cell: number; rock: number }[];
   /** Новые посылки под полем; не влезли — сданы за столько токенов. */
@@ -1441,12 +1444,16 @@ interface FinanceState {
   prisonPerksReset: () => void;
   /** Спуститься в другую открытую шахту — или обновить эту. */
   prisonGoMine: (id: number) => void;
-  /** Продать рюкзак в общий кошелёк. */
-  prisonSell: () => number;
-  /** Купить следующий ранг за общие монеты. */
-  /** Новый ранг. Без выполненной нормы — только с `buyout`, за доплату. */
+  /**
+   * Продать рюкзак в общий кошелёк. Руда для следующей кирки не продаётся —
+   * ложится в ящик кузнеца (`boxed`).
+   */
+  prisonSell: () => { coins: number; boxed: number };
+  /** Новый ранг. Недостающие блоки этажа — только с `buyout`, за доплату. */
   prisonRankUp: (buyout?: boolean) => PrisonRankUp | null;
-  prisonBuy: (what: 'pick' | 'sharp' | 'bag' | 'cart') => boolean;
+  /** Выковать следующую кирку: руда из ящика и рюкзака, монеты из кошелька. */
+  prisonForge: () => number;
+  prisonBuy: (what: 'bag' | 'cart') => boolean;
   /** Престиж: ранг и шахта — на A, кирка остаётся, продажа дороже. */
   prisonPrestige: () => boolean;
   /** Спецзона: войти (после престижа, пока есть время сегодня) и выйти. */
@@ -3071,6 +3078,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const cells: number[] = [];
     for (const b of breaks) {
       if (b.cell < 0 || b.cell >= dug.length || dug[b.cell] >= DEPTH || b.rock < 0) continue;
+      // Руда твёрже кирки не ломается ничем — страница её и не шлёт, но
+      // сохранение не должно зависеть от честности страницы.
+      if (!canMine(p.pick, b.rock)) continue;
       dug[b.cell] += 1;
       rocks.push(b.rock);
       cells.push(b.cell);
@@ -3096,8 +3106,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         eventDone: null,
         eventEnded: null,
         zone: null,
-        forged: -1,
-        forgeTook: 0,
+        boxed: 0,
+        pityBlock: -1,
       };
     const now = Date.now();
     const m0 = modsOf(p);
@@ -3108,22 +3118,28 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       mine: p.mine.id,
       streak: streakLoot(opts.streak ?? 0),
     });
-    // Спецзона платит токенами: добыча не в рюкзак, а сразу в токены.
+    // Спецзона платит токенами: добыча не в рюкзак, а сразу в токены. Руда
+    // престижной кирки идёт из-под кирки в ящик кузнеца — рюкзака там нет.
     const inZone = p.zone.on;
+    const next = nextPick(p);
     let zoneGot = 0;
-    if (inZone)
-      for (const rock of feedForge(p.forge, drops.units).rest) {
+    let box = p.forgeBox;
+    let boxed = 0;
+    if (inZone) {
+      const fed = feedBox(p.forgeBox, drops.units, next);
+      box = fed.box;
+      boxed = fed.took;
+      for (const rock of fed.rest) {
         const t = zoneTokens(rock);
         zoneGot += Math.floor(t) + (Math.random() < t - Math.floor(t) ? 1 : 0);
       }
-    // Заказ кузнице забирает руду первым — мимо рюкзака и мимо токенов зоны
-    // (кирки спецзоны куются из её руды).
-    const fed0 = feedForge(p.forge, drops.units);
-    const units = fed0.rest;
-    const forgeDone = fed0.order ? forgeReady(fed0.order) : false;
+    }
+    // Вагонетка, как и продажа руками, откладывает руду кирки в ящик.
     const put = inZone
-      ? { bag: p.bag, taken: 0, lost: 0, sold: 0 }
-      : stash(p.bag, units, bagCapacity(p.bagLevel), p.cart, m.sell);
+      ? { bag: p.bag, taken: 0, lost: 0, sold: 0, box, boxed: 0 }
+      : stash(p.bag, drops.units, bagCapacity(p.bagLevel), p.cart, m.sell, { box, pick: next });
+    box = put.box;
+    boxed += put.boxed;
     // Находка: новая идёт в коллекцию, дубликат сдаётся за токены.
     const finds = { ...p.finds };
     let dupTokens = 0;
@@ -3158,12 +3174,31 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const fed = feedPet(p, rocks.length);
     const pets = fed.pets;
     const petUp = fed.up;
-    // Заказ набрался — кирка выдаётся сразу, заточка новой начинается с нуля.
-    const forged = forgeDone && fed0.order ? fed0.order.pick : -1;
+    // Гарантия блока этажа: столько блоков своего этажа без блока этажа —
+    // и он встаёт на верх случайной клетки с рудой этажа.
+    const own = !inZone && p.mine.id === p.rank && p.rank < LAST_RANK;
+    let pity = own ? p.pity + rocks.length : p.pity;
+    let bonus = p.mine.bonus ?? null;
+    let pityBlock = -1;
+    if (own && !bonus && pity >= blockPity(p.rank)) {
+      const live = liveEvent(p, now);
+      const covered = new Set<number>(
+        live?.id === 'meteor' ? [live.cell] : live?.id === 'kuiva' ? kuivaCells(live.cell) : [],
+      );
+      const c = pityCell({ ...p.mine, dug }, buildMine(p.mine.id, p.mine.seed), Math.random, (x) =>
+        covered.has(x),
+      );
+      if (c >= 0) {
+        bonus = { cell: c, depth: dug[c] };
+        pityBlock = c;
+        pity = 0;
+      }
+    }
     let prison: PrisonState = {
       ...p,
-      ...(forged >= 0 ? { pick: forged, sharp: 0, forge: null } : { forge: fed0.order }),
-      mine: { ...p.mine, dug },
+      mine: { ...p.mine, dug, bonus },
+      pity,
+      forgeBox: box,
       bag: put.bag,
       mined: p.mined + rocks.length,
       earned: p.earned + put.sold,
@@ -3243,8 +3278,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       eventDone,
       eventEnded: settled.end,
       zone: zoneOut,
-      forged,
-      forgeTook: fed0.took,
+      boxed,
+      pityBlock,
     };
   },
 
@@ -4134,16 +4169,19 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const s = get();
     const p = s.prison;
     const dug0 = p.mine.dug[cell];
-    if (dug0 === undefined || !blockTop(blocksOf(p.mine.id, p.mine.seed), cell, dug0)) return null;
+    if (dug0 === undefined || !blockTop(mineBlocks(p.mine), cell, dug0)) return null;
     const dug = p.mine.dug.slice();
     dug[cell] += 1;
     // Блок платит сразу, в кошелёк, с той же надбавкой к продаже, что и руда.
     const coins = Math.round(blockValue(p.mine.id) * modsOf(p).sell);
     const norm = { ...p.norm, [p.mine.id]: (p.norm[p.mine.id] ?? 0) + 1 };
     const own = p.mine.id === p.rank;
+    // Блок гарантии расколот — гарантия снова копится с нуля.
+    const bonus = p.mine.bonus && p.mine.bonus.cell === cell ? null : (p.mine.bonus ?? null);
     const prison: PrisonState = {
       ...p,
-      mine: { ...p.mine, dug },
+      mine: { ...p.mine, dug, bonus },
+      pity: own ? 0 : p.pity,
       norm,
       earned: p.earned + coins,
       oreBlocks: p.oreBlocks + (own ? 1 : 0),
@@ -4488,9 +4526,17 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   prisonSell: () => {
     const s = get();
     const p = s.prison;
-    const value = bagValue(p.bag, modsOf(p).sell);
-    if (!bagCount(p.bag)) return 0;
-    const prison = { ...p, bag: {}, earned: p.earned + value, sells: p.sells + 1 };
+    if (!bagCount(p.bag)) return { coins: 0, boxed: 0 };
+    // Руда для следующей кирки не продаётся — кузнец откладывает её в ящик.
+    const r = reserveOre(p.bag, p.forgeBox, nextPick(p));
+    const value = bagValue(r.bag, modsOf(p).sell);
+    const prison = {
+      ...p,
+      bag: {},
+      forgeBox: r.box,
+      earned: p.earned + value,
+      sells: p.sells + 1,
+    };
     const missions = missionsForToday(s.slotsMissions);
     const counters: MissionCounters = { ...EMPTY_COUNTERS, ...missions.counters };
     counters.ore += value;
@@ -4501,7 +4547,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     });
     persistPrison(prison);
     persistSlots(get());
-    return value;
+    return { coins: value, boxed: r.moved };
   },
 
   prisonRankUp: (buyout = false) => {
@@ -4511,7 +4557,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     // Условия ранга: деньги, выработка (не докупается — это работа руками)
     // и блоки этажа (недостающие докупаются по двойной цене блока).
     const need = rankNeeds(p);
-    if (need.work < need.workNeed) return null;
+    if (need.work < need.workNeed || !need.pickOk) return null;
     const extra = need.buyout;
     if (extra > 0 && !buyout) return null;
     const cost = need.coins + extra;
@@ -4531,6 +4577,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       keys: p.keys + RANK_KEYS,
       norm: {},
       oreBlocks: 0,
+      pity: 0,
       zone: { ...p.zone, on: false, back: null },
     };
     set({ prison, slotsBalance: s.slotsBalance - cost, slotsXp: xp });
@@ -4539,27 +4586,31 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return { rank, cost, buyout: extra, levelUps };
   },
 
+  prisonForge: () => {
+    const s = get();
+    const p = s.prison;
+    const c = forgeCheck(p);
+    if (!c || !c.open || !c.ore || s.slotsBalance < c.coins) return -1;
+    const took = forgeTake(c.pick, p.forgeBox, p.bag);
+    const prison: PrisonState = {
+      ...p,
+      pick: c.pick,
+      forgeBox: took.box,
+      bag: took.bag,
+      forgePaid: -1,
+    };
+    set({ prison, slotsBalance: s.slotsBalance - c.coins });
+    persistPrison(prison);
+    if (c.coins) persistSlots(get());
+    return c.pick;
+  },
+
   prisonBuy: (what) => {
     const s = get();
     const p = s.prison;
     let price = 0;
     let next: PrisonState = p;
-    if (what === 'pick') {
-      // Кирка — заказ кузнице: монеты вперёд, руда из рюкзака сразу, остальное
-      // дойдёт из-под кирки. Набралось сразу — кирка выдаётся тут же.
-      const n = p.pick + 1;
-      const d = PICKS[n];
-      if (!d || p.forge || !pickOpen(n, p.rank, p.prestige)) return false;
-      price = d.coins;
-      const fed = forgeFromBag({ pick: n, have: {} }, p.bag);
-      next = forgeReady(fed.order)
-        ? { ...p, bag: fed.bag, pick: n, sharp: 0, forge: null }
-        : { ...p, bag: fed.bag, forge: fed.order };
-    } else if (what === 'sharp') {
-      if (p.sharp >= SHARP_MAX) return false;
-      price = sharpCost(p.pick, p.sharp);
-      next = { ...p, sharp: p.sharp + 1 };
-    } else if (what === 'bag') {
+    if (what === 'bag') {
       if (p.bagLevel >= BAG_MAX) return false;
       price = bagCost(p.bagLevel);
       next = { ...p, bagLevel: p.bagLevel + 1 };
@@ -4592,6 +4643,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       keys: p.keys + PRESTIGE_KEYS,
       norm: {},
       oreBlocks: 0,
+      pity: 0,
       zone: { ...p.zone, on: false, back: null },
     };
     set({ prison, slotsBalance: s.slotsBalance - cost, slotsXp: xp });

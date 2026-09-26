@@ -19,6 +19,7 @@ import {
   TokenIcon,
 } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
+import { ForgeScreen, forgeReadyNow } from '@/components/ForgeScreen';
 import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { BatLayer, MagpieLayer, TreasurePanel } from '@/components/Critters';
 import type { BatHandle, MagpieHandle } from '@/components/Critters';
@@ -44,6 +45,8 @@ import {
   DEPTH,
   ENCHANT_UNLOCK,
   ENCHANTS,
+  enchantCap,
+  enchantCost,
   ENERGY_RATE,
   findOf,
   FRENZY_RATE,
@@ -56,7 +59,6 @@ import {
   MINE_COLS,
   MINE_RESET_AT,
   MINE_ROWS,
-  mineMix,
   minedShare,
   modsOf,
   perkPointsFree,
@@ -66,9 +68,13 @@ import {
   rankCost,
   rankNeeds,
   rankLetter,
-  blocksOf,
+  blockPity,
   blockTop,
-  forgeLeft,
+  canMine,
+  mineBlocks,
+  nextPick,
+  reserveOre,
+  rockHardness,
   blockValue,
   BLOCK_HITS,
   HORIZONS,
@@ -107,6 +113,7 @@ import {
   rockVariant,
 } from '@/lib/prison-art';
 import { plainPlan, runRollup } from '@/lib/rollup';
+import { rarityOf } from '@/lib/rarity';
 import { flashFrame, squashPop, stopShake } from '@/lib/juice';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
@@ -196,12 +203,34 @@ function rewardText(r: GuideReward): string {
   return out.join(' · ');
 }
 
-/** Условия ранга фишками: выработка (блоков сломано) и блоки этажа. */
+/** Искры с каждого удара — у эпической и выше; легендарная сыплет золотом. */
+function pickSpark(pick: number): { colors: string[]; n: number } | null {
+  const rar = PICKS[pick]?.rarity ?? 0;
+  if (rar < 3 || (rar === 3 && Math.random() < 0.5)) return null;
+  const r = rarityOf(rar);
+  return { colors: [r.color, r.light, '#ffffff'], n: rar - 2 };
+}
+
+/** Кузница и экраны лагеря — кнопки нижней панели шахты (v2.67). */
+type Screen = 'enchant' | 'cases' | 'pets' | 'more';
+const SCREENS: Record<Screen, { only: CampTab[]; title: string }> = {
+  enchant: { only: ['enchant'], title: 'Чары' },
+  cases: { only: ['cases'], title: 'Сундуки' },
+  pets: { only: ['pets'], title: 'Питомцы' },
+  more: { only: ['crew', 'runes', 'shop', 'finds', 'miles', 'perks'], title: 'Лагерь' },
+};
+
+/** Условия ранга фишками: кирка, выработка (блоков сломано) и блоки этажа. */
 function RankChips({ need, floor }: { need: RankNeeds; floor: number }) {
   const workOk = need.work >= need.workNeed;
   const blocksOk = need.blocks >= need.blocksNeed;
   return (
     <span className="pquota">
+      {!need.pickOk && (
+        <span className="pquota__chip is-pick">
+          <GxIcon name="anvil" size={12} />⛏{need.power}
+        </span>
+      )}
       {need.workNeed > 0 && (
         <span className={`pquota__chip${workOk ? ' is-done' : ''}`}>
           <GxIcon name="pick" size={12} />
@@ -248,11 +277,18 @@ export function PrisonPage() {
   const { mine, rank, prestige, pick, bagLevel, cart, bag } = prison;
   const rocks = useMemo(() => buildMine(mine.id, mine.seed), [mine.id, mine.seed]);
   const seids = useMemo(() => seidsOf(mine.id, mine.seed), [mine.id, mine.seed]);
-  const blocks = useMemo(() => blocksOf(mine.id, mine.seed), [mine.id, mine.seed]);
+  // Блоки этажа: из зерна и блок гарантии, если встал. Дёшево — без memo:
+  // гарантия меняет список посреди поля.
+  const blocks = mineBlocks(mine);
   const mineKey = `${mine.id}:${mine.seed}`;
 
   const [sheet, setSheet] = useState<Sheetname>(null);
-  const [camp, setCamp] = useState<CampTab | null>(null);
+  const [screen, setScreen] = useState<{ key: Screen; tab: CampTab } | null>(null);
+  const [forgeOpen, setForgeOpen] = useState(false);
+  const openScreen = (key: Screen, tab?: CampTab) => {
+    tapLight();
+    setScreen({ key, tab: tab ?? SCREENS[key].only[0] });
+  };
   const [rankScene, setRankScene] = useState<PrisonRankUp | null>(null);
   const [sceneShown, sceneLeaving] = useExit(rankScene, 260);
   const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
@@ -307,6 +343,7 @@ export function PrisonPage() {
   const rolling = useRef<(() => void) | null>(null);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fullWarnAt = useRef(0);
+  const hardSayAt = useRef(0);
   const toastSeq = useRef(0);
   // Удар по полю: урон, трещины, чары — общие с шахтами подземелья. Правила
   // зовут функции страницы через стрелки: в миг удара они уже объявлены.
@@ -321,14 +358,22 @@ export function PrisonPage() {
       return (
         yardShut(st).has(c) ||
         seidTop(seids, c, st.mine.dug[c]) ||
-        blockTop(blocks, c, st.mine.dug[c])
+        blockTop(mineBlocks(st.mine), c, st.mine.dug[c])
       );
     },
+    // Руда следующего этажа на дне — твёрже кирки: звенит, пока не выкуешь новую.
+    hard: (c) => {
+      const st = useFinanceStore.getState().prison;
+      const rock = rockAt(rocks, c, st.mine.dug[c]);
+      return rock < 0 || canMine(st.pick, rock) ? 0 : rockHardness(rock);
+    },
+    onHard: (c, power) => onHardOre(c, power),
+    spark: () => pickSpark(useFinanceStore.getState().prison.pick),
     special: (c) => specialHit(c),
     gapMs: () => gapMs(useFinanceStore.getState().prison),
     damage: () => {
       const st = useFinanceStore.getState().prison;
-      return hitDamage(st.pick, st.sharp) * modsOf(st).dmg;
+      return hitDamage(st.pick) * modsOf(st).dmg;
     },
     procs: () => modsOf(useFinanceStore.getState().prison),
     vein: (c, rock, max) =>
@@ -338,7 +383,8 @@ export function PrisonPage() {
   });
   const stripRef = useRef<HTMLDivElement>(null);
   const parcelsRef = useRef<HTMLDivElement>(null);
-  const campRef = useRef<HTMLButtonElement>(null);
+  const chestRef = useRef<HTMLButtonElement>(null);
+  const forgeRef = useRef<HTMLButtonElement>(null);
   const petRef = useRef<HTMLImageElement>(null);
   const streakBase = useRef({ n: 0, at: 0 });
   const streakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -581,8 +627,8 @@ export function PrisonPage() {
     keyFound();
     notifySuccess();
     field.current?.chips(c, ['#4fd04a', '#a6ec3a', '#f2e64a', '#ffffff'], 18, 1.4);
-    const played = playTotem(campRef.current, () => {
-      squashPop(campRef.current, 0.6);
+    const played = playTotem(chestRef.current, () => {
+      squashPop(chestRef.current, 0.6);
       coinDing();
     });
     if (!played) {
@@ -649,13 +695,6 @@ export function PrisonPage() {
       burstConfetti(40, ['#9be38a', '#ffe08a', '#fff']);
       say('Выработка набрана');
     }
-    if (res.forged >= 0) {
-      // Заказ кузнице набрался — новая кирка сразу в руке.
-      tierBreak(3);
-      notifySuccess();
-      burstConfetti(60, [PICKS[res.forged].head, '#ffe08a', '#fff']);
-      say(`${PICKS[res.forged].name} кирка готова!`);
-    }
     if (res.lost > 0 && now - fullWarnAt.current > 1400) {
       fullWarnAt.current = now;
       bagFullSound();
@@ -670,6 +709,8 @@ export function PrisonPage() {
       coinDing();
       floatText(c, `+${shortMoney(res.sold)}`, 'pfloat--coin');
     }
+    // Вагонетка (или спецзона) отложила руду для кирки — кузница кивнула.
+    if (res.boxed > 0) squashPop(forgeRef.current, 0.45);
     const dug = useFinanceStore.getState().prison.mine.dug;
     if (minedShare(dug) >= MINE_RESET_AT) scheduleReset();
   };
@@ -704,11 +745,16 @@ export function PrisonPage() {
       field.current?.chips(f.cell, ['#ffd35a', '#fff3b0', '#ffae3a'], single ? 12 : 6, 1.2);
       if (single) floatText(f.cell, `⚙ ${ROCKS[f.rock].name}`, 'pfloat--reforge', 120);
     }
-    // Руда ушла в заказ кузнице — показать, сколько осталось, не на каждом блоке.
-    if (res.forgeTook > 0 && after.forge && single) {
-      const left = forgeLeft(after.forge).reduce((a, [, n]) => a + n, 0);
-      if (left > 0 && (left % 25 === 0 || left <= 10))
-        floatText(list[0].cell, `⚒ ещё ${left}`, 'pfloat--norm', 60);
+    // Гарантия: долго не было блока этажа — он встал сам, это надо увидеть.
+    if (res.pityBlock >= 0) {
+      const cb = res.pityBlock;
+      floatText(cb, 'ГАРАНТИЯ!', 'pfloat--block', 140);
+      field.current?.chips(cb, [...rockColors(after.mine.id), '#ffffff', '#ffe08a'], 24, 1.6);
+      field.current?.shockwave(cb, 2, false);
+      field.current?.rise(cb);
+      tierBreak(3);
+      notifySuccess();
+      say(`${ROCKS[after.mine.id].blockName} встал по гарантии — вон он, блестит`);
     }
     list.forEach((b, i) => {
       if (res.taken > 0 && i < (single ? 1 : 4)) flyLoot(b.cell, b.rock);
@@ -802,7 +848,7 @@ export function PrisonPage() {
       say(`+${fmt(r.amount)} токенов`);
     } else if (r.kind === 'keys') {
       keyFound();
-      squashPop(campRef.current, 0.6);
+      squashPop(chestRef.current, 0.6);
       say(r.amount > 1 ? `+${r.amount} ключа от сундука` : '+ключ от сундука');
     } else if (r.kind === 'rune') {
       tierBreak(2);
@@ -820,6 +866,18 @@ export function PrisonPage() {
   const onRiskLost = (stake: number) => {
     field.current?.trauma(0.25);
     say(`Сгорело: ${shortMoney(stake)}. В другой раз повезёт`);
+  };
+
+  /** Звон о руду твёрже кирки: подсказка, какая кирка её берёт. */
+  const onHardOre = (c: number, power: number) => {
+    floatText(c, `⛏${power}`, 'pfloat--hard');
+    const now = Date.now();
+    if (now - hardSayAt.current < 6000) return;
+    hardSayAt.current = now;
+    const need = PICKS.find((x) => !x.prestige && x.power >= power);
+    say(
+      `Не берёт! Нужна ${need ? need.name.toLowerCase() : 'кирка сильнее'} кирка ⛏${power} — кузница внизу`,
+    );
   };
 
   const startFrenzy = (c: number) => {
@@ -1028,7 +1086,7 @@ export function PrisonPage() {
   const kuivaHit = (c: number, crit: boolean, st: PrisonState, ev: YardEvent) => {
     const f = field.current;
     f?.swing(c, crit);
-    const dmg = hitDamage(st.pick, st.sharp) * modsOf(st).dmg * (crit ? CRIT_MULT : 1);
+    const dmg = hitDamage(st.pick) * modsOf(st).dmg * (crit ? CRIT_MULT : 1);
     const left = (bossHp.current < 0 ? ev.hp : bossHp.current) - dmg;
     f?.chips(c, ['#6a727c', '#9aa4ae', '#3fe6d0'], crit ? 12 : 5, crit ? 1.4 : 0.9);
     const el = bossRef.current;
@@ -1159,7 +1217,7 @@ export function PrisonPage() {
       // Крепь не продаётся — её сбивают на лесопилке, а она в лесу: лагерь
       // шахты про лес не знает.
       if (id === 'prop') say('Крепь делают из досок на лесопилке — она в лесу');
-      else setCamp('shop');
+      else openScreen('more', 'shop');
       return;
     }
     if (id === 'bomb3' || id === 'bomb5') {
@@ -1203,8 +1261,18 @@ export function PrisonPage() {
   const sell = () => {
     primeAudio();
     const from = useFinanceStore.getState().slotsBalance;
-    const value = prisonSell();
+    const got = prisonSell();
+    const value = got.coins;
+    if (got.boxed > 0) {
+      // Руда для следующей кирки не продана — легла в ящик кузнеца.
+      squashPop(forgeRef.current, 0.7);
+      say(`В ящик кузнеца: ${fmt(got.boxed)} руды для кирки`);
+    }
     if (!value) {
+      if (got.boxed > 0) {
+        tapLight();
+        return;
+      }
       notifyWarning();
       say('Рюкзак пуст — копай');
       return;
@@ -1230,7 +1298,7 @@ export function PrisonPage() {
     const st = useFinanceStore.getState();
     const nd = rankNeeds(st.prison);
     // Не готово — лист условий: что сделано, чего не хватает, что можно докупить.
-    if (nd.work < nd.workNeed || nd.buyout > 0 || st.slotsBalance < nd.coins) {
+    if (!nd.pickOk || nd.work < nd.workNeed || nd.buyout > 0 || st.slotsBalance < nd.coins) {
       tapLight();
       setSheet('norm');
       return;
@@ -1352,15 +1420,20 @@ export function PrisonPage() {
   const m = modsOf(prison);
   const cap = bagCapacity(bagLevel);
   const count = bagCount(bag);
-  const value = bagValue(bag, m.sell);
+  // Цена на кнопке — без руды для следующей кирки: её кузнец отложит в ящик.
+  const value = bagValue(reserveOre(bag, prison.forgeBox, nextPick(prison)).bag, m.sell);
   const full = count >= cap;
   const atTop = rank >= LAST_RANK;
   const cost = atTop ? prestigeCost(prestige) : rankCost(rank, prestige);
   const progress = Math.max(0, Math.min(1, balance / cost));
   const need = rankNeeds(prison);
   const workOk = atTop || need.work >= need.workNeed;
+  const pickOk = atTop || need.pickOk;
   const buyout = atTop ? 0 : need.buyout;
-  const qDone = workOk && buyout === 0;
+  const qDone = workOk && pickOk && buyout === 0;
+  // Кирка, которую просит следующий этаж, и гарантия блока этажа.
+  const needPick = PICKS.findIndex((x) => !x.prestige && x.power >= need.power);
+  const pityLeft = mine.id === rank ? Math.max(0, blockPity(rank) - prison.pity) : 0;
   const rankReady = progress >= 1 && qDone;
   const needRocks = new Set<number>();
   // Конвой: та же точка на породе, которую он ждёт.
@@ -1388,9 +1461,16 @@ export function PrisonPage() {
   const guide = guideStep(prison);
   const guideOk = guideReady(prison);
   const [guideV, guideGoal] = guide ? guide.progress(prison) : [0, 0];
-  const mix = mineMix(mine.id);
   const crewNow = crewYield(prison, nowTick);
   const campBadge = perkPointsFree(prison) > 0 || crewNow.minutes >= 60 || milesReady(prison) > 0;
+  const forgeReady = forgeReadyNow(prison, balance);
+  // «!» на чарах: хоть одну можно поднять прямо сейчас.
+  const enchReady = ENCHANTS.some((e) => {
+    const l = prison.ench[e.id];
+    return (
+      l < enchantCap(e.id, pickLv.level, prison.pickStars) && prison.tokens >= enchantCost(e.id, l)
+    );
+  });
 
   /** Лупа: метка ближайшей редкости под клеткой — сейда или блока этажа. */
   const lensMark = (c: number, d: number): { seidBelow: number; seidTex?: string } => {
@@ -1410,6 +1490,7 @@ export function PrisonPage() {
       const top = rockAt(rocks, c, d);
       const seid = seidTop(seids, c, d);
       const oreBlock = !seid && blockTop(blocks, c, d);
+      const hard = top >= 0 && !seid && !oreBlock && !canMine(pick, top) ? rockHardness(top) : 0;
       let peek = -1;
       if (buffs.lens > 0 && top >= 0 && d + 1 < DEPTH) {
         const below = rockAt(rocks, c, d + 1);
@@ -1435,6 +1516,7 @@ export function PrisonPage() {
           need={needRocks.has(top)}
           seid={seid}
           block={oreBlock}
+          hard={hard}
           {...lensMark(c, d)}
           wt={wall(mine.dug, c, 0, -1)}
           wl={wall(mine.dug, c, -1, 0)}
@@ -1480,6 +1562,7 @@ export function PrisonPage() {
         progress,
         need.workNeed ? need.work / need.workNeed : 1,
         need.blocksNeed ? need.blocks / need.blocksNeed : 1,
+        need.pickOk ? 1 : 0.95,
       );
 
   return (
@@ -1523,10 +1606,7 @@ export function PrisonPage() {
             ref={tokenRef}
             className="gx-chip pmx-chip--btn"
             aria-label="Токены — чары"
-            onClick={() => {
-              tapLight();
-              setCamp('enchant');
-            }}
+            onClick={() => openScreen('enchant')}
           >
             <TokenIcon size={17} /> {shortCount(prison.tokens)}
           </button>
@@ -1851,9 +1931,13 @@ export function PrisonPage() {
                 label={full ? `${count} / ${cap} — полный` : `${count} / ${cap}`}
               />
               <span className={`gx-btn gx-btn--sm${count ? ' gx-btn--red' : ''} pmx-bag__sell`}>
-                {count ? (
+                {count && value ? (
                   <>
                     Продать {shortMoney(value)} <CoinIcon size={13} />
+                  </>
+                ) : count ? (
+                  <>
+                    <GxIcon name="anvil" size={14} /> В ящик
                   </>
                 ) : (
                   'Пусто'
@@ -1861,41 +1945,65 @@ export function PrisonPage() {
               </span>
             </span>
           </button>
+        </div>
+
+        {/* Нижняя панель (v2.67) вместо листа «Лагерь» с десятью вкладками:
+            пять крупных кнопок, как в мобильных играх. Каждая открывает свой
+            экран. Кузница показывает кирку в руке — в цвете её редкости. */}
+        <nav className="gx-panel gx-panel--wood pmx-dock" aria-label="Лагерь">
           <button
             type="button"
-            className="gx-panel gx-panel--wood pmx-camp"
-            ref={campRef}
+            ref={forgeRef}
+            className={`pmx-dock__btn${forgeReady ? ' is-ready' : ''}`}
             onClick={() => {
               tapLight();
-              setCamp('forge');
+              setForgeOpen(true);
             }}
           >
             <PickIcon pick={pick} size={30} />
-            <b>Лагерь</b>
-            {prison.pet && (
-              <img
-                ref={petRef}
-                className="ppet-perch"
-                src={petTexture(prison.pet)}
-                alt={petOf(prison.pet).name}
-                title={`${petOf(prison.pet).name}, ${petLevelOf(prison.pets[prison.pet] ?? 0).level} ур.`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  tapLight();
-                  setCamp('pets');
-                }}
-              />
-            )}
-            {prison.keys > 0 ? (
-              <i className="gx-badge gx-badge--gold pmx-camp__keys">
+            <b>Кузница</b>
+            {forgeReady && <i className="gx-badge gx-badge--gold">!</i>}
+          </button>
+          <button type="button" className="pmx-dock__btn" onClick={() => openScreen('enchant')}>
+            <GxIcon name="magic" />
+            <b>Чары</b>
+            {enchReady && <i className="gx-badge">!</i>}
+          </button>
+          <button
+            type="button"
+            ref={chestRef}
+            className="pmx-dock__btn"
+            onClick={() => openScreen('cases')}
+          >
+            <GxIcon name="chest" />
+            <b>Сундуки</b>
+            {prison.keys > 0 && (
+              <i className="gx-badge gx-badge--gold">
                 <KeyIcon size={10} />
                 {prison.keys}
               </i>
-            ) : (
-              campBadge && <i className="gx-badge">!</i>
             )}
           </button>
-        </div>
+          <button type="button" className="pmx-dock__btn" onClick={() => openScreen('pets')}>
+            {prison.pet ? (
+              <img
+                ref={petRef}
+                className="pmx-dock__pet"
+                src={petTexture(prison.pet)}
+                alt={petOf(prison.pet).name}
+                title={`${petOf(prison.pet).name}, ${petLevelOf(prison.pets[prison.pet] ?? 0).level} ур.`}
+              />
+            ) : (
+              <GxIcon name="paw" />
+            )}
+            <b>Питомцы</b>
+          </button>
+          <button type="button" className="pmx-dock__btn" onClick={() => openScreen('more')}>
+            <GxIcon name="campfire" />
+            <b>Ещё</b>
+            {campBadge && <i className="gx-badge">!</i>}
+          </button>
+        </nav>
 
         {/* Задание, пока они не пройдены, стоит на месте строки с ценами
             пород: высота под полем на счету, а цены есть и в окне шахт.
@@ -1932,29 +2040,22 @@ export function PrisonPage() {
               </span>
             )}
           </button>
-        ) : (
-          /* Породы этой шахты и цена блока — чтобы знать, что почём. */
-          <div className="pmx-mix" aria-label="Породы шахты">
-            {mix.map((s) => (
-              <span key={s.rock} className="gx-chip pmx-mix__rock">
-                <img src={rockTexture(s.rock)} alt="" />
-                {Math.round(ROCKS[s.rock].value * m.sell)}
-              </span>
-            ))}
-          </div>
-        )}
+        ) : null}
       </div>
 
-      {camp && (
+      {screen && (
         <PrisonCamp
           place="mine"
-          tab={camp}
-          onTab={setCamp}
-          onClose={() => setCamp(null)}
+          only={SCREENS[screen.key].only}
+          title={SCREENS[screen.key].title}
+          tab={screen.tab}
+          onTab={(t) => setScreen({ key: screen.key, tab: t })}
+          onClose={() => setScreen(null)}
           onGain={rollBalance}
           onSpend={settleBalance}
         />
       )}
+      {forgeOpen && <ForgeScreen onClose={() => setForgeOpen(false)} onSpend={settleBalance} />}
 
       {sheet === 'mines' && (
         <GxModal title="Этажи" onClose={() => setSheet(null)} className="pmx-mines">
@@ -1971,7 +2072,12 @@ export function PrisonPage() {
                   <span className={`gx-hex${locked ? '' : ' gx-hex--dark'}`}>{rankLetter(id)}</span>
                   <img className="pmx-mines__ore" src={blockTexture(id)} alt="" />
                   <span className="pmx-mines__info">
-                    <b>{ROCKS[id].name}</b>
+                    <b>
+                      {ROCKS[id].name}
+                      <em className={`pmx-mines__hard${canMine(pick, id) ? '' : ' is-no'}`}>
+                        ⛏{rockHardness(id)}
+                      </em>
+                    </b>
                     <span className="pmx-mines__price">
                       руда {ROCKS[id].value} · блок {shortMoney(ROCKS[id].block)}
                     </span>
@@ -2044,6 +2150,31 @@ export function PrisonPage() {
           onClose={() => setSheet(null)}
           className="pmx-norm"
         >
+          {needPick > 0 && (
+            <div className={`pmx-norm__row${pickOk ? ' is-done' : ''}`}>
+              <PickIcon pick={needPick} size={40} />
+              <span className="pmx-norm__info">
+                <b>
+                  Кирка ⛏{need.power} · {PICKS[needPick].name.toLowerCase()}
+                </b>
+                {pickOk ? (
+                  <GxBar tone="green" value={1} label={<KIcon name="checkmark" size={12} />} />
+                ) : (
+                  <button
+                    type="button"
+                    className="gx-btn gx-btn--sm gx-btn--red pmx-norm__go"
+                    onClick={() => {
+                      tapLight();
+                      setSheet(null);
+                      setForgeOpen(true);
+                    }}
+                  >
+                    <GxIcon name="anvil" size={16} /> В кузницу
+                  </button>
+                )}
+              </span>
+            </div>
+          )}
           {need.workNeed > 0 && (
             <div className={`pmx-norm__row${workOk ? ' is-done' : ''}`}>
               <PickIcon pick={pick} size={40} />
@@ -2081,6 +2212,11 @@ export function PrisonPage() {
                     )
                   }
                 />
+                {need.blocks < need.blocksNeed && mine.id === rank && (
+                  <i className="pmx-norm__sub">
+                    Гарантия: через {fmt(pityLeft)} блоков он встанет сам
+                  </i>
+                )}
               </span>
             </div>
           )}
@@ -2211,7 +2347,7 @@ export function PrisonPage() {
               <span className="prank__norm">
                 Для ранга {rankLetter(sceneShown.rank + 1)}:
                 <RankChips
-                  need={rankNeeds({ rank: sceneShown.rank, norm: {}, oreBlocks: 0 })}
+                  need={rankNeeds({ rank: sceneShown.rank, norm: {}, oreBlocks: 0, pick })}
                   floor={sceneShown.rank}
                 />
               </span>

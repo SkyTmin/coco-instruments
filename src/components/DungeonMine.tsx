@@ -151,7 +151,7 @@ export function DungeonMine({
     },
     damage: () => {
       const p = useFinanceStore.getState().prison;
-      return hitDamage(p.pick, p.sharp) * modsOf(p).dmg;
+      return hitDamage(p.pick) * modsOf(p).dmg;
     },
     procs: () => modsOf(useFinanceStore.getState().prison),
     vein: (c, rock, max) => veinCells(rocks, mRef.current.dug, c, rock, max),

@@ -5,6 +5,7 @@ import { GameTop, GxBar, GxIcon, GxModal, KIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, campPlaceOf, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
+import { ForgeScreen, forgeReadyNow } from '@/components/ForgeScreen';
 import type { CampPlace, CampTab } from '@/components/PrisonCamp';
 import { BarygaSheet } from '@/components/YardBits';
 import { useFinanceStore } from '@/store';
@@ -64,6 +65,7 @@ export function YardPage() {
   // лагеря не должна перебрасывать его в шахтный.
   const [campPlace, setCampPlace] = useState<CampPlace>('mine');
   const [baryga, setBaryga] = useState(false);
+  const [forgeOpen, setForgeOpen] = useState(false);
   const now = useNow(1000);
   useGameAudio('yard');
 
@@ -270,8 +272,16 @@ export function YardPage() {
           <Building
             icon="anvil"
             name="Кузница"
-            text="Кирка, заточка, рюкзак, чары"
-            onClick={() => open('forge')}
+            text={
+              forgeReadyNow(prison, balance)
+                ? 'Новая кирка готова к выковке'
+                : 'Кирка, рюкзак, вагонетка'
+            }
+            badge={forgeReadyNow(prison, balance) ? '!' : null}
+            onClick={() => {
+              tapLight();
+              setForgeOpen(true);
+            }}
           />
           <Building
             icon="saw"
@@ -318,6 +328,7 @@ export function YardPage() {
         />
       )}
       {baryga && <BarygaSheet onClose={() => setBaryga(false)} />}
+      {forgeOpen && <ForgeScreen onClose={() => setForgeOpen(false)} />}
       {newTerm && (
         <GxModal title="Новый срок" onClose={dismissNewTerm} className="yard-term">
           <ul className="yard-term__list">

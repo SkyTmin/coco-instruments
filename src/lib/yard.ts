@@ -201,7 +201,7 @@ export function spawnEvent(
 
 /** Здоровье Куйвы — от кирки игрока: великан одинаково крепок на любом ранге. */
 export function kuivaHp(p: PrisonState): number {
-  return KUIVA_HITS * hitDamage(p.pick, p.sharp) * modsOf(p).dmg;
+  return KUIVA_HITS * hitDamage(p.pick) * modsOf(p).dmg;
 }
 
 /** Клетки, которые занимает Куйва. */

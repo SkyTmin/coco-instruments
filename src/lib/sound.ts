@@ -158,7 +158,7 @@ const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
   ui: (n) => /^(ui\.|chip|coins|cloth|jingle\.|slot\.drum|slot\.win|tick|case\.tick)/.test(n),
   slots: (n) => /^(reel\.|slot\.|gem\.|pluck|bubble|orb\.|slam|chips)/.test(n),
   mine: (n) =>
-    /^(pick\.|crit\.|break\.|bag\.|rumble|boom\.|fuse|gem\.chime|pluck|card\.|flap|shiny|bat\.)/.test(
+    /^(pick\.|crit\.|break\.|bag\.|rumble|boom\.|fuse|gem\.chime|pluck|card\.|flap|shiny|bat\.|clang|jingle\.)/.test(
       n,
     ),
   forest: (n) => /^(axe\.|saw\.|log\.|tree\.|snow\.|crit\.|bag\.)/.test(n),
@@ -637,6 +637,30 @@ export function blockBreak(kind: MineSound): void {
 /** По дну: кирка не берёт коренную породу. */
 export function bedrockClink(): void {
   play('pick.metal', { gain: 0.35, rate: 1.5 });
+}
+
+/** Кирка по руде твёрже себя (v2.67): звон и искры — и ничего. */
+export function hardClang(): void {
+  play('clang', { gain: 0.42, rate: 1.35, vary: 0.05 });
+  play('pick.metal', { gain: 0.28, rate: 1.7, at: 0.02 });
+}
+
+/** Удар молота по наковальне в сцене выковки: от удара к удару выше. */
+export function forgeStrike(i: number): void {
+  play('clang', { gain: 0.7, rate: 0.85 + 0.08 * i, vary: 0 });
+  play('crit.thud', { gain: 0.55 });
+  if (i >= 2) play('gem.chime', { gain: 0.35, at: 0.05 });
+}
+
+/** Кирка проявилась: чем реже, тем длиннее фраза (эскалация неравномерна). */
+export function forgeReveal(rarity: number): void {
+  if (rarity >= 4) {
+    tierBreak(4);
+    jingle('jingle.win', 1.6, { gain: 0.8, at: 0.15 });
+  } else if (rarity >= 2) {
+    tierBreak(2);
+    jingle('jingle.up', 1.1, { gain: 0.75, at: 0.1 });
+  } else jingle('jingle.up', 1, { gain: 0.7 });
 }
 
 /** Рюкзак полон — мешок шлёпнулся. */
