@@ -20,7 +20,9 @@ import {
   veinCells,
   blastCells,
   BASE_MODS,
+  caseClimb,
   caseCoinShare,
+  caseTokenMean,
   crewCost,
   crewYield,
   FINDS,
@@ -1067,14 +1069,66 @@ describe('сундуки, находки, бригада, перки', () => {
     const finds = { coin: 1 } as const;
     for (let i = 0; i < 3000; i++) {
       const r = rollCase({ rank: 5, prestige: 0, finds }, rnd);
-      if (r.reward.kind === 'find') {
-        expect(r.reward.id).not.toBe('coin');
-        expect(
-          FINDS.find((f) => f.id === (r.reward as { id: string }).id)!.from,
-        ).toBeLessThanOrEqual(5);
+      const got = r.rewards.filter((x) => x.kind === 'find').map((x) => x.id);
+      expect(new Set(got).size).toBe(got.length);
+      for (const id of got) {
+        expect(id).not.toBe('coin');
+        expect(FINDS.find((f) => f.id === id)!.from).toBeLessThanOrEqual(5);
       }
-      if (r.reward.kind === 'coins') expect(r.reward.amount).toBeGreaterThan(0);
     }
+  });
+
+  const BOOK_OF_CASE = { common: 'simple', rare: 'rare', epic: 'epic', legend: 'legend' } as const;
+
+  it('сундук v2.71 — набор: монеты, токены и призы, у старших больше', () => {
+    const rnd = lcg(11);
+    const size: Record<string, Set<number>> = {};
+    const seen: Record<string, number> = {};
+    let books = 0;
+    for (let i = 0; i < 6000; i++) {
+      const r = rollCase({ rank: 8, prestige: 0, finds: {} }, rnd);
+      seen[r.tier] = (seen[r.tier] ?? 0) + 1;
+      (size[r.tier] ??= new Set()).add(r.rewards.length);
+      expect(r.rewards[0].kind).toBe('coins');
+      expect(r.rewards[1].kind).toBe('tokens');
+      for (const x of r.rewards) {
+        if (x.kind === 'coins') expect(x.amount).toBeGreaterThan(0);
+        // Книга — своего яруса: уровень в пределах яруса сундука.
+        if (x.kind === 'book') {
+          books += 1;
+          const t = BOOK_TIERS.find((b) => b.id === BOOK_OF_CASE[r.tier])!;
+          expect(x.book.lvl).toBeGreaterThanOrEqual(t.lvl[0]);
+          expect(x.book.lvl).toBeLessThanOrEqual(t.lvl[1]);
+        }
+      }
+      // Легендарный — главный приз последним: книга, находка, руна IV или
+      // токены вместо находки, которой не осталось.
+      if (r.tier === 'legend') {
+        const top = r.rewards[r.rewards.length - 1];
+        expect(['book', 'find', 'rune', 'tokens']).toContain(top.kind);
+        if (top.kind === 'rune') expect(top.rune.tier).toBe(4);
+      }
+    }
+    expect([...size.common]).toEqual([3]);
+    expect([...size.rare]).toEqual([3]);
+    expect([...size.epic]).toEqual([4]);
+    expect([...size.legend]).toEqual([5]);
+    // Шансы ярусов прежние: 58 / 30 / 10 / 2 %.
+    expect(seen.common / 6000).toBeGreaterThan(0.54);
+    expect(seen.common / 6000).toBeLessThan(0.62);
+    expect(seen.legend / 6000).toBeGreaterThan(0.01);
+    expect(seen.legend / 6000).toBeLessThan(0.03);
+    // Книга — в каждом третьем-четвёртом сундуке.
+    expect(books / 6000).toBeGreaterThan(0.25);
+    expect(books / 6000).toBeLessThan(0.5);
+    expect(caseClimb('common')).toBe(0);
+    expect(caseClimb('legend')).toBe(3);
+  });
+
+  it('токенов в сундуке — как прежде, а не второй источник', () => {
+    // До v2.71 одна награда давала в среднем ≈18 токенов.
+    expect(caseTokenMean()).toBeGreaterThan(12);
+    expect(caseTokenMean()).toBeLessThan(30);
   });
 
   it('в шахте A не найти лампу забойщика', () => {

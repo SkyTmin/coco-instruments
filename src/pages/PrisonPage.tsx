@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { GxBar, GxIcon, GxModal, KIcon } from '@/components/gx';
 import { CashDesk } from '@/components/CashDesk';
+import { ChestIcon } from '@/components/ChestTab';
 import { crackStage, MineCell, MineField, useMineDig, wall } from '@/components/MineField';
 import type { BreakKind, DigBlock, MineFieldHandle } from '@/components/MineField';
 import { useNavigate } from 'react-router-dom';
@@ -1983,7 +1984,7 @@ export function PrisonPage() {
             className="pmx-dock__btn"
             onClick={() => openScreen('cases')}
           >
-            <GxIcon name="chest" />
+            <ChestIcon size={30} />
             <b>Сундуки</b>
             {prison.keys > 0 && (
               <i className="gx-badge gx-badge--gold">

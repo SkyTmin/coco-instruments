@@ -845,7 +845,25 @@ export interface CrewCollect extends CrewYield {
   shift: CrewShift;
 }
 
-/** Сундуки, открытые разом. */
+/** Набор сундука — всеми наградами по очереди (монеты — отдельно, в кошелёк). */
+function applyCase(
+  p: PrisonState,
+  roll: CaseRoll,
+): { p: PrisonState; coins: number; shattered: number; newPets: PetId[] } {
+  let coins = 0;
+  let shattered = 0;
+  const newPets: PetId[] = [];
+  for (const r of roll.rewards) {
+    const a = applyReward(p, r);
+    p = a.p;
+    coins += a.coins;
+    shattered += a.shattered;
+    if (a.newPet) newPets.push(a.newPet);
+  }
+  return { p, coins, shattered, newPets };
+}
+
+/** Сундуки, открытые разом (и один сундук — тем же видом). */
 export interface CasesOpened {
   rolls: CaseRoll[];
   coins: number;
@@ -1451,7 +1469,7 @@ interface FinanceState {
   /** Кураж сработал на ударе. */
   prisonFrenzy: () => void;
   /** Открыть сундук: ключ уходит, награда начисляется сразу. */
-  prisonOpenCase: () => CaseRoll | null;
+  prisonOpenCase: () => CasesOpened | null;
   /**
    * Открыть до `count` сундуков разом. По одному, подряд: каждая находка
    * уже лежит в коллекции к следующему сундуку, поэтому не повторится.
@@ -4431,13 +4449,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const p = s.prison;
     if (p.keys <= 0) return null;
     const roll = rollCase(p, Math.random);
-    const a = applyReward({ ...p, keys: p.keys - 1, cases: p.cases + 1 }, roll.reward);
-    const prison = a.p;
+    const a = applyCase({ ...p, keys: p.keys - 1, cases: p.cases + 1 }, roll);
     const balance = s.slotsBalance + a.coins;
-    set({ prison, slotsBalance: balance });
-    persistPrison(prison);
+    set({ prison: a.p, slotsBalance: balance });
+    persistPrison(a.p);
     if (balance !== s.slotsBalance) persistSlots(get());
-    return roll;
+    return { rolls: [roll], coins: a.coins, shattered: a.shattered, newPets: a.newPets };
   },
 
   prisonOpenCases: (count) => {
@@ -4449,13 +4466,15 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     let coins = 0;
     let shattered = 0;
     const newPets: PetId[] = [];
+    // По одному подряд: находка из прошлого сундука уже в коллекции и не
+    // повторится.
     for (let i = 0; i < n; i++) {
       const roll = rollCase(p, Math.random);
-      const a = applyReward({ ...p, keys: p.keys - 1, cases: p.cases + 1 }, roll.reward);
+      const a = applyCase({ ...p, keys: p.keys - 1, cases: p.cases + 1 }, roll);
       p = a.p;
       coins += a.coins;
       shattered += a.shattered;
-      if (a.newPet) newPets.push(a.newPet);
+      newPets.push(...a.newPets);
       rolls.push(roll);
     }
     set({ prison: p, slotsBalance: s.slotsBalance + coins });

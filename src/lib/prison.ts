@@ -2324,9 +2324,12 @@ export function findsMult(finds: Finds): number {
 
 // ---------------------------------------------------------------------------
 // Ключи и сундуки. Ключ падает с блока (Ключник поднимает шанс), даётся за
-// каждый ранг и пачкой за престиж. Сундук крутит ленту наград: четыре
-// ступени редкости, награда в монетах — доля цены текущего ранга, поэтому
-// сундук одинаково приятен на ранге C и на ранге X.
+// каждый ранг и пачкой за престиж. С v2.71 в сундуке НАБОР: монеты, токены
+// и приз (книга своего яруса, руна, находка, расходник, ключ); у старших
+// ярусов призов больше. Ярус решается при открытии (58/30/10/2%), а сцена
+// показывает его «ростом»: падает обычный сундук и по уровню вырастает до
+// выпавшего. Монеты — доля цены текущего ранга, поэтому сундук одинаково
+// приятен на ранге C и на ранге X.
 // ---------------------------------------------------------------------------
 
 export type CaseTier = 'common' | 'rare' | 'epic' | 'legend';
@@ -2360,7 +2363,8 @@ export type Reward =
 
 export interface CaseRoll {
   tier: CaseTier;
-  reward: Reward;
+  /** Набор: монеты, токены, призы; главный приз — последним. */
+  rewards: Reward[];
 }
 
 type Slot = { w: number; make: (rnd: () => number, rank: number, prestige: number) => Reward };
@@ -2384,42 +2388,57 @@ const bookOf = (tier: BookTier) => (rnd: () => number) =>
 /** Место под питомца: кто именно — решается по тому, кого ещё нет. */
 const PET_SLOT = () => ({ kind: 'pet', id: 'lemming' }) as Reward;
 
-const CASE_TABLE: Record<CaseTier, Slot[]> = {
+/** Сколько монет (доля цены ранга) и токенов в сундуке и сколько в нём призов. */
+export const CASE_BUNDLE: Record<
+  CaseTier,
+  { coins: [number, number]; tokens: [number, number]; prizes: number }
+> = {
+  common: { coins: [0.015, 0.03], tokens: [6, 12], prizes: 1 },
+  rare: { coins: [0.04, 0.06], tokens: [18, 32], prizes: 1 },
+  epic: { coins: [0.1, 0.15], tokens: [50, 80], prizes: 2 },
+  legend: { coins: [0.35, 0.5], tokens: [150, 250], prizes: 2 },
+};
+
+/**
+ * Приз сундука. Книга своего яруса — самый частый приз: сундук — второй,
+ * после Чародея, источник книг, и приз, ради которого его открывают.
+ */
+const CASE_PRIZE: Record<CaseTier, Slot[]> = {
   common: [
-    { w: 35, make: coins(0.04, 0.08) },
-    { w: 35, make: tokens(15, 40) },
-    { w: 10, make: item('energy', 1) },
-    { w: 10, make: item('lens', 1) },
-    { w: 10, make: item('bomb3', 1) },
-    { w: 10, make: bookOf('simple') },
+    { w: 35, make: bookOf('simple') },
+    { w: 20, make: item('energy', 1) },
+    { w: 20, make: item('lens', 1) },
+    { w: 20, make: item('bomb3', 1) },
+    { w: 5, make: keysOf(1) },
   ],
   rare: [
-    { w: 30, make: coins(0.1, 0.18) },
-    { w: 30, make: tokens(50, 120) },
-    { w: 15, make: item('bomb3', 2) },
-    { w: 10, make: item('energy', 2) },
+    { w: 35, make: bookOf('rare') },
+    { w: 25, make: rune(1, 2, 0.3) },
     { w: 15, make: item('bomb5', 1) },
-    { w: 12, make: rune(1, 2, 0.3) },
-    { w: 12, make: bookOf('rare') },
+    { w: 15, make: item('bomb3', 2) },
+    { w: 10, make: keysOf(1) },
   ],
   epic: [
-    { w: 30, make: coins(0.3, 0.45) },
-    { w: 25, make: tokens(150, 300) },
-    { w: 15, make: item('charge', 1) },
-    { w: 10, make: item('bomb5', 2) },
+    { w: 35, make: bookOf('epic') },
+    { w: 25, make: rune(2, 3, 0.3) },
     { w: 20, make: FIND_SLOT },
-    { w: 15, make: rune(2, 3, 0.3) },
-    { w: 14, make: bookOf('epic') },
+    { w: 10, make: item('charge', 1) },
+    { w: 10, make: keysOf(2) },
   ],
   legend: [
-    { w: 35, make: coins(0.9, 1.3) },
-    { w: 25, make: tokens(500, 800) },
-    { w: 15, make: item('charge', 2) },
+    { w: 40, make: bookOf('legend') },
+    { w: 25, make: rune(3, 4, 0.3) },
     { w: 25, make: FIND_SLOT },
-    { w: 15, make: rune(3, 4, 0.3) },
-    { w: 14, make: bookOf('legend') },
+    { w: 10, make: item('charge', 2) },
   ],
 };
+
+/** Главный приз легендарного сундука: книга, находка или руна IV. */
+const LEGEND_TOP: Slot[] = [
+  { w: 50, make: bookOf('legend') },
+  { w: 30, make: FIND_SLOT },
+  { w: 20, make: rune(4, 4, 0) },
+];
 
 /** Посылка: руны и питомцы — её главное, монеты и токены — подкладка. */
 const PARCEL_TABLE: Record<CaseTier, Slot[]> = {
@@ -2502,32 +2521,63 @@ export function rollCase(
   rnd: () => number,
 ): CaseRoll {
   const tier = rollTier(rnd);
-  let reward = pickWeighted(CASE_TABLE[tier], rnd).make(rnd, p.rank, p.prestige);
-  if (reward.kind === 'find') {
-    const missing = FINDS.filter((f) => f.from <= p.rank && !(p.finds[f.id] ?? 0));
-    reward = missing.length
-      ? { kind: 'find', id: missing[Math.floor(rnd() * missing.length)].id }
-      : { kind: 'tokens', amount: tier === 'legend' ? 600 : 250 };
+  const def = CASE_BUNDLE[tier];
+  const between = ([lo, hi]: [number, number]) => lo + (hi - lo) * rnd();
+  const rewards: Reward[] = [
+    {
+      kind: 'coins',
+      amount: nice(rankCost(Math.min(p.rank, LAST_RANK - 1), p.prestige) * between(def.coins)),
+    },
+    { kind: 'tokens', amount: Math.round(between(def.tokens)) },
+  ];
+  const slots: Slot[][] = Array.from({ length: def.prizes }, () => CASE_PRIZE[tier]);
+  if (tier === 'legend') slots.push(LEGEND_TOP);
+  // Находка — только недостающая и доступная по шахте; две одинаковые в
+  // одном сундуке не лягут. Нечего найти — токены.
+  const taken = new Set<FindId>();
+  for (const table of slots) {
+    let r = pickWeighted(table, rnd).make(rnd, p.rank, p.prestige);
+    if (r.kind === 'find') {
+      const missing = FINDS.filter(
+        (f) => f.from <= p.rank && !(p.finds[f.id] ?? 0) && !taken.has(f.id),
+      );
+      if (missing.length) {
+        const id = missing[Math.floor(rnd() * missing.length)].id;
+        taken.add(id);
+        r = { kind: 'find', id };
+      } else r = { kind: 'tokens', amount: tier === 'legend' ? 600 : 250 };
+    }
+    rewards.push(r);
   }
-  return { tier, reward };
+  return { tier, rewards };
 }
+
+/** Сколько раз сундук «вырастет» при открытии: обычный — 0, легендарный — 3. */
+export function caseClimb(tier: CaseTier): number {
+  return Math.max(
+    0,
+    CASE_TIERS.findIndex((t) => t.id === tier),
+  );
+}
+
+export const caseTierOf = (id: CaseTier): CaseTierDef => CASE_TIERS.find((t) => t.id === id)!;
 
 /** Средняя выплата монетами за сундук в долях цены ранга — для теста. */
 export function caseCoinShare(): number {
   const total = CASE_TIERS.reduce((s, t) => s + t.weight, 0);
-  const ranges: Record<CaseTier, [number, number, number]> = {
-    common: [35, 0.04, 0.08],
-    rare: [30, 0.1, 0.18],
-    epic: [30, 0.3, 0.45],
-    legend: [35, 0.9, 1.3],
-  };
-  let ev = 0;
-  for (const t of CASE_TIERS) {
-    const slots = CASE_TABLE[t.id].reduce((s, x) => s + x.w, 0);
-    const [w, lo, hi] = ranges[t.id];
-    ev += (t.weight / total) * (w / slots) * ((lo + hi) / 2);
-  }
-  return ev;
+  return CASE_TIERS.reduce((ev, t) => {
+    const [lo, hi] = CASE_BUNDLE[t.id].coins;
+    return ev + (t.weight / total) * ((lo + hi) / 2);
+  }, 0);
+}
+
+/** Средние токены за сундук (без призов-токенов за повторную находку). */
+export function caseTokenMean(): number {
+  const total = CASE_TIERS.reduce((s, t) => s + t.weight, 0);
+  return CASE_TIERS.reduce((ev, t) => {
+    const [lo, hi] = CASE_BUNDLE[t.id].tokens;
+    return ev + (t.weight / total) * ((lo + hi) / 2);
+  }, 0);
 }
 
 /** Ключей за новый ранг и за престиж. */

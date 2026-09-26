@@ -14,6 +14,7 @@ import { BeastTab, GearTab, StashTab } from '@/components/DungeonCamp';
 import { RodsTab, TrophiesTab } from '@/components/FishingCamp';
 import { pickSrc } from '@/components/PickArt';
 import { BookArt, BooksTab } from '@/components/BooksTab';
+import { ChestTab } from '@/components/ChestTab';
 import {
   CASE_TIERS,
   CREW_MAX,
@@ -54,14 +55,11 @@ import {
   PERKS,
   perkPointsFree,
   PICKS,
-  PRESTIGE_KEYS,
   rankLetter,
-  rollCase,
   shortMoney,
 } from '@/lib/prison';
 import type {
   Bonus,
-  CaseRoll,
   CrewShift,
   CaseTier,
   ItemId,
@@ -72,7 +70,7 @@ import type {
   Rune,
   RuneKind,
 } from '@/lib/prison';
-import type { CasesOpened, CrewCollect, ParcelOpen } from '@/store';
+import type { CrewCollect, ParcelOpen } from '@/store';
 import {
   AXE_ENCHANTS,
   axeEnchCap,
@@ -126,7 +124,6 @@ import {
   caseTick,
   coinDing,
   keyFound,
-  payoutEnd,
   pickHit,
   primeAudio,
   tierBreak,
@@ -404,7 +401,7 @@ export function PrisonCamp({
         {tab === 'pets' && <PetsTab />}
         {tab === 'miles' && <MilesTab onGain={onGain} />}
         {tab === 'shop' && <ShopTab />}
-        {tab === 'cases' && <CasesTab onGain={onGain} />}
+        {tab === 'cases' && <ChestTab onGain={onGain} />}
         {tab === 'crew' && <CrewTab now={now} onGain={onGain} onSpend={onSpend} />}
         {tab === 'finds' && <FindsTab />}
         {tab === 'perks' && <PerksTab />}
@@ -576,257 +573,6 @@ function ShopTab() {
 
 // ---- Сундуки -----------------------------------------------------------------
 
-function CasesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
-  const p = useFinanceStore((s) => s.prison);
-  const prisonOpenCases = useFinanceStore((s) => s.prisonOpenCases);
-  const [open, setOpen] = useState<OpenedCase | null>(null);
-  const [batch, setBatch] = useState<CasesOpened | null>(null);
-  return (
-    <div className="pforge">
-      <div className="pchest">
-        <ChestArt />
-        <div className="pchest__info">
-          <b>
-            <KeyIcon size={16} /> {p.keys}{' '}
-            {p.keys === 1 ? 'ключ' : p.keys >= 2 && p.keys <= 4 ? 'ключа' : 'ключей'}
-          </b>
-          <i>Ключи падают с блоков, по одному даётся за ранг и {PRESTIGE_KEYS} за престиж.</i>
-          <button
-            type="button"
-            className="btn btn--primary btn--block"
-            disabled={p.keys <= 0}
-            onClick={() => {
-              primeAudio();
-              tapLight();
-              const o = openCase();
-              if (o) setOpen(o);
-              else notifyWarning();
-            }}
-          >
-            Открыть сундук
-          </button>
-          {p.keys >= 2 && (
-            <button
-              type="button"
-              className="btn btn--block pchest__all"
-              onClick={() => {
-                primeAudio();
-                tapLight();
-                const from = useFinanceStore.getState().slotsBalance;
-                const got = prisonOpenCases(p.keys);
-                if (!got) {
-                  notifyWarning();
-                  return;
-                }
-                const to = useFinanceStore.getState().slotsBalance;
-                if (to > from) onGain(from, to);
-                setBatch(got);
-              }}
-            >
-              Открыть все · {fmt(p.keys)}
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="pchest__odds">
-        {CASE_TIERS.map((t) => (
-          <span key={t.id} style={{ color: t.color }}>
-            {t.name} · {t.weight}%
-          </span>
-        ))}
-      </div>
-      {open && <CaseRoller first={open} onClose={() => setOpen(null)} onGain={onGain} />}
-      {batch && <CasesSummary got={batch} onClose={() => setBatch(null)} />}
-    </div>
-  );
-}
-
-// ---- Сундуки разом: плитки и итог ------------------------------------------
-
-interface CaseSum {
-  tiers: Record<CaseTier, number>;
-  /** Что складывается — одной строкой на вид. */
-  summed: Reward[];
-  /** Что не складывается — каждое отдельно. */
-  single: Reward[];
-}
-
-/** Сложить награды сундуков: монеты к монетам, бомбы к бомбам. */
-function sumCases(rolls: CaseRoll[]): CaseSum {
-  const tiers: Record<CaseTier, number> = { common: 0, rare: 0, epic: 0, legend: 0 };
-  let coins = 0;
-  let tokens = 0;
-  let keys = 0;
-  let treats = 0;
-  const items = new Map<ItemId, number>();
-  const single: Reward[] = [];
-  for (const r of rolls) {
-    tiers[r.tier] += 1;
-    const x = r.reward;
-    if (x.kind === 'coins') coins += x.amount;
-    else if (x.kind === 'tokens') tokens += x.amount;
-    else if (x.kind === 'keys') keys += x.amount;
-    else if (x.kind === 'treat') treats += 1;
-    else if (x.kind === 'item') items.set(x.id, (items.get(x.id) ?? 0) + x.amount);
-    else single.push(x);
-  }
-  const summed: Reward[] = [];
-  if (coins) summed.push({ kind: 'coins', amount: coins });
-  if (tokens) summed.push({ kind: 'tokens', amount: tokens });
-  if (keys) summed.push({ kind: 'keys', amount: keys });
-  for (const [id, amount] of items) summed.push({ kind: 'item', id, amount });
-  if (treats) summed.push({ kind: 'treat', amount: treats });
-  // Старшие руны — вперёд: их ищут глазами первыми.
-  single.sort((a, b) =>
-    a.kind === 'rune' && b.kind === 'rune' ? b.rune.tier - a.rune.tier : a.kind < b.kind ? -1 : 1,
-  );
-  return { tiers, summed, single };
-}
-
-/** Сколько плиток показываем; остальные — «и ещё N». */
-const CASES_TILES = 48;
-
-function CasesSummary({ got, onClose }: { got: CasesOpened; onClose: () => void }) {
-  const [done, setDone] = useState(false);
-  const sum = sumCases(got.rolls);
-  const shown = got.rolls.slice(0, CASES_TILES);
-  const best = [...CASE_TIERS].reverse().find((t) => sum.tiers[t.id] > 0) ?? CASE_TIERS[0];
-  // Плитки открываются очередью, итог — после последней.
-  const step = Math.min(60, 1400 / Math.max(1, shown.length));
-  const total = step * shown.length + 250;
-  useEffect(() => {
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const ticks = Math.min(12, shown.length);
-    for (let i = 0; i < ticks; i++)
-      timers.push(setTimeout(() => caseTick(), (i * total) / Math.max(1, ticks)));
-    timers.push(
-      setTimeout(() => {
-        setDone(true);
-      }, total),
-    );
-    return () => timers.forEach(clearTimeout);
-  }, [shown.length, total]);
-  useEffect(() => {
-    if (!done) return;
-    tierBreak(best.beats);
-    flashFrame(best.beats >= 2 ? 'big' : 'small');
-    burstConfetti(30 + best.beats * 30, [best.color, '#ffe08a', '#fff']);
-    coinDing();
-    notifySuccess();
-  }, [done, best]);
-  const count = (n: number) =>
-    n % 10 === 1 && n % 100 !== 11
-      ? 'сундук'
-      : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)
-        ? 'сундука'
-        : 'сундуков';
-  return createPortal(
-    <div
-      className={`pcases${done ? ' is-done' : ''}`}
-      style={{ '--tier': best.color, '--step': `${step}ms` } as CSSProperties}
-      onClick={() => {
-        if (!done) {
-          setDone(true);
-          return;
-        }
-        tapLight();
-        onClose();
-      }}
-    >
-      <div className="pcases__card" onClick={(e) => done && e.stopPropagation()}>
-        <span className="pcases__title">
-          Открыто {fmt(got.rolls.length)} {count(got.rolls.length)}
-        </span>
-        <span className="pcases__tiers">
-          {CASE_TIERS.filter((t) => sum.tiers[t.id] > 0).map((t) => (
-            <i key={t.id} style={{ color: t.color }}>
-              {t.name} ×{sum.tiers[t.id]}
-            </i>
-          ))}
-        </span>
-        <div className="pcases__grid">
-          {shown.map((r, i) => {
-            const t = CASE_TIERS.find((x) => x.id === r.tier)!;
-            return (
-              <span
-                key={i}
-                className="pcases__tile"
-                style={{ '--c': t.color, '--i': i } as CSSProperties}
-                title={rewardLabel(r.reward)}
-              >
-                <RewardIcon r={r.reward} size={26} />
-              </span>
-            );
-          })}
-          {got.rolls.length > shown.length && (
-            <span className="pcases__more">+{got.rolls.length - shown.length}</span>
-          )}
-        </div>
-        {done && (
-          <div className="pcases__sum">
-            <b>Итого</b>
-            {sum.summed.map((r, i) => (
-              <span key={i} className="pcases__row">
-                <RewardIcon r={r} size={24} />
-                <em>
-                  {r.kind === 'treat'
-                    ? `Лакомство питомцу ×${r.amount}`
-                    : r.kind === 'keys'
-                      ? `${r.amount} ${r.amount === 1 ? 'ключ' : r.amount < 5 ? 'ключа' : 'ключей'}`
-                      : rewardLabel(r)}
-                </em>
-              </span>
-            ))}
-            {sum.single.length > 0 && (
-              <span className="pcases__singles">
-                {sum.single.map((r, i) => (
-                  <span key={i} className="pcases__single" title={rewardLabel(r)}>
-                    <RewardIcon r={r} size={r.kind === 'rune' ? 40 : 28} />
-                    <i>
-                      {r.kind === 'rune'
-                        ? `${runeOf(r.rune.kind).name} ${RUNE_ROMAN[r.rune.tier - 1]}`
-                        : rewardLabel(r)}
-                    </i>
-                  </span>
-                ))}
-              </span>
-            )}
-            {got.newPets.length > 0 && (
-              <span className="pcases__note">
-                Новый питомец: {got.newPets.map((id) => petOf(id).name).join(', ')}
-              </span>
-            )}
-            {got.shattered > 0 && (
-              <span className="pcases__note">
-                Мешочек рун полон — лишние разбиты на {fmt(got.shattered)} ✦
-              </span>
-            )}
-            <button type="button" className="btn btn--primary btn--block" onClick={onClose}>
-              Забрать всё
-            </button>
-          </div>
-        )}
-        {!done && <span className="pcases__skip">тап — показать итог</span>}
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-function ChestArt({ size = 84 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 32 32" width={size} height={size} className="pchest__art" aria-hidden="true">
-      <rect x="4" y="12" width="24" height="15" rx="2" fill="#7a4a24" stroke="#2e1a0a" />
-      <path d="M4 12 Q16 3 28 12 Z" fill="#9a5e2e" stroke="#2e1a0a" />
-      <rect x="4" y="12" width="24" height="3" fill="#c8923a" stroke="#2e1a0a" />
-      <rect x="9" y="12" width="3" height="15" fill="#c8923a" stroke="#2e1a0a" strokeWidth=".6" />
-      <rect x="20" y="12" width="3" height="15" fill="#c8923a" stroke="#2e1a0a" strokeWidth=".6" />
-      <rect x="14" y="15" width="4" height="5" rx="1" fill="#ffd35a" stroke="#2e1a0a" />
-      <circle cx="16" cy="17.4" r=".9" fill="#2e1a0a" />
-    </svg>
-  );
-}
-
 export function rewardLabel(r: Reward): string {
   switch (r.kind) {
     case 'coins':
@@ -879,229 +625,6 @@ export function RewardIcon({ r, size = 30 }: { r: Reward; size?: number }) {
     case 'book':
       return <BookArt book={r.book} size={size} />;
   }
-}
-
-const TILE = 88;
-const STRIP = 44;
-const WIN_AT = 38;
-const ROLL_MS = 4800;
-
-/**
- * Лента сундука. Награда уже начислена в сторе — лента только доезжает до
- * неё. Ход не WAAPI, а свой кадр: щелчок звучит на КАЖДОЙ плитке, прошедшей
- * под стрелкой, и редеет вместе со скоростью, как у колеса удачи. Тап
- * досчитывает мгновенно — ожидание не должно быть наказанием.
- */
-/**
- * Открыть сундук: ключ списывается и награда начисляется СРАЗУ, в обработчике
- * нажатия, а не в эффекте. Эффект в разработке (StrictMode) отрабатывает
- * дважды — и на стенде один тап открывал два сундука.
- */
-function openCase(): OpenedCase | null {
-  const before = useFinanceStore.getState().slotsBalance;
-  const result = useFinanceStore.getState().prisonOpenCase();
-  if (!result) return null;
-  const after = useFinanceStore.getState().slotsBalance;
-  const p = useFinanceStore.getState().prison;
-  const strip = Array.from({ length: STRIP }, (_, i) =>
-    i === WIN_AT ? result : rollCase(p, Math.random),
-  );
-  return { result, strip, gain: after > before ? [before, after] : null };
-}
-
-interface OpenedCase {
-  result: CaseRoll;
-  strip: CaseRoll[];
-  gain: [number, number] | null;
-}
-
-function CaseRoller({
-  first,
-  onClose,
-  onGain,
-}: {
-  first: OpenedCase;
-  onClose: () => void;
-  onGain: (from: number, to: number) => void;
-}) {
-  const keys = useFinanceStore((s) => s.prison.keys);
-  const [roll, setRoll] = useState<{ result: CaseRoll; strip: CaseRoll[]; id: number }>(() => ({
-    result: first.result,
-    strip: first.strip,
-    id: 0,
-  }));
-  const [done, setDone] = useState(false);
-  const stripRef = useRef<HTMLDivElement>(null);
-  const winRef = useRef<HTMLDivElement>(null);
-  const needleRef = useRef<HTMLElement>(null);
-  const skip = useRef<(() => void) | null>(null);
-  const seq = useRef(0);
-  // Монеты из сундука: табло досчитает их, когда лента доедет.
-  const pending = useRef<[number, number] | null>(first.gain);
-
-  const start = () => {
-    const o = openCase();
-    if (!o) {
-      notifyWarning();
-      return;
-    }
-    seq.current += 1;
-    setDone(false);
-    setRoll({ result: o.result, strip: o.strip, id: seq.current });
-    pending.current = o.gain;
-  };
-
-  useEffect(() => {
-    const strip = stripRef.current;
-    const win = winRef.current;
-    if (!strip || !win) return undefined;
-    const W = win.clientWidth;
-    const jitter = (Math.random() - 0.5) * TILE * 0.7;
-    const end = WIN_AT * TILE + TILE / 2 - W / 2 + jitter;
-    const from = 0;
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    let raf = 0;
-    let lastTile = -1;
-    let stopped = false;
-    const t0 = performance.now();
-    const place = (x: number) => {
-      strip.style.transform = `translate3d(${-x.toFixed(1)}px,0,0)`;
-    };
-    const finish = () => {
-      if (stopped) return;
-      stopped = true;
-      cancelAnimationFrame(raf);
-      place(end);
-      reveal(roll.result);
-    };
-    skip.current = finish;
-    if (reduce) {
-      finish();
-      return undefined;
-    }
-    const frame = (now: number) => {
-      const t = Math.min(1, (now - t0) / ROLL_MS);
-      // Быстрый старт и очень долгое торможение: последние плитки ползут, и
-      // на них смотрят — «остановится или нет».
-      const k = 1 - Math.pow(1 - t, 4.2);
-      const x = from + (end - from) * k;
-      place(x);
-      const tile = Math.floor((x + W / 2) / TILE);
-      if (tile !== lastTile) {
-        lastTile = tile;
-        caseTick();
-        const n = needleRef.current;
-        try {
-          n?.animate([{ transform: 'rotate(-14deg)' }, { transform: 'rotate(0deg)' }], {
-            duration: 110,
-            easing: 'ease-out',
-          });
-        } catch {
-          /* не страшно */
-        }
-      }
-      if (t < 1) raf = requestAnimationFrame(frame);
-      else finish();
-    };
-    raf = requestAnimationFrame(frame);
-    return () => {
-      stopped = true;
-      cancelAnimationFrame(raf);
-    };
-    // Лента заводится на каждый новый сундук, и только на него.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roll.id]);
-
-  const reveal = (r: CaseRoll) => {
-    setDone(true);
-    skip.current = null;
-    const tier = CASE_TIERS.find((t) => t.id === r.tier)!;
-    tierBreak(tier.beats);
-    if (tier.beats >= 2) burstConfetti(tier.beats >= 4 ? 140 : 70, [tier.color, '#ffe08a', '#fff']);
-    if (tier.beats >= 4) flashFrame('big');
-    notifySuccess();
-    setTimeout(() => payoutEnd(Math.min(3, tier.beats)), 250);
-    if (pending.current) {
-      onGain(pending.current[0], pending.current[1]);
-      pending.current = null;
-    }
-  };
-
-  const tierOf = (t: CaseTier) => CASE_TIERS.find((x) => x.id === t)!;
-
-  // Портал: у листа `backdrop-filter`, а он делает лист рамкой даже для
-  // `position: fixed` — лента сундука жила бы внутри листа, а не над экраном.
-  return createPortal(
-    <div
-      className="pcase"
-      onClick={() => {
-        if (skip.current) skip.current();
-      }}
-    >
-      <div className="pcase__card" onClick={(e) => e.stopPropagation()}>
-        <b className="pcase__title">Сундук</b>
-        <div
-          className="pcase__window"
-          ref={winRef}
-          onClick={() => {
-            if (skip.current) skip.current();
-          }}
-        >
-          <div className="pcase__strip" ref={stripRef} key={roll.id}>
-            {roll.strip.map((c, i) => (
-              <div
-                key={i}
-                className={`pcase__tile${done && i === WIN_AT ? ' is-win' : ''}`}
-                style={{ '--tc': tierOf(c.tier).color } as CSSProperties}
-              >
-                <RewardIcon r={c.reward} />
-                <span>{rewardLabel(c.reward)}</span>
-              </div>
-            ))}
-          </div>
-          <i className="pcase__needle" ref={needleRef} />
-        </div>
-        <div className="pcase__result">
-          {done ? (
-            <>
-              <span style={{ color: tierOf(roll.result.tier).color }}>
-                {tierOf(roll.result.tier).name}
-              </span>
-              <b>{rewardLabel(roll.result.reward)}</b>
-              {roll.result.reward.kind === 'find' && <i>Новая находка в коллекции</i>}
-            </>
-          ) : (
-            <span className="muted">Тапни, чтобы остановить сразу</span>
-          )}
-        </div>
-        <div className="pcase__btns">
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={!done || keys <= 0}
-            onClick={() => {
-              primeAudio();
-              tapLight();
-              start();
-            }}
-          >
-            Ещё · <KeyIcon size={13} /> {keys}
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => {
-              skip.current?.();
-              onClose();
-            }}
-          >
-            Готово
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
 }
 
 // ---- Бригада -------------------------------------------------------------------

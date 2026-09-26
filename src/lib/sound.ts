@@ -180,7 +180,7 @@ export type SoundGroup = 'ui' | 'slots' | 'mine' | 'forest' | 'dungeon' | 'fishi
 
 const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
   ui: (n) =>
-    /^(ui\.|chip|coins|cloth|jingle\.|rank\.up|soft\.up|slot\.drum|slot\.win|tick|case\.tick)/.test(
+    /^(ui\.|chip|coins|cloth|jingle\.|rank\.up|soft\.up|slot\.drum|slot\.win|tick|case\.tick|crate|latch|gem\.|card\.flip|crit\.thud)/.test(
       n,
     ),
   slots: (n) => /^(reel\.|slot\.|gem\.|pluck|bubble|orb\.|slam|chips)/.test(n),
@@ -1015,6 +1015,40 @@ export function shinyPick(k = 0): void {
 export function cardDeal(at = 0): void {
   play('card.deal', { gain: 0.55, at });
 }
+// ---- Сундук (v2.71) ---------------------------------------------------------
+
+/** Сундук сел на пол: глухой деревянный удар. */
+export function chestLand(): void {
+  play('crate', { gain: 0.42, rate: 0.78, vary: 0.04 });
+  softThud(0.3);
+}
+
+/** Сундук вздрогнул — вырастет или нет. */
+export function chestShake(): void {
+  play('crit.thud', { gain: 0.2, rate: 0.9, vary: 0.06 });
+}
+
+/** Ключ повернулся в замке. */
+export function chestLatch(): void {
+  play('latch', { gain: 0.5, rate: 1.1 });
+}
+
+/** Сундук вырос на ярус: звон выше с каждой ступенью. */
+export function chestGrow(step: number): void {
+  play('gem.burst', { gain: 0.3, rate: Math.pow(2, (step * 3) / 12), vary: 0.01 });
+  softChime(3 + step * 2);
+}
+
+/** Крышка открылась: защёлка, скрип дерева и, у старших, фраза. */
+export function chestOpen(beats: number): void {
+  play('latch', { gain: 0.38, rate: 0.82 });
+  play('crate', { gain: 0.24, rate: 1.25, at: 0.05 });
+  if (beats >= 4) bigMoment(0.7);
+  else if (beats >= 2) {
+    if (!softPhrase(0.5, 0.08)) softChime(5);
+  } else softChime(4);
+}
+
 export function cardFlip(): void {
   play('card.flip', { gain: 0.7 });
 }
