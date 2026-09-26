@@ -43,10 +43,8 @@ import {
   crewYield,
   decayStreak,
   DEPTH,
-  ENCHANT_UNLOCK,
-  ENCHANTS,
-  enchantCap,
-  enchantCost,
+  bookTitle,
+  booksReady,
   ENERGY_RATE,
   findOf,
   FRENZY_RATE,
@@ -224,7 +222,7 @@ function pickSpark(pick: number): { colors: string[]; n: number } | null {
 /** Кузница и экраны лагеря — кнопки нижней панели шахты (v2.67). */
 type Screen = 'enchant' | 'cases' | 'pets' | 'more';
 const SCREENS: Record<Screen, { only: CampTab[]; title: string }> = {
-  enchant: { only: ['enchant'], title: 'Чары' },
+  enchant: { only: ['enchant'], title: 'Книги' },
   cases: { only: ['cases'], title: 'Сундуки' },
   pets: { only: ['pets'], title: 'Питомцы' },
   more: { only: ['crew', 'runes', 'shop', 'finds', 'miles', 'perks'], title: 'Лагерь' },
@@ -665,19 +663,12 @@ export function PrisonPage() {
     }
     if (res.pickUps.length) {
       const up = res.pickUps[res.pickUps.length - 1];
-      const opened = ENCHANTS.filter((e) =>
-        res.pickUps.some((u) => ENCHANT_UNLOCK[e.id] === u.level),
-      );
       floatText(c, `КИРКА ${up.level}`, 'pfloat--level', 180);
       softChime(2);
       notifySuccess();
       const tokens = res.pickUps.reduce((x, u) => x + u.tokens, 0);
       const keys = res.pickUps.reduce((x, u) => x + u.keys, 0);
-      say(
-        opened.length
-          ? `Кирка ${up.level} ур. · открыта чара «${opened[opened.length - 1].name}»`
-          : `Кирка ${up.level} ур. · +${fmt(tokens)} ✦${keys ? ' · +ключ' : ''}`,
-      );
+      say(`Кирка ${up.level} ур. · +${fmt(tokens)} ✦${keys ? ' · +ключ' : ''}`);
     }
     if (res.parcels.length) {
       floatText(c, 'ПОСЫЛКА', 'pfloat--parcel', 200);
@@ -865,6 +856,9 @@ export function PrisonPage() {
           ? `Мешочек рун полон — руна разбита на ${got.shattered} ✦`
           : `${rewardLabel(r)} — в мешочке рун`,
       );
+    } else if (r.kind === 'book') {
+      tierBreak(2);
+      say(`${rewardLabel(r)} — на полке, кнопка «Книги»`);
     } else {
       tierBreak(1);
       say(`${rewardLabel(r)} — в ряду расходников`);
@@ -980,8 +974,9 @@ export function PrisonPage() {
     setTimeout(() => payoutEnd(0), 350);
     floatText(c, `+${shortMoney(got.coins)}`, 'pfloat--block', 0);
     say(
-      `${ROCKS[floor].blockName}: +${fmt(got.coins)} монет${got.own ? '' : ' (для ранга — блок своего этажа)'}`,
+      `${ROCKS[floor].blockName}: +${fmt(got.coins)} монет${got.own ? '' : ' (для ранга — блок своего этажа)'}${got.book ? ` · книга «${bookTitle(got.book)}»` : ''}`,
     );
+    if (got.book) floatText(c, 'КНИГА', 'pfloat--level', 260);
     bumpStreak(1, c);
   };
 
@@ -1478,13 +1473,8 @@ export function PrisonPage() {
   const crewNow = crewYield(prison, nowTick);
   const campBadge = perkPointsFree(prison) > 0 || crewNow.minutes >= 60 || milesReady(prison) > 0;
   const forgeReady = forgeReadyNow(prison, balance);
-  // «!» на чарах: хоть одну можно поднять прямо сейчас.
-  const enchReady = ENCHANTS.some((e) => {
-    const l = prison.ench[e.id];
-    return (
-      l < enchantCap(e.id, pickLv.level, prison.pickStars) && prison.tokens >= enchantCost(e.id, l)
-    );
-  });
+  // «!» на книгах: есть что вписать или склеить на наковальне.
+  const enchReady = booksReady(prison);
 
   /** Лупа: метка ближайшей редкости под клеткой — сейда или блока этажа. */
   const lensMark = (c: number, d: number): { seidBelow: number; seidTex?: string } => {
@@ -1608,7 +1598,7 @@ export function PrisonPage() {
             type="button"
             ref={tokenRef}
             className="gx-chip pmx-chip--btn"
-            aria-label="Токены — чары"
+            aria-label="Токены — книги"
             onClick={() => openScreen('enchant')}
           >
             <TokenIcon size={17} /> {shortCount(prison.tokens)}
@@ -1983,8 +1973,8 @@ export function PrisonPage() {
             {forgeReady && <i className="gx-badge gx-badge--gold">!</i>}
           </button>
           <button type="button" className="pmx-dock__btn" onClick={() => openScreen('enchant')}>
-            <GxIcon name="magic" />
-            <b>Чары</b>
+            <GxIcon name="book" />
+            <b>Книги</b>
             {enchReady && <i className="gx-badge">!</i>}
           </button>
           <button

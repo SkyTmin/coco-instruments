@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildMine,
-  enchantCap,
   enchantMax,
+  enchUnits,
   ENCHANTS,
   freshMine,
   LAST_RANK,
   MINES,
   modsOf,
   normalizePrison,
-  PICK_LEVEL_MAX,
   PRISON_START,
   ROCKS,
   STAR_DMG,
@@ -109,24 +108,21 @@ describe('престиж кирки', () => {
     for (const e of ENCHANTS) {
       expect(enchantMax(e.id, 0)).toBe(e.max);
       expect(enchantMax(e.id, 5)).toBe(e.max * 2);
-      expect(enchantCap(e.id, PICK_LEVEL_MAX, 2)).toBe(enchantMax(e.id, 2));
+      expect(enchUnits(e.id, 10, 2)).toBe(enchantMax(e.id, 2));
     }
     const p = normalizePrison({ ...PRISON_START });
     expect(modsOf({ ...p, pickStars: 3 }).dmg).toBeCloseTo(modsOf(p).dmg * (1 + 3 * STAR_DMG));
   });
 
-  it('уровни чар выше обычного предела не срезаются при загрузке, если есть звёзды', () => {
+  it('звёзды усиливают книгу того же уровня, уровень при загрузке не выше X', () => {
     const e = ENCHANTS[0];
-    const kept = normalizePrison({
-      ...PRISON_START,
-      pickStars: 2,
-      ench: { ...PRISON_START.ench, [e.id]: e.max + 5 },
-    });
-    expect(kept.ench[e.id]).toBe(e.max + 5);
-    const cut = normalizePrison({
-      ...PRISON_START,
-      ench: { ...PRISON_START.ench, [e.id]: e.max + 5 },
-    });
-    expect(cut.ench[e.id]).toBe(e.max);
+    const lvl = { ...PRISON_START.ench, [e.id]: 7 };
+    const plain = normalizePrison({ ...PRISON_START, ench: lvl });
+    const starred = normalizePrison({ ...PRISON_START, pickStars: 2, ench: lvl });
+    expect(starred.ench[e.id]).toBe(7);
+    expect(enchUnits(e.id, 7, 2)).toBeCloseTo(enchUnits(e.id, 7, 0) * 1.4, 9);
+    expect(plain.ench[e.id]).toBe(7);
+    const cut = normalizePrison({ ...PRISON_START, ench: { ...lvl, [e.id]: 99 } });
+    expect(cut.ench[e.id]).toBe(10);
   });
 });

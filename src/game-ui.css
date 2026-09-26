@@ -5397,3 +5397,843 @@ button.fg-slot {
 .pmx-norm__go {
   align-self: flex-start;
 }
+
+/* ==========================================================================
+   Книги зачарований (v2.70) — components/BooksTab.tsx.
+   Обложка — 3D-рендер яруса (public/ui/books, scripts/books-render), знак
+   чары — маска game-icons в медальоне. Центр медальона на картинке
+   (48,2% · 50,6%, радиус 14,5%) печатает run.mjs рендера.
+   ========================================================================== */
+.pbook {
+  position: relative;
+  display: inline-block;
+  flex: none;
+}
+.pbook > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+/* Свечение цвета яруса — статичное, под книгой. */
+.pbook.is-glow::before {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border-radius: 30%;
+  background: radial-gradient(closest-side, var(--rc), transparent 75%);
+  opacity: 0.55;
+}
+.pbook.t-simple.is-glow::before {
+  opacity: 0.25;
+}
+.pbook__emboss {
+  position: absolute;
+  left: 33.7%;
+  top: 36.1%;
+  width: 29%;
+  height: 29%;
+  display: grid;
+  place-items: center;
+  /* Тиснение: тень снизу и светлый край сверху — один раз, без анимации. */
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.7)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 0.25));
+}
+.pbook__glyph {
+  width: 100%;
+  height: 100%;
+  -webkit-mask: var(--gx-icon) center / 82% no-repeat;
+  mask: var(--gx-icon) center / 82% no-repeat;
+  background: linear-gradient(180deg, #fff3c4, #f0b83c 55%, #9a6412);
+}
+.pbook.t-simple .pbook__glyph {
+  background: linear-gradient(180deg, #f6d2a0, #c0833e 60%, #6e4418);
+}
+.pbook.t-rare .pbook__glyph {
+  background: linear-gradient(180deg, #ffffff, #c9d6e4 55%, #6d7f94);
+}
+.pbook.t-epic .pbook__glyph {
+  background: linear-gradient(180deg, #fff1d0, #ffc85a 50%, #b86bff);
+}
+.pbook.t-legend .pbook__glyph {
+  background: linear-gradient(180deg, #ffffff, #ffe08a 45%, #ff9d2e);
+}
+.pbook.t-legend .pbook__emboss {
+  filter: drop-shadow(0 0 3px rgba(255, 200, 80, 0.8)) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.7));
+}
+.pbook__q {
+  font-family: 'GxRubik', system-ui, sans-serif;
+  font-weight: 900;
+  line-height: 1;
+  color: #ffe6a8;
+}
+
+.pdust-ico {
+  color: #b77bff;
+  filter: drop-shadow(0 0 2px rgba(183, 123, 255, 0.6));
+}
+
+/* ---- Вкладка --------------------------------------------------------------- */
+.pbk {
+  position: relative;
+  gap: 12px;
+}
+.pbk h4 {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+.pbk h4 > i:not(.gx-icon) {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: right;
+}
+.pbk-purse {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+}
+.pbk-purse > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pbk-pick {
+  padding: 10px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #4a3220, #2e1f14);
+  color: var(--gx-paper);
+  box-shadow:
+    inset 0 0 0 2px var(--gx-wood-dd),
+    inset 0 0 0 3px color-mix(in srgb, var(--rc) 45%, transparent);
+}
+.pbk-pick__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.pbk-pick__head > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pbk-pick__head .rname {
+  font-size: 17px;
+}
+.pbk-pick__head i {
+  font-style: normal;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.pbk-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pbk-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 241, 210, 0.08);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 241, 210, 0.18);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pbk-slot.is-open {
+  box-shadow: inset 0 0 0 2px var(--gx-gold);
+}
+.pbk-slot.is-off {
+  opacity: 0.55;
+}
+.pbk-slot.is-empty {
+  cursor: default;
+  background: none;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 241, 210, 0.22);
+  border: 1.5px dashed rgba(255, 241, 210, 0.3);
+}
+.pbk-slot__plus {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  font-size: 26px;
+  font-weight: 800;
+  opacity: 0.45;
+}
+.pbk-slot__txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pbk-slot__txt b {
+  font-size: 14px;
+}
+.pbk-slot__txt b em {
+  font-style: normal;
+  color: var(--gx-gold);
+}
+.pbk-slot__txt i {
+  font-style: normal;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.pbk-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 4px 0;
+}
+.pbk-tools .pench-switch,
+.pbk-tools .pench-reset {
+  color: var(--gx-paper);
+  font-size: 13px;
+}
+.pbk-tools .pench-reset.is-armed {
+  color: #ff8a6a;
+}
+.pbk-locks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+}
+.pbk-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--rc);
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rc) 55%, transparent);
+}
+.pbk-lock.is-next {
+  padding: 2px 8px 2px 5px;
+}
+.pbk-locks em {
+  font-style: normal;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.pbk-tiers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.pbk-tier {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  grid-template-rows: auto auto auto;
+  column-gap: 6px;
+  align-items: center;
+  padding: 6px 8px 6px 4px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #3a281a, #24170e);
+  color: var(--gx-paper);
+  font: inherit;
+  text-align: left;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--rc) 60%, #000),
+    0 3px 0 rgba(61, 42, 22, 0.4);
+  cursor: pointer;
+  transition: transform 80ms ease-out;
+}
+.pbk-tier:active {
+  transform: translateY(2px);
+}
+.pbk-tier .pbook {
+  grid-row: 1 / 4;
+}
+.pbk-tier b {
+  font-size: 14px;
+  color: var(--rl);
+}
+.pbk-tier i {
+  font-style: normal;
+  font-size: 11px;
+  opacity: 0.8;
+}
+.pbk-tier__price {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: start;
+  margin-top: 2px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--gx-gold);
+  color: #3a2408;
+  font-size: 13px;
+  font-weight: 900;
+}
+.pbk-tier.is-no .pbk-tier__price {
+  background: rgba(255, 241, 210, 0.2);
+  color: var(--gx-paper);
+}
+.pbk-tier.is-no .pbook {
+  opacity: 0.7;
+}
+
+.pbk-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.pbk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
+  gap: 6px;
+}
+.pbk-book {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #3a281a, #24170e);
+  box-shadow: inset 0 0 0 1.5px var(--gx-wood-dd);
+  cursor: pointer;
+  padding: 0;
+}
+.pbk-book.is-weak {
+  opacity: 0.55;
+}
+.pbk-book.is-fresh {
+  animation: pbk-fresh 1.4s ease-out 2;
+}
+@keyframes pbk-fresh {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 1.5px var(--gx-wood-dd);
+  }
+  30% {
+    box-shadow:
+      inset 0 0 0 2.5px var(--gx-gold),
+      0 0 10px rgba(255, 210, 87, 0.8);
+  }
+}
+.pbk-book__lv {
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--gx-gold);
+  text-shadow:
+    0 1px 0 #000,
+    0 0 3px #000;
+}
+.pbk-book__ch {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  padding: 0 4px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 900;
+  color: #fff;
+  background: #5a4a3a;
+}
+.pbk-book__ch.is-hi,
+.pbk-odds.is-hi b,
+.pbks__ch.is-hi {
+  background: #2f8a3c;
+}
+.pbk-book__ch.is-mid,
+.pbk-odds.is-mid b,
+.pbks__ch.is-mid {
+  background: #b07a12;
+}
+.pbk-book__ch.is-lo,
+.pbk-odds.is-lo b,
+.pbks__ch.is-lo {
+  background: #a8322a;
+}
+/* Зелёная стрелка: книгу можно вписать прямо сейчас. */
+.pbk-book__up {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid #6fe07c;
+  filter: drop-shadow(0 1px 0 #000);
+}
+.pbk-book__anvil {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  color: #cfd8e2;
+}
+
+.pbk-hint {
+  position: sticky;
+  bottom: 8px;
+  z-index: 3;
+  align-self: center;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(30, 18, 10, 0.94);
+  color: var(--gx-paper);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  animation: gx-fade 160ms ease-out;
+}
+
+/* ---- Книга с полки (окно) -------------------------------------------------- */
+.pbk-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--gx-ink);
+}
+.pbk-sheet__top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pbk-sheet__fx {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pbk-sheet__fx .rname {
+  font-size: 13px;
+}
+.pbk-sheet__fx b {
+  font-size: 16px;
+}
+.pbk-sheet__fx i {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--gx-ink-soft);
+}
+.pbk-note,
+.pbk-warn {
+  margin: 0;
+  font-size: 13px;
+  color: var(--gx-ink-soft);
+}
+.pbk-warn {
+  font-size: 12px;
+  text-align: center;
+}
+.pbk-odds {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pbk-odds__bar {
+  position: relative;
+  flex: 1;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #b0402e;
+  box-shadow: inset 0 0 0 2px var(--gx-wood-dd);
+}
+.pbk-odds__bar i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, #7fdc6a, #3f8a2a);
+}
+.pbk-odds__bar i.is-dust {
+  background: repeating-linear-gradient(135deg, #c89bff 0 6px, #9a5cff 6px 12px);
+}
+.pbk-odds b {
+  min-width: 52px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 16px;
+  text-align: center;
+}
+.pbk-dust {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(109, 75, 39, 0.14);
+  color: var(--gx-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: inset 0 0 0 1.5px rgba(109, 75, 39, 0.3);
+  cursor: pointer;
+}
+.pbk-dust.is-on {
+  background: rgba(154, 92, 255, 0.18);
+  box-shadow: inset 0 0 0 2px #9a5cff;
+}
+.pbk-dust:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.pbk-replace > i {
+  display: block;
+  margin-bottom: 6px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--gx-ink-soft);
+}
+.pbk-replace > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pbk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(109, 75, 39, 0.14);
+  color: var(--gx-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.pbk-chip.is-on {
+  background: #b0402e;
+  color: #fff;
+}
+.pbk-sheet__btns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pbk-sheet__btns .gx-btn {
+  width: 100%;
+}
+.pbk-go[aria-disabled='true'] {
+  filter: grayscale(0.85) brightness(0.8);
+}
+.pbk-sheet__btns .gx-btn.is-armed {
+  --gx-btn: url('/ui/kenney/button_red.png');
+  --gx-btn-shadow: var(--gx-red-d);
+}
+
+/* ---- Сцены: покупка, наковальня, вписывание -------------------------------- */
+.pbks,
+.pbka {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  /* Непрозрачный: под сценой полка уже показывает, что выпало. */
+  background: radial-gradient(90% 60% at 50% 42%, #24142e, #08050a 70%) #08050a;
+  color: var(--gx-paper);
+  animation: gx-fade 180ms ease-out;
+  cursor: pointer;
+  font-family: 'GxRubik', system-ui, sans-serif;
+}
+.pbks__stage {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  display: grid;
+  place-items: center;
+}
+.pbks__burst {
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--rc), transparent 70%);
+  opacity: 0.25;
+  transition: opacity 260ms ease-out;
+}
+.pbks.is-flash .pbks__burst,
+.pbka.is-ok .pbks__burst {
+  opacity: 0.6;
+}
+.pbks.is-show .pbks__burst {
+  opacity: 0.42;
+}
+.pbka.is-fail .pbks__burst {
+  opacity: 0.12;
+}
+/* Книга дрожит всё сильнее — ярус виден, чара ещё нет. */
+.pbks__shake {
+  animation: pbk-shake 720ms ease-in both;
+}
+.pbks.is-slow .pbks__shake {
+  animation-duration: 1200ms;
+}
+@keyframes pbk-shake {
+  0% {
+    transform: scale(0.8) rotate(0deg);
+  }
+  20% {
+    transform: scale(0.95) rotate(-3deg);
+  }
+  40% {
+    transform: scale(1) rotate(4deg);
+  }
+  60% {
+    transform: scale(1.03) rotate(-6deg);
+  }
+  80% {
+    transform: scale(1.06) rotate(7deg);
+  }
+  100% {
+    transform: scale(1.1) rotate(0deg);
+  }
+}
+.pbks.is-flash .pbks__shake {
+  opacity: 0;
+}
+.pbks__pair {
+  position: relative;
+  width: 240px;
+  height: 140px;
+}
+.pbks__pair span {
+  position: absolute;
+  top: 10px;
+}
+.pbks__pair .is-l {
+  left: 0;
+  animation: pbk-pair-l 1100ms cubic-bezier(0.5, 0, 0.9, 0.5) both;
+}
+.pbks__pair .is-r {
+  right: 0;
+  animation: pbk-pair-r 1100ms cubic-bezier(0.5, 0, 0.9, 0.5) both;
+}
+@keyframes pbk-pair-l {
+  to {
+    transform: translateX(60px) rotate(8deg);
+  }
+}
+@keyframes pbk-pair-r {
+  to {
+    transform: translateX(-60px) rotate(-8deg);
+  }
+}
+.pbks__book {
+  animation: fgr-reveal 520ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+}
+.pbks__text,
+.pbka__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 96px;
+  padding: 0 16px;
+  text-align: center;
+  animation: fgr-text 380ms 120ms ease-out both;
+}
+.pbks__text .rname,
+.pbka__text .rname {
+  font-size: 26px;
+}
+.pbks__fx {
+  font-size: 15px;
+  font-weight: 700;
+  opacity: 0.92;
+}
+.pbks__ch {
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* Вписывание: круг шанса — зелёный сектор ровно `--ch` процентов. */
+.pbka__stage {
+  position: relative;
+  width: 260px;
+  height: 330px;
+}
+.pbka__stage .pbks__burst {
+  inset: -10% -20% 20%;
+}
+.pbka__dial {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 196px;
+  height: 196px;
+  margin-left: -98px;
+  border-radius: 50%;
+  background: conic-gradient(#4fcf5e 0 var(--ch), #b8322a var(--ch) 100%);
+  -webkit-mask: radial-gradient(closest-side, transparent 80%, #000 81%);
+  mask: radial-gradient(closest-side, transparent 80%, #000 81%);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5);
+}
+.pbka__needle {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 196px;
+  height: 196px;
+  margin-left: -98px;
+  pointer-events: none;
+}
+.pbka__needle::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  width: 0;
+  height: 0;
+  margin-left: -9px;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 22px solid #fff4d0;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6));
+}
+.pbka__book {
+  position: absolute;
+  left: 50%;
+  top: 52px;
+  margin-left: -46px;
+}
+.pbka__pick {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  margin-left: -66px;
+}
+.pbka.is-ok .pbka__book {
+  animation: pbk-into 560ms cubic-bezier(0.55, 0, 0.85, 0.4) both;
+}
+@keyframes pbk-into {
+  to {
+    transform: translateY(170px) scale(0.2);
+    opacity: 0;
+  }
+}
+.pbka.is-ok .pbka__pick {
+  animation: fgr-reveal 520ms 480ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+}
+.pbka.is-ok .pbka__dial,
+.pbka.is-ok .pbka__needle {
+  animation: pbk-dial-out 400ms ease-out both;
+}
+@keyframes pbk-dial-out {
+  to {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+/* Сгорела: книга чернеет и осыпается, искры летят вверх. */
+.pbka.is-fail .pbka__book {
+  animation: pbk-burn 900ms ease-in both;
+}
+.pbka__book::after {
+  content: '';
+  position: absolute;
+  inset: 8%;
+  border-radius: 12%;
+  background: radial-gradient(closest-side, #1a0a04 30%, #ff5a1a 70%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+.pbka.is-fail .pbka__book::after {
+  animation: pbk-char 900ms ease-in both;
+}
+@keyframes pbk-burn {
+  60% {
+    transform: scale(1.04) rotate(-3deg);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(40px) scale(0.6) rotate(8deg);
+    opacity: 0;
+  }
+}
+@keyframes pbk-char {
+  to {
+    opacity: 1;
+  }
+}
+.pbka__embers {
+  position: absolute;
+  left: 50%;
+  top: 100px;
+  width: 0;
+  height: 0;
+}
+.pbka__embers i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: #ffb040;
+  box-shadow: 0 0 6px #ff7a1a;
+  opacity: 0;
+  animation: pbk-ember 1100ms calc(var(--k) * 45ms) ease-out both;
+  --dx: calc((var(--k) - 5.5) * 9px);
+}
+@keyframes pbk-ember {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), -140px) scale(0.3) rotate(160deg);
+  }
+}
+.pbka__odds {
+  font-size: 34px;
+  font-weight: 900;
+  color: #fff4d0;
+}
+.pbka__lost {
+  font-size: 26px;
+  color: #ff8a6a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pbks__shake,
+  .pbks__pair span,
+  .pbks__book,
+  .pbka__book,
+  .pbka.is-ok .pbka__pick,
+  .pbka__embers i,
+  .pbk-book.is-fresh,
+  .pbks__text,
+  .pbka__text {
+    animation: none;
+  }
+}

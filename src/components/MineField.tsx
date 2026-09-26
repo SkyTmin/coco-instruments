@@ -25,15 +25,7 @@ import type {
   ReactNode,
   RefObject,
 } from 'react';
-import {
-  CRIT_CHANCE,
-  CRIT_MULT,
-  blastCells,
-  MINE_CELLS,
-  MINE_COLS,
-  MINE_ROWS,
-  ROCKFALL_HITS,
-} from '@/lib/prison';
+import { CRIT_CHANCE, CRIT_MULT, blastCells, MINE_CELLS, MINE_COLS, MINE_ROWS } from '@/lib/prison';
 import type { RockKind } from '@/lib/prison';
 import { CRACK_STAGES, crackStageOf, crackStrip } from '@/lib/crack-stages';
 import { createFx } from '@/lib/prison-fx';
@@ -740,12 +732,10 @@ export interface DigBlock {
 /** Шансы чар поля на один сломанный блок. */
 export interface DigProcs {
   hammer: number;
-  rockfall: number;
   beam: number;
   blast: number;
   vein: number;
   veinMax: number;
-  crack: number;
   frenzy: number;
 }
 
@@ -921,54 +911,6 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
     wave(rings(c, cells), 'blast', 40);
   };
 
-  /** Камнепад: град взрывов по полю, друг за другом. */
-  const rockfallAt = (c: number) => {
-    const picked = new Set<number>();
-    while (picked.size < ROCKFALL_HITS) picked.add(Math.floor(Math.random() * MINE_CELLS));
-    field.current?.float(c, 'КАМНЕПАД', 'pfloat--blast');
-    mineRumble();
-    flashFrame('big');
-    [...picked].forEach((cell, i) => later(() => blastAt(cell, 1, ''), 140 + i * 190));
-  };
-
-  /**
-   * Трещина: удар расходится по четырём соседям тем же уроном. Слабые
-   * соседи ломаются, крепкие — трескаются.
-   */
-  const crackFrom = (c: number, dmg: number) => {
-    const r = R.current;
-    const x = c % MINE_COLS;
-    const y = Math.floor(c / MINE_COLS);
-    const nb = [
-      x > 0 ? c - 1 : -1,
-      x < MINE_COLS - 1 ? c + 1 : -1,
-      y > 0 ? c - MINE_COLS : -1,
-      y < MINE_ROWS - 1 ? c + MINE_COLS : -1,
-    ].filter((n) => n >= 0);
-    const broken: number[] = [];
-    const staged: [number, number][] = [];
-    for (const n of nb) {
-      const rock = r.rockAt(n);
-      if (rock < 0 || r.shut?.(n) || r.hard?.(n)) continue;
-      const hpMax = r.rock(rock).hp;
-      const left = (hp.current[n] < 0 ? hpMax : hp.current[n]) - dmg;
-      if (left <= 1e-6) broken.push(n);
-      else {
-        hp.current[n] = left;
-        staged.push([n, crackStage(left, hpMax)]);
-      }
-    }
-    if (staged.length)
-      setCracks((prev) => {
-        const next = prev.slice();
-        for (const [n, stage] of staged) next[n] = stage;
-        return next;
-      });
-    field.current?.float(c, 'ТРЕЩИНА', 'pfloat--crack');
-    chainTick(2);
-    if (broken.length) breakCells(broken, 'vein');
-  };
-
   const hammerFrom = (c: number, label: string, power = 2) => {
     const all = Array.from({ length: MINE_CELLS }, (_, i) => i);
     boom(power);
@@ -1053,15 +995,12 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
     else tapLight();
     breakCells([c], crit ? 'crit' : 'hit');
 
-    // Зачарования. Срабатывает одно, старшее: отбойник, камнепад, луч,
-    // взрыв, жила, трещина — несколько сразу превращают поле в кашу, в
-    // которой не видно ни одного.
+    // Зачарования. Срабатывает одно, старшее: отбойник, луч, взрыв, жила —
+    // несколько сразу превращают поле в кашу, в которой не видно ни одного.
     if (Math.random() < m.hammer) hammerFrom(c, 'ОТБОЙНИК');
-    else if (Math.random() < m.rockfall) rockfallAt(c);
     else if (Math.random() < m.beam) beamFrom(c);
     else if (Math.random() < m.blast) blastAt(c, 1, 'ВЗРЫВ');
     else if (Math.random() < m.vein) veinFrom(c, rock, m.veinMax);
-    else if (Math.random() < m.crack) crackFrom(c, dmg);
     if (Math.random() < m.frenzy) r.onFrenzy?.(c);
   };
 

@@ -105,6 +105,18 @@ import type { Session, SpinRecord } from '@/lib/session';
 import { genId } from '@/lib/id';
 import { ECONOMY_ERA } from '@/lib/economy';
 import {
+  anvil,
+  applyChance,
+  BLOCK_BOOK_CHANCE,
+  bookTierOf,
+  canApply,
+  dustOf,
+  dustToFull,
+  rollBook,
+  SHELF_MAX,
+} from '@/lib/books';
+import type { Book, BookTier } from '@/lib/books';
+import {
   bagCapacity,
   bagCost,
   bagCount,
@@ -115,8 +127,6 @@ import {
   crewCost,
   crewYield,
   DEPTH,
-  enchantCost,
-  enchantRefund,
   ENERGY_MS,
   freshMine,
   FIND_DUP_TOKENS,
@@ -163,7 +173,7 @@ import {
   PRESTIGE_XP,
   PRISON_START,
   rankXp,
-  enchantCap,
+  enchSlots,
   ENCHANT_TOGGLE,
   GUIDE,
   guideReady,
@@ -1410,15 +1420,30 @@ interface FinanceState {
   /** Разбит сейд-камень в клетке `cell`: токены и монеты. */
   prisonSeid: (cell: number) => { tokens: number; coins: number } | null;
   /** Блок этажа сломан: платит сразу, идёт в условие ранга (только блок своего этажа). */
-  prisonOreBlock: (cell: number) => { coins: number; own: boolean } | null;
+  prisonOreBlock: (cell: number) => { coins: number; own: boolean; book?: Book } | null;
   prisonMileClaim: (id: string) => MileClaim | null;
   /** Проводник: забрать награду за выполненный шаг. */
   prisonGuideClaim: () => GuideReward | null;
   prisonEnchantToggle: (id: EnchantId) => void;
-  /** Зачарование: взять уровень за токены или сбросить с возвратом половины. */
-  /** Купить до `count` уровней чары (сколько хватит токенов и потолка). */
-  prisonEnchant: (id: EnchantId, count?: number) => number;
-  prisonEnchantReset: (id: EnchantId) => number;
+  /** Книги (v2.70). Чародей: книга яруса «вслепую» за токены; полка полна — null. */
+  prisonBookBuy: (tier: BookTier) => Book | null;
+  /**
+   * Вписать книгу с полки в кирку. `dust` — сколько пыли подсыпать (лишняя
+   * сверх 100% не тратится). Мест нет — `replace` называет чару, которую
+   * книга выбьет (только при удаче; выбитая рассыпается в пыль). Неудача —
+   * книга сгорает, кирка цела.
+   */
+  prisonBookApply: (
+    i: number,
+    dust: number,
+    replace?: EnchantId,
+  ) => { ok: boolean; book: Book; chance: number } | null;
+  /** Разобрать книгу в пыль: сколько пыли вышло. */
+  prisonBookSalvage: (i: number) => number;
+  /** Наковальня: две одинаковые книги → одна уровнем выше. */
+  prisonBookAnvil: (i: number, j: number) => Book | null;
+  /** Снять чару с кирки: она рассыпается в пыль (сколько вышло). */
+  prisonEnchantWipe: (id: EnchantId) => number;
   /** Лавка: расходник за токены. */
   prisonBuyItem: (id: ItemId) => boolean;
   /** Потратить расходник. Энергетик и лупа включаются сразу. */
@@ -4180,8 +4205,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const own = p.mine.id === p.rank;
     // Блок гарантии расколот — гарантия снова копится с нуля.
     const bonus = p.mine.bonus && p.mine.bonus.cell === cell ? null : (p.mine.bonus ?? null);
+    // Книга из блока этажа: изредка, ярус — по горизонту шахты.
+    const book =
+      Math.random() < BLOCK_BOOK_CHANCE && p.books.length < SHELF_MAX
+        ? rollBook(p.mine.id >= 15 ? 'epic' : p.mine.id >= 8 ? 'rare' : 'simple', Math.random)
+        : undefined;
     const prison: PrisonState = {
       ...p,
+      books: book ? [...p.books, book] : p.books,
       mine: { ...p.mine, dug, bonus },
       pity: own ? 0 : p.pity,
       norm,
@@ -4194,7 +4225,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ prison, slotsBalance: s.slotsBalance + coins });
     persistPrison(prison);
     persistSlots(get());
-    return { coins, own };
+    return { coins, own, book };
   },
 
   prisonPetSet: (id) => {
@@ -4274,26 +4305,6 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return r;
   },
 
-  prisonEnchant: (id, count = 1) => {
-    const p = get().prison;
-    const cap = enchantCap(id, pickLevelOf(p.pickXp).level, p.pickStars);
-    let level = p.ench[id];
-    let tokens = p.tokens;
-    let bought = 0;
-    while (bought < count && level < cap) {
-      const cost = enchantCost(id, level);
-      if (tokens < cost) break;
-      tokens -= cost;
-      level += 1;
-      bought += 1;
-    }
-    if (!bought) return 0;
-    const prison = { ...p, tokens, ench: { ...p.ench, [id]: level } };
-    set({ prison });
-    persistPrison(prison);
-    return bought;
-  },
-
   prisonEnchantToggle: (id) => {
     const p = get().prison;
     if (!ENCHANT_TOGGLE.includes(id)) return;
@@ -4303,15 +4314,84 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistPrison(prison);
   },
 
-  prisonEnchantReset: (id) => {
+  prisonBookBuy: (tier) => {
     const p = get().prison;
-    const level = p.ench[id];
-    if (!level) return 0;
-    const back = enchantRefund(id, level);
-    const prison = { ...p, tokens: p.tokens + back, ench: { ...p.ench, [id]: 0 } };
+    const price = bookTierOf(tier).price;
+    if (p.tokens < price || p.books.length >= SHELF_MAX) return null;
+    const book = rollBook(tier, Math.random);
+    const prison = { ...p, tokens: p.tokens - price, books: [...p.books, book] };
     set({ prison });
     persistPrison(prison);
-    return back;
+    return book;
+  },
+
+  prisonBookApply: (i, dust, replace) => {
+    const p = get().prison;
+    const book = p.books[i];
+    if (!book) return null;
+    const check = canApply(p.ench, enchSlots(p), book);
+    if (check === 'lower') return null;
+    if (check === 'full' && (!replace || !p.ench[replace] || replace === book.id)) return null;
+    const use = Math.max(0, Math.min(Math.floor(dust), p.dust, dustToFull(book)));
+    const chance = applyChance(book, use);
+    const ok = Math.random() * 100 < chance;
+    const books = p.books.filter((_, j) => j !== i);
+    let ench = p.ench;
+    let back = 0;
+    if (ok) {
+      ench = { ...ench, [book.id]: book.lvl };
+      if (check === 'full' && replace) {
+        back = dustOf({ lvl: p.ench[replace] });
+        ench[replace] = 0;
+      }
+    }
+    // Запись сразу: иначе перезапуск между броском и сохранением дал бы
+    // бросить ещё раз.
+    const prison = { ...p, books, ench, dust: p.dust - use + back };
+    set({ prison });
+    persistPrison(prison);
+    flushers.forEach((f) => f());
+    return { ok, book, chance };
+  },
+
+  prisonBookSalvage: (i) => {
+    const p = get().prison;
+    const book = p.books[i];
+    if (!book) return 0;
+    const got = dustOf(book);
+    const prison = { ...p, books: p.books.filter((_, j) => j !== i), dust: p.dust + got };
+    set({ prison });
+    persistPrison(prison);
+    return got;
+  },
+
+  prisonBookAnvil: (i, j) => {
+    const p = get().prison;
+    if (i === j || !p.books[i] || !p.books[j]) return null;
+    const book = anvil(p.books[i], p.books[j]);
+    if (!book) return null;
+    const books = p.books.filter((_, k) => k !== i && k !== j);
+    books.push(book);
+    const prison = { ...p, books };
+    set({ prison });
+    persistPrison(prison);
+    return book;
+  },
+
+  prisonEnchantWipe: (id) => {
+    const p = get().prison;
+    const lvl = p.ench[id];
+    if (!lvl) return 0;
+    const got = dustOf({ lvl });
+    const prison = {
+      ...p,
+      ench: { ...p.ench, [id]: 0 },
+      dust: p.dust + got,
+      off: p.off.filter((x) => x !== id),
+    };
+    set({ prison });
+    persistPrison(prison);
+    return got;
   },
 
   prisonBuyItem: (id) => {

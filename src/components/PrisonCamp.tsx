@@ -13,6 +13,7 @@ import { useFinanceStore } from '@/store';
 import { BeastTab, GearTab, StashTab } from '@/components/DungeonCamp';
 import { RodsTab, TrophiesTab } from '@/components/FishingCamp';
 import { pickSrc } from '@/components/PickArt';
+import { BookArt, BooksTab } from '@/components/BooksTab';
 import {
   CASE_TIERS,
   CREW_MAX,
@@ -27,17 +28,8 @@ import {
   crewRate,
   crewYield,
   bonusOf,
+  bookTitle,
   CASE_TIERS as TIERS_OF,
-  ENCHANTS,
-  enchantCap,
-  enchantCost,
-  enchantMax,
-  PICK_LEVEL_MAX,
-  PICK_STARS_MAX,
-  STAR_CAP,
-  STAR_DMG,
-  STAR_KEYS,
-  STAR_TOKENS,
   fusePlan,
   MILES,
   mileReady,
@@ -53,19 +45,14 @@ import {
   runePower,
   SOCKET_UNLOCK,
   socketsOpen,
-  enchantRefund,
-  ENCHANT_TOGGLE,
-  ENCHANT_UNLOCK,
   FINDS,
   findsFound,
   findsMult,
   handleRate,
   HANDLES,
   ITEMS,
-  modsOf,
   PERKS,
   perkPointsFree,
-  pickLevelOf,
   PICKS,
   PRESTIGE_KEYS,
   rankLetter,
@@ -77,7 +64,6 @@ import type {
   CaseRoll,
   CrewShift,
   CaseTier,
-  EnchantId,
   ItemId,
   PerkId,
   PetId,
@@ -261,7 +247,7 @@ const TAB_NAMES: Record<CampTab, string> = {
   axench: 'Чары',
   mill: 'Лесопилка',
   bench: 'Верстак',
-  enchant: 'Чары',
+  enchant: 'Книги',
   runes: 'Руны',
   pets: 'Питомцы',
   shop: 'Лавка',
@@ -283,7 +269,7 @@ const TAB_ICONS: Record<CampTab, GxIconName> = {
   axench: 'magic',
   mill: 'saw',
   bench: 'hammer',
-  enchant: 'magic',
+  enchant: 'book',
   runes: 'rune',
   pets: 'paw',
   shop: 'shop',
@@ -413,7 +399,7 @@ export function PrisonCamp({
           <MillTab now={now} onGain={onGain} onSpend={onSpend} onBench={() => onTab('bench')} />
         )}
         {tab === 'bench' && <BenchTab now={now} onGain={onGain} />}
-        {tab === 'enchant' && <EnchantTab />}
+        {tab === 'enchant' && <BooksTab />}
         {tab === 'runes' && <RunesTab axeLevel={axeLevelOf(f.logs).level} />}
         {tab === 'pets' && <PetsTab />}
         {tab === 'miles' && <MilesTab onGain={onGain} />}
@@ -514,254 +500,13 @@ export function OreIcon({
   );
 }
 
-// ---- Чары: за токены ---------------------------------------------------------
-
-function enchantNow(id: EnchantId, p: PrisonState): string {
-  const l = p.ench[id];
-  const m = modsOf(p);
-  switch (id) {
-    case 'power':
-      return `+${10 * l}% к скорости копки`;
-    case 'fortune':
-      return `+${6 * l}% лишних блоков`;
-    case 'vein':
-      return `${pct(m.vein)} · до ${m.veinMax} блоков жилы`;
-    case 'blast':
-      return `${pct(m.blast)} · квадрат 3×3`;
-    case 'hammer':
-      return `${pct(m.hammer)} · весь верхний ярус`;
-    case 'token':
-      return `токен с ${pct(m.tokenChance)} блоков`;
-    case 'key':
-      return `ключ с ${pct(m.keyChance)} блоков`;
-    case 'frenzy':
-      return `${pct(m.frenzy)} · 15 с двойной добычи`;
-    case 'crack':
-      return `${pct(m.crack)} · удар по четырём соседям`;
-    case 'beam':
-      return `${pct(m.beam)} · весь ряд`;
-    case 'reforge':
-      return `${pct(m.reforge)} блоков — порода выше`;
-    case 'rockfall':
-      return `${pct(m.rockfall)} · четыре взрыва по полю`;
-    case 'echo':
-      return `шансы чар поля ×${(1 + 0.05 * l).toFixed(2)}`;
-  }
-}
-
-/** Сколько уровней чары возьмёт кнопка и во что это встанет. */
-function enchantPlan(
-  id: EnchantId,
-  p: PrisonState,
-  want: number,
-): { k: number; price: number; next: number } {
-  const cap = enchantCap(id, pickLevelOf(p.pickXp).level, p.pickStars);
-  let l = p.ench[id];
-  let tokens = p.tokens;
-  let k = 0;
-  let price = 0;
-  const next = l < cap ? enchantCost(id, l) : 0;
-  while (k < want && l < cap) {
-    const c = enchantCost(id, l);
-    if (tokens < c) break;
-    tokens -= c;
-    price += c;
-    l += 1;
-    k += 1;
-  }
-  return { k, price, next };
-}
-
+/** Сколько уровней брать разом (чары топора). */
 const BULK: { n: number; label: string }[] = [
   { n: 1, label: '+1' },
   { n: 5, label: '+5' },
   { n: 25, label: '+25' },
   { n: 1e9, label: 'Макс' },
 ];
-
-function EnchantTab() {
-  const p = useFinanceStore((s) => s.prison);
-  const prisonEnchant = useFinanceStore((s) => s.prisonEnchant);
-  const prisonEnchantReset = useFinanceStore((s) => s.prisonEnchantReset);
-  const prisonEnchantToggle = useFinanceStore((s) => s.prisonEnchantToggle);
-  const prisonPickStar = useFinanceStore((s) => s.prisonPickStar);
-  const [confirm, setConfirm] = useState<EnchantId | null>(null);
-  const [starArmed, setStarArmed] = useState(false);
-  const [bulk, setBulk] = useState(1);
-  const lvl = pickLevelOf(p.pickXp);
-  return (
-    <div className="pforge">
-      <div className="pcamp-purse">
-        <TokenIcon size={18} /> <b>{fmt(p.tokens)}</b> токенов
-        <span>падают с блоков, Токенист — чаще</span>
-      </div>
-      <div className="pench-pick">
-        <span className="pench-pick__lv">
-          <PickIcon pick={p.pick} size={20} /> Кирка ур. {lvl.level}
-          {p.pickStars > 0 && <em className="pench-stars">{'★'.repeat(p.pickStars)}</em>}
-        </span>
-        <span className="pench-pick__bar">
-          <i style={{ transform: `scaleX(${lvl.need ? lvl.into / lvl.need : 1})` }} />
-        </span>
-        <span className="pench-pick__txt">
-          {lvl.need ? `ещё ${fmt(lvl.need - lvl.into)} блоков` : 'максимум'}
-        </span>
-      </div>
-      {lvl.level >= PICK_LEVEL_MAX && p.pickStars < PICK_STARS_MAX && (
-        <div className="pstar">
-          <span>
-            <b>Перековать кирку ★{p.pickStars + 1}</b>
-            <i>
-              Уровень кирки — в ноль, зато потолок каждой чары +{Math.round(STAR_CAP * 100)}%,
-              скорость копки +{Math.round(STAR_DMG * 100)}%, {fmt(STAR_TOKENS * (p.pickStars + 1))}{' '}
-              токенов и {STAR_KEYS} ключа. Купленные уровни чар остаются.
-            </i>
-          </span>
-          <button
-            type="button"
-            className={`btn btn--sm pforge__buy${starArmed ? ' is-armed' : ''}`}
-            onClick={() => {
-              primeAudio();
-              if (!starArmed) {
-                setStarArmed(true);
-                return;
-              }
-              setStarArmed(false);
-              if (!prisonPickStar()) {
-                notifyWarning();
-                return;
-              }
-              tierBreak(3);
-              burstConfetti(80, ['#ffe08a', '#ffffff', '#b8f4e6']);
-              flashFrame('big');
-              notifySuccess();
-            }}
-          >
-            {starArmed ? 'Точно?' : 'Перековать'}
-          </button>
-        </div>
-      )}
-      <div className="pench-bulk" role="radiogroup" aria-label="Сколько уровней брать">
-        {BULK.map((b) => (
-          <button
-            key={b.n}
-            type="button"
-            role="radio"
-            aria-checked={bulk === b.n}
-            className={`pench-bulk__b${bulk === b.n ? ' is-on' : ''}`}
-            onClick={() => {
-              selectionChanged();
-              setBulk(b.n);
-            }}
-          >
-            {b.label}
-          </button>
-        ))}
-      </div>
-      {ENCHANTS.map((e) => {
-        const l = p.ench[e.id];
-        const cap = enchantCap(e.id, lvl.level, p.pickStars);
-        const max = enchantMax(e.id, p.pickStars);
-        const locked = cap === 0;
-        const maxed = l >= max;
-        const plan = enchantPlan(e.id, p, bulk);
-        const off = p.off.includes(e.id);
-        const toggle = ENCHANT_TOGGLE.includes(e.id) && l > 0;
-        return (
-          <div
-            key={e.id}
-            className={`pforge__row${locked ? ' is-locked' : ''}${off ? ' is-off' : ''}`}
-          >
-            <span className="pforge__ico">
-              <span className="pforge__glyph pench-glyph">{locked ? '🔒' : e.glyph}</span>
-            </span>
-            <span className="pforge__info">
-              <b>
-                {e.name}{' '}
-                <span className="pench-lvl">
-                  {l}/{maxed || locked ? max : cap}
-                </span>
-              </b>
-              <i>
-                {locked
-                  ? `Откроется на ${ENCHANT_UNLOCK[e.id]} уровне кирки`
-                  : l
-                    ? off
-                      ? 'отключено — не срабатывает'
-                      : enchantNow(e.id, p)
-                    : e.per}
-                {!locked && !maxed && l >= cap && (
-                  <span className="pench-cap"> · потолок растёт с уровнем кирки</span>
-                )}
-              </i>
-              {(toggle || l > 0) && (
-                <span className="pench-tools">
-                  {toggle && (
-                    <button
-                      type="button"
-                      className={`pench-switch${off ? '' : ' is-on'}`}
-                      aria-pressed={!off}
-                      onClick={() => {
-                        selectionChanged();
-                        prisonEnchantToggle(e.id);
-                      }}
-                    >
-                      <i />
-                      {off ? 'выкл' : 'вкл'}
-                    </button>
-                  )}
-                  {l > 0 && (
-                    <button
-                      type="button"
-                      className={`pench-reset${confirm === e.id ? ' is-armed' : ''}`}
-                      onClick={() => {
-                        if (confirm !== e.id) {
-                          setConfirm(e.id);
-                          return;
-                        }
-                        setConfirm(null);
-                        prisonEnchantReset(e.id);
-                        notifySuccess();
-                      }}
-                    >
-                      {confirm === e.id ? `вернуть ${fmt(enchantRefund(e.id, l))}?` : 'сбросить'}
-                    </button>
-                  )}
-                </span>
-              )}
-            </span>
-            {maxed ? (
-              <Done>Макс.</Done>
-            ) : locked ? (
-              <Done>ур. {ENCHANT_UNLOCK[e.id]}</Done>
-            ) : l >= cap ? (
-              <Done>Потолок</Done>
-            ) : (
-              <button
-                type="button"
-                className="btn btn--sm pforge__buy"
-                disabled={plan.k === 0}
-                onClick={() => {
-                  primeAudio();
-                  const got = prisonEnchant(e.id, bulk);
-                  if (!got) {
-                    notifyWarning();
-                    return;
-                  }
-                  tierBreak(l + got >= max ? 2 : got >= 5 ? 1 : 0);
-                  notifySuccess();
-                }}
-              >
-                {plan.k > 1 && <em className="pforge__k">+{plan.k}</em>}
-                {shortMoney(plan.k ? plan.price : plan.next)} <TokenIcon size={12} />
-              </button>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ---- Иконки расходников -------------------------------------------------------
 
@@ -1102,6 +847,8 @@ export function rewardLabel(r: Reward): string {
       return petOf(r.id).name;
     case 'treat':
       return 'Лакомство питомцу';
+    case 'book':
+      return `Книга «${bookTitle(r.book)}»`;
   }
 }
 
@@ -1129,6 +876,8 @@ export function RewardIcon({ r, size = 30 }: { r: Reward; size?: number }) {
           🐟
         </span>
       );
+    case 'book':
+      return <BookArt book={r.book} size={size} />;
   }
 }
 

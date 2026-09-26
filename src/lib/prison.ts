@@ -30,6 +30,21 @@ import {
   SELL_BONUS_CAP,
 } from './economy';
 
+import {
+  anvilMate,
+  BOOK_LEVELS,
+  bookShare,
+  bookSlots,
+  canApply,
+  dustOf,
+  levelForShare,
+  normalizeBook,
+  rollBook,
+  ROMAN,
+  SHELF_MAX,
+} from './books';
+import type { Book, BookTier } from './books';
+
 export { nice, PICKS, AUTOSELL_TOKENS, BLOCK_HITS, blockPity } from './economy';
 export type { PickDef as Pick } from './economy';
 
@@ -1023,127 +1038,84 @@ export type EnchantId =
   | 'token'
   | 'key'
   | 'frenzy'
-  | 'crack'
   | 'beam'
-  | 'reforge'
-  | 'rockfall'
-  | 'echo';
+  | 'reforge';
 
 export interface Enchant {
   id: EnchantId;
   name: string;
-  /** Что даёт один уровень — подпись в мастерской. */
-  per: string;
+  /** Что даёт чара силой `u` (единицы — как в `modsOf`) — подпись к книге. */
+  fx: (u: number) => string;
+  /** Сила чары на уровне книги X (I — десятая часть). */
   max: number;
-  base: number;
-  inc: number;
   glyph: string;
 }
 
+const pc = (x: number, d = 0) =>
+  `${(x * 100).toLocaleString('ru-RU', { maximumFractionDigits: d })}%`;
+
+// v2.70: чары — книги (lib/books.ts). Уровень книги I…X даёт десятую часть
+// `max` за уровень: «Эффективность X» — прежние 30 уровней. Трещина,
+// Камнепад и Эхо убраны по плану: две первые повторяли взрыв и луч, Эхо
+// множило чужие шансы и делало кашу. Их уровни вернулись токенами.
 export const ENCHANTS: Enchant[] = [
-  // «Сила» переименована в «Эффективность» (v2.67): у кирки теперь Сила ⛏ —
-  // какую руду она берёт, а урона игрок не видит вовсе.
   {
     id: 'power',
     name: 'Эффективность',
-    per: '+10% к скорости копки',
+    fx: (u) => `+${pc(0.1 * u)} к скорости копки`,
     max: 30,
-    base: 50,
-    inc: 30,
     glyph: '⚒',
   },
   {
     id: 'fortune',
     name: 'Удача',
-    per: '+6% к шансу лишнего блока',
+    fx: (u) => `+${pc(0.06 * u)} лишних блоков добычи`,
     max: 30,
-    base: 80,
-    inc: 50,
     glyph: '☘',
   },
   {
     id: 'vein',
     name: 'Жилокоп',
-    per: '+2,5% выломать жилу целиком',
+    fx: (u) => `${pc(0.025 * u, 1)} выломать жилу целиком`,
     max: 20,
-    base: 65,
-    inc: 40,
     glyph: '⚡',
   },
-  { id: 'blast', name: 'Взрыв', per: '+1% снести 3×3', max: 20, base: 95, inc: 65, glyph: '✸' },
+  { id: 'blast', name: 'Взрыв', fx: (u) => `${pc(0.01 * u, 1)} снести 3×3`, max: 20, glyph: '✸' },
   {
     id: 'hammer',
     name: 'Отбойник',
-    per: '+0,2% снести весь ярус',
+    fx: (u) => `${pc(0.002 * u, 2)} снести весь ярус`,
     max: 15,
-    base: 240,
-    inc: 130,
     glyph: '≋',
   },
-  { id: 'token', name: 'Токенист', per: '+15% токенов', max: 20, base: 40, inc: 25, glyph: '✦' },
+  { id: 'token', name: 'Токенист', fx: (u) => `+${pc(0.15 * u)} токенов`, max: 20, glyph: '✦' },
   {
     id: 'key',
     name: 'Ключник',
-    per: '+0,05% найти ключ',
+    fx: (u) => `+${pc(0.0005 * u, 2)} найти ключ`,
     max: 20,
-    base: 65,
-    inc: 40,
     glyph: '⚿',
   },
   {
     id: 'frenzy',
     name: 'Кураж',
-    per: '+0,08% впасть в кураж',
+    fx: (u) => `${pc(0.0008 * u, 2)} впасть в кураж`,
     max: 15,
-    base: 130,
-    inc: 80,
     glyph: '✺',
-  },
-  // Пять чар v2.49 — с серверов (X-Prison, Cosmic), под нашу сетку 7×9.
-  {
-    id: 'crack',
-    name: 'Трещина',
-    per: '+2% ударить и по соседям',
-    max: 20,
-    base: 60,
-    inc: 35,
-    glyph: '╳',
   },
   {
     id: 'beam',
     name: 'Луч',
-    per: '+0,6% снести весь ряд',
+    fx: (u) => `${pc(0.006 * u, 1)} снести весь ряд`,
     max: 15,
-    base: 110,
-    inc: 70,
     glyph: '═',
   },
   {
     id: 'reforge',
     name: 'Перековка',
-    per: '+1,5% блоку стать породой выше',
+    fx: (u) => `${pc(0.015 * u, 1)} блоку стать породой выше`,
     max: 20,
-    base: 90,
-    inc: 60,
     glyph: '⚙',
-  },
-  {
-    id: 'rockfall',
-    name: 'Камнепад',
-    per: '+0,15% обрушить град взрывов',
-    max: 15,
-    base: 260,
-    inc: 140,
-    glyph: '☄',
-  },
-  {
-    id: 'echo',
-    name: 'Эхо',
-    per: '+5% к шансам чар поля',
-    max: 20,
-    base: 200,
-    inc: 120,
-    glyph: '◎',
   },
 ];
 
@@ -1160,31 +1132,33 @@ export const NO_ENCHANTS: Enchants = {
   token: 0,
   key: 0,
   frenzy: 0,
-  crack: 0,
   beam: 0,
   reforge: 0,
-  rockfall: 0,
-  echo: 0,
 };
 
-/** Цена следующего уровня (с уровня `level` на `level + 1`). */
-export function enchantCost(id: EnchantId, level: number): number {
-  const e = enchantOf(id);
-  return Math.round((e.base + e.inc * level) * ENCHANT_PRICE);
+/**
+ * Сила чары (единицы `modsOf`) при уровне книги `lvl` (0…10). Звёзды кирки
+ * поднимают потолок каждой чары на 20% — значит, и силу каждого уровня.
+ */
+export function enchUnits(id: EnchantId, lvl: number, stars = 0): number {
+  return bookShare(lvl) * enchantMax(id, stars);
 }
 
 /**
- * Во сколько раз чары дороже, чем в v2.66. Круг A→Z стал в 2,6 раза
- * длиннее, токенов за него падает столько же больше — без этого чары
- * докачивались бы к середине круга, и поздние этажи пролетались бы.
+ * Цены чар до v2.70 (уровень за токены): нужны только переносу старых
+ * сохранений — убранные чары возвращаются токенами, сколько за них отдано.
  */
-export const ENCHANT_PRICE = Number((typeof process !== 'undefined' && process.env?.EP) || 2.5);
-
-/** Сколько вернёт сброс: половина всего, что ушло на уровни. */
-export function enchantRefund(id: EnchantId, level: number): number {
+const LEGACY_ENCH: Record<string, [number, number]> = {
+  crack: [60, 35],
+  rockfall: [260, 140],
+  echo: [200, 120],
+};
+function legacySpent(id: string, level: number): number {
+  const c = LEGACY_ENCH[id];
+  if (!c) return 0;
   let sum = 0;
-  for (let i = 0; i < level; i++) sum += enchantCost(id, i);
-  return Math.floor(sum / 2);
+  for (let i = 0; i < level; i++) sum += Math.round((c[0] + c[1] * i) * 2.5);
+  return sum;
 }
 
 /** Базовые шансы с одного блока — до зачарований и перков. */
@@ -1205,13 +1179,8 @@ export const LENS_MS = 90_000;
 export const VEIN_EXTRA = 1.3;
 export const BLAST_EXTRA = 7;
 export const HAMMER_EXTRA = 55;
-/** Луч — ряд из семи клеток; камнепад — четыре взрыва 3×3 внахлёст. */
+/** Луч — ряд из семи клеток. */
 export const BEAM_EXTRA = 5;
-export const ROCKFALL_EXTRA = 24;
-/** Трещина бьёт четырёх соседей одним ударом: ломается в среднем один. */
-export const CRACK_EXTRA = 1.2;
-/** Камнепад: сколько взрывов и через сколько мс друг за другом. */
-export const ROCKFALL_HITS = 4;
 
 /** Всё, что меняют зачарования, престиж, перки и коллекция, — в одном месте. */
 export interface Mods {
@@ -1226,9 +1195,7 @@ export interface Mods {
   blast: number;
   hammer: number;
   frenzy: number;
-  crack: number;
   beam: number;
-  rockfall: number;
   /** Шанс, что сломанный блок засчитается породой выше (Перековка). */
   reforge: number;
   tokenChance: number;
@@ -1247,9 +1214,7 @@ export const BASE_MODS: Mods = {
   blast: 0,
   hammer: 0,
   frenzy: 0,
-  crack: 0,
   beam: 0,
-  rockfall: 0,
   reforge: 0,
   tokenChance: TOKEN_CHANCE,
   keyChance: KEY_CHANCE,
@@ -1479,7 +1444,9 @@ export function modsOf(p: ModsSource): Mods {
   // Отключённая чара (игрок выключил её в мастерской) не срабатывает, но и
   // не теряет уровни: включил — и она снова в деле.
   const off = p.off ?? [];
-  const lv = (id: EnchantId) => (off.includes(id) ? 0 : (p.ench[id] ?? 0));
+  // В `ench` — уровни книг I…X; сила чары — доля её предела (v2.70).
+  const lv = (id: EnchantId) =>
+    off.includes(id) ? 0 : enchUnits(id, p.ench[id] ?? 0, p.pickStars ?? 0);
   const k = p.perks ?? NO_PERKS;
   const nose = 1 + 0.2 * k.nose;
   const level = pickLevelOf(p.pickXp ?? 0).level;
@@ -1487,9 +1454,9 @@ export function modsOf(p: ModsSource): Mods {
   // в потолок (`BONUS_CAP`): иначе к концу игры шахта печатала бы деньги, и
   // ставка в автоматах стала бы мелочью, ради которой незачем крутить.
   const b = bonusOf(p);
-  // Эхо и руна Совило множат шансы чар поля: жилы, взрыва, отбойника, луча,
-  // камнепада и трещины. Перековку не трогают — она про цену, а не про поле.
-  const proc = (1 + 0.05 * lv('echo')) * (1 + b.proc);
+  // Руна Совило множит шансы чар поля: жилы, взрыва, отбойника, луча.
+  // Перековку не трогает — она про цену, а не про поле.
+  const proc = 1 + b.proc;
   const ev = liveEvent(p)?.id;
   return {
     // Сноровка: каждый уровень кирки — ещё полпроцента к урону.
@@ -1516,9 +1483,7 @@ export function modsOf(p: ModsSource): Mods {
     blast: 0.01 * lv('blast') * proc,
     hammer: 0.002 * lv('hammer') * proc,
     frenzy: 0.0008 * lv('frenzy'),
-    crack: 0.02 * lv('crack') * proc,
     beam: 0.006 * lv('beam') * proc,
-    rockfall: 0.0015 * lv('rockfall') * proc,
     reforge: 0.015 * lv('reforge'),
     tokenChance: TOKEN_CHANCE * (1 + 0.15 * lv('token')) * (1 + 0.1 * k.lucky) * (1 + b.token),
     keyChance: (KEY_CHANCE + 0.0005 * lv('key')) * nose * (1 + b.luck),
@@ -1675,23 +1640,6 @@ export function pickLevelOf(xp: number): { level: number; into: number; need: nu
   }
 }
 
-/** С какого уровня кирки открывается чара. */
-export const ENCHANT_UNLOCK: Record<EnchantId, number> = {
-  power: 1,
-  fortune: 1,
-  token: 1,
-  vein: 3,
-  key: 5,
-  crack: 6,
-  blast: 8,
-  beam: 10,
-  frenzy: 12,
-  reforge: 14,
-  hammer: 18,
-  rockfall: 22,
-  echo: 26,
-};
-
 /**
  * Престиж кирки (v2.55). На 50-м уровне кирку можно перековать: опыт — в
  * ноль, зато звезда. Каждая звезда поднимает потолок КАЖДОЙ чары на 20% и
@@ -1709,11 +1657,23 @@ export function enchantMax(id: EnchantId, stars = 0): number {
   return Math.round(enchantOf(id).max * (1 + STAR_CAP * Math.max(0, stars)));
 }
 
-/** Потолок уровня чары при данном уровне кирки: к 40-му открыт весь. */
-export function enchantCap(id: EnchantId, pickLevel: number, stars = 0): number {
-  const max = enchantMax(id, stars);
-  if (pickLevel < ENCHANT_UNLOCK[id]) return 0;
-  return Math.min(max, 3 + Math.floor((pickLevel * max) / 40));
+/**
+ * Сколько книг держит кирка: по редкости ЛУЧШЕЙ выкованной (v2.70) —
+ * обычная одну, божественная семь. Чары переходят на новую кирку сами.
+ */
+export function enchSlots(p: { pickMax: number }): number {
+  return bookSlots(PICKS[Math.max(0, Math.min(PICKS.length - 1, p.pickMax))].rarity);
+}
+
+/** «Удача III» — имя книги и её чары. */
+export function bookTitle(b: { id: EnchantId; lvl: number }): string {
+  return `${enchantOf(b.id).name} ${ROMAN[Math.max(0, Math.min(BOOK_LEVELS, b.lvl) - 1)]}`;
+}
+
+/** «!» на кнопке книг: на полке есть книга, которую можно вписать или склеить. */
+export function booksReady(p: Pick<PrisonState, 'books' | 'ench' | 'pickMax'>): boolean {
+  const slots = enchSlots(p);
+  return p.books.some((b, i) => canApply(p.ench, slots, b) === 'ok' || anvilMate(p.books, i) >= 0);
 }
 
 /**
@@ -1721,15 +1681,7 @@ export function enchantCap(id: EnchantId, pickLevel: number, stars = 0): number 
  * (ломают соседей, ускоряют кирку). Иногда нужен точный удар — например,
  * добрать норму в одном месте, не сметя всё вокруг.
  */
-export const ENCHANT_TOGGLE: EnchantId[] = [
-  'vein',
-  'blast',
-  'hammer',
-  'frenzy',
-  'crack',
-  'beam',
-  'rockfall',
-];
+export const ENCHANT_TOGGLE: EnchantId[] = ['vein', 'blast', 'hammer', 'frenzy', 'beam'];
 
 /** Награда за новый уровень кирки: токены, а каждый пятый — ещё ключ. */
 export function pickLevelReward(level: number): { tokens: number; keys: number } {
@@ -2232,12 +2184,7 @@ export function hitsFor(rock: number, dmg: number): number {
 /** Сколько блоков в среднем ломается за удар, который сломал один. */
 export function extraBlocks(m: Mods): number {
   return (
-    m.vein * VEIN_EXTRA +
-    m.blast * BLAST_EXTRA +
-    m.hammer * HAMMER_EXTRA +
-    m.beam * BEAM_EXTRA +
-    m.rockfall * ROCKFALL_EXTRA +
-    m.crack * CRACK_EXTRA
+    m.vein * VEIN_EXTRA + m.blast * BLAST_EXTRA + m.hammer * HAMMER_EXTRA + m.beam * BEAM_EXTRA
   );
 }
 
@@ -2408,7 +2355,8 @@ export type Reward =
   | { kind: 'keys'; amount: number }
   | { kind: 'rune'; rune: Omit<Rune, 'id'> }
   | { kind: 'pet'; id: PetId }
-  | { kind: 'treat'; amount: number };
+  | { kind: 'treat'; amount: number }
+  | { kind: 'book'; book: Book };
 
 export interface CaseRoll {
   tier: CaseTier;
@@ -2430,6 +2378,9 @@ const FIND_SLOT = () => ({ kind: 'find', id: 'coin' }) as Reward;
 const rune = (lo: number, hi: number, pHi: number) => (rnd: () => number) =>
   ({ kind: 'rune', rune: rollRune(rnd() < pHi ? hi : lo, rnd) }) as Reward;
 const keysOf = (amount: number) => () => ({ kind: 'keys', amount }) as Reward;
+/** Книга яруса: чара, уровень и шанс — как у Чародея. */
+const bookOf = (tier: BookTier) => (rnd: () => number) =>
+  ({ kind: 'book', book: rollBook(tier, rnd) }) as Reward;
 /** Место под питомца: кто именно — решается по тому, кого ещё нет. */
 const PET_SLOT = () => ({ kind: 'pet', id: 'lemming' }) as Reward;
 
@@ -2440,6 +2391,7 @@ const CASE_TABLE: Record<CaseTier, Slot[]> = {
     { w: 10, make: item('energy', 1) },
     { w: 10, make: item('lens', 1) },
     { w: 10, make: item('bomb3', 1) },
+    { w: 10, make: bookOf('simple') },
   ],
   rare: [
     { w: 30, make: coins(0.1, 0.18) },
@@ -2448,6 +2400,7 @@ const CASE_TABLE: Record<CaseTier, Slot[]> = {
     { w: 10, make: item('energy', 2) },
     { w: 15, make: item('bomb5', 1) },
     { w: 12, make: rune(1, 2, 0.3) },
+    { w: 12, make: bookOf('rare') },
   ],
   epic: [
     { w: 30, make: coins(0.3, 0.45) },
@@ -2456,6 +2409,7 @@ const CASE_TABLE: Record<CaseTier, Slot[]> = {
     { w: 10, make: item('bomb5', 2) },
     { w: 20, make: FIND_SLOT },
     { w: 15, make: rune(2, 3, 0.3) },
+    { w: 14, make: bookOf('epic') },
   ],
   legend: [
     { w: 35, make: coins(0.9, 1.3) },
@@ -2463,6 +2417,7 @@ const CASE_TABLE: Record<CaseTier, Slot[]> = {
     { w: 15, make: item('charge', 2) },
     { w: 25, make: FIND_SLOT },
     { w: 15, make: rune(3, 4, 0.3) },
+    { w: 14, make: bookOf('legend') },
   ],
 };
 
@@ -2475,6 +2430,7 @@ const PARCEL_TABLE: Record<CaseTier, Slot[]> = {
     { w: 5, make: item('bomb3', 1) },
     { w: 5, make: item('energy', 1) },
     { w: 5, make: item('lens', 1) },
+    { w: 10, make: bookOf('simple') },
   ],
   rare: [
     { w: 22, make: coins(0.08, 0.15) },
@@ -2482,6 +2438,7 @@ const PARCEL_TABLE: Record<CaseTier, Slot[]> = {
     { w: 32, make: rune(1, 2, 0.4) },
     { w: 12, make: keysOf(1) },
     { w: 12, make: PET_SLOT },
+    { w: 10, make: bookOf('rare') },
   ],
   epic: [
     { w: 18, make: coins(0.25, 0.4) },
@@ -2489,12 +2446,14 @@ const PARCEL_TABLE: Record<CaseTier, Slot[]> = {
     { w: 36, make: rune(2, 3, 0.4) },
     { w: 12, make: keysOf(2) },
     { w: 16, make: PET_SLOT },
+    { w: 12, make: bookOf('epic') },
   ],
   legend: [
     { w: 18, make: coins(0.8, 1.2) },
     { w: 14, make: tokens(400, 700) },
     { w: 40, make: rune(3, 4, 0.35) },
     { w: 28, make: PET_SLOT },
+    { w: 16, make: bookOf('legend') },
   ],
 };
 
@@ -2781,6 +2740,13 @@ export function applyReward(p: PrisonState, r: Reward): Applied {
         ? { ...p, pets: { ...p.pets, [p.pet]: (p.pets[p.pet] ?? 0) + r.amount } }
         : { ...p, tokens: p.tokens + 50 };
       break;
+    case 'book':
+      // Полка полна — книга рассыпается в пыль сама, как лишняя руна в токены.
+      out.p =
+        p.books.length >= SHELF_MAX
+          ? { ...p, dust: p.dust + dustOf(r.book) }
+          : { ...p, books: [...p.books, r.book] };
+      break;
   }
   return out;
 }
@@ -2963,7 +2929,14 @@ export interface PrisonState {
   mined: number;
   earned: number;
   tokens: number;
+  /** Уровни книг I…X в кирке (0 — чары нет). С v2.70 — уровни, не «покупки». */
   ench: Enchants;
+  /** Полка книг: куплены у Чародея, выпали из сундуков и посылок. */
+  books: Book[];
+  /** Пыль из разобранных книг: 1 пыль = +1% к шансу вписать. */
+  dust: number;
+  /** 2 — чары уже книгами; старое сохранение переносится при чтении. */
+  enchV: number;
   items: Items;
   /** До какого времени действуют энергетик, лупа и кураж (мс эпохи). */
   energyUntil: number;
@@ -3056,6 +3029,9 @@ export const PRISON_START: PrisonState = {
   earned: 0,
   tokens: 0,
   ench: NO_ENCHANTS,
+  books: [],
+  dust: 0,
+  enchV: 2,
   items: NO_ITEMS,
   energyUntil: 0,
   lensUntil: 0,
@@ -3114,6 +3090,50 @@ const int = (v: unknown, lo: number, hi: number, dflt: number): number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : dflt;
 
 /** Сохранение могло прийти битым или от старой версии — чиним по полям. */
+/**
+ * Чары из сохранения. До v2.70 в `ench` лежало число купленных уровней
+ * (Эффективность до 30, Удача до 30…), теперь — уровень книги I…X. Старые
+ * уровни переводятся в книги без потерь: доля предела → уровень книги с
+ * округлением вверх. Если чар больше, чем мест у кирки, в кирке остаются
+ * самые сильные, остальные ложатся на полку книгами со 100% шансом.
+ * Трещина, Камнепад и Эхо убраны — за них возвращаются токены.
+ */
+function normalizeEnch(
+  raw: Partial<PrisonState> & Record<string, unknown>,
+  pickMax: number,
+): { ench: Enchants; books: Book[]; dust: number; refund: number } {
+  const ids = ENCHANTS.map((e) => e.id);
+  const src = (raw.ench ?? {}) as Record<string, unknown>;
+  const books = (Array.isArray(raw.books) ? raw.books : [])
+    .map((b) => normalizeBook(b, ids))
+    .filter((b): b is Book => !!b)
+    .slice(0, SHELF_MAX);
+  const dust = int(raw.dust, 0, 1e7, 0);
+  if (raw.enchV === 2) {
+    const ench = Object.fromEntries(
+      ENCHANTS.map((e) => [e.id, int(src[e.id], 0, BOOK_LEVELS, 0)]),
+    ) as Enchants;
+    return { ench, books, dust, refund: 0 };
+  }
+  const stars = int(raw.pickStars, 0, PICK_STARS_MAX, 0);
+  const lv = ENCHANTS.map((e) => {
+    const old = int(src[e.id], 0, 1e6, 0);
+    const max = enchantMax(e.id, stars);
+    return { id: e.id, lvl: old > 0 ? levelForShare(old / max) : 0 };
+  })
+    .filter((x) => x.lvl > 0)
+    .sort((a, b) => b.lvl - a.lvl);
+  const slots = bookSlots(PICKS[Math.max(0, Math.min(PICKS.length - 1, pickMax))].rarity);
+  const ench = { ...NO_ENCHANTS };
+  for (const x of lv.slice(0, slots)) ench[x.id] = x.lvl;
+  const extra = lv.slice(slots).map((x) => ({ id: x.id, lvl: x.lvl, chance: 100 }));
+  const refund = ['crack', 'rockfall', 'echo'].reduce(
+    (sum, id) => sum + legacySpent(id, int(src[id], 0, 1e4, 0)),
+    0,
+  );
+  return { ench, books: [...books, ...extra].slice(0, SHELF_MAX), dust, refund };
+}
+
 export function normalizePrison(raw: Partial<PrisonState> | null | undefined): PrisonState {
   if (!raw || typeof raw !== 'object') return { ...PRISON_START, mine: freshMine(0) };
   const rank = int(raw.rank, 0, LAST_RANK, 0);
@@ -3151,6 +3171,7 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
   );
   const pick = hasMax ? Math.min(rawPick, pickMax) : pickMax;
   const old = normalizeOldOrder((raw as { forge?: unknown }).forge, pickMax);
+  const lib = normalizeEnch(raw, pickMax);
   const box = normalizeBag(raw.forgeBox ?? old?.have);
   return {
     rank,
@@ -3170,13 +3191,11 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
       : freshMine(mineId),
     mined: int(raw.mined, 0, 1e12, 0),
     earned: int(raw.earned, 0, 1e15, 0),
-    tokens: int(raw.tokens, 0, 1e12, 0),
-    ench: Object.fromEntries(
-      ENCHANTS.map((e) => [
-        e.id,
-        int(raw.ench?.[e.id], 0, enchantMax(e.id, int(raw.pickStars, 0, PICK_STARS_MAX, 0)), 0),
-      ]),
-    ) as Enchants,
+    tokens: int(raw.tokens, 0, 1e12, 0) + lib.refund,
+    ench: lib.ench,
+    books: lib.books,
+    dust: lib.dust,
+    enchV: 2,
     items: Object.fromEntries(ITEMS.map((i) => [i.id, int(raw.items?.[i.id], 0, 1e6, 0)])) as Items,
     energyUntil: int(raw.energyUntil, 0, 1e14, 0),
     lensUntil: int(raw.lensUntil, 0, 1e14, 0),
@@ -3418,8 +3437,8 @@ export const GUIDE: GuideStep[] = [
   },
   {
     id: 'enchant',
-    title: 'Возьми первую чару',
-    hint: 'Кнопка «Чары» внизу, платишь токенами',
+    title: 'Впиши первую книгу',
+    hint: 'Кнопка «Книги» внизу: книгу продаёт Чародей за токены',
     progress: (p) => upTo(enchSum(p), 1),
     reward: { tokens: 30 },
   },

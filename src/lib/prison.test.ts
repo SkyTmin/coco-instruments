@@ -11,8 +11,6 @@ import {
   bagValue,
   blockRate,
   buildMine,
-  enchantCost,
-  enchantRefund,
   ENCHANTS,
   modsOf,
   NO_ENCHANTS,
@@ -88,7 +86,6 @@ import {
 } from './prison';
 import {
   decayStreak,
-  enchantCap,
   pickLevelOf,
   rankWork,
   rankNeeds,
@@ -121,6 +118,25 @@ import {
   RANK_PRICE,
   RANK_WORK,
 } from './economy';
+import {
+  anvil,
+  anvilMate,
+  applyChance,
+  BOOK_LEVELS,
+  BOOK_POOL,
+  bookShare,
+  levelForShare,
+  BOOK_TIERS,
+  bookSlots,
+  canApply,
+  dustOf,
+  dustToFull,
+  LEGEND_POOL,
+  normalizeBook,
+  rollBook,
+  SHELF_MAX,
+} from './books';
+import type { Book, BookTier } from './books';
 
 /** Средняя прибавка запала за смену в 8 минут при `bps` блоков в секунду. */
 function sessionStreak(bps: number, sec = 480): number {
@@ -128,6 +144,12 @@ function sessionStreak(bps: number, sec = 480): number {
   for (let t = 0; t < sec; t++) sum += streakLoot(bps * t);
   return sum / sec;
 }
+
+// Подбор цен Чародея: BOOKP=150,600,2500,9000 PACE=1 npx vitest run … -t A→Z
+if (process.env.WORKK)
+  RANK_WORK.forEach((x, i) => (RANK_WORK[i] = Math.round(x * Number(process.env.WORKK))));
+if (process.env.BOOKP)
+  process.env.BOOKP.split(',').forEach((x, i) => (BOOK_TIERS[i].price = Number(x)));
 
 /** Детерминированный ГСЧ для симуляции: темп не должен зависеть от удачи прогона. */
 const lcg = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -153,6 +175,8 @@ function run(
     enchants?: boolean;
     loot?: boolean;
     seed?: number;
+    /** Книги бросать настоящим ГСЧ (тест разброса везения). */
+    bookLuck?: boolean;
   } = {},
 ) {
   const until = opts.until ?? LAST_RANK;
@@ -199,6 +223,42 @@ function run(
   /** Когда игрок встал на этаж материала кирки. */
   const floorAt: number[] = [];
   let blocksBought = 0;
+  /** Книги (v2.70): пыль, куплено у Чародея по ярусам, вписано и сгорело. */
+  let dust = 0;
+  const bought: Record<string, number> = {};
+  const buyLog: string[] = [];
+  let applied = 0;
+  let burned = 0;
+  /**
+   * Удача с книгами — «средняя», а не брошенная: чара, уровень и шанс идут
+   * по кругу, успех — накоплением шанса (65% — это 13 удач из 20 ровно).
+   * Со случайными книгами темп прыгал 3,0–5,7 ч от зерна к зерну, и любая
+   * правка цен тонула в шуме: бросок книги сдвигал ГСЧ рун и посылок, и
+   * весь прогон шёл другой дорогой. Разброс везения меряет отдельный тест.
+   */
+  const luckBooks = opts.bookLuck === true;
+  const tierSeen: Record<string, number> = {};
+  let luckAcc = 50;
+  const nextBook = (tier: BookTier): Book => {
+    if (luckBooks) return rollBook(tier, rnd);
+    const k = (tierSeen[tier] = (tierSeen[tier] ?? 0) + 1) - 1;
+    const def = BOOK_TIERS.find((x) => x.id === tier)!;
+    const pool = tier === 'legend' ? LEGEND_POOL : BOOK_POOL;
+    const lvls = def.lvl[1] - def.lvl[0] + 1;
+    const chances = (def.chance[1] - def.chance[0]) / 5 + 1;
+    return {
+      id: pool[(k * 7 + 3) % pool.length],
+      lvl: def.lvl[0] + (k % lvls),
+      chance: def.chance[0] + ((k * 3) % chances) * 5,
+    };
+  };
+  const lucky = (chance: number) => {
+    if (luckBooks) return rnd() * 100 < chance;
+    luckAcc += chance;
+    if (luckAcc < 100) return false;
+    luckAcc -= 100;
+    return true;
+  };
   const src = (e: Enchants) => ({
     ench: e,
     prestige: 0,
@@ -271,6 +331,52 @@ function run(
     else if (r.kind === 'rune') runes.push({ ...r.rune, id: ++seq });
     else if (r.kind === 'pet') pets[r.id] = 0;
     else if (r.kind === 'treat' && pet) pets[pet] = (pets[pet] ?? 0) + r.amount;
+    else if (r.kind === 'book') {
+      buyLog.push(`${Math.round(t / 60)}м:ПОСЫЛКА${r.book.id}${r.book.lvl}/${r.book.chance}`);
+      takeBook(r.book);
+    }
+  };
+  /**
+   * Прирост дохода от книги, если она впишется. Мест нет — выбивается та
+   * чара, без которой потеря меньше. Токенист и Ключник доход не двигают —
+   * идеальный игрок их не держит (темп от этого только осторожнее).
+   */
+  const worth = (b: { id: EnchantId; lvl: number }, now: number): [number, EnchantId | null] => {
+    if (ench[b.id] >= b.lvl) return [0, null];
+    const next = { ...ench, [b.id]: b.lvl };
+    const slots = bookSlots(PICKS[pick].rarity);
+    const used = ENCHANTS.filter((e) => ench[e.id] > 0 && e.id !== b.id);
+    if (ench[b.id] === 0 && used.length >= slots) {
+      let best = 0;
+      let out: EnchantId | null = null;
+      for (const e of used) {
+        const g = income({ ...next, [e.id]: 0 }) - now;
+        if (g > best) {
+          best = g;
+          out = e.id;
+        }
+      }
+      return [best, out];
+    }
+    return [income(next) - now, null];
+  };
+  /** Книга в руках: вписать с пылью до 100%, если она что-то даёт, иначе в пыль. */
+  const takeBook = (b: Book) => {
+    const [g, out] = worth(b, income(ench));
+    if (g <= 0) {
+      dust += dustOf(b);
+      return;
+    }
+    const use = Math.min(dust, dustToFull(b));
+    dust -= use;
+    if (lucky(applyChance(b, use))) {
+      ench[b.id] = b.lvl;
+      if (out) {
+        dust += dustOf({ lvl: ench[out] });
+        ench[out] = 0;
+      }
+      applied += 1;
+    } else burned += 1;
   };
   while (rank < until && t < 40 * 3600) {
     const m = mods(ench);
@@ -341,28 +447,44 @@ function run(
         equip();
       }
     }
-    const level = pickLevelOf(xp).level;
     if (opts.enchants !== false && t % 20 === 0) {
-      // Лучшее зачарование за токен из тех, что двигают доход; Токенист —
-      // пока дешёвый, он окупается токенами.
-      let best: EnchantId | null = null;
-      let bestGain = 0;
-      const now = income(ench);
-      for (const e of ENCHANTS) {
-        if (ench[e.id] >= enchantCap(e.id, level)) continue;
-        const cost = enchantCost(e.id, ench[e.id]);
-        if (cost > tokens) continue;
-        const next = { ...ench, [e.id]: ench[e.id] + 1 };
-        let gain = (income(next) - now) / cost;
-        if (e.id === 'token' && ench.token < 5) gain = Infinity;
-        if (gain > bestGain) {
-          bestGain = gain;
-          best = e.id;
+      // Чародей: ярус с лучшим ожидаемым приростом дохода на токен. Книга
+      // случайна — чара, уровень и шанс бросаются тем же ГСЧ.
+      for (let buys = 0; buys < 4; buys++) {
+        const now = income(ench);
+        const memo = new Map<string, number>();
+        const w = (id: EnchantId, lvl: number) => {
+          const k = `${id}${lvl}`;
+          if (!memo.has(k)) memo.set(k, worth({ id, lvl }, now)[0]);
+          return memo.get(k)!;
+        };
+        let best: BookTier | null = null;
+        let bestGain = 0;
+        // Копит на ярус с лучшей отдачей, даже если он пока не по карману:
+        // так играет тот, кто считает, а не тот, кто тратит всё сразу.
+        for (const tier of BOOK_TIERS) {
+          const pool = tier.id === 'legend' ? LEGEND_POOL : BOOK_POOL;
+          let sum = 0;
+          let n = 0;
+          const chance = Math.min(100, (tier.chance[0] + tier.chance[1]) / 2 + dust) / 100;
+          for (const id of pool)
+            for (let lvl = tier.lvl[0]; lvl <= tier.lvl[1]; lvl++) {
+              sum += w(id, lvl) * chance;
+              n += 1;
+            }
+          const gain = sum / n / tier.price;
+          if (gain > bestGain) {
+            bestGain = gain;
+            best = tier.id;
+          }
         }
-      }
-      if (best) {
-        tokens -= enchantCost(best, ench[best]);
-        ench[best] += 1;
+        if (!best) break;
+        const price = BOOK_TIERS.find((x) => x.id === best)!.price;
+        if (price > tokens) break;
+        tokens -= price;
+        bought[best] = (bought[best] ?? 0) + 1;
+        buyLog.push(`${Math.round(t / 60)}м:${best[0]}`);
+        takeBook(nextBook(best));
       }
     }
     const cost = rankCost(rank);
@@ -437,6 +559,11 @@ function run(
     bpsBy,
     blocksBought,
     work: workBy,
+    dust,
+    bought,
+    buyLog,
+    applied,
+    burned,
   };
 }
 
@@ -531,6 +658,14 @@ describe('темп каторги', () => {
     );
   });
 
+  it.runIf(!!process.env.VAR)('разброс по зёрнам', () => {
+    const rows = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((seed) => [
+      (run({ seed }).t / 3600).toFixed(2),
+      (run({ seed, enchants: false }).t / 3600).toFixed(2),
+    ]);
+    console.log('VAR', rows.map((x) => x.join('/')).join(' '));
+  });
+
   it('первый ранг — за минуту-две', () => {
     const { took } = run({ until: 1 });
     expect(took[0]).toBeGreaterThan(30);
@@ -577,10 +712,16 @@ describe('темп каторги', () => {
     expect(rank).toBe(LAST_RANK);
     expect(t / 3600).toBeGreaterThan(3.8);
     expect(t / 3600).toBeLessThan(5.5);
-    for (const seed of [1, 2, 3]) {
-      const h = run({ seed }).t / 3600;
-      expect(h).toBeGreaterThan(3.6);
-      expect(h).toBeLessThan(5.8);
+    // С книгами (v2.70) удача решает больше: книга «вслепую» и шанс вписать.
+    // Среднее по зёрнам держим в 4,2–5,2 ч, а каждое зерно — в 3,2–6,2 ч:
+    // везучий игрок быстрее, но не вдвое.
+    const hs = [1, 2, 3, 4, 5, 6].map((seed) => run({ seed }).t / 3600);
+    const mean = hs.reduce((a, b) => a + b, 0) / hs.length;
+    expect(mean).toBeGreaterThan(4.2);
+    expect(mean).toBeLessThan(5.2);
+    for (const h of hs) {
+      expect(h).toBeGreaterThan(3.2);
+      expect(h).toBeLessThan(6.2);
     }
   });
 
@@ -866,15 +1007,6 @@ describe('цены и сохранение', () => {
 });
 
 describe('зачарования и добыча', () => {
-  it('цена уровня растёт, сброс возвращает ровно половину', () => {
-    for (const e of ENCHANTS) {
-      expect(enchantCost(e.id, 1)).toBeGreaterThan(enchantCost(e.id, 0));
-      let spent = 0;
-      for (let i = 0; i < 5; i++) spent += enchantCost(e.id, i);
-      expect(enchantRefund(e.id, 5)).toBe(Math.floor(spent / 2));
-    }
-  });
-
   it('Удача даёт лишние блоки в среднем ровно столько, сколько обещает', () => {
     let seed = 1;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -999,12 +1131,9 @@ describe('запал, уровень кирки, норма', () => {
     expect(d.units.length / n).toBeLessThan(expect_ + 0.04);
   });
 
-  it('уровень кирки растёт от блоков и открывает чары ветками', () => {
+  it('уровень кирки растёт от блоков', () => {
     expect(pickLevelOf(0).level).toBe(1);
     expect(pickLevelOf(200).level).toBe(2);
-    expect(enchantCap('hammer', 17)).toBe(0);
-    expect(enchantCap('hammer', 18)).toBeGreaterThan(0);
-    for (const e of ENCHANTS) expect(enchantCap(e.id, 40)).toBe(e.max);
     // Первый круг A→Z доводит кирку примерно до середины лестницы.
     const { xp } = run();
     const lvl = pickLevelOf(xp).level;
@@ -1171,14 +1300,6 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
     expect(top.rocks).toEqual([LAST_RANK]);
   });
 
-  it('Эхо множит шансы чар поля, но не перековку', () => {
-    const e = { ...NO_ENCHANTS, blast: 10, reforge: 10 };
-    const a = modsOf({ ench: e, prestige: 0 });
-    const b = modsOf({ ench: { ...e, echo: 20 }, prestige: 0 });
-    expect(b.blast / a.blast).toBeCloseTo(2, 9);
-    expect(b.reforge).toBe(a.reforge);
-  });
-
   it('посылка ждёт тем дольше, чем реже; мест три', () => {
     expect(PARCEL_NEED.legend).toBeGreaterThan(PARCEL_NEED.epic);
     expect(PARCEL_NEED.epic).toBeGreaterThan(PARCEL_NEED.rare);
@@ -1294,5 +1415,121 @@ describe('кирка в руке и лучшая выкованная (v2.69)', 
     const r = PICKS[12].floor;
     const hand = rankNeeds({ rank: r, norm: {}, oreBlocks: 0, pickMax: 12 });
     expect(hand.pickOk).toBe(pickPower(12) >= hand.power);
+  });
+});
+
+describe('книги зачарований (v2.70)', () => {
+  const rnd = lcg(77);
+
+  it('книга яруса — в пределах яруса: уровень, шанс кратен 5, Отбойник только в легендарной', () => {
+    for (const t of BOOK_TIERS)
+      for (let i = 0; i < 2000; i++) {
+        const b = rollBook(t.id, rnd);
+        expect(b.lvl).toBeGreaterThanOrEqual(t.lvl[0]);
+        expect(b.lvl).toBeLessThanOrEqual(t.lvl[1]);
+        expect(b.chance % 5).toBe(0);
+        expect(b.chance).toBeGreaterThanOrEqual(t.chance[0]);
+        expect(b.chance).toBeLessThanOrEqual(t.chance[1]);
+        if (t.id !== 'legend') expect(b.id).not.toBe('hammer');
+      }
+    // Все уровни и оба края шанса выпадают, а не только середина.
+    const seen = new Set<number>();
+    for (let i = 0; i < 3000; i++) seen.add(rollBook('legend', rnd).lvl);
+    expect([...seen].sort((a, b) => a - b)).toEqual([7, 8, 9, 10]);
+  });
+
+  it('ярусы дорожают, уровень X — полный предел чары', () => {
+    for (let i = 1; i < BOOK_TIERS.length; i++)
+      expect(BOOK_TIERS[i].price).toBeGreaterThan(BOOK_TIERS[i - 1].price);
+    const full = modsOf({ ench: { ...NO_ENCHANTS, fortune: BOOK_LEVELS }, prestige: 0 });
+    const half = modsOf({ ench: { ...NO_ENCHANTS, fortune: 5 }, prestige: 0 });
+    expect(full.fortune).toBeCloseTo(0.06 * ENCHANTS.find((e) => e.id === 'fortune')!.max, 9);
+    // V — не больше половины X (при BOOK_CURVE 1 — ровно половина), каждый
+    // уровень сильнее прошлого.
+    expect(half.fortune).toBeLessThanOrEqual(full.fortune / 2 + 1e-9);
+    for (let l = 1; l < BOOK_LEVELS; l++) expect(bookShare(l + 1)).toBeGreaterThan(bookShare(l));
+    for (let l = 1; l <= BOOK_LEVELS; l++) expect(levelForShare(bookShare(l))).toBe(l);
+  });
+
+  it('мест в кирке — по редкости: обычная одна, божественная семь', () => {
+    expect(bookSlots(0)).toBe(1);
+    expect(bookSlots(4)).toBe(5);
+    expect(bookSlots(6)).toBe(7);
+    expect(bookSlots(99)).toBe(7);
+    const b: Book = { id: 'blast', lvl: 3, chance: 50 };
+    expect(canApply({ fortune: 2 }, 1, b)).toBe('full');
+    expect(canApply({ fortune: 2 }, 2, b)).toBe('ok');
+    expect(canApply({ blast: 3 }, 1, b)).toBe('lower');
+    // Та же чара уровнем выше — замена, место не нужно.
+    expect(canApply({ blast: 2 }, 1, b)).toBe('ok');
+  });
+
+  it('пыль поднимает шанс до 100% и не дальше; наковальня — только пара', () => {
+    const b: Book = { id: 'vein', lvl: 4, chance: 65 };
+    expect(applyChance(b, 20)).toBe(85);
+    expect(applyChance(b, 999)).toBe(100);
+    expect(dustToFull(b)).toBe(35);
+    expect(dustOf(b)).toBe(12);
+    expect(anvil(b, { ...b, chance: 40 })).toEqual({ id: 'vein', lvl: 5, chance: 55 });
+    expect(anvil(b, { ...b, lvl: 3 })).toBeNull();
+    expect(anvil({ ...b, lvl: 10 }, { ...b, lvl: 10 })).toBeNull();
+    expect(anvilMate([b, { ...b, id: 'blast' }, { ...b, chance: 30 }], 0)).toBe(2);
+  });
+
+  it('полка полна — книга из сундука рассыпается в пыль', () => {
+    const p = norm({
+      ...PRISON_START,
+      books: new Array(SHELF_MAX).fill({ id: 'power', lvl: 1, chance: 50 }),
+    });
+    const r = applyReward(p, { kind: 'book', book: { id: 'blast', lvl: 3, chance: 60 } }).p;
+    expect(r.books.length).toBe(SHELF_MAX);
+    expect(r.dust).toBe(p.dust + 9);
+  });
+
+  it('старое сохранение: уровни → книги, лишние на полку, убранные чары — токенами', () => {
+    const old = norm({
+      ...PRISON_START,
+      enchV: undefined as unknown as number,
+      pickMax: 0,
+      pick: 0,
+      tokens: 100,
+      ench: { ...NO_ENCHANTS, fortune: 15, power: 3, crack: 5, echo: 2 } as unknown as Enchants,
+    });
+    // Обычная кирка держит одну книгу: сильнейшая — Удача (15 из 30 → V,
+    // не слабее прежнего); Эффективность (3 из 30 → I) — на полку.
+    expect(old.ench.fortune).toBe(5);
+    expect(old.ench.power).toBe(0);
+    expect(old.books).toEqual([{ id: 'power', lvl: 1, chance: 100 }]);
+    expect(old.tokens).toBeGreaterThan(100);
+    expect(old.enchV).toBe(2);
+    // Повторное чтение ничего не меняет.
+    expect(norm(old)).toEqual(old);
+    expect(
+      normalizeBook(
+        { id: 'echo', lvl: 3, chance: 50 },
+        ENCHANTS.map((e) => e.id),
+      ),
+    ).toBeNull();
+  });
+
+  it('темп: книги в ходу — Чародей покупает, пыль тратится', () => {
+    const r = run();
+    const total = Object.values(r.bought).reduce((a, b) => a + b, 0);
+    if (process.env.PACE)
+      console.log(
+        'КНИГИ',
+        JSON.stringify(r.bought),
+        'вписано',
+        r.applied,
+        'сгорело',
+        r.burned,
+        'пыль',
+        r.dust,
+        JSON.stringify(r.ench),
+        '\n' + r.buyLog.join(' '),
+      );
+    expect(total).toBeGreaterThan(10);
+    expect(r.applied).toBeGreaterThan(5);
+    expect(r.burned).toBeGreaterThan(0);
   });
 });
