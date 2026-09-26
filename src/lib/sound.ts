@@ -16,6 +16,8 @@ type Ctx = AudioContext;
 
 let ctx: Ctx | null = null;
 let sfxBus: GainNode | null = null;
+/** Полка по верхам на эффектах: в каторге срезает звон, в казино ровная. */
+let warm: BiquadFilterNode | null = null;
 let musicBus: GainNode | null = null;
 let muted = false;
 let musicOn = true;
@@ -25,6 +27,24 @@ let primed = false;
 /** Громкость музыки относительно эффектов: подложка, а не солист. */
 const MUSIC_LEVEL = 0.42;
 const SFX_LEVEL = 0.9;
+
+/**
+ * «Тёплая» полка каторги (v2.67.3): всё, что выше 2,8 кГц, на 7 дБ тише.
+ * Владелец: «звуки должны быть мягкими и приятными, а не звонкими и
+ * отталкивающими». Звон — это и есть энергия в 2–6 кГц, к которой ухо
+ * чувствительнее всего: у монет, металла, защёлок и щелчков её 60–98%
+ * (замер с A-взвешиванием по готовым файлам). Полка
+ * смягчает разом все эффекты шахты, леса, двора, рыбалки и подземелья и
+ * не трогает казино — там звон и есть жанр. Музыка идёт мимо неё.
+ */
+const WARM_HZ = 2800;
+const WARM_DB = -7;
+
+/**
+ * Чей голос у джинглов: в зале и автоматах — стил-драм, в каторге —
+ * пиццикато. Та же мелодия, но стил-драм в шахте звучит казино.
+ */
+let flavor: 'casino' | 'camp' = 'casino';
 
 function ensureCtx(): Ctx | null {
   if (ctx) return ctx;
@@ -43,7 +63,11 @@ function ensureCtx(): Ctx | null {
     comp.connect(ctx.destination);
     sfxBus = ctx.createGain();
     sfxBus.gain.value = muted ? 0 : SFX_LEVEL;
-    sfxBus.connect(comp);
+    warm = ctx.createBiquadFilter();
+    warm.type = 'highshelf';
+    warm.frequency.value = WARM_HZ;
+    warm.gain.value = flavor === 'camp' ? WARM_DB : 0;
+    sfxBus.connect(warm).connect(comp);
     musicBus = ctx.createGain();
     musicBus.gain.value = muted || !musicOn ? 0 : MUSIC_LEVEL;
     musicBus.connect(comp);
@@ -155,7 +179,10 @@ function load(name: string): Promise<void> {
 export type SoundGroup = 'ui' | 'slots' | 'mine' | 'forest' | 'dungeon' | 'fishing';
 
 const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
-  ui: (n) => /^(ui\.|chip|coins|cloth|jingle\.|slot\.drum|slot\.win|tick|case\.tick)/.test(n),
+  ui: (n) =>
+    /^(ui\.|chip|coins|cloth|jingle\.|rank\.up|soft\.up|slot\.drum|slot\.win|tick|case\.tick)/.test(
+      n,
+    ),
   slots: (n) => /^(reel\.|slot\.|gem\.|pluck|bubble|orb\.|slam|chips)/.test(n),
   mine: (n) =>
     /^(pick\.|crit\.|break\.|bag\.|rumble|boom\.|fuse|gem\.chime|pluck|card\.|flap|shiny|bat\.|clang|jingle\.)/.test(
@@ -384,11 +411,6 @@ function fadeOut(p: Playing | null): void {
   }
 }
 
-/**
- * Чей голос у джинглов: в зале и автоматах — стил-драм, в каторге —
- * пиццикато. Та же мелодия, но стил-драм в шахте звучит казино.
- */
-let flavor: 'casino' | 'camp' = 'casino';
 const CAMP: Record<string, string> = {
   'slot.win.s': 'jingle.go',
   'slot.win.b': 'jingle.up',
@@ -400,8 +422,11 @@ const voice = (name: string) => (flavor === 'camp' ? (CAMP[name] ?? name) : name
 
 /** Музыка сцены; `null` — тишина (ушли из игр). */
 export function setMusicScene(scene: MusicScene | null): void {
-  if (scene)
+  if (scene) {
     flavor = scene === 'hall' || scene === 'slots' || scene === 'cascade' ? 'casino' : 'camp';
+    if (ctx && warm)
+      warm.gain.setTargetAtTime(flavor === 'camp' ? WARM_DB : 0, ctx.currentTime, 0.05);
+  }
   wantScene = scene;
   if (!scene) {
     fadeOut(current);
@@ -464,6 +489,23 @@ export function softChime(k = 0): void {
 /** Тихий глухой удар — «готово», без мелодии. */
 export function softThud(gain = 0.32): void {
   play('crit.thud', { gain, rate: 1.15, vary: 0.04 });
+}
+
+/**
+ * Большое событие каторги — новый этаж, престиж, легендарная кирка, король:
+ * нарастающий аккорд до-ми-соль-до (атака 0,9 с, ни щелчка, ни шума). Идёт
+ * мимо бюджета мелодий — такое бывает раз в несколько минут, — но сам его
+ * занимает, чтобы следом не влезла ещё одна фраза.
+ */
+export function bigMoment(gain = 0.8): void {
+  if (ctx) lastPhrase = ctx.currentTime;
+  duck(2.2);
+  play('rank.up', { gain, vary: 0 });
+}
+
+/** Редкая награда: мягкое арпеджио колокольчиком. По бюджету мелодий. */
+function softPhrase(gain = 0.6, at = 0): boolean {
+  return jingle('soft.up', 1.2, { gain, at });
 }
 
 // ---------------------------------------------------------------------------
@@ -563,6 +605,12 @@ export function winChime(level: 'small' | 'big'): void {
 
 /** Джекпот: пассаж и барабанная дробь поверх. */
 export function jackpotFanfare(): void {
+  // В каторге (король повержен) — аккорд, без тарелки и фишек казино.
+  if (flavor === 'camp') {
+    bigMoment(0.85);
+    play('coins', { gain: 0.3, at: 0.3 });
+    return;
+  }
   jingle(voice('slot.win.b'), 1.6, { gain: 0.9 });
   play('slot.drum.5', { gain: 0.7, vary: 0 });
   play('chips.stack', { gain: 0.7, at: 0.35 });
@@ -575,7 +623,7 @@ export function counterTick(): void {
 
 /** Монета — звон фишек. Для дождя монет, продажи и наград. */
 export function coinDing(at = 0): void {
-  play('chip', { at, gain: flavor === 'camp' ? 0.32 : 0.55, vary: 0.08 });
+  play('chip', { at, gain: flavor === 'camp' ? 0.24 : 0.55, vary: 0.08 });
 }
 
 /**
@@ -656,18 +704,18 @@ export function tierBreak(beats: number): void {
   // В каторге — без барабанной дроби и фраз: барабаны набора звонкие (у
   // них 30–40% энергии в резкой середине 2–6 кГц), а зовут эту функцию
   // двадцать мест шахты. Фраза — только от четвёртой ступени и по бюджету.
+  // v2.67.3: и без ударов барабана вовсе. Четвёртая ступень (новый этаж)
+  // звучала ударом тарелки — шум по всей полосе почти секунду, — и
+  // владелец назвал его ужасным.
   if (flavor === 'camp') {
     if (beats <= 1) softThud(0.3);
     else if (beats === 2) {
-      softThud(0.38);
+      softThud(0.36);
       softChime(4);
     } else if (beats === 3) {
-      play('slot.drum.2', { gain: 0.32, vary: 0 });
-      softChime(7);
-    } else {
-      play('slot.drum.3', { gain: 0.4, vary: 0 });
-      jingle('jingle.up', 1.1, { gain: 0.6, at: 0.1 });
-    }
+      softThud(0.36);
+      if (!softPhrase(0.55, 0.05)) softChime(7);
+    } else bigMoment();
     return;
   }
   if (beats <= 0) play('slot.drum.1', { gain: 0.55, vary: 0 });
@@ -685,8 +733,8 @@ export function tierBreak(beats: number): void {
 /** Счёт договорил: фраза-разрешение «всё, это твоё». */
 export function payoutEnd(beats: number): void {
   if (flavor === 'camp') {
-    play('chips.stack', { gain: 0.35 });
-    if (beats >= 3) jingle('jingle.end', 1.3, { gain: 0.6, at: 0.05 });
+    play('chips.stack', { gain: 0.26 });
+    if (beats >= 3) softPhrase(0.5, 0.05);
     return;
   }
   if (beats >= 3) jingle(voice('slot.win.m'), 1.3, { gain: 0.75 });
@@ -704,7 +752,10 @@ export type MineSound = 'soil' | 'stone' | 'metal' | 'crystal' | 'star';
 
 /** Удар кирки. Вариант и высота гуляют — сорок одинаковых ударов режут ухо. */
 export function pickHit(kind: MineSound, crit = false): void {
-  play(`pick.${kind}`, { gain: kind === 'soil' ? 0.62 : 0.48, vary: 0.06 });
+  // Металл звенит сильнее всего остального (64% энергии в резкой середине):
+  // на тон ниже и тише.
+  if (kind === 'metal') play('pick.metal', { gain: 0.36, rate: 0.88, vary: 0.06 });
+  else play(`pick.${kind}`, { gain: kind === 'soil' ? 0.62 : 0.48, vary: 0.06 });
   if (crit) play('crit.thud', { gain: 0.45 });
 }
 
@@ -718,30 +769,36 @@ export function blockBreak(kind: MineSound): void {
 
 /** По дну: кирка не берёт коренную породу. */
 export function bedrockClink(): void {
-  play('pick.metal', { gain: 0.35, rate: 1.5 });
+  // Был звон металла на квинту выше — теперь глухой стук: «не берёт».
+  play('pick.stone', { gain: 0.4, rate: 0.72, vary: 0.04 });
 }
 
 /** Кирка по руде твёрже себя (v2.67): звон и искры — и ничего. */
 export function hardClang(): void {
-  play('clang', { gain: 0.42, rate: 1.35, vary: 0.05 });
-  play('pick.metal', { gain: 0.28, rate: 1.7, at: 0.02 });
+  // Был лязг на кварту выше и звон поверх — самый резкий звук шахты, а
+  // бьёшь по такой руде очередью. Теперь глухой «тук» с металлом где-то
+  // внизу: не берёт — и так видно по искрам и метке «⛏N».
+  play('pick.stone', { gain: 0.42, rate: 0.7, vary: 0.04 });
+  play('clang', { gain: 0.14, rate: 0.62, vary: 0.03, at: 0.01 });
 }
 
 /** Удар молота по наковальне в сцене выковки: от удара к удару выше. */
 export function forgeStrike(i: number): void {
-  play('clang', { gain: 0.7, rate: 0.85 + 0.08 * i, vary: 0 });
+  // Наковальня обязана звенеть, но не резать: ниже тоном и тише, чем была.
+  play('clang', { gain: 0.42, rate: 0.72 + 0.06 * i, vary: 0 });
   play('crit.thud', { gain: 0.55 });
-  if (i >= 2) play('gem.chime', { gain: 0.35, at: 0.05 });
+  if (i >= 2) softChime(2);
 }
 
 /** Кирка проявилась: чем реже, тем длиннее фраза (эскалация неравномерна). */
 export function forgeReveal(rarity: number): void {
   // Одна фраза, не две разом: раньше легендарная звучала дробью с фразой
   // из tierBreak(4) и поверх ещё своей.
-  play('slot.drum.2', { gain: 0.35, vary: 0 });
-  softChime(rarity >= 4 ? 7 : 4);
-  if (rarity >= 4) jingle('jingle.win', 1.3, { gain: 0.65, at: 0.15 });
-  else if (rarity >= 2) jingle('jingle.up', 1.1, { gain: 0.55, at: 0.1 });
+  softThud(0.4);
+  if (rarity >= 4) bigMoment(0.75);
+  else if (rarity >= 2) {
+    if (!softPhrase(0.55, 0.1)) softChime(4);
+  } else softChime(4);
 }
 
 /** Рюкзак полон — мешок шлёпнулся. */
@@ -909,20 +966,22 @@ export function eatChomp(): void {
 
 /** Новый уровень героя — восходящий пассаж. */
 export function levelUp(): void {
-  jingle('jingle.up', 1.1, { gain: 0.8 });
+  if (!softPhrase(0.7)) softChime(5);
 }
 
 /** Серия убийств выросла: удар барабана, выше с каждой ступенью. */
 export function streakUp(tier: number): void {
+  // Были удары барабанов набора — те же звонкие, что у нового этажа.
   const t = Math.max(1, Math.min(tier, 3));
-  play(`slot.drum.${t}`, { gain: 0.55, vary: 0 });
+  softThud(0.3 + 0.06 * t);
+  softChime(t * 2);
 }
 
 /** Лифт: скрип троса, лязг защёлки. */
 export function liftClank(): void {
   play('winch', { gain: 0.6 });
-  play('latch', { gain: 0.8, at: 0.4 });
-  play('clang', { gain: 0.4, at: 0.42 });
+  play('latch', { gain: 0.45, at: 0.4 });
+  play('clang', { gain: 0.22, rate: 0.8, at: 0.42 });
 }
 
 /** Смерть героя: удар и нисходящий пассаж. */
@@ -942,7 +1001,7 @@ export function wingFlap(gain = 0.35): void {
 
 /** Летучая мышь пискнула: заметили или поймали. */
 export function batSqueak(caught = false): void {
-  play('bat.squeak', { gain: caught ? 0.7 : 0.4, rate: caught ? 1.1 : 1, vary: 0.06 });
+  play('bat.squeak', { gain: caught ? 0.5 : 0.32, rate: caught ? 1.1 : 1, vary: 0.06 });
   if (caught) play('crit.thud', { gain: 0.35, at: 0.02 });
 }
 
@@ -968,8 +1027,8 @@ export function cardFan(): void {
 
 /** Риск: угадал — пассаж выше с каждым удвоением; мимо — вниз; ничья — вопрос. */
 export function riskWin(step: number): void {
-  jingle(step >= 3 ? 'jingle.win' : step >= 2 ? 'jingle.up' : 'jingle.go', 1, { gain: 0.75 });
-  play('chips.stack', { gain: 0.45, at: 0.08 });
+  jingle(step >= 3 ? 'jingle.win' : step >= 2 ? 'jingle.up' : 'jingle.go', 1, { gain: 0.65 });
+  play('chips.stack', { gain: 0.28, at: 0.08 });
 }
 export function riskLose(): void {
   jingle('jingle.down', 1.2, { gain: 0.7 });
@@ -1013,7 +1072,7 @@ export function fishSplash(power = 1): void {
 
 /** Леска лопнула. */
 export function lineSnap(): void {
-  play('snap', { gain: 0.7 });
+  play('snap', { gain: 0.45 });
 }
 
 /** Вытащил: плеск и звон, редкая — пассаж. `beats` — как у сундука. */

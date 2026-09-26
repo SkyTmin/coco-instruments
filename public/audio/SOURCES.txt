@@ -227,3 +227,5 @@ music/lobby.mp3	«Shrine» — yd, CC0-1.0, https://opengameart.org/content/shri
 music/depths.mp3	«Patreon Challenge 04» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
 music/boss.mp3	«Ludum Dare 30 03» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
 music/fishing.mp3	«Ambient Relaxing Loop» — isaiah658, CC0-1.0, https://opengameart.org/content/ambient-relaxing-loop
+sfx/rank.up.1.mp3	oga-gui-lokif/GUI_Sound_Effects_by_Lokif/save.wav
+sfx/soft.up.1.mp3	oga-gui-lokif/GUI_Sound_Effects_by_Lokif/positive.wav

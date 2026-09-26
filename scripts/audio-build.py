@@ -173,6 +173,7 @@ JIN = lambda n: K('music-jingles', 'jingles_' + n + '.ogg')  # noqa: E731
 OGR = lambda *p: K('oga-rpg-pack', 'RPG Sound Pack', *p)  # noqa: E731
 OGB = lambda n: K('oga-battle', 'battle_sound_effects', n + '.wav')  # noqa: E731
 HIT = lambda n: K('oga-hits-punches', 'hits', f'hit{n:02d}.mp3.flac')  # noqa: E731
+OGL = lambda n: K('oga-gui-lokif', 'GUI_Sound_Effects_by_Lokif', n + '.wav')  # noqa: E731
 
 # (источник, опции). Опции: dur — макс. длина, rate — высота, lp — срез
 # верхов, start — сдвиг начала после обрезки тишины, rms — целевая
@@ -242,6 +243,16 @@ SOUNDS = {
     'jingle.win': [(JIN('PIZZI15'), {})],
     'jingle.end': [(JIN('PIZZI12'), {})],
     'jingle.small': [(JIN('PIZZI08'), {})],
+    # Мягкие фразы каторги (v2.67.3). Владелец: «звук, когда переходишь на
+    # новый этаж, ужасный… звуки должны быть мягкими и приятными». Там
+    # стоял удар тарелки (`slot.drum.3` — шум по всей полосе до 10 кГц почти
+    # секунду) и пиццикато поверх. Здесь — чистые тоны без шума и щелчка:
+    # `rank.up` — нарастающий аккорд до-ми-соль-до с атакой 0,9 с (новый
+    # этаж, престиж, легендарная кирка), `soft.up` — то же арпеджио
+    # колокольчиком, на малую терцию ниже и со срезанными верхами (редкая
+    # награда, перековка, уровень героя).
+    'rank.up': [(OGL('save'), {'dur': 2.6, 'lp': 3200, 'out': 900, 'rms': -21})],
+    'soft.up': [(OGL('positive'), {'dur': 1.3, 'rate': 0.84, 'lp': 2600, 'out': 450, 'rms': -22})],
 
     # ---- Лес.
     'axe.chop': [(RPG('chop'), {})] + [(IMP(f'impactWood_medium_00{i}'), {'dur': 0.25}) for i in range(4)],
@@ -325,27 +336,33 @@ def reel_loop():
     return normalize(out, rms_db=-24)
 
 
+def build_one(name, variants):
+    """Один звук из SOUNDS: варианты `name.k.mp3`. Возвращает (число, авторство)."""
+    k, credits = 0, []
+    for src, opt in variants:
+        a = trim_head(load(src))
+        if opt.get('start'):
+            a = a[int(opt['start'] * SR):]
+        if opt.get('rate'):
+            a = resample(a, opt['rate'])
+        if opt.get('lp'):
+            a = lowpass(a, opt['lp'])
+        a = trim_tail(a)
+        if opt.get('dur'):
+            a = a[: int(opt['dur'] * SR)]
+        a = fade(a, ms_out=opt.get('out', 40))
+        a = normalize(a, rms_db=opt.get('rms', -18))
+        k += 1
+        save_mp3(a, os.path.join(OUT, 'sfx', f'{name}.{k}.mp3'), kbps=96)
+        credits.append((f'sfx/{name}.{k}.mp3', os.path.relpath(src, SFX)))
+    return k, credits
+
+
 def build_sfx():
     manifest, credits = {}, []
     for name, variants in SOUNDS.items():
-        k = 0
-        for src, opt in variants:
-            a = trim_head(load(src))
-            if opt.get('start'):
-                a = a[int(opt['start'] * SR):]
-            if opt.get('rate'):
-                a = resample(a, opt['rate'])
-            if opt.get('lp'):
-                a = lowpass(a, opt['lp'])
-            a = trim_tail(a)
-            if opt.get('dur'):
-                a = a[: int(opt['dur'] * SR)]
-            a = fade(a, ms_out=opt.get('out', 40))
-            a = normalize(a, rms_db=opt.get('rms', -18))
-            k += 1
-            save_mp3(a, os.path.join(OUT, 'sfx', f'{name}.{k}.mp3'), kbps=96)
-            credits.append((f'sfx/{name}.{k}.mp3', os.path.relpath(src, SFX)))
-        manifest[name] = k
+        manifest[name], c = build_one(name, variants)
+        credits += c
     for name, files in RAT_SETS.items():
         k = 0
         for f in files:
@@ -392,26 +409,23 @@ def build_music():
     return manifest, credits
 
 
-def main():
-    if not (SFX and RAT and MUSIC):
-        sys.exit('Нужны AUDIO_SFX, AUDIO_RAT и AUDIO_MUSIC — см. шапку файла')
-    import shutil
-    for d in ('sfx', 'music'):  # CREDITS.txt ведётся руками и не трогается
-        shutil.rmtree(os.path.join(OUT, d), ignore_errors=True)
-    sfx, c1 = build_sfx()
-    music, c2 = build_music()
+def audio_rev():
     import hashlib
     h = hashlib.sha1()
     for dp, _, fs in sorted(os.walk(OUT)):
         for fn in sorted(fs):
             if fn.endswith('.mp3'):
                 h.update(open(os.path.join(dp, fn), 'rb').read())
+    return h.hexdigest()[:8]
+
+
+def write_manifest(sfx, music):
     ts = [
         '// Сгенерировано scripts/audio-build.py — не править руками.',
         '// Число вариантов у каждого звука и длина каждой музыкальной петли.',
         '',
         '/** Ревизия набора: входит в адрес файла, чтобы кеш не отдал старый звук. */',
-        f"export const AUDIO_REV = '{h.hexdigest()[:8]}';",
+        f"export const AUDIO_REV = '{audio_rev()}';",
         '',
         f'export const SFX_VARIANTS: Record<string, number> = {json.dumps(sfx, ensure_ascii=False, indent=2)};',
         '',
@@ -419,6 +433,51 @@ def main():
         '',
     ]
     open(os.path.join(ROOT, 'src', 'lib', 'audio-manifest.ts'), 'w').write('\n'.join(ts))
+
+
+def rebuild_only(names):
+    """
+    Пересобрать только названные эффекты (`--only=rank.up,soft.up`): нужен
+    один AUDIO_SFX. Остальные файлы, музыка и их авторство не трогаются —
+    исходники музыки и писков весят сотни мегабайт, и держать их ради
+    одного нового звука незачем.
+    """
+    import re
+    if not SFX:
+        sys.exit('Нужен AUDIO_SFX — см. шапку файла')
+    path = os.path.join(ROOT, 'src', 'lib', 'audio-manifest.ts')
+    src = open(path).read()
+    sfx = json.loads(re.search(r'SFX_VARIANTS: Record<string, number> = (\{.*?\});', src, re.S)[1])
+    music = json.loads(re.search(r'MUSIC_TRACKS = (\{.*?\}) as const;', src, re.S)[1])
+    src_lines = open(os.path.join(OUT, 'SOURCES.txt')).read().splitlines()
+    for name in names:
+        if name not in SOUNDS:
+            sys.exit(f'Нет такого звука в SOUNDS: {name}')
+        for fn in os.listdir(os.path.join(OUT, 'sfx')):
+            if fn.startswith(name + '.') and fn[len(name) + 1:-4].isdigit():
+                os.remove(os.path.join(OUT, 'sfx', fn))
+        sfx[name], credits = build_one(name, SOUNDS[name])
+        src_lines = [ln for ln in src_lines if not ln.startswith(f'sfx/{name}.')]
+        src_lines += [f'{o}\t{s}' for o, s in credits]
+    write_manifest(sfx, music)
+    with open(os.path.join(OUT, 'SOURCES.txt'), 'w') as f:
+        f.write('\n'.join(src_lines) + '\n')
+    print(f'пересобрано: {", ".join(names)}')
+
+
+def main():
+    only = [a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--only=')]
+    if only:
+        rebuild_only([n for n in only[0].split(',') if n])
+        return
+    if not (SFX and RAT and MUSIC):
+        sys.exit('Нужны AUDIO_SFX, AUDIO_RAT и AUDIO_MUSIC — см. шапку файла')
+    import shutil
+    for d in ('sfx', 'music'):  # CREDITS.txt ведётся руками и не трогается
+        shutil.rmtree(os.path.join(OUT, d), ignore_errors=True)
+    sfx, c1 = build_sfx()
+    music, c2 = build_music()
+    write_manifest(sfx, music)
     with open(os.path.join(OUT, 'SOURCES.txt'), 'w') as f:
         for out, src in c1 + c2:
             f.write(f'{out}\t{src}\n')

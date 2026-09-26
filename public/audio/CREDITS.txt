@@ -15,6 +15,9 @@ OpenGameArt.org, лицензия CC0 1.0 (через тот же индекс):
   «RPG Sound Pack» — artisticdude (взмахи клинка, укус, великан);
   «Battle Sound Effects» — Ogrebane (свист);
   «37 Hits/Punches» — qubodup (удары клинка).
+  «GUI Sound Effects» — LokiF (v2.67.3: аккорд нового этажа rank.up —
+  save.wav; арпеджио редкой награды soft.up — positive.wav ниже тоном),
+  opengameart.org/content/gui-sound-effects.
 
 Писк крыс — примеры голосов мода Squeaky Ratkin для RimWorld
   (github.com/Coahuilite/SqueakyRatkin, Extras/SqueakyRatkinExampleVoices).
