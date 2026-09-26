@@ -59,9 +59,11 @@ describe('разлом как в Майнкрафте', () => {
         for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 200) dark++;
         return dark / (CRACK_N * CRACK_N);
       };
+      // Линии тонкие, в пиксель (так хочет владелец): сеть заметна, но не
+      // заливает блок.
       expect(ink(0)).toBeLessThan(0.02);
-      expect(ink(CRACK_STAGES - 1)).toBeGreaterThan(0.08);
-      expect(ink(CRACK_STAGES - 1)).toBeLessThan(0.45);
+      expect(ink(CRACK_STAGES - 1)).toBeGreaterThan(0.05);
+      expect(ink(CRACK_STAGES - 1)).toBeLessThan(0.3);
     }
   });
 });

@@ -58,17 +58,10 @@ export function crackMap(kind: number): { t: Float32Array; max: number; ox: numb
     const i = yi * n + xi;
     if (time < t[i]) t[i] = time;
   };
-  // Главные ветки у точки удара — в два пикселя: волосок в один пиксель
-  // на пёстрой руде теряется (проверено листом 8×10).
-  const mark = (x: number, y: number, time: number, thick = false) => {
-    const xi = Math.round(x);
-    const yi = Math.round(y);
-    mark1(xi, yi, time);
-    if (thick) {
-      mark1(xi + 1, yi, time + 0.3);
-      mark1(xi, yi + 1, time + 0.3);
-    }
-  };
+  // Линия — в один пиксель. Пробовал главные ветки в два у точки удара
+  // (волосок на пёстрой руде теряется), и владелец вернул тонкие: «тонкие
+  // линии мне очень нравились, больше чем толстые».
+  const mark = (x: number, y: number, time: number) => mark1(Math.round(x), Math.round(y), time);
   const style = v % 4;
   const bend = style === 3 ? 1.5 : 0.75;
   // Ветка: шаг в полпикселя, угол гуляет; по пути отходят ветки поменьше.
@@ -80,11 +73,11 @@ export function crackMap(kind: number): { t: Float32Array; max: number; ox: numb
       x += Math.cos(ang) * 0.5;
       y += Math.sin(ang) * 0.5;
       time += 0.5;
-      mark(x, y, time, depth === 0 && s < steps * 0.55);
+      mark(x, y, time);
       if (x < -1 || y < -1 || x > n || y > n) return;
-      if (depth < 3 && s > 3 && rnd() < [0.07, 0.05, 0.035][depth]) {
+      if (depth < 2 && s > 4 && rnd() < (depth === 0 ? 0.045 : 0.03)) {
         const side = rnd() < 0.5 ? -1 : 1;
-        walk(x, y, ang + side * (0.5 + rnd() * 0.7), len * (0.25 + rnd() * 0.25), time, depth + 1);
+        walk(x, y, ang + side * (0.55 + rnd() * 0.6), len * (0.22 + rnd() * 0.22), time, depth + 1);
       }
     }
   };
@@ -130,13 +123,13 @@ export function stageLimit(k: number, max: number): number {
 type RGBA = [number, number, number, number];
 
 /**
- * Пиксели стадии k: трещина и светлая кромка под ней (без неё тёмная линия на
- * тёмной руде теряется), на двух последних — отколотые углы. Возвращает RGBA
- * CRACK_N×CRACK_N.
+ * Пиксели стадии k: трещина в один пиксель и светлая кромка под ней (без неё
+ * тёмная линия на тёмной руде теряется), с шестой стадии — вмятина у точки
+ * удара, на двух последних — отколотые углы. Возвращает RGBA CRACK_N×CRACK_N.
  */
 export function crackStagePixels(kind: number, k: number): Uint8ClampedArray {
   const n = CRACK_N;
-  const { t, max } = crackMap(kind);
+  const { t, max, ox, oy } = crackMap(kind);
   const lim = stageLimit(k, max);
   const out = new Uint8ClampedArray(n * n * 4);
   const put = (x: number, y: number, [r, g, b, a]: RGBA) => {
@@ -151,6 +144,7 @@ export function crackStagePixels(kind: number, k: number): Uint8ClampedArray {
   const ink = (x: number, y: number) => x >= 0 && y >= 0 && x < n && y < n && t[y * n + x] <= lim;
   const INK: RGBA = [16, 11, 8, 232];
   const LIP: RGBA = [255, 242, 222, 70];
+  const DENT: RGBA = [16, 11, 8, 105];
   for (let y = 0; y < n; y++)
     for (let x = 0; x < n; x++) {
       if (ink(x, y)) {
@@ -158,6 +152,13 @@ export function crackStagePixels(kind: number, k: number): Uint8ClampedArray {
         if (!ink(x + 1, y + 1)) put(x + 1, y + 1, LIP);
       }
     }
+  // Вмятина: у точки удара порода крошится — пятно в шахматку, растёт.
+  if (k >= 5) {
+    const r = 1.2 + (k - 5) * 0.9;
+    for (let y = Math.floor(oy - r); y <= Math.ceil(oy + r); y++)
+      for (let x = Math.floor(ox - r); x <= Math.ceil(ox + r); x++)
+        if (Math.hypot(x - ox, y - oy) <= r && (x + y) % 2 === 0) put(x, y, DENT);
+  }
   // Отколотые углы: у каждого рисунка свои, на последних стадиях.
   if (k >= 8) {
     const rnd = mulberry(0x51ed27 ^ kind);

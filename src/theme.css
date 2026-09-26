@@ -17262,6 +17262,15 @@ input[type='datetime-local'] {
   scale: calc(1 - var(--d) * 0.05);
   animation: pcell-rise 0.42s cubic-bezier(0.2, 0.8, 0.3, 1) var(--rd) backwards;
 }
+/* Нетронутый блок — БЕЗ `scale` (v2.68.1). Даже `scale: 1` — это
+   трансформация, а трансформированный торец Safari не выравнивает по
+   пикселям экрана и сглаживает ему края. Клетка дробной ширины (55,7 px), и
+   где граница рядов падает на полпикселя (ряды 5/6 при ×3), полупрозрачные
+   края соседей пропускали чёрное дно ямы — через всё поле шла тёмная
+   полоса. Chrome края выравнивает, поэтому на стенде её не было. */
+.pcell.is-top .pcell__face {
+  scale: none;
+}
 .pcell__crack {
   position: absolute;
   inset: 0;
@@ -19091,7 +19100,7 @@ input[type='datetime-local'] {
   }
 }
 .pcell.is-seid .pcell__face {
-  scale: 1;
+  scale: none;
 }
 /* Лупа: сейд в глубине — знак в углу и сколько ярусов до него. */
 .pcell__seidmark {

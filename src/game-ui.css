@@ -2758,6 +2758,21 @@
 .pmx--mine .prison.has-guide {
   --below: 345px;
 }
+/* Клетка — в целых пикселях, где браузер умеет round(): границы рядов не
+   падают на полпикселя (см. «.pcell.is-top» в theme.css). */
+@supports (width: round(down, 10.5px, 1px)) {
+  .pmx--mine .prison {
+    --cell: round(
+      down,
+      min(
+        calc((min(100vw, 560px) - 40px) / 7),
+        max(32px, calc((100dvh - var(--safe-top) - var(--content-top) - var(--below)) / 9)),
+        60px
+      ),
+      1px
+    );
+  }
+}
 .pmx-bar {
   gap: 4px;
 }

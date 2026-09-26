@@ -153,7 +153,7 @@ export const MineCell = memo(function MineCell({
   } as CSSProperties;
   return (
     <div
-      className={`pcell${bottom ? ' is-bottom' : ''}${seid ? ' is-seid' : ''}${block ? ' is-block' : ''}${hard ? ' is-hard' : ''}${tex.startsWith('/') ? ' is-hd' : ''}`}
+      className={`pcell${depth === 0 && !bottom ? ' is-top' : ''}${bottom ? ' is-bottom' : ''}${seid ? ' is-seid' : ''}${block ? ' is-block' : ''}${hard ? ' is-hard' : ''}${tex.startsWith('/') ? ' is-hd' : ''}`}
       style={style}
     >
       <span
