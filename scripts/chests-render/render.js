@@ -94,7 +94,23 @@ const TIERS = {
     glow: '#ffd978',
   },
 };
+// Сундук-загадка (v2.71.1): тёмный, без цвета — летит, вращаясь, и уже на
+// полу превращается в выпавший. Светится только скважина.
+TIERS.mystery = {
+  wood: '#2e2b33',
+  lacquer: 0.35,
+  band: '#4b4854',
+  bandRough: 0.42,
+  bandW: 0.09,
+  corner: '#57535f',
+  lock: '#67636f',
+  gem: null,
+  vyaz: null,
+  glow: '#b9a6ff',
+};
 const T = TIERS[tier];
+/** Сколько кадров вращения снять лентой (0 — одна картинка). */
+const SPIN = Math.max(0, Number(q.get('spin') ?? 0));
 
 // Размеры: ширина, высота корпуса, глубина; крышка — полубочка радиусом D/2.
 const W = 1.22;
@@ -126,7 +142,8 @@ function planksTex(seed, count, along) {
     // Волокна.
     for (let i = 0; i < 26; i++) {
       const o = k * span + r() * span;
-      g.strokeStyle = r() < 0.6 ? `rgba(20,8,2,${0.08 + r() * 0.16})` : `rgba(255,225,190,${0.04 + r() * 0.07})`;
+      g.strokeStyle =
+        r() < 0.6 ? `rgba(20,8,2,${0.08 + r() * 0.16})` : `rgba(255,225,190,${0.04 + r() * 0.07})`;
       g.lineWidth = 0.8 + r() * 2.2;
       g.beginPath();
       let d = o;
@@ -330,28 +347,36 @@ function build() {
   const plate = new THREE.Mesh(new RoundedBoxGeometry(0.22, 0.26, 0.04, 3, 0.02), lockMat);
   plate.position.set(0, H - 0.16, D / 2 + 0.025);
   g.add(plate);
-  const hole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.022, 0.022, 0.02, 16),
-    new THREE.MeshStandardMaterial({ color: '#0a0604', roughness: 1 }),
-  );
+  const holeMat =
+    tier === 'mystery'
+      ? new THREE.MeshStandardMaterial({
+          color: '#d9ccff',
+          emissive: hex('#b9a6ff'),
+          emissiveIntensity: 2.2,
+        })
+      : new THREE.MeshStandardMaterial({ color: '#0a0604', roughness: 1 });
+  const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.02, 16), holeMat);
   hole.rotation.x = Math.PI / 2;
   hole.position.set(0, H - 0.14, D / 2 + 0.047);
   g.add(hole);
-  const slot = new THREE.Mesh(
-    new THREE.BoxGeometry(0.014, 0.05, 0.02),
-    new THREE.MeshStandardMaterial({ color: '#0a0604', roughness: 1 }),
-  );
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.05, 0.02), holeMat);
   slot.position.set(0, H - 0.175, D / 2 + 0.047);
   g.add(slot);
   if (T.gem) {
-    const gm = new THREE.Mesh(new THREE.OctahedronGeometry(tier === 'legend' ? 0.05 : 0.035, 0), gem(T.gem));
+    const gm = new THREE.Mesh(
+      new THREE.OctahedronGeometry(tier === 'legend' ? 0.05 : 0.035, 0),
+      gem(T.gem),
+    );
     gm.scale.z = 0.55;
     gm.position.set(0, H - 0.24, D / 2 + 0.055);
     g.add(gm);
   }
   if (tier === 'legend') {
     for (let i = -2; i <= 2; i++) {
-      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.07 - Math.abs(i) * 0.012, 6), lockMat);
+      const sp = new THREE.Mesh(
+        new THREE.ConeGeometry(0.018, 0.07 - Math.abs(i) * 0.012, 6),
+        lockMat,
+      );
       sp.position.set(i * 0.045, H - 0.005 + 0.03 - Math.abs(i) * 0.006, D / 2 + 0.03);
       g.add(sp);
     }
@@ -376,18 +401,40 @@ function build() {
   shell.position.z = R;
   lid.add(shell);
   // Изнанка крышки — тёмное дерево (видно у открытого).
-  const underGeo = new THREE.CylinderGeometry(R - 0.02, R - 0.02, W - 0.04, 40, 1, true, Math.PI, Math.PI);
+  const underGeo = new THREE.CylinderGeometry(
+    R - 0.02,
+    R - 0.02,
+    W - 0.04,
+    40,
+    1,
+    true,
+    Math.PI,
+    Math.PI,
+  );
   underGeo.rotateZ(-Math.PI / 2);
   const under = new THREE.Mesh(
     underGeo,
-    new THREE.MeshStandardMaterial({ color: hex(T.wood).multiplyScalar(0.45), roughness: 0.9, side: THREE.BackSide }),
+    new THREE.MeshStandardMaterial({
+      color: hex(T.wood).multiplyScalar(0.45),
+      roughness: 0.9,
+      side: THREE.BackSide,
+    }),
   );
   under.position.z = R;
   lid.add(under);
   // Полосы крышки — дуги поверх досок, и кант по краю.
   for (const x of [-0.36, 0.36, -W / 2 + 0.012, W / 2 - 0.012]) {
     const edge = Math.abs(x) > 0.5;
-    const bandGeo = new THREE.CylinderGeometry(R + 0.012, R + 0.012, edge ? 0.05 : bw, 48, 1, true, Math.PI, Math.PI);
+    const bandGeo = new THREE.CylinderGeometry(
+      R + 0.012,
+      R + 0.012,
+      edge ? 0.05 : bw,
+      48,
+      1,
+      true,
+      Math.PI,
+      Math.PI,
+    );
     bandGeo.rotateZ(-Math.PI / 2);
     const bm = new THREE.Mesh(bandGeo, edge ? cornerMat : bandMat);
     bm.material.side = THREE.DoubleSide;
@@ -422,10 +469,17 @@ function build() {
     // У редкого и выше в горке — камни цвета яруса.
     if (T.gem)
       for (let i = 0; i < (tier === 'legend' ? 7 : 4); i++) {
-        const gm = new THREE.Mesh(new THREE.OctahedronGeometry(0.035, 0), gem(i % 3 ? T.gem : T.glow));
+        const gm = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.035, 0),
+          gem(i % 3 ? T.gem : T.glow),
+        );
         const a = r() * Math.PI * 2;
         const rr = Math.sqrt(r()) * 0.8;
-        gm.position.set(Math.cos(a) * rr * 0.45, H - 0.06 + (1 - rr) * 0.07, Math.sin(a) * rr * 0.26);
+        gm.position.set(
+          Math.cos(a) * rr * 0.45,
+          H - 0.06 + (1 - rr) * 0.07,
+          Math.sin(a) * rr * 0.26,
+        );
         gm.rotation.set(r() * 3, r() * 3, r() * 3);
         g.add(gm);
       }
@@ -437,7 +491,11 @@ function build() {
 }
 
 // ---------------------------------------------------------------- сцена
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  alpha: true,
+  preserveDrawingBuffer: true,
+});
 renderer.setPixelRatio(1);
 renderer.setSize(SIZE, SIZE);
 renderer.setClearColor(0x000000, 0);
@@ -460,6 +518,14 @@ const fill = new THREE.DirectionalLight('#ffffff', 0.45);
 fill.position.set(2, -3, 4);
 scene.add(fill);
 scene.add(new THREE.AmbientLight('#ffffff', 0.25));
+if (tier === 'mystery') {
+  // Тёмный сундук на тёмном фоне держится контровым светом с двух сторон.
+  for (const x of [-4, 4]) {
+    const l = new THREE.DirectionalLight('#a9b4ff', 2.6);
+    l.position.set(x, 3, -4);
+    scene.add(l);
+  }
+}
 
 const chest = build();
 const holder = new THREE.Group();
@@ -477,10 +543,26 @@ camera.position.set(0, 0, dist);
 camera.lookAt(0, 0, 0);
 holder.position.set(0, -0.5, 0);
 
-renderer.render(scene, camera);
-// Где замок на картинке — туда сцена вставляет ключ (печатает run.mjs).
-holder.updateMatrixWorld(true);
-const lk = new THREE.Vector3(0, H - 0.14, D / 2 + 0.05).applyMatrix4(chest.matrixWorld).project(camera);
-window.lock = { x: (lk.x + 1) / 2, y: (1 - lk.y) / 2 };
-window.chestPNG = renderer.domElement.toDataURL('image/png');
-window.done = true;
+if (SPIN) {
+  // Лента кадров вращения: кадр 0 — та же поза, что у неподвижного.
+  const FR = 320;
+  const [strip, sg] = canvas(FR * SPIN, FR);
+  for (let f = 0; f < SPIN; f++) {
+    chest.rotation.y = -0.55 + (f / SPIN) * Math.PI * 2;
+    renderer.render(scene, camera);
+    sg.drawImage(renderer.domElement, f * FR, 0, FR, FR);
+  }
+  window.chestPNG = strip.toDataURL('image/png');
+  window.lock = null;
+  window.done = true;
+} else {
+  renderer.render(scene, camera);
+  // Где замок на картинке — туда сцена вставляет ключ (печатает run.mjs).
+  holder.updateMatrixWorld(true);
+  const lk = new THREE.Vector3(0, H - 0.14, D / 2 + 0.05)
+    .applyMatrix4(chest.matrixWorld)
+    .project(camera);
+  window.lock = { x: (lk.x + 1) / 2, y: (1 - lk.y) / 2 };
+  window.chestPNG = renderer.domElement.toDataURL('image/png');
+  window.done = true;
+}

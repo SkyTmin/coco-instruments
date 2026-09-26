@@ -180,7 +180,7 @@ export type SoundGroup = 'ui' | 'slots' | 'mine' | 'forest' | 'dungeon' | 'fishi
 
 const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
   ui: (n) =>
-    /^(ui\.|chip|coins|cloth|jingle\.|rank\.up|soft\.up|slot\.drum|slot\.win|tick|case\.tick|crate|latch|gem\.|card\.flip|crit\.thud)/.test(
+    /^(ui\.|chip|coins|cloth|jingle\.|rank\.up|soft\.up|slot\.drum|slot\.win|tick|case\.tick|crate|latch|gem\.|card\.flip|crit\.thud|dash)/.test(
       n,
     ),
   slots: (n) => /^(reel\.|slot\.|gem\.|pluck|bubble|orb\.|slam|chips)/.test(n),
@@ -1033,20 +1033,27 @@ export function chestLatch(): void {
   play('latch', { gain: 0.5, rate: 1.1 });
 }
 
-/** Сундук вырос на ярус: звон выше с каждой ступенью. */
-export function chestGrow(step: number): void {
-  play('gem.burst', { gain: 0.3, rate: Math.pow(2, (step * 3) / 12), vary: 0.01 });
-  softChime(3 + step * 2);
+/** Тёмный сундук вылетел: свист полёта. */
+export function chestFly(): void {
+  play('dash', { gain: 0.34, rate: 0.85 });
 }
 
-/** Крышка открылась: защёлка, скрип дерева и, у старших, фраза. */
-export function chestOpen(beats: number): void {
+/**
+ * Тёмный сундук превращается в выпавший (v2.71.1): звон выше с каждым
+ * ярусом, у эпического — фраза, у легендарного — большой аккорд.
+ */
+export function chestReveal(step: number): void {
+  play('gem.burst', { gain: 0.3, rate: Math.pow(2, (step * 3) / 12), vary: 0.01 });
+  softChime(3 + step * 2);
+  if (step >= 3) bigMoment(0.7);
+  else if (step >= 2) softPhrase(0.5, 0.1);
+}
+
+/** Крышка открылась: защёлка и скрип дерева. */
+export function chestOpen(): void {
   play('latch', { gain: 0.38, rate: 0.82 });
   play('crate', { gain: 0.24, rate: 1.25, at: 0.05 });
-  if (beats >= 4) bigMoment(0.7);
-  else if (beats >= 2) {
-    if (!softPhrase(0.5, 0.08)) softChime(5);
-  } else softChime(4);
+  softChime(4);
 }
 
 export function cardFlip(): void {

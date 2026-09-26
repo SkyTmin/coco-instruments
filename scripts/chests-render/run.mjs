@@ -36,17 +36,23 @@ const b = await chromium.launch({
   executablePath: process.env.CHROME ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 });
-const only = process.argv[2] ? process.argv[2].split(',') : ['common', 'rare', 'epic', 'legend'];
+const only = process.argv[2]
+  ? process.argv[2].split(',')
+  : ['common', 'rare', 'epic', 'legend', 'mystery'];
+const jobs = [];
 for (const t of only)
-  for (const s of ['closed', 'open']) {
-    const p = await b.newPage({ viewport: { width: 1024, height: 1024 } });
-    p.on('pageerror', (e) => console.log('ошибка', e.message));
-    await p.goto(`http://127.0.0.1:8767/index.html?t=${t}&s=${s}`);
-    await p.waitForFunction('window.done === true', null, { timeout: 90000 });
-    const { url, lock } = await p.evaluate(() => ({ url: window.chestPNG, lock: window.lock }));
-    fs.writeFileSync(path.join(out, `raw_${t}-${s}.png`), Buffer.from(url.split(',')[1], 'base64'));
-    console.log('сундук', t, s, 'замок', JSON.stringify(lock));
-    await p.close();
-  }
+  if (t === 'mystery') jobs.push([t, 'closed'], [t, 'spin']);
+  else jobs.push([t, 'closed'], [t, 'open']);
+for (const [t, s] of jobs) {
+  const p = await b.newPage({ viewport: { width: 1024, height: 1024 } });
+  p.on('pageerror', (e) => console.log('ошибка', e.message));
+  const q = s === 'spin' ? `t=${t}&spin=16` : `t=${t}&s=${s}`;
+  await p.goto(`http://127.0.0.1:8767/index.html?${q}`);
+  await p.waitForFunction('window.done === true', null, { timeout: 90000 });
+  const { url, lock } = await p.evaluate(() => ({ url: window.chestPNG, lock: window.lock }));
+  fs.writeFileSync(path.join(out, `raw_${t}-${s}.png`), Buffer.from(url.split(',')[1], 'base64'));
+  console.log('сундук', t, s, 'замок', JSON.stringify(lock));
+  await p.close();
+}
 await b.close();
 srv.close();

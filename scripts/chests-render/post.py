@@ -14,4 +14,9 @@ for t in ['common', 'rare', 'epic', 'legend']:
         out.alpha_composite(im)
         out = out.resize((512, 512), Image.LANCZOS)
         out.save(os.path.join(dst, f'{t}-{s}.webp'), 'WEBP', quality=86, method=6)
+# Сундук-загадка: неподвижный кадр (посадка) и лента вращения (полёт).
+im = Image.open(os.path.join(src, 'raw_mystery-closed.png')).convert('RGBA')
+im.resize((512, 512), Image.LANCZOS).save(os.path.join(dst, 'mystery-closed.webp'), 'WEBP', quality=86, method=6)
+strip = Image.open(os.path.join(src, 'raw_mystery-spin.png')).convert('RGBA')
+strip.save(os.path.join(dst, 'mystery-spin.webp'), 'WEBP', quality=80, method=6)
 print('ok', sum(os.path.getsize(os.path.join(dst, f)) for f in os.listdir(dst)) // 1024, 'KB')

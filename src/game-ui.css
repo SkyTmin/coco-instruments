@@ -6690,14 +6690,15 @@ button.fg-slot {
   min-height: 34px;
 }
 .pchs__head .rname {
+  display: inline-block;
   font-size: 24px;
+  animation: pch-name 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
 }
-.pchs.is-drop .pchs__head,
-.pchs.is-key .pchs__head {
-  opacity: 0;
-}
-.pchs__head {
-  transition: opacity 200ms;
+@keyframes pch-name {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
 }
 .pchs__stage {
   position: relative;
@@ -6765,26 +6766,92 @@ button.fg-slot {
     transform: scale(1);
   }
 }
-.pchs.is-drop .pchs__burst,
-.pchs.is-key .pchs__burst {
-  opacity: 0;
-  animation: none;
+/* Столб света за эпическим и легендарным. */
+.pchs__pillar {
+  position: absolute;
+  left: 50%;
+  top: -40%;
+  bottom: 12%;
+  width: 150px;
+  margin-left: -75px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--rl) 45%, transparent) 35%,
+    color-mix(in srgb, #fff 55%, transparent) 50%,
+    color-mix(in srgb, var(--rl) 45%, transparent) 65%,
+    transparent
+  );
+  -webkit-mask: linear-gradient(180deg, transparent, #000 30%, #000 80%, transparent);
+  mask: linear-gradient(180deg, transparent, #000 30%, #000 80%, transparent);
+  opacity: 0.5;
+  animation: pch-pillar 900ms ease-out both;
+  transform-origin: 50% 100%;
 }
-/* Падение: свободный разгон (y = t²), посадка сплющиванием от дна. */
-.pchs__drop {
+.pchs.t-legend .pchs__pillar {
+  width: 200px;
+  margin-left: -100px;
+  opacity: 0.75;
+}
+@keyframes pch-pillar {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.2);
+  }
+  30% {
+    opacity: 1;
+    transform: scaleX(1.2);
+  }
+}
+/* Полёт (v2.71.1): тёмный сундук вылетает снизу слева, вращаясь (лента
+   16 кадров 3D-вращения, два оборота), поднимается и падает с разгоном. */
+.pchs__fly {
   position: relative;
-  animation:
-    pch-fall 430ms cubic-bezier(0.11, 0, 0.5, 0) both,
-    pch-land 260ms 430ms ease-out both;
-  transform-origin: 50% 90%;
+  width: 240px;
+  height: 240px;
+  animation: pch-fly 900ms both;
 }
-@keyframes pch-fall {
-  from {
-    transform: translateY(-120vh);
+@keyframes pch-fly {
+  0% {
+    transform: translate(-45vw, 70vh) scale(0.55) rotate(-35deg);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
   }
+  52% {
+    transform: translate(-3vw, -150px) scale(1.04) rotate(10deg);
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.55);
+  }
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+}
+.pchs__spin {
+  width: 240px;
+  height: 240px;
+  overflow: hidden;
+}
+.pchs__strip {
+  display: block;
+  width: 1600%;
+  height: 100%;
+  animation: pch-spin 450ms steps(16) 2;
+}
+@keyframes pch-spin {
   to {
-    transform: translateY(0);
+    transform: translateX(-100%);
   }
+}
+.pchs__chest {
+  position: relative;
+  width: 240px;
+  height: 240px;
+}
+.pchs__chest > span {
+  position: absolute;
+  inset: 0;
+}
+/* Посадка — сплющиванием от дна, как клетки «Каскада». */
+.pchs__chest.is-land {
+  animation: pch-land 280ms ease-out both;
 }
 @keyframes pch-land {
   0% {
@@ -6800,14 +6867,108 @@ button.fg-slot {
     scale: 1;
   }
 }
+/* Скважина тёмного сундука светится — «что там?». Замок — 38,5% · 61,7%. */
+.pchs__glowhole {
+  position: absolute;
+  left: 38.5%;
+  top: 61.7%;
+  width: 60px;
+  height: 60px;
+  margin: -30px 0 0 -30px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(220, 205, 255, 0.9), rgba(160, 130, 255, 0.3) 45%, transparent);
+  animation: pch-hole 700ms ease-in-out infinite alternate;
+}
+@keyframes pch-hole {
+  from {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+/* Превращение: окно с настоящим сундуком едет снизу вверх, а сам сундук в
+   нём стоит на месте (встречный сдвиг) — открывается полоса за полосой.
+   Только трансформ, без clip-path. */
+.pchs__reveal {
+  overflow: hidden;
+}
+.pchs__reveal.is-run {
+  animation: pch-rv-out var(--rv) cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+.pchs__reveal.is-run .pchs__reveal-in {
+  display: block;
+  animation: pch-rv-in var(--rv) cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+@keyframes pch-rv-out {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes pch-rv-in {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+/* Полоса света на кромке превращения. */
+.pchs__sweep {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  top: 100%;
+  height: 26px;
+  margin-top: -13px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #ffffff, color-mix(in srgb, var(--rl) 80%, transparent) 40%, transparent);
+  box-shadow: 0 0 24px 6px color-mix(in srgb, var(--rc) 60%, transparent);
+  animation: pch-sweep var(--rv) cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+@keyframes pch-sweep {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scaleX(0.6);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(-12%) scaleX(1);
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-240px) scaleX(0.8);
+  }
+}
+/* Дрожь перед превращением (дольше у редких): вокруг дна. */
 .pchs__chest {
   transform-origin: 50% 85%;
 }
 .pchs__chest.is-shake {
-  animation: pch-shake 380ms ease-in-out;
+  animation: pch-tremble 240ms linear infinite;
 }
-.pchs.t-legend .pchs__chest.is-shake {
-  animation-duration: 620ms;
+@keyframes pch-tremble {
+  0%,
+  100% {
+    transform: rotate(0) translate(0, 0);
+  }
+  25% {
+    transform: rotate(-2.5deg) translate(-2px, -2px);
+  }
+  50% {
+    transform: rotate(2deg) translate(2px, -4px);
+  }
+  75% {
+    transform: rotate(-1.5deg) translate(-1px, -1px);
+  }
 }
 @keyframes pch-shake {
   0%,
@@ -6855,7 +7016,7 @@ button.fg-slot {
   border-radius: 50%;
   background: radial-gradient(closest-side, rgba(200, 170, 130, 0.45), transparent);
   opacity: 0;
-  animation: pch-dust 600ms 420ms ease-out both;
+  animation: pch-dust 600ms ease-out both;
 }
 @keyframes pch-dust {
   0% {
@@ -7132,7 +7293,13 @@ button.fg-slot {
   .pch-stage__glow,
   .pch-hero,
   .pch-hero__glint,
-  .pchs__drop,
+  .pchs__fly,
+  .pchs__strip,
+  .pchs__reveal,
+  .pchs__reveal-in,
+  .pchs__sweep,
+  .pchs__pillar,
+  .pchs__glowhole,
   .pchs__chest,
   .pchs__rays,
   .pchs__burst,

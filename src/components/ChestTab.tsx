@@ -24,10 +24,11 @@ import { registerEscape } from '@/lib/escape-stack';
 import {
   caseTick,
   cardFlip,
-  chestGrow,
+  chestFly,
   chestLand,
   chestLatch,
   chestOpen,
+  chestReveal,
   chestShake,
   coinDing,
   primeAudio,
@@ -60,7 +61,8 @@ export function ChestArt({
   open = false,
   size = 96,
 }: {
-  tier?: CaseTier;
+  /** `mystery` — тёмный сундук-загадка (ярус ещё не известен). */
+  tier?: CaseTier | 'mystery';
   open?: boolean;
   size?: number;
 }) {
@@ -281,10 +283,18 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
 }
 
 // ---------------------------------------------------------------------------
-// Сцена: падение → ключ → рост → крышка → карточки.
+// Сцена (v2.71.1): тёмный сундук-загадка вылетает, вращаясь, садится и
+// превращается в выпавший → ключ → крышка → карточки.
 // ---------------------------------------------------------------------------
 
-type Phase = 'drop' | 'key' | 'climb' | 'open' | 'done';
+type Phase = 'fly' | 'land' | 'reveal' | 'key' | 'open' | 'done';
+
+/** Полёт тёмного сундука, мс (два оборота ленты кадров). */
+const FLY_MS = 900;
+/** Сколько сундук дрожит перед превращением: чем реже ярус, тем дольше. */
+const TREMBLE_MS = [140, 260, 420, 700];
+/** Превращение — полоса света снизу вверх: старшим медленнее. */
+const REVEAL_MS = [480, 560, 700, 950];
 
 function ChestScene({
   roll,
@@ -302,18 +312,18 @@ function ChestScene({
   onClose: () => void;
 }) {
   const keys = useFinanceStore((s) => s.prison.keys);
-  const climb = caseClimb(roll.tier);
-  const final = TIER_ORDER[climb];
-  const [phase, setPhase] = useState<Phase>('drop');
-  const [step, setStep] = useState(0);
-  const [shake, setShake] = useState(0);
+  const tier = roll.tier;
+  const k = caseClimb(tier);
+  const r = CHEST_RARITY[tier];
+  const [phase, setPhase] = useState<Phase>('fly');
+  const [shake, setShake] = useState(false);
   const [cards, setCards] = useState(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const paid = useRef(false);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  const tier = TIER_ORDER[step];
-  const r = CHEST_RARITY[tier];
+  const flying = phase === 'fly';
+  const known = phase === 'key' || phase === 'open' || phase === 'done';
   const opened = phase === 'open' || phase === 'done';
 
   useEffect(() => registerEscape(() => closeRef.current()), []);
@@ -327,7 +337,7 @@ function ChestScene({
   const finish = () => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
-    setStep(climb);
+    setShake(false);
     setCards(roll.rewards.length);
     setPhase('done');
     pay();
@@ -335,62 +345,55 @@ function ChestScene({
 
   useEffect(() => {
     if (reduceMotion()) {
-      chestOpen(caseTierOf(roll.tier).beats);
+      chestReveal(k);
       finish();
       return undefined;
     }
     const at = (ms: number, fn: () => void) => timers.current.push(setTimeout(fn, ms));
-    const beats = caseTierOf(roll.tier).beats;
-    // 1. Падение и посадка.
-    at(430, () => {
+    const color = rarityOf(r).color;
+    // 1. Полёт: тёмный сундук вылетает снизу, вращаясь, и падает.
+    chestFly();
+    at(FLY_MS, () => {
+      setPhase('land');
       chestLand();
       tapMedium();
     });
-    // 2. Ключ в замок.
-    at(620, () => setPhase('key'));
-    at(1080, () => {
+    // 2. Дрожь — пауза-вопрос: чем реже ярус, тем дольше.
+    let t = FLY_MS + 260;
+    at(t, () => {
+      setShake(true);
+      chestShake();
+    });
+    t += TREMBLE_MS[k];
+    // 3. Превращение: полоса света снизу вверх открывает настоящий сундук.
+    at(t, () => {
+      setShake(false);
+      setPhase('reveal');
+      chestReveal(k);
+      tapMedium();
+    });
+    t += REVEAL_MS[k];
+    at(t, () => {
+      setPhase('key');
+      flashFrame(k >= 3 ? 'mega' : k >= 2 ? 'big' : 'small');
+      if (k >= 1) notifySuccess();
+      if (k >= 2) burstConfetti(40 + 30 * k, [color, rarityOf(r).light, '#ffffff']);
+    });
+    // 4. Ключ в замок.
+    t += 380;
+    at(t, () => {
       chestLatch();
       tapLight();
     });
-    // 3. Рост: встряска, вспышка — ярус выше. Легендарный — медленнее.
-    let t = 1320;
-    at(t, () => setPhase('climb'));
-    for (let i = 1; i <= climb; i++) {
-      const last = i === climb && climb === 3;
-      at(t, () => {
-        setShake((x) => x + 1);
-        chestShake();
-      });
-      at(t + (last ? 620 : 380), () => {
-        flashFrame(last ? 'mega' : i >= 2 ? 'big' : 'small');
-        setStep(i);
-        chestGrow(i);
-        tapMedium();
-        if (i >= 2)
-          burstConfetti(30 + 25 * i, [rarityOf(CHEST_RARITY[TIER_ORDER[i]]).color, '#ffffff']);
-      });
-      t += last ? 1150 : 780;
-    }
-    // Последняя встряска без роста — пауза-вопрос «ещё?». У легендарного
-    // её нет: выше некуда.
-    if (climb < 3) {
-      at(t, () => {
-        setShake((x) => x + 1);
-        chestShake();
-      });
-      t += 560;
-    }
-    // 4. Крышка.
+    // 5. Крышка.
+    t += 340;
     at(t, () => {
       setPhase('open');
-      flashFrame(beats >= 2 ? 'big' : 'small');
-      chestOpen(beats);
-      notifySuccess();
-      if (beats >= 2)
-        burstConfetti(50 + 30 * beats, [rarityOf(CHEST_RARITY[final]).color, '#ffe08a', '#fff']);
+      flashFrame('small');
+      chestOpen();
     });
     t += 480;
-    // 5. Карточки по одной, приз — последним и с паузой.
+    // 6. Карточки по одной, приз — последним и с паузой.
     roll.rewards.forEach((rw, j) => {
       const prize = j === roll.rewards.length - 1;
       at(t + j * 360 + (prize ? 260 : 0), () => {
@@ -402,7 +405,7 @@ function ChestScene({
         }
         if (prize) {
           softChime(6);
-          if (beats >= 2) tierBreak(Math.min(3, beats));
+          if (k >= 2) tierBreak(Math.min(3, caseTierOf(tier).beats));
         }
       });
     });
@@ -417,25 +420,47 @@ function ChestScene({
 
   return (
     <div
-      className={`pchs is-${phase}${opened ? ' is-opened' : ''} t-${tier}`}
-      style={rarityVars(r)}
+      className={`pchs is-${phase}${opened ? ' is-opened' : ''}${known ? ' is-known' : ''} t-${tier}`}
+      style={{ ...rarityVars(r), '--rv': `${REVEAL_MS[k]}ms` } as CSSProperties}
       onClick={() => {
         if (phase !== 'done') finish();
       }}
     >
       <div className="pchs__head">
-        <RarityName rarity={r}>{CHEST_NAME[tier]} сундук</RarityName>
+        {known && <RarityName rarity={r}>{CHEST_NAME[tier]} сундук</RarityName>}
       </div>
       <div className="pchs__stage">
         <i className="pchs__rays" aria-hidden="true" />
-        <i key={`b${step}`} className="pchs__burst" aria-hidden="true" />
+        {known && <i className="pchs__burst" aria-hidden="true" />}
+        {known && k >= 2 && <i className="pchs__pillar" aria-hidden="true" />}
         <i className="pchs__floor" aria-hidden="true" />
-        <div className="pchs__drop">
-          <div key={`s${shake}`} className={`pchs__chest${shake ? ' is-shake' : ''}`}>
-            <ChestArt tier={tier} open={opened} size={240} />
+        {flying ? (
+          <div className="pchs__fly">
+            <div className="pchs__spin">
+              <img className="pchs__strip" src="/ui/chests/mystery-spin.webp" alt="" />
+            </div>
           </div>
-        </div>
-        {phase === 'drop' && <i className="pchs__dust" aria-hidden="true" />}
+        ) : (
+          <div
+            className={`pchs__chest${phase === 'land' ? ' is-land' : ''}${shake ? ' is-shake' : ''}`}
+          >
+            {!known && (
+              <span className="pchs__dark">
+                <ChestArt tier="mystery" size={240} />
+                <i className="pchs__glowhole" aria-hidden="true" />
+              </span>
+            )}
+            {phase !== 'land' && (
+              <span className={`pchs__reveal${phase === 'reveal' ? ' is-run' : ''}`}>
+                <span className="pchs__reveal-in">
+                  <ChestArt tier={tier} open={opened} size={240} />
+                </span>
+              </span>
+            )}
+            {phase === 'reveal' && <i className="pchs__sweep" aria-hidden="true" />}
+          </div>
+        )}
+        {phase === 'land' && <i className="pchs__dust" aria-hidden="true" />}
         {phase === 'key' && (
           <span className="pchs__key" aria-hidden="true">
             <KeyIcon size={60} />
@@ -594,7 +619,8 @@ function ChestsBatch({
   useEffect(() => {
     if (!done) return;
     const beats = caseTierOf(best).beats;
-    chestOpen(beats);
+    chestReveal(caseClimb(best));
+    chestOpen();
     flashFrame(beats >= 2 ? 'big' : 'small');
     burstConfetti(30 + beats * 30, [rarityOf(CHEST_RARITY[best]).color, '#ffe08a', '#fff']);
     coinDing();
