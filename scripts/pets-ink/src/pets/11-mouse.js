@@ -130,18 +130,7 @@
     }
   }
 
-  function token(ctx, x, y, r, B, turn = 0) {
-    const w = r * Math.max(0.2, Math.abs(Math.cos(Math.PI * turn)));
-    const disc = L.ellipsePts(x, y, w, r, 28);
-    K.form(ctx, disc, { fill: C.brass, deep: C.brassDeep, width: 4.5, seed: sd('token'), boil: B, shade: 0.8, spacing: 5, hatchW: 1.8 });
-    if (w > r * 0.5) {
-      K.line(ctx, L.ellipsePts(x, y, w * 0.66, r * 0.66, 18), { closed: true, width: 2.6, color: C.brassDeep, seed: sd('tokenRim'), boil: B, taper: 0 });
-      // the camp's stamp: a pick
-      K.line(ctx, [[x - w * 0.35, y + r * 0.3], [x + w * 0.3, y - r * 0.3]], { width: 3.4, color: C.brassDeep, seed: sd('tokenPick'), boil: B, smooth: false, taper: 0 });
-      K.line(ctx, [[x - w * 0.05, y - r * 0.42], [x + w * 0.4, y - r * 0.12], [x + w * 0.5, y + r * 0.1]], { width: 3.4, color: C.brassDeep, seed: sd('tokenPick2'), boil: B, taper: 0 });
-    }
-    K.fill(ctx, L.ellipsePts(x - w * 0.4, y - r * 0.45, w * 0.18, r * 0.14, 10), '#FFF1C4', 0.9);
-  }
+  const token = (ctx, x, y, r, B, turn = 0) => K.fx.token(ctx, x, y, r, turn, B, sd('token'));
 
   function hand(ctx, R, B, PT) {
     const pose = R.pose;

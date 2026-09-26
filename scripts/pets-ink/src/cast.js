@@ -226,6 +226,7 @@
         wobble: o.wobble != null ? o.wobble : 1.4,
         tremble: 0.35,
         taper: o.open ? o.taper || [22, 22] : [6, 14],
+        smooth: o.smooth,
         color: o.ink || P.ink,
         alpha: o.inkAlpha == null ? 1 : o.inkAlpha,
       });
@@ -555,6 +556,18 @@
     K.form(ctx, pts, { fill: '#E9BC45', deep: '#9E6F1C', width: 4.5, seed, boil: B, shade: 0.8, spacing: 5, hatchW: 1.8, alpha });
     if (w > r * 0.5) K.line(ctx, L.ellipsePts(x, y, w * 0.62, r * 0.62, 18), { closed: true, width: 2.6, color: '#9E6F1C', seed: seed + 1, boil: B, taper: 0 });
   };
+  /** The camp token: a brass disc stamped with a pick (the game's token currency). */
+  FX.token = (ctx, x, y, r, turn, B, seed, alpha = 1) => {
+    const w = r * Math.max(0.2, Math.abs(Math.cos(Math.PI * turn)));
+    const deep = '#86621F';
+    K.form(ctx, L.ellipsePts(x, y, w, r, 28), { fill: '#D2A546', deep, width: 4.5, seed, boil: B, shade: 0.8, spacing: 5, hatchW: 1.8, alpha, inkAlpha: alpha });
+    if (w > r * 0.5) {
+      K.line(ctx, L.ellipsePts(x, y, w * 0.66, r * 0.66, 18), { closed: true, width: 2.6, color: deep, alpha, seed: seed + 1, boil: B, taper: 0 });
+      K.line(ctx, [[x - w * 0.35, y + r * 0.3], [x + w * 0.3, y - r * 0.3]], { width: 3.4, color: deep, alpha, seed: seed + 2, boil: B, smooth: false, taper: 0 });
+      K.line(ctx, [[x - w * 0.05, y - r * 0.42], [x + w * 0.4, y - r * 0.12], [x + w * 0.5, y + r * 0.1]], { width: 3.4, color: deep, alpha, seed: seed + 3, boil: B, taper: 0 });
+    }
+    K.fill(ctx, L.ellipsePts(x - w * 0.4, y - r * 0.45, w * 0.18, r * 0.14, 10), '#FFF1C4', 0.9 * alpha);
+  };
   /** Coins popping up from o and falling, emitted on `emits`. */
   FX.coins = (ctx, o, d, n, emits, B, seed) => {
     for (const e0 of emits) {
@@ -589,6 +602,41 @@
       const x = o[0] - (k % 2) * 40;
       K.line(ctx, [[x, y], [x - len * (0.7 + 0.3 * L.h3(k, 3, seed)), y]], { width: 5, alpha, color: P.inkSoft, seed: seed + k, boil: B, taper: [4, 30], smooth: false });
     }
+  };
+  /**
+   * A flame standing on (x, y): a round base and n tongues licking up, in three layers (outer,
+   * middle, core). ph shifts the tongues (pass the drawing number), so it flickers on twos.
+   */
+  FX.flame = (ctx, x, y, w, h, ph, B, seed, o = {}) => {
+    const cols = o.colors || ['#D8402A', '#F28A2C', '#FFE08A'];
+    const n = o.tongues || 3;
+    const shape = (k) => {
+      const ww = w * k, hh = h * k;
+      const pts = [];
+      // the round base, left to right under the flame
+      for (let i = 0; i <= 6; i++) {
+        const a = Math.PI - (i / 6) * Math.PI;
+        pts.push([x + Math.cos(a) * ww * 0.5, y - hh * 0.22 + Math.sin(a) * hh * 0.22]);
+      }
+      // tongues, right to left along the top
+      for (let t = n - 1; t >= 0; t--) {
+        const u = n === 1 ? 0.5 : t / (n - 1);
+        const cx = x + (u - 0.5) * ww * 0.7;
+        const tall = 0.72 + 0.28 * Math.sin(Math.PI * u) + 0.16 * L.noise1(ph * 0.9 + t * 3.1, seed);
+        const lean = 0.18 * ww * L.noise1(ph * 0.7 + t * 1.7, seed + 7);
+        pts.push([cx + ww * 0.16, y - hh * 0.42]);
+        pts.push([cx + lean, y - hh * tall]);
+        if (t > 0) pts.push([cx - ww * 0.12, y - hh * 0.5]);
+      }
+      pts.push([x - ww * 0.5, y - hh * 0.3]);
+      return K.smooth(pts, 4);
+    };
+    const a = o.alpha == null ? 1 : o.alpha;
+    const outer = shape(1);
+    K.fill(ctx, outer, cols[0], a);
+    K.fill(ctx, shape(0.72).map(([px, py]) => [px, py + h * 0.06]), cols[1], a);
+    K.fill(ctx, shape(0.42).map(([px, py]) => [px, py + h * 0.14]), cols[2], a);
+    if (o.ink !== false) L.inkPath(ctx, outer, { closed: true, width: o.width || 5, alpha: a, seed, boil: B, wobble: 0.8, taper: [4, 8] });
   };
   /** Embers drifting up from c (fire pets), phase u of the loop. */
   FX.embers = (ctx, c, spread, u, B, seed, colors) => {

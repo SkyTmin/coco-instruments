@@ -26,7 +26,8 @@
     const w0 = T.width || ((u) => lerp(T.w0, T.w1, u) * (T.bushy ? Math.sin(Math.PI * clamp(0.15 + u * 0.85)) + 0.3 : 1));
     // a round tip: the last stretch closes on a quarter circle instead of a sawn-off end
     const w = (u) => w0(u) * (u > 0.86 ? Math.sqrt(Math.max(0.02, 1 - ((u - 0.86) / 0.14) ** 2)) : 1);
-    const rib = M.all(R.Mb, K.ribbonPts(K.curve(pts, 5), w));
+    const cpts = K.curve(pts, 5);
+    const rib = M.all(R.Mb, K.ribbonPts(cpts, w));
     K.form(ctx, rib, {
       fill: T.fill || C.skin,
       deep: T.deep || C.skinDeep,
@@ -36,6 +37,25 @@
       shade: 0.6,
       spacing: 8,
       hatchW: 2.2,
+      after: T.tip
+        ? (c2, pp) =>
+            K.clip(c2, pp, () => {
+              // a coloured tip (the fox's white brush): the last stretch of the tail, overdrawn
+              const k0 = Math.floor(cpts.length * (1 - T.tipLen));
+              const sub = cpts.slice(k0);
+              const tipRib = M.all(R.Mb, K.ribbonPts(sub, (u) => w(1 - T.tipLen + u * T.tipLen) * 1.2));
+              K.fill(c2, tipRib, T.tip);
+              const edge = [];
+              for (let i = 0; i <= 8; i++) {
+                const q = sub[0], nb = sub[1];
+                const tx = nb[0] - q[0], ty = nb[1] - q[1], tl = Math.hypot(tx, ty) || 1;
+                const ww = w(1 - T.tipLen) * 0.5;
+                const v = (i / 8) * 2 - 1;
+                edge.push([q[0] - (ty / tl) * ww * v + (tx / tl) * 10 * Math.sin(v * 3.1), q[1] + (tx / tl) * ww * v + (ty / tl) * 10 * Math.sin(v * 3.1)]);
+              }
+              K.line(c2, M.all(R.Mb, edge), { width: 3.6, color: P.inkSoft, seed: sd('tipEdge'), boil: B });
+            })
+        : null,
       inside: T.rings
         ? (c2, pp) =>
             K.clip(c2, pp, () => {
@@ -105,8 +125,12 @@
   }
 
   // short fur tufts that break the back and crown outline
-  function tufts(ctx, R, pts, B) {
+  function tufts(ctx, R, pts0, B) {
     const S = R.S, sd = sdOf(S);
+    // a fixed stretch of the outline (control points a..b) when the spec names one: tufts then stay
+    // on the mane however the head turns; otherwise wherever the outline faces up or back
+    const ranged = !!S.tuftRange;
+    const pts = ranged ? K.curve(R.ctrl.slice(S.tuftRange[0], S.tuftRange[1] + 1), 5) : pts0;
     const n = pts.length;
     let acc = 0;
     const maxX = M.ap(R.Mh, [S.tuftMaxX == null ? 150 : S.tuftMaxX, 0])[0];
@@ -120,8 +144,8 @@
       const tx = b[0] - a[0], ty = b[1] - a[1];
       const tl = Math.hypot(tx, ty) || 1;
       const nx = -ty / tl, ny = tx / tl;
-      if (!(ny < -0.25 || nx < -0.55)) continue;
-      if (b[0] > maxX || b[1] > minY) continue;
+      if (!ranged && !(ny < -0.25 || nx < -0.55)) continue;
+      if (!ranged && (b[0] > maxX || b[1] > minY)) continue;
       const h = L.h3(i, 7, sd('tuft'));
       const len = 13 + 9 * h;
       const back = [b[0] - (tx / tl) * 12, b[1] - (ty / tl) * 12];
@@ -147,7 +171,7 @@
       K.fill(ctx, mouth, C.mouth || '#6E2A26');
       K.fill(ctx, M.all(H, L.ellipsePts((m[1][0] + m[2][0]) / 2, m[2][1] + 3 + 5 * o, 12, 6, 16)), C.tongue || '#E88E86');
       L.inkPath(ctx, mouth, { closed: true, width: 4.2, seed: sd('mouthO'), boil: B, wobble: 0.3 });
-      if (F.tongue && o > 0.5) {
+      if (F.tongue && o > 0.5 && pose.tongue !== 0) {
         // a dog's tongue lolling out of the side of the mouth
         const tx = lerp(m[1][0], m[2][0], 0.4), ty = lerp(m[1][1], m[2][1], 0.4) + 8 * o;
         const tl = F.tongue * o;

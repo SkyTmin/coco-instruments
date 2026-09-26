@@ -162,9 +162,10 @@
       const h = M.ap(Mh, p);
       return [lerp(bf[0], h[0], w), lerp(bf[1], h[1], w)];
     };
-    const body = K.smooth(S.sil.map((p) => place(p, p[2])), 5);
+    const ctrl = S.sil.map((p) => place(p, p[2]));
+    const body = K.smooth(ctrl, 5);
     const c = place(S.bodyC, 0);
-    return { S, pose, Mr, Mb, Mf, Mh, place, body, center: { x: c[0], y: c[1], r: S.bodyR || 230 } };
+    return { S, pose, Mr, Mb, Mf, Mh, place, ctrl, body, center: { x: c[0], y: c[1], r: S.bodyR || 230 } };
   }
 
   // ---------------------------------------------------------------- legs
@@ -184,7 +185,7 @@
     // two sides, so no line crosses the knee (capped bones read as a robot's segments).
     const lower = K.limbOpen(knee, f, G.rj, G.r2, 8);
     const upper = K.limbPts(a, knee, G.r1, G.rj, 10);
-    K.fill(ctx, lower.poly, col);
+    K.fill(ctx, lower.poly, S.sock ? K.far(S.sock, far) : col);
     K.fill(ctx, upper, col);
     const shade = K.shadeOf(K.centreOf(upper.concat(lower.poly)));
     for (const pts of [lower.poly, upper]) L.hatch(ctx, pts, { spacing: 10, width: 3, color: C.furDeep, alpha: 0.45, density: (x, y) => 0.8 * shade(x, y), clip: true, inset: 5, overshoot: 0, seed: sd('legH', key, pts.length), boil: B });

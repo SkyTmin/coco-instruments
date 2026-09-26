@@ -151,9 +151,10 @@
       const a = M.ap(Mb, p), b = M.ap(Mh, p);
       return [lerp(a[0], b[0], p[2]), lerp(a[1], b[1], p[2])];
     };
-    const body = K.smooth(S.sil.map(skin), 5);
+    const ctrl = S.sil.map(skin);
+    const body = K.smooth(ctrl, 5);
     const c = M.ap(Mb, S.bodyC);
-    return { S, pose, Mr, Mb, Mh, body, center: { x: c[0], y: c[1], r: S.bodyR || 250 } };
+    return { S, pose, Mr, Mb, Mh, ctrl, body, center: { x: c[0], y: c[1], r: S.bodyR || 250 } };
   }
 
   // ---------------------------------------------------------------- parts
