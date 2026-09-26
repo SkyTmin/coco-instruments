@@ -102,6 +102,7 @@ import type { FindId, GuideReward, ItemId, PrisonState, RankNeeds } from '@/lib/
 import {
   bedrockTexture,
   blockTexture,
+  crackVariant,
   findTexture,
   kuivaTexture,
   meteorTexture,
@@ -148,6 +149,7 @@ import {
   tapLight,
   tapMedium,
 } from '@/lib/haptics';
+import { moneyText } from '@/lib/money';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 /** Коротко для узкой ячейки табло: 12 345 → «12,3к». */
@@ -157,6 +159,13 @@ const shortCount = (n: number) =>
     : n < 1e6
       ? `${(Math.floor(n / 100) / 10).toLocaleString('ru-RU')}к`
       : `${(Math.floor(n / 1e5) / 10).toLocaleString('ru-RU')}м`;
+
+/**
+ * Монеты в шапке шахты: до ста тысяч — целиком, дальше «123,4к» и «12,3м»,
+ * как токены рядом. Шапка — одна строка на всё (v2.67.2): «999 999», как и
+ * «12,3 млн», на экране 375 px в неё уже не влезают.
+ */
+const chipMoney = (n: number) => (n >= 1e5 ? shortCount(n) : moneyText(n));
 
 /** Минуты и секунды: 7:05. */
 const clockMs = (ms: number) => {
@@ -1511,6 +1520,7 @@ export function PrisonPage() {
           bottom={top < 0}
           depth={d}
           crack={dig.cracks[c]}
+          crackVar={crackVariant(mine.seed, c, d)}
           peek={peek >= 0 ? rockTexture(peek) : ''}
           need={needRocks.has(top)}
           seid={seid}
@@ -1565,10 +1575,14 @@ export function PrisonPage() {
       );
 
   return (
-    <div className="gx pmx">
+    <div className="gx pmx pmx--mine">
       <div className="prison-scene" aria-hidden="true" />
       <div className={`prison${guide ? ' has-guide' : ''}`}>
-        <div className="pmx-top">
+        {/* Одна строка сверху (v2.67.2): лента с названием этажа и отдельный
+            ряд фишек съедали 78 px высоты, а поле шахты ограничено именно
+            высотой — на телефоне оно сжималось до 32 px клетки. Этаж теперь
+            фишкой с его рудой: тап — окно этажей. */}
+        <div className="pmx-top pmx-bar">
           <button
             type="button"
             className="gx-round gx-round--dark pmx-top__btn"
@@ -1580,25 +1594,9 @@ export function PrisonPage() {
           >
             <KIcon name="arrowLeft" />
           </button>
-          <div className="gx-ribbon pmx-top__title">
-            {prison.zone.on
-              ? 'Особая шахта'
-              : `Этаж ${rankLetter(mine.id)} · ${ROCKS[mine.id].name}`}
-          </div>
-          <button
-            type="button"
-            className="gx-round gx-round--dark pmx-top__btn"
-            aria-label="Настройки"
-            onClick={() => openSheet('settings')}
-          >
-            <KIcon name="gear" />
-          </button>
-        </div>
-
-        <div className="pmx-chips">
           <span className="gx-chip pmx-chip--coins">
             <CoinIcon size={18} />
-            <MoneyCounter ref={moneyRef} value={shownBalance} />
+            <MoneyCounter ref={moneyRef} value={shownBalance} format={chipMoney} />
           </span>
           <button
             type="button"
@@ -1612,17 +1610,32 @@ export function PrisonPage() {
           <span className="pmx-chips__gap" />
           <button
             type="button"
-            className="gx-chip pmx-chip--btn"
+            className="gx-chip pmx-chip--btn pmx-floor"
+            aria-label={
+              prison.zone.on
+                ? 'Особая шахта — этажи'
+                : `Этаж ${rankLetter(mine.id)}, ${ROCKS[mine.id].name} — этажи`
+            }
             onClick={() => openSheet('mines')}
           >
-            <GxIcon name="stairs" /> Шахты
+            <img className="pmx-floor__ore" src={rockTexture(mine.id)} alt="" />
+            {prison.zone.on ? <GxIcon name="stairs" size={16} /> : rankLetter(mine.id)}
           </button>
           <button
             type="button"
-            className={`gx-chip pmx-chip--btn${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
+            className={`gx-round gx-round--dark pmx-top__btn${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
+            aria-label="Лес"
             onClick={goForest}
           >
-            <GxIcon name="forest" /> Лес
+            <GxIcon name="forest" />
+          </button>
+          <button
+            type="button"
+            className="gx-round gx-round--dark pmx-top__btn"
+            aria-label="Настройки"
+            onClick={() => openSheet('settings')}
+          >
+            <KIcon name="gear" />
           </button>
         </div>
 
@@ -1959,7 +1972,7 @@ export function PrisonPage() {
               setForgeOpen(true);
             }}
           >
-            <PickIcon pick={pick} size={30} />
+            <PickIcon pick={pick} size={24} />
             <b>Кузница</b>
             {forgeReady && <i className="gx-badge gx-badge--gold">!</i>}
           </button>

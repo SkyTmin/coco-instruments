@@ -70,6 +70,8 @@ export interface MineCellProps {
   bottom: boolean;
   depth: number;
   crack: number;
+  /** Рисунок трещины (`crackVariant`): у соседних клеток разный. */
+  crackVar?: number;
   /** Лупа: картинка породы ярусом ниже (пусто — не показывать). */
   peek: string;
   /** Сверху порода, которую сейчас ищут (норма, конвой, заказ). */
@@ -100,6 +102,7 @@ export const MineCell = memo(function MineCell({
   bottom,
   depth,
   crack,
+  crackVar = 0,
   peek,
   need,
   seid,
@@ -136,7 +139,10 @@ export const MineCell = memo(function MineCell({
         style={{ backgroundImage: `url(${tex})` }}
       >
         {crack > 0 && (
-          <i className="pcell__crack" style={{ backgroundImage: `url(${crackTexture(crack)})` }} />
+          <i
+            className="pcell__crack"
+            style={{ backgroundImage: `url(${crackTexture(crack, crackVar)})` }}
+          />
         )}
       </span>
       {seid && <i className="pcell__glow" />}

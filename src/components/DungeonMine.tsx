@@ -38,7 +38,13 @@ import {
   rockAt,
   veinCells,
 } from '@/lib/prison';
-import { bedrockTexture, deepRockColors, deepRockTexture, rockVariant } from '@/lib/prison-art';
+import {
+  bedrockTexture,
+  crackVariant,
+  deepRockColors,
+  deepRockTexture,
+  rockVariant,
+} from '@/lib/prison-art';
 import { itemUrl } from '@/lib/dungeon-art';
 import { bagFull, deepRumble, ratSqueak } from '@/lib/sound';
 import { notifyWarning, tapLight } from '@/lib/haptics';
@@ -171,6 +177,7 @@ export function DungeonMine({
           bottom={top < 0}
           depth={d}
           crack={dig.cracks[c]}
+          crackVar={crackVariant(m.window, c, d)}
           peek=""
           need={false}
           seid={false}

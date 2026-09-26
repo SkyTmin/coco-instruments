@@ -55,6 +55,7 @@ import {
   bearTexture,
   branchTexture,
   crackTexture,
+  crackVariant,
   crownTexture,
   logMarkTexture,
   parcelTexture,
@@ -1282,7 +1283,9 @@ export function ForestPage() {
                       {k === 0 && crack > 0 && (
                         <i
                           className="flog__crack"
-                          style={{ backgroundImage: `url(${crackTexture(crack)})` }}
+                          style={{
+                            backgroundImage: `url(${crackTexture(crack, crackVariant(forest.tree.seed, cut, 0))})`,
+                          }}
                         />
                       )}
                     </div>

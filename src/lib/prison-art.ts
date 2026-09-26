@@ -324,10 +324,17 @@ function line(px: Pixels, x0: number, y0: number, x1: number, y1: number, c: RGB
 }
 
 /** Ломаная из (x, y) по направлению `ang`: `n` звеньев по полтора пикселя. */
-function walk(rnd: () => number, x: number, y: number, ang: number, n: number): [number, number][] {
+function walk(
+  rnd: () => number,
+  x: number,
+  y: number,
+  ang: number,
+  n: number,
+  bend = 0.9,
+): [number, number][] {
   const pts: [number, number][] = [[x, y]];
   for (let i = 0; i < n; i++) {
-    ang += rnd() * 0.9 - 0.45;
+    ang += rnd() * bend - bend / 2;
     x += Math.cos(ang) * 1.6;
     y += Math.sin(ang) * 1.6;
     pts.push([x, y]);
@@ -335,32 +342,89 @@ function walk(rnd: () => number, x: number, y: number, ang: number, n: number): 
   return pts;
 }
 
+/** Сколько рисунков трещин: каждой клетке — свой, по зерну шахты. */
+export const CRACK_VARIANTS = 8;
+
+/** Рисунок трещины клетки: разный у соседей, один и тот же при перезаходе. */
+export function crackVariant(seed: number, cell: number, depth: number): number {
+  let h = (seed ^ (cell * 2246822519) ^ (depth * 3266489917)) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 2654435761) >>> 0;
+  return ((h ^ (h >>> 13)) >>> 0) % CRACK_VARIANTS;
+}
+
 /**
- * Трещина стадии 1…3. Ветви одни и те же для всех стадий, растёт только
- * длина: трещина на глазах РАСТЁТ, а не подменяется другой картинкой. На
- * последней стадии она доходит до края и у блока откалываются углы.
+ * Трещина стадии 1…3, рисунок `variant` (v2.67.2: владелец — «у нас только
+ * один разлом по середине, скучно»). Четыре вида по два рисунка: раскол
+ * надвое, звезда от точки удара, скол от края, зигзаг с мелкими ветками.
+ * Ветви одни и те же для всех стадий, растёт только длина: трещина на
+ * глазах РАСТЁТ, а не подменяется другой картинкой. На последней стадии у
+ * блока откалываются углы — у каждого рисунка свои.
  */
-export function crackTexture(stage: number): string {
+export function crackTexture(stage: number, variant = 0): string {
   if (stage <= 0) return '';
   const k = Math.min(3, stage);
-  if (crackCache[k]) return crackCache[k];
-  const rnd = rng32(0xc4ac);
+  const v = ((variant % CRACK_VARIANTS) + CRACK_VARIANTS) % CRACK_VARIANTS;
+  const key = v * 4 + k;
+  if (crackCache[key]) return crackCache[key];
+  const rnd = rng32(0xc4ac + v * 7919);
   const px = new Pixels();
   const ink: RGB = [14, 10, 8];
   const lip: RGB = [255, 244, 225];
+  const kind = v % 4;
+  const inner = () => 4.5 + rnd() * 7;
   const a0 = rnd() * Math.PI * 2;
-  const main = [walk(rnd, 7.5, 7.5, a0, 9), walk(rnd, 7.5, 7.5, a0 + Math.PI, 9)];
-  const branches = [0, 1, 2].map((i) => {
-    const from = main[i % 2][3 + i * 2] ?? main[0][3];
+  let main: [number, number][][];
+  let branchN = 3;
+  let branchLen = 4;
+  if (kind === 1) {
+    // Звезда: лучи от точки удара.
+    const ox = inner();
+    const oy = inner();
+    const arms = 4 + Math.floor(rnd() * 2);
+    main = Array.from({ length: arms }, (_, i) =>
+      walk(rnd, ox, oy, a0 + (i * Math.PI * 2) / arms + (rnd() - 0.5) * 0.5, 6),
+    );
+    branchN = 2;
+    branchLen = 3;
+  } else if (kind === 2) {
+    // Скол от края: трещина входит сбоку и идёт через блок.
+    const side = Math.floor(rnd() * 4);
+    const t = 3 + rnd() * 10;
+    const [ox, oy, ang] =
+      side === 0
+        ? [t, 0, Math.PI / 2]
+        : side === 1
+          ? [15, t, Math.PI]
+          : side === 2
+            ? [t, 15, -Math.PI / 2]
+            : [0, t, 0];
+    main = [walk(rnd, ox, oy, ang + (rnd() - 0.5) * 0.6, 12)];
+    branchN = 3;
+  } else if (kind === 3) {
+    // Зигзаг: крутые изломы и много мелких веток.
+    const ox = inner();
+    const oy = inner();
+    main = [walk(rnd, ox, oy, a0, 8, 1.7), walk(rnd, ox, oy, a0 + Math.PI, 8, 1.7)];
+    branchN = 4;
+    branchLen = 3;
+  } else {
+    // Раскол надвое — прежний рисунок, но из разных точек.
+    const ox = inner();
+    const oy = inner();
+    main = [walk(rnd, ox, oy, a0, 9), walk(rnd, ox, oy, a0 + Math.PI, 9)];
+  }
+  const branches = Array.from({ length: branchN }, (_, i) => {
+    const arm = main[i % main.length];
+    const from = arm[Math.min(arm.length - 1, 2 + Math.floor(rnd() * (arm.length - 3)))];
+    const dir = Math.atan2(arm[arm.length - 1][1] - arm[0][1], arm[arm.length - 1][0] - arm[0][0]);
     return walk(
       rnd,
       from[0],
       from[1],
-      a0 + (i % 2 ? Math.PI : 0) + (rnd() < 0.5 ? 1 : -1) * (0.7 + rnd() * 0.5),
-      4,
+      dir + (rnd() < 0.5 ? 1 : -1) * (0.7 + rnd() * 0.6),
+      branchLen,
     );
   });
-  const reach = [0, 3, 6, 9][k];
   const draw = (pts: [number, number][], n: number) => {
     for (let i = 0; i < Math.min(n, pts.length - 1); i++) {
       // Светлая кромка на пиксель ниже: без неё тёмная линия на тёмной
@@ -371,25 +435,34 @@ export function crackTexture(stage: number): string {
       line(px, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], ink, 225);
     }
   };
-  main.forEach((m) => draw(m, reach));
-  if (k >= 2) draw(branches[0], 3);
-  if (k >= 3) branches.forEach((b) => draw(b, 4));
+  main.forEach((m) => draw(m, Math.ceil(((m.length - 1) * k) / 3)));
+  if (k >= 2) draw(branches[0], Math.ceil(branchLen / 2) + 1);
+  if (k >= 3) branches.forEach((b) => draw(b, branchLen));
   if (k >= 3) {
-    // Отколотые углы: пиксели дыры открывают тёмную яму под блоком.
+    // Отколотые углы — у каждого рисунка свои: пиксели дыры открывают
+    // тёмную яму под блоком.
     const hole: RGB = [10, 7, 6];
-    for (const [x, y] of [
-      [0, 0],
-      [1, 0],
-      [0, 1],
-      [15, 15],
-      [14, 15],
-      [15, 14],
-      [15, 0],
-    ])
+    const corners: [number, number, number, number][] = [
+      [0, 0, 1, 1],
+      [15, 0, -1, 1],
+      [0, 15, 1, -1],
+      [15, 15, -1, -1],
+    ];
+    for (const [x, y, dx, dy] of corners) {
+      if (rnd() < 0.45) continue;
+      const big = rnd() < 0.4;
       px.set(x, y, hole, 235);
+      px.set(x + dx, y, hole, 235);
+      px.set(x, y + dy, hole, 235);
+      if (big) {
+        px.set(x + 2 * dx, y, hole, 235);
+        px.set(x + dx, y + dy, hole, 200);
+        px.set(x, y + 2 * dy, hole, 235);
+      }
+    }
   }
-  crackCache[k] = px.toUrl();
-  return crackCache[k];
+  crackCache[key] = px.toUrl();
+  return crackCache[key];
 }
 
 /** Цвета крошки породы — для частиц. */

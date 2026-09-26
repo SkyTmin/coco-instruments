@@ -19,35 +19,41 @@ export interface MoneyHandle {
   set(n: number): void;
 }
 
-export const MoneyCounter = forwardRef<MoneyHandle, { value: number; className?: string }>(
-  function MoneyCounter({ value, className }, ref) {
-    const host = useRef<HTMLSpanElement>(null);
-    const lastLen = useRef(0);
+export const MoneyCounter = forwardRef<
+  MoneyHandle,
+  {
+    value: number;
+    className?: string;
+    /** Свой вид числа — например, «12,3 млн» в тесной шапке шахты. */
+    format?: (n: number) => string;
+  }
+>(function MoneyCounter({ value, className, format }, ref) {
+  const host = useRef<HTMLSpanElement>(null);
+  const lastLen = useRef(0);
 
-    const apply = (n: number) => {
-      const el = host.current;
-      if (!el) return;
-      el.textContent = moneyText(n);
-      const len = digitCount(n);
-      if (len !== lastLen.current) {
-        // Прибавился разряд — счётчик толкает сам себя. Момент, когда число
-        // становится ДЛИННЕЕ, читается сильнее, чем любое его значение.
-        if (len > lastLen.current && lastLen.current > 0) {
-          el.classList.remove('mnum--grew');
-          void el.offsetWidth;
-          el.classList.add('mnum--grew');
-        }
-        lastLen.current = len;
+  const apply = (n: number) => {
+    const el = host.current;
+    if (!el) return;
+    el.textContent = (format ?? moneyText)(n);
+    const len = digitCount(n);
+    if (len !== lastLen.current) {
+      // Прибавился разряд — счётчик толкает сам себя. Момент, когда число
+      // становится ДЛИННЕЕ, читается сильнее, чем любое его значение.
+      if (len > lastLen.current && lastLen.current > 0) {
+        el.classList.remove('mnum--grew');
+        void el.offsetWidth;
+        el.classList.add('mnum--grew');
       }
-    };
+      lastLen.current = len;
+    }
+  };
 
-    useImperativeHandle(ref, () => ({ set: apply }));
-    // apply читает только рефы, поэтому зависимость здесь ровно одна — само
-    // значение: пересоздавать эффект на каждый рендер родителя незачем.
-    useEffect(() => {
-      apply(value);
-    }, [value]);
+  useImperativeHandle(ref, () => ({ set: apply }));
+  // apply читает только рефы, поэтому зависимость здесь ровно одна — само
+  // значение: пересоздавать эффект на каждый рендер родителя незачем.
+  useEffect(() => {
+    apply(value);
+  }, [value]);
 
-    return <span className={`mnum${className ? ` ${className}` : ''}`} ref={host} />;
-  },
-);
+  return <span className={`mnum${className ? ` ${className}` : ''}`} ref={host} />;
+});

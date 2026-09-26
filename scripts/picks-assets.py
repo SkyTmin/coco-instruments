@@ -9,13 +9,18 @@ Kenney «Voxel Pack» (CC0), `Items/pick_*.png`: у всех кирок набо
 
 KENNEY — путь к клону github.com/shorepine/kenney. Выход —
 public/ui/picks/p{номер}.png, 64×64. Цвета — `head` из src/lib/economy.ts.
+
+v2.67.2: у каждой кирки тёмный контур в 2 точки и светлая кромка снаружи.
+Без них ржавая (бурая головка, рыжая рукоять) сливалась с глиной этажа A и
+с деревом кнопок — владелец: «первая ржавая кирка прям сливается с
+блоками». Контур — ПО СИЛУЭТУ, а не рамка: кирка читается на любом фоне.
 """
 
 import colorsys
 import os
 import re
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 KENNEY = os.environ.get('KENNEY', '')
 ITEMS = os.path.join(KENNEY, '2d', 'Voxel Pack', 'Items')
@@ -33,11 +38,32 @@ def heads():
     """Цвета головок — прямо из economy.ts, чтобы не разъехались."""
     src = open(os.path.join(ROOT, 'src', 'lib', 'economy.ts'), encoding='utf-8').read()
     block = src[src.index('export const PICKS'):src.index('];', src.index('export const PICKS'))]
-    return re.findall(r"head: '(#[0-9a-fA-F]{6})'", block)
+    # С v2.67 таблица — строками P(...), цвет головки — единственная строка
+    # вида '#rrggbb' в каждой.
+    return re.findall(r"'(#[0-9a-fA-F]{6})'", block)
 
 
 def lum(c):
     return (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255
+
+
+def outlined(im):
+    """Кирка чуть меньше холста, вокруг — тёмный контур и светлая кромка."""
+    w, h = im.size
+    inner = int(w * 0.8)
+    pick = im.resize((inner, inner), Image.LANCZOS)
+    off = (w - inner) // 2
+    canvas = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    canvas.paste(pick, (off, off), pick)
+    alpha = canvas.getchannel('A').point(lambda a: 255 if a > 40 else 0)
+    # На холсте 128 точек: 4 точки контура и 2 кромки = 2 и 1 на итоговых 64.
+    dark = alpha.filter(ImageFilter.MaxFilter(9))
+    rim = alpha.filter(ImageFilter.MaxFilter(13))
+    out = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    out.paste(Image.new('RGBA', (w, h), (255, 238, 205, 150)), (0, 0), rim)
+    out.paste(Image.new('RGBA', (w, h), (26, 16, 10, 255)), (0, 0), dark)
+    out.alpha_composite(canvas)
+    return out
 
 
 def main():
@@ -69,7 +95,9 @@ def main():
                     k = min(1, (f - 1) * 2.2)
                     c = tuple(int(t + (255 - t) * k) for t in target)
                 px[x, y] = c + (sp[x, y][3],)
-        im.resize((SIZE, SIZE), Image.LANCZOS).save(os.path.join(OUT, f'p{i}.png'), optimize=True)
+        outlined(im).resize((SIZE, SIZE), Image.LANCZOS).save(
+            os.path.join(OUT, f'p{i}.png'), optimize=True
+        )
     print(f'{len(heads())} кирок → {OUT}')
 
 

@@ -2720,15 +2720,175 @@
   font-size: 12px;
   opacity: 0.75;
 }
-/* Всё, кроме девяти рядов поля (замерено на стенде, v2.67): шапка, табло,
-   рама, расходники, рюкзак и нижняя панель — 406 px, с заданием — 460.
-   Строки пород больше нет: цены — в окне «Этажи». Поменяли низ —
-   перемерьте, иначе поле уедет под край. */
+/* Всё, кроме девяти рядов поля (замерено на стенде, v2.67). Лес и рыбалка
+   носят тот же каркас `.pmx`, но меряют себя сами. */
 .pmx .prison {
   --below: 406px;
 }
 .pmx .prison.has-guide {
   --below: 460px;
+}
+
+/* ---- Шахта, v2.67.2: поле шире --------------------------------------------
+   Владелец: «экран стал слишком узким». Клетку шахты ограничивает ВЫСОТА
+   (7×9 клеток на экране телефона), и нижняя панель v2.67 отняла у поля
+   ещё 70 px: на 430×805 с заданием клетка сжалась до 36 px, поле — до двух
+   третей ширины экрана. Вернули высотой: одна строка сверху вместо ленты и
+   ряда фишек, ниже расходники, рюкзак, панель и задание, зазоры 6 px.
+   `--below` замерен на стенде (430×805, 390×750, 375×667, 412×915): всё,
+   кроме девяти рядов клеток. Поменяли строку — перемерьте. */
+.pmx--mine {
+  padding: calc(var(--safe-top) + var(--content-top) + 6px) 10px calc(var(--safe-bottom) + 8px);
+}
+.pmx--mine .prison {
+  --below: 300px;
+  --cell: min(
+    calc((min(100vw, 560px) - 40px) / 7),
+    max(32px, calc((100vh - var(--safe-top) - var(--content-top) - var(--below)) / 9)),
+    60px
+  );
+  --cell: min(
+    calc((min(100vw, 560px) - 40px) / 7),
+    max(32px, calc((100dvh - var(--safe-top) - var(--content-top) - var(--below)) / 9)),
+    60px
+  );
+  --pw: max(calc(var(--cell) * 7 + 16px), min(100%, 340px));
+  gap: 6px;
+}
+.pmx--mine .prison.has-guide {
+  --below: 345px;
+}
+.pmx-bar {
+  gap: 4px;
+}
+.pmx-bar .pmx-top__btn {
+  --gx-size: 34px;
+}
+.pmx-bar .gx-chip {
+  height: 30px;
+  flex: none;
+  gap: 4px;
+  padding: 0 8px 0 5px;
+  font-size: 14px;
+}
+.pmx-bar .pmx-chip--coins {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.pmx-bar .gx-chip > :not(.mnum) {
+  flex: none;
+}
+.pmx-bar .pmx-chip--coins .mnum {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.pmx-bar .mnum {
+  font: inherit;
+}
+.pmx-top__btn.is-locked {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+/* Этаж: руда этажа и буква. Руда — квадрат с тёмной рамкой, как клетка. */
+.pmx-floor {
+  gap: 5px;
+  padding: 0 10px 0 4px;
+  font-weight: 800;
+}
+.pmx-floor__ore {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--gx-wood-dd);
+  image-rendering: pixelated;
+}
+.pmx--mine .pmx-rank {
+  min-height: 0;
+}
+.pmx--mine .pmx-rank__hex {
+  width: 22px;
+  height: 28px;
+  font-size: 13px;
+}
+.pmx--mine .pmx-items {
+  gap: 10px;
+}
+.pmx--mine .pmx-item {
+  --gx-size: 42px;
+}
+.pmx--mine .pmx-item__n {
+  right: -5px;
+  bottom: -5px;
+  min-width: 18px;
+  height: 18px;
+  font-size: 11px;
+}
+.pmx--mine .pmx-bag {
+  padding: 0 4px;
+}
+.pmx--mine .pmx-bag__ico {
+  width: 28px;
+  height: 28px;
+}
+.pmx--mine .pmx-bag__body .gx-bar {
+  height: 18px;
+}
+.pmx--mine .pmx-bag__sell {
+  min-height: 30px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.pmx--mine .pmx-dock {
+  padding: 0 2px;
+}
+.pmx--mine .pmx-dock__btn {
+  min-height: 0;
+  gap: 1px;
+  padding: 1px 0 0;
+}
+.pmx--mine .pmx-dock__btn > .gx-icon,
+.pmx--mine .pmx-dock__btn > .ppick-ico,
+.pmx--mine .pmx-dock__pet {
+  width: 24px;
+  height: 24px;
+}
+.pmx--mine .pmx-dock__btn b {
+  font-size: 10px;
+  line-height: 1.1;
+}
+/* Задание — одной строкой: номер, название и полоска под ним, счёт справа. */
+.pmx--mine .pmx-quest {
+  min-height: 0;
+  gap: 6px;
+  padding: 0 4px;
+}
+.pmx--mine .pmx-quest__n {
+  width: 20px;
+  height: 26px;
+  font-size: 11px;
+}
+.pmx--mine .pmx-quest__body {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.pmx--mine .pmx-quest__body b {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.15;
+}
+.pmx--mine .pmx-quest__bar {
+  flex: none;
+  width: 56px;
+}
+.pmx--mine .pmx-quest__body em {
+  font-size: 11px;
+  line-height: 1.1;
+}
+.pmx--mine .pmx-quest .gx-btn--sm {
+  min-height: 28px;
 }
 
 /* ==========================================================================
@@ -4154,6 +4314,14 @@
 }
 .ppick-ico:is(.r2, .r3, .r4, .r5, .r6) img {
   filter: drop-shadow(0 0 2px var(--rc));
+}
+/* Обычная и необычная кирки без свечения: ржаво-бурая головка на глине
+   этажа A и на тёмном дереве панелей пропадала (владелец: «ржавая кирка
+   прям сливается с блоками первого этажа»). Светлый ореол — статичный
+   фильтр на самой картинке; взмах двигает родителя, так что перерисовки
+   под фильтром нет. */
+.ppick-ico:is(.r0, .r1) img {
+  filter: drop-shadow(0 0 1px rgba(255, 238, 205, 0.95)) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.45));
 }
 .pore-ico {
   flex: none;
