@@ -115,6 +115,9 @@ const PrisonPage = lazy(() =>
 const ForestPage = lazy(() =>
   import('@/pages/ForestPage').then((m) => ({ default: m.ForestPage })),
 );
+const FishingPage = lazy(() =>
+  import('@/pages/FishingPage').then((m) => ({ default: m.FishingPage })),
+);
 const YardPage = lazy(() => import('@/pages/YardPage').then((m) => ({ default: m.YardPage })));
 const DungeonPage = lazy(() =>
   import('@/pages/DungeonPage').then((m) => ({ default: m.DungeonPage })),
@@ -537,6 +540,7 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
                 <Route path="/games" element={<GamesPage />} />
                 <Route path="/prison" element={<PrisonPage />} />
                 <Route path="/forest" element={<ForestPage />} />
+                <Route path="/fishing" element={<FishingPage />} />
                 <Route path="/yard" element={<YardPage />} />
                 <Route path="/dungeon" element={<DungeonPage />} />
                 <Route path="/camera" element={<CameraPage />} />

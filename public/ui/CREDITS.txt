@@ -26,3 +26,8 @@ critters/bat.png — Pixel-boy, «Prehistoric Platformer» из Superpowers Asse
 
 critters/magpie.png — нарисована для игры по пикселям (scripts/critters-assets.py).
 
+
+fish/fish.png — рыбы, ракушка, жемчужина и поплавок нарисованы для игры по
+           пикселям кодом (scripts/fish-assets.py), без чужих файлов.
+icons/fishing.svg, fish.svg, fish-bucket.svg — Delapouite (game-icons.net,
+           CC BY 3.0, как остальные иконки).

@@ -23,6 +23,10 @@ OpenGameArt.org, лицензия CC0 1.0 (через тот же индекс):
   можно. Происхождение самих записей авторы не гарантируют.
   Писк летучей мыши (bat.squeak) — те же записи на кварту выше.
 
+Рыбалка (v2.65): всплеск — пузыри «RPG Sound Pack» (artisticdude, CC0)
+  ниже тоном; падение поплавка — капли Kenney «Interface Sounds»; обрыв
+  лески — Kenney «RPG Audio» (knifeSlice).
+
 Карты риск-игры, взмахи крыльев, звон блестяшек (v2.64) — Kenney
   «Casino Audio», «RPG Audio» (cloth), «Interface Sounds» (glass), CC0.
 
@@ -37,6 +41,7 @@ OpenGameArt.org, лицензия CC0 1.0 (через тот же индекс):
   depths.mp3  «Patreon Challenge 04»    — Abstraction / Tallbeard Studios
   boss.mp3    «Ludum Dare 30 03»        — Abstraction / Tallbeard Studios
   lobby.mp3   «Shrine»                  — yd (opengameart.org/content/shrine)
+  fishing.mp3 «Ambient Relaxing Loop»   — isaiah658 (opengameart.org/content/ambient-relaxing-loop)
 
   Треки Abstraction — из «Music Loop Bundle» (tallbeard.itch.io/music-loop-bundle,
   abstractionmusic.com), CC0.

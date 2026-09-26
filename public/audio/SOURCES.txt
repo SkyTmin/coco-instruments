@@ -189,6 +189,13 @@ sfx/shiny.1.mp3	interface-sounds/glass_001.ogg
 sfx/shiny.2.mp3	interface-sounds/glass_002.ogg
 sfx/shiny.3.mp3	interface-sounds/glass_005.ogg
 sfx/shiny.4.mp3	interface-sounds/glass_006.ogg
+sfx/splash.1.mp3	oga-rpg-pack/RPG Sound Pack/inventory/bubble.wav
+sfx/splash.2.mp3	oga-rpg-pack/RPG Sound Pack/inventory/bubble2.wav
+sfx/splash.3.mp3	oga-rpg-pack/RPG Sound Pack/inventory/bubble3.wav
+sfx/plop.1.mp3	interface-sounds/drop_002.ogg
+sfx/plop.2.mp3	interface-sounds/drop_003.ogg
+sfx/snap.1.mp3	rpg-audio/knifeSlice.ogg
+sfx/snap.2.mp3	rpg-audio/knifeSlice2.ogg
 sfx/rat.call.1.mp3	SqueakyRatkin Call/call_01
 sfx/rat.call.2.mp3	SqueakyRatkin Call/call_01
 sfx/rat.call.3.mp3	SqueakyRatkin Call/call_03
@@ -219,3 +226,4 @@ music/forest.mp3	«Sketchbook 2024-06-26» — Abstraction / Tallbeard Studios (
 music/lobby.mp3	«Shrine» — yd, CC0-1.0, https://opengameart.org/content/shrine
 music/depths.mp3	«Patreon Challenge 04» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
 music/boss.mp3	«Ludum Dare 30 03» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
+music/fishing.mp3	«Ambient Relaxing Loop» — isaiah658, CC0-1.0, https://opengameart.org/content/ambient-relaxing-loop

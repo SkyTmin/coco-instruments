@@ -152,7 +152,7 @@ function load(name: string): Promise<void> {
 }
 
 /** Наборы звуков по местам: грузятся, когда игрок туда пришёл. */
-export type SoundGroup = 'ui' | 'slots' | 'mine' | 'forest' | 'dungeon';
+export type SoundGroup = 'ui' | 'slots' | 'mine' | 'forest' | 'dungeon' | 'fishing';
 
 const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
   ui: (n) => /^(ui\.|chip|coins|cloth|jingle\.|slot\.drum|slot\.win|tick|case\.tick)/.test(n),
@@ -162,6 +162,7 @@ const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
       n,
     ),
   forest: (n) => /^(axe\.|saw\.|log\.|tree\.|snow\.|crit\.|bag\.)/.test(n),
+  fishing: (n) => /^(splash|plop|snap|swing|tick|bubble|coins|gem\.chime|pluck|card\.)/.test(n),
   dungeon: (n) =>
     /^(swing|hit|bite|dash|crate|gate|clang|latch|winch|roar|rat\.|rumble|boom\.|pick\.|break\.|crit\.|bag\.|gem\.chime)/.test(
       n,
@@ -219,6 +220,8 @@ const GAP: Record<string, number> = {
   hit: 0.03,
   flap: 0.07,
   shiny: 0.04,
+  plop: 0.05,
+  splash: 0.08,
 };
 
 const voices = new Map<string, AudioBufferSourceNode[]>();
@@ -871,4 +874,46 @@ export function riskDraw(): void {
 /** Сорока уронила блестяшку: тихий звон, чтобы слышно было, куда смотреть. */
 export function shinyDrop(): void {
   play('shiny', { gain: 0.16, rate: 0.9 });
+}
+
+// ---------------------------------------------------------------------------
+// Рыбалка (v2.65).
+// ---------------------------------------------------------------------------
+
+/** Заброс: свист удилища, потом поплавок шлёпается — `far` 0…1 даёт паузу. */
+export function castWhoosh(far: number): void {
+  play('swing', { gain: 0.45, rate: 0.9 });
+  play('plop', { gain: 0.55, at: 0.35 + 0.35 * far });
+}
+
+/** Поплавок дёрнулся: холостая поклёвка — тихо; настоящая — всплеск. */
+export function floatTwitch(real: boolean): void {
+  if (real) {
+    play('splash', { gain: 0.7 });
+    play('plop', { gain: 0.5, rate: 0.8 });
+  } else play('plop', { gain: 0.25, rate: 1.2 });
+}
+
+/** Катушка: щелчок трещотки; частота — как быстро крутишь. */
+export function reelClick(tension: number): void {
+  play('tick', { gain: 0.18 + 0.2 * tension, rate: 0.9 + 0.5 * tension, vary: 0.02 });
+}
+
+/** Рыба бьётся у поверхности. */
+export function fishSplash(power = 1): void {
+  play('splash', { gain: Math.min(0.9, 0.35 + 0.25 * power) });
+}
+
+/** Леска лопнула. */
+export function lineSnap(): void {
+  play('snap', { gain: 0.8 });
+  jingle('jingle.nope', 0.8, { gain: 0.45, at: 0.1 });
+}
+
+/** Вытащил: плеск и звон, редкая — пассаж. `beats` — как у сундука. */
+export function fishLanded(beats: number): void {
+  play('splash', { gain: 0.5, rate: 1.2 });
+  if (beats >= 2) jingle('jingle.win', 1.2, { gain: 0.75, at: 0.1 });
+  else if (beats >= 1) jingle('jingle.found', 0.8, { gain: 0.65, at: 0.1 });
+  else play('coins', { gain: 0.4, at: 0.1 });
 }

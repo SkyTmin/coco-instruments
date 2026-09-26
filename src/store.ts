@@ -267,6 +267,25 @@ import {
 } from '@/lib/critters';
 import type { RiskReveal, ShinyKind } from '@/lib/critters';
 import {
+  BITE_DRAIN,
+  biteNow,
+  firstCatchTokens,
+  FISHING_START,
+  fishValue,
+  netCapacity,
+  netCost,
+  NET_MAX,
+  normalizeFishing,
+  PEARL_CHANCE,
+  PEARL_MAX,
+  PET_FISH_XP,
+  RARITY_XP,
+  RODS,
+  skillOf,
+  spotOpen,
+} from '@/lib/fishing';
+import type { Bite, FishingState } from '@/lib/fishing';
+import {
   applyDelta,
   canPay,
   conditionsMet,
@@ -488,6 +507,10 @@ const persistForest = (f: ForestState) => writeForest({ version: 1, ...f });
 // несколько секунд, а не на каждую крысу.
 const writeDungeon = makePersister<DungeonBlob>(STORAGE_KEYS.dungeon, 3000);
 const persistDungeon = (d: DungeonState) => writeDungeon({ version: 1, ...d });
+// Рыбалка — своим ключом, как лес: рыба раз в десяток секунд, но садок,
+// клёв и рекорды незачем писать в сохранение шахты.
+const writeFishing = makePersister<FishingBlob>(STORAGE_KEYS.fishing, 2000);
+const persistFishing = (f: FishingState) => writeFishing({ version: 1, ...f });
 
 /**
  * Посылки зреют от любой добычи — блоков шахты и брёвен леса. Новая
@@ -663,6 +686,27 @@ interface ForestBlob extends ForestState {
 /** Сохранение подземелья — своим ключом: снаряжение, счётчики, вылазка. */
 interface DungeonBlob extends DungeonState {
   version: 1;
+}
+
+/** Сохранение рыбалки (v2.65). */
+interface FishingBlob extends FishingState {
+  version: 1;
+}
+
+/** Что дал улов: рыба в садке, шкатулка в сундучке или жемчуг. */
+export interface FishCatch {
+  kind: Bite['kind'];
+  value: number;
+  xp: number;
+  /** Первая рыба этого вида — токены. */
+  firstTokens: number;
+  /** Новый рекорд веса вида (0 — нет). */
+  record: number;
+  /** Мастерство выросло до этого уровня (0 — нет). */
+  levelUp: number;
+  pearl: boolean;
+  /** Жемчуг сверх десятого или шкатулка при занятом сундучке — токенами. */
+  tokens: number;
 }
 
 /** Итог выхода клетью — для экрана «Поднялся». */
@@ -963,6 +1007,7 @@ interface ExportData {
   prison?: Partial<PrisonState>;
   forest?: Partial<ForestState>;
   dungeon?: Partial<DungeonState>;
+  fishing?: Partial<FishingState>;
   reminderPrefs?: Partial<ReminderPrefs>;
 }
 export interface ExportBundle {
@@ -1036,6 +1081,7 @@ interface FinanceState {
   /** Каторга: ранг, кирка, рюкзак, шахта. Деньги — общие, в `slotsBalance`. */
   prison: PrisonState;
   forest: ForestState;
+  fishing: FishingState;
   /** Подземелье: снаряжение, счётчики, склад, текущая вылазка. */
   dungeon: DungeonState;
   reminderPrefs: ReminderPrefs;
@@ -1275,6 +1321,16 @@ interface FinanceState {
   forestOrderFill: (i: number) => { coins: number; tokens: number; item: string } | null;
   /** Двор: закрыть событие, чьё время вышло (медведь уносит штабель). */
   yardExpire: () => YardEnd | null;
+  /** Рыбалка (v2.65): встать на место. */
+  fishSpot: (spot: number) => boolean;
+  /** Вытащил: рыба — в садок, шкатулка — в сундучок, ракушка — жемчуг. */
+  fishCatch: (bite: Bite) => FishCatch | null;
+  /** Продать садок: монеты в общий кошелёк (жемчуг и навыки — сверху). */
+  fishSell: () => number;
+  /** Скормить садок питомцу: опыт вместо монет. */
+  fishFeed: () => { xp: number; up: number } | null;
+  fishBuyRod: () => boolean;
+  fishNetUp: () => boolean;
   /** Поймана летучая мышь: в сундучок легли три карты. */
   prisonBatCatch: (rare: boolean) => Treasure | null;
   /**
@@ -1465,6 +1521,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   prison: PRISON_START,
   forest: FOREST_START,
   dungeon: DUNGEON_START,
+  fishing: FISHING_START,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
 
@@ -1494,6 +1551,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       prison,
       forest,
       dungeon,
+      fishing,
     ] = await Promise.all([
       storage.get<FinanceExpensesBlob>(STORAGE_KEYS.expenses),
       storage.get<FinanceSavingsBlob>(STORAGE_KEYS.savings),
@@ -1518,6 +1576,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       storage.get<PrisonBlob>(STORAGE_KEYS.prison),
       storage.get<ForestBlob>(STORAGE_KEYS.forest),
       storage.get<DungeonBlob>(STORAGE_KEYS.dungeon),
+      storage.get<FishingBlob>(STORAGE_KEYS.fishing),
     ]);
     set({
       expenses: exp?.items ?? [],
@@ -1569,6 +1628,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       prison: normalizePrison(prison),
       forest: normalizeForest(forest),
       dungeon: normalizeDungeon(dungeon),
+      fishing: normalizeFishing(fishing),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       hydrated: true,
     });
@@ -2419,6 +2479,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         prison: s.prison,
         forest: s.forest,
         dungeon: s.dungeon,
+        fishing: s.fishing,
         reminderPrefs: s.reminderPrefs,
       },
     };
@@ -2480,6 +2541,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       prison: normalizePrison(d.prison),
       forest: normalizeForest(d.forest),
       dungeon: normalizeDungeon(d.dungeon),
+      fishing: normalizeFishing(d.fishing),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -2505,6 +2567,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistPrison(st.prison);
     persistForest(st.forest);
     persistDungeon(st.dungeon);
+    persistFishing(st.fishing);
     persistReminderPrefs(st.reminderPrefs);
     return true;
   },
@@ -3815,6 +3878,142 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     };
   },
 
+  // ---- Рыбалка (v2.65) --------------------------------------------------------
+
+  fishSpot: (spot) => {
+    const f = get().fishing;
+    if (!spotOpen(spot, skillOf(f.xp).level) || f.spot === spot) return false;
+    const fishing = { ...f, spot };
+    set({ fishing });
+    persistFishing(fishing);
+    return true;
+  },
+
+  fishCatch: (bite) => {
+    const s = get();
+    const f0 = s.fishing;
+    let p = s.prison;
+    const now = Date.now();
+    const spot = f0.spot;
+    const skill0 = skillOf(f0.xp).level;
+    // Клёв места проедается каждой вытащенной штукой.
+    const bite0 = biteNow(f0.bite[spot], f0.biteAt[spot], now);
+    const bites = f0.bite.slice();
+    const bitesAt = f0.biteAt.slice();
+    bites[spot] = Math.max(0, bite0 - BITE_DRAIN);
+    bitesAt[spot] = now;
+    const out: FishCatch = {
+      kind: bite.kind,
+      value: 0,
+      xp: 0,
+      firstTokens: 0,
+      record: 0,
+      levelUp: 0,
+      pearl: false,
+      tokens: 0,
+    };
+    let fishing: FishingState = { ...f0, bite: bites, biteAt: bitesAt };
+    if (bite.kind === 'fish') {
+      if (f0.net.n >= netCapacity(f0.netLevel)) return null;
+      const fish = bite.fish;
+      const value = fishValue(fish, bite.kg, skill0);
+      const xp = f0.xp + RARITY_XP[fish.rarity];
+      const first = !(f0.caught[fish.id] ?? 0);
+      const best = f0.records[fish.id] ?? 0;
+      out.value = value;
+      out.xp = RARITY_XP[fish.rarity];
+      out.firstTokens = first ? firstCatchTokens(fish) : 0;
+      out.record = !first && bite.kg > best ? bite.kg : 0;
+      const lv = skillOf(xp).level;
+      out.levelUp = lv > skill0 ? lv : 0;
+      fishing = {
+        ...fishing,
+        xp,
+        total: f0.total + 1,
+        net: {
+          n: f0.net.n + 1,
+          kg: Math.round((f0.net.kg + bite.kg) * 100) / 100,
+          value: f0.net.value + value,
+        },
+        records: { ...f0.records, [fish.id]: Math.max(best, bite.kg) },
+        caught: { ...f0.caught, [fish.id]: (f0.caught[fish.id] ?? 0) + 1 },
+      };
+      if (out.firstTokens) p = { ...p, tokens: p.tokens + out.firstTokens };
+    } else if (bite.kind === 'box') {
+      // Шкатулка со дна — тот же сундучок «одна из трёх», что у мыши. Занят —
+      // отдаём токенами, второй сундучок затёр бы первый.
+      if (!p.treasure) p = { ...p, treasure: newTreasure('box', batOffers(p, false, Math.random)) };
+      else {
+        out.tokens = 15 + 3 * (p.rank + p.prestige);
+        p = { ...p, tokens: p.tokens + out.tokens };
+      }
+    } else if (Math.random() < PEARL_CHANCE) {
+      out.pearl = true;
+      p = { ...p, pearls: p.pearls + 1 };
+      if (p.pearls > PEARL_MAX) {
+        out.tokens = 40;
+        p = { ...p, tokens: p.tokens + 40 };
+      }
+    }
+    set({ fishing, prison: p });
+    persistFishing(fishing);
+    if (p !== s.prison) persistPrison(p);
+    return out;
+  },
+
+  fishSell: () => {
+    const s = get();
+    const f = s.fishing;
+    if (!f.net.n) return 0;
+    // Жемчуг, престиж, навыки и получка — та же надбавка продажи, что у
+    // шахты и леса.
+    const coins = Math.round(f.net.value * modsOf(s.prison).sell);
+    const fishing = { ...f, net: { n: 0, kg: 0, value: 0 } };
+    const prison = { ...s.prison, earned: s.prison.earned + coins };
+    set({ fishing, prison, slotsBalance: s.slotsBalance + coins });
+    persistFishing(fishing);
+    persistPrison(prison);
+    persistSlots(get());
+    return coins;
+  },
+
+  fishFeed: () => {
+    const s = get();
+    const f = s.fishing;
+    const p = s.prison;
+    if (!f.net.n || !p.pet) return null;
+    const xp = f.net.n * PET_FISH_XP;
+    const fed = feedPet(p, xp);
+    const prison = { ...p, pets: fed.pets };
+    const fishing = { ...f, net: { n: 0, kg: 0, value: 0 } };
+    set({ prison, fishing });
+    persistPrison(prison);
+    persistFishing(fishing);
+    return { xp, up: fed.up };
+  },
+
+  fishBuyRod: () => {
+    const s = get();
+    const next = RODS[s.fishing.rod + 1];
+    if (!next || s.slotsBalance < next.price) return false;
+    const fishing = { ...s.fishing, rod: s.fishing.rod + 1 };
+    set({ fishing, slotsBalance: s.slotsBalance - next.price });
+    persistFishing(fishing);
+    persistSlots(get());
+    return true;
+  },
+
+  fishNetUp: () => {
+    const s = get();
+    const lv = s.fishing.netLevel;
+    if (lv >= NET_MAX || s.slotsBalance < netCost(lv)) return false;
+    const fishing = { ...s.fishing, netLevel: lv + 1 };
+    set({ fishing, slotsBalance: s.slotsBalance - netCost(lv) });
+    persistFishing(fishing);
+    persistSlots(get());
+    return true;
+  },
+
   yardShiny: (kind) => {
     const p = get().prison;
     const ev = liveEvent(p);
@@ -3887,21 +4086,26 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
     const forest = freshForest();
     const dungeon = { ...DUNGEON_START };
-    set({ prison, forest, dungeon });
+    const fishing = normalizeFishing(null);
+    set({ prison, forest, dungeon, fishing });
     persistPrison(prison);
     persistForest(forest);
     persistDungeon(dungeon);
+    persistFishing(fishing);
   },
 
   gamesReset: () => {
     const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
     const forest = freshForest();
     const dungeon = { ...DUNGEON_START };
+    const fishing = normalizeFishing(null);
     persistForest(forest);
     persistDungeon(dungeon);
+    persistFishing(fishing);
     set({
       dungeon,
       forest,
+      fishing,
       prison,
       slotsBalance: START_BALANCE,
       slotsBet: 25,

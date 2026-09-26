@@ -42,6 +42,7 @@ export const STORAGE_KEYS = {
   prison: 'prison.state',
   forest: 'forest.state',
   dungeon: 'dungeon.state',
+  fishing: 'fishing.state',
   meta: 'app.meta',
 } as const;
 

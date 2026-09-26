@@ -10,6 +10,7 @@ import type { GxIconName } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { useFinanceStore } from '@/store';
 import { BeastTab, GearTab, StashTab } from '@/components/DungeonCamp';
+import { RodsTab, TrophiesTab } from '@/components/FishingCamp';
 import {
   bagCapacity,
   bagCost,
@@ -256,6 +257,8 @@ export type CampTab =
   | 'gear'
   | 'beasts'
   | 'stash'
+  | 'rods'
+  | 'trophies'
   | 'forge'
   | 'axes'
   | 'axench'
@@ -275,6 +278,8 @@ const TAB_NAMES: Record<CampTab, string> = {
   gear: 'Снаряжение',
   beasts: 'Враги',
   stash: 'Склад',
+  rods: 'Снасти',
+  trophies: 'Журнал',
   forge: 'Кузница',
   axes: 'Топоры',
   axench: 'Чары',
@@ -296,6 +301,8 @@ const TAB_ICONS: Record<CampTab, GxIconName> = {
   gear: 'helmet',
   beasts: 'rat',
   stash: 'chest',
+  rods: 'fishing',
+  trophies: 'fish',
   forge: 'anvil',
   axes: 'axe',
   axench: 'magic',
@@ -312,7 +319,7 @@ const TAB_ICONS: Record<CampTab, GxIconName> = {
   perks: 'sparkles',
 };
 
-export type CampPlace = 'mine' | 'forest' | 'dungeon';
+export type CampPlace = 'mine' | 'forest' | 'dungeon' | 'fish';
 
 /**
  * Лагерь у шахты и у леса — РАЗНЫЙ. В шахте топоры и пилорама — чужое, в
@@ -324,11 +331,19 @@ const PLACE_TABS: Record<CampPlace, CampTab[]> = {
   mine: ['forge', 'enchant', 'runes', 'pets', 'shop', 'cases', 'crew', 'finds', 'miles', 'perks'],
   forest: ['axes', 'axench', 'mill', 'bench', 'cases', 'pets', 'runes'],
   dungeon: ['gear', 'beasts', 'stash', 'cases', 'runes', 'pets'],
+  // Руны рыбалке ничего не дают — их тут нет. Питомца здесь кормят уловом.
+  fish: ['rods', 'trophies', 'pets', 'cases'],
 };
 
 /** Где живёт вкладка: для двора, который открывает лагерь со своих зданий. */
 export const campPlaceOf = (tab: CampTab): CampPlace =>
-  PLACE_TABS.mine.includes(tab) ? 'mine' : PLACE_TABS.forest.includes(tab) ? 'forest' : 'dungeon';
+  PLACE_TABS.mine.includes(tab)
+    ? 'mine'
+    : PLACE_TABS.forest.includes(tab)
+      ? 'forest'
+      : PLACE_TABS.fish.includes(tab)
+        ? 'fish'
+        : 'dungeon';
 
 export function PrisonCamp({
   place = 'mine',
@@ -365,7 +380,15 @@ export function PrisonCamp({
   return (
     <GxSheet
       className="gx-camp"
-      title={place === 'forest' ? 'Лагерь лесоруба' : place === 'dungeon' ? 'Снаряжение' : 'Лагерь'}
+      title={
+        place === 'forest'
+          ? 'Лагерь лесоруба'
+          : place === 'dungeon'
+            ? 'Снаряжение'
+            : place === 'fish'
+              ? 'Лагерь рыбака'
+              : 'Лагерь'
+      }
       onClose={onClose}
       tabs={
         <div className="gx-tabs" role="tablist">
@@ -394,6 +417,8 @@ export function PrisonCamp({
         {tab === 'gear' && <GearTab onSpend={onSpend} />}
         {tab === 'beasts' && <BeastTab />}
         {tab === 'stash' && <StashTab onSpend={onSpend} />}
+        {tab === 'rods' && <RodsTab onSpend={onSpend} />}
+        {tab === 'trophies' && <TrophiesTab />}
         {tab === 'forge' && <ForgeTab onSpend={onSpend} />}
         {tab === 'axes' && <AxesTab onSpend={onSpend} />}
         {tab === 'axench' && <AxeEnchSection f={f} p={p} />}

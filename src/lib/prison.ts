@@ -953,7 +953,12 @@ export interface ModsSource {
   handle?: number;
   event?: YardEvent | null;
   pickStars?: number;
+  pearls?: number;
 }
+
+/** Жемчуг с рыбалки (v2.65): +0,5% к продаже везде за каждую, не больше десяти. */
+export const PEARL_MAX = 10;
+export const PEARL_SELL = 0.005;
 
 // ---------------------------------------------------------------------------
 // События двора (v2.54). Правила и награды — в `lib/yard.ts`; здесь только
@@ -1005,7 +1010,7 @@ export interface YardEvent {
 // лежит в сохранении: закрыл приложение посреди выбора — вернёшься к нему же.
 // ---------------------------------------------------------------------------
 
-export type TreasureFrom = 'bat' | 'batRare' | 'magpie';
+export type TreasureFrom = 'bat' | 'batRare' | 'magpie' | 'box';
 
 export interface Treasure {
   from: TreasureFrom;
@@ -1027,7 +1032,8 @@ export const RISK_STEPS = 4;
 export function normalizeTreasure(raw: unknown): Treasure | null {
   const t = raw as Partial<Treasure> | null | undefined;
   if (!t || typeof t !== 'object' || !Array.isArray(t.options) || !t.options.length) return null;
-  const from: TreasureFrom = t.from === 'batRare' || t.from === 'magpie' ? t.from : 'bat';
+  const from: TreasureFrom =
+    t.from === 'batRare' || t.from === 'magpie' || t.from === 'box' ? t.from : 'bat';
   const options = t.options.filter(
     (r): r is Reward =>
       !!r &&
@@ -1174,6 +1180,7 @@ export function modsOf(p: ModsSource): Mods {
       (1 + 0.06 * k.dealer) *
       findsMult(p.finds ?? {}) *
       (1 + b.sell) *
+      (1 + PEARL_SELL * Math.min(PEARL_MAX, p.pearls ?? 0)) *
       (ev === 'payday' ? PAYDAY_SELL : 1),
     fortune: 0.06 * lv('fortune') + b.loot + (ev === 'gold' ? GOLD_FORTUNE : 0),
     vein: 0.025 * lv('vein') * proc,
@@ -2694,6 +2701,8 @@ export interface PrisonState {
   treasure: Treasure | null;
   /** Сколько летучих мышей поймано — для статистики и вех. */
   bats: number;
+  /** Жемчуг с рыбалки (v2.65): сколько найдено; действует не больше десяти. */
+  pearls: number;
 }
 
 export function freshMine(id: number, seed = Math.floor(Math.random() * 2 ** 31)): PrisonMine {
@@ -2759,6 +2768,7 @@ export const PRISON_START: PrisonState = {
   seids: 0,
   treasure: null,
   bats: 0,
+  pearls: 0,
 };
 
 const int = (v: unknown, lo: number, hi: number, dflt: number): number =>
@@ -2852,6 +2862,7 @@ export function normalizePrison(raw: Partial<PrisonState> | null | undefined): P
     seids: int(raw.seids, 0, 1e9, 0),
     treasure: normalizeTreasure(raw.treasure),
     bats: int(raw.bats, 0, 1e9, 0),
+    pearls: int(raw.pearls, 0, 1e6, 0),
   };
 }
 

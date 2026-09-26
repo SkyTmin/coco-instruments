@@ -273,6 +273,12 @@ SOUNDS = {
     'card.fan': [(CAS('card-fan-1'), {'dur': 0.5, 'out': 150}), (CAS('card-fan-2'), {'dur': 0.5, 'out': 150})],
     'flap': [(RPG(f'cloth{i}'), {'dur': 0.16, 'rate': 1.35, 'out': 60, 'rms': -22}) for i in (1, 2, 3, 4)],
     'shiny': [(IFC(f'glass_00{i}'), {'dur': 0.25, 'rate': 1.25, 'out': 120}) for i in (1, 2, 5, 6)],
+
+    # ---- Рыбалка (v2.65). Воды в наборах Kenney нет: всплеск — пузыри
+    # «RPG Sound Pack» ниже тоном, падение поплавка — капли интерфейса.
+    'splash': [(OGR('inventory', n + '.wav'), {'dur': 0.5, 'rate': 0.72, 'lp': 3000, 'out': 180}) for n in ('bubble', 'bubble2', 'bubble3')],
+    'plop': [(IFC(f'drop_00{i}'), {'rate': 0.7, 'lp': 2600, 'out': 90}) for i in (2, 3)],
+    'snap': [(RPG('knifeSlice'), {'dur': 0.25, 'rate': 1.35}), (RPG('knifeSlice2'), {'dur': 0.25, 'rate': 1.35})],
 }
 
 # Писки крыс: одиночные, вырезанные из серий (частое событие не должно звучать
@@ -299,6 +305,7 @@ MUSIC_SCENES = {
     'lobby': 'Shrine',
     'depths': 'Patreon Challenge 04',
     'boss': 'Ludum Dare 30 03',
+    'fishing': 'Ambient Relaxing Loop',
 }
 
 

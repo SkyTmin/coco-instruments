@@ -30,6 +30,7 @@ import {
   EVENTS_FROM_RANK,
 } from '@/lib/yard';
 import { areaOf, bossReadyAt, dungeonOpen, DUNGEON_UNLOCK_RANK } from '@/lib/dungeon';
+import { FISH_UNLOCK_RANK, netCapacity, skillOf, SPOTS } from '@/lib/fishing';
 import { tapLight } from '@/lib/haptics';
 import { useGameAudio } from '@/lib/use-game-audio';
 import { AudioToggles } from '@/components/AudioToggles';
@@ -53,6 +54,7 @@ export function YardPage() {
   const prison = useFinanceStore((s) => s.prison);
   const forest = useFinanceStore((s) => s.forest);
   const dungeon = useFinanceStore((s) => s.dungeon);
+  const fishing = useFinanceStore((s) => s.fishing);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const prisonZoneEnter = useFinanceStore((s) => s.prisonZoneEnter);
   const [camp, setCamp] = useState<CampTab | null>(null);
@@ -74,6 +76,8 @@ export function YardPage() {
   const ev = liveEvent(prison, now);
   const def = ev ? eventOf(ev.id) : null;
   const forestOpen = prison.rank >= FOREST_UNLOCK_RANK || prison.prestige > 0;
+  const fishOpen = prison.rank >= FISH_UNLOCK_RANK || prison.prestige > 0;
+  const netFull = fishing.net.n >= netCapacity(fishing.netLevel);
   const w = barygaWindow(now);
   const lots = barygaLots(w, prison);
   const bought = barygaBought(prison, w);
@@ -201,6 +205,20 @@ export function YardPage() {
             locked={!forestOpen}
             badge={ev?.place === 'forest' ? def?.glyph : null}
             onClick={() => go('/forest')}
+          />
+          <Building
+            icon="fishing"
+            name="Рыбалка"
+            text={
+              !fishOpen
+                ? `С ранга ${rankLetter(FISH_UNLOCK_RANK)}`
+                : netFull
+                  ? 'Садок полон — продай улов'
+                  : `${SPOTS[fishing.spot].name} · мастерство ${skillOf(fishing.xp).level}`
+            }
+            locked={!fishOpen}
+            badge={fishOpen && netFull ? '!' : null}
+            onClick={() => go('/fishing')}
           />
           <Building
             icon="cave"

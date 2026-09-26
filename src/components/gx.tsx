@@ -97,7 +97,10 @@ export type GxIconName =
   | 'chainsaw'
   | 'coins-pile'
   | 'stairs'
-  | 'medal';
+  | 'medal'
+  | 'fishing'
+  | 'fish'
+  | 'fish-bucket';
 
 /** Системные значки Kenney Game Icons — public/ui/kenney/i-*.png. */
 export type KIconName =

@@ -474,6 +474,7 @@ const FROM_TITLE: Record<Treasure['from'], string> = {
   bat: 'Сундучок мыши',
   batRare: 'Сундучок синей мыши',
   magpie: 'Мешочек сороки',
+  box: 'Шкатулка со дна',
 };
 
 type Flash = { kind: 'win' | 'draw'; step: number } | null;
