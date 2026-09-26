@@ -50,7 +50,7 @@ import {
 } from '@/lib/fishing';
 import type { Bite, Fight, FishDef } from '@/lib/fishing';
 import { modsOf, petOf, rankLetter, shortMoney } from '@/lib/prison';
-import { petTexture } from '@/lib/prison-art';
+import { PetArt } from '@/components/PetArt';
 import { createFx } from '@/lib/prison-fx';
 import type { Fx } from '@/lib/prison-fx';
 import { plainPlan, runRollup } from '@/lib/rollup';
@@ -745,10 +745,10 @@ export function FishingPage() {
 
   const feed = () => {
     primeAudio();
-    const pet = useFinanceStore.getState().prison.pet;
+    const pet = useFinanceStore.getState().prison.squad[0];
     if (!pet) {
       tapLight();
-      say('Питомца нет — они выпадают из посылок');
+      say('Питомцев нет — они вылупляются из яиц');
       return;
     }
     const got = fishFeed();
@@ -759,7 +759,10 @@ export function FishingPage() {
     }
     tierBreak(1);
     notifySuccess();
-    say(`${petOf(pet).name}: +${fmt(got.xp)} опыта${got.up ? ` · ${got.up} уровень` : ''}`);
+    const many = useFinanceStore.getState().prison.squad.length > 1;
+    say(
+      `${many ? 'Отряд' : petOf(pet).name}: +${fmt(got.xp)} опыта${got.up ? ` · ${got.up} уровень` : ''}`,
+    );
   };
 
   const goSpot = (i: number) => {
@@ -877,7 +880,7 @@ export function FishingPage() {
             : phase === 'fight'
               ? 'Держи — подматывай. Краснеет — отпусти'
               : '';
-  const petOn = prison.pet;
+  const petOn = prison.squad[0];
   // Садок продаётся с той же надбавкой, что порода и лес: показываем то, что придёт.
   const sellMult = modsOf(prison).sell;
 
@@ -1108,7 +1111,11 @@ export function FishingPage() {
             onClick={feed}
             aria-label="Покормить питомца уловом"
           >
-            {petOn ? <img src={petTexture(petOn)} alt="" /> : <GxIcon name="paw" size={28} />}
+            {petOn ? (
+              <PetArt id={petOn} size={30} v={prison.pets[petOn]?.v ?? 0} still fx={false} />
+            ) : (
+              <GxIcon name="paw" size={28} />
+            )}
             <b>Кормить</b>
           </button>
           <button

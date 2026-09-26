@@ -112,6 +112,8 @@ function cardSub(r: Reward): string | null {
       return 'находка · в коллекцию';
     case 'pet':
       return 'новый питомец';
+    case 'egg':
+      return 'яйцо · в гнездо';
     case 'keys':
       return 'ещё сундук';
     case 'item':
@@ -542,7 +544,7 @@ interface CaseSum {
   single: Reward[];
 }
 
-const SINGLE_ORDER: Record<string, number> = { book: 0, rune: 1, find: 2, pet: 3 };
+const SINGLE_ORDER: Record<string, number> = { egg: 0, book: 1, rune: 2, find: 3, pet: 4 };
 
 /** Сложить наборы: монеты к монетам, бомбы к бомбам; книги — вперёд. */
 function sumCases(rolls: CaseRoll[]): CaseSum {
@@ -570,8 +572,15 @@ function sumCases(rolls: CaseRoll[]): CaseSum {
   if (keys) summed.push({ kind: 'keys', amount: keys });
   for (const [id, amount] of items) summed.push({ kind: 'item', id, amount });
   if (treats) summed.push({ kind: 'treat', amount: treats });
+  const EGG_ORDER = { dragon: 0, crystal: 1, stone: 2, moss: 3 };
   const rank = (x: Reward) =>
-    x.kind === 'book' ? -x.book.lvl : x.kind === 'rune' ? -x.rune.tier : 0;
+    x.kind === 'book'
+      ? -x.book.lvl
+      : x.kind === 'rune'
+        ? -x.rune.tier
+        : x.kind === 'egg'
+          ? EGG_ORDER[x.egg]
+          : 0;
   single.sort(
     (a, b) => (SINGLE_ORDER[a.kind] ?? 9) - (SINGLE_ORDER[b.kind] ?? 9) || rank(a) - rank(b),
   );

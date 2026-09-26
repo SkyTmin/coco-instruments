@@ -302,6 +302,19 @@ export function YardPage() {
             onClick={() => open('cases')}
           />
           <Building
+            icon="egg"
+            name="Питомник"
+            text={
+              prison.nest.some((x) => x.left <= 0)
+                ? 'Яйцо согрелось — вылупи его'
+                : prison.nest.length
+                  ? `В гнёздах: ${prison.nest.length} · питомцев ${Object.keys(prison.pets).length}`
+                  : 'Яйца, гнёзда и твои питомцы'
+            }
+            badge={prison.nest.some((x) => x.left <= 0) ? '!' : null}
+            onClick={() => open('pets')}
+          />
+          <Building
             icon="miner"
             name="Рабочие"
             text={crew.blocks > 0 ? `Накопали ${fmt(crew.blocks)} блоков` : 'Копают, пока тебя нет'}

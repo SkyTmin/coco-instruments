@@ -100,7 +100,9 @@ export type GxIconName =
   | 'medal'
   | 'fishing'
   | 'fish'
-  | 'fish-bucket';
+  | 'fish-bucket'
+  | 'egg'
+  | `pet-${string}`;
 
 /** Системные значки Kenney Game Icons — public/ui/kenney/i-*.png. */
 export type KIconName =

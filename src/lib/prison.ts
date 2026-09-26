@@ -44,6 +44,22 @@ import {
   SHELF_MAX,
 } from './books';
 import type { Book, BookTier } from './books';
+import {
+  addPet,
+  EGG_PITY,
+  normalizeEggs,
+  normalizeNest,
+  normalizePets,
+  normalizeSquad,
+  NO_EGGS,
+  petBonus,
+  petLevelOf,
+  PETS,
+  putEgg,
+  squadSlots,
+  zooMult,
+} from './pets';
+import type { EggId, Eggs, Nest, PetId, Pets } from './pets';
 
 export { nice, PICKS, AUTOSELL_TOKENS, BLOCK_HITS, blockPity } from './economy';
 export type { PickDef as Pick } from './economy';
@@ -1232,7 +1248,7 @@ export interface ModsSource {
   off?: EnchantId[];
   runes?: Rune[];
   sockets?: number[];
-  pet?: PetId | null;
+  squad?: PetId[];
   pets?: Pets;
   miles?: string[];
   handle?: number;
@@ -1474,6 +1490,7 @@ export function modsOf(p: ModsSource): Mods {
         sellMult(p.prestige) *
           (1 + 0.06 * k.dealer) *
           findsMult(p.finds ?? {}) *
+          zooMult(p.pets) *
           (1 + b.sell) *
           (1 + PEARL_SELL * Math.min(PEARL_MAX, p.pearls ?? 0)),
       ) * (ev === 'payday' ? PAYDAY_SELL : 1),
@@ -1868,106 +1885,23 @@ export function fusePlan(
 }
 
 // ---------------------------------------------------------------------------
-// Питомцы — кольская фауна. Растут, пока копаешь (опыт — сломанные блоки),
-// с собой водишь одного. Каждый даёт одну прибавку, растущую с уровнем.
-// Приходят из посылок; второй такой же — лакомство, опыт текущему.
+// Питомцы (v2.72) — правила в `pets.ts`: состав, яйца, отряд, золотые и
+// радужные. Здесь только то, что нужно шахте: прибавки в `bonusOf`,
+// коллекция в `modsOf`, награды-яйца в посылках и сундуках.
 // ---------------------------------------------------------------------------
 
-export type PetId = 'lemming' | 'fox' | 'wolverine' | 'raven' | 'owl' | 'calf';
-
-/** Что умеет питомец. `luck` — ключи, находки и посылки. */
-export type PetStat = 'loot' | 'sell' | 'dmg' | 'token' | 'luck' | 'rate';
-
-export interface PetDef {
-  id: PetId;
-  name: string;
-  stat: PetStat;
-  /** Прибавка за уровень. */
-  per: number;
-  text: string;
-  lore: string;
-}
-
-export const PETS: PetDef[] = [
-  {
-    id: 'lemming',
-    name: 'Лемминг',
-    stat: 'loot',
-    per: 0.012,
-    text: 'к добыче',
-    lore: 'Их в тундре тысячи, и все копают',
-  },
-  {
-    id: 'fox',
-    name: 'Песец',
-    stat: 'sell',
-    per: 0.01,
-    text: 'к продаже',
-    lore: 'Торгуется за каждый камешек',
-  },
-  {
-    id: 'wolverine',
-    name: 'Росомаха',
-    stat: 'dmg',
-    per: 0.02,
-    text: 'к скорости копки',
-    lore: 'Грызёт мёрзлый гранит',
-  },
-  {
-    id: 'raven',
-    name: 'Ворон',
-    stat: 'token',
-    per: 0.03,
-    text: 'к токенам',
-    lore: 'Тащит всё, что блестит',
-  },
-  {
-    id: 'owl',
-    name: 'Полярная сова',
-    stat: 'luck',
-    per: 0.03,
-    text: 'к ключам, находкам и посылкам',
-    lore: 'Видит сквозь пургу',
-  },
-  {
-    id: 'calf',
-    name: 'Оленёнок',
-    stat: 'rate',
-    per: 0.008,
-    text: 'к частоте ударов',
-    lore: 'Тянет волокушу с рудой',
-  },
-];
-
-export const petOf = (id: PetId): PetDef => PETS.find((x) => x.id === id)!;
-
-/** Опыт каждого приручённого питомца. Нет ключа — не приручён. */
-export type Pets = Partial<Record<PetId, number>>;
-
-export const PET_LEVEL_MAX = 25;
-/** Лакомство (второй такой же питомец) — опыт текущему. */
-export const PET_TREAT_XP = 400;
-
-export function petXpFor(level: number): number {
-  return Math.round(150 * Math.pow(1.2, level - 1));
-}
-
-export function petLevelOf(xp: number): { level: number; into: number; need: number } {
-  let level = 1;
-  let rest = Math.max(0, Math.floor(xp || 0));
-  for (;;) {
-    if (level >= PET_LEVEL_MAX) return { level, into: 0, need: 0 };
-    const need = petXpFor(level);
-    if (rest < need) return { level, into: rest, need };
-    rest -= need;
-    level += 1;
-  }
-}
-
-/** Прибавка питомца на уровне `level`. */
-export function petPower(id: PetId, level: number): number {
-  return petOf(id).per * level;
-}
+export type { PetId, PetStat, Pets, PetRec, EggId, Nest, Eggs } from './pets';
+export {
+  PETS,
+  petOf,
+  petLevelOf,
+  petXpFor,
+  PET_LEVEL_MAX,
+  PET_TREAT_XP,
+  petBonus,
+  EGGS,
+  eggOf,
+} from './pets';
 
 // ---------------------------------------------------------------------------
 // Потолок прибавок. Руны и питомец складываются по виду и упираются в
@@ -1997,11 +1931,11 @@ export const BONUS_CAP: Bonus = {
   luck: 1,
 };
 
-/** Прибавки рун в гнёздах и питомца — уже с потолком. */
+/** Прибавки рун в гнёздах и отряда питомцев — уже с потолком. */
 export function bonusOf(p: {
   runes?: Rune[];
   sockets?: number[];
-  pet?: PetId | null;
+  squad?: PetId[];
   pets?: Pets;
 }): Bonus {
   const b: Bonus = { ...NO_BONUS };
@@ -2011,9 +1945,10 @@ export function bonusOf(p: {
     const r = runes.find((x) => x.id === id);
     if (r) b[r.kind] += runePower(r);
   }
-  if (p.pet && p.pets && p.pets[p.pet] !== undefined) {
-    const def = petOf(p.pet);
-    b[def.stat] += petPower(p.pet, petLevelOf(p.pets[p.pet] ?? 0).level);
+  for (const id of p.squad ?? []) {
+    const rec = p.pets?.[id];
+    if (!rec) continue;
+    for (const [k, v] of Object.entries(petBonus(id, rec))) b[k as keyof Bonus] += v ?? 0;
   }
   for (const k of Object.keys(b) as (keyof Bonus)[]) b[k] = Math.min(BONUS_CAP[k], b[k]);
   return b;
@@ -2358,6 +2293,7 @@ export type Reward =
   | { kind: 'keys'; amount: number }
   | { kind: 'rune'; rune: Omit<Rune, 'id'> }
   | { kind: 'pet'; id: PetId }
+  | { kind: 'egg'; egg: EggId }
   | { kind: 'treat'; amount: number }
   | { kind: 'book'; book: Book };
 
@@ -2385,8 +2321,8 @@ const keysOf = (amount: number) => () => ({ kind: 'keys', amount }) as Reward;
 /** Книга яруса: чара, уровень и шанс — как у Чародея. */
 const bookOf = (tier: BookTier) => (rnd: () => number) =>
   ({ kind: 'book', book: rollBook(tier, rnd) }) as Reward;
-/** Место под питомца: кто именно — решается по тому, кого ещё нет. */
-const PET_SLOT = () => ({ kind: 'pet', id: 'lemming' }) as Reward;
+/** Яйцо (v2.72): питомцы приходят только из яиц, кто вылупится — решает гнездо. */
+const eggPrize = (egg: EggId) => () => ({ kind: 'egg', egg }) as Reward;
 
 /** Сколько монет (доля цены ранга) и токенов в сундуке и сколько в нём призов. */
 export const CASE_BUNDLE: Record<
@@ -2406,38 +2342,42 @@ export const CASE_BUNDLE: Record<
 const CASE_PRIZE: Record<CaseTier, Slot[]> = {
   common: [
     { w: 35, make: bookOf('simple') },
-    { w: 20, make: item('energy', 1) },
-    { w: 20, make: item('lens', 1) },
-    { w: 20, make: item('bomb3', 1) },
+    { w: 17, make: item('energy', 1) },
+    { w: 17, make: item('lens', 1) },
+    { w: 17, make: item('bomb3', 1) },
+    { w: 9, make: eggPrize('moss') },
     { w: 5, make: keysOf(1) },
   ],
   rare: [
     { w: 35, make: bookOf('rare') },
-    { w: 25, make: rune(1, 2, 0.3) },
-    { w: 15, make: item('bomb5', 1) },
-    { w: 15, make: item('bomb3', 2) },
-    { w: 10, make: keysOf(1) },
+    { w: 22, make: rune(1, 2, 0.3) },
+    { w: 12, make: item('bomb5', 1) },
+    { w: 12, make: item('bomb3', 2) },
+    { w: 10, make: eggPrize('stone') },
+    { w: 9, make: keysOf(1) },
   ],
   epic: [
     { w: 35, make: bookOf('epic') },
-    { w: 25, make: rune(2, 3, 0.3) },
-    { w: 20, make: FIND_SLOT },
-    { w: 10, make: item('charge', 1) },
-    { w: 10, make: keysOf(2) },
+    { w: 22, make: rune(2, 3, 0.3) },
+    { w: 18, make: FIND_SLOT },
+    { w: 12, make: eggPrize('crystal') },
+    { w: 7, make: item('charge', 1) },
+    { w: 6, make: keysOf(2) },
   ],
   legend: [
     { w: 40, make: bookOf('legend') },
-    { w: 25, make: rune(3, 4, 0.3) },
-    { w: 25, make: FIND_SLOT },
-    { w: 10, make: item('charge', 2) },
+    { w: 22, make: rune(3, 4, 0.3) },
+    { w: 22, make: FIND_SLOT },
+    { w: 16, make: eggPrize('crystal') },
   ],
 };
 
-/** Главный приз легендарного сундука: книга, находка или руна IV. */
+/** Главный приз легендарного сундука: книга, драконье яйцо, находка или руна IV. */
 const LEGEND_TOP: Slot[] = [
-  { w: 50, make: bookOf('legend') },
-  { w: 30, make: FIND_SLOT },
-  { w: 20, make: rune(4, 4, 0) },
+  { w: 40, make: bookOf('legend') },
+  { w: 25, make: eggPrize('dragon') },
+  { w: 20, make: FIND_SLOT },
+  { w: 15, make: rune(4, 4, 0) },
 ];
 
 /** Посылка: руны и питомцы — её главное, монеты и токены — подкладка. */
@@ -2456,7 +2396,7 @@ const PARCEL_TABLE: Record<CaseTier, Slot[]> = {
     { w: 22, make: tokens(50, 120) },
     { w: 32, make: rune(1, 2, 0.4) },
     { w: 12, make: keysOf(1) },
-    { w: 12, make: PET_SLOT },
+    { w: 12, make: eggPrize('moss') },
     { w: 10, make: bookOf('rare') },
   ],
   epic: [
@@ -2464,14 +2404,14 @@ const PARCEL_TABLE: Record<CaseTier, Slot[]> = {
     { w: 18, make: tokens(150, 300) },
     { w: 36, make: rune(2, 3, 0.4) },
     { w: 12, make: keysOf(2) },
-    { w: 16, make: PET_SLOT },
+    { w: 16, make: eggPrize('stone') },
     { w: 12, make: bookOf('epic') },
   ],
   legend: [
     { w: 18, make: coins(0.8, 1.2) },
     { w: 14, make: tokens(400, 700) },
     { w: 40, make: rune(3, 4, 0.35) },
-    { w: 28, make: PET_SLOT },
+    { w: 28, make: eggPrize('crystal') },
     { w: 16, make: bookOf('legend') },
   ],
 };
@@ -2498,22 +2438,13 @@ export function rollTier(rnd: () => number): CaseTier {
   ).id;
 }
 
-/** Питомец из посылки: тот, кого ещё нет; все есть — лакомство текущему. */
-function resolvePet(pets: Pets, tier: CaseTier, rnd: () => number): Reward {
-  const missing = PETS.filter((x) => pets[x.id] === undefined);
-  if (missing.length) return { kind: 'pet', id: missing[Math.floor(rnd() * missing.length)].id };
-  const k = tier === 'legend' ? 3 : tier === 'epic' ? 2 : 1;
-  return { kind: 'treat', amount: PET_TREAT_XP * k };
-}
-
 /** Что лежит в посылке редкости `tier`. */
 export function rollParcel(
-  p: { rank: number; prestige: number; pets: Pets },
+  p: { rank: number; prestige: number },
   tier: CaseTier,
   rnd: () => number,
 ): Reward {
-  const r = pickWeighted(PARCEL_TABLE[tier], rnd).make(rnd, p.rank, p.prestige);
-  return r.kind === 'pet' ? resolvePet(p.pets, tier, rnd) : r;
+  return pickWeighted(PARCEL_TABLE[tier], rnd).make(rnd, p.rank, p.prestige);
 }
 
 export function rollCase(
@@ -2748,12 +2679,14 @@ export interface Applied {
   coins: number;
   /** Руна не влезла в мешочек и разбилась на столько токенов. */
   shattered: number;
-  /** Новый питомец пришёл (а не лакомство). */
+  /** Новый питомец пришёл (а не копия или лакомство). */
   newPet: PetId | null;
+  /** Куда легло яйцо: в гнездо, в корзину или разбилось (корзина полна). */
+  egg: 'nest' | 'basket' | 'broken' | null;
 }
 
 export function applyReward(p: PrisonState, r: Reward): Applied {
-  const out: Applied = { p, coins: 0, shattered: 0, newPet: null };
+  const out: Applied = { p, coins: 0, shattered: 0, newPet: null, egg: null };
   switch (r.kind) {
     case 'coins':
       out.coins = r.amount;
@@ -2779,17 +2712,32 @@ export function applyReward(p: PrisonState, r: Reward): Applied {
         out.p = { ...p, runeSeq: id, runes: [...p.runes, { ...r.rune, id }] };
       }
       break;
-    case 'pet':
-      if (p.pets[r.id] !== undefined)
-        return applyReward(p, { kind: 'treat', amount: PET_TREAT_XP });
-      out.newPet = r.id;
-      out.p = { ...p, pets: { ...p.pets, [r.id]: 0 }, pet: p.pet ?? r.id };
+    case 'pet': {
+      const a = addPet(p.pets, r.id);
+      if (a.kind === 'new') out.newPet = r.id;
+      // Первый питомец сразу идёт с тобой: пустой отряд ничего не даёт.
+      const squad =
+        a.kind === 'new' && p.squad.length < squadSlots(p.rank, p.prestige)
+          ? [...p.squad, r.id]
+          : p.squad;
+      out.p = { ...p, pets: a.pets, squad };
       break;
-    case 'treat':
-      out.p = p.pet
-        ? { ...p, pets: { ...p.pets, [p.pet]: (p.pets[p.pet] ?? 0) + r.amount } }
-        : { ...p, tokens: p.tokens + 50 };
+    }
+    case 'egg': {
+      const put = putEgg(p.nest, p.eggs, r.egg);
+      out.egg = put.where;
+      out.p = { ...p, nest: put.nest, eggs: put.eggs, tokens: p.tokens + put.tokens };
       break;
+    }
+    case 'treat': {
+      const lead = p.squad[0];
+      const rec = lead ? p.pets[lead] : undefined;
+      out.p =
+        lead && rec
+          ? { ...p, pets: { ...p.pets, [lead]: { ...rec, xp: rec.xp + r.amount } } }
+          : { ...p, tokens: p.tokens + 50 };
+      break;
+    }
     case 'book':
       // Полка полна — книга рассыпается в пыль сама, как лишняя руна в токены.
       out.p =
@@ -2817,6 +2765,8 @@ export interface MileReward {
   rune?: number;
   /** Четвёртое гнездо для руны. */
   socket?: boolean;
+  /** Яйцо питомца (v2.72). */
+  egg?: EggId;
 }
 
 export interface Mile {
@@ -2900,12 +2850,35 @@ export const MILES: Mile[] = [
     progress: (p) => upToM(p.bestStreak, STREAK_TIERS.length),
     reward: { keys: 3, parcel: 'epic' },
   },
+  // v2.72: питомцы. Шесть видов даёт драконье яйцо — чтобы легендарного
+  // можно было ждать уже в первом круге, а не только из редкого сундука.
+  {
+    id: 'pets6',
+    title: 'Шесть видов',
+    text: 'Вырастить из яиц шесть разных питомцев',
+    progress: (p) => upToM(Object.keys(p.pets).length, 6),
+    reward: { egg: 'dragon' },
+  },
+  {
+    id: 'hatch50',
+    title: 'Наседка',
+    text: 'Высидеть пятьдесят яиц',
+    progress: (p) => upToM(p.hatched, 50),
+    reward: { egg: 'dragon', tokens: 500 },
+  },
+  {
+    id: 'golden',
+    title: 'Золотой питомец',
+    text: 'Собрать пять одинаковых',
+    progress: (p) => upToM(Object.values(p.pets).some((r) => (r?.v ?? 0) >= 1) ? 1 : 0, 1),
+    reward: { egg: 'crystal', keys: 3 },
+  },
   {
     id: 'zoo',
-    title: 'Кольская фауна',
-    text: 'Приручить всех шестерых',
+    title: 'Весь зоопарк',
+    text: `Собрать всех ${PETS.length}`,
     progress: (p) => upToM(Object.keys(p.pets).length, PETS.length),
-    reward: { tokens: 1000, rune: 4 },
+    reward: { tokens: 3000, rune: 4 },
   },
   {
     id: 'cases',
@@ -3038,9 +3011,16 @@ export interface PrisonState {
   runes: Rune[];
   runeSeq: number;
   sockets: number[];
-  /** Приручённые питомцы (опыт каждого) и тот, что с собой. */
+  /** Приручённые питомцы и отряд — кто с собой (v2.72: до трёх). */
   pets: Pets;
-  pet: PetId | null;
+  squad: PetId[];
+  /** Яйца: корзина, гнёзда, счётчик гарантии, сколько вылупилось всего. */
+  eggs: Eggs;
+  nest: Nest[];
+  eggPity: number;
+  hatched: number;
+  /** Сколько блоков было сломано на последнем трюке каждого в отряде. */
+  tricks: number[];
   /** Забранные вехи. */
   miles: string[];
   /** Сколько сейд-камней разбито за всё время. */
@@ -3123,7 +3103,12 @@ export const PRISON_START: PrisonState = {
   runeSeq: 0,
   sockets: [0, 0, 0, 0],
   pets: {},
-  pet: null,
+  squad: [],
+  eggs: NO_EGGS,
+  nest: [],
+  eggPity: 0,
+  hatched: 0,
+  tricks: [],
   miles: [],
   seids: 0,
   treasure: null,
@@ -3372,7 +3357,12 @@ interface LootState {
   runeSeq: number;
   sockets: number[];
   pets: Pets;
-  pet: PetId | null;
+  squad: PetId[];
+  eggs: Eggs;
+  nest: Nest[];
+  eggPity: number;
+  hatched: number;
+  tricks: number[];
   miles: string[];
 }
 
@@ -3403,12 +3393,16 @@ function normalizeLoot(raw: Partial<PrisonState>): LootState {
     used.add(id);
     return id;
   });
-  const pets: Pets = {};
-  for (const d of PETS) {
-    const xp = raw.pets?.[d.id];
-    if (typeof xp === 'number') pets[d.id] = int(xp, 0, 1e12, 0);
-  }
-  const pet = raw.pet && pets[raw.pet] !== undefined ? raw.pet : null;
+  // v2.72: питомцы — записи, а не числа; прежние шесть переезжают в новых
+  // зверей с тем же опытом, `pet` становится первым в отряде.
+  const pets = normalizePets(raw.pets);
+  const legacy = (raw as { pet?: unknown }).pet;
+  const squad = normalizeSquad(
+    raw.squad,
+    legacy,
+    pets,
+    squadSlots(int(raw.rank, 0, LAST_RANK, 0), int(raw.prestige, 0, 1e6, 0)),
+  );
   return {
     parcels,
     parcelsOpened: int(raw.parcelsOpened, 0, 1e9, 0),
@@ -3416,7 +3410,12 @@ function normalizeLoot(raw: Partial<PrisonState>): LootState {
     runeSeq: Math.max(maxId, int(raw.runeSeq, 0, 1e9, 0)),
     sockets,
     pets,
-    pet,
+    squad,
+    eggs: normalizeEggs(raw.eggs),
+    nest: normalizeNest(raw.nest),
+    eggPity: int(raw.eggPity, 0, EGG_PITY, 0),
+    hatched: int(raw.hatched, 0, 1e9, 0),
+    tricks: Array.isArray(raw.tricks) ? raw.tricks.slice(0, 3).map((x) => int(x, 0, 1e15, 0)) : [],
     miles: Array.isArray(raw.miles) ? raw.miles.filter((id) => MILES.some((m) => m.id === id)) : [],
   };
 }
@@ -3435,7 +3434,8 @@ export interface GuideReward {
   item?: [ItemId, number];
   /** Руна этой ступени (вид случайный). */
   rune?: number;
-  pet?: PetId;
+  /** Яйцо питомца (v2.72): кладётся в гнездо. */
+  egg?: EggId;
 }
 
 export interface GuideStep {
@@ -3548,13 +3548,14 @@ export const GUIDE: GuideStep[] = [
     title: 'Вставь руну в оберег',
     hint: '«Ещё» → Руны. Первое гнездо открывается на 5 уровне кирки',
     progress: (p) => upTo(p.sockets.filter(Boolean).length, 1),
-    reward: { pet: 'lemming' },
+    reward: { egg: 'moss' },
   },
   {
     id: 'pet',
     title: 'Дорасти питомца до 3 уровня',
-    hint: 'Питомец растёт, пока ты копаешь',
-    progress: (p) => upTo(p.pet ? petLevelOf(p.pets[p.pet] ?? 0).level : 0, 3),
+    hint: 'Яйцо греется, пока копаешь; вылупится — растёт от работы',
+    progress: (p) =>
+      upTo(Math.max(0, ...p.squad.map((id) => petLevelOf(p.pets[id]?.xp ?? 0).level)), 3),
     reward: { keys: 2, tokens: 100 },
   },
 ];

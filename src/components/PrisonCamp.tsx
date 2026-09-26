@@ -15,6 +15,9 @@ import { RodsTab, TrophiesTab } from '@/components/FishingCamp';
 import { pickSrc } from '@/components/PickArt';
 import { BookArt, BooksTab } from '@/components/BooksTab';
 import { ChestTab } from '@/components/ChestTab';
+import { EggArt, PetArt } from '@/components/PetArt';
+import { PetsTab } from '@/components/PetsTab';
+import { eggOf } from '@/lib/pets';
 import {
   CASE_TIERS,
   CREW_MAX,
@@ -35,10 +38,7 @@ import {
   MILES,
   mileReady,
   milesReady,
-  petLevelOf,
   petOf,
-  petPower,
-  PETS,
   RUNE_BAG,
   RUNE_ROMAN,
   RUNE_SHATTER,
@@ -114,7 +114,6 @@ import {
   findTexture,
   runeTexture,
   parcelTexture,
-  petTexture,
   tearTexture,
 } from '@/lib/prison-art';
 import { burstConfetti } from '@/lib/confetti';
@@ -591,6 +590,8 @@ export function rewardLabel(r: Reward): string {
       return `Руна ${runeOf(r.rune.kind).name} ${RUNE_ROMAN[r.rune.tier - 1]}`;
     case 'pet':
       return petOf(r.id).name;
+    case 'egg':
+      return eggOf(r.egg).name;
     case 'treat':
       return 'Лакомство питомцу';
     case 'book':
@@ -615,7 +616,9 @@ export function RewardIcon({ r, size = 30 }: { r: Reward; size?: number }) {
     case 'rune':
       return <RuneIcon kind={r.rune.kind} tier={r.rune.tier} size={size} />;
     case 'pet':
-      return <img className="pfind-img" src={petTexture(r.id)} width={size} height={size} alt="" />;
+      return <PetIcon id={r.id} size={size} />;
+    case 'egg':
+      return <EggArt egg={r.egg} size={size} />;
     case 'treat':
       return (
         <span className="preward__emoji" style={{ fontSize: size * 0.9 }}>
@@ -1474,6 +1477,7 @@ function RunesTab({ axeLevel }: { axeLevel: number }) {
 
 // ---- Питомцы -------------------------------------------------------------------
 
+/** Питомец значком (списки, награды): портрет вида без движения. */
 export function PetIcon({
   id,
   size = 32,
@@ -1483,73 +1487,7 @@ export function PetIcon({
   size?: number;
   ghost?: boolean;
 }) {
-  return (
-    <img
-      className="ppet-img"
-      src={petTexture(id, ghost)}
-      width={size}
-      height={size}
-      alt={ghost ? '' : petOf(id).name}
-    />
-  );
-}
-
-function PetsTab() {
-  const p = useFinanceStore((s) => s.prison);
-  const setPet = useFinanceStore((s) => s.prisonPetSet);
-  return (
-    <div className="pforge">
-      {PETS.map((d) => {
-        const xp = p.pets[d.id];
-        const have = xp !== undefined;
-        const lv = petLevelOf(xp ?? 0);
-        const here = p.pet === d.id;
-        return (
-          <div
-            key={d.id}
-            className={`pforge__row ppet-row${here ? ' is-here' : ''}${have ? '' : ' is-ghost'}`}
-          >
-            <span className="pforge__ico ppet-ico">
-              <PetIcon id={d.id} size={34} ghost={!have} />
-            </span>
-            <span className="pforge__info">
-              <b>
-                {have ? d.name : '???'} {have && <span className="pench-lvl">ур. {lv.level}</span>}
-              </b>
-              <i>
-                {have
-                  ? `${pctText(petPower(d.id, lv.level))} ${d.text}`
-                  : `Придёт в посылке · ${d.text}`}
-              </i>
-              {have && lv.need > 0 && (
-                <span className="ppet-bar">
-                  <i style={{ transform: `scaleX(${lv.into / lv.need})` }} />
-                </span>
-              )}
-              <em className="ppet-lore">{have ? d.lore : ' '}</em>
-            </span>
-            {have &&
-              (here ? (
-                <Done>С тобой</Done>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn--sm pforge__buy"
-                  onClick={() => {
-                    primeAudio();
-                    selectionChanged();
-                    setPet(d.id);
-                    tierBreak(0);
-                  }}
-                >
-                  С собой
-                </button>
-              ))}
-          </div>
-        );
-      })}
-    </div>
-  );
+  return <PetArt id={id} size={size} ghost={ghost} still fx={false} />;
 }
 
 // ---- Вехи ------------------------------------------------------------------------
@@ -1563,6 +1501,7 @@ function mileRewardText(m: (typeof MILES)[number]): string {
     out.push(`посылка «${TIERS_OF.find((t) => t.id === r.parcel)!.name.toLowerCase()}»`);
   if (r.rune) out.push(`руна ${RUNE_ROMAN[r.rune - 1]}`);
   if (r.socket) out.push('четвёртое гнездо');
+  if (r.egg) out.push(eggOf(r.egg).name.toLowerCase());
   return out.join(' · ');
 }
 

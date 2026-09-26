@@ -117,6 +117,8 @@ import {
 } from '@/lib/books';
 import type { Book, BookTier } from '@/lib/books';
 import {
+  MINES,
+  ROCKS,
   bagCapacity,
   bagCost,
   bagCount,
@@ -298,6 +300,26 @@ import {
   NET_AUTO_TOKENS,
 } from '@/lib/fishing';
 import type { Bite, FishingState } from '@/lib/fishing';
+import {
+  canPat,
+  eggOf,
+  FISH_WARMTH,
+  hatchRoll,
+  addPet as addPetRec,
+  mergePet,
+  PAT_XP,
+  putEgg,
+  refillNest,
+  squadSlots,
+  TRICK_EVERY,
+  TRICK_SELL,
+  trickOre,
+  trickRole,
+  trickTokens,
+  warmNest,
+  SQUAD_MAX,
+} from '@/lib/pets';
+import type { EggId, Nest, PetStat } from '@/lib/pets';
 import {
   applyDelta,
   canPay,
@@ -647,13 +669,34 @@ function collectCrew(p: PrisonState, now: number): { prison: PrisonState; y: Cre
   };
 }
 
-/** Питомец растёт от каждого блока и бревна, пока он с собой. */
-function feedPet(p: PrisonState, n: number): { pets: PrisonState['pets']; up: number } {
-  if (!p.pet || p.pets[p.pet] === undefined) return { pets: p.pets, up: 0 };
-  const before = petLevelOf(p.pets[p.pet] ?? 0).level;
-  const xp = (p.pets[p.pet] ?? 0) + n;
-  const after = petLevelOf(xp).level;
-  return { pets: { ...p.pets, [p.pet]: xp }, up: after > before ? after : 0 };
+/** Яйцо из заданий уже тёплое: столько блоков до вылупления. */
+const GUIDE_EGG_WARM = 150;
+/** Шанс драконьего яйца в сейде. */
+const SEID_EGG = 0.05;
+
+/**
+ * Работа растит отряд и греет яйца (v2.72): каждый блок, бревно или рыба.
+ * Растут все, кто с собой; дозревшее яйцо ждёт тапа — вылупляется сценой.
+ */
+function workPets(
+  p: PrisonState,
+  n: number,
+  warm = n,
+): { pets: PrisonState['pets']; nest: Nest[]; up: PetUp | null; ready: number } {
+  let pets = p.pets;
+  let up: PetUp | null = null;
+  if (n > 0)
+    for (const id of p.squad) {
+      const rec = pets[id];
+      if (!rec) continue;
+      const before = petLevelOf(rec.xp).level;
+      const xp = rec.xp + n;
+      pets = { ...pets, [id]: { ...rec, xp } };
+      const after = petLevelOf(xp).level;
+      if (after > before) up = { id, level: after };
+    }
+  const w = warmNest(p.nest, warm);
+  return { pets, nest: w.nest, up, ready: w.ready };
 }
 
 const persistExpenses = (items: Obligation[]) => writeExpenses({ version: 1, items });
@@ -771,8 +814,10 @@ export interface PrisonLoot {
   parcelTokens: number;
   /** Сколько посылок дозрело этим ударом. */
   parcelsReady: number;
-  /** Питомец дорос до этого уровня (0 — нет). */
-  petUp: number;
+  /** Питомец отряда дорос до нового уровня (null — нет). */
+  petUp: PetUp | null;
+  /** Сколько яиц в гнёздах созрело этим ударом. */
+  eggsReady: number;
   /** Двор: событие началось, выполнено этим ударом или кончилось по часам. */
   eventStarted: YardEvent | null;
   eventDone: YardPrize | null;
@@ -788,6 +833,36 @@ export interface YardEnd {
   failed: boolean;
   lost: number;
   pouch: number;
+}
+
+/** Питомец отряда дорос до уровня. */
+export interface PetUp {
+  id: PetId;
+  level: number;
+}
+
+/** Вылупился питомец: кто, из какого яйца и что с ним стало. */
+export interface HatchResult {
+  egg: EggId;
+  id: PetId;
+  rarity: number;
+  /** Новый, копия к золотому или (у радужного) лакомство. */
+  kind: 'new' | 'dup' | 'treat';
+  /** Сработала гарантия. */
+  forced: boolean;
+}
+
+/** Трюк питомца в шахте: что сделал и что принёс. */
+export interface PetTrick {
+  id: PetId;
+  slot: number;
+  role: PetStat;
+  /** Руда, выкопанная добытчиком: порода и сколько единиц легло в рюкзак. */
+  ore: { rock: number; units: number } | null;
+  coins: number;
+  tokens: number;
+  /** Счастливчик учуял: клетка блока этажа или сейда и на сколько ярусов он глубже. */
+  sense: { cell: number; below: number } | null;
 }
 
 /** Что выдал сундучок живности: награда и монеты (они идут в кошелёк). */
@@ -831,7 +906,8 @@ export interface ForestCut {
   planDone: boolean;
   parcels: CaseTier[];
   parcelsReady: number;
-  petUp: number;
+  petUp: PetUp | null;
+  eggsReady: number;
   eventStarted: YardEvent | null;
   eventDone: YardPrize | null;
   eventEnded: YardEnd | null;
@@ -1326,7 +1402,18 @@ interface FinanceState {
   prisonRuneSocket: (slot: number, runeId: number) => void;
   prisonRuneFuse: (runeId: number) => Rune | null;
   prisonRuneShatter: (runeId: number) => number;
-  prisonPetSet: (id: PetId | null) => void;
+  /** Отряд питомцев (v2.72): кто с собой, по порядку. */
+  prisonSquadSet: (ids: PetId[]) => void;
+  /** Вылупить созревшее яйцо из гнезда `i`. */
+  prisonHatch: (i: number) => HatchResult | null;
+  /** Купить яйцо в Питомнике за монеты. */
+  prisonEggBuy: (egg: EggId) => boolean;
+  /** Слить копии: пять одинаковых — золотой, пять золотых — радужный. */
+  prisonPetMerge: (id: PetId) => boolean;
+  /** Погладить: сердечки всегда, опыт — раз в десять минут (true — дал опыт). */
+  prisonPetPat: (id: PetId) => boolean;
+  /** Трюк питомца из отряда (место `slot`), если он накопил работы. */
+  prisonPetTrick: (slot: number) => PetTrick | null;
   /**
    * Лесоповал: срублено нижнее бревно текущего дерева со стороны `side`.
    * Урон по бревну живёт в странице, как урон по блоку в шахте.
@@ -1436,7 +1523,7 @@ interface FinanceState {
   /** Заколотил нору: одна крепь из запаса каторги. */
   dungeonSpendProp: () => boolean;
   /** Разбит сейд-камень в клетке `cell`: токены и монеты. */
-  prisonSeid: (cell: number) => { tokens: number; coins: number } | null;
+  prisonSeid: (cell: number) => { tokens: number; coins: number; egg: boolean } | null;
   /** Блок этажа сломан: платит сразу, идёт в условие ранга (только блок своего этажа). */
   prisonOreBlock: (cell: number) => { coins: number; own: boolean; book?: Book } | null;
   prisonMileClaim: (id: string) => MileClaim | null;
@@ -3146,7 +3233,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         parcels: [],
         parcelTokens: 0,
         parcelsReady: 0,
-        petUp: 0,
+        petUp: null,
+        eggsReady: 0,
         eventStarted: null,
         eventDone: null,
         eventEnded: null,
@@ -3216,7 +3304,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const parcelsReady = tick.ready;
     const parcelTokens = tick.tokens;
     const parcelsNew = tick.added;
-    const fed = feedPet(p, rocks.length);
+    const fed = workPets(p, rocks.length);
     const pets = fed.pets;
     const petUp = fed.up;
     // Гарантия блока этажа: столько блоков своего этажа без блока этажа —
@@ -3254,6 +3342,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       pickXp,
       parcels,
       pets,
+      nest: fed.nest,
     };
     // Спецзона: время идёт только за работой, норма добавляет десять минут.
     let zoneOut: PrisonLoot['zone'] = null;
@@ -3319,6 +3408,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       parcelTokens,
       parcelsReady,
       petUp,
+      eggsReady: fed.ready,
       eventStarted: start.started,
       eventDone,
       eventEnded: settled.end,
@@ -3496,7 +3586,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       ...hollows.flatMap((h) => (h.kind === 'parcel' ? [h.tier] : [])),
     ];
     const tick = tickParcels(p, logs, fresh);
-    const fed = feedPet(p, logs);
+    const fed = workPets(p, logs);
     const hollowSum = (kind: 'tokens' | 'keys') =>
       hollows.reduce((a, h) => a + (h.kind === kind ? h.amount : 0), 0);
     let prison: PrisonState = {
@@ -3512,6 +3602,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       keys: p.keys + chop.keys + hollowSum('keys'),
       parcels: tick.parcels,
       pets: fed.pets,
+      nest: fed.nest,
     };
     // Двор: медведя отгоняет работа — каждое срубленное бревно.
     let eventDone: YardPrize | null = null;
@@ -3552,6 +3643,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       parcels: tick.added,
       parcelsReady: tick.ready,
       petUp: fed.up,
+      eggsReady: fed.ready,
       eventStarted: start.started,
       eventDone,
       eventEnded: settled.end,
@@ -3996,6 +4088,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         p = { ...p, tokens: p.tokens + 40 };
       }
     }
+    // Каждая вытащенная штука греет яйца: рыбалка — тоже работа.
+    if (p.nest.length) {
+      const w = warmNest(p.nest, FISH_WARMTH);
+      p = { ...p, nest: w.nest };
+    }
     set(out.sold ? { fishing, prison: p, slotsBalance: balance } : { fishing, prison: p });
     persistFishing(fishing);
     if (p !== s.prison) persistPrison(p);
@@ -4023,15 +4120,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const s = get();
     const f = s.fishing;
     const p = s.prison;
-    if (!f.net.n || !p.pet) return null;
+    if (!f.net.n || !p.squad.length) return null;
+    // Садок делится на весь отряд поровну: кормить троих — не втрое сытнее.
     const xp = f.net.n * PET_FISH_XP;
-    const fed = feedPet(p, xp);
+    const fed = workPets(p, Math.round(xp / p.squad.length), 0);
     const prison = { ...p, pets: fed.pets };
     const fishing = { ...f, net: { n: 0, kg: 0, value: 0 } };
     set({ prison, fishing });
     persistPrison(prison);
     persistFishing(fishing);
-    return { xp, up: fed.up };
+    return { xp, up: fed.up?.level ?? 0 };
   },
 
   fishBuyRod: () => {
@@ -4195,7 +4293,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const dug = p.mine.dug.slice();
     dug[cell] += 1;
     const r = seidReward(p.rank, p.prestige);
-    const prison: PrisonState = {
+    let prison: PrisonState = {
       ...p,
       mine: { ...p.mine, dug },
       tokens: p.tokens + r.tokens,
@@ -4204,10 +4302,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       mined: p.mined + 1,
       pickXp: p.pickXp + 1,
     };
+    // Сейд изредка хранит драконье яйцо (v2.72): самое редкое — к самому редкому.
+    const egg = Math.random() < SEID_EGG;
+    if (egg) prison = applyReward(prison, { kind: 'egg', egg: 'dragon' }).p;
     set({ prison, slotsBalance: s.slotsBalance + r.coins });
     persistPrison(prison);
     persistSlots(get());
-    return r;
+    return { ...r, egg };
   },
 
   prisonOreBlock: (cell) => {
@@ -4246,12 +4347,145 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return { coins, own, book };
   },
 
-  prisonPetSet: (id) => {
+  prisonSquadSet: (ids) => {
     const p = get().prison;
-    if (id && p.pets[id] === undefined) return;
-    const prison = { ...p, pet: id };
+    const slots = Math.min(SQUAD_MAX, squadSlots(p.rank, p.prestige));
+    const squad: PetId[] = [];
+    for (const id of ids)
+      if (p.pets[id] && !squad.includes(id) && squad.length < slots) squad.push(id);
+    // Трюки нового отряда — вразбивку, чтобы не срабатывали в один миг.
+    const tricks = squad.map((id, i) => {
+      const was = p.squad.indexOf(id);
+      return was >= 0 ? (p.tricks[was] ?? p.mined) : p.mined - Math.round((i * TRICK_EVERY) / 3);
+    });
+    const prison = { ...p, squad, tricks };
     set({ prison });
     persistPrison(prison);
+  },
+
+  prisonHatch: (i) => {
+    const p = get().prison;
+    const n = p.nest[i];
+    if (!n || n.left > 0) return null;
+    const h = hatchRoll(n.egg, p.eggPity, Math.random);
+    const a = addPetRec(p.pets, h.id);
+    const re = refillNest(
+      p.nest.filter((_, k) => k !== i),
+      p.eggs,
+    );
+    // Первый питомец сам встаёт в отряд, как и любой новый, пока есть место.
+    const room = p.squad.length < squadSlots(p.rank, p.prestige);
+    const squad = a.kind === 'new' && room ? [...p.squad, h.id] : p.squad;
+    const tricks = squad.length > p.squad.length ? [...p.tricks, p.mined] : p.tricks;
+    const prison: PrisonState = {
+      ...p,
+      pets: a.pets,
+      squad,
+      tricks,
+      nest: re.nest,
+      eggs: re.eggs,
+      eggPity: h.pity,
+      hatched: p.hatched + 1,
+    };
+    set({ prison });
+    persistPrison(prison);
+    // Бросок уже на диске — перезапуск посреди сцены не даст бросить снова.
+    flushers.forEach((f) => f());
+    return { egg: n.egg, id: h.id, rarity: h.rarity, kind: a.kind, forced: h.forced };
+  },
+
+  prisonEggBuy: (egg) => {
+    const s = get();
+    const p = s.prison;
+    const def = eggOf(egg);
+    if (!def.price || p.rank < def.from || s.slotsBalance < def.price) return false;
+    const put = putEgg(p.nest, p.eggs, egg);
+    if (put.where === 'broken') return false;
+    const prison = { ...p, nest: put.nest, eggs: put.eggs };
+    set({ prison, slotsBalance: s.slotsBalance - def.price });
+    persistPrison(prison);
+    persistSlots(get());
+    return true;
+  },
+
+  prisonPetMerge: (id) => {
+    const p = get().prison;
+    const pets = mergePet(p.pets, id);
+    if (!pets) return false;
+    const prison = { ...p, pets };
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  prisonPetPat: (id) => {
+    const p = get().prison;
+    const rec = p.pets[id];
+    const now = Date.now();
+    if (!rec || !canPat(rec, now)) return false;
+    const prison = { ...p, pets: { ...p.pets, [id]: { ...rec, xp: rec.xp + PAT_XP, pat: now } } };
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  prisonPetTrick: (slot) => {
+    const s = get();
+    const p = s.prison;
+    const id = p.squad[slot];
+    const rec = id ? p.pets[id] : undefined;
+    if (!id || !rec) return null;
+    const last = p.tricks[slot] ?? p.mined - TRICK_EVERY;
+    if (p.mined - last < TRICK_EVERY) return null;
+    const role = trickRole(id, Math.floor(p.mined / TRICK_EVERY) + slot);
+    const out: PetTrick = { id, slot, role, ore: null, coins: 0, tokens: 0, sense: null };
+    const tricks = p.squad.map((_, k) => (k === slot ? p.mined : (p.tricks[k] ?? p.mined)));
+    let prison: PrisonState = { ...p, tricks };
+    let balance = s.slotsBalance;
+    const inZone = p.mine.id >= MINES;
+    const rock = Math.min(p.mine.id, ROCKS.length - 1);
+    const units = trickOre(id, rec.v);
+    if (role === 'token' || (inZone && (role === 'loot' || role === 'sell'))) {
+      // В спецзоне добыча — токенами, как и сама зона.
+      out.tokens = trickTokens(id, rec.v);
+      prison = { ...prison, tokens: prison.tokens + out.tokens };
+    } else if (role === 'loot') {
+      const put = stash(
+        p.bag,
+        Array(units).fill(rock),
+        bagCapacity(p.bagLevel),
+        p.cart,
+        modsOf(p).sell,
+      );
+      out.ore = { rock, units: put.taken };
+      out.coins = put.sold;
+      balance += put.sold;
+      prison = { ...prison, bag: put.bag, earned: prison.earned + put.sold };
+    } else if (role === 'luck') {
+      // Счастливчик чует блок этажа или сейд, который ещё впереди: ближайший
+      // к поверхности. Нечего чуять — находит токены.
+      const dug = p.mine.dug;
+      let best: { cell: number; below: number } | null = null;
+      if (!inZone)
+        for (const t of [...seidsOf(p.mine.id, p.mine.seed), ...mineBlocks(p.mine)]) {
+          const below = t.depth - (dug[t.cell] ?? 0);
+          if (below < 0) continue;
+          if (!best || below < best.below) best = { cell: t.cell, below };
+        }
+      if (best) out.sense = best;
+      else {
+        out.tokens = trickTokens(id, rec.v);
+        prison = { ...prison, tokens: prison.tokens + out.tokens };
+      }
+    } else if (role === 'sell') {
+      out.coins = Math.round(units * ROCKS[rock].value * modsOf(p).sell * TRICK_SELL);
+      balance += out.coins;
+      prison = { ...prison, earned: prison.earned + out.coins };
+    }
+    set(balance !== s.slotsBalance ? { prison, slotsBalance: balance } : { prison });
+    persistPrison(prison);
+    if (balance !== s.slotsBalance) persistSlotsLazy();
+    return out;
   },
 
   prisonMileClaim: (id) => {
@@ -4272,6 +4506,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       p = a.p;
       rune = a.shattered ? null : p.runes[p.runes.length - 1];
     }
+    if (r.egg) p = applyReward(p, { kind: 'egg', egg: r.egg }).p;
     let parcel: ParcelOpen | null = null;
     if (r.parcel) {
       const reward = rollParcel(p, r.parcel, Math.random);
@@ -4316,7 +4551,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     };
     if (r.rune)
       prison = applyReward(prison, { kind: 'rune', rune: rollRune(r.rune, Math.random) }).p;
-    if (r.pet) prison = applyReward(prison, { kind: 'pet', id: r.pet }).p;
+    // Яйцо заданий уже тёплое: вылупится через пару минут копания.
+    if (r.egg) {
+      const put = putEgg(prison.nest, prison.eggs, r.egg, GUIDE_EGG_WARM);
+      prison = { ...prison, nest: put.nest, eggs: put.eggs, tokens: prison.tokens + put.tokens };
+    }
     set(r.coins ? { prison, slotsBalance: s.slotsBalance + r.coins } : { prison });
     persistPrison(prison);
     if (r.coins) persistSlots(get());

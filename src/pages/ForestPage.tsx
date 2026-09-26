@@ -9,6 +9,7 @@ import { AxeIcon, KeyIcon, ParcelReveal, PrisonCamp, TokenIcon } from '@/compone
 import type { CampTab } from '@/components/PrisonCamp';
 import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { useFinanceStore } from '@/store';
+import { PetArt } from '@/components/PetArt';
 import type { ForestCut, ParcelOpen } from '@/store';
 import {
   AXE_CRIT_CHANCE,
@@ -58,7 +59,6 @@ import {
   crownTexture,
   logMarkTexture,
   parcelTexture,
-  petTexture,
 } from '@/lib/prison-art';
 import { CRACK_STAGES, crackStageOf, crackStrip } from '@/lib/crack-stages';
 import { createFx } from '@/lib/prison-fx';
@@ -687,9 +687,12 @@ export function ForestPage() {
     }
     if (res.parcelsReady) say('Посылка дозрела — вскрой её');
     if (res.petUp) {
-      const st = useFinanceStore.getState().prison;
-      if (st.pet) say(`${petOf(st.pet).name}: ${res.petUp} уровень`);
+      say(`${petOf(res.petUp.id).name}: ${res.petUp.level} уровень`);
       softChime(2);
+    }
+    if (res.eggsReady) {
+      say('Яйцо согрелось — вылупи его в Питомнике');
+      softChime(5);
     }
     const seidTokens = (res.felled?.tokens ?? 0) + (res.storm?.tokens ?? 0);
     if (seidTokens) {
@@ -1390,18 +1393,23 @@ export function ForestPage() {
             >
               <AxeIcon axe={forest.axe} size={30} />
               <b>Лагерь</b>
-              {prison.pet && (
-                <img
+              {prison.squad[0] && (
+                <span
                   className="ppet-perch"
-                  src={petTexture(prison.pet)}
-                  alt={petOf(prison.pet).name}
-                  title={`${petOf(prison.pet).name}, ${petLevelOf(prison.pets[prison.pet] ?? 0).level} ур.`}
+                  title={`${petOf(prison.squad[0]).name}, ${petLevelOf(prison.pets[prison.squad[0]]?.xp ?? 0).level} ур.`}
                   onClick={(e) => {
                     e.stopPropagation();
                     tapLight();
                     setCamp('pets');
                   }}
-                />
+                >
+                  <PetArt
+                    id={prison.squad[0]}
+                    size={30}
+                    v={prison.pets[prison.squad[0]]?.v ?? 0}
+                    fx={false}
+                  />
+                </span>
               )}
               {prison.keys > 0 ? (
                 <i className="gx-badge gx-badge--gold pmx-camp__keys">

@@ -23,11 +23,14 @@ import type { CampTab } from '@/components/PrisonCamp';
 import { ForgeScreen, forgeReadyNow } from '@/components/ForgeScreen';
 import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { BatLayer, MagpieLayer, TreasurePanel } from '@/components/Critters';
+import { MinePets } from '@/components/MinePets';
+import { PetArt } from '@/components/PetArt';
+import { eggOf, TRICK_RUSH, TRICK_RUSH_MS, TRICK_SENSE_MS } from '@/lib/pets';
 import type { BatHandle, MagpieHandle } from '@/components/Critters';
 import { BAT_GAP_MS, BAT_RARE, batRoll } from '@/lib/critters';
 import type { ShinyKind } from '@/lib/critters';
 import { useFinanceStore } from '@/store';
-import type { ParcelOpen, PrisonLoot, PrisonRankUp, TreasureGot } from '@/store';
+import type { ParcelOpen, PetTrick, PrisonLoot, PrisonRankUp, TreasureGot } from '@/store';
 import type { YardEvent } from '@/lib/prison';
 import {
   liveEvent,
@@ -90,7 +93,6 @@ import {
   CASE_TIERS,
   milesReady,
   PARCEL_NEED,
-  petLevelOf,
   petOf,
   RUNE_ROMAN,
   SEID_HITS,
@@ -106,7 +108,6 @@ import {
   kuivaTexture,
   meteorTexture,
   parcelTexture,
-  petTexture,
   seidTexture,
   rockColors,
   rockTexture,
@@ -176,13 +177,17 @@ const reduceMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
-/** Скорость кирки прямо сейчас: перки, энергетик, кураж. */
+/** Разгон от питомца-непоседы (v2.72): живёт в странице, как запал. */
+let petRushUntil = 0;
+
+/** Скорость кирки прямо сейчас: перки, энергетик, кураж, разгон питомца. */
 function liveRate(p: PrisonState): number {
   const now = Date.now();
   const base = PICKS[p.pick].rate * modsOf(p).rate;
   let r = base;
   if (now < p.energyUntil) r *= ENERGY_RATE;
   if (now < p.frenzyUntil) r *= FRENZY_RATE;
+  if (now < petRushUntil) r *= 1 + TRICK_RUSH;
   // Потолок: иначе энергетик в кураже превращал бы удержание в пулемёт.
   return Math.min(r, base * 2.5);
 }
@@ -208,7 +213,7 @@ function rewardText(r: GuideReward): string {
     out.push(`${it.name.toLowerCase()}${r.item[1] > 1 ? ` ×${r.item[1]}` : ''}`);
   }
   if (r.rune) out.push(`руна ${RUNE_ROMAN[r.rune - 1]}`);
-  if (r.pet) out.push(petOf(r.pet).name.toLowerCase());
+  if (r.egg) out.push(eggOf(r.egg).name.toLowerCase());
   return out.join(' · ');
 }
 
@@ -225,7 +230,7 @@ type Screen = 'enchant' | 'cases' | 'pets' | 'more';
 const SCREENS: Record<Screen, { only: CampTab[]; title: string }> = {
   enchant: { only: ['enchant'], title: 'Книги' },
   cases: { only: ['cases'], title: 'Сундуки' },
-  pets: { only: ['pets'], title: 'Питомцы' },
+  pets: { only: ['pets'], title: 'Питомник' },
   more: { only: ['crew', 'runes', 'shop', 'finds', 'miles', 'perks'], title: 'Лагерь' },
 };
 
@@ -394,7 +399,7 @@ export function PrisonPage() {
   const parcelsRef = useRef<HTMLDivElement>(null);
   const chestRef = useRef<HTMLButtonElement>(null);
   const forgeRef = useRef<HTMLButtonElement>(null);
-  const petRef = useRef<HTMLImageElement>(null);
+  const petRef = useRef<HTMLSpanElement>(null);
   const streakBase = useRef({ n: 0, at: 0 });
   const streakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Темп: что сломано и сколько это стоит за последнюю минуту.
@@ -684,9 +689,13 @@ export function PrisonPage() {
       say('Посылка дозрела — вскрой её');
     }
     if (res.petUp) {
-      const st = useFinanceStore.getState().prison;
-      if (st.pet) say(`${petOf(st.pet).name}: ${res.petUp} уровень`);
+      say(`${petOf(res.petUp.id).name}: ${res.petUp.level} уровень`);
       softChime(2);
+      squashPop(petRef.current, 0.6);
+    }
+    if (res.eggsReady) {
+      say('Яйцо согрелось — вылупи его в Питомнике');
+      softChime(5);
       squashPop(petRef.current, 0.6);
     }
     if (res.normDone) {
@@ -791,6 +800,46 @@ export function PrisonPage() {
     const col = Math.max(0, Math.min(MINE_COLS - 1, Math.floor(x / size)));
     const row = Math.max(0, Math.min(MINE_ROWS - 1, Math.floor(y / size)));
     return row * MINE_COLS + col;
+  };
+
+  // ---- Питомцы (v2.72): трюки отряда на поле -----------------------------
+  const [sense, setSense] = useState<{ cell: number; below: number; key: number } | null>(null);
+  const [rush, setRush] = useState(false);
+  /** Клетка ближе всего к питомцам (нижний ряд, середина), где ещё есть порода. */
+  const nearPets = (): number => {
+    const st = useFinanceStore.getState().prison;
+    const mid = Math.floor(MINE_COLS / 2);
+    for (let row = MINE_ROWS - 1; row >= 0; row--)
+      for (let d = 0; d <= mid; d++)
+        for (const col of [mid - d, mid + d]) {
+          const c = row * MINE_COLS + col;
+          if (col < 0 || col >= MINE_COLS) continue;
+          if (rockAt(rocks, c, st.mine.dug[c]) >= 0) return c;
+        }
+    return -1;
+  };
+  const onPetTrick = (t: PetTrick) => {
+    const f = field.current;
+    if (t.role === 'loot' && t.ore) {
+      const c = nearPets();
+      if (c >= 0)
+        f?.fly(c, rockTexture(t.ore.rock), bagRef.current, () => squashPop(bagRef.current, 0.3));
+    } else if (t.role === 'sell' && t.coins) {
+      coinDing();
+    } else if (t.role === 'dmg') {
+      // Силач раскалывает блок у своих лап — один, а не площадь.
+      const c = nearPets();
+      if (c >= 0) dig.breakCells([c], 'hit');
+    } else if (t.role === 'rate') {
+      petRushUntil = Date.now() + TRICK_RUSH_MS;
+      setRush(true);
+      dig.later(() => setRush(false), TRICK_RUSH_MS);
+    } else if (t.role === 'luck' && t.sense) {
+      const key = Date.now();
+      setSense({ ...t.sense, key });
+      softChime(6);
+      setTimeout(() => setSense((x) => (x && x.key === key ? null : x)), TRICK_SENSE_MS);
+    }
   };
 
   /** Мышь поймана: пух и искры там, где её сбили, потом — сундучок. */
@@ -1723,7 +1772,7 @@ export function PrisonPage() {
               Выйти
             </button>
           )}
-          {(anyBuff || yardEv || prison.zone.on) && (
+          {(anyBuff || rush || yardEv || prison.zone.on) && (
             <div className="pbuffs">
               {prison.zone.on && (
                 <span className="pbuff pbuff--zone">
@@ -1733,6 +1782,11 @@ export function PrisonPage() {
                 </span>
               )}
               {yardEv && <EventPill ev={yardEv} now={yardNow} />}
+              {rush && (
+                <span className="pbuff pbuff--frenzy">
+                  <GxIcon name="paw" size={12} /> Разгон
+                </span>
+              )}
               {buffs.frenzy > 0 && (
                 <span className="pbuff pbuff--frenzy">
                   <GxIcon name="sparkles" size={12} /> {sec(buffs.frenzy)}
@@ -1780,6 +1834,7 @@ export function PrisonPage() {
               })}
             </div>
           )}
+          <MinePets onTrick={onPetTrick} />
           <MineField
             ref={field}
             gridKey={mineKey}
@@ -1834,6 +1889,20 @@ export function PrisonPage() {
             }
           >
             <BatLayer ref={batRef} host={fieldEl} onCatch={onBatCatch} />
+            {sense && (
+              <span
+                key={sense.key}
+                className="psense"
+                style={{
+                  left: `${((sense.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                  top: `${(Math.floor(sense.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                  width: `${100 / MINE_COLS}%`,
+                  height: `${100 / MINE_ROWS}%`,
+                }}
+              >
+                <b>{sense.below ? `↓${sense.below}` : '★'}</b>
+              </span>
+            )}
             {yardEv?.id === 'magpie' && (
               <MagpieLayer
                 key={yardEv.from}
@@ -1994,18 +2063,20 @@ export function PrisonPage() {
             )}
           </button>
           <button type="button" className="pmx-dock__btn" onClick={() => openScreen('pets')}>
-            {prison.pet ? (
-              <img
-                ref={petRef}
-                className="pmx-dock__pet"
-                src={petTexture(prison.pet)}
-                alt={petOf(prison.pet).name}
-                title={`${petOf(prison.pet).name}, ${petLevelOf(prison.pets[prison.pet] ?? 0).level} ур.`}
-              />
-            ) : (
-              <GxIcon name="paw" />
-            )}
+            <span className="pmx-dock__pets" ref={petRef}>
+              {prison.squad[0] ? (
+                <PetArt
+                  id={prison.squad[0]}
+                  size={30}
+                  v={prison.pets[prison.squad[0]]?.v ?? 0}
+                  still
+                />
+              ) : (
+                <GxIcon name="paw" />
+              )}
+            </span>
             <b>Питомцы</b>
+            {prison.nest.some((x) => x.left <= 0) && <i className="gx-badge">!</i>}
           </button>
           <button type="button" className="pmx-dock__btn" onClick={() => openScreen('more')}>
             <GxIcon name="campfire" />

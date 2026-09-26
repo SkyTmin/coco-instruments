@@ -1056,6 +1056,46 @@ export function chestOpen(): void {
   softChime(4);
 }
 
+// ---- Питомцы (v2.72) ---------------------------------------------------------
+
+/** Яйцо качнулось в гнезде: мягкий стук скорлупы. */
+export function eggWobble(k = 0): void {
+  play('crit.thud', { gain: 0.14 + 0.03 * k, rate: 1.3 + 0.05 * k, vary: 0.05 });
+}
+
+/** По яйцу пошла трещина: сухой щелчок, выше с каждой. */
+export function eggCrack(step: number): void {
+  play('crate', { gain: 0.2, rate: 1.7 + 0.18 * step, vary: 0.03 });
+}
+
+/**
+ * Вылупился: звон по редкости, у эпического — фраза, у легендарного и
+ * мифического — большой аккорд (как сундук, тот же язык редкости).
+ */
+export function eggHatch(rarity: number): void {
+  const step = rarity >= 4 ? 3 : rarity >= 3 ? 2 : rarity >= 2 ? 1 : 0;
+  play('gem.burst', { gain: 0.3, rate: Math.pow(2, (step * 3) / 12), vary: 0.01 });
+  softChime(4 + step * 2);
+  if (step >= 3) bigMoment(0.7);
+  else if (step >= 2) softPhrase(0.5, 0.1);
+}
+
+/** Погладили питомца: тихий высокий «дзынь». */
+export function petPat(): void {
+  softChime(9);
+}
+
+/** Трюк питомца в шахте: частое событие — только стекло, без мелодии. */
+export function petTrick(): void {
+  play('gem.chime', { gain: 0.18, rate: 1.5, vary: 0.04 });
+}
+
+/** Золотой или радужный: удар и фраза. */
+export function petMerge(): void {
+  play('gem.burst', { gain: 0.32, rate: 1.2 });
+  if (!softPhrase(0.55, 0.08)) softChime(8);
+}
+
 export function cardFlip(): void {
   play('card.flip', { gain: 0.7 });
 }

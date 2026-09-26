@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addPet,
+  canMerge,
+  eggChances,
+  EGG_PITY,
+  EGGS,
+  hatchRoll,
+  mergePet,
+  NEST_SLOTS,
+  NO_EGGS,
+  putEgg,
+  refillNest,
+  squadSlots,
+  STAT_PER,
+  trickOre,
+  trickRole,
+  trickTokens,
+  TRICK_EVERY,
+  TRICK_SELL,
+  warmNest,
+} from './pets';
+import type { EggId, Eggs, Nest } from './pets';
+import {
   BAT_COINS,
   BAT_GAP_MS,
   BAT_PER_BLOCK,
@@ -179,6 +201,8 @@ function run(
     seed?: number;
     /** Книги бросать настоящим ГСЧ (тест разброса везения). */
     bookLuck?: boolean;
+    /** Покупать яйца в Питомнике (v2.72). */
+    eggShop?: boolean;
   } = {},
 ) {
   const until = opts.until ?? LAST_RANK;
@@ -193,8 +217,18 @@ function run(
   let runes: Rune[] = [];
   let seq = 0;
   let sockets = [0, 0, 0, 0];
-  const pets: Pets = {};
-  let pet = null as PetId | null;
+  let pets: Pets = {};
+  let squad: PetId[] = [];
+  /** Яйца (v2.72): гнёзда, корзина, гарантия, сколько вылупилось. */
+  let nest: Nest[] = [];
+  let eggs: Eggs = { ...NO_EGGS };
+  let eggPity = 0;
+  let hatchedN = 0;
+  let eggsBought = 0;
+  // Свой ГСЧ у яиц: кто вылупился, не сдвигает бросков рун и посылок —
+  // иначе одно другое яйцо уводило бы весь прогон другой дорогой.
+  const eggRnd = lcg((opts.seed ?? 20260922) * 31 + 7);
+  let trickAcc = 0;
   const parcels: Parcel[] = [];
   let parcelAcc = 0;
   let t = 0;
@@ -268,7 +302,7 @@ function run(
     runes,
     sockets,
     pets,
-    pet,
+    squad,
   });
   const mods = (e: Enchants) => modsOf(src(e));
   const income = (e: Enchants, mine = rank) => incomeRate(mine, pick, mods(e));
@@ -291,17 +325,67 @@ function run(
       if (best) chosen.push(best);
     }
     sockets = [...chosen, 0, 0, 0, 0].slice(0, 4);
-    let bestPet: PetId | null = pet;
-    let bestInc = income(ench);
-    for (const id of Object.keys(pets) as PetId[]) {
-      pet = id;
-      const inc = income(ench);
-      if (inc > bestInc) {
-        bestInc = inc;
-        bestPet = id;
+    // Отряд: жадно, по приросту дохода, сколько мест открыто.
+    const slots = squadSlots(rank, 0);
+    const picked: PetId[] = [];
+    for (let k = 0; k < slots; k++) {
+      let best: PetId | null = null;
+      let bestInc = -1;
+      for (const id of Object.keys(pets) as PetId[]) {
+        if (picked.includes(id)) continue;
+        squad = [...picked, id];
+        const inc = income(ench);
+        if (inc > bestInc) {
+          bestInc = inc;
+          best = id;
+        }
       }
+      if (best) picked.push(best);
     }
-    pet = bestPet;
+    squad = picked;
+  };
+  /**
+   * Вылупление со «средней удачей», как книги: редкость — накоплением долей
+   * (из десяти мшистых ровно семь обычных), вид внутри редкости — по кругу.
+   * Со случайным вылуплением зёрна расходились на час: ранний эпический
+   * питомец из посылки менял весь прогон.
+   */
+  const hatchAcc: Record<string, number[]> = {};
+  const kindTurn: number[] = [0, 0, 0, 0, 0, 0];
+  const avgHatch = (egg: EggId) => {
+    const acc = (hatchAcc[egg] ??= [0, 0, 0, 0, 0, 0]);
+    eggChances(egg).forEach((c, i) => (acc[i] += c));
+    let r = acc.indexOf(Math.max(...acc));
+    acc[r] -= 1;
+    if (r < 3 && eggPity + 1 >= EGG_PITY) r = 3;
+    const pool = PETS.filter((x) => x.rarity === r);
+    const id = pool[kindTurn[r]++ % pool.length].id;
+    return { id, rarity: r, pity: r >= 3 ? 0 : eggPity + 1, forced: false };
+  };
+  /** Яйцо: в гнездо, в корзину или разбилось на токены. */
+  const takeEgg = (egg: EggId) => {
+    const put = putEgg(nest, eggs, egg);
+    nest = put.nest;
+    eggs = put.eggs;
+    tokens += put.tokens;
+  };
+  /** Вылупить всё созревшее, слить копии в золотых, дозаполнить гнёзда. */
+  const hatchAll = () => {
+    const keep: Nest[] = [];
+    for (const n of nest) {
+      if (n.left > 0) {
+        keep.push(n);
+        continue;
+      }
+      const h = luckBooks ? hatchRoll(n.egg, eggPity, eggRnd) : avgHatch(n.egg);
+      eggPity = h.pity;
+      hatchedN += 1;
+      pets = addPet(pets, h.id).pets;
+      while (canMerge(pets[h.id])) pets = mergePet(pets, h.id)!;
+    }
+    const re = refillNest(keep, eggs);
+    nest = re.nest;
+    eggs = re.eggs;
   };
   /** Сплавить тройки: самую сильную руну ступени — с двумя слабейшими. */
   const fuse = () => {
@@ -327,12 +411,11 @@ function run(
   let opened = 0;
   const open = (tier: CaseTier) => {
     opened += 1;
-    const r = rollParcel({ rank, prestige: 0, pets }, tier, rnd);
+    const r = rollParcel({ rank, prestige: 0 }, tier, rnd);
     if (r.kind === 'coins') money += r.amount;
     else if (r.kind === 'tokens') tokens += r.amount;
     else if (r.kind === 'rune') runes.push({ ...r.rune, id: ++seq });
-    else if (r.kind === 'pet') pets[r.id] = 0;
-    else if (r.kind === 'treat' && pet) pets[pet] = (pets[pet] ?? 0) + r.amount;
+    else if (r.kind === 'egg') takeEgg(r.egg);
     else if (r.kind === 'book') {
       buyLog.push(`${Math.round(t / 60)}м:ПОСЫЛКА${r.book.id}${r.book.lvl}/${r.book.chance}`);
       takeBook(r.book);
@@ -443,7 +526,40 @@ function run(
           parcels.splice(i, 1);
         }
       }
-      if (pet) pets[pet] = (pets[pet] ?? 0) + bps;
+      // Отряд растёт от каждого блока; яйца греются работой.
+      for (const id of squad) pets = { ...pets, [id]: { ...pets[id]!, xp: pets[id]!.xp + bps } };
+      nest = warmNest(nest, bps).nest;
+      if (nest.some((n) => n.left <= 0)) hatchAll();
+      // Трюки отряда: добытчик — кусок руды, торгаш — он же дороже, токенщик — токены.
+      trickAcc += bps;
+      if (trickAcc >= TRICK_EVERY && !process.env.NOTRICK) {
+        trickAcc -= TRICK_EVERY;
+        squad.forEach((id, i) => {
+          const role = trickRole(id, Math.floor(t / 60) + i);
+          const rec = pets[id]!;
+          const ore = trickOre(id, rec.v) * ROCKS[mine].value * m.sell;
+          if (role === 'loot') money += ore;
+          else if (role === 'sell') money += ore * TRICK_SELL;
+          else if (role === 'token') tokens += trickTokens(id, rec.v);
+        });
+      }
+      // Питомник: яйцо берут, когда оно стоит не больше 40% ранга и есть
+      // свободное гнездо. Жадный покупатель — худший случай для темпа: при
+      // 10% и при 100% круг выходит не быстрее (EGGK=… печатает разницу).
+      if (opts.eggShop !== false && t % 30 === 0 && nest.length < NEST_SLOTS) {
+        const cost = rankCost(rank);
+        const egg = [...EGGS]
+          .reverse()
+          .find(
+            (e) =>
+              e.price > 0 && e.from <= rank && e.price <= cost * Number(process.env.EGGK ?? 0.4),
+          );
+        if (egg && money >= egg.price) {
+          money -= egg.price;
+          eggsBought += 1;
+          takeEgg(egg.id);
+        }
+      }
       if (t % 60 === 0) {
         fuse();
         equip();
@@ -530,7 +646,7 @@ function run(
       }
     }
   }
-  const bonus = bonusOf({ runes, sockets, pet, pets });
+  const bonus = bonusOf({ runes, sockets, squad, pets });
   // Во сколько раз выработка дольше денег на СРЕДНЕМ доходе ранга, с нуля
   // (без денег, перенесённых с прошлого ранга): мера «стены».
   for (let k = 0; k < took.length; k++)
@@ -547,7 +663,9 @@ function run(
     xp,
     runes,
     pets,
-    pet,
+    squad,
+    hatched: hatchedN,
+    eggsBought,
     bonus,
     opened,
     pickAt,
@@ -572,6 +690,13 @@ function run(
 /** Сколько минут идеальный игрок стоит на ранге: цель подгонки (v2.67, круг 4–5 ч). */
 const TARGET_MIN = (k: number) =>
   k === 0 ? 1.3 : k === 1 ? 2.5 : k === 2 ? 4 : k === 3 ? 5.5 : 7 + ((17 - 7) * (k - 4)) / 20;
+
+// Подбор яиц: EGGP=цены через запятую, EGGN=сколько блоков высиживать.
+if (process.env.EGGP) process.env.EGGP.split(',').forEach((x, i) => (EGGS[i].price = Number(x)));
+if (process.env.PETK)
+  for (const k of Object.keys(STAT_PER) as (keyof typeof STAT_PER)[])
+    STAT_PER[k] *= Number(process.env.PETK);
+if (process.env.EGGN) process.env.EGGN.split(',').forEach((x, i) => (EGGS[i].need = Number(x)));
 
 describe('темп каторги', () => {
   // Подгонка таблиц economy.ts под нужный темп: TUNE=1 npx vitest run
@@ -693,7 +818,17 @@ describe('темп каторги', () => {
         'руны',
         JSON.stringify(r.runes.map((x) => x.kind + x.tier)),
         'питомцы',
-        Object.keys(r.pets).join(','),
+        Object.entries(r.pets)
+          .map(([id, x]) => `${id}${x?.v ? '*' + x.v : ''}:${pickLevelOf(0) && x?.dup}`)
+          .join(','),
+        'отряд',
+        r.squad.join(','),
+        'яиц',
+        r.hatched,
+        'куплено',
+        r.eggsBought,
+        'без Питомника',
+        (run({ eggShop: false }).t / 3600).toFixed(2),
         'бонус',
         JSON.stringify(r.bonus),
         'чары',
@@ -1105,7 +1240,7 @@ describe('сундуки, находки, бригада, перки', () => {
       // токены вместо находки, которой не осталось.
       if (r.tier === 'legend') {
         const top = r.rewards[r.rewards.length - 1];
-        expect(['book', 'find', 'rune', 'tokens']).toContain(top.kind);
+        expect(['book', 'egg', 'find', 'rune', 'tokens']).toContain(top.kind);
         if (top.kind === 'rune') expect(top.rune.tier).toBe(4);
       }
     }
@@ -1276,11 +1411,17 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
 
   it('прибавки рун и питомца упираются в потолок', () => {
     const runes = [1, 2, 3, 4].map((id) => ({ id, kind: 'token' as const, tier: 5, roll: 100 }));
-    const b = bonusOf({ runes, sockets: [1, 2, 3, 4], pet: 'raven', pets: { raven: 1e9 } });
+    const big = { xp: 1e12, dup: 0, v: 2, pat: 0 };
+    const b = bonusOf({ runes, sockets: [1, 2, 3, 4], squad: ['kitten'], pets: { kitten: big } });
     expect(b.token).toBe(BONUS_CAP.token);
     // Продажу даже полный набор не выводит за +100%: её потолок — край.
     const sell = [1, 2, 3, 4].map((id) => ({ id, kind: 'sell' as const, tier: 5, roll: 100 }));
-    const s = bonusOf({ runes: sell, sockets: [1, 2, 3, 4], pet: 'fox', pets: { fox: 1e9 } });
+    const s = bonusOf({
+      runes: sell,
+      sockets: [1, 2, 3, 4],
+      squad: ['hamster', 'raccoon', 'kitsune'],
+      pets: { hamster: big, raccoon: big, kitsune: big },
+    });
     expect(s.sell).toBeLessThanOrEqual(BONUS_CAP.sell);
     // Без питомца и рун — ноль, а не NaN.
     expect(bonusOf({}).sell).toBe(0);
@@ -1292,23 +1433,24 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
     expect(socketsOpen({ pickXp: 1e9, miles: ['p10'] })).toBe(4);
   });
 
-  it('питомец из посылки — только тот, кого ещё нет; все есть — лакомство', () => {
+  it('посылки и сундуки кладут яйца, а не питомцев', () => {
     const rnd = lcg(11);
-    const have = { lemming: 0, fox: 0, wolverine: 0, raven: 0, owl: 0 };
-    let pets = 0;
-    for (let i = 0; i < 3000; i++) {
-      const r = rollParcel({ rank: 5, prestige: 0, pets: have }, 'legend', rnd);
-      if (r.kind === 'pet') {
-        expect(r.id).toBe('calf');
-        pets += 1;
+    const eggs: Record<string, number> = {};
+    for (let i = 0; i < 3000; i++)
+      for (const tier of ['common', 'rare', 'epic', 'legend'] as const) {
+        const r = rollParcel({ rank: 5, prestige: 0 }, tier, rnd);
+        expect(r.kind).not.toBe('pet');
+        if (r.kind === 'egg') eggs[`${tier}:${r.egg}`] = (eggs[`${tier}:${r.egg}`] ?? 0) + 1;
       }
+    expect(Object.keys(eggs).sort()).toEqual(['epic:stone', 'legend:crystal', 'rare:moss']);
+    let dragon = 0;
+    for (let i = 0; i < 20000; i++) {
+      const c = rollCase({ rank: 5, prestige: 0, finds: {} }, rnd);
+      for (const r of c.rewards) if (r.kind === 'egg' && r.egg === 'dragon') dragon += 1;
+      if (c.rewards.some((r) => r.kind === 'egg' && r.egg === 'dragon'))
+        expect(c.tier).toBe('legend');
     }
-    expect(pets).toBeGreaterThan(0);
-    const all = Object.fromEntries(PETS.map((x) => [x.id, 0]));
-    for (let i = 0; i < 2000; i++) {
-      const r = rollParcel({ rank: 5, prestige: 0, pets: all }, 'legend', rnd);
-      expect(r.kind).not.toBe('pet');
-    }
+    expect(dragon).toBeGreaterThan(0);
   });
 
   it('награда ложится в состояние: руна в полный мешочек разбивается, первый питомец идёт с собой', () => {
@@ -1327,13 +1469,20 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
     expect(a.p.runes.length).toBe(RUNE_BAG);
     expect(a.shattered).toBe(RUNE_SHATTER[2]);
     expect(a.p.tokens).toBe(full.tokens + RUNE_SHATTER[2]);
-    const b = applyReward(base, { kind: 'pet', id: 'raven' });
-    expect(b.newPet).toBe('raven');
-    expect(b.p.pet).toBe('raven');
-    // Второй такой же — не новый питомец, а опыт текущему.
-    const c = applyReward(b.p, { kind: 'pet', id: 'raven' });
+    const b = applyReward(base, { kind: 'pet', id: 'kitten' });
+    expect(b.newPet).toBe('kitten');
+    expect(b.p.squad).toEqual(['kitten']);
+    // Второй такой же — не новый питомец, а копия к золотому.
+    const c = applyReward(b.p, { kind: 'pet', id: 'kitten' });
     expect(c.newPet).toBeNull();
-    expect(c.p.pets.raven).toBeGreaterThan(0);
+    expect(c.p.pets.kitten?.dup).toBe(1);
+    // Яйцо — в гнездо, пока есть место, потом в корзину.
+    const e1 = applyReward(base, { kind: 'egg', egg: 'moss' });
+    const e2 = applyReward(e1.p, { kind: 'egg', egg: 'stone' });
+    const e3 = applyReward(e2.p, { kind: 'egg', egg: 'dragon' });
+    expect([e1.egg, e2.egg, e3.egg]).toEqual(['nest', 'nest', 'basket']);
+    expect(e3.p.nest.map((x) => x.egg)).toEqual(['moss', 'stone']);
+    expect(e3.p.eggs.dragon).toBe(1);
     expect(applyReward(base, { kind: 'coins', amount: 70 }).coins).toBe(70);
   });
 
@@ -1389,8 +1538,8 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
         { id: 7, kind: 'nope' as never, tier: 1, roll: 1 },
       ],
       sockets: [3, 3, 42, 0],
-      pets: { owl: 120, dragon: 5 } as never,
-      pet: 'fox',
+      pets: { owl: 120, unicorn: 5 } as never,
+      ...({ pet: 'fox' } as object),
       parcels: [
         { tier: 'epic', left: 99999 },
         { tier: 'junk' as never, left: 1 },
@@ -1399,9 +1548,10 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
     });
     expect(s.runes).toEqual([{ id: 3, kind: 'sell', tier: RUNE_TIERS, roll: 100 }]);
     expect(s.sockets).toEqual([3, 0, 0, 0]);
-    expect(s.pets).toEqual({ owl: 120 });
+    // Старая сова переехала в совёнка с тем же опытом.
+    expect(s.pets).toEqual({ owlet: { xp: 120, dup: 0, v: 0, pat: 0 } });
     // Питомца, которого нет, с собой не водят.
-    expect(s.pet).toBeNull();
+    expect(s.squad).toEqual([]);
     expect(s.parcels).toEqual([{ tier: 'epic', left: PARCEL_NEED.epic }]);
     expect(s.miles).toEqual(['b1k']);
     expect(s.runeSeq).toBeGreaterThanOrEqual(3);

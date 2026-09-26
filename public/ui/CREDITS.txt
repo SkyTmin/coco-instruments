@@ -52,3 +52,13 @@ books/enchanter.webp — портрет Чародея: сгенерирован
 chests/*.webp — сундуки по ярусам, закрытые и открытые: собственный рендер
            3D-моделей, собранных кодом (three.js, MIT — только инструмент).
            Сборка — scripts/chests-render/.
+
+eggs/*.webp — яйца питомцев: 3D-рендер моделей, собранных кодом
+           (scripts/eggs-render, three.js), без чужих файлов.
+icons/pet-*.svg, egg.svg — временные силуэты питомцев до портретов:
+           game-icons.net, CC BY 3.0 — Caro Asercion (mole, hedgehog, fox),
+           Delapouite (squirrel, mouse, sitting-dog, raccoon-head, panda,
+           penguin, beaver, tiger, fox-tail, dolphin, nest-eggs), Lorc
+           (cat, owl, wyvern, raven). Изменения: убран фон-квадрат.
+pets/*.webp — портреты питомцев нарисованы для игры владельцем (ChatGPT)
+           по нашим промптам; фон вырезан.
