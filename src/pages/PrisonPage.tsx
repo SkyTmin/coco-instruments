@@ -917,6 +917,7 @@ export function PrisonPage() {
       return;
     }
     hp[c] = -1;
+    f?.shatter(c, true);
     dig.setCrack(c, 0);
     const from = useFinanceStore.getState().slotsBalance;
     const got = prisonSeid(c);
@@ -957,6 +958,7 @@ export function PrisonPage() {
       return;
     }
     hp[c] = -1;
+    f?.shatter(c, true);
     dig.setCrack(c, 0);
     const from = useFinanceStore.getState().slotsBalance;
     const got = prisonOreBlock(c);

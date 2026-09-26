@@ -35,7 +35,7 @@ import {
   ROCKFALL_HITS,
 } from '@/lib/prison';
 import type { RockKind } from '@/lib/prison';
-import { crackTexture } from '@/lib/prison-art';
+import { CRACK_STAGES, crackStageOf, crackStrip } from '@/lib/crack-stages';
 import { createFx } from '@/lib/prison-fx';
 import type { Fx } from '@/lib/prison-fx';
 import { addTrauma, flashFrame } from '@/lib/juice';
@@ -116,6 +116,29 @@ export const MineCell = memo(function MineCell({
   wr,
   faceRef,
 }: MineCellProps) {
+  // Трещина между ударами не прыгает, а пробегает: стадии от прошлой до новой
+  // проигрываются подряд, ступеньками, за 60–150 мс — как в Майнкрафте, где
+  // трещина растёт, пока держишь кнопку. Двигается лента стадий трансформом,
+  // без перерисовки.
+  const crackRef = useRef<HTMLElement>(null);
+  const shownCrack = useRef(crack);
+  useLayoutEffect(() => {
+    const was = shownCrack.current;
+    shownCrack.current = crack;
+    const el = crackRef.current;
+    if (!el || crack <= 0 || crack <= was || reduceMotion()) return;
+    const from = Math.max(0, was - 1);
+    const to = crack - 1;
+    if (to <= from) return;
+    try {
+      el.animate(
+        [{ transform: `translateY(${-from * 10}%)` }, { transform: `translateY(${-to * 10}%)` }],
+        { duration: Math.min(150, 30 * (to - from)), easing: `steps(${to - from}, jump-start)` },
+      );
+    } catch {
+      /* без WAAPI трещина просто встанет на место */
+    }
+  }, [crack]);
   const x = index % MINE_COLS;
   const y = Math.floor(index / MINE_COLS);
   // Задержка подъёма при обновлении шахты: волна от центра к краям.
@@ -139,10 +162,15 @@ export const MineCell = memo(function MineCell({
         style={{ backgroundImage: `url(${tex})` }}
       >
         {crack > 0 && (
-          <i
-            className="pcell__crack"
-            style={{ backgroundImage: `url(${crackTexture(crack, crackVar)})` }}
-          />
+          <i className="pcell__crack">
+            <b
+              ref={crackRef}
+              style={{
+                backgroundImage: `url(${crackStrip(crackVar)})`,
+                transform: `translateY(${-(Math.min(crack, CRACK_STAGES) - 1) * 10}%)`,
+              }}
+            />
+          </i>
         )}
       </span>
       {seid && <i className="pcell__glow" />}
@@ -207,6 +235,12 @@ export interface MineFieldHandle {
   kick(c: number, crit: boolean): void;
   /** Под сломанным блоком открылся следующий: он «проступает» из ямы. */
   rise(c: number): void;
+  /**
+   * Блок разломился: четыре куска его же торца разлетаются и падают, как
+   * частицы блока в Майнкрафте. Звать ДО того, как клетка покажет ярус
+   * ниже: куски берут картинку с торца.
+   */
+  shatter(c: number, crit?: boolean): void;
   /** Торец качнулся — удар по сейду. */
   wobble(c: number): void;
   /** Картинка летит дугой из клетки в элемент (рюкзак, сидор). */
@@ -460,6 +494,65 @@ export const MineField = forwardRef<MineFieldHandle, MineFieldProps>(function Mi
         'ease-out',
       );
     },
+    shatter(c, crit = false) {
+      const layer = layerRef.current;
+      const field = fieldRef.current;
+      const face = faces.current[c];
+      if (!layer || !field || !face || reduceMotion()) return;
+      // Пачка взрыва — это десятки клеток: кусков хватит и с первых.
+      if (layer.childElementCount > 48) return;
+      const bg = face.style.backgroundImage;
+      if (!bg) return;
+      const fr = field.getBoundingClientRect();
+      const r = face.getBoundingClientRect();
+      if (!r.width) return;
+      const h = r.width / 2;
+      const hd = face.parentElement?.classList.contains('is-hd');
+      const power = crit ? 1.35 : 1;
+      for (let q = 0; q < 4; q++) {
+        const qx = q % 2;
+        const qy = q >> 1;
+        const el = document.createElement('i');
+        el.className = `pshard${hd ? ' is-hd' : ''}`;
+        el.style.left = `${r.left - fr.left + qx * h}px`;
+        el.style.top = `${r.top - fr.top + qy * h}px`;
+        el.style.width = `${h}px`;
+        el.style.height = `${h}px`;
+        el.style.backgroundImage = bg;
+        el.style.backgroundSize = `${h * 2}px ${h * 2}px`;
+        el.style.backgroundPosition = `${-qx * h}px ${-qy * h}px`;
+        layer.appendChild(el);
+        // Куски разлетаются от центра, подпрыгивают к камере (крупнее) и
+        // падают обратно в яму (мельче и гаснут) — вид сверху, как у крошки.
+        const dx = (qx ? 1 : -1) * h * (0.55 + Math.random() * 0.55) * power;
+        const dy = (qy ? 1 : -1) * h * (0.35 + Math.random() * 0.45) * power;
+        const hop = h * (0.45 + Math.random() * 0.35) * power;
+        const rot = (qx ? 1 : -1) * (18 + Math.random() * 40);
+        const done = () => el.remove();
+        try {
+          const a = el.animate(
+            [
+              { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 },
+              {
+                transform: `translate(${dx * 0.45}px, ${dy * 0.45 - hop}px) rotate(${rot * 0.45}deg) scale(1.12)`,
+                opacity: 1,
+                offset: 0.35,
+              },
+              {
+                transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg) scale(.42)`,
+                opacity: 0,
+              },
+            ],
+            { duration: 380 + Math.random() * 120, easing: 'cubic-bezier(.25,.6,.55,1)' },
+          );
+          a.onfinish = done;
+          a.oncancel = done;
+        } catch {
+          done();
+        }
+        setTimeout(done, 900);
+      }
+    },
     rise(c) {
       faceAnim(
         c,
@@ -702,9 +795,11 @@ export interface Dig {
   later(fn: () => void, ms: number): void;
 }
 
-/** Стадия трещины 1…3 по остатку прочности. */
-export const crackStage = (left: number, max: number) =>
-  Math.min(3, 1 + Math.floor((1 - left / max) * 3));
+/**
+ * Стадия трещины 0…10 по остатку прочности — `destroy_stage` Майнкрафта:
+ * сколько ударов до разлома, столько кадров (см. lib/crack-stages.ts).
+ */
+export const crackStage = crackStageOf;
 
 export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigRules): Dig {
   const [cracks, setCracks] = useState<number[]>(() => new Array<number>(MINE_CELLS).fill(0));
@@ -771,9 +866,15 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
       for (const b of list) next[b.cell] = 0;
       return next;
     });
-    r.onBreak(list, kind);
     const single = kind === 'hit' || kind === 'crit';
     const f = field.current;
+    // Куски берут картинку с торца — до того, как клетка покажет ярус ниже.
+    // Раньше вместо этого ярус ниже «проступал» из ямы (рост от 0,72):
+    // сломанный блок исчезал в один кадр, а новый выпрыгивал навстречу.
+    list.forEach((b, i) => {
+      if (single || i < 10) f?.shatter(b.cell, kind === 'crit');
+    });
+    r.onBreak(list, kind);
     list.forEach((b, i) => {
       const colors = r.rock(b.rock).colors;
       if (single) {
@@ -783,7 +884,6 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
         f?.chips(b.cell, colors, kind === 'hammer' ? 5 : 9, kind === 'vein' ? 1 : 1.35);
         if (i < 12) f?.puff(b.cell, 'rgba(210,190,160,1)', 3);
       }
-      f?.rise(b.cell);
     });
     if (single) blockBreak(r.rock(list[0].rock).kind);
   };

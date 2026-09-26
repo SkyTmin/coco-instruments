@@ -54,13 +54,13 @@ import {
   barkTexture,
   bearTexture,
   branchTexture,
-  crackTexture,
   crackVariant,
   crownTexture,
   logMarkTexture,
   parcelTexture,
   petTexture,
 } from '@/lib/prison-art';
+import { CRACK_STAGES, crackStageOf, crackStrip } from '@/lib/crack-stages';
 import { createFx } from '@/lib/prison-fx';
 import type { Fx } from '@/lib/prison-fx';
 import { plainPlan, runRollup } from '@/lib/rollup';
@@ -796,7 +796,7 @@ export function ForestPage() {
     }
     if (left > 1e-6) {
       hp.current = left;
-      setCrack(Math.min(3, 1 + Math.floor((1 - left / max) * 3)));
+      setCrack(crackStageOf(left, max));
       axeChop(AXES[f.axe].saw, crit);
       if (!crit) tapLight();
       fx.current?.chips(x, y, woodColors, crit ? 10 : 4, crit ? 1.3 : 0.8);
@@ -1281,12 +1281,14 @@ export function ForestPage() {
                         />
                       )}
                       {k === 0 && crack > 0 && (
-                        <i
-                          className="flog__crack"
-                          style={{
-                            backgroundImage: `url(${crackTexture(crack, crackVariant(forest.tree.seed, cut, 0))})`,
-                          }}
-                        />
+                        <i className="flog__crack">
+                          <b
+                            style={{
+                              backgroundImage: `url(${crackStrip(crackVariant(forest.tree.seed, cut, 0))})`,
+                              transform: `translateY(${-(Math.min(crack, CRACK_STAGES) - 1) * 10}%)`,
+                            }}
+                          />
+                        </i>
                       )}
                     </div>
                   ))}
