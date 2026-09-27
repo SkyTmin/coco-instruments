@@ -191,7 +191,7 @@ const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
   forest: (n) => /^(axe\.|saw\.|log\.|tree\.|snow\.|crit\.|bag\.)/.test(n),
   fishing: (n) => /^(splash|plop|snap|swing|tick|bubble|coins|gem\.chime|pluck|card\.)/.test(n),
   dungeon: (n) =>
-    /^(swing|hit|bite|dash|crate|gate|clang|latch|winch|roar|rat\.|rumble|boom\.|pick\.|break\.|crit\.|bag\.|gem\.chime)/.test(
+    /^(swing|hit|bite|dash|crate|gate|clang|latch|winch|roar|rat\.|rumble|boom\.|pick\.|break\.|crit\.|bag\.|gem\.chime|splash|plop)/.test(
       n,
     ),
 };

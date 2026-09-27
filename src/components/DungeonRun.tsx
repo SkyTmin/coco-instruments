@@ -89,6 +89,8 @@ import {
   swordHit,
   swordSwing,
   setMusicScene,
+  fishSplash,
+  softChime,
 } from '@/lib/sound';
 import type { MusicScene } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
@@ -810,6 +812,18 @@ export function DungeonRun({
           else if (e.what === 'summon') {
             ratSqueak(0);
             ratSqueak(1);
+          } else if (e.what.endsWith('_dive') || e.what.endsWith('_splash')) {
+            // Нырок и прыжок из воды — всплеск (бездна, омуты).
+            fishSplash(1.4);
+            if (e.text) say(e.text, e.sub, 'danger', 1600);
+          } else if (e.what.endsWith('_call')) {
+            // Чужой голос из темноты — тихое стекло, без мелодии.
+            softChime(-5);
+            if (e.text) say(e.text, e.sub, 'area', 2000);
+          } else if (e.what.endsWith('_trap')) {
+            gateSlam();
+            notifyWarning();
+            if (e.text) say(e.text, e.sub, 'danger', 1800);
           } else if (e.what.endsWith('_wall')) {
             // Босс врезался в стену — тяжёлый глухой удар и дрожь в руке.
             deepRumble();

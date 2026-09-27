@@ -53,7 +53,15 @@ export interface LegendCell {
    * грибов), `breakable` — бьётся, как ящик (свои картинка и добыча).
    * Рисует `registerPropPainter(ref)`.
    */
-  obj?: { kind: 'deco' | 'breakable'; ref: string; solid?: number; hp?: number; light?: LightSpec };
+  obj?: {
+    kind: 'deco' | 'breakable';
+    ref: string;
+    solid?: number;
+    hp?: number;
+    light?: LightSpec;
+    /** Что роняет разбитый (id материала); по умолчанию — ходовой материал этажа. */
+    loot?: string;
+  };
   /** Свет от клетки (светящиеся грибы, лава, кристаллы). */
   light?: LightSpec;
 }

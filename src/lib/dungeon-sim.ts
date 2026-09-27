@@ -42,6 +42,7 @@ import {
   smellOf,
   ALBINO_CHANCE,
   floorBeaten,
+  floorOf,
 } from './dungeon';
 import type {
   Affix,
@@ -1632,18 +1633,27 @@ function dropAt(sim: Sim, kind: DropKind, n: number, x: number, y: number): void
   });
 }
 
+/**
+ * Ходовой материал этажа (на первом — крысиная шкурка): его роняют ящики,
+ * гнёзда и тайники. Раньше везде стояла шкурка — и на пятом этаже из
+ * разбитого горшка выпадали крысиные шкурки.
+ */
+function commonMat(sim: Sim): string {
+  return floorOf(sim.floor).mats.find((m) => (m.stack ?? 32) > 1)?.id ?? 'skin';
+}
+
 function breakProp(sim: Sim, p: Prop): void {
   p.alive = false;
   sim.events.push({ t: 'break', x: p.x, y: p.y, kind: p.kind });
   if (p.kind === 'crate' || p.kind === 'barrel' || p.kind === 'breakable') {
     if (sim.rng() < 0.55)
       dropAt(sim, 'coin', Math.round(CRATE_COINS * (0.6 + sim.rng())), p.x, p.y);
-    if (sim.rng() < 0.16) dropAt(sim, 'skin', 1, p.x, p.y);
+    if (sim.rng() < 0.16) dropAt(sim, p.obj.loot ?? commonMat(sim), 1, p.x, p.y);
     if (sim.rng() < 0.07) dropAt(sim, 'token', 1 + Math.floor(sim.rng() * 2), p.x, p.y);
   }
   if (p.kind === 'nest' || p.kind === 'cartnest') {
-    dropAt(sim, 'skin', 1, p.x, p.y);
-    dropAt(sim, 'skin', 1, p.x, p.y);
+    dropAt(sim, commonMat(sim), 1, p.x, p.y);
+    dropAt(sim, commonMat(sim), 1, p.x, p.y);
     if (sim.rng() < 0.3) dropAt(sim, 'token', 2 + Math.floor(sim.rng() * 3), p.x, p.y);
     gainXp(sim, 12 * Math.pow(1.5, bandAt(sim.world, p.y).def.level));
   }
@@ -2967,7 +2977,7 @@ export function useObject(sim: Sim, u: Usable): boolean {
     for (let i = 0; i < 5; i++) dropAt(sim, 'coin', SECRET_COINS, p.x, p.y + 0.4);
     for (let i = 0; i < 6; i++) dropAt(sim, 'token', 2 + Math.floor(sim.rng() * 3), p.x, p.y + 0.4);
     dropAt(sim, 'key', 1, p.x, p.y + 0.4);
-    for (let i = 0; i < 4; i++) dropAt(sim, 'skin', 1, p.x, p.y + 0.4);
+    for (let i = 0; i < 4; i++) dropAt(sim, commonMat(sim), 1, p.x, p.y + 0.4);
     return true;
   }
   if (u.kind === 'seal') {

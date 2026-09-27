@@ -92,6 +92,8 @@ export interface WorldObj {
   /** Предмет этажа: радиус тела (0 — сквозь него проходят) и прочность. */
   solid?: number;
   hp?: number;
+  /** Что роняет разбитый предмет этажа (по умолчанию — ходовой материал). */
+  loot?: string;
 }
 
 export interface Rail {
@@ -207,7 +209,12 @@ export function buildWorld(floorId = 1): World {
           mark[i] = own.mark ?? 0;
           haz[i] = hazIdx.get(ch) ?? 0;
           if (own.obj)
-            obj(own.obj.kind, { ref: own.obj.ref, solid: own.obj.solid ?? 0.34, hp: own.obj.hp });
+            obj(own.obj.kind, {
+              ref: own.obj.ref,
+              solid: own.obj.solid ?? 0.34,
+              hp: own.obj.hp,
+              loot: own.obj.loot,
+            });
           const l = own.light ?? own.obj?.light;
           if (l) lights.push({ x: x + 0.5, y: y + 0.5, r: l.r, tint: tintOf(l) });
           tiles[i] = t;
