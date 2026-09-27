@@ -34,7 +34,7 @@ export const RAT_FRAMES: Record<RatAnim, number> = {
   sleep: 2,
 };
 
-interface Pal {
+export interface Pal {
   ink: RGBA;
   dark: RGBA;
   fur: RGBA;
@@ -47,7 +47,7 @@ interface Pal {
   eyeHi: RGBA;
 }
 
-const PALS: Record<string, Pal> = {
+export const PALS: Record<string, Pal> = {
   rat: {
     ink: hex('#1c1416'),
     dark: hex('#3a2e2b'),
@@ -146,7 +146,7 @@ interface Pose {
 // Растеризация формы с объёмом.
 // ---------------------------------------------------------------------------
 
-interface Ell {
+export interface Ell {
   x: number;
   y: number;
   rx: number;
@@ -158,7 +158,7 @@ const LX = -0.45;
 const LY = -0.75;
 const LZ = 0.5;
 
-function shadeOf(p: Pal, e: Ell, x: number, y: number, belly: boolean): RGBA {
+export function shadeOf(p: Pal, e: Ell, x: number, y: number, belly: boolean): RGBA {
   const dx = (x + 0.5 - e.x) / e.rx;
   const dy = (y + 0.5 - e.y) / e.ry;
   const r2 = dx * dx + dy * dy;
@@ -178,7 +178,7 @@ const inE = (e: Ell, x: number, y: number) => {
 };
 
 /** Кривая Катмулла — Рома через точки хвоста. */
-function spline(pts: [number, number][], n: number): [number, number][] {
+export function spline(pts: [number, number][], n: number): [number, number][] {
   const out: [number, number][] = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[Math.max(0, i - 1)];
@@ -546,7 +546,7 @@ function addBomb(px: Pal, img: Px, pose: Pose, f: number): void {
 // сплетённых хвостов. Крысёныш — младший, поменьше и с венчиком.
 // ---------------------------------------------------------------------------
 
-const KING_PAL: Pal = {
+export const KING_PAL: Pal = {
   ink: hex('#120c0e'),
   dark: hex('#2c2224'),
   fur: hex('#4a3a38'),
@@ -678,6 +678,25 @@ export function ratFrame(
   const key = `${kind}:${look}:${anim}:${f}:${left ? 1 : 0}:${flash ? 1 : 0}`;
   let c = cache.get(key);
   if (c) return c;
+  c = ratPx(kind, look, anim, f, left, flash).canvas();
+  cache.set(key, c);
+  return c;
+}
+
+/**
+ * Пиксели кадра крысы без кеша — для рисовальщиков этажа, которые
+ * дорисовывают поверх (чары шамана, свечение). Кешировать — им.
+ */
+export function ratPx(
+  kind: MobId,
+  look: RatLook,
+  anim: RatAnim,
+  frame: number,
+  left: boolean,
+  flash = false,
+): Px {
+  const n = RAT_FRAMES[anim];
+  const f = ((Math.floor(frame) % n) + n) % n;
   const pal =
     look === 'albino'
       ? PALS.albino
@@ -699,9 +718,7 @@ export function ratFrame(
   }
   if (left) px = px.flipX();
   if (flash) px = px.tint([255, 255, 255, 255], 0.9);
-  c = px.canvas();
-  cache.set(key, c);
-  return c;
+  return px;
 }
 
 /** Где у кадра глаз — для свечения поверх темноты. */
