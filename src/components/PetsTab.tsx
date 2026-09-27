@@ -362,7 +362,7 @@ export function PetsTab() {
             <button
               key={d.id}
               type="button"
-              className={`ppn__card r${d.rarity}${rec ? '' : ' is-ghost'}${p.squad.includes(d.id) ? ' is-with' : ''}`}
+              className={`ppn__card r${d.rarity}${rec ? '' : ' is-ghost'}${rec?.v ? ` is-v${rec.v}` : ''}${p.squad.includes(d.id) ? ' is-with' : ''}`}
               style={rarityVars(d.rarity)}
               onClick={() => {
                 tapLight();

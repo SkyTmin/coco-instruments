@@ -7441,14 +7441,17 @@ button.fg-slot {
   animation: none;
 }
 /* Золотой и радужный — статичный фильтр на самой полосе: её трансформ
-   двигает готовый слой, фильтр не пересчитывается (а на родителе — пересчитывался бы). */
+   двигает готовый слой, фильтр не пересчитывается (а на родителе — пересчитывался бы).
+   Свечение меряется `--pglow` в пикселях: где размер питомца задан процентом
+   (карточка коллекции, `--ps: 100%`), `drop-shadow` с процентом — ошибка, и
+   браузер выбрасывал ВЕСЬ `filter` — золотой в коллекции не был золотым. */
 .pet.v1 :is(.pet__strip, .pet__thumb) {
   filter: sepia(0.8) saturate(2.2) hue-rotate(-12deg) brightness(1.06)
-    drop-shadow(0 0 calc(var(--ps) * 0.03) rgba(255, 200, 60, 0.85));
+    drop-shadow(0 0 calc(var(--pglow, var(--ps)) * 0.03) rgba(255, 200, 60, 0.85));
 }
 .pet.v2 :is(.pet__strip, .pet__thumb) {
-  filter: saturate(1.35) drop-shadow(0 0 calc(var(--ps) * 0.025) #ff6fd8)
-    drop-shadow(0 0 calc(var(--ps) * 0.04) #5fd3ff);
+  filter: saturate(1.35) drop-shadow(0 0 calc(var(--pglow, var(--ps)) * 0.025) #ff6fd8)
+    drop-shadow(0 0 calc(var(--pglow, var(--ps)) * 0.04) #5fd3ff);
 }
 
 /* ---- Сердечки на ласку ------------------------------------------------------ */
@@ -7867,12 +7870,30 @@ button.fg-slot {
 }
 .ppn__card .pet {
   --ps: 100% !important;
+  --pglow: 52px;
   width: 92%;
   height: 92%;
 }
 .ppn__card.is-ghost {
   border-color: rgba(109, 75, 39, 0.3);
   background: rgba(109, 75, 39, 0.08);
+}
+/* Золотой и радужный видны в сетке и рамкой карточки, не только самим зверем. */
+.ppn__card.is-v1 {
+  border-color: #e8b53a;
+  background: radial-gradient(closest-side, rgba(255, 200, 60, 0.4), transparent),
+    rgba(109, 75, 39, 0.1);
+}
+.ppn__card.is-v2 {
+  border-color: transparent;
+  /* Радуга только рамкой: внутри — непрозрачный пергамент, иначе она
+     просвечивает на всю карточку. */
+  background:
+    radial-gradient(closest-side, rgba(161, 123, 255, 0.28), transparent) padding-box,
+    linear-gradient(rgba(109, 75, 39, 0.1), rgba(109, 75, 39, 0.1)) padding-box,
+    linear-gradient(var(--gx-paper), var(--gx-paper)) padding-box,
+    conic-gradient(#ff5f6d, #ffc371, #f9f871, #7cffb2, #5fd3ff, #a17bff, #ff6fd8, #ff5f6d)
+      border-box;
 }
 .ppn__card.is-with {
   box-shadow: 0 0 0 2px var(--gx-red);
