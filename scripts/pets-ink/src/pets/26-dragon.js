@@ -1,8 +1,10 @@
-// pets/26-dragon.js : Угольный дракон (legendary, loot + sell). Quad kit with wings.
-// A small coal dragon: black scales cracked with glowing lava, bone horns, a ridge of spikes down
-// the back and tail, stubby bat wings, a heavy chain collar with a broken link, embers always
-// drifting off him. Bites with a puff of flame. Work: breathes in (the cracks blaze), breathes
-// fire on a stone until it glows, and the stone becomes a gold nugget.
+// pets/26-dragon.js : Угольный дракон (legendary, loot + sell). Front kit, sits with wings out.
+// A little coal dragon sitting up: charcoal scales cracked with glowing lava, a pale ochre belly in
+// plates, big golden eyes with slit pupils, a broad snout with two smoking nostrils and two little
+// fangs, bone horns curving up (a small gold crown hung on the left one — his hoard), webbed
+// frills for ears, a crest of spikes on top, bat wings behind his shoulders, a spade-tipped tail
+// curled on the floor, embers drifting off him. Work: a deep breath (the cracks blaze), fire on a
+// stone until it glows and melts into a gold nugget, and he beams.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -10,361 +12,338 @@
   const P = L.pal;
   const K = FILM.pets;
   const M = K.M;
-  const TAU = Math.PI * 2;
   const clamp = L.clamp, lerp = L.lerp;
+  const F = () => K.front;
   const ID = 'dragon';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
 
   const C = {
     fur: '#3E3736',
     furDeep: '#171313',
-    furLit: '#7A6C68',
-    chest: '#9A6A44',
-    plate: '#A87A4E',
-    plateDeep: '#5E3E22',
+    furLit: '#6E625E',
+    belly: '#C9955E',
+    bellyDeep: '#8A5E34',
+    muzzle: '#524947',
+    leg: '#3E3736',
+    paw: '#3E3736',
+    hindPaw: '#3E3736',
+    claw: '#E8DCC2',
+    pad: '#8A5A44',
     lava: '#FF8A2A',
     lavaHot: '#FFD166',
-    skin: '#8C3A2A',
-    skinDeep: '#4A1A12',
+    lavaDeep: '#C0391E',
     nose: '#1E1A1A',
-    noseDeep: '#0A0808',
-    eye: '#1A110E',
-    eyeLine: '#E8D9C4',
+    blush: '#E0704E',
     mouth: '#5E1A10',
     tongue: '#E0574A',
-    horn: '#DCCDB0',
-    hornDeep: '#8E7E60',
+    eyeLine: '#F2E0C4',
+    horn: '#E2D4B6',
+    hornDeep: '#9C8C6A',
     membrane: '#8A3A2C',
-    membraneDeep: '#3E1812',
-    steel: '#8F949A',
-    stone: '#8A857E',
-    stoneDeep: '#55504A',
+    membraneDeep: '#4A1A12',
     gold: '#F2C14E',
     goldDeep: '#A0741E',
+    ruby: '#D0304A',
+    stone: '#8A857E',
+    stoneTop: '#A9A49B',
+    stoneDeep: '#55504A',
   };
 
-  // a round chubby body, a reptile head: flat skull, brow bump, a nostril knob, a long jaw
-  const SIL = [
-    [-176, -130, 0],
-    [-206, -190, 0],
-    [-190, -250, 0],
-    [-130, -284, 0],
-    [-40, -298, 0],
-    [40, -306, 0.1],
-    [92, -336, 0.5],
-    [112, -386, 1],
-    [150, -428, 1],
-    [210, -440, 1],
-    [256, -448, 1],
-    [276, -432, 1],
-    [326, -414, 1],
-    [364, -410, 1],
-    [384, -394, 1],
-    [392, -374, 1],
-    [384, -352, 1],
-    [340, -340, 1],
-    [292, -330, 1],
-    [248, -318, 0.9],
-    [200, -292, 0.5],
-    [186, -230, 0],
-    [158, -150, 0],
-    [80, -118, 0],
-    [0, -114, 0],
-    [-100, -120, 0],
-  ];
+  const glowOf = (R) => (R.pose.fx && R.pose.fx.glow) || 1;
 
-  // lava cracks: a fixed branching net inside the body, glowing with pose.glow
-  const CRACKS = (() => {
-    const r = L.rng(sd('cracks'));
-    const out = [];
-    const seeds = [[-150, -240], [-80, -210], [0, -250], [60, -200], [-120, -180], [30, -290], [100, -250]];
-    for (const [x0, y0] of seeds) {
-      let x = x0, y = y0, a = r.range(0, TAU);
-      const pts = [[x, y]];
-      for (let k = 0; k < 4; k++) {
-        a += r.range(-0.9, 0.9);
-        const l = r.range(18, 34);
-        x += Math.cos(a) * l;
-        y += Math.sin(a) * l * 0.8;
-        pts.push([x, y]);
-      }
-      out.push(pts);
-    }
-    return out;
-  })();
-
-  function glowAt(ctx, x, y, rad, a) {
-    const g = ctx.createRadialGradient(x, y, 2, x, y, rad);
-    g.addColorStop(0, L.rgba(C.lava, a));
-    g.addColorStop(1, L.rgba(C.lava, 0));
-    ctx.save();
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, rad, 0, TAU);
-    ctx.fill();
-    ctx.restore();
+  /** A glowing crack: a dark-red groove with an orange line and a hot core, brighter with g. */
+  function crack(c2, pts, g, B, seed) {
+    K.line(c2, pts, { width: 9, color: C.lavaDeep, seed, boil: B, smooth: false, taper: [3, 6] });
+    K.line(c2, pts, { width: 5, color: C.lava, alpha: clamp(0.5 + 0.3 * g), seed, boil: B, smooth: false, taper: [3, 6] });
+    if (g > 1.3) K.line(c2, pts, { width: 2.4, color: C.lavaHot, seed, boil: B, smooth: false, taper: [3, 6] });
   }
 
-  function scales(ctx, R, B, pts) {
-    const T = R.Mb, H = R.Mh;
-    const glow = R.pose.fx && R.pose.fx.glow != null ? R.pose.fx.glow : 1;
-    // belly plates
-    for (let k = 0; k < 7; k++) {
-      const x = -140 + k * 46;
-      const yb = -118 - 10 * Math.abs(k - 3) ** 1.4;
-      const plate = M.all(T, K.smooth([[x - 22, yb - 34], [x + 22, yb - 34], [x + 20, yb], [x - 20, yb]], 4));
-      K.fill(ctx, plate, C.plate);
-      L.inkPath(ctx, plate, { closed: true, width: 3, color: C.plateDeep, seed: sd('plate', k), boil: B, wobble: 0.3, taper: 0 });
-    }
-    K.fill(ctx, M.all(T, K.smooth([[150, -300], [190, -270], [180, -180], [150, -150], [124, -240]], 5)), C.chest);
-    // scale scallops over the back
-    L.stipple(ctx, pts, { spacing: 20, r: [2, 3.4], color: C.furLit, alpha: 0.7, seed: sd('scl'), boil: B });
-    // the cracks: a glow under a bright line
-    for (let i = 0; i < CRACKS.length; i++) {
-      const c = M.all(T, CRACKS[i]);
-      glowAt(ctx, c[1][0], c[1][1], 40 * glow, 0.35 * clamp(glow));
-      K.line(ctx, c, { width: 7, color: C.lava, alpha: clamp(0.4 + 0.6 * glow), seed: sd('crack', i), boil: B, smooth: false, taper: [3, 6] });
-      if (glow > 1.2) K.line(ctx, c, { width: 3, color: C.lavaHot, alpha: clamp(glow - 1.2), seed: sd('crackH', i), boil: B, smooth: false, taper: [3, 6] });
-    }
-    // a crack on the cheek
-    const cc = M.all(H, [[220, -360], [240, -372], [256, -364], [272, -376]]);
-    K.line(ctx, cc, { width: 6, color: C.lava, alpha: clamp(0.4 + 0.6 * glow), seed: sd('cheek'), boil: B, smooth: false, taper: [3, 5] });
-  }
-
-  function spikes(ctx, R, B) {
-    const S = [[-170, -286], [-110, -304], [-50, -312], [10, -318], [66, -330]];
-    for (let i = 0; i < S.length; i++) {
-      const [x, y] = S[i];
-      const h = 30 + (i === 2 ? 8 : 0);
-      const tri = [R.place([x - 20, y + 10], 0), R.place([x + 4, y - h], 0), R.place([x + 22, y + 10], 0)];
-      K.fill(ctx, tri, C.horn);
-      L.inkPath(ctx, tri, { closed: true, width: 4.5, seed: sd('spike', i), boil: B, smooth: false, taper: 0, wobble: 0.3 });
+  function headCracks(c2, R, B) {
+    const T = R.Mh, g = glowOf(R);
+    const cr = (pts, k) => crack(c2, M.all(T, pts.map(([x, y]) => R.hl(x, y, 0.7))), g, B, sd('hc', k));
+    cr([[-40, -130], [-30, -96], [-44, -70], [-34, -48]], 0);
+    cr([[120, -90], [100, -70], [112, -44]], 1);
+    cr([[-150, 20], [-126, 34], [-132, 58]], 2);
+    // scale texture: small arcs over the crown
+    for (let i = 0; i < 9; i++) {
+      const x = -120 + (i % 5) * 60 + (i > 4 ? 30 : 0), y = -110 + (i > 4 ? 36 : 0);
+      K.line(c2, M.all(T, K.curve([R.hl(x - 16, y, 0.6), R.hl(x, y + 10, 0.6), R.hl(x + 16, y, 0.6)], 3)), { width: 3, color: C.furLit, alpha: 0.7, seed: sd('sc', i), boil: B });
     }
   }
 
-  function horns(ctx, R, B, far) {
-    const H = R.Mh;
-    const base = far ? [236, -440] : [180, -432];
+  function bodyCracks(c2, R, B) {
+    const T = R.Mb, g = glowOf(R);
+    // the belly plates
+    for (let k = 0; k < 6; k++) {
+      const y = -300 + k * 44;
+      K.line(c2, M.all(T, K.curve([[-100 + k * 4, y - 6], [0, y + 8], [100 - k * 4, y - 6]], 5)), { width: 4, color: C.bellyDeep, seed: sd('plate', k), boil: B, taper: [3, 3] });
+    }
+    for (const [pts, k] of [[[[150, -300], [170, -250], [156, -210], [176, -170]], 0], [[[-160, -260], [-176, -214], [-160, -180]], 1], [[[-120, -120], [-150, -90], [-140, -60]], 2]])
+      crack(c2, M.all(T, pts), g, B, sd('bc', k));
+  }
+
+  // ---- the horns, the crown, the crest
+  function horn(ctx, R, B, side) {
+    const T = R.Mh;
     const pts = [];
-    for (let k = 0; k <= 6; k++) {
-      const u = k / 6;
-      pts.push([base[0] - 70 * u - 10 * u * u, base[1] - 60 * u + 36 * u * u]);
+    for (let i = 0; i <= 8; i++) {
+      const u = i / 8;
+      const x = side * (84 + 50 * u + 80 * u * u), y = -96 - 176 * u + 70 * u * u * u;
+      pts.push(R.hl(x, y, 0.3));
     }
-    const rib = M.all(H, K.ribbonPts(pts, 30, 4));
-    K.form(ctx, rib, { fill: K.far(C.horn, far), deep: C.hornDeep, width: far ? 4.5 : 5.5, seed: sd('horn', far ? 1 : 0), boil: B, shade: 0.7, spacing: 5, hatchW: 1.8 });
-    for (let k = 1; k < 4; k++) {
-      const p = pts[k * 1.5 | 0];
-      K.line(ctx, M.all(H, [[p[0] - 9, p[1] - 6], [p[0] + 9, p[1] + 6]]), { width: 2.2, color: C.hornDeep, seed: sd('hornR', k, far ? 1 : 0), boil: B, smooth: false, taper: 0 });
-    }
-  }
-
-  function head(ctx, R, B) {
-    const H = R.Mh;
-    // the brow ridge over the eye
-    K.line(ctx, M.all(H, [[214, -436], [250, -440], [284, -426]]), { width: 11, color: C.furDeep, seed: sd('brow'), boil: B, taper: [6, 8] });
-    // the nostril knob
-    K.fill(ctx, M.all(H, L.ellipsePts(372, -392, 9, 6, 12, -0.3)), C.furDeep);
-    // cheek frill: three spikes back from the jaw hinge
-    for (let k = 0; k < 3; k++) {
-      const b0 = [236 - k * 10, -348 + k * 14];
-      const tri = M.all(H, [[b0[0] + 10, b0[1] - 12], [b0[0] - 48 - k * 6, b0[1] - 18 + k * 8], [b0[0] + 6, b0[1] + 10]]);
-      K.fill(ctx, tri, C.horn);
-      L.inkPath(ctx, tri, { closed: true, width: 4, seed: sd('frill', k), boil: B, smooth: false, taper: 0, wobble: 0.3 });
-    }
-  }
-
-  // a bat wing over the back: the arm runs up and back from the shoulder to the wrist, three
-  // fingers fan back from the wrist, the membrane is scalloped between the tips and joins the back.
-  // open 0 folded along the back, 1 spread high (tables of offsets, so the fan never folds over)
-  function wing(ctx, R, B, far) {
-    const t = R.pose.fx && R.pose.fx.wing != null ? R.pose.fx.wing : 0.35;
-    const k = far ? 0.88 : 1;
-    const W0 = R.place(far ? [60, -312] : [30, -300], 0);
-    const mixv = (a, b) => [lerp(a[0], b[0], t) * k, lerp(a[1], b[1], t) * k];
-    const W1 = ((v) => [W0[0] + v[0], W0[1] + v[1]])(mixv([-46, -92], [-6, -160]));
-    const tips = [
-      mixv([-190, -30], [-150, -120]),
-      mixv([-176, 30], [-190, -20]),
-      mixv([-130, 72], [-160, 72]),
-    ].map((v) => [W1[0] + v[0], W1[1] + v[1]]);
-    const back = R.place(far ? [-110, -300] : [-130, -290], 0);
-    const scallop = (a, b) => [(a[0] + b[0]) / 2 * 0.78 + W1[0] * 0.22, (a[1] + b[1]) / 2 * 0.78 + W1[1] * 0.22];
-    const mem = [W0, W1, tips[0], scallop(tips[0], tips[1]), tips[1], scallop(tips[1], tips[2]), tips[2], scallop(tips[2], back), back];
-    K.form(ctx, mem, {
-      fill: K.far(C.membrane, far),
-      deep: C.membraneDeep,
-      width: far ? 5 : 6,
-      seed: sd('wing', far ? 1 : 0),
-      boil: B,
-      spacing: 8,
-      hatchAlpha: 0.6,
-      wobble: 0.6,
-      after: (c2) => K.line(c2, [tips[0], mem[3], tips[1], mem[5], tips[2], mem[7]], { width: 4, color: C.lava, alpha: 0.6, seed: sd('wingGlow', far ? 1 : 0), boil: B }),
+    const c = M.all(T, K.curve(pts, 5));
+    const rib = K.ribbonPts(c, (u) => 56 * (1 - u * 0.86));
+    F().form(ctx, rib, C.horn, B, sd('horn', side), {
+      width: 5,
+      off: 0.1,
+      hatch: 0.5,
+      dark: C.hornDeep,
+      inside(c2) {
+        for (let k = 1; k <= 4; k++) {
+          const i = Math.floor((k / 6) * (c.length - 1));
+          const q = c[i], nb = c[i + 1] || q;
+          const a = Math.atan2(nb[1] - q[1], nb[0] - q[0]) + Math.PI / 2;
+          const w = 28 * (1 - (k / 6) * 0.86);
+          K.line(c2, [[q[0] - Math.cos(a) * w, q[1] - Math.sin(a) * w], [q[0] + Math.cos(a) * w, q[1] + Math.sin(a) * w]], { width: 3, color: C.hornDeep, seed: sd('hr', side, k), boil: B, taper: 0 });
+        }
+      },
     });
-    for (let i = 0; i < 3; i++) K.line(ctx, [W1, tips[i]], { width: far ? 6 : 7.5, color: K.far(C.fur, far), seed: sd('finger', i, far ? 1 : 0), boil: B, taper: [2, 6] });
-    K.line(ctx, [W0, W1], { width: far ? 12 : 14, color: K.far(C.fur, far), seed: sd('warm', far ? 1 : 0), boil: B, taper: [2, 4] });
-    const claw = [[W1[0] - 4, W1[1] - 4], [W1[0] + 14, W1[1] - 22], [W1[0] + 8, W1[1] + 2]];
-    K.fill(ctx, claw, C.horn);
-    L.inkPath(ctx, claw, { closed: true, width: 3, seed: sd('wclaw', far ? 1 : 0), boil: B, smooth: false, taper: 0 });
+    return c;
   }
 
-  function collar(ctx, R, B) {
-    const T = R.Mf;
-    const ring = M.ap(T, [200, -300]);
-    const line = M.all(T, K.curve([[106, -382], [160, -340], [214, -296]], 8));
-    K.chain(ctx, line, 18, { width: 8, color: C.steel, seed: sd('collar'), boil: B });
-    const sw = R.pose.fx && R.pose.fx.swing != null ? R.pose.fx.swing : 0;
-    K.chain(ctx, [ring, [ring[0] + 12 + 16 * sw, ring[1] + 46]], 18, { width: 7, color: C.steel, seed: sd('hang'), boil: B });
-    const end = [ring[0] + 12 + 16 * sw, ring[1] + 60];
-    L.inkPath(ctx, L.ellipsePts(end[0], end[1], 9, 14, 16, 0.3).slice(3, 15), { width: 7, color: P.ink, seed: sd('open'), boil: B, taper: [2, 2] });
-    L.inkPath(ctx, L.ellipsePts(end[0], end[1], 9, 14, 16, 0.3).slice(3, 15), { width: 3.2, color: C.steel, seed: sd('open'), boil: B, taper: [2, 2] });
+  function crown(ctx, c, a, B) {
+    const T = M.chain(M.tr(c[0], c[1]), M.rot(a), M.sc(0.85, 0.85));
+    const pts = M.all(T, [[-40, 18], [-44, -22], [-24, -4], [0, -34], [24, -4], [44, -22], [40, 18]]);
+    F().form(ctx, pts, C.gold, B, sd('crown'), { width: 4.5, off: 0.12, shine: 1, hatch: 0.3, dark: C.goldDeep, smooth: false });
+    K.fill(ctx, M.all(T, L.ellipsePts(0, 6, 8, 7, 10)), C.ruby);
+    for (const x of [-44, 0, 44]) K.fill(ctx, M.all(T, L.ellipsePts(x, x ? -24 : -36, 5, 5, 8)), C.gold);
   }
 
-  // a cone of fire from the mouth to a target, strength f 0..1, flicker by drawing
-  function fire(ctx, from, to, f, d, B) {
-    if (f <= 0) return;
-    const dx = to[0] - from[0], dy = to[1] - from[1];
-    const len = Math.hypot(dx, dy) * f, a = Math.atan2(dy, dx);
-    const layer = (wmax, col, alpha, salt) => {
-      const top = [], bot = [];
-      for (let i = 0; i <= 12; i++) {
-        const u = i / 12;
-        const w = wmax * (0.15 + 0.85 * Math.sin(Math.PI * Math.min(1, u * 0.95 + 0.05)) ** 0.8) * (u < 0.9 ? 1 : (1 - u) * 10);
-        const n = 10 * L.noise1(u * 6 + d * 1.7 + salt, sd('fire'));
-        const x = from[0] + Math.cos(a) * len * u, y = from[1] + Math.sin(a) * len * u;
-        top.push([x - Math.sin(a) * (w + n), y + Math.cos(a) * (w + n)]);
-        bot.push([x + Math.sin(a) * (w - n), y - Math.cos(a) * (w - n)]);
-      }
-      const pts = top.concat(bot.reverse());
-      K.fill(ctx, pts, col, alpha);
-      return pts;
-    };
-    const outer = layer(56, '#E0501E', 0.95, 0);
-    layer(38, C.lava, 1, 3);
-    layer(20, C.lavaHot, 1, 7);
-    layer(8, '#FFF6D8', 0.9, 11);
-    L.inkPath(ctx, outer, { closed: true, width: 4.5, color: '#7A2410', seed: sd('fireInk', d), boil: B, wobble: 1.2 });
-  }
-
-  function stone(ctx, R, B) {
-    const fx = R.pose.fx;
-    if (!fx || fx.stone == null) return;
-    const g = K.GROUND, x = M.ap(R.Mr, [390, 0])[0];
-    if (fx.stone < 2) {
-      const heat = clamp(fx.stone);
-      const pts = K.smooth([[x - 64, g + 2], [x - 68, g - 40], [x - 26, g - 70], [x + 30, g - 64], [x + 66, g - 28], [x + 62, g + 2]], 5);
-      K.form(ctx, pts, { fill: L.mix(C.stone, '#E0501E', heat * 0.8), deep: heat > 0.5 ? '#7A2410' : C.stoneDeep, width: 7, seed: sd('stone'), boil: B, spacing: 8 });
-      if (heat > 0.3) glowAt(ctx, x, g - 36, 90, 0.5 * heat);
-    } else {
-      const pts = K.smooth([[x - 44, g + 2], [x - 50, g - 30], [x - 14, g - 54], [x + 30, g - 44], [x + 46, g - 12], [x + 36, g + 2]], 5);
-      K.form(ctx, pts, { fill: C.gold, deep: C.goldDeep, width: 6, seed: sd('nugget'), boil: B, spacing: 6 });
-      K.fill(ctx, L.ellipsePts(x - 16, g - 32, 10, 6, 10, -0.4), '#FFF3C8', 0.9);
-      K.fx.star(ctx, x + 40, g - 80, 26 * (fx.star || 1), B, sd('gst1'), '#FFF3C8');
-      K.fx.star(ctx, x - 50, g - 70, 18 * (fx.star || 1), B, sd('gst2'), '#FFF3C8');
+  function hornsAndCrest(ctx, R, B) {
+    const T = R.Mh;
+    const hl = horn(ctx, R, B, -1);
+    horn(ctx, R, B, 1);
+    crown(ctx, hl[Math.floor(hl.length * 0.3)], -0.35 + R.pose.head, B);
+    // three spikes along the top of the head
+    for (const [x, h] of [[-36, 44], [0, 58], [36, 44]]) {
+      const b = R.hl(x, -130, 0.4);
+      const sp = M.all(T, [[b[0] - 16, b[1] + 10], [b[0] + 4, b[1] - h], [b[0] + 18, b[1] + 10]]);
+      F().form(ctx, sp, C.membrane, B, sd('crest', x), { width: 4.5, off: 0.1, hatch: 0.4, rim: false, smooth: false });
     }
   }
 
+  // ---- wings (behind), the tail with its spade (behind)
+  function wings(ctx, R, B) {
+    const T = R.Mb;
+    const up = (R.pose.fx && R.pose.fx.wing) || 0;
+    for (const s of [-1, 1]) {
+      const sh = [s * 110, -320];
+      const el = [s * (230 + 20 * up), -430 - 70 * up];
+      const tips = [[s * (380 + 30 * up), -470 - 90 * up], [s * (400 + 20 * up), -330 - 50 * up], [s * (330 + 10 * up), -210 - 10 * up]];
+      // the membrane scalloped between the finger tips
+      const mem = [sh, el, tips[0]];
+      for (let i = 0; i < tips.length; i++) {
+        const a = tips[i], b = tips[i + 1] || [s * 150, -220];
+        const mid = [(a[0] + b[0]) / 2 - s * 26, (a[1] + b[1]) / 2 + 10];
+        mem.push(mid, b);
+      }
+      const pts = M.all(T, K.smooth(mem, 4));
+      F().form(ctx, pts, C.membrane, B, sd('wing', s), {
+        width: 6,
+        off: 0.08,
+        hatch: 0.6,
+        dark: C.membraneDeep,
+        inside(c2) {
+          for (const t of tips) K.line(c2, M.all(T, [el, t]), { width: 5, color: C.membraneDeep, seed: sd('fing', s, t[1]), boil: B, taper: [4, 2] });
+        },
+      });
+      // the arm of the wing with a claw at the elbow
+      const arm = M.all(T, [sh, el]);
+      K.line(ctx, arm, { width: 22, color: P.ink, seed: sd('warm', s), boil: B, taper: [8, 4] });
+      K.line(ctx, arm, { width: 15, color: C.fur, seed: sd('warm', s), boil: B, taper: [8, 4] });
+      const e = M.ap(T, el);
+      const cl = [[e[0] - 8, e[1] + 4], [e[0] + s * 4, e[1] - 30], [e[0] + 10, e[1] + 2]];
+      K.fill(ctx, cl, C.claw);
+      L.inkPath(ctx, cl, { closed: true, width: 3, seed: sd('wcl', s), boil: B, smooth: false, taper: 0 });
+    }
+  }
+
+  function tailBehind(ctx, R, B) {
+    const T = R.Mr;
+    const sw = R.pose.tail * 40;
+    const c = M.all(T, K.curve([[120, -60], [230, -40], [310, -16], [370 + sw * 0.3, -40], [400 + sw, -96]], 6));
+    const rib = K.ribbonPts(c, (u) => lerp(40, 14, u));
+    // spikes along the top edge
+    for (let k = 1; k < 6; k++) {
+      const i = Math.floor((k / 7) * (c.length - 1));
+      const q = c[i], nb = c[i + 1] || q;
+      const a = Math.atan2(nb[1] - q[1], nb[0] - q[0]) - Math.PI / 2;
+      const w = lerp(40, 14, i / (c.length - 1)) * 0.5;
+      const sp = [[q[0] - Math.cos(a + Math.PI / 2) * 12, q[1] - Math.sin(a + Math.PI / 2) * 12], [q[0] + Math.cos(a) * (w + 30), q[1] + Math.sin(a) * (w + 30)], [q[0] + Math.cos(a + Math.PI / 2) * 12, q[1] + Math.sin(a + Math.PI / 2) * 12]];
+      F().form(ctx, sp, C.membrane, B, sd('tsp', k), { width: 4, off: 0.1, hatch: 0.3, rim: false, smooth: false });
+    }
+    F().form(ctx, rib, C.fur, B, sd('tail'), { width: 7, off: 0.06, hatch: 0.6 });
+    // the spade at the tip
+    const e = c[c.length - 1], p = c[c.length - 4];
+    const a = Math.atan2(e[1] - p[1], e[0] - p[0]);
+    const TS = M.chain(M.tr(e[0], e[1]), M.rot(a));
+    F().form(ctx, M.all(TS, K.smooth([[-8, 0], [10, -30], [60, 0], [10, 30]], 3)), C.membrane, B, sd('spade'), { width: 5, off: 0.1, hatch: 0.4, rim: false });
+  }
+
+  // ---- fire, the stone, the nugget, embers
   function fx(ctx, R, B) {
     const f = R.pose.fx || {};
-    if (f.breath) fire(ctx, M.ap(R.Mh, [388, -350]), [M.ap(R.Mr, [390, 0])[0], K.GROUND - 40], f.breath, f.d || 0, B);
-    if (f.kind === 'chomp' && f.p > 0.2 && f.p < 1.4) {
-      const m = M.ap(R.Mh, [396, -352]);
-      fire(ctx, m, [m[0] + 140, m[1] + 10], 0.6 + 0.3 * Math.sin(f.p * 6), Math.round(f.p * 5), B);
+    const g = K.GROUND, sx = K.CXF + 300;
+    if (f.stone) {
+      const heat = f.stone;
+      if (heat < 2) {
+        const pts = L.ellipsePts(sx, g - 50, 76, 54, 9, 0.3);
+        F().form(ctx, pts, heat > 0.6 ? L.mix(C.stone, C.lava, (heat - 0.6) * 1.5) : C.stone, B, sd('stone'), {
+          width: 6,
+          off: 0.1,
+          hatch: 0.5,
+          smooth: false,
+          inside(c2) {
+            L.stipple(c2, pts, { spacing: 14, r: [1.6, 3], color: C.stoneDeep, alpha: 0.6, seed: sd('st'), boil: B });
+            if (heat > 0.3) crack(c2, [[sx - 40, g - 70], [sx - 6, g - 48], [sx + 30, g - 64]], heat * 2, B, sd('stc'));
+          },
+        });
+      } else {
+        const pts = K.smooth([[sx - 50, g - 6], [sx - 56, g - 44], [sx - 16, g - 80], [sx + 36, g - 70], [sx + 58, g - 30], [sx + 40, g - 4]], 3);
+        F().form(ctx, pts, C.gold, B, sd('nug'), { width: 6, off: 0.12, shine: 1, hatch: 0.3, dark: C.goldDeep });
+        if (f.star) K.fx.star(ctx, sx + 50, g - 110, 44 * f.star, B, sd('ns'), '#FFF1C4');
+      }
     }
-    if (f.embers !== 0) K.fx.embers(ctx, M.ap(R.Mb, [-20, -300]), 260, f.u || 0, B, sd('embers'), [C.lava, C.lavaHot, C.lava]);
     if (f.smoke) {
-      const n = M.ap(R.Mh, [386, -372]);
+      for (let k = 0; k < 4; k++) {
+        const p = f.smoke;
+        const c = [sx - 20 + k * 20, g - 110 - p * 90 - k * 26];
+        const r = 22 + p * 18 + k * 6;
+        const pf = L.ellipsePts(c[0], c[1], r, r * 0.85, 16);
+        K.fill(ctx, pf, '#B8B2AA', 0.8 * (1 - p * 0.6));
+        L.inkPath(ctx, pf, { closed: true, width: 3.4, alpha: 1 - p * 0.6, color: P.inkSoft, seed: sd('smk', k), boil: B, wobble: 0.6 });
+      }
+    }
+    if (f.breath) {
+      // the flame: blobs growing from his mouth to the stone, dark rim, orange, a hot core
+      const m = R.hp(0, 110, 1);
+      const tg = [sx - 10, g - 60];
+      const n = 9;
+      const reach = f.breath;
+      const blobs = [];
+      for (let i = 0; i < n; i++) {
+        const u = (i / (n - 1)) * reach;
+        const x = lerp(m[0], tg[0], u) + 16 * L.noise1(i * 1.3 + R.d, 3);
+        const y = lerp(m[1], tg[1], u) - 40 * Math.sin(Math.PI * u) + 12 * L.noise1(i * 1.7 + R.d, 5);
+        blobs.push([x, y, 24 + 58 * u]);
+      }
+      for (const [col, k, ink] of [[C.lavaDeep, 1, true], [C.lava, 0.72, false], [C.lavaHot, 0.42, false]])
+        for (const [x, y, r] of blobs) {
+          const pts = L.ellipsePts(x, y, r * k, r * k * 0.9, 16);
+          K.fill(ctx, pts, col);
+          if (ink) L.inkPath(ctx, pts, { closed: true, width: 4, seed: sd('fl', x | 0), boil: B, wobble: 0.8 });
+        }
+      for (const [x, y, r] of blobs) K.fill(ctx, L.ellipsePts(x, y, r * 0.72, r * 0.64, 14), C.lava);
+      for (const [x, y, r] of blobs) K.fill(ctx, L.ellipsePts(x, y, r * 0.4, r * 0.36, 12), C.lavaHot);
+    }
+    if (f.nostril || glowOf(R) > 1.4) {
+      for (const s of [-1, 1]) {
+        const n = R.hp(s * 22, 44, 1);
+        K.fill(ctx, L.ellipsePts(n[0], n[1], 10, 7, 10), C.lava);
+        K.fill(ctx, L.ellipsePts(n[0], n[1], 5, 3.5, 8), C.lavaHot);
+      }
+    }
+    // embers always drifting off him
+    if (R.anim !== 'sleep') K.fx.embers(ctx, M.ap(R.Mb, [0, -360]), 360, (R.d || 0) / (R.n || 12), B, sd('emb'), [C.lava, C.lavaHot, '#FFB060']);
+    // smoke curling from the nostrils in his sleep
+    if (f.kind === 'zzz') {
       for (let k = 0; k < 3; k++) {
-        const r = 12 + k * 8 + 10 * f.smoke;
-        L.inkPath(ctx, L.ellipsePts(n[0] + 20 + k * 22, n[1] - 30 - k * 30 * f.smoke, r, r * 0.8, 14), { closed: true, width: 4, alpha: 0.8 - k * 0.2, color: P.inkSoft, seed: sd('smoke', k), boil: B, wobble: 0.8 });
+        const n = R.hp(-22, 44, 1);
+        const p = ((f.u || 0) + k / 3) % 1;
+        const c = [n[0] - 20 - p * 40, n[1] - 30 - p * 120];
+        const r = 10 + p * 20;
+        L.inkPath(ctx, L.ellipsePts(c[0], c[1], r, r * 0.8, 14), { closed: true, width: 3.4, alpha: 1 - p, color: P.inkSoft, seed: sd('zs', k), boil: B, wobble: 0.7 });
       }
     }
   }
 
-  // the tail with a spade and a spike ridge (the tail is the kit's; this adds the ridge on top)
-  const TAIL = { base: [-190, -200], len: 280, lift: -0.3, curl: -0.9, rise: 0, w0: 80, w1: 14, fill: C.fur, deep: C.furDeep, ink: 7 };
+  const WORK = [
+    { turn: 0.45, look: [0.8, 0.5], fx: { stone: 0.01, glow: 1 } },
+    { sq: 1.06, y: -10, turn: 0.3, eye: 'closed', fx: { stone: 0.01, glow: 2, wing: 0.7, nostril: 1 } },
+    { turn: 0.55, head: 0.14, eye: 'angry', mouth: 1, fx: { stone: 0.3, glow: 1.6, breath: 0.6, wing: 0.4 } },
+    { turn: 0.6, head: 0.16, eye: 'angry', mouth: 1, fx: { stone: 0.8, glow: 1.6, breath: 1, wing: 0.3 } },
+    { turn: 0.55, head: 0.12, mouth: 0.6, fx: { stone: 1.4, glow: 1.3, breath: 0.45 } },
+    { turn: 0.4, look: [0.7, 0.6], fx: { stone: 2, smoke: 0.4, star: 1, glow: 1.1 } },
+    { turn: 0.2, eye: 'happy', mouth: 0.7, fx: { stone: 2, smoke: 0.9, star: 0.7, glow: 1.2, wing: 0.5 } },
+    { look: [0.3, 0.3], fx: { stone: 2, glow: 1 } },
+  ];
 
-  K.kits.quad.make({
+  K.kits.front.make({
     id: ID,
     colors: C,
     stripe: P.stripeApricot,
-    sil: SIL,
-    neck: [160, -360],
-    headScale: 1.16,
-    spine: [0, -250],
-    bodyC: [-10, -220],
-    bodyR: 230,
-    front: { atN: [124, -150], atF: [100, -158], l1: 66, l2: 62, r1: 44, rj: 32, r2: 28, paw: [40, 19], claws: true, clawCol: C.horn },
-    hind: { atN: [-130, -160], atF: [-108, -168], l1: 80, l2: 62, r1: 58, rj: 32, r2: 28, paw: [40, 19], claws: true, clawCol: C.horn },
-    feet: { fn: 132, ff: 108, hn: -130, hf: -108 },
-    stride: 48,
-    lift: 34,
-    wag: 0.6,
-    lie: 110,
-    tail: TAIL,
-    tufts: false,
-    ears: null,
-    face: {
-      eye: { x: 254, y: -410, r: 20, style: 'iris', iris: '#FF9F1C', slit: true, lid: 0.3, lidColor: C.fur },
-      nose: { x: 390, y: -372, rx: 1, ry: 1 },
-      mouth: [[386, -352], [340, -342], [290, -332]],
-      whiskers: null,
-      blush: null,
-      tongue: 30,
-      fangs: 1,
+    plan: 'sit',
+    bodyC: [0, -190],
+    bodyR: 260,
+    body: { half: [[0, -350], [92, -342], [150, -300], [182, -214], [196, -120], [188, -44], [146, -14], [0, -10]] },
+    belly: { half: [[0, -330], [70, -324], [104, -270], [112, -180], [96, -90], [54, -44], [0, -36]] },
+    fur: false,
+    sit: {
+      thigh: [150, -84, 76, 74],
+      hind: [184, 0, 48, 24],
+      front: { at: [104, -250], len: 238, r: 34, paw: [42, 25], splay: 0.05 },
+      claws: 18,
     },
+    head: { c: [0, -500], rx: 180, ry: 150, half: [[0, -140], [90, -134], [146, -100], [176, -40], [180, 20], [164, 70], [124, 112], [70, 140], [0, 150]] },
+    ears: {
+      at: [170, -20],
+      pts: [[-10, 40], [20, -20], [66, -74], [72, -34], [108, -40], [98, 0], [124, 16], [70, 40]],
+      fill: C.membrane,
+      tilt: 0,
+      flop: 0.4,
+    },
+    face: {
+      eyes: { x: 72, y: -20, rx: 36, ry: 38, white: '#FFF6DE', iris: '#F2B830', irisR: 0.88, slit: true, lid: 0.06, lidColor: C.fur, lash: true },
+      muzzle: { half: [[0, 18], [60, 20], [112, 46], [124, 86], [100, 124], [52, 142], [0, 146]] },
+      nose: null,
+      mouth: { y: 104, w: 44, drop: 8, h: 40, style: 'smile', fangs: 16 },
+      blush: [132, 44, 24],
+    },
+    shadowW: 280,
+    attack: 'bite',
     hooks: {
       behind(ctx, R, B) {
-        horns(ctx, R, B, true);
-        stone(ctx, R, B);
+        wings(ctx, R, B);
+        tailBehind(ctx, R, B);
       },
-      farWing: (ctx, R, B) => wing(ctx, R, B, true),
-      body: (ctx, R, B, pts) => scales(ctx, R, B, pts),
-      bodyAfter: (ctx, R, B) => spikes(ctx, R, B),
-      face: head,
-      front(ctx, R, B) {
-        collar(ctx, R, B);
-        wing(ctx, R, B, false);
-        horns(ctx, R, B, false);
+      skin: headCracks,
+      body: bodyCracks,
+      front: hornsAndCrest,
+      ear(c2, R, B, side, T) {
+        for (const tip of [[66, -74], [108, -40], [124, 16]]) K.line(c2, M.all(T, [[20 * side, 20], [tip[0] * side * 0.94, tip[1] * 0.94]]), { width: 4, color: C.membraneDeep, seed: sd('fr', side, tip[0]), boil: B, taper: [3, 2] });
+      },
+      face(ctx, R, B) {
+        const T = R.Mh;
+        // two big nostrils on top of the snout, and two fangs when the mouth is shut
+        for (const s of [-1, 1]) {
+          const n = M.all(T, L.ellipsePts(...R.hl(s * 22, 44, 1), 11, 8, 12, s * 0.4));
+          K.fill(ctx, n, '#120E0E');
+          L.inkPath(ctx, n, { closed: true, width: 3, seed: sd('nos', s), boil: B, wobble: 0.3 });
+        }
+        if (R.pose.mouth <= 0.25)
+          for (const s of [-1, 1]) {
+            const c = R.hl(s * 26, 112, 1);
+            const f = M.all(T, [[c[0] - 7, c[1] - 2], [c[0] + 7, c[1] - 2], [c[0], c[1] + 16]]);
+            K.fill(ctx, f, '#FFFBF0');
+            L.inkPath(ctx, f, { closed: true, width: 2.6, seed: sd('fang', s), boil: B, smooth: false, taper: 0 });
+          }
       },
       fx,
     },
     poses: {
-      idle(d, n, P0) {
-        return Object.assign(P0.idle(d, n), { fx: { glow: 1 + 0.2 * Math.sin((TAU * d) / n), u: d / n, wing: 0.33 + 0.05 * Math.sin((TAU * d) / n), swing: 0.3 * Math.sin((TAU * d) / n) } });
-      },
-      walk(d, n, P0) {
-        return Object.assign(P0.walk(d, n), { fx: { glow: 1, u: d / n, wing: 0.3 + 0.08 * Math.sin((TAU * d) / n), swing: Math.cos((TAU * d) / n) } });
-      },
-      happy(d, n, P0) {
-        const p = P0.happy(d, n);
-        p.fx = { kind: 'burst', k: d, u: d / n, glow: 1.4, wing: d >= 1 && d <= 5 ? (d % 2 ? 1 : 0.55) : 0.2 };
-        return p;
-      },
-      attack(d, n, P0) {
-        const p = P0.attack(d, n);
-        p.fx = Object.assign({}, p.fx, { glow: 1.3, u: d / n, wing: 0.3 });
-        return p;
-      },
-      sleep(d, n, P0) {
-        const p = P0.sleep(d, n);
-        p.fx = Object.assign({}, p.fx, { glow: 0.45 + 0.1 * Math.sin((TAU * d) / n), embers: 0, wing: 0.05 });
-        return p;
-      },
-      // breathe in (the cracks blaze), fire on the stone until it glows, a gold nugget
-      work(d, n, P0) {
-        const st = P0.idle(0, 12).legs;
-        const T = [
-          { head: -0.2, sq: 1.04, glow: 1.6, stone: 0 },
-          { head: -0.24, sq: 1.07, glow: 2.2, stone: 0, wing: 0.4 },
-          { head: 0.26, mouth: 1, breath: 0.7, glow: 1.8, stone: 0.3 },
-          { head: 0.28, mouth: 1, breath: 1, glow: 1.6, stone: 0.7 },
-          { head: 0.24, mouth: 0.6, breath: 0.5, glow: 1.2, stone: 1 },
-          { head: 0.1, glow: 1, stone: 2, smoke: 0.5, star: 1.2 },
-          { head: -0.06, glow: 1, stone: 2, smoke: 1, eye: 'happy', star: 0.8 },
-          { head: -0.12, glow: 1.1, stone: 2, mouth: 0.6, eye: 'happy', star: 1 },
-        ][d];
-        return { head: T.head, sq: T.sq || 1, mouth: T.mouth || 0, eyeMode: T.eye || 'open', legs: st, fx: { glow: T.glow, stone: T.stone, breath: T.breath, smoke: T.smoke, star: T.star, wing: T.wing || 0, d, u: d / n } };
+      work(d) {
+        const T = WORK[d];
+        return { turn: T.turn || 0, look: T.look || null, head: T.head || 0, sq: T.sq || 1, y: T.y || 0, eyeMode: T.eye || 'open', mouth: T.mouth || 0, fx: T.fx };
       },
     },
   });

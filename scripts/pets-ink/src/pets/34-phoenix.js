@@ -1,9 +1,10 @@
-// pets/34-phoenix.js : Феникс свободы (mythic, every role). Bird kit, struts.
-// A crimson firebird with an orange-gold chest, gold coverts and orange primaries, a small gold
-// hooked beak, a gold stroke behind a proud gold eye. A crest of gold feathers tipped with flame,
-// three long tail plumes that end in fire, embers always drifting off him. On one leg, the iron
-// cuff of a shackle he broke, its chain snapped. Work: bursts into flame, burns down to a glowing
-// ember, hatches out of it again with his wings wide — and the ember rains down as coins and tokens.
+// pets/34-phoenix.js : Феникс свободы (mythic, every role). Front kit, a firebird facing us.
+// A crimson firebird with an orange-gold breast, gold coverts and orange flight feathers, a small
+// gold hooked beak, proud gold eyes with a gold stroke trailing from each, a crest of gold feathers
+// with little flames on their tips, three long tail plumes that end in fire, a warm glow round him
+// and embers always drifting off. On one leg the iron cuff of a shackle he broke. Work: bursts into
+// flame, burns down to a glowing ember, is reborn out of it with his wings wide — and the ember
+// rains down as coins and tokens.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -12,274 +13,226 @@
   const K = FILM.pets;
   const M = K.M;
   const lerp = L.lerp;
+  const F = () => K.front;
   const ID = 'phoenix';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
-
-  const C = {
-    fur: '#C23A2C',
-    furDeep: '#6E1812',
-    furLit: '#F07A50',
-    chest: '#F39A3A',
-    chestDeep: '#B8601A',
-    gold: '#F6C94A',
-    goldDeep: '#A8741A',
-    wing: '#B22E26',
-    wingDeep: '#5E120E',
-    primary: '#F28A2C',
-    covert: '#E8662A',
-    wingLine: '#7A1A16',
-    secondary: '#D84A2A',
-    tail: '#B22E26',
-    beak: '#F2C04A',
-    beakDeep: '#9A6A14',
-    eye: '#1A110E',
-    leg: '#E8A23A',
-    legDeep: '#9A5A16',
-    iron: '#6A6E75',
-    ironDeep: '#3A3D42',
-    ironLit: '#9CA1A8',
-  };
   const FIRE = ['#D8402A', '#F28A2C', '#FFE08A'];
 
-  const SIL = [
-    [-140, -170, 0],
-    [-180, -222, 0],
-    [-160, -288, 0],
-    [-90, -338, 0],
-    [-10, -382, 0.2],
-    [22, -432, 0.7],
-    [46, -478, 1],
-    [92, -506, 1],
-    [140, -500, 1],
-    [170, -474, 1],
-    [174, -446, 1],
-    [158, -422, 1],
-    [134, -402, 0.7],
-    [124, -352, 0.3],
-    [128, -292, 0.1],
-    [116, -232, 0],
-    [84, -182, 0],
-    [0, -158, 0],
-    [-80, -160, 0],
-  ];
-
-  const WING = {
-    fold: [[46, -340], [0, -340], [-80, -310], [-146, -266], [-190, -236], [-210, -220], [-180, -206], [-122, -200], [-40, -216], [18, -254], [56, -300]],
-    spread: [[46, -340], [34, -430], [-6, -540], [-72, -610], [-156, -630], [-226, -600], [-206, -548], [-160, -486], [-96, -420], [-26, -370], [50, -322]],
-    covert: [[46, -340], [0, -340], [-84, -310], [-70, -272], [-4, -272], [50, -304]],
-    covertSpread: [[46, -340], [34, -430], [-6, -540], [-30, -484], [-4, -408], [42, -342]],
-    wrist: [-60, -300],
-    wristSpread: [-50, -540],
-    tips: [3, 4, 5],
-    feather: 84,
-    trail: [7, 8, 9],
-    secLen: 30,
-    scallops: [[-150, -250], [-110, -236], [-70, -232], [-30, -244]],
-    scallopsSpread: [[-150, -540], [-110, -486], [-70, -432], [-30, -382]],
+  const C = {
+    fur: '#C8302A',
+    furDeep: '#7A1614',
+    furLit: '#EE6A4A',
+    belly: '#F2A640',
+    wing: '#B82A26',
+    covert: '#E8B84A',
+    primary: '#F07A2A',
+    secondary: '#D8502A',
+    wingLine: '#7A1614',
+    tail: '#C8302A',
+    leg: '#E0B040',
+    beak: '#F0C040',
+    beakLow: '#D09A28',
+    beakDeep: '#8A5A10',
+    gold: '#F2C14E',
+    goldDeep: '#A0741E',
+    blush: '#F08A6A',
+    mouth: '#6A1A14',
+    eyeLine: '#FFE6B0',
+    iron: '#6E747A',
+    ironDeep: '#3C4044',
   };
 
-  const BEAK_TIP = [216, -442];
-
-  const flick = (R) => (R.pose.fx && R.pose.fx.ph) || 0;
-
-  function markings(ctx, R, B) {
-    const T = R.Mb, H = R.Mh;
-    // the orange-gold chest with scalloped feathers
-    const chest = M.all(T, K.smooth([[70, -330], [126, -300], [124, -220], [84, -176], [30, -190], [30, -270]], 5));
-    K.fill(ctx, chest, C.chest);
-    for (let r = 0; r < 3; r++) {
-      for (let k = 0; k < 3; k++) {
-        const x = 50 + k * 24 + (r % 2) * 12, y = -300 + r * 36;
-        K.line(ctx, M.all(T, K.curve([[x - 12, y], [x, y + 10], [x + 12, y]], 4)), { width: 3, color: C.chestDeep, alpha: 0.85, seed: sd('scal', r, k), boil: B, taper: [3, 3] });
-      }
-    }
-    // the gold stroke behind the eye
-    K.line(ctx, M.all(H, K.curve([[112, -470], [86, -474], [58, -484]], 4)), { width: 9, color: C.gold, seed: sd('liner'), boil: B, taper: [3, 10] });
+  function glow(ctx, R) {
+    const c = M.ap(R.Mb, [0, -330]);
+    const g = ctx.createRadialGradient(c[0], c[1], 60, c[0], c[1], 420);
+    g.addColorStop(0, L.rgba('#FFB050', 0.35));
+    g.addColorStop(1, L.rgba('#FFB050', 0));
+    ctx.save();
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(c[0], c[1], 420, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
-  /**
-   * A fire feather along the centre line c (screen points): red at the tip, orange, gold at the
-   * root (fire is palest where it burns hottest), one ink outline round the whole.
-   */
-  function fireFeather(ctx, c, w, B, seed, bands) {
-    const rib = K.ribbonPts(c, w);
-    K.fill(ctx, rib, bands[0][1]);
-    for (let i = 1; i < bands.length; i++) {
-      const k = bands[i][0];
-      const n = Math.max(2, Math.round(c.length * k));
-      const sub = c.slice(0, n);
-      K.clip(ctx, rib, () => K.fill(ctx, K.ribbonPts(sub, (u) => w(u * k) * 1.3), bands[i][1]));
-    }
-    L.hatch(ctx, rib, { angle: -Math.PI / 4, spacing: 7, width: 2, color: C.furDeep, alpha: 0.45, density: 0.35, clip: true, seed: seed + 3, boil: B });
-    L.inkPath(ctx, rib, { closed: true, width: 5, seed, boil: B, wobble: 0.8, taper: [4, 10] });
+  /** A plume: a thin shaft opening into a flame-shaped vane with a gold eye, base to tip. */
+  function plume(ctx, base, tip, w, B, seed) {
+    const dx = tip[0] - base[0], dy = tip[1] - base[1], l = Math.hypot(dx, dy) || 1;
+    const ux = dx / l, uy = dy / l, nx = -uy, ny = ux;
+    const at = (u, v) => [base[0] + ux * l * u + nx * v, base[1] + uy * l * u + ny * v];
+    // the vane: widest at 70%, three flame licks at the end
+    const vane = K.smooth([at(0.28, 0), at(0.55, w * 0.62), at(0.78, w), at(0.94, w * 0.7), at(1.06, w * 0.3), at(1.16, w * 0.32), at(1.08, -w * 0.2), at(0.94, -w * 0.72), at(0.78, -w), at(0.55, -w * 0.62)], 4);
+    K.line(ctx, [base, at(0.4, 0)], { width: 9, color: P.ink, seed: seed + 1, boil: B, taper: [2, 2] });
+    K.line(ctx, [base, at(0.4, 0)], { width: 5, color: C.gold, seed: seed + 1, boil: B, taper: [2, 2] });
+    F().form(ctx, vane, C.primary, B, seed, {
+      width: 5,
+      off: 0.06,
+      hatch: 0.3,
+      inside(c2) {
+        // fire colours toward the tip, an eye in the middle, barbs
+        K.fill(c2, K.smooth([at(0.86, w * 0.62), at(1.1, w * 0.22), at(0.9, -w * 0.5), at(0.94, 0)], 4), '#FFD166');
+        K.fill(c2, L.ellipsePts(...at(0.7, 0), w * 0.42, w * 0.34, 16, Math.atan2(uy, ux)), C.fur);
+        K.fill(c2, L.ellipsePts(...at(0.7, 0), w * 0.22, w * 0.18, 12, Math.atan2(uy, ux)), C.gold);
+        for (let k = 0; k < 6; k++) {
+          const u = 0.45 + k * 0.08;
+          for (const s of [-1, 1]) K.line(c2, [at(u, 0), at(u + 0.06, s * w)], { width: 2, color: C.furDeep, alpha: 0.5, seed: seed + 10 + k * 2 + (s > 0 ? 1 : 0), boil: B, taper: 0 });
+        }
+      },
+    });
   }
 
-  // three long plumes sweeping up and back, burning at their ends
   function plumes(ctx, R, B) {
-    const T = R.Mb;
-    const sw = R.pose.fx && R.pose.fx.sway != null ? R.pose.fx.sway : 0;
-    const ph = flick(R);
-    const lines = [
-      [[-150, -214], [-214, -302], [-300, -356], [-384, -352]],
-      [[-150, -206], [-238, -262], [-340, -276], [-428, -240]],
-      [[-150, -198], [-236, -212], [-318, -194], [-384, -146]],
-    ];
-    const w = (u) => (u < 0.68 ? 10 + 30 * (u / 0.68) : 40 * Math.pow(Math.max(0, 1 - (u - 0.68) / 0.32), 0.6) + 2);
-    lines.forEach((pts, k) => {
-      const moved = pts.map(([x, y], i) => [x + sw * 6 * i, y + Math.sin(sw * 1.4 + k * 1.3 + i * 0.6) * 9 * i]);
-      const c = M.all(T, K.curve(moved, 6));
-      fireFeather(ctx, c, w, B, sd('plume', k), [[1, '#C8352B'], [0.84, '#F28A2C'], [0.5, C.wing]]);
-      K.line(ctx, c.slice(1, Math.floor(c.length * 0.8)), { width: 3, color: C.gold, alpha: 0.9, seed: sd('plumeLine', k), boil: B, taper: [4, 6] });
-      const tip = c[c.length - 1];
-      K.fx.flame(ctx, tip[0] + 4, tip[1] + 8, 34, 52, ph + k * 2, B, sd('plumeFire', k), { colors: FIRE, width: 3.6, tongues: 2 });
-    });
-  }
-
-  // a crest of fire feathers fanned back from the crown, flickering
-  function crest(ctx, R, B) {
-    const H = R.Mh;
-    const ph = flick(R);
-    const flare = R.pose.fx && R.pose.fx.flare ? 1.3 : 1;
-    const w = (u) => 4 + 20 * Math.sin(Math.PI * Math.min(1, 0.12 + u * 0.95));
-    [[-2.05, 96], [-2.35, 110], [-2.62, 100], [-2.88, 82]].forEach(([a0, l], k) => {
-      const a = a0 + 0.1 * L.noise1(ph * 0.8 + k * 2.3, sd('crestA'));
-      const len = l * flare;
-      const base = [96 - k * 10, -498];
-      const mid = [base[0] + Math.cos(a + 0.25) * len * 0.5, base[1] + Math.sin(a + 0.25) * len * 0.5];
-      const tip = [base[0] + Math.cos(a) * len, base[1] + Math.sin(a) * len];
-      const c = M.all(H, K.curve([base, mid, tip], 6));
-      fireFeather(ctx, c, w, B, sd('crest', k), [[1, '#D8402A'], [0.62, '#F28A2C'], [0.3, C.gold]]);
-    });
-  }
-
-  function shackle(ctx, R, B, knee, f) {
-    const c = [lerp(knee[0], f[0], 0.45), lerp(knee[1], f[1], 0.45)];
-    K.plate(ctx, L.rrectPts(c[0] - 16, c[1] - 11, 32, 22, 5, 4), { fill: C.iron, deep: C.ironDeep, width: 4, seed: sd('cuff'), boil: B });
-    K.fill(ctx, L.ellipsePts(c[0] + 8, c[1], 3, 3, 6), C.ironLit);
-    const sw = R.pose.fx && R.pose.fx.sway != null ? R.pose.fx.sway : 0;
-    const a = [c[0] - 12, c[1] + 10];
-    const b = [a[0] - 16 - sw * 8, a[1] + 34];
-    K.chain(ctx, [a, b], 16, { width: 5, color: C.iron, seed: sd('chain'), boil: B });
-    // the snapped link
-    const e = [b[0] - 2, b[1] + 16];
-    L.inkPath(ctx, L.ellipsePts(e[0], e[1], 8, 12, 14, 0.4).slice(3, 13), { width: 7, color: P.ink, seed: sd('snap'), boil: B, taper: [2, 2] });
-    L.inkPath(ctx, L.ellipsePts(e[0], e[1], 8, 12, 14, 0.4).slice(3, 13), { width: 3, color: C.ironLit, seed: sd('snap'), boil: B, taper: [2, 2] });
-  }
-
-  function orb(ctx, B, crack, ph) {
-    const c = [K.CX - 10, K.GROUND - 110];
-    const z = 1.3;
-    K.fill(ctx, L.ellipsePts(c[0], c[1], 150 * z, 150 * z, 40), P.annYellow, 0.22);
-    K.fx.flame(ctx, c[0], c[1] - 20 * z, 160 * z, 190 * z, ph, B, sd('orbFire'), { colors: FIRE, alpha: 0.9, tongues: 4 });
-    const body = L.ellipsePts(c[0], c[1], 74 * z, 84 * z, 36);
-    K.form(ctx, body, { fill: '#F6B23A', deep: '#C8551E', width: 6, seed: sd('orb'), boil: B, spacing: 6, hatchAlpha: 0.6 });
-    K.fill(ctx, L.ellipsePts(c[0] - 22 * z, c[1] - 30 * z, 22 * z, 16 * z, 16, -0.5), '#FFF1C4', 0.9);
-    if (crack) {
-      const q = (x, y) => [c[0] + x * z, c[1] + y * z];
-      const lines = [[q(-10, -84), q(6, -40), q(-14, -10), q(10, 20)], [q(6, -40), q(40, -30)]];
-      for (const [i, ln] of lines.entries()) {
-        K.line(ctx, ln, { width: 10, color: '#FFF6D8', seed: sd('crackG', i), boil: B, smooth: false, taper: [3, 3] });
-        K.line(ctx, ln, { width: 3.4, seed: sd('crack', i), boil: B, smooth: false, taper: [3, 3] });
-      }
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * K.TAU + 0.2;
-        K.line(ctx, [q(Math.cos(a) * 100, Math.sin(a) * 110), q(Math.cos(a) * 150, Math.sin(a) * 165)], { width: 7, color: P.annYellow, seed: sd('ray', k), boil: B, smooth: false, taper: [3, 8] });
-      }
+    // a fan of long plumes spread behind him like a halo of fire
+    const base = M.ap(R.Mb, [0, -230]);
+    const sw = R.pose.tail * 0.12;
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const u = i / (n - 1) - 0.5;
+      const a = -Math.PI / 2 + u * 2.5 + sw;
+      const len = 560 - Math.abs(u) * 150;
+      plume(ctx, base, [base[0] + Math.cos(a) * len, base[1] + Math.sin(a) * len * 0.9], 44, B, sd('plume', i));
     }
   }
 
-  function rain(ctx, B, u) {
-    const drops = [
-      ['coin', -170, 0.1], ['token', -80, 0.35], ['coin', 60, 0.6], ['token', 170, 0.2], ['coin', 250, 0.8],
-    ];
-    drops.forEach(([kind, dx, turn], k) => {
-      const y = u === 1 ? K.GROUND - 320 + k * 30 + (k % 2) * 60 : K.GROUND - 20 - (k % 2) * 6;
-      const x = K.CX + dx;
-      const t = u === 1 ? turn : 0.1;
-      if (kind === 'coin') K.fx.coin(ctx, x, y, 24, t, B, sd('rc', k));
-      else K.fx.token(ctx, x, y, 26, t, B, sd('rt', k));
-    });
+  function crest(ctx, R, B) {
+    // five gold feathers fanning up from the crown, a small flame on each tip
+    const T = R.Mh;
+    for (let i = 0; i < 5; i++) {
+      const u = i / 4 - 0.5;
+      const b = R.hl(u * 70, -120, 0.4);
+      const tip = R.hl(u * 200, -250 + Math.abs(u) * 70, 0.3);
+      const bp = M.ap(T, b), tp = M.ap(T, tip);
+      F().feather(ctx, bp, tp, 20, C.gold, C.goldDeep, B, sd('crest', i));
+      // the tip burns orange
+      K.fill(ctx, L.ellipsePts(lerp(bp[0], tp[0], 0.86), lerp(bp[1], tp[1], 0.86), 12, 12, 10), C.primary);
+    }
+  }
+
+  function eyeStrokes(ctx, R, B) {
+    const T = R.Mh;
+    for (const s of [-1, 1]) {
+      const st = M.all(T, K.curve([R.hl(s * 100, -6, 0.8), R.hl(s * 136, -16, 0.6), R.hl(s * 170, -40, 0.4)], 4));
+      K.line(ctx, st, { width: 13, color: P.ink, seed: sd('es', s), boil: B, taper: [6, 10] });
+      K.line(ctx, st, { width: 7, color: C.gold, seed: sd('es', s), boil: B, taper: [6, 10] });
+    }
+  }
+
+  function breastRows(c2, R, B) {
+    const T = R.Mb;
+    for (let row = 0; row < 4; row++)
+      for (let i = -3; i <= 3; i++) {
+        const x = i * 36 + (row % 2) * 18, y = -300 + row * 50;
+        if (Math.abs(x) > 120 - row * 8) continue;
+        K.line(c2, M.all(T, K.curve([[x - 16, y], [x, y + 12], [x + 16, y]], 3)), { width: 3.2, color: '#C87424', seed: sd('br', row, i), boil: B, taper: [2, 2] });
+      }
   }
 
   const WORK = [
-    { wing: 0.3, head: -0.2, fx: { flare: 1, sway: 0.5 } },
-    { wing: 0.6, wingF: 0.6, sq: 1.04, head: -0.25, beak: 0.4, fx: { flare: 1, wreath: 1 } },
-    { wing: 0.9, wingF: 0.9, sq: 1.05, head: -0.3, beak: 0.6, eyeMode: 'closed', fx: { flare: 1, wreath: 1, cover: 1 } },
-    { hide: true, fx: { orb: 1 } },
-    { hide: true, fx: { orb: 1, crack: 1 } },
-    { y: -60, wing: 1, wingF: 1, sq: 1.08, head: -0.25, beak: 0.6, eyeMode: 'happy', fx: { flare: 1, rebirth: 1 } },
-    { y: -30, wing: 0.6, wingF: 0.6, head: -0.15, beak: 0.3, eyeMode: 'happy', fx: { flare: 1, rain: 1 } },
-    { wing: 0.15, wingF: 0.15, head: -0.08, sq: 1.03, fx: { rain: 2, sway: -0.4 } },
+    { wing: 1, sq: 1.05, eye: 'closed', fx: { lick: 0.5 } },
+    { wing: 1, sq: 1.02, eye: 'closed', fx: { lick: 1, pillar: 0.6 } },
+    { hide: true, fx: { pillar: 1 } },
+    { hide: true, fx: { ember: 1, pillar: 0.35 } },
+    { hide: true, fx: { ember: 1, rays: 1 } },
+    { y: -60, wing: 1, scale: 1.08, mouth: 0.6, fx: { rain: 0.3, rays: 0.6 } },
+    { y: -20, wing: 0.7, eye: 'happy', mouth: 0.5, fx: { rain: 0.7 } },
+    { fx: { rain: 1 } },
   ];
 
-  const withFx = (p, extra) => Object.assign(p, { fx: Object.assign({}, p.fx, extra) });
-
-  K.kits.bird.make({
+  K.kits.front.make({
     id: ID,
     colors: C,
     stripe: P.stripeApricot,
-    sil: SIL,
-    neck: [60, -420],
-    headScale: 1.26,
-    bodyC: [-10, -270],
-    bodyR: 190,
-    gait: 'strut',
-    stride: 40,
-    feet: { n: 36, f: 2 },
-    wing: WING,
-    tailFan: { base: [-150, -196], angle: Math.PI + 0.25, spread: 0.4, n: 5, len: 110, width: 17, taper: 0.1, fill: (i) => (i % 2 ? C.wing : C.fur) },
-    sit: 30,
-    leg: { hipN: [30, -160], hipF: [0, -164], l1: 40, l2: 80, r: 8, toe: 38, thighR: 2.4, thigh: C.fur, claw: '#3A2A20' },
-    tufts: false,
-    fur: true,
-    shadowW: 230,
-    beak: { hinge: [168, -460], tip: BEAK_TIP, upper: [[160, -476], [190, -480], [212, -464], [218, -440], [206, -448], [186, -454], [164, -452]], lower: [[166, -454], [190, -452], [204, -446], [190, -438], [168, -442]] },
-    face: { eye: { x: 126, y: -468, r: 15, style: 'iris', white: '#FFF4DE', iris: '#F6C94A', lid: 0.26, lidColor: C.fur } },
+    plan: 'bird',
+    bodyC: [0, -210],
+    bodyR: 250,
+    body: { half: [[0, -390], [96, -380], [156, -330], [182, -236], [178, -140], [144, -74], [72, -46], [0, -40]] },
+    belly: { half: [[0, -350], [74, -340], [118, -290], [126, -200], [106, -116], [56, -70], [0, -62]] },
+    wings: {
+      fold: [[96, -340], [158, -330], [194, -250], [196, -160], [168, -100], [130, -126], [104, -226]],
+      hold: [[96, -340], [160, -326], [194, -266], [178, -206], [120, -196], [104, -232], [98, -284]],
+      spread: [[96, -340], [200, -410], [320, -460], [380, -410], [366, -330], [266, -296], [134, -270]],
+      root: [100, -300],
+      tip: 4,
+      n: 8,
+      feather: 150,
+      fw: 22,
+      covert: [[100, -334], [156, -324], [186, -266], [176, -220], [120, -236]],
+      covertSpread: [[100, -334], [200, -400], [310, -440], [300, -380], [150, -300]],
+      rows: [[[110, -270], [150, -258], [186, -236]]],
+      rowsSpread: [[[150, -330], [236, -360], [322, -384]]],
+    },
+    feet: { at: [54, -50], r: 9, toe: 36, claw: '#6A4A20' },
+    head: { c: [0, -530], rx: 150, ry: 138 },
+    beak: { y: 34, w: 24, h: 44, down: 14 },
+    face: {
+      eyes: { x: 64, y: -10, rx: 32, ry: 34, white: '#FFF6E0', iris: '#E8A020', irisR: 0.82, lid: 0.18, lidColor: C.fur, lash: true },
+      blush: [104, 42, 20],
+    },
+    fur: false,
+    shadowW: 220,
+    attack: 'peck',
     hooks: {
       behind(ctx, R, B) {
-        const fx = R.pose.fx || {};
-        if (fx.wreath || fx.rebirth) {
-          const c = M.ap(R.Mr, [-10, 0]);
-          K.fx.flame(ctx, c[0], c[1] + 10, fx.rebirth ? 620 : 420, fx.rebirth ? 700 : 560, flick(R), B, sd('wreath'), { colors: FIRE, tongues: 5, alpha: 0.95 });
-        }
-        if (!R.pose.hide) plumes(ctx, R, B);
+        glow(ctx, R);
+        if (R.pose.hide) return;
+        plumes(ctx, R, B);
       },
-      body: markings,
+      body: breastRows,
+      face: eyeStrokes,
       head: crest,
-      legAfter(ctx, R, B, side, knee, f) {
-        if (side === 'n') shackle(ctx, R, B, knee, f);
+      foot(ctx, R, B, side, f) {
+        if (side > 0) return;
+        // the broken shackle: an iron cuff, two links, the last one split
+        const c = [f[0], f[1] - 40];
+        F().form(ctx, L.rrectPts(c[0] - 20, c[1] - 12, 40, 24, 6, 4), C.iron, B, sd('cuff'), { width: 4, off: 0.1, hatch: 0.3, rim: false, dark: C.ironDeep });
+        K.chain(ctx, [[c[0] - 18, c[1] + 8], [c[0] - 40, c[1] + 26]], 18, { width: 6, color: C.iron, seed: sd('ch'), boil: B });
       },
       fx(ctx, R, B) {
         const fx = R.pose.fx || {};
-        if (fx.orb) orb(ctx, B, !!fx.crack, flick(R));
-        if (fx.cover) {
-          const c = M.ap(R.Mr, [0, 0]);
-          K.fx.flame(ctx, c[0] - 10, c[1] + 6, 360, 520, flick(R) + 5, B, sd('cover'), { colors: FIRE, tongues: 4, alpha: 0.92 });
+        const g = K.GROUND, cx = K.CXF;
+        if (fx.lick) for (let i = 0; i < 5; i++) K.fx.flame(ctx, cx - 160 + i * 80, g - 20 - 60 * Math.sin((i / 4) * Math.PI), 70, 120 * fx.lick, (R.d || 0) + i, B, sd('lk', i), { colors: FIRE });
+        if (fx.pillar) K.fx.flame(ctx, cx, g, 420 * fx.pillar, 700 * fx.pillar, (R.d || 0) * 1.3, B, sd('pil'), { colors: FIRE, tongues: 5, width: 7 });
+        if (fx.ember) {
+          const e = L.ellipsePts(cx, g - 70, 64, 76, 26);
+          const gl = ctx.createRadialGradient(cx, g - 70, 20, cx, g - 70, 200);
+          gl.addColorStop(0, L.rgba('#FFB050', 0.6));
+          gl.addColorStop(1, L.rgba('#FFB050', 0));
+          ctx.save();
+          ctx.fillStyle = gl;
+          ctx.beginPath();
+          ctx.arc(cx, g - 70, 200, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          F().form(ctx, e, '#5A1A12', B, sd('ember'), { width: 6, off: 0.1, hatch: 0.5, rim: false, inside: (c2) => {
+            for (const [pts, k] of [[[[cx - 30, g - 130], [cx - 6, g - 90], [cx - 20, g - 50]], 0], [[[cx + 30, g - 120], [cx + 10, g - 70], [cx + 34, g - 30]], 1], [[[cx - 50, g - 60], [cx - 10, g - 30]], 2]]) {
+              K.line(c2, pts, { width: 9, color: '#FF8A2A', seed: sd('ec', k), boil: B, smooth: false, taper: [3, 6] });
+              K.line(c2, pts, { width: 3.4, color: '#FFE08A', seed: sd('ec', k), boil: B, smooth: false, taper: [3, 6] });
+            }
+          } });
         }
-        if (fx.rebirth) K.fx.burst(ctx, M.ap(R.Mb, [0, -300]), 0.3, B, sd('reburst'), '#F28A2C');
-        if (fx.rain) rain(ctx, B, fx.rain);
-        if (fx.ember != null && !R.pose.hide) K.fx.embers(ctx, M.ap(R.Mb, [-200, -200]), 260, fx.ember, B, sd('embers'), FIRE);
+        if (fx.rays) {
+          for (let k = 0; k < 10; k++) {
+            const a = (k / 10) * Math.PI * 2;
+            const o = [cx, g - 200];
+            K.line(ctx, [[o[0] + Math.cos(a) * 120, o[1] + Math.sin(a) * 120], [o[0] + Math.cos(a) * (220 + 60 * fx.rays), o[1] + Math.sin(a) * (220 + 60 * fx.rays)]], { width: 8, color: '#FFD166', alpha: fx.rays, seed: sd('ray', k), boil: B, smooth: false, taper: [3, 10] });
+          }
+        }
+        if (fx.rain) {
+          for (let i = 0; i < 10; i++) {
+            const x = cx - 330 + i * 72 + 20 * L.h3(i, 1, 9);
+            const p = Math.min(1, fx.rain * (0.8 + 0.4 * L.h3(i, 2, 9)));
+            const y = g - 600 + p * p * 580;
+            if (i % 2) K.fx.coin(ctx, x, Math.min(g - 16, y), 22, p * 3 + i, B, sd('rc', i));
+            else K.fx.token(ctx, x, Math.min(g - 16, y), 22, p * 2 + i, B, sd('rt', i));
+          }
+        }
+        if (!R.pose.hide && R.anim !== 'sleep') K.fx.embers(ctx, M.ap(R.Mb, [0, -380]), 320, (R.d || 0) / (R.n || 12), B, sd('emb'), FIRE);
       },
     },
     poses: {
-      idle(d, n, P0) {
-        return withFx(P0.idle(d, n), { ember: d / n, ph: d, sway: Math.sin((Math.PI * 2 * d) / n) * 0.5 });
-      },
-      walk(d, n, P0) {
-        return withFx(P0.walk(d, n), { ember: d / n, ph: d, sway: Math.sin((Math.PI * 2 * d) / n) });
-      },
-      happy(d, n, P0) {
-        return withFx(P0.happy(d, n), { ember: d / n, ph: d, flare: 1 });
-      },
-      attack(d, n, P0) {
-        return withFx(P0.attack(d, n), { ember: d / n, ph: d, flare: d >= 1 && d <= 3 ? 1 : 0 });
-      },
-      sleep(d, n, P0) {
-        return withFx(P0.sleep(d, n), { ph: d * 0.5 });
-      },
-      work(d, n, P0) {
-        const p = Object.assign({ feet: P0.idle(0, 12).feet }, WORK[d]);
-        return withFx(p, { ph: d, ember: d >= 5 ? d / n : null });
+      work(d) {
+        const T = WORK[d];
+        return { y: T.y || 0, wing: T.wing || 0, sq: T.sq || 1, scale: T.scale || 1, hide: !!T.hide, eyeMode: T.eye || 'open', mouth: T.mouth || 0, fx: T.fx };
       },
     },
   });

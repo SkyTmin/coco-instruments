@@ -1,8 +1,9 @@
-// pets/41-spider.js : Паук-отмычка (epic, rate). Bug kit, eight legs in two alternating sets.
-// A round, hairy little tarantula: a dark body, orange bands at every knee and an orange tuft on
-// its back, two big shiny eyes with four small ones above, two fuzzy fangs. Its feelers hold a
-// lockpick and a tension wrench; a leather strap round its belly carries a brass ring of keys.
-// Work: raises its back legs and spins a web in a blur, and a token flying past sticks in it.
+// pets/41-spider.js : Паук-отмычка (epic, rate). Front kit, a tarantula facing us on eight legs.
+// A round, hairy little tarantula: the big furry ball of the abdomen behind with an orange tuft on
+// top, the head in front with two big glossy eyes and four small ones above, fuzzy fangs, orange
+// bands at every knee, eight legs arching out to both sides. Its feelers hold a lockpick and a
+// tension wrench. Work: raises its front legs and spins a web between them; a token flying past
+// sticks in it, and it dances.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -11,246 +12,179 @@
   const K = FILM.pets;
   const M = K.M;
   const lerp = L.lerp;
+  const F = () => K.front;
   const ID = 'spider';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
+  const TAU = Math.PI * 2;
 
   const C = {
-    body: '#3E322C',
-    bodyDeep: '#1A1412',
-    abd: '#4A3A32',
-    tuft: '#D9772E',
-    head: '#3E322C',
-    leg: '#342A25',
-    legDeep: '#120E0C',
+    fur: '#4A3A32',
+    furDeep: '#1E1614',
+    furLit: '#7A6456',
+    leg: '#3E322C',
     joint: '#E07A2E',
-    eye: '#1A110E',
-    eyeLine: '#E8D9C4',
+    tuft: '#D9772E',
     fang: '#EDE3CF',
+    eyeLine: '#E8D9C4',
+    blush: '#E08A70',
     steel: '#B8BEC6',
     steelDeep: '#6A7078',
-    leather: '#7B4E2F',
-    leatherDeep: '#4A2C18',
-    gold: '#E2B54A',
-    goldDeep: '#96701E',
-    iron: '#6A6E75',
-    ironDeep: '#3A3D42',
     silk: '#F4F1EA',
   };
 
-  const ABD = L.ellipsePts(-160, -226, 132, 114, 26);
-  const CEPH = L.ellipsePts(70, -200, 102, 84, 24);
+  function tuft(c2, R, B) {
+    const T = R.Mb;
+    K.fill(c2, M.all(T, L.ellipsePts(0, -470, 110, 50, 22)), C.tuft);
+    L.hatch(c2, M.all(T, L.ellipsePts(0, -470, 110, 50, 22)), { angle: -1.4, spacing: 10, length: [8, 14], gap: [8, 16], width: 2.2, color: '#F2A860', alpha: 0.8, clip: true, seed: sd('tf'), boil: B });
+  }
 
-  function tuft(c2, R, B, id, T) {
-    if (id !== 'abd') return;
-    K.fill(c2, M.all(T, L.ellipsePts(-196, -306, 74, 40, 20, -0.25)), C.tuft);
-    for (let k = 0; k < 9; k++) {
-      const x = -250 + k * 13, y = -318 + (k % 3) * 12;
-      K.line(c2, M.all(T, [[x, y], [x - 8, y + 22]]), { width: 3, color: '#F2A052', seed: sd('tuftL', k), boil: B, taper: [2, 4] });
+  function knee(ctx, R, B, side, i, hip, kn, foot) {
+    // an orange band at each knee and a lighter one at the ankle
+    for (const [p, q, w] of [[kn, hip, 1], [foot, kn, 0.7]]) {
+      const dx = q[0] - p[0], dy = q[1] - p[1], dl = Math.hypot(dx, dy) || 1;
+      const u = [dx / dl, dy / dl];
+      const c = [p[0] + u[0] * 26 * w, p[1] + u[1] * 26 * w];
+      const r = 20 * w;
+      const band = [[c[0] - u[1] * r - u[0] * 8, c[1] + u[0] * r - u[1] * 8], [c[0] + u[1] * r - u[0] * 8, c[1] - u[0] * r - u[1] * 8], [c[0] + u[1] * r + u[0] * 8, c[1] - u[0] * r + u[1] * 8], [c[0] - u[1] * r + u[0] * 8, c[1] + u[0] * r + u[1] * 8]];
+      K.fill(ctx, band, C.joint);
+    }
+    // hairs sticking out of the leg
+    for (let k = 1; k < 4; k++) {
+      const p = [lerp(kn[0], foot[0], k / 4), lerp(kn[1], foot[1], k / 4)];
+      K.line(ctx, [p, [p[0] + side * 14, p[1] - 6]], { width: 2.4, seed: sd('lh', side, i, k), boil: B, taper: [2, 4] });
     }
   }
 
-  // hair on the legs and the orange band at each knee
-  function legHair(ctx, R, B, side, i, hip, knee, foot, far) {
-    for (const [a, b] of [[hip, knee], [knee, foot]]) {
-      const dx = b[0] - a[0], dy = b[1] - a[1], dl = Math.hypot(dx, dy) || 1;
-      const nx = -dy / dl, ny = dx / dl;
-      for (const u of [0.25, 0.5, 0.75]) {
-        const p = [lerp(a[0], b[0], u), lerp(a[1], b[1], u)];
-        for (const s of [-1, 1]) K.line(ctx, [[p[0] + s * nx * 8, p[1] + s * ny * 8], [p[0] + s * nx * 20 - (dx / dl) * 6, p[1] + s * ny * 20 - (dy / dl) * 6]], { width: far ? 2.4 : 3, seed: sd('lh', side, i, u, s), boil: B, smooth: false, taper: [2, 3] });
-      }
+  function faceBits(ctx, R, B) {
+    const T = R.Mh;
+    // four small eyes over the two big ones
+    for (const [x, y, r] of [[-96, -84, 13], [-40, -104, 15], [40, -104, 15], [96, -84, 13]]) {
+      const c = R.hl(x, y, 0.8);
+      K.fill(ctx, M.all(T, L.ellipsePts(c[0], c[1], r, r, 14)), '#140E0C');
+      K.fill(ctx, M.all(T, L.ellipsePts(c[0] - r * 0.3, c[1] - r * 0.35, r * 0.35, r * 0.28, 8)), '#FFFFFF', 0.9);
+      L.inkPath(ctx, M.all(T, L.ellipsePts(c[0], c[1], r, r, 14)), { closed: true, width: 3, seed: sd('se', x), boil: B, wobble: 0.2 });
     }
-    const band = [lerp(knee[0], foot[0], 0.12), lerp(knee[1], foot[1], 0.12)];
-    K.fill(ctx, L.ellipsePts(band[0], band[1], 13, 13, 12), K.far(C.joint, far));
-  }
-
-  function harness(ctx, R, B) {
-    const T = R.Ma;
-    const strap = M.all(T, K.curve([[-118, -334], [-108, -226], [-128, -116]], 6));
-    K.clip(ctx, M.all(T, ABD), () => {
-      K.line(ctx, strap, { width: 22, color: P.ink, seed: sd('strap'), boil: B, taper: 0 });
-      K.line(ctx, strap, { width: 15, color: C.leather, seed: sd('strap'), boil: B, taper: 0 });
-    });
-    // the key ring on top, keys swinging behind
-    const ring = M.ap(T, [-118, -344]);
-    const sw = R.pose.fx && R.pose.fx.sway != null ? R.pose.fx.sway : 0;
-    K.key(ctx, ring[0] - 4, ring[1] + 6, 2.4 + sw * 0.2, 0.62, C.iron, C.ironDeep, B, sd('k1'));
-    K.key(ctx, ring[0] - 2, ring[1] + 8, 2.0 + sw * 0.25, 0.7, C.gold, C.goldDeep, B, sd('k2'));
-    L.inkPath(ctx, L.ellipsePts(ring[0], ring[1], 16, 16, 18), { closed: true, width: 9, color: P.ink, seed: sd('ring'), boil: B });
-    L.inkPath(ctx, L.ellipsePts(ring[0], ring[1], 16, 16, 18), { closed: true, width: 4.5, color: C.gold, seed: sd('ring'), boil: B });
-  }
-
-  function fangs(ctx, R, B) {
-    const H = R.Mh;
-    const o = R.pose.mouth || 0;
-    for (const far of [true, false]) {
-      const dx = far ? 26 : 0;
-      const T = M.mul(H, M.about((far ? 1 : -1) * 0.25 * o, 150 + dx, -166));
-      const f = M.all(T, K.smooth([[136 + dx, -176], [168 + dx, -178], [176 + dx, -146], [166 + dx, -128], [150 + dx, -142], [138 + dx, -156]], 4));
-      K.form(ctx, f, { fill: K.far(C.body, far), deep: C.bodyDeep, width: 4.5, seed: sd('fang', far ? 1 : 0), boil: B, shade: 0.5, spacing: 5 });
-      const tip = M.all(T, [[160 + dx, -140], [170 + dx, -136], [158 + dx, -114]]);
-      K.fill(ctx, tip, C.fang);
-      L.inkPath(ctx, tip, { closed: true, width: 3, seed: sd('fangT', far ? 1 : 0), boil: B, smooth: false, taper: 0 });
+    // the chelicerae: two fuzzy lumps with ivory fangs
+    const open = R.pose.mouth || 0;
+    for (const s of [-1, 1]) {
+      const c = R.hl(s * 36, 86, 1);
+      const lump = M.all(T, L.ellipsePts(c[0], c[1], 34, 40, 18, s * 0.2));
+      F().form(ctx, lump, C.fur, B, sd('chel', s), { width: 5, off: 0.1, hatch: 0.4, inside: (c2) => F().fur(c2, lump, R, B, sd('cf', s), C.furLit, C.furDeep, 1.6) });
+      const f0 = R.hl(s * 30, 118, 1);
+      const fang = M.all(T, K.smooth([[f0[0] - 10, f0[1] - 6], [f0[0] + 10, f0[1] - 6], [f0[0] - s * (6 + open * 12), f0[1] + 34]], 3));
+      K.fill(ctx, fang, C.fang);
+      L.inkPath(ctx, fang, { closed: true, width: 3, seed: sd('fang', s), boil: B, wobble: 0.2 });
     }
   }
 
-  // the feelers: short two-part limbs; the near one holds the hook pick, the far one the wrench
-  function feelers(ctx, R, B) {
-    const H = R.Mh;
+  function tools(ctx, R, B) {
+    // the feelers hold a lockpick (right) and a tension wrench (left)
+    const T = R.Mh;
+    const lift = (R.pose.fx && R.pose.fx.palps) || 0;
+    for (const s of [-1, 1]) {
+      const b = R.hl(s * 96, 70, 0.8);
+      const e = R.hl(s * 130, 150 - lift * 60, 0.9);
+      const palp = M.all(T, [b, [lerp(b[0], e[0], 0.5) + s * 20, lerp(b[1], e[1], 0.5)], e]);
+      K.line(ctx, palp, { width: 24, color: P.ink, seed: sd('palp', s), boil: B, taper: [4, 4] });
+      K.line(ctx, palp, { width: 16, color: C.leg, seed: sd('palp', s), boil: B, taper: [4, 4] });
+      const tip = palp[palp.length - 1];
+      K.fill(ctx, L.ellipsePts(tip[0], tip[1], 14, 12, 12), C.joint);
+      L.inkPath(ctx, L.ellipsePts(tip[0], tip[1], 14, 12, 12), { closed: true, width: 3, seed: sd('pt', s), boil: B, wobble: 0.2 });
+      const tool = s > 0 ? [[tip[0] + 4, tip[1] - 6], [tip[0] + 40, tip[1] - 60], [tip[0] + 36, tip[1] - 70], [tip[0] + 46, tip[1] - 74]] : [[tip[0] - 4, tip[1] - 6], [tip[0] - 20, tip[1] - 70], [tip[0] - 40, tip[1] - 74]];
+      K.line(ctx, tool, { width: 9, color: P.ink, seed: sd('tool', s), boil: B, smooth: false, taper: 0 });
+      K.line(ctx, tool, { width: 5, color: C.steel, seed: sd('tool', s), boil: B, smooth: false, taper: 0 });
+    }
+  }
+
+  function web(ctx, R, B) {
     const fx = R.pose.fx || {};
-    const lift = fx.pick || 0;
-    for (const far of [true, false]) {
-      const dx = far ? 30 : 0;
-      const a = M.ap(H, [150 + dx, -186]);
-      const b = M.ap(H, [206 + dx, -206 - lift * 30]);
-      const c = M.ap(H, [236 + dx, -170 - lift * 50]);
-      const col = K.far(C.leg, far);
-      for (const [p, q, r1, r2] of [[a, b, 9, 8], [b, c, 8, 7]]) K.form(ctx, K.limbPts(p, q, r1, r2, 6), { fill: col, deep: C.legDeep, width: 4.5, seed: sd('palp', far ? 1 : 0, r1), boil: B, shade: 0.5, spacing: 5 });
-      K.fill(ctx, L.ellipsePts(c[0], c[1], 10, 10, 10), K.far(C.joint, far));
-      // the tools
-      const tool = far
-        ? [[c[0] + 4, c[1] - 4], [c[0] + 40, c[1] - 26], [c[0] + 52, c[1] - 10]]
-        : [[c[0] + 4, c[1] - 6], [c[0] + 56, c[1] - 40], [c[0] + 64, c[1] - 52], [c[0] + 72, c[1] - 46]];
-      L.inkPath(ctx, tool, { width: 9, color: P.ink, seed: sd('tool', far ? 1 : 0), boil: B, smooth: false, taper: [2, 2] });
-      L.inkPath(ctx, tool, { width: 4, color: K.far(C.steel, far), seed: sd('tool', far ? 1 : 0), boil: B, smooth: false, taper: [2, 2] });
-    }
-  }
-
-  // the web: radials out from the hub, then the spiral laid ring by ring (w 0..2)
-  const HUB = [K.CX - 150, K.GROUND - 520];
-  function web(ctx, B, w) {
-    const n = 8, rMax = 230;
-    const ang = (k) => -0.3 + (k / n) * Math.PI * 2;
-    const rad = Math.min(1, w);
+    if (!fx.web) return;
+    const c = M.ap(R.Mb, [0, -640]);
+    const w = fx.web;
+    const r = 260;
+    // spokes, then the spiral, drawn as far as the web has got
+    const n = 12;
     for (let k = 0; k < n; k++) {
-      const a = ang(k);
-      const e = [HUB[0] + Math.cos(a) * rMax * rad, HUB[1] + Math.sin(a) * rMax * rad];
-      K.line(ctx, [HUB, e], { width: 3, color: C.silk, seed: sd('rad', k), boil: B, smooth: false, taper: [2, 2] });
-      K.line(ctx, [HUB, e], { width: 1.4, color: P.inkSoft, alpha: 0.6, seed: sd('radI', k), boil: B, smooth: false, taper: 0 });
+      const a = (k / n) * TAU;
+      K.line(ctx, [c, [c[0] + Math.cos(a) * r * Math.min(1, w * 1.6), c[1] + Math.sin(a) * r * 0.8 * Math.min(1, w * 1.6)]], { width: 2.6, color: C.silk, alpha: 0.95, seed: sd('sp', k), boil: B, smooth: false, taper: 0 });
     }
-    const sp = Math.max(0, w - 1);
-    const rings = 6;
-    for (let r = 0; r < Math.floor(sp * rings + 1e-6); r++) {
-      const rr = 50 + r * 32;
-      const pts = [];
+    const turns = Math.floor(w * 7);
+    for (let t = 1; t <= turns; t++) {
+      const rr = (t / 7) * r;
+      const ring = [];
       for (let k = 0; k <= n; k++) {
-        const a0 = ang(k), a1 = ang(k + 1);
-        pts.push([HUB[0] + Math.cos(a0) * rr, HUB[1] + Math.sin(a0) * rr]);
-        const am = (a0 + a1) / 2;
-        if (k < n) pts.push([HUB[0] + Math.cos(am) * rr * 0.9, HUB[1] + Math.sin(am) * rr * 0.9]);
+        const a = (k / n) * TAU;
+        ring.push([c[0] + Math.cos(a) * rr, c[1] + Math.sin(a) * rr * 0.8 + 6 * Math.sin(k * 2)]);
       }
-      K.line(ctx, K.curve(pts, 4), { width: 2.6, color: C.silk, seed: sd('ring', r), boil: B, taper: 0 });
-      K.line(ctx, K.curve(pts, 4), { width: 1.2, color: P.inkSoft, alpha: 0.5, seed: sd('ringI', r), boil: B, taper: 0 });
+      K.line(ctx, ring, { width: 2.2, color: C.silk, alpha: 0.9, seed: sd('ring', t), boil: B, smooth: false, taper: 0 });
     }
-    // the anchor threads up to the top and back to the left
-    if (w > 0.2) {
-      K.line(ctx, [HUB, [HUB[0] - 40, HUB[1] - 330]], { width: 2.4, color: C.silk, seed: sd('anchor1'), boil: B, smooth: false });
-      K.line(ctx, [[HUB[0] + Math.cos(ang(2)) * rMax * rad, HUB[1] + Math.sin(ang(2)) * rMax * rad], [HUB[0] + 260, HUB[1] + 330]], { width: 2.4, color: C.silk, seed: sd('anchor2'), boil: B, smooth: false });
+    if (fx.token) {
+      const p = fx.token;
+      const x = lerp(c[0] + 520, c[0] + 60, Math.min(1, p)), y = lerp(c[1] - 60, c[1] + 30, Math.min(1, p));
+      K.fx.token(ctx, x, y, 26, p < 1 ? 0.3 + p : 0.1, B, sd('tok'));
+      if (p < 1) K.fx.speed(ctx, [x + 60, y], 200, 0.8, B, sd('tsp'));
+      else K.fx.star(ctx, x + 40, y - 40, 38, B, sd('tst'), '#FFF1C4');
     }
   }
 
+  const up = (a) => ({ l: [a, 0, 0, 0], r: [a, 0, 0, 0] });
+  const WEB = 540;
   const WORK = [
-    { abd: 0.2, lean: -0.04, fx: { web: 0.3, spin: 0 } },
-    { abd: 0.26, lean: -0.05, fx: { web: 0.8, spin: 1 } },
-    { abd: 0.22, lean: -0.04, fx: { web: 1.25, spin: 0 } },
-    { abd: 0.26, lean: -0.05, fx: { web: 1.6, spin: 1 } },
-    { abd: 0.2, lean: -0.04, fx: { web: 2, spin: 0 } },
-    { abd: 0.08, head: -0.06, fx: { web: 2, tok: 1 } },
-    { abd: 0.06, head: -0.1, eyeMode: 'happy', fx: { web: 2, tok: 2, star: 1 } },
-    { abd: 0.04, fx: { web: 2, tok: 2 } },
+    { look: [0, -0.8], lifts: up(300), fx: { palps: 0.5 } },
+    { look: [0, -0.9], lifts: { l: [WEB, 60, 0, 0], r: [WEB - 60, 0, 0, 0] }, fx: { web: 0.3, palps: 1 } },
+    { look: [0, -0.9], lifts: { l: [WEB - 60, 0, 0, 0], r: [WEB, 60, 0, 0] }, fx: { web: 0.65, palps: 1 } },
+    { look: [0, -0.9], lifts: up(WEB), fx: { web: 1, palps: 0.6 } },
+    { look: [0.6, -0.8], turn: 0.3, lifts: up(WEB - 30), fx: { web: 1, token: 0.5 } },
+    { look: [0.2, -0.9], lifts: up(WEB - 30), lid: 0, fx: { web: 1, token: 1 } },
+    { eye: 'happy', mouth: 0.5, y: -30, lifts: { l: [120, 60, 0, 60], r: [60, 0, 60, 0] }, fx: { web: 1, token: 1 } },
+    { lifts: up(0), fx: {} },
   ];
 
-  K.kits.bug.make({
+  K.kits.front.make({
     id: ID,
     colors: C,
     stripe: P.stripeSage,
-    neck: [20, -190],
-    waist: [-30, -196],
-    headScale: 1.06,
-    bodyC: [-40, -220],
-    bodyR: 240,
-    parts: [
-      { id: 'abd', T: 'a', pts: ABD, smooth: false, fill: C.abd, deep: C.bodyDeep, hair: 1 },
-      // in front of the near legs: they arch out from behind the head and never cross the face
-      { id: 'ceph', T: 'h', z: 'front', pts: CEPH, smooth: false, fill: C.body, deep: C.bodyDeep, hair: 0.7 },
+    plan: 'spider',
+    bodyC: [0, -300],
+    bodyR: 250,
+    body: { half: [[0, -520], [110, -508], [180, -450], [206, -360], [190, -270], [130, -220], [0, -210]] },
+    spiderLegs: [
+      { hip: [140, -200], knee: [262, -310], foot: [370, 0], r: 26 },
+      { hip: [160, -240], knee: [316, -360], foot: [450, -6], r: 25 },
+      { hip: [164, -280], knee: [340, -400], foot: [505, -14], r: 23 },
+      { hip: [140, -320], knee: [300, -440], foot: [430, -26], r: 21 },
     ],
-    legs: [
-      // splayed wide at about 45 degrees: knees up above the back, feet far out, body low
-      { hip: [110, -176], foot: 440, l1: 242, l2: 360, phase: 0, r1: 14, r2: 10 },
-      { hip: [78, -184], foot: 300, l1: 235, l2: 345, phase: 0.5, r1: 14, r2: 10 },
-      { hip: [40, -188], foot: -220, l1: 234, l2: 358, phase: 0, r1: 14, r2: 10, under: true },
-      { hip: [6, -184], foot: -380, l1: 256, l2: 358, phase: 0.5, r1: 14, r2: 10, under: true },
-    ],
-    legR: 14,
-    sit: 80,
-    farHip: [-12, -10],
-    farFoot: -26,
-    stride: 58,
-    lift: 42,
+    head: { c: [0, -250], rx: 176, ry: 148, tufts: [[0.55, 0.95, 22]] },
+    face: {
+      eyes: { x: 62, y: -14, rx: 42, ry: 46, beadLit: '#5A4A60' },
+      blush: [124, 40, 22],
+    },
+    shadowW: 330,
     sleepLow: 30,
-    eyes: [
-      { x: 84, y: -252, r: 7 },
-      { x: 158, y: -276, r: 8 },
-      { x: 128, y: -280, r: 10 },
-      { x: 100, y: -272, r: 9 },
-      { x: 172, y: -234, r: 18 },
-      { x: 130, y: -230, r: 27 },
-    ],
-    mouthAt: [176, -150],
-    shadowW: 300,
+    attack: 'bite',
     hooks: {
-      part: tuft,
-      leg: legHair,
-      body: harness,
-      face: fangs,
-      head: feelers,
-      behind(ctx, R, B) {
-        const fx = R.pose.fx || {};
-        if (fx.web) web(ctx, B, fx.web);
+      behind: web,
+      body(c2, R, B) {
+        tuft(c2, R, B);
       },
-      fx(ctx, R, B) {
-        const fx = R.pose.fx || {};
-        if (fx.spin) {
-          // the blur of legs at work: arcs behind the raised back legs
-          for (let k = 0; k < 3; k++) {
-            const c = M.ap(R.Mb, [-210, -400 + k * 40]);
-            const arc = [];
-            for (let i = 0; i <= 8; i++) arc.push([c[0] + Math.cos(-2.6 + i * 0.22) * (70 + k * 16), c[1] + Math.sin(-2.6 + i * 0.22) * (70 + k * 16)]);
-            K.line(ctx, arc, { width: 4, color: P.inkSoft, alpha: 0.7, seed: sd('blur', k), boil: B, taper: [6, 6] });
-          }
-        }
-        if (fx.tok === 1) {
-          K.fx.token(ctx, HUB[0] + 330, HUB[1] - 60, 26, 0.35, B, sd('tokF'));
-          K.fx.speed(ctx, [HUB[0] + 470, HUB[1] - 60], 120, 0.7, B, sd('tokS'));
-        }
-        if (fx.tok === 2) K.fx.token(ctx, HUB[0] + 70, HUB[1] + 40, 26, 0.1, B, sd('tokW'));
-        if (fx.star) {
-          K.fx.star(ctx, HUB[0] + 120, HUB[1] - 10, 30, B, sd('s1'), '#FFF1C4');
-          K.fx.star(ctx, HUB[0] + 20, HUB[1] + 90, 20, B, sd('s2'), '#FFF1C4');
-        }
-      },
+      leg: knee,
+      face: faceBits,
+      head: tools,
     },
     poses: {
-      idle(d, n, P0) {
-        return Object.assign(P0.idle(d, n), { fx: { sway: Math.sin((Math.PI * 2 * d) / n) * 0.6 } });
+      walk(d, n) {
+        const s = Math.sin((TAU * d) / n);
+        const a = Math.max(0, s) * 50, b = Math.max(0, -s) * 50;
+        return { y: -6 * Math.abs(s), lean: 0.02 * s, turn: 0.06 * s, lifts: { l: [a, b, a, b], r: [b, a, b, a] } };
       },
-      walk(d, n, P0) {
-        return Object.assign(P0.walk(d, n), { fx: { sway: Math.sin((Math.PI * 2 * d) / n) } });
+      happy(d, n, base) {
+        const p = base.happy(d, n);
+        p.lifts = up(Math.max(0, p.arm.l) * 100);
+        return p;
       },
-      // tucked in a little, not folded up: long legs folded all the way stand up like sticks
-      sleep(d, n, P0) {
-        return Object.assign(P0.sleep(d, n), { fold: 0.3 });
-      },
-      work(d, n, P0, S) {
+      work(d) {
         const T = WORK[d];
-        const legs = K.kits.bug.stand(S);
-        if (d <= 4) {
-          // the back legs up at the web, taking turns
-          const up = d % 2;
-          legs.n[3] = { x: -330, lift: up ? 300 : 220 };
-          legs.n[2] = { x: -250, lift: up ? 140 : 220 };
-          legs.f[3] = { x: -350, lift: up ? 220 : 300 };
-        }
-        return Object.assign({}, T, { legs, fx: T.fx });
+        return { look: T.look || null, turn: T.turn || 0, lifts: T.lifts, lid: T.lid == null ? null : T.lid, eyeMode: T.eye || 'open', mouth: T.mouth || 0, y: T.y || 0, fx: T.fx };
       },
     },
   });

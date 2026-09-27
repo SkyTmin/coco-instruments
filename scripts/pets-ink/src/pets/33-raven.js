@@ -1,9 +1,9 @@
-// pets/33-raven.js : Ворон-ключник (legendary, luck + token). Bird kit, hops.
-// A big raven, glossy blue-black with a violet and blue sheen, a shaggy throat, a heavy hooked beak
-// with bristles, a wedge tail, a gold eye behind a gold-rimmed monocle on a chain. A ring of keys
-// hangs on his chest (iron, brass, one gold), gold rings on his leg. Work: a padlock on the ground;
-// he takes a key from the ring, turns it in the lock, the shackle springs, a token and a coin
-// jump out.
+// pets/33-raven.js : Ворон-ключник (legendary, luck + token). Front kit, a big bird facing us.
+// A big raven, glossy blue-black with a violet and blue sheen, shaggy hackles hanging from his
+// throat, a heavy dark beak with bristles over its base, a scruffy crest, a gold eye behind a
+// gold-rimmed monocle on a chain. A ring of keys on a cord across his chest (iron, brass, one of
+// gold), gold rings on his leg, a long wedge of a tail. Work: a padlock on the floor; he raises a
+// key, hops over, turns it — the shackle springs and a token and a coin jump out.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -12,265 +12,210 @@
   const K = FILM.pets;
   const M = K.M;
   const lerp = L.lerp;
+  const F = () => K.front;
   const ID = 'raven';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
 
   const C = {
-    fur: '#2C2F3A',
-    furDeep: '#12131A',
-    furLit: '#5B6178',
-    sheenV: '#6A5AA0',
-    sheenB: '#4A7AB0',
-    wing: '#2A2D38',
-    wingDeep: '#101118',
-    primary: '#23252F',
-    covert: '#3A3F52',
-    wingLine: '#6E7696',
-    secondary: '#2A2D38',
-    tail: '#2A2D38',
-    beak: '#1E1F25',
-    beakDeep: '#0A0A0D',
-    leg: '#26272E',
-    legDeep: '#0E0E12',
-    eye: '#1A110E',
-    eyeLine: '#C9CEDC',
-    gold: '#E2B54A',
-    goldDeep: '#96701E',
-    iron: '#6A6E75',
-    ironDeep: '#3A3D42',
-    ironLit: '#9CA1A8',
-    brass: '#C99A4A',
-    brassDeep: '#7E5A22',
-    glass: '#CFE6F0',
+    fur: '#34303E',
+    furDeep: '#15131A',
+    furLit: '#5A5470',
+    belly: '#2E2A38',
+    sheenB: '#7A8CD0',
+    sheenV: '#9A76C8',
+    wing: '#2C2834',
+    primary: '#1C1A22',
+    secondary: '#24212C',
+    wingLine: '#6A6488',
+    tail: '#221F2A',
+    leg: '#26232C',
+    beak: '#57525E',
+    beakLow: '#46424E',
+    beakDeep: '#1E1C22',
+    eyeLine: '#E6E0F0',
+    blush: '#C87A9A',
+    mouth: '#5E2A3A',
+    gold: '#E8B830',
+    goldDeep: '#9A7418',
+    iron: '#8E949A',
+    ironDeep: '#4E5458',
+    brass: '#C89A4E',
+    brassDeep: '#7E5E24',
+    cord: '#7A2A2A',
+    glass: '#DDEFF4',
   };
 
-  const SIL = [
-    [-150, -160, 0],
-    [-192, -210, 0],
-    [-172, -282, 0],
-    [-96, -338, 0],
-    [-6, -378, 0.2],
-    [28, -422, 0.7],
-    [54, -468, 1],
-    [100, -498, 1],
-    [156, -496, 1],
-    [192, -468, 1],
-    [202, -432, 1],
-    [186, -402, 1],
-    [160, -376, 0.8],
-    [138, -340, 0.4],
-    [128, -290, 0.1],
-    [118, -236, 0],
-    [86, -180, 0],
-    [0, -150, 0],
-    [-86, -152, 0],
-  ];
-
-  const WING = {
-    fold: [[50, -350], [0, -350], [-84, -318], [-152, -272], [-196, -240], [-216, -222], [-184, -208], [-124, -200], [-40, -218], [20, -258], [60, -306]],
-    spread: [[50, -350], [36, -440], [-8, -546], [-76, -610], [-160, -626], [-226, -596], [-206, -546], [-162, -484], [-98, -420], [-26, -372], [54, -330]],
-    covert: [[50, -350], [0, -350], [-88, -318], [-72, -280], [-4, -278], [54, -310]],
-    covertSpread: [[50, -350], [36, -440], [-8, -546], [-32, -490], [-6, -414], [44, -352]],
-    wrist: [-64, -310],
-    wristSpread: [-54, -546],
-    tips: [3, 4, 5],
-    feather: 82,
-    trail: [7, 8, 9],
-    secLen: 30,
-    scallops: [[-160, -256], [-118, -242], [-76, -238], [-34, -250]],
-    scallopsSpread: [[-160, -546], [-118, -494], [-76, -440], [-34, -390]],
-  };
-
-  const BEAK_TIP = [272, -426];
-  const KEY_LEN = 70;
-
-  // the gloss: violet and blue strokes where the light catches the black
-  function sheen(ctx, R, B) {
-    const H = R.Mh, T = R.Mb;
-    const stroke = (Tm, pts, col, k) => K.line(ctx, M.all(Tm, pts), { width: 9, color: col, alpha: 0.75, seed: sd('sheen', k), boil: B, taper: [8, 10] });
-    stroke(H, [[62, -468], [100, -488], [150, -486]], C.sheenB, 1);
-    stroke(H, [[40, -440], [66, -470]], C.sheenV, 2);
-    stroke(T, [[-150, -290], [-96, -326], [-20, -360]], C.sheenV, 3);
-    stroke(T, [[-170, -250], [-150, -286]], C.sheenB, 4);
+  function sheen(c2, pts, R, B, seed, k = 1) {
+    // a glossy sheen: blue and violet strokes over the lit side of the black
+    const f = K.shadeOf(R.center);
+    L.hatch(c2, pts, { angle: -1.2, spacing: 13 / k, length: [12, 24], gap: [10, 20], width: 3, color: C.sheenB, alpha: 0.7, density: (x, y) => Math.max(0, 0.95 - 1.3 * f(x, y)), clip: true, inset: 8, overshoot: 0, seed, boil: B });
+    L.hatch(c2, pts, { angle: -1.7, spacing: 16 / k, length: [10, 20], gap: [12, 24], width: 2.6, color: C.sheenV, alpha: 0.6, density: (x, y) => Math.max(0, 0.7 - 1.2 * f(x, y)), clip: true, inset: 8, overshoot: 0, seed: seed + 3, boil: B });
   }
 
-  function wingSheen(c2, R, B, T, t) {
-    const a = [[-20, -326], [-80, -300], [-130, -270]];
-    const b = [[20, -420], [-10, -500], [-50, -560]];
-    const pts = a.map((p, i) => [lerp(p[0], b[i][0], t), lerp(p[1], b[i][1], t)]);
-    K.line(c2, M.all(T, pts), { width: 8, color: C.sheenB, alpha: 0.7, seed: sd('wsheen'), boil: B, taper: [8, 10] });
-    K.line(c2, M.all(T, pts.map(([x, y]) => [x - 6, y + 22])), { width: 6, color: C.sheenV, alpha: 0.6, seed: sd('wsheen2'), boil: B, taper: [8, 10] });
+  /** A pointed hackle feather hanging from base toward tip. */
+  function hackle(ctx, base, tip, w, B, seed) {
+    const dx = tip[0] - base[0], dy = tip[1] - base[1], l = Math.hypot(dx, dy) || 1;
+    const nx = -dy / l, ny = dx / l;
+    const pts = K.smooth([[base[0] - nx * w, base[1] - ny * w], [base[0] + dx * 0.6 - nx * w * 0.6, base[1] + dy * 0.6 - ny * w * 0.6], tip, [base[0] + dx * 0.6 + nx * w * 0.6, base[1] + dy * 0.6 + ny * w * 0.6], [base[0] + nx * w, base[1] + ny * w]], 4);
+    F().form(ctx, pts, C.fur, B, seed, { width: 4, off: 0.1, hatch: 0.3, rim: false, inside: (c2) => K.line(c2, [[base[0] + dx * 0.2, base[1] + dy * 0.2], [base[0] + dx * 0.8, base[1] + dy * 0.8]], { width: 2.4, color: C.sheenB, alpha: 0.8, seed: seed + 1, boil: B, taper: [2, 4] }) });
   }
 
-  function bristles(ctx, R, B) {
-    const H = R.Mh;
-    for (let k = 0; k < 5; k++) {
-      K.line(ctx, M.all(H, [[178 + k * 5, -472 + k * 5], [206 + k * 6, -474 + k * 6]]), { width: 3.2, color: C.furDeep, seed: sd('bristle', k), boil: B, taper: [2, 5] });
+  function throat(ctx, R, B) {
+    // shaggy hackles hanging from under the beak over the chest
+    for (let i = 0; i < 7; i++) {
+      const u = i / 6 - 0.5;
+      const b = R.hp(u * 150, 118 - Math.abs(u) * 30, 0.8);
+      hackle(ctx, b, [b[0] + u * 30, b[1] + 70 + 20 * (1 - Math.abs(u) * 2)], 16, B, sd('hk', i));
     }
-  }
-
-  const key = (ctx, x, y, rot, s, fill, deep, B, seed, turn = 0) => K.key(ctx, x, y, rot, s, fill, deep, B, seed, turn, KEY_LEN);
-
-  function keyring(ctx, R, B) {
-    const S = R.skin;
-    const chain = K.curve([[20, -404, 0.6], [70, -350, 0.4], [112, -318, 0.2]].map(S), 5);
-    K.chain(ctx, chain, 14, { width: 5, color: C.iron, seed: sd('chain'), boil: B });
-    const c = S([118, -300, 0.1]);
-    const sway = R.pose.fx && R.pose.fx.sway != null ? R.pose.fx.sway : 0;
-    L.inkPath(ctx, L.ellipsePts(c[0], c[1], 20, 20, 22), { closed: true, width: 10, color: P.ink, seed: sd('ring'), boil: B });
-    L.inkPath(ctx, L.ellipsePts(c[0], c[1], 20, 20, 22), { closed: true, width: 5, color: C.ironLit, seed: sd('ring'), boil: B });
-    const keys = [
-      [1.7 + sway * 0.2, 0.62, C.iron, C.ironDeep],
-      [1.25 + sway * 0.25, 0.7, C.brass, C.brassDeep],
-      [0.85 + sway * 0.3, 0.72, C.gold, C.goldDeep],
-    ];
-    const missing = R.pose.fx && R.pose.fx.keyOut;
-    keys.forEach(([a, s, f, d], k) => {
-      if (missing && k === 2) return;
-      key(ctx, c[0] + Math.cos(a) * 20, c[1] + Math.sin(a) * 20, a - 0.12, s, f, d, B, sd('key', k));
-    });
+    // bristles over the base of the beak
+    const T = R.Mh;
+    for (const s of [-1, 1])
+      for (let k = 0; k < 4; k++) {
+        const a = R.hl(s * (14 + k * 7), 16 + k * 4, 1.08);
+        K.line(ctx, M.all(T, [a, [a[0] + s * 8, a[1] + 22]]), { width: 4, color: C.furDeep, seed: sd('br', s, k), boil: B, taper: [3, 5] });
+      }
   }
 
   function monocle(ctx, R, B) {
-    if (R.pose.eyeMode === 'happy' || R.pose.eyeMode === 'closed') return;
-    const H = R.Mh;
-    const rim = M.all(H, L.ellipsePts(150, -460, 27, 29, 26));
-    K.fill(ctx, rim, C.glass, 0.25);
-    const g = M.ap(H, [140, -472]);
-    K.line(ctx, [[g[0] - 6, g[1] + 6], [g[0] + 6, g[1] - 8]], { width: 4, color: P.white, alpha: 0.8, seed: sd('glint'), boil: B, smooth: false, taper: [2, 2] });
-    L.inkPath(ctx, rim, { closed: true, width: 10, color: P.ink, seed: sd('mono'), boil: B, wobble: 0.3 });
-    L.inkPath(ctx, rim, { closed: true, width: 5, color: C.gold, seed: sd('mono'), boil: B, wobble: 0.3 });
-    const a = M.ap(H, [138, -434]);
-    const b = M.ap(R.Mb, [96, -344]);
-    const chain = K.curve([a, [lerp(a[0], b[0], 0.5) - 6, lerp(a[1], b[1], 0.5) + 16], b], 5);
-    L.inkPath(ctx, chain, { width: 5, color: P.ink, seed: sd('monoChain'), boil: B, taper: [2, 2] });
-    L.inkPath(ctx, chain, { width: 2.4, color: C.gold, seed: sd('monoChain'), boil: B, taper: [2, 2] });
+    const T = R.Mh;
+    const c = R.hl(70, -8, 0.9);
+    const ring = M.all(T, L.ellipsePts(c[0], c[1], 52, 54, 26));
+    K.fill(ctx, ring, C.glass, 0.25);
+    K.fill(ctx, M.all(T, L.ellipsePts(c[0] - 20, c[1] - 22, 14, 8, 12, -0.6)), '#FFFFFF', 0.55);
+    L.inkPath(ctx, ring, { closed: true, width: 13, color: P.ink, seed: sd('mon'), boil: B, wobble: 0.3 });
+    L.inkPath(ctx, ring, { closed: true, width: 7, color: C.gold, seed: sd('mon'), boil: B, wobble: 0.3 });
+    // its chain down to the key ring
+    const a = M.ap(T, [c[0] + 30, c[1] + 44]);
+    const b = M.ap(R.Mb, [40, -250]);
+    K.chain(ctx, [a, [lerp(a[0], b[0], 0.5) + 30, lerp(a[1], b[1], 0.5)], b], 11, { width: 4.5, color: C.gold, seed: sd('mch'), boil: B });
   }
 
-  // the padlock: its keyhole sits where the key tip lands in the lunge (drawing 2)
-  let lockAt = null;
-  function lockSpot(R) {
-    if (!lockAt) {
-      const R2 = K.kits.bird.rig(R.S, K.pose(K.kits.bird.REST, WORK[2]));
-      const tip = M.ap(R2.Mh, BEAK_TIP);
-      const ang = Math.atan2(tip[1] - M.ap(R2.Mh, [200, -440])[1], tip[0] - M.ap(R2.Mh, [200, -440])[0]);
-      const kh = [tip[0] + Math.cos(ang) * KEY_LEN * 0.8, tip[1] + Math.sin(ang) * KEY_LEN * 0.8];
-      lockAt = { x: kh[0] + 12, key: kh, h: Math.max(90, Math.min(150, (K.GROUND - kh[1]) / 0.5)) };
-    }
-    return lockAt;
+  function keyRing(ctx, R, B) {
+    const T = R.Mb;
+    const cord = M.all(T, K.curve([[-150, -370], [-70, -300], [0, -266], [70, -300], [150, -370]], 6));
+    K.line(ctx, cord, { width: 9, color: P.ink, seed: sd('cord'), boil: B, taper: 0 });
+    K.line(ctx, cord, { width: 5, color: C.cord, seed: sd('cord'), boil: B, taper: 0 });
+    const c = M.ap(T, [0, -236]);
+    const hide = R.pose.fx && R.pose.fx.keyOut;
+    const keys = [[-0.5, C.iron, C.ironDeep], [-0.15, C.brass, C.brassDeep], [0.2, C.iron, C.ironDeep], [0.55, C.gold, C.goldDeep]];
+    keys.forEach(([a, fill, deep], i) => {
+      if (hide && i === 3) return;
+      const sw = Math.sin(R.pose.tail * 3 + i) * 0.08;
+      K.key(ctx, c[0] + Math.sin(a) * 34, c[1] + Math.cos(a) * 34, Math.PI / 2 - a * 1.2 + sw, 0.75, fill, deep, B, sd('key', i));
+    });
+    L.inkPath(ctx, L.ellipsePts(c[0], c[1], 34, 34, 24), { closed: true, width: 13, color: P.ink, seed: sd('ring'), boil: B, wobble: 0.3 });
+    L.inkPath(ctx, L.ellipsePts(c[0], c[1], 34, 34, 24), { closed: true, width: 7, color: C.iron, seed: sd('ring'), boil: B, wobble: 0.3 });
   }
 
-  function padlock(ctx, R, B, open) {
-    const Lk = lockSpot(R);
-    const g = K.GROUND;
-    const w = 92, h = Lk.h;
-    const top = g - h;
-    // the shackle: an arc over the body, lifted and swung open when unlocked
-    // with legs that go down into the body, so the lifted shackle still sits in the lock
-    const sh = [[Lk.x - 30, top + 40]];
+  function padlock(ctx, c, open, B) {
+    const w = 110, h = 96;
+    // the shackle: a U over the body, springing up and turning when open
+    const lift = open ? 44 : 0;
+    const sh = [];
     for (let i = 0; i <= 14; i++) {
       const a = Math.PI + (i / 14) * Math.PI;
-      sh.push([Lk.x + Math.cos(a) * 30, top + 6 + Math.sin(a) * 40]);
+      sh.push([c[0] + Math.cos(a) * 34 + (open ? 14 : 0), c[1] - h / 2 - lift + Math.sin(a) * 50]);
     }
-    sh.push([Lk.x + 30, top + (open ? 20 : 40)]);
-    const T = open ? M.chain(M.tr(0, -26), M.about(-0.55, Lk.x - 30, top + 30)) : M.I;
-    const shp = M.all(T, sh);
-    L.inkPath(ctx, shp, { width: 20, color: P.ink, seed: sd('shackle'), boil: B, taper: 0 });
-    L.inkPath(ctx, shp, { width: 12, color: C.ironLit, seed: sd('shackle'), boil: B, taper: 0 });
-    const body = L.rrectPts(Lk.x - w / 2, top, w, h, 14, 8);
-    K.form(ctx, body, { fill: C.brass, deep: C.brassDeep, width: 6, seed: sd('lock'), boil: B, spacing: 7 });
-    const kh = [Lk.x - 12, Lk.key[1]];
-    K.fill(ctx, L.ellipsePts(kh[0], kh[1] - 6, 9, 9, 12), P.ink);
-    K.fill(ctx, [[kh[0] - 5, kh[1]], [kh[0] + 5, kh[1]], [kh[0] + 7, kh[1] + 22], [kh[0] - 7, kh[1] + 22]], P.ink);
-    return kh;
+    const leg = [[c[0] - 34 + (open ? 14 : 0), c[1] - h / 2 - lift], [c[0] - 34 + (open ? 14 : 0), c[1] - h / 2 + 6 - (open ? lift : 0)]];
+    const path = [leg[1], ...sh, [c[0] + 34 + (open ? 14 : 0), c[1] - h / 2 + 6 - lift * (open ? 1.4 : 0)]];
+    K.line(ctx, path, { width: 26, color: P.ink, seed: sd('shk'), boil: B, taper: 0 });
+    K.line(ctx, path, { width: 16, color: C.iron, seed: sd('shk'), boil: B, taper: 0 });
+    const body = L.rrectPts(c[0] - w / 2, c[1] - h / 2, w, h, 18, 6);
+    F().form(ctx, body, C.brass, B, sd('lockB'), { width: 6, off: 0.12, shine: 0.8, hatch: 0.5, dark: C.brassDeep });
+    K.fill(ctx, L.ellipsePts(c[0], c[1] - 6, 11, 11, 12), '#1A1410');
+    K.fill(ctx, [[c[0] - 6, c[1]], [c[0] + 6, c[1]], [c[0] + 3, c[1] + 26], [c[0] - 3, c[1] + 26]], '#1A1410');
   }
 
+  const LOCK = () => [K.CXF + 310, K.GROUND - 50];
   const WORK = [
-    { x: -50, head: 0.3, fx: { lock: 1, sway: 0.4 } },
-    { x: -50, head: -0.1, beak: 0.2, fx: { lock: 1, keyOut: 1, item: 'beak' } },
-    { x: 10, lean: 0.36, head: 0.64, hy: 14, sq: 0.95, fx: { lock: 1, keyOut: 1, item: 'lock', turn: 0 } },
-    { x: 10, lean: 0.36, head: 0.7, hy: 14, sq: 0.95, fx: { lock: 1, keyOut: 1, item: 'lock', turn: 0.5 } },
-    { x: -20, lean: 0.1, head: -0.1, beak: 0.2, fx: { lock: 1, open: 1, keyOut: 1, item: 'beak', burst: 1 } },
-    { x: -30, head: -0.3, sq: 1.05, wing: 0.35, wingF: 0.35, eyeMode: 'happy', fx: { lock: 1, open: 1, keyOut: 1, item: 'beak', pop: 1 } },
-    { x: -30, head: -0.2, sq: 1.04, wing: 0.15, wingF: 0.15, eyeMode: 'happy', fx: { lock: 1, open: 1, keyOut: 1, item: 'beak', pop: 2 } },
-    { x: -40, head: 0.1, fx: { lock: 1, open: 1, pop: 3, sway: -0.4 } },
+    { turn: 0.4, look: [0.8, 0.8], lid: 0.3, nod: 0.3, fx: { lock: 0 } },
+    { turn: 0.3, arm: { l: 0, r: 1.3 }, look: [0.6, -0.4], fx: { lock: 0, keyUp: 1, keyOut: 1, glint: 1 } },
+    { x: 70, y: -50, turn: 0.3, arm: { l: 0, r: 1.3 }, wing: 0.2, fx: { lock: 0, keyUp: 1, keyOut: 1 } },
+    { x: 100, turn: 0.45, nod: 0.5, look: [0.8, 0.9], fx: { lock: 0, keyIn: 0, keyOut: 1 } },
+    { x: 100, turn: 0.45, nod: 0.5, look: [0.8, 0.9], lid: 0.2, fx: { lock: 1, keyIn: 1, keyOut: 1, click: 1 } },
+    { x: 94, turn: 0.3, look: [0.6, -0.3], lid: 0, fx: { lock: 1, keyIn: 1, keyOut: 1, jump: 0.5 } },
+    { x: 80, eye: 'happy', mouth: 0.4, wing: 0.3, fx: { lock: 1, keyIn: 1, keyOut: 1, jump: 1 } },
+    { x: 40, lid: 0.3, fx: { lock: 1 } },
   ];
 
-  K.kits.bird.make({
+  K.kits.front.make({
     id: ID,
     colors: C,
     stripe: P.stripeSky,
-    sil: SIL,
-    neck: [70, -410],
-    headScale: 1.26,
-    bodyC: [-10, -270],
-    bodyR: 200,
-    gait: 'hop',
-    feet: { n: 40, f: 2 },
-    wing: WING,
-    tailFan: { base: [-170, -204], angle: Math.PI + 0.3, spread: 0.34, n: 5, len: 160, width: 19, taper: 0.3, fill: () => C.tail },
-    sit: 30,
-    leg: { hipN: [30, -160], hipF: [0, -164], l1: 40, l2: 86, r: 9, toe: 44, thighR: 2.5, claw: '#0E0E12' },
-    tuftRange: [11, 14],
-    fur: true,
-    shadowW: 230,
-    beak: { hinge: [190, -448], tip: BEAK_TIP, upper: [[182, -476], [222, -482], [258, -468], [280, -442], [274, -422], [260, -436], [226, -446], [186, -444]], lower: [[186, -444], [226, -442], [256, -434], [236, -424], [188, -428]], nostril: [208, -460] },
-    face: { eye: { x: 150, y: -460, r: 16, style: 'iris', white: '#E6E3DC', iris: '#E8B53A', lid: 0.3, lidColor: C.fur } },
+    plan: 'bird',
+    bodyC: [0, -210],
+    bodyR: 260,
+    body: { half: [[0, -400], [104, -392], [166, -340], [194, -244], [190, -146], [154, -78], [76, -48], [0, -42]] },
+    belly: null,
+    wings: {
+      fold: [[100, -350], [166, -340], [204, -256], [206, -160], [176, -100], [136, -126], [108, -236]],
+      spread: [[100, -350], [200, -412], [310, -452], [366, -400], [352, -326], [258, -294], [136, -272]],
+      root: [104, -310],
+      tip: 4,
+      n: 8,
+      feather: 150,
+      fw: 22,
+      rows: [[[116, -316], [154, -306], [186, -280]], [[112, -276], [152, -262], [192, -238]]],
+      rowsSpread: [[[156, -370], [236, -400], [314, -420]], [[156, -330], [240, -360], [322, -380]]],
+    },
+    feet: { at: [56, -50], r: 10, toe: 38, claw: '#15131A' },
+    fan: { base: [0, -110], n: 7, spread: 0.9, len: 230, width: 22, taper: 0.4 },
+    head: { c: [0, -540], rx: 156, ry: 142, tufts: [[0.66, 0.84, 40]] },
+    beak: { y: 34, w: 46, h: 96, down: 22 },
+    face: {
+      eyes: { x: 70, y: -8, rx: 30, ry: 32, white: '#FFF4D8', iris: '#E8B830', irisR: 0.84, lid: 0.26, lidColor: C.fur },
+      blush: [108, 40, 18],
+    },
+    fur: false,
+    shadowW: 220,
+    attack: 'peck',
     hooks: {
-      body: sheen,
-      wingInside: wingSheen,
-      face: bristles,
-      front: keyring,
-      head: monocle,
-      legAfter(ctx, R, B, side, knee, f) {
-        if (side !== 'n') return;
-        for (const u of [0.4, 0.62]) {
-          const c = [lerp(knee[0], f[0], u), lerp(knee[1], f[1], u)];
-          K.plate(ctx, L.rrectPts(c[0] - 13, c[1] - 7, 26, 14, 5, 4), { fill: C.gold, deep: C.goldDeep, width: 3.4, seed: sd('lring', u), boil: B });
-        }
+      body(c2, R, B, pts) {
+        sheen(c2, pts, R, B, sd('bsh'));
       },
-      behind(ctx, R, B) {
-        const fx = R.pose.fx;
-        if (fx && fx.lock) padlock(ctx, R, B, !!fx.open);
+      skin(c2, R, B, pts) {
+        sheen(c2, pts, R, B, sd('hsh'), 1.2);
+      },
+      wing(c2, R, B, side) {
+        void side;
+        sheen(c2, [[0, 0], [K.W, 0], [K.W, K.H], [0, K.H]], R, B, sd('wsh', side), 0.9);
+      },
+      front: keyRing,
+      face: throat,
+      head: monocle,
+      foot(ctx, R, B, side, f) {
+        if (side < 0) return;
+        for (let k = 0; k < 2; k++) {
+          const c = [f[0], f[1] - 36 - k * 18];
+          K.fill(ctx, L.rrectPts(c[0] - 14, c[1] - 7, 28, 14, 5, 3), C.gold);
+          L.inkPath(ctx, L.rrectPts(c[0] - 14, c[1] - 7, 28, 14, 5, 3), { closed: true, width: 2.8, seed: sd('lr', k), boil: B, taper: 0 });
+        }
       },
       fx(ctx, R, B) {
-        const fx = R.pose.fx;
-        if (!fx) return;
-        const tip = M.ap(R.Mh, BEAK_TIP);
-        const base = M.ap(R.Mh, [200, -440]);
-        const ang = Math.atan2(tip[1] - base[1], tip[0] - base[0]);
-        if (fx.item === 'beak') key(ctx, tip[0] - 18, tip[1] + 8, ang + 0.1, 0.9, C.gold, C.goldDeep, B, sd('keyB'));
-        if (fx.item === 'lock') {
-          // the key in the keyhole: its bow in the beak, the shaft in the lock
-          const Lk = lockSpot(R);
-          key(ctx, tip[0] - 18, tip[1] + 8, Math.atan2(Lk.key[1] - tip[1], Lk.key[0] - tip[0]), 0.9, C.gold, C.goldDeep, B, sd('keyL'), fx.turn);
+        const fx = R.pose.fx || {};
+        if (fx.lock == null) return;
+        const lc = LOCK();
+        padlock(ctx, lc, fx.lock, B);
+        if (fx.keyIn) K.key(ctx, lc[0] - 30, lc[1] - 6, Math.PI + (fx.lock ? -0.5 : 0), 0.9, C.gold, C.goldDeep, B, sd('kin'), fx.lock ? 0.35 : 0);
+        if (fx.keyUp && R.wingTip && R.wingTip[1]) {
+          const t = R.wingTip[1];
+          K.key(ctx, t[0] + 10, t[1] - 20, -Math.PI / 2 - 0.3, 1, C.gold, C.goldDeep, B, sd('kup'));
+          if (fx.glint) K.fx.star(ctx, t[0] + 40, t[1] - 100, 34, B, sd('kg'), '#FFF1C4');
         }
-        const Lk = lockSpot(R);
-        const top = [Lk.x, K.GROUND - Lk.h - 20];
-        if (fx.burst) {
-          K.fx.star(ctx, top[0] + 50, top[1] - 20, 34, B, sd('b1'), '#FFF1C4');
-          K.fx.star(ctx, top[0] - 40, top[1] + 10, 22, B, sd('b2'), '#FFF1C4');
-        }
-        if (fx.pop) {
-          const u = fx.pop;
-          const h1 = [0, 120, 170, 60][u], h2 = [0, 80, 150, 20][u];
-          K.fx.token(ctx, top[0] - 20 - 10 * u, top[1] - h1, 28, u * 0.3, B, sd('popT'));
-          if (u < 3) K.fx.coin(ctx, top[0] + 30 + 16 * u, top[1] - h2, 24, u * 0.4, B, sd('popC'));
-          else K.fx.coin(ctx, top[0] + 90, K.GROUND - 20, 22, 0.1, B, sd('popC'));
-          if (u === 2) K.fx.burst(ctx, [top[0], top[1] - 120], 0.35, B, sd('popB'));
+        if (fx.click) K.fx.star(ctx, lc[0] + 60, lc[1] - 70, 40, B, sd('clk'), '#FFF1C4');
+        if (fx.jump) {
+          const j = fx.jump;
+          const hgt = 170 * Math.sin(Math.PI * Math.min(1, j * 0.9));
+          K.fx.token(ctx, lc[0] - 40 - 60 * j, lc[1] - 60 - hgt, 26, 0.2 + j, B, sd('jt'));
+          K.fx.coin(ctx, lc[0] + 40 + 60 * j, lc[1] - 70 - hgt * 0.9, 26, 0.3 + j, B, sd('jc'));
+          if (j >= 1) K.fx.star(ctx, lc[0], lc[1] - 230, 44, B, sd('js'), '#FFF1C4');
         }
       },
     },
     poses: {
-      idle(d, n, P0) {
-        return Object.assign(P0.idle(d, n), { fx: { sway: Math.sin((Math.PI * 2 * d) / n) * 0.5 } });
-      },
-      walk(d, n, P0) {
-        const p = P0.walk(d, n);
-        return Object.assign(p, { fx: { sway: p.y < -30 ? -1 : 0.6 } });
-      },
-      work(d, n, P0) {
-        return Object.assign({ feet: P0.idle(0, 12).feet }, WORK[d]);
+      work(d) {
+        const T = WORK[d];
+        return { x: T.x || 0, y: T.y || 0, turn: T.turn || 0, look: T.look || null, lid: T.lid == null ? null : T.lid, nod: T.nod || 0, arm: T.arm || { l: 0, r: 0 }, wing: T.wing || 0, eyeMode: T.eye || 'open', mouth: T.mouth || 0, fx: T.fx };
       },
     },
   });

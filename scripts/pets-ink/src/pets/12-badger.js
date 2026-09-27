@@ -1,7 +1,9 @@
-// pets/12-badger.js : Барсук-проходчик (rare, loot). Biped kit.
-// A stocky grey badger: white face with the black band from the snout through the eye to the ear,
-// black forelegs and legs, long pale digging claws. An orange hard hat with goggles on it and a
-// dusty canvas work vest with pockets. Work: digs, pulls a blue ore crystal out and lifts it high.
+// pets/12-badger.js : Барсук-проходчик (rare, loot). Front kit, stands.
+// A stocky grey badger with the badger's face: a white blaze down the middle, black bands over the
+// eyes to the ears, white cheeks; small round ears rimmed white. An orange hard hat with goggles
+// on it, an open canvas work vest with patch pockets and a pencil, black arms with long ivory claws.
+// Work: swings a small pick into the rock in front of him twice, the rock cracks, a crystal pops
+// out and he holds it up to the lamp.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -9,28 +11,31 @@
   const P = L.pal;
   const K = FILM.pets;
   const M = K.M;
-  const TAU = Math.PI * 2;
+  const lerp = L.lerp;
+  const F = () => K.front;
   const ID = 'badger';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
 
   const C = {
-    fur: '#8F8A84',
-    furDeep: '#5A5550',
-    furLit: '#B9B3AB',
-    chest: '#3A3431',
-    black: '#2B2522',
-    white: '#EEE9E0',
-    skin: '#4A403B',
-    skinDeep: '#2B2522',
-    palm: '#4A403B',
-    palmDeep: '#231D1A',
-    sole: '#4A403B',
-    soleDeep: '#231D1A',
-    claw: '#EDE2CB',
-    clawDeep: '#AD9C7C',
-    nose: '#2E2724',
-    noseDeep: '#171210',
-    eye: '#1A110E',
+    fur: '#908B85',
+    furDeep: '#58534E',
+    furLit: '#BBB5AD',
+    belly: '#6E6964',
+    black: '#2E2826',
+    eyeLine: '#F1ECE3',
+    white: '#F1ECE3',
+    muzzle: '#F1ECE3',
+    skin: '#5A4E49',
+    nose: '#2A2320',
+    leg: '#2E2826',
+    foot: '#3A3230',
+    arm: '#2E2826',
+    paw: '#3A3230',
+    pad: '#6A5A55',
+    claw: '#EFE4CC',
+    blush: '#D98A8A',
+    mouth: '#6E2A26',
+    tongue: '#EE8F8A',
     hat: '#E57B2E',
     hatDeep: '#A5501B',
     hatLit: '#F8BE84',
@@ -39,192 +44,171 @@
     vestLit: '#B3A078',
     brass: '#C39A55',
     brassDeep: '#7E5E2E',
-    ore: '#63B6D8',
-    oreDeep: '#2B6F92',
-    dirt: '#8B6848',
-    dirtDeep: '#5B4330',
+    rock: '#8F857A',
+    rockDeep: '#5E554C',
+    gem: '#B478E6',
+    gemDeep: '#6B3AA0',
+    wood: '#9A6A3E',
   };
 
-  const SIL = [
-    [-20, -24, 0],
-    [-122, -36, 0],
-    [-192, -98, 0],
-    [-216, -198, 0],
-    [-212, -300, 0.05],
-    [-188, -382, 0.3],
-    [-142, -442, 0.7],
-    [-62, -480, 1],
-    [30, -490, 1],
-    [112, -472, 1],
-    [182, -442, 1],
-    [244, -414, 1],
-    [304, -392, 1],
-    [346, -382, 1],
-    [360, -366, 1],
-    [344, -350, 1],
-    [296, -344, 1],
-    [236, -336, 1],
-    [198, -318, 0.8],
-    [192, -270, 0.3],
-    [202, -200, 0],
-    [192, -118, 0],
-    [152, -56, 0],
-    [80, -28, 0],
-  ];
-
-  // the white face and the black band from the snout through the eye to the ear (head space)
-  function markings(ctx, R) {
-    const H = R.Mh;
-    K.fill(ctx, M.all(H, K.smooth([[0, -520], [150, -500], [300, -420], [380, -380], [380, -330], [230, -318], [120, -330], [40, -380], [-10, -440]], 5)), C.white);
-    K.fill(ctx, M.all(H, K.smooth([[362, -384], [300, -408], [230, -440], [150, -470], [60, -486], [-30, -470], [-60, -430], [10, -432], [90, -420], [170, -404], [250, -380], [330, -360]], 5)), C.black);
-    // the dark throat and chest
-    K.fill(ctx, M.all(R.Mb, K.smooth([[90, -340], [200, -320], [222, -230], [206, -140], [120, -150], [70, -250]], 5)), C.black);
+  // the badger's face: black bands from the nose over the eyes to the ears, white between and below
+  function mask(c2, R, B) {
+    const T = R.Mh;
+    for (const s of [-1, 1]) {
+      const band = [R.hl(s * 28, 44, 0.9), R.hl(s * 36, -20, 0.85), R.hl(s * 60, -98, 0.6), R.hl(s * 104, -140, 0.4), R.hl(s * 150, -110, 0.25), R.hl(s * 128, -40, 0.5), R.hl(s * 98, 30, 0.7), R.hl(s * 62, 60, 0.8)];
+      K.fill(c2, M.all(T, K.smooth(band, 5)), C.black);
+    }
+    // the white blaze up the middle to the crown
+    K.fill(c2, M.all(T, K.smooth([R.hl(-26, 60, 0.9), R.hl(-30, -40, 0.85), R.hl(-40, -140, 0.5), R.hl(0, -176, 0.3), R.hl(40, -140, 0.5), R.hl(30, -40, 0.85), R.hl(26, 60, 0.9)], 5)), C.white);
   }
 
-  // an open canvas vest: the back panel and the shoulder, short, the black chest and the grey belly
-  // show at the front; one pocket with a flap, dust
   function vest(ctx, R, B, bodyPts) {
     const T = R.Mb;
-    const v = M.all(T, K.smooth([[-240, -330], [-150, -352], [-40, -352], [40, -330], [60, -250], [40, -190], [30, -150], [-240, -140]], 5));
     K.clip(ctx, bodyPts, () => {
-      K.form(ctx, v, {
-        fill: C.vest,
-        deep: C.vestDeep,
-        c: R.center,
-        width: 6,
-        seed: sd('vest'),
-        boil: B,
-        spacing: 9,
-        hatchAlpha: 0.7,
-        after(c2) {
-          L.stipple(c2, v, { spacing: 13, r: [1.4, 2.8], color: C.vestDeep, alpha: 0.6, seed: sd('dust'), boil: B });
-          K.line(c2, M.all(T, [[-120, -350], [-116, -250], [-120, -146]]), { width: 3.4, color: C.vestDeep, seed: sd('seam'), boil: B });
-          const x = -40, y = -236;
-          const pk = M.all(T, L.rrectPts(x - 30, y - 24, 60, 52, 8, 6));
-          K.form(c2, pk, { fill: C.vestLit, deep: C.vestDeep, width: 4.5, seed: sd('pocket'), boil: B, shade: 0.6, spacing: 7, hatchW: 2 });
-          const fl = M.all(T, [[x - 32, y - 26], [x + 32, y - 26], [x + 27, y - 7], [x - 27, y - 7]]);
-          K.fill(c2, fl, C.vest);
-          L.inkPath(c2, fl, { closed: true, width: 4, seed: sd('flap'), boil: B, smooth: false, wobble: 0.4, taper: 0 });
-          K.plate(c2, M.all(T, L.ellipsePts(x, y - 14, 5, 5, 10)), { width: 2.4, seed: sd('btn'), boil: B, shade: 0 });
-          // a hem stitched along the open front
-          K.line(c2, M.all(T, K.curve([[40, -330], [60, -250], [40, -190], [30, -150]], 8)), { width: 3, color: C.vestLit, alpha: 0.9, seed: sd('hem'), boil: B });
-        },
-      });
+      for (const s of [-1, 1]) {
+        // each half of the open vest, a patch pocket with a flap
+        const half = M.all(T, K.smooth([[s * 34, -356], [s * 150, -330], [s * 214, -250], [s * 222, -110], [s * 196, -40], [s * 70, -40], [s * 56, -180], [s * 38, -300]], 4));
+        F().form(ctx, half, C.vest, B, sd('vest', s), {
+          width: 6,
+          off: 0.1,
+          hatch: 0.6,
+          inside(c2) {
+            L.hatch(c2, half, { angle: 1.1, spacing: 9, width: 1.8, color: C.vestDeep, alpha: 0.35, density: 0.5, clip: true, seed: sd('canvas', s), boil: B });
+            for (let i = 0; i < 9; i++) K.line(c2, M.all(T, [[s * (44 + i * 1.4), -290 + i * 28], [s * (46 + i * 1.4), -278 + i * 28]]), { width: 2.4, color: C.vestLit, alpha: 0.9, seed: sd('st', s, i), boil: B, smooth: false, taper: 0 });
+          },
+        });
+        const pk = M.all(T, L.rrectPts(s > 0 ? 88 : -168, -170, 80, 78, 10, 6));
+        F().form(ctx, pk, C.vest, B, sd('pocket', s), { width: 5, off: 0.1, hatch: 0.5 });
+        const fl = M.all(T, K.smooth([[s > 0 ? 86 : -170, -172], [s > 0 ? 170 : -86, -172], [s > 0 ? 166 : -90, -140], [s > 0 ? 128 : -128, -130], [s > 0 ? 90 : -166, -140]], 4));
+        F().form(ctx, fl, C.vestDeep, B, sd('flap', s), { width: 4.5, off: 0.1, hatch: 0.2, rim: false });
+        F().form(ctx, M.all(T, L.ellipsePts(s > 0 ? 128 : -128, -138, 6, 6, 10)), C.brass, B, sd('btn', s), { width: 3, shine: 1, hatch: 0 });
+      }
+      // a pencil in the left breast pocket
+      const pen = M.all(T, [[-120, -258], [-110, -318], [-100, -316], [-110, -256]]);
+      K.fill(ctx, pen, '#E8B83E');
+      K.fill(ctx, M.all(T, [[-110, -318], [-100, -316], [-104, -334]]), '#F3D8A8');
+      L.inkPath(ctx, pen, { closed: true, width: 3, seed: sd('pen'), boil: B, smooth: false, taper: 0 });
+      const bp = M.all(T, L.rrectPts(-156, -268, 62, 54, 8, 5));
+      F().form(ctx, bp, C.vest, B, sd('bpocket'), { width: 4.5, off: 0.1, hatch: 0.4 });
     });
   }
 
   function hat(ctx, R, B) {
-    const Hm = M.mul(R.Mh, M.about(R.pose.hat, 30, -460));
-    K.helmet(ctx, Hm, { cx: 26, cy: -462, rx: 150, ry: 108, col: { hat: C.hat, hatDeep: C.hatDeep, hatLit: C.hatLit }, ridge: true, seed: sd('hat'), boil: B });
-    K.goggles(ctx, Hm, 70, -512, 24, { seed: sd('goggles'), boil: B });
+    F().helmet(ctx, R, B, { cy: -96, rx: 170, ry: 104, col: { hat: C.hat, hatDeep: C.hatDeep, hatLit: C.hatLit, brass: C.brass, brassDeep: C.brassDeep, glass: '#FFF6D2' }, lamp: null, tilt: -0.06 }, sd('hat'));
+    F().goggles(ctx, R, B, { y: -150, w: 168, r: 30, brass: C.brass, strap: '#3A2A20' }, sd('goggles'));
   }
 
-  function ore(ctx, x, y, s, B, glow) {
-    const pts = [[x - 26 * s, y + 18 * s], [x - 30 * s, y - 8 * s], [x - 10 * s, y - 34 * s], [x + 16 * s, y - 30 * s], [x + 30 * s, y - 4 * s], [x + 18 * s, y + 22 * s]];
-    if (glow) {
-      const g = ctx.createRadialGradient(x, y, 4, x, y, 90 * s);
-      g.addColorStop(0, L.rgba(C.ore, 0.5 * glow));
-      g.addColorStop(1, L.rgba(C.ore, 0));
-      ctx.save();
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(x, y, 90 * s, 0, TAU);
-      ctx.fill();
-      ctx.restore();
+  function pick(ctx, end, a, B) {
+    // a small pick held in the right paw, swung by the arm's angle
+    const dir = [Math.sin(a), Math.cos(a)];
+    const h0 = [end[0] - dir[0] * 10, end[1] - dir[1] * 10];
+    const h1 = [end[0] + dir[0] * 120, end[1] + dir[1] * 120];
+    K.line(ctx, [h0, h1], { width: 18, color: P.ink, seed: sd('handle'), boil: B, taper: 0, smooth: false });
+    K.line(ctx, [h0, h1], { width: 11, color: C.wood, seed: sd('handle'), boil: B, taper: 0, smooth: false });
+    const n = [-dir[1], dir[0]];
+    const head = [
+      [h1[0] + n[0] * 70, h1[1] + n[1] * 70 + 10],
+      [h1[0] + n[0] * 20 + dir[0] * 16, h1[1] + n[1] * 20 + dir[1] * 16],
+      [h1[0] - n[0] * 20 + dir[0] * 16, h1[1] - n[1] * 20 + dir[1] * 16],
+      [h1[0] - n[0] * 70, h1[1] - n[1] * 70 + 10],
+      [h1[0] - n[0] * 20 - dir[0] * 12, h1[1] - n[1] * 20 - dir[1] * 12],
+      [h1[0] + n[0] * 20 - dir[0] * 12, h1[1] + n[1] * 20 - dir[1] * 12],
+    ];
+    F().form(ctx, head, '#8E949A', B, sd('pickhead'), { width: 5, off: 0.1, shine: 0.7, hatch: 0.4, smooth: false });
+  }
+
+  function rock(ctx, crack, B) {
+    const g = K.GROUND, cx = K.CXF;
+    const r = [[cx - 150, g + 4], [cx - 136, g - 70], [cx - 70, g - 118], [cx + 20, g - 124], [cx + 110, g - 96], [cx + 152, g - 30], [cx + 150, g + 4]];
+    F().form(ctx, K.smooth(r, 3), C.rock, B, sd('rock'), { width: 7, off: 0.12, hatch: 0.8 });
+    L.stipple(ctx, K.smooth(r, 3), { spacing: 14, r: [1.6, 3], color: C.rockDeep, alpha: 0.7, seed: sd('rockS'), boil: B });
+    if (crack) {
+      const c = [[cx - 10, g - 120], [cx + 8, g - 84], [cx - 12, g - 52], [cx + 6, g - 14]];
+      K.line(ctx, c, { width: 12, color: crack > 1 ? '#F4E3FF' : C.rockDeep, seed: sd('crackG'), boil: B, smooth: false, taper: [3, 3] });
+      K.line(ctx, c, { width: 4, seed: sd('crack'), boil: B, smooth: false, taper: [3, 3] });
     }
-    K.form(ctx, pts, { fill: C.ore, deep: C.oreDeep, width: 5, seed: sd('ore'), boil: B, shade: 1, spacing: 6, hatchW: 2.2 });
-    K.line(ctx, [[x - 10 * s, y - 34 * s], [x - 2 * s, y - 2 * s], [x + 18 * s, y + 22 * s]], { width: 3, color: C.oreDeep, seed: sd('oreF'), boil: B, smooth: false, taper: 0 });
-    K.fill(ctx, [[x - 20 * s, y - 6 * s], [x - 8 * s, y - 26 * s], [x - 4 * s, y - 10 * s]], P.white, 0.8);
   }
 
-  K.kits.biped.make({
+  function gem(ctx, c, s, B) {
+    const pts = [[c[0], c[1] - 50 * s], [c[0] + 28 * s, c[1] - 12 * s], [c[0] + 18 * s, c[1] + 30 * s], [c[0] - 18 * s, c[1] + 30 * s], [c[0] - 28 * s, c[1] - 12 * s]];
+    F().form(ctx, pts, C.gem, B, sd('gem'), { width: 5, off: 0.14, shine: 1, hatch: 0.3, smooth: false });
+    K.line(ctx, [[c[0], c[1] - 50 * s], [c[0] - 4 * s, c[1] + 30 * s]], { width: 2.6, color: '#F0DDFF', seed: sd('facet'), boil: B, smooth: false, taper: 0 });
+  }
+
+  const WORK = [
+    { arm: { l: 0.2, r: 2.3 }, rock: 1, fx: { pick: 1 } },
+    { arm: { l: 0.1, r: -0.3 }, sq: 0.94, rock: 1, fx: { pick: 1, hit: 1 } },
+    { arm: { l: 0.2, r: 2.3 }, rock: 1, crack: 1, fx: { pick: 1 } },
+    { arm: { l: 0.1, r: -0.3 }, sq: 0.94, rock: 1, crack: 2, fx: { pick: 1, hit: 1 } },
+    { arm: { l: -0.6, r: -0.6 }, rock: 1, crack: 2, fx: { gem: 'rock' } },
+    { arm: { l: -1.0, r: -1.0 }, y: -40, rock: 1, crack: 2, eye: 'happy', mouth: 0.7, fx: { gem: 'hands', star: 1 } },
+    { arm: { l: -1.0, r: -1.0 }, rock: 1, crack: 2, eye: 'happy', mouth: 0.5, fx: { gem: 'hands', star: 0.7 } },
+    { arm: { l: -0.95, r: -0.95 }, rock: 1, crack: 2, fx: { gem: 'hands' } },
+  ];
+
+  K.kits.front.make({
     id: ID,
     colors: C,
-    stripe: P.stripeSage,
-    sil: SIL,
-    neck: [110, -390],
-    bodyC: [0, -270],
-    legh: 46,
-    shoulders: { n: [120, -285], f: [90, -305] },
-    hips: { n: [44, -62], f: [-40, -66] },
-    arm: {
-      len: 52,
-      r: 30,
-      paw: 'spade',
-      pawScale: 1.25,
-      claw: 40,
-      sleeve: (far) => ({ fill: K.far(C.black, far) }),
-      rest: { n: { a1: 0.8, a2: 0.15 }, f: { a1: 0.58, a2: 0.05 } },
-      up: { n: { a1: -0.5, a2: -0.9 }, f: { a1: -1.9, a2: -2.1 } },
-    },
-    leg: { r: 31, fill: () => C.black },
-    foot: { len: 50, rest: { n: { x: 54 }, f: { x: -40 } } },
-    tail: { base: [-196, -96], len: 70, lift: -0.55, curl: 0.2, rise: 0, w0: 46, w1: 26, bushy: true, fill: C.fur, deep: C.furDeep, ink: 6 },
+    stripe: P.stripeSky,
+    plan: 'stand',
+    bodyC: [0, -200],
+    bodyR: 280,
+    body: { half: [[0, -364], [110, -350], [180, -300], [214, -214], [222, -128], [198, -62], [140, -40], [60, -34], [0, -32]] },
+    belly: [0, -170, 86, 130],
+    legs: { hip: [80, -54], r: 34, foot: [56, 30], splay: 12 },
+    arms: [{ at: [172, -300], len: 140, r: 36, pr: 54, rest: 0.4, claws: 38, pads: true }],
+    head: { c: [0, -488], rx: 182, ry: 164, tufts: [[0.22, 0.3, 14], [0.7, 0.78, 14]] },
+    ears: { at: [128, -118], pts: [[-40, 8], [-40, -34], [0, -56], [40, -34], [40, 8]], inner: [[-24, 4], [-24, -24], [0, -38], [24, -24], [24, 4]], fill: C.black, innerFill: C.white, tilt: 0.3 },
     face: {
-      eye: { x: 192, y: -428, r: 15, style: 'iris', iris: '#6B4424' },
-      nose: { x: 358, y: -370, rx: 22, ry: 17 },
-      mouth: [[322, -350], [300, -344], [276, -342]],
-      whiskers: null,
-      blush: null,
+      eyes: { x: 62, y: -30, rx: 25, ry: 28, white: '#F6F2EA', iris: '#6B4A2E', irisR: 0.74, lid: 0.12, lidColor: C.black },
+      muzzle: [0, 58, 70, 48],
+      nose: { y: 44, w: 32, h: 24 },
+      mouth: { y: 88, w: 22, drop: 14, h: 30, style: 'cat' },
+      blush: [104, 40, 24],
     },
-    ears: {
-      n: { at: [-40, -470], flop: 0.08, fill: C.black, deep: P.ink, innerFill: C.white, pts: K.smooth([[-90, -470], [-78, -522], [-40, -532], [-10, -500], [-20, -462]], 5), inner: K.smooth([[-76, -478], [-66, -512], [-42, -516], [-26, -492], [-34, -470]], 5) },
-      f: { at: [10, -480], flop: 0.06, fill: C.black, deep: P.ink, innerFill: C.white, pts: K.smooth([[-30, -486], [-20, -534], [14, -542], [40, -512], [30, -478]], 5), inner: null },
-    },
-    tuftBelow: -150,
+    shadowW: 270,
     hooks: {
-      body: markings,
+      skin: mask,
       bodyAfter: vest,
       head: hat,
-      hand(ctx, R, B, PT) {
-        const fx = R.pose.fx;
-        if (!fx || !fx.ore) return;
-        const h = M.ap(PT, [60, -8]);
-        ore(ctx, h[0], h[1] - 20, 1.2, B, fx.ore);
-        if (fx.star) K.fx.star(ctx, h[0] + 46, h[1] - 70, 26 * fx.star, B, sd('glint'), '#E9FBFF');
+      hand(ctx, R, B, side, end, a) {
+        const fx = R.pose.fx || {};
+        if (fx.pick && side > 0) pick(ctx, end, a, B);
+        if (fx.gem === 'hands' && side > 0) {
+          const l = K.front.armEnd(R, R.S.arms[0], -1).end;
+          gem(ctx, [(end[0] + l[0]) / 2, (end[1] + l[1]) / 2 - 44], 1.2, B);
+        }
+      },
+      behind(ctx, R, B) {
+        // the tail: a short grey brush peeking out at his right hip
+        const T = R.Mb;
+        const sw = R.pose.tail * 40;
+        const t = M.all(T, K.smooth([[150, -120], [220 + sw * 0.3, -150], [262 + sw, -110], [240 + sw * 0.6, -70], [170, -70]], 4));
+        F().form(ctx, t, C.fur, B, sd('tail'), { width: 6, off: 0.1, hatch: 0.6 });
       },
       fx(ctx, R, B) {
-        const fx = R.pose.fx;
-        if (!fx || !fx.dig) return;
-        const H0 = M.ap(R.Mr, [330, 0]);
-        K.fx.heap(ctx, H0[0], B, sd('heap'), C);
-        if (fx.dig === 2) K.fx.clods(ctx, [H0[0] - 70, K.GROUND - 50], fx.d, 8, [1, 3], B, sd('clod'), C);
+        const fx = R.pose.fx || {};
+        if (R.pose.rock) rock(ctx, R.pose.crack || 0, B);
+        if (fx.hit) {
+          const h = [K.CXF + 60, K.GROUND - 120];
+          K.fx.star(ctx, h[0], h[1], 36, B, sd('hitS'), P.white);
+          for (let k = 0; k < 6; k++) {
+            const a = -Math.PI / 2 + (k - 2.5) * 0.4;
+            K.line(ctx, [[h[0] + Math.cos(a) * 30, h[1] + Math.sin(a) * 30], [h[0] + Math.cos(a) * 70, h[1] + Math.sin(a) * 70]], { width: 6, seed: sd('hit', k), boil: B, smooth: false, taper: [3, 8] });
+          }
+        }
+        if (fx.gem === 'rock') gem(ctx, [K.CXF, K.GROUND - 150], 1, B);
+        if (fx.star) {
+          const t = R.hp(0, -260, 0);
+          K.fx.star(ctx, t[0] - 150, t[1] + 20, 34 * fx.star, B, sd('s1'), '#F4E3FF');
+          K.fx.star(ctx, t[0] + 160, t[1] + 50, 24 * fx.star, B, sd('s2'), '#F4E3FF');
+        }
       },
     },
     poses: {
-      // two fast scoops, the crystal comes up, lifted high, gleaming
       work(d) {
-        const S = [
-          { a1: -0.2, a2: 0.3 },
-          { a1: 1.2, a2: 1.6 },
-          { a1: -0.1, a2: 0.35 },
-          { a1: 1.3, a2: 1.7 },
-        ];
-        if (d < 4)
-          return {
-            x: -160,
-            y: d % 2 ? -5 : 0,
-            lean: 0.48,
-            sq: 0.95,
-            legh: 36,
-            armN: S[d],
-            armF: S[(d + 1) % 4],
-            fx: { dig: 2, d },
-          };
-        const T = [
-          { lean: 0.3, x: -110, a: [0.6, 0.6], ore: 0.3, star: 0 },
-          { lean: 0.05, x: -40, a: [-0.4, -0.7], ore: 0.8, star: 0.6, mouth: 0.7 },
-          { lean: -0.06, x: -20, a: [-1.0, -1.35], ore: 1, star: 1.1, mouth: 1, eye: 'happy' },
-          { lean: -0.04, x: -20, a: [-0.95, -1.3], ore: 1, star: 0.7, mouth: 1, eye: 'happy' },
-        ][d - 4];
-        return {
-          x: T.x,
-          lean: T.lean,
-          mouth: T.mouth || 0,
-          eyeMode: T.eye || 'open',
-          armN: { a1: T.a[0], a2: T.a[1] },
-          fx: { dig: 1, d, ore: T.ore, star: T.star },
-        };
+        const T = WORK[d];
+        return { arm: T.arm, sq: T.sq || 1, y: T.y || 0, eyeMode: T.eye || 'open', mouth: T.mouth || 0, rock: T.rock, crack: T.crack, head: 0.05, fx: T.fx };
       },
     },
   });

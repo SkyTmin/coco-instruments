@@ -1,8 +1,9 @@
-// pets/20-cat.js : Кот Шрам (uncommon, sell). Quad kit.
-// A scruffy grey-brown tabby: the scar that names him runs through the visible eye (the eye is
-// narrowed, not lost — a patch there would kill his whole face), a notched ear, a striped prisoner
-// neckerchief, a bandaged front leg, a question-mark tail. Swipes with a paw. Work: brings a fish,
-// pats it, the fish turns into a coin, walks off with the coin in his teeth.
+// pets/20-cat.js : Кот Шрам (uncommon, sell). Front kit, sits.
+// A big tabby tom sitting up: grey-brown with dark stripes, the tabby "M" on his forehead, striped
+// cheeks, legs and tail, a pale bib; green eyes with slit pupils under half-lowered lids, a
+// stitched scar over his right eye, a notch in his left ear, a prison-striped kerchief knotted at
+// his throat and a bandage round one foreleg. Work: flips a fish off his paws, it turns into a gold
+// coin in the air, he catches it — and the lids come down, smug.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -10,208 +11,195 @@
   const P = L.pal;
   const K = FILM.pets;
   const M = K.M;
+  const lerp = L.lerp;
+  const F = () => K.front;
   const ID = 'cat';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
 
   const C = {
-    fur: '#9E8C74',
+    fur: '#A5937A',
     furDeep: '#665646',
-    furLit: '#C6B69E',
-    chest: '#DCCEB6',
+    furLit: '#CDBEA6',
+    belly: '#E6DAC4',
+    muzzle: '#EFE5D2',
     stripe: '#5A4938',
-    skin: '#E0978E',
-    skinDeep: '#B46A62',
-    nose: '#D98A82',
-    noseDeep: '#A8605A',
-    eye: '#1A110E',
-    scar: '#E7A89C',
-    mouth: '#5E2220',
-    tongue: '#E88E86',
-    band: '#EFE9DC',
-    bandDark: '#2C2522',
+    skin: '#E6A098',
+    nose: '#DE8C86',
+    paw: '#A5937A',
+    pad: '#D98C86',
+    leg: '#A5937A',
+    blush: '#E48E88',
+    mouth: '#6A2422',
+    tongue: '#EE908A',
+    scar: '#E9AEA2',
+    white: '#F4EEE2',
+    black: '#2C2522',
     bandage: '#F2ECDD',
     bandageDeep: '#B9AE98',
     fish: '#8FA7B4',
     fishDeep: '#56707E',
   };
 
-  const SIL = [
-    [-150, -120, 0],
-    [-184, -166, 0],
-    [-188, -230, 0],
-    [-158, -264, 0],
-    [-90, -278, 0],
-    [0, -282, 0],
-    [72, -292, 0.2],
-    [112, -322, 0.6],
-    [128, -378, 1],
-    [160, -422, 1],
-    [220, -438, 1],
-    [276, -414, 1],
-    [298, -378, 1],
-    [314, -352, 1],
-    [302, -328, 1],
-    [278, -306, 1],
-    [232, -290, 1],
-    [184, -270, 0.7],
-    [152, -232, 0.2],
-    [140, -170, 0],
-    [100, -128, 0],
-    [0, -118, 0],
-    [-100, -122, 0],
-  ];
+  function markings(c2, R, B) {
+    const T = R.Mh;
+    // the tabby M on the forehead and stripes on the cheeks
+    const M1 = [R.hl(-54, -80, 0.8), R.hl(-40, -128, 0.6), R.hl(-18, -96, 0.7), R.hl(0, -134, 0.6), R.hl(18, -96, 0.7), R.hl(40, -128, 0.6), R.hl(54, -80, 0.8)];
+    K.line(c2, M.all(T, M1), { width: 12, color: C.stripe, seed: sd('M'), boil: B, smooth: false, taper: [5, 5] });
+    for (const x of [-96, 96]) K.line(c2, M.all(T, [R.hl(x, -120, 0.5), R.hl(x * 1.05, -80, 0.6)]), { width: 11, color: C.stripe, seed: sd('fs', x), boil: B, taper: [6, 6] });
+    for (const s of [-1, 1])
+      for (let k = 0; k < 3; k++) K.line(c2, M.all(T, K.curve([R.hl(s * 196, 10 + k * 26, 0.2), R.hl(s * 160, 16 + k * 22, 0.45), R.hl(s * 128, 30 + k * 16, 0.6)], 4)), { width: 10, color: C.stripe, seed: sd('cs', s, k), boil: B, taper: [8, 3] });
+  }
 
-  // a pointed ear with a V notch out of its tip (near) or whole (far)
-  const earPts = (x, y, h, w, notch) =>
-    notch ? [[x - w, y], [x - w * 0.6, y - h * 0.6], [x - w * 0.22, y - h], [x + w * 0.02, y - h * 0.62], [x + w * 0.3, y - h * 0.88], [x + w * 0.7, y - h * 0.4], [x + w * 0.8, y + 6]] : [[x - w, y], [x - w * 0.4, y - h * 0.7], [x, y - h], [x + w * 0.5, y - h * 0.5], [x + w * 0.8, y + 6]];
-
-  function stripes(ctx, R) {
+  function bodyStripes(c2, R, B) {
     const T = R.Mb;
-    // across the back and the haunch
-    for (let k = 0; k < 7; k++) {
-      const x = -168 + k * 40;
-      K.fill(ctx, M.all(T, K.smooth([[x - 10, -300], [x + 12, -300], [x + 20, -240], [x + 6, -200], [x - 2, -236]], 4)), C.stripe);
-    }
-    K.fill(ctx, M.all(T, K.smooth([[-176, -200], [-126, -214], [-106, -196], [-166, -180]], 4)), C.stripe);
-    // the M on the forehead and cheek stripes
-    const H = R.Mh;
-    for (const [x0, y0, x1, y1] of [[170, -430, 196, -392], [200, -438, 214, -398], [236, -436, 238, -404]]) {
-      K.fill(ctx, M.all(H, K.ribbonPts([[x0, y0], [(x0 + x1) / 2 + 2, (y0 + y1) / 2], [x1, y1]], 13, 4)), C.stripe);
-    }
-    for (const [x0, y0, x1, y1] of [[196, -350, 150, -344], [202, -330, 160, -318]]) {
-      K.fill(ctx, M.all(H, K.ribbonPts([[x0, y0], [x1, y1]], 10, 3)), C.stripe);
-    }
-    // the pale muzzle and chest
-    K.fill(ctx, M.all(H, K.smooth([[252, -360], [300, -370], [318, -340], [300, -310], [262, -300], [236, -320]], 5)), C.chest);
-    K.fill(ctx, M.all(T, K.smooth([[120, -290], [170, -270], [158, -190], [120, -150], [96, -210]], 5)), C.chest);
+    for (const s of [-1, 1])
+      for (let k = 0; k < 4; k++) {
+        const y = -290 + k * 58;
+        K.line(c2, M.all(T, K.curve([[s * 184, y + 20], [s * 150, y], [s * 118, y + 16]], 4)), { width: 13, color: C.stripe, seed: sd('bs', s, k), boil: B, taper: [8, 4] });
+      }
   }
 
   function scar(ctx, R, B) {
-    const H = R.Mh;
-    const s = M.all(H, [[216, -452], [228, -426], [252, -362], [262, -338]]);
-    K.line(ctx, s, { width: 11, color: P.ink, seed: sd('scar'), boil: B, taper: [5, 7] });
-    K.line(ctx, s, { width: 6, color: C.scar, seed: sd('scar'), boil: B, taper: [5, 7] });
+    const T = R.Mh;
+    const a = R.hl(40, -96, 0.8), b = R.hl(100, 40, 0.8);
+    const s = M.all(T, [a, [lerp(a[0], b[0], 0.5) + 6, lerp(a[1], b[1], 0.5)], b]);
+    K.line(ctx, s, { width: 14, color: P.ink, seed: sd('scar'), boil: B, taper: [5, 6] });
+    K.line(ctx, s, { width: 8, color: C.scar, seed: sd('scar'), boil: B, taper: [5, 6] });
     for (let k = 0; k < 4; k++) {
-      const u = k / 3;
-      const x = 218 + u * 42, y = -446 + u * 104;
-      if (y > -414 && y < -372) continue; // the eye sits on the scar
-      K.line(ctx, M.all(H, [[x - 11, y + 3], [x + 11, y - 3]]), { width: 3, seed: sd('scarSt', k), boil: B, smooth: false, taper: 0 });
+      const u = 0.15 + k * 0.23;
+      const c = [lerp(a[0], b[0], u), lerp(a[1], b[1], u)];
+      K.line(ctx, M.all(T, [[c[0] - 12, c[1] - 3], [c[0] + 12, c[1] + 3]]), { width: 3, seed: sd('stitch', k), boil: B, smooth: false, taper: 0 });
     }
   }
 
-  // the striped prisoner neckerchief, knotted at the throat, its corner hanging on the chest
   function kerchief(ctx, R, B) {
-    const T = R.Mf;
-    const band = M.all(T, K.smooth([[92, -334], [150, -312], [196, -286], [190, -262], [140, -284], [86, -306]], 5));
-    const tri = M.all(T, K.smooth([[150, -300], [196, -278], [184, -220], [164, -206], [150, -250]], 4));
-    for (const pts of [band, tri]) {
-      K.fill(ctx, pts, C.band);
-      K.clip(ctx, pts, () => {
-        for (let k = -6; k < 12; k++) {
-          const a = M.ap(T, [60 + k * 22, -360]), b = M.ap(T, [110 + k * 22, -180]);
-          const w = 9;
-          K.fill(ctx, [[a[0] - w, a[1]], [a[0] + w, a[1]], [b[0] + w, b[1]], [b[0] - w, b[1]]], C.bandDark);
-        }
+    const T = R.Mb;
+    // a band round the neck, a triangle over the bib, prison stripes, a knot at his left
+    const band = M.all(T, K.smooth([[-150, -350], [0, -326], [150, -350], [148, -318], [0, -292], [-148, -318]], 4));
+    const tri = M.all(T, K.smooth([[-120, -330], [120, -330], [10, -176], [-10, -176]], 3));
+    for (const pts of [tri, band])
+      F().form(ctx, pts, C.white, B, sd('ker', pts.length), {
+        width: 6,
+        off: 0.1,
+        hatch: 0.5,
+        inside(c2) {
+          for (let k = -6; k <= 6; k++) K.line(c2, M.all(T, [[k * 28 - 30, -380], [k * 28 + 40, -160]]), { width: 13, color: C.black, seed: sd('ks', k), boil: B, taper: 0, smooth: false });
+        },
       });
-      L.inkPath(ctx, pts, { closed: true, width: 5, seed: sd('kerch', pts.length), boil: B, wobble: 0.6, taper: [4, 8] });
-    }
-    const knot = M.all(T, L.ellipsePts(176, -284, 17, 14, 16));
-    K.form(ctx, knot, { fill: C.band, deep: C.bandDark, width: 4.5, seed: sd('knot'), boil: B, shade: 0.8, spacing: 5, hatchW: 1.8 });
-  }
-
-  // the bandage wrapped round the near front leg
-  function bandage(ctx, R, B, key, knee, foot) {
-    if (key !== 'fn') return;
-    const a = [knee[0] + (foot[0] - knee[0]) * 0.25, knee[1] + (foot[1] - knee[1]) * 0.25];
-    const b = [knee[0] + (foot[0] - knee[0]) * 0.8, knee[1] + (foot[1] - knee[1]) * 0.8];
-    const wrap = K.limbPts(a, b, 22, 21, 6);
-    K.form(ctx, wrap, { fill: C.bandage, deep: C.bandageDeep, width: 5, seed: sd('bandage'), boil: B, shade: 0.7, spacing: 6, hatchW: 2 });
-    for (let k = 1; k < 4; k++) {
-      const u = k / 4;
-      const c = [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
-      K.line(ctx, [[c[0] - 21, c[1] - 6], [c[0] + 21, c[1] + 6]], { width: 3, color: C.bandageDeep, seed: sd('wrap', k), boil: B, taper: [2, 2] });
+    const kn = M.ap(T, [-120, -326]);
+    F().form(ctx, L.ellipsePts(kn[0], kn[1], 24, 20, 16), C.white, B, sd('knot'), { width: 5, off: 0.1, hatch: 0.5, inside: (c2) => K.line(c2, [[kn[0] - 20, kn[1] - 10], [kn[0] + 20, kn[1] + 10]], { width: 10, color: C.black, seed: sd('kk'), boil: B, taper: 0 }) });
+    for (const s of [-1, 1]) {
+      const tail = M.all(T, K.smooth([[-130, -318], [-150 + s * 20, -270], [-164 + s * 30, -250], [-140 + s * 10, -290]], 3));
+      F().form(ctx, tail, C.white, B, sd('ktail', s), { width: 4.5, off: 0.1, hatch: 0.4, rim: false });
     }
   }
 
-  function fish(ctx, x, y, s, rot, B) {
-    const T = M.chain(M.tr(x, y), M.rot(rot), M.sc(s));
-    const body = M.all(T, K.smooth([[-40, 0], [-10, -18], [26, -14], [44, 0], [26, 14], [-10, 16]], 4));
-    const tail = M.all(T, [[-36, 0], [-62, -18], [-56, 0], [-62, 18]]);
-    K.form(ctx, tail, { fill: C.fish, deep: C.fishDeep, width: 4, seed: sd('fishT'), boil: B, shade: 0.5, spacing: 5, hatchW: 1.6 });
-    K.form(ctx, body, { fill: C.fish, deep: C.fishDeep, width: 4.5, seed: sd('fish'), boil: B, shade: 0.8, spacing: 5, hatchW: 1.6 });
-    K.fill(ctx, M.all(T, L.ellipsePts(28, -3, 4, 4, 8)), P.ink);
-    K.line(ctx, M.all(T, [[10, -12], [4, 0], [10, 12]]), { width: 2.6, seed: sd('gill'), boil: B, taper: 0 });
+  function fish(ctx, c, a, s, B, seed) {
+    const T = M.chain(M.tr(c[0], c[1]), M.rot(a), M.sc(s, s));
+    const body = M.all(T, K.smooth([[-50, 0], [-10, -22], [30, -14], [50, 0], [30, 14], [-10, 22]], 4));
+    const tail = M.all(T, [[-46, 0], [-80, -24], [-72, 0], [-80, 24]]);
+    F().form(ctx, tail, C.fishDeep, B, seed + 1, { width: 4, off: 0.1, hatch: 0, rim: false, smooth: false });
+    F().form(ctx, body, C.fish, B, seed, {
+      width: 4.5,
+      off: 0.12,
+      shine: 0.8,
+      hatch: 0.3,
+      inside(c2) {
+        for (let k = 0; k < 3; k++) K.line(c2, M.all(T, K.curve([[-20 + k * 14, -14], [-14 + k * 14, 0], [-20 + k * 14, 14]], 4)), { width: 2, color: C.fishDeep, seed: seed + 3 + k, boil: B });
+      },
+    });
+    K.fill(ctx, M.all(T, L.ellipsePts(32, -4, 5, 5, 10)), P.ink);
   }
 
-  K.kits.quad.make({
+  const WORK = [
+    { arm: 1.4, lift: 130, item: 'fishChest' },
+    { arm: 2.0, lift: 110, item: 'fishAir', h: 0.8, spin: 0.8, look: [0, -0.6], head: -0.12 },
+    { arm: 1.6, lift: 120, item: 'fishAir', h: 1.15, spin: 2.2, look: [0, -0.8], head: -0.16 },
+    { arm: 1.6, lift: 120, item: 'coinAir', h: 1.2, spin: 0.1, burst: 1, look: [0, -0.8], head: -0.16, eye: 'open' },
+    { arm: 1.8, lift: 120, item: 'coinAir', h: 0.6, spin: 0.45, look: [0, -0.5] },
+    { arm: 1.4, lift: 130, item: 'coinChest', eye: 'happy', mouth: 0.6 },
+    { arm: 1.4, lift: 130, item: 'coinChest', lid: 0.55, turn: 0.2, star: 1 },
+    { arm: 1.4, lift: 130, item: 'coinChest', lid: 0.45 },
+  ];
+
+  K.kits.front.make({
     id: ID,
     colors: C,
-    stripe: P.stripeYellow,
-    sil: SIL,
-    neck: [150, -300],
-    headScale: 1.24,
-    spine: [0, -250],
-    bodyC: [-20, -200],
-    bodyR: 220,
-    front: { atN: [100, -150], atF: [76, -160], l1: 72, l2: 70, r1: 27, rj: 20, r2: 18, paw: [30, 15] },
-    hind: { atN: [-126, -168], atF: [-104, -176], l1: 88, l2: 72, r1: 44, rj: 20, r2: 17, paw: [30, 15] },
-    feet: { fn: 118, ff: 92, hn: -132, hf: -106 },
-    stride: 50,
-    attack: 'swipe',
-    slashAt: [330, -240],
-    tail: { base: [-180, -234], len: 250, lift: 0.9, curl: -1.1, rise: 0, w0: 30, w1: 22, fill: C.fur, deep: C.furDeep, ink: 6, rings: 5, ringCol: C.stripe },
+    stripe: P.stripeSage,
+    plan: 'sit',
+    bodyC: [0, -190],
+    bodyR: 260,
+    body: { half: [[0, -344], [84, -334], [136, -292], [164, -210], [178, -116], [172, -44], [132, -16], [0, -12]] },
+    belly: [0, -214, 70, 122],
+    sit: {
+      thigh: [118, -98, 78, 86],
+      hind: [156, 0, 48, 24],
+      front: { at: [62, -250], len: 232, r: 30, paw: [40, 26], splay: 0.04, stripes: 3 },
+      thighStripes: 3,
+    },
+    tail: { pts: [[110, -60], [226, -80], [276, -200], [250, -320], [206, -364]], w0: 34, w1: 28, rings: 5, ringColor: C.stripe, tip: C.stripe, tipLen: 0.14, swing: 0.8 },
+    head: { c: [0, -486], rx: 184, ry: 152, half: [[0, -152], [92, -144], [152, -106], [184, -44], [202, 26], [176, 66], [124, 104], [62, 124], [0, 130]], tufts: [[0.36, 0.44, 22], [0.56, 0.64, 22]] },
     ears: {
-      n: { at: [150, -410], flop: 0.12, fill: C.fur, deep: C.furDeep, innerFill: C.skin, pts: earPts(150, -408, 104, 44, true), inner: earPts(152, -414, 70, 26, false) },
-      f: { at: [230, -430], flop: 0.1, fill: C.fur, deep: C.furDeep, innerFill: C.skin, pts: earPts(232, -428, 96, 40, false), inner: null },
+      at: [112, -118],
+      pts: [[-56, 10], [-12, -124], [48, 8]],
+      inner: [[-36, 4], [-12, -88], [26, 4]],
+      ptsL: [[56, 10], [12, -124], [-10, -88], [6, -72], [-22, -58], [-48, 8]],
+      innerL: [[36, 4], [12, -88], [-4, -60], [-26, 4]],
+      fill: C.fur,
+      innerFill: C.skin,
+      tilt: 0.1,
     },
-    tuftBelow: -160,
     face: {
-      eye: { x: 240, y: -392, r: 21, style: 'iris', iris: '#C4B53A', slit: true, lid: 0.42, lidColor: C.fur },
-      nose: { x: 310, y: -352, rx: 12, ry: 9 },
-      mouth: [[304, -326], [288, -318], [268, -318]],
-      whiskers: [296, -340, 118],
-      blush: null,
-      tongue: 0,
-      fangs: 0.8,
+      eyes: { x: 70, y: -12, rx: 34, ry: 36, white: '#FBF6E6', iris: '#9EC23A', irisR: 0.82, slit: true, lid: 0.26, lidColor: C.fur, tilt: -0.1, lash: true },
+      muzzle: [0, 52, 76, 46],
+      nose: { y: 30, w: 22, h: 16 },
+      mouth: { y: 58, w: 28, drop: 12, h: 30, style: 'cat', fangs: 16 },
+      whiskers: { x: 62, y: 44, len: 116 },
+      blush: [118, 40, 24],
     },
+    shadowW: 270,
+    attack: 'slash',
     hooks: {
-      body: stripes,
-      face: scar,
+      skin: markings,
+      body: bodyStripes,
       front: kerchief,
-      legAfter: bandage,
-      fx(ctx, R, B) {
-        const fx = R.pose.fx;
-        if (!fx || !fx.item) return;
-        const mouth = M.ap(R.Mh, [300, -318]);
-        const g = M.ap(R.Mr, [260, -26]);
-        if (fx.item === 'fishMouth') fish(ctx, mouth[0] + 8, mouth[1] + 14, 1, 0.25, B);
-        if (fx.item === 'fishGround') fish(ctx, g[0], g[1], 1.05, 0, B);
-        if (fx.item === 'coinGround') {
-          K.fx.coin(ctx, g[0], g[1] - 10, 30, 0, B, sd('coin'));
-          K.fx.star(ctx, g[0] + 44, g[1] - 60, 30, B, sd('st1'), '#FFF1C4');
-          K.fx.star(ctx, g[0] - 40, g[1] - 44, 20, B, sd('st2'), '#FFF1C4');
+      face: scar,
+      hand(ctx, R, B, side, end) {
+        const fx = R.pose.fx || {};
+        // the bandage on his left foreleg
+        if (side < 0) {
+          // wound round the leg just above the paw, following the leg
+          const { sh } = K.front.sitPaw(R, side);
+          const dx = end[0] - sh[0], dy = end[1] - sh[1], dl = Math.hypot(dx, dy) || 1;
+          const ux = dx / dl, uy = dy / dl, nx = -uy, ny = ux;
+          for (let k = 0; k < 3; k++) {
+            const c = [end[0] - ux * (70 - k * 15), end[1] - uy * (70 - k * 15)];
+            const w = 33;
+            const band = [[c[0] - nx * w - ux * 6, c[1] - ny * w - uy * 6], [c[0] + nx * w - ux * 2, c[1] + ny * w - uy * 2], [c[0] + nx * w + ux * 9, c[1] + ny * w + uy * 9], [c[0] - nx * w + ux * 5, c[1] - ny * w + uy * 5]];
+            K.fill(ctx, band, C.bandage);
+            L.inkPath(ctx, band, { closed: true, width: 3, seed: sd('bd', k), boil: B, smooth: false, taper: 0, wobble: 0.3 });
+          }
         }
-        if (fx.item === 'coinMouth') {
-          K.fx.coin(ctx, mouth[0] + 10, mouth[1] + 10, 26, 0.12, B, sd('coinM'));
-          if (fx.star) K.fx.star(ctx, mouth[0] + 50, mouth[1] - 40, 24 * fx.star, B, sd('st3'), '#FFF1C4');
+        if (side < 0 || !fx.item) return;
+        const l = [end[0] - 2 * (end[0] - K.CXF), end[1]];
+        const mid = [(end[0] + l[0]) / 2, end[1] - 30];
+        // the toss is measured from the paws (0) to just over the head (1)
+        const top = R.hp(0, -R.S.head.ry, 0)[1] - 70;
+        const y = (h) => mid[1] + (top - mid[1]) * h;
+        if (fx.item === 'fishChest') fish(ctx, mid, 0, 1.1, B, sd('fishC'));
+        if (fx.item === 'fishAir') fish(ctx, [mid[0], y(fx.h)], fx.spin, 1.1, B, sd('fishA'));
+        if (fx.item === 'coinAir') {
+          K.fx.coin(ctx, mid[0], y(fx.h), 34, fx.spin, B, sd('coinA'));
+          if (fx.burst) K.fx.star(ctx, mid[0] + 50, y(fx.h) - 40, 40, B, sd('cb'), '#FFF1C4');
         }
+        if (fx.item === 'coinChest') K.fx.coin(ctx, mid[0], mid[1], 34, 0.05, B, sd('coinC'));
+        if (fx.star) K.fx.star(ctx, mid[0] + 60, mid[1] - 40, 28, B, sd('cs'), '#FFF1C4');
       },
     },
     poses: {
-      work(d, n, P0) {
-        const legs = P0.idle(0, 12).legs;
-        const T = [
-          { head: 0, item: 'fishMouth' },
-          { head: 0.18, hy: 10, item: 'fishMouth' },
-          { head: -0.04, item: 'fishGround' },
-          { head: 0.08, item: 'fishGround', paw: 1 },
-          { head: 0.02, item: 'coinGround', mode: 'happy' },
-          { head: 0.3, hy: 16, item: 'coinGround' },
-          { head: -0.12, item: 'coinMouth', star: 1, mode: 'happy' },
-          { head: -0.1, item: 'coinMouth', star: 0.6 },
-        ][d];
-        if (T.paw) legs.fn = { x: 176, lift: 30 };
-        return { head: T.head, hy: T.hy || 0, eyeMode: T.mode || 'open', tail: d % 2 ? 0.2 : -0.1, legs, fx: { item: T.item, star: T.star } };
+      work(d) {
+        const T = WORK[d];
+        return { arm: { l: T.arm, r: T.arm }, leg: { l: T.lift, r: T.lift }, look: T.look || null, head: T.head || 0, eyeMode: T.eye || 'open', mouth: T.mouth || 0, lid: T.lid == null ? null : T.lid, turn: T.turn || 0, fx: { item: T.item, h: T.h, spin: T.spin, burst: T.burst, star: T.star } };
       },
     },
   });

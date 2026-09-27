@@ -1,7 +1,9 @@
-// pets/11-mouse.js : Мышь-воришка (common, token). Biped kit.
-// A light grey mouse with a head as big as its body, huge round ears (the near one torn), a sly
-// heavy-lidded eye, a ragged hooded cape over the shoulders, a rope belt, and a brass camp token on a
-// chain in its hand. Work: sniffs, snatches the token, holds it up gleaming, pockets it.
+// pets/11-mouse.js : Мышь-воришка (common, token). Front kit, stands.
+// A light grey mouse with a head as big as its body, huge round ears (the left one torn), big glossy
+// eyes under a sly lid, a pink nose, long whiskers and buck teeth. A ragged brown capelet tied at
+// the throat, a rope belt, a long pink tail curled up at the side, and the camp token on a chain in
+// its paw. Work: sniffs, spots a token on the floor, snatches it, holds it up gleaming, pockets it
+// under the cape — and winks.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -9,212 +11,187 @@
   const P = L.pal;
   const K = FILM.pets;
   const M = K.M;
+  const lerp = L.lerp;
+  const F = () => K.front;
   const ID = 'mouse';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
 
   const C = {
-    fur: '#9C958D',
+    fur: '#A7A098',
     furDeep: '#655E58',
-    furLit: '#C3BCB3',
-    chest: '#DCCFBE',
-    skin: '#EFA9A1',
-    skinDeep: '#C6776F',
-    claw: '#F6D3CC',
-    clawDeep: '#C6776F',
-    eye: '#140E0C',
-    cloak: '#5B4535',
-    cloakDeep: '#35271D',
-    cloakLit: '#7A604B',
-    rope: '#B79A68',
+    furLit: '#CFC8BF',
+    belly: '#E4D8C6',
+    muzzle: '#E9DFD2',
+    skin: '#F0A9A2',
+    nose: '#EE8E92',
+    paw: '#F2B3AC',
+    pad: '#DC8A86',
+    foot: '#F2B3AC',
+    leg: '#A7A098',
+    arm: '#A7A098',
+    blush: '#EC8C92',
+    mouth: '#7A2C2C',
+    tongue: '#F29A96',
+    cape: '#5E4636',
+    capeDeep: '#35271D',
+    capeLit: '#7E6450',
+    patch: '#8A6B45',
+    rope: '#C2A46E',
     ropeDeep: '#7B6440',
-    brass: '#D2A546',
-    brassDeep: '#86621F',
   };
 
-  const SIL = [
-    [-10, -24, 0],
-    [-90, -36, 0],
-    [-136, -92, 0],
-    [-150, -172, 0],
-    [-140, -250, 0.1],
-    [-112, -312, 0.45],
-    [-100, -372, 1],
-    [-82, -452, 1],
-    [-32, -518, 1],
-    [40, -546, 1],
-    [112, -532, 1],
-    [166, -498, 1],
-    [206, -462, 1],
-    [250, -441, 1],
-    [292, -428, 1],
-    [316, -418, 1],
-    [304, -398, 1],
-    [260, -392, 1],
-    [202, -382, 1],
-    [150, -354, 0.8],
-    [126, -300, 0.3],
-    [130, -222, 0],
-    [122, -132, 0],
-    [94, -60, 0],
-    [48, -30, 0],
-  ];
-
-  // a round ear; the near one has a torn V out of its rim
-  function earPts(cx, cy, rx, ry, rot, torn) {
-    const pts = [];
-    const n = 28;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      let r = 1;
-      if (torn) {
-        const da = Math.atan2(Math.sin(a - 5.35), Math.cos(a - 5.35));
-        if (Math.abs(da) < 0.26) r = 1 - 0.28 * (1 - Math.abs(da) / 0.26);
-      }
-      const x = Math.cos(a) * rx * r, y = Math.sin(a) * ry * r;
-      pts.push([cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)]);
+  // ears: a big round shape, the left one with a notch torn out of its rim
+  const earPts = (notch) => {
+    const out = [];
+    for (let i = 0; i <= 16; i++) {
+      const a = Math.PI * 0.62 + (i / 16) * Math.PI * 1.76;
+      let r = 96;
+      if (notch && i >= 5 && i <= 7) r -= [18, 30, 16][i - 5];
+      out.push([34 + Math.cos(a) * r * 0.95, -78 + Math.sin(a) * r]);
     }
-    return pts;
+    return out;
+  };
+  const RIGHT = earPts(false);
+  const LEFT = earPts(true).map(([x, y]) => [-x, y]);
+  const inner = (pts) => pts.map(([x, y]) => [x * 0.66 + (x > 0 ? 6 : -6), -78 + (y + 78) * 0.66 + 8]);
+
+  function capeBack(ctx, R, B) {
+    const T = R.Mb;
+    // the capelet hangs behind: seen at the sides and below the arms, a ragged hem
+    const hem = [];
+    for (let i = 0; i <= 10; i++) {
+      const x = -196 + i * 39.2;
+      hem.push([x, -78 + (i % 2 ? -18 : 10) + 20 * Math.abs(x / 196) ** 2]);
+    }
+    const pts = [[-150, -300], [-190, -220], ...hem, [190, -220], [150, -300]];
+    F().form(ctx, M.all(T, K.smooth(pts, 3)), C.cape, B, sd('capeB'), { width: 7, off: 0.1, hatch: 0.7 });
   }
 
-  function cape(ctx, R, B) {
+  function capeFront(ctx, R, B) {
     const T = R.Mb;
-    const pts = K.smooth(
-      [
-        [104, -318], [62, -354], [-10, -372], [-76, -366], [-128, -340], [-166, -282], [-180, -206],
-        [-164, -150], [-146, -176], [-126, -144], [-104, -172], [-82, -148], [-62, -180],
-        [-34, -232], [6, -276], [58, -300],
-      ],
-      5
-    );
-    const cp = M.all(T, pts);
-    K.form(ctx, cp, {
-      fill: C.cloak,
-      deep: C.cloakDeep,
+    // the mantle over the shoulders: a wide band from shoulder to shoulder, tied at the throat
+    const mantle = K.smooth([[-168, -290], [-110, -336], [0, -350], [110, -336], [168, -290], [150, -236], [80, -262], [0, -276], [-80, -262], [-150, -236]], 4);
+    F().form(ctx, M.all(T, mantle), C.cape, B, sd('mantle'), {
       width: 7,
-      seed: sd('cape'),
-      boil: B,
-      spacing: 9,
-      hatchAlpha: 0.7,
-      after(c2) {
-        // folds of the hood rolled round the neck, and two long folds down the back
-        K.line(c2, M.all(T, [[-112, -344], [-60, -350], [0, -344], [52, -324]]), { width: 4, color: C.cloakDeep, seed: sd('fold1'), boil: B });
-        K.line(c2, M.all(T, [[-96, -330], [-120, -260], [-128, -190]]), { width: 3.6, color: C.cloakDeep, seed: sd('fold2'), boil: B });
-        K.line(c2, M.all(T, [[-50, -320], [-70, -250], [-90, -186]]), { width: 3.4, color: C.cloakDeep, seed: sd('fold3'), boil: B });
-        K.line(c2, M.all(T, [[20, -354], [-40, -358]]), { width: 7, color: C.cloakLit, alpha: 0.9, seed: sd('capeHl'), boil: B, taper: [10, 10] });
-        // a patch sewn on with big stitches
-        const patch = M.all(T, [[-150, -250], [-112, -256], [-108, -218], [-146, -212]]);
-        K.fill(c2, patch, '#7A6450');
-        L.inkPath(c2, patch, { closed: true, width: 3.2, seed: sd('patch'), boil: B, smooth: false, wobble: 0.5, taper: 0 });
-        for (let k = 0; k < 4; k++) K.line(c2, M.all(T, [[-150 + k * 11, -262], [-146 + k * 11, -246]]), { width: 2.4, seed: sd('st', k), boil: B, smooth: false, taper: 0 });
+      off: 0.12,
+      inside(c2) {
+        // a patch sewn on the left shoulder
+        const pt = M.all(T, L.rrectPts(-140, -304, 42, 34, 5, 4));
+        K.fill(c2, pt, C.patch);
+        L.inkPath(c2, pt, { closed: true, width: 3, seed: sd('patch'), boil: B, wobble: 0.4 });
+        for (let k = 0; k < 4; k++) K.line(c2, M.all(T, [[-136 + k * 11, -308], [-133 + k * 11, -298]]), { width: 2.6, seed: sd('pst', k), boil: B, smooth: false, taper: 0 });
+        L.hatch(c2, M.all(T, mantle), { angle: 1.2, spacing: 11, width: 2, color: C.capeLit, alpha: 0.5, density: 0.4, clip: true, seed: sd('weave'), boil: B });
       },
     });
-    K.plate(ctx, M.all(T, L.ellipsePts(104, -318, 13, 13, 16)), { seed: sd('clasp'), boil: B, fill: C.brass, deep: C.brassDeep });
+    // the knot and two hanging strings
+    const k0 = M.ap(T, [0, -272]);
+    F().form(ctx, L.ellipsePts(k0[0], k0[1], 16, 13, 14), C.rope, B, sd('knot'), { width: 4, off: 0.12, hatch: 0.3, rim: false });
+    for (const s of [-1, 1]) {
+      const str = M.all(T, [[s * 6, -262], [s * 16, -226], [s * 10, -196]]);
+      K.line(ctx, str, { width: 8, color: P.ink, seed: sd('str', s), boil: B, taper: [2, 4] });
+      K.line(ctx, str, { width: 4.5, color: C.rope, seed: sd('str', s), boil: B, taper: [2, 4] });
+    }
   }
 
   function belt(ctx, R, B, bodyPts) {
+    const y0 = -168;
     const line = [];
-    for (let x = -170; x <= 170; x += 20) line.push([x, -112 + 10 * (1 - (x / 150) ** 2)]);
-    K.band(ctx, M.all(R.Mb, line), 15, { fill: C.rope, deep: C.ropeDeep, seed: sd('rope'), boil: B, clip: bodyPts, width: 4 });
-    // twists of the rope
+    for (let x = -160; x <= 160; x += 16) line.push([x, y0 + 10 * (1 - (x / 150) ** 2)]);
     K.clip(ctx, bodyPts, () => {
-      for (let x = -140; x <= 130; x += 18) {
-        const y = -112 + 10 * (1 - (x / 150) ** 2);
-        K.line(ctx, M.all(R.Mb, [[x - 5, y - 7], [x + 5, y + 7]]), { width: 2.4, color: C.ropeDeep, seed: sd('tw', x), boil: B, smooth: false, taper: 0 });
-      }
+      const L2 = M.all(R.Mb, line);
+      K.line(ctx, L2, { width: 22, color: P.ink, seed: sd('rope'), boil: B, taper: 0 });
+      K.line(ctx, L2, { width: 16, color: C.rope, seed: sd('rope'), boil: B, taper: 0 });
+      // the twist of the rope
+      for (let i = 0; i + 1 < line.length; i++) K.line(ctx, M.all(R.Mb, [[line[i][0] + 2, line[i][1] - 7], [line[i][0] + 10, line[i][1] + 7]]), { width: 2.4, color: C.ropeDeep, seed: sd('tw', i), boil: B, smooth: false, taper: 0 });
     });
-    const knot = M.all(R.Mb, K.smooth([[92, -118], [110, -122], [116, -104], [100, -94]], 4));
-    K.form(ctx, knot, { fill: C.rope, deep: C.ropeDeep, width: 4, seed: sd('knot'), boil: B, shade: 0.6, spacing: 5, hatchW: 1.8 });
-    for (const [x0, y0, x1, y1] of [[104, -100, 98, -58], [110, -100, 122, -62]]) {
-      const end = M.all(R.Mb, K.ribbonPts([[x0, y0], [(x0 + x1) / 2 + 3, (y0 + y1) / 2], [x1, y1]], 10, 7));
-      K.form(ctx, end, { fill: C.rope, width: 3.6, seed: sd('ropeEnd', x1), boil: B, shade: 0 });
+    const kn = M.ap(R.Mb, [-96, y0 + 8]);
+    F().form(ctx, L.ellipsePts(kn[0], kn[1], 15, 12, 14), C.rope, B, sd('bknot'), { width: 4, off: 0.12, hatch: 0.3, rim: false });
+    for (const s of [0, 1]) {
+      const e = M.all(R.Mb, [[-96, y0 + 14], [-104 + s * 18, y0 + 50], [-100 + s * 22, y0 + 76]]);
+      K.line(ctx, e, { width: 9, color: P.ink, seed: sd('bend', s), boil: B, taper: [2, 5] });
+      K.line(ctx, e, { width: 5.5, color: C.rope, seed: sd('bend', s), boil: B, taper: [2, 5] });
     }
   }
 
-  const token = (ctx, x, y, r, B, turn = 0) => K.fx.token(ctx, x, y, r, turn, B, sd('token'));
-
-  function hand(ctx, R, B, PT) {
-    const pose = R.pose;
-    if (!pose.held) return;
-    const h = M.ap(PT, [36, 4]);
-    if (pose.fx && pose.fx.up) {
-      token(ctx, h[0] + 6, h[1] - 18, 30, B, 0);
-      if (pose.fx.star) K.fx.star(ctx, h[0] + 40, h[1] - 52, 26 * pose.fx.star, B, sd('glint'), '#FFF6D2');
-      return;
+  function teeth(ctx, R, B) {
+    if (R.pose.mouth > 0.25) return;
+    const T = R.Mh;
+    const c = R.hl(0, 82, 1);
+    for (const s of [-1, 1]) {
+      const t = M.all(T, L.rrectPts(c[0] + (s < 0 ? -12 : 0), c[1], 12, 14, 3, 4));
+      K.fill(ctx, t, '#FFFBF0');
+      L.inkPath(ctx, t, { closed: true, width: 2.8, seed: sd('tooth', s), boil: B, smooth: false, taper: 0, wobble: 0.3 });
     }
-    const sway = pose.fx && pose.fx.sway != null ? pose.fx.sway : 0;
-    const end = [h[0] + sway * 20, h[1] + 58];
-    K.chain(ctx, [h, [h[0] + sway * 8, h[1] + 30], end], 13, { width: 5.5, color: C.brass, seed: sd('chain'), boil: B });
-    token(ctx, end[0], end[1] + 26, 26, B, sway * 0.3);
   }
 
-  const base = K.kits.biped;
-  base.make({
+  function chainToken(ctx, end, sway, B) {
+    const a = [end[0] + 6, end[1] + 16];
+    const b = [a[0] + 10 * sway, a[1] + 60];
+    K.chain(ctx, [a, [lerp(a[0], b[0], 0.5) + 4, lerp(a[1], b[1], 0.5)], b], 13, { width: 5, color: '#C9A64E', seed: sd('chain'), boil: B });
+    K.fx.token(ctx, b[0], b[1] + 26, 26, sway * 0.2, B, sd('token'));
+  }
+
+  const WORK = [
+    { head: -0.12, hy: -8, turn: 0.1, look: [0.1, -0.35], fx: { ground: 1, glint: 0.6, noChain: 1 } },
+    { head: 0.06, turn: 0.55, look: [0.6, 0.5], lid: 0.1, fx: { ground: 1, glint: 1, noChain: 1 } },
+    { lean: 0.1, x: 30, arm: { l: 0, r: -0.5 }, turn: 0.4, look: [0.5, 0.6], fx: { inPaw: 1, noChain: 1 } },
+    { arm: { l: 0.1, r: 1.55 }, turn: 0.25, look: [0.4, -0.2], mouth: 0.5, lid: 0.05, fx: { inPaw: 1, star: 1, noChain: 1 } },
+    { arm: { l: 0.1, r: 1.45 }, turn: 0.3, look: [0.4, -0.2], lid: 0.45, fx: { inPaw: 1, noChain: 1 } },
+    { arm: { l: 0.05, r: -0.95 }, turn: -0.1, eyeR: 'happy', fx: { noChain: 1 } },
+    { arm: { l: 0.05, r: -0.9 }, turn: -0.15, eyeR: 'happy', mouth: 0.4, fx: { noChain: 1, star: 0.6 } },
+    { arm: { l: -0.9, r: -0.9 }, lid: 0.45, fx: { noChain: 1 } },
+  ];
+
+  K.kits.front.make({
     id: ID,
     colors: C,
-    stripe: P.stripeApricot,
-    sil: SIL,
-    neck: [90, -340],
-    bodyC: [0, -200],
-    bodyR: 200,
-    legh: 40,
-    shoulders: { n: [70, -285], f: [40, -300] },
-    hips: { n: [30, -44], f: [-30, -48] },
-    arm: {
-      len: 60,
-      r: 22,
-      paw: 'hand',
-      pawScale: 1.05,
-      rest: { n: { a1: 1.05, a2: 0.35 }, f: { a1: 0.95, a2: 0.2 } },
-      up: { n: { a1: -0.9, a2: -1.3 }, f: { a1: -1.55, a2: -1.9 } },
-      windup: [-2.1, -2.5],
-    },
-    leg: { r: 21 },
-    foot: { len: 46, h: 15, toes: 3, rest: { n: { x: 40 }, f: { x: -30 } }, stride: 54 },
-    tail: { base: [-128, -70], len: 290, lift: -0.35, curl: -1.7, rise: 0, w0: 17, w1: 5 },
-    chest: [72, -170, 66, 118, -0.1],
-    ears: {
-      n: { at: [-20, -520], flop: 0.12, fill: '#A69F97', deep: C.furDeep, innerFill: C.skin, pts: earPts(-22, -598, 74, 84, -0.25, true), inner: earPts(-18, -594, 48, 58, -0.25, false) },
-      f: { at: [80, -530], flop: 0.1, fill: '#A69F97', deep: C.furDeep, innerFill: C.skin, pts: earPts(88, -606, 64, 74, 0.15, false), inner: earPts(90, -604, 40, 50, 0.15, false) },
-    },
-    tuftMaxX: 60,
-    tuftBelow: -200,
+    stripe: P.stripeSky,
+    plan: 'stand',
+    bodyC: [0, -190],
+    bodyR: 230,
+    body: { half: [[0, -324], [80, -316], [132, -272], [152, -200], [150, -120], [128, -62], [80, -40], [0, -36]] },
+    belly: [0, -150, 90, 104],
+    legs: { hip: [56, -52], r: 22, foot: [44, 26], splay: 8 },
+    arms: [{ at: [122, -268], len: 116, r: 22, pr: 32, rest: 0.34, pawFill: 'paw', pads: true }],
+    tail: { pts: [[70, -70], [190, -64], [262, -140], [252, -248], [196, -300], [168, -270]], w0: 16, w1: 7, fill: C.skin, swing: 0.8 },
+    head: { c: [0, -470], rx: 166, ry: 150, tufts: [[0.98, 1.0, 16], [0.0, 0.03, 16]] },
+    ears: { at: [96, -98], pts: RIGHT, inner: inner(RIGHT), ptsL: LEFT, innerL: inner(LEFT), fill: C.fur, innerFill: C.skin, tilt: 0.12, flop: 0.4 },
     face: {
-      eye: { x: 176, y: -468, r: 19, lid: 0.58, lidColor: '#A69F97' },
-      nose: { x: 318, y: -415, rx: 15, ry: 12 },
-      mouth: [[298, -398], [278, -392], [256, -392]],
-      whiskers: [294, -410, 108],
-      blush: [214, -440],
+      eyes: { x: 64, y: -6, rx: 30, ry: 34, lid: 0.3, lidColor: C.fur, beadLit: '#4B3E48' },
+      muzzle: [0, 52, 66, 46],
+      nose: { y: 40, w: 20, h: 15 },
+      mouth: { y: 70, w: 18, drop: 12, h: 28, style: 'cat' },
+      whiskers: { x: 42, y: 44, len: 92 },
+      blush: [100, 38, 26],
     },
-    hooks: { front: cape, bodyAfter: belt, hand },
+    shadowW: 220,
+    hooks: {
+      behind: capeBack,
+      bodyAfter: belt,
+      front: capeFront,
+      face: teeth,
+      hand(ctx, R, B, side, end) {
+        const fx = R.pose.fx || {};
+        if (side < 0) return;
+        if (!fx.noChain) chainToken(ctx, end, Math.sin(R.pose.tail * 3) * 0.8, B);
+        if (fx.inPaw) K.fx.token(ctx, end[0] + 4, end[1] - 34, 28, 0.08, B, sd('tokP'));
+        if (fx.star && fx.inPaw) K.fx.star(ctx, end[0] + 44, end[1] - 64, 30 * fx.star, B, sd('ts'), '#FFF1C4');
+      },
+      fx(ctx, R, B) {
+        const fx = R.pose.fx || {};
+        const spot = [K.CXF + 190, K.GROUND - 18];
+        if (fx.ground) K.fx.token(ctx, spot[0], spot[1], 22, 0.55, B, sd('tokG'));
+        if (fx.glint) K.fx.star(ctx, spot[0] + 22, spot[1] - 34, 28 * fx.glint, B, sd('glint'), '#FFF1C4');
+        if (fx.star && !fx.inPaw) {
+          const t = R.hp(120, -120, 0.5);
+          K.fx.star(ctx, t[0], t[1], 26 * fx.star, B, sd('wink'), '#FFF1C4');
+        }
+      },
+    },
     poses: {
-      idle(d, n, P0) {
-        return Object.assign(P0.idle(d, n), { fx: { sway: Math.sin((Math.PI * 2 * d) / n) } });
-      },
-      walk(d, n, P0) {
-        return Object.assign(P0.walk(d, n), { fx: { sway: Math.cos((Math.PI * 2 * d) / n) } });
-      },
-      // sniff, snatch the token, hold it up gleaming, pocket it
       work(d) {
-        const T = [
-          { head: -0.14, nose: 1, lean: 0.02, a: [1.05, 0.35], held: 0 },
-          { head: -0.1, nose: 0.4, lean: 0.06, a: [1.0, 0.4], held: 0 },
-          { head: 0.08, nose: 0, lean: 0.3, x: 40, a: [0.55, 0.95], held: 0 },
-          { head: 0.02, nose: 0, lean: 0.1, x: 20, a: [0.25, -0.2], held: 1, sway: 0.6 },
-          { head: -0.1, lean: -0.05, a: [-1.0, -1.35], held: 1, up: 1, star: 0.7, mouth: 0.6 },
-          { head: -0.12, lean: -0.06, a: [-1.05, -1.4], held: 1, up: 1, star: 1.1, mouth: 0.6 },
-          { head: 0.06, lean: 0.04, a: [1.55, 1.3], held: 1, sway: -0.4 },
-          { head: 0.04, lean: 0.02, a: [1.6, 1.35], held: 0, mouth: 0.4 },
-        ][d];
-        return {
-          x: T.x || 0,
-          head: T.head,
-          nose: T.nose || 0,
-          lean: T.lean,
-          mouth: T.mouth || 0,
-          held: T.held,
-          armN: { a1: T.a[0], a2: T.a[1] },
-          fx: { up: T.up, star: T.star, sway: T.sway || 0 },
-        };
+        const T = WORK[d];
+        return Object.assign({ arm: { l: 0.05, r: 0.05 } }, T);
       },
     },
   });

@@ -1,9 +1,9 @@
-// pets/32-owl.js : Сова-фонарщица (rare, luck). Bird kit, waddles.
-// A round little eagle-owl: a big head with no neck, long ear tufts, a pale facial disc with a
-// dark rim, two huge orange eyes (the head turns a three-quarter face to us), a small hooked beak,
-// a streaked cream chest, barred wings, feathered legs with dark talons. A brass lamp strapped to
-// her forehead. Work: switches the lamp on, sweeps the beam over the
-// ground, finds a hidden crystal — the luck of the camp.
+// pets/32-owl.js : Сова-фонарщица (rare, luck). Front kit, a round owl facing us.
+// A round little eagle-owl: a big head sitting straight on the body, long feather ear tufts, a pale
+// facial disc in two rings with a dark rim and a pale V of brows, two huge orange eyes, a small
+// hooked beak, a cream breast streaked with dark chevrons, spotted and barred wings, fluffy
+// feathered legs with dark talons. A brass lamp strapped to her forehead. Work: clicks the lamp on,
+// sweeps the beam over the floor, finds a hidden crystal, hops to it and holds it up.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -12,6 +12,7 @@
   const K = FILM.pets;
   const M = K.M;
   const lerp = L.lerp;
+  const F = () => K.front;
   const ID = 'owl';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
 
@@ -19,231 +20,211 @@
     fur: '#9C7250',
     furDeep: '#5E4128',
     furLit: '#C49A70',
-    chest: '#E1CBA2',
+    belly: '#E6D2AC',
     streak: '#6B4A2E',
-    disc: '#EAD9B8',
+    disc: '#EEDFC2',
     rim: '#5E4128',
     wing: '#8E6646',
-    wingDeep: '#553A22',
-    primary: '#7E5A3C',
-    covert: '#A87E58',
-    wingLine: '#553A22',
-    secondary: '#8E6646',
+    primary: '#6E4E34',
+    secondary: '#7E5A3C',
+    wingLine: '#4A3220',
     spot: '#E6D0A6',
-    tail: '#8E6646',
-    beak: '#3A302A',
-    beakDeep: '#1C1612',
-    leg: '#D9C09A',
-    legDeep: '#9C7E5A',
-    eye: '#1A110E',
+    tail: '#7E5A3C',
+    beak: '#4A3E36',
+    beakLow: '#3A302A',
+    leg: '#E2CCA4',
+    blush: '#E89A7A',
+    mouth: '#5E2A2A',
+    eyeLine: '#3A2A20',
     brass: '#D2A546',
     brassDeep: '#86621F',
     glass: '#FFF3B8',
-    glassOff: '#9DB3B8',
     strap: '#5A3A24',
     strapDeep: '#35210F',
     gem: '#6FC3E8',
     gemDeep: '#2C7FA6',
+    beam: '#FFF3B8',
   };
 
-  const SIL = [
-    [-120, -150, 0],
-    [-160, -210, 0],
-    [-168, -290, 0],
-    [-146, -350, 0.3],
-    [-112, -410, 0.8],
-    [-62, -462, 1],
-    [20, -492, 1],
-    [104, -482, 1],
-    [160, -450, 1],
-    [180, -392, 1],
-    [168, -338, 0.8],
-    [146, -300, 0.4],
-    [142, -240, 0],
-    [122, -180, 0],
-    [60, -140, 0],
-    [-40, -130, 0],
-  ];
-
-  const WING = {
-    fold: [[40, -320], [0, -330], [-70, -312], [-130, -270], [-160, -222], [-172, -192], [-150, -178], [-100, -172], [-30, -184], [20, -222], [48, -272]],
-    spread: [[40, -320], [30, -400], [-4, -490], [-60, -550], [-130, -570], [-190, -540], [-180, -490], [-146, -430], [-90, -380], [-30, -340], [44, -300]],
-    covert: [[40, -320], [0, -330], [-74, -312], [-60, -270], [0, -266], [46, -290]],
-    covertSpread: [[40, -320], [30, -400], [-4, -490], [-24, -440], [0, -380], [40, -326]],
-    wrist: [-50, -280],
-    wristSpread: [-40, -490],
-    tips: [3, 4, 5],
-    feather: 54,
-    trail: [7, 8, 9],
-    secLen: 22,
-  };
-
-  const LAMP = [118, -466];
-  const BEAK_TIP = [128, -362];
-
-  function markings(ctx, R, B) {
-    const T = R.Mb;
-    // the pale streaked chest
-    const chest = M.all(T, K.smooth([[60, -320], [130, -300], [146, -230], [120, -160], [40, -140], [20, -230]], 5));
-    K.fill(ctx, chest, C.chest);
-    for (let k = 0; k < 9; k++) {
-      const x = 44 + (k % 3) * 30 + (Math.floor(k / 3) % 2) * 14, y = -290 + Math.floor(k / 3) * 44;
-      K.line(ctx, M.all(T, [[x, y], [x - 2, y + 20]]), { width: 5, color: C.streak, seed: sd('streak', k), boil: B, taper: [3, 3] });
-    }
-    // pale mottling down the back
-    for (let k = 0; k < 7; k++) {
-      const x = -140 + (k % 3) * 24, y = -330 + k * 22;
-      K.fill(ctx, M.all(T, L.ellipsePts(x, y, 6, 4, 8)), C.spot, 0.9);
-    }
-  }
-
-  function barring(c2, R, B, T, t) {
-    // rows of pale spots across the wing (an owl's barred feathers)
-    for (let row = 0; row < 3; row++) {
-      for (let k = 0; k < 4; k++) {
-        const u = (k + 0.5 + row * 0.3) / 4.4;
-        const a = [lerp(20, -150, u), lerp(-300, -220, u) + row * 26];
-        const b = [lerp(20, -150, u) + 6, lerp(-500, -560, u) + row * 40];
-        const p = [lerp(a[0], b[0], t), lerp(a[1], b[1], t)];
-        K.fill(c2, M.all(T, L.ellipsePts(p[0], p[1], 9, 5, 8, 0.4)), C.spot, 0.9);
+  function disc(c2, R, B) {
+    const T = R.Mh;
+    // the facial disc: two rings joined, a dark rim round the outside, a pale V of brows
+    const ring = (s, r) => {
+      const out = [];
+      for (let i = 0; i <= 26; i++) {
+        const a = (i / 26) * Math.PI * 2;
+        out.push(R.hl(s * 68 + Math.cos(a) * r, 4 + Math.sin(a) * r * 1.02, 0.85));
       }
+      return M.all(T, out);
+    };
+    for (const s of [-1, 1]) K.fill(c2, ring(s, 104), C.rim);
+    for (const s of [-1, 1]) K.fill(c2, ring(s, 92), C.disc);
+    // fine radiating feathers round each eye
+    for (const s of [-1, 1])
+      for (let k = 0; k < 14; k++) {
+        const a = (k / 14) * Math.PI * 2;
+        const c = R.hl(s * 68, 4, 0.85);
+        K.line(c2, M.all(T, [[c[0] + Math.cos(a) * 58, c[1] + Math.sin(a) * 58], [c[0] + Math.cos(a) * 84, c[1] + Math.sin(a) * 86]]), { width: 2.4, color: '#CDB894', seed: sd('rad', s, k), boil: B, taper: [2, 2] });
+      }
+    // the brows: a pale V over the beak
+    for (const s of [-1, 1]) K.line(c2, M.all(T, K.curve([R.hl(s * 10, 20, 1), R.hl(s * 40, -66, 0.9), R.hl(s * 110, -92, 0.7)], 4)), { width: 14, color: '#F6ECD6', seed: sd('brow', s), boil: B, taper: [6, 8] });
+  }
+
+  function breast(c2, R, B) {
+    const T = R.Mb;
+    // dark chevrons in rows down the cream breast
+    for (let row = 0; row < 5; row++)
+      for (let i = -2; i <= 2; i++) {
+        const x = i * 44 + (row % 2) * 22, y = -290 + row * 44;
+        if (Math.abs(x) > 110 - row * 6) continue;
+        K.line(c2, M.all(T, [[x - 12, y - 6], [x, y + 6], [x + 12, y - 6]]), { width: 5, color: C.streak, seed: sd('chev', row, i), boil: B, smooth: false, taper: [2, 2] });
+      }
+  }
+
+  function wingSpots(c2, R, B, side) {
+    const T = R.Mb;
+    for (let k = 0; k < 7; k++) {
+      const p = K.mir([[118 + (k % 3) * 22, -290 + Math.floor(k / 3) * 46 + (k % 3) * 10]], side)[0];
+      K.fill(c2, M.all(T, L.ellipsePts(p[0], p[1], 8, 6, 10)), C.spot);
     }
   }
 
-  // the ear tufts: long feathers swept back, each ending in two points (the far one behind the head)
-  function tuft(ctx, R, B, near) {
-    const H = R.Mh;
-    const perk = R.pose.fx && R.pose.fx.perk ? 1 : 0;
-    const base = near ? [4, -482] : [80, -482];
-    const ang = (near ? -0.55 : -0.3) + 0.18 * perk;
-    const len = (near ? 92 : 80) * (1 + 0.1 * perk);
-    const T = M.chain(H, M.tr(base[0], base[1]), M.rot(ang));
-    const pts = M.all(T, K.smooth([[-24, 6], [-18, -len * 0.5], [-10, -len], [-2, -len * 0.78], [8, -len * 0.92], [12, -len * 0.5], [22, 6]], 4));
-    K.form(ctx, pts, { fill: K.far(C.fur, !near), deep: C.furDeep, width: near ? 6 : 5, seed: sd('tuft', near ? 1 : 0), boil: B, shade: 0.6, spacing: 6 });
-    K.line(ctx, M.all(T, [[0, -8], [-4, -len * 0.7]]), { width: 3, color: C.furDeep, seed: sd('tuftLine', near ? 1 : 0), boil: B, taper: [2, 6] });
-    K.line(ctx, M.all(T, [[-12, -len * 0.3], [-8, -len * 0.55]]), { width: 2.4, color: C.spot, seed: sd('tuftLit', near ? 1 : 0), boil: B, taper: [2, 4] });
-  }
-
-  // the three-quarter face: the pale disc with its dark rim and the far eye, before the beak
-  function faceFront(ctx, R, B) {
-    const H = R.Mh, pose = R.pose;
-    const disc = M.all(H, K.smooth([[40, -452], [104, -474], [168, -448], [178, -392], [160, -340], [104, -326], [44, -348], [26, -404]], 5));
-    K.fill(ctx, disc, C.disc);
-    K.line(ctx, M.all(H, K.curve([[92, -472], [44, -450], [24, -404], [40, -352], [96, -326]], 5)), { width: 7, color: C.rim, seed: sd('rim'), boil: B, taper: [6, 6] });
-    // feathery lines radiating from the eyes
-    for (let k = 0; k < 5; k++) {
-      const a = 2.2 + k * 0.45;
-      K.line(ctx, M.all(H, [[80 + Math.cos(a) * 34, -414 + Math.sin(a) * 38], [80 + Math.cos(a) * 52, -414 + Math.sin(a) * 58]]), { width: 2.4, color: C.legDeep, alpha: 0.8, seed: sd('ray', k), boil: B, taper: [2, 4] });
+  function lamp(ctx, R, B) {
+    const T = R.Mh;
+    const on = (R.pose.fx && R.pose.fx.lamp) || 0;
+    // a leather strap round the head above the disc
+    const strap = [];
+    for (let i = 0; i <= 10; i++) {
+      const x = -176 + (i / 10) * 352;
+      strap.push(R.hl(x, -108 + 26 * (x / 176) ** 2, 0.5));
     }
-    K.eye(ctx, H, 144, -416, { r: 19, style: 'iris', iris: '#F29A2E', lid: pose.eyeMode === 'happy' ? 0 : 0.14, lidColor: C.disc, mode: pose.eyeMode, open: pose.eye, look: pose.fx && pose.fx.look }, B, sd('eyeFar'));
-  }
-
-  function lamp(ctx, R, B, on) {
-    const H = R.Mh;
-    const strap = M.all(H, K.curve([[-70, -440], [0, -476], [70, -484], [128, -470]], 6));
-    // the strap lies on the head: clipped to the outline, so it never crosses a raised wing
-    K.clip(ctx, R.body, () => {
-      K.line(ctx, strap, { width: 16, color: P.ink, seed: sd('strap'), boil: B, taper: 0 });
-      K.line(ctx, strap, { width: 10, color: C.strap, seed: sd('strap'), boil: B, taper: 0 });
-    });
-    const body = M.all(H, L.rrectPts(LAMP[0] - 30, LAMP[1] - 22, 42, 40, 8, 6));
-    K.plate(ctx, body, { fill: C.brass, deep: C.brassDeep, width: 5, seed: sd('lamp'), boil: B });
-    const glass = M.all(H, L.ellipsePts(LAMP[0] + 14, LAMP[1] - 2, 12, 18, 16));
-    K.form(ctx, glass, { fill: on ? C.glass : C.glassOff, deep: C.brassDeep, width: 4.5, seed: sd('glass'), boil: B, shade: on ? 0 : 0.5, spacing: 4 });
+    K.band(ctx, M.all(T, strap), 22, { fill: C.strap, deep: C.strapDeep, seed: sd('strap'), boil: B, width: 4 });
+    const lc = R.hl(0, -116, 1);
     if (on) {
-      const g = M.ap(H, [LAMP[0] + 14, LAMP[1] - 2]);
-      K.fill(ctx, L.ellipsePts(g[0], g[1], 40, 40, 20), P.annYellow, 0.25);
+      const g = M.ap(T, lc);
+      const glow = ctx.createRadialGradient(g[0], g[1], 6, g[0], g[1], 120);
+      glow.addColorStop(0, L.rgba(C.glass, 0.7 * on));
+      glow.addColorStop(1, L.rgba(C.glass, 0));
+      ctx.save();
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(g[0], g[1], 120, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
+    F().form(ctx, M.all(T, L.rrectPts(lc[0] - 38, lc[1] - 32, 76, 62, 14, 6)), C.brass, B, sd('lamp'), { width: 6, off: 0.12, shine: 0.8, hatch: 0.5, dark: C.brassDeep });
+    const glass = M.all(T, L.ellipsePts(lc[0], lc[1], 24, 24, 20));
+    K.fill(ctx, glass, on ? C.glass : '#9DB3B8');
+    K.fill(ctx, M.all(T, L.ellipsePts(lc[0] - 8, lc[1] - 8, 8, 5, 10)), '#FFFFFF', 0.9);
+    L.inkPath(ctx, glass, { closed: true, width: 5, seed: sd('glass'), boil: B, wobble: 0.3 });
   }
 
-  function crystal(ctx, x, y, s, B) {
-    const pts = [[x, y - 34 * s], [x + 16 * s, y - 8 * s], [x + 8 * s, y + 8 * s], [x - 10 * s, y + 8 * s], [x - 16 * s, y - 10 * s]];
-    K.form(ctx, pts, { fill: C.gem, deep: C.gemDeep, width: 4, seed: sd('gem'), boil: B, shade: 0.6, spacing: 4, hatchW: 1.6, smooth: false });
-    K.line(ctx, [[x, y - 34 * s], [x - 2 * s, y + 8 * s]], { width: 2.4, color: '#E6F7FF', seed: sd('gemFacet'), boil: B, smooth: false, taper: 0 });
+  function crystal(ctx, c, s, B) {
+    const T = M.chain(M.tr(c[0], c[1]), M.sc(s, s));
+    const body = M.all(T, [[-22, 0], [-26, -40], [0, -70], [26, -40], [22, 0]]);
+    F().form(ctx, body, C.gem, B, sd('gem'), { width: 4.5, off: 0.1, shine: 1, hatch: 0.3, dark: C.gemDeep, smooth: false });
+    K.line(ctx, M.all(T, [[0, -70], [0, 0]]), { width: 2.6, color: C.gemDeep, seed: sd('gf'), boil: B, smooth: false, taper: 0 });
+    K.line(ctx, M.all(T, [[-26, -40], [26, -40]]), { width: 2.6, color: '#BFE8F8', seed: sd('gf2'), boil: B, smooth: false, taper: 0 });
   }
 
-  // the beam from the lamp to a spot on the ground
-  function beam(ctx, R, B, u) {
-    const g = M.ap(R.Mh, [LAMP[0] + 14, LAMP[1] - 2]);
-    const x = K.CX + lerp(180, 420, u), y = K.GROUND - 8;
-    const w = 70;
-    const cone = [[g[0], g[1] - 12], [x + w, y], [x - w, y], [g[0], g[1] + 12]];
-    K.fill(ctx, cone, P.annYellow, 0.28);
-    K.fill(ctx, L.ellipsePts(x, y, w, 16, 24), P.annYellow, 0.4);
-    L.inkPath(ctx, [cone[0], cone[1]], { width: 3, alpha: 0.35, seed: sd('beamA'), boil: B, smooth: false, taper: [2, 2] });
-    L.inkPath(ctx, [cone[3], cone[2]], { width: 3, alpha: 0.35, seed: sd('beamB'), boil: B, smooth: false, taper: [2, 2] });
-    return [x, y];
+  function beam(ctx, R, B) {
+    const fx = R.pose.fx || {};
+    if (!fx.beam) return;
+    const src = R.hp(0, -116, 1);
+    const tx = K.CXF + fx.beam * 280, ty = K.GROUND - 10;
+    const w = 110;
+    const cone = [[src[0] - 20, src[1]], [src[0] + 20, src[1]], [tx + w, ty], [tx - w, ty]];
+    K.fill(ctx, cone, C.beam, 0.28);
+    K.fill(ctx, L.ellipsePts(tx, ty, w, 26, 24), C.beam, 0.45);
   }
 
-  const SPOT = 0.86;
   const WORK = [
-    { head: -0.08, fx: { look: [0.3, 0], lamp: 0 } },
-    { head: 0.18, fx: { look: [0.3, 0.3], lamp: 1, beam: 0.1 } },
-    { head: 0.24, fx: { look: [0.35, 0.35], lamp: 1, beam: 0.35, sway: 0.6 } },
-    { head: 0.3, fx: { look: [0.4, 0.4], lamp: 1, beam: 0.6, sway: -0.4 } },
-    { head: 0.32, fx: { look: [0.4, 0.45], lamp: 1, beam: SPOT, gem: 0.6 } },
-    { head: 0.1, sq: 1.05, beak: 0.5, fx: { look: [0.3, 0.3], lamp: 1, beam: SPOT, gem: 1, star: 1, perk: 1 } },
-    { head: 0.05, sq: 1.04, wing: 0.25, wingF: 0.25, eyeMode: 'happy', fx: { lamp: 1, beam: SPOT, gem: 1, star: 0.7, perk: 1 } },
-    { head: 0.1, fx: { look: [0.3, 0.3], lamp: 1, beam: SPOT, gem: 1 } },
+    { look: [0, -0.8], ear: 0.6, fx: { lamp: 0, click: 1 } },
+    { look: [0, 0.8], nod: 0.3, fx: { lamp: 1, beam: 0.01 } },
+    { turn: -0.5, look: [-0.8, 0.8], nod: 0.3, fx: { lamp: 1, beam: -0.9 } },
+    { turn: 0.5, look: [0.8, 0.8], nod: 0.3, fx: { lamp: 1, beam: 0.9, gem: 1, glint: 1 } },
+    { turn: 0.5, look: [0.8, 0.8], lid: 0, ear: 1, sq: 1.05, fx: { lamp: 1, beam: 0.9, gem: 1, glint: 1.4 } },
+    { x: 90, y: -50, wing: 0.5, turn: 0.3, look: [0.5, 0.7], fx: { lamp: 1, gem: 1 } },
+    { x: 60, hold: 1, eye: 'happy', mouth: 0.4, fx: { lamp: 1, held: 1, glint: 1 } },
+    { x: 20, fx: { lamp: 0.3 } },
   ];
 
-  K.kits.bird.make({
+  K.kits.front.make({
     id: ID,
     colors: C,
-    stripe: P.stripeApricot,
-    sil: SIL,
-    neck: [20, -340],
-    headScale: 1.12,
-    bodyC: [-10, -290],
-    bodyR: 200,
-    gait: 'waddle',
-    stride: 30,
-    feet: { n: 40, f: 10 },
-    wing: WING,
-    tailFan: { base: [-150, -178], angle: Math.PI + 0.6, spread: 0.42, n: 5, len: 76, width: 19, taper: 0.1, band: C.spot, fill: () => C.tail },
-    sit: 44,
-    sleepLow: 16,
-    leg: { hipN: [40, -140], hipF: [10, -144], l1: 26, l2: 40, r: 15, toe: 30, thighR: 1.5, thigh: C.leg, claw: '#2A2320' },
-    tufts: false,
-    fur: true,
-    shadowW: 190,
-    beak: { hinge: [114, -398], tip: BEAK_TIP, upper: [[102, -404], [126, -408], [138, -386], [130, -360], [118, -374], [104, -388]], lower: [[106, -384], [124, -382], [122, -368], [110, -372]] },
-    face: { eye: { x: 80, y: -414, r: 26, style: 'iris', iris: '#F29A2E', lid: 0.14, lidColor: C.disc } },
+    stripe: P.stripeSage,
+    plan: 'bird',
+    bodyC: [0, -200],
+    bodyR: 260,
+    body: { half: [[0, -370], [124, -360], [184, -300], [204, -196], [192, -104], [146, -46], [72, -26], [0, -22]] },
+    belly: { half: [[0, -330], [80, -322], [124, -270], [134, -180], [116, -100], [62, -56], [0, -48]] },
+    wings: {
+      fold: [[118, -340], [176, -330], [210, -250], [212, -150], [182, -80], [148, -110], [124, -230]],
+      hold: [[118, -340], [180, -326], [214, -260], [196, -196], [132, -186], [118, -226], [114, -280]],
+      spread: [[118, -340], [210, -400], [310, -440], [362, -390], [350, -320], [260, -290], [150, -270]],
+      root: [124, -300],
+      holdRoot: [166, -300],
+      tip: 4,
+      n: 7,
+      feather: 110,
+      fw: 20,
+      rows: [[[130, -310], [168, -300], [196, -276]]],
+      rowsSpread: [[[166, -360], [246, -392], [320, -410]]],
+    },
+    feet: { at: [60, -40], r: 16, toe: 34, claw: '#2A2220' },
+    fan: { base: [0, -100], n: 5, spread: 1.0, len: 130, width: 24 },
+    head: { c: [0, -484], rx: 186, ry: 152 },
+    ears: {
+      at: [128, -118],
+      pts: [[-24, 24], [-22, -40], [-18, -96], [-10, -126], [-2, -104], [8, -140], [14, -104], [24, -40], [26, 20]],
+      fill: C.fur,
+      tilt: 0.5,
+      flop: 0.5,
+    },
+    beak: { y: 40, w: 20, h: 38, down: 10 },
+    face: {
+      eyes: { x: 68, y: 4, rx: 46, ry: 48, white: '#FFF4DC', iris: '#F08A24', irisR: 0.9 },
+      blush: [138, 70, 20],
+    },
+    fur: false,
+    shadowW: 240,
+    attack: 'peck',
     hooks: {
-      behind(ctx, R, B) {
-        tuft(ctx, R, B, false);
-      },
-      body: markings,
-      wingInside: barring,
-      front: faceFront,
-      head(ctx, R, B) {
-        tuft(ctx, R, B, true);
-        lamp(ctx, R, B, !!(R.pose.fx && R.pose.fx.lamp));
+      skin: disc,
+      body: breast,
+      wing: wingSpots,
+      head: lamp,
+      ear(c2, R, B, side, T) {
+        // feather lines up each tuft, dark down the middle
+        K.line(c2, M.all(T, [[0, 16], [side * 2, -80], [side * 6, -118]]), { width: 7, color: C.furDeep, seed: sd('et', side), boil: B, taper: [3, 6] });
+        for (const k of [-1, 1]) K.line(c2, M.all(T, [[k * 12, 10], [k * 12 + side * 2, -60]]), { width: 2.6, color: C.furLit, seed: sd('el', side, k), boil: B, taper: [2, 5] });
       },
       fx(ctx, R, B) {
-        const fx = R.pose.fx;
-        if (!fx) return;
-        if (fx.beam) {
-          const at = beam(ctx, R, B, fx.beam);
-          if (fx.gem) crystal(ctx, at[0], at[1] - 4, fx.gem * 1.4, B);
-          if (fx.star) {
-            K.fx.star(ctx, at[0] + 34, at[1] - 50, 30 * fx.star, B, sd('s1'), '#FFF1C4');
-            K.fx.star(ctx, at[0] - 30, at[1] - 30, 20 * fx.star, B, sd('s2'), '#E6F7FF');
+        const fx = R.pose.fx || {};
+        beam(ctx, R, B);
+        const gp = [K.CXF + 250, K.GROUND - 4];
+        if (fx.gem) crystal(ctx, gp, 1, B);
+        if (fx.glint && fx.gem) K.fx.star(ctx, gp[0] + 36, gp[1] - 90, 34 * fx.glint, B, sd('gg'), '#FFF1C4');
+        if (fx.held) {
+          const a = R.wingTip ? R.wingTip[-1] : M.ap(R.Mb, [-120, -190]);
+          const b = R.wingTip ? R.wingTip[1] : M.ap(R.Mb, [120, -190]);
+          const c = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 10];
+          crystal(ctx, c, 1.2, B);
+          if (fx.glint) K.fx.star(ctx, c[0] + 44, c[1] - 90, 34, B, sd('hg'), '#FFF1C4');
+        }
+        if (fx.click) {
+          const l = R.hp(0, -116, 1);
+          for (let k = 0; k < 3; k++) {
+            const a = -Math.PI / 2 + (k - 1) * 0.6;
+            K.line(ctx, [[l[0] + Math.cos(a) * 50, l[1] + Math.sin(a) * 50], [l[0] + Math.cos(a) * 74, l[1] + Math.sin(a) * 74]], { width: 5, seed: sd('clk', k), boil: B, smooth: false, taper: [2, 4] });
           }
         }
       },
     },
     poses: {
-      idle(d, n, P0) {
-        // an owl's slow head turn instead of the pigeon's glance
-        const p = P0.idle(d, n);
-        return Object.assign(p, { hx: 0, fx: { look: [0.15 + 0.25 * Math.sin((Math.PI * 2 * d) / n), 0], sway: Math.sin((Math.PI * 2 * d) / n) * 0.4 } });
-      },
-      walk(d, n, P0) {
-        return Object.assign(P0.walk(d, n), { fx: { sway: Math.sin((Math.PI * 2 * d) / n) } });
-      },
-      work(d, n, P0) {
-        return Object.assign({ feet: P0.idle(0, 12).feet }, WORK[d]);
+      work(d) {
+        const T = WORK[d];
+        return { x: T.x || 0, y: T.y || 0, sq: T.sq || 1, turn: T.turn || 0, look: T.look || null, nod: T.nod || 0, lid: T.lid == null ? null : T.lid, ear: T.ear || 0, wing: T.wing || 0, hold: !!T.hold, eyeMode: T.eye || 'open', mouth: T.mouth || 0, fx: T.fx };
       },
     },
   });

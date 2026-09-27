@@ -1,7 +1,8 @@
-// pets/10-mole.js : Крот-подкопщик (common, loot). Biped kit (art bible 10).
-// A dented yellow miner's helmet with a brass lamp, a belt with a buckle and a side pouch; the
-// spade forepaws are the character. Work: lying low over a heap, two scoops a loop, clods flung
-// over the back.
+// pets/10-mole.js : Крот-забойщик (common, loot). Front kit, stands.
+// Velvet charcoal fur, a big pink snout, small shiny eyes under the brim of a dented yellow miner's
+// helmet with a brass lamp, huge pink spade paws with white claws, a leather belt with a brass
+// buckle and a pouch, a patch on the belly fur where the belt rubs. Work: the lamp comes on, he
+// digs in front of himself — the heap grows, clods fly both ways — and pops up with a chunk of ore.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -9,150 +10,188 @@
   const P = L.pal;
   const K = FILM.pets;
   const M = K.M;
-  const TAU = Math.PI * 2;
+  const F = () => K.front;
   const ID = 'mole';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
 
   const C = {
-    fur: '#6B615B',
-    furDeep: '#433A36',
-    furLit: '#8C8078',
-    chest: '#7E736C',
-    skin: '#EDA898',
-    skinDeep: '#C27466',
-    claw: '#F3E7D1',
-    clawDeep: '#B9A688',
-    helmet: '#E8B53D',
-    helmetDeep: '#AE7B25',
-    helmetLit: '#FAE3A0',
-    brass: '#C39A55',
+    fur: '#6E6560',
+    furDeep: '#3F3733',
+    furLit: '#968A82',
+    belly: '#857A73',
+    muzzle: '#9A8C86',
+    skin: '#EFA2A0',
+    nose: '#E8888C',
+    paw: '#EFA8A4',
+    pad: '#D98282',
+    foot: '#EFA8A4',
+    leg: '#6E6560',
+    arm: '#6E6560',
+    claw: '#F6EEDC',
+    blush: '#E48A8E',
+    mouth: '#7A2C2C',
+    tongue: '#F29A96',
+    helmet: '#EDB83C',
+    helmetDeep: '#B07A22',
+    helmetLit: '#FFE9A6',
+    brass: '#C9A05A',
     brassDeep: '#7E5E2E',
     glass: '#FFF6D2',
     leather: '#8C5A33',
     leatherDeep: '#5A361D',
-    eye: '#1A110E',
     dirt: '#8B6848',
     dirtDeep: '#5B4330',
+    ore: '#6FC0D8',
+    oreDeep: '#2F7F9E',
   };
 
-  // the silhouette [x, y, head weight]
-  const SIL = [
-    [-20, -22, 0],
-    [-110, -32, 0],
-    [-176, -88, 0],
-    [-204, -186, 0],
-    [-206, -290, 0],
-    [-184, -382, 0.25],
-    [-140, -450, 0.65],
-    [-55, -494, 1],
-    [40, -506, 1],
-    [128, -484, 1],
-    [192, -440, 1],
-    [236, -402, 1],
-    [298, -382, 1],
-    [346, -370, 1],
-    [364, -352, 1],
-    [334, -334, 1],
-    [272, -326, 1],
-    [218, -312, 0.85],
-    [202, -268, 0.3],
-    [206, -200, 0],
-    [193, -120, 0],
-    [152, -56, 0],
-    [80, -27, 0],
-  ];
-
-  function helmet(ctx, R, B) {
-    const Hm = M.mul(R.Mh, M.about(R.pose.hat, 40, -470));
-    K.helmet(ctx, Hm, { cx: 32, cy: -470, rx: 160, ry: 118, col: { hat: C.helmet, hatDeep: C.helmetDeep, hatLit: C.helmetLit, brass: C.brass, brassDeep: C.brassDeep, glass: C.glass }, lamp: R.pose.lamp, seed: sd('helmet'), boil: B });
-  }
+  const helmetCol = { hat: C.helmet, hatDeep: C.helmetDeep, hatLit: C.helmetLit, brass: C.brass, brassDeep: C.brassDeep, glass: C.glass };
 
   function belt(ctx, R, B, bodyPts) {
-    const top = (x) => -186 + 16 * (1 - (x / 230) ** 2);
+    const y0 = -196;
     const line = [];
-    for (let x = -250; x <= 250; x += 20) line.push([x, top(x) + 19]);
-    K.band(ctx, M.all(R.Mb, line), 38 * R.pose.sq, { fill: C.leather, deep: C.leatherDeep, stitch: C.leatherDeep, seed: sd('belt'), boil: B, clip: bodyPts, width: 5 });
-    const bx = 158, by = top(158) - 5;
-    const outer = M.all(R.Mb, L.rrectPts(bx - 20, by, 40, 48, 8, 6));
-    const inner = M.all(R.Mb, L.rrectPts(bx - 9, by + 11, 18, 26, 4, 5));
-    K.plate(ctx, outer, { seed: sd('buckle'), boil: B });
-    K.fill(ctx, inner, C.leatherDeep);
-    L.inkPath(ctx, inner, { closed: true, width: 3, seed: sd('buckle2'), boil: B, wobble: 0.3 });
+    for (let x = -200; x <= 200; x += 20) line.push([x, y0 + 14 * (1 - (x / 190) ** 2)]);
+    K.clip(ctx, bodyPts, () => {
+      K.band(ctx, M.all(R.Mb, line), 40, { fill: C.leather, deep: C.leatherDeep, seed: sd('belt'), boil: B, width: 5 });
+      // stitching along both edges
+      for (const s of [-1, 1])
+        for (let i = 0; i + 1 < line.length; i++) {
+          const [x, y] = line[i];
+          K.line(ctx, M.all(R.Mb, [[x + 4, y + s * 13], [x + 12, y + s * 13 + 1]]), { width: 2.4, color: '#C99A6A', alpha: 0.85, seed: sd('stitch', s, i), boil: B, taper: 0, smooth: false });
+        }
+    });
+    const buckle = M.all(R.Mb, L.rrectPts(-30, y0 - 12, 60, 50, 9, 6));
+    F().form(ctx, buckle, C.brass, B, sd('buckle'), { width: 5, off: 0.12, shine: 0.9, hatch: 0.4 });
+    K.fill(ctx, M.all(R.Mb, L.rrectPts(-15, y0 + 1, 30, 24, 4, 5)), C.leatherDeep);
+    L.inkPath(ctx, M.all(R.Mb, L.rrectPts(-15, y0 + 1, 30, 24, 4, 5)), { closed: true, width: 3, seed: sd('buckle2'), boil: B, wobble: 0.3 });
+    K.line(ctx, M.all(R.Mb, [[0, y0 + 2], [0, y0 + 26]]), { width: 5, color: C.brassDeep, seed: sd('prong'), boil: B, taper: 0 });
+    // the pouch on his right hip, with a flap and a stud
+    const pouch = M.all(R.Mb, L.rrectPts(100, y0 + 4, 74, 70, 14, 6));
+    F().form(ctx, pouch, C.leather, B, sd('pouch'), { width: 6, off: 0.12, hatch: 0.6 });
+    const flap = M.all(R.Mb, K.smooth([[98, y0 + 2], [176, y0 + 2], [172, y0 + 34], [137, y0 + 44], [102, y0 + 34]], 4));
+    F().form(ctx, flap, C.leatherDeep, B, sd('flap'), { width: 5, off: 0.1, hatch: 0.3, rim: false });
+    F().form(ctx, M.all(R.Mb, L.ellipsePts(137, y0 + 36, 8, 8, 12)), C.brass, B, sd('stud'), { width: 3, shine: 1, hatch: 0 });
   }
 
-  function pouch(ctx, R, B) {
+  function patch(ctx, R, B) {
+    // a sewn-on patch of paler cloth over a hole in the fur, big stitches
     const T = R.Mb;
-    const bag = M.all(T, K.smooth([[-196, -176], [-104, -180], [-98, -118], [-120, -92], [-178, -92], [-200, -120]], 5));
-    K.form(ctx, bag, { fill: C.leather, deep: C.leatherDeep, width: 6, seed: sd('pouch'), boil: B, shade: 0.9, spacing: 7, hatchW: 2.4, hatchAlpha: 0.7 });
-    const flap = M.all(T, K.smooth([[-200, -180], [-100, -184], [-104, -150], [-150, -136], [-196, -150]], 5));
-    K.form(ctx, flap, { fill: C.leatherDeep, deep: P.ink, width: 5.5, seed: sd('flap'), boil: B, shade: 0.5, spacing: 7, hatchW: 2.2, hatchAlpha: 0.6 });
-    K.plate(ctx, M.all(T, L.ellipsePts(-150, -143, 8, 8, 16)), { width: 3, seed: sd('btn'), boil: B, shade: 0 });
+    const pts = M.all(T, L.rrectPts(-120, -128, 56, 50, 6, 4));
+    K.fill(ctx, pts, '#B8A07E');
+    L.hatch(ctx, pts, { angle: 0.7, spacing: 6, width: 1.6, color: '#8C7556', alpha: 0.7, density: 0.6, clip: true, seed: sd('weave'), boil: B });
+    L.inkPath(ctx, pts, { closed: true, width: 3.4, seed: sd('patch'), boil: B, wobble: 0.5 });
+    for (let k = 0; k < 5; k++) {
+      const x = -118 + k * 13;
+      K.line(ctx, M.all(T, [[x, -134], [x + 3, -122]]), { width: 3, seed: sd('ps', k), boil: B, smooth: false, taper: 0 });
+    }
   }
 
-  K.kits.biped.make({
+  function ore(ctx, c, s, B, seed) {
+    const pts = [[c[0], c[1] - 40 * s], [c[0] + 34 * s, c[1] - 12 * s], [c[0] + 26 * s, c[1] + 26 * s], [c[0] - 22 * s, c[1] + 30 * s], [c[0] - 36 * s, c[1] - 6 * s]];
+    F().form(ctx, pts, '#8A8078', B, seed, { width: 5, off: 0.12, hatch: 0.6, smooth: false });
+    for (const [x, y, r] of [[-8, -10, 12], [14, 8, 9], [-16, 14, 7]]) {
+      const g = [[c[0] + x * s, c[1] + (y - r) * s], [c[0] + (x + r) * s, c[1] + y * s], [c[0] + x * s, c[1] + (y + r) * s], [c[0] + (x - r) * s, c[1] + y * s]];
+      K.fill(ctx, g, C.ore);
+      K.fill(ctx, [g[0], g[1], [c[0] + x * s, c[1] + y * s]], '#D8F4FF', 0.8);
+      L.inkPath(ctx, g, { closed: true, width: 2.4, seed: seed + x, boil: B, smooth: false, taper: 0 });
+    }
+  }
+
+  function heap(ctx, h, B) {
+    if (h <= 0) return;
+    const g = K.GROUND, cx = K.CXF;
+    const pts = K.smooth([[cx - 190 * h, g + 6], [cx - 120 * h, g - 50 * h], [cx - 20, g - 80 * h], [cx + 110 * h, g - 56 * h], [cx + 200 * h, g + 6]], 5);
+    F().form(ctx, pts, C.dirt, B, sd('heap'), { width: 7, off: 0.1, hatch: 0.8 });
+    L.stipple(ctx, pts, { spacing: 12, r: [1.6, 3.2], color: C.dirtDeep, alpha: 0.8, seed: sd('heapS'), boil: B });
+  }
+
+  function clods(ctx, side, age, B) {
+    if (age < 0 || age > 2) return;
+    for (let k = 0; k < 4; k++) {
+      const t = age + 0.5 + k * 0.12;
+      const x = K.CXF + side * (60 + 150 * t + k * 18), y = K.GROUND - 60 - 260 * t + 150 * t * t - k * 12;
+      if (y > K.GROUND) continue;
+      const r = 12 + 6 * L.h3(k, side, 3);
+      F().form(ctx, L.ellipsePts(x, y, r, r * 0.8, 10, k + t), C.dirt, B, sd('clod', side, k), { width: 4, off: 0.1, hatch: 0.5, rim: false });
+    }
+  }
+
+  // the dig, facing us: the lamp on, paws taking turns, the heap growing, clods both ways, the ore
+  const WORK = [
+    { sq: 0.9, arm: { l: 1.2, r: 1.2 }, lamp: 1, heap: 0.3, low: 10 },
+    { sq: 0.92, arm: { l: 1.0, r: -0.55 }, lamp: 1, heap: 0.5, clods: [1, 0] },
+    { sq: 0.9, arm: { l: -0.55, r: 1.0 }, lamp: 1, heap: 0.65, clods: [-1, 0], turn: -0.15 },
+    { sq: 0.92, arm: { l: 1.0, r: -0.55 }, lamp: 1, heap: 0.8, clods: [1, 0], turn: 0.15 },
+    { sq: 0.9, arm: { l: -0.55, r: 1.0 }, lamp: 1, heap: 0.9, clods: [-1, 0] },
+    { sq: 1.08, y: -70, arm: { l: -1.0, r: -1.0 }, lamp: 1, heap: 0.9, ore: 'chest', eye: 'happy', mouth: 0.7 },
+    { sq: 1.02, y: -20, arm: { l: -0.98, r: -0.98 }, lamp: 1, heap: 0.9, ore: 'chest', eye: 'happy', mouth: 0.6, star: 1 },
+    { sq: 1, arm: { l: -0.95, r: -0.95 }, lamp: 1, heap: 0.9, ore: 'chest' },
+  ];
+
+  K.kits.front.make({
     id: ID,
     colors: C,
-    stripe: P.stripeSage,
-    sil: SIL,
-    neck: [110, -400],
-    bodyC: [0, -270],
-    legh: 46,
-    shoulders: { n: [122, -285], f: [92, -305] },
-    hips: { n: [40, -62], f: [-40, -66] },
-    arm: {
-      len: 46,
-      r: 28,
-      paw: 'spade',
-      pawScale: 1.28,
-      rest: { n: { a1: 0.78, a2: 0.12 }, f: { a1: 0.56, a2: 0.02 } },
-      up: { n: { a1: -0.55, a2: -0.95 }, f: { a1: -1.9, a2: -2.1 } },
+    stripe: P.stripeApricot,
+    plan: 'stand',
+    bodyC: [0, -210],
+    bodyR: 260,
+    body: {
+      half: [[0, -348], [96, -338], [158, -296], [190, -226], [196, -146], [176, -80], [128, -44], [60, -34], [0, -32]],
     },
-    leg: { r: 29 },
-    foot: { len: 48, rest: { n: { x: 52 }, f: { x: -38 } } },
-    tail: { base: [-186, -74], len: 80, lift: 0.25, curl: 0.35, rise: 6, w0: 26, w1: 9 },
-    chest: [150, -210, 70, 120, -0.15],
+    belly: [0, -150, 118, 118],
+    legs: { hip: [70, -58], r: 30, foot: [50, 30], splay: 10 },
+    arms: [{ at: [150, -282], len: 132, r: 30, pr: 58, rest: 0.42, claws: 30 }],
+    head: { c: [0, -470], rx: 186, ry: 168, tufts: [[0.55, 0.62, 14], [0.88, 0.95, 14]] },
     face: {
-      eye: { x: 206, y: -414, r: 17 },
-      nose: { x: 360, y: -356, rx: 25, ry: 19 },
-      mouth: [[322, -334], [300, -326], [278, -324]],
-      whiskers: [326, -346, 92],
-      blush: [236, -368],
+      eyes: { x: 66, y: -14, rx: 27, ry: 30, beadLit: '#5A4A56' },
+      muzzle: [0, 52, 88, 60],
+      nose: { y: 34, w: 40, h: 32 },
+      mouth: { y: 82, w: 24, drop: 12, h: 30, style: 'cat' },
+      whiskers: { x: 58, y: 46, len: 64 },
+      blush: [112, 36, 28],
     },
+    shadowW: 250,
     hooks: {
+      body: patch,
       bodyAfter: belt,
-      front: pouch,
-      head: helmet,
+      head(ctx, R, B) {
+        F().helmet(ctx, R, B, { cy: -78, rx: 178, ry: 118, col: helmetCol, lamp: R.pose.fx && R.pose.fx.lamp ? 1 : null, tilt: 0.05 }, sd('helmet'));
+      },
+      hand(ctx, R, B, side, end) {
+        const fx = R.pose.fx;
+        if (!fx || !fx.ore || side < 0) return;
+        const l = K.front.armEnd(R, R.S.arms[0], -1).end;
+        const c = [(end[0] + l[0]) / 2, (end[1] + l[1]) / 2 - 36];
+        ore(ctx, c, 1.3, B, sd('ore'));
+      },
       fx(ctx, R, B) {
         const fx = R.pose.fx;
-        if (!fx || fx.kind !== 'dig') return;
-        const H0 = M.ap(R.Mr, [330, 0]);
-        K.fx.heap(ctx, H0[0], B, sd('heap'), C);
-        K.fx.clods(ctx, [H0[0] - 70, K.GROUND - 50], fx.d, fx.n, [2, 6], B, sd('clod'), C);
+        if (!fx) return;
+        heap(ctx, fx.heap || 0, B);
+        if (fx.clods) clods(ctx, fx.clods[0], 0, B);
+        if (fx.star) {
+          const t = R.hp(0, -300, 0);
+          K.fx.star(ctx, t[0] - 110, t[1] + 10, 34, B, sd('s1'), '#FFF1C4');
+          K.fx.star(ctx, t[0] + 120, t[1] + 40, 24, B, sd('s2'), '#FFF1C4');
+        }
       },
     },
     poses: {
-      // lying low over the heap, two scoops per loop: near paw on drawings 0-3, far paw on 4-7
-      work(d, n) {
-        const S = [
-          { a1: -0.25, a2: 0.25 },
-          { a1: 0.55, a2: 1.0 },
-          { a1: 1.3, a2: 1.75 },
-          { a1: 2.0, a2: 2.5 },
-        ];
-        const rest = { a1: 1.0, a2: 1.3 };
+      idle(d, n, P0) {
+        return Object.assign(P0.idle(d, n), { fx: {} });
+      },
+      work(d) {
+        const T = WORK[d];
         return {
-          x: -170,
-          y: d % 2 ? -5 : 0,
-          lean: 0.52 + 0.04 * Math.cos((TAU * d) / 4),
-          sq: 0.94,
-          legh: 34,
-          head: 0.04,
-          armN: d < 4 ? S[d] : rest,
-          armF: d >= 4 ? S[d - 4] : rest,
-          footN: { x: 70, lift: 0, ang: 0 },
-          footF: { x: -60, lift: 0, ang: 0 },
-          tail: 0.35 * Math.sin((TAU * d) / 4),
-          fx: { kind: 'dig', d, n },
+          sq: T.sq || 1,
+          y: T.y || 0,
+          low: T.low || 0,
+          turn: T.turn || 0,
+          arm: T.arm,
+          eyeMode: T.eye || 'open',
+          mouth: T.mouth || 0,
+          head: T.ore ? -0.04 : 0.04,
+          fx: { lamp: T.lamp, heap: T.heap, clods: T.clods, ore: T.ore, star: T.star },
         };
       },
     },

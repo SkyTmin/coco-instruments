@@ -1,8 +1,9 @@
-// pets/30-pigeon.js : Голубь-почтальон (common, luck). Bird kit, struts.
-// A plump blue-grey city pigeon with the green-and-violet sheen on its neck, two dark bars on the
-// wing, an orange eye and a white cere. A leather flying cap with goggles, a satchel on a strap,
-// a rolled note tied to its leg. Work: pulls the note off its leg, unrolls it, is amazed — the
-// luck of the camp, a "!" over its head.
+// pets/30-pigeon.js : Голубь-почтальон (common, luck). Front kit, a bird standing square to us.
+// A plump blue-grey city pigeon: a round head, orange eyes, a small dark beak with a white cere, a
+// shimmering green-and-violet collar, a pale grey breast, two dark bars on each folded wing, pink
+// feet. An old leather flying cap with ear flaps and goggles, a satchel on a strap with a letter
+// sticking out, a rolled note tied to one leg. Work: the note pops off his leg, he unrolls it —
+// "!" — a four-leaf clover jumps out of it: the luck of the camp.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -11,178 +12,242 @@
   const K = FILM.pets;
   const M = K.M;
   const lerp = L.lerp;
+  const F = () => K.front;
   const ID = 'pigeon';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
 
   const C = {
-    fur: '#8E97A6',
-    furDeep: '#586072',
-    furLit: '#BAC1CD',
-    chest: '#A0A8B6',
-    wing: '#9CA4B2',
-    wingDeep: '#566074',
-    covert: '#B6BDC9',
-    tail: '#747C8C',
-    sheenG: '#5F8E6B',
-    sheenV: '#7D5E8E',
-    beak: '#3A3434',
-    beakDeep: '#1E1A1A',
+    fur: '#8E9AAE',
+    furDeep: '#58627A',
+    furLit: '#B8C2D2',
+    belly: '#B4BDCC',
+    wing: '#7F8BA2',
+    secondary: '#6A7690',
+    primary: '#4E566A',
+    tail: '#6E7890',
+    wingLine: '#4A5266',
+    bar: '#3E4458',
+    green: '#4E9A7A',
+    violet: '#8A5A9A',
+    leg: '#E07A80',
+    beak: '#4A4448',
+    beakLow: '#3A3438',
     cere: '#F2EEE6',
-    eye: '#1A110E',
-    leg: '#D8675E',
-    legDeep: '#9C3F38',
-    leather: '#7B4E2F',
-    leatherDeep: '#4A2C18',
-    paper: '#F4ECD8',
-    paperDeep: '#B9AB88',
+    blush: '#E88A9A',
+    mouth: '#5E2A2A',
+    leather: '#7A5234',
+    leatherDeep: '#4A3020',
+    leatherLit: '#9A7050',
+    satchel: '#8A6040',
+    paper: '#F6EEDA',
+    paperDeep: '#C8BA98',
+    clover: '#5AAA4A',
+    cloverDeep: '#2E6A2A',
   };
 
-  const SIL = [
-    [-150, -150, 0],
-    [-172, -178, 0],
-    [-132, -232, 0],
-    [-60, -272, 0],
-    [16, -302, 0.2],
-    [40, -350, 0.7],
-    [60, -400, 1],
-    [100, -432, 1],
-    [150, -430, 1],
-    [180, -406, 1],
-    [184, -382, 1],
-    [162, -360, 1],
-    [132, -340, 0.6],
-    [124, -290, 0.2],
-    [120, -220, 0],
-    [84, -150, 0],
-    [0, -116, 0],
-    [-80, -122, 0],
-  ];
-
-  const WING = {
-    fold: [[40, -300], [0, -298], [-80, -272], [-140, -236], [-180, -210], [-196, -196], [-170, -184], [-120, -178], [-40, -190], [20, -220], [50, -262]],
-    spread: [[40, -300], [26, -380], [-16, -470], [-80, -524], [-150, -536], [-204, -512], [-186, -470], [-146, -418], [-86, -360], [-20, -314], [44, -282]],
-    covert: [[40, -300], [0, -298], [-84, -272], [-70, -236], [-4, -236], [44, -262]],
-    covertSpread: [[40, -300], [26, -380], [-16, -470], [-40, -420], [-12, -356], [34, -300]],
-    wrist: [-60, -262],
-    wristSpread: [-50, -470],
-    tips: [3, 4, 5],
-    feather: 62,
-    trail: [7, 8, 9],
-    secLen: 22,
-    scallops: [[-150, -214], [-110, -200], [-70, -196], [-30, -206]],
-    scallopsSpread: [[-150, -470], [-110, -420], [-70, -372], [-30, -330]],
-  };
-
-  function sheen(ctx, R) {
-    const H = R.Mh;
-    K.fill(ctx, M.all(R.Mb, K.smooth([[20, -300], [60, -350], [130, -350], [130, -300], [110, -272], [40, -280]], 5)), C.sheenG);
-    K.fill(ctx, M.all(H, K.smooth([[50, -360], [70, -392], [110, -380], [134, -350], [110, -334], [70, -336]], 5)), C.sheenV);
+  function collar(c2, R, B) {
+    const T = R.Mb;
+    // the shimmering neck: green shading into violet
+    // the lower edge in little scallops, like the tips of neck feathers
+    const low = [];
+    const n = 8;
+    for (let i = 0; i < n; i++) {
+      const x0 = 168 - (i / n) * 336, x1 = 168 - ((i + 1) / n) * 336;
+      for (let k = 0; k < 5; k++) {
+        const u = k / 5, x = lerp(x0, x1, u);
+        low.push([x, -300 + 16 * (1 - (x / 170) ** 2) + 16 * Math.sin(Math.PI * u)]);
+      }
+    }
+    const band = M.all(T, K.smooth([[-176, -372], [0, -394], [176, -372], ...low], 3));
+    K.fill(c2, band, C.green);
+    K.clip(c2, band, () => {
+      for (const s of [-1, 1]) K.fill(c2, M.all(T, L.ellipsePts(s * 70, -310, 90, 40, 20, s * 0.3)), C.violet, 0.8);
+      L.hatch(c2, band, { angle: 0.6, spacing: 8, width: 2, color: '#C8F0D8', alpha: 0.35, clip: true, seed: sd('sheen'), boil: B });
+    });
   }
 
-  function wingBars(c2, R, B, T, t) {
+  function wingBars(c2, R, B, side, t) {
+    // two dark bars across the folded wing
     if (t > 0.5) return;
-    for (const u of [0.45, 0.62]) {
-      const a = [lerp(40, -200, u), lerp(-290, -206, u) - 10], b = [lerp(40, -200, u) + 30, lerp(-290, -206, u) + 60];
-      K.line(c2, M.all(T, [a, b]), { width: 10, color: '#3E4556', seed: sd('bar', u), boil: B, taper: [4, 4] });
-    }
+    const T = R.Mb;
+    for (const y of [-200, -160]) K.line(c2, M.all(T, K.mir([[118, y - 10], [150, y], [178, y + 10]], side)), { width: 11, color: C.bar, seed: sd('bar', side, y), boil: B, taper: [4, 4] });
   }
 
   function cap(ctx, R, B) {
-    const H = R.Mh;
-    const pts = M.all(H, K.smooth([[56, -398], [66, -442], [108, -462], [156, -452], [178, -424], [150, -418], [110, -424], [80, -412]], 5));
-    K.form(ctx, pts, { fill: C.leather, deep: C.leatherDeep, width: 6, seed: sd('cap'), boil: B, spacing: 7, hatchAlpha: 0.7 });
-    const flap = M.all(H, K.smooth([[66, -404], [92, -400], [96, -352], [76, -344], [62, -372]], 4));
-    K.form(ctx, flap, { fill: C.leather, deep: C.leatherDeep, width: 5.5, seed: sd('flap'), boil: B, spacing: 6 });
-    K.line(ctx, M.all(H, [[90, -456], [84, -412]]), { width: 3, color: C.leatherDeep, seed: sd('capSeam'), boil: B });
-    K.goggles(ctx, H, 130, -456, 13, { seed: sd('goggles'), boil: B });
+    const T = R.Mh;
+    // an aviator's cap: a leather dome over the crown, ear flaps down the sides
+    const dome = [];
+    for (let i = 0; i <= 20; i++) {
+      const a = Math.PI + (i / 20) * Math.PI;
+      dome.push(R.hl(Math.cos(a) * 156, -30 + Math.sin(a) * 120, 0.3));
+    }
+    const edge = [];
+    for (let i = 0; i <= 8; i++) {
+      const x = 150 - (i / 8) * 300;
+      edge.push(R.hl(x, -46 - 22 * (1 - (x / 150) ** 2), 0.6));
+    }
+    const pts = M.all(T, K.smooth(dome.concat(edge), 4));
+    F().form(ctx, pts, C.leather, B, sd('cap'), {
+      width: 7,
+      off: 0.12,
+      shine: 0.7,
+      hatch: 0.5,
+      inside(c2) {
+        K.line(c2, M.all(T, K.curve([R.hl(0, -150, 0.4), R.hl(0, -100, 0.7), R.hl(0, -60, 0.9)], 4)), { width: 4, color: C.leatherDeep, seed: sd('seam'), boil: B });
+        const st = L.smoothPts(M.all(T, [R.hl(-6, -148, 0.4), R.hl(-6, -64, 0.9)]), false, 12);
+        for (let i = 0; i + 1 < st.length; i += 2) K.line(c2, [st[i], st[i + 1]], { width: 2, color: C.leatherLit, seed: sd('stc', i), boil: B, smooth: false, taper: 0 });
+      },
+    });
+    for (const s of [-1, 1]) {
+      const flap = M.all(T, K.smooth([R.hl(s * 118, -40, 0.3), R.hl(s * 160, -30, 0.1), R.hl(s * 166, 40, 0.1), R.hl(s * 146, 82, 0.2), R.hl(s * 118, 60, 0.3)], 4));
+      F().form(ctx, flap, C.leather, B, sd('flap', s), { width: 6, off: 0.12, hatch: 0.5, inside: (c2) => K.fill(c2, M.all(T, L.ellipsePts(...R.hl(s * 148, 30, 0.2), 16, 30, 14)), '#E8DCC6', 0.9) });
+    }
+    F().goggles(ctx, R, B, { y: -84, w: 150, r: 34, lens: '#8FC0CF' }, sd('gog'));
   }
 
   function satchel(ctx, R, B) {
     const T = R.Mb;
-    K.line(ctx, M.all(T, [[70, -316], [20, -262], [-30, -206]]), { width: 13, color: P.ink, seed: sd('strap'), boil: B, taper: 0 });
-    K.line(ctx, M.all(T, [[70, -316], [20, -262], [-30, -206]]), { width: 7, color: C.leather, seed: sd('strap'), boil: B, taper: 0 });
-    const bag = M.all(T, L.rrectPts(-96, -214, 84, 66, 12, 6));
-    K.form(ctx, bag, { fill: C.leather, deep: C.leatherDeep, width: 6, seed: sd('bag'), boil: B, spacing: 7 });
-    const flap = M.all(T, K.smooth([[-98, -216], [-10, -216], [-14, -186], [-54, -176], [-94, -186]], 4));
-    K.form(ctx, flap, { fill: C.leatherDeep, deep: P.ink, width: 5, seed: sd('bagFlap'), boil: B, shade: 0.4, spacing: 6 });
-    K.plate(ctx, M.all(T, L.ellipsePts(-54, -184, 7, 7, 10)), { width: 2.8, seed: sd('bagBtn'), boil: B, shade: 0 });
+    const strap = M.all(T, K.curve([[120, -340], [40, -260], [-60, -170], [-120, -130]], 6));
+    K.band(ctx, strap, 20, { fill: C.leather, deep: C.leatherDeep, seed: sd('strap'), boil: B, width: 4 });
+    const bag = M.all(T, L.rrectPts(-196, -170, 116, 94, 16, 5));
+    F().form(ctx, bag, C.satchel, B, sd('bag'), {
+      width: 6,
+      off: 0.1,
+      hatch: 0.5,
+      inside(c2) {
+        // a letter sticking out of the top
+        const env = M.all(T, [[-176, -186], [-110, -196], [-104, -160], [-172, -150]]);
+        K.fill(c2, env, C.paper);
+        L.inkPath(c2, env, { closed: true, width: 3, seed: sd('env'), boil: B, smooth: false, taper: 0 });
+      },
+    });
+    const flap = M.all(T, K.smooth([[-196, -172], [-80, -172], [-84, -128], [-138, -116], [-192, -128]], 3));
+    F().form(ctx, flap, C.leatherLit, B, sd('bflap'), { width: 5, off: 0.1, hatch: 0.4, rim: false });
+    const bk = M.ap(T, [-138, -124]);
+    K.fill(ctx, L.rrectPts(bk[0] - 10, bk[1] - 8, 20, 16, 4, 3), '#D8B25C');
+    L.inkPath(ctx, L.rrectPts(bk[0] - 10, bk[1] - 8, 20, 16, 4, 3), { closed: true, width: 2.6, seed: sd('bk'), boil: B, taper: 0 });
   }
 
-  function note(ctx, x, y, s, rot, B, seed) {
-    const pts = M.all(M.chain(M.tr(x, y), M.rot(rot)), L.capsulePts(0, 0, 44 * s, 11 * s, 0, 20));
-    K.form(ctx, pts, { fill: C.paper, deep: C.paperDeep, width: 4, seed, boil: B, shade: 0.6, spacing: 4, hatchW: 1.6 });
-    K.line(ctx, M.all(M.chain(M.tr(x, y), M.rot(rot)), [[0, -11 * s], [0, 11 * s]]), { width: 3, color: '#B0402E', seed: seed + 1, boil: B, taper: 0, smooth: false });
+  function scroll(ctx, c, open, B, seed) {
+    // a note: rolled (open 0) or unrolled between two rolls (open 1)
+    const w = 30 + 120 * open, h = 70;
+    if (open > 0.2) {
+      const sh = [[c[0] - w, c[1] - h * 0.5], [c[0] + w, c[1] - h * 0.5], [c[0] + w, c[1] + h * 0.5], [c[0] - w, c[1] + h * 0.5]];
+      F().form(ctx, sh, C.paper, B, seed, { width: 4, off: 0.06, hatch: 0.3, rim: false, smooth: false });
+      for (let k = 0; k < 3; k++) K.line(ctx, [[c[0] - w * 0.7, c[1] - 18 + k * 16], [c[0] + w * (0.7 - k * 0.2), c[1] - 18 + k * 16]], { width: 3, color: C.paperDeep, seed: seed + 5 + k, boil: B, smooth: false, taper: 0 });
+    }
+    for (const s of [-1, 1]) {
+      const rc = [c[0] + s * w, c[1]];
+      F().form(ctx, L.rrectPts(rc[0] - 12, rc[1] - h * 0.6, 24, h * 1.2, 10, 4), C.paperDeep, B, seed + 20 + s, { width: 4, off: 0.12, hatch: 0.3, rim: false });
+    }
   }
 
-  function sheet(ctx, x, y, u, B) {
-    const w = 40 + 50 * u, h = 64;
-    const pts = [[x - w / 2, y - h / 2], [x + w / 2, y - h / 2 + 4], [x + w / 2 - 4, y + h / 2], [x - w / 2 + 2, y + h / 2 - 4]];
-    K.fill(ctx, pts, C.paper);
-    for (let k = 0; k < 4; k++) K.line(ctx, [[x - w / 2 + 10, y - 20 + k * 13], [x + w / 2 - 12, y - 18 + k * 13]], { width: 2.4, color: C.paperDeep, seed: sd('lines', k), boil: B, taper: 0 });
-    L.inkPath(ctx, pts, { closed: true, width: 4, seed: sd('sheet'), boil: B, smooth: false, taper: 0, wobble: 0.4 });
+  function clover(ctx, c, s, B, seed) {
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+      const lc = [c[0] + Math.cos(a) * 26 * s, c[1] + Math.sin(a) * 26 * s];
+      const leaf = [];
+      for (let i = 0; i <= 20; i++) {
+        const t = (i / 20) * Math.PI * 2;
+        // a heart-shaped leaf pointing at the centre
+        const hx = 16 * Math.sin(t) ** 3, hy = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+        const r = a + Math.PI / 2;
+        leaf.push([lc[0] + (hx * Math.cos(r) - hy * Math.sin(r)) * s * 1.3, lc[1] + (hx * Math.sin(r) + hy * Math.cos(r)) * s * 1.3]);
+      }
+      F().form(ctx, leaf, C.clover, B, seed + k, { width: 4, off: 0.1, shine: 0.6, hatch: 0.3, rim: false, dark: C.cloverDeep });
+    }
+    K.line(ctx, [c, [c[0] + 10 * s, c[1] + 50 * s]], { width: 6, color: C.cloverDeep, seed: seed + 9, boil: B, taper: [3, 2] });
   }
 
-  function bang(ctx, c, s, B) {
-    K.fill(ctx, [[c[0] - 12 * s, c[1] - 60 * s], [c[0] + 12 * s, c[1] - 60 * s], [c[0] + 5 * s, c[1] - 6 * s], [c[0] - 5 * s, c[1] - 6 * s]], P.annYellow);
-    L.inkPath(ctx, [[c[0] - 12 * s, c[1] - 60 * s], [c[0] + 12 * s, c[1] - 60 * s], [c[0] + 5 * s, c[1] - 6 * s], [c[0] - 5 * s, c[1] - 6 * s]], { closed: true, width: 4.5, seed: sd('bang'), boil: B, smooth: false, taper: 0 });
-    K.fill(ctx, L.ellipsePts(c[0], c[1] + 12 * s, 9 * s, 9 * s, 12), P.annYellow);
-    L.inkPath(ctx, L.ellipsePts(c[0], c[1] + 12 * s, 9 * s, 9 * s, 12), { closed: true, width: 4, seed: sd('bangDot'), boil: B });
-  }
+  const WORK = [
+    { look: [0.3, 0.9], nod: 0.4, leg: { l: 0, r: 34 }, fx: { legNote: 1, glow: 1 } },
+    { look: [0.2, -0.4], nod: -0.2, fx: { noteAir: 1 } },
+    { hold: 1, look: [0, 0.8], nod: 0.3, fx: { scroll: 0.1 } },
+    { hold: 1, look: [0, 0.8], nod: 0.3, lid: 0, fx: { scroll: 1 } },
+    { hold: 1, look: [0, 0], lid: 0, mouth: 0.5, sq: 1.06, fx: { scroll: 1, bang: 1 } },
+    { y: -70, wing: 0.9, eye: 'happy', mouth: 0.6, fx: { clover: 1 } },
+    { y: -20, wing: 0.4, eye: 'happy', mouth: 0.4, fx: { clover: 0.7 } },
+    { fx: {} },
+  ];
 
-  K.kits.bird.make({
+  K.kits.front.make({
     id: ID,
     colors: C,
     stripe: P.stripeSky,
-    sil: SIL,
-    neck: [60, -330],
-    headScale: 1.3,
-    bodyC: [-10, -220],
-    bodyR: 170,
-    gait: 'strut',
-    feet: { n: 34, f: -6 },
-    wing: WING,
-    tailFan: { base: [-150, -168], angle: Math.PI + 0.3, spread: 0.36, n: 5, len: 116, width: 16, taper: 0.14, band: '#3E4556', fill: () => C.tail },
-    sit: 34,
-    leg: { hipN: [24, -130], hipF: [-6, -134], l1: 46, l2: 58, r: 7, toe: 34 },
-    tufts: false,
-    fur: true,
-    beak: { hinge: [180, -392], tip: [224, -386], upper: [[176, -406], [200, -402], [226, -388], [206, -382], [178, -382]], lower: [[178, -386], [200, -382], [216, -378], [198, -372], [180, -374]], cere: [190, -400, 12, 8] },
-    face: { eye: { x: 140, y: -404, r: 14, style: 'iris', iris: '#E07B2E', ring: null } },
+    plan: 'bird',
+    bodyC: [0, -200],
+    bodyR: 250,
+    body: { half: [[0, -380], [96, -370], [152, -320], [180, -230], [178, -140], [144, -74], [72, -46], [0, -40]] },
+    belly: { half: [[0, -300], [70, -290], [110, -240], [118, -160], [96, -96], [48, -64], [0, -58]] },
+    wings: {
+      fold: [[96, -320], [156, -312], [192, -240], [194, -160], [166, -110], [128, -130], [104, -220]],
+      hold: [[96, -320], [158, -306], [190, -250], [176, -196], [120, -186], [104, -220], [98, -270]],
+      spread: [[96, -320], [190, -380], [290, -420], [340, -370], [330, -300], [240, -270], [130, -250]],
+      root: [100, -280],
+      holdRoot: [150, -280],
+      tip: 4,
+      n: 7,
+      feather: 120,
+      fw: 20,
+      rows: [[[112, -286], [146, -276], [174, -250]], [[108, -250], [144, -236], [178, -214]]],
+      rowsSpread: [[[150, -340], [226, -370], [300, -392]], [[150, -300], [230, -330], [310, -350]]],
+    },
+    feet: { at: [56, -50], r: 9, toe: 34, claw: '#4A3A3A' },
+    fan: { base: [0, -110], n: 5, spread: 1.4, len: 170, width: 22 },
+    head: { c: [0, -520], rx: 154, ry: 142 },
+    beak: { y: 40, w: 26, h: 38, cere: true },
+    face: {
+      eyes: { x: 70, y: -8, rx: 32, ry: 34, white: '#FFF4E2', iris: '#E8752A', irisR: 0.8 },
+      blush: [112, 44, 22],
+    },
+    fur: false,
+    shadowW: 210,
+    attack: 'peck',
     hooks: {
-      body: sheen,
-      wingInside: wingBars,
-      bodyAfter: satchel,
+      body: collar,
+      wing: wingBars,
+      front: satchel,
       head: cap,
-      legAfter(ctx, R, B, side, knee, f) {
-        if (side === 'n' && !(R.pose.fx && R.pose.fx.noLegNote)) note(ctx, (knee[0] + f[0]) / 2 + 4, (knee[1] + f[1]) / 2, 0.8, 1.4, B, sd('legNote'));
+      foot(ctx, R, B, side, f) {
+        const fx = R.pose.fx || {};
+        if (side > 0 && (fx.legNote || !Object.keys(fx).length || R.anim !== 'work')) {
+          // the note rolled round his right leg, tied with string
+          const c = [f[0], f[1] - 40];
+          F().form(ctx, L.rrectPts(c[0] - 20, c[1] - 12, 40, 24, 8, 4), C.paper, B, sd('legN'), { width: 3.6, off: 0.1, hatch: 0.2, rim: false });
+          K.line(ctx, [[c[0], c[1] - 12], [c[0], c[1] + 12]], { width: 3, color: '#B04030', seed: sd('str'), boil: B, taper: 0 });
+          if (fx.glow) K.fx.star(ctx, c[0] + 34, c[1] - 30, 28, B, sd('lg'), '#FFF1C4');
+        }
       },
       fx(ctx, R, B) {
-        const fx = R.pose.fx;
-        if (!fx) return;
-        const tip = M.ap(R.Mh, [218, -386]);
-        if (fx.item === 'beak') note(ctx, tip[0] + 10, tip[1] + 6, 1, 0.2, B, sd('beakNote'));
-        if (fx.item === 'sheet') sheet(ctx, tip[0] + 36, tip[1] + 30, fx.open || 1, B);
+        const fx = R.pose.fx || {};
+        if (fx.noteAir) {
+          const c = M.ap(R.Mb, [90, -200]);
+          F().form(ctx, L.rrectPts(c[0] - 22, c[1] - 13, 44, 26, 8, 4), C.paper, B, sd('airN'), { width: 3.6, off: 0.1, hatch: 0.2, rim: false });
+          K.fx.star(ctx, c[0] + 40, c[1] - 30, 30, B, sd('as'), '#FFF1C4');
+        }
+        if (fx.scroll) {
+          const a = R.wingTip ? R.wingTip[-1] : M.ap(R.Mb, [-120, -190]);
+          const b = R.wingTip ? R.wingTip[1] : M.ap(R.Mb, [120, -190]);
+          scroll(ctx, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 10], fx.scroll, B, sd('scroll'));
+        }
         if (fx.bang) {
-          const top = M.ap(R.Mh, [110, -520]);
-          bang(ctx, top, fx.bang, B);
-          if (fx.bang > 0.9) K.fx.burst(ctx, top, 0.4, B, sd('burst'));
+          const t = R.hp(0, -R.S.head.ry, 0);
+          const c = [t[0] + 150, t[1] - 10];
+          K.line(ctx, [[c[0], c[1] - 70], [c[0] - 4, c[1] - 10]], { width: 18, seed: sd('bang'), boil: B, taper: [8, 3], smooth: false });
+          K.fill(ctx, L.ellipsePts(c[0] - 5, c[1] + 16, 9, 9, 10), P.ink);
+          K.fx.burst(ctx, [c[0], c[1] - 20], 0.4, B, sd('bb'));
+        }
+        if (fx.clover) {
+          const t = R.hp(0, -R.S.head.ry, 0);
+          clover(ctx, [t[0], t[1] - 90], fx.clover, B, sd('clv'));
+          K.fx.star(ctx, t[0] + 70, t[1] - 140, 40 * fx.clover, B, sd('cs'), '#FFF1C4');
         }
       },
     },
     poses: {
-      // a peck at the leg, the note in the beak, unrolled, amazed: "!"
-      work(d, n, P0) {
-        const T = [
-          { head: 0.4, hy: 10, fx: {} },
-          { head: 0.55, hy: 20, beak: 0.5, fx: { noLegNote: 1 } },
-          { head: -0.05, beak: 0.2, fx: { noLegNote: 1, item: 'beak' } },
-          { head: 0.05, fx: { noLegNote: 1, item: 'sheet', open: 0.5 } },
-          { head: -0.1, fx: { noLegNote: 1, item: 'sheet', open: 1, bang: 0.7 }, eye: 'open' },
-          { head: -0.14, sq: 1.05, fx: { noLegNote: 1, item: 'sheet', open: 1, bang: 1.1 } },
-          { head: -0.1, sq: 1.04, fx: { noLegNote: 1, item: 'sheet', open: 1, bang: 1 }, eye: 'happy' },
-          { head: 0.08, fx: { noLegNote: 1, item: 'sheet', open: 1 } },
-        ][d];
-        return { head: T.head, hy: T.hy || 0, beak: T.beak || 0, sq: T.sq || 1, eyeMode: T.eye || 'open', feet: P0.idle(0, 12).feet, fx: T.fx };
+      work(d) {
+        const T = WORK[d];
+        return { look: T.look || null, nod: T.nod || 0, leg: T.leg || { l: 0, r: 0 }, hold: !!T.hold, lid: T.lid == null ? null : T.lid, mouth: T.mouth || 0, sq: T.sq || 1, y: T.y || 0, wing: T.wing || 0, eyeMode: T.eye || 'open', fx: T.fx };
       },
     },
   });

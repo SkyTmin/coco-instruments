@@ -295,6 +295,122 @@
     }
   };
 
+  /**
+   * A form with light and shadow (v2.74): the shadow tone fills the shape, the lit tone is the same
+   * shape shifted toward the light (upper left) and clipped, so a crescent of shadow is left on the
+   * lower right; a soft rim of reflected light, hatching over the shadow, the ink outline.
+   *   o.fill, o.dark (shadow tone, default mixed from fill), o.light (rim, default mixed), o.off
+   *   (shift as a fraction of the size, default 0.13), o.shine (a glossy spot 0..1), o.inside(ctx)
+   *   decorations over the tones, o.after(ctx), o.width, o.seed, o.boil, o.hatch 0..1, o.c centre
+   */
+  K.cel = (ctx, pts, o) => {
+    const b = L.bounds(pts);
+    const r = Math.max(b.w, b.h) / 2;
+    const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+    const k = o.off == null ? 0.13 : o.off;
+    const dx = r * k * 0.8, dy = r * k;
+    const dark = o.dark || L.mix(o.fill, '#2B1D2E', 0.3);
+    K.fill(ctx, pts, dark, o.alpha == null ? 1 : o.alpha);
+    K.clip(ctx, pts, () => {
+      K.fill(ctx, pts.map(([x, y]) => [x - dx, y - dy]), o.fill, o.alpha == null ? 1 : o.alpha);
+      // reflected light along the shadowed edge: a thin lighter band just inside the outline
+      if (o.rim !== false) {
+        const rim = o.light || L.mix(o.fill, '#FFF4E0', 0.35);
+        L.inkPath(ctx, pts.map(([x, y]) => [x + dx * 0.25, y + dy * 0.25]), { closed: true, width: Math.max(3, r * 0.05), color: rim, alpha: 0.35, seed: o.seed + 21, boil: o.boil, wobble: 0.6, taper: 0 });
+      }
+      if (o.inside) o.inside(ctx, pts);
+      if (o.shine) {
+        const sh = L.ellipsePts(cx - r * 0.38, cy - r * 0.42, r * 0.26, r * 0.14, 20, -0.6);
+        K.fill(ctx, sh, '#FFFFFF', 0.45 * o.shine);
+        K.fill(ctx, L.ellipsePts(cx - r * 0.45, cy - r * 0.46, r * 0.09, r * 0.06, 12, -0.6), '#FFFFFF', 0.8 * o.shine);
+      }
+    });
+    if (o.hatch !== 0) {
+      const f = K.shadeOf(o.c || { x: cx, y: cy, r });
+      L.hatch(ctx, pts, {
+        angle: -Math.PI / 4,
+        spacing: o.spacing || Math.max(6, r * 0.06),
+        width: o.hatchW || Math.max(1.8, r * 0.018),
+        color: o.deep || L.mix(dark, '#1A1016', 0.4),
+        alpha: 0.5,
+        density: (x, y) => (o.hatch == null ? 0.8 : o.hatch) * f(x, y),
+        length: [r * 0.12, r * 0.3],
+        gap: [3, 8],
+        inset: 4,
+        overshoot: 0,
+        clip: true,
+        seed: o.seed + 11,
+        boil: o.boil,
+      });
+    }
+    if (o.after) o.after(ctx, pts);
+    if (o.width !== 0)
+      L.inkPath(ctx, pts, { closed: true, width: o.width || 8, seed: o.seed, boil: o.boil, wobble: o.wobble != null ? o.wobble : 1.2, tremble: 0.3, taper: [6, 14], smooth: o.smooth, color: o.ink || P.ink });
+  };
+
+  /**
+   * A big glossy cartoon eye (v2.74). Sclera (o.white, or none for a solid bead), a large iris with
+   * a darker rim and a lit crescent, the pupil (round or o.slit), two highlights, a heavy upper lid
+   * line; o.lid 0..1 an eyelid coming down (o.lidColor), o.tilt, o.lash an outer flick (+1 right eye,
+   * -1 left eye), modes 'open' | 'closed' | 'happy' | 'angry', o.open 0..1 a blink.
+   */
+  K.eyeBig = (ctx, T, x, y, o, B, seed) => {
+    const rx = o.rx || 30, ry0 = o.ry || rx * 1.12;
+    const mode = o.mode || 'open';
+    const open = o.open == null ? 1 : o.open;
+    const tilt = o.tilt || 0;
+    const shut = (pts, w) => {
+      if (o.lineColor) K.line(ctx, M.all(T, pts), { width: w + 4, color: P.ink, seed, boil: B, taper: [4, 4] });
+      K.line(ctx, M.all(T, pts), Object.assign({ width: w, seed, boil: B, taper: [4, 4] }, o.lineColor ? { color: o.lineColor } : {}));
+    };
+    if (mode === 'happy') return shut([[x - rx, y + ry0 * 0.25], [x, y - ry0 * 0.5], [x + rx, y + ry0 * 0.25]], Math.max(5, rx * 0.3));
+    if (mode === 'closed' || open < 0.2) return shut([[x - rx, y - ry0 * 0.05], [x, y + ry0 * 0.4], [x + rx, y - ry0 * 0.05]], Math.max(4.5, rx * 0.26));
+    const ry = ry0 * open;
+    const TE = M.mul(T, M.about(tilt, x, y));
+    const E = M.all(TE, L.ellipsePts(x, y, rx, ry, 32));
+    const lx = (o.look ? o.look[0] : 0.08) * rx, ly = (o.look ? o.look[1] : 0.05) * ry;
+    const ir = (o.iris ? o.irisR || 0.72 : 1) * Math.min(rx, ry0);
+    K.fill(ctx, E, o.white || o.iris || '#1A110E');
+    K.clip(ctx, E, () => {
+      const ic = [x + lx, y + ly];
+      if (o.white) {
+        K.fill(ctx, M.all(TE, L.ellipsePts(ic[0], ic[1], ir, ir * 1.05, 24)), o.iris);
+        // the iris: darker rim and a lit crescent low on it
+        L.inkPath(ctx, M.all(TE, L.ellipsePts(ic[0], ic[1], ir * 0.93, ir * 0.98, 24)), { closed: true, width: ir * 0.16, color: L.mix(o.iris, '#1A0E10', 0.45), seed: seed + 3, boil: B, wobble: 0.2, taper: 0 });
+        K.fill(ctx, M.all(TE, L.ellipsePts(ic[0], ic[1] + ir * 0.42, ir * 0.62, ir * 0.36, 20)), L.mix(o.iris, '#FFF6D0', 0.4), 0.8);
+        const pr = o.slit ? [ir * 0.2, ir * 0.78] : [ir * 0.46, ir * 0.5];
+        K.fill(ctx, M.all(TE, L.ellipsePts(ic[0], ic[1], pr[0], pr[1], 18)), P.ink);
+      } else {
+        // a bead: a glossy dark ball with a faint coloured bottom
+        K.fill(ctx, M.all(TE, L.ellipsePts(x, y + ry * 0.45, rx * 0.7, ry * 0.4, 18)), o.beadLit || '#4A3A44', 0.9);
+      }
+      if (open > 0.5) {
+        const hs = Math.min(rx, ry0);
+        K.fill(ctx, M.all(TE, L.ellipsePts(ic0(x, lx) - hs * 0.32, y + ly - hs * 0.36, hs * 0.3, hs * 0.26, 16, -0.4)), '#FFFFFF');
+        K.fill(ctx, M.all(TE, L.ellipsePts(ic0(x, lx) + hs * 0.3, y + ly + hs * 0.34, hs * 0.12, hs * 0.1, 10)), '#FFFFFF', 0.85);
+      }
+      if (o.lid) K.fill(ctx, M.all(TE, L.ellipsePts(x, y - ry * (2 - o.lid * 1.2), rx * 1.4, ry * 1.05, 24)), o.lidColor || '#6B615B');
+    });
+    L.inkPath(ctx, E, { closed: true, width: Math.max(3, rx * 0.12), seed, boil: B, wobble: 0.4, taper: [3, 6] });
+    // the upper lid: a heavier line over the top of the eye
+    const top = [];
+    const lidY = o.lid ? y - ry + o.lid * ry * 0.9 : y - ry;
+    for (let i = 0; i <= 10; i++) {
+      const a = Math.PI + (i / 10) * Math.PI;
+      top.push([x + Math.cos(a) * rx * 1.02, (o.lid ? lidY + (Math.sin(a) + 1) * ry * 0.15 : y + Math.sin(a) * ry * 1.02)]);
+    }
+    K.line(ctx, M.all(TE, top), { width: Math.max(5, rx * 0.26), seed: seed + 5, boil: B, taper: [5, 5] });
+    if (o.lash) {
+      const s = o.lash;
+      K.line(ctx, M.all(TE, [[x + s * rx * 0.9, y - ry * 0.45], [x + s * rx * 1.3, y - ry * 0.75]]), { width: Math.max(3.5, rx * 0.16), seed: seed + 6, boil: B, taper: [3, 5] });
+    }
+    if (mode === 'angry') {
+      const s = o.lash || 1;
+      K.line(ctx, M.all(T, [[x - s * rx * 1.2, y - ry0 * 1.55], [x + s * rx * 1.0, y - ry0 * 1.05]]), { width: Math.max(6, rx * 0.34), seed: seed + 7, boil: B, taper: [3, 5], smooth: false });
+    }
+  };
+  const ic0 = (x, lx) => x + lx;
+
   // ---------------------------------------------------------------- kit props
   /** A band (belt, strap, collar) along a centre line, clipped to a shape if given. */
   K.band = (ctx, pts, w, o) => {
@@ -613,7 +729,25 @@
       const r = s * (0.5 + u);
       const cx = o[0] + Math.cos(ang) * r, cy = o[1] + Math.sin(ang) * r * 0.5 - 10 * u;
       const rr = s * 0.35 * (0.6 + u);
-      L.inkPath(ctx, L.ellipsePts(cx, cy, rr, rr * 0.8, 16), { closed: true, width: 4, alpha: a * 0.8, color: P.inkSoft, seed: seed + k, boil: B, wobble: 0.6 });
+      const pf = L.ellipsePts(cx, cy, rr, rr * 0.8, 16);
+      K.fill(ctx, pf, DUST, a * 0.75);
+      L.inkPath(ctx, pf, { closed: true, width: 4, alpha: a * 0.8, color: P.inkSoft, seed: seed + k, boil: B, wobble: 0.6 });
+    }
+  };
+  const DUST = '#DDCDB1';
+  /** A cloud of dust thrown up both ways from o (a block breaking, a landing): filled puffs. */
+  FX.cloud = (ctx, o, s, u, B, seed) => {
+    if (u <= 0 || u >= 1) return;
+    const a = 1 - u;
+    const n = 7;
+    for (let k = 0; k < n; k++) {
+      const ang = Math.PI + 0.2 + (k / (n - 1)) * (Math.PI - 0.4);
+      const r = s * (0.3 + 0.9 * u) * (0.8 + 0.4 * L.h3(k, 1, seed));
+      const cx = o[0] + Math.cos(ang) * r, cy = o[1] + Math.sin(ang) * r * 0.55;
+      const rr = s * 0.42 * (0.7 + u) * (1 - 0.35 * Math.abs(Math.cos(ang)));
+      const pf = L.ellipsePts(cx, cy, rr, rr * 0.82, 18);
+      K.fill(ctx, pf, DUST, Math.min(1, a * 1.2));
+      L.inkPath(ctx, pf, { closed: true, width: 4, alpha: a * 0.9, color: P.inkSoft, seed: seed + k, boil: B, wobble: 0.6 });
     }
   };
   /** Speed lines behind a dashing pet. */

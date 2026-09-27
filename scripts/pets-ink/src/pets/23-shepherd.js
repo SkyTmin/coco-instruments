@@ -1,8 +1,10 @@
-// pets/23-shepherd.js : Конвойная овчарка (epic, dmg). Quad kit.
-// A black-and-tan German shepherd: the black saddle and muzzle, tan legs and cheeks, tall ears, a
-// sloping back. A leather guard harness with a brass shield badge, a wire basket muzzle hanging
-// loose under the throat, a short chain leash from the collar. Bites. Work: crouches with the ears
-// back, leaps, lands on a stone with both forepaws and cracks it, stands proud.
+// pets/23-shepherd.js : Конвойная овчарка (epic, dmg). Front kit, sits to attention.
+// A black-and-tan German shepherd pup sitting straight: huge upright ears, a black muzzle and a
+// black streak up the forehead, tan cheeks with the two tan "pips" over the eyes, the black saddle
+// showing over the shoulders, a cream ruff on the chest. A guard harness of brown leather with
+// brass rivets and a shield badge, a chain leash trailing from the collar, a long bushy tail on
+// the floor. Work: the guard bark — ears flat, a breath in, a bark that goes out in rings and
+// cracks the floor, stones jumping — then the tongue out, pleased.
 (function () {
   'use strict';
   const FILM = window.FILM;
@@ -10,6 +12,8 @@
   const P = L.pal;
   const K = FILM.pets;
   const M = K.M;
+  const lerp = L.lerp;
+  const F = () => K.front;
   const ID = 'shepherd';
   const sd = (...k) => L.hash(ID, ...k) & 0x7fffffff;
 
@@ -17,173 +21,233 @@
     fur: '#C98F53',
     furDeep: '#8A5A2E',
     furLit: '#E6B67E',
-    chest: '#E8D2AA',
-    black: '#2A2320',
+    belly: '#EAD6B0',
+    black: '#2E2622',
+    blackLit: '#4E423A',
+    muzzle: '#5E4F44',
+    pip: '#E9BE86',
+    ear: '#3A2E28',
+    earIn: '#D9B385',
     skin: '#D9968C',
-    skinDeep: '#A8605A',
-    nose: '#2A2320',
-    noseDeep: '#141010',
-    eye: '#1A110E',
+    nose: '#1E1816',
+    blush: '#E08A78',
     mouth: '#5E2220',
-    tongue: '#E88E86',
+    tongue: '#EE8E88',
+    pad: '#3A2E28',
+    eyeLine: '#F2E4C8',
     leather: '#6E4A2C',
     leatherDeep: '#43291A',
-    brass: '#D2B25C',
+    brass: '#D8B65C',
     brassDeep: '#8A6C28',
-    steel: '#AEB5BA',
+    steel: '#B4BBC0',
     stone: '#8A857E',
+    stoneTop: '#ABA69D',
     stoneDeep: '#55504A',
-    dirt: '#8B6848',
-    dirtDeep: '#5B4330',
   };
 
-  const SIL = [
-    [-196, -170, 0],
-    [-228, -224, 0],
-    [-222, -278, 0],
-    [-170, -300, 0],
-    [-60, -318, 0],
-    [60, -340, 0.1],
-    [116, -380, 0.5],
-    [150, -436, 1],
-    [196, -466, 1],
-    [252, -470, 1],
-    [292, -444, 1],
-    [346, -424, 1],
-    [390, -410, 1],
-    [404, -392, 1],
-    [390, -374, 1],
-    [340, -366, 1],
-    [292, -352, 1],
-    [248, -330, 0.9],
-    [196, -300, 0.5],
-    [190, -240, 0],
-    [170, -186, 0],
-    [100, -170, 0],
-    [0, -174, 0],
-    [-110, -180, 0],
+  // ---- the black-and-tan pattern of the head
+  function headMarks(c2, R) {
+    const T = R.Mh;
+    // a black cap over the crown running down the forehead in a streak
+    const cap = [R.hl(-170, -60, 0.2), R.hl(-120, -140, 0.4), R.hl(0, -160, 0.6), R.hl(120, -140, 0.4), R.hl(170, -60, 0.2), R.hl(96, -92, 0.6), R.hl(30, -70, 0.9), R.hl(14, -10, 1), R.hl(-14, -10, 1), R.hl(-30, -70, 0.9), R.hl(-96, -92, 0.6)];
+    K.fill(c2, M.all(T, K.smooth(cap, 4)), C.black);
+    // dark rims round the eyes, fading out toward the temples
+    for (const s of [-1, 1]) {
+      K.fill(c2, M.all(T, K.smooth([R.hl(s * 30, -30, 0.95), R.hl(s * 76, -52, 0.85), R.hl(s * 124, -30, 0.6), R.hl(s * 136, 0, 0.5), R.hl(s * 100, 20, 0.7), R.hl(s * 50, 18, 0.9)], 4)), C.blackLit);
+      // the tan pips over the eyes
+      K.fill(c2, M.all(T, L.ellipsePts(...R.hl(s * 66, -74, 0.85), 17, 12, 14, -s * 0.3)), C.pip);
+    }
+  }
+
+  function bodyMarks(c2, R) {
+    const T = R.Mb;
+    // the black saddle over the shoulders
+    for (const s of [-1, 1]) K.fill(c2, M.all(T, K.smooth([[s * 60, -350], [s * 150, -330], [s * 210, -250], [s * 214, -170], [s * 180, -196], [s * 140, -268], [s * 90, -300]], 4)), C.black);
+  }
+
+  // ---- the harness, badge and leash
+  function harness(ctx, R, B) {
+    const T = R.Mb;
+    const strap = (pts, w, seed) => {
+      const line = M.all(T, K.curve(pts, 6));
+      K.band(ctx, line, w, { fill: C.leather, deep: C.leatherDeep, seed, boil: B, width: 4.5, stitch: '#C9A878' });
+      return line;
+    };
+    // the collar
+    strap([[-150, -338], [-70, -318], [0, -312], [70, -318], [150, -338]], 26, sd('col'));
+    // a Y: from each shoulder to the badge, then down the chest
+    for (const s of [-1, 1]) {
+      const l = strap([[s * 170, -300], [s * 110, -268], [s * 40, -236]], 24, sd('y', s));
+      for (const u of [0.25, 0.7]) {
+        const p = l[Math.floor(u * (l.length - 1))];
+        K.fill(ctx, L.ellipsePts(p[0], p[1], 5, 5, 8), C.brass);
+        L.inkPath(ctx, L.ellipsePts(p[0], p[1], 5, 5, 8), { closed: true, width: 2, seed: sd('rv', s, u), boil: B });
+      }
+    }
+    strap([[0, -220], [0, -150], [0, -80]], 26, sd('down'));
+    // the shield badge where the straps meet
+    const b = M.ap(T, [0, -224]);
+    const sh = [[b[0] - 40, b[1] - 38], [b[0], b[1] - 46], [b[0] + 40, b[1] - 38], [b[0] + 36, b[1] + 8], [b[0], b[1] + 44], [b[0] - 36, b[1] + 8]];
+    F().form(ctx, K.smooth(sh, 3), C.brass, B, sd('badge'), {
+      width: 5,
+      off: 0.14,
+      shine: 1,
+      hatch: 0.3,
+      dark: C.brassDeep,
+      inside(c2) {
+        L.inkPath(c2, K.smooth(sh.map(([x, y]) => [b[0] + (x - b[0]) * 0.74, b[1] + (y - b[1]) * 0.74]), 3), { closed: true, width: 2.6, color: C.brassDeep, seed: sd('bi'), boil: B, wobble: 0.2 });
+        // a five-point star on it
+        const st = [];
+        for (let k = 0; k < 10; k++) {
+          const a = -Math.PI / 2 + (k / 10) * Math.PI * 2;
+          const r = k % 2 ? 7 : 17;
+          st.push([b[0] + Math.cos(a) * r, b[1] - 2 + Math.sin(a) * r]);
+        }
+        K.fill(c2, st, C.brassDeep);
+      },
+    });
+    if (R.pose.fx && R.pose.fx.glint) K.fx.star(ctx, b[0] + 34, b[1] - 40, 30 * R.pose.fx.glint, B, sd('bgl'), '#FFF1C4');
+    // the chain leash from a ring on the collar, trailing over the floor
+    const ring = M.ap(T, [96, -322]);
+    L.inkPath(ctx, L.ellipsePts(ring[0], ring[1], 14, 15, 16), { closed: true, width: 11, color: P.ink, seed: sd('ring'), boil: B, wobble: 0.3 });
+    L.inkPath(ctx, L.ellipsePts(ring[0], ring[1], 14, 15, 16), { closed: true, width: 5.5, color: C.steel, seed: sd('ring'), boil: B, wobble: 0.3 });
+    const sway = Math.sin(R.pose.tail * 2) * 10;
+    K.chain(ctx, [[ring[0], ring[1] + 14], M.ap(T, [150 + sway, -200]), M.ap(R.Mr, [196, -40]), M.ap(R.Mr, [250, 2]), M.ap(R.Mr, [330, 4])], 22, { width: 7, color: C.steel, seed: sd('leash'), boil: B });
+    const h = M.ap(R.Mr, [352, -4]);
+    F().form(ctx, L.rrectPts(h[0] - 18, h[1] - 16, 50, 26, 12, 4), C.leather, B, sd('handle'), { width: 4.5, off: 0.1, hatch: 0.3, rim: false });
+  }
+
+  // ---- the bark
+  const rock = (x, y, r, a, k) => {
+    const out = [];
+    for (let i = 0; i < 6; i++) {
+      const t = a + (i / 6) * Math.PI * 2;
+      const rr = r * (0.7 + 0.45 * L.h3(k, i, 13));
+      out.push([x + Math.cos(t) * rr, y + Math.sin(t) * rr * 0.85]);
+    }
+    return out;
+  };
+  function bark(ctx, R, B) {
+    const fx = R.pose.fx || {};
+    const m = R.hp(0, 90, 1);
+    if (fx.bark) {
+      for (let k = 0; k < 3; k++) {
+        const p = fx.bark - k * 0.35;
+        if (p <= 0 || p > 1.3) continue;
+        const r = 80 + p * 260;
+        const a = Math.max(0, 1 - p / 1.3);
+        // a pair of arcs either side of the mouth, like sound drawn in a comic
+        for (const s of [-1, 1]) {
+          const arc = [];
+          for (let i = 0; i <= 10; i++) {
+            const t = -0.75 + (i / 10) * 1.5;
+            arc.push([m[0] + s * Math.cos(t) * r, m[1] + Math.sin(t) * r * 0.8]);
+          }
+          K.line(ctx, arc, { width: 12 - k * 2, alpha: a, seed: sd('arc', k, s), boil: B, taper: [6, 6] });
+        }
+      }
+    }
+    if (fx.inhale) for (const s of [-1, 1]) K.line(ctx, [[m[0] + s * 150, m[1] - 20], [m[0] + s * 90, m[1] - 10]], { width: 5, color: P.inkSoft, seed: sd('in', s), boil: B, smooth: false, taper: [2, 8] });
+    const g = K.GROUND, cx = K.CXF;
+    if (fx.crack) {
+      // cracks fanning out over the floor in front of her: zigzags with a branch each
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI * (0.06 + (i / 5) * 0.88);
+        const dx = Math.cos(a), dy = Math.sin(a) * 0.32;
+        const o = [cx + dx * 130, g + 6 + dy * 40];
+        const pts = [o];
+        let p = o;
+        for (let k = 1; k <= 4; k++) {
+          const j = (k % 2 ? 1 : -1) * 16 * L.h3(i, k, 5);
+          const step = (48 + 18 * L.h3(i, k, 6)) * fx.crack;
+          p = [p[0] + dx * step - dy * j, p[1] + dy * step + dx * j * 0.3];
+          pts.push(p);
+        }
+        K.line(ctx, pts, { width: 5, seed: sd('cr', i), boil: B, smooth: false, taper: [2, 8] });
+        const b0 = pts[2];
+        K.line(ctx, [b0, [b0[0] + dx * 30 + dy * 40, b0[1] + dy * 30 + 10]], { width: 3.2, seed: sd('crb', i), boil: B, smooth: false, taper: [2, 6] });
+      }
+    }
+    if (fx.pebbles) {
+      const t = fx.pebbles;
+      for (let i = 0; i < 6; i++) {
+        const s = i % 2 ? 1 : -1;
+        const x = cx + s * (220 + 60 * i * 0.4), y = g - 16 - (200 + 80 * L.h3(i, 7, 5)) * Math.sin(Math.PI * t);
+        const r = 14 + 8 * L.h3(i, 8, 5);
+        F().form(ctx, rock(x, y, r, i + t * 5, i), i % 3 ? C.stone : C.stoneTop, B, sd('pb', i), { width: 4, off: 0.1, hatch: 0.3, rim: false, smooth: false });
+      }
+    }
+  }
+
+  const WORK = [
+    { sq: 0.95, head: 0.08, ear: -0.8, eye: 'angry', mouth: 0, fx: {} },
+    { sq: 1.06, y: -12, head: -0.1, ear: 0.4, eye: 'open', lid: 0.1, mouth: 0.3, fx: { inhale: 1 } },
+    { scale: 1.06, head: 0.02, ear: -0.4, eye: 'angry', mouth: 1, fx: { bark: 0.3, glint: 1 } },
+    { scale: 1.08, head: 0.03, ear: -0.4, eye: 'angry', mouth: 1, fx: { bark: 0.8, crack: 0.6 } },
+    { scale: 1.04, ear: -0.2, eye: 'angry', mouth: 0.8, fx: { bark: 1.3, crack: 1, pebbles: 0.35 } },
+    { mouth: 0.4, fx: { bark: 1.7, crack: 1, pebbles: 0.75 } },
+    { eye: 'happy', mouth: 0.7, tail: 0.5, ear: 0.3, fx: { crack: 1 } },
+    { lid: 0.1, tail: -0.3, fx: { crack: 1 } },
   ];
 
-  function markings(ctx, R) {
-    const T = R.Mb, H = R.Mh;
-    // the black saddle over the back
-    K.fill(ctx, M.all(T, K.smooth([[-240, -240], [-200, -310], [-60, -334], [80, -350], [120, -320], [60, -262], [-80, -242], [-180, -220]], 5)), C.black);
-    // the black muzzle and the mask up to the eye, tan brow spot
-    K.fill(ctx, M.all(H, K.smooth([[268, -430], [340, -430], [400, -410], [408, -380], [360, -360], [300, -350], [262, -372]], 5)), C.black);
-    K.fill(ctx, M.all(H, K.smooth([[176, -470], [240, -478], [262, -446], [230, -430], [190, -440]], 5)), C.black);
-    K.fill(ctx, M.all(T, K.smooth([[150, -300], [196, -290], [190, -210], [150, -200], [140, -250]], 5)), C.chest);
-  }
-
-  function harness(ctx, R, B, bodyPts) {
-    const T = R.Mb;
-    // girth strap behind the forelegs and the strap across the chest
-    const girth = M.all(T, K.curve([[50, -352], [62, -260], [70, -170]], 8));
-    const chest = M.all(T, K.curve([[40, -330], [120, -300], [196, -262]], 8));
-    K.band(ctx, girth, 30, { fill: C.leather, deep: C.leatherDeep, stitch: C.leatherDeep, seed: sd('girth'), boil: B, clip: bodyPts, width: 4.5 });
-    K.band(ctx, chest, 26, { fill: C.leather, deep: C.leatherDeep, seed: sd('chestS'), boil: B, clip: bodyPts, width: 4.5 });
-    // the brass shield badge on the girth
-    const c = [62, -262];
-    const shield = M.all(T, K.smooth([[c[0] - 22, c[1] - 26], [c[0] + 22, c[1] - 26], [c[0] + 22, c[1] + 4], [c[0], c[1] + 28], [c[0] - 22, c[1] + 4]], 3));
-    K.plate(ctx, shield, { fill: C.brass, deep: C.brassDeep, width: 4.5, seed: sd('badge'), boil: B });
-    const star = [];
-    for (let i = 0; i < 10; i++) {
-      const r = i % 2 ? 5 : 12, a = (i / 10) * Math.PI * 2 - Math.PI / 2;
-      star.push([c[0] + Math.cos(a) * r, c[1] - 2 + Math.sin(a) * r]);
-    }
-    K.fill(ctx, M.all(T, star), C.brassDeep);
-  }
-
-  function collarKit(ctx, R, B) {
-    const T = R.Mf;
-    const line = M.all(T, K.curve([[118, -392], [170, -360], [226, -326]], 8));
-    K.band(ctx, line, 22, { fill: C.leather, deep: C.leatherDeep, seed: sd('collar'), boil: B, width: 4.5 });
-    // the basket muzzle hanging loose under the throat: a wire cage on its strap
-    const cage = M.ap(T, [226, -290]);
-    const cx = cage[0], cy = cage[1];
-    for (let k = 0; k < 4; k++) K.line(ctx, [[cx - 30 + k * 18, cy - 20], [cx - 26 + k * 16, cy + 30]], { width: 4, color: C.steel, seed: sd('wire', k), boil: B, taper: 0 });
-    for (const y of [-20, 6, 30]) K.line(ctx, [[cx - 34, cy + y], [cx + 26, cy + y + 4]], { width: 4, color: C.steel, seed: sd('wireH', y), boil: B, taper: 0 });
-    L.inkPath(ctx, K.smooth([[cx - 36, cy - 24], [cx + 30, cy - 22], [cx + 26, cy + 34], [cx - 30, cy + 34]], 5), { closed: true, width: 4.5, seed: sd('cage'), boil: B, wobble: 0.5 });
-    // the chain leash from the collar ring, hanging and swinging
-    const ring = M.ap(T, [200, -334]);
-    const sw = R.pose.fx && R.pose.fx.swing != null ? R.pose.fx.swing : 0;
-    K.chain(ctx, [ring, [ring[0] + 18 + 20 * sw, ring[1] + 70], [ring[0] + 10 + 40 * sw, ring[1] + 140]], 16, { width: 6, color: C.steel, seed: sd('leash'), boil: B });
-  }
-
-  function stone(ctx, R, B) {
-    const fx = R.pose.fx;
-    if (!fx || fx.stone == null) return;
-    const g = K.GROUND, x = K.CX + 360;
-    if (fx.stone < 1) {
-      K.form(ctx, K.smooth([[x - 70, g + 2], [x - 74, g - 40], [x - 30, g - 72], [x + 34, g - 68], [x + 72, g - 30], [x + 68, g + 2]], 5), { fill: C.stone, deep: C.stoneDeep, width: 7, seed: sd('stone'), boil: B, spacing: 8 });
-    } else {
-      for (const s of [-1, 1]) {
-        const o = 30 * s;
-        K.form(ctx, K.smooth(s < 0 ? [[x - 80 + o, g + 2], [x - 80 + o, g - 30], [x - 30 + o, g - 50], [x + o * 0.3, g - 20], [x + o * 0.3, g + 2]] : [[x + o * 0.3, g + 2], [x + o * 0.3, g - 24], [x + 34 + o, g - 46], [x + 76 + o, g - 22], [x + 72 + o, g + 2]], 5), { fill: C.stone, deep: C.stoneDeep, width: 6, seed: sd('stoneS', s), boil: B, spacing: 7 });
-      }
-      for (let i = 0; i < 4; i++) {
-        const t = fx.debris || 0;
-        const px = x + (i - 1.5) * 50 * t, py = g - 60 - 110 * t + 80 * t * t;
-        K.form(ctx, L.ellipsePts(px, py, 9, 7, 8, i), { fill: C.stone, deep: C.stoneDeep, width: 3.6, seed: sd('deb', i), boil: B, shade: 0.5 });
-      }
-    }
-  }
-
-  K.kits.quad.make({
+  K.kits.front.make({
     id: ID,
     colors: C,
-    stripe: P.stripeSky,
-    sil: SIL,
-    neck: [170, -380],
-    headScale: 1.1,
-    spine: [20, -300],
-    bodyC: [-20, -250],
-    bodyR: 240,
-    front: { atN: [124, -210], atF: [100, -218], l1: 100, l2: 92, r1: 30, rj: 22, r2: 19, paw: [32, 15] },
-    hind: { atN: [-160, -220], atF: [-136, -228], l1: 116, l2: 92, r1: 46, rj: 22, r2: 18, paw: [32, 15] },
-    feet: { fn: 140, ff: 112, hn: -150, hf: -126 },
-    stride: 64,
-    lift: 40,
-    legFill: () => C.fur,
-    lie: 150,
-    tail: { base: [-222, -272], len: 240, lift: -0.95, curl: -0.75, rise: 0, w0: 40, w1: 30, bushy: true, fill: C.fur, deep: C.furDeep, ink: 6.5, rings: 1, ringCol: C.black },
+    stripe: P.stripeSage,
+    plan: 'sit',
+    bodyC: [0, -190],
+    bodyR: 260,
+    body: { half: [[0, -350], [88, -342], [150, -300], [186, -214], [200, -120], [190, -44], [150, -14], [0, -10]] },
+    belly: { half: [[0, -350], [60, -344], [92, -300], [100, -200], [84, -100], [44, -50], [0, -42]] },
+    sit: {
+      thigh: [146, -84, 78, 74],
+      hind: [182, 0, 46, 24],
+      front: { at: [98, -250], len: 236, r: 32, paw: [40, 24], splay: 0.05 },
+    },
+    tail: { pts: [[130, -30], [230, -14], [320, -30], [366, -90], [380, -150]], w0: 40, w1: 36, bushy: true, tip: C.black, tipLen: 0.3, swing: 0.9 },
+    head: { c: [0, -500], rx: 176, ry: 150, half: [[0, -146], [84, -140], [140, -106], [170, -50], [176, 10], [160, 64], [120, 110], [70, 146], [0, 160]], tufts: [[0.2, 0.3, 18], [0.7, 0.8, 18]] },
     ears: {
-      n: { at: [196, -462], flop: 0.12, fill: C.black, deep: P.ink, innerFill: C.fur, pts: [[168, -452], [180, -540], [196, -586], [230, -540], [238, -466]], inner: [[184, -462], [192, -530], [200, -560], [220, -528], [224, -470]] },
-      f: { at: [240, -470], flop: 0.1, fill: C.black, deep: P.ink, innerFill: C.fur, pts: [[222, -462], [238, -546], [256, -584], [282, -534], [280, -460]], inner: null },
+      at: [100, -118],
+      pts: [[-56, 22], [-34, -110], [-6, -184], [20, -120], [52, 20]],
+      inner: [[-34, 12], [-18, -96], [-6, -146], [8, -100], [30, 12]],
+      fill: C.ear,
+      innerFill: C.earIn,
+      tilt: 0.22,
+      flop: 0.5,
     },
-    tufts: false,
     face: {
-      eye: { x: 262, y: -426, r: 16, style: 'iris', iris: '#7A4A22', lid: 0.2, lidColor: C.black },
-      nose: { x: 398, y: -398, rx: 17, ry: 13 },
-      mouth: [[392, -376], [350, -366], [300, -354]],
+      eyes: { x: 72, y: -16, rx: 30, ry: 32, white: '#FBF4E4', iris: '#6B4020', irisR: 0.8, lid: 0.08, lidColor: C.blackLit },
+      muzzle: { half: [[0, 0], [38, 2], [66, 24], [78, 64], [66, 104], [38, 128], [0, 134]] },
+      muzzleInk: 5,
+      nose: { y: 36, w: 32, h: 23 },
+      mouth: { y: 82, w: 28, drop: 14, h: 40, style: 'cat', fangs: 14 },
       whiskers: null,
-      blush: null,
-      tongue: 46,
-      fangs: 1.1,
+      blush: [120, 44, 22],
     },
-    hooks: { body: markings, bodyAfter: harness, front: collarKit, behind: stone },
+    shadowW: 270,
+    attack: 'bite',
+    hooks: {
+      skin: headMarks,
+      body: bodyMarks,
+      front: harness,
+      fx: bark,
+      ear(c2, R, B, side, T) {
+        for (let k = 0; k < 5; k++) {
+          const x = (-22 + k * 11) * side;
+          K.line(c2, M.all(T, K.curve([[x, 14], [x * 0.8 + side * 4, -30 - 8 * (k % 2)], [x * 0.5 + side * 6, -64 - 14 * (k % 3)]], 4)), { width: 3.2, color: '#F6E6C8', seed: sd('ef', side, k), boil: B, taper: [2, 6] });
+        }
+      },
+    },
     poses: {
-      idle(d, n, P0) {
-        return Object.assign(P0.idle(d, n), { fx: { swing: Math.sin((Math.PI * 2 * d) / n) * 0.3 } });
+      idle(d, n, base) {
+        // the tail sweeps the floor now and then
+        const p = base.idle(d, n);
+        p.tail = 0.25 * K.wave(d / n);
+        return p;
       },
-      walk(d, n, P0) {
-        return Object.assign(P0.walk(d, n), { fx: { swing: Math.cos((Math.PI * 2 * d) / n) } });
-      },
-      // ears back in a crouch, the leap, both forepaws on the stone, it cracks, proud
-      work(d, n, P0) {
-        const st = P0.idle(0, 12).legs;
-        const reach = { fn: { x: 240, lift: 20 }, ff: { x: 214, lift: 30 }, hn: { x: -110, lift: 40 }, hf: { x: -90, lift: 40 } };
-        const onStone = { fn: { x: 250, lift: 64 }, ff: { x: 226, lift: 60 }, hn: { x: -130, lift: 0 }, hf: { x: -106, lift: 0 } };
-        const T = [
-          { bow: 0.2, sq: 0.9, ear: -1, eye: 'angry', legs: st, stone: 0 },
-          { bow: 0.24, sq: 0.86, ear: -1, eye: 'angry', legs: st, stone: 0, x: -20 },
-          { x: 70, y: -80, bow: -0.14, legs: reach, stone: 0, ear: -1 },
-          { x: 100, y: -40, bow: 0.06, legs: onStone, stone: 0 },
-          { x: 100, y: -30, bow: 0.16, legs: onStone, stone: 1, debris: 0.3, mouth: -1, eye: 'angry' },
-          { x: 90, y: -10, bow: 0.08, legs: onStone, stone: 1, debris: 0.7 },
-          { x: 60, bow: -0.04, legs: st, stone: 1, debris: 1.1, head: -0.1 },
-          { x: 40, bow: -0.06, legs: st, stone: 1, head: -0.16, mouth: 0.7, eye: 'happy' },
-        ][d];
-        return { x: T.x || 0, y: T.y || 0, bow: T.bow, sq: T.sq || 1, head: T.head || 0, mouth: T.mouth || 0, eyeMode: T.eye || 'open', ear: T.ear || 0, tail: d >= 6 ? 0.5 : 0, legs: T.legs, fx: { stone: T.stone, debris: T.debris || 0, swing: d % 2 ? 0.6 : -0.6 } };
+      work(d) {
+        const T = WORK[d];
+        return { sq: T.sq || 1, y: T.y || 0, scale: T.scale || 1, head: T.head || 0, ear: T.ear || 0, eyeMode: T.eye || 'open', lid: T.lid == null ? null : T.lid, mouth: T.mouth || 0, tail: T.tail || 0, fx: T.fx };
       },
     },
   });
