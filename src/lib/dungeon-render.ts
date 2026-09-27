@@ -56,6 +56,7 @@ import {
   x72Ready,
 } from './dungeon-tiles';
 import type { Dir4, FxId } from './dungeon-sprites';
+import { walkRow } from './walk';
 
 const CHUNK = 16;
 /** Сколько кусков карты держать в памяти (кусок — 256×256 точек). */
@@ -1123,7 +1124,7 @@ export class DungeonRenderer {
       dir = spin[Math.floor((h.t / SKILL.dur) * 8) % 4];
     }
     const speed = Math.hypot(h.vx, h.vy);
-    let row = speed > 0.6 ? ((Math.floor(h.walk / 0.36) % 4) + 4) % 4 : 0;
+    let row = speed > 0.6 ? walkRow(h.walk) : 0;
     if (attacking) row = ROW.attack;
     if (h.mode === 'dash') row = ROW.jump;
     const img = heroSprite(tier, dir, row, h.flash > 0);

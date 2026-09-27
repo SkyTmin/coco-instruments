@@ -46,6 +46,7 @@ import {
   runeOf,
   runePower,
   SOCKET_UNLOCK,
+  runesIdle,
   socketsOpen,
   FINDS,
   findsFound,
@@ -1162,13 +1163,6 @@ const pctText = (x: number) =>
 /** Руна словами: «Феху III · +7,1% к продаже». */
 export function runeLine(r: { kind: RuneKind; tier: number; roll: number }): string {
   return `${pctText(runePower(r))} ${runeOf(r.kind).text}`;
-}
-
-/** Есть свободное гнездо и руна, которую можно в него вставить. */
-function runesIdle(p: PrisonState, axeLevel = 0): boolean {
-  const open = socketsOpen(p, axeLevel);
-  const empty = p.sockets.slice(0, open).some((id) => !id);
-  return empty && p.runes.some((r) => !p.sockets.includes(r.id));
 }
 
 const BONUS_TEXT: { k: keyof Bonus; text: string }[] = [

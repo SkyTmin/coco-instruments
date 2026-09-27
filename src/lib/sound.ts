@@ -962,6 +962,15 @@ export function kingRoar(): void {
   play('rat.call', { gain: 0.35, at: 0.25, rate: 0.9 });
 }
 
+/**
+ * Дверь на площади: щеколда и глухой стук створки. Мягко — дверь стучит
+ * каждый раз, как входишь в здание, звонкий лязг решётки тут утомил бы.
+ */
+export function doorLatch(): void {
+  play('latch', { gain: 0.42, rate: 0.9, vary: 0.05 });
+  softThud(0.22);
+}
+
 /** Ворота арены: лязг решётки об пол. */
 export function gateSlam(): void {
   play('gate', { gain: 0.8 });

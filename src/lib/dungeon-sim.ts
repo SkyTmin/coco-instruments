@@ -62,6 +62,8 @@ import {
   walkableTile,
 } from './dungeon-world';
 import type { Rail, World, WorldObj } from './dungeon-world';
+import { collideGrid, moveBody, steerVelocity } from './walk';
+import type { Grid } from './walk';
 
 // ---------------------------------------------------------------------------
 // Входы и события.
@@ -761,43 +763,30 @@ export function solidTile(sim: Sim, x: number, y: number): boolean {
   return !walkableTile(t);
 }
 
-/** Круг против клеток: вытолкнуть наружу, скользя вдоль стены. */
-function collideTiles(sim: Sim, e: { x: number; y: number; r: number }): boolean {
-  let hit = false;
-  const x0 = Math.floor(e.x - e.r) - 1;
-  const x1 = Math.floor(e.x + e.r) + 1;
-  const y0 = Math.floor(e.y - e.r) - 1;
-  const y1 = Math.floor(e.y + e.r) + 1;
-  for (let ty = y0; ty <= y1; ty++) {
-    for (let tx = x0; tx <= x1; tx++) {
-      if (!solidTile(sim, tx, ty)) continue;
-      const cx = Math.max(tx, Math.min(e.x, tx + 1));
-      const cy = Math.max(ty, Math.min(e.y, ty + 1));
-      const dx = e.x - cx;
-      const dy = e.y - cy;
-      const d2 = dx * dx + dy * dy;
-      if (d2 >= e.r * e.r) continue;
-      hit = true;
-      if (d2 > 1e-9) {
-        const d = Math.sqrt(d2);
-        const push = e.r - d;
-        e.x += (dx / d) * push;
-        e.y += (dy / d) * push;
-      } else {
-        // Центр внутри клетки — выталкиваем к ближайшей грани.
-        const l = e.x - tx;
-        const r = tx + 1 - e.x;
-        const t = e.y - ty;
-        const b = ty + 1 - e.y;
-        const m = Math.min(l, r, t, b);
-        if (m === l) e.x = tx - e.r;
-        else if (m === r) e.x = tx + 1 + e.r;
-        else if (m === t) e.y = ty - e.r;
-        else e.y = ty + 1 + e.r;
-      }
-    }
+/**
+ * Сетка столкновений мира — клетка в целую плитку. Одна на симуляцию: удар
+ * по крысе зовёт столкновения десятки раз за кадр, и новый объект на каждый
+ * вызов был бы мусором. Клетки читаются живыми (`sim.tiles` меняется:
+ * решётки, осыпавшиеся трещины, ворота арены).
+ */
+const grids = new WeakMap<Sim, Grid>();
+function gridOf(sim: Sim): Grid {
+  let g = grids.get(sim);
+  if (!g) {
+    g = {
+      w: sim.world.w,
+      h: sim.world.h,
+      cell: 1,
+      solid: (x, y) => solidTile(sim, x, y),
+    };
+    grids.set(sim, g);
   }
-  return hit;
+  return g;
+}
+
+/** Круг против клеток: вытолкнуть наружу, скользя вдоль стены (`lib/walk.ts`). */
+function collideTiles(sim: Sim, e: { x: number; y: number; r: number }): boolean {
+  return collideGrid(gridOf(sim), e);
 }
 
 const SOLID_PROPS: PropKind[] = [
@@ -2355,10 +2344,7 @@ function stepHero(sim: Sim, dt: number, input: SimInput): void {
   }
 
   // Ход.
-  const target = st.speed * speedK;
-  const acc = Math.min(1, dt * 14);
-  h.vx += (mx * target - h.vx) * acc;
-  h.vy += (my * target - h.vy) * acc;
+  steerVelocity(h, mx, my, st.speed * speedK, dt);
   if (moving && h.mode === 'free') h.face = Math.atan2(my, mx);
   moveHero(sim, dt);
 }
@@ -2383,21 +2369,14 @@ function perfectDodge(sim: Sim): boolean {
 
 function moveHero(sim: Sim, dt: number): void {
   const h = sim.hero;
-  const ox = h.x;
-  const oy = h.y;
-  const n = Math.max(1, Math.ceil((Math.hypot(h.vx, h.vy) * dt) / 0.2));
-  for (let i = 0; i < n; i++) {
-    h.x += (h.vx * dt) / n;
-    h.y += (h.vy * dt) / n;
-    collideTiles(sim, h);
+  const moved = moveBody(gridOf(sim), h, dt, () => {
     const cart = collideProps(sim, h);
     if (cart?.kind === 'cart' && cart.rail && Math.abs(cart.v) < 1) {
       // Упёрся в вагонетку вдоль рельсов — она медленно подаётся.
       const along = cart.rail.axis === 'v' ? h.vy : h.vx;
       if (Math.abs(along) > 1) cart.v = Math.sign(along) * 1.6;
     }
-  }
-  const moved = Math.hypot(h.x - ox, h.y - oy);
+  });
   sim.meters += moved;
   if (moved > 0.001) h.walk += moved;
   if (sim.meters >= 1) {
