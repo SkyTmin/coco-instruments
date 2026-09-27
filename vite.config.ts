@@ -48,8 +48,17 @@ export default defineConfig({
         // lazily when importing a payslip. Precaching them bloated the service
         // worker and blew the build's memory on the small VPS — fetch on demand.
         // Питомцы (ui/pets, ~16 МБ полос кадров) — тоже по требованию: игрок
-        // видит троих из восемнадцати, а не всех разом.
-        globIgnores: ['**/eruda-*.js', '**/emoji/**', '**/pdf-*.js', '**/pdf.worker*', '**/ui/pets/**'],
+        // видит троих из восемнадцати, а не всех разом. Площадь каторги
+        // (hub: пол карт, атлас, жители) — по требованию и по ревизии в
+        // адресе, как питомцы: её перерисовывают картами по одной.
+        globIgnores: [
+          '**/eruda-*.js',
+          '**/emoji/**',
+          '**/pdf-*.js',
+          '**/pdf.worker*',
+          '**/ui/pets/**',
+          '**/hub/**',
+        ],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],
         cleanupOutdatedCaches: true,
@@ -80,6 +89,17 @@ export default defineConfig({
             options: {
               cacheName: 'coco-pets',
               expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 90 },
+            },
+          },
+          {
+            // Площадь каторги: карты, атлас, жители и их портреты. В адресе
+            // ?v=HUB_REV (lib/hub-maps.ts) — перерисованная карта не
+            // отдастся из старого кеша.
+            urlPattern: ({ url }) => url.pathname.startsWith('/hub/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'coco-hub',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 90 },
             },
           },
           {

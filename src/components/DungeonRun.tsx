@@ -13,6 +13,7 @@ import { KeyIcon, TokenIcon } from '@/components/PrisonCamp';
 import { DungeonMine } from '@/components/DungeonMine';
 import { DungeonInventory } from '@/components/DungeonInventory';
 import { AudioToggles } from '@/components/AudioToggles';
+import { FloatingStick, useFloatingStick } from '@/components/FloatingStick';
 import { useFinanceStore } from '@/store';
 import type { DungeonExit } from '@/store';
 import {
@@ -252,8 +253,6 @@ export function DungeonRun({
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mapRef = useRef<HTMLCanvasElement>(null);
-  const stickRef = useRef<HTMLDivElement>(null);
-  const knobRef = useRef<HTMLElement>(null);
   const sackRef = useRef<HTMLButtonElement>(null);
   const atkRef = useRef<HTMLButtonElement>(null);
   const dashRef = useRef<HTMLButtonElement>(null);
@@ -269,7 +268,16 @@ export function DungeonRun({
   const simRef = useRef<Sim | null>(null);
   const rendRef = useRef<DungeonRenderer | null>(null);
   const input = useRef<SimInput>({ ...NO_INPUT });
-  const stick = useRef<{ id: number; x: number; y: number } | null>(null);
+  // Левая часть экрана — джойстик там, где коснулся (`FloatingStick`).
+  const stickRef = useRef<HTMLDivElement>(null);
+  const stickApi = useFloatingStick({
+    rootRef,
+    stickRef,
+    onMove: (mx, my) => {
+      input.current.mx = mx;
+      input.current.my = my;
+    },
+  });
   const atk = useRef<{ id: number; x: number; y: number; swiped: boolean } | null>(null);
   const paused = useRef(false);
   const ended = useRef(false);
@@ -453,24 +461,6 @@ export function DungeonRun({
     [],
   );
 
-  // Джойстик в покое стоит внизу слева полупрозрачным: видно, чем ходить.
-  // Коснулся левой половины — встаёт под палец; отпустил — возвращается.
-  const parkStick = useCallback(() => {
-    const s = stickRef.current;
-    const el = rootRef.current;
-    if (!s || !el) return;
-    const h = el.clientHeight;
-    s.style.transform = `translate(${36}px, ${Math.max(120, h - 210)}px)`;
-    s.classList.remove('is-on');
-    s.classList.add('is-idle');
-    if (knobRef.current) knobRef.current.style.transform = 'translate(0px, 0px)';
-  }, []);
-  useEffect(() => {
-    parkStick();
-    window.addEventListener('resize', parkStick);
-    return () => window.removeEventListener('resize', parkStick);
-  }, [parkStick]);
-
   // Пауза, пока открыт любой лист или шахта. «Назад» Telegram — сперва пауза.
   const sheetOpen = useRef(false);
   useEffect(() => {
@@ -478,10 +468,11 @@ export function DungeonRun({
     paused.current = sheetOpen.current || ended.current;
     if (sheetOpen.current) {
       input.current = { ...NO_INPUT };
-      stick.current = null;
-      parkStick();
+      stickApi.release();
     }
-  }, [sheet, mine, parkStick]);
+    // release — стабильный колбэк хука.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet, mine]);
   useEffect(() => {
     if (sheet || mine || dying) return undefined;
     return registerEscape(() => setSheet('pause'));
@@ -860,8 +851,6 @@ export function DungeonRun({
 
   // ---- Пальцы ------------------------------------------------------------
 
-  const STICK_R = 46;
-
   const onRootDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     primeAudio();
     if (paused.current || ended.current) return;
@@ -871,22 +860,7 @@ export function DungeonRun({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     // Левая часть экрана — джойстик там, где коснулся.
-    if (x < rect.width * 0.55 && !stick.current) {
-      stick.current = { id: e.pointerId, x, y };
-      const s = stickRef.current;
-      if (s) {
-        s.style.transform = `translate(${x - 60}px, ${y - 60}px)`;
-        s.classList.remove('is-idle');
-        s.classList.add('is-on');
-      }
-      if (knobRef.current) knobRef.current.style.transform = 'translate(0px, 0px)';
-      try {
-        el.setPointerCapture(e.pointerId);
-      } catch {
-        /* нет захвата — и ладно */
-      }
-      return;
-    }
+    if (stickApi.down(e)) return;
     // Правая часть — тап по крысе: цель и удар в неё.
     const sim = simRef.current;
     const r = rendRef.current;
@@ -909,42 +883,10 @@ export function DungeonRun({
     }
   };
 
-  const onRootMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const s = stick.current;
-    if (!s || s.id !== e.pointerId) return;
-    const el = rootRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    let dx = e.clientX - rect.left - s.x;
-    let dy = e.clientY - rect.top - s.y;
-    const len = Math.hypot(dx, dy);
-    // Палец ушёл дальше края — основа едет за ним (как в Brawl Stars).
-    if (len > STICK_R * 1.6) {
-      const k = (len - STICK_R * 1.6) / len;
-      s.x += dx * k;
-      s.y += dy * k;
-      dx -= dx * k;
-      dy -= dy * k;
-      if (stickRef.current)
-        stickRef.current.style.transform = `translate(${s.x - 60}px, ${s.y - 60}px)`;
-    }
-    const l2 = Math.hypot(dx, dy);
-    const k = l2 > STICK_R ? STICK_R / l2 : 1;
-    if (knobRef.current) knobRef.current.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
-    const mag = Math.min(1, l2 / STICK_R);
-    // Мёртвая зона: дрожь пальца не двигает героя.
-    const m = mag < 0.14 ? 0 : (mag - 0.14) / 0.86;
-    input.current.mx = l2 > 0 ? (dx / l2) * m : 0;
-    input.current.my = l2 > 0 ? (dy / l2) * m : 0;
-  };
+  const onRootMove = (e: ReactPointerEvent<HTMLDivElement>) => stickApi.move(e);
 
   const onRootUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const s = stick.current;
-    if (!s || s.id !== e.pointerId) return;
-    stick.current = null;
-    input.current.mx = 0;
-    input.current.my = 0;
-    parkStick();
+    stickApi.up(e);
   };
 
   // Удар: тап — удар серии, держать — тяжёлый, свайп с кнопки — удар туда.
@@ -1296,9 +1238,7 @@ export function DungeonRun({
         </div>
       )}
 
-      <div className="dg-stick is-idle" ref={stickRef} aria-hidden="true">
-        <i ref={knobRef} />
-      </div>
+      <FloatingStick api={stickApi} />
 
       {/* Кнопки под правый большой палец. */}
       <div className="dgx-pad" onPointerDown={stop}>

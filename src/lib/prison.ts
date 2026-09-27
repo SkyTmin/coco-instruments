@@ -905,6 +905,12 @@ export function forgeCheck(p: {
   };
 }
 
+/** Можно ли выковать прямо сейчас — для «!» у кузницы и у кузнеца на площади. */
+export function forgeReadyNow(p: Parameters<typeof forgeCheck>[0], balance: number): boolean {
+  const c = forgeCheck(p);
+  return !!c && c.open && c.ore && balance >= c.coins;
+}
+
 /** Выковать: руда уходит из ящика, недостающая — из рюкзака. */
 export function forgeTake(pick: number, box: Bag, bag: Bag): { box: Bag; bag: Bag } {
   const outBox: Bag = { ...box };
@@ -1882,6 +1888,19 @@ export function rollRune(
 export function socketsOpen(p: { pickXp: number; miles?: string[] }, axeLevel = 0): number {
   const level = Math.max(pickLevelOf(p.pickXp).level, axeLevel);
   return SOCKET_UNLOCK.filter((l) => level >= l).length + (p.miles?.includes('p10') ? 1 : 0);
+}
+
+/**
+ * «•» у рун: есть свободное гнездо и руна, которую можно в него вставить.
+ * Одна функция на лагерь и на Чародея площади — «!» не расходится.
+ */
+export function runesIdle(
+  p: Pick<PrisonState, 'runes' | 'sockets' | 'pickXp' | 'miles'>,
+  axeLevel = 0,
+): boolean {
+  const open = socketsOpen(p, axeLevel);
+  const empty = p.sockets.slice(0, open).some((id) => !id);
+  return empty && p.runes.some((r) => !p.sockets.includes(r.id));
 }
 
 /**

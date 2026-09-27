@@ -23,6 +23,7 @@ import {
   bagCost,
   forgeCheck,
   forgeOres,
+  forgeReadyNow,
   modsOf,
   nextPick,
   opensRocks,
@@ -643,11 +644,8 @@ function ForgeReveal({ pick, onDone }: { pick: number; onDone: () => void }) {
   );
 }
 
-/** Можно ли выковать прямо сейчас — для «!» на кнопке кузницы. */
-export function forgeReadyNow(p: Parameters<typeof forgeCheck>[0], balance: number): boolean {
-  const c = forgeCheck(p);
-  return !!c && c.open && c.ore && balance >= c.coins;
-}
+/** Можно ли выковать прямо сейчас — правило живёт в `lib/prison.ts`. */
+export { forgeReadyNow };
 
 /** Есть ли вообще следующая кирка (без престижа, которого нет). */
 export const hasNextPick = (p: { pickMax: number; prestige: number }) => nextPick(p) >= 0;

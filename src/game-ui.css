@@ -2069,23 +2069,8 @@
 }
 
 /* ==========================================================================
-   Двор (pages/YardPage.tsx).
+   Двор (pages/YardPage.tsx): фишка ранга и доска объявлений (окно «Доска»).
    ========================================================================== */
-.yardx {
-  position: relative;
-  min-height: 100%;
-  padding: calc(var(--safe-top) + var(--content-top) + 14px) 14px calc(var(--safe-bottom) + 24px);
-  color: var(--gx-paper);
-}
-.yardx__wrap {
-  position: relative;
-  z-index: 1;
-  max-width: 560px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 .yardx__rank {
   background: var(--gx-red-d);
 }
@@ -2168,75 +2153,346 @@
   opacity: 1;
   box-shadow: 0 0 10px var(--ev);
 }
-.yardx-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+
+/* ==========================================================================
+   Площадь каторги (v2.80, pages/YardPage.tsx): мир рисует канва, разметка —
+   только табло, джойстик, кнопка действия, окно разговора и карта. Бюджет
+   кадра тот же, что у подземелья: анимируются transform и opacity.
+   ========================================================================== */
+.hub {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow: hidden;
+  background: #07060a;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  color: var(--gx-paper);
 }
-.yardx-b {
-  position: relative;
+.hub__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+.hub-top {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--content-top) + 8px);
+  left: 10px;
+  right: 10px;
+  z-index: 3;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  pointer-events: none;
+}
+.hub-top > * {
+  pointer-events: auto;
+}
+.hub-top .gx-top {
+  margin: 0;
+  gap: 6px;
+}
+
+/* Живое событие — одна строка под табло; тап ведёт туда, где оно идёт. */
+.hub-ev {
+  align-self: center;
+  display: inline-flex;
   align-items: center;
-  text-align: center;
-  gap: 3px;
-  padding: 6px 6px 8px;
-  border: 8px solid transparent;
-  border-image: url('/ui/kenney/panel_brown_dark.png') 8 fill / 8px stretch;
-  image-rendering: pixelated;
-  background: none;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 10px 3px 4px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(28, 18, 10, 0.88);
+  box-shadow:
+    inset 0 0 0 2px var(--ev, var(--gx-gold)),
+    0 3px 0 rgba(0, 0, 0, 0.35);
   color: var(--gx-paper);
-  font: inherit;
+  font:
+    800 13px/1 'GxRubik',
+    system-ui,
+    sans-serif;
   cursor: pointer;
-  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3);
-  transition:
-    transform 80ms ease-out,
-    box-shadow 80ms ease-out,
-    filter 120ms;
+  animation: hub-pop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
-.yardx-b:active:not(:disabled) {
-  transform: translateY(3px);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
-}
-.yardx-b__medal {
-  position: relative;
+.hub-ev__glyph {
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 64px;
-  margin-top: -2px;
-  background: url('/ui/kenney/round_brown.png') center / 100% 100% no-repeat;
-  color: var(--gx-wood-d);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ev, var(--gx-wood));
+  font-size: 13px;
 }
-.yardx-b__medal .gx-icon {
-  width: 60%;
-  height: 60%;
+.hub-ev b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.yardx-b__lock {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  color: #fff;
-  filter: drop-shadow(0 2px 0 #000);
-}
-.yardx-b b {
-  font-size: 16px;
-  font-weight: 800;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
-}
-.yardx-b i {
+.hub-ev em {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-style: normal;
-  font-size: 12px;
-  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
   opacity: 0.9;
 }
-.yardx-b.is-locked {
-  filter: grayscale(0.85) brightness(0.72);
-  cursor: default;
+
+.hub-toast {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: calc(var(--safe-top) + var(--content-top) + 128px);
+  max-width: calc(100vw - 32px);
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(61, 42, 22, 0.94);
+  box-shadow:
+    inset 0 0 0 2px var(--gx-wood-dd),
+    0 4px 0 rgba(0, 0, 0, 0.35);
+  color: var(--gx-paper);
+  font:
+    700 14px/1.3 'GxRubik',
+    system-ui,
+    sans-serif;
+  text-align: center;
+  translate: -50% 0;
+  pointer-events: none;
+  animation: hub-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
-.yardx-b .gx-badge {
-  top: -10px;
-  right: -10px;
+
+/* Под правый большой палец: карта и кнопка действия. */
+.hub-pad {
+  position: absolute;
+  z-index: 3;
+  right: 12px;
+  bottom: calc(var(--safe-bottom) + 26px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+  pointer-events: none;
+}
+.hub-pad > * {
+  pointer-events: auto;
+}
+.hub-pad__map {
+  --gx-size: 52px;
+}
+.hub-pad__use {
+  min-height: 52px;
+  font-size: 17px;
+  white-space: nowrap;
+  animation: hub-use 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.3) both;
+}
+
+/* Смена карты: в чёрное и из чёрного, по четверти секунды. */
+.hub-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s linear;
+}
+.hub-fade.is-on {
+  opacity: 1;
+}
+
+/* Разговор: портрет, имя, реплика печатается, кнопки дел и «Пока». */
+.hub-talk {
+  position: absolute;
+  z-index: 7;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 8px calc(var(--safe-bottom) + 10px);
+  animation: hub-talk-in 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.08) both;
+}
+.hub-talk__box {
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px;
+}
+.hub-talk__head {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.hub-talk__face {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 6px;
+  background: radial-gradient(circle at 50% 40%, #3a2a1c, #140e0a 75%);
+  box-shadow:
+    inset 0 0 0 2px var(--gx-wood-dd),
+    inset 0 0 0 4px var(--gx-wood);
+}
+.hub-talk__face img {
+  width: 76px;
+  height: 76px;
+  image-rendering: pixelated;
+}
+.hub-talk__face .gx-badge {
+  top: -6px;
+  right: -6px;
+}
+.hub-talk__say {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 84px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 4px 10px 12px;
+  background: none;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.hub-talk .hub-talk__name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--gx-red-d);
+  text-shadow: none;
+}
+.hub-talk__text {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--gx-ink);
+  white-space: pre-wrap;
+}
+.hub-talk__more {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid var(--gx-wood-d);
+  animation: hub-more 0.9s steps(2, jump-none) infinite;
+}
+.hub-talk__opts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.hub-talk__opts .gx-btn {
+  flex: 1 1 auto;
+  min-width: 92px;
+}
+
+/* Карта площади: пол и постройки одним кадром, подписи зданий — кнопки. */
+.hub-map__frame {
+  position: relative;
+  width: 100%;
+  margin: 18px 0 4px;
+}
+.hub-map__cv {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 2px var(--gx-wood-dd);
+}
+.hub-map__pin {
+  position: absolute;
+  translate: -50% -100%;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(61, 42, 22, 0.94);
+  box-shadow:
+    0 0 0 2px var(--gx-wood-dd),
+    0 3px 0 rgba(0, 0, 0, 0.35);
+  color: var(--gx-paper);
+  font:
+    800 12px/1.1 'GxRubik',
+    system-ui,
+    sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hub-map__pin .gx-badge {
+  top: -9px;
+  right: -9px;
+  min-width: 18px;
+  height: 18px;
+}
+.hub-map__me {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: #7fe6d0;
+  box-shadow:
+    0 0 0 2px #0b1e1a,
+    0 0 8px #7fe6d0;
+  animation: hub-me 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes hub-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.94);
+  }
+}
+@keyframes hub-use {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.8);
+  }
+}
+@keyframes hub-talk-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+@keyframes hub-more {
+  to {
+    transform: translateY(2px);
+  }
+}
+@keyframes hub-me {
+  50% {
+    transform: scale(1.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-ev,
+  .hub-toast,
+  .hub-talk,
+  .hub-talk__more,
+  .hub-map__me,
+  .hub-pad__use {
+    animation: none;
+  }
+  .hub-fade {
+    transition: none;
+  }
 }
 
 /* ==========================================================================
