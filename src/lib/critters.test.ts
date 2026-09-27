@@ -11,6 +11,7 @@ import {
   normalizeTreasure,
   riskable,
   riskDeal,
+  riskHand,
   riskReveal,
   shinyRoll,
   shinyValue,
@@ -100,7 +101,10 @@ describe('сундучок', () => {
     expect(normalizeTreasure({ options: [{ kind: 'pet', id: 'x' }] })).toBeNull();
     const t = normalizeTreasure({
       from: 'batRare',
-      options: [{ kind: 'coins', amount: 10 }, { kind: 'keys', amount: 1 }],
+      options: [
+        { kind: 'coins', amount: 10 },
+        { kind: 'keys', amount: 1 },
+      ],
       pick: 9,
       stake: -5,
       step: 99,
@@ -116,7 +120,21 @@ describe('сундучок', () => {
       stake: 0,
       step: 4,
       dealer: 51,
+      hand: [],
     });
+    // Рука с повтором или с картой сдающего — выброшена, раздача доберёт её.
+    expect(
+      normalizeTreasure({ options: [{ kind: 'coins', amount: 1 }], dealer: 5, hand: [1, 1, 2, 3] })!
+        .hand,
+    ).toEqual([]);
+    expect(
+      normalizeTreasure({ options: [{ kind: 'coins', amount: 1 }], dealer: 5, hand: [5, 1, 2, 3] })!
+        .hand,
+    ).toEqual([]);
+    expect(
+      normalizeTreasure({ options: [{ kind: 'coins', amount: 1 }], dealer: 5, hand: [0, 1, 2, 3] })!
+        .hand,
+    ).toEqual([0, 1, 2, 3]);
   });
 });
 
@@ -124,10 +142,24 @@ describe('риск-игра', () => {
   it('четыре закрытые карты разные и не повторяют карту сдающего', () => {
     const rnd = lcg(7);
     for (let k = 0; k < 2000; k++) {
-      const d = riskDeal(rnd);
-      const r = riskReveal(d, k % 4, rnd);
-      expect(new Set([...r.cards, d]).size).toBe(5);
+      const { dealer, hand } = riskDeal(rnd);
+      expect(new Set([...hand, dealer]).size).toBe(5);
     }
+  });
+
+  it('проигрышной раздачи не бывает: среди закрытых всегда есть старше и младше', () => {
+    // v2.78: «бывает, что все карты младше выпавшей — 100% проиграешь».
+    const rnd = lcg(11);
+    for (let k = 0; k < 20_000; k++) {
+      const { dealer, hand } = riskDeal(rnd);
+      const his = cardRank(dealer);
+      expect(his).toBeGreaterThanOrEqual(1);
+      expect(his).toBeLessThanOrEqual(11);
+      expect(hand.some((c) => cardRank(c) > his)).toBe(true);
+      expect(hand.some((c) => cardRank(c) < his)).toBe(true);
+    }
+    // У старого сохранения мог остаться туз сдающего — рука всё равно сдаётся.
+    expect(riskHand(12, rnd).some((c) => cardRank(c) < 12)).toBe(true);
   });
 
   it('честная: выиграть и проиграть одинаково вероятно', () => {
@@ -136,13 +168,16 @@ describe('риск-игра', () => {
     let lose = 0;
     const n = 300_000;
     for (let k = 0; k < n; k++) {
-      const r = riskReveal(riskDeal(rnd), Math.floor(rnd() * 4), rnd);
+      const { dealer, hand } = riskDeal(rnd);
+      const r = riskReveal(dealer, hand, Math.floor(rnd() * 4));
       if (r.outcome === 'win') win++;
       else if (r.outcome === 'lose') lose++;
     }
     expect(Math.abs(win - lose) / n).toBeLessThan(0.006);
-    // Ничья — примерно каждая семнадцатая (3 из 51 карты того же достоинства).
-    expect((n - win - lose) / n).toBeCloseTo(3 / 51, 2);
+    // Ничья — примерно каждая восемнадцатая: закрытых того же достоинства
+    // три из пятидесяти одной, и условие «старше и младше» их чуть теснит.
+    expect((n - win - lose) / n).toBeGreaterThan(0.03);
+    expect((n - win - lose) / n).toBeLessThan(0.07);
   });
 
   it('в среднем риск ничего не отнимает и не дарит', () => {
@@ -153,7 +188,8 @@ describe('риск-игра', () => {
     for (let k = 0; k < n; k++) {
       let stake = 1;
       for (;;) {
-        const r = riskReveal(riskDeal(rnd), 0, rnd);
+        const { dealer, hand } = riskDeal(rnd);
+        const r = riskReveal(dealer, hand, 0);
         if (r.outcome === 'draw') continue;
         stake = r.outcome === 'win' ? stake * 2 : 0;
         break;

@@ -3389,6 +3389,9 @@
   inset: 0;
   z-index: 10;
   display: grid;
+  /* Колонка — ровно поле. Без неё колонка росла под кнопки, и на 375×667
+     (поле 245 px) весь сундучок уезжал вправо, «Рискнуть» — за край. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   touch-action: none;
   cursor: default;
@@ -3410,7 +3413,10 @@
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  /* Поле бывает уже экрана (его режет высота): стол шире поля и стоит по
+     его центру, выходя на раму поровну с обеих сторон. */
+  width: min(340px, calc(100vw - 24px));
+  justify-self: center;
   padding: 0 10px;
 }
 .ptreasure__title {

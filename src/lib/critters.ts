@@ -161,6 +161,7 @@ export function newTreasure(from: TreasureFrom, options: Reward[]): Treasure {
     stake: one && riskable(r) ? (r as { amount: number }).amount : 0,
     step: 0,
     dealer: -1,
+    hand: [],
   };
 }
 
@@ -174,8 +175,35 @@ export const cardSuit = (c: number): number => Math.floor(c / 13);
 
 export const RANK_NAMES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'В', 'Д', 'К', 'Т'];
 
-export function riskDeal(rnd: () => number): number {
-  return Math.floor(rnd() * 52);
+/**
+ * Раздача (v2.78): карта сдающего и сразу четыре закрытые. Владелец:
+ * «бывает, что все карты младше выпавшей — 100% проиграешь, так не должно
+ * быть». Поэтому у сдающего только тройка…король (против туза не выиграть,
+ * против двойки не проиграть), а среди закрытых всегда есть и старше, и
+ * младше: выбор всегда что-то решает. Оба условия зеркальны, поэтому игра
+ * по-прежнему честная — выиграть и проиграть одинаково вероятно (тест).
+ */
+export function riskDeal(rnd: () => number): { dealer: number; hand: number[] } {
+  const dealer = 13 * Math.floor(rnd() * 4) + 1 + Math.floor(rnd() * 11);
+  return { dealer, hand: riskHand(dealer, rnd) };
+}
+
+/**
+ * Четыре закрытые карты к карте сдающего: разные, не она сама, хотя бы одна
+ * старше и одна младше — если такие вообще есть в колоде (у старого
+ * сохранения мог остаться туз или двойка сдающего).
+ */
+export function riskHand(dealer: number, rnd: () => number): number[] {
+  const his = cardRank(dealer);
+  for (;;) {
+    const deck: number[] = [];
+    for (let c = 0; c < 52; c++) if (c !== dealer) deck.push(c);
+    const hand: number[] = [];
+    for (let i = 0; i < 4; i++) hand.push(deck.splice(Math.floor(rnd() * deck.length), 1)[0]);
+    const up = hand.some((c) => cardRank(c) > his) || his === 12;
+    const down = hand.some((c) => cardRank(c) < his) || his === 0;
+    if (up && down) return hand;
+  }
 }
 
 export type RiskOutcome = 'win' | 'lose' | 'draw';
@@ -187,19 +215,11 @@ export interface RiskReveal {
   outcome: RiskOutcome;
 }
 
-/** Открыть карту `pick` (0…3). Остальные три открываются для вида. */
-export function riskReveal(dealer: number, pick: number, rnd: () => number): RiskReveal {
-  const deck: number[] = [];
-  for (let c = 0; c < 52; c++) if (c !== dealer) deck.push(c);
-  const cards: number[] = [];
-  for (let i = 0; i < 4; i++) {
-    const j = Math.floor(rnd() * deck.length);
-    cards.push(deck[j]);
-    deck.splice(j, 1);
-  }
-  const mine = cardRank(cards[pick]);
+/** Открыть карту `pick` (0…3) из розданных. Остальные три открываются для вида. */
+export function riskReveal(dealer: number, hand: number[], pick: number): RiskReveal {
+  const mine = cardRank(hand[pick]);
   const his = cardRank(dealer);
-  return { cards, pick, outcome: mine > his ? 'win' : mine < his ? 'lose' : 'draw' };
+  return { cards: hand, pick, outcome: mine > his ? 'win' : mine < his ? 'lose' : 'draw' };
 }
 
 // ---------------------------------------------------------------------------

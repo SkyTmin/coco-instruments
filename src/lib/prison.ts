@@ -1328,6 +1328,8 @@ export interface Treasure {
   step: number;
   /** Открытая карта сдающего (0…51); −1 — раздачи нет. */
   dealer: number;
+  /** Четыре закрытые карты раздачи (v2.78): сданы вместе с картой сдающего. */
+  hand: number[];
 }
 
 /** Больше четырёх удвоений (×16) не бывает: дальше — чистая лотерея. */
@@ -1348,13 +1350,25 @@ export function normalizeTreasure(raw: unknown): Treasure | null {
   if (!options.length) return null;
   const num = (v: unknown, lo: number, hi: number, d: number) =>
     typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : d;
+  const dealer = num(t.dealer, -1, 51, -1);
+  const raw4 = Array.isArray(t.hand) ? t.hand : [];
+  // Рука — четыре разные карты, не карта сдающего; иначе её нет, и раздача
+  // (если была) доберёт её при выборе (`riskHand`).
+  const hand =
+    dealer >= 0 &&
+    raw4.length === 4 &&
+    raw4.every((c) => Number.isInteger(c) && c >= 0 && c < 52 && c !== dealer) &&
+    new Set(raw4).size === 4
+      ? raw4
+      : [];
   return {
     from,
     options,
     pick: num(t.pick, -1, options.length - 1, -1),
     stake: num(t.stake, 0, 1e13, 0),
     step: num(t.step, 0, RISK_STEPS, 0),
-    dealer: num(t.dealer, -1, 51, -1),
+    dealer,
+    hand,
   };
 }
 

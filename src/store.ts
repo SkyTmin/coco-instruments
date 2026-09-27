@@ -276,6 +276,7 @@ import {
   RISK_STEPS,
   riskable,
   riskDeal,
+  riskHand,
   riskReveal,
   shinyValue,
 } from '@/lib/critters';
@@ -3981,8 +3982,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!riskable(t.options[t.pick])) return null;
     // Карта сдающего открыта — ставка на кону. Запись сразу: закрыл
     // приложение, увидев туза, — вернёшься к тому же тузу.
-    const dealer = riskDeal(Math.random);
-    const prison = { ...p, treasure: { ...t, dealer } };
+    const { dealer, hand } = riskDeal(Math.random);
+    const prison = { ...p, treasure: { ...t, dealer, hand } };
     set({ prison });
     persistPrison(prison);
     flushers.forEach((f) => f());
@@ -3993,12 +3994,15 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const p = get().prison;
     const t = p.treasure;
     if (!t || t.dealer < 0 || slot < 0 || slot > 3) return null;
-    const rev = riskReveal(t.dealer, slot, Math.random);
+    // Рука сдана вместе с картой сдающего; у раздачи из старой версии её
+    // нет — добираем по тем же правилам.
+    const hand = t.hand.length === 4 ? t.hand : riskHand(t.dealer, Math.random);
+    const rev = riskReveal(t.dealer, hand, slot);
     let treasure: Treasure | null;
     if (rev.outcome === 'win')
-      treasure = { ...t, stake: t.stake * 2, step: t.step + 1, dealer: -1 };
+      treasure = { ...t, stake: t.stake * 2, step: t.step + 1, dealer: -1, hand: [] };
     else if (rev.outcome === 'lose') treasure = null;
-    else treasure = { ...t, dealer: -1 };
+    else treasure = { ...t, dealer: -1, hand: [] };
     const prison = { ...p, treasure };
     set({ prison });
     persistPrison(prison);
