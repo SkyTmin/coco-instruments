@@ -297,7 +297,12 @@ export class HubRenderer {
     const mw = sim.map.w * TS;
     const mh = sim.map.h * TS;
     this.left = this.q(this.edge(this.camX - this.gw / 2, mw, this.gw, 0, 0));
-    this.top = this.q(this.edge(this.camY - sy, mh, this.gh, this.insetTop, this.insetBottom));
+    // Снизу у площади пустоты не показываем вовсе: под джойстиком и кнопкой
+    // карты лежит сама площадь (там стена и ворота), а не фон за её краем —
+    // иначе у ворот внизу экрана висела пустая бурая полоса. Комнату же
+    // по-прежнему центруем в части экрана над нижними кнопками.
+    const hi = sim.map.data.kind === 'outdoor' ? 0 : this.insetBottom;
+    this.top = this.q(this.edge(this.camY - sy, mh, this.gh, this.insetTop, hi));
   }
 
   // ---- Кадр --------------------------------------------------------------
