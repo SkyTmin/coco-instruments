@@ -1,3 +1,9 @@
+// Бой подземелья и баланс первого этажа «Крысиные норы» (v2.81). Движок
+// общий, карты и монстры — этажа 1: Вход в шахты (первый комплект) и
+// Прогрызенные штреки (второй). Короля и механики этажа (капканы,
+// растяжки, Зал черепов, броня латника, чары шамана) держит
+// `dungeon-floors/f1.test.ts`.
+
 import { describe, expect, it } from 'vitest';
 import { DUNGEON_START, heroOf, MOBS, SLOTS } from './dungeon';
 import type { DungeonState, Gear } from './dungeon';
@@ -9,15 +15,18 @@ import {
   snapshot,
   spawnMob,
   stepSim,
+  strikeHits,
   SWORD,
   takeDelta,
   usableNear,
   useObject,
 } from './dungeon-sim';
 import type { Sim, SimEvent, SimInput } from './dungeon-sim';
+import { f1State } from './dungeon-floors/f1-brains';
 
-const world = buildWorld();
+const world = buildWorld(1);
 const DT = 1 / 60;
+const DIAG = !!process.env.DIAG;
 
 function dungeon(tier: number, plus: number, extra: Partial<DungeonState> = {}): DungeonState {
   const gear = {} as Gear;
@@ -45,7 +54,12 @@ function sim(
   });
 }
 
-/** Поле расстояний до цели — бот идёт по нему. */
+/** Клетки с капканами: живой игрок их видит и обходит. */
+const TRAPS = new Set(
+  world.objs.filter((o) => o.ref === 'f1_trap').map((o) => o.y * world.w + o.x),
+);
+
+/** Поле расстояний до цели — бот идёт по нему (капканы обходит). */
 function field(tx: number, ty: number): Int32Array {
   const f = new Int32Array(world.w * world.h).fill(-1);
   const q = [ty * world.w + tx];
@@ -62,7 +76,7 @@ function field(tx: number, ty: number): Int32Array {
     ]) {
       const j = (y + dy) * world.w + x + dx;
       const t = world.tiles[j];
-      if (f[j] >= 0 || !(walkableTile(t) || t === Tile.Gate)) continue;
+      if (f[j] >= 0 || !(walkableTile(t) || t === Tile.Gate) || TRAPS.has(j)) continue;
       f[j] = f[i] + 1;
       q.push(j);
     }
@@ -70,38 +84,87 @@ function field(tx: number, ty: number): Int32Array {
   return f;
 }
 
+const REACT = 0.3;
+
+/** Куда уйти от угрозы: прочь от середины (или вбок от линии). */
+function away(
+  hx: number,
+  hy: number,
+  cx: number,
+  cy: number,
+  line?: number,
+): { x: number; y: number } {
+  if (line !== undefined) {
+    const nx = -Math.sin(line);
+    const ny = Math.cos(line);
+    const side = (hx - cx) * nx + (hy - cy) * ny >= 0 ? 1 : -1;
+    return { x: nx * side, y: ny * side };
+  }
+  const a = Math.atan2(hy - cy, hx - cx) + 0.5;
+  return { x: Math.cos(a), y: Math.sin(a) };
+}
+
 /**
- * Бот: живой игрок средней руки. Видит замах — уворачивается, но с
- * задержкой реакции 0,3 с; ест, когда здоровья меньше 40%; дерётся с
- * ближайшим, остальное время идёт к цели.
+ * Бот: живой игрок средней руки. Видит метки на полу — замах, линию,
+ * конус, круг, место падения камня — и уходит из них с задержкой реакции
+ * 0,3 с (рывком, если рывок готов). Капканы обходит, растяжки
+ * перепрыгивает рывком, из капкана вырывается рывком. Ест, когда здоровья
+ * меньше 40%; дерётся с ближайшим, латника бьёт, только когда тот открыт;
+ * остальное время идёт к цели.
  */
 function bot(s: Sim, goal: Int32Array | null, st: { lastAtk: number; noEat?: boolean }): SimInput {
   const h = s.hero;
   const inp: SimInput = { ...NO_INPUT };
-  const REACT = 0.3;
+  const flee = (d: { x: number; y: number }, now: boolean) => {
+    inp.mx = d.x;
+    inp.my = d.y;
+    if (now && h.dashCd <= 0) inp.dash = true;
+    return inp;
+  };
+  const f1 = f1State(s);
+  if (f1?.held) return flee({ x: -Math.sin(h.face), y: Math.cos(h.face) }, true);
   for (const m of s.mobs) {
     const d = Math.hypot(m.x - h.x, m.y - h.y);
-    const danger =
-      (m.mode === 'windup' && m.t > REACT && d < MOBS[m.kind].reach + m.r + 0.9) ||
-      (m.mode === 'rollAim' && m.t > 0.5 && d < 5) ||
-      (m.mode === 'whipAim' && m.t > 0.4 && d < 2.8);
-    if (danger && h.dashCd <= 0) {
-      const away = Math.atan2(h.y - m.y, h.x - m.x) + 0.9;
-      inp.mx = Math.cos(away);
-      inp.my = Math.sin(away);
-      inp.dash = true;
-      return inp;
+    const def = MOBS[m.kind];
+    if (m.mode === 'windup' && m.t > REACT && d < def.reach + m.r + 0.9)
+      return flee(away(h.x, h.y, m.x, m.y), true);
+    const t = m.tele;
+    if (t && t.k > 0.45) {
+      const zone = {
+        shape: t.shape,
+        x: t.x ?? m.x,
+        y: t.y ?? m.y,
+        r: t.r,
+        w: t.w,
+        ang: t.ang,
+        arc: t.arc,
+        warn: 1,
+        dmg: 0,
+      };
+      if (strikeHits(zone, h.x, h.y, h.r + 0.25))
+        return flee(
+          away(h.x, h.y, zone.x, zone.y, t.shape === 'line' ? t.ang : undefined),
+          t.k > 0.6,
+        );
     }
+  }
+  for (const z of s.strikes) {
+    if (z.t < REACT * 0.6 || !strikeHits(z, h.x, h.y, h.r + 0.3)) continue;
+    // Внутри кольца волны — безопасно: стоим.
+    if (z.shape === 'ring' && Math.hypot(h.x - z.x, h.y - z.y) < z.r - (z.w ?? 0.6) - 0.3) continue;
+    return flee(
+      away(h.x, h.y, z.x, z.y, z.shape === 'line' ? z.ang : undefined),
+      z.warn - z.t < 0.3,
+    );
+  }
+  for (const sh of s.shots) {
+    if (!sh.lob || sh.age < REACT * 0.5) continue;
+    if (Math.hypot(h.x - sh.lob.x1, h.y - sh.lob.y1) < sh.r + h.r + 0.35)
+      return flee(away(h.x, h.y, sh.lob.x1, sh.lob.y1), sh.lob.T - sh.age < 0.3);
   }
   for (const b of s.bombs) {
     const d = Math.hypot(b.x - h.x, b.y - h.y);
-    if (d < b.r + 0.6) {
-      const away = Math.atan2(h.y - b.y, h.x - b.x);
-      inp.mx = Math.cos(away);
-      inp.my = Math.sin(away);
-      if (b.fuse < 0.6 && h.dashCd <= 0) inp.dash = true;
-      return inp;
-    }
+    if (d < b.r + 0.6) return flee(away(h.x, h.y, b.x, b.y), b.fuse < 0.6);
   }
   const meat = (s.sack.meat.meat ?? 0) + (s.sack.meat.fatmeat ?? 0);
   if (!st.noEat && h.hp < s.stats.maxHp * 0.4 && meat > 0 && h.mode === 'free') inp.eat = true;
@@ -109,19 +172,25 @@ function bot(s: Sim, goal: Int32Array | null, st: { lastAtk: number; noEat?: boo
   let nd = 1e9;
   for (const m of s.mobs) {
     if (m.mode === 'dying' || m.mode === 'emerge' || m.mode === 'escape') continue;
-    const d = Math.hypot(m.x - h.x, m.y - h.y);
+    if ((m.data.ghost ?? 0) > 0) continue;
+    let d = Math.hypot(m.x - h.x, m.y - h.y);
+    // Латник со щитом — потом: сперва те, кого можно ранить.
+    if (m.kind === 'f1_guard' && ['chase', 'windup', 'bashAim', 'bash'].includes(m.mode)) d += 3;
     if (d < nd) {
       nd = d;
       near = m;
     }
   }
   if (near && nd < 7) {
-    const a = Math.atan2(near.y - h.y, near.x - h.x);
-    if (nd > SWORD.reach * 0.8) {
+    const real = Math.hypot(near.x - h.x, near.y - h.y);
+    let a = Math.atan2(near.y - h.y, near.x - h.x);
+    // К латнику со щитом — заходить сбоку.
+    if (near.kind === 'f1_guard' && nd !== real) a += 0.9;
+    if (real > SWORD.reach * 0.8) {
       inp.mx = Math.cos(a);
       inp.my = Math.sin(a);
     }
-    if (nd < SWORD.reach + near.r && s.time - st.lastAtk > 0.14) {
+    if (real < SWORD.reach + near.r && s.time - st.lastAtk > 0.14) {
       inp.attack = true;
       st.lastAtk = s.time;
     }
@@ -161,8 +230,33 @@ function bot(s: Sim, goal: Int32Array | null, st: { lastAtk: number; noEat?: boo
     const l = Math.hypot(tx, ty) || 1;
     inp.mx = tx / l;
     inp.my = ty / l;
+    // Растяжка впереди — перепрыгнуть рывком (или подождать рывка).
+    const ahead = Math.floor(h.y + inp.my * 0.8) * world.w + Math.floor(h.x + inp.mx * 0.8);
+    if (f1?.wires.some((w) => w.live && w.cells.has(ahead))) {
+      if (h.dashCd <= 0) inp.dash = true;
+      else {
+        inp.mx = 0;
+        inp.my = 0;
+      }
+    }
   }
   return inp;
+}
+
+/** Кто бил героя — для разбора прогонов (`DIAG=1`). */
+function blame(s: Sim, e: SimEvent): string {
+  if (e.t !== 'hurt') return '';
+  let best = 'удар по площади';
+  let bd = 3;
+  for (const m of s.mobs) {
+    const d = Math.hypot(m.x - e.x, m.y - e.y);
+    if (d < bd) {
+      bd = d;
+      best = m.kind;
+    }
+  }
+  if (s.shots.length && bd > 1.5) best = 'камень';
+  return best;
 }
 
 function run(
@@ -174,14 +268,20 @@ function run(
 ) {
   const st = { lastAtk: -9, noEat };
   const all: SimEvent[] = [];
+  const hits: Record<string, number> = {};
   for (let t = 0; t < sec * 60; t++) {
     stepSim(s, DT, bot(s, goal, st));
     for (const e of s.events) {
       all.push(e);
       onEvent?.(e);
+      if (DIAG && e.t === 'hurt') {
+        const who = blame(s, e);
+        hits[who] = (hits[who] ?? 0) + e.dmg;
+      }
     }
     if (s.hero.mode === 'dead') break;
   }
+  if (DIAG) console.log('урон по герою', JSON.stringify(hits), 'жив:', s.hero.mode !== 'dead');
   return all;
 }
 
@@ -189,16 +289,15 @@ describe('подземелье: бой', () => {
   it('герой не проходит сквозь стену', () => {
     const lift = liftOf(world, 'mouth')!;
     const s = sim(1, 0, lift.x + 0.5, lift.y + 0.5);
-    for (let i = 0; i < 240; i++) stepSim(s, DT, { ...NO_INPUT, mx: 1, my: 0 });
-    // Справа от клети в её ряду — стена двора.
+    for (let i = 0; i < 600; i++) stepSim(s, DT, { ...NO_INPUT, mx: -1, my: 0 });
+    // Слева от лифта в его ряду — стена двора.
     let wall = lift.x;
-    while (walkableTile(world.tiles[lift.y * world.w + wall + 1])) wall++;
-    wall += 1;
-    expect(s.hero.x).toBeLessThan(wall);
-    expect(s.hero.x).toBeGreaterThan(wall - 1);
+    while (walkableTile(world.tiles[lift.y * world.w + wall - 1])) wall--;
+    expect(s.hero.x).toBeGreaterThan(wall);
+    expect(s.hero.x).toBeLessThan(wall + 1);
   });
 
-  it('пасюк Устья падает с двух ударов первого комплекта', () => {
+  it('серая крыса у входа падает с двух ударов первого комплекта', () => {
     const h = heroOf(dungeon(1, 0));
     expect(h.dmg * 0.9 * 2).toBeGreaterThanOrEqual(MOBS.rat.hp);
     expect(h.dmg * 1.1).toBeLessThan(MOBS.rat.hp);
@@ -241,7 +340,7 @@ describe('подземелье: бой', () => {
   });
 
   it('рывок под укус — уклон в последний миг: замедление и крит', () => {
-    // В главном штреке, подальше от клети: у клети крысы не кусают.
+    // В главном штреке, подальше от лифта: у лифта крысы не кусают.
     const lift = liftOf(world, 'mouth')!;
     const s = sim(1, 0, lift.x + 0.5, lift.y - 22, 11);
     const rat = spawnMob(s, 'rat', s.hero.x + 0.7, s.hero.y, { mode: 'chase' });
@@ -259,170 +358,45 @@ describe('подземелье: бой', () => {
     expect(s.hero.hp).toBe(s.stats.maxHp);
   });
 
-  it('Устье в первом комплекте проходимо: бот ходит 4 минуты и почти не умирает', () => {
+  it('Вход в шахты в первом комплекте проходим: бот ходит 4 минуты и почти не умирает', () => {
     const lift = liftOf(world, 'mouth')!;
     const top = bandOf(world, 'mouth')!;
     let deaths = 0;
     let kills = 0;
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const s = sim(1, 2, lift.x + 0.5, lift.y + 0.5, seed);
-      // Туда и обратно: к верху Устья (верхний штрек) и к клети.
-      const up = field(lift.x, top.top + 2);
+      // Туда и обратно: к верху Входа (верхний штрек) и к лифту.
+      const up = field(32, top.top + 2);
       const down = field(lift.x, lift.y);
       run(s, 120, up, (e) => e.t === 'kill' && (kills += 1));
       if (s.hero.mode !== 'dead') run(s, 120, down, (e) => e.t === 'kill' && (kills += 1));
       if (s.hero.mode === 'dead') deaths += 1;
     }
+    if (DIAG) console.log('Вход: смертей', deaths, 'убийств в среднем', kills / 6);
     expect(deaths).toBeLessThanOrEqual(2);
     expect(kills / 6).toBeGreaterThan(25);
   });
 
-  it('Откатка просит следующий комплект: на +0 без еды опасно, к +5 — спокойно', () => {
+  it('Штреки просят следующий комплект: на Т2+0 без еды опасно, к +5 — спокойно', () => {
     const b = bandOf(world, 'haul')!;
     const hl = liftOf(world, 'haul')!;
-    // От стыка с Устьем — к верхней клети и обратно.
-    const start = { x: hl.x + 0.5, y: b.top + b.h - 3 };
+    // От стыка со Входом — к верхнему лифту и обратно.
+    const start = { x: 32.5, y: b.top + b.h - 3 };
     const up = field(hl.x, hl.y);
-    const down = field(hl.x, b.top + b.h - 3);
-    const deaths = (plus: number) => {
+    const down = field(32, b.top + b.h - 3);
+    const deaths = (tier: number, plus: number) => {
       let n = 0;
       for (const seed of [1, 2, 3, 4, 5, 6]) {
-        const s = sim(2, plus, start.x, start.y, seed);
+        const s = sim(tier, plus, start.x, start.y, seed);
         run(s, 150, up, undefined, true);
         if (s.hero.mode !== 'dead') run(s, 150, down, undefined, true);
         if (s.hero.mode === 'dead') n += 1;
       }
+      if (DIAG) console.log(`Штреки Т${tier}+${plus}: смертей`, n);
       return n;
     };
-    expect(deaths(0)).toBeGreaterThanOrEqual(2);
-    expect(deaths(5)).toBe(0);
-  });
-
-  it('король на Забойном +3 падает за одну-четыре минуты', () => {
-    const boss = world.objs.find((o) => o.kind === 'boss')!;
-    const results: number[] = [];
-    for (const seed of [21, 22, 23, 24]) {
-      const s = sim(2, 3, boss.x + 4.5, boss.y + 0.5, seed);
-      // Бой короля короче минуты не бывает: у него 1750 здоровья на уровне Откатки.
-      let won = -1;
-      const st = { lastAtk: -9 };
-      for (let t = 0; t < 300 * 60; t++) {
-        stepSim(s, DT, bot(s, null, st));
-        if (s.events.some((e) => e.t === 'boss' && e.what === 'dead')) {
-          won = s.time;
-          break;
-        }
-        if (s.hero.mode === 'dead') break;
-      }
-      results.push(won);
-    }
-    const wins = results.filter((t) => t > 0);
-    expect(wins.length).toBeGreaterThanOrEqual(2);
-    for (const t of wins) {
-      expect(t).toBeGreaterThan(45);
-      expect(t).toBeLessThan(240);
-    }
-  });
-
-  it('после победы из логова выходят через ворота, и ворота не захлопываются на герое', () => {
-    // Владелец: «победил короля, но уйти не могу — будто скрытая дверь».
-    // Двести выходов из разных точек арены к каждым воротам.
-    const probe = sim(2, 3, 1, 1, 1);
-    const b0 = probe.boss!;
-    const W = world.w;
-    const cellsIn = [...b0.cells].filter((c) => walkableTile(world.tiles[c]));
-    // Цель за каждыми воротами — пол в пяти шагах снаружи арены.
-    const targets = b0.gates.map((g) => {
-      const dist = new Map<number, number>([[g, 0]]);
-      const q = [g];
-      let best = g;
-      while (q.length) {
-        const i = q.shift()!;
-        for (const d of [1, -1, W, -W]) {
-          const j = i + d;
-          if (dist.has(j) || b0.cells.has(j) || !walkableTile(world.tiles[j])) continue;
-          dist.set(j, dist.get(i)! + 1);
-          if (dist.get(j)! <= 5) best = j;
-          q.push(j);
-        }
-      }
-      return { gate: g, goal: best };
-    });
-    let exits = 0;
-    for (let k = 0; k < 200; k++) {
-      const { gate, goal } = targets[k % targets.length];
-      const from = cellsIn[(k * 37) % cellsIn.length];
-      const s = sim(2, 3, (from % W) + 0.5, Math.floor(from / W) + 0.5, 100 + k);
-      s.boss!.state = 'won';
-      s.mobs = [];
-      // Ящики и бочки арены живой игрок разбивает по пути; тест — про ворота.
-      for (const p of s.props)
-        if (b0.cells.has(Math.floor(p.y) * W + Math.floor(p.x))) p.alive = false;
-      const f = field(goal % W, Math.floor(goal / W));
-      for (let t = 0; t < 30 * 60; t++) {
-        const h = s.hero;
-        const i = Math.floor(h.y) * W + Math.floor(h.x);
-        let mx = 0;
-        let my = 0;
-        let bestD = f[i];
-        for (const [dx, dy] of [
-          [1, 0],
-          [-1, 0],
-          [0, 1],
-          [0, -1],
-        ]) {
-          const j = i + dy * W + dx;
-          if (f[j] >= 0 && f[j] < bestD) {
-            bestD = f[j];
-            mx = (j % W) + 0.5 - h.x;
-            my = Math.floor(j / W) + 0.5 - h.y;
-          }
-        }
-        if (bestD === f[i]) {
-          mx = (goal % W) + 0.5 - h.x;
-          my = Math.floor(goal / W) + 0.5 - h.y;
-        }
-        const n = Math.hypot(mx, my) || 1;
-        stepSim(s, DT, { ...NO_INPUT, mx: mx / n, my: my / n });
-        s.mobs = [];
-        if (Math.hypot((goal % W) + 0.5 - h.x, Math.floor(goal / W) + 0.5 - h.y) < 0.6) break;
-      }
-      const h = s.hero;
-      const atGoal = Math.hypot((goal % W) + 0.5 - h.x, Math.floor(goal / W) + 0.5 - h.y) < 0.8;
-      if (atGoal) exits += 1;
-      // Ушёл — ворота за спиной закрыты, король отдыхает.
-      if (atGoal) expect(s.tiles[gate]).toBe(Tile.Gate);
-      // И снаружи к отдыхающему королю они не пускают.
-      if (atGoal && k % 20 === 0) {
-        for (let t = 0; t < 90; t++) {
-          const dx = (gate % W) + 0.5 - h.x;
-          const dy = Math.floor(gate / W) + 0.5 - h.y;
-          const n = Math.hypot(dx, dy) || 1;
-          stepSim(s, DT, { ...NO_INPUT, mx: dx / n, my: dy / n });
-        }
-        expect(s.tiles[gate]).toBe(Tile.Gate);
-        expect(s.boss!.cells.has(Math.floor(h.y) * W + Math.floor(h.x))).toBe(false);
-      }
-    }
-    expect(exits).toBe(200);
-  });
-
-  it('король на Лагерном без заточки — смерть чаще победы', () => {
-    const boss = world.objs.find((o) => o.kind === 'boss')!;
-    let wins = 0;
-    for (const seed of [31, 32, 33]) {
-      const s = sim(1, 0, boss.x + 4.5, boss.y + 0.5, seed);
-      const st = { lastAtk: -9 };
-      for (let t = 0; t < 240 * 60; t++) {
-        stepSim(s, DT, bot(s, null, st));
-        if (s.events.some((e) => e.t === 'boss' && e.what === 'dead')) {
-          wins += 1;
-          break;
-        }
-        if (s.hero.mode === 'dead') break;
-      }
-    }
-    expect(wins).toBeLessThanOrEqual(1);
+    expect(deaths(2, 0)).toBeGreaterThanOrEqual(2);
+    expect(deaths(2, 5)).toBe(0);
   });
 
   it('фонарь, решётка и тайник — через кнопку действия', () => {
@@ -460,6 +434,6 @@ describe('подземелье: бой', () => {
 });
 
 function s0Cart() {
-  // Вагонетка в рельсовом коридоре Устья: рельсы вдоль, есть куда катиться.
+  // Вагонетка в главном штреке Входа: рельсы вдоль, есть куда катиться.
   return world.objs.find((o) => o.kind === 'cart' && o.area === 'mouth' && o.axis === 'v')!;
 }
