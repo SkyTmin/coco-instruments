@@ -13,29 +13,30 @@
 // десятки часов. Ступени открывают убийства, пройденный путь, выходы живым,
 // руда подземных шахт и трофеи боссов. Монеты — только сбор и расходники.
 
+import { BLOCK_PRICE, ORE_PRICE } from './economy';
 import { bonusOf, LAST_RANK, rng32, ROCKS } from './prison';
 import type { Bonus, PrisonState, Rock } from './prison';
+import { FLOORS } from './dungeon-floors';
+import { DEEP_BASE, DEEP_PYRITE, DEEP_WALLROCK } from './dungeon-floors/types';
+import type {
+  AreaSpec,
+  BossLoot,
+  BossSpec,
+  FloorDef,
+  MineSpec,
+  StatusKind,
+} from './dungeon-floors/types';
+
+export { DEEP_BASE };
+export type { BossLoot, FloorDef, StatusKind };
 
 // ---------------------------------------------------------------------------
-// Районы. Названия и порядок — на всё подземелье сразу: мир строится снизу
-// вверх, каждый следующий район глубже. Построены пока первые два, остальные
-// — в следующих этапах (флаг `built`).
+// Этажи и районы (v2.81). Подземелье — пять этажей, этаж — стопка районов со
+// своими картами (`lib/dungeon-floors/fN.ts`). Чтобы спуститься ниже, надо
+// победить босса этажа: за ареной — запечатанный проход к лестнице.
 // ---------------------------------------------------------------------------
 
-export type AreaId =
-  | 'mouth'
-  | 'haul'
-  | 'old'
-  | 'flood'
-  | 'barrack'
-  | 'ice'
-  | 'dark'
-  | 'fungus'
-  | 'gas'
-  | 'geode'
-  | 'river'
-  | 'seid'
-  | 'saivo';
+export type AreaId = string;
 
 export interface AreaDef {
   id: AreaId;
@@ -49,57 +50,34 @@ export interface AreaDef {
   /** Подпись под названием при входе. */
   lead: string;
   built: boolean;
+  /** Этаж, к которому относится район. */
+  floor: number;
+  spec: AreaSpec;
 }
 
-export const AREAS: AreaDef[] = [
-  {
-    id: 'mouth',
-    name: 'Вход в шахты',
-    tier: 1,
-    level: 0,
-    ambient: 0.62,
-    lead: 'Пещеры у лифта. Фонари горят, крыс немного.',
+export const AREAS: AreaDef[] = FLOORS.flatMap((f) =>
+  f.areas.map((a) => ({
+    id: a.id,
+    name: a.name,
+    tier: a.tier,
+    level: a.level,
+    ambient: a.ambient,
+    lead: a.lead,
     built: true,
-  },
-  {
-    id: 'haul',
-    name: 'Рельсовые туннели',
-    tier: 2,
-    level: 1,
-    ambient: 0.4,
-    lead: 'Вагонетки, гнёзда и логово Крысиного короля.',
-    built: true,
-  },
-  { id: 'old', name: 'Старые выработки', tier: 3, level: 2, ambient: 0.3, lead: '', built: false },
-  {
-    id: 'flood',
-    name: 'Затопленный горизонт',
-    tier: 4,
-    level: 3,
-    ambient: 0.3,
-    lead: '',
-    built: false,
-  },
-  { id: 'barrack', name: 'Барак', tier: 4, level: 4, ambient: 0.28, lead: '', built: false },
-  { id: 'ice', name: 'Ледяной штрек', tier: 5, level: 5, ambient: 0.34, lead: '', built: false },
-  { id: 'dark', name: 'Тёмный горизонт', tier: 5, level: 6, ambient: 0.06, lead: '', built: false },
-  { id: 'fungus', name: 'Грибной грот', tier: 6, level: 6, ambient: 0.2, lead: '', built: false },
-  { id: 'gas', name: 'Газовый забой', tier: 6, level: 7, ambient: 0.22, lead: '', built: false },
-  {
-    id: 'geode',
-    name: 'Кристальная жеода',
-    tier: 7,
-    level: 8,
-    ambient: 0.3,
-    lead: '',
-    built: false,
-  },
-  { id: 'river', name: 'Подземная река', tier: 7, level: 8, ambient: 0.2, lead: '', built: false },
-  { id: 'seid', name: 'Сейд-ход', tier: 7, level: 9, ambient: 0.18, lead: '', built: false },
-  { id: 'saivo', name: 'Сайво', tier: 8, level: 10, ambient: 0.3, lead: '', built: false },
-];
+    floor: f.id,
+    spec: a,
+  })),
+);
 
-export const areaOf = (id: AreaId): AreaDef => AREAS.find((a) => a.id === id) ?? AREAS[0];
+const AREA_BY = new Map(AREAS.map((a) => [a.id, a]));
+export const areaOf = (id: AreaId): AreaDef => AREA_BY.get(id) ?? AREAS[0];
+
+export const FLOOR_COUNT = FLOORS.length;
+export const floorOf = (id: number): FloorDef => FLOORS.find((f) => f.id === id) ?? FLOORS[0];
+/** Этаж, к которому относится район. */
+export const floorOfArea = (area: AreaId): number => areaOf(area).floor;
+/** Район-вход этажа: там его лифт. */
+export const entryArea = (floor: number): AreaId => floorOf(floor).areas[0].id;
 
 // ---------------------------------------------------------------------------
 // Снаряжение. Четыре слота, у каждого своя работа кроме защиты: каска светит,
@@ -347,10 +325,40 @@ export function levelOf(xp: number): { level: number; into: number; need: number
 // следующий район требует следующего комплекта, а не терпения.
 // ---------------------------------------------------------------------------
 
-export type MobId = 'rat' | 'fatrat' | 'bomber' | 'goldrat' | 'king' | 'kinglet';
+export type MobId = string;
 
-export type MeatId = 'meat' | 'fatmeat';
-export type MatId = 'skin' | 'tail' | 'pyrite' | 'crown';
+export type MeatId = string;
+export type MatId = string;
+
+/**
+ * Как нарисован моб: крыса (`dungeon-rats.ts`), кадры атласа 0x72
+ * (`<name>_idle_anim_f0…3`, `_run_anim_f0…3`) или свой рисовальщик этажа
+ * (`registerMobPainter(id)` в `dungeon-paint.ts`).
+ */
+export type MobArt =
+  | { kind: 'rat' }
+  | { kind: 'x72'; name: string; scale?: number; tint?: string; k?: number }
+  | { kind: 'paint'; id: string };
+
+/** Снаряд: плевок, камень, стрела, огонь. Рисует `registerShotPainter(art)`. */
+export interface ShotSpec {
+  /** Клеток в секунду. */
+  speed: number;
+  /** Радиус попадания, клеток. */
+  r: number;
+  /** Сколько летит, с. */
+  life: number;
+  /** Урон — доля урона моба. */
+  dmg: number;
+  art: string;
+  status?: StatusKind;
+  dur?: number;
+  /** Навесом: летит над стенами и падает в точку прицела (камень из пращи). */
+  lob?: boolean;
+  /** Сколько сразу и разлёт веером, рад. */
+  n?: number;
+  spread?: number;
+}
 
 export interface MobDef {
   id: MobId;
@@ -376,109 +384,45 @@ export interface MobDef {
   mats: [MatId, number][];
   /** Считается ли в бестиарии (у короля свой счёт). */
   beast: boolean;
+  /** ИИ: библиотека `dungeon-brains.ts` или свой (`registerBrain`). */
+  brain: string;
+  art: MobArt;
+  /** Вес: от него отдача. 1 — серая крыса. */
+  mass?: number;
+  /**
+   * Доля обычных ударов, сбивающих замах (тяжёлый и крит сбивают всегда,
+   * босса — ничто). Серая крыса 0,35, жирная 0, подрывник 1.
+   */
+  flinch?: number;
+  /** Сколько стоит оглушённым, с (0,2). */
+  stunT?: number;
+  /** Часть боя с боссом: полоса здоровья, победа, никаких альбиносов. */
+  boss?: boolean;
+  /** Не бывает альбиносом. */
+  noAlbino?: boolean;
+  /** Мешок монет при смерти (золотая крыса). */
+  coins?: number;
+  /** Зигзаг на подходе (серая крыса). */
+  zigzag?: boolean;
+  /** Удар: статус и отброс героя (2; жирная крыса — 5). */
+  hit?: { status?: StatusKind; dur?: number; push?: number };
+  shot?: ShotSpec;
+  /** Летает: над «глубиной» (вода, пропасть) проходит. */
+  fly?: boolean;
+  /** Цвет глаз в темноте. */
+  eye?: string;
+  /** Светится сам: радиус света, клеток (кристальные, огненные). */
+  light?: number;
+  /** Цвета брызг при смерти (у крыс — шерсть и кровь). */
+  gore?: string[];
+  /** Куда уходит после оглушения и выхода из норы (беглец — `flee`). */
+  resume?: 'chase' | 'flee';
 }
 
-export const MOBS: Record<MobId, MobDef> = {
-  rat: {
-    id: 'rat',
-    name: 'Серая крыса',
-    many: 'серых крыс',
-    hp: 14,
-    dmg: 9,
-    speed: 3.7,
-    radius: 0.26,
-    windup: 0.26,
-    reach: 0.34,
-    rest: 0.55,
-    xp: 3,
-    meat: ['meat', 0.7, 1],
-    mats: [['skin', 0.22]],
-    beast: true,
-  },
-  fatrat: {
-    id: 'fatrat',
-    name: 'Жирная крыса',
-    many: 'жирных крыс',
-    hp: 46,
-    dmg: 18,
-    speed: 2.1,
-    radius: 0.36,
-    windup: 0.5,
-    reach: 0.42,
-    rest: 1,
-    xp: 9,
-    meat: ['fatmeat', 1, 2],
-    mats: [['skin', 0.6]],
-    beast: true,
-  },
-  bomber: {
-    id: 'bomber',
-    name: 'Крыса-подрывник',
-    many: 'подрывников',
-    hp: 16,
-    dmg: 30,
-    speed: 3.2,
-    radius: 0.26,
-    windup: 1.5,
-    reach: 1.4,
-    rest: 2,
-    xp: 7,
-    meat: ['meat', 0.6, 1],
-    mats: [
-      ['tail', 0.5],
-      ['skin', 0.2],
-    ],
-    beast: true,
-  },
-  goldrat: {
-    id: 'goldrat',
-    name: 'Золотая крыса',
-    many: 'золотых крыс',
-    hp: 40,
-    dmg: 0,
-    speed: 5.2,
-    radius: 0.27,
-    windup: 0,
-    reach: 0,
-    rest: 0,
-    xp: 25,
-    meat: null,
-    mats: [['skin', 1]],
-    beast: true,
-  },
-  king: {
-    id: 'king',
-    name: 'Крысиный король',
-    many: 'крысиных королей',
-    hp: 1750,
-    dmg: 16,
-    speed: 2.4,
-    radius: 0.95,
-    windup: 0.8,
-    reach: 0.6,
-    rest: 1.2,
-    xp: 450,
-    meat: ['fatmeat', 1, 12],
-    mats: [['crown', 1]],
-    beast: true,
-  },
-  kinglet: {
-    id: 'kinglet',
-    name: 'Малый король',
-    many: 'малых королей',
-    hp: 260,
-    dmg: 16,
-    speed: 3.2,
-    radius: 0.55,
-    windup: 0.6,
-    reach: 0.4,
-    rest: 1,
-    xp: 60,
-    meat: ['fatmeat', 1, 3],
-    mats: [['skin', 1]],
-    beast: false,
-  },
-};
+/** Все монстры всех этажей: один реестр на игру. */
+export const MOBS: Record<MobId, MobDef> = Object.fromEntries(
+  FLOORS.flatMap((f) => f.mobs).map((m) => [m.id, m]),
+);
 
 /** Рост силы мобов от района к району. */
 export const AREA_HP = 1.8;
@@ -648,18 +592,22 @@ export const armorCut = (armor: number) => 100 / (100 + Math.max(0, armor));
 // Деньги: постоянные цены. Глубже — дороже, больше ничего цену не двигает.
 // ---------------------------------------------------------------------------
 
-/** Кусок мяса во Входе в шахты; глубже — дороже (`AREA_MEAT`). */
-export const MEAT_BASE: Record<MeatId, number> = { meat: 25, fatmeat: 45 };
-export const MEAT_NAMES: Record<MeatId, string> = {
-  meat: 'Крысятина',
-  fatmeat: 'Жирная крысятина',
-};
+/** Мясо и еда всех этажей: цена куска во Входе в шахты, глубже — дороже. */
+export const MEATS = Object.fromEntries(FLOORS.flatMap((f) => f.meats).map((m) => [m.id, m]));
+export const MEAT_BASE: Record<MeatId, number> = Object.fromEntries(
+  Object.values(MEATS).map((m) => [m.id, m.price]),
+);
+export const MEAT_NAMES: Record<MeatId, string> = Object.fromEntries(
+  Object.values(MEATS).map((m) => [m.id, m.name]),
+);
+export const isMeat = (id: string): boolean => id in MEATS;
 /** Во сколько раз мясо района дороже входного, по уровню района. */
 export const AREA_MEAT = [1, 2.2, 3.6, 5.5, 8, 11, 15, 20, 26];
 export const areaMeat = (level: number) =>
   AREA_MEAT[Math.max(0, Math.min(AREA_MEAT.length - 1, level))];
 /** Цена куска мяса вида `id` из района уровня `level`. */
-export const meatPrice = (id: MeatId, level: number) => Math.round(MEAT_BASE[id] * areaMeat(level));
+export const meatPrice = (id: MeatId, level: number) =>
+  Math.round((MEAT_BASE[id] ?? 0) * areaMeat(level));
 
 export interface MatDef {
   id: MatId;
@@ -667,24 +615,61 @@ export interface MatDef {
   /** Цена штуки у торговца, монет. */
   price: number;
   lead: string;
+  /** Сколько в одной ячейке рюкзака. */
+  stack: number;
 }
 
-export const MATS: Record<MatId, MatDef> = {
-  skin: { id: 'skin', name: 'Крысиная шкурка', price: 20, lead: 'На заточку снаряжения.' },
-  tail: { id: 'tail', name: 'Хвост подрывника', price: 35, lead: 'Фитиль в нём не догорел.' },
-  pyrite: {
-    id: 'pyrite',
-    name: 'Пирит',
-    price: 70,
-    lead: '«Кошачье золото» из подземных шахт — для каски и улучшений.',
-  },
-  crown: {
-    id: 'crown',
-    name: 'Корона Крысиного короля',
-    price: 6_000,
-    lead: 'Трофей. Нужен, чтобы улучшить снаряжение до Кованого.',
-  },
-};
+/**
+ * Руда и цельные блоки из шахт подземелья — вещи с id `ore:<порода>` и
+ * `block:<порода>` (номер `ROCKS` каторги): так их узнают и рюкзак, и склад,
+ * и инвентарь. Цены — те же, что у каторги (`ORE_PRICE`, `BLOCK_PRICE`).
+ */
+export const oreItem = (rock: number): MatId => `ore:${rock}`;
+export const blockItem = (rock: number): MatId => `block:${rock}`;
+export function itemRock(id: MatId): { kind: 'ore' | 'block'; rock: number } | null {
+  const m = /^(ore|block):(\d+)$/.exec(id);
+  if (!m) return null;
+  const rock = Number(m[2]);
+  return ROCKS[rock] ? { kind: m[1] as 'ore' | 'block', rock } : null;
+}
+
+const BASE_MATS: Record<MatId, MatDef> = Object.fromEntries(
+  FLOORS.flatMap((f) => f.mats).map((m) => [
+    m.id,
+    { id: m.id, name: m.name, price: m.price, lead: m.lead, stack: m.stack ?? 32 },
+  ]),
+);
+
+/** Описание вещи рюкзака: материалы этажей, руда и блоки шахт. */
+export function matDef(id: MatId): MatDef {
+  const own = BASE_MATS[id];
+  if (own) return own;
+  const r = itemRock(id);
+  if (r) {
+    const rock = ROCKS[r.rock];
+    return r.kind === 'ore'
+      ? {
+          id,
+          name: rock.name,
+          price: ORE_PRICE[r.rock] ?? 1,
+          lead: 'Руда из шахты подземелья.',
+          stack: 64,
+        }
+      : {
+          id,
+          name: rock.blockName,
+          price: BLOCK_PRICE[r.rock] ?? 1,
+          lead: 'Цельный блок руды — на снаряжение.',
+          stack: 16,
+        };
+  }
+  return { id, name: id, price: 0, lead: '', stack: 32 };
+}
+
+/** Материалы по id — для старого кода (`MATS[id].name`). */
+export const MATS: Record<MatId, MatDef> = new Proxy(BASE_MATS, {
+  get: (t, k: string) => (typeof k === 'string' ? (t[k] ?? matDef(k)) : undefined),
+});
 
 // ---------------------------------------------------------------------------
 // Сидор — всё, что взял внизу. Умер — пропал целиком.
@@ -711,18 +696,22 @@ export const EMPTY_SACK: Sack = { meat: {}, mats: {}, tokens: 0, keys: 0, coins:
  */
 export type ItemId = MeatId | MatId;
 
-/** Порядок ячеек в сидоре: мясо, потом материалы, трофей последним. */
-export const ITEM_ORDER: ItemId[] = ['meat', 'fatmeat', 'skin', 'tail', 'pyrite', 'crown'];
+/** Сколько штук вида в одной ячейке. */
+export const stackOf = (id: ItemId): number => (isMeat(id) ? 32 : matDef(id).stack);
 
-/** Сколько штук в одной ячейке. Корона — трофей, одна на ячейку. */
-export const STACK: Record<ItemId, number> = {
-  meat: 32,
-  fatmeat: 32,
-  skin: 32,
-  tail: 32,
-  pyrite: 32,
-  crown: 1,
-};
+/** Порядок видов в ячейках: мясо, материалы этажей, руда, блоки, трофеи последними. */
+function itemRank(id: ItemId): number {
+  if (isMeat(id)) return Object.keys(MEATS).indexOf(id);
+  const r = itemRock(id);
+  if (r) return (r.kind === 'ore' ? 3 : 4) * 1000 + r.rock;
+  return stackOf(id) === 1 ? 9000 : 1000 + Object.keys(BASE_MATS).indexOf(id);
+}
+
+/** Виды в сидоре по порядку ячеек. */
+export function itemsIn(s: Sack): ItemId[] {
+  const ids = [...Object.keys(s.meat), ...Object.keys(s.mats)].filter((id) => itemCount(s, id) > 0);
+  return ids.sort((a, b) => itemRank(a) - itemRank(b));
+}
 
 export const SACK_ROW = 9;
 /** Карманы: 0…3 — от одного ряда до четырёх. */
@@ -730,19 +719,19 @@ export const SACK_MAX = 3;
 
 export const sackSlots = (level: number) => SACK_ROW * (1 + Math.max(0, Math.min(SACK_MAX, level)));
 
-const isMeat = (id: ItemId): id is MeatId => id === 'meat' || id === 'fatmeat';
-
 /** Сколько штук вида лежит в сидоре. */
 export function itemCount(s: Sack, id: ItemId): number {
-  return (isMeat(id) ? s.meat[id] : s.mats[id as MatId]) ?? 0;
+  return (isMeat(id) ? s.meat[id] : s.mats[id]) ?? 0;
 }
 
 /** Занятые ячейки: каждый вид — своими стопками. */
 export function slotsUsed(s: Sack, extra?: { id: ItemId; n: number }): number {
   let n = 0;
-  for (const id of ITEM_ORDER) {
+  const ids = itemsIn(s);
+  if (extra && !ids.includes(extra.id)) ids.push(extra.id);
+  for (const id of ids) {
     const k = itemCount(s, id) + (extra?.id === id ? extra.n : 0);
-    if (k > 0) n += Math.ceil(k / STACK[id]);
+    if (k > 0) n += Math.ceil(k / stackOf(id));
   }
   return n;
 }
@@ -755,15 +744,21 @@ export function canTake(s: Sack, id: ItemId, n: number, level: number): boolean 
 /** Ячейки по порядку — для сетки инвентаря. */
 export function sackStacks(s: Sack): { id: ItemId; n: number }[] {
   const out: { id: ItemId; n: number }[] = [];
-  for (const id of ITEM_ORDER) {
+  for (const id of itemsIn(s)) {
     let left = itemCount(s, id);
     while (left > 0) {
-      const n = Math.min(STACK[id], left);
+      const n = Math.min(stackOf(id), left);
       out.push({ id, n });
       left -= n;
     }
   }
   return out;
+}
+
+/** Положить в сидор: мясо — к мясу, прочее — к материалам. */
+export function sackAdd(s: Sack, id: ItemId, n: number): void {
+  if (isMeat(id)) s.meat[id] = (s.meat[id] ?? 0) + n;
+  else s.mats[id] = (s.mats[id] ?? 0) + n;
 }
 
 export function sackCount(s: Sack): number {
@@ -804,7 +799,7 @@ export function meatValue(s: Sack, sell = 1): { value: number; pieces: number } 
   const areaMul = n > 0 ? areaK / n : 1;
   let value = 0;
   for (const [id, k] of Object.entries(s.meat) as [MeatId, number][])
-    value += (k ?? 0) * Math.round(MEAT_BASE[id] * areaMul);
+    value += (k ?? 0) * Math.round((MEAT_BASE[id] ?? 0) * areaMul);
   return { value: Math.round(value * sell), pieces };
 }
 
@@ -958,48 +953,41 @@ export function upgradable(
 // сервер не нужен. Босс отдыхает от СВОЕЙ смерти; шахта — по окну часов.
 // ---------------------------------------------------------------------------
 
-export type BossId = 'king';
+export type BossId = string;
 
-export interface BossDef {
-  id: BossId;
-  name: string;
-  area: AreaId;
-  restMs: number;
-  mob: MobId;
-}
+export type BossDef = BossSpec & { floor: number };
 
-export const BOSSES: Record<BossId, BossDef> = {
-  king: { id: 'king', name: 'Крысиный король', area: 'haul', restMs: 20 * 60_000, mob: 'king' },
-};
+/** Боссы всех этажей: по одному на этаж, арена — `K` на карте района. */
+export const BOSSES: Record<BossId, BossDef> = Object.fromEntries(
+  FLOORS.map((f) => [f.boss.id, { ...f.boss, floor: f.id }]),
+);
+
+/** Босс этажа. */
+export const bossOfFloor = (floor: number): BossDef => BOSSES[floorOf(floor).boss.id];
 
 export function bossReadyAt(d: DungeonState, id: BossId): number {
   const b = d.bosses[id];
-  return b ? b.at + BOSSES[id].restMs : 0;
+  const def = BOSSES[id];
+  return b && def ? b.at + def.restMs : 0;
 }
 
-export type DeepMineId = 'pyrite1' | 'pyrite2';
+export type DeepMineId = string;
 
-export interface DeepMineDef {
-  id: DeepMineId;
-  name: string;
-  area: AreaId;
-  /** Окно обновления, мс. */
-  windowMs: number;
-  /** Главная руда шахты и её доля по ярусам. */
-  ore: number;
-  share: number[];
-}
+export type DeepMineDef = MineSpec & { floor: number };
+
+/** Шахты всех этажей. */
+export const DEEP_MINES: Record<DeepMineId, DeepMineDef> = Object.fromEntries(
+  FLOORS.flatMap((f) => f.mines.map((m) => [m.id, { ...m, floor: f.id }])),
+);
 
 // ---------------------------------------------------------------------------
-// Подземная руда. Своя, которой нет в шахте каторги, — поэтому свои описания
-// пород (тот же формат `Rock`, чтобы поле шахты рисовало их тем же кодом).
-// Индексы начинаются после пород каторги: одна нумерация на обе шахты.
+// Подземная порода. Пустая порода и пирит — свои (их нет в шахте каторги);
+// руды этажей — номера `ROCKS` каторги со своими текстурами и блоками.
+// Номера подземных начинаются с `DEEP_BASE`: одна нумерация на обе шахты.
 // ---------------------------------------------------------------------------
-
-export const DEEP_BASE = 100;
 
 export interface DeepRock extends Rock {
-  /** Куда идёт в сидор: материал или пустая порода. */
+  /** Куда идёт в сидор: вещь или пустая порода. */
   mat: MatId | null;
 }
 
@@ -1036,32 +1024,20 @@ export const DEEP_ROCKS: DeepRock[] = [
   },
 ];
 
-export const deepRock = (r: number): DeepRock => DEEP_ROCKS[r - DEEP_BASE] ?? DEEP_ROCKS[0];
-
-export const DEEP_MINES: Record<DeepMineId, DeepMineDef> = {
-  pyrite1: {
-    id: 'pyrite1',
-    name: 'Пиритовая шахта',
-    area: 'mouth',
-    windowMs: 60 * 60_000,
-    ore: DEEP_BASE + 1,
-    share: [0.14, 0.2, 0.26, 0.32, 0.4],
-  },
-  pyrite2: {
-    id: 'pyrite2',
-    name: 'Богатая пиритовая шахта',
-    area: 'haul',
-    windowMs: 3 * 60 * 60_000,
-    ore: DEEP_BASE + 1,
-    share: [0.22, 0.3, 0.38, 0.46, 0.55],
-  },
-};
+/** Порода шахты подземелья: своя (≥ DEEP_BASE) или руда каторги (её номер). */
+export function deepRock(r: number): DeepRock {
+  if (r >= DEEP_BASE) return DEEP_ROCKS[r - DEEP_BASE] ?? DEEP_ROCKS[0];
+  const rock = ROCKS[r];
+  if (!rock) return DEEP_ROCKS[0];
+  // Руда этажа держит чуть больше пустой породы: копать её — работа.
+  return { ...rock, hp: 10, mat: oreItem(r) };
+}
 
 export const mineWindow = (id: DeepMineId, now: number) =>
-  Math.floor(now / DEEP_MINES[id].windowMs);
+  Math.floor(now / (DEEP_MINES[id]?.windowMs ?? 3_600_000));
 
 export const mineNextAt = (id: DeepMineId, now: number) =>
-  (mineWindow(id, now) + 1) * DEEP_MINES[id].windowMs;
+  (mineWindow(id, now) + 1) * (DEEP_MINES[id]?.windowMs ?? 3_600_000);
 
 /** Выработано до этой доли — шахта закрыта до следующего окна. */
 export const DEEP_DONE_AT = 0.85;
@@ -1073,26 +1049,89 @@ export const DEEP_DONE_AT = 0.85;
 export const DEEP_NOISE_BLOCKS = 35;
 export const DEEP_NOISE_MAX = 3;
 
+const mineSeed = (id: DeepMineId, window: number) => {
+  let h = window * 7919 + id.length * 104729;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619) >>> 0;
+  return h >>> 0;
+};
+
 /**
  * Поле подземной шахты в окне: те же 7×9×5, что у каторги. Зерно — от
- * шахты и окна, поэтому поле одинаково при каждом входе в этот час.
+ * шахты и окна, поэтому поле одинаково при каждом входе в этот час. Руда —
+ * две породы этажа поровну, пирит — своей долей среди руды; жилы
+ * растекаются к соседу справа и снизу — сверху видно прожилки.
  */
 export function deepField(id: DeepMineId, window: number, cells: number, depth: number): number[] {
   const def = DEEP_MINES[id];
-  const rnd = rng32(window * 7919 + id.length * 104729 + def.ore * 31);
-  const out = new Array<number>(cells * depth);
+  const out = new Array<number>(cells * depth).fill(DEEP_WALLROCK);
+  if (!def) return out;
+  const rnd = rng32(mineSeed(id, window));
+  const pick = () => {
+    if (def.pyrite > 0 && rnd() < def.pyrite) return DEEP_PYRITE;
+    return def.ores[rnd() < 0.5 ? 0 : 1];
+  };
   for (let d = 0; d < depth; d++) {
     for (let c = 0; c < cells; c++) {
-      out[d * cells + c] = rnd() < def.share[d] ? def.ore : DEEP_BASE;
+      out[d * cells + c] = rnd() < def.share[d] ? pick() : DEEP_WALLROCK;
     }
-    // Жилы: руда растекается к соседу справа и снизу — сверху видно прожилки.
     for (let c = 0; c < cells; c++) {
-      if (out[d * cells + c] !== def.ore || rnd() > 0.45) continue;
+      const r = out[d * cells + c];
+      if (r === DEEP_WALLROCK || rnd() > 0.45) continue;
       const n = c + (rnd() < 0.5 ? 1 : 7);
-      if (n < cells) out[d * cells + n] = def.ore;
+      if (n < cells) out[d * cells + n] = r;
     }
   }
   return out;
+}
+
+/** Цельный блок в поле шахты: клетка, ярус и чья руда. */
+export interface DeepBlock {
+  cell: number;
+  depth: number;
+  rock: number;
+}
+
+/** Сколько ударов держит цельный блок (крит — за два), как у каторги. */
+export const DEEP_BLOCK_HITS = 3;
+
+/**
+ * Цельные блоки шахты в окне: редкие клетки из того же зерна, чаще глубже.
+ * Руда блока — одна из двух руд этажа.
+ */
+export function deepBlocks(
+  id: DeepMineId,
+  window: number,
+  cells: number,
+  depth: number,
+): DeepBlock[] {
+  const def = DEEP_MINES[id];
+  if (!def || def.blocks <= 0) return [];
+  const rnd = rng32(mineSeed(id, window) ^ 0x5bd1e995);
+  const mean = def.blocks;
+  const n = Math.floor(mean) + (rnd() < mean - Math.floor(mean) ? 1 : 0);
+  const out: DeepBlock[] = [];
+  let guard = 0;
+  while (out.length < n && guard++ < 200) {
+    const cell = Math.floor(rnd() * cells);
+    // Глубже — вероятнее: вес яруса d — d + 1.
+    let x = rnd() * ((depth * (depth + 1)) / 2);
+    let dd = depth - 1;
+    for (let k = 0; k < depth; k++) {
+      x -= k + 1;
+      if (x <= 0) {
+        dd = k;
+        break;
+      }
+    }
+    if (out.some((b) => b.cell === cell)) continue;
+    out.push({ cell, depth: dd, rock: def.ores[rnd() < 0.5 ? 0 : 1] });
+  }
+  return out;
+}
+
+/** Сверху клетки сейчас цельный блок. */
+export function deepBlockTop(blocks: DeepBlock[], cell: number, dug: number): DeepBlock | null {
+  return blocks.find((b) => b.cell === cell && b.depth === dug) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1102,6 +1141,8 @@ export function deepField(id: DeepMineId, window: number, cells: number, depth: 
 export interface RunState {
   /** Откуда спустился — там и выход по умолчанию. */
   lift: string;
+  /** Этаж вылазки. */
+  floor: number;
   area: AreaId;
   /** Место внутри района, клетки. */
   x: number;
@@ -1142,16 +1183,19 @@ export interface DungeonState {
   run: RunState | null;
   /** Видел ли вступление. */
   intro: boolean;
-  /** Для какой планировки записаны разведка, фонари и место вылазки. */
-  mapVer: number;
+  /** Самый глубокий открытый этаж: босс этажа выше побеждён. */
+  reached: number;
+  /**
+   * Для какой планировки КАЖДОГО этажа записаны разведка, фонари и место
+   * вылазки (`FloorDef.mapVer`). Сменилась карта этажа — сбрасывается только
+   * его привязанное к клеткам.
+   */
+  mapVers: Partial<Record<string, number>>;
 }
 
 /**
- * Версия планировки подземелья. Разведка — биты клеток, фонари и решётки —
- * номера по координатам, вылазка — место в районе: на другой карте всё это
- * указывает мимо. Поменяли карту — поднимите номер, и сохранение сбросит
- * привязанное к клеткам (сидор, снаряжение и прогресс не трогаются).
- * 2 — мир 64×410 (v2.61).
+ * Версия планировки до этажей (v2.61–v2.80): мир 64×410 из двух районов.
+ * Старое сохранение с этим номером — это первый этаж той же карты.
  */
 export const MAP_VERSION = 2;
 
@@ -1161,7 +1205,7 @@ export const DUNGEON_START: DungeonState = {
   kills: {},
   stats: {},
   stash: {},
-  lifts: ['mouth'],
+  lifts: [entryArea(1)],
   opened: [],
   lamps: [],
   secrets: [],
@@ -1171,7 +1215,8 @@ export const DUNGEON_START: DungeonState = {
   sackLevel: 0,
   run: null,
   intro: false,
-  mapVer: MAP_VERSION,
+  reached: 1,
+  mapVers: Object.fromEntries(FLOORS.map((f) => [String(f.id), f.mapVer])),
 };
 
 /** Подземелье открывается с этого ранга шахты (или после престижа). */
@@ -1179,6 +1224,9 @@ export const DUNGEON_UNLOCK_RANK = 5;
 
 export const dungeonOpen = (p: Pick<PrisonState, 'rank' | 'prestige'>) =>
   p.rank >= DUNGEON_UNLOCK_RANK || p.prestige > 0;
+
+/** Побеждён ли босс этажа хоть раз — открыт ли проход к лестнице вниз. */
+export const floorBeaten = (d: Pick<DungeonState, 'reached'>, floor: number) => d.reached > floor;
 
 const num = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
@@ -1212,14 +1260,53 @@ export function normalizeSack(v: unknown): Sack {
   };
 }
 
+/** Район записи: `area:x:y` — по нему видно, к какому этажу она привязана. */
+const areaOfId = (id: string) => id.slice(0, id.indexOf(':'));
+
 export function normalizeDungeon(v: unknown): DungeonState {
   if (!v || typeof v !== 'object') return { ...DUNGEON_START };
-  const o = v as Partial<DungeonState>;
+  const o = v as Partial<DungeonState> & { mapVer?: number };
   const g = (o.gear ?? {}) as Partial<Gear>;
   const run = o.run as Partial<RunState> | null | undefined;
-  // Другая планировка: привязанное к клеткам — с нуля, вылазка — у её клети.
-  const sameMap = num(o.mapVer, 1) === MAP_VERSION;
-  const norm = normalizeCoords(o, sameMap);
+  // Версии карт по этажам. Сохранение до этажей (одно число `mapVer`) — это
+  // карта первого этажа того номера.
+  const saved: Partial<Record<string, number>> =
+    o.mapVers && typeof o.mapVers === 'object'
+      ? (o.mapVers as Partial<Record<string, number>>)
+      : { '1': num(o.mapVer, 1) };
+  const stale = new Set(
+    FLOORS.filter((f) => num(saved[String(f.id)], -1) !== f.mapVer).map((f) => f.id),
+  );
+  const known = (area: string) => AREAS.some((a) => a.id === area);
+  // Запись привязана к клеткам: на другой карте её этажа — с нуля.
+  const keep = (id: string) => {
+    const area = areaOfId(id);
+    return known(area) && !stale.has(floorOfArea(area));
+  };
+  const bosses: DungeonState['bosses'] =
+    o.bosses && typeof o.bosses === 'object'
+      ? Object.fromEntries(
+          Object.entries(o.bosses)
+            .filter(([id]) => id in BOSSES)
+            .map(([id, b]) => [
+              id,
+              {
+                at: num((b as { at?: number })?.at),
+                kills: Math.floor(num((b as { kills?: number })?.kills)),
+              },
+            ]),
+        )
+      : {};
+  // Самый глубокий открытый этаж: сохранённый, а у старого — по победам.
+  let reached = Math.floor(num(o.reached, 1));
+  for (const f of FLOORS)
+    if ((bosses[f.boss.id]?.kills ?? 0) > 0) reached = Math.max(reached, f.id + 1);
+  reached = Math.max(1, Math.min(FLOORS.length, reached));
+  const lifts = new Set(strs(o.lifts).filter(known));
+  for (const f of FLOORS) if (f.id <= reached) lifts.add(entryArea(f.id));
+  const runFloor =
+    run && typeof run.area === 'string' && known(run.area) ? floorOfArea(run.area) : 1;
+  const runFresh = !run || !known(String(run.area)) || stale.has(runFloor);
   return {
     gear: {
       weapon: normPiece(g.weapon),
@@ -1231,25 +1318,19 @@ export function normalizeDungeon(v: unknown): DungeonState {
     kills: normCounts<MobId>(o.kills),
     stats: normCounts<StatId>(o.stats),
     stash: normCounts<MatId>(o.stash),
-    lifts: Array.from(new Set(['mouth', ...strs(o.lifts)])),
-    opened: norm.opened,
-    lamps: norm.lamps,
-    secrets: norm.secrets,
-    fog: norm.fog,
-    bosses:
-      o.bosses && typeof o.bosses === 'object'
-        ? Object.fromEntries(
-            Object.entries(o.bosses)
-              .filter(([id]) => id in BOSSES)
-              .map(([id, b]) => [
-                id,
-                {
-                  at: num((b as { at?: number })?.at),
-                  kills: Math.floor(num((b as { kills?: number })?.kills)),
-                },
-              ]),
-          )
+    lifts: [...lifts],
+    opened: strs(o.opened).filter(keep),
+    lamps: strs(o.lamps).filter(keep),
+    secrets: strs(o.secrets).filter(keep),
+    fog:
+      o.fog && typeof o.fog === 'object'
+        ? (Object.fromEntries(
+            Object.entries(o.fog).filter(
+              ([area, s]) => typeof s === 'string' && known(area) && !stale.has(floorOfArea(area)),
+            ),
+          ) as Partial<Record<AreaId, string>>)
         : {},
+    bosses,
     mines:
       o.mines && typeof o.mines === 'object'
         ? Object.fromEntries(
@@ -1268,15 +1349,12 @@ export function normalizeDungeon(v: unknown): DungeonState {
     run:
       run && typeof run === 'object' && typeof run.area === 'string'
         ? {
-            lift: typeof run.lift === 'string' ? run.lift : 'mouth',
-            area: (sameMap && AREAS.some((a) => a.id === run.area)
-              ? run.area
-              : AREAS.some((a) => a.id === run.lift)
-                ? run.lift
-                : 'mouth') as AreaId,
+            lift: typeof run.lift === 'string' && known(run.lift) ? run.lift : entryArea(runFloor),
+            floor: runFloor,
+            area: runFresh ? entryArea(runFloor) : run.area,
             // x < 0 — «у клети спуска»: так мир ставит героя на новой карте.
-            x: sameMap ? num(run.x) : -1,
-            y: sameMap ? num(run.y) : 0,
+            x: runFresh ? -1 : num(run.x),
+            y: runFresh ? 0 : num(run.y),
             hp: num(run.hp, 1),
             sack: normalizeSack(run.sack),
             started: num(run.started),
@@ -1284,22 +1362,8 @@ export function normalizeDungeon(v: unknown): DungeonState {
           }
         : null,
     intro: o.intro === true,
-    mapVer: MAP_VERSION,
-  };
-}
-
-function normalizeCoords(o: Partial<DungeonState>, sameMap: boolean) {
-  if (!sameMap) return { opened: [], lamps: [], secrets: [], fog: {} };
-  return {
-    opened: strs(o.opened),
-    lamps: strs(o.lamps),
-    secrets: strs(o.secrets),
-    fog:
-      o.fog && typeof o.fog === 'object'
-        ? (Object.fromEntries(
-            Object.entries(o.fog).filter(([, s]) => typeof s === 'string'),
-          ) as Partial<Record<AreaId, string>>)
-        : {},
+    reached,
+    mapVers: Object.fromEntries(FLOORS.map((f) => [String(f.id), f.mapVer])),
   };
 }
 
@@ -1307,14 +1371,7 @@ function normalizeCoords(o: Partial<DungeonState>, sameMap: boolean) {
 // Сундук Крысиного короля и прочие награды — чистые броски.
 // ---------------------------------------------------------------------------
 
-export interface BossLoot {
-  tokens: number;
-  keys: number;
-  coins: number;
-  mats: Partial<Record<MatId, number>>;
-}
-
-/** Король платит постоянно: 8 000 монет, корона, шкурки. */
+/** Король платит постоянно: 8 000 монет, корона, шкурки (сундук — в `f1.ts`). */
 export const KING_COINS = 8_000;
 /** Мешок золотой крысы. */
 export const GOLD_BAG = 1_500;
@@ -1322,14 +1379,14 @@ export const GOLD_BAG = 1_500;
 export const CRATE_COINS = 30;
 export const SECRET_COINS = 400;
 
-export function kingLoot(rnd: () => number): BossLoot {
-  return {
-    tokens: 20 + Math.floor(rnd() * 20),
-    keys: rnd() < 0.4 ? 1 : 0,
-    coins: KING_COINS,
-    mats: { crown: 1, skin: 6 + Math.floor(rnd() * 6) },
-  };
+/** Сундук босса этажа. */
+export function bossLoot(id: BossId, rnd: () => number): BossLoot {
+  const def = BOSSES[id];
+  return def ? def.loot(rnd) : { tokens: 0, keys: 0, coins: 0, mats: {} };
 }
+
+/** Сундук Крысиного короля — для старых мест и тестов. */
+export const kingLoot = (rnd: () => number): BossLoot => bossLoot('king', rnd);
 
 /** Сколько ROCKS в каторге — для проверок, что подземные номера не пересекаются. */
 export const PRISON_ROCKS = ROCKS.length;
@@ -1370,12 +1427,22 @@ export function applyDelta(
   fog?: Partial<Record<AreaId, string>>,
 ): DungeonState {
   const bosses = { ...d.bosses };
+  let reached = d.reached;
+  const lifts = new Set(d.lifts);
   for (const b of x.bosses) {
     const prev = bosses[b.id];
     bosses[b.id] = { at: Math.max(prev?.at ?? 0, b.at), kills: (prev?.kills ?? 0) + 1 };
+    // Победа над боссом открывает этаж ниже навсегда — и его лифт.
+    const f = BOSSES[b.id]?.floor;
+    if (f && f < FLOORS.length && f + 1 > reached) {
+      reached = f + 1;
+      lifts.add(entryArea(reached));
+    }
   }
   return {
     ...d,
+    reached,
+    lifts: lifts.size === d.lifts.length ? d.lifts : [...lifts],
     kills: addCounts(d.kills, x.kills),
     stats: addCounts(d.stats, x.stats),
     xp: d.xp + x.xp,
@@ -1384,6 +1451,23 @@ export function applyDelta(
     secrets: union(d.secrets, x.secrets),
     bosses,
     fog: fog ? { ...d.fog, ...fog } : d.fog,
+  };
+}
+
+/**
+ * Спуск по лестнице за ареной: вылазка переезжает на этаж ниже, к его лифту,
+ * рюкзак и здоровье — с собой. Только если этаж открыт (босс повержен).
+ */
+export function descendRun(d: DungeonState): DungeonState | null {
+  const run = d.run;
+  if (!run) return null;
+  const next = run.floor + 1;
+  if (next > FLOORS.length || !floorBeaten(d, run.floor)) return null;
+  const area = entryArea(next);
+  return {
+    ...d,
+    lifts: d.lifts.includes(area) ? d.lifts : [...d.lifts, area],
+    run: { ...run, floor: next, area, x: -1, y: 0 },
   };
 }
 

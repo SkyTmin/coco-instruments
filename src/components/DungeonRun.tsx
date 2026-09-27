@@ -18,8 +18,13 @@ import { useFinanceStore } from '@/store';
 import type { DungeonExit } from '@/store';
 import {
   areaOf,
-  BOSSES,
+  bossOfFloor,
   canPay,
+  entryArea,
+  floorOf,
+  matDef,
+  MOBS,
+  stackOf,
   DEEP_MINES,
   heroOf,
   levelOf,
@@ -34,6 +39,7 @@ import {
 } from '@/lib/dungeon';
 import type { AreaId, DeepMineId, Haul, MatId } from '@/lib/dungeon';
 import {
+  bossBar,
   createSim,
   dropFromSack,
   fogOf,
@@ -84,6 +90,7 @@ import {
   swordSwing,
   setMusicScene,
 } from '@/lib/sound';
+import type { MusicScene } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 
 const STEP = 1 / 60;
@@ -98,7 +105,10 @@ const clock = (ms: number) => {
     : `${m}:${String(t % 60).padStart(2, '0')}`;
 };
 
-export type RunEnd = { kind: 'extract'; exit: DungeonExit } | { kind: 'dead'; lost: Haul };
+export type RunEnd =
+  | { kind: 'extract'; exit: DungeonExit }
+  | { kind: 'dead'; lost: Haul }
+  | { kind: 'descend'; floor: number };
 
 interface Hud {
   hp: number;
@@ -196,9 +206,17 @@ function signRows(sim: Sim, o: WorldObj, lifts: readonly string[]): SignRow[] {
   const lift = nearest('lift');
   add(lift, 'lift', lift && !lifts.includes(lift.area) ? 'Лифт (сломан)' : 'Лифт');
   add(nearest('mine'), 'minecart', 'Шахта');
-  if (sim.boss) add(sim.boss.obj, 'crown', 'Логово короля');
+  if (sim.boss) add(sim.boss.obj, 'crown', `Логово: ${sim.boss.def.name}`);
   return rows;
 }
+
+const STATUS_NOTE: Record<string, string> = {
+  poison: 'Отравлен — здоровье тает',
+  burn: 'Горишь — отойди от огня',
+  slow: 'Замедлен',
+  chill: 'Холод сковывает',
+  stun: 'Оглушён!',
+};
 
 const USE_ICON: Record<Usable['kind'], GxIconName> = {
   lift: 'lift',
@@ -209,6 +227,7 @@ const USE_ICON: Record<Usable['kind'], GxIconName> = {
   board: 'joystick',
   seal: 'hammer',
   plaque: 'crown',
+  stairs: 'stairs',
 };
 
 type Banner = { key: number; big: string; small?: string; tone: string };
@@ -287,14 +306,18 @@ export function DungeonRun({
   const lastFull = useRef(0);
   const lastCart = useRef(0);
   const [hud, setHud] = useState<Hud | null>(null);
-  // Король на арене — своя музыка; пал или ушли — снова глубина.
+  // Босс на арене — своя музыка; пал или ушли — снова музыка этажа.
   const bossOn = hud?.bossHp != null;
-  useEffect(() => setMusicScene(bossOn ? 'boss' : 'depths'), [bossOn]);
+  const music = floorOf(world.floor).music;
+  useEffect(
+    () => setMusicScene((bossOn ? music.boss : music.explore) as MusicScene),
+    [bossOn, music],
+  );
   const [banner, setBanner] = useState<Banner | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [mine, setMine] = useState<{ id: DeepMineId; obj: Usable['obj'] } | null>(null);
-  const [liftArea, setLiftArea] = useState<AreaId>('mouth');
+  const [liftArea, setLiftArea] = useState<AreaId>(() => entryArea(world.floor));
   const [dying, setDying] = useState(false);
   const [lowHp, setLowHp] = useState(false);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -344,7 +367,7 @@ export function DungeonRun({
     let y: number;
     if (run.x >= 0) ({ x, y } = { x: run.x, y: (bandOf(world, run.area)?.top ?? 0) + run.y });
     else {
-      const lift = liftOf(world, run.lift as AreaId) ?? liftOf(world, 'mouth')!;
+      const lift = liftOf(world, run.lift as AreaId) ?? liftOf(world, entryArea(world.floor))!;
       x = lift.x + 0.5;
       y = lift.y + 0.5;
     }
@@ -361,7 +384,7 @@ export function DungeonRun({
     sim.killed = run.killed;
     // Битое сохранение (стоит в стене) — к клети спуска.
     if (heroStuck(sim)) {
-      const lift = liftOf(world, run.lift as AreaId) ?? liftOf(world, 'mouth')!;
+      const lift = liftOf(world, run.lift as AreaId) ?? liftOf(world, entryArea(world.floor))!;
       const p = worldPos(sim, lift.area, lift.x + 0.5, lift.ly + 0.5);
       sim.hero.x = p.x;
       sim.hero.y = p.y;
@@ -485,23 +508,9 @@ export function DungeonRun({
     const lv = levelOf(sim.xp);
     const props = useFinanceStore.getState().prison.items.prop;
     const boss = sim.boss;
-    let bossHp: number | null = null;
-    if (boss?.state === 'fight') {
-      // Одна полоса на весь бой: король — первые 60%, принцы после раскола —
-      // последние 40%. Иначе на расколе полоса прыгала бы обратно к полной.
-      const king = sim.mobs.find((m) => m.kind === 'king' && m.mode !== 'dying');
-      if (king) bossHp = 0.4 + (0.6 * Math.max(0, king.hp)) / king.maxHp;
-      else {
-        let hp = 0;
-        let max = 0;
-        for (const m of sim.mobs)
-          if (m.kind === 'kinglet') {
-            hp += Math.max(0, m.hp);
-            max += m.maxHp;
-          }
-        bossHp = max > 0 ? (0.4 * hp) / max : 0;
-      }
-    }
+    // Полоса босса — сценарий этажа решает, как её считать (король —
+    // одна полоса на весь бой, с расколом на малых).
+    const bossHp = bossBar(sim);
     let plaque: number | null = null;
     if (boss && boss.state === 'rest') {
       const d = Math.hypot(boss.obj.x - h.x, boss.obj.y - h.y);
@@ -656,10 +665,10 @@ export function DungeonRun({
           else tapLight();
           break;
         case 'kill':
-          ratDie(e.mob === 'fatrat' || e.mob === 'king' || e.mob === 'kinglet');
-          if (e.mob === 'goldrat') {
+          ratDie((MOBS[e.mob]?.mass ?? 1) >= 2);
+          if (MOBS[e.mob]?.coins) {
             coinDing();
-            note('Золотая крыса — мешок монет!');
+            note(`${MOBS[e.mob].name} — мешок монет!`);
           }
           if (e.albino) say('АЛЬБИНОС', 'редкая крыса — добыча ×10', 'gold', 1800);
           else if (e.elite) note('Вожак стаи повержен');
@@ -676,7 +685,8 @@ export function DungeonRun({
           pickUp(e.what);
           if (!coach.current.bagAt) coach.current.bagAt = Date.now();
           if (e.what === 'key') playTotem(sackRef.current);
-          if (e.what === 'crown') say('КОРОНА', 'трофей Крысиного короля', 'gold', 2200);
+          if (e.what !== 'coin' && e.what !== 'token' && e.what !== 'key' && stackOf(e.what) === 1)
+            say('ТРОФЕЙ', matDef(e.what).name, 'gold', 2200);
           break;
         case 'full':
           if (now - lastFull.current > 3000) {
@@ -750,29 +760,49 @@ export function DungeonRun({
           save();
           break;
         }
-        case 'boss':
+        case 'boss': {
+          const name = sim.boss?.def.name ?? 'Босс';
           if (e.what === 'wake') {
             kingRoar();
             gateSlam();
             notifyWarning();
-            say(BOSSES.king.name.toUpperCase(), 'ворота закрылись', 'danger', 2600);
+            say(e.text ?? name.toUpperCase(), e.sub ?? 'ворота закрылись', 'danger', 2600);
           } else if (e.what === 'split') {
             kingRoar();
-            say('КОРОЛЬ РАСКОЛОЛСЯ', 'два принца — бей по очереди', 'danger', 2000);
+            say(
+              e.text ?? 'КОРОЛЬ РАСКОЛОЛСЯ',
+              e.sub ?? 'три малых — бей по очереди',
+              'danger',
+              2000,
+            );
+          } else if (e.what === 'phase') {
+            kingRoar();
+            tapMedium();
+            say(e.text ?? 'ЯРОСТЬ', e.sub ?? name, 'danger', 2000);
           } else if (e.what === 'dead') {
             jackpotFanfare();
             notifySuccess();
-            say('КОРОЛЬ ПАЛ', 'сундук, корона и дорога дальше', 'gold', 3000);
+            say('ПОБЕДА', e.sub ?? `${name} — сундук и дорога вниз`, 'gold', 3000);
             save();
+          } else if (e.what === 'seal') {
+            gateSlam();
+            note('Печати пали — лестница вниз открыта', 3000);
           } else if (e.what === 'reset') {
             gateSlam();
-            note('Король уполз в логово — ворота открыты');
+            note(`${name} ушёл отдыхать — ворота открыты`);
           } else if (e.what === 'roll') deepRumble();
           else if (e.what === 'whip') swordSwing(2, true);
           else if (e.what === 'summon') {
             ratSqueak(0);
             ratSqueak(1);
-          }
+          } else if (e.text) say(e.text, e.sub, 'danger', 1800);
+          break;
+        }
+        case 'strike':
+          if (e.big) boom(1);
+          break;
+        case 'status':
+          note(STATUS_NOTE[e.kind] ?? 'Ты под ударом', 1400);
           break;
         case 'streak':
           streakUp(e.tier);
@@ -1001,6 +1031,10 @@ export function DungeonRun({
       setSheet('plaque');
       return;
     }
+    if (u.kind === 'stairs') {
+      descendNow();
+      return;
+    }
     if (u.kind === 'seal') {
       if (!st.dungeonSpendProp()) {
         note('Нужна крепь — её делают на лесопилке в лесу');
@@ -1025,6 +1059,26 @@ export function DungeonRun({
       }
       save();
     }
+  };
+
+  // ---- Лестница вниз ------------------------------------------------------
+
+  const descendNow = () => {
+    const sim = simRef.current;
+    if (!sim || ended.current) return;
+    ended.current = true;
+    paused.current = true;
+    const ok = useFinanceStore
+      .getState()
+      .dungeonDescend(snapshot(sim), takeDelta(sim), fogNow(sim));
+    if (!ok) {
+      ended.current = false;
+      paused.current = false;
+      note('Лестница закрыта — сперва победи босса');
+      return;
+    }
+    liftClank();
+    onEnd({ kind: 'descend', floor: world.floor + 1 });
   };
 
   // ---- Подъём клетью ----------------------------------------------------
@@ -1196,7 +1250,7 @@ export function DungeonRun({
       {hud?.bossHp != null && (
         <div className="dgx-boss">
           <GxIcon name="crown" />
-          <b>{BOSSES.king.name}</b>
+          <b>{simRef.current?.boss?.def.name}</b>
           <GxBar value={hud.bossHp} />
         </div>
       )}
@@ -1207,8 +1261,8 @@ export function DungeonRun({
             <b>Логово пусто</b>
             <i>
               {hud.plaque > 0
-                ? `король вернётся через ${clock(hud.plaque)}`
-                : 'король вот-вот вернётся'}
+                ? `${simRef.current?.boss?.def.name ?? 'Босс'} вернётся через ${clock(hud.plaque)}`
+                : 'вот-вот вернётся'}
             </i>
           </span>
         </div>
@@ -1433,8 +1487,8 @@ export function DungeonRun({
       )}
 
       {sheet === 'plaque' && (
-        <GxModal title="Логово короля" kind="wood" onClose={() => setSheet(null)}>
-          <PlaqueBody />
+        <GxModal title="Логово" kind="wood" onClose={() => setSheet(null)}>
+          <PlaqueBody floor={world.floor} />
         </GxModal>
       )}
 
@@ -1601,26 +1655,30 @@ function Controls() {
   );
 }
 
-function PlaqueBody() {
+function PlaqueBody({ floor }: { floor: number }) {
   const d = useFinanceStore((s) => s.dungeon);
+  const def = bossOfFloor(floor);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  const b = d.bosses.king;
-  const ready = (b?.at ?? 0) + BOSSES.king.restMs;
+  const b = d.bosses[def.id];
+  const ready = (b?.at ?? 0) + def.restMs;
   const home = ready <= now;
+  // Трофеи из сундука — по описанию босса (броском с постоянным зерном).
+  const trophies = Object.keys(def.loot(() => 0.5).mats);
   return (
     <div className="dgx-lair">
       <GxIcon name="crown" size={64} className={home ? 'is-home' : ''} />
-      <b>{home ? 'Король в логове' : 'Логово пусто'}</b>
+      <b>{home ? `${def.name} в логове` : 'Логово пусто'}</b>
       <span>
         {home ? 'Войдёшь — ворота закроются за тобой' : `вернётся через ${clock(ready - now)}`}
       </span>
       <div className="dgx-lair__loot">
-        <img src={itemUrl('crown')} alt="Корона" />
-        <img src={itemUrl('skin')} alt="Шкурки" />
+        {trophies.map((id) => (
+          <img key={id} src={itemUrl(id)} alt={matDef(id).name} />
+        ))}
         <TokenIcon size={24} />
         <CoinIcon size={24} />
         <KeyIcon size={24} />

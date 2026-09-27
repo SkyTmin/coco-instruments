@@ -19,6 +19,7 @@
 // Пока атлас не пришёл, `x72Ready()` ложно и рисовальщик берёт прежние
 // плитки.
 
+import { areaOf } from './dungeon';
 import type { AreaId } from './dungeon';
 import { hex, Px, TS } from './dungeon-art';
 import { X72_FRAMES } from './dungeon-x72-frames';
@@ -383,7 +384,8 @@ function timberOnFace(px: Px, left: boolean, right: boolean): void {
 
 export type WallLook = 'brick' | 'rock';
 
-export const wallLookOf = (area: AreaId): WallLook => (area === 'mouth' ? 'brick' : 'rock');
+/** Лицо стены района — из облика этажа (`AreaSkin.wall`). */
+export const wallLookOf = (area: AreaId): WallLook => areaOf(area).spec.skin.wall;
 
 /**
  * Сплошная клетка целиком: лицо, кромки, углы, порода. `timber` — через
@@ -484,7 +486,8 @@ export function wallCell(a: Around, look: WallLook, wx: number, wy: number): Px 
 
 /** Какой пол у района: плиты (выложенное) или грунт (дикая выработка). */
 export type FloorLook = 'slab' | 'ground';
-export const floorLookOf = (area: AreaId): FloorLook => (area === 'mouth' ? 'slab' : 'ground');
+/** Пол района — из облика этажа (`AreaSkin.floor`). */
+export const floorLookOf = (area: AreaId): FloorLook => areaOf(area).spec.skin.floor;
 
 /** Сглаженный шум по мировым пикселям — пятна грунта без швов. */
 // Узлы решётки шума — считаются один раз на весь мир: кусок карты рисует

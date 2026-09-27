@@ -32,7 +32,7 @@ import {
   SLOT_NAMES,
   SLOTS,
   slotsUsed,
-  STACK,
+  stackOf,
   upgradable,
 } from '@/lib/dungeon';
 import type { AreaId, Cost, DungeonState, ItemId, MatId, MeatId, Slot } from '@/lib/dungeon';
@@ -339,7 +339,7 @@ export function DungeonInventory({
           {meat ? 'Торговец даст' : 'Цена лишнего'} {fmt(each)} <CoinIcon size={11} /> за штуку ·
           всего в рюкзаке {fmt(total)}
         </span>
-        <span className="mcinv__sub">В ячейке до {STACK[sk.id]} шт.</span>
+        <span className="mcinv__sub">В ячейке до {stackOf(sk.id)} шт.</span>
         <div className="mcinv__acts">
           {meat && (
             <button

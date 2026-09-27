@@ -36,7 +36,9 @@ import {
 } from '@/lib/dungeon';
 import type { Cost, MatId, MobId, Slot } from '@/lib/dungeon';
 import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
-import { gearIcon, heroFrame, itemUrl, mobArt } from '@/lib/dungeon-art';
+import { gearIcon, heroFrame, itemUrl } from '@/lib/dungeon-art';
+import { mobPortrait } from '@/lib/dungeon-mobart';
+import { FLOORS } from '@/lib/dungeon-floors';
 import { shortMoney } from '@/lib/prison';
 import { coinDing, primeAudio, tierBreak } from '@/lib/sound';
 import { notifySuccess, notifyWarning } from '@/lib/haptics';
@@ -258,7 +260,10 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
 
 // ---- Бестиарий -------------------------------------------------------------
 
-const BEASTS: MobId[] = ['rat', 'fatrat', 'bomber', 'goldrat'];
+/** Бестиарий — звери всех этажей по порядку (боссы — отдельной строкой этажа). */
+const BEASTS: MobId[] = FLOORS.flatMap((f) =>
+  f.mobs.filter((m) => m.beast && !m.boss).map((m) => m.id),
+);
 
 export function BeastTab() {
   const d = useFinanceStore((s) => s.dungeon);
@@ -275,7 +280,7 @@ export function BeastTab() {
         const next = BEAST_STEPS[st];
         const from = st > 0 ? BEAST_STEPS[st - 1].at : 0;
         const seen = n > 0;
-        const url = spriteUrl(`beast:${id}`, () => mobArt(id, 'normal', 'run0', false));
+        const url = spriteUrl(`beast:${id}`, () => mobPortrait(id));
         return (
           <div
             key={id}
@@ -310,20 +315,29 @@ export function BeastTab() {
           </div>
         );
       })}
-      <div className="dgc-beast dgc-beast--boss">
-        <img
-          className="dgc-beast__img"
-          src={spriteUrl('beast:king', () => mobArt('king', 'normal', 'run0', false))}
-          alt=""
-        />
-        <span className="dgc-beast__info">
-          <b>
-            {BOSSES.king.name}
-            <em>{d.bosses.king?.kills ?? 0}</em>
-          </b>
-          <i>Логово — в конце Рельсовых туннелей. Возвращается через 20 минут после смерти.</i>
-        </span>
-      </div>
+      {FLOORS.map((f) => {
+        const b = BOSSES[f.boss.id];
+        const kills = d.bosses[b.id]?.kills ?? 0;
+        return (
+          <div key={b.id} className="dgc-beast dgc-beast--boss">
+            <img
+              className="dgc-beast__img"
+              src={spriteUrl(`beast:${b.mob}`, () => mobPortrait(b.mob))}
+              alt=""
+            />
+            <span className="dgc-beast__info">
+              <b>
+                {kills > 0 || d.reached >= f.id ? b.name : '???'}
+                <em>{kills}</em>
+              </b>
+              <i>
+                Этаж {f.id} — {b.lead}. Возвращается через {Math.round(b.restMs / 60_000)} минут
+                после смерти.
+              </i>
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

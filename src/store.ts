@@ -328,9 +328,11 @@ import {
   applyDelta,
   canPay,
   conditionsMet,
+  descendRun,
   dieRun,
   DUNGEON_START,
   extractRun,
+  floorOfArea,
   liftCost,
   nextStep,
   normalizeDungeon,
@@ -1499,6 +1501,12 @@ interface FinanceState {
   dungeonEnter: (lift: AreaId, hp: number) => void;
   /** Запись вылазки на ходу: дельта прогресса и где стоишь. */
   dungeonSave: (snap: DungeonSnap, delta: DeltaIn, fog: Partial<Record<AreaId, string>>) => void;
+  /** Спустился по лестнице за ареной на этаж ниже — с рюкзаком. false — нельзя. */
+  dungeonDescend: (
+    snap: DungeonSnap,
+    delta: DeltaIn,
+    fog: Partial<Record<AreaId, string>>,
+  ) => boolean;
   /** Поднялся клетью: мясо — Барыге, монеты — в кошелёк, токены и ключи — в каторгу. */
   dungeonExtract: (
     snap: DungeonSnap,
@@ -5072,6 +5080,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       ...d,
       run: {
         lift,
+        floor: floorOfArea(lift),
         area: lift,
         x: -1,
         y: -1,
@@ -5104,6 +5113,20 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     };
     set({ dungeon });
     persistDungeon(dungeon);
+  },
+
+  dungeonDescend: (snap, delta, fog) => {
+    const d = get().dungeon;
+    if (!d.run) return false;
+    const d0 = applyDelta(d, delta, fog);
+    const next = descendRun({
+      ...d0,
+      run: { ...d.run, hp: snap.hp, sack: snap.sack, killed: snap.killed },
+    });
+    if (!next) return false;
+    set({ dungeon: next });
+    persistDungeon(next);
+    return true;
   },
 
   dungeonExtract: (snap, delta, fog) => {

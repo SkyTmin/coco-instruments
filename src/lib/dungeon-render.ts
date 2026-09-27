@@ -9,7 +9,7 @@
 // и герой по глубине → частицы и следы ударов → свет → растяжка → цифры.
 // Анимируем только то, что в канве: DOM страницы этот цикл не трогает.
 
-import { areaOf, MOBS } from './dungeon';
+import { areaOf, MOBS, stackOf } from './dungeon';
 import type { AreaId, Gear, MobId } from './dungeon';
 import {
   boardTile,
@@ -43,6 +43,23 @@ import { bandAt, fogGet, Tile, walkableTile } from './dungeon-world';
 import type { World } from './dungeon-world';
 import { bladeSprite, fxCount, fxFrame, heroSprite, ROW, spritesReady } from './dungeon-sprites';
 import { ratEye, ratFrame, ratSize } from './dungeon-rats';
+import {
+  CELL_PAINTERS,
+  MOB_PAINTERS,
+  PROP_PAINTERS,
+  SHOT_PAINTERS,
+  ZONE_PAINTERS,
+} from './dungeon-paint';
+import type { MobFrame, MobPose } from './dungeon-paint';
+import {
+  blobFrame,
+  deepPx,
+  orbSprite,
+  sealSprite,
+  stairsPx,
+  statusRgb,
+  x72MobFrame,
+} from './dungeon-mobart';
 import { boardX72, burrowX72, minePortalX72, propX72, wallLampX72 } from './dungeon-props';
 import type { RatAnim } from './dungeon-rats';
 import {
@@ -160,6 +177,34 @@ interface Ghost {
   life: number;
   /** Где верх картинки относительно ног: у старого героя и у спрайта разный. */
   top: number;
+}
+
+let stairsImg: HTMLCanvasElement | null = null;
+const stairsCanvas = () => (stairsImg ??= stairsPx().canvas());
+
+/**
+ * Перекраска клетки под облик района (`AreaSkin.tint`): множители каналов
+ * и подмешанный цвет. Считается по пикселям буфера куска — один раз на
+ * кусок, в кадре ничего не стоит.
+ */
+function tintCell(buf: Px, px: number, py: number, area: string): void {
+  const tint = areaOf(area).spec.skin.tint;
+  if (!tint) return;
+  const [mr, mg, mb] = tint.mul;
+  const k = tint.k ?? 0;
+  const v = tint.mix ? parseInt(tint.mix.slice(1), 16) : 0;
+  const cr = (v >> 16) & 255;
+  const cg = (v >> 8) & 255;
+  const cb = v & 255;
+  const d = buf.data;
+  for (let y = py; y < py + TS && y < buf.h; y++)
+    for (let x = px; x < px + TS && x < buf.w; x++) {
+      const o = (y * buf.w + x) * 4;
+      if (!d[o + 3]) continue;
+      d[o] = d[o] * mr * (1 - k) + cr * k;
+      d[o + 1] = d[o + 1] * mg * (1 - k) + cg * k;
+      d[o + 2] = d[o + 2] * mb * (1 - k) + cb * k;
+    }
 }
 
 export class DungeonRenderer {
@@ -315,13 +360,11 @@ export class DungeonRenderer {
           break;
         }
         case 'kill': {
-          const colors =
-            e.mob === 'goldrat'
-              ? ['#d8a83a', '#fff0a8', '#8a6418']
-              : e.albino
-                ? ['#ebe4de', '#ffffff', '#b3a79f']
-                : ['#6b6158', '#978b80', '#3d3630', '#c68d84'];
-          const big = e.mob === 'king' || e.mob === 'kinglet';
+          const kd = MOBS[e.mob];
+          const colors = e.albino
+            ? ['#ebe4de', '#ffffff', '#b3a79f']
+            : (kd?.gore ?? ['#6b6158', '#978b80', '#3d3630', '#c68d84']);
+          const big = !!kd?.boss;
           this.burst(e.x, e.y, colors, big ? 40 : 14, 1.8);
           // Клуб дыма набора на месте крысы: тело не «исчезает», а лопается.
           // Небольшой и полупрозрачный: четыре крысы одним ударом — это четыре
@@ -434,8 +477,17 @@ export class DungeonRenderer {
               color: '#ffffff',
             });
           break;
+        case 'strike': {
+          // Удар по площади, упавший камень, лопнувший снаряд.
+          const near = Math.hypot(e.x - sim.hero.x, e.y - sim.hero.y) < 6;
+          this.burst(e.x, e.y, ['#ffffff', '#ffd9a0', '#a08070'], 8, 1.1);
+          this.rings.push({ x: e.x, y: e.y, r: 1.2, life: 0, max: 0.3, color: '#ffe0b0' });
+          if (near) this.addTrauma(0.12);
+          break;
+        }
         case 'boss':
-          if (e.what === 'wake' || e.what === 'split') this.addTrauma(0.6);
+          if (e.what === 'wake' || e.what === 'split' || e.what === 'phase') this.addTrauma(0.6);
+          if (e.what === 'seal') this.flash = Math.max(this.flash, 0.15);
           if (e.what === 'dead') {
             this.addTrauma(0.9);
             this.flash = 0.2;
@@ -575,7 +627,7 @@ export class DungeonRenderer {
 
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.imageSmoothingEnabled = false;
-    g.fillStyle = '#07060a';
+    g.fillStyle = areaOf(bandAt(w, h.y).def.id).spec.skin.fog ?? '#07060a';
     g.fillRect(0, 0, this.view.width, this.view.height);
     g.setTransform(this.scale, 0, 0, this.scale, 0, 0);
 
@@ -609,6 +661,19 @@ export class DungeonRenderer {
 
     for (const p of sim.props) {
       if (!p.alive || !inView(p.x, p.y)) continue;
+      if (p.kind === 'deco' || p.kind === 'breakable') {
+        // Предмет этажа рисует сам этаж; нет рисовальщика — не рисуем.
+        const f = PROP_PAINTERS.get(p.obj.ref ?? '');
+        const sp = f?.(p.obj, this.time, p.alive, p.flash > 0);
+        if (!sp) continue;
+        const bottom = Math.floor(p.y) + 1;
+        list.push({
+          y: bottom,
+          draw: () =>
+            g.drawImage(sp.img, this.q(p.x * TS - left - sp.ax), this.q(bottom * TS - top - sp.ay)),
+        });
+        continue;
+      }
       const art: PropArt =
         p.kind === 'secret'
           ? p.on
@@ -656,6 +721,14 @@ export class DungeonRenderer {
             ),
         });
       }
+      if (o.kind === 'seal' && inView(o.x, o.y) && sim.tiles[o.y * w.w + o.x] === Tile.Seal) {
+        const sp = sealSprite(Math.floor(this.time * 6 + o.x));
+        list.push({
+          y: o.y + 1,
+          draw: () =>
+            g.drawImage(sp.img, this.q(o.x * TS - left), this.q((o.y + 1) * TS - top - sp.ay)),
+        });
+      }
       if (o.kind === 'gate' && inView(o.x, o.y) && sim.tiles[o.y * w.w + o.x] === Tile.Gate) {
         const img = propArt('gate');
         list.push({
@@ -683,6 +756,10 @@ export class DungeonRenderer {
           }
         },
       });
+    }
+    for (const s of sim.shots) {
+      if (!inView(s.x, s.y)) continue;
+      list.push({ y: s.y, draw: () => this.drawShot(s, left, top) });
     }
     for (const d of sim.drops) {
       if (!inView(d.x, d.y)) continue;
@@ -818,7 +895,11 @@ export class DungeonRenderer {
         const px = x * TS;
         const py = y * TS;
         if (buf && this.cellX72(buf, late, g, sim, area, tx, ty, px, py, v, cracks)) continue;
-        if (open(v) || v === Tile.Lift) {
+        if (v === Tile.Deep) {
+          g.drawImage(deepPx(tx, ty, () => false).canvas(), px, py);
+          continue;
+        }
+        if (open(v) || v === Tile.Lift || v === Tile.Seal) {
           g.drawImage(v === Tile.Lift ? liftFloorTile() : floorTile(area, deco), px, py);
           if (v === Tile.RailV) g.drawImage(railTile(area, 'v'), px, py);
           if (v === Tile.RailH) g.drawImage(railTile(area, 'h'), px, py);
@@ -876,6 +957,7 @@ export class DungeonRenderer {
         }
       }
       if (o.kind === 'lamp') g.drawImage(this.x72 ? wallLampX72() : wallLamp(true), px, py);
+      if (o.kind === 'stairs') g.drawImage(stairsCanvas(), px, py);
       if (o.kind === 'board') g.drawImage(this.x72 ? boardX72() : boardTile(), px, py);
       if (o.kind === 'mine') g.drawImage(this.x72 ? minePortalX72() : minePortal(), px - TS, py);
       if (o.kind === 'grate' && sim.tiles[o.y * w.w + o.x] !== Tile.Grate) {
@@ -922,15 +1004,45 @@ export class DungeonRenderer {
       if (x < 0 || y < 0 || x >= w.w || y >= w.h) return Tile.Wall;
       return sim.tiles[y * w.w + x];
     };
+    // «Глубина» и печать — не стены: у стены над ними есть лицо, у пола
+    // рядом нет тени подножия.
     const open = (x: number, y: number) => {
       const k = t(x, y);
-      return walkableTile(k) || k === Tile.Gate || k === Tile.Grate || k === Tile.Lift;
+      return (
+        walkableTile(k) ||
+        k === Tile.Gate ||
+        k === Tile.Grate ||
+        k === Tile.Lift ||
+        k === Tile.Deep ||
+        k === Tile.Seal
+      );
     };
     const put = (p: Px | null) => {
       if (p) blit(buf, p, px, py);
       return p !== null;
     };
     const around = { open: (dx: number, dy: number) => open(tx + dx, ty + dy) };
+    // Своя клетка этажа (вода, лава, грибница, кости) — рисовальщик района.
+    const own = CELL_PAINTERS.get(area);
+    const i = ty * w.w + tx;
+    const mark = w.mark[i];
+    const ownCell = () =>
+      own?.({
+        tile: v,
+        mark,
+        wx: tx,
+        wy: ty,
+        open: (dx, dy) => open(tx + dx, ty + dy),
+        markAt: (dx, dy) => {
+          const x = tx + dx;
+          const y = ty + dy;
+          return x < 0 || y < 0 || x >= w.w || y >= w.h ? 0 : w.mark[y * w.w + x];
+        },
+      }) ?? null;
+    if (v === Tile.Deep) {
+      const deep = (x: number, y: number) => t(x, y) === Tile.Deep;
+      return put(ownCell() ?? deepPx(tx, ty, (dx, dy) => !deep(tx + dx, ty + dy)));
+    }
     if (open(tx, ty)) {
       if (v === Tile.Lift) late.push(() => g.drawImage(liftFloorTile(), px, py));
       else {
@@ -958,6 +1070,9 @@ export class DungeonRenderer {
       if (v === Tile.Grate) late.push(() => g.drawImage(grateTile(false), px, py));
       // Стена в одну клетку толщиной: кромка её верха ложится на пол.
       if (!open(tx, ty + 1) && open(tx, ty + 2)) put(rimOverFloor(tx));
+      // Облик района — под своими клетками этажа: их цвета не трогаем.
+      tintCell(buf, px, py, area);
+      if (mark || v === Tile.Hazard) put(ownCell());
       return true;
     }
     if (v === Tile.Rubble) {
@@ -972,6 +1087,8 @@ export class DungeonRenderer {
     const base = floorLookOf(bandAt(w, below).def.id);
     const floorBelow = alt ? (base === 'slab' ? 'ground' : 'slab') : base;
     if (!put(wallCell(around, floorBelow === 'slab' ? 'brick' : 'rock', tx, ty))) return false;
+    tintCell(buf, px, py, area);
+    if (mark) put(ownCell());
     if (v === Tile.Crack) {
       const o = cracks.find((k) => k.x === tx && k.y === ty);
       late.push(() =>
@@ -1243,6 +1360,8 @@ export class DungeonRenderer {
       case 'plant':
       case 'summon':
       case 'roar':
+      case 'aim':
+      case 'cast':
         return { anim: 'wind', frame: m.t < 0.12 ? 0 : 1 };
       case 'recover':
         return m.t < 0.18
@@ -1261,20 +1380,52 @@ export class DungeonRenderer {
     }
   }
 
+  /** Поза для рисовальщика этажа — та же, что у крыс, плюс режим как есть. */
+  private mobPose(m: Mob): MobPose {
+    const { anim, frame } = this.ratAnim(m);
+    const hurtNow = m.flash > 0 && m.mode !== 'dying' && anim !== 'wind' && anim !== 'bite';
+    return {
+      anim: hurtNow ? 'hurt' : anim,
+      frame,
+      mode: m.mode,
+      t: m.t,
+      left: Math.cos(m.face) < 0,
+      flash: m.flash > 0.05,
+      look: m.albino ? 'albino' : m.elite ? 'elite' : 'normal',
+    };
+  }
+
   private drawMob(sim: Sim, m: Mob, left: number, top: number): void {
     const g = this.bctx;
+    const def = MOBS[m.kind];
+    const art = def?.art ?? { kind: 'rat' as const };
     const px = this.q(m.x * TS - left);
     const py = this.q(m.y * TS - top);
-    const boss = m.kind === 'king' || m.kind === 'kinglet';
+    const boss = !!def?.boss;
     const leftFace = Math.cos(m.face) < 0;
-    const { anim, frame } = this.ratAnim(m);
-    const look = m.albino ? 'albino' : m.elite ? 'elite' : 'normal';
-    // Вспышка удара — белым; сразу после — поза «ушибленной» ещё миг.
-    const hurtNow = m.flash > 0 && m.mode !== 'dying' && anim !== 'wind' && anim !== 'bite';
-    const img = ratFrame(m.kind, look, hurtNow ? 'hurt' : anim, frame, leftFace, m.flash > 0.05);
-    const size = ratSize(m.kind);
-    // Середина тела — в точке моба; земля кадра — на два пикселя ниже.
-    const ax = leftFace ? size.w - size.body : size.body;
+    // Кадр: крыса — своим рисовальщиком, остальные — атласом или этажом.
+    let fr: MobFrame;
+    let eye: [number, number] | null = null;
+    if (art.kind === 'rat') {
+      const { anim, frame } = this.ratAnim(m);
+      const look = m.albino ? 'albino' : m.elite ? 'elite' : 'normal';
+      // Вспышка удара — белым; сразу после — поза «ушибленной» ещё миг.
+      const hurtNow = m.flash > 0 && m.mode !== 'dying' && anim !== 'wind' && anim !== 'bite';
+      const img = ratFrame(m.kind, look, hurtNow ? 'hurt' : anim, frame, leftFace, m.flash > 0.05);
+      const size = ratSize(m.kind);
+      // Середина тела — в точке моба; земля кадра — на два пикселя ниже.
+      fr = { img, ax: leftFace ? size.w - size.body : size.body, ay: size.h - 2 };
+      const [ex, ey] = ratEye(m.kind, hurtNow ? 'hurt' : anim, frame);
+      eye = [leftFace ? size.w - 1 - ex : ex, ey];
+    } else {
+      const pose = this.mobPose(m);
+      const got =
+        art.kind === 'x72'
+          ? x72MobFrame(art, pose.anim, pose.frame, pose.left, pose.flash, pose.look)
+          : (MOB_PAINTERS.get(art.id)?.(m, pose) ?? null);
+      fr = got ?? blobFrame(m.r, pose.flash);
+      eye = fr.eye ?? null;
+    }
     // Появление: из норы выползает, со свода падает.
     let dy = 0;
     let alpha = 1;
@@ -1293,55 +1444,63 @@ export class DungeonRenderer {
       g.ellipse(px, py + 2, 2 + 4 * k, 1 + 1.5 * k, 0, 0, Math.PI * 2);
       g.fill();
       if (m.t < 0) return;
-    } else {
+    } else if (!def?.fly) {
       g.fillStyle = 'rgba(0,0,0,0.32)';
       g.beginPath();
-      g.ellipse(px, py + 2, (boss ? 0.36 : 0.3) * size.w * 0.7, boss ? 4 : 2, 0, 0, Math.PI * 2);
+      g.ellipse(
+        px,
+        py + 2,
+        Math.max(2, (boss ? 0.36 : 0.3) * fr.img.width * 0.7),
+        boss ? 4 : 2,
+        0,
+        0,
+        Math.PI * 2,
+      );
       g.fill();
+    } else {
+      // Летун: тень на полу, сам — выше, покачиваясь.
+      g.fillStyle = 'rgba(0,0,0,0.22)';
+      g.beginPath();
+      g.ellipse(px, py + 2, Math.max(2, m.r * TS * 0.8), 1.5, 0, 0, Math.PI * 2);
+      g.fill();
+      dy = -6 + Math.round(Math.sin(this.time * 5 + m.id) * 1.5);
     }
     if (m.mode === 'dying') alpha = Math.max(0, 1 - Math.max(0, m.t - 0.35) / 0.35);
     // Замах: мелкая дрожь.
     let jx = 0;
-    if (m.mode === 'windup' || m.mode === 'rollAim' || m.mode === 'whipAim')
+    if (m.mode === 'windup' || m.mode === 'rollAim' || m.mode === 'whipAim' || m.tele)
       jx = Math.round(Math.sin(this.time * 70 + m.id) * (boss ? 1.4 : 0.6));
-    const x0 = px - ax + jx;
-    const y0 = py + 4 - size.h + dy;
+    const x0 = px - fr.ax + jx;
+    const y0 = py + 2 - fr.ay + dy;
     g.globalAlpha = alpha;
-    if (m.mode === 'roll') {
+    if (m.mode === 'roll' && art.kind === 'rat') {
       // Король катится — клубок вращается вокруг своей середины.
+      const size = fr.img.height;
       g.save();
-      g.translate(px, py - size.h * 0.3);
+      g.translate(px, py - size * 0.3);
       g.rotate(this.time * 14 * (Math.cos(m.dir) >= 0 ? 1 : -1));
-      g.drawImage(img, -ax, -size.h * 0.55);
+      g.drawImage(fr.img, -fr.ax, -size * 0.55);
       g.restore();
-    } else g.drawImage(img, x0, y0);
+    } else g.drawImage(fr.img, x0, y0);
     g.globalAlpha = 1;
     // Глаза светятся поверх темноты — видно, откуда лезут.
     if (
+      eye &&
       m.mode !== 'dying' &&
       m.mode !== 'sleep' &&
       m.mode !== 'escape' &&
       m.mode !== 'drop' &&
       m.mode !== 'roll'
     ) {
-      const [ex, ey] = ratEye(m.kind, hurtNow ? 'hurt' : anim, frame);
       this.eyes.push({
-        x: x0 + (leftFace ? size.w - 1 - ex : ex),
-        y: y0 + ey,
-        c: boss
-          ? '#ffcc30'
-          : m.kind === 'goldrat'
-            ? '#fff0a0'
-            : m.albino
-              ? '#ff6a88'
-              : m.elite
-                ? '#ffb020'
-                : '#ff3a28',
+        x: x0 + eye[0],
+        y: y0 + eye[1],
+        c: m.albino ? '#ff6a88' : m.elite && !boss ? '#ffb020' : (def?.eye ?? '#ff3a28'),
       });
     }
     // Полоска здоровья — только у раненых.
     if (!boss && m.hp < m.maxHp && m.hp > 0) {
-      const w = m.kind === 'fatrat' ? 14 : 10;
+      const w = Math.max(10, Math.min(18, Math.round(10 + (m.r - 0.26) * 40)));
       const x = px - w / 2;
       const y = y0 + 2;
       g.fillStyle = 'rgba(0,0,0,0.7)';
@@ -1351,16 +1510,142 @@ export class DungeonRenderer {
     }
   }
 
+  // ---- Снаряды ------------------------------------------------------------
+
+  private drawShot(s: Sim['shots'][number], left: number, top: number): void {
+    const g = this.bctx;
+    const sp = SHOT_PAINTERS.get(s.art)?.(s, this.time) ?? orbSprite(s.status);
+    const px = s.x * TS - left;
+    const py = s.y * TS - top;
+    // Тень на полу — видно, куда упадёт навесной.
+    g.fillStyle = 'rgba(0,0,0,0.3)';
+    g.beginPath();
+    g.ellipse(px, py + 2, 2.5, 1, 0, 0, Math.PI * 2);
+    g.fill();
+    if (s.lob) {
+      // Метка приземления навесного — наливается к падению.
+      const k = Math.min(1, s.age / s.lob.T);
+      const [r, gg, b] = statusRgb(s.status);
+      g.strokeStyle = `rgba(${r},${gg},${b},${0.3 + 0.5 * k})`;
+      g.lineWidth = 1;
+      g.beginPath();
+      g.arc(s.lob.x1 * TS - left, s.lob.y1 * TS - top, s.r * TS, 0, Math.PI * 2);
+      g.stroke();
+    }
+    g.drawImage(sp.img, this.q(px - sp.ax), this.q(py - s.z * TS - sp.ay));
+  }
+
   // ---- Метки на полу: всё, что бьёт, сперва предупреждает -----------------
+
+  /** Метка формы удара: круг, кольцо, линия, конус; `k` — насколько налилась. */
+  private drawShape(
+    shape: 'circle' | 'line' | 'cone' | 'ring',
+    x: number,
+    y: number,
+    r: number,
+    k: number,
+    rgb: [number, number, number],
+    w?: number,
+    ang?: number,
+    arc?: number,
+  ): void {
+    const g = this.bctx;
+    const [cr, cg, cb] = rgb;
+    const fill = (a: number) => `rgba(${cr},${cg},${cb},${a})`;
+    const R = r * TS;
+    switch (shape) {
+      case 'circle':
+        g.strokeStyle = fill(0.5 + 0.4 * k);
+        g.lineWidth = 1;
+        g.beginPath();
+        g.arc(x, y, R, 0, Math.PI * 2);
+        g.stroke();
+        g.fillStyle = fill(0.12 + 0.25 * k);
+        g.beginPath();
+        g.arc(x, y, R * k, 0, Math.PI * 2);
+        g.fill();
+        break;
+      case 'ring': {
+        const t = (w ?? 0.6) * TS;
+        g.strokeStyle = fill(0.2 + 0.4 * k);
+        g.lineWidth = t * 2;
+        g.beginPath();
+        g.arc(x, y, R, 0, Math.PI * 2);
+        g.stroke();
+        g.strokeStyle = fill(0.6 + 0.3 * k);
+        g.lineWidth = 1;
+        g.beginPath();
+        g.arc(x, y, R, 0, Math.PI * 2);
+        g.stroke();
+        break;
+      }
+      case 'line': {
+        const hw = (w ?? 0.5) * TS;
+        g.save();
+        g.translate(x, y);
+        g.rotate(ang ?? 0);
+        g.fillStyle = fill(0.15 + 0.35 * k);
+        g.fillRect(0, -hw, R, hw * 2);
+        g.fillStyle = fill(0.5 * k);
+        for (let i = 1; i * TS < R; i++) g.fillRect(i * TS - 2, -2, 3, 4);
+        g.restore();
+        break;
+      }
+      case 'cone': {
+        const a = ang ?? 0;
+        const h = (arc ?? 1) / 2;
+        g.fillStyle = fill(0.18 + 0.3 * k);
+        g.beginPath();
+        g.moveTo(x, y);
+        g.arc(x, y, R, a - h, a + h);
+        g.closePath();
+        g.fill();
+        break;
+      }
+    }
+  }
 
   private drawTelegraphs(sim: Sim, left: number, top: number): void {
     const g = this.bctx;
+    // Лужи и облака — самые нижние: на них стоят.
+    for (const z of sim.zones) {
+      const px = z.x * TS - left;
+      const py = z.y * TS - top;
+      if (ZONE_PAINTERS.get(z.art ?? '')?.(g, z, px, py, TS, this.time)) continue;
+      const warn = z.warn ?? 0;
+      const [r, gg, b] = statusRgb(z.status ?? (z.slow ? 'slow' : undefined));
+      const life = z.t - warn;
+      const fade = Math.min(1, (z.life - life) / 0.6);
+      if (z.t < warn) {
+        this.drawShape('circle', px, py, z.r, z.t / warn, [r, gg, b]);
+        continue;
+      }
+      g.fillStyle = `rgba(${r},${gg},${b},${0.22 * fade})`;
+      g.beginPath();
+      g.arc(px, py, z.r * TS, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = `rgba(${r},${gg},${b},${0.3 * fade})`;
+      for (let i = 0; i < 5; i++) {
+        const a = this.time * 0.7 + i * 1.26 + z.id;
+        const rr = z.r * TS * (0.3 + 0.5 * ((i * 0.37 + this.time * 0.2) % 1));
+        g.fillRect(Math.round(px + Math.cos(a) * rr), Math.round(py + Math.sin(a) * rr), 2, 2);
+      }
+    }
+    // Удары по площади, пока горит метка.
+    for (const st of sim.strikes) {
+      const px = st.x * TS - left;
+      const py = st.y * TS - top;
+      if (ZONE_PAINTERS.get(st.art ?? '')?.(g, st, px, py, TS, this.time)) continue;
+      const k = Math.min(1, st.t / st.warn);
+      this.drawShape(st.shape, px, py, st.r, k, statusRgb(st.status), st.w, st.ang, st.arc);
+    }
     for (const m of sim.mobs) {
       const px = m.x * TS - left;
       const py = m.y * TS - top;
-      if (m.mode === 'windup') {
-        const k = Math.min(1, m.t / MOBS[m.kind].windup);
-        const reach = (MOBS[m.kind].reach + m.r + 0.2) * TS;
+      const def = MOBS[m.kind];
+      if (m.mode === 'windup' && def) {
+        const k = Math.min(1, m.t / Math.max(0.05, def.windup));
+        const reach = (def.reach + m.r + 0.2) * TS;
         g.fillStyle = `rgba(255,60,40,${0.18 + 0.3 * k})`;
         g.beginPath();
         g.moveTo(px, py);
@@ -1368,30 +1653,12 @@ export class DungeonRenderer {
         g.closePath();
         g.fill();
       }
-      if (m.mode === 'rollAim') {
-        // Стрела качения: полоса по направлению, наливается к броску.
-        const k = Math.min(1, m.t / 0.8);
-        g.save();
-        g.translate(px, py);
-        g.rotate(m.dir);
-        g.fillStyle = `rgba(255,50,30,${0.15 + 0.35 * k})`;
-        g.fillRect(0, -m.r * TS, 7 * TS, m.r * 2 * TS);
-        g.fillStyle = `rgba(255,120,80,${0.5 * k})`;
-        for (let i = 1; i < 7; i++) g.fillRect(i * TS - 2, -2, 3, 4);
-        g.restore();
-      }
-      if (m.mode === 'whipAim') {
-        const k = Math.min(1, m.t / 0.7);
-        const r = (m.kind === 'kinglet' ? 1.7 : 2.1) * TS;
-        g.strokeStyle = `rgba(255,60,40,${0.5 + 0.4 * k})`;
-        g.lineWidth = 1;
-        g.beginPath();
-        g.arc(px, py, r, 0, Math.PI * 2);
-        g.stroke();
-        g.fillStyle = `rgba(255,60,40,${0.12 + 0.25 * k})`;
-        g.beginPath();
-        g.arc(px, py, r * k, 0, Math.PI * 2);
-        g.fill();
+      // Метка ИИ: куда придётся удар (перекат, хлыст, рывок, выстрел).
+      const t = m.tele;
+      if (t) {
+        const tx = t.x !== undefined ? t.x * TS - left : px;
+        const ty = t.y !== undefined ? t.y * TS - top : py;
+        this.drawShape(t.shape, tx, ty, t.r, t.k, [255, 60, 40], t.w, t.ang, t.arc);
       }
     }
     for (const b of sim.bombs) {
@@ -1593,9 +1860,21 @@ export class DungeonRenderer {
     for (const b of this.blasts) hole(b.x, b.y, b.r, Math.min(1, b.life * 4));
     // Добыча и золотая крыса светятся сами.
     for (const d of sim.drops)
-      if (d.kind === 'coin' || d.kind === 'token' || d.kind === 'key' || d.kind === 'crown')
+      if (
+        d.kind === 'coin' ||
+        d.kind === 'token' ||
+        d.kind === 'key' ||
+        d.kind.startsWith('block:') ||
+        stackOf(d.kind) === 1
+      )
         hole(d.x, d.y, 0.9, 0.6);
-    for (const m of sim.mobs) if (m.kind === 'goldrat' || m.albino) hole(m.x, m.y, 1.8, 0.7);
+    for (const m of sim.mobs) {
+      const def = MOBS[m.kind];
+      if (def?.coins || m.albino) hole(m.x, m.y, 1.8, 0.7);
+      else if (def?.light) hole(m.x, m.y, def.light, 0.8);
+    }
+    // Снаряды и огонь светят сами.
+    for (const s of sim.shots) hole(s.x, s.y - s.z, 0.8, 0.5);
     l.globalAlpha = 1;
     l.globalCompositeOperation = 'source-over';
     const g = this.bctx;
@@ -1609,6 +1888,8 @@ export class DungeonRenderer {
       cold: glowBlob('rgba(140,190,255,0.16)'),
       teal: glowBlob('rgba(90,230,200,0.18)'),
       red: glowBlob('rgba(255,70,50,0.2)'),
+      violet: glowBlob('rgba(190,120,255,0.2)'),
+      green: glowBlob('rgba(120,240,110,0.18)'),
     };
     for (const li of lights) {
       if (li.lamp && !sim.lit.has(li.lamp)) continue;

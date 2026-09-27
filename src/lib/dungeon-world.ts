@@ -1,5 +1,6 @@
-// Мир подземелья: одна цельная карта из районов, сложенных снизу вверх.
-// Ни экранов, ни переходов: район кончается там, где начинается следующий,
+// Мир подземелья: карта ЭТАЖА из его районов, сложенных снизу вверх (v2.81:
+// этажей пять, между ними — лестница и экран спуска). Внутри этажа ни
+// экранов, ни переходов: район кончается там, где начинается следующий,
 // проход тянется в тех же столбцах. Здесь только постоянная часть мира —
 // клетки, предметы на своих местах, свет, рельсы. Что сломано и кто где
 // бегает, живёт в симуляции (`dungeon-sim.ts`).
@@ -10,9 +11,9 @@
 // (`area`, `x`, `ly`): новый район сверху сдвинет мировые ряды, но не
 // местные.
 
-import { AREAS } from './dungeon';
-import type { AreaDef, AreaId, DeepMineId } from './dungeon';
-import { MAP_HAUL, MAP_MOUTH } from './dungeon-maps';
+import { AREAS, floorOf } from './dungeon';
+import type { AreaDef, AreaId } from './dungeon';
+import type { HazardSpec, LightSpec } from './dungeon-floors/types';
 
 export const WORLD_W = 64;
 
@@ -30,6 +31,12 @@ export const Tile = {
   Gate: 8,
   Rubble: 9,
   Lift: 10,
+  /** «Глубина» этажа: вода, пропасть, лава. Не пройти, но это не стена. */
+  Deep: 11,
+  /** Опасный пол: ходить можно, но он жжёт, травит или вязнет. */
+  Hazard: 12,
+  /** Печать: закрыта, пока босс этажа не побеждён (за ней — лестница вниз). */
+  Seal: 13,
 } as const;
 
 /** Сквозь что нельзя пройти (без учёта открытых решёток и ворот). */
@@ -58,7 +65,11 @@ export type ObjKind =
   | 'grate'
   | 'ambush'
   | 'group'
-  | 'crack';
+  | 'crack'
+  | 'seal'
+  | 'stairs'
+  | 'deco'
+  | 'breakable';
 
 export interface WorldObj {
   /** Постоянный номер: район и местные координаты. */
@@ -76,8 +87,11 @@ export interface WorldObj {
   face?: 'front' | 'side';
   /** Для вагонеток: ось рельсов. */
   axis?: 'v' | 'h';
-  /** Для шахт и клетей — что это. */
+  /** Для шахт и клетей — что это; для предметов этажа — их рисунок. */
   ref?: string;
+  /** Предмет этажа: радиус тела (0 — сквозь него проходят) и прочность. */
+  solid?: number;
+  hp?: number;
 }
 
 export interface Rail {
@@ -93,8 +107,8 @@ export interface Light {
   x: number;
   y: number;
   r: number;
-  /** Тёплый, холодный, бирюзовый. */
-  tint: 'warm' | 'cold' | 'teal' | 'red';
+  /** Тёплый, холодный, бирюзовый, красный, фиолетовый, зелёный. */
+  tint: 'warm' | 'cold' | 'teal' | 'red' | 'violet' | 'green';
   /** Если свет зажигается — номер фонаря. */
   lamp?: string;
 }
@@ -107,9 +121,16 @@ export interface AreaBand {
 }
 
 export interface World {
+  /** Этаж, из районов которого собран мир. */
+  floor: number;
   w: number;
   h: number;
   tiles: Uint8Array;
+  /** Вид своей клетки этажа (буква легенды района → `mark`), 0 — обычная. */
+  mark: Uint8Array;
+  /** Опасность клетки: номер в `hazards` + 1, 0 — безопасно. */
+  haz: Uint8Array;
+  hazards: HazardSpec[];
   /** Узор клетки 0…255 — постоянный, от координат. */
   deco: Uint8Array;
   /** Пол другого вида (`,` на карте): грунт в Устье, плиты в Откатке. */
@@ -122,29 +143,30 @@ export interface World {
   lights: Light[];
 }
 
-/** Районы, которые уже построены, СНИЗУ ВВЕРХ, со своими картами. */
-const BUILT: { id: AreaId; rows: string[] }[] = [
-  { id: 'mouth', rows: MAP_MOUTH },
-  { id: 'haul', rows: MAP_HAUL },
-];
-
-/** Какая подземная шахта за каким входом. */
-const MINE_AT: Partial<Record<AreaId, DeepMineId>> = { mouth: 'pyrite1', haul: 'pyrite2' };
-
 const hash = (x: number, y: number) => {
   let h = (x * 374761393 + y * 668265263) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
   return (h ^ (h >>> 16)) & 255;
 };
 
-export function buildWorld(): World {
-  // Сверху — самый глубокий район: порядок BUILT обратный.
-  const order = [...BUILT].reverse();
+/**
+ * Мир этажа: его районы, сложенные снизу вверх (первый — вход с лифтом).
+ * Другие этажи в мир не входят: переход между ними — лестница и экран
+ * спуска (v2.81).
+ */
+export function buildWorld(floorId = 1): World {
+  const floor = floorOf(floorId);
+  // Сверху — самый глубокий район: порядок районов обратный.
+  const order = [...floor.areas].reverse();
   const h = order.reduce((s, a) => s + a.rows.length, 0);
   const w = WORLD_W;
   const tiles = new Uint8Array(w * h);
   const deco = new Uint8Array(w * h);
   const alt = new Uint8Array(w * h);
+  const mark = new Uint8Array(w * h);
+  const haz = new Uint8Array(w * h);
+  const hazards: HazardSpec[] = [];
+  const tintOf = (l: LightSpec) => l.tint;
   const bands: AreaBand[] = [];
   const rowArea: AreaId[] = [];
   const objs: WorldObj[] = [];
@@ -152,6 +174,13 @@ export function buildWorld(): World {
   let top = 0;
   for (const a of order) {
     const def = AREAS.find((d) => d.id === a.id)!;
+    const legend = a.legend ?? {};
+    const hazIdx = new Map<string, number>();
+    for (const [ch, cell] of Object.entries(legend))
+      if (cell.hazard) {
+        hazards.push(cell.hazard);
+        hazIdx.set(ch, hazards.length);
+      }
     bands.push({ def, top, h: a.rows.length });
     for (let ly = 0; ly < a.rows.length; ly++) {
       rowArea.push(a.id);
@@ -165,6 +194,25 @@ export function buildWorld(): World {
         const obj = (kind: ObjKind, extra: Partial<WorldObj> = {}) =>
           objs.push({ id, kind, area: a.id, x, y, ly, ...extra });
         let t: number = Tile.Floor;
+        const own = legend[ch];
+        if (own) {
+          t =
+            own.tile === 'wall'
+              ? Tile.Wall
+              : own.tile === 'deep'
+                ? Tile.Deep
+                : own.tile === 'hazard'
+                  ? Tile.Hazard
+                  : Tile.Floor;
+          mark[i] = own.mark ?? 0;
+          haz[i] = hazIdx.get(ch) ?? 0;
+          if (own.obj)
+            obj(own.obj.kind, { ref: own.obj.ref, solid: own.obj.solid ?? 0.34, hp: own.obj.hp });
+          const l = own.light ?? own.obj?.light;
+          if (l) lights.push({ x: x + 0.5, y: y + 0.5, r: l.r, tint: tintOf(l) });
+          tiles[i] = t;
+          continue;
+        }
         switch (ch) {
           case '#':
             t = Tile.Wall;
@@ -197,6 +245,14 @@ export function buildWorld(): World {
             t = Tile.Lift;
             obj('lift', { ref: a.id });
             break;
+          case 'S':
+            t = Tile.Seal;
+            obj('seal');
+            break;
+          case '>':
+            obj('stairs');
+            lights.push({ x: x + 0.5, y: y + 0.5, r: 3.4, tint: 'cold' });
+            break;
           case 'L':
             t = Tile.Wall;
             obj('lamp');
@@ -208,7 +264,7 @@ export function buildWorld(): World {
             break;
           case 'M':
             t = Tile.Wall;
-            obj('mine', { ref: MINE_AT[a.id] });
+            obj('mine', { ref: a.mine });
             lights.push({ x: x + 0.5, y: y + 1.1, r: 3.2, tint: 'warm' });
             break;
           case 'b':
@@ -251,7 +307,7 @@ export function buildWorld(): World {
             obj('plaque');
             break;
           case 'K':
-            obj('boss', { ref: 'king' });
+            obj('boss', { ref: floor.boss.id });
             break;
           case 'a':
             obj('ambush');
@@ -295,7 +351,22 @@ export function buildWorld(): World {
       if (n && a * 2 > n) alt[i] = 1;
     }
 
-  const world: World = { w, h, tiles, deco, alt, bands, rowArea, objs, rails: [], lights };
+  const world: World = {
+    floor: floor.id,
+    w,
+    h,
+    tiles,
+    mark,
+    haz,
+    hazards,
+    deco,
+    alt,
+    bands,
+    rowArea,
+    objs,
+    rails: [],
+    lights,
+  };
 
   // Площадка клети — три на три пола вокруг центра.
   for (const o of objs) {
@@ -346,7 +417,19 @@ export function tileAt(wd: World, x: number, y: number): number {
 
 /** Можно ли стоять на клетке (решётки и ворота — по их состоянию, здесь закрыты). */
 export const walkableTile = (t: number) =>
-  t === Tile.Floor || t === Tile.RailV || t === Tile.RailH || t === Tile.Puddle || t === Tile.Lift;
+  t === Tile.Floor ||
+  t === Tile.RailV ||
+  t === Tile.RailH ||
+  t === Tile.Puddle ||
+  t === Tile.Lift ||
+  t === Tile.Hazard;
+
+/** Опасность клетки мира или null. */
+export function hazardAt(wd: World, x: number, y: number): HazardSpec | null {
+  if (x < 0 || y < 0 || x >= wd.w || y >= wd.h) return null;
+  const k = wd.haz[y * wd.w + x];
+  return k ? wd.hazards[k - 1] : null;
+}
 
 /** Непрерывные отрезки рельсов: по ним катаются вагонетки. */
 function findRails(wd: World): Rail[] {
@@ -462,7 +545,7 @@ export function reachable(wd: World, sx: number, sy: number): Uint8Array {
   const q: number[] = [sy * wd.w + sx];
   seen[q[0]] = 1;
   const pass = (t: number) =>
-    walkableTile(t) || t === Tile.Grate || t === Tile.Gate || t === Tile.Crack;
+    walkableTile(t) || t === Tile.Grate || t === Tile.Gate || t === Tile.Crack || t === Tile.Seal;
   while (q.length) {
     const i = q.shift()!;
     const x = i % wd.w;

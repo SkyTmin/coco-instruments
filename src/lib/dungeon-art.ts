@@ -7,7 +7,9 @@
 // это палитра и узор (`SETS` в `dungeon.ts`), поэтому каска, роба, сапоги и
 // клинок одного комплекта нарисованы одной рукой и читаются как набор.
 
-import { SETS, setOf } from './dungeon';
+import { itemRock, SETS, setOf } from './dungeon';
+import { ITEM_ART } from './dungeon-paint';
+import { ROCKS } from './prison';
 import type { AreaId, Gear, MobId, SetMotif } from './dungeon';
 import { bladeSprite, spritesReady } from './dungeon-sprites';
 
@@ -1442,16 +1444,12 @@ export function propArt(kind: PropArt, flash = false): HTMLCanvasElement {
 // Добыча на полу.
 // ---------------------------------------------------------------------------
 
-export type ItemArt =
-  | 'meat'
-  | 'fatmeat'
-  | 'skin'
-  | 'tail'
-  | 'pyrite'
-  | 'crown'
-  | 'coin'
-  | 'token'
-  | 'key';
+/**
+ * Вид вещи на полу и в ячейке — id вещи (`meat`, `skin`, `ore:3`, `block:3`)
+ * или монета, жетон, ключ. Материалы этажа рисуют себя сами
+ * (`registerItemArt` в `dungeon-paint.ts`); руда и блоки — по цветам руды.
+ */
+export type ItemArt = string;
 
 export function itemArt(kind: ItemArt): HTMLCanvasElement {
   return cached(`item:${kind}`, () => itemPx(kind));
@@ -1471,7 +1469,65 @@ export function itemUrl(kind: ItemArt): string {
   return url;
 }
 
+/** Кусок руды: неровный самородок с вкраплениями. */
+function orePx(r: number): Px {
+  const rock = ROCKS[r] ?? ROCKS[0];
+  const base = hex(rock.base);
+  const dark = hex(rock.dark);
+  const fleck = hex(rock.fleck);
+  const shine = hex(rock.shine);
+  const px = new Px(10, 10);
+  px.ell(5, 5.5, 3.9, 3.3, base);
+  px.ell(3.6, 7.2, 2, 1.2, dark);
+  px.set(7, 7, dark);
+  px.set(8, 6, dark);
+  px.set(3, 4, fleck);
+  px.set(6, 4, fleck);
+  px.set(5, 6, fleck);
+  px.set(4, 3, shine);
+  px.outline(INK);
+  return px;
+}
+
+/** Цельный блок: куб с верхней гранью светлее, передней — темнее. */
+function blockPx(r: number): Px {
+  const rock = ROCKS[r] ?? ROCKS[0];
+  const base = hex(rock.base);
+  const dark = hex(rock.dark);
+  const fleck = hex(rock.fleck);
+  const shine = hex(rock.shine);
+  const px = new Px(10, 10);
+  px.rect(1, 1, 8, 3, mix(base, shine, 0.45));
+  px.rect(1, 4, 8, 8, base);
+  px.rect(1, 8, 8, 8, dark);
+  px.rect(8, 4, 8, 8, dark);
+  px.set(3, 5, fleck);
+  px.set(6, 6, fleck);
+  px.set(4, 7, fleck);
+  px.set(2, 2, shine);
+  px.set(3, 1, shine);
+  px.outline(INK);
+  return px;
+}
+
+/** Вещь без картинки — узелок: всегда что-то видно, а не пустая клетка. */
+function bundlePx(kind: string): Px {
+  let h = 0;
+  for (let i = 0; i < kind.length; i++) h = (Math.imul(h, 31) + kind.charCodeAt(i)) >>> 0;
+  const tint = hex(['#8a6a44', '#6a7a8a', '#7a5a7a', '#5a7a5a', '#8a5a4a'][h % 5]);
+  const px = new Px(10, 10);
+  px.ell(5, 6, 3.8, 3, tint);
+  px.ell(4, 5, 1.6, 1, mix(tint, WHITE, 0.35));
+  px.rect(4, 1, 6, 3, mix(tint, BLACK, 0.25));
+  px.outline(INK);
+  return px;
+}
+
 function itemPx(kind: ItemArt): Px {
+  const own = ITEM_ART.get(kind);
+  if (own) return own();
+  const r = itemRock(kind);
+  if (r) return r.kind === 'block' ? blockPx(r.rock) : orePx(r.rock);
   const px = new Px(10, 10);
   switch (kind) {
     case 'meat':
@@ -1540,6 +1596,8 @@ function itemPx(kind: ItemArt): Px {
       px.set(6, 7, hex('#4f8490'));
       break;
     }
+    default:
+      return bundlePx(kind);
   }
   px.outline(INK);
   return px;

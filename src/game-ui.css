@@ -1464,7 +1464,10 @@
   background: rgba(0, 0, 0, 0.28);
   box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25);
   color: var(--gx-paper);
-  font: 800 13px/1 'GxRubik', system-ui, sans-serif;
+  font:
+    800 13px/1 'GxRubik',
+    system-ui,
+    sans-serif;
   transition: transform 70ms ease-out;
 }
 .pshop-pack__opt:active {
@@ -1618,6 +1621,59 @@
   flex: 1 0 100%;
 }
 
+/* Этажи подземелья (v2.81): ряд номеров, закрытые — с замком. */
+.dgl-floors {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.dgl-floor {
+  position: relative;
+  flex: 1;
+  max-width: 64px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 8px solid transparent;
+  border-image: url('/ui/kenney/panel_grey_bolts_dark.png') 8 fill / 8px stretch;
+  image-rendering: pixelated;
+  background: none;
+  color: #f2f6fa;
+  font: inherit;
+  cursor: pointer;
+}
+.dgl-floor b {
+  font-size: 18px;
+  font-weight: 900;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+.dgl-floor.is-on {
+  border-image-source: url('/ui/kenney/panel_grey_bolts_green.png');
+}
+.dgl-floor.is-locked {
+  filter: grayscale(0.8) brightness(0.75);
+}
+.dgl-floorname {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  color: #f4e6d4;
+}
+.dgl-floorname b {
+  font-size: 16px;
+  font-weight: 800;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+.dgl-floorname i {
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1.3;
+  opacity: 0.85;
+}
 .dgl-areas {
   display: grid;
   gap: 10px;
@@ -3480,9 +3536,16 @@
 .dgmine__info {
   width: min(100%, 440px);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 6px;
+}
+.dgmine__ores {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
 }
 .dgmine__noise.is-loud {
   background: var(--gx-red-d);
@@ -5977,7 +6040,12 @@ button.fg-slot {
   height: 4.5%;
   margin: -2.25% 0 0 -3.5%;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(236, 214, 255, 0.95), rgba(170, 100, 255, 0.5) 45%, transparent);
+  background: radial-gradient(
+    closest-side,
+    rgba(236, 214, 255, 0.95),
+    rgba(170, 100, 255, 0.5) 45%,
+    transparent
+  );
   animation: pbk-eye 4.2s ease-in-out infinite;
 }
 .pbk-mage__eye.is-l {
@@ -6800,9 +6868,7 @@ button.fg-slot {
   height: 46px;
   margin-left: -105px;
   border-radius: 50%;
-  background:
-    radial-gradient(60% 55% at 50% 40%, #8a8378, #5c564d 70%, #3b3630),
-    #3b3630;
+  background: radial-gradient(60% 55% at 50% 40%, #8a8378, #5c564d 70%, #3b3630), #3b3630;
   box-shadow:
     0 10px 0 #2c2823,
     0 14px 18px rgba(0, 0, 0, 0.5);
@@ -7170,7 +7236,12 @@ button.fg-slot {
   height: 60px;
   margin: -30px 0 0 -30px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(220, 205, 255, 0.9), rgba(160, 130, 255, 0.3) 45%, transparent);
+  background: radial-gradient(
+    closest-side,
+    rgba(220, 205, 255, 0.9),
+    rgba(160, 130, 255, 0.3) 45%,
+    transparent
+  );
   animation: pch-hole 700ms ease-in-out infinite alternate;
 }
 @keyframes pch-hole {
@@ -7221,7 +7292,12 @@ button.fg-slot {
   height: 26px;
   margin-top: -13px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, #ffffff, color-mix(in srgb, var(--rl) 80%, transparent) 40%, transparent);
+  background: radial-gradient(
+    closest-side,
+    #ffffff,
+    color-mix(in srgb, var(--rl) 80%, transparent) 40%,
+    transparent
+  );
   box-shadow: 0 0 24px 6px color-mix(in srgb, var(--rc) 60%, transparent);
   animation: pch-sweep var(--rv) cubic-bezier(0.45, 0, 0.55, 1) both;
 }
@@ -7664,7 +7740,11 @@ button.fg-slot {
   position: absolute;
   inset: -14%;
   border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--rc) 55%, transparent), transparent 72%);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--rc) 55%, transparent),
+    transparent 72%
+  );
   opacity: 0.55;
   pointer-events: none;
 }
@@ -7687,7 +7767,16 @@ button.fg-slot {
 }
 .pet.r5 .pet__rays,
 .pet.v2 .pet__rays {
-  background: conic-gradient(#ff5f6d, #ffc371, #f9f871, #7cffb2, #5fd3ff, #a17bff, #ff6fd8, #ff5f6d);
+  background: conic-gradient(
+    #ff5f6d,
+    #ffc371,
+    #f9f871,
+    #7cffb2,
+    #5fd3ff,
+    #a17bff,
+    #ff6fd8,
+    #ff5f6d
+  );
   -webkit-mask: radial-gradient(closest-side, transparent 38%, #000 52%, transparent 70%);
   mask: radial-gradient(closest-side, transparent 38%, #000 52%, transparent 70%);
   opacity: 0.55;
@@ -7724,8 +7813,10 @@ button.fg-slot {
   height: calc(var(--ps) * 0.2);
   margin-left: calc(var(--ps) * -0.1);
   background: #ff5a7a;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.3C6 16.8 2 13.2 2 8.7 2 5.6 4.4 3.3 7.3 3.3c1.9 0 3.6 1 4.7 2.5 1.1-1.5 2.8-2.5 4.7-2.5 2.9 0 5.3 2.3 5.3 5.4 0 4.5-4 8.1-10 12.6z'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.3C6 16.8 2 13.2 2 8.7 2 5.6 4.4 3.3 7.3 3.3c1.9 0 3.6 1 4.7 2.5 1.1-1.5 2.8-2.5 4.7-2.5 2.9 0 5.3 2.3 5.3 5.4 0 4.5-4 8.1-10 12.6z'/%3E%3C/svg%3E") center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.3C6 16.8 2 13.2 2 8.7 2 5.6 4.4 3.3 7.3 3.3c1.9 0 3.6 1 4.7 2.5 1.1-1.5 2.8-2.5 4.7-2.5 2.9 0 5.3 2.3 5.3 5.4 0 4.5-4 8.1-10 12.6z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.3C6 16.8 2 13.2 2 8.7 2 5.6 4.4 3.3 7.3 3.3c1.9 0 3.6 1 4.7 2.5 1.1-1.5 2.8-2.5 4.7-2.5 2.9 0 5.3 2.3 5.3 5.4 0 4.5-4 8.1-10 12.6z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
   animation: pet-heart 900ms ease-out both;
 }
 .pet__hearts i:nth-child(2) {
@@ -7737,9 +7828,17 @@ button.fg-slot {
   animation-delay: 170ms;
 }
 @keyframes pet-heart {
-  0% { opacity: 0; transform: translate(var(--hx, 0), 0) scale(0.4); }
-  25% { opacity: 1; }
-  100% { opacity: 0; transform: translate(calc(var(--hx, 0) * 2), -140%) scale(1); }
+  0% {
+    opacity: 0;
+    transform: translate(var(--hx, 0), 0) scale(0.4);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--hx, 0) * 2), -140%) scale(1);
+  }
 }
 
 /* Яйцо */
@@ -7790,7 +7889,12 @@ button.fg-slot {
   padding: 6px 6px 8px;
   border: 2px solid color-mix(in srgb, var(--rc, #b08a5a) 55%, transparent);
   border-radius: 12px;
-  background: radial-gradient(90% 70% at 50% 35%, color-mix(in srgb, var(--rc, #b08a5a) 22%, transparent), transparent),
+  background:
+    radial-gradient(
+      90% 70% at 50% 35%,
+      color-mix(in srgb, var(--rc, #b08a5a) 22%, transparent),
+      transparent
+    ),
     rgba(109, 75, 39, 0.1);
   color: var(--text);
   font: inherit;
@@ -7895,13 +7999,8 @@ button.fg-slot {
   height: 26px;
   margin-left: -48px;
   border-radius: 50% 50% 45% 45% / 30% 30% 70% 70%;
-  background: repeating-linear-gradient(
-      160deg,
-      #c8963c 0 3px,
-      #9a6a24 3px 5px,
-      #e0b060 5px 8px
-    ),
-    #b07e34;
+  background:
+    repeating-linear-gradient(160deg, #c8963c 0 3px, #9a6a24 3px 5px, #e0b060 5px 8px), #b07e34;
   box-shadow: inset 0 4px 6px rgba(60, 30, 5, 0.45);
 }
 .ppn__nest.is-empty .ppn__straw {
@@ -7916,7 +8015,12 @@ button.fg-slot {
 }
 .ppn__nest.is-ready {
   border-color: var(--rc);
-  background: radial-gradient(80% 70% at 50% 45%, color-mix(in srgb, var(--rc) 30%, transparent), transparent),
+  background:
+    radial-gradient(
+      80% 70% at 50% 45%,
+      color-mix(in srgb, var(--rc) 30%, transparent),
+      transparent
+    ),
     rgba(109, 75, 39, 0.08);
 }
 /* Созревшее яйцо покачивается — «тапни меня». */
@@ -7924,11 +8028,23 @@ button.fg-slot {
   animation: ppn-ready 1.4s ease-in-out infinite;
 }
 @keyframes ppn-ready {
-  0%, 60%, 100% { transform: none; }
-  68% { transform: rotate(-9deg); }
-  76% { transform: rotate(8deg); }
-  84% { transform: rotate(-5deg); }
-  92% { transform: rotate(3deg); }
+  0%,
+  60%,
+  100% {
+    transform: none;
+  }
+  68% {
+    transform: rotate(-9deg);
+  }
+  76% {
+    transform: rotate(8deg);
+  }
+  84% {
+    transform: rotate(-5deg);
+  }
+  92% {
+    transform: rotate(3deg);
+  }
 }
 .ppn__go {
   padding: 2px 10px;
@@ -7997,7 +8113,11 @@ button.fg-slot {
   gap: 8px;
   padding: 8px;
   border-radius: 12px;
-  background: radial-gradient(70% 60% at 50% 35%, color-mix(in srgb, var(--rc) 22%, transparent), transparent);
+  background: radial-gradient(
+    70% 60% at 50% 35%,
+    color-mix(in srgb, var(--rc) 22%, transparent),
+    transparent
+  );
 }
 .ppn-nest__now .gx-bar {
   width: 80%;
@@ -8039,7 +8159,12 @@ button.fg-slot {
   padding: 6px 4px 8px;
   border: 2px solid color-mix(in srgb, var(--rc) 45%, transparent);
   border-radius: 10px;
-  background: radial-gradient(90% 60% at 50% 30%, color-mix(in srgb, var(--rc) 18%, transparent), transparent),
+  background:
+    radial-gradient(
+      90% 60% at 50% 30%,
+      color-mix(in srgb, var(--rc) 18%, transparent),
+      transparent
+    ),
     rgba(109, 75, 39, 0.08);
   color: var(--text);
   font: inherit;
@@ -8061,7 +8186,12 @@ button.fg-slot {
   padding: 6px 4px 7px;
   border: 2px solid color-mix(in srgb, var(--rc) 45%, transparent);
   border-radius: 10px;
-  background: radial-gradient(90% 60% at 50% 30%, color-mix(in srgb, var(--rc) 18%, transparent), transparent),
+  background:
+    radial-gradient(
+      90% 60% at 50% 30%,
+      color-mix(in srgb, var(--rc) 18%, transparent),
+      transparent
+    ),
     rgba(109, 75, 39, 0.08);
   color: var(--text);
   font: inherit;
@@ -8119,7 +8249,8 @@ button.fg-slot {
   padding: 0;
   border: 2px solid color-mix(in srgb, var(--rc) 60%, transparent);
   border-radius: 10px;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--rc) 28%, transparent), transparent),
+  background:
+    radial-gradient(closest-side, color-mix(in srgb, var(--rc) 28%, transparent), transparent),
     rgba(109, 75, 39, 0.1);
   cursor: pointer;
   overflow: hidden;
@@ -8137,8 +8268,8 @@ button.fg-slot {
 /* Золотой и радужный видны в сетке и рамкой карточки, не только самим зверем. */
 .ppn__card.is-v1 {
   border-color: #e8b53a;
-  background: radial-gradient(closest-side, rgba(255, 200, 60, 0.4), transparent),
-    rgba(109, 75, 39, 0.1);
+  background:
+    radial-gradient(closest-side, rgba(255, 200, 60, 0.4), transparent), rgba(109, 75, 39, 0.1);
 }
 .ppn__card.is-v2 {
   border-color: transparent;
@@ -8198,7 +8329,12 @@ button.fg-slot {
   place-items: center;
   height: 176px;
   border-radius: 12px;
-  background: radial-gradient(70% 70% at 50% 45%, color-mix(in srgb, var(--rc) 35%, transparent), transparent 75%),
+  background:
+    radial-gradient(
+      70% 70% at 50% 45%,
+      color-mix(in srgb, var(--rc) 35%, transparent),
+      transparent 75%
+    ),
     radial-gradient(120% 90% at 50% 100%, #3a2615, #1c120a);
   overflow: hidden;
 }
@@ -8213,9 +8349,17 @@ button.fg-slot {
   pointer-events: none;
 }
 @keyframes ppn-xp {
-  0% { opacity: 0; transform: translate(-50%, 10px); }
-  20% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -18px); }
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -18px);
+  }
 }
 .ppn-sheet__acts {
   display: flex;
@@ -8423,8 +8567,8 @@ button.fg-slot {
   height: 44px;
   margin-left: -85px;
   border-radius: 50% 50% 45% 45% / 30% 30% 70% 70%;
-  background: repeating-linear-gradient(160deg, #c8963c 0 3px, #9a6a24 3px 5px, #e0b060 5px 8px),
-    #b07e34;
+  background:
+    repeating-linear-gradient(160deg, #c8963c 0 3px, #9a6a24 3px 5px, #e0b060 5px 8px), #b07e34;
   box-shadow: inset 0 6px 10px rgba(40, 20, 5, 0.55);
 }
 .phs__egg {
@@ -8435,29 +8579,60 @@ button.fg-slot {
   transform-origin: 50% 88%;
 }
 /* Качается всё сильнее: у каждой ступени свой размах и частота. */
-.phs__egg.is-w1 { animation: phs-wob1 900ms ease-in-out infinite; }
-.phs__egg.is-w2 { animation: phs-wob2 520ms ease-in-out infinite; }
-.phs__egg.is-w3 { animation: phs-wob3 260ms ease-in-out infinite; }
+.phs__egg.is-w1 {
+  animation: phs-wob1 900ms ease-in-out infinite;
+}
+.phs__egg.is-w2 {
+  animation: phs-wob2 520ms ease-in-out infinite;
+}
+.phs__egg.is-w3 {
+  animation: phs-wob3 260ms ease-in-out infinite;
+}
 @keyframes phs-wob1 {
-  0%, 55%, 100% { transform: none; }
-  65% { transform: rotate(-5deg); }
-  78% { transform: rotate(4deg); }
-  90% { transform: rotate(-2deg); }
+  0%,
+  55%,
+  100% {
+    transform: none;
+  }
+  65% {
+    transform: rotate(-5deg);
+  }
+  78% {
+    transform: rotate(4deg);
+  }
+  90% {
+    transform: rotate(-2deg);
+  }
 }
 @keyframes phs-wob2 {
-  0%, 100% { transform: rotate(-6deg); }
-  50% { transform: rotate(6deg) translateY(-2px); }
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg) translateY(-2px);
+  }
 }
 @keyframes phs-wob3 {
-  0%, 100% { transform: rotate(-8deg) translateX(-2px); }
-  50% { transform: rotate(8deg) translate(2px, -4px); }
+  0%,
+  100% {
+    transform: rotate(-8deg) translateX(-2px);
+  }
+  50% {
+    transform: rotate(8deg) translate(2px, -4px);
+  }
 }
 /* Свет изнутри — цвета редкости, сквозь трещины. */
 .phs__leak {
   position: absolute;
   inset: -14%;
   border-radius: 50%;
-  background: radial-gradient(closest-side, var(--rl), color-mix(in srgb, var(--rc) 60%, transparent) 45%, transparent 75%);
+  background: radial-gradient(
+    closest-side,
+    var(--rl),
+    color-mix(in srgb, var(--rc) 60%, transparent) 45%,
+    transparent 75%
+  );
   transition: opacity 180ms;
 }
 .phs__egg .pegg-img {
@@ -8469,7 +8644,8 @@ button.fg-slot {
   width: 100%;
   height: 100%;
   overflow: visible;
-  filter: drop-shadow(0 0 2px var(--rc)) drop-shadow(0 0 5px var(--rc)) drop-shadow(0 0 9px var(--rl));
+  filter: drop-shadow(0 0 2px var(--rc)) drop-shadow(0 0 5px var(--rc))
+    drop-shadow(0 0 9px var(--rl));
 }
 .phs__cracks g {
   opacity: 0;
@@ -8493,22 +8669,67 @@ button.fg-slot {
   transform-origin: 50% 50%;
 }
 .phs__half--top {
-  clip-path: polygon(0 0, 100% 0, 100% 48%, 76% 48%, 71% 44%, 65% 49%, 58% 43%, 52% 51%, 46% 44%, 39% 50%, 33% 43%, 26% 47%, 0 47%);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% 48%,
+    76% 48%,
+    71% 44%,
+    65% 49%,
+    58% 43%,
+    52% 51%,
+    46% 44%,
+    39% 50%,
+    33% 43%,
+    26% 47%,
+    0 47%
+  );
   animation: phs-top 800ms cubic-bezier(0.2, 0.7, 0.4, 1) both;
 }
 .phs__half--bot {
-  clip-path: polygon(0 47%, 26% 47%, 33% 43%, 39% 50%, 46% 44%, 52% 51%, 58% 43%, 65% 49%, 71% 44%, 76% 48%, 100% 48%, 100% 100%, 0 100%);
+  clip-path: polygon(
+    0 47%,
+    26% 47%,
+    33% 43%,
+    39% 50%,
+    46% 44%,
+    52% 51%,
+    58% 43%,
+    65% 49%,
+    71% 44%,
+    76% 48%,
+    100% 48%,
+    100% 100%,
+    0 100%
+  );
   animation: phs-bot 900ms ease-out both;
 }
 @keyframes phs-top {
-  0% { transform: none; opacity: 1; }
-  60% { opacity: 1; }
-  100% { transform: translate(-38%, -70%) rotate(-48deg); opacity: 0; }
+  0% {
+    transform: none;
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-38%, -70%) rotate(-48deg);
+    opacity: 0;
+  }
 }
 @keyframes phs-bot {
-  0% { transform: none; opacity: 1; }
-  40% { transform: translateY(6%) rotate(6deg); opacity: 1; }
-  100% { transform: translateY(12%) rotate(10deg); opacity: 0; }
+  0% {
+    transform: none;
+    opacity: 1;
+  }
+  40% {
+    transform: translateY(6%) rotate(6deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(12%) rotate(10deg);
+    opacity: 0;
+  }
 }
 .phs__pet {
   position: relative;
@@ -8516,9 +8737,17 @@ button.fg-slot {
   animation: phs-pet 620ms cubic-bezier(0.2, 0.8, 0.3, 1.25) both;
 }
 @keyframes phs-pet {
-  0% { transform: translateY(24%) scale(0.2); opacity: 0; }
-  30% { opacity: 1; }
-  100% { transform: none; opacity: 1; }
+  0% {
+    transform: translateY(24%) scale(0.2);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
 }
 .phs__label {
   display: flex;
@@ -8586,10 +8815,21 @@ button.fg-slot {
   animation: ppets-say 1.5s ease-out both;
 }
 @keyframes ppets-say {
-  0% { opacity: 0; transform: translate(-50%, 6px) scale(0.8); }
-  12% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-  80% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -8px); }
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.8);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
 }
 /* Счастливчик учуял: кольцо над клеткой, где в глубине блок этажа или сейд. */
 .psense {
@@ -8605,7 +8845,9 @@ button.fg-slot {
   inset: 6%;
   border: 2px solid #ffe38a;
   border-radius: 50%;
-  box-shadow: 0 0 10px #ffd24a, inset 0 0 8px #ffd24a;
+  box-shadow:
+    0 0 10px #ffd24a,
+    inset 0 0 8px #ffd24a;
   animation: psense 900ms ease-in-out infinite;
 }
 .psense b {
@@ -8613,11 +8855,20 @@ button.fg-slot {
   color: #fff3c0;
   font-size: 12px;
   font-weight: 900;
-  text-shadow: 0 1px 0 #000, 0 0 4px #000;
+  text-shadow:
+    0 1px 0 #000,
+    0 0 4px #000;
 }
 @keyframes psense {
-  0%, 100% { transform: scale(0.9); opacity: 0.7; }
-  50% { transform: scale(1.05); opacity: 1; }
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
 }
 .pmx-dock__pets {
   position: relative;

@@ -39,7 +39,7 @@ import {
   smellOf,
   SLOTS,
   xpFor,
-  MAP_VERSION,
+  floorOf,
   minusMats,
   payFromBoth,
 } from './dungeon';
@@ -169,7 +169,7 @@ describe('подземелье: правила', () => {
     const c = deepField('pyrite1', 101, 63, 5);
     expect(a).toEqual(b);
     expect(a).not.toEqual(c);
-    const ore = a.filter((r) => r === DEEP_MINES.pyrite1.ore).length;
+    const ore = a.filter((r) => DEEP_MINES.pyrite1.ores.includes(r)).length;
     expect(ore).toBeGreaterThan(20);
     // Подземные номера не пересекаются с породами каторги.
     expect(DEEP_BASE).toBeGreaterThan(PRISON_ROCKS);
@@ -230,6 +230,7 @@ describe('подземелье: правила', () => {
     };
     const run = {
       lift: 'mouth',
+      floor: 1,
       area: 'mouth' as const,
       x: 1,
       y: 1,
@@ -272,7 +273,9 @@ describe('подземелье: правила', () => {
     expect(sackCost(1).coins).toBeGreaterThan(sackCost(0).coins);
     expect(sackCost(2).mats.skin!).toBeGreaterThan(sackCost(0).mats.skin!);
     expect(liftCost('haul').coins).toBe(8_000);
-    expect(liftCost('old').coins).toBeGreaterThan(liftCost('haul').coins);
+    // Ниже — дороже: лифт района глубже Рельсовых туннелей.
+    const deeper = AREAS.find((a) => a.level > AREAS.find((b) => b.id === 'haul')!.level)!;
+    expect(liftCost(deeper.id).coins).toBeGreaterThan(liftCost('haul').coins);
     const d = payMats(
       { ...DUNGEON_START, stash: { skin: 12, pyrite: 2 } },
       { coins: 0, mats: { skin: 12 } },
@@ -309,6 +312,8 @@ describe('подземелье: правила', () => {
   it('другая планировка карты: разведка и фонари с нуля, вылазка — у клети, сидор цел', () => {
     const old = {
       ...DUNGEON_START,
+      // Сохранение до этажей: одно число `mapVer` — карта первого этажа.
+      mapVers: undefined,
       mapVer: 1,
       fog: { mouth: 'AAAA' },
       lamps: ['mouth:3:4'],
@@ -326,7 +331,7 @@ describe('подземелье: правила', () => {
       },
     };
     const d = normalizeDungeon(old);
-    expect(d.mapVer).toBe(MAP_VERSION);
+    expect(d.mapVers['1']).toBe(floorOf(1).mapVer);
     expect(d.fog).toEqual({});
     expect(d.lamps).toEqual([]);
     expect(d.opened).toEqual([]);
@@ -334,7 +339,7 @@ describe('подземелье: правила', () => {
     expect(d.run!.area).toBe('mouth');
     expect(d.run!.sack.coins).toBe(77);
     // Та же планировка — ничего не трогаем.
-    const same = normalizeDungeon({ ...old, mapVer: MAP_VERSION });
+    const same = normalizeDungeon({ ...old, mapVers: d.mapVers });
     expect(same.lamps).toEqual(['mouth:3:4']);
     expect(same.run!.x).toBe(20);
   });

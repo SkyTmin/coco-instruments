@@ -14,39 +14,51 @@
 //     гнёзда, засады, спящие стаи, крысиный поток, золотая крыса,
 //     сорвавшаяся вагонетка; запах мяса в сидоре зовёт крыс;
 //   • ящики, бочки, порох, гнёзда, вагонетки на рельсах;
-//   • Крысиный король: катится, хлещет хвостами, зовёт стаю, на половине
-//     здоровья распадается на трёх малых.
+//   • боссы этажей — сценарии в `dungeon-floors/fN-brains.ts` (v2.81);
+//   • снаряды, удары по площади с меткой на полу, лужи и облака, статусы
+//     героя (яд, ожог, холод, замедление, оглушение), опасные клетки.
+//
+// Монстры — данными (`MobDef`), их ИИ — в реестре `dungeon-ai.ts`: общая
+// библиотека `dungeon-brains.ts` и своё у каждого этажа.
 
 import {
   AREAS,
+  areaOf,
   armorCut,
   beastBonus,
   BOSSES,
+  bossLoot,
   CRIT_X,
-  GOLD_BAG,
   CRATE_COINS,
   SECRET_COINS,
-  kingLoot,
   levelOf,
   mobStats,
   MOBS,
+  MEATS,
   canTake,
   DEEP_NOISE_MAX,
+  isMeat,
+  sackAdd,
   smellOf,
   ALBINO_CHANCE,
+  floorBeaten,
 } from './dungeon';
 import type {
   Affix,
   AreaId,
+  BossDef,
   BossId,
   DungeonState,
   Hero,
   MatId,
   MeatId,
+  MobDef,
   MobId,
   ItemId,
   Sack,
+  ShotSpec,
   StatId,
+  StatusKind,
 } from './dungeon';
 import { STREAK_TIERS } from './prison';
 import {
@@ -55,12 +67,18 @@ import {
   bandOf,
   fogDecode,
   fogSet,
+  hazardAt,
   railAt,
   Tile,
   tileAt,
   toLocal,
   walkableTile,
 } from './dungeon-world';
+import { BOSS_SCRIPTS, BRAINS } from './dungeon-ai';
+import type { BrainCtx, SimApi, SpawnOpts, StrikeIn, Tele, ZoneIn } from './dungeon-ai';
+// ИИ общей библиотеки и этажей регистрируются при загрузке.
+import './dungeon-brains';
+import './dungeon-floors/brains';
 import type { Rail, World, WorldObj } from './dungeon-world';
 import { collideGrid, moveBody, steerVelocity } from './walk';
 import type { Grid } from './walk';
@@ -98,16 +116,8 @@ export const NO_INPUT: SimInput = {
   lock: null,
 };
 
-export type DropKind =
-  | 'meat'
-  | 'fatmeat'
-  | 'skin'
-  | 'tail'
-  | 'pyrite'
-  | 'crown'
-  | 'coin'
-  | 'token'
-  | 'key';
+/** Что лежит на полу: вещь рюкзака (мясо, материал, руда) или монеты, токены, ключ. */
+export type DropKind = ItemId | 'coin' | 'token' | 'key';
 
 export type SimEvent =
   | {
@@ -138,7 +148,17 @@ export type SimEvent =
   | { t: 'eat'; heal: number }
   | { t: 'rumble'; x: number; y: number; what: 'horde' | 'cart' }
   | { t: 'area'; area: AreaId }
-  | { t: 'boss'; what: 'wake' | 'split' | 'dead' | 'reset' | 'roll' | 'whip' | 'summon' }
+  | {
+      t: 'boss';
+      /** wake, split, dead, reset, roll, whip, summon, phase — или своё слово сценария. */
+      what: string;
+      /** Надпись на табло (для `phase` и своих). */
+      text?: string;
+      sub?: string;
+    }
+  | { t: 'shot'; x: number; y: number; art: string }
+  | { t: 'strike'; x: number; y: number; art: string; big?: boolean }
+  | { t: 'status'; kind: StatusKind }
   | { t: 'combo'; n: number }
   | { t: 'streak'; tier: number }
   | { t: 'skill'; x: number; y: number }
@@ -197,27 +217,17 @@ export interface HeroState {
   /** Подсветка удара по герою, с. */
   flash: number;
   walk: number;
+  /** Статусы: сколько секунд осталось и сила (урон в секунду, доля замедления). */
+  status: Partial<Record<StatusKind, { t: number; p: number }>>;
 }
 
-export type MobMode =
-  | 'emerge'
-  | 'drop'
-  | 'sleep'
-  | 'alert'
-  | 'chase'
-  | 'windup'
-  | 'recover'
-  | 'stun'
-  | 'flee'
-  | 'plant'
-  | 'dying'
-  | 'roar'
-  | 'rollAim'
-  | 'roll'
-  | 'dizzy'
-  | 'whipAim'
-  | 'summon'
-  | 'escape';
+/**
+ * Режим моба. Общие ведёт движок: `emerge` (из норы), `drop` (со свода),
+ * `sleep`, `alert`, `stun`, `dying`, `escape`. Остальные — ИИ вида:
+ * `chase`, `windup`, `recover`, `flee`, `plant`, `aim`, `charge`, `dizzy`,
+ * `roar`… (ИИ этажа вправе завести свои).
+ */
+export type MobMode = string;
 
 export interface Mob {
   id: number;
@@ -261,6 +271,17 @@ export interface Mob {
   /** Появился в этой вылазке из режиссёра (а не стая, не босс). */
   area: AreaId;
   level: number;
+  /** Черновик ИИ: свои счётчики вида. */
+  data: Record<string, number>;
+  /** Метка на полу — куда придётся удар (рисует движок). */
+  tele: Tele | null;
+  /**
+   * Опасен прямо сейчас в этом радиусе: рывок под такой удар — уклон в
+   * последний миг (замедление и верный крит).
+   */
+  danger: number;
+  /** Отскакивает от стен (катится, таранит): удар о стену зовёт `onWall`. */
+  bounce: boolean;
 }
 
 export type PropKind =
@@ -274,7 +295,9 @@ export type PropKind =
   | 'lantern'
   | 'unlit'
   | 'plaque'
-  | 'secret';
+  | 'secret'
+  | 'deco'
+  | 'breakable';
 
 export interface Prop {
   id: number;
@@ -351,6 +374,7 @@ export interface Director {
 
 export interface BossFight {
   id: BossId;
+  def: BossDef;
   obj: WorldObj;
   cells: Set<number>;
   /** Состояние боя: ждёт героя, идёт, выигран в этой вылазке, отдыхает. */
@@ -362,6 +386,43 @@ export interface BossFight {
   t: number;
   /** Победитель уходит: ворота держатся открытыми, пока он не отошёл. */
   exiting?: boolean;
+  /** Фаза боя для сценария (0 — начало). */
+  phase: number;
+  /** Черновик сценария. */
+  data: Record<string, number>;
+}
+
+/** Снаряд в полёте. */
+export interface Shot {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+  life: number;
+  age: number;
+  dmg: number;
+  art: string;
+  status?: StatusKind;
+  dur?: number;
+  /** Навесом: откуда, куда и сколько лететь; высота для рисунка. */
+  lob?: { x0: number; y0: number; x1: number; y1: number; T: number };
+  z: number;
+  /** Чей: для бестиария и защиты. */
+  kind: MobId;
+}
+
+/** Удар по площади: метка горит `warn`, потом бьёт один раз. */
+export interface Strike extends StrikeIn {
+  id: number;
+  t: number;
+}
+
+/** Лужа, облако, огонь. */
+export interface Zone extends ZoneIn {
+  id: number;
+  t: number;
 }
 
 /** То, что вылазка добавила к сохранению — сбрасывается страницей в стор. */
@@ -377,6 +438,10 @@ export interface SimDelta {
 
 export interface Sim {
   world: World;
+  /** Этаж мира. */
+  floor: number;
+  /** Босс этажа хоть раз побеждён: печати открыты, лестница вниз работает. */
+  beaten: boolean;
   tiles: Uint8Array;
   time: number;
   rng: () => number;
@@ -387,6 +452,9 @@ export interface Sim {
   props: Prop[];
   drops: Drop[];
   bombs: Bomb[];
+  shots: Shot[];
+  strikes: Strike[];
+  zones: Zone[];
   burrows: Burrow[];
   ambushes: { obj: WorldObj; used: boolean }[];
   groups: { obj: WorldObj; used: boolean }[];
@@ -497,14 +565,9 @@ export const STREAK_GRACE = 5;
 export const SKILL = { dur: 0.5, reach: 1.9, mult: 1.5, perHit: 0.08 };
 
 /** Кого сколько весит — от этого отдача. */
-const MASS: Record<MobId, number> = {
-  rat: 1,
-  fatrat: 2.6,
-  bomber: 1,
-  goldrat: 1,
-  king: 9,
-  kinglet: 4,
-};
+const massOf = (kind: MobId) => MOBS[kind]?.mass ?? 1;
+/** Описание вида (незнакомый — как серая крыса, чтобы битое сохранение не падало). */
+const defOf = (kind: MobId): MobDef => MOBS[kind] ?? MOBS.rat ?? Object.values(MOBS)[0];
 
 /** Ступени серии убийств: названия — как у запала шахты, счёт — убийствами. */
 export const KILL_STREAK = [5, 15, 35, 70, 120];
@@ -520,22 +583,8 @@ export function streakTierOf(n: number): number {
   return t;
 }
 
-/** Что водится в районе и с каким весом. */
-const AREA_MOBS: Partial<Record<AreaId, [MobId, number][]>> = {
-  mouth: [
-    ['rat', 80],
-    ['fatrat', 14],
-    ['bomber', 6],
-  ],
-  haul: [
-    ['rat', 55],
-    ['fatrat', 26],
-    ['bomber', 19],
-  ],
-};
-
-/** Плотность появления по району. */
-const DENSITY: Partial<Record<AreaId, number>> = { mouth: 1, haul: 1.25 };
+/** Кто и как появляется в районе (`AreaSpec.spawn`). */
+const spawnOf = (area: AreaId) => areaOf(area).spec.spawn;
 
 // ---------------------------------------------------------------------------
 // Создание.
@@ -561,6 +610,8 @@ const PROP_OF: Partial<Record<string, PropKind>> = {
   unlit: 'unlit',
   plaque: 'plaque',
   secret: 'secret',
+  deco: 'deco',
+  breakable: 'breakable',
 };
 
 const PROP_R: Record<PropKind, number> = {
@@ -575,6 +626,8 @@ const PROP_R: Record<PropKind, number> = {
   unlit: 0.18,
   plaque: 0.2,
   secret: 0.34,
+  deco: 0.34,
+  breakable: 0.38,
 };
 
 export function createSim(o: SimOptions): Sim {
@@ -587,8 +640,14 @@ export function createSim(o: SimOptions): Sim {
     if (obj.kind === 'crack' && d.opened.includes(obj.id)) tiles[obj.y * w.w + obj.x] = Tile.Floor;
   }
   const lvl = levelOf(d.xp).level;
+  // Босс этажа побеждён — печати на пути к лестнице открыты навсегда.
+  const beaten = floorBeaten(d, w.floor);
+  if (beaten)
+    for (const obj of w.objs) if (obj.kind === 'seal') tiles[obj.y * w.w + obj.x] = Tile.Floor;
   const sim: Sim = {
     world: w,
+    floor: w.floor,
+    beaten,
     tiles,
     time: 0,
     rng: lcg(o.seed ?? Date.now() & 0x7fffffff),
@@ -620,11 +679,15 @@ export function createSim(o: SimOptions): Sim {
       lock: null,
       flash: 0,
       walk: 0,
+      status: {},
     },
     mobs: [],
     props: [],
     drops: [],
     bombs: [],
+    shots: [],
+    strikes: [],
+    zones: [],
     burrows: [],
     ambushes: [],
     groups: [],
@@ -696,14 +759,14 @@ export function createSim(o: SimOptions): Sim {
       };
       const lvlA = bandAt(w, obj.y).def.level;
       const scale = kind === 'nest' || kind === 'cartnest' ? Math.pow(1.8, lvlA) : 1;
-      const hp = (hpBase[kind] ?? 0) * scale;
+      const hp = kind === 'breakable' ? (obj.hp ?? 2) : (hpBase[kind] ?? 0) * scale;
       const p: Prop = {
         id: sim.nextId++,
         kind,
         obj,
         x: obj.x + 0.5,
         y: obj.y + 0.5,
-        r: PROP_R[kind],
+        r: kind === 'deco' || kind === 'breakable' ? (obj.solid ?? PROP_R[kind]) : PROP_R[kind],
         hp,
         maxHp: hp,
         alive: true,
@@ -728,16 +791,17 @@ export function createSim(o: SimOptions): Sim {
   // Никакой стаи прямо у точки спуска: иначе вход встречает дракой.
   for (const g of sim.groups) if (Math.hypot(g.obj.x - o.x, g.obj.y - o.y) < 10) g.used = true;
 
-  // Арена короля.
+  // Арена босса этажа (одна на этаж: все ворота мира — её).
   const bossObj = w.objs.find((x) => x.kind === 'boss');
-  if (bossObj) {
-    const def = BOSSES[(bossObj.ref as BossId) ?? 'king'];
+  const def = bossObj ? BOSSES[bossObj.ref as BossId] : undefined;
+  if (bossObj && def) {
     const cells = arenaCells(w, bossObj);
     const gates = w.objs.filter((x) => x.kind === 'gate').map((x) => x.y * w.w + x.x);
     const readyAt = (d.bosses[def.id]?.at ?? 0) + def.restMs;
     const resting = readyAt > sim.now();
     sim.boss = {
       id: def.id,
+      def,
       obj: bossObj,
       cells,
       state: resting ? 'rest' : 'idle',
@@ -745,6 +809,8 @@ export function createSim(o: SimOptions): Sim {
       gates,
       split: false,
       t: 0,
+      phase: 0,
+      data: {},
     };
   }
   updateGates(sim);
@@ -770,6 +836,7 @@ export function solidTile(sim: Sim, x: number, y: number): boolean {
  * решётки, осыпавшиеся трещины, ворота арены).
  */
 const grids = new WeakMap<Sim, Grid>();
+const flyGrids = new WeakMap<Sim, Grid>();
 function gridOf(sim: Sim): Grid {
   let g = grids.get(sim);
   if (!g) {
@@ -784,9 +851,39 @@ function gridOf(sim: Sim): Grid {
   return g;
 }
 
+/** Сетка летунов: «глубина» (вода, пропасть) им не преграда. */
+function flyGridOf(sim: Sim): Grid {
+  let g = flyGrids.get(sim);
+  if (!g) {
+    const w = sim.world;
+    g = {
+      w: w.w,
+      h: w.h,
+      cell: 1,
+      solid: (x, y) =>
+        x < 0 || y < 0 || x >= w.w || y >= w.h
+          ? true
+          : sim.tiles[y * w.w + x] === Tile.Deep
+            ? false
+            : solidTile(sim, x, y),
+    };
+    flyGrids.set(sim, g);
+  }
+  return g;
+}
+
 /** Круг против клеток: вытолкнуть наружу, скользя вдоль стены (`lib/walk.ts`). */
-function collideTiles(sim: Sim, e: { x: number; y: number; r: number }): boolean {
-  return collideGrid(gridOf(sim), e);
+function collideTiles(sim: Sim, e: { x: number; y: number; r: number; kind?: MobId }): boolean {
+  const fly = e.kind !== undefined && MOBS[e.kind]?.fly;
+  return collideGrid(fly ? flyGridOf(sim) : gridOf(sim), e);
+}
+
+/** Клетка закрывает вид: стены, закрытые ворота и печати — но не вода. */
+function opaque(sim: Sim, x: number, y: number): boolean {
+  const w = sim.world;
+  if (x < 0 || y < 0 || x >= w.w || y >= w.h) return true;
+  const t = sim.tiles[y * w.w + x];
+  return !walkableTile(t) && t !== Tile.Deep;
 }
 
 const SOLID_PROPS: PropKind[] = [
@@ -801,12 +898,14 @@ const SOLID_PROPS: PropKind[] = [
   'unlit',
   'plaque',
   'secret',
+  'deco',
+  'breakable',
 ];
 
 function collideProps(sim: Sim, e: { x: number; y: number; r: number }, share = 1): Prop | null {
   let touched: Prop | null = null;
   for (const p of sim.props) {
-    if (!p.alive || !SOLID_PROPS.includes(p.kind)) continue;
+    if (!p.alive || p.r <= 0 || !SOLID_PROPS.includes(p.kind)) continue;
     const dx = e.x - p.x;
     const dy = e.y - p.y;
     const min = e.r + p.r;
@@ -829,7 +928,7 @@ export function lineOfSight(sim: Sim, ax: number, ay: number, bx: number, by: nu
   for (let i = 1; i < n; i++) {
     const x = Math.floor(ax + (dx * i) / n);
     const y = Math.floor(ay + (dy * i) / n);
-    if (solidTile(sim, x, y)) return false;
+    if (opaque(sim, x, y)) return false;
   }
   return true;
 }
@@ -912,24 +1011,11 @@ function flowDir(sim: Sim, x: number, y: number, away = false): [number, number]
 
 const AFFIX_LIST: Affix[] = ['fast', 'tough', 'leader', 'regen', 'boom'];
 
-export function spawnMob(
-  sim: Sim,
-  kind: MobId,
-  x: number,
-  y: number,
-  opts: {
-    mode?: MobMode;
-    elite?: boolean;
-    burrow?: number;
-    nest?: number;
-    rush?: boolean;
-    level?: number;
-  } = {},
-): Mob {
+export function spawnMob(sim: Sim, kind: MobId, x: number, y: number, opts: SpawnOpts = {}): Mob {
   const band = bandAt(sim.world, y);
   const level = opts.level ?? band.def.level;
-  const albino =
-    kind !== 'king' && kind !== 'kinglet' && kind !== 'goldrat' && sim.rng() < ALBINO_CHANCE;
+  const def = defOf(kind);
+  const albino = !def.boss && !def.noAlbino && sim.rng() < ALBINO_CHANCE;
   const affixes: Affix[] = opts.elite
     ? [AFFIX_LIST[Math.floor(sim.rng() * AFFIX_LIST.length)]]
     : [];
@@ -943,7 +1029,7 @@ export function spawnMob(
     vy: 0,
     kx: 0,
     ky: 0,
-    r: MOBS[kind].radius * (opts.elite ? 1.15 : 1),
+    r: def.radius * (opts.elite ? 1.15 : 1),
     hp: st.hp,
     maxHp: st.hp,
     dmg: st.dmg,
@@ -968,13 +1054,17 @@ export function spawnMob(
     summonCd: 6,
     area: band.def.id,
     level,
+    data: {},
+    tele: null,
+    danger: 0,
+    bounce: false,
   };
   sim.mobs.push(m);
   return m;
 }
 
 function pickKind(sim: Sim, area: AreaId): MobId {
-  const list = AREA_MOBS[area] ?? AREA_MOBS.mouth!;
+  const list = spawnOf(area).mobs;
   let total = 0;
   for (const [, w] of list) total += w;
   let r = sim.rng() * total;
@@ -1052,8 +1142,7 @@ function pickBurrow(sim: Sim, minD: number, maxD: number): Burrow | null {
 
 function liveMobs(sim: Sim): number {
   let n = 0;
-  for (const m of sim.mobs)
-    if (m.mode !== 'dying' && m.kind !== 'king' && m.kind !== 'kinglet') n++;
+  for (const m of sim.mobs) if (m.mode !== 'dying' && !defOf(m.kind).boss) n++;
   return n;
 }
 
@@ -1096,6 +1185,7 @@ function stepDirector(sim: Sim, dt: number): void {
   }
 
   const area = sim.area;
+  const spec = spawnOf(area);
   const smell = smellOf(sim.sack);
   const safeNow = nearSafe(sim, h.x, h.y, SAFE_R + 2);
 
@@ -1105,15 +1195,11 @@ function stepDirector(sim: Sim, dt: number): void {
     if (Math.hypot(g.obj.x + 0.5 - h.x, g.obj.y + 0.5 - h.y) > 16) continue;
     g.used = true;
     const band = bandAt(sim.world, g.obj.y);
+    const gs = spawnOf(band.def.id);
     const n = 3 + Math.floor(sim.rng() * 3);
     const lead = sim.rng() < 0.18;
     for (let i = 0; i < n; i++) {
-      const kind =
-        band.def.id === 'haul' && i % 2 === 0
-          ? 'fatrat'
-          : i === 0 && sim.rng() < 0.3
-            ? 'bomber'
-            : 'rat';
+      const kind = gs.group ? gs.group(i, n, sim.rng) : pickKind(sim, band.def.id);
       const a = (i / n) * Math.PI * 2;
       const m = spawnMob(
         sim,
@@ -1151,14 +1237,14 @@ function stepDirector(sim: Sim, dt: number): void {
     sim.events.push({ t: 'squeak', x: h.x, y: h.y });
   }
 
-  // Крысиный поток.
-  if (!bossOn && !safeNow) {
+  // Поток из норы (крысиная орда).
+  if (!bossOn && !safeNow && spec.horde) {
     if (d.hordeLeft > 0) {
       d.hordeWarn -= dt;
       if (d.hordeWarn <= 0) {
         const b = sim.burrows[d.hordeFrom];
         if (b && liveMobs(sim) < MOB_CAP + 10) {
-          fromBurrow(sim, b, sim.rng() < 0.85 ? 'rat' : 'fatrat', {
+          fromBurrow(sim, b, spec.horde(sim.rng), {
             rush: true,
             elite: d.hordeLeft === 1 && sim.rng() < 0.3,
           });
@@ -1182,20 +1268,20 @@ function stepDirector(sim: Sim, dt: number): void {
     }
   }
 
-  // Золотая крыса.
+  // Беглец с мешком монет (золотая крыса).
   d.goldT -= dt;
   if (d.goldT <= 0 && !bossOn) {
-    const b = pickBurrow(sim, 8, 15);
-    if (b) {
-      const m = fromBurrow(sim, b, 'goldrat');
+    const b = spec.treasure ? pickBurrow(sim, 8, 15) : null;
+    if (b && spec.treasure) {
+      const m = fromBurrow(sim, b, spec.treasure);
       m.mode = 'emerge';
       sim.events.push({ t: 'gold', x: m.x, y: m.y });
     }
     d.goldT = 900 + sim.rng() * 900;
   }
 
-  // Сорвавшаяся вагонетка — в Откатке, если стоишь на её рельсах.
-  if (area === 'haul' && !bossOn) {
+  // Сорвавшаяся вагонетка — там, где они водятся, если стоишь на её рельсах.
+  if (spec.carts && !bossOn) {
     if (d.cartId >= 0) {
       d.cartWarn -= dt;
       const cart = sim.props.find((p) => p.id === d.cartId);
@@ -1231,17 +1317,17 @@ function stepDirector(sim: Sim, dt: number): void {
 
   // Обычное появление из нор — только на нарастании.
   if (d.phase !== 'build' || bossOn || safeNow) return;
-  d.spawnT -= dt * (DENSITY[area] ?? 1) * (1 + smell);
+  d.spawnT -= dt * spec.density * (1 + smell);
   if (d.spawnT > 0) return;
   d.spawnT = 2.2 + sim.rng() * 1.2;
   if (liveMobs(sim) >= MOB_CAP || nearMobs(sim, 12) >= NEAR_CAP) return;
   const b = pickBurrow(sim, 6, 16);
   if (!b) return;
-  const n = 2 + Math.floor(sim.rng() * (area === 'mouth' ? 2 : 3));
+  const n = spec.pack[0] + Math.floor(sim.rng() * spec.pack[1]);
   const kind = pickKind(sim, area);
   const elite = sim.rng() < 0.05;
   for (let i = 0; i < n; i++) {
-    const m = fromBurrow(sim, b, i === 0 ? kind : 'rat', { elite: elite && i === 0 });
+    const m = fromBurrow(sim, b, i === 0 ? kind : spec.filler, { elite: elite && i === 0 });
     m.t = -i * 0.35;
   }
 }
@@ -1304,7 +1390,8 @@ const isBreakable = (p: Prop) =>
   p.kind === 'powder' ||
   p.kind === 'nest' ||
   p.kind === 'cartnest' ||
-  p.kind === 'cart';
+  p.kind === 'cart' ||
+  p.kind === 'breakable';
 
 function startSwing(sim: Sim, step: number, aim: { x: number; y: number } | null): void {
   const h = sim.hero;
@@ -1448,21 +1535,18 @@ function hitMob(sim: Sim, m: Mob, mult: number, knock: number, heavy: boolean): 
   m.flash = 0.12;
   h.skill = Math.min(1, h.skill + SKILL.perHit);
   const ang = Math.atan2(m.y - h.y, m.x - h.x);
-  const k = (knock * (heavy ? 1.3 : 1)) / MASS[m.kind];
+  const k = (knock * (heavy ? 1.3 : 1)) / massOf(m.kind);
   m.kx += Math.cos(ang) * k;
   m.ky += Math.sin(ang) * k;
-  const boss = m.kind === 'king' || m.kind === 'kinglet';
+  const def = defOf(m.kind);
+  const boss = !!def.boss;
   // Сбить замах можно не всяким ударом, иначе серия ударов держит стаю в
   // вечном оглушении и крысы не кусают вовсе (так было на первом замере:
   // ноль смертей в любом комплекте). Пасюка сбивает крит, тяжёлый удар и
-  // треть обычных; жирную — только тяжёлый или крит; короля — ничто.
-  const flinch =
-    !boss &&
-    (heavy ||
-      crit ||
-      m.kind === 'bomber' ||
-      m.kind === 'goldrat' ||
-      (m.kind === 'rat' && sim.rng() < 0.35));
+  // треть обычных; жирную — только тяжёлый или крит; босса — ничто
+  // (`MobDef.flinch`).
+  const fl = def.flinch ?? 0.35;
+  const flinch = !boss && (heavy || crit || fl >= 1 || (fl > 0 && sim.rng() < fl));
   if (flinch && m.mode !== 'sleep') {
     if (m.mode === 'windup' || m.mode === 'chase' || m.mode === 'recover' || m.mode === 'alert') {
       m.mode = 'stun';
@@ -1540,7 +1624,7 @@ function dropAt(sim: Sim, kind: DropKind, n: number, x: number, y: number): void
 function breakProp(sim: Sim, p: Prop): void {
   p.alive = false;
   sim.events.push({ t: 'break', x: p.x, y: p.y, kind: p.kind });
-  if (p.kind === 'crate' || p.kind === 'barrel') {
+  if (p.kind === 'crate' || p.kind === 'barrel' || p.kind === 'breakable') {
     if (sim.rng() < 0.55)
       dropAt(sim, 'coin', Math.round(CRATE_COINS * (0.6 + sim.rng())), p.x, p.y);
     if (sim.rng() < 0.16) dropAt(sim, 'skin', 1, p.x, p.y);
@@ -1565,10 +1649,10 @@ function explode(sim: Sim, x: number, y: number, r: number, dmg: number, heroSha
     m.hp -= dmg * (0.5 + 0.5 * k);
     m.flash = 0.15;
     const a = Math.atan2(m.y - y, m.x - x);
-    m.kx += (Math.cos(a) * 9) / MASS[m.kind];
-    m.ky += (Math.sin(a) * 9) / MASS[m.kind];
+    m.kx += (Math.cos(a) * 9) / massOf(m.kind);
+    m.ky += (Math.sin(a) * 9) / massOf(m.kind);
     if (m.hp <= 0) killMob(sim, m);
-    else if (m.kind !== 'king' && m.kind !== 'kinglet') {
+    else if (!defOf(m.kind).boss) {
       m.mode = 'stun';
       m.t = 0;
     }
@@ -1596,9 +1680,11 @@ function hurtHero(
   fy: number,
   knock: number,
   kind?: MobId,
+  status?: { kind: StatusKind; dur: number },
 ): void {
   const h = sim.hero;
   if (h.inv > 0 || h.mode === 'dying' || h.mode === 'dead') return;
+  if (status) heroStatus(sim, status.kind, status.dur);
   const guard = kind ? beastBonus(sim.beast[kind] ?? 0).guard : 0;
   const dmg = raw * armorCut(sim.stats.armor) * (1 - guard);
   h.hp -= dmg;
@@ -1640,8 +1726,10 @@ function bump(sim: Sim, id: StatId, n: number): void {
 }
 
 function killMob(sim: Sim, m: Mob): void {
-  const planting = m.mode === 'plant';
+  const was = m.mode;
   m.mode = 'dying';
+  m.tele = null;
+  m.danger = 0;
   m.t = 0;
   m.hp = 0;
   const h = sim.hero;
@@ -1660,7 +1748,7 @@ function killMob(sim: Sim, m: Mob): void {
   if (m.affixes.includes('boom')) explode(sim, m.x, m.y, 1.6, m.dmg * 1.5, 0.12);
 
   // Добыча.
-  const def = MOBS[m.kind];
+  const def = defOf(m.kind);
   const beast = beastBonus(sim.beast[m.kind] ?? 0);
   const st = streakTierOf(sim.streak);
   const lootK = sim.stats.loot * (1 + beast.loot) * (1 + (st >= 0 ? STREAK_LOOT[st] : 0));
@@ -1673,24 +1761,13 @@ function killMob(sim: Sim, m: Mob): void {
       dropAt(sim, 'token', 1 + Math.floor(sim.rng() * 2), m.x, m.y);
   }
   if (m.elite && sim.rng() < 0.08) dropAt(sim, 'key', 1, m.x, m.y);
-  if (m.kind === 'goldrat') {
-    const bag = GOLD_BAG;
+  if (def.coins) {
+    const bag = def.coins;
     for (let i = 0; i < 6; i++) dropAt(sim, 'coin', Math.round(bag / 6), m.x, m.y);
   }
-  if (m.kind === 'bomber' && planting) {
-    // Убит с шашкой в зубах — шашка падает горящей.
-    sim.bombs.push({
-      id: sim.nextId++,
-      x: m.x,
-      y: m.y,
-      vx: 0,
-      vy: 0,
-      fuse: 1.1,
-      r: 1.8,
-      dmg: m.dmg,
-    });
-  }
-  if (m.kind === 'king' || m.kind === 'kinglet') onBossPartDown(sim, m);
+  // Своё у вида: подрывник, убитый с шашкой в зубах, роняет её горящей.
+  BRAINS.get(def.brain)?.onDeath?.(sim, m, was, API);
+  if (def.boss) onBossPartDown(sim, m);
 }
 
 // ---------------------------------------------------------------------------
@@ -1728,18 +1805,24 @@ function startBoss(sim: Sim): void {
   b.state = 'fight';
   b.split = false;
   b.t = 0;
-  const k = spawnMob(sim, 'king', b.obj.x + 0.5, b.obj.y + 0.5, { mode: 'roar' });
-  k.summonCd = 8;
+  b.phase = 0;
+  b.data = {};
+  const lead = spawnMob(sim, b.def.mob, b.obj.x + 0.5, b.obj.y + 0.5, { mode: 'roar' });
+  BOSS_SCRIPTS.get(b.def.script)?.start?.(sim, b, lead, API);
   sim.events.push({ t: 'boss', what: 'wake' });
-  // Стаи и чужие крысы из арены убираются: бой один на один с королём.
-  sim.mobs = sim.mobs.filter((m) => m === k || !inArena(sim, m.x, m.y));
+  // Стаи и чужие мобы из арены убираются: бой один на один с боссом.
+  sim.mobs = sim.mobs.filter((m) => m === lead || !inArena(sim, m.x, m.y));
   updateGates(sim);
 }
 
 function resetBoss(sim: Sim): void {
   const b = sim.boss;
   if (!b) return;
-  sim.mobs = sim.mobs.filter((m) => m.kind !== 'king' && m.kind !== 'kinglet');
+  BOSS_SCRIPTS.get(b.def.script)?.reset?.(sim, b);
+  sim.mobs = sim.mobs.filter((m) => !defOf(m.kind).boss);
+  sim.strikes = [];
+  sim.zones = [];
+  sim.shots = [];
   b.state = 'idle';
   b.split = false;
   sim.events.push({ t: 'boss', what: 'reset' });
@@ -1748,21 +1831,18 @@ function resetBoss(sim: Sim): void {
 
 function onBossPartDown(sim: Sim, m: Mob): void {
   const b = sim.boss;
-  if (!b) return;
-  if (m.kind === 'king' && !b.split) {
-    // Убит до распада (например, взрывом) — распад всё равно играем.
-    splitKing(sim, m);
-    return;
-  }
-  const left = sim.mobs.filter(
-    (x) => (x.kind === 'kinglet' || x.kind === 'king') && x.mode !== 'dying',
-  );
+  if (!b || b.state !== 'fight') return;
+  // Сценарий решает, продолжается ли бой (король распадается на малых).
+  if (BOSS_SCRIPTS.get(b.def.script)?.onPartDown?.(sim, b, m, API)) return;
+  const left = sim.mobs.filter((x) => defOf(x.kind).boss && x.mode !== 'dying');
   if (left.length) return;
   b.state = 'won';
   sim.delta.bosses.push({ id: b.id, at: sim.now() });
   sim.events.push({ t: 'boss', what: 'dead' });
   sim.slowmo = Math.max(sim.slowmo, 0.6);
-  const loot = kingLoot(sim.rng);
+  sim.strikes = [];
+  sim.shots = [];
+  const loot = bossLoot(b.id, sim.rng);
   const cx = b.obj.x + 0.5;
   const cy = b.obj.y + 0.5;
   for (let i = 0; i < 8; i++) dropAt(sim, 'coin', Math.round(loot.coins / 8), cx, cy);
@@ -1770,131 +1850,31 @@ function onBossPartDown(sim: Sim, m: Mob): void {
     dropAt(sim, 'token', Math.ceil(loot.tokens / Math.min(12, loot.tokens)), cx, cy);
   if (loot.keys) dropAt(sim, 'key', loot.keys, cx, cy);
   for (const [mat, n] of Object.entries(loot.mats) as [MatId, number][])
-    for (let i = 0; i < n; i++) dropAt(sim, mat as DropKind, 1, cx, cy);
+    for (let i = 0; i < n; i++) dropAt(sim, mat, 1, cx, cy);
+  // Первая победа открывает печати: дорога к лестнице вниз.
+  if (!sim.beaten) {
+    sim.beaten = true;
+    for (const o of sim.world.objs)
+      if (o.kind === 'seal') sim.tiles[o.y * sim.world.w + o.x] = Tile.Floor;
+    sim.events.push({ t: 'boss', what: 'seal' });
+  }
   updateGates(sim);
 }
 
-function splitKing(sim: Sim, k: Mob): void {
-  const b = sim.boss!;
-  b.split = true;
-  k.mode = 'dying';
-  k.t = 0;
-  sim.events.push({ t: 'boss', what: 'split' });
-  sim.hitstop = Math.max(sim.hitstop, 0.12);
-  for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * Math.PI * 2 + 0.4;
-    const m = spawnMob(sim, 'kinglet', k.x + Math.cos(a) * 1.2, k.y + Math.sin(a) * 1.2, {
-      mode: 'stun',
-      level: k.level,
-    });
-    m.hp = m.maxHp = k.maxHp * 0.18;
-    m.kx = Math.cos(a) * 6;
-    m.ky = Math.sin(a) * 6;
-    collideTiles(sim, m);
-  }
-}
-
-function stepBossMob(sim: Sim, m: Mob, dt: number): void {
-  const h = sim.hero;
-  const b = sim.boss!;
-  const dx = h.x - m.x;
-  const dy = h.y - m.y;
-  const dist = Math.hypot(dx, dy);
-  const enraged = b.t > 180;
-  const haste = enraged ? 1.3 : 1;
-  const small = m.kind === 'kinglet';
-  m.summonCd -= dt;
-  switch (m.mode) {
-    case 'roar':
-      if (m.t > 1.2) setMode(m, 'chase');
-      return;
-    case 'chase': {
-      const s = m.speed * haste;
-      steer(sim, m, dx / (dist || 1), dy / (dist || 1), s, dt);
-      if (m.t > (small ? 0.9 : 1.4) / haste) {
-        const r = sim.rng();
-        if (!small && m.summonCd <= 0 && r < 0.3) {
-          setMode(m, 'summon');
-          sim.events.push({ t: 'boss', what: 'summon' });
-        } else if (dist > 2.6 || r < 0.45) {
-          setMode(m, 'rollAim');
-          m.dir = Math.atan2(dy, dx);
-        } else {
-          setMode(m, 'whipAim');
-        }
-      }
-      return;
+/** Полоса здоровья боя 0…1, null — боя нет. */
+export function bossBar(sim: Sim): number | null {
+  const b = sim.boss;
+  if (!b || b.state !== 'fight') return null;
+  const own = BOSS_SCRIPTS.get(b.def.script)?.bar?.(sim, b);
+  if (own !== undefined) return own;
+  let hp = 0;
+  let max = 0;
+  for (const m of sim.mobs)
+    if (defOf(m.kind).boss) {
+      hp += Math.max(0, m.hp);
+      max += m.maxHp;
     }
-    case 'rollAim':
-      m.vx *= 0.8;
-      m.vy *= 0.8;
-      // Прицел доводится первые полсекунды, потом замирает — видно, куда покатится.
-      if (m.t < 0.45) m.dir = Math.atan2(dy, dx);
-      if (m.t > 0.8 / haste) {
-        setMode(m, 'roll');
-        m.bounces = 0;
-        sim.events.push({ t: 'boss', what: 'roll' });
-      }
-      return;
-    case 'roll': {
-      const s = (small ? 10 : 9) * haste;
-      m.vx = Math.cos(m.dir) * s;
-      m.vy = Math.sin(m.dir) * s;
-      // Качение бьёт один раз: попал — король и сам оглушён ударом, это
-      // окно для ответа. Иначе он катался бы по арене, задевая снова и снова.
-      if (dist < m.r + h.r + 0.1 && h.inv <= 0 && h.mode !== 'dash') {
-        hurtHero(sim, m.dmg * 1.4, m.x, m.y, 9, m.kind);
-        setMode(m, 'dizzy');
-        return;
-      }
-      if (m.t > 2.2) setMode(m, 'dizzy');
-      return;
-    }
-    case 'dizzy':
-      m.vx *= 0.85;
-      m.vy *= 0.85;
-      if (m.t > (small ? 0.8 : 1.3)) setMode(m, 'chase');
-      return;
-    case 'whipAim':
-      m.vx *= 0.7;
-      m.vy *= 0.7;
-      if (m.t > 0.7 / haste) {
-        const r = small ? 1.7 : 2.1;
-        if (dist < r + h.r) hurtHero(sim, m.dmg, m.x, m.y, 6, m.kind);
-        sim.events.push({ t: 'boss', what: 'whip' });
-        sim.events.push({ t: 'boom', x: m.x, y: m.y, r: 0 });
-        setMode(m, 'recover');
-      }
-      return;
-    case 'summon':
-      m.vx *= 0.7;
-      m.vy *= 0.7;
-      if (m.t > 1) {
-        const holes = sim.burrows.filter((x) =>
-          inArena(sim, x.obj.out![0] + 0.5, x.obj.out![1] + 0.5),
-        );
-        const n = 3 + Math.floor(sim.rng() * 2);
-        for (let i = 0; i < n && holes.length; i++) {
-          const hb = holes[i % holes.length];
-          hb.cd = 0;
-          const mm = fromBurrow(sim, hb, 'rat', { elite: i === 0 && sim.rng() < 0.2 });
-          mm.t = -i * 0.2;
-        }
-        m.summonCd = 12;
-        setMode(m, 'chase');
-      }
-      return;
-    case 'recover':
-      m.vx *= 0.8;
-      m.vy *= 0.8;
-      if (m.t > 0.6) setMode(m, 'chase');
-      return;
-    case 'stun':
-      if (m.t > 0.4) setMode(m, 'chase');
-      return;
-    default:
-      if (m.mode !== 'dying') setMode(m, 'chase');
-  }
+  return max > 0 ? hp / max : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1934,16 +1914,20 @@ function stepMob(sim: Sim, m: Mob, dt: number): void {
   const dx = h.x - m.x;
   const dy = h.y - m.y;
   const dist = Math.hypot(dx, dy);
-  const def = MOBS[m.kind];
+  const def = defOf(m.kind);
   const smell = smellOf(sim.sack);
   if (m.affixes.includes('regen') && m.mode !== 'dying')
     m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.03 * dt);
+  const brain = BRAINS.get(def.brain) ?? BRAINS.get('melee')!;
+  const ctx: BrainCtx = { dx, dy, dist, def, smell };
 
-  if (m.kind === 'king' || m.kind === 'kinglet') {
-    if (m.mode !== 'dying') stepBossMob(sim, m, dt);
+  // ИИ, ведущий все режимы сам (боссы).
+  if (brain.raw) {
+    if (m.mode !== 'dying') brain.step(sim, m, dt, ctx, API);
     return;
   }
 
+  const resume = def.resume ?? 'chase';
   switch (m.mode) {
     case 'emerge': {
       // Из стены на пол: полсекунды выползает.
@@ -1957,7 +1941,7 @@ function stepMob(sim: Sim, m: Mob, dt: number): void {
       if (k >= 1) {
         m.x = m.hx;
         m.y = m.hy;
-        setMode(m, m.kind === 'goldrat' ? 'flee' : 'chase');
+        setMode(m, resume);
       }
       return;
     }
@@ -1979,8 +1963,9 @@ function stepMob(sim: Sim, m: Mob, dt: number): void {
       if (m.t > 0.35) setMode(m, 'chase');
       return;
     case 'stun': {
-      if (m.t > (m.kind === 'fatrat' ? 0.14 : 0.2))
-        setMode(m, m.kind === 'goldrat' ? 'flee' : 'chase');
+      m.tele = null;
+      m.danger = 0;
+      if (m.t > (def.stunT ?? 0.2)) setMode(m, resume);
       return;
     }
     case 'dying':
@@ -1994,6 +1979,7 @@ function stepMob(sim: Sim, m: Mob, dt: number): void {
   if (heroDown) {
     m.vx *= 0.9;
     m.vy *= 0.9;
+    m.tele = null;
     return;
   }
 
@@ -2004,128 +1990,7 @@ function stepMob(sim: Sim, m: Mob, dt: number): void {
     return;
   }
 
-  if (m.kind === 'goldrat') {
-    // Удирает: по полю расстояний прочь, к норе.
-    const away = flowDir(sim, m.x, m.y, true);
-    const d = away ?? [-dx / (dist || 1), -dy / (dist || 1)];
-    steer(sim, m, d[0], d[1], m.speed, dt);
-    if (m.t > 14 && dist > 5) {
-      setMode(m, 'escape');
-      m.hp = 0;
-    }
-    return;
-  }
-
-  if (m.kind === 'bomber') {
-    if (m.mode === 'chase') {
-      const [cx, cy] = chaseDir(sim, m, h.x, h.y);
-      steer(sim, m, cx, cy, m.speed, dt);
-      if (dist < 2.7 && m.cd <= 0 && lineOfSight(sim, m.x, m.y, h.x, h.y)) setMode(m, 'plant');
-      return;
-    }
-    if (m.mode === 'plant') {
-      m.vx *= 0.7;
-      m.vy *= 0.7;
-      if (m.t > 0.5) {
-        sim.bombs.push({
-          id: sim.nextId++,
-          x: m.x,
-          y: m.y,
-          vx: 0,
-          vy: 0,
-          fuse: 1.6,
-          r: 1.8,
-          dmg: m.dmg,
-        });
-        sim.events.push({ t: 'fuse', x: m.x, y: m.y });
-        setMode(m, 'flee');
-        m.cd = 4.5;
-      }
-      return;
-    }
-    if (m.mode === 'flee') {
-      steer(sim, m, -dx / (dist || 1), -dy / (dist || 1), m.speed * 1.1, dt);
-      if (m.t > 1.3) setMode(m, 'chase');
-      return;
-    }
-  }
-
-  switch (m.mode) {
-    case 'chase': {
-      const reach = def.reach + m.r + h.r;
-      if (dist < reach && m.cd <= 0) {
-        setMode(m, 'windup');
-        m.face = Math.atan2(dy, dx);
-        return;
-      }
-      // Стая обходит с флангов: у каждой крысы своя сторона.
-      let tx = h.x;
-      let ty = h.y;
-      if (!m.rush && dist > 1.6) {
-        const side = ((m.id * 2.399) % (Math.PI * 2)) - Math.PI;
-        const r = Math.min(1.4, dist * 0.35);
-        tx += Math.cos(side) * r;
-        ty += Math.sin(side) * r;
-      }
-      let [cx, cy] = chaseDir(sim, m, tx, ty);
-      // Зигзаг пасюка — только издали.
-      if (m.kind === 'rat' && dist > 2.2) {
-        const z = Math.sin(sim.time * 9 + m.id) * 0.55;
-        const px = -cy;
-        const py = cx;
-        cx += px * z;
-        cy += py * z;
-        const l = Math.hypot(cx, cy) || 1;
-        cx /= l;
-        cy /= l;
-      }
-      const s = m.speed * (m.rush ? 1.15 : 1) * (dist < 1.4 ? 0.6 : 1);
-      steer(sim, m, cx, cy, s, dt);
-      return;
-    }
-    case 'windup':
-      m.vx *= 0.75;
-      m.vy *= 0.75;
-      if (m.t >= def.windup) {
-        const reach = def.reach + m.r + h.r + 0.18;
-        if (dist < reach) {
-          const push = m.kind === 'fatrat' ? 5 : 2;
-          hurtHero(sim, m.dmg, m.x, m.y, push, m.kind);
-        }
-        // Рывок вперёд на укусе.
-        m.vx += Math.cos(m.face) * 3;
-        m.vy += Math.sin(m.face) * 3;
-        setMode(m, 'recover');
-        m.cd = def.rest * (0.8 + sim.rng() * 0.4);
-      }
-      return;
-    case 'recover':
-      steer(sim, m, -dx / (dist || 1), -dy / (dist || 1), m.speed * 0.35, dt);
-      if (m.t > 0.35) {
-        // Раненая крыса иногда бежит в нору — догонять или отпустить.
-        if (m.hp < m.maxHp * 0.3 && sim.rng() < 0.35 && m.burrow >= 0) setMode(m, 'flee');
-        else setMode(m, 'chase');
-      }
-      return;
-    case 'flee': {
-      const b = sim.burrows[m.burrow];
-      if (!b) {
-        setMode(m, 'chase');
-        return;
-      }
-      const [ox, oy] = b.obj.out!;
-      const tx = ox + 0.5 - m.x;
-      const ty = oy + 0.5 - m.y;
-      const d = Math.hypot(tx, ty);
-      steer(sim, m, tx / (d || 1), ty / (d || 1), m.speed * 1.1, dt);
-      if (d < 0.4) {
-        setMode(m, 'escape');
-        m.hp = 0;
-      }
-      if (m.t > 4) setMode(m, 'chase');
-      return;
-    }
-  }
+  brain.step(sim, m, dt, ctx, API);
 }
 
 // ---------------------------------------------------------------------------
@@ -2151,7 +2016,8 @@ export function stepSim(sim: Sim, dtReal: number, input: SimInput): void {
   stepWorld(sim, dt);
 }
 
-function stepHero(sim: Sim, dt: number, input: SimInput): void {
+function stepHero(sim: Sim, dt: number, input0: SimInput): void {
+  let input = input0;
   const h = sim.hero;
   const st = sim.stats;
   h.t += dt;
@@ -2172,6 +2038,12 @@ function stepHero(sim: Sim, dt: number, input: SimInput): void {
     return;
   }
   if (h.mode === 'dead') return;
+
+  // Статусы: яд и ожог жгут здоровье, холод и замедление — ноги, оглушение —
+  // всё сразу.
+  tickStatus(sim, dt);
+  const stunned = (h.status.stun?.t ?? 0) > 0;
+  if (stunned) input = { ...NO_INPUT };
 
   // Джойстик.
   let mx = input.mx;
@@ -2211,9 +2083,7 @@ function stepHero(sim: Sim, dt: number, input: SimInput): void {
 
   // Еда из сидора.
   if (input.eat && h.mode === 'free' && h.eatCd <= 0) {
-    const fat = (sim.sack.meat.fatmeat ?? 0) > 0;
-    const plain = (sim.sack.meat.meat ?? 0) > 0;
-    if ((fat || plain) && h.hp < st.maxHp) {
+    if (bestFood(sim.sack) && h.hp < st.maxHp) {
       h.mode = 'eat';
       h.t = 0;
     }
@@ -2322,16 +2192,15 @@ function stepHero(sim: Sim, dt: number, input: SimInput): void {
     case 'eat': {
       speedK = 0.5;
       if (h.t >= 0.5) {
-        const fat = (sim.sack.meat.fatmeat ?? 0) > 0;
-        const id: MeatId = fat ? 'fatmeat' : 'meat';
-        if ((sim.sack.meat[id] ?? 0) > 0) {
+        const id: MeatId | null = bestFood(sim.sack);
+        if (id && (sim.sack.meat[id] ?? 0) > 0) {
           sim.sack.meat[id] = (sim.sack.meat[id] ?? 0) - 1;
           // Из какого района кусок — всё равно: списываем с самого мелкого.
           const by = Object.entries(sim.sack.meatBy).sort(
             (a, b) => AREAS.findIndex((x) => x.id === a[0]) - AREAS.findIndex((x) => x.id === b[0]),
           )[0];
           if (by) sim.sack.meatBy[by[0] as AreaId] = Math.max(0, (by[1] ?? 0) - 1);
-          const heal = st.maxHp * (fat ? 0.25 : 0.15);
+          const heal = st.maxHp * (MEATS[id]?.heal ?? 0.15);
           h.hp = Math.min(st.maxHp, h.hp + heal);
           sim.events.push({ t: 'eat', heal: Math.round(heal) });
         }
@@ -2344,9 +2213,76 @@ function stepHero(sim: Sim, dt: number, input: SimInput): void {
   }
 
   // Ход.
-  steerVelocity(h, mx, my, st.speed * speedK, dt);
+  steerVelocity(h, mx, my, st.speed * speedK * slowOf(sim), dt);
   if (moving && h.mode === 'free') h.face = Math.atan2(my, mx);
   moveHero(sim, dt);
+}
+
+/** Самая сытная еда в рюкзаке — её и съедят. */
+function bestFood(s: Sack): MeatId | null {
+  let best: MeatId | null = null;
+  let heal = -1;
+  for (const [id, n] of Object.entries(s.meat)) {
+    const f = MEATS[id];
+    if (!n || !f) continue;
+    if (f.heal > heal) {
+      heal = f.heal;
+      best = id;
+    }
+  }
+  return best;
+}
+
+/** Повесить статус на героя: дольше — продлевает, сильнее — усиливает. */
+function heroStatus(sim: Sim, kind: StatusKind, dur: number, power?: number): void {
+  const h = sim.hero;
+  if (h.mode === 'dying' || h.mode === 'dead') return;
+  const p =
+    power ??
+    (kind === 'poison'
+      ? 0.03
+      : kind === 'burn'
+        ? 0.05
+        : kind === 'slow'
+          ? 0.4
+          : kind === 'chill'
+            ? 0.3
+            : 1);
+  const cur = h.status[kind];
+  if (!cur) sim.events.push({ t: 'status', kind });
+  h.status[kind] = { t: Math.max(cur?.t ?? 0, dur), p: Math.max(cur?.p ?? 0, p) };
+}
+
+/** Статусы тикают: яд и ожог жгут (броня не спасает, неуязвимость — тоже). */
+function tickStatus(sim: Sim, dt: number): void {
+  const h = sim.hero;
+  for (const [k, v] of Object.entries(h.status) as [StatusKind, { t: number; p: number }][]) {
+    if (!v) continue;
+    if (k === 'poison' || k === 'burn') {
+      h.hp -= sim.stats.maxHp * v.p * dt;
+      if (h.hp <= 0) {
+        h.hp = 0;
+        h.mode = 'dying';
+        h.t = 0;
+        if (sim.boss?.state === 'fight') resetBoss(sim);
+      }
+    }
+    v.t -= dt;
+    if (v.t <= 0) delete h.status[k];
+  }
+}
+
+/** Множитель скорости героя: статусы, опасная клетка, лужи и облака. */
+function slowOf(sim: Sim): number {
+  const h = sim.hero;
+  let k = 1;
+  if (h.status.slow) k *= 1 - h.status.slow.p;
+  if (h.status.chill) k *= 1 - h.status.chill.p;
+  const hz = hazardAt(sim.world, Math.floor(h.x), Math.floor(h.y));
+  if (hz?.slow) k *= hz.slow;
+  for (const z of sim.zones)
+    if (z.slow && z.t >= (z.warn ?? 0) && Math.hypot(z.x - h.x, z.y - h.y) < z.r) k *= z.slow;
+  return Math.max(0.2, k);
 }
 
 /** Уклон в последний миг: рывок пришёлся под уже летящий удар. */
@@ -2355,15 +2291,18 @@ function perfectDodge(sim: Sim): boolean {
   for (const m of sim.mobs) {
     const d = Math.hypot(m.x - h.x, m.y - h.y);
     if (m.mode === 'windup') {
-      const left = MOBS[m.kind].windup - m.t;
-      if (left <= DODGE_WINDOW && d < MOBS[m.kind].reach + m.r + h.r + 0.3) return true;
+      const def = defOf(m.kind);
+      const left = def.windup - m.t;
+      if (left <= DODGE_WINDOW && d < def.reach + m.r + h.r + 0.3) return true;
     }
-    if (m.mode === 'rollAim' && m.t > 0.6 && d < 4) return true;
-    if (m.mode === 'roll' && d < m.r + h.r + 1.4) return true;
-    if (m.mode === 'whipAim' && m.t > 0.5 && d < 2.6) return true;
+    if (m.danger > 0 && d < m.danger) return true;
   }
   for (const b of sim.bombs)
     if (b.fuse < 0.3 && Math.hypot(b.x - h.x, b.y - h.y) < b.r + 0.3) return true;
+  for (const st of sim.strikes)
+    if (st.warn - st.t < 0.3 && strikeHits(st, h.x, h.y, h.r)) return true;
+  for (const sh of sim.shots)
+    if (Math.hypot(sh.x - h.x, sh.y - h.y) < sh.r + h.r + 0.9) return true;
   return false;
 }
 
@@ -2418,11 +2357,32 @@ function stepWorld(sim: Sim, dt: number): void {
     if (b.state === 'rest' && sim.now() >= b.readyAt) b.state = 'idle';
     if (b.state === 'won' && !inside) {
       b.state = 'rest';
-      b.readyAt = sim.now() + BOSSES[b.id].restMs;
+      b.readyAt = sim.now() + b.def.restMs;
     }
     if (b.state === 'idle' && inside && h.mode !== 'dying' && h.mode !== 'dead') startBoss(sim);
+    if (b.state === 'fight') BOSS_SCRIPTS.get(b.def.script)?.step?.(sim, b, dt, API);
     updateGates(sim);
   }
+
+  // Опасная клетка под ногами: жжёт, травит, вязнет.
+  if (h.mode !== 'dying' && h.mode !== 'dead') {
+    const hz = hazardAt(sim.world, Math.floor(h.x), Math.floor(h.y));
+    if (hz) {
+      if (hz.status) heroStatus(sim, hz.status, hz.dur ?? 1.5);
+      if (hz.dps) {
+        h.hp -= sim.stats.maxHp * hz.dps * dt;
+        if (h.hp <= 0) {
+          h.hp = 0;
+          h.mode = 'dying';
+          h.t = 0;
+          if (sim.boss?.state === 'fight') resetBoss(sim);
+        }
+      }
+    }
+  }
+  stepShots(sim, dt);
+  stepStrikes(sim, dt);
+  stepZones(sim, dt);
 
   // Мобы.
   for (const m of sim.mobs) stepMob(sim, m, dt);
@@ -2430,7 +2390,7 @@ function stepWorld(sim: Sim, dt: number): void {
   sim.mobs = sim.mobs.filter((m) => {
     if (m.mode === 'dying') return m.t < 0.7;
     if (m.mode === 'escape') return m.t < 0.4;
-    if (m.kind !== 'king' && m.kind !== 'kinglet' && m.mode !== 'sleep')
+    if (!defOf(m.kind).boss && m.mode !== 'sleep')
       return Math.hypot(m.x - h.x, m.y - h.y) < DESPAWN_R;
     return true;
   });
@@ -2450,7 +2410,10 @@ function stepWorld(sim: Sim, dt: number): void {
           p.spawnT = 6 + sim.rng() * 2;
           const mine = sim.mobs.filter((m) => m.nest === p.id && m.mode !== 'dying').length;
           if (mine < 2 && liveMobs(sim) < MOB_CAP) {
-            const kind: MobId = p.kind === 'cartnest' && sim.rng() < 0.3 ? 'fatrat' : 'rat';
+            const ns = spawnOf(bandAt(sim.world, p.y).def.id);
+            const kind: MobId = ns.nest
+              ? ns.nest(p.kind === 'cartnest', sim.rng)
+              : pickKind(sim, bandAt(sim.world, p.y).def.id);
             const m = spawnMob(sim, kind, p.x + (sim.rng() - 0.5) * 0.6, p.y + 0.5, {
               nest: p.id,
               mode: 'stun',
@@ -2522,17 +2485,10 @@ function moveMobs(sim: Sim, dt: number): void {
       m.y += (vy * dt) / steps;
       const px = m.x;
       const py = m.y;
-      if (collideTiles(sim, m) && m.mode === 'roll' && !bounced) {
-        // Король отскакивает от стены: зеркалим направление по нормали.
-        const nx = m.x - px;
-        const ny = m.y - py;
-        if (Math.abs(nx) > Math.abs(ny)) m.dir = Math.PI - m.dir;
-        else m.dir = -m.dir;
-        m.bounces += 1;
+      if (collideTiles(sim, m) && m.bounce && !bounced) {
+        // Катящийся и таранящий бьются о стену: что дальше — решает ИИ вида.
         bounced = true;
-        sim.hitstop = Math.max(sim.hitstop, 0.05);
-        sim.events.push({ t: 'boom', x: m.x, y: m.y, r: 0 });
-        if (m.bounces > 1) setMode(m, 'dizzy');
+        BRAINS.get(defOf(m.kind).brain)?.onWall?.(sim, m, m.x - px, m.y - py, API);
       }
       if (m.mode !== 'dying') collideProps(sim, m);
     }
@@ -2552,7 +2508,7 @@ function moveMobs(sim: Sim, dt: number): void {
       const d = Math.hypot(dx, dy);
       if (d >= min || d < 1e-6) continue;
       const push = (min - d) / 2;
-      const wa = MASS[b.kind] / (MASS[a.kind] + MASS[b.kind]);
+      const wa = massOf(b.kind) / (massOf(a.kind) + massOf(b.kind));
       a.x -= (dx / d) * push * 2 * wa;
       a.y -= (dy / d) * push * 2 * wa;
       b.x += (dx / d) * push * 2 * (1 - wa);
@@ -2685,25 +2641,194 @@ function stepDrops(sim: Sim, dt: number): void {
 
 function take(sim: Sim, d: Drop): void {
   const s = sim.sack;
-  switch (d.kind) {
-    case 'meat':
-    case 'fatmeat':
-      s.meat[d.kind] = (s.meat[d.kind] ?? 0) + d.n;
-      s.meatBy[d.area] = (s.meatBy[d.area] ?? 0) + d.n;
-      break;
-    case 'coin':
-      s.coins += d.n;
-      break;
-    case 'token':
-      s.tokens += d.n;
-      break;
-    case 'key':
-      s.keys += d.n;
-      break;
-    default:
-      s.mats[d.kind as MatId] = (s.mats[d.kind as MatId] ?? 0) + d.n;
+  if (d.kind === 'coin') s.coins += d.n;
+  else if (d.kind === 'token') s.tokens += d.n;
+  else if (d.kind === 'key') s.keys += d.n;
+  else {
+    sackAdd(s, d.kind, d.n);
+    if (isMeat(d.kind)) s.meatBy[d.area] = (s.meatBy[d.area] ?? 0) + d.n;
   }
   sim.events.push({ t: 'pick', x: d.x, y: d.y, what: d.kind, n: d.n });
+}
+
+// ---------------------------------------------------------------------------
+// Снаряды, удары по площади, лужи и облака.
+// ---------------------------------------------------------------------------
+
+/** Выстрел моба по направлению. Навесом — в точку прицела `tx, ty`. */
+function shoot(sim: Sim, m: Mob, ang: number, spec?: ShotSpec, tx?: number, ty?: number): void {
+  const sp = spec ?? defOf(m.kind).shot;
+  if (!sp) return;
+  const n = Math.max(1, sp.n ?? 1);
+  for (let i = 0; i < n; i++) {
+    const a = ang + (n > 1 ? (i / (n - 1) - 0.5) * (sp.spread ?? 0.5) : 0);
+    const x0 = m.x + Math.cos(a) * (m.r + 0.1);
+    const y0 = m.y + Math.sin(a) * (m.r + 0.1);
+    let lob: Shot['lob'];
+    let vx = Math.cos(a) * sp.speed;
+    let vy = Math.sin(a) * sp.speed;
+    if (sp.lob) {
+      const x1 = tx ?? m.x + Math.cos(a) * 5;
+      const y1 = ty ?? m.y + Math.sin(a) * 5;
+      const T = Math.max(0.35, Math.hypot(x1 - x0, y1 - y0) / sp.speed);
+      lob = { x0, y0, x1, y1, T };
+      vx = (x1 - x0) / T;
+      vy = (y1 - y0) / T;
+    }
+    sim.shots.push({
+      id: sim.nextId++,
+      x: x0,
+      y: y0,
+      vx,
+      vy,
+      r: sp.r,
+      life: lob ? lob.T : sp.life,
+      age: 0,
+      dmg: m.dmg * sp.dmg,
+      art: sp.art,
+      status: sp.status,
+      dur: sp.dur,
+      lob,
+      z: 0,
+      kind: m.kind,
+    });
+  }
+  sim.events.push({ t: 'shot', x: m.x, y: m.y, art: sp.art });
+}
+
+function stepShots(sim: Sim, dt: number): void {
+  if (!sim.shots.length) return;
+  const h = sim.hero;
+  const keep: Shot[] = [];
+  for (const s of sim.shots) {
+    s.age += dt;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    if (s.lob) {
+      const k = Math.min(1, s.age / s.lob.T);
+      s.z = Math.sin(k * Math.PI) * Math.min(3, s.lob.T * 2.2);
+      if (k >= 1) {
+        // Долетел навесом — бьёт по месту падения.
+        if (Math.hypot(h.x - s.x, h.y - s.y) < s.r + h.r)
+          hurtHero(
+            sim,
+            s.dmg,
+            s.x,
+            s.y,
+            3,
+            s.kind,
+            s.status ? { kind: s.status, dur: s.dur ?? 2 } : undefined,
+          );
+        sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art });
+        continue;
+      }
+      keep.push(s);
+      continue;
+    }
+    if (s.age > s.life || opaque(sim, Math.floor(s.x), Math.floor(s.y))) {
+      sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art });
+      continue;
+    }
+    if (h.mode !== 'dying' && h.mode !== 'dead' && Math.hypot(h.x - s.x, h.y - s.y) < s.r + h.r) {
+      if (h.mode !== 'dash')
+        hurtHero(
+          sim,
+          s.dmg,
+          s.x,
+          s.y,
+          3,
+          s.kind,
+          s.status ? { kind: s.status, dur: s.dur ?? 2 } : undefined,
+        );
+      if (h.mode !== 'dash') {
+        sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art });
+        continue;
+      }
+    }
+    keep.push(s);
+  }
+  sim.shots = keep;
+}
+
+/** Задевает ли удар по площади круг (x, y, r). */
+function strikeHits(st: StrikeIn, x: number, y: number, r: number): boolean {
+  const dx = x - st.x;
+  const dy = y - st.y;
+  const d = Math.hypot(dx, dy);
+  switch (st.shape) {
+    case 'circle':
+      return d < st.r + r;
+    case 'ring':
+      return Math.abs(d - st.r) < (st.w ?? 0.6) + r;
+    case 'cone': {
+      if (d > st.r + r) return false;
+      const off = Math.abs(angDiff(Math.atan2(dy, dx), st.ang ?? 0));
+      return off < (st.arc ?? 1) / 2 + (d > 0.01 ? Math.atan(r / d) : Math.PI);
+    }
+    case 'line': {
+      const a = st.ang ?? 0;
+      const ux = Math.cos(a);
+      const uy = Math.sin(a);
+      const along = dx * ux + dy * uy;
+      const across = Math.abs(-dx * uy + dy * ux);
+      return along > -r && along < st.r + r && across < (st.w ?? 0.5) + r;
+    }
+  }
+  return false;
+}
+
+function stepStrikes(sim: Sim, dt: number): void {
+  if (!sim.strikes.length) return;
+  const h = sim.hero;
+  const keep: Strike[] = [];
+  for (const st of sim.strikes) {
+    st.t += dt;
+    // Чей удар умер — метка гаснет.
+    if (st.from !== undefined && !sim.mobs.some((m) => m.id === st.from && m.mode !== 'dying'))
+      continue;
+    if (st.t < st.warn) {
+      keep.push(st);
+      continue;
+    }
+    if (h.mode !== 'dying' && h.mode !== 'dead' && strikeHits(st, h.x, h.y, h.r))
+      hurtHero(
+        sim,
+        st.dmg,
+        st.x,
+        st.y,
+        st.knock ?? 5,
+        undefined,
+        st.status ? { kind: st.status, dur: st.dur ?? 2 } : undefined,
+      );
+    sim.hitstop = Math.max(sim.hitstop, 0.05);
+    sim.events.push({ t: 'strike', x: st.x, y: st.y, art: st.art ?? 'slam', big: true });
+  }
+  sim.strikes = keep;
+}
+
+function stepZones(sim: Sim, dt: number): void {
+  if (!sim.zones.length) return;
+  const h = sim.hero;
+  const alive = h.mode !== 'dying' && h.mode !== 'dead';
+  const keep: Zone[] = [];
+  for (const z of sim.zones) {
+    z.t += dt;
+    if (z.t > (z.warn ?? 0) + z.life) continue;
+    keep.push(z);
+    if (!alive || z.t < (z.warn ?? 0)) continue;
+    if (Math.hypot(h.x - z.x, h.y - z.y) >= z.r + h.r * 0.5) continue;
+    if (z.status) heroStatus(sim, z.status, z.dur ?? 1.2);
+    if (z.dps) {
+      h.hp -= sim.stats.maxHp * z.dps * dt;
+      if (h.hp <= 0) {
+        h.hp = 0;
+        h.mode = 'dying';
+        h.t = 0;
+        if (sim.boss?.state === 'fight') resetBoss(sim);
+      }
+    }
+  }
+  sim.zones = keep;
 }
 
 function markFog(sim: Sim): void {
@@ -2732,7 +2857,16 @@ function markFog(sim: Sim): void {
 // Взаимодействие: клеть, шахта, фонарь, решётка, тайник, доска, нора.
 // ---------------------------------------------------------------------------
 
-export type UseKind = 'lift' | 'mine' | 'light' | 'grate' | 'secret' | 'board' | 'seal' | 'plaque';
+export type UseKind =
+  | 'lift'
+  | 'mine'
+  | 'light'
+  | 'grate'
+  | 'secret'
+  | 'board'
+  | 'seal'
+  | 'plaque'
+  | 'stairs';
 
 export interface Usable {
   kind: UseKind;
@@ -2769,6 +2903,8 @@ export function usableNear(sim: Sim, props = 0): Usable | null {
     const d = Math.hypot(cx - h.x, cy - h.y);
     if (d > 1.6) continue;
     if (o.kind === 'lift') consider({ kind: 'lift', obj: o, label: 'Лифт' }, d);
+    else if (o.kind === 'stairs' && sim.beaten)
+      consider({ kind: 'stairs', obj: o, label: 'Вниз' }, d);
     else if (o.kind === 'mine') consider({ kind: 'mine', obj: o, label: 'В шахту' }, d);
     else if (o.kind === 'board') consider({ kind: 'board', obj: o, label: 'Управление' }, d);
     else if (o.kind === 'plaque' && nearLair(sim, o))
@@ -2856,7 +2992,8 @@ export function packAtMine(sim: Sim, mine: WorldObj, packs: number): void {
         m.t = -(p * 0.4 + i * 0.25);
       } else {
         const a = sim.rng() * Math.PI * 2;
-        spawnMob(sim, 'rat', mine.x + 0.5 + Math.cos(a) * 3, mine.y + 2 + Math.sin(a) * 2, {
+        const filler = spawnOf(bandAt(sim.world, mine.y).def.id).filler;
+        spawnMob(sim, filler, mine.x + 0.5 + Math.cos(a) * 3, mine.y + 2 + Math.sin(a) * 2, {
           mode: 'drop',
         });
       }
@@ -2897,7 +3034,7 @@ export function snapshot(sim: Sim): RunSnap {
  */
 export function dropFromSack(sim: Sim, id: ItemId, n: number): number {
   const s = sim.sack;
-  const meat = id === 'meat' || id === 'fatmeat';
+  const meat = isMeat(id);
   const have = (meat ? s.meat[id as MeatId] : s.mats[id as MatId]) ?? 0;
   const k = Math.min(have, Math.max(0, Math.floor(n)));
   if (k <= 0) return 0;
@@ -2905,7 +3042,7 @@ export function dropFromSack(sim: Sim, id: ItemId, n: number): number {
     s.meat[id as MeatId] = have - k;
     if (!s.meat[id as MeatId]) delete s.meat[id as MeatId];
     // Район мяса — пропорционально: выброшенное уносит свою долю цены.
-    const total = Object.values(s.meatBy).reduce((a, b) => a + (b ?? 0), 0);
+    const total = Object.values(s.meatBy).reduce<number>((a, b) => a + (b ?? 0), 0);
     if (total > 0) {
       let left = k;
       for (const [a, v] of Object.entries(s.meatBy) as [AreaId, number][]) {
@@ -2964,4 +3101,32 @@ export function heroStuck(sim: Sim): boolean {
   return solidTile(sim, Math.floor(sim.hero.x), Math.floor(sim.hero.y));
 }
 
-export { tileAt };
+/** Функции движка для ИИ и сценариев (`dungeon-ai.ts`). */
+export const API: SimApi = {
+  setMode,
+  steer,
+  chaseDir,
+  flowDir,
+  lineOfSight,
+  solidTile,
+  hurtHero,
+  heroStatus,
+  spawnMob,
+  fromBurrow,
+  dropAt,
+  explode,
+  shoot,
+  strike(sim: Sim, st: StrikeIn) {
+    sim.strikes.push({ ...st, id: sim.nextId++, t: 0 });
+  },
+  zone(sim: Sim, z: ZoneIn) {
+    sim.zones.push({ ...z, id: sim.nextId++, t: 0 });
+  },
+  inArena,
+  collide: collideTiles,
+  pickKind,
+  pickBurrow,
+  def: defOf,
+};
+
+export { tileAt, heroStatus, strikeHits };

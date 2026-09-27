@@ -17,12 +17,15 @@ import { useFinanceStore } from '@/store';
 import {
   AREAS,
   areaOf,
+  bossOfFloor,
   bossReadyAt,
   DEEP_DONE_AT,
   DEEP_MINES,
   deepMineNow,
   dungeonOpen,
   DUNGEON_UNLOCK_RANK,
+  entryArea,
+  floorOf,
   heroOf,
   levelOf,
   MATS,
@@ -33,8 +36,9 @@ import {
   SLOTS,
   upgradable,
 } from '@/lib/dungeon';
-import type { AreaId, DeepMineId, MatId } from '@/lib/dungeon';
+import type { AreaId, MatId } from '@/lib/dungeon';
 import { buildWorld } from '@/lib/dungeon-world';
+import { FLOORS } from '@/lib/dungeon-floors';
 import { gearIcon, heroFrame, itemUrl, propArt } from '@/lib/dungeon-art';
 import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
 import { MINE_CELLS, minedShare, rankLetter, shortMoney } from '@/lib/prison';
@@ -78,12 +82,15 @@ export function DungeonPage() {
   const balance = useFinanceStore((s) => s.slotsBalance);
   const enter = useFinanceStore((s) => s.dungeonEnter);
   const introSeen = useFinanceStore((s) => s.dungeonIntroSeen);
-  const world = useMemo(() => buildWorld(), []);
+  // Этаж: у вылазки — её, в лобби — выбранный (по умолчанию самый глубокий).
+  const [floorSel, setFloorSel] = useState(() => d.run?.floor ?? d.reached);
+  const playFloor = d.run?.floor ?? floorSel;
+  const world = useMemo(() => buildWorld(playFloor), [playFloor]);
   const [view, setView] = useState<View>('lobby');
   const [end, setEnd] = useState<RunEnd | null>(null);
   const [camp, setCamp] = useState<CampTab | null>(null);
-  const [lift, setLift] = useState<AreaId>('mouth');
-  const [shaftArea, setShaftArea] = useState<AreaId>('mouth');
+  const [lift, setLift] = useState<AreaId>(() => entryArea(floorSel));
+  const [shaftArea, setShaftArea] = useState<AreaId>(() => entryArea(floorSel));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const now = useNow(1000);
   // Картинки героя грузятся, пока игрок в клети: к спуску они уже есть.
@@ -116,6 +123,15 @@ export function DungeonPage() {
   };
 
   const onEnd = (e: RunEnd) => {
+    if (e.kind === 'descend') {
+      // Лестница вниз: экран спуска прячет сборку нового этажа.
+      setFloorSel(e.floor);
+      setLift(entryArea(e.floor));
+      setShaftArea(entryArea(e.floor));
+      setView('down');
+      timer.current = setTimeout(() => setView('play'), DOWN_MS);
+      return;
+    }
     setEnd(e);
     if (e.kind === 'extract') {
       setView('up');
@@ -136,7 +152,7 @@ export function DungeonPage() {
   if (view === 'down' || view === 'play') {
     return (
       <>
-        <DungeonRun world={world} onEnd={onEnd} onLeave={() => nav(-1)} />
+        <DungeonRun key={world.floor} world={world} onEnd={onEnd} onLeave={() => nav(-1)} />
         {view === 'down' && <Shaft dir="down" area={shaftArea} />}
       </>
     );
@@ -347,8 +363,12 @@ export function DungeonPage() {
     () => heroPortrait(d.gear) ?? heroFrame(d.gear, 'down', 'idle', 0, false),
   );
   const run = d.run;
-  const kingAt = bossReadyAt(d, 'king');
-  const lifts = AREAS.filter((a) => a.built);
+  const floor = floorOf(floorSel);
+  const boss = bossOfFloor(floorSel);
+  const bossAt = bossReadyAt(d, boss.id);
+  const lifts = AREAS.filter((a) => a.floor === floorSel);
+  const floorOpen = floorSel <= d.reached;
+  const floorMines = floor.mines.map((m) => m.id);
   const ups = upgradable(d, balance);
   const chips = (
     <>
@@ -438,13 +458,50 @@ export function DungeonPage() {
               </button>
             </div>
 
+            {!run && (
+              <div className="dgl-floors" role="tablist" aria-label="Этаж">
+                {FLOORS.map((f) => {
+                  const ok = f.id <= d.reached;
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={floorSel === f.id}
+                      className={`dgl-floor${floorSel === f.id ? ' is-on' : ''}${ok ? '' : ' is-locked'}`}
+                      onClick={() => {
+                        tapLight();
+                        setFloorSel(f.id);
+                        setLift(entryArea(f.id));
+                      }}
+                    >
+                      <b>{f.id}</b>
+                      {!ok && <KIcon name="locked" size={14} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {!run && (
+              <div className="dgl-floorname">
+                <b>
+                  Этаж {floor.id} · {floor.name}
+                </b>
+                <i>
+                  {floorOpen
+                    ? floor.lead
+                    : `Закрыт. Победи босса ${floor.id - 1}-го этажа — лестница за его ареной.`}
+                </i>
+              </div>
+            )}
             {run ? (
               <div className="gx-panel gx-panel--iron dgl-resume">
                 <GxIcon name="miner" size={40} />
                 <div>
                   <b>Ты остался внизу</b>
                   <span>
-                    {areaOf(run.area).name} · рюкзак {slotsUsed(run.sack)}/{sackSlots(d.sackLevel)}
+                    Этаж {run.floor} · {areaOf(run.area).name} · рюкзак {slotsUsed(run.sack)}/
+                    {sackSlots(d.sackLevel)}
                   </span>
                   <GxBar
                     value={run.hp / Math.max(1, hero.maxHp)}
@@ -455,7 +512,7 @@ export function DungeonPage() {
             ) : (
               <div className="dgl-areas">
                 {lifts.map((a, i) => {
-                  const ok = d.lifts.includes(a.id);
+                  const ok = floorOpen && d.lifts.includes(a.id);
                   return (
                     <button
                       key={a.id}
@@ -467,7 +524,15 @@ export function DungeonPage() {
                         setLift(a.id);
                       }}
                     >
-                      <img src={`/ui/areas/${a.id}.png`} alt="" />
+                      <img
+                        src={`/ui/areas/${a.id}.png`}
+                        alt=""
+                        onError={(ev) => {
+                          // Своей обложки у района нет — обложка этажа.
+                          const img = ev.currentTarget;
+                          if (!img.src.endsWith(floor.cover)) img.src = floor.cover;
+                        }}
+                      />
                       <span className="dgl-area__info">
                         <b>{a.name}</b>
                         <span className="dgl-area__stars" aria-label={`сложность ${i + 1}`}>
@@ -480,7 +545,13 @@ export function DungeonPage() {
                             />
                           ))}
                         </span>
-                        <i>{ok ? a.lead : 'Лифт сломан — дойди пешком и почини'}</i>
+                        <i>
+                          {ok
+                            ? a.lead
+                            : floorOpen
+                              ? 'Лифт сломан — дойди пешком и почини'
+                              : 'Этаж закрыт'}
+                        </i>
                       </span>
                       {!ok && (
                         <span className="dgl-area__lock">
@@ -495,6 +566,7 @@ export function DungeonPage() {
 
             <button
               className="gx-btn gx-btn--red gx-btn--big gx-btn--block dgl-go"
+              disabled={!run && (!floorOpen || !d.lifts.includes(lift))}
               onClick={() => descend(run ? run.area : lift)}
             >
               <GxIcon name="lift" />
@@ -506,11 +578,18 @@ export function DungeonPage() {
 
             <div className="dgl-status">
               <div className="gx-panel gx-panel--wood dgl-tile">
-                <GxIcon name="crown" size={28} className={kingAt > now ? '' : 'is-gold'} />
-                <b>Король</b>
-                <span>{kingAt > now ? `через ${clock(kingAt - now)}` : 'в логове'}</span>
+                <GxIcon name="crown" size={28} className={bossAt > now ? '' : 'is-gold'} />
+                <b>{boss.name}</b>
+                <span>
+                  {!floorOpen
+                    ? 'этаж закрыт'
+                    : bossAt > now
+                      ? `через ${clock(bossAt - now)}`
+                      : 'в логове'}
+                </span>
+                {(d.bosses[boss.id]?.kills ?? 0) > 0 && <i>побеждён</i>}
               </div>
-              {(Object.keys(DEEP_MINES) as DeepMineId[]).map((id) => {
+              {floorMines.map((id) => {
                 const m = deepMineNow(d, id, now, MINE_CELLS);
                 const share = minedShare(m.dug);
                 const def = DEEP_MINES[id];
@@ -518,7 +597,7 @@ export function DungeonPage() {
                 return (
                   <div key={id} className="gx-panel gx-panel--wood dgl-tile">
                     <GxIcon name="minecart" size={28} className={share > 0 ? '' : 'is-gold'} />
-                    <b>{id === 'pyrite1' ? 'Шахта' : 'Богатая шахта'}</b>
+                    <b>{def.name}</b>
                     <span>
                       {share >= DEEP_DONE_AT
                         ? `новая через ${left}`
