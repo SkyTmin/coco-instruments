@@ -814,13 +814,47 @@
     }
   }
 
+  // ---------------------------------------------------------------- in-betweens
+  // happy, work and attack are written as KEY poses (8, 8 and 6 of them); the loop has more
+  // drawings than keys (K.ANIMS), and the drawings between two keys are tweened: numbers glide
+  // (position, limbs, turn, the progress of an effect), everything else holds the earlier key
+  // until the middle. Stage numbers that must not glide (which cup is up, the block's stage) are
+  // listed in DISCRETE.
+  const KEYS = { happy: 8, work: 8, attack: 6 };
+  const DISCRETE = new Set(['kind', 'item', 'hide', 'hold', 'eyeMode', 'eyeL', 'eyeR', 'block', 'up', 'lock', 'watch', 'whoosh', 'boulder', 'gog']);
+  function tween(a, b, u, key) {
+    const pick = u <= 0.5 ? a : b;
+    if (a === undefined || b === undefined || a === null || b === null || DISCRETE.has(key)) return pick;
+    if (typeof a === 'number' && typeof b === 'number') return a + (b - a) * u;
+    if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length ? a.map((v, i) => tween(v, b[i], u, key)) : pick;
+    if (typeof a === 'object' && typeof b === 'object') {
+      const out = {};
+      for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+        const v = tween(a[k], b[k], u, k);
+        if (v !== undefined) out[k] = v;
+      }
+      return out;
+    }
+    return pick;
+  }
+  K.front.tween = tween;
+
   // ---------------------------------------------------------------- draw
   function make(S) {
     S.hooks = S.hooks || {};
     const base = poses(S);
     const table = Object.assign({}, base, S.poses || {});
+    function poseAt(anim, d, A) {
+      const keys = KEYS[anim];
+      if (!keys || keys === A.n) return table[anim](d, A.n, base, S);
+      const k = (d * keys) / A.n, k0 = Math.floor(k + 1e-9), u = k - k0;
+      const a = table[anim](k0 % keys, keys, base, S);
+      // these play once in the game: the last key is held, not tweened back into the first
+      if (u < 1e-6 || k0 >= keys - 1) return a;
+      return tween(a, table[anim](k0 + 1, keys, base, S), u);
+    }
     function draw(ctx, anim, d, A) {
-      const pose = K.pose(REST, table[anim](d, A.n, base, S));
+      const pose = K.pose(REST, poseAt(anim, d, A));
       const B = d % A.boil;
       const R = rig(S, pose);
       // the drawing's place in its loop, for effects that run on their own clock (embers)

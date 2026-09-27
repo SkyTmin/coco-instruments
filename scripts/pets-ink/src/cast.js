@@ -25,15 +25,17 @@
   K.TAU = TAU;
 
   // drawings per loop, drawings per second and the boil period (a divisor of the drawings).
-  // Slow loops (idle, sleep) are held on fours: half the drawings, the same two seconds.
+  // v2.75: half as many drawings again and slower (the owner: "too few frames, too fast"): idle
+  // and sleep breathe over three seconds, the trick tells its story over two. happy, work and
+  // attack are key poses (8, 8, 6), two drawings to a key: the key and a tweened one after it
+  // (00-front.js, KEYS).
   K.ANIMS = {
-    idle: { n: 12, fps: 6, boil: 3 },
-    walk: { n: 8, fps: 12, boil: 4 },
-    happy: { n: 8, fps: 12, boil: 4 },
-    // the trick reads as a little story (the phoenix burns down and hatches again): slower
-    work: { n: 8, fps: 8, boil: 4 },
-    attack: { n: 6, fps: 12, boil: 3 },
-    sleep: { n: 12, fps: 6, boil: 3 },
+    idle: { n: 18, fps: 6, boil: 3 },
+    walk: { n: 12, fps: 12, boil: 4 },
+    happy: { n: 16, fps: 14, boil: 4 },
+    work: { n: 16, fps: 8, boil: 4 },
+    attack: { n: 12, fps: 14, boil: 4 },
+    sleep: { n: 18, fps: 6, boil: 3 },
   };
   K.ANIM_IDS = Object.keys(K.ANIMS);
 

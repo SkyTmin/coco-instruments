@@ -5,12 +5,12 @@
   'use strict';
   const FILM = window.FILM;
   const ANIMS = [
-    ['idle', 12, 6],
-    ['walk', 8, 12],
-    ['happy', 8, 12],
-    ['work', 8, 8],
-    ['attack', 6, 12],
-    ['sleep', 12, 6],
+    ['idle', 18, 6],
+    ['walk', 12, 12],
+    ['happy', 16, 14],
+    ['work', 16, 8],
+    ['attack', 12, 14],
+    ['sleep', 18, 6],
   ];
   const PETS = ['mole', 'mouse', 'badger', 'raccoon', 'cat', 'bulldog', 'ferret', 'shepherd', 'fox', 'wolf', 'dragon', 'pigeon', 'crow', 'owl', 'raven', 'phoenix', 'roach', 'spider'];
   const shots = [];
