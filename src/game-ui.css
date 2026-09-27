@@ -1622,6 +1622,38 @@
 }
 
 /* Этажи подземелья (v2.81): ряд номеров, закрытые — с замком. */
+/* Статусы героя в вылазке (v2.81): яд, ожог, холод — цветной чип с секундами. */
+.dgx-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.dgx-status__chip {
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 14px;
+  color: #10140c;
+  background: #c9c9c9;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+.dgx-status__chip.is-poison {
+  background: #86dc58;
+}
+.dgx-status__chip.is-burn {
+  background: #ff9a44;
+}
+.dgx-status__chip.is-slow {
+  background: #8aa8ff;
+}
+.dgx-status__chip.is-chill {
+  background: #a6ecff;
+}
+.dgx-status__chip.is-stun {
+  background: #ffe36a;
+}
+
 .dgl-floors {
   display: flex;
   gap: 6px;

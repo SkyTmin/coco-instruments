@@ -132,6 +132,8 @@ interface Hud {
   up: boolean;
   sign: Sign | null;
   coach: CoachStep | null;
+  /** Статусы героя и сколько им осталось, целых секунд: `poison:3,slow:1`. */
+  status: string;
 }
 
 /** Указатель у дороги: куда идти, в какую сторону и сколько шагов. */
@@ -210,6 +212,14 @@ function signRows(sim: Sim, o: WorldObj, lifts: readonly string[]): SignRow[] {
   return rows;
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  poison: 'яд',
+  burn: 'ожог',
+  slow: 'вязнешь',
+  chill: 'холод',
+  stun: 'оглушён',
+};
+
 const STATUS_NOTE: Record<string, string> = {
   poison: 'Отравлен — здоровье тает',
   burn: 'Горишь — отойди от огня',
@@ -257,6 +267,7 @@ const hudKey = (h: Hud) =>
     h.up,
     h.sign?.id ?? '',
     h.coach ?? '',
+    h.status,
   ].join('|');
 
 export function DungeonRun({
@@ -570,6 +581,10 @@ export function DungeonRun({
       up,
       sign,
       coach: step,
+      status: Object.entries(h.status)
+        .filter(([, v]) => v && v.t > 0)
+        .map(([k, v]) => `${k}:${Math.ceil(v!.t)}`)
+        .join(','),
     };
     const k = hudKey(next);
     if (k !== hudKeyRef.current) {
@@ -1189,6 +1204,18 @@ export function DungeonRun({
             <span className="gx-hex gx-hex--dark">{hud?.level ?? 1}</span>
             <GxBar value={hud?.xp ?? 0} tone="gold" thin />
           </div>
+          {hud?.status && (
+            <div className="dgx-status">
+              {hud.status.split(',').map((x) => {
+                const [k, t] = x.split(':');
+                return (
+                  <span key={k} className={`dgx-status__chip is-${k}`}>
+                    {STATUS_LABEL[k] ?? k} {t}
+                  </span>
+                );
+              })}
+            </div>
+          )}
           {hud && (hud.coins > 0 || hud.tokens > 0 || hud.keys > 0) && (
             <div className="dgx-loot">
               {hud.coins > 0 && (
