@@ -463,7 +463,7 @@ def build() -> Map:
 
     # --- the clerk behind the counter
     ct = ledger_counter()
-    m.put('store.counter', ct, 5 * T - 27, 5 * T + 3, solid=(3.3, 5.3, 6.7, 6.6))
+    m.put('store.counter', ct, 5 * T - 27, 5 * T + 3, solid=(3.3, 5.3, 6.7, 6.4))
     m.npc('clerk', 'clerk', 5.0, 4.95, face=0, anim='idle', name='Каптёрщик')
     m.marks['clerk'] = (5.0, 4.95)
     m.block(3.3, 4.8, 3.5, 5.3); m.block(6.5, 4.8, 6.7, 5.3)                      # close the gaps behind

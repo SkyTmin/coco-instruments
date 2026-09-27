@@ -6,33 +6,250 @@
 // solid: bit-packed half-tile grid (w*2 × h*2, row-major, MSB first), 1 = blocked.
 // HUB_SPRITES: name → [x, y, w, h, frames] in /hub/atlas.png; frames lie side by side.
 
-export const HUB_REV = '14d6b229b7';
+export const HUB_REV = '5ab3da6609';
 
-export const HUB_ATLAS = { w: 1024, h: 72 } as const;
+export const HUB_ATLAS = { w: 1024, h: 450 } as const;
 
 export const HUB_SPRITES: Record<string, readonly [number, number, number, number, number]> = {
- "forge.anvil": [480, 0, 24, 22, 1],
- "forge.bellows": [652, 0, 20, 15, 1],
- "forge.bench": [309, 0, 44, 26, 1],
- "forge.coal": [443, 0, 36, 24, 1],
- "forge.grindstone": [354, 0, 22, 24, 4],
+ "club.armchair": [467, 421, 16, 15, 1],
+ "club.ball": [57, 355, 12, 22, 4],
+ "club.bar": [317, 297, 56, 28, 1],
+ "club.cashier": [106, 355, 40, 22, 1],
+ "club.cig": [175, 297, 16, 30, 1],
+ "club.cocktail": [813, 400, 16, 16, 2],
+ "club.cocktail_table": [580, 400, 14, 17, 1],
+ "club.dice": [94, 421, 18, 16, 1],
+ "club.jukebox": [666, 264, 20, 30, 6],
+ "club.lamp": [285, 355, 28, 22, 1],
+ "club.mic": [759, 328, 11, 23, 1],
+ "club.neon": [0, 378, 52, 21, 12],
+ "club.palm": [439, 297, 20, 28, 1],
+ "club.palm2": [460, 297, 20, 28, 1],
+ "club.piano": [277, 328, 24, 26, 1],
+ "club.rope": [424, 400, 54, 17, 1],
+ "club.roulette": [671, 378, 22, 20, 8],
+ "club.sconce": [312, 438, 8, 10, 1],
+ "club.slot0": [833, 229, 20, 32, 6],
+ "club.slot1": [0, 264, 20, 32, 6],
+ "club.slot2": [121, 264, 20, 32, 6],
+ "club.slotgold": [242, 264, 20, 32, 6],
+ "club.stage": [885, 184, 56, 36, 1],
+ "club.stool": [595, 400, 12, 17, 1],
+ "club.table": [363, 264, 60, 32, 1],
+ "forge.anvil": [368, 355, 24, 22, 1],
+ "forge.bellows": [446, 421, 20, 15, 1],
+ "forge.bench": [203, 328, 44, 26, 1],
+ "forge.coal": [649, 328, 36, 24, 1],
+ "forge.grindstone": [371, 328, 22, 24, 4],
  "forge.hearth": [0, 0, 48, 72, 4],
- "forge.ingots": [505, 0, 28, 18, 1],
- "forge.quench": [564, 0, 26, 16, 1],
- "forge.rack": [274, 0, 22, 34, 1],
- "kit.barrel": [534, 0, 14, 18, 1],
- "kit.barrel.water": [549, 0, 14, 18, 1],
- "kit.barrow": [591, 0, 26, 16, 1],
- "kit.bucket": [688, 0, 10, 10, 1],
- "kit.crate": [618, 0, 16, 16, 1],
- "kit.crate.dark": [635, 0, 16, 16, 1],
- "kit.lamp": [297, 0, 11, 30, 1],
- "kit.sack": [673, 0, 14, 14, 1],
- "kit.stool": [699, 0, 10, 10, 1],
- "stub.forge": [193, 0, 80, 64, 1]
+ "forge.ingots": [296, 400, 28, 18, 1],
+ "forge.quench": [978, 400, 26, 16, 1],
+ "forge.rack": [514, 229, 22, 34, 1],
+ "hq.basket": [137, 438, 10, 11, 1],
+ "hq.bookcase": [489, 229, 24, 34, 1],
+ "hq.cabinet": [544, 297, 15, 28, 1],
+ "hq.cabinets": [408, 297, 30, 28, 1],
+ "hq.carafe": [418, 355, 16, 22, 1],
+ "hq.chair": [608, 400, 12, 17, 1],
+ "hq.chess": [325, 400, 26, 18, 1],
+ "hq.clock": [640, 421, 13, 13, 8],
+ "hq.coatrack": [996, 184, 18, 36, 1],
+ "hq.desk": [638, 184, 64, 38, 1],
+ "hq.extinguisher": [338, 421, 8, 16, 1],
+ "hq.fan": [356, 421, 13, 15, 4],
+ "hq.ficus": [481, 297, 20, 28, 1],
+ "hq.ficus2": [502, 297, 20, 28, 1],
+ "hq.files": [81, 438, 14, 12, 1],
+ "hq.files2": [96, 438, 14, 12, 1],
+ "hq.flag": [752, 134, 22, 46, 1],
+ "hq.globe": [435, 355, 16, 22, 1],
+ "hq.lamp": [357, 328, 13, 26, 1],
+ "hq.radiator": [962, 421, 34, 12, 1],
+ "hq.safe": [302, 328, 22, 26, 1],
+ "hq.sofa": [848, 378, 38, 20, 1],
+ "hq.trophies": [736, 184, 28, 38, 1],
+ "kennel.bench": [0, 355, 56, 22, 1],
+ "kennel.bowl.food": [373, 438, 12, 8, 1],
+ "kennel.bowl.water": [386, 438, 12, 8, 1],
+ "kennel.broom": [221, 297, 10, 30, 1],
+ "kennel.cages": [792, 184, 46, 36, 2],
+ "kennel.carrier": [352, 400, 22, 18, 1],
+ "kennel.catbed": [686, 400, 22, 16, 2],
+ "kennel.dog": [846, 400, 16, 16, 2],
+ "kennel.dogbed": [887, 378, 30, 20, 1],
+ "kennel.doghouse": [0, 297, 32, 30, 1],
+ "kennel.egg.crystal": [575, 421, 12, 14, 1],
+ "kennel.egg.dragon": [588, 421, 12, 14, 1],
+ "kennel.egg.glow": [151, 421, 16, 16, 1],
+ "kennel.egg.moss": [601, 421, 12, 14, 1],
+ "kennel.egg.stone": [614, 421, 12, 14, 1],
+ "kennel.eggbasket": [73, 421, 20, 16, 1],
+ "kennel.hay": [469, 264, 42, 32, 1],
+ "kennel.heatlamp": [611, 184, 13, 39, 2],
+ "kennel.hen.brown": [879, 400, 16, 16, 2],
+ "kennel.hen.white": [912, 400, 16, 16, 2],
+ "kennel.nest": [874, 421, 24, 13, 1],
+ "kennel.nestrim": [432, 438, 24, 7, 1],
+ "kennel.playpen": [460, 328, 40, 24, 2],
+ "kennel.sacks": [947, 378, 26, 20, 1],
+ "kennel.terrarium": [907, 264, 26, 30, 2],
+ "kennel.trough": [220, 400, 38, 18, 1],
+ "kennel.vettable": [147, 355, 40, 22, 1],
+ "kiosk.bin": [627, 421, 12, 14, 1],
+ "kiosk.bombs": [113, 421, 18, 16, 1],
+ "kiosk.bread": [918, 378, 28, 20, 1],
+ "kiosk.counter": [83, 328, 64, 26, 1],
+ "kiosk.drinks": [686, 328, 26, 24, 1],
+ "kiosk.dynamite": [314, 355, 26, 22, 1],
+ "kiosk.fridge": [661, 134, 30, 46, 3],
+ "kiosk.lamp": [560, 297, 11, 28, 1],
+ "kiosk.lenses": [248, 328, 28, 26, 1],
+ "kiosk.neon": [745, 421, 31, 13, 3],
+ "kiosk.post": [17, 400, 6, 20, 1],
+ "kiosk.register": [504, 400, 20, 17, 1],
+ "kiosk.rope": [359, 438, 13, 8, 1],
+ "kiosk.shelves": [578, 134, 36, 48, 1],
+ "kiosk.tea": [350, 438, 8, 9, 1],
+ "kit.barrel": [394, 400, 14, 18, 1],
+ "kit.barrel.water": [409, 400, 14, 18, 1],
+ "kit.barrow": [0, 421, 26, 16, 1],
+ "kit.bucket": [279, 438, 10, 10, 1],
+ "kit.crate": [168, 421, 16, 16, 1],
+ "kit.crate.dark": [185, 421, 16, 16, 1],
+ "kit.lamp": [209, 297, 11, 30, 1],
+ "kit.sack": [560, 421, 14, 14, 1],
+ "kit.stool": [290, 438, 10, 10, 1],
+ "lift.barrow": [341, 355, 26, 22, 1],
+ "lift.broom": [572, 297, 10, 28, 1],
+ "lift.cagelantern": [409, 421, 9, 15, 4],
+ "lift.cagetrap": [899, 421, 18, 13, 1],
+ "lift.cat": [621, 400, 16, 16, 4],
+ "lift.chalk": [435, 229, 26, 34, 1],
+ "lift.crate.a": [202, 421, 16, 16, 1],
+ "lift.crate.b": [219, 421, 16, 16, 1],
+ "lift.hole": [148, 438, 14, 10, 4],
+ "lift.lantern": [787, 264, 16, 30, 4],
+ "lift.lantern.hang": [579, 229, 9, 33, 4],
+ "lift.levers": [773, 297, 34, 26, 4],
+ "lift.meat": [974, 378, 20, 20, 1],
+ "lift.meat.shut": [995, 378, 20, 20, 1],
+ "lift.poison": [950, 421, 11, 13, 1],
+ "lift.rat": [321, 438, 14, 9, 2],
+ "lift.ratrun": [399, 438, 16, 7, 2],
+ "lift.rig": [440, 184, 80, 40, 1],
+ "lift.sack": [918, 421, 16, 13, 1],
+ "lift.shaft": [291, 0, 56, 68, 1],
+ "lift.trap": [457, 438, 12, 7, 1],
+ "lift.trap.2": [470, 438, 12, 7, 1],
+ "lift.winch": [521, 184, 50, 40, 1],
+ "mine.bench": [839, 421, 34, 13, 1],
+ "mine.board": [0, 328, 41, 26, 2],
+ "mine.buffer": [27, 421, 22, 16, 1],
+ "mine.cage": [193, 0, 48, 72, 1],
+ "mine.cart": [24, 400, 20, 19, 1],
+ "mine.cart.empty": [45, 400, 20, 19, 1],
+ "mine.coats": [537, 229, 22, 34, 1],
+ "mine.desk": [960, 264, 44, 30, 1],
+ "mine.drum": [393, 355, 24, 22, 1],
+ "mine.fire": [576, 264, 26, 32, 1],
+ "mine.lamp": [638, 264, 13, 31, 1],
+ "mine.lamps": [0, 229, 42, 34, 4],
+ "mine.lockers": [572, 184, 38, 40, 1],
+ "mine.props": [625, 378, 26, 21, 1],
+ "mine.ropes": [301, 438, 10, 10, 1],
+ "mine.signal": [483, 438, 3, 3, 2],
+ "mine.spill": [33, 438, 24, 12, 1],
+ "mine.tnt": [652, 378, 18, 21, 1],
+ "mine.tools": [137, 297, 18, 30, 1],
+ "mine.water": [523, 297, 20, 28, 1],
+ "store.bench": [606, 328, 42, 24, 1],
+ "store.boxes": [66, 297, 28, 30, 1],
+ "store.cage": [289, 184, 50, 44, 3],
+ "store.chests": [0, 134, 64, 49, 5],
+ "store.counter": [148, 328, 54, 26, 1],
+ "store.extinguisher": [347, 421, 8, 16, 1],
+ "store.keyboard": [616, 229, 36, 32, 6],
+ "store.ladder": [648, 134, 12, 48, 1],
+ "store.lamp": [626, 264, 11, 32, 1],
+ "store.rack": [400, 229, 34, 34, 1],
+ "store.rope": [539, 421, 20, 14, 1],
+ "store.shelves1": [809, 73, 40, 50, 1],
+ "store.shelves2": [850, 73, 40, 50, 1],
+ "store.trolley": [95, 297, 20, 30, 1],
+ "stub.forge": [348, 0, 80, 64, 1],
+ "tower.altar": [620, 297, 38, 26, 4],
+ "tower.ball": [541, 328, 16, 24, 4],
+ "tower.bookcase": [615, 134, 32, 48, 1],
+ "tower.bookcase2": [703, 184, 32, 38, 1],
+ "tower.candelabra": [266, 229, 19, 34, 4],
+ "tower.candles0": [167, 400, 13, 18, 4],
+ "tower.candles1": [259, 400, 9, 18, 4],
+ "tower.cat": [731, 400, 22, 16, 2],
+ "tower.cauldron": [910, 297, 26, 26, 4],
+ "tower.chest": [0, 400, 16, 20, 1],
+ "tower.circle": [0, 184, 72, 44, 4],
+ "tower.druse": [66, 400, 20, 18, 5],
+ "tower.easel": [462, 229, 26, 34, 1],
+ "tower.floorbooks": [58, 438, 22, 12, 1],
+ "tower.globe": [325, 328, 16, 26, 1],
+ "tower.herbrack": [33, 297, 32, 30, 1],
+ "tower.hourglass": [342, 328, 14, 26, 1],
+ "tower.ingredients": [771, 328, 30, 22, 4],
+ "tower.lectern": [892, 328, 24, 22, 4],
+ "tower.mirror": [560, 229, 18, 34, 1],
+ "tower.potions": [765, 184, 26, 38, 1],
+ "tower.sconce": [776, 400, 9, 16, 4],
+ "tower.scrolls": [545, 264, 30, 32, 1],
+ "tower.stair": [242, 0, 48, 72, 1],
+ "trader.bale": [479, 400, 24, 17, 1],
+ "trader.bicycle": [188, 355, 32, 22, 1],
+ "trader.boots": [935, 421, 14, 13, 1],
+ "trader.carpets": [221, 355, 32, 22, 1],
+ "trader.crate.arrows": [236, 421, 16, 16, 1],
+ "trader.crate.bottles": [525, 400, 18, 17, 1],
+ "trader.crate.star": [253, 421, 16, 16, 1],
+ "trader.crate.star.dark": [270, 421, 16, 16, 1],
+ "trader.crate.tobacco": [132, 421, 18, 16, 1],
+ "trader.crate.x": [287, 421, 16, 16, 1],
+ "trader.cuckoo": [232, 297, 14, 28, 6],
+ "trader.gramophone": [169, 229, 24, 34, 4],
+ "trader.jerrycans": [50, 421, 22, 16, 1],
+ "trader.lantern": [374, 297, 11, 28, 3],
+ "trader.painting": [452, 355, 16, 22, 1],
+ "trader.radio": [583, 297, 18, 27, 2],
+ "trader.sack.coffee": [304, 421, 16, 16, 1],
+ "trader.sack.sugar": [321, 421, 16, 16, 1],
+ "trader.samovar": [156, 297, 18, 30, 1],
+ "trader.strongbox": [738, 328, 20, 24, 1],
+ "trader.table": [852, 264, 54, 30, 1],
+ "trader.tarp": [424, 264, 44, 32, 1],
+ "zone.barricade": [375, 400, 18, 18, 1],
+ "zone.barrier": [748, 73, 30, 52, 2],
+ "zone.beacon": [205, 438, 11, 10, 4],
+ "zone.bench": [0, 438, 32, 12, 1],
+ "zone.board": [512, 264, 32, 32, 1],
+ "zone.booth": [705, 73, 42, 54, 1],
+ "zone.cr.a": [713, 328, 24, 24, 1],
+ "zone.cr.c": [111, 438, 12, 12, 1],
+ "zone.cr.d": [544, 400, 17, 17, 1],
+ "zone.cr.l": [562, 400, 17, 17, 1],
+ "zone.cr.r": [124, 438, 12, 12, 1],
+ "zone.cracks": [0, 73, 176, 60, 4],
+ "zone.desk": [254, 355, 30, 22, 1],
+ "zone.dog": [484, 421, 27, 14, 2],
+ "zone.fence": [343, 229, 56, 34, 1],
+ "zone.lamp": [652, 264, 13, 31, 1],
+ "zone.mat": [250, 438, 28, 10, 1],
+ "zone.samples": [116, 297, 20, 30, 1],
+ "zone.sandbags": [945, 400, 32, 16, 1],
+ "zone.searchlight": [603, 264, 22, 32, 1],
+ "zone.shaft": [321, 134, 64, 48, 4],
+ "zone.stop": [192, 297, 16, 30, 1],
+ "zone.wallcr.l": [942, 184, 26, 36, 1],
+ "zone.wallcr.r": [969, 184, 26, 36, 1]
 };
 
-export const HUB_RESIDENTS = ["smith"] as const;
+export const HUB_RESIDENTS = ["chief", "clerk", "croupier", "foreman", "guard", "keeper", "liftman", "mage", "seller", "smith", "trader"] as const;
 
 export type HubObjRow = [sprite: string, x: number, y: number, base: number, top: 0 | 1, fps: number, phase: number];
 export type HubLightRow = [x: number, y: number, r: number, color: string, kind: string, night: 0 | 1];
@@ -167,6 +384,856 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   },
   "marks": {
    "smith": [5.5, 6.85]
+  },
+  "searchlights": []
+ },
+ "mine": {
+  "id": "mine",
+  "name": "Шахта",
+  "kind": "indoor",
+  "w": 12,
+  "h": 14,
+  "ambient": 0.55,
+  "music": "mine",
+  "bg": "#120c10",
+  "solid": "/////////////////////////n4D/n5j/n77/n77wAADwAADwAAP/hgP/hgf/hgf/gAfwBgD/hjj/hjvwBgP8HgP/GAD/AAD/gGf/gGf/8P//8P/",
+  "objs": [
+   ["mine.cage", 72, 8, 80, 0, 0, 0],
+   ["mine.signal", 73, 21, 81, 0, 1.2, 0],
+   ["mine.ropes", 91, -2, 8, 1, 0, 0],
+   ["mine.board", 124, 19, 47, 0, 1.6, 0],
+   ["mine.desk", 122, 50, 80, 0, 0, 0],
+   ["mine.lamps", 17, 46, 80, 0, 2.5, 0],
+   ["mine.lockers", 17, 96, 136, 0, 0, 0],
+   ["mine.bench", 19, 143, 156, 0, 0, 0],
+   ["kit.crate.dark", 17, 172, 188, 0, 0, 0],
+   ["kit.crate", 33, 178, 194, 0, 0, 0],
+   ["mine.tnt", 17, 187, 208, 0, 0, 0],
+   ["kit.sack", 37, 195, 209, 0, 0, 0],
+   ["mine.spill", 66, 167, 179, 0, 0, 0],
+   ["mine.cart", 86, 105, 124, 0, 0, 0],
+   ["mine.cart.empty", 86, 137, 156, 0, 0, 0],
+   ["mine.buffer", 85, 156, 172, 0, 0, 0],
+   ["mine.water", 156, 80, 108, 0, 0, 0],
+   ["mine.props", 150, 113, 134, 0, 0, 0],
+   ["mine.drum", 130, 138, 160, 0, 0, 0],
+   ["mine.tools", 158, 144, 174, 0, 0, 0],
+   ["mine.fire", 150, 176, 208, 0, 0, 0],
+   ["mine.coats", 123, 174, 208, 0, 0, 0],
+   ["mine.lamp", 62, 73, 104, 1, 0, 0],
+   ["mine.lamp", 130, 97, 128, 1, 0, 0],
+   ["mine.lamp", 50, 145, 176, 1, 0, 0]
+  ],
+  "npcs": [
+   {
+    "id": "foreman",
+    "sheet": "foreman",
+    "x": 9.0,
+    "y": 3.85,
+    "face": 0,
+    "anim": "idle",
+    "name": "Бригадир"
+   }
+  ],
+  "doors": [
+   {
+    "x": 5,
+    "y": 13.35,
+    "w": 2,
+    "h": 0.65,
+    "to": "square",
+    "at": "mine",
+    "kind": "exit",
+    "label": "Выйти",
+    "lock": ""
+   },
+   {
+    "x": 5,
+    "y": 5,
+    "w": 2,
+    "h": 0.9,
+    "to": "@prison",
+    "at": "",
+    "kind": "use",
+    "label": "Спуститься",
+    "lock": ""
+   }
+  ],
+  "lights": [
+   [96, 60, 30, "#fff0c8", "glow", 0],
+   [144, 32, 30, "#ffc85a", "neon", 0],
+   [128, 56, 44, "#ffd08a", "lamp", 0],
+   [38, 64, 28, "#9dffb0", "glow", 0],
+   [68, 106, 62, "#cfe0ff", "lamp", 0],
+   [136, 130, 62, "#cfe0ff", "lamp", 0],
+   [56, 178, 62, "#cfe0ff", "lamp", 0]
+  ],
+  "fx": [
+   ["drip", 104, 36, 0.6],
+   ["dust", 96, 86, 0.5]
+  ],
+  "spawns": {
+   "in": [6.0, 12.4, 1]
+  },
+  "marks": {
+   "foreman": [9.0, 3.85]
+  },
+  "searchlights": []
+ },
+ "zone": {
+  "id": "zone",
+  "name": "Особая шахта",
+  "kind": "indoor",
+  "w": 12,
+  "h": 14,
+  "ambient": 0.45,
+  "music": "depths",
+  "bg": "#120c10",
+  "solid": "////////////////////////+AAfw//DwP/DwP8Pz/9vz/9jwAADwAA/wAA/wAG//4f/wAP/wIAD3IAD3AA/wAA//AHj/AHj+8B/+8B//8P//8P/",
+  "objs": [
+   ["zone.beacon", 91, 17, 46, 0, 6, 0],
+   ["zone.wallcr.l", 14, 18, 54, 0, 0, 0],
+   ["zone.wallcr.r", 151, 18, 54, 0, 0, 0],
+   ["zone.cracks", 8, 92, 92, 0, 3, 0],
+   ["zone.shaft", 64, 48, 96, 0, 3, 0],
+   ["zone.cr.a", 36, 66, 90, 0, 0, 0],
+   ["zone.cr.d", 142, 75, 92, 0, 0, 0],
+   ["zone.cr.c", 54, 50, 62, 0, 0, 0],
+   ["zone.cr.r", 134, 54, 66, 0, 0, 0],
+   ["zone.cr.l", 159, 69, 86, 0, 0, 0],
+   ["zone.fence", 16, 102, 136, 0, 0, 0],
+   ["zone.barrier", 89, 84, 136, 0, 1.5, 0],
+   ["zone.desk", 114, 122, 144, 0, 0, 0],
+   ["zone.booth", 148, 90, 144, 0, 0, 0],
+   ["zone.searchlight", 28, 136, 168, 0, 0, 0],
+   ["zone.stop", 62, 126, 156, 0, 0, 0],
+   ["zone.bench", 18, 180, 192, 0, 0, 0],
+   ["zone.board", 50, 176, 208, 0, 0, 0],
+   ["zone.samples", 17, 178, 208, 0, 0, 0],
+   ["zone.mat", 146, 164, 164, 0, 0, 0],
+   ["zone.dog", 146, 159, 173, 0, 1.2, 0],
+   ["zone.barricade", 156, 188, 206, 0, 0, 0],
+   ["kit.crate.dark", 138, 198, 214, 0, 0, 0],
+   ["zone.sandbags", 120, 172, 188, 0, 0, 0],
+   ["zone.lamp", 74, 93, 124, 1, 0, 0],
+   ["zone.lamp", 84, 147, 178, 1, 0, 0],
+   ["zone.lamp", 126, 167, 198, 1, 0, 0]
+  ],
+  "npcs": [
+   {
+    "id": "guard",
+    "sheet": "guard",
+    "x": 7.85,
+    "y": 7.85,
+    "face": 0,
+    "anim": "idle",
+    "name": "Охранник"
+   }
+  ],
+  "doors": [
+   {
+    "x": 5,
+    "y": 13.35,
+    "w": 2,
+    "h": 0.65,
+    "to": "square",
+    "at": "zone",
+    "kind": "exit",
+    "label": "Выйти",
+    "lock": ""
+   },
+   {
+    "x": 4.5,
+    "y": 6,
+    "w": 3,
+    "h": 0.9,
+    "to": "@zone",
+    "at": "",
+    "kind": "use",
+    "label": "Войти",
+    "lock": "zone"
+   }
+  ],
+  "lights": [
+   [96, 22, 26, "#ff4a3a", "neon", 0],
+   [47, 28, 30, "#fff4cf", "lamp", 0],
+   [32, 40, 40, "#b27ee6", "magic", 0],
+   [160, 40, 40, "#ec8fb4", "magic", 0],
+   [96, 76, 80, "#9a6be0", "magic", 0],
+   [48, 78, 38, "#e87aa6", "magic", 0],
+   [150, 84, 30, "#7ad986", "magic", 0],
+   [60, 56, 22, "#b27ee6", "magic", 0],
+   [140, 60, 22, "#ec8fb4", "magic", 0],
+   [167, 78, 30, "#ecd67a", "magic", 0],
+   [164, 116, 36, "#ffd08a", "window", 0],
+   [39, 148, 48, "#e6ecff", "lamp", 0],
+   [80, 126, 56, "#cfe0ff", "lamp", 0],
+   [90, 180, 56, "#cfe0ff", "lamp", 0],
+   [132, 200, 56, "#cfe0ff", "lamp", 0]
+  ],
+  "fx": [
+   ["motes", 96, 72, 1.4],
+   ["motes", 32, 48, 0.4],
+   ["motes", 160, 48, 0.4],
+   ["smoke", 158, 92, 0.5]
+  ],
+  "spawns": {
+   "in": [6.0, 12.4, 1]
+  },
+  "marks": {
+   "guard": [7.85, 7.85]
+  },
+  "searchlights": []
+ },
+ "lift": {
+  "id": "lift",
+  "name": "Лифт в подземелье",
+  "kind": "indoor",
+  "w": 12,
+  "h": 14,
+  "ambient": 0.5,
+  "music": "lobby",
+  "bg": "#120c10",
+  "solid": "////////////////////////////////x//Dx//f9//f9/ODwAPDwAPD8AAf8AAf8AADxAADxAADwAAD/gAD/gAfwAAfwAAf9gH/9gH//8P//8P/",
+  "objs": [
+   ["lift.hole", 22, 54, 63, 0, 2, 0],
+   ["lift.shaft", 38, 28, 96, 0, 0, 0],
+   ["lift.cagelantern", 76, 62, 97, 0, 4, 0],
+   ["lift.rig", 39, 16, 56, 1, 0, 0],
+   ["lift.winch", 98, 48, 88, 0, 0, 0],
+   ["lift.levers", 106, 86, 112, 0, 5, 0],
+   ["lift.chalk", 154, 94, 128, 0, 0, 0],
+   ["lift.meat", 156, 68, 88, 0, 0, 0],
+   ["lift.meat.shut", 150, 186, 206, 0, 0, 0],
+   ["lift.barrow", 122, 184, 206, 0, 0, 0],
+   ["kit.crate", 158, 170, 186, 0, 0, 0],
+   ["lift.trap", 20, 69, 76, 0, 0, 0],
+   ["lift.trap.2", 38, 124, 131, 0, 0, 0],
+   ["lift.sack", 16, 77, 90, 0, 0, 0],
+   ["lift.crate.a", 16, 116, 132, 0, 0, 0],
+   ["lift.crate.b", 19, 104, 120, 0, 0, 0],
+   ["lift.rat", 34, 123, 132, 0, 3, 0],
+   ["lift.broom", 37, 120, 148, 0, 0, 0],
+   ["lift.cagetrap", 18, 159, 172, 0, 0, 0],
+   ["lift.poison", 38, 159, 172, 0, 0, 0],
+   ["kit.barrel", 17, 188, 206, 0, 0, 0],
+   ["lift.lantern", 38, 178, 208, 0, 5, 0],
+   ["lift.ratrun", 98, 155, 162, 0, 8, 0],
+   ["lift.cat", 56, 93, 109, 0, 1.2, 0],
+   ["lift.lantern.hang", 76, 115, 148, 1, 5, 0],
+   ["lift.lantern.hang", 132, 127, 160, 1, 5, 0]
+  ],
+  "npcs": [
+   {
+    "id": "liftman",
+    "sheet": "liftman",
+    "x": 7.75,
+    "y": 5.85,
+    "face": 0,
+    "anim": "idle",
+    "name": "Лифтёр"
+   }
+  ],
+  "doors": [
+   {
+    "x": 5,
+    "y": 13.35,
+    "w": 2,
+    "h": 0.65,
+    "to": "square",
+    "at": "lift",
+    "kind": "exit",
+    "label": "Выйти",
+    "lock": ""
+   },
+   {
+    "x": 3,
+    "y": 6,
+    "w": 2.5,
+    "h": 0.9,
+    "to": "@dungeon",
+    "at": "",
+    "kind": "use",
+    "label": "Спуститься",
+    "lock": "dungeon"
+   }
+  ],
+  "lights": [
+   [28, 48, 44, "#9fc4d0", "window", 0],
+   [56, 70, 34, "#ffd08a", "candle", 0],
+   [140, 98, 46, "#ffd08a", "candle", 0],
+   [46, 192, 40, "#ffd08a", "candle", 0],
+   [80, 142, 60, "#ffd08a", "lamp", 0],
+   [136, 154, 60, "#ffd08a", "lamp", 0]
+  ],
+  "fx": [
+   ["drip", 68, 68, 0.5],
+   ["dust", 116, 80, 0.4]
+  ],
+  "spawns": {
+   "in": [6.0, 12.4, 1]
+  },
+  "marks": {
+   "liftman": [7.75, 5.85]
+  },
+  "searchlights": []
+ },
+ "tower": {
+  "id": "tower",
+  "name": "Башня Чародея",
+  "kind": "indoor",
+  "w": 12,
+  "h": 14,
+  "ambient": 0.5,
+  "music": "yard",
+  "bg": "#120c10",
+  "solid": "/////////////////////////8H//8H/wAD/wBj//BgD/BuDx9v/x8D//AD//AODwwODwwA7/wD7/wDD/gADzsM/8AD/8MP/wMMDwAAD/8P//8P/",
+  "objs": [
+   ["tower.sconce", 103, 28, 48, 0, 6, 0],
+   ["kit.bucket", 125, 51, 61, 0, 0, 0],
+   ["tower.bookcase", 16, 16, 64, 0, 0, 0],
+   ["tower.bookcase2", 48, 26, 64, 0, 0, 0],
+   ["tower.stair", 132, 10, 82, 0, 0, 0],
+   ["tower.lectern", 84, 80, 102, 0, 3, 0],
+   ["tower.cat", 109, 83, 99, 0, 1, 0],
+   ["tower.circle", 60, 130, 128, 0, 4, 0],
+   ["tower.candles0", 50, 138, 156, 0, 6, 0.0],
+   ["tower.candles0", 129, 138, 156, 0, 6, 0.3],
+   ["tower.candles1", 69, 158, 176, 0, 6, 0.6],
+   ["tower.candles1", 114, 158, 176, 0, 6, 0.9],
+   ["tower.herbrack", 16, 67, 97, 0, 0, 0],
+   ["tower.cauldron", 20, 102, 128, 0, 5, 0],
+   ["tower.ingredients", 44, 92, 114, 0, 6, 0.2],
+   ["tower.hourglass", 50, 116, 142, 0, 0, 0],
+   ["tower.potions", 16, 126, 164, 0, 0, 0],
+   ["tower.chest", 17, 174, 194, 0, 0, 0],
+   ["tower.floorbooks", 35, 189, 201, 0, 0, 0],
+   ["tower.globe", 38, 150, 176, 0, 0, 0],
+   ["tower.altar", 134, 90, 116, 0, 6, 0],
+   ["tower.easel", 111, 98, 132, 0, 0, 0],
+   ["tower.ball", 148, 128, 152, 0, 3, 0],
+   ["tower.druse", 150, 158, 176, 0, 3, 0],
+   ["tower.scrolls", 128, 162, 194, 0, 0, 0],
+   ["tower.mirror", 158, 160, 194, 0, 0, 0],
+   ["tower.candelabra", 60, 164, 198, 0, 6, 0.0],
+   ["tower.candelabra", 113, 164, 198, 0, 6, 0.5]
+  ],
+  "npcs": [
+   {
+    "id": "mage",
+    "sheet": "mage",
+    "x": 6.0,
+    "y": 4.9,
+    "face": 0,
+    "anim": "idle",
+    "name": "Чародей"
+   }
+  ],
+  "doors": [
+   {
+    "x": 5,
+    "y": 13.35,
+    "w": 2,
+    "h": 0.65,
+    "to": "square",
+    "at": "tower",
+    "kind": "exit",
+    "label": "Выйти",
+    "lock": ""
+   }
+  ],
+  "lights": [
+   [96, 36, 36, "#8aa4e0", "window", 0],
+   [107, 32, 24, "#ffb35a", "candle", 0],
+   [96, 84, 34, "#b48cff", "magic", 0],
+   [96, 152, 64, "#9a6be0", "magic", 0],
+   [57, 146, 26, "#ffb35a", "candle", 0],
+   [135, 146, 26, "#ffb35a", "candle", 0],
+   [74, 166, 26, "#ffb35a", "candle", 0],
+   [118, 166, 26, "#ffb35a", "candle", 0],
+   [33, 120, 40, "#7fd05a", "fire", 0],
+   [152, 106, 28, "#c9a6ff", "glow", 0],
+   [156, 140, 24, "#b48cff", "glow", 0],
+   [160, 168, 20, "#b48cff", "glow", 0],
+   [70, 174, 40, "#ffb35a", "candle", 0],
+   [122, 174, 40, "#ffb35a", "candle", 0]
+  ],
+  "fx": [
+   ["drip", 127, 47, 0.4],
+   ["motes", 96, 150, 1.2],
+   ["steam", 33, 110, 0.8]
+  ],
+  "spawns": {
+   "in": [6.0, 12.4, 1]
+  },
+  "marks": {
+   "mage": [6.0, 4.9]
+  },
+  "searchlights": []
+ },
+ "kennel": {
+  "id": "kennel",
+  "name": "Питомник",
+  "kind": "indoor",
+  "w": 12,
+  "h": 13,
+  "ambient": 0.62,
+  "music": "yard",
+  "bg": "#120c10",
+  "solid": "////////////////////////3+H/3+H/3+H/3/n/8H4D8H4Dz/4Dz4B/wAB//8H//8HD/8ADwAA//gA//4H//gHDw8P/28P//8P//8P/",
+  "objs": [
+   ["kennel.bench", 28, 60, 60, 0, 0, 0],
+   ["kennel.nest", 32, 59, 61, 0, 0, 0],
+   ["kennel.nestrim", 31, 65, 70, 0, 0, 0],
+   ["kennel.nest", 58, 59, 61, 0, 0, 0],
+   ["kennel.nestrim", 57, 65, 70, 0, 0, 0],
+   ["kennel.heatlamp", 50, 14, 53, 1, 1, 0],
+   ["kennel.vettable", 76, 81, 103, 0, 0, 0],
+   ["kit.lamp", 113, 46, 76, 1, 0, 0],
+   ["kennel.cages", 126, 44, 80, 0, 1.5, 0],
+   ["kennel.doghouse", 142, 100, 130, 0, 0, 0],
+   ["kennel.dog", 126, 116, 132, 0, 2, 0],
+   ["kennel.bowl.food", 116, 140, 148, 0, 0, 0],
+   ["kennel.bowl.water", 138, 142, 150, 0, 0, 0],
+   ["kennel.dogbed", 146, 142, 162, 0, 0, 0],
+   ["kennel.terrarium", 150, 164, 194, 0, 1, 0],
+   ["kennel.carrier", 120, 160, 178, 0, 0, 0],
+   ["kennel.broom", 132, 164, 194, 0, 0, 0],
+   ["kit.bucket", 116, 182, 192, 0, 0, 0],
+   ["kennel.eggbasket", 15, 78, 94, 0, 0, 0],
+   ["kennel.trough", 36, 95, 113, 0, 0, 0],
+   ["kennel.catbed", 18, 122, 138, 0, 1, 0],
+   ["kennel.hay", 14, 146, 178, 0, 0, 0],
+   ["kennel.playpen", 41, 120, 144, 0, 2, 0],
+   ["kennel.hen.white", 59, 152, 168, 0, 2, 0.0],
+   ["kennel.hen.brown", 20, 176, 192, 0, 2, 0.5],
+   ["kennel.sacks", 48, 174, 194, 0, 0, 0]
+  ],
+  "npcs": [
+   {
+    "id": "keeper",
+    "sheet": "keeper",
+    "x": 6.0,
+    "y": 4.9,
+    "face": 0,
+    "anim": "idle",
+    "name": "Смотрительница"
+   }
+  ],
+  "doors": [
+   {
+    "x": 5,
+    "y": 12.35,
+    "w": 2,
+    "h": 0.65,
+    "to": "square",
+    "at": "kennel",
+    "kind": "exit",
+    "label": "Выйти",
+    "lock": ""
+   }
+  ],
+  "lights": [
+   [29, 40, 34, "#9fc4d0", "window", 0],
+   [56, 64, 48, "#ff6a3a", "lamp", 0],
+   [118, 86, 50, "#ffd98a", "lamp", 0]
+  ],
+  "fx": [
+   ["dust", 56, 54, 0.35],
+   ["dust", 36, 158, 0.5]
+  ],
+  "spawns": {
+   "in": [6.0, 11.4, 1]
+  },
+  "marks": {
+   "nest0": [2.75, 4.25],
+   "nest1": [4.375, 4.25],
+   "keeper": [6.0, 4.9]
+  },
+  "searchlights": []
+ },
+ "store": {
+  "id": "store",
+  "name": "Каптёрка",
+  "kind": "indoor",
+  "w": 11,
+  "h": 13,
+  "ambient": 0.58,
+  "music": "yard",
+  "bg": "#120c10",
+  "solid": "///////////////////////gfP+B8/4Hz/mfPD/M8P//w///8AA/wADwAAPAAA8AH//8f//x/8AH/wAP//A//+D//w///D/w",
+  "objs": [
+   ["store.keyboard", 62, 16, 47, 0, 3, 0],
+   ["store.shelves1", 16, 28, 78, 0, 0, 0],
+   ["store.shelves2", 104, 28, 78, 0, 0, 0],
+   ["store.ladder", 130, 34, 82, 0, 0, 0],
+   ["store.extinguisher", 58, 177, 193, 0, 0, 0],
+   ["store.counter", 53, 83, 109, 0, 0, 0],
+   ["store.lamp", 92, 44, 76, 1, 0, 0],
+   ["store.rack", 15, 86, 120, 0, 0, 0],
+   ["store.chests", 15, 111, 160, 0, 4, 0],
+   ["store.trolley", 110, 74, 104, 0, 0, 0],
+   ["store.boxes", 132, 72, 102, 0, 0, 0],
+   ["store.cage", 108, 120, 164, 0, 2, 0],
+   ["store.rope", 140, 170, 184, 0, 0, 0],
+   ["store.bench", 18, 169, 193, 0, 0, 0],
+   ["kit.crate", 114, 177, 193, 0, 0, 0],
+   ["kit.crate.dark", 116, 166, 182, 0, 0, 0],
+   ["kit.sack", 132, 180, 194, 0, 0, 0],
+   ["kit.barrel", 146, 175, 193, 0, 0, 0]
+  ],
+  "npcs": [
+   {
+    "id": "clerk",
+    "sheet": "clerk",
+    "x": 5.0,
+    "y": 4.95,
+    "face": 0,
+    "anim": "idle",
+    "name": "Каптёрщик"
+   }
+  ],
+  "doors": [
+   {
+    "x": 4,
+    "y": 12.35,
+    "w": 2,
+    "h": 0.65,
+    "to": "square",
+    "at": "store",
+    "kind": "exit",
+    "label": "Выйти",
+    "lock": ""
+   }
+  ],
+  "lights": [
+   [36, 36, 30, "#9fc4d0", "window", 0],
+   [97, 84, 56, "#ffd98a", "lamp", 0],
+   [46, 120, 28, "#ffd76a", "glow", 0]
+  ],
+  "fx": [
+   ["dust", 97, 72, 0.4],
+   ["motes", 46, 118, 0.35]
+  ],
+  "spawns": {
+   "in": [5.0, 11.4, 1]
+  },
+  "marks": {
+   "keys": [5.0, 2.0],
+   "clerk": [5.0, 4.95]
+  },
+  "searchlights": []
+ },
+ "kiosk": {
+  "id": "kiosk",
+  "name": "Ларёк",
+  "kind": "indoor",
+  "w": 10,
+  "h": 11,
+  "ambient": 0.62,
+  "music": "yard",
+  "bg": "#120c10",
+  "solid": "/////////////////////gP/4D/+A//mf8P8PD/Dw/w//8P/h//4f8AAP4AD/w/88P//D//w/w==",
+  "objs": [
+   ["kiosk.neon", 65, 17, 47, 0, 2, 0],
+   ["kiosk.shelves", 14, 30, 78, 0, 0, 0],
+   ["kiosk.fridge", 113, 32, 78, 0, 3, 0],
+   ["kiosk.counter", 48, 83, 109, 0, 0, 0],
+   ["kiosk.register", 90, 72, 108, 0, 0, 0],
+   ["kiosk.tea", 60, 77, 108, 0, 0, 0],
+   ["kiosk.lamp", 58, 44, 72, 1, 0, 0],
+   ["kiosk.dynamite", 17, 106, 128, 0, 0, 0],
+   ["kiosk.bombs", 22, 132, 148, 0, 0, 0],
+   ["kiosk.bread", 38, 140, 160, 0, 0, 0],
+   ["kiosk.post", 49, 103, 123, 0, 0, 0],
+   ["kiosk.post", 61, 103, 123, 0, 0, 0],
+   ["kiosk.rope", 52, 103, 122, 0, 0, 0],
+   ["kiosk.lenses", 110, 102, 128, 0, 0, 0],
+   ["kiosk.drinks", 112, 136, 160, 0, 0, 0],
+   ["kiosk.bin", 98, 146, 160, 0, 0, 0]
+  ],
+  "npcs": [
+   {
+    "id": "seller",
+    "sheet": "seller",
+    "x": 5.0,
+    "y": 4.95,
+    "face": 0,
+    "anim": "idle",
+    "name": "Продавщица"
+   }
+  ],
+  "doors": [
+   {
+    "x": 4,
+    "y": 10.35,
+    "w": 2,
+    "h": 0.65,
+    "to": "square",
+    "at": "kiosk",
+    "kind": "exit",
+    "label": "Выйти",
+    "lock": ""
+   }
+  ],
+  "lights": [
+   [80, 24, 40, "#ff5ab4", "neon", 0],
+   [128, 64, 34, "#a8f0d8", "neon", 0],
+   [63, 82, 54, "#ffe0a8", "lamp", 0],
+   [125, 150, 22, "#b8ff70", "glow", 0]
+  ],
+  "fx": [
+   ["dust", 80, 128, 0.25],
+   ["steam", 63, 75, 0.3]
+  ],
+  "spawns": {
+   "in": [5.0, 9.4, 1]
+  },
+  "marks": {
+   "seller": [5.0, 4.95]
+  },
+  "searchlights": []
+ },
+ "trader": {
+  "id": "trader",
+  "name": "Торговец",
+  "kind": "indoor",
+  "w": 11,
+  "h": 13,
+  "ambient": 0.45,
+  "music": "yard",
+  "bg": "#120c10",
+  "solid": "//////////////////////wAD//wP//AD//APB/P8H8/+AAP4AH8AAfwAAP+AH/4AfwwAPDAA/wA//wD//AD/wAP/w///D/w",
+  "objs": [
+   ["trader.cuckoo", 106, 17, 48, 0, 4, 0],
+   ["trader.table", 52, 68, 98, 0, 0, 0],
+   ["trader.strongbox", 56, 54, 78, 0, 0, 0],
+   ["trader.lantern", 104, 48, 76, 1, 5, 0],
+   ["trader.tarp", 16, 50, 82, 0, 0, 0],
+   ["trader.gramophone", 18, 80, 114, 0, 6, 0],
+   ["trader.crate.star", 16, 128, 144, 0, 0, 0],
+   ["trader.crate.bottles", 33, 127, 144, 0, 0, 0],
+   ["trader.crate.x", 16, 116, 127, 0, 0, 0],
+   ["trader.carpets", 16, 154, 176, 0, 0, 0],
+   ["trader.bale", 49, 145, 162, 0, 0, 0],
+   ["trader.sack.coffee", 46, 178, 194, 0, 0, 0],
+   ["trader.sack.sugar", 17, 178, 194, 0, 0, 0],
+   ["trader.painting", 31, 171, 193, 0, 0, 0],
+   ["trader.crate.tobacco", 130, 48, 64, 0, 0, 0],
+   ["trader.crate.arrows", 146, 48, 64, 0, 0, 0],
+   ["trader.crate.star.dark", 146, 36, 63, 0, 0, 0],
+   ["trader.samovar", 134, 66, 96, 0, 0, 0],
+   ["trader.jerrycans", 138, 114, 130, 0, 0, 0],
+   ["trader.radio", 142, 118, 145, 0, 1.5, 0],
+   ["trader.bicycle", 130, 156, 178, 0, 0, 0],
+   ["trader.boots", 108, 178, 191, 0, 0, 0],
+   ["kit.barrel", 145, 174, 192, 0, 0, 0]
+  ],
+  "npcs": [
+   {
+    "id": "trader",
+    "sheet": "trader",
+    "x": 5.3,
+    "y": 4.85,
+    "face": 0,
+    "anim": "idle",
+    "name": "Торговец"
+   }
+  ],
+  "doors": [
+   {
+    "x": 4,
+    "y": 12.35,
+    "w": 2,
+    "h": 0.65,
+    "to": "square",
+    "at": "trader",
+    "kind": "exit",
+    "label": "Выйти",
+    "lock": ""
+   }
+  ],
+  "lights": [
+   [92, 84, 88, "#ffc86a", "lamp", 0],
+   [151, 130, 16, "#ffb347", "glow", 0]
+  ],
+  "fx": [
+   ["dust", 88, 80, 0.5],
+   ["steam", 145, 68, 0.35]
+  ],
+  "spawns": {
+   "in": [5.0, 11.4, 1]
+  },
+  "marks": {
+   "trader": [5.3, 4.85]
+  },
+  "searchlights": []
+ },
+ "hq": {
+  "id": "hq",
+  "name": "Штаб",
+  "kind": "indoor",
+  "w": 12,
+  "h": 14,
+  "ambient": 0.7,
+  "music": "yard",
+  "bg": "#120c10",
+  "solid": "/////////////////////////gAD/gf/wAb/wD//wD/DwD/D/AA//DD/wAADwAAD/4Hf/4Hf/4HfwAADwAB/8AB/8GAfwGB/wAADwAAD//D///D/",
+  "objs": [
+   ["hq.clock", 162, 20, 48, 0, 1, 0],
+   ["hq.flag", 111, 20, 66, 0, 0, 0],
+   ["hq.desk", 80, 54, 92, 0, 0, 0],
+   ["hq.radiator", 18, 52, 64, 0, 0, 0],
+   ["hq.files", 54, 54, 66, 0, 0, 0],
+   ["hq.basket", 72, 65, 76, 0, 0, 0],
+   ["hq.safe", 132, 50, 76, 0, 0, 0],
+   ["hq.cabinet", 158, 48, 76, 0, 0, 0],
+   ["hq.fan", 160, 37, 77, 0, 12, 0],
+   ["hq.chair", 82, 96, 113, 0, 0, 0],
+   ["hq.chair", 130, 96, 113, 0, 0, 0],
+   ["hq.trophies", 17, 76, 114, 0, 0, 0],
+   ["hq.bookcase", 18, 114, 148, 0, 0, 0],
+   ["hq.chess", 46, 128, 146, 0, 0, 0],
+   ["hq.ficus", 15, 154, 182, 0, 0, 0],
+   ["hq.coatrack", 70, 157, 193, 0, 0, 0],
+   ["hq.files2", 36, 180, 192, 0, 0, 0],
+   ["hq.cabinets", 145, 84, 112, 0, 0, 0],
+   ["hq.carafe", 158, 124, 146, 0, 0, 0],
+   ["hq.sofa", 136, 156, 176, 0, 0, 0],
+   ["hq.globe", 124, 126, 148, 0, 0, 0],
+   ["hq.ficus2", 158, 168, 196, 0, 0, 0],
+   ["hq.extinguisher", 138, 176, 192, 0, 0, 0],
+   ["hq.lamp", 106, 124, 150, 1, 0, 0]
+  ],
+  "npcs": [
+   {
+    "id": "chief",
+    "sheet": "chief",
+    "x": 7.0,
+    "y": 4.05,
+    "face": 0,
+    "anim": "idle",
+    "name": "Начальник"
+   }
+  ],
+  "doors": [
+   {
+    "x": 6,
+    "y": 13.35,
+    "w": 2,
+    "h": 0.65,
+    "to": "square",
+    "at": "hq",
+    "kind": "exit",
+    "label": "Выйти",
+    "lock": ""
+   }
+  ],
+  "lights": [
+   [87, 74, 40, "#c8f0a0", "lamp", 0],
+   [34, 92, 22, "#ffe0a0", "glow", 0],
+   [112, 152, 100, "#fff0c8", "lamp", 0]
+  ],
+  "fx": [
+   ["steam", 126, 62, 0.25],
+   ["dust", 112, 128, 0.3]
+  ],
+  "spawns": {
+   "in": [7.0, 12.4, 1]
+  },
+  "marks": {
+   "chief": [7.0, 4.05]
+  },
+  "searchlights": []
+ },
+ "club": {
+  "id": "club",
+  "name": "Клуб",
+  "kind": "indoor",
+  "w": 12,
+  "h": 14,
+  "ambient": 0.32,
+  "music": "yard",
+  "bg": "#120c10",
+  "solid": "////////////////////////wAH//////////4H/wAH/95n/wBgDwP8D3P/f3P//wAAzwAAD/4D//4D/wAADwAAD+4Of+4OfwAADwAAD/8P//8P/",
+  "objs": [
+   ["club.cocktail", 44, 17, 48, 0, 1.2, 0],
+   ["club.neon", 70, 17, 48, 0, 6, 0],
+   ["club.sconce", 70, 28, 48, 0, 0, 0],
+   ["club.sconce", 114, 28, 48, 0, 0, 0],
+   ["club.bar", 16, 54, 82, 0, 0, 0],
+   ["club.stool", 22, 81, 98, 0, 0, 0],
+   ["club.stool", 42, 81, 98, 0, 0, 0],
+   ["club.stool", 62, 81, 98, 0, 0, 0],
+   ["club.stage", 120, 48, 84, 0, 0, 0],
+   ["club.piano", 151, 38, 85, 0, 0, 0],
+   ["club.mic", 138, 49, 85, 0, 0, 0],
+   ["club.rope", 120, 80, 97, 0, 0, 0],
+   ["club.ball", 130, 17, 39, 1, 4, 0],
+   ["club.cashier", 76, 47, 69, 0, 0, 0],
+   ["club.table", 66, 94, 126, 0, 0, 0],
+   ["club.lamp", 82, 62, 84, 1, 0, 0],
+   ["club.slot0", 17, 128, 160, 0, 8, 0.0],
+   ["club.slot1", 34, 128, 160, 0, 8, 0.33],
+   ["club.slot2", 51, 128, 160, 0, 8, 0.66],
+   ["club.armchair", 130, 115, 130, 0, 0, 0],
+   ["club.cocktail_table", 146, 115, 132, 0, 0, 0],
+   ["club.armchair", 158, 115, 130, 0, 0, 0],
+   ["club.roulette", 128, 142, 162, 0, 10, 0],
+   ["club.dice", 24, 110, 126, 0, 0, 0],
+   ["club.jukebox", 156, 130, 160, 0, 5, 0],
+   ["club.slotgold", 158, 162, 194, 0, 8, 0.5],
+   ["club.cig", 18, 164, 194, 0, 0, 0],
+   ["club.palm", 52, 168, 196, 0, 0, 0],
+   ["club.palm2", 114, 168, 196, 0, 0, 0]
+  ],
+  "npcs": [
+   {
+    "id": "croupier",
+    "sheet": "croupier",
+    "x": 6.0,
+    "y": 6.1,
+    "face": 0,
+    "anim": "work",
+    "name": "Крупье"
+   }
+  ],
+  "doors": [
+   {
+    "x": 5,
+    "y": 13.35,
+    "w": 2,
+    "h": 0.65,
+    "to": "square",
+    "at": "club",
+    "kind": "exit",
+    "label": "Выйти",
+    "lock": ""
+   }
+  ],
+  "lights": [
+   [52, 32, 30, "#4fe8ff", "neon", 0],
+   [96, 40, 72, "#ff5ec4", "neon", 0],
+   [40, 68, 36, "#ffc080", "lamp", 0],
+   [148, 72, 44, "#ffe0a0", "lamp", 0],
+   [96, 112, 52, "#ffe8b0", "lamp", 0],
+   [25, 144, 20, "#ff6a4a", "glow", 0],
+   [42, 144, 20, "#6ab0ff", "glow", 0],
+   [59, 144, 20, "#6aff9a", "glow", 0],
+   [152, 118, 16, "#ff8a6a", "candle", 0],
+   [166, 144, 26, "#ff9a5a", "glow", 0],
+   [166, 180, 20, "#ffd060", "glow", 0]
+  ],
+  "fx": [
+   ["dust", 148, 64, 0.3],
+   ["smoke", 106, 98, 0.25],
+   ["motes", 44, 140, 0.5]
+  ],
+  "spawns": {
+   "in": [6.0, 12.4, 1]
+  },
+  "marks": {
+   "croupier": [6.0, 6.1]
   },
   "searchlights": []
  }
