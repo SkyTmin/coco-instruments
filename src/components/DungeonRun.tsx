@@ -768,7 +768,7 @@ export function DungeonRun({
         case 'rumble':
           deepRumble();
           tapMedium();
-          if (e.what === 'horde') say('ОРДА', 'крысы идут стаей — к стене спиной', 'danger', 1800);
+          if (e.what === 'horde') say('ОРДА', 'лезут стаей — к стене спиной', 'danger', 1800);
           else note('Вагонетка сорвалась!');
           break;
         case 'area': {
@@ -807,6 +807,10 @@ export function DungeonRun({
           } else if (e.what === 'reset') {
             gateSlam();
             note(`${name} ушёл отдыхать — ворота открыты`);
+          } else if (e.what === 'roar') {
+            kingRoar();
+            tapMedium();
+            if (e.text) say(e.text, e.sub, 'danger', 1800);
           } else if (e.what === 'roll') deepRumble();
           else if (e.what === 'whip') swordSwing(2, true);
           else if (e.what === 'summon') {
@@ -856,7 +860,7 @@ export function DungeonRun({
           break;
         case 'gold':
           coinDing();
-          note('Золотая крыса! Догони — убежит в нору');
+          note(`${MOBS[e.mob]?.name ?? 'Беглец'} с мешком! Догони — убежит`);
           break;
         case 'fuse':
           fuseTick();

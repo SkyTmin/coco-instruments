@@ -163,7 +163,7 @@ export type SimEvent =
   | { t: 'combo'; n: number }
   | { t: 'streak'; tier: number }
   | { t: 'skill'; x: number; y: number }
-  | { t: 'gold'; x: number; y: number }
+  | { t: 'gold'; x: number; y: number; mob: MobId }
   | { t: 'fuse'; x: number; y: number }
   | { t: 'charge' };
 
@@ -1280,7 +1280,7 @@ function stepDirector(sim: Sim, dt: number): void {
     if (b && spec.treasure) {
       const m = fromBurrow(sim, b, spec.treasure);
       m.mode = 'emerge';
-      sim.events.push({ t: 'gold', x: m.x, y: m.y });
+      sim.events.push({ t: 'gold', x: m.x, y: m.y, mob: m.kind });
     }
     d.goldT = 900 + sim.rng() * 900;
   }
