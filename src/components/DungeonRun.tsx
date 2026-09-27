@@ -223,6 +223,7 @@ const STATUS_LABEL: Record<string, string> = {
   slow: 'вязнешь',
   chill: 'холод',
   stun: 'оглушён',
+  charm: 'очарован',
 };
 
 const STATUS_NOTE: Record<string, string> = {
@@ -231,6 +232,7 @@ const STATUS_NOTE: Record<string, string> = {
   slow: 'Замедлен',
   chill: 'Холод сковывает',
   stun: 'Оглушён!',
+  charm: 'Очарован — ноги идут наоборот',
 };
 
 const USE_ICON: Record<Usable['kind'], GxIconName> = {

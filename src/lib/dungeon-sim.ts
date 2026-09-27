@@ -2095,6 +2095,14 @@ function stepHero(sim: Sim, dt: number, input0: SimInput): void {
   tickStatus(sim, dt);
   const stunned = (h.status.stun?.t ?? 0) > 0;
   if (stunned) input = { ...NO_INPUT };
+  // Очарован: джойстик и прицел наоборот. Рывок и удар работают — ответ есть.
+  if ((h.status.charm?.t ?? 0) > 0)
+    input = {
+      ...input,
+      mx: -input.mx,
+      my: -input.my,
+      aim: input.aim ? { x: -input.aim.x, y: -input.aim.y } : null,
+    };
 
   // Джойстик.
   let mx = input.mx;

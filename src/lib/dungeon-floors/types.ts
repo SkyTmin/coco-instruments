@@ -17,7 +17,11 @@ export const DEEP_WALLROCK = DEEP_BASE;
 export const DEEP_PYRITE = DEEP_BASE + 1;
 
 /** Статусы, которые удар или клетка вешает на героя. */
-export type StatusKind = 'poison' | 'burn' | 'slow' | 'stun' | 'chill';
+/**
+ * Статусы героя. `charm` — очарован: джойстик наоборот (суккуб, зеркало),
+ * держите его коротким (≤1,5 с) — дольше это не бой, а мучение.
+ */
+export type StatusKind = 'poison' | 'burn' | 'slow' | 'stun' | 'chill' | 'charm';
 
 /** Опасная клетка: что она делает с тем, кто стоит в ней. */
 export interface HazardSpec {

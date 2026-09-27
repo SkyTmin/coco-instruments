@@ -1672,6 +1672,9 @@
 .dgx-status__chip.is-stun {
   background: #ffe36a;
 }
+.dgx-status__chip.is-charm {
+  background: #ff8ad8;
+}
 
 /* Этажей больше пяти — два ряда по пять: номера остаются крупными. */
 .dgl-floors {
