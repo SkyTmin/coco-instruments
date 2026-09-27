@@ -21,6 +21,10 @@ import {
   walkTo,
 } from './hub-sim';
 import type { HubDoor, HubEvent, HubSim } from './hub-sim';
+import { hubFacts, RESIDENTS } from './hub-dialog';
+import { DUNGEON_START } from './dungeon';
+import { PRISON_START } from './prison';
+import { EGG_BASKET, NO_EGGS } from './pets';
 
 const IDS = Object.keys(HUB_MAPS);
 const DT = 1 / 60;
@@ -252,5 +256,47 @@ describe('площадь: ходьба', () => {
       }
       expect(reached, id).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('Барак 1: койка и личный сундук (v2.81)', () => {
+  it('в барак входят с площади, внутри дневальный и сундук у койки', () => {
+    const sq = loadMap('square');
+    expect(sq.doors.find((d) => d.to === 'barrack1')?.kind).toBe('enter');
+    const m = loadMap('barrack1');
+    expect(m.data.npcs.map((n) => n.id)).toContain('orderly');
+    const chest = m.doors.find((d) => d.to === '@bunk');
+    expect(chest?.kind).toBe('use');
+    expect(chest?.label).toBe('Мой сундук');
+  });
+
+  it('тап по сундуку — герой подходит и открывает его', () => {
+    const m = loadMap('barrack1');
+    const chest = m.doors.find((d) => d.to === '@bunk')!;
+    // Середина картинки сундука (метка `chest`) — тап по нему, а не по полу.
+    const [cx, cy] = m.data.marks.chest;
+    const sim = createHubSim({ map: 'barrack1', at: 'in' });
+    const t = hitTest(sim, cx, cy);
+    expect(t).toEqual({ kind: 'door', i: chest.i });
+    expect(walkTo(sim, t)).toBe(true);
+    const e = until(sim, (x) => x.t === 'use') as { t: 'use'; door: HubDoor } | null;
+    expect(e?.door.to).toBe('@bunk');
+  });
+
+  it('дневальный зовёт отложить лишнее, когда корзина, полка или мешочек полны', () => {
+    const calm = hubFacts(PRISON_START, DUNGEON_START, 0, 0);
+    expect(RESIDENTS.orderly.badge(calm)).toBe(false);
+    const kinds = RESIDENTS.orderly.options(calm).map((o) => o.action.kind);
+    expect(kinds).toEqual(['bunk', 'inventory']);
+    const eggs = { ...NO_EGGS, moss: EGG_BASKET };
+    const full = hubFacts({ ...PRISON_START, eggs }, DUNGEON_START, 0, 0);
+    expect(RESIDENTS.orderly.badge(full)).toBe(true);
+    expect(RESIDENTS.orderly.lines(full)[0]).toMatch(/Корзина/);
+    // Сундук забит — говорит, где взять двойной.
+    const packed = hubFacts(PRISON_START, DUNGEON_START, 0, 0, {
+      big: false,
+      slots: Array.from({ length: 27 }, () => ({ thing: { t: 'mat', id: 'skin' }, n: 1 })),
+    });
+    expect(RESIDENTS.orderly.lines(packed).join(' ')).toMatch(/Двойной/);
   });
 });

@@ -10,6 +10,7 @@ import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { DungeonRun } from '@/components/DungeonRun';
+import { Inventory } from '@/components/Inventory';
 import { AudioToggles } from '@/components/AudioToggles';
 import { useGameAudio } from '@/lib/use-game-audio';
 import type { RunEnd } from '@/components/DungeonRun';
@@ -89,6 +90,8 @@ export function DungeonPage() {
   const [view, setView] = useState<View>('lobby');
   const [end, setEnd] = useState<RunEnd | null>(null);
   const [camp, setCamp] = useState<CampTab | null>(null);
+  /** Инвентарь (v2.81) — всё добро одним экраном; сундук — в бараке. */
+  const [invOpen, setInvOpen] = useState(false);
   const [lift, setLift] = useState<AreaId>(() => entryArea(floorSel));
   const [shaftArea, setShaftArea] = useState<AreaId>(() => entryArea(floorSel));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -381,6 +384,17 @@ export function DungeonPage() {
       <span className="gx-chip" title={MATS.pyrite.name}>
         <img src={itemUrl('pyrite')} alt="" /> {fmt(d.stash.pyrite ?? 0)}
       </span>
+      <button
+        type="button"
+        className="gx-chip inv-chip"
+        aria-label="Инвентарь"
+        onClick={() => {
+          tapLight();
+          setInvOpen(true);
+        }}
+      >
+        <GxIcon name="backpack" size={18} />
+      </button>
     </>
   );
 
@@ -614,6 +628,7 @@ export function DungeonPage() {
         )}
       </div>
       {campSheet}
+      {invOpen && <Inventory place="yard" onClose={() => setInvOpen(false)} />}
     </div>
   );
 }

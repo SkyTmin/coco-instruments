@@ -1,0 +1,424 @@
+/* Инвентарь и сундук у койки (v2.81) — components/Inventory.tsx.
+   Панель, ячейки, кнопки и карточка — те же, что у инвентаря вылазки
+   (.mcinv, .mcslot, .mcbtn в theme.css): серое со скосами, белые цифры с
+   тенью. Здесь — раскладка экрана: разделы, вкладки, сундук сверху. */
+
+.inv-back {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--safe-top, 0px) + var(--content-top, 0px) + 8px) 8px
+    calc(var(--safe-bottom, 0px) + 8px);
+  background: rgba(0, 0, 0, 0.62);
+  animation: fade 0.15s ease;
+}
+
+.inv {
+  width: min(100%, 380px);
+  height: min(100%, 780px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 8px 10px;
+  border-radius: 4px;
+  background: #c6c6c6;
+  box-shadow:
+    0 0 0 2px #000,
+    inset 3px 3px 0 #ffffff,
+    inset -3px -3px 0 #555555;
+  color: #3f3f3f;
+  font:
+    13px/1.3 'GxRubik',
+    system-ui,
+    sans-serif;
+  animation: mcinv-in 0.16s ease-out both;
+}
+
+.inv__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px 6px;
+}
+.inv__head > b {
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.inv__purse {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.inv__purse > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ---- Ячейки ---------------------------------------------------------------- */
+
+.inv__grid {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 2px;
+}
+.inv-slot {
+  position: relative;
+  overflow: visible;
+}
+.inv-slot > img,
+.inv-slot > .gx-icon:not(.inv-slot__mark),
+.inv-slot > .pbook,
+.inv-slot > .inv-pearl {
+  width: 72% !important;
+  height: 72% !important;
+}
+.inv-slot > .pegg-img {
+  width: 76% !important;
+  height: 76% !important;
+  object-fit: contain;
+}
+.inv-slot > .pore-ico {
+  image-rendering: auto;
+}
+.inv-slot > .prune-ico {
+  image-rendering: auto;
+}
+.inv-px {
+  image-rendering: pixelated;
+}
+.inv-slot.is-ghost > img {
+  opacity: 0.45;
+}
+.inv-slot.is-empty {
+  cursor: default;
+}
+.inv-slot .mcslot__n {
+  right: 2px;
+  bottom: 0;
+  font-size: 11px;
+}
+.inv-slot__mark {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  color: #ffffff;
+  filter: drop-shadow(1px 1px 0 #3f3f3f);
+  pointer-events: none;
+}
+.inv-slot__bar {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 3px;
+  height: 3px;
+  background: #3f3f3f;
+  pointer-events: none;
+}
+.inv-slot__bar > i {
+  display: block;
+  height: 100%;
+  background: #80ff20;
+  transform-origin: left center;
+}
+.inv-pearl {
+  display: block;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffffff 0 18%, #f3e6ee 30%, #c9b4c6 72%, #8a7890);
+  box-shadow: 0 0 0 1px #3f3f3f;
+}
+
+/* ---- Сундук сверху (у койки) ---------------------------------------------- */
+
+.inv__chest {
+  flex: none;
+  margin-bottom: 6px;
+}
+.inv__chest .mcinv__label {
+  margin-top: 0;
+}
+.inv__chest .mcinv__label > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.inv__chest .inv__grid {
+  padding: 3px;
+  background: #6f5236;
+  box-shadow:
+    inset 2px 2px 0 #3d2a1a,
+    inset -2px -2px 0 #a07a52;
+}
+.inv__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 24px;
+  margin-top: 3px;
+  border: 0;
+  border-radius: 0;
+  background: repeating-linear-gradient(45deg, #6b6b6b 0 4px, #747474 4px 8px);
+  color: #ffffff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  text-shadow: 1px 1px 0 #3f3f3f;
+  opacity: 0.8;
+  cursor: pointer;
+}
+.inv__more.is-on {
+  opacity: 1;
+  box-shadow: 0 0 0 2px #ffffff;
+}
+
+/* ---- Вкладки разделов ----------------------------------------------------- */
+
+.inv__tabs {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.inv__tab {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #8b8b8b;
+  box-shadow:
+    inset 2px 2px 0 #dbdbdb,
+    inset -2px -2px 0 #555555;
+  color: #ffffff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.inv__tab:active {
+  transform: translateY(1px);
+}
+.inv__tab .gx-icon {
+  filter: drop-shadow(1px 1px 0 #3f3f3f);
+}
+.inv__tab.is-empty .gx-icon {
+  opacity: 0.5;
+}
+.inv__tab > i {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 1px 1px 0 #3f3f3f;
+  font-variant-numeric: tabular-nums;
+}
+.inv__tab-full {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff5555;
+  box-shadow: 0 0 0 1px #3f3f3f;
+}
+
+/* ---- Разделы -------------------------------------------------------------- */
+
+.inv__scroll {
+  flex: 1 1 auto;
+  min-height: 90px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 1px 4px;
+  scrollbar-width: thin;
+}
+.inv__sec + .inv__sec {
+  margin-top: 8px;
+}
+.inv__sec-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  margin: 0 2px 3px;
+}
+.inv__sec-head > .gx-icon {
+  color: #3f3f3f;
+}
+.inv__sec-head > b {
+  font-weight: 800;
+}
+.inv__lims {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px 8px;
+}
+.inv-lim {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #555555;
+  white-space: nowrap;
+}
+.inv-lim > b {
+  color: #3f3f3f;
+  font-variant-numeric: tabular-nums;
+}
+.inv-lim > i {
+  display: block;
+  width: 34px;
+  height: 5px;
+  background: #3f3f3f;
+}
+.inv-lim > i > i {
+  display: block;
+  height: 100%;
+  background: #80ff20;
+  transform-origin: left center;
+}
+.inv-lim.is-full > b {
+  color: #b02020;
+}
+.inv-lim.is-full > i > i {
+  background: #ff5555;
+}
+.inv__empty {
+  display: block;
+  margin: 0 4px;
+  font-size: 11px;
+  color: #6f6f6f;
+}
+
+/* ---- Карточка вещи -------------------------------------------------------- */
+
+.inv__info {
+  flex: none;
+  min-height: 86px;
+  margin-top: 6px;
+}
+.inv__info .mcinv__stat .gx-icon {
+  color: #55ffff;
+}
+/* Рюкзак вылазки: смерть его заберёт — строка места красная. */
+.inv__info .mcinv__stat.is-risk,
+.inv__info .mcinv__stat.is-risk .gx-icon {
+  color: #ff7a6a;
+}
+.inv__note {
+  color: #55ff55;
+  font-weight: 700;
+  animation: inv-note 0.2s ease-out both;
+}
+.inv__note.is-bad {
+  color: #ff7a6a;
+}
+@keyframes inv-note {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+.inv .mcbtn {
+  min-width: 70px;
+}
+.inv .mcbtn.is-armed {
+  box-shadow:
+    0 0 0 1px #000,
+    0 0 0 3px #ffd24a,
+    inset 2px 2px 0 #aaaaaa,
+    inset -2px -2px 0 #3f3f3f;
+}
+
+/* ---- Узкий и низкий экран -------------------------------------------------- */
+
+@media (max-height: 700px) {
+  .inv__tab {
+    height: 28px;
+  }
+  .inv__info {
+    min-height: 76px;
+  }
+}
+
+/* ---- Пометка в инвентаре вылазки (DungeonInventory) ----------------------- */
+
+.mcinv__warn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 2px 0;
+  padding: 4px 8px;
+  background: #4a1414;
+  box-shadow:
+    inset 1px 1px 0 #7a2a2a,
+    inset -1px -1px 0 #2a0a0a;
+  color: #ffd0c8;
+  font-size: 12px;
+  font-weight: 700;
+}
+.mcinv__warn .gx-icon {
+  flex: none;
+  color: #ff7a6a;
+}
+.mcinv__all {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 2px;
+  background: #6f6f6f;
+  box-shadow:
+    0 0 0 1px #000,
+    inset 2px 2px 0 #aaaaaa,
+    inset -2px -2px 0 #3f3f3f;
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  text-shadow: 1px 1px 0 #3f3f3f;
+  cursor: pointer;
+}
+
+/* ---- Кнопка-фишка инвентаря (лобби подземелья) ----------------------------- */
+
+.gx-chip.inv-chip {
+  border: 0;
+  padding: 0 9px;
+  cursor: pointer;
+  transition: transform 70ms ease-out;
+}
+.gx-chip.inv-chip:active {
+  transform: translateY(2px);
+}
+.gx-chip.inv-chip .gx-icon {
+  color: var(--gx-gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inv,
+  .inv-back,
+  .inv__note {
+    animation: none;
+  }
+}

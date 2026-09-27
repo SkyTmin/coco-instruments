@@ -22,6 +22,7 @@ import {
 } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { ForgeScreen, forgeReadyNow } from '@/components/ForgeScreen';
+import { Inventory } from '@/components/Inventory';
 import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { BatLayer, MagpieLayer, TreasurePanel } from '@/components/Critters';
 import { MinePets } from '@/components/MinePets';
@@ -304,6 +305,8 @@ export function PrisonPage() {
   const [sheet, setSheet] = useState<Sheetname>(null);
   const [screen, setScreen] = useState<{ key: Screen; tab: CampTab } | null>(null);
   const [forgeOpen, setForgeOpen] = useState(false);
+  /** Инвентарь (v2.81): всё добро одним экраном. */
+  const [invOpen, setInvOpen] = useState(false);
   const openScreen = (key: Screen, tab?: CampTab) => {
     tapLight();
     setScreen({ key, tab: tab ?? SCREENS[key].only[0] });
@@ -1683,6 +1686,19 @@ export function PrisonPage() {
               <GxIcon name="forest" />
             </button>
           )}
+          {/* Инвентарь — в той же строке, где была кнопка леса: высота над
+              полем не меняется (см. «Шахта v2.67.2», --below). */}
+          <button
+            type="button"
+            className="gx-round gx-round--dark pmx-top__btn"
+            aria-label="Инвентарь"
+            onClick={() => {
+              tapLight();
+              setInvOpen(true);
+            }}
+          >
+            <GxIcon name="backpack" />
+          </button>
           <button
             type="button"
             className="gx-round gx-round--dark pmx-top__btn"
@@ -2144,6 +2160,9 @@ export function PrisonPage() {
         />
       )}
       {forgeOpen && <ForgeScreen onClose={() => setForgeOpen(false)} onSpend={settleBalance} />}
+      {invOpen && (
+        <Inventory place="mine" onClose={() => setInvOpen(false)} onUse={(id) => applyItem(id)} />
+      )}
 
       {sheet === 'mines' && (
         <GxModal title="Этажи" onClose={() => setSheet(null)} className="pmx-mines">

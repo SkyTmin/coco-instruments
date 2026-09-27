@@ -9,7 +9,7 @@
 // страница не считает одно и то же в двух местах.
 
 import type { CampTab } from '@/components/PrisonCamp';
-import { MAGE_LINES } from './books';
+import { MAGE_LINES, SHELF_MAX } from './books';
 import { bossReadyAt, dungeonOpen, DUNGEON_UNLOCK_RANK } from './dungeon';
 import type { DungeonState } from './dungeon';
 import {
@@ -32,6 +32,10 @@ import {
   zoneTier,
 } from './prison';
 import type { PrisonState } from './prison';
+import { RUNE_BAG } from './prison';
+import { EGG_BASKET, eggCount } from './pets';
+import { BUNK_BIG_PRICE, bunkSize, bunkUsed } from './inventory';
+import type { BunkState } from './inventory';
 import { barygaBought, barygaLots, barygaWindow, BARYGA_MS } from './yard';
 
 /** Что открывает кнопка разговора. */
@@ -40,7 +44,11 @@ export type HubAction =
   | { kind: 'camp'; tabs: CampTab[]; title: string }
   | { kind: 'baryga' }
   | { kind: 'zone' }
-  | { kind: 'route'; path: string };
+  | { kind: 'route'; path: string }
+  /** Личный сундук у койки (v2.81). */
+  | { kind: 'bunk' }
+  /** Инвентарь — всё добро одним экраном (v2.81). */
+  | { kind: 'inventory' };
 
 export interface HubOption {
   label: string;
@@ -85,6 +93,14 @@ export interface HubFacts {
   zoneOn: boolean;
   zoneMs: number;
   zoneRock: string;
+  /** Хранилища, упёршиеся в край: следующая вещь разобьётся (v2.81). */
+  eggsFull: boolean;
+  shelfFull: boolean;
+  runesFull: boolean;
+  /** Сундук у койки: занято, всего, двойной ли. */
+  bunkUsed: number;
+  bunkSize: number;
+  bunkBig: boolean;
 }
 
 export function hubFacts(
@@ -92,6 +108,7 @@ export function hubFacts(
   d: Pick<DungeonState, 'run' | 'bosses'>,
   coins: number,
   now = Date.now(),
+  bunk: Pick<BunkState, 'big' | 'slots'> = { big: false, slots: [] },
 ): HubFacts {
   const w = barygaWindow(now);
   const lots = barygaLots(w, p);
@@ -141,6 +158,12 @@ export function hubFacts(
     zoneOn: p.zone.on,
     zoneMs: zoneLeft(p.zone, now),
     zoneRock: ROCKS[zoneMineId(p.prestige)]?.name ?? '',
+    eggsFull: eggCount(p.eggs) >= EGG_BASKET,
+    shelfFull: p.books.length >= SHELF_MAX,
+    runesFull: p.runes.length >= RUNE_BAG,
+    bunkUsed: bunkUsed(bunk as BunkState),
+    bunkSize: bunkSize(bunk),
+    bunkBig: bunk.big,
   };
 }
 
@@ -181,6 +204,15 @@ function pick2(pool: string[], now: number): string[] {
 }
 
 const camp = (tabs: CampTab[], title: string): HubAction => ({ kind: 'camp', tabs, title });
+
+/** Присказки дневального — по одной, разные в разные минуты. */
+const ORDERLY_LINES = [
+  'Сапоги у порога, не на койку.',
+  'Печку не трогай — я топлю.',
+  'Отбой в десять. Кто храпит — тот дневалит.',
+  'Чужой сундук не открывают. Свой — пожалуйста.',
+  'Умывальник общий, мыло своё.',
+];
 
 export const RESIDENTS: Record<string, Resident> = {
   smith: {
@@ -362,6 +394,39 @@ export const RESIDENTS: Record<string, Resident> = {
       { label: 'Коллекция', action: camp(['finds'], 'Коллекция') },
     ],
     badge: (f) => f.miles > 0 || f.perksFree > 0,
+  },
+  // Дневальный Барака 1 (v2.81): стоит у тумбочки, стережёт койки. Дело у
+  // него одно — чтобы добро не пропадало: корзина, полка или мешочек полны
+  // — следующая вещь разобьётся, и он зовёт отложить лишнее в сундук.
+  orderly: {
+    id: 'orderly',
+    name: 'Дневальный',
+    sheet: 'orderly',
+    lines: (f) => {
+      const out: string[] = [];
+      if (f.eggsFull) out.push('Корзина яиц полна — новое разобьётся. Отложи в сундук.');
+      if (f.shelfFull) out.push('Полка книг забита. Лишние — в сундук, пока не рассыпались.');
+      if (f.runesFull) out.push('Мешочек рун полон. Сундук под койкой — туда.');
+      if (f.bunkUsed >= f.bunkSize)
+        out.push(
+          f.bunkBig
+            ? 'Сундук набит под крышку. Разбери, что лишнее.'
+            : `Сундук полон. Двойной — ${shortMoney(BUNK_BIG_PRICE)} монет, у меня.`,
+        );
+      if (!out.length)
+        out.push(
+          f.bunkUsed === 0
+            ? 'Твоя койка — у двери. Сундук под ней, клади что хочешь.'
+            : `В сундуке занято ${f.bunkUsed} из ${f.bunkSize}. Всё цело, я слежу.`,
+        );
+      out.push(pick2(ORDERLY_LINES, f.now)[0]);
+      return out.slice(0, 3);
+    },
+    options: () => [
+      { label: 'Мой сундук', action: { kind: 'bunk' } },
+      { label: 'Инвентарь', action: { kind: 'inventory' } },
+    ],
+    badge: (f) => f.eggsFull || f.shelfFull || f.runesFull,
   },
   croupier: {
     id: 'croupier',
