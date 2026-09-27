@@ -1,13 +1,381 @@
-// Этаж 3 — заготовка каркаса. Агент этажа заменяет этот файл целиком.
-import { stubFloor } from './stub';
+// Этаж 3 — «Затопленная бездна». Мотив — вертикальная бездна, красивая и
+// смертельная: светящиеся друзы, затопленные штреки, хищники, которые
+// подражают голосам, и проклятие, которое бьёт на ПОДЪЁМЕ (герой идёт к
+// лифту — на юг карты — с грузом, и бездна тянет его назад).
+//
+// Данные этажа: районы, монстры, босс, шахты, мясо и материалы. ИИ и
+// сценарий — `f3-brains.ts`, рисунок — `f3-art.ts`, карта —
+// `scripts/dungeon/f3.py` → `f3-map.ts`. Правила — `scripts/dungeon/README.md`.
 
-export const F3 = stubFloor({
+import type { MobDef } from '../dungeon';
+import { MAP_F3_DEPTH, MAP_F3_RIM } from './f3-map';
+import type { FloorDef, LegendCell } from './types';
+
+/** Свои виды клеток этажа (`LegendCell.mark`): их различают ИИ и рисовальщик. */
+export const F3_MARK = {
+  water: 1,
+  shallow: 2,
+  abyss: 3,
+  tide: 5,
+  lake: 6,
+  pool: 7,
+  spring: 9,
+  bridgeH: 10,
+  bridgeV: 11,
+  fall: 12,
+  glow: 13,
+} as const;
+
+const M = F3_MARK;
+
+/** Буквы карты этажа (см. шапку `scripts/dungeon/f3.py`). */
+const LEGEND: Record<string, LegendCell> = {
+  w: { tile: 'deep', mark: M.water },
+  p: { tile: 'deep', mark: M.pool },
+  s: { tile: 'hazard', mark: M.shallow, hazard: { slow: 0.62 } },
+  A: { tile: 'deep', mark: M.abyss },
+  H: { tile: 'floor', mark: M.bridgeH },
+  I: { tile: 'floor', mark: M.bridgeV },
+  k: {
+    tile: 'floor',
+    obj: { kind: 'deco', ref: 'f3_crystal', solid: 0.3, light: { r: 3.2, tint: 'teal' } },
+  },
+  q: {
+    tile: 'floor',
+    obj: { kind: 'deco', ref: 'f3_crystal_v', solid: 0.3, light: { r: 3, tint: 'violet' } },
+  },
+  d: { tile: 'floor', obj: { kind: 'breakable', ref: 'f3_druse', hp: 3, solid: 0.34 } },
+  g: {
+    tile: 'floor',
+    mark: M.spring,
+    obj: { kind: 'deco', ref: 'f3_spring', solid: 0 },
+    light: { r: 2.8, tint: 'teal' },
+  },
+  h: { tile: 'floor', mark: M.tide },
+  r: { tile: 'deep', mark: M.lake },
+  W: { tile: 'wall', mark: M.fall },
+  j: { tile: 'floor', mark: M.glow, light: { r: 3.4, tint: 'teal' } },
+  x: { tile: 'floor', obj: { kind: 'deco', ref: 'f3_bones', solid: 0 } },
+  U: { tile: 'floor', obj: { kind: 'deco', ref: 'f3_pillar', solid: 0.36 } },
+};
+
+const MOBS: MobDef[] = [
+  {
+    // Пересмешник: кружит над водой и пропастью, зовёт чужим голосом к
+    // засаде, пикирует по линии; после пике — миг на земле.
+    id: 'f3_mocker',
+    name: 'Пересмешник',
+    many: 'пересмешников',
+    hp: 18,
+    dmg: 11,
+    speed: 4.2,
+    radius: 0.3,
+    windup: 0.6,
+    reach: 0.5,
+    rest: 1.4,
+    xp: 8,
+    meat: ['f3_meat', 0.3, 1],
+    mats: [['f3_feather', 0.4]],
+    beast: true,
+    brain: 'f3_mocker',
+    art: { kind: 'paint', id: 'f3_mocker' },
+    fly: true,
+    mass: 0.8,
+    flinch: 0.6,
+    stunT: 0.3,
+    eye: '#ff6a4a',
+    gore: ['#3e4c5a', '#d8d2c0', '#7a1c1c'],
+  },
+  {
+    // Шар-копьё: сворачивается, разгоняется по линии (метка растёт) и
+    // проносится насквозь; в стену — застревает иглой.
+    id: 'f3_spear',
+    name: 'Шар-копьё',
+    many: 'шаров-копий',
+    hp: 34,
+    dmg: 15,
+    speed: 2.4,
+    radius: 0.34,
+    windup: 1.0,
+    reach: 0.4,
+    rest: 1.6,
+    xp: 10,
+    meat: ['f3_meat', 0.6, 1],
+    mats: [['f3_spine', 0.45]],
+    beast: true,
+    brain: 'f3_spear',
+    art: { kind: 'paint', id: 'f3_spear' },
+    mass: 1.8,
+    flinch: 0.25,
+    stunT: 0.3,
+    eye: '#ffc860',
+    gore: ['#8e6a3a', '#e6dcc4', '#6a1c14'],
+  },
+  {
+    // Омутник: сидит в омуте (недосягаем), выныривает хватом у берега —
+    // круг на месте героя, потом тянет к воде; вынырнул — открыт.
+    id: 'f3_grasp',
+    name: 'Омутник',
+    many: 'омутников',
+    hp: 44,
+    dmg: 17,
+    speed: 2.6,
+    radius: 0.36,
+    windup: 0.8,
+    reach: 1.0,
+    rest: 2.4,
+    xp: 13,
+    meat: ['f3_fish', 0.8, 2],
+    mats: [['f3_pearl', 0.12]],
+    beast: true,
+    brain: 'f3_grasp',
+    art: { kind: 'paint', id: 'f3_grasp' },
+    fly: true,
+    mass: 3,
+    flinch: 0,
+    stunT: 0.3,
+    eye: '#c8ff6a',
+    gore: ['#4a6a5a', '#9ab8a0', '#1c3a2c'],
+  },
+  {
+    // Друзовый краб: светится, панцирь спереди держит удар — бей сбоку и со
+    // спины или после удара клешнёй, пока она в земле.
+    id: 'f3_crab',
+    name: 'Друзовый краб',
+    many: 'друзовых крабов',
+    hp: 50,
+    dmg: 15,
+    speed: 1.8,
+    radius: 0.4,
+    windup: 0.65,
+    reach: 0.55,
+    rest: 1.4,
+    xp: 12,
+    meat: ['f3_crabmeat', 0.6, 1],
+    mats: [['f3_chitin', 0.5]],
+    beast: true,
+    brain: 'f3_crab',
+    art: { kind: 'paint', id: 'f3_crab' },
+    light: 2.4,
+    mass: 2.6,
+    flinch: 0,
+    stunT: 0.25,
+    eye: '#d8b8ff',
+    gore: ['#463a62', '#b88cff', '#1c1428'],
+  },
+  {
+    // Туманка: медуза, плывёт по воздуху, оставляет ледяные облака; лопнув,
+    // выпускает облако побольше.
+    id: 'f3_jelly',
+    name: 'Туманка',
+    many: 'туманок',
+    hp: 16,
+    dmg: 9,
+    speed: 1.2,
+    radius: 0.3,
+    windup: 0.5,
+    reach: 0.3,
+    rest: 1.8,
+    xp: 6,
+    meat: null,
+    mats: [],
+    beast: true,
+    brain: 'f3_jelly',
+    art: { kind: 'paint', id: 'f3_jelly' },
+    fly: true,
+    light: 2.6,
+    mass: 0.5,
+    flinch: 1,
+    stunT: 0.5,
+    eye: '#e8fdff',
+    gore: ['#7ae8ff', '#d8fbff', '#3aa8c8'],
+  },
+  {
+    // Алая пасть: хищник озера арены. Под водой недосягаема, прыгает на
+    // берег (круг приземления), лежит на берегу — окно; с половины бьёт
+    // хвостом волной и поднимает воду; в ярости прыгает сериями.
+    id: 'f3_maw',
+    name: 'Алая пасть',
+    many: 'Алых пастей',
+    hp: 1400,
+    dmg: 20,
+    speed: 3,
+    radius: 0.85,
+    windup: 0.8,
+    reach: 0.6,
+    rest: 1.2,
+    xp: 700,
+    meat: ['f3_fish', 1, 10],
+    mats: [],
+    beast: true,
+    brain: 'f3_maw',
+    art: { kind: 'paint', id: 'f3_maw' },
+    fly: true,
+    mass: 12,
+    boss: true,
+    noAlbino: true,
+    light: 2.6,
+    eye: '#ffb030',
+    gore: ['#b01e24', '#ff7a3a', '#5a0c10'],
+  },
+];
+
+/** Облик: холодная бирюза, туман бездны за краем света. */
+const RIM_SKIN = {
+  floor: 'ground' as const,
+  wall: 'rock' as const,
+  tint: { mul: [0.74, 0.92, 1.06] as [number, number, number], mix: '#0e3a46', k: 0.2 },
+  fog: '#04161c',
+};
+const DEPTH_SKIN = {
+  floor: 'ground' as const,
+  wall: 'rock' as const,
+  tint: { mul: [0.66, 0.84, 1.04] as [number, number, number], mix: '#0a2238', k: 0.26 },
+  fog: '#020b16',
+};
+
+export const F3: FloorDef = {
   id: 3,
-  name: 'Этаж 3',
-  lead: 'Ещё не открыт.',
-  mob: { id: 'f3mob', name: 'Болотник', many: 'болотников', x72: 'tiny_zombie' },
-  boss: { id: 'f3boss', name: 'Великан', x72: 'big_zombie' },
-  mat: { id: 'f3mat', name: 'Трофей третьего этажа' },
-  ores: [4, 5],
-  skin: { floor: 'ground', wall: 'rock', tint: { mul: [0.8, 0.95, 1.1] } },
-});
+  name: 'Затопленная бездна',
+  lead: 'Отвесная бездна в воде и друзах. Голоса в темноте лгут, а подъём с грузом тянет назад.',
+  mapVer: 1,
+  areas: [
+    {
+      id: 'f3rim',
+      name: 'Край Бездны',
+      lead: 'Бирюзовый грот и Великий обрыв. Вверх с грузом — тяжело.',
+      tier: 5,
+      level: 4,
+      ambient: 0.44,
+      rows: MAP_F3_RIM,
+      skin: RIM_SKIN,
+      legend: LEGEND,
+      mine: 'f3mine1',
+      spawn: {
+        mobs: [
+          ['f3_spear', 34],
+          ['f3_mocker', 26],
+          ['f3_crab', 22],
+          ['f3_jelly', 18],
+        ],
+        density: 0.9,
+        pack: [1, 2],
+        filler: 'f3_jelly',
+        group: (i, _n, rnd) => (i === 0 || rnd() < 0.6 ? 'f3_crab' : 'f3_spear'),
+        horde: null,
+        treasure: null,
+        nest: () => 'f3_jelly',
+      },
+    },
+    {
+      id: 'f3depth',
+      name: 'Затопленные уступы',
+      lead: 'Водопады, Эхо-зал и Алое озеро. Не иди на зов.',
+      tier: 6,
+      level: 5,
+      ambient: 0.36,
+      rows: MAP_F3_DEPTH,
+      skin: DEPTH_SKIN,
+      legend: LEGEND,
+      mine: 'f3mine2',
+      spawn: {
+        mobs: [
+          ['f3_mocker', 30],
+          ['f3_spear', 26],
+          ['f3_crab', 24],
+          ['f3_jelly', 20],
+        ],
+        density: 1.1,
+        pack: [1, 2],
+        filler: 'f3_jelly',
+        group: (i, _n, rnd) => (i === 0 ? 'f3_crab' : rnd() < 0.5 ? 'f3_mocker' : 'f3_crab'),
+        horde: null,
+        treasure: null,
+        nest: () => 'f3_jelly',
+      },
+    },
+  ],
+  boss: {
+    id: 'f3_maw',
+    name: 'Алая пасть',
+    lead: 'Алое озеро на дне Затопленных уступов',
+    area: 'f3depth',
+    restMs: 20 * 60_000,
+    mob: 'f3_maw',
+    script: 'f3_maw',
+    parts: ['f3_maw'],
+    loot: (rnd) => ({
+      tokens: 40 + Math.floor(rnd() * 30),
+      keys: rnd() < 0.5 ? 1 : 0,
+      coins: 24_000,
+      mats: {
+        f3_fang: 1,
+        f3_chitin: 3 + Math.floor(rnd() * 3),
+        f3_pearl: rnd() < 0.5 ? 1 : 0,
+      },
+    }),
+  },
+  mines: [
+    {
+      id: 'f3mine1',
+      name: 'Угольная штольня',
+      area: 'f3rim',
+      windowMs: 60 * 60_000,
+      ores: [4, 5],
+      share: [0.18, 0.24, 0.3, 0.38, 0.46],
+      pyrite: 0,
+      blocks: 1.5,
+    },
+    {
+      id: 'f3mine2',
+      name: 'Медный забой',
+      area: 'f3depth',
+      windowMs: 3 * 60 * 60_000,
+      ores: [4, 5],
+      share: [0.24, 0.32, 0.4, 0.48, 0.56],
+      pyrite: 0,
+      blocks: 2.2,
+    },
+  ],
+  mobs: MOBS,
+  meats: [
+    { id: 'f3_meat', name: 'Мясо бездны', price: 30, heal: 0.18 },
+    { id: 'f3_fish', name: 'Рыба омута', price: 38, heal: 0.22 },
+    { id: 'f3_crabmeat', name: 'Крабовая мякоть', price: 45, heal: 0.28 },
+  ],
+  mats: [
+    {
+      id: 'f3_feather',
+      name: 'Перо пересмешника',
+      price: 90,
+      lead: 'Шелестит чужими голосами. На лёгкую броню.',
+    },
+    {
+      id: 'f3_spine',
+      name: 'Игла шар-копья',
+      price: 110,
+      lead: 'Прочнее стали на излом. На наконечники.',
+    },
+    {
+      id: 'f3_chitin',
+      name: 'Друзовый хитин',
+      price: 130,
+      lead: 'Панцирь в кристаллах — светится в темноте. На щиты и каски.',
+    },
+    {
+      id: 'f3_pearl',
+      name: 'Жемчуг омута',
+      price: 400,
+      lead: 'Редкость со дна омутов. На оберег от проклятия подъёма.',
+    },
+    {
+      id: 'f3_fang',
+      name: 'Клык Алой пасти',
+      price: 15_000,
+      lead: 'Трофей. Нужен, чтобы перековать снаряжение для глубин.',
+      stack: 1,
+    },
+  ],
+  music: { explore: 'depths', boss: 'boss' },
+  cover: '/ui/areas/f3rim.png',
+};
