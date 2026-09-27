@@ -21,3 +21,8 @@ npm-debug.log*
 .env
 .env.local
 *.local
+
+# Sources of the prison square (scripts/hub/fetch.sh)
+scripts/hub/.src/
+scripts/hub/.out/
+__pycache__/
