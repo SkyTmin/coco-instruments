@@ -52,6 +52,7 @@ import {
   handleRate,
   HANDLES,
   ITEMS,
+  itemPrice,
   PERKS,
   perkPointsFree,
   PICKS,
@@ -565,35 +566,39 @@ function ShopTab() {
           ))}
         </div>
       </div>
-      {ITEMS.filter((it) => it.price > 0).map((it) => (
-        <Row
-          key={it.id}
-          icon={<ItemIcon id={it.id} size={30} />}
-          title={
-            <>
-              {it.name} {p.items[it.id] > 0 && <span className="pench-lvl">×{p.items[it.id]}</span>}
-            </>
-          }
-          text={it.text}
-          action={
-            <Buy
-              token
-              price={it.price * pack}
-              count={pack}
-              can={p.tokens >= it.price * pack}
-              onClick={() => {
-                primeAudio();
-                if (!prisonBuyItem(it.id, pack)) {
-                  notifyWarning();
-                  return;
-                }
-                coinDing();
-                tapLight();
-              }}
-            />
-          }
-        />
-      ))}
+      {ITEMS.filter((it) => itemPrice(it.id, p.rank, p.prestige) > 0).map((it) => {
+        const price = itemPrice(it.id, p.rank, p.prestige);
+        return (
+          <Row
+            key={it.id}
+            icon={<ItemIcon id={it.id} size={30} />}
+            title={
+              <>
+                {it.name}{' '}
+                {p.items[it.id] > 0 && <span className="pench-lvl">×{p.items[it.id]}</span>}
+              </>
+            }
+            text={it.text}
+            action={
+              <Buy
+                token
+                price={price * pack}
+                count={pack}
+                can={p.tokens >= price * pack}
+                onClick={() => {
+                  primeAudio();
+                  if (!prisonBuyItem(it.id, pack)) {
+                    notifyWarning();
+                    return;
+                  }
+                  coinDing();
+                  tapLight();
+                }}
+              />
+            }
+          />
+        );
+      })}
     </div>
   );
 }

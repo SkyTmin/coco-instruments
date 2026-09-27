@@ -133,7 +133,7 @@ import {
   freshMine,
   FIND_DUP_TOKENS,
   FRENZY_MS,
-  itemOf,
+  itemPrice,
   NO_PERKS,
   perkPointsFree,
   PERKS,
@@ -4654,9 +4654,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   prisonBuyItem: (id, n = 1) => {
     const p = get().prison;
     const count = Math.max(1, Math.floor(n));
-    const price = itemOf(id).price * count;
+    const price = itemPrice(id, p.rank, p.prestige) * count;
+    if (price <= 0) return false;
     if (p.tokens < price) return false;
-    const prison = { ...p, tokens: p.tokens - price, items: { ...p.items, [id]: p.items[id] + count } };
+    const prison = {
+      ...p,
+      tokens: p.tokens - price,
+      items: { ...p.items, [id]: p.items[id] + count },
+    };
     set({ prison });
     persistPrison(prison);
     return true;

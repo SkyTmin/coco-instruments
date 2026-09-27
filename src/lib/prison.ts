@@ -18,6 +18,7 @@ import {
   BLOCK_PRICE,
   blocksPerField,
   CREW_PRICE,
+  ITEM_PRICE,
   nice,
   ORE_PRICE,
   PICKS,
@@ -1997,27 +1998,39 @@ export interface Item {
   name: string;
   text: string;
   glyph: string;
-  /** Цена в лавке, токенов. */
-  price: number;
 }
 
 export const ITEMS: Item[] = [
-  { id: 'bomb3', name: 'Бомба', text: 'Сносит 3×3 на ярус', glyph: '💣', price: 25 },
-  { id: 'bomb5', name: 'Динамит', text: 'Сносит 5×5 на ярус', glyph: '🧨', price: 70 },
-  { id: 'charge', name: 'Заряд', text: 'Снимает весь верхний ярус', glyph: '💥', price: 180 },
-  { id: 'energy', name: 'Энергетик', text: 'Кирка вдвое быстрее минуту', glyph: '⚡', price: 40 },
-  { id: 'lens', name: 'Лупа', text: 'Полторы минуты видно ярус ниже', glyph: '🔍', price: 20 },
-  // Крепь в лавке не продаётся (цена 0): её сбивают на лесопилке из досок.
+  { id: 'bomb3', name: 'Бомба', text: 'Сносит 3×3 на ярус', glyph: '💣' },
+  { id: 'bomb5', name: 'Динамит', text: 'Сносит 5×5 на ярус', glyph: '🧨' },
+  { id: 'charge', name: 'Заряд', text: 'Снимает весь верхний ярус', glyph: '💥' },
+  { id: 'energy', name: 'Энергетик', text: 'Кирка вдвое быстрее минуту', glyph: '⚡' },
+  { id: 'lens', name: 'Лупа', text: 'Полторы минуты видно ярус ниже', glyph: '🔍' },
+  // Крепь в лавке не продаётся (`itemPrice` — 0): её сбивают на лесопилке из досок.
   {
     id: 'prop',
     name: 'Крепь',
     text: 'Десять минут каждый второй блок — порода выше',
     glyph: '⛩',
-    price: 0,
   },
 ];
 
 export const itemOf = (id: ItemId): Item => ITEMS.find((i) => i.id === id)!;
+
+/** Горизонт ранга `rank`: 0 — Верхние штольни … 4 — Алмазное дно. */
+export const horizonIndex = (rank: number) =>
+  HORIZONS.reduce((at, h, i) => (rank >= h.from ? i : at), 0);
+
+/**
+ * Цена расходника в лавке на ранге `rank`, токенов; 0 — не продаётся. После
+ * престижа — цена последнего горизонта: кирка, чары и питомцы остаются, и на
+ * ранге A токены идут так же быстро, как на дне.
+ */
+export function itemPrice(id: ItemId, rank: number, prestige = 0): number {
+  if (id === 'prop') return 0;
+  const row = ITEM_PRICE[id];
+  return prestige > 0 ? row[row.length - 1] : row[horizonIndex(rank)];
+}
 
 export type Items = Record<ItemId, number>;
 

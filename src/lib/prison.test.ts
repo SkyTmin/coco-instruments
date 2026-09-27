@@ -70,6 +70,12 @@ import {
   rankLetter,
   ROCKS,
   TOKEN_CHANCE,
+  itemPrice,
+  ENERGY_MS,
+  ENERGY_RATE,
+  HORIZONS,
+  horizonIndex,
+  HAMMER_EXTRA,
 } from './prison';
 import type {
   CaseTier,
@@ -141,6 +147,7 @@ import {
   BPS,
   RANK_PRICE,
   RANK_WORK,
+  ITEM_PRICE,
 } from './economy';
 import {
   anvil,
@@ -192,6 +199,15 @@ const lcg = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) /
  * и водит самого выгодного питомца — всё, что множит доход, обязано
  * пройти через этот прогон, иначе темп в тесте врёт.
  */
+/** Расходники, которые понимает симуляция: у лупы нет «блоков», её не мерить. */
+type SimItem = 'energy' | 'bomb3' | 'bomb5' | 'charge';
+/** Сколько блоков сносит расходник: 3×3, 5×5, весь ярус без закрытых клеток. */
+const SIM_BLOCKS: Record<Exclude<SimItem, 'energy'>, number> = {
+  bomb3: 9,
+  bomb5: 25,
+  charge: HAMMER_EXTRA,
+};
+
 function run(
   opts: {
     buyPicks?: boolean;
@@ -203,6 +219,13 @@ function run(
     bookLuck?: boolean;
     /** Покупать яйца в Питомнике (v2.72). */
     eggShop?: boolean;
+    /**
+     * Лавка (v2.75.2): расходник, который игрок берёт при каждой
+     * возможности. `only` — все токены на него, книг нет; `first` — сперва
+     * он (энергетик — как только кончился прошлый, бомба — раз в секунду),
+     * книги на остаток. `price` — цена по рангу для подбора таблицы.
+     */
+    shop?: { id: SimItem; mode: 'only' | 'first'; price?: (rank: number) => number };
   } = {},
 ) {
   const until = opts.until ?? LAST_RANK;
@@ -250,6 +273,8 @@ function run(
   const tPick: number[] = [];
   /** Сколько монет пришло за ранг (без трат) — средний доход ранга. */
   const gained: number[] = [];
+  /** Сколько токенов пришло за ранг (без трат) — для цен лавки. */
+  const tokGot: number[] = [];
   const workBy: number[] = [];
   /** Блоков в секунду на каждом этаже — для таблицы `BPS`. */
   const bpsBy: number[] = [];
@@ -463,13 +488,34 @@ function run(
       applied += 1;
     } else burned += 1;
   };
+  let energyLeft = 0;
+  let shopBought = 0;
   while (rank < until && t < 40 * 3600) {
-    const m = mods(ench);
+    const tok0 = tokens;
+    const base = mods(ench);
+    // Бомба — это её блоки сверх того, что кирка сломала за эту секунду:
+    // весь доход секунды пропорционален блокам, поэтому хватает поднять темп.
+    let boost = 1;
+    const sh = opts.shop;
+    if (sh && (sh.id !== 'energy' || energyLeft <= 0)) {
+      const price = (sh.price ?? ((k) => itemPrice(sh.id, k)))(rank);
+      if (tokens >= price) {
+        tokens -= price;
+        shopBought += 1;
+        if (sh.id === 'energy') energyLeft = ENERGY_MS / 1000;
+        else boost = 1 + SIM_BLOCKS[sh.id] / (blockRate(rank, pick, base) * 0.92);
+      }
+    }
+    if (energyLeft > 0) {
+      boost *= ENERGY_RATE;
+      energyLeft -= 1;
+    }
+    const m = boost > 1 ? { ...base, rate: base.rate * boost } : base;
     const mine = rank;
     if (floorAt[mine] === undefined) floorAt[mine] = t;
     const bps = blockRate(mine, pick, m) * 0.92;
     bpsBy[mine] = bps;
-    let perSec = income(ench, mine) * 0.92 * (1 + sessionStreak(bps));
+    let perSec = incomeRate(mine, pick, m) * 0.92 * (1 + sessionStreak(bps));
     // Ящик кузнеца: руда следующей кирки не продаётся, а откладывается —
     // её цена выпадает из дохода, пока рецепт не наберётся.
     const next = PICKS[pick + 1];
@@ -565,7 +611,8 @@ function run(
         equip();
       }
     }
-    if (opts.enchants !== false && t % 20 === 0) {
+    tokGot[rank] = (tokGot[rank] ?? 0) + tokens - tok0;
+    if (opts.enchants !== false && opts.shop?.mode !== 'only' && t % 20 === 0) {
       // Чародей: ярус с лучшим ожидаемым приростом дохода на токен. Книга
       // случайна — чара, уровень и шанс бросаются тем же ГСЧ.
       for (let buys = 0; buys < 4; buys++) {
@@ -673,6 +720,8 @@ function run(
     tWork,
     tPick,
     gained,
+    tokGot,
+    shopBought,
     oreAt,
     readyAt,
     floorAt,
@@ -710,6 +759,7 @@ describe('темп каторги', () => {
         (d / 60).toFixed(1) + 'м',
         'цена ' + rankCost(k),
         'доход/мин ' + Math.round((r.gained[k] / d) * 60),
+        'токенов/мин ' + ((r.tokGot[k] / d) * 60).toFixed(1),
         'деньги ' + ((r.tCoin[k] ?? 0) / 60).toFixed(1),
         'работа ' + ((r.tWork[k] ?? 0) / 60).toFixed(1),
         'кирка ' + ((r.tPick[k] ?? 0) / 60).toFixed(1),
@@ -717,6 +767,54 @@ describe('темп каторги', () => {
       ].join(' '),
     );
     console.log('DUMP\n' + rows.join('\n') + '\nкирки ' + r.pickAt.join(' '));
+  });
+
+  // Подбор цен лавки (v2.75.2): SHOP=1 npx vitest run src/lib/prison.test.ts
+  // -t лавка. Печатает токены в минуту и за блок по горизонтам и круг A→Z
+  // для книг, «всё на расходник» и «расходник первым, книги на остаток» —
+  // по нынешней таблице и по правилу «K минут (для бомб — K блоков) дохода
+  // токенов», K из SHOPK.
+  it.runIf(!!process.env.SHOP)('лавка', () => {
+    const base = run();
+    const rate = base.took.map((d, k) => (base.tokGot[k] / d) * 60);
+    const perBlock = base.took.map((_, k) => base.tokGot[k] / base.work[k]);
+    const top = (xs: number[]) =>
+      HORIZONS.map((h, i) => Math.max(...xs.slice(h.from, HORIZONS[i + 1]?.from ?? LAST_RANK)));
+    const rTop = top(rate);
+    const bTop = top(perBlock);
+    console.log('SHOP токенов/мин (макс)', rTop.map((x) => x.toFixed(1)).join(' '));
+    console.log('SHOP токенов/блок (макс)', bTop.map((x) => x.toFixed(3)).join(' '));
+    const h = (t: number) => (t / 3600).toFixed(2);
+    const line = (id: SimItem, name: string, price: (k: number) => number) => {
+      const only = run({ shop: { id, mode: 'only', price } });
+      const first = run({ shop: { id, mode: 'first', price } });
+      console.log(
+        'SHOP',
+        id,
+        name,
+        [0, 5, 10, 15, 20].map(price).join('/'),
+        'книги',
+        h(base.t),
+        'всё на него',
+        h(only.t),
+        `(${only.shopBought})`,
+        'он первым',
+        h(first.t),
+        `(${first.shopBought})`,
+      );
+    };
+    const ids = (process.env.SHOPID ?? 'energy,bomb3,bomb5,charge').split(',') as SimItem[];
+    for (const id of ids) {
+      line(id, 'таблица', (k) => itemPrice(id, k));
+      for (const K of (process.env.SHOPK ?? '2.5,4').split(',').map(Number))
+        line(id, `K=${K}`, (k) =>
+          Math.round(
+            id === 'energy'
+              ? K * rTop[horizonIndex(k)]
+              : K * SIM_BLOCKS[id] * bTop[horizonIndex(k)],
+          ),
+        );
+    }
   });
 
   it.runIf(!!process.env.TUNE)('подгонка таблиц', () => {
@@ -791,6 +889,36 @@ describe('темп каторги', () => {
       (run({ seed, enchants: false }).t / 3600).toFixed(2),
     ]);
     console.log('VAR', rows.map((x) => x.join('/')).join(' '));
+  });
+
+  it('энергетик из лавки не окупает сам себя', () => {
+    // v2.75.2: за 40 токенов на всю игру его пили без перерыва — минута
+    // двойной копки приносила больше токенов, чем он стоил, и идеальный
+    // игрок проходил круг за 3 ч вместо 5. Цена обязана быть больше, чем
+    // та минута приносит (вдвое больше обычного), на каждом этаже.
+    const r = run();
+    const perMin = r.took.map((d, k) => (r.tokGot[k] / d) * 60);
+    perMin.forEach((x, k) => expect(itemPrice('energy', k)).toBeGreaterThan(2 * x));
+    // После престижа — цена дна: кирка и чары те же, что на Y.
+    expect(itemPrice('energy', 0, 1)).toBeGreaterThan(2 * Math.max(...perMin));
+  });
+
+  it('расходники лавки не ломают темп и не мёртвый товар', () => {
+    // Игрок берёт расходник при каждой возможности (энергетик — как только
+    // кончился прошлый), книги — на остаток. Быстрее книг — чуть-чуть,
+    // медленнее — не настолько, чтобы покупать было глупо.
+    const books = run().t;
+    for (const id of ['energy', 'bomb3', 'bomb5', 'charge'] as SimItem[]) {
+      const k = run({ shop: { id, mode: 'first' } }).t / books;
+      expect(k, id).toBeGreaterThan(0.92);
+      expect(k, id).toBeLessThan(1.25);
+    }
+  });
+
+  it('цены лавки к дну не дешевеют', () => {
+    for (const row of Object.values(ITEM_PRICE))
+      row.forEach((x, i) => expect(x).toBeGreaterThanOrEqual(row[Math.max(0, i - 1)]));
+    expect(ITEM_PRICE.energy.length).toBe(HORIZONS.length);
   });
 
   it('первый ранг — за минуту-две', () => {
