@@ -38,6 +38,7 @@ import type { Cost, MatId, MobId, Slot } from '@/lib/dungeon';
 import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
 import { gearIcon, heroFrame, itemUrl } from '@/lib/dungeon-art';
 import { mobPortrait } from '@/lib/dungeon-mobart';
+import '@/lib/dungeon-floors/art';
 import { FLOORS } from '@/lib/dungeon-floors';
 import { shortMoney } from '@/lib/prison';
 import { coinDing, primeAudio, tierBreak } from '@/lib/sound';

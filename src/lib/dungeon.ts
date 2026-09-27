@@ -1550,11 +1550,22 @@ export function sackCost(level: number): Cost {
 /** Починить клеть района — новая точка спуска и выхода. */
 /** Лифт Рельсовых туннелей — 8 000; каждый следующий район вдвое дороже. */
 export const LIFT_PRICE = 8_000;
+/**
+ * Починка лифта района. Монеты растут с уровнем РОВНО (было ×2 за уровень —
+ * на девятом уровне это два миллиона, а миллионов в игре нет), материал —
+ * ходовой материал ЭТОГО этажа (на первом — шкурки, как раньше), и его
+ * число считается от входа этажа: иначе на пятом этаже просили бы
+ * тысячи крысиных шкурок.
+ */
 export function liftCost(area: AreaId): Cost {
-  const lvl = areaOf(area).level;
+  const a = areaOf(area);
+  const lvl = a.level;
+  const floor = floorOf(a.floor);
+  const base = floor.areas[0]?.level ?? 0;
+  const mat = floor.mats.find((m) => (m.stack ?? 32) > 1)?.id ?? 'skin';
   return {
-    coins: Math.round(LIFT_PRICE * Math.pow(2, Math.max(0, lvl - 1))),
-    mats: { skin: Math.round(20 * Math.pow(1.6, lvl)) },
+    coins: Math.round(LIFT_PRICE * (1 + Math.max(0, lvl - 1))),
+    mats: { [mat]: Math.round(20 * Math.pow(1.6, Math.max(0, lvl - base))) },
   };
 }
 

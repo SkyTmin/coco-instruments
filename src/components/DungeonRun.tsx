@@ -810,6 +810,11 @@ export function DungeonRun({
           else if (e.what === 'summon') {
             ratSqueak(0);
             ratSqueak(1);
+          } else if (e.what.endsWith('_wall')) {
+            // Босс врезался в стену — тяжёлый глухой удар и дрожь в руке.
+            deepRumble();
+            boom(1);
+            tapMedium();
           } else if (e.text) say(e.text, e.sub, 'danger', 1800);
           break;
         }

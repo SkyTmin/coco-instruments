@@ -74,6 +74,9 @@ import {
 } from './dungeon-tiles';
 import type { Dir4, FxId } from './dungeon-sprites';
 import { walkRow } from './walk';
+// Рисовальщики этажей регистрируются при загрузке своих модулей: без этого
+// импорта монстры этажей рисовались бы комками, а клетки — общей водой.
+import './dungeon-floors/art';
 
 const CHUNK = 16;
 /** Сколько кусков карты держать в памяти (кусок — 256×256 точек). */

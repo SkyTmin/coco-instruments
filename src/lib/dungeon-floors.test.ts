@@ -16,6 +16,7 @@ import {
   EMPTY_SACK,
   entryArea,
   floorBeaten,
+  liftCost,
   matDef,
   MEATS,
   MOBS,
@@ -150,6 +151,21 @@ describe('этажи подземелья: договор', () => {
       });
     });
   }
+});
+
+describe('этажи подземелья: лифты', () => {
+  it('починка лифта — без миллионов и из материала своего этажа', () => {
+    for (const a of AREAS) {
+      const c = liftCost(a.id);
+      expect(c.coins, a.id).toBeLessThan(1_000_000);
+      const [[mat, n]] = Object.entries(c.mats) as [string, number][];
+      expect(n, a.id).toBeLessThan(400);
+      expect(
+        FLOORS.find((f) => f.id === a.floor)!.mats.some((m) => m.id === mat),
+        a.id,
+      ).toBe(true);
+    }
+  });
 });
 
 describe('этажи подземелья: спуск и сохранение', () => {
