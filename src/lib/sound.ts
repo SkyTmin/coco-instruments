@@ -180,7 +180,7 @@ export type SoundGroup = 'ui' | 'slots' | 'mine' | 'forest' | 'dungeon' | 'fishi
 
 const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
   ui: (n) =>
-    /^(ui\.|chip|coins|cloth|jingle\.|rank\.up|soft\.up|slot\.drum|slot\.win|tick|case\.tick|crate|latch|gem\.|card\.flip|crit\.thud|dash)/.test(
+    /^(ui\.|chip|coins|cloth|jingle\.|rank\.up|soft\.up|slot\.drum|slot\.win|tick|case\.tick|crate|latch|gem\.|card\.flip|crit\.thud|dash|step\.)/.test(
       n,
     ),
   slots: (n) => /^(reel\.|slot\.|gem\.|pluck|bubble|orb\.|slam|chips)/.test(n),
@@ -241,6 +241,8 @@ const VOICES: Record<string, number> = {
   rumble: 1,
   swing: 2,
   hit: 3,
+  'step.ground': 1,
+  'step.wood': 1,
 };
 /** Минимальный промежуток между двумя запусками, с: пулемёт режет ухо. */
 const GAP: Record<string, number> = {
@@ -484,6 +486,14 @@ function jingle(name: string, sec: number, opts: PlayOpts = {}): boolean {
  */
 export function softChime(k = 0): void {
   play('gem.chime', { gain: 0.26, rate: Math.pow(2, Math.min(k, 7) / 12), vary: 0.02 });
+}
+
+/**
+ * Шаг героя на площади (v2.80): тихий, один голос — площадь зовёт его на каждом
+ * втором кадре ходьбы, громче будет барабанной дробью. wood — полы в зданиях.
+ */
+export function footstep(wood = false): void {
+  play(wood ? 'step.wood' : 'step.ground', { gain: 0.22, vary: 0.06 });
 }
 
 /** Тихий глухой удар — «готово», без мелодии. */

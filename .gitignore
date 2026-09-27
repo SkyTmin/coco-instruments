@@ -26,3 +26,4 @@ npm-debug.log*
 scripts/hub/.src/
 scripts/hub/.out/
 __pycache__/
+.claude/worktrees/

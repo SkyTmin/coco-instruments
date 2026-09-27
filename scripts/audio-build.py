@@ -221,6 +221,10 @@ SOUNDS = {
     'pick.crystal': [(IMP(f'impactGlass_light_00{i}'), {'dur': 0.22, 'out': 100}) for i in range(5)],
     'pick.star': [(IFC(f'glass_00{i}'), {'dur': 0.3, 'out': 150}) for i in (1, 2, 5)],
     'crit.thud': [(IMP(f'impactPunch_medium_00{i}'), {'dur': 0.25}) for i in range(3)],
+    # Шаги на площади и в зданиях (v2.80): тихие, короткие, пять вариантов — один
+    # вариант подряд на каждом шаге читается пилой. Бетон — площадь, дерево — полы.
+    'step.ground': [(IMP(f'footstep_concrete_00{i}'), {'dur': 0.16, 'lp': 2200, 'rms': -29}) for i in range(5)],
+    'step.wood': [(IMP(f'footstep_wood_00{i}'), {'dur': 0.16, 'lp': 2400, 'rms': -29}) for i in range(5)],
     'break.soil': [(IMP(f'impactSoft_heavy_00{i}'), {'dur': 0.3}) for i in range(4)],
     'break.stone': [(IMP(f'footstep_concrete_00{i}'), {'dur': 0.2}) for i in range(5)],
     'break.metal': [(IMP(f'impactMetal_medium_00{i}'), {'dur': 0.35, 'out': 150}) for i in range(4)],

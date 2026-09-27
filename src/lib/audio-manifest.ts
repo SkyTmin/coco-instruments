@@ -2,7 +2,7 @@
 // Число вариантов у каждого звука и длина каждой музыкальной петли.
 
 /** Ревизия набора: входит в адрес файла, чтобы кеш не отдал старый звук. */
-export const AUDIO_REV = 'bee67976';
+export const AUDIO_REV = 'a313ed76';
 
 export const SFX_VARIANTS: Record<string, number> = {
   "ui.tap": 3,
@@ -95,7 +95,9 @@ export const SFX_VARIANTS: Record<string, number> = {
   "bat.squeak": 4,
   "reel.spin": 1,
   "rank.up": 1,
-  "soft.up": 1
+  "soft.up": 1,
+  "step.ground": 5,
+  "step.wood": 5
 };
 
 export const MUSIC_TRACKS = {
