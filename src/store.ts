@@ -304,7 +304,10 @@ import {
   canPat,
   eggOf,
   FISH_WARMTH,
+  hatchNowCost,
   hatchRoll,
+  placeEgg,
+  pullEgg,
   addPet as addPetRec,
   mergePet,
   PAT_XP,
@@ -1408,6 +1411,12 @@ interface FinanceState {
   prisonHatch: (i: number) => HatchResult | null;
   /** Купить яйцо в Питомнике за монеты. */
   prisonEggBuy: (egg: EggId) => boolean;
+  /** Вынуть яйцо из гнезда в корзину — прогрев остаётся за видом (v2.76). */
+  prisonEggPull: (i: number) => boolean;
+  /** Положить яйцо из корзины в гнездо; `swap` — какое гнездо освободить взамен. */
+  prisonEggPlace: (egg: EggId, swap?: number) => boolean;
+  /** Вылупить сразу за токены (драконье), не грея: гнездо становится готовым. */
+  prisonHatchNow: (i: number) => boolean;
   /** Слить копии: пять одинаковых — золотой, пять золотых — радужный. */
   prisonPetMerge: (id: PetId) => boolean;
   /** Погладить: сердечки всегда, опыт — раз в десять минут (true — дал опыт). */
@@ -4372,6 +4381,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const re = refillNest(
       p.nest.filter((_, k) => k !== i),
       p.eggs,
+      p.eggHeat,
     );
     // Первый питомец сам встаёт в отряд, как и любой новый, пока есть место.
     const room = p.squad.length < squadSlots(p.rank, p.prestige);
@@ -4384,6 +4394,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       tricks,
       nest: re.nest,
       eggs: re.eggs,
+      eggHeat: re.heat,
       eggPity: h.pity,
       hatched: p.hatched + 1,
     };
@@ -4398,13 +4409,51 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const s = get();
     const p = s.prison;
     const def = eggOf(egg);
-    if (!def.price || p.rank < def.from || s.slotsBalance < def.price) return false;
+    // Драконье (v2.76) — за токены, остальные — за монеты.
+    const tokens = def.tokens ?? 0;
+    if (tokens > 0) {
+      if (p.tokens < tokens) return false;
+    } else if (!def.price || p.rank < def.from || s.slotsBalance < def.price) return false;
     const put = putEgg(p.nest, p.eggs, egg);
     if (put.where === 'broken') return false;
-    const prison = { ...p, nest: put.nest, eggs: put.eggs };
-    set({ prison, slotsBalance: s.slotsBalance - def.price });
+    const prison = { ...p, nest: put.nest, eggs: put.eggs, tokens: p.tokens - tokens };
+    set({ prison, slotsBalance: s.slotsBalance - (tokens > 0 ? 0 : def.price) });
     persistPrison(prison);
     persistSlots(get());
+    return true;
+  },
+
+  prisonEggPull: (i) => {
+    const p = get().prison;
+    const r = pullEgg(p.nest, p.eggs, p.eggHeat, i);
+    if (!r) return false;
+    const prison = { ...p, nest: r.nest, eggs: r.eggs, eggHeat: r.heat };
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  prisonEggPlace: (egg, swap) => {
+    const p = get().prison;
+    const r = placeEgg(p.nest, p.eggs, p.eggHeat, egg, swap);
+    if (!r) return false;
+    const prison = { ...p, nest: r.nest, eggs: r.eggs, eggHeat: r.heat };
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  prisonHatchNow: (i) => {
+    const p = get().prison;
+    const n = p.nest[i];
+    const cost = n ? hatchNowCost(n.egg) : 0;
+    if (!n || n.left <= 0 || cost <= 0 || p.tokens < cost) return false;
+    const nest = p.nest.map((x, k) => (k === i ? { ...x, left: 0 } : x));
+    const prison = { ...p, nest, tokens: p.tokens - cost };
+    set({ prison });
+    persistPrison(prison);
+    // Токены списаны — на диск сразу, до сцены вылупления.
+    flushers.forEach((f) => f());
     return true;
   },
 

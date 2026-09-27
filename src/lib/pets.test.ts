@@ -3,7 +3,10 @@ import {
   addPet,
   canMerge,
   eggChances,
+  eggOf,
   EGGS,
+  EGG_BASKET,
+  hatchNowCost,
   EGG_PITY,
   hatchRoll,
   MERGE_NEED,
@@ -18,6 +21,8 @@ import {
   petBonus,
   PETS,
   petScore,
+  placeEgg,
+  pullEgg,
   putEgg,
   refillNest,
   squadSlots,
@@ -140,6 +145,55 @@ describe('питомцы (v2.72–v2.73)', () => {
     expect(re.eggs).toMatchObject({ moss: 2, dragon: 0 });
     // Тёплое яйцо (подарок заданий) почти готово.
     expect(putEgg([], NO_EGGS, 'moss', 150).nest[0].left).toBe(150);
+  });
+
+  it('выбор яйца (v2.76): вынутое в корзину, прогрев не сгорает и не множится', () => {
+    const need = eggOf('moss').need;
+    let nest = [
+      { egg: 'moss' as EggId, left: need - 1000 },
+      { egg: 'stone' as EggId, left: 500 },
+    ];
+    let eggs = { ...NO_EGGS, dragon: 1 };
+    // Вынули недогретое мшистое — тысяча блоков работы осталась за видом.
+    const pulled = pullEgg(nest, eggs, NO_EGGS, 0)!;
+    expect(pulled.nest.map((x) => x.egg)).toEqual(['stone']);
+    expect(pulled.eggs).toMatchObject({ moss: 1, dragon: 1 });
+    expect(pulled.heat.moss).toBe(1000);
+    // Положили драконье — оно холодное, прогрев мшистого ему не достаётся.
+    const withDragon = placeEgg(pulled.nest, pulled.eggs, pulled.heat, 'dragon')!;
+    expect(withDragon.nest.at(-1)).toEqual({ egg: 'dragon', left: eggOf('dragon').need });
+    expect(withDragon.heat.moss).toBe(1000);
+    // Мшистое обратно (обменом на драконье) — с той же тысячей.
+    const back = placeEgg(withDragon.nest, withDragon.eggs, withDragon.heat, 'moss', 1)!;
+    expect(back.nest[1]).toEqual({ egg: 'moss', left: need - 1000 });
+    expect(back.heat.moss).toBe(0);
+    expect(back.eggs).toMatchObject({ moss: 0, dragon: 1 });
+    // Обмен занимает то же гнездо: порядок гнёзд не прыгает.
+    expect(back.nest[0].egg).toBe('stone');
+    nest = back.nest;
+    eggs = back.eggs;
+    // Нельзя: пустая корзина, полная корзина при вынимании, занятые гнёзда без обмена.
+    expect(placeEgg(nest, eggs, NO_EGGS, 'crystal')).toBeNull();
+    expect(placeEgg(nest, eggs, NO_EGGS, 'dragon')).toBeNull();
+    expect(pullEgg(nest, { ...NO_EGGS, moss: EGG_BASKET }, NO_EGGS, 0)).toBeNull();
+    // А обмен при полной корзине можно: одно уходит, одно приходит.
+    expect(placeEgg(nest, { ...NO_EGGS, moss: EGG_BASKET }, NO_EGGS, 'moss', 0)).not.toBeNull();
+  });
+
+  it('сбережённого тепла больше, чем нужно яйцу, — оно ложится готовым, остаток ждёт', () => {
+    const need = eggOf('moss').need;
+    const r = placeEgg([], { ...NO_EGGS, moss: 2 }, { ...NO_EGGS, moss: need + 300 }, 'moss')!;
+    expect(r.nest[0].left).toBe(0);
+    expect(r.heat.moss).toBe(300);
+    const r2 = placeEgg(r.nest, r.eggs, r.heat, 'moss')!;
+    expect(r2.nest[1].left).toBe(need - 300);
+  });
+
+  it('драконье яйцо: 30 000 токенов в Питомнике, столько же — вылупить сразу', () => {
+    expect(eggOf('dragon').tokens).toBe(30_000);
+    expect(eggOf('dragon').price).toBe(0);
+    expect(hatchNowCost('dragon')).toBe(30_000);
+    for (const id of ['moss', 'stone', 'crystal'] as EggId[]) expect(hatchNowCost(id)).toBe(0);
   });
 
   it('коллекция: +1% за вид, весь зоопарк — ещё +10%', () => {

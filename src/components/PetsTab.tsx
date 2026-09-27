@@ -15,6 +15,7 @@ import { RarityName, rarityVars } from '@/components/PickArt';
 import { EggArt, PetArt } from '@/components/PetArt';
 import type { PetAnim } from '@/components/PetArt';
 import { CoinIcon } from '@/components/slot-art';
+import { TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
 import type { HatchResult } from '@/store';
 import { rarityOf } from '@/lib/rarity';
@@ -28,6 +29,7 @@ import {
   EGGS,
   EGG_BASKET,
   EGG_IDS,
+  hatchNowCost,
   MERGE_NEED,
   NEST_SLOTS,
   PAT_XP,
@@ -101,6 +103,18 @@ export function PetsTab() {
   const buyEgg = useFinanceStore((s) => s.prisonEggBuy);
   const [sheet, setSheet] = useState<PetId | null>(null);
   const [pick, setPick] = useState<number | null>(null);
+  const [nestAt, setNestAt] = useState<number | null>(null);
+  const [armed, setArmed] = useState<string | null>(null);
+  const armT = useRef<ReturnType<typeof setTimeout>>();
+  /** Дорогая покупка — в два касания: первое взводит, второе платит. */
+  const arm = (key: string) => {
+    if (armed === key) return true;
+    setArmed(key);
+    clearTimeout(armT.current);
+    armT.current = setTimeout(() => setArmed(null), 4000);
+    return false;
+  };
+  const place = useFinanceStore((s) => s.prisonEggPlace);
   const [scene, setScene] = useState<{ res: HatchResult; key: number } | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const noteT = useRef<ReturnType<typeof setTimeout>>();
@@ -109,7 +123,13 @@ export function PetsTab() {
     clearTimeout(noteT.current);
     noteT.current = setTimeout(() => setNote(null), 2200);
   };
-  useEffect(() => () => clearTimeout(noteT.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(noteT.current);
+      clearTimeout(armT.current);
+    },
+    [],
+  );
   const slots = squadSlots(p.rank, p.prestige);
   const owned = PETS.filter((d) => p.pets[d.id]).length;
   const zoo = zooMult(p.pets) - 1;
@@ -192,10 +212,19 @@ export function PetsTab() {
           const n = p.nest[i];
           if (!n)
             return (
-              <div key={i} className="ppn__nest is-empty">
+              <button
+                key={i}
+                type="button"
+                className="ppn__nest is-empty"
+                onClick={() => {
+                  tapLight();
+                  if (eggCount(p.eggs) > 0) setNestAt(i);
+                  else say('Корзина пуста');
+                }}
+              >
                 <i className="ppn__straw" aria-hidden="true" />
-                <em>Пусто</em>
-              </div>
+                <em>{eggCount(p.eggs) > 0 ? 'Положить яйцо' : 'Пусто'}</em>
+              </button>
             );
           const need = eggOf(n.egg).need;
           const ready = n.left <= 0;
@@ -209,7 +238,7 @@ export function PetsTab() {
                 if (ready) doHatch(i);
                 else {
                   tapLight();
-                  say(`${eggOf(n.egg).name} греется: ещё ${fmt(n.left)} блоков работы`);
+                  setNestAt(i);
                 }
               }}
             >
@@ -230,9 +259,24 @@ export function PetsTab() {
         <div className="ppn__basket">
           <span>Ждут гнезда:</span>
           {EGG_IDS.filter((id) => p.eggs[id] > 0).map((id) => (
-            <span key={id} className="ppn__chip">
+            <button
+              key={id}
+              type="button"
+              className="ppn__chip"
+              onClick={() => {
+                primeAudio();
+                if (p.nest.length < NEST_SLOTS && place(id)) {
+                  selectionChanged();
+                  say(`${eggOf(id).name} — в гнездо`);
+                } else {
+                  tapLight();
+                  say('Гнёзда заняты — нажми на гнездо, чтобы поменять');
+                }
+              }}
+            >
               <EggArt egg={id} size={26} />×{p.eggs[id]}
-            </span>
+              {p.eggHeat[id] > 0 && <HeatBar egg={id} heat={p.eggHeat[id]} />}
+            </button>
           ))}
         </div>
       )}
@@ -240,24 +284,21 @@ export function PetsTab() {
       <h4 className="ppn__h">Яйца</h4>
       <div className="ppn__shop">
         {EGGS.map((e) => {
-          const sold = e.price > 0;
-          const locked = sold && p.rank < e.from;
+          const tok = e.tokens ?? 0;
+          const sold = e.price > 0 || tok > 0;
+          const locked = sold && !tok && p.rank < e.from;
           const room = p.nest.length < NEST_SLOTS || eggCount(p.eggs) < EGG_BASKET;
-          const can = sold && !locked && room && balance >= e.price;
+          const rich = tok ? p.tokens >= tok : balance >= e.price;
+          const can = sold && !locked && room && rich;
           return (
             <button
               key={e.id}
               type="button"
-              className={`ppn__buy${locked ? ' is-locked' : ''}${sold ? '' : ' is-rare'}`}
+              className={`ppn__buy${locked ? ' is-locked' : ''}${tok ? ' is-rare' : ''}${armed === e.id ? ' is-armed' : ''}`}
               style={rarityVars(EGG_RARITY[e.id])}
               aria-disabled={!can}
               onClick={() => {
                 primeAudio();
-                if (!sold) {
-                  tapLight();
-                  say('Драконье не продаётся: сундуки, сейды и достижения');
-                  return;
-                }
                 if (locked) {
                   uiError();
                   notifyWarning();
@@ -269,12 +310,22 @@ export function PetsTab() {
                   say('Корзина полна — вылупи кого-нибудь');
                   return;
                 }
-                if (balance < e.price) {
+                if (!rich) {
                   uiError();
                   notifyWarning();
-                  say(`Не хватает ${shortMoney(e.price - balance)} монет`);
+                  say(
+                    tok
+                      ? `Не хватает ${fmt(tok - p.tokens)} токенов`
+                      : `Не хватает ${shortMoney(e.price - balance)} монет`,
+                  );
                   return;
                 }
+                if (tok && !arm(e.id)) {
+                  tapLight();
+                  say(`${e.name} за ${fmt(tok)} токенов — нажми ещё раз`);
+                  return;
+                }
+                setArmed(null);
                 if (buyEgg(e.id)) {
                   uiBuy();
                   tapMedium();
@@ -285,15 +336,14 @@ export function PetsTab() {
               <EggArt egg={e.id} size={58} />
               <b>{e.name.replace(' яйцо', '')}</b>
               <OddsBar egg={e.id} />
-              {!sold ? (
-                <i>не продаётся</i>
-              ) : locked ? (
+              {locked ? (
                 <i>
                   <KIcon name="locked" /> ранг {rankLetter(e.from)}
                 </i>
               ) : (
                 <span className="ppn__price">
-                  <CoinIcon size={14} /> {shortMoney(e.price)}
+                  {tok ? <TokenIcon size={14} /> : <CoinIcon size={14} />}{' '}
+                  {shortMoney(tok || e.price)}
                 </span>
               )}
             </button>
@@ -329,6 +379,17 @@ export function PetsTab() {
       {note && <div className="ppn__note">{note}</div>}
       {sheet && <PetSheet id={sheet} onClose={() => setSheet(null)} />}
       {pick !== null && <SquadPicker slot={pick} onClose={() => setPick(null)} />}
+      {nestAt !== null && (
+        <NestSheet
+          i={nestAt}
+          onClose={() => setNestAt(null)}
+          onHatch={(i) => {
+            setNestAt(null);
+            doHatch(i);
+          }}
+          say={say}
+        />
+      )}
       {scene &&
         createPortal(
           <HatchScene
@@ -519,6 +580,134 @@ function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
 }
 
 /** Кого взять на пустое место отряда: сильнейшие сверху. */
+/** Сбережённый прогрев вида — тонкая полоска под яйцом в корзине. */
+function HeatBar({ egg, heat }: { egg: EggId; heat: number }) {
+  return (
+    <i className="ppn__heat" aria-hidden="true">
+      <i style={{ width: `${Math.min(100, (100 * heat) / eggOf(egg).need)}%` }} />
+    </i>
+  );
+}
+
+/**
+ * Гнездо (v2.76): что в нём греется, вынуть в корзину, положить другое
+ * взамен, драконье — вылупить сразу за токены. Прогрев вынутого не сгорает —
+ * он остаётся за видом яйца (`pullEgg`).
+ */
+function NestSheet({
+  i,
+  onClose,
+  onHatch,
+  say,
+}: {
+  i: number;
+  onClose: () => void;
+  onHatch: (i: number) => void;
+  say: (t: string) => void;
+}) {
+  const p = useFinanceStore((s) => s.prison);
+  const pull = useFinanceStore((s) => s.prisonEggPull);
+  const place = useFinanceStore((s) => s.prisonEggPlace);
+  const now = useFinanceStore((s) => s.prisonHatchNow);
+  const [armed, setArmed] = useState(false);
+  const n = p.nest[i];
+  const cost = n ? hatchNowCost(n.egg) : 0;
+  const basket = EGG_IDS.filter((id) => p.eggs[id] > 0 && id !== n?.egg);
+  const full = eggCount(p.eggs) >= EGG_BASKET;
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <GxModal title={n ? eggOf(n.egg).name : 'Гнездо'} onClose={onClose}>
+      <div className="ppn-nest">
+        {n && (
+          <div className="ppn-nest__now" style={rarityVars(EGG_RARITY[n.egg])}>
+            <EggArt egg={n.egg} size={88} />
+            <GxBar
+              tone="green"
+              value={1 - n.left / eggOf(n.egg).need}
+              label={n.left > 0 ? `ещё ${fmt(n.left)} блоков` : 'готово'}
+            />
+            <div className="ppn-nest__acts">
+              {cost > 0 && n.left > 0 && (
+                <button
+                  type="button"
+                  className={`btn btn--primary btn--sm${armed ? ' is-armed' : ''}`}
+                  aria-disabled={p.tokens < cost}
+                  onClick={() => {
+                    primeAudio();
+                    if (p.tokens < cost) {
+                      uiError();
+                      notifyWarning();
+                      say(`Не хватает ${fmt(cost - p.tokens)} токенов`);
+                      return;
+                    }
+                    if (!armed) {
+                      tapLight();
+                      setArmed(true);
+                      return;
+                    }
+                    if (now(i)) onHatch(i);
+                  }}
+                >
+                  {armed ? 'Точно? ' : 'Вылупить сразу '}
+                  {fmt(cost)} <TokenIcon size={13} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                aria-disabled={full}
+                onClick={() => {
+                  primeAudio();
+                  if (!pull(i)) {
+                    uiError();
+                    say('Корзина полна');
+                    return;
+                  }
+                  selectionChanged();
+                  onClose();
+                }}
+              >
+                В корзину
+              </button>
+            </div>
+          </div>
+        )}
+        {basket.length > 0 ? (
+          <>
+            <h5 className="ppn-nest__h">{n ? 'Положить вместо' : 'Положить в гнездо'}</h5>
+            <div className="ppn-nest__basket">
+              {basket.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="ppn-nest__egg"
+                  style={rarityVars(EGG_RARITY[id])}
+                  onClick={() => {
+                    primeAudio();
+                    if (!place(id, n ? i : undefined)) return;
+                    selectionChanged();
+                    onClose();
+                  }}
+                >
+                  <EggArt egg={id} size={52} />
+                  <b>×{p.eggs[id]}</b>
+                  {p.eggHeat[id] > 0 && <HeatBar egg={id} heat={p.eggHeat[id]} />}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          !n && <p className="ppn-sheet__from">Корзина пуста</p>
+        )}
+      </div>
+    </GxModal>
+  );
+}
+
 function SquadPicker({ slot, onClose }: { slot: number; onClose: () => void }) {
   const p = useFinanceStore((s) => s.prison);
   const setSquad = useFinanceStore((s) => s.prisonSquadSet);

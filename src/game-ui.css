@@ -7682,11 +7682,106 @@ button.fg-slot {
   color: var(--muted);
 }
 .ppn__chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  padding: 2px 6px 4px 2px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(109, 75, 39, 0.1);
+  font: inherit;
   font-weight: 800;
   color: var(--text);
+  cursor: pointer;
+}
+.ppn__nest.is-empty {
+  cursor: pointer;
+}
+/* Сбережённый прогрев вида (v2.76): вынутое из гнезда яйцо его не теряет. */
+.ppn__heat {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 1px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(60, 40, 20, 0.2);
+}
+.ppn__heat > i {
+  display: block;
+  height: 100%;
+  background: #6cc04a;
+}
+.ppn__buy.is-armed {
+  border-color: var(--gx-red);
+  box-shadow: 0 0 0 2px var(--gx-red);
+}
+
+/* Окно гнезда: что греется, в корзину, вылупить сразу, положить другое. */
+.ppn-nest {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ppn-nest__now {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 12px;
+  background: radial-gradient(70% 60% at 50% 35%, color-mix(in srgb, var(--rc) 22%, transparent), transparent);
+}
+.ppn-nest__now .gx-bar {
+  width: 80%;
+}
+.ppn-nest__acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.ppn-nest__acts .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.gx-camp .ppn-nest__acts .btn.is-armed,
+.ppn-nest__acts .btn.is-armed {
+  filter: brightness(1.15);
+}
+.ppn-nest__acts .btn[aria-disabled='true'] {
+  filter: grayscale(0.7) brightness(0.92);
+}
+.ppn-nest__h {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ppn-nest__basket {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.ppn-nest__egg {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px 8px;
+  border: 2px solid color-mix(in srgb, var(--rc) 45%, transparent);
+  border-radius: 10px;
+  background: radial-gradient(90% 60% at 50% 30%, color-mix(in srgb, var(--rc) 18%, transparent), transparent),
+    rgba(109, 75, 39, 0.08);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.ppn-nest__egg b {
+  font-size: 12px;
 }
 .ppn__shop {
   display: grid;

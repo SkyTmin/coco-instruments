@@ -3034,6 +3034,8 @@ export interface PrisonState {
   /** Яйца: корзина, гнёзда, счётчик гарантии, сколько вылупилось всего. */
   eggs: Eggs;
   nest: Nest[];
+  /** Прогрев вынутых из гнезда яиц — по виду (v2.76, `pullEgg`). */
+  eggHeat: Eggs;
   eggPity: number;
   hatched: number;
   /** Сколько блоков было сломано на последнем трюке каждого в отряде. */
@@ -3124,6 +3126,7 @@ export const PRISON_START: PrisonState = {
   petsV: PETS_V,
   eggs: NO_EGGS,
   nest: [],
+  eggHeat: NO_EGGS,
   eggPity: 0,
   hatched: 0,
   tricks: [],
@@ -3379,6 +3382,7 @@ interface LootState {
   petsV: number;
   eggs: Eggs;
   nest: Nest[];
+  eggHeat: Eggs;
   eggPity: number;
   hatched: number;
   tricks: number[];
@@ -3435,6 +3439,7 @@ function normalizeLoot(raw: Partial<PrisonState>): LootState {
     petsV: PETS_V,
     eggs: normalizeEggs(raw.eggs),
     nest: normalizeNest(raw.nest),
+    eggHeat: normalizeEggs(raw.eggHeat, 1e7),
     eggPity: int(raw.eggPity, 0, EGG_PITY, 0),
     hatched: int(raw.hatched, 0, 1e9, 0),
     tricks: Array.isArray(raw.tricks) ? raw.tricks.slice(0, 3).map((x) => int(x, 0, 1e15, 0)) : [],

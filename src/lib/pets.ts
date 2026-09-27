@@ -243,8 +243,13 @@ export interface EggDef {
   odds: number[];
   /** Сколько работы (блоков) нужно, чтобы вылупился. */
   need: number;
-  /** Цена в Питомнике, монет; 0 — не продаётся. */
+  /** Цена в Питомнике, монет; 0 — не за монеты. */
   price: number;
+  /**
+   * Цена в Питомнике, токенов (v2.76: драконье). За ту же цену такое яйцо
+   * можно вылупить сразу, не грея (`hatchNowCost`).
+   */
+  tokens?: number;
   /** С какого ранга продаётся (0 — A). */
   from: number;
   /** Разбилось в полной корзине — столько токенов. */
@@ -285,7 +290,8 @@ export const EGGS: EggDef[] = [
     odds: [0, 0, 0, 70, 29.5, 0.5],
     need: 15_000,
     price: 0,
-    from: 99,
+    tokens: 30_000,
+    from: 0,
     overflow: 400,
   },
 ];
@@ -371,17 +377,93 @@ export function putEgg(
 }
 
 /** Из корзины в освободившиеся гнёзда — сперва старшие яйца. */
-export function refillNest(nest: Nest[], eggs: Eggs): { nest: Nest[]; eggs: Eggs } {
+export function refillNest(
+  nest: Nest[],
+  eggs: Eggs,
+  heat: Eggs = NO_EGGS,
+): { nest: Nest[]; eggs: Eggs; heat: Eggs } {
   const out = [...nest];
   const left = { ...eggs };
+  let h = heat;
   for (const id of [...EGG_IDS].reverse()) {
     while (out.length < NEST_SLOTS && left[id] > 0) {
       left[id] -= 1;
-      out.push({ egg: id, left: eggOf(id).need });
+      const w = warmFrom(h, id);
+      h = w.heat;
+      out.push({ egg: id, left: w.left });
     }
   }
-  return { nest: out, eggs: left };
+  return { nest: out, eggs: left, heat: h };
 }
+
+// ---------------------------------------------------------------------------
+// Выбор яйца в гнезде (v2.76). Владелец: «выбирать, какое яйцо вылупляется:
+// убрать яйцо, добавить яйцо». Вынутое яйцо уходит в корзину, а его прогрев
+// не сгорает — он остаётся за ВИДОМ яйца (`heat`) и достаётся следующему
+// такому же, что ляжет в гнездо. Одинаковые яйца неотличимы, поэтому помнить,
+// какое именно грелось, незачем, а работа не теряется и не множится.
+// ---------------------------------------------------------------------------
+
+/** Сколько осталось греть яйцу вида `egg` с учётом сбережённого тепла. */
+function warmFrom(heat: Eggs, egg: EggId): { left: number; heat: Eggs } {
+  const need = eggOf(egg).need;
+  const use = Math.min(need, heat[egg] ?? 0);
+  if (!use) return { left: need, heat };
+  return { left: need - use, heat: { ...heat, [egg]: (heat[egg] ?? 0) - use } };
+}
+
+/** Вынуть яйцо из гнезда `i` в корзину; null — корзина полна или гнездо пусто. */
+export function pullEgg(
+  nest: Nest[],
+  eggs: Eggs,
+  heat: Eggs,
+  i: number,
+): { nest: Nest[]; eggs: Eggs; heat: Eggs } | null {
+  const n = nest[i];
+  if (!n || eggCount(eggs) >= EGG_BASKET) return null;
+  const done = eggOf(n.egg).need - n.left;
+  return {
+    nest: nest.filter((_, k) => k !== i),
+    eggs: { ...eggs, [n.egg]: eggs[n.egg] + 1 },
+    heat: done > 0 ? { ...heat, [n.egg]: (heat[n.egg] ?? 0) + done } : heat,
+  };
+}
+
+/**
+ * Положить яйцо из корзины в гнездо. `swap` — номер гнезда, чьё яйцо уходит
+ * в корзину взамен (его место займёт новое); без него — в свободное гнездо.
+ */
+export function placeEgg(
+  nest: Nest[],
+  eggs: Eggs,
+  heat: Eggs,
+  egg: EggId,
+  swap?: number,
+): { nest: Nest[]; eggs: Eggs; heat: Eggs } | null {
+  if (!(eggs[egg] > 0)) return null;
+  let base = { nest, eggs, heat };
+  let at = nest.length;
+  if (swap !== undefined) {
+    const old = nest[swap];
+    if (!old) return null;
+    // Меняем местами: вынутое ложится в корзину, пока оттуда берём новое,
+    // поэтому полная корзина обмену не мешает.
+    const done = eggOf(old.egg).need - old.left;
+    base = {
+      nest: nest.filter((_, k) => k !== swap),
+      eggs: { ...eggs, [old.egg]: eggs[old.egg] + 1 },
+      heat: done > 0 ? { ...heat, [old.egg]: (heat[old.egg] ?? 0) + done } : heat,
+    };
+    at = swap;
+  } else if (nest.length >= NEST_SLOTS) return null;
+  const w = warmFrom(base.heat, egg);
+  const out = [...base.nest];
+  out.splice(at, 0, { egg, left: w.left });
+  return { nest: out, eggs: { ...base.eggs, [egg]: base.eggs[egg] - 1 }, heat: w.heat };
+}
+
+/** Вылупить сразу, не грея: цена в токенах, 0 — так нельзя. */
+export const hatchNowCost = (egg: EggId): number => eggOf(egg).tokens ?? 0;
 
 /** Работа греет все яйца в гнёздах. `ready` — сколько созрело этим шагом. */
 export function warmNest(nest: Nest[], n: number): { nest: Nest[]; ready: number } {
@@ -559,10 +641,10 @@ export function normalizeSquad(
   return out;
 }
 
-export function normalizeEggs(raw: unknown): Eggs {
+export function normalizeEggs(raw: unknown, max = 999): Eggs {
   const out: Eggs = { ...NO_EGGS };
   if (raw && typeof raw === 'object')
-    for (const id of EGG_IDS) out[id] = num((raw as Record<string, unknown>)[id], 0, 999, 0);
+    for (const id of EGG_IDS) out[id] = num((raw as Record<string, unknown>)[id], 0, max, 0);
   return out;
 }
 
