@@ -399,7 +399,7 @@ export function HomePage() {
             <span className="home-tile__fact">
               {prisonMined
                 ? `Ранг ${rankLetter(prisonRank)} · ${fmtCoins(slotsBalance)} 🪙`
-                : 'Шахта, лес, рыбалка, подземелье'}
+                : 'Шахта, подземелье, питомцы'}
             </span>
           </button>
         </div>

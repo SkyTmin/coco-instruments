@@ -9,6 +9,7 @@ import { GxIcon, GxSheet } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { rarityOf } from '@/lib/rarity';
+import { CREW_ON } from '@/lib/features';
 import { useFinanceStore } from '@/store';
 import { BeastTab, GearTab, StashTab } from '@/components/DungeonCamp';
 import { RodsTab, TrophiesTab } from '@/components/FishingCamp';
@@ -287,7 +288,18 @@ export type CampPlace = 'mine' | 'forest' | 'dungeon' | 'fish';
  */
 const PLACE_TABS: Record<CampPlace, CampTab[]> = {
   // Кузница (v2.67) — отдельный экран `ForgeScreen`, а не вкладка.
-  mine: ['enchant', 'runes', 'pets', 'shop', 'cases', 'crew', 'finds', 'miles', 'perks'],
+  // Рабочие временно убраны (v2.77, lib/features.ts).
+  mine: [
+    'enchant',
+    'runes',
+    'pets',
+    'shop',
+    'cases',
+    ...(CREW_ON ? (['crew'] as CampTab[]) : []),
+    'finds',
+    'miles',
+    'perks',
+  ],
   forest: ['axes', 'axench', 'mill', 'bench', 'cases', 'pets', 'runes'],
   dungeon: ['gear', 'beasts', 'stash', 'cases', 'runes', 'pets'],
   // Руны рыбалке ничего не дают — их тут нет. Питомца здесь кормят уловом.
@@ -1062,7 +1074,7 @@ function PerksTab() {
       <div className="pcamp-purse">
         <b>{free}</b> свободных очков · престиж {p.prestige}
       </div>
-      {PERKS.map((k) => (
+      {PERKS.filter((k) => CREW_ON || k.id !== 'shift').map((k) => (
         <Row
           key={k.id}
           icon={<span className="pforge__glyph">★</span>}

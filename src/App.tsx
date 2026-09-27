@@ -31,6 +31,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SessionCard } from '@/components/SessionCard';
 import { SyncIndicator } from '@/components/SyncIndicator';
 import { ToastHost } from '@/components/Toast';
+import { FISHING_ON, FOREST_ON } from '@/lib/features';
 
 // Per-section route chunks — keep the initial bundle small; pages load on demand.
 const SearchPage = lazy(() =>
@@ -539,8 +540,15 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
                 <Route path="/scatter" element={<ScatterPage />} />
                 <Route path="/games" element={<GamesPage />} />
                 <Route path="/prison" element={<PrisonPage />} />
-                <Route path="/forest" element={<ForestPage />} />
-                <Route path="/fishing" element={<FishingPage />} />
+                {/* Лес и рыбалка временно убраны (v2.77, lib/features.ts): старые ссылки — во двор. */}
+                <Route
+                  path="/forest"
+                  element={FOREST_ON ? <ForestPage /> : <Navigate to="/yard" replace />}
+                />
+                <Route
+                  path="/fishing"
+                  element={FISHING_ON ? <FishingPage /> : <Navigate to="/yard" replace />}
+                />
                 <Route path="/yard" element={<YardPage />} />
                 <Route path="/dungeon" element={<DungeonPage />} />
                 <Route path="/camera" element={<CameraPage />} />

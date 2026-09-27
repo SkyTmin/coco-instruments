@@ -1347,7 +1347,7 @@ export function SlotsPage() {
 
         {broke && (
           <p className="slot-bonus-hint">
-            Монеты кончились — заработай в шахте, лесу или на рыбалке
+            Монеты кончились — заработай в шахте
           </p>
         )}
 

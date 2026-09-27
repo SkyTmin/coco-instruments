@@ -31,6 +31,7 @@ import {
   SELL_BONUS_CAP,
 } from './economy';
 
+import { CREW_ON } from './features';
 import {
   anvilMate,
   BOOK_LEVELS,
@@ -2679,7 +2680,10 @@ export const NO_PERKS: Perks = { dealer: 0, grip: 0, lucky: 0, nose: 0, shift: 0
 export const PERK_POINTS_PER_PRESTIGE = 2;
 
 export function perkPointsFree(p: { prestige: number; perks: Perks }): number {
-  const spent = PERKS.reduce((s, k) => s + p.perks[k.id], 0);
+  // «Длинная смена» — только про рабочих; пока их нет (v2.77), её очки
+  // считаются свободными. Сохранение не трогаем: вернутся рабочие — и очков
+  // на всё не хватит, сбросить `shift` при чтении.
+  const spent = PERKS.reduce((s, k) => s + (!CREW_ON && k.id === 'shift' ? 0 : p.perks[k.id]), 0);
   return p.prestige * PERK_POINTS_PER_PRESTIGE - spent;
 }
 

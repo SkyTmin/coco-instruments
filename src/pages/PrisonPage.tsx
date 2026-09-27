@@ -7,6 +7,7 @@ import { crackStage, MineCell, MineField, useMineDig, wall } from '@/components/
 import type { BreakKind, DigBlock, MineFieldHandle } from '@/components/MineField';
 import { useNavigate } from 'react-router-dom';
 import { FOREST_UNLOCK_RANK } from '@/lib/forest';
+import { CREW_ON, FOREST_ON } from '@/lib/features';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon } from '@/components/slot-art';
@@ -231,7 +232,11 @@ const SCREENS: Record<Screen, { only: CampTab[]; title: string }> = {
   enchant: { only: ['enchant'], title: 'Книги' },
   cases: { only: ['cases'], title: 'Сундуки' },
   pets: { only: ['pets'], title: 'Питомник' },
-  more: { only: ['crew', 'runes', 'shop', 'finds', 'miles', 'perks'], title: 'Лагерь' },
+  // Рабочие временно убраны (v2.77, lib/features.ts).
+  more: {
+    only: [...(CREW_ON ? (['crew'] as CampTab[]) : []), 'runes', 'shop', 'finds', 'miles', 'perks'],
+    title: 'Лагерь',
+  },
 };
 
 /** Условия ранга фишками: кирка, выработка (блоков сломано) и блоки этажа. */
@@ -440,7 +445,7 @@ export function PrisonPage() {
 
   // Вернулся после смены — бригада уже накопала: сказать об этом сразу.
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !CREW_ON) return;
     const y = crewYield(useFinanceStore.getState().prison, Date.now());
     if (y.blocks > 0 && y.minutes >= 15) setCrewNote(true);
   }, [hydrated]);
@@ -1521,7 +1526,8 @@ export function PrisonPage() {
   const guideOk = guideReady(prison);
   const [guideV, guideGoal] = guide ? guide.progress(prison) : [0, 0];
   const crewNow = crewYield(prison, nowTick);
-  const campBadge = perkPointsFree(prison) > 0 || crewNow.minutes >= 60 || milesReady(prison) > 0;
+  const campBadge =
+    perkPointsFree(prison) > 0 || (CREW_ON && crewNow.minutes >= 60) || milesReady(prison) > 0;
   const forgeReady = forgeReadyNow(prison, balance);
   // «!» на книгах: есть что вписать или склеить на наковальне.
   const enchReady = booksReady(prison);
@@ -1667,14 +1673,16 @@ export function PrisonPage() {
             <img className="pmx-floor__ore" src={rockTexture(mine.id)} alt="" />
             {prison.zone.on ? <GxIcon name="stairs" size={16} /> : rankLetter(mine.id)}
           </button>
-          <button
-            type="button"
-            className={`gx-round gx-round--dark pmx-top__btn${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
-            aria-label="Лес"
-            onClick={goForest}
-          >
-            <GxIcon name="forest" />
-          </button>
+          {FOREST_ON && (
+            <button
+              type="button"
+              className={`gx-round gx-round--dark pmx-top__btn${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
+              aria-label="Лес"
+              onClick={goForest}
+            >
+              <GxIcon name="forest" />
+            </button>
+          )}
           <button
             type="button"
             className="gx-round gx-round--dark pmx-top__btn"
@@ -1975,23 +1983,23 @@ export function PrisonPage() {
         </div>
 
         <div className="pmx-items">
-          {ITEMS.filter((it) => it.id !== 'prop' || prison.items.prop > 0 || millLevel > 0).map(
-            (it) => {
-              const n = prison.items[it.id];
-              return (
-                <button
-                  key={it.id}
-                  type="button"
-                  className={`gx-round pmx-item${n ? '' : ' is-empty'}${arming === it.id ? ' is-armed' : ''}`}
-                  aria-label={`${it.name}: ${n}`}
-                  onClick={() => applyItem(it.id)}
-                >
-                  <ItemIcon id={it.id} />
-                  <i className={`pmx-item__n${n ? '' : ' is-buy'}`}>{n || '+'}</i>
-                </button>
-              );
-            },
-          )}
+          {ITEMS.filter(
+            (it) => it.id !== 'prop' || prison.items.prop > 0 || (FOREST_ON && millLevel > 0),
+          ).map((it) => {
+            const n = prison.items[it.id];
+            return (
+              <button
+                key={it.id}
+                type="button"
+                className={`gx-round pmx-item${n ? '' : ' is-empty'}${arming === it.id ? ' is-armed' : ''}`}
+                aria-label={`${it.name}: ${n}`}
+                onClick={() => applyItem(it.id)}
+              >
+                <ItemIcon id={it.id} />
+                <i className={`pmx-item__n${n ? '' : ' is-buy'}`}>{n || '+'}</i>
+              </button>
+            );
+          })}
         </div>
 
         <div className="pmx-foot">
@@ -2417,7 +2425,7 @@ export function PrisonPage() {
             <span className="prank__key">
               <KeyIcon size={13} /> +1 ключ от сундука
             </span>
-            {sceneShown.rank === FOREST_UNLOCK_RANK && (
+            {FOREST_ON && sceneShown.rank === FOREST_UNLOCK_RANK && (
               <span className="prank__lvl">Открыт лес — кнопка «Лес» над полем</span>
             )}
             {sceneShown.buyout > 0 && (

@@ -33,6 +33,7 @@ import {
 import { areaOf, bossReadyAt, dungeonOpen, DUNGEON_UNLOCK_RANK } from '@/lib/dungeon';
 import { FISH_UNLOCK_RANK, netCapacity, skillOf, SPOTS } from '@/lib/fishing';
 import { tapLight } from '@/lib/haptics';
+import { CREW_ON, FISHING_ON, FOREST_ON } from '@/lib/features';
 import { useGameAudio } from '@/lib/use-game-audio';
 import { AudioToggles } from '@/components/AudioToggles';
 
@@ -77,7 +78,9 @@ export function YardPage() {
     );
   }
 
-  const ev = liveEvent(prison, now);
+  // Лесное событие без леса (v2.77) не показываем: идти на него некуда.
+  const live = liveEvent(prison, now);
+  const ev = live && (FOREST_ON || live.place !== 'forest') ? live : null;
   const def = ev ? eventOf(ev.id) : null;
   const forestOpen = prison.rank >= FOREST_UNLOCK_RANK || prison.prestige > 0;
   const fishOpen = prison.rank >= FISH_UNLOCK_RANK || prison.prestige > 0;
@@ -171,13 +174,15 @@ export function YardPage() {
                     ? `События во дворе начнутся с ранга ${rankLetter(EVENTS_FROM_RANK)}`
                     : prison.eventNext > now
                       ? `Тихо. Следующее событие — через ${nextMin} мин, пока работаешь`
-                      : 'Событие вот-вот — начни копать или рубить'}
+                      : FOREST_ON
+                        ? 'Событие вот-вот — начни копать или рубить'
+                        : 'Событие вот-вот — начни копать'}
                 </span>
               </div>
             )}
           </div>
           <div className="yardx-board__all">
-            {EVENTS.map((e) => (
+            {EVENTS.filter((e) => FOREST_ON || e.place !== 'forest').map((e) => (
               <span
                 key={e.id}
                 title={e.name}
@@ -198,32 +203,36 @@ export function YardPage() {
             badge={ev?.place === 'mine' ? def?.glyph : null}
             onClick={() => go('/prison')}
           />
-          <Building
-            icon="forest"
-            name="Лес"
-            text={
-              forestOpen
-                ? `${SPECIES[forest.rank].name} · разряд ${forest.rank + 1}`
-                : `С ранга ${rankLetter(FOREST_UNLOCK_RANK)}`
-            }
-            locked={!forestOpen}
-            badge={ev?.place === 'forest' ? def?.glyph : null}
-            onClick={() => go('/forest')}
-          />
-          <Building
-            icon="fishing"
-            name="Рыбалка"
-            text={
-              !fishOpen
-                ? `С ранга ${rankLetter(FISH_UNLOCK_RANK)}`
-                : netFull
-                  ? 'Садок полон — продай улов'
-                  : `${SPOTS[fishing.spot].name} · мастерство ${skillOf(fishing.xp).level}`
-            }
-            locked={!fishOpen}
-            badge={fishOpen && netFull ? '!' : null}
-            onClick={() => go('/fishing')}
-          />
+          {FOREST_ON && (
+            <Building
+              icon="forest"
+              name="Лес"
+              text={
+                forestOpen
+                  ? `${SPECIES[forest.rank].name} · разряд ${forest.rank + 1}`
+                  : `С ранга ${rankLetter(FOREST_UNLOCK_RANK)}`
+              }
+              locked={!forestOpen}
+              badge={ev?.place === 'forest' ? def?.glyph : null}
+              onClick={() => go('/forest')}
+            />
+          )}
+          {FISHING_ON && (
+            <Building
+              icon="fishing"
+              name="Рыбалка"
+              text={
+                !fishOpen
+                  ? `С ранга ${rankLetter(FISH_UNLOCK_RANK)}`
+                  : netFull
+                    ? 'Садок полон — продай улов'
+                    : `${SPOTS[fishing.spot].name} · мастерство ${skillOf(fishing.xp).level}`
+              }
+              locked={!fishOpen}
+              badge={fishOpen && netFull ? '!' : null}
+              onClick={() => go('/fishing')}
+            />
+          )}
           <Building
             icon="cave"
             name="Подземелье"
@@ -283,17 +292,19 @@ export function YardPage() {
               setForgeOpen(true);
             }}
           />
-          <Building
-            icon="saw"
-            name="Лесопилка"
-            text={
-              mill.level > 0
-                ? `Досок ${fmt(sumRow(mill.boards))}, в очереди ${fmt(sumRow(mill.queue))}`
-                : 'Пилорамы ещё нет'
-            }
-            badge={mill.level > 0 && sumRow(mill.boards) >= PROP_BOARDS ? '•' : null}
-            onClick={() => open('mill')}
-          />
+          {FOREST_ON && (
+            <Building
+              icon="saw"
+              name="Лесопилка"
+              text={
+                mill.level > 0
+                  ? `Досок ${fmt(sumRow(mill.boards))}, в очереди ${fmt(sumRow(mill.queue))}`
+                  : 'Пилорамы ещё нет'
+              }
+              badge={mill.level > 0 && sumRow(mill.boards) >= PROP_BOARDS ? '•' : null}
+              onClick={() => open('mill')}
+            />
+          )}
           <Building
             icon="chest-open"
             name="Сундуки"
@@ -314,13 +325,17 @@ export function YardPage() {
             badge={prison.nest.some((x) => x.left <= 0) ? '!' : null}
             onClick={() => open('pets')}
           />
-          <Building
-            icon="miner"
-            name="Рабочие"
-            text={crew.blocks > 0 ? `Накопали ${fmt(crew.blocks)} блоков` : 'Копают, пока тебя нет'}
-            badge={crew.blocks > 0 && crew.minutes >= 10 ? '•' : null}
-            onClick={() => open('crew')}
-          />
+          {CREW_ON && (
+            <Building
+              icon="miner"
+              name="Рабочие"
+              text={
+                crew.blocks > 0 ? `Накопали ${fmt(crew.blocks)} блоков` : 'Копают, пока тебя нет'
+              }
+              badge={crew.blocks > 0 && crew.minutes >= 10 ? '•' : null}
+              onClick={() => open('crew')}
+            />
+          )}
           <Building
             icon="slots"
             name="Казино"
