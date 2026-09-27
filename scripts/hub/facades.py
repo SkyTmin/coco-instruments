@@ -71,8 +71,8 @@ FOOTPRINTS: dict[str, tuple[int, int, float, float, str]] = {
     'kiosk': (4, 3, 1, 2, 'ЛАРЁК'),
     'hq': (9, 5, 3.5, 2, 'ШТАБ'),
     'club': (9, 5, 3.5, 2, 'КЛУБ'),
-    # not enterable in v2.80 (doors shut, residents come in v2.81)
-    'barrack1': (11, 5, 5, 1, 'БАРАК 1'),
+    'barrack1': (11, 5, 5, 1, 'БАРАК 1'),  # v2.81: the orderly and your bunk with its chest
+    # not enterable yet (doors shut, residents come later)
     'barrack2': (11, 5, 5, 1, 'БАРАК 2'),
     'canteen': (9, 5, 4, 1, 'СТОЛОВАЯ'),
     'boiler': (6, 5, 2, 1, 'КОТЕЛЬНАЯ'),
@@ -82,7 +82,8 @@ FOOTPRINTS: dict[str, tuple[int, int, float, float, str]] = {
     'watchtower': (3, 3, 1, 1, ''),        # four corners, searchlight on top
 }
 
-ENTERABLE = ('mine', 'zone', 'forge', 'lift', 'tower', 'kennel', 'trader', 'store', 'kiosk', 'hq', 'club')
+ENTERABLE = ('mine', 'zone', 'forge', 'lift', 'tower', 'kennel', 'trader', 'store', 'kiosk', 'hq', 'club',
+             'barrack1')
 
 
 @dataclass

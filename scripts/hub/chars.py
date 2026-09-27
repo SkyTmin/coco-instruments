@@ -35,6 +35,8 @@ RESIDENTS: dict[str, tuple[str, list]] = {
     'seller': ('Villager5', [('grade', 0.7)]),
     # Крупье клуба
     'croupier': ('Monk', [('grade', 0.7)]),
+    # Дневальный Барака 1 (v2.81): молодой зэк в ватнике цвета шифера
+    'orderly': ('Villager3', [('hue', 60, 180, 212, 0.55, 0.9), ('grade', 0.7)]),
 }
 
 

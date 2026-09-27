@@ -409,6 +409,16 @@ import { normalizeNoteTitle } from '@/lib/notes-graph';
 import { deriveFromMessages, makeMessage, materializeMessages } from '@/lib/notes-messages';
 import type { MessageExtra } from '@/lib/notes-messages';
 import { deriveStatus, paidSoFar, resolve } from '@/lib/finance-calc';
+// ---- Инвентарь и сундук у койки (v2.81) ----
+import {
+  BUNK_KEY,
+  BUNK_START,
+  bunkBuyBig as bunkBuyBigOf,
+  bunkPut as bunkPutOf,
+  bunkTake as bunkTakeOf,
+  normalizeBunk,
+} from '@/lib/inventory';
+import type { BunkState, InvRef } from '@/lib/inventory';
 
 export type ObligationDraft = Omit<
   Obligation,
@@ -551,6 +561,10 @@ const persistDungeon = (d: DungeonState) => writeDungeon({ version: 1, ...d });
 // клёв и рекорды незачем писать в сохранение шахты.
 const writeFishing = makePersister<FishingBlob>(STORAGE_KEYS.fishing, 2000);
 const persistFishing = (f: FishingState) => writeFishing({ version: 1, ...f });
+// Сундук у койки (v2.81): перекладка редкая, пишется быстро. Вместе с ним
+// меняются каторга и склад — после переноса все записи сбрасываются разом.
+const writeBunk = makePersister<BunkBlob>(BUNK_KEY, 1000);
+const persistBunk = (b: BunkState) => writeBunk({ version: 1, ...b });
 
 /**
  * Посылки зреют от любой добычи — блоков шахты и брёвен леса. Новая
@@ -791,6 +805,11 @@ export interface DungeonSnap {
 
 /** Сохранение каторги: состояние шахты целиком, деньги — в кошельке слотов. */
 interface PrisonBlob extends PrisonState {
+  version: 1;
+}
+
+/** Сундук у койки (v2.81) — своим ключом, как лес и рыбалка. */
+interface BunkBlob extends BunkState {
   version: 1;
 }
 
@@ -1129,6 +1148,7 @@ interface ExportData {
   forest?: Partial<ForestState>;
   dungeon?: Partial<DungeonState>;
   fishing?: Partial<FishingState>;
+  bunk?: Partial<BunkState>;
   reminderPrefs?: Partial<ReminderPrefs>;
 }
 export interface ExportBundle {
@@ -1205,6 +1225,16 @@ interface FinanceState {
   fishing: FishingState;
   /** Подземелье: снаряжение, счётчики, склад, текущая вылазка. */
   dungeon: DungeonState;
+  // ---- Инвентарь и сундук у койки (v2.81) ----
+  /** Личный сундук у койки в Бараке 1: ячейки со стопками. */
+  bunk: BunkState;
+  /** Отложить в сундук до `n` штук; сколько легло. */
+  bunkPut: (ref: InvRef, n: number) => number;
+  /** Забрать из ячейки до `n` штук туда, откуда пришло; сколько вернулось. */
+  bunkTake: (slot: number, n: number) => number;
+  /** Двойной сундук за монеты — одна покупка. */
+  bunkBuyBig: () => boolean;
+  // ---- конец блока инвентаря ----
   reminderPrefs: ReminderPrefs;
   hydrated: boolean;
   /** Эпоха экономики сохранения (см. `ECONOMY_ERA`). */
@@ -1688,6 +1718,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   forest: FOREST_START,
   dungeon: DUNGEON_START,
   fishing: FISHING_START,
+  bunk: BUNK_START,
   reminderPrefs: DEFAULT_REMINDER_PREFS,
   hydrated: false,
   slotsEra: ECONOMY_ERA,
@@ -1695,6 +1726,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   hydrate: async () => {
     const storage = getStorage();
+    // Сундук у койки читается вместе со всем (своим ключом, v2.81).
+    const bunkRead = storage.get<BunkBlob>(BUNK_KEY).catch(() => null);
     const [
       exp,
       sav,
@@ -1797,6 +1830,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       forest: normalizeForest(forest),
       dungeon: normalizeDungeon(dungeon),
       fishing: normalizeFishing(fishing),
+      bunk: normalizeBunk(await bunkRead),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
       slotsEra: slots ? (slots.era ?? 1) : ECONOMY_ERA,
       hydrated: true,
@@ -2659,6 +2693,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         forest: s.forest,
         dungeon: s.dungeon,
         fishing: s.fishing,
+        bunk: s.bunk,
         reminderPrefs: s.reminderPrefs,
       },
     };
@@ -2721,6 +2756,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       forest: normalizeForest(d.forest),
       dungeon: normalizeDungeon(d.dungeon),
       fishing: normalizeFishing(d.fishing),
+      bunk: normalizeBunk(d.bunk),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(d.reminderPrefs ?? {}) },
     });
     const st = get();
@@ -2747,6 +2783,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistForest(st.forest);
     persistDungeon(st.dungeon);
     persistFishing(st.fishing);
+    persistBunk(st.bunk);
     persistReminderPrefs(st.reminderPrefs);
     return true;
   },
@@ -4254,16 +4291,61 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     persistPrison(prison);
   },
 
+  // ---- Инвентарь и сундук у койки (v2.81) ----------------------------------
+  // Перенос трогает до трёх сохранений (каторга, склад, сундук); после него
+  // все записи сбрасываются сразу, чтобы перезапуск между ними не оставил
+  // вещь в двух местах или ни в одном.
+
+  bunkPut: (ref, n) => {
+    const s = get();
+    const r = bunkPutOf(s.prison, s.dungeon, s.bunk, ref, n);
+    if (!r) return 0;
+    set({ prison: r.p, dungeon: r.d, bunk: r.b });
+    if (r.p !== s.prison) persistPrison(r.p);
+    if (r.d !== s.dungeon) persistDungeon(r.d);
+    persistBunk(r.b);
+    flushers.forEach((f) => f());
+    return r.n;
+  },
+
+  bunkTake: (slot, n) => {
+    const s = get();
+    const r = bunkTakeOf(s.prison, s.dungeon, s.bunk, slot, n);
+    if (!r) return 0;
+    set({ prison: r.p, dungeon: r.d, bunk: r.b });
+    if (r.p !== s.prison) persistPrison(r.p);
+    if (r.d !== s.dungeon) persistDungeon(r.d);
+    persistBunk(r.b);
+    flushers.forEach((f) => f());
+    return r.n;
+  },
+
+  bunkBuyBig: () => {
+    const s = get();
+    const r = bunkBuyBigOf(s.bunk, s.slotsBalance);
+    if (!r) return false;
+    const balance = s.slotsBalance - r.cost;
+    set({ bunk: r.b, slotsBalance: balance });
+    persistBunk(r.b);
+    persistSlots(get());
+    flushers.forEach((f) => f());
+    return true;
+  },
+  // ---- конец блока инвентаря ----
+
   prisonReset: () => {
     const prison: PrisonState = { ...PRISON_START, mine: freshMine(0) };
     const forest = freshForest();
     const dungeon = { ...DUNGEON_START };
     const fishing = normalizeFishing(null);
-    set({ prison, forest, dungeon, fishing });
+    // Вещи в сундуке у койки — часть каторги: сброс забирает и их (v2.81).
+    const bunk = normalizeBunk(null);
+    set({ prison, forest, dungeon, fishing, bunk });
     persistPrison(prison);
     persistForest(forest);
     persistDungeon(dungeon);
     persistFishing(fishing);
+    persistBunk(bunk);
   },
 
   gamesReset: () => {
@@ -4271,13 +4353,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const forest = freshForest();
     const dungeon = { ...DUNGEON_START };
     const fishing = normalizeFishing(null);
+    const bunk = normalizeBunk(null);
     persistForest(forest);
     persistDungeon(dungeon);
     persistFishing(fishing);
+    persistBunk(bunk);
     set({
       dungeon,
       forest,
       fishing,
+      bunk,
       prison,
       slotsBalance: START_BALANCE,
       slotsBet: 25,

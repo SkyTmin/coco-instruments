@@ -4,10 +4,16 @@
 // ячейке — подробности и действия (съесть, выбросить); тап по вещи на
 // человечке — её сила, заточка и перековка ПРЯМО ЗДЕСЬ (владелец: «качать
 // вещи можно прям в подземелье»); тап по тёмному ряду — нашить карман.
+//
+// v2.81: рюкзак вылазки — единственное, что смерть забирает, и это сказано
+// прямо над ним. «Всё добро» открывает общий инвентарь (`Inventory`) только
+// посмотреть: перекладывать в сундук можно у койки в бараке, не отсюда.
 
 import { useEffect, useMemo, useState } from 'react';
 import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, TokenIcon } from '@/components/PrisonCamp';
+import { GxIcon } from '@/components/gx';
+import { Inventory } from '@/components/Inventory';
 import { useFinanceStore } from '@/store';
 import {
   areaMeat,
@@ -15,8 +21,10 @@ import {
   MEAT_BASE,
   conditionsMet,
   fullSet,
+  isMeat as isMeatId,
   levelOf,
   MATS,
+  MEATS,
   MEAT_NAMES,
   minusMats,
   nextStep,
@@ -46,7 +54,8 @@ import { shortMoney } from '@/lib/prison';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 
-const isMeat = (id: ItemId): id is MeatId => id === 'meat' || id === 'fatmeat';
+// Мясо любого этажа (не только крысятина Входа): имя и лечение — из его записи.
+const isMeat = (id: ItemId): id is MeatId => isMeatId(id);
 const itemName = (id: ItemId) => (isMeat(id) ? MEAT_NAMES[id] : MATS[id as MatId].name);
 
 const urls = new Map<string, string>();
@@ -125,8 +134,10 @@ export function DungeonInventory({
   const upgradeHere = useFinanceStore((s) => s.dungeonUpgradeHere);
   const sackUpHere = useFinanceStore((s) => s.dungeonSackUpHere);
   const [pick, setPick] = useState<Pick>(null);
+  const [all, setAll] = useState(false);
   // Сидор живёт в мире, а не в сторе: после «выбросить» перерисовываемся сами.
   const [, bump] = useState(0);
+  // Открыт общий инвентарь — «Назад» закрывает сперва его (он в стеке выше).
   useEffect(() => registerEscape(onClose), [onClose]);
 
   const sprites = useDungeonSprites();
@@ -332,7 +343,7 @@ export function DungeonInventory({
         </b>
         <span className="mcinv__sub">
           {meat
-            ? `Лечит ${Math.round(st.maxHp * (sk.id === 'fatmeat' ? 0.25 : 0.15))} здоровья. Пахнет — крысы идут на запах.`
+            ? `Лечит ${Math.round(st.maxHp * (MEATS[sk.id]?.heal ?? 0.15))} здоровья. Пахнет — крысы идут на запах.`
             : MATS[sk.id as MatId].lead}
         </span>
         <span className="mcinv__stat">
@@ -405,8 +416,7 @@ export function DungeonInventory({
   } else {
     info = (
       <span className="mcinv__hint">
-        Тапни по вещи на человечке — заточить её можно прямо здесь. Тап по ячейке — съесть или
-        выбросить. Монеты, токены и ключи лежат в кошельке на поясе и места не занимают.
+        Тап по вещи на человечке — заточить. Тап по ячейке — съесть или выбросить.
       </span>
     );
   }
@@ -450,8 +460,12 @@ export function DungeonInventory({
           </div>
         </div>
 
+        <div className="mcinv__warn">
+          <GxIcon name="skull" size={16} />
+          <span>Умрёшь — рюкзак вылазки пропадёт. Вынести — только лифтом.</span>
+        </div>
         <div className="mcinv__label">
-          Рюкзак{' '}
+          Рюкзак вылазки{' '}
           <em>
             {used}/{slots} ячеек
           </em>
@@ -495,10 +509,21 @@ export function DungeonInventory({
           <span>
             <KeyIcon size={14} /> {sim.sack.keys}
           </span>
+          <button
+            type="button"
+            className="mcinv__all"
+            onClick={() => {
+              tapLight();
+              setAll(true);
+            }}
+          >
+            <GxIcon name="backpack" size={14} /> Всё добро
+          </button>
         </div>
 
         <div className="mcinv__info">{info}</div>
       </div>
+      {all && <Inventory place="view" onClose={() => setAll(false)} />}
     </div>
   );
 }

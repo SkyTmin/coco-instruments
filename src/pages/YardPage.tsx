@@ -19,6 +19,7 @@ import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { ForgeScreen } from '@/components/ForgeScreen';
+import { Inventory } from '@/components/Inventory';
 import { BarygaSheet, useYardEvent } from '@/components/YardBits';
 import { AudioToggles } from '@/components/AudioToggles';
 import { FloatingStick, useFloatingStick } from '@/components/FloatingStick';
@@ -47,7 +48,15 @@ import { hubFacts, residentOf } from '@/lib/hub-dialog';
 import type { HubAction, HubFacts, HubOption } from '@/lib/hub-dialog';
 import { useDungeonSprites } from '@/lib/dungeon-sprites';
 import { useGameAudio } from '@/lib/use-game-audio';
-import { doorLatch, footstep, primeAudio, softChime, softThud, uiTap } from '@/lib/sound';
+import {
+  chestLatch,
+  doorLatch,
+  footstep,
+  primeAudio,
+  softChime,
+  softThud,
+  uiTap,
+} from '@/lib/sound';
 import { tapLight } from '@/lib/haptics';
 import { registerEscape } from '@/lib/escape-stack';
 
@@ -143,13 +152,14 @@ function HubWorld() {
   const prison = useFinanceStore((s) => s.prison);
   const dungeon = useFinanceStore((s) => s.dungeon);
   const balance = useFinanceStore((s) => s.slotsBalance);
+  const bunk = useFinanceStore((s) => s.bunk);
   const newTerm = useFinanceStore((s) => s.newTerm);
   const dismissNewTerm = useFinanceStore((s) => s.dismissNewTerm);
   const prisonZoneEnter = useFinanceStore((s) => s.prisonZoneEnter);
   const now = useNow(1000);
   const facts = useMemo(
-    () => hubFacts(prison, dungeon, balance, now),
-    [prison, dungeon, balance, now],
+    () => hubFacts(prison, dungeon, balance, now, bunk),
+    [prison, dungeon, balance, now, bunk],
   );
   const factsRef = useRef(facts);
   factsRef.current = facts;
@@ -175,12 +185,14 @@ function HubWorld() {
   const [forgeOpen, setForgeOpen] = useState(false);
   const [baryga, setBaryga] = useState(false);
   const [board, setBoard] = useState(false);
+  /** Инвентарь (v2.81): 'yard' — посмотреть, 'bunk' — у койки, с сундуком. */
+  const [inv, setInv] = useState<'yard' | 'bunk' | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [fade, setFade] = useState(false);
   const [toast, setToast] = useState<{ key: number; text: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const busy = !!talk || !!camp || forgeOpen || baryga || board || mapOpen || newTerm;
+  const busy = !!talk || !!camp || forgeOpen || baryga || board || mapOpen || newTerm || !!inv;
   busyRef.current = busy || fade;
   const coveredRef = useRef(false);
   coveredRef.current = forgeOpen;
@@ -305,6 +317,11 @@ function HubWorld() {
           uiTap();
           setBoard(true);
           return;
+        case '@bunk':
+          // Сундук у койки в Бараке 1 (v2.81).
+          chestLatch();
+          setInv('bunk');
+          return;
         case '@back':
           leaving.current = true;
           savePlace(back);
@@ -359,6 +376,13 @@ function HubWorld() {
           return;
         case 'zone':
           enterZone();
+          return;
+        case 'bunk':
+          chestLatch();
+          setInv('bunk');
+          return;
+        case 'inventory':
+          setInv('yard');
           return;
         case 'route':
           leave(a.path);
@@ -615,6 +639,17 @@ function HubWorld() {
       <FloatingStick api={stick} />
 
       <div className="hub-pad" onPointerDown={stop}>
+        <button
+          type="button"
+          className="gx-round gx-round--dark hub-pad__map"
+          aria-label="Инвентарь"
+          onClick={() => {
+            tapLight();
+            setInv('yard');
+          }}
+        >
+          <GxIcon name="backpack" />
+        </button>
         {onSquare && (
           <button
             type="button"
@@ -697,6 +732,7 @@ function HubWorld() {
       )}
       {baryga && <BarygaSheet onClose={() => setBaryga(false)} />}
       {forgeOpen && <ForgeScreen onClose={() => setForgeOpen(false)} />}
+      {inv && <Inventory place={inv} onClose={() => setInv(null)} />}
       {newTerm && (
         <GxModal title="Новый срок" onClose={dismissNewTerm} className="yard-term">
           <ul className="yard-term__list">
