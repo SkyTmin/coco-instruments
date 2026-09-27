@@ -40,6 +40,7 @@ import {
 import type { AreaId, DeepMineId, Haul, MatId } from '@/lib/dungeon';
 import {
   bossBar,
+  bossNotches,
   createSim,
   dropFromSack,
   fogOf,
@@ -129,6 +130,8 @@ interface Hud {
   eat: boolean;
   use: Usable | null;
   bossHp: number | null;
+  /** Засечки фаз на полосе босса. */
+  bossMarks: number[];
   plaque: number | null;
   /** Есть что улучшить прямо сейчас — «!» на рюкзаке. */
   up: boolean;
@@ -265,6 +268,7 @@ const hudKey = (h: Hud) =>
     h.eat,
     h.use ? `${h.use.kind}:${h.use.obj.id}` : '',
     h.bossHp === null ? -1 : Math.round(h.bossHp * 100),
+    h.bossMarks.join(','),
     h.plaque === null ? -1 : Math.ceil(h.plaque / 1000),
     h.up,
     h.sign?.id ?? '',
@@ -524,6 +528,7 @@ export function DungeonRun({
     // Полоса босса — сценарий этажа решает, как её считать (король —
     // одна полоса на весь бой, с расколом на малых).
     const bossHp = bossBar(sim);
+    const bossMarks = bossHp === null ? [] : bossNotches(sim);
     let plaque: number | null = null;
     if (boss && boss.state === 'rest') {
       const d = Math.hypot(boss.obj.x - h.x, boss.obj.y - h.y);
@@ -579,6 +584,7 @@ export function DungeonRun({
       eat: meatCount(sim.sack) > 0 && h.hp < sim.stats.maxHp && h.eatCd <= 0,
       use: usableNear(sim, props),
       bossHp,
+      bossMarks,
       plaque,
       up,
       sign,
@@ -1301,7 +1307,12 @@ export function DungeonRun({
         <div className="dgx-boss">
           <GxIcon name="crown" />
           <b>{simRef.current?.boss?.def.name}</b>
-          <GxBar value={hud.bossHp} />
+          <span className="dgx-boss__bar">
+            <GxBar value={hud.bossHp} />
+            {hud.bossMarks.map((v) => (
+              <i key={v} style={{ left: `${v * 100}%` }} className={hud.bossHp! <= v ? 'is-past' : ''} />
+            ))}
+          </span>
         </div>
       )}
       {hud?.plaque != null && hud.bossHp == null && (

@@ -446,6 +446,10 @@ export interface Sim {
   /** Черновик сценария этажа (`registerFloor`). */
   floorData: Record<string, number>;
   tiles: Uint8Array;
+  /** Клетки, сменённые на ходу (`api.setTile`): рендер перерисует их куски. */
+  retiled: number[];
+  /** Счётчик переносов героя (`api.moveHero`): рендер ставит камеру сразу. */
+  warps: number;
   time: number;
   rng: () => number;
   now: () => number;
@@ -634,7 +638,9 @@ const PROP_R: Record<PropKind, number> = {
 };
 
 export function createSim(o: SimOptions): Sim {
-  const w = o.world;
+  // Свой вид клеток у каждой вылазки: `api.setTile` меняет его на ходу, а
+  // мир страницы общий для всех вылазок этажа.
+  const w: World = { ...o.world, mark: o.world.mark.slice() };
   const tiles = w.tiles.slice();
   const d = o.dungeon;
   // Постоянные перемены мира: открытые решётки, найденные тайники.
@@ -653,6 +659,8 @@ export function createSim(o: SimOptions): Sim {
     beaten,
     floorData: {},
     tiles,
+    retiled: [],
+    warps: 0,
     time: 0,
     rng: lcg(o.seed ?? Date.now() & 0x7fffffff),
     now: o.now ?? (() => Date.now()),
@@ -1542,15 +1550,30 @@ function heroDamage(sim: Sim, m: Mob, mult: number): { dmg: number; crit: boolea
 /** Удар по мобу. Возвращает, убит ли. */
 function hitMob(sim: Sim, m: Mob, mult: number, knock: number, heavy: boolean): boolean {
   const h = sim.hero;
-  const { dmg, crit } = heroDamage(sim, m, mult);
+  const hit = heroDamage(sim, m, mult);
+  const { crit } = hit;
+  let dmg = hit.dmg;
+  const ang = Math.atan2(m.y - h.y, m.x - h.x);
+  const def = defOf(m.kind);
+  // Щит, броня спереди, уязвимое окно — решает ИИ моба (`Brain.onHit`).
+  const guard = BRAINS.get(def.brain)?.onHit?.(sim, m, { dmg, crit, heavy, ang }, API);
+  if (typeof guard === 'number') dmg *= Math.max(0, guard);
+  if (dmg <= 0) {
+    // Отбил: звон и искры, без урона и без отброса. Герой чуть отлетает —
+    // удар пришёлся в железо.
+    m.flash = 0.06;
+    sim.events.push({ t: 'clank', x: m.x, y: m.y });
+    sim.hitstop = Math.max(sim.hitstop, 0.05);
+    h.vx -= Math.cos(ang) * 2.2;
+    h.vy -= Math.sin(ang) * 2.2;
+    return false;
+  }
   m.hp -= dmg;
   m.flash = 0.12;
   h.skill = Math.min(1, h.skill + SKILL.perHit);
-  const ang = Math.atan2(m.y - h.y, m.x - h.x);
   const k = (knock * (heavy ? 1.3 : 1)) / massOf(m.kind);
   m.kx += Math.cos(ang) * k;
   m.ky += Math.sin(ang) * k;
-  const def = defOf(m.kind);
   const boss = !!def.boss;
   // Сбить замах можно не всяким ударом, иначе серия ударов держит стаю в
   // вечном оглушении и крысы не кусают вовсе (так было на первом замере:
@@ -1880,6 +1903,13 @@ function onBossPartDown(sim: Sim, m: Mob): void {
     sim.events.push({ t: 'boss', what: 'seal' });
   }
   updateGates(sim);
+}
+
+/** Засечки фаз на полосе босса (доли 0…1). */
+export function bossNotches(sim: Sim): number[] {
+  const b = sim.boss;
+  if (!b || b.state !== 'fight') return [];
+  return BOSS_SCRIPTS.get(b.def.script)?.notches?.(sim, b) ?? [];
 }
 
 /** Полоса здоровья боя 0…1, null — боя нет. */
@@ -3150,6 +3180,30 @@ export const API: SimApi = {
   pickKind,
   pickBurrow,
   def: defOf,
+  setTile(sim: Sim, x: number, y: number, tile: number, mark?: number) {
+    const w = sim.world;
+    if (x < 0 || y < 0 || x >= w.w || y >= w.h) return;
+    const i = y * w.w + x;
+    const was = mark !== undefined && w.mark[i] !== mark;
+    if (sim.tiles[i] === tile && !was) return;
+    sim.tiles[i] = tile;
+    if (mark !== undefined) w.mark[i] = mark;
+    sim.retiled.push(i);
+  },
+  moveHero(sim: Sim, x: number, y: number) {
+    const h = sim.hero;
+    h.x = x;
+    h.y = y;
+    h.vx = 0;
+    h.vy = 0;
+    if (h.mode === 'dash') {
+      h.mode = 'free';
+      h.t = 0;
+    }
+    collideTiles(sim, h);
+    sim.warps += 1;
+    sim.flowT = 0;
+  },
 };
 
 export { tileAt, heroStatus, strikeHits };

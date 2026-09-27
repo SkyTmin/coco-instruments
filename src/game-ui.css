@@ -792,6 +792,25 @@
   font-weight: 800;
   text-shadow: 0 2px 0 #000;
 }
+/* Засечки фаз босса: где сменится поведение. Пройденная гаснет. */
+.dgx-boss__bar {
+  position: relative;
+  display: block;
+}
+.dgx-boss__bar > i {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  margin-left: -1px;
+  background: #fff3c4;
+  box-shadow: 0 0 0 1px #1a0f08;
+  border-radius: 1px;
+  pointer-events: none;
+}
+.dgx-boss__bar > i.is-past {
+  background: #5a4632;
+}
 
 .dgx-card {
   position: absolute;

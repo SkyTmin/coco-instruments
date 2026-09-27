@@ -26,7 +26,8 @@ import type { DungeonState } from './dungeon';
 import { FLOORS } from './dungeon-floors';
 import { DEEP_PYRITE, DEEP_WALLROCK } from './dungeon-floors/types';
 import { BOSS_SCRIPTS, BRAINS } from './dungeon-ai';
-import './dungeon-sim';
+import { API, createSim, NO_INPUT, spawnMob, stepSim } from './dungeon-sim';
+import { heroOf } from './dungeon';
 import { arenaCells, buildWorld, liftOf, reachable, Tile, walkableTile } from './dungeon-world';
 import type { World } from './dungeon-world';
 import { x72HasMob } from './dungeon-mobart';
@@ -228,5 +229,60 @@ describe('этажи подземелья: спуск и сохранение', 
     expect(d.run!.floor).toBe(3);
     expect(d.run!.area).toBe(entryArea(3));
     expect(d.run!.x).toBe(10);
+  });
+});
+
+describe('движок для этажей: щит, смена клеток, перенос героя', () => {
+  const wd = buildWorld(1);
+  const lift = liftOf(wd, entryArea(1))!;
+  const make = () =>
+    createSim({
+      world: wd,
+      dungeon: DUNGEON_START,
+      stats: heroOf(DUNGEON_START),
+      x: lift.x + 0.5,
+      y: lift.y + 1.5,
+      seed: 3,
+      now: () => 1e12,
+    });
+
+  it('onHit: вернул 0 — удар отбит, урона нет, звон', () => {
+    const id = MOBS.rat.brain;
+    const was = BRAINS.get(id)!;
+    BRAINS.set(id, { ...was, onHit: () => 0 });
+    try {
+      const s = make();
+      s.mobs = [];
+      const m = spawnMob(s, 'rat', s.hero.x + 0.8, s.hero.y, { mode: 'chase' });
+      const hp = m.hp;
+      let clank = 0;
+      for (let i = 0; i < 40; i++) {
+        stepSim(s, 1 / 60, { ...NO_INPUT, attack: i % 10 === 0, aim: { x: 1, y: 0 } });
+        clank += s.events.filter((e) => e.t === 'clank').length;
+        m.x = s.hero.x + 0.8;
+        m.y = s.hero.y;
+      }
+      expect(clank).toBeGreaterThan(0);
+      expect(m.hp).toBe(hp);
+    } finally {
+      BRAINS.set(id, was);
+    }
+  });
+
+  it('setTile меняет клетку только этой вылазке, moveHero переносит сразу', () => {
+    const s = make();
+    const x = Math.floor(s.hero.x) + 1;
+    const y = Math.floor(s.hero.y);
+    API.setTile(s, x, y, Tile.Wall, 7);
+    expect(s.tiles[y * wd.w + x]).toBe(Tile.Wall);
+    expect(s.world.mark[y * wd.w + x]).toBe(7);
+    expect(wd.mark[y * wd.w + x]).not.toBe(7);
+    expect(s.retiled).toContain(y * wd.w + x);
+    const w0 = s.warps;
+    s.hero.vx = 5;
+    API.moveHero(s, lift.x + 0.5, lift.y + 3.5);
+    expect(s.hero.vx).toBe(0);
+    expect(s.warps).toBe(w0 + 1);
+    expect(Math.hypot(s.hero.x - lift.x - 0.5, s.hero.y - lift.y - 3.5)).toBeLessThan(0.6);
   });
 });

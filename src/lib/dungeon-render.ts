@@ -228,6 +228,8 @@ export class DungeonRenderer {
   camX = 0;
   camY = 0;
   private camReady = false;
+  /** Сколько переносов героя уже видели: новый — камера встаёт сразу. */
+  private warps = 0;
   private chunks = new Map<
     number,
     { c: HTMLCanvasElement; snap: Uint8Array; sig: string; used: number }
@@ -601,6 +603,23 @@ export class DungeonRenderer {
       const kl = 1 - Math.exp(-2.5 * dt);
       this.leadX += (h.vx * 0.3 * TS - this.leadX) * kl;
       this.leadY += (h.vy * 0.3 * TS - this.leadY) * kl;
+    }
+    // Сменённые на ходу клетки (`api.setTile`): их куски и соседние — заново
+    // (стены рисуются по соседям).
+    if (sim.retiled.length) {
+      for (const i of sim.retiled) {
+        const cx = Math.floor((i % w.w) / CHUNK);
+        const cy = Math.floor(Math.floor(i / w.w) / CHUNK);
+        for (let oy = -1; oy <= 1; oy++)
+          for (let ox = -1; ox <= 1; ox++) this.chunks.delete((cy + oy) * 1000 + cx + ox);
+      }
+      sim.retiled.length = 0;
+    }
+    if (sim.warps !== this.warps) {
+      this.warps = sim.warps;
+      this.camReady = false;
+      this.leadX = 0;
+      this.leadY = 0;
     }
     const tx = h.x * TS + this.leadX;
     const ty = h.y * TS + this.leadY - this.gh * 0.1;

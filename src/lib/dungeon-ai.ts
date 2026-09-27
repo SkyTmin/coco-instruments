@@ -116,6 +116,27 @@ export interface SimApi {
   pickBurrow(sim: Sim, minD: number, maxD: number): Burrow | null;
   /** Описание вида. */
   def(kind: string): MobDef;
+  /**
+   * Сменить клетку на ходу (комнаты, которые двигаются, мост, осыпь):
+   * рисунок куска карты и соседей перерисуется сам, поле путей — на
+   * ближайшем пересчёте. `mark` — свой вид клетки этажа (0 — обычная).
+   */
+  setTile(sim: Sim, x: number, y: number, tile: number, mark?: number): void;
+  /**
+   * Перенести героя (телепорт, ловушка-провал, зеркало): скорость и рывок
+   * гаснут, камера прыгает сразу, а не едет через полкарты. Клетка должна
+   * быть проходимой — иначе героя вытолкнет к ближайшей.
+   */
+  moveHero(sim: Sim, x: number, y: number): void;
+}
+
+export interface HeroHit {
+  /** Урон, который удар нанесёт без множителя. */
+  dmg: number;
+  crit: boolean;
+  heavy: boolean;
+  /** Угол от героя к мобу. */
+  ang: number;
 }
 
 export interface BrainCtx {
@@ -139,6 +160,14 @@ export interface Brain {
   /** Моб убит: что бросить, кого позвать. `mode` — режим до смерти. */
   onDeath?(sim: Sim, m: Mob, mode: string, api: SimApi): void;
   /**
+   * Героя клинок задел моба — ДО урона. Вернуть множитель урона: 1 —
+   * как есть, 0,2 — щит, 0 — отбил (звон, искры, без урона и без
+   * отброса), 2 — уязвим. `ang` — откуда пришёл удар (от героя к мобу):
+   * щит спереди — сравнить с тем, куда моб смотрит. Не вернуть ничего —
+   * как 1.
+   */
+  onHit?(sim: Sim, m: Mob, hit: HeroHit, api: SimApi): number | void;
+  /**
    * ИИ ведёт ВСЕ режимы сам (боссы): движок не трогает сон, привязь,
    * оглушение.
    */
@@ -157,6 +186,11 @@ export interface BossScript {
   onPartDown?(sim: Sim, b: BossFight, m: Mob, api: SimApi): boolean;
   /** Полоса здоровья 0…1; по умолчанию — сумма частей. */
   bar?(sim: Sim, b: BossFight): number | null;
+  /**
+   * Засечки фаз на полосе (доли 0…1, как у босса SAO): где сменится
+   * поведение. Без них — полоса без засечек.
+   */
+  notches?(sim: Sim, b: BossFight): number[];
   /** Герой пал — бой сброшен. */
   reset?(sim: Sim, b: BossFight): void;
 }
