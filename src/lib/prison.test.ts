@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addPet,
   canMerge,
+  eggOf,
   eggChances,
   EGG_PITY,
   EGGS,
@@ -220,6 +221,13 @@ function run(
     /** Покупать яйца в Питомнике (v2.72). */
     eggShop?: boolean;
     /**
+     * Вылуплять сразу за цену яйца (v2.79): жадно — купил и тут же вылупил,
+     * и тёплые яйца в гнёздах тоже, пока это не дороже `EGGK` цены ранга.
+     */
+    hatchNow?: boolean;
+    /** Сколько цены ранга не жалко на яйцо с вылуплением (иначе `EGGK`). */
+    hatchK?: number;
+    /**
      * Лавка (v2.75.2): расходник, который игрок берёт при каждой
      * возможности. `only` — все токены на него, книг нет; `first` — сперва
      * он (энергетик — как только кончился прошлый, бомба — раз в секунду),
@@ -248,6 +256,7 @@ function run(
   let eggPity = 0;
   let hatchedN = 0;
   let eggsBought = 0;
+  let hatchedNow = 0;
   // Свой ГСЧ у яиц: кто вылупился, не сдвигает бросков рун и посылок —
   // иначе одно другое яйцо уводило бы весь прогон другой дорогой.
   const eggRnd = lcg((opts.seed ?? 20260922) * 31 + 7);
@@ -592,6 +601,36 @@ function run(
       // Питомник: яйцо берут, когда оно стоит не больше 40% ранга и есть
       // свободное гнездо. Жадный покупатель — худший случай для темпа: при
       // 10% и при 100% круг выходит не быстрее (EGGK=… печатает разницу).
+      if (opts.hatchNow && t % 30 === 0) {
+        // Вылупить сразу: гнёзда больше не держат поток — держит только цена.
+        const cost = rankCost(rank);
+        const cap = cost * (opts.hatchK ?? Number(process.env.EGGK ?? 0.4));
+        for (const n of nest)
+          if (
+            n.left > 0 &&
+            eggOf(n.egg).price > 0 &&
+            eggOf(n.egg).price <= cap &&
+            money >= eggOf(n.egg).price
+          ) {
+            money -= eggOf(n.egg).price;
+            n.left = 0;
+            hatchedNow += 1;
+          }
+        if (nest.some((n) => n.left <= 0)) hatchAll();
+        const egg = [...EGGS]
+          .reverse()
+          .find((e) => e.price > 0 && e.from <= rank && 2 * e.price <= cap);
+        if (egg && money >= 2 * egg.price) {
+          money -= 2 * egg.price;
+          eggsBought += 1;
+          hatchedNow += 1;
+          const h = avgHatch(egg.id);
+          eggPity = h.pity;
+          hatchedN += 1;
+          pets = addPet(pets, h.id).pets;
+          while (canMerge(pets[h.id])) pets = mergePet(pets, h.id)!;
+        }
+      }
       if (opts.eggShop !== false && t % 30 === 0 && nest.length < NEST_SLOTS) {
         const cost = rankCost(rank);
         const egg = [...EGGS]
@@ -722,6 +761,7 @@ function run(
     gained,
     tokGot,
     shopBought,
+    hatchedNow,
     oreAt,
     readyAt,
     floorAt,
@@ -815,6 +855,30 @@ describe('темп каторги', () => {
           ),
         );
     }
+  });
+
+  // Вылупить сразу (v2.79): HATCH=1 npx vitest run src/lib/prison.test.ts -t «вылупить сразу»
+  it.runIf(!!process.env.HATCH)('вылупить сразу — замер', () => {
+    const base = run();
+    const fast = run({ hatchNow: true });
+    console.log(
+      'HATCH круг',
+      (base.t / 3600).toFixed(2),
+      '→',
+      (fast.t / 3600).toFixed(2),
+      'ч; вылуплено',
+      base.hatched,
+      '→',
+      fast.hatched,
+      '(сразу',
+      fast.hatchedNow,
+      ') бонус',
+      JSON.stringify(fast.bonus),
+      'зёрна',
+      [1, 2, 3, 4, 5, 6]
+        .map((seed) => (run({ seed, hatchNow: true }).t / 3600).toFixed(2))
+        .join(' '),
+    );
   });
 
   it.runIf(!!process.env.TUNE)('подгонка таблиц', () => {
@@ -930,6 +994,16 @@ describe('темп каторги', () => {
     for (const row of Object.values(ITEM_PRICE))
       row.forEach((x, i) => expect(x).toBeGreaterThanOrEqual(row[Math.max(0, i - 1)]));
     expect(ITEM_PRICE.energy.length).toBe(HORIZONS.length);
+  });
+
+  it('вылупить сразу за цену яйца не ускоряет круг', () => {
+    // v2.79: гнёзда больше не держат поток питомцев — держит цена. Игрок,
+    // который покупает и тут же вылупляет (осторожно — 2% цены ранга, и
+    // смелее — 10%), не проходит круг быстрее: монеты в рангах работают
+    // лучше, чем в яйцах, а сила питомцев упирается в потолок прибавок.
+    const base = run().t;
+    for (const hatchK of [0.02, 0.1])
+      expect(run({ hatchNow: true, hatchK }).t / base, `hatchK ${hatchK}`).toBeGreaterThan(0.95);
   });
 
   it('первый ранг — за минуту-две', () => {

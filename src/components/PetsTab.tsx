@@ -609,9 +609,13 @@ function NestSheet({
   const pull = useFinanceStore((s) => s.prisonEggPull);
   const place = useFinanceStore((s) => s.prisonEggPlace);
   const now = useFinanceStore((s) => s.prisonHatchNow);
+  const balance = useFinanceStore((s) => s.slotsBalance);
   const [armed, setArmed] = useState(false);
   const n = p.nest[i];
-  const cost = n ? hatchNowCost(n.egg) : 0;
+  // Цена «вылупить сразу» — цена яйца: монеты или токены (драконье).
+  const cost = n ? hatchNowCost(n.egg) : { coins: 0, tokens: 0 };
+  const price = cost.coins || cost.tokens;
+  const short = cost.coins ? cost.coins - balance : cost.tokens - p.tokens;
   const basket = EGG_IDS.filter((id) => p.eggs[id] > 0 && id !== n?.egg);
   const full = eggCount(p.eggs) >= EGG_BASKET;
   useEffect(() => {
@@ -631,17 +635,21 @@ function NestSheet({
               label={n.left > 0 ? `ещё ${fmt(n.left)} блоков` : 'готово'}
             />
             <div className="ppn-nest__acts">
-              {cost > 0 && n.left > 0 && (
+              {price > 0 && n.left > 0 && (
                 <button
                   type="button"
                   className={`btn btn--primary btn--sm${armed ? ' is-armed' : ''}`}
-                  aria-disabled={p.tokens < cost}
+                  aria-disabled={short > 0}
                   onClick={() => {
                     primeAudio();
-                    if (p.tokens < cost) {
+                    if (short > 0) {
                       uiError();
                       notifyWarning();
-                      say(`Не хватает ${fmt(cost - p.tokens)} токенов`);
+                      say(
+                        cost.coins
+                          ? `Не хватает ${shortMoney(short)} монет`
+                          : `Не хватает ${fmt(short)} токенов`,
+                      );
                       return;
                     }
                     if (!armed) {
@@ -653,7 +661,8 @@ function NestSheet({
                   }}
                 >
                   {armed ? 'Точно? ' : 'Вылупить сразу '}
-                  {fmt(cost)} <TokenIcon size={13} />
+                  {cost.coins ? shortMoney(price) : fmt(price)}{' '}
+                  {cost.coins ? <CoinIcon size={13} /> : <TokenIcon size={13} />}
                 </button>
               )}
               <button

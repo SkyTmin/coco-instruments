@@ -1416,7 +1416,7 @@ interface FinanceState {
   prisonEggPull: (i: number) => boolean;
   /** Положить яйцо из корзины в гнездо; `swap` — какое гнездо освободить взамен. */
   prisonEggPlace: (egg: EggId, swap?: number) => boolean;
-  /** Вылупить сразу за токены (драконье), не грея: гнездо становится готовым. */
+  /** Вылупить сразу за цену яйца (монеты или токены), не грея: гнездо готово. */
   prisonHatchNow: (i: number) => boolean;
   /** Слить копии: пять одинаковых — золотой, пять золотых — радужный. */
   prisonPetMerge: (id: PetId) => boolean;
@@ -4448,15 +4448,18 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   prisonHatchNow: (i) => {
-    const p = get().prison;
+    const s = get();
+    const p = s.prison;
     const n = p.nest[i];
-    const cost = n ? hatchNowCost(n.egg) : 0;
-    if (!n || n.left <= 0 || cost <= 0 || p.tokens < cost) return false;
+    if (!n || n.left <= 0) return false;
+    const cost = hatchNowCost(n.egg);
+    if (p.tokens < cost.tokens || s.slotsBalance < cost.coins) return false;
     const nest = p.nest.map((x, k) => (k === i ? { ...x, left: 0 } : x));
-    const prison = { ...p, nest, tokens: p.tokens - cost };
-    set({ prison });
+    const prison = { ...p, nest, tokens: p.tokens - cost.tokens };
+    set({ prison, slotsBalance: s.slotsBalance - cost.coins });
     persistPrison(prison);
-    // Токены списаны — на диск сразу, до сцены вылупления.
+    if (cost.coins) persistSlots(get());
+    // Цена списана — на диск сразу, до сцены вылупления.
     flushers.forEach((f) => f());
     return true;
   },

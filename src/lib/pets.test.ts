@@ -189,11 +189,13 @@ describe('питомцы (v2.72–v2.73)', () => {
     expect(r2.nest[1].left).toBe(need - 300);
   });
 
-  it('драконье яйцо: 30 000 токенов в Питомнике, столько же — вылупить сразу', () => {
+  it('вылупить сразу — за цену яйца: драконье за токены, остальные за монеты', () => {
     expect(eggOf('dragon').tokens).toBe(30_000);
     expect(eggOf('dragon').price).toBe(0);
-    expect(hatchNowCost('dragon')).toBe(30_000);
-    for (const id of ['moss', 'stone', 'crystal'] as EggId[]) expect(hatchNowCost(id)).toBe(0);
+    expect(hatchNowCost('dragon')).toEqual({ coins: 0, tokens: 30_000 });
+    // v2.79: остальные — за свою цену в Питомнике, монетами.
+    for (const id of ['moss', 'stone', 'crystal'] as EggId[])
+      expect(hatchNowCost(id)).toEqual({ coins: eggOf(id).price, tokens: 0 });
   });
 
   it('коллекция: +1% за вид, весь зоопарк — ещё +10%', () => {
