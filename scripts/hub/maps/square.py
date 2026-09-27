@@ -54,6 +54,16 @@ LESSONS (critique rounds)
      loop index that does not follow the picture (bush i % 3 vs bush kind) did exactly that.
   6. Sorting: a thing that sits ON another (the cat on the bin, the crow on the scarecrow) needs
      an explicit base below its host's, or the host is painted over it.
+  7. Round 5 (night and edges) — in daylight a prop without a contact shadow floats: `put` stamps
+     a soft oval under every solid prop taller than 10 px, and every footprint gets a band of
+     shade along its south and east foot (the facade can't paint below its footprint). The boot
+     trail on the strip was hidden under a plate and too pale — a story nobody sees isn't told.
+     At night the parade ground was a black hole between four corner lamps: the tribune has its
+     own light now. Things standing side by side (birch + finger-post, bench + punching bag)
+     read as one blob — give each its own air.
+  8. The KPP stands IN the wall line: no wall face or coil under its footprint (the facade shows
+     ground inside it), an asphalt apron instead; the boom barrier is the facade's own arm, so the
+     square draws none. Searchlights come from `facades.searchlight(f)` when it exists.
 """
 from __future__ import annotations
 
@@ -99,6 +109,10 @@ def put(m: Map, name: str, img, x: float, y: float, solid=None, fps: float = 0, 
     if solid is not None and len(solid) == 2:
         sw, sh = solid
         solid = (x - sw / 2, y - sh, x + sw / 2, y) if anchor == 'bc' else (x, y - sh, x + sw, y)
+        if anchor == 'bc' and h > 10:
+            # a soft contact shadow on the ground: in daylight a prop without one floats
+            s = A._shadow(int(min(w - 2, sw * T + 6)), 5, 0.2)
+            m.stamp(s, int(round(x * T - s.w / 2 + 1)), int(round(y * T - 3)))
     return m.put(name, frames, int(round(px)), int(round(py)), solid=solid, fps=fps, layer=layer, phase=phase,
                  base=None if base is None else int(round(base * T)))
 
@@ -293,7 +307,7 @@ def perimeter(m: Map) -> None:
     for a, b in ((0, kx0), ((AX + 2) * T, wpx)):
         gr.paste_(scoil.crop(a, 0, b - a, scoil.h), a, gy - 12)
     # a trail of boot prints across the north strip that stops short of the wall — somebody tried
-    decal(m, A.footprints(7, 2, -3, seed=3), 45.3, 5.1)
+    decal(m, A.footprints(8, 2, -3, seed=3), 50.6, 5.0)
     # the warning fence: north run with plates, west/east runs, south run broken by kpp and gate
     plate = A.warn_sign(['СТОЙ!'])
     for i, x in enumerate(range(FENCE_W * T + 8, (FENCE_E - 2) * T + 8, 32)):
@@ -513,7 +527,7 @@ def west(m: Map) -> None:
         put(m, 'square.tyre', ty, 14.8 + i * 0.95, 31.5, solid=(0.8, 0.3))
     put(m, 'square.banner.sport', A.banner_small(['В ЗДОРОВОМ ТЕЛЕ -', 'ЗДОРОВЫЙ ДУХ!'], '#3f5a78'), 17.6, 25.5,
         solid=(3.6, 0.3))
-    put(m, 'square.bench', A.bench(), 21.0, 29.0, solid=(1.7, 0.5))
+    put(m, 'square.bench', A.bench(), 21.6, 26.4, solid=(1.7, 0.5))
     # the yard between the west road and the store: the smoking shelter, a woodpile, its fire
     put(m, 'square.shelter', A.smoking_shelter(), 18.2, 40.4, solid=(16.4, 39.6, 20.0, 40.4))
     put(m, 'square.smoke_sign', A.sign_post(A.warn_sign(['МЕСТО', 'ДЛЯ КУРЕНИЯ']), 8), 22.0, 40.2, solid=(0.4, 0.3))
@@ -545,7 +559,7 @@ def west(m: Map) -> None:
     decal(m, A.flowerbed(), 14.9, 23.3)
     put(m, 'square.bench', A.bench(), 14.6, 26.2, solid=(1.7, 0.5))
     # birches: a few survived the building of the camp
-    put(m, 'square.birch', A.birch(1), 12.0, 16.9, solid=(0.4, 0.3))
+    put(m, 'square.birch', A.birch(1), 4.1, 16.9, solid=(0.4, 0.3))
     put(m, 'square.birch.2', A.birch(2), 4.6, 34.9, solid=(0.4, 0.3))
     for x, y in ((13.6, 34.8), (13.6, 25.8)):
         lamp(m, x, y, left=True)

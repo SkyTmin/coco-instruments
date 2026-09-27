@@ -1877,8 +1877,9 @@ def footprints(n: int = 6, dx: int = 3, dy: int = -5, seed: int = 1) -> Img:
     for i in range(n):
         side = 2 if i % 2 else -2
         px, py = x + (side if abs(dy) >= abs(dx) else 0), y + (side if abs(dx) > abs(dy) else 0)
-        out.rect_(px, py, 2, 3, '#8a7456', 0.85)
-        out.px_(px, py + 3, '#8a7456', 0.6)
+        out.rect_(px, py, 2, 3, '#77623f', 0.9)
+        out.px_(px, py + 3, '#77623f', 0.7)
+        out.px_(px + 1, py - 1, '#d9c89f')
         x += dx
         y += dy
     return out
