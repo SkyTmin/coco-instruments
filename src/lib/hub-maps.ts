@@ -3,10 +3,11 @@
 // Units: tiles are 16 px. Map w/h, npc/door/spawn positions are in tiles; objects, lights and
 // effects in pixels. objs: [sprite, x, y, base, top, fps, phase] — x/y is the sprite's top-left,
 // base the pixel row where it stands (depth sorting with actors), top = always drawn over actors.
-// solid: bit-packed half-tile grid (w*2 × h*2, row-major, MSB first), 1 = blocked.
+// solid: bit-packed collision grid of `sub` cells per tile (w*sub × h*sub, row-major, MSB first),
+// 1 = blocked. sub = 4 (quarter tiles) since v2.80.1; the engine defaults to 2 if it is missing.
 // HUB_SPRITES: name → [x, y, w, h, frames] in /hub/atlas.png; frames lie side by side.
 
-export const HUB_REV = '56745b36a3';
+export const HUB_REV = '93e775cc3c';
 
 export const HUB_ATLAS = { w: 1024, h: 1249 } as const;
 
@@ -361,7 +362,7 @@ export interface HubNpcData { id: string; sheet: string; x: number; y: number; f
 export interface HubDoorData { x: number; y: number; w: number; h: number; to: string; at: string; kind: string; label: string; lock: string }
 export interface HubMapData {
   id: string; name: string; kind: 'indoor' | 'outdoor'; w: number; h: number;
-  ambient: number; music: string; bg: string; solid: string;
+  ambient: number; music: string; bg: string; sub?: number; solid: string;
   objs: HubObjRow[]; npcs: HubNpcData[]; doors: HubDoorData[]; lights: HubLightRow[]; fx: HubFxRow[];
   spawns: Record<string, [number, number, number]>; marks: Record<string, [number, number]>;
   searchlights: [number, number, number][];
@@ -377,7 +378,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 1.0,
   "music": "yard",
   "bg": "#6e5a44",
-  "solid": "//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4AAAAAAAAAAAAAAAAAAH/+AAAAAAAD///wAADAAAB//gAAcADgA///8wAAwAAAf/4//w//AAD///A//AP//3/+P/8P/wAA///wP/wD//9//j//D/8AAP//8D//A///f/4//w//H/z///A//wP//3/+P/8P/x/8///wP/8D//9//j//D/8f/P//8D//A///f/4//w//H/z///e//wP//3/+P/8P/x/////3v/8D//9//v8Pz/8AA/8P8Dw/////f/7/D8//8cD/D/H8P////3/+AABgD/HAAAAHwAOOAAB//gAAAAAAAAAAAAAAAAAAf/4AAAAAAAAAAAAAAAAAAH/+AAAAAAAAAAAAAAAAAAB//gAAAAAAAAAAAAAAAAAAf/4AAAAAAAAAAAAAAAAAAH/+AAwAAAAAAAAAAAAAAAB////8AAAMAAAAAAMAAAAAf/4ADD///4AAAAADAAAAAH/+AAw///OAAAAAAAAAAAB//gAMP//wAAAAAAD/wAAAf/4ADD//8B+A8f/w/wAAB3/+AAA///AfgPH/wP8AAAd//gAAP//wAAAAAAD/AAAAf/4AAD//8AAB+AADwwc/8//+AwA///AAAfgAA8MHP/P//gMAP4fwAAH4AAAAAD/wf/4ADD+H8AAAAAAAAAA/8H/+AAwAAAAAAAAAAAAAP/B//gAcAAAAAAAAAAAABj/zf/7//AAAAAAAAAAAAAY/83/+//wAAAAAAAAAAABgP/B//gAAAAH8AAAAAAAAYDhwf/4AAAAB/AAAAAAAAAA4cH/+AAAx/gA+AAAAAAAAAAB//gAAPgB4PgAAAAAAAwAHf/7//B4AeAAAAAAAAAAAAH/+//wAAAAAAAAAAAAAAAB//v/8B8+AAAAAAAAAAAAD//7//AAAAD4AAAAAAAAAA//+//wAAAA+AAAAAAAAYBh//v/8AAAAAAAAAAAAPwAAf/7//AAAAAAAAAfAAD8AAH/+//wD4AAAAAAHwAA/AAB//vh94+HgwAAAAAAAAAAOf/74feAAAAAAAAAcAgDgAH/+wAAP/wAAAAAAHAIAAAB//gAAAAAMAAAAAAMAAAAAf/4AAAAADAAAAAADAAAAAH/+AAAAAAAACAAAAAAAAAB//gAAAAAAAAAAAAAAwAAAf/4AAAAAAAAAAAAAAAAAAH/+IAwwIAgAAAAAAAAAAAB//uAMMCAIAAAAAAAAAAAAf/4AAAAAA//wA///8D/////+AAAAAAP/8AP///A//////v/wD+AD//AD///wP//wf/7/8A/gA//wA///8D//8H/+//AAAAP/8AP///A///B//v/wAAAD//AD///wP//wf/7/8AAAD//wA///8D//8H/+//AAAAP//AP///A///B//v/wAAA/4fwD///wPw//f/7/8A7/P+H8A///8D8P/3/+AAAO/xgAHAAAAAAAADB//gAYGAAAAAAA+AfwAAAwf/4AGBsAAAAAAPgH8AAAMH/+AAAAAAAAAAAAAAAAADB//oAwAAAAAAABgAAAAAAwf/6AMAAAAAAAAYAAAAAAMH/+wAAAAAAAAAAAAAwAADB//sAAAAAAAAAAAAAMAAA/f/4ADA///8AAAP//wA///3/+AAAP///AAAD//8AP//B//v/wD///wAAA///AD//wf/7/8A////gAAP//wA//8H/+//AP///4AAD//8AP//B//v/8D///wAAA///AD/////7//A///8AYAP//wA//wH/+//wP///HgAD//8AP/8B//vD8D///x7gA/h/AD//Af/7w8A///8A4AP4f/A//wH/+wAAAAAAAAAAAAAAB+cB//sAAAAAAAAAAAAAAPfnAf/4AAAAAAAAAAAAAAAH4AH/+AAAAAAAAAAB+AAAB+AB//gAAAAwAABgAfgDAAfgAf/4AAAAMAAAYAAAAwAAAAH///////////AP///////////////////wD///////////////////8A////////////////////AP///////////////////wD///////////////////8A////////////////////AP///////////////////wD/////////w==",
+  "sub": 4,
+  "solid": "/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9+///////////////////////////////////////37zz///////////////////////////////////////PPPP//////////////////////////////////////8888///////////////////////////////////////zz37///////////////////////////////////////fv//////////////////////////////////////////+98AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD73zzwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPPP//AAAAAAAAAAAAAAAAP//////AAAAAAAAAAAAAAA////8AAAAAAAAAAAAAAAH//////8AAAAAAAAAAAAAAD////wAAAAADgAAAHAAAAD//////w8AAAAA8AAAAAAAP////AAAAAAOAAAAcAAAAP//////AAAAAAAAAAAAAAA////8D////wD///8AAAAA//////8AD///8AAP/////z////wP////AP///wAAAAD//////wAP///wAA//////P////A////8A////AAAAAP//////AA////AAD/////8////8D////wD///8AAAAA//////8AD///8AAP/////z////wP////AP///wAAAAD//////wAP///+AA//////P////A////8A////AAAAAP//////AA////4AD/////8////8D////wD///8Af/8A//////8AD////gAP/////z////wP////AP///wB//wD//////wAP///+AA//////P////A////8A////AH//AP//////AA////4AD/////8////8D////wD///8Af/8A//////8AD////gAP/////z////wP////AP///wH//8D//////wAP///+AA//////P////A////8A////Af//wP//////AA////4AD/////8////8D////wD///8H///4//////8AD////gAP/////z////wP////AP///wf///j//////x/P///+AA//////P////A////8A////B///////////H8////4AD/////8////8D////wD///8H//////////8fz////wAP/////z////wP/wD/AP///wAAAAD//wD//wAP8A//B8//////P////O//AP8A////AAAAAP//AP//AA/wD//3z/////8////87/8A/3D////AAfAA//8A//8D7/AP//fP/////z////wP/wD/cP///84B8AD//wD//wPv8A//8H//////P////AAAAAAYAAD/zgAAAAAAAAAAGDAAAADAcAAAAAA////8AAAAABgAAAAAAAAAAAAAAAAYMAAAAMAAAAAAAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////8AAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////yAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////P///wAAAAAAADAAAAAAAAAAAAAMAAAAAAAAAAA////8AAAAYA//////MAAAAAAAAAAAAAwAAAAAAAAAAD////wAAABgD/////8AAAAAAAAAAAAAAAAAAAAAAAAAP////AAAAGAP/////weAAAAAAAAAAAAAAAAAAAAAAAA////8AAAAYA//////B4AAAAAAAAAAAAAAAAAAAAAAAD////wAAABgD/////8AAAAAAAAAAAAAAP//cAAAAAAAP////AAAAGAP/////wAAAAAAAAAAAAAA//9wAAAAAAA////8AAAAYA//////AAAAAAAAAAAABgD//wAAAAAAAD////wAAABgD/////8AAAAAADwAAAAGAP//AAAAAAAcP////AAAAAAP/////wAA/wAAPAH///AA//8AAAAAABw////8AAAAAA//////AAAAAAAAAAAAAAD//wAAAAAAAD////wAAAAAD/////8AAAAAAAAAAAAAAP//AAAAAAAAP////AAAAAAP/////wAAAAAAAAAAAAAA//8AAAAAAAA////8AAAAAA//////AAAAAAAAAAAAAADwDwAAAf/4AD////wAAAAAD/////8AAAAAA//AAAAAAPAPAA4B//gHP////AAAAAAP/////wAAAAAD/8AAAAAP8A8AAAH/+AA////8AAYAAA//////AAAAAAP/wAAAAA/wDwAAAf/4AD////wAAAAAD//AP/8AAAAAA//AAAAAAAAAAAAB//gAP////AAAAAAP/8A//wAAAAAAAAAAAAAAAAAAAAH/+AA////8AAAAAA//wD//AAAAAAAAAAAAAAAAAAAAAf/4AD////wAAABgD//AP/8AAAAAAAAAAAAAAAAAAAAB//gAP////AAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/+AA////8AAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/4AD////wAAABgAAAAAAAAAAAAAAAAAAAAAAAAAAAD//wAP////AAAA2AAAAAAAAAAAAAAAAAAAAAAAAAAOAP//Ac////8AAADYAAAAAAAAAAAAAAAAAAAAAAAAAA4A//8Bz////wAAABgAAAAAAAAAAAAAAAAAAAAAAAAAAAD//wAP////P///2AAAAAAAAAAAAAAAAAAAAAAAAAAAAP//AA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAADwAAf/6AD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAABQDcAP////AAAAAAAAAAB//AAAAAAAAAAAAAAAAAAAA/APwA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8A/AD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPwD8AP////AAAAAAAAAAAAAAH8AAAAAAAAAAAAAAAAAAAAAA////8AAAAAAAB//wAAAfwAAAAAAAAAAAAAAAAAAAAAD////wAAAAABgAAAAAAAAAAAAAAAAAAAAAAAA4AAAAOP////AAAAAAB/AAAAAAAAAAAAAAAAAAAAAAADgAAAA4////8////8AH8AAAfwAAAAAAAAAAAAAAAAAAAAAAAAD////z////wAAAAAB/AAAAAAAAAAAAAAAAAAAAAAAAAP////P////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////8////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////z////wAAAAf4AAAAAAAAAAAAAAAAAAAAAAAAAAP////P////AAD+B/gAAAAAAAAAAAAAAAAAAAAAAAAAc////8////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////z////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////P////AAAAAAAAAH8AAAAAAAAAAAAAAAADgAAcA////8////8AAAAAAAAAfwAAAAAAAAAAAAAAAAOAABwD////z////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////P////AAAAAAAAAAAAAAAAAAAAAAAAAH/gAAAAA////8////8AAAAAAAAAAAAAAAAAAAAAAAAAf+AAAAAD////z////wAAAAAAAAAAAAAAAAAA/gAAAAB/4AAAAAP////P////AAAAAAAAAAAAAAAAAAD+AAAAAH/gAAAAA////8////8AAH+AAAAAAAAAAAAAAAAAAAAAf+AAAAAD////z/wD/wAAf4AfAAYAAAAAAAAAAAAAAAAAAAAAA4P////P/AP/AAAAAB8ABgAAAAAAAAAAAAAAAAAAAAADg////8/8A/8/AAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAD////z/wD/z8AAAAAAAAAAAAAAAAAAAAAAMAAA4AAAAP////PAAAAAAAAAAAAAAAAAAAAAAAAHgAAAAAAAAAAA////88AAAAAA/93cAAAAAAAAAAAAAAeAAAAAAAAAAAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////8AAAAAAAAAAAAMAAAAAAAAAAAAAwAAAAAAAAAAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////AAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAABgAAAAAAA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////wsAABABgAMAADAAAAAAAAAAAAAAAAAAAAAAAAAP////CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////8AAAAAAAAAAAAD////wAAD///////AA/////wAD////wAAAAAAAAAAAAP////AAAP//////8AD/////f//////AAAAAAAAAAAAA////8AAA///////wAP////9gA////8AAAAAAAAAAAAD////wAAD///////AA/////2AD////z///8AAAAAAAAP////AAAP//////8AD/////YAP////P///wAAf/AAAA////8AAA///////wAP////9gA////8////AAB/8AAAD////wAAD///////AA/////2AD////z///8AAH/wAAAP////AAAP//////8AD/////YAP////P///wAAAAAAAA////8AAA///////wAP////9gA////8////AAAAAAAAD////wAAD///////AA/////2AD////z///8AAAAAAAAP////AAAP//////8AD/////YAP////P///wAAAAAAAA////8AAA///////wAP////9gA////8////AAAAAAAA7////wAAD///////AA/////2AD////z///8AAAAAAADv////AAAP//////8AD/////YAP////P///wAAAAAAAA////8AAA///////wAP////9gA////8////AAAAAAAAD////wAAD///////AA/////2AD////z///8AAAAAAAAP/AP/8AAP//////8AD/8A//Y/P////P///wAAAAAAB+/8A//wAA///////wAP/wD/9j8////8////AAAAP/8H7/wD/wAAD///////AA//AP/2Pz////z///8AAHA//wfv/AP/AAAP//////8AD/8A//YAP////AAAAAAAcD//AYAAAADgAAAAAAAAAAAAAAAABgA////8AAAAAAAAP/8AAAAAAOAAAAAAAAAAAAAAAAAGAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAP////AAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgA////8AAAAAAOOAAAAAAAAAAAAAP+AAB/eAAAAAAAGAD////wAAAAAAAAAAAAAAAAAAAAAAAAAH94AAAAAAAYAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAP////IAABAAAAAAAAAAAAAAAAAGAAAAAAAAAAAAABgA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAAAAGAD////zgAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAYAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABn4////8AAAAYAD///////AAAAAAAP/////wAAD////2fj////wAAABgAP//////8AAAAAAA//////AAAP////YAP////AAAAAAA///////wAAAAAAD/////8AAA////9gA////8AAAAAAD///////AAAAAAAP/////wAAD////2AD////z///8AAP//////8AAAAAAA//////AAAP////YAP////P///wAA///////wAAAAAAD/////8AAA////9gA////8////AAD///////AAAAAAAP/////wAAD////2AD////z///8AAP//////84AAAAAA//////AAAP////YAP////P///wAA///////zgAAAAAD/////8AAA////9gA////8////AAD///////AAAAAAAP/////wAAD////2AD////z///8AAP//////8AAAAAAA//////AAAP////f//////P///+AA///////wAAAAAAD/////8AAA////9//////8////4AD///////AAAYAAAP/////wAAD////wAD////z///8AAP//////8AABgAAA//////AAAP////AAP////P///wAA///////wAAAAAAD/////8AAA////8AA////8////AAD///////AfgAAAAP/////wAAD////wAD////z/AP/wAP//////8B+AAAAA//wD//AAAP////AAP////P8A//AA///////wH4cAAAD//AP/8AAA////8AA////8/wD/AAD///////AAAAAAAP/8A///4AD////wAD////z/AP8AAP//////8AAAAAAA//wD///gAP////AAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////84AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wAAAD////zgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwD/APAAP////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwP8A8AA////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wAAAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AAAAP////AAAAAAAAAAAAAAAAAAAAAAf/AAAAAAAAP8AAAA////8AAAAAAAAAAAAAAAAAAAAAB/8AAAAAAAA/wAAAD////wAAAAAAAAAAAAAAAAAAAAAH/wAAAAAAAAAAAAAP////AAAAAAAAABgAAAAAADAAAAAAAAAYAAAAAAAAAA////8AAAAAAAAAGAAAAAAAMAAAAAAAABgAAAAAAAAAD////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//fv/////////////////gAAA/////////////////9+88/////////////////+AAAD/////////////////zzzz/////////////////4AAAP/////////////////PPPP/////////////////gAAA/////////////////889+/////////////////+AAAD/////////////////37///////////////////4AAAP///////////////////vf/////////////////gAAA/////////////////+988//////////////////DAAD/////////////////zz///////////////////+8AAP//////////////////////////////////////7wAA//////////////////////////////////////+PAAD//////////////////////////////////////88AAP///////////////////////////////////////wAA////////////////////////////////////////AAD///////////////////////////////////////8AAP//////////////////////////////////////7wAA///////////////////w==",
   "objs": [
    ["square.fence_h", 56, 79, 96, 0, 0, 0],
    ["square.fence_h", 88, 79, 96, 0, 0, 0],
@@ -1014,7 +1016,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.6,
   "music": "yard",
   "bg": "#120c10",
-  "solid": "///////////////////////wAP/AA//nD/+d/AAH8AAfwAAP/MA/94DwHgPAAA/wAD/8/P/z88ADf8AN/8AH/wAf/w///D/w",
+  "sub": 4,
+  "solid": "//////////////////////////////////////////////////////////////////////////////////////////8AAAD///AAAA///wAAAP//8AAAD///+AAA////gAAP///4Hz////+B8//wAAAAP/8AAAAD//AAAAA//wAAAAP/8AAAAAD/AAAAAA///wYAAP//8GAAD///P8AA//8D/AAP8AA/wAD/AAP8AA/wAAAAAP8AAAAAD/AAAAAA//8AAAAP//AA//D//34P/w//9+D/8P//fg//D/AAAAAA/wAAAHD//wAABw//8AAAAP//8AAAAP8PAAAA//7wAAAP/+8AAAD///8A//////AP/////wD/////8A///w==",
   "objs": [
    ["forge.hearth", 16, 8, 80, 0, 7, 0],
    ["forge.bellows", 64, 65, 80, 0, 0, 0],
@@ -1088,7 +1091,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.55,
   "music": "mine",
   "bg": "#120c10",
-  "solid": "/////////////////////////n4D/n5j/n77/n77wAADwAADwAAP/hgP/hgf/hgf/gAfwBgD/hjj/hjvwBgP8HgP/GAD/AAD/gGf/gGf/8P//8P/",
+  "sub": 4,
+  "solid": "//////////////////////////////////////////////////////////////////////////////////////////////////w//AAP//w//AAP//w//BgP//w//BgP//w//P/P//w//P/P//w//P/P//w//P/P8AAAAAAP8AAAAAAP8AAAAAAP8AAAAAAP8AAAAAD/8AAAAAD///wAAAD///wDwAAP//wDwAAP//wDwAP///wDwAP///wAAAP///wAAAP///wAAAP/8AAAAAAP8AADwAAP//wDwPwP//wDwPwP//wDwPz/8AAAAPz/8AADwAD/8AADwAD//wA/wAD//wA8AAAP//A8AAAP//AAAAAP//AAAAAP8PAAAAAP/4AAAAP//7gAA8P//7gAA8P//7gAA8P////wD//////wD//////wD//////wD///",
   "objs": [
    ["mine.cage", 72, 8, 80, 0, 0, 0],
    ["mine.signal", 73, 21, 81, 0, 1.2, 0],
@@ -1181,7 +1185,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.45,
   "music": "depths",
   "bg": "#120c10",
-  "solid": "////////////////////////+AAfw//DwP/DwP8Pz/9vz/9jwAADwAA/wAA/wAG//4f/wAP/wIAD3IAD3AA/wAA//AHj/AHj+8B/+8B//8P//8P/",
+  "sub": 4,
+  "solid": "/////////////////////////////////////////////////////////////////////////////////////////////////8AAAAP//8AAAAP/8Af//wAP8Af//3AP8AD//3AP8AD//wAP8AD//wAP8AD//wD/8H7//wD/8H7//zwP8H7//zwP8AD//wAP8AAAAAAP8AAAAAAP8AAAAA//8AAAAA//8AAAAA//8AAAAA//8AAAA4//8AAAA4/////AP//////AP///8AAAD///8AAAD///8AAAAAAP8ADAAAAP8ADAAAAP8+AAAAAP8+AAAAfv8+AAAAfv8AAAAAfv8AAAAAAP8AAAA/wP//AAA/wP//AAA/wP//AAAAAP8AAAAAAP/4fwAD3//4fwAD3//4fwAD3////wD//////wD//////wD//////wD///",
   "objs": [
    ["zone.beacon", 91, 17, 46, 0, 6, 0],
    ["zone.wallcr.l", 14, 18, 54, 0, 0, 0],
@@ -1286,7 +1291,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.5,
   "music": "lobby",
   "bg": "#120c10",
-  "solid": "////////////////////////////////x//Dx//f9//f9/ODwAPDwAPD8AAf8AAf8AADxAADxAADwAAD/gAD/gAfwAAfwAAf9gH/9gH//8P//8P/",
+  "sub": 4,
+  "solid": "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8D////AP8D////AP8D////P/8D////P//z////P//z////P//z//AwAP8D//AwAP8AAAD/AP8AAAD/AP8AAAD/AP8AAAD/AP8AAAAAAP/wAAAAH//wAAAAH//wAAAAH//wAAAAAP8AAAAAAP8AAAAAAP8DAAAAAP8DAAAAAP8AAAAAAP8AAAAAAP8AAAAAAP/4AAAAAP/7gAAAAP/7gAAAAP8AAAAAH/8AAAAAH/8AAAAAH/8AAAAAH/8AAAAAAP/wAAAAfv/zwAA/fv/zwAA/fv/zwAA/fv///wD//////wD//////wD//////wD///",
   "objs": [
    ["lift.hole", 22, 54, 63, 0, 2, 0],
    ["lift.shaft", 38, 28, 96, 0, 0, 0],
@@ -1379,7 +1385,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.5,
   "music": "yard",
   "bg": "#120c10",
-  "solid": "/////////////////////////8H//8H/wAD/wBj//BgD/BuDx9v/x8D//AD//AODwwODwwA7/wD7/wDD/gADzsM/8AD/8MP/wMMDwAAD/8P//8P/",
+  "sub": 4,
+  "solid": "///////////////////////////////////////////////////////////////////////////////////////////////////wAf/////wAf/////wAf/////wAH//8AAAAH//8AAAAH//8AABgH//8AABgH//8AAAAAAP//AAAAAP//ADz4AP//ADz4AP8AADz4AP8AADwAAP8B/AAH/v8B/AAH/v8AAAAH/v9/AAAAAP9/AAD8AP9/AAD8AP8AAAD8AP8A8AAAAP8A8AAAAP8A8AAAeP8AAAAAeP/+YAAGeP/+YAAGAP/+AAAAAP/+AAAAAP8AAAAAAP8DhwDgPP8DhwDgPP8AAAAAAP8AAAAP8P/wAAAP///wDgB///8ADgBwAP8ADgBwAP8AAAAAAP8AAAAAAP///wD//////wD//////wD//////wD///",
   "objs": [
    ["tower.sconce", 103, 28, 48, 0, 6, 0],
    ["kit.bucket", 125, 51, 61, 0, 0, 0],
@@ -1472,7 +1479,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.62,
   "music": "yard",
   "bg": "#120c10",
-  "solid": "////////////////////////3+H/3+H/3+H/3/n/8H4D8H4Dz/4Dz4B/wAB//8H//8HD/8ADwAA//gA//4H//gHDw8P/28P//8P//8P/",
+  "sub": 4,
+  "solid": "////////////////////////////////////////////////////////////////////////////////////////////////8f/4AP/v8f/4AP/v8f/4AP/v8f/4AP/v8f/4AP/v8f/4AP/v8AABgP/v8AABgP/v/wAP/AAP/wAP/AAP8AAP/AAP8AAP/AAP8AAP/AAP8H/P/AAP8H/AAAAP8H/AAAAP8AAAAA/v8AAAAA/v8AAAAO/v8AAAAO/v///wAOAP///wAAAP8D/wAAAP8D/wAAAP8AAAAAAP8AAAAA/v8AAAAA/v//gAAA/v//jAAAAP//jAAAAP//gAA/AP//gAA/AP8AAAAAAP8A/AAAP/8w/AB3P/8w/AB3P////wD//////wD//////wD//////wD///",
   "objs": [
    ["kennel.bench", 28, 60, 60, 0, 0, 0],
    ["kennel.nest", 32, 59, 61, 0, 0, 0],
@@ -1553,7 +1561,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.58,
   "music": "yard",
   "bg": "#120c10",
-  "solid": "///////////////////////gfP+B8/4Hz/mfPD/M8P//w///8AA/wADwAAPAAA8AH//8f//x/8AH/wAP//A//+D//w///D/w",
+  "sub": 4,
+  "solid": "//////////////////////////////////////////////////////////////////////////////////////////wAP/D//8AD/w///AA/8P//wAP/D//8AD/w///AA/8P//wAP/D/AEGCDw/wBBggAP8Af/4AD/AH/+B//wB//vf/8Af/73//AH/+9//wAAAAAP8AAAAAD//wAAAA//8AAAAP8AAAAAD/AAAAAA/wAAAAAP8AAAAAD/AAAB///wAAAf//8AAAH/////8B//////Af/////wH///AAAB///wAAAAAP8AAAB5//AAAAef/wAAAHgP//4ADw////AA9////wAPf///8A//////AP/////wD/////8A///w==",
   "objs": [
    ["store.keyboard", 62, 16, 47, 0, 3, 0],
    ["store.shelves1", 16, 28, 78, 0, 0, 0],
@@ -1625,7 +1634,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.62,
   "music": "yard",
   "bg": "#120c10",
-  "solid": "/////////////////////gP/4D/+A//mf8P8PD/Dw/w//8P/h//4f8AAP4AD/w/88P//D//w/w==",
+  "sub": 4,
+  "solid": "//////////////////////////////////////////////////////////////////////////////////AAD///8AAP///wAA////AAD///8AAP///wAA////AAD//wDBgwD/AMGDAP8A//8A/wD//wD/AP//AP8A//8A/wD//wD/AAAAAP8AAAAA//4AAAD//tgA/P/+2AD8//4AAPz/AAAAAP8AAAAA/3wAAAD/fAAAAP98AAAA/wPwAPz/A/AO/P8D8A78///wD/////AP////8A/////wD//w==",
   "objs": [
    ["kiosk.neon", 65, 17, 47, 0, 2, 0],
    ["kiosk.shelves", 14, 30, 78, 0, 0, 0],
@@ -1695,7 +1705,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.45,
   "music": "yard",
   "bg": "#120c10",
-  "solid": "//////////////////////wAD//wP//AD//APB/P8H8/+AAP4AH8AAfwAAP+AH/4AfwwAPDAA/wA//wD//AD/wAP/w///D/w",
+  "sub": 4,
+  "solid": "////////////////////////////////////////////////////////////////////////////////////////8AAAAP//AAAAD////AAA////wAAP////4AAA///+AAAP///uAAD//8DgAA/wA//wPP8AP/8Dz/AD//A8/wA//wPP98AAAAD/fAAAAA/3wAAAP/98AAAD//AAAAA//wAAAAAP8AAAAAD/AAAAAA//+AAAD///gAAA///4AAAP//+AAAD/8AAAAAD/AAAAAA/wDwAAAP8A8AAAD/AAAAAA//8AAAAP//4AAP///+AAD//wDgAAAP8AAAAA///wAAAP//8AAAD///8A//////AP/////wD/////8A///w==",
   "objs": [
    ["trader.cuckoo", 106, 17, 48, 0, 4, 0],
    ["trader.table", 52, 68, 98, 0, 0, 0],
@@ -1770,7 +1781,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.7,
   "music": "yard",
   "bg": "#120c10",
-  "solid": "/////////////////////////gAD/gf/wAb/wD//wD/DwD/D/AA//DD/wAADwAAD/4Hf/4Hf/4HfwAADwAB/8AB/8GAfwGB/wAADwAAD//D///D/",
+  "sub": 4,
+  "solid": "////////////////////////////////////////////////////////////////////////////////////////////////8AAAAAAP//gAAAAP//gAA/z/8AAAG/z/8AAAGHz/8AAAAHz/8AAP//AP8AAP//AP8AAP//AP8AAP//AP8AAP//AP8AAAAAAP/+AAAAAP/+AAAA///+APAP///+APAP//8AAAAAAP8AAAAAAP8AAAAAAP8AAAAAAP8AAAAAAP/8AAAAAP/8/AAcHv/8/AAcHv/8AAAAAP8AAAAAAP8AAAAAAP8AAAAAAP8AAAAD//8AAAAD///wAAAD///wAAAD///wAAAAAP8AAAAAAP8AA8ADj/8AA8ADj/8AAAAAAP8AAAAAAP8AAAAAAP8AAAAAAP////AP//////AP//////AP//////AP//",
   "objs": [
    ["hq.clock", 162, 20, 48, 0, 1, 0],
    ["hq.flag", 111, 20, 66, 0, 0, 0],
@@ -1847,7 +1859,8 @@ export const HUB_MAPS: Record<string, HubMapData> = {
   "ambient": 0.32,
   "music": "yard",
   "bg": "#120c10",
-  "solid": "////////////////////////wAH//////////4H/wAH/95n/wBgDwP8D3P/f3P//wAAzwAAD/4D//4D/wAADwAAD+4Of+4OfwAADwAAD/8P//8P/",
+  "sub": 4,
+  "solid": "////////////////////////////////////////////////////////////////////////////////////////////////8AAAA///8AAAA//////f+//////f+//////f+//////AA//////AA///8AAAA///8AAAA///8AAAAAAP8xjAA///8xjBg///8AABgAAP8AAAAAAP8AB//gAP8AB//gAP8AB//gAP88B//vD/88AAAP//88AAAP//8AAAAA8P8AAAAAAP8AAAAAAP8AAAAAAP8AAAAAAP//eAAAH///eAAPn///eAAPn/8AAAAAAP8AAAAAAP8AAAAAAP8AAAAAAP8AAAAAAP/wAAAAD//weADwD//weADwD/8AAAAAAP8AAAAAAP8AAAAAAP8AAAAAAP///wD//////wD//////wD//////wD///",
   "objs": [
    ["club.cocktail", 44, 17, 48, 0, 1.2, 0],
    ["club.neon", 70, 17, 48, 0, 6, 0],

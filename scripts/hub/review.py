@@ -5,7 +5,7 @@
 Draws ground, objects and residents sorted by their feet exactly like hub-render.ts, puts the
 dungeon hero at the spawn for scale, and writes <out>/<id>.png (×scale, nearest neighbour).
 --night lays the night grade with the map's lights cut out of it (a preview, the game's light
-layer is softer); --solid tints the collision half-tiles red. Default out: scripts/hub/.out/review.
+layer is softer); --solid tints the collision cells red. Default out: scripts/hub/.out/review.
 """
 from __future__ import annotations
 
@@ -46,9 +46,10 @@ def render(m: lib.Map, night: bool = False, solid: bool = False, frame: int = 0)
     for base, x, y, fr in sorted(items, key=lambda t: t[0]):
         out.paste_(fr, x, y)
     if solid:
-        red = Img.new(8, 8, '#ff0000')
+        c = T // lib.SUB
+        red = Img.new(c, c, '#ff0000')
         for yy, xx in zip(*np.nonzero(m.solid)):
-            out.paste_(red, xx * 8, yy * 8, 0.28)
+            out.paste_(red, xx * c, yy * c, 0.28)
         for d in m.doors:
             out.rect_(int(d.x * T), int(d.y * T), int(d.w * T), int(d.h * T), '#00ffff', 0.35)
     if night:

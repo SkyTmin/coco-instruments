@@ -13,7 +13,7 @@ and Kenney pieces and our own drawings end up in one hand:
 
 Units: 1 tile = 16 px. Map sizes are in tiles, object positions in pixels (top-left of the sprite),
 `base` is the pixel row where the object touches the ground (depth sorting), collision is kept on a
-half-tile grid (8 px cells), so a barrel can block half a tile.
+quarter-tile grid (4 px cells, `SUB`), so a lamp post blocks its post, not a whole tile.
 """
 from __future__ import annotations
 
@@ -29,6 +29,9 @@ import numpy as np
 from PIL import Image
 
 T = 16
+# Collision cells per tile. Quarters since v2.80.1: on half tiles every lamp post and barrel
+# rounded out to a whole tile and a gap that is open in the picture was shut in the game.
+SUB = 4
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 SRC = os.path.join(HERE, '.src')
@@ -460,7 +463,7 @@ class Map:
         self.id, self.w, self.h, self.kind, self.name = id, w, h, kind, name
         self.ambient, self.music, self.bg = ambient, music, bg
         self.ground = Img.new(w * T, h * T, bg)
-        self.solid = np.zeros((h * 2, w * 2), bool)
+        self.solid = np.zeros((h * SUB, w * SUB), bool)
         self.objs: list[Obj] = []
         self.npcs: list[Npc] = []
         self.doors: list[Door] = []
@@ -485,9 +488,10 @@ class Map:
 
     # collision (half-tile cells)
     def block(self, x0: float, y0: float, x1: float, y1: float, v: bool = True) -> None:
-        """Mark tiles [x0, x1) × [y0, y1) (fractions snap to half tiles) solid."""
-        a, b = int(math.floor(x0 * 2)), int(math.floor(y0 * 2))
-        c, d = int(math.ceil(x1 * 2)), int(math.ceil(y1 * 2))
+        """Mark tiles [x0, x1) × [y0, y1) solid on the quarter-tile grid. Edges snap to the NEAREST
+        quarter (at least one cell), not outwards: rounding out made a half-tile post a whole tile."""
+        a, b = int(round(x0 * SUB)), int(round(y0 * SUB))
+        c, d = max(a + 1, int(round(x1 * SUB))), max(b + 1, int(round(y1 * SUB)))
         self.solid[max(0, b):max(0, d), max(0, a):max(0, c)] = v
 
     def free(self, x0, y0, x1, y1) -> None:

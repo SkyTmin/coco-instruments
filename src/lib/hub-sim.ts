@@ -68,9 +68,13 @@ export interface HubMap {
   /** Размер в плитках. */
   w: number;
   h: number;
-  /** Сетка половинок: 1 — занято. */
+  /** Клеток сетки на плитку: 4 — четверти (с v2.80.1), 2 — половинки. */
+  sub: number;
+  /** Сетка столкновений: 1 — занято. */
   solid: Uint8Array;
   grid: Grid;
+  /** Узлы пути — углы клеток сетки, (w·sub+1) × (h·sub+1): 1 — тело там помещается. */
+  stand: Uint8Array;
   doors: HubDoor[];
 }
 
@@ -156,7 +160,7 @@ function b64bytes(s: string): Uint8Array {
   return new Uint8Array(Buffer.from(s, 'base64'));
 }
 
-/** Сетка половинок из строки выгрузки: бит на клетку, по строкам, старший бит первым. */
+/** Сетка столкновений из строки выгрузки: бит на клетку, по строкам, старший бит первым. */
 export function decodeSolid(b64: string, cw: number, ch: number): Uint8Array {
   const bytes = b64bytes(b64);
   const out = new Uint8Array(cw * ch);
@@ -175,24 +179,37 @@ export function loadMap(id: string): HubMap {
   if (hit) return hit;
   const data = HUB_MAPS[id];
   if (!data) throw new Error(`hub: no map ${id}`);
-  const cw = data.w * 2;
-  const ch = data.h * 2;
+  const sub = data.sub ?? 2;
+  const cw = data.w * sub;
+  const ch = data.h * sub;
   const solid = decodeSolid(data.solid, cw, ch);
   const grid: Grid = {
     w: cw,
     h: ch,
-    cell: 0.5,
+    cell: 1 / sub,
     solid: (x, y) => x < 0 || y < 0 || x >= cw || y >= ch || solid[y * cw + x] === 1,
   };
-  const m: HubMap = { id, data, w: data.w, h: data.h, solid, grid, doors: [] };
+  // Где тело помещается — считается один раз на карту, честным кругом, а не
+  // правилом «свободны четыре клетки вокруг». На половинках это правило
+  // требовало проход в целую плитку, и щель в три четверти плитки между
+  // фонарём и стеной, открытая на картинке, была закрыта (v2.80.1).
+  // Узлы — ЦЕНТРЫ клеток, а не углы: стены лежат на границах четвертей, и в
+  // щели в три четверти угол всегда в четверти от стены (тело 0,3 не встаёт),
+  // а центр средней клетки — в 0,375. Так путь по тапу пролезает туда же,
+  // куда джойстик.
+  const stand = new Uint8Array(cw * ch);
+  for (let j = 0; j < ch; j++)
+    for (let i = 0; i < cw; i++)
+      if (!overlapsGrid(grid, (i + 0.5) / sub, (j + 0.5) / sub, HERO_R - 0.02)) stand[j * cw + i] = 1;
+  const m: HubMap = { id, data, w: data.w, h: data.h, sub, solid, grid, stand, doors: [] };
   m.doors = data.doors.map((d, i) => doorInfo(m, d, i));
   maps.set(id, m);
   return m;
 }
 
-/** Свободна ли половинка, где лежит точка. */
+/** Свободна ли клетка сетки, где лежит точка. */
 function freeAt(m: HubMap, x: number, y: number): boolean {
-  return !m.grid.solid(Math.floor(x * 2), Math.floor(y * 2));
+  return !m.grid.solid(Math.floor(x * m.sub), Math.floor(y * m.sub));
 }
 
 /**
@@ -273,18 +290,23 @@ function tapArea(m: HubMap, d: HubDoorData, ny: number): Rect {
 }
 
 // ---------------------------------------------------------------------------
-// Где можно стоять: узлы пути — углы половинок.
+// Где можно стоять: узлы пути — углы четвертей плитки.
 // ---------------------------------------------------------------------------
 
 /**
- * Узлы пути — УГЛЫ половинок, а не их центры. Центр половинки в проходе
- * шириной в плитку от стены в 0,25 — тело радиусом 0,3 туда не встанет, и
- * путь не нашёлся бы вовсе. Угол, вокруг которого свободны все четыре
- * половинки, держит тело с запасом 0,2 во все стороны.
+ * Узлы пути — центры клеток сетки (четвертей плитки): узел (i, j) стоит в
+ * ((i + ½) / sub, (j + ½) / sub). Годится, если тело героя, поставленное в
+ * него, не задевает занятых клеток (карта `stand`).
  */
-export function standVertex(m: HubMap, i: number, j: number): boolean {
-  const g = m.grid;
-  return !g.solid(i - 1, j - 1) && !g.solid(i, j - 1) && !g.solid(i - 1, j) && !g.solid(i, j);
+export function standNode(m: HubMap, i: number, j: number): boolean {
+  const cw = m.w * m.sub;
+  if (i < 0 || j < 0 || i >= cw || j >= m.h * m.sub) return false;
+  return m.stand[j * cw + i] === 1;
+}
+
+/** Координата узла в плитках. */
+export function nodeAt(m: HubMap, i: number): number {
+  return (i + 0.5) / m.sub;
 }
 
 /** Может ли тело героя стоять в точке (не задевая стен). */
@@ -292,7 +314,7 @@ export function canStand(m: HubMap, x: number, y: number, r = HERO_R): boolean {
   return !overlapsGrid(m.grid, x, y, r - 1e-6);
 }
 
-/** Ближайший к точке угол, где можно стоять, в радиусе `maxR` плиток. */
+/** Ближайший к точке узел, где можно стоять, в радиусе `maxR` плиток. */
 export function nearestStand(
   m: HubMap,
   x: number,
@@ -300,26 +322,29 @@ export function nearestStand(
   maxR = 2,
   ok?: (x: number, y: number) => boolean,
 ): { x: number; y: number; i: number; j: number } | null {
-  const ci = Math.round(x * 2);
-  const cj = Math.round(y * 2);
-  const R = Math.ceil(maxR * 2);
+  const S = m.sub;
+  const ci = Math.round(x * S - 0.5);
+  const cj = Math.round(y * S - 0.5);
+  const R = Math.ceil(maxR * S);
   let best: { x: number; y: number; i: number; j: number } | null = null;
   let bd = Infinity;
   for (let j = cj - R; j <= cj + R; j++)
     for (let i = ci - R; i <= ci + R; i++) {
-      if (i < 1 || j < 1 || i >= m.w * 2 || j >= m.h * 2) continue;
-      if (!standVertex(m, i, j) || (ok && !ok(i / 2, j / 2))) continue;
-      const d = Math.hypot(i / 2 - x, j / 2 - y);
+      if (!standNode(m, i, j)) continue;
+      const px = nodeAt(m, i);
+      const py = nodeAt(m, j);
+      if (ok && !ok(px, py)) continue;
+      const d = Math.hypot(px - x, py - y);
       if (d < bd && d <= maxR) {
         bd = d;
-        best = { x: i / 2, y: j / 2, i, j };
+        best = { x: px, y: py, i, j };
       }
     }
   return best;
 }
 
 // ---------------------------------------------------------------------------
-// A* по углам половинок.
+// A* по центрам четвертей.
 // ---------------------------------------------------------------------------
 
 class Heap {
@@ -377,7 +402,7 @@ export interface Goal {
 
 /**
  * Путь от точки до ближайшей из целей (по цене пути плюс надбавке цели).
- * null — не дойти. Путь — в плитках, от первого угла до цели.
+ * null — не дойти. Путь — в плитках, от первого узла до цели.
  */
 export function findPath(
   m: HubMap,
@@ -388,14 +413,15 @@ export function findPath(
   if (!goals.length) return null;
   const start = nearestStand(m, fx, fy, 1.5);
   if (!start) return null;
-  const W = m.w * 2 + 1;
-  const H = m.h * 2 + 1;
+  const S = m.sub;
+  const W = m.w * S;
+  const H = m.h * S;
   const goalExtra = new Map<number, number>();
   let cx = 0;
   let cy = 0;
   for (const g of goals) {
     const k = g.j * W + g.i;
-    goalExtra.set(k, Math.min(goalExtra.get(k) ?? Infinity, g.extra * 2));
+    goalExtra.set(k, Math.min(goalExtra.get(k) ?? Infinity, g.extra * S));
     cx += g.i;
     cy += g.j;
   }
@@ -444,11 +470,10 @@ export function findPath(
     for (const [di, dj, c] of DIRS) {
       const ni = i + di;
       const nj = j + dj;
-      if (ni < 1 || nj < 1 || ni >= W - 1 || nj >= H - 1) continue;
-      if (!standVertex(m, ni, nj)) continue;
+      if (!standNode(m, ni, nj)) continue;
       // По диагонали — только если свободны оба прямых соседа: иначе тело
       // срезало бы угол стены.
-      if (di && dj && (!standVertex(m, i + di, j) || !standVertex(m, i, j + dj))) continue;
+      if (di && dj && (!standNode(m, i + di, j) || !standNode(m, i, j + dj))) continue;
       const nk = nj * W + ni;
       const ng = g[k] + c;
       if (ng >= g[nk]) continue;
@@ -461,7 +486,7 @@ export function findPath(
   const out: { x: number; y: number }[] = [];
   for (let k = best; k >= 0; k = from[k]) {
     const i = k % W;
-    out.push({ x: i / 2, y: (k - i) / W / 2 });
+    out.push({ x: nodeAt(m, i), y: nodeAt(m, (k - i) / W) });
     if (k === s) break;
   }
   out.reverse();
@@ -509,18 +534,18 @@ const FACE_VEC: Record<Face, [number, number]> = {
 /** Куда встать, чтобы заговорить: перед жителем, а не сбоку и не за спиной. */
 export function talkGoals(m: HubMap, n: HubNpcData): Goal[] {
   const out: Goal[] = [];
-  const R = Math.ceil(TALK_R * 2);
-  const ci = Math.round(n.x * 2);
-  const cj = Math.round(n.y * 2);
+  const S = m.sub;
+  const R = Math.ceil(TALK_R * S);
+  const ci = Math.round(n.x * S - 0.5);
+  const cj = Math.round(n.y * S - 0.5);
   const [fx, fy] = FACE_VEC[(n.face & 3) as Face];
   for (let j = cj - R; j <= cj + R; j++)
     for (let i = ci - R; i <= ci + R; i++) {
-      if (i < 1 || j < 1 || i >= m.w * 2 || j >= m.h * 2) continue;
-      const x = i / 2;
-      const y = j / 2;
+      if (!standNode(m, i, j)) continue;
+      const x = nodeAt(m, i);
+      const y = nodeAt(m, j);
       const d = Math.hypot(x - n.x, y - n.y);
       if (d > TALK_R - 0.1 || d < 0.5) continue;
-      if (!standVertex(m, i, j)) continue;
       const dot = ((x - n.x) * fx + (y - n.y) * fy) / d;
       // Надбавки: сбоку и за спиной — дороже, чем перед ним; и чем дальше от
       // него, тем дороже — иначе герой вставал бы за полплитки от прилавка,

@@ -528,10 +528,11 @@ def txt(s: str, color: str, shadow: str | None = None) -> Img:
 # ================================================================================ checks
 def reach(m, start: tuple[float, float], width: float = 2.0) -> dict[str, bool]:
     """Can an agent `width` tiles wide walk from start to every spawn of the map? BFS on the
-    half-tile collision grid; the agent is a width × width box. Returns spawn id → reachable.
-    (A shared helper worth moving to lib.py: every outdoor map wants this check.)"""
+    collision grid (lib.SUB cells per tile); the agent is a width × width box. Returns spawn id →
+    reachable. (A shared helper worth moving to lib.py: every outdoor map wants this check.)"""
     from collections import deque
-    k = int(round(width * 2))
+    from lib import SUB
+    k = int(round(width * SUB))
     free = ~m.solid
     Hh, Ww = free.shape
     cs = np.zeros((Hh + 1, Ww + 1), np.int32)
@@ -540,7 +541,7 @@ def reach(m, start: tuple[float, float], width: float = 2.0) -> dict[str, bool]:
     ok[:Hh - k + 1, :Ww - k + 1] = (cs[k:, k:] - cs[:-k, k:] - cs[k:, :-k] + cs[:-k, :-k]) == k * k
 
     def cells_for(px, py):
-        cx, cy = int(px * 2), int(py * 2)
+        cx, cy = int(px * SUB), int(py * SUB)
         return [(y, x) for y in range(cy - k + 1, cy + 1) for x in range(cx - k + 1, cx + 1)
                 if 0 <= y < Hh and 0 <= x < Ww and ok[y, x]]
     seen = np.zeros((Hh, Ww), bool)

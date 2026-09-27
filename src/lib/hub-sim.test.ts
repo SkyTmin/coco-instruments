@@ -9,10 +9,12 @@ import {
   HUB_NO_INPUT,
   hitTest,
   loadMap,
+  nearestStand,
   nearestUsable,
   placeAtDoor,
   spawnOf,
-  standVertex,
+  nodeAt,
+  standNode,
   stepHub,
   talkGoals,
   TALK_R,
@@ -34,6 +36,53 @@ function until(sim: HubSim, want: (e: HubEvent) => boolean, secs = 30, input = H
   return null;
 }
 
+/** Карта-стенд: четыре на три плитки, поперёк стена со щелью в три четверти плитки. */
+function gapMap(): string {
+  const id = '__gap';
+  if (HUB_MAPS[id]) return id;
+  const cw = 16;
+  const ch = 12;
+  const bits = new Uint8Array(Math.ceil((cw * ch) / 8));
+  for (let j = 4; j < 8; j++)
+    for (let i = 0; i < cw; i++) {
+      if (i >= 6 && i <= 8) continue;
+      const k = j * cw + i;
+      bits[k >> 3] |= 0x80 >> (k & 7);
+    }
+  HUB_MAPS[id] = {
+    id, name: '', kind: 'indoor', w: 4, h: 3, ambient: 1, music: '', bg: '#000', sub: 4,
+    solid: btoa(String.fromCharCode(...bits)),
+    objs: [], npcs: [], doors: [], lights: [], fx: [], spawns: { in: [1.875, 0.5, 0] }, marks: {}, searchlights: [],
+  };
+  return id;
+}
+
+describe('площадь: узкие места (v2.80.1)', () => {
+  // Владелец: «визуально видно, что можешь пройти, но не получается», особенно у
+  // входов. Щель в три четверти плитки телу 0,3 впору — её обязаны проходить и
+  // джойстик, и путь по тапу.
+  it('щель в три четверти плитки проходима джойстиком', () => {
+    const sim = createHubSim({ map: gapMap(), at: 'in' });
+    for (let t = 0; t < 3; t += DT) stepHub(sim, DT, { mx: 0, my: 1 });
+    expect(sim.hero.y).toBeGreaterThan(2.2);
+  });
+
+  it('и путём по тапу', () => {
+    const m = loadMap(gapMap());
+    const g = nearestStand(m, 1.875, 2.5, 0.5);
+    expect(g).not.toBeNull();
+    const path = findPath(m, 1.875, 0.5, [{ i: g!.i, j: g!.j, extra: 0 }]);
+    expect(path).not.toBeNull();
+  });
+
+  it('у башни Чародея ходят по траве у её боков', () => {
+    // Участок башни 5×5, а сама она — цилиндр: бока участка были невидимой стеной.
+    const m = loadMap('square');
+    expect(canStand(m, 53.4, 21.5)).toBe(true);
+    expect(canStand(m, 57.6, 21.5)).toBe(true);
+  });
+});
+
 describe('площадь: карты', () => {
   it('ни одна точка появления не стоит в стене', () => {
     for (const id of IDS) {
@@ -48,12 +97,13 @@ describe('площадь: карты', () => {
       const m = loadMap(id);
       for (const d of m.doors) {
         let inZone = false;
-        for (let j = Math.floor(d.zone.y0 * 2); j <= Math.ceil(d.zone.y1 * 2); j++)
-          for (let i = Math.floor(d.zone.x0 * 2); i <= Math.ceil(d.zone.x1 * 2); i++) {
-            const x = i / 2;
-            const y = j / 2;
+        const S = m.sub;
+        for (let j = Math.floor(d.zone.y0 * S) - 1; j <= Math.ceil(d.zone.y1 * S); j++)
+          for (let i = Math.floor(d.zone.x0 * S) - 1; i <= Math.ceil(d.zone.x1 * S); i++) {
+            const x = nodeAt(m, i);
+            const y = nodeAt(m, j);
             if (x < d.zone.x0 || x > d.zone.x1 || y < d.zone.y0 || y > d.zone.y1) continue;
-            if (i >= 1 && j >= 1 && standVertex(m, i, j)) inZone = true;
+            if (standNode(m, i, j)) inZone = true;
           }
         expect(inZone, `${id}: дверь в ${d.to}`).toBe(true);
         expect(canStand(m, d.ax, d.ay), `${id}: перед дверью в ${d.to}`).toBe(true);

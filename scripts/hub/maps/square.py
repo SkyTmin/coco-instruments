@@ -73,7 +73,7 @@ import art_outdoor as A
 from art_outdoor import Ground
 from facades import ENTERABLE, facade
 from kit import barrel, bucket, crate, ore_pile, sack
-from lib import T, Img, Map, rng
+from lib import SUB, T, Img, Map, rng
 
 W, H = 64, 56
 AX = 33                                            # the axis: gate → parade ground → flag → mine
@@ -168,6 +168,17 @@ def place(m: Map, key: str, fid: str):
     m.put(f'square.facade.{fid}', f.frames or [f.img], sx, sy, fps=f.fps)
     if f.solid is None:
         m.block(fx, fy, fx + f.fw, fy + f.fh)
+        # The plot is square, the building need not be: the water tower is a cylinder on a 5×5
+        # plot, and the grass at its sides was a wall nobody could see (v2.80.1). A plot cell stays
+        # solid only where the facade itself covers it.
+        a = f.img.a[:, :, 3] > 40
+        c = T // SUB
+        for j in range(fy * SUB, (fy + f.fh) * SUB):
+            for i in range(fx * SUB, (fx + f.fw) * SUB):
+                px, py = i * c - sx, j * c - sy
+                cell = a[max(0, py):max(0, py + c), max(0, px):max(0, px + c)]
+                if cell.size == 0 or cell.mean() < 0.25:
+                    m.solid[j, i] = False
         if fid in ENTERABLE:
             m.free(fx + f.door_x, fy + f.fh - 1, fx + f.door_x + f.door_w, fy + f.fh)
     else:
@@ -431,7 +442,11 @@ def industry(m: Map) -> None:
     # the spoil heap — a waste-rock mountain between the boiler house and the headframe, glinting
     # with ore — the belt that tops it up, and the track in front of it with a cart and a buffer
     put(m, 'square.heap.big', A.spoil_heap(100, 62, 'stone', ('#c9483a', '#6fb0d8', '#e8c14e', '#9a6be0'), seed=2),
-        24.2, 11.9, solid=(21.6, 9.6, 27.0, 11.9))
+        24.2, 11.9)
+    # a mound, not a crate: its foot steps in with its slopes, or the ground by its shoulders
+    # is a wall nobody can see (v2.80.1)
+    for r in ((21.3, 11.1, 27.2, 11.9), (21.8, 10.4, 26.5, 11.1), (22.3, 9.6, 25.9, 10.4)):
+        m.block(*r)
     put(m, 'square.heap.rust', A.spoil_heap(40, 24, 'rust', ('#e8c14e',), seed=5), 39.6, 11.9, solid=(1.8, 0.6))
     cv = put(m, 'square.conveyor', A.conveyor(), 28.0 - 54 / 32, 12.1, fps=6, solid=(27.2, 11.5, 28.0, 12.1))
     m.emit('dust', cv.x + 6, cv.y + 8, 0.6)                    # rock dust where the belt tips
@@ -672,7 +687,7 @@ def scatter(m: Map) -> None:
     for _ in range(420):
         x, y = r.uniform(3.6, 60.4), r.uniform(6.4, 51.8)
         px, py = int(x * T), int(y * T)
-        if m.solid[int(y * 2), int(x * 2)]:
+        if m.solid[int(y * SUB), int(x * SUB)]:
             continue
         L = lab[py, px]
         if L == grass:
