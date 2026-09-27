@@ -161,7 +161,22 @@ export interface BossScript {
   reset?(sim: Sim, b: BossFight): void;
 }
 
+/**
+ * Правила этажа целиком: то, что не принадлежит ни одному монстру
+ * (проклятие подъёма, прилив, гаснущий свет, «статуи смотрят»). `start` —
+ * мир собран, `step` — каждый шаг. Черновик — `sim.floorData`.
+ */
+export interface FloorScript {
+  start?(sim: Sim, api: SimApi): void;
+  step?(sim: Sim, dt: number, api: SimApi): void;
+}
+
 export const BRAINS = new Map<string, Brain>();
+export const FLOOR_SCRIPTS = new Map<number, FloorScript>();
+
+export function registerFloor(floor: number, s: FloorScript): void {
+  FLOOR_SCRIPTS.set(floor, s);
+}
 export const BOSS_SCRIPTS = new Map<string, BossScript>();
 
 export function registerBrain(id: string, b: Brain): void {

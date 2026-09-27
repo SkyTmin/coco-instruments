@@ -74,7 +74,7 @@ import {
   toLocal,
   walkableTile,
 } from './dungeon-world';
-import { BOSS_SCRIPTS, BRAINS } from './dungeon-ai';
+import { BOSS_SCRIPTS, BRAINS, FLOOR_SCRIPTS } from './dungeon-ai';
 import type { BrainCtx, SimApi, SpawnOpts, StrikeIn, Tele, ZoneIn } from './dungeon-ai';
 // ИИ общей библиотеки и этажей регистрируются при загрузке.
 import './dungeon-brains';
@@ -442,6 +442,8 @@ export interface Sim {
   floor: number;
   /** Босс этажа хоть раз побеждён: печати открыты, лестница вниз работает. */
   beaten: boolean;
+  /** Черновик сценария этажа (`registerFloor`). */
+  floorData: Record<string, number>;
   tiles: Uint8Array;
   time: number;
   rng: () => number;
@@ -648,6 +650,7 @@ export function createSim(o: SimOptions): Sim {
     world: w,
     floor: w.floor,
     beaten,
+    floorData: {},
     tiles,
     time: 0,
     rng: lcg(o.seed ?? Date.now() & 0x7fffffff),
@@ -815,6 +818,7 @@ export function createSim(o: SimOptions): Sim {
   }
   updateGates(sim);
   markFog(sim);
+  FLOOR_SCRIPTS.get(sim.floor)?.start?.(sim, API);
   return sim;
 }
 
@@ -1343,16 +1347,24 @@ const angDiff = (a: number, b: number) => {
   return d;
 };
 
+/**
+ * Недосягаем для героя: выползает, падает, умирает, ушёл в нору — или ИИ
+ * сам спрятал его (`m.data.ghost` > 0: нырнул, окаменел, в панцире). Удары,
+ * взрывы, вагонетки и прицел его не берут.
+ */
+const ghost = (m: Mob) =>
+  m.mode === 'dying' || m.mode === 'emerge' || m.mode === 'escape' || (m.data.ghost ?? 0) > 0;
+
 /** Кого бить: захваченная цель, иначе ближняя в конусе взгляда, иначе ближняя вообще. */
 function autoAim(sim: Sim, reach: number): number {
   const h = sim.hero;
-  const lock = h.lock != null ? sim.mobs.find((m) => m.id === h.lock && m.mode !== 'dying') : null;
+  const lock = h.lock != null ? sim.mobs.find((m) => m.id === h.lock && !ghost(m)) : null;
   if (lock && Math.hypot(lock.x - h.x, lock.y - h.y) < reach + 2.5)
     return Math.atan2(lock.y - h.y, lock.x - h.x);
   let best: Mob | null = null;
   let bestD = 1e9;
   for (const m of sim.mobs) {
-    if (m.mode === 'dying' || m.mode === 'emerge' || m.mode === 'escape') continue;
+    if (ghost(m)) continue;
     const d = Math.hypot(m.x - h.x, m.y - h.y);
     if (d > reach + 0.8 + m.r) continue;
     const a = Math.atan2(m.y - h.y, m.x - h.x);
@@ -1447,8 +1459,7 @@ function sweep(
   const h = sim.hero;
   let kills = 0;
   for (const m of sim.mobs) {
-    if (h.hitSet.has(m.id) || m.mode === 'dying' || m.mode === 'emerge' || m.mode === 'escape')
-      continue;
+    if (h.hitSet.has(m.id) || ghost(m)) continue;
     const dx = m.x - h.x;
     const dy = m.y - h.y;
     const d = Math.hypot(dx, dy);
@@ -1642,7 +1653,7 @@ function explode(sim: Sim, x: number, y: number, r: number, dmg: number, heroSha
   sim.events.push({ t: 'boom', x, y, r });
   sim.hitstop = Math.max(sim.hitstop, 0.09);
   for (const m of sim.mobs) {
-    if (m.mode === 'dying') continue;
+    if (ghost(m)) continue;
     const d = Math.hypot(m.x - x, m.y - y);
     if (d > r + m.r) continue;
     const k = 1 - d / (r + m.r);
@@ -2333,6 +2344,8 @@ function stepWorld(sim: Sim, dt: number): void {
     sim.area = band.def.id;
     sim.events.push({ t: 'area', area: sim.area });
   }
+  // Правила этажа (проклятие подъёма, свет, события) — сценарий этажа.
+  FLOOR_SCRIPTS.get(sim.floor)?.step?.(sim, dt, API);
 
   // Поле расстояний — пять раз в секунду хватает.
   sim.flowT -= dt;
@@ -2557,7 +2570,7 @@ function stepCart(sim: Sim, p: Prop, dt: number): void {
   // Давит всех на пути.
   const lvl = bandAt(sim.world, p.y).def.level;
   for (const m of sim.mobs) {
-    if (m.mode === 'dying' || m.mode === 'emerge') continue;
+    if (ghost(m)) continue;
     if (Math.hypot(m.x - p.x, m.y - p.y) > p.r + m.r + 0.05) continue;
     const dmg = 30 * Math.pow(1.8, lvl) * (speed / 7);
     m.hp -= dmg;
