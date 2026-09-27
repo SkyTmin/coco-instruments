@@ -501,7 +501,7 @@ def rat_run(frame: int) -> Img:
 
 # ------------------------------------------------------------------------------------ map
 def build() -> Map:
-    m = Map('lift', W, H, 'indoor', name='Лифт в подземелье', ambient=0.5, music='dungeon')
+    m = Map('lift', W, H, 'indoor', name='Лифт в подземелье', ambient=0.5, music='lobby')
     shell(m, 'stone', 'na-dark', face=FACE, door=(5, 2), out_to='square', out_at='lift', floor_seed=4)
     g = m.ground
     wall = iron_wall((W - 2) * T, FACE * T - 3)

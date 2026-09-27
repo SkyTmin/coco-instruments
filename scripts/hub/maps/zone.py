@@ -533,7 +533,7 @@ def sandbags() -> Img:
 
 # ------------------------------------------------------------------------------------ map
 def build() -> Map:
-    m = Map('zone', W, H, 'indoor', name='Особая шахта', ambient=0.45, music='deep')
+    m = Map('zone', W, H, 'indoor', name='Особая шахта', ambient=0.45, music='depths')
     shell(m, 'concrete', 'concrete', face=2, door=(5, 2), out_to='square', out_at='zone', floor_seed=9)
     refloor(m, lambda g_, a, b, c, d: concrete_floor(g_, a, b, c, d, seed=9, tone=DARK_CONCRETE))
     g = m.ground

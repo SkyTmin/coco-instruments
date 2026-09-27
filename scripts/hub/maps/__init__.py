@@ -4,7 +4,7 @@ Order matters only for the build log; doors refer to maps by id.
 """
 import importlib
 
-MAPS = ['square', 'forge', 'trader', 'hq', 'club']
+MAPS = ['square', 'forge', 'mine', 'zone', 'lift', 'trader', 'hq', 'club']
 
 
 def load(id: str):
