@@ -447,11 +447,14 @@ function Buy({
   can,
   onClick,
   token = false,
+  count = 1,
 }: {
   price: number;
   can: boolean;
   onClick: () => void;
   token?: boolean;
+  /** Пачка: на кнопке «×5» перед ценой всей пачки. */
+  count?: number;
 }) {
   return (
     <button
@@ -463,6 +466,7 @@ function Buy({
         onClick();
       }}
     >
+      {count > 1 && <small className="pforge__count">×{count}</small>}
       {shortMoney(price)} {token ? <TokenIcon size={12} /> : <CoinIcon size={12} />}
     </button>
   );
@@ -530,13 +534,36 @@ export function ItemIcon({ id, size }: { id: ItemId; size?: number }) {
 
 // ---- Лавка: расходники за токены --------------------------------------------
 
+/** Сколько штук берёт одна кнопка лавки. Выбор помнится до конца сессии. */
+const SHOP_PACKS = [1, 5, 10] as const;
+let shopPack: number = 1;
+
 function ShopTab() {
   const p = useFinanceStore((s) => s.prison);
   const prisonBuyItem = useFinanceStore((s) => s.prisonBuyItem);
+  const [pack, setPack] = useState(shopPack);
+  const pick = (n: number) => {
+    shopPack = n;
+    setPack(n);
+    tapLight();
+  };
   return (
     <div className="pforge">
       <div className="pcamp-purse">
         <TokenIcon size={18} /> <b>{fmt(p.tokens)}</b> токенов
+        <div className="pshop-pack" role="group" aria-label="Сколько брать">
+          {SHOP_PACKS.map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`pshop-pack__opt${pack === n ? ' is-on' : ''}`}
+              aria-pressed={pack === n}
+              onClick={() => pick(n)}
+            >
+              ×{n}
+            </button>
+          ))}
+        </div>
       </div>
       {ITEMS.filter((it) => it.price > 0).map((it) => (
         <Row
@@ -551,11 +578,12 @@ function ShopTab() {
           action={
             <Buy
               token
-              price={it.price}
-              can={p.tokens >= it.price}
+              price={it.price * pack}
+              count={pack}
+              can={p.tokens >= it.price * pack}
               onClick={() => {
                 primeAudio();
-                if (!prisonBuyItem(it.id)) {
+                if (!prisonBuyItem(it.id, pack)) {
                   notifyWarning();
                   return;
                 }

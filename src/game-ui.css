@@ -1450,6 +1450,38 @@
   color: var(--gx-paper);
 }
 
+/* Лавка: сколько штук берёт одна кнопка — переключатель в строке с токенами. */
+.pshop-pack {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.pshop-pack__opt {
+  min-width: 40px;
+  padding: 4px 8px 5px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25);
+  color: var(--gx-paper);
+  font: 800 13px/1 'GxRubik', system-ui, sans-serif;
+  transition: transform 70ms ease-out;
+}
+.pshop-pack__opt:active {
+  transform: translateY(2px);
+}
+.pshop-pack__opt.is-on {
+  background: #f4d27a;
+  box-shadow:
+    inset 0 0 0 2px #fff3c4,
+    0 2px 0 #8a5a1c;
+  color: var(--gx-ink);
+}
+.pforge__count {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
 /* ==========================================================================
    Подземелье: лобби, добыча, гибель (pages/DungeonPage.tsx).
    ========================================================================== */

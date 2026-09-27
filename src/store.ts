@@ -1549,8 +1549,8 @@ interface FinanceState {
   prisonBookAnvil: (i: number, j: number) => Book | null;
   /** Снять чару с кирки: она рассыпается в пыль (сколько вышло). */
   prisonEnchantWipe: (id: EnchantId) => number;
-  /** Лавка: расходник за токены. */
-  prisonBuyItem: (id: ItemId) => boolean;
+  /** Лавка: расходник за токены, `n` штук разом (всё или ничего). */
+  prisonBuyItem: (id: ItemId, n?: number) => boolean;
   /** Потратить расходник. Энергетик и лупа включаются сразу. */
   prisonUseItem: (id: ItemId) => boolean;
   /** Кураж сработал на ударе. */
@@ -4651,11 +4651,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     return got;
   },
 
-  prisonBuyItem: (id) => {
+  prisonBuyItem: (id, n = 1) => {
     const p = get().prison;
-    const price = itemOf(id).price;
+    const count = Math.max(1, Math.floor(n));
+    const price = itemOf(id).price * count;
     if (p.tokens < price) return false;
-    const prison = { ...p, tokens: p.tokens - price, items: { ...p.items, [id]: p.items[id] + 1 } };
+    const prison = { ...p, tokens: p.tokens - price, items: { ...p.items, [id]: p.items[id] + count } };
     set({ prison });
     persistPrison(prison);
     return true;
