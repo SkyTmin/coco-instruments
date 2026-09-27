@@ -8929,3 +8929,83 @@ button.fg-slot {
   display: grid;
   place-items: center;
 }
+
+/* ---- Креатив владельца (v2.81) ------------------------------------------ */
+/* Плашка поверх всего, пока песочница включена: видно, что это НЕ настоящее
+   сохранение. Справа посередине — там нет ни джойстика, ни кнопок боя. */
+.crv-badge {
+  position: fixed;
+  z-index: 60;
+  right: 0;
+  top: 42%;
+  padding: 8px 5px;
+  border: 0;
+  border-radius: 8px 0 0 8px;
+  writing-mode: vertical-rl;
+  font: 900 11px/1 GxRubik, system-ui, sans-serif;
+  letter-spacing: 1.5px;
+  color: #fff;
+  background: linear-gradient(180deg, #d0369e, #7a2bd6);
+  box-shadow:
+    0 0 0 2px #1a0f08,
+    0 3px 8px rgba(0, 0, 0, 0.5);
+  opacity: 0.88;
+}
+.crv {
+  display: grid;
+  gap: 12px;
+  color: var(--gx-ink, #3b2616);
+}
+.crv__lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.crv__sec {
+  display: grid;
+  gap: 6px;
+}
+.crv__sec h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 900;
+}
+.crv__note {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.8;
+}
+.crv__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.crv-step {
+  display: grid;
+  grid-template-columns: 70px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.crv-step__label {
+  font-size: 13px;
+  font-weight: 700;
+}
+.crv-step__val {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crv-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.crv-check input {
+  width: 20px;
+  height: 20px;
+}

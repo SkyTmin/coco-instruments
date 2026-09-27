@@ -450,6 +450,8 @@ export interface Sim {
   retiled: number[];
   /** Счётчик переносов героя (`api.moveHero`): рендер ставит камеру сразу. */
   warps: number;
+  /** Бессмертие креатива: смертельный удар оставляет 1 здоровья. */
+  god: boolean;
   time: number;
   rng: () => number;
   now: () => number;
@@ -516,6 +518,8 @@ export interface SimOptions {
   now?: () => number;
   /** Сколько крепи в запасе каторги — ей заколачивают норы. */
   props?: number;
+  /** Креатив владельца: герой не умирает (здоровье не падает ниже 1). */
+  god?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -661,6 +665,7 @@ export function createSim(o: SimOptions): Sim {
     tiles,
     retiled: [],
     warps: 0,
+    god: !!o.god,
     time: 0,
     rng: lcg(o.seed ?? Date.now() & 0x7fffffff),
     now: o.now ?? (() => Date.now()),
@@ -1745,12 +1750,19 @@ function hurtHero(
     h.mode = 'free';
     h.t = 0;
   }
-  if (h.hp <= 0) {
+  if (h.hp <= 0 && !spared(sim)) {
     h.hp = 0;
     h.mode = 'dying';
     h.t = 0;
     if (sim.boss?.state === 'fight') resetBoss(sim);
   }
+}
+
+/** Бессмертие креатива: вместо смерти — одна единица здоровья. */
+function spared(sim: Sim): boolean {
+  if (!sim.god) return false;
+  sim.hero.hp = 1;
+  return true;
 }
 
 function gainXp(sim: Sim, xp: number): void {
@@ -2319,7 +2331,7 @@ function tickStatus(sim: Sim, dt: number): void {
     if (!v) continue;
     if (k === 'poison' || k === 'burn') {
       h.hp -= sim.stats.maxHp * v.p * dt;
-      if (h.hp <= 0) {
+      if (h.hp <= 0 && !spared(sim)) {
         h.hp = 0;
         h.mode = 'dying';
         h.t = 0;
@@ -2432,7 +2444,7 @@ function stepWorld(sim: Sim, dt: number): void {
       if (hz.status) heroStatus(sim, hz.status, hz.dur ?? 1.5);
       if (hz.dps) {
         h.hp -= sim.stats.maxHp * hz.dps * dt;
-        if (h.hp <= 0) {
+        if (h.hp <= 0 && !spared(sim)) {
           h.hp = 0;
           h.mode = 'dying';
           h.t = 0;
@@ -2881,7 +2893,7 @@ function stepZones(sim: Sim, dt: number): void {
     if (z.status) heroStatus(sim, z.status, z.dur ?? 1.2);
     if (z.dps) {
       h.hp -= sim.stats.maxHp * z.dps * dt;
-      if (h.hp <= 0) {
+      if (h.hp <= 0 && !spared(sim)) {
         h.hp = 0;
         h.mode = 'dying';
         h.t = 0;

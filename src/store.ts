@@ -419,6 +419,17 @@ import {
   normalizeBunk,
 } from '@/lib/inventory';
 import type { BunkState, InvRef } from '@/lib/inventory';
+import {
+  CREATIVE_COINS,
+  CREATIVE_KEY,
+  CREATIVE_OFF,
+  creativeDungeon,
+  creativePrison,
+  gameKey,
+  normalizeCreative,
+  setCreativeActive,
+} from '@/lib/creative';
+import type { CreativeState, DungeonPatch, PrisonPatch } from '@/lib/creative';
 
 export type ObligationDraft = Omit<
   Obligation,
@@ -486,7 +497,8 @@ function makePersister<T>(key: string, delay = 300) {
   let pending: T | undefined;
   const write = () => {
     if (pending !== undefined) {
-      void getStorage().set<T>(key, pending);
+      // Ключ — в момент записи: в креативе игровые ключи уходят в песочницу.
+      void getStorage().set<T>(gameKey(key), pending);
       pending = undefined;
     }
   };
@@ -1242,6 +1254,17 @@ interface FinanceState {
   /** Только что случился «Новый срок» — показать объяснение один раз. */
   newTerm: boolean;
   dismissNewTerm: () => void;
+  /**
+   * Креатив владельца (v2.81): отдельное сохранение-песочница. Настоящее не
+   * трогается, выход возвращает его как было (`lib/creative.ts`).
+   */
+  creative: CreativeState;
+  creativeEnter: () => Promise<void>;
+  creativeExit: () => Promise<void>;
+  creativeGod: (on: boolean) => void;
+  creativePrisonSet: (patch: PrisonPatch) => void;
+  creativeDungeonSet: (patch: DungeonPatch) => void;
+  creativeCoins: () => void;
 
   hydrate: () => Promise<void>;
 
@@ -1658,6 +1681,57 @@ function peopleSnapshot(state: FinanceState): Omit<PeopleBlob, 'version'> {
   };
 }
 
+/**
+ * Игровая часть сохранения из прочитанных блоков: общая для входа в
+ * приложение и для выхода из креатива (там настоящие ключи перечитываются).
+ */
+function gameFields(
+  slots: SlotsBlob | null,
+  prison: PrisonBlob | null,
+  forest: ForestBlob | null,
+  dungeon: DungeonBlob | null,
+  fishing: FishingBlob | null,
+  bunk: BunkBlob | null,
+) {
+  return {
+    slotsBalance: slots?.balance ?? START_BALANCE,
+    slotsBet: snapBet(slots?.bet),
+    slotsSpins: slots?.spins ?? 0,
+    slotsBest: slots?.best ?? 0,
+    slotsBonusAt: slots?.lastBonusAt,
+    slotsHistory: slots?.history ?? [],
+    slotsJackpot: slots?.jackpot ?? JACKPOT_BASE,
+    slotsSkin: (slots?.skin as SkinId) ?? 'classic',
+    slotsTopX: slots?.topX ?? 0,
+    slotsSound: slots?.sound ?? true,
+    slotsMusic: slots?.music ?? true,
+    slotsHaptics: slots?.haptics ?? true,
+    slotsTurbo: slots?.turbo ?? false,
+    ...slotsProgress(slots),
+    ...staleSession(slotsProgress(slots)),
+    prison: normalizePrison(prison),
+    forest: normalizeForest(forest),
+    dungeon: normalizeDungeon(dungeon),
+    fishing: normalizeFishing(fishing),
+    bunk: normalizeBunk(bunk),
+    slotsEra: slots ? (slots.era ?? 1) : ECONOMY_ERA,
+  };
+}
+
+/** Прочитать НАСТОЯЩИЕ игровые ключи — для выхода из креатива. */
+async function readRealGames() {
+  const storage = getStorage();
+  const [slots, prison, forest, dungeon, fishing, bunk] = await Promise.all([
+    storage.get<SlotsBlob>(STORAGE_KEYS.slots),
+    storage.get<PrisonBlob>(STORAGE_KEYS.prison),
+    storage.get<ForestBlob>(STORAGE_KEYS.forest),
+    storage.get<DungeonBlob>(STORAGE_KEYS.dungeon),
+    storage.get<FishingBlob>(STORAGE_KEYS.fishing),
+    storage.get<BunkBlob>(BUNK_KEY).catch(() => null),
+  ]);
+  return gameFields(slots, prison, forest, dungeon, fishing, bunk);
+}
+
 export const useFinanceStore = create<FinanceState>((set, get) => ({
   expenses: [],
   savings: [],
@@ -1723,11 +1797,17 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   hydrated: false,
   slotsEra: ECONOMY_ERA,
   newTerm: false,
+  creative: CREATIVE_OFF,
 
   hydrate: async () => {
     const storage = getStorage();
+    // Креатив читается ПЕРВЫМ: от него зависит, из каких ключей брать игры.
+    const creative = normalizeCreative(
+      await storage.get<CreativeState>(CREATIVE_KEY).catch(() => null),
+    );
+    setCreativeActive(creative.on);
     // Сундук у койки читается вместе со всем (своим ключом, v2.81).
-    const bunkRead = storage.get<BunkBlob>(BUNK_KEY).catch(() => null);
+    const bunkRead = storage.get<BunkBlob>(gameKey(BUNK_KEY)).catch(() => null);
     const [
       exp,
       sav,
@@ -1773,11 +1853,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       storage.get<WardrobeWishlistBlob>(STORAGE_KEYS.wishlist),
       storage.get<WardrobeSizesBlob>(STORAGE_KEYS.sizes),
       storage.get<CameraBlob>(STORAGE_KEYS.camera),
-      storage.get<SlotsBlob>(STORAGE_KEYS.slots),
-      storage.get<PrisonBlob>(STORAGE_KEYS.prison),
-      storage.get<ForestBlob>(STORAGE_KEYS.forest),
-      storage.get<DungeonBlob>(STORAGE_KEYS.dungeon),
-      storage.get<FishingBlob>(STORAGE_KEYS.fishing),
+      storage.get<SlotsBlob>(gameKey(STORAGE_KEYS.slots)),
+      storage.get<PrisonBlob>(gameKey(STORAGE_KEYS.prison)),
+      storage.get<ForestBlob>(gameKey(STORAGE_KEYS.forest)),
+      storage.get<DungeonBlob>(gameKey(STORAGE_KEYS.dungeon)),
+      storage.get<FishingBlob>(gameKey(STORAGE_KEYS.fishing)),
     ]);
     set({
       expenses: exp?.items ?? [],
@@ -1811,28 +1891,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       cameraShots: camera?.shots ?? [],
       cameraScripts: camera?.scripts ?? [],
       prompterPrefs: { ...DEFAULT_PROMPTER_PREFS, ...(camera?.prompter ?? {}) },
-      slotsBalance: slots?.balance ?? START_BALANCE,
-      slotsBet: snapBet(slots?.bet),
-      slotsSpins: slots?.spins ?? 0,
-      slotsBest: slots?.best ?? 0,
-      slotsBonusAt: slots?.lastBonusAt,
-      slotsHistory: slots?.history ?? [],
-      slotsJackpot: slots?.jackpot ?? JACKPOT_BASE,
-      slotsSkin: (slots?.skin as SkinId) ?? 'classic',
-      slotsTopX: slots?.topX ?? 0,
-      slotsSound: slots?.sound ?? true,
-      slotsMusic: slots?.music ?? true,
-      slotsHaptics: slots?.haptics ?? true,
-      slotsTurbo: slots?.turbo ?? false,
-      ...slotsProgress(slots),
-      ...staleSession(slotsProgress(slots)),
-      prison: normalizePrison(prison),
-      forest: normalizeForest(forest),
-      dungeon: normalizeDungeon(dungeon),
-      fishing: normalizeFishing(fishing),
-      bunk: normalizeBunk(await bunkRead),
+      ...gameFields(slots, prison, forest, dungeon, fishing, await bunkRead),
       reminderPrefs: { ...DEFAULT_REMINDER_PREFS, ...(rem?.prefs ?? {}) },
-      slotsEra: slots ? (slots.era ?? 1) : ECONOMY_ERA,
+      creative,
       hydrated: true,
     });
     // «Новый срок» (v2.66): экономика переписана, старые числа с новыми
@@ -1846,6 +1907,71 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   dismissNewTerm: () => set({ newTerm: false }),
+
+  creativeEnter: async () => {
+    if (get().creative.on) return;
+    // Всё, что ждёт записи, — в НАСТОЯЩИЕ ключи, пока креатив не включён.
+    // Между сбросом и переключением нет ни одного await: чужая запись
+    // вклиниться не может.
+    flushers.forEach((f) => f());
+    setCreativeActive(true);
+    const s = get();
+    const creative: CreativeState = { on: true, god: s.creative.god, since: Date.now() };
+    const prison = creativePrison(s.prison, { fill: true });
+    const dungeon = creativeDungeon(s.dungeon, { open: true, bosses: true, stash: true });
+    set({ prison, dungeon, slotsBalance: Math.max(s.slotsBalance, CREATIVE_COINS), creative });
+    // Песочница целиком — в свои ключи, и только потом флаг: оборвалось
+    // посередине — при следующем входе прочитается настоящее сохранение.
+    const g = get();
+    persistSlots(g);
+    persistPrison(g.prison);
+    persistForest(g.forest);
+    persistDungeon(g.dungeon);
+    persistFishing(g.fishing);
+    persistBunk(g.bunk);
+    flushers.forEach((f) => f());
+    await getStorage().set(CREATIVE_KEY, creative);
+  },
+
+  creativeExit: async () => {
+    if (!get().creative.on) return;
+    flushers.forEach((f) => f());
+    const games = await readRealGames();
+    // Пока читали, песочница могла что-то записать — дописываем её в СВОИ
+    // ключи и только потом переключаемся: отложенная запись песочницы после
+    // переключения ушла бы в настоящее сохранение.
+    flushers.forEach((f) => f());
+    setCreativeActive(false);
+    const creative: CreativeState = { ...get().creative, on: false };
+    set({ ...games, creative });
+    await getStorage().set(CREATIVE_KEY, creative);
+  },
+
+  creativeGod: (on) => {
+    const creative = { ...get().creative, god: on };
+    set({ creative });
+    void getStorage().set(CREATIVE_KEY, creative);
+  },
+
+  creativePrisonSet: (patch) => {
+    if (!get().creative.on) return;
+    const prison = creativePrison(get().prison, patch);
+    set({ prison });
+    persistPrison(prison);
+  },
+
+  creativeDungeonSet: (patch) => {
+    if (!get().creative.on) return;
+    const dungeon = creativeDungeon(get().dungeon, patch);
+    set({ dungeon });
+    persistDungeon(dungeon);
+  },
+
+  creativeCoins: () => {
+    if (!get().creative.on) return;
+    set({ slotsBalance: get().slotsBalance + CREATIVE_COINS });
+    persistSlots(get());
+  },
 
   addExpense: (draft) => {
     const now = Date.now();

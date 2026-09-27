@@ -22,6 +22,7 @@ import { ForgeScreen } from '@/components/ForgeScreen';
 import { Inventory } from '@/components/Inventory';
 import { BarygaSheet, useYardEvent } from '@/components/YardBits';
 import { AudioToggles } from '@/components/AudioToggles';
+import { openCreative, useOwner } from '@/components/CreativePanel';
 import { FloatingStick, useFloatingStick } from '@/components/FloatingStick';
 import { useFinanceStore } from '@/store';
 import { liveEvent, rankLetter, shortMoney, ZONE_TIERS } from '@/lib/prison';
@@ -149,6 +150,7 @@ export function YardPage() {
 
 function HubWorld() {
   const nav = useNavigate();
+  const owner = useOwner();
   const prison = useFinanceStore((s) => s.prison);
   const dungeon = useFinanceStore((s) => s.dungeon);
   const balance = useFinanceStore((s) => s.slotsBalance);
@@ -639,6 +641,19 @@ function HubWorld() {
       <FloatingStick api={stick} />
 
       <div className="hub-pad" onPointerDown={stop}>
+        {owner && (
+          <button
+            type="button"
+            className="gx-round gx-round--dark hub-pad__map"
+            aria-label="Креатив"
+            onClick={() => {
+              tapLight();
+              openCreative();
+            }}
+          >
+            <GxIcon name="magic" />
+          </button>
+        )}
         <button
           type="button"
           className="gx-round gx-round--dark hub-pad__map"

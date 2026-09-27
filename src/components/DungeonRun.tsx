@@ -399,6 +399,8 @@ export function DungeonRun({
       hp: run.hp > 0 ? run.hp : stats.maxHp,
       sack: run.sack,
       props: st.prison.items.prop,
+      // Креатив владельца: смертельный удар оставляет 1 здоровья.
+      god: st.creative.on && st.creative.god,
     });
     sim.killed = run.killed;
     // Битое сохранение (стоит в стене) — к клети спуска.

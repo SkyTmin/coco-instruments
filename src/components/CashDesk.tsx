@@ -6,6 +6,7 @@ import { CoinIcon } from '@/components/slot-art';
 import { rainCoins } from '@/lib/coins';
 import { coinDing, primeAudio } from '@/lib/sound';
 import { notifySuccess, tapMedium } from '@/lib/haptics';
+import { CreativeRow } from '@/components/CreativePanel';
 
 const AMOUNTS = [10_000, 100_000, 1_000_000];
 /** Токены каторги: их в игре добывать тяжелее всего. */
@@ -74,6 +75,7 @@ export function CashDesk() {
           </button>
         ))}
       </div>
+      <CreativeRow />
       <p className="reward-block__hint">
         Отдача автомата от этого не меняется: спины по-прежнему считает честный ГСЧ, и проигрывать
         тоже будет. Это просто способ не ждать ежедневных бонусов.

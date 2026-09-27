@@ -30,6 +30,7 @@ import { CropProvider } from '@/components/CropProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SessionCard } from '@/components/SessionCard';
 import { SyncIndicator } from '@/components/SyncIndicator';
+import { CreativeHost } from '@/components/CreativePanel';
 import { ToastHost } from '@/components/Toast';
 import { FISHING_ON, FOREST_ON } from '@/lib/features';
 
@@ -588,6 +589,7 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
             угодно, а чаще всего — просто закрыв Telegram. */}
         <SessionCard />
         <SyncIndicator />
+        <CreativeHost />
       </HashRouter>
     </AppRoot>
   );
