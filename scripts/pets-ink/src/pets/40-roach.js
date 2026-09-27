@@ -37,6 +37,8 @@
   };
 
   function wingCases(ctx, R, B) {
+    // the back layer is drawn even while he is off the picture: no wings hanging in the air
+    if (R.pose.hide) return;
     const T = R.Mb;
     for (const s of [-1, 1]) {
       const w = M.all(T, K.smooth([[s * 60, -340], [s * 170, -330], [s * 238, -230], [s * 236, -90], [s * 190, -20], [s * 120, -40], [s * 80, -200]], 4));

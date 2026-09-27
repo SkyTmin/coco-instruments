@@ -12,7 +12,7 @@ export interface PetStrip {
 
 export const PET_LARGE = ["idle", "happy", "work"] as const;
 
-export const PET_REV = '0d84a91a98';
+export const PET_REV = 'e2c4b8098e';
 
 export const PET_SPRITES: Record<string, { anims: Record<string, PetStrip> }> = {
   "badger": {
