@@ -5,3 +5,8 @@ import './f2-art';
 import './f3-art';
 import './f4-art';
 import './f5-art';
+import './f6-art';
+import './f7-art';
+import './f8-art';
+import './f9-art';
+import './f10-art';

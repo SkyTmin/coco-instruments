@@ -16,8 +16,10 @@ export function stubFloor(o: {
   mat: { id: string; name: string };
   ores: [number, number];
   skin: AreaSkin;
+  /** Уровень района (по умолчанию — номер этажа). */
+  level?: number;
 }): FloorDef {
-  const level = o.id;
+  const level = o.level ?? o.id;
   const area = `f${o.id}`;
   const mob: MobDef = {
     id: o.mob.id,

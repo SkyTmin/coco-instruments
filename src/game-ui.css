@@ -1654,15 +1654,15 @@
   background: #ffe36a;
 }
 
+/* Этажей больше пяти — два ряда по пять: номера остаются крупными. */
 .dgl-floors {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 64px));
   gap: 6px;
   justify-content: center;
 }
 .dgl-floor {
   position: relative;
-  flex: 1;
-  max-width: 64px;
   height: 44px;
   display: flex;
   align-items: center;

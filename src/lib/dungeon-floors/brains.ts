@@ -5,3 +5,8 @@ import './f2-brains';
 import './f3-brains';
 import './f4-brains';
 import './f5-brains';
+import './f6-brains';
+import './f7-brains';
+import './f8-brains';
+import './f9-brains';
+import './f10-brains';
