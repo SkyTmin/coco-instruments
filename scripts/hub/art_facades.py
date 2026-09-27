@@ -230,9 +230,10 @@ def courses(kind: str, w: int, h: int, seed: int = 1) -> Img:
                 if r.random() < 0.35:
                     ln = r.randrange(2, 7)
                     out.rect_(x, y + 3, 1, ln, P['rust'][r.randrange(1, 4)], 0.8)
-        for _ in range(max(1, w * h // 900)):          # rust patches
+        painted = kind in ('tin', 'tinred')
+        for _ in range(max(1, w * h // (2400 if painted else 900))):          # rust patches
             x, y = r.randrange(0, w), r.randrange(0, h)
-            out.ellipse_(x, y, r.uniform(1.5, 4), r.uniform(1, 2.5), P['rust'][r.randrange(1, 4)], 0.75)
+            out.ellipse_(x, y, r.uniform(1.5, 3.5), r.uniform(1, 2), P['rust'][r.randrange(0, 2) if painted else r.randrange(1, 4)], 0.6 if painted else 0.75)
         return out
     if kind == 'shifer':
         # wavy asbestos-cement sheets (шифер), the Soviet roof: waves down the slope, rows of
@@ -294,35 +295,32 @@ def courses(kind: str, w: int, h: int, seed: int = 1) -> Img:
                 out.px_(x, y, wd[3])
         return out
     if kind in ('canvas', 'khaki'):
+        # a tarp: it sags in bays between the ropes (light crest at each rope, shade in the belly),
+        # wrinkles run down the slope, it darkens toward the eave where the rain sits
         c = R[kind]
-        out.rect_(0, 0, w, h, c[2])
-        # folds sag between the ropes: light crest at the top of each bay, shade at its belly
-        bay = 18
-        for bx in range(-r.randrange(0, 8), w, bay):
-            for x in range(bx, bx + bay):
-                t = (x - bx) / bay
-                sag = int(round(math.sin(t * math.pi) * 2))
-                for y in range(h):
-                    v = y / max(1, h - 1)
-                    idx = 2
-                    if (y + sag) % 10 == 0:
-                        idx = 3
-                    elif (y + sag) % 10 == 9:
-                        idx = 1
-                    if t < 0.12:
-                        idx = max(idx, 3)
-                    elif t > 0.85:
-                        idx = min(idx, 1)
-                    out.px_(x, y, c[idx])
-            out.rect_(bx, 0, 1, h, c[0])
+        bay = 22
+        off = r.randrange(0, 8)
+        for x in range(w):
+            t = ((x + off) % bay) / bay
+            base = 3 if t < 0.12 else (1 if t > 0.82 else 2)
+            for y in range(h):
+                v = y / max(1, h - 1)
+                idx = base - (1 if v > 0.78 and base > 1 else 0)
+                out.px_(x, y, c[idx])
+        for _ in range(w // 3):                                  # wrinkles down the slope
+            x, y = r.randrange(0, w), r.randrange(0, h)
+            ln = r.randrange(4, 12)
+            out.rect_(x, y, 1, ln, c[r.choice([1, 3])])
         for _ in range(max(1, w * h // 700)):
             out.px_(r.randrange(0, w), r.randrange(0, h), c[1])
-        for _ in range(max(1, w * h // 2500)):          # a patch sewn on
-            pw, ph = r.randrange(6, 11), r.randrange(5, 8)
+        for _ in range(max(1, w * h // 2500)):                   # a patch sewn on
+            pw, ph = r.randrange(7, 12), r.randrange(5, 8)
             x, y = r.randrange(0, max(1, w - pw)), r.randrange(0, max(1, h - ph))
             out.rect_(x, y, pw, ph, R['khaki'][2] if kind == 'canvas' else R['canvas'][2])
             for xx in range(x, x + pw, 2):
                 out.px_(xx, y, c[4]); out.px_(xx, y + ph - 1, c[4])
+            for yy in range(y, y + ph, 2):
+                out.px_(x, yy, c[4]); out.px_(x + pw - 1, yy, c[4])
         return out
     raise ValueError(kind)
 
@@ -735,11 +733,14 @@ def window(w: int = 14, h: int = 17, frame: str = 'white', bars: int = 0, kind: 
         for y in range(gy0 + 4, gy1, 5):
             out.rect_(gx0, y, gx1 - gx0, 1, fc[2])
     if bars:
+        st = R['steel']
+        cy = gy0 + (gy1 - gy0) * 2 // 3
+        out.rect_(1, cy, w - 2, 1, st[3]); out.rect_(1, cy + 1, w - 2, 1, st[0])
         for i in range(1, bars + 1):
             x = gx0 + ((gx1 - gx0) * i) // (bars + 1)
-            out.rect_(x, 1, 1, h - 1, R['steel'][1])
-            out.px_(x, 1, R['steel'][3])
-        out.rect_(1, gy0 + (gy1 - gy0) * 2 // 3, w - 2, 1, R['steel'][1])
+            out.rect_(x, 1, 1, h - 1, st[3])
+            out.rect_(x + 1, 2, 1, h - 3, st[0])
+            out.px_(x, 1, st[4])
     out = ink(out.crop(0, 0, w, h)).crop(0, 0, w, h + sh)
     if sill:
         out.rect_(-1 + 0, h, w, 2, P['concrete'][3] if frame != 'wood' else P['wood'][3])
@@ -993,6 +994,65 @@ def monitor(img: Img, x0: int, x1: int, yb: int, face: int, depth: int, kind: st
     img.rect_(x0 - 2, yb - face + 1, w + 4, 1, INK)
     img.rect_(x0 - 2, yb - face - depth, w + 4, 1, INK)
     img.rect_(x0 - 2, yb - face - depth, 1, depth + 2, INK); img.rect_(x1 + 1, yb - face - depth, 1, depth + 2, INK)
+
+
+def moss(img: Img, x0: int, y0: int, x1: int, y1: int, seed: int = 1, n: int = 12) -> None:
+    """Moss and lichen in clumps on a roof region (only on opaque, non-ink pixels)."""
+    r = rng('moss', x0, y0, seed)
+    ink_ = np.array(hexrgb(INK)[:3])
+    cols = ['#56643a', '#6f7d44', '#8f9a4a']
+    for _ in range(n):
+        cx, cy = r.randrange(x0, x1), r.randrange(y0, y1)
+        for k in range(r.randrange(3, 8)):
+            x, y = cx + r.randrange(-3, 4), cy + r.randrange(-1, 2)
+            if 0 <= x < img.w and 0 <= y < img.h and img.a[y, x, 3] > 0 and not np.array_equal(img.a[y, x, :3], ink_):
+                img.px_(x, y, cols[min(2, k % 3)])
+
+
+def soot_trail(img: Img, x: int, y: int, dx: float, n: int, seed: int = 1) -> None:
+    """Soot washed down a roof from a chimney: dark pixels thinning out along (dx, 1)."""
+    r = rng('soot', x, y, seed)
+    for i in range(n):
+        k = 1 - i / n
+        for j in range(3):
+            px = int(x + dx * i + r.randrange(-2, 3))
+            py = int(y + i)
+            if 0 <= px < img.w and 0 <= py < img.h and img.a[py, px, 3] > 0 and r.random() < k:
+                img.px_(px, py, '#141012', 0.35 * k + 0.1)
+
+
+def weathervane(kind: str = 'arrow') -> Img:
+    """A little iron weathervane on a spike: an arrow, or a dog for the kennel. 11 × 14."""
+    from lib import grid
+    st = R['steel']
+    if kind == 'dog':
+        g = ['.....k.....', '....kkk....', '.kk.kkkk...', 'kkkkkkkk...', '.kkkkkkk...', '.k.k.k.k...',
+             '.....k.....', '...kkkkk...', '.....k.....', '.....k.....', '.....k.....', '.....k.....',
+             '.....k.....', '....kkk....']
+    else:
+        g = ['...........', '.....k.....', 'kk..kkk....', 'kkkkkkkkkkk', 'kk..kkk....', '.....k.....',
+             '.....k.....', '...kkkkk...', '.....k.....', '.....k.....', '.....k.....', '.....k.....',
+             '.....k.....', '....kkk....']
+    out = grid(g, {'k': st[3]})
+    out.a[:3, :, :3] = np.where(out.a[:3, :, 3:4] > 0, np.array(hexrgb(st[4])[:3], np.uint8), out.a[:3, :, :3])
+    return out
+
+
+def cupola(w: int = 14, h: int = 10) -> Img:
+    """A barn's ventilation cupola: a louvred box under a little pyramid cap."""
+    wd = P['wood']
+    out = Img.new(w, h + 8)
+    out.rect_(1, 8, w - 2, h, A_BARN[2])
+    for y in range(10, 8 + h - 1, 2):
+        out.rect_(3, y, w - 6, 1, '#1a1210')
+    out.rect_(1, 8, 1, h, A_BARN[3])
+    out.poly_([(0, 9), (w / 2, 0), (w, 9)], P['woodgrey'][2])
+    out.poly_([(0, 9), (w / 2, 0), (w / 2, 9)], P['woodgrey'][3])
+    out.rect_(0, 8, w, 1, P['woodgrey'][1])
+    return outline(out, INK).crop(1, 1, w, h + 8)
+
+
+A_BARN = ['#3c1d19', '#5a2a22', '#7a3a2c', '#95513a', '#b0704f']
 
 
 def canopy(w: int, depth: int = 7, kind: str = 'galv', seed: int = 1) -> Img:
@@ -1596,7 +1656,8 @@ def scissor_gate(w: int, h: int, open_: float = 0.72) -> Img:
     return ink(out)
 
 
-def rollup(w: int, h: int, raised: int, seed: int = 1, inside: str = 'shelves') -> Img:
+def rollup(w: int, h: int, raised: int, seed: int = 1, inside: str = 'shelves', tone: str | None = None,
+           stencil: str | None = None) -> Img:
     """A roll-up steel shutter in a steel frame, `raised` px up from the ground: the drum box on top,
     ribbed slats, the storeroom showing beneath."""
     st = R['galv']
@@ -1608,12 +1669,23 @@ def rollup(w: int, h: int, raised: int, seed: int = 1, inside: str = 'shelves') 
     oy = box
     out.rect_(0, oy, w, h - oy, R['steel'][2])
     ix0, ix1 = 2, w - 2
-    op = doorway(ix1 - ix0, raised + 6, glow=WARM, inside=inside, frame='iron', step=False, seed=seed)
-    out.paste_(op.crop(2, 0, op.w - 4, op.h), ix0, h - raised - 6)
+    if raised:
+        op = doorway(ix1 - ix0, raised + 6, glow=WARM, inside=inside, frame='iron', step=False, seed=seed)
+        out.paste_(op.crop(2, 0, op.w - 4, op.h), ix0, h - raised - 6)
     sl_bot = h - raised
+    sc = rp(tone) if tone else st
     for y in range(oy, sl_bot):
         k = (y - oy) % 3
-        out.rect_(ix0, y, ix1 - ix0, 1, [st[3], st[2], st[1]][k])
+        out.rect_(ix0, y, ix1 - ix0, 1, [sc[3], sc[2], sc[1]][k])
+    r = rng('rollup', w, h, seed)
+    for _ in range(w // 10):                                   # dents and rust runs
+        x = r.randrange(ix0 + 2, ix1 - 2)
+        out.rect_(x, r.randrange(oy + 2, max(oy + 3, sl_bot - 6)), 1, r.randrange(2, 6), P['rust'][2], 0.6)
+    if stencil:
+        t = sign_text(stencil, '#e8e2cf', None)
+        out.paste_(t, (w - t.w) // 2, oy + 5)
+    if not raised:
+        out.paste_(hazard(ix1 - ix0, 3), ix0, h - 3)
     out.rect_(ix0, sl_bot - 2, ix1 - ix0, 2, R['steel'][1]); out.rect_(ix0, sl_bot - 2, ix1 - ix0, 1, R['steel'][3])
     out.rect_(w // 2 - 3, sl_bot - 3, 6, 1, R['steel'][4])                 # the handle
     out.rect_(0, oy, 2, h - oy, R['steel'][3]); out.rect_(w - 2, oy, 2, h - oy, R['steel'][1])
@@ -1684,10 +1756,10 @@ def searchlight() -> Img:
     return outline(out, INK).crop(1, 1, 14, 12)
 
 
-def flag(frame: int, color: str = '#b8322e', pole: int = 30, n: int = 4) -> Img:
+def flag(frame: int, color: str = '#9e2626', pole: int = 30, n: int = 4) -> Img:
     """A flag on a pole waving in the wind, frame of n. 22 × pole px; the pole's foot is at the
     bottom-left."""
-    fr = ramp(color, 4, 0.4)
+    fr = ramp(color, 4, 0.3)
     out = Img.new(22, pole)
     st = R['steel']
     out.rect_(1, 1, 2, pole - 1, st[3]); out.px_(1, 0, '#e8c14e'); out.px_(2, 0, '#e8c14e')

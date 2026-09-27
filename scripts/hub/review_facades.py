@@ -27,6 +27,9 @@ from kit import floor_tile, text  # noqa: E402
 from lib import T, Img  # noqa: E402
 
 
+NAMES = {'tower': 'БАШНЯ ЧАРОДЕЯ', 'trader': 'ТОРГОВЕЦ', 'zone': 'ОСОБАЯ ЗОНА', 'watchtower': 'ВЫШКА'}
+
+
 def hero() -> Img:
     sh = Img.open(os.path.join(lib.ROOT, 'public', 'dungeon', 'na', 'char3.png'))
     return sh.crop(0, 0, 16, 16)
@@ -92,7 +95,7 @@ def layout(ids: list[str], width: int, frame: int, lines: bool) -> tuple[Img, li
             # the hero in front of the door, facing it (up)
             hx = fl + int((f.door_x + f.door_w / 2) * T) - 8
             out.paste_(hr, hx, base + 2)
-            lab = text(f.id, '#ffffff')
+            lab = text(NAMES.get(f.id) or facades.FOOTPRINTS[f.id][4] or f.id, '#ffffff')
             out.paste_(lab, fl, base + T + 4)
             for (lx, ly, lr, lc, lk, ln) in f.lights:
                 lights.append((fx + lx, top + ly, lr, lc, lk, ln))

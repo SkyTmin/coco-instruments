@@ -10,7 +10,43 @@ everything above the footprint (walls, roof, chimney, the headframe) rises up th
 Door: `door_x` tiles from the footprint's left edge, `door_w` tiles wide, at its bottom row.
 
 The drawing tools (materials, roofs, openings, fittings) live in `art_facades.py`; each building
-is a `_draw_<id>()` here that composes them.
+is a `_draw_<id>()` here that composes them. Look at them with `review_facades.py` (all of them on
+a dirt patch, the hero at every door, `--night`, `--lines`, `--anim`).
+
+For the square: animated facades carry `frames` + `fps` (mine: the sheave turns, the beacon
+blinks; hq: the flag waves; club: the neon stutters, the bulbs chase). `searchlight(f)` gives the
+lamp the square hangs its beam on (watchtower, kpp). Lights with night=True are windows and door
+lamps; night=False ones glow always (the forge's fire, the zone's violet, the club's neon).
+
+Geometry (see art_facades): the front wall is H px tall from the footprint's bottom; the roof
+covers the footprint shifted up by H, so the sprite is D + H (+ chimneys, towers) tall and nothing
+of the footprint shows through. Props "by the door" stand ON the wall line — the sprite may not
+reach below the footprint, so nothing can stand in front of it.
+
+Lessons (three rounds on every building, ×3–×4 sheets, day and night):
+  * The final contour goes OUTSIDE the silhouette (`art_facades.contour`). kit.ink turns every
+    pixel that touches transparency into ink: the sheave's spokes, the headframe's bracing, cables,
+    ladder rungs, the tower's railing all went solid black and the wheel stopped reading as a wheel.
+  * kit.text (3×5) can't carry a facade sign: Ш, Ц, И are too close — ШАХТА read ЧАХТА, КУЗНИЦА
+    read КУЗНИЧА. Signs use the 5×7 `sign_text`; the 3×5 font only for short labels (БАРАК 1).
+    Letters on a LIGHT board get no drop shadow, or they turn into outlines (ПРАЧЕЧНАЯ was mush).
+  * Tar paper with battens over a whole long roof reads as prison bars; wavy asbestos slate
+    (шифер) is the Soviet barrack roof and reads at once. Big roofs are the price of the 3/4 view
+    (D = 80 px of roof over a 36 px wall), so they need things ON them: dormers, stove pipes, a
+    ladder, painted numbers, moss, soot, monitors, skylights, a cupola, weathervanes.
+  * A hip roof whose ridge sits below its back eave on screen must draw the back slope, or its
+    side triangles stick up as "ears" (hq, canteen, kpp all had them).
+  * Flat roofs are anonymous grey boxes; puddles drawn dark read as holes. Give them felt strips,
+    patches, a drain, and a load (the zone's chained hatch and crystals, the garage's tarp heap).
+  * Anything "inside the door" must not be vertical bars: a lattice read as a jail cell (mine,
+    lift). The mine shows rails running into a lit hall, the lift an open car with its gate folded.
+  * Draw order on landmarks: the sheave's axle post was painted over the wheel and hid its hub.
+  * A thing painted over a thing: the ШТАБ board under the balcony slab lost its top row (ШТНБ),
+    the lamp covered the board of honour, the sign covered a barrack window — check signs last.
+  * Bars must be LIGHT steel on the dark glass, or "barred windows" are just dark windows.
+  * Two front-gable buildings in a row look alike: the forge is a plain gable in stone and slate
+    with a brick chimney, the kennel a gambrel barn in red boards with a cupola and a hay door.
+  * Tyres drawn as dark ellipses read as holes; a tyre needs its tread band and a see-through hole.
 """
 from __future__ import annotations
 
@@ -64,6 +100,17 @@ class Facade:
     lights: list[tuple[float, float, float, str, str, bool]] = field(default_factory=list)  # x, y, r, color, kind, night
     fx: list[tuple[str, float, float, float]] = field(default_factory=list)                   # kind, x, y, rate
     solid: list[tuple[float, float, float, float]] | None = None   # tile rects relative to the footprint; default = whole footprint minus the door
+
+
+def searchlight(f: Facade) -> tuple[float, float] | None:
+    """Where the square hangs a searchlight beam on this facade (px from the sprite's top-left)."""
+    for x, y, r, col, kind, night in f.lights:
+        if col == SEARCH:
+            return x, y
+    return None
+
+
+SEARCH = '#fff3c0'
 
 
 def facade(id: str) -> Facade:
@@ -133,7 +180,13 @@ def _draw_forge() -> Facade:
     # chimney out of the left slope, towering over the ridge
     chx, chw = L + 12, 14
     bl = int(A.slope_y(roof, chx, cv.D * 0.42))
+    A.soot_trail(img, chx + 2, bl + 1, -0.6, 22, 4)
+    A.moss(img, L, roof['top'] + 20, cv.R, roof['eave'] - 4, seed=2, n=16)
+    for (sx, sy) in ((L + 70, roof['top'] + 40), (L + 30, roof['top'] + 66)):   # replaced slates
+        img.rect_(sx, sy, 4, 3, P['slate'][3]); img.rect_(sx, sy, 4, 1, P['slate'][4])
     A.roof_stack(img, chx, chw, roof['top'] - 16, bl, int(bl - (chw - 1) * roof['k']), seed=4)
+    wv = A.weathervane('arrow')
+    img.paste_(wv, int(roof['cx']) - 5, roof['top'] - wv.h + 2)
     # door: open wide on the fire
     dx, dw = _door(cv, 'forge')
     d = A.doorway(dw, 30, glow='#ffb347', inside='hearth', frame='wood')
@@ -198,6 +251,14 @@ def _barrack(id: str, n: int) -> Facade:
         chx = dx + dw // 2 - 6
         A.roof_stack(img, chx, 12, roof['ridge'] - 14, roof['ridge'] + 8, roof['ridge'] + 8, seed=n)
         cv.emit('smoke', chx + 6, roof['ridge'] - 16, 0.5)
+    # the barrack's number painted big on the roof, weathered (seen from the towers)
+    num = A.sign_text(str(n), '#e9e4d6', None).scale(3)
+    nx, ny = L + 18 if logs else R_ - 62, roof['ridge'] + 16
+    mask = num.a[:, :, 3] > 0
+    r_ = rng('num', n)
+    for yy, xx in zip(*mask.nonzero()):
+        if r_.random() < 0.82:
+            img.px_(nx + xx, ny + yy, '#e2ddcf', 0.85)
     # door under its canopy
     d = A.plank_door(dw + 2, 27, tone='woodgrey' if logs else 'wood')
     img.paste_(d, dx - 1, B - 27)
@@ -400,6 +461,12 @@ def _draw_zone() -> Facade:
     img.paste_(A.steel_door(dw, 34, glow='violet'), dx, B - 34)
     img.paste_(A.chains_x(dw + 2, 22), dx - 1, B - 30)
     cv.light(dx + dw / 2, B - 6, 52, VIOLET, 'magic', False)
+    cl = Img.new(7, 6)
+    cl.rect_(0, 0, 7, 1, R['steel'][1]); cl.rect_(1, 1, 5, 4, '#ff4a3a'); cl.px_(2, 2, '#ffd0c0')
+    for x in (1, 3, 5):
+        cl.rect_(x, 1, 1, 4, R['steel'][2])
+    img.paste_(A.outline(cl, INK), dx + dw + 3, B - 44)
+    cv.light(dx + dw + 7, B - 40, 24, '#ff4a3a', 'lamp', True)
     cv.emit('motes', dx + dw / 2, B - 8, 1.0)
     # hazard stripes on the jambs, the sign above
     img.paste_(A.hazard(3, 34), dx - 3, B - 34)
@@ -529,6 +596,7 @@ def _draw_tower() -> Facade:
         y = ttop + 12 + int(9 * math.cos(math.radians(a)) * 0.8)
         _rune(img, x, y, i, '#c9a6ff' if i % 2 else '#fbe594')
         img.px_(x + 1, y - 1, '#9a6be0')
+    cv.light(cx, ttop + 16, 30, '#c9a6ff', 'magic', True)     # the runes glow after dark
     # gallery railing round the tank's foot
     for a in range(-80, 81, 16):
         x = cx + int(math.sin(math.radians(a)) * (rt + 3))
@@ -611,6 +679,13 @@ def _draw_kennel() -> Facade:
         img.rect_(x, B - H, 1, H - 4, A.R['barn'][1])
     roof = A.roof_gable(cv, 'shingle', H, [(0, 0), (0.17, 26), (0.5, 40), (0.83, 26), (1, 0)],
                         gable='siding', gable_tone='barn', seed=32)
+    A.moss(img, L, roof['top'] + 10, R_, roof['apex'] + 2, seed=3, n=22)
+    cup = A.cupola(16, 10)
+    cxr = int(roof['cx'])
+    cy_ = roof['top'] + 22
+    img.paste_(cup, cxr - cup.w // 2, cy_ - cup.h)
+    wv = A.weathervane('dog')
+    img.paste_(wv, cxr - 5, cy_ - cup.h - wv.h + 2)
     # the hay door and hoist beam
     hx = int(roof['cx'])
     hy = roof['apex'] + 12
@@ -693,14 +768,16 @@ def _draw_trader() -> Facade:
     img.paste_(ln, dx - 8, B - 30)
     cv.light(dx - 5, B - 24, 40, WARM, 'lamp', True)
     cv.light(dx + dw / 2, B - 12, 30, WARM, 'glow', False)
-    # the hand-painted % on a crooked plank, a chalkboard of prices
-    pc = A.sign_text('%', '#c8433a', None).scale(2)
-    pl = Img.new(pc.w + 8, pc.h + 6)
-    pl.rect_(0, 1, pl.w, pl.h - 1, P['wood'][3]); pl.rect_(0, 1, pl.w, 1, P['wood'][4])
-    pl.rect_(0, pl.h - 3, pl.w, 1, P['wood'][1])
-    pl.paste_(pc, 4, 3)
-    pl.a[0:2, :] = 0
-    pl.rect_(2, 0, pl.w - 4, 1, P['wood'][3])
+    # the hand-painted % on a pale plank, a chalkboard of prices
+    from lib import grid
+    pc = grid(['.###.....##.', '##.##...##..', '##.##..##...', '.###..##....', '.....##.....', '....##..###.',
+               '...##..##.##', '..##...##.##', '.##.....###.'], {'#': '#b8322e'})
+    pl = Img.new(pc.w + 6, pc.h + 6)
+    pl.rect_(0, 1, pl.w, pl.h - 1, '#d9c7a2'); pl.rect_(0, 1, pl.w, 1, '#eee2c4')
+    pl.rect_(0, pl.h - 2, pl.w, 1, '#a8906a')
+    pl.paste_(pc, 3, 3)
+    pl.px_(pl.w - 3, 5, '#b8322e'); pl.px_(pl.w - 3, 6, '#b8322e')          # a paint drip
+    pl.a[0, :] = 0
     img.paste_(ink(pl), dx + dw + 3, B - 33)
     ch = Img.new(14, 12, '#2a332c')
     for y in range(2, 10, 2):
@@ -793,6 +870,15 @@ def _draw_kiosk() -> Facade:
         img.rect_(wx, B - 31, 13, 1, INK); img.rect_(wx, B - 10, 13, 1, INK)
         img.rect_(wx, B - 30, 1, 20, INK); img.rect_(wx + 12, B - 30, 1, 20, INK)
         img.rect_(wx - 1, B - 10, 15, 2, R['white'][4])
+    # the serving hatch: the left pane swung up, a ledge with a saucer of change
+    hx0 = L + 3
+    img.rect_(hx0, B - 25, 11, 9, '#2a201d')
+    img.rect_(hx0 + 1, B - 24, 9, 6, '#6b4f2a'); img.rect_(hx0 + 1, B - 24, 9, 1, '#9a7a48')
+    img.rect_(hx0 + 3, B - 22, 2, 3, '#c9c8bd'); img.rect_(hx0 + 6, B - 23, 2, 4, '#5e9360')
+    img.rect_(hx0 - 1, B - 16, 13, 2, R['white'][4]); img.rect_(hx0 - 1, B - 14, 13, 1, INK)
+    img.ellipse_(hx0 + 8, B - 17, 2, 1, '#e8c14e')
+    img.rect_(hx0 - 1, B - 27, 13, 2, R['glass'][2]); img.rect_(hx0 - 1, B - 28, 13, 1, INK)
+    cv.light(hx0 + 5, B - 20, 18, WARM, 'window', True)
     # the awning over the whole front
     aw = A.awning(cv.W + 8, 9, '#b8322e', '#e9e2d0')
     img.paste_(aw, L - 4, B - H - 3)
@@ -1037,6 +1123,9 @@ def _draw_boiler() -> Facade:
     cv.emit('steam', L + 30, roof['ridge'] - 2, 0.4)
     dx, dw = _door(cv, 'boiler')
     img.paste_(A.steel_door(dw + 4, 27, tone='steel'), dx - 2, B - 27)
+    lamp, (lbx, lby) = A.wall_lamp()
+    img.paste_(lamp, dx - 14, B - 30)
+    cv.light(dx - 14 + lbx, B - 30 + lby, 34, WARM, 'lamp', True)
     sg = A.board('КОТЕЛЬНАЯ', bg='#2a2a2e', fg='#e8e2cf', pad=2)
     img.paste_(sg, L + 6, B - H + 1)
     for wx in (dx + dw + 6, dx + dw + 21):
@@ -1083,6 +1172,9 @@ def _draw_laundry() -> Facade:
     img.paste_(w, R_ - 22, B - 28)
     cv.light(R_ - 15, B - 20, 20, WARM, 'window', True)
     cv.emit('steam', dx + dw / 2, B - 26, 0.4)
+    lamp, (lbx, lby) = A.wall_lamp()
+    img.paste_(lamp, dx + dw + 2, B - 30)
+    cv.light(dx + dw + 2 + lbx, B - 30 + lby, 32, WARM, 'lamp', True)
     img.paste_(A.laundry_line(34, 2), L + 4, B - 27)
     for x in (L + 4, L + 37):
         img.rect_(x, B - 28, 1, 3, R['steel'][2])
@@ -1109,12 +1201,21 @@ def _draw_garage() -> Facade:
     roof = A.roof_flat(cv, H, parapet=4, mat='panel', seed=121, surface='felt')
     sx0, sy0, sx1, sy1 = roof['surface']
     img.paste_(A.tyre_stack(2), sx1 - 26, sy0 + 20)
+    # a heap under a roped tarp, and a few planks thrown up there
+    heap = Img.new(34, 16)
+    heap.ellipse_(17, 10, 17, 7, R['khaki'][1]); heap.ellipse_(15, 8, 14, 6, R['khaki'][2])
+    heap.ellipse_(12, 6, 8, 4, R['khaki'][3])
+    for x in (8, 18, 27):
+        heap.line_(x, 2, x + 2, 15, '#b8a07a')
+    heap.rect_(1, 13, 32, 1, R['khaki'][0])
+    img.paste_(A.outline(heap, INK), sx0 + 26, sy0 + 26)
+    for i, y in enumerate((sy1 - 12, sy1 - 9)):
+        img.rect_(sx0 + 6 + i * 3, y, 30, 2, P['woodgrey'][3]); img.rect_(sx0 + 6 + i * 3, y + 2, 30, 1, INK)
     img.rect_(sx0 + 12, sy0 + 10, 4, 12, R['galv'][2]); img.rect_(sx0 + 12, sy0 + 10, 1, 12, R['galv'][4])
     img.ellipse_(sx0 + 14, sy0 + 9, 4, 2, R['galv'][3])
     dx, dw = _door(cv, 'garage')
     img.rect_(dx - 2, B - 40, dw + 4, 40, P['concrete'][1])
-    img.paste_(A.gates(dw, 36, 'sidegreen', 'ГАРАЖ'), dx, B - 36)
-    img.rect_(dx - 2, B - 40, dw + 4, 3, R['steel'][2]); img.rect_(dx - 2, B - 40, dw + 4, 1, R['steel'][4])
+    img.paste_(A.rollup(dw, 38, 0, seed=12, tone='sidegreen', stencil='ГАРАЖ'), dx, B - 38)
     lamp, (lbx, lby) = A.wall_lamp()
     img.paste_(lamp, dx + dw // 2 - 6, B - 44)
     cv.light(dx + dw // 2 - 6 + lbx, B - 44 + lby, 44, WARM, 'lamp', True)
@@ -1152,7 +1253,7 @@ def _draw_kpp() -> Facade:
     # searchlight on the roof, boom on the right
     sl = A.searchlight()
     img.paste_(sl, L + 40, roof['ridge'] - 8)
-    cv.light(L + 50, roof['ridge'] - 2, 26, '#fff3c0', 'lamp', True)
+    cv.light(L + 50, roof['ridge'] - 2, 26, SEARCH, 'lamp', True)
     arm_x = bx1 + 2
     img.paste_(A.barrier_arm(R_ + cv.over - arm_x - 7), arm_x, B - 16)
     stop = Img.new(11, 20)
@@ -1213,5 +1314,5 @@ def _draw_watchtower() -> Facade:
     roof = A.roof_hip(cv, 'galv', H, rise=D // 2 - 2, seed=142, x0=c0, x1=c1, ov=3)
     sl = A.searchlight()
     img.paste_(sl, cv.cx - 7, roof['ridge'] - 9)
-    cv.light(cv.cx + 3, roof['ridge'] - 3, 28, '#fff3c0', 'lamp', True)
+    cv.light(cv.cx + 3, roof['ridge'] - 3, 28, SEARCH, 'lamp', True)
     return _finish('watchtower', cv)
