@@ -1806,7 +1806,7 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           mob: m.id,
         };
         api.zone(sim, z);
-        sim.events.push({ t: 'boss', what: 'f10_dive', text: 'С НЕБА', sub: 'метка ходит за тобой — уйди, когда замрёт' });
+        sim.events.push({ t: 'boss', what: 'f10_swoop_trap', text: 'С НЕБА', sub: 'метка ходит за тобой — уйди, когда замрёт' });
       }
       return;
     case 'f10_air': {
