@@ -8,6 +8,8 @@
 
 import type { MobDef, ShotSpec, StatusKind } from './dungeon';
 import type { BossFight, Burrow, Mob, Sim } from './dungeon-sim';
+import type { HazardSpec } from './dungeon-floors/types';
+import type { Light, WorldObj } from './dungeon-world';
 
 /** Предупреждение на полу: куда придётся удар. Рисует движок. */
 export interface Tele {
@@ -47,6 +49,18 @@ export interface StrikeIn {
   art?: string;
   /** Чей удар: умер моб — метка гаснет. */
   from?: number;
+  /**
+   * Стены режут удар (Движок 3): героя за стеной от точки удара не задевает.
+   * Для ширм, колонн-укрытий, «спрячься за камнем».
+   */
+  los?: boolean;
+  /**
+   * Урон по мобам в зоне удара (Движок 3): поезд, пушка, обвал бьют и своих.
+   * Боссов не трогает. `Infinity` — насмерть.
+   */
+  mobDmg?: number;
+  /** Рисовать поверх темноты (молния, лазер) — Движок 3. */
+  above?: boolean;
 }
 
 /** Лужа, облако, огонь: лежит и действует на того, кто стоит внутри. */
@@ -65,6 +79,18 @@ export interface ZoneIn {
   /** Сперва видно, потом действует, с. */
   warn?: number;
   art?: string;
+  /** Рисовать поверх темноты (свечение, пламя) — Движок 3. */
+  above?: boolean;
+}
+
+/** Как тянуть героя (`api.pullHero`). */
+export interface PullOpts {
+  /** Клеток в секунду (по умолчанию 12). */
+  speed?: number;
+  /** Неуязвим, пока летит (крюк, зип-линия). */
+  inv?: boolean;
+  /** Сколько тянуть самое большее, с (по умолчанию 2). */
+  max?: number;
 }
 
 export interface SpawnOpts {
@@ -121,7 +147,42 @@ export interface SimApi {
    * рисунок куска карты и соседей перерисуется сам, поле путей — на
    * ближайшем пересчёте. `mark` — свой вид клетки этажа (0 — обычная).
    */
-  setTile(sim: Sim, x: number, y: number, tile: number, mark?: number): void;
+  setTile(
+    sim: Sim,
+    x: number,
+    y: number,
+    tile: number,
+    mark?: number,
+    haz?: HazardSpec | null,
+  ): void;
+  /**
+   * Свет на ходу (Движок 3): поставить, сдвинуть (тот же `key`) или погасить
+   * (`null`). Жаровни, фары поезда, светящиеся вены, огонь в руке.
+   */
+  light(sim: Sim, key: string, l: Light | null): void;
+  /**
+   * Урон от окружения (Движок 3): доля здоровья героя, без брони и отброса;
+   * неуязвимость и бессмертие креатива уважает. ЗДОРОВЬЕ ГЕРОЯ НАПРЯМУЮ НЕ
+   * ТРОГАТЬ — только так или `hurtHero`.
+   */
+  hurtEnv(sim: Sim, frac: number, status?: { kind: StatusKind; dur: number }): void;
+  /** Моб сорвался в пропасть (Движок 3): убийство, добыча — на ближнем краю. */
+  fall(sim: Sim, m: Mob): void;
+  /**
+   * Тянуть героя к точке (Движок 3): крюк, аркан, течение, зип-линия. Ввод
+   * заперт, стены останавливают; конец — у точки, об стену или по `max`.
+   */
+  pullHero(sim: Sim, tx: number, ty: number, o?: PullOpts): void;
+  /**
+   * Время (Движок 3): мир (мобы, снаряды, удары, зоны, сценарии) идёт с
+   * `dt·world`, герой — с `dt·hero`, `dur` секунд настоящего времени.
+   * «Мир стоит» — `world: 0`; «герой застыл, а босс ходит» — `hero: 0`.
+   */
+  timeScale(sim: Sim, world: number, hero: number, dur: number): void;
+  /** Камера уходит к точке и через `dur` с возвращается к герою (Движок 3). */
+  camera(sim: Sim, x: number, y: number, dur: number): void;
+  /** Замедление всего (Движок 3): `scale` 0,2…1 на `dur` с. */
+  slowmo(sim: Sim, dur: number, scale: number): void;
   /**
    * Перенести героя (телепорт, ловушка-провал, зеркало): скорость и рывок
    * гаснут, камера прыгает сразу, а не едет через полкарты. Клетка должна
@@ -191,8 +252,8 @@ export interface BossScript {
    * поведение. Без них — полоса без засечек.
    */
   notches?(sim: Sim, b: BossFight): number[];
-  /** Герой пал — бой сброшен. */
-  reset?(sim: Sim, b: BossFight): void;
+  /** Герой пал — бой сброшен (Движок 3: с `api`, чтобы вернуть арену). */
+  reset?(sim: Sim, b: BossFight, api: SimApi): void;
 }
 
 /**
@@ -203,6 +264,17 @@ export interface BossScript {
 export interface FloorScript {
   start?(sim: Sim, api: SimApi): void;
   step?(sim: Sim, dt: number, api: SimApi): void;
+  /**
+   * Нажали «Действие» у предмета этажа с `use` (Движок 3). Вернуть false —
+   * «сейчас нельзя» (кнопка просто ничего не сделает).
+   */
+  onUse?(sim: Sim, obj: WorldObj, api: SimApi): boolean | void;
+  /**
+   * Подпись кнопки у предмета этажа прямо сейчас (Движок 3): строка —
+   * своя подпись («Выстрел», «Зарядка…»), null — кнопки нет (рычаг уже
+   * повёрнут). Не задано — всегда `obj.use.label`.
+   */
+  useLabel?(sim: Sim, obj: WorldObj): string | null;
 }
 
 export const BRAINS = new Map<string, Brain>();
