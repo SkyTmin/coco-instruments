@@ -267,6 +267,17 @@ const FLOOR_SOUND: Record<string, () => void> = {
   f9_sprout: () => bubblePop(),
   f9_heal: () => softChime(4),
   f9_pull: () => dashWhoosh(),
+  // Этаж 7: стекло — звон и треск, переход сквозь зеркало.
+  f7_mirror_wall: () => {
+    crateBreak();
+    boom(1);
+  },
+  f7_mirror_trap: () => crateBreak(),
+  f7_prisms_trap: () => crateBreak(),
+  f7_warp_call: () => dashWhoosh(),
+  f7_fake_call: () => bedrockClink(),
+  f7_frame_call: () => crateBreak(),
+  f7_thread_trap: () => swordHit(false, false),
 };
 
 const USE_ICON: Record<Usable['kind'], GxIconName> = {
@@ -857,7 +868,9 @@ export function DungeonRun({
             if (e.text) say(e.text, e.sub, 'danger', 1800);
           } else if (FLOOR_SOUND[e.what]) {
             FLOOR_SOUND[e.what]();
-            if (e.text) say(e.text, e.sub, e.what.endsWith('_heal') ? 'danger' : 'area', 1600);
+            const alarm = e.what.endsWith('_trap') || e.what.endsWith('_heal');
+            if (e.what.endsWith('_trap')) notifyWarning();
+            if (e.text) say(e.text, e.sub, alarm ? 'danger' : 'area', 1600);
           } else if (e.what === 'roll') deepRumble();
           else if (e.what === 'whip') swordSwing(2, true);
           else if (e.what === 'summon') {
