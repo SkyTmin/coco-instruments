@@ -332,6 +332,9 @@ def area_throat():
 
     m.put(44, 88, 'D')
     m.put(44, 89, '#')
+    # Горло надгортанника — ровно шесть клеток клапана, по бокам мышца.
+    box(m, 25, 3, 28, 6)
+    box(m, 35, 3, 38, 6)
 
     # --- Лифт.
     m.put(31, 99, 'E')
@@ -466,9 +469,9 @@ def area_gut():
     for y in range(86, 97):
         for x in range(24, 40):
             if m.g[y][x] == '.' and ring_of(31.5, 91, 25, 8.6, x, y) < 0.86:
-                m.g[y][x] = 'f'
+                m.g[y][x] = '4'
     # --- Западный путь: берег второго озера, мелководье.
-    tube(m, [(10, 83), (8, 76), (9, 68), (13, 63)], 1.5, seed=0.7)
+    tube(m, [(5, 89), (7, 84), (10, 81), (8, 76), (9, 68), (13, 63)], 1.5, seed=0.7)
     m.ell(17, 72, 5, 6.5, '_', rough=0.2)
     # --- Восточный путь: коридор складок (к востоку от Кривизны).
     m.rect(50, 57, 54, 84)
@@ -514,6 +517,7 @@ def area_gut():
     m.put(47, 97, 'D')
     m.put(47, 98, '#')
     m.put(49, 30, '%')
+    m.rect(46, 29, 48, 31)
     # Дверь из коридора складок в Кривизну.
     m.rect(45, 57, 49, 59)
 
@@ -590,7 +594,7 @@ def area_gut():
     for y in range(60, 84):
         for x in range(50, 55):
             if m.g[y][x] == '.' and (y % 3 != 0):
-                m.g[y][x] = 'f'
+                m.g[y][x] = '2'
 
     # --- Вены к сердцу.
     vein(m, [(31, 104), (31, 99)])
@@ -639,8 +643,8 @@ def area_gut():
     put_face(m, 6, 48, 'M')
 
     # --- Поры.
-    for (x, y) in ((8, 84), (22, 83), (40, 83), (54, 88), (5, 72), (43, 70), (51, 66),
-                   (13, 46), (50, 50), (13, 66), (49, 60), (18, 26), (45, 28), (24, 20),
+    for (x, y) in ((8, 84), (22, 83), (40, 83), (5, 72), (43, 70), (55, 66),
+                   (16, 46), (50, 50), (13, 66), (49, 64), (18, 26), (45, 28), (24, 20),
                    (40, 22), (32, 8), (48, 16), (27, 101)):
         hole(m, x, y)
 
@@ -662,6 +666,7 @@ def area_gut():
 # ---------------------------------------------------------------------------
 # Район 3 — «Сосуды».
 # ---------------------------------------------------------------------------
+
 
 def area_veins():
     H = 110
@@ -689,7 +694,7 @@ def area_veins():
     tube(m, [(12, 55), (9, 48), (12, 42), (18, 38)], 1.2, seed=0.8)
     tube(m, [(29, 52), (31, 45), (26, 39), (20, 37)], 1.1, seed=1.9)
     m.ell(20, 36, 6.5, 4, '.')              # малый зал у выхода в Клапаны
-    # Лимфоузел — тайник за трещиной (запад).
+    # Лимфоузел — тайник за трещиной (запад), дверь — вентилем.
     box(m, 1, 50, 5, 60)
     for y in range(52, 58):
         for x in (2, 3, 4):
@@ -704,19 +709,19 @@ def area_veins():
     # --- «Устье сердца» (ряды 0…12).
     m.ell(31.5, 7, 10, 4.2, '.')
     m.rect(JOIN[0], 0, JOIN[1], 7)
+    m.rect(27, 9, 36, 12)
 
-    # --- Короткий путь: от Клапанов по восточному краю в Узел.
-    tube(m, [(47, 30), (53, 29), (59, 31), (60, 44), (59, 58), (60, 72), (59, 84), (58, 90)],
-         1.05, wobble=0.1, seed=0.6)
+    # --- Короткий путь: из верхней камеры Клапанов по восточному краю в Узел.
+    tube(m, [(47, 13), (52, 12), (57, 14), (60, 24), (59, 38), (60, 52), (59, 66),
+             (60, 80), (58, 90)], 1.05, wobble=0.1, seed=0.6)
     m.rect(57, 90, 59, 91)
 
     # Перемычки.
-    box(m, 55, 32, 57, 88)                 # Аорта ↔ короткий путь
+    box(m, 55, 29, 57, 88)                 # Аорта ↔ короткий путь
+    box(m, 48, 15, 55, 31)                 # короткий путь ↔ нижние камеры Клапанов
     box(m, 36, 34, 39, 84)                 # Аорта ↔ Капилляры
     box(m, 0, 0, 27, 2)
     box(m, 36, 0, 63, 2)
-    box(m, 48, 12, 63, 27)                 # короткий путь уходит только с юго-востока Клапанов
-    box(m, 1, 99, 63, 99) if False else None
     box(m, 55, 89, 56, 95)
     box(m, 1, 50, 1, 60)
     m.jitter(0.18, 2)
@@ -729,27 +734,26 @@ def area_veins():
     for yy in (90, 91):
         m.put(56, yy, '#')
     m.rect(56, 92, 58, 92)
-    m.put(6, 55, '%')
-    for y in range(53, 58):
-        m.put(5, y, '#') if y != 55 else None
+    # Дверь Лимфоузла: сфинктер (открывает вентиль), за ним трещина не нужна.
+    for y in range(52, 58):
+        m.put(5, y, '#')
+    m.put(5, 55, 'H')
+    tube(m, [(6, 55), (9, 57)], 0.8, wobble=0.0)
 
     # Аорта: русло и течение к сердцу.
     for y in range(32, 87):
         for x in range(40, 55):
             if m.g[y][x] != '.':
                 continue
-            if 45 <= x <= 49:
-                m.g[y][x] = 'h'
-            else:
-                m.g[y][x] = '8'
+            m.g[y][x] = 'h' if 45 <= x <= 49 else '8'
     # Переправы через русло (стенка сосуда).
     for y in (44, 66):
         for x in range(45, 50):
             m.g[y][x] = 'e'
-    # Тромб: места сгустков поперёк Аорты.
+    # Тромб: места сгустков поперёк берегов Аорты.
     for y in (36, 80):
         for x in range(40, 55):
-            if m.g[y][x] in '8':
+            if m.g[y][x] == '8':
                 m.g[y][x] = 't'
     # Клапаны сердца: три ряда створок, течение к сердцу по середине.
     for y in (29, 22, 15):
@@ -760,17 +764,13 @@ def area_veins():
         for x in range(28, 36):
             if m.g[y][x] == '.':
                 m.g[y][x] = '8'
-    # Стенки сосудов — пол Капилляров и Узла.
-    for y in range(34, 102):
-        for x in range(1, 40):
-            if m.g[y][x] == '.' and (x * 7 + y * 3) % 5 == 0:
-                m.g[y][x] = 'e'
     # Вены к сердцу.
     vein(m, [(42, 99), (34, 94), (26, 90), (22, 86)])
     vein(m, [(10, 66), (13, 58), (20, 37), (26, 33)])
     vein(m, [(31, 11), (31, 4)])
-    for (x, y) in ((34, 94), (13, 58), (31, 8)):
-        m.g[y][x] = 'j'
+    for (x, y) in ((34, 94), (13, 58), (31, 8), (20, 37)):
+        if m.g[y][x] in '.y':
+            m.g[y][x] = 'j'
 
     # --- Предметы.
     at(m, 26, 97, '|')
@@ -788,11 +788,10 @@ def area_veins():
     at(m, 21, 18, '|')
     at(m, 43, 18, '|')
     at(m, 21, 26, '/')
-    at(m, 42, 32, '(') if False else None
     at(m, 44, 25, 'U')
     at(m, 24, 8, '&')
     at(m, 39, 8, '&')
-    at(m, 17, 96, 'W')
+    at(m, 7, 58, 'W')
     speckle(m, 12, 86, 54, 100, 'x', 8, gap=2, lock=False)
     speckle(m, 12, 86, 54, 100, '*', 3, gap=6, clear=2)
     speckle(m, 6, 36, 34, 84, 'x', 10, gap=2, lock=False)
@@ -815,24 +814,114 @@ def area_veins():
     put_face(m, 35, 61, 'M')
 
     # --- Поры.
-    for (x, y) in ((14, 88), (30, 85), (48, 86), (22, 99), (39, 60), (39, 44), (55, 50),
-                   (55, 70), (8, 70), (21, 56), (32, 52), (15, 44), (26, 40), (16, 20),
-                   (48, 30), (27, 12), (36, 12), (10, 60)):
+    for (x, y) in ((14, 88), (30, 85), (22, 99), (8, 70), (21, 56), (32, 52), (15, 44),
+                   (26, 40), (16, 20), (47, 17), (26, 11), (37, 11), (10, 60), (52, 88)):
         hole(m, x, y)
 
     # --- Посты и залы-события.
     spot('watcher', A, 14, 57)
     spot('watcher', A, 29, 53)
     spot('watcher', A, 20, 34)
-    spot('watcher', A, 32, 18)
+    spot('watcher', A, 20, 19)
+    spot('watcher', A, 44, 26)
     spot('nerve', A, 33, 92)
     spot('nerve', A, 32, 26)
     spot('knight', A, 26, 91)
     spot('knight', A, 40, 94)
-    spot('macro', A, 47, 58)
+    spot('knight', A, 23, 57)
+    spot('macro', A, 42, 58)
+    spot('sac', A, 18, 86)
+    spot('sac', A, 50, 86)
+    spot('sac', A, 25, 37)
     spot('group', A, 22, 92)
-    spot('group', A, 46, 52)
+    spot('group', A, 51, 52)
     spot('group', A, 16, 62)
     spot('box', A, 'aorta', 40, 32, 54, 86)
     spot('box', A, 'valves', 17, 12, 47, 33)
     return m
+
+
+def bfs(rows, sx, sy, passable):
+    h = len(rows)
+    seen = [[False] * W for _ in range(h)]
+    q = deque([(sx, sy)])
+    seen[sy][sx] = True
+    while q:
+        x, y = q.popleft()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < W and 0 <= ny < h and not seen[ny][nx] and rows[ny][nx] in passable:
+                seen[ny][nx] = True
+                q.append((nx, ny))
+    return seen
+
+
+def verify(areas):
+    """Весь этаж — один столб: верх района k+1 стыкуется с низом района k."""
+    rows = []
+    for name, r in reversed(areas):
+        rows += r
+    # Стыки.
+    for (na, ra), (nb, rb) in zip(areas, areas[1:]):
+        top = [x for x, c in enumerate(ra[0]) if c != '#']
+        bot = [x for x, c in enumerate(rb[-1]) if c != '#']
+        assert top == bot, ('стык', na, nb, top, bot)
+    top = [x for x, c in enumerate(areas[-1][1][0]) if c != '#']
+    assert top == list(range(JOIN[0], JOIN[1] + 1)), ('стык с Сердцем', top)
+    # Всё главное достижимо от лифта (решётки и трещины — проходимы).
+    walk = FLOORISH + 'E$D%MQHgNW()}{79][U/<?0)|^&*+-'
+    ly = next(y for y, r in enumerate(rows) if 'E' in r)
+    lx = rows[ly].index('E')
+    seen = bfs(rows, lx, ly, walk)
+    for y, r in enumerate(rows):
+        for x, c in enumerate(r):
+            if c in '$M':
+                ok = seen[y][x] or (c == 'M' and seen[y + 1][x])
+                assert ok, ('недостижимо', c, x, y)
+    assert seen[0][JOIN[0]], 'до Сердца не дойти'
+    # Мёртвые карманы: клетки пола, до которых не дойти.
+    lost = [(x, y) for y, r in enumerate(rows) for x, c in enumerate(r)
+            if c in FLOORISH and not seen[y][x]]
+    return rows, lost
+
+
+def main():
+    SPOTS.clear()
+    throat = area_throat()
+    gut = area_gut()
+    veins = area_veins()
+    rt = check(throat, 'f15')
+    rg = check(gut, 'f15gut')
+    rv = check(veins, 'f15veins')
+    rows, lost = verify([('f15', rt), ('f15gut', rg), ('f15veins', rv)])
+    # Карманы, до которых не дойти (дрожь краёв у озера), — зарастают мышцей.
+    if lost:
+        print('  заросло карманов пола:', len(lost), file=sys.stderr)
+        hv, hg = len(rv), len(rg)
+        for (x, y) in lost:
+            if y < hv:
+                rv[y] = rv[y][:x] + '#' + rv[y][x + 1:]
+            elif y < hv + hg:
+                k = y - hv
+                rg[k] = rg[k][:x] + '#' + rg[k][x + 1:]
+            else:
+                k = y - hv - hg
+                rt[k] = rt[k][:x] + '#' + rt[k][x + 1:]
+        rows, lost = verify([('f15', rt), ('f15gut', rg), ('f15veins', rv)])
+        assert not lost
+    if '--show' in sys.argv:
+        show(rv, 'V ')
+        show(rg, 'C ')
+        show(rt, 'G ')
+    if '--write' in sys.argv or '--show' not in sys.argv:
+        write_floor(15, {
+            'F15_THROAT_MAP': rt,
+            'F15_GUT_MAP': rg,
+            'F15_VEINS_MAP': rv,
+            'F15_SPOTS': SPOTS,
+        }, note='F15_SPOTS: «вид район x y …» — посты монстров и рамки залов-событий '
+                '(местные координаты района).')
+
+
+if __name__ == '__main__':
+    main()
