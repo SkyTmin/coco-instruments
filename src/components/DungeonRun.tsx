@@ -69,7 +69,6 @@ import { FLOORS } from '@/lib/dungeon-floors';
 import {
   bagFull,
   bedrockClink,
-  bigMoment,
   boom,
   cartRoll,
   coinDing,
@@ -96,9 +95,25 @@ import {
   setMusicScene,
   fishSplash,
   softChime,
-  bubblePop,
-  doorLatch,
   softThud,
+  beastRoar,
+  cannonShot,
+  chainRattle,
+  clockBell,
+  finaleChoir,
+  fleshSquelch,
+  glassBreak,
+  lavaBubble,
+  lavaHiss,
+  preloadFloorSounds,
+  steamBurst,
+  stoneGrind,
+  stringBend,
+  stringPluck,
+  teleport,
+  thunder,
+  timeResume,
+  windGust,
 } from '@/lib/sound';
 import type { MusicScene } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
@@ -247,41 +262,144 @@ const STATUS_NOTE: Record<string, string> = {
  * (`_call`, `_trap`, `_wall`, `_dive`, `_splash`, `_fall`, `_stone`).
  * Надпись события показывается как обычно; здесь только звук.
  */
+// Звуки событий этажей 6–10 (v2.82.4 — наборы агента «Звук», по замерам:
+// A-вес, доля выше 2,5 кГц). Слово события — из `fN-brains.ts`; чего нет в
+// таблице, озвучивают окончания `_call/_trap/_wall/…` ниже.
 const FLOOR_SOUND: Record<string, () => void> = {
-  // Этаж 6: гейзеры шипят, лава остывает с треском.
-  f6_vents: () => fuseTick(),
-  f6_cool: () => bedrockClink(),
-  // Этаж 8: стены-фусума едут, комната поворачивается, мост трещит.
-  f8_shift: () => {
-    doorLatch();
+  // Этаж 6: гейзеры и лава, мост и извержение, змей в лаве.
+  f6_vents: () => {
+    steamBurst();
+    lavaBubble();
+  },
+  f6_cool: () => lavaHiss(),
+  f6_trap: () => {
     deepRumble();
+    stoneGrind();
+    lavaBubble();
+  },
+  f6_dive: () => {
+    lavaBubble();
+    lavaHiss();
+  },
+  f6_splash: () => {
+    lavaBubble();
+    lavaHiss();
+  },
+  f6_wall: () => {
+    deepRumble();
+    boom(1);
+    stoneGrind();
+    tapMedium();
+  },
+  // Этаж 7: стекло — звон и треск, переход сквозь зеркало, нить.
+  f7_mirror_wall: () => glassBreak(true),
+  f7_mirror_trap: () => glassBreak(true),
+  f7_prisms_trap: () => {
+    glassBreak();
+    gateSlam();
+  },
+  f7_prisms_call: () => glassBreak(),
+  f7_frame_call: () => glassBreak(),
+  f7_glass_wall: () => glassBreak(),
+  f7_volley_call: () => glassBreak(),
+  f7_warp_call: () => teleport(),
+  f7_illusion_call: () => teleport(),
+  f7_shuffle_call: () => teleport(),
+  f7_thread_trap: () => stringPluck(0),
+  f7_lag_call: () => timeResume(),
+  f7_fake_call: () => softChime(-5),
+  f7_clear_call: () => softChime(-5),
+  // Этаж 8: бива, стены-фусума, перевёрнутая комната, луны.
+  f8_shift: () => {
+    stringPluck(1);
+    stoneGrind();
   },
   f8_turn: () => {
-    doorLatch();
+    stringPluck(2);
+    stoneGrind();
+  },
+  f8_shift_wall: () => stoneGrind(),
+  f8_turn_wall: () => stoneGrind(),
+  f8_flip_wall: () => stoneGrind(),
+  f8_pit_wall: () => stoneGrind(),
+  f8_flip_trap: () => {
+    stringBend();
+    stoneGrind();
     deepRumble();
   },
+  f8_string_call: () => stringBend(),
+  f8_hall_call: () => {
+    stringPluck(0);
+    stringPluck(2);
+  },
+  f8_rings_call: () => {
+    stringPluck(1);
+    stringPluck(4);
+  },
+  f8_moon_call: () => clockBell(true),
+  f8_moons_call: () => clockBell(true),
+  f8_drum_call: () => cannonShot(true),
+  f8_fall_trap: () => windGust(0.4),
   f8_bridge: () => crateBreak(),
-  // Этаж 9: кобольд хлопает телепортом, пиявка присасывается, шею прижигают.
-  f9_blink: () => dashWhoosh(),
-  f9_leech: () => eatChomp(),
-  f9_fire: () => fuseTick(),
-  f9_sear: () => fuseTick(1),
-  f9_stump: () => swordHit(true, true),
-  f9_regrow: () => bubblePop(),
-  f9_sprout: () => bubblePop(),
+  f8_screen_wall: () => crateBreak(),
+  // Этаж 9: телепорты, пиявки, гидра — огонь, пар и плоть.
+  f9_blink: () => teleport(),
+  f9_warp_call: () => teleport(),
+  f9_leech: () => fleshSquelch(),
+  f9_fire: () => lavaHiss(),
+  f9_sear: () => {
+    steamBurst();
+    lavaHiss();
+  },
+  f9_stump: () => {
+    swordHit(true, true);
+    fleshSquelch();
+  },
+  f9_regrow: () => {
+    fleshSquelch(true);
+    beastRoar(false);
+  },
+  f9_sprout: () => {
+    fleshSquelch(true);
+    beastRoar(false);
+  },
   f9_heal: () => softChime(4),
   f9_pull: () => dashWhoosh(),
-  // Этаж 7: стекло — звон и треск, переход сквозь зеркало.
-  f7_mirror_wall: () => {
-    crateBreak();
-    boom(1);
+  f9_spin_call: () => windGust(0.5),
+  f9_hall_call: () => windGust(0.5),
+  f9_chapel_trap: () => {
+    stoneGrind();
+    fleshSquelch();
   },
-  f7_mirror_trap: () => crateBreak(),
-  f7_prisms_trap: () => crateBreak(),
-  f7_warp_call: () => dashWhoosh(),
-  f7_fake_call: () => bedrockClink(),
-  f7_frame_call: () => crateBreak(),
-  f7_thread_trap: () => swordHit(false, false),
+  f9_chapel_call: () => stoneGrind(),
+  f9_tide_call: () => stoneGrind(),
+  f9_stone: () => stoneGrind(),
+  f9_ambush_trap: () => {
+    gateSlam();
+    beastRoar(false);
+  },
+  // Этаж 10: гроза, мост на цепях, крошащийся край.
+  f10_storm_trap: () => thunder(true),
+  f10_storm_wall: () => thunder(),
+  f10_calm_call: () => thunder(),
+  f10_bridge_trap: () => {
+    chainRattle();
+    stoneGrind();
+  },
+  f10_mend_call: () => chainRattle(),
+  f10_bars_call: () => chainRattle(),
+  f10_vault_trap: () => {
+    gateSlam();
+    chainRattle();
+  },
+  f10_crumble_trap: () => stoneGrind(),
+  f10_stone: () => stoneGrind(),
+  f10_edge_trap: () => windGust(0.5),
+  f10_swoop_trap: () => windGust(1),
+  f10_wake_call: () => {
+    beastRoar();
+    thunder();
+  },
 };
 
 const USE_ICON: Record<Usable['kind'], GxIconName> = {
@@ -382,6 +500,8 @@ export function DungeonRun({
     () => setMusicScene((bossOn ? music.boss : music.explore) as MusicScene),
     [bossOn, music],
   );
+  // Звуки этажа — заранее: незагруженный сэмпл в первый раз молчит.
+  useEffect(() => preloadFloorSounds(world.floor), [world.floor]);
   const [banner, setBanner] = useState<Banner | null>(null);
   /** Финал подземелья (Движок 3, `boss/finale`): итог поверх всего. */
   const [finale, setFinale] = useState<{ fight: number; kills: number; floors: number } | null>(
@@ -853,13 +973,16 @@ export function DungeonRun({
         }
         case 'boss': {
           const name = sim.boss?.def.name ?? 'Босс';
+          // С 6-го этажа боссы — звери и демоны, не крысы: в `kingRoar`
+          // слышна крысиная свита.
+          const roar = world.floor >= 6 ? () => beastRoar() : kingRoar;
           if (e.what === 'wake') {
-            kingRoar();
+            roar();
             gateSlam();
             notifyWarning();
             say(e.text ?? name.toUpperCase(), e.sub ?? 'ворота закрылись', 'danger', 2600);
           } else if (e.what === 'split') {
-            kingRoar();
+            roar();
             say(
               e.text ?? 'КОРОЛЬ РАСКОЛОЛСЯ',
               e.sub ?? 'три малых — бей по очереди',
@@ -867,7 +990,7 @@ export function DungeonRun({
               2000,
             );
           } else if (e.what === 'phase') {
-            kingRoar();
+            roar();
             tapMedium();
             say(e.text ?? 'ЯРОСТЬ', e.sub ?? name, 'danger', 2000);
           } else if (e.what === 'dead') {
@@ -882,7 +1005,7 @@ export function DungeonRun({
             gateSlam();
             note(`${name} ушёл отдыхать — ворота открыты`);
           } else if (e.what === 'roar') {
-            kingRoar();
+            roar();
             tapMedium();
             if (e.text) say(e.text, e.sub, 'danger', 1800);
           } else if (e.what === 'finale') {
@@ -893,9 +1016,10 @@ export function DungeonRun({
               floors: FLOORS.length,
             };
             save();
+            timeResume();
             window.setTimeout(() => {
               if (!simRef.current) return;
-              bigMoment(1);
+              finaleChoir();
               notifySuccess();
               rainCoins(44);
               setFinale(stats);
