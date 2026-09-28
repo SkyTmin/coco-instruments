@@ -98,6 +98,7 @@ import {
   softChime,
   bubblePop,
   doorLatch,
+  softThud,
 } from '@/lib/sound';
 import type { MusicScene } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
@@ -752,6 +753,16 @@ export function DungeonRun({
           }
           if (e.albino) say('АЛЬБИНОС', 'редкая крыса — добыча ×10', 'gold', 1800);
           else if (e.elite) note('Вожак стаи повержен');
+          break;
+        // Движок 3: героя дёрнуло (крюк, течение), моб сорвался в пропасть.
+        case 'pull':
+          if (!e.end) {
+            dashWhoosh();
+            tapLight();
+          }
+          break;
+        case 'fall':
+          softThud(0.26);
           break;
         case 'hurt':
           heroHurt();
