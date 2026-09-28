@@ -2671,7 +2671,7 @@ interface SleepPose {
 }
 
 function drawSleeper(sp: SleepPose): Built {
-  const p = new Px(22, 26);
+  const p = new Px(26, 26);
   const G = 24;
   if (sp.sit) {
     // Сидит на полу у скамьи, колени к груди, голова на коленях.
@@ -2714,29 +2714,32 @@ function drawSleeper(sp: SleepPose): Built {
   // Руки длинные, висят до земли.
   limb(p, 12, hipY - 6, 16 + sp.arms * 2, hipY + 2 - sp.arms * 2, 1.3, 1.1, COAT);
   const [hx0, hy0] = sp.head;
-  // Голова: раскрывается вертикальной пастью.
-  shadeEll(p, hx0, hy0, 3.2, 3.4, SKINS);
+  // Голова: раскалывается вертикальной пастью — половины расходятся.
+  const spread = Math.round(sp.maw * 1.2);
+  shadeEll(p, hx0, hy0, 3.2 + spread, 3.4, SKINS);
   if (sp.maw > 0) {
-    const w = Math.round(1 + sp.maw * 2);
-    for (let y = hy0 - 3; y <= hy0 + 3; y++)
-      for (let x = hx0 - w; x <= hx0 + w; x++) {
-        const e = Math.abs(x - hx0) / (w + 0.5) + Math.abs(y - hy0) / 4;
-        if (e < 1) p.set(x, y, e > 0.72 ? hx('#e8e0d0') : hx('#5a0812'));
+    const w = 0.5 + sp.maw * 1.5;
+    for (let y = hy0 - 3; y <= hy0 + 3; y++) {
+      const half = w * (1 - Math.abs(y - hy0) / 3.8);
+      const x0 = Math.round(hx0 - half);
+      const x1 = Math.round(hx0 + half);
+      for (let x = x0; x <= x1; x++) p.set(x, y, hx('#2e050c'));
+      // Зубы по краям разлома — через ряд, навстречу друг другу.
+      if ((y - hy0 + 4) % 2 === 0 && x1 > x0) {
+        p.set(x0, y, hx('#f0e8d8'));
+        p.set(x1, y, hx('#f0e8d8'));
       }
-    // Зубы по краям разлома.
-    for (let y = hy0 - 2; y <= hy0 + 2; y += 2) {
-      p.set(hx0 - w, y, hx('#f8f0e0'));
-      p.set(hx0 + w, y, hx('#f8f0e0'));
     }
+    p.set(hx0, hy0 + 1, hx('#9a1428'));
   }
   // Кепка.
-  for (let x = hx0 - 3; x <= hx0 + 3; x++) p.set(x, hy0 - 3 - (sp.maw > 0.5 ? 1 : 0), hx('#14161c'));
-  p.set(hx0 + 4, hy0 - 2, hx('#14161c'));
+  for (let x = hx0 - 3 - spread; x <= hx0 + 3 + spread; x++) p.set(x, hy0 - 3 - (sp.maw > 0.5 ? 1 : 0), hx('#14161c'));
+  p.set(hx0 + 4 + spread, hy0 - 2, hx('#14161c'));
   p.outline(INK);
-  // Глаза — по бокам пасти.
-  p.set(hx0 - 2, hy0 - 1, hx('#ff3a50'));
-  p.set(hx0 + 2, hy0 - 1, hx('#ff3a50'));
-  return { p, ax: 10, ay: G, eye: [hx0 + 2, hy0 - 1] };
+  // Глаза — на разошедшихся половинах.
+  p.set(hx0 - 2 - spread, hy0 - 1, hx('#ff3a50'));
+  p.set(hx0 + 2 + spread, hy0 - 1, hx('#ff3a50'));
+  return { p, ax: 10, ay: G, eye: [hx0 + 2 + spread, hy0 - 1] };
 }
 
 registerMobPainter('f12_sleeper', (m: Mob, pose: MobPose) => {
