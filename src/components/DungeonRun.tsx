@@ -111,8 +111,11 @@ import {
   stringBend,
   stringPluck,
   teleport,
+  heartbeat,
   thunder,
   timeResume,
+  trainHorn,
+  trainPass,
   windGust,
 } from '@/lib/sound';
 import type { MusicScene } from '@/lib/sound';
@@ -399,6 +402,51 @@ const FLOOR_SOUND: Record<string, () => void> = {
   f10_wake_call: () => {
     beastRoar();
     thunder();
+  },
+  // Этаж 12: поезда (гудок, проход, удар состава), территории, духи станции.
+  f12_horn: () => trainHorn(),
+  f12_ghost_horn: () => {
+    trainHorn();
+    heartbeat();
+  },
+  f12_pass: () => trainPass(false),
+  f12_train_hit: () => {
+    boom(1);
+    fleshSquelch(true);
+  },
+  f12_train_wall: () => {
+    trainHorn();
+    fleshSquelch(true);
+    beastRoar();
+  },
+  f12_meet_trap: () => trainHorn(),
+  f12_signal_trap: () => trainHorn(),
+  f12_ghost_call: () => heartbeat(),
+  f12_ghost_trap: () => steamBurst(),
+  f12_stairs_trap: () => stoneGrind(),
+  f12_stairs_call: () => stoneGrind(),
+  f12_rush_trap: () => {
+    gateSlam();
+    heartbeat(true);
+  },
+  f12_dark_trap: () => heartbeat(true),
+  f12_dark_call: () => softChime(0),
+  f12_lever_call: () => chainRattle(),
+  f12_bell_call: () => clockBell(),
+  f12_gate_call: () => gateSlam(),
+  f12_domain_call: () => heartbeat(true),
+  f12_doll_call: () => heartbeat(true),
+  f12_hall_trap: () => heartbeat(true),
+  f12_cast_call: () => heartbeat(true),
+  f12_grid_trap: () => heartbeat(true),
+  f12_domain_trap: () => glassBreak(true),
+  f12_grid_call: () => teleport(),
+  f12_eye_call: () => fleshSquelch(),
+  f12_grab_call: () => fleshSquelch(true),
+  f12_scream_call: () => beastRoar(false),
+  f12_wake_call: () => {
+    beastRoar();
+    heartbeat(true);
   },
 };
 

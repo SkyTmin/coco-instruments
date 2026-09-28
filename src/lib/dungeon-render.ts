@@ -725,11 +725,28 @@ export class DungeonRenderer {
         const sp = f?.(p.obj, this.time, p.alive, p.flash > 0);
         if (!sp) continue;
         const bottom = Math.floor(p.y) + 1;
+        const x0 = p.x * TS - left - sp.ax;
+        const y0 = bottom * TS - top - sp.ay;
+        // Герой зашёл за высокий предмет (ворота, колонна, статуя) — предмет
+        // просвечивает: иначе героя не видно вовсе.
+        const hx = h.x * TS - left;
+        const hy = h.y * TS - top - 6;
+        const behind =
+          !p.obj.flat &&
+          h.y < bottom &&
+          sp.img.height > TS * 1.5 &&
+          hx > x0 + 2 &&
+          hx < x0 + sp.img.width - 2 &&
+          hy > y0 &&
+          hy < y0 + sp.img.height - 3;
         list.push({
           // Плоское (руны, решётки, ковры — Движок 3) — всегда под всеми.
           y: p.obj.flat ? -1e9 + bottom : bottom,
-          draw: () =>
-            g.drawImage(sp.img, this.q(p.x * TS - left - sp.ax), this.q(bottom * TS - top - sp.ay)),
+          draw: () => {
+            if (behind) g.globalAlpha = 0.45;
+            g.drawImage(sp.img, this.q(x0), this.q(y0));
+            g.globalAlpha = 1;
+          },
         });
         continue;
       }
