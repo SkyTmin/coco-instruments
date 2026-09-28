@@ -1,0 +1,27 @@
+Этаж 7 «Зеркальный лабиринт» — откуда картинки
+=============================================
+
+golem.png — стеклянный голем, лист 9 кадров 40×40 (покой ×2, шаг ×4, замах,
+удар, боль).
+  Основа: тайл Dungeon Crawl Stone Soup `crystal_guardian`
+  (crawl-ref/source/rltiles/mon/nonliving/crystal_guardian.png),
+  https://raw.githubusercontent.com/crawl/crawl/master/crawl-ref/source/rltiles/mon/nonliving/crystal_guardian.png
+  Авторы: команда и художники Dungeon Crawl Stone Soup. Лицензия тайлов
+  rltiles — CC0 1.0 (общественное достояние).
+  Что сделано: перекрашено в палитру стекла этажа (7 тонов, свет сверху-
+  слева), разрезано на части (голова, руки, корпус, ноги) и собрано в позы;
+  трещины, сердцевина и вспышка разрыва дорисовываются кодом.
+  Сборка: python3 scripts/dungeon/f7.py --sprites (исходник кешируется в
+  scripts/dungeon/.f7src, в git не лежит).
+
+Отражение (моб) и Отражение героя (босс) — рисуются во время игры из листа
+самого героя: public/dungeon/na/ (Ninja Adventure Asset Pack, Pixel-boy,
+CC0 — см. public/dungeon/na/CREDITS.txt), перекраска в зеркальное стекло,
+трещины и клинок — кодом (src/lib/dungeon-floors/f7-art.ts).
+
+Всё остальное — монстры (копия, тень, бабочка, паук, призма, стекольщик),
+реквизит, клетки районов, метки ударов, иконки вещей — нарисовано кодом в
+src/lib/dungeon-floors/f7-art.ts.
+
+Обложки районов public/ui/areas/f7.png, f7crystal.png, f7hall.png — кадры
+самой игры (канва стенда), высветленные ×1,45.
