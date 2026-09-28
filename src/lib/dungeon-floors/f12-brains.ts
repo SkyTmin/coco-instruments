@@ -940,7 +940,8 @@ function stepTracks(sim: Sim, st: F12State, api: SimApi, dt: number): void {
     v.sig = left > SIG_YELLOW ? 0 : left > SIG_RED ? 1 : 2;
     // Гудок и гул — пока поезд ещё в тоннеле.
     if (left < HORN && left > HORN - dt * 1.5 && near) {
-      sim.events.push({ t: 'cart', x: t.dir > 0 ? t.wx0 : t.wx1, y: t.y + 1, v: 14 });
+      // Гудок из тоннеля (звук — `trainHorn`); призрак гудит иначе.
+      sim.events.push({ t: 'boss', what: t.cfg.kind === 'ghost' ? 'f12_ghost_horn' : 'f12_horn' });
       // Спящие рядом с путями просыпаются от гудка.
       wakeSleepers(sim, api, (t.wx0 + t.wx1) / 2, t.y + 1, 99, 4.2);
     }
@@ -948,7 +949,11 @@ function stepTracks(sim: Sim, st: F12State, api: SimApi, dt: number): void {
     const edge = t.dir > 0 ? t.wx0 : t.wx1;
     const x0 = t.dir > 0 ? t.x0 - 3 : t.x1 + 3;
     const speed = t.express ? t.cfg.speed * 1.35 : t.cfg.speed;
-    if (left <= Math.abs(edge - x0) / speed) launch(sim, t);
+    if (left <= Math.abs(edge - x0) / speed) {
+      launch(sim, t);
+      // Гул состава с Доплером (`trainPass`) — только рядом с героем.
+      if (near) sim.events.push({ t: 'boss', what: 'f12_pass' });
+    }
   }
   // Семафоры для рисовальщика.
   for (const [key, t] of st.sigTrack) F12_FX.sig.set(key, t.view.sig);
@@ -1619,6 +1624,9 @@ registerFloor(12, {
     stepMeet(sim, st);
     stepHall(sim, st, api);
     stepGhost(sim, st);
+    // Король пал, пока храм сворачивался: сценарий босса больше не ходит —
+    // зал и путь арены возвращаем здесь, разом.
+    if (sim.boss && sim.boss.state !== 'fight' && KSTATE.has(sim)) restoreArena(sim, api);
   },
   onUse,
   useLabel,
@@ -2809,7 +2817,7 @@ function kingArrow(sim: Sim, api: SimApi, m: Mob, a: number): void {
     const y = m.y + Math.sin(a) * d;
     if (x < x0 || x > x1 + 1 || y < y0 || y > y1 + 1) break;
     if (api.solidTile(sim, Math.floor(x), Math.floor(y))) continue;
-    api.zone(sim, { x, y, r: 0.75, life: 4.5, dps: 0.045, status: 'burn', dur: 0.8, warn: 0.15, art: 'f12_fire' });
+    api.zone(sim, { x, y, r: 0.75, life: 4.5, dps: 0.045, status: 'burn', dur: 0.8, warn: 0.15, art: 'f12_fire', above: true });
   }
   sim.events.push({ t: 'flash', color: '#ff8a20', k: 0.35 });
 }
@@ -2947,7 +2955,7 @@ function lightWards(sim: Sim, api: SimApi, n: number): void {
     if (api.solidTile(sim, Math.floor(x), Math.floor(y))) continue;
     if (ks.wards.some((w) => hypot(w.x - x, w.y - y) < 3)) continue;
     const wd = { x, y, z: null as Zone | null, lit: sim.time };
-    api.zone(sim, { x, y, r: KING.wardR, life: KING.gridWarn + KING.gridCut + 0.4, art: 'f12_ward' });
+    api.zone(sim, { x, y, r: KING.wardR, life: KING.gridWarn + KING.gridCut + 0.4, art: 'f12_ward', above: true });
     wd.z = sim.zones[sim.zones.length - 1];
     ks.wards.push(wd);
   }

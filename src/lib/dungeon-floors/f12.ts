@@ -198,7 +198,7 @@ const LEGEND: Record<string, LegendCell> = {
   '|': {
     tile: 'wall',
     mark: M.wFix,
-    obj: { kind: 'deco', ref: 'f12_breaker', solid: 0 },
+    obj: { kind: 'deco', ref: 'f12_breaker', solid: 0, use: { label: 'Дать свет' } },
     light: { r: 1.4, tint: 'green' },
   },
   // Балюстрада эскалатора с торшером.
@@ -255,11 +255,11 @@ const LEGEND: Record<string, LegendCell> = {
   P: { tile: 'floor', obj: { kind: 'deco', ref: 'f12_handcar', solid: 0.5 } },
   B: { tile: 'floor', mark: M.tile, obj: { kind: 'deco', ref: 'f12_kiosk', solid: 0.5 } },
   // Действия этажа: стрелочный рычаг и колокол дежурной (щиток — на стене).
-  '!': { tile: 'floor', obj: { kind: 'deco', ref: 'f12_lever', solid: 0.22 } },
+  '!': { tile: 'floor', obj: { kind: 'deco', ref: 'f12_lever', solid: 0.22, use: { label: 'Перевести стрелку' } } },
   l: {
     tile: 'floor',
     mark: M.tile,
-    obj: { kind: 'deco', ref: 'f12_bell', solid: 0.22 },
+    obj: { kind: 'deco', ref: 'f12_bell', solid: 0.22, use: { label: 'Вызвать поезд' } },
     light: { r: 1.4, tint: 'red' },
   },
 };
@@ -658,6 +658,7 @@ export const F12: FloorDef = {
       tier: 8,
       level: 9,
       ambient: 0.5,
+      paintAll: true,
       rows: MAP_F12_HALL,
       skin: {
         floor: 'slab',
@@ -676,6 +677,7 @@ export const F12: FloorDef = {
       tier: 8,
       level: 9,
       ambient: 0.36,
+      paintAll: true,
       rows: MAP_F12_PLAT,
       skin: {
         floor: 'slab',
@@ -693,6 +695,7 @@ export const F12: FloorDef = {
       tier: 8,
       level: 9,
       ambient: 0.4,
+      paintAll: true,
       rows: MAP_F12_SHRINE,
       skin: {
         floor: 'ground',
