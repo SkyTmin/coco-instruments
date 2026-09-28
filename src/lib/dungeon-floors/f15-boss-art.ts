@@ -885,14 +885,20 @@ function circleCell(c: CellCtx): Px {
 }
 
 function scorchCell(c: CellCtx): Px {
-  const p = fleshCell(c, 0.8, true);
+  const p = fleshCell(c, 0.5, true);
   const ox = c.wx * 16;
   const oy = c.wy * 16;
-  const CH = hx('#1a0c0a');
+  const CH = hx('#1e0e0c');
+  const isScorch = (m: number) => m === MK.scorch;
   for (let y = 0; y < 16; y++)
-    for (let x = 0; x < 16; x++) glowPx(p, x, y, CH, 0.55 + vn((ox + x) / 5, (oy + y) / 5, 13) * 0.3);
-  for (let k = 0; k < 4; k++)
-    if (hash(ox, oy, 100 + k) < 0.5) p.set(Math.floor(hash(ox, oy, 110 + k) * 16), Math.floor(hash(ox, oy, 120 + k) * 16), EMBER);
+    for (let x = 0; x < 16; x++) {
+      const X = ox + x;
+      const Y = oy + y;
+      const s = regionS(c, x, y, isScorch) + wob(X, Y, 76);
+      if (s < 1) continue;
+      glowPx(p, x, y, CH, Math.min(0.62, 0.2 + s * 0.06) + (vn(X / 5, Y / 5, 13) - 0.5) * 0.2);
+      if (LAT[((Y & 255) << 8) | (X & 255)] < 0.012) p.set(x, y, EMBER);
+    }
   return p;
 }
 
@@ -1636,8 +1642,8 @@ const M_FLESH_FAR = mat('flesh', 44, '#10030a', '#1e050c', '#320911', '#4a0f18',
 const M_MANE = mat('mane', 45, '#120c0a', '#221815', '#352620', '#4c372c', '#654a3a', '#80604a', '#9c7a5c');
 const M_MANE_FAR = mat('mane', 46, '#0a0706', '#150f0d', '#221814', '#30221b', '#402e24', '#523b2e');
 const M_BONE = mat('bone', 47, '#3a3026', '#5e5242', '#857660', '#a99a80', '#cfc2a4', '#efe6cc');
-const M_MEMB = mat('memb', 48, '#14030a', '#2a0712', '#460c1c', '#661528', '#8a2436', '#b03c48');
-const M_MEMB_FAR = mat('memb', 49, '#0c0206', '#18040b', '#280812', '#3a0d1a', '#4e1422');
+const M_MEMB = mat('memb', 48, '#2a0712', '#4a0c1c', '#6e1628', '#962438', '#bc3c4a', '#e0685e');
+const M_MEMB_FAR = mat('memb', 49, '#14030a', '#26060f', '#3a0b17', '#521220', '#6a1a2a');
 const M_SCALE = mat('scale', 50, '#0c120b', '#172014', '#25331d', '#374b29', '#4e6836', '#6e8c4a');
 const MOUTH = mat('memb', 51, '#2a0604', '#6a1406', '#b8300a', '#f06a1c', '#ffb050', '#fff0a8');
 
@@ -2046,8 +2052,9 @@ const LP = (o: Partial<LionPose>): LionPose => ({
 
 function drawLionSide(lp: LionPose): Built {
   const W = 132;
-  const H = 116;
-  const G = 108;
+  // Сверху — запас под раскрытые крылья.
+  const H = lp.wings > 0 ? 142 : 116;
+  const G = H - 8;
   const p = new Px(W, H);
   rimK = 0.12 + lp.glow * 0.18;
   const cr = lp.crouch;
