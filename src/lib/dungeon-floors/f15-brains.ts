@@ -286,6 +286,55 @@ export interface F15State {
 const STATE = new WeakMap<Sim, F15State>();
 let postSeq = 1;
 
+/** Ближайшая клетка пола (не стена, не глубина, не живая стенка) к точке. */
+function openNear(sim: Sim, x: number, y: number, R = 4): [number, number] | null {
+  const w = sim.world;
+  const ok = (cx: number, cy: number) => {
+    if (cx < 0 || cy < 0 || cx >= w.w || cy >= w.h) return false;
+    const t = sim.tiles[cy * w.w + cx];
+    if (t !== T_FLOOR && t !== T_HAZARD) return false;
+    const k = w.mark[cy * w.w + cx];
+    return k !== M.band && k !== M.valve && k !== M.door && k !== M.leaflet && k !== M.lymphDoor;
+  };
+  const fx = Math.floor(x);
+  const fy = Math.floor(y);
+  if (ok(fx, fy)) return [x, y];
+  let best: [number, number] | null = null;
+  let bd = 1e9;
+  for (let dy = -R; dy <= R; dy++)
+    for (let dx = -R; dx <= R; dx++) {
+      if (!ok(fx + dx, fy + dy)) continue;
+      const d = dx * dx + dy * dy;
+      if (d < bd) {
+        bd = d;
+        best = [fx + dx + 0.5, fy + dy + 0.5];
+      }
+    }
+  return best;
+}
+
+/**
+ * Страховка: монстр, которого вдавило в стену (сомкнувшейся кромкой,
+ * толкотнёй у живой стенки, рождением у стены), выходит на ближний пол.
+ */
+function unstick(sim: Sim, api: SimApi): void {
+  for (const m of sim.mobs) {
+    if (m.mode === 'dying' || m.mode === 'emerge' || m.t < 0 || (m.data.ghost ?? 0) > 0) continue;
+    const def = api.def(m.kind);
+    if (def.boss || def.fly || def.speed === 0) continue;
+    const t = sim.tiles[Math.floor(m.y) * sim.world.w + Math.floor(m.x)];
+    if (t !== T_WALL && t !== T_DEEP) continue;
+    const p = openNear(sim, m.x, m.y, 3);
+    if (!p) continue;
+    m.x = p[0];
+    m.y = p[1];
+    m.vx = 0;
+    m.vy = 0;
+    m.kx = 0;
+    m.ky = 0;
+  }
+}
+
 /** Состояние этажа — для рисовальщика (`paintSim()`), тестов и стенда. */
 export const f15View = (sim: Sim | null): F15State | null => (sim ? (STATE.get(sim) ?? null) : null);
 
@@ -337,11 +386,23 @@ function scan(sim: Sim): F15State {
     let dy = 0;
     if (kind === 'band') {
       // К середине хода: в сторону, где нет стены.
+      // Середина хода — там, где вена или кольцо: к ним и толкает.
+      const mid = (d: number) => {
+        for (let i = 1; i <= 5; i++) {
+          const k = markAt(sim, x + d * i, y);
+          if (k === M.vein || k === M.ring || k === M.node) return i;
+          if (!open(d * i, 0)) return 99;
+        }
+        return 99;
+      };
+      const ml = mid(-1);
+      const mr = mid(1);
       const wl = !open(-1, 0);
       const wr = !open(1, 0);
-      if (wl && !wr) dx = 1;
+      if (ml < 99 || mr < 99) dx = mr <= ml ? 1 : -1;
+      else if (wl && !wr) dx = 1;
       else if (wr && !wl) dx = -1;
-      else dx = liveAt(-1, 0) && !liveAt(1, 0) ? 1 : liveAt(1, 0) && !liveAt(-1, 0) ? -1 : 1;
+      else dx = liveAt(1, 0) && !liveAt(-1, 0) ? 1 : liveAt(-1, 0) && !liveAt(1, 0) ? -1 : 1;
     }
     const l: Live = {
       p,
@@ -393,13 +454,15 @@ function scan(sim: Sim): F15State {
       continue;
     }
     const pm = s.kind === 'group' ? null : POST_MOB[s.kind];
+    // Пост на карте мог уехать в стену или в русло — на ближний пол.
+    const snap = openNear(sim, s.x + 0.5, top + s.y + 0.5, 5) ?? [s.x + 0.5, top + s.y + 0.5];
     posts.push({
       id: postSeq++,
       kind: s.kind,
       mob: pm ? pm[0] : '',
       mode: pm ? pm[1] : 'sleep',
-      x: s.x + 0.5,
-      y: top + s.y + 0.5,
+      x: snap[0],
+      y: snap[1],
       area: s.area,
       live: 0,
       dead: false,
@@ -604,6 +667,15 @@ function throatValveShut(sim: Sim, st: F15State): boolean {
   return st.breath < BREATH.valveOpen || st.breath >= BREATH.valveClose;
 }
 
+/** Что сказать, когда живая стенка впервые помяла героя. */
+const SQUEEZE_TEXT: Record<LiveKind, [string, string]> = {
+  band: ['СТЕНЫ СЖАЛИСЬ', 'на вдохе кромка сходится — держись середины'],
+  valve: ['СФИНКТЕР СЖАЛСЯ', 'кольцо смыкается в такт — проходи, пока открыто'],
+  door: ['ПРИВРАТНИК ЗАКРЫТ', 'идёт переваривание — жди у стены, пока не кончится'],
+  leaflet: ['СТВОРКИ СОМКНУЛИСЬ', 'створки бьют в такт сердца — проходи сразу после удара'],
+  lymph: ['ЛИМФОУЗЕЛ', 'дверь не пускает — сожми вену рядом'],
+};
+
 /** Живая стенка сомкнулась или разошлась. Сомкнулась на ком-то — вытолкнуть. */
 function setLive(sim: Sim, st: F15State, api: SimApi, l: Live, closed: boolean): void {
   l.closed = closed;
@@ -630,9 +702,13 @@ function setLive(sim: Sim, st: F15State, api: SimApi, l: Live, closed: boolean):
     if (sim.time - st.squeezeAt > 0.6) {
       st.squeezeAt = sim.time;
       api.hurtEnv(sim, 0.045);
-      if (!st.squeezed) {
+      // Надпись — один раз на каждый вид живой стенки.
+      const flag = `f15sq_${l.kind}`;
+      if (!sim.floorData[flag]) {
+        sim.floorData[flag] = 1;
         st.squeezed = true;
-        say(sim, 'f15_squeeze_trap', 'СТЕНЫ СЖАЛИСЬ', 'на вдохе кромка сходится — держись середины');
+        const [t, sub] = SQUEEZE_TEXT[l.kind];
+        say(sim, 'f15_squeeze_trap', t, sub);
       }
     }
   }
@@ -687,7 +763,7 @@ function stepLives(sim: Sim, st: F15State, api: SimApi): void {
 // Метка «чужак».
 // ---------------------------------------------------------------------------
 
-export const ALIEN = { passive: 0.35, kill: 2.4, mucus: 24, patrol: [11, 6.5], response: 55 };
+export const ALIEN = { passive: 0.12, kill: 1.6, killAb: 0.5, mucus: 24, patrol: [16, 10], response: 25, cap: 5 };
 
 function stepAlien(sim: Sim, st: F15State, api: SimApi, dt: number): void {
   const h = sim.hero;
@@ -702,7 +778,7 @@ function stepAlien(sim: Sim, st: F15State, api: SimApi, dt: number): void {
   if (!ours || heroDown(sim)) return;
   let d = ALIEN.passive * dt;
   for (const e of sim.events) {
-    if (e.t === 'kill') d += e.mob === 'f15_mob' || e.mob === 'f15_larva' ? 1 : ALIEN.kill;
+    if (e.t === 'kill') d += e.mob === 'f15_mob' || e.mob === 'f15_larva' ? ALIEN.killAb : ALIEN.kill;
     if (e.t === 'swing') st.noise += e.heavy ? 1.4 : 0.6;
     if (e.t === 'dash') st.noise += 0.5;
     if (e.t === 'kill') st.noise += 1.2;
@@ -731,7 +807,7 @@ function stepAlien(sim: Sim, st: F15State, api: SimApi, dt: number): void {
     if (st.patrolT <= 0) {
       st.patrolT = stage >= 2 ? ALIEN.patrol[1] : ALIEN.patrol[0];
       const n = sim.mobs.filter((m) => m.kind === 'f15_mob' && m.mode !== 'dying').length;
-      const b = n < 10 ? api.pickBurrow(sim, 6, 15) : null;
+      const b = n < ALIEN.cap ? api.pickBurrow(sim, 6, 15) : null;
       if (b) {
         const k = stage >= 2 ? 2 : 1;
         for (let i = 0; i < k; i++) {
@@ -749,11 +825,11 @@ function immuneResponse(sim: Sim, st: F15State, api: SimApi): void {
   sim.events.push({ t: 'flash', color: '#ff2a4a', k: 0.8 });
   sim.events.push({ t: 'shake', k: 0.4 });
   const extra = sim.area === F15_GUT ? 'f15_parasite' : sim.area === F15_VEINS ? 'f15_drone' : 'f15_mhound';
-  for (let w = 0; w < 2; w++) {
+  for (let w = 0; w < 1; w++) {
     const b = api.pickBurrow(sim, 5, 14);
     if (!b) continue;
     for (let i = 0; i < 3; i++) {
-      const m = api.fromBurrow(sim, b, i === 2 ? extra : 'f15_mob');
+      const m = api.fromBurrow(sim, b, i === 2 && w === 0 ? extra : 'f15_mob');
       m.t = -i * 0.3;
     }
   }
@@ -885,7 +961,7 @@ function stepCough(sim: Sim, st: F15State, api: SimApi, dt: number): void {
     if (!inCore || c.cd > 0) return;
     const mid = (b.y0 + b.y1) / 2;
     // Первый раз — как только прошёл середину Трахеи; дальше — на тревоге.
-    if ((!c.done && h.y < mid) || (c.done && st.alien >= 60)) startCough(sim, st, api);
+    if ((!c.done && h.y < mid) || (c.done && st.alien >= 85)) startCough(sim, st, api);
     return;
   }
   c.t += dt;
@@ -1332,6 +1408,7 @@ registerFloor(15, {
     }
     stepPulse(sim, st, api, dt);
     stepLives(sim, st, api);
+    if (Math.floor(sim.time * 4) !== Math.floor((sim.time - dt) * 4)) unstick(sim, api);
     stepAlien(sim, st, api, dt);
     stepPosts(sim, st, api);
     if (sim.area === HEART_AREA) return;
@@ -1404,8 +1481,25 @@ function latchStep(sim: Sim, m: Mob, dt: number, api: SimApi, maxT: number): boo
     return true;
   }
   // На краю тела героя: 0,6 клетки — ни толкотни, ни наезда.
-  const a = (m.data.la ?? 0) + Math.sin(sim.time * 3 + m.id) * 0.15;
+  let a = (m.data.la ?? 0) + Math.sin(sim.time * 3 + m.id) * 0.15;
   const R = m.r + h.r + 0.04;
+  // Не в стену: сдвинуться по кругу героя, а негде — отвалиться.
+  const solidAt = (q: number) => api.solidTile(sim, Math.floor(h.x + Math.cos(q) * R), Math.floor(h.y + Math.sin(q) * R));
+  if (solidAt(a)) {
+    let found = false;
+    for (let k = 1; k <= 8 && !found; k++)
+      for (const sg of [1, -1])
+        if (!solidAt(a + sg * k * 0.4)) {
+          a += sg * k * 0.4;
+          m.data.la = a;
+          found = true;
+          break;
+        }
+    if (!found) {
+      api.setMode(m, 'recover');
+      return true;
+    }
+  }
   m.x = h.x + Math.cos(a) * R;
   m.y = h.y + Math.sin(a) * R;
   api.collide(sim, m);
@@ -1422,7 +1516,7 @@ function latchStep(sim: Sim, m: Mob, dt: number, api: SimApi, maxT: number): boo
 // медленнее) и метит «чужака». Рывок стряхивает всех разом.
 // ---------------------------------------------------------------------------
 
-export const ANTIBODY = { maxLatch: 4, hold: 5, slowPer: 0.13, slowMax: 0.55, bite: 1.1, alien: 3 };
+export const ANTIBODY = { maxLatch: 4, hold: 5, slowPer: 0.13, slowMax: 0.55, bite: 1.1, alien: 1.2 };
 
 registerBrain('f15_antibody', {
   step(sim, m, dt, c, api) {
@@ -1630,7 +1724,7 @@ registerBrain('f15_macro', {
 // антитела из пор. Убит — вены вокруг гаснут, метка падает.
 // ---------------------------------------------------------------------------
 
-export const NERVE_NODE = { see: 9.5, charge: 1.1, warn: 0.6, fan: 0.34, alien: 22, calm: 25 };
+export const NERVE_NODE = { see: 9.5, charge: 1.1, warn: 0.6, fan: 0.34, alien: 14, calm: 25 };
 
 registerBrain('f15_nerve', {
   step(sim, m, dt, c, api) {
@@ -2300,7 +2394,7 @@ registerBrain('f15_mhound', {
         m.danger = m.r + h.r + 0.8;
         if (!m.data.hit && dist < m.r + h.r + 0.18 && canHurt(sim)) {
           m.data.hit = 1;
-          api.hurtHero(sim, m.dmg * 1.15, m.x, m.y, 3.5, m.kind, { kind: 'poison', dur: 1 });
+          api.hurtHero(sim, m.dmg, m.x, m.y, 3.5, m.kind, { kind: 'poison', dur: 1 });
         }
         if (m.data.run >= (m.data.len2 ?? MHOUND.max) || m.t > 0.6) {
           // Лужа желчи там, где приземлилась.
@@ -2780,11 +2874,13 @@ registerBrain('f15_sac', {
       const n = SAC.larvae + (m.elite ? 2 : 0);
       for (let i = 0; i < n; i++) {
         const a = (i / n) * TAU + sim.rng();
-        const o = api.spawnMob(sim, 'f15_larva', m.x + Math.cos(a) * 0.6, m.y + Math.sin(a) * 0.6, { mode: 'stun' });
+        const q = openNear(sim, m.x + Math.cos(a) * 0.6, m.y + Math.sin(a) * 0.6) ?? [m.x, m.y];
+        const o = api.spawnMob(sim, 'f15_larva', q[0], q[1], { mode: 'stun' });
         api.collide(sim, o);
       }
       if (sim.rng() < 0.25) {
-        const o = api.spawnMob(sim, mimicFor(sim, m.x, m.y), m.x, m.y + 0.5, { mode: 'stun' });
+        const q = openNear(sim, m.x, m.y + 0.5) ?? [m.x, m.y + 0.5];
+        const o = api.spawnMob(sim, mimicFor(sim, m.x, m.y), q[0], q[1], { mode: 'stun' });
         api.collide(sim, o);
       }
       sim.events.push({ t: 'boss', what: 'f15_burst' });
@@ -2810,7 +2906,8 @@ registerBrain('f15_sac', {
   onDeath(sim, m, mode, api) {
     // Не успел лопнуть, но почти — одна личинка вырвалась.
     if (!m.data.burst && !m.data.wither && (m.data.s ?? 0) > 0.55) {
-      const o = api.spawnMob(sim, 'f15_larva', m.x, m.y + 0.3, { mode: 'stun' });
+      const q = openNear(sim, m.x, m.y + 0.3) ?? [m.x, m.y + 0.3];
+      const o = api.spawnMob(sim, 'f15_larva', q[0], q[1], { mode: 'stun' });
       api.collide(sim, o);
     }
     postDead(sim, m.data.post);
