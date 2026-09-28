@@ -138,8 +138,8 @@ const LEGEND: Record<string, LegendCell> = {
   d: floorObj('f15b_drip', 0),
   e: floorObj('f15b_vent', 0, { r: 1.6, tint: 'warm' }),
   t: floorObj('f15b_teeth', 0.3),
-  '5': floorObj('f15b_bones', 0.26),
-  '6': { tile: 'floor', mark: M.vein, obj: { kind: 'deco', ref: 'f15b_node', solid: 0 }, light: { r: 2, tint: 'red' } },
+  '5': { tile: 'floor', mark: M.flesh, obj: { kind: 'deco', ref: 'f15b_bones', solid: 0.26, flat: true } },
+  '6': { tile: 'floor', mark: M.vein, obj: { kind: 'deco', ref: 'f15b_node', solid: 0, flat: true }, light: { r: 2, tint: 'red' } },
 };
 
 // ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ export const F15_BOSS_MOBS: MobDef[] = [
     name: 'Истинное сердце',
     many: 'истинных сердец',
     hp: 420,
-    dmg: 27,
+    dmg: 24,
     speed: 0,
     radius: 1.05,
     windup: 0.8,
@@ -246,7 +246,7 @@ export const F15_BOSS_MOBS: MobDef[] = [
     name: 'Кровяной сгусток',
     many: 'кровяных сгустков',
     hp: 13,
-    dmg: 17,
+    dmg: 15,
     speed: 3.7,
     radius: 0.32,
     windup: 0.6,
@@ -277,6 +277,8 @@ export const F15_HEART_AREA: AreaSpec = {
   level: 9,
   ambient: 0.46,
   rows: F15_HEART_MAP,
+  // Плоть — всё: и пол, и стены, и буквы движка (ворота, печать, лестница).
+  paintAll: true,
   skin: {
     floor: 'ground',
     wall: 'rock',

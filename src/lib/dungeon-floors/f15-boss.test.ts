@@ -15,7 +15,9 @@ import type { DungeonState, Gear } from '../dungeon';
 import { buildWorld, Tile, walkableTile } from '../dungeon-world';
 import { API, createSim, NO_INPUT, stepSim, strikeHits, SWORD } from '../dungeon-sim';
 import type { Mob, Sim, SimInput } from '../dungeon-sim';
-import { ECHO, f15bView, HEART, LION, QUADS } from './f15-boss-brains';
+import { BRAINS } from '../dungeon-ai';
+import { ECHO, f15bForce, f15bView, HEART, LION, QUADS } from './f15-boss-brains';
+import { F15_JOIN } from './f15-boss';
 import { F15_HEART, F15B_MARK } from './f15-boss';
 
 const world = buildWorld(15);
@@ -183,7 +185,8 @@ function bot(s: Sim, st: BotState): SimInput {
   for (const m of s.mobs) {
     if (m.mode === 'dying' || (m.data.ghost ?? 0) > 0) continue;
     const boss = !!MOBS[m.kind]?.boss;
-    const d = Math.hypot(m.x - h.x, m.y - h.y) + (boss ? 0 : 1.5);
+    // В фазе «СЕРДЦЕ» сгусток — помеха, а не цель: бьём, только если вплотную.
+    const d = Math.hypot(m.x - h.x, m.y - h.y) + (boss ? 0 : (s.boss?.phase ?? 0) >= 4 ? 5 : 1.5);
     if (d < nd) {
       nd = d;
       near = m;
@@ -252,6 +255,10 @@ function fight(tier: number, plus: number, seed: number, meat = 5, limit = 600):
       src.set(`${s.boss?.phase}:${who}`, (src.get(`${s.boss?.phase}:${who}`) ?? 0) + (hp0 - s.hero.hp) / s.stats.maxHp);
     }
     low = Math.min(low, s.hero.hp / s.stats.maxHp);
+    if (process.env.F15DBG && t % 600 === 0 && (s.boss?.phase ?? 0) >= 4) {
+      const hh = s.mobs.find((m) => m.kind === 'f15boss_heart');
+      console.log(`  t=${s.time.toFixed(0)} hero ${s.hero.x.toFixed(1)},${s.hero.y.toFixed(1)} ${s.hero.mode} hp ${Math.round((100 * s.hero.hp) / s.stats.maxHp)}% heart ${hh ? `${hh.hp.toFixed(0)}/${hh.maxHp} ${hh.mode} @${hh.x.toFixed(1)},${hh.y.toFixed(1)}` : '-'} slow ${s.slowmo.toFixed(1)} mobs ${s.mobs.map((m) => m.kind.replace('f15b', '') + ':' + m.mode).join(' ')}`);
+    }
     for (const e of s.events) {
       if (e.t === 'boss' && e.what === 'dead') won = s.time;
       if (e.t === 'boss' && e.what === 'finale') finale += 1;
@@ -296,6 +303,176 @@ describe('этаж 15: Хозяин подземелья', () => {
       expect(r.finale).toBe(1);
     }
     expect(res.some((r) => r.won < 0 || r.low < 0.45)).toBe(true);
+  });
+});
+
+/** Бой начат: герой в арене, босс проснулся. */
+function started(seed = 5): Sim {
+  const s = sim(8, 5, bossObj.x + 0.5, bossObj.y + 7.5, seed, 5);
+  for (let t = 0; t < 120 && s.boss?.state !== 'fight'; t++) stepSim(s, DT, NO_INPUT);
+  expect(s.boss?.state).toBe('fight');
+  return s;
+}
+
+/** Клетки арены, куда можно дойти от точки (по проходимым клеткам). */
+function reach(s: Sim, x: number, y: number): Set<number> {
+  const start = Math.floor(y) * W + Math.floor(x);
+  const seen = new Set<number>([start]);
+  const q = [start];
+  while (q.length) {
+    const i = q.pop()!;
+    for (const d of [1, -1, W, -W]) {
+      const j = i + d;
+      if (seen.has(j) || !walkableTile(s.tiles[j])) continue;
+      seen.add(j);
+      q.push(j);
+    }
+  }
+  return seen;
+}
+
+const heartCell = (s: Sim) => (bossObj.y + 3) * W + bossObj.x;
+const count = (s: Sim, f: (i: number) => boolean) => [...s.boss!.cells].filter(f).length;
+
+describe('этаж 15: механики боя', () => {
+  it('от стыка с «Миром» до ворот арены — дорога есть', () => {
+    const s = sim(8, 5, F15_JOIN.x0 + 3.5, world.h - 1.5);
+    const top = s.world.bands.find((b) => b.def.id === F15_HEART)!.top;
+    const r = reach(s, (F15_JOIN.x0 + F15_JOIN.x1) / 2 + 0.5, top + 76.5);
+    expect(r.has((gateObj.y + 1) * W + gateObj.x)).toBe(true);
+  });
+
+  it('эхо встают по очереди — Король, Минотавр, Змей, Гидра, Король демонов', () => {
+    const s = started();
+    const st: BotState = { lastAtk: -9, react: [0.22, 0.45], miss: 0, seed: 3 };
+    const calls: string[] = [];
+    let cracks = 0;
+    for (let t = 0; t < 200 * 60 && (s.boss?.phase ?? 0) === 0 && s.hero.mode !== 'dead'; t++) {
+      s.hero.inv = 9;
+      stepSim(s, DT, bot(s, st));
+      for (const e of s.events) {
+        if (e.t === 'boss' && e.what === 'f15b_echo_call') calls.push(e.text ?? '');
+        if (e.t === 'boss' && e.what === 'f15b_crack_stone') cracks += 1;
+      }
+    }
+    expect(s.boss?.phase).toBe(1);
+    expect(cracks).toBe(5);
+    expect(calls).toEqual(ECHO.names.map((n) => `ЭХО · ${n}`));
+  });
+
+  it('четверти памяти: лава, бездна, зеркала, круги — и к сердцу всегда можно дойти', () => {
+    const s = started();
+    expect(f15bForce(s, API, 2)).toBe(true);
+    let stuck = 0;
+    for (let t = 0; t < 10 * 60; t++) {
+      s.hero.inv = 9;
+      stepSim(s, DT, NO_INPUT);
+      const hi = Math.floor(s.hero.y) * W + Math.floor(s.hero.x);
+      if (!walkableTile(s.tiles[hi])) stuck += 1;
+    }
+    expect(stuck).toBe(0);
+    const mk = s.world.mark;
+    expect(count(s, (i) => s.tiles[i] === Tile.Deep && mk[i] === MK.lava)).toBeGreaterThan(3);
+    expect(count(s, (i) => s.tiles[i] === Tile.Deep && mk[i] === MK.abyss)).toBeGreaterThan(3);
+    expect(count(s, (i) => s.tiles[i] === Tile.Wall && mk[i] === MK.mirror)).toBeGreaterThanOrEqual(3);
+    expect(count(s, (i) => mk[i] === MK.circleA)).toBe(2);
+    expect(count(s, (i) => mk[i] === MK.circleB)).toBe(2);
+    // От ворот до сердца и до каждой клетки пола арены — дорога есть.
+    const r = reach(s, gateObj.x + 0.5, gateObj.y - 0.5);
+    expect(r.has(heartCell(s))).toBe(true);
+    const cut = [...s.boss!.cells].filter((i) => walkableTile(s.tiles[i]) && !r.has(i));
+    expect(cut).toEqual([]);
+  });
+
+  it('фаза «СЕРДЦЕ» гасит память: ни лавы, ни бездны, ни зеркал', () => {
+    const s = started();
+    f15bForce(s, API, 2);
+    for (let t = 0; t < 8 * 60; t++) {
+      s.hero.inv = 9;
+      stepSim(s, DT, NO_INPUT);
+    }
+    f15bForce(s, API, 4);
+    stepSim(s, DT, NO_INPUT);
+    const mk = s.world.mark;
+    expect(count(s, (i) => s.tiles[i] === Tile.Deep)).toBe(0);
+    expect(count(s, (i) => mk[i] === MK.mirror || mk[i] === MK.abyss || mk[i] === MK.lava)).toBe(0);
+  });
+
+  it('сердце: раскрылось — бьётся в полную силу, сомкнулось — почти не берёт', () => {
+    const s = started();
+    f15bForce(s, API, 4);
+    for (let t = 0; t < 6 * 60; t++) {
+      s.hero.inv = 9;
+      stepSim(s, DT, NO_INPUT);
+    }
+    const heart = s.mobs.find((m) => m.kind === 'f15boss_heart')!;
+    expect(heart).toBeTruthy();
+    const v = f15bView(s)!;
+    const hit = { dmg: 100, crit: false, kind: 'hit' } as never;
+    const onHit = BRAINS.get('f15boss_heart')!.onHit!;
+    const at = (k: number) => {
+      s.time = v.beatAt + k * v.period;
+      return Number(onHit(s, heart, hit, API) ?? 1);
+    };
+    expect(at(0.1)).toBeLessThan(0.5);
+    expect(at(0.8)).toBeGreaterThan(1);
+  });
+
+  it('стены сжимаются, но героя не запирают и в стене не оставляют', () => {
+    const s = started();
+    f15bForce(s, API, 4);
+    for (let t = 0; t < 5 * 60; t++) stepSim(s, DT, NO_INPUT);
+    // Сердце ранено — стены начинают сжиматься.
+    const heart = s.mobs.find((m) => m.kind === 'f15boss_heart')!;
+    heart.hp = heart.maxHp * 0.8;
+    let bad = 0;
+    let cut = 0;
+    let squeezed = 0;
+    for (let t = 0; t < 70 * 60; t++) {
+      s.hero.inv = 9;
+      // Герой жмётся к западной стене.
+      stepSim(s, DT, { ...NO_INPUT, mx: -1, my: 0.2 });
+      const hi = Math.floor(s.hero.y) * W + Math.floor(s.hero.x);
+      if (!walkableTile(s.tiles[hi])) bad += 1;
+      if (t % 60 === 0) {
+        if (!reach(s, s.hero.x, s.hero.y).has(heartCell(s))) cut += 1;
+        squeezed = Math.max(squeezed, count(s, (i) => s.world.mark[i] === MK.swell && s.tiles[i] === Tile.Wall));
+      }
+    }
+    expect(squeezed).toBeGreaterThan(0);
+    expect(bad).toBe(0);
+    expect(cut).toBe(0);
+  });
+
+  it('смерть героя возвращает арену целой, после победы — тоже; с арены выходят', () => {
+    const s = started();
+    f15bForce(s, API, 2);
+    for (let t = 0; t < 8 * 60; t++) {
+      s.hero.inv = 9;
+      stepSim(s, DT, NO_INPUT);
+    }
+    expect(count(s, (i) => s.tiles[i] !== world.tiles[i])).toBeGreaterThan(0);
+    s.hero.inv = 0;
+    API.hurtEnv(s, 5);
+    for (let t = 0; t < 12 * 60 && s.boss?.state === 'fight'; t++) stepSim(s, DT, NO_INPUT);
+    expect(s.boss?.state).not.toBe('fight');
+    expect(count(s, (i) => s.tiles[i] !== world.tiles[i] || s.world.mark[i] !== world.mark[i])).toBe(0);
+    // Победа: арена цела, финал один, ворота выпускают.
+    const r = fight(8, 5, 42);
+    expect(r.won).toBeGreaterThan(0);
+    expect(r.finale).toBe(1);
+    const w = r.s;
+    expect(count(w, (i) => w.tiles[i] !== world.tiles[i] || w.world.mark[i] !== world.mark[i])).toBe(0);
+    let out = false;
+    for (let t = 0; t < 20 * 60 && !out; t++) {
+      const h = w.hero;
+      const tx = gateObj.x + 0.5;
+      const ty = gateObj.y + 3;
+      const l = Math.hypot(tx - h.x, ty - h.y) || 1;
+      stepSim(w, DT, { ...NO_INPUT, mx: (tx - h.x) / l, my: (ty - h.y) / l });
+      out = h.y > gateObj.y + 2;
+    }
+    expect(out).toBe(true);
   });
 });
 

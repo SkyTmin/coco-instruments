@@ -248,85 +248,210 @@ const WET = hx('#ffb0b0');
 const DARK = hx('#0e0305');
 
 // ---------------------------------------------------------------------------
-// Ткань: бесшовная клеточная текстура 64×64 (Вороной на торе) — основа пола
-// и стен. Считается один раз.
+// Ткань. Всё — одна функция мировых пикселей: складки плоти (скатки, как
+// у кишки или мозга), капилляры, корни у кокона, веер вен от сердца и два
+// ствола вниз по горловине. Клетки не видят друг друга, но картинка
+// сшита: каждая точка считается от мира, а не от клетки.
 // ---------------------------------------------------------------------------
 
-const TISSUE = 64;
-let tissue: { v: Float32Array; edge: Uint8Array } | null = null;
+/** Решётка шума 256×256: быстрее хеша на каждую точку. */
+const LAT = (() => {
+  const a = new Float32Array(65536);
+  for (let i = 0; i < 65536; i++) a[i] = hash(i & 255, i >> 8, 777);
+  return a;
+})();
 
-function tissueTex(): { v: Float32Array; edge: Uint8Array } {
-  if (tissue) return tissue;
-  const N = 7;
-  const cell = TISSUE / N;
-  const pts: [number, number][] = [];
-  for (let j = 0; j < N; j++)
-    for (let i = 0; i < N; i++)
-      pts.push([(i + 0.2 + hash(i, j, 5) * 0.6) * cell, (j + 0.2 + hash(i, j, 9) * 0.6) * cell]);
-  const v = new Float32Array(TISSUE * TISSUE);
-  const edge = new Uint8Array(TISSUE * TISSUE);
-  for (let y = 0; y < TISSUE; y++)
-    for (let x = 0; x < TISSUE; x++) {
-      let d1 = 1e9;
-      let d2 = 1e9;
-      let bx = 0;
-      let by = 0;
-      for (const [px, py] of pts)
-        for (const ox of [-TISSUE, 0, TISSUE])
-          for (const oy of [-TISSUE, 0, TISSUE]) {
-            const dx = x + 0.5 - (px + ox);
-            const dy = y + 0.5 - (py + oy);
-            const d = Math.hypot(dx, dy);
-            if (d < d1) {
-              d2 = d1;
-              d1 = d;
-              bx = dx;
-              by = dy;
-            } else if (d < d2) d2 = d;
-          }
-      const dome = 1 - Math.min(1, d1 / (cell * 0.75));
-      const lit = d1 > 0.01 ? (bx * LX + by * LY) / d1 : 0;
-      v[y * TISSUE + x] = 0.42 + dome * 0.32 + lit * 0.16 * dome;
-      edge[y * TISSUE + x] = d2 - d1 < 1.1 ? 2 : d2 - d1 < 2 ? 1 : 0;
-    }
-  tissue = { v, edge };
-  return tissue;
+/** Сглаженный шум по решётке, 0…1. */
+function vn(x: number, y: number, s = 0): number {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const fx = x - xi;
+  const fy = y - yi;
+  const u = fx * fx * (3 - 2 * fx);
+  const v = fy * fy * (3 - 2 * fy);
+  const x0 = (xi + s * 57) & 255;
+  const x1 = (x0 + 1) & 255;
+  const y0 = ((yi + s * 131) & 255) << 8;
+  const y1 = ((yi + 1 + s * 131) & 255) << 8;
+  const a = LAT[y0 + x0] + (LAT[y0 + x1] - LAT[y0 + x0]) * u;
+  const b = LAT[y1 + x0] + (LAT[y1 + x1] - LAT[y1 + x0]) * u;
+  return a + (b - a) * v;
 }
 
-/** Плоть мира в точке (wx, wy — мировые пиксели): тон ткани с оттенком. */
-function fleshAt(wx: number, wy: number, t: Tones = FLESH, dim = 0): RGBA {
-  const tx = tissueTex();
-  const i = (((wy % TISSUE) + TISSUE) % TISSUE) * TISSUE + (((wx % TISSUE) + TISSUE) % TISSUE);
-  const big = vnoise(wx / 23, wy / 23, 3) - 0.5;
-  const l = tx.v[i] + big * 0.22 - dim;
-  if (tx.edge[i] === 2) return mixc(t[0], DARK, 0.35);
-  const c = tone(t, l);
-  return tx.edge[i] === 1 ? mixc(c, t[0], 0.5) : c;
+/** Порядок Байера 4×4 — ступени тона без полос. */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
+const ramp = (r: RGBA[], f: number, X: number, Y: number): RGBA => {
+  const k = Math.max(0, Math.min(r.length - 1.001, f));
+  const i = Math.floor(k);
+  return k - i > BAYER[(Y & 3) * 4 + (X & 3)] ? r[i + 1] : r[i];
+};
+const rampOf = (...h: string[]): RGBA[] => h.map((x) => hx(x));
+
+/** Плоть пола: от щели до влажного верха скатки. */
+const FR = rampOf('#130408', '#1f070c', '#2e0b12', '#3e1119', '#501822', '#65212b', '#7d2e35', '#984444');
+/** Мышца стены — насыщенней и светлей. */
+const MR = rampOf('#12030a', '#26060e', '#3e0a16', '#5a1220', '#781c2a', '#982c36', '#ba4646', '#dc7466');
+/** Порода за стеной — плоть в темноте. */
+const DR = rampOf('#080104', '#0f0207', '#17040b', '#210710', '#2d0b16');
+/** Корни кокона — почти чёрные жгуты. */
+const RR = rampOf('#0a0205', '#1a050b', '#2e0a12', '#48121c', '#6a2230');
+/** Вена: тень, стенка, кровь, свет, блик. */
+const VR = rampOf('#1c0206', '#3e0710', '#640c18', '#8c1622', '#b03434', '#d86a5c');
+const SPEC = hx('#f0b0a8');
+const CAP = hx('#6e0e1a');
+
+/** Высота скатки 0…1 в мировой точке. */
+function foldH(X: number, Y: number): number {
+  const n = vn(X / 38, Y / 32, 1) * 0.72 + vn(X / 15, Y / 13, 2) * 0.28;
+  const t = n * 4.2 + vn(X / 8, Y / 8, 3) * 0.22;
+  const b = t - Math.floor(t);
+  return Math.pow(Math.sin(b * Math.PI), 0.55);
 }
 
-// ---------------------------------------------------------------------------
-// Клетки района «Сердце».
-// ---------------------------------------------------------------------------
-
-/** Сердце арены (центр K) — для корней, вен и знаков. */
-function heartPos(): [number, number] | null {
+/** Где верх района «Сердце» в мире (он верхний, но не полагаемся). */
+let topCache: { w: unknown; top: number } | null = null;
+function heartTop(): number {
   const s = paintSim();
-  const o = s?.boss?.obj;
-  return o ? [o.x + 0.5, o.y + 0.5] : null;
+  if (!s) return topCache?.top ?? 0;
+  if (topCache?.w === s.world) return topCache.top;
+  const band = s.world.bands.find((b) => b.def.id === F15_HEART);
+  topCache = { w: s.world, top: band?.top ?? 0 };
+  return topCache.top;
 }
 
-function fleshCell(c: CellCtx, t: Tones = FLESH, dim = 0): Px {
+// Геометрия вен — та же, что у генератора карты (`scripts/dungeon/f15_boss.py`):
+// сердце K (31, 32), десять вен веером, у каждой своя волна.
+const KCX = 31.5;
+const KCY = 32.5;
+const VEINS = Array.from({ length: 10 }, (_, i) => ({
+  ang: -Math.PI / 2 + (i + 0.5) * ((2 * Math.PI) / 10) + 0.12 * Math.sin(i * 2.7),
+  wob: 0.35 + 0.1 * (i % 3),
+  i,
+  // Ветка: где отходит, в какую сторону.
+  db: 7.2 + hash(i, 1, 5) * 3.2,
+  side: hash(i, 2, 5) < 0.5 ? -1 : 1,
+}));
+const veinAng = (v: (typeof VEINS)[number], d: number) => v.ang + v.wob * Math.sin(d * 0.55 + v.i) * 0.18;
+const angDelta = (a: number, b: number) => {
+  let d = a - b;
+  while (d > Math.PI) d -= TAU;
+  while (d < -Math.PI) d += TAU;
+  return d;
+};
+/** Толщина вены в точках по расстоянию от сердца. */
+const veinW = (d: number) => Math.max(2.4, 5.4 - (d - 4) * 0.22);
+
+/** Точка вены номер i на расстоянии d (клетки района). */
+export function veinPoint(i: number, d: number, branch = false): [number, number] {
+  const v = VEINS[i];
+  let a = veinAng(v, d);
+  if (branch) a += v.side * (d - v.db) * 0.05;
+  return [KCX + Math.cos(a) * d, KCY + Math.sin(a) * d * 0.95];
+}
+/** Где кончается вена i (как у генератора: до стены или 17). */
+const veinEnd = new Map<string, number>();
+
+/** Ствол горловины: смещение от оси по ряду (клетки района). */
+function trunkOff(y: number): number {
+  const w = 0.3 * Math.sin(y * 0.45);
+  if (y < 43) return 1.2 + (43 - y) * 0.62 + w;
+  if (y < 47) return 1.2 + w;
+  const k = Math.min(1, (y - 47) / 5);
+  return 1.2 + 1.3 * k * k * (3 - 2 * k) + w;
+}
+export const TRUNK = { y0: 40.2, y1: 78 } as const;
+export const trunkX = (y: number, side: -1 | 1) => KCX + side * trunkOff(y);
+
+type Tube = { s: number; w: number; nx: number; ny: number; kind: 0 | 1 | 2 };
+
+/**
+ * Трубка под точкой: s — поперёк (−1…1), w — толщина, (nx, ny) — нормаль
+ * поперёк; kind 0 — вена, 1 — корень, 2 — ствол.
+ */
+function tubeAt(x: number, y: number): Tube | null {
+  const u = x - KCX;
+  const v = (y - KCY) / 0.95;
+  const d = Math.hypot(u, v);
+  let best: Tube | null = null;
+  const take = (lat: number, w: number, a: number, kind: 0 | 1 | 2) => {
+    const s = (lat * 16) / (w / 2);
+    if (Math.abs(s) > 1.35) return;
+    if (best && Math.abs(best.s) <= Math.abs(s)) return;
+    best = { s, w, nx: -Math.sin(a), ny: Math.cos(a), kind };
+  };
+  if (d < 4.6 && d > 0.6) {
+    // Корни: восемнадцать жгутов, закрученных вокруг кокона.
+    const phi = Math.atan2(v, u);
+    for (let k = 0; k < 18; k++) {
+      const a = (k / 18) * TAU + 0.2 * Math.sin(k * 1.7) + (4.6 - d) * 0.3;
+      take(angDelta(phi, a) * d, Math.max(1.8, 4.4 - (d - 1.1) * 0.7), a, 1);
+    }
+  }
+  if (d > 3.7 && d < 17.2 && y < 44.5) {
+    const phi = Math.atan2(v, u);
+    for (const vv of VEINS) {
+      const a = veinAng(vv, d);
+      take(angDelta(phi, a) * d, veinW(d), a, 0);
+      if (d > vv.db && d < vv.db + 4.6) {
+        const ab = a + vv.side * (d - vv.db) * 0.05;
+        take(angDelta(phi, ab) * d, Math.max(1.4, veinW(d) * 0.62 * (1 - ((d - vv.db) / 4.6) * 0.8)), ab, 0);
+      }
+    }
+  }
+  if (y > TRUNK.y0 && y < TRUNK.y1) {
+    for (const side of [-1, 1] as const) {
+      const cx = trunkX(y, side);
+      take(x - cx, 5, Math.PI / 2, 2);
+    }
+  }
+  return best;
+}
+
+/** Свет по трубке: выпуклость и сторона к свету. */
+function tubeShade(t: Tube): number {
+  const s = Math.max(-1, Math.min(1, t.s));
+  const nz = Math.sqrt(Math.max(0, 1 - s * s));
+  return nz * 0.7 + s * (t.nx * LX + t.ny * LY) * 0.75;
+}
+
+/**
+ * Цвет точки пола: `dim` притемняет, `bare` — без вен и корней (под
+ * пятнами памяти). Возвращает цвет и тон (для бликов).
+ */
+function floorPx(X: number, Y: number, dim: number, bare: boolean, top: number): RGBA {
+  const h = foldH(X, Y);
+  const h2 = foldH(X - 1, Y - 1);
+  const lit = Math.max(-1, Math.min(1, (h - h2) * 4));
+  const micro = vn(X / 3, Y / 3, 4) - 0.5;
+  let f = 1.4 + h * 3.3 + lit * 1.2 + micro * 0.7 - dim;
+  // Капилляры — тонкие извилистые нити, пятнами.
+  const cn = vn(X / 15, Y / 15, 5);
+  const cap = Math.abs(cn - 0.5) < 0.018 && vn(X / 46, Y / 46, 6) > 0.52;
+  if (!bare) {
+    const t = tubeAt(X / 16, Y / 16 - top);
+    if (t) {
+      const as = Math.abs(t.s);
+      if (as <= 1) {
+        const l = tubeShade(t);
+        if (t.kind === 1) return ramp(RR, 0.6 + l * 3.4, X, Y);
+        return ramp(VR, 0.9 + l * 4.2, X, Y);
+      }
+      // Кромка: ложбинка вдоль трубки, тень с нижней стороны.
+      f -= (1.35 - as) * 5;
+    }
+  }
+  if (cap && f > 2) return mixc(CAP, ramp(FR, f, X, Y), 0.25);
+  if (lit > 0.65 && h > 0.8 && LAT[((Y & 255) << 8) | (X & 255)] < 0.035) return SPEC;
+  if (LAT[(((Y + 91) & 255) << 8) | ((X + 37) & 255)] < 0.006) return FR[1];
+  return ramp(FR, f, X, Y);
+}
+
+function fleshCell(c: CellCtx, dim = 0, bare = false): Px {
   const p = new Px(16, 16);
   const ox = c.wx * 16;
   const oy = c.wy * 16;
-  for (let y = 0; y < 16; y++)
-    for (let x = 0; x < 16; x++) p.set(x, y, fleshAt(ox + x, oy + y, t, dim));
-  // Влажные блики — редкие светлые точки.
-  for (let k = 0; k < 2; k++) {
-    const x = Math.floor(hash(c.wx, c.wy, 30 + k) * 16);
-    const y = Math.floor(hash(c.wx, c.wy, 40 + k) * 16);
-    if (hash(c.wx, c.wy, 50 + k) < 0.55) p.set(x, y, alpha(WET, 0.55));
-  }
+  const top = heartTop();
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, floorPx(ox + x, oy + y, dim, bare, top));
   footShade(p, c);
   return p;
 }
@@ -334,149 +459,60 @@ function fleshCell(c: CellCtx, t: Tones = FLESH, dim = 0): Px {
 /** Тень у подножия стены и по бокам — как у плиток движка. */
 function footShade(p: Px, c: CellCtx): void {
   const dark = (a: number): RGBA => [8, 2, 4, Math.round(a * 255)];
-  if (!c.open(0, -1)) for (let x = 0; x < 16; x++) {
-    p.set(x, 0, dark(0.55));
-    p.set(x, 1, dark(0.4));
-    p.set(x, 2, dark(0.22));
-    p.set(x, 3, dark(0.1));
-  }
-  if (!c.open(-1, 0)) for (let y = 0; y < 16; y++) {
-    p.set(0, y, dark(0.35));
-    p.set(1, y, dark(0.15));
-  }
-  if (!c.open(1, 0)) for (let y = 0; y < 16; y++) {
-    p.set(15, y, dark(0.35));
-    p.set(14, y, dark(0.15));
-  }
-}
-
-const isVeinMark = (m: number) => m === MK.vein || m === MK.root || m === MK.plate;
-
-/** Вена: толстая жила к соседним венам, в центре — узел. */
-function veinCell(c: CellCtx): Px {
-  const p = fleshCell(c);
-  const cx = 7.5 + (hash(c.wx, c.wy, 7) - 0.5) * 3;
-  const cy = 7.5 + (hash(c.wx, c.wy, 8) - 0.5) * 3;
-  const links: [number, number][] = [];
-  for (const [dx, dy] of [
-    [1, 0],
-    [-1, 0],
-    [0, 1],
-    [0, -1],
-    [1, 1],
-    [-1, -1],
-    [1, -1],
-    [-1, 1],
-  ] as [number, number][]) {
-    if (!isVeinMark(c.markAt(dx, dy))) continue;
-    // Диагональ — только если нет прямого соседа рядом (иначе треугольники).
-    if (dx && dy && (isVeinMark(c.markAt(dx, 0)) || isVeinMark(c.markAt(0, dy)))) continue;
-    links.push([dx, dy]);
-  }
-  const hp = heartPos();
-  // Одиночная вена — тянется к сердцу (или по диагонали).
-  if (!links.length && hp) {
-    const a = Math.atan2(hp[1] - (c.wy + 0.5), hp[0] - (c.wx + 0.5));
-    links.push([Math.round(Math.cos(a)), Math.round(Math.sin(a))]);
-  }
-  // Толщина вены растёт к сердцу.
-  const d = hp ? Math.hypot(hp[0] - c.wx - 0.5, hp[1] - c.wy - 0.5) : 8;
-  const w = d < 6 ? 2.6 : d < 10 ? 2.1 : 1.6;
-  for (const [dx, dy] of links) {
-    const ex = 7.5 + dx * 8.5;
-    const ey = 7.5 + dy * 8.5;
-    // Жила слегка вьётся.
-    const mx = (cx + ex) / 2 + (hash(c.wx + dx, c.wy + dy, 3) - 0.5) * 2.5;
-    const my = (cy + ey) / 2 + (hash(c.wx + dx, c.wy + dy, 4) - 0.5) * 2.5;
-    for (const [ax, ay, bx, by] of [
-      [cx, cy, mx, my],
-      [mx, my, ex, ey],
-    ]) {
-      stroke(p, ax, ay + 0.8, bx, by + 0.8, VEIN_D, w + 1.2);
-      stroke(p, ax, ay, bx, by, VEIN, w);
-      stroke(p, ax - 0.3, ay - 0.4, bx - 0.3, by - 0.4, VEIN_HOT, 1);
+  if (!c.open(0, -1))
+    for (let x = 0; x < 16; x++) {
+      p.set(x, 0, dark(0.62));
+      p.set(x, 1, dark(0.45));
+      p.set(x, 2, dark(0.28));
+      p.set(x, 3, dark(0.12));
     }
-  }
-  // Узел.
-  p.ell(cx, cy, w * 0.9, w * 0.8, VEIN);
-  p.set(Math.round(cx - 0.5), Math.round(cy - 0.8), VEIN_CORE);
-  return p;
+  if (!c.open(-1, 0))
+    for (let y = 0; y < 16; y++) {
+      p.set(0, y, dark(0.4));
+      p.set(1, y, dark(0.18));
+    }
+  if (!c.open(1, 0))
+    for (let y = 0; y < 16; y++) {
+      p.set(15, y, dark(0.4));
+      p.set(14, y, dark(0.18));
+    }
 }
 
-/** Лужа крови: глянец и блик; соседние лужи сливаются. */
+/** Лужа крови: капли-сгустки от центров соседних лужиц, край неровный. */
 function bloodCell(c: CellCtx): Px {
   const p = fleshCell(c);
-  const pool = (dx: number, dy: number) => c.markAt(dx, dy) === MK.blood;
-  const BL = tn('#1e0206', '#3a060e', '#6a0c18', '#b8303c');
+  const ox = c.wx * 16;
+  const oy = c.wy * 16;
+  const BL = rampOf('#160206', '#2c040c', '#4a0812', '#72101c', '#a8243a', '#e07878');
+  const pools: [number, number, number][] = [];
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++)
+      if (c.markAt(dx, dy) === MK.blood) {
+        const wx = c.wx + dx;
+        const wy = c.wy + dy;
+        pools.push([(wx + 0.5 + (hash(wx, wy, 1) - 0.5) * 0.3) * 16, (wy + 0.5 + (hash(wx, wy, 2) - 0.5) * 0.3) * 16, 6.2 + hash(wx, wy, 3) * 1.6]);
+      }
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
-      // Край лужи — неровный, к соседней луже — открыт.
-      const ex = x < 3 && !pool(-1, 0) ? 3 - x : x > 12 && !pool(1, 0) ? x - 12 : 0;
-      const ey = y < 3 && !pool(0, -1) ? 3 - y : y > 12 && !pool(0, 1) ? y - 12 : 0;
-      const e = Math.hypot(ex, ey) + (hash(c.wx * 16 + x, c.wy * 16 + y, 2) - 0.5) * 1.6;
-      if (e > 2.4) continue;
-      const l = 0.35 + vnoise((c.wx * 16 + x) / 5, (c.wy * 16 + y) / 5, 8) * 0.3;
-      p.set(x, y, tone(BL, l));
+      const X = ox + x;
+      const Y = oy + y;
+      let f = 0;
+      for (const [cx, cy, r] of pools) f += Math.exp(-((X + 0.5 - cx) ** 2 + ((Y + 0.5 - cy) * 1.25) ** 2) / (r * r));
+      f += (vn(X / 3, Y / 3, 8) - 0.5) * 0.35;
+      if (f < 0.55) continue;
+      // Глубже к середине — темней; сверху-слева — блик по краю.
+      const edge = f < 0.66;
+      const l = edge ? 1 : 1.6 + vn(X / 6, Y / 6, 9) * 1.2;
+      p.set(x, y, ramp(BL, l, X, Y));
     }
-  // Блик — в верхнем левом углу пятна.
-  if (!pool(0, -1) || !pool(-1, 0)) {
-    p.set(5, 4, alpha(WET, 0.9));
-    p.set(6, 4, alpha(WET, 0.6));
-    p.set(5, 5, alpha(WET, 0.4));
+  // Блик — пара точек в верхней-левой части пятна.
+  const [cx, cy] = pools.length ? pools[0] : [ox + 8, oy + 8];
+  const bx = Math.round(cx - ox - 2);
+  const by = Math.round(cy - oy - 2);
+  if (bx >= 0 && bx < 15 && by >= 0 && by < 16) {
+    p.set(bx, by, BL[5]);
+    p.set(bx + 1, by, alpha(BL[5], 0.6));
   }
-  return p;
-}
-
-/** Пластины у сердца: чешуя из плёнки рядами (как шишка). */
-function plateCell(c: CellCtx): Px {
-  const p = fleshCell(c, MUSCLE, 0.05);
-  const SC = tn('#4a2028', '#7a3a44', '#a86068', '#d89aa0');
-  for (let row = -1; row < 4; row++) {
-    const y0 = row * 5 + ((c.wx & 1) ? 2 : 0);
-    for (let col = -1; col < 4; col++) {
-      const x0 = col * 6 + (row & 1 ? 3 : 0) + 1;
-      // Чешуйка: полукруг, светлее сверху.
-      for (let y = 0; y < 5; y++)
-        for (let x = 0; x < 6; x++) {
-          const dx = (x + 0.5 - 3) / 3;
-          const dy = (y + 0.5 - 1) / 4;
-          if (dx * dx + dy * dy > 1 || y + 0.5 < 1) continue;
-          const px = x0 + x;
-          const py = y0 + y;
-          if (px < 0 || py < 0 || px > 15 || py > 15) continue;
-          const l = 0.75 - dy * 0.55 - dx * 0.12;
-          p.set(px, py, tone(SC, l));
-        }
-      for (let x = 0; x < 6; x++) p.set(x0 + x, y0 + 4, alpha(DARK, 0.6));
-    }
-  }
-  footShade(p, c);
-  return p;
-}
-
-/** Корни сердца: тёмные жгуты, текут к сердцу. */
-function rootCell(c: CellCtx): Px {
-  const p = fleshCell(c, FLESH, 0.06);
-  const hp = heartPos() ?? [c.wx, c.wy];
-  const a = Math.atan2(hp[1] - (c.wy + 0.5), hp[0] - (c.wx + 0.5));
-  const RT = tn('#0e0306', '#2a070c', '#4a1018', '#7a2430');
-  for (let k = 0; k < 3; k++) {
-    const off = (k - 1) * 4.2 + (hash(c.wx, c.wy, 20 + k) - 0.5) * 2;
-    const nx = -Math.sin(a);
-    const ny = Math.cos(a);
-    const pts: [number, number][] = [];
-    for (let s = -10; s <= 10; s += 5) {
-      const w = Math.sin((c.wx * 16 + c.wy * 16 + s) * 0.35 + k) * 1.4;
-      pts.push([7.5 + Math.cos(a) * s + nx * (off + w), 7.5 + Math.sin(a) * s + ny * (off + w)]);
-    }
-    const sp = spline(pts, 5);
-    for (let i = 0; i < sp.length - 1; i++) {
-      stroke(p, sp[i][0], sp[i][1] + 0.7, sp[i + 1][0], sp[i + 1][1] + 0.7, RT[0], 2.6);
-      stroke(p, sp[i][0], sp[i][1], sp[i + 1][0], sp[i + 1][1], RT[2], 1.8);
-      if (i % 3 === 0) p.set(Math.round(sp[i][0] - 0.4), Math.round(sp[i][1] - 0.6), RT[3]);
-    }
-  }
-  footShade(p, c);
   return p;
 }
 
@@ -522,7 +558,7 @@ const SIGIL_TINT: Record<number, RGBA> = {
 };
 
 function sigilCell(c: CellCtx): Px {
-  const p = fleshCell(c, FLESH, 0.04);
+  const p = fleshCell(c, 0.3, true);
   const m = c.mark;
   // Где клетка в блоке 3×3: по соседям с той же меткой.
   const sx = c.markAt(-1, 0) === m ? (c.markAt(1, 0) === m ? 0 : 1) : -1;
@@ -574,9 +610,41 @@ function sigilCell(c: CellCtx): Px {
   return p;
 }
 
-// --- Клетки памяти (ставит сценарий на ходу).
+// --- Клетки памяти (ставит сценарий на ходу). Пятно лежит по клеткам, но
+// край у него живой: граница с соседом «не своего» вида гуляет внутрь
+// клетки шумом мира (±3 точки), углы скругляются. Наружу пятно не
+// выходит — клетку соседа рисует сосед, и после отката арены не остаётся
+// чужих краёв.
 
-const LAVA = tn('#6a1204', '#c83a0a', '#ff8a1a', '#ffe070');
+/** Сколько точек от (x, y) до ближайшей клетки-соседа не из пятна (99 — нет). */
+function regionS(c: CellCtx, x: number, y: number, member: (m: number) => boolean): number {
+  let s = 99;
+  const px = x + 0.5;
+  const py = y + 0.5;
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      if (member(c.markAt(dx, dy))) continue;
+      const ex = dx < 0 ? px : dx > 0 ? 16 - px : 0;
+      const ey = dy < 0 ? py : dy > 0 ? 16 - py : 0;
+      s = Math.min(s, dx && dy ? Math.hypot(ex, ey) : dx ? ex : ey);
+    }
+  return s;
+}
+const wob = (X: number, Y: number, seed: number, amp = 6) => (vn(X / 5, Y / 5, seed) - 0.5) * amp;
+
+const LAVA_R = rampOf('#5a0e04', '#a02606', '#d8480a', '#ff7a14', '#ffb030', '#ffe070', '#fff6c0');
+const CRUST_R = rampOf('#0e0a0a', '#1c1614', '#2c2420', '#40342c', '#564636');
+const isLava = (m: number) => m === MK.lava;
+const isHot = (m: number) => m === MK.lava || m === MK.crust;
+
+/** Корка в точке: тёмный камень, по трещинам — жар. */
+function crustPx(X: number, Y: number, heat: number): RGBA {
+  const n = vn(X / 3.5, Y / 3.5, 31);
+  const crack = Math.abs(n - 0.5) < 0.05 + heat * 0.03;
+  if (crack) return heat > 0.5 ? LAVA_R[4] : LAVA_R[3];
+  return ramp(CRUST_R, 0.6 + vn(X / 6, Y / 6, 36) * 3.2, X, Y);
+}
 
 function lavaCell(c: CellCtx): Px {
   const p = new Px(16, 16);
@@ -584,79 +652,125 @@ function lavaCell(c: CellCtx): Px {
   const oy = c.wy * 16;
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
-      const n = vnoise((ox + x) / 6, (oy + y) / 6, 21) * 0.6 + vnoise((ox + x) / 2.5, (oy + y) / 2.5, 22) * 0.4;
-      const crust = n < 0.34;
-      p.set(x, y, crust ? tone(STONE, 0.05 + n) : tone(LAVA, 0.2 + (n - 0.34) * 1.6));
-    }
-  // Край: остывшая кромка там, где рядом не лава.
-  const lava = (dx: number, dy: number) => c.markAt(dx, dy) === MK.lava;
-  for (let y = 0; y < 16; y++)
-    for (let x = 0; x < 16; x++) {
-      const e =
-        (!lava(0, -1) && y < 2) || (!lava(0, 1) && y > 13) || (!lava(-1, 0) && x < 2) || (!lava(1, 0) && x > 13);
-      if (e) p.set(x, y, hash(ox + x, oy + y, 5) < 0.5 ? STONE[1] : STONE[0]);
+      const X = ox + x;
+      const Y = oy + y;
+      const s = regionS(c, x, y, isLava) + wob(X, Y, 71);
+      if (s < 2.5) {
+        p.set(x, y, crustPx(X, Y, 1));
+        continue;
+      }
+      // Раскалённая кромка, дальше — жидкий огонь с жилами течения.
+      const flow = vn(X / 9 + vn(X / 20, Y / 20, 23) * 2, Y / 5, 21) * 0.6 + vn(X / 3, Y / 3, 22) * 0.4;
+      let f = 1.4 + flow * 3.6;
+      if (s < 4) f += 1.6;
+      if (Math.abs(vn(X / 7, Y / 11, 24) - 0.5) < 0.03) f += 1.5;
+      p.set(x, y, ramp(LAVA_R, f, X, Y));
     }
   return p;
 }
 
 function crustCell(c: CellCtx): Px {
-  const p = new Px(16, 16);
+  const p = fleshCell(c, 0.6, true);
   const ox = c.wx * 16;
   const oy = c.wy * 16;
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
-      const n = vnoise((ox + x) / 3.5, (oy + y) / 3.5, 31);
-      const crack = Math.abs(n - 0.5) < 0.045;
-      p.set(x, y, crack ? (hash(ox + x, oy + y, 3) < 0.5 ? EMBER : EMBER_HI) : tone(STONE, 0.12 + n * 0.5));
+      const X = ox + x;
+      const Y = oy + y;
+      const s = regionS(c, x, y, isHot) + wob(X, Y, 72);
+      if (s < 1.5) continue;
+      // Ближе к лаве — горячей.
+      const toLava = regionS(c, x, y, (m) => !isLava(m));
+      const heat = toLava < 99 ? Math.max(0, 1 - toLava / 10) : 0;
+      if (s < 3) {
+        // Обгорелая плоть по краю.
+        glowPx(p, x, y, hx('#1a0c0a'), 0.7);
+        if (LAT[((Y & 255) << 8) | (X & 255)] < 0.06) p.set(x, y, EMBER);
+        continue;
+      }
+      p.set(x, y, crustPx(X, Y, heat));
     }
-  footShade(p, c);
   return p;
 }
 
-const ABYSS = tn('#010608', '#04161c', '#0a2c34', '#1a5a64');
+const ABYSS_R = rampOf('#010507', '#03121a', '#072430', '#0c3a48', '#16586a');
 
 function abyssCell(c: CellCtx): Px {
   const p = new Px(16, 16);
   const ox = c.wx * 16;
   const oy = c.wy * 16;
-  const water = (dx: number, dy: number) => c.markAt(dx, dy) === MK.abyss;
+  const isAb = (m: number) => m === MK.abyss;
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
-      const n = vnoise((ox + x) / 7, (oy + y) / 7, 41);
-      p.set(x, y, tone(ABYSS, n * 0.6 - 0.05));
-      // Светящиеся искры глубины.
-      if (hash(ox + x, oy + y, 42) < 0.012) p.set(x, y, hx('#6ae8f0'));
-    }
-  // Кромка пены и мокрой плоти там, где кончается вода.
-  for (let y = 0; y < 16; y++)
-    for (let x = 0; x < 16; x++) {
-      const d = Math.min(
-        water(0, -1) ? 9 : y,
-        water(0, 1) ? 9 : 15 - y,
-        water(-1, 0) ? 9 : x,
-        water(1, 0) ? 9 : 15 - x,
-      );
-      if (d < 1) p.set(x, y, hx('#2a5058'));
-      else if (d < 2 && hash(ox + x, oy + y, 43) < 0.6) p.set(x, y, hx('#6ab8c0', 200));
+      const X = ox + x;
+      const Y = oy + y;
+      const s = regionS(c, x, y, isAb) + wob(X, Y, 73, 5);
+      if (s < 1.2) {
+        p.set(x, y, hx('#1e4a52'));
+        continue;
+      }
+      if (s < 2.4) {
+        // Пена у края.
+        p.set(x, y, LAT[((Y & 255) << 8) | (X & 255)] < 0.55 ? hx('#8ad8dc') : hx('#3a8a94'));
+        continue;
+      }
+      // Глубина: к середине темнее, мягкие волны, искры.
+      const depth = Math.min(1, (s - 2.4) / 12);
+      const wave = Math.sin(X * 0.18 + vn(X / 12, Y / 12, 41) * 5 + Y * 0.07);
+      let f = 2.6 - depth * 2 + wave * 0.35 + (vn(X / 6, Y / 6, 42) - 0.5) * 0.8;
+      if (wave > 0.93) f += 1;
+      p.set(x, y, ramp(ABYSS_R, f, X, Y));
+      if (LAT[(((Y * 3) & 255) << 8) | ((X * 5) & 255)] < 0.008) p.set(x, y, hx('#8af4f8'));
     }
   return p;
 }
 
 function shallowCell(c: CellCtx): Px {
-  const p = fleshCell(c, FLESH, 0.05);
+  const p = fleshCell(c, 0.4, true);
   const ox = c.wx * 16;
   const oy = c.wy * 16;
+  const isWet = (m: number) => m === MK.shallow || m === MK.abyss;
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
-      glowPx(p, x, y, hx('#0e3a44'), 0.6);
-      const r = Math.sin((ox + x) * 0.4 + (oy + y) * 0.9) + vnoise((ox + x) / 4, (oy + y) / 4, 44) * 1.5;
-      if (r > 1.75) p.set(x, y, hx('#5ab0b8', 170));
+      const X = ox + x;
+      const Y = oy + y;
+      const s = regionS(c, x, y, isWet) + wob(X, Y, 74);
+      if (s < 1.5) continue;
+      // Вода над плотью: чем дальше от края, тем гуще.
+      const k = Math.min(0.72, 0.3 + (s - 1.5) * 0.06);
+      glowPx(p, x, y, hx('#0a3440'), k);
+      const r = Math.sin(X * 0.35 + Y * 0.8 + vn(X / 4, Y / 4, 44) * 3);
+      if (r > 0.92) p.set(x, y, hx('#6ac0c8', 190));
+      else if (s < 2.6) p.set(x, y, hx('#4a9aa4', 170));
+    }
+  return p;
+}
+
+function bogCell(c: CellCtx): Px {
+  const p = fleshCell(c, 0.4, true);
+  const ox = c.wx * 16;
+  const oy = c.wy * 16;
+  const BG = rampOf('#0a1206', '#14200a', '#223410', '#344c18', '#4c6a22', '#6e8e30');
+  const isBog = (m: number) => m === MK.bog;
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const X = ox + x;
+      const Y = oy + y;
+      const s = regionS(c, x, y, isBog) + wob(X, Y, 75);
+      if (s < 1.5) continue;
+      const n = vn(X / 4, Y / 4, 51);
+      p.set(x, y, ramp(BG, 0.8 + n * 3.2 + (s < 3 ? -0.8 : 0), X, Y));
+      // Пузыри яда.
+      if (LAT[(((Y + 13) & 255) << 8) | ((X * 7) & 255)] < 0.02) {
+        p.set(x, y, hx('#b8e860'));
+        if (x < 15) p.set(x + 1, y, hx('#6a8a20'));
+      }
     }
   return p;
 }
 
 function mirrorFloorCell(c: CellCtx): Px {
-  const p = fleshCell(c, FLESH, 0.08);
+  const p = fleshCell(c, 0.6);
   const ox = c.wx * 16;
   const oy = c.wy * 16;
   // Осколки стекла, отражающие свет: светлые клинья.
@@ -673,28 +787,64 @@ function mirrorFloorCell(c: CellCtx): Px {
   return p;
 }
 
-/** Зеркало-столб (стена): стекло в раме из кости, с отражением. */
+/**
+ * Зеркало-столб (стена): куст стеклянных осколков из плоти. Грань к свету —
+ * светлая, в тени — синяя; снизу в стекле отражается красный пол.
+ */
+const GLASS = rampOf('#10182a', '#1e2c46', '#34476a', '#5a7298', '#94aed0', '#d4e2f4', '#ffffff');
 function mirrorCell(c: CellCtx): Px {
-  const p = new Px(16, 16);
-  const face = c.open(0, 1);
-  const GL = tn('#1c2638', '#3a4c6a', '#7a92b8', '#e6f0ff');
+  const p = fleshCell(c, 0.9, true);
+  const ox = c.wx * 16;
+  const oy = c.wy * 16;
+  const flip = hash(c.wx, c.wy, 5) < 0.5;
+  const shards: [number, number][][] = [
+    [[1.5, 15.5], [3, 6], [6.5, 9], [6.5, 15.5]],
+    [[10, 15.5], [12.5, 4.5], [14.8, 8], [14.5, 15.5]],
+    [[4.5, 15.5], [7.5, 0.5], [11, 3], [11.5, 15.5]],
+  ];
+  for (const sh of shards) {
+    const pts = sh.map(([x, y]) => [flip ? 16 - x : x, y] as [number, number]);
+    const [bx] = pts[0];
+    const tipX = pts[1][0];
+    poly(p, pts, (x, y) => {
+      // Ребро осколка: слева от ребра — на свету.
+      const ridge = tipX + ((bx + pts[3][0]) / 2 - tipX) * ((y - pts[1][1]) / (15.5 - pts[1][1]));
+      const lit = x < ridge;
+      let f = lit ? 3.6 : 1.8;
+      f += (15 - y) * 0.06;
+      // Косой блик.
+      const band = (x + y * 0.6 + (flip ? 3 : 0)) % 9;
+      if (lit && band < 1.2) f += 2.2;
+      let col = ramp(GLASS, f, ox + x, oy + y);
+      // Внизу — отражение красного пола.
+      if (y > 10) col = mixc(col, hx('#7a2030'), (y - 10) * 0.09);
+      return col;
+    });
+  }
+  // Контур осколков.
+  const q = new Px(16, 16);
+  for (let i = 0; i < p.data.length; i++) q.data[i] = p.data[i];
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
-      const inFrame = x < 2 || x > 13 || (face ? y < 2 : y < 2 || y > 13);
-      if (inFrame) {
-        p.set(x, y, tone(BONE, 0.3 + (x < 2 || y < 2 ? 0.4 : 0)));
-        continue;
+      const i = (y * 16 + x) * 4;
+      const isGlass = (xx: number, yy: number) => {
+        if (xx < 0 || yy < 0 || xx > 15 || yy > 15) return false;
+        const j = (yy * 16 + xx) * 4;
+        return q.data[j + 2] > q.data[j] + 12;
+      };
+      if (isGlass(x, y)) continue;
+      if (isGlass(x + 1, y) || isGlass(x - 1, y) || isGlass(x, y + 1) || isGlass(x, y - 1)) {
+        p.data[i] = 8;
+        p.data[i + 1] = 10;
+        p.data[i + 2] = 22;
+        p.data[i + 3] = 255;
       }
-      // Косые блики по стеклу.
-      const s = (x - y + 32) % 11;
-      p.set(x, y, s < 2 ? GL[3] : s < 4 ? GL[2] : tone(GL, 0.2 + (15 - y) * 0.02));
     }
-  if (face) for (let x = 0; x < 16; x++) p.set(x, 15, INK);
   return p;
 }
 
 function circleCell(c: CellCtx): Px {
-  const p = fleshCell(c, FLESH, 0.08);
+  const p = fleshCell(c, 0.6, true);
   const col = c.mark === MK.circleA ? hx('#70f090') : hx('#c080ff');
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
@@ -707,29 +857,13 @@ function circleCell(c: CellCtx): Px {
   return p;
 }
 
-function bogCell(c: CellCtx): Px {
-  const p = fleshCell(c, FLESH, 0.05);
-  const ox = c.wx * 16;
-  const oy = c.wy * 16;
-  const BG = tn('#0c1406', '#1c2a0c', '#3a4a14', '#6a8a28');
-  for (let y = 0; y < 16; y++)
-    for (let x = 0; x < 16; x++) {
-      const n = vnoise((ox + x) / 5, (oy + y) / 5, 51);
-      if (n > 0.3) p.set(x, y, tone(BG, n * 0.9 - 0.2));
-    }
-  for (let k = 0; k < 3; k++) {
-    const x = 2 + hash(ox, oy, 90 + k) * 12;
-    const y = 2 + hash(ox, oy, 95 + k) * 12;
-    p.set(Math.round(x), Math.round(y), hx('#a8d850'));
-    p.set(Math.round(x) + 1, Math.round(y), hx('#5a7a1a'));
-  }
-  return p;
-}
-
 function scorchCell(c: CellCtx): Px {
-  const p = fleshCell(c, tn('#0c0506', '#1e0c0c', '#342018', '#4e3424'), 0);
+  const p = fleshCell(c, 0.8, true);
   const ox = c.wx * 16;
   const oy = c.wy * 16;
+  const CH = hx('#1a0c0a');
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) glowPx(p, x, y, CH, 0.55 + vn((ox + x) / 5, (oy + y) / 5, 13) * 0.3);
   for (let k = 0; k < 4; k++)
     if (hash(ox, oy, 100 + k) < 0.5) p.set(Math.floor(hash(ox, oy, 110 + k) * 16), Math.floor(hash(ox, oy, 120 + k) * 16), EMBER);
   return p;
@@ -737,41 +871,76 @@ function scorchCell(c: CellCtx): Px {
 
 // --- Стены.
 
-/** Стена плоти: лицо — мышечные волокна, верх — тёмная плёнка с жилками. */
+/** Мышечный пучок лица стены: высота 0…1 в мировой точке. */
+function bundleH(X: number, Y: number): number {
+  const u = X / 6.5 + Math.sin(Y / 10 + X * 0.05) * 0.45 + vn(X / 20, Y / 30, 11) * 0.8;
+  return Math.pow(Math.sin((u - Math.floor(u)) * Math.PI), 0.6);
+}
+
+/**
+ * Стена плоти. Лицо (над полом) — пучки мышц сверху вниз со свесом-губой
+ * по верху и тенью к полу; порода за лицом — плоть во тьме с жилами;
+ * кромки у пола — светлый валик.
+ */
 function wallCell(c: CellCtx): Px {
   const p = new Px(16, 16);
   const ox = c.wx * 16;
   const oy = c.wy * 16;
   const face = c.open(0, 1);
   if (face) {
+    const LIP = [2.6, 1.9, 0.6, -1.2, -0.5];
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
-        // Волокна — вертикальные пучки, чуть волнистые; к низу темнее.
-        const fib = Math.sin((ox + x) * 1.25 + Math.sin((oy + y) * 0.35 + ox * 0.01) * 1.4);
-        const n = vnoise((ox + x) / 3, (oy + y) / 9, 61);
-        let l = 0.55 + fib * 0.18 + (n - 0.5) * 0.3 - y * 0.03;
-        if (y < 3) l = 0.85 - y * 0.18; // кромка: складка сверху, на свету
-        p.set(x, y, tone(MUSCLE, l));
+        const X = ox + x;
+        const Y = oy + y;
+        const h = bundleH(X, Y);
+        const lit = Math.max(-1, Math.min(1, (h - bundleH(X - 1, Y)) * 3));
+        let f = 1.3 + h * 3 + lit * 1.3 + (vn(X / 2.2, Y / 8, 12) - 0.5) * 1.3;
+        if (y < LIP.length) f += LIP[y];
+        f -= Math.max(0, y - 8) * 0.42;
+        p.set(x, y, ramp(MR, f, X, Y));
+        // Влажный блик на верху пучка.
+        if (y > 4 && y < 9 && h > 0.9 && lit > 0.2 && LAT[((Y & 255) << 8) | (X & 255)] < 0.12) p.set(x, y, SPEC);
       }
-    // Сухожильные тяжи.
+    // Сухожильные тяжи — светлые нити по пучку.
     for (let k = 0; k < 2; k++) {
-      const x = 2 + Math.floor(hash(c.wx, c.wy, 130 + k) * 12);
-      for (let y = 3; y < 14; y++) p.set(x + Math.round(Math.sin(y * 0.6 + k) * 0.6), y, alpha(SINEW[2], 0.7));
+      if (hash(c.wx, c.wy, 130 + k) < 0.45) continue;
+      const x0 = 2 + hash(c.wx, c.wy, 131 + k) * 12;
+      for (let y = 5; y < 13; y++) p.set(Math.round(x0 + Math.sin(y * 0.55 + k) * 0.7), y, alpha(SINEW[2], 0.55));
     }
     for (let x = 0; x < 16; x++) {
-      p.set(x, 14, mixc(MUSCLE[0], DARK, 0.5));
+      p.set(x, 14, mixc(MR[1], DARK, 0.4));
       p.set(x, 15, DARK);
     }
-  } else {
-    for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) {
-        const n = vnoise((ox + x) / 6, (oy + y) / 6, 71);
-        p.set(x, y, fleshAt(ox + x, oy + y, tn('#0c0204', '#1c060a', '#2e0c12', '#44161c'), 0.1 + (1 - n) * 0.1));
-      }
-    // Кромка сверху, где под стеной не пол, а рядом открыто (стены сверху видно ребро).
-    if (c.open(0, -1)) for (let x = 0; x < 16; x++) p.set(x, 0, MUSCLE[2]);
-    if (c.open(-1, 0)) for (let y = 0; y < 16; y++) p.set(0, y, MUSCLE[1]);
-    if (c.open(1, 0)) for (let y = 0; y < 16; y++) p.set(15, y, FLESH[0]);
+    return p;
+  }
+  // Порода: тёмная плоть, крупные сосуды в глубине.
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const X = ox + x;
+      const Y = oy + y;
+      const h = foldH(X * 0.7, Y * 0.7);
+      let f = 0.6 + h * 2.2 + (vn(X / 4, Y / 4, 14) - 0.5) * 0.8;
+      const vv = vn(X / 26, Y / 26, 15);
+      if (Math.abs(vv - 0.5) < 0.03) f += 1.4;
+      p.set(x, y, ramp(DR, f, X, Y));
+    }
+  // Кромки у пола: сверху — валик на свету, по бокам — тонкий кант.
+  if (c.open(0, -1))
+    for (let x = 0; x < 16; x++) {
+      const X = ox + x;
+      p.set(x, 0, ramp(MR, 5.2, X, oy));
+      p.set(x, 1, ramp(MR, 4.2, X, oy + 1));
+      p.set(x, 2, ramp(MR, 2.6, X, oy + 2));
+      p.set(x, 3, ramp(MR, 1.2, X, oy + 3));
+    }
+  if (c.open(-1, 0)) for (let y = 0; y < 16; y++) {
+    p.set(0, y, ramp(MR, 3.6, ox, oy + y));
+    p.set(1, y, ramp(MR, 1.8, ox + 1, oy + y));
+  }
+  if (c.open(1, 0)) for (let y = 0; y < 16; y++) {
+    p.set(15, y, ramp(MR, 2.4, ox + 15, oy + y));
+    p.set(14, y, ramp(MR, 1.2, ox + 14, oy + y));
   }
   return p;
 }
@@ -849,14 +1018,8 @@ registerCellPainter(F15_HEART, (c) => {
   }
   if (T === 11) return abyssCell(c);
   switch (m) {
-    case MK.vein:
-      return veinCell(c);
     case MK.blood:
       return bloodCell(c);
-    case MK.plate:
-      return plateCell(c);
-    case MK.root:
-      return rootCell(c);
     case MK.bone:
       return boneCell(c);
     case MK.sigLava:
@@ -1389,14 +1552,387 @@ function petrify(p: Px, k: number, glow: number, seed: number): void {
 // Бок (ходьба и удары) и анфас (кокон, пробуждение, рык, крылья, сердце).
 // ---------------------------------------------------------------------------
 
-/** Каменная броня: тёплый серо-бурый камень. Плоть — там, где плиты разошлись. */
+/** Каменная броня и плоть (старые четыре тона — для кокона и мелочи). */
 const LSTONE = tn('#1e1814', '#40352e', '#66584c', '#9a8a78');
-const LSTONE_FAR = tn('#120e0c', '#261f1b', '#3c332c', '#56493e');
 const LFLESH = tn('#2a060c', '#581420', '#8a2632', '#c0505a');
 const LFLESH_FAR = tn('#1a0408', '#380c14', '#581820', '#7a2a32');
-const MANE = tn('#241c18', '#4c4038', '#7a6a5a', '#b8a48c');
-const WINGM = tn('#1e050a', '#40101a', '#6e2030', '#a84050');
-const WINGB = tn('#2a2420', '#5a4e44', '#8e7e6c', '#c4b49c');
+
+// --- Материалы Хозяина: ступени тона плюс своя фактура.
+
+type MatTex = 'stone' | 'flesh' | 'mane' | 'bone' | 'memb' | 'scale';
+interface Mat {
+  r: RGBA[];
+  tex: MatTex;
+  seed: number;
+}
+const mat = (tex: MatTex, seed: number, ...h: string[]): Mat => ({ r: rampOf(...h), tex, seed });
+
+const M_STONE = mat('stone', 41, '#120e0f', '#211b1a', '#352c28', '#4e423a', '#6b5b4e', '#8c7866', '#ad9880');
+const M_STONE_FAR = mat('stone', 42, '#0b0809', '#151011', '#201918', '#2d2421', '#3c302b', '#4d3f37');
+const M_FLESH = mat('flesh', 43, '#1a0409', '#34070f', '#550d18', '#7a1622', '#a0242c', '#c4423e');
+const M_FLESH_FAR = mat('flesh', 44, '#10030a', '#1e050c', '#320911', '#4a0f18', '#621720');
+const M_MANE = mat('mane', 45, '#120c0a', '#221815', '#352620', '#4c372c', '#654a3a', '#80604a', '#9c7a5c');
+const M_MANE_FAR = mat('mane', 46, '#0a0706', '#150f0d', '#221814', '#30221b', '#402e24', '#523b2e');
+const M_BONE = mat('bone', 47, '#3a3026', '#5e5242', '#857660', '#a99a80', '#cfc2a4', '#efe6cc');
+const M_MEMB = mat('memb', 48, '#14030a', '#2a0712', '#460c1c', '#661528', '#8a2436', '#b03c48');
+const M_MEMB_FAR = mat('memb', 49, '#0c0206', '#18040b', '#280812', '#3a0d1a', '#4e1422');
+const M_SCALE = mat('scale', 50, '#0c120b', '#172014', '#25331d', '#374b29', '#4e6836', '#6e8c4a');
+const MOUTH = mat('memb', 51, '#2a0604', '#6a1406', '#b8300a', '#f06a1c', '#ffb050', '#fff0a8');
+
+/** Подсветка снизу: сердце и пол светят в тело красным. */
+let rimK = 0.2;
+
+function texAt(m: Mat, x: number, y: number, along: number, lat: number): number {
+  switch (m.tex) {
+    case 'stone': {
+      let t = (vn(x / 3.2, y / 3.2, m.seed) - 0.5) * 1.1;
+      const h = LAT[(((y * 7 + m.seed) & 255) << 8) | ((x * 3 + m.seed) & 255)];
+      if (h < 0.035) t -= 1.4;
+      else if (h > 0.975) t += 0.9;
+      return t;
+    }
+    case 'flesh':
+      return (vn(lat * 1.5 + m.seed, along / 6, m.seed) - 0.5) * 1.7;
+    case 'mane':
+      return (vn(lat * 1.3 + m.seed, along / 3.5, m.seed) - 0.5) * 1.6;
+    case 'bone':
+      return (vn(x / 4, y / 4, m.seed) - 0.5) * 0.5;
+    case 'memb':
+      return (vn(x / 5, y / 7, m.seed) - 0.5) * 0.9;
+    case 'scale':
+      return ((x + ((y >> 1) & 1) * 2) % 4 === 0 || y % 3 === 0 ? -0.9 : 0.15) + (vn(x / 3, y / 3, m.seed) - 0.5) * 0.4;
+  }
+}
+
+/** Цвет точки материала: свет l (−1…1), фактура, смещение. */
+function matPx(m: Mat, l: number, ny: number, x: number, y: number, along: number, lat: number, bias: number): RGBA {
+  const n = m.r.length;
+  const idx = 0.2 + (l * 0.45 + 0.33 + bias) * (n - 1) + texAt(m, x, y, along, lat);
+  const c = ramp(m.r, idx, x, y);
+  // Нижние грани ловят красный свет снизу.
+  if (ny > 0.5 && rimK > 0) return mixc(c, VEIN_HOT, Math.min(0.5, (ny - 0.5) * 2 * rimK));
+  return c;
+}
+
+/** Капсула из материала. */
+function mlimb(p: Px, x0: number, y0: number, x1: number, y1: number, r0: number, r1: number, m: Mat, bias = 0): void {
+  const minX = Math.floor(Math.min(x0 - r0, x1 - r1)) - 1;
+  const maxX = Math.ceil(Math.max(x0 + r0, x1 + r1)) + 1;
+  const minY = Math.floor(Math.min(y0 - r0, y1 - r1)) - 1;
+  const maxY = Math.ceil(Math.max(y0 + r0, y1 + r1)) + 1;
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const L = Math.hypot(dx, dy) || 1e-6;
+  const ux = dx / L;
+  const uy = dy / L;
+  for (let y = minY; y <= maxY; y++)
+    for (let x = minX; x <= maxX; x++) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      const t = Math.max(0, Math.min(1, ((px - x0) * ux + (py - y0) * uy) / L));
+      const cx = x0 + dx * t;
+      const cy = y0 + dy * t;
+      const r = r0 + (r1 - r0) * t;
+      const ex = px - cx;
+      const ey = py - cy;
+      const d = Math.hypot(ex, ey);
+      if (d > r) continue;
+      const nx = ex / (r || 1);
+      const ny = ey / (r || 1);
+      const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+      const lat = ex * -uy + ey * ux;
+      p.set(x, y, matPx(m, nx * LX + ny * LY + nz * LZ, ny, x, y, t * L, lat, bias));
+    }
+}
+
+/** Овал из материала. */
+function mell(p: Px, cx: number, cy: number, rx: number, ry: number, m: Mat, bias = 0): void {
+  if (rx <= 0 || ry <= 0) return;
+  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
+    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+      const dx = (x + 0.5 - cx) / rx;
+      const dy = (y + 0.5 - cy) / ry;
+      const q = dx * dx + dy * dy;
+      if (q > 1) continue;
+      const nz = Math.sqrt(1 - q);
+      p.set(x, y, matPx(m, dx * LX + dy * LY + nz * LZ, dy, x, y, y - cy, x - cx, bias));
+    }
+}
+
+/** Плита из материала: грань с наклоном и фаской по краю. */
+function mplate(p: Px, pts: [number, number][], m: Mat, tilt: [number, number] = [0, 0], bias = 0): void {
+  const inside = (x: number, y: number) => {
+    let ins = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i];
+      const [xj, yj] = pts[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) ins = !ins;
+    }
+    return ins;
+  };
+  let minX = 1e9;
+  let maxX = -1e9;
+  let minY = 1e9;
+  let maxY = -1e9;
+  for (const [x, y] of pts) {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  const l0 = tilt[0] * LX + tilt[1] * LY + 0.55 * LZ;
+  for (let y = Math.floor(minY); y <= Math.ceil(maxY); y++)
+    for (let x = Math.floor(minX); x <= Math.ceil(maxX); x++) {
+      if (!inside(x + 0.5, y + 0.5)) continue;
+      let l = l0;
+      if (!inside(x - 0.5, y - 0.5)) l += 0.55;
+      else if (!inside(x + 1.5, y + 1.5)) l -= 0.6;
+      p.set(x, y, matPx(m, l, tilt[1], x, y, y, x, bias));
+    }
+}
+
+/** Жаркий шов: светящаяся линия (щель между плитами, трещина). */
+function seam(p: Px, x0: number, y0: number, x1: number, y1: number, glow: number): void {
+  const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5) + 1;
+  for (let i = 0; i <= n; i++) {
+    const x = Math.round(x0 + ((x1 - x0) * i) / n);
+    const y = Math.round(y0 + ((y1 - y0) * i) / n);
+    if (!p.solid(x, y)) continue;
+    p.set(x, y, glow > 0.6 ? EMBER_HI : glow > 0.3 ? EMBER : VEIN);
+    glowPx(p, x, y + 1, EMBER, 0.2 + glow * 0.3);
+  }
+}
+
+/** Трещины по камню со светом из-под них (сердце светит сквозь броню). */
+function cracksOn(p: Px, pts: [number, number][], glow: number, seed: number): void {
+  for (const [x0, y0] of pts) {
+    let x = x0;
+    let y = y0;
+    let a = hash(x0, y0, seed) * TAU;
+    for (let s = 0; s < 7; s++) {
+      if (p.solid(Math.round(x), Math.round(y))) glowPx(p, x, y, glow > 0.55 ? EMBER_HI : EMBER, 0.35 + glow * 0.6);
+      a += (hash(s, x0, seed) - 0.5) * 1.6;
+      x += Math.cos(a);
+      y += Math.sin(a) * 0.8;
+    }
+  }
+}
+
+/** Точка квадратичной кривой. */
+const qb = (a: [number, number], c: [number, number], b: [number, number], t: number): [number, number] => [
+  (1 - t) * (1 - t) * a[0] + 2 * (1 - t) * t * c[0] + t * t * b[0],
+  (1 - t) * (1 - t) * a[1] + 2 * (1 - t) * t * c[1] + t * t * b[1],
+];
+
+/**
+ * Прядь гривы: толстая у корня, тонкая к концу, провисает; кончик тлеет.
+ * `droop` — насколько кончик тянет вниз.
+ */
+function lock(p: Px, bx: number, by: number, a: number, len: number, w: number, m: Mat, glow: number, droop = 0.3, ember = true): void {
+  const b: [number, number] = [bx, by];
+  const e: [number, number] = [bx + Math.cos(a) * len, by + Math.sin(a) * len + len * droop * 0.5];
+  const c: [number, number] = [bx + Math.cos(a) * len * 0.55, by + Math.sin(a) * len * 0.55 - len * 0.05];
+  const n = Math.max(4, Math.ceil(len / 2.5));
+  let prev = b;
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    const q = qb(b, c, e, t);
+    const r0 = w * Math.pow(1 - (t - 1 / n) * 0.85, 0.9) * 0.5;
+    const r1 = w * Math.pow(1 - t * 0.85, 0.9) * 0.5;
+    if (ember && t > 0.82 && glow > 0.25) {
+      const k = (t - 0.82) / 0.18;
+      mlimb(p, prev[0], prev[1], q[0], q[1], r0, r1, MOUTH, -0.35 + glow * 0.25 + k * 0.15);
+    } else mlimb(p, prev[0], prev[1], q[0], q[1], r0, r1, m, 0.02);
+    prev = q;
+  }
+}
+
+/** Крыло летучей мыши из камня и плоти: плечо, пальцы веером, перепонка. */
+function lionWing(p: Px, sx: number, sy: number, a: number, len: number, open: number, far: boolean): void {
+  const MB = far ? M_MEMB_FAR : M_MEMB;
+  const BN = far ? M_STONE_FAR : M_STONE;
+  const spread = 0.3 + open * 0.7;
+  // Локоть и запястье.
+  const ex = sx + Math.cos(a) * len * 0.34;
+  const ey = sy + Math.sin(a) * len * 0.34;
+  const wa = a + 0.35 * spread;
+  const wx = ex + Math.cos(wa) * len * 0.3;
+  const wy = ey + Math.sin(wa) * len * 0.3;
+  const tips: [number, number][] = [];
+  for (let i = 0; i < 4; i++) {
+    const fa = wa + 0.15 - i * 0.5 * spread;
+    const fl = len * (0.7 - i * 0.08);
+    tips.push([wx + Math.cos(fa) * fl, wy + Math.sin(fa) * fl]);
+  }
+  // Последняя перепонка идёт к боку тела.
+  const body: [number, number] = [sx + Math.cos(a + 2.2) * len * 0.22, sy + Math.sin(a + 2.2) * len * 0.22 + 6];
+  const chain: [number, number][] = [...tips, body];
+  for (let i = 0; i < chain.length - 1; i++) {
+    const t0 = chain[i];
+    const t1 = chain[i + 1];
+    const mid: [number, number] = [(t0[0] + t1[0]) / 2, (t0[1] + t1[1]) / 2];
+    // Провис перепонки к запястью — зубцом.
+    const ctrl: [number, number] = [mid[0] + (wx - mid[0]) * 0.42, mid[1] + (wy - mid[1]) * 0.42];
+    const edge: [number, number][] = [[wx, wy], t0];
+    for (let k = 1; k < 8; k++) edge.push(qb(t0, ctrl, t1, k / 8));
+    edge.push(t1);
+    if (i === chain.length - 2) edge.push([sx, sy]);
+    poly(p, edge, (x, y) => {
+      const d = Math.hypot(x - wx, y - wy) / len;
+      // Сквозь тонкую перепонку — свет: к краю светлее.
+      const l = -0.4 + d * 1.1 + (vn(x / 3, y / 3, 60 + i) - 0.5) * 0.3;
+      return matPx(MB, l, 0, x, y, 0, 0, 0);
+    });
+    // Жилы — от запястья к краю.
+    if (!far) {
+      const q = qb(t0, ctrl, t1, 0.5);
+      const mm: [number, number] = [(wx + q[0]) / 2 + (hash(i, 3, 9) - 0.5) * 4, (wy + q[1]) / 2];
+      for (let k = 0; k < 10; k++) {
+        const pt = qb([wx, wy], mm, q, k / 10);
+        const X = Math.round(pt[0]);
+        const Y = Math.round(pt[1]);
+        if (p.solid(X, Y)) glowPx(p, X, Y, VEIN_HOT, 0.35);
+      }
+    }
+  }
+  // Кромка перепонки — светлая нить.
+  // Кости: плечо, предплечье, пальцы.
+  mlimb(p, sx, sy, ex, ey, 3.4, 2.6, BN, 0.05);
+  mlimb(p, ex, ey, wx, wy, 2.6, 2, BN, 0.05);
+  for (const [tx, ty] of tips) mlimb(p, wx, wy, tx, ty, 1.5, 0.6, BN, 0.1);
+  // Коготь на запястье и шипы на локте.
+  mlimb(p, wx, wy, wx + Math.cos(a - 1.1) * 5, wy + Math.sin(a - 1.1) * 5, 1.3, 0.3, M_BONE, 0.2);
+  mlimb(p, ex, ey, ex + Math.cos(a - 1.6) * 3.5, ey + Math.sin(a - 1.6) * 3.5, 1.1, 0.3, M_BONE, 0.2);
+}
+
+/** Голова в профиль: каменный череп, тяжёлая морда, челюсть, глаз, уши. */
+function lionHeadSide(p: Px, hx0: number, hy0: number, lp: LionPose, far = false): [number, number] {
+  const tilt = lp.head;
+  const ca = Math.cos(tilt);
+  const sa = Math.sin(tilt);
+  const R = (x: number, y: number): [number, number] => [hx0 + x * ca - y * sa, hy0 + x * sa + y * ca];
+  const S = far ? M_STONE_FAR : M_STONE;
+  const jaw = lp.jaw;
+  // Ухо — маленькое, круглое, торчит из гривы.
+  mell(p, ...R(-5, -8.5), 2.6, 3, S, 0.1);
+  mell(p, ...R(-4.8, -8), 1.3, 1.6, M_FLESH, -0.1);
+  // Нижняя челюсть (опускается на рыке).
+  const [j0x, j0y] = R(-2, 4.5);
+  const [j1x, j1y] = R(12, 5.5 + jaw * 8);
+  if (jaw > 0.15) {
+    // Пасть: жар, язык, клыки сверху и снизу.
+    const [m0x, m0y] = R(1, 3);
+    const [m1x, m1y] = R(13, 3 + jaw * 4.5);
+    mlimb(p, m0x, m0y, m1x, m1y, 2.6 * jaw + 0.6, 1.6 * jaw + 0.5, MOUTH, 0.1);
+  }
+  mlimb(p, j0x, j0y, j1x, j1y, 3.8, 2.8, S, -0.1);
+  // Череп.
+  mell(p, ...R(-1.5, -1), 8.2, 7.6, S, 0.05);
+  // Морда — тяжёлая, с подушкой усов.
+  mplate(p, [R(1, -5.5), R(12, -3.5), R(15.5, -0.5), R(15, 3.5), R(12, 5), R(2, 5.5)], S, [0.3, -0.2], 0.05);
+  mell(p, ...R(10.5, 2.5), 4, 2.8, S, 0.18);
+  // Нос.
+  mell(p, ...R(14.6, -1.8), 1.9, 1.5, M_STONE_FAR, 0);
+  const [nx, ny] = R(15.3, -1.3);
+  p.set(Math.round(nx), Math.round(ny), INK);
+  // Надбровье — каменный козырёк над глазом.
+  mplate(p, [R(-3, -8.5), R(7.5, -7.5), R(9.5, -4.5), R(-1, -4)], S, [-0.3, -0.8], 0.15);
+  // Клыки из-под губы.
+  for (const k of [7.5, 11]) {
+    const [tx, ty] = R(k, 5.2);
+    p.set(Math.round(tx), Math.round(ty), BONE[3]);
+    p.set(Math.round(tx), Math.round(ty) + 1, BONE[2]);
+    if (jaw > 0.3) {
+      const [bx, by] = R(k - 1, 5 + jaw * 6);
+      p.set(Math.round(bx), Math.round(by), BONE[3]);
+      p.set(Math.round(bx), Math.round(by) - 1, BONE[2]);
+    }
+  }
+  // Трещина по щеке со светом.
+  cracksOn(p, [R(-1, 2), R(4, -6)], lp.glow, 7);
+  // Глаз: тёмная впадина, в ней золотой уголь.
+  const [ex, ey] = R(5.5, -3.2);
+  const X = Math.round(ex);
+  const Y = Math.round(ey);
+  p.set(X - 1, Y, INK);
+  p.set(X, Y, GOLD);
+  p.set(X + 1, Y, GOLD_HI);
+  p.set(X, Y + 1, alpha(EMBER, 0.85));
+  return [X + 1, Y];
+}
+
+/** Грива в профиль: задний слой (тёмный, длинный) и передний — вокруг затылка. */
+function maneSide(p: Px, cx: number, cy: number, glow: number, back: boolean, far = false): void {
+  const m = back ? (far ? M_MANE_FAR : M_MANE_FAR) : M_MANE;
+  const n = back ? 13 : 10;
+  for (let i = 0; i < n; i++) {
+    const k = i / (n - 1);
+    // Сзади: от подбородка вниз-назад, через затылок, до макушки.
+    const a = back ? Math.PI * (0.4 + k * 1.1) : Math.PI * (0.6 + k * 0.85);
+    const len = (back ? 17 : 11) * (0.75 + hash(i, back ? 3 : 4, 17) * 0.35) * (back ? 0.8 + Math.sin(Math.PI * k) * 0.3 : 1);
+    const w = back ? 12 : 9;
+    const r0 = back ? 4 : 6;
+    lock(p, cx + Math.cos(a) * r0, cy + Math.sin(a) * r0, a + (hash(i, 5, 17) - 0.5) * 0.2, len, w, m, glow, back ? 0.6 : 0.45, i % 3 === 1);
+  }
+}
+
+/** Хвост: каменные позвонки у корня, дальше — змея с головой (химера). */
+function lionTail(p: Px, pts: [number, number][], glow: number, far = false): [number, number] {
+  const sp = spline(pts, 7);
+  const N = sp.length;
+  for (let i = 0; i < N - 1; i++) {
+    const k = i / N;
+    const snake = k > 0.38;
+    const r0 = snake ? 1.9 + (k - 0.38) * 2.2 : 2.6 - k * 2;
+    const r1 = r0;
+    mlimb(p, sp[i][0], sp[i][1], sp[i + 1][0], sp[i + 1][1], r0, r1, snake ? M_SCALE : far ? M_FLESH_FAR : M_FLESH, 0);
+    if (!snake && i % 3 === 1) mell(p, sp[i][0], sp[i][1] - 0.8, 2.8 - k * 2, 2, far ? M_STONE_FAR : M_STONE, 0.1);
+  }
+  // Змеиная голова: клин, пасть, красный глаз.
+  const [x1, y1] = sp[N - 1];
+  const [x0, y0] = sp[Math.max(0, N - 4)];
+  const a = Math.atan2(y1 - y0, x1 - x0);
+  const ux = Math.cos(a);
+  const uy = Math.sin(a);
+  const hx1 = x1 + ux * 3;
+  const hy1 = y1 + uy * 3;
+  mlimb(p, x1, y1, hx1 + ux * 3.5, hy1 + uy * 3.5, 3.4, 1.6, M_SCALE, 0.1);
+  mell(p, x1 + ux * 1.5, y1 + uy * 1.5, 3.4, 3, M_SCALE, 0.1);
+  // Пасть приоткрыта.
+  const mx = hx1 + ux * 2 + uy * 0.8;
+  const my = hy1 + uy * 2 - ux * 0.8;
+  p.set(Math.round(mx), Math.round(my), MOUTH.r[2]);
+  p.set(Math.round(mx + ux), Math.round(my + uy), MOUTH.r[3]);
+  const [ex, ey] = [x1 + ux * 2 - uy * 1.5, y1 + uy * 2 + ux * 1.5 - 1];
+  p.set(Math.round(ex), Math.round(ey), glow > 0.2 ? hx('#ff4a3a') : hx('#b02020'));
+  return [hx1, hy1];
+}
+
+/** Лапа: бедро (плоть под плитой) → голень → стопа с когтями. */
+function lionLeg(p: Px, pts: [number, number][], rs: number[], far: boolean, claws: boolean, plate = true): void {
+  const S = far ? M_STONE_FAR : M_STONE;
+  const F = far ? M_FLESH_FAR : M_FLESH;
+  for (let i = 0; i < pts.length - 1; i++)
+    mlimb(p, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], rs[i], rs[i + 1], S, i === 0 ? -0.04 : 0.05);
+  // Колено — плоть в стыке камня.
+  mell(p, pts[1][0], pts[1][1], rs[1] * 0.8, rs[1] * 0.7, F, 0);
+  seam(p, pts[0][0] - 1, pts[0][1] + 2, pts[1][0], pts[1][1] - 1, 0.3);
+  // Плита на бедре.
+  if (plate) {
+    const [ax, ay] = pts[0];
+    const [bx, by] = pts[1];
+    mell(p, ax + (bx - ax) * 0.3 - 1, ay + (by - ay) * 0.3 - 1, rs[0] * 0.75, rs[0] * 0.85, S, 0.12);
+  }
+  const [px, py] = pts[pts.length - 1];
+  mell(p, px + 1.5, py - 1.6, rs[rs.length - 1] + 1.8, 2.8, S, 0.12);
+  if (claws)
+    for (let k = 0; k < 3; k++) {
+      const cx = Math.round(px + 3.5 + k * 1.6);
+      p.set(cx, Math.round(py), BONE[3]);
+      p.set(cx + 1, Math.round(py), BONE[2]);
+      p.set(cx + 1, Math.round(py) + 1, BONE[1]);
+    }
+}
 
 interface LionPose {
   view: 'side' | 'front';
@@ -1445,465 +1981,301 @@ const LP = (o: Partial<LionPose>): LionPose => ({
   ...o,
 });
 
-/** Трещины по камню со светом из-под них (сердце светит сквозь броню). */
-function cracksOn(p: Px, pts: [number, number][], glow: number, seed: number): void {
-  for (const [x0, y0] of pts) {
-    let x = x0;
-    let y = y0;
-    let a = hash(x0, y0, seed) * TAU;
-    for (let s = 0; s < 6; s++) {
-      if (p.solid(Math.round(x), Math.round(y))) {
-        glowPx(p, x, y, glow > 0.55 ? EMBER_HI : EMBER, 0.35 + glow * 0.6);
-      }
-      a += (hash(s, x0, seed) - 0.5) * 1.6;
-      x += Math.cos(a);
-      y += Math.sin(a) * 0.8;
-    }
-  }
-}
-
-/** Крыло: плечевая кость, пальцы веером, перепонка с жилами, зубцы по краю. */
-function lionWing(p: Px, sx: number, sy: number, a: number, len: number, open: number, far: boolean): void {
-  const M = far ? tn('#12030a', '#260812', '#3e0e1a', '#581828') : WINGM;
-  const B = far ? tn('#1a1614', '#3a322c', '#564a40', '#6e6052') : WINGB;
-  const spread = 0.25 + open * 0.75;
-  const ex = sx + Math.cos(a) * len * 0.45;
-  const ey = sy + Math.sin(a) * len * 0.45;
-  const tips: [number, number][] = [];
-  for (let i = 0; i < 4; i++) {
-    const fa = a + 0.35 - i * 0.42 * spread;
-    const fl = len * (0.78 - i * 0.1);
-    tips.push([ex + Math.cos(fa) * fl, ey + Math.sin(fa) * fl]);
-  }
-  const root: [number, number] = [sx + Math.cos(a + 1.9) * len * 0.12, sy + Math.sin(a + 1.9) * len * 0.12];
-  // Перепонка: от пальца к пальцу провисает дугой.
-  const edge: [number, number][] = [[sx, sy], [ex, ey], tips[0]];
-  for (let i = 0; i < tips.length - 1; i++) {
-    const [ax, ay] = tips[i];
-    const [bx, by] = tips[i + 1];
-    const mx = (ax + bx) / 2 + (ex - (ax + bx) / 2) * 0.25;
-    const my = (ay + by) / 2 + (ey - (ay + by) / 2) * 0.25;
-    edge.push([mx, my], [bx, by]);
-  }
-  edge.push(root);
-  poly(p, edge, (x, y) => {
-    const d = Math.hypot(x - ex, y - ey) / len;
-    const vein = (x * 2 + y * 3) % 11 === 0 ? -0.2 : 0;
-    return tone(M, 0.62 - d * 0.5 + vein);
-  });
-  // Жилы перепонки: от локтя к краю.
-  if (!far)
-    for (let i = 0; i < tips.length - 1; i++) {
-      const [ax, ay] = tips[i];
-      const [bx, by] = tips[i + 1];
-      stroke(p, ex, ey, (ax + bx) / 2, (ay + by) / 2, alpha(VEIN, 0.7), 1);
-    }
-  // Кости: плечо и пальцы.
-  limb(p, sx, sy, ex, ey, 2.2, 1.6, B);
-  for (const [tx, ty] of tips) limb(p, ex, ey, tx, ty, 1, 0.45, B);
-  // Коготь-шип на сгибе.
-  limb(p, ex, ey, ex + Math.cos(a - 1.2) * 4, ey + Math.sin(a - 1.2) * 4, 1, 0.2, B, 0.2);
-}
-
-/** Голова в профиль: каменная маска, морда, челюсть, глаз, клыки. */
-function lionHeadSide(p: Px, hx0: number, hy0: number, lp: LionPose, far = false): [number, number] {
-  const tilt = lp.head;
-  const ca = Math.cos(tilt);
-  const sa = Math.sin(tilt);
-  const R = (x: number, y: number): [number, number] => [hx0 + x * ca - y * sa, hy0 + x * sa + y * ca];
-  const S = far ? LSTONE_FAR : LSTONE;
-  // Нижняя челюсть (опускается на рыке).
-  const jaw = lp.jaw;
-  const [j0x, j0y] = R(-2, 4);
-  const [j1x, j1y] = R(11, 5 + jaw * 7);
-  limb(p, j0x, j0y, j1x, j1y, 3.4, 2.4, S, -0.1);
-  if (jaw > 0.2) {
-    // Пасть: жар внутри, клыки.
-    const [m0x, m0y] = R(3, 3);
-    const [m1x, m1y] = R(12, 3 + jaw * 4);
-    limb(p, m0x, m0y, m1x, m1y, 2.2 * jaw, 1.2 * jaw + 0.4, tn('#3a0a06', '#8a1a0a', '#ff6a2a', '#ffd080'));
-    for (const k of [0.45, 0.8]) {
-      const [tx, ty] = R(3 + k * 9, 1.5);
-      p.set(Math.round(tx), Math.round(ty) + 1, BONE[3]);
-      p.set(Math.round(tx), Math.round(ty) + 2, BONE[2]);
-    }
-  }
-  // Череп и морда.
-  shadeEll(p, ...R(-1, -1), 7.2, 6.8, S, 0.05);
-  const muzzle: [number, number][] = [R(2, -5), R(12, -3), R(14, 1), R(12, 4.5), R(2, 5)];
-  polyShade(p, muzzle, S, 0.05);
-  // Нос и ноздри.
-  const [nx, ny] = R(13.5, -1.5);
-  p.ell(nx, ny, 1.5, 1.2, S[0]);
-  p.set(Math.round(nx), Math.round(ny), INK);
-  // Надбровье — каменный козырёк.
-  poly(p, [R(-3, -8), R(7, -7), R(9, -4), R(-1, -4)], (x) => tone(S, x < hx0 + 3 ? 0.9 : 0.55));
-  // Клыки сверху вниз из-под губы.
-  for (const k of [7, 10.5]) {
-    const [tx, ty] = R(k, 4.5);
-    p.set(Math.round(tx), Math.round(ty), BONE[3]);
-    p.set(Math.round(tx), Math.round(ty) + 1, BONE[2]);
-  }
-  // Трещина по щеке со светом.
-  cracksOn(p, [R(0, 1)], lp.glow, 7);
-  // Глаз — золотой уголь под козырьком.
-  const [ex, ey] = R(5, -3.5);
-  p.set(Math.round(ex), Math.round(ey), GOLD);
-  p.set(Math.round(ex) + 1, Math.round(ey), GOLD_HI);
-  p.set(Math.round(ex), Math.round(ey) + 1, alpha(EMBER, 0.8));
-  return [Math.round(ex) + 1, Math.round(ey)];
-}
-
-/** Грива: каменные осколки веером вокруг головы, кончики тлеют. */
-function lionMane(p: Px, cx: number, cy: number, a0: number, a1: number, r0: number, r1: number, glow: number, seed: number, far = false): void {
-  const n = 11;
-  for (let i = 0; i < n; i++) {
-    const k = i / (n - 1);
-    const a = a0 + (a1 - a0) * k + (hash(i, seed) - 0.5) * 0.12;
-    const len = r0 + (r1 - r0) * (0.55 + hash(i, seed, 1) * 0.45) * Math.sin(Math.PI * (0.15 + k * 0.7));
-    const w = 2.6 + hash(i, seed, 2) * 1.6;
-    const bx = cx + Math.cos(a) * r0 * 0.4;
-    const by = cy + Math.sin(a) * r0 * 0.4;
-    const tx = cx + Math.cos(a) * len;
-    const ty = cy + Math.sin(a) * len;
-    const nx = -Math.sin(a) * w;
-    const ny = Math.cos(a) * w;
-    poly(p, [
-      [bx + nx, by + ny],
-      [tx, ty],
-      [bx - nx, by - ny],
-    ], (x, y) => {
-      const side = (x - bx) * -Math.sin(a) + (y - by) * Math.cos(a);
-      const along = ((x - bx) * Math.cos(a) + (y - by) * Math.sin(a)) / Math.max(1, len);
-      if (along > 0.82 && glow > 0.2) return along > 0.92 ? EMBER_HI : EMBER;
-      return tone(far ? LSTONE_FAR : MANE, 0.5 + (side > 0 ? -0.2 : 0.25) - along * 0.2);
-    });
-  }
-}
-
-/** Хвост: позвонки-камни на жгуте плоти, на конце — змеиная голова. */
-function lionTail(p: Px, pts: [number, number][], glow: number): [number, number] {
-  const sp = spline(pts, 6);
-  for (let i = 0; i < sp.length - 1; i++) {
-    const k = i / sp.length;
-    limb(p, sp[i][0], sp[i][1], sp[i + 1][0], sp[i + 1][1], 2.6 - k * 1.3, 2.4 - k * 1.3, LFLESH);
-  }
-  for (let i = 1; i < sp.length - 2; i += 3) {
-    const k = i / sp.length;
-    shadeEll(p, sp[i][0], sp[i][1] - 0.6, 2.6 - k * 1.2, 2.1 - k * 1, LSTONE, 0.1);
-  }
-  // Змеиная голова на конце хвоста — химера.
-  const [x1, y1] = sp[sp.length - 1];
-  const [x0, y0] = sp[sp.length - 3];
-  const a = Math.atan2(y1 - y0, x1 - x0);
-  const hx1 = x1 + Math.cos(a) * 2.5;
-  const hy1 = y1 + Math.sin(a) * 2.5;
-  limb(p, x1, y1, hx1 + Math.cos(a) * 2.5, hy1 + Math.sin(a) * 2.5, 2.6, 1.4, tn('#1a2014', '#34402a', '#566a40', '#8aa060'));
-  p.set(Math.round(hx1 + Math.cos(a - 0.8) * 1.4), Math.round(hy1 + Math.sin(a - 0.8) * 1.4), glow > 0.2 ? hx('#ff4040') : hx('#a02020'));
-  return [hx1, hy1];
-}
-
-/** Нога: бедро → голень → лапа с когтями (капсулами со светом). */
-function lionLeg(p: Px, pts: [number, number][], rs: number[], S: Tones, F: Tones, claws: boolean): void {
-  for (let i = 0; i < pts.length - 1; i++) limb(p, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], rs[i], rs[i + 1], i === 0 ? F : S);
-  const [px, py] = pts[pts.length - 1];
-  shadeEll(p, px + 1.5, py - 1.2, 3.6, 2.2, S, 0.1);
-  if (claws) for (let k = 0; k < 3; k++) {
-    p.set(Math.round(px + 3 + k * 1.3), Math.round(py), BONE[3]);
-    p.set(Math.round(px + 4 + k * 1.3), Math.round(py), BONE[2]);
-  }
-}
-
 function drawLionSide(lp: LionPose): Built {
-  const W = 120;
-  const H = 104;
-  const G = 96;
+  const W = 132;
+  const H = 116;
+  const G = 108;
   const p = new Px(W, H);
+  rimK = 0.12 + lp.glow * 0.18;
   const cr = lp.crouch;
   const rear = lp.rear;
-  const hipX = 40;
-  const hipY = G - 38 + cr * 8 - lp.bob + rear * 3;
-  const shX = 74 - rear * 4;
-  const shY = G - 42 + cr * 7 - lp.bob - rear * 16;
+  const hipX = 42;
+  const hipY = G - 43 + cr * 8 - lp.bob + rear * 3;
+  const shX = 78 - rear * 4;
+  const shY = G - 49 + cr * 7 - lp.bob - rear * 16;
   const ph = lp.step < 0 ? 0 : lp.step * TAU;
   const swing = (o: number) => (lp.step < 0 ? 0 : Math.sin(ph + o));
-  const lift = (o: number) => (lp.step < 0 ? 0 : Math.max(0, Math.cos(ph + o)) * 3);
+  const lift = (o: number) => (lp.step < 0 ? 0 : Math.max(0, Math.cos(ph + o)) * 3.5);
   const tuck = lp.tuck;
-  // --- Дальние ноги (темнее).
-  const farHind: [number, number][] = [
-    [hipX + 3, hipY + 6],
-    [hipX + 5 + swing(Math.PI) * 4 - tuck * 2, G - 20 - tuck * 8],
-    [hipX - 1 + swing(Math.PI) * 5 - tuck * 6, G - 10 - lift(Math.PI) - tuck * 10],
-    [hipX + 3 + swing(Math.PI) * 6 - tuck * 4, G - 3 - lift(Math.PI) - tuck * 12],
-  ];
-  lionLeg(p, farHind, [6, 4, 3, 2.6], LSTONE_FAR, LFLESH_FAR, false);
-  const farFore: [number, number][] = [
-    [shX + 4, shY + 12],
-    [shX + 4 + swing(0) * 4 + tuck * 3, G - 20 - tuck * 8 + rear * 4],
-    [shX + 7 + swing(0) * 6 + tuck * 6, G - 8 - lift(0) - tuck * 10 - rear * 10],
-    [shX + 9 + swing(0) * 6 + tuck * 6, G - 3 - lift(0) - tuck * 12 - rear * 14],
-  ];
-  lionLeg(p, farFore, [5, 3.8, 3, 2.6], LSTONE_FAR, LFLESH_FAR, false);
   // --- Дальнее крыло (за телом).
-  if (lp.wings > 0) lionWing(p, shX - 8, shY - 2, -Math.PI * 0.62 - lp.flap * 0.45, 46 * (0.6 + lp.wings * 0.4), lp.wings, true);
-  // --- Хвост.
+  if (lp.wings > 0) lionWing(p, shX - 10, shY - 2, -Math.PI * 0.6 - lp.flap * 0.45, 54 * (0.6 + lp.wings * 0.4), lp.wings, true);
+  // --- Дальние ноги.
+  lionLeg(p, [
+    [hipX + 4, hipY + 6],
+    [hipX + 7 + swing(Math.PI) * 4 - tuck * 2, G - 22 - tuck * 8],
+    [hipX + 1 + swing(Math.PI) * 5 - tuck * 6, G - 11 - lift(Math.PI) - tuck * 10],
+    [hipX + 5 + swing(Math.PI) * 6 - tuck * 4, G - 3 - lift(Math.PI) - tuck * 12],
+  ], [8, 5, 3.6, 3.2], true, false, false);
+  lionLeg(p, [
+    [shX + 4, shY + 14],
+    [shX + 5 + swing(0) * 4 + tuck * 3, G - 22 - tuck * 8 + rear * 4],
+    [shX + 7 + swing(0) * 6 + tuck * 6, G - 9 - lift(0) - tuck * 10 - rear * 10],
+    [shX + 9 + swing(0) * 6 + tuck * 6, G - 3 - lift(0) - tuck * 12 - rear * 14],
+  ], [7, 5.2, 4.2, 3.6], true, false, false);
+  // --- Хвост: вверх и назад, змеиная голова смотрит вперёд.
   const tw = lp.tail;
-  lionTail(
-    p,
-    [
-      [hipX - 10, hipY - 2],
-      [hipX - 20, hipY + 4 + tw * 2],
-      [hipX - 29 + tw * 2, hipY - 4 + tw * 3],
-      [hipX - 32 + tw * 4, hipY - 18 + tw * 2],
-      [hipX - 27 + tw * 5, hipY - 26],
-    ],
-    lp.glow,
-  );
-  // --- Тело: бочка от бедра к груди, бедро, грудь.
-  limb(p, hipX, hipY + 3, shX, shY + 8, 13, 15, LFLESH, 0.05);
-  shadeEll(p, hipX - 2, hipY + 5, 12.5, 14, LSTONE, 0.05);
-  shadeEll(p, shX + 3, shY + 11, 12, 15, LSTONE, 0.1);
-  // Брюхо — плоть между плитами, жилы.
-  for (let x = hipX + 6; x < shX - 2; x++) {
-    const k = (x - hipX) / (shX - hipX);
-    const by = hipY + 14 + (shY + 20 - hipY - 14) * k + Math.sin(k * Math.PI) * 3;
-    for (let dy = -4; dy <= 0; dy++) p.set(x, Math.round(by + dy), tone(LFLESH, 0.35 + dy * 0.05));
-    if (x % 5 === 0) p.set(x, Math.round(by - 2), VEIN);
+  lionTail(p, [
+    [hipX - 10, hipY - 3],
+    [hipX - 21, hipY + 2 + tw * 2],
+    [hipX - 30 + tw * 2, hipY - 6 + tw * 3],
+    [hipX - 32 + tw * 4, hipY - 20 + tw * 2],
+    [hipX - 25 + tw * 5, hipY - 29],
+    [hipX - 17 + tw * 4, hipY - 31],
+  ], lp.glow);
+  // --- Тело: брюхо плотью, бедро и грудь — каменные массы.
+  mlimb(p, hipX + 2, hipY + 5, shX - 2, shY + 13, 9.5, 13, M_FLESH, 0);
+  mell(p, hipX - 2, hipY + 3, 11.5, 12.5, M_STONE, 0.05);
+  mell(p, shX + 3, shY + 13, 13.5, 17, M_STONE, 0.08);
+  // Рёбра: каменные дуги поперёк бока, меж ними — мышца.
+  for (let i = 0; i < 3; i++) {
+    const k = (i + 0.8) / 3.8;
+    const x = hipX + 6 + (shX - hipX - 8) * k;
+    const yt = hipY - 5 + (shY - hipY) * k;
+    const yb = hipY + 13 + (shY + 22 - hipY - 13) * k;
+    const pts = spline([
+      [x - 1, yt],
+      [x + 3.5, (yt + yb) / 2],
+      [x + 1.5, yb],
+    ], 4);
+    for (let j = 0; j < pts.length - 1; j++) mlimb(p, pts[j][0], pts[j][1], pts[j + 1][0], pts[j + 1][1], 2, 1.8, M_STONE, 0.12);
   }
-  // Плиты спины: каменные пластины внахлёст, щели светятся.
-  const nPl = 5;
+  // Брюхо снизу: тёмная складка и вена.
+  for (let x = hipX + 8; x < shX - 4; x++) {
+    const k = (x - hipX - 8) / (shX - hipX - 12);
+    const by = hipY + 14 + (shY + 24 - hipY - 14) * k + Math.sin(k * Math.PI) * 1.5;
+    p.set(x, Math.round(by), M_FLESH.r[1]);
+    if (x % 6 === 0) glowPx(p, x, by - 3, VEIN_HOT, 0.5);
+  }
+  // Плиты спины внахлёст — щели светятся сердцем.
+  const nPl = 6;
+  const folded = lp.wings > 0 ? 0 : 1;
   for (let i = 0; i < nPl; i++) {
     const k0 = i / nPl;
-    const k1 = (i + 1.25) / nPl;
-    const x0 = hipX - 8 + (shX - hipX + 10) * k0;
-    const x1 = hipX - 8 + (shX - hipX + 10) * k1;
-    const y0 = hipY - 12 + (shY - 6 - hipY + 12) * k0 - Math.sin(k0 * Math.PI) * 3;
-    const y1 = hipY - 12 + (shY - 6 - hipY + 12) * k1 - Math.sin(k1 * Math.PI) * 3;
-    const wing = lp.wings > 0 ? 0 : 1;
-    polyShade(
-      p,
-      [
-        [x0, y0 + 1],
-        [x0 + 2, y0 - 3 - wing * 2],
-        [x1, y1 - 3 - wing * 2],
-        [x1 + 1, y1 + 3],
-        [x0 + 1, y0 + 6],
-      ],
-      LSTONE,
-      0.1,
-    );
-    // Щель между плитами — свет сердца.
-    stroke(p, x0 + 0.5, y0 + 1, x0 + 1, y0 + 5, lp.glow > 0.5 ? EMBER : VEIN, 1);
+    const k1 = (i + 1.3) / nPl;
+    const x0 = hipX - 10 + (shX - hipX + 12) * k0;
+    const x1 = hipX - 10 + (shX - hipX + 12) * k1;
+    const arch = (k: number) => Math.sin(k * Math.PI) * 4;
+    const y0 = hipY - 11 + (shY - 7 - hipY + 11) * k0 - arch(k0);
+    const y1 = hipY - 11 + (shY - 7 - hipY + 11) * k1 - arch(k1);
+    mplate(p, [
+      [x0, y0 + 2],
+      [x0 + 2, y0 - 3 - folded * 3],
+      [x1, y1 - 3 - folded * 3],
+      [x1 + 2, y1 + 3],
+      [x0 + 1, y0 + 8],
+    ], M_STONE, [-0.2, -0.7], 0.08);
+    seam(p, x0 + 0.5, y0 - 1, x0 + 1.2, y0 + 6, lp.glow);
   }
-  // Сложенные крылья под плитами (до фазы «КРЫЛЬЯ»): каменный плащ на спине.
-  if (lp.wings <= 0) {
-    polyShade(
-      p,
-      [
-        [shX - 4, shY - 6],
-        [shX - 18, shY - 12],
-        [hipX + 2, hipY - 14],
-        [hipX + 8, hipY - 6],
-        [shX - 6, shY + 2],
-      ],
-      LSTONE,
-      0.2,
-    );
-    for (let i = 0; i < 4; i++) stroke(p, shX - 8 - i * 7, shY - 8 + i, shX - 12 - i * 7, shY - 1 + i * 1.5, LSTONE[0], 1);
+  // Сложенные крылья под плитами: каменный плащ с жаркими щелями.
+  if (folded) {
+    mplate(p, [
+      [shX - 2, shY - 10],
+      [shX - 20, shY - 16],
+      [hipX + 4, hipY - 17],
+      [hipX + 10, hipY - 8],
+      [shX - 4, shY + 1],
+    ], M_STONE, [-0.3, -0.8], 0.14);
+    for (let i = 0; i < 4; i++) seam(p, shX - 7 - i * 7, shY - 12 + i * 0.5, shX - 11 - i * 7, shY - 3 + i, lp.glow * 0.8);
   }
-  // Трещины по броне тела.
-  cracksOn(p, [[hipX, hipY + 2], [shX, shY + 14], [hipX + 14, hipY - 4]], lp.glow, 3);
+  cracksOn(p, [[hipX - 2, hipY + 2], [shX + 2, shY + 18], [hipX + 12, hipY - 4], [shX - 6, shY + 4]], lp.glow, 3);
   // Сердце в груди светит сквозь рёбра.
-  const hcx = shX + 5;
-  const hcy = shY + 14;
-  for (let a = -1.2; a <= 1.2; a += 0.6) stroke(p, hcx - 4, hcy + a * 4, hcx + 5, hcy + a * 4.5, LSTONE[0], 1);
-  p.ell(hcx, hcy, 2.4, 2.8, alpha(lp.glow > 0.6 ? EMBER_HI : EMBER, 0.55 + lp.glow * 0.45));
+  const hcx = shX + 7;
+  const hcy = shY + 15;
+  p.ell(hcx, hcy, 2.8, 3.2, alpha(lp.glow > 0.6 ? EMBER_HI : EMBER, 0.55 + lp.glow * 0.45));
+  for (let a = -1; a <= 1; a += 1) mlimb(p, hcx - 5, hcy + a * 4 - 1, hcx + 5, hcy + a * 4.5, 1.2, 1.1, M_STONE, 0.1);
   // --- Ближние ноги.
-  const nearHind: [number, number][] = [
+  lionLeg(p, [
     [hipX - 1, hipY + 6],
-    [hipX + 2 + swing(0) * 4 - tuck * 2, G - 19 - tuck * 8],
-    [hipX - 5 + swing(0) * 5 - tuck * 6, G - 10 - lift(0) - tuck * 10],
-    [hipX - 1 + swing(0) * 6 - tuck * 4, G - 2 - lift(0) - tuck * 12],
-  ];
-  lionLeg(p, nearHind, [8, 4.6, 3.4, 3], LSTONE, LFLESH, true);
-  // Передняя ближняя: стоит, занесена (удар когтями) или бьёт вперёд.
+    [hipX + 3 + swing(0) * 4 - tuck * 2, G - 21 - tuck * 8],
+    [hipX - 4 + swing(0) * 5 - tuck * 6, G - 11 - lift(0) - tuck * 10],
+    [hipX + swing(0) * 6 - tuck * 4, G - 2 - lift(0) - tuck * 12],
+  ], [9, 5.6, 4, 3.6], false, true, false);
   const paw = lp.paw;
   let fore: [number, number][];
   if (paw > 0) {
     fore = [
-      [shX + 2, shY + 11],
-      [shX + 10, shY + 2 - paw * 8],
-      [shX + 16, shY - 6 - paw * 10],
-      [shX + 20, shY - 10 - paw * 10],
+      [shX + 3, shY + 12],
+      [shX + 11, shY + 2 - paw * 8],
+      [shX + 17, shY - 6 - paw * 10],
+      [shX + 21, shY - 10 - paw * 10],
     ];
   } else if (paw < 0) {
     const k = -paw;
     fore = [
-      [shX + 2, shY + 11],
-      [shX + 12 + k * 4, shY + 16],
-      [shX + 22 + k * 4, G - 10],
-      [shX + 26 + k * 3, G - 3],
+      [shX + 3, shY + 12],
+      [shX + 13 + k * 4, shY + 17],
+      [shX + 23 + k * 4, G - 11],
+      [shX + 27 + k * 3, G - 3],
     ];
   } else
     fore = [
-      [shX + 2, shY + 11],
-      [shX + 1 + swing(Math.PI) * 4 + tuck * 3, G - 20 - tuck * 8 + rear * 2],
-      [shX + 4 + swing(Math.PI) * 6 + tuck * 6, G - 8 - lift(Math.PI) - tuck * 10 - rear * 12],
-      [shX + 6 + swing(Math.PI) * 6 + tuck * 6, G - 2 - lift(Math.PI) - tuck * 12 - rear * 16],
+      [shX + 3, shY + 12],
+      [shX + 2 + swing(Math.PI) * 4 + tuck * 3, G - 22 - tuck * 8 + rear * 2],
+      [shX + 5 + swing(Math.PI) * 6 + tuck * 6, G - 9 - lift(Math.PI) - tuck * 10 - rear * 12],
+      [shX + 7 + swing(Math.PI) * 6 + tuck * 6, G - 2 - lift(Math.PI) - tuck * 12 - rear * 16],
     ];
-  lionLeg(p, fore, [7.5, 4.6, 3.6, 3.2], LSTONE, LFLESH, true);
+  lionLeg(p, fore, [9, 6.2, 4.8, 4.2], false, true);
   if (paw > 0.6) {
-    // Когти выпущены, светятся.
     const [px, py] = fore[3];
-    for (let k = 0; k < 3; k++) stroke(p, px + 1 + k, py - 2 + k, px + 4 + k, py - 4 + k * 1.5, BONE[3], 1);
+    for (let k = 0; k < 3; k++) stroke(p, px + 1 + k, py - 2 + k, px + 5 + k, py - 5 + k * 1.5, BONE[3], 1);
   }
-  // --- Шея и голова.
-  const hx0 = shX + 20 + rear * 3;
-  const hy0 = shY - 8 - rear * 4 + lp.head * 6;
-  limb(p, shX + 4, shY + 4, hx0 - 5, hy0 + 3, 9, 7, LFLESH, 0.05);
-  // Каменный воротник на шее.
-  shadeEll(p, shX + 10, shY - 1, 7, 6, LSTONE, 0.15);
-  // Грива: за головой, веером назад-вверх.
-  lionMane(p, hx0 - 5, hy0 + 1, -Math.PI * 0.98, -Math.PI * 0.08, 10, 22, lp.glow, 11);
+  // --- Шея, грива, голова.
+  const hx0 = shX + 22 + rear * 3;
+  const hy0 = shY - 9 - rear * 4 + lp.head * 6;
+  mlimb(p, shX + 4, shY + 5, hx0 - 5, hy0 + 3, 10, 8, M_FLESH, 0.05);
+  maneSide(p, hx0 - 4, hy0 + 1, lp.glow, true);
   const eye = lionHeadSide(p, hx0, hy0, lp);
-  // Грива поверх шеи спереди — короче.
-  lionMane(p, hx0 - 6, hy0 + 4, Math.PI * 0.35, Math.PI * 0.75, 6, 12, lp.glow, 23);
+  maneSide(p, hx0 - 5, hy0 + 1, lp.glow, false);
   // --- Ближнее крыло.
-  if (lp.wings > 0) lionWing(p, shX - 6, shY - 3, -Math.PI * 0.72 - lp.flap * 0.55, 52 * (0.6 + lp.wings * 0.4), lp.wings, false);
+  if (lp.wings > 0) lionWing(p, shX - 8, shY - 4, -Math.PI * 0.7 - lp.flap * 0.55, 60 * (0.6 + lp.wings * 0.4), lp.wings, false);
   p.outline(INK);
-  return { p, ax: 56, ay: G, eye };
+  rimK = 0.2;
+  return { p, ax: 60, ay: G, eye };
 }
 
-/** Анфас: голова в центре, грива венцом, лапы в упор, крылья по сторонам. */
+/** Анфас: морда в венце гривы, грудь с сердцем, лапы в упор, крылья. */
 function drawLionFront(lp: LionPose): Built {
-  const W = 144;
-  const H = 110;
-  const G = 102;
-  const cx = 72;
+  const W = 156;
+  const H = 120;
+  const G = 112;
+  const cx = 78;
   const p = new Px(W, H);
+  rimK = 0.14 + lp.glow * 0.2;
   const cr = lp.crouch;
-  const shY = G - 44 + cr * 8 - lp.bob;
-  // --- Крылья по бокам (симметрично): дальние слои сзади.
+  const shY = G - 46 + cr * 8 - lp.bob;
+  // --- Крылья по бокам: одно рисуем и отражаем.
   if (lp.wings > 0) {
-    const a = -Math.PI * 0.82 - lp.flap * 0.4 + lp.gust * 0.9;
-    const L = 56 * (0.6 + lp.wings * 0.4);
+    const a = -Math.PI * 0.84 - lp.flap * 0.4 + lp.gust * 0.9;
+    const L = 64 * (0.6 + lp.wings * 0.4);
     const q = new Px(W, H);
-    lionWing(q, cx - 12, shY - 2, a, L, lp.wings, false);
+    lionWing(q, cx - 14, shY - 2, a, L, lp.wings, false);
     const qf = q.flipX();
-    for (let i = 0; i < q.data.length; i += 4) {
-      if (q.data[i + 3]) {
-        p.data[i] = q.data[i];
-        p.data[i + 1] = q.data[i + 1];
-        p.data[i + 2] = q.data[i + 2];
-        p.data[i + 3] = 255;
-      }
-      if (qf.data[i + 3]) {
-        p.data[i] = qf.data[i];
-        p.data[i + 1] = qf.data[i + 1];
-        p.data[i + 2] = qf.data[i + 2];
-        p.data[i + 3] = 255;
-      }
-    }
+    for (let i = 0; i < q.data.length; i += 4)
+      for (const src of [q, qf])
+        if (src.data[i + 3]) {
+          p.data[i] = src.data[i];
+          p.data[i + 1] = src.data[i + 1];
+          p.data[i + 2] = src.data[i + 2];
+          p.data[i + 3] = 255;
+        }
   }
-  // --- Задние лапы видны за передними (присел).
+  // --- Задние лапы за передними.
   for (const s of [-1, 1]) {
-    shadeEll(p, cx + s * 17, G - 12, 9, 10, LSTONE_FAR);
-    shadeEll(p, cx + s * 19, G - 3, 5, 2.6, LSTONE_FAR);
+    mell(p, cx + s * 19, G - 13, 10, 11, M_STONE_FAR, 0.05);
+    mell(p, cx + s * 22, G - 3, 5.5, 2.8, M_STONE_FAR, 0.1);
   }
-  // --- Хвост за спиной, змеиная голова над плечом.
+  // --- Хвост за спиной: змея выглядывает над плечом.
   lionTail(p, [
-    [cx + 12, shY + 20],
-    [cx + 24, shY + 10],
-    [cx + 30, shY - 4 + lp.tail * 3],
-    [cx + 26 + lp.tail * 3, shY - 16],
-  ], lp.glow);
+    [cx + 14, shY + 22],
+    [cx + 27, shY + 12],
+    [cx + 33, shY - 2 + lp.tail * 3],
+    [cx + 30 + lp.tail * 3, shY - 16],
+    [cx + 24 + lp.tail * 3, shY - 22],
+  ], lp.glow, true);
+  // --- Грива сзади: большой тёмный венец.
+  const hy0 = shY - 13 + lp.head * 5;
+  for (let i = 0; i < 22; i++) {
+    const a = -Math.PI / 2 + (i / 22) * TAU + 0.07;
+    const down = Math.max(0, Math.sin(a));
+    lock(p, cx + Math.cos(a) * 8, hy0 + 2 + Math.sin(a) * 7, a, 15 + hash(i, 1, 33) * 6 + down * 6, 10, M_MANE_FAR, lp.glow, 0.45, i % 3 === 0);
+  }
   // --- Грудь и плечи.
-  shadeEll(p, cx, shY + 16, 20, 20, LSTONE, 0.1);
-  for (const s of [-1, 1]) shadeEll(p, cx + s * 16, shY + 8, 10, 11, LSTONE, s < 0 ? 0.15 : -0.05);
-  // Рёбра на груди: каменные дуги, между ними — плоть.
+  mell(p, cx, shY + 18, 21, 21, M_STONE, 0.08);
+  for (const s of [-1, 1]) mell(p, cx + s * 17, shY + 9, 11, 12, M_STONE, s < 0 ? 0.14 : -0.02);
+  // Грудная клетка: плоть в середине, каменные рёбра дугами; вскрывается.
+  const open = lp.chest;
+  mell(p, cx, shY + 21, 9 + open * 6, 12 + open * 4, M_FLESH, 0);
   for (let i = 0; i < 4; i++) {
-    const y = shY + 10 + i * 5;
-    const open = lp.chest * (1 - i * 0.12);
+    const y = shY + 12 + i * 5.2;
+    const ok = open * (1 - i * 0.12);
     for (const s of [-1, 1]) {
-      const x0 = cx + s * (2 + open * 7);
-      stroke(p, x0, y, x0 + s * 12, y + 3, LSTONE[2], 2);
-      stroke(p, x0, y + 1, x0 + s * 12, y + 4, LSTONE[0], 1);
+      const x0 = cx + s * (1.5 + ok * 8);
+      const pts = spline([
+        [x0, y],
+        [x0 + s * 7, y - 1.5],
+        [x0 + s * 13, y + 3],
+      ], 4);
+      for (let j = 0; j < pts.length - 1; j++) mlimb(p, pts[j][0], pts[j][1], pts[j + 1][0], pts[j + 1][1], 1.9, 1.7, M_STONE, 0.12);
     }
   }
-  // Сердце в груди: светит; вскрытая грудь показывает его целиком.
-  const hr = 4 + lp.chest * 4;
-  if (lp.chest > 0) {
-    p.ell(cx, shY + 20, 3 + lp.chest * 8, 6 + lp.chest * 8, LFLESH[0]);
-    for (let a = 0; a < TAU; a += 0.5) stroke(p, cx + Math.cos(a) * (3 + lp.chest * 8), shY + 20 + Math.sin(a) * (6 + lp.chest * 8), cx + Math.cos(a) * (1 + lp.chest * 5), shY + 20 + Math.sin(a) * (3 + lp.chest * 5), LFLESH[2], 1);
-  }
-  p.ell(cx, shY + 20, hr, hr * 1.15, (x, y) => {
-    const d = Math.hypot(x + 0.5 - cx, y + 0.5 - shY - 20) / hr;
+  // Сердце в груди.
+  const hr = 4 + open * 4;
+  p.ell(cx, shY + 21, hr, hr * 1.15, (x, y) => {
+    const d = Math.hypot(x + 0.5 - cx, y + 0.5 - shY - 21) / hr;
     return d < 0.45 ? EMBER_HI : d < 0.8 ? EMBER : VEIN_HOT;
   });
-  cracksOn(p, [[cx - 12, shY + 12], [cx + 12, shY + 14], [cx - 6, shY + 30], [cx + 7, shY + 28]], lp.glow, 5);
+  cracksOn(p, [[cx - 13, shY + 12], [cx + 13, shY + 14], [cx - 7, shY + 31], [cx + 8, shY + 29]], lp.glow, 5);
   // --- Передние лапы в упор.
   for (const s of [-1, 1]) {
     const raise = s > 0 ? Math.max(0, lp.paw) : 0;
-    lionLeg(
-      p,
-      [
-        [cx + s * 15, shY + 14],
-        [cx + s * 16, G - 18 - raise * 18],
-        [cx + s * 15, G - 7 - raise * 22],
-        [cx + s * 14, G - 2 - raise * 24],
-      ],
-      [7.5, 5, 4, 3.4],
-      LSTONE,
-      LFLESH,
-      false,
-    );
+    const pts: [number, number][] = [
+      [cx + s * 16, shY + 14],
+      [cx + s * 17, G - 19 - raise * 18],
+      [cx + s * 16, G - 8 - raise * 22],
+      [cx + s * 15, G - 2 - raise * 24],
+    ];
+    for (let i = 0; i < 3; i++) mlimb(p, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], [8.5, 6, 5][i], [6, 5, 4.4][i], i === 0 ? M_FLESH : M_STONE, 0.05);
+    mell(p, pts[0][0] - s * 1, pts[0][1] - 1, 8, 9, M_STONE, 0.12);
+    mell(p, pts[3][0], pts[3][1] - 1.5, 6, 3.2, M_STONE, 0.12);
     for (let k = -1; k <= 1; k++) {
-      p.set(cx + s * 14 + k * 2, G - 1 - Math.round(raise * 24), BONE[3]);
-      p.set(cx + s * 14 + k * 2, G - Math.round(raise * 24), BONE[2]);
+      p.set(Math.round(pts[3][0] + k * 2.2), Math.round(pts[3][1] + 0.5), BONE[3]);
+      p.set(Math.round(pts[3][0] + k * 2.2), Math.round(pts[3][1] + 1.5), BONE[2]);
     }
   }
-  // --- Грива венцом.
-  const hy0 = shY - 12 + lp.head * 5;
-  lionMane(p, cx, hy0 + 2, -Math.PI * 1.08, Math.PI * 0.08, 12, 27, lp.glow, 31);
+  // --- Грива спереди: венец вокруг морды и борода на грудь.
+  for (let i = 0; i < 16; i++) {
+    const a = -Math.PI / 2 + ((i + 0.5) / 16) * TAU;
+    lock(p, cx + Math.cos(a) * 9, hy0 + 1 + Math.sin(a) * 8.5, a, 8 + hash(i, 2, 34) * 4, 7.5, M_MANE, lp.glow, 0.35, i % 4 === 2);
+  }
+  for (let i = 0; i < 5; i++) lock(p, cx - 6 + i * 3, hy0 + 9, Math.PI / 2 + (i - 2) * 0.18, 9 + (i % 2) * 3, 6, M_MANE, lp.glow, 0.1, false);
   // --- Морда анфас.
-  shadeEll(p, cx, hy0, 10, 9.5, LSTONE, 0.1);
-  // Козырёк бровей.
-  poly(p, [
-    [cx - 10, hy0 - 4],
-    [cx, hy0 - 1],
-    [cx + 10, hy0 - 4],
-    [cx + 9, hy0 - 1],
-    [cx, hy0 + 2],
-    [cx - 9, hy0 - 1],
-  ], (x) => tone(LSTONE, x < cx ? 0.95 : 0.55));
-  // Морда и нос.
-  shadeEll(p, cx, hy0 + 6, 6.5, 5, LSTONE, 0.15);
-  p.ell(cx, hy0 + 3.5, 2.2, 1.4, LSTONE[0]);
+  mell(p, cx, hy0, 10.5, 10, M_STONE, 0.1);
+  // Уши.
+  for (const s of [-1, 1]) {
+    mell(p, cx + s * 8.5, hy0 - 8.5, 2.8, 3, M_STONE, 0.1);
+    mell(p, cx + s * 8.5, hy0 - 8, 1.4, 1.6, M_FLESH, -0.1);
+  }
+  // Надбровья.
+  mplate(p, [
+    [cx - 10.5, hy0 - 5],
+    [cx, hy0 - 2],
+    [cx + 10.5, hy0 - 5],
+    [cx + 9.5, hy0 - 1.5],
+    [cx, hy0 + 1.5],
+    [cx - 9.5, hy0 - 1.5],
+  ], M_STONE, [0, -0.8], 0.15);
+  // Морда, подушки усов, нос.
+  mell(p, cx, hy0 + 6.5, 7, 5.5, M_STONE, 0.18);
+  for (const s of [-1, 1]) mell(p, cx + s * 3.2, hy0 + 7, 3.2, 2.6, M_STONE, 0.24);
+  mell(p, cx, hy0 + 3.8, 2.6, 1.7, M_STONE_FAR, 0);
   p.set(cx - 1, hy0 + 4, INK);
   p.set(cx + 1, hy0 + 4, INK);
   // Пасть: на рыке — широко, жар и клыки.
   if (lp.roar || lp.jaw > 0.2) {
     const j = Math.max(lp.jaw, lp.roar ? 1 : 0);
-    p.ell(cx, hy0 + 10 + j * 2, 5.2, 2 + j * 3.2, tn('#3a0a06', '#8a1a0a', '#ff6a2a', '#ffd080')[1]);
-    p.ell(cx, hy0 + 10.5 + j * 2, 3.2, 1 + j * 2, EMBER);
+    mell(p, cx, hy0 + 11 + j * 2, 5.4, 2 + j * 3.4, MOUTH, 0.05);
     for (const s of [-1, 1]) {
-      p.set(cx + s * 3, hy0 + 8, BONE[3]);
-      p.set(cx + s * 3, hy0 + 9, BONE[2]);
-      p.set(cx + s * 3, hy0 + 12 + Math.round(j * 5), BONE[3]);
+      p.set(cx + s * 3, hy0 + 9, BONE[3]);
+      p.set(cx + s * 3, hy0 + 10, BONE[2]);
+      p.set(cx + s * 3, hy0 + 13 + Math.round(j * 5), BONE[3]);
+      p.set(cx + s * 3, hy0 + 12 + Math.round(j * 5), BONE[2]);
     }
   } else {
     for (let x = cx - 3; x <= cx + 3; x++) p.set(x, hy0 + 10, INK);
     p.set(cx - 3, hy0 + 11, BONE[3]);
     p.set(cx + 3, hy0 + 11, BONE[3]);
   }
-  // Глаза — золотые угли.
+  // Глаза — золотые угли в тёмных впадинах.
   for (const s of [-1, 1]) {
+    p.set(cx + s * 5 - 1, hy0 - 1, INK);
+    p.set(cx + s * 5 + 1, hy0 - 1, INK);
     p.set(cx + s * 5, hy0 - 1, GOLD);
     p.set(cx + s * 5 + (s < 0 ? 1 : -1), hy0 - 1, GOLD_HI);
-    p.set(cx + s * 5, hy0, alpha(EMBER, 0.8));
+    p.set(cx + s * 5, hy0, alpha(EMBER, 0.85));
   }
-  cracksOn(p, [[cx - 6, hy0 + 3], [cx + 7, hy0 - 2]], lp.glow, 9);
+  cracksOn(p, [[cx - 6, hy0 + 3], [cx + 7, hy0 - 3]], lp.glow, 9);
   p.outline(INK);
+  rimK = 0.2;
   return { p, ax: cx, ay: G, eye: [cx + 5, hy0 - 1] };
 }
 
@@ -1911,105 +2283,164 @@ function drawLionFront(lp: LionPose): Built {
 
 const COCOON = tn('#1a1412', '#3a302a', '#5e5046', '#8e7c6a');
 
+/** Плёнка кокона: вино, мокрый верх; каменная корка; свет изнутри. */
+const MEMB = rampOf('#12030a', '#2a0812', '#46101c', '#66182a', '#8a2a38', '#b04850', '#d87a70');
+const CRUST = rampOf('#141011', '#241d1c', '#3a302c', '#54463e', '#726052', '#948070');
+const INGLOW = hx('#ff6038');
+const INGLOW_HI = hx('#ffc080');
+
+/**
+ * Кокон Хозяина: живая куколка на корнях. Плёнка тонкая — изнутри
+ * просвечивает свернувшийся зверь и бьётся свет; низ и бока в каменной
+ * корке, её колет каждое павшее эхо; рёбра выходят из пола и держат
+ * кокон, как когти. `burst` — лопнул (лепестки плёнки наружу).
+ */
 function drawCocoon(cracks: number, beat: number, burst: number): Built {
-  const W = 96;
-  const H = 104;
-  const G = 94;
-  const cx = 48;
+  const W = 104;
+  const H = 108;
+  const G = 98;
+  const cx = 52;
   const p = new Px(W, H);
-  const sw = beat;
-  // Корни в пол.
-  for (let i = 0; i < 9; i++) {
-    const a = Math.PI * (0.05 + (i / 8) * 0.9);
-    const x0 = cx + Math.cos(a) * 14;
-    const x1 = cx + Math.cos(a) * (30 + (i % 3) * 5);
-    const y1 = G - 1 + (i % 2);
-    limb(p, x0, G - 12, (x0 + x1) / 2, G - 2 - (i % 2) * 2, 3, 2, LFLESH);
-    limb(p, (x0 + x1) / 2, G - 2 - (i % 2) * 2, x1, y1, 2, 0.8, LFLESH);
+  const cy = G - 38 - beat * 1.2;
+  const rx = 23 + beat * 1.4;
+  const ry = 35 + beat * 0.8;
+  // Корни в пол — толстые жгуты веером, под коконом.
+  for (let i = 0; i < 11; i++) {
+    const a = Math.PI * (0.02 + (i / 10) * 0.96);
+    const x0 = cx + Math.cos(a) * 12;
+    const x1 = cx + Math.cos(a) * (32 + (i % 3) * 7);
+    const y1 = G - 1 + (i % 2) * 2;
+    const mid: [number, number] = [(x0 + x1) / 2, G - 6 - (i % 2) * 2];
+    limb(p, x0, G - 14, mid[0], mid[1], 4.2, 3, LFLESH_FAR);
+    limb(p, mid[0], mid[1], x1, y1, 3, 1, LFLESH_FAR);
   }
-  if (burst > 0) {
-    // Лопнувший: лепестки брони раскрылись наружу, внутри — пусто и жар.
-    const open = Math.min(1, burst);
-    const n = 6;
-    for (let i = 0; i < n; i++) {
-      const a = -Math.PI / 2 + ((i + 0.5) / n - 0.5) * (1.2 + open * 2.2);
-      const bx = cx + Math.cos(a) * 6;
-      const by = G - 18 + Math.sin(a) * 6;
-      const tx = cx + Math.cos(a) * (22 + open * 12);
-      const ty = G - 18 + Math.sin(a) * (30 - open * 6);
-      poly(p, [
-        [bx - 6, by + 8],
-        [tx - 3, ty],
-        [tx + 3, ty],
-        [bx + 6, by + 8],
-      ], (x) => tone(COCOON, x < cx ? 0.8 : 0.4));
+  // Рёбра-когти за коконом (дальние).
+  const rib = (side: number, i: number, front: boolean) => {
+    const baseX = cx + side * (14 + i * 7);
+    const pts = spline([
+      [baseX, G - 1],
+      [baseX + side * (8 + i * 2), G - 22 - i * 4],
+      [cx + side * (rx + 1 - i * 3), cy - 10 - i * 8],
+      [cx + side * (rx - 10 - i * 2), cy - ry * 0.55 - i * 6],
+    ], 6);
+    for (let j = 0; j < pts.length - 1; j++) {
+      const k = j / (pts.length - 1);
+      limb(p, pts[j][0], pts[j][1], pts[j + 1][0], pts[j + 1][1], 3.1 - k * 1.8, 2.9 - k * 1.8, front ? BONE : tn('#2e261e', '#5a4e40', '#857660', '#a89880'));
     }
-    p.ell(cx, G - 14, 12, 7, LFLESH[0]);
-    p.ell(cx, G - 15, 8, 4, alpha(EMBER, 0.5 * (1 - open * 0.6)));
+  };
+  if (burst <= 0) for (const sd of [-1, 1]) rib(sd, 1, false);
+  if (burst > 0) {
+    // Лопнул: плёнка разорвана лепестками наружу, корка раскидана,
+    // внутри пустая горячая полость.
+    const open = Math.min(1, burst);
+    p.ell(cx, G - 16, 20, 9, MEMB[0]);
+    p.ell(cx, G - 17, 14, 5.5, alpha(INGLOW, 0.55 * (1 - open * 0.5)));
+    p.ell(cx, G - 17.5, 7, 2.5, alpha(INGLOW_HI, 0.6 * (1 - open * 0.6)));
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + ((i + 0.5) / n - 0.5) * (1.4 + open * 2.4);
+      const bx = cx + Math.cos(a) * 9;
+      const by = G - 16 + Math.sin(a) * 4;
+      const len = 24 + (i % 2) * 6 - open * 4;
+      const tx = cx + Math.cos(a) * (14 + len * 0.9);
+      const ty = G - 16 + Math.sin(a) * len;
+      const nx = -Math.sin(a);
+      const ny = Math.cos(a);
+      poly(p, [
+        [bx - nx * 7, by - ny * 3 + 4],
+        [tx - nx * 2.5, ty],
+        [tx + nx * 1.5, ty + 1],
+        [bx + nx * 7, by + ny * 3 + 4],
+      ], (x, y) => ramp(MEMB, 2.2 + ((x - cx) * LX + (y - G) * LY) * 0.05 + (x + y) * 0, x, y));
+      stroke(p, bx, by + 2, (bx + tx) / 2, (by + ty) / 2, VEIN_D, 1);
+    }
+    // Осколки корки у подножия.
+    for (let i = 0; i < 9; i++) {
+      const x = cx + (hash(i, 3) - 0.5) * 70;
+      const y = G - 3 - hash(i, 4) * 8;
+      polyShade(p, [
+        [x - 3, y + 2],
+        [x - 1, y - 2],
+        [x + 3, y - 1],
+        [x + 2, y + 2],
+      ], LSTONE);
+    }
     p.outline(INK);
     return { p, ax: cx, ay: G, eye: null };
   }
-  // Бутон: пластины внахлёст, сходятся кверху.
-  const top = G - 76 - sw * 2;
-  const bulge = 26 + sw * 1.5;
-  const body = (x: number, y: number) => {
-    const k = (y - top) / (G - 6 - top);
-    if (k < 0 || k > 1) return -1;
-    const half = bulge * Math.sin(Math.PI * Math.min(1, k * 1.08)) ** 0.8 * (0.35 + 0.65 * k ** 0.5);
-    return Math.abs(x + 0.5 - cx) <= half ? k : -1;
+  // Тело куколки: эллипсоид, к верху уже.
+  const inside = (x: number, y: number) => {
+    const dy = (y + 0.5 - cy) / ry;
+    const taper = 1 - Math.max(0, -dy) * 0.28;
+    const dx = (x + 0.5 - cx) / (rx * taper);
+    return dx * dx + dy * dy <= 1 ? [dx, dy] : null;
   };
-  for (let y = Math.floor(top); y < G - 5; y++)
-    for (let x = cx - 30; x <= cx + 30; x++) {
-      const k = body(x, y);
-      if (k < 0) continue;
-      const nx = (x + 0.5 - cx) / (bulge + 1);
-      // Пластина: светлее вверху каждой, шов — тёмный.
-      const band = ((y - top) / 9 + (x < cx ? 0 : 0.5)) % 1;
-      const seam = band < 0.12;
-      const l = 0.62 - nx * 0.55 - k * 0.15 + (band > 0.6 ? -0.12 : 0.08);
-      p.set(x, y, seam ? COCOON[0] : tone(COCOON, l));
-    }
-  // Рёбра обнимают бутон.
-  for (const s of [-1, 1]) {
-    for (let i = 0; i < 3; i++) {
-      const pts = spline([
-        [cx + s * 4, G - 8 - i * 3],
-        [cx + s * (bulge + 3), G - 30 - i * 12],
-        [cx + s * (bulge - 6), G - 52 - i * 9],
-        [cx + s * 6, top + 6 + i * 6],
-      ], 6);
-      for (let j = 0; j < pts.length - 1; j++) limb(p, pts[j][0], pts[j][1], pts[j + 1][0], pts[j + 1][1], 1.9, 1.7, BONE);
-    }
-  }
-  // Вены по пластинам.
-  for (let i = 0; i < 4; i++) {
-    const x0 = cx + (i - 1.5) * 9;
-    const pts = spline([
-      [x0, G - 6],
-      [x0 + (i - 1.5) * 4, G - 34],
-      [x0 * 0.3 + cx * 0.7, top + 12],
-    ], 6);
-    for (let j = 0; j < pts.length - 1; j++) stroke(p, pts[j][0], pts[j][1], pts[j + 1][0], pts[j + 1][1], VEIN, 1.4);
-  }
-  // Трещины: по одной на павшее эхо; свет сердца изнутри.
-  const glow = 0.3 + sw * 0.5;
-  for (let n = 0; n < cracks; n++) {
-    let x = cx + (hash(n, 5) - 0.5) * 20;
-    let y = G - 30 - hash(n, 6) * 30;
-    let a = -Math.PI / 2 + (hash(n, 7) - 0.5) * 2;
-    for (let s = 0; s < 18 + n * 3; s++) {
-      if (body(Math.round(x), Math.round(y)) >= 0) {
-        p.set(Math.round(x), Math.round(y), glow > 0.5 ? EMBER_HI : EMBER);
-        glowPx(p, x + 1, y, EMBER, 0.35);
+  const glow = 0.35 + beat * 0.65;
+  // Кто внутри: свернувшийся зверь (тёмный силуэт под плёнкой).
+  const beast = (x: number, y: number) => {
+    const u = (x - cx) / rx;
+    const v = (y - cy) / ry;
+    const body = Math.hypot((u + 0.1) / 0.62, (v - 0.12) / 0.5) < 1 && Math.hypot((u + 0.15) / 0.3, (v - 0.05) / 0.26) > 1;
+    const head = Math.hypot((u - 0.25) / 0.3, (v + 0.35) / 0.24) < 1;
+    const wing = Math.abs(u + 0.35 + v * 0.3) < 0.08 && v > -0.55 && v < 0.35;
+    return body || head || wing;
+  };
+  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
+    for (let x = Math.floor(cx - rx - 1); x <= Math.ceil(cx + rx + 1); x++) {
+      const q = inside(x, y);
+      if (!q) continue;
+      const [dx, dy] = q;
+      const nz = Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy));
+      const l = dx * LX + dy * LY + nz * LZ;
+      // Плёнка: складки вдоль, тонкие места светятся.
+      const fold = Math.sin(dx * 9 + Math.sin(dy * 5) * 1.3) * 0.5 + 0.5;
+      const thin = vn(x / 7, y / 9, 31) * 0.7 + fold * 0.3;
+      let c = ramp(MEMB, 0.7 + l * 3.4 + fold * 0.6, x, y);
+      // Свет изнутри: к середине и в тонких местах; зверь — тенью.
+      const core = Math.max(0, 1 - Math.hypot(dx * 0.9, dy * 0.8 - 0.05)) * glow;
+      const shade = beast(x, y) ? 0.25 : 1;
+      const k = Math.max(0, core * (thin - 0.22) * 2.3) * shade;
+      if (k > 0.02) c = mixc(c, k > 0.5 ? INGLOW_HI : INGLOW, Math.min(0.85, k));
+      // Сосуды плёнки.
+      const vv = vn(x / 11, y / 16, 32);
+      if (Math.abs(vv - 0.5) < 0.035) c = mixc(c, k > 0.2 ? INGLOW : VEIN_D, 0.7);
+      // Каменная корка: снизу и пятнами по бокам.
+      const crust = dy > 0.52 - vn(x / 9, y / 9, 33) * 0.4 || Math.abs(dx) > 0.9 - vn(x / 6, y / 12, 34) * 0.22;
+      if (crust) {
+        const seam = Math.abs(vn(x / 5.5, y / 4.5, 35) - 0.5) < 0.05;
+        c = seam ? CRUST[0] : ramp(CRUST, 1.2 + l * 3.4, x, y);
       }
-      a += (hash(n, s, 3) - 0.5) * 1.1;
+      p.set(x, y, c);
+    }
+  // Блик по мокрой плёнке.
+  for (let i = 0; i < 9; i++) {
+    const a = -2.35 + i * 0.07;
+    const x = Math.round(cx + Math.cos(a) * rx * 0.72);
+    const y = Math.round(cy + Math.sin(a) * ry * 0.7);
+    if (inside(x, y)) p.set(x, y, alpha(SPEC, 0.85 - Math.abs(i - 4) * 0.12));
+  }
+  // Трещины корки: по одной на павшее эхо, светятся сердцем.
+  for (let n = 0; n < cracks; n++) {
+    let x = cx + (hash(n, 5) - 0.5) * 30;
+    let y = cy + 8 + hash(n, 6) * 20;
+    let a = -Math.PI / 2 + (hash(n, 7) - 0.5) * 2.2;
+    for (let st = 0; st < 20 + n * 4; st++) {
+      const X = Math.round(x);
+      const Y = Math.round(y);
+      if (inside(X, Y)) {
+        p.set(X, Y, glow > 0.6 ? INGLOW_HI : EMBER);
+        glowPx(p, X + 1, Y, INGLOW, 0.4);
+        glowPx(p, X - 1, Y, INGLOW, 0.25);
+      }
+      a += (hash(n, st, 3) - 0.5) * 1.2;
       x += Math.cos(a);
       y += Math.sin(a);
     }
   }
-  // Сердце видно в шве посередине — тем ярче, чем больше трещин.
-  const cy = G - 36;
-  p.ell(cx, cy, 3 + cracks * 0.5, 5 + cracks * 0.6, alpha(cracks >= 3 ? EMBER_HI : EMBER, 0.25 + cracks * 0.12 + sw * 0.3));
+  // Рёбра-когти спереди.
+  for (const sd of [-1, 1]) rib(sd, 0, true);
+  // Пуповина: жгуты от кокона к полу спереди.
+  for (const sd of [-1, 1]) limb(p, cx + sd * 6, G - 8, cx + sd * 10, G - 1, 3, 2.2, LFLESH);
   p.outline(INK);
   return { p, ax: cx, ay: G, eye: null };
 }
@@ -3010,6 +3441,7 @@ registerZonePainter('f15b_echobody', (g, z, px, py, S, time) => {
 
 /** Четверть просыпается: клетки четверти мерцают цветом памяти. */
 const QUAD_COL: RGBA[] = [hx('#ff6a20'), hx('#30d0d8'), hx('#c8dcff'), hx('#70f080')];
+const cellSets = new WeakMap<number[], Set<number>>();
 registerZonePainter('f15b_qwarn', (g, z, px, py, S, time) => {
   const zz = z as ZoneX & Zone;
   const s = paintSim();
@@ -3017,15 +3449,31 @@ registerZonePainter('f15b_qwarn', (g, z, px, py, S, time) => {
   const W = s.world.w;
   const col = QUAD_COL[zz.q ?? 0];
   const left = zz.life - zz.t;
-  // Мерцание сильнее к моменту перемены.
-  const k = Math.max(0, Math.min(1, 1 - left / 1.4));
-  const a = 0.06 + k * 0.3 + (Math.sin(time * (8 + k * 14)) > 0 ? 0.08 : 0);
+  // Мерцание сильнее к моменту перемены; обводка — форма будущего пятна.
+  const k = Math.max(0, Math.min(1, 1 - left / 1.6));
   if (k <= 0) return true;
-  g.fillStyle = rgba(col, a);
+  let set = cellSets.get(zz.cells);
+  if (!set) {
+    set = new Set(zz.cells);
+    cellSets.set(zz.cells, set);
+  }
+  const on = Math.sin(time * (8 + k * 14)) > 0;
+  g.fillStyle = rgba(col, 0.05 + k * 0.14 + (on ? 0.05 : 0));
+  const edge = rgba(col, 0.35 + k * 0.55);
   for (const i of zz.cells) {
-    const x = px + ((i % W) - zz.x) * S;
-    const y = py + (Math.floor(i / W) - zz.y) * S;
-    g.fillRect(Math.round(x), Math.round(y), S, S);
+    const x = Math.round(px + ((i % W) - zz.x) * S);
+    const y = Math.round(py + (Math.floor(i / W) - zz.y) * S);
+    g.fillRect(x, y, S, S);
+  }
+  g.fillStyle = edge;
+  const w = Math.max(1, Math.round(S / 8));
+  for (const i of zz.cells) {
+    const x = Math.round(px + ((i % W) - zz.x) * S);
+    const y = Math.round(py + (Math.floor(i / W) - zz.y) * S);
+    if (!set.has(i - 1)) g.fillRect(x, y, w, S);
+    if (!set.has(i + 1)) g.fillRect(x + S - w, y, w, S);
+    if (!set.has(i - W)) g.fillRect(x, y, S, w);
+    if (!set.has(i + W)) g.fillRect(x, y + S - w, S, w);
   }
   return true;
 });
@@ -3081,27 +3529,61 @@ registerZonePainter('f15b_warp', (g, z, px, py, S, time) => {
   return true;
 });
 
-/** Пульс по венам арены: волна света бежит от сердца наружу на каждый удар. */
+/**
+ * Пульс по венам арены: на каждый удар сердца по веерным венам и двум
+ * стволам горловины бежит волна света — по тем же кривым, что на полу.
+ */
+const veinLen = new WeakMap<object, number[]>();
+function veinEnds(s: Sim): number[] {
+  const hit = veinLen.get(s.world);
+  if (hit) return hit;
+  const top = heartTop();
+  const out = VEINS.map((v) => {
+    let d = 4;
+    for (; d < 17; d += 0.1) {
+      const [x, y] = veinPoint(v.i, d);
+      if (y > 44.5) break;
+      const t = s.tiles[Math.floor(y + top) * s.world.w + Math.floor(x)];
+      if (t !== 2 && t !== 12 && t !== 11) break;
+    }
+    return d;
+  });
+  veinLen.set(s.world, out);
+  return out;
+}
+
 registerZonePainter('f15b_veins', (g, z, px, py, S) => {
   const s = paintSim();
   const v = f15bView(s);
-  if (!s || !v) return true;
-  const W = s.world.w;
+  const b = s?.boss;
+  if (!s || !v || !b || b.state !== 'fight') return true;
   const k = beatK(v, s.time);
-  const front = k * 16;
-  const b = s.boss;
-  if (!b || b.state !== 'fight') return true;
-  for (let n = 0; n < v.veins.length; n += 2) {
-    const i = v.veins[n];
-    const d = v.veins[n + 1] / 10;
-    const e = 1 - Math.abs(d - front) / 1.6;
-    if (e <= 0) continue;
-    const x = Math.round(px + ((i % W) + 0.5 - z.x) * S);
-    const y = Math.round(py + (Math.floor(i / W) + 0.5 - z.y) * S);
-    g.fillStyle = rgba(VEIN_CORE, 0.25 + e * 0.55);
-    g.fillRect(x - 2, y - 1, 4, 2);
-    g.fillStyle = rgba(VEIN_HOT, 0.2 + e * 0.35);
-    g.fillRect(x - 4, y - 2, 8, 4);
+  if (k >= 1) return true;
+  const front = 3.8 + k * 16;
+  const ends = veinEnds(s);
+  const top = heartTop();
+  const put = (x: number, y: number, e: number, w: number) => {
+    const sx = Math.round(px + (x - z.x) * S);
+    const sy = Math.round(py + (y + top - z.y) * S);
+    g.fillStyle = rgba(VEIN_HOT, 0.22 * e);
+    g.fillRect(sx - w, sy - w, w * 2, w * 2);
+    g.fillStyle = rgba(VEIN_CORE, 0.75 * e);
+    g.fillRect(sx - 1, sy - 1, 2, 2);
+  };
+  const fade = 1 - k * 0.55;
+  for (let i = 0; i < VEINS.length; i++)
+    for (let d = front - 1.6; d <= front; d += 0.14) {
+      if (d < 3.8 || d > ends[i]) continue;
+      const e = ((d - front + 1.6) / 1.6) * fade;
+      const [x, y] = veinPoint(i, d);
+      put(x, y, e, 3);
+    }
+  // Стволы горловины: волна идёт дальше вниз, к стыку.
+  for (let d = front - 1.6; d <= front; d += 0.14) {
+    const y = TRUNK.y0 + (d - 10.2);
+    if (y < TRUNK.y0 || y > TRUNK.y1) continue;
+    const e = ((d - front + 1.6) / 1.6) * fade;
+    for (const side of [-1, 1] as const) put(trunkX(y, side), y, e, 3);
   }
   return true;
 });

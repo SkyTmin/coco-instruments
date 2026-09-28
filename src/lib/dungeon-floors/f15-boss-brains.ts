@@ -149,7 +149,7 @@ export const HEART = {
   squeezeWarn: 1.7,
   squeezeMax: 4,
   open: 1.45,
-  shut: 0.55,
+  shut: 0.35,
   /** Сжато первые столько долей удара. */
   shutK: 0.3,
 };
@@ -1260,7 +1260,7 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           ang: m.dir,
           arc: LION.clawArc,
           warn: W - 0.2,
-          dmg: m.dmg * 1.2,
+          dmg: m.dmg * 1.05,
           knock: 9,
           art: 'f15b_claw',
           from: m.id,
@@ -1994,16 +1994,13 @@ function stepQuads(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
 /** Память гаснет: четверти выгорают обратно в плоть (фаза «СЕРДЦЕ»). */
 function drainQuads(sim: Sim, st: F15BState, api: SimApi): void {
   const W = sim.world.w;
+  // Всё, что меняли четверти: лава оставляет копоть, прочее — плоть как была.
+  for (const [i, was] of [...st.changed]) {
+    const lava = sim.world.mark[i] === MK.lava || sim.world.mark[i] === MK.crust;
+    api.setTile(sim, i % W, Math.floor(i / W), was.tile, lava ? MK.scorch : was.mark, null);
+    if (!lava) st.changed.delete(i);
+  }
   for (const qd of st.quads) {
-    for (const [i] of qd.to) {
-      const was = st.changed.get(i);
-      if (!was) continue;
-      // Лава оставляет копоть, прочее — плоть как была.
-      const mark = qd.kind === 'lava' ? MK.scorch : was.mark;
-      api.setTile(sim, i % W, Math.floor(i / W), was.tile, mark, null);
-      if (qd.kind !== 'lava') st.changed.delete(i);
-      else st.changed.set(i, was);
-    }
     qd.on = false;
     qd.at = 0;
   }
@@ -2047,11 +2044,45 @@ function buildRings(sim: Sim, b: BossFight, husk: Mob | undefined): number[][] {
     if (d >= HEART.squeezeMax) continue;
     const x = (i % W) + 0.5;
     const y = Math.floor(i / W) + 0.5;
-    if (y - ky > 7.5 && Math.abs(x - kx) < 3.6) continue;
+    // Тропа от сердца к воротам и само сердце не сжимаются.
+    if (y - ky > 3 && Math.abs(x - kx) < 3.6) continue;
     if (hypot(x - kx, y - ky) < 6.5) continue;
     if (husk && hypot(x - husk.x, y - husk.y) < 2.6) continue;
     if (sim.props.some((p) => p.alive && p.r > 0 && Math.floor(p.x) === i % W && Math.floor(p.y) === Math.floor(i / W))) continue;
     rings[d].push(i);
+  }
+  // Карманов не бывает: после каждого кольца любая открытая клетка арены
+  // достижима от сердца, иначе стену рядом с карманом не ставим.
+  const start = Math.floor(ky) * W + Math.floor(kx);
+  for (let s = 0; s < rings.length; s++) {
+    for (let pass = 0; pass < 40; pass++) {
+      const shut = new Set<number>();
+      for (let k = 0; k <= s; k++) for (const i of rings[k]) shut.add(i);
+      const seen = new Set<number>([start]);
+      const q2 = [start];
+      while (q2.length) {
+        const i = q2.pop()!;
+        for (const d of [1, -1, W, -W]) {
+          const j = i + d;
+          if (seen.has(j) || !b.cells.has(j) || shut.has(j) || !walkT(sim.tiles[j])) continue;
+          seen.add(j);
+          q2.push(j);
+        }
+      }
+      let fixed = false;
+      for (const i of b.cells) {
+        if (seen.has(i) || shut.has(i) || !walkT(sim.tiles[i])) continue;
+        for (const d of [1, -1, W, -W])
+          for (let k = 0; k <= s; k++) {
+            const at = rings[k].indexOf(i + d);
+            if (at >= 0) {
+              rings[k].splice(at, 1);
+              fixed = true;
+            }
+          }
+      }
+      if (!fixed) break;
+    }
   }
   return rings;
 }
@@ -2253,6 +2284,42 @@ function finale(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
   sim.events.push({ t: 'boss', what: 'finale' });
 }
 
+/**
+ * Перейти сразу в фазу `p` идущего боя — для тестов и стенда (кадры фаз без
+ * пяти минут боя). Эхо убираются, лев получает здоровье ровно на пороге.
+ */
+export function f15bForce(sim: Sim, api: SimApi, p: number): boolean {
+  const b = sim.boss;
+  const lion = lionOf(sim);
+  if (!b || b.state !== 'fight' || !lion || p <= b.phase || p > 4) return false;
+  const st = stateOf(sim, api);
+  sim.mobs = sim.mobs.filter((m) => !m.kind.startsWith('f15b_echo_'));
+  sim.strikes = [];
+  sim.zones = sim.zones.filter((z) => !z.art?.startsWith('f15b_') || z.art === 'f15b_qwarn' || z.art === 'f15b_veins');
+  st.echo = ECHO.order.length;
+  st.echoAt = 0;
+  st.wakeAt = 0;
+  lion.data.ghost = 0;
+  const from = b.phase;
+  if (from === 0) toPhase(sim, b, st, api, lion, 1);
+  if (p >= 2 && from < 2) {
+    lion.hp = lion.maxHp * LION.hp[0] - 1;
+    toPhase(sim, b, st, api, lion, 2);
+  }
+  if (p >= 3 && from < 3) {
+    lion.hp = lion.maxHp * LION.hp[1] - 1;
+    toPhase(sim, b, st, api, lion, 3);
+  }
+  if (p >= 4) {
+    lion.hp = lion.maxHp * LION.hp[2];
+    st.rings = buildRings(sim, b, lion);
+    toPhase(sim, b, st, api, lion, 4);
+    st.whipAt = sim.time + LION.rip + HEART.rise + 1.5;
+    st.clotAt = sim.time + LION.rip + HEART.rise + 3;
+  }
+  return true;
+}
+
 registerBoss('f15boss', {
   start(sim, b, lead, api) {
     const st = stateOf(sim, api);
@@ -2277,6 +2344,8 @@ registerBoss('f15boss', {
       if (sim.world.mark[i] === MK.vein || sim.world.mark[i] === MK.root)
         fresh.veins.push(i, Math.round(hypot((i % W) + 0.5 - kx, Math.floor(i / W) + 0.5 - ky) * 10));
     light(sim, fresh, 'f15b_core', kx, ky, 5.5, 'red');
+    // Пульс по венам арены — рисунок (зона без вреда, живёт весь бой).
+    api.zone(sim, { x: kx, y: ky, r: 0.1, life: 1e6, art: 'f15b_veins' });
   },
   step(sim, b, dt, api) {
     const st = stateOf(sim, api);
