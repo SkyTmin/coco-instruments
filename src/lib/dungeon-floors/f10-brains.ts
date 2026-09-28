@@ -2477,10 +2477,8 @@ function stepBridge(sim: Sim, st: F10State, api: SimApi): void {
         }
         api.setTile(sim, x, y, T_DEEP, F10_MARK.fallen);
         for (const m of sim.mobs)
-          if (m.mode !== 'dying' && !MOB_FLY.has(m.kind) && Math.floor(m.x) === x && Math.floor(m.y) === y) {
-            m.hp = 0;
-            api.setMode(m, 'escape');
-          }
+          if (m.mode !== 'dying' && !MOB_FLY.has(m.kind) && Math.floor(m.x) === x && Math.floor(m.y) === y)
+            api.fall(sim, m);
       }
       if (!left) {
         st.bridgeState = 'fallen';

@@ -94,6 +94,10 @@ export interface WorldObj {
   hp?: number;
   /** Что роняет разбитый предмет этажа (по умолчанию — ходовой материал). */
   loot?: string;
+  /** Своё действие этажа: подпись кнопки (Движок 3). */
+  use?: { label: string };
+  /** Плоский предмет — рисуется под героем. */
+  flat?: boolean;
 }
 
 export interface Rail {
@@ -214,6 +218,8 @@ export function buildWorld(floorId = 1): World {
               solid: own.obj.solid ?? 0.34,
               hp: own.obj.hp,
               loot: own.obj.loot,
+              use: own.obj.use,
+              flat: own.obj.flat,
             });
           const l = own.light ?? own.obj?.light;
           if (l) lights.push({ x: x + 0.5, y: y + 0.5, r: l.r, tint: tintOf(l) });

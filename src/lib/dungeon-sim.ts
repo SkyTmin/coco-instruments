@@ -76,11 +76,12 @@ import {
   walkableTile,
 } from './dungeon-world';
 import { BOSS_SCRIPTS, BRAINS, FLOOR_SCRIPTS } from './dungeon-ai';
-import type { BrainCtx, SimApi, SpawnOpts, StrikeIn, Tele, ZoneIn } from './dungeon-ai';
+import type { BrainCtx, PullOpts, SimApi, SpawnOpts, StrikeIn, Tele, ZoneIn } from './dungeon-ai';
+import type { HazardSpec } from './dungeon-floors/types';
 // ИИ общей библиотеки и этажей регистрируются при загрузке.
 import './dungeon-brains';
 import './dungeon-floors/brains';
-import type { Rail, World, WorldObj } from './dungeon-world';
+import type { Light, Rail, World, WorldObj } from './dungeon-world';
 import { collideGrid, moveBody, steerVelocity } from './walk';
 import type { Grid } from './walk';
 
@@ -165,7 +166,15 @@ export type SimEvent =
   | { t: 'skill'; x: number; y: number }
   | { t: 'gold'; x: number; y: number; mob: MobId }
   | { t: 'fuse'; x: number; y: number }
-  | { t: 'charge' };
+  | { t: 'charge' }
+  /** Тряска кадра без звука (Движок 3): `k` 0…1 — сила. */
+  | { t: 'shake'; k: number }
+  /** Цветная вспышка кадра (Движок 3): молния, остановка времени. */
+  | { t: 'flash'; color: string; k: number }
+  /** Моб сорвался в пропасть (Движок 3). */
+  | { t: 'fall'; x: number; y: number; mob: MobId }
+  /** Героя дёрнуло (крюк, течение) — Движок 3. */
+  | { t: 'pull'; x: number; y: number; end: boolean };
 
 // ---------------------------------------------------------------------------
 // Состояние.
@@ -220,6 +229,8 @@ export interface HeroState {
   walk: number;
   /** Статусы: сколько секунд осталось и сила (урон в секунду, доля замедления). */
   status: Partial<Record<StatusKind, { t: number; p: number }>>;
+  /** Героя тянут (`api.pullHero`, Движок 3): крюк, аркан, течение. */
+  pull?: { tx: number; ty: number; speed: number; inv: boolean; t: number; max: number } | null;
 }
 
 /**
@@ -283,6 +294,8 @@ export interface Mob {
   danger: number;
   /** Отскакивает от стен (катится, таранит): удар о стену зовёт `onWall`. */
   bounce: boolean;
+  /** Сорвался в пропасть (`api.fall`): рисуется падающим, а не убитым. */
+  fell?: boolean;
 }
 
 export type PropKind =
@@ -412,6 +425,8 @@ export interface Shot {
   z: number;
   /** Чей: для бестиария и защиты. */
   kind: MobId;
+  /** Лёг — оставляет зону (Движок 3, `ShotSpec.onLand`). */
+  onLand?: ShotSpec['onLand'];
 }
 
 /** Удар по площади: метка горит `warn`, потом бьёт один раз. */
@@ -452,6 +467,18 @@ export interface Sim {
   warps: number;
   /** Бессмертие креатива: смертельный удар оставляет 1 здоровья. */
   god: boolean;
+  /** Время мира и героя (`api.timeScale`, Движок 3) и сколько ему осталось. */
+  worldScale: number;
+  heroScale: number;
+  scaleT: number;
+  /** Своё замедление (`api.slowmo`); 0 — обычное замедление уклона. */
+  slowK: number;
+  /** Камера-кинематограф (`api.camera`): куда и сколько. */
+  cam: { x: number; y: number; t: number; dur: number } | null;
+  /** Свет на ходу (`api.light`): ключ → свет в `world.lights`. */
+  lightKeys: Map<string, Light>;
+  /** Радиус поля путей (`FloorDef.flowR`). */
+  flowR: number;
   time: number;
   rng: () => number;
   now: () => number;
@@ -644,7 +671,14 @@ const PROP_R: Record<PropKind, number> = {
 export function createSim(o: SimOptions): Sim {
   // Свой вид клеток у каждой вылазки: `api.setTile` меняет его на ходу, а
   // мир страницы общий для всех вылазок этажа.
-  const w: World = { ...o.world, mark: o.world.mark.slice() };
+  const w: World = {
+    ...o.world,
+    mark: o.world.mark.slice(),
+    // Опасность клеток и свет меняются на ходу (Движок 3) — тоже свои.
+    haz: o.world.haz.slice(),
+    hazards: o.world.hazards.slice(),
+    lights: o.world.lights.slice(),
+  };
   const tiles = w.tiles.slice();
   const d = o.dungeon;
   // Постоянные перемены мира: открытые решётки, найденные тайники.
@@ -666,6 +700,13 @@ export function createSim(o: SimOptions): Sim {
     retiled: [],
     warps: 0,
     god: !!o.god,
+    worldScale: 1,
+    heroScale: 1,
+    scaleT: 0,
+    slowK: 0,
+    cam: null,
+    lightKeys: new Map(),
+    flowR: floorOf(w.floor).flowR ?? FLOW_R,
     time: 0,
     rng: lcg(o.seed ?? Date.now() & 0x7fffffff),
     now: o.now ?? (() => Date.now()),
@@ -964,7 +1005,8 @@ function rebuildFlow(sim: Sim): void {
   const hx = Math.floor(sim.hero.x);
   const hy = Math.floor(sim.hero.y);
   if (solidTile(sim, hx, hy)) return;
-  const q = new Int32Array(w.w * (FLOW_R * 2 + 2) * 2);
+  const R = sim.flowR;
+  const q = new Int32Array(w.w * (R * 2 + 2) * 2);
   let head = 0;
   let tail = 0;
   const start = hy * w.w + hx;
@@ -975,11 +1017,11 @@ function rebuildFlow(sim: Sim): void {
     const x = i % w.w;
     const y = (i - x) / w.w;
     const dNow = f[i];
-    if (dNow >= FLOW_R * 2) continue;
+    if (dNow >= R * 2) continue;
     for (let k = 0; k < 4; k++) {
       const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0);
       const ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0);
-      if (Math.abs(ny - hy) > FLOW_R) continue;
+      if (Math.abs(ny - hy) > R) continue;
       if (solidTile(sim, nx, ny)) continue;
       const j = ny * w.w + nx;
       if (f[j] >= 0) continue;
@@ -1750,12 +1792,7 @@ function hurtHero(
     h.mode = 'free';
     h.t = 0;
   }
-  if (h.hp <= 0 && !spared(sim)) {
-    h.hp = 0;
-    h.mode = 'dying';
-    h.t = 0;
-    if (sim.boss?.state === 'fight') resetBoss(sim);
-  }
+  heroDown(sim);
 }
 
 /** Бессмертие креатива: вместо смерти — одна единица здоровья. */
@@ -1763,6 +1800,38 @@ function spared(sim: Sim): boolean {
   if (!sim.god) return false;
   sim.hero.hp = 1;
   return true;
+}
+
+/** Здоровье кончилось: смерть (или бессмертие креатива) и сброс боя. */
+function heroDown(sim: Sim): void {
+  const h = sim.hero;
+  if (h.hp > 0 || spared(sim)) return;
+  h.hp = 0;
+  h.mode = 'dying';
+  h.t = 0;
+  h.pull = null;
+  if (sim.boss?.state === 'fight') resetBoss(sim);
+}
+
+/**
+ * Урон от окружения (Движок 3): доля здоровья, без брони и отброса.
+ * Неуязвимость (рывок, только что ранен) спасает — так же, как от удара.
+ * Мелкие доли (прилив, жар — каждый кадр) идут молча; заметный удар
+ * мигает героем и пишет цифру.
+ */
+function hurtEnv(sim: Sim, frac: number, status?: { kind: StatusKind; dur: number }): void {
+  const h = sim.hero;
+  if (h.mode === 'dying' || h.mode === 'dead') return;
+  if (status) heroStatus(sim, status.kind, status.dur);
+  if (frac <= 0 || h.inv > 0) return;
+  const dmg = sim.stats.maxHp * frac;
+  h.hp -= dmg;
+  if (frac >= 0.02) {
+    h.flash = 0.2;
+    sim.director.intensity += frac * 1.3;
+    sim.events.push({ t: 'hurt', x: h.x, y: h.y, dmg: Math.round(dmg) });
+  }
+  heroDown(sim);
 }
 
 function gainXp(sim: Sim, xp: number): void {
@@ -1874,7 +1943,7 @@ function startBoss(sim: Sim): void {
 function resetBoss(sim: Sim): void {
   const b = sim.boss;
   if (!b) return;
-  BOSS_SCRIPTS.get(b.def.script)?.reset?.(sim, b);
+  BOSS_SCRIPTS.get(b.def.script)?.reset?.(sim, b, API);
   sim.mobs = sim.mobs.filter((m) => !defOf(m.kind).boss);
   sim.strikes = [];
   sim.zones = [];
@@ -2070,13 +2139,31 @@ export function stepSim(sim: Sim, dtReal: number, input: SimInput): void {
     if (input.attack && sim.hero.mode === 'attack') sim.hero.queued = true;
     return;
   }
+  // Остановка времени и камера (Движок 3) считают настоящие секунды.
+  const real = dt;
   if (sim.slowmo > 0) {
     sim.slowmo = Math.max(0, sim.slowmo - dt);
-    dt *= SLOWMO.scale;
+    dt *= sim.slowK > 0 ? sim.slowK : SLOWMO.scale;
+    if (sim.slowmo <= 0) sim.slowK = 0;
   }
-  sim.time += dt;
-  stepHero(sim, dt, input);
-  stepWorld(sim, dt);
+  let wdt = dt;
+  let hdt = dt;
+  if (sim.scaleT > 0) {
+    sim.scaleT = Math.max(0, sim.scaleT - real);
+    wdt = dt * sim.worldScale;
+    hdt = dt * sim.heroScale;
+    if (sim.scaleT <= 0) {
+      sim.worldScale = 1;
+      sim.heroScale = 1;
+    }
+  }
+  if (sim.cam) {
+    sim.cam.t += real;
+    if (sim.cam.t >= sim.cam.dur) sim.cam = null;
+  }
+  sim.time += wdt;
+  stepHero(sim, hdt, input);
+  stepWorld(sim, wdt);
 }
 
 function stepHero(sim: Sim, dt: number, input0: SimInput): void {
@@ -2101,6 +2188,13 @@ function stepHero(sim: Sim, dt: number, input0: SimInput): void {
     return;
   }
   if (h.mode === 'dead') return;
+
+  // Героя тянут (Движок 3): крюк, аркан, течение. Ввод заперт, статусы
+  // тикают; конец — у точки, об стену или по времени.
+  if (h.pull) {
+    tickStatus(sim, dt);
+    if (stepPull(sim, dt)) return;
+  }
 
   // Статусы: яд и ожог жгут здоровье, холод и замедление — ноги, оглушение —
   // всё сразу.
@@ -2289,6 +2383,40 @@ function stepHero(sim: Sim, dt: number, input0: SimInput): void {
   moveHero(sim, dt);
 }
 
+/** Шаг тяги: true — тянем дальше (остальной ход героя пропускается). */
+function stepPull(sim: Sim, dt: number): boolean {
+  const h = sim.hero;
+  const p = h.pull;
+  if (!p || h.mode === 'dying') return false;
+  p.t += dt;
+  const dx = p.tx - h.x;
+  const dy = p.ty - h.y;
+  const d = Math.hypot(dx, dy);
+  const end = () => {
+    h.pull = null;
+    h.vx *= 0.35;
+    h.vy *= 0.35;
+    sim.events.push({ t: 'pull', x: h.x, y: h.y, end: true });
+    return false;
+  };
+  if (d < 0.2 || p.t >= p.max || dt <= 0) return dt <= 0 ? true : end();
+  const v = Math.min(p.speed, d / dt);
+  h.vx = (dx / d) * v;
+  h.vy = (dy / d) * v;
+  if (p.inv) h.inv = Math.max(h.inv, 0.12);
+  if (h.mode !== 'free' && h.mode !== 'dash') {
+    h.mode = 'free';
+    h.t = 0;
+  }
+  h.face = Math.atan2(dy, dx);
+  const bx = h.x;
+  const by = h.y;
+  moveHero(sim, dt);
+  // Упёрся в стену: прошёл меньше трети положенного — конец тяги.
+  if (Math.hypot(h.x - bx, h.y - by) < v * dt * 0.33) return end();
+  return true;
+}
+
 /** Самая сытная еда в рюкзаке — её и съедят. */
 function bestFood(s: Sack): MeatId | null {
   let best: MeatId | null = null;
@@ -2331,12 +2459,7 @@ function tickStatus(sim: Sim, dt: number): void {
     if (!v) continue;
     if (k === 'poison' || k === 'burn') {
       h.hp -= sim.stats.maxHp * v.p * dt;
-      if (h.hp <= 0 && !spared(sim)) {
-        h.hp = 0;
-        h.mode = 'dying';
-        h.t = 0;
-        if (sim.boss?.state === 'fight') resetBoss(sim);
-      }
+      heroDown(sim);
     }
     v.t -= dt;
     if (v.t <= 0) delete h.status[k];
@@ -2444,12 +2567,7 @@ function stepWorld(sim: Sim, dt: number): void {
       if (hz.status) heroStatus(sim, hz.status, hz.dur ?? 1.5);
       if (hz.dps) {
         h.hp -= sim.stats.maxHp * hz.dps * dt;
-        if (h.hp <= 0 && !spared(sim)) {
-          h.hp = 0;
-          h.mode = 'dying';
-          h.t = 0;
-          if (sim.boss?.state === 'fight') resetBoss(sim);
-        }
+        heroDown(sim);
       }
     }
   }
@@ -2764,6 +2882,7 @@ function shoot(sim: Sim, m: Mob, ang: number, spec?: ShotSpec, tx?: number, ty?:
       lob,
       z: 0,
       kind: m.kind,
+      onLand: sp.onLand,
     });
   }
   sim.events.push({ t: 'shot', x: m.x, y: m.y, art: sp.art });
@@ -2793,6 +2912,7 @@ function stepShots(sim: Sim, dt: number): void {
             s.status ? { kind: s.status, dur: s.dur ?? 2 } : undefined,
           );
         sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art });
+        shotLand(sim, s);
         continue;
       }
       keep.push(s);
@@ -2800,6 +2920,12 @@ function stepShots(sim: Sim, dt: number): void {
     }
     if (s.age > s.life || opaque(sim, Math.floor(s.x), Math.floor(s.y))) {
       sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art });
+      if (s.onLand) {
+        // Упёрся в стену — лужа у стены, а не в ней.
+        s.x -= s.vx * dt;
+        s.y -= s.vy * dt;
+        shotLand(sim, s);
+      }
       continue;
     }
     if (h.mode !== 'dying' && h.mode !== 'dead' && Math.hypot(h.x - s.x, h.y - s.y) < s.r + h.r) {
@@ -2823,6 +2949,13 @@ function stepShots(sim: Sim, dt: number): void {
   sim.shots = keep;
 }
 
+/** Снаряд лёг: зона ровно в кадр падения (Движок 3). */
+function shotLand(sim: Sim, s: Shot): void {
+  const o = s.onLand;
+  if (!o) return;
+  sim.zones.push({ ...o, x: s.x, y: s.y, id: sim.nextId++, t: 0 });
+}
+
 /** Задевает ли удар по площади круг (x, y, r). */
 function strikeHits(st: StrikeIn, x: number, y: number, r: number): boolean {
   const dx = x - st.x;
@@ -2831,8 +2964,13 @@ function strikeHits(st: StrikeIn, x: number, y: number, r: number): boolean {
   switch (st.shape) {
     case 'circle':
       return d < st.r + r;
-    case 'ring':
-      return Math.abs(d - st.r) < (st.w ?? 0.6) + r;
+    case 'ring': {
+      if (Math.abs(d - st.r) >= (st.w ?? 0.6) + r) return false;
+      // Дуга кольца (Движок 3): `arc` меньше полного круга — сектор.
+      if (st.arc === undefined || st.arc >= Math.PI * 2) return true;
+      const off = Math.abs(angDiff(Math.atan2(dy, dx), st.ang ?? 0));
+      return off < st.arc / 2 + (d > 0.01 ? Math.atan(r / d) : Math.PI);
+    }
     case 'cone': {
       if (d > st.r + r) return false;
       const off = Math.abs(angDiff(Math.atan2(dy, dx), st.ang ?? 0));
@@ -2863,7 +3001,12 @@ function stepStrikes(sim: Sim, dt: number): void {
       keep.push(st);
       continue;
     }
-    if (h.mode !== 'dying' && h.mode !== 'dead' && strikeHits(st, h.x, h.y, h.r))
+    if (
+      h.mode !== 'dying' &&
+      h.mode !== 'dead' &&
+      strikeHits(st, h.x, h.y, h.r) &&
+      (!st.los || lineOfSight(sim, st.x, st.y, h.x, h.y))
+    )
       hurtHero(
         sim,
         st.dmg,
@@ -2873,6 +3016,25 @@ function stepStrikes(sim: Sim, dt: number): void {
         undefined,
         st.status ? { kind: st.status, dur: st.dur ?? 2 } : undefined,
       );
+    // Удар и по своим (Движок 3): поезд, пушка, обвал. Боссов не трогает.
+    if (st.mobDmg)
+      for (const m of sim.mobs) {
+        if (m.mode === 'dying' || ghost(m) || defOf(m.kind).boss) continue;
+        if (!strikeHits(st, m.x, m.y, m.r)) continue;
+        if (st.los && !lineOfSight(sim, st.x, st.y, m.x, m.y)) continue;
+        m.hp -= st.mobDmg;
+        m.flash = 0.15;
+        sim.events.push({
+          t: 'hit',
+          x: m.x,
+          y: m.y,
+          dmg: Math.round(Math.min(st.mobDmg, m.maxHp)),
+          crit: false,
+          kill: m.hp <= 0,
+          boss: false,
+        });
+        if (m.hp <= 0) killMob(sim, m);
+      }
     sim.hitstop = Math.max(sim.hitstop, 0.05);
     sim.events.push({ t: 'strike', x: st.x, y: st.y, art: st.art ?? 'slam', big: true });
   }
@@ -2893,12 +3055,7 @@ function stepZones(sim: Sim, dt: number): void {
     if (z.status) heroStatus(sim, z.status, z.dur ?? 1.2);
     if (z.dps) {
       h.hp -= sim.stats.maxHp * z.dps * dt;
-      if (h.hp <= 0 && !spared(sim)) {
-        h.hp = 0;
-        h.mode = 'dying';
-        h.t = 0;
-        if (sim.boss?.state === 'fight') resetBoss(sim);
-      }
+      heroDown(sim);
     }
   }
   sim.zones = keep;
@@ -2939,7 +3096,9 @@ export type UseKind =
   | 'board'
   | 'seal'
   | 'plaque'
-  | 'stairs';
+  | 'stairs'
+  /** Своё действие этажа (Движок 3). */
+  | 'floor';
 
 export interface Usable {
   kind: UseKind;
@@ -2975,6 +3134,13 @@ export function usableNear(sim: Sim, props = 0): Usable | null {
     const cy = onWall ? o.y + 1.3 : o.y + 0.5;
     const d = Math.hypot(cx - h.x, cy - h.y);
     if (d > 1.6) continue;
+    // Предмет этажа со своим действием (Движок 3): рычаг, крюк, пушка.
+    if (o.use) {
+      const fs = FLOOR_SCRIPTS.get(sim.floor);
+      const label = fs?.useLabel ? fs.useLabel(sim, o) : o.use.label;
+      if (label) consider({ kind: 'floor', obj: o, label }, d - 0.05);
+      continue;
+    }
     if (o.kind === 'lift') consider({ kind: 'lift', obj: o, label: 'Лифт' }, d);
     else if (o.kind === 'stairs' && sim.beaten)
       consider({ kind: 'stairs', obj: o, label: 'Вниз' }, d);
@@ -3035,6 +3201,10 @@ export function useObject(sim: Sim, u: Usable): boolean {
     if (!b || b.sealed) return false;
     b.sealed = true;
     return true;
+  }
+  if (u.kind === 'floor') {
+    const r = FLOOR_SCRIPTS.get(sim.floor)?.onUse?.(sim, o, API);
+    return r !== false;
   }
   return false;
 }
@@ -3174,6 +3344,63 @@ export function heroStuck(sim: Sim): boolean {
   return solidTile(sim, Math.floor(sim.hero.x), Math.floor(sim.hero.y));
 }
 
+/** Номер опасности в таблице мира (такая же — та же запись). */
+function hazIndex(w: World, hz: HazardSpec): number {
+  const same = (a: HazardSpec) =>
+    a === hz ||
+    (a.status === hz.status && a.dur === hz.dur && a.dps === hz.dps && a.slow === hz.slow);
+  const k = w.hazards.findIndex(same);
+  if (k >= 0) return k + 1;
+  if (w.hazards.length >= 255) return 0;
+  w.hazards.push({ ...hz });
+  return w.hazards.length;
+}
+
+/** Ближайшая проходимая клетка (центр) — поиском по кольцам, до 8 клеток. */
+function nearestOpen(sim: Sim, x: number, y: number, fly = false): [number, number] | null {
+  const ok = (cx: number, cy: number) =>
+    fly
+      ? !flyGridOf(sim).solid(cx, cy)
+      : !solidTile(sim, cx, cy);
+  if (ok(x, y)) return [x + 0.5, y + 0.5];
+  for (let r = 1; r <= 8; r++) {
+    let best: [number, number] | null = null;
+    let bd = Infinity;
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !ok(x + dx, y + dy)) continue;
+        const d = dx * dx + dy * dy;
+        if (d < bd) {
+          bd = d;
+          best = [x + dx + 0.5, y + dy + 0.5];
+        }
+      }
+    if (best) return best;
+  }
+  return null;
+}
+
+/** Выгнать из клетки, ставшей стеной, героя и мобов. */
+function evictCell(sim: Sim, x: number, y: number): void {
+  const h = sim.hero;
+  if (Math.floor(h.x) === x && Math.floor(h.y) === y) {
+    const p = nearestOpen(sim, x, y);
+    if (p) {
+      h.x = p[0];
+      h.y = p[1];
+      h.pull = null;
+    }
+  }
+  for (const m of sim.mobs) {
+    if (m.mode === 'dying' || Math.floor(m.x) !== x || Math.floor(m.y) !== y) continue;
+    const p = nearestOpen(sim, x, y, !!defOf(m.kind).fly);
+    if (p) {
+      m.x = p[0];
+      m.y = p[1];
+    }
+  }
+}
+
 /** Функции движка для ИИ и сценариев (`dungeon-ai.ts`). */
 export const API: SimApi = {
   setMode,
@@ -3200,15 +3427,91 @@ export const API: SimApi = {
   pickKind,
   pickBurrow,
   def: defOf,
-  setTile(sim: Sim, x: number, y: number, tile: number, mark?: number) {
+  setTile(sim: Sim, x: number, y: number, tile: number, mark?: number, haz?: HazardSpec | null) {
     const w = sim.world;
     if (x < 0 || y < 0 || x >= w.w || y >= w.h) return;
     const i = y * w.w + x;
-    const was = mark !== undefined && w.mark[i] !== mark;
+    const hz = haz === undefined ? w.haz[i] : haz === null ? 0 : hazIndex(w, haz);
+    const was = (mark !== undefined && w.mark[i] !== mark) || w.haz[i] !== hz;
     if (sim.tiles[i] === tile && !was) return;
+    const wall = !walkableTile(tile) && tile !== Tile.Deep && walkableTile(sim.tiles[i]);
     sim.tiles[i] = tile;
     if (mark !== undefined) w.mark[i] = mark;
+    w.haz[i] = hz;
     sim.retiled.push(i);
+    // Клетка стала стеной — кто стоял в ней, выходит к ближайшей
+    // проходимой. Глубину (провал, вода) решает этаж: сорвался или успел.
+    if (wall) evictCell(sim, x, y);
+  },
+  light(sim: Sim, key: string, l: Light | null) {
+    const lights = sim.world.lights;
+    const cur = sim.lightKeys.get(key);
+    if (!l) {
+      if (cur) {
+        const k = lights.indexOf(cur);
+        if (k >= 0) lights.splice(k, 1);
+        sim.lightKeys.delete(key);
+      }
+      return;
+    }
+    if (cur) Object.assign(cur, l);
+    else {
+      const own = { ...l };
+      lights.push(own);
+      sim.lightKeys.set(key, own);
+    }
+  },
+  hurtEnv,
+  fall(sim: Sim, m: Mob) {
+    if (m.mode === 'dying' || defOf(m.kind).boss) return;
+    const fx = m.x;
+    const fy = m.y;
+    // Добыча — на ближнем краю: в пропасти её не подобрать.
+    const edge = nearestOpen(sim, Math.floor(fx), Math.floor(fy));
+    if (edge) {
+      m.x = edge[0];
+      m.y = edge[1];
+    }
+    killMob(sim, m);
+    m.x = fx;
+    m.y = fy;
+    m.fell = true;
+    sim.events.push({ t: 'fall', x: fx, y: fy, mob: m.kind });
+  },
+  pullHero(sim: Sim, tx: number, ty: number, o?: PullOpts) {
+    const h = sim.hero;
+    if (h.mode === 'dying' || h.mode === 'dead') return;
+    const d = Math.hypot(tx - h.x, ty - h.y);
+    const speed = o?.speed ?? 14;
+    h.pull = {
+      tx,
+      ty,
+      speed,
+      inv: !!o?.inv,
+      t: 0,
+      max: o?.max ?? d / speed + 0.6,
+    };
+    if (h.mode === 'dash') {
+      h.mode = 'free';
+      h.t = 0;
+    }
+    sim.events.push({ t: 'pull', x: h.x, y: h.y, end: false });
+  },
+  timeScale(sim: Sim, world: number, hero: number, dur: number) {
+    sim.worldScale = Math.max(0, world);
+    sim.heroScale = Math.max(0, hero);
+    sim.scaleT = Math.max(0, dur);
+    if (dur <= 0) {
+      sim.worldScale = 1;
+      sim.heroScale = 1;
+    }
+  },
+  camera(sim: Sim, x: number, y: number, dur: number) {
+    sim.cam = dur > 0 ? { x, y, t: 0, dur } : null;
+  },
+  slowmo(sim: Sim, dur: number, scale: number) {
+    sim.slowmo = Math.max(sim.slowmo, dur);
+    sim.slowK = Math.max(0.05, Math.min(1, scale));
   },
   moveHero(sim: Sim, x: number, y: number) {
     const h = sim.hero;

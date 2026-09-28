@@ -2557,11 +2557,8 @@ function stepBridge(sim: Sim, api: SimApi, st: F8State): void {
         // Мобы на доске: летуны остаются, остальные падают.
         for (const m of sim.mobs) {
           if (m.mode === 'dying' || api.def(m.kind).fly || api.def(m.kind).boss) continue;
-          if (Math.floor(m.y) === row.y && row.xs.includes(Math.floor(m.x))) {
-            m.hp = 0;
-            m.mode = 'escape';
-            m.t = 0;
-          }
+          // Сорвался — убийство в зачёт (Движок 3), добыча на краю.
+          if (Math.floor(m.y) === row.y && row.xs.includes(Math.floor(m.x))) api.fall(sim, m);
         }
       }
       if (row.s !== 2) all = false;
