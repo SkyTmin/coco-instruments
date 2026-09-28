@@ -37,6 +37,7 @@ import {
   SLOTS,
   upgradable,
   OPEN_FLOORS,
+  READY_FLOORS,
 } from '@/lib/dungeon';
 import type { AreaId, MatId } from '@/lib/dungeon';
 import { buildWorld } from '@/lib/dungeon-world';
@@ -80,6 +81,8 @@ export function DungeonPage() {
   const hydrated = useFinanceStore((s) => s.hydrated);
   const prison = useFinanceStore((s) => s.prison);
   const d = useFinanceStore((s) => s.dungeon);
+  // Креатив видит и готовые этажи за недоделанными — чтобы проверить их сразу.
+  const creativeOn = useFinanceStore((s) => s.creative.on);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const enter = useFinanceStore((s) => s.dungeonEnter);
   const introSeen = useFinanceStore((s) => s.dungeonIntroSeen);
@@ -476,7 +479,7 @@ export function DungeonPage() {
 
             {!run && (
               <div className="dgl-floors" role="tablist" aria-label="Этаж">
-                {OPEN_FLOORS.map((f) => {
+                {(creativeOn ? READY_FLOORS : OPEN_FLOORS).map((f) => {
                   const ok = f.id <= d.reached;
                   return (
                     <button

@@ -74,10 +74,17 @@ export const areaOf = (id: AreaId): AreaDef => AREA_BY.get(id) ?? AREAS[0];
 
 export const FLOOR_COUNT = FLOORS.length;
 /**
- * Этажи, которые видит игрок: заготовки (`draft`) спрятаны, пока их делают.
- * Этажи идут подряд, заготовки — только в конце, поэтому это префикс.
+ * Этажи, которые видит игрок: готовые ПОДРЯД с первого. Заготовки
+ * (`draft`) спрятаны, пока их делают, и готовый этаж за заготовкой тоже
+ * ждёт — спуститься к нему всё равно нельзя.
  */
-export const OPEN_FLOORS = FLOORS.filter((f) => !f.draft);
+export const OPEN_FLOORS: FloorDef[] = [];
+for (const f of FLOORS) {
+  if (f.draft) break;
+  OPEN_FLOORS.push(f);
+}
+/** Все готовые этажи, и за заготовками тоже: их видит креатив владельца. */
+export const READY_FLOORS = FLOORS.filter((f) => !f.draft);
 /** Готов ли этаж (есть и не заготовка). */
 export const floorReady = (id: number): boolean =>
   FLOORS.some((f) => f.id === id && !f.draft);

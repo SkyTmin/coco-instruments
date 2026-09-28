@@ -289,11 +289,14 @@ describe('движок для этажей: щит, смена клеток, п�
 
 describe('этажи подземелья: заготовки спрятаны', () => {
   it('заготовки — только в конце, лестница на них закрыта', async () => {
-    const { OPEN_FLOORS, floorReady } = await import('./dungeon');
-    // Открытые — префикс: после первой заготовки готовых нет.
+    const { OPEN_FLOORS, READY_FLOORS, floorReady } = await import('./dungeon');
+    // Открытые — подряд с первого, до первой заготовки.
     expect(OPEN_FLOORS.map((f) => f.id)).toEqual(OPEN_FLOORS.map((_, i) => i + 1));
+    for (const f of OPEN_FLOORS) expect(f.draft).toBeFalsy();
+    for (const f of READY_FLOORS) expect(floorReady(f.id)).toBe(true);
     const last = OPEN_FLOORS.length;
     if (last === FLOORS.length) return;
+    expect(FLOORS[last].draft).toBe(true);
     expect(floorReady(last + 1)).toBe(false);
     const d: DungeonState = {
       ...DUNGEON_START,

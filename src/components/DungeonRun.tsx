@@ -93,6 +93,8 @@ import {
   setMusicScene,
   fishSplash,
   softChime,
+  bubblePop,
+  doorLatch,
 } from '@/lib/sound';
 import type { MusicScene } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
@@ -234,6 +236,37 @@ const STATUS_NOTE: Record<string, string> = {
   chill: 'Холод сковывает',
   stun: 'Оглушён!',
   charm: 'Очарован — ноги идут наоборот',
+};
+
+/**
+ * Звуки своих событий этажей (`boss.what`), у которых нет общего окончания
+ * (`_call`, `_trap`, `_wall`, `_dive`, `_splash`, `_fall`, `_stone`).
+ * Надпись события показывается как обычно; здесь только звук.
+ */
+const FLOOR_SOUND: Record<string, () => void> = {
+  // Этаж 6: гейзеры шипят, лава остывает с треском.
+  f6_vents: () => fuseTick(),
+  f6_cool: () => bedrockClink(),
+  // Этаж 8: стены-фусума едут, комната поворачивается, мост трещит.
+  f8_shift: () => {
+    doorLatch();
+    deepRumble();
+  },
+  f8_turn: () => {
+    doorLatch();
+    deepRumble();
+  },
+  f8_bridge: () => crateBreak(),
+  // Этаж 9: кобольд хлопает телепортом, пиявка присасывается, шею прижигают.
+  f9_blink: () => dashWhoosh(),
+  f9_leech: () => eatChomp(),
+  f9_fire: () => fuseTick(),
+  f9_sear: () => fuseTick(1),
+  f9_stump: () => swordHit(true, true),
+  f9_regrow: () => bubblePop(),
+  f9_sprout: () => bubblePop(),
+  f9_heal: () => softChime(4),
+  f9_pull: () => dashWhoosh(),
 };
 
 const USE_ICON: Record<Usable['kind'], GxIconName> = {
@@ -822,6 +855,9 @@ export function DungeonRun({
             kingRoar();
             tapMedium();
             if (e.text) say(e.text, e.sub, 'danger', 1800);
+          } else if (FLOOR_SOUND[e.what]) {
+            FLOOR_SOUND[e.what]();
+            if (e.text) say(e.text, e.sub, e.what.endsWith('_heal') ? 'danger' : 'area', 1600);
           } else if (e.what === 'roll') deepRumble();
           else if (e.what === 'whip') swordSwing(2, true);
           else if (e.what === 'summon') {
@@ -844,6 +880,14 @@ export function DungeonRun({
             deepRumble();
             boom(1);
             tapMedium();
+          } else if (e.what.endsWith('_fall')) {
+            // Враг сорвался в пропасть — удача игрока, а не опасность.
+            softChime(0);
+            if (e.text) say(e.text, e.sub, 'gold', 1600);
+          } else if (e.what.endsWith('_stone')) {
+            // Окаменел (горгулья, статуя) — сухой стук камня.
+            bedrockClink();
+            if (e.text) say(e.text, e.sub, 'area', 1400);
           } else if (e.text) say(e.text, e.sub, 'danger', 1800);
           break;
         }
