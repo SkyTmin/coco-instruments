@@ -446,12 +446,39 @@ function floorPx(X: number, Y: number, dim: number, bare: boolean, top: number):
   return ramp(FR, f, X, Y);
 }
 
+/**
+ * Стык с «Миром»: ниже этого ряда плоть наползает на камень — чем ближе к
+ * краю района, тем реже; сквозь просветы виден пол движка (камень).
+ */
+const CREEP_Y0 = 70.5;
+const CREEP_Y1 = 77.8;
+/** Покрыта ли точка плотью у стыка: 1 — да, 0 — камень, 0,5 — кромка. */
+function creep(X: number, Y: number, top: number): number {
+  const ly = Y / 16 - top;
+  if (ly < CREEP_Y0) return 1;
+  const cov = (CREEP_Y1 - ly) / (CREEP_Y1 - CREEP_Y0);
+  const n = vn(X / 6, Y / 6, 90) * 0.75 + vn(X / 2.5, Y / 2.5, 91) * 0.25;
+  return n < cov * 1.05 - 0.07 ? 1 : n < cov * 1.05 ? 0.5 : 0;
+}
+
 function fleshCell(c: CellCtx, dim = 0, bare = false): Px {
   const p = new Px(16, 16);
   const ox = c.wx * 16;
   const oy = c.wy * 16;
   const top = heartTop();
-  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, floorPx(ox + x, oy + y, dim, bare, top));
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const X = ox + x;
+      const Y = oy + y;
+      const k = creep(X, Y, top);
+      if (k === 1) p.set(x, y, floorPx(X, Y, dim, bare, top));
+      else {
+        // На камне остаются только вены — корни плоти.
+        const t = tubeAt(X / 16, Y / 16 - top);
+        if (t && Math.abs(t.s) <= 1) p.set(x, y, ramp(VR, 0.9 + tubeShade(t) * 4.2, X, Y));
+        else if (k === 0.5) p.set(x, y, FR[1]);
+      }
+    }
   footShade(p, c);
   return p;
 }
@@ -889,10 +916,12 @@ function wallCell(c: CellCtx): Px {
   const face = c.open(0, 1);
   if (face) {
     const LIP = [2.6, 1.9, 0.6, -1.2, -0.5];
+    const topF = heartTop();
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
         const X = ox + x;
         const Y = oy + y;
+        if (creep(X, Y, topF) === 0) continue;
         const h = bundleH(X, Y);
         const lit = Math.max(-1, Math.min(1, (h - bundleH(X - 1, Y)) * 3));
         let f = 1.3 + h * 3 + lit * 1.3 + (vn(X / 2.2, Y / 8, 12) - 0.5) * 1.3;
@@ -915,10 +944,12 @@ function wallCell(c: CellCtx): Px {
     return p;
   }
   // Порода: тёмная плоть, крупные сосуды в глубине.
+  const top = heartTop();
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
       const X = ox + x;
       const Y = oy + y;
+      if (creep(X, Y, top) === 0) continue;
       const h = foldH(X * 0.7, Y * 0.7);
       let f = 0.6 + h * 2.2 + (vn(X / 4, Y / 4, 14) - 0.5) * 0.8;
       const vv = vn(X / 26, Y / 26, 15);
@@ -1055,26 +1086,32 @@ const frameAt = (time: number, fps: number, n: number, o = 0) => ((Math.floor(ti
 /** Ребро-арка: кость из пола, изгибается внутрь камеры. */
 registerPropPainter('f15b_rib', (o) =>
   sprite(`rib|${o.x < 32 ? 1 : 0}`, () => {
-    const p = new Px(24, 44);
+    const p = new Px(26, 46);
     const flip = o.x < 32;
+    // Гнездо: кость вросла в плоть — тёмный бугор с жилами.
+    mell(p, 12, 42, 6.5, 3.2, M_FLESH, -0.1);
     const pts = spline([
-      [12, 42],
-      [11, 30],
-      [13, 16],
-      [18, 7],
-      [21, 4],
-    ], 6);
+      [12, 43],
+      [11, 31],
+      [13, 17],
+      [18, 8],
+      [22, 5],
+    ], 7);
     for (let i = 0; i < pts.length - 1; i++) {
       const k = i / pts.length;
-      const r = 2.6 - k * 1.6;
-      limb(p, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], r, r - 0.1, BONE, 0.05);
+      mlimb(p, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 3 - k * 2, 2.9 - k * 2, M_BONE, 0.05);
     }
-    // Хрящ у основания и жилы, приросшие к кости.
-    shadeEll(p, 12, 41, 4, 2.2, SINEW);
-    stroke(p, 10, 40, 11, 31, alpha(MUSCLE[2], 0.8), 1);
-    stroke(p, 14, 40, 13, 27, alpha(VEIN, 0.8), 1);
+    // Жилы, приросшие к кости снизу.
+    for (const dx of [-2, 2]) {
+      const q = spline([
+        [12 + dx * 1.6, 43],
+        [12 + dx * 0.8, 38],
+        [12 + dx * 0.3, 32],
+      ], 4);
+      for (let i = 0; i < q.length - 1; i++) mlimb(p, q[i][0], q[i][1], q[i + 1][0], q[i + 1][1], 1, 0.7, M_FLESH, 0.1);
+    }
     p.outline(INK);
-    return { p: flip ? p.flipX() : p, ax: 12, ay: 43 };
+    return { p: flip ? p.flipX() : p, ax: 12, ay: 44 };
   }),
 );
 
@@ -1082,50 +1119,64 @@ registerPropPainter('f15b_rib', (o) =>
 registerPropPainter('f15b_tendon', (o, time) => {
   const f = frameAt(time + o.x * 0.13, 1.8, 4);
   return sprite(`tendon|${f}`, () => {
-    const p = new Px(20, 48);
-    const w = [0, 0.6, 1, 0.6][f];
-    for (let y = 0; y < 44; y++) {
-      const k = y / 44;
-      const r = 3.2 + Math.abs(k - 0.5) * 4 + w * (1 - Math.abs(k - 0.5) * 2) * 0.8;
-      for (let x = -Math.ceil(r); x <= Math.ceil(r); x++) {
-        if (Math.abs(x) > r) continue;
-        const nx = x / r;
-        const fib = Math.sin(x * 1.9 + y * 0.18) * 0.12;
-        p.set(10 + x, y + 2, tone(SINEW, 0.55 - nx * 0.5 + fib - (k > 0.9 ? 0.2 : 0)));
-      }
+    const p = new Px(22, 50);
+    const w = [0, 0.5, 1, 0.5][f];
+    // Раструбы у пола и у свода.
+    mell(p, 11, 45, 7, 3.4, M_FLESH, -0.05);
+    mell(p, 11, 5, 6, 3, M_FLESH, -0.2);
+    // Жгут: тоньше к середине, волокна вдоль.
+    for (let i = 0; i < 10; i++) {
+      const y0 = 6 + i * 4;
+      const y1 = y0 + 4;
+      const r = (y: number) => 2.6 + Math.abs(y - 25) * 0.11 + w * 0.5 * (1 - Math.abs(y - 25) / 20);
+      mlimb(p, 11, y0, 11, y1, r(y0), r(y1), M_FLESH, 0.18);
     }
-    // Жила вдоль.
-    for (let y = 4; y < 44; y++) p.set(10 + Math.round(Math.sin(y * 0.25) * 1.5) + 1, y, VEIN);
+    // Сухожильные нити — светлые, вдоль.
+    for (const dx of [-1, 1]) for (let y = 8; y < 43; y++) if ((y + dx * 3) % 7 < 4) glowPx(p, 11 + dx + Math.round(Math.sin(y * 0.2) * 0.5), y, SINEW[3], 0.35);
     p.outline(INK);
-    return { p, ax: 10, ay: 47 };
+    return { p, ax: 11, ay: 48 };
   });
 });
 
 /** Пузырь-нарыв: плёнка, внутри светится жижа (бьётся — в нём ихор). */
+const PUS = rampOf('#4a2010', '#8a4a18', '#c08030', '#e8b850', '#f8e08a', '#fff6d0');
 registerPropPainter('f15b_pustule', (o, time, _alive, flash) => {
   const f = frameAt(time + o.x * 0.37 + o.y * 0.11, 2.2, 4);
   return sprite(`pus|${f}|${flash ? 1 : 0}`, () => {
-    let p = new Px(18, 18);
+    let p = new Px(20, 20);
     const s = [0, 0.4, 0.8, 0.4][f];
-    const cx = 9;
-    const cy = 10 - s * 0.5;
-    const rx = 5.5 + s * 0.4;
-    const ry = 5 + s * 0.6;
-    shadeEll(p, cx, cy + 1, rx + 1, ry * 0.6, FLESH);
-    p.ell(cx, cy, rx, ry, (x, y) => {
-      const dx = (x + 0.5 - cx) / rx;
-      const dy = (y + 0.5 - cy) / ry;
-      const l = 0.5 - dx * 0.3 - dy * 0.35;
-      return mixc(hx('#7a1a14'), hx('#ff9a5a'), Math.max(0, Math.min(1, l + 0.1)));
-    });
+    const cx = 10;
+    const cy = 11 - s * 0.5;
+    const rx = 6 + s * 0.4;
+    const ry = 5.4 + s * 0.6;
+    // Воспалённое основание.
+    mell(p, cx, cy + 4, rx + 2, 3, M_FLESH, 0.05);
+    // Мешок: жёлтая жижа сквозь плёнку, снизу гуще.
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
+      for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+        const dx = (x + 0.5 - cx) / rx;
+        const dy = (y + 0.5 - cy) / ry;
+        const q = dx * dx + dy * dy;
+        if (q > 1) continue;
+        const nz = Math.sqrt(1 - q);
+        const l = dx * LX + dy * LY + nz * LZ;
+        let c = ramp(PUS, 1 + l * 2.6 + (dy > 0.3 ? -0.6 : 0), x, y);
+        if (q > 0.72) c = mixc(c, hx('#a0303a'), 0.55);
+        p.set(x, y, c);
+      }
     // Жилки по плёнке и блик.
-    stroke(p, cx - 3, cy + 3, cx - 1, cy - 3, alpha(VEIN_D, 0.8), 1);
-    stroke(p, cx + 2, cy + 3, cx + 3, cy - 2, alpha(VEIN_D, 0.8), 1);
-    p.set(cx - 2, cy - 3, WHITE);
-    p.set(cx - 3, cy - 2, alpha(WHITE, 0.7));
+    for (const [a, b2, c2, d] of [
+      [cx - 4, cy + 3, cx - 2, cy - 3],
+      [cx + 2, cy + 4, cx + 4, cy - 1],
+      [cx - 1, cy + 4, cx, cy],
+    ])
+      stroke(p, a, b2, c2, d, alpha(hx('#a0202c'), 0.8), 1);
+    p.set(cx - 3, cy - 3, WHITE);
+    p.set(cx - 2, cy - 3, alpha(WHITE, 0.7));
+    p.set(cx - 3, cy - 2, alpha(WHITE, 0.5));
     p.outline(INK);
     if (flash) p = p.tint(WHITE, 0.8);
-    return { p, ax: 9, ay: 17 };
+    return { p, ax: 10, ay: 18 };
   });
 });
 
@@ -1218,16 +1269,24 @@ registerPropPainter('f15b_node', (o, time) => {
   const k = v && s ? beatK(v, s.time) : ((time * 0.8 + o.x * 0.1) % 1);
   const f = k < 0.15 ? 0 : k < 0.35 ? 1 : k < 0.6 ? 2 : 3;
   return sprite(`node|${f}`, () => {
-    const p = new Px(16, 12);
-    const r = [3.6, 3.2, 2.8, 2.6][f];
-    shadeEll(p, 8, 6, r + 1, r * 0.7 + 0.6, tn('#3a0810', '#6a1420', '#a02030', '#e04050'));
-    p.ell(8, 5.6, r * 0.6, r * 0.4, [VEIN_CORE, VEIN_HOT, VEIN, VEIN][f]);
-    // Отростки-дендриты.
+    const p = new Px(22, 14);
+    const sw = [1, 0.6, 0.25, 0][f];
+    // Нервы: пять тяжей, изогнуты.
     for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * TAU + 0.4;
-      stroke(p, 8 + Math.cos(a) * r, 6 + Math.sin(a) * r * 0.6, 8 + Math.cos(a) * (r + 3), 6 + Math.sin(a) * (r + 3) * 0.6, alpha(VEIN, 0.9), 1);
+      const a = (i / 5) * TAU + 0.5;
+      const q = spline([
+        [11 + Math.cos(a) * 3, 7 + Math.sin(a) * 2],
+        [11 + Math.cos(a + 0.3) * 6, 7 + Math.sin(a + 0.3) * 3.6],
+        [11 + Math.cos(a + 0.5) * 9.5, 7 + Math.sin(a + 0.5) * 5.5],
+      ], 4);
+      for (let j = 0; j < q.length - 1; j++) mlimb(p, q[j][0], q[j][1], q[j + 1][0], q[j + 1][1], 1.1, 0.6, M_FLESH, 0.15 + sw * 0.3);
     }
-    return { p, ax: 8, ay: 10 };
+    // Узел: вздутие, внутри свет.
+    mell(p, 11, 7, 4.2 + sw * 0.5, 3.2 + sw * 0.4, M_FLESH, 0.2);
+    p.ell(11, 6.6, 2 + sw * 0.8, 1.3 + sw * 0.5, [VEIN_CORE, VEIN_HOT, VEIN, VEIN_D][f]);
+    if (f === 0) p.set(10, 6, WHITE);
+    p.outline(INK);
+    return { p, ax: 11, ay: 12 };
   });
 });
 
@@ -1298,14 +1357,17 @@ registerPropPainter('f15b_eye', (o, time) => {
   });
 });
 
-/** Губы клапана у ворот: складки мышцы по бокам. */
+/** Губы клапана у ворот: мясистый валик со складкой, мокрый. */
 registerPropPainter('f15b_lip', (o) =>
   sprite(`lip|${o.x < 32 ? 1 : 0}`, () => {
-    const p = new Px(16, 24);
-    for (let i = 0; i < 4; i++) limb(p, 4 + i * 2.5, 22, 9 + i * 1.5, 3 + i * 3, 2.6 - i * 0.3, 1.4, MUSCLE, -i * 0.08);
-    stroke(p, 6, 20, 11, 5, alpha(VEIN, 0.9), 1);
+    const p = new Px(18, 26);
+    mell(p, 9, 15, 7.5, 10, M_FLESH, 0.12);
+    mell(p, 11, 16, 4.5, 8, M_FLESH, -0.12);
+    // Складка и блик.
+    for (let y = 8; y < 24; y++) p.set(Math.round(12 + Math.sin(y * 0.3) * 0.8), y, INK);
+    for (let y = 9; y < 14; y++) p.set(6, y, alpha(SPEC, 0.7));
     p.outline(INK);
-    return { p: o.x < 32 ? p : p.flipX(), ax: 8, ay: 24 };
+    return { p: o.x < 32 ? p : p.flipX(), ax: 9, ay: 25 };
   }),
 );
 
@@ -1823,7 +1885,8 @@ function lionHeadSide(p: Px, hx0: number, hy0: number, lp: LionPose, far = false
     // Пасть: жар, язык, клыки сверху и снизу.
     const [m0x, m0y] = R(1, 3);
     const [m1x, m1y] = R(13, 3 + jaw * 4.5);
-    mlimb(p, m0x, m0y, m1x, m1y, 2.6 * jaw + 0.6, 1.6 * jaw + 0.5, MOUTH, 0.1);
+    mlimb(p, m0x, m0y, m1x, m1y, 2.6 * jaw + 0.6, 1.6 * jaw + 0.5, M_MEMB, -0.15);
+    mlimb(p, m0x + 1, m0y + 0.5, m1x - 3, m1y - 0.5, 1.2 * jaw + 0.3, 0.6 * jaw + 0.3, MOUTH, -0.05);
   }
   mlimb(p, j0x, j0y, j1x, j1y, 3.8, 2.8, S, -0.1);
   // Череп.
@@ -1915,7 +1978,7 @@ function lionLeg(p: Px, pts: [number, number][], rs: number[], far: boolean, cla
   for (let i = 0; i < pts.length - 1; i++)
     mlimb(p, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], rs[i], rs[i + 1], S, i === 0 ? -0.04 : 0.05);
   // Колено — плоть в стыке камня.
-  mell(p, pts[1][0], pts[1][1], rs[1] * 0.8, rs[1] * 0.7, F, 0);
+  mell(p, pts[1][0] - 0.5, pts[1][1] + 0.5, rs[1] * 0.5, rs[1] * 0.45, F, -0.15);
   seam(p, pts[0][0] - 1, pts[0][1] + 2, pts[1][0], pts[1][1] - 1, 0.3);
   // Плита на бедре.
   if (plate) {
@@ -1998,7 +2061,7 @@ function drawLionSide(lp: LionPose): Built {
   const lift = (o: number) => (lp.step < 0 ? 0 : Math.max(0, Math.cos(ph + o)) * 3.5);
   const tuck = lp.tuck;
   // --- Дальнее крыло (за телом).
-  if (lp.wings > 0) lionWing(p, shX - 10, shY - 2, -Math.PI * 0.6 - lp.flap * 0.45, 54 * (0.6 + lp.wings * 0.4), lp.wings, true);
+  if (lp.wings > 0) lionWing(p, shX - 8, shY - 4, -Math.PI * 0.52 - lp.flap * 0.4, 52 * (0.6 + lp.wings * 0.4), lp.wings, true);
   // --- Дальние ноги.
   lionLeg(p, [
     [hipX + 4, hipY + 6],
@@ -2050,6 +2113,7 @@ function drawLionSide(lp: LionPose): Built {
   const nPl = 6;
   const folded = lp.wings > 0 ? 0 : 1;
   for (let i = 0; i < nPl; i++) {
+    const thick = 1;
     const k0 = i / nPl;
     const k1 = (i + 1.3) / nPl;
     const x0 = hipX - 10 + (shX - hipX + 12) * k0;
@@ -2059,8 +2123,8 @@ function drawLionSide(lp: LionPose): Built {
     const y1 = hipY - 11 + (shY - 7 - hipY + 11) * k1 - arch(k1);
     mplate(p, [
       [x0, y0 + 2],
-      [x0 + 2, y0 - 3 - folded * 3],
-      [x1, y1 - 3 - folded * 3],
+      [x0 + 2, y0 - 3 - thick * 3],
+      [x1, y1 - 3 - thick * 3],
       [x1 + 2, y1 + 3],
       [x0 + 1, y0 + 8],
     ], M_STONE, [-0.2, -0.7], 0.08);
@@ -2127,7 +2191,7 @@ function drawLionSide(lp: LionPose): Built {
   const eye = lionHeadSide(p, hx0, hy0, lp);
   maneSide(p, hx0 - 5, hy0 + 1, lp.glow, false);
   // --- Ближнее крыло.
-  if (lp.wings > 0) lionWing(p, shX - 8, shY - 4, -Math.PI * 0.7 - lp.flap * 0.55, 60 * (0.6 + lp.wings * 0.4), lp.wings, false);
+  if (lp.wings > 0) lionWing(p, shX - 12, shY - 2, -Math.PI * 0.8 - lp.flap * 0.5, 62 * (0.6 + lp.wings * 0.4), lp.wings, false);
   p.outline(INK);
   rimK = 0.2;
   return { p, ax: 60, ay: G, eye };
@@ -2177,7 +2241,7 @@ function drawLionFront(lp: LionPose): Built {
   for (let i = 0; i < 22; i++) {
     const a = -Math.PI / 2 + (i / 22) * TAU + 0.07;
     const down = Math.max(0, Math.sin(a));
-    lock(p, cx + Math.cos(a) * 8, hy0 + 2 + Math.sin(a) * 7, a, 15 + hash(i, 1, 33) * 6 + down * 6, 10, M_MANE_FAR, lp.glow, 0.45, i % 3 === 0);
+    lock(p, cx + Math.cos(a) * 8, hy0 + 2 + Math.sin(a) * 7, a, 15 + hash(i, 1, 33) * 6 + down * 6, 10, M_MANE_FAR, lp.glow, 0.45, i % 5 === 0);
   }
   // --- Грудь и плечи.
   mell(p, cx, shY + 18, 21, 21, M_STONE, 0.08);
@@ -2225,7 +2289,7 @@ function drawLionFront(lp: LionPose): Built {
   // --- Грива спереди: венец вокруг морды и борода на грудь.
   for (let i = 0; i < 16; i++) {
     const a = -Math.PI / 2 + ((i + 0.5) / 16) * TAU;
-    lock(p, cx + Math.cos(a) * 9, hy0 + 1 + Math.sin(a) * 8.5, a, 8 + hash(i, 2, 34) * 4, 7.5, M_MANE, lp.glow, 0.35, i % 4 === 2);
+    lock(p, cx + Math.cos(a) * 9, hy0 + 1 + Math.sin(a) * 8.5, a, 8 + hash(i, 2, 34) * 4, 7.5, M_MANE, lp.glow, 0.35, i % 6 === 3);
   }
   for (let i = 0; i < 5; i++) lock(p, cx - 6 + i * 3, hy0 + 9, Math.PI / 2 + (i - 2) * 0.18, 9 + (i % 2) * 3, 6, M_MANE, lp.glow, 0.1, false);
   // --- Морда анфас.
@@ -2244,16 +2308,32 @@ function drawLionFront(lp: LionPose): Built {
     [cx, hy0 + 1.5],
     [cx - 9.5, hy0 - 1.5],
   ], M_STONE, [0, -0.8], 0.15);
-  // Морда, подушки усов, нос.
-  mell(p, cx, hy0 + 6.5, 7, 5.5, M_STONE, 0.18);
-  for (const s of [-1, 1]) mell(p, cx + s * 3.2, hy0 + 7, 3.2, 2.6, M_STONE, 0.24);
-  mell(p, cx, hy0 + 3.8, 2.6, 1.7, M_STONE_FAR, 0);
+  // Скулы шире лба — львиная морда.
+  for (const sd of [-1, 1]) mell(p, cx + sd * 6.5, hy0 + 3, 5, 5.5, M_STONE, sd < 0 ? 0.12 : -0.04);
+  // Переносица — светлая полоса ото лба к носу.
+  mplate(p, [
+    [cx - 2.4, hy0 - 6],
+    [cx + 2.4, hy0 - 6],
+    [cx + 3.4, hy0 + 3],
+    [cx - 3.4, hy0 + 3],
+  ], M_STONE, [0, -0.7], 0.22);
+  // Подушки усов и подбородок.
+  for (const sd of [-1, 1]) mell(p, cx + sd * 3.4, hy0 + 7, 3.6, 2.8, M_STONE, 0.26);
+  mell(p, cx, hy0 + 10.5, 3.4, 2, M_STONE, 0.05);
+  for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) p.set(cx + sd * (2 + k * 1.3), hy0 + 6.5 + (k % 2), M_STONE_FAR.r[1]);
+  // Нос — широкий треугольник.
+  poly(p, [
+    [cx - 3.4, hy0 + 2.6],
+    [cx + 3.4, hy0 + 2.6],
+    [cx, hy0 + 6],
+  ], (x, y) => (y < hy0 + 3.6 ? M_STONE_FAR.r[4] : M_STONE_FAR.r[1]));
   p.set(cx - 1, hy0 + 4, INK);
   p.set(cx + 1, hy0 + 4, INK);
   // Пасть: на рыке — широко, жар и клыки.
   if (lp.roar || lp.jaw > 0.2) {
     const j = Math.max(lp.jaw, lp.roar ? 1 : 0);
-    mell(p, cx, hy0 + 11 + j * 2, 5.4, 2 + j * 3.4, MOUTH, 0.05);
+    mell(p, cx, hy0 + 11 + j * 2, 5.4, 2 + j * 3.4, M_MEMB, -0.2);
+    mell(p, cx, hy0 + 12 + j * 2.6, 2.6, 0.8 + j * 1.6, MOUTH, -0.1);
     for (const s of [-1, 1]) {
       p.set(cx + s * 3, hy0 + 9, BONE[3]);
       p.set(cx + s * 3, hy0 + 10, BONE[2]);
@@ -2265,13 +2345,13 @@ function drawLionFront(lp: LionPose): Built {
     p.set(cx - 3, hy0 + 11, BONE[3]);
     p.set(cx + 3, hy0 + 11, BONE[3]);
   }
-  // Глаза — золотые угли в тёмных впадинах.
-  for (const s of [-1, 1]) {
-    p.set(cx + s * 5 - 1, hy0 - 1, INK);
-    p.set(cx + s * 5 + 1, hy0 - 1, INK);
-    p.set(cx + s * 5, hy0 - 1, GOLD);
-    p.set(cx + s * 5 + (s < 0 ? 1 : -1), hy0 - 1, GOLD_HI);
-    p.set(cx + s * 5, hy0, alpha(EMBER, 0.85));
+  // Глаза — золотые угли, скошены к носу, во впадинах под бровью.
+  for (const sd of [-1, 1]) {
+    for (let k = -1; k <= 2; k++) p.set(cx + sd * (4 + k), hy0 - 1 - (k > 0 ? 1 : 0), INK);
+    p.set(cx + sd * 4, hy0 - 1, GOLD_HI);
+    p.set(cx + sd * 5, hy0 - 1, GOLD);
+    p.set(cx + sd * 6, hy0 - 2, GOLD);
+    p.set(cx + sd * 5, hy0, alpha(EMBER, 0.85));
   }
   cracksOn(p, [[cx - 6, hy0 + 3], [cx + 7, hy0 - 3]], lp.glow, 9);
   p.outline(INK);
@@ -2375,14 +2455,14 @@ function drawCocoon(cracks: number, beat: number, burst: number): Built {
     const dx = (x + 0.5 - cx) / (rx * taper);
     return dx * dx + dy * dy <= 1 ? [dx, dy] : null;
   };
-  const glow = 0.35 + beat * 0.65;
+  const glow = 0.5 + beat * 0.5;
   // Кто внутри: свернувшийся зверь (тёмный силуэт под плёнкой).
   const beast = (x: number, y: number) => {
     const u = (x - cx) / rx;
     const v = (y - cy) / ry;
-    const body = Math.hypot((u + 0.1) / 0.62, (v - 0.12) / 0.5) < 1 && Math.hypot((u + 0.15) / 0.3, (v - 0.05) / 0.26) > 1;
-    const head = Math.hypot((u - 0.25) / 0.3, (v + 0.35) / 0.24) < 1;
-    const wing = Math.abs(u + 0.35 + v * 0.3) < 0.08 && v > -0.55 && v < 0.35;
+    const body = Math.hypot((u + 0.08) / 0.46, (v - 0.1) / 0.36) < 1 && Math.hypot((u + 0.1) / 0.2, (v - 0.04) / 0.17) > 1;
+    const head = Math.hypot((u - 0.2) / 0.22, (v + 0.3) / 0.18) < 1;
+    const wing = Math.abs(u + 0.3 + v * 0.3) < 0.06 && v > -0.5 && v < 0.3;
     return body || head || wing;
   };
   for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
@@ -2398,8 +2478,8 @@ function drawCocoon(cracks: number, beat: number, burst: number): Built {
       let c = ramp(MEMB, 0.7 + l * 3.4 + fold * 0.6, x, y);
       // Свет изнутри: к середине и в тонких местах; зверь — тенью.
       const core = Math.max(0, 1 - Math.hypot(dx * 0.9, dy * 0.8 - 0.05)) * glow;
-      const shade = beast(x, y) ? 0.25 : 1;
-      const k = Math.max(0, core * (thin - 0.22) * 2.3) * shade;
+      const shade = beast(x, y) ? 0.12 : 1;
+      const k = Math.max(0, core * (thin - 0.08) * 2.6) * shade;
       if (k > 0.02) c = mixc(c, k > 0.5 ? INGLOW_HI : INGLOW, Math.min(0.85, k));
       // Сосуды плёнки.
       const vv = vn(x / 11, y / 16, 32);
@@ -2683,8 +2763,8 @@ function drawHeart(open: number, flash: number, dying: number): Built {
   const core = open > 0.5 ? EMBER_HI : EMBER;
   if (open > 0) p.ell(cx, cy + 2, rx * 0.72, ry * 0.7, (x, y) => (Math.hypot((x - cx) / rx, (y - cy - 2) / ry) < 0.35 ? core : mixc(EMBER, VEIN_HOT, 0.4)));
   for (const [ox, oy, rot] of plates) {
-    const px = cx + ox * (1 + open * 0.28);
-    const py = cy + oy * (1 + open * 0.2);
+    const px = cx + ox * (0.82 + open * 0.55);
+    const py = cy + oy * (0.85 + open * 0.35);
     const w = 7;
     const h = 5.5;
     const c = Math.cos(rot);
@@ -2709,6 +2789,13 @@ function drawHeart(open: number, flash: number, dying: number): Built {
     return { p: b, ax: cx, ay: G, eye: null };
   }
   p.outline(INK);
+  if (open >= 1 && !flash) {
+    // Раскрылось — окно: золотой ореол, бей сейчас.
+    const q = new Px(W, H);
+    q.data.set(p.data);
+    q.outline(alpha(EMBER_HI, 0.85), true);
+    return { p: q, ax: cx, ay: G, eye: [cx + 4, cy - 4] };
+  }
   if (flash > 0) {
     // Удар сердца: алый ореол вокруг силуэта.
     const q = new Px(W, H);

@@ -2359,7 +2359,8 @@ registerBoss('f15boss', {
       st.beatAt = sim.time;
       st.beatNext = sim.time + st.period;
       st.beats += 1;
-      sim.events.push({ t: 'boss', what: 'f15b_beat' });
+      // Удар сердца — звук (в фазе «СЕРДЦЕ» — чаще и громче).
+      sim.events.push({ t: 'boss', what: b.phase === 4 ? 'f15b_beat_fast' : 'f15b_beat' });
       if (b.phase === 4) heartBeat(sim, b, st, api);
     }
     if (!st.said && b.t > 1.3) {

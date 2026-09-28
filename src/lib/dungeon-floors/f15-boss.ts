@@ -282,7 +282,8 @@ export const F15_HEART_AREA: AreaSpec = {
   skin: {
     floor: 'ground',
     wall: 'rock',
-    tint: { mul: [0.82, 0.42, 0.44], mix: '#3a0612', k: 0.22 },
+    // Облик движка виден только в просветах у стыка — там камень «Мира».
+    tint: { mul: [0.92, 0.8, 0.8], mix: '#2a0a10', k: 0.1 },
     fog: '#12030a',
   },
   legend: LEGEND,
