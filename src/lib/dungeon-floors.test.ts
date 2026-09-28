@@ -335,3 +335,249 @@ describe('этаж 15: договор «Мира» и «Сердца»', () => {
     expect(f.mats.some((m) => m.id === 'f15mat')).toBe(true);
   });
 });
+
+describe('движок 3', () => {
+  const wd = buildWorld(1);
+  const lift = liftOf(wd, entryArea(1))!;
+  const make = (god = false) => {
+    const s = createSim({
+      world: wd,
+      dungeon: DUNGEON_START,
+      stats: heroOf(DUNGEON_START),
+      x: lift.x + 0.5,
+      y: lift.y + 1.5,
+      seed: 5,
+      now: () => 1e12,
+      god,
+    });
+    s.mobs = [];
+    s.hero.inv = 0;
+    // Площадка 9×5 вокруг героя — чистый пол: проверкам не мешают стены карты.
+    const hx = Math.floor(s.hero.x);
+    const hy = Math.floor(s.hero.y);
+    for (let y = hy - 2; y <= hy + 2; y++)
+      for (let x = hx - 4; x <= hx + 4; x++) s.tiles[y * wd.w + x] = Tile.Floor;
+    return { s, hx, hy };
+  };
+  const idle = { ...NO_INPUT };
+
+  it('E1: клетка с опасностью — только своей вылазке; стена выталкивает', () => {
+    const { s, hx, hy } = make();
+    API.setTile(s, hx + 1, hy, Tile.Hazard, 0, { dps: 0.5, slow: 0.5 });
+    const i = hy * wd.w + hx + 1;
+    expect(s.world.haz[i]).toBeGreaterThan(0);
+    expect(wd.haz[i]).toBe(0);
+    expect(s.world.hazards[s.world.haz[i] - 1].dps).toBe(0.5);
+    // Та же опасность второй раз — та же запись таблицы.
+    const n = s.world.hazards.length;
+    API.setTile(s, hx + 2, hy, Tile.Hazard, 0, { dps: 0.5, slow: 0.5 });
+    expect(s.world.hazards.length).toBe(n);
+    // Снять опасность.
+    API.setTile(s, hx + 1, hy, Tile.Floor, 0, null);
+    expect(s.world.haz[i]).toBe(0);
+    // Стена под героем и под мобом — оба выходят на ближнюю проходимую.
+    const m = spawnMob(s, 'rat', hx - 1.5, hy + 0.5, { mode: 'chase' });
+    API.setTile(s, hx, hy, Tile.Wall);
+    API.setTile(s, hx - 2, hy, Tile.Wall);
+    expect(Math.floor(s.hero.x) !== hx || Math.floor(s.hero.y) !== hy).toBe(true);
+    expect(Math.floor(m.x) !== hx - 2 || Math.floor(m.y) !== hy).toBe(true);
+  });
+
+  it('E2: свет на ходу — поставить, сдвинуть, погасить; мир общий не трогается', () => {
+    const { s } = make();
+    const n0 = wd.lights.length;
+    API.light(s, 'fire', { x: 3, y: 4, r: 5, tint: 'red' });
+    expect(s.world.lights.length).toBe(n0 + 1);
+    API.light(s, 'fire', { x: 6, y: 4, r: 5, tint: 'red' });
+    expect(s.world.lights.length).toBe(n0 + 1);
+    expect(s.world.lights.at(-1)!.x).toBe(6);
+    API.light(s, 'fire', null);
+    expect(s.world.lights.length).toBe(n0);
+    expect(wd.lights.length).toBe(n0);
+  });
+
+  it('E3: урон окружения — мимо брони, неуязвимость спасает, бессмертие держит', () => {
+    const { s } = make();
+    const hp = s.hero.hp;
+    API.hurtEnv(s, 0.1);
+    expect(hp - s.hero.hp).toBeCloseTo(s.stats.maxHp * 0.1, 3);
+    s.hero.inv = 1;
+    const hp1 = s.hero.hp;
+    API.hurtEnv(s, 0.5);
+    expect(s.hero.hp).toBe(hp1);
+    s.hero.inv = 0;
+    API.hurtEnv(s, 5);
+    expect(s.hero.mode).toBe('dying');
+    const g = make(true).s;
+    API.hurtEnv(g, 5);
+    expect(g.hero.hp).toBe(1);
+    expect(g.hero.mode).not.toBe('dying');
+  });
+
+  it('E4: сорвался в пропасть — убийство в зачёт, добыча на краю', () => {
+    const { s, hx, hy } = make();
+    s.tiles[hy * wd.w + hx + 3] = Tile.Deep;
+    const m = spawnMob(s, 'rat', hx + 3.5, hy + 0.5, { mode: 'chase' });
+    const k0 = s.killed;
+    API.fall(s, m);
+    expect(s.killed).toBe(k0 + 1);
+    expect(m.fell).toBe(true);
+    expect(s.delta.kills.rat).toBe(1);
+    for (const d of s.drops)
+      expect(s.tiles[Math.floor(d.y) * wd.w + Math.floor(d.x)]).not.toBe(Tile.Deep);
+    expect(s.events.some((e) => e.t === 'fall')).toBe(true);
+  });
+
+  it('E5: дуга кольца, стены режут удар, удар по своим', () => {
+    const { s, hx, hy } = make();
+    const x = s.hero.x;
+    const y = s.hero.y;
+    const ring = (ang: number) =>
+      API.strike(s, { shape: 'ring', x: x - 2, y, r: 2, w: 0.4, ang, arc: 1, warn: 0, dmg: 30 });
+    // Сектор смотрит от героя — мимо.
+    ring(Math.PI);
+    const hp0 = s.hero.hp;
+    stepSim(s, 1 / 60, idle);
+    expect(s.hero.hp).toBe(hp0);
+    // Сектор на героя — попал.
+    s.hero.inv = 0;
+    ring(0);
+    // Удар сработал — стоп-кадр; следующий сработает после него.
+    for (let i = 0; i < 6; i++) stepSim(s, 1 / 60, idle);
+    expect(s.hero.hp).toBeLessThan(hp0);
+    // Стена между ударом и героем при `los` — мимо.
+    const s2 = make().s;
+    s2.tiles[hy * wd.w + hx + 2] = Tile.Wall;
+    API.strike(s2, { shape: 'circle', x: hx + 3.5, y: hy + 0.5, r: 4, warn: 0, dmg: 30, los: true });
+    const h2 = s2.hero.hp;
+    stepSim(s2, 1 / 60, idle);
+    expect(s2.hero.hp).toBe(h2);
+    // Поезд давит своих.
+    const s3 = make().s;
+    const rat = spawnMob(s3, 'rat', hx + 3.5, hy + 0.5, { mode: 'chase' });
+    API.strike(s3, {
+      shape: 'line',
+      x: hx - 3.5,
+      y: hy + 0.5,
+      r: 8,
+      w: 0.6,
+      ang: 0,
+      warn: 0,
+      dmg: 0,
+      mobDmg: Infinity,
+    });
+    stepSim(s3, 1 / 60, idle);
+    expect(rat.mode).toBe('dying');
+  });
+
+  it('E6: героя тянут — едет к точке, ввод заперт, конец у точки', () => {
+    const { s } = make();
+    const x0 = s.hero.x;
+    API.pullHero(s, x0 + 3, s.hero.y, { speed: 10, inv: true });
+    // Джойстик тянет назад — пока героя тянут, он не слушается.
+    let i = 0;
+    for (; i < 60 && s.hero.pull; i++) stepSim(s, 1 / 60, { ...NO_INPUT, mx: -1 });
+    expect(s.hero.pull).toBeFalsy();
+    expect(i).toBeLessThan(40);
+    expect(s.hero.x).toBeGreaterThan(x0 + 2.5);
+  });
+
+  it('E7: мир стоит — мобы замерли, герой идёт; время возвращается само', () => {
+    const { s, hx, hy } = make();
+    const m = spawnMob(s, 'rat', hx + 3.5, hy + 0.5, { mode: 'chase' });
+    API.timeScale(s, 0, 1, 0.5);
+    const mx = m.x;
+    const t0 = s.time;
+    const x0 = s.hero.x;
+    for (let i = 0; i < 20; i++) stepSim(s, 1 / 60, { ...NO_INPUT, mx: -1 });
+    expect(m.x).toBe(mx);
+    expect(s.time).toBe(t0);
+    expect(s.hero.x).toBeLessThan(x0);
+    for (let i = 0; i < 30; i++) stepSim(s, 1 / 60, idle);
+    expect(s.worldScale).toBe(1);
+    expect(s.time).toBeGreaterThan(t0);
+  });
+
+  it('E8: своё действие этажа — кнопка с подписью, нажатие зовёт этаж', async () => {
+    const { FLOOR_SCRIPTS } = await import('./dungeon-ai');
+    const { usableNear, useObject } = await import('./dungeon-sim');
+    const { s, hx, hy } = make();
+    const was = FLOOR_SCRIPTS.get(1);
+    let used = 0;
+    FLOOR_SCRIPTS.set(1, { ...was, onUse: () => void (used += 1), useLabel: () => 'Рычаг' });
+    try {
+      const lever = {
+        ...wd.objs[0],
+        id: 'lever',
+        kind: 'deco' as const,
+        x: hx + 1,
+        y: hy,
+        use: { label: 'Рычаг' },
+      };
+      s.world.objs = [...wd.objs, lever];
+      const u = usableNear(s);
+      expect(u?.kind).toBe('floor');
+      expect(u?.label).toBe('Рычаг');
+      expect(useObject(s, u!)).toBe(true);
+      expect(used).toBe(1);
+    } finally {
+      if (was) FLOOR_SCRIPTS.set(1, was);
+      else FLOOR_SCRIPTS.delete(1);
+    }
+  });
+
+  it('E9–E10: камера уходит и возвращается, своё замедление', () => {
+    const { s } = make();
+    API.camera(s, 10, 10, 0.3);
+    expect(s.cam).toBeTruthy();
+    for (let i = 0; i < 25; i++) stepSim(s, 1 / 60, idle);
+    expect(s.cam).toBeNull();
+    API.slowmo(s, 1, 0.25);
+    const t0 = s.time;
+    stepSim(s, 0.04, idle);
+    expect(s.time - t0).toBeCloseTo(0.01, 4);
+  });
+
+  it('E13: навес лёг — зона ровно на месте падения', () => {
+    const { s, hx, hy } = make();
+    const m = spawnMob(s, 'rat', hx - 3.5, hy + 0.5, { mode: 'idle' });
+    API.shoot(
+      s,
+      m,
+      0,
+      {
+        speed: 8,
+        r: 0.4,
+        life: 2,
+        dmg: 0,
+        art: 'x',
+        lob: true,
+        onLand: { r: 1, life: 2, dps: 0.01 },
+      },
+      hx + 3.5,
+      hy + 0.5,
+    );
+    for (let i = 0; i < 90 && s.shots.length; i++) stepSim(s, 1 / 60, idle);
+    expect(s.shots.length).toBe(0);
+    const z = s.zones.find((q) => q.r === 1);
+    expect(z).toBeTruthy();
+    expect(Math.hypot(z!.x - hx - 3.5, z!.y - hy - 0.5)).toBeLessThan(0.3);
+  });
+
+  it('E17–E18: радиус поля путей этажа, сброс боя получает api', () => {
+    const { s } = make();
+    expect(s.flowR).toBe(FLOORS[0].flowR ?? 26);
+    const b = s.boss!;
+    const was = BOSS_SCRIPTS.get(b.def.script)!;
+    let got: unknown = null;
+    BOSS_SCRIPTS.set(b.def.script, { ...was, reset: (_s, _b, api) => void (got = api) });
+    try {
+      b.state = 'fight';
+      API.hurtEnv(s, 5);
+      expect(got).toBe(API);
+      expect(b.state).toBe('idle');
+    } finally {
+      BOSS_SCRIPTS.set(b.def.script, was);
+    }
+  });
+});

@@ -11,7 +11,7 @@
 // рисуется один раз на позу и сторону).
 
 import type { Px } from './dungeon-art';
-import type { Mob, Shot, Strike, Zone } from './dungeon-sim';
+import type { Mob, Shot, Sim, Strike, Zone } from './dungeon-sim';
 import type { WorldObj } from './dungeon-world';
 
 /** Поза моба для кадра. Движок выводит её из режима ИИ. */
@@ -98,4 +98,17 @@ export const registerZonePainter = (art: string, f: ZonePainter) => void ZONE_PA
 export const registerPropPainter = (ref: string, f: PropPainter) => void PROP_PAINTERS.set(ref, f);
 export const registerCellPainter = (area: string, f: CellPainter) =>
   void CELL_PAINTERS.set(area, f);
+
+let painting: Sim | null = null;
+
+/**
+ * Вылазка, которую рисуют прямо сейчас (Движок 3): снаряжение героя, где он,
+ * фаза босса, `sim.floorData`. Рендер ставит её в начале каждого кадра;
+ * вне кадра (иконки, лобби) — null. Кеш кадров по этим данным — забота
+ * рисовальщика: ключ кеша обязан покрывать всё, что читается отсюда.
+ */
+export const paintSim = (): Sim | null => painting;
+export const setPaintSim = (s: Sim | null): void => {
+  painting = s;
+};
 export const registerItemArt = (id: string, f: ItemPainter) => void ITEM_ART.set(id, f);
