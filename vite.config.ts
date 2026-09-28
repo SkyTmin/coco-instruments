@@ -78,7 +78,8 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'coco-audio',
-              expiration: { maxEntries: 320, maxAgeSeconds: 60 * 60 * 24 * 90 },
+              // 302 файла на v2.82.4 (эффекты этажей 6–15 и три трека) — с запасом.
+              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 90 },
             },
           },
           {

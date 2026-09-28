@@ -33,6 +33,63 @@ OpenGameArt.org, лицензия CC0 1.0 (через тот же индекс):
 Карты риск-игры, взмахи крыльев, звон блестяшек (v2.64) — Kenney
   «Casino Audio», «RPG Audio» (cloth), «Interface Sounds» (glass), CC0.
 
+ЭТАЖИ 6–15 ПОДЗЕМЕЛЬЯ (v2.83) — всё CC0 1.0. Какой файл из чего собран —
+SOURCES.txt; склейки (сердце, телепорт, остановка времени, хор, пушка,
+лазер, рёв) перечислены там по частям.
+
+  VSCO 2 Community Edition — Versilian Studios, CC0
+  (github.com/sgossner/VSCO-2-CE): литавры (сердце), трубчатый колокол
+  (бой часов), гонг (остановка и пуск времени, хор финала), большой
+  барабан (удар остановки), «Miscellania Raw»: пузыри (лава), кирпич по
+  кирпичу (скрежет камня), цепь на вороте (цепи), бьющееся стекло.
+
+  Versilian Community Sample Library (VCSL) — Versilian Studios, CC0
+  (github.com/sgossner/VCSL): вьетнамская цитра данчань (струна бивы,
+  скольжение струны), игрушечный паровозный свисток октавой ниже (гудок
+  поезда), трубчатый колокол (бой часов).
+
+  Сэмплы Sonic Pi (github.com/sonic-pi-net/sonic-pi, etc/samples) —
+  все CC0 с freesound.org, по их README:
+    ambi_choir — Exsomniel (freesound.org/people/Exsomniel/sounds/207809) — хор финала;
+    ambi_swoosh — Halgrimm (freesound.org/people/Halgrimm/sounds/169867) — телепорт, время;
+    ambi_dark_woosh — EcoDTR (freesound.org/people/EcoDTR/sounds/27281) — телепорт;
+    ambi_sauna — hullum (freesound.org/people/hullum/sounds/415551) — пар, шипение лавы.
+
+  ESC-50 (github.com/karolpiczak/ESC-50) — ТОЛЬКО клипы, у которых в его
+  LICENSE исходная запись на freesound.org помечена [CC0]. Набор целиком
+  выложен под CC BY-NC, но это лицензия на подборку; каждый взятый клип —
+  пятисекундный отрезок записи, которую автор сам отдал в общественное
+  достояние. Клипы с [CC-BY] и [CC-BY-NC] не брались.
+    5-156999-A — chrscrwfrd18, «Lightening.wav» (sounds/156999) — гром;
+    3-144891-A — kijjaz, «20120202 Bangkok Thunderstorm» (sounds/144891) — гром;
+    3-117504-A — klangfabrik, «winter wind 01a» (sounds/117504) — ветер;
+    5-117773-A — klangfabrik, «roaring wind» (sounds/117773) — ветер;
+    5-179496-B — toiletrolltube, «111224_04 wind» (sounds/179496) — ветер;
+    5-213802-A — laribum, «burning-fire-steam» (sounds/213802) — пар, лава;
+    4-212698-A — dasebr, «Breaking a glass bottle» (sounds/212698) — стекло;
+    3-136451-A — felix.blume, «Train passing by in the desert» (sounds/136451) — поезд;
+    3-159445-A — felix.blume, «Brussels Train Station» (sounds/159445) — поезд;
+    5-210571-A — Sclolex, «wall_clock» (sounds/210571) — тиканье (и в треке «часы»);
+    1-62849-A — life_interconnected, «clock_tick_close» (sounds/62849) — тиканье.
+
+  CC-Sounds для Cataclysm: DDA (github.com/Fris0uman/CDDA-Soundpacks) —
+  ТОЛЬКО файлы, у которых в credits.md папки стоит CC0 (сам репозиторий
+  под CC BY-SA 4.0 — это лицензия на пак, а не на чужие записи в нём):
+    thunder_far — chromakei (freesound.org/people/chromakei/sounds/398287) — гром;
+    smash_fail_glass — Ryanz-Official (sounds/639745) — стекло;
+    small_bash_flesh 1, 3 — mateusboga (sounds/426065) — плоть;
+    big_stabbing_flesh_1 — magnuswaker (sounds/522091) — плоть;
+    zombie_gibbed_1 — PaulMorek (sounds/196725) — плоть;
+    launcher_1 — LeMudCrab (sounds/163458) — пушка;
+    explosion_huge 1, 2 — unfa (sounds/352143) — пушка;
+    explosion_small — j1987 (sounds/140727) — пушка.
+
+  Kenney «Sci-fi Sounds» (forceField, laserLarge, spaceEngineSmall — лазер,
+  гул луча, телепорт) и «Interface Sounds» (капли — хлопок телепорта), CC0;
+  OpenGameArt через тот же индекс: «Zombies Sound Pack» — artisticdude
+  (рык зомби октавой ниже — рёв зверя), «RPG Sound Pack» — artisticdude
+  (огр, «gutteral beast», великан — под рыком), CC0.
+
 МУЗЫКА — music/  (все треки CC0 1.0)
 
   hall.mp3    «Sketchbook 2024-12-04»   — Abstraction / Tallbeard Studios (Benjamin Burnes)
@@ -45,6 +102,10 @@ OpenGameArt.org, лицензия CC0 1.0 (через тот же индекс):
   boss.mp3    «Ludum Dare 30 03»        — Abstraction / Tallbeard Studios
   lobby.mp3   «Shrine»                  — yd (opengameart.org/content/shrine)
   fishing.mp3 «Ambient Relaxing Loop»   — isaiah658 (opengameart.org/content/ambient-relaxing-loop)
+  sky.mp3     «Heavenly Loop»           — isaiah658 (opengameart.org/content/heavenly-loop) — этаж 11
+  finale.mp3  «Ludum Dare 30 08»        — Abstraction / Tallbeard Studios — бой с Хозяином подземелья
+  clock.mp3   «Unsolved Investigation»  — isaiah658 (opengameart.org/content/unsolved-investigation)
+              с наложенным тиканьем настенных часов (Sclolex, CC0, см. выше) — этаж 14
 
   Треки Abstraction — из «Music Loop Bundle» (tallbeard.itch.io/music-loop-bundle,
   abstractionmusic.com), CC0.
