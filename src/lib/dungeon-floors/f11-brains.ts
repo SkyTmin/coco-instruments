@@ -932,8 +932,16 @@ function blowOff(sim: Sim, st: F11State, api: SimApi, text: string, sub?: string
   api.hurtEnv(sim, 0.12);
   let [sx, sy] = st.safe;
   if (!standable(sim, sx, sy)) {
+    // Последняя твёрдая клетка ушла сама (обвал): ближайший пол рядом, в бою —
+    // ближе к середине арены. Лифт — только если рядом пола нет вовсе:
+    // унести героя с арены значило бы сбросить бой.
+    const fight = sim.boss?.state === 'fight';
+    const near = spotNear(sim, h.x, h.y, 0.6, 7, (px, py) =>
+      fight ? hypot(px - st.arena.cx, py - st.arena.cy) : hypot(px - h.x, py - h.y),
+    );
     const lift = sim.world.objs.find((o) => o.kind === 'lift');
-    if (lift) [sx, sy] = [lift.x + 0.5, lift.y + 1.5];
+    if (near) [sx, sy] = near;
+    else if (lift) [sx, sy] = [lift.x + 0.5, lift.y + 1.5];
   }
   api.moveHero(sim, sx, sy);
   h.inv = Math.max(h.inv, 0.9);
@@ -1527,12 +1535,22 @@ function valveIndex(sim: Sim, obj: WorldObj): number {
   return list.findIndex((o) => o.x === obj.x && o.y === obj.y);
 }
 
+/** Заслонка для рисовальщика: 0 — закрыта, 1 — открывается, 2 — дует. */
+export function valveShown(sim: Sim, obj: WorldObj): 0 | 1 | 2 {
+  const st = STATE.get(sim);
+  if (!st) return 0;
+  const k = valveIndex(sim, obj);
+  const t = k >= 0 ? (st.gallery.valveT[k] ?? 0) : 0;
+  const since = VALVE.cd - t;
+  if (t <= 0 || since > VALVE.warn + VALVE.on) return 0;
+  return since < VALVE.warn ? 1 : 2;
+}
+
 function openValve(sim: Sim, st: F11State, api: SimApi, k: number): boolean {
   const gl = st.gallery;
-  if (gl.valveT[k] > 0) return false;
-  gl.valveT[k] = VALVE.cd;
   const g = st.groups[4 + k];
-  if (!g) return false;
+  if (!g || gl.valveT[k] > 0) return false;
+  gl.valveT[k] = VALVE.cd;
   sim.events.push({ t: 'boss', what: 'f11_valve_call' });
   after(st, VALVE.warn, () => {
     g.to = VALVE.k;

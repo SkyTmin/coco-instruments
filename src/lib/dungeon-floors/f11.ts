@@ -163,6 +163,8 @@ export const F11_LEGEND: Record<string, LegendCell> = {
     light: { r: 3.2, tint: 'teal' },
   },
   Z: { tile: 'wall', mark: M.window, obj: { kind: 'deco', ref: 'f11_window', solid: 0 } },
+  // Верх Ветряной башни: флюгер показывает, куда башня гонит ветер.
+  L: { tile: 'wall', mark: M.ruin, obj: { kind: 'deco', ref: 'f11_vane', solid: 0 } },
   // Вещи на полу.
   O: thing('f11_tree', 0.45),
   V: thing('f11_sakura', 0.42),
@@ -422,7 +424,7 @@ const MOBS: MobDef[] = [
     fly: true,
     eye: '#ff4030',
     light: 0.8,
-    shot: { speed: 6.5, r: 0.22, life: 1.8, dmg: 1, art: 'f11_bolt' },
+    shot: { speed: 6.5, r: 0.22, life: 1.8, dmg: 1, art: 'f11_dart' },
     gore: GORE_ROBOT,
   },
   {
@@ -692,6 +694,6 @@ export const F11: FloorDef = {
       stack: 1,
     },
   ],
-  music: { explore: 'fishing', boss: 'boss' },
+  music: { explore: 'sky', boss: 'boss' },
   cover: '/ui/areas/f11.png',
 };
