@@ -316,3 +316,22 @@ describe('этажи подземелья: заготовки спрятаны',
     expect(descendRun(d)).toBeNull();
   });
 });
+
+describe('этаж 15: договор «Мира» и «Сердца»', () => {
+  it('последний район — «Сердце», стык ровно в столбцах F15_JOIN', async () => {
+    const { F15_HEART_AREA, F15_JOIN, F15_BOSS } = await import('./dungeon-floors/f15-boss');
+    const f = FLOORS.find((x) => x.id === 15)!;
+    expect(f.areas[f.areas.length - 1]).toBe(F15_HEART_AREA);
+    expect(f.boss).toBe(F15_BOSS);
+    expect(F15_BOSS.id).toBe('f15boss');
+    expect(F15_BOSS.area).toBe(F15_HEART_AREA.id);
+    const open = (r: string) =>
+      [...r].map((c, i) => (c === '#' ? -1 : i)).filter((i) => i >= 0);
+    const want = Array.from({ length: F15_JOIN.x1 - F15_JOIN.x0 + 1 }, (_, i) => F15_JOIN.x0 + i);
+    const heart = F15_HEART_AREA.rows;
+    expect(open(heart[heart.length - 1]), 'низ «Сердца»').toEqual(want);
+    const world = f.areas[f.areas.length - 2].rows;
+    expect(open(world[0]), 'верх «Мира»').toEqual(want);
+    expect(f.mats.some((m) => m.id === 'f15mat')).toBe(true);
+  });
+});

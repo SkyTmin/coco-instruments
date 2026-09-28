@@ -13,6 +13,27 @@ import { F7 } from './f7';
 import { F8 } from './f8';
 import { F9 } from './f9';
 import { F10 } from './f10';
+import { F11 } from './f11';
+import { F12 } from './f12';
+import { F13 } from './f13';
+import { F14 } from './f14';
+import { F15 } from './f15';
 import type { FloorDef } from './types';
 
-export const FLOORS: FloorDef[] = [F1, F2, F3, F4, F5, F6, F7, F8, F9, F10];
+export const FLOORS: FloorDef[] = [
+  F1,
+  F2,
+  F3,
+  F4,
+  F5,
+  F6,
+  F7,
+  F8,
+  F9,
+  F10,
+  F11,
+  F12,
+  F13,
+  F14,
+  F15,
+];
