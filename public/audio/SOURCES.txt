@@ -61,11 +61,6 @@ sfx/pick.soil.2.mp3	impact-sounds/impactSoft_medium_001.ogg
 sfx/pick.soil.3.mp3	impact-sounds/impactSoft_medium_002.ogg
 sfx/pick.soil.4.mp3	impact-sounds/impactSoft_medium_003.ogg
 sfx/pick.soil.5.mp3	impact-sounds/impactSoft_medium_004.ogg
-sfx/pick.stone.1.mp3	impact-sounds/impactMining_000.ogg
-sfx/pick.stone.2.mp3	impact-sounds/impactMining_001.ogg
-sfx/pick.stone.3.mp3	impact-sounds/impactMining_002.ogg
-sfx/pick.stone.4.mp3	impact-sounds/impactMining_003.ogg
-sfx/pick.stone.5.mp3	impact-sounds/impactMining_004.ogg
 sfx/pick.metal.1.mp3	impact-sounds/impactMetal_light_000.ogg
 sfx/pick.metal.2.mp3	impact-sounds/impactMetal_light_001.ogg
 sfx/pick.metal.3.mp3	impact-sounds/impactMetal_light_002.ogg
@@ -123,7 +118,6 @@ sfx/axe.chop.2.mp3	impact-sounds/impactWood_medium_000.ogg
 sfx/axe.chop.3.mp3	impact-sounds/impactWood_medium_001.ogg
 sfx/axe.chop.4.mp3	impact-sounds/impactWood_medium_002.ogg
 sfx/axe.chop.5.mp3	impact-sounds/impactWood_medium_003.ogg
-sfx/saw.bite.1.mp3	sci-fi-sounds/spaceEngine_002.ogg
 sfx/log.drop.1.mp3	impact-sounds/impactWood_light_000.ogg
 sfx/log.drop.2.mp3	impact-sounds/impactWood_light_001.ogg
 sfx/log.drop.3.mp3	impact-sounds/impactWood_light_002.ogg
@@ -189,9 +183,6 @@ sfx/shiny.1.mp3	interface-sounds/glass_001.ogg
 sfx/shiny.2.mp3	interface-sounds/glass_002.ogg
 sfx/shiny.3.mp3	interface-sounds/glass_005.ogg
 sfx/shiny.4.mp3	interface-sounds/glass_006.ogg
-sfx/splash.1.mp3	oga-rpg-pack/RPG Sound Pack/inventory/bubble.wav
-sfx/splash.2.mp3	oga-rpg-pack/RPG Sound Pack/inventory/bubble2.wav
-sfx/splash.3.mp3	oga-rpg-pack/RPG Sound Pack/inventory/bubble3.wav
 sfx/plop.1.mp3	interface-sounds/drop_002.ogg
 sfx/plop.2.mp3	interface-sounds/drop_003.ogg
 sfx/snap.1.mp3	rpg-audio/knifeSlice.ogg
@@ -227,7 +218,6 @@ music/lobby.mp3	«Shrine» — yd, CC0-1.0, https://opengameart.org/content/shri
 music/depths.mp3	«Patreon Challenge 04» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
 music/boss.mp3	«Ludum Dare 30 03» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
 music/fishing.mp3	«Ambient Relaxing Loop» — isaiah658, CC0-1.0, https://opengameart.org/content/ambient-relaxing-loop
-sfx/rank.up.1.mp3	oga-gui-lokif/GUI_Sound_Effects_by_Lokif/save.wav
 sfx/soft.up.1.mp3	oga-gui-lokif/GUI_Sound_Effects_by_Lokif/positive.wav
 sfx/step.ground.1.mp3	impact-sounds/footstep_concrete_000.ogg
 sfx/step.ground.2.mp3	impact-sounds/footstep_concrete_001.ogg
@@ -239,3 +229,74 @@ sfx/step.wood.2.mp3	impact-sounds/footstep_wood_001.ogg
 sfx/step.wood.3.mp3	impact-sounds/footstep_wood_002.ogg
 sfx/step.wood.4.mp3	impact-sounds/footstep_wood_003.ogg
 sfx/step.wood.5.mp3	impact-sounds/footstep_wood_004.ogg
+sfx/rank.up.1.mp3	oga-gui-lokif/GUI_Sound_Effects_by_Lokif/save.wav
+sfx/saw.bite.1.mp3	sci-fi-sounds/spaceEngine_002.ogg
+sfx/pick.stone.1.mp3	impact-sounds/impactMining_000.ogg
+sfx/pick.stone.2.mp3	impact-sounds/impactMining_001.ogg
+sfx/pick.stone.3.mp3	impact-sounds/impactMining_002.ogg
+sfx/pick.stone.4.mp3	impact-sounds/impactMining_003.ogg
+sfx/pick.stone.5.mp3	impact-sounds/impactMining_004.ogg
+sfx/splash.1.mp3	oga-rpg-pack/RPG Sound Pack/inventory/bubble.wav
+sfx/splash.2.mp3	oga-rpg-pack/RPG Sound Pack/inventory/bubble2.wav
+sfx/splash.3.mp3	oga-rpg-pack/RPG Sound Pack/inventory/bubble3.wav
+music/sky.mp3	«Heavenly Loop» — isaiah658, CC0-1.0, https://opengameart.org/content/heavenly-loop
+music/finale.mp3	«Ludum Dare 30 08» — Abstraction / Tallbeard Studios (Ben Burnes), CC0-1.0, https://tallbeard.itch.io/music-loop-bundle
+music/clock.mp3	«Unsolved Investigation» — isaiah658, CC0-1.0, https://opengameart.org/content/unsolved-investigation + тиканье: esc50/5-210571-A-38.wav
+sfx/thunder.1.mp3	esc50/5-156999-A-19.wav
+sfx/thunder.2.mp3	esc50/3-144891-A-19.wav
+sfx/thunder.3.mp3	cdda-sp/sound/CC-Sounds/environment/weather/thunder_far.ogg
+sfx/wind.1.mp3	esc50/3-117504-A-16.wav
+sfx/wind.2.mp3	esc50/5-117773-A-16.wav
+sfx/wind.3.mp3	esc50/5-179496-B-16.wav
+sfx/lava.bubble.1.mp3	vsco/Miscellania Raw/Misc 1/bubbles.wav
+sfx/lava.bubble.2.mp3	vsco/Miscellania Raw/Misc 1/bubbles2.wav
+sfx/lava.bubble.3.mp3	vsco/Miscellania Raw/Misc 1/bubbles4.wav
+sfx/lava.hiss.1.mp3	sonicpi/ambi_sauna.flac + vsco/Miscellania Raw/Misc 1/bubbles4.wav
+sfx/lava.hiss.2.mp3	sonicpi/ambi_sauna.flac + vsco/Miscellania Raw/Misc 1/bubbles.wav
+sfx/lava.hiss.3.mp3	esc50/5-213802-A-12.wav
+sfx/steam.1.mp3	sonicpi/ambi_sauna.flac
+sfx/steam.2.mp3	sonicpi/ambi_sauna.flac
+sfx/steam.3.mp3	esc50/5-213802-A-12.wav
+sfx/glass.break.1.mp3	vsco/Miscellania Raw/Misc 1/glass_break3.wav
+sfx/glass.break.2.mp3	esc50/4-212698-A-39.wav
+sfx/glass.break.3.mp3	cdda-sp/sound/CC-Sounds/smash_fail/glass/smash_fail_glass.ogg
+sfx/string.1.mp3	vcsl/Chordophones/Zithers/Dan Tranh/Normal/F#3_mf_1.wav
+sfx/string.2.mp3	vcsl/Chordophones/Zithers/Dan Tranh/Normal/G#3_mf_1.wav
+sfx/string.3.mp3	vcsl/Chordophones/Zithers/Dan Tranh/Normal/D#3_mf_1.wav
+sfx/string.bend.1.mp3	vcsl/Chordophones/Zithers/Dan Tranh/Gliss/Gliss_Dwn_Med_mf_1.wav
+sfx/train.1.mp3	esc50/3-136451-A-45.wav
+sfx/train.2.mp3	esc50/3-159445-A-45.wav
+sfx/train.horn.1.mp3	vcsl/Aerophones/Edge-blown Aerophones/Train Whistle, Toy/Main_TrainLow_Sus-001.wav
+sfx/train.horn.2.mp3	vcsl/Aerophones/Edge-blown Aerophones/Train Whistle, Toy/Main_TrainLow_Double-001.wav
+sfx/clock.tick.1.mp3	esc50/5-210571-A-38.wav
+sfx/clock.tick.2.mp3	esc50/5-210571-A-38.wav
+sfx/clock.tick.3.mp3	esc50/1-62849-A-38.wav
+sfx/clock.tick.4.mp3	esc50/1-62849-A-38.wav
+sfx/clock.bell.1.mp3	vsco/Percussion/TB_hit_C4_v4_rr1.wav
+sfx/clock.bell.2.mp3	vcsl/Idiophones/Struck Idiophones/Tubular Bells 1/chimes_C4_ff_rr2.wav
+sfx/heart.1.mp3	vsco/Percussion/Timpani/Timpani2_Hit_v4_rr1_Sum.wav + vsco/Percussion/Timpani/Timpani2_Hit_v4_rr1_Sum.wav
+sfx/heart.2.mp3	vsco/Percussion/Timpani/Timpani2_Hit_v4_rr1_Sum.wav + vsco/Percussion/Timpani/Timpani2_Hit_v4_rr1_Sum.wav
+sfx/heart.3.mp3	vsco/Percussion/Timpani/Timpani2_Hit_v4_rr1_Sum.wav + vsco/Percussion/Timpani/Timpani2_Hit_v4_rr1_Sum.wav
+sfx/flesh.1.mp3	cdda-sp/sound/CC-Sounds/melee_hit_flesh/small_bash/small_bash_flesh_1.ogg
+sfx/flesh.2.mp3	cdda-sp/sound/CC-Sounds/melee_hit_flesh/small_bash/small_bash_flesh_3.ogg
+sfx/flesh.3.mp3	cdda-sp/sound/CC-Sounds/melee_hit_flesh/big_stabbing/big_stabbing_flesh_1.ogg
+sfx/flesh.4.mp3	cdda-sp/sound/CC-Sounds/mon_death/zombie_gibbed/zombie_gibbed_1.ogg
+sfx/warp.1.mp3	sonicpi/ambi_swoosh.flac + sci-fi-sounds/forceField_001.ogg + interface-sounds/drop_004.ogg
+sfx/warp.2.mp3	sonicpi/ambi_dark_woosh.flac + sci-fi-sounds/forceField_003.ogg + interface-sounds/drop_001.ogg
+sfx/stone.grind.1.mp3	vsco/Miscellania Raw/Misc 1/brick_scrape.wav
+sfx/stone.grind.2.mp3	vsco/Miscellania Raw/Misc 1/brick_scrape2.wav
+sfx/stone.grind.3.mp3	vsco/Miscellania Raw/Misc 1/brick_scrape2.wav
+sfx/chains.1.mp3	vsco/Miscellania Raw/Misc 1/chaingrindLoop.wav
+sfx/chains.2.mp3	vsco/Miscellania Raw/Misc 1/chaingrindLoop.wav
+sfx/chains.3.mp3	vsco/Miscellania Raw/Misc 1/chaingrindLoop.wav
+sfx/cannon.1.mp3	cdda-sp/sound/CC-Sounds/fire_gun/launchers/launcher_1.ogg + cdda-sp/sound/CC-Sounds/explosion/huge/explosion_huge_2.ogg
+sfx/cannon.2.mp3	cdda-sp/sound/CC-Sounds/explosion/small/explosion_small.ogg + cdda-sp/sound/CC-Sounds/explosion/huge/explosion_huge_1.ogg
+sfx/laser.1.mp3	sci-fi-sounds/forceField_000.ogg + sci-fi-sounds/laserLarge_000.ogg + sci-fi-sounds/spaceEngineSmall_000.ogg
+sfx/laser.2.mp3	sci-fi-sounds/forceField_002.ogg + sci-fi-sounds/laserLarge_002.ogg + sci-fi-sounds/spaceEngineSmall_000.ogg
+sfx/laser.hum.1.mp3	sci-fi-sounds/spaceEngineSmall_000.ogg
+sfx/time.stop.1.mp3	vsco/Percussion/gongHit_mf.wav + sonicpi/ambi_swoosh.flac + vsco/Percussion/BDrumNewhit_v4_rr1_Sum.wav
+sfx/time.go.1.mp3	sonicpi/ambi_swoosh.flac + vsco/Percussion/gongHit_p.wav
+sfx/choir.1.mp3	vsco/Percussion/gongHit_mf.wav + sonicpi/ambi_choir.flac + sonicpi/ambi_choir.flac + vsco/Percussion/gongHit_p.wav
+sfx/beast.1.mp3	oga-zombies/zombies/zombie-17.wav + oga-rpg-pack/RPG Sound Pack/NPC/ogre/ogre3.wav
+sfx/beast.2.mp3	oga-zombies/zombies/zombie-21.wav + oga-rpg-pack/RPG Sound Pack/NPC/gutteral beast/mnstr14.wav
+sfx/beast.3.mp3	oga-zombies/zombies/zombie-1.wav + oga-rpg-pack/RPG Sound Pack/NPC/giant/giant5.wav

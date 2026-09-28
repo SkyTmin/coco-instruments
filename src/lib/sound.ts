@@ -10,7 +10,7 @@
 // Всё обёрнуто в try/catch: звук никогда не должен ломать игру (в Telegram
 // WebView контекст может быть недоступен или заморожен до первого касания).
 
-import { AUDIO_REV, MUSIC_TRACKS, SFX_VARIANTS } from '@/lib/audio-manifest';
+import { AUDIO_REV, MUSIC_TRACKS, SFX_LOOPS, SFX_VARIANTS } from '@/lib/audio-manifest';
 
 type Ctx = AudioContext;
 
@@ -175,8 +175,15 @@ function load(name: string): Promise<void> {
   return p;
 }
 
-/** Наборы звуков по местам: грузятся, когда игрок туда пришёл. */
-export type SoundGroup = 'ui' | 'slots' | 'mine' | 'forest' | 'dungeon' | 'fishing';
+/**
+ * Наборы звуков по местам: грузятся, когда игрок туда пришёл. `floors` —
+ * все звуки этажей 6–15 разом (≈1,3 МБ); по одному этажу — `preloadFloorSounds`.
+ */
+export type SoundGroup = 'ui' | 'slots' | 'mine' | 'forest' | 'dungeon' | 'fishing' | 'floors';
+
+/** Звуки этажей 6–15 (v2.83): стихии, механизмы, время, финал. */
+const FLOOR_SFX =
+  /^(thunder|wind|lava\.|steam|glass\.break|string|train|clock\.|heart|flesh|warp|stone\.grind|chains|cannon|laser|time\.|choir|beast)/;
 
 const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
   ui: (n) =>
@@ -194,11 +201,46 @@ const GROUPS: Record<SoundGroup, (name: string) => boolean> = {
     /^(swing|hit|bite|dash|crate|gate|clang|latch|winch|roar|rat\.|rumble|boom\.|pick\.|break\.|crit\.|bag\.|gem\.chime|splash|plop)/.test(
       n,
     ),
+  floors: (n) => FLOOR_SFX.test(n),
 };
 
 export function preloadSounds(...groups: SoundGroup[]): void {
   for (const name of Object.keys(SFX_VARIANTS))
     if (groups.some((g) => GROUPS[g](name))) void load(name);
+}
+
+/**
+ * Что звучит на каком этаже (v2.83). Первый вызов незагруженного звука
+ * молчит — пока идёт загрузка, — поэтому этаж просит свой набор заранее,
+ * при входе: гром на первой молнии и хор финала обязаны прозвучать.
+ * Этаж 15 — сердце, которое «переварило» всё выше, — берёт всё.
+ */
+export const FLOOR_SOUNDS: Record<number, readonly string[]> = {
+  6: ['lava.bubble', 'lava.hiss', 'steam', 'stone.grind', 'beast', 'thunder', 'wind'],
+  7: ['glass.break', 'warp', 'string.bend', 'time.stop', 'time.go'],
+  8: ['string', 'string.bend', 'stone.grind', 'clock.bell', 'warp', 'wind'],
+  9: ['warp', 'flesh', 'lava.hiss', 'steam', 'thunder', 'beast', 'stone.grind'],
+  10: ['thunder', 'chains', 'stone.grind', 'glass.break', 'wind', 'beast'],
+  11: ['wind', 'laser', 'laser.hum', 'stone.grind', 'chains', 'cannon', 'steam', 'thunder'],
+  12: ['train', 'train.horn', 'flesh', 'warp', 'glass.break', 'heart', 'beast', 'stone.grind'],
+  13: ['cannon', 'chains', 'steam', 'stone.grind', 'beast', 'clock.bell', 'wind', 'heart'],
+  14: [
+    'clock.tick',
+    'clock.bell',
+    'time.stop',
+    'time.go',
+    'warp',
+    'stone.grind',
+    'chains',
+    'glass.break',
+  ],
+};
+
+/** Загрузить звуки этажа `floor` (6–15); прочие этажи звучат общим набором. */
+export function preloadFloorSounds(floor: number): void {
+  const names =
+    floor >= 15 ? Object.keys(SFX_VARIANTS).filter((n) => FLOOR_SFX.test(n)) : FLOOR_SOUNDS[floor];
+  for (const name of names ?? []) void load(name);
 }
 
 // ---------------------------------------------------------------------------
@@ -243,6 +285,31 @@ const VOICES: Record<string, number> = {
   hit: 3,
   'step.ground': 1,
   'step.wood': 1,
+  // v2.83, этажи 6–15. Долгие звуки (гром, поезд, хор) — по одному: два
+  // раската разом — уже каша, а не гроза.
+  thunder: 1,
+  wind: 2,
+  'lava.bubble': 2,
+  'lava.hiss': 1,
+  steam: 2,
+  'glass.break': 2,
+  string: 3,
+  'string.bend': 1,
+  train: 1,
+  'train.horn': 1,
+  'clock.tick': 1,
+  'clock.bell': 13, // бой до двенадцати ударов: будущие удары уже заняли голоса
+  heart: 1,
+  flesh: 3,
+  warp: 2,
+  'stone.grind': 1,
+  chains: 2,
+  cannon: 2,
+  laser: 1,
+  'time.stop': 1,
+  'time.go': 1,
+  choir: 1,
+  beast: 1,
 };
 /** Минимальный промежуток между двумя запусками, с: пулемёт режет ухо. */
 const GAP: Record<string, number> = {
@@ -280,6 +347,31 @@ const GAP: Record<string, number> = {
   'slot.drum.1': 0.12,
   'slot.drum.2': 0.12,
   'slot.drum.3': 0.4,
+  // v2.83, этажи 6–15: события, которые приходят пачкой (гейзеры рядами,
+  // удары по стеклу, шлепки плоти), — не чаще.
+  thunder: 1.5,
+  wind: 0.6,
+  'lava.bubble': 0.15,
+  'lava.hiss': 0.5,
+  steam: 0.3,
+  'glass.break': 0.08,
+  string: 0.06,
+  'string.bend': 0.8,
+  train: 3,
+  'train.horn': 2,
+  'clock.tick': 0.25,
+  'clock.bell': 0.5,
+  heart: 0.3,
+  flesh: 0.06,
+  warp: 0.12,
+  'stone.grind': 0.5,
+  chains: 0.25,
+  cannon: 0.2,
+  laser: 0.3,
+  'time.stop': 1,
+  'time.go': 1,
+  choir: 3,
+  beast: 1,
 };
 
 const voices = new Map<string, AudioBufferSourceNode[]>();
@@ -433,6 +525,7 @@ export function setMusicScene(scene: MusicScene | null): void {
   if (!scene) {
     fadeOut(current);
     current = null;
+    stopLoops();
     return;
   }
   if (current?.scene === scene) return;
@@ -440,8 +533,11 @@ export function setMusicScene(scene: MusicScene | null): void {
 }
 
 let duckUntil = 0;
-/** Приглушить музыку на время джингла, чтобы выигрыш не тонул в подложке. */
-function duck(sec: number): void {
+/**
+ * Приглушить музыку на время джингла, чтобы выигрыш не тонул в подложке.
+ * `depth` — до какой доли громкости (остановка времени глушит глубже).
+ */
+function duck(sec: number, depth = 0.35): void {
   if (!ctx || !musicBus || muted || !musicOn) return;
   try {
     const t = ctx.currentTime;
@@ -449,11 +545,80 @@ function duck(sec: number): void {
     if (until <= duckUntil) return;
     duckUntil = until;
     musicBus.gain.cancelScheduledValues(t);
-    musicBus.gain.setTargetAtTime(MUSIC_LEVEL * 0.35, t, 0.05);
+    musicBus.gain.setTargetAtTime(MUSIC_LEVEL * depth, t, 0.05);
     musicBus.gain.setTargetAtTime(MUSIC_LEVEL, until, 0.4);
   } catch {
     /* no-op */
   }
+}
+
+/** Вернуть музыку сразу, не дожидаясь конца приглушения (время пошло). */
+function unduck(): void {
+  if (!ctx || !musicBus) return;
+  try {
+    const t = ctx.currentTime;
+    duckUntil = t;
+    musicBus.gain.cancelScheduledValues(t);
+    musicBus.gain.setTargetAtTime(muted || !musicOn ? 0 : MUSIC_LEVEL, t, 0.12);
+  } catch {
+    /* no-op */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Петли эффектов: включить и выключить (гул долгого луча). Как вращение
+// барабанов, только по имени; уход из игр (`setMusicScene(null)`) глушит все.
+// ---------------------------------------------------------------------------
+
+const loops = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>();
+
+function loopSound(name: string, on: boolean, gain = 0.4, rate = 1): void {
+  const c = ctx;
+  const have = loops.get(name);
+  if (!on) {
+    if (have && c) {
+      try {
+        const t = c.currentTime;
+        have.gain.gain.setTargetAtTime(0.0001, t, 0.08);
+        have.src.stop(t + 0.5);
+      } catch {
+        /* no-op */
+      }
+    }
+    loops.delete(name);
+    return;
+  }
+  if (have || muted || !c || !sfxBus || c.state !== 'running') return;
+  const l = bank.get(name);
+  if (!l) {
+    void load(name);
+    return;
+  }
+  try {
+    const { buf, lead } = l[0];
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    // Точки петли — по настоящей длине из манифеста, как у музыки: хвостовая
+    // тишина MP3 в петлю не попадёт, даже если браузер её не срезал.
+    const dur = SFX_LOOPS[name] ?? buf.duration - lead;
+    src.loopStart = lead;
+    src.loopEnd = Math.min(buf.duration, lead + dur);
+    src.playbackRate.value = rate;
+    const g = c.createGain();
+    const t = c.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.setTargetAtTime(gain, t, 0.08);
+    src.connect(g).connect(sfxBus);
+    src.start(t, lead);
+    loops.set(name, { src, gain: g });
+  } catch {
+    loops.delete(name);
+  }
+}
+
+function stopLoops(): void {
+  for (const name of [...loops.keys()]) loopSound(name, false);
 }
 
 /**
@@ -1007,6 +1172,181 @@ export function liftClank(): void {
 export function heroDeath(): void {
   play('break.soil', { gain: 0.8 });
   jingle('jingle.down', 1.3, { gain: 0.8, at: 0.2 });
+}
+
+// ---------------------------------------------------------------------------
+// Этажи 6–15 (v2.83): стихии, механизмы, время, финал.
+//
+// Записи из свободных наборов (CC0 и CC BY — public/audio/CREDITS.txt),
+// выбранные по замерам без прослушивания: A-взвешенная доля выше 2,5 кГц,
+// атака, спектрограмма (правило v2.67.3). Всё, что по природе звонкое —
+// стекло, цепи, пар, влажное, — собрано ниже тоном и со срезанными верхами
+// и звучит тише остального. Частые события (гейзер рядами, шаг поезда,
+// тиканье, удары по плоти) — короткие и без мелодии; мелодия — только хор
+// финала, и он занимает бюджет фраз, как `bigMoment`.
+// ---------------------------------------------------------------------------
+
+/** Далёкий гром — низкий раскат без треска. `near` — ближе, громче и ниже. */
+export function thunder(near = false): void {
+  play('thunder', { gain: near ? 0.75 : 0.5, rate: near ? 0.92 : 1, vary: 0.05 });
+}
+
+/** Порыв ветра: нарастает и уходит (~2,3 с). `k` — сила 0…1. */
+export function windGust(k = 0.6): void {
+  const s = Math.max(0, Math.min(1, k));
+  play('wind', { gain: 0.25 + 0.4 * s, rate: 0.9 + 0.2 * s, vary: 0.06 });
+}
+
+/** Лава булькнула: густой пузырь. */
+export function lavaBubble(): void {
+  play('lava.bubble', { gain: 0.42, vary: 0.1 });
+}
+
+/** Лава зашипела: корка остыла, в неё нырнули, жерло выдохнуло. */
+export function lavaHiss(): void {
+  play('lava.hiss', { gain: 0.36, vary: 0.05 });
+}
+
+/** Пар вырвался из клапана или трещины. */
+export function steamBurst(): void {
+  play('steam', { gain: 0.3, vary: 0.05 });
+}
+
+/** Стекло разбилось — мягко, без визга. `big` — зеркало или витраж целиком. */
+export function glassBreak(big = false): void {
+  play('glass.break', { gain: big ? 0.46 : 0.32, rate: big ? 0.88 : 1.05, vary: 0.05 });
+  if (big) play('crit.thud', { gain: 0.3, rate: 0.9, at: 0.01 });
+}
+
+/**
+ * Лад бивы — японская пентатоника «мияко-буси» (ин): 0, 1, 5, 7, 8. Щипок
+ * `k` идёт вверх по ладу: струнник, играющий подряд, звучит мелодией, а не
+ * одной нотой.
+ */
+const IN_SCALE = [0, 1, 5, 7, 8, 12, 13, 17];
+
+/** Щипок струны (бива). `k` — ступень лада (0 — нижняя, по кругу). */
+export function stringPluck(k = 0): void {
+  const i = ((Math.round(k) % IN_SCALE.length) + IN_SCALE.length) % IN_SCALE.length;
+  play('string', { gain: 0.5, rate: Math.pow(2, IN_SCALE[i] / 12), vary: 0.004 });
+}
+
+/** Струна скользит вниз — комнаты сдвинулись, струна оборвалась. */
+export function stringBend(): void {
+  play('string.bend', { gain: 0.46, vary: 0.02 });
+}
+
+/** Поезд проходит по линии: гул с Доплером (~4 с), `horn` — с гудком в начале. */
+export function trainPass(horn = true): void {
+  play('train', { gain: 0.62, vary: 0.02 });
+  if (horn) trainHorn(0.1);
+}
+
+/** Гудок поезда (семафор, фары из темноты). */
+export function trainHorn(at = 0): void {
+  play('train.horn', { gain: 0.46, at, vary: 0.01 });
+}
+
+let tock = false;
+/** Часы: тик и так по очереди (так на полтона ниже). Для маятника и такта. */
+export function clockTick(): void {
+  tock = !tock;
+  play('clock.tick', { gain: 0.34, rate: tock ? 0.94 : 1, vary: 0.01 });
+}
+
+/** Удар часового колокола. `deep` — «ЧАС»: октавой ниже и дольше. */
+export function clockBell(deep = false): void {
+  play('clock.bell', { gain: deep ? 0.62 : 0.46, rate: deep ? 0.5 : 1, vary: 0 });
+}
+
+/**
+ * Бой часов: `n` ударов колокола (не больше двенадцати), одна нота — у
+ * вариантов своя высота, поэтому бой берёт один и тот же. Первый удар —
+ * сразу, дальше каждые 1,1 с (`deep` — через 1,6 с, низкий колокол гудит дольше).
+ */
+export function clockChime(n = 3, deep = false): void {
+  const k = Math.max(1, Math.min(12, Math.round(n)));
+  const step = deep ? 1.6 : 1.1;
+  for (let i = 0; i < k; i++)
+    play('clock.bell', {
+      gain: deep ? 0.6 : 0.44,
+      rate: deep ? 0.5 : 1,
+      vary: 0,
+      pick: 0,
+      at: i * step,
+    });
+}
+
+/** Сердцебиение: «тук-тук». `fast` — чаще и громче (сердце в ярости). */
+export function heartbeat(fast = false): void {
+  play('heart', { gain: fast ? 0.72 : 0.56, rate: fast ? 1.1 : 1, vary: 0.02 });
+}
+
+/** Влажный звук плоти: стена дышит, мешок лопнул, пиявка присосалась. */
+export function fleshSquelch(big = false): void {
+  play('flesh', { gain: big ? 0.52 : 0.38, rate: big ? 0.82 : 1, vary: 0.08 });
+}
+
+/** Телепорт: вдох и хлопок (круг, зеркало, отмотка). */
+export function teleport(): void {
+  play('warp', { gain: 0.5, vary: 0.04 });
+}
+
+/** Скрежет камня: плита, жернов, шестерня, стена сдвинулась. */
+export function stoneGrind(): void {
+  play('stone.grind', { gain: 0.44, vary: 0.05 });
+}
+
+/** Цепи: ворот, мост на цепях, маятник, крюк. */
+export function chainRattle(): void {
+  play('chains', { gain: 0.42, vary: 0.05 });
+}
+
+/** Пушка — глухой выстрел. `far` — со стены: тише и ниже. */
+export function cannonShot(far = false): void {
+  play('cannon', { gain: far ? 0.5 : 0.78, rate: far ? 0.88 : 1, vary: 0.04 });
+}
+
+/** Лазер: гул заряда и луч (~1,1 с), разовый. */
+export function laserBeam(): void {
+  play('laser', { gain: 0.46, vary: 0.03 });
+}
+
+/** Долгий луч (лазер по кругу): петля гула — включить и выключить. */
+export function laserHum(on: boolean): void {
+  loopSound('laser.hum', on, 0.3);
+}
+
+/**
+ * Время остановилось: гонг задом наперёд (вдох) и глухой удар. Музыка на
+ * `dur` секунд уходит почти в тишину — мир стоит; `timeResume` возвращает
+ * её сразу. Удар — через ~2 с после вызова: звать в начале замаха.
+ */
+export function timeStop(dur = 2.5): void {
+  duck(Math.max(1, dur) + 2, 0.12);
+  play('time.stop', { gain: 0.62, vary: 0 });
+}
+
+/** Время пошло: выдох и тихий гонг, музыка возвращается. */
+export function timeResume(): void {
+  unduck();
+  play('time.go', { gain: 0.5, vary: 0 });
+}
+
+/**
+ * Хоровой акцент финала: вдох гонга, хор и тот же хор октавой ниже.
+ * Раз на всю игру — пробуждение Хозяина подземелья или последний удар;
+ * идёт мимо бюджета мелодий, но занимает его, как `bigMoment`.
+ */
+export function finaleChoir(): void {
+  if (ctx) lastPhrase = ctx.currentTime;
+  duck(4, 0.25);
+  play('choir', { gain: 0.72, vary: 0 });
+}
+
+/** Рёв крупного зверя — босс не из крыс (змей, гидра, колосс). `big` — ниже. */
+export function beastRoar(big = true): void {
+  play('beast', { gain: big ? 0.8 : 0.58, rate: big ? 0.9 : 1.08, vary: 0.05 });
 }
 
 // ---------------------------------------------------------------------------
