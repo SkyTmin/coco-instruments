@@ -2691,7 +2691,7 @@ registerMobPainter('f15boss', (m: Mob, pose: MobPose) => {
   }
   const zq = z;
   const fk = `f15boss|${key}|${winged}|${Math.round(glow * 3)}|${zq}`;
-  return frameOf(fk, pose, () => {
+  const fr = frameOf(fk, pose, () => {
     const b = lp.view === 'front' ? drawLionFront(lp) : drawLionSide(lp);
     if (mode === 'f15_husk') petrify(b.p, 0.85, lp.glow, 13);
     if (mode === 'dying') {
@@ -2704,7 +2704,26 @@ registerMobPainter('f15boss', (m: Mob, pose: MobPose) => {
     }
     return b;
   }, lp.view === 'side');
+  // Герой за тушей (она огромная) — туша полупрозрачна: героя и метки видно.
+  const h = s?.hero;
+  if (h && h.y < m.y - 0.2 && m.y - h.y < 5.5 && Math.abs(h.x - m.x) < 3.4) return faded(fr);
+  return fr;
 });
+
+const fadedFrames = new WeakMap<MobFrame, MobFrame>();
+function faded(fr: MobFrame): MobFrame {
+  const hit = fadedFrames.get(fr);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = fr.img.width;
+  c.height = fr.img.height;
+  const g = c.getContext('2d')!;
+  g.globalAlpha = 0.5;
+  g.drawImage(fr.img, 0, 0);
+  const out: MobFrame = { ...fr, img: c };
+  fadedFrames.set(fr, out);
+  return out;
+}
 
 // --- Истинное сердце: камень и плоть, бьётся; раскрытое — светится.
 
