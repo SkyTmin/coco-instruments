@@ -649,6 +649,8 @@ export const F14: FloorDef = {
         fog: '#0c0804',
       },
       legend: LEGEND_SAND,
+      // Весь пол района — песок: клетки без метки рисует этаж (утоптанный).
+      paintAll: true,
       mine: 'f14mine2',
       spawn: spawnSand,
     },

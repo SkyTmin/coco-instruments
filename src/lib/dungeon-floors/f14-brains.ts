@@ -403,6 +403,14 @@ function timed(b: Brain): Brain {
         m.danger = 0;
         return;
       }
+      // Замер в Стоп-кадре (или стопор Завода): стоит, пока время не пошло.
+      if (m.mode === 'f14_frozen' && m.kind !== 'f14_soldier') {
+        m.vx = 0;
+        m.vy = 0;
+        m.tele = null;
+        m.danger = 0;
+        return;
+      }
       if (m.data.tvx !== undefined) {
         m.vx = m.data.tvx;
         m.vy = m.data.tvy ?? 0;
@@ -2141,7 +2149,8 @@ function stepGear(sim: Sim, st: F14State, api: SimApi, dt: number): void {
     gh.waveT = 1.2;
     sim.events.push({ t: 'boss', what: 'f14_gear_trap', text: 'ЗАЛ ШЕСТЕРЁН', sub: 'кольца идут — ищи проём, стопор у входа' });
   }
-  if (gh.state === 'waves' && dt > 0) {
+  // Ушёл из зала — волны ждут: зал нельзя «пройти», просто выйдя.
+  if (gh.state === 'waves' && dt > 0 && d < 15) {
     gh.waveT -= dt;
     const live = sim.mobs.filter((m) => gh.spawned.has(m.id) && m.mode !== 'dying').length;
     if (gh.waveT <= 0 && gh.wave < GEAR.waves && live < 5) {
@@ -2841,7 +2850,8 @@ export const LORD = {
   clap: 0.7,
   stopDur: 2.2,
   knifeR: 3.3,
-  knives: 9,
+  /** Ножей в кольце (чётное: проём сквозной). */
+  knives: 10,
   knifeSpeed: 10,
   knifeDelay: 0.35,
   stopEvery: 11,
@@ -2957,14 +2967,23 @@ function lordHpAgo(s: LordState, now: number, ago: number, cur: number): number 
   return v;
 }
 
-/** Ножи кольцом вокруг героя: проём — туда уходить. */
-function knifeRing(sim: Sim, lead: Mob, n: number, gaps: number): void {
+/**
+ * Ножи кольцом вокруг героя: проём — туда уходить. Проём — СКВОЗНОЙ: пустое
+ * место и напротив него. Иначе нож с дальней стороны летел бы через центр
+ * ровно по проёму и бил в спину тому, кто в него ушёл.
+ */
+function knifeRing(sim: Sim, lead: Mob, n: number, lanes: number): void {
   const s = lordState(sim);
   const h = sim.hero;
-  const total = n + gaps;
-  const gap0 = Math.floor(sim.rng() * total);
+  const total = n + 2 * lanes;
+  const half = total / 2;
+  const gap0 = Math.floor(sim.rng() * half);
   const skip = new Set<number>();
-  for (let g = 0; g < gaps; g++) skip.add((gap0 + Math.round((g * total) / gaps)) % total);
+  for (let g = 0; g < lanes; g++) {
+    const k = (gap0 + Math.round((g * half) / lanes)) % half;
+    skip.add(k);
+    skip.add(k + half);
+  }
   s.knives = [];
   const W = sim.world.w;
   for (let i = 0; i < total; i++) {
@@ -3008,7 +3027,7 @@ function lordPlace(sim: Sim, m: Mob, api: SimApi): void {
       m.y = to[1];
       m.face = Math.atan2(h.y - m.y, h.x - m.x);
     }
-    knifeRing(sim, m, ph >= 3 ? 10 : LORD.knives, ph >= 3 ? 2 : 1);
+    knifeRing(sim, m, ph >= 3 ? LORD.knives + 2 : LORD.knives, ph >= 3 ? 2 : 1);
     sim.events.push({ t: 'boss', what: 'f14_knives' });
   }
   if (s.placed === 1 && t > 1.1) {
