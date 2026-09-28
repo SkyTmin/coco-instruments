@@ -62,7 +62,7 @@ FLOORS = '.,sqzkxjhgwedmyfr^123456'
 OBJS = '09Z()8nipt&*+<|}{/?7;bvcluX'
 BASE_PASS = 'EGDKTRaC$B~%>'
 PASS = FLOORS + OBJS + BASE_PASS
-DEEP = '_:;'
+DEEP = '_:-'
 WALLISH = '#QWNIOП[]AJVUoLMY'
 
 
@@ -499,8 +499,8 @@ def area_wall():
     # Пролом: x 42…45, насквозь; дорожка обрывается у краёв.
     rect(m, 42, 54, 45, 66, 'r')
     for y in (58, 59, 60):
-        m.put(41, y, ';')
-        m.put(46, y, ';')
+        m.put(41, y, '-')
+        m.put(46, y, '-')
     # Пушки на дорожке — за амбразурами зубцов.
     for x in (10, 20, 26, 37, 52, 58):
         m.put(x, 60, 'Z')

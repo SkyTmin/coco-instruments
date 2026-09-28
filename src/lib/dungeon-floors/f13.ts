@@ -136,7 +136,7 @@ const LEGEND: Record<string, LegendCell> = {
   // Глубина: провал в сток, канал, обрыв со Стены.
   _: { tile: 'deep', mark: M.proval },
   ':': { tile: 'deep', mark: M.canal },
-  ';': { tile: 'deep', mark: M.drop },
+  '-': { tile: 'deep', mark: M.drop },
   // Стены: дома, Стена, колокольня.
   '#': { tile: 'wall', mark: M.house },
   Q: { tile: 'wall', mark: M.burnt },
@@ -167,14 +167,25 @@ const LEGEND: Record<string, LegendCell> = {
     light: { r: 3.8, tint: 'warm' },
   },
   // Действия: крюк, пушка, валун, набат.
-  '0': { tile: 'floor', mark: M.pad, obj: { kind: 'deco', ref: 'f13_hook', solid: 0.2 } },
-  '9': { tile: 'floor', obj: { kind: 'deco', ref: 'f13_hookc', solid: 0.2 } },
-  Z: { tile: 'floor', mark: M.rampart, obj: { kind: 'deco', ref: 'f13_cannon', solid: 0.42 } },
-  '(': { tile: 'floor', obj: { kind: 'deco', ref: 'f13_boulder', solid: 0.55 } },
+  '0': {
+    tile: 'floor',
+    mark: M.pad,
+    obj: { kind: 'deco', ref: 'f13_hook', solid: 0.2, use: { label: 'Крюк' } },
+  },
+  '9': { tile: 'floor', obj: { kind: 'deco', ref: 'f13_hookc', solid: 0.2, use: { label: 'Крюк' } } },
+  Z: {
+    tile: 'floor',
+    mark: M.rampart,
+    obj: { kind: 'deco', ref: 'f13_cannon', solid: 0.42, use: { label: 'Выстрел' } },
+  },
+  '(': {
+    tile: 'floor',
+    obj: { kind: 'deco', ref: 'f13_boulder', solid: 0.55, use: { label: 'Сбросить валун' } },
+  },
   ')': {
     tile: 'floor',
     mark: M.planks,
-    obj: { kind: 'deco', ref: 'f13_bell', solid: 0.55 },
+    obj: { kind: 'deco', ref: 'f13_bell', solid: 0.55, use: { label: 'Набат' } },
     light: { r: 2.4, tint: 'warm' },
   },
   // Вещи на полу.
@@ -557,6 +568,8 @@ export const F13: FloorDef = {
   name: 'Город за стенами',
   lead: 'Город в осаде исполинов. Бей в затылок — за спину выносит крюк.',
   mapVer: 1,
+  // Исполины велики, а площади открыты: поле путей шире обычного.
+  flowR: 32,
   areas: [
     {
       id: F13_OUTER,
@@ -573,6 +586,7 @@ export const F13: FloorDef = {
         fog: '#120a07',
       },
       legend: LEGEND,
+      paintAll: true,
       mine: 'f13mine',
       spawn: spawnOuter,
     },
@@ -591,6 +605,7 @@ export const F13: FloorDef = {
         fog: '#0e0b0a',
       },
       legend: LEGEND,
+      paintAll: true,
       spawn: spawnWall,
     },
     {
@@ -608,6 +623,7 @@ export const F13: FloorDef = {
         fog: '#0b0a10',
       },
       legend: LEGEND,
+      paintAll: true,
       mine: 'f13mine2',
       spawn: spawnBell,
     },
