@@ -503,7 +503,7 @@ const MOBS: MobDef[] = [
     name: 'Колосс',
     many: 'колоссов',
     hp: 820,
-    dmg: 26,
+    dmg: 24,
     speed: 1.15,
     radius: 1.8,
     windup: 1,

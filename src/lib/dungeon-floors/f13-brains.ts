@@ -1481,8 +1481,10 @@ export const COL = {
   turn: [0.8, 0.8, 0.85, 1.1],
   walk: [1.15, 1.1, 1.15, 1.4],
   swipe: { r: 5.2, arc: 1.5, warn: 1, dmg: 1.3 },
-  stomp: { r: 2.9, w: 0.8, arc: 2.4, warn: 0.9, dmg: 1.15 },
-  back: { r: 4.2, arc: 2.2, warn: 0.65, dmg: 1.2 },
+  stomp: { r: 2.9, w: 0.8, arc: 2.4, warn: 0.9, dmg: 1.05, cd: 3.2 },
+  back: { r: 3.9, arc: 2.2, warn: 0.8, dmg: 1.1 },
+  /** Разворот не чаще — окно для затылка между наказаниями. */
+  spin: 4.4,
   naps: 3,
   vent: { r: 3.4, warn: 0.8, life: 2.2, dps: 0.05, cd: 7 },
   cloak: { r: 2.4, dps: 0.02 },
@@ -1491,7 +1493,10 @@ export const COL = {
   throw: { windup: 1.1, cd: 5 },
   rings: { cd: 8, warn: 0.75, gap: 0.32, radii: [2.6, 4.6, 6.6, 8.6] },
   heat: { r: 2.3, dps: 0.03 },
-  kneel: 2.8,
+  kneel: 3.4,
+  /** Пушка по Колоссу: доля здоровья и множитель удара, пока он на коленях. */
+  cannonHit: 0.05,
+  kneelMul: 1.5,
 };
 
 interface ColState {
@@ -1821,7 +1826,7 @@ function colStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
   m.tele = null;
   m.danger = 0;
   m.data.phase = phase;
-  for (const k of ['ventCd', 'quakeCd', 'ringCd', 'throwCd']) m.data[k] = (m.data[k] ?? 3) - dt;
+  for (const k of ['ventCd', 'quakeCd', 'ringCd', 'throwCd', 'stompCd']) m.data[k] = (m.data[k] ?? 3) - dt;
   m.data.bareT = (m.data.bareT ?? 0) - dt;
   if (m.mode !== 'rise' && m.mode !== 'roar') shoulder(sim, m);
   if (heroDown(sim)) {
@@ -1940,7 +1945,7 @@ function colStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
   // Приёмы фаз — по своим часам.
   if (m.data.spinCd <= 0 && ((m.data.naped ?? 0) >= COL.naps || (m.data.behind ?? 0) > 2.4) && dist < 5) {
     api.setMode(m, 'back');
-    m.data.spinCd = 3.2;
+    m.data.spinCd = COL.spin;
     m.data.lit = 0;
     return;
   }
@@ -1968,8 +1973,11 @@ function colStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
       m.data.lit = 0;
       return;
     }
-    if (rel >= 0.75 && dist < COL.stomp.r + COL.stomp.w) {
+    // Нога — не чаще раза в `stompCd`: между топотами за спиной есть окно
+    // для затылка (иначе топот шёл бы без продыху и затылок не бился).
+    if (rel >= 0.75 && dist < COL.stomp.r + COL.stomp.w && m.data.stompCd <= 0) {
       api.setMode(m, 'stomp');
+      m.data.stompCd = COL.stomp.cd;
       m.data.lit = 0;
       return;
     }
@@ -1991,7 +1999,7 @@ registerBrain('f13boss', {
     if (m.mode === 'rise' || m.mode === 'roar') return 0;
     if (m.mode === 'kneel') {
       m.data.cut = 0.3;
-      return 1.15;
+      return COL.kneelMul;
     }
     const side = napeSide(m, hit.ang);
     const phase = sim.boss?.phase ?? 0;
@@ -2716,12 +2724,12 @@ function fireCannon(sim: Sim, st: F13State, api: SimApi, c: Cannon): boolean {
       if (!lineHits(x0, y0, c.ang, c.len, CANNON.w, m.x, m.y, m.r)) continue;
       if (m.kind === 'f13boss') {
         if (m.mode === 'rise' || m.mode === 'roar') continue;
-        m.hp = Math.max(1, m.hp - m.maxHp * 0.035);
+        m.hp = Math.max(1, m.hp - m.maxHp * COL.cannonHit);
         m.flash = 0.2;
         a.setMode(m, 'kneel');
         m.data.lit = 0;
         sim.events.push({ t: 'boss', what: 'f13_kneel', text: 'НА КОЛЕНИ', sub: 'затылок открыт со всех сторон' });
-        sim.events.push({ t: 'hit', x: m.x, y: m.y, dmg: Math.round(m.maxHp * 0.035), crit: true, kill: false, boss: true });
+        sim.events.push({ t: 'hit', x: m.x, y: m.y, dmg: Math.round(m.maxHp * COL.cannonHit), crit: true, kill: false, boss: true });
       } else knockDown(sim, m, a);
     }
   });
