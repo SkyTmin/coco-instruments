@@ -1,0 +1,31 @@
+Этаж 10 «Трон демона» — чужая графика
+
+sheet.png — девять кадров 32×32 (по пять в ряд), перекрашены в палитру подземелья
+(`python3 scripts/dungeon/f10.py --sprites <папка с исходниками>`):
+чёрный камень и латунь, тёмный контур #150f0b снаружи, свет слева-сверху.
+
+  Dungeon Crawl Stone Soup — rltiles (Crawl Tiles), CC0 1.0 (public domain).
+  Source: https://github.com/crawl/crawl — crawl-ref/source/rltiles/
+  Взяты файлы:
+    dngn/statues/statue_depths_zot_devil.png — статуя демона у лифта Врат
+    dngn/statues/statue_depths_asmodeus.png  — статуи владык в апсиде
+    dngn/statues/statue_iron.png             — железные статуи шествия
+    dngn/statues/statue_polearm.png          — статуи стражей с алебардой
+    dngn/decor/blood_fountain.png            — кровавый фонтан, кадр 1
+    dngn/decor/blood_fountain2.png           — кровавый фонтан, кадр 2
+    dngn/altars/makhleb_flame1.png           — огненный алтарь, кадр 1
+    dngn/altars/makhleb_flame2.png           — огненный алтарь, кадр 2
+    dngn/altars/kikubaaqudgha.png            — груда черепов
+  Лицензия: LICENSE в корне crawl/crawl — «Public Domain|CC0: most of tiles»;
+  ни один из этих файлов не значится в списке тайлов неясной лицензии
+  (https://github.com/crawl/tiles, TILES_UNDER_UNKNOWN_LICENSE.md).
+  Горгулью DCSS (war_gargoyle.png) НЕ берём: она в том списке — наша
+  горгулья нарисована кодом.
+
+Из атласа, уже лежащего в проекте (public/dungeon/x72, CC0, 0x72 DungeonTileset II):
+  wall_fountain_mid_red_anim_f0..2, wall_fountain_basin_red_anim_f0..2 —
+  настенный кровавый фонтан апсиды и зала.
+
+Всё остальное (горгульи, демоны, псы, рыцари, суккубы, маги, палачи, импы, Король
+демонов, трон, пол, ковры, витражи, мост, пропасть, метки ударов, иконки
+вещей) нарисовано кодом в src/lib/dungeon-floors/f10-art.ts.
