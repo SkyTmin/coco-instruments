@@ -10,6 +10,18 @@
                 Extras/SqueakyRatkinExampleVoices/1.6/Race/Sounds/…/SR_ExampleTemplate_Race
   AUDIO_MUSIC — распакованный music-cc0.zip из github.com/jfpx/cc0-media-library
                 (релиз music-v1), папка с music/catalog.json
+  AUDIO_SRC   — (v2.83, звуки этажей 6–15) папка с клонами, по умолчанию
+                scripts/audio-src (в git не лежит). Внутри:
+                  cdda-sp/  github.com/Fris0uman/CDDA-Soundpacks, sound/CC-Sounds —
+                            только файлы, у которых в credits.md CC0 или CC-BY
+                  esc50/    клипы github.com/karolpiczak/ESC-50 (audio/*.wav) —
+                            только клипы с [CC0] в его LICENSE (там авторство
+                            каждого клипа); meta.json — выписка авторства
+                  vsco/     github.com/sgossner/VSCO-2-CE (CC0)
+                  vcsl/     github.com/sgossner/VCSL (CC0)
+                  sonicpi/  etc/samples из github.com/sonic-pi-net/sonic-pi (CC0)
+                Клонировать можно без содержимого (--filter=blob:none
+                --no-checkout) и доставать только нужные файлы.
 
 Что делается с каждым звуком: декод в моно 44,1 кГц, обрезка тишины в начале
 (удар должен звучать в тот же кадр, что и картинка), обрезка хвоста с
@@ -19,6 +31,8 @@
 в сэмплах сохраняется, иначе петля перестанет сходиться.
 
 Запуск: AUDIO_SFX=… AUDIO_RAT=… AUDIO_MUSIC=… python3 scripts/audio-build.py
+Один звук или одна музыкальная сцена: … --only=thunder,sky (музыке нужен
+AUDIO_MUSIC, эффектам — AUDIO_SFX и/или AUDIO_SRC).
 Нужны numpy и ffmpeg (pip install numpy imageio-ffmpeg).
 """
 
@@ -43,6 +57,7 @@ OUT = os.path.join(ROOT, 'public', 'audio')
 SFX = os.environ.get('AUDIO_SFX', '')
 RAT = os.environ.get('AUDIO_RAT', '')
 MUSIC = os.environ.get('AUDIO_MUSIC', '')
+MORE = os.environ.get('AUDIO_SRC', os.path.join(ROOT, 'scripts', 'audio-src'))
 SR = 44100
 random.seed(7)
 
@@ -72,15 +87,53 @@ def resample(a, rate):
 
 
 def lowpass(a, hz):
-    """Однополюсный срез верхов дважды — мягкий, без звона."""
+    """
+    Однополюсный срез верхов дважды — мягкий, без звона. Нарочно питоновским
+    циклом, а не scipy: lfilter расходится с ним на единицу последнего знака
+    float32, и LAME выдаёт другие байты — старые звуки при пересборке
+    перестали бы совпадать с тем, что лежит в git (проверено на rank.up).
+    """
     k = math.exp(-2 * math.pi * hz / SR)
-    out = a.copy()
+    out = a.astype(np.float32).copy()
     for _ in range(2):
         y = 0.0
         for i in range(len(out)):
             y = (1 - k) * out[i] + k * y
             out[i] = y
     return out
+
+
+def highpass(a, hz):
+    """Срез низа (Баттерворт 4-го порядка, 24 дБ/окт): инфразвук телефон
+    всё равно не сыграет, а запас громкости он съедает — гром и пушка без
+    него громче на слух. «Вычесть срез верхов» пробовал: это 6 дБ/окт, и у
+    взрыва гул на 40–80 Гц оставался хозяином смеси."""
+    from scipy.signal import butter, sosfilt
+    sos = butter(4, hz, 'highpass', fs=SR, output='sos')
+    return sosfilt(sos, a).astype(np.float32)
+
+
+def loopable(a, ms=250):
+    """Петля без щелчка: хвост плавно перетекает в начало (равная мощность),
+    длина становится короче на `ms`. Для гула, который включают и выключают."""
+    n = int(ms * SR / 1000)
+    if len(a) < 3 * n:
+        return a
+    t = np.linspace(0, math.pi / 2, n)
+    head, tail = a[:n], a[-n:]
+    body = a[n:-n].copy()
+    mixed = tail * np.cos(t) + head * np.sin(t)
+    return np.concatenate([body, mixed]).astype(np.float32)
+
+
+def glide(a, r0, r1):
+    """Высота плавно едет от r0 к r1 (эффект Доплера у поезда: подъезжает
+    выше, уходит ниже). Длина меняется на среднюю из двух."""
+    n_out = int(len(a) / ((r0 + r1) / 2))
+    rates = np.linspace(r0, r1, n_out)
+    x = np.cumsum(rates) - rates[0]
+    x = x[x < len(a) - 1]
+    return np.interp(x, np.arange(len(a)), a).astype(np.float32)
 
 
 def trim_head(a, thresh_db=-45):
@@ -174,6 +227,17 @@ OGR = lambda *p: K('oga-rpg-pack', 'RPG Sound Pack', *p)  # noqa: E731
 OGB = lambda n: K('oga-battle', 'battle_sound_effects', n + '.wav')  # noqa: E731
 HIT = lambda n: K('oga-hits-punches', 'hits', f'hit{n:02d}.mp3.flac')  # noqa: E731
 OGL = lambda n: K('oga-gui-lokif', 'GUI_Sound_Effects_by_Lokif', n + '.wav')  # noqa: E731
+ZOM = lambda n: K('oga-zombies', 'zombies', n + '.wav')  # noqa: E731
+
+# v2.83 — звуки этажей 6–15. Исходники — в AUDIO_SRC (см. шапку).
+CDD = lambda *p: os.path.join(MORE, 'cdda-sp', 'sound', 'CC-Sounds', *p)  # noqa: E731
+ESC = lambda n: os.path.join(MORE, 'esc50', n + '.wav')  # noqa: E731
+VSC = lambda *p: os.path.join(MORE, 'vsco', *p)  # noqa: E731
+MIS = lambda n: os.path.join(MORE, 'vsco', 'Miscellania Raw', 'Misc 1', n + '.wav')  # noqa: E731
+VCS = lambda *p: os.path.join(MORE, 'vcsl', *p)  # noqa: E731
+SPI = lambda n: os.path.join(MORE, 'sonicpi', n + '.flac')  # noqa: E731
+TRANH = lambda n: VCS('Chordophones', 'Zithers', 'Dan Tranh', n + '.wav')  # noqa: E731
+WHISTLE = lambda n: VCS('Aerophones', 'Edge-blown Aerophones', 'Train Whistle, Toy', n + '.wav')  # noqa: E731
 
 # (источник, опции). Опции: dur — макс. длина, rate — высота, lp — срез
 # верхов, start — сдвиг начала после обрезки тишины, rms — целевая
@@ -294,6 +358,189 @@ SOUNDS = {
     'splash': [(OGR('inventory', n + '.wav'), {'dur': 0.5, 'rate': 0.72, 'lp': 3000, 'out': 180}) for n in ('bubble', 'bubble2', 'bubble3')],
     'plop': [(IFC(f'drop_00{i}'), {'rate': 0.7, 'lp': 2600, 'out': 90}) for i in (2, 3)],
     'snap': [(RPG('knifeSlice'), {'dur': 0.25, 'rate': 1.35}), (RPG('knifeSlice2'), {'dur': 0.25, 'rate': 1.35})],
+
+    # ---- Этажи 6–15 подземелья (v2.83): стихии, механизмы, время, финал.
+    # Правило v2.67.3 в силе: мягко. Всё, что по природе звонкое (стекло,
+    # цепи, пар, влажное), ниже тоном и со срезанными верхами; замеры с
+    # A-весом — в отчёте выпуска. `from` — нужное место в длинной записи.
+    #
+    # Гром — далёкий раскат без треска: верх срезан на 1,6 кГц (треск и
+    # дождь уходят), низ ниже 45 Гц тоже — телефон его не сыграет.
+    'thunder': [
+        (ESC('5-156999-A-19'), {'from': 0.6, 'dur': 3.8, 'hp': 45, 'lp': 1600, 'in': 60, 'out': 1500, 'rms': -19}),
+        (ESC('3-144891-A-19'), {'from': 0.4, 'dur': 3.4, 'hp': 45, 'lp': 1600, 'in': 60, 'out': 1400, 'rms': -19}),
+        (CDD('environment', 'weather', 'thunder_far.ogg'), {'from': 1.4, 'dur': 4.0, 'hp': 45, 'lp': 1600, 'in': 250, 'out': 1600, 'rms': -19}),
+    ],
+    # Порыв ветра: кусок ровного ветра, собранный в «нарастает и уходит».
+    'wind': [
+        (ESC('3-117504-A-16'), {'from': 0.5, 'dur': 2.4, 'lp': 2400, 'in': 700, 'out': 1100, 'rms': -21}),
+        (ESC('5-117773-A-16'), {'from': 1.2, 'dur': 2.4, 'lp': 2400, 'in': 700, 'out': 1100, 'rms': -21}),
+        (ESC('5-179496-B-16'), {'from': 0.6, 'dur': 2.4, 'lp': 2400, 'in': 700, 'out': 1100, 'rms': -21}),
+    ],
+    # Лава: пузыри воды на полскорости (октава вниз — густо), шипение —
+    # вода на камнях сауны и пар над огнём.
+    'lava.bubble': [
+        (MIS('bubbles'), {'from': 0.3, 'rate': 0.55, 'lp': 1800, 'dur': 1.2, 'out': 350, 'rms': -20}),
+        (MIS('bubbles2'), {'from': 0.8, 'rate': 0.5, 'lp': 1800, 'dur': 1.2, 'out': 350, 'rms': -20}),
+        (MIS('bubbles4'), {'rate': 0.55, 'lp': 1800, 'dur': 1.2, 'out': 350, 'rms': -20}),
+    ],
+    # Шипение лавы — ниже пара и с бульканьем под ним: густое, а не свист.
+    'lava.hiss': [
+        ([(SPI('ambi_sauna'), {'len': 1.8, 'rate': 0.85}, 0, 1.0), (MIS('bubbles4'), {'rate': 0.5}, 0.1, 0.35)],
+         {'lp': 2200, 'dur': 1.6, 'in': 30, 'out': 800, 'rms': -22}),
+        ([(SPI('ambi_sauna'), {'from': 3.0, 'len': 1.8, 'rate': 0.85}, 0, 1.0), (MIS('bubbles'), {'from': 0.3, 'rate': 0.5}, 0.1, 0.35)],
+         {'lp': 2200, 'dur': 1.6, 'in': 120, 'out': 800, 'rms': -22}),
+        (ESC('5-213802-A-12'), {'from': 1.0, 'dur': 1.6, 'lp': 2200, 'in': 150, 'out': 800, 'rms': -22}),
+    ],
+    # Пар из клапана: резкий вход, долгое шипение, верх срезан.
+    # Пар из клапана: резкий вход, долгое шипение. Шипение и есть середина
+    # 1–3 кГц — срез на 2,6–3 кГц оставляет его, а свист выше убирает.
+    # (Рёв сопла Kenney `thrusterFire` пробовал: после среза остаётся гул,
+    # центр 290 Гц, — это не пар.)
+    'steam': [
+        (SPI('ambi_sauna'), {'from': 5.2, 'dur': 1.3, 'rate': 1.08, 'hp': 250, 'lp': 2600, 'in': 15, 'out': 800, 'rms': -22}),
+        (SPI('ambi_sauna'), {'from': 1.0, 'dur': 1.3, 'rate': 1.08, 'hp': 250, 'lp': 2600, 'in': 15, 'out': 800, 'rms': -22}),
+        (ESC('5-213802-A-12'), {'from': 2.0, 'dur': 1.3, 'hp': 250, 'lp': 3000, 'in': 15, 'out': 800, 'rms': -22}),
+    ],
+    # Стекло: осколки на треть ниже и без верхов — «хрусть», а не визг.
+    # Стекло звонкое по природе: взяты три самых мягких из девятнадцати
+    # замеренных записей (A-вес выше 2,5 кГц — 8–24%, у тарелки было 46%).
+    'glass.break': [
+        (MIS('glass_break3'), {'rate': 0.62, 'lp': 2600, 'out': 250, 'rms': -21}),
+        (ESC('4-212698-A-39'), {'lp': 2800, 'dur': 0.9, 'out': 300, 'rms': -21}),
+        (CDD('smash_fail', 'glass', 'smash_fail_glass.ogg'), {'rate': 0.8, 'lp': 2400, 'out': 120, 'rms': -21}),
+    ],
+    # Струна (бива): щипок вьетнамской цитры данчань — ближайшее к лютне в
+    # свободных наборах. Все варианты подогнаны к одной ноте (фа-диез), чтобы
+    # `stringPluck(k)` держал лад.
+    'string': [
+        (TRANH('Normal/F#3_mf_1'), {'dur': 1.6, 'out': 700}),
+        (TRANH('Normal/G#3_mf_1'), {'rate': 2 ** (-2 / 12), 'dur': 1.6, 'out': 700}),
+        (TRANH('Normal/D#3_mf_1'), {'rate': 2 ** (3 / 12), 'dur': 1.6, 'out': 700}),
+    ],
+    'string.bend': [(TRANH('Gliss/Gliss_Dwn_Med_mf_1'), {'dur': 1.8, 'out': 800, 'rms': -20})],
+    # Поезд: проход с Доплером (подъезжает выше, уходит ниже), гудок —
+    # игрушечный паровозный свисток октавой ниже.
+    'train': [
+        (ESC('3-136451-A-45'), {'dur': 4.4, 'hp': 40, 'lp': 3000, 'glide': (1.05, 0.95), 'in': 1300, 'out': 1700, 'rms': -18}),
+        (ESC('3-159445-A-45'), {'dur': 4.4, 'hp': 40, 'lp': 3000, 'glide': (1.05, 0.95), 'in': 1300, 'out': 1700, 'rms': -18}),
+    ],
+    'train.horn': [
+        (WHISTLE('Main_TrainLow_Sus-001'), {'rate': 0.5, 'dur': 1.9, 'lp': 3000, 'in': 60, 'out': 600, 'rms': -20}),
+        (WHISTLE('Main_TrainLow_Double-001'), {'rate': 0.5, 'dur': 2.4, 'lp': 3000, 'in': 60, 'out': 600, 'rms': -20}),
+    ],
+    # Часы: одиночные удары из записей настенных часов, бой — трубчатый
+    # колокол (оба варианта — до, чтобы бой шёл одной нотой).
+    'clock.tick': [
+        (ESC('5-210571-A-38'), {'from': 1.15, 'len': 0.25, 'lp': 3000, 'out': 60, 'rms': -24}),
+        (ESC('5-210571-A-38'), {'from': 2.2, 'len': 0.25, 'lp': 3000, 'out': 60, 'rms': -24}),
+        (ESC('1-62849-A-38'), {'from': 1.25, 'len': 0.25, 'lp': 2500, 'out': 60, 'rms': -24}),
+        (ESC('1-62849-A-38'), {'from': 2.25, 'len': 0.25, 'lp': 2500, 'out': 60, 'rms': -24}),
+    ],
+    'clock.bell': [
+        (VSC('Percussion', 'TB_hit_C4_v4_rr1.wav'), {'dur': 3.4, 'lp': 3000, 'out': 1800, 'rms': -20}),
+        (VCS('Idiophones', 'Struck Idiophones', 'Tubular Bells 1', 'chimes_C4_ff_rr2.wav'), {'dur': 3.4, 'lp': 3000, 'out': 1800, 'rms': -20}),
+    ],
+    # Сердце: «тук-тук» из двух ударов литавры. Большой барабан пробовал —
+    # центр 147 Гц, на динамике телефона от него остаётся тишина; у литавры
+    # центр ~380 Гц, удар слышен и там.
+    'heart': [
+        ([(VSC('Percussion', 'Timpani', 'Timpani2_Hit_v4_rr1_Sum.wav'), {'len': 0.35, 'rate': 0.8}, 0, 1.0),
+          (VSC('Percussion', 'Timpani', 'Timpani2_Hit_v4_rr1_Sum.wav'), {'len': 0.3, 'rate': 0.9}, 0.2, 0.7)],
+         {'lp': 900, 'dur': 0.8, 'out': 200, 'rms': -17}),
+        ([(VSC('Percussion', 'Timpani', 'Timpani2_Hit_v4_rr1_Sum.wav'), {'len': 0.35, 'rate': 0.85}, 0, 1.0),
+          (VSC('Percussion', 'Timpani', 'Timpani2_Hit_v4_rr1_Sum.wav'), {'len': 0.3, 'rate': 0.95}, 0.18, 0.65)],
+         {'lp': 900, 'dur': 0.8, 'out': 200, 'rms': -17}),
+        ([(VSC('Percussion', 'Timpani', 'Timpani2_Hit_v4_rr1_Sum.wav'), {'len': 0.35, 'rate': 0.75}, 0, 1.0),
+          (VSC('Percussion', 'Timpani', 'Timpani2_Hit_v4_rr1_Sum.wav'), {'len': 0.3, 'rate': 0.84}, 0.21, 0.7)],
+         {'lp': 900, 'dur': 0.8, 'out': 200, 'rms': -17}),
+    ],
+    # Плоть: шлепки и чавканье ниже тоном, верх срезан на 2 кГц.
+    'flesh': [
+        (CDD('melee_hit_flesh', 'small_bash', 'small_bash_flesh_1.ogg'), {'rate': 0.8, 'lp': 2000, 'out': 150, 'rms': -20}),
+        (CDD('melee_hit_flesh', 'small_bash', 'small_bash_flesh_3.ogg'), {'rate': 0.8, 'lp': 2000, 'out': 150, 'rms': -20}),
+        (CDD('melee_hit_flesh', 'big_stabbing', 'big_stabbing_flesh_1.ogg'), {'rate': 0.75, 'lp': 1800, 'out': 200, 'rms': -20}),
+        (CDD('mon_death', 'zombie_gibbed', 'zombie_gibbed_1.ogg'), {'rate': 0.85, 'lp': 2000, 'dur': 0.8, 'out': 250, 'rms': -20}),
+    ],
+    # Телепорт: вдох (свист задом наперёд — нарастает и обрывается) и хлопок.
+    'warp': [
+        ([(SPI('ambi_swoosh'), {'from': 0.9, 'len': 0.9, 'rev': True, 'in': 200}, 0, 1.0),
+          (SCI('forceField_001'), {'rate': 1.2}, 0.35, 0.45),
+          (IFC('drop_004'), {'rate': 0.8}, 0.86, 0.9)],
+         {'lp': 4000, 'dur': 1.3, 'out': 250, 'rms': -19}),
+        ([(SPI('ambi_dark_woosh'), {'from': 1.6, 'len': 1.1, 'rev': True, 'in': 250}, 0, 1.0),
+          (SCI('forceField_003'), {'rate': 1.1}, 0.5, 0.45),
+          (IFC('drop_001'), {'rate': 0.75}, 1.06, 0.9)],
+         {'lp': 4000, 'dur': 1.5, 'out': 250, 'rms': -19}),
+    ],
+    # Камень трётся о камень: кирпичом по кирпичу, ниже тоном — тяжелее.
+    'stone.grind': [
+        (MIS('brick_scrape'), {'rate': 0.7, 'lp': 2000, 'out': 300, 'rms': -20}),
+        (MIS('brick_scrape2'), {'rate': 0.7, 'lp': 2000, 'out': 300, 'rms': -20}),
+        (MIS('brick_scrape2'), {'rate': 0.55, 'lp': 1800, 'out': 400, 'rms': -20}),
+    ],
+    # Цепь на вороте — из одной долгой записи три места: звенья, а не звон
+    # (короткие «chain_grind»/«chain_loop» того же набора — 33–41% выше 2,5 кГц).
+    'chains': [
+        (MIS('chaingrindLoop'), {'from': 1.4, 'rate': 0.85, 'lp': 2600, 'dur': 1.2, 'in': 60, 'out': 400, 'rms': -21}),
+        (MIS('chaingrindLoop'), {'from': 4.0, 'rate': 0.85, 'lp': 2600, 'dur': 1.2, 'in': 60, 'out': 400, 'rms': -21}),
+        (MIS('chaingrindLoop'), {'from': 6.5, 'rate': 0.85, 'lp': 2600, 'dur': 1.2, 'in': 60, 'out': 400, 'rms': -21}),
+    ],
+    # Пушка — глухо: хлопок пускового устройства и хвост взрыва. Хвост без
+    # самого низа (hp 160): инфразвук взрыва телефон не сыграет, а громкость
+    # выстрела он съедает — хлопок тонул.
+    'cannon': [
+        ([(CDD('fire_gun', 'launchers', 'launcher_1.ogg'), {}, 0, 1.0),
+          (CDD('explosion', 'huge', 'explosion_huge_2.ogg'), {'hp': 160}, 0.01, 0.32)],
+         {'hp': 50, 'lp': 2400, 'dur': 1.8, 'out': 900, 'rms': -17}),
+        ([(CDD('explosion', 'small', 'explosion_small.ogg'), {}, 0, 1.0),
+          (CDD('explosion', 'huge', 'explosion_huge_1.ogg'), {'len': 2.2, 'hp': 160}, 0.0, 0.32)],
+         {'hp': 50, 'lp': 2400, 'dur': 1.8, 'out': 900, 'rms': -17}),
+    ],
+    # Лазер: гул силового поля, «вжух» луча октавой ниже и гул двигателя —
+    # разовый луч; `laser.hum` — петля для долгого луча.
+    'laser': [
+        ([(SCI('forceField_000'), {}, 0, 0.8),
+          (SCI('laserLarge_000'), {'rate': 0.6}, 0.18, 0.5),
+          (SCI('spaceEngineSmall_000'), {'from': 0.5, 'len': 1.1, 'in': 80, 'pout': 500}, 0.18, 0.8)],
+         {'lp': 2600, 'dur': 1.4, 'out': 500, 'rms': -20}),
+        ([(SCI('forceField_002'), {}, 0, 0.8),
+          (SCI('laserLarge_002'), {'rate': 0.6}, 0.16, 0.45),
+          (SCI('spaceEngineSmall_000'), {'from': 2.0, 'len': 1.1, 'in': 80, 'pout': 500}, 0.16, 0.8)],
+         {'lp': 2600, 'dur': 1.4, 'out': 500, 'rms': -20}),
+    ],
+    'laser.hum': [(SCI('spaceEngineSmall_000'), {'from': 0.6, 'dur': 3.0, 'lp': 2600, 'loop': True, 'xfade': 400, 'rms': -22})],
+    # Время: остановка — гонг задом наперёд (нарастает и обрывается) и
+    # глухой удар; пуск — выдох свиста и тихий гонг.
+    'time.stop': [
+        ([(VSC('Percussion', 'gongHit_mf.wav'), {'len': 2.0, 'rev': True, 'in': 900}, 0, 0.9),
+          (SPI('ambi_swoosh'), {'from': 0.9, 'len': 0.9, 'rev': True, 'in': 200}, 1.1, 0.7),
+          (VSC('Percussion', 'BDrumNewhit_v4_rr1_Sum.wav'), {'len': 1.0}, 2.0, 1.0)],
+         {'lp': 2500, 'dur': 3.0, 'out': 900, 'rms': -19}),
+    ],
+    'time.go': [
+        ([(SPI('ambi_swoosh'), {'from': 0.8, 'rate': 1.1}, 0, 1.0),
+          (VSC('Percussion', 'gongHit_p.wav'), {'len': 1.4}, 0, 0.35)],
+         {'lp': 2500, 'dur': 1.4, 'out': 600, 'rms': -20}),
+    ],
+    # Хор финала: «а-а» хора и тот же хор октавой ниже, под ним гонг,
+    # перед ним гонг задом наперёд — вдох перед ударом.
+    'choir': [
+        ([(VSC('Percussion', 'gongHit_mf.wav'), {'len': 0.9, 'rev': True, 'in': 500}, 0, 0.5),
+          (SPI('ambi_choir'), {}, 0.6, 1.0),
+          (SPI('ambi_choir'), {'rate': 0.5}, 0.6, 0.55),
+          (VSC('Percussion', 'gongHit_p.wav'), {'len': 3.0}, 0.6, 0.35)],
+         {'lp': 3500, 'dur': 4.2, 'out': 1500, 'rms': -20}),
+    ],
+    # Рёв крупного зверя: рык зомби на кварту ниже и огр под ним.
+    'beast': [
+        ([(ZOM('zombie-17'), {'rate': 0.72}, 0, 1.0), (OGR('NPC', 'ogre', 'ogre3.wav'), {'rate': 0.78}, 0.04, 0.55)],
+         {'lp': 2600, 'dur': 2.0, 'out': 700, 'rms': -18}),
+        ([(ZOM('zombie-21'), {'rate': 0.7}, 0, 1.0), (OGR('NPC', 'gutteral beast', 'mnstr14.wav'), {'rate': 0.7}, 0.05, 0.5)],
+         {'lp': 2600, 'dur': 1.8, 'out': 700, 'rms': -18}),
+        ([(ZOM('zombie-1'), {'rate': 0.7}, 0, 1.0), (OGR('NPC', 'giant', 'giant5.wav'), {'rate': 0.8}, 0.03, 0.6)],
+         {'lp': 2600, 'dur': 1.6, 'out': 600, 'rms': -18}),
+    ],
 }
 
 # Писки крыс: одиночные, вырезанные из серий (частое событие не должно звучать
@@ -321,6 +568,27 @@ MUSIC_SCENES = {
     'depths': 'Patreon Challenge 04',
     'boss': 'Ludum Dare 30 03',
     'fishing': 'Ambient Relaxing Loop',
+    # v2.83 — этажи 11–15. Выбор тем же способом, по замерам
+    # (scripts/audio-src/music_measure.py и music_pulse.py, не в git):
+    # «небо» (этаж 11) — «Heavenly Loop»: эмбиент, harsh 0,001, выше 2,5 кГц
+    # 0,2%, пульс 0,36 — лёгкая подложка без ударов, первый светлый этаж.
+    'sky': 'Heavenly Loop',
+    # «финал» (бой с Хозяином подземелья) — «Ludum Dare 30 08»: тот же
+    # альбом, что у обычного босса («Ludum Dare 30 03»), но громче (−11,3
+    # против −13,3 LUFS), с чётким битом (пульс 0,62 против 0,34, 129 уд/мин)
+    # и всё ещё мягкий (harsh 0,015, выше 2,5 кГц 6%).
+    'finale': 'Ludum Dare 30 08',
+    # «часы» (этаж 14) — «Unsolved Investigation» (саспенс-эмбиент, 120
+    # уд/мин, ровно 48 с = 96 долей) и поверх тиканье настенных часов раз в
+    # секунду, тик-так: 48 ударов ровно в сетку петли.
+    'clock': {
+        'title': 'Unsolved Investigation',
+        'ticks': {
+            'files': [(ESC('5-210571-A-38'), {'from': 1.15, 'len': 0.25}),
+                      (ESC('5-210571-A-38'), {'from': 2.2, 'len': 0.25, 'rate': 0.9})],
+            'period': 1.0, 'lp': 2600, 'db': -12,
+        },
+    },
 }
 
 
@@ -340,25 +608,111 @@ def reel_loop():
     return normalize(out, rms_db=-24)
 
 
+def src_name(path):
+    """Путь исходника для SOURCES.txt: от корня его набора."""
+    for root in (SFX, MORE):
+        if root and os.path.abspath(path).startswith(os.path.abspath(root) + os.sep):
+            return os.path.relpath(path, root)
+    return os.path.basename(path)
+
+
+def prep(src, opt):
+    """
+    Один исходник с опциями: from — сдвиг от начала файла (до обрезки
+    тишины), start — сдвиг после обрезки тишины (если не `raw`), len —
+    длина отрезка ДО обработки, rev — задом наперёд
+    (обратный вдох: звук нарастает и обрывается), rate, hp, lp, in/pout —
+    затухания отрезка, мс. Порядок для обычного звука прежний
+    (обрезка → сдвиг → высота → срез), поэтому старые звуки собираются
+    байт в байт как раньше.
+    """
+    a = load(src)
+    if opt.get('from'):  # сдвиг от начала файла, ДО обрезки тишины: нужный удар в серии
+        a = a[int(opt['from'] * SR):]
+    if not opt.get('raw'):
+        a = trim_head(a)
+    if opt.get('start'):
+        a = a[int(opt['start'] * SR):]
+    if opt.get('len'):
+        a = a[: int(opt['len'] * SR)]
+    if opt.get('rev'):
+        a = a[::-1].copy()
+        if not opt.get('raw'):
+            a = trim_head(a)
+    if opt.get('rate'):
+        a = resample(a, opt['rate'])
+    if opt.get('glide'):
+        a = glide(a, *opt['glide'])
+    if opt.get('hp'):
+        a = highpass(a, opt['hp'])
+    if opt.get('lp'):
+        a = lowpass(a, opt['lp'])
+    if opt.get('in') or opt.get('pout'):
+        a = fade(a, ms_in=opt.get('in', 0), ms_out=opt.get('pout', 0))
+    return a
+
+
+def mix(parts):
+    """Склейка из нескольких записей: [(путь, опции, сдвиг с, громкость)].
+    Так собраны «тук-тук» сердца, вдох-хлопок телепорта, аккорд гудка."""
+    layers = []
+    for src, opt, at, gain in parts:
+        a = prep(src, opt)
+        a = a / (np.max(np.abs(a)) + 1e-9) * gain
+        layers.append((int(at * SR), a))
+    n = max(off + len(a) for off, a in layers)
+    out = np.zeros(n, dtype=np.float32)
+    for off, a in layers:
+        out[off: off + len(a)] += a
+    return out
+
+
+def build_variant(src, opt):
+    """
+    Вариант звука: одна запись или склейка (`src` — список частей). Опции
+    варианта: dur — длина готового звука, in/out — затухания, мс, loop —
+    петля без щелчка (xfade — длина перетекания), rms — громкость; у
+    склейки ещё hp/lp на всю смесь.
+    """
+    if isinstance(src, list):
+        a = mix(src)
+        cred = ' + '.join(src_name(p[0]) for p in src)
+    else:
+        a = prep(src, {k: v for k, v in opt.items() if k not in ('in', 'out', 'dur', 'loop', 'rms')})
+        cred = src_name(src)
+    if not opt.get('raw'):
+        a = trim_tail(a)
+    if opt.get('dur'):
+        a = a[: int(opt['dur'] * SR)]
+    if isinstance(src, list):
+        if opt.get('hp'):
+            a = highpass(a, opt['hp'])
+        if opt.get('lp'):
+            a = lowpass(a, opt['lp'])
+    if opt.get('loop'):
+        a = loopable(a, opt.get('xfade', 250))
+    else:
+        a = fade(a, ms_in=opt.get('in', 2), ms_out=opt.get('out', 40))
+    a = normalize(a, rms_db=opt.get('rms', -18))
+    return a, cred
+
+
+# Длины петель эффектов (опция `loop`), с: страница ставит по ним точки петли,
+# как у музыки, — иначе хвостовая тишина MP3, если браузер её не срежет,
+# щёлкала бы на каждом круге.
+LOOP_DUR = {}
+
+
 def build_one(name, variants):
     """Один звук из SOUNDS: варианты `name.k.mp3`. Возвращает (число, авторство)."""
     k, credits = 0, []
     for src, opt in variants:
-        a = trim_head(load(src))
-        if opt.get('start'):
-            a = a[int(opt['start'] * SR):]
-        if opt.get('rate'):
-            a = resample(a, opt['rate'])
-        if opt.get('lp'):
-            a = lowpass(a, opt['lp'])
-        a = trim_tail(a)
-        if opt.get('dur'):
-            a = a[: int(opt['dur'] * SR)]
-        a = fade(a, ms_out=opt.get('out', 40))
-        a = normalize(a, rms_db=opt.get('rms', -18))
+        a, cred = build_variant(src, opt)
         k += 1
+        if opt.get('loop') and k == 1:
+            LOOP_DUR[name] = round(len(a) / SR, 5)
         save_mp3(a, os.path.join(OUT, 'sfx', f'{name}.{k}.mp3'), kbps=96)
-        credits.append((f'sfx/{name}.{k}.mp3', os.path.relpath(src, SFX)))
+        credits.append((f'sfx/{name}.{k}.mp3', cred))
     return k, credits
 
 
@@ -393,23 +747,66 @@ def loudness(path):
     return float(lines[-1].split()[1])
 
 
-def build_music():
+def build_track(scene, by_title):
+    """
+    Одна музыкальная сцена. Значение MUSIC_SCENES — название трека или
+    словарь {title, lufs?, ticks?}: `ticks` накладывает на петлю тиканье часов
+    (этаж 14) — удары ровно в сетку, которая делится на длину петли, поэтому
+    стык не слышен, а длина трека в сэмплах не меняется.
+    """
+    spec = MUSIC_SCENES[scene]
+    if isinstance(spec, str):
+        spec = {'title': spec}
+    t = by_title[spec['title']]
+    src = os.path.join(MUSIC, t['path'])
+    a = load(src, stereo=True)
+    lufs = loudness(src)
+    g = 10 ** ((spec.get('lufs', -19) - lufs) / 20)
+    a = a * g
+    cred = f"«{t['title']}» — {t['author']}, {t['license']}, {t['source']}"
+    tk = spec.get('ticks')
+    if tk:
+        a = a + tick_bed(len(a), tk)[:, None]
+        cred += ' + тиканье: ' + ', '.join(sorted({src_name(p) for p, _ in tk['files']}))
+    peak = float(np.max(np.abs(a)))
+    if peak > 0.89:  # −1 дБ: громче не тянем, пусть будет тише
+        a = a * (0.89 / peak)
+    save_mp3(a, os.path.join(OUT, 'music', f'{scene}.mp3'), stereo=True, kbps=96)
+    return {'dur': round(len(a) / SR, 5)}, (f'music/{scene}.mp3', cred)
+
+
+def tick_bed(n, tk):
+    """
+    Дорожка тиканья под музыку: тик и так (два разных щелчка, «так» ниже),
+    период подогнан так, чтобы в петлю влезало целое число ударов, громкость
+    на `db` ниже музыки, верхи срезаны — часы идут где-то в стене, а не над ухом.
+    """
+    clicks = []
+    for p, o in tk['files']:
+        c = prep(p, o)[: int(0.12 * SR)]
+        c = lowpass(c, tk.get('lp', 2600))
+        c = fade(c, ms_out=30)
+        clicks.append(c / (np.max(np.abs(c)) + 1e-9))
+    beats = max(1, round(n / (tk.get('period', 1.0) * SR)))
+    step = n / beats
+    out = np.zeros(n, dtype=np.float32)
+    for i in range(beats):
+        c = clicks[i % len(clicks)] * (0.85 if i % 2 else 1.0)
+        at = int(i * step)
+        m = min(len(c), n - at)
+        out[at: at + m] += c[:m]
+    return out * (10 ** (tk.get('db', -24) / 20))
+
+
+def build_music(only=None):
     cat = json.load(open(os.path.join(MUSIC, 'music', 'catalog.json')))
     by_title = {t['title']: t for t in cat['tracks']}
     manifest, credits = {}, []
-    for scene, title in MUSIC_SCENES.items():
-        t = by_title[title]
-        src = os.path.join(MUSIC, t['path'])
-        a = load(src, stereo=True)
-        lufs = loudness(src)
-        g = 10 ** ((-19 - lufs) / 20)
-        peak = float(np.max(np.abs(a))) * g
-        if peak > 0.89:  # −1 дБ: громче не тянем, пусть будет тише
-            g *= 0.89 / peak
-        a = a * g
-        save_mp3(a, os.path.join(OUT, 'music', f'{scene}.mp3'), stereo=True, kbps=96)
-        manifest[scene] = {'dur': round(len(a) / SR, 5)}
-        credits.append((f'music/{scene}.mp3', f"«{t['title']}» — {t['author']}, {t['license']}, {t['source']}"))
+    for scene in MUSIC_SCENES:
+        if only is not None and scene not in only:
+            continue
+        manifest[scene], c = build_track(scene, by_title)
+        credits.append(c)
     return manifest, credits
 
 
@@ -423,7 +820,8 @@ def audio_rev():
     return h.hexdigest()[:8]
 
 
-def write_manifest(sfx, music):
+def write_manifest(sfx, music, loops=None):
+    loops = {**LOOP_DUR} if loops is None else loops
     ts = [
         '// Сгенерировано scripts/audio-build.py — не править руками.',
         '// Число вариантов у каждого звука и длина каждой музыкальной петли.',
@@ -433,6 +831,9 @@ def write_manifest(sfx, music):
         '',
         f'export const SFX_VARIANTS: Record<string, number> = {json.dumps(sfx, ensure_ascii=False, indent=2)};',
         '',
+        '/** Длина петли у эффектов-петель, с (гул долгого луча): точки петли. */',
+        f'export const SFX_LOOPS: Record<string, number> = {json.dumps(loops, ensure_ascii=False, indent=2)};',
+        '',
         f'export const MUSIC_TRACKS = {json.dumps(music, ensure_ascii=False, indent=2)} as const;',
         '',
     ]
@@ -441,29 +842,47 @@ def write_manifest(sfx, music):
 
 def rebuild_only(names):
     """
-    Пересобрать только названные эффекты (`--only=rank.up,soft.up`): нужен
-    один AUDIO_SFX. Остальные файлы, музыка и их авторство не трогаются —
-    исходники музыки и писков весят сотни мегабайт, и держать их ради
-    одного нового звука незачем.
+    Пересобрать только названные эффекты или музыкальные сцены
+    (`--only=rank.up,soft.up,sky`): эффектам нужны их исходники (AUDIO_SFX
+    и/или AUDIO_SRC), сцене — AUDIO_MUSIC. Остальные файлы и их авторство не
+    трогаются — исходники музыки и писков весят сотни мегабайт, и держать
+    их ради одного нового звука незачем.
     """
     import re
-    if not SFX:
-        sys.exit('Нужен AUDIO_SFX — см. шапку файла')
     path = os.path.join(ROOT, 'src', 'lib', 'audio-manifest.ts')
     src = open(path).read()
     sfx = json.loads(re.search(r'SFX_VARIANTS: Record<string, number> = (\{.*?\});', src, re.S)[1])
     music = json.loads(re.search(r'MUSIC_TRACKS = (\{.*?\}) as const;', src, re.S)[1])
+    m = re.search(r'SFX_LOOPS: Record<string, number> = (\{.*?\});', src, re.S)
+    loops = json.loads(m[1]) if m else {}
     src_lines = open(os.path.join(OUT, 'SOURCES.txt')).read().splitlines()
+    tracks = [n for n in names if n in MUSIC_SCENES]
+    if tracks:
+        if not MUSIC:
+            sys.exit('Нужен AUDIO_MUSIC — см. шапку файла')
+        got, credits = build_music(set(tracks))
+        music.update(got)
+        for o, s in credits:
+            src_lines = [ln for ln in src_lines if not ln.startswith(o + '\t')]
+            src_lines.append(f'{o}\t{s}')
     for name in names:
+        if name in MUSIC_SCENES:
+            continue
         if name not in SOUNDS:
             sys.exit(f'Нет такого звука в SOUNDS: {name}')
         for fn in os.listdir(os.path.join(OUT, 'sfx')):
             if fn.startswith(name + '.') and fn[len(name) + 1:-4].isdigit():
                 os.remove(os.path.join(OUT, 'sfx', fn))
         sfx[name], credits = build_one(name, SOUNDS[name])
-        src_lines = [ln for ln in src_lines if not ln.startswith(f'sfx/{name}.')]
+        loops.pop(name, None)
+        if name in LOOP_DUR:
+            loops[name] = LOOP_DUR[name]
+        # Ровно файлы этого звука: у `train` и `train.horn` общее начало имени,
+        # и `startswith('sfx/train.')` стирал бы строки гудка.
+        own = re.compile(rf'^sfx/{re.escape(name)}\.\d+\.mp3\t')
+        src_lines = [ln for ln in src_lines if not own.match(ln)]
         src_lines += [f'{o}\t{s}' for o, s in credits]
-    write_manifest(sfx, music)
+    write_manifest(sfx, music, loops)
     with open(os.path.join(OUT, 'SOURCES.txt'), 'w') as f:
         f.write('\n'.join(src_lines) + '\n')
     print(f'пересобрано: {", ".join(names)}')

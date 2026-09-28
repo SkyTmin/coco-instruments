@@ -2,7 +2,7 @@
 // Число вариантов у каждого звука и длина каждой музыкальной петли.
 
 /** Ревизия набора: входит в адрес файла, чтобы кеш не отдал старый звук. */
-export const AUDIO_REV = 'a313ed76';
+export const AUDIO_REV = '76504d53';
 
 export const SFX_VARIANTS: Record<string, number> = {
   "ui.tap": 3,
@@ -97,7 +97,36 @@ export const SFX_VARIANTS: Record<string, number> = {
   "rank.up": 1,
   "soft.up": 1,
   "step.ground": 5,
-  "step.wood": 5
+  "step.wood": 5,
+  "thunder": 3,
+  "wind": 3,
+  "lava.bubble": 3,
+  "lava.hiss": 3,
+  "steam": 3,
+  "glass.break": 3,
+  "string": 3,
+  "string.bend": 1,
+  "train": 2,
+  "train.horn": 2,
+  "clock.tick": 4,
+  "clock.bell": 2,
+  "heart": 3,
+  "flesh": 4,
+  "warp": 2,
+  "stone.grind": 3,
+  "chains": 3,
+  "cannon": 2,
+  "laser": 2,
+  "laser.hum": 1,
+  "time.stop": 1,
+  "time.go": 1,
+  "choir": 1,
+  "beast": 3
+};
+
+/** Длина петли у эффектов-петель, с (гул долгого луча): точки петли. */
+export const SFX_LOOPS: Record<string, number> = {
+  "laser.hum": 2.6
 };
 
 export const MUSIC_TRACKS = {
@@ -130,5 +159,14 @@ export const MUSIC_TRACKS = {
   },
   "fishing": {
     "dur": 24.51093
+  },
+  "sky": {
+    "dur": 33.65249
+  },
+  "finale": {
+    "dur": 83.07694
+  },
+  "clock": {
+    "dur": 48.0
   }
 } as const;
