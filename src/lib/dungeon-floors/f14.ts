@@ -750,6 +750,6 @@ export const F14: FloorDef = {
       stack: 1,
     },
   ],
-  music: { explore: 'depths', boss: 'boss' },
+  music: { explore: 'clock', boss: 'boss' },
   cover: '/ui/areas/f14.png',
 };

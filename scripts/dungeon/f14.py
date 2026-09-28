@@ -139,7 +139,7 @@ def hole(m, x, y):
                 print(f'  сдвиг o ({x},{y}) -> ({x+dx},{y+dy})', file=sys.stderr)
                 m.put(x + dx, y + dy, 'o')
                 return
-    print(f'  НЕТ места для норы ({x},{y})', file=sys.stderr)
+    raise SystemExit(f'НЕТ места для норы ({x},{y})')
 
 
 def face(m, x, y, c):
@@ -151,7 +151,7 @@ def face(m, x, y, c):
                 print(f'  сдвиг {c} ({x},{y}) -> ({xx},{y})', file=sys.stderr)
             m.put(xx, y, c)
             return
-    print(f'  НЕТ стены для {c} ({x},{y})', file=sys.stderr)
+    raise SystemExit(f'НЕТ стены для {c} ({x},{y})')
 
 
 def lamp(m, x, y):

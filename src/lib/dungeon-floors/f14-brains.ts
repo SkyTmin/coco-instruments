@@ -49,7 +49,7 @@
 
 import { registerBoss, registerBrain, registerFloor } from '../dungeon-ai';
 import type { Brain, BrainCtx, SimApi, ZoneIn } from '../dungeon-ai';
-import type { BossFight, Mob, Prop, Shot, Sim } from '../dungeon-sim';
+import type { BossFight, Mob, Prop, Shot, Sim, Zone } from '../dungeon-sim';
 import type { WorldObj } from '../dungeon-world';
 import { F14_DIAL, F14_GEO, F14_MARK, F14_MECH, F14_SAND } from './f14';
 
@@ -968,16 +968,23 @@ brain('f14_rewinder', {
         api.setMode(m, 'chase');
     }
   },
-  onHit(sim, m) {
+  onHit(sim, m, _hit, api) {
     if (m.mode === 'f14_rewind') return 0;
     if (m.mode === 'f14_dazed') return 1.5;
     if ((m.data.rwCd ?? 0) <= 0 && m.data.rwAt === undefined) {
       m.data.rwAt = sim.time + REWIND.window;
       const a = rewindAnchor(sim, m);
-      if (a) {
-        m.data.ax = a.x;
-        m.data.ay = a.y;
-      }
+      m.data.ax = a ? a.x : m.x;
+      m.data.ay = a ? a.y : m.y;
+      // Якорь виден: куда его унесёт и откуда тянется след.
+      api.zone(sim, {
+        x: m.data.ax,
+        y: m.data.ay,
+        r: REWIND.anchorR,
+        life: REWIND.window + REWIND.fly,
+        art: 'f14_anchor',
+        mob: m.id,
+      } as ZoneIn);
     }
     return 1;
   },
@@ -2470,6 +2477,8 @@ function knife(sim: Sim, x: number, y: number, ang: number, dmg: number, kind: s
   };
   sim.shots.push(s);
   KNIFE_ANG.set(s.id, ang);
+  // Линия полёта видна, пока нож висит (рисует этаж, пока снаряд не пущен).
+  sim.zones.push({ id: sim.nextId++, t: 0, x, y, r: 0.2, life: 60, art: 'f14_knifeline', ang, shot: s.id } as Zone);
   if (KNIFE_ANG.size > 400) {
     const live = new Set(sim.shots.map((q) => q.id));
     for (const id of KNIFE_ANG.keys()) if (!live.has(id)) KNIFE_ANG.delete(id);
