@@ -1,0 +1,20 @@
+Этаж 6 «Огненный разлом» — чужие картинки и откуда они.
+
+f6-sheet.png — лист трёх монстров, перекрашенных по ролям цветов
+(scripts/dungeon/f6-sheet.py): огненный дух, пепельный летун, жук-огнёвка.
+  Ninja Adventure Asset Pack — Pixel-boy (https://pixel-boy.itch.io/ninja-adventure-asset-pack)
+  License: CC0 1.0 (public domain). Attribution not required but appreciated.
+  Source: https://github.com/sparklinlabs/superpowers-asset-packs
+          ninja-adventure/monsters/2.png  (flame → огненный дух)
+          ninja-adventure/monsters/9.png  (bird → пепельный летун)
+          ninja-adventure/monsters/15.png (beetle → жук-огнёвка)
+
+Бесёнок-старьёвщик — кадры imp_idle_anim_f0…3 и imp_run_anim_f0…3 из атласа,
+который уже лежит в public/dungeon/x72 (новых файлов не добавлено):
+  0x72 DungeonTileset II v1.7 — 0x72 (https://0x72.itch.io/dungeontileset-ii)
+  License: CC0 1.0 (public domain).
+
+Всё остальное — саламандра, лавовый голем, живая руда, магмовый червь,
+Красный змей, лава, корка, пепел, базальт, мост, реквизит лагеря и кладбища
+великанов, зоны и иконки материалов — нарисовано кодом
+(src/lib/dungeon-floors/f6-art.ts), чужих картинок в нём нет.
