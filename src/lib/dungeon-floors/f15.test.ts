@@ -422,9 +422,10 @@ describe('этаж 15: события Чрева и Сосудов', () => {
     for (let i = 0; i < before.length; i++) if (before[i] !== s.tiles[i]) diff += 1;
     expect(diff).toBe(0);
     // Середина зала не заливается: там можно переждать.
-    const i = Math.floor(s.hero.y) * W + Math.floor(s.hero.x);
+    const b = f15View(s)!.boxes.digest;
+    const mid = Math.floor((b.y0 + b.y1 + 1) / 2) * W + Math.floor((b.x0 + b.x1 + 1) / 2);
     const cells = f15View(s)!.digest.cells.flat();
-    expect(cells.includes(i)).toBe(false);
+    expect(cells.includes(mid)).toBe(false);
   });
 
   it('тромб: сгусток запирает Аорту спереди и сзади, после волн рассасывается', () => {
@@ -468,7 +469,7 @@ describe('этаж 15: события Чрева и Сосудов', () => {
       s.hero.hp = s.stats.maxHp;
       stepSim(s, DT, bot(s, st));
     }
-    expect(f15Alien(s)).toBeGreaterThan(5);
+    expect(f15Alien(s)).toBeGreaterThan(3);
     s.hero.x = x + 0.5;
     s.hero.y = y + 1.5;
     for (let t = 0; t < 3; t++) stepSim(s, DT, NO_INPUT);

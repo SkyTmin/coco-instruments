@@ -618,15 +618,15 @@ function faceTex(style: Style): Tex {
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < TEX; x++) {
         const fib = tnoise2(x, y, 2, 16, TEX, 51);
-        const bundle = tnoise(x, 0, 8, TEX, 52);
+        const bundle = tnoise(x + (tnoise(x, y, 8, TEX, 61) - 0.5) * 6, 0, 16, TEX, 52);
         const big = tnoise(x, 0, 32, TEX, 56);
         const k = y / 15;
         let l = 0.78 - k * 0.62 + (fib - 0.5) * 0.3 + (big - 0.5) * 0.2 + dith(x, y) * 0.2;
         // Край пучка — тёмная борозда, рядом свет.
         const edge = Math.abs(bundle - 0.5);
-        if (edge < 0.03) l = -1;
-        else if (edge < 0.07) l += bundle > 0.5 ? 0.18 : -0.12;
-        let c = l < 0 ? P.groove : tone(P.face, l);
+        if (edge < 0.025) l -= 0.35;
+        else if (edge < 0.06) l += bundle > 0.5 ? 0.14 : -0.1;
+        let c = tone(P.face, l);
         if (style === 'throat') {
           // Хрящевые кольца: две выпуклые полосы, волной по ±1.
           for (const ry of [6]) {
@@ -650,10 +650,10 @@ function faceTex(style: Style): Tex {
           }
         } else {
           // Эластика: тонкие светлые полосы с волной.
-          for (const ry of [4, 10]) {
-            const yy = ry + Math.round((tnoise(x, ry, 32, TEX, 58) - 0.5) * 2);
-            if (y === yy && tnoise(x, ry, 8, TEX, 55) > 0.3) c = mixc(c, P.band[2], 0.6);
-            if (y === yy + 1 && tnoise(x, ry, 8, TEX, 55) > 0.3) c = mixc(c, P.groove, 0.35);
+          for (const ry of [7]) {
+            const yy = ry + Math.round((tnoise(x, ry, 32, TEX, 58) - 0.5) * 3);
+            if (y === yy && tnoise(x, ry, 8, TEX, 55) > 0.45) c = mixc(c, P.band[2], 0.3);
+            if (y === yy + 1 && tnoise(x, ry, 8, TEX, 55) > 0.45) c = mixc(c, P.groove, 0.2);
           }
           // Сосудики на стенке: тёмные жилки сверху вниз.
           const v = ridge(x + (tnoise(x, y, 8, TEX, 59) - 0.5) * 6, 0, 32, TEX, 60);
@@ -697,7 +697,7 @@ function bloodTex(): Tex {
         let c = tone(B, 0.08 + n * 0.5 + (big - 0.5) * 0.3 + dith(x, y) * 0.2);
         if (n > 0.82) c = mixc(c, hx('#d83848'), 0.45);
         // Клетки крови: редкие диски.
-        if (hash(x >> 1, y >> 1, 74) > 0.985) c = mixc(c, hx('#c02030'), 0.8);
+        if (hash(x >> 1, y >> 1, 74) > 0.994) c = mixc(c, hx('#a01828'), 0.6);
         t.put(x, y, c);
       }
   });
@@ -852,16 +852,16 @@ function flowOver(p: Px, c: CellCtx, st: Style, k: number): void {
       const b = X * fy - Y * fx;
       if (veins) p.set(x, y, alpha(base, 0.45));
       const sN = tnoise2(b, a, 2, 24, 1 << 16, 401);
-      if (sN > 0.74) p.set(x, y, alpha(streakC, veins ? 0.55 : 0.3));
+      if (sN > 0.76) p.set(x, y, alpha(streakC, veins ? 0.38 : 0.22));
     }
   // Одна «ёлочка» на клетку через одну — остриём по ходу.
-  if (hash(c.wx, c.wy, 77) > 0.5) {
+  if (hash(c.wx, c.wy, 77) > 0.72) {
     for (let i = -3; i <= 3; i++) {
       const back = Math.abs(i) * 0.9;
       const x = Math.round(8 + fy * i - fx * back + fx * 2);
       const y = Math.round(8 - fx * i - fy * back + fy * 2);
-      p.set(x, y, alpha(chev, veins ? 0.5 : 0.32));
-      p.set(x - fx, y - fy, alpha(chev, veins ? 0.25 : 0.15));
+      p.set(x, y, alpha(chev, veins ? 0.3 : 0.22));
+      p.set(x - fx, y - fy, alpha(chev, veins ? 0.14 : 0.1));
     }
   }
 }
@@ -1085,23 +1085,27 @@ function wallTop(c: CellCtx, st: Style): Px {
   const faceR = !oR && c.open(1, 1);
   const R = P.rim;
   const lip = (x: number, y: number, k: number) => p.set(x, y, k > 2.5 ? INK : tone(R, 0.95 - k * 0.3));
+  // Край плоти волнистый: шум по мировым координатам, стыки клеток сходятся.
+  const wv = (t: number, seed: number) => Math.round((tnoise(t, seed, 8, 1 << 20, 131) - 0.5) * 4);
   if (faceD)
     for (let x = 0; x < 16; x++) {
-      const w = Math.round(Math.sin((c.wx * 16 + x) * 0.45) * 0.6);
+      const w = Math.min(1, wv(c.wx * 16 + x, c.wy));
       for (let k = 0; k < 4; k++) lip(x, 15 - k + w, 3 - k);
       p.set(x, 11 + w, INK);
     }
   if (oU)
     for (let x = 0; x < 16; x++) {
-      const w = Math.round(Math.sin((c.wx * 16 + x) * 0.45) * 0.6);
-      for (let k = 0; k < 3; k++) lip(x, k + Math.max(0, w), k);
-      p.set(x, 3 + Math.max(0, w), INK);
+      const w = Math.max(0, wv(c.wx * 16 + x, c.wy + 7) + 1);
+      for (let y = 0; y < w; y++) p.set(x, y, INK);
+      for (let k = 0; k < 3; k++) lip(x, k + w, k);
+      p.set(x, 3 + w, INK);
     }
   const side = (x0: number, dir: number) => {
     for (let y = 0; y < 16; y++) {
-      const w = Math.round(Math.sin((c.wy * 16 + y) * 0.5) * 0.6);
-      for (let k = 0; k < 3; k++) lip(x0 + dir * (k + Math.max(0, w)), y, k);
-      p.set(x0 + dir * (3 + Math.max(0, w)), y, INK);
+      const w = Math.max(0, wv(c.wy * 16 + y, c.wx * 3 + dir) + 1);
+      for (let k = 0; k < w; k++) p.set(x0 + dir * k, y, INK);
+      for (let k = 0; k < 3; k++) lip(x0 + dir * (k + w), y, k);
+      p.set(x0 + dir * (3 + w), y, INK);
     }
   };
   if (oL || faceL) side(0, 1);
@@ -1316,24 +1320,20 @@ function clotWall(c: CellCtx, face: boolean): Px {
   return p;
 }
 
-/** Пол под «живой стенкой»: складка, куда уходит кромка/клапан. */
+/** Пол под «живой стенкой»: влажная тень, куда мышца уходит, открывшись. */
 function socketOver(p: Px, c: CellCtx, P: Pal, kind: number): void {
-  if (kind === M.band) {
-    // Кромка: влажная борозда у стены, мышца сюда наползает на вдохе.
-    for (let y = 0; y < 16; y++) {
-      const wallW = !c.open(-1, 0) || c.markAt(-1, 0) === M.band;
-      for (let x = 0; x < 16; x++) {
-        const t = wallW ? x : 15 - x;
-        if ((t + y) % 5 === 0) p.set(x, y, alpha(P.groove, 0.45));
-      }
-    }
-    return;
-  }
-  // Сфинктер / створка: кольцевые мышцы на полу, радиальные складки.
+  const wallL = !c.open(-1, 0) || c.markAt(-1, 0) === kind;
+  const wallR = !c.open(1, 0) || c.markAt(1, 0) === kind;
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
-      if ((y === 1 || y === 14) && hash(c.wx * 16 + x, y, 311) > 0.25) p.set(x, y, alpha(P.rim[1], 0.8));
-      if (x % 4 === (c.wx % 2) * 2 && (y < 3 || y > 12)) p.set(x, y, alpha(P.groove, 0.6));
+      let a = 0.1;
+      if (kind === M.band) {
+        // Темнее к стене: там лежит сложенная мышца.
+        const t = wallL && !wallR ? x : wallR && !wallL ? 15 - x : 8;
+        a = 0.28 - t * 0.016;
+      }
+      if (hash(c.wx * 16 + x, c.wy * 16 + y, 151) > 0.97) a += 0.25;
+      p.set(x, y, alpha(P.groove, Math.max(0, a)));
     }
 }
 
@@ -1507,7 +1507,18 @@ function bandRank(l: Live): [number, number] {
 
 const HMAX = 10;
 
-function slabPx(st: Style, kind: LiveKind, side: number, k: number, trem: number, hot: number): Px {
+function slabPx(
+  st: Style,
+  kind: LiveKind,
+  side: number,
+  k: number,
+  trem: number,
+  hot: number,
+  ox: number,
+  oy: number,
+  rank: number,
+  span16 = 16,
+): Px {
   const P = PAL[st];
   const p = new Px(16, 16 + HMAX);
   const depth = side < 0 ? 16 : Math.max(2, Math.round(16 * k));
@@ -1546,16 +1557,34 @@ function slabPx(st: Style, kind: LiveKind, side: number, k: number, trem: number
     const e = edge(v);
     for (let u = 0; u < e; u++) {
       const [x, y] = xy(u, v);
-      let l = 0.5 + dith(x, y) * 0.22 + (hash(v >> 1, side, 71) - 0.5) * 0.15;
-      // Волокна вдоль хода (кромка), складки к центру (сфинктер).
-      if (kind === 'band' && (v + (u >> 3)) % 4 === 0) l -= 0.22;
-      if ((kind === 'valve' || kind === 'door') && (v * 3 + u) % 7 === 0) l -= 0.25;
-      if (kind === 'lymph' && hash(x >> 2, y >> 2, 73) > 0.7 && ((x + y) & 3) === 0) l += 0.3;
+      // Точка в координатах всей стенки (клетки группы сшиваются).
+      const gx = ox * 16 + x - 7.5;
+      const gy = oy * 16 + y - 7.5;
+      let l = 0.5 + dith(x, y) * 0.22 + (tnoise(gx + 64, gy + 64, 8, 1 << 12, 141) - 0.5) * 0.3;
+      if (kind === 'band') {
+        // Валик мышцы: выпуклый поперёк (свет посередине, тень к краям),
+        // волокна — вдоль стены, волной.
+        const U = rank * 16 + u;
+        const span = Math.max(16, span16);
+        l += Math.cos(Math.PI * (U / span - 0.5)) * 0.42 - 0.2;
+        const f = Math.sin(U * 0.85 + Math.sin(v * 0.35 + U * 0.15) * 1.6);
+        if (f > 0.86) l -= 0.22;
+        if (U >= span - 1) l -= 0.35;
+      } else if (kind === 'valve' || kind === 'door') {
+        // Сфинктер: складки лучами к середине, у середины — темнее.
+        const ang = Math.atan2(gy, gx);
+        const r = Math.hypot(gx, gy);
+        const fold = Math.cos(ang * 11 + r * 0.08);
+        if (fold > 0.78) l -= 0.3;
+        else if (fold > 0.45) l += 0.14;
+        l -= Math.max(0, 6 - r) * 0.06;
+        if (r < 2.2 && k > 0.9) l = -1;
+      } else if (kind === 'lymph' && hash(x >> 2, y >> 2, 73) > 0.7 && ((x + y) & 3) === 0) l += 0.3;
       const d = e - u;
-      if (d <= 1 && side >= 0) l += facesLight ? 0.35 : -0.3;
-      else if (d === 2 && side >= 0) l += facesLight ? 0.12 : -0.1;
-      if (u === 0 && side >= 0) l -= 0.15;
-      let c = tone(top, l);
+      if (d <= 1 && side >= 0 && k < 0.97) l += facesLight ? 0.35 : -0.3;
+      else if (d === 2 && side >= 0 && k < 0.97) l += facesLight ? 0.12 : -0.1;
+      if (u === 0 && side >= 0 && rank === 0 && kind === 'band') l -= 0.12;
+      let c = l < 0 ? P.groove : tone(top, l);
       if (hot > 0) c = mixc(c, hotC, hot * (0.25 + 0.2 * (d <= 2 ? 1 : 0)));
       p.set(x, y - H + HMAX, alpha(c, a));
     }
@@ -1585,11 +1614,6 @@ function slabPx(st: Style, kind: LiveKind, side: number, k: number, trem: number
       p.set(x, y - H + HMAX + 2, alpha(hx('#8a3a4c'), 0.3));
     }
   }
-  // Сомкнувшийся сфинктер — морщинистая точка у середины.
-  if ((kind === 'valve' || kind === 'door') && k > 0.9 && side >= 0) {
-    const [x, y] = xy(15, 8);
-    p.ell(x, y - H + HMAX, 1.6, 1.4, alpha(P.groove, 0.9));
-  }
   return p;
 }
 
@@ -1602,6 +1626,10 @@ function livePainter(kind: LiveKind) {
     let side = 0;
     let trem = 0;
     let hot = 0;
+    let rank = 0;
+    let span = 1;
+    let ox = 0;
+    let oy = 0;
     if (!l || !S) {
       k = kind === 'lymph' ? 1 : 0.15;
     } else {
@@ -1626,18 +1654,20 @@ function livePainter(kind: LiveKind) {
       }
       // Сколько мышцы наползло от стены (клетки) и чья это доля.
       let D: number;
-      let rank: number;
       if (kind === 'band') {
         const [r, n] = bandRank(l);
         side = l.dx >= 0 ? 0 : 1;
         D = 0.4 + warn * 0.35 + (n - 0.4) * e;
         rank = r;
+        span = n;
       } else {
         const [cx, cy, hw, hh] = boxOf(S, l);
         const horiz = hw >= hh;
         const half = horiz ? hw : hh;
         side = horiz ? (l.cx <= cx ? 0 : 1) : l.cy <= cy ? 2 : 3;
         rank = half - Math.abs(horiz ? l.cx - cx : l.cy - cy) - 0.5;
+        ox = l.cx - cx;
+        oy = l.cy - cy;
         const base = kind === 'lymph' ? 0.2 : 0.3;
         D = base + warn * 0.3 + (half + 0.1 - base) * e;
       }
@@ -1646,8 +1676,10 @@ function livePainter(kind: LiveKind) {
     }
     const step = qn(k, 10);
     const hq = qn(hot, 3);
-    return flashed(`live|${st}|${kind}|${side}|${step}|${trem}|${hq}`, flash, () => ({
-      p: slabPx(st, kind, side, step / 10, trem, hq / 3),
+    const rk = Math.round(rank * 2) / 2;
+    const ok = `${Math.round(ox * 2) / 2},${Math.round(oy * 2) / 2}`;
+    return flashed(`live|${st}|${kind}|${side}|${step}|${trem}|${hq}|${rk}|${ok}|${span}`, flash, () => ({
+      p: slabPx(st, kind, side, step / 10, trem, hq / 3, Math.round(ox * 2) / 2, Math.round(oy * 2) / 2, rk, span * 16),
       ax: 8,
       ay: 16 + HMAX,
     }));
