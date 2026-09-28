@@ -35,7 +35,6 @@ export const F15: FloorDef = {
   id: 15,
   name: 'Сердце подземелья',
   lead: 'Ещё не открыт.',
-  draft: true,
   mapVer: 1,
   areas: [
     {
