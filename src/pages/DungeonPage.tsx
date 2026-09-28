@@ -36,10 +36,10 @@ import {
   setOf,
   SLOTS,
   upgradable,
+  OPEN_FLOORS,
 } from '@/lib/dungeon';
 import type { AreaId, MatId } from '@/lib/dungeon';
 import { buildWorld } from '@/lib/dungeon-world';
-import { FLOORS } from '@/lib/dungeon-floors';
 import { gearIcon, heroFrame, itemUrl, propArt } from '@/lib/dungeon-art';
 import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
 import { MINE_CELLS, minedShare, rankLetter, shortMoney } from '@/lib/prison';
@@ -84,7 +84,9 @@ export function DungeonPage() {
   const enter = useFinanceStore((s) => s.dungeonEnter);
   const introSeen = useFinanceStore((s) => s.dungeonIntroSeen);
   // Этаж: у вылазки — её, в лобби — выбранный (по умолчанию самый глубокий).
-  const [floorSel, setFloorSel] = useState(() => d.run?.floor ?? d.reached);
+  const [floorSel, setFloorSel] = useState(
+    () => d.run?.floor ?? Math.min(d.reached, OPEN_FLOORS.length),
+  );
   const playFloor = d.run?.floor ?? floorSel;
   const world = useMemo(() => buildWorld(playFloor), [playFloor]);
   const [view, setView] = useState<View>('lobby');
@@ -474,7 +476,7 @@ export function DungeonPage() {
 
             {!run && (
               <div className="dgl-floors" role="tablist" aria-label="Этаж">
-                {FLOORS.map((f) => {
+                {OPEN_FLOORS.map((f) => {
                   const ok = f.id <= d.reached;
                   return (
                     <button

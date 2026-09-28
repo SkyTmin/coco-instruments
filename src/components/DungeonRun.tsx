@@ -36,6 +36,7 @@ import {
   slotsUsed,
   smellOf,
   upgradable,
+  floorReady,
 } from '@/lib/dungeon';
 import type { AreaId, DeepMineId, Haul, MatId } from '@/lib/dungeon';
 import {
@@ -1114,6 +1115,10 @@ export function DungeonRun({
   const descendNow = () => {
     const sim = simRef.current;
     if (!sim || ended.current) return;
+    if (!floorReady(world.floor + 1)) {
+      note('Ниже ещё не пройти — этаж достраивают');
+      return;
+    }
     ended.current = true;
     paused.current = true;
     const ok = useFinanceStore

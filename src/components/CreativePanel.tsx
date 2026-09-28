@@ -7,9 +7,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFinanceStore } from '@/store';
 import { cachedOwner, getBackupStatus } from '@/lib/backup';
-import { SETS } from '@/lib/dungeon';
-import { PLUS_SAFE } from '@/lib/dungeon';
-import { FLOORS } from '@/lib/dungeon-floors';
+import { OPEN_FLOORS, PLUS_SAFE, SETS } from '@/lib/dungeon';
 import { PICKS } from '@/lib/economy';
 import { LAST_RANK, rankLetter } from '@/lib/prison';
 import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
@@ -198,7 +196,7 @@ function Panel({ onClose }: { onClose: () => void }) {
       <section className="crv__sec">
         <h4>Подземелье</h4>
         <p className="crv__note">
-          Открыто этажей: {Math.min(dungeon.reached, FLOORS.length)} из {FLOORS.length}
+          Открыто этажей: {Math.min(dungeon.reached, OPEN_FLOORS.length)} из {OPEN_FLOORS.length}
         </p>
         <Stepper
           label="Ступень"

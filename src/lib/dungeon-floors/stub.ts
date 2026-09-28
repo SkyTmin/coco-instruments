@@ -67,6 +67,7 @@ export function stubFloor(o: {
     id: o.id,
     name: o.name,
     lead: o.lead,
+    draft: true,
     mapVer: 1,
     areas: [
       {

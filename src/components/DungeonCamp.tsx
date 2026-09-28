@@ -33,13 +33,13 @@ import {
   SETS,
   SLOT_NAMES,
   SLOTS,
+  OPEN_FLOORS,
 } from '@/lib/dungeon';
 import type { Cost, MatId, MobId, Slot } from '@/lib/dungeon';
 import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
 import { gearIcon, heroFrame, itemUrl } from '@/lib/dungeon-art';
 import { mobPortrait } from '@/lib/dungeon-mobart';
 import '@/lib/dungeon-floors/art';
-import { FLOORS } from '@/lib/dungeon-floors';
 import { shortMoney } from '@/lib/prison';
 import { coinDing, primeAudio, tierBreak } from '@/lib/sound';
 import { notifySuccess, notifyWarning } from '@/lib/haptics';
@@ -262,7 +262,7 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
 // ---- Бестиарий -------------------------------------------------------------
 
 /** Бестиарий — звери всех этажей по порядку (боссы — отдельной строкой этажа). */
-const BEASTS: MobId[] = FLOORS.flatMap((f) =>
+const BEASTS: MobId[] = OPEN_FLOORS.flatMap((f) =>
   f.mobs.filter((m) => m.beast && !m.boss).map((m) => m.id),
 );
 
@@ -316,7 +316,7 @@ export function BeastTab() {
           </div>
         );
       })}
-      {FLOORS.map((f) => {
+      {OPEN_FLOORS.map((f) => {
         const b = BOSSES[f.boss.id];
         const kills = d.bosses[b.id]?.kills ?? 0;
         return (

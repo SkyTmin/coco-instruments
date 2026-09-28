@@ -286,3 +286,30 @@ describe('движок для этажей: щит, смена клеток, п�
     expect(Math.hypot(s.hero.x - lift.x - 0.5, s.hero.y - lift.y - 3.5)).toBeLessThan(0.6);
   });
 });
+
+describe('этажи подземелья: заготовки спрятаны', () => {
+  it('заготовки — только в конце, лестница на них закрыта', async () => {
+    const { OPEN_FLOORS, floorReady } = await import('./dungeon');
+    // Открытые — префикс: после первой заготовки готовых нет.
+    expect(OPEN_FLOORS.map((f) => f.id)).toEqual(OPEN_FLOORS.map((_, i) => i + 1));
+    const last = OPEN_FLOORS.length;
+    if (last === FLOORS.length) return;
+    expect(floorReady(last + 1)).toBe(false);
+    const d: DungeonState = {
+      ...DUNGEON_START,
+      reached: FLOORS.length,
+      run: {
+        lift: entryArea(last),
+        floor: last,
+        area: entryArea(last),
+        x: 10,
+        y: 10,
+        hp: 40,
+        sack: EMPTY_SACK,
+        started: 1,
+        killed: 0,
+      },
+    };
+    expect(descendRun(d)).toBeNull();
+  });
+});

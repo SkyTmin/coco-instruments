@@ -73,6 +73,14 @@ const AREA_BY = new Map(AREAS.map((a) => [a.id, a]));
 export const areaOf = (id: AreaId): AreaDef => AREA_BY.get(id) ?? AREAS[0];
 
 export const FLOOR_COUNT = FLOORS.length;
+/**
+ * Этажи, которые видит игрок: заготовки (`draft`) спрятаны, пока их делают.
+ * Этажи идут подряд, заготовки — только в конце, поэтому это префикс.
+ */
+export const OPEN_FLOORS = FLOORS.filter((f) => !f.draft);
+/** Готов ли этаж (есть и не заготовка). */
+export const floorReady = (id: number): boolean =>
+  FLOORS.some((f) => f.id === id && !f.draft);
 export const floorOf = (id: number): FloorDef => FLOORS.find((f) => f.id === id) ?? FLOORS[0];
 /** Этаж, к которому относится район. */
 export const floorOfArea = (area: AreaId): number => areaOf(area).floor;
@@ -1462,7 +1470,7 @@ export function descendRun(d: DungeonState): DungeonState | null {
   const run = d.run;
   if (!run) return null;
   const next = run.floor + 1;
-  if (next > FLOORS.length || !floorBeaten(d, run.floor)) return null;
+  if (!floorReady(next) || !floorBeaten(d, run.floor)) return null;
   const area = entryArea(next);
   return {
     ...d,
