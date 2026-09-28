@@ -93,7 +93,7 @@ const M = F15B_MARK;
 export const F15B_HAZ = {
   crust: { status: 'burn', dur: 1.2, dps: 0.02 },
   shallow: { slow: 0.55 },
-  bog: { status: 'poison', dur: 2 },
+  bog: { status: 'poison', dur: 1.2 },
 } as const;
 
 const floorObj = (ref: string, solid: number, light?: LegendCell['light']): LegendCell => ({
@@ -235,12 +235,12 @@ export const F15_BOSS_MOBS: MobDef[] = [
     light: 4.5,
     gore: ['#5a0c18', '#c01c30', '#ff6070', '#ffd0a0'],
   },
-  echo('f15b_echo_king', 'Эхо Крысиного короля', 'эх Крысиного короля', 170, 22, 3.1, 0.75),
-  echo('f15b_echo_mino', 'Эхо Минотавра', 'эх Минотавра', 190, 25, 2.7, 0.8, { mass: 16 }),
-  echo('f15b_echo_serpent', 'Эхо Красного змея', 'эх Красного змея', 190, 24, 2.3, 0.95, { mass: 16 }),
+  echo('f15b_echo_king', 'Эхо Крысиного короля', 'эх Крысиного короля', 120, 22, 3.1, 0.75),
+  echo('f15b_echo_mino', 'Эхо Минотавра', 'эх Минотавра', 135, 25, 2.7, 0.8, { mass: 16 }),
+  echo('f15b_echo_serpent', 'Эхо Красного змея', 'эх Красного змея', 135, 24, 2.3, 0.95, { mass: 16 }),
   echo('f15b_echo_hydra', 'Эхо гидры', 'эх гидры', 40, 22, 0, 1.2, { mass: 99, mats: [] }),
-  echo('f15b_echo_head', 'Голова эха', 'голов эха', 72, 22, 0, 0.5, { mass: 99, fly: true, mats: [['f15b_echo', 0.3]] }),
-  echo('f15b_echo_demon', 'Эхо Короля демонов', 'эх Короля демонов', 210, 26, 2.5, 0.95, { mass: 18 }),
+  echo('f15b_echo_head', 'Голова эха', 'голов эха', 52, 22, 0, 0.5, { mass: 99, fly: true, mats: [['f15b_echo', 0.3]] }),
+  echo('f15b_echo_demon', 'Эхо Короля демонов', 'эх Короля демонов', 150, 26, 2.5, 0.95, { mass: 18 }),
   {
     id: 'f15b_clot',
     name: 'Кровяной сгусток',
