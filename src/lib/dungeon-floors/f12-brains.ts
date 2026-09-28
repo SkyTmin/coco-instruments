@@ -1319,6 +1319,12 @@ function stepRush(sim: Sim, st: F12State, api: SimApi): void {
     return;
   }
   const t = sim.time - ev.t;
+  // Ушёл из вестибюля (лифтом, смертью) — час пик кончился без награды.
+  if (sim.area !== F12_HALL) {
+    ev.st = 'done';
+    for (const i of ev.cells) api.setTile(sim, i % w.w, Math.floor(i / w.w), T_FLOOR, MK.tile);
+    return;
+  }
   const guard = st.posts.find((p) => p.kind === 'f12_turnstile');
   const guardDead = !guard || guard.mob === -2;
   // Волны толпы: мухи, пассажиры, многоликий.
@@ -1378,7 +1384,7 @@ function stepStairs(sim: Sim, st: F12State, api: SimApi): void {
     return;
   }
   const t = sim.time - ev.t;
-  if (ev.wave < 3 && t > 1 + ev.wave * 5) {
+  if (ev.wave < 3 && t > 1 + ev.wave * 5 && sim.area === F12_HALL) {
     for (let i = 0; i < 3 + ev.wave; i++) dropNear(sim, api, 'f12_flies', h.x, h.y - 2, 1.5, 4, i * 0.12);
     ev.wave += 1;
   }
@@ -2681,6 +2687,7 @@ function restoreArena(sim: Sim, api: SimApi): void {
     sim.zones = sim.zones.filter((z) => z !== ks.grid && z !== ks.shrine && !ks.wards.some((w) => w.z === z));
   }
   KSTATE.delete(sim);
+  api.light(sim, 'f12_shrine', null);
   F12_FX.domain = 0;
   const st = STATE.get(sim);
   if (st) for (const t of st.tracks) if (t.cfg.kind === 'arena') t.off = false;
@@ -2894,6 +2901,8 @@ function openDomain(sim: Sim, b: BossFight, api: SimApi, m: Mob): void {
     life: 1e9,
     art: 'f12_shrine',
   }));
+  // Храм светится своим красным: иначе в тёмном зале его не видно.
+  api.light(sim, 'f12_shrine', { x: ks.dais[0], y: ks.dais[1] - 1.5, r: 7, tint: 'red' });
   api.camera(sim, ks.dais[0], ks.dais[1] + 2, 2.4);
   api.slowmo(sim, 0.9, 0.35);
   sim.events.push({ t: 'flash', color: '#c01030', k: 0.9 });
@@ -3279,6 +3288,7 @@ registerBoss('f12boss', {
       if (n >= rings.length && ks.waveBack) {
         ks.waveBack = false;
         ks.wave = [];
+        api.light(sim, 'f12_shrine', null);
         sim.zones = sim.zones.filter((z) => z !== ks.shrine);
         ks.shrine = null;
         const at = arenaTrack(sim);

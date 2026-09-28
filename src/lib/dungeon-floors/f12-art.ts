@@ -398,8 +398,6 @@ const deathK = (pose: MobPose) => (pose.mode === 'dying' ? Math.min(3, Math.floo
 const GRANITE = [hx('#3e4541'), hx('#555d57'), hx('#6c756d'), hx('#838c82'), hx('#98a095')];
 const GROUT = hx('#2c312e');
 const CONC = [hx('#30332f'), hx('#3d403c'), hx('#4b4e49'), hx('#595c56')];
-const MOS_A = [hx('#3a2224'), hx('#4e2e2e'), hx('#643c3a')];
-const MOS_B = [hx('#4a4e50'), hx('#5c6264'), hx('#727a7a')];
 const YELLOW = [hx('#6a5210'), hx('#9a7a18'), hx('#c8a024'), hx('#e8cc4a')];
 const BALLAST = [hx('#1e1c1a'), hx('#2a2724'), hx('#36322e'), hx('#443f39'), hx('#534d45')];
 const SLEEPER = [hx('#1c130e'), hx('#2a1c14'), hx('#3a281c'), hx('#4c3626')];
@@ -463,31 +461,41 @@ const edgesOf = (c: CellCtx) => ({
 });
 
 /** Гранитная плита: две плиты 16×8 со сдвигом, прожилки, выщербины. */
-function graniteCell(wx: number, wy: number, v: number): Px {
+/**
+ * Пол станции: большие полированные плиты гранита 2×2 клетки, серые и
+ * розоватые в шахматку (как в старом метро), тонкий шов только по краю
+ * плиты, зерно камня мелкое и тихое, мягкий блик по диагонали плиты.
+ * `ix`, `iy` — клетка внутри плиты (0/1), `tone` — какой камень.
+ */
+const GRAN_T: [number, number, number][] = [
+  [104, 110, 106],
+  [112, 100, 96],
+];
+function graniteCell(ix: number, iy: number, v: number, tone = 0): Px {
   const p = new Px(16, 16);
-  const off = (wy & 1) * 8;
+  const [r0, g0, b0] = GRAN_T[tone & 1];
+  const vk = 1 + ((v % 7) - 3) * 0.012;
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
-      const gx = (x + off + wx * 16) & 15;
-      const slab = Math.floor((wx * 16 + x + off) / 16) * 31 + Math.floor((wy * 16 + y) / 8) * 17;
-      const base = 2 + (hash(slab, 3) < 0.3 ? -1 : hash(slab, 5) > 0.85 ? 1 : 0);
-      const n = hash(wx * 16 + x, wy * 16 + y, 11);
-      let c = GRANITE[base];
-      if (n > 0.93) c = GRANITE[Math.min(4, base + 1)];
-      else if (n < 0.07) c = GRANITE[Math.max(0, base - 1)];
-      // Швы.
-      if (gx === 0 || y === 0 || y === 8) c = GROUT;
-      else if (gx === 1 || y === 1 || y === 9) c = mixc(c, GRANITE[4], 0.35);
+      const lx = ix * 16 + x;
+      const ly = iy * 16 + y;
+      // Блик: свет сверху-слева, к дальнему углу плиты тише.
+      const sheen = 1.07 - ((lx + ly) / 62) * 0.14;
+      const n = hash(lx + tone * 40, ly + v * 7, 11);
+      let k = vk * sheen * (0.95 + n * 0.08);
+      if (n > 0.965) k *= 1.16;
+      else if (n < 0.04) k *= 0.8;
+      let c: RGBA = [Math.min(255, r0 * k), Math.min(255, g0 * k), Math.min(255, b0 * k), 255];
+      // Шов по краю плиты и светлая фаска под ним.
+      if (lx === 0 || ly === 0) c = GROUT;
+      else if (lx === 1 || ly === 1) c = mixc(c, WHITE, 0.12);
+      else if (lx === 31 || ly === 31) c = mixc(c, INK, 0.18);
       p.set(x, y, c);
     }
-  // Грязь в швах и затёртая середина.
-  const g = vnoise(wx * 16, wy * 16, 24, 7);
-  if (g > 0.6)
-    for (let i = 0; i < 6; i++) p.set(Math.floor(hash(wx, wy, i) * 16), Math.floor(hash(wy, wx, i + 9) * 16), alpha(hx('#1a1c18'), 0.5));
   if (v % 5 === 0) {
     // Скол на углу плиты.
-    const x0 = 2 + (v % 7);
-    p.set(x0, 3, GRANITE[0]);
+    const x0 = 3 + (v % 7);
+    p.set(x0, 3, mixc(GROUT, WHITE, 0.2));
     p.set(x0 + 1, 3, GRANITE[1]);
     p.set(x0, 4, GRANITE[1]);
   }
@@ -499,16 +507,20 @@ function concreteCell(wx: number, wy: number): Px {
   const p = new Px(16, 16);
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
-      const n = vnoise(wx * 16 + x, wy * 16 + y, 6, 21) * 0.7 + hash(wx * 16 + x, wy * 16 + y, 3) * 0.3;
+      const n = tnoise((wx & 3) * 16 + x, (wy & 3) * 16 + y, 8, 64, 21) * 0.7 + hash(wx * 16 + x, wy * 16 + y, 3) * 0.3;
       p.set(x, y, CONC[n > 0.72 ? 3 : n > 0.48 ? 2 : n > 0.26 ? 1 : 0]);
     }
   // Шов заливки раз в две клетки.
   if (wx % 2 === 0) for (let y = 0; y < 16; y++) p.set(0, y, mixc(CONC[0], INK, 0.3));
-  if (wy % 3 === 0) for (let x = 0; x < 16; x++) p.set(x, 0, mixc(CONC[0], INK, 0.3));
+  if (wy % 2 === 0) for (let x = 0; x < 16; x++) p.set(x, 0, mixc(CONC[0], INK, 0.3));
   return p;
 }
 
-/** Мозаика вестибюля: шахматка красного и серого гранита с каймой. */
+/**
+ * Мозаика вестибюля: тёмно-вишнёвое поле, на каждой плите 2×2 клетки —
+ * восьмилучевая звезда охрой в тонком кремовом круге, по углам — сланцевые
+ * четверти. Смальта сеткой 4 px — видно, что набрано, но без шахматки.
+ */
 function mosaicCell(c: CellCtx): Px {
   const edge = (dx: number, dy: number) => c.markAt(dx, dy) !== MK.mosaic;
   const n = edge(0, -1);
@@ -518,25 +530,38 @@ function mosaicCell(c: CellCtx): Px {
   const key = `mos|${c.wx & 1}|${c.wy & 1}|${n ? 1 : 0}${s ? 1 : 0}${w ? 1 : 0}${e ? 1 : 0}`;
   return cellOf(key, () => {
     const p = new Px(16, 16);
+    const field = [hx('#301a1d'), hx('#3a2024'), hx('#44282b')];
+    const ochre = [hx('#6e5226'), hx('#8c6c38'), hx('#a8864c')];
+    const slate = [hx('#2a3a3c'), hx('#3a4e50'), hx('#4a6062')];
+    const cream = hx('#d8ccb0');
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
-        const qx = Math.floor((c.wx * 16 + x) / 8);
-        const qy = Math.floor((c.wy * 16 + y) / 8);
-        const dark = (qx + qy) % 2 === 0;
-        const pal = dark ? MOS_A : MOS_B;
-        const nn = hash(c.wx * 16 + x, c.wy * 16 + y, 5);
-        let col = pal[nn > 0.9 ? 2 : nn < 0.12 ? 0 : 1];
-        const lx = (c.wx * 16 + x) & 7;
-        const ly = (c.wy * 16 + y) & 7;
-        if (lx === 0 || ly === 0) col = mixc(col, GROUT, 0.6);
-        // Ромб в центре каждой пары квадратов.
-        const cx = Math.abs(((c.wx * 16 + x) & 15) - 7.5);
-        const cy = Math.abs(((c.wy * 16 + y) & 15) - 7.5);
-        if (cx + cy < 3) col = dark ? hx('#8a6a3a') : hx('#9a5a4a');
+        const lx = (c.wx & 1) * 16 + x;
+        const ly = (c.wy & 1) * 16 + y;
+        const dx = lx + 0.5 - 16;
+        const dy = ly + 0.5 - 16;
+        const r = Math.hypot(dx, dy);
+        const a = Math.atan2(dy, dx);
+        const nn = hash(lx >> 1, ly >> 1, 5);
+        const t = nn > 0.8 ? 2 : nn < 0.2 ? 0 : 1;
+        let col = field[t];
+        const star = 6.2 + 3 * Math.max(Math.cos(a * 4), Math.cos(a * 4 + Math.PI) * 0.5);
+        const corner = Math.min(
+          Math.hypot(lx + 0.5, ly + 0.5),
+          Math.hypot(32 - lx - 0.5, ly + 0.5),
+          Math.hypot(lx + 0.5, 32 - ly - 0.5),
+          Math.hypot(32 - lx - 0.5, 32 - ly - 0.5),
+        );
+        if (r < 2.6) col = hx('#7a1c24');
+        else if (r < star) col = ochre[t];
+        else if (Math.abs(r - 13.2) < 0.6) col = cream;
+        else if (corner < 6.5) col = corner > 5.5 ? cream : slate[t];
+        // Швы смальты.
+        if (lx % 4 === 0 || ly % 4 === 0) col = mixc(col, INK, 0.22);
         p.set(x, y, col);
       }
     // Латунная кайма по краю мозаики.
-    const brass = hx('#9a7a3a');
+    const brass = hx('#a88438');
     const brassD = hx('#5a4420');
     for (let i = 0; i < 16; i++) {
       if (n) {
@@ -1228,23 +1253,61 @@ function lockedCell(c: CellCtx): Px {
 // --- Святилище ---------------------------------------------------------------
 
 /** Камень святилища: большие старые плиты, трещины, мох тьмы. */
-function shrineFloor(wx: number, wy: number): Px {
-  return cellOf(`sfloor|${wx % 4}|${wy % 4}`, () => {
-    const p = new Px(16, 16);
-    for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) {
-        const gx = wx * 16 + x;
-        const gy = wy * 16 + y;
-        const sx = Math.floor((gx + (Math.floor(gy / 12) % 2) * 9) / 18);
-        const sy = Math.floor(gy / 12);
-        const base = 2 + (hash(sx, sy, 1) > 0.7 ? 1 : hash(sx, sy, 2) < 0.25 ? -1 : 0);
-        let col = SHRINE[base];
-        if ((gx + (Math.floor(gy / 12) % 2) * 9) % 18 === 0 || gy % 12 === 0) col = SHRINE[0];
-        else if (hash(gx, gy, 3) > 0.94) col = SHRINE[Math.min(4, base + 1)];
-        p.set(x, y, col);
+/**
+ * Плиты неровного камня на торе 64×64 (4×4 клетки): рисунок стыкуется сам с
+ * собой на любом сдвиге, ключ кеша — клетка внутри тора.
+ */
+const FLAG_SEEDS: [number, number][] = (() => {
+  const out: [number, number][] = [];
+  for (let gy = 0; gy < 3; gy++)
+    for (let gx = 0; gx < 3; gx++)
+      out.push([gx * 21.3 + 4 + hash(gx, gy, 71) * 12, gy * 21.3 + 4 + hash(gy, gx, 72) * 12]);
+  return out;
+})();
+
+function flagstone(ix: number, iy: number, pal: RGBA[], seed: number): Px {
+  const p = new Px(16, 16);
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const px = ix * 16 + x + 0.5;
+      const py = iy * 16 + y + 0.5;
+      let d1 = 1e9;
+      let d2 = 1e9;
+      let best = 0;
+      let bx = 0;
+      let by = 0;
+      FLAG_SEEDS.forEach(([sx, sy], i) => {
+        for (const ox of [-64, 0, 64])
+          for (const oy of [-64, 0, 64]) {
+            const d = Math.hypot(px - sx - ox, py - sy - oy);
+            if (d < d1) {
+              d2 = d1;
+              d1 = d;
+              best = i;
+              bx = sx + ox;
+              by = sy + oy;
+            } else if (d < d2) d2 = d;
+          }
+      });
+      const edge = d2 - d1;
+      const t = 1 + (hash(best, seed, 3) > 0.66 ? 1 : hash(best, seed, 4) < 0.3 ? -1 : 0);
+      let col = pal[t + 1];
+      const n = hash(Math.floor(px), Math.floor(py), seed + 9);
+      if (n > 0.95) col = pal[Math.min(pal.length - 1, t + 2)];
+      else if (n < 0.06) col = pal[t];
+      if (edge < 1.3) col = pal[0];
+      else if (edge < 2.6) {
+        // Фаска: сверху-слева камень светлее, снизу-справа темнее.
+        const lit = (px - bx) * LX + (py - by) * LY > 0;
+        col = lit ? mixc(col, pal[pal.length - 1], 0.35) : mixc(col, pal[0], 0.35);
       }
-    return p;
-  });
+      p.set(x, y, col);
+    }
+  return p;
+}
+
+function shrineFloor(wx: number, wy: number): Px {
+  return cellOf(`sfloor|${wx & 3}|${wy & 3}`, () => flagstone(wx & 3, wy & 3, SHRINE, 5));
 }
 
 /** Кости на камне. */
@@ -1295,22 +1358,36 @@ function runeOver(base: Px, wx: number, wy: number): Px {
 function daisCell(c: CellCtx): Px {
   const n = c.markAt(0, -1) !== MK.dais;
   const s = c.markAt(0, 1) !== MK.dais;
-  return cellOf(`dais|${n ? 1 : 0}${s ? 1 : 0}|${c.wx & 1}`, () => {
+  const w = c.markAt(-1, 0) !== MK.dais;
+  const e = c.markAt(1, 0) !== MK.dais;
+  return cellOf(`dais|${n ? 1 : 0}${s ? 1 : 0}${w ? 1 : 0}${e ? 1 : 0}|${c.wx % 3}|${c.wy & 1}`, () => {
+    // Помост: тёмные лакированные доски — красные метки ударов на нём
+    // обязаны читаться, поэтому сам он почти чёрный.
+    const wood = [hx('#140a0c'), hx('#1e0f12'), hx('#2a1418'), hx('#3a1c20')];
     const p = new Px(16, 16);
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
-        let col = LACQUER[(c.wx * 16 + x) % 16 < 1 ? 1 : y % 4 === 0 ? 2 : 3];
-        if (hash(c.wx * 16 + x, y, 8) > 0.92) col = LACQUER[4];
+        const gy = (c.wy & 1) * 16 + y;
+        const board = Math.floor(gy / 4);
+        const gx = (c.wx % 3) * 16 + x;
+        const t = hash(board, Math.floor((gx + board * 13) / 24), 2) > 0.5 ? 2 : 1;
+        let col = wood[t];
+        if (gy % 4 === 0) col = wood[0];
+        else if ((gx + board * 13) % 24 === 0) col = wood[0];
+        else if (hash(gx, gy, 8) > 0.9) col = wood[t + 1];
         p.set(x, y, col);
       }
-    if (n) for (let x = 0; x < 16; x++) {
-      p.set(x, 0, GOLD[1]);
-      p.set(x, 1, GOLD[3]);
-    }
-    if (s) for (let x = 0; x < 16; x++) {
-      p.set(x, 13, GOLD[2]);
-      p.set(x, 14, LACQUER[0]);
-      p.set(x, 15, INK);
+    for (let i = 0; i < 16; i++) {
+      if (n) {
+        p.set(i, 0, GOLD[1]);
+        p.set(i, 1, GOLD[3]);
+      }
+      if (s) {
+        p.set(i, 14, GOLD[2]);
+        p.set(i, 15, INK);
+      }
+      if (w) p.set(0, i, GOLD[1]);
+      if (e) p.set(15, i, GOLD[1]);
     }
     return p;
   });
@@ -1340,11 +1417,13 @@ function abyssCell(c: CellCtx): Px {
 
 /** Земля провала: тёмная, сыпучая. */
 function groundCell(wx: number, wy: number): Px {
-  return cellOf(`ground|${wx % 4}|${wy % 4}`, () => {
+  const ix = wx & 3;
+  const iy = wy & 3;
+  return cellOf(`ground|${ix}|${iy}`, () => {
     const p = new Px(16, 16);
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
-        const n = vnoise(wx * 16 + x, wy * 16 + y, 5, 31) * 0.6 + hash(wx * 16 + x, wy * 16 + y, 7) * 0.4;
+        const n = tnoise(ix * 16 + x, iy * 16 + y, 8, 64, 31) * 0.6 + hash(ix * 16 + x, iy * 16 + y, 7) * 0.4;
         p.set(x, y, [hx('#161016'), hx('#201820'), hx('#2a2028'), hx('#372a34')][n > 0.75 ? 3 : n > 0.5 ? 2 : n > 0.25 ? 1 : 0]);
       }
     return p;
@@ -1352,18 +1431,42 @@ function groundCell(wx: number, wy: number): Px {
 }
 
 /** Храм развёрнут: чёрная вода с кровью, кости всплывают. */
+/** Сглаженный шум на торе `per` пикселей (решётка шага `sc`) — стыкуется сам с собой. */
+function tnoise(x: number, y: number, sc: number, per: number, seed: number): number {
+  const n = per / sc;
+  const xi = Math.floor(x / sc);
+  const yi = Math.floor(y / sc);
+  const fx = x / sc - xi;
+  const fy = y / sc - yi;
+  const u = fx * fx * (3 - 2 * fx);
+  const v = fy * fy * (3 - 2 * fy);
+  const h = (a: number, b: number) => hash(((a % n) + n) % n, ((b % n) + n) % n, seed);
+  const a = h(xi, yi) * (1 - u) + h(xi + 1, yi) * u;
+  const b = h(xi, yi + 1) * (1 - u) + h(xi + 1, yi + 1) * u;
+  return a * (1 - v) + b * v;
+}
+
+/** Храм развёрнут: чёрная кровь, по ней идёт рябь; изредка всплывают кости. */
 function domainCell(c: CellCtx): Px {
-  return cellOf(`domain|${c.wx % 4}|${c.wy % 4}`, () => {
+  const ix = c.wx & 3;
+  const iy = c.wy & 3;
+  return cellOf(`domain|${ix}|${iy}`, () => {
     const p = new Px(16, 16);
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
-        const n = vnoise(c.wx * 16 + x, c.wy * 16 + y * 1.6, 7, 61);
-        let col = mixc(hx('#0a0206'), hx('#3a0610'), n);
-        if (n > 0.72) col = hx('#5a0a14');
-        if (Math.abs(n - 0.5) < 0.02) col = hx('#7a1a24');
+        const lx = ix * 16 + x;
+        const ly = iy * 16 + y;
+        const n = tnoise(lx, ly, 16, 64, 61);
+        const m = tnoise(lx, ly, 8, 64, 62);
+        let col = mixc(hx('#0a0205'), hx('#22060c'), n);
+        // Рябь: волнистые полосы света вдоль ряда.
+        const wave = Math.sin(ly * 0.9 + m * 7 + n * 3);
+        if (wave > 0.93) col = hx('#4a0c16');
+        else if (wave > 0.82) col = mixc(col, hx('#3a0810'), 0.6);
+        if (hash(lx, ly, 63) > 0.992) col = hx('#8a2030');
         p.set(x, y, col);
       }
-    if (hash(c.wx, c.wy, 4) > 0.8) {
+    if (hash(ix, iy, 4) > 0.8) {
       stroke(p, 3, 9, 9, 7, BONE[1], 1);
       p.set(3, 9, BONE[3]);
       p.set(9, 7, BONE[2]);
@@ -1394,8 +1497,15 @@ function stationFloor(c: CellCtx, area: string): Px {
   const baseOf = (): Px => {
     if (area === F12_SHRINE) return k === MK.ballast || k === MK.edge ? shrineFloor(c.wx, c.wy) : c.tile === 2 && k === 0 ? groundCell(c.wx, c.wy) : shrineFloor(c.wx, c.wy);
     if (granite(k) || onGranite)
-      return cellOf(`gran|${c.wx & 1}|${c.wy & 1}|${Math.floor(hash(c.wx, c.wy, 1) * 3)}`, () => graniteCell(c.wx & 1, c.wy & 1, Math.floor(hash(c.wx, c.wy, 1) * 7)));
-    return cellOf(`conc|${c.wx % 4}|${c.wy % 3}`, () => concreteCell(c.wx % 4, c.wy % 3));
+    {
+      // Плита — 2×2 клетки: камень и оттенок общие на плиту.
+      const sx = c.wx >> 1;
+      const sy = c.wy >> 1;
+      const tone = (sx + sy) & 1;
+      const v = Math.floor(hash(sx, sy, 1) * 7);
+      return cellOf(`gran|${c.wx & 1}|${c.wy & 1}|${tone}|${v}`, () => graniteCell(c.wx & 1, c.wy & 1, v, tone));
+    }
+    return cellOf(`conc|${c.wx & 3}|${c.wy & 3}`, () => concreteCell(c.wx & 3, c.wy & 3));
   };
   let p: Px;
   switch (k) {
@@ -2277,7 +2387,7 @@ function drawFlies(fp: FlyPose): Built {
   const cx = 10 + fp.lunge;
   const cy = 8;
   const body = hx('#0e0e0a');
-  const wing = alpha(hx('#c8d0c0'), 0.55);
+  const wing = alpha(hx('#e4ecd8'), 0.8);
   if (fp.fall > 0) {
     for (let i = 0; i < 10; i++) {
       const x = Math.round(3 + hash(i, 1) * 16);
@@ -2288,8 +2398,8 @@ function drawFlies(fp: FlyPose): Built {
     return { p, ax: 11, ay: 17, eye: null };
   }
   // Сгусток: мухи вповалку.
-  shadeEll(p, cx, cy, 3.2 - fp.spread * 0.2, 2.6, tn('#050504', '#12120e', '#22221a', '#34342a'));
-  for (let i = 0; i < 11; i++) {
+  shadeEll(p, cx, cy, 3.8 - fp.spread * 0.2, 3, tn('#050504', '#12120e', '#22221a', '#3a3a2a'));
+  for (let i = 0; i < 15; i++) {
     const a = hash(i, 5) * TAU + fp.f * (0.9 + hash(i, 6) * 0.6) * (i % 2 ? 1 : -1);
     const r = fp.spread * (0.55 + hash(i, 7) * 0.55);
     const x = Math.round(cx + Math.cos(a) * r * 1.3);
@@ -2302,6 +2412,8 @@ function drawFlies(fp: FlyPose): Built {
     }
   }
   p.outline(alpha(INK, 0.7));
+  // Трупная дымка вокруг роя — чтобы рой читался на тёмном полу (за мухами).
+  p.ell(cx, cy, 7, 5, (x, y) => (p.solid(x, y) ? p.get(x, y) : alpha(hx('#7aa04a'), 0.16)));
   // Глаз проклятия в сгустке.
   const eye = hx('#c8ff5a');
   p.set(Math.round(cx) + 1, cy - 1, fp.glow > 0.5 ? WHITE : eye);
@@ -2352,16 +2464,24 @@ interface FacePose {
 }
 
 function faceAt(p: Px, x: number, y: number, s: number, mouth: number, glow: boolean): void {
-  shadeEll(p, x, y, 1.8 * s, 2.2 * s, FACE);
-  p.set(Math.round(x - 0.8 * s), Math.round(y - 0.5 * s), glow ? hx('#ffe0a0') : INK);
-  p.set(Math.round(x + 0.8 * s), Math.round(y - 0.5 * s), glow ? hx('#ffe0a0') : INK);
+  shadeEll(p, x, y, 2 * s, 2.4 * s, FACE);
+  // Глазницы и брови домиком — лица страдают; в крике глаза горят.
+  const ey = y - 0.6 * s;
+  for (const sx of [-1, 1]) {
+    const ex = x + sx * 0.9 * s;
+    p.set(ex, ey, glow ? hx('#ffe0a0') : INK);
+    if (s >= 1.2) p.set(ex + sx * 0.6, ey, glow ? hx('#ff9a50') : INK);
+    p.set(ex + sx * 0.7 * s, ey - 1, shade(FACE[0], 0.75));
+  }
   if (mouth > 0) {
-    const h = Math.max(1, Math.round(mouth * 1.6 * s));
-    for (let dy = 0; dy < h; dy++) {
-      p.set(Math.round(x), Math.round(y + 0.8 * s) + dy, dy === 0 ? INK : hx('#6a0a14'));
-      if (s > 1) p.set(Math.round(x) + 1, Math.round(y + 0.8 * s) + dy, INK);
-    }
-  } else p.set(Math.round(x), Math.round(y + 0.9 * s), shade(FACE[0], 0.7));
+    const mh = Math.max(1.2, mouth * 1.8 * s);
+    const mw = Math.max(0.9, 0.6 * s + mouth * 0.5);
+    p.ell(x, y + 1.1 * s + mh * 0.3, mw, mh * 0.6, INK);
+    if (mh > 1.6) p.ell(x, y + 1.2 * s + mh * 0.38, mw * 0.55, mh * 0.34, hx('#8a0a1a'));
+  } else {
+    p.set(x - 0.6, y + 1.1 * s, shade(FACE[0], 0.6));
+    p.set(x + 0.6, y + 1.1 * s, shade(FACE[0], 0.6));
+  }
 }
 
 function drawManyface(fp: FacePose): Built {
@@ -2464,16 +2584,24 @@ function drawLongarm(len: number, ang: number, open: number, grip: boolean, limp
     // Локоть — лишний сустав, рука гнётся не туда.
     const mx = ox + Math.cos(ang) * L * 0.5 + Math.cos(ang + Math.PI / 2) * (limp ? 1 : 3);
     const my = oy + Math.sin(ang) * L * 0.5 + Math.sin(ang + Math.PI / 2) * (limp ? 1 : 3);
-    limb(p, ox, oy, mx, my, 1.8, 1.4, ARMSKIN);
-    limb(p, mx, my, ex, ey, 1.4, 1.2, ARMSKIN);
-    p.set(Math.round(mx), Math.round(my), shade(ARMSKIN[1], 0.7));
-    // Кисть: ладонь и длинные пальцы веером (или сжатые).
-    shadeEll(p, ex, ey, 2.2, 2.2, ARMSKIN, 0.1);
+    limb(p, ox, oy, mx, my, 2.7, 2.1, ARMSKIN);
+    limb(p, mx, my, ex, ey, 2.1, 1.6, ARMSKIN);
+    shadeEll(p, mx, my, 2.4, 2.4, ARMSKIN, -0.1);
+    // Жилы вдоль руки.
+    for (let k = 0.15; k < 0.95; k += 0.14) {
+      const x = ox + (ex - ox) * k + Math.cos(ang + Math.PI / 2) * 0.8;
+      const y = oy + (ey - oy) * k + Math.sin(ang + Math.PI / 2) * 0.8;
+      p.set(Math.round(x), Math.round(y), shade(ARMSKIN[0], 0.8));
+    }
+    // Кисть: широкая ладонь и длинные пальцы веером (или сжатые).
+    shadeEll(p, ex, ey, 3.2, 3, ARMSKIN, 0.1);
     for (let i = -2; i <= 2; i++) {
-      const a = ang + i * (grip ? 0.25 : 0.42);
-      const fl = grip ? 2.5 : 4.5 - Math.abs(i) * 0.6;
-      stroke(p, ex, ey, ex + Math.cos(a) * fl, ey + Math.sin(a) * fl, ARMSKIN[2], 1);
-      p.set(Math.round(ex + Math.cos(a) * fl), Math.round(ey + Math.sin(a) * fl), hx('#1a1a14'));
+      const a = ang + i * (grip ? 0.28 : 0.45);
+      const fl = grip ? 3.2 : 6.5 - Math.abs(i) * 0.8;
+      const sx = ex + Math.cos(a) * 2;
+      const sy = ey + Math.sin(a) * 2;
+      limb(p, sx, sy, sx + Math.cos(a) * fl, sy + Math.sin(a) * fl, 0.9, 0.7, ARMSKIN, 0.1);
+      p.set(Math.round(sx + Math.cos(a) * (fl + 0.6)), Math.round(sy + Math.sin(a) * (fl + 0.6)), hx('#d8d0b8'));
     }
   }
   p.outline(INK);
@@ -3425,7 +3553,7 @@ const K_ROBE = tn('#6e685e', '#b4ac9c', '#dcd5c6', '#f6f2e8');
 const K_HAK = tn('#121016', '#221e28', '#342e3c', '#4c4456');
 const K_OBI = tn('#0a080c', '#1a141c', '#2a222e', '#443846');
 const K_SKIN = tn('#6e4c40', '#9c705c', '#c4967a', '#e4ba9c');
-const K_HAIR = tn('#521a28', '#8e3248', '#c0566e', '#ea8aa0');
+const K_HAIR = tn('#4a1a26', '#7e3044', '#a84c62', '#d27a8e');
 const K_MASK = tn('#6a6252', '#a09680', '#cfc4a8', '#f0e8d2');
 const K_TAT = hx('#120608');
 const K_EYE = hx('#ff2030');
@@ -3553,15 +3681,6 @@ function drawKing(kp: KingPose): Built {
   const sy = hipY - 21;
   const headY = sy - 9;
   const hxc = cx + kp.tilt;
-  // Аура проклятия — редкие огоньки по кругу.
-  if (kp.aura > 0)
-    for (let i = 0; i < 28; i++) {
-      const a = (i / 28) * TAU + kp.f * 0.35;
-      const rr = 1 + 0.08 * Math.sin(i * 3 + kp.f);
-      const x = cx + Math.cos(a) * 24 * rr;
-      const y = hipY - 12 + Math.sin(a) * 26 * rr;
-      if (hash(i, kp.f, 5) < 0.55 * kp.aura) p.set(x, y, alpha(K_GHOST, 0.5 + 0.4 * hash(i, kp.f)));
-    }
   // Ноги: хакама.
   if (kp.body === 'stand') {
     const s = kp.step;
@@ -3624,81 +3743,98 @@ function drawKing(kp: KingPose): Built {
   const lu = kingArm(p, cx - 9, sy + 1, -1, kp.lu, true, claw);
   // Шея и голова.
   p.rect(hxc - 2, headY + 5, hxc + 2, sy, K_SKIN[1]);
-  shadeEll(p, hxc, headY, 5.6, 6.2, K_SKIN);
-  // Второе лицо: костяная маска на щеке.
-  shadeEll(p, hxc - 5.6, headY + 0.6, 3, 4.2, K_MASK, 0.05);
-  for (let x = Math.round(hxc - 8); x <= Math.round(hxc - 3); x++) p.set(x, headY + 4, x % 2 ? BONE[3] : K_TAT);
-  // Вихры: шапка и зубцы.
-  p.ell(hxc, headY - 3, 6.4, 4.4, (x, y) =>
-    tone(K_HAIR, ((x + 0.5 - hxc) / 6.4) * LX + ((y + 0.5 - (headY - 3)) / 4.4) * LY + 0.5),
+  shadeEll(p, hxc, headY, 5.2, 6, K_SKIN);
+  // Вихры: шапка до бровей, зубцы вверх и в стороны, виски.
+  p.ell(hxc, headY - 4, 6.2, 3.6, (x, y) =>
+    tone(K_HAIR, ((x + 0.5 - hxc) / 6.2) * LX + ((y + 0.5 - (headY - 4)) / 3.6) * LY + 0.5),
   );
   for (let i = -3; i <= 3; i++) {
     const bx = hxc + i * 2;
-    const tip = headY - 9 - (i % 2 === 0 ? 2 : 0) - (i === 0 ? 1 : 0);
-    polyShade(p, [[bx - 1.6, headY - 4], [bx + 1.6, headY - 4], [bx + i * 0.9, tip]], K_HAIR, 0.1);
+    const tip = headY - 10 - (i % 2 === 0 ? 2 : 0) - (i === 0 ? 1 : 0);
+    polyShade(p, [[bx - 1.6, headY - 5], [bx + 1.6, headY - 5], [bx + i * 1.1, tip]], K_HAIR, 0.1);
   }
-  // Лицо: две пары глаз, полосы под глазами, рот.
+  for (const sx of [-1, 1]) {
+    p.set(hxc + sx * 5, headY - 2, K_HAIR[1]);
+    p.set(hxc + sx * 5, headY - 1, K_HAIR[0]);
+  }
+  // Лоб: чёрная полоса татуировки под чёлкой.
+  for (let x = hxc - 3; x <= hxc + 3; x++) p.set(x, headY - 2, x === hxc ? K_SKIN[2] : K_TAT);
+  // Глаза: косые, красные, с тяжёлым веком; под ними — вторая пара.
   const eyeC = kp.glow > 0.8 ? hx('#ff6a70') : K_EYE;
-  for (const ex of [hxc - 2, hxc + 2]) {
-    p.set(ex - 1, headY, K_TAT);
+  for (const sx of [-1, 1]) {
+    const ex = hxc + sx * 2;
     p.set(ex, headY, eyeC);
-    p.set(ex + (ex > hxc ? 1 : -1), headY - 1, K_TAT);
+    p.set(ex + sx, headY, K_TAT);
+    p.set(ex, headY - 1, K_TAT);
+    p.set(ex - sx, headY - 1, K_TAT);
+    p.set(ex + sx, headY + 1, hx('#b01020'));
+    // Полосы на скулах.
+    p.set(hxc + sx * 4, headY + 2, K_TAT);
+    p.set(hxc + sx * 5, headY + 2, K_TAT);
+    p.set(hxc + sx * 4, headY + 3, K_TAT);
   }
-  p.set(hxc - 3, headY + 2, hx('#8a0a18'));
-  p.set(hxc + 3, headY + 2, hx('#8a0a18'));
-  for (const s of [-1, 1]) {
-    p.set(hxc + s * 4, headY + 1, K_TAT);
-    p.set(hxc + s * 5, headY + 1, K_TAT);
-    p.set(hxc + s * 4, headY + 3, K_TAT);
-  }
-  p.set(hxc, headY - 3, K_TAT);
   if (kp.roar) {
     p.rect(hxc - 2, headY + 3, hxc + 2, headY + 5, hx('#5a0a12'));
-    p.set(hxc - 1, headY + 3, BONE[3]);
-    p.set(hxc + 1, headY + 3, BONE[3]);
-    p.set(hxc, headY + 5, BONE[2]);
+    for (const x of [hxc - 2, hxc, hxc + 2]) p.set(x, headY + 3, BONE[3]);
+    p.set(hxc - 1, headY + 5, BONE[2]);
+    p.set(hxc + 1, headY + 5, BONE[2]);
   } else {
-    for (let x = hxc - 2; x <= hxc + 2; x++) p.set(x, headY + 4, K_TAT);
-    p.set(hxc + 3, headY + 3, K_TAT);
+    for (let x = hxc - 2; x <= hxc + 1; x++) p.set(x, headY + 4, K_TAT);
+    p.set(hxc + 2, headY + 3, K_TAT);
   }
-  // Глаз маски: закрыт щелью или открыт.
-  const mx = Math.round(hxc - 6);
+  // Второе лицо — костяная маска, наросшая на щеку: свой глаз и зубы.
+  const mcx = hxc - 6;
+  shadeEll(p, mcx, headY + 0.8, 2.8, 4, K_MASK, 0.05);
+  p.set(mcx + 2, headY - 2, K_MASK[1]);
+  const mx = Math.round(mcx);
   if (kp.face2) {
-    p.set(mx, headY, hx('#ff9a40'));
-    p.set(mx + 1, headY, K_EYE);
+    p.set(mx, headY, hx('#ffb040'));
+    p.set(mx - 1, headY, K_EYE);
     p.set(mx, headY - 1, K_TAT);
+    p.set(mx - 1, headY + 1, K_TAT);
   } else {
+    p.set(mx - 1, headY, K_TAT);
     p.set(mx, headY, K_TAT);
-    p.set(mx + 1, headY, K_TAT);
+    p.set(mx + 1, headY + 1, K_MASK[0]);
   }
-  // Приёмы.
+  for (let x = mx - 2; x <= mx + 1; x++) p.set(x, headY + 3, x % 2 ? BONE[3] : K_TAT);
+  p.set(mx - 1, headY + 4, K_TAT);
+  p.outline(kp.ghost ? hx('#3a0610') : INK);
+  // Приёмы — поверх контура: свет не обводится тушью.
   if (kp.fx === 'cut0') {
     // Два пальца вверх — блик.
     p.set(ru[0], ru[1] - 2, WHITE);
-    p.set(ru[0], ru[1] - 3, hx('#ffd0d0'));
+    p.set(ru[0] + 1, ru[1] - 3, hx('#ffd0d0'));
+    glowDot(p, ru[0], ru[1] - 3, hx('#ff5060'), 2);
   }
   if (kp.fx === 'cut1')
     for (let i = 0; i < 3; i++) {
-      const ox = ru[0] - 8 + i * 3;
-      stroke(p, ox, ru[1] - 12 + i, ox + 7, ru[1] + 2 + i, alpha(WHITE, 0.85 - i * 0.2), 1);
+      const ox = ru[0] - 9 + i * 3;
+      stroke(p, ox, ru[1] - 13 + i, ox + 8, ru[1] + 2 + i, alpha(i ? hx('#ffb0b8') : WHITE, 0.9 - i * 0.25), 1);
     }
   if (kp.fx === 'bow') {
-    // Лук из пламени в передней руке, стрела — от задней.
-    const bx = ru[0] + 1;
+    // Лук из пламени в передней руке: дуга выгнута вперёд, тетива — к задней
+    // руке, стрела горит.
+    const bx = ru[0];
     const by = ru[1];
-    for (let i = -8; i <= 8; i++) {
-      const x = bx + 2.2 * Math.cos((i / 8) * (Math.PI / 2)) - 1;
-      const c = FIRE[1 + ((i + kp.f) & 1) + (Math.abs(i) < 3 ? 1 : 0)];
+    const pull = lu[0] - 3 * kp.draw;
+    for (let i = -9; i <= 9; i++) {
+      const x = bx + 3.6 * Math.cos((i / 9) * (Math.PI / 2));
+      const c = FIRE[Math.abs(i) < 4 ? 3 : 1 + ((i + kp.f) & 1)];
       p.set(x, by + i, c);
-      if (hash(i, kp.f, 9) > 0.6) p.set(x + 1, by + i, FIRE[3]);
+      p.set(x + 1, by + i, FIRE[1]);
     }
-    const pull = lu[0] - 2 * kp.draw;
-    stroke(p, bx - 1, by - 8, pull, lu[1], alpha(FIRE[2], 0.8), 1);
-    stroke(p, bx - 1, by + 8, pull, lu[1], alpha(FIRE[2], 0.8), 1);
-    stroke(p, pull, lu[1], bx + 5, by, FIRE[3], 1);
-    flame(p, bx + 6, by + 2, 3, 4, kp.f, FIRE, 2);
+    stroke(p, bx, by - 9, pull, lu[1], alpha(hx('#ffe0a0'), 0.7), 1);
+    stroke(p, bx, by + 9, pull, lu[1], alpha(hx('#ffe0a0'), 0.7), 1);
+    stroke(p, pull, lu[1], bx + 7, by, FIRE[3], 1);
+    flame(p, bx + 8, by + 2, 4, 5, kp.f, FIRE, 2);
+    glowDot(p, bx + 8, by, FIRE[2], 2);
   }
-  if (kp.fx === 'pyre') for (const [x, y] of [ru, lu, rl, ll]) flame(p, x, y - 1, 4, 6, kp.f, FIRE, x);
+  if (kp.fx === 'pyre')
+    for (const [x, y] of [ru, lu, rl, ll]) {
+      flame(p, x, y - 1, 4, 7, kp.f, FIRE, x);
+      glowDot(p, Math.round(x), Math.round(y - 3), FIRE[2], 1);
+    }
   if (kp.fx === 'sign') {
     // Знак храма в сложенных руках.
     const gx = cx;
@@ -3707,20 +3843,28 @@ function drawKing(kp: KingPose): Built {
       const a = (i / 8) * TAU + kp.f * 0.6;
       p.set(gx + Math.cos(a) * 3, gy + Math.sin(a) * 2, alpha(K_GHOST, 0.9));
     }
-    p.set(gx, gy, WHITE);
+    glowDot(p, gx, gy, K_GHOST, 2);
   }
-  p.outline(kp.ghost ? hx('#5a0a1a') : INK);
+  // Аура: язычки проклятого пламени по кругу у пола.
+  if (kp.aura > 0)
+    for (let i = 0; i < 14; i++) {
+      if (hash(i, 3) > kp.aura) continue;
+      const a = (i / 14) * TAU + kp.f * 0.45;
+      const x = Math.round(cx + Math.cos(a) * 20);
+      const y = Math.round(G - 6 + Math.sin(a) * 6);
+      const hgt = 2 + ((i + kp.f) % 3);
+      for (let k = 0; k < hgt; k++) p.set(x, y - k, alpha(k === hgt - 1 ? hx('#ffb0c8') : K_GHOST, 0.85 - k * 0.15));
+    }
   if (kp.ghost)
-    // Проклятая кромка: недосягаем, пока светится.
+    // Проклятая кромка: недосягаем, пока светится (через пиксель — не шум).
     for (let y = 1; y < p.h - 1; y++)
       for (let x = 1; x < p.w - 1; x++) {
-        if (p.solid(x, y)) continue;
-        if ((p.solid(x - 1, y) || p.solid(x + 1, y) || p.solid(x, y - 1)) && hash(x, y, kp.f) > 0.45)
-          p.set(x, y, alpha(K_GHOST, 0.75));
+        if (p.solid(x, y) || (x + y + kp.f) % 2) continue;
+        if (p.solid(x - 1, y) || p.solid(x + 1, y) || p.solid(x, y - 1)) p.set(x, y, alpha(K_GHOST, 0.55));
       }
   if (kp.glow > 0.5) glowDot(p, hxc + 2, headY, K_EYE, 1);
-  if (kp.face2 && kp.glow > 0.5) glowDot(p, mx + 1, headY, hx('#ff8a40'), 1);
-  if (kp.stars) stars(p, hxc, headY - 12, 7, kp.f & 3);
+  if (kp.face2 && kp.glow > 0.5) glowDot(p, mx, headY, hx('#ff8a40'), 1);
+  if (kp.stars) stars(p, hxc, headY - 13, 7, kp.f & 3);
   return { p, ax: cx, ay: G, eye: [hxc + 2, headY] };
 }
 
