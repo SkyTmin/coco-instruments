@@ -64,9 +64,12 @@ import type { World, WorldObj } from '@/lib/dungeon-world';
 import { itemUrl } from '@/lib/dungeon-art';
 import { registerEscape } from '@/lib/escape-stack';
 import { playTotem } from '@/lib/totem';
+import { rainCoins } from '@/lib/coins';
+import { FLOORS } from '@/lib/dungeon-floors';
 import {
   bagFull,
   bedrockClink,
+  bigMoment,
   boom,
   cartRoll,
   coinDing,
@@ -95,6 +98,7 @@ import {
   softChime,
   bubblePop,
   doorLatch,
+  softThud,
 } from '@/lib/sound';
 import type { MusicScene } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
@@ -290,6 +294,7 @@ const USE_ICON: Record<Usable['kind'], GxIconName> = {
   seal: 'hammer',
   plaque: 'crown',
   stairs: 'stairs',
+  floor: 'pointing',
 };
 
 type Banner = { key: number; big: string; small?: string; tone: string };
@@ -378,6 +383,10 @@ export function DungeonRun({
     [bossOn, music],
   );
   const [banner, setBanner] = useState<Banner | null>(null);
+  /** Финал подземелья (Движок 3, `boss/finale`): итог поверх всего. */
+  const [finale, setFinale] = useState<{ fight: number; kills: number; floors: number } | null>(
+    null,
+  );
   const [toast, setToast] = useState<Toast | null>(null);
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [mine, setMine] = useState<{ id: DeepMineId; obj: Usable['obj'] } | null>(null);
@@ -553,7 +562,7 @@ export function DungeonRun({
   // Пауза, пока открыт любой лист или шахта. «Назад» Telegram — сперва пауза.
   const sheetOpen = useRef(false);
   useEffect(() => {
-    sheetOpen.current = sheet !== null || mine !== null;
+    sheetOpen.current = sheet !== null || mine !== null || finale !== null;
     paused.current = sheetOpen.current || ended.current;
     if (sheetOpen.current) {
       input.current = { ...NO_INPUT };
@@ -561,7 +570,7 @@ export function DungeonRun({
     }
     // release — стабильный колбэк хука.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheet, mine]);
+  }, [sheet, mine, finale]);
   useEffect(() => {
     if (sheet || mine || dying) return undefined;
     return registerEscape(() => setSheet('pause'));
@@ -745,6 +754,16 @@ export function DungeonRun({
           if (e.albino) say('АЛЬБИНОС', 'редкая крыса — добыча ×10', 'gold', 1800);
           else if (e.elite) note('Вожак стаи повержен');
           break;
+        // Движок 3: героя дёрнуло (крюк, течение), моб сорвался в пропасть.
+        case 'pull':
+          if (!e.end) {
+            dashWhoosh();
+            tapLight();
+          }
+          break;
+        case 'fall':
+          softThud(0.26);
+          break;
         case 'hurt':
           heroHurt();
           tapMedium();
@@ -866,6 +885,21 @@ export function DungeonRun({
             kingRoar();
             tapMedium();
             if (e.text) say(e.text, e.sub, 'danger', 1800);
+          } else if (e.what === 'finale') {
+            // Последний босс пал: победа отзвучала — пауза — церемония.
+            const stats = {
+              fight: Math.round(sim.boss?.t ?? 0),
+              kills: sim.killed,
+              floors: FLOORS.length,
+            };
+            save();
+            window.setTimeout(() => {
+              if (!simRef.current) return;
+              bigMoment(1);
+              notifySuccess();
+              rainCoins(44);
+              setFinale(stats);
+            }, 1500);
           } else if (FLOOR_SOUND[e.what]) {
             FLOOR_SOUND[e.what]();
             const alarm = e.what.endsWith('_trap') || e.what.endsWith('_heal');
@@ -1416,6 +1450,35 @@ export function DungeonRun({
       {toast && (
         <div key={toast.key} className="dg-toast">
           {toast.text}
+        </div>
+      )}
+      {finale && (
+        <div className="dg-finale" onClick={() => setFinale(null)}>
+          <div className="dg-finale__rays" aria-hidden="true" />
+          <div className="dg-finale__cup">
+            <GxIcon name="laurels" />
+          </div>
+          <b className="dg-finale__title">ПОДЗЕМЕЛЬЕ ПОКОРЕНО</b>
+          <span className="dg-finale__sub">Хозяин подземелья пал — его сердце у тебя</span>
+          <div className="dg-finale__stats">
+            <div>
+              <b>{finale.floors}</b>
+              <span>этажей</span>
+            </div>
+            <div>
+              <b>
+                {Math.floor(finale.fight / 60)}:{String(finale.fight % 60).padStart(2, '0')}
+              </b>
+              <span>бой</span>
+            </div>
+            <div>
+              <b>{finale.kills}</b>
+              <span>убито за вылазку</span>
+            </div>
+          </div>
+          <button type="button" className="gx-btn gx-btn--big" onClick={() => setFinale(null)}>
+            Дальше
+          </button>
         </div>
       )}
 

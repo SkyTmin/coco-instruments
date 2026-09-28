@@ -373,6 +373,21 @@ export interface ShotSpec {
   /** Сколько сразу и разлёт веером, рад. */
   n?: number;
   spread?: number;
+  /**
+   * Навес лёг — на месте падения зона (лужа, огонь, облако) ровно в этот
+   * кадр (Движок 3). Поля — как у `api.zone`, кроме места.
+   */
+  onLand?: {
+    r: number;
+    life: number;
+    dps?: number;
+    status?: StatusKind;
+    dur?: number;
+    slow?: number;
+    warn?: number;
+    art?: string;
+    above?: boolean;
+  };
 }
 
 export interface MobDef {

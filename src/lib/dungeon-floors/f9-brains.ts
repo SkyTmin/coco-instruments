@@ -1073,14 +1073,8 @@ function stepTide(sim: Sim, st: F9State, dt: number, api: SimApi): void {
     t.front = nf;
     // Стоишь в воде — она тянет силы: одна доля за секунду, сколько бы
     // клеток ни ушло под воду вокруг.
-    if (heroOnSunk(sim, t)) {
-      h.hp -= sim.stats.maxHp * TIDE_DPS * dt;
-      if (h.hp <= 0) {
-        h.hp = 0;
-        h.mode = 'dying';
-        h.t = 0;
-      }
-    }
+    // Через движок (Движок 3): бессмертие креатива и сброс боя — его забота.
+    if (heroOnSunk(sim, t)) api.hurtEnv(sim, TIDE_DPS * dt);
     // Пиявки прыгают из воды у гати.
     t.leechT -= dt;
     if (t.leechT <= 0 && here !== undefined) {
