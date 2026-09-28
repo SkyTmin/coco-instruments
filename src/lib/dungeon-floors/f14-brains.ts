@@ -1,50 +1,49 @@
 // Этаж 14 «Часовая башня» — ИИ монстров, правила этажа и сценарий
 // Повелителя часа.
 //
-// ВРЕМЯ — глагол этажа. Всё время этажа ведёт одна система (`TIME`):
-//   • ОСТАНОВКА МИРА. Колокол «ЧАС» (раз в минуту, в Механизме реже, на
-//     Циферблате чаще) и Повелитель часа останавливают мир: монстры,
-//     их снаряды, метки ударов, лужи, маятники, кольца шестерён, песок и
-//     стрелки стоят. Ходит герой (а в бою — Повелитель, и тогда стоит сам
-//     герой). Удары по замершим ложатся, отдача копится и срывается разом,
-//     когда время пошло;
-//   • СФЕРЫ. Замедление (голубая) и ускорение (янтарная): внутри время
-//     течёт иначе — для монстров, их снарядов и меток, для героя (шаг);
-//   • ИСТОРИЯ. Этаж помнит, где был герой последние 8 с (двойник), каждый
-//     отмотчик — где был он сам и сколько было здоровья.
-// Пока «Движок 3» не пришёл, остановка сделана этажом: сценарий этажа
-// идёт до снарядов, меток и мобов, поэтому он придерживает их часы (`t`,
-// `age`) и скорости, а ИИ этажа (обёртка `timed`) не шагает.
+// ВРЕМЯ — глагол этажа. Его держат три вещи:
+//   • ОСТАНОВКА МИРА — `api.timeScale` (Движок 3). Колокол «ЧАС» (раз в
+//     минуту: в Механизме реже, на Циферблате чаще) — мир стоит, ходит
+//     только герой; удары по замершим ложатся, а отдача копится и
+//     срывается разом, когда время пошло. Повелитель часа — стоят все,
+//     и сам герой, кроме Повелителя: он ставит ножи;
+//   • СФЕРЫ ВРЕМЕНИ — своё время по месту: внутри голубой сферы монстры,
+//     их снаряды и метки ударов идут медленнее, в янтарной — быстрее, и
+//     герой в них шагает иначе (зона со `slow`). Считает обёртка ИИ
+//     этажа (`timed`) и шаг времени (`stepTime`);
+//   • ИСТОРИЯ — этаж помнит, где был герой 8 с (двойник идёт по следу и
+//     повторяет удары), отмотчик — где был он сам и сколько было
+//     здоровья, Повелитель — своё здоровье (отмотка).
 //
 // Правила этажа (`registerFloor(14)`):
 //   • КОЛОКОЛ «ЧАС»: за 3 с — «бьёт час», потом мир стоит 2 с;
 //   • МАЯТНИКИ поперёк Галереи: лезвие ходит по такту, бьёт и отбрасывает
 //     (и героя, и солдатиков), в «ЧАС» замирает;
 //   • ЗАЛ ШЕСТЕРЁН (зал-событие Механизма): два кольца латунных зубьев
-//     вращаются навстречу — тик-так, по зубу; проёмы не совпадают; из
-//     люков лезут жуки; стопор держит кольца;
+//     вращаются навстречу — тик-так, по зубу, проёмы не совпадают; из люков
+//     лезут жуки; стопор (действие) держит кольца восемь секунд;
 //   • ЗАВОД (зал-событие Механизма): вошёл — огромный ключ поворачивается,
-//     и строй солдатиков оживает шеренга за шеренгой; стопор за строем
-//     держит ключ — остальные так и стоят (разбирай на пружины);
+//     и строй солдатиков оживает шеренга за шеренгой; стопор (действие) за
+//     строем держит ключ — остальные так и стоят (разбирай на пружины);
 //   • ПЕРЕВЁРНУТЫЕ ЧАСЫ (зал-событие Песочных часов): вошёл в верхнюю
 //     колбу — часы переворачиваются, песок поднимается от горловины к
-//     выходу; в песке вязнешь, из него встают призраки; малые часы
-//     придерживают песок;
+//     выходу; в песке вязнешь и задыхаешься, из него встают призраки;
+//     малые часы (действие) держат песок;
 //   • ОТМОТКА (зал-событие Песочных часов): решётка падает, Великие часы
 //     сыплются; перевернулись — все павшие за круг встают из песка там,
 //     где пали, пока целы три якоря;
 //   • СТОП-КАДР (зал-событие Циферблата): битва замерла на полувзмахе,
-//     ножи висят в воздухе; дошёл до середины зала — три секунды, и время
-//     идёт: ножи летят по своим линиям, враги доделывают удары;
+//     ножи висят; дошёл до середины (или толкнул маятник — действие) —
+//     три секунды, и время идёт: ножи летят по своим линиям;
 //   • ПОЛДЕНЬ (зал-событие Циферблата): две стрелки метут площадь, в
 //     полдень бьёт колокол; ступица — единственное место, где стрелки не
-//     достают;
+//     достают; кончик минутной — свет на ходу;
+//   • КОЛОКОЛ Колокольни (действие): «ЧАС» по желанию — раз в 40 с;
 //   • ПОСТЫ: гири под лебёдками, кукушки в часах, солдатики в строю.
 //
-// Честность: всё, что бьёт, видно заранее — линия штыка и клюва,
-// конусы маятника-косы, круг гири (тень), линии стрелок, метка возврата
-// отмотчика, линии ножей; лезвие маятника и стрелки площади видны сами и
-// ходят ровно.
+// Честность: всё, что бьёт, видно заранее — линия штыка и клюва, конусы
+// косы, круг гири (тень), линии стрелок, метка возврата отмотчика, линии
+// ножей; лезвие маятника и стрелки площади видны сами и ходят ровно.
 //
 // Движок сюда не импортируется значениями (круг модулей) — только `api`.
 
@@ -61,6 +60,7 @@ const hypot = Math.hypot;
 // импортируется).
 const T_WALL = 1;
 const T_FLOOR = 2;
+const T_HAZARD = 12;
 
 const MK = F14_MARK;
 
@@ -165,22 +165,38 @@ function geoWorld(sim: Sim, g: { area: string; x: number; y: number }): [number,
   return [g.x, (b?.top ?? 0) + g.y];
 }
 
+/**
+ * Убить моба окружением (маятник, гиря, стрелка): удар по своим без урона
+ * герою — движок засчитает убийство и бросит добычу.
+ */
+function envKill(sim: Sim, api: SimApi, m: Mob): void {
+  api.strike(sim, { shape: 'circle', x: m.x, y: m.y, r: 0.01, warn: 0, dmg: 0, mobDmg: Infinity, art: 'f14_none' });
+}
+
+/** Урон окружения по мобу: лёгкий — сразу, смертельный — ударом движка. */
+function envHurt(sim: Sim, api: SimApi, m: Mob, frac: number): void {
+  const d = m.maxHp * frac;
+  if (m.hp - d <= 0) envKill(sim, api, m);
+  else {
+    m.hp -= d;
+    m.flash = 0.15;
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Видимое для рисовальщика: кадр — один мир на экране.
+// Видимое для рисовальщика: кадр — одна вылазка на экране.
 // ---------------------------------------------------------------------------
 
 export const F14_FX = {
-  /** Сила «серого мира» 0…1: мир стоит (колокол, Повелитель). */
-  gray: 0,
   /** До удара колокола, с (для настенных часов: стрелка к двенадцати). */
   bellIn: 60,
   /** Период колокола в этом районе, с. */
   bellP: 60,
   /** Смещение лезвия маятника (клетки) и его скорость — по id предмета. */
   pend: new Map<string, { off: number; v: number }>(),
-  /** Зубья шестерён: id предмета → угол (для поворота рисунка). */
+  /** Зубья шестерён: id предмета → угол и место. */
   teeth: new Map<string, { ang: number; x: number; y: number }>(),
-  /** Угол ступицы-шестерни. */
+  /** Угол колец шестерён (для ступицы). */
   gearAng: 0,
   /** Стрелки: площадь и арена — углы (0 — XII, по часовой). */
   hands: {
@@ -190,24 +206,24 @@ export const F14_FX = {
   /** Песок верхней колбы: ряд фронта (мировой), 0 — нет. */
   flood: { front: 0, bottom: 0, top: 0, cx: 0, cy: 0, rx: 0, ry: 0, paused: 0 },
   /** Великие часы Зала отмотки: сколько песка сверху 0…1, разбиты ли. */
-  bigGlass: { k: 1, broken: 0, flip: 0 },
-  /** Завод: крутится ли ключ (0/1), стоп. */
+  bigGlass: { k: 1, broken: 0, flip: 0, on: 0 },
+  /** Завод: крутится ли ключ, остановлен ли. */
   key: { spin: 0, stopped: 0 },
   /** Стопоры: id предмета → опущен ли. */
   levers: new Map<string, number>(),
   /** Кукушкины часы: id предмета → 0 закрыты, 1 открыты, 2 сломаны. */
   cuckoo: new Map<string, number>(),
-  /** Малые часы: id → 0 целы, 1 перевёрнуты (держат песок). */
+  /** Малые часы: id → 0 целы, 1 перевёрнуты. */
   glasses: new Map<string, number>(),
-  /** Колокол: когда бил в последний раз (время сцены). */
-  bell: 0,
+  /** Колокол: когда бил (часы сцены) — качается. */
+  bell: -9,
   /** Маятник Стоп-кадра: 0 стоит, 1 идёт. */
   frame: 0,
   /** Полночь: сколько ламп погасло (0…12). */
   midnight: 0,
-  /** Фаза Повелителя (для вида арены). */
+  /** Фаза Повелителя (для вида арены и его рисунка). */
   bossPhase: 0,
-  /** Время сцены (растёт с шагом мира, в «ЧАС» стоит). */
+  /** Часы сцены: растут с миром, в «ЧАС» стоят. */
   clock: 0,
 };
 
@@ -233,15 +249,10 @@ interface HistPt {
 }
 
 interface TimeState {
-  /** Мир стоит ещё столько секунд. */
-  stop: number;
-  /** Кто остановил: колокол, Повелитель. */
+  /** Кто остановил мир последним и на сколько. */
   by: 'bell' | 'boss' | null;
-  /** Шаг ли сейчас Повелитель (его остановка — он ходит). */
-  bossFree: boolean;
-  /** Придержанные снаряды: id → скорость. */
-  held: Map<number, { vx: number; vy: number }>;
-  /** Сферы времени. */
+  dur: number;
+  was: boolean;
   spheres: Sphere[];
   /** Какой множитель уже применён к снаряду. */
   shotK: Map<number, number>;
@@ -262,15 +273,15 @@ function timeOf(sim: Sim): TimeState {
   let t = TIME.get(sim);
   if (!t) {
     t = {
-      stop: 0,
       by: null,
-      bossFree: false,
-      held: new Map(),
+      dur: 0,
+      was: false,
       spheres: [],
       shotK: new Map(),
       hist: [],
       histT: 0,
       swings: [],
+      // Первый удар — почти сразу: глагол этажа видно в первые секунды.
       bellT: 9,
       bellWarn: false,
       bells: 0,
@@ -280,8 +291,14 @@ function timeOf(sim: Sim): TimeState {
   return t;
 }
 
-/** Мир стоит? (для ИИ и правил этажа). */
-export const worldStopped = (sim: Sim) => (TIME.get(sim)?.stop ?? 0) > 0;
+/** Мир стоит (колокол или Повелитель). */
+export const worldStopped = (sim: Sim) => sim.scaleT > 0 && sim.worldScale < 0.01;
+
+/** Сколько настоящих секунд идёт остановка. */
+const stopElapsed = (sim: Sim) => {
+  const T = TIME.get(sim);
+  return T ? T.dur - sim.scaleT : 0;
+};
 
 /** Сферы и песок: множитель времени в точке для монстров и снарядов. */
 function localK(sim: Sim, x: number, y: number, kind?: string): number {
@@ -291,22 +308,14 @@ function localK(sim: Sim, x: number, y: number, kind?: string): number {
   for (const s of T.spheres) if (hypot(s.x - x, s.y - y) < s.r) k *= s.k;
   // Песок верхней колбы: вязнут все, кроме песочных призраков.
   const fl = FLOOD.get(sim);
-  if (fl && fl.state !== 'idle' && kind !== 'f14_sand' && inFlood(sim, fl, x, y)) k *= 0.55;
+  if (fl && fl.state !== 'idle' && kind !== 'f14_sand' && inFlood(fl, x, y)) k *= 0.55;
   return k;
 }
 
 /** Поставить сферу времени (зона — картинка и шаг героя). */
-function addSphere(
-  sim: Sim,
-  api: SimApi,
-  x: number,
-  y: number,
-  r: number,
-  k: number,
-  life: number,
-): Sphere {
+function addSphere(sim: Sim, api: SimApi, x: number, y: number, r: number, k: number, life: number): void {
   const T = timeOf(sim);
-  // Героя сфера замедляет мягче, чем монстров: иначе это ловушка, а не инструмент.
+  // Героя сфера замедляет мягче, чем монстров: это инструмент, а не ловушка.
   const hero = k < 1 ? 0.62 : 1.28;
   const z: ZoneIn & { f14k: number } = {
     x,
@@ -319,36 +328,33 @@ function addSphere(
   };
   api.zone(sim, z);
   const zone = sim.zones[sim.zones.length - 1];
-  const s: Sphere = { x, y, r, k, until: life > 1e8 ? Infinity : sim.time + life, zone: zone.id };
-  T.spheres.push(s);
-  return s;
+  T.spheres.push({ x, y, r, k, until: life > 1e8 ? Infinity : sim.time + life, zone: zone.id });
 }
 
 /**
- * Остановить мир на `dur` секунд. Колокол — стоят все, кроме героя;
- * Повелитель — стоят все, кроме Повелителя, и сам герой.
+ * Остановить мир. Колокол — стоят все, кроме героя; Повелитель — стоит и
+ * герой (а сценарий Повелителя считает настоящие секунды сам).
  */
 function stopWorld(sim: Sim, api: SimApi, dur: number, by: 'bell' | 'boss'): void {
   const T = timeOf(sim);
-  T.stop = Math.max(T.stop, dur);
   T.by = by;
-  // Серый мир: пол теряет цвет (зона-вуаль), монстры и предметы — серые.
-  if (!sim.zones.some((z) => z.art === 'f14_veil'))
-    api.zone(sim, { x: sim.hero.x, y: sim.hero.y, r: 40, life: dur + 0.2, art: 'f14_veil' });
-  else for (const z of sim.zones) if (z.art === 'f14_veil') z.life = Math.max(z.life, z.t + dur + 0.2);
+  T.dur = dur;
+  api.timeScale(sim, 0, by === 'boss' ? 0 : 1, dur);
+  sim.events.push({ t: 'flash', color: by === 'boss' ? '#fff0c0' : '#d8e4ff', k: 0.9 });
+  sim.events.push({ t: 'shake', k: by === 'boss' ? 0.35 : 0.2 });
 }
 
-/** Зоны, у которых свои часы (не замирают в «ЧАС»). */
-const OWN_CLOCK = new Set(['f14_veil', 'f14_slow', 'f14_fast', 'f14_hands', 'f14_flood', 'f14_glassring', 'f14_arena']);
-
-/**
- * Шаг времени этажа ДО снарядов, меток и мобов: придержать то, что стоит,
- * и растянуть то, что в сферах.
- */
+/** Шаг времени этажа ДО снарядов, меток и мобов: сферы и история. */
 function stepTime(sim: Sim, api: SimApi, dt: number): void {
   const T = timeOf(sim);
   const h = sim.hero;
-  // История героя: 10 раз в секунду.
+  const stopped = worldStopped(sim);
+  if (T.was && !stopped) {
+    T.was = false;
+    sim.events.push({ t: 'boss', what: 'f14_resume' });
+  }
+  if (stopped) T.was = true;
+  // История героя: 10 раз в секунду (время мира — в «ЧАС» не пишется).
   T.histT -= dt;
   if (T.histT <= 0) {
     T.histT = 0.1;
@@ -356,55 +362,19 @@ function stepTime(sim: Sim, api: SimApi, dt: number): void {
     while (T.hist.length && T.hist[0].t < sim.time - 8.5) T.hist.shift();
   }
   while (T.swings.length && T.swings[0].t < sim.time - 8) T.swings.shift();
-  // Сферы кончаются.
-  if (T.spheres.length) {
+  if (T.spheres.length)
     T.spheres = T.spheres.filter((s) => s.until > sim.time && sim.zones.some((z) => z.id === s.zone));
-  }
-  const stopped = T.stop > 0;
-  if (stopped) {
-    T.stop = Math.max(0, T.stop - dt);
-    F14_FX.gray = Math.min(1, F14_FX.gray + dt * 6);
-    for (const s of sim.shots) {
-      if (!T.held.has(s.id)) {
-        T.held.set(s.id, { vx: s.vx, vy: s.vy });
-        s.vx = 0;
-        s.vy = 0;
-      }
-      s.age -= dt;
-    }
-    for (const st of sim.strikes) if (!(T.by === 'boss' && st.from === bossId(sim))) st.t -= dt;
-    for (const z of sim.zones) if (!OWN_CLOCK.has(z.art ?? '')) z.t -= dt;
-    const free = T.by === 'boss' ? bossId(sim) : -1;
-    for (const m of sim.mobs) {
-      if (m.id === free || m.mode === 'dying') continue;
-      m.t -= dt;
-      m.cd += dt;
-      if (m.data.fz === undefined) {
-        m.data.fz = 1;
-        m.data.fvx = m.vx;
-        m.data.fvy = m.vy;
-      }
-      m.data.fkx = (m.data.fkx ?? 0) + m.kx;
-      m.data.fky = (m.data.fky ?? 0) + m.ky;
-      m.vx = 0;
-      m.vy = 0;
-      m.kx = 0;
-      m.ky = 0;
-    }
-    if (T.stop <= 0) resumeWorld(sim, api);
-  } else {
-    F14_FX.gray = Math.max(0, F14_FX.gray - dt * 3);
-    if (T.held.size) resumeWorld(sim, api);
-  }
+  if (stopped) return;
   // Сферы: снаряды и метки внутри живут медленнее (или быстрее).
-  if (!stopped && (T.spheres.length || FLOOD.get(sim)?.state !== 'idle')) {
+  const fl = FLOOD.get(sim);
+  if (T.spheres.length || (fl && fl.state !== 'idle')) {
     for (const s of sim.shots) {
+      if (KNIFE_ANG.has(s.id) && s.vx === 0 && s.vy === 0) continue;
       const k = localK(sim, s.x, s.y, s.kind);
       const was = T.shotK.get(s.id) ?? 1;
       if (Math.abs(k - was) > 1e-3) {
         s.vx *= k / was;
         s.vy *= k / was;
-        if (s.lob) s.lob.T = s.lob.T; // навес живёт по возрасту
         T.shotK.set(s.id, k);
       }
       if (k !== 1) s.age -= dt * (1 - k);
@@ -421,48 +391,15 @@ function stepTime(sim: Sim, api: SimApi, dt: number): void {
   void api;
 }
 
-/** Время пошло: снаряды летят, отдача, накопленная в стоп-кадре, срывается. */
-function resumeWorld(sim: Sim, api: SimApi): void {
-  const T = timeOf(sim);
-  for (const s of sim.shots) {
-    const v = T.held.get(s.id);
-    if (v) {
-      s.vx = v.vx;
-      s.vy = v.vy;
-    }
-  }
-  T.held.clear();
-  for (const m of sim.mobs) {
-    if (m.data.fz === undefined) continue;
-    m.vx = m.data.fvx ?? 0;
-    m.vy = m.data.fvy ?? 0;
-    const kx = m.data.fkx ?? 0;
-    const ky = m.data.fky ?? 0;
-    const kl = hypot(kx, ky);
-    const cap = 14;
-    m.kx += kl > cap ? (kx / kl) * cap : kx;
-    m.ky += kl > cap ? (ky / kl) * cap : ky;
-    delete m.data.fz;
-    delete m.data.fvx;
-    delete m.data.fvy;
-    delete m.data.fkx;
-    delete m.data.fky;
-  }
-  T.by = null;
-  sim.events.push({ t: 'boss', what: 'f14_resume' });
-  void api;
-}
-
 /**
- * Обёртка ИИ этажа: мир стоит — не шагает; в сфере — шагает медленнее
- * (часы режима и отдыха тоже), скорость — по той же доле.
+ * Обёртка ИИ этажа: мир стоит — не шагает (режимы не меняются); в сфере —
+ * шагает медленнее (часы режима и отдыха тоже), скорость — по той же доле.
  */
 function timed(b: Brain): Brain {
   return {
     ...b,
     step(sim, m, dt, c, api) {
-      const T = TIME.get(sim);
-      if (T && T.stop > 0 && !(T.by === 'boss' && m.kind === 'f14boss')) {
+      if (worldStopped(sim)) {
         m.danger = 0;
         return;
       }
@@ -490,18 +427,8 @@ function timed(b: Brain): Brain {
 
 const brain = (id: string, b: Brain) => registerBrain(id, timed(b));
 
-const bossId = (sim: Sim) => sim.mobs.find((m) => m.kind === 'f14boss' && m.mode !== 'dying')?.id ?? -1;
-
-/** Замерший для рисовальщика: мир стоит или сам застыл (Стоп-кадр, строй). */
-export function frozenLook(sim: Sim | null, m: Mob): boolean {
-  if (m.mode === 'f14_statue' || m.mode === 'f14_frozen' || m.mode === 'f14_still') return true;
-  if (!sim) return false;
-  const T = TIME.get(sim);
-  return !!T && T.stop > 0 && !(T.by === 'boss' && m.kind === 'f14boss');
-}
-
 // ---------------------------------------------------------------------------
-// Заводной солдатик: марширует строем по осям, штык по линии. Ключ в спине
+// Заводной солдатик: марширует по осям, штык по линии. Ключ в спине
 // крутится и кончается; удар сзади — по ключу — сразу стоп.
 // ---------------------------------------------------------------------------
 
@@ -528,7 +455,7 @@ brain('f14_soldier', {
         m.vx *= 0.5;
         m.vy *= 0.5;
         m.data.ghost = m.mode === 'f14_statue' ? 1 : 0;
-        m.face = Math.PI / 2;
+        if (!m.data.frame) m.face = Math.PI / 2;
         return;
       case 'f14_waking':
         m.data.ghost = 0;
@@ -554,6 +481,7 @@ brain('f14_soldier', {
         }
         return;
       case 'chase': {
+        m.data.ghost = 0;
         m.data.wind -= dt * SOLDIER.drain;
         if (m.data.wind <= 0) {
           m.data.wind = 0;
@@ -577,7 +505,6 @@ brain('f14_soldier', {
         let my = cy;
         if (see && dist < 7) {
           if (off > 0.35 && along < SOLDIER.len + 1) {
-            // Встать в линию с героем.
             mx = ax ? 0 : Math.sign(dx);
             my = ax ? Math.sign(dy) : 0;
           } else {
@@ -623,9 +550,9 @@ brain('f14_soldier', {
   onHit(sim, m, hit) {
     if (m.mode === 'f14_statue') return 0;
     if (m.mode === 'f14_frozen') return 2;
+    if (m.mode === 'f14_unwound' || m.mode === 'f14_rewind') return 1.6;
     // Сзади — по ключу: завод слетает, солдатик встаёт.
     const behind = Math.abs(angDiff(hit.ang, m.face)) < 0.95;
-    if (m.mode === 'f14_unwound' || m.mode === 'f14_rewind') return 1.6;
     if (behind && m.mode !== 'f14_waking') {
       m.data.wind = 0;
       m.mode = 'f14_unwound';
@@ -637,19 +564,24 @@ brain('f14_soldier', {
     }
     return 1;
   },
+  onDeath(sim, m) {
+    postDead(sim, m);
+  },
 });
 
 // ---------------------------------------------------------------------------
-// Кукушка: живёт в часах на стене; бьёт час — дверцы, клюв на пружине по
-// линии; вылетела — открыта, пока пружина не втянула.
+// Кукушка: живёт в часах на стене; дверцы, клюв на пружине по линии;
+// вылетела — открыта, пока пружина не втянула.
 // ---------------------------------------------------------------------------
 
 export const CUCKOO = { see: 6.2, call: 0.45, aim: 0.75, peck: 0.14, out: 1.4, back: 0.3, len: 3.6 };
 
+/** Номера часов с кукушкой: индекс в `m.data.clock` → id предмета. */
+const CLOCK_IDS: string[] = [];
+
 brain('f14_cuckoo', {
-  step(sim, m, dt, c, api) {
+  step(sim, m, _dt, _c, api) {
     const h = sim.hero;
-    const { dist } = c;
     m.tele = null;
     m.danger = 0;
     m.vx = 0;
@@ -683,8 +615,8 @@ brain('f14_cuckoo', {
         if (m.t > CUCKOO.call) {
           m.dir = Math.atan2(h.y - ny, h.x - nx);
           // Пружина не бьёт вверх, в стену.
-          if (Math.sin(m.dir) < -0.2) m.dir = Math.atan2(0.2, Math.cos(m.dir));
-          m.data.len = Math.min(CUCKOO.len, clearDist(sim, api, nx, ny, m.dir, CUCKOO.len) - 0.2);
+          if (Math.sin(m.dir) < 0.2) m.dir = Math.atan2(0.2, Math.cos(m.dir) || 0.01);
+          m.data.len = Math.max(1, Math.min(CUCKOO.len, clearDist(sim, api, nx, ny, m.dir, CUCKOO.len) - 0.2));
           api.setMode(m, 'aim');
         }
         return;
@@ -721,7 +653,6 @@ brain('f14_cuckoo', {
       case 'f14_out': {
         setDoor(1);
         const len = m.data.len ?? CUCKOO.len;
-        // Качается на пружине — открыта.
         const bob = Math.sin(m.t * 12) * 0.12 * (1 - m.t / CUCKOO.out);
         m.x = nx + Math.cos(m.dir) * (len + bob);
         m.y = ny + Math.sin(m.dir) * (len + bob);
@@ -742,11 +673,15 @@ brain('f14_cuckoo', {
         }
         return;
       }
+      case 'stun':
+        return;
       default:
         api.setMode(m, 'f14_nest');
     }
-    void dt;
-    void dist;
+  },
+  onHit(_sim, m) {
+    if ((m.data.ghost ?? 0) > 0) return 0;
+    return m.mode === 'f14_out' ? 1.3 : 1;
   },
   onDeath(sim, m) {
     const clock = m.data.clock;
@@ -754,9 +689,6 @@ brain('f14_cuckoo', {
     postDead(sim, m);
   },
 });
-
-/** Номера часов с кукушкой: индекс в `m.data.clock` → id предмета. */
-const CLOCK_IDS: string[] = [];
 
 // ---------------------------------------------------------------------------
 // Песочный призрак: когти вблизи, песок в глаза конусом; от удара
@@ -773,9 +705,15 @@ brain('f14_sand', {
     m.danger = 0;
     m.data.bCd = (m.data.bCd ?? 1.5 + sim.rng() * 2) - dt;
     m.data.sCd = (m.data.sCd ?? 0) - dt;
+    if (m.data.sinkNext) {
+      m.data.sinkNext = 0;
+      if (m.mode !== 'f14_sink' && m.mode !== 'f14_under' && m.mode !== 'f14_rise') {
+        api.setMode(m, 'f14_sink');
+        sim.events.push({ t: 'boss', what: 'f14_sandpuff' });
+      }
+    }
     switch (m.mode) {
       case 'f14_sink':
-        // Рассыпается в песок.
         m.data.ghost = 1;
         m.vx *= 0.5;
         m.vy *= 0.5;
@@ -835,7 +773,6 @@ brain('f14_sand', {
           return;
         }
         const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-        // Плывёт волнами, как дым песка.
         const z = Math.sin(sim.time * 3 + m.id) * 0.35;
         api.steer(sim, m, cx - cy * z, cy + cx * z, m.speed, dt);
         return;
@@ -846,8 +783,7 @@ brain('f14_sand', {
         m.face = m.dir;
         if (m.t > def.windup - 0.22) m.danger = def.reach + m.r + 0.6;
         if (m.t >= def.windup) {
-          if (dist < def.reach + m.r + h.r + 0.15 && canHurt(sim))
-            api.hurtHero(sim, m.dmg, m.x, m.y, 4, m.kind);
+          if (dist < def.reach + m.r + h.r + 0.15 && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 4, m.kind);
           api.setMode(m, 'recover');
           m.cd = 0.9 + sim.rng() * 0.5;
         }
@@ -892,7 +828,7 @@ brain('f14_sand', {
   },
   onHit(sim, m) {
     if ((m.data.ghost ?? 0) > 0) return 0;
-    // Рассыпается от удара: не всегда, и не чаще раза в 3 с.
+    // Рассыпается от удара — не всегда и не чаще раза в 3 с (урон ложится).
     if ((m.data.sCd ?? 0) <= 0 && m.mode !== 'windup' && m.mode !== 'f14_blast' && sim.rng() < 0.4) {
       m.data.sCd = 3;
       m.data.sinkNext = 1;
@@ -900,20 +836,6 @@ brain('f14_sand', {
     return 1;
   },
 });
-
-// Песочный призрак рассыпается ПОСЛЕ удара: в `onHit` урон ещё не лёг.
-function sandAfterHits(sim: Sim, api: SimApi): void {
-  for (const m of sim.mobs)
-    if (m.kind === 'f14_sand' && m.data.sinkNext && m.mode !== 'dying') {
-      m.data.sinkNext = 0;
-      if (m.mode !== 'f14_sink' && m.mode !== 'f14_under' && m.mode !== 'f14_rise') {
-        api.setMode(m, 'f14_sink');
-        m.tele = null;
-        m.danger = 0;
-        sim.events.push({ t: 'boss', what: 'f14_sandpuff' });
-      }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Отмотчик: помнит 3 с своего прошлого. Ранен — через полсекунды
@@ -951,7 +873,6 @@ brain('f14_rewinder', {
     m.tele = null;
     m.danger = 0;
     m.data.rwCd = (m.data.rwCd ?? 0) - dt;
-    // Память: 10 раз в секунду, на 3,5 с.
     let hs = RW_HIST.get(m);
     if (!hs) RW_HIST.set(m, (hs = []));
     m.data.recT = (m.data.recT ?? 0) - dt;
@@ -960,25 +881,22 @@ brain('f14_rewinder', {
       hs.push({ t: sim.time, x: m.x, y: m.y, hp: m.hp });
       while (hs.length && hs[0].t < sim.time - REWIND.back - 0.5) hs.shift();
     }
+    if (m.mode === 'stun') return;
     // Ранен: окно перед отмоткой.
-    if (m.data.rwAt !== undefined && m.mode !== 'f14_rewind' && m.mode !== 'stun') {
-      const a = rewindAnchor(sim, m);
-      if (a) {
-        m.data.ax = a.x;
-        m.data.ay = a.y;
-      }
+    if (m.data.rwAt !== undefined && m.mode !== 'f14_rewind') {
       if (sim.time >= m.data.rwAt) {
         delete m.data.rwAt;
         const ax = m.data.ax ?? m.x;
         const ay = m.data.ay ?? m.y;
         if (hypot(h.x - ax, h.y - ay) < REWIND.anchorR + h.r && !heroDown(sim)) {
           // Якорь занят героем: отмотка сорвана.
-          api.setMode(m, 'stun');
+          api.setMode(m, 'f14_dazed');
           m.data.broken = 1;
           m.data.rwCd = REWIND.cd;
           sim.events.push({ t: 'boss', what: 'f14_anchor_stone', text: 'ЯКОРЬ ЗАНЯТ', sub: 'отмотка сорвана — бей' });
           return;
         }
+        const a = rewindAnchor(sim, m);
         m.data.fromX = m.x;
         m.data.fromY = m.y;
         m.data.hp0 = m.hp;
@@ -1009,6 +927,15 @@ brain('f14_rewinder', {
         }
         return;
       }
+      case 'f14_dazed':
+        // Сорвали отмотку: стоит, стрелки внутри сломаны — открыт.
+        m.vx *= 0.7;
+        m.vy *= 0.7;
+        if (m.t > 1.6) {
+          m.data.broken = 0;
+          api.setMode(m, 'chase');
+        }
+        return;
       case 'chase': {
         const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
         if (see && m.cd <= 0 && dist < def.reach + m.r + h.r + 0.3) {
@@ -1026,8 +953,7 @@ brain('f14_rewinder', {
         m.face = m.dir;
         if (m.t > def.windup - 0.22) m.danger = def.reach + m.r + 0.6;
         if (m.t >= def.windup) {
-          if (dist < def.reach + m.r + h.r + 0.2 && canHurt(sim))
-            api.hurtHero(sim, m.dmg, m.x, m.y, 4, m.kind);
+          if (dist < def.reach + m.r + h.r + 0.2 && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 4, m.kind);
           m.vx = Math.cos(m.dir) * 3;
           m.vy = Math.sin(m.dir) * 3;
           api.setMode(m, 'recover');
@@ -1044,7 +970,7 @@ brain('f14_rewinder', {
   },
   onHit(sim, m) {
     if (m.mode === 'f14_rewind') return 0;
-    if (m.data.broken) return 1.5;
+    if (m.mode === 'f14_dazed') return 1.5;
     if ((m.data.rwCd ?? 0) <= 0 && m.data.rwAt === undefined) {
       m.data.rwAt = sim.time + REWIND.window;
       const a = rewindAnchor(sim, m);
@@ -1093,8 +1019,9 @@ brain('f14_reaper', {
         m.dir += clamp(angDiff(want, m.dir), -dt * 1.4, dt * 1.4);
         m.face = m.dir;
         const beat = Math.floor(m.t / REAPER.beat);
-        if (beat > (m.data.n ?? 0) - 1 && (m.data.n ?? 0) < REAPER.swings && beat === m.data.n) {
-          const side = (m.data.side ?? 1) * ((m.data.n ?? 0) % 2 ? -1 : 1);
+        const n = m.data.n ?? 0;
+        if (beat === n && n < REAPER.swings) {
+          const side = (m.data.side ?? 1) * (n % 2 ? -1 : 1);
           api.strike(sim, {
             shape: 'cone',
             x: m.x,
@@ -1109,7 +1036,8 @@ brain('f14_reaper', {
             from: m.id,
           });
           m.data.swSide = side;
-          m.data.n = (m.data.n ?? 0) + 1;
+          m.data.swAt = m.t;
+          m.data.n = n + 1;
         }
         const inBeat = m.t - beat * REAPER.beat;
         if (inBeat > REAPER.warn - 0.22 && inBeat < REAPER.warn) m.danger = REAPER.r + 0.4;
@@ -1211,8 +1139,7 @@ brain('f14_beetle', {
         m.face = m.dir;
         if (m.t > def.windup - 0.2) m.danger = def.reach + m.r + 0.6;
         if (m.t >= def.windup) {
-          if (dist < def.reach + m.r + h.r + 0.2 && canHurt(sim))
-            api.hurtHero(sim, m.dmg, m.x, m.y, 3, m.kind);
+          if (dist < def.reach + m.r + h.r + 0.2 && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 3, m.kind);
           api.setMode(m, 'recover');
           m.cd = 0.7 + sim.rng() * 0.4;
         }
@@ -1364,13 +1291,14 @@ brain('f14_keeper', {
   },
   onHit(_sim, m) {
     if (m.mode === 'recover') return 1.3;
+    if (m.mode === 'f14_frozen') return 2;
     return 1;
   },
 });
 
 // ---------------------------------------------------------------------------
 // Двойник из прошлого: идёт по следу героя на 5 с позади и повторяет его
-// удары там, где они были. Бьёт и сам — туда, где герой стоял.
+// удары там, где они были. Догнал стоящего — топает.
 // ---------------------------------------------------------------------------
 
 export const DOUBLE = { lag: 5, warn: 0.6, stomp: 2.6, stompR: 1.1 };
@@ -1394,19 +1322,21 @@ export function heroPast(sim: Sim, ago: number): { x: number; y: number } | null
 }
 
 brain('f14_double', {
-  step(sim, m, dt, c, api) {
+  step(sim, m, dt, _c, api) {
     const T = timeOf(sim);
     m.tele = null;
     m.danger = 0;
-    m.data.born = m.data.born ?? sim.time;
-    // Пришёл из прошлого: полсекунды проявляется.
-    if (m.mode !== 'chase' && m.mode !== 'recover') api.setMode(m, 'chase');
+    if (m.mode === 'f14_frozen') {
+      m.vx = 0;
+      m.vy = 0;
+      return;
+    }
+    if (m.mode !== 'chase') api.setMode(m, 'chase');
     const p = heroPast(sim, DOUBLE.lag);
     if (p) {
       const ex = p.x - m.x;
       const ey = p.y - m.y;
       const el = hypot(ex, ey);
-      // Идёт по следу героя: скорость — такая, чтобы держать пять секунд.
       const sp = clamp(el * 8, 0, 9);
       if (el > 0.02) {
         m.vx = (ex / el) * sp;
@@ -1420,7 +1350,7 @@ brain('f14_double', {
     // Повтор ударов: удар героя пять секунд назад — здесь, сейчас.
     for (const s of T.swings) {
       const due = s.t + DOUBLE.lag - DOUBLE.warn;
-      if (due <= sim.time && due > sim.time - dt - 1e-6) {
+      if (due <= sim.time && due > sim.time - dt - 1e-6 && s.t > (m.data.born ?? -1e9)) {
         api.strike(sim, {
           shape: 'cone',
           x: s.x,
@@ -1454,7 +1384,6 @@ brain('f14_double', {
         from: m.id,
       });
     }
-    void c;
   },
 });
 
@@ -1466,7 +1395,7 @@ brain('f14_double', {
 export const WEIGHT = { reach: 3.4, see: 5.8, track: 1.5, lock: 0.45, fall: 0.18, down: 2.4, up: 0.8, r: 0.95 };
 
 brain('f14_weight', {
-  step(sim, m, dt, c, api) {
+  step(sim, m, dt, _c, api) {
     const h = sim.hero;
     m.tele = null;
     m.danger = 0;
@@ -1531,13 +1460,20 @@ brain('f14_weight', {
             api.hurtHero(sim, m.dmg * 1.2, m.x, m.y, 7, m.kind);
           // Солдатиков и жуков под гирей — давит.
           for (const o of sim.mobs)
-            if (o !== m && o.mode !== 'dying' && hypot(o.x - m.x, o.y - m.y) < WEIGHT.r + o.r && !o.kind.endsWith('boss')) {
+            if (
+              o !== m &&
+              o.mode !== 'dying' &&
+              (o.data.ghost ?? 0) <= 0 &&
+              hypot(o.x - m.x, o.y - m.y) < WEIGHT.r + o.r &&
+              !o.kind.endsWith('boss') &&
+              o.kind !== 'f14_weight'
+            ) {
               o.kx += (o.x - m.x) * 6;
               o.ky += (o.y - m.y) * 6;
-              o.hp = Math.max(1, o.hp - o.maxHp * 0.5);
-              o.flash = 0.15;
+              envHurt(sim, api, o, 0.6);
             }
           sim.events.push({ t: 'boom', x: m.x, y: m.y, r: 0.8 });
+          sim.events.push({ t: 'shake', k: 0.25 });
           sim.events.push({ t: 'boss', what: 'f14_thud' });
           m.r = 0.46;
           m.data.ghost = 0;
@@ -1545,7 +1481,7 @@ brain('f14_weight', {
         }
         return;
       case 'f14_down':
-        // Лежит: открыта. Цепь натягивается к концу.
+        // Лежит: открыта.
         m.vx = 0;
         m.vy = 0;
         m.data.ghost = 0;
@@ -1631,7 +1567,7 @@ brain('f14_smith', {
 
 // ---------------------------------------------------------------------------
 // Правила этажа: посты, колокол, маятники, шестерни, завод, песок,
-// отмотка, стоп-кадр, полдень.
+// отмотка, стоп-кадр, полдень, действия.
 // ---------------------------------------------------------------------------
 
 interface Post {
@@ -1646,8 +1582,6 @@ interface Post {
   clock?: number;
   /** Строй Завода. */
   rank?: number;
-  /** Замершие Стоп-кадра. */
-  frame?: boolean;
   area: string;
 }
 
@@ -1655,7 +1589,6 @@ interface Pend {
   obj: WorldObj;
   x: number;
   y: number;
-  /** Фаза маятника (с). */
   ph: number;
   amp: number;
   period: number;
@@ -1674,9 +1607,9 @@ interface GearHall {
   cx: number;
   cy: number;
   teeth: Tooth[];
-  /** Поворот колец в местах: целый — стоит, дробный — едет. */
+  /** Поворот колец в местах и куда они идут. */
   rot: [number, number];
-  /** Такт: следующий поворот. */
+  goal: [number, number];
   tick: number;
   beat: number;
   state: 'idle' | 'waves' | 'done';
@@ -1765,6 +1698,8 @@ interface F14State {
   bellCd: number;
   saved: Map<number, { tile: number; mark: number }>;
   spheresMade: boolean;
+  /** Часовые лампы арены: ключ света и место. */
+  lamps: { key: string; x: number; y: number; hour: number }[];
 }
 
 const STATE = new WeakMap<Sim, F14State>();
@@ -1780,7 +1715,7 @@ function postDead(sim: Sim, m: Mob): void {
   }
 }
 
-function inFlood(sim: Sim, fl: Flood, x: number, y: number): boolean {
+function inFlood(fl: Flood, x: number, y: number): boolean {
   if (fl.state === 'idle') return false;
   if (y < fl.front || y > fl.bottom + 1) return false;
   const dx = (x - fl.cx) / fl.rx;
@@ -1808,10 +1743,10 @@ function scan(sim: Sim): F14State {
   const mechTop = bandTop(F14_MECH);
   const dialTop = bandTop(F14_DIAL);
   const sandTop = bandTop(F14_SAND);
-  // Завод: рамка зала (местные x 3…16, ряды 78…106).
-  const fbox: [number, number, number, number] = [3, mechTop + 78, 16, mechTop + 106];
   const inBox = (b: [number, number, number, number], x: number, y: number) =>
     x >= b[0] && x <= b[2] + 0.99 && y >= b[1] && y <= b[3] + 0.99;
+  // Завод: рамка зала (местные x 3…16, ряды 78…106).
+  const fbox: [number, number, number, number] = [3, mechTop + 78, 16, mechTop + 106];
   const ranks: number[] = [];
   for (let y = 0; y < w.h; y++)
     for (let x = 0; x < W; x++) {
@@ -1820,34 +1755,26 @@ function scan(sim: Sim): F14State {
       else if (k === MK.cuckoo) {
         const o = w.objs.find((q) => q.x === x && q.y === y && q.ref === 'f14_cuckooclock');
         if (o) {
-          CLOCK_IDS.push(o.id);
-          add('f14_cuckoo', 'f14_nest', x + 0.5, y + 1.2, { clock: CLOCK_IDS.length - 1 });
+          let n = CLOCK_IDS.indexOf(o.id);
+          if (n < 0) {
+            CLOCK_IDS.push(o.id);
+            n = CLOCK_IDS.length - 1;
+          }
+          add('f14_cuckoo', 'f14_nest', x + 0.5, y + 1.2, { clock: n });
         }
       } else if (k === MK.rank) {
         if (!ranks.includes(y)) ranks.push(y);
         add('f14_soldier', 'f14_statue', x + 0.5, y + 0.5, { rank: y });
-      } else if (k === MK.frozen) {
-        add('', 'f14_frozen', x + 0.5, y + 0.5, { frame: true });
       }
     }
   ranks.sort((a, b) => a - b);
   for (const p of posts) if (p.rank !== undefined) p.rank = ranks.indexOf(p.rank);
-  // Маятники.
+  // Маятники: соседние качаются вразнобой.
   const pends: Pend[] = [];
   let pi = 0;
   for (const p of sim.props)
     if (p.kind === 'deco' && p.obj.ref === 'f14_pendulum') {
-      pends.push({
-        obj: p.obj,
-        x: p.x,
-        y: p.y,
-        ph: 0,
-        amp: 2.25,
-        period: 2.5,
-        off: (pi % 2) * 0.5 + (pi % 3) * 0.17,
-        v: 0,
-        hitCd: 0,
-      });
+      pends.push({ obj: p.obj, x: p.x, y: p.y, ph: 0, amp: 2.25, period: 2.5, off: (pi * 0.37) % 1, v: 0, hitCd: 0 });
       pi++;
     }
   // Зал шестерён.
@@ -1864,20 +1791,19 @@ function scan(sim: Sim): F14State {
   for (const ring of [0, 1] as const) {
     const list = byRing[ring];
     const slots = g.slots[ring];
-    const gaps = g.gaps[ring];
-    const gw = g.gapW[ring];
-    // Проёмы — ровно по кругу, зубья — на остальных местах.
+    const per = slots / g.gaps[ring];
     const free: number[] = [];
-    const per = slots / gaps;
-    for (let s = 0; s < slots; s++) {
-      const inGap = s % per < gw;
-      if (!inGap) free.push(s);
-    }
+    // Проёмы — ровно по кругу; у внешнего кольца проём начинается на юге
+    // (вход), у внутреннего — сдвинут: проёмы не совпадают.
+    const shift = ring === 0 ? Math.round(slots * 0.25 - g.gapW[0] / 2) : Math.round(per / 2);
+    for (let s = 0; s < slots; s++) if ((((s - shift) % per) + per) % per >= g.gapW[ring]) free.push(s);
     list.sort((a, b) => Math.atan2(a.y - gcy, a.x - gcx) - Math.atan2(b.y - gcy, b.x - gcx));
     for (let i = 0; i < list.length && i < free.length; i++) {
       list[i].r = 0.5;
       teeth.push({ prop: list[i], ring, slot: free[i] });
     }
+    // Лишние зубья (карта дала больше, чем мест) — прячем.
+    for (let i = free.length; i < list.length; i++) list[i].alive = false;
   }
   let gearLever: Prop | null = null;
   let facLever: Prop | null = null;
@@ -1888,7 +1814,7 @@ function scan(sim: Sim): F14State {
     }
   const holes: number[] = [];
   sim.burrows.forEach((b, i) => {
-    if (b.obj.out && hypot(b.obj.out[0] + 0.5 - gcx, b.obj.out[1] + 0.5 - gcy) < 12) holes.push(i);
+    if (b.obj.out && hypot(b.obj.out[0] + 0.5 - gcx, b.obj.out[1] + 0.5 - gcy) < 12.5) holes.push(i);
   });
   const gear: GearHall | null = teeth.length
     ? {
@@ -1896,7 +1822,8 @@ function scan(sim: Sim): F14State {
         cy: gcy,
         teeth,
         rot: [0, 0],
-        tick: 0,
+        goal: [0, 0],
+        tick: GEAR.beat,
         beat: 0,
         state: 'idle',
         wave: 0,
@@ -1919,7 +1846,7 @@ function scan(sim: Sim): F14State {
     ranks: ranks.length,
     paid: false,
   };
-  // Зал отмотки: местные x 50…61, ряды 68…98.
+  // Зал отмотки: местные x 50…61, ряды 68…98; решётка — в двери (x 49).
   const rbox: [number, number, number, number] = [50, sandTop + 68, 61, sandTop + 98];
   const glass = sim.props.find((p) => p.kind === 'deco' && p.obj.ref === 'f14_bigglass') ?? null;
   const anchors = sim.props.filter((p) => p.kind === 'breakable' && p.obj.ref === 'f14_anchor');
@@ -1931,7 +1858,7 @@ function scan(sim: Sim): F14State {
     anchors,
     bars,
     state: 'idle',
-    cycle: 16,
+    cycle: RWH.cycle,
     t: 0,
     dead: [],
     mobs: new Set(),
@@ -1958,21 +1885,29 @@ function scan(sim: Sim): F14State {
     kspots,
     mid: dialTop + 91,
   };
-  // Замершие Стоп-кадра ставит само событие, а не посты.
-  for (let i = posts.length - 1; i >= 0; i--) if (posts[i].frame) posts.splice(i, 1);
   const pz = F14_GEO.plaza;
   const plaza: Plaza = {
     cx: pz.x,
     cy: dialTop + pz.y,
     r: pz.r,
     min: 0,
-    hour: -TAU / 12,
+    hour: 0,
     hitM: 0,
     hitH: 0,
     noon: false,
     on: false,
   };
   const bell = sim.props.find((p) => p.kind === 'deco' && p.obj.ref === 'f14_bell') ?? null;
+  // Часовые лампы арены: час — по углу от ступицы.
+  const ar = F14_GEO.arena;
+  const lamps: F14State['lamps'] = [];
+  for (const o of w.objs)
+    if (o.ref === 'f14_hourlamp') {
+      const a = Math.atan2(o.y + 0.5 - (dialTop + ar.y), o.x + 0.5 - ar.x);
+      const hour = Math.round((((a + Math.PI / 2) / TAU) * 12 + 12 - 0.5) % 12);
+      lamps.push({ key: `f14_hl${hour}`, x: o.x + 0.5, y: o.y + 0.5, hour });
+    }
+  lamps.sort((a, b) => a.hour - b.hour);
   // Песок верхней колбы.
   const up = F14_GEO.upper;
   FLOOD.set(sim, {
@@ -2002,6 +1937,7 @@ function scan(sim: Sim): F14State {
     bellCd: 0,
     saved: new Map(),
     spheresMade: false,
+    lamps,
   };
 }
 
@@ -2082,9 +2018,9 @@ function stepPosts(sim: Sim, st: F14State, api: SimApi): void {
 
 /** Период колокола по району: Механизм реже, Циферблат чаще. */
 const bellPeriod = (area: string) => (area === F14_MECH ? 70 : area === F14_SAND ? 60 : 50);
-const BELL = { warn: 3, stop: 2 };
+export const BELL = { warn: 3, stop: 2 };
 
-function stepBell(sim: Sim, st: F14State, api: SimApi, dt: number): void {
+function stepBell(sim: Sim, dt: number, api: SimApi): void {
   const T = timeOf(sim);
   const area = areaAt(sim, sim.hero.y);
   F14_FX.bellP = bellPeriod(area);
@@ -2093,7 +2029,7 @@ function stepBell(sim: Sim, st: F14State, api: SimApi, dt: number): void {
     F14_FX.bellIn = F14_FX.bellP;
     return;
   }
-  if (T.stop > 0) return;
+  if (worldStopped(sim)) return;
   T.bellT -= dt;
   F14_FX.bellIn = Math.max(0, T.bellT);
   if (!T.bellWarn && T.bellT <= BELL.warn) {
@@ -2101,12 +2037,11 @@ function stepBell(sim: Sim, st: F14State, api: SimApi, dt: number): void {
     sim.events.push({
       t: 'boss',
       what: 'f14_bell_call',
-      text: T.bells ? 'БЬЁТ ЧАС' : 'БЬЁТ ЧАС',
+      text: 'БЬЁТ ЧАС',
       sub: T.bells ? undefined : 'мир замрёт — ходишь только ты',
     });
   }
   if (T.bellT <= 0) ringBell(sim, api, BELL.stop + (area === F14_DIAL ? 0.4 : 0));
-  void st;
 }
 
 /** Удар колокола: мир стоит `dur` секунд. */
@@ -2124,27 +2059,23 @@ function ringBell(sim: Sim, api: SimApi, dur: number): void {
 
 function stepPends(sim: Sim, st: F14State, api: SimApi, dt: number): void {
   const h = sim.hero;
-  const stopped = worldStopped(sim);
   for (const p of st.pends) {
-    const near = Math.abs(p.y - h.y) < 14 && Math.abs(p.x - h.x) < 12;
-    if (!stopped && near) p.ph += dt;
-    else if (!stopped) p.ph += dt; // идёт и вдали — чтобы не прыгал
+    p.ph += dt;
     const w = TAU / p.period;
     const a = w * p.ph + p.off * TAU;
     const off = p.amp * Math.sin(a);
-    const v = stopped ? 0 : p.amp * w * Math.cos(a);
+    const v = dt > 0 ? p.amp * w * Math.cos(a) : 0;
     p.v = v;
     F14_FX.pend.set(p.obj.id, { off, v });
     p.hitCd = Math.max(0, p.hitCd - dt);
-    if (!near || stopped) continue;
+    if (dt <= 0 || Math.abs(p.y - h.y) > 12) continue;
     const bx = p.x + off;
     const by = p.y;
-    // Лезвие — полоса 1×0,5 клетки; бьёт, пока идёт (у края почти стоит).
+    // Лезвие — полоса 1×0,7 клетки; бьёт, пока идёт (у края почти стоит).
     if (Math.abs(v) < 1.6) continue;
     if (Math.abs(h.x - bx) < 0.5 + h.r && Math.abs(h.y - by) < 0.34 + h.r && p.hitCd <= 0 && canHurt(sim)) {
       p.hitCd = 0.6;
-      api.hurtHero(sim, rawShare(sim, 0.15), bx - Math.sign(v), by, 0);
-      h.vx += Math.sign(v) * 7;
+      api.hurtHero(sim, rawShare(sim, 0.15), bx - Math.sign(v), by, 7);
       sim.events.push({ t: 'boss', what: 'f14_pend' });
     }
     for (const m of sim.mobs) {
@@ -2152,9 +2083,8 @@ function stepPends(sim: Sim, st: F14State, api: SimApi, dt: number): void {
       if (Math.abs(m.x - bx) < 0.5 + m.r && Math.abs(m.y - by) < 0.34 + m.r && (m.data.pendT ?? 0) < sim.time) {
         m.data.pendT = sim.time + 0.6;
         m.kx += Math.sign(v) * 9;
-        m.hp = Math.max(1, m.hp - m.maxHp * 0.25);
-        m.flash = 0.15;
-        if (m.mode !== 'f14_statue') api.setMode(m, 'stun');
+        envHurt(sim, api, m, 0.35);
+        if (m.mode !== 'dying' && m.mode !== 'f14_statue' && m.kind !== 'f14_weight') api.setMode(m, 'stun');
       }
     }
   }
@@ -2162,61 +2092,49 @@ function stepPends(sim: Sim, st: F14State, api: SimApi, dt: number): void {
 
 // ---- Зал шестерён ----------------------------------------------------------
 
-const GEAR = { beat: 0.85, move: 0.22, waves: 3, waveGap: 9 };
-
-function toothPos(gh: GearHall, t: Tooth): [number, number, number] {
-  const g = F14_GEO.gear;
-  const n = g.slots[t.ring];
-  const ang = ((t.slot + gh.rot[t.ring]) / n) * TAU;
-  const r = g.r[t.ring];
-  return [gh.cx + Math.cos(ang) * r, gh.cy + Math.sin(ang) * r, ang];
-}
+const GEAR = { beat: 0.85, move: 0.2, waves: 3, waveGap: 9, stop: 8, leverCd: 16 };
 
 function stepGear(sim: Sim, st: F14State, api: SimApi, dt: number): void {
   const gh = st.gear;
   if (!gh) return;
   const h = sim.hero;
   const d = hypot(h.x - gh.cx, h.y - gh.cy);
-  const stopped = worldStopped(sim) || sim.time < gh.stopUntil;
+  const held = sim.time < gh.stopUntil;
   gh.leverCd = Math.max(0, gh.leverCd - dt);
-  if (gh.lever) F14_FX.levers.set(gh.lever.obj.id, sim.time < gh.stopUntil ? 1 : 0);
-  // Стопор: подошёл вплотную — кольца стоят 8 с (до «Движка 3» — само).
-  if (gh.lever && gh.leverCd <= 0 && hypot(h.x - gh.lever.x, h.y - gh.lever.y) < 1.1 && !heroDown(sim)) {
-    gh.stopUntil = sim.time + 8;
-    gh.leverCd = 16;
-    sim.events.push({ t: 'boss', what: 'f14_lever', text: 'СТОПОР', sub: 'кольца стоят восемь секунд' });
-  }
-  const active = d < 16;
-  if (active && !stopped) {
+  if (gh.lever) F14_FX.levers.set(gh.lever.obj.id, held ? 1 : 0);
+  // Такт: внешнее кольцо — на «тик», внутреннее — на «так», по месту.
+  if (d < 17 && !held && dt > 0) {
     gh.tick -= dt;
     if (gh.tick <= 0) {
-      gh.tick = GEAR.beat;
+      gh.tick += GEAR.beat;
       gh.beat += 1;
-      sim.events.push({ t: 'boss', what: 'f14_tick' });
+      if (gh.beat % 2) gh.goal[0] += 1;
+      else gh.goal[1] -= 1;
+      if (d < 12) sim.events.push({ t: 'boss', what: 'f14_tick' });
     }
   }
-  // Ход: внешнее — на тик, внутреннее — на так, по месту за такт.
-  const phase = clamp((GEAR.beat - gh.tick) / GEAR.move, 0, 1);
-  const ease = phase * phase * (3 - 2 * phase);
-  const base = Math.floor(gh.beat / 2);
-  const outer = gh.beat % 2 === 1 ? base + ease : base + (gh.beat > 0 ? 1 : 0) * 0;
-  const inner = gh.beat % 2 === 0 && gh.beat > 0 ? -(gh.beat / 2 - 1 + ease) : -base;
-  gh.rot = [outer, inner];
+  const step = dt / GEAR.move;
+  for (const r of [0, 1] as const) gh.rot[r] += clamp(gh.goal[r] - gh.rot[r], -step, step);
   F14_FX.gearAng = (gh.rot[0] / F14_GEO.gear.slots[0]) * TAU;
+  const g = F14_GEO.gear;
   for (const t of gh.teeth) {
-    const [x, y, ang] = toothPos(gh, t);
+    const n = g.slots[t.ring];
+    const ang = ((t.slot + gh.rot[t.ring]) / n) * TAU;
+    const R = g.r[t.ring];
+    const x = gh.cx + Math.cos(ang) * R;
+    const y = gh.cy + Math.sin(ang) * R;
     t.prop.x = x;
     t.prop.y = y;
     F14_FX.teeth.set(t.prop.obj.id, { ang, x, y });
   }
   // Событие: вошёл в зал — механизм пошёл, из люков лезут жуки.
-  if (gh.state === 'idle' && d < 9.5) {
+  if (gh.state === 'idle' && d < 9.5 && !heroDown(sim)) {
     gh.state = 'waves';
     gh.wave = 0;
     gh.waveT = 1.2;
-    sim.events.push({ t: 'boss', what: 'f14_gear_trap', text: 'ЗАЛ ШЕСТЕРЁН', sub: 'кольца пошли — ищи проём' });
+    sim.events.push({ t: 'boss', what: 'f14_gear_trap', text: 'ЗАЛ ШЕСТЕРЁН', sub: 'кольца идут — ищи проём, стопор у входа' });
   }
-  if (gh.state === 'waves' && !stopped) {
+  if (gh.state === 'waves' && dt > 0) {
     gh.waveT -= dt;
     const live = sim.mobs.filter((m) => gh.spawned.has(m.id) && m.mode !== 'dying').length;
     if (gh.waveT <= 0 && gh.wave < GEAR.waves && live < 5) {
@@ -2242,7 +2160,7 @@ function stepGear(sim: Sim, st: F14State, api: SimApi, dt: number): void {
       gh.wave += 1;
       gh.waveT = GEAR.waveGap;
     }
-    if (gh.wave >= GEAR.waves && live === 0) {
+    if (gh.wave >= GEAR.waves && live === 0 && gh.waveT < GEAR.waveGap - 1) {
       gh.state = 'done';
       for (let i = 0; i < 4; i++) api.dropAt(sim, 'token', 2 + Math.floor(sim.rng() * 3), gh.cx, gh.cy);
       for (let i = 0; i < 2; i++) api.dropAt(sim, 'f14mat', 1, gh.cx, gh.cy);
@@ -2256,35 +2174,35 @@ function stepGear(sim: Sim, st: F14State, api: SimApi, dt: number): void {
 
 const FACTORY = { turn: 2.3 };
 
+function factorySoldiers(sim: Sim, st: F14State): Mob[] {
+  return st.posts
+    .filter((p) => p.rank !== undefined)
+    .map((p) => sim.mobs.find((m) => m.id === p.mob))
+    .filter(Boolean) as Mob[];
+}
+
 function stepFactory(sim: Sim, st: F14State, api: SimApi, dt: number): void {
   const f = st.factory;
   if (!f) return;
   const h = sim.hero;
   const inside = h.x >= f.box[0] && h.x <= f.box[2] + 1 && h.y >= f.box[1] && h.y <= f.box[3] + 1;
   if (f.lever) F14_FX.levers.set(f.lever.obj.id, f.state === 'stopped' || f.state === 'done' ? 1 : 0);
-  F14_FX.key.spin = f.state === 'wind' && !worldStopped(sim) ? 1 : 0;
+  F14_FX.key.spin = f.state === 'wind' && dt > 0 ? 1 : 0;
   F14_FX.key.stopped = f.state === 'stopped' || f.state === 'done' ? 1 : 0;
-  const soldiers = () =>
-    st.posts.filter((p) => p.rank !== undefined).map((p) => sim.mobs.find((m) => m.id === p.mob)).filter(Boolean) as Mob[];
   if (f.state === 'idle' && inside && h.y < f.box[3] - 3 && !heroDown(sim)) {
     f.state = 'wind';
-    f.t = 0.6;
+    f.t = 0.8;
     f.rank = 0;
+    if (f.key) api.camera(sim, f.key.x + 0.5, f.key.y + 3, 1.8);
     sim.events.push({ t: 'boss', what: 'f14_key_trap', text: 'ЗАВОД', sub: 'ключ пошёл — стопор за строем' });
   }
-  // Стопор: вплотную — ключ встал (до «Движка 3» — само).
-  if (f.state === 'wind' && f.lever && hypot(h.x - f.lever.x, h.y - f.lever.y) < 1.1 && !heroDown(sim)) {
-    f.state = 'stopped';
-    for (const m of soldiers()) if (m.mode === 'f14_statue') api.setMode(m, 'f14_frozen');
-    sim.events.push({ t: 'boss', what: 'f14_lever', text: 'СТОПОР', sub: 'ключ встал — строй не проснётся' });
-  }
-  if (f.state === 'wind' && !worldStopped(sim)) {
+  if (f.state === 'wind' && dt > 0) {
     f.t -= dt;
     if (f.t <= 0) {
       f.t = FACTORY.turn;
       // Ключ поворачивается — шеренга просыпается.
       let woke = 0;
-      for (const m of soldiers())
+      for (const m of factorySoldiers(sim, st))
         if (m.data.rank === f.rank && m.mode === 'f14_statue') {
           api.setMode(m, 'f14_waking');
           woke += 1;
@@ -2295,15 +2213,14 @@ function stepFactory(sim: Sim, st: F14State, api: SimApi, dt: number): void {
     }
   }
   // Кончилось: все проснувшиеся пали — награда у ключа.
-  if ((f.state === 'stopped' || f.state === 'wind') && !f.paid) {
+  if (f.state === 'stopped' && !f.paid) {
     const posts = st.posts.filter((p) => p.rank !== undefined);
     const awake = posts.some((p) => {
       if (p.dead) return false;
       const m = sim.mobs.find((x) => x.id === p.mob);
-      return m && m.mode !== 'f14_statue' && m.mode !== 'f14_frozen';
+      return !!m && m.mode !== 'f14_statue' && m.mode !== 'f14_frozen';
     });
-    const any = posts.some((p) => p.dead);
-    if (f.state === 'stopped' && !awake && any) {
+    if (!awake && posts.some((p) => p.dead)) {
       f.paid = true;
       f.state = 'done';
       const kx = f.key ? f.key.x + 0.5 : h.x;
@@ -2317,34 +2234,32 @@ function stepFactory(sim: Sim, st: F14State, api: SimApi, dt: number): void {
   }
 }
 
+/** Стопор Завода: ключ встал, спящие остались статуями. */
+function factoryStop(sim: Sim, st: F14State, api: SimApi): boolean {
+  const f = st.factory;
+  if (!f || (f.state !== 'wind' && f.state !== 'idle')) return false;
+  f.state = 'stopped';
+  for (const m of factorySoldiers(sim, st)) if (m.mode === 'f14_statue') api.setMode(m, 'f14_frozen');
+  sim.events.push({ t: 'boss', what: 'f14_lever', text: 'СТОПОР', sub: 'ключ встал — строй не проснётся' });
+  return true;
+}
+
 // ---- Перевёрнутые часы -----------------------------------------------------
 
-const FLOODC = { row: 0.9, hold: 3, drain: 0.25, cool: 40 };
+const FLOODC = { row: 0.9, hold: 3, drain: 0.25, cool: 40, pause: 6 };
 
-function stepFlood(sim: Sim, st: F14State, api: SimApi, dt: number): void {
+function stepFlood(sim: Sim, api: SimApi, dt: number): void {
   const fl = FLOOD.get(sim);
   if (!fl) return;
   const h = sim.hero;
   fl.cool = Math.max(0, fl.cool - dt);
-  const inBowl = (() => {
-    const dx = (h.x - fl.cx) / fl.rx;
-    const dy = (h.y - fl.cy) / fl.ry;
-    return dx * dx + dy * dy <= 1 && h.y < fl.bottom - 2;
-  })();
-  const stopped = worldStopped(sim) || sim.time < fl.pause;
-  F14_FX.flood.paused = stopped ? 1 : 0;
-  // Малые часы: подошёл — перевернул, песок стоит 6 с (до «Движка 3» — само).
+  const dxh = (h.x - fl.cx) / fl.rx;
+  const dyh = (h.y - fl.cy) / fl.ry;
+  const inBowl = dxh * dxh + dyh * dyh <= 1 && h.y < fl.bottom - 2;
+  const held = sim.time < fl.pause;
+  F14_FX.flood.paused = held || dt <= 0 ? 1 : 0;
   for (const p of sim.props)
-    if (p.kind === 'deco' && p.obj.ref === 'f14_glass') {
-      const used = fl.used.has(p.obj.id);
-      F14_FX.glasses.set(p.obj.id, used ? 1 : 0);
-      if (!used && fl.state === 'rise' && hypot(h.x - p.x, h.y - p.y) < 1.2) {
-        fl.used.add(p.obj.id);
-        fl.pause = sim.time + 6;
-        addSphere(sim, api, p.x, p.y, 2.4, 0.4, 6);
-        sim.events.push({ t: 'boss', what: 'f14_glass', text: 'ЧАСЫ ПЕРЕВЁРНУТЫ', sub: 'песок стоит шесть секунд' });
-      }
-    }
+    if (p.kind === 'deco' && p.obj.ref === 'f14_glass') F14_FX.glasses.set(p.obj.id, fl.used.has(p.obj.id) ? 1 : 0);
   switch (fl.state) {
     case 'idle':
       fl.front = fl.bottom;
@@ -2353,12 +2268,18 @@ function stepFlood(sim: Sim, st: F14State, api: SimApi, dt: number): void {
         fl.t = 0;
         fl.spawnT = 1.5;
         fl.used.clear();
-        sim.events.push({ t: 'boss', what: 'f14_flip_trap', text: 'ЧАСЫ ПЕРЕВЕРНУЛИСЬ', sub: 'песок поднимается — к выходу!' });
-        sim.events.push({ t: 'boss', what: 'f14_quake' });
+        api.camera(sim, fl.cx, fl.bottom - 1, 1.4);
+        sim.events.push({ t: 'shake', k: 0.45 });
+        sim.events.push({
+          t: 'boss',
+          what: 'f14_flip_trap',
+          text: 'ЧАСЫ ПЕРЕВЕРНУЛИСЬ',
+          sub: 'песок поднимается — к выходу! малые часы держат его',
+        });
       }
       break;
     case 'rise':
-      if (!stopped) {
+      if (!held && dt > 0) {
         fl.front -= dt / FLOODC.row;
         fl.spawnT -= dt;
         if (fl.spawnT <= 0) {
@@ -2368,6 +2289,7 @@ function stepFlood(sim: Sim, st: F14State, api: SimApi, dt: number): void {
           const y = fl.front + 1.2;
           if (!api.solidTile(sim, Math.floor(x), Math.floor(y))) {
             const m = api.spawnMob(sim, 'f14_sand', x, y, { mode: 'f14_rise' });
+            m.data.ghost = 1;
             api.strike(sim, { shape: 'circle', x, y, r: SAND.riseR, warn: SAND.rise, dmg: m.dmg, knock: 5, art: 'f14_sandrise', from: m.id });
           }
         }
@@ -2377,7 +2299,6 @@ function stepFlood(sim: Sim, st: F14State, api: SimApi, dt: number): void {
         fl.state = 'full';
         fl.t = 0;
       }
-      // Ушёл из колбы на север — песок стекает.
       if (h.y < fl.top - 1) {
         fl.state = 'drain';
         fl.t = 0;
@@ -2385,8 +2306,7 @@ function stepFlood(sim: Sim, st: F14State, api: SimApi, dt: number): void {
       break;
     case 'full':
       fl.t += dt;
-      if (fl.t > FLOODC.hold && !inBowl) fl.state = 'drain';
-      if (fl.t > FLOODC.hold + 8) fl.state = 'drain';
+      if ((fl.t > FLOODC.hold && !inBowl) || fl.t > FLOODC.hold + 8) fl.state = 'drain';
       break;
     case 'drain':
       fl.front += dt / FLOODC.drain;
@@ -2397,11 +2317,15 @@ function stepFlood(sim: Sim, st: F14State, api: SimApi, dt: number): void {
       }
       break;
   }
-  // Герой в песке: вязнет, чем глубже, тем сильнее.
-  if (fl.state !== 'idle' && inFlood(sim, fl, h.x, h.y) && !heroDown(sim)) {
+  // Герой в песке: вязнет и задыхается, чем глубже, тем сильнее.
+  if (fl.state !== 'idle' && inFlood(fl, h.x, h.y) && !heroDown(sim)) {
     const depth = clamp((h.y - fl.front) / 3, 0.2, 1);
     api.heroStatus(sim, 'slow', 0.2, 0.25 + 0.4 * depth);
+    if (depth > 0.6 && dt > 0) api.hurtEnv(sim, 0.03 * dt);
   }
+  // Свет на ходу: фронт песка светится тёплым.
+  if (fl.state !== 'idle') api.light(sim, 'f14_flood', { x: fl.cx, y: fl.front + 0.5, r: 5.5, tint: 'warm' });
+  else api.light(sim, 'f14_flood', null);
   const F = F14_FX.flood;
   F.front = fl.state === 'idle' ? 0 : fl.front;
   F.bottom = fl.bottom;
@@ -2412,7 +2336,17 @@ function stepFlood(sim: Sim, st: F14State, api: SimApi, dt: number): void {
   F.ry = fl.ry;
   if (!sim.zones.some((z) => z.art === 'f14_flood'))
     api.zone(sim, { x: fl.cx, y: fl.cy, r: fl.ry + 1, life: 1e9, art: 'f14_flood' });
-  void st;
+}
+
+/** Малые часы: песок стоит шесть секунд. */
+function floodHold(sim: Sim, obj: WorldObj, api: SimApi): boolean {
+  const fl = FLOOD.get(sim);
+  if (!fl || fl.state !== 'rise' || fl.used.has(obj.id)) return false;
+  fl.used.add(obj.id);
+  fl.pause = sim.time + FLOODC.pause;
+  addSphere(sim, api, obj.x + 0.5, obj.y + 0.5, 2.4, 0.4, FLOODC.pause);
+  sim.events.push({ t: 'boss', what: 'f14_glass', text: 'ЧАСЫ ПЕРЕВЁРНУТЫ', sub: 'песок стоит шесть секунд' });
+  return true;
 }
 
 // ---- Зал отмотки ----------------------------------------------------------
@@ -2424,9 +2358,9 @@ function stepRewindHall(sim: Sim, st: F14State, api: SimApi, dt: number): void {
   if (!r) return;
   const h = sim.hero;
   const inside = h.x >= r.box[0] + 0.8 && h.x <= r.box[2] + 1 && h.y >= r.box[1] && h.y <= r.box[3] + 1;
-  const W = sim.world.w;
   const alive = r.anchors.filter((p) => p.alive).length;
   F14_FX.bigGlass.broken = alive === 0 && r.state !== 'idle' ? 1 : 0;
+  F14_FX.bigGlass.on = r.state === 'on' ? 1 : 0;
   if (r.state === 'idle') {
     F14_FX.bigGlass.k = 1;
     if (inside && !heroDown(sim)) {
@@ -2434,7 +2368,7 @@ function stepRewindHall(sim: Sim, st: F14State, api: SimApi, dt: number): void {
       r.t = r.cycle;
       r.flips = 0;
       r.dead = [];
-      for (const i of r.bars) saveTile(sim, st, api, i, T_WALL, 70);
+      for (const i of r.bars) saveTile(sim, st, api, i, T_WALL, MK.bars);
       sim.events.push({
         t: 'boss',
         what: 'f14_rewind_trap',
@@ -2446,10 +2380,13 @@ function stepRewindHall(sim: Sim, st: F14State, api: SimApi, dt: number): void {
     return;
   }
   if (r.state === 'done') return;
-  const stopped = worldStopped(sim);
-  if (!stopped) r.t -= dt;
+  if (heroDown(sim)) {
+    for (const i of r.bars) restoreTile(sim, st, api, i);
+    r.state = 'idle';
+    return;
+  }
+  r.t -= dt;
   F14_FX.bigGlass.k = clamp(r.t / r.cycle, 0, 1);
-  // Встающие из песка.
   for (let i = r.rising.length - 1; i >= 0; i--) {
     const q = r.rising[i];
     if (sim.time < q.at) continue;
@@ -2470,10 +2407,10 @@ function stepRewindHall(sim: Sim, st: F14State, api: SimApi, dt: number): void {
       if (r.dead.length)
         sim.events.push({ t: 'boss', what: 'f14_flipback', text: 'ПАВШИЕ ВСТАЮТ', sub: `${r.dead.length} — из песка` });
       r.dead = [];
-      if (r.flips <= 3) spawnRewindWave(sim, r, api, r.flips === 3 ? ['f14_reaper', 'f14_sand'] : ['f14_rewinder', 'f14_sand']);
+      if (r.flips <= 3)
+        spawnRewindWave(sim, r, api, r.flips === 3 ? ['f14_reaper', 'f14_sand'] : ['f14_rewinder', 'f14_sand']);
     }
   }
-  // Павшие в зале.
   for (const m of sim.mobs)
     if (m.mode === 'dying' && r.mobs.has(m.id) && !m.data.rwCounted) {
       m.data.rwCounted = 1;
@@ -2484,19 +2421,13 @@ function stepRewindHall(sim: Sim, st: F14State, api: SimApi, dt: number): void {
     r.state = 'done';
     for (const i of r.bars) restoreTile(sim, st, api, i);
     const gx = r.glass ? r.glass.x : h.x;
-    const gy = r.glass ? r.glass.y + 1.2 : h.y;
+    const gy = r.glass ? r.glass.y + 1.4 : h.y;
     for (let i = 0; i < 4; i++) api.dropAt(sim, 'token', 3 + Math.floor(sim.rng() * 3), gx, gy);
     for (let i = 0; i < 3; i++) api.dropAt(sim, 'f14_sand', 1, gx, gy);
     api.dropAt(sim, 'coin', 1200, gx, gy);
     if (sim.rng() < 0.35) api.dropAt(sim, 'key', 1, gx, gy);
     sim.events.push({ t: 'boss', what: 'f14_rewind_done', text: 'ЧАСЫ РАЗБИТЫ', sub: 'время в зале пошло вперёд' });
   }
-  // Герой погиб — решётка поднимается, зал ждёт.
-  if (heroDown(sim)) {
-    for (const i of r.bars) restoreTile(sim, st, api, i);
-    r.state = 'idle';
-  }
-  void W;
 }
 
 function spawnRewindWave(sim: Sim, r: RewindHall, api: SimApi, kinds: string[]): void {
@@ -2512,9 +2443,16 @@ function spawnRewindWave(sim: Sim, r: RewindHall, api: SimApi, kinds: string[]):
 
 // ---- Стоп-кадр ------------------------------------------------------------
 
-const FRAME = { count: 3, speed: 10.5, kinds: ['f14_reaper', 'f14_soldier', 'f14_keeper', 'f14_sand', 'f14_rewinder', 'f14_soldier'] };
+const FRAME = {
+  count: 3,
+  speed: 10.5,
+  kinds: ['f14_reaper', 'f14_soldier', 'f14_keeper', 'f14_sand', 'f14_rewinder', 'f14_soldier'],
+};
 
-/** Нож: снаряд, который висит, пока время стоит. */
+/** Куда смотрит нож (для рисовальщика): id снаряда → угол. */
+export const KNIFE_ANG = new Map<number, number>();
+
+/** Нож: снаряд, который висит, пока его не пустят. */
 function knife(sim: Sim, x: number, y: number, ang: number, dmg: number, kind: string): Shot {
   const s: Shot = {
     id: sim.nextId++,
@@ -2532,10 +2470,34 @@ function knife(sim: Sim, x: number, y: number, ang: number, dmg: number, kind: s
   };
   sim.shots.push(s);
   KNIFE_ANG.set(s.id, ang);
+  if (KNIFE_ANG.size > 400) {
+    const live = new Set(sim.shots.map((q) => q.id));
+    for (const id of KNIFE_ANG.keys()) if (!live.has(id)) KNIFE_ANG.delete(id);
+  }
   return s;
 }
-/** Куда смотрит нож (для рисовальщика): id снаряда → угол. */
-export const KNIFE_ANG = new Map<number, number>();
+
+/** Время в Стоп-кадре пошло: ножи летят, враги доделывают замах. */
+function frameGo(sim: Sim, fr: FrameHall, api: SimApi): void {
+  fr.state = 'fight';
+  for (const k of fr.knives) {
+    const s = sim.shots.find((x) => x.id === k.id);
+    if (!s) continue;
+    s.age = 0;
+    s.life = 2.6;
+    s.vx = Math.cos(k.ang) * FRAME.speed;
+    s.vy = Math.sin(k.ang) * FRAME.speed;
+  }
+  for (const m of sim.mobs)
+    if (fr.mobs.has(m.id) && m.mode === 'f14_frozen') {
+      m.data.ghost = 0;
+      api.setMode(m, 'chase');
+      m.cd = 0.4;
+    }
+  F14_FX.frame = 1;
+  sim.events.push({ t: 'flash', color: '#fff4d8', k: 0.7 });
+  sim.events.push({ t: 'boss', what: 'f14_resume', text: 'ВРЕМЯ ПОШЛО' });
+}
 
 function stepFrame(sim: Sim, st: F14State, api: SimApi, dt: number): void {
   const fr = st.frame;
@@ -2544,12 +2506,18 @@ function stepFrame(sim: Sim, st: F14State, api: SimApi, dt: number): void {
   const cx = (fr.box[0] + fr.box[2] + 1) / 2;
   const cy = (fr.box[1] + fr.box[3] + 1) / 2;
   const d = hypot(h.x - cx, h.y - cy);
-  F14_FX.frame = fr.state === 'fight' || fr.state === 'done' ? 1 : 0;
+  // Ножи висят, пока время в зале стоит.
+  const hold = () => {
+    for (const k of fr.knives) {
+      const s = sim.shots.find((x) => x.id === k.id);
+      if (s) s.age = -1e6;
+    }
+  };
   switch (fr.state) {
     case 'idle': {
       if (d > 18) return;
       fr.state = 'still';
-      // Ножи висят: каждый смотрит через зал — к середине и мимо.
+      F14_FX.frame = 0;
       fr.knives = [];
       fr.kspots.forEach(([x, y], i) => {
         const a = Math.atan2(cy - y, cx - x) + (i % 2 ? 0.35 : -0.35);
@@ -2566,13 +2534,10 @@ function stepFrame(sim: Sim, st: F14State, api: SimApi, dt: number): void {
       return;
     }
     case 'still': {
-      // Ножи висят, враги стоят. Дошёл до середины или ударил — отсчёт.
-      for (const k of fr.knives) {
-        const s = sim.shots.find((x) => x.id === k.id);
-        if (s) s.age = -1e6;
-      }
+      hold();
       const hitOne = sim.mobs.some((m) => fr.mobs.has(m.id) && m.hp < m.maxHp);
-      if ((h.y < fr.mid + 3 && h.x > fr.box[0] && h.x < fr.box[2] + 1 && h.y > fr.box[1]) || hitOne) {
+      const inMid = h.y < fr.mid + 3 && h.x > fr.box[0] && h.x < fr.box[2] + 1 && h.y > fr.box[1];
+      if (inMid || hitOne) {
         fr.state = 'count';
         fr.t = FRAME.count;
         sim.events.push({
@@ -2584,33 +2549,11 @@ function stepFrame(sim: Sim, st: F14State, api: SimApi, dt: number): void {
       }
       return;
     }
-    case 'count': {
-      for (const k of fr.knives) {
-        const s = sim.shots.find((x) => x.id === k.id);
-        if (s) s.age = -1e6;
-      }
-      if (!worldStopped(sim)) fr.t -= dt;
-      if (fr.t <= 0) {
-        fr.state = 'fight';
-        // Время пошло: ножи летят, враги доделывают замах.
-        for (const k of fr.knives) {
-          const s = sim.shots.find((x) => x.id === k.id);
-          if (!s) continue;
-          s.age = 0;
-          s.life = 2.6;
-          s.vx = Math.cos(k.ang) * FRAME.speed;
-          s.vy = Math.sin(k.ang) * FRAME.speed;
-        }
-        for (const m of sim.mobs)
-          if (fr.mobs.has(m.id) && m.mode === 'f14_frozen') {
-            m.data.ghost = 0;
-            api.setMode(m, 'chase');
-            m.cd = 0.4;
-          }
-        sim.events.push({ t: 'boss', what: 'f14_resume', text: 'ВРЕМЯ ПОШЛО' });
-      }
+    case 'count':
+      hold();
+      fr.t -= dt;
+      if (fr.t <= 0) frameGo(sim, fr, api);
       return;
-    }
     case 'fight': {
       const live = sim.mobs.filter((m) => fr.mobs.has(m.id) && m.mode !== 'dying').length;
       if (live === 0) {
@@ -2623,7 +2566,6 @@ function stepFrame(sim: Sim, st: F14State, api: SimApi, dt: number): void {
       return;
     }
   }
-  void dt;
 }
 
 // ---- Полдень ---------------------------------------------------------------
@@ -2631,9 +2573,18 @@ function stepFrame(sim: Sim, st: F14State, api: SimApi, dt: number): void {
 /** Стрелки площади: минутная — круг за 7,2 с, часовая — в 12 раз медленнее. */
 export const NOON = { minPeriod: 7.2, minLen: 11.3, hourLen: 7.2, hub: 2.1, w: 0.42 };
 
-/** Задевает ли стрелка (отрезок от ступицы) круг героя. */
-function handHits(cx: number, cy: number, ang: number, r0: number, r1: number, w: number, x: number, y: number, hr: number): boolean {
-  // Угол 0 — на XII (вверх), по часовой.
+/** Задевает ли стрелка (отрезок от ступицы) круг. Угол 0 — XII, по часовой. */
+export function handHits(
+  cx: number,
+  cy: number,
+  ang: number,
+  r0: number,
+  r1: number,
+  w: number,
+  x: number,
+  y: number,
+  hr: number,
+): boolean {
   const ux = Math.sin(ang);
   const uy = -Math.cos(ang);
   const dx = x - cx;
@@ -2648,38 +2599,43 @@ function stepPlaza(sim: Sim, st: F14State, api: SimApi, dt: number): void {
   if (!pz) return;
   const h = sim.hero;
   const d = hypot(h.x - pz.cx, h.y - pz.cy);
-  const stopped = worldStopped(sim);
-  const near = d < pz.r + 6;
-  if (!near) {
-    // Вдали стрелки стоят на без пяти двенадцать — полдень придёт при герое.
-    pz.on = false;
+  if (d > pz.r + 6) {
+    if (pz.on) {
+      pz.on = false;
+      api.light(sim, 'f14_noon', null);
+    }
     F14_FX.hands.plaza.on = 0;
     return;
   }
   if (!pz.on) {
+    // Пришёл на площадь — без пяти полдень: удар колокола случится при нём.
     pz.on = true;
     pz.min = 0;
-    pz.hour = -TAU / 12 * 0.35;
+    pz.hour = -(TAU / 12) * 0.32;
     pz.noon = false;
     sim.events.push({ t: 'boss', what: 'f14_noon_call', text: 'ПОЛДЕНЬ', sub: 'стрелки метут площадь — ступица безопасна' });
   }
-  if (!stopped) {
-    const wm = TAU / NOON.minPeriod;
-    pz.min += wm * dt;
-    pz.hour += (wm / 12) * dt;
-  }
+  const wm = TAU / NOON.minPeriod;
+  pz.min += wm * dt;
+  pz.hour += (wm / 12) * dt;
   pz.hitM = Math.max(0, pz.hitM - dt);
   pz.hitH = Math.max(0, pz.hitH - dt);
-  // Полдень: обе стрелки на XII — бьёт колокол.
   const hourAt = ((pz.hour % TAU) + TAU) % TAU;
-  if (!pz.noon && hourAt < 0.08 && hourAt >= 0) {
+  if (!pz.noon && hourAt < 0.1 && pz.hour >= 0) {
     pz.noon = true;
     ringBell(sim, api, 2.4);
   }
   F14_FX.hands.plaza = { m: pz.min, h: pz.hour, on: 1 };
+  // Кончик минутной стрелки светит — видно, откуда она идёт.
+  api.light(sim, 'f14_noon', {
+    x: pz.cx + Math.sin(pz.min) * (NOON.minLen - 1.2),
+    y: pz.cy - Math.cos(pz.min) * (NOON.minLen - 1.2),
+    r: 3.2,
+    tint: 'warm',
+  });
   if (!sim.zones.some((z) => z.art === 'f14_hands' && (z as { which?: string }).which === 'plaza'))
     api.zone(sim, { x: pz.cx, y: pz.cy, r: pz.r, life: 1e9, art: 'f14_hands', which: 'plaza' } as ZoneIn);
-  if (stopped || heroDown(sim)) return;
+  if (dt <= 0 || heroDown(sim)) return;
   sweepHands(sim, api, pz.cx, pz.cy, pz.min, pz.hour, NOON.minLen, NOON.hourLen, pz);
 }
 
@@ -2714,15 +2670,14 @@ function sweepHands(
       m.data.handT = sim.time + 0.8;
       m.kx += Math.cos(ang) * 7;
       m.ky += Math.sin(ang) * 7;
-      m.hp = Math.max(1, m.hp - m.maxHp * 0.15);
-      m.flash = 0.12;
+      envHurt(sim, api, m, 0.2);
     }
   };
   hit(min, minLen, 'm');
   hit(hour, hourLen, 'h');
 }
 
-// ---- Сферы с карты --------------------------------------------------------
+// ---- Сферы с карты, лампы арены -------------------------------------------
 
 function makeMapSpheres(sim: Sim, st: F14State, api: SimApi): void {
   if (st.spheresMade) return;
@@ -2736,69 +2691,129 @@ function makeMapSpheres(sim: Sim, st: F14State, api: SimApi): void {
     }
 }
 
-/** Вернуть сферы с карты, если бой их смыл (сброс боя чистит зоны). */
+/** Вернуть сферы с карты, если сброс боя смыл зоны. */
 function keepSpheres(sim: Sim, st: F14State, api: SimApi): void {
   const T = timeOf(sim);
-  if (!st.spheresMade) return;
-  if (T.spheres.some((s) => s.until === Infinity)) return;
+  if (!st.spheresMade || T.spheres.some((s) => s.until === Infinity)) return;
   st.spheresMade = false;
   makeMapSpheres(sim, st, api);
+}
+
+/** Часовые лампы арены: горят все, кроме погасших в полночь. */
+function lightLamps(sim: Sim, st: F14State, api: SimApi, out: number): void {
+  for (const l of st.lamps) {
+    if (l.hour < out) api.light(sim, l.key, null);
+    else api.light(sim, l.key, { x: l.x, y: l.y - 0.2, r: 2.6, tint: 'warm' });
+  }
+}
+
+// ---- Действия этажа ----------------------------------------------------------
+
+function useLabel(sim: Sim, obj: WorldObj): string | null {
+  const st = STATE.get(sim);
+  if (!st) return null;
+  switch (obj.ref) {
+    case 'f14_lever': {
+      if (st.gear?.lever?.obj === obj) {
+        if (sim.time < st.gear.stopUntil) return null;
+        return st.gear.leverCd > 0 ? null : 'Стопор';
+      }
+      const f = st.factory;
+      if (f?.lever?.obj === obj) return f.state === 'wind' || f.state === 'idle' ? 'Стопор' : null;
+      return null;
+    }
+    case 'f14_glass': {
+      const fl = FLOOD.get(sim);
+      return fl && fl.state === 'rise' && !fl.used.has(obj.id) ? 'Перевернуть' : null;
+    }
+    case 'f14_bell':
+      if (sim.boss?.state === 'fight' || worldStopped(sim)) return null;
+      return st.bellCd > sim.time ? null : 'Ударить в колокол';
+    case 'f14_bigpendulum':
+      return st.frame && (st.frame.state === 'still' || st.frame.state === 'count') ? 'Толкнуть маятник' : null;
+  }
+  return obj.use?.label ?? null;
+}
+
+function onUse(sim: Sim, obj: WorldObj, api: SimApi): boolean {
+  const st = stateOf(sim);
+  if (!useLabel(sim, obj)) return false;
+  switch (obj.ref) {
+    case 'f14_lever':
+      if (st.gear?.lever?.obj === obj) {
+        st.gear.stopUntil = sim.time + GEAR.stop;
+        st.gear.leverCd = GEAR.leverCd;
+        sim.events.push({ t: 'boss', what: 'f14_lever', text: 'СТОПОР', sub: 'кольца стоят восемь секунд' });
+        return true;
+      }
+      return factoryStop(sim, st, api);
+    case 'f14_glass':
+      return floodHold(sim, obj, api);
+    case 'f14_bell':
+      st.bellCd = sim.time + 40;
+      ringBell(sim, api, 2.6);
+      return true;
+    case 'f14_bigpendulum':
+      if (st.frame) frameGo(sim, st.frame, api);
+      return true;
+  }
+  return false;
 }
 
 registerFloor(14, {
   start(sim, api) {
     STATE.set(sim, scan(sim));
-    TIME.set(sim, undefined as unknown as TimeState);
     TIME.delete(sim);
     timeOf(sim);
-    makeMapSpheres(sim, stateOf(sim), api);
+    const st = stateOf(sim);
+    makeMapSpheres(sim, st, api);
+    lightLamps(sim, st, api, 0);
     API_REF.api = api;
   },
   step(sim, dt, api) {
     API_REF.api = api;
     const st = stateOf(sim);
-    F14_FX.clock += worldStopped(sim) ? 0 : dt;
+    F14_FX.clock += dt;
     stepTime(sim, api, dt);
-    sandAfterHits(sim, api);
     keepSpheres(sim, st, api);
     // Удары героя — в историю (двойник их повторит).
     const T = timeOf(sim);
-    const h = sim.hero;
     for (const e of sim.events)
       if (e.t === 'swing' && !heroDown(sim)) T.swings.push({ t: sim.time, x: e.x, y: e.y, ang: e.ang, heavy: e.heavy });
     stepPends(sim, st, api, dt);
     stepGear(sim, st, api, dt);
-    stepFlood(sim, st, api, dt);
+    stepFlood(sim, api, dt);
     if (heroDown(sim)) return;
-    stepBell(sim, st, api, dt);
+    stepBell(sim, dt, api);
     stepPosts(sim, st, api);
     stepFactory(sim, st, api, dt);
     stepRewindHall(sim, st, api, dt);
     stepFrame(sim, st, api, dt);
     stepPlaza(sim, st, api, dt);
-    void h;
   },
+  onUse,
+  useLabel,
 });
 
-/** Сценарий босса получает `api` только в `step`; для `start`/`reset` — последний. */
+/** Сценарий босса получает `api` в `step`; для прочего — последний. */
 const API_REF: { api: SimApi | null } = { api: null };
 
 // ---------------------------------------------------------------------------
 // Повелитель часа. Ведёт все режимы сам (босс).
 //   chase        — идёт к герою, выбирает приём;
 //   f14_hour     — часовая стрелка рубит конусом;
-//   f14_minute   — минутная: прицел линией, выпад — и стрелка застревает
+//   f14_minute   — минутная: прицел линией, выпад — стрелка застревает
 //                  (f14_stuck — окно);
 //   f14_spin     — обе стрелки кругом: кольцо (вплотную или далеко — мимо);
-//   f14_clap     — хлопок: ОСТАНОВКА. Мир стоит, стоит и герой; Повелитель
-//                  ходит, ставит ножи кольцом (один проём), уходит;
-//                  время пошло — ножи летят;
-//   f14_ritual   — ОТМОТКА: в ступице переворачивает часы — если за окно
-//                  не снять порог (засечка на полосе), здоровье вернётся;
-//                  сорвал — f14_broken (оглушён, открыт);
-//   f14_toll     — ПОЛНОЧЬ: бьёт час, гаснет лампа; двенадцатый удар —
-//                  f14_midnight: вся арена, кроме ступицы;
-//   f14_tired    — выдохся после полуночи — окно.
+//   f14_clap     — хлопок: ОСТАНОВКА. Стоит мир и герой; Повелитель встаёт
+//                  рядом, ставит ножи кольцом (проём — один), отходит;
+//                  время пошло — ножи летят (f14_place);
+//   f14_toHub, f14_ritual — ОТМОТКА: в ступице переворачивает часы; не
+//                  снял порог (засечка на полосе) — здоровье вернётся;
+//                  снял — f14_broken (оглушён, открыт);
+//   ПОЛНОЧЬ      — бьёт час, гаснет лампа, стрелки арены метут пол;
+//                  двенадцатый удар — вся арена, кроме ступицы;
+//                  f14_tired — выдохся после полуночи (окно).
 // ---------------------------------------------------------------------------
 
 export const LORD = {
@@ -2832,7 +2847,7 @@ export const LORD = {
 };
 
 interface LordState {
-  /** История здоровья (для отмотки): время → здоровье. */
+  /** История здоровья (для отмотки). */
   hp: { t: number; hp: number }[];
   hpT: number;
   /** Клетки, сменённые боем. */
@@ -2840,20 +2855,21 @@ interface LordState {
   /** Ножи последней остановки: id → угол; когда полетят. */
   knives: { id: number; ang: number }[];
   launchAt: number;
+  /** Остановка — его: настоящие секунды считает сам. */
+  own: boolean;
+  placed: number;
   /** Отмотка: здоровье в начале ритуала, порог. */
   ritualHp: number;
   need: number;
-  /** Полночь: сколько ударов пробило. */
+  /** Полночь. */
   tolls: number;
   nextToll: number;
-  /** Стрелки арены. */
   min: number;
   hour: number;
   hitM: number;
   hitH: number;
   stopCd: number;
   ritualCd: number;
-  /** Сколько раз останавливал время (для текста). */
   stops: number;
 }
 
@@ -2868,6 +2884,8 @@ function lordState(sim: Sim): LordState {
       changed: new Map(),
       knives: [],
       launchAt: 0,
+      own: false,
+      placed: 0,
       ritualHp: 0,
       need: 0,
       tolls: 0,
@@ -2885,35 +2903,26 @@ function lordState(sim: Sim): LordState {
   return s;
 }
 
-/** Сменить клетку арены, запомнив прежнюю (для сброса боя). */
-function retile(sim: Sim, api: SimApi, i: number, tile: number, mark: number): void {
-  const s = lordState(sim);
-  const w = sim.world;
-  if (!s.changed.has(i)) s.changed.set(i, { tile: sim.tiles[i], mark: w.mark[i] });
-  api.setTile(sim, i % w.w, Math.floor(i / w.w), tile, mark);
-}
-
 const lordOf = (sim: Sim) => sim.mobs.find((x) => x.kind === 'f14boss' && x.mode !== 'dying');
 
-/** Сменить вид циферблата арены: эмаль по фазе. */
+/** Вид циферблата арены по фазе: эмаль, цифры, песок по краю. */
 function arenaLook(sim: Sim, api: SimApi, b: BossFight, phase: number): void {
+  const s = lordState(sim);
   const w = sim.world;
-  const dialMark = phase === 1 ? 60 : phase === 2 ? 61 : phase === 3 ? 62 : MK.dial;
-  const numMark = phase === 1 ? 63 : phase === 2 ? 64 : phase === 3 ? 65 : MK.numeral;
-  const a = F14_GEO.arena;
-  const [ax, ay] = geoWorld(sim, a);
+  const dialMark = phase === 1 ? MK.dialStop : phase === 2 ? MK.dialRewind : phase === 3 ? MK.dialNight : MK.dial;
+  const numMark = phase === 1 ? MK.numStop : phase === 2 ? MK.numRewind : phase === 3 ? MK.numNight : MK.numeral;
+  const [ax, ay] = geoWorld(sim, F14_GEO.arena);
   for (const i of b.cells) {
-    const k = w.mark[i];
+    const k = s.changed.get(i)?.mark ?? w.mark[i];
     const x = (i % w.w) + 0.5;
     const y = Math.floor(i / w.w) + 0.5;
     const r = hypot(x - ax, y - ay);
-    const isDial = k === MK.dial || (k >= 60 && k <= 62) || k === 66;
-    const isNum = k === MK.numeral || (k >= 63 && k <= 65);
-    if (isDial) {
-      // Отмотка: по краю — песок (вязнет).
-      const m = phase === 2 && r > 8.4 ? 66 : dialMark;
-      retile(sim, api, i, T_FLOOR, m);
-    } else if (isNum) retile(sim, api, i, T_FLOOR, numMark);
+    if (!s.changed.has(i)) s.changed.set(i, { tile: sim.tiles[i], mark: w.mark[i] });
+    if (k === MK.dial) {
+      // Отмотка: по краю — песок, вязнет.
+      if (phase === 2 && r > 8.4) api.setTile(sim, i % w.w, Math.floor(i / w.w), T_HAZARD, MK.rimSand, { slow: 0.55 });
+      else api.setTile(sim, i % w.w, Math.floor(i / w.w), T_FLOOR, dialMark, null);
+    } else if (k === MK.numeral) api.setTile(sim, i % w.w, Math.floor(i / w.w), T_FLOOR, numMark, null);
   }
 }
 
@@ -2921,12 +2930,14 @@ function restoreArena(sim: Sim, api: SimApi): void {
   const s = LSTATE.get(sim);
   if (s) {
     const W = sim.world.w;
-    for (const [i, v] of s.changed) api.setTile(sim, i % W, Math.floor(i / W), v.tile, v.mark);
+    for (const [i, v] of s.changed) api.setTile(sim, i % W, Math.floor(i / W), v.tile, v.mark, null);
   }
   LSTATE.delete(sim);
   F14_FX.midnight = 0;
   F14_FX.bossPhase = 0;
   F14_FX.hands.arena.on = 0;
+  const st = STATE.get(sim);
+  if (st) lightLamps(sim, st, api, 0);
 }
 
 /** Здоровье Повелителя `ago` секунд назад. */
@@ -2937,22 +2948,23 @@ function lordHpAgo(s: LordState, now: number, ago: number, cur: number): number 
   return v;
 }
 
-/** Ножи кольцом вокруг героя: один проём — туда уходить. */
+/** Ножи кольцом вокруг героя: проём — туда уходить. */
 function knifeRing(sim: Sim, lead: Mob, n: number, gaps: number): void {
   const s = lordState(sim);
   const h = sim.hero;
-  const gap0 = sim.rng() * n;
+  const total = n + gaps;
+  const gap0 = Math.floor(sim.rng() * total);
+  const skip = new Set<number>();
+  for (let g = 0; g < gaps; g++) skip.add((gap0 + Math.round((g * total) / gaps)) % total);
   s.knives = [];
-  for (let i = 0; i < n + gaps; i++) {
-    let skip = false;
-    for (let g = 0; g < gaps; g++) if (Math.round(gap0 + (g * (n + gaps)) / gaps) % (n + gaps) === i) skip = true;
-    if (skip) continue;
-    const a = (i / (n + gaps)) * TAU + 0.2;
+  const W = sim.world.w;
+  for (let i = 0; i < total; i++) {
+    if (skip.has(i)) continue;
+    const a = (i / total) * TAU + 0.2;
     const x = h.x + Math.cos(a) * LORD.knifeR;
     const y = h.y + Math.sin(a) * LORD.knifeR;
-    // В стене нож не висит.
-    if (sim.tiles[Math.floor(y) * sim.world.w + Math.floor(x)] !== T_FLOOR && sim.tiles[Math.floor(y) * sim.world.w + Math.floor(x)] !== 12)
-      continue;
+    const t = sim.tiles[Math.floor(y) * W + Math.floor(x)];
+    if (t !== T_FLOOR && t !== T_HAZARD) continue;
     const k = knife(sim, x, y, a + Math.PI, lead.dmg * 1.05, 'f14boss');
     k.life = 1.2;
     s.knives.push({ id: k.id, ang: a + Math.PI });
@@ -2972,6 +2984,34 @@ function launchKnives(sim: Sim): void {
   s.launchAt = 0;
 }
 
+/** Пока мир стоит по его воле: подходит, ставит ножи, отходит. */
+function lordPlace(sim: Sim, m: Mob, api: SimApi): void {
+  const s = lordState(sim);
+  const h = sim.hero;
+  const ph = sim.boss?.phase ?? 0;
+  const [ax, ay] = geoWorld(sim, F14_GEO.arena);
+  const t = stopElapsed(sim);
+  if (s.placed === 0 && t > 0.3) {
+    s.placed = 1;
+    const to = spotNear(sim, api, h.x, h.y, 1.6, 2.3, (px, py) => -hypot(px - m.x, py - m.y));
+    if (to) {
+      m.x = to[0];
+      m.y = to[1];
+      m.face = Math.atan2(h.y - m.y, h.x - m.x);
+    }
+    knifeRing(sim, m, ph >= 3 ? 10 : LORD.knives, ph >= 3 ? 2 : 1);
+    sim.events.push({ t: 'boss', what: 'f14_knives' });
+  }
+  if (s.placed === 1 && t > 1.1) {
+    s.placed = 2;
+    const to = spotNear(sim, api, ax, ay, 4, 7, (px, py) => -Math.abs(hypot(px - h.x, py - h.y) - 5));
+    if (to) {
+      m.x = to[0];
+      m.y = to[1];
+    }
+  }
+}
+
 function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
   const b = sim.boss;
   if (!b || b.state !== 'fight') {
@@ -2980,34 +3020,37 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
     return;
   }
   const s = lordState(sim);
-  const T = timeOf(sim);
   const h = sim.hero;
   const { dx, dy, dist } = c;
   const [ax, ay] = geoWorld(sim, F14_GEO.arena);
   const ph = b.phase;
   const haste = ph >= 3 ? 1.25 : ph >= 2 ? 1.12 : 1;
+  // Его остановка: мир стоит, он ставит ножи (настоящие секунды).
+  if (worldStopped(sim)) {
+    m.vx = 0;
+    m.vy = 0;
+    if (s.own) lordPlace(sim, m, api);
+    return;
+  }
+  if (s.own) {
+    s.own = false;
+    s.launchAt = sim.time + LORD.knifeDelay;
+    if (m.mode === 'f14_place') {
+      api.setMode(m, 'recover');
+      m.cd = 0.8;
+    }
+  }
+  if (s.launchAt && sim.time >= s.launchAt) launchKnives(sim);
   m.tele = null;
   m.danger = 0;
-  // История здоровья — для отмотки.
   s.hpT -= dt;
   if (s.hpT <= 0) {
     s.hpT = 0.25;
     s.hp.push({ t: sim.time, hp: m.hp });
     while (s.hp.length && s.hp[0].t < sim.time - 16) s.hp.shift();
   }
-  // Его остановка: пока мир стоит, он ходит.
-  const own = T.stop > 0 && T.by === 'boss';
-  if (T.stop > 0 && !own) {
-    m.vx = 0;
-    m.vy = 0;
-    return;
-  }
-  s.stopCd -= own ? 0 : dt;
-  s.ritualCd -= own ? 0 : dt;
-  // Ножи полетят, когда время пошло.
-  if (s.launchAt && !own && sim.time >= s.launchAt) launchKnives(sim);
-  if (!own && s.knives.length && !s.launchAt) s.launchAt = sim.time + LORD.knifeDelay;
-
+  s.stopCd -= dt;
+  s.ritualCd -= dt;
   const go = (x: number, y: number, sp: number) => {
     const ex = x - m.x;
     const ey = y - m.y;
@@ -3018,11 +3061,10 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
     case 'roar':
       m.vx *= 0.8;
       m.vy *= 0.8;
-      if (m.t > 1.4) api.setMode(m, 'chase');
+      if (m.t > 1.6) api.setMode(m, 'chase');
       return;
     case 'chase': {
-      // Выбор приёма.
-      if (ph >= 1 && s.stopCd <= 0 && dist < 9) {
+      if (ph >= 1 && s.stopCd <= 0 && dist < 9 && !s.knives.length) {
         api.setMode(m, 'f14_clap');
         return;
       }
@@ -3055,6 +3097,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.vy *= 0.7;
       if (m.t < 0.22) m.dir = Math.atan2(dy, dx);
       m.face = m.dir;
+      const warn = LORD.hourWarn / haste;
       if (!m.data.lit && m.t >= 0.22) {
         m.data.lit = 1;
         api.strike(sim, {
@@ -3064,15 +3107,15 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           r: LORD.hourR,
           ang: m.dir,
           arc: LORD.hourArc,
-          warn: LORD.hourWarn / haste - 0.22,
+          warn: warn - 0.22,
           dmg: m.dmg * 1.2,
           knock: 6,
           art: 'f14_lordhour',
           from: m.id,
         });
       }
-      if (m.t > LORD.hourWarn / haste - 0.26) m.danger = LORD.hourR + 0.4;
-      if (m.t >= LORD.hourWarn / haste) {
+      if (m.t > warn - 0.26) m.danger = LORD.hourR + 0.4;
+      if (m.t >= warn) {
         m.data.lit = 0;
         api.setMode(m, 'recover');
         m.cd = 0.8 / haste + sim.rng() * 0.4;
@@ -3084,11 +3127,12 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.vy *= 0.6;
       if (m.t < 0.25) m.dir = Math.atan2(dy, dx);
       m.face = m.dir;
-      const len = Math.min(LORD.minLen, clearDist(sim, api, m.x, m.y, m.dir, LORD.minLen) - 0.4);
+      const warn = LORD.minWarn / haste;
+      const len = Math.max(1.5, Math.min(LORD.minLen, clearDist(sim, api, m.x, m.y, m.dir, LORD.minLen) - 0.4));
       m.data.len = len;
-      m.tele = { shape: 'line', r: len, w: LORD.minW, ang: m.dir, k: clamp(m.t / LORD.minWarn, 0, 1) };
-      if (m.t > LORD.minWarn / haste - 0.26) m.danger = len + 0.6;
-      if (m.t >= LORD.minWarn / haste) {
+      m.tele = { shape: 'line', r: len, w: LORD.minW, ang: m.dir, k: clamp(m.t / warn, 0, 1) };
+      if (m.t > warn - 0.26) m.danger = len + 0.6;
+      if (m.t >= warn) {
         const ux = Math.cos(m.dir);
         const uy = Math.sin(m.dir);
         const hx = h.x - m.x;
@@ -3113,6 +3157,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.vy = 0;
       if (k >= 1) {
         sim.events.push({ t: 'boss', what: 'f14_stuck_wall' });
+        sim.events.push({ t: 'shake', k: 0.3 });
         api.setMode(m, 'f14_stuck');
       }
       return;
@@ -3129,6 +3174,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
     case 'f14_spin': {
       m.vx *= 0.7;
       m.vy *= 0.7;
+      const warn = LORD.spinWarn / haste;
       if (!m.data.lit) {
         m.data.lit = 1;
         api.strike(sim, {
@@ -3137,15 +3183,15 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           y: m.y,
           r: LORD.spinR,
           w: LORD.spinW,
-          warn: LORD.spinWarn / haste,
+          warn,
           dmg: m.dmg,
           knock: 7,
           art: 'f14_lordspin',
           from: m.id,
         });
       }
-      if (m.t > LORD.spinWarn / haste - 0.25) m.danger = LORD.spinR + LORD.spinW + 0.3;
-      if (m.t >= LORD.spinWarn / haste) {
+      if (m.t > warn - 0.25) m.danger = LORD.spinR + LORD.spinW + 0.3;
+      if (m.t >= warn) {
         m.data.lit = 0;
         api.setMode(m, 'recover');
         m.cd = 0.9 / haste + sim.rng() * 0.4;
@@ -3153,58 +3199,31 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       return;
     }
     case 'f14_clap':
-      // Хлопок: стрелки вверх, лицо-циферблат вспыхивает.
+      // Хлопок: стрелки вверх, лицо-циферблат разгорается.
       m.vx *= 0.6;
       m.vy *= 0.6;
       m.face = Math.atan2(dy, dx);
       if (m.t >= LORD.clap) {
         const dur = ph >= 3 ? 1.6 : LORD.stopDur;
-        stopWorld(sim, api, dur, 'boss');
-        // Герой стоит вместе с миром (до «Движка 3» — оглушением).
-        api.heroStatus(sim, 'stun', dur);
+        s.own = true;
+        s.placed = 0;
         s.stops += 1;
         s.stopCd = LORD.stopEvery - (ph >= 3 ? 3 : 0);
+        api.setMode(m, 'f14_place');
+        stopWorld(sim, api, dur, 'boss');
         sim.events.push({
           t: 'boss',
           what: 'f14_stop',
           text: 'ОСТАНОВКА',
-          sub: s.stops === 1 ? 'время пошло — уходи в проём или рывком сквозь ножи' : undefined,
+          sub: s.stops === 1 ? 'время пойдёт — уходи в проём или рывком сквозь ножи' : undefined,
         });
-        api.setMode(m, 'f14_place');
-        m.data.placed = 0;
       }
       return;
-    case 'f14_place': {
-      // Мир стоит: подходит, ставит ножи кольцом, отходит.
-      m.vx = 0;
-      m.vy = 0;
-      if (!m.data.placed && m.t > 0.25) {
-        m.data.placed = 1;
-        // Встал рядом с героем — вспышкой.
-        const to = spotNear(sim, api, h.x, h.y, 1.5, 2.2, (px, py) => -hypot(px - m.x, py - m.y));
-        if (to) {
-          m.x = to[0];
-          m.y = to[1];
-        }
-        knifeRing(sim, m, ph >= 3 ? 10 : LORD.knives, ph >= 3 ? 2 : 1);
-        sim.events.push({ t: 'boss', what: 'f14_knives' });
-      }
-      if (m.data.placed === 1 && m.t > 0.9) {
-        m.data.placed = 2;
-        const to = spotNear(sim, api, ax, ay, 4, 7, (px, py) => hypot(px - h.x, py - h.y) * 0.6 - Math.abs(hypot(px - h.x, py - h.y) - 5));
-        if (to) {
-          m.x = to[0];
-          m.y = to[1];
-        }
-      }
-      if (!T.stop) {
-        api.setMode(m, 'recover');
-        m.cd = 0.8;
-      }
+    case 'f14_place':
+      // Мир снова идёт — сюда попадаем, только если остановку сорвали.
+      api.setMode(m, 'recover');
       return;
-    }
     case 'f14_toHub': {
-      // К ступице — там его часы.
       go(ax, ay, m.speed * 1.6);
       if (hypot(m.x - ax, m.y - ay) < 0.8 || m.t > 3.5) {
         m.x = ax;
@@ -3234,11 +3253,11 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.vy = 0;
       m.x = ax;
       m.y = ay;
-      const lost = s.ritualHp - m.hp;
-      if (lost >= s.need) {
+      if (s.ritualHp - m.hp >= s.need) {
         api.setMode(m, 'f14_broken');
         s.ritualCd = LORD.ritualEvery;
         sim.zones = sim.zones.filter((z) => z.art !== 'f14_glassring');
+        sim.events.push({ t: 'shake', k: 0.4 });
         sim.events.push({ t: 'boss', what: 'f14_ritual_stone', text: 'ОТМОТКА СОРВАНА', sub: 'часы разбиты — бей' });
         return;
       }
@@ -3247,6 +3266,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         const gain = clamp(back - m.hp, 0, m.maxHp * LORD.regain);
         m.hp += gain;
         s.ritualCd = LORD.ritualEvery;
+        sim.events.push({ t: 'flash', color: '#8fe8ff', k: 0.6 });
         sim.events.push({
           t: 'boss',
           what: 'f14_ritual',
@@ -3280,11 +3300,10 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
 registerBrain('f14boss', {
   raw: true,
   step: lordStep,
-  onHit(sim, m) {
+  onHit(_sim, m) {
     if (m.mode === 'f14_stuck') return 1.5;
     if (m.mode === 'f14_broken' || m.mode === 'f14_tired') return 1.6;
     if (m.mode === 'f14_ritual') return 1.2;
-    void sim;
     return 1;
   },
 });
@@ -3301,12 +3320,13 @@ registerBoss('f14boss', {
     F14_FX.bossPhase = 0;
     F14_FX.midnight = 0;
     api.setMode(lead, 'roar');
-    api.zone(sim, { x: b.obj.x + 0.5, y: b.obj.y + 0.5, r: 10.6, life: 1e9, art: 'f14_arena' });
+    api.camera(sim, lead.x, lead.y, 2.2);
+    sim.events.push({ t: 'shake', k: 0.3 });
     sim.events.push({
       t: 'boss',
       what: 'f14_wake_call',
       text: 'ПОВЕЛИТЕЛЬ ЧАСА',
-      sub: 'две стрелки — две разных линии удара',
+      sub: 'часовая рубит конусом, минутная — по линии',
     });
   },
   step(sim, b, dt, api) {
@@ -3314,14 +3334,17 @@ registerBoss('f14boss', {
     const lead = lordOf(sim);
     if (!lead) return;
     const s = lordState(sim);
-    const T = timeOf(sim);
+    const st = stateOf(sim);
     const k = lead.hp / lead.maxHp;
-    const busy = (m: Mob) => m.mode === 'f14_place' || m.mode === 'f14_lunge' || m.mode === 'f14_ritual' || m.mode === 'f14_toHub';
+    const busy = (m: Mob) =>
+      m.mode === 'f14_place' || m.mode === 'f14_lunge' || m.mode === 'f14_ritual' || m.mode === 'f14_toHub' || m.mode === 'f14_clap';
+    if (worldStopped(sim)) return;
     if (b.phase === 0 && k <= LORD.hp[0] && !busy(lead)) {
       b.phase = 1;
       F14_FX.bossPhase = 1;
       arenaLook(sim, api, b, 1);
       s.stopCd = 1.2;
+      sim.events.push({ t: 'flash', color: '#e8ecf4', k: 0.8 });
       sim.events.push({ t: 'boss', what: 'phase', text: 'ОСТАНОВКА', sub: 'он останавливает время — и тебя' });
     }
     if (b.phase === 1 && k <= LORD.hp[1] && !busy(lead)) {
@@ -3329,6 +3352,7 @@ registerBoss('f14boss', {
       F14_FX.bossPhase = 2;
       arenaLook(sim, api, b, 2);
       s.ritualCd = 1;
+      sim.events.push({ t: 'flash', color: '#8fe8ff', k: 0.8 });
       sim.events.push({ t: 'boss', what: 'phase', text: 'ОТМОТКА', sub: 'он возвращает себе время — не дай' });
     }
     if (b.phase === 2 && k <= LORD.hp[2] && !busy(lead)) {
@@ -3340,28 +3364,24 @@ registerBoss('f14boss', {
       s.min = 0;
       s.hour = 0;
       sim.zones = sim.zones.filter((z) => z.art !== 'f14_glassring');
+      sim.events.push({ t: 'flash', color: '#1a2448', k: 1 });
       sim.events.push({ t: 'boss', what: 'phase', text: 'ПОЛНОЧЬ', sub: 'двенадцать ударов — на двенадцатом стой в ступице' });
     }
-    // Отмотка: край арены в песке — вязнешь.
-    const [ax, ay] = geoWorld(sim, F14_GEO.arena);
-    const h = sim.hero;
-    if (b.phase === 2 && hypot(h.x - ax, h.y - ay) > 8.4 && !heroDown(sim)) api.heroStatus(sim, 'slow', 0.2, 0.45);
     // Полночь: стрелки арены метут пол, бьёт час, гаснут лампы.
     if (b.phase >= 3) {
-      const stopped = T.stop > 0;
-      if (!stopped) {
-        s.min += (TAU / 6.4) * dt;
-        s.hour += (TAU / 38) * dt;
-      }
+      const [ax, ay] = geoWorld(sim, F14_GEO.arena);
+      s.min += (TAU / 6.4) * dt;
+      s.hour += (TAU / 38) * dt;
       s.hitM = Math.max(0, s.hitM - dt);
       s.hitH = Math.max(0, s.hitH - dt);
       F14_FX.hands.arena = { m: s.min, h: s.hour, on: 1 };
       if (!sim.zones.some((z) => z.art === 'f14_hands' && (z as { which?: string }).which === 'arena'))
-        api.zone(sim, { x: ax, y: ay, r: 10.6, life: 1e9, art: 'f14_hands', which: 'arena' } as ZoneIn);
-      if (!stopped && !heroDown(sim)) sweepHands(sim, api, ax, ay, s.min, s.hour, 9.6, 6.2, s);
-      if (!stopped && sim.time >= s.nextToll && lead.mode !== 'f14_tired') {
+        api.zone(sim, { x: ax, y: ay, r: 10.6, life: 1e9, art: 'f14_hands', which: 'arena', above: true } as ZoneIn);
+      if (!heroDown(sim)) sweepHands(sim, api, ax, ay, s.min, s.hour, 9.6, 6.2, s);
+      if (sim.time >= s.nextToll && lead.mode !== 'f14_tired') {
         s.tolls += 1;
         F14_FX.midnight = Math.min(12, s.tolls);
+        lightLamps(sim, st, api, Math.min(12, s.tolls));
         s.nextToll = sim.time + LORD.toll;
         sim.events.push({ t: 'boss', what: 'f14_toll' });
         if (s.tolls === 12) {
@@ -3376,6 +3396,7 @@ registerBoss('f14boss', {
             dmg: rawShare(sim, 0.45),
             knock: 4,
             art: 'f14_midnight',
+            above: true,
           });
           sim.events.push({ t: 'boss', what: 'f14_midnight_call', text: 'ПОЛНОЧЬ', sub: 'в ступицу — две секунды' });
           s.nextToll = sim.time + LORD.midnightWarn + 0.1;
@@ -3384,30 +3405,24 @@ registerBoss('f14boss', {
           // Пробило: выдохся, лампы снова горят.
           s.tolls = 0;
           F14_FX.midnight = 0;
+          lightLamps(sim, st, api, 0);
+          sim.events.push({ t: 'shake', k: 0.6 });
           s.nextToll = sim.time + LORD.tired + 1.5;
           if (!busy(lead)) api.setMode(lead, 'f14_tired');
         }
       }
     }
   },
-  notches(sim, b) {
+  notches(sim) {
     const out: number[] = [...LORD.hp];
     const lead = lordOf(sim);
     if (lead && lead.mode === 'f14_ritual') {
       const s = lordState(sim);
       out.push(clamp((s.ritualHp - s.need) / lead.maxHp, 0, 1));
     }
-    void b;
     return out;
   },
-  reset(sim) {
-    if (API_REF.api) restoreArena(sim, API_REF.api);
-    else LSTATE.delete(sim);
-    const T = TIME.get(sim);
-    if (T) {
-      T.stop = 0;
-      T.by = null;
-      T.held.clear();
-    }
+  reset(sim, _b, api) {
+    restoreArena(sim, api);
   },
 });

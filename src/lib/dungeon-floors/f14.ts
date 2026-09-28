@@ -104,6 +104,15 @@ export const F14_MARK = {
   keyface: 53,
   glasswall: 54,
   window: 55,
+  // Сменённые на ходу (`setTile`): арена по фазам, решётка отмотки.
+  dialStop: 60,
+  dialRewind: 61,
+  dialNight: 62,
+  numStop: 63,
+  numRewind: 64,
+  numNight: 65,
+  rimSand: 66,
+  bars: 70,
 } as const;
 
 /** Районы этажа. `f14` — вход: на нём могут стоять сохранения. */
@@ -176,19 +185,27 @@ const LEGEND_MECH: Record<string, LegendCell> = {
   '0': {
     tile: 'deep',
     mark: M.pit,
-    obj: { kind: 'deco', ref: 'f14_gear', solid: 0 },
+    obj: { kind: 'deco', ref: 'f14_gear', solid: 0, flat: true },
   },
   r: { tile: 'floor', mark: M.disc },
   q: { tile: 'floor', mark: M.groove },
   // Зуб кольца: едет по жёлобу (двигает сценарий этажа).
   '*': { tile: 'floor', mark: M.groove, obj: { kind: 'deco', ref: 'f14_tooth', solid: 0.5 } },
-  '(': { tile: 'floor', mark: M.hubgear, obj: { kind: 'deco', ref: 'f14_hubgear', solid: 0 } },
+  '(': {
+    tile: 'floor',
+    mark: M.hubgear,
+    obj: { kind: 'deco', ref: 'f14_hubgear', solid: 0, flat: true },
+  },
   // Маятник поперёк прохода: сам — предмет, лезвие ходит по такту.
   '|': { tile: 'floor', mark: M.track, obj: { kind: 'deco', ref: 'f14_pendulum', solid: 0 } },
   // Место солдатика в строю и гири под лебёдкой — ставит сценарий.
   A: { tile: 'floor', mark: M.rank },
-  W: { tile: 'floor', mark: M.wspot, obj: { kind: 'deco', ref: 'f14_winch', solid: 0 } },
-  '&': { tile: 'floor', mark: M.brass, obj: { kind: 'deco', ref: 'f14_lever', solid: 0.3 } },
+  W: { tile: 'floor', mark: M.wspot, obj: { kind: 'deco', ref: 'f14_winch', solid: 0, flat: true } },
+  '&': {
+    tile: 'floor',
+    mark: M.brass,
+    obj: { kind: 'deco', ref: 'f14_lever', solid: 0.3, use: { label: 'Стопор' } },
+  },
   J: { tile: 'wall', mark: M.keyface, obj: { kind: 'deco', ref: 'f14_key', solid: 0 } },
   '8': {
     tile: 'floor',
@@ -230,7 +247,7 @@ const LEGEND_SAND: Record<string, LegendCell> = {
   '9': {
     tile: 'floor',
     mark: M.glass,
-    obj: { kind: 'deco', ref: 'f14_glass', solid: 0.3 },
+    obj: { kind: 'deco', ref: 'f14_glass', solid: 0.3, use: { label: 'Перевернуть' } },
     light: { r: 2.4, tint: 'teal' },
   },
   W: { tile: 'wall', mark: M.glasswall },
@@ -251,21 +268,21 @@ const LEGEND_DIAL: Record<string, LegendCell> = {
   '4': {
     tile: 'floor',
     mark: M.hub,
-    obj: { kind: 'deco', ref: 'f14_bell', solid: 0.7 },
+    obj: { kind: 'deco', ref: 'f14_bell', solid: 0.7, use: { label: 'Ударить в колокол' } },
     light: { r: 3.4, tint: 'warm' },
   },
   '5': {
     tile: 'floor',
     mark: M.runner,
-    obj: { kind: 'deco', ref: 'f14_bigpendulum', solid: 0.55 },
+    obj: { kind: 'deco', ref: 'f14_bigpendulum', solid: 0.55, use: { label: 'Толкнуть маятник' } },
     light: { r: 2.4, tint: 'warm' },
   },
-  // Часовые лампы арены: гаснут по одной, когда бьёт полночь.
+  // Часовые лампы арены: гаснут по одной, когда бьёт полночь (свет ставит
+  // сценарий этажа — `api.light`, чтобы гасить).
   '6': {
     tile: 'floor',
     mark: M.hourlamp,
     obj: { kind: 'deco', ref: 'f14_hourlamp', solid: 0.2 },
-    light: { r: 2.4, tint: 'warm' },
   },
 };
 
