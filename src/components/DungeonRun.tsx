@@ -448,7 +448,64 @@ const FLOOR_SOUND: Record<string, () => void> = {
     beastRoar();
     heartbeat(true);
   },
+  // Этаж 15, «Сердце»: пульс арены, эхо прошлых боссов, память четвертей.
+  f15b_intro_call: () => {
+    heartbeat();
+    deepRumble();
+  },
+  f15b_echo_call: () => teleport(),
+  f15b_crack_stone: () => {
+    stoneGrind();
+    heartbeat(true);
+  },
+  f15b_lava_trap: () => {
+    lavaBubble();
+    lavaHiss();
+  },
+  f15b_abyss_trap: () => {
+    fishSplash(1.4);
+    windGust(0.3);
+  },
+  f15b_mirror_trap: () => glassBreak(true),
+  f15b_hydra_trap: () => {
+    teleport();
+    fleshSquelch();
+  },
+  f15b_warp_call: () => teleport(),
+  f15b_flame_trap: () => {
+    lavaHiss();
+    steamBurst();
+  },
+  f15b_storm_trap: () => thunder(true),
+  f15b_swoop_trap: () => windGust(1),
+  f15b_land_wall: () => {
+    boom(1);
+    deepRumble();
+  },
+  f15b_bump_wall: () => {
+    boom(1);
+    deepRumble();
+  },
+  f15b_gore_wall: () => {
+    boom(1);
+    deepRumble();
+  },
+  f15b_squeeze_wall: () => {
+    fleshSquelch(true);
+    stoneGrind();
+  },
+  f15b_squeeze_trap: () => fleshSquelch(true),
+  // Пульс арены бьётся раз в секунду; в фазах 0–3 слышен каждый третий удар
+  // (частому событию — мягко и редко), в фазе 4 — каждый.
+  f15b_beat: () => {
+    const now = performance.now();
+    if (now - beatAt < 2600) return;
+    beatAt = now;
+    heartbeat();
+  },
+  f15b_beat_fast: () => heartbeat(true),
 };
+let beatAt = 0;
 
 const USE_ICON: Record<Usable['kind'], GxIconName> = {
   lift: 'lift',
