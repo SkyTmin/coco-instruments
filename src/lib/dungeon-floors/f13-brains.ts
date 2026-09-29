@@ -32,7 +32,7 @@
 // Движок сюда не импортируется значениями (круг модулей) — только `api`.
 
 import { BRAINS, registerBoss, registerBrain, registerFloor } from '../dungeon-ai';
-import type { BrainCtx, SimApi, StrikeIn, ZoneIn } from '../dungeon-ai';
+import type { BrainCtx, SimApi, ZoneIn } from '../dungeon-ai';
 
 /**
  * Зона-картинка со своими полями для рисовальщика: трос (куда), след
@@ -47,7 +47,7 @@ export type ZX = ZoneIn & {
   k?: number;
   seed?: number;
 };
-import type { BossFight, Mob, Prop, Sim } from '../dungeon-sim';
+import type { BossFight, Mob, Sim } from '../dungeon-sim';
 import type { WorldObj } from '../dungeon-world';
 import { F13_BELL, F13_GIANTS, F13_MARK, F13_OUTER, F13_POSTS, F13_WALL } from './f13';
 import { F13_HOOKS } from './f13-map';
@@ -94,11 +94,6 @@ const tileAt = (sim: Sim, x: number, y: number): number => {
   return sim.tiles[y * w.w + x];
 };
 
-const markAt = (sim: Sim, x: number, y: number): number => {
-  const w = sim.world;
-  if (x < 0 || y < 0 || x >= w.w || y >= w.h) return 0;
-  return w.mark[y * w.w + x];
-};
 
 const walkable = (t: number) => t === T_FLOOR || t === T_HAZARD || (t >= 3 && t <= 5) || t === 10;
 
@@ -1567,7 +1562,8 @@ function setAura(sim: Sim, api: SimApi, st: ColState, m: Mob, art: string | null
   if (z) z.life = 0;
   st.aura = 0;
   if (!art) return;
-  api.zone(sim, { x: m.x, y: m.y, r, life: 1e6, dps, status: 'burn', dur: 0.8, art });
+  // Плащ пара — поверх Колосса (его окутывает), жар — по земле.
+  api.zone(sim, { x: m.x, y: m.y, r, life: 1e6, dps, status: 'burn', dur: 0.8, art, above: art === 'f13_cloak' });
   st.aura = sim.zones[sim.zones.length - 1]?.id ?? 0;
 }
 
@@ -2278,9 +2274,6 @@ export const HOOK = { speed: 15, range: 12, cd: 1.2, lift: 0.9 };
 export const CANNON = { warn: 0.45, reload: 7, battery: 2.5, arena: 12, w: 0.9 };
 export const BELL = { r: 7.5, cd: 7, stun: 1.3 };
 
-function areaTop(sim: Sim, id: string): number {
-  return sim.world.bands.find((b) => b.def.id === id)?.top ?? 0;
-}
 
 function areaAt(sim: Sim, y: number): string {
   const yy = Math.floor(y);
@@ -2622,7 +2615,9 @@ function stepFlight(sim: Sim, st: F13State, api: SimApi, dt: number): void {
     h.y = y;
     h.vx = 0;
     h.vy = 0;
-    h.inv = Math.max(h.inv, 0.15);
+    // Неуязвим весь полёт; выше 0,5 рендер героя не мигает (мигание —
+    // знак «укусили», а тут герой летит).
+    h.inv = Math.max(h.inv, 0.6);
     // Тень на земле — там, куда он опустится.
     if (k < 1) {
       const e = k < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k);
@@ -2655,7 +2650,8 @@ function land(sim: Sim, st: F13State, api: SimApi, f: Flight): void {
   const h = sim.hero;
   st.flight = null;
   st.shadow = null;
-  h.inv = Math.max(h.inv, 0.25);
+  // Сел — неуязвимость полёта кончилась без мигания.
+  if (h.inv > 0.5) h.inv = 0.08;
   puff(api, sim, 'f13_dust', h.x, h.y + 0.2, 1, 0.45);
   const g = f.target ? sim.mobs.find((m) => m.id === f.target && m.mode !== 'dying') : null;
   if (!g) return;
@@ -3032,6 +3028,8 @@ function stepAlarm(sim: Sim, st: F13State, api: SimApi, dt: number): void {
     return;
   }
   if (A.st !== 'on') return;
+  // Ушёл с площади — тревога ждёт: волны лезут у набата, а не за героем.
+  if (!heroIn(sim, st, F13_BELL, 2, 74, 61, 106)) return;
   A.t += dt;
   // Набат бьёт сам три раза — созывает.
   if (A.tolls < 3 && A.t > A.tolls * 1.1) {
@@ -3085,7 +3083,8 @@ function stepRift(sim: Sim, st: F13State, api: SimApi, dt: number): void {
   if (R.st !== 'on') return;
   R.t += dt;
   R.tick -= dt;
-  if (R.tick <= 0) {
+  // Осыпь — только над трещиной, а не за героем по всему этажу.
+  if (R.tick <= 0 && inZone) {
     R.tick = 1.35;
     sim.events.push({ t: 'shake', k: 0.28 });
     for (let i = 0; i < 2; i++) {

@@ -23,7 +23,7 @@ import {
   strikeHits,
   SWORD,
   usableNear,
-  useObject,
+  useObject as applyUse,
 } from '../dungeon-sim';
 import type { Mob, Sim, SimInput } from '../dungeon-sim';
 import { CANNON, COL, f13State, GIANT, HOOK } from './f13-brains';
@@ -273,7 +273,7 @@ function tryHook(s: Sim, st: BotState, g: Mob, force: boolean): SimInput | null 
   if (!best) return null;
   const u = usableNear(s);
   if (u && u.kind === 'floor' && u.obj === best.obj) {
-    if (useObject(s, u)) st.hooks += 1;
+    if (applyUse(s, u)) st.hooks += 1;
     return { ...NO_INPUT };
   }
   const l = Math.hypot(best.x - h.x, best.y + 0.6 - h.y) || 1;
@@ -310,7 +310,7 @@ function tryCannon(s: Sim, st: BotState, g: Mob): SimInput | null {
   const u = usableNear(s);
   if (u && u.kind === 'floor' && u.obj === c.obj) {
     if (along > 1 && along < c.len && across < CANNON.w + g.r * 0.7) {
-      if (useObject(s, u)) {
+      if (applyUse(s, u)) {
         st.cannons += 1;
         st.cannonAt = undefined;
         st.cannonRest = s.time + 6;
@@ -377,7 +377,6 @@ function bot(s: Sim, st: BotState): SimInput {
         tgt = m;
       }
     }
-    // Исполин вплотную спереди — обойти за спину, пока бьёт мимо.
     return tgt ? attackAt(s, st, tgt, inp) : inp;
   }
   // Прочие: исполина — со спины, мелочь — в лоб.
@@ -401,7 +400,6 @@ function bot(s: Sim, st: BotState): SimInput {
     }
     return attackAt(s, st, near, inp);
   }
-  if (st.goal) return follow(s, st.goal.f, st.goal.x, st.goal.y);
   return { ...NO_INPUT };
 }
 
@@ -628,7 +626,7 @@ describe('этаж 13: площадь Колосса', () => {
     k.data.bareT = 0;
     const u = usableNear(s)!;
     expect(u.kind).toBe('floor');
-    expect(useObject(s, u)).toBe(true);
+    expect(applyUse(s, u)).toBe(true);
     let bared = false;
     let invAll = true;
     for (let t = 0; t < 3 * 60; t++) {
@@ -691,7 +689,7 @@ describe('этаж 13: механики', () => {
     s.mobs = [];
     const u = usableNear(s)!;
     expect(u.obj.ref).toBe('f13_hook');
-    expect(useObject(s, u)).toBe(true);
+    expect(applyUse(s, u)).toBe(true);
     let inv = true;
     for (let t = 0; t < 3 * 60; t++) {
       if (f13State(s)?.flight && s.hero.inv <= 0) inv = false;
@@ -720,7 +718,7 @@ describe('этаж 13: механики', () => {
     s.hero.y = c.y + 0.5 - Math.sin(c.ang) * 0.9;
     const u = usableNear(s)!;
     expect(u.obj.ref).toBe('f13_cannon');
-    expect(useObject(s, u)).toBe(true);
+    expect(applyUse(s, u)).toBe(true);
     let down = false;
     for (let t = 0; t < 1.2 * 60; t++) {
       s.hero.hp = s.stats.maxHp;
@@ -740,11 +738,11 @@ describe('этаж 13: механики', () => {
     expect(st.breach.length).toBeGreaterThan(4);
     const u = usableNear(s)!;
     expect(u.obj.ref).toBe('f13_boulder');
-    expect(useObject(s, u)).toBe(true);
+    expect(applyUse(s, u)).toBe(true);
     for (let t = 0; t < 1.5 * 60; t++) stepSim(s, DT, NO_INPUT);
     expect(st.breachEv.sealed).toBe(true);
     expect(st.breach.every((i) => !walkableTile(s.tiles[i]))).toBe(true);
-    expect(useObject(s, u)).toBe(false);
+    expect(applyUse(s, u)).toBe(false);
   });
 
   it('набат глушит ухмылок и валит исполинов вокруг', () => {
@@ -757,7 +755,7 @@ describe('этаж 13: механики', () => {
     const g = spawnMob(s, 'f13_walker', bx + 5.5, by + 0.5, { mode: 'stalk' });
     const u = usableNear(s)!;
     expect(u.obj.ref).toBe('f13_bell');
-    expect(useObject(s, u)).toBe(true);
+    expect(applyUse(s, u)).toBe(true);
     expect(grins.every((m) => m.mode === 'stun')).toBe(true);
     expect(g.mode).toBe('down');
   });

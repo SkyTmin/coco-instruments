@@ -221,11 +221,40 @@ function finish(key: string, b: Built, look: Look, flash: boolean, left: boolean
   return out;
 }
 
-function frameOf(key: string, pose: MobPose, build: () => Built): MobFrame {
-  const k = `${key}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
+function frameOf(key: string, pose: MobPose, build: () => Built, ghost = false): MobFrame {
+  const k = `${key}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}|${+ghost}`;
   const hit = frames.get(k);
   if (hit) return hit;
-  return finish(k, build(), pose.look, pose.flash, pose.left);
+  const b = build();
+  if (ghost) b.p = seeThrough(b.p);
+  return finish(k, b, pose.look, pose.flash, pose.left);
+}
+
+/**
+ * Герой за спиной исполина — исполин просвечивает: иначе высокая фигура
+ * закрывает героя целиком ровно тогда, когда он делает то, чего просит этаж
+ * (бьёт в затылок). Светящийся затылок остаётся ярким.
+ */
+function seeThrough(p: Px): Px {
+  const o = new Px(p.w, p.h);
+  for (let i = 0; i < p.data.length; i += 4) {
+    const a = p.data[i + 3];
+    if (!a) continue;
+    const hot = p.data[i] > 230 && p.data[i + 1] > 120 && p.data[i + 1] < 215 && p.data[i + 2] < 130;
+    o.data[i] = p.data[i];
+    o.data[i + 1] = p.data[i + 1];
+    o.data[i + 2] = p.data[i + 2];
+    o.data[i + 3] = hot ? a : Math.round(a * 0.5);
+  }
+  return o;
+}
+
+/** Герой стоит в тени высокой фигуры (севернее, в её силуэте). */
+function heroHidden(m: Mob, tall: number): boolean {
+  const h = paintSim()?.hero;
+  if (!h) return false;
+  const dy = m.y - h.y;
+  return dy > 0.25 && dy < tall && Math.abs(h.x - m.x) < m.r + 0.7;
 }
 
 /** Звёздочки над головой оглушённого (кадр f из 4). */
@@ -321,7 +350,6 @@ const TEETH = hx('#f4ecd8');
 const MOUTH = hx('#2a0a08');
 const NAPE_HOT = hx('#fff4c8');
 const NAPE_GLOW = hx('#ff9a3a');
-const STEAM = hx('#f6f2ee', 150);
 
 // ---------------------------------------------------------------------------
 // Исполин: параметрическая фигура. Анфас — лицо и ухмылка; спиной —
@@ -742,13 +770,28 @@ function polyPlate(p: Px, cx: number, cy: number, rx: number, ry: number, side: 
 
 /** Кристальная скорлупа поверх фигуры: голубые грани. */
 function crystalShell(p: Px, k: number, seed: number): void {
+  // Грани: ближайшая из редких точек-центров даёт плоскость со своим тоном,
+  // по краю грани — светлое ребро. Полосами (как было) читалось леденцом.
+  const pts: [number, number, number][] = [];
+  for (let i = 0; i < 26; i++) pts.push([hash(i, seed, 1) * p.w, hash(seed, i, 2) * p.h, hash(i, seed, 3)]);
   for (let y = 0; y < p.h; y++)
     for (let x = 0; x < p.w; x++) {
       const i = (y * p.w + x) * 4;
       if (!p.data[i + 3]) continue;
-      const f = Math.floor((x + y * 0.5 + seed) / 3) % 3;
-      const c = f === 0 ? CRYST[3] : f === 1 ? CRYST[2] : CRYST[1];
-      p.set(x, y, alpha(c, 0.35 + 0.5 * k));
+      let d1 = 1e9;
+      let d2 = 1e9;
+      let tone0 = 0;
+      for (const [px, py, t] of pts) {
+        const d = (px - x) ** 2 + (py - y) ** 2 * 0.6;
+        if (d < d1) {
+          d2 = d1;
+          d1 = d;
+          tone0 = t;
+        } else if (d < d2) d2 = d;
+      }
+      const edge = Math.sqrt(d2) - Math.sqrt(d1) < 0.9;
+      const c = edge ? CRYST[3] : tone(CRYST, 0.25 + tone0 * 0.55 - y * 0.004);
+      p.set(x, y, alpha(c, 0.4 + 0.5 * k));
     }
 }
 
@@ -1051,11 +1094,16 @@ function giantPainter(kind: string) {
       return frameOf(`${kind}|lie|${+cut}|${Math.floor(pose.t * 5) % 4}`, pose, () => drawLying(lk, Math.floor(pose.t * 5) % 4, cut));
     }
     const key = `${kind}|${gp.key}|${+gp.g.back}|${+gp.g.cut}|${+gp.stars}|${seed}`;
-    const fr = frameOf(key, pose, () => {
-      const b = drawGiant(lk, gp.g, seed);
-      if (gp.stars) stars(b.p, b.ax, 3, 5, Math.floor(pose.t * 8) % 4);
-      return b;
-    });
+    const fr = frameOf(
+      key,
+      pose,
+      () => {
+        const b = drawGiant(lk, gp.g, seed);
+        if (gp.stars) stars(b.p, b.ax, 3, 5, Math.floor(pose.t * 8) % 4);
+        return b;
+      },
+      heroHidden(m, (lk.H + 8) / 16),
+    );
     return fr;
   };
 }
@@ -1469,10 +1517,15 @@ registerMobPainter('f13boss', (m, pose) => {
   };
   const rise = pose.mode === 'rise' ? Math.min(5, Math.floor((pose.t / COL.rise) * 6)) : 5;
   const k = `col|${key}|${phase >= 3 ? 3 : 0}|${+cloaked}|${+g.back}|${+g.cut}|${f}|${rise}`;
-  return frameOf(k, pose, () => {
-    const b = drawGiant(lk, g, 3, colDeco(c), colPost(c));
-    return rise < 5 ? fromGround(b, Math.round((1 - rise / 5) * 60)) : b;
-  });
+  return frameOf(
+    k,
+    pose,
+    () => {
+      const b = drawGiant(lk, g, 3, colDeco(c), colPost(c));
+      return rise < 5 ? fromGround(b, Math.round((1 - rise / 5) * 60)) : b;
+    },
+    heroHidden(m, 5.4),
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -1932,6 +1985,8 @@ function baseOf(c: CellCtx): number {
       let m = c.markAt(dx, dy);
       if (m >= MK.pWalker && m <= MK.pCrawler) m = MK.cobble;
       if (m === MK.pad || m === MK.drain || m === MK.crack || m === MK.blood || m === MK.weeds || m === MK.rubble) m = MK.cobble;
+      if (m === MK.breach || m === MK.crater || m === MK.sealed) m = MK.cobble;
+      if (m === MK.scorch || m === MK.cracking) m = MK.mosaic;
       if (m === MK.vent || m === MK.fault) m = MK.mosaic;
       if (!FLOOR_BASE.includes(m)) continue;
       cnt.set(m, (cnt.get(m) ?? 0) + 1);
@@ -2270,9 +2325,15 @@ function shopAt(c: CellCtx, x: number, y: number): RGBA {
 
 function greatWallAt(X: number, Y: number, y: number, face: boolean, kind: number): RGBA {
   if (!face) {
-    // Верх Стены: плиты с тёмными швами.
-    if (X % 16 === 0 || Y % 8 === 0) return tone(WALLST, 0.12);
-    return tone(WALLST, 0.34 + hash(X >> 4, Y >> 3, 7) * 0.1);
+    // Верх Стены: ровная кладка плитами вразбежку, мох по швам. Яркость у
+    // плит почти одна — иначе верх читался россыпью светлых кирпичей.
+    const r = Math.floor(Y / 8);
+    const off = r % 2 ? 8 : 0;
+    const sx = Math.floor((X + off) / 16);
+    if ((X + off) % 16 === 0 || Y % 8 === 0) return hash(X, Y, 2) < 0.2 ? mixc(tone(WALLST, 0.14), MOSS, 0.5) : tone(WALLST, 0.14);
+    let l = 0.3 + hash(sx, r, 7) * 0.05 + (hash(X, Y, 3) - 0.5) * 0.06;
+    if (Y % 8 === 1) l += 0.06;
+    return tone(WALLST, l);
   }
   if (kind === MK.parapet) {
     // Зубцы: чередование, в проёме видно небо (тьму).
@@ -2365,6 +2426,33 @@ function wallCellOf(c: CellCtx): Px | null {
   return p;
 }
 
+const DIRT = tn('#1e150f', '#3a2a1e', '#56402e', '#735840');
+
+/**
+ * Шов «мостовая — земля» в Предполье: у края, где за клеткой голая земля,
+ * камни выбиты неровно, между ними земля. Иначе дорога лежала ровными
+ * прямоугольниками, как ковёр.
+ */
+function frayToDirt(p: Px, c: CellCtx): void {
+  const dirt = (dx: number, dy: number) => c.open(dx, dy) && c.markAt(dx, dy) === 0;
+  const L = dirt(-1, 0);
+  const R = dirt(1, 0);
+  const U = dirt(0, -1);
+  const D = dirt(0, 1);
+  if (!L && !R && !U && !D) return;
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const d = Math.min(L ? x : 99, R ? 15 - x : 99, U ? y : 99, D ? 15 - y : 99);
+      if (d > 5) continue;
+      // Выбиты целые камни (по шашке 5×5), а не пиксели.
+      const X = c.wx * 16 + x;
+      const Y = c.wy * 16 + y;
+      const r = Math.floor(Y / 5);
+      const sId = Math.floor((X + (r % 2 ? 3 : 0)) / 5);
+      if (hash(sId, r, 57) < 0.75 - d * 0.14) p.set(x, y, tone(DIRT, 0.45 + hash(X >> 1, Y >> 1, 3) * 0.2));
+    }
+}
+
 function f13Cell(c: CellCtx, area: string): Px | null {
   // Глубина.
   if (DEEP_MARKS.has(c.mark)) return deepCell(c);
@@ -2384,6 +2472,7 @@ function f13Cell(c: CellCtx, area: string): Px | null {
   }
   const p = floorBase(c, base);
   if (!p) return null;
+  if (area === F13_WALL && base === MK.cobble) frayToDirt(p, c);
   if (!FLOOR_BASE.includes(c.mark) && c.mark) scatter(p, c, c.mark);
   return p;
 }
@@ -3541,13 +3630,24 @@ registerZonePainter('f13_smoke', (g, z, px, py, S) => {
 registerZonePainter('f13_cloak', (g, z, px, py, S, time) => {
   const zz = z as ZoneX;
   const R = zz.r * S;
-  // Плащ пара кружит вокруг Колосса.
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * TAU + time * 0.9;
-    const x = px + Math.cos(a) * R * 0.85;
-    const y = py + Math.sin(a) * R * 0.5 - 4;
-    const rr = R * (0.24 + 0.08 * Math.sin(time * 2 + i));
-    g.fillStyle = rgba(STEAMC, 0.32 * fadeOf(zz));
+  const sim = paintSim();
+  const col = sim?.mobs.find((m) => m.kind === 'f13boss');
+  // Сорван крюком — плащ редеет, затылок виден.
+  const bare = (col?.data.bareT ?? 0) > 0;
+  const a0 = (bare ? 0.12 : 0.34) * fadeOf(zz);
+  // Туман у ног — плотный, кольцом.
+  g.fillStyle = rgba(STEAMC, a0 * 0.7);
+  g.beginPath();
+  g.ellipse(px, py, R * 1.1, R * 0.5, 0, 0, TAU);
+  g.fill();
+  // Клубы по всему росту: поднимаются и кружат вокруг тела.
+  for (let i = 0; i < 14; i++) {
+    const ph = (time * 0.35 + i / 14) % 1;
+    const a = (i / 14) * TAU + time * 0.6;
+    const x = px + Math.cos(a) * R * (0.7 + 0.25 * Math.sin(i))
+    const y = py + Math.sin(a) * R * 0.35 - ph * 70;
+    const rr = 5 + ph * 7 + (i % 3);
+    g.fillStyle = rgba(STEAMC, a0 * (1 - ph * 0.7));
     g.beginPath();
     g.arc(Math.round(x), Math.round(y), rr, 0, TAU);
     g.fill();
