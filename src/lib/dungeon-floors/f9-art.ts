@@ -1965,24 +1965,66 @@ function bboxOf(p: Px): [number, number, number, number] | null {
   return x1 < 0 ? null : [x0, y0, x1, y1];
 }
 
-/** Чешуя в МЕСТНЫХ координатах: поворачивается вместе с головой, не ползёт. */
-function scalesLocal(p: Px, g: HGeo, B: HBox, dk: RGBA, lt: RGBA, seed: number): void {
+/** Контур снаружи — как `Px.outline`, но в рамке фигуры и без вызова на пиксель. */
+function inkOut(p: Px, c: RGBA = INK): void {
   const bb = bboxOf(p);
   if (!bb) return;
-  for (let y = bb[1]; y <= bb[3]; y++)
-    for (let x = bb[0]; x <= bb[2]; x++) {
-      if (!p.solid(x, y)) continue;
-      const dx = (x + 0.5 - B.CX) / g.s;
-      const dy = (y + 0.5 - B.CY) / g.s;
-      const lx = dx * g.cp + dy * g.sp;
-      const ly = (-dx * g.sp + dy * g.cp) / g.sq;
-      const iy = Math.floor(ly + 64);
-      const ix = Math.floor(lx + 64);
-      const row = iy >> 1;
-      const col = (ix + (row & 1)) >> 1;
-      if (((ix + row) & 1) === 0 && (iy & 1) === 1 && hash(col, row, seed) > 0.25) p.set(x, y, dk);
-      else if (((ix + row) & 1) === 1 && (iy & 1) === 0 && hash(col, row, seed + 7) > 0.7)
-        p.set(x, y, lt);
+  const W = p.w;
+  const H = p.h;
+  const d = p.data;
+  const x0 = Math.max(0, bb[0] - 1);
+  const x1 = Math.min(W - 1, bb[2] + 1);
+  const y0 = Math.max(0, bb[1] - 1);
+  const y1 = Math.min(H - 1, bb[3] + 1);
+  const add: number[] = [];
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const i = y * W + x;
+      if (d[i * 4 + 3]) continue;
+      if (
+        (x > 0 && d[(i - 1) * 4 + 3]) ||
+        (x < W - 1 && d[(i + 1) * 4 + 3]) ||
+        (y > 0 && d[(i - W) * 4 + 3]) ||
+        (y < H - 1 && d[(i + W) * 4 + 3])
+      )
+        add.push(i);
+    }
+  for (const i of add) {
+    d[i * 4] = c[0];
+    d[i * 4 + 1] = c[1];
+    d[i * 4 + 2] = c[2];
+    d[i * 4 + 3] = 255;
+  }
+}
+
+/** Чешуя шахматкой (как у всего этажа) — только в рамке фигуры. */
+function scalesIn(p: Px, dk: RGBA, lt: RGBA | null, seed: number): void {
+  const bb = bboxOf(p);
+  if (bb) scales(p, bb[0], bb[1], bb[2], bb[3], dk, lt, seed);
+}
+
+/**
+ * Чешуя точками по сетке в МЕСТНЫХ координатах: каждая чешуйка — точка с
+ * бликом, и при повороте головы она едет вместе с ней. Шахматка по холсту
+ * на повёрнутой голове шла муаром — полосами поперёк морды.
+ */
+function scalesLocal(p: Px, g: HGeo, dk: RGBA, lt: RGBA, seed: number): void {
+  for (let j = -4; j <= 3; j++)
+    for (let i = -6; i <= 6; i++) {
+      const lx = i * 2 + (j & 1);
+      const ly = j * 1.7 + 0.4;
+      if (hash(i + 20, j + 20, seed) < 0.3) continue;
+      // Морда поднимается с верхней челюстью — её чешуя тоже.
+      const [x, y] = lx > 2 && ly < 3 ? g.Q(lx, ly) : g.P(lx, ly);
+      const xi = Math.round(x);
+      const yi = Math.round(y);
+      if (!p.solid(xi, yi)) continue;
+      p.set(xi, yi, dk);
+      if (hash(i + 20, j + 20, seed + 7) > 0.55) {
+        const xl = xi - 1;
+        const yl = yi - 1;
+        if (p.solid(xl, yl)) p.set(xl, yl, lt);
+      }
     }
 }
 
@@ -2116,15 +2158,15 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
     const a = Math.PI - 0.5 + r.pitch * 0.35;
     const nx = -Math.sin(a);
     const ny = Math.cos(a);
-    const off = 1.7 * s * (ny >= 0 ? 1 : -1);
+    const off = 2.4 * s * (ny >= 0 ? 1 : -1);
     limb(
       p,
       g.stub[0] + nx * off,
       g.stub[1] + ny * off,
-      g.nape[0] + nx * off,
-      g.nape[1] + ny * off,
-      2 * s,
-      1.6 * s,
+      g.nape[0] + nx * off * 0.8,
+      g.nape[1] + ny * off * 0.8,
+      1.3 * s,
+      1 * s,
       L.belly,
       0.1,
     );
@@ -2151,7 +2193,7 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
   const ub = Q(11, 1);
   limb(p, ua[0], ua[1], ub[0], ub[1], 3.4 * s, 2 * s, L.skin);
   headCrest(p, el, g, r, L);
-  scalesLocal(p, g, B, L.skin[0], L.skin[3], 29 + el);
+  scalesLocal(p, g, L.skin[0], L.skin[3], 29 + el);
   // Пасть — только в щели между челюстями.
   if (r.jaw > 0.26) {
     const hot = clamp01(r.glow * 1.25);
@@ -2213,7 +2255,7 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
       p.set(x, y, L.crest[3]);
       p.set(x + 1, y + 1, L.crest[2]);
     }
-  p.outline(INK);
+  inkOut(p);
   // Ноздря и глаз.
   const [nx0, ny0] = Q(10.5, -0.6);
   p.set(nx0, ny0, INK);
@@ -2237,7 +2279,9 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
       p.set(ex + 1, ey - 2, INK);
     }
     eye = [ex, ey];
-    LIT().set(ex, ey, alpha(r.eye > 1.5 ? L.glowHi : L.eye, 0.95));
+    // Глаз над темнотой светит движок (`eye`); свой слой — только у короны
+    // с её четырьмя глазами и у ярости (глаз вспыхивает).
+    if (el === 5 || r.eye > 1.5) LIT().set(ex, ey, alpha(r.eye > 1.5 ? L.glowHi : L.eye, 0.95));
     if (el === 5)
       for (const [dx, dy] of [
         [-2, 2],
@@ -2290,6 +2334,44 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
       LIT().set(x, y, alpha(c, 0.9));
       p.set(x, y, c);
     }
+  }
+  // Под водой (или илом): срезать и положить на поверхность пену кругом.
+  if (clip < B.H) {
+    let x0 = B.W;
+    let x1 = -1;
+    let cut = false;
+    const cy = Math.max(0, Math.floor(clip));
+    for (let y = cy; y < B.H; y++)
+      for (let x = 0; x < B.W; x++) {
+        const i = (y * B.W + x) * 4 + 3;
+        if (p.data[i]) {
+          cut = true;
+          p.data[i] = 0;
+          if (y <= cy + 2) {
+            x0 = Math.min(x0, x);
+            x1 = Math.max(x1, x);
+          }
+        }
+        if (lit) (lit as Px).data[i] = 0;
+      }
+    if (cut && x1 >= x0) {
+      const fo = mud ? HY.mud[3] : HY.foam;
+      const fd = mud ? HY.mud[1] : hx('#4a8a80');
+      const mx = (x0 + x1) / 2;
+      const rx = (x1 - x0) / 2 + 3;
+      for (let x = Math.floor(mx - rx); x <= Math.ceil(mx + rx); x++) {
+        const k = Math.abs(x - mx) / rx;
+        const y = cy - 1 + Math.round(k * k * 1.5);
+        p.set(x, y, alpha(fo, 0.95));
+        if (k > 0.6) p.set(x, y + 1, alpha(fd, 0.8));
+      }
+      for (let a = 0; a < TAU; a += 0.08) {
+        const x = Math.round(mx + Math.cos(a) * (rx + 3));
+        const y = Math.round(cy + Math.sin(a) * 1.6);
+        if (!p.solid(x, y)) p.set(x, y, alpha(fo, 0.5));
+      }
+    }
+    if (eye && eye[1] >= cy) eye = null;
   }
   // След захлопнувшихся челюстей: серпы по дугам кончиков.
   if (r.smear > 0.05) {
@@ -2344,46 +2426,8 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
       const fall = (1 - r.wet) * 9 + hash(i, 11) * 5 + ((r.spark + i) % 3);
       const x = Math.round(bx);
       const y = Math.round(by + fall);
-      if (!p.solid(x, y)) p.set(x, y, alpha(c, 0.9 * Math.min(1, r.wet * 1.6)));
+      if (y < clip - 1 && !p.solid(x, y)) p.set(x, y, alpha(c, 0.9 * Math.min(1, r.wet * 1.6)));
     }
-  }
-  // Под водой (или илом): срезать и положить на поверхность пену кругом.
-  if (clip < B.H) {
-    let x0 = B.W;
-    let x1 = -1;
-    let cut = false;
-    const cy = Math.max(0, Math.floor(clip));
-    for (let y = cy; y < B.H; y++)
-      for (let x = 0; x < B.W; x++) {
-        const i = (y * B.W + x) * 4 + 3;
-        if (p.data[i]) {
-          cut = true;
-          p.data[i] = 0;
-          if (y <= cy + 2) {
-            x0 = Math.min(x0, x);
-            x1 = Math.max(x1, x);
-          }
-        }
-        if (lit) (lit as Px).data[i] = 0;
-      }
-    if (cut && x1 >= x0) {
-      const fo = mud ? HY.mud[3] : HY.foam;
-      const fd = mud ? HY.mud[1] : hx('#4a8a80');
-      const mx = (x0 + x1) / 2;
-      const rx = (x1 - x0) / 2 + 3;
-      for (let x = Math.floor(mx - rx); x <= Math.ceil(mx + rx); x++) {
-        const k = Math.abs(x - mx) / rx;
-        const y = cy - 1 + Math.round(k * k * 1.5);
-        p.set(x, y, alpha(fo, 0.95));
-        if (k > 0.6) p.set(x, y + 1, alpha(fd, 0.8));
-      }
-      for (let a = 0; a < TAU; a += 0.08) {
-        const x = Math.round(mx + Math.cos(a) * (rx + 3));
-        const y = Math.round(cy + Math.sin(a) * 1.6);
-        if (!p.solid(x, y)) p.set(x, y, alpha(fo, 0.5));
-      }
-    }
-    if (eye && eye[1] >= cy) eye = null;
   }
   return { p, lit, eye };
 }
@@ -3013,7 +3057,7 @@ function wakeFrame(f: number, left: boolean, heave: number): MobFrame {
     const hgt = 3 + ((f + i * 3) % 4 < 2 ? 1 : 0) + hv * 2;
     limb(p, x, cy - 1, x + 1, cy - 1 - hgt, 0.9, 0.3, ELEM[5].crest);
   }
-  p.outline(INK);
+  inkOut(p);
   // Кольца буруна и комья.
   for (let ring = 0; ring < 2; ring++) {
     const R = 9 + ring * 3 + (f % 4) * 0.6;
@@ -3065,7 +3109,7 @@ function moundFrame(k8: number, f: number): Px {
         i % 2 ? HY.mud[0] : alpha(ELEM[5].glow, 0.8),
       );
     }
-  p.outline(INK);
+  inkOut(p);
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * TAU + ff * 0.7;
     const x = Math.round(cx + Math.cos(a) * (rx + 2));
@@ -3169,7 +3213,7 @@ function paintStump2(el: number, r: StumpRig): { p: Px; lit: Px | null } {
     const x = lerp(bx, tx, k) + (i % 2 ? 1.9 : -1.7);
     shadeEll(p, x, y, 2.3 + 0.4 * (i % 2), 1.9, L.skin, 0.25);
   }
-  scales(p, 0, 0, W - 1, H - 1, L.skin[0], L.skin[3], 51);
+  scalesIn(p, L.skin[0], L.skin[3], 51);
   // Рваный край и срез: мясо, кость (или угли).
   for (let k = 0; k < 9; k++) {
     const a = (k / 9) * TAU;
@@ -3213,7 +3257,7 @@ function paintStump2(el: number, r: StumpRig): { p: Px; lit: Px | null } {
     for (let i = 0; i < dl; i++) p.set(tx - 3, topY + 1.5 + i, i === dl - 1 ? FLESH[2] : FLESH[1]);
     for (let i = 0; i < ((r.drip + 2) % 4) + 1; i++) p.set(tx + 2, topY + 1.5 + i, FLESH[1]);
   }
-  p.outline(INK);
+  inkOut(p);
   // Лужа у основания — ПОД столбом (только по пустому).
   const pool = seared ? alpha(hx('#1a120c'), 0.8) : alpha(hx('#5a0e0c'), 0.85);
   for (let y = by - 3; y <= by + 3; y++)
@@ -3455,21 +3499,34 @@ interface TailRig {
 /** Хвост: E, SE, S, NE, N (запад — зеркалом). */
 const TAIL_DIRS = [0, Math.PI / 4, Math.PI / 2, -Math.PI / 4, -Math.PI / 2];
 
-function blit(dst: Px, src: Px): void {
-  for (let i = 0; i < src.data.length; i += 4) {
-    if (!src.data[i + 3]) continue;
-    if (src.data[i + 3] >= 255 || !dst.data[i + 3]) {
-      dst.data[i] = src.data[i];
-      dst.data[i + 1] = src.data[i + 1];
-      dst.data[i + 2] = src.data[i + 2];
-      dst.data[i + 3] = src.data[i + 3];
-    } else
-      dst.set((i / 4) % dst.w, Math.floor(i / 4 / dst.w), [
-        src.data[i],
-        src.data[i + 1],
-        src.data[i + 2],
-        src.data[i + 3],
-      ]);
+/** Наложить `src` на `dst` со сдвигом — только в рамке `src`. */
+function blit(
+  dst: Px,
+  src: Px,
+  ox = 0,
+  oy = 0,
+  bb: [number, number, number, number] | null = bboxOf(src),
+): void {
+  if (!bb) return;
+  const sd = src.data;
+  const dd = dst.data;
+  for (let y = bb[1]; y <= bb[3]; y++) {
+    const ty = y + oy;
+    if (ty < 0 || ty >= dst.h) continue;
+    for (let x = bb[0]; x <= bb[2]; x++) {
+      const tx = x + ox;
+      if (tx < 0 || tx >= dst.w) continue;
+      const i = (y * src.w + x) * 4;
+      const a = sd[i + 3];
+      if (!a) continue;
+      const j = (ty * dst.w + tx) * 4;
+      if (a >= 255 || !dd[j + 3]) {
+        dd[j] = sd[i];
+        dd[j + 1] = sd[i + 1];
+        dd[j + 2] = sd[i + 2];
+        dd[j + 3] = a;
+      } else dst.set(tx, ty, [sd[i], sd[i + 1], sd[i + 2], a]);
+    }
   }
 }
 
@@ -3480,28 +3537,76 @@ function under(p: Px, x: number, y: number, c: RGBA): void {
   if (!p.solid(xi, yi)) p.set(xi, yi, c);
 }
 
-const BODY_L = frameLRU<Px>(96);
+interface Layer {
+  p: Px;
+  bb: [number, number, number, number] | null;
+}
 
-function bodyLayer(r: BodyRig): Px {
+const BODY_CORE = frameLRU<Layer>(40);
+
+/**
+ * Неподвижная часть тела — воротники, гора, пластины, чешуя, шрамы — при
+ * данном вдохе и обмякании. Подъём на лапах и уход в ил лишь сдвигают её:
+ * рисуется один раз, а не на каждый кадр сцены.
+ */
+function bodyCore(b10: number, d20: number): Layer {
+  const key = `${b10}|${d20}`;
+  const hit = BODY_CORE.get(key);
+  if (hit) return hit;
+  const p = new Px(BW, BH);
+  const b = b10 / 10;
+  const dd = d20 / 20;
+  const cx = BCX;
+  const cy = BCY;
+  const rx = lerp(21 + b * 0.4, 22.5, dd);
+  const ry = lerp(12.5 + b * 0.5, 10, dd);
+  const top = cy - lerp(3 + b * 0.6, 1.5, dd);
+  for (const a of NECK_ANG) {
+    const nx = cx + Math.cos(a) * rx * 0.9;
+    const ny = top + Math.sin(a) * ry * 0.85;
+    shadeEll(p, nx, ny, 4.4, 3.4, HY.plate, -0.1);
+  }
+  shadeEll(p, cx, top, rx, ry, HY.body);
+  for (let i = 0; i < 9; i++) {
+    const k = i / 8;
+    const x = cx - rx * 0.75 + k * rx * 1.5;
+    const y = top - ry * 0.35 - Math.sin(k * Math.PI) * ry * 0.35;
+    shadeEll(p, x, y, 3.4, 2.4, HY.plate, 0.1);
+  }
+  scalesIn(p, HY.body[0], HY.body[3], 17);
+  for (const [x0, y0, x1, y1] of [
+    [cx - 10, top + 2, cx - 4, top + 5],
+    [cx + 6, top - 3, cx + 12, top - 1],
+  ])
+    stroke(p, x0, y0, x1, y1, HY.scar);
+  return BODY_CORE.set(key, { p, bb: bboxOf(p) });
+}
+
+const BODY_L = frameLRU<Layer>(96);
+
+function bodyLayer(r: BodyRig): Layer {
+  const b10 = Math.round(r.breath * 10);
+  const d20 = Math.round(r.droop * 20);
+  const shift = Math.round(r.sink - r.up);
   const key = [
-    Math.round(r.breath * 10),
+    b10,
     Math.round(r.wave * 24) % 24,
     Math.round(r.legs * 20),
-    Math.round(r.up * 2),
+    shift,
     Math.round(Math.min(40, r.water) * 2),
     Math.round(r.mud * 5),
     r.drip,
     Math.round(r.crest * 20),
-    Math.round(r.droop * 20),
-    Math.round(r.sink * 2),
+    d20,
+    Math.round(r.sink),
   ].join('|');
   const hit = BODY_L.get(key);
   if (hit) return hit;
   const p = new Px(BW, BH);
   const cx = BCX;
-  const cy = BCY - r.up + r.sink;
-  const b = r.breath;
-  const dd = r.droop;
+  const cy = BCY + shift;
+  const b = b10 / 10;
+  const dd = d20 / 20;
   const rx = lerp(21 + b * 0.4, 22.5, dd);
   const ry = lerp(12.5 + b * 0.5, 10, dd);
   const top = cy - lerp(3 + b * 0.6, 1.5, dd);
@@ -3526,19 +3631,8 @@ function bodyLayer(r: BodyRig): Px {
         stroke(p, fx + k * 1.5, fy, fx + s * 1 + k * 2, fy + 2, HY.spike[3]);
     }
   }
-  // Воротники шей по краю тела.
-  for (const a of NECK_ANG) {
-    const nx = cx + Math.cos(a) * rx * 0.9;
-    const ny = top + Math.sin(a) * ry * 0.85;
-    shadeEll(p, nx, ny, 4.4, 3.4, HY.plate, -0.1);
-  }
-  shadeEll(p, cx, top, rx, ry, HY.body);
-  for (let i = 0; i < 9; i++) {
-    const k = i / 8;
-    const x = cx - rx * 0.75 + k * rx * 1.5;
-    const y = top - ry * 0.35 - Math.sin(k * Math.PI) * ry * 0.35;
-    shadeEll(p, x, y, 3.4, 2.4, HY.plate, 0.1);
-  }
+  const core = bodyCore(b10, d20);
+  blit(p, core.p, 0, shift, core.bb);
   // Гребень: волна бежит от головы к хвосту, в смерти шипы валятся по одному.
   for (let i = 0; i < 8; i++) {
     const k = (i + 0.5) / 8;
@@ -3548,37 +3642,34 @@ function bodyLayer(r: BodyRig): Px {
     const di = clamp01(dd * 1.8 - (7 - i) * 0.1);
     const hgt = ((4 + Math.sin(k * Math.PI) * 5) * r.crest * ripple + b) * (1 - 0.65 * di);
     const lean = di * 3.5 + (r.crest - 1) * -0.6;
-    poly(
-      p,
-      [
-        [x - 2, base + 1],
-        [x + 0.5 + lean, base - hgt],
-        [x + 2, base + 1],
-      ],
-      (px, py) => tone(HY.spike, 0.8 - (px - x + 2) * 0.2 - (py - base + hgt) * 0.02),
+    const tip: V2 = [x + 0.5 + lean, base - hgt];
+    poly(p, [[x - 2, base + 1], tip, [x + 2, base + 1]], (px, py) =>
+      tone(HY.spike, 0.8 - (px - x + 2) * 0.2 - (py - tip[1]) * 0.02),
     );
   }
-  scales(p, 0, 0, BW - 1, BH - 1, HY.body[0], HY.body[3], 17);
-  for (const [x0, y0, x1, y1] of [
-    [cx - 10, top + 2, cx - 4, top + 5],
-    [cx + 6, top - 3, cx + 12, top - 1],
-  ])
-    stroke(p, x0, y0, x1, y1, HY.scar);
   // Ил на брюхе.
   if (r.mud > 0.05)
     for (let y = Math.floor(cy + 2); y < cy + 13; y++)
       for (let x = cx - rx - 2; x <= cx + rx + 2; x++)
         if (p.solid(x, y) && hash(x, y, 3) < 0.55 * r.mud) p.set(x, y, HY.mud[1 + (y % 2)]);
-  p.outline(INK);
+  inkOut(p);
+  const d = p.data;
   // Вода: нижняя часть тонет в озере; пена по кромке бежит.
   if (!onLand) {
     const wl = BCY + r.water;
-    for (let y = Math.floor(wl); y < BH; y++)
-      for (let x = 0; x < BW; x++) {
-        if (!p.solid(x, y)) continue;
-        const k = clamp01((y - wl) / 5);
-        p.set(x, y, mixc(p.get(x, y), HY.water, 0.4 + 0.5 * k));
+    const x0 = Math.max(0, Math.floor(cx - rx - 8));
+    const x1 = Math.min(BW - 1, Math.ceil(cx + rx + 8));
+    const W = HY.water;
+    for (let y = Math.max(0, Math.floor(wl)); y < BH; y++) {
+      const k = 0.4 + 0.5 * clamp01((y - wl) / 5);
+      for (let x = x0; x <= x1; x++) {
+        const i = (y * BW + x) * 4;
+        if (!d[i + 3]) continue;
+        d[i] += (W[0] - d[i]) * k;
+        d[i + 1] += (W[1] - d[i + 1]) * k;
+        d[i + 2] += (W[2] - d[i + 2]) * k;
       }
+    }
     for (let x = cx - rx - 2; x <= cx + rx + 2; x++) {
       const y = Math.round(wl + Math.sin(x * 0.7 + r.wave * TAU) * 0.8);
       if (p.solid(x, y) || p.solid(x, y - 1))
@@ -3586,11 +3677,12 @@ function bodyLayer(r: BodyRig): Px {
     }
   } else {
     // На суше — своя тень под брюхом.
+    const sh = alpha(hx('#000000'), 0.32);
     for (let y = BFEET - 3; y <= BFEET + 3; y++)
       for (let x = cx - 26; x <= cx + 26; x++) {
         const dx = (x + 0.5 - cx) / 25;
         const dy = (y + 0.5 - BFEET - 0.5) / 3.6;
-        if (dx * dx + dy * dy <= 1) under(p, x, y, alpha(hx('#000000'), 0.32));
+        if (dx * dx + dy * dy <= 1) under(p, x, y, sh);
       }
   }
   // Ил капает с брюха, пока тело встаёт.
@@ -3606,17 +3698,13 @@ function bodyLayer(r: BodyRig): Px {
   // Смерть: уходит в ил — ниже кромки ничего, по кромке ил кольцом.
   if (r.sink > 0.5) {
     const cyc0 = BFEET - 1;
-    for (let y = cyc0; y < BH; y++)
-      for (let x = 0; x < BW; x++) {
-        const i = (y * BW + x) * 4 + 3;
-        if (p.data[i] && y > cyc0) p.data[i] = 0;
-      }
+    for (let y = cyc0 + 1; y < BH; y++) for (let x = 0; x < BW; x++) d[(y * BW + x) * 4 + 3] = 0;
     for (let x = cx - rx - 3; x <= cx + rx + 3; x++) {
       const k = Math.abs(x - cx) / (rx + 3);
       p.set(x, cyc0 - Math.round((1 - k * k) * 1.2), x & 1 ? HY.mud[3] : HY.mud[2]);
     }
   }
-  return BODY_L.set(key, p);
+  return BODY_L.set(key, { p, bb: bboxOf(p) });
 }
 
 interface TailPt {
@@ -3660,9 +3748,9 @@ function tailGeo(t: TailRig, dir: number): TailPt[] {
 /** Взведённый хвост — откуда начинается взмах (для следа). */
 const TAIL_COCK: TailRig = { emerge: 1, phi: 1.9, curl: 0.165, psi: 0.62, smear: 0, slap: 0 };
 
-const TAIL_L = frameLRU<Px>(140);
+const TAIL_L = frameLRU<Layer>(140);
 
-function tailLayer(t: TailRig, dir: number, drip: number): Px {
+function tailLayer(t: TailRig, dir: number, drip: number): Layer {
   const key = [
     dir,
     Math.round(t.emerge * 20),
@@ -3757,8 +3845,8 @@ function tailLayer(t: TailRig, dir: number, drip: number): Px {
       (x, y) => tone(HY.plate, 0.75 - (x - tip.x) * 0.05 - (y - tip.y) * 0.08),
     );
   }
-  scales(p, 0, 0, BW - 1, BH - 1, HY.body[0], HY.body[3], 23);
-  p.outline(INK);
+  scalesIn(p, HY.body[0], HY.body[3], 23);
+  inkOut(p);
   // Кромка воды вокруг выхода хвоста.
   if (surf) {
     const R = surf.r + 3;
@@ -3821,7 +3909,7 @@ function tailLayer(t: TailRig, dir: number, drip: number): Px {
       prev = q;
     }
   }
-  return TAIL_L.set(key, p);
+  return TAIL_L.set(key, { p, bb: bboxOf(p) });
 }
 
 // --- Сцены тела ключевыми позами. ---
@@ -3978,9 +4066,10 @@ function bodyFrame(
   const body = bodyLayer(r);
   let p = new Px(BW, BH);
   const front = dir <= 2;
-  if (tail && !front) blit(p, tailLayer(tail, dir, drip));
-  blit(p, body);
-  if (tail && front) blit(p, tailLayer(tail, dir, drip));
+  const tl = tail ? tailLayer(tail, dir, drip) : null;
+  if (tl && !front) blit(p, tl.p, 0, 0, tl.bb);
+  blit(p, body.p, 0, 0, body.bb);
+  if (tl && front) blit(p, tl.p, 0, 0, tl.bb);
   if (flash) p = p.tint(WHITE, 0.85);
   if (flip) p = p.flipX();
   // Обрезать по содержимому: у покоя кадр втрое меньше рабочего холста.
@@ -4048,7 +4137,7 @@ registerMobPainter('f9_body', (m: Mob, pose: MobPose) => {
       const side = dir === 2 || dir === 4 ? 0 : flip ? -1 : 1;
       fx = { rot: f.rot * side, sx: f.sx, sy: f.sy, dy: f.dy };
       // Дыхание замирает на взмахе: тело собрано.
-      r = { ...r, breath: 0.5, wave: (x % 24) / 24, crest: f.crest };
+      r = { ...r, breath: 0.5, wave: 0, crest: f.crest };
     } else bob = Math.sin((now / 2.4) * TAU) * 0.6;
   }
   // Ранение (отсечена или прижжена шея): вздрагивает всем телом.
@@ -4184,7 +4273,7 @@ function neckSpike(el: number, cut: number, di: number, big: boolean): HTMLCanva
   poly(p, [[6.5 + nx * 1.6, 6.5 + ny * 1.6], tip, [6.5 - nx * 1.6, 6.5 - ny * 1.6]], (x, y) =>
     tone(col, 0.9 - Math.hypot(x - tip[0], y - tip[1]) * 0.12),
   );
-  p.outline(INK);
+  inkOut(p);
   c = p.canvas();
   SPIKE.set(key, c);
   return c;
@@ -4742,7 +4831,7 @@ registerMobWarm('f9_body', function* () {
   for (let x = 0; x <= TAIL_END; x++) {
     const f = lashFx(x);
     bodyFrame(
-      { ...BODY0, breath: 0.5, wave: (x % 24) / 24, crest: f.crest },
+      { ...BODY0, breath: 0.5, wave: 0, crest: f.crest },
       tailLane(x),
       2,
       false,
