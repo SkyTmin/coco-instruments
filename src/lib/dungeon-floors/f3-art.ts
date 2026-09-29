@@ -13,9 +13,12 @@
 import { P } from '../dungeon-tiles';
 import { hex, mix, Px, TS } from '../dungeon-art';
 import {
+  frameLRU,
+  paintSim,
   registerCellPainter,
   registerItemArt,
   registerMobPainter,
+  registerMobWarm,
   registerPropPainter,
   registerShotPainter,
   registerZonePainter,
@@ -1059,8 +1062,26 @@ registerMobPainter('f3_jelly', (m: Mob, pose: MobPose) => {
 // ---------------------------------------------------------------------------
 // Алая пасть: алая хищная саламандра-щука. Длинное тело, плоская голова с
 // огромной пастью (горло светится), гребень шипов по спине, хвост с
-// плавником, четыре коротких лапы. Под водой — только плавник-гребень и
-// тёмная тень с «усами» волны.
+// плавником, четыре коротких лапы. Под водой — тёмный силуэт и гребень,
+// режущий воду.
+//
+// Анимация (v2.85) — риг, а не набор картинок. Поза — горсть чисел
+// (`MawRig`): центр тела, наклон, изгибы шеи и хвоста, голова, челюсть,
+// горловой мешок, жабры, гребень, лапы, погружение. Техника — дорожка
+// ключевых поз по времени режима (`pose.t`, 24 к/с), промежуточные позы —
+// интерполяцией с разгоном и торможением. Тело рисуется из позы (сплайн
+// позвоночника, голова в своих осях), поэтому любой изгиб ложится целыми
+// пикселями, без поворота картинки. Общий ход (прыжок, отдача, вес) —
+// трансформом кадра (`dx/dy/sx/sy`), свечение глотки — слоем `lit`.
+//
+// Метроном — `mawStep` в `f3-brains.ts` (тайминги НЕ трогаем):
+//   surface 1,55/h, волна бьёт в 0,85/h — кадр удара 20 (от t·h);
+//   spit    замах 0,6/h, плевок, ещё 0,5 с;
+//   rise    0,5/h (0,34/h в «Голоде») → leap T = 0,74 + d/16 (0,66 + d/18),
+//           удар приземления — ровно в конце полёта (кадр 0 «на берегу»);
+//   beached с прилива хлёст хвостом: метка с 0,75 с, удар в 1,30 с;
+//   crawl / swim / tail — циклы; roar 1,3 с; dying 0,7 с (+ `linger`).
+// h — спешка 1,25 после 200 с боя. Кадр контакта = кадр урона.
 // ---------------------------------------------------------------------------
 
 const MAW = {
@@ -1074,302 +1095,2403 @@ const MAW = {
   throatHi: hex('#ffd070'),
   mouth: hex('#2a0406'),
   eye: hex('#ffb030'),
-  shadow: [58, 6, 10, 150] as RGBA,
+  gillIn: hex('#ff6a5a'),
   wake: hex('#a0ece4', 210),
+  sacHot: hex('#ffd070', 200),
+  sacGlow: hex('#ff7a2a', 130),
+  ember: hex('#ff7a50', 200),
   foam: hex('#e0fffa', 230),
-  water: hex('#1e6e78', 185),
+  spit: hex('#5ad0cc'),
+  spitDk: hex('#1c6a74'),
 };
 
-interface MawPose {
-  kind: 'swim' | 'rise' | 'air' | 'beach' | 'crawl' | 'surface' | 'spit' | 'roar' | 'dead';
-  f: number;
+/** Поза рига. Всё — числа: промежуточная поза — интерполяция. */
+interface MawRig {
+  /** Центр тела (грудь) от точки ног, пиксели кадра. */
+  cx: number;
+  cy: number;
+  /** Наклон тела, рад: + нос вверх. */
+  p: number;
+  /** Изгиб шеи и хвоста по звеньям, рад: + вверх (к спине). */
+  fw1: number;
+  fw2: number;
+  bk1: number;
+  bk2: number;
+  bk3: number;
+  /** Голова относительно шеи: + нос вверх. */
+  hd: number;
+  /** Челюсть 0…1 (чуть больше — на ударе). */
+  jaw: number;
+  /** Горловой мешок 0…1 — набор воздуха перед плевком. */
+  throat: number;
+  /** Жар в глотке 0…1 (слой поверх темноты). */
+  glow: number;
+  /** Жабры 0…1. */
+  gill: number;
+  /** Гребень: 0,6 прижат, 1 как есть, 1,5 дыбом; `crestRun` — волна от головы. */
+  crest: number;
+  crestRun: number;
+  /** Перепонка между шипами — парус над водой. */
+  sail: number;
+  /** Хвостовой плавник: угол к хвосту и размах. */
+  fin: number;
+  finS: number;
+  /** Лапы: фаза шага, ход шага, поджаты, вперёд когтями, врастопырку, бьют. */
+  walk: number;
+  step: number;
+  tuck: number;
+  reach: number;
+  splay: number;
+  kick: number;
+  /** Глаз: 0 открыт, 1 прищур, 2 закрыт, 3 мёртв. */
+  eye: number;
+  /** На сколько пикселей тело ниже кромки воды. */
+  sink: number;
+}
+
+const REST: MawRig = {
+  cx: -2,
+  cy: -6,
+  p: 0,
+  fw1: 0,
+  fw2: 0,
+  bk1: -0.06,
+  bk2: -0.05,
+  bk3: -0.04,
+  hd: 0,
+  jaw: 0.15,
+  throat: 0,
+  glow: 0,
+  gill: 0.15,
+  crest: 1,
+  crestRun: 1,
+  sail: 0,
+  fin: 0,
+  finS: 1,
+  walk: 0,
+  step: 0,
+  tuck: 0,
+  reach: 0,
+  splay: 0,
+  kick: 0,
+  eye: 0,
+  sink: 0,
+};
+const RIG_KEYS = Object.keys(REST) as (keyof MawRig)[];
+
+type Ease = (x: number) => number;
+const EZ = {
+  lin: (x: number) => x,
+  /** Разгон — замах, падение. */
+  in: (x: number) => x * x,
+  in3: (x: number) => x * x * x,
+  /** Торможение — удар, выход из рывка. */
+  out: (x: number) => 1 - (1 - x) * (1 - x) * (1 - x),
+  out2: (x: number) => 1 - (1 - x) * (1 - x),
+  io: (x: number) => x * x * (3 - 2 * x),
+  /** С перелётом за цель. */
+  back: (x: number) => {
+    const y = x - 1;
+    return 1 + 2.4 * y * y * y + 1.4 * y * y;
+  },
+};
+
+const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+const F = (n: number) => n / 24;
+
+type Key<T> = [number, Partial<T>, Ease?];
+
+/**
+ * Дорожка ключей: каждая следующая поза — предыдущая плюс изменения.
+ * Возвращает функцию времени; ключи — по возрастанию.
+ */
+function lane<T extends object>(base: T, keys: Key<T>[]): (x: number) => T {
+  const ts: number[] = [];
+  const rs: T[] = [];
+  const es: Ease[] = [];
+  let cur = base;
+  for (const [t, part, e] of keys) {
+    cur = { ...cur, ...part };
+    ts.push(t);
+    rs.push(cur);
+    es.push(e ?? EZ.io);
+  }
+  const names = Object.keys(base) as (keyof T)[];
+  return (x: number) => {
+    if (x <= ts[0]) return rs[0];
+    for (let i = 1; i < ts.length; i++) {
+      if (x > ts[i]) continue;
+      const k = es[i]((x - ts[i - 1]) / Math.max(1e-6, ts[i] - ts[i - 1]));
+      const a = rs[i - 1];
+      const b = rs[i];
+      const o = { ...a };
+      for (const n of names) {
+        const va = a[n] as unknown as number;
+        const vb = b[n] as unknown as number;
+        (o[n] as unknown as number) = va + (vb - va) * k;
+      }
+      return o;
+    }
+    return rs[rs.length - 1];
+  };
+}
+
+function mixRig(a: MawRig, b: MawRig, k: number): MawRig {
+  const o = { ...a };
+  for (const n of RIG_KEYS) o[n] = a[n] + (b[n] - a[n]) * k;
+  return o;
+}
+
+// ---- Геометрия ------------------------------------------------------------
+
+/** Рабочий холст: с запасом под прыжок, дыбу и след хвоста кругом. */
+const MW = 112;
+const MH = 108;
+const GX = 56;
+const GY = 70;
+const L_B = 6;
+const L_F = 5.5;
+const THICK = 5.2;
+
+type V2 = [number, number];
+const step2 = (p: V2, a: number, l: number): V2 => [p[0] + Math.cos(a) * l, p[1] + Math.sin(a) * l];
+
+/** Толщина: хвост тонкий, к груди толще, шея чуть уже. */
+const prof = (k: number) =>
+  k < 0.55 ? 0.35 + (k / 0.55) * 0.65 : k < 0.8 ? 1 : 1 - (k - 0.8) * 1.2;
+
+interface MawGeo {
+  line: V2[];
+  rad: number[];
+  tan: V2[];
+  hinge: V2;
+  ha: number;
+  /** Брюхо — в сторону +нормали (запас на переворот). */
+  flip: number;
+}
+
+function mawGeo(r: MawRig): MawGeo {
+  const a0 = -r.p;
+  const C: V2 = [GX + r.cx, GY + r.cy + r.sink];
+  const af1 = a0 - r.fw1;
+  const af2 = af1 - r.fw2;
+  const F1 = step2(C, af1, L_F);
+  const F2 = step2(F1, af2, L_F);
+  const ab1 = a0 + Math.PI + r.bk1;
+  const ab2 = ab1 + r.bk2;
+  const ab3 = ab2 + r.bk3;
+  const B1 = step2(C, ab1, L_B);
+  const B2 = step2(B1, ab2, L_B);
+  const B3 = step2(B2, ab3, L_B);
+  const line = spline([B3, B2, B1, C, F1, F2], 10) as V2[];
+  const n = line.length;
+  const rad = line.map((_, i) => THICK * prof(i / (n - 1)));
+  const tan = line.map((_, i): V2 => {
+    const a = line[Math.max(0, i - 1)];
+    const b = line[Math.min(n - 1, i + 1)];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l = Math.hypot(dx, dy) || 1;
+    return [dx / l, dy / l];
+  });
+  const ha = af2 - r.hd;
+  return { line, rad, tan, hinge: step2(F2, ha, 3), ha, flip: 1 };
+}
+
+/** Нормаль к брюху в точке оси. */
+const belly = (g: MawGeo, i: number): V2 => [-g.tan[i][1] * g.flip, g.tan[i][0] * g.flip];
+
+/** Точка в многоугольнике (чёт-нечет). */
+function inPoly(pts: V2[], x: number, y: number): boolean {
+  let c = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+
+// ---- Кисти рига -------------------------------------------------------------
+
+const TUBE_BEST = new Float32Array(MW * MH);
+const TUBE_OWN = new Int16Array(MW * MH);
+let WORK: Px | null = null;
+let WLIT: Px | null = null;
+
+/** Тело — трубка по оси: пиксель принадлежит тому звену, в котором он глубже. */
+function mawTube(p: Px, g: MawGeo): void {
+  const { line, rad } = g;
+  const W = p.w;
+  const H = p.h;
+  const best = TUBE_BEST;
+  const own = TUBE_OWN;
+  best.fill(-1);
+  let x0 = W;
+  let x1 = 0;
+  let y0 = H;
+  let y1 = 0;
+  for (let i = 0; i < line.length; i++) {
+    const [x, y] = line[i];
+    const r = rad[i];
+    const ya = Math.max(0, Math.floor(y - r));
+    const yb = Math.min(H - 1, Math.ceil(y + r));
+    const xa = Math.max(0, Math.floor(x - r));
+    const xb = Math.min(W - 1, Math.ceil(x + r));
+    for (let yy = ya; yy <= yb; yy++)
+      for (let xx = xa; xx <= xb; xx++) {
+        const dx = xx + 0.5 - x;
+        const dy = yy + 0.5 - y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r * r) continue;
+        const dep = 1 - Math.sqrt(d2) / r;
+        const k = yy * W + xx;
+        if (dep > best[k]) {
+          best[k] = dep;
+          own[k] = i;
+        }
+      }
+    x0 = Math.min(x0, xa);
+    x1 = Math.max(x1, xb);
+    y0 = Math.min(y0, ya);
+    y1 = Math.max(y1, yb);
+  }
+  for (let yy = y0; yy <= y1; yy++)
+    for (let xx = x0; xx <= x1; xx++) {
+      const k = yy * W + xx;
+      if (best[k] < 0) continue;
+      const i = own[k];
+      const [sx, sy] = line[i];
+      const [nx, ny] = belly(g, i);
+      const dx = xx + 0.5 - sx;
+      const dy = yy + 0.5 - sy;
+      const s = clamp((dx * nx + dy * ny) / rad[i], -1, 1);
+      // Свет сверху-слева: на прямом теле — ровно прежняя формула.
+      const c =
+        s > 0.5
+          ? tone(MAW.belly, 0.7 - s * 0.5)
+          : tone(MAW.body, 0.42 + s * (nx * -0.45 + ny * -0.75) - dx * 0.04);
+      p.set(xx, yy, c);
+    }
+}
+
+/** Гребень шипов по спине; `sail` — перепонка (парус над водой). Кончики — наружу. */
+function mawCrest(p: Px, g: MawGeo, r: MawRig): V2[] {
+  const n = g.line.length;
+  const spikes: { b: V2; t: V2 }[] = [];
+  for (let i = Math.floor(n * 0.12); i < Math.floor(n * 0.82); i += 3) {
+    const k = i / (n - 1);
+    const [x, y] = g.line[i];
+    const [tx, ty] = g.tan[i];
+    const [nx, ny] = belly(g, i);
+    const rr = g.rad[i];
+    const run = clamp((r.crestRun - (1 - k)) * 3, 0, 1);
+    const cr = 1 + (r.crest - 1) * run;
+    const h = (1.5 + Math.sin(k * Math.PI) * 3.2) * (0.35 + 0.65 * cr);
+    const lean = clamp(1 + (1 - cr) * 2.5, -0.4, 3);
+    const b: V2 = [x - nx * rr, y - ny * rr];
+    spikes.push({ b, t: [b[0] - nx * h - tx * lean, b[1] - ny * h - ty * lean] });
+  }
+  if (r.sail > 0.05)
+    for (let j = 0; j + 1 < spikes.length; j++) {
+      const a = spikes[j];
+      const c = spikes[j + 1];
+      const m = spikes.length - 1;
+      const ka = r.sail * (0.35 + 0.65 * Math.sin((j / m) * Math.PI));
+      const kc = r.sail * (0.35 + 0.65 * Math.sin(((j + 1) / m) * Math.PI));
+      const lerp = (u: V2, v: V2, k: number): V2 => [
+        u[0] + (v[0] - u[0]) * k,
+        u[1] + (v[1] - u[1]) * k,
+      ];
+      poly(p, [a.b, lerp(a.b, a.t, ka), lerp(c.b, c.t, kc), c.b], (x, y) =>
+        y < Math.min(a.t[1], c.t[1]) + 1.5 ? MAW.finHi : MAW.fin,
+      );
+    }
+  for (const { b, t } of spikes) {
+    p.line(b[0], b[1], t[0], t[1], MAW.spine[1]);
+    p.set(t[0], t[1], MAW.spine[3]);
+    const [dx, dy] = [t[0] - b[0], t[1] - b[1]];
+    const l = Math.hypot(dx, dy) || 1;
+    p.set(b[0] + dx / l, b[1] + dy / l, MAW.spine[2]);
+  }
+  return spikes.map((q) => q.t);
+}
+
+/** Хвостовой плавник по касательной к хвосту. */
+function mawFin(p: Px, g: MawGeo, r: MawRig): void {
+  const [tx, ty] = g.line[0];
+  const a = Math.atan2(g.tan[0][1], g.tan[0][0]) + r.fin * g.flip;
+  const ux = Math.cos(a);
+  const uy = Math.sin(a);
+  const vx = -uy * g.flip;
+  const vy = ux * g.flip;
+  const s = r.finS;
+  const pt = (u: number, v: number): V2 => [tx + (u * ux + v * s * vx), ty + (u * uy + v * s * vy)];
+  poly(p, [pt(3, -1), pt(-3 * s, -5), pt(-4 * s, 0), pt(-3 * s, 4), pt(3, 1)], (x, y) =>
+    (x + 0.5 - tx) * ux + (y + 0.5 - ty) * uy < -1 ? MAW.finHi : MAW.fin,
+  );
+}
+
+/** Лапы: дальние — до тела, ближние — после. */
+function mawLegs(p: Px, g: MawGeo, r: MawRig, far: boolean): void {
+  const n = g.line.length;
+  const legs: [number, number, boolean][] = far
+    ? [
+        [0.47, 0, true],
+        [0.76, 0.5, false],
+      ]
+    : [
+        [0.52, 0.5, true],
+        [0.81, 0, false],
+      ];
+  const col = far ? MAW.body[0] : MAW.body[1];
+  for (const [k, off, hind] of legs) {
+    const i = Math.round(k * (n - 1));
+    const [x, y] = g.line[i];
+    const [tx, ty] = g.tan[i];
+    const [nx, ny] = belly(g, i);
+    const rr = g.rad[i];
+    const hip: V2 = [x + nx * rr * 0.4, y + ny * rr * 0.4];
+    const ph = (r.walk + off) * Math.PI * 2;
+    let foot: V2;
+    {
+      const plant: V2 = [
+        hip[0] + (hind ? -0.6 : 0.8) + Math.cos(ph) * r.step * 1.8 + (hind ? -2 : 2) * r.splay,
+        Math.min(GY + 1, hip[1] + rr * 0.6 + 2.2) -
+          Math.max(0, Math.sin(ph)) * r.step * 1.5 -
+          r.splay * 1.2 -
+          r.kick * (1.4 + Math.sin(ph) * 1.4),
+      ];
+      plant[0] += Math.cos(ph) * r.kick * 1.4;
+      const tuck: V2 = [hip[0] - tx * 4.5 + nx * 1.2, hip[1] - ty * 4.5 + ny * 1.2];
+      const reach: V2 = [hip[0] + tx * 4 + nx * 2.8, hip[1] + ty * 4 + ny * 2.8];
+      const wt = clamp(r.tuck, 0, 1);
+      const wr = clamp(r.reach, 0, 1);
+      const w0 = Math.max(0, 1 - wt - wr);
+      const sum = w0 + wt + wr || 1;
+      foot = [
+        (plant[0] * w0 + tuck[0] * wt + reach[0] * wr) / sum,
+        (plant[1] * w0 + tuck[1] * wt + reach[1] * wr) / sum,
+      ];
+    }
+    p.line(hip[0], hip[1], foot[0], foot[1], col);
+    p.line(hip[0] + 1, hip[1], foot[0] + 1, foot[1], col);
+    p.set(foot[0] + 2, foot[1], MAW.tooth);
+  }
+}
+
+interface MawHead {
+  /** Точка головы (u — вперёд по голове, v — вниз) в пикселях кадра. */
+  at: (u: number, v: number) => V2;
+  /** То же для нижней челюсти (поворачивается на шарнире). */
+  jawAt: (u: number, v: number) => V2;
+  eye: V2;
+}
+
+/** Оси головы: (u — вперёд, v — к горлу) → пиксели кадра. */
+function headAt(g: MawGeo): (u: number, v: number) => V2 {
+  const [hx, hy] = g.hinge;
+  const ca = Math.cos(g.ha);
+  const sa = Math.sin(g.ha);
+  const fl = g.flip;
+  return (u, v) => [hx + u * ca - v * fl * sa, hy + u * sa + v * fl * ca];
+}
+
+/** Горловой мешок под челюстью — набирает воздух перед плевком. */
+function mawSac(p: Px, lit: Px, g: MawGeo, th: number): void {
+  if (th < 0.04) return;
+  const cu = -3.4;
+  const cv = 3.0 + th * 1.8;
+  const ru = 2 + th * 3.4;
+  const rv = 1.2 + th * 2.8;
+  const ca = Math.cos(g.ha);
+  const sa = Math.sin(g.ha);
+  const c = headAt(g)(cu, cv);
+  const R = Math.ceil(Math.max(ru, rv)) + 1;
+  const glowK = clamp((th - 0.3) / 0.7, 0, 1);
+  for (let y = Math.floor(c[1] - R); y <= c[1] + R; y++)
+    for (let x = Math.floor(c[0] - R); x <= c[0] + R; x++) {
+      const dx = x + 0.5 - c[0];
+      const dy = y + 0.5 - c[1];
+      const du = (dx * ca + dy * sa) / ru;
+      const dv = (-dx * sa + dy * ca) / rv;
+      const d = du * du + dv * dv;
+      if (d > 1) continue;
+      const nz = Math.sqrt(1 - d);
+      const wx = du * ca - dv * sa;
+      const wy = du * sa + dv * ca;
+      const k = wx * -0.45 + wy * -0.75 + nz * 0.5;
+      // Натянутая кожа светлеет, внутри — жар.
+      p.set(x, y, tone(MAW.belly, k + th * 0.25));
+      if (glowK > 0 && d < 0.55)
+        lit.set(
+          x,
+          y,
+          d < 0.18
+            ? [MAW.sacHot[0], MAW.sacHot[1], MAW.sacHot[2], 200 * glowK]
+            : [MAW.sacGlow[0], MAW.sacGlow[1], MAW.sacGlow[2], 130 * glowK],
+        );
+    }
 }
 
 /**
- * Тело саламандры вдоль кривой `spine` (от хвоста к голове): толщина по
- * профилю, спина — гребень, брюхо светлое. Возвращает точку головы.
+ * Голова в своих осях: череп, челюсть на шарнире, пасть, зубы, ноздря,
+ * бровь с шипом. На прямой голове — пиксель в пиксель прежний рисунок.
  */
-function mawBody(p: Px, spine: [number, number][], thick: number, frameH: number, legsF: number) {
-  const line = spline(spine, 10);
-  const n = line.length;
-  // Толщина: хвост тонкий, к груди толще, шея чуть уже.
-  const prof = (k: number) =>
-    k < 0.55 ? 0.35 + (k / 0.55) * 0.65 : k < 0.8 ? 1 : 1 - (k - 0.8) * 1.2;
-  // Лапы (дальние — до тела).
-  const legAt = (k: number, far: boolean, s: number) => {
-    const i = Math.min(n - 1, Math.floor(k * (n - 1)));
-    const [x, y] = line[i];
-    const r = thick * prof(k);
-    const lx = x + s * 1.5;
-    const ly = Math.min(frameH - 2, y + r + 2);
-    p.line(x, y + r * 0.4, lx, ly, far ? MAW.body[0] : MAW.body[1]);
-    p.line(x + 1, y + r * 0.4, lx + 1, ly, far ? MAW.body[0] : MAW.body[1]);
-    p.set(lx + 2, ly, MAW.tooth);
+function mawHead(p: Px, g: MawGeo, r: MawRig): MawHead {
+  const [hx, hy] = g.hinge;
+  const ca = Math.cos(g.ha);
+  const sa = Math.sin(g.ha);
+  const fl = g.flip;
+  const at = headAt(g);
+  const jawA = clamp(r.jaw, 0, 1.15) * 0.62;
+  const jc = Math.cos(jawA);
+  const js = Math.sin(jawA);
+  const J: V2 = [-3.5, 1.3];
+  const jr = (u: number, v: number): V2 => {
+    const du = u - J[0];
+    const dv = v - J[1];
+    return [J[0] + du * jc - dv * js, J[1] + du * js + dv * jc];
   };
-  if (legsF >= 0) {
-    legAt(0.45, true, [1, -1, 1, -1][legsF % 4]);
-    legAt(0.75, true, [-1, 1, -1, 1][legsF % 4]);
-  }
-  // Тело: круги по кривой, тон по высоте в сечении.
-  for (let i = 0; i < n; i++) {
-    const k = i / (n - 1);
-    const [x, y] = line[i];
-    const r = thick * prof(k);
-    for (let yy = Math.floor(y - r); yy <= Math.ceil(y + r); yy++)
-      for (let xx = Math.floor(x - r); xx <= Math.ceil(x + r); xx++) {
-        const dx = xx + 0.5 - x;
-        const dy = yy + 0.5 - y;
-        if (dx * dx + dy * dy > r * r) continue;
-        const t = dy / r;
-        const c =
-          t > 0.5 ? tone(MAW.belly, 0.7 - t * 0.5) : tone(MAW.body, 0.42 - t * 0.75 - dx * 0.04);
-        p.set(xx, yy, c);
+  const jawAt = (u: number, v: number) => at(...jr(u, v));
+  const JAW: V2[] = [
+    [-4, 1],
+    [7.5, 1],
+    [7, 3.5],
+    [-3, 3.8],
+  ];
+  const open = r.jaw > 0.1;
+  const CAV: V2[] = [[-2, 0.3], [7, -0.2], jr(7, 1), jr(-2, 1.6)];
+  const R = 12;
+  for (let y = Math.floor(hy - R); y <= hy + R; y++)
+    for (let x = Math.floor(hx - R); x <= hx + R; x++) {
+      const ox = x + 0.5 - hx;
+      const oy = y + 0.5 - hy;
+      const u = ox * ca + oy * sa;
+      const v = (-ox * sa + oy * ca) * fl;
+      // Вне черепа и челюсти — сразу дальше (дорого только многоугольникам).
+      if (u < -8.6 || u > 9 || v < -6.4 || v > 11) continue;
+      let c: RGBA | null = null;
+      const eu = (u + 0.5) / 7.4;
+      const ev = (v + 1.5) / 4.4;
+      if (eu * eu + ev * ev <= 1) {
+        const nz = Math.sqrt(Math.max(0, 1 - eu * eu - ev * ev));
+        const wx = eu * ca - ev * fl * sa;
+        const wy = eu * sa + ev * fl * ca;
+        c = tone(MAW.body, wx * -0.45 + wy * -0.75 + nz * 0.5);
       }
-  }
-  // Гребень шипов по спине: треугольники, выше к середине.
-  for (let i = Math.floor(n * 0.12); i < Math.floor(n * 0.82); i += 3) {
-    const k = i / (n - 1);
-    const [x, y] = line[i];
-    const r = thick * prof(k);
-    const h = 1.5 + Math.sin(k * Math.PI) * 3.2;
-    p.line(x, y - r, x - 1, y - r - h, MAW.spine[1]);
-    p.set(x - 1, y - r - h, MAW.spine[3]);
-    p.set(x, y - r - 1, MAW.spine[2]);
-  }
-  // Хвостовой плавник.
-  const [tx, ty] = line[0];
-  poly(
-    p,
-    [
-      [tx + 3, ty - 1],
-      [tx - 3, ty - 5],
-      [tx - 4, ty],
-      [tx - 3, ty + 4],
-      [tx + 3, ty + 1],
-    ],
-    (x) => (x < tx - 1 ? MAW.finHi : MAW.fin),
-  );
-  if (legsF >= 0) {
-    legAt(0.5, false, [-1, 1, -1, 1][legsF % 4]);
-    legAt(0.8, false, [1, -1, 1, -1][legsF % 4]);
-  }
-  return line[n - 1];
-}
-
-/** Голова: плоская, с пастью; `open` 0…1, глаз сверху. */
-function mawHead(p: Px, hx: number, hy: number, open: number, glow: boolean): [number, number] {
-  // Череп: широкий и плоский — пасть главнее всего.
-  blob(p, hx - 0.5, hy - 1.5, 7.4, 4.4, MAW.body);
-  // Нижняя челюсть — тяжёлая, откидывается вниз.
-  const drop = open * 5;
-  poly(
-    p,
-    [
-      [hx - 4, hy + 1],
-      [hx + 7.5, hy + 1 + drop * 0.55],
-      [hx + 7, hy + 3.5 + drop],
-      [hx - 3, hy + 3.8],
-    ],
-    (x, y) => (y > hy + 2.6 + drop * 0.5 ? MAW.belly[0] : MAW.belly[1]),
-  );
-  if (open > 0.1) {
-    // Пасть: тёмный провал, светящееся горло, зубы сверху и снизу.
-    poly(
-      p,
-      [
-        [hx - 2, hy + 0.3],
-        [hx + 7, hy - 0.2],
-        [hx + 7, hy + 1 + drop * 0.6],
-        [hx - 2, hy + 2.2],
-      ],
-      MAW.mouth,
-    );
-    if (glow) {
-      p.ell(hx - 0.5, hy + 1.2, 1.6, 1, MAW.throat);
-      p.set(hx - 1, hy + 1, MAW.throatHi);
-      p.set(hx, hy + 1, MAW.throatHi);
+      // Челюсть — в её осях.
+      const du = u - J[0];
+      const dv = v - J[1];
+      const ju = J[0] + du * jc + dv * js;
+      const jv = J[1] - du * js + dv * jc;
+      if (ju > -4.5 && ju < 8 && jv > 0.5 && jv < 4.3 && inPoly(JAW, ju, jv))
+        c = jv > 2.6 ? MAW.belly[0] : MAW.belly[1];
+      if (open && u > -2.5 && u < 7.5 && v > -0.7 && inPoly(CAV, u, v)) c = MAW.mouth;
+      if (c) p.set(x, y, c);
+    }
+  if (open) {
+    if (r.glow > 0.3) {
+      const c = at(-0.5, 1.2);
+      p.ell(c[0], c[1], 1.6, 1, MAW.throat);
+      p.set(...at(-1, 1), MAW.throatHi);
+      p.set(...at(0, 1), MAW.throatHi);
     }
     // Зубы — иглы через точку: верхние вниз, нижние вверх.
-    for (let x = Math.round(hx); x <= hx + 6.5; x += 2) {
-      p.set(x, hy + 0.3, MAW.tooth);
-      p.set(x + 1, hy + 0.6 + drop * 0.6, MAW.tooth);
+    for (let u = 0; u <= 6.5; u += 2) {
+      p.set(...at(u, 0.3), MAW.tooth);
+      p.set(...jawAt(u + 1, 0.6), MAW.tooth);
     }
   } else {
-    p.line(hx - 2, hy + 1, hx + 7, hy + 1, MAW.mouth);
-    for (let x = hx + 1; x <= hx + 6; x += 2) p.set(x, hy + 2, MAW.tooth);
+    const a = at(-2, 1);
+    const b = at(7, 1);
+    p.line(a[0], a[1], b[0], b[1], MAW.mouth);
+    for (let u = 1; u <= 6; u += 2) p.set(...at(u, 2), MAW.tooth);
   }
   // Ноздря, надбровье с шипом.
-  p.set(hx + 6, hy - 2.5, MAW.body[0]);
-  p.set(hx + 1, hy - 5, MAW.spine[2]);
-  p.set(hx, hy - 6, MAW.spine[3]);
-  return [Math.round(hx + 1.5), Math.round(hy - 3.2)];
+  p.set(...at(6, -2.5), MAW.body[0]);
+  p.set(...at(1, -5), MAW.spine[2]);
+  p.set(...at(0, -6), MAW.spine[3]);
+  // Жабры: на вдохе за черепом раскрываются три розовые щели.
+  if (r.gill > 0.45)
+    for (let j = 0; j < 3; j++) {
+      const u = -6.2 + j * 1.5;
+      const a = at(u + 0.4, -1.6);
+      const b = at(u - 0.2, 0.8);
+      p.line(a[0], a[1], b[0], b[1], r.gill > 0.8 ? MAW.finHi : MAW.gillIn);
+    }
+  const e = at(1.5, -3.2);
+  return { at, jawAt, eye: [Math.round(e[0]), Math.round(e[1])] };
 }
 
-function paintMaw(o: MawPose): Raw {
-  const W = 64;
-  const H = 40;
-  const p = new Px(W, H);
-  const g = 34; // земля
-  const cx = 30;
-  if (o.kind === 'swim' || o.kind === 'rise') {
-    // Под водой: тёмная тень тела и гребень над водой, «усы» волны.
-    const wl = g;
-    const sh = o.kind === 'rise' ? 1 : 0;
-    p.ell(cx, wl, 15, 3.4, [58, 6, 10, o.kind === 'rise' ? 190 : 140]);
-    p.ell(cx + 10, wl, 4.5, 2.6, [70, 8, 12, 150]);
-    if (o.kind === 'swim') {
-      // Гребень режет воду.
-      poly(
-        p,
-        [
-          [cx - 6, wl],
-          [cx - 1, wl - 7],
-          [cx + 1, wl - 7.5],
-          [cx + 5, wl],
-        ],
-        (x) => (x < cx ? MAW.spine[2] : MAW.fin),
-      );
-      p.line(cx - 1, wl - 7, cx + 1, wl - 7, MAW.finHi);
-      p.outline(INK);
-      // Волна от гребня: расходящиеся «усы» и пена.
-      for (let k = 0; k < 3; k++) {
-        const s = ((o.f + k) % 4) * 2;
-        p.line(cx - 7 - s, wl + 1 + k, cx - 13 - s * 1.4, wl + 2 + k * 1.6, MAW.wake);
-        p.line(cx - 7 - s, wl - 1 - k * 0.3, cx - 13 - s * 1.4, wl - 1 - k, MAW.wake);
+// ---- Кадр целиком -----------------------------------------------------------
+
+interface MawDraw {
+  /** Вода по кромке GY: ниже — тёмный силуэт, по кромке — пена и рябь. */
+  water?: boolean;
+  /** Фаза ряби и следа 0…1 (квантованная). */
+  ph?: number;
+  /** След «усами» за гребнем (плывёт) — длина. */
+  wake?: number;
+  /**
+   * След быстрого движения: позы от старой к новой (часто, по дуге) и чьи
+   * точки вести — нос и челюсть или хвост и плавник. Тонкая дуга, как у
+   * клинка героя, а не залитый клин.
+   */
+  smear?: { rigs: MawRig[]; part: 'tail' | 'front'; col: RGBA } | null;
+  /** След хвоста кругом: углы начала и конца дуги (по часовой), яркость. */
+  ring?: { a0: number; a1: number; k: number } | null;
+  /** Ярость (смена фазы): алый ореол по силуэту. */
+  rage?: number;
+  /** «Голод»: кончики гребня тлеют. */
+  hunger?: boolean;
+}
+
+interface MawCanvas {
+  p: Px;
+  lit: Px;
+  g: MawGeo;
+  h: MawHead;
+  eye: V2 | null;
+}
+
+function smearPts(r: MawRig, part: 'tail' | 'front'): V2[] {
+  const g = mawGeo(r);
+  if (part === 'tail') {
+    const [tx, ty] = g.line[0];
+    const a = Math.atan2(g.tan[0][1], g.tan[0][0]) + r.fin;
+    const ux = Math.cos(a);
+    const uy = Math.sin(a);
+    const s = r.finS;
+    const fin = (u: number, v: number): V2 => [tx + u * ux - v * s * uy, ty + u * uy + v * s * ux];
+    return [fin(-3 * s, -5), fin(-4 * s, 0), fin(-3 * s, 4), g.line[6]];
+  }
+  const at = headAt(g);
+  const jawA = clamp(r.jaw, 0, 1.15) * 0.62;
+  const du = 7 + 3.5;
+  const dv = 3.5 - 1.3;
+  const ju = -3.5 + du * Math.cos(jawA) - dv * Math.sin(jawA);
+  const jv = 1.3 + du * Math.sin(jawA) + dv * Math.cos(jawA);
+  return [at(7.5, -1.8), at(5, -4.5), at(ju, jv)];
+}
+
+/** Контур снаружи — как `Px.outline`, но только в рамке нарисованного. */
+function outlineFast(p: Px, c: RGBA): void {
+  const { w, h, data: d } = p;
+  let x0 = w;
+  let y0 = h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++)
+      if (d[(y * w + x) * 4 + 3]) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
       }
-      p.line(cx - 6, wl, cx + 6, wl, MAW.foam);
-    } else {
-      // Всплывает: пузыри кругом.
-      for (let k = 0; k < 10; k++) {
-        const a = (k / 10) * Math.PI * 2 + o.f;
-        const rr = 5 + ((k * 7 + o.f) % 4) * 2;
-        p.set(cx + 4 + Math.cos(a) * rr * 1.5, wl + Math.sin(a) * rr * 0.5, MAW.foam);
-      }
-      p.ell(cx + 4, wl, 5, 1.6, MAW.wake);
+  if (x1 < 0) return;
+  const add: number[] = [];
+  for (let y = Math.max(0, y0 - 1); y <= Math.min(h - 1, y1 + 1); y++)
+    for (let x = Math.max(0, x0 - 1); x <= Math.min(w - 1, x1 + 1); x++) {
+      const i = y * w + x;
+      if (d[i * 4 + 3]) continue;
+      if (
+        (x > 0 && d[(i - 1) * 4 + 3]) ||
+        (x < w - 1 && d[(i + 1) * 4 + 3]) ||
+        (y > 0 && d[(i - w) * 4 + 3]) ||
+        (y < h - 1 && d[(i + w) * 4 + 3])
+      )
+        add.push(i);
     }
-    void sh;
-    return { p, ax: cx, ay: wl - FLY_LIFT + 1, eye: null };
+  for (const i of add) {
+    d[i * 4] = c[0];
+    d[i * 4 + 1] = c[1];
+    d[i * 4 + 2] = c[2];
+    d[i * 4 + 3] = 255;
   }
-  if (o.kind === 'dead') {
-    const spine: [number, number][] = [
-      [cx - 20, g - 3],
-      [cx - 8, g - 4],
-      [cx + 4, g - 4],
-      [cx + 12, g - 5],
-    ];
-    mawBody(p, spine, 5, H, -1);
-    const [hx, hy] = spine[spine.length - 1];
-    mawHead(p, hx + 3, hy + 1, 0.8, false);
-    p.outline(INK);
-    p.set(hx + 4, hy - 2, INK);
-    p.set(hx + 5, hy - 3, INK);
-    p.set(hx + 5, hy - 1, INK);
-    p.set(hx + 6, hy - 2, INK);
-    return { p, ax: cx, ay: g - FLY_LIFT, eye: null };
+}
+
+/** Только в пустые пиксели — «позади» тела. */
+function under(p: Px, x: number, y: number, c: RGBA): void {
+  const xi = Math.round(x);
+  const yi = Math.round(y);
+  if (!p.solid(xi, yi)) p.set(xi, yi, c);
+}
+
+function drawMaw(r: MawRig, o: MawDraw = {}): MawCanvas {
+  // Рабочие холсты общие: кадр живёт только до `cropMaw`.
+  const p = (WORK ??= new Px(MW, MH));
+  const lit = (WLIT ??= new Px(MW, MH));
+  p.data.fill(0);
+  lit.data.fill(0);
+  const g = mawGeo(r);
+  mawLegs(p, g, r, true);
+  mawTube(p, g);
+  const tips = mawCrest(p, g, r);
+  mawFin(p, g, r);
+  mawLegs(p, g, r, false);
+  mawSac(p, lit, g, r.throat);
+  const h = mawHead(p, g, r);
+  outlineFast(p, INK);
+  // Глаз.
+  let eye: V2 | null = null;
+  const [ex, ey] = h.eye;
+  if (r.eye < 0.5) {
+    p.set(ex, ey, MAW.eye);
+    eye = [ex, ey];
+  } else if (r.eye < 1.5) {
+    p.set(ex - 1, ey, INK);
+    p.set(ex, ey, INK);
+    p.set(ex + 1, ey, INK);
+  } else if (r.eye < 2.5) {
+    p.set(ex, ey, INK);
+    p.set(ex + 1, ey, INK);
+  } else {
+    for (const [u, v] of [
+      [0.5, -3.2],
+      [1.5, -4.2],
+      [1.5, -2.2],
+      [2.5, -3.2],
+    ] as V2[])
+      p.set(...h.at(u, v), INK);
   }
-  if (o.kind === 'surface' || o.kind === 'spit') {
-    // Вынырнула у кромки: голова и грудь над водой, хвост поднят для удара.
-    const wl = g;
-    const tailUp = o.kind === 'surface' ? (o.f === 0 ? -12 : -2) : -4;
-    const spine: [number, number][] = [
-      [cx - 16, wl + tailUp],
-      [cx - 12, wl - 2],
-      [cx - 4, wl - 3],
-      [cx + 6, wl - 6],
+  // Жар в глотке — поверх темноты.
+  const mouthUnder = h.at(1, 1)[1] > GY + 0.5 && !!o.water;
+  if (r.glow > 0.02 && r.jaw > 0.1) {
+    const c = h.at(-0.3, 1.1);
+    const k = clamp(r.glow, 0, 1) * (mouthUnder ? 0.35 : 1);
+    const halo = mouthUnder ? 4.2 : 2.6 + r.jaw * 1.2;
+    lit.ell(c[0], c[1], halo, halo * 0.75, hex('#ff4a1a', 70 * k));
+    lit.ell(c[0], c[1], 1.7, 1.1, hex('#ff8a3a', 190 * k));
+    if (!mouthUnder && k > 0.4) {
+      lit.set(...h.at(-1, 1), hex('#ffe08a', 255 * k));
+      lit.set(...h.at(0, 1), hex('#ffe08a', 255 * k));
+    }
+  } else if (o.water && r.glow > 0.02) {
+    // Под водой пасть закрыта, но глотка просвечивает сквозь воду.
+    // Чем ярче (перед прыжком), тем заметнее в темноте: алое пятно из глубины.
+    const c = h.at(0, 0.5);
+    const k = clamp(r.glow, 0, 1);
+    lit.ell(c[0], c[1], 5, 3, [255, 58, 26, Math.round(70 * k)]);
+    lit.ell(c[0], c[1], 2.2, 1.4, [255, 110, 50, Math.round(150 * k * k)]);
+  }
+  if (o.hunger) for (const [x, y] of tips) lit.set(x, y, MAW.ember);
+  if (o.water) mawWater(p, r, o);
+  if (o.smear) {
+    const list = [
+      ...o.smear.rigs.map((q) => smearPts(q, o.smear!.part)),
+      smearPts(r, o.smear.part),
     ];
-    mawBody(p, spine, 5, H, -1);
-    const [hx, hy] = spine[spine.length - 1];
-    const open = o.kind === 'spit' ? (o.f ? 1 : 0.5) : o.f ? 0.7 : 0.2;
-    const eye = mawHead(p, hx + 3, hy, open, true);
-    p.outline(INK);
-    // Вода: срез по кромке, пена.
-    for (let y = wl; y < H; y++)
-      for (let x = cx - 18; x <= cx + 16; x++) {
-        const dx = (x + 0.5 - cx) / 17;
-        const dy = (y - wl + 0.5) / 5;
-        if (dx * dx + dy * dy > 1) continue;
-        p.set(x, y, y === wl ? MAW.foam : (x * 3 + y) % 7 === 0 ? MAW.wake : MAW.water);
+    const n = list.length;
+    const [cr, cg, cb, ca] = o.smear.col;
+    for (let k = 0; k < list[0].length; k++)
+      for (let j = 0; j + 1 < n; j++) {
+        const a = list[j][k];
+        const b = list[j + 1][k];
+        const f = (j + 1) / (n - 1);
+        const al = Math.round(ca * f * f);
+        const steps = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 1.5));
+        for (let q = 0; q <= steps; q++) {
+          const x = a[0] + ((b[0] - a[0]) * q) / steps;
+          const y = a[1] + ((b[1] - a[1]) * q) / steps;
+          under(p, x, y, [cr, cg, cb, al]);
+          if (f > 0.4) under(p, x, y + 1, [cr, cg, cb, Math.round(al * 0.6)]);
+        }
       }
-    if (o.kind === 'surface' && o.f === 1)
-      for (let k = 0; k < 8; k++)
-        p.set(cx - 16 + ((k * 5) % 9) - 4, wl - 3 - (k % 4) * 2, MAW.foam);
-    p.set(eye[0], eye[1], MAW.eye);
-    return { p, ax: cx, ay: wl - FLY_LIFT + 1, eye };
   }
-  if (o.kind === 'air') {
-    // Прыжок: тело дугой, пасть нараспашку, лапы поджаты.
-    const up = o.f === 0;
-    const spine: [number, number][] = up
-      ? [
-          [cx - 18, g - 2],
-          [cx - 10, g - 9],
-          [cx, g - 13],
-          [cx + 10, g - 16],
-        ]
-      : [
-          [cx - 18, g - 16],
-          [cx - 8, g - 14],
-          [cx + 2, g - 10],
-          [cx + 10, g - 4],
-        ];
-    mawBody(p, spine, 5, H, -1);
-    const [hx, hy] = spine[spine.length - 1];
-    const eye = mawHead(p, hx + 3, hy, 1, true);
-    p.outline(INK);
-    p.set(eye[0], eye[1], MAW.eye);
-    return { p, ax: cx, ay: g - FLY_LIFT, eye };
+  if (o.ring) mawRing(p, lit, o.ring);
+  if (o.rage && o.rage > 0.05) mawRage(p, lit, o.rage);
+  return { p, lit, g, h, eye: eye && (!o.water || eye[1] < GY) ? eye : null };
+}
+
+/** Вода: всё ниже кромки — тёмный силуэт в толще, по кромке — пена и рябь. */
+function mawWater(p: Px, r: MawRig, o: MawDraw): void {
+  const d = p.data;
+  let xa = MW;
+  let xb = -1;
+  for (let y = GY; y < MH; y++)
+    for (let x = 0; x < MW; x++) {
+      const i = (y * MW + x) * 4;
+      if (!d[i + 3]) continue;
+      if (y === GY) {
+        xa = Math.min(xa, x);
+        xb = Math.max(xb, x);
+        continue;
+      }
+      const a = clamp(150 - (y - GY) * 8, 40, 150);
+      d[i] = 46 + d[i] * 0.22;
+      d[i + 1] = 10 + d[i + 1] * 0.14;
+      d[i + 2] = 18 + d[i + 2] * 0.16;
+      d[i + 3] = a;
+    }
+  if (xb < 0) return;
+  // Кромка: пена по телу и на палец в стороны.
+  for (let x = xa - 1; x <= xb + 1; x++) p.set(x, GY, MAW.foam);
+  p.set(xa - 2, GY, hex('#e0fffa', 120));
+  p.set(xb + 2, GY, hex('#e0fffa', 120));
+  const ph = o.ph ?? 0;
+  const xc = (xa + xb) / 2;
+  const hw = (xb - xa) / 2;
+  // Рябь: два кольца расходятся от кромки.
+  for (let j = 0; j < 2; j++) {
+    const f = (ph + j * 0.5) % 1;
+    const rx = hw + 2.5 + f * 6;
+    const ry = 1 + f * 1.6;
+    const a = Math.round(150 * (1 - f));
+    for (let t = 0; t < 64; t++) {
+      const an = (t / 64) * Math.PI * 2;
+      under(p, xc + Math.cos(an) * rx, GY + 0.5 + Math.sin(an) * ry, hex('#a0ece4', a));
+    }
   }
-  // На берегу: лежит, бьёт хвостом; ползёт — лапы шагают; ревёт — пасть
-  // вверх, горло горит.
-  const f = o.f;
-  const crawl = o.kind === 'crawl';
-  const roar = o.kind === 'roar';
-  const tw = [0, 3, 0, -3][f % 4];
-  const spine: [number, number][] = roar
-    ? [
-        [cx - 20, g - 4],
-        [cx - 10, g - 5],
-        [cx, g - 7],
-        [cx + 8, g - 11],
-      ]
-    : [
-        [cx - 20, g - 4 + (crawl ? 0 : tw)],
-        [cx - 11, g - 5 + (crawl ? tw * 0.3 : tw * 0.4)],
-        [cx - 1, g - 6],
-        [cx + 9, g - 6 - (crawl ? f % 2 : 0)],
-      ];
-  mawBody(p, spine, 5.2, H, crawl ? f : f % 2 === 0 ? 0 : 1);
-  const [hx, hy] = spine[spine.length - 1];
-  const open = roar ? 1 : crawl ? 0.15 : [0.2, 0.7, 0.4, 0.9][f % 4];
-  const eye = mawHead(p, hx + 3, hy, open, roar || open > 0.6);
-  p.outline(INK);
-  p.set(eye[0], eye[1], MAW.eye);
-  return { p, ax: cx, ay: g - FLY_LIFT, eye };
+  // «Усы» за гребнем: плывёт — расходятся назад, тают к концу.
+  if (o.wake) {
+    const len = o.wake;
+    for (let side = -1; side <= 1; side += 2)
+      for (let q = 0; q <= len; q++) {
+        const f = q / len;
+        // Пунктир бежит назад с фазой.
+        if ((q + Math.floor(ph * 8)) % 4 === 3) continue;
+        const x = xa - 1 - q;
+        const y = GY + side * (0.6 + f * 2.4) + (side > 0 ? 0.6 : 0);
+        under(p, x, y, [160, 236, 228, Math.round(200 * (1 - f))]);
+      }
+    // Бурун у носа.
+    under(p, xb + 2, GY - 1, MAW.foam);
+    under(p, xb + 3, GY, MAW.foam);
+  }
+  void r;
+}
+
+/** След хвоста кругом (хлёст на берегу): дальняя половина — позади тела. */
+function mawRing(p: Px, lit: Px, ring: { a0: number; a1: number; k: number }): void {
+  const cx = GX;
+  const cy = GY - 2;
+  const R = 30;
+  const span = ring.a1 - ring.a0;
+  const n = Math.max(8, Math.ceil(Math.abs(span) * R * 1.4));
+  for (let s = 0; s <= n; s++) {
+    const f = s / n;
+    const an = ring.a0 + span * f;
+    const lead = Math.pow(f, 1.6);
+    for (let w = 0; w < 4; w++) {
+      const rr = R - w;
+      const x = cx + Math.cos(an) * rr;
+      const y = cy + Math.sin(an) * rr * 0.9;
+      const a = Math.round(255 * ring.k * lead * (w === 1 ? 1 : w === 0 ? 0.75 : 0.5));
+      const col: RGBA = w <= 1 && lead > 0.7 ? [255, 214, 190, a] : [255, 90, 60, a];
+      if (Math.sin(an) < 0) under(p, x, y, col);
+      else p.set(x, y, col);
+      if (w === 1 && lead > 0.5) lit.set(x, y, [255, 120, 80, Math.round(a * 0.6)]);
+    }
+  }
+}
+
+/** Ярость: алый ореол по силуэту на два пикселя. */
+function mawRage(p: Px, lit: Px, k: number): void {
+  const { w: W, h: H, data: d } = p;
+  const near = new Uint8Array(W * H).fill(9);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      if (d[(y * W + x) * 4 + 3] < 200) continue;
+      for (let dy = -2; dy <= 2; dy++)
+        for (let dx = -2; dx <= 2; dx++) {
+          const m = Math.abs(dx) + Math.abs(dy);
+          if (m > 2 || m === 0) continue;
+          const xx = x + dx;
+          const yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+          const i = yy * W + xx;
+          if (m < near[i]) near[i] = m;
+        }
+    }
+  for (let i = 0; i < W * H; i++) {
+    if (near[i] > 2 || d[i * 4 + 3]) continue;
+    lit.set(i % W, Math.floor(i / W), [255, 50, 30, Math.round((near[i] === 1 ? 150 : 70) * k)]);
+  }
+}
+
+interface MawRaw {
+  p: Px;
+  lit: Px | null;
+  ax: number;
+  ay: number;
+  eye: V2 | null;
+}
+
+/** Обрезать по нарисованному: ноги кадра — точка (GX, GY). */
+function cropMaw(c: MawCanvas): MawRaw {
+  let x0 = MW;
+  let y0 = MH;
+  let x1 = -1;
+  let y1 = -1;
+  let litUsed = false;
+  for (let y = 0; y < MH; y++)
+    for (let x = 0; x < MW; x++) {
+      const i = (y * MW + x) * 4 + 3;
+      const a = c.p.data[i];
+      const b = c.lit.data[i];
+      if (b) litUsed = true;
+      if (!a && !b) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  if (x1 < 0) {
+    x0 = GX;
+    y0 = GY;
+    x1 = GX;
+    y1 = GY;
+  }
+  const w = x1 - x0 + 1;
+  const hh = y1 - y0 + 1;
+  const cut = (src: Px): Px => {
+    const o = new Px(w, hh);
+    for (let y = 0; y < hh; y++)
+      o.data.set(
+        src.data.subarray(((y + y0) * MW + x0) * 4, ((y + y0) * MW + x0 + w) * 4),
+        y * w * 4,
+      );
+    return o;
+  };
+  return {
+    p: cut(c.p),
+    lit: litUsed ? cut(c.lit) : null,
+    ax: GX - x0,
+    ay: GY - y0 - FLY_LIFT,
+    eye: c.eye ? [c.eye[0] - x0, c.eye[1] - y0] : null,
+  };
+}
+
+// ---- Техники: поза по времени мозга ----------------------------------------
+
+/** Плывёт под водой (swim) и несётся к кромке (tail): цикл от `now`. */
+function swimRig(ph: number, fast: boolean): MawRig {
+  const w = ph * Math.PI * 2;
+  const A = fast ? 0.26 : 0.19;
+  return {
+    ...REST,
+    sink: fast ? 10 : 12.5,
+    crest: fast ? 1.45 : 1.4,
+    sail: 1,
+    tuck: 1,
+    jaw: 0.1,
+    glow: 0.4,
+    gill: 0,
+    bk1: -0.02 + A * 0.5 * Math.sin(w),
+    bk2: A * Math.sin(w - 1.1),
+    bk3: A * 1.25 * Math.sin(w - 2.2),
+    fw1: 0.05 * Math.sin(w + 1.3),
+    hd: (fast ? 0.1 : 0) + 0.04 * Math.sin(w + 2),
+    fin: 0.45 * Math.sin(w - 3),
+  };
+}
+
+/** Ползёт к воде: диагональные пары лап, волна по хвосту, голова кивает. */
+function crawlRig(ph: number): MawRig {
+  const w = ph * Math.PI * 2;
+  return {
+    ...REST,
+    walk: ph,
+    step: 1,
+    cy: -6.2,
+    bk1: -0.06 + 0.07 * Math.sin(w),
+    bk2: -0.05 + 0.11 * Math.sin(w - 1),
+    bk3: -0.04 + 0.17 * Math.sin(w - 2),
+    fw1: 0.04 * Math.sin(w + 0.8),
+    hd: 0.05 * Math.sin(2 * w + 1),
+    jaw: 0.14 + 0.06 * Math.sin(w),
+    fin: 0.3 * Math.sin(w - 3),
+    gill: 0.3 + 0.2 * Math.sin(w),
+  };
+}
+
+/**
+ * Всплытие-удар: вынырнула, выросла из воды на дыбы (шея лебедем, хвост
+ * уходит в глубину, передние лапы когтями вперёд), замерла — и рухнула
+ * грудью в воду к герою: голова рывком вперёд, хвост взлетает гребнем.
+ * Кадр удара — 20 (0,85 с · спешка), кадр 19 — смаз.
+ */
+const SURF_HIT = Math.floor(0.85 * 24);
+const surfRig = lane<MawRig>(swimRig(0, true), [
+  [0, {}],
+  [
+    F(4),
+    {
+      sink: 1,
+      sail: 0,
+      p: 0.1,
+      cy: -7,
+      fw1: 0.2,
+      fw2: 0.1,
+      hd: 0.05,
+      jaw: 0.35,
+      tuck: 0.3,
+      reach: 0.4,
+      crest: 1.25,
+      bk1: -0.2,
+      bk2: -0.15,
+      bk3: -0.05,
+      fin: 0,
+      glow: 0.5,
+      gill: 0.6,
+    },
+    EZ.out,
+  ],
+  [
+    F(11),
+    {
+      sink: 0,
+      p: 0.22,
+      cy: -9,
+      cx: -3,
+      fw1: 0.38,
+      fw2: 0.22,
+      hd: -0.14,
+      jaw: 0.7,
+      throat: 0.25,
+      reach: 1,
+      tuck: 0,
+      crest: 1.4,
+      bk1: -0.34,
+      bk2: -0.28,
+      bk3: -0.1,
+      fin: 0.2,
+      glow: 0.75,
+      gill: 1,
+    },
+    EZ.io,
+  ],
+  [
+    F(17),
+    {
+      p: 0.28,
+      cy: -10.5,
+      cx: -4.5,
+      fw1: 0.46,
+      fw2: 0.28,
+      hd: -0.12,
+      jaw: 0.9,
+      throat: 0.35,
+      crest: 1.5,
+      bk3: 0.05,
+      glow: 0.95,
+    },
+    EZ.io,
+  ],
+  [F(18), { p: 0.3, cy: -11, cx: -5, fw1: 0.5, jaw: 0.96, bk3: 0.12 }, EZ.lin],
+  // Кадр смаза: пошла вниз.
+  [
+    F(SURF_HIT - 1),
+    {
+      p: 0.06,
+      cy: -8,
+      cx: -1,
+      fw1: 0.1,
+      fw2: 0.04,
+      hd: -0.04,
+      jaw: 1.05,
+      bk1: -0.05,
+      bk2: 0.05,
+      bk3: 0.2,
+      fin: 0.3,
+    },
+    EZ.in,
+  ],
+  // Удар: грудь на воде, голова вперёд над водой, хвост взлетел.
+  [
+    F(SURF_HIT),
+    {
+      p: -0.04,
+      cy: -6.6,
+      cx: 2.5,
+      fw1: -0.04,
+      fw2: 0,
+      hd: 0.12,
+      jaw: 0.95,
+      throat: 0.05,
+      reach: 0.7,
+      crest: 1.5,
+      bk1: 0.2,
+      bk2: 0.26,
+      bk3: 0.3,
+      fin: 0.6,
+      glow: 1,
+    },
+    EZ.in,
+  ],
+  [
+    F(SURF_HIT + 2),
+    {
+      p: -0.07,
+      cy: -6.1,
+      cx: 3,
+      fw1: -0.08,
+      hd: 0.08,
+      jaw: 0.8,
+      bk1: 0.28,
+      bk2: 0.34,
+      bk3: 0.28,
+      fin: 0.1,
+      sink: 0.5,
+    },
+    EZ.out,
+  ],
+  [
+    F(SURF_HIT + 6),
+    {
+      p: -0.02,
+      cy: -6,
+      cx: 1,
+      fw1: 0,
+      fw2: 0,
+      hd: 0,
+      jaw: 0.45,
+      bk1: -0.12,
+      bk2: -0.16,
+      bk3: -0.2,
+      fin: -0.5,
+      crest: 1.2,
+      glow: 0.4,
+      sink: 1.5,
+      reach: 0,
+      tuck: 0.6,
+    },
+    EZ.io,
+  ],
+  [
+    F(SURF_HIT + 10),
+    {
+      p: 0,
+      cy: -6,
+      cx: -1,
+      jaw: 0.25,
+      bk1: -0.05,
+      bk2: -0.03,
+      bk3: 0,
+      fin: 0.1,
+      glow: 0.3,
+      sink: 4,
+      gill: 0.4,
+    },
+    EZ.io,
+  ],
+  [
+    1.55,
+    {
+      sink: 12.5,
+      sail: 1,
+      tuck: 1,
+      jaw: 0.1,
+      crest: 1.4,
+      glow: 0.4,
+      cx: -2,
+      cy: -6,
+      p: 0,
+      hd: 0,
+      gill: 0,
+      throat: 0,
+    },
+    EZ.in,
+  ],
+]);
+
+/** Плевок: вынырнула, набрала воздух в мешок, выплюнула с отдачей. */
+function spitRig(a: number, b: number): MawRig {
+  // a — доля замаха (до плевка), b — секунды после него (−1 — ещё не плюнула).
+  if (b < 0) return spitPre(a);
+  return spitPost(b);
+}
+const spitPre = lane<MawRig>(swimRig(0, false), [
+  [0, {}],
+  [
+    0.25,
+    { sink: 2, sail: 0, p: 0.15, cy: -7, jaw: 0.2, crest: 1.2, glow: 0.4, gill: 0.5, tuck: 0.5 },
+    EZ.out,
+  ],
+  [
+    0.8,
+    { p: 0.28, hd: 0.3, cx: -3.5, jaw: 0.04, throat: 1, crest: 1.45, glow: 0.8, gill: 0 },
+    EZ.in,
+  ],
+  [0.93, { p: 0.3, hd: 0.36, cx: -4, throat: 1.08 }, EZ.lin],
+  [1, { p: 0.02, hd: -0.12, cx: 0.5, jaw: 0.7, throat: 0.9 }, EZ.in],
+]);
+const spitPost = lane<MawRig>(spitPre(1), [
+  [0, { p: -0.05, hd: -0.16, cx: 1, jaw: 1.1, throat: 0.25, glow: 1 }],
+  [0.1, { p: 0.12, hd: 0.22, cx: -2.5, jaw: 0.8, throat: 0.1, glow: 0.6 }, EZ.out],
+  [0.24, { p: 0.08, hd: 0.05, cx: -1.5, jaw: 0.35, throat: 0, glow: 0.4, crest: 1.2 }, EZ.io],
+  [0.5, { sink: 11, sail: 1, p: 0, hd: 0, cx: -2, cy: -6, jaw: 0.1, tuck: 1, crest: 1.35 }, EZ.in],
+]);
+
+/** Подъём из глубины перед прыжком: ушла вниз, пошла вверх, нос пробил воду. */
+const riseWater = lane<MawRig>(swimRig(0, false), [
+  [0, {}],
+  [
+    0.42,
+    { sink: 15, sail: 0.2, p: 0.2, glow: 0.6, bk1: -0.15, bk2: -0.1, bk3: -0.05, jaw: 0.3 },
+    EZ.io,
+  ],
+  [0.85, { sink: 7, sail: 0, p: 0.42, hd: 0.15, glow: 1, jaw: 0.8, crest: 1.2 }, EZ.in],
+  [1, { sink: 4, p: 0.5, jaw: 0.9 }, EZ.lin],
+]);
+
+/** На суше перед прыжком серии: сжалась пружиной. */
+const riseLand = lane<MawRig>(REST, [
+  [0, {}],
+  [
+    0.7,
+    {
+      cy: -5,
+      cx: -3.5,
+      p: -0.12,
+      hd: 0.14,
+      bk1: 0.25,
+      bk2: 0.3,
+      bk3: 0.35,
+      crest: 1.35,
+      jaw: 0.5,
+      glow: 0.6,
+      splay: 0.6,
+      gill: 0.8,
+      fin: 0.3,
+    },
+    EZ.io,
+  ],
+  [1, { cy: -4.6, cx: -4, p: -0.16, bk3: 0.45, jaw: 0.6 }, EZ.in],
+]);
+
+/** Полёт: наклон — по скорости на экране, отдельно; здесь изгиб и пасть. */
+const leapRig = lane<MawRig>(REST, [
+  [
+    0,
+    {
+      cy: -6,
+      bk1: -0.2,
+      bk2: -0.18,
+      bk3: -0.1,
+      jaw: 0.4,
+      tuck: 0.3,
+      crest: 0.8,
+      glow: 0.4,
+      fin: -0.3,
+      gill: 0,
+    },
+  ],
+  [0.15, { bk1: -0.12, bk2: -0.12, bk3: -0.08, tuck: 1, jaw: 0.55, crest: 0.7, fin: -0.4 }, EZ.out],
+  [
+    0.45,
+    {
+      fw1: -0.1,
+      fw2: -0.05,
+      bk1: -0.08,
+      bk2: -0.08,
+      bk3: -0.02,
+      jaw: 0.95,
+      glow: 0.9,
+      crest: 0.9,
+      fin: 0,
+    },
+    EZ.io,
+  ],
+  [
+    0.75,
+    {
+      fw1: -0.02,
+      fw2: 0,
+      bk1: 0.12,
+      bk2: 0.16,
+      bk3: 0.2,
+      jaw: 1.05,
+      reach: 0.6,
+      tuck: 0.4,
+      crest: 1.2,
+      fin: 0.35,
+      hd: 0.08,
+    },
+    EZ.io,
+  ],
+  [
+    1,
+    { bk1: 0.18, bk2: 0.22, bk3: 0.26, jaw: 1.1, reach: 1, tuck: 0, hd: 0.12, crest: 1.3, glow: 1 },
+    EZ.in,
+  ],
+]);
+
+/** Приземление: пасть захлопнулась, хвост хлопнул, гребень спружинил. */
+const landRig = lane<MawRig>(REST, [
+  [
+    0,
+    {
+      cy: -5.2,
+      jaw: 1.1,
+      reach: 0.8,
+      splay: 0.6,
+      bk1: 0.2,
+      bk2: 0.24,
+      bk3: 0.3,
+      crest: 1.3,
+      hd: 0.1,
+      glow: 0.9,
+      eye: 1,
+    },
+  ],
+  [
+    F(2),
+    {
+      cy: -4.6,
+      jaw: 0.05,
+      reach: 0,
+      splay: 1,
+      bk1: -0.2,
+      bk2: -0.16,
+      bk3: -0.1,
+      crest: 1.45,
+      hd: -0.12,
+      glow: 0.3,
+    },
+    EZ.out,
+  ],
+  [
+    F(4),
+    {
+      cy: -6.4,
+      bk1: 0.12,
+      bk2: 0.18,
+      bk3: 0.25,
+      jaw: 0.3,
+      crest: 0.9,
+      hd: 0.06,
+      splay: 0.7,
+      eye: 0,
+    },
+    EZ.io,
+  ],
+  [
+    F(7),
+    {
+      cy: -6,
+      bk1: -0.06,
+      bk2: -0.05,
+      bk3: -0.04,
+      jaw: 0.25,
+      crest: 1,
+      splay: 0.4,
+      hd: 0,
+      glow: 0.2,
+    },
+    EZ.io,
+  ],
+]);
+
+/** Выброшенная рыба: подброс, шлепок, хватает воздух, жабры ходят. */
+const FLOP_T = 16 / 12;
+const flopRig = lane<MawRig>({ ...REST, splay: 0.4, jaw: 0.25, gill: 0.2 }, [
+  [0, {}],
+  [0.1, { fw1: -0.08, bk1: -0.12, bk2: -0.1, jaw: 0.1, gill: 0.1 }, EZ.io],
+  [
+    0.22,
+    {
+      fw1: 0.22,
+      fw2: 0.12,
+      bk1: 0.22,
+      bk2: 0.26,
+      bk3: 0.32,
+      hd: 0.15,
+      jaw: 0.85,
+      gill: 1,
+      fin: 0.4,
+      kick: 1,
+      walk: 0.3,
+      crest: 1.25,
+    },
+    EZ.out,
+  ],
+  [
+    0.34,
+    {
+      fw1: -0.1,
+      fw2: 0,
+      bk1: -0.14,
+      bk2: -0.1,
+      bk3: -0.1,
+      hd: -0.05,
+      jaw: 0.35,
+      gill: 0.6,
+      kick: 0.4,
+      walk: 0.6,
+      fin: -0.35,
+      crest: 0.9,
+    },
+    EZ.in,
+  ],
+  [
+    0.46,
+    { fw1: 0, bk1: -0.06, bk2: -0.05, bk3: 0.02, hd: 0, jaw: 0.3, kick: 0, fin: 0.15, crest: 1 },
+    EZ.out,
+  ],
+  [0.72, { jaw: 0.58, gill: 0.95, throat: 0.12, cy: -6.4, fin: -0.05 }, EZ.io],
+  [1.0, { jaw: 0.2, gill: 0.25, throat: 0, cy: -6 }, EZ.io],
+  [FLOP_T, { jaw: 0.25, gill: 0.2, fin: 0 }, EZ.io],
+]);
+
+/**
+ * Хлёст хвостом по кругу (с прилива): метка с 0,75 с, удар в 1,30 — кадр
+ * 31 от начала «берега». Ключи — в кадрах от 0,75 с (кадр 18): смаз — 12,
+ * удар — 13.
+ */
+const THR_AT = 0.75;
+const THR_HIT = Math.floor((THR_AT + 0.55) * 24);
+const THR_K = THR_HIT - 18;
+const thrashRig = lane<MawRig>({ ...REST, splay: 0.4, jaw: 0.25 }, [
+  [0, {}],
+  [F(3), { hd: 0.15, jaw: 0.6, crest: 1.3, glow: 0.4, splay: 0.8, cy: -7, gill: 0.6 }, EZ.out],
+  [
+    F(9),
+    {
+      fw1: 0.2,
+      fw2: 0.1,
+      bk1: 0.45,
+      bk2: 0.6,
+      bk3: 0.7,
+      hd: 0.2,
+      jaw: 0.8,
+      glow: 0.8,
+      crest: 1.45,
+      gill: 1,
+      cy: -8,
+      throat: 0.2,
+      fin: 0.3,
+    },
+    EZ.io,
+  ],
+  [F(THR_K - 2), { bk3: 0.82, cx: -3, fw1: 0.24, jaw: 0.86 }, EZ.io],
+  // Кадр смаза: хвост пошёл.
+  [F(THR_K - 1), { bk1: 0.1, bk2: 0.05, bk3: -0.1, p: -0.06, cx: -1.5, jaw: 1 }, EZ.in],
+  // Удар: хвост метёт по земле, тело крутнуло.
+  [
+    F(THR_K),
+    {
+      bk1: -0.25,
+      bk2: -0.5,
+      bk3: -0.6,
+      p: -0.15,
+      fw1: -0.1,
+      hd: -0.2,
+      jaw: 1.1,
+      cx: 1,
+      cy: -6,
+      glow: 1,
+    },
+    EZ.in,
+  ],
+  [
+    F(THR_K + 2),
+    { bk1: -0.35, bk2: -0.3, bk3: 0.05, p: -0.1, jaw: 0.9, fin: -0.5, crest: 1.2 },
+    EZ.out,
+  ],
+  [
+    F(THR_K + 6),
+    {
+      bk1: -0.02,
+      bk2: -0.05,
+      bk3: 0.12,
+      p: 0,
+      fw1: 0,
+      hd: 0,
+      jaw: 0.45,
+      cx: -2,
+      cy: -6.4,
+      crest: 1.1,
+      glow: 0.3,
+      fin: 0.2,
+    },
+    EZ.io,
+  ],
+  [
+    F(THR_K + 10),
+    {
+      bk1: -0.06,
+      bk2: -0.05,
+      bk3: -0.04,
+      jaw: 0.25,
+      crest: 1,
+      splay: 0.4,
+      glow: 0,
+      throat: 0,
+      gill: 0.2,
+      fin: 0,
+      cy: -6,
+    },
+    EZ.io,
+  ],
+]);
+
+/** Рёв на берегу в начале боя: поднялась, вдох, рёв с дрожью, опустилась. */
+const roarRig = lane<MawRig>(REST, [
+  [0, { crestRun: 0 }],
+  [
+    F(4),
+    {
+      cy: -7.5,
+      p: 0.12,
+      fw1: 0.15,
+      hd: 0.1,
+      jaw: 0.35,
+      crest: 1.3,
+      crestRun: 0.35,
+      gill: 0.6,
+      splay: 0.4,
+      bk1: 0.1,
+      bk2: 0.15,
+      bk3: 0.2,
+    },
+    EZ.out,
+  ],
+  [
+    F(7),
+    {
+      jaw: 0.06,
+      throat: 0.45,
+      fw1: 0.06,
+      hd: -0.12,
+      p: 0.06,
+      cx: -3.5,
+      crestRun: 0.7,
+      crest: 1.45,
+      glow: 0.2,
+    },
+    EZ.io,
+  ],
+  [
+    F(9),
+    {
+      jaw: 1.15,
+      fw1: 0.38,
+      fw2: 0.26,
+      hd: 0.2,
+      p: 0.2,
+      cy: -8.5,
+      cx: -1,
+      glow: 1,
+      throat: 0.12,
+      crest: 1.55,
+      crestRun: 1,
+      gill: 1,
+      bk1: 0.25,
+      bk2: 0.3,
+      bk3: 0.35,
+      fin: 0.4,
+    },
+    EZ.out,
+  ],
+  [F(23), { jaw: 1.05, fw1: 0.34, hd: 0.15 }, EZ.lin],
+  [
+    F(27),
+    {
+      jaw: 0.25,
+      fw1: 0,
+      fw2: 0,
+      hd: 0,
+      p: 0.04,
+      cy: -6.5,
+      glow: 0.2,
+      crest: 1.15,
+      gill: 0.3,
+      bk1: -0.06,
+      bk2: -0.05,
+      bk3: -0.04,
+      fin: 0,
+    },
+    EZ.io,
+  ],
+  [1.3, { cy: -6.2, cx: -2, p: 0, crest: 1, step: 1, walk: 0, splay: 0 }, EZ.io],
+]);
+
+/**
+ * Смерть на суше: две судороги (выгнулась, ударилась), обмякла — шея и
+ * голова падают, пасть отвисла, гребень лёг, лапы разъехались; хвост
+ * вздрагивает; потом тело оседает и тает алой лужей.
+ */
+const dieLand = lane<MawRig>(REST, [
+  [0, { jaw: 0.9, eye: 1, crest: 1.4, glow: 1, hd: 0.3, p: 0.15, bk1: 0.3, bk2: 0.3, bk3: 0.3 }],
+  [
+    F(3),
+    { fw1: 0.3, fw2: 0.15, hd: 0.34, bk1: 0.35, bk2: 0.36, bk3: 0.4, jaw: 1.12, gill: 1, fin: 0.5 },
+    EZ.out,
+  ],
+  [
+    F(6),
+    { fw1: -0.1, fw2: 0, hd: -0.05, p: 0, bk1: -0.15, bk2: -0.1, bk3: -0.1, jaw: 0.6, fin: -0.4 },
+    EZ.in,
+  ],
+  [
+    F(8),
+    { fw1: 0.2, hd: 0.2, bk1: 0.25, bk2: 0.3, bk3: 0.3, jaw: 1.05, glow: 0.6, fin: 0.3 },
+    EZ.out,
+  ],
+  [
+    F(11),
+    {
+      fw1: 0,
+      hd: 0,
+      bk1: -0.06,
+      bk2: -0.05,
+      bk3: -0.04,
+      jaw: 0.7,
+      glow: 0.3,
+      crest: 1.1,
+      fin: 0,
+      gill: 0.5,
+    },
+    EZ.in,
+  ],
+  [
+    F(15),
+    {
+      cy: -4.6,
+      fw1: -0.14,
+      fw2: -0.12,
+      hd: -0.12,
+      jaw: 0.85,
+      eye: 3,
+      glow: 0,
+      crest: 0.55,
+      splay: 1.2,
+      bk1: -0.1,
+      bk2: -0.07,
+      bk3: -0.05,
+      gill: 0,
+    },
+    EZ.io,
+  ],
+  [F(18), { bk3: 0.25, fin: 0.5, kick: 0.5, walk: 0.3 }, EZ.out],
+  [F(21), { bk3: -0.06, fin: -0.1, kick: 0, walk: 0.6 }, EZ.io],
+  [F(24), { bk3: 0.08, fin: 0.3 }, EZ.io],
+  [1.4, { bk3: -0.05, fin: 0 }, EZ.io],
+]);
+
+/** Смерть в воде: рванулась из воды, судорога, обмякла и тонет. */
+const dieWater = lane<MawRig>({ ...REST, sink: 2 }, [
+  [0, { jaw: 0.9, eye: 1, crest: 1.4, glow: 1, hd: 0.3, p: 0.3, cy: -8 }],
+  [
+    F(4),
+    { p: 0.4, fw1: 0.3, fw2: 0.2, hd: 0.3, jaw: 1.12, bk1: -0.2, bk2: -0.1, cy: -10, gill: 1 },
+    EZ.out,
+  ],
+  [
+    F(9),
+    {
+      p: 0.05,
+      fw1: 0,
+      fw2: 0,
+      hd: 0,
+      jaw: 0.7,
+      bk1: -0.1,
+      bk2: -0.1,
+      bk3: -0.1,
+      cy: -6,
+      glow: 0.4,
+    },
+    EZ.in,
+  ],
+  [F(14), { eye: 3, glow: 0, jaw: 0.85, crest: 0.6, fw1: -0.12, hd: -0.1, sink: 4 }, EZ.io],
+  [1.4, { sink: 18, jaw: 0.7, bk3: 0.1 }, EZ.in],
+]);
+
+/** Отдёрнулась от удара: пасть захлопнута, прищур, гребень прижат. */
+function flinch(r: MawRig): MawRig {
+  return {
+    ...r,
+    jaw: 0.04,
+    eye: 1,
+    crest: Math.min(r.crest, 0.85),
+    hd: r.hd - 0.12,
+    cx: r.cx - 0.8,
+    bk1: r.bk1 + 0.1,
+    bk3: r.bk3 + 0.15,
+    gill: 0.9,
+  };
+}
+
+/** Ярость смены фазы: пасть, жар, гребень дыбом. */
+function enrage(r: MawRig, k: number): MawRig {
+  return {
+    ...r,
+    jaw: Math.max(r.jaw, 1.05 * k),
+    glow: Math.max(r.glow, k),
+    crest: Math.max(r.crest, 1 + 0.5 * k),
+    hd: r.hd + 0.28 * k,
+    gill: Math.max(r.gill, k),
+    eye: k > 0.3 ? 0 : r.eye,
+  };
+}
+
+// ---- Кадры: поза → рисунок (кеш), трансформ — каждый кадр игры -------------
+
+/** Что знает рисовальщик о пасти в этот миг. */
+interface MawCtx {
+  mode: string;
+  t: number;
+  now: number;
+  data: Record<string, number>;
+  /** Фаза боя и спешка (1,25 после 200 с) — из `paintSim()`. */
+  ph: number;
+  haste: number;
+  hurt: boolean;
+  /** Откуда прыжок: из воды, с берега (серия) или нырок с суши в воду. */
+  from: 'water' | 'land' | 'dive';
+  /** Погибла в воде. */
+  wet: boolean;
+  /** Сцена смены фазы: секунды от начала, −1 — нет. */
+  rage: number;
+  /** Секунды после нырка с суши (swim), −1 — нет. */
+  entry: number;
+  /** Экранная скорость полёта для наклона: пикселей за k по x и по y. */
+  flight: [number, number] | null;
+}
+
+interface MawFx {
+  dx: number;
+  dy: number;
+  sx: number;
+  sy: number;
+  shadow: number;
+  ghost: boolean;
+  alpha: number;
+  linger?: number;
+}
+
+interface MawSpec {
+  key: string;
+  make: () => MawRaw;
+  fx: MawFx;
+}
+
+/** Позы вдоль дуги от `t0` до `t1` — для следа. */
+function path(f: (x: number) => MawRig, t0: number, t1: number, n = 6): MawRig[] {
+  const out: MawRig[] = [];
+  for (let i = 0; i < n; i++) out.push(f(t0 + ((t1 - t0) * i) / n));
+  return out;
+}
+
+const FX0: MawFx = { dx: 0, dy: 0, sx: 1, sy: 1, shadow: 16, ghost: false, alpha: 1 };
+
+/** Кадр 24 к/с от времени техники. */
+const q24 = (t: number) => Math.max(0, Math.floor(t * 24 + 1e-6));
+
+/** Пузыри на кромке вокруг тела: `n` штук, мигают по фазе. */
+function bubbles(c: MawCanvas, n: number, ph: number, spread: number): void {
+  const g = c.g;
+  const cx = g.line[Math.floor(g.line.length * 0.6)][0];
+  for (let i = 0; i < n; i++) {
+    const h = hash(i, 17, 3);
+    const life = ((ph * 2 + (h % 100) / 100) % 1) * 1;
+    if (life > 0.8) continue;
+    const x = cx + (((h >> 8) % 100) / 100 - 0.5) * spread * 2;
+    const y = GY - 1 + ((h >> 16) % 3) - life * 2;
+    if (life < 0.55) c.p.set(x, y, MAW.foam);
+    else {
+      c.p.set(x - 1, y, hex('#e0fffa', 150));
+      c.p.set(x + 1, y, hex('#e0fffa', 150));
+    }
+  }
+}
+
+/** Капли, стекающие с тела после выхода из воды: `k` 0…1 — сколько прошло. */
+function drips(c: MawCanvas, k: number, n = 7): void {
+  if (k >= 1) return;
+  const g = c.g;
+  for (let i = 0; i < n; i++) {
+    const h = hash(i, 5, 11);
+    const j = 4 + (h % (g.line.length - 8));
+    const s = g.line[j];
+    const r = g.rad[j];
+    const fall = 3 + k * k * 26 * (0.7 + ((h >> 10) % 30) / 100);
+    const x = s[0] - k * 3 * (((h >> 4) % 3) - 1);
+    const y = s[1] + r + fall;
+    const a = Math.round(220 * (1 - k));
+    c.p.set(x, y, hex('#a0ece4', a));
+    if (k < 0.5) c.p.set(x, y - 1, hex('#e0fffa', a * 0.6));
+  }
+}
+
+/**
+ * Грудь ударила в воду: две стенки брызг по бокам груди поднимаются и
+ * опадают, капли летят дугой, по кромке — пена. `f` — кадр после удара.
+ */
+function splash(c: MawCanvas, f: number, cx: number): void {
+  const k = f / 8;
+  const rise = Math.sin(Math.min(1, (f + 1) / 4) * Math.PI * 0.5);
+  const fall = f < 4 ? 0 : (f - 4) / 4;
+  for (const side of [-1, 1]) {
+    // Стенка: столбики от кромки, выше у тела, наклон наружу.
+    for (let j = 0; j < 6; j++) {
+      const x0 = cx + side * (6 + j * 1.6 + f * 0.9);
+      const hgt = (9 - j * 1.2) * rise * (1 - fall * 0.8);
+      for (let q = 0; q < hgt; q++) {
+        const y = GY - q;
+        const x = x0 + side * q * 0.35;
+        const top = q > hgt - 2;
+        const a = Math.round((top ? 240 : 150) * (1 - k * 0.7));
+        c.p.set(x, y, top ? [224, 255, 250, a] : [160, 236, 228, a]);
+      }
+    }
+  }
+  for (let i = 0; i < 16; i++) {
+    const h = hash(i, 9, 2);
+    const side = i % 2 ? 1 : -1;
+    const vx = side * (1.2 + ((h >> 3) % 5) * 0.5);
+    const vy = -(2.2 + ((h >> 9) % 7) * 0.45);
+    const tt = f * 0.9;
+    const px = cx + side * 5 + vx * tt * 1.6;
+    const py = GY - 2 + vy * tt * 1.6 + tt * tt * 0.55;
+    if (py > GY) continue;
+    c.p.set(px, py, [224, 255, 250, Math.round(235 * (1 - k))]);
+  }
+  for (let x = -12 - f; x <= 12 + f; x++)
+    under(c.p, cx + x, GY, [224, 255, 250, Math.round(200 * (1 - k))]);
+}
+
+function surfSpec(x: MawCtx): MawSpec {
+  const u = x.t * x.haste;
+  const fi = Math.min(q24(u), q24(1.55) - 1);
+  const t = F(fi);
+  const fx: MawFx = { ...FX0, shadow: 0 };
+  // Замах — дрожь на вершине (0,71–0,79), удар — толчок вперёд и сжатие.
+  if (u > 0.71 && u < 0.8) fx.dx = Math.sin(x.now * 70) * 0.7;
+  const hk = u - F(SURF_HIT);
+  if (hk >= 0 && hk < 0.3) {
+    const e = 1 - hk / 0.3;
+    fx.dx = 2.2 * e * e;
+    fx.sx = 1 + 0.1 * e * e;
+    fx.sy = 1 - 0.12 * e * e;
+  }
+  return {
+    key: `surf|${fi}`,
+    fx,
+    make: () => {
+      const r = surfRig(t);
+      const smear =
+        fi === SURF_HIT - 1 || fi === SURF_HIT
+          ? {
+              rigs: path(surfRig, t - F(1.2), t),
+              part: 'front' as const,
+              col: [255, 250, 240, 255] as RGBA,
+            }
+          : fi === SURF_HIT + 1 || fi === SURF_HIT + 2
+            ? {
+                rigs: path(surfRig, t - F(1.4), t),
+                part: 'tail' as const,
+                col: hex('#ffb098', 200),
+              }
+            : null;
+      const c = drawMaw(r, { water: true, ph: fi / 10, smear });
+      if (fi >= 3 && fi < 14) drips(c, (fi - 3) / 11);
+      if (fi >= SURF_HIT && fi < SURF_HIT + 8)
+        splash(c, fi - SURF_HIT, c.g.line[c.g.line.length - 12][0]);
+      return cropMaw(c);
+    },
+  };
+}
+
+function spitSpec(x: MawCtx): MawSpec {
+  const wind = 0.6 / x.haste;
+  const hitF = q24(wind);
+  const fi = Math.min(q24(x.t), hitF + 11);
+  const pre = fi < hitF;
+  const a = pre ? fi / hitF : 1;
+  const b = pre ? -1 : F(fi - hitF);
+  const fx: MawFx = { ...FX0, shadow: 0 };
+  // Набор: тело чуть раздувается; плевок — отдача назад.
+  if (pre && a > 0.25) {
+    const k = clamp((a - 0.25) / 0.7, 0, 1);
+    fx.sx = 1 + 0.03 * k;
+    fx.sy = 1 + 0.03 * k;
+    if (a > 0.8) fx.dx = Math.sin(x.now * 60) * 0.5;
+  }
+  const since = x.t - wind;
+  if (since >= 0 && since < 0.3) {
+    const e = 1 - since / 0.3;
+    fx.dx = -2.6 * e * e;
+    fx.sy = 1 + 0.06 * e * e;
+    fx.sx = 1 - 0.04 * e * e;
+  }
+  const n = x.ph >= 2 ? 3 : 1;
+  return {
+    key: `spit|${fi}|${hitF}|${n}`,
+    fx,
+    make: () => {
+      const r = spitRig(a, b);
+      const c = drawMaw(r, {
+        water: true,
+        ph: fi / 9,
+        smear:
+          fi === hitF
+            ? { rigs: path(spitPre, 0.9, 1), part: 'front', col: hex('#9affee', 200) }
+            : null,
+      });
+      if (fi >= 3 && fi < 10) drips(c, (fi - 3) / 7, 5);
+      if (!pre && fi - hitF < 5) {
+        // Струя из пасти: сгусток и брызги конусом вперёд, тают.
+        const k = (fi - hitF) / 5;
+        const [mx, my] = c.h.at(8, 0.6);
+        const a0 = c.g.ha + 0.08;
+        if (k < 0.3) {
+          c.p.ell(mx + 1, my, 2.2, 1.6, MAW.spitDk);
+          c.p.ell(mx + 1, my - 0.4, 1.3, 0.9, MAW.spit);
+          c.lit.ell(mx + 1, my, 2.6, 2, hex('#9affee', 120));
+        }
+        for (let i = 0; i < 10 + 5 * n; i++) {
+          const h = hash(i, 23, n);
+          const an = a0 + (((h >> 6) % 100) / 100 - 0.5) * (0.5 + k * 0.7);
+          const dist = 3 + k * (8 + (h % 10)) + (i % 3);
+          const px = mx + Math.cos(an) * dist;
+          const py = my + Math.sin(an) * dist + k * k * 6;
+          const col = i % 3 ? MAW.spit : MAW.spitDk;
+          c.p.set(px, py, [col[0], col[1], col[2], Math.round(255 * (1 - k * 0.7))]);
+          if (i % 3 === 0) c.lit.set(px, py, hex('#9affee', Math.round(150 * (1 - k))));
+        }
+      }
+      return cropMaw(c);
+    },
+  };
+}
+
+function riseSpec(x: MawCtx): MawSpec {
+  const wind = (x.ph >= 2 ? 0.34 : 0.5) / x.haste;
+  const total = Math.max(1, q24(wind));
+  const fi = Math.min(q24(x.t), total);
+  const k = fi / total;
+  const water = (x.data.ghost ?? 0) > 0;
+  const fx: MawFx = { ...FX0, shadow: water ? 0 : 16 };
+  if (water) fx.dx = Math.sin(x.now * 44) * 0.35 * k;
+  else {
+    // Сжалась пружиной: чем ближе прыжок, тем ниже.
+    const e = EZ.in(clamp(x.t / wind, 0, 1));
+    fx.sx = 1 + 0.12 * e;
+    fx.sy = 1 - 0.14 * e;
+    if (e > 0.5) fx.dx = Math.sin(x.now * 64) * 0.6;
+  }
+  return {
+    key: `rise|${water ? 'w' : 'l'}|${Math.round(k * 24)}`,
+    fx,
+    make: () => {
+      if (!water) return cropMaw(drawMaw(riseLand(k)));
+      const c = drawMaw(riseWater(k), { water: true, ph: fi / 8, wake: 0 });
+      bubbles(c, Math.round(3 + k * 14), fi / 8, 10 + k * 6);
+      if (k > 0.6) {
+        // Вода вспучилась над головой; нос пробивает кромку.
+        const [hx] = c.h.at(3, 0);
+        const w = 3 + (k - 0.6) * 12;
+        for (let xx = -w; xx <= w; xx++)
+          under(c.p, hx + xx, GY - 1 - (Math.abs(xx) < w * 0.5 ? 1 : 0), hex('#a0ece4', 160));
+        if (k > 0.85)
+          for (let i = 0; i < 9; i++) {
+            const an = -Math.PI * (0.1 + (0.8 * i) / 8);
+            c.p.set(hx + Math.cos(an) * (w + 1), GY - 1 + Math.sin(an) * 4, MAW.foam);
+          }
+      }
+      return cropMaw(c);
+    },
+  };
+}
+
+function leapSpec(x: MawCtx): MawSpec {
+  const T = x.data.T || 1;
+  const hop = x.data.hop || 2.5;
+  const kc = clamp(x.t / T, 0, 1);
+  const fi = Math.min(24, q24(kc));
+  const k = fi / 24;
+  // Наклон — по скорости на экране: вверх на взлёте, носом вниз к земле.
+  const [fxs, fys] = x.flight ?? [T * 90, 0];
+  const vx = Math.abs(fxs);
+  const vy = fys - Math.cos(k * Math.PI) * Math.PI * hop * TS;
+  let pitch = clamp(0.7 * Math.atan2(-vy, Math.max(vx, 60)), -0.55, 0.62);
+  // К земле — брюхом, лапами вперёд: нос выравнивается.
+  if (k > 0.72) pitch += (-0.1 - pitch) * EZ.io((k - 0.72) / 0.28);
+  const pq = Math.round(pitch / 0.07);
+  const z = Math.sin(kc * Math.PI) * hop;
+  const fx: MawFx = {
+    ...FX0,
+    dy: -z * TS,
+    shadow: Math.round(16 * (1 - 0.4 * Math.sin(kc * Math.PI))),
+    ghost: true,
+  };
+  // Толчок — вытянулась; к земле — вытягивается навстречу удару.
+  if (kc < 0.22) {
+    const e = 1 - kc / 0.22;
+    fx.sy = 1 + 0.2 * e * e - 0.03 * Math.sin(e * Math.PI);
+    fx.sx = 1 - 0.14 * e * e + 0.02 * Math.sin(e * Math.PI);
+  } else if (kc > 0.8) {
+    const e = (kc - 0.8) / 0.2;
+    fx.sy = 1 + 0.08 * e;
+    fx.sx = 1 - 0.05 * e;
+  }
+  const from = x.from;
+  return {
+    key: `air|${fi}|${pq}|${from}`,
+    fx,
+    make: () => {
+      let r = { ...leapRig(k), p: pq * 0.07 };
+      if (from === 'dive') r = { ...r, jaw: 0.15, reach: 0, tuck: 1, crest: 0.6, glow: 0.2 };
+      const c = drawMaw(r, { hunger: x.ph >= 2 });
+      if (from === 'water') drips(c, k / 0.5, 9);
+      return cropMaw(c);
+    },
+  };
+}
+
+function beachSpec(x: MawCtx): MawSpec {
+  const t = x.t;
+  const thr = (x.data.thr ?? 0) > 0 && t >= THR_AT;
+  const series = (x.data.series ?? 0) > 0;
+  const fx: MawFx = { ...FX0 };
+  let key: string;
+  let rig: () => MawRig;
+  let draw: MawDraw = { hunger: x.ph >= 2 };
+  let flin = x.hurt;
+  if (t < F(7)) {
+    // Приземление: сплющило, отпружинила.
+    const fi = q24(t);
+    key = `land|${fi}`;
+    rig = () => landRig(F(fi));
+    const pts: [number, number, number][] = [
+      [0, 1.2, 0.8],
+      [F(2), 1.13, 0.86],
+      [F(3.5), 0.95, 1.07],
+      [F(5), 1.02, 0.98],
+      [F(7), 1, 1],
+    ];
+    for (let i = 1; i < pts.length; i++)
+      if (t <= pts[i][0]) {
+        const e = EZ.io((t - pts[i - 1][0]) / (pts[i][0] - pts[i - 1][0]));
+        fx.sx = pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * e;
+        fx.sy = pts[i - 1][2] + (pts[i][2] - pts[i - 1][2]) * e;
+        break;
+      }
+    flin = false;
+  } else if (thr && t < THR_AT + 1) {
+    // Хлёст: метка 0,55 с — заводит хвост; удар — ровно в кадр урона.
+    const fi = q24(t);
+    const tt = F(fi) - THR_AT;
+    key = `thr|${fi}`;
+    rig = () => thrashRig(tt);
+    const rel = fi - THR_HIT;
+    if (rel >= -1 && rel <= 2) {
+      // След хвоста кругом, по часовой: от хвоста (слева) через верх.
+      const a0 = Math.PI * 0.95;
+      const span = rel === -1 ? 0.9 : rel === 0 ? 2 * Math.PI : 2 * Math.PI;
+      const k = rel <= 0 ? 1 : rel === 1 ? 0.6 : 0.3;
+      draw = {
+        ...draw,
+        ring: { a0: rel <= 0 ? a0 : a0 + 0.5 * rel, a1: a0 + span, k },
+        smear:
+          rel <= 0
+            ? { rigs: path(thrashRig, tt - F(1.2), tt), part: 'tail', col: hex('#ffb098', 210) }
+            : null,
+      };
+    }
+    if (t > THR_AT + F(9) && t < F(THR_HIT - 1)) fx.dx = Math.sin(x.now * 66) * 0.6;
+    if (rel >= 0 && rel < 6) {
+      const e = 1 - rel / 6;
+      fx.sx = 1 + 0.08 * e;
+      fx.sy = 1 - 0.1 * e;
+    }
+    flin = false;
+  } else if (series) {
+    // Серия: не лежит — глядит на цель, готова к следующему прыжку.
+    const fi = Math.min(q24(t), 12);
+    key = `glare|${fi}`;
+    rig = () =>
+      mixRig(
+        landRig(F(7)),
+        { ...REST, hd: 0.14, jaw: 0.5, crest: 1.3, glow: 0.6, splay: 0.5, gill: 0.6 },
+        EZ.io(clamp((F(fi) - F(7)) / 0.2, 0, 1)),
+      );
+  } else {
+    // Выброшенная рыба: цикл 16 кадров на 12 к/с.
+    const fi = Math.floor(((t - F(7)) * 12) % 16);
+    const lt = fi / 12;
+    key = `flop|${fi}`;
+    rig = () => {
+      const r = flopRig(lt);
+      // Кончик хвоста подрагивает, пока лежит.
+      return lt > 0.5 ? { ...r, bk3: r.bk3 + 0.1 * Math.sin(lt * 17) } : r;
+    };
+    const lc = ((t - F(7)) % FLOP_T) / FLOP_T;
+    const T0 = 0.1 / FLOP_T;
+    const T1 = 0.22 / FLOP_T;
+    const T2 = 0.34 / FLOP_T;
+    const T3 = 0.46 / FLOP_T;
+    if (lc > T0 && lc < T2) fx.dy = -2.6 * Math.sin(((lc - T0) / (T2 - T0)) * Math.PI);
+    if (lc >= T1 - 0.02 && lc < T3) {
+      const e = lc < T2 ? 0 : 1 - (lc - T2) / (T3 - T2);
+      fx.sx = 1 + 0.08 * e;
+      fx.sy = 1 - 0.1 * e;
+    }
+  }
+  const make = (): MawRaw => {
+    let r = rig();
+    if (flin) r = flinch(r);
+    if (x.rage >= 0 && !thr) r = enrage(r, rageK(x.rage));
+    return cropMaw(drawMaw(r, { ...draw, rage: x.rage >= 0 ? rageK(x.rage) : 0 }));
+  };
+  const rq = x.rage >= 0 && !thr ? Math.round(rageK(x.rage) * 4) : -1;
+  return {
+    key: `${key}|${flin ? 'h' : ''}|${rq}|${x.ph >= 2 ? 'g' : ''}`,
+    fx,
+    make,
+  };
+}
+
+/** Сцена смены фазы: 0,9 с — вспыхнула, заревела, отпустило. */
+const rageK = (s: number) =>
+  s < 0.12 ? s / 0.12 : s < 0.62 ? 1 : Math.max(0, 1 - (s - 0.62) / 0.28);
+
+function crawlSpec(x: MawCtx): MawSpec {
+  const fi = Math.floor(x.t * 12) % 10;
+  const ph = fi / 10;
+  const fx: MawFx = { ...FX0, dy: -0.6 * Math.max(0, Math.sin(((x.t * 12) / 10) * Math.PI * 4)) };
+  const rq = x.rage >= 0 ? Math.round(rageK(x.rage) * 4) : -1;
+  return {
+    key: `crawl|${fi}|${x.hurt ? 'h' : ''}|${rq}|${x.ph >= 2 ? 'g' : ''}`,
+    fx,
+    make: () => {
+      let r = crawlRig(ph);
+      if (x.hurt) r = flinch(r);
+      if (rq >= 0) r = enrage(r, rq / 4);
+      return cropMaw(drawMaw(r, { hunger: x.ph >= 2, rage: rq >= 0 ? rq / 4 : 0 }));
+    },
+  };
+}
+
+function swimSpec(x: MawCtx, fast: boolean): MawSpec {
+  const n = 8;
+  const fi = Math.floor(x.now * (fast ? 16 : 10)) % n;
+  const ph = fi / n;
+  const fx: MawFx = { ...FX0, shadow: 0 };
+  const ent = x.entry >= 0 && x.entry < 0.42 ? Math.min(9, q24(x.entry)) : -1;
+  return {
+    key: `swim|${fast ? 1 : 0}|${fi}|${ent}`,
+    fx,
+    make: () => {
+      let r = swimRig(ph, fast);
+      if (ent >= 0) {
+        // Нырнула с берега: уходит под воду по кадрам.
+        const e = EZ.out(ent / 9);
+        r = { ...r, sink: 2 + (r.sink - 2) * e, sail: e, jaw: 0.3 * (1 - e) + r.jaw * e };
+      }
+      const c = drawMaw(r, { water: true, ph, wake: fast ? 13 : 9 });
+      if (ent >= 0) bubbles(c, 12 - ent, ent / 6, 14);
+      else if (fi % 4 === 1) bubbles(c, 2, ph, 8);
+      return cropMaw(c);
+    },
+  };
+}
+
+function roarSpec(x: MawCtx): MawSpec {
+  const fi = Math.min(q24(x.t), q24(1.3) - 1);
+  const fx: MawFx = { ...FX0 };
+  if (x.t > F(9) && x.t < F(24)) {
+    fx.dx = Math.sin(x.now * 55) * 0.7;
+    fx.dy = -0.8;
+  }
+  return {
+    key: `roar|${fi}`,
+    fx,
+    make: () => {
+      let r = roarRig(F(fi));
+      // Рёв — дрожь челюсти и головы через кадр.
+      if (fi > 9 && fi < 24)
+        r = { ...r, hd: r.hd + (fi % 2 ? 0.05 : -0.03), jaw: r.jaw + (fi % 2 ? 0.04 : -0.04) };
+      const c = drawMaw(r);
+      if (fi >= 9 && fi < 25) {
+        // Брызги слюны из пасти — летят по дуге.
+        for (let i = 0; i < 6; i++) {
+          const h = hash(i, fi >> 1, 31);
+          const s = ((fi - 9 + i * 2.7) % 8) / 8;
+          const [px, py] = c.h.at(6 + s * 14 + (h % 3), -1 - s * 6 + s * s * 12 + ((h >> 4) % 3));
+          c.p.set(px, py, hex('#f6eedc', Math.round(220 * (1 - s))));
+        }
+      }
+      if (fi >= 24) {
+        // Выдохнула: пар из ноздрей вьётся вверх и тает.
+        const k = (fi - 24) / 7;
+        for (let i = 0; i < 5; i++) {
+          const s = clamp(k * 1.3 - i * 0.12, 0, 1);
+          if (s <= 0 || s >= 1) continue;
+          const [nx, ny] = c.h.at(6.5 + s * 3, -3 - s * 9);
+          const wob = Math.sin(s * 7 + i) * 1.2;
+          c.p.set(nx + wob, ny, [226, 214, 208, Math.round(170 * (1 - s))]);
+          if (s > 0.3) c.p.set(nx + wob + 1, ny, [226, 214, 208, Math.round(110 * (1 - s))]);
+        }
+      }
+      return cropMaw(c);
+    },
+  };
+}
+
+function deathSpec(x: MawCtx): MawSpec {
+  const fi = Math.min(q24(x.t), q24(1.4) - 1);
+  const t = F(fi);
+  const fx: MawFx = { ...FX0, linger: 1.4 };
+  if (!x.wet) {
+    // Судороги — подскоки; перевернулась — сплющило на миг; тает.
+    if (x.t < F(6)) fx.dy = -3 * Math.sin((x.t / F(6)) * Math.PI);
+    else if (x.t < F(11)) fx.dy = -1.5 * Math.sin(((x.t - F(6)) / F(5)) * Math.PI);
+    if (x.t > F(12) && x.t < F(18)) fx.sy = 1 - 0.35 * Math.sin(((x.t - F(12)) / F(6)) * Math.PI);
+    if (x.t > 1.0) {
+      const k = (x.t - 1) / 0.4;
+      fx.alpha = 1 - k;
+      fx.sy = 1 - 0.25 * k;
+      fx.sx = 1 + 0.08 * k;
+    }
+  } else {
+    fx.shadow = 0;
+    if (x.t > 1.1) fx.alpha = 1 - (x.t - 1.1) / 0.3;
+  }
+  if (x.t < 0.1) fx.dx = 2 * (1 - x.t / 0.1);
+  return {
+    key: `die|${x.wet ? 'w' : 'l'}|${fi}`,
+    fx,
+    make: () => {
+      if (x.wet) {
+        const c = drawMaw(dieWater(t), { water: true, ph: fi / 8 });
+        bubbles(c, fi < 14 ? 4 : 10, fi / 6, 12);
+        return cropMaw(c);
+      }
+      const c = drawMaw(dieLand(t));
+      if (t > 0.72) {
+        // Алая лужа растекается из-под тела, пар поднимается.
+        const k = clamp((t - 0.72) / 0.6, 0, 1);
+        const rx = 8 + k * 14;
+        for (let y = -3; y <= 3; y++)
+          for (let xx = -rx; xx <= rx; xx++) {
+            const e = (xx / rx) ** 2 + (y / (2 + k * 2)) ** 2;
+            if (e <= 1)
+              under(c.p, GX - 3 + xx, GY + y, [110, 12, 18, Math.round(150 * (1 - e * 0.5))]);
+          }
+        for (let i = 0; i < 6; i++) {
+          const h = hash(i, 3, 77);
+          const s = (k * 1.5 + (h % 100) / 100) % 1;
+          c.p.set(GX - 14 + (h % 26), GY - 8 - s * 12, hex('#d8b0a8', Math.round(140 * (1 - s))));
+        }
+      }
+      return cropMaw(c);
+    },
+  };
+}
+
+function mawSpec(x: MawCtx): MawSpec {
+  switch (x.mode) {
+    case 'dying':
+      return deathSpec(x);
+    case 'swim':
+      return swimSpec(x, false);
+    case 'tail':
+      return swimSpec(x, true);
+    case 'surface':
+      return surfSpec(x);
+    case 'spit':
+      return spitSpec(x);
+    case 'rise':
+      return riseSpec(x);
+    case 'leap':
+      return leapSpec(x);
+    case 'roar':
+      return roarSpec(x);
+    case 'crawl':
+      return crawlSpec(x);
+    default:
+      return beachSpec(x);
+  }
+}
+
+const mawRaws = frameLRU<MawRaw>(180);
+const mawFrames = frameLRU<MobFrame>(400);
+const mawLits = frameLRU<HTMLCanvasElement>(260);
+
+function mawFrame(spec: MawSpec, left: boolean, flash: boolean): MobFrame {
+  const fk = `${spec.key}|${left ? 1 : 0}|${flash ? 1 : 0}`;
+  const hit = mawFrames.get(fk);
+  if (hit) return hit;
+  let raw = mawRaws.get(spec.key);
+  if (!raw) raw = mawRaws.set(spec.key, spec.make());
+  let p = raw.p;
+  if (left) p = p.flipX();
+  if (flash) p = p.tint(WHITE, 0.8);
+  let lit: HTMLCanvasElement | null = null;
+  if (raw.lit) {
+    const lk = `${spec.key}|${left ? 1 : 0}`;
+    lit = mawLits.get(lk) ?? mawLits.set(lk, (left ? raw.lit.flipX() : raw.lit).canvas());
+  }
+  const ax = left ? p.w - raw.ax : raw.ax;
+  const eye = raw.eye ? ([left ? p.w - 1 - raw.eye[0] : raw.eye[0], raw.eye[1]] as V2) : null;
+  return mawFrames.set(fk, { img: p.canvas(), ax, ay: raw.ay, eye, lit });
+}
+
+/** Что пасть делала до этого режима — для прыжка, нырка и смерти. */
+interface MawMem {
+  mode: string;
+  prev: string;
+  wetPrev: boolean;
+  from: 'water' | 'land' | 'dive';
+  wet: boolean;
+  phase: number;
+  phaseAt: number;
+  diveAt: number;
+}
+const mawMem = new Map<number, MawMem>();
+
+function mawCtx(m: Mob, pose: MobPose): MawCtx {
+  const sim = paintSim();
+  const ph = sim?.boss?.phase ?? m.data.vPh ?? 0;
+  const haste = (sim?.boss?.t ?? 0) > 200 ? 1.25 : 1;
+  let mem = mawMem.get(m.id);
+  if (!mem) {
+    mem = {
+      mode: m.mode,
+      prev: '',
+      wetPrev: false,
+      from: 'water',
+      wet: false,
+      phase: ph,
+      phaseAt: -9,
+      diveAt: -9,
+    };
+    mawMem.set(m.id, mem);
+  }
+  if (mem.mode !== m.mode) {
+    const wasWet =
+      mem.mode === 'swim' ||
+      mem.mode === 'tail' ||
+      mem.mode === 'surface' ||
+      mem.mode === 'spit' ||
+      (mem.mode === 'rise' && (m.data.ghost ?? 0) > 0);
+    mem.prev = mem.mode;
+    mem.wetPrev = wasWet;
+    mem.mode = m.mode;
+    if (m.mode === 'leap')
+      mem.from = mem.prev === 'crawl' ? 'dive' : mem.prev === 'rise' && wasWet ? 'water' : 'land';
+    if (m.mode === 'dying') mem.wet = wasWet;
+    if (m.mode === 'swim' && (mem.prev === 'crawl' || mem.prev === 'leap' || mem.prev === 'roar'))
+      mem.diveAt = pose.now;
+  }
+  if (ph > mem.phase) {
+    mem.phase = ph;
+    mem.phaseAt = pose.now;
+  }
+  const since = pose.now - mem.phaseAt;
+  const rage = since >= 0 && since < 0.9 ? since : -1;
+  const d = m.data;
+  const flight: [number, number] | null =
+    d.lx !== undefined && d.sx !== undefined
+      ? [(d.lx - d.sx) * TS * (pose.left ? -1 : 1), (d.ly - d.sy) * TS]
+      : null;
+  return {
+    mode: m.mode,
+    t: m.t,
+    now: pose.now,
+    data: d,
+    ph,
+    haste,
+    hurt: pose.anim === 'hurt',
+    from: d.vFrom === 1 ? 'water' : d.vFrom === 2 ? 'land' : d.vFrom === 3 ? 'dive' : mem.from,
+    wet: d.vWet === 1 ? true : mem.wet,
+    rage,
+    entry:
+      m.mode === 'swim' && pose.now - mem.diveAt < 0.5 ? pose.now - mem.diveAt : (d.vEntry ?? -1),
+    flight,
+  };
 }
 
 registerMobPainter('f3_maw', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  let o: MawPose;
-  if (pose.anim === 'dead') o = { kind: 'dead', f: 0 };
-  else if (mode === 'swim' || mode === 'tail') o = { kind: 'swim', f: cyc(m.t * 8, 4) };
-  else if (mode === 'rise')
-    o = m.data.ghost ? { kind: 'rise', f: cyc(m.t * 10, 4) } : { kind: 'roar', f: 0 };
-  else if (mode === 'leap') o = { kind: 'air', f: m.t < (m.data.T || 1) / 2 ? 0 : 1 };
-  else if (mode === 'surface') o = { kind: 'surface', f: m.t < 0.8 ? 0 : 1 };
-  else if (mode === 'spit') o = { kind: 'spit', f: m.t < 0.55 ? 0 : 1 };
-  else if (mode === 'roar') o = { kind: 'roar', f: 0 };
-  else if (mode === 'crawl') o = { kind: 'crawl', f: cyc(m.t * 7, 4) };
-  else o = { kind: 'beach', f: cyc(m.t * (m.data.thr ? 12 : 5), 4) };
-  const key = `maw|${o.kind}${o.f}`;
-  const fr = mobFrame(
-    key,
-    o.kind === 'swim' || o.kind === 'rise' ? { ...pose, flash: false } : pose,
-    () => paintMaw(o),
-  );
-  // В прыжке — выше земли на высоту дуги.
-  const z = m.data.z || 0;
-  if (!z) return fr;
-  return { ...fr, ay: fr.ay + Math.round(z * TS) };
+  const x = mawCtx(m, pose);
+  const spec = mawSpec(x);
+  // Вспышка: под водой её не бывает; на смерти — только удар, добивший её
+  // (копия долгой смерти держит `flash` таким, каким он был в миг гибели).
+  const flash =
+    pose.flash && x.mode !== 'swim' && x.mode !== 'tail' && !(x.mode === 'dying' && x.t > 0.12);
+  const fr = mawFrame(spec, pose.left, flash);
+  const fx = spec.fx;
+  let dx = fx.dx;
+  let dy = fx.dy;
+  let sx = fx.sx;
+  let sy = fx.sy;
+  // Удар героя: отдача от него, тело вжимается.
+  if (m.flash > 0 && m.mode !== 'dying') {
+    const k = clamp(m.flash / 0.12, 0, 1);
+    const hero = paintSim()?.hero;
+    const away = hero ? Math.sign(m.x - hero.x) || (pose.left ? 1 : -1) : pose.left ? 1 : -1;
+    const e = Math.sin(k * Math.PI * 0.5);
+    dx += away * 2.4 * e;
+    if (hero) dy += Math.sign(m.y - hero.y) * 0.8 * e;
+    sx *= 1 + 0.05 * e;
+    sy *= 1 - 0.07 * e;
+  }
+  // Смена фазы: дрожь всем телом.
+  if (x.rage >= 0) dx += Math.sin(x.now * 58) * 0.9 * rageK(x.rage);
+  return {
+    ...fr,
+    dx,
+    dy,
+    sx,
+    sy,
+    still: true,
+    shadow: fx.shadow,
+    ghost: fx.ghost ? { every: 0.035, life: 0.2, tint: '#ff4a32', alpha: 0.3 } : null,
+    alpha: fx.alpha < 1 ? Math.max(0, fx.alpha) : undefined,
+    linger: fx.linger,
+  };
+});
+
+/**
+ * Прогрев: всё, что игрок увидит в первом бою (рёв, ползком к воде, под
+ * водой, подъём, прыжок, берег, плевок), — в обе стороны; потом прилив
+ * (всплытие-волна, хлёст), пока не наберётся 340 кадров: кеш держит 400.
+ */
+registerMobWarm('f3_maw', function* () {
+  const base: MawCtx = {
+    mode: 'roar',
+    t: 0,
+    now: 0,
+    data: { ghost: 1, T: 1.1, hop: 3.5 },
+    ph: 0,
+    haste: 1,
+    hurt: false,
+    from: 'water',
+    wet: false,
+    rage: -1,
+    entry: -1,
+    flight: [100, 0],
+  };
+  const plan: [string, number, number, Partial<MawCtx>?][] = [
+    ['roar', 1.3, 1 / 24],
+    ['crawl', 0.84, 1 / 12],
+    ['swim', 0.8, 1 / 10],
+    ['rise', 0.5, 1 / 24],
+    ['leap', 1.1, 1.1 / 24],
+    ['beached', 2.6, 1 / 24],
+    ['spit', 1.1, 1 / 24],
+    ['tail', 0.5, 1 / 16],
+    ['surface', 1.55, 1 / 24, { data: { thr: 1 } }],
+    ['beached', 1.8, 1 / 24, { data: { thr: 1 }, ph: 1 }],
+  ];
+  // Только новые кадры и не больше, чем держит кеш с запасом на бой.
+  const done = new Set<string>();
+  for (const [mode, dur, dt, extra] of plan)
+    for (const left of [false, true])
+      for (let t = 0; t < dur; t += dt) {
+        const spec = mawSpec({ ...base, ...extra, mode, t, now: t });
+        const fk = `${spec.key}|${left ? 1 : 0}`;
+        if (done.has(fk)) continue;
+        done.add(fk);
+        mawFrame(spec, left, false);
+        yield;
+        if (done.size >= 340) return;
+      }
 });
 
 // ---------------------------------------------------------------------------
