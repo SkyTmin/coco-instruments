@@ -2306,6 +2306,7 @@ registerBrain('f9_head', {
     if (!body) return;
     const phase = sim.boss?.phase ?? 0;
     const haste = phase >= 2 ? 1.2 : phase >= 1 ? 1.1 : 1;
+    m.data.vH = haste; // v2.86 — только рисунок: кадр укуса и приёма = миг урона
     const [ax, ay] = anchorOf(body, m.data.slot ?? 0);
     m.data.ax = ax;
     m.data.ay = ay;
@@ -3048,6 +3049,7 @@ registerBoss('f9boss', {
           from: body.id,
         });
         body.data.lash = sim.time;
+        body.data.vLashA = ang; // v2.86 — только рисунок: куда хлещет хвост
         sim.events.push({ t: 'boss', what: 'roll' });
       }
     }

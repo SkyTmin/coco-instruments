@@ -13,9 +13,12 @@
 
 import { Px, TS } from '../dungeon-art';
 import {
+  frameLRU,
+  paintSim,
   registerCellPainter,
   registerItemArt,
   registerMobPainter,
+  registerMobWarm,
   registerPropPainter,
   registerShotPainter,
   registerZonePainter,
@@ -1658,515 +1661,2765 @@ const NECK_ANG = [
   -Math.PI / 2 + 0.9,
 ];
 
-/** Тело гидры: чешуйчатая гора в озере, гребень шипов, воротники шей. */
-function paintBody(anim: string, f: number, risen: boolean): Built {
-  const W = 80;
-  const H = 60;
-  const p = new Px(W, H);
-  const ax = 40;
-  const ay = 38;
-  const cx = ax;
-  const cy = ay + 4;
-  const breath = anim === 'idle' ? [0, 0.6, 1, 0.6][f % 4] : anim === 'roar' ? 1.4 : 0;
-  const dead = anim === 'dead';
-  const rx = dead ? 22 : 21 + breath * 0.4;
-  const ry = dead ? 10 : 12.5 + breath * 0.5;
-  const top = cy - (dead ? 2 : 3) - breath * 0.6;
-  if (risen && !dead) {
-    // Вышло из ила: видны короткие лапы с когтями.
-    for (const [dx, s] of [
-      [-15, -1],
-      [-8, -1],
-      [8, 1],
-      [15, 1],
-    ] as const) {
-      limb(p, cx + dx, cy + 6, cx + dx + s * 4, cy + 12, 3, 2, HY.body);
-      for (let k = -1; k <= 1; k++)
-        stroke(
-          p,
-          cx + dx + s * 4 + k * 1.5,
-          cy + 12,
-          cx + dx + s * 5 + k * 2,
-          cy + 14,
-          HY.spike[3],
-        );
-    }
+// ===========================================================================
+// Гидра v2.86 — анимации («Тело»). Риг голов на 24 к/с, шеи с запаздыванием
+// и волной, хвост из воды, подъём на лапы и смерть — сценами.
+//
+// Мозг — метроном: техника считается от `pose.t` (время режима; в стоп-кадре
+// стоит, и поза контакта держится сама), покой и вторичное движение — от
+// `pose.now`. Кадр контакта — `q24(T)`, где T — ровно момент урона в мозге
+// (`m.data.vH` — спешка головы, ставит мозг: только рисунок).
+// Кадры — в `frameLRU` по СОДЕРЖИМОМУ позы: одинаковые позы разных техник
+// делят один холст. Тяжёлое — в прогрев (`registerMobWarm`).
+// ===========================================================================
+
+type V2 = [number, number];
+type Ease = (x: number) => number;
+
+const EZ = {
+  lin: (x: number) => x,
+  /** Разгон — замах, падение. */
+  in: (x: number) => x * x,
+  in3: (x: number) => x * x * x,
+  /** Торможение — удар, выход из рывка. */
+  out: (x: number) => 1 - (1 - x) * (1 - x) * (1 - x),
+  out2: (x: number) => 1 - (1 - x) * (1 - x),
+  io: (x: number) => x * x * (3 - 2 * x),
+};
+
+const clampv = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+/** Номер кадра 24 к/с от времени техники. */
+const q24 = (t: number) => Math.max(0, Math.floor(t * 24 + 1e-6));
+const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+const rgbOf = (c: RGBA) => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+type Key<T> = [number, Partial<T>, Ease?];
+
+/**
+ * Дорожка ключевых поз: каждая следующая — предыдущая плюс изменения, между
+ * ключами — интерполяция с кривой ключа. Время — в кадрах 24 к/с: ключ
+ * контакта стоит ровно на кадре урона.
+ */
+function lane<T extends object>(base: T, keys: Key<T>[]): (x: number) => T {
+  const ts: number[] = [];
+  const rs: T[] = [];
+  const es: Ease[] = [];
+  let cur = base;
+  for (const [t, part, e] of keys) {
+    cur = { ...cur, ...part };
+    ts.push(t);
+    rs.push(cur);
+    es.push(e ?? EZ.io);
   }
-  // Воротники шей по краю тела (шеи уходят под них).
-  for (const a of NECK_ANG) {
-    const nx = cx + Math.cos(a) * rx * 0.9;
-    const ny = top + Math.sin(a) * ry * 0.85;
-    shadeEll(p, nx, ny, 4.4, 3.4, HY.plate, -0.1);
-  }
-  // Тело: горб, свет сверху-слева.
-  shadeEll(p, cx, top, rx, ry, HY.body);
-  // Пластины брони по хребту — от головы к хвосту.
-  for (let i = 0; i < 9; i++) {
-    const k = i / 8;
-    const x = cx - rx * 0.75 + k * rx * 1.5;
-    const y = top - ry * 0.35 - Math.sin(k * Math.PI) * ry * 0.35;
-    shadeEll(p, x, y, 3.4, 2.4, HY.plate, 0.1);
-  }
-  // Гребень: ряд шипов, дышит (приподнимается).
-  for (let i = 0; i < 8; i++) {
-    const k = (i + 0.5) / 8;
-    const x = cx - rx * 0.7 + k * rx * 1.4;
-    const base = top - ry * 0.55 - Math.sin(k * Math.PI) * ry * 0.4;
-    const hgt = (4 + Math.sin(k * Math.PI) * 5) * (dead ? 0.4 : 1) + breath;
-    poly(
-      p,
-      [
-        [x - 2, base + 1],
-        [x + 0.5, base - hgt],
-        [x + 2, base + 1],
-      ],
-      (px, py) => tone(HY.spike, 0.8 - (px - x + 2) * 0.2 - (py - base + hgt) * 0.02),
-    );
-  }
-  // Чешуя и шрамы.
-  scales(p, 0, 0, W - 1, H - 1, HY.body[0], HY.body[3], 17);
-  for (const [x0, y0, x1, y1] of [
-    [cx - 10, top + 2, cx - 4, top + 5],
-    [cx + 6, top - 3, cx + 12, top - 1],
-  ])
-    stroke(p, x0, y0, x1, y1, HY.scar);
-  p.outline(INK);
-  // Вода у подножия: нижняя треть тонет в озере (кроме вылезшего).
-  if (!risen || dead) {
-    const wl = cy + 3;
-    for (let y = Math.floor(wl); y < H; y++)
-      for (let x = 0; x < W; x++) {
-        if (!p.solid(x, y)) continue;
-        const k = clamp01((y - wl) / 5);
-        const c = p.get(x, y);
-        p.set(x, y, mixc(c, HY.water, 0.4 + 0.5 * k));
+  const names = Object.keys(base) as (keyof T)[];
+  return (x: number) => {
+    if (x <= ts[0]) return rs[0];
+    for (let i = 1; i < ts.length; i++) {
+      if (x > ts[i]) continue;
+      const k = es[i]((x - ts[i - 1]) / Math.max(1e-6, ts[i] - ts[i - 1]));
+      const a = rs[i - 1];
+      const b = rs[i];
+      const o = { ...a };
+      for (const n of names) {
+        const va = a[n] as unknown as number;
+        const vb = b[n] as unknown as number;
+        (o[n] as unknown as number) = va + (vb - va) * k;
       }
-    // Пена по кромке воды.
-    for (let x = cx - rx - 2; x <= cx + rx + 2; x++) {
-      const y = Math.round(wl + Math.sin(x * 0.7 + f * 1.6) * 0.8);
-      if (p.solid(x, y) || p.solid(x, y - 1)) p.set(x, y, alpha(HY.foam, (x + f) % 3 ? 0.9 : 0.5));
+      return o;
     }
-  } else {
-    // Ил налип на брюхо.
-    for (let y = cy + 4; y < cy + 12; y++)
-      for (let x = 0; x < W; x++)
-        if (p.solid(x, y) && hash(x, y, 3) < 0.55) p.set(x, y, HY.mud[1 + (y % 2)]);
-  }
-  return { p, ax, ay, eye: null };
+    return rs[rs.length - 1];
+  };
 }
 
-registerMobPainter('f9_body', (m: Mob, pose: MobPose) => {
-  const risen = (m.data.risen ?? 0) > 0;
-  let anim = pose.anim === 'dead' ? 'dead' : pose.mode === 'roar' && pose.t < 1.5 ? 'roar' : 'idle';
-  const f = anim === 'idle' ? cyc(pose.t * 2.5, 4) : 0;
-  if (anim === 'roar') anim = 'roar';
-  return frameOf(risen ? 'f9_body_r' : 'f9_body', pose, anim, f, () => paintBody(anim, f, risen));
-});
+/** Кеш дорожек: у техник они зависят от момента урона (спешка фазы). */
+const LANES = new Map<string, (x: number) => unknown>();
+function laneOf<T>(key: string, make: () => (x: number) => T): (x: number) => T {
+  let f = LANES.get(key) as ((x: number) => T) | undefined;
+  if (!f) {
+    f = make();
+    LANES.set(key, f as (x: number) => unknown);
+  }
+  return f;
+}
 
-/** Голова гидры стихии `el`: клин морды, рога-гребень, глаз, пасть. */
-function paintHead(el: number, anim: string, f: number, crown = false): Built {
-  const L = ELEM[el];
-  const s = crown ? 1.3 : 1;
-  const W = Math.round(32 * s);
-  const H = Math.round(28 * s);
-  const p = new Px(W, H);
-  const ax = Math.round(13 * s);
-  const ay = Math.round(24 * s);
-  const cx = 13 * s;
-  const cy = 12 * s;
-  let jaw = 0;
-  let lunge = 0;
-  let droop = 0;
-  let recoil = 0;
-  switch (anim) {
-    case 'idle':
-      jaw = [0, 0.1, 0.2, 0.1][f % 4];
-      break;
-    case 'wind':
-      jaw = 0.8 + (f % 2) * 0.2;
-      recoil = 1;
-      break;
-    case 'bite':
-      lunge = 2.5;
-      jaw = 0;
-      break;
-    case 'cast':
-    case 'prism':
-      jaw = 1;
-      break;
-    case 'heal':
-      jaw = 0.3;
-      break;
-    case 'hurt':
-      recoil = 2;
-      jaw = 0.3;
-      break;
-    case 'dead':
-      droop = 1;
-      jaw = 0.6;
-      break;
+// --- Память рисовальщика: что было до этого режима (по номеру моба). ---
+
+interface HMem {
+  mode: string;
+  prev: string;
+  /** Последнее `t` прошлого режима. */
+  prevT: number;
+  lastT: number;
+  /** Время рендера, когда режим сменился. */
+  at: number;
+  seen: number;
+  /** Сторона взгляда с запасом: у героя прямо под головой она не мигает. */
+  left: boolean;
+  /** С какого `t` впервые увидели смерть (−1 — жив). */
+  dieFrom: number;
+  /** Тело: −2 — давно на лапах, −1 — в воде, иначе когда встало (now). */
+  risen: number;
+}
+
+const MEM = new Map<number, HMem>();
+
+function memOf(m: Mob, now: number): HMem {
+  let s = MEM.get(m.id);
+  // Новая вылазка или лист кадров (время пошло заново) — память с нуля.
+  if (!s || now - s.seen > 3 || now < s.seen - 0.5) {
+    s = {
+      mode: m.mode,
+      prev: '',
+      prevT: 0,
+      lastT: m.t,
+      at: now - 10,
+      seen: now,
+      left: Math.cos(m.face) < 0,
+      dieFrom: m.mode === 'dying' ? m.t : -1,
+      risen: (m.data.risen ?? 0) > 0 ? -2 : -1,
+    };
+    MEM.set(m.id, s);
+    if (MEM.size > 96)
+      for (const [id, o] of MEM) if (now - o.seen > 5 || now < o.seen - 0.5) MEM.delete(id);
   }
-  const hx0 = cx + lunge - recoil;
-  const hy0 = cy + droop * 5;
-  // Свет белой головы — нимб за затылком.
-  if (el === 4 && !droop) {
-    const R = 7 * s + (anim === 'heal' ? 1 + (f % 2) : 0);
-    for (let a = 0; a < TAU; a += 0.12) {
-      const x = Math.round(hx0 - 2 * s + Math.cos(a) * R);
-      const y = Math.round(hy0 - 1 * s + Math.sin(a) * R * 0.9);
-      p.set(x, y, alpha(L.glow, anim === 'heal' ? 0.95 : 0.6));
+  if (s.mode !== m.mode) {
+    s.prev = s.mode;
+    s.prevT = s.lastT;
+    s.mode = m.mode;
+    s.at = now;
+  }
+  if (m.mode === 'dying') {
+    if (s.dieFrom < 0) s.dieFrom = m.t;
+  } else s.dieFrom = -1;
+  s.lastT = m.t;
+  s.seen = Math.max(s.seen, now);
+  const c = Math.cos(m.face);
+  if (Math.abs(c) > 0.3) s.left = c < 0;
+  return s;
+}
+
+// ---------------------------------------------------------------------------
+// Голова: риг. Местные координаты — от центра черепа, морда вправо; поворот
+// `pitch` (плюс — нос вниз) и масштаб переводят их в холст. Свет всегда
+// сверху-слева: голова не вращается картинкой, а рисуется заново в позе.
+// ---------------------------------------------------------------------------
+
+interface HeadRig {
+  /** Масштаб (подъём новой головы растёт от малого). */
+  s: number;
+  pitch: number;
+  /** Пасть: 0 закрыта, 1 открыта, 1,3 — разинута до хруста. */
+  jaw: number;
+  /** Горло раздуто перед выдохом. */
+  swell: number;
+  /** Свет стихии в пасти. */
+  glow: number;
+  /** Гребень: 0,3 прижат, 1 обычно, 1,7 вздыблен. */
+  crest: number;
+  /** Глаз: 0 закрыт, 0,5 прищур, 1 открыт, 2 в ярости. */
+  eye: number;
+  tongue: number;
+  /** Вода/ил стекают (подъём, всплытие). */
+  wet: number;
+  /** След захлопнувшихся челюстей (кадр контакта укуса). */
+  smear: number;
+  /** Отрубленная: срез вместо шеи. */
+  cut: number;
+  blood: number;
+  /** Лежит на боку. */
+  roll: number;
+  /** Номер кадра искр и углей стихии. */
+  spark: number;
+  // --- Ход (не рисуется в кадре, двигает его): ---
+  fx: number;
+  fy: number;
+  lift: number;
+  alpha: number;
+  // --- Шея (рисует зона `f9_necks`): ---
+  /** Шея свёрнута S-образно — пружина перед броском. */
+  coil: number;
+  /** Ком по шее: где (0 у тела … 1 у головы) и насколько. */
+  bulge: number;
+  bulgeA: number;
+}
+
+const HREST: HeadRig = {
+  s: 1,
+  pitch: 0,
+  jaw: 0.1,
+  swell: 0,
+  glow: 0,
+  crest: 1,
+  eye: 1,
+  tongue: 0,
+  wet: 0,
+  smear: 0,
+  cut: 0,
+  blood: 0,
+  roll: 0,
+  spark: 0,
+  fx: 0,
+  fy: 0,
+  lift: 6,
+  alpha: 1,
+  coil: 0,
+  bulge: 0,
+  bulgeA: 0,
+};
+
+/** Холст головы: размер, центр черепа, точка земли, масштаб вида. */
+interface HBox {
+  W: number;
+  H: number;
+  CX: number;
+  CY: number;
+  AX: number;
+  AY: number;
+  S: number;
+}
+const HBOX: HBox = { W: 48, H: 46, CX: 22, CY: 20, AX: 22, AY: 32, S: 1 };
+const CBOX: HBox = { W: 64, H: 62, CX: 30, CY: 26, AX: 30, AY: 42, S: 1.3 };
+
+interface HGeo {
+  P: (x: number, y: number) => V2;
+  /** Верхняя челюсть: поднимается, когда пасть открыта. */
+  Q: (x: number, y: number) => V2;
+  s: number;
+  cp: number;
+  sp: number;
+  sq: number;
+  ja: number;
+  hinge: V2;
+  jawTip: V2;
+  nape: V2;
+  stub: V2;
+}
+
+function headGeo(r: HeadRig, B: HBox): HGeo {
+  const s = r.s * B.S;
+  const cp = Math.cos(r.pitch);
+  const sp = Math.sin(r.pitch);
+  const sq = 1 - 0.3 * r.roll;
+  const P = (x: number, y: number): V2 => {
+    const yy = y * sq;
+    return [B.CX + (x * cp - yy * sp) * s, B.CY + (x * sp + yy * cp) * s];
+  };
+  const au = -r.jaw * 0.2;
+  const ca = Math.cos(au);
+  const sa = Math.sin(au);
+  const Q = (x: number, y: number): V2 => {
+    const dx = x - 1;
+    const dy = y - 0.6;
+    return P(1 + dx * ca - dy * sa, 0.6 + dx * sa + dy * ca);
+  };
+  const ja = 0.18 + r.jaw * 0.55;
+  const nape = P(-4.5, 2.2);
+  // Шея уходит от затылка назад и вниз и гнётся с головой лишь отчасти.
+  const a = Math.PI - 0.5 + r.pitch * 0.35;
+  const stub: V2 = [nape[0] + Math.cos(a) * 7 * s, nape[1] + Math.sin(a) * 7 * s];
+  return {
+    P,
+    Q,
+    s,
+    cp,
+    sp,
+    sq,
+    ja,
+    hinge: P(1, 3),
+    jawTip: P(1 + Math.cos(ja) * 10, 3 + Math.sin(ja) * 10),
+    nape,
+    stub,
+  };
+}
+
+/** Точка нижней челюсти: `d` вдоль, `n` к нёбу (местные единицы). */
+function jawAt(g: HGeo, d: number, n: number): V2 {
+  const c = Math.cos(g.ja);
+  const s = Math.sin(g.ja);
+  return g.P(1 + c * d + s * n, 3 + s * d - c * n);
+}
+
+/** Многоугольник только по пустым пикселям — пасть между челюстями. */
+function polyUnder(p: Px, pts: V2[], c: RGBA | ((x: number, y: number) => RGBA)): void {
+  const q = new Px(p.w, p.h);
+  poly(q, pts, [255, 255, 255, 255]);
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++)
+      if (q.solid(x, y) && !p.solid(x, y)) p.set(x, y, typeof c === 'function' ? c(x, y) : c);
+}
+
+/** Рамка непрозрачного — чтобы проходы по холсту не шли по пустоте. */
+function bboxOf(p: Px): [number, number, number, number] | null {
+  let x0 = p.w;
+  let y0 = p.h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++)
+      if (p.data[(y * p.w + x) * 4 + 3]) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+  return x1 < 0 ? null : [x0, y0, x1, y1];
+}
+
+/** Чешуя в МЕСТНЫХ координатах: поворачивается вместе с головой, не ползёт. */
+function scalesLocal(p: Px, g: HGeo, B: HBox, dk: RGBA, lt: RGBA, seed: number): void {
+  const bb = bboxOf(p);
+  if (!bb) return;
+  for (let y = bb[1]; y <= bb[3]; y++)
+    for (let x = bb[0]; x <= bb[2]; x++) {
+      if (!p.solid(x, y)) continue;
+      const dx = (x + 0.5 - B.CX) / g.s;
+      const dy = (y + 0.5 - B.CY) / g.s;
+      const lx = dx * g.cp + dy * g.sp;
+      const ly = (-dx * g.sp + dy * g.cp) / g.sq;
+      const iy = Math.floor(ly + 64);
+      const ix = Math.floor(lx + 64);
+      const row = iy >> 1;
+      const col = (ix + (row & 1)) >> 1;
+      if (((ix + row) & 1) === 0 && (iy & 1) === 1 && hash(col, row, seed) > 0.25) p.set(x, y, dk);
+      else if (((ix + row) & 1) === 1 && (iy & 1) === 0 && hash(col, row, seed + 7) > 0.7)
+        p.set(x, y, lt);
     }
-  }
-  // Шея-обрубок у затылка — сливается с шеей на полу.
-  limb(p, hx0 - 12 * s, hy0 + 6 * s, hx0 - 4 * s, hy0 + 1.5 * s, 4.2 * s, 3.6 * s, L.skin);
-  // Нижняя челюсть: опускается в замахе.
-  const ja = 0.18 + jaw * 0.55 + droop * 0.4;
-  const jx0 = hx0 + 1 * s;
-  const jy0 = hy0 + 3 * s;
-  const jx1 = jx0 + Math.cos(ja) * 10 * s;
-  const jy1 = jy0 + Math.sin(ja) * 10 * s;
-  limb(p, jx0, jy0, jx1, jy1, 2.4 * s, 1.3 * s, L.belly);
-  // Пасть изнутри: тёмная, со светом стихии в касте.
-  if (jaw > 0.4) {
-    poly(
-      p,
-      [
-        [hx0 + 2 * s, hy0 + 1.5 * s],
-        [hx0 + 11 * s, hy0 + 1 * s],
-        [jx1, jy1 - 1 * s],
-        [jx0 + 1 * s, jy0],
-      ],
-      anim === 'cast' || anim === 'prism' ? L.glow : hx('#3a0a0e'),
-    );
-    if (anim === 'cast' || anim === 'prism')
-      p.ell(hx0 + 6 * s, hy0 + 2.8 * s, 2 * s, 1.4 * s, L.glowHi);
-    // Клыки.
-    for (let k = 0; k < 3; k++) {
-      const x = hx0 + (4 + k * 2.5) * s;
-      p.set(Math.round(x), Math.round(hy0 + 1.5 * s), WHITE);
-      p.set(Math.round(x), Math.round(hy0 + 2.5 * s), hx('#d8d0c0'));
-    }
-  }
-  // Череп и морда.
-  shadeEll(p, hx0, hy0, 6.2 * s, 4.8 * s, L.skin);
-  limb(p, hx0 + 2 * s, hy0 + 0.2 * s, hx0 + 11 * s, hy0 + 1 * s, 3.4 * s, 2 * s, L.skin);
-  // Гребень/рога по стихии.
+}
+
+/** Гребень и рога стихии — по позе: вздыблен, прижат. */
+function headCrest(p: Px, el: number, g: HGeo, r: HeadRig, L: ElemLook): void {
+  const { P, s } = g;
+  const k = r.crest;
   if (el === 1) {
-    // Лёд: ледяные иглы назад.
-    for (let k = 0; k < 4; k++) {
-      const bx = hx0 - (1 + k * 1.8) * s;
-      const by = hy0 - 3.8 * s + k * 0.8 * s;
-      poly(
-        p,
-        [
-          [bx - 1.2 * s, by + 1],
-          [bx - (3 + k) * s, by - (5 - k) * s],
-          [bx + 1.2 * s, by + 1],
-        ],
-        (x, y) => tone(L.crest, 0.9 - (y - by + 5 * s) * 0.05),
-      );
+    // Лёд: ледяные иглы назад; вздыблены — встают, прижаты — ложатся.
+    for (let i = 0; i < 4; i++) {
+      const bx = -(1 + i * 1.8);
+      const by = -3.8 + i * 0.8;
+      const tip = P(bx - (3 + i) * (1.25 - 0.25 * k), by - (5 - i) * k);
+      const a = P(bx - 1.2, by + 0.4);
+      const b = P(bx + 1.2, by + 0.4);
+      const ty = tip[1];
+      poly(p, [a, tip, b], (_x, y) => tone(L.crest, 0.95 - (y - ty) * (0.07 / s)));
     }
   } else if (el === 3) {
     // Гроза: два рога-молнии.
     for (const d of [0, 1]) {
-      const bx = hx0 - (1 + d * 3) * s;
-      const pts: [number, number][] = [
-        [bx, hy0 - 3.5 * s],
-        [bx - 2 * s, hy0 - 6 * s],
-        [bx - 0.5 * s, hy0 - 7 * s],
-        [bx - 3 * s, hy0 - 10 * s],
+      const bx = -(1 + d * 3);
+      const pts = [
+        P(bx, -3.5),
+        P(bx - 2, -3.5 - 2.5 * k),
+        P(bx - 0.5, -3.5 - 3.5 * k),
+        P(bx - 3, -3.5 - 6.5 * k),
       ];
-      for (let k = 0; k < 3; k++)
+      for (let i = 0; i < 3; i++)
         stroke(
           p,
-          pts[k][0],
-          pts[k][1],
-          pts[k + 1][0],
-          pts[k + 1][1],
-          L.crest[2 + (k % 2)],
+          pts[i][0],
+          pts[i][1],
+          pts[i + 1][0],
+          pts[i + 1][1],
+          L.crest[2 + (i % 2)],
           1.6 * s,
         );
     }
   } else if (el === 2) {
-    // Яд: перепончатый гребень с пятнами.
-    for (let k = 0; k < 5; k++) {
-      const bx = hx0 - (k * 1.6 - 1) * s;
-      const hgt = (4.5 - Math.abs(k - 1.5)) * s;
-      limb(p, bx, hy0 - 3.8 * s, bx - 1.5 * s, hy0 - 3.8 * s - hgt, 1 * s, 0.4 * s, L.crest);
+    // Яд: перепончатый гребень.
+    for (let i = 0; i < 5; i++) {
+      const bx = -(i * 1.6 - 1);
+      const hgt = (4.5 - Math.abs(i - 1.5)) * k;
+      const a = P(bx, -3.8);
+      const b = P(bx - 1.5 - (1 - k) * 1.5, -3.8 - hgt);
+      limb(p, a[0], a[1], b[0], b[1], 1 * s, 0.4 * s, L.crest);
     }
   } else if (el === 5) {
     // Скрытая голова: корона из пяти рогов и плавники.
-    for (let k = 0; k < 5; k++) {
-      const a = -Math.PI / 2 - 0.9 + k * 0.38;
-      const bx = hx0 - 1 * s + Math.cos(a) * 4 * s;
-      const by = hy0 - 1 * s + Math.sin(a) * 3.5 * s;
-      limb(
-        p,
-        bx,
-        by,
-        bx + Math.cos(a) * 5 * s - 2 * s,
-        by + Math.sin(a) * 5 * s,
-        1.1 * s,
-        0.3 * s,
-        L.crest,
-      );
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 - 0.9 + i * 0.38;
+      const bx = -1 + Math.cos(a) * 4;
+      const by = -1 + Math.sin(a) * 3.5;
+      const b0 = P(bx, by);
+      const b1 = P(bx + (Math.cos(a) * 5 - 2) * (0.6 + 0.4 * k), by + Math.sin(a) * 5 * k);
+      limb(p, b0[0], b0[1], b1[0], b1[1], 1.1 * s, 0.3 * s, L.crest);
     }
-    for (let k = 0; k < 3; k++)
-      limb(
-        p,
-        hx0 - 4 * s,
-        hy0 + k * 1.5 * s,
-        hx0 - 9 * s,
-        hy0 - 1 * s + k * 2.5 * s,
-        1 * s,
-        0.4 * s,
-        L.belly,
-      );
+    for (let i = 0; i < 3; i++) {
+      const a = P(-4, i * 1.5);
+      const b = P(-9 - (k - 1) * 1.5, -1 + i * 2.5 - (k - 1) * 1.2);
+      limb(p, a[0], a[1], b[0], b[1], 1 * s, 0.4 * s, L.belly);
+    }
   } else {
-    // Огонь и свет: два изогнутых рога назад.
+    // Огонь и свет: два изогнутых рога назад (рога не гнутся — чуть
+    // отходят назад, когда голова прижимает гребень).
+    const lean = (1 - k) * 1.2;
     for (const d of [0, 1]) {
       const pts = spline(
         [
-          [hx0 - (1 + d * 2) * s, hy0 - 3.5 * s],
-          [hx0 - (4 + d * 2) * s, hy0 - 6 * s],
-          [hx0 - (8 + d) * s, hy0 - 6.5 * s],
+          P(-(1 + d * 2), -3.5),
+          P(-(4 + d * 2) - lean, -6 + lean * 0.8),
+          P(-(8 + d) - lean * 1.6, -6.5 + lean * 1.4),
         ],
         3,
       );
       chain(p, pts, 1.4 * s, 0.4 * s, L.crest);
     }
   }
-  scales(p, 0, 0, W - 1, H - 1, L.skin[0], L.skin[3], 29 + el);
+}
+
+interface HeadRaw {
+  p: Px;
+  lit: Px | null;
+  eye: V2 | null;
+}
+
+const MOUTH = hx('#3a0a0e');
+const TONGUE = hx('#d0486a');
+const FLESH = [hx('#5a0e0c'), hx('#8a1a14'), hx('#c83a2a'), hx('#f0e6d0')];
+
+/**
+ * Кадр головы по позе. `clip` — строка поверхности воды/ила в холсте: всё,
+ * что ниже, под водой (подъём, нырок, погружение); `mud` — поверхность ил.
+ */
+function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolean): HeadRaw {
+  const L = ELEM[el];
+  const p = new Px(B.W, B.H);
+  let lit: Px | null = null;
+  const LIT = () => (lit ??= new Px(B.W, B.H));
+  const g = headGeo(r, B);
+  const { P, Q, s } = g;
+  // Нимб белой — за затылком: светлеет, когда голова копит свет.
+  if (el === 4 && r.cut === 0 && r.roll < 0.5) {
+    const [hx0, hy0] = P(-2, -1);
+    const R = 7 * s + r.glow * 2.2;
+    for (let a = 0; a < TAU; a += 0.09) {
+      const x = Math.round(hx0 + Math.cos(a) * R);
+      const y = Math.round(hy0 + Math.sin(a) * R * 0.9);
+      p.set(x, y, alpha(L.glow, 0.5));
+      if (r.glow > 0.05) LIT().set(x, y, alpha(L.glowHi, 0.35 + 0.6 * r.glow));
+    }
+    if (r.glow > 0.35)
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU + r.spark * 0.2;
+        const r0 = R + 1.5;
+        const r1 = R + 1.5 + r.glow * 3;
+        stroke(
+          LIT(),
+          hx0 + Math.cos(a) * r0,
+          hy0 + Math.sin(a) * r0 * 0.9,
+          hx0 + Math.cos(a) * r1,
+          hy0 + Math.sin(a) * r1 * 0.9,
+          alpha(L.glowHi, 0.55 * r.glow),
+        );
+      }
+  }
+  // Шея у затылка — сливается с шеей на полу; брюшко светлее.
+  limb(p, g.stub[0], g.stub[1], g.nape[0], g.nape[1], 4.2 * s, 3.7 * s, L.skin);
+  {
+    const a = Math.PI - 0.5 + r.pitch * 0.35;
+    const nx = -Math.sin(a);
+    const ny = Math.cos(a);
+    const off = 1.7 * s * (ny >= 0 ? 1 : -1);
+    limb(
+      p,
+      g.stub[0] + nx * off,
+      g.stub[1] + ny * off,
+      g.nape[0] + nx * off,
+      g.nape[1] + ny * off,
+      2 * s,
+      1.6 * s,
+      L.belly,
+      0.1,
+    );
+  }
+  // Горло: раздувается перед выдохом; изнутри светится стихией.
+  if (r.swell > 0.04) {
+    const [tx, ty] = P(-1.4, 4.4);
+    shadeEll(p, tx, ty, (1.8 + 2.4 * r.swell) * s, (1.3 + 1.8 * r.swell) * s, L.belly, 0.15);
+    if (r.glow > 0.2 && el !== 5)
+      LIT().ell(
+        tx,
+        ty,
+        (0.8 + 1.6 * r.swell) * s,
+        (0.6 + 1.1 * r.swell) * s,
+        alpha(L.glow, 0.45 * r.glow * r.swell),
+      );
+  }
+  // Нижняя челюсть.
+  limb(p, g.hinge[0], g.hinge[1], g.jawTip[0], g.jawTip[1], 2.4 * s, 1.3 * s, L.belly);
+  // Череп и морда.
+  const [c0, c1] = P(0, 0);
+  shadeEll(p, c0, c1, 6.2 * s, 4.8 * s * g.sq, L.skin);
+  const ua = Q(2, 0.2);
+  const ub = Q(11, 1);
+  limb(p, ua[0], ua[1], ub[0], ub[1], 3.4 * s, 2 * s, L.skin);
+  headCrest(p, el, g, r, L);
+  scalesLocal(p, g, B, L.skin[0], L.skin[3], 29 + el);
+  // Пасть — только в щели между челюстями.
+  if (r.jaw > 0.26) {
+    const hot = clamp01(r.glow * 1.25);
+    const pts: V2[] = [Q(1.6, 0.9), Q(10.6, 1.4), g.jawTip, g.hinge];
+    if (el === 5 && r.glow > 0.15) {
+      // Призма: полосы пяти стихий кружат в глотке, к центру — белый.
+      const [mx, my] = P(4.5, 2.4);
+      polyUnder(p, pts, (x, y) => {
+        const a = Math.atan2(y - my, x - mx) + r.spark * 0.55;
+        const band = ((Math.floor(((a / TAU) * 5 + 50) % 5) % 5) + 5) % 5;
+        const d = Math.hypot(x - mx, y - my) / (4 * s);
+        return d < 0.35 * r.glow ? L.glowHi : mixc(MOUTH, ELEM[band].glow, 0.35 + 0.6 * r.glow);
+      });
+    } else polyUnder(p, pts, mixc(MOUTH, L.glow, hot * 0.85));
+    // Зубы: по кромке верхней челюсти и нижней.
+    for (const x of [4, 6.3, 8.6]) {
+      const k = (x - 2) / 9;
+      const yc = lerp(0.2, 1, k) + lerp(3.4, 2, k);
+      const [tx, ty] = Q(x, yc + 0.35);
+      p.set(tx, ty, WHITE);
+      if (x > 8 || el === 5) p.set(tx, ty + 1, hx('#d8d0c0'));
+    }
+    for (const d of [3, 5.5, 8]) {
+      const rr = lerp(2.4, 1.3, d / 10);
+      const [tx, ty] = jawAt(g, d, rr + 0.35);
+      p.set(tx, ty, hx('#e8e0d0'));
+    }
+    if (hot > 0.05 && el !== 5) {
+      const lp = LIT();
+      poly(lp, pts, alpha(L.glow, 0.75 * hot));
+      const [mx, my] = P(5.5, 2.6);
+      lp.ell(mx, my, (1.2 + 1.4 * hot) * s, (0.8 + 0.8 * hot) * s, alpha(L.glowHi, 0.9 * hot));
+    }
+    if (el === 5 && r.glow > 0.15) {
+      const lp = LIT();
+      polyUnder(lp, pts, (x, y) => alpha(p.get(x, y), 0.85));
+      const [mx, my] = P(4.5, 2.4);
+      lp.ell(
+        mx,
+        my,
+        (0.8 + 1.8 * r.glow) * s,
+        (0.6 + 1.2 * r.glow) * s,
+        alpha(WHITE, 0.9 * r.glow),
+      );
+    }
+  }
   // Прожилки стихии по чешуе.
   if (el === 0)
     for (let k = 0; k < 6; k++) {
-      const x = Math.round(hx0 - 4 * s + hash(k, 41) * 12 * s);
-      const y = Math.round(hy0 - 2 * s + hash(k, 42) * 5 * s);
-      if (p.solid(x, y)) p.set(x, y, (f + k) % 3 ? L.glow : L.glowHi);
+      const [x, y] = P(-4 + hash(k, 41) * 12, -2 + hash(k, 42) * 5);
+      if (!p.solid(Math.round(x), Math.round(y))) continue;
+      const hot = (r.spark + k) % 3 !== 0;
+      p.set(x, y, hot ? L.glow : L.glowHi);
+      if (r.glow > 0.3) LIT().set(x, y, alpha(L.glowHi, 0.4 + 0.5 * r.glow));
     }
   if (el === 3)
     for (let k = 0; k < 3; k++) {
-      const x = Math.round(hx0 - 3 * s + k * 3 * s);
-      p.set(x, Math.round(hy0 - 1 * s), L.crest[3]);
-      p.set(x + 1, Math.round(hy0), L.crest[2]);
+      const [x, y] = P(-3 + k * 3, -1);
+      p.set(x, y, L.crest[3]);
+      p.set(x + 1, y + 1, L.crest[2]);
     }
-  if (el === 2 && jaw > 0.3) {
-    // Яд капает с челюсти.
-    p.set(Math.round(jx1 - 1), Math.round(jy1 + 2), L.glow);
-    p.set(Math.round(jx1 - 1), Math.round(jy1 + 3 + (f % 2)), alpha(L.glow, 0.7));
-  }
   p.outline(INK);
-  // Ноздри и глаз (у скрытой — четыре глаза).
-  p.set(Math.round(hx0 + 10.5 * s), Math.round(hy0 - 0.6 * s), INK);
-  const ex = Math.round(hx0 + 2 * s);
-  const ey = Math.round(hy0 - 1.6 * s);
-  if (droop || anim === 'hurt') {
+  // Ноздря и глаз.
+  const [nx0, ny0] = Q(10.5, -0.6);
+  p.set(nx0, ny0, INK);
+  const [ex, ey] = P(2, -1.6).map(Math.round) as V2;
+  let eye: V2 | null = null;
+  if (r.cut || r.eye < 0.25) {
     p.set(ex - 1, ey, INK);
     p.set(ex, ey, INK);
     p.set(ex + 1, ey, INK);
+  } else if (r.eye < 0.75) {
+    p.set(ex, ey, mixc(L.eye, INK, 0.5));
+    p.set(ex - 1, ey - 1, INK);
+    p.set(ex, ey - 1, INK);
+    p.set(ex + 1, ey - 1, INK);
   } else {
-    p.set(ex, ey, L.eye);
-    p.set(ex + 1, ey, L.eye);
+    p.set(ex, ey, r.eye > 1.5 ? L.glowHi : L.eye);
     p.set(ex + 1, ey, INK);
-    if (el === 5) {
-      p.set(ex - 2, ey + 2, L.eye);
-      p.set(ex + 2, ey - 2, L.eye);
-      p.set(ex - 3, ey - 1, L.eye);
+    if (r.eye > 1.5) {
+      p.set(ex - 1, ey - 1, INK);
+      p.set(ex, ey - 1, INK);
+      p.set(ex + 1, ey - 2, INK);
+    }
+    eye = [ex, ey];
+    LIT().set(ex, ey, alpha(r.eye > 1.5 ? L.glowHi : L.eye, 0.95));
+    if (el === 5)
+      for (const [dx, dy] of [
+        [-2, 2],
+        [2, -2],
+        [-3, -1],
+      ]) {
+        p.set(ex + dx, ey + dy, L.eye);
+        LIT().set(ex + dx, ey + dy, alpha(L.eye, 0.9));
+      }
+  }
+  // Язык: раздвоенный, из сомкнутых губ.
+  if (r.tongue > 0.05) {
+    const len = 4 + 7 * r.tongue;
+    const [a0, a1] = Q(9.5, 2.2);
+    const [b0, b1] = Q(9.5 + len, 2.8 + r.tongue);
+    stroke(p, a0, a1, b0, b1, TONGUE);
+    p.set(b0 + 1, b1 - 1, TONGUE);
+    p.set(b0 + 1, b1 + 1, TONGUE);
+  }
+  // Капли яда с челюсти.
+  if (el === 2 && r.jaw > 0.3) {
+    const [jx, jy] = g.jawTip;
+    const dy = (r.spark % 4) + 1;
+    p.set(jx - 1, jy + 2, L.glow);
+    p.set(jx - 1, jy + 2 + dy, alpha(L.glow, 0.8));
+    LIT().set(jx - 1, jy + 2 + dy, alpha(L.glow, 0.6));
+  }
+  // Иней из пасти, искры по рогам — свет стихии.
+  if (r.glow > 0.2 && el === 1) {
+    for (let i = 0; i < 5; i++) {
+      const [x, y] = Q(11 + i * 1.3 + ((r.spark + i) % 3), 2.2 + hash(i, r.spark, 5) * 3 - 1.5);
+      LIT().set(x, y, alpha(L.glowHi, 0.3 + 0.5 * r.glow));
     }
   }
-  return { p, ax, ay, eye: droop ? null : [ex, ey] };
+  if (el === 3 && r.glow > 0.15) {
+    for (let d = 0; d < 2; d++)
+      for (let i = 0; i < 3; i++) {
+        if (hash(d, i, r.spark) > 0.35 + 0.5 * r.glow) continue;
+        const bx = -(1 + d * 3);
+        const [x, y] = P(bx - 1.5 - hash(i, d, r.spark + 3) * 2, -5 - i * 1.6);
+        LIT().set(x, y, alpha(WHITE, 0.95));
+        LIT().set(x + (i % 2 ? 1 : -1), y + 1, alpha(L.glow, 0.8));
+      }
+  }
+  if (el === 0 && r.glow > 0.6) {
+    // Язычки пламени из пасти во время струи.
+    for (let i = 0; i < 4; i++) {
+      const [x, y] = Q(11 + i * 1.6 + ((r.spark + i * 2) % 3), 2 + (hash(i, r.spark, 9) - 0.5) * 3);
+      const c = i % 2 ? L.glowHi : L.glow;
+      LIT().set(x, y, alpha(c, 0.9));
+      p.set(x, y, c);
+    }
+  }
+  // След захлопнувшихся челюстей: серпы по дугам кончиков.
+  if (r.smear > 0.05) {
+    const jaOpen = 0.18 + 1.3 * 0.55;
+    for (let a = g.ja; a <= jaOpen; a += 0.04) {
+      const k = (a - g.ja) / (jaOpen - g.ja + 1e-6);
+      const [x, y] = g.P(1 + Math.cos(a) * 10, 3 + Math.sin(a) * 10);
+      const [x2, y2] = g.P(1 + Math.cos(a) * 8.6, 3 + Math.sin(a) * 8.6);
+      p.set(x, y, alpha(WHITE, (0.85 - 0.5 * k) * r.smear));
+      if (!p.solid(Math.round(x2), Math.round(y2)))
+        p.set(x2, y2, alpha(L.glowHi, (0.6 - 0.4 * k) * r.smear));
+    }
+    const au0 = -1.3 * 0.2;
+    const au1 = -r.jaw * 0.2;
+    for (let a = au0; a <= au1; a += 0.03) {
+      const dx = 10;
+      const dy = 0.4;
+      const [x, y] = g.P(
+        1 + dx * Math.cos(a) - dy * Math.sin(a),
+        0.6 + dx * Math.sin(a) + dy * Math.cos(a),
+      );
+      if (!p.solid(Math.round(x), Math.round(y))) p.set(x, y, alpha(WHITE, 0.7 * r.smear));
+    }
+    // Росчерки скорости за затылком: бросок, а не шаг.
+    for (let i = 0; i < 3; i++) {
+      const [x0, y0] = P(-6.5, -2.5 + i * 2.5);
+      for (let j = 0; j < 7; j++) {
+        const x = Math.round(x0 - j * g.cp * 1.2);
+        const y = Math.round(y0 - j * g.sp * 1.2);
+        if (!p.solid(x, y)) p.set(x, y, alpha(L.glowHi, 0.4 * r.smear * (1 - j / 7)));
+      }
+    }
+  }
+  // Срез шеи у отрубленной и кровь.
+  if (r.cut) {
+    const [sx, sy] = g.stub;
+    p.ell(sx, sy, 3.3 * s, 2.4 * s, FLESH[1]);
+    p.ell(sx, sy, 2.3 * s, 1.6 * s, FLESH[2]);
+    p.ell(sx, sy, 0.9 * s, 0.7 * s, FLESH[3]);
+    for (let i = 0; i < 6 * r.blood; i++) {
+      const d = 2 + i * 1.6;
+      const x = sx - Math.cos(0.5 + r.pitch * 0.35) * d * (0.6 + hash(i, 3) * 0.6);
+      const y = sy + Math.sin(0.5) * d + hash(i, 4) * 2 - 1;
+      p.set(x, y, i % 2 ? FLESH[2] : FLESH[1]);
+    }
+  }
+  // Вода и ил стекают: капли падают ниже, чем суше голова.
+  if (r.wet > 0.05) {
+    const c = mud ? HY.mud[3] : HY.foam;
+    for (let i = 0; i < 7; i++) {
+      const [bx, by] = P(-5 + i * 2.4, 3.5 + (i % 3));
+      const fall = (1 - r.wet) * 9 + hash(i, 11) * 5 + ((r.spark + i) % 3);
+      const x = Math.round(bx);
+      const y = Math.round(by + fall);
+      if (!p.solid(x, y)) p.set(x, y, alpha(c, 0.9 * Math.min(1, r.wet * 1.6)));
+    }
+  }
+  // Под водой (или илом): срезать и положить на поверхность пену кругом.
+  if (clip < B.H) {
+    let x0 = B.W;
+    let x1 = -1;
+    let cut = false;
+    const cy = Math.max(0, Math.floor(clip));
+    for (let y = cy; y < B.H; y++)
+      for (let x = 0; x < B.W; x++) {
+        const i = (y * B.W + x) * 4 + 3;
+        if (p.data[i]) {
+          cut = true;
+          p.data[i] = 0;
+          if (y <= cy + 2) {
+            x0 = Math.min(x0, x);
+            x1 = Math.max(x1, x);
+          }
+        }
+        if (lit) (lit as Px).data[i] = 0;
+      }
+    if (cut && x1 >= x0) {
+      const fo = mud ? HY.mud[3] : HY.foam;
+      const fd = mud ? HY.mud[1] : hx('#4a8a80');
+      const mx = (x0 + x1) / 2;
+      const rx = (x1 - x0) / 2 + 3;
+      for (let x = Math.floor(mx - rx); x <= Math.ceil(mx + rx); x++) {
+        const k = Math.abs(x - mx) / rx;
+        const y = cy - 1 + Math.round(k * k * 1.5);
+        p.set(x, y, alpha(fo, 0.95));
+        if (k > 0.6) p.set(x, y + 1, alpha(fd, 0.8));
+      }
+      for (let a = 0; a < TAU; a += 0.08) {
+        const x = Math.round(mx + Math.cos(a) * (rx + 3));
+        const y = Math.round(cy + Math.sin(a) * 1.6);
+        if (!p.solid(x, y)) p.set(x, y, alpha(fo, 0.5));
+      }
+    }
+    if (eye && eye[1] >= cy) eye = null;
+  }
+  return { p, lit, eye };
 }
 
-registerMobPainter('f9_head', (m: Mob, pose: MobPose) => {
-  const el = m.data.el ?? 0;
-  const mode = pose.mode;
-  let anim = 'idle';
-  let f = cyc(pose.t * 5 + m.id, 4);
-  if (pose.anim === 'dead') {
-    anim = 'dead';
-    f = 0;
-  } else if (mode === 'rise') {
-    const k = Math.min(3, Math.floor(pose.t * 4));
-    return frameOf(`f9_head${el}`, pose, 'rise', k, () => {
-      const b = paintHead(el, 'idle', 0);
-      return { ...b, p: dissolve(b.p, 1 - (k + 1) / 4, 11) };
-    });
-  } else if (mode === 'bite') {
-    anim = pose.t < 0.6 ? 'wind' : 'bite';
-    f = cyc(pose.t * 10, 2);
-  } else if (mode === 'cast') {
-    anim = 'cast';
-    f = cyc(pose.t * 10, 2);
+// ---------------------------------------------------------------------------
+// Голова: техники ключевыми позами. Время — кадры 24 к/с; `H` — кадр урона.
+// ---------------------------------------------------------------------------
+
+type HL = (x: number) => HeadRig;
+const REST_MOVE: Partial<HeadRig> = {
+  fx: 0,
+  fy: 0,
+  pitch: 0,
+  jaw: 0.1,
+  swell: 0,
+  glow: 0,
+  crest: 1,
+  eye: 1,
+  tongue: 0,
+  smear: 0,
+  coil: 0,
+  bulge: 0,
+  bulgeA: 0,
+  lift: 6,
+  wet: 0,
+};
+
+/**
+ * Укус: голова отводится назад и вверх на шее (шея сворачивается пружиной),
+ * пасть раскрывается до хруста, держит — и бросок: кадр до контакта ещё
+ * разинута, в кадре урона челюсти схлопнуты со следом, проводка с
+ * перелётом вниз-вперёд, возврат.
+ */
+function biteLane(T: number, E: number, A: number): HL {
+  const H = Math.max(6, q24(T));
+  const e = Math.max(H + 8, q24(E));
+  return lane<HeadRig>(HREST, [
+    [0, {}],
+    [
+      Math.round(H * 0.3),
+      { fx: -3 * A, fy: -4 * A, pitch: -0.36, jaw: 0.55, crest: 1.35, eye: 2, coil: 0.6 },
+      EZ.out,
+    ],
+    [H - 5, { fx: -4.5 * A, fy: -5.5 * A, pitch: -0.5, jaw: 1.12, crest: 1.6, coil: 1 }, EZ.io],
+    [H - 2, { fx: -5.6 * A, fy: -6.3 * A, pitch: -0.57, jaw: 1.25, coil: 1.15 }, EZ.in],
+    [H - 1, { fx: 1.5 * A, fy: -1.6 * A, pitch: 0.02, jaw: 1.3, coil: 0.25 }, EZ.in],
+    [H, { fx: 6 * A, fy: 3 * A, pitch: 0.3, jaw: 0, crest: 0.85, coil: 0, smear: 1 }, EZ.lin],
+    [H + 1, { fx: 7.3 * A, fy: 3.9 * A, pitch: 0.37, smear: 0.55 }, EZ.out],
+    [H + 3, { fx: 6.6 * A, fy: 3.3 * A, pitch: 0.31, smear: 0, crest: 1 }, EZ.io],
+    [H + 6, { fx: 4 * A, fy: 1.6 * A, pitch: 0.16, jaw: 0.14, eye: 1 }, EZ.io],
+    [e, REST_MOVE, EZ.io],
+  ]);
+}
+
+/**
+ * Приём стихии. Огонь, гроза, свет — замах: горло раздувается, ком идёт по
+ * шее от тела к голове, пасть светится всё сильнее и выпускает в кадре
+ * урона. Лёд и яд плюют в первый же кадр режима (мозг стреляет в t = 0),
+ * поэтому у них — рывок-выплёвывание и долгая проводка вверх, как бросок.
+ */
+function castLane(el: number, T: number, E: number): HL {
+  const H = Math.max(4, q24(T));
+  const e = Math.max(H + 6, q24(E));
+  if (el === 0)
+    return lane<HeadRig>(HREST, [
+      [0, {}],
+      [
+        Math.round(H * 0.35),
+        {
+          fx: -2.5,
+          fy: -4,
+          pitch: -0.34,
+          jaw: 0.28,
+          swell: 0.35,
+          glow: 0.25,
+          crest: 1.3,
+          bulge: 0.4,
+          bulgeA: 1,
+        },
+        EZ.out,
+      ],
+      [
+        Math.round(H * 0.75),
+        { fx: -3.5, fy: -5, pitch: -0.42, jaw: 0.36, swell: 1, glow: 0.55, bulge: 1, bulgeA: 1 },
+        EZ.io,
+      ],
+      [H - 2, { fx: -2, fy: -3, pitch: -0.22, jaw: 0.85, glow: 0.9, bulgeA: 0 }, EZ.in],
+      [H, { fx: 3, fy: 1.5, pitch: 0.16, jaw: 1.2, glow: 1, swell: 0.25, crest: 1.5 }, EZ.out],
+      [H + 3, { fx: 1.8, fy: 0.6, pitch: 0.1, jaw: 1.12, glow: 0.95 }, EZ.io],
+      [e - 3, { fx: 0.6, fy: 0, pitch: 0.04, jaw: 0.5, glow: 0.35, swell: 0, crest: 1.1 }, EZ.io],
+      [e, REST_MOVE, EZ.io],
+    ]);
+  if (el === 3)
+    return lane<HeadRig>(HREST, [
+      [0, {}],
+      [
+        Math.round(H * 0.3),
+        { pitch: 0.12, fy: -1, crest: 1.5, glow: 0.25, jaw: 0.2, eye: 2, bulge: 0.5, bulgeA: 0.6 },
+        EZ.out,
+      ],
+      [
+        H - 3,
+        { pitch: 0.06, fx: -2.5, fy: -2.5, glow: 0.8, jaw: 0.6, swell: 0.6, bulge: 1, bulgeA: 0.8 },
+        EZ.io,
+      ],
+      [H - 1, { fx: -3, fy: -3, pitch: -0.05, jaw: 0.9, glow: 0.95, bulgeA: 0 }, EZ.in],
+      [H, { fx: 3.5, fy: 0.5, pitch: 0.14, jaw: 1.25, glow: 1, swell: 0.2 }, EZ.lin],
+      [H + 2, { fx: -2.5, fy: -1.5, pitch: -0.25, jaw: 1, glow: 0.6 }, EZ.out],
+      [H + 5, { fx: -1, fy: -0.5, pitch: -0.08, jaw: 0.5, glow: 0.3, swell: 0 }, EZ.io],
+      [e, REST_MOVE, EZ.io],
+    ]);
+  if (el === 4)
+    return lane<HeadRig>(HREST, [
+      [0, {}],
+      [
+        Math.round(H * 0.5),
+        { fy: -6, pitch: -0.25, crest: 1.7, glow: 0.45, eye: 0, jaw: 0.12, lift: 7 },
+        EZ.out,
+      ],
+      [H - 2, { fy: -7.5, pitch: -0.32, glow: 0.85, lift: 7.5 }, EZ.io],
+      [H, { fy: -3, pitch: -0.55, jaw: 1.2, glow: 1, eye: 2 }, EZ.out],
+      [H + 4, { fy: -2, pitch: -0.22, jaw: 0.45, glow: 0.35, eye: 1 }, EZ.io],
+      [e, REST_MOVE, EZ.io],
+    ]);
+  // Лёд, яд (и эхо-плевок): выплюнуть — сразу.
+  return lane<HeadRig>(HREST, [
+    [0, { fx: -1.5, fy: 1.5, pitch: 0.25, jaw: 0.5, swell: 1, glow: 0.7, crest: 1.4 }],
+    [
+      1,
+      { fx: 2, fy: -2.5, pitch: -0.4, jaw: 1.2, glow: 1, swell: 0.2, bulge: 1, bulgeA: 0.7 },
+      EZ.out,
+    ],
+    [3, { fx: 1, fy: -5, pitch: -0.62, jaw: 1.1, glow: 0.7, bulge: 0.75, bulgeA: 0.55 }, EZ.out],
+    [6, { fx: -1, fy: -5, pitch: -0.6, jaw: 0.5, glow: 0.35, bulge: 0.4, bulgeA: 0.35 }, EZ.out],
+    [
+      12,
+      { fx: 0.5, fy: -1, pitch: 0.14, jaw: 0.22, glow: 0.1, bulge: 0, bulgeA: 0, crest: 1.1 },
+      EZ.io,
+    ],
+    [Math.max(13, e), REST_MOVE, EZ.io],
+  ]);
+}
+
+/** Эхо на 15-м: плевок стихией после замаха (как огонь, 0,75 с). */
+function echoCastLane(T: number, E: number): HL {
+  return castLane(0, T, E);
+}
+
+/** Белая тянется к раненой (вперёд — к цели), свет льётся, в конце толчок. */
+const healLane: HL = lane<HeadRig>(HREST, [
+  [0, {}],
+  [7, { fx: 3, fy: -2, pitch: -0.1, jaw: 0.45, glow: 0.5, crest: 1.45, eye: 0 }, EZ.out],
+  [20, { fx: 4.5, fy: -2.6, pitch: -0.06, jaw: 0.6, glow: 0.85 }, EZ.io],
+  [30, { fx: 5.2, fy: -2.4, jaw: 0.65, glow: 0.95 }, EZ.io],
+  [33, { fx: 6.5, fy: -1.2, pitch: 0.12, jaw: 0.35, glow: 1, eye: 1 }, EZ.in],
+]);
+
+/** Новая голова: бугор под водой → вырывается вверх с криком → стряхивает воду. */
+const riseLane: HL = lane<HeadRig>(HREST, [
+  [0, { s: 0.4, lift: -9, pitch: -1.15, jaw: 0, crest: 0.3, eye: 0, wet: 1 }],
+  [5, { s: 0.55, lift: -4, pitch: -1.2, jaw: 0.15 }, EZ.out],
+  [9, { s: 1.06, lift: 13, pitch: -0.95, jaw: 1.2, crest: 1.55, eye: 2 }, EZ.out],
+  [13, { s: 1, lift: 8, pitch: -0.3, jaw: 0.6, wet: 0.65 }, EZ.io],
+  [16, { lift: 5.5, pitch: 0.16, jaw: 0.2, wet: 0.35 }, EZ.io],
+  [18, { lift: 6.3, pitch: -0.06, jaw: 0.12, eye: 1, crest: 1.1, wet: 0.15 }, EZ.io],
+  [21, { ...REST_MOVE, s: 1 }, EZ.io],
+]);
+
+/** Удар героя: голову откидывает назад, пасть от боли, глаз зажмурен. */
+const HURT: Partial<HeadRig>[] = [
+  { pitch: -0.34, fx: -2.4, fy: -1.4, jaw: 0.55, eye: 0, crest: 0.5 },
+  { pitch: -0.42, fx: -3, fy: -2, jaw: 0.62, eye: 0, crest: 0.4 },
+  { pitch: -0.22, fx: -1.6, fy: -0.8, jaw: 0.36, eye: 0.5, crest: 0.7 },
+  { pitch: -0.07, fx: -0.5, fy: -0.2, jaw: 0.16, eye: 1, crest: 0.95 },
+];
+
+/** Отрублена: голова отлетает, кувыркаясь, падает, подпрыгивает, тонет. */
+const severLane: HL = lane<HeadRig>(HREST, [
+  [0, { cut: 1, blood: 1, jaw: 0.9, eye: 0, pitch: -0.25, crest: 0.5, lift: 7 }],
+  [4, { fx: -5, pitch: -1.6, jaw: 1.05, lift: 15 }, EZ.out2],
+  [8, { fx: -9, pitch: -3.4, jaw: 0.9, lift: 12, roll: 0.4 }, EZ.lin],
+  [12, { fx: -11.5, pitch: -5.9, jaw: 0.75, lift: 0, roll: 1, blood: 0.6 }, EZ.in],
+  [15, { fx: -12.8, pitch: -6.05, lift: 2.6, blood: 0.3 }, EZ.out2],
+  [18, { fx: -13.4, pitch: -6.0, lift: 0, blood: 0 }, EZ.in],
+  [22, { jaw: 0.7 }, EZ.io],
+  [32, { lift: -7, alpha: 0 }, EZ.in],
+]);
+
+/** Фаза 3: головы уходят под воду — последний рёв вверх и нырок. */
+const sinkLane: HL = lane<HeadRig>(HREST, [
+  [0, { jaw: 0.7, eye: 2, crest: 1.4 }],
+  [5, { pitch: -0.5, lift: 10, jaw: 1.05, fy: -2 }, EZ.out],
+  [11, { pitch: 1.1, lift: -2, jaw: 0.3, eye: 0, fy: 0 }, EZ.in],
+  [18, { pitch: 1.35, lift: -20, crest: 0.5 }, EZ.in],
+]);
+
+// --- Скрытая голова (корона). ---
+
+const crownRise: HL = lane<HeadRig>(HREST, [
+  [0, { lift: -44, pitch: -1.4, jaw: 0, eye: 0, crest: 0.3, wet: 1 }],
+  [11, { lift: -30 }, EZ.lin],
+  [14, { lift: -6, jaw: 0.8, pitch: -1.45, crest: 1 }, EZ.in],
+  [18, { lift: 16, jaw: 1.35, eye: 2, crest: 1.6 }, EZ.out],
+  [22, { lift: 9, pitch: -0.4, jaw: 0.9 }, EZ.io],
+  [26, { lift: 5, pitch: 0.16, jaw: 0.3, wet: 0.45 }, EZ.io],
+  [30, { lift: 6.5, pitch: -0.04, jaw: 0.15, eye: 1, crest: 1.1, wet: 0.15 }, EZ.io],
+  [33, REST_MOVE, EZ.io],
+]);
+
+/** Призма: пасть раскрывается ступенями, в глотке раскручивается свет. */
+function prismLane(T: number, E: number): HL {
+  const H = q24(T);
+  const e = q24(E);
+  return lane<HeadRig>(HREST, [
+    [0, {}],
+    [6, { fx: -3, fy: -5, pitch: -0.45, jaw: 0.6, crest: 1.5, glow: 0.2, eye: 2 }, EZ.out],
+    [H - 7, { fx: -3.6, fy: -6.5, pitch: -0.58, jaw: 0.95, glow: 0.5, swell: 0.5 }, EZ.io],
+    [H - 4, { fx: -4, fy: -7, pitch: -0.62, jaw: 1.25, glow: 0.75, swell: 0.8 }, EZ.out],
+    [H - 1, { fx: -4.5, fy: -7.5, pitch: -0.6, jaw: 1.35, glow: 0.95, swell: 1 }, EZ.io],
+    [H, { fx: 3, fy: 0, pitch: 0.12, jaw: 1.4, glow: 1, swell: 0.3 }, EZ.out],
+    [H + 4, { fx: 1.5, fy: -0.5, pitch: 0.06, jaw: 1.3, glow: 0.9 }, EZ.io],
+    [H + 9, { fx: 0, fy: 1, pitch: 0.2, jaw: 0.5, glow: 0.3, crest: 0.9, eye: 1, swell: 0 }, EZ.io],
+    [e, { fx: 0, fy: 0, pitch: 0.1, jaw: 0.2, glow: 0 }, EZ.io],
+  ]);
+}
+
+/** Нырок: вверх, как кит перед погружением, — и носом в ил. */
+const crownDive: HL = lane<HeadRig>(HREST, [
+  [0, { pitch: 0.1, jaw: 0.2 }],
+  [4, { fy: -4, lift: 10, pitch: -0.45, jaw: 0.4 }, EZ.out],
+  [9, { pitch: 1.35, lift: -8, jaw: 0.1, crest: 0.4, fy: 0 }, EZ.in],
+  [13, { pitch: 1.5, lift: -34 }, EZ.in],
+]);
+
+/**
+ * Водоворот: до 0,8 с — только бурун, потом бугор, и пасть поднимается из
+ * ила вертикально, разинутая, прямо под героем; захлоп — в кадре урона,
+ * это уже первый кадр `up` (см. `crownErupt`).
+ */
+const crownWhirl: HL = lane<HeadRig>(HREST, [
+  [0, { lift: -46, pitch: -1.45, jaw: 1.3, eye: 2, crest: 1.6, wet: 1 }],
+  [19, { lift: -34 }, EZ.lin],
+  [22, { lift: -18, jaw: 1.35 }, EZ.in],
+  [25, { lift: 4, jaw: 1.4 }, EZ.in],
+]);
+
+/** Выныривание после водоворота: захлоп пастью вверх и падение в горизонт. */
+const crownErupt: HL = lane<HeadRig>(HREST, [
+  [0, { lift: 12, pitch: -1.45, jaw: 0, eye: 2, crest: 1.6, smear: 1, wet: 1 }],
+  [1, { lift: 15, jaw: 0.15, smear: 0.4 }, EZ.out],
+  [4, { lift: 13, pitch: -1.15, jaw: 0.7, smear: 0 }, EZ.out],
+  [9, { lift: 8, pitch: -0.3, jaw: 0.45, wet: 0.6 }, EZ.io],
+  [12, { lift: 5.5, pitch: 0.14, jaw: 0.2, wet: 0.3 }, EZ.io],
+  [15, REST_MOVE, EZ.io],
+]);
+
+/** Смерть короны: бьётся, ревёт, валится в ил и тонет. */
+const crownDie: HL = lane<HeadRig>(HREST, [
+  [0, { jaw: 1.3, eye: 2, pitch: -0.5, lift: 8, crest: 1.6 }],
+  [3, { pitch: 0.3, fx: 2 }, EZ.io],
+  [6, { pitch: -0.6, fx: -2 }, EZ.io],
+  [9, { pitch: 0.25, fx: 1.5, jaw: 1 }, EZ.io],
+  [12, { pitch: -0.4, fx: -1, crest: 1.2 }, EZ.io],
+  [18, { pitch: 0.7, lift: 0, jaw: 0.8, eye: 0, fx: 0, crest: 0.6 }, EZ.in],
+  [21, { lift: 2.5, pitch: 0.6 }, EZ.out2],
+  [24, { lift: 0, pitch: 0.75, roll: 0.6 }, EZ.in],
+  [38, { lift: -18, pitch: 0.9, crest: 0.3 }, EZ.in],
+]);
+
+// ---------------------------------------------------------------------------
+// Голова: что рисовать сейчас — по режиму мозга, памяти и времени.
+// ---------------------------------------------------------------------------
+
+interface HeadPose {
+  rig: HeadRig;
+  B: HBox;
+  el: number;
+  left: boolean;
+  /** Строка поверхности в холсте (ниже — под водой/илом). */
+  clip: number;
+  mud: boolean;
+  ghost: boolean;
+  linger?: number;
+  /** Шея держится за голову и в смерти (погружение, корона). */
+  attached: boolean;
+  /** Бурун корона под илом: кадр 0…7, −1 — нет. */
+  wake: number;
+  /** Бугор ила над поднимающейся короной 0…1. */
+  mound: number;
+}
+
+const isEcho = (m: Mob) => m.kind !== 'f9_head' && m.kind !== 'f9_crown';
+/** Спешка головы — ставит мозг (`vH`, только рисунок); иначе по фазе. */
+function hasteOf(m: Mob): number {
+  if (m.data.vH) return m.data.vH;
+  const ph = paintSim()?.boss?.phase ?? 0;
+  return ph >= 2 ? 1.2 : ph >= 1 ? 1.1 : 1;
+}
+const CAST_T = [0.85, 0.7, 0.7, 0.75, 0.7];
+
+/** Покой: дыхание, моргание, раз в несколько секунд — язык. */
+function idleRig(m: Mob, now: number, crown: boolean): HeadRig {
+  const r = { ...HREST };
+  const id = m.id;
+  const per = crown ? 1.9 : 1.25;
+  const n = crown ? 16 : 12;
+  const ph = (((now / per + id * 0.37) % 1) + 1) % 1;
+  const bi = Math.floor(ph * n);
+  const b = 0.5 - 0.5 * Math.cos((bi / n) * TAU);
+  // Моргает раз в ~3,7 с, язык — раз в ~5,3 с (свои часы у каждой головы).
+  const bt = (((now + id * 1.31) % 3.7) + 3.7) % 3.7;
+  const tt = (((now + id * 2.17) % 5.3) + 5.3) % 5.3;
+  if (tt < 0.5) {
+    const tf = Math.floor(tt * 12);
+    r.tongue = [0.3, 0.8, 1, 0.5, 0.9, 1][tf] ?? 0;
+    r.jaw = 0.16;
+  } else {
+    r.jaw = 0.06 + 0.12 * b;
+    r.crest = 1 + 0.12 * b;
+    r.swell = crown ? 0 : 0.08 * b;
+    if (bt < 0.24) r.eye = bt < 0.08 || bt > 0.16 ? 0.5 : 0;
+  }
+  // На ходу — вперёд носом, чем быстрее, тем сильнее.
+  const sp = Math.hypot(m.vx, m.vy);
+  if (sp > 1) r.pitch = sp > 2.2 ? 0.12 : 0.06;
+  // Дыхание корпуса — сдвигом, без перерисовки.
+  r.fy = Math.sin(now * 2.1 + id) * 1.1;
+  return r;
+}
+
+/** Удар героя поверх любой позы: сдвиг и наклон назад, без нового рисунка. */
+function hurtK(m: Mob): number {
+  if (m.flash <= 0.001 || m.mode === 'dying') return -1;
+  const sim = paintSim();
+  // Белая только что вылечила — это вспышка света, а не боль.
+  if (sim?.zones.some((z) => z.art === 'f9_healed' && Math.hypot(z.x - m.x, z.y - m.y) < 1.3))
+    return -1;
+  return clamp01(1 - m.flash / 0.12);
+}
+
+function headPose(m: Mob, now: number, t: number, crown: boolean): HeadPose {
+  const mem = memOf(m, now);
+  const el = crown ? 5 : Math.max(0, Math.min(4, m.data.el ?? 0));
+  const B = crown ? CBOX : HBOX;
+  const echo = isEcho(m);
+  let rig: HeadRig = HREST;
+  let ghost = false;
+  let linger: number | undefined;
+  let attached = true;
+  let wake = -1;
+  let mound = 0;
+  /** Кадр техники: от него искры стихии (−1 — покой, их нет). */
+  let spark = -1;
+  const mode = m.mode;
+  const h = hasteOf(m);
+  if (mode === 'dying') {
+    if (crown) {
+      spark = q24(t);
+      rig = crownDie(spark);
+      linger = 1.6;
+    } else {
+      const from = m.data.vDie !== undefined ? (m.data.vDie === 2 ? 0.35 : 0) : mem.dieFrom;
+      if (from >= 0.2) {
+        spark = q24(t - from);
+        rig = sinkLane(spark);
+        linger = from + 0.8;
+      } else {
+        spark = q24(t);
+        rig = severLane(spark);
+        linger = 1.35;
+        attached = false;
+      }
+    }
+  } else if (crown) {
+    if (mode === 'rise') {
+      spark = q24(t);
+      rig = crownRise(spark);
+      mound = spark < 18 ? clamp01(spark / 12) : 0;
+    } else if (mode === 'bite') {
+      spark = q24(t);
+      rig = laneOf('cbite', () => biteLane(0.62, 1.2, 1.25))(spark);
+      ghost = spark >= q24(0.62) - 2 && spark <= q24(0.62) + 1;
+    } else if (mode === 'prism') {
+      spark = q24(t);
+      rig = laneOf('prism', () => prismLane(0.95, 1.5))(spark);
+    } else if (mode === 'dive') {
+      spark = q24(t);
+      rig = crownDive(spark);
+    } else if (mode === 'hunt') {
+      wake = Math.floor(now * 8) % 8;
+      rig = { ...HREST, lift: -50 };
+    } else if (mode === 'whirl') {
+      spark = q24(t);
+      rig = crownWhirl(spark);
+      wake = spark < 22 ? Math.floor(now * 12) % 8 : -1;
+      mound = spark >= 19 ? clamp01((spark - 18) / 4) : 0;
+    } else if ((mode === 'up' && mem.prev === 'whirl' && t < 1) || m.data.vFromWhirl) {
+      spark = q24(Math.max(0, t - 0.3));
+      rig = crownErupt(spark);
+      ghost = spark <= 2;
+    } else rig = idleRig(m, now, true);
+  } else if (mode === 'rise' || mode === 'f15e_rise') {
+    spark = q24(t);
+    rig = riseLane(spark);
+  } else if (mode === 'bite' || (mode === 'recover' && mem.prev === 'bite')) {
+    const T = echo ? 0.62 : 0.6 / h;
+    const E = T + 0.55;
+    const f = laneOf(`bite|${T.toFixed(3)}`, () => biteLane(T, E, 1));
+    spark = q24(mode === 'recover' ? 0.77 + t : t);
+    rig = f(spark);
+    ghost = spark >= q24(T) - 2 && spark <= q24(T) + 1;
+  } else if (mode === 'cast' || (mode === 'recover' && mem.prev === 'cast')) {
+    if (echo) {
+      spark = q24(mode === 'recover' ? 0.75 + t : t);
+      rig = laneOf('ecast', () => echoCastLane(0.75, 1.3))(spark);
+    } else {
+      const T = CAST_T[el] / h;
+      const E = T + 0.35;
+      const f = laneOf(`cast|${el}|${T.toFixed(3)}`, () =>
+        castLane(el, el === 1 || el === 2 ? 0 : T, E),
+      );
+      spark = q24(t);
+      rig = f(spark);
+    }
   } else if (mode === 'heal') {
-    anim = 'heal';
-    f = cyc(pose.t * 6, 2);
-  } else if (pose.anim === 'hurt') {
-    anim = 'hurt';
-    f = 0;
+    spark = q24(t);
+    rig = { ...healLane(spark) };
+    rig.glow = clamp01(rig.glow * (0.86 + 0.14 * Math.sin(spark * 0.9)));
+  } else {
+    rig = idleRig(m, now, false);
+    // Белая только что лечила — плавно возвращается из вытянутой позы.
+    if (mem.prev === 'heal' && now - mem.at < 0.3 && mode === 'idle') {
+      const k = EZ.out(clampv(Math.floor(((now - mem.at) / 0.3) * 7) / 7, 0, 1));
+      const a = healLane(33);
+      const o = { ...rig };
+      for (const key of ['fx', 'fy', 'pitch', 'jaw', 'glow', 'crest'] as const)
+        o[key] = lerp(a[key], rig[key], k);
+      rig = o;
+    }
+    const hk = hurtK(m);
+    if (hk >= 0) rig = { ...rig, ...HURT[Math.min(3, Math.floor(hk * 4))], fy: rig.fy };
   }
-  return frameOf(`f9_head${el}`, pose, anim, f, () => paintHead(el, anim, f));
-});
-
-/** Рябь ила над нырнувшей скрытой головой. */
-function paintWake(f: number): Built {
-  const p = new Px(28, 16);
-  const cx = 14;
-  shadeEll(p, cx, 11, 5 + (f % 2), 2.2, HY.mud);
-  for (let i = 0; i < 3; i++)
-    limb(p, cx - 3 + i * 3, 10, cx - 3 + i * 3 + 1, 7 - (i % 2) - (f % 2), 0.9, 0.3, ELEM[5].crest);
-  p.outline(INK);
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * TAU + f * 0.4;
-    const x = Math.round(cx + Math.cos(a) * (8 + (f % 2)));
-    const y = Math.round(11 + Math.sin(a) * 3.2);
-    if (!p.solid(x, y)) p.set(x, y, alpha(HY.mud[3], 0.8));
+  // Искры и угли стихии — от кадра техники (в покое их нет): кадр техники
+  // один на номер, и свет не множит кеш.
+  rig = { ...rig, spark: spark < 0 ? 0 : spark % 8 };
+  // Удар героя посреди техники — только сдвиг назад (поза техники цела).
+  if (mode !== 'idle' && mode !== 'chase' && mode !== 'dying') {
+    const hk = hurtK(m);
+    if (hk >= 0) {
+      const e = Math.sin((1 - hk) * Math.PI * 0.5);
+      rig = { ...rig, fx: rig.fx - 2.2 * e, fy: rig.fy - 1 * e };
+    }
   }
-  return { p, ax: cx, ay: 14, eye: null };
+  // Поверхность: у голов — вода, у скрытой головы — ил.
+  const clip = B.AY + rig.lift;
+  return { rig, B, el, left: mem.left, clip, mud: crown, ghost, linger, attached, wake, mound };
 }
 
-registerMobPainter('f9_crown', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  if (mode === 'hunt' || mode === 'whirl') {
-    const f = cyc(pose.t * 8, 4);
-    return frameOf('f9_crown', pose, 'wake', f, () => paintWake(f));
-  }
-  if (mode === 'rise' || mode === 'dive') {
-    const k = Math.min(3, Math.floor(pose.t * (mode === 'rise' ? 3 : 6)));
-    const kk = mode === 'rise' ? 1 - (k + 1) / 4 : (k + 1) / 4;
-    return frameOf('f9_crown', pose, mode, k, () => {
-      const b = paintHead(5, 'idle', 0, true);
-      return { ...b, p: dissolve(b.p, kk, 13) };
-    });
-  }
-  let anim = 'idle';
-  let f = cyc(pose.t * 5, 4);
-  if (pose.anim === 'dead') {
-    anim = 'dead';
-    f = 0;
-  } else if (mode === 'bite') {
-    anim = pose.t < 0.62 ? 'wind' : 'bite';
-    f = cyc(pose.t * 10, 2);
-  } else if (mode === 'prism') {
-    anim = 'prism';
-    f = cyc(pose.t * 10, 2);
-  } else if (pose.anim === 'hurt') anim = 'hurt';
-  return frameOf('f9_crown', pose, anim, f, () => paintHead(5, anim, f, true));
-});
+// --- Кадры голов: кеш по содержимому позы. ---
 
-/** Обрубок шеи: срез с костью и кровью; прижжённый — угли и огонь. */
-function paintStump(el: number, state: string, f: number): Built {
-  // Обрубок стоит столбиком — срез смотрит вверх, к камере: так он
-  // читается «шеей без головы» с любой стороны, а не банкой на боку.
-  const L = ELEM[el];
-  const W = 22;
-  const H = 26;
+interface HeadFrame {
+  key: string;
+  img: HTMLCanvasElement;
+  lit: HTMLCanvasElement | null;
+  ax: number;
+  ay: number;
+  eye: [number, number] | null;
+}
+
+const HEAD_FR = frameLRU<HeadFrame>(560);
+const HEAD_RAW = frameLRU<HeadRaw>(260);
+
+/** Ключ позы: всё, что меняет рисунок, округлено до заметного глазу шага. */
+function rigKey(r: HeadRig, clip: number): string {
+  const q = (v: number, st: number) => Math.round(v / st);
+  return [
+    q(r.s, 0.05),
+    q(r.pitch, 0.025),
+    q(r.jaw, 0.04),
+    q(r.swell, 0.1),
+    q(r.glow, 0.1),
+    q(r.crest, 0.1),
+    q(r.eye, 0.5),
+    q(r.tongue, 0.2),
+    q(r.wet, 0.2),
+    q(r.smear, 0.25),
+    r.cut ? 1 : 0,
+    q(r.blood, 0.34),
+    q(r.roll, 0.2),
+    r.glow > 0.05 || r.wet > 0.05 ? r.spark : 0,
+    Math.round(clip),
+  ].join(',');
+}
+
+function headFrame(el: number, hp: HeadPose, flash: boolean): HeadFrame {
+  const r = hp.rig;
+  // Под водой целиком — пустой кадр не рисуем.
+  const clip = Math.min(hp.B.H, Math.max(-1, Math.floor(hp.clip)));
+  const rk = `${el}|${hp.B === CBOX ? 'c' : 'h'}|${hp.mud ? 1 : 0}|${rigKey(r, clip)}`;
+  const fk = `${rk}|${hp.left ? 1 : 0}|${flash ? 1 : 0}`;
+  const hit = HEAD_FR.get(fk);
+  if (hit) return hit;
+  let raw = HEAD_RAW.get(rk);
+  if (!raw) raw = HEAD_RAW.set(rk, paintHeadRig(el, r, hp.B, clip, hp.mud));
+  let p = raw.p;
+  if (flash) p = p.tint(WHITE, 0.85);
+  if (hp.left) p = p.flipX();
+  let lit: HTMLCanvasElement | null = null;
+  if (raw.lit) lit = (hp.left ? raw.lit.flipX() : raw.lit).canvas();
+  const B = hp.B;
+  const eye = raw.eye
+    ? ([hp.left ? B.W - 1 - raw.eye[0] : raw.eye[0], raw.eye[1]] as [number, number])
+    : null;
+  return HEAD_FR.set(fk, {
+    key: fk,
+    img: p.canvas(),
+    lit,
+    ax: hp.left ? B.W - B.AX : B.AX,
+    ay: B.AY,
+    eye,
+  });
+}
+
+/** Точка, где шея на полу входит в обрубок шеи на кадре головы (мир, px). */
+interface NeckEnd {
+  E: V2;
+  D: V2;
+  lift: number;
+  r1: number;
+  under: number;
+}
+
+function headEnd(m: Mob, hp: HeadPose): NeckEnd {
+  const g = headGeo(hp.rig, hp.B);
+  const f = hp.left ? -1 : 1;
+  const ox = m.x * TS + hp.rig.fx * f;
+  const oy = m.y * TS + 2 - hp.rig.lift + hp.rig.fy;
+  const sx = ox + f * (g.stub[0] - hp.B.AX);
+  const sy = oy + (g.stub[1] - hp.B.AY);
+  const nx = ox + f * (g.nape[0] - hp.B.AX);
+  const ny = oy + (g.nape[1] - hp.B.AY);
+  const l = Math.hypot(sx - nx, sy - ny) || 1;
+  const lift = m.y * TS + 2 - sy;
+  return {
+    E: [sx, sy],
+    D: [(sx - nx) / l, (sy - ny) / l],
+    lift,
+    r1: 4 * g.s,
+    under: clamp01(-hp.rig.lift / 22),
+  };
+}
+
+/** Последний нарисованный конец шеи — для смерти, когда моба уже нет в мире. */
+const DRAWN = new Map<number, { end: NeckEnd; now: number; attached: boolean; alpha: number }>();
+
+function headPainter(crown: boolean) {
+  return (m: Mob, pose: MobPose): MobFrame | null => {
+    const hp = headPose(m, pose.now, pose.t, crown);
+    const r = hp.rig;
+    if (m.mode !== 'dying' || hp.attached)
+      DRAWN.set(m.id, {
+        end: headEnd(m, hp),
+        now: pose.now,
+        attached: hp.attached,
+        alpha: r.alpha,
+      });
+    else DRAWN.delete(m.id);
+    if (DRAWN.size > 40) for (const [id, d] of DRAWN) if (pose.now - d.now > 3) DRAWN.delete(id);
+    const f = hp.left ? -1 : 1;
+    // Под илом: бурун вместо головы.
+    if (crown && hp.wake >= 0 && r.lift < -30) {
+      const w = wakeFrame(hp.wake, pose.left, hp.mound);
+      return { ...w, still: true, shadow: 0, lift: 0 };
+    }
+    // Вспышка удара — белым; в смерти — только удар, добивший её.
+    const flash = pose.flash && !(m.mode === 'dying' && pose.t > 0.12);
+    const fr = headFrame(hp.el, hp, flash);
+    let img = fr.img;
+    let ax = fr.ax;
+    let ay = fr.ay;
+    // Бугор ила над поднимающейся короной (и перед захлопом водоворота).
+    if (crown && hp.mound > 0.02) {
+      img = composite(Math.round(hp.mound * 8), hp.wake, fr, r.lift - r.fy);
+      ax = CBOX.AX;
+      ay = CBOX.AY;
+    }
+    return {
+      img,
+      ax,
+      ay,
+      eye: fr.eye,
+      lit: fr.lit,
+      dx: r.fx * f,
+      dy: r.fy,
+      lift: r.lift,
+      still: true,
+      shadow: r.lift > 0 ? (crown ? 7 : 5) * clamp01(r.lift / 6 + 0.3) : 0,
+      alpha: r.alpha < 1 ? Math.max(0, r.alpha) : undefined,
+      ghost: hp.ghost
+        ? { every: 0.025, life: 0.16, tint: rgbOf(ELEM[hp.el].glow), alpha: 0.34 }
+        : null,
+      linger: hp.linger,
+    };
+  };
+}
+
+// --- Бурун и бугор ила над скрытой головой. ---
+
+const WAKE_FR = frameLRU<MobFrame>(24);
+
+/** Бурун: ил вздыблен кругом, сквозь него режут воду рога короны. */
+function wakeFrame(f: number, left: boolean, heave: number): MobFrame {
+  const key = `${f}|${left ? 1 : 0}|${Math.round(heave * 4)}`;
+  const hit = WAKE_FR.get(key);
+  if (hit) return hit;
+  const W = 36;
+  const H = 22;
   const p = new Px(W, H);
-  const ax = 11;
-  const ay = 23;
-  const seared = state === 'seared';
-  // Лужа крови у основания.
-  if (!seared) p.ell(11, 23, 6.5, 2, alpha(hx('#5a0e0c'), 0.85));
-  else p.ell(11, 23, 6, 1.8, alpha(hx('#1a120c'), 0.8));
-  // Столб шеи.
-  limb(p, 11, 22.5, 11, 13, 4.6, 4.1, L.skin);
-  scales(p, 0, 10, W - 1, H - 1, L.skin[0], L.skin[3], 51);
-  // Рваный край: зубцы кожи вокруг среза.
-  for (let k = 0; k < 9; k++) {
-    const a = (k / 9) * TAU;
-    const x = Math.round(11 + Math.cos(a) * 4.6);
-    const y = Math.round(12.5 + Math.sin(a) * 2.3 - (k % 2));
-    p.set(x, y, L.skin[k % 2 ? 2 : 1]);
-  }
-  // Срез: мясо, в середине кость (или угли, если прижжено).
-  p.ell(11, 12.5, 3.8, 2.1, seared ? hx('#1a100c') : hx('#7a1612'));
-  p.ell(11, 12.3, 2.7, 1.4, seared ? hx('#2e1a10') : hx('#c83a2a'));
-  p.ell(11, 12.2, 1.1, 0.7, seared ? hx('#4a3a2a') : hx('#f0e6d0'));
-  if (!seared) {
-    // Кровь стекает по шее — две струйки, растут и срываются.
-    const dl = [2, 4, 6, 3][f % 4];
-    for (let i = 0; i < dl; i++) p.set(8, 14 + i, i === dl - 1 ? hx('#c83a2a') : hx('#8a1a14'));
-    for (let i = 0; i < ((f + 2) % 4) + 1; i++) p.set(13, 14 + i, hx('#8a1a14'));
+  const cx = 18;
+  const cy = 15;
+  const hv = heave;
+  shadeEll(p, cx, cy, 6 + (f % 2) + hv * 2, 2.4 + hv * 1.2, HY.mud);
+  // Рога режут ил, как плавники: качаются по кругу.
+  for (let i = 0; i < 3; i++) {
+    const a = (f / 8) * TAU + i * 2.1;
+    const x = cx - 4 + i * 4 + Math.round(Math.cos(a) * 0.8);
+    const hgt = 3 + ((f + i * 3) % 4 < 2 ? 1 : 0) + hv * 2;
+    limb(p, x, cy - 1, x + 1, cy - 1 - hgt, 0.9, 0.3, ELEM[5].crest);
   }
   p.outline(INK);
-  if (seared) {
-    // Угли по кромке и язык огня.
-    for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * TAU + f;
-      p.set(
-        Math.round(11 + Math.cos(a) * 3.6),
-        Math.round(12.5 + Math.sin(a) * 2),
-        (k + f) % 2 ? hx('#ff7a1a') : hx('#ffd24a'),
+  // Кольца буруна и комья.
+  for (let ring = 0; ring < 2; ring++) {
+    const R = 9 + ring * 3 + (f % 4) * 0.6;
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * TAU + f * 0.35 * (ring ? -1 : 1);
+      const x = Math.round(cx + Math.cos(a) * R);
+      const y = Math.round(cy + Math.sin(a) * R * 0.34);
+      if (!p.solid(x, y) && (i + f + ring) % 3 !== 0)
+        p.set(x, y, alpha(HY.mud[3], ring ? 0.5 : 0.85));
+    }
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * TAU + f * 0.8;
+    const x = Math.round(cx + Math.cos(a) * 7);
+    const y = Math.round(cy - 2 - ((f + i * 2) % 4));
+    p.set(x, y, HY.mud[2]);
+  }
+  const q = left ? p.flipX() : p;
+  return WAKE_FR.set(key, { img: q.canvas(), ax: cx, ay: 17, eye: null });
+}
+
+const MOUND_FR = frameLRU<Px>(24);
+
+/** Бугор ила: растёт, трескается, пузырится — сейчас оттуда вырвется пасть. */
+function moundFrame(k8: number, f: number): Px {
+  const ff = f < 0 ? 0 : f % 4;
+  const key = `${k8}|${ff}`;
+  const hit = MOUND_FR.get(key);
+  if (hit) return hit;
+  const B = CBOX;
+  const p = new Px(B.W, B.H);
+  const k = k8 / 8;
+  const cx = B.CX;
+  const gy = B.AY;
+  const rx = 7 + 6 * k;
+  const ry = 2 + 5 * k;
+  shadeEll(p, cx, gy - ry * 0.45, rx, ry, HY.mud, 0.05);
+  // Трещины в бугре и свет из-под ила.
+  if (k > 0.35)
+    for (let i = 0; i < 4; i++) {
+      const a = -Math.PI / 2 + (i - 1.5) * 0.7;
+      const len = rx * 0.7 * k;
+      stroke(
+        p,
+        cx,
+        gy - ry * 0.6,
+        cx + Math.cos(a) * len,
+        gy - ry * 0.6 + Math.sin(a) * len * 0.45,
+        i % 2 ? HY.mud[0] : alpha(ELEM[5].glow, 0.8),
       );
     }
-    // Прижжённый срез не горит — тлеет: дымок, а не пламя (с пламенем
-    // обрубок читался свечкой).
-    for (let i = 0; i < 9; i++) {
-      const y = 10 - i;
-      const x = Math.round(11 + Math.sin((i + f * 1.5) * 0.9) * (0.6 + i * 0.25));
-      const a = 0.75 - i * 0.07;
+  p.outline(INK);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * TAU + ff * 0.7;
+    const x = Math.round(cx + Math.cos(a) * (rx + 2));
+    const y = Math.round(gy - 1 - ((i + ff) % 3) * k);
+    if (!p.solid(x, y)) p.set(x, y, alpha(HY.mud[3], 0.8));
+  }
+  return MOUND_FR.set(key, p);
+}
+
+const COMP = frameLRU<HTMLCanvasElement>(64);
+/** Бугор под головой, голова поверх — один холст, в кеше по обоим кадрам. */
+function composite(k8: number, f: number, fr: HeadFrame, ground: number): HTMLCanvasElement {
+  const oy = Math.round(ground);
+  const key = `${k8}|${f < 0 ? 0 : f % 4}|${fr.key}|${oy}`;
+  const hit = COMP.get(key);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = CBOX.W;
+  c.height = CBOX.H;
+  const g = c.getContext('2d');
+  if (g) {
+    // Бугор стоит на земле: в кадре головы земля на `lift` ниже точки.
+    g.drawImage(moundFrame(k8, f).canvas(), 0, oy);
+    g.drawImage(fr.img, 0, 0);
+  }
+  return COMP.set(key, c);
+}
+
+registerMobPainter('f9_head', headPainter(false));
+registerMobPainter('f9_crown', headPainter(true));
+
+// ---------------------------------------------------------------------------
+// Обрубок шеи: кровит пульсом, чем ближе отрастание — тем сильнее бьётся и
+// шевелится (под кожей лезут две головы); прижгли — корчится и чернеет;
+// отрастает — срез лопается надвое.
+// ---------------------------------------------------------------------------
+
+interface StumpRig {
+  /** Высота столба 0…1,3. */
+  h: number;
+  sway: number;
+  /** Сколько бугров лезет под кожей (0…3). */
+  press: number;
+  /** Фаза бугров снизу вверх 0…1. */
+  lump: number;
+  /** Срез набухает от удара сердца. */
+  beat: number;
+  /** Кадр фонтана крови (−1 — нет) и его сила. */
+  spurt: number;
+  gush: number;
+  /** Обугленность сверху вниз 0…1 и белый жар прижигания. */
+  char: number;
+  hot: number;
+  smoke: number;
+  /** Срез лопается надвое (отрастание). */
+  split: number;
+  /** Уходит под воду, px. */
+  sink: number;
+  /** Кадр золотой стрелки «прижги» (−1 — нет). */
+  arrow: number;
+  drip: number;
+}
+
+const SREST: StumpRig = {
+  h: 1,
+  sway: 0,
+  press: 0,
+  lump: 0,
+  beat: 0,
+  spurt: -1,
+  gush: 1,
+  char: 0,
+  hot: 0,
+  smoke: -1,
+  split: 0,
+  sink: 0,
+  arrow: -1,
+  drip: 0,
+};
+
+const CHAR: Tones = T('#0e0906', '#241812', '#3a2a20', '#5a4436');
+
+function paintStump2(el: number, r: StumpRig): { p: Px; lit: Px | null } {
+  const L = ELEM[el];
+  const W = 30;
+  const H = 42;
+  const bx = 15;
+  const by = 36;
+  const p = new Px(W, H);
+  let lit: Px | null = null;
+  const LIT = () => (lit ??= new Px(W, H));
+  const seared = r.char > 0.02;
+  const topY = by - 10.5 * r.h;
+  const tx = bx + r.sway;
+  // Столб шеи: шкура, бугры, чешуя.
+  limb(p, bx, by - 0.5, tx, topY, 4.7, 4.1, L.skin);
+  limb(p, bx + 1.6, by - 0.5, tx + 1.4, topY + 1, 1.8, 1.5, L.belly, 0.1);
+  for (let i = 0; i < r.press; i++) {
+    const k = (r.lump + i * 0.37) % 1;
+    const y = lerp(by - 2, topY + 2, k);
+    const x = lerp(bx, tx, k) + (i % 2 ? 1.9 : -1.7);
+    shadeEll(p, x, y, 2.3 + 0.4 * (i % 2), 1.9, L.skin, 0.25);
+  }
+  scales(p, 0, 0, W - 1, H - 1, L.skin[0], L.skin[3], 51);
+  // Рваный край и срез: мясо, кость (или угли).
+  for (let k = 0; k < 9; k++) {
+    const a = (k / 9) * TAU;
+    p.set(tx + Math.cos(a) * 4.6, topY + Math.sin(a) * 2.3 - (k % 2), L.skin[k % 2 ? 2 : 1]);
+  }
+  const cr = 3.8 + r.beat * 0.9;
+  if (r.split > 0.02) {
+    // Лопнул надвое: две лопасти мяса расходятся, между ними тьма.
+    const d = 1.2 + r.split * 3.2;
+    p.ell(tx, topY - r.split * 1.5, cr * 0.8, cr * 0.5, hx('#2a0806'));
+    for (const s of [-1, 1]) {
+      shadeEll(
+        p,
+        tx + s * d,
+        topY - r.split * 2.2,
+        cr * 0.62,
+        cr * 0.46,
+        T('#5a0e0c', '#8a1a14', '#c83a2a', '#f06a4a'),
+      );
+      p.set(tx + s * (d + 1), topY - r.split * 2.2 - 1, FLESH[3]);
+    }
+  } else {
+    p.ell(tx, topY, cr, cr * 0.56, seared ? hx('#1a100c') : FLESH[1]);
+    p.ell(tx, topY - 0.2, cr * 0.72, cr * 0.38, seared ? hx('#2e1a10') : FLESH[2]);
+    p.ell(tx, topY - 0.3, 1.1, 0.7, seared ? hx('#4a3a2a') : FLESH[3]);
+  }
+  // Обугливается сверху вниз: тон уходит в угольный, светотень остаётся.
+  if (seared) {
+    const edge = lerp(topY - 3, by + 1, r.char);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        if (!p.solid(x, y) || y > edge) continue;
+        const c = p.get(x, y);
+        const l = (c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11) / 255;
+        p.set(x, y, tone(CHAR, l * 1.6 - 0.1));
+      }
+  }
+  // Кровь стекает по шее.
+  if (!seared && r.split < 0.05 && r.sink < 1) {
+    const dl = [2, 4, 6, 3][r.drip % 4];
+    for (let i = 0; i < dl; i++) p.set(tx - 3, topY + 1.5 + i, i === dl - 1 ? FLESH[2] : FLESH[1]);
+    for (let i = 0; i < ((r.drip + 2) % 4) + 1; i++) p.set(tx + 2, topY + 1.5 + i, FLESH[1]);
+  }
+  p.outline(INK);
+  // Лужа у основания — ПОД столбом (только по пустому).
+  const pool = seared ? alpha(hx('#1a120c'), 0.8) : alpha(hx('#5a0e0c'), 0.85);
+  for (let y = by - 3; y <= by + 3; y++)
+    for (let x = bx - 8; x <= bx + 8; x++) {
+      const dx = (x + 0.5 - bx) / 7;
+      const dy = (y + 0.5 - by) / 2.1;
+      if (dx * dx + dy * dy <= 1 && !p.solid(x, y)) p.set(x, y, pool);
+    }
+  // Фонтан крови в такт сердцу: капли летят дугой и падают.
+  if (r.spurt >= 0 && !seared) {
+    const k = r.spurt / 6;
+    for (let i = 0; i < 6; i++) {
+      const vx = (i - 2.5) * 0.9 * r.gush;
+      const vy = (3.2 + (i % 3) * 0.9) * r.gush;
+      const x = tx + vx * k * 4;
+      const y = topY - 1 - vy * k * 4 + 6 * k * k * 4;
+      if (y > by) continue;
+      p.set(x, y, i % 2 ? FLESH[2] : FLESH[1]);
+      if (k < 0.5) p.set(x, y - 1, alpha(FLESH[2], 0.7));
+    }
+  }
+  // Прижигание: белый жар по срезу, угли по кромке, дым.
+  if (r.hot > 0.02) {
+    const lp = LIT();
+    lp.ell(tx, topY, cr + 1, cr * 0.6 + 0.6, alpha(hx('#fff0a0'), 0.9 * r.hot));
+    lp.ell(tx, topY, cr * 0.6, cr * 0.35, alpha(WHITE, r.hot));
+  }
+  if (seared) {
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * TAU + (r.smoke < 0 ? 0 : r.smoke) * 0.8;
+      const x = tx + Math.cos(a) * 3.6;
+      const y = topY + Math.sin(a) * 2;
+      const c = (k + (r.smoke < 0 ? 0 : r.smoke)) % 2 ? hx('#ff7a1a') : hx('#ffd24a');
+      p.set(x, y, c);
+      LIT().set(x, y, alpha(c, 0.8));
+    }
+  }
+  if (r.smoke >= 0) {
+    // Дым тлеет, а не горит — иначе обрубок читается свечкой.
+    const f = r.smoke;
+    const big = r.hot > 0.02 ? 1.6 : 1;
+    for (let i = 0; i < 11; i++) {
+      const y = topY - 2 - i * big;
+      const x = tx + Math.sin((i + f * 1.5) * 0.9) * (0.6 + i * 0.28 * big);
+      const a = 0.75 - i * 0.065;
+      if (a <= 0) continue;
       p.set(x, y, alpha(i < 2 ? hx('#6a5a4a') : hx('#8a8a86'), a));
       if (i > 3 && i % 2) p.set(x + 1, y, alpha(hx('#a8a8a2'), a * 0.6));
     }
   }
-  if (state === 'can') {
-    // Прижги! — золотая стрелка вниз, на срез.
-    const by = 1 + (f % 2);
+  // «Прижги!» — золотая стрелка на срез, подпрыгивает.
+  if (r.arrow >= 0) {
+    const lp = LIT();
+    const byA = Math.round(topY - 12 + [0, 1, 2, 1][r.arrow % 4]);
     for (let i = 0; i < 4; i++) {
-      p.set(8 + i, by + i, GOLD);
-      p.set(14 - i, by + i, GOLD);
+      for (const q of [p, lp]) {
+        q.set(tx - 3 + i, byA + i, GOLD);
+        q.set(tx + 3 - i, byA + i, GOLD);
+      }
     }
-    p.set(11, by + 4, hx('#fff4b0'));
-    p.set(11, by + 5, hx('#ff7a1a'));
+    for (const q of [p, lp]) {
+      q.set(tx, byA + 4, hx('#fff4b0'));
+      q.set(tx, byA + 5, hx('#ff7a1a'));
+    }
   }
-  return { p, ax, ay, eye: null };
+  // Под воду: срезать ниже поверхности, пена кругом.
+  if (r.sink > 0.5) {
+    const cy = Math.round(by - r.sink);
+    for (let y = Math.max(0, cy); y < H; y++)
+      for (let x = 0; x < W; x++) {
+        p.data[(y * W + x) * 4 + 3] = 0;
+        if (lit) (lit as Px).data[(y * W + x) * 4 + 3] = 0;
+      }
+    for (let a = 0; a < TAU; a += 0.12) {
+      const x = Math.round(tx + Math.cos(a) * (5.5 + r.sink * 0.15));
+      const y = Math.round(cy + Math.sin(a) * 1.6);
+      if (!p.solid(x, y)) p.set(x, y, alpha(HY.foam, 0.7));
+    }
+  }
+  return { p, lit };
+}
+
+const STUMP_FR = frameLRU<MobFrame>(200);
+
+function stumpRig(m: Mob, pose: MobPose): { r: StumpRig; linger?: number; alpha?: number } {
+  const mem = memOf(m, pose.now);
+  const t = pose.t;
+  const r: StumpRig = { ...SREST };
+  if (pose.mode === 'dying') {
+    const T = m.data.T ?? 8;
+    const vd = m.data.vDie;
+    const sink = vd === 2 || (vd === undefined && mem.dieFrom >= 0.3);
+    const regrow = vd === 1 || (vd === undefined && mem.prev === 'bleed' && mem.prevT >= T - 0.2);
+    if (sink || !regrow) {
+      const from = sink ? (vd === 2 ? 0.35 : mem.dieFrom) : mem.dieFrom;
+      const k = clamp01((t - from) / 0.5);
+      r.sink = Math.round(EZ.in(k) * 16);
+      r.spurt = -1;
+      return { r, linger: from + 0.55 };
+    }
+    // Отрастает: срез раздувается и лопается надвое — из него лезут головы.
+    const x = q24(t);
+    const L = lane<StumpRig>(SREST, [
+      [0, { h: 1.1, beat: 1, press: 3, lump: 0.9 }],
+      [3, { h: 1.25, split: 0.35, beat: 1 }, EZ.out],
+      [6, { h: 1.1, split: 1, press: 0 }, EZ.out],
+      [10, { h: 0.55, split: 1 }, EZ.in],
+    ]);
+    const o = L(x);
+    return {
+      r: { ...o, press: Math.round(o.press), spurt: -1 },
+      linger: 0.45,
+      alpha: x > 6 ? clamp01(1 - (x - 6) / 5) : undefined,
+    };
+  }
+  if (pose.mode === 'seared') {
+    const x = q24(t);
+    if (x < 14) {
+      // Прижгли: вспыхнул добела, дёрнулся и сжался, чернеет сверху вниз.
+      const L = lane<StumpRig>(SREST, [
+        [0, { hot: 1, h: 1.05, char: 0.15, smoke: 0 }],
+        [2, { h: 0.78, sway: -1, char: 0.4, hot: 0.8 }, EZ.out],
+        [4, { h: 0.92, sway: 1, char: 0.6, hot: 0.5 }, EZ.io],
+        [7, { h: 0.8, sway: -1, char: 0.85, hot: 0.2 }, EZ.io],
+        [10, { h: 0.84, sway: 0, char: 1, hot: 0 }, EZ.io],
+        [14, { h: 0.82 }, EZ.io],
+      ]);
+      const o = L(x);
+      return { r: { ...o, sway: Math.round(o.sway), smoke: x % 8, spurt: -1 } };
+    }
+    return { r: { ...r, h: 0.82, char: 1, smoke: Math.floor(pose.now * 8) % 8, spurt: -1 } };
+  }
+  // Кровит. Свежий срез: столб выпрыгивает, кровь фонтаном.
+  if (t < 0.36) {
+    const x = q24(t);
+    const L = lane<StumpRig>(SREST, [
+      [0, { h: 0.35, beat: 1, gush: 1.5 }],
+      [3, { h: 1.12, beat: 0.7 }, EZ.out],
+      [6, { h: 0.95, beat: 0.3 }, EZ.io],
+      [8, { h: 1, beat: 0 }, EZ.io],
+    ]);
+    const o = L(x);
+    return { r: { ...o, spurt: Math.min(6, x), drip: x % 4 } };
+  }
+  const T = m.data.T ?? 8;
+  const prog = t / T;
+  r.press = prog < 0.5 ? 0 : prog < 0.72 ? 1 : prog < 0.9 ? 2 : 3;
+  const P = [0.8, 0.62, 0.48, 0.36][r.press];
+  const ph = (((t % P) + P) % P) / P;
+  const f = Math.floor(ph * 8);
+  r.beat = f === 0 ? 1 : f === 1 ? 0.6 : f === 2 ? 0.25 : 0;
+  r.spurt = f < 6 ? f : -1;
+  r.gush = 0.7 + r.press * 0.15;
+  r.lump = ph;
+  r.sway = Math.round(Math.sin(ph * TAU) * [0.3, 0.9, 1.3, 1.9][r.press]);
+  r.drip = Math.floor(t * 3) % 4;
+  if ((m.data.can ?? 0) > 0) r.arrow = Math.floor(pose.now * 6) % 4;
+  return { r };
 }
 
 registerMobPainter('f9_stump', (m: Mob, pose: MobPose) => {
-  const el = m.data.el ?? 0;
-  const state = pose.mode === 'seared' ? 'seared' : (m.data.can ?? 0) > 0 ? 'can' : 'bleed';
-  const f = state === 'seared' ? cyc(pose.t * 8, 4) : cyc(pose.t * 3, 2);
-  if (pose.anim === 'dead')
-    return frameOf(`f9_stump${el}`, pose, 'dead', 0, () => {
-      const b = paintStump(el, 'bleed', 0);
-      return { ...b, p: dissolve(b.p, 0.5, 3) };
+  const el = Math.max(0, Math.min(4, m.data.el ?? 0));
+  const { r, linger, alpha: al } = stumpRig(m, pose);
+  const flash = pose.flash && pose.mode !== 'dying';
+  const key = [
+    el,
+    r.h.toFixed(2),
+    r.sway,
+    r.press,
+    Math.round(r.lump * 8),
+    r.beat.toFixed(1),
+    r.spurt,
+    r.gush.toFixed(1),
+    r.char.toFixed(2),
+    r.hot.toFixed(1),
+    r.smoke,
+    r.split.toFixed(2),
+    r.sink,
+    r.arrow,
+    r.drip,
+    pose.left ? 1 : 0,
+    flash ? 1 : 0,
+  ].join('|');
+  let fr = STUMP_FR.get(key);
+  if (!fr) {
+    const raw = paintStump2(el, r);
+    let p = raw.p;
+    if (flash) p = p.tint(WHITE, 0.85);
+    fr = STUMP_FR.set(key, {
+      img: p.canvas(),
+      lit: raw.lit ? raw.lit.canvas() : null,
+      ax: 15,
+      ay: 36,
+      eye: null,
     });
-  return frameOf(`f9_stump${el}`, pose, state, f, () => paintStump(el, state, f));
+  }
+  return { ...fr, still: true, shadow: 0, linger, alpha: al };
 });
 
-// --- Шеи на полу: сегменты по кривой от тела к голове. ---
+// ---------------------------------------------------------------------------
+// Тело: гора в озере. Дышит (гребень бежит волной, пена у кромки), на
+// ранении вздрагивает, хвост выходит из воды дугой и хлещет, в 3-й фазе
+// озеро уходит — и тело встаёт на лапы сценой; смерть — сценой.
+// Слои: тело (кеш по позе тела) и хвост (кеш по позе хвоста) — кадр
+// собирается из двух готовых и обрезается по содержимому.
+// ---------------------------------------------------------------------------
 
-const segCache = new Map<string, HTMLCanvasElement>();
+const BW = 132;
+const BH = 118;
+const BCX = 66;
+/** Низ тела (как `cy` прежнего рисунка), вода на 3 ниже, земля лап — на 12. */
+const BCY = 66;
+const BAY = 62;
+const BGY = BCY + 3;
+const BFEET = BCY + 12;
 
-/** Сегмент шеи радиуса r: круг с объёмом, чешуйкой и шипом гребня. */
-function neckSeg(el: number, r: number, cut: number, spike: boolean): HTMLCanvasElement {
-  const key = `${el}|${r}|${cut}|${spike ? 1 : 0}`;
-  let c = segCache.get(key);
-  if (c) return c;
-  const L = ELEM[el];
-  const S = r * 2 + 6;
-  const p = new Px(S, S);
-  const t: Tones = cut === 2 ? T('#0e0806', '#241a14', '#3a2a20', '#5a4436') : L.skin;
-  shadeEll(p, S / 2, S / 2 + 1, r, r * 0.9, t);
-  shadeEll(p, S / 2 + 0.5, S / 2 + r * 0.45 + 1, r * 0.6, r * 0.35, cut === 2 ? t : L.belly, 0.1);
-  if (spike)
+interface BodyRig {
+  breath: number;
+  wave: number;
+  legs: number;
+  up: number;
+  water: number;
+  mud: number;
+  drip: number;
+  crest: number;
+  droop: number;
+  sink: number;
+}
+
+interface TailRig {
+  emerge: number;
+  phi: number;
+  curl: number;
+  psi: number;
+  smear: number;
+  slap: number;
+}
+
+/** Хвост: E, SE, S, NE, N (запад — зеркалом). */
+const TAIL_DIRS = [0, Math.PI / 4, Math.PI / 2, -Math.PI / 4, -Math.PI / 2];
+
+function blit(dst: Px, src: Px): void {
+  for (let i = 0; i < src.data.length; i += 4) {
+    if (!src.data[i + 3]) continue;
+    if (src.data[i + 3] >= 255 || !dst.data[i + 3]) {
+      dst.data[i] = src.data[i];
+      dst.data[i + 1] = src.data[i + 1];
+      dst.data[i + 2] = src.data[i + 2];
+      dst.data[i + 3] = src.data[i + 3];
+    } else
+      dst.set((i / 4) % dst.w, Math.floor(i / 4 / dst.w), [
+        src.data[i],
+        src.data[i + 1],
+        src.data[i + 2],
+        src.data[i + 3],
+      ]);
+  }
+}
+
+/** Только по пустому — под фигурой (тень, лужа). */
+function under(p: Px, x: number, y: number, c: RGBA): void {
+  const xi = Math.round(x);
+  const yi = Math.round(y);
+  if (!p.solid(xi, yi)) p.set(xi, yi, c);
+}
+
+const BODY_L = frameLRU<Px>(96);
+
+function bodyLayer(r: BodyRig): Px {
+  const key = [
+    Math.round(r.breath * 10),
+    Math.round(r.wave * 24) % 24,
+    Math.round(r.legs * 20),
+    Math.round(r.up * 2),
+    Math.round(Math.min(40, r.water) * 2),
+    Math.round(r.mud * 5),
+    r.drip,
+    Math.round(r.crest * 20),
+    Math.round(r.droop * 20),
+    Math.round(r.sink * 2),
+  ].join('|');
+  const hit = BODY_L.get(key);
+  if (hit) return hit;
+  const p = new Px(BW, BH);
+  const cx = BCX;
+  const cy = BCY - r.up + r.sink;
+  const b = r.breath;
+  const dd = r.droop;
+  const rx = lerp(21 + b * 0.4, 22.5, dd);
+  const ry = lerp(12.5 + b * 0.5, 10, dd);
+  const top = cy - lerp(3 + b * 0.6, 1.5, dd);
+  const onLand = r.water > 30;
+  // Лапы: бедро на теле, колено наружу, ступня стоит на земле.
+  if (r.legs > 0.02) {
+    for (const [dx, s] of [
+      [-15, -1],
+      [-8, -1],
+      [8, 1],
+      [15, 1],
+    ] as const) {
+      const hipX = cx + dx;
+      const hipY = cy + 5;
+      const fx = lerp(hipX + s * 2.5, BCX + dx + s * 4.5, r.legs);
+      const fy = lerp(cy + 8, BFEET, r.legs);
+      const kx = (hipX + fx) / 2 + s * (1.5 + (1 - r.legs) * 1.5);
+      const ky = (hipY + fy) / 2 - 1;
+      limb(p, hipX, hipY, kx, ky, 3.3, 2.7, HY.body);
+      limb(p, kx, ky, fx, fy, 2.7, 2, HY.body);
+      for (let k = -1; k <= 1; k++)
+        stroke(p, fx + k * 1.5, fy, fx + s * 1 + k * 2, fy + 2, HY.spike[3]);
+    }
+  }
+  // Воротники шей по краю тела.
+  for (const a of NECK_ANG) {
+    const nx = cx + Math.cos(a) * rx * 0.9;
+    const ny = top + Math.sin(a) * ry * 0.85;
+    shadeEll(p, nx, ny, 4.4, 3.4, HY.plate, -0.1);
+  }
+  shadeEll(p, cx, top, rx, ry, HY.body);
+  for (let i = 0; i < 9; i++) {
+    const k = i / 8;
+    const x = cx - rx * 0.75 + k * rx * 1.5;
+    const y = top - ry * 0.35 - Math.sin(k * Math.PI) * ry * 0.35;
+    shadeEll(p, x, y, 3.4, 2.4, HY.plate, 0.1);
+  }
+  // Гребень: волна бежит от головы к хвосту, в смерти шипы валятся по одному.
+  for (let i = 0; i < 8; i++) {
+    const k = (i + 0.5) / 8;
+    const x = cx - rx * 0.7 + k * rx * 1.4;
+    const base = top - ry * 0.55 - Math.sin(k * Math.PI) * ry * 0.4;
+    const ripple = 1 + 0.14 * Math.sin((r.wave - i / 8) * TAU);
+    const di = clamp01(dd * 1.8 - (7 - i) * 0.1);
+    const hgt = ((4 + Math.sin(k * Math.PI) * 5) * r.crest * ripple + b) * (1 - 0.65 * di);
+    const lean = di * 3.5 + (r.crest - 1) * -0.6;
     poly(
       p,
       [
-        [S / 2 - 1.5, S / 2 - r * 0.6],
-        [S / 2 - 0.5, S / 2 - r - 2.5],
-        [S / 2 + 1, S / 2 - r * 0.6],
+        [x - 2, base + 1],
+        [x + 0.5 + lean, base - hgt],
+        [x + 2, base + 1],
       ],
-      cut === 2 ? t[0] : L.crest[1],
+      (px, py) => tone(HY.spike, 0.8 - (px - x + 2) * 0.2 - (py - base + hgt) * 0.02),
     );
+  }
+  scales(p, 0, 0, BW - 1, BH - 1, HY.body[0], HY.body[3], 17);
+  for (const [x0, y0, x1, y1] of [
+    [cx - 10, top + 2, cx - 4, top + 5],
+    [cx + 6, top - 3, cx + 12, top - 1],
+  ])
+    stroke(p, x0, y0, x1, y1, HY.scar);
+  // Ил на брюхе.
+  if (r.mud > 0.05)
+    for (let y = Math.floor(cy + 2); y < cy + 13; y++)
+      for (let x = cx - rx - 2; x <= cx + rx + 2; x++)
+        if (p.solid(x, y) && hash(x, y, 3) < 0.55 * r.mud) p.set(x, y, HY.mud[1 + (y % 2)]);
+  p.outline(INK);
+  // Вода: нижняя часть тонет в озере; пена по кромке бежит.
+  if (!onLand) {
+    const wl = BCY + r.water;
+    for (let y = Math.floor(wl); y < BH; y++)
+      for (let x = 0; x < BW; x++) {
+        if (!p.solid(x, y)) continue;
+        const k = clamp01((y - wl) / 5);
+        p.set(x, y, mixc(p.get(x, y), HY.water, 0.4 + 0.5 * k));
+      }
+    for (let x = cx - rx - 2; x <= cx + rx + 2; x++) {
+      const y = Math.round(wl + Math.sin(x * 0.7 + r.wave * TAU) * 0.8);
+      if (p.solid(x, y) || p.solid(x, y - 1))
+        p.set(x, y, alpha(HY.foam, (x + Math.round(r.wave * 24)) % 3 ? 0.9 : 0.5));
+    }
+  } else {
+    // На суше — своя тень под брюхом.
+    for (let y = BFEET - 3; y <= BFEET + 3; y++)
+      for (let x = cx - 26; x <= cx + 26; x++) {
+        const dx = (x + 0.5 - cx) / 25;
+        const dy = (y + 0.5 - BFEET - 0.5) / 3.6;
+        if (dx * dx + dy * dy <= 1) under(p, x, y, alpha(hx('#000000'), 0.32));
+      }
+  }
+  // Ил капает с брюха, пока тело встаёт.
+  if (r.drip >= 0)
+    for (let i = 0; i < 8; i++) {
+      const x = cx - 17 + Math.floor(hash(i, 21) * 34);
+      const y0 = cy + ry * 0.55;
+      const span = BFEET - y0 + 2;
+      const y = y0 + ((r.drip * 1.7 + hash(i, 22) * 12) % span);
+      under(p, x, y, HY.mud[2]);
+      under(p, x, y - 1, alpha(HY.mud[1], 0.7));
+    }
+  // Смерть: уходит в ил — ниже кромки ничего, по кромке ил кольцом.
+  if (r.sink > 0.5) {
+    const cyc0 = BFEET - 1;
+    for (let y = cyc0; y < BH; y++)
+      for (let x = 0; x < BW; x++) {
+        const i = (y * BW + x) * 4 + 3;
+        if (p.data[i] && y > cyc0) p.data[i] = 0;
+      }
+    for (let x = cx - rx - 3; x <= cx + rx + 3; x++) {
+      const k = Math.abs(x - cx) / (rx + 3);
+      p.set(x, cyc0 - Math.round((1 - k * k) * 1.2), x & 1 ? HY.mud[3] : HY.mud[2]);
+    }
+  }
+  return BODY_L.set(key, p);
+}
+
+interface TailPt {
+  x: number;
+  y: number;
+  h: number;
+  r: number;
+}
+
+function tailGeo(t: TailRig, dir: number): TailPt[] {
+  const A = TAIL_DIRS[dir];
+  const ca = Math.cos(A);
+  const sa = Math.sin(A);
+  const N = 11;
+  const L = 3.9;
+  let u = 21;
+  let v = 9;
+  let h = -3 - (1 - t.emerge) * 42;
+  const pts: TailPt[] = [];
+  const push = (i: number) =>
+    pts.push({
+      x: BCX + u * ca - v * sa,
+      y: BGY + (u * sa + v * ca) * 0.62 - h,
+      h,
+      r: 5.4 - i * 0.36,
+    });
+  push(0);
+  for (let i = 0; i < N; i++) {
+    const phi = t.phi + t.curl * i * (1 + i * 0.05);
+    const psi = t.psi * (0.25 + (0.75 * i) / (N - 1));
+    u += Math.cos(phi) * Math.cos(psi) * L;
+    v += Math.cos(phi) * Math.sin(psi) * L;
+    h += Math.sin(phi) * L;
+    // Лежит на воде — не глубже поверхности, пока не тонет.
+    if (t.emerge > 0.98 && h < 0.5) h = 0.5;
+    push(i + 1);
+  }
+  return pts;
+}
+
+/** Взведённый хвост — откуда начинается взмах (для следа). */
+const TAIL_COCK: TailRig = { emerge: 1, phi: 1.9, curl: 0.165, psi: 0.62, smear: 0, slap: 0 };
+
+const TAIL_L = frameLRU<Px>(140);
+
+function tailLayer(t: TailRig, dir: number, drip: number): Px {
+  const key = [
+    dir,
+    Math.round(t.emerge * 20),
+    Math.round(t.phi * 50),
+    Math.round(t.curl * 200),
+    Math.round(t.psi * 50),
+    Math.round(t.smear * 10),
+    Math.round(t.slap * 10),
+    drip,
+  ].join('|');
+  const hit = TAIL_L.get(key);
+  if (hit) return hit;
+  const p = new Px(BW, BH);
+  const pts = tailGeo(t, dir);
+  let surf: TailPt | null = null;
+  // Позвонки над водой; тот, что пересекает поверхность, — с кромки.
+  for (let i = 0; i < pts.length - 1; i++) {
+    let a = pts[i];
+    const b = pts[i + 1];
+    if (a.h < 0 && b.h < 0) continue;
+    if (a.h < 0) {
+      const k = a.h / (a.h - b.h);
+      a = { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), h: 0, r: lerp(a.r, b.r, k) };
+      surf = a;
+    }
+    limb(p, a.x, a.y, b.x, b.y, a.r, b.r, HY.body);
+    // Брюхо — светлой полосой с нижней стороны.
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l = Math.hypot(dx, dy) || 1;
+    let nx = -dy / l;
+    let ny = dx / l;
+    if (ny < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    limb(
+      p,
+      a.x + nx * a.r * 0.45,
+      a.y + ny * a.r * 0.45,
+      b.x + nx * b.r * 0.45,
+      b.y + ny * b.r * 0.45,
+      a.r * 0.5,
+      b.r * 0.5,
+      HY.belly,
+      0.1,
+    );
+  }
+  // Шипы гребня по спине хвоста и плавник-лопата на конце.
+  for (let i = 1; i < pts.length - 1; i += 2) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    if (a.h < 0.5) continue;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l = Math.hypot(dx, dy) || 1;
+    let nx = dy / l;
+    let ny = -dx / l;
+    if (ny > 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const bx = a.x + nx * a.r * 0.7;
+    const by = a.y + ny * a.r * 0.7;
+    const hgt = 2.6 + (pts.length - i) * 0.15;
+    poly(
+      p,
+      [
+        [bx - (dx / l) * 1.6, by - (dy / l) * 1.6],
+        [bx + nx * hgt - (dx / l) * 1.2, by + ny * hgt - (dy / l) * 1.2],
+        [bx + (dx / l) * 1.6, by + (dy / l) * 1.6],
+      ],
+      HY.spike[2],
+    );
+  }
+  const tip = pts[pts.length - 1];
+  const pre = pts[pts.length - 2];
+  if (tip.h > -0.5) {
+    const dx = tip.x - pre.x;
+    const dy = tip.y - pre.y;
+    const l = Math.hypot(dx, dy) || 1;
+    const ux = dx / l;
+    const uy = dy / l;
+    poly(
+      p,
+      [
+        [tip.x + ux * 4.5, tip.y + uy * 4.5],
+        [tip.x - uy * 3.4, tip.y + ux * 3.4],
+        [tip.x - ux * 1.5, tip.y - uy * 1.5],
+        [tip.x + uy * 3.4, tip.y - ux * 3.4],
+      ],
+      (x, y) => tone(HY.plate, 0.75 - (x - tip.x) * 0.05 - (y - tip.y) * 0.08),
+    );
+  }
+  scales(p, 0, 0, BW - 1, BH - 1, HY.body[0], HY.body[3], 23);
+  p.outline(INK);
+  // Кромка воды вокруг выхода хвоста.
+  if (surf) {
+    const R = surf.r + 3;
+    for (let a = 0; a < TAU; a += 0.1) {
+      const x = surf.x + Math.cos(a) * R;
+      const y = surf.y + Math.sin(a) * R * 0.38;
+      under(p, x, y, alpha(HY.foam, 0.85));
+    }
+  }
+  // Вода течёт с поднятого хвоста.
+  if (t.emerge > 0.5 && t.slap < 0.05)
+    for (let i = 3; i < pts.length; i += 2) {
+      const a = pts[i];
+      if (a.h < 6) continue;
+      const fall = ((drip * 2.2 + hash(i, 7) * 9) % Math.max(3, a.h)) + a.r * 0.6;
+      under(p, a.x + (hash(i, 8) - 0.5) * a.r, a.y + fall, alpha(HY.foam, 0.8));
+      under(p, a.x + (hash(i, 8) - 0.5) * a.r, a.y + fall - 1, alpha(HY.waterLt, 0.6));
+    }
+  // Шлепок: пена вдоль хвоста, где он лёг на воду.
+  if (t.slap > 0.05)
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i];
+      if (a.h > 3) continue;
+      for (const s of [-1, 1]) {
+        under(p, a.x + s * (a.r + 1), a.y + 1, alpha(HY.foam, 0.9 * t.slap));
+        under(p, a.x + s * (a.r + 2.5), a.y + 1.5, alpha(HY.foam, 0.55 * t.slap));
+      }
+    }
+  // След взмаха: серп по дуге, где прошёл кончик и середина хвоста.
+  if (t.smear > 0.05) {
+    const steps = 7;
+    let prev: TailPt[] | null = null;
+    for (let s = 0; s <= steps; s++) {
+      const k = s / steps;
+      const q = tailGeo(
+        {
+          ...t,
+          phi: lerp(TAIL_COCK.phi, t.phi, k),
+          curl: lerp(TAIL_COCK.curl, t.curl, k),
+          psi: lerp(TAIL_COCK.psi, t.psi, k),
+        },
+        dir,
+      );
+      if (prev)
+        for (const [j, w] of [
+          [q.length - 1, 2.2],
+          [q.length - 3, 1.4],
+          [q.length - 5, 1],
+        ] as const) {
+          const a = prev[j];
+          const b = q[j];
+          const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y));
+          for (let i = 0; i <= n; i++) {
+            const x = lerp(a.x, b.x, i / n);
+            const y = lerp(a.y, b.y, i / n);
+            const al = t.smear * (0.25 + 0.6 * k);
+            for (let d = -w / 2; d <= w / 2; d += 1) under(p, x, y + d, alpha(hx('#e8fff4'), al));
+          }
+        }
+      prev = q;
+    }
+  }
+  return TAIL_L.set(key, p);
+}
+
+// --- Сцены тела ключевыми позами. ---
+
+interface BodyDyn extends BodyRig {
+  sx: number;
+  sy: number;
+  rot: number;
+  dy: number;
+  alpha: number;
+}
+
+const BODY0: BodyDyn = {
+  breath: 0.5,
+  wave: 0,
+  legs: 0,
+  up: 0,
+  water: 3,
+  mud: 0,
+  drip: -1,
+  crest: 1,
+  droop: 0,
+  sink: 0,
+  sx: 1,
+  sy: 1,
+  rot: 0,
+  dy: 0,
+  alpha: 1,
+};
+
+/** Фаза 3: озеро уходит, тело оседает, упирается лапами, встаёт, ревёт, садится. */
+const bodyRise = lane<BodyDyn>(BODY0, [
+  [0, {}],
+  [8, { water: 16, mud: 0.6, sy: 0.96, dy: 1 }, EZ.in],
+  [13, { legs: 0.35, up: -1, sy: 0.97 }, EZ.io],
+  [19, { legs: 0.8, up: 3, sy: 1.02, dy: 0 }, EZ.out],
+  [23, { legs: 0.74, up: 2 }, EZ.io],
+  [28, { legs: 1, up: 4, crest: 1.5, sy: 1.05, water: 40 }, EZ.out],
+  [36, { crest: 1.3, up: 5 }, EZ.io],
+  [41, { up: 3, sy: 0.92, sx: 1.06 }, EZ.in],
+  [44, { up: 3.5, sy: 1.02, sx: 0.99 }, EZ.out],
+  [48, { up: 4, sy: 1, sx: 1, crest: 1, mud: 0.5 }, EZ.io],
+]);
+
+/** Смерть: судороги, лапы подламываются, удар о дно, гребень валится, ил. */
+const bodyDie = lane<BodyDyn>({ ...BODY0, legs: 1, up: 4, water: 40, mud: 0.5 }, [
+  [0, {}],
+  [3, { up: 6, crest: 1.4, sy: 1.04 }, EZ.out],
+  [6, { up: 3, crest: 0.8, sy: 0.97 }, EZ.io],
+  [10, { up: 5.5, crest: 1.25, sy: 1.03 }, EZ.out],
+  [18, { legs: 0, up: -4, crest: 0.6, sy: 1 }, EZ.in],
+  [19, { sy: 0.88, sx: 1.08 }, EZ.lin],
+  [21, { up: -3, sy: 0.97, sx: 1.02 }, EZ.out],
+  [24, { up: -4, sy: 1, sx: 1, droop: 0.4 }, EZ.io],
+  [34, { droop: 0.8, sink: 6 }, EZ.io],
+  [41, { droop: 1, sink: 13, alpha: 0 }, EZ.in],
+]);
+
+/** Хвост: из воды → взведён → держит → взмах → шлепок в кадре урона → тонет. */
+const TAIL0: TailRig = { emerge: 0, phi: 1.45, curl: 0.1, psi: 0.6, smear: 0, slap: 0 };
+const TAIL_HIT = q24(1.15);
+const tailLane = lane<TailRig>(TAIL0, [
+  [0, {}],
+  [4, { emerge: 0.3 }, EZ.in],
+  [9, { emerge: 0.9, phi: 1.62, curl: 0.12, psi: 0.55 }, EZ.out],
+  [12, { emerge: 1, phi: 1.75, curl: 0.13, psi: 0.5 }, EZ.out],
+  [TAIL_HIT - 6, { phi: 1.9, curl: 0.165, psi: 0.62 }, EZ.io],
+  [TAIL_HIT - 2, { phi: 1.35, curl: 0.03, psi: 0.36 }, EZ.in],
+  [TAIL_HIT - 1, { phi: 0.7, curl: -0.05, psi: 0.15, smear: 1 }, EZ.in],
+  [TAIL_HIT, { phi: 0.1, curl: -0.012, psi: 0, smear: 0.8, slap: 1 }, EZ.lin],
+  [TAIL_HIT + 2, { phi: 0.02, curl: -0.03, psi: -0.13, smear: 0, slap: 0.6 }, EZ.out],
+  [TAIL_HIT + 6, { phi: 0.08, curl: 0, psi: -0.04, slap: 0 }, EZ.io],
+  [TAIL_HIT + 11, { emerge: 1 }, EZ.io],
+  [TAIL_HIT + 19, { emerge: 0 }, EZ.in],
+]);
+const TAIL_END = TAIL_HIT + 19;
+
+/** Ход тела на взмахе: оседает, закручивается против взмаха, бросается в него. */
+const lashFx = lane<{ rot: number; sx: number; sy: number; dy: number; crest: number }>(
+  { rot: 0, sx: 1, sy: 1, dy: 0, crest: 1 },
+  [
+    [0, {}],
+    [10, { dy: 1.2, sy: 0.98 }, EZ.out],
+    [TAIL_HIT - 6, { rot: -0.035, sy: 0.965, dy: 1.6, crest: 1.25 }, EZ.io],
+    [TAIL_HIT - 2, { rot: -0.045, sy: 0.96 }, EZ.io],
+    [TAIL_HIT, { rot: 0.05, sx: 1.045, sy: 0.95, dy: 0, crest: 0.8 }, EZ.in],
+    [TAIL_HIT + 2, { rot: 0.06, sx: 1.03, sy: 0.97 }, EZ.out],
+    [TAIL_HIT + 9, { rot: 0, sx: 1, sy: 1, dy: 0, crest: 1 }, EZ.io],
+  ],
+);
+
+/** Хвост: сколько секунд с удара (−1 — не хлещет). */
+function lashAge(m: Mob, pose: MobPose): number {
+  const sim = paintSim();
+  if (m.data.lash !== undefined && sim && sim.mobs.includes(m)) return sim.time - m.data.lash;
+  if (m.data.vLash !== undefined) return pose.t - m.data.vLash;
+  return -1;
+}
+
+/** Направление хвоста → (0 E, 1 SE, 2 S, 3 NE, 4 N) и зеркало для запада. */
+function tailDir(ang: number): [number, boolean] {
+  const d8 = (((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8) as number;
+  return (
+    [
+      [0, false],
+      [1, false],
+      [2, false],
+      [1, true],
+      [0, true],
+      [3, true],
+      [4, false],
+      [3, false],
+    ] as [number, boolean][]
+  )[d8];
+}
+
+const BODY_FR = frameLRU<MobFrame>(200);
+
+function bodyFrame(
+  r: BodyRig,
+  tail: TailRig | null,
+  dir: number,
+  flip: boolean,
+  drip: number,
+  flash: boolean,
+): MobFrame {
+  const bk = [
+    Math.round(r.breath * 10),
+    Math.round(r.wave * 24) % 24,
+    Math.round(r.legs * 20),
+    Math.round(r.up * 2),
+    Math.round(Math.min(40, r.water) * 2),
+    Math.round(r.mud * 5),
+    r.drip,
+    Math.round(r.crest * 20),
+    Math.round(r.droop * 20),
+    Math.round(r.sink * 2),
+  ].join(',');
+  const tk = tail
+    ? [
+        dir,
+        Math.round(tail.emerge * 20),
+        Math.round(tail.phi * 50),
+        Math.round(tail.curl * 200),
+        Math.round(tail.psi * 50),
+        Math.round(tail.smear * 10),
+        Math.round(tail.slap * 10),
+        drip,
+      ].join(',')
+    : '-';
+  const key = `${bk}|${tk}|${flip ? 1 : 0}|${flash ? 1 : 0}`;
+  const hit = BODY_FR.get(key);
+  if (hit) return hit;
+  const body = bodyLayer(r);
+  let p = new Px(BW, BH);
+  const front = dir <= 2;
+  if (tail && !front) blit(p, tailLayer(tail, dir, drip));
+  blit(p, body);
+  if (tail && front) blit(p, tailLayer(tail, dir, drip));
+  if (flash) p = p.tint(WHITE, 0.85);
+  if (flip) p = p.flipX();
+  // Обрезать по содержимому: у покоя кадр втрое меньше рабочего холста.
+  const bb = bboxOf(p);
+  let ax = flip ? BW - BCX : BCX;
+  let ay = BAY;
+  if (bb) {
+    const [x0, y0, x1, y1] = bb;
+    const q = new Px(x1 - x0 + 1, y1 - y0 + 1);
+    for (let y = y0; y <= y1; y++)
+      q.data.set(p.data.subarray((y * BW + x0) * 4, (y * BW + x1 + 1) * 4), (y - y0) * q.w * 4);
+    p = q;
+    ax -= x0;
+    ay -= y0;
+  }
+  return BODY_FR.set(key, { img: p.canvas(), ax, ay, eye: null });
+}
+
+registerMobPainter('f9_body', (m: Mob, pose: MobPose) => {
+  const now = pose.now;
+  const mem = memOf(m, now);
+  const risen = (m.data.risen ?? 0) > 0;
+  if (risen && mem.risen === -1) mem.risen = now;
+  if (!risen) mem.risen = -1;
+  const bi = Math.floor(now * 10) % 24;
+  const breathOf = (i: number) => 0.5 - 0.5 * Math.cos((i / 24) * TAU);
+  let r: BodyRig = { ...BODY0, breath: breathOf(bi), wave: bi / 24 };
+  let tail: TailRig | null = null;
+  let dir = 2;
+  let flip = false;
+  let drip = 0;
+  let fx = { rot: 0, sx: 1, sy: 1, dy: 0 };
+  let linger: number | undefined;
+  let al: number | undefined;
+  let bob = 0;
+  if (pose.mode === 'dying') {
+    const d = bodyDie(q24(pose.t));
+    r = { ...d, breath: 0.5, wave: 0, water: risen ? 40 : 3, legs: risen ? d.legs : 0 };
+    fx = { rot: 0, sx: d.sx, sy: d.sy, dy: 0 };
+    linger = 1.72;
+    al = d.alpha < 1 ? Math.max(0, d.alpha) : undefined;
+  } else if (risen) {
+    const u =
+      m.data.vRiseT !== undefined ? pose.t - m.data.vRiseT : mem.risen >= 0 ? now - mem.risen : 99;
+    if (u < 2.02) {
+      const x = q24(u);
+      const d = bodyRise(x);
+      r = { ...d, breath: 0.5, wave: (x % 24) / 24, drip: x >= 8 ? x : -1 };
+      fx = { rot: 0, sx: d.sx, sy: d.sy, dy: d.dy };
+    } else r = { ...r, legs: 1, up: 4, water: 40, mud: 0.5 };
+  } else {
+    const a = lashAge(m, pose);
+    const x = q24(a);
+    if (a >= 0 && x <= TAIL_END) {
+      const sim = paintSim();
+      const ang =
+        m.data.vLashA ??
+        (sim && sim.mobs.includes(m)
+          ? Math.atan2(sim.hero.y - m.y, sim.hero.x - m.x)
+          : Math.PI / 2);
+      [dir, flip] = tailDir(ang);
+      tail = tailLane(x);
+      drip = x % 8;
+      const f = lashFx(x);
+      const side = dir === 2 || dir === 4 ? 0 : flip ? -1 : 1;
+      fx = { rot: f.rot * side, sx: f.sx, sy: f.sy, dy: f.dy };
+      // Дыхание замирает на взмахе: тело собрано.
+      r = { ...r, breath: 0.5, wave: (x % 24) / 24, crest: f.crest };
+    } else bob = Math.sin((now / 2.4) * TAU) * 0.6;
+  }
+  // Ранение (отсечена или прижжена шея): вздрагивает всем телом.
+  if (m.flash > 0.001 && pose.mode !== 'dying') {
+    const k = clamp01(1 - m.flash / 0.2);
+    const e = 1 - k;
+    fx = {
+      ...fx,
+      sx: fx.sx * (1 + 0.04 * Math.sin(k * Math.PI * 3) * e),
+      sy: fx.sy * (1 - 0.05 * e),
+      dy: fx.dy + 1.3 * e,
+    };
+  }
+  const flash = pose.flash && !(pose.mode === 'dying' && pose.t > 0.12);
+  const fr = bodyFrame(r, tail, dir, flip, drip, flash);
+  return {
+    ...fr,
+    still: true,
+    lift: 6,
+    shadow: 0,
+    dy: fx.dy + bob,
+    sx: fx.sx !== 1 ? fx.sx : undefined,
+    sy: fx.sy !== 1 ? fx.sy : undefined,
+    rot: fx.rot !== 0 ? fx.rot : undefined,
+    linger,
+    alpha: al,
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Шеи — зона `f9_necks` на полу (под телом и головами). Каждая шея — кривая
+// от корня у тела к обрубку шеи на кадре головы; изгиб следует за головой
+// с запаздыванием (пружина), перед укусом шея сворачивается S-образно, при
+// выдохе по ней идёт ком. Отрубили голову — шея хлёстко падает к обрубку;
+// ушла голова под воду — шея тонет за ней; исчезла шея — не в один кадр,
+// а падает в воду и уходит, по очереди с соседками.
+// ---------------------------------------------------------------------------
+
+interface NeckNow {
+  key: string;
+  id: number;
+  el: number;
+  big: boolean;
+  cut: number;
+  R: V2;
+  E: V2;
+  D: V2;
+  r0: number;
+  r1: number;
+  coil: number;
+  bulge: number;
+  bulgeA: number;
+  under: number;
+  lift: number;
+}
+
+interface NeckMem {
+  c1: V2;
+  v1: V2;
+  c2: V2;
+  v2: V2;
+  at: number;
+  n: NeckNow;
+  /** Шея обрубка родилась из падающей шеи головы: откуда хлестнула. */
+  link: { E: V2; r1: number; t0: number } | null;
+}
+
+interface NeckFall {
+  n: NeckNow;
+  c1: V2;
+  c2: V2;
+  t0: number;
+  mud: boolean;
+  head: boolean;
+}
+
+const NMEM = new Map<string, NeckMem>();
+let FALLS: NeckFall[] = [];
+let neckSim: object | null = null;
+
+/** Диск шеи: тело с объёмом и светлым брюхом снизу; `ink` — контур шире на пиксель. */
+const DISC = new Map<string, HTMLCanvasElement>();
+function neckDisc(el: number, cut: number, r: number, ink: boolean): HTMLCanvasElement {
+  const key = `${el}|${cut}|${r}|${ink ? 1 : 0}`;
+  let c = DISC.get(key);
+  if (c) return c;
+  const S = 2 * r + 4;
+  const p = new Px(S, S);
+  const o = r + 2;
+  if (ink) p.ell(o, o, r + 1, r + 1, INK);
+  else {
+    const L = ELEM[el];
+    const skin = cut === 2 ? CHAR : L.skin;
+    const belly = cut === 2 ? CHAR : L.belly;
+    shadeEll(p, o, o, r, r, skin);
+    // Брюхо: нижняя треть светлее — у лежащей поперёк шеи оно видно полосой.
+    for (let y = 0; y < S; y++)
+      for (let x = 0; x < S; x++) {
+        const dx = (x + 0.5 - o) / r;
+        const dy = (y + 0.5 - o) / r;
+        if (dx * dx + dy * dy > 1 || dy < 0.42) continue;
+        const nz = Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy));
+        p.set(x, y, tone(belly, dx * LX + dy * LY + nz * LZ + 0.35));
+      }
+    // Чешуйка — редкая, по кругу, чтобы стык дисков не читался бусами.
+    if (r >= 4 && cut !== 2) {
+      p.set(o - Math.round(r * 0.4), o - Math.round(r * 0.35), skin[3]);
+      p.set(o + Math.round(r * 0.25), o - Math.round(r * 0.1), skin[0]);
+    }
+  }
+  c = p.canvas();
+  DISC.set(key, c);
+  return c;
+}
+
+/** Шип гребня шеи: 16 направлений, свой контур. */
+const SPIKE = new Map<string, HTMLCanvasElement>();
+function neckSpike(el: number, cut: number, di: number, big: boolean): HTMLCanvasElement {
+  const key = `${el}|${cut}|${di}|${big ? 1 : 0}`;
+  let c = SPIKE.get(key);
+  if (c) return c;
+  const p = new Px(13, 13);
+  const a = (di / 16) * TAU;
+  const ux = Math.cos(a);
+  const uy = Math.sin(a);
+  const len = big ? 4.5 : 3.6;
+  // Шип наклонён назад — к корню шеи (перпендикуляр повёрнут на 0,5 рад).
+  const tip: V2 = [6.5 + ux * len, 6.5 + uy * len];
+  const nx = -uy;
+  const ny = ux;
+  const L = ELEM[el];
+  const col = cut === 2 ? CHAR : el === 5 ? L.crest : L.crest[1] ? L.crest : L.skin;
+  poly(p, [[6.5 + nx * 1.6, 6.5 + ny * 1.6], tip, [6.5 - nx * 1.6, 6.5 - ny * 1.6]], (x, y) =>
+    tone(col, 0.9 - Math.hypot(x - tip[0], y - tip[1]) * 0.12),
+  );
   p.outline(INK);
   c = p.canvas();
-  segCache.set(key, c);
+  SPIKE.set(key, c);
   return c;
+}
+
+function springTo(c: V2, v: V2, tgt: V2, dt: number, k: number, d: number): void {
+  let t = dt;
+  while (t > 1e-4) {
+    const h = Math.min(0.016, t);
+    for (let i = 0; i < 2; i++) {
+      const a = k * (tgt[i] - c[i]) - d * v[i];
+      v[i] += a * h;
+      c[i] += v[i] * h;
+    }
+    t -= h;
+  }
+}
+
+/** Куда тянутся контрольные точки: шея встаёт из воды и подходит к голове снизу-сзади. */
+function neckTargets(n: NeckNow, time: number): [V2, V2] {
+  const dx = n.E[0] - n.R[0];
+  const dy = n.E[1] - n.R[1];
+  const L = Math.hypot(dx, dy) || 1;
+  const nx = -dy / L;
+  const ny = dx / L;
+  const sway = Math.sin(time * 1.6 + n.R[0] * 0.19 + n.el * 1.3) * (n.cut ? 0.03 : 0.1);
+  if (n.cut)
+    return [
+      [n.R[0] + dx * 0.33 + nx * L * sway, n.R[1] + dy * 0.33 + ny * L * sway - 4],
+      [n.R[0] + dx * 0.7, n.R[1] + dy * 0.7 - 2],
+    ];
+  const rise = Math.min(n.big ? 22 : 18, L * 0.42) * (1 - n.under);
+  const pull = Math.min(14, L * 0.36);
+  return [
+    [n.R[0] + dx * 0.3 + nx * L * sway, n.R[1] + dy * 0.3 + ny * L * sway - rise],
+    [n.E[0] + n.D[0] * pull + nx * L * sway * 0.4, n.E[1] + n.D[1] * pull + ny * L * sway * 0.4],
+  ];
+}
+
+interface NeckSample {
+  x: number;
+  y: number;
+  r: number;
+  tx: number;
+  ty: number;
+}
+
+/** Точки по кривой шеи: радиус, волна свёрнутой шеи, ком выдоха. */
+function sampleNeck(
+  R: V2,
+  c1: V2,
+  c2: V2,
+  E: V2,
+  r0: number,
+  r1: number,
+  n: NeckNow,
+  uMax: number,
+  rk: number,
+): NeckSample[] {
+  const len =
+    Math.hypot(c1[0] - R[0], c1[1] - R[1]) +
+    Math.hypot(c2[0] - c1[0], c2[1] - c1[1]) +
+    Math.hypot(E[0] - c2[0], E[1] - c2[1]);
+  const N = Math.max(8, Math.ceil(len / 1.7));
+  const out: NeckSample[] = [];
+  const L = Math.hypot(E[0] - R[0], E[1] - R[1]) || 1;
+  const A = n.coil * Math.min(7, L * 0.13);
+  for (let i = 0; i <= N; i++) {
+    const u = i / N;
+    if (u > uMax) break;
+    const a = (1 - u) * (1 - u) * (1 - u);
+    const b = 3 * (1 - u) * (1 - u) * u;
+    const c = 3 * (1 - u) * u * u;
+    const d = u * u * u;
+    let x = a * R[0] + b * c1[0] + c * c2[0] + d * E[0];
+    let y = a * R[1] + b * c1[1] + c * c2[1] + d * E[1];
+    // Касательная.
+    const tx0 =
+      3 * (1 - u) * (1 - u) * (c1[0] - R[0]) +
+      6 * (1 - u) * u * (c2[0] - c1[0]) +
+      3 * u * u * (E[0] - c2[0]);
+    const ty0 =
+      3 * (1 - u) * (1 - u) * (c1[1] - R[1]) +
+      6 * (1 - u) * u * (c2[1] - c1[1]) +
+      3 * u * u * (E[1] - c2[1]);
+    const tl = Math.hypot(tx0, ty0) || 1;
+    const tx = tx0 / tl;
+    const ty = ty0 / tl;
+    if (A > 0.05) {
+      const off = A * Math.sin(u * TAU) * Math.sin(u * Math.PI);
+      x += -ty * off;
+      y += tx * off;
+    }
+    let r = lerp(r0, r1, u);
+    if (n.bulgeA > 0.02) r += n.bulgeA * 2.4 * Math.exp(-(((u - n.bulge) / 0.11) ** 2));
+    out.push({ x, y, r: Math.max(2, Math.round(r * rk)), tx, ty });
+  }
+  return out;
+}
+
+function drawNeckPts(
+  g: CanvasRenderingContext2D,
+  pts: NeckSample[],
+  n: NeckNow,
+  left: number,
+  top: number,
+): void {
+  // Контур всей шеи, потом шипы, потом тело: стыки дисков не видны.
+  for (const s of pts) {
+    const img = neckDisc(n.el, n.cut, s.r, true);
+    const o = s.r + 2;
+    g.drawImage(img, Math.round(s.x) - o - left, Math.round(s.y) - o - top);
+  }
+  let acc = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const s = pts[i];
+    acc += Math.hypot(s.x - pts[i - 1].x, s.y - pts[i - 1].y);
+    if (acc < (n.big ? 6 : 5)) continue;
+    acc = 0;
+    // Спина — сторона, обращённая вверх; шип клонится к корню.
+    let nx = s.ty;
+    let ny = -s.tx;
+    if (ny > 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const ax = nx * 0.87 - s.tx * 0.5;
+    const ay = ny * 0.87 - s.ty * 0.5;
+    const di = ((Math.round((Math.atan2(ay, ax) / TAU) * 16) % 16) + 16) % 16;
+    const img = neckSpike(n.el, n.cut, di, n.big);
+    g.drawImage(
+      img,
+      Math.round(s.x + nx * s.r * 0.75) - 6 - left,
+      Math.round(s.y + ny * s.r * 0.75) - 6 - top,
+    );
+  }
+  for (const s of pts) {
+    const img = neckDisc(n.el, n.cut, s.r, false);
+    const o = s.r + 2;
+    g.drawImage(img, Math.round(s.x) - o - left, Math.round(s.y) - o - top);
+  }
+}
+
+function ripple(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  R: number,
+  a: number,
+  mud: boolean,
+): void {
+  if (a <= 0.01) return;
+  g.strokeStyle = mud ? `rgba(106,90,58,${a.toFixed(3)})` : `rgba(168,224,208,${a.toFixed(3)})`;
+  g.lineWidth = 1;
+  g.beginPath();
+  g.ellipse(Math.round(x), Math.round(y), Math.max(0.5, R), Math.max(0.5, R * 0.4), 0, 0, TAU);
+  g.stroke();
+}
+
+/** Шея без головы: конец падает в воду, дуга опадает, шея уходит под воду к телу. */
+function drawFall(
+  g: CanvasRenderingContext2D,
+  f: NeckFall,
+  time: number,
+  left: number,
+  top: number,
+): boolean {
+  const age = time - f.t0;
+  if (age > 1.2) return false;
+  const n = f.n;
+  const a = Math.max(0, age);
+  const k1 = clamp01(a / 0.38);
+  const drop = EZ.in(k1) * Math.max(4, n.lift);
+  const E: V2 = [n.E[0], n.E[1] + drop];
+  const c2: V2 = [f.c2[0], f.c2[1] + drop * 0.85];
+  const c1: V2 = [f.c1[0], f.c1[1] + EZ.in(k1) * Math.max(0, n.R[1] - f.c1[1]) * 0.85];
+  const k2 = clamp01((a - 0.38) / 0.72);
+  const pts = sampleNeck(
+    n.R,
+    c1,
+    c2,
+    E,
+    n.r0,
+    n.r1,
+    { ...n, coil: 0, bulgeA: 0 },
+    1 - EZ.in(k2) * 0.97,
+    1 - 0.3 * k2,
+  );
+  if (pts.length > 1) drawNeckPts(g, pts, n, left, top);
+  if (a >= 0.38) {
+    const last = pts[pts.length - 1];
+    if (last) ripple(g, last.x - left, last.y - top, 3 + (a - 0.38) * 14, 0.6 * (1 - k2), f.mud);
+    for (let i = 0; i < 3; i++) {
+      const st = 0.38 + i * 0.14;
+      const q = pts[Math.floor(pts.length * (0.8 - i * 0.28))];
+      if (!q || a < st) continue;
+      const k = (a - st) / 0.6;
+      ripple(g, q.x - left, q.y - top, 2 + k * 10, 0.45 * (1 - k), f.mud);
+    }
+  }
+  return true;
+}
+
+function rootOf(body: Mob, x: number, y: number): V2 {
+  const a = Math.atan2(y - body.y, x - body.x);
+  return [(body.x + Math.cos(a) * 1.15) * TS, (body.y + Math.sin(a) * 0.75) * TS];
+}
+
+/** Видна ли шея скрытой головы (над илом). */
+function crownNeckOn(m: Mob): boolean {
+  switch (m.mode) {
+    case 'up':
+    case 'bite':
+    case 'prism':
+      return true;
+    case 'rise':
+      return m.t >= 0.6;
+    case 'dive':
+      return m.t < 0.45;
+    case 'whirl':
+      return m.t >= 0.9;
+    default:
+      return false;
+  }
 }
 
 registerZonePainter('f9_necks', (g, z, px, py, S, time) => {
   const left = z.x * S - px;
   const top = z.y * S - py;
+  const sim = paintSim();
+  if (sim !== neckSim) {
+    NMEM.clear();
+    FALLS = [];
+    neckSim = sim;
+  }
   const phase = F9_VIEW.phase;
   // Круги по воде вокруг тела (в иле — пузыри).
   if (phase >= 0 && phase < 3) {
@@ -2191,33 +4444,313 @@ registerZonePainter('f9_necks', (g, z, px, py, S, time) => {
       g.fill();
     }
   }
-  // Шеи: от основания у тела к голове, с изгибом вверх (шея поднята).
+  const mobs = sim?.mobs ?? [];
+  const body = mobs.find((m) => m.kind === 'f9boss');
+  const live: NeckNow[] = [];
   for (const n of F9_VIEW.necks) {
-    const ax = n.ax * S - left;
-    const ay = n.ay * S - top;
-    const bob = n.id ? Math.round(Math.sin(time * 5 + n.id) * 1.5) : 0;
-    const hx2 = n.hx * S - left;
-    const hy2 = n.hy * S - top + (n.id ? -6 - 4 + bob : -2);
-    const dx = hx2 - ax;
-    const dy = hy2 - ay;
-    const L = Math.hypot(dx, dy) || 1;
-    // Контрольная точка: середина, поднятая и отведённая вбок.
-    const sway = Math.sin(time * 1.6 + n.ax * 3 + n.hx) * 0.18;
-    const mx = ax + dx * 0.5 - (dy / L) * L * sway;
-    const my = ay + dy * 0.5 + (dx / L) * L * sway - Math.min(14, L * 0.35) * (n.cut ? 0.2 : 1);
-    const steps = Math.max(4, Math.ceil(L / 3));
-    const r0 = n.big ? 6 : 5;
-    const r1 = n.big ? 5 : 4;
-    for (let i = 0; i <= steps; i++) {
-      const u = i / steps;
-      const x = (1 - u) * (1 - u) * ax + 2 * (1 - u) * u * mx + u * u * hx2;
-      const y = (1 - u) * (1 - u) * ay + 2 * (1 - u) * u * my + u * u * hy2;
-      const r = Math.round(r0 + (r1 - r0) * u);
-      const img = neckSeg(n.el, r, n.cut, i % 3 === 1);
-      g.drawImage(img, Math.round(x - img.width / 2), Math.round(y - img.height / 2));
+    if (n.big) continue;
+    const R: V2 = [n.ax * S, n.ay * S];
+    if (n.id) {
+      const m = mobs.find((o) => o.id === n.id);
+      let E: V2 = [n.hx * S, n.hy * S - 12];
+      let D: V2 = [-0.6, 0.8];
+      let r1 = 4;
+      let lift = 12;
+      let under = 0;
+      let rig: HeadRig = HREST;
+      if (m && m.mode !== 'dying') {
+        const hp = headPose(m, time, m.t, false);
+        const e = headEnd(m, hp);
+        ({ E, D, r1, lift, under } = e);
+        rig = hp.rig;
+      }
+      live.push({
+        key: `h${n.id}`,
+        id: n.id,
+        el: n.el,
+        big: false,
+        cut: 0,
+        R,
+        E,
+        D,
+        r0: 5.2,
+        r1,
+        coil: rig.coil,
+        bulge: rig.bulge,
+        bulgeA: rig.bulgeA,
+        under,
+        lift,
+      });
+    } else {
+      const E: V2 = [n.hx * S, n.hy * S + 1];
+      const l = Math.hypot(R[0] - E[0], R[1] - E[1]) || 1;
+      live.push({
+        key: `s${n.hx.toFixed(2)},${n.hy.toFixed(2)}`,
+        id: 0,
+        el: n.el,
+        big: false,
+        cut: n.cut,
+        R,
+        E,
+        D: [(R[0] - E[0]) / l, (R[1] - E[1]) / l],
+        r0: 5.2,
+        r1: 4.6,
+        coil: 0,
+        bulge: 0,
+        bulgeA: 0,
+        under: 0,
+        lift: 0,
+      });
+    }
+  }
+  const cr = mobs.find((m) => m.kind === 'f9_crown' && m.mode !== 'dying');
+  if (cr && body && crownNeckOn(cr)) {
+    const hp = headPose(cr, time, cr.t, true);
+    const e = headEnd(cr, hp);
+    live.push({
+      key: `c${cr.id}`,
+      id: cr.id,
+      el: 5,
+      big: true,
+      cut: 0,
+      R: rootOf(body, cr.x, cr.y),
+      E: e.E,
+      D: e.D,
+      r0: 6.6,
+      r1: e.r1,
+      coil: hp.rig.coil,
+      bulge: hp.rig.bulge,
+      bulgeA: hp.rig.bulgeA,
+      under: e.under,
+      lift: e.lift,
+    });
+  }
+  // Голова погибла, но шея за неё держится (ушла под воду, корона легла в ил).
+  for (const [id, d] of DRAWN) {
+    if (!d.attached || time - d.now > 0.08 || live.some((n) => n.id === id)) continue;
+    const mm = NMEM.get(`h${id}`) ?? NMEM.get(`c${id}`);
+    if (!mm) continue;
+    live.push({
+      ...mm.n,
+      E: d.end.E,
+      D: d.end.D,
+      lift: d.end.lift,
+      under: d.end.under,
+      r1: d.end.r1,
+      coil: 0,
+      bulge: 0,
+      bulgeA: 0,
+    });
+  }
+  const seen = new Set(live.map((n) => n.key));
+  // Исчезла — падает в воду; несколько сразу (смена фазы) — по очереди.
+  let stagger = 0;
+  for (const [key, mm] of NMEM) {
+    if (seen.has(key)) continue;
+    NMEM.delete(key);
+    FALLS.push({
+      n: mm.n,
+      c1: mm.c1,
+      c2: mm.c2,
+      t0: time + stagger * 0.13,
+      mud: phase === 3 || mm.n.big,
+      head: mm.n.id > 0 && !mm.n.big,
+    });
+    stagger++;
+  }
+  for (const n of live) {
+    let mm = NMEM.get(n.key);
+    const [t1, t2] = neckTargets(n, time);
+    if (!mm) {
+      let link: NeckMem['link'] = null;
+      let c1: V2 = [t1[0], t1[1]];
+      let c2: V2 = [t2[0], t2[1]];
+      if (n.cut === 1) {
+        // Шея обрубка — это шея только что срубленной головы: она хлёстко
+        // падает от места, где была голова, к обрубку на земле.
+        const i = FALLS.findIndex(
+          (f) =>
+            f.head &&
+            f.n.el === n.el &&
+            time - f.t0 < 0.25 &&
+            Math.hypot(f.n.E[0] - n.E[0], f.n.E[1] - n.E[1]) < 90,
+        );
+        if (i >= 0) {
+          const f = FALLS[i];
+          FALLS.splice(i, 1);
+          link = { E: f.n.E, r1: f.n.r1, t0: time };
+          c1 = [f.c1[0], f.c1[1]];
+          c2 = [f.c2[0], f.c2[1]];
+        }
+      }
+      mm = { c1, v1: [0, 0], c2, v2: [0, 0], at: time, n, link };
+      NMEM.set(n.key, mm);
+    }
+    const dt = clampv(time - mm.at, 0, 0.05);
+    springTo(mm.c1, mm.v1, t1, dt, 85, 10);
+    springTo(mm.c2, mm.v2, t2, dt, 240, 24);
+    mm.at = time;
+    mm.n = n;
+  }
+  FALLS = FALLS.filter((f) => drawFall(g, f, time, left, top));
+  live.sort((a, b) => a.E[1] - b.E[1]);
+  for (const n of live) {
+    const mm = NMEM.get(n.key);
+    if (!mm) continue;
+    let E = n.E;
+    let r1 = n.r1;
+    if (mm.link) {
+      const k = (time - mm.link.t0) / 0.42;
+      if (k >= 1) mm.link = null;
+      else {
+        // Хлёст: быстро вниз с перелётом и отскоком.
+        const e = 1 - (1 - k) * (1 - k) * (1 - k);
+        const bounce = Math.sin(k * Math.PI * 2.2) * (1 - k) * 3;
+        E = [lerp(mm.link.E[0], n.E[0], e), lerp(mm.link.E[1], n.E[1], e) - bounce];
+        r1 = lerp(mm.link.r1, n.r1, k);
+      }
+    }
+    const pts = sampleNeck(n.R, mm.c1, mm.c2, E, n.r0, r1, n, 1 - n.under * 0.92, 1);
+    if (pts.length > 1) drawNeckPts(g, pts, n, left, top);
+    if (n.under > 0.05 && pts.length) {
+      const q = pts[pts.length - 1];
+      ripple(g, q.x - left, q.y - top, q.r + 3, 0.7, n.big || phase === 3);
+    }
+  }
+  // Скрытая голова под илом: над ней вздыблен ил — шея ползёт под землёй.
+  const hid = mobs.find(
+    (m) => m.kind === 'f9_crown' && (m.mode === 'hunt' || (m.mode === 'whirl' && m.t < 0.9)),
+  );
+  if (hid && body) {
+    const R = rootOf(body, hid.x, hid.y);
+    const E: V2 = [hid.x * S, hid.y * S];
+    const L = Math.hypot(E[0] - R[0], E[1] - R[1]);
+    const N = Math.ceil(L / 4);
+    for (let i = 1; i < N; i++) {
+      const u = i / N;
+      const x = lerp(R[0], E[0], u) + Math.sin(u * 7 + time * 3) * 1.5;
+      const y = lerp(R[1], E[1], u);
+      const rr = 2.4 - u * 0.6;
+      g.fillStyle = 'rgba(46,38,22,0.9)';
+      g.beginPath();
+      g.ellipse(Math.round(x) - left, Math.round(y) - top + 1, rr + 1, (rr + 1) * 0.55, 0, 0, TAU);
+      g.fill();
+      g.fillStyle = 'rgba(106,90,58,0.95)';
+      g.beginPath();
+      g.ellipse(Math.round(x) - left, Math.round(y) - top, rr, rr * 0.5, 0, 0, TAU);
+      g.fill();
     }
   }
   return true;
+});
+
+// ---------------------------------------------------------------------------
+// Прогрев: всё, что игрок увидит в первом бою, — заранее, по кадру за шаг.
+// Позы берутся теми же дорожками, что в бою (ключ кадра — по содержимому).
+// ---------------------------------------------------------------------------
+
+function warmHead(el: number, rig: HeadRig, left: boolean, crown: boolean, mud: boolean): void {
+  const B = crown ? CBOX : HBOX;
+  headFrame(
+    el,
+    {
+      rig,
+      B,
+      el,
+      left,
+      clip: B.AY + rig.lift,
+      mud,
+      ghost: false,
+      attached: true,
+      wake: -1,
+      mound: 0,
+    },
+    false,
+  );
+}
+
+registerMobWarm('f9_head', function* () {
+  // Первая фаза: огонь, лёд, яд — укус, приём, покой, подъём; обе стороны.
+  for (const el of [0, 1, 2])
+    for (const left of [false, true]) {
+      const bite = laneOf(`bite|${(0.6).toFixed(3)}`, () => biteLane(0.6, 1.15, 1));
+      for (let x = 0; x <= q24(1.15); x++) {
+        warmHead(el, { ...bite(x), spark: x % 8 }, left, false, false);
+        yield;
+      }
+      const T = CAST_T[el];
+      const cast = laneOf(`cast|${el}|${T.toFixed(3)}`, () =>
+        castLane(el, el === 1 || el === 2 ? 0 : T, T + 0.35),
+      );
+      for (let x = 0; x <= q24(T + 0.35); x++) {
+        warmHead(el, { ...cast(x), spark: x % 8 }, left, false, false);
+        yield;
+      }
+    }
+  for (const el of [0, 1, 2])
+    for (const left of [false, true]) {
+      for (let bi = 0; bi < 12; bi++) {
+        const b = 0.5 - 0.5 * Math.cos((bi / 12) * TAU);
+        warmHead(
+          el,
+          { ...HREST, jaw: 0.06 + 0.12 * b, crest: 1 + 0.12 * b, swell: 0.08 * b },
+          left,
+          false,
+          false,
+        );
+        yield;
+      }
+      for (let x = 0; x <= 21; x++) {
+        warmHead(el, { ...riseLane(x), spark: x % 8 }, left, false, false);
+        yield;
+      }
+    }
+});
+
+registerMobWarm('f9_crown', function* () {
+  for (const left of [false, true]) {
+    const bite = laneOf('cbite', () => biteLane(0.62, 1.2, 1.25));
+    for (let x = 0; x <= q24(1.2); x++) {
+      warmHead(5, { ...bite(x), spark: x % 8 }, left, true, true);
+      yield;
+    }
+    const pr = laneOf('prism', () => prismLane(0.95, 1.5));
+    for (let x = 0; x <= q24(1.5); x++) {
+      warmHead(5, { ...pr(x), spark: x % 8 }, left, true, true);
+      yield;
+    }
+    for (let x = 0; x <= 13; x++) {
+      warmHead(5, { ...crownDive(x), spark: x % 8 }, left, true, true);
+      yield;
+    }
+  }
+});
+
+registerMobWarm('f9_body', function* () {
+  // Покой (петля дыхания) и хвост на юг — туда, откуда входит герой.
+  for (let bi = 0; bi < 24; bi++) {
+    bodyFrame(
+      { ...BODY0, breath: 0.5 - 0.5 * Math.cos((bi / 24) * TAU), wave: bi / 24 },
+      null,
+      2,
+      false,
+      0,
+      false,
+    );
+    yield;
+  }
+  for (let x = 0; x <= TAIL_END; x++) {
+    const f = lashFx(x);
+    bodyFrame(
+      { ...BODY0, breath: 0.5, wave: (x % 24) / 24, crest: f.crest },
+      tailLane(x),
+      2,
+      false,
+      x % 8,
+      false,
+    );
+    yield;
+  }
 });
 
 // ---------------------------------------------------------------------------
