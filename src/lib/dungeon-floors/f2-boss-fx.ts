@@ -78,9 +78,9 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => 
 class Layer {
   readonly w: number;
   readonly h: number;
-  /** Где в слое центр эффекта. */
-  readonly cx: number;
-  readonly cy: number;
+  /** Где в слое центр эффекта (слой берётся под рамку эффекта). */
+  cx: number;
+  cy: number;
   private readonly cv: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly img: ImageData;
@@ -103,12 +103,27 @@ class Layer {
     this.px.fill(0);
   }
 
+  /** Рамка слоя в пикселях от центра эффекта: [x0, x1) × [y0, y1). */
+  get x0(): number {
+    return -this.cx;
+  }
+  get x1(): number {
+    return this.w - this.cx;
+  }
+  get y0(): number {
+    return -this.cy;
+  }
+  get y1(): number {
+    return this.h - this.cy;
+  }
+
   /** Стоит ли пиксель при плотности `v` (0…1) — растр Байера. */
   keep(x: number, y: number, v: number): boolean {
     if (v >= 1) return true;
     if (v <= 0) return false;
-    const X = (Math.floor(x) + this.cx) & 3;
-    const Y = (Math.floor(y) + this.cy) & 3;
+    // Растр — от центра эффекта, а не слоя: рамка меняется, узор стоит.
+    const X = Math.floor(x) & 3;
+    const Y = Math.floor(y) & 3;
     return v > BAYER[Y * 4 + X];
   }
 
@@ -141,16 +156,81 @@ class Layer {
 }
 
 const LAYERS = new Map<number, Layer>();
-/** Чистый слой, в который влезает всё в радиусе `half` от центра. */
-function layer(half: number): Layer {
-  const side = Math.max(32, Math.ceil((2 * half + 4) / 32) * 32);
-  let l = LAYERS.get(side);
+/**
+ * Чистый слой под рамку [x0, x1]×[y0, y1] (пиксели от центра эффекта).
+ * Слои переиспользуются по размеру (шаг 16): на кадр не создаётся ни одного
+ * холста, а выгружается и рисуется только то, где эффект есть.
+ */
+function layerBox(x0: number, y0: number, x1: number, y1: number): Layer {
+  const w = Math.max(16, Math.ceil((x1 - x0 + 4) / 16) * 16);
+  const h = Math.max(16, Math.ceil((y1 - y0 + 4) / 16) * 16);
+  const key = w * 4096 + h;
+  let l = LAYERS.get(key);
   if (!l) {
-    l = new Layer(side, side);
-    LAYERS.set(side, l);
+    l = new Layer(w, h);
+    LAYERS.set(key, l);
   }
+  l.cx = 2 - Math.floor(x0);
+  l.cy = 2 - Math.floor(y0);
   l.clear();
   return l;
+}
+
+/** Чистый слой, в который влезает всё в радиусе `half` от центра. */
+const layer = (half: number) => layerBox(-half, -half, half, half);
+
+/** Рамка полосы вдоль `a`: вдоль [l0, l1], поперёк ±c, запас `pad`, подъём `dy`. */
+function laneBox(
+  l0: number,
+  l1: number,
+  c: number,
+  a: number,
+  pad: number,
+  dy = 0,
+): [number, number, number, number] {
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const l of [l0, l1])
+    for (const q of [-c, c]) {
+      xs.push(l * ca - q * sa);
+      ys.push(l * sa + q * ca);
+    }
+  return [
+    Math.min(...xs) - pad,
+    Math.min(...ys) - pad + Math.min(0, dy),
+    Math.max(...xs) + pad,
+    Math.max(...ys) + pad + Math.max(0, dy),
+  ];
+}
+
+/** Рамка дуги: углы [a0, a1] (a0 ≤ a1), радиусы [r0, r1], запас `pad`. */
+function arcBox(
+  a0: number,
+  a1: number,
+  r0: number,
+  r1: number,
+  pad: number,
+): [number, number, number, number] {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  const add = (ang: number) => {
+    for (const r of [r0, r1]) {
+      const x = Math.cos(ang) * r;
+      const y = Math.sin(ang) * r;
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x);
+      y1 = Math.max(y1, y);
+    }
+  };
+  add(a0);
+  add(a1);
+  for (let q = Math.ceil(a0 / (Math.PI / 2)); q * (Math.PI / 2) < a1; q++) add((q * Math.PI) / 2);
+  return [x0 - pad, y0 - pad, x1 + pad, y1 + pad];
 }
 
 // ---------------------------------------------------------------------------
@@ -385,7 +465,7 @@ registerZonePainter('f2_sword', (g, z, px, py, S, time) => {
   const dir = sweepDir(a, comboOf(st));
   note(strikeKey(st.x, st.y, a), dir);
   const a0 = a - dir * h;
-  const L = layer(R + 4);
+  const L = layerBox(...arcBox(a - h, a + h, 0, R, 3));
   const ca = Math.cos(a);
   const sa = Math.sin(a);
   const ch = Math.cos(h);
@@ -398,8 +478,8 @@ registerZonePainter('f2_sword', (g, z, px, py, S, time) => {
   // Лучи-предвестники бегут по конусу в сторону взмаха — всё быстрее.
   const stripe = (time * (0.7 + 2.6 * k)) % 1;
   const Ri = Math.ceil(R);
-  for (let y = -Ri; y < Ri; y++)
-    for (let x = -Ri; x < Ri; x++) {
+  for (let y = Math.max(-Ri, L.y0); y < Math.min(Ri, L.y1); y++)
+    for (let x = Math.max(-Ri, L.x0); x < Math.min(Ri, L.x1); x++) {
       const cx = x + 0.5;
       const cy = y + 0.5;
       const d2 = cx * cx + cy * cy;
@@ -482,9 +562,11 @@ registerImpactPainter('f2_sword', {
     const vc = (rec as ImpactRec & { vc?: number }).vc;
     const dir =
       vc !== undefined ? sweepDir(a, vc) : (NOTE.get(strikeKey(rec.x, rec.y, a)) ?? sweepDir(a, 0));
-    const L = layer(R * 1.3 + 18);
     const a0 = a - dir * h;
     const span = 2 * h + OVER;
+    const aLo = Math.min(a0, a0 + dir * span) - 0.15;
+    const aHi = Math.max(a0, a0 + dir * span) + 0.15;
+    const L = layerBox(...arcBox(aLo, aHi, R * 0.25, R * 1.2 + 10, 20));
     // Взмах — три кадра на 24 к/с: половина, почти всё, перелёт за край.
     const sw = clamp01(age / SWEEP_T);
     const sp = 1 - (1 - sw) * (1 - sw);
@@ -497,8 +579,8 @@ registerImpactPainter('f2_sword', {
     const Tm = R * 0.46 * (1 - thin) + 2 * thin;
     const Rmax = Math.ceil(R * 1.1);
     const flash = age < 0.06 ? 1 - age / 0.06 : 0;
-    for (let y = -Rmax; y < Rmax; y++)
-      for (let x = -Rmax; x < Rmax; x++) {
+    for (let y = Math.max(-Rmax, L.y0); y < Math.min(Rmax, L.y1); y++)
+      for (let x = Math.max(-Rmax, L.x0); x < Math.min(Rmax, L.x1); x++) {
         const cx = x + 0.5;
         const cy = y + 0.5;
         const d = Math.sqrt(cx * cx + cy * cy);
@@ -579,7 +661,10 @@ registerZonePainter('f2v_swdust', (g, z, px, py, S) => {
   const h = 1.05;
   const dir = sweepDir(a, zz.vc ?? 0);
   const a0 = a - dir * h;
-  const L = layer(R * 1.35 + 8);
+  const span = 2 * h + OVER;
+  const L = layerBox(
+    ...arcBox(Math.min(a0, a0 + dir * span), Math.max(a0, a0 + dir * span), R * 0.6, R * 1.05, 18),
+  );
   const r = rnd(seedAt(zz.x, zz.y) ^ Math.floor(a * 1000));
   for (let i = 0; i < 8; i++) {
     const f = 0.15 + 0.85 * (i / 7);
@@ -623,7 +708,7 @@ registerZonePainter('f2_thrust', (g, z, px, py, S, time) => {
   const a = st.ang ?? 0;
   const ca = Math.cos(a);
   const sa = Math.sin(a);
-  const L = layer(Ln + 8);
+  const L = layerBox(...laneBox(0, Ln + 8, hw + 2, a, 3));
   // Захват цели: дорожка вспыхивает в первые кадры — направление заперто;
   // кромки дотягиваются до конца за 0,06 с.
   const lock = clamp01(1 - t / 0.09);
@@ -632,9 +717,8 @@ registerZonePainter('f2_thrust', (g, z, px, py, S, time) => {
   // Шевроны бегут от лат к острию — всё быстрее; в конце сливаются в жилу.
   const gap = 11;
   const off = (time * (50 + 230 * k * k)) % gap;
-  const B = Math.ceil(Ln + hw + 2);
-  for (let y = -B; y < B; y++)
-    for (let x = -B; x < B; x++) {
+  for (let y = L.y0; y < L.y1; y++)
+    for (let x = L.x0; x < L.x1; x++) {
       const cx = x + 0.5;
       const cy = y + 0.5;
       const al = cx * ca + cy * sa;
@@ -699,17 +783,16 @@ registerImpactPainter('f2_thrust', {
     const ca = Math.cos(a);
     const sa = Math.sin(a);
     const Z = THRUST_Z;
-    const L = layer(Ln + 30);
+    const L = layerBox(...laneBox(-4, Ln + 18, hw + 26, a, 12, -Z));
     // Прокол: жила выстреливает до конца за две смены кадра, потом хвост
     // догоняет остриё — удар «уходит» вперёд и тает.
     const front = 6 + (Ln - 6) * easeOut(age / 0.05);
     const tail = 6 + (Ln - 12) * easeIn((age - 0.05) / 0.22);
     const fade = clamp01(1 - (age - 0.05) / 0.26);
     const glow = age < 0.1 ? 1 - age / 0.1 : 0;
-    const B = Math.ceil(Ln + hw + 4);
     if (front - tail > 1 && fade > 0)
-      for (let y = -B; y < B; y++)
-        for (let x = -B; x < B; x++) {
+      for (let y = L.y0 + Z; y < L.y1 + Z; y++)
+        for (let x = L.x0; x < L.x1; x++) {
           const cx = x + 0.5;
           const cy = y + 0.5;
           const al = cx * ca + cy * sa;
@@ -799,7 +882,7 @@ registerZonePainter('f2v_lunge', (g, z, px, py, S) => {
   }
   const D = len * S;
   const V = 11 * S;
-  const L = layer(D + 16);
+  const L = layerBox(...laneBox(0, D + 6, 16, a, 8, -10));
   const r = rnd(seedAt(zz.x, zz.y) ^ 0x51);
   for (let s = 2; s < D; s += 5) {
     const side = r() < 0.5 ? -1 : 1;
@@ -1446,16 +1529,24 @@ registerZonePainter('f2v_gather', (g, z, px, py, S, time) => {
   const cy = -CHEST;
   const sim = paintSim();
   const threads: { x: number; y: number; id: number; mite: boolean }[] = [];
-  let far = 36;
+  // Рамка — по концам нитей: слой не больше, чем нужно.
+  let bx0 = -26;
+  let by0 = cy - 20;
+  let bx1 = 26;
+  let by1 = 8;
   for (const m of sim?.mobs ?? []) {
     if (m.mode !== 'gather') continue;
     if (m.kind !== F2_PLATE && m.kind !== F2_BLADE && m.kind !== F2_MITE) continue;
     const x = (m.x - zz.x) * S;
     const y = (m.y - zz.y) * S - (m.kind === F2_BLADE ? 12 : 3);
-    far = Math.max(far, Math.abs(x) + 4, Math.abs(y) + 4);
+    if (Math.abs(x) > 150 || Math.abs(y) > 150) continue;
+    bx0 = Math.min(bx0, x - 10);
+    bx1 = Math.max(bx1, x + 10);
+    by0 = Math.min(by0, y - 10);
+    by1 = Math.max(by1, y + 10);
     threads.push({ x, y, id: m.id, mite: m.kind === F2_MITE });
   }
-  const L = layer(Math.min(150, far));
+  const L = layerBox(bx0, by0, bx1, by1);
   for (const th of threads) {
     const d = Math.hypot(th.x, th.y - cy);
     if (d < 3) continue;
