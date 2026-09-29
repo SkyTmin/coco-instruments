@@ -25,7 +25,12 @@
 // считается от зерна и возраста, а не копится по кадрам: лист кадров и игра
 // рисуют одно и то же, и стоп-кадр держит позу сам.
 import { Px } from '../dungeon-art';
-import { paintSim, registerImpactPainter, registerMobWarm, registerZonePainter } from '../dungeon-paint';
+import {
+  paintSim,
+  registerImpactPainter,
+  registerMobWarm,
+  registerZonePainter,
+} from '../dungeon-paint';
 import type { ImpactRec } from '../dungeon-paint';
 import type { Mob, Strike, Zone } from '../dungeon-sim';
 
@@ -76,7 +81,15 @@ const C = {
 
 /** Искра по доле жизни: белая → жёлтая → оранжевая → красная. */
 const sparkCol = (k: number) =>
-  k < 0.18 ? '#ffffff' : k < 0.42 ? C.fire[4] : k < 0.7 ? C.fire[3] : k < 0.88 ? C.fire[2] : C.fire[1];
+  k < 0.18
+    ? '#ffffff'
+    : k < 0.42
+      ? C.fire[4]
+      : k < 0.7
+        ? C.fire[3]
+        : k < 0.88
+          ? C.fire[2]
+          : C.fire[1];
 
 let rmq: MediaQueryList | null | undefined;
 /** Пользователь просил меньше движения: меньше частиц, без мигания. */
@@ -192,7 +205,13 @@ function fillSector(
     if (Math.abs(yy) >= r1) continue;
     const ho = Math.sqrt(r1 * r1 - yy * yy);
     const hi = Math.abs(yy) < r0 ? Math.sqrt(r0 * r0 - yy * yy) : 0;
-    const segs: [number, number][] = hi > 0 ? [[-ho, -hi], [hi, ho]] : [[-ho, ho]];
+    const segs: [number, number][] =
+      hi > 0
+        ? [
+            [-ho, -hi],
+            [hi, ho],
+          ]
+        : [[-ho, ho]];
     for (let j = 0; j < n; j++) {
       for (const [s0, s1] of segs) {
         let lo = s0;
@@ -710,7 +729,13 @@ const cracks = new Map<string, Crack>();
  * снизу-справа (свет сверху-слева), как высеченный жёлоб; у корня трещина
  * шире — раскол, а не царапина.
  */
-function crackOf(key: string, seed: number, br: [number, number, number][], jag = 0.5, forkP = 0.22): Crack {
+function crackOf(
+  key: string,
+  seed: number,
+  br: [number, number, number][],
+  jag = 0.5,
+  forkP = 0.22,
+): Crack {
   let c = cracks.get(key);
   if (c) return c;
   const px = new Map<number, number>();
@@ -721,7 +746,16 @@ function crackOf(key: string, seed: number, br: [number, number, number][], jag 
     if (o === undefined || d < o) px.set(k, d);
   };
   let maxLen = 0;
-  const walk = (x0: number, y0: number, a0: number, len: number, d0: number, wid: number, id: number, depth: number) => {
+  const walk = (
+    x0: number,
+    y0: number,
+    a0: number,
+    len: number,
+    d0: number,
+    wid: number,
+    id: number,
+    depth: number,
+  ) => {
     let x = x0;
     let y = y0;
     let a = a0;
@@ -737,19 +771,34 @@ function crackOf(key: string, seed: number, br: [number, number, number][], jag 
         const qy = y + ((ny - y) * q) / 4;
         const d = d0 + s + q * 0.5;
         put(Math.floor(qx), Math.floor(qy), d);
-        if (w > 1.1) put(Math.floor(qx + Math.sin(a) * 0.95), Math.floor(qy - Math.cos(a) * 0.95), d);
-        if (w > 2.1) put(Math.floor(qx - Math.sin(a) * 0.95), Math.floor(qy + Math.cos(a) * 0.95), d);
+        if (w > 1.1)
+          put(Math.floor(qx + Math.sin(a) * 0.95), Math.floor(qy - Math.cos(a) * 0.95), d);
+        if (w > 2.1)
+          put(Math.floor(qx - Math.sin(a) * 0.95), Math.floor(qy + Math.cos(a) * 0.95), d);
       }
       x = nx;
       y = ny;
       if (depth < 1 && s > len * 0.3 && s < len * 0.75 && hash(seed, id * 17 + i, 2) < forkP) {
         const side = hash(seed, id * 19 + i, 3) < 0.5 ? -1 : 1;
-        walk(x, y, a + side * (0.5 + 0.4 * hash(seed, id, 4)), (len - s) * 0.5, d0 + s, 1, id * 7 + i + 1, depth + 1);
+        walk(
+          x,
+          y,
+          a + side * (0.5 + 0.4 * hash(seed, id, 4)),
+          (len - s) * 0.5,
+          d0 + s,
+          1,
+          id * 7 + i + 1,
+          depth + 1,
+        );
       }
     }
   };
   br.forEach(([a, len, w], i) => walk(0.5, 0.5, a, len, 0, w, i + 1, 0));
-  const pts = [...px.entries()].map(([k, d]) => [Math.floor(k / 4096) - 1024, (k % 4096) - 1024, d]);
+  const pts = [...px.entries()].map(([k, d]) => [
+    Math.floor(k / 4096) - 1024,
+    (k % 4096) - 1024,
+    d,
+  ]);
   pts.sort((a, b) => a[2] - b[2]);
   // Кромка — только у широкой части: на тонких концах светлые точки на
   // пёстром песке превращаются в сор.
@@ -774,7 +823,10 @@ function crackOf(key: string, seed: number, br: [number, number, number][], jag 
  * Раскрытая трещина одним холстом: пока бежит — по пикселям, дорисовалась —
  * одним `drawImage` (разломы лежат по 5–7 с, их по шесть разом).
  */
-const crackImgs = new WeakMap<Crack, Map<string, { img: HTMLCanvasElement; x: number; y: number }>>();
+const crackImgs = new WeakMap<
+  Crack,
+  Map<string, { img: HTMLCanvasElement; x: number; y: number }>
+>();
 function crackImg(c: Crack, core: string, lip: string | null) {
   let m = crackImgs.get(c);
   if (!m) {
@@ -859,7 +911,14 @@ function drawCrack(
 }
 
 /** Звезда трещин: n ветвей вокруг, длины lo…hi, первая — по углу a. */
-const starBranches = (seed: number, n: number, a: number, lo: number, hi: number, w = 2): [number, number, number][] =>
+const starBranches = (
+  seed: number,
+  n: number,
+  a: number,
+  lo: number,
+  hi: number,
+  w = 2,
+): [number, number, number][] =>
   Array.from({ length: n }, (_, i) => [
     a + (i / n) * TAU + (hash(seed, i, 41) - 0.5) * (TAU / n) * 0.6,
     lo + (hi - lo) * hash(seed, i, 42),
@@ -899,14 +958,21 @@ function screenOf(S: number): Screen {
     for (let i = 0; i < box.length; i += 5) {
       const up = box[i + 1] - 1 - y;
       if (up <= 0 || up > box[i + 4]) continue;
-      if (Math.abs(x - box[i]) < box[i + 2] + (box[i + 3] - box[i + 2]) * (up / box[i + 4])) return true;
+      if (Math.abs(x - box[i]) < box[i + 2] + (box[i + 3] - box[i + 2]) * (up / box[i + 4]))
+        return true;
     }
     return false;
   }) as Screen;
   hid.clear = (x0, y0, x1, y1) => {
     for (let i = 0; i < box.length; i += 5) {
       const w = Math.max(box[i + 2], box[i + 3]);
-      if (x1 > box[i] - w && x0 < box[i] + w && y1 > box[i + 1] - 1 - box[i + 4] && y0 < box[i + 1] - 1) return false;
+      if (
+        x1 > box[i] - w &&
+        x0 < box[i] + w &&
+        y1 > box[i + 1] - 1 - box[i + 4] &&
+        y0 < box[i + 1] - 1
+      )
+        return false;
     }
     return true;
   };
@@ -914,7 +980,8 @@ function screenOf(S: number): Screen {
 }
 
 /** Зерно от места: пол и огонь одного разлома рисуют одну трещину. */
-const placeSeed = (x: number, y: number) => (Math.round(x * 64) * 7919 + Math.round(y * 64) * 104729) >>> 0;
+const placeSeed = (x: number, y: number) =>
+  (Math.round(x * 64) * 7919 + Math.round(y * 64) * 104729) >>> 0;
 
 /**
  * Обёртка рисовальщика: сохранить и вернуть контекст (зоны рисуются без
@@ -1049,7 +1116,16 @@ registerZonePainter(
     const rf = R * (0.12 + 0.88 * Math.pow(k, 1.6));
     p.col(sig ? C.redHot : C.red, (tk ? 0.62 : 0.34) + 0.12 * k);
     fillSector(p, cx, cy, 0, rf, a0, a0 + arc);
-    ring(p, cx, cy, rf, sig ? C.yellow : C.orange, 0.75 + 0.25 * k, (ang) => inArc(ang, a0, arc), 0.5);
+    ring(
+      p,
+      cx,
+      cy,
+      rf,
+      sig ? C.yellow : C.orange,
+      0.75 + 0.25 * k,
+      (ang) => inArc(ang, a0, arc),
+      0.5,
+    );
     // Кромка: штрихи бегут от краёв к оси — удар сходится в точку.
     const run = time * (24 + 60 * k);
     sectorRim(
@@ -1089,8 +1165,23 @@ registerZonePainter(
     }
     // Последние 0,2 с: трещины уже бегут из точки удара.
     if (sig) {
-      const ck = crackOf(`axeTele|${st.id % 997}`, st.id, starBranches(st.id, 4, a, 6, 12, 1), 0.45, 0);
-      drawCrack(p, ck, cx + ux * S * AXE_BITE, cy + uy * S * AXE_BITE, (1 - left / SIG) * 12, C.groove, null, 0.85);
+      const ck = crackOf(
+        `axeTele|${st.id % 997}`,
+        st.id,
+        starBranches(st.id, 4, a, 6, 12, 1),
+        0.45,
+        0,
+      );
+      drawCrack(
+        p,
+        ck,
+        cx + ux * S * AXE_BITE,
+        cy + uy * S * AXE_BITE,
+        (1 - left / SIG) * 12,
+        C.groove,
+        null,
+        0.85,
+      );
     }
   }),
 );
@@ -1116,7 +1207,16 @@ registerImpactPainter('f5_axe', {
     if (age < 0.22) {
       const k = age / 0.22;
       const rw = R * (0.35 + 0.75 * eOut2(k));
-      ring(p, cx, cy, rw, C.wind, 0.9 * (1 - k), (ang, i) => inArc(ang, a - arc / 2, arc) && hash(i >> 1, sd, 7) > 0.2, 0.6);
+      ring(
+        p,
+        cx,
+        cy,
+        rw,
+        C.wind,
+        0.9 * (1 - k),
+        (ang, i) => inArc(ang, a - arc / 2, arc) && hash(i >> 1, sd, 7) > 0.2,
+        0.6,
+      );
     }
     // Раскол пола: главная трещина по оси удара — секира рубит вдоль, две
     // веером, коротко вбок и назад.
@@ -1148,8 +1248,25 @@ registerImpactPainter('f5_axe', {
     // Ударная волна от точки удара — рваная, как пыль, а не циркуль.
     if (age < 0.3) {
       const k = age / 0.3;
-      ring(p, bx, by, 5 + 34 * eOut2(k), C.white, 0.95 * (1 - k), (_ang, i) => hash(i >> 2, sd, 9) > 0.22, 0.6);
-      ring(p, bx, by, 4 + 34 * eOut2(k), C.sandHi, 0.7 * (1 - k), (_ang, i) => hash(i >> 2, sd, 10) > 0.4);
+      ring(
+        p,
+        bx,
+        by,
+        5 + 34 * eOut2(k),
+        C.white,
+        0.95 * (1 - k),
+        (_ang, i) => hash(i >> 2, sd, 9) > 0.22,
+        0.6,
+      );
+      ring(
+        p,
+        bx,
+        by,
+        4 + 34 * eOut2(k),
+        C.sandHi,
+        0.7 * (1 - k),
+        (_ang, i) => hash(i >> 2, sd, 10) > 0.4,
+      );
     }
     // Песок брызгами (мелкие, быстрые) и камни (тяжёлые, с отскоком).
     for (let i = 0; i < (few ? 6 : 18); i++) {
@@ -1300,7 +1417,16 @@ registerImpactPainter('f5_whirl', {
     // Ударная волна.
     if (age < 0.3) {
       const k = age / 0.3;
-      ring(p, cx, cy, R * (0.6 + 0.65 * eOut2(k)), C.wind, 0.95 * (1 - k), (_a, i) => hash(i >> 1, sd, 4) > 0.2, 0.6);
+      ring(
+        p,
+        cx,
+        cy,
+        R * (0.6 + 0.65 * eOut2(k)),
+        C.wind,
+        0.95 * (1 - k),
+        (_a, i) => hash(i >> 1, sd, 4) > 0.2,
+        0.6,
+      );
     }
     // Кольцо ветра: дуги по касательной, крутятся и уходят наружу.
     if (age < 0.6) {
@@ -1308,7 +1434,16 @@ registerImpactPainter('f5_whirl', {
       for (let i = 0; i < 6; i++) {
         const rr = R * (0.6 + 0.55 * eOut2(k) + 0.06 * (i % 3));
         const s = dir * (age * 9 + (i * TAU) / 6);
-        ring(p, cx, cy, rr, C.wind, 0.85 * (1 - k), (ang) => inArc(ang, dir > 0 ? s - 0.55 : s, 0.55), 0.5);
+        ring(
+          p,
+          cx,
+          cy,
+          rr,
+          C.wind,
+          0.85 * (1 - k),
+          (ang) => inArc(ang, dir > 0 ? s - 0.55 : s, 0.55),
+          0.5,
+        );
       }
     }
     // Пыль спиралью: наружу и по ходу вращения.
@@ -1326,12 +1461,32 @@ registerImpactPainter('f5_whirl', {
       const ang = phi + dir * dt;
       const im = puffImg(0, 2 + 8 * eOut2(k01(age / 0.6)) * (0.35 + 0.65 * hash(sd, i, 10)), i);
       p.col('#000', 0.9 * (k < 0.3 ? 1 : 1 - (k - 0.3) / 0.7));
-      p.img(im, cx + Math.cos(ang) * (r0 + dr) - im.width / 2, cy + Math.sin(ang) * (r0 + dr) - 4 * eOut2(k) - im.height / 2);
+      p.img(
+        im,
+        cx + Math.cos(ang) * (r0 + dr) - im.width / 2,
+        cy + Math.sin(ang) * (r0 + dr) - 4 * eOut2(k) - im.height / 2,
+      );
     }
     // Камни — по касательной: их отбросило лезвие.
     for (let i = 0; i < (few ? 4 : 10); i++) {
       const phi = hash(sd, i, 61) * TAU;
-      stones(p, sd * 31 + i, age, cx + Math.cos(phi) * gr, cy + Math.sin(phi) * gr, 1, phi + dir * 1.2, 0.35, 28, 36, 55, 60, 0, [1.0, 1.4], 0.4);
+      stones(
+        p,
+        sd * 31 + i,
+        age,
+        cx + Math.cos(phi) * gr,
+        cy + Math.sin(phi) * gr,
+        1,
+        phi + dir * 1.2,
+        0.35,
+        28,
+        36,
+        55,
+        60,
+        0,
+        [1.0, 1.4],
+        0.4,
+      );
     }
   }),
 });
@@ -1361,7 +1516,15 @@ registerZonePainter(
     fillSector(p, cx, cy, 0, R, 0, TAU);
     // Кромка в два пикселя: тёмная снаружи, светлая, пунктир бежит.
     ring(p, cx, cy, R + 1, C.ink, 0.55);
-    ring(p, cx, cy, R, sig ? (tk ? '#ffffff' : C.yellow) : C.roar, 0.75 + 0.25 * k, (_a, i) => sig || (i + Math.floor(st.t * 30)) % 9 < 6);
+    ring(
+      p,
+      cx,
+      cy,
+      R,
+      sig ? (tk ? '#ffffff' : C.yellow) : C.roar,
+      0.75 + 0.25 * k,
+      (_a, i) => sig || (i + Math.floor(st.t * 30)) % 9 < 6,
+    );
     // Кольцо вдоха сходится к быку — дошло до него, значит, рёв.
     for (const lag of [0, 0.14]) {
       const kk = k01(k - lag);
@@ -1397,48 +1560,68 @@ registerImpactPainter('f5_roar', {
   flash: 0.3,
   flashRgb: '255,236,170',
   above: true,
-  paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number, time: number) => {
-    const cx = rec.x * S;
-    const cy = rec.y * S;
-    const p = new Pen(g, px, py, cx, cy);
-    const R = (rec.r ?? 4.6) * S;
-    const sd = rec.seed;
-    // Три кольца пыли по воздуху — толстые, рваные, у каждого своя «рвань».
-    for (let j = 0; j < 3; j++) {
-      const t = age - [0, 0.1, 0.22][j];
-      if (t < 0 || t > 0.5) continue;
-      const k = t / 0.5;
-      const rr = S + (R * 1.12 - S) * eOut2(k);
-      const a = (1 - k) * (j === 0 ? 1 : 0.75);
-      const keep = (_a: number, i: number) => hash(i >> 2, sd + j, 5) > 0.14;
-      ring(p, cx, cy, rr - 2, C.roarDk, a * 0.75, keep);
-      ring(p, cx, cy, rr - 1, '#e6d6b2', a, keep);
-      ring(p, cx, cy, rr, j === 0 ? '#ffffff' : C.roar, a, keep, 0.5);
-      // Штрихи ветра за первым кольцом.
-      if (j === 0)
-        for (let i = 0; i < 18; i++) {
-          const phi = (i / 18) * TAU + hash(sd, i, 7) * 0.3;
-          const r1 = rr - 5 - 3 * hash(sd, i, 8);
-          p.lineS(cx + Math.cos(phi) * r1, cy + Math.sin(phi) * r1, cx + Math.cos(phi) * (r1 - 6), cy + Math.sin(phi) * (r1 - 6), C.wind, a * 0.9, 0.4);
-        }
-    }
-    // Оглушённый герой: звёзды кружат над головой, пока держит оглушение.
-    const h = paintSim()?.hero;
-    const stun = h?.status?.stun;
-    if (h && stun && stun.t > 0) {
-      const hx0 = h.x * S;
-      const hy0 = h.y * S - 21;
-      for (let i = 0; i < 3; i++) {
-        const an = time * 6 + (i * TAU) / 3;
-        const front = Math.sin(an) > 0;
-        const im = stunStar(front ? 0 : 1);
-        p.col('#000', front ? 1 : 0.75);
-        p.img(im, hx0 + Math.cos(an) * 8 - 3, hy0 + Math.sin(an) * 2.5 - 3);
+  paint: guarded(
+    (g, rec: ImpactRec, px: number, py: number, S: number, age: number, time: number) => {
+      const cx = rec.x * S;
+      const cy = rec.y * S;
+      const p = new Pen(g, px, py, cx, cy);
+      const R = (rec.r ?? 4.6) * S;
+      const sd = rec.seed;
+      // Три кольца пыли по воздуху — толстые, рваные, у каждого своя «рвань».
+      for (let j = 0; j < 3; j++) {
+        const t = age - [0, 0.1, 0.22][j];
+        if (t < 0 || t > 0.5) continue;
+        const k = t / 0.5;
+        const rr = S + (R * 1.12 - S) * eOut2(k);
+        const a = (1 - k) * (j === 0 ? 1 : 0.75);
+        const keep = (_a: number, i: number) => hash(i >> 2, sd + j, 5) > 0.14;
+        ring(p, cx, cy, rr - 2, C.roarDk, a * 0.75, keep);
+        ring(p, cx, cy, rr - 1, '#e6d6b2', a, keep);
+        ring(p, cx, cy, rr, j === 0 ? '#ffffff' : C.roar, a, keep, 0.5);
+        // Штрихи ветра за первым кольцом.
+        if (j === 0)
+          for (let i = 0; i < 18; i++) {
+            const phi = (i / 18) * TAU + hash(sd, i, 7) * 0.3;
+            const r1 = rr - 5 - 3 * hash(sd, i, 8);
+            p.lineS(
+              cx + Math.cos(phi) * r1,
+              cy + Math.sin(phi) * r1,
+              cx + Math.cos(phi) * (r1 - 6),
+              cy + Math.sin(phi) * (r1 - 6),
+              C.wind,
+              a * 0.9,
+              0.4,
+            );
+          }
       }
-      // Удар по ушам: кольцо у головы в первые мгновения.
-      if (age < 0.3) ring(p, hx0, hy0 + 6, 4 + 10 * eOut2(age / 0.3), '#ffffff', 0.9 * (1 - age / 0.3), (_a, i) => i % 3 !== 0, 0.5);
-    }
-  }),
+      // Оглушённый герой: звёзды кружат над головой, пока держит оглушение.
+      const h = paintSim()?.hero;
+      const stun = h?.status?.stun;
+      if (h && stun && stun.t > 0) {
+        const hx0 = h.x * S;
+        const hy0 = h.y * S - 21;
+        for (let i = 0; i < 3; i++) {
+          const an = time * 6 + (i * TAU) / 3;
+          const front = Math.sin(an) > 0;
+          const im = stunStar(front ? 0 : 1);
+          p.col('#000', front ? 1 : 0.75);
+          p.img(im, hx0 + Math.cos(an) * 8 - 3, hy0 + Math.sin(an) * 2.5 - 3);
+        }
+        // Удар по ушам: кольцо у головы в первые мгновения.
+        if (age < 0.3)
+          ring(
+            p,
+            hx0,
+            hy0 + 6,
+            4 + 10 * eOut2(age / 0.3),
+            '#ffffff',
+            0.9 * (1 - age / 0.3),
+            (_a, i) => i % 3 !== 0,
+            0.5,
+          );
+      }
+    },
+  ),
 });
 
 // =============================================================================
@@ -1481,14 +1664,39 @@ registerZonePainter(
       const burn = Math.min(1, (z.t - warn) / 0.4);
       p.col('#3a1a0c', 0.32 * fade * burn);
       fillSector(p, cx, cy, 0, z.r * S * 1.05, 0, TAU);
-      ring(p, cx, cy, z.r * S * 1.05 + 1, '#3a1a0c', 0.2 * fade * burn, (_a, i) => hash(i, z.id, 2) > 0.5);
+      ring(
+        p,
+        cx,
+        cy,
+        z.r * S * 1.05 + 1,
+        '#3a1a0c',
+        0.2 * fade * burn,
+        (_a, i) => hash(i, z.id, 2) > 0.5,
+      );
     }
     const reach = ck.max * eOut2(open);
     // Раскрытие: сначала трещина бежит, потом жёлоб темнеет — нутро.
     drawCrack(p, ck, cx, cy, reach, on ? '#2a0804' : C.groove, C.sandHi, fade);
     // Песок осыпается в трещину, пока она раскрывается.
     if (!on || z.t < warn + 0.2)
-      dust(p, z.id, z.t, cx, cy, 3, (z.ang ?? 0) + Math.PI / 2, Math.PI, 8, 10, 1, 5, 3, 0.55, 0, 0.9);
+      dust(
+        p,
+        z.id,
+        z.t,
+        cx,
+        cy,
+        3,
+        (z.ang ?? 0) + Math.PI / 2,
+        Math.PI,
+        8,
+        10,
+        1,
+        5,
+        3,
+        0.55,
+        0,
+        0.9,
+      );
   }),
 );
 
@@ -1606,7 +1814,11 @@ registerZonePainter(
         if (hid(ox + ck.x[j], oy + ck.y[j])) continue;
         const im = puffImg(2, 2 + 3 * u, i);
         p.col('#000', smoke * 0.6 * (1 - u));
-        p.img(im, ox + ck.x[j] - im.width / 2 + Math.sin(u * 4 + i) * 2, oy + ck.y[j] - 4 - u * 12 - im.height / 2);
+        p.img(
+          im,
+          ox + ck.x[j] - im.width / 2 + Math.sin(u * 4 + i) * 2,
+          oy + ck.y[j] - 4 - u * 12 - im.height / 2,
+        );
       }
     }
   }),
@@ -1652,7 +1864,16 @@ function fillPoly(p: Pen, xs: number[], ys: number[]): void {
 }
 
 /** Галочка «>» в два пикселя: остриё в (x, y), смотрит по (ux, uy). */
-function chevron(p: Pen, x: number, y: number, ux: number, uy: number, s: number, c: string, a: number): void {
+function chevron(
+  p: Pen,
+  x: number,
+  y: number,
+  ux: number,
+  uy: number,
+  s: number,
+  c: string,
+  a: number,
+): void {
   const nx = -uy;
   const ny = ux;
   for (const side of [-1, 1]) {
@@ -1735,7 +1956,15 @@ registerZonePainter(
     const lt = t - T * 0.55;
     if (lt >= 0 && lt < 0.14) {
       const u = r0 + (L - r0) * (lt / 0.14);
-      p.lineS(mx + ux * u + nx * W, my + uy * u + ny * W, mx + ux * u - nx * W, my + uy * u - ny * W, C.white, 1, 0.5);
+      p.lineS(
+        mx + ux * u + nx * W,
+        my + uy * u + ny * W,
+        mx + ux * u - nx * W,
+        my + uy * u - ny * W,
+        C.white,
+        1,
+        0.5,
+      );
     }
     // Конец полосы: стена — звезда трещин; нет стены — стоп-черта.
     const ex = mx + ux * L;
@@ -1745,7 +1974,15 @@ registerZonePainter(
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * TAU + 0.2;
         const r1 = 3 + (i & 1 ? 3 : 6) + (lock ? pulse * 2 : 0);
-        p.lineS(ex + Math.cos(a) * 2, ey + Math.sin(a) * 2, ex + Math.cos(a) * r1, ey + Math.sin(a) * r1, danger ? C.yellow : C.orange, lock ? 1 : 0.6, 0.5);
+        p.lineS(
+          ex + Math.cos(a) * 2,
+          ey + Math.sin(a) * 2,
+          ex + Math.cos(a) * r1,
+          ey + Math.sin(a) * r1,
+          danger ? C.yellow : C.orange,
+          lock ? 1 : 0.6,
+          0.5,
+        );
       }
     } else {
       for (let s = -W; s <= W; s += 1)
@@ -1788,11 +2025,45 @@ registerZonePainter(
     for (let i = 0; i < 2; i++) {
       const b = len * (0.2 + 0.5 * i);
       const side = (i % 2 ? 1 : -1) * (2 + 3 * hash(sd, i, 1));
-      dust(p, sd * 7 + i, t, cx - ux * b - uy * side, cy - uy * b + ux * side + 1, 1, a + Math.PI + (i % 2 ? 0.7 : -0.7), 0.4, 14, 10, 2, 7, 7, 0.6, 0, 0.85);
+      dust(
+        p,
+        sd * 7 + i,
+        t,
+        cx - ux * b - uy * side,
+        cy - uy * b + ux * side + 1,
+        1,
+        a + Math.PI + (i % 2 ? 0.7 : -0.7),
+        0.4,
+        14,
+        10,
+        2,
+        7,
+        7,
+        0.6,
+        0,
+        0.85,
+      );
     }
     // Старт рывка: копыта рвут песок — веер назад и клубы.
     if ((z.n ?? 0) > 0) {
-      dust(p, sd * 3 + 1, t, cx - ux * 6, cy - uy * 6 + 1, 4, a + Math.PI, 0.9, 30, 20, 3, 9, 6, 0.8, 0, 0.95);
+      dust(
+        p,
+        sd * 3 + 1,
+        t,
+        cx - ux * 6,
+        cy - uy * 6 + 1,
+        4,
+        a + Math.PI,
+        0.9,
+        30,
+        20,
+        3,
+        9,
+        6,
+        0.8,
+        0,
+        0.95,
+      );
       for (let i = 0; i < 12; i++) {
         const f = fly(t, 50 + 40 * hash(sd, i, 15), 430, 0);
         if (!f.air) continue;
@@ -1887,7 +2158,25 @@ registerZonePainter(
     }
     // Пыль из-под копыт в стороны, пока едет, и догоняет, когда встал.
     for (const s of [-1, 1])
-      dust(p, sd + (s > 0 ? 3 : 5), t, cx + ux * L - uy * s * 6, cy + uy * L + ux * s * 6, 3, a + s * 1.3, 0.5, 26, 14, 2, 8, 6, 0.9, 0, 0.9, 0.3);
+      dust(
+        p,
+        sd + (s > 0 ? 3 : 5),
+        t,
+        cx + ux * L - uy * s * 6,
+        cy + uy * L + ux * s * 6,
+        3,
+        a + s * 1.3,
+        0.5,
+        26,
+        14,
+        2,
+        8,
+        6,
+        0.9,
+        0,
+        0.9,
+        0.3,
+      );
     dust(p, sd, t - 0.08, cx + ux * L, cy + uy * L, 4, a, 0.9, 16, 12, 3, 10, 6, 1.0, 0, 0.85, 0.2);
   }),
 );
@@ -1932,10 +2221,43 @@ registerZonePainter(
     }
     // Обломки: от стены — назад, колонна — разлетается вперёд.
     const back = pillar ? a : a + Math.PI;
-    stones(p, sd, t, cx, cy, few ? 6 : pillar ? 20 : 14, back, pillar ? 1.35 : 1.05, 30, 50, 70, 80, pillar ? 2 : 1, [z.life - 1.1, z.life - 0.3], pillar ? 0.55 : 0.45);
+    stones(
+      p,
+      sd,
+      t,
+      cx,
+      cy,
+      few ? 6 : pillar ? 20 : 14,
+      back,
+      pillar ? 1.35 : 1.05,
+      30,
+      50,
+      70,
+      80,
+      pillar ? 2 : 1,
+      [z.life - 1.1, z.life - 0.3],
+      pillar ? 0.55 : 0.45,
+    );
     // Пыль: клуб от удара встаёт и уходит вверх (слой поверх быка — он
     // накрывает его на миг и рассеивается), вдоль стены в обе стороны.
-    dust(p, sd + 1, t, cx, cy - 4, few ? 3 : 5, back, 0.8, 22, 22, 4, pillar ? 12 : 10, pillar ? 22 : 14, 0.95, 0, 0.8);
+    dust(
+      p,
+      sd + 1,
+      t,
+      cx,
+      cy - 4,
+      few ? 3 : 5,
+      back,
+      0.8,
+      22,
+      22,
+      4,
+      pillar ? 12 : 10,
+      pillar ? 22 : 14,
+      0.95,
+      0,
+      0.8,
+    );
     dust(p, sd + 2, t, cx, cy, few ? 2 : 3, a + Math.PI / 2, 0.35, 22, 16, 3, 8, 6, 0.9, 1, 0.75);
     dust(p, sd + 3, t, cx, cy, few ? 2 : 3, a - Math.PI / 2, 0.35, 22, 16, 3, 8, 6, 0.9, 1, 0.75);
     dust(p, sd + 4, t, cx, cy, few ? 1 : 3, back, 0.9, 34, 20, 2, 6, 4, 0.8, 0, 0.85);
@@ -1998,7 +2320,15 @@ registerZonePainter(
       for (let i = 0; i < 7; i++) {
         const th = a + (i / 7 - 0.5) * 2.4;
         const r0 = 6 + 12 * eOut2(k);
-        p.lineS(cx + Math.cos(th) * r0, cy + Math.sin(th) * r0, cx + Math.cos(th) * (r0 + 6), cy + Math.sin(th) * (r0 + 6), '#ffffff', 1 - k, 0.5);
+        p.lineS(
+          cx + Math.cos(th) * r0,
+          cy + Math.sin(th) * r0,
+          cx + Math.cos(th) * (r0 + 6),
+          cy + Math.sin(th) * (r0 + 6),
+          '#ffffff',
+          1 - k,
+          0.5,
+        );
       }
     }
     const dir = kind === 1 ? a + Math.PI : a;
@@ -2011,7 +2341,10 @@ registerZonePainter(
         if (t > L) continue;
         const u = t / L;
         p.col(sparkCol(0.35 + 0.65 * u), 1 - u);
-        p.dot(cx + (hash(sd, i, 2) - 0.5) * 16 + Math.sin(u * 6 + i) * 2, cy - 6 - u * (16 + 8 * hash(sd, i, 3)));
+        p.dot(
+          cx + (hash(sd, i, 2) - 0.5) * 16 + Math.sin(u * 6 + i) * 2,
+          cy - 6 - u * (16 + 8 * hash(sd, i, 3)),
+        );
       }
   }),
 );
@@ -2023,13 +2356,23 @@ registerZonePainter(
 // =============================================================================
 
 /** Камешки подпрыгивают на толчке: t — время с толчка. */
-function pebbles(p: Pen, sd: number, t: number, cx: number, cy: number, n: number, r0: number, r1: number): void {
+function pebbles(
+  p: Pen,
+  sd: number,
+  t: number,
+  cx: number,
+  cy: number,
+  n: number,
+  r0: number,
+  r1: number,
+): void {
   for (let i = 0; i < n; i++) {
     const a = hash(sd, i, 1) * TAU;
     const r = r0 + (r1 - r0) * hash(sd, i, 2);
     const delay = (r / Math.max(1, r1)) * 0.12;
     const u = t - delay;
-    const z = u > 0 && u < 0.3 ? Math.round(Math.sin((u / 0.3) * Math.PI) * (3 + 4 * hash(sd, i, 3))) : 0;
+    const z =
+      u > 0 && u < 0.3 ? Math.round(Math.sin((u / 0.3) * Math.PI) * (3 + 4 * hash(sd, i, 3))) : 0;
     const x = cx + Math.cos(a) * r;
     const y = cy + Math.sin(a) * r;
     if (z) {
@@ -2061,8 +2404,23 @@ registerZonePainter(
     const fade = k01((z.life - t) / 0.5);
     // Трещины из-под копыт на первом толчке.
     if (t > 0.25) {
-      const ck = crackOf(`roar|${sd % 97}`, sd, starBranches(sd, 6, 0.4, S * 0.7, S * 1.3, 2), 0.5, 0.25);
-      drawCrack(p, ck, cx, cy + 2, ck.max * eOut3(k01((t - 0.25) / 0.12)), C.groove, C.sandHi, fade);
+      const ck = crackOf(
+        `roar|${sd % 97}`,
+        sd,
+        starBranches(sd, 6, 0.4, S * 0.7, S * 1.3, 2),
+        0.5,
+        0.25,
+      );
+      drawCrack(
+        p,
+        ck,
+        cx,
+        cy + 2,
+        ck.max * eOut3(k01((t - 0.25) / 0.12)),
+        C.groove,
+        C.sandHi,
+        fade,
+      );
     }
     for (const t0 of [0.25, 0.62, 0.98]) {
       const u = t - t0;
@@ -2079,12 +2437,34 @@ registerZonePainter(
         const ph = (i / 10) * TAU + hash(sd, i, Math.round(t0 * 10)) * 0.5;
         const im = puffImg(0, 3 + 4 * k, i);
         p.col('#000', 0.85 * live);
-        p.img(im, cx + Math.cos(ph) * rr - im.width / 2, cy + 1 + Math.sin(ph) * rr - 3 * k - im.height / 2);
+        p.img(
+          im,
+          cx + Math.cos(ph) * rr - im.width / 2,
+          cy + 1 + Math.sin(ph) * rr - 3 * k - im.height / 2,
+        );
       }
     }
     const last = t > 0.98 ? t - 0.98 : t > 0.62 ? t - 0.62 : t - 0.25;
     if (t > 0.25) pebbles(p, sd, last, cx, cy, 12, S * 1.4, S * 3.2);
-    if (t > 0.25) dust(p, sd, t - 0.25, cx, cy + 2, reduced() ? 2 : 6, 0, Math.PI, 18, 10, 3, 7, 3, 0.9, 0, 0.85);
+    if (t > 0.25)
+      dust(
+        p,
+        sd,
+        t - 0.25,
+        cx,
+        cy + 2,
+        reduced() ? 2 : 6,
+        0,
+        Math.PI,
+        18,
+        10,
+        3,
+        7,
+        3,
+        0.9,
+        0,
+        0.85,
+      );
   }),
 );
 
@@ -2098,7 +2478,13 @@ registerZonePainter(
     const t = z.t;
     const sd = z.id;
     const fade = k01((z.life - t) / 0.6);
-    const ck = crackOf(`quake|${sd % 97}`, sd, starBranches(sd, 7, hash(sd, 0, 9) * TAU, S * 1.2, S * 2.3, 3), 0.5, 0.3);
+    const ck = crackOf(
+      `quake|${sd % 97}`,
+      sd,
+      starBranches(sd, 7, hash(sd, 0, 9) * TAU, S * 1.2, S * 2.3, 3),
+      0.5,
+      0.3,
+    );
     drawCrack(p, ck, cx, cy + 2, ck.max * eOut3(k01(t / 0.14)), C.groove, C.sandHi, fade);
     if (t < 0.4) dustRing(p, sd, cx, cy + 1, S * (1 + 2.6 * eOut2(t / 0.4)), 0.9 * (1 - t / 0.4));
     pebbles(p, sd, t, cx, cy, 14, S * 1.3, S * 4);
@@ -2117,7 +2503,13 @@ registerZonePainter(
     const sd = z.id;
     const rage = (z.n ?? 1) >= 2;
     const fade = k01((z.life - t) / 1);
-    const ck = crackOf(`phase|${sd % 97}`, sd, starBranches(sd, 9, 0.3, S * 2.1, S * 3.4, 3), 0.45, 0.35);
+    const ck = crackOf(
+      `phase|${sd % 97}`,
+      sd,
+      starBranches(sd, 9, 0.3, S * 2.1, S * 3.4, 3),
+      0.45,
+      0.35,
+    );
     const reach = ck.max * eOut3(k01(t / 0.22));
     drawCrack(p, ck, cx, cy + 2, reach, C.deep, C.sandHi, fade);
     // Жар из трещин: багровый — рёв лабиринта, раскалённый — ярость.
@@ -2127,8 +2519,25 @@ registerZonePainter(
     p.col(rage ? C.fire[3] : C.redHot, glow);
     for (let i = 0; i < ck.x.length && ck.d[i] <= reach; i += 1)
       if (ck.d[i] < ck.max * 0.5 && (i & 1) === 0) p.dot(ox + ck.x[i], oy + ck.y[i]);
-    if (t < 0.5) dustRing(p, sd, cx, cy + 1, S * (1.2 + 3.6 * eOut2(t / 0.5)), 0.95 * (1 - t / 0.5));
-    stones(p, sd, t, cx, cy, reduced() ? 5 : 16, 0, Math.PI, 30, 44, 80, 80, 0, [z.life - 1.2, z.life - 0.2], 0.45);
+    if (t < 0.5)
+      dustRing(p, sd, cx, cy + 1, S * (1.2 + 3.6 * eOut2(t / 0.5)), 0.95 * (1 - t / 0.5));
+    stones(
+      p,
+      sd,
+      t,
+      cx,
+      cy,
+      reduced() ? 5 : 16,
+      0,
+      Math.PI,
+      30,
+      44,
+      80,
+      80,
+      0,
+      [z.life - 1.2, z.life - 0.2],
+      0.45,
+    );
     dust(p, sd, t, cx, cy + 2, reduced() ? 4 : 12, 0, Math.PI, 28, 16, 4, 12, 7, 1.6, 0, 0.9);
   }),
 );

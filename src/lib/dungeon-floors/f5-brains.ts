@@ -916,8 +916,25 @@ const hasteOf = (sim: Sim) => {
 // v2.85 — только рисунок: зона-картинка (`api.vfx`: без урона и статусов, номер
 // мимо `nextId`) — пыль, искры, трещины, огонь разлома рисует `f5-boss-fx.ts`.
 // Своих `f5_fx*` разом не больше 36, пыли движения — не больше 24.
-type FxIn = { ang?: number; mid?: number; len?: number; v?: number; n?: number; warn?: number; above?: boolean };
-function fx(sim: Sim, api: SimApi, art: string, x: number, y: number, life: number, o: FxIn = {}, move = false): void {
+type FxIn = {
+  ang?: number;
+  mid?: number;
+  len?: number;
+  v?: number;
+  n?: number;
+  warn?: number;
+  above?: boolean;
+};
+function fx(
+  sim: Sim,
+  api: SimApi,
+  art: string,
+  x: number,
+  y: number,
+  life: number,
+  o: FxIn = {},
+  move = false,
+): void {
   let n = 0;
   for (const z of sim.zones) if (z.art?.startsWith('f5_fx')) n++;
   if (n < (move ? 24 : 36)) api.vfx(sim, { x, y, r: 0.5, life, art, ...o } as ZoneIn & FxIn);
@@ -997,7 +1014,11 @@ function minoStun(sim: Sim, m: Mob, api: SimApi, long: boolean): void {
   const wx = m.x + Math.cos(m.dir) * m.r;
   const wy = m.y + Math.sin(m.dir) * m.r;
   fx(sim, api, 'f5_fxwall', wx, wy, long ? 3.3 : 2.8, { ang: m.dir, n: long ? 1 : 0, above: true });
-  fx(sim, api, 'f5_fxspark', wx, wy, long ? 1.2 : 0.5, { ang: m.dir, n: long ? 3 : 1, above: true });
+  fx(sim, api, 'f5_fxspark', wx, wy, long ? 1.2 : 0.5, {
+    ang: m.dir,
+    n: long ? 3 : 1,
+    above: true,
+  });
   fxShake(sim, wx, wy, long ? 0.6 : 0.5);
   sim.events.push({ t: 'flash', k: long ? 0.4 : 0.3, color: '#fff0d0' });
   api.setMode(m, 'dizzy');
@@ -1009,7 +1030,9 @@ function startAim(sim: Sim, m: Mob, api: SimApi, next: boolean): void {
   m.data.next = next ? 1 : 0;
   api.setMode(m, 'aim');
   // v2.85 — только рисунок: полоса разбега (стрелки, конец пути, копыто роет).
-  fx(sim, api, 'f5_fxlane', m.x, m.y, (next ? MINO.aimNext : MINO.aim) / hasteOf(sim) + 0.05, { mid: m.id });
+  fx(sim, api, 'f5_fxlane', m.x, m.y, (next ? MINO.aimNext : MINO.aim) / hasteOf(sim) + 0.05, {
+    mid: m.id,
+  });
 }
 
 registerBrain('f5_minotaur', {
@@ -1055,7 +1078,16 @@ registerBrain('f5_minotaur', {
           m.data.vSide = m.data.vSide ? 0 : 1;
           const va = Math.atan2(m.vy, m.vx);
           const vs = m.data.vSide ? 0.28 : -0.28;
-          fx(sim, api, 'f5_fxstep', m.x - Math.sin(va) * vs, m.y + Math.cos(va) * vs, 1.4, { ang: va }, true);
+          fx(
+            sim,
+            api,
+            'f5_fxstep',
+            m.x - Math.sin(va) * vs,
+            m.y + Math.cos(va) * vs,
+            1.4,
+            { ang: va },
+            true,
+          );
         }
         if (m.t < 0.85 / haste) return;
         const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
@@ -1161,13 +1193,27 @@ registerBrain('f5_minotaur', {
         // v2.85 — только рисунок: пыль из-под копыт, 10 раз в секунду.
         if (sim.time >= (m.data.vDust ?? 0)) {
           m.data.vDust = sim.time + 0.1;
-          fx(sim, api, 'f5_fxdust', m.x, m.y, 0.9, { ang: m.dir, len: s * 0.1, n: m.t < 0.05 ? 1 : 0 }, true);
+          fx(
+            sim,
+            api,
+            'f5_fxdust',
+            m.x,
+            m.y,
+            0.9,
+            { ang: m.dir, len: s * 0.1, n: m.t < 0.05 ? 1 : 0 },
+            true,
+          );
         }
         if (!m.data.hit && dist < m.r + h.r + 0.1 && h.inv <= 0 && h.mode !== 'dash') {
           // Сшиб — и бежит дальше: остановит его только стена.
           m.data.hit = 1;
           api.hurtHero(sim, m.dmg * 2, m.x, m.y, 12, m.kind);
-          fx(sim, api, 'f5_fxspark', (m.x + h.x) / 2, (m.y + h.y) / 2 - 0.3, 0.45, { ang: m.dir, n: 2, above: true }); // v2.85 — только рисунок
+          // v2.85 — только рисунок: искры сшибки там, где рога встретили героя.
+          fx(sim, api, 'f5_fxspark', (m.x + h.x) / 2, (m.y + h.y) / 2 - 0.3, 0.45, {
+            ang: m.dir,
+            n: 2,
+            above: true,
+          });
         }
         if (smashPillar(sim, m)) {
           minoStun(sim, m, api, true);
@@ -1212,7 +1258,15 @@ registerBrain('f5_minotaur', {
           sim.events.push({ t: 'boss', what: 'whip' });
           // v2.85 — только рисунок: искры секиры о пол там, где она вошла.
           if (m.mode === 'axe')
-            fx(sim, api, 'f5_fxspark', m.x + Math.cos(m.dir) * 2.2, m.y + Math.sin(m.dir) * 2.2, 0.5, { ang: m.dir, above: true });
+            fx(
+              sim,
+              api,
+              'f5_fxspark',
+              m.x + Math.cos(m.dir) * 2.2,
+              m.y + Math.sin(m.dir) * 2.2,
+              0.5,
+              { ang: m.dir, above: true },
+            );
         }
         if (m.t >= T + 0.75 / haste) {
           m.data.swung = 0;
@@ -1258,7 +1312,8 @@ registerBoss('f5_minotaur', {
     lead.data.roarCd = 6;
     lead.face = Math.PI / 2;
   },
-  step(sim, b, _dt, api) { // v2.85 — только рисунок: api — для зон смены фазы
+  step(sim, b, _dt, api) {
+    // v2.85 — только рисунок: api — для зон смены фазы
     const lead = sim.mobs.find((m) => m.kind === 'f5_minotaur' && m.mode !== 'dying');
     if (!lead) return;
     const k = lead.hp / lead.maxHp;
