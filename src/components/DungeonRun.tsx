@@ -916,6 +916,9 @@ export function DungeonRun({
     let hudT = 0;
     let mapT = 0;
     const loop = (t: number) => {
+      // Следующий кадр заказываем первым: исключение в кадре (в рисунке
+      // этажа) не должно останавливать игру намертво.
+      raf = requestAnimationFrame(loop);
       // Метка кадра бывает раньше `performance.now()` при запуске: шаг не
       // бывает отрицательным.
       const dt = Math.max(0, Math.min(0.1, (t - last) / 1000));
@@ -954,7 +957,6 @@ export function DungeonRun({
         mapT = 0;
         drawMini(sim);
       }
-      raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
 
@@ -1841,7 +1843,11 @@ export function DungeonRun({
           <span className="dgx-boss__bar">
             <GxBar value={hud.bossHp} />
             {hud.bossMarks.map((v) => (
-              <i key={v} style={{ left: `${v * 100}%` }} className={hud.bossHp! <= v ? 'is-past' : ''} />
+              <i
+                key={v}
+                style={{ left: `${v * 100}%` }}
+                className={hud.bossHp! <= v ? 'is-past' : ''}
+              />
             ))}
           </span>
         </div>

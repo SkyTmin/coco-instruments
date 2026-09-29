@@ -1097,7 +1097,7 @@ zonePainter('f4_judge', (g, z, px, py, scale, time) => {
     if (V.verdict === 2) c = C.red;
     if (V.verdict === 1) c = col.hi;
     al *= appear * ringA;
-    const rows = RUNES3[(i * 7 + (zz.id % 4)) % 4];
+    const rows = RUNES3[(((i * 7 + (zz.id % 4)) % 4) + 4) % 4];
     g.fillStyle = C.ink;
     g.globalAlpha = al * 0.5;
     g.fillRect(x - 1, y - 1, 5, 5);
@@ -1304,7 +1304,7 @@ zonePainter('f4_scorch', (g, z, px, py, scale) => {
     return p;
   });
   drawCentered(g, sootImg, x, y, 0.6 * eOut(a / 0.06) * out);
-  drawCentered(g, crackNet(zz.id % 5, 7, 3, 13, 1, 0.6), x, y, out);
+  drawCentered(g, crackNet(((zz.id % 5) + 5) % 5, 7, 3, 13, 1, 0.6), x, y, out);
   // Кольцо выжженных рун.
   g.fillStyle = heat(0.35);
   g.globalAlpha = out;
@@ -2056,7 +2056,7 @@ zonePainter('f4_collapse', (g, z, px, py, scale) => {
   const y = Math.round(py);
   if (offView(g, x - 110, y - 90, x + 110, y + 110)) return true;
   const out = a < 1.8 ? 1 : 1 - (a - 1.8) / 0.8;
-  drawCentered(g, crackNet(zz.id % 4, 11, 16, 60, cl(a / 0.25), 0.7), x, y + 8, out);
+  drawCentered(g, crackNet(((zz.id % 4) + 4) % 4, 11, 16, 60, cl(a / 0.25), 0.7), x, y + 8, out);
   for (let i = 0; i < 40; i++) {
     // Волна пыли идёт в зал — на юг и в стороны; позади трона стена.
     const ang = -0.15 * Math.PI + (i / 40) * 1.3 * Math.PI + (hs(zz.id, i) - 0.5) * 0.12;

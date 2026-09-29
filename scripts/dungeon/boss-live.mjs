@@ -97,6 +97,18 @@ for (let i = 0; i < 40; i++) {
   if (st === 'fight') break;
   await p.waitForTimeout(250);
 }
+// Бой начат — встать к самому боссу: у больших арен (идол 4-го) точка
+// входа в бой далеко от него, и окно записи смотрело бы в пустоту.
+await p.evaluate(
+  (dy) => {
+    const s = window.__dg;
+    const b = s.mobs.find((m) => s.boss && m.kind === s.boss.def.mob);
+    if (!b) return;
+    s.hero.x = b.x;
+    s.hero.y = b.y + dy;
+  },
+  Number(process.env.DY ?? 4),
+);
 if (process.env.HP)
   await p.evaluate((k) => {
     const s = window.__dg;
@@ -164,6 +176,8 @@ const meta = await p.evaluate(
   { secs, crop, every },
 );
 if (attack) clearInterval(attack);
+// Снимок всей страницы в конце — видно, что было вокруг (для разбора).
+await p.screenshot({ path: `${out}/page.png` });
 for (let i = 0; i < meta.count; i++) {
   const url = await p.evaluate((i) => window.__shots[i].toDataURL('image/png'), i);
   fs.writeFileSync(

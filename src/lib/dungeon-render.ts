@@ -332,6 +332,8 @@ export class DungeonRenderer {
   private warmIt: Iterator<unknown> | null = null;
   private warmQueue: (() => Iterator<unknown>)[] = [];
   private warmDone = new Set<string>();
+  /** Рисовальщики этажей, упавшие с ошибкой: больше не зовутся (v2.85). */
+  private broken = new Set<string>();
   private ghostT = 0;
   private dt = 0;
   /** Куски карты нарисованы плитками 0x72 (иначе — прежними). */
@@ -817,7 +819,9 @@ export class DungeonRenderer {
       if (p.kind === 'deco' || p.kind === 'breakable') {
         // Предмет этажа рисует сам этаж; нет рисовальщика — не рисуем.
         const f = PROP_PAINTERS.get(p.obj.ref ?? '');
-        const sp = f?.(p.obj, this.time, p.alive, p.flash > 0);
+        const sp = f
+          ? this.guard(`prop:${p.obj.ref}`, () => f(p.obj, this.time, p.alive, p.flash > 0), null)
+          : null;
         if (!sp) continue;
         const bottom = Math.floor(p.y) + 1;
         const x0 = p.x * TS - left - sp.ax;
@@ -1031,6 +1035,27 @@ export class DungeonRenderer {
 
   // ---- Движок анимаций (v2.85) ----------------------------------------------
 
+  /**
+   * Вызов рисовальщика этажа под защитой. Упал — пишем один раз в консоль,
+   * больше его не зовём (рисуется запасной вид), а кадр и бой идут дальше.
+   * Без этого одно исключение в картинке останавливало цикл кадров: игра
+   * замирала намертво.
+   */
+  private guard<T>(key: string, fn: () => T, fallback: T): T {
+    if (this.broken.has(key)) return fallback;
+    try {
+      return fn();
+    } catch (e) {
+      this.broken.add(key);
+      console.error(`рисовальщик ${key} упал и отключён`, e);
+      const g = this.bctx;
+      g.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'source-over';
+      return fallback;
+    }
+  }
+
   /** Кадр моба на экран: сдвиг, сжатие, наклон от точки ног, прозрачность. */
   private place(p: Placed, img: HTMLCanvasElement): void {
     const g = this.bctx;
@@ -1063,7 +1088,11 @@ export class DungeonRenderer {
       const px = this.q(it.rec.x * TS - left);
       const py = this.q(it.rec.y * TS - top);
       g.save();
-      const alive = it.def.paint(g, it.rec, px, py, TS, it.age, this.time);
+      const alive = this.guard(
+        `impact:${it.rec.art}`,
+        () => it.def.paint(g, it.rec, px, py, TS, it.age, this.time),
+        false,
+      );
       g.restore();
       g.globalAlpha = 1;
       if (alive !== false) keep.push(it);
@@ -1113,7 +1142,8 @@ export class DungeonRenderer {
         if (!next) return;
         this.warmIt = next();
       }
-      if (this.warmIt.next().done) this.warmIt = null;
+      const it = this.warmIt;
+      if (this.guard('warm', () => it.next().done, true)) this.warmIt = null;
     }
   }
 
@@ -1732,7 +1762,7 @@ export class DungeonRenderer {
       const got =
         art.kind === 'x72'
           ? x72MobFrame(art, pose.anim, pose.frame, pose.left, pose.flash, pose.look)
-          : (MOB_PAINTERS.get(art.id)?.(m, pose) ?? null);
+          : this.guard(`mob:${art.id}`, () => MOB_PAINTERS.get(art.id)?.(m, pose) ?? null, null);
       fr = got ?? blobFrame(m.r, pose.flash);
       eye = fr.eye ?? null;
     }
@@ -1903,7 +1933,9 @@ export class DungeonRenderer {
 
   private drawShot(s: Sim['shots'][number], left: number, top: number): void {
     const g = this.bctx;
-    const sp = SHOT_PAINTERS.get(s.art)?.(s, this.time) ?? orbSprite(s.status);
+    const sp =
+      this.guard(`shot:${s.art}`, () => SHOT_PAINTERS.get(s.art)?.(s, this.time) ?? null, null) ??
+      orbSprite(s.status);
     const px = s.x * TS - left;
     const py = s.y * TS - top;
     // Тень на полу — видно, куда упадёт навесной.
@@ -2005,7 +2037,11 @@ export class DungeonRenderer {
       if (!!z.above !== above) continue;
       const px = z.x * TS - left;
       const py = z.y * TS - top;
-      if (ZONE_PAINTERS.get(z.art ?? '')?.(g, z, px, py, TS, this.time)) continue;
+      // Зона-картинка с упавшим рисовальщиком не рисуется вовсе; зона с
+      // действием — запасным кругом (её обязаны видеть).
+      const zp = ZONE_PAINTERS.get(z.art ?? '');
+      const bare = !z.dps && !z.status && !z.slow;
+      if (zp && this.guard(`zone:${z.art}`, () => zp(g, z, px, py, TS, this.time), bare)) continue;
       const warn = z.warn ?? 0;
       const [r, gg, b] = statusRgb(z.status ?? (z.slow ? 'slow' : undefined));
       const life = z.t - warn;
@@ -2030,7 +2066,9 @@ export class DungeonRenderer {
       if (!!st.above !== above) continue;
       const px = st.x * TS - left;
       const py = st.y * TS - top;
-      if (ZONE_PAINTERS.get(st.art ?? '')?.(g, st, px, py, TS, this.time)) continue;
+      const sp = ZONE_PAINTERS.get(st.art ?? '');
+      if (sp && this.guard(`zone:${st.art}`, () => sp(g, st, px, py, TS, this.time), false))
+        continue;
       const k = Math.min(1, st.t / st.warn);
       this.drawShape(st.shape, px, py, st.r, k, statusRgb(st.status), st.w, st.ang, st.arc);
     }
