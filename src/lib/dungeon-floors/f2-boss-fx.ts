@@ -165,11 +165,14 @@ function layerBox(x0: number, y0: number, x1: number, y1: number): Layer {
   const w = Math.max(16, Math.ceil((x1 - x0 + 4) / 16) * 16);
   const h = Math.max(16, Math.ceil((y1 - y0 + 4) / 16) * 16);
   const key = w * 4096 + h;
+  // Не больше 40 размеров разом (≈4 МБ): давно не нужный уходит первым.
   let l = LAYERS.get(key);
-  if (!l) {
+  if (l) LAYERS.delete(key);
+  else {
     l = new Layer(w, h);
-    LAYERS.set(key, l);
+    if (LAYERS.size >= 40) LAYERS.delete(LAYERS.keys().next().value as number);
   }
+  LAYERS.set(key, l);
   l.cx = 2 - Math.floor(x0);
   l.cy = 2 - Math.floor(y0);
   l.clear();

@@ -1419,9 +1419,9 @@ function burst(sim: Sim, b: BossFight, armor: Mob, api: SimApi): void {
   vfx(api, sim, 'f2v_splat', armor.x, armor.y, 7);
 }
 
+// v2.85 — только рисунок: третий аргумент `api` — ради `api.vfx` нитей сборки.
 /** Рой не добит — латы собираются: всё ползёт к одной точке. */
 function startGather(sim: Sim, b: BossFight, api: SimApi): void {
-  // v2.85 — только рисунок: api для api.vfx
   b.data.stage = 2;
   b.data.gatherT = 0;
   const plates = sim.mobs.filter((x) => x.kind === F2_PLATE && x.mode !== 'dying');
