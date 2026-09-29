@@ -112,6 +112,7 @@ import {
   stringPluck,
   teleport,
   heartbeat,
+  laserBeam,
   thunder,
   timeResume,
   trainHorn,
@@ -504,6 +505,61 @@ const FLOOR_SOUND: Record<string, () => void> = {
     heartbeat();
   },
   f15b_beat_fast: () => heartbeat(true),
+  // Этаж 15, «Мир»: живой этаж — пульс, дыхание, сок, иммунитет.
+  f15_beat: () => {
+    const now = performance.now();
+    if (now - beatAt < 2600) return;
+    beatAt = now;
+    heartbeat();
+  },
+  f15_squeeze_trap: () => fleshSquelch(true),
+  f15_cough_trap: () => windGust(1),
+  f15_digest_trap: () => {
+    fleshSquelch(true);
+    lavaBubble();
+  },
+  f15_boil: () => lavaBubble(),
+  f15_acid_splash: () => lavaHiss(),
+  f15_digest_call: () => steamBurst(),
+  f15_pop: () => lavaBubble(),
+  f15_dive: () => lavaBubble(),
+  f15_splash: () => lavaBubble(),
+  f15_clot_trap: () => {
+    fleshSquelch(true);
+    deepRumble();
+  },
+  f15_clot_wall: () => fleshSquelch(true),
+  f15_clot_call: () => fleshSquelch(),
+  f15_valves_trap: () => heartbeat(true),
+  f15_alarm_trap: () => heartbeat(true),
+  f15_heart_call: () => {
+    heartbeat(true);
+    beastRoar(false);
+  },
+  f15_immune_trap: () => {
+    heartbeat(true);
+    fleshSquelch(true);
+  },
+  f15_mark_call: () => heartbeat(),
+  f15_nerve_call: () => stringBend(),
+  f15_signal: () => laserBeam(),
+  f15_seen_call: () => laserBeam(),
+  f15_numb_call: () => softChime(-5),
+  f15_gland_call: () => fleshSquelch(),
+  f15_wheel_call: () => {
+    stoneGrind();
+    fleshSquelch();
+  },
+  f15_engulf: () => fleshSquelch(true),
+  f15_engulf_trap: () => fleshSquelch(true),
+  f15_burst: () => fleshSquelch(true),
+  f15_hatch: () => fleshSquelch(),
+  f15_lay: () => fleshSquelch(),
+  f15_brood_trap: () => beastRoar(false),
+  f15_brood_call: () => fleshSquelch(),
+  f15_tonsil_trap: () => fleshSquelch(true),
+  f15_tonsil_call: () => fleshSquelch(),
+  f15_gold_call: () => softChime(4),
 };
 let beatAt = 0;
 

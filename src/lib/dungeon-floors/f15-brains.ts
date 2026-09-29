@@ -763,7 +763,11 @@ function stepLives(sim: Sim, st: F15State, api: SimApi): void {
 // Метка «чужак».
 // ---------------------------------------------------------------------------
 
-export const ALIEN = { passive: 0.12, kill: 1.6, killAb: 0.5, mucus: 24, patrol: [16, 10], response: 25, cap: 5 };
+// Сведение (v2.83.1): на карте с настоящим «Сердцем» бот доходил до ворот в
+// 2 из 6 прогонов — этаж душил числом. Причина — петля: убийство поднимало
+// метку (1,6), метка звала волну, волну убивали. Убийство теперь весит втрое
+// меньше, патрули реже (было 16/10 с) и не больше четырёх антител разом.
+export const ALIEN = { passive: 0.12, kill: 0.5, killAb: 0.15, mucus: 24, patrol: [24, 16], response: 25, cap: 4 };
 
 function stepAlien(sim: Sim, st: F15State, api: SimApi, dt: number): void {
   const h = sim.hero;
@@ -2447,7 +2451,7 @@ registerBrain('f15_mhound', {
 // сока плюётся желчью навесом (лужа там, где лёг плевок).
 // ---------------------------------------------------------------------------
 
-export const MSALA = { rise: 0.72, riseR: 0.95, lunge: 3.2, lungeSpeed: 9, spit: 0.7, diveCd: 4.5 };
+export const MSALA = { rise: 0.72, riseR: 0.95, lunge: 3.2, lungeSpeed: 9, spit: 0.7, diveCd: 4.5, swims: 2 };
 
 const isAcid = (sim: Sim, x: number, y: number) => markAt(sim, Math.floor(x), Math.floor(y)) === M.acid;
 
@@ -2488,14 +2492,19 @@ registerBrain('f15_msala', {
     m.data.bcd = (m.data.bcd ?? 0) - dt;
     m.data.diveCd = (m.data.diveCd ?? 1.5) - dt;
     const wet = isAcid(sim, m.x, m.y);
-    if (wet && ['chase', 'recover', 'windup', 'aim', 'f15_spit'].includes(m.mode)) {
+    // Нырков за жизнь — не больше MSALA.swims (сведение v2.83.1): иначе цикл
+    // «вынырнула — укусила — нырнула» делал её неуязвимой навсегда, и бот
+    // на Т8+5 гиб в Чреве, убив три саламандры из десятков.
+    const swims = m.data.swims ?? 0;
+    if (wet && swims < MSALA.swims && ['chase', 'recover', 'windup', 'aim', 'f15_spit'].includes(m.mode)) {
       api.setMode(m, 'f15_swim');
+      m.data.swims = swims + 1;
       m.data.ghost = 1;
     }
     switch (m.mode) {
       case 'chase': {
         m.data.ghost = 0;
-        if (m.data.diveCd <= 0 && (m.hp < m.maxHp * 0.7 || dist > 3.6)) {
+        if ((m.data.swims ?? 0) < MSALA.swims && m.data.diveCd <= 0 && (m.hp < m.maxHp * 0.7 || dist > 3.6)) {
           const lv = acidNear(sim, m.x, m.y, 2, (cx, cy) => hypot(cx - m.x, cy - m.y));
           if (lv && hypot(lv[0] - m.x, lv[1] - m.y) < 1.8) {
             m.data.tx = lv[0];
@@ -2589,6 +2598,7 @@ registerBrain('f15_msala', {
         if (m.t > 0.25) m.data.ghost = 1;
         if (m.t > 0.4 || l < 0.2) {
           api.setMode(m, 'f15_swim');
+          m.data.swims = (m.data.swims ?? 0) + 1;
           m.data.ghost = 1;
           sim.events.push({ t: 'boss', what: 'f15_dive' });
         }
