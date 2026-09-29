@@ -2756,8 +2756,12 @@ function idolGaze(r: IdolRig, t: number, W: number, E: number, now: number): voi
   const fall = eInOut(seg(t, W + 0.8, E));
   const upK = snap > 0 ? eBack(snap, 2.4) : 0;
   const hold = (1 - fall) * upK;
-  r.hy += dip * (1 - snap) * 3 - hold * 3;
-  r.ty += dip * (1 - snap) * 1 - hold * 1;
+  // Рывок вверх с перелётом, потом голова оседает: подбородок остаётся
+  // задран, а глаза встают туда, откуда бьёт конус взора (−57…−58 точек от
+  // ног, `IDOL_EYES` у «Техник»).
+  const settle = eInOut(seg(t, 0.38, 0.62));
+  r.hy += dip * (1 - snap) * 3 - hold * 3 * (1 - settle);
+  r.ty += dip * (1 - snap) * 1 - hold * (1 - settle);
   r.nod = dip * (1 - snap) - hold;
   r.jaw = hold * (snap >= 1 ? 1 : 0);
   r.L = mixArm(r.L, mirrorArm(ARM.grip), dip);
@@ -2769,7 +2773,6 @@ function idolGaze(r: IdolRig, t: number, W: number, E: number, now: number): voi
   r.eye = snap > 0 ? 0.4 + 0.6 * eIn(charge) : 0.5 - 0.35 * dip;
   // Последние треть секунды перед залпом накал дрожит — вот-вот ударит.
   if (t > W - 0.33 && t < W) r.eye = Math.floor(qf(now, 12) * 12) % 2 ? 1 : 0.84;
-  r.ty -= hold * eOut(charge);
   // Волны: вспышка и отдача головы на три кадра.
   let kick = 0;
   let beam = 0;
@@ -3549,6 +3552,9 @@ interface IdolWreck {
   /** Голова на боку — последние кадры и предмет «разбит». */
   lying: Px;
   lyingBox: number[];
+  /** Та же голова стоймя с сомкнутой ухмылкой — для кадров поворота. */
+  still: Px;
+  stillBox: number[];
   chunks: Px;
 }
 
@@ -3661,6 +3667,8 @@ function idolWreck(): IdolWreck {
     headTo,
     lying,
     lyingBox: boxOf(lying),
+    still: still.p,
+    stillBox: still.box,
     chunks,
   };
   return wreckCache;
@@ -3685,6 +3693,75 @@ function dustAt(p: OPx, x: number, y: number, k: number, w: number, seed: number
   }
 }
 
+/**
+ * Половина торса бьётся о пол и рассыпается: картинка режется на куски 6×6,
+ * каждый отлетает от середины низа и падает — два кадра, пока пыль не
+ * накроет подмену на обломки.
+ */
+function shatterBlit(p: Px, src: Px, box: number[], dx: number, dy: number, k: number): void {
+  const [x0, y0, x1, y1] = box;
+  const cx = (x0 + x1) / 2;
+  const w = p.w;
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const i = (y * w + x) * 4;
+      if (!src.data[i + 3]) continue;
+      const bx = Math.floor((x - x0) / 6);
+      const by = Math.floor((y - y0) / 6);
+      const cxb = x0 + bx * 6 + 3;
+      const spread = (cxb - cx) / 6;
+      const up = (y1 - (y0 + by * 6)) / 6;
+      const jit = ((bx * 7 + by * 13) % 5) - 2;
+      const tx = Math.round(x + dx + spread * k * 5 + jit * k);
+      const ty = Math.round(y + dy - up * k * 3 + k * k * 6);
+      if (tx < 0 || ty < 0 || tx >= w || ty >= p.h) continue;
+      const j = (ty * w + tx) * 4;
+      for (let c = 0; c < 4; c++) p.data[j + c] = src.data[i + c];
+    }
+}
+
+/**
+ * Поворот куска вокруг его середины — кадр-другой, пока голова валится на
+ * бок. Ближайший пиксель: в движении рваный край не читается.
+ */
+function rotBlit(p: Px, src: Px, box: number[], ang: number, dcx: number, dcy: number): void {
+  const [x0, y0, x1, y1] = box;
+  const scx = (x0 + x1 + 1) / 2;
+  const scy = (y0 + y1 + 1) / 2;
+  const c = Math.cos(ang);
+  const sn = Math.sin(ang);
+  const rad = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 2) + 1;
+  for (let y = Math.floor(dcy - rad); y <= Math.ceil(dcy + rad); y++)
+    for (let x = Math.floor(dcx - rad); x <= Math.ceil(dcx + rad); x++) {
+      if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;
+      const vx = x + 0.5 - dcx;
+      const vy = y + 0.5 - dcy;
+      const sx = Math.floor(scx + c * vx + sn * vy);
+      const sy = Math.floor(scy - sn * vx + c * vy);
+      if (sx < x0 || sy < y0 || sx > x1 || sy > y1) continue;
+      const i = (sy * src.w + sx) * 4;
+      if (!src.data[i + 3]) continue;
+      const j = (y * p.w + x) * 4;
+      for (let k = 0; k < 4; k++) p.data[j + k] = src.data[i + k];
+    }
+}
+
+/** Клуб пыли: плотный в первые кадры — под ним одна картинка сменяет другую. */
+function dustCloud(p: OPx, x: number, y: number, k: number, w: number, seed: number): void {
+  if (k <= 0 || k >= 1) return;
+  const n = 14;
+  for (let i = 0; i < n; i++) {
+    const a = ((i + 0.5) / n) * Math.PI + (((seed * 13 + i * 7) % 5) - 2) * 0.1;
+    const d = w * (0.15 + 0.85 * eOut(k)) * (0.6 + ((i * 5 + seed) % 4) * 0.13);
+    const px = Math.round(x + Math.cos(a) * d);
+    const py = Math.round(y - Math.sin(a) * d * 0.45 - k * 4);
+    const al = Math.round(200 * (1 - k) * (1 - k * 0.4));
+    const c = i % 3 ? hex('#aaa494', al) : hex('#cfc9b8', al);
+    const sz = k < 0.35 ? 2 : k < 0.7 ? 1 : 0;
+    for (let yy = 0; yy <= sz; yy++) for (let xx = 0; xx <= sz; xx++) p.set(px + xx, py - yy, c);
+  }
+}
+
 /** Кадр распада после раскола (t ≥ BREAK_T). */
 function paintIdolCollapse(t: number): Px {
   const W = idolWreck();
@@ -3701,14 +3778,21 @@ function paintIdolCollapse(t: number): Px {
   const tt = t - BREAK_T;
   // Половины торса: расходятся по шву, падают с разгоном, бьются и крошатся.
   const LAND = 0.3;
+  const CRUMBLE = 2 / 24;
   if (tt < LAND) {
     const k = tt / LAND;
     blit(p, W.halves[0], -Math.round(1 + k * 8), Math.round(k * k * 30), W.boxes[0]);
     blit(p, W.halves[1], Math.round(1 + k * 6), Math.round(k * k * 22), W.boxes[1]);
   } else {
-    blit(p, W.chunks, 0, 0, boxOf(W.chunks));
-    dustAt(p, 8, 72, (tt - LAND) / 0.5, 13, 1);
-    dustAt(p, 54, 62, (tt - LAND) / 0.5, 10, 2);
+    const c = (tt - LAND) / CRUMBLE;
+    if (c < 1) {
+      // Удар о пол: половины рассыпаются на куски, обломки уже лежат под ними.
+      blit(p, W.chunks, 0, 0, boxOf(W.chunks));
+      shatterBlit(p, W.halves[0], W.boxes[0], -9, 30, 0.5 + c * 0.5);
+      shatterBlit(p, W.halves[1], W.boxes[1], 7, 22, 0.5 + c * 0.5);
+    } else blit(p, W.chunks, 0, 0, boxOf(W.chunks));
+    dustCloud(p, 8, 72, (tt - LAND) / 0.55, 15, 1);
+    dustCloud(p, 54, 62, (tt - LAND) / 0.55, 12, 2);
   }
   // Голова: раскол подбрасывает её, она падает дугой к подножию, отскакивает
   // и валится на бок.
@@ -3725,8 +3809,17 @@ function paintIdolCollapse(t: number): Px {
     const k = (tt - HL) / 0.1;
     blit(p, W.head, ex, Math.round(ey - Math.sin(k * Math.PI) * 3), W.headBox);
     dustAt(p, 48, 87, k * 0.5, 12, 4);
+  } else if (tt < HL + 0.1 + 2 / 24) {
+    // Валится на бок: два кадра поворота, на втором — почти лёжа.
+    const k = tt - HL - 0.1 < 1 / 24 ? 0.33 : 0.72;
+    const [hx0, hy0, hx1, hy1] = W.headBox;
+    const cx = (hx0 + hx1 + 1) / 2 + ex;
+    const cy = (hy0 + hy1 + 1) / 2 + ey;
+    rotBlit(p, W.still, W.stillBox, (k * Math.PI) / 2, cx + k * 1, cy + k * 1);
+    dustAt(p, 48, 87, 0.5, 12, 4);
   } else {
     blit(p, W.lying, 0, 0, W.lyingBox);
+    dustCloud(p, 50, 86, (tt - HL - 0.1 - 2 / 24) / 0.5, 11, 3);
     dustAt(p, 48, 87, 0.5 + (tt - HL - 0.1) / 0.8, 12, 3);
   }
   outlineRaw(p, INK);
