@@ -330,6 +330,7 @@ export class DungeonRenderer {
   private remainsOf: Sim | null = null;
   /** Прогрев кадров (`registerMobWarm`): текущий генератор и готовые. */
   private warmIt: Iterator<unknown> | null = null;
+  private warmQueue: (() => Iterator<unknown>)[] = [];
   private warmDone = new Set<string>();
   private ghostT = 0;
   private dt = 0;
@@ -919,6 +920,7 @@ export class DungeonRenderer {
       this.mobGhosts = [];
       this.impacts = [];
       this.warmIt = null;
+      this.warmQueue = [];
       this.warmDone.clear();
       this.remainsOf = sim;
     }
@@ -976,9 +978,9 @@ export class DungeonRenderer {
     }
     list.push({ y: h.y + 0.02, draw: () => this.drawHero(sim, gear, left, top) });
     list.sort((a, b) => a.y - b.y);
-    for (const d of list) d.draw();
-
+    // Шлейф мобов — под мобами, как у героя: поверх тела силуэт подкрашивал бы его.
     this.drawMobGhosts(left, top);
+    for (const d of list) d.draw();
 
     // Частицы.
     this.drawParticles(dt, left, top);
@@ -1093,25 +1095,25 @@ export class DungeonRenderer {
   /** Прогрев: до 3 мс за кадр на генераторы кадров боссов, что есть в мире. */
   private warmStep(sim: Sim): void {
     if (!MOB_WARM.size) return;
-    if (!this.warmIt) {
+    if (!this.warmIt && !this.warmQueue.length)
       for (const m of sim.mobs) {
         const art = MOBS[m.kind]?.art;
         if (!art || art.kind !== 'paint' || this.warmDone.has(art.id)) continue;
-        const gen = MOB_WARM.get(art.id);
         this.warmDone.add(art.id);
-        if (gen) {
-          this.warmIt = gen();
+        const gens = MOB_WARM.get(art.id);
+        if (gens?.length) {
+          this.warmQueue = [...gens];
           break;
         }
       }
-      if (!this.warmIt) return;
-    }
     const t0 = performance.now();
     while (performance.now() - t0 < 3) {
-      if (this.warmIt.next().done) {
-        this.warmIt = null;
-        return;
+      if (!this.warmIt) {
+        const next = this.warmQueue.shift();
+        if (!next) return;
+        this.warmIt = next();
       }
+      if (this.warmIt.next().done) this.warmIt = null;
     }
   }
 
@@ -1762,7 +1764,8 @@ export class DungeonRenderer {
         g.ellipse(px, py + 2, fr.shadow, Math.max(1.5, fr.shadow * 0.28), 0, 0, Math.PI * 2);
         g.fill();
       }
-      if (def?.fly) dy = -6 + (fr.still ? 0 : Math.round(Math.sin(this.time * 5 + m.id) * 1.5));
+      if (def?.fly)
+        dy = -(fr.lift ?? 6) + (fr.still ? 0 : Math.round(Math.sin(this.time * 5 + m.id) * 1.5));
     } else if (!def?.fly) {
       g.fillStyle = 'rgba(0,0,0,0.32)';
       g.beginPath();
@@ -1782,7 +1785,7 @@ export class DungeonRenderer {
       g.beginPath();
       g.ellipse(px, py + 2, Math.max(2, m.r * TS * 0.8), 1.5, 0, 0, Math.PI * 2);
       g.fill();
-      dy = -6 + (fr.still ? 0 : Math.round(Math.sin(this.time * 5 + m.id) * 1.5));
+      dy = -(fr.lift ?? 6) + (fr.still ? 0 : Math.round(Math.sin(this.time * 5 + m.id) * 1.5));
     }
     if (m.mode === 'dying') {
       if (fr.linger !== undefined) {
@@ -2036,6 +2039,9 @@ export class DungeonRenderer {
       const px = m.x * TS - left;
       const py = m.y * TS - top;
       const def = MOBS[m.kind];
+      // Этаж рисует метки этого моба сам (v2.85, `m.data.vNoTele`): красная
+      // заливка движка легла бы поверх его картинки.
+      if (m.data.vNoTele) continue;
       if (m.mode === 'windup' && def) {
         const k = Math.min(1, m.t / Math.max(0.05, def.windup));
         const reach = (def.reach + m.r + 0.2) * TS;
