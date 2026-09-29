@@ -220,11 +220,12 @@ function dust(
   body: RGB = DUST,
   light: RGB = DUST_L,
   shade: RGB = DUST_D,
+  alpha = 0.95,
 ): void {
   if (k < 0 || k >= 1) return;
   const r = rMax * (k < 0.2 ? easeOut(k / 0.2) : 1 - easeIn((k - 0.2) / 0.8));
   if (r < 0.5) return;
-  const a = 0.95 - 0.35 * k;
+  const a = alpha * (1 - 0.4 * k);
   const s = (n * 2.39996) % TAU;
   const lumps: [number, number, number][] = [
     [0, 0, r],
@@ -580,15 +581,15 @@ registerZonePainter('f2v_swdust', (g, z, px, py, S) => {
   const a0 = a - dir * h;
   const L = layer(R * 1.35 + 8);
   const r = rnd(seedAt(zz.x, zz.y) ^ Math.floor(a * 1000));
-  for (let i = 0; i < 12; i++) {
-    const f = 0.1 + 0.9 * (i / 11);
+  for (let i = 0; i < 8; i++) {
+    const f = 0.15 + 0.85 * (i / 7);
     const tb = SWEEP_T * f;
     const ang = a0 + dir * (2 * h + OVER) * (1 - (1 - f) * (1 - f)) + (r() - 0.5) * 0.12;
     const rr = R * (0.72 + 0.3 * r());
     const tang = ang + (dir * Math.PI) / 2;
     const v = 22 + 22 * r();
     const tt = t - tb;
-    const life = 0.5 + 0.35 * r();
+    const life = 0.4 + 0.25 * r();
     if (tt < 0 || tt > life) continue;
     const m = fly(
       tt,
@@ -601,7 +602,8 @@ registerZonePainter('f2v_swdust', (g, z, px, py, S) => {
       0,
     );
     const k = tt / life;
-    dust(L, Math.cos(ang) * rr + m.x, Math.sin(ang) * rr + m.y - 5 * easeOut(k), 4.2, k, i);
+    const x = Math.cos(ang) * rr + m.x;
+    dust(L, x, Math.sin(ang) * rr + m.y - 5 * easeOut(k), 3.4, k, i, DUST, DUST_L, DUST_D, 0.75);
   }
   L.blit(g, px, py);
   return true;
@@ -647,7 +649,7 @@ registerZonePainter('f2_thrust', (g, z, px, py, S, time) => {
         c = WHITE;
         aa = 0.6 + 0.35 * pulse;
       } else if (Math.abs(ac) < 3.5 && al > 12 && al < reach - 4) {
-        const ph = (((al - Math.abs(ac) * 1.1 - off) % gap) + gap) % gap;
+        const ph = (((al + Math.abs(ac) * 1.1 - off) % gap) + gap) % gap;
         if (ph < 1) {
           c = late ? WHITE : HOT;
           aa = late ? 0.8 : 0.3 + 0.5 * k;
@@ -683,6 +685,9 @@ registerZonePainter('f2_thrust', (g, z, px, py, S, time) => {
   return true;
 });
 
+/** Высота клинка над полом при выпаде, пиксели: жила идёт на уровне меча. */
+const THRUST_Z = 11;
+
 registerImpactPainter('f2_thrust', {
   life: 0.42,
   shake: 0.2,
@@ -693,13 +698,14 @@ registerImpactPainter('f2_thrust', {
     const a = rec.ang ?? 0;
     const ca = Math.cos(a);
     const sa = Math.sin(a);
-    const L = layer(Ln + 26);
+    const Z = THRUST_Z;
+    const L = layer(Ln + 30);
     // Прокол: жила выстреливает до конца за две смены кадра, потом хвост
-    // догоняет остриё — удар «уходит» вперёд.
+    // догоняет остриё — удар «уходит» вперёд и тает.
     const front = 6 + (Ln - 6) * easeOut(age / 0.05);
     const tail = 6 + (Ln - 12) * easeIn((age - 0.05) / 0.22);
     const fade = clamp01(1 - (age - 0.05) / 0.26);
-    const glow = age < 0.12 ? 1 - age / 0.12 : 0;
+    const glow = age < 0.1 ? 1 - age / 0.1 : 0;
     const B = Math.ceil(Ln + hw + 4);
     if (front - tail > 1 && fade > 0)
       for (let y = -B; y < B; y++)
@@ -709,18 +715,18 @@ registerImpactPainter('f2_thrust', {
           const al = cx * ca + cy * sa;
           if (al < tail || al >= front) continue;
           const ac = Math.abs(-cx * sa + cy * ca);
-          // Остриё — клином: к концу жила сужается.
-          const nose = clamp01((front - al) / 6);
-          const w = (1 + 2.5 * fade) * (0.4 + 0.6 * nose);
-          if (ac < w * 0.45) L.set(x, y, WHITE, Math.min(1, fade * 1.6));
-          else if (ac < w * 1.3) {
-            if (L.keep(x, y, 0.4 + 0.6 * fade)) L.set(x, y, EDGE, 0.85);
-          } else if (glow > 0 && ac < hw && L.keep(x, y, 0.45 * glow * (1 - ac / hw)))
-            L.set(x, y, SPEC, 0.55);
+          // Остриё — клином: к концу жила сужается; к хвосту — тоже.
+          const nose = clamp01((front - al) / 7);
+          const back = clamp01((al - tail) / 10);
+          const w = (0.8 + 1.6 * fade) * (0.35 + 0.65 * Math.min(nose, 0.5 + back));
+          if (ac < w * 0.5) L.set(x, y - Z, WHITE, 1);
+          else if (ac < w * 1.25) L.set(x, y - Z, EDGE, 0.95 * Math.max(0.4, fade));
+          else if (ac < w * 1.25 + 1) L.set(x, y - Z, WAVE[1], 0.7 * fade);
+          else if (glow > 0 && ac < hw) L.set(x, y - Z, SPEC, 0.3 * glow * (1 - ac / hw));
         }
     // Остриё: звезда на бегущем конце, у цели — кольцо и звезда крупнее.
     const tx = front * ca;
-    const ty = front * sa;
+    const ty = front * sa - Z;
     if (age < 0.16)
       star(L, tx, ty, age < 0.05 ? 4 : 7 - Math.floor(age * 30), WHITE, age > 0.04 ? 3 : 0);
     if (age > 0.04 && age < 0.28) {
@@ -728,20 +734,20 @@ registerImpactPainter('f2_thrust', {
       const rr = 3 + 12 * easeOut(k);
       ring(L, tx, ty, rr - 1, rr, SPEC, 0.9 * (1 - k), 1 - k * 0.6);
     }
-    // Спутный след: две штриховые линии расходятся от дорожки.
+    // Спутный след: две штриховые линии расходятся от жилы.
     if (age > 0.03) {
       const k = clamp01((age - 0.03) / 0.32);
-      const offc = hw + 1 + 20 * easeOut(k);
+      const offc = 4 + 18 * easeOut(k);
       for (let s = Ln * 0.18; s < Ln * 0.96; s += 1) {
         if ((Math.floor(s) + Math.floor(age * 90)) % 8 > 4 - Math.floor(k * 3)) continue;
         for (const side of [-1, 1])
-          L.set(s * ca - side * offc * sa, s * sa + side * offc * ca, SPEC, 0.6 * (1 - k));
+          L.set(s * ca - side * offc * sa, s * sa + side * offc * ca - Z, SPEC, 0.6 * (1 - k));
       }
     }
-    // Штрихи скорости: летят вдоль дорожки быстрее самого удара.
+    // Штрихи скорости: летят вдоль жилы быстрее самого удара.
     const r = rnd(rec.seed);
     for (let i = 0; i < 7; i++) {
-      const c = (r() - 0.5) * hw * 2.8;
+      const c = (r() - 0.5) * hw * 2.4;
       const t0 = r() * 0.08;
       const k = (age - t0) / 0.14;
       if (k < 0 || k > 1) continue;
@@ -749,27 +755,27 @@ registerImpactPainter('f2_thrust', {
       line(
         L,
         s0 * ca - c * sa,
-        s0 * sa + c * ca,
+        s0 * sa + c * ca - Z,
         (s0 + 10) * ca - c * sa,
-        (s0 + 10) * sa + c * ca,
+        (s0 + 10) * sa + c * ca - Z,
         WHITE,
         0.85 * (1 - k),
       );
     }
-    // Искры с острия.
-    for (let i = 0; i < 9; i++) {
+    // Искры с острия: вперёд веером и вниз, на пол.
+    for (let i = 0; i < 10; i++) {
       const sp = (r() - 0.5) * 1.7;
       const v = 60 + 90 * r();
       spark(
         L,
         age - 0.045,
-        0.14 + 0.18 * r(),
+        0.16 + 0.2 * r(),
         Ln * ca,
         Ln * sa,
         Math.cos(a + sp) * v,
         Math.sin(a + sp) * v,
-        20 + 50 * r(),
-        8,
+        10 + 40 * r(),
+        Z,
       );
     }
     L.blit(g, px, py);
@@ -1051,16 +1057,17 @@ registerImpactPainter('f2_leap', {
     }
     // Кольцо пыли: клубы разлетаются, тормозят, растут, поднимаются и оседают.
     const r = rnd(seed ^ 0xabc);
-    for (let i = 0; i < 18; i++) {
-      const ang = (i / 18) * TAU + (r() - 0.5) * 0.35;
-      const v = 60 + 50 * r();
+    for (let i = 0; i < 14; i++) {
+      const ang = (i / 14) * TAU + (r() - 0.5) * 0.35;
+      const v = 75 + 55 * r();
       const life = 0.65 + 0.45 * r();
       const tt = age - 0.015 * r();
       if (tt < 0 || tt > life) continue;
       const k = tt / life;
       const f = fly(tt, Math.cos(ang) * v, Math.sin(ang) * v * 0.8, 0, 0, 4.2, 0, 0);
       const r0 = R * 0.4;
-      dust(L, Math.cos(ang) * r0 + f.x, Math.sin(ang) * r0 + f.y - 8 * easeOut(k), 6.5, k, i);
+      const y = Math.sin(ang) * r0 + f.y - 9 * easeOut(k);
+      dust(L, Math.cos(ang) * r0 + f.x, y, 4.2 + 1.6 * r(), k, i, DUST_L, PALE, DUST, 0.85);
     }
     // Осколки плит: подлетают, падают с отскоком, лежат и тают.
     for (let i = 0; i < 16; i++) {
