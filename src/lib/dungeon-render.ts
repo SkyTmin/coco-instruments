@@ -932,6 +932,9 @@ export class DungeonRenderer {
         continue;
       }
       r.m.t += dt;
+      // Вспышка добившего удара гаснет, как у живого: иначе труп весь
+      // `linger` рисовался бы белым.
+      r.m.flash = Math.max(0, r.m.flash - dt);
       if (r.m.t >= r.linger) {
         this.remains.delete(id);
         continue;

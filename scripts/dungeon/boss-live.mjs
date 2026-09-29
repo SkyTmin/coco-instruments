@@ -128,12 +128,17 @@ const meta = await p.evaluate(
     const times = [];
     const t0 = performance.now();
     let n = 0;
+    let last = null;
     await new Promise((done) => {
       const tick = () => {
         const now = performance.now();
         if (now - t0 > secs * 1000) return done();
         if (n++ % every === 0) {
-          const bm = s.mobs.find((m) => s.boss && m.kind === s.boss.def.mob) ?? s.hero;
+          // Босс убит — окно остаётся на его последнем месте: сцена смерти
+          // (\`linger\`) доигрывает там же.
+          const live = s.mobs.find((m) => s.boss && m.kind === s.boss.def.mob);
+          if (live) last = { x: live.x, y: live.y };
+          const bm = live ?? last ?? s.hero;
           const c = r.toScreen(bm.x, bm.y);
           const x = Math.round(c.x * dpr - side / 2);
           const y = Math.round(c.y * dpr - side * 0.62);
