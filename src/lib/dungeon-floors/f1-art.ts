@@ -2478,11 +2478,29 @@ function idleClip(look: KingLook): Clip {
         sq: T >= 0.9 && T < 1.0 ? 1 : 0,
         wa: base.wa + 0.06 * Math.sin(ph * 2 - 0.6),
       });
+      // Раз в цикл король играет оружием: тесак делает оборот в кисти,
+      // рельс подпрыгивает на плече.
+      const fl = clamp((T - 1.84) / 0.36, 0, 1);
+      let smear: KFx['smear'];
+      if (fl > 0 && fl < 1) {
+        const e = EZ.io(fl);
+        if (look.blade) {
+          p.wa += Math.sin(fl * Math.PI) * 0.35;
+          p.nhy -= Math.sin(fl * Math.PI) * 0.7;
+          p.hy += Math.sin(fl * Math.PI) * 0.25;
+        } else {
+          p.wa -= e * TAU;
+          p.nhy -= Math.sin(fl * Math.PI) * 0.8;
+          p.nhx += Math.sin(fl * Math.PI) * 0.4;
+          if (fl > 0.15 && fl < 0.85) smear = [T - 0.06, T, 0.5];
+        }
+      }
       return {
         p,
         fx: {
           weapon,
           lid: !look.blade,
+          smear,
           wave: ph * 2,
           waveAmp: 0.4,
           // Рельс лежит на плече одной рукой, за головой.
@@ -2517,10 +2535,10 @@ function runClip(look: KingLook): Clip {
       nfl: lift(0),
       ffx: -1.4 - sw,
       ffl: lift(Math.PI),
-      nhx: look.blade ? base.nhx + 0.25 * Math.sin(p * 2) : 2.2 - sw * 0.55,
-      nhy: look.blade ? base.nhy + 0.3 * bob : 4.1,
-      fhx: 1.9 + sw * 0.45,
-      fhy: 4.0,
+      nhx: look.blade ? base.nhx + 0.25 * Math.sin(p * 2) : 2.4 - sw * 0.75,
+      nhy: look.blade ? base.nhy + 0.3 * bob : 3.9 - Math.max(0, -sw) * 0.35,
+      fhx: 1.9 + sw * 0.6,
+      fhy: 3.9 - Math.max(0, sw) * 0.3,
       wa: look.blade ? base.wa + 0.08 * Math.sin(p * 2 - 0.8) : 1.25 - sw * 0.1,
       ts: 0.3 * Math.sin(p * 2),
       tu: 0.12,
@@ -3941,9 +3959,11 @@ function deathClip(look: KingLook): Clip {
       return [35 + 3 * k, -1.5 * Math.sin(Math.PI * k), 4.9 + 0.8 * k];
     }
     // Катится и качается, пока не ляжет на бок.
+    // Катится ободом, покачивается и встаёт ровно — корона лежит перед
+    // мёртвым королём, её видно издали.
     const k = clamp((t - 0.72) / 0.45, 0, 1);
-    const wob = Math.sin(k * Math.PI * 3) * (1 - k) * 0.45;
-    return [38 + 7 * EZ.out2(k), 0, 5.7 + 0.9 * EZ.out2(k) + wob];
+    const wob = Math.sin(k * Math.PI * 3) * (1 - k) * 0.5;
+    return [38 + 7 * EZ.out2(k), 0, TAU + 0.12 + (5.7 - TAU) * (1 - EZ.out2(k)) + wob];
   };
   return {
     id: `die${rail ? 'R' : 'C'}`,
@@ -4209,7 +4229,7 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
   const wst = 1 / (fx.whirlSx ?? 1);
   const G: Geo = { w: W, h: H, cx: QG.cx + 1, gy: base + 1, id: 'q' };
   if (fx.whirl && fx.whirl[1] > 0) {
-    paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], true, 1.7 * TS, wst);
+    paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], true, 1.7 * TS, wst, false, !!fx.flip);
     litUsed = true;
   }
   const leg = (l: [V, V], far: boolean) => {
@@ -4323,7 +4343,8 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
     }
   } else drawCrown(Math.round(headX - headR * 0.9), Math.round(headY - headR * 1.15));
   outlineFast(px, KING_PAL.ink);
-  if (fx.whirl && fx.whirl[1] > 0) paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], false, 1.7 * TS, wst);
+  if (fx.whirl && fx.whirl[1] > 0)
+    paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], false, 1.7 * TS, wst, false, !!fx.flip);
   // Глаз.
   const gx = Math.round(headX + headR * 0.35);
   const gy = Math.round(headY - headR * 0.2);
