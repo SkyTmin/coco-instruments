@@ -1,15 +1,699 @@
-// Этаж 11 — заготовка каркаса. Агент этажа заменяет этот файл целиком.
-import { stubFloor } from './stub';
+// Этаж 11 — «Небесный архипелаг». Первый СВЕТЛЫЙ этаж подземелья: день,
+// внизу — небо. Острова в облаках, сады, разбитый акведук и замок, который
+// держат корни великого дерева. Мотив — небесный замок (названия свои).
+//
+// Глагол этажа — ВЕТЕР. Его видно с первого шага: ленты потоков бегут по
+// полу, трава клонится, вертушки крутятся. Поток толкает героя, мобов,
+// снаряды и добычу; порыв предупреждает (фронт ветра идёт по экрану,
+// стрелки вокруг героя, трава ложится) и бьёт по открытым местам; край
+// острова по ветру опасен — прижало к краю, круг под ногами наливается,
+// налился — «СДУЛО», урон и возврат на твёрдое место. Ветряки, заслонки и
+// лебёдка — действия этажа. Ветер растёт по районам:
+//   • «Сады ветра» (`f11`, вход) — тихие потоки, редкие порывы, урок на
+//     первом мосту, головоломка Мельничных островов (два ветряка крутят
+//     потоки на трёх мостах, тайник на боковом островке), Сад Пробуждения;
+//   • «Разбитый акведук» (`f11aqua`) — течение канала, «Бегущий мост» через
+//     пролом (плиты всплывают волной, порывы поперёк), площадь Ветряной
+//     башни: ветер крутится по кругу, гарпии налетают волнами; карниз вдоль
+//     обрыва — короткий путь под порывами;
+//   • «Замок на облаке» (`f11castle`) — буря: ветер меняет направление,
+//     молнии бьют по меткам, заслонки Галереи выпускают бурю поперёк —
+//     стражей можно сдуть в небо; арена — «Сердце замка».
+//
+// Монстры (ИИ — `f11-brains.ts`, рисунок — `f11-art.ts`):
+//   • небесный скат — кружит над небом, пикирует по линии через мост;
+//   • робот-садовник — мирный, пока не ударишь (или пока сад не проснулся):
+//     ножницы конусом и струя поливалки, отбрасывающая к краю;
+//   • робот-страж — щит спереди, лазер по линии с прицелом; после залпа
+//     остывает — спина открыта;
+//   • гарпия — висит над краем, «порыв» конусом толкает к обрыву;
+//   • облачная медуза — плывёт по ветру, жалит кольцом (холод);
+//   • абордажник — прилетает из неба на планере, крюк тянет к себе;
+//   • мох-пружина — притаился в мху, прыгает навесом, приземление бьёт
+//     кольцом; в прыжке его сносит ветер;
+//   • ветряной дух — прозрачный вихрь: бросает смерчи, которые затягивают;
+//   • дрон-разведчик — кружит и стреляет, выстрелы сносит ветром;
+//   • жук-копилка (редкий) — удирает по ветру с мешком монет.
+// Босс — Древний страж (`f11boss`): робот в три клетки. Взгляд-лазер;
+// «ЗАЩИТНЫЙ ПРОТОКОЛ» (купол от трёх пилонов, ракеты навесом, ветер кругом);
+// «ПЕРЕГРЕВ» (ядро открыто ×2, лазер по кругу, пар из решёток);
+// «ПАДЕНИЕ ОСТРОВА» (край арены уходит в небо, ветер тянет к краю).
+//
+// Карта — `scripts/dungeon/f11.py` → `f11-map.ts` (руками не править).
 
-export const F11 = stubFloor({
+import type { MobDef } from '../dungeon';
+import { MAP_F11_AQUA, MAP_F11_CASTLE, MAP_F11_GARDEN } from './f11-map';
+import type { FloorDef, LegendCell, SpawnSpec } from './types';
+
+/** Свои клетки этажа: номер вида для рисовальщика и правил этажа. */
+export const F11_MARK = {
+  // Пол.
+  grass: 1,
+  path: 2,
+  moss: 3,
+  bed: 4,
+  sand: 5,
+  marble: 6,
+  mosaic: 7,
+  roots: 8,
+  plank: 9,
+  stone: 10,
+  arena: 11,
+  vent: 12,
+  plate: 13,
+  dirt: 14,
+  water: 15,
+  // Посты: пол, на котором ждёт монстр (ставит сценарий этажа).
+  guardPost: 20,
+  gardenerPost: 21,
+  mossPost: 22,
+  sentryPost: 23,
+  harpyPost: 24,
+  // Небо.
+  sky: 30,
+  fallen: 31,
+  rising: 32,
+  cracking: 33,
+  // Стены.
+  hedge: 40,
+  rock: 41,
+  ruin: 42,
+  arch: 43,
+  castle: 44,
+  rootwall: 45,
+  border: 46,
+  crystal: 47,
+  banner: 48,
+  sconce: 49,
+  window: 50,
+  // Пол под вещью: рисовальщик берёт вид пола у соседей.
+  under: 60,
+} as const;
+
+/** Районы этажа. `f11` — вход: на нём могут стоять сохранения. */
+export const F11_GARDEN = 'f11';
+export const F11_AQUA = 'f11aqua';
+export const F11_CASTLE = 'f11castle';
+
+const M = F11_MARK;
+
+/** Вещь на полу: рисовальщик вещи — `ref`, пол под ней — как у соседей. */
+const thing = (
+  ref: string,
+  solid: number,
+  extra: Partial<NonNullable<LegendCell['obj']>> = {},
+  light?: LegendCell['light'],
+): LegendCell => ({
+  tile: 'floor',
+  mark: M.under,
+  obj: { kind: 'deco', ref, solid, ...extra },
+  light,
+});
+
+/** Вещь в небе (облако, камень, водопад): клетка — глубина. */
+const skyThing = (ref: string): LegendCell => ({
+  tile: 'deep',
+  mark: M.sky,
+  obj: { kind: 'deco', ref, solid: 0 },
+});
+
+/** Свои буквы карты — одни на все три района (см. шапку `f11.py`). */
+export const F11_LEGEND: Record<string, LegendCell> = {
+  g: { tile: 'floor', mark: M.grass },
+  p: { tile: 'floor', mark: M.path },
+  m: { tile: 'floor', mark: M.moss },
+  f: { tile: 'floor', mark: M.bed },
+  s: { tile: 'floor', mark: M.sand },
+  k: { tile: 'floor', mark: M.marble },
+  q: { tile: 'floor', mark: M.mosaic },
+  r: { tile: 'floor', mark: M.roots },
+  j: { tile: 'floor', mark: M.plank },
+  z: { tile: 'floor', mark: M.stone },
+  d: { tile: 'floor', mark: M.arena },
+  e: { tile: 'floor', mark: M.vent },
+  x: { tile: 'floor', mark: M.plate },
+  h: { tile: 'floor', mark: M.dirt },
+  // Канал акведука: вода по колено — вязнет, течение несёт (слой ветра).
+  w: { tile: 'hazard', mark: M.water, hazard: { slow: 0.62 } },
+  // Посты.
+  '1': { tile: 'floor', mark: M.guardPost },
+  '3': { tile: 'floor', mark: M.gardenerPost },
+  '5': { tile: 'floor', mark: M.mossPost },
+  '7': { tile: 'floor', mark: M.sentryPost },
+  '9': { tile: 'floor', mark: M.harpyPost },
+  // Небо: не пройти, но видно сквозь, летуны над ним висят.
+  _: { tile: 'deep', mark: M.sky },
+  y: skyThing('f11_cloud'),
+  '/': skyThing('f11_floatrock'),
+  '2': skyThing('f11_waterfall'),
+  // Стены.
+  H: { tile: 'wall', mark: M.hedge },
+  A: { tile: 'wall', mark: M.rock },
+  U: { tile: 'wall', mark: M.ruin },
+  N: { tile: 'wall', mark: M.arch },
+  W: { tile: 'wall', mark: M.castle },
+  Q: { tile: 'wall', mark: M.rootwall },
+  '|': { tile: 'wall', mark: M.border },
+  I: { tile: 'wall', mark: M.crystal, light: { r: 2.4, tint: 'teal' } },
+  F: { tile: 'wall', mark: M.banner, obj: { kind: 'deco', ref: 'f11_banner', solid: 0 } },
+  J: {
+    tile: 'wall',
+    mark: M.sconce,
+    obj: { kind: 'deco', ref: 'f11_sconce', solid: 0 },
+    light: { r: 3.2, tint: 'teal' },
+  },
+  Z: { tile: 'wall', mark: M.window, obj: { kind: 'deco', ref: 'f11_window', solid: 0 } },
+  // Верх Ветряной башни: флюгер показывает, куда башня гонит ветер.
+  L: { tile: 'wall', mark: M.ruin, obj: { kind: 'deco', ref: 'f11_vane', solid: 0 } },
+  // Вещи на полу.
+  O: thing('f11_tree', 0.45),
+  V: thing('f11_sakura', 0.42),
+  t: thing('f11_grass', 0),
+  i: thing('f11_pinwheel', 0.12),
+  '&': thing('f11_windmill', 0.55, { use: { label: 'Повернуть' } }),
+  '*': thing('f11_fountain', 0.62),
+  '+': thing('f11_lantern', 0.22, {}, { r: 3.2, tint: 'warm' }),
+  ':': { tile: 'floor', mark: M.under, obj: { kind: 'breakable', ref: 'f11_urn', solid: 0.28, hp: 1 } },
+  ';': {
+    tile: 'floor',
+    mark: M.under,
+    obj: { kind: 'breakable', ref: 'f11_crate', solid: 0.38, hp: 2, loot: 'f11_fruit' },
+  },
+  '[': thing('f11_statue', 0.5),
+  ']': thing('f11_column', 0.4),
+  '?': thing('f11_topiary', 0.42),
+  '^': thing('f11_flag', 0.12),
+  '(': thing('f11_bench', 0.3),
+  ')': thing('f11_wheel', 0.6),
+  '{': thing('f11_winch', 0.45, { use: { label: 'Тянуть' } }),
+  '}': thing('f11_valve', 0.35, { use: { label: 'Открыть' } }),
+  '<': thing('f11_console', 0.4, { use: { label: 'Пульт' } }),
+  '0': thing('f11_crystal', 0.3, {}, { r: 2.6, tint: 'teal' }),
+  '4': thing('f11_wreck', 0.42),
+  '6': { tile: 'floor', mark: M.under, obj: { kind: 'breakable', ref: 'f11_barrel', solid: 0.34, hp: 2 } },
+  '8': {
+    tile: 'floor',
+    mark: M.under,
+    obj: { kind: 'breakable', ref: 'f11_nest', solid: 0.36, hp: 3, loot: 'f11_feather' },
+  },
+};
+
+const GORE_ROBOT = ['#5a5a52', '#9a9a8a', '#d8d4c0', '#3a8a4a'];
+
+const MOBS: MobDef[] = [
+  {
+    id: 'f11_ray',
+    name: 'Небесный скат',
+    many: 'небесных скатов',
+    hp: 30,
+    dmg: 16,
+    speed: 3.8,
+    radius: 0.36,
+    windup: 0.75,
+    reach: 0.5,
+    rest: 1.2,
+    xp: 14,
+    meat: ['f11_fillet', 0.35, 1],
+    mats: [['f11mat', 0.1]],
+    beast: true,
+    brain: 'f11_ray',
+    art: { kind: 'paint', id: 'f11_ray' },
+    mass: 1.2,
+    flinch: 0.4,
+    fly: true,
+    eye: '#bff4ff',
+    gore: ['#2c4468', '#7aa6d8', '#eaf4ff', '#16223a'],
+  },
+  {
+    id: 'f11_gardener',
+    name: 'Робот-садовник',
+    many: 'роботов-садовников',
+    hp: 64,
+    dmg: 18,
+    speed: 1.9,
+    radius: 0.42,
+    windup: 0.75,
+    reach: 0.9,
+    rest: 1.1,
+    xp: 18,
+    meat: ['f11_fruit', 0.45, 1],
+    mats: [
+      ['f11_gear', 0.35],
+      ['f11mat', 0.15],
+    ],
+    beast: true,
+    brain: 'f11_gardener',
+    art: { kind: 'paint', id: 'f11_gardener' },
+    mass: 4.5,
+    flinch: 0.1,
+    stunT: 0.3,
+    eye: '#ff5a40',
+    gore: GORE_ROBOT,
+  },
+  {
+    id: 'f11_guard',
+    name: 'Робот-страж',
+    many: 'роботов-стражей',
+    hp: 72,
+    dmg: 20,
+    speed: 2.2,
+    radius: 0.45,
+    windup: 0.9,
+    reach: 0.8,
+    rest: 1.2,
+    xp: 22,
+    meat: null,
+    mats: [
+      ['f11_gear', 0.45],
+      ['f11mat', 0.2],
+    ],
+    beast: true,
+    brain: 'f11_guard',
+    art: { kind: 'paint', id: 'f11_guard' },
+    mass: 5,
+    flinch: 0.05,
+    stunT: 0.3,
+    noAlbino: true,
+    eye: '#ff3020',
+    light: 1.2,
+    gore: GORE_ROBOT,
+  },
+  {
+    id: 'f11_harpy',
+    name: 'Гарпия',
+    many: 'гарпий',
+    hp: 30,
+    dmg: 15,
+    speed: 3.6,
+    radius: 0.34,
+    windup: 0.8,
+    reach: 0.45,
+    rest: 1.2,
+    xp: 14,
+    meat: ['f11_fillet', 0.15, 1],
+    mats: [
+      ['f11_feather', 0.4],
+      ['f11mat', 0.08],
+    ],
+    beast: true,
+    brain: 'f11_harpy',
+    art: { kind: 'paint', id: 'f11_harpy' },
+    mass: 1,
+    flinch: 0.4,
+    fly: true,
+    eye: '#ffd040',
+    gore: ['#6a4a3a', '#c89868', '#f0e0c0', '#3a2a22'],
+  },
+  {
+    id: 'f11_jelly',
+    name: 'Облачная медуза',
+    many: 'облачных медуз',
+    hp: 40,
+    dmg: 13,
+    speed: 1.3,
+    radius: 0.4,
+    windup: 0.9,
+    reach: 1.2,
+    rest: 1,
+    xp: 12,
+    meat: null,
+    mats: [
+      ['f11_silk', 0.4],
+      ['f11mat', 0.06],
+    ],
+    beast: true,
+    brain: 'f11_jelly',
+    art: { kind: 'paint', id: 'f11_jelly' },
+    mass: 0.4,
+    flinch: 0.5,
+    fly: true,
+    light: 1.4,
+    eye: '#e0f8ff',
+    gore: ['#e0f0ff', '#a0d0ff', '#ffffff', '#8098e0'],
+  },
+  {
+    id: 'f11_boarder',
+    name: 'Абордажник',
+    many: 'абордажников',
+    hp: 46,
+    dmg: 18,
+    speed: 3.3,
+    radius: 0.36,
+    windup: 0.55,
+    reach: 0.7,
+    rest: 0.9,
+    xp: 16,
+    meat: ['f11_fruit', 0.2, 1],
+    mats: [['f11mat', 0.3]],
+    beast: true,
+    brain: 'f11_boarder',
+    art: { kind: 'paint', id: 'f11_boarder' },
+    mass: 1.8,
+    flinch: 0.3,
+    eye: '#ffb060',
+    gore: ['#5a3a2a', '#b06040', '#e0c090', '#2a1a14'],
+  },
+  {
+    id: 'f11_moss',
+    name: 'Мох-пружина',
+    many: 'мхов-пружин',
+    hp: 38,
+    dmg: 16,
+    speed: 2.4,
+    radius: 0.36,
+    windup: 0.6,
+    reach: 0.6,
+    rest: 1.2,
+    xp: 12,
+    meat: ['f11_fruit', 0.3, 1],
+    mats: [['f11mat', 0.12]],
+    beast: true,
+    brain: 'f11_moss',
+    art: { kind: 'paint', id: 'f11_moss' },
+    mass: 1.4,
+    flinch: 0.4,
+    eye: '#d8ff60',
+    gore: ['#2a5a24', '#6aa040', '#c8e878', '#18321a'],
+  },
+  {
+    id: 'f11_spirit',
+    name: 'Ветряной дух',
+    many: 'ветряных духов',
+    hp: 34,
+    dmg: 14,
+    speed: 3.2,
+    radius: 0.34,
+    windup: 1,
+    reach: 0.5,
+    rest: 1.4,
+    xp: 16,
+    meat: null,
+    mats: [
+      ['f11mat', 0.25],
+      ['f11_silk', 0.1],
+    ],
+    beast: true,
+    brain: 'f11_spirit',
+    art: { kind: 'paint', id: 'f11_spirit' },
+    mass: 0.7,
+    flinch: 0.5,
+    fly: true,
+    light: 1.2,
+    eye: '#d0ffff',
+    gore: ['#d8f4ff', '#a0e0f0', '#ffffff', '#6ab0d0'],
+  },
+  {
+    id: 'f11_drone',
+    name: 'Дрон-разведчик',
+    many: 'дронов-разведчиков',
+    hp: 20,
+    dmg: 11,
+    speed: 4,
+    radius: 0.26,
+    windup: 0.5,
+    reach: 0.4,
+    rest: 1,
+    xp: 10,
+    meat: null,
+    mats: [['f11_gear', 0.2]],
+    beast: true,
+    brain: 'f11_drone',
+    art: { kind: 'paint', id: 'f11_drone' },
+    mass: 0.6,
+    flinch: 0.6,
+    fly: true,
+    eye: '#ff4030',
+    light: 0.8,
+    shot: { speed: 6.5, r: 0.22, life: 1.8, dmg: 1, art: 'f11_dart' },
+    gore: GORE_ROBOT,
+  },
+  {
+    id: 'f11_beetle',
+    name: 'Жук-копилка',
+    many: 'жуков-копилок',
+    hp: 22,
+    dmg: 6,
+    speed: 5.2,
+    radius: 0.3,
+    windup: 0.4,
+    reach: 0.3,
+    rest: 1,
+    xp: 30,
+    meat: null,
+    mats: [['f11mat', 0.6]],
+    beast: true,
+    brain: 'f11_beetle',
+    art: { kind: 'paint', id: 'f11_beetle' },
+    mass: 1,
+    flinch: 1,
+    coins: 1760,
+    resume: 'flee',
+    eye: '#ffd040',
+    light: 1.4,
+    gore: ['#2a4a6a', '#ffd040', '#f0f0e0', '#1a2a3a'],
+  },
+  {
+    id: 'f11_pylon',
+    name: 'Щитовой пилон',
+    many: 'щитовых пилонов',
+    hp: 58,
+    dmg: 0,
+    speed: 0,
+    radius: 0.45,
+    windup: 1,
+    reach: 0,
+    rest: 1,
+    xp: 20,
+    meat: null,
+    mats: [],
+    beast: false,
+    brain: 'f11_pylon',
+    art: { kind: 'paint', id: 'f11_pylon' },
+    mass: 99,
+    flinch: 0,
+    noAlbino: true,
+    light: 1.6,
+    gore: ['#4a6a8a', '#8ae0ff', '#ffffff', '#2a3a4a'],
+  },
+  {
+    id: 'f11boss',
+    name: 'Древний страж',
+    many: 'древних стражей',
+    hp: 1010,
+    dmg: 22,
+    speed: 1.6,
+    radius: 1.3,
+    windup: 0.9,
+    reach: 1.2,
+    rest: 1,
+    xp: 1000,
+    meat: null,
+    mats: [],
+    beast: true,
+    brain: 'f11boss',
+    art: { kind: 'paint', id: 'f11boss' },
+    mass: 30,
+    boss: true,
+    noAlbino: true,
+    eye: '#ff3020',
+    light: 3,
+    gore: ['#5a5a52', '#9a9a8a', '#ff6030', '#3a8a4a'],
+  },
+];
+
+/** Сады: скаты над краями, мох в грядках, медузы в потоках, абордажники с неба. */
+const spawnGarden: SpawnSpec = {
+  mobs: [
+    ['f11_ray', 30],
+    ['f11_moss', 24],
+    ['f11_jelly', 20],
+    ['f11_boarder', 16],
+    ['f11_harpy', 10],
+  ],
+  density: 0.62,
+  pack: [1, 2],
+  filler: 'f11_moss',
+  group: (i) => (i < 2 ? 'f11_ray' : 'f11_moss'),
+  horde: null,
+  treasure: 'f11_beetle',
+  nest: () => 'f11_moss',
+};
+
+const spawnAqua: SpawnSpec = {
+  ...spawnGarden,
+  mobs: [
+    ['f11_harpy', 30],
+    ['f11_ray', 22],
+    ['f11_spirit', 18],
+    ['f11_jelly', 16],
+    ['f11_boarder', 14],
+  ],
+  density: 0.7,
+  filler: 'f11_harpy',
+  group: (i) => (i < 2 ? 'f11_harpy' : 'f11_jelly'),
+  nest: () => 'f11_harpy',
+};
+
+const spawnCastle: SpawnSpec = {
+  ...spawnGarden,
+  mobs: [
+    ['f11_drone', 28],
+    ['f11_guard', 20],
+    ['f11_spirit', 18],
+    ['f11_boarder', 18],
+    ['f11_ray', 16],
+  ],
+  density: 0.76,
+  filler: 'f11_drone',
+  group: (i) => (i < 1 ? 'f11_guard' : 'f11_drone'),
+  nest: () => 'f11_drone',
+};
+
+export const F11: FloorDef = {
   id: 11,
   name: 'Небесный архипелаг',
-  lead: 'Ещё не открыт.',
-  mob: { id: 'f11mob', name: 'Небесный скат', many: 'скатов', x72: 'imp' },
-  boss: { id: 'f11boss', name: 'Древний страж', x72: 'big_zombie' },
-  mat: { id: 'f11mat', name: 'Трофей 11-го этажа' },
-  ores: [20, 21],
-  // Глубже снаряжения Т8 пока нет — уровень держится на 9 (библия §12в).
-  level: 9,
-  skin: { floor: 'slab', wall: 'brick', tint: { mul: [0.95, 1.05, 1.25] } },
-});
+  lead: 'Острова в облаках. Ветер — хозяин: смотри, куда бегут ленты.',
+  mapVer: 1,
+  // Острова большие и открытые: поле путей шире обычного.
+  flowR: 32,
+  areas: [
+    {
+      id: F11_GARDEN,
+      name: 'Сады ветра',
+      lead: 'Сад над облаками. Ветер толкает — иди против лент.',
+      tier: 8,
+      level: 9,
+      ambient: 0.97,
+      rows: MAP_F11_GARDEN,
+      skin: {
+        floor: 'ground',
+        wall: 'rock',
+        tint: { mul: [1.1, 1.1, 1.02], mix: '#c8c4b0', k: 0.35 },
+        fog: '#8ec4ec',
+      },
+      legend: F11_LEGEND,
+      mine: 'f11mine',
+      spawn: spawnGarden,
+      paintAll: true,
+    },
+    {
+      id: F11_AQUA,
+      name: 'Разбитый акведук',
+      lead: 'Вода течёт в небо. Порывы сильнее — держись середины.',
+      tier: 8,
+      level: 9,
+      ambient: 0.92,
+      rows: MAP_F11_AQUA,
+      skin: {
+        floor: 'ground',
+        wall: 'rock',
+        tint: { mul: [1.18, 1.08, 0.94], mix: '#e0c498', k: 0.35 },
+        fog: '#f0c49a',
+      },
+      legend: F11_LEGEND,
+      spawn: spawnAqua,
+      paintAll: true,
+    },
+    {
+      id: F11_CASTLE,
+      name: 'Замок на облаке',
+      lead: 'Буря над шпилями. Стражи спят, пока ты не ступишь на их двор.',
+      tier: 8,
+      level: 9,
+      ambient: 0.74,
+      rows: MAP_F11_CASTLE,
+      skin: {
+        floor: 'slab',
+        wall: 'brick',
+        tint: { mul: [1.2, 1.2, 1.28], mix: '#d8dae6', k: 0.42 },
+        fog: '#4a5470',
+      },
+      legend: F11_LEGEND,
+      mine: 'f11mine2',
+      spawn: spawnCastle,
+      paintAll: true,
+    },
+  ],
+  boss: {
+    id: 'f11boss',
+    name: 'Древний страж',
+    lead: '«Сердце замка» на вершине архипелага',
+    area: F11_CASTLE,
+    restMs: 20 * 60_000,
+    mob: 'f11boss',
+    script: 'f11boss',
+    parts: ['f11boss'],
+    loot: (rnd) => ({
+      tokens: 76 + Math.floor(rnd() * 44),
+      keys: rnd() < 0.8 ? 1 : 0,
+      coins: 66_000,
+      mats: {
+        f11_core: 1,
+        f11mat: 4 + Math.floor(rnd() * 4),
+        f11_gear: 2 + Math.floor(rnd() * 2),
+      },
+    }),
+  },
+  mines: [
+    {
+      id: 'f11mine',
+      name: 'Шахта Садов',
+      area: F11_GARDEN,
+      windowMs: 60 * 60_000,
+      ores: [20, 21],
+      share: [0.26, 0.32, 0.4, 0.48, 0.57],
+      pyrite: 0,
+      blocks: 2.6,
+    },
+    {
+      id: 'f11mine2',
+      name: 'Шахта под Сердцем',
+      area: F11_CASTLE,
+      windowMs: 3 * 60 * 60_000,
+      ores: [20, 21],
+      share: [0.32, 0.4, 0.48, 0.56, 0.64],
+      pyrite: 0,
+      blocks: 3.2,
+    },
+  ],
+  mobs: MOBS,
+  meats: [
+    { id: 'f11_fruit', name: 'Облачный плод', price: 66, heal: 0.3 },
+    { id: 'f11_fillet', name: 'Филе небесного ската', price: 120, heal: 0.45 },
+  ],
+  mats: [
+    {
+      id: 'f11mat',
+      name: 'Летучий кварц',
+      price: 520,
+      lead: 'Голубой камень, на котором держатся острова. В ладони тянет вверх.',
+    },
+    {
+      id: 'f11_gear',
+      name: 'Шестерня стража',
+      price: 700,
+      lead: 'Бронза без единой царапины: её точили века назад.',
+    },
+    {
+      id: 'f11_feather',
+      name: 'Перо гарпии',
+      price: 620,
+      lead: 'Маховое перо в локоть. Ловит ветер даже в кармане.',
+    },
+    {
+      id: 'f11_silk',
+      name: 'Облачный шёлк',
+      price: 660,
+      lead: 'Щупальце медузы, высохшее в нить. Холодное и лёгкое, как пар.',
+    },
+    {
+      id: 'f11_core',
+      name: 'Ядро Древнего стража',
+      price: 66_000,
+      lead: 'Трофей. Шар летучего кварца в бронзовой клетке — ещё тёплый.',
+      stack: 1,
+    },
+  ],
+  music: { explore: 'sky', boss: 'boss' },
+  cover: '/ui/areas/f11.png',
+};
