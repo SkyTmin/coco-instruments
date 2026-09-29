@@ -1281,12 +1281,14 @@ registerZonePainter('f2_shard', (g, z, px, py, S, time) => {
   const fx = pl ? (pl.x - st.x) * S : 0;
   const fy = pl ? (pl.y - st.y) * S : 0;
   const L = layerBox(
-    Math.min(-R * 2.6 - 6, fx - 4),
-    Math.min(-R * 2.6 - 6, fy - 4),
-    Math.max(R * 2.6 + 6, fx + 4),
-    Math.max(R * 2.6 + 6, fy + 4),
+    Math.min(-R * 2 - 6, fx - 4),
+    Math.min(-R * 2 - 6, fy - 4),
+    Math.max(R * 2 + 6, fx + 4),
+    Math.max(R * 2 + 6, fy + 4),
   );
-  const rc = R * (1 + 1.5 * (1 - easeIn(k)));
+  // Сходящееся кольцо — не шире 1,9R: при взрыве лат обломков в воздухе
+  // шесть–восемь разом, и кольца по 2,5R сливались в одну рыжую сетку.
+  const rc = R * (1 + 0.9 * (1 - easeIn(k)));
   const spin = late ? Math.PI / 4 : Math.PI / 4 + time * 1.4;
   const B = Math.ceil(Math.max(rc, R + 4) + 2);
   for (let y = -B; y < B; y++)
@@ -1296,7 +1298,7 @@ registerZonePainter('f2_shard', (g, z, px, py, S, time) => {
       const d = Math.sqrt(cx * cx + cy * cy);
       if (d < R - 1) L.set(x, y, RED, 0.1 + 0.18 * k + (late ? 0.12 : 0));
       else if (d < R) L.set(x, y, late ? SPEC : HOT, late ? 1 : 0.55 + 0.35 * k);
-      else if (rc > R + 1 && d >= rc - 1 && d < rc) L.set(x, y, HOT, 0.3 + 0.6 * k);
+      else if (rc > R + 1 && d >= rc - 1 && d < rc) L.set(x, y, HOT, 0.2 + 0.5 * k);
     }
   // Прицел: четыре засечки снаружи, чуть кружат.
   for (let i = 0; i < 4; i++) {
