@@ -1561,30 +1561,34 @@ function pastSelf(tier: number, dir: Dir4, row: number, fade: number): Px | null
   if (!g) return null;
   const img = g.getImageData(0, 0, c.width, c.height);
   const p = new Px(c.width + 4, c.height + 4);
-  // Засвеченная плёнка: свои цвета героя, выбеленные к янтарю, и второй
-  // отпечаток со сдвигом — двойная экспозиция. Сепия по яркости не годилась:
-  // рыцарь Т8 тёмный и полосатый (забрало, пластины), и в одну бурую гамму
-  // он читался бочкой — узнать в двойнике себя было нельзя. Контур — золото.
-  const AMBER = hx('#ffd27a');
+  // Засвеченная плёнка: светлота — своя у каждого пикселя героя (форма и
+  // забрало читаются), цвет — бледный янтарь; второй отпечаток со сдвигом —
+  // двойная экспозиция. Сепия по тонам уводила тёмный доспех Т8 в бурую
+  // бочку, а свои цвета с янтарём давали оливковое пятно — ни то ни другое
+  // не узнавалось как «я». Контур — золото.
+  const PALE = hx('#ffe6a8');
+  const DEEP = hx('#5a3a14');
   const px = (x: number, y: number): RGBA | null => {
     const i = (y * c.width + x) * 4;
     if (!img.data[i + 3]) return null;
-    return [img.data[i], img.data[i + 1], img.data[i + 2], 255];
+    const l = Math.min(
+      1,
+      ((img.data[i] * 0.3 + img.data[i + 1] * 0.55 + img.data[i + 2] * 0.15) / 255) * 1.5 + 0.12,
+    );
+    return l < 0.2 ? DEEP : mixc(DEEP, PALE, l);
   };
   // Отпечаток прошлого кадра: на пиксель выше и левее, еле виден.
   for (let y = 0; y < c.height; y++)
     for (let x = 0; x < c.width; x++) {
       const o = px(x, y);
-      if (o) p.set(x + 1, y + 1, alpha(mixc(o, AMBER, 0.7), 0.32 * fade));
+      if (o) p.set(x + 1, y + 1, alpha(PALE, 0.26 * fade));
     }
   for (let y = 0; y < c.height; y++)
     for (let x = 0; x < c.width; x++) {
       const o = px(x, y);
       if (!o) continue;
-      const ink = o[0] + o[1] + o[2] < 90;
       const line = y % 4 === 3;
-      const col = ink ? mixc(o, hx('#3a2208'), 0.5) : mixc(o, AMBER, 0.5);
-      p.set(x + 2, y + 2, alpha(col, (line ? 0.66 : 0.86) * fade));
+      p.set(x + 2, y + 2, alpha(o, (line ? 0.66 : 0.88) * fade));
     }
   p.outline(hx('#ffcf5a', 210));
   return p;
