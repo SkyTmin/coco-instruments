@@ -2263,7 +2263,6 @@ function kingPaint(
   elite: boolean,
   left: boolean,
 ): KPainted {
-  const KT = ((globalThis as any).__kt ??= {}); let q0 = performance.now(); const mk = (n: string) => { const q = performance.now(); KT[n] = (KT[n] ?? 0) + q - q0; q0 = q; };
   const G = clip.geo;
   const sh = clip.at(T);
   const P = sh.p;
@@ -2348,13 +2347,10 @@ function kingPaint(
       draw: (px) => crownLoose(px, [G.cx + cx0, G.gy + cy0], r.headR, ca),
     });
   }
-  mk('prep');
   const px = drawRig(r, f, G.w, G.h);
-  mk('rig');
   if (fx.whirl && fx.whirl[1] > 0)
     paintWhirl(px, lit(), G, fx.whirl[0], fx.whirl[1], false, WHIRL_R, wst, !look.split, !!fx.flip);
   outlineFast(px, INK);
-  mk('outline');
   if (elite) outlineFast(px, hex('#ffcc40'));
   // Глаз.
   const eyeMode = fx.eye ?? 'open';
@@ -2380,13 +2376,10 @@ function kingPaint(
     }
   }
   // След — поверх тела, под клинком (он сам поверх следа).
-  mk('eye');
   if (fx.smear) {
     paintSmear(px, lit(), clip, fx.smear[0], fx.smear[1], fx.smear[2]);
   }
-  mk('smear');
   if (wFront) weaponOver(px, hand, P.wa, fx.weapon, fx.wShow ?? 1);
-  mk('weapon');
   // Блеск на кромке: крест на конце клинка — «сейчас ударит».
   if (fx.glint && fx.glint > 0.05 && fx.weapon !== 'none') {
     const o = WPN[fx.weapon];
@@ -2463,11 +2456,9 @@ function kingPaint(
         }
       }
   }
-  mk('extras');
   // Смотрит влево (или разворачивается) — зеркало кадра, слоя и глаза.
   const flip = left !== !!fx.flip;
   const out = cropFrame(px, litPx, G.cx, G.gy + 1, eye, flip);
-  mk('canvas');
   return out;
 }
 
@@ -4637,7 +4628,6 @@ function kingletFrame(m: Mob, pose: MobPose): MobFrame {
   const key = `${id}|${Math.round(Tq * 1000)}|${hurt ? 1 : 0}|${pose.left ? 1 : 0}`;
   let fr = QFR.get(key);
   if (!fr) {
-    MISS.q++; // TEMP-BENCH
     const r = paintQuad(P, fx, Tq);
     const flip = pose.left !== !!fx.flip;
     fr = QFR.set(key, cropFrame(r.px, r.lit, QG.cx, QG.base, r.eye, flip));
@@ -4929,7 +4919,6 @@ function kingBallFrame(m: Mob, pose: MobPose, look: KingLook, h: number, st: KSt
 
 // ---- Рисовальщик ----------------------------------------------------------
 
-const MISS = { k: 0, b: 0, q: 0, f: 0 }; // TEMP-BENCH
 const KFR = frameLRU<KPainted>(400);
 /** Клубки — отдельно: 8 направлений × 13 шагов не должны вытеснять техники. */
 const BFR = frameLRU<KPainted>(200);
@@ -4944,7 +4933,6 @@ function ballFrame(
   const key = `ball${small ? 'k' : ''}|${bk.q}|${s}|${split ? 1 : 0}|${bk.left ? 1 : 0}`;
   let fr = BFR.get(key);
   if (!fr) {
-    MISS.b++; // TEMP-BENCH
     const px = ballPx(small ? 8.5 : 14, bk.dirA, (s / steps) * TAU, split, small);
     fr = BFR.set(key, cropFrame(px, null, px.w / 2, px.h - 2, null, bk.left));
   }
@@ -4962,7 +4950,6 @@ function kingCached(
   const key = `${clip.id}|${Math.round(Tq * 1000)}|${look.blade ? 1 : 0}${look.split ? 1 : 0}|${left ? 1 : 0}|${lk}`;
   let fr = KFR.get(key);
   if (!fr) {
-    MISS.k++; // TEMP-BENCH
     fr = KFR.set(key, kingPaint(clip, Tq, look, lk === 'elite', left));
   }
   return { key, fr };
@@ -4973,7 +4960,6 @@ const KFLASH = frameLRU<HTMLCanvasElement>(48);
 function flashOf(key: string, img: HTMLCanvasElement): HTMLCanvasElement {
   let c = KFLASH.get(key);
   if (c) return c;
-  MISS.f++; // TEMP-BENCH
   c = document.createElement('canvas');
   c.width = img.width;
   c.height = img.height;
@@ -5080,20 +5066,6 @@ registerMobWarm('f1_king', function* () {
   }
 });
 
-// TEMP-BENCH
-(globalThis as unknown as Record<string, unknown>).__f1k = {
-  MISS,
-  kingPaint,
-  cleaveClip,
-  sweepClip,
-  whipClip,
-  idleClip,
-  paintQuad,
-  qIdle,
-  ballPx,
-  drawRig,
-  kRig,
-};
 // ⟦king-end⟧
 
 // ---------------------------------------------------------------------------
