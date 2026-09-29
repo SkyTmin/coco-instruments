@@ -536,9 +536,9 @@ function puffImg(r: number, v: number): HTMLCanvasElement {
     const n = R * 2 + 3;
     const p = new Px(n, n);
     const c = n / 2;
-    const lo = hx('#3c5474', 150);
-    const mid = hx('#7c9cc0', 175);
-    const hi = hx('#c6e0f6', 205);
+    const lo = hx('#5a7aa0', 100);
+    const mid = hx('#9cbcdc', 135);
+    const hi = hx('#e2f2ff', 175);
     for (let y = 0; y < n; y++)
       for (let x = 0; x < n; x++) {
         const dx = x + 0.5 - c;
@@ -676,6 +676,24 @@ function glints(
     p.col('#000', 1);
     p.img(im, x - im.width / 2, y - im.height / 2);
   }
+}
+
+/**
+ * Отсвет вспышки на ЗЕРКАЛЬНОМ полу: пол не темнеет пятном, а светлеет —
+ * тёплое ядро и кольцо света, расходящееся по стеклу (сложение цвета).
+ */
+function floorFlash(p: Pen, x: number, y: number, age: number, T: number, rMax: number): void {
+  if (age >= T) return;
+  const q = age / T;
+  p.g.save();
+  p.g.globalCompositeOperation = 'lighter';
+  p.col(C.g1, 0.45 * (1 - q));
+  fillSector(p, x, y, 0, 2 + 5 * (1 - q), 0, TAU);
+  p.col(C.g2, 0.55 * (1 - q));
+  ring(p, x, y, 4 + rMax * eOut2(q));
+  p.col(C.g1, 0.35 * (1 - q));
+  ring(p, x, y, 3 + rMax * 0.78 * eOut2(q));
+  p.g.restore();
 }
 
 /** Пыль клубами: из (x, y) по направлению ± разброс, растёт и тает. */
@@ -1045,7 +1063,7 @@ function coneFloor(p: Pen, t: Tele, time: number): void {
   const sig = t.left < SIG;
   const tk = !reduced() && tick(t.left);
   // «Куда»: весь сектор с первого кадра.
-  p.col(pal.dk, 0.22 + 0.1 * t.k);
+  p.col(pal.dk, 0.3 + 0.1 * t.k);
   fillSector(p, t.cx, t.cy, r0, t.R, a0, a1);
   // «Когда»: налив от Отражения к кромке.
   const rf = r0 + (t.R - r0) * (0.06 + 0.94 * frontK(t));
@@ -1152,7 +1170,7 @@ function laneFloor(p: Pen, t: Tele, time: number): void {
   const L = Math.max(s0 + 2, t.R);
   const sig = t.left < SIG;
   const tk = !reduced() && tick(t.left);
-  p.col(pal.dk, 0.24 + 0.1 * t.k);
+  p.col(pal.dk, 0.3 + 0.1 * t.k);
   laneRows(t.cx, t.cy, ux, uy, s0, L, t.hw, (Y, xa, xb) => p.row(Y, xa, xb));
   const sf = s0 + (L - s0) * (0.05 + 0.95 * Math.pow(t.k, 1.5));
   p.col(sig ? pal.hot : pal.mid, (tk ? 0.5 : 0.26) + 0.14 * t.k);
@@ -1270,9 +1288,11 @@ const cutOf = (fx: Fx): Cut => ({
 });
 
 /**
- * Серп света по дуге: дуга режется на дольки, каждая рождается, когда до
- * неё доходит клинок (`born` — время прохода всей дуги), живёт `life` с,
- * белая → стекло, тоньше к концам и к старости; слегка расходится наружу.
+ * Серп света по дуге: дуга режется на дольки, каждая родилась, когда через
+ * неё прошёл клинок (`born` — время прохода всей дуги, он кончается в миг
+ * урона: в кадре контакта серп уже целый, свежий у острия и старше к
+ * хвосту), живёт `life` с, белая → стекло, тоньше к концам и к старости;
+ * слегка расходится наружу.
  */
 function crescent(
   p: Pen,
@@ -1288,21 +1308,27 @@ function crescent(
   thick: number,
   slices: number,
   vio = false,
+  amul = 1,
 ): void {
   const a0 = ang - arc / 2;
   for (let i = 0; i < slices; i++) {
     const u = (i + 0.5) / slices;
-    const a = age - born * u;
+    const a = age + born * (1 - u);
     if (a < 0 || a >= life) continue;
     const q = a / life;
     const s0 = dir > 0 ? a0 + (arc * i) / slices : a0 + arc - (arc * (i + 1)) / slices;
+    const s1 = s0 + arc / slices + 0.002;
     const outer = R * (0.95 + 0.1 * eOut2(q));
-    const th = Math.max(1, (thick * (1 - q * 0.85) + 0.5) * Math.pow(Math.sin(Math.PI * u), 0.45));
-    p.col(
-      q < 0.22 ? C.white : q < 0.5 ? (vio ? C.v3 : C.hot) : vio ? C.v2 : C.g2,
-      1 - q * 0.75,
-    );
-    fillSector(p, cx, cy, outer - th, outer, s0, s0 + arc / slices + 0.002);
+    // Толще всего сразу за клинком, к хвосту и к концам дуги — тоньше.
+    const th = Math.max(1, (thick * (1 - q * 0.8) + 0.5) * Math.pow(Math.sin(Math.PI * u), 0.4));
+    const al = (1 - q * 0.75) * amul;
+    // Тело серпа — стекло, кромка — раскалённая нить.
+    if (th > 1.5) {
+      p.col(q < 0.3 ? C.hot : vio ? C.v2 : q < 0.6 ? C.cyan : C.g2, al * 0.85);
+      fillSector(p, cx, cy, outer - th, outer - 1, s0, s1);
+    }
+    p.col(q < 0.45 ? C.white : vio ? C.v3 : C.hot, al);
+    fillSector(p, cx, cy, outer - 1, outer, s0, s1);
   }
 }
 
@@ -1343,7 +1369,7 @@ function cutLit(fx: Fx): void {
     age,
     big ? 0.07 : 0.05,
     0.15,
-    big ? 5 : 4,
+    big ? 7 : 5,
     big ? 14 : 10,
   );
   // Трещина в воздухе у середины дуги.
@@ -1356,12 +1382,17 @@ function cutLit(fx: Fx): void {
     0.55,
     0.3,
   );
-  airCrack(p, ck, hx0, hy0, age - 0.02, 0.05, big ? 0.24 : 0.18, c.sd);
-  // Искра в точке удара: кадр контакта.
-  if (age < 0.08) {
-    const im = glintImg(age < 0.04 ? 4 : 3, 0);
+  airCrack(p, ck, hx0, hy0, age + 0.025, 0.05, big ? 0.24 : 0.18, c.sd);
+  // Кадр контакта: искра и кольцо звона в точке удара.
+  if (age < 0.09) {
+    const im = glintImg(age < 0.045 ? 4 : 3, 0);
     p.col('#000', 1);
     p.img(im, hx0 - im.width / 2, hy0 - im.height / 2);
+  }
+  if (age < 0.16) {
+    const q = age / 0.16;
+    p.col(q < 0.4 ? C.white : C.cyan, 0.9 * (1 - q));
+    ring(p, hx0, hy0, 3 + (big ? 11 : 8) * eOut2(q), (_a, i) => hash(i >> 1, c.sd, 3) > 0.25);
   }
   glints(
     p,
@@ -1385,12 +1416,27 @@ function cutLit(fx: Fx): void {
 function cutFloor(fx: Fx): void {
   const c = cutOf(fx);
   const { p, age, time } = fx;
-  // Отсвет вспышки на зеркальном полу.
-  if (age < 0.24) {
-    const q = age / 0.24;
-    p.col(C.g2, 0.2 * (1 - q));
-    fillSector(p, c.cx, c.cy, c.R * 0.3, c.R, c.ang - c.arc / 2, c.ang + c.arc / 2);
-  }
+  // Зеркальный пол отражает серп: тот же серп, тусклый, у самого пола.
+  const big = c.k === 2 || c.k === 3;
+  p.g.save();
+  p.g.globalCompositeOperation = 'lighter';
+  crescent(
+    p,
+    c.cx,
+    c.cy + 2,
+    c.ang,
+    c.arc,
+    c.R * 0.94,
+    SWEEP[c.k],
+    age,
+    big ? 0.07 : 0.05,
+    0.13,
+    big ? 3 : 2,
+    big ? 14 : 10,
+    false,
+    0.28,
+  );
+  p.g.restore();
   shards(p, cutShards(c), age, time, 'ground');
 }
 
@@ -1448,7 +1494,7 @@ const heavyShards = (h: Heavy): ShardSpec => ({
 function heavyLit(fx: Fx): void {
   const h = heavyOf(fx);
   const { p, age, time } = fx;
-  crescent(p, h.cx, h.cy - LIFT, h.ang, h.arc, h.R, 1, age, 0.08, 0.17, 6, 16);
+  crescent(p, h.cx, h.cy - LIFT, h.ang, h.arc, h.R, 1, age, 0.08, 0.18, 8, 18);
   // Кадр контакта: звезда удара в точке, где клинок вошёл в пол.
   if (age < 0.12) {
     const q = age / 0.12;
@@ -1474,7 +1520,7 @@ function heavyLit(fx: Fx): void {
     0.5,
     0.35,
   );
-  airCrack(p, ck, h.bx, h.by - LIFT + 2, age - 0.03, 0.06, 0.3, h.sd);
+  airCrack(p, ck, h.bx, h.by - LIFT + 2, age + 0.025, 0.06, 0.3, h.sd);
   glints(
     p,
     h.sd,
@@ -1498,11 +1544,7 @@ function heavyFloor(fx: Fx): void {
   const h = heavyOf(fx);
   const { p, age, time } = fx;
   const fade = 1 - k01((age - 1.2) / 0.55);
-  // Отсвет удара на зеркальном полу.
-  if (age < 0.3) {
-    p.col(C.g2, 0.28 * (1 - age / 0.3));
-    fillSector(p, h.bx, h.by, 0, 12 + 20 * eOut2(age / 0.3), 0, TAU);
-  }
+  floorFlash(p, h.bx, h.by, age, 0.3, 30);
   // Раскол зеркального пола: жёлоб тёмный, кромка — светлый пиксель снизу-справа.
   const ck = crackOf(
     `hfl|${h.sd % 1031}`,
@@ -1519,7 +1561,7 @@ function heavyFloor(fx: Fx): void {
   // Выбоина у точки удара.
   p.col(C.deep, 0.9 * fade);
   fillSector(p, h.bx, h.by, 0, 2.6, 0, TAU);
-  dust(p, h.sd, age, h.bx, h.by, 10, h.ang, 1.6, 22, 30, 3, 8, 6, 1.0, 0.75);
+  dust(p, h.sd, age, h.bx, h.by, 8, h.ang, 1.6, 26, 34, 2, 6, 7, 0.9, 0.55);
   shards(p, heavyShards(h), age, time, 'ground');
 }
 
@@ -1552,7 +1594,7 @@ function kickFloor(fx: Fx): void {
       );
     }
   }
-  dust(p, sd, age, cx, cy, big ? 8 : 6, back, 0.8, 26, 30, 2, 6, 3, 0.8, 0.7);
+  dust(p, sd, age, cx, cy, big ? 6 : 4, back, 0.8, 26, 30, 2, 4, 3, 0.6, 0.5);
 }
 function kickLit(fx: Fx): void {
   const { p, age, cx, cy, sd, z } = fx;
@@ -1653,7 +1695,7 @@ registerZonePainter(
       [a + Math.PI + 0.3, 5, 1],
       [a + Math.PI - 0.5, 4, 1],
     ]);
-    airCrack(p, ck, cx, y, age - 0.01, 0.04, 0.2, sd);
+    airCrack(p, ck, cx, y, age + 0.02, 0.04, 0.2, sd);
     if (age < 0.2) {
       const q = age / 0.2;
       p.col(C.white, 0.8 * (1 - q));
@@ -1709,7 +1751,7 @@ registerZonePainter(
       0.55,
       0.25,
     );
-    airCrack(p, ck, x, y, age, 0.04, 0.2, sd);
+    airCrack(p, ck, x, y, age + 0.02, 0.04, 0.2, sd);
     shards(p, wallShards(fx), age, fx.time, 'air');
   }),
 );
@@ -1722,12 +1764,7 @@ registerZonePainter(
 
 registerZonePainter(
   'f7_fxparry',
-  fxZone(({ p, age, cx, cy }) => {
-    if (age < 0.2) {
-      p.col(C.g2, 0.25 * (1 - age / 0.2));
-      fillSector(p, cx, cy, 0, 7 + 8 * (age / 0.2), 0, TAU);
-    }
-  }),
+  fxZone(({ p, age, cx, cy }) => floorFlash(p, cx, cy, age, 0.22, 14)),
 );
 registerZonePainter(
   'f7_fxparry_lit',
@@ -1839,7 +1876,7 @@ registerZonePainter(
       const q = t / 0.3;
       const r = 5 + (R - 5) * eOut2(k01(t / 0.16));
       p.col(j === 0 ? C.white : C.v3, (j === 0 ? 1 : 0.6) * (1 - q));
-      ring(p, cx, cy - 6, r, inside);
+      ring(p, cx, cy, r, inside);
     }
     if (age < 0.08) {
       const im = glintImg(3, 2);
@@ -1934,9 +1971,17 @@ registerZonePainter(
       p.col(j === 0 ? C.hot : C.g2, 0.6 * (1 - q));
       ring(p, cx, cy, 3 + (big ? 34 : 24) * eOut2(q));
     }
-    if (age < 0.3) {
-      p.col(C.g2, 0.3 * (1 - age / 0.3));
-      fillSector(p, cx, cy, 0, 9 + 6 * (age / 0.3), 0, TAU);
+    floorFlash(p, cx, cy, age, 0.35, 18);
+    // Щель — дверь зеркала ЗА фигурой: раскрывается шире тела (свет бьёт из-за
+    // спины по краям), выпускает и схлопывается. Под мобом — поверх тела
+    // она читалась бы белой полосой по фигуре.
+    const big2 = (z.vK ?? 0) > 0;
+    const H = big2 ? 42 : 34;
+    const T = big2 ? 0.8 : 0.55;
+    if (age < T) {
+      const q = age / T;
+      const w = q < 0.3 ? 11 * eOut2(q / 0.3) : 11 * (1 - eIn2((q - 0.3) / 0.7));
+      slit(p, cx, cy, Math.round(H * (q < 0.2 ? eOut2(q / 0.2) : 1)), w, 1 - q * 0.3);
     }
   }),
 );
@@ -1946,13 +1991,6 @@ registerZonePainter(
     if (dup(z)) return;
     const big = (z.vK ?? 0) > 0;
     const H = big ? 38 : 30;
-    // Щель — дверь зеркала: раскрывается, выпускает, схлопывается.
-    const T = big ? 0.8 : 0.55;
-    if (age < T) {
-      const q = age / T;
-      const w = q < 0.3 ? 5 * eOut2(q / 0.3) : 5 * (1 - eIn2((q - 0.3) / 0.7));
-      slit(p, cx, cy, Math.round(H * (q < 0.2 ? eOut2(q / 0.2) : 1)), w, 1 - q * 0.3);
-    }
     glints(
       p,
       sd,
@@ -2153,17 +2191,14 @@ registerZonePainter(
   fxZone((fx) => {
     const { p, age, cx, cy, sd, time } = fx;
     const fade = 1 - k01((age - 2.3) / 0.9);
-    if (age < 0.4) {
-      p.col(C.g2, 0.32 * (1 - age / 0.4));
-      fillSector(p, cx, cy, 0, 14 + 26 * eOut2(age / 0.4), 0, TAU);
-    }
+    floorFlash(p, cx, cy, age, 0.45, 44);
     const ck = crackOf(`dfl|${sd % 1033}`, sd + 3, starBranches(sd + 3, 9, 0.2, 18, 40, 2), 0.45, 0.35);
     const reach = ck.max * eOut3(k01(age / 0.2));
     p.col(C.g2, 0.55 * fade);
     drawCrack(p, ck, cx + 1, cy + 1, reach);
     p.col(C.deep, 0.95 * fade);
     drawCrack(p, ck, cx, cy, reach);
-    dust(p, sd, age, cx, cy, 14, 0, Math.PI, 18, 34, 3, 9, 8, 1.4, 0.7);
+    dust(p, sd, age, cx, cy, 12, 0, Math.PI, 20, 40, 2, 7, 9, 1.2, 0.55);
     shards(p, deathShards(fx), age, time, 'ground');
   }),
 );
@@ -2192,7 +2227,7 @@ registerZonePainter(
       p.img(im, cx - im.width / 2, y - im.height / 2);
     }
     const ck = crackOf(`dai|${sd % 1039}`, sd, starBranches(sd, 10, 0.1, 10, 24, 2), 0.5, 0.35);
-    airCrack(p, ck, cx, y, age - 0.02, 0.08, 0.38, sd);
+    airCrack(p, ck, cx, y, age + 0.03, 0.08, 0.38, sd);
     glints(
       p,
       sd,
@@ -2228,9 +2263,9 @@ const burstShards = (x: number, y: number, S: number, sd: number): ShardSpec => 
   z0: 10,
   ang: 0,
   spread: Math.PI,
-  v0: 30,
-  dv: 45,
-  vz0: 30,
+  v0: 55,
+  dv: 70,
+  vz0: 40,
   dvz: 45,
   big: 0.35,
   pal: 0,
@@ -2262,8 +2297,8 @@ registerZonePainter(
     for (let i = 0; i < n; i++) {
       const w = 5 + 26 * k * k;
       const a = (i / n) * TAU + time * w * 0.3 + hash(sd, i, 1);
-      const rr = R * (0.62 - 0.22 * k) * (0.85 + 0.3 * hash(sd, i, 2));
-      const h = 6 + 5 * Math.sin(time * 9 + i);
+      const rr = R * (1.02 - 0.2 * k) * (0.85 + 0.3 * hash(sd, i, 2));
+      const h = 7 + 3 * Math.sin(time * 9 + i) - 3 * k;
       const im = shardImg(3, mod(Math.floor(time * w) + i, SHARD_FRAMES), 0);
       p.col(C.shadow, 0.3);
       p.dot(cx + Math.cos(a) * rr - 1, cy + Math.sin(a) * rr * 0.7, 3, 1);
@@ -2296,7 +2331,7 @@ registerImpactPainter('f7_copyburst', {
       ring(p, cx, cy, 5 + (rec.r ?? 1.25) * S * 1.2 * eOut2(q), (_a, i) => hash(i >> 2, sd, 9) > 0.3);
     }
     const ck = crackOf(`cbr|${sd % 997}`, sd, starBranches(sd, 6, 0.5, 5, 11, 2), 0.55, 0.25);
-    airCrack(p, ck, cx, cy - 10, age, 0.04, 0.2, sd);
+    airCrack(p, ck, cx, cy - 10, age + 0.02, 0.04, 0.2, sd);
     shards(p, burstShards(rec.x, rec.y, S, sd), age, time, 'air');
   }),
 });
@@ -2326,7 +2361,7 @@ registerZonePainter(
     const left = life - z.t;
     const mi = z.mi ?? 0;
     const sim = paintSim();
-    const W = sim?.world.w ?? MAP_W;
+    const W = sim?.world?.w ?? MAP_W;
     const tx = mod(mi, W);
     const ty = Math.floor(mi / W);
     const cx = z.x * S;
@@ -2335,7 +2370,7 @@ registerZonePainter(
     const x0 = tx * S;
     const y0 = ty * S;
     // Лицо зеркала есть, если под ним пол; у боковых — только кромка.
-    const face = sim ? sim.tiles[(ty + 1) * W + tx] !== 1 : true;
+    const face = sim?.tiles ? sim.tiles[(ty + 1) * W + tx] !== 1 : true;
     const sig = left < SIG;
     const tk = !reduced() && tick(left);
     const flick = 0.35 + 0.5 * k + (reduced() ? 0 : 0.12 * Math.sin(time * 40 + mi));
@@ -2416,7 +2451,7 @@ registerZonePainter(
 );
 
 /** Скорость залпа: пикселей мира в секунду. */
-const VOLLEY_V = 1400;
+const VOLLEY_V = 2400;
 registerImpactPainter('f7_shardline', {
   life: 0.8,
   shake: 0.12,
@@ -2434,8 +2469,18 @@ registerImpactPainter('f7_shardline', {
     const hw = (rec.w ?? 0.42) * S;
     const sd = seedOf(rec.x, rec.y, a);
     const y0 = cy - 5;
-    // Полоса вспыхивает за головой залпа и гаснет.
-    const head = Math.min(L, age * VOLLEY_V);
+    // Кадр контакта: вся линия режется светом разом (урон — по всей линии в
+    // один миг), потом по ней несутся осколки.
+    if (age < 0.07) {
+      const q = age / 0.07;
+      p.col(C.white, 1 - q * 0.6);
+      p.line(cx, y0, cx + ux * L, y0 + uy * L);
+      p.col(C.cyan, 0.6 * (1 - q));
+      p.line(cx + nx, y0 + ny, cx + ux * L + nx, y0 + uy * L + ny);
+      p.line(cx - nx, y0 - ny, cx + ux * L - nx, y0 + uy * L - ny);
+    }
+    // След залпа по полосе гаснет за ним.
+    const head = Math.min(L, (age + 0.03) * VOLLEY_V);
     const fl = 1 - k01(age / 0.35);
     if (fl > 0) {
       p.col(C.hot, 0.5 * fl);
@@ -2444,7 +2489,7 @@ registerImpactPainter('f7_shardline', {
     // Осколки летят по линии со следом.
     const n = reduced() ? 4 : 7;
     for (let i = 0; i < n; i++) {
-      const t = age - 0.09 * hash(sd, i, 7);
+      const t = age + 0.03 - 0.09 * hash(sd, i, 7);
       if (t < 0) continue;
       const s = t * VOLLEY_V * (0.9 + 0.2 * hash(sd, i, 8));
       if (s > L + 20) continue;
