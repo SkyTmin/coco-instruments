@@ -1974,29 +1974,37 @@ function paintSmear(px: Px, lit: Px, clip: Clip, a: number, b: number, k: number
   const probe = [w0];
   for (let i = 1; i < K; i++) probe.push(weaponAt(clip, a + ((b - a) * i) / K));
   probe.push(w1);
-  const seen = new Set<number>();
+  // Уже закрашенные точки — маской по кадру (не множеством): след рисуется
+  // от свежего края к старому, и старый не перекрывает свежий.
+  const W = px.w;
+  const H = px.h;
+  if (seenBuf.length < W * H) seenBuf = new Uint8Array(W * H);
+  const seen = seenBuf;
+  seen.fill(0, 0, W * H);
+  const half = SMEAR_HALF[kind];
+  const litC = SMEAR_LIT[kind];
   for (let i = n; i >= 0; i--) {
     const u = i / n;
     const g = Math.min(K - 1, Math.floor(u * K));
     const v = u * K - g;
     const pa = probe[g];
     const pb = probe[g + 1];
-    const w = {
-      hand: lerp(pa.hand, pb.hand, v),
-      ang: pa.ang + (pb.ang - pa.ang) * v,
-      show: pa.show + (pb.show - pa.show) * v,
-    };
-    const dx = Math.cos(w.ang);
-    const dy = Math.sin(w.ang);
+    const hx = pa.hand[0] + (pb.hand[0] - pa.hand[0]) * v;
+    const hy = pa.hand[1] + (pb.hand[1] - pa.hand[1]) * v;
+    const ang = pa.ang + (pb.ang - pa.ang) * v;
+    const show = pa.show + (pb.show - pa.show) * v;
+    const dx = Math.cos(ang);
+    const dy = Math.sin(ang);
     // Укороченный в ракурсе клинок (вращение над головой) — короче и след.
-    const rr1 = o.grip + o.len * w.show + 1.5;
+    const rr1 = o.grip + o.len * show + 1.5;
     const rr0 = Math.min(r0, rr1 - 3);
     for (let r = rr0; r <= rr1; r += 0.5) {
-      const x = Math.round(w.hand[0] + dx * r);
-      const y = Math.round(w.hand[1] + dy * r);
-      const id = y * 1000 + x;
-      if (seen.has(id)) continue;
-      seen.add(id);
+      const x = Math.round(hx + dx * r);
+      const y = Math.round(hy + dy * r);
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const id = y * W + x;
+      if (seen[id]) continue;
+      seen[id] = 1;
       const q = (r - rr0) / Math.max(1, rr1 - rr0);
       // Ярус: 0 — кромка, 1 — тело, 2 — тусклый хвост; слабый след — на ярус ниже.
       let tier = u > 0.7 ? (q > 0.5 ? 0 : 1) : u > 0.3 ? (q > 0.45 ? 1 : 2) : q > 0.6 ? 2 : 3;
@@ -2005,20 +2013,32 @@ function paintSmear(px: Px, lit: Px, clip: Clip, a: number, b: number, k: number
       if (tier === 2 && ((x + y) & 1) === 1) continue;
       // По телу — только кромка целиком и тело следа вполсилы: морду и
       // руки видно сквозь взмах.
-      const i = (y * px.w + x) * 4;
-      if (x >= 0 && y >= 0 && x < px.w && y < px.h && px.data[i + 3]) {
+      if (px.data[id * 4 + 3]) {
         if (tier === 2) continue;
         if (tier === 1) {
-          const c = col[1];
-          px.set(x, y, [c[0], c[1], c[2], 115]);
+          px.set(x, y, half);
           continue;
         }
       }
       px.set(x, y, col[tier]);
-      if (tier < 2) lit.set(x, y, [col[tier][0], col[tier][1], col[tier][2], tier ? 150 : 220]);
+      if (tier < 2) lit.set(x, y, litC[tier]);
     }
   }
 }
+
+let seenBuf = new Uint8Array(0);
+const withA = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], a];
+/** Тело следа поверх тела короля — вполсилы; яркое — в слой поверх темноты. */
+const SMEAR_HALF = {
+  cleaver: withA(SMEAR.cleaver[1], 115),
+  rail: withA(SMEAR.rail[1], 115),
+  tail: withA(SMEAR.tail[1], 115),
+};
+const SMEAR_LIT = {
+  cleaver: [withA(SMEAR.cleaver[0], 220), withA(SMEAR.cleaver[1], 150)],
+  rail: [withA(SMEAR.rail[0], 220), withA(SMEAR.rail[1], 150)],
+  tail: [withA(SMEAR.tail[0], 220), withA(SMEAR.tail[1], 150)],
+};
 
 /** Кольцо хвостов на развороте хлыста: эллипс у ног, свежая часть ярче. */
 function paintWhirl(
@@ -2040,7 +2060,8 @@ function paintWhirl(
   const rx = R * stretch;
   const ry = R * 0.36;
   const col = SMEAR.tail;
-  const n = Math.ceil(rx * 7);
+  const n = Math.ceil(rx * 4.5);
+  const litC = SMEAR_LIT.tail[0];
   for (let i = 0; i < n; i++) {
     const a = (i / n) * TAU;
     const sa = Math.sin(a);
@@ -2056,7 +2077,7 @@ function paintWhirl(
       const y = Math.round(cy + sa * (ry + dr * 0.4));
       if (tier === 2 && ((x + y) & 1) === 1) continue;
       px.set(x, y, col[tier]);
-      if (lit && tier === 0) lit.set(x, y, [col[0][0], col[0][1], col[0][2], 170]);
+      if (lit && tier === 0) lit.set(x, y, litC);
     }
   }
   if (!tied || frac < 0.4) return;
@@ -2101,10 +2122,12 @@ const hash01 = (x: number, y: number, k: number) => {
 };
 
 /** Контур снаружи — как `Px.outline`, но по маске альфы: в разы быстрее. */
+let maskBuf = new Uint8Array(0);
 function outlineFast(px: Px, c: RGBA): void {
   const { w, h, data } = px;
-  const a = new Uint8Array(w * h);
-  for (let i = 0, j = 3; i < a.length; i++, j += 4) a[i] = data[j] > 0 ? 1 : 0;
+  if (maskBuf.length < w * h) maskBuf = new Uint8Array(w * h);
+  const a = maskBuf;
+  for (let i = 0, j = 3; i < w * h; i++, j += 4) a[i] = data[j] > 0 ? 1 : 0;
   for (let y = 0; y < h; y++) {
     const row = y * w;
     for (let x = 0; x < w; x++) {
@@ -2202,21 +2225,28 @@ function cropFrame(
   const cw = x1 - x0 + 1;
   const ch = y1 - y0 + 1;
   const cut = (p: Px): HTMLCanvasElement => {
-    const o = new Px(cw, ch);
+    const c = document.createElement('canvas');
+    c.width = cw;
+    c.height = ch;
+    const g = c.getContext('2d');
+    if (!g) return c;
+    const img = g.createImageData(cw, ch);
+    const o = img.data;
     for (let y = 0; y < ch; y++) {
       const src = ((y + y0) * w + x0) * 4;
-      if (!flip) o.data.set(p.data.subarray(src, src + cw * 4), y * cw * 4);
+      if (!flip) o.set(p.data.subarray(src, src + cw * 4), y * cw * 4);
       else
         for (let x = 0; x < cw; x++) {
           const i = src + x * 4;
           const j = (y * cw + (cw - 1 - x)) * 4;
-          o.data[j] = p.data[i];
-          o.data[j + 1] = p.data[i + 1];
-          o.data[j + 2] = p.data[i + 2];
-          o.data[j + 3] = p.data[i + 3];
+          o[j] = p.data[i];
+          o[j + 1] = p.data[i + 1];
+          o[j + 2] = p.data[i + 2];
+          o[j + 3] = p.data[i + 3];
         }
     }
-    return o.canvas();
+    g.putImageData(img, 0, 0);
+    return c;
   };
   const ax = flip ? cw - (ax0 - x0) : ax0 - x0;
   const eye: V | null = eye0
@@ -2263,15 +2293,16 @@ function kingPaint(
     const lc: V = add(r.armFar[2], [0.6 * s, 0]);
     r.items.push({ layer: 'back', draw: (px) => lid(px, lc, 2.8 * s, 3.4 * s, METAL.iron) });
   }
-  const lit = new Px(G.w, G.h);
-  let litUsed = false;
+  // Слой поверх темноты — только если в кадре есть что-то светящееся.
+  let litPx: Px | null = null;
+  const lit = () => (litPx ??= new Px(G.w, G.h));
   r.items.push(kingCape2(r, pc.cf + drag * 0.9 + rise * 0.5, pc.cs - drag * 0.3, G.gy));
   const wst = 1 / (fx.whirlSx ?? 1);
   if (fx.whirl && fx.whirl[1] > 0)
     r.items.push({
       layer: 'back',
       draw: (px) =>
-        paintWhirl(px, lit, G, fx.whirl![0], fx.whirl![1], true, WHIRL_R, wst, !look.split, !!fx.flip),
+        paintWhirl(px, lit(), G, fx.whirl![0], fx.whirl![1], true, WHIRL_R, wst, !look.split, !!fx.flip),
     });
   if (fx.lidAt) {
     const la: V = [G.cx + fx.lidAt[0], G.gy + fx.lidAt[1]];
@@ -2321,7 +2352,7 @@ function kingPaint(
   const px = drawRig(r, f, G.w, G.h);
   mk('rig');
   if (fx.whirl && fx.whirl[1] > 0)
-    paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], false, WHIRL_R, wst, !look.split, !!fx.flip);
+    paintWhirl(px, lit(), G, fx.whirl[0], fx.whirl[1], false, WHIRL_R, wst, !look.split, !!fx.flip);
   outlineFast(px, INK);
   mk('outline');
   if (elite) outlineFast(px, hex('#ffcc40'));
@@ -2351,8 +2382,7 @@ function kingPaint(
   // След — поверх тела, под клинком (он сам поверх следа).
   mk('eye');
   if (fx.smear) {
-    paintSmear(px, lit, clip, fx.smear[0], fx.smear[1], fx.smear[2]);
-    litUsed = true;
+    paintSmear(px, lit(), clip, fx.smear[0], fx.smear[1], fx.smear[2]);
   }
   mk('smear');
   if (wFront) weaponOver(px, hand, P.wa, fx.weapon, fx.wShow ?? 1);
@@ -2366,14 +2396,12 @@ function kingPaint(
     const gx2 = hand[0] + Math.cos(P.wa) * along + nx * (o.w / 2);
     const gy2 = hand[1] + Math.sin(P.wa) * along + ny * (o.w / 2);
     const rr = fx.glint > 0.66 ? 3 : fx.glint > 0.33 ? 2 : 1;
-    sparkAt(lit, gx2, gy2, rr, [255, 244, 200, 230], [255, 255, 255, 255]);
-    litUsed = true;
+    sparkAt(lit(), gx2, gy2, rr, [255, 244, 200, 230], [255, 255, 255, 255]);
   }
   if (fx.spark && fx.spark > 0.05) {
     const lc: V = add(r.armFar[2], [0.6 * s, -1.2 * s]);
     const rr = Math.round(2 + fx.spark * 3);
-    sparkAt(lit, lc[0], lc[1], rr, [255, 210, 120, 230], [255, 255, 240, 255]);
-    litUsed = true;
+    sparkAt(lit(), lc[0], lc[1], rr, [255, 210, 120, 230], [255, 255, 240, 255]);
   }
   if (fx.stars !== undefined) {
     // Звёзды кружат над головой по эллипсу; дальняя половина — тусклее.
@@ -2384,7 +2412,7 @@ function kingPaint(
       const y = hd[1] - r.headR - 6 + Math.sin(a) * 2.2;
       const near = Math.sin(a) > 0;
       sparkAt(
-        lit,
+        lit(),
         x,
         y,
         near ? 2 : 1,
@@ -2392,7 +2420,6 @@ function kingPaint(
         [255, 250, 210, 255],
       );
     }
-    litUsed = true;
   }
   if (fx.roar && fx.roar > 0.05) {
     // Рык: брызги и три штриха от пасти вперёд.
@@ -2406,9 +2433,8 @@ function kingPaint(
     ] as V[]) {
       const x0 = tip[0] + 3 + ax * 2;
       const y0 = tip[1] + ay * 3;
-      for (let i = 0; i < L; i++) lit.set(x0 + ax * i, y0 + ay * i, c);
+      for (let i = 0; i < L; i++) lit().set(x0 + ax * i, y0 + ay * i, c);
     }
-    litUsed = true;
   }
   if (fx.steam && fx.steam > 0.05) {
     // Пар из ноздрей: два клуба уходят вперёд-вверх и тают.
@@ -2440,7 +2466,7 @@ function kingPaint(
   mk('extras');
   // Смотрит влево (или разворачивается) — зеркало кадра, слоя и глаза.
   const flip = left !== !!fx.flip;
-  const out = cropFrame(px, litUsed ? lit : null, G.cx, G.gy + 1, eye, flip);
+  const out = cropFrame(px, litPx, G.cx, G.gy + 1, eye, flip);
   mk('canvas');
   return out;
 }
@@ -4134,8 +4160,8 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
   const H = QG.h;
   const base = QG.base;
   const px = new Px(W, H);
-  const lit = new Px(W, H);
-  let litUsed = false;
+  let litPx: Px | null = null;
+  const lit = () => (litPx ??= new Px(W, H));
   // Покой прежнего кадра, сдвинутый в новый холст.
   const o = 10 * s;
   const X = (v: number) => v + QOX + P.bx;
@@ -4229,8 +4255,7 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
   const wst = 1 / (fx.whirlSx ?? 1);
   const G: Geo = { w: W, h: H, cx: QG.cx + 1, gy: base + 1, id: 'q' };
   if (fx.whirl && fx.whirl[1] > 0) {
-    paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], true, 1.7 * TS, wst, false, !!fx.flip);
-    litUsed = true;
+    paintWhirl(px, lit(), G, fx.whirl[0], fx.whirl[1], true, 1.7 * TS, wst, false, !!fx.flip);
   }
   const leg = (l: [V, V], far: boolean) => {
     const [[x0, y0], [x1, y1]] = l;
@@ -4344,7 +4369,7 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
   } else drawCrown(Math.round(headX - headR * 0.9), Math.round(headY - headR * 1.15));
   outlineFast(px, KING_PAL.ink);
   if (fx.whirl && fx.whirl[1] > 0)
-    paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], false, 1.7 * TS, wst, false, !!fx.flip);
+    paintWhirl(px, lit(), G, fx.whirl[0], fx.whirl[1], false, 1.7 * TS, wst, false, !!fx.flip);
   // Глаз.
   const gx = Math.round(headX + headR * 0.35);
   const gy = Math.round(headY - headR * 0.2);
@@ -4375,7 +4400,7 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
       const a = fx.stars + (i * TAU) / 3;
       const near = Math.sin(a) > 0;
       sparkAt(
-        lit,
+        lit(),
         headX - 1 + Math.cos(a) * 5.5,
         headY - headR - 5 + Math.sin(a) * 1.6,
         near ? 2 : 1,
@@ -4383,7 +4408,6 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
         [255, 250, 210, 255],
       );
     }
-    litUsed = true;
   }
   if (fx.dissolve && fx.dissolve > 0) {
     for (let y = 0; y < H; y++)
@@ -4394,7 +4418,7 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
         if (h < fx.dissolve) px.data[i + 3] = 0;
       }
   }
-  return { px, lit: litUsed ? lit : null, eye };
+  return { px, lit: litPx, eye };
 }
 
 /** Покой малого: дышит, принюхивается, хвосты ходят (2 с, 8 к/с). */
@@ -5030,6 +5054,20 @@ registerMobWarm('f1_king', function* () {
     }
   }
 });
+
+// TEMP-BENCH
+(globalThis as unknown as Record<string, unknown>).__f1k = {
+  kingPaint,
+  cleaveClip,
+  sweepClip,
+  whipClip,
+  idleClip,
+  paintQuad,
+  qIdle,
+  ballPx,
+  drawRig,
+  kRig,
+};
 // ⟦king-end⟧
 
 // ---------------------------------------------------------------------------
