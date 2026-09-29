@@ -100,6 +100,8 @@ import {
   cannonShot,
   chainRattle,
   clockBell,
+  clockChime,
+  wingFlap,
   finaleChoir,
   fleshSquelch,
   glassBreak,
@@ -560,6 +562,88 @@ const FLOOR_SOUND: Record<string, () => void> = {
   f15_tonsil_trap: () => fleshSquelch(true),
   f15_tonsil_call: () => fleshSquelch(),
   f15_gold_call: () => softChime(4),
+  // Этаж 11: ветер, стражи, буря.
+  f11_gust_call: () => windGust(0.5),
+  f11_gust: () => windGust(0.5),
+  f11_gust_blow: () => windGust(0.9),
+  f11_blow_trap: () => windGust(1),
+  f11_sky_fall: () => windGust(0.7),
+  f11_tower_turn: () => windGust(0.4),
+  f11_ray_dive: () => windGust(0.4),
+  f11_glide_call: () => windGust(0.3),
+  f11_spirit_call: () => windGust(0.5),
+  f11_flap: () => wingFlap(),
+  f11_thunder: () => thunder(true),
+  f11_storm_trap: () => thunder(),
+  f11_laser: () => laserBeam(),
+  f11_beam: () => laserBeam(),
+  // Гул лазера петлёй не включаем: у вращения нет события конца.
+  f11_spin_call: () => laserBeam(),
+  f11_rockets: () => cannonShot(),
+  f11_valve_blow: () => steamBurst(),
+  f11_valve_call: () => chainRattle(),
+  f11_winch_call: () => chainRattle(),
+  f11_hook_throw: () => chainRattle(),
+  f11_mill_call: () => stoneGrind(),
+  f11_bridge_call: () => stoneGrind(),
+  f11_winch_trap: () => stoneGrind(),
+  f11_crumble_trap: () => stoneGrind(),
+  f11_crumble_fall: () => boom(0.7),
+  f11_shield_trap: () => glassBreak(true),
+  f11_shield_call: () => teleport(),
+  f11_zap: () => teleport(),
+  f11_wake_call: () => {
+    stoneGrind();
+    beastRoar(true);
+  },
+  f11_snip: () => swordSwing(),
+  f11_hook_call: () => swordSwing(),
+  f11_moss_land: () => softThud(),
+  f11_boing: () => softThud(),
+  f11_calm_call: () => softChime(),
+  // Этаж 13: исполины и крюки, пушки, набат, пар Колосса.
+  f13_rise_call: () => {
+    beastRoar();
+    steamBurst();
+  },
+  f13_hook_call: () => chainRattle(),
+  f13_zip: () => chainRattle(),
+  f13_cannon_wall: () => cannonShot(),
+  f13_kneel: () => {
+    stoneGrind();
+    beastRoar(false);
+  },
+  f13_roll_wall: () => stoneGrind(),
+  f13_seal_wall: () => stoneGrind(),
+  f13_bell_call: () => clockChime(1, true),
+  f13_alarm_trap: () => clockChime(3, true),
+  f13_alarm_call: () => clockChime(2, true),
+  f13_steam_call: () => steamBurst(),
+  f13_steam_off: () => steamBurst(),
+  f13_evap_call: () => steamBurst(),
+  f13_evap: () => steamBurst(),
+  f13_stomp_wall: () => stoneGrind(),
+  f13_quake_wall: () => stoneGrind(),
+  f13_crack_trap: () => stoneGrind(),
+  f13_edge_trap: () => windGust(0.5),
+  f13_armor_wall: () => stoneGrind(),
+  f13_charge: () => beastRoar(false),
+  f13_notice: () => beastRoar(false),
+  f13_crystal_stone: () => glassBreak(),
+  f13_fire_trap: () => lavaHiss(),
+  f13_fire_call: () => lavaHiss(),
+  f13_march_trap: () => beastRoar(),
+  f13_march_call: () => beastRoar(),
+  f13_breach_trap: () => {
+    stoneGrind();
+    beastRoar(false);
+  },
+  f13_battery_trap: () => cannonShot(true),
+  f13_battery_call: () => cannonShot(true),
+  f13_wave_call: () => cannonShot(true),
+  f13_rift_trap: () => stoneGrind(),
+  f13_rift_call: () => windGust(0.4),
+  f13_smoke: () => steamBurst(),
 };
 let beatAt = 0;
 

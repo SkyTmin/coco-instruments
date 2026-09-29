@@ -18,6 +18,7 @@ import { FLOORS } from './index';
 import { F15_BEASTS, F15_GUT, F15_MARK, F15_THROAT, F15_VEINS } from './f15';
 import { F15_JOIN } from './f15-boss';
 import {
+  ALIEN,
   BREATH,
   f15Alien,
   f15Events,
@@ -472,7 +473,9 @@ describe('этаж 15: события Чрева и Сосудов', () => {
       s.hero.hp = s.stats.maxHp;
       stepSim(s, DT, bot(s, st));
     }
-    expect(f15Alien(s)).toBeGreaterThan(3);
+    // Восемь секунд сами по себе дают только `passive`; сверху — хотя бы
+    // шесть засчитанных убийств антител.
+    expect(f15Alien(s)).toBeGreaterThan(ALIEN.passive * 8 + ALIEN.killAb * 6);
     s.hero.x = x + 0.5;
     s.hero.y = y + 1.5;
     for (let t = 0; t < 3; t++) stepSim(s, DT, NO_INPUT);
