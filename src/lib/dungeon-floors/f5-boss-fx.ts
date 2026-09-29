@@ -25,7 +25,7 @@
 // считается от зерна и возраста, а не копится по кадрам: лист кадров и игра
 // рисуют одно и то же, и стоп-кадр держит позу сам.
 import { Px } from '../dungeon-art';
-import { paintSim, registerImpactPainter, registerZonePainter } from '../dungeon-paint';
+import { MOB_WARM, paintSim, registerImpactPainter, registerMobWarm, registerZonePainter } from '../dungeon-paint';
 import type { ImpactRec } from '../dungeon-paint';
 import type { Mob, Strike, Zone } from '../dungeon-sim';
 
@@ -813,6 +813,22 @@ function crackImg(c: Crack, core: string, lip: string | null) {
   return hit;
 }
 
+/** Рамка трещины [x0, y0, x1, y1] относительно корня. */
+const crackBoxes = new WeakMap<Crack, [number, number, number, number]>();
+function crackBox(c: Crack): [number, number, number, number] {
+  let b = crackBoxes.get(c);
+  if (b) return b;
+  b = [0, 0, 0, 0];
+  for (let i = 0; i < c.x.length; i++) {
+    b[0] = Math.min(b[0], c.x[i]);
+    b[1] = Math.min(b[1], c.y[i]);
+    b[2] = Math.max(b[2], c.x[i]);
+    b[3] = Math.max(b[3], c.y[i]);
+  }
+  crackBoxes.set(c, b);
+  return b;
+}
+
 /** Трещина до пути `reach` (пиксели): жёлоб `core`, кромка `lip`. */
 function drawCrack(
   p: Pen,
@@ -864,20 +880,36 @@ const mobOf = (id: number | undefined): Mob | undefined =>
  * 2,3 вверху, 3,9 в высоту) и герой (0,9 × 1,25 клетки): точка ЗА ними и в
  * их силуэте не рисуется — как если бы слой сортировался по глубине.
  */
-function screenOf(S: number): (x: number, y: number) => boolean {
+interface Screen {
+  (x: number, y: number): boolean;
+  /** Прямоугольник [x0, x1] × [y0, y1] никем не заслонён — проверки не нужны. */
+  clear(x0: number, y0: number, x1: number, y1: number): boolean;
+}
+function screenOf(S: number): Screen {
   const sim = paintSim();
-  if (!sim) return () => false;
-  const box: [number, number, number, number, number][] = [];
-  for (const m of sim.mobs)
-    if (m.r >= 0.8 && m.mode !== 'dying') box.push([m.x * S, m.y * S, 0.85 * S, 1.15 * S, 3.9 * S]);
-  const h = sim.hero;
-  box.push([h.x * S, h.y * S, 0.45 * S, 0.45 * S, 1.25 * S]);
-  return (x, y) =>
-    box.some(([bx, by, w0, w1, hh]) => {
-      const up = by - 1 - y;
-      if (up <= 0 || up > hh) return false;
-      return Math.abs(x - bx) < w0 + (w1 - w0) * (up / hh);
-    });
+  const box: number[] = [];
+  if (sim) {
+    for (const m of sim.mobs)
+      if (m.r >= 0.8 && m.mode !== 'dying') box.push(m.x * S, m.y * S, 0.85 * S, 1.15 * S, 3.9 * S);
+    const h = sim.hero;
+    box.push(h.x * S, h.y * S, 0.45 * S, 0.45 * S, 1.25 * S);
+  }
+  const hid = ((x: number, y: number) => {
+    for (let i = 0; i < box.length; i += 5) {
+      const up = box[i + 1] - 1 - y;
+      if (up <= 0 || up > box[i + 4]) continue;
+      if (Math.abs(x - box[i]) < box[i + 2] + (box[i + 3] - box[i + 2]) * (up / box[i + 4])) return true;
+    }
+    return false;
+  }) as Screen;
+  hid.clear = (x0, y0, x1, y1) => {
+    for (let i = 0; i < box.length; i += 5) {
+      const w = Math.max(box[i + 2], box[i + 3]);
+      if (x1 > box[i] - w && x0 < box[i] + w && y1 > box[i + 1] - 1 - box[i + 4] && y0 < box[i + 1] - 1) return false;
+    }
+    return true;
+  };
+  return hid;
 }
 
 /** Зерно от места: пол и огонь одного разлома рисуют одну трещину. */
@@ -1459,6 +1491,31 @@ registerZonePainter(
   }),
 );
 
+/** Корзины точек жара: 3 цвета × 4 ступени, угольки × 4. */
+const fireBins: number[][] = Array.from({ length: 16 }, () => []);
+
+/** Где растут три языка пламени: точки жилы по обе стороны и в середине. */
+const anchorCache = new WeakMap<Crack, number[]>();
+function flameAnchors(ck: Crack, ra: number, core: number): number[] {
+  let a = anchorCache.get(ck);
+  if (a) return a;
+  a = [0, 0, 0];
+  for (let i = 0; i < 3; i++) {
+    const want = (i - 1) * core * 0.55;
+    let best = 1e9;
+    for (let q = 0; q < ck.x.length; q++) {
+      const sgn = ck.x[q] * Math.cos(ra) + ck.y[q] * Math.sin(ra) >= 0 ? 1 : -1;
+      const dd = Math.abs(ck.d[q] * sgn - want);
+      if (dd < best) {
+        best = dd;
+        a[i] = q;
+      }
+    }
+  }
+  anchorCache.set(ck, a);
+  return a;
+}
+
 registerZonePainter(
   'f5_fxfire',
   guarded((g, zz: Zone | Strike, px: number, py: number, S: number, time: number) => {
@@ -1479,35 +1536,48 @@ registerZonePainter(
     const sd = placeSeed(z.x, z.y);
     const core = ck.max * 0.62;
     const ra = (z.ang ?? 0) + Math.PI / 2;
-    const hid = screenOf(S);
+    const scr = screenOf(S);
+    const bb = crackBox(ck);
+    const hid: (x: number, y: number) => boolean = scr.clear(
+      ox + bb[0],
+      oy + bb[1] - 24,
+      ox + bb[2],
+      oy + bb[3],
+    )
+      ? () => false
+      : scr;
     // Жар в трещине: светящаяся жила, переливается; к концам — темнее.
+    // Точки раскладываются по корзинам (цвет × ступень яркости) и рисуются
+    // корзиной — смена цвета канвы на каждую точку стоила миллисекунды.
+    const bins = fireBins;
+    for (const b of bins) b.length = 0;
+    const blink = Math.floor(time * 3);
     for (let i = 0; i < ck.x.length; i += 1) {
-      if (ck.d[i] > core || hid(ox + ck.x[i], oy + ck.y[i])) continue;
+      if (ck.d[i] > core) continue;
       const w = 0.5 + 0.5 * Math.sin(time * 5 + ck.d[i] * 0.35 + (i & 3));
       const hot = env * (0.55 + 0.45 * w) * (1 - (ck.d[i] / core) * 0.4);
-      const cold = (1 - env) * ember * (w > 0.55 ? 1 : 0.35);
+      let bin = -1;
       if (hot > 0.05) {
-        p.col(hot > 0.8 ? C.fire[4] : hot > 0.5 ? C.fire[3] : C.fire[2], Math.min(1, hot * 1.3));
-        p.dot(ox + ck.x[i], oy + ck.y[i]);
-      } else if (cold > 0.05) {
+        const lvl = Math.min(3, Math.floor(Math.min(1, hot * 1.3) * 4));
+        bin = (hot > 0.8 ? 2 : hot > 0.5 ? 1 : 0) * 4 + lvl;
+      } else {
         // Угольки: гаснет — тлеют отдельные точки.
-        p.col(C.fire[1], cold);
-        if ((i + Math.floor(time * 3)) % 3 === 0) p.dot(ox + ck.x[i], oy + ck.y[i]);
+        const cold = (1 - env) * ember * (w > 0.55 ? 1 : 0.35);
+        if (cold > 0.05 && (i + blink) % 3 === 0) bin = 12 + Math.min(3, Math.floor(cold * 4));
       }
+      if (bin < 0 || hid(ox + ck.x[i], oy + ck.y[i])) continue;
+      bins[bin].push(i);
+    }
+    for (let b = 0; b < 16; b++) {
+      const list = bins[b];
+      if (!list.length) continue;
+      p.col(b < 12 ? C.fire[2 + (b >> 2)] : C.fire[1], ((b & 3) + 1) / 4);
+      for (const i of list) p.rect(ox + ck.x[i], oy + ck.y[i], 1, 1);
     }
     // Языки пламени — посередине трещины, в центре выше.
+    const anchors = flameAnchors(ck, ra, core);
     for (let i = 0; i < 3 && env > 0.02; i++) {
-      const want = (i - 1) * core * 0.55;
-      let j = 0;
-      let best = 1e9;
-      for (let q = 0; q < ck.x.length; q++) {
-        const sgn = ck.x[q] * Math.cos(ra) + ck.y[q] * Math.sin(ra) >= 0 ? 1 : -1;
-        const dd = Math.abs(ck.d[q] * sgn - want);
-        if (dd < best) {
-          best = dd;
-          j = q;
-        }
-      }
+      const j = anchors[i];
       const base = i === 1 ? 10 : 7 + 2 * hash(sd, i, 1);
       const h = base * env * (0.8 + 0.2 * Math.sin(time * 9 + i * 1.9));
       if (h < 2.5 || hid(ox + ck.x[j], oy + ck.y[j])) continue;
@@ -2010,3 +2080,45 @@ registerZonePainter(
     dust(p, sd, t, cx, cy + 2, reduced() ? 4 : 12, 0, Math.PI, 28, 16, 4, 12, 7, 1.6, 0, 0.9);
   }),
 );
+
+// =============================================================================
+// ПРОГРЕВ: заготовки техник рисуются до боя, по одной на шаг (движок тратит
+// на прогрев до 3 мс за кадр, пока бык в мире) — первый клуб пыли, камень
+// или язык пламени не рисуется впервые посреди удара. Генератор тела быка
+// (`f5-art` грузится раньше, см. `art.ts`) идёт первым и не теряется.
+// =============================================================================
+
+function* warmFx(): Generator<unknown> {
+  for (let r = 1; r <= 100; r++) {
+    circle(r);
+    yield;
+  }
+  for (let pal = 0; pal < PUFF_PAL.length; pal++)
+    for (let r = 1; r <= 16; r++)
+      for (let v = 0; v < 4; v++) {
+        puffImg(pal, r, v);
+        yield;
+      }
+  for (let pal = 0; pal < STONE_PAL.length; pal++)
+    for (let sz = 1; sz <= 4; sz++)
+      for (let f = 0; f < 4; f++) {
+        stoneImg(sz, f, pal);
+        yield;
+      }
+  for (let h = 3; h <= 12; h++)
+    for (let f = 0; f < 4; f++) {
+      flameImg(h, f);
+      yield;
+    }
+  stunStar(0);
+  stunStar(1);
+}
+
+const bodyWarm = MOB_WARM.get('f5_minotaur');
+registerMobWarm('f5_minotaur', function* () {
+  if (bodyWarm) {
+    const it = bodyWarm();
+    while (!it.next().done) yield;
+  }
+  yield* warmFx();
+});
