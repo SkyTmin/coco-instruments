@@ -2080,7 +2080,7 @@ function paintWhirl(
       if (lit && tier === 0) lit.set(x, y, litC);
     }
   }
-  if (!tied || frac < 0.4) return;
+  if (!tied || frac < 0.3) return;
   // Привязанные малые летят на концах хвостов — кистени по кругу.
   for (const da of [0, -0.45]) {
     const a = ph * TAU + da;
@@ -2863,7 +2863,6 @@ function roarClip(look: KingLook): Clip {
       const sustain = T > t1 + 0.06 && T < 0.96;
       // Дрожь рыка: голова и пасть бьются на пиксель, 12 раз в секунду.
       if (sustain && Math.floor(T * 12) % 2 === 1) p = kp(p, { ny: p.ny + 0.45, dr: p.dr + 0.3, jaw: 0.85 });
-      const roar = T > t1 && T < 1.0 ? Math.min(1, (T - t1) / 0.08) * (T > 0.85 ? (1 - T) / 0.15 : 1) : 0;
       return {
         p,
         fx: {
@@ -2871,7 +2870,7 @@ function roarClip(look: KingLook): Clip {
           lid: !rail,
           ...(rail ? { oneHand: true, wLayer: 'mid' as const } : {}),
           eye: T < t1 ? 'squint' : 'angry',
-          roar,
+          // Волны рыка от пасти рисуют «Техники» (f1-boss-fx, `shout`).
           wave: T * (look.split ? 16 : 10),
           waveAmp: look.split ? (T < 0.5 ? 1.4 : 0.7) : T > t1 && T < 0.96 ? 0.8 : 0.3,
           steam: T > 1.0 ? (T - 1.0) / 0.2 : 0,
@@ -2968,7 +2967,7 @@ function summonClip(look: KingLook): Clip {
           smear,
           spark: rail ? 0 : sparkAtT(T),
           eye: 'angry',
-          roar: T > 0.64 ? Math.min(1, (T - 0.64) / 0.06) : 0,
+          // Крик зова — волнами у «Техник»; здесь только открытая пасть.
           wave: T * 9,
           waveAmp: 0.5,
         },
@@ -3296,15 +3295,20 @@ function dizzyClip(D: number, look: KingLook): Clip {
  * (бок → сжат «лицом» → другой бок …), хвосты вытянуты и оставляют
  * кольцо-след ровно по метке удара; потом хвосты опадают с перелётом.
  */
-const WHIRL_R = 2.1 * TS;
+/**
+ * След хвостов в кадре — размытие самих хвостов у тела (их длина, на уровне
+ * бедра), а не всё кольцо удара: полный круг по полу на радиусе метки
+ * рисует контакт `f1_whip` («Техники», от мига урона).
+ */
+const WHIRL_R = 1.35 * TS;
 /** Кадры разворота: зеркало, ширина тела, голова следа (доля круга), сколько круга видно. */
 const SPIN: [boolean, number, number, number][] = [
-  [false, 0.55, 0.67, 0.22],
-  [true, 0.55, 0.83, 0.45],
-  [true, 1, 0, 0.9],
-  [true, 0.55, 0.17, 0.9],
-  [false, 0.55, 0.33, 0.6],
-  [false, 1, 0.5, 0.3],
+  [false, 0.55, 0.67, 0.25],
+  [true, 0.55, 0.83, 0.36],
+  [true, 1, 0, 0.42],
+  [true, 0.55, 0.17, 0.32],
+  [false, 0.55, 0.33, 0.18],
+  [false, 1, 0.5, 0],
 ];
 
 function whipClip(wu: number, rec: number, look: KingLook): Clip {
@@ -3377,7 +3381,7 @@ function whipClip(wu: number, rec: number, look: KingLook): Clip {
           flip: sp ? sp[0] : false,
           whirl: sp ? [sp[2], sp[3]] : undefined,
           whirlSx: sp ? sp[1] : 1,
-          noTied: !!sp && sp[3] >= 0.4,
+          noTied: !!sp && sp[3] >= 0.3,
           wave: rattle ? T * 55 : T * 9,
           waveAmp: rattle ? 0.55 : T > H ? 0.9 * Math.max(0, 1 - (T - H) / 0.5) + 0.2 : 0.35,
         },
@@ -4269,7 +4273,7 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
   const wst = 1 / (fx.whirlSx ?? 1);
   const G: Geo = { w: W, h: H, cx: QG.cx + 1, gy: base + 1, id: 'q' };
   if (fx.whirl && fx.whirl[1] > 0) {
-    paintWhirl(px, lit(), G, fx.whirl[0], fx.whirl[1], true, 1.7 * TS, wst, false, !!fx.flip);
+    paintWhirl(px, lit(), G, fx.whirl[0], fx.whirl[1], true, 0.95 * TS, wst, false, !!fx.flip);
   }
   const leg = (l: [V, V], far: boolean) => {
     const [[x0, y0], [x1, y1]] = l;
@@ -4383,7 +4387,7 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
   } else drawCrown(Math.round(headX - headR * 0.9), Math.round(headY - headR * 1.15));
   outlineFast(px, KING_PAL.ink);
   if (fx.whirl && fx.whirl[1] > 0)
-    paintWhirl(px, lit(), G, fx.whirl[0], fx.whirl[1], false, 1.7 * TS, wst, false, !!fx.flip);
+    paintWhirl(px, lit(), G, fx.whirl[0], fx.whirl[1], false, 0.95 * TS, wst, false, !!fx.flip);
   // Глаз.
   const gx = Math.round(headX + headR * 0.35);
   const gy = Math.round(headY - headR * 0.2);
