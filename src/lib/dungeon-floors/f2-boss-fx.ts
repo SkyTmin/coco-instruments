@@ -710,8 +710,87 @@ registerZonePainter('f2v_swdust', (g, z, px, py, S) => {
 });
 
 // ---------------------------------------------------------------------------
+// Прицел `f2v_aim` — метка ИИ `m.tele` (движок её не рисует: `vNoTele`).
+// Латы ведут дорожку выпада за героем 0,32 с, летучий клинок — 0,8 с перед
+// уколом: 0,5 с ищет, потом направление заперто (вспышка кромок), последние
+// 0,2 с — белые кромки и жила. Пока ищет — пунктир кромок и точки, бегущие
+// к острию: «куда» видно с первого кадра, но ещё не «сейчас».
+// ---------------------------------------------------------------------------
+
+/** Клинок: когда запирает направление и когда колет, с (`f2-brains`, aim). */
+const BLADE_AIM = { lock: 0.5, stab: 0.8 };
+
+registerZonePainter('f2v_aim', (g, z, px, py, S, time) => {
+  const m = mobById((z as Zone & { vm?: number }).vm);
+  const tl = m?.tele;
+  if (!m || !tl || tl.shape !== 'line' || m.mode === 'dying') return true;
+  const blade = m.kind === F2_BLADE;
+  const k = clamp01(tl.k);
+  const Ln = tl.r * S;
+  const hw = Math.max(3, (tl.w ?? 0.5) * S);
+  const a = tl.ang ?? m.dir;
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  // У клинка своя развязка: заперт → последние 0,2 с. Латы досказывает
+  // метка удара `f2_thrust`, у их прицела развязки нет.
+  const cd = blade ? countdown(m.t, BLADE_AIM.stab) : null;
+  const lockT = blade ? m.t - BLADE_AIM.lock : -1;
+  const locked = lockT >= 0;
+  const flash = locked ? clamp01(1 - lockT / 0.08) : 0;
+  const late = !!cd?.late;
+  const pulse = cd?.pulse ?? 0;
+  // Клинок висит в воздухе — дорожка от его тени, а не от рукояти.
+  const L = layerBox(...laneBox(0, Ln + 6, hw + 2, a, 3));
+  const base = locked ? 0.1 + 0.12 * k + (late ? 0.1 : 0) + 0.2 * pulse : 0.04 + 0.08 * k;
+  // Точки бегут к острию: пока ищет — редко и медленно, запер — чаще.
+  const gap = locked ? 7 : 12;
+  const off = (time * (locked ? 90 : 30 + 40 * k)) % gap;
+  for (let y = L.y0; y < L.y1; y++)
+    for (let x = L.x0; x < L.x1; x++) {
+      const cx = x + 0.5;
+      const cy = y + 0.5;
+      const al = cx * ca + cy * sa;
+      const ac = -cx * sa + cy * ca;
+      if (al < 4 || al >= Ln || Math.abs(ac) >= hw) continue;
+      const edge = Math.abs(ac) >= hw - 1;
+      if (edge) {
+        // Кромка: пока ищет — пунктир, запер — сплошная.
+        if (!locked && Math.floor(al) % 4 > 1) continue;
+        const c = late ? SPEC : flash > 0 ? WHITE : locked ? RED : RED_D;
+        L.set(x, y, c, late || flash > 0 ? 0.95 : 0.5 + 0.4 * k);
+      } else if (Math.abs(ac) < 1) {
+        const ph = (((al - off) % gap) + gap) % gap;
+        if (late) L.set(x, y, WHITE, 0.55 + 0.4 * pulse);
+        else if (ph < 1.5) L.set(x, y, locked ? WHITE : HOT, locked ? 0.85 : 0.35 + 0.45 * k);
+        else L.set(x, y, RED, base);
+      } else L.set(x, y, RED, base);
+    }
+  // Острие: крест прицела на конце, запертый — ромбом.
+  const tx = Ln * ca;
+  const ty = Ln * sa;
+  const c = late ? SPEC : locked ? WHITE : HOT;
+  const pts = locked
+    ? [
+        [0, 0],
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+      ]
+    : [
+        [-2, 0],
+        [2, 0],
+        [0, -2],
+        [0, 2],
+      ];
+  for (const [dx, dy] of pts) L.set(tx + dx, ty + dy, c, 0.5 + 0.5 * k);
+  L.blit(g, px + (m.x - z.x) * S, py + (m.y - z.y) * S);
+  return true;
+});
+
+// ---------------------------------------------------------------------------
 // Выпад `f2_thrust`: линия r 3,9, полуширина 0,5; мозг целится 0,32 с
-// (метку прицела рисует движок), потом метка 0,4 с — и удар, за ним рывок.
+// (прицел — `f2v_aim` выше), потом метка 0,4 с — и удар, за ним рывок.
 // ---------------------------------------------------------------------------
 
 registerZonePainter('f2_thrust', (g, z, px, py, S, time) => {
