@@ -3417,6 +3417,9 @@ function evictCell(sim: Sim, x: number, y: number): void {
 }
 
 /** Функции движка для ИИ и сценариев (`dungeon-ai.ts`). */
+/** Номера зон-картинок (`api.vfx`): свои, отрицательные — мимо `nextId`. */
+let vfxSeq = 0;
+
 export const API: SimApi = {
   setMode,
   steer,
@@ -3436,6 +3439,11 @@ export const API: SimApi = {
   },
   zone(sim: Sim, z: ZoneIn) {
     sim.zones.push({ ...z, id: sim.nextId++, t: 0 });
+  },
+  vfx(sim: Sim, z: ZoneIn) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { dps, status, slow, ...look } = z;
+    sim.zones.push({ ...look, id: -++vfxSeq, t: 0 });
   },
   inArena,
   collide: collideTiles,

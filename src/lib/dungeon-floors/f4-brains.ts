@@ -735,13 +735,13 @@ function vfxStatue(sim: Sim, m: Mob, dt: number, was: string, api: SimApi): void
     // v2.85 — только рисунок: меч врезался в плиты перед стражем.
     const x = m.x + Math.cos(f) * 0.8; // v2.85 — только рисунок
     const y = m.y + Math.sin(f) * 0.8 + 0.1; // v2.85 — только рисунок
-    api.zone(sim, { x, y, r: 0.4, life: 0.9, art: 'f4_cut' }); // v2.85 — только рисунок
+    api.vfx(sim, { x, y, r: 0.4, life: 0.9, art: 'f4_cut' }); // v2.85 — только рисунок
     sim.events.push({ t: 'shake', k: 0.12 }); // v2.85 — только рисунок
     return; // v2.85 — только рисунок
   } // v2.85 — только рисунок
   if (was === 'creep' && m.mode === 'still') {
     // v2.85 — только рисунок: застыл — с него осыпается пыль, он только что шёл.
-    api.zone(sim, { x: m.x, y: m.y, r: 0.4, life: 0.8, art: 'f4_freeze' }); // v2.85 — только рисунок
+    api.vfx(sim, { x: m.x, y: m.y, r: 0.4, life: 0.8, art: 'f4_freeze' }); // v2.85 — только рисунок
     return; // v2.85 — только рисунок
   } // v2.85 — только рисунок
   if (m.mode !== 'creep') return; // v2.85 — только рисунок
@@ -750,7 +750,7 @@ function vfxStatue(sim: Sim, m: Mob, dt: number, was: string, api: SimApi): void
   m.data.vStep = 0; // v2.85 — только рисунок
   b.data.vDust = sim.time; // v2.85 — только рисунок: на весь зал не чаще 10 в секунду
   const x = m.x - Math.cos(f) * 0.15; // v2.85 — только рисунок
-  api.zone(sim, { x, y: m.y + 0.05, r: 0.3, life: 0.5, art: 'f4_step' }); // v2.85 — только рисунок
+  api.vfx(sim, { x, y: m.y + 0.05, r: 0.3, life: 0.5, art: 'f4_step' }); // v2.85 — только рисунок
 } // v2.85 — только рисунок
 
 /** v2.85 — только рисунок: скол базальта — осколки летят к герою. */
@@ -759,7 +759,7 @@ function vfxChip(sim: Sim, m: Mob, api: SimApi): void {
   const a = Math.atan2(sim.hero.y - m.y, sim.hero.x - m.x); // v2.85 — только рисунок
   const x = m.x + Math.cos(a) * m.r; // v2.85 — только рисунок
   const y = m.y + Math.sin(a) * m.r; // v2.85 — только рисунок
-  api.zone(sim, { x, y, r: 0.3, life: 0.7, art: 'f4_chip', above: true }); // v2.85 — только рисунок
+  api.vfx(sim, { x, y, r: 0.3, life: 0.7, art: 'f4_chip', above: true }); // v2.85 — только рисунок
 } // v2.85 — только рисунок
 
 // ---------------------------------------------------------------------------
@@ -1012,11 +1012,11 @@ function startGaze(
     const [px, py] = A.plates[i];
     api.zone(sim, { x: px + 1, y: py + 1, r: 1, life: last + 0.4, art: 'f4_plate' });
     const pz = { x: px + 1, y: py + 1, r: 1, life: last + 0.4 }; // v2.85 — только рисунок
-    api.zone(sim, { ...pz, art: 'f4_pillar', above: true }); // v2.85 — только рисунок: столб
+    api.vfx(sim, { ...pz, art: 'f4_pillar', above: true }); // v2.85 — только рисунок: столб
   }
   d.gazeEnd = last + 0.35;
   const gz = { x: A.seatX, y: A.seatY, r: 1, life: last + 0.35 }; // v2.85 — только рисунок
-  api.zone(sim, { ...gz, art: 'f4_gazeray', above: true }); // v2.85 — только рисунок: взор
+  api.vfx(sim, { ...gz, art: 'f4_gazeray', above: true }); // v2.85 — только рисунок: взор
   say(sim, 'ВЗОР ИДОЛА', 'встань на светлую плиту', 'f4_gaze');
 }
 
@@ -1169,7 +1169,7 @@ registerBoss('f4_idol', {
         sub: 'их уже четверо — не отворачивайся',
       });
       wakeStatues(sim, b, PH[1].statues);
-      api.zone(sim, { x: h.x, y: h.y, r: 6, life: 2.4, art: 'f4_quake' }); // v2.85 — только рисунок
+      api.vfx(sim, { x: h.x, y: h.y, r: 6, life: 2.4, art: 'f4_quake' }); // v2.85 — только рисунок
     } else if (b.phase === 1 && k <= 1 / 3) {
       b.phase = 2;
       sim.events.push({
@@ -1179,7 +1179,7 @@ registerBoss('f4_idol', {
         sub: 'двойной взор и удары руками',
       });
       wakeStatues(sim, b, PH[2].statues);
-      api.zone(sim, { x: h.x, y: h.y, r: 6, life: 2.4, art: 'f4_quake' }); // v2.85 — только рисунок
+      api.vfx(sim, { x: h.x, y: h.y, r: 6, life: 2.4, art: 'f4_quake' }); // v2.85 — только рисунок
     }
     const P = PH[Math.min(2, b.phase)];
     d.stT = (d.stT ?? 0) + dt;
@@ -1206,8 +1206,8 @@ registerBoss('f4_idol', {
             // `warn` — когда начнётся суд, `life` — суд и полсекунды приговора (v2.85).
             const jw = rule === RULES.sheathe ? SHEATHE_GRACE : P.rule - P.judge; // v2.85 — только рисунок
             const vz = { x: h.x, y: h.y, r: 0.9, warn: jw, life: P.rule - jw + 0.5 }; // v2.85 — только рисунок
-            api.zone(sim, { ...vz, art: 'f4_judge' }); // v2.85 — только рисунок
-            api.zone(sim, { ...vz, art: 'f4_sign', above: true }); // v2.85 — только рисунок
+            api.vfx(sim, { ...vz, art: 'f4_judge' }); // v2.85 — только рисунок
+            api.vfx(sim, { ...vz, art: 'f4_sign', above: true }); // v2.85 — только рисунок
           }
         }
         break;
@@ -1250,7 +1250,7 @@ registerBoss('f4_idol', {
           api.heroStatus(sim, 'stun', 0.8);
           const wz = { x: h.x, y: h.y, r: 0.9, life: 0.6, art: 'f4_wrath' }; // v2.85 — только рисунок
           api.zone(sim, { ...wz, above: true }); // v2.85 — только рисунок: столб поверх темноты
-          api.zone(sim, { ...wz, life: 1.8, art: 'f4_scorch' }); // v2.85 — только рисунок: ожог
+          api.vfx(sim, { ...wz, life: 1.8, art: 'f4_scorch' }); // v2.85 — только рисунок: ожог
           sim.events.push({ t: 'shake', k: 0.2 }); // v2.85 — только рисунок: с уроном ≈0,5
           sim.events.push({ t: 'flash', k: 0.5, color: '#ffe2a0' }); // v2.85 — только рисунок
           say(sim, 'КАРА', 'заповедь нарушена', 'f4_wrath');
@@ -1348,7 +1348,7 @@ registerBoss('f4_idol', {
   onPartDown(sim, b, m, api) {
     // v2.85 — только рисунок: api — для зон пыли
     if (m.kind === 'f4_statue') {
-      api.zone(sim, { x: m.x, y: m.y, r: 0.5, life: 1.4, art: 'f4_crumble' }); // v2.85 — только рисунок
+      api.vfx(sim, { x: m.x, y: m.y, r: 0.5, life: 1.4, art: 'f4_crumble' }); // v2.85 — только рисунок
       sim.events.push({ t: 'shake', k: 0.2 }); // v2.85 — только рисунок: камень рассыпался
       const key = `cr${m.data.ped ?? 0}`;
       if (!b.data[key]) {
@@ -1368,10 +1368,10 @@ registerBoss('f4_idol', {
           s.tele = null;
           s.danger = 0;
           sim.events.push({ t: 'boom', x: s.x, y: s.y, r: 0 });
-          api.zone(sim, { x: s.x, y: s.y, r: 0.5, life: 1.4, art: 'f4_crumble' }); // v2.85 — только рисунок
+          api.vfx(sim, { x: s.x, y: s.y, r: 0.5, life: 1.4, art: 'f4_crumble' }); // v2.85 — только рисунок
         }
       sim.zones = sim.zones.filter((z) => z.art !== 'f4_reform');
-      api.zone(sim, { x: m.x, y: m.y, r: 3, life: 2.6, art: 'f4_collapse' }); // v2.85 — только рисунок
+      api.vfx(sim, { x: m.x, y: m.y, r: 3, life: 2.6, art: 'f4_collapse' }); // v2.85 — только рисунок
       F4_VIEW.rule = '';
       F4_VIEW.ruleK = 0;
       F4_VIEW.judging = false;
