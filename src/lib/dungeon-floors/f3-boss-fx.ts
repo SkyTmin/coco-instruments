@@ -892,7 +892,7 @@ registerZonePainter('f3_wave', (g, z, px, py, scale, time) => {
   g.save();
   // Докуда накроет: мокрая бирюза; в тревоге мигает.
   const flick = alarm && Math.floor(time * 18) % 2 === 0 ? 0.08 : 0;
-  b.ink('#46aab4', 0.07 + 0.12 * k + flick);
+  b.ink('#46aab4', 0.1 + 0.16 * k + flick);
   b.sector(WAVE_R0, R, a, half);
   // Вода уходит к пасти: дуги ряби бегут внутрь, всё быстрее.
   const ph = t * 0.8 + (1.3 * t * t) / T;
@@ -949,8 +949,18 @@ registerImpactPainter('f3_wave', {
     const back = R - (R - WAVE_R0) * backK;
     const wetR = Math.min(rc, back);
     const dry = 1 - clamp01((age - 0.35) / 1.25);
-    b.ink('#3e98a0', 0.3 * dry);
+    // Вода по песку темнее сухого (мокро) и в бликах — не луч фонаря.
+    b.ink(TEAL_D, 0.42 * dry);
     b.sector(WAVE_R0, Math.max(WAVE_R0 + 1, wetR), a, half);
+    // Блики на плёнке: короткие черты поперёк течения, уходят с водой к пасти.
+    b.ink(FOAM2, 0.4 * dry);
+    for (let i = 0; i < 14; i++) {
+      const rr = WAVE_R0 + 6 + rnd(seed, i, 70) * (R - WAVE_R0 - 10);
+      const r = rr - (rr - WAVE_R0) * 0.6 * inQuad((age - 0.3) / 1.2);
+      if (r > wetR - 2) continue;
+      const aa = a + (rnd(seed, i, 71) * 2 - 1) * half * 0.9;
+      b.dot(Math.cos(aa) * r - 1, Math.sin(aa) * r, 3, 1);
+    }
     b.ink(WET, 0.32 * (1 - dry) * (1 - clamp01((age - 1.1) / 0.5)));
     b.sector(Math.max(WAVE_R0, wetR), R, a, half);
     // Пена отката: рваная линия на краю воды.
@@ -1335,13 +1345,17 @@ registerZonePainter('f3_tidefx', (g, z, px, py, scale, time) => {
       // Живая кромка: пена лижет сухих соседей — набегает и отходит.
       const lap = (Math.sin(time * 2.6 + x0 * 0.05 + y0 * 0.07) * 0.5 + 0.5) * 2.5;
       const n0 = Math.round(lap);
+      // Три черты на сторону с разрывами (сдвиг по клетке — стык не в такт).
+      const o = k % 3;
       b.ink(FOAM, 0.6);
-      if (dryAt(i, i + ww))
-        for (let x = 0; x < 16; x++) if ((x + k) % 5) b.dot(x0 + x, y0 + 16 + n0 - 1);
-      if (dryAt(i, i - ww)) for (let x = 0; x < 16; x++) if ((x + k) % 5) b.dot(x0 + x, y0 - n0);
-      if (dryAt(i, i + 1))
-        for (let y = 0; y < 16; y++) if ((y + k) % 5) b.dot(x0 + 16 + n0 - 1, y0 + y);
-      if (dryAt(i, i - 1)) for (let y = 0; y < 16; y++) if ((y + k) % 5) b.dot(x0 - n0, y0 + y);
+      for (let e = 0; e < 3; e++) {
+        const a0 = e * 6 - o + (e ? 0 : o);
+        const len = e === 2 ? 16 - a0 : 4 + ((k + e) % 2);
+        if (dryAt(i, i + ww)) b.dot(x0 + a0, y0 + 15 + n0, len, 1);
+        if (dryAt(i, i - ww)) b.dot(x0 + a0, y0 - n0, len, 1);
+        if (dryAt(i, i + 1)) b.dot(x0 + 15 + n0, y0 + a0, 1, len);
+        if (dryAt(i, i - 1)) b.dot(x0 - n0, y0 + a0, 1, len);
+      }
     } else if (tr.et[k] >= 0) {
       // Отлив: дальние клетки сохнут первыми, у озера вода держится дольше и
       // уходит к озеру полосой с пеной по краю; песок за ней мокрый и сохнет.
