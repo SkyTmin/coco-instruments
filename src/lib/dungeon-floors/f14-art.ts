@@ -1520,20 +1520,32 @@ function pastSelf(tier: number, dir: Dir4, row: number, fade: number): Px | null
   if (!g) return null;
   const img = g.getImageData(0, 0, c.width, c.height);
   const p = new Px(c.width + 4, c.height + 4);
-  // Старая плёнка: сепия в пять ступеней по яркости (форма читается), через
-  // строку — чуть прозрачнее и светлее (строки кадра), контур — золото.
-  const RAMP: RGBA[] = [hx('#2a1808'), hx('#5a3a1a'), hx('#9a7040'), hx('#d8b070'), hx('#fff0c0')];
+  // Засвеченная плёнка: свои цвета героя, выбеленные к янтарю, и второй
+  // отпечаток со сдвигом — двойная экспозиция. Сепия по яркости не годилась:
+  // рыцарь Т8 тёмный и полосатый (забрало, пластины), и в одну бурую гамму
+  // он читался бочкой — узнать в двойнике себя было нельзя. Контур — золото.
+  const AMBER = hx('#ffd27a');
+  const px = (x: number, y: number): RGBA | null => {
+    const i = (y * c.width + x) * 4;
+    if (!img.data[i + 3]) return null;
+    return [img.data[i], img.data[i + 1], img.data[i + 2], 255];
+  };
+  // Отпечаток прошлого кадра: на пиксель выше и левее, еле виден.
   for (let y = 0; y < c.height; y++)
     for (let x = 0; x < c.width; x++) {
-      const i = (y * c.width + x) * 4;
-      if (!img.data[i + 3]) continue;
-      const l = (img.data[i] * 0.3 + img.data[i + 1] * 0.55 + img.data[i + 2] * 0.15) / 255;
-      const k = Math.max(0, Math.min(4, Math.round(l * 5.2 - 0.3)));
-      const line = y % 2 === 1;
-      const c1 = line ? mixc(RAMP[k], RAMP[4], 0.18) : RAMP[k];
-      p.set(x + 2, y + 2, alpha(c1, (line ? 0.72 : 0.92) * fade));
+      const o = px(x, y);
+      if (o) p.set(x + 1, y + 1, alpha(mixc(o, AMBER, 0.7), 0.32 * fade));
     }
-  p.outline(hx('#ffcf5a', 200));
+  for (let y = 0; y < c.height; y++)
+    for (let x = 0; x < c.width; x++) {
+      const o = px(x, y);
+      if (!o) continue;
+      const ink = o[0] + o[1] + o[2] < 90;
+      const line = y % 4 === 3;
+      const col = ink ? mixc(o, hx('#3a2208'), 0.5) : mixc(o, AMBER, 0.38);
+      p.set(x + 2, y + 2, alpha(col, (line ? 0.66 : 0.86) * fade));
+    }
+  p.outline(hx('#ffcf5a', 210));
   return p;
 }
 
@@ -3040,25 +3052,31 @@ function brassCell(c: CellCtx): Px {
   const e = edges(c, same);
   const ox = (c.wx & 1) * 16;
   const oy = (c.wy & 1) * 16;
+  // Тоны берутся по номеру, а не через порог `tone`: основа сидела ровно на
+  // пороге 0,42, и шум перекидывал каждый пиксель то в тёмный, то в средний
+  // тон — рифлёный лист выходил наждачным «лабиринтом».
   return cellOf(`brass|${+e.n}${+e.s}${+e.w}${+e.e}|${ox}${oy}`, () => {
     const p = new Px(16, 16);
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
         const X = ox + x;
         const Y = oy + y;
-        let l = 0.42 + (hash(X, Y, 5) - 0.5) * 0.05;
+        let k = 2;
         // Рифы «чечевицей»: в квадрате 8×8 два коротких ребра — «/» и «\»;
         // верх ребра на свету, под ним тень.
         const bx = X % 8;
         const by = Y % 8;
-        if ((bx === 1 && by === 3) || (bx === 2 && by === 2) || (bx === 3 && by === 1)) l += 0.34;
-        else if ((bx === 2 && by === 3) || (bx === 3 && by === 2)) l -= 0.22;
-        if ((bx === 5 && by === 5) || (bx === 6 && by === 6) || (bx === 7 && by === 7)) l += 0.34;
-        else if ((bx === 5 && by === 6) || (bx === 6 && by === 7)) l -= 0.22;
+        if ((bx === 1 && by === 3) || (bx === 2 && by === 2) || (bx === 3 && by === 1)) k = 3;
+        else if ((bx === 2 && by === 3) || (bx === 3 && by === 2)) k = 1;
+        if ((bx === 5 && by === 5) || (bx === 6 && by === 6) || (bx === 7 && by === 7)) k = 3;
+        else if ((bx === 5 && by === 6) || (bx === 6 && by === 7)) k = 1;
+        // Затёртость: редкие тёмные точки.
+        else if (k === 2 && hash(X, Y, 5) < 0.05) k = 1;
         // Шов листа: две клетки — один лист.
-        if (X % 32 === 0 || Y % 32 === 0) l = 0.05;
-        else if (X % 32 === 1 || Y % 32 === 1) l = 0.62;
-        p.set(x, y, tone(TREAD, l));
+        if (X % 32 === 0 || Y % 32 === 0) k = 0;
+        else if (X % 32 === 1 || Y % 32 === 1) k = 3;
+        else if (X % 32 === 31 || Y % 32 === 31) k = 1;
+        p.set(x, y, TREAD[k]);
       }
     if (e.n) for (let x = 0; x < 16; x++) (p.set(x, 0, TREAD[3]), p.set(x, 1, TREAD[2]));
     if (e.w) for (let y = 0; y < 16; y++) p.set(0, y, TREAD[2]);
@@ -3077,7 +3095,7 @@ function brassCell(c: CellCtx): Px {
 }
 
 /** Метки, на которые можно положить мелочь (трещину, масло, песок). */
-const FLOOR_LOOK = new Set<number>([MK.brass, MK.dune, MK.stone, MK.parquet, MK.still, MK.runner, MK.dial]);
+const FLOOR_LOOK = new Set<number>([0, MK.brass, MK.dune, MK.stone, MK.parquet, MK.still, MK.runner, MK.dial]);
 
 /** Мелочь поверх пола соседей: трещина или пятно ложатся на их узор. */
 function onBase(c: CellCtx, paint: (c: CellCtx) => Px | null, over: Px): Px {
@@ -3323,7 +3341,87 @@ function hubCellMech(c: CellCtx): Px {
 }
 
 /** Пол механизма по метке (для подложки мелочи). */
+/** Район по мировому ряду (рисовальщику видны только мировые координаты). */
+function areaOfRow(wy: number): string {
+  if (wy < (F14_TOP[F14_SAND] ?? 0)) return F14_DIAL;
+  if (wy < (F14_TOP[F14_MECH] ?? 0)) return F14_SAND;
+  return F14_MECH;
+}
+
+const DECK = tn('#1a1510', '#332c24', '#4e4436', '#7c6c54');
+
+/**
+ * Настил Механизма — пол без метки: чугунные листы два на два с фаской,
+ * болтами по углам, потёртостью и пятнами масла. Раньше тут лежала общая
+ * плита подземелья в тонировке — зернистая, как наждак, и чужая рядом с
+ * латунным рифлёным листом залов.
+ */
+function deckCell(c: CellCtx): Px {
+  const sx = c.wx >> 1;
+  const sy = c.wy >> 1;
+  const sv = Math.floor(hash(sx, sy, 41) * 6);
+  return cellOf(`deck|${c.wx & 1}${c.wy & 1}|${sv}`, () => {
+    const p = new Px(16, 16);
+    const ox = (c.wx & 1) * 16;
+    const oy = (c.wy & 1) * 16;
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 16; x++) {
+        const X = ox + x;
+        const Y = oy + y;
+        // Лист — тёмный тон; зерно — редкие точки средним и самым тёмным.
+        const g = hash(X, Y, sv + 17);
+        let k = g < 0.05 ? 2 : g > 0.96 ? 0 : 1;
+        // Выдавленная рамка жёсткости по краю листа: свет сверху-слева.
+        const d = Math.min(X, Y, 31 - X, 31 - Y);
+        if (d === 3) k = X === 3 || Y === 3 ? 2 : 1;
+        else if (d === 4) k = X === 28 || Y === 28 ? 0 : k;
+        if (d === 0) k = 0;
+        else if (d === 1) k = X === 1 || Y === 1 ? 2 : 0;
+        // Потёртость ходом: посередине листа зерно светлее.
+        if (k === 1 && Math.abs(Y - 16) < 5 && d > 5 && hash(X, Y, sv) < 0.12 + sv * 0.02) k = 2;
+        p.set(x, y, DECK[k]);
+      }
+    // Болты по углам листа.
+    for (const [X, Y] of [
+      [6, 6],
+      [25, 6],
+      [6, 25],
+      [25, 25],
+    ]) {
+      const lx = X - ox;
+      const ly = Y - oy;
+      if (lx >= 1 && lx < 15 && ly >= 1 && ly < 15) rivet(p, lx, ly, IRON);
+    }
+    // Пятно масла у части листов, царапины — у других.
+    if (sv === 0 || sv === 3) {
+      const cx = 16 + (sv - 1.5) * 3 - ox;
+      const cy = 17 - oy;
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++) {
+          const r = Math.hypot((x - cx) / 4.2, (y - cy) / 2.8);
+          if (r < 1) p.set(x, y, alpha(hx('#0c0906'), 0.35 * (1 - r * r)));
+          if (r > 0.55 && r < 0.7 && hash(x, y, 8) < 0.5) p.set(x, y, alpha(hx('#6a5a8a'), 0.18));
+        }
+    } else if (sv === 4) {
+      for (let k = 0; k < 3; k++) {
+        const x0 = 8 + k * 5 - ox;
+        const y0 = 10 + k * 3 - oy;
+        for (let t = 0; t < 6; t++) {
+          const x = x0 + t;
+          const y = y0 - (t >> 1);
+          if (x >= 0 && x < 16 && y >= 0 && y < 16) p.set(x, y, alpha(DECK[3], 0.55));
+        }
+      }
+    }
+    return p;
+  });
+}
+
 function mechBase(c: CellCtx): Px | null {
+  if (c.mark === 0 && c.tile === 2) {
+    const a = areaOfRow(c.wy);
+    return a === F14_MECH ? deckCell(c) : a === F14_SAND ? packedCell(c) : parquetCell(c, false);
+  }
   if (c.mark === MK.brass) return brassCell(c);
   if (c.mark === MK.dune) return duneCell(c);
   if (c.mark === MK.stone) return stoneCell(c);
@@ -3452,17 +3550,19 @@ function duneCell(c: CellCtx): Px {
 
 /** Утоптанный песок без ряби: переход между дюнами и камнем. */
 function packedCell(c: CellCtx): Px {
-  // Та же рябь, что у дюн, но притоптанная: гребни слабее, тон ниже на шаг.
+  // Та же рябь, что у дюн, но притоптанная: тон ниже на шаг, гребень —
+  // средним тоном, песчинки — редкими точками (по номеру тона: основа на
+  // пороге `tone` давала сплошной шум).
   const p = new Px(16, 16);
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
       const [wx, wy] = wpt(c, x, y);
       const bend = Math.sin(wx * 0.55 + wy * 0.18) * 0.9 + Math.sin(wx * 0.17 - wy * 0.11) * 1.7;
       const ph = (((wy * 0.85 + bend) % 1) + 1) % 1;
-      let l = 0.4 + (hash(x, y, c.wx ^ (c.wy << 3)) - 0.5) * 0.14;
-      if (ph < 0.07) l += 0.12;
-      else if (ph < 0.2) l -= 0.07;
-      p.set(x, y, tone(SAND_FLOOR, l));
+      const g = hash(x, y, c.wx ^ (c.wy << 3));
+      let k = g < 0.1 ? 2 : g > 0.97 ? 0 : 1;
+      if (ph < 0.08) k = g < 0.3 ? 3 : 2;
+      p.set(x, y, SAND_FLOOR[k]);
     }
   const v = (c.wx * 7 + c.wy * 13) % 5;
   if (v === 0) p.ell(5 + (c.wx % 3) * 2, 6 + (c.wy % 3) * 2, 1.3, 0.9, SAND_FLOOR[0]);
@@ -3471,13 +3571,25 @@ function packedCell(c: CellCtx): Px {
 
 const SANDSTONE = tn('#3a2a18', '#6a5236', '#927252', '#b89a72');
 
-/** Плиты песчаника два на два, в швах песок. */
+/**
+ * Плиты песчаника два на два, в швах песок. У каждой плиты свой тон и
+ * свой износ: песок намело в швы (гуще с наветренной, северо-западной
+ * стороны), у части — трещина, у части — стёртый угол. Одинаковые плиты
+ * читались кафелем ванной, а не дном часов.
+ */
 function stoneCell(c: CellCtx): Px {
-  return cellOf(`stone|${c.wx & 1}${c.wy & 1}|${(c.wx * 13 + c.wy * 7) % 3}`, () => {
+  const sx = c.wx >> 1;
+  const sy = c.wy >> 1;
+  const sv = Math.floor(hash(sx, sy, 71) * 6);
+  return cellOf(`stone|${c.wx & 1}${c.wy & 1}|${sv}`, () => {
     const p = new Px(16, 16);
     const ox = (c.wx & 1) * 16;
     const oy = (c.wy & 1) * 16;
-    const v = (c.wx * 13 + c.wy * 7) % 3;
+    // Плита светлая или тёмная (через одну — по зерну), а не «где-то на
+    // пороге»: иначе шум перекидывал пиксели между тонами.
+    const hi = sv % 2 === 0;
+    const crack = sv === 1 || sv === 4;
+    const worn = sv === 2 || sv === 5;
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
         const X = ox + x;
@@ -3485,14 +3597,39 @@ function stoneCell(c: CellCtx): Px {
         const seam = X % 32 === 0 || Y % 32 === 0;
         const edgeHi = X % 32 === 1 || Y % 32 === 1;
         const edgeLo = X % 32 === 31 || Y % 32 === 31;
-        p.set(
-          x,
-          y,
-          seam
-            ? tone(SAND_FLOOR, 0.45)
-            : tone(SANDSTONE, 0.48 + (edgeHi ? 0.22 : edgeLo ? -0.2 : 0) + (hash(x, y, v) - 0.5) * 0.12),
-        );
+        if (seam) {
+          p.set(x, y, SAND_FLOOR[hash(X, Y, sv) < 0.7 ? 1 : 2]);
+          continue;
+        }
+        // Нанос: у северного и западного края плиты, неровной кромкой.
+        const dEdge = Math.min(X % 32, Y % 32);
+        const drift = dEdge < 5 && hash(X, Y, sv + 9) < 0.55 - dEdge * 0.12;
+        if (drift) {
+          p.set(x, y, SAND_FLOOR[hash(X, Y, 3) < 0.25 ? 3 : 2]);
+          continue;
+        }
+        // Стёртый угол: юго-восточный, пологой дугой.
+        const rim = worn && Math.hypot(31 - X, 31 - Y) < 7;
+        const g = hash(x, y, sv);
+        let k = hi ? 2 : 1;
+        if (g < 0.05) k -= 1;
+        else if (g > 0.97) k += 1;
+        if (edgeHi) k = hi ? 3 : 2;
+        else if (edgeLo) k = 0;
+        if (rim && k > 0 && !edgeLo) k -= 1;
+        p.set(x, y, SANDSTONE[Math.max(0, Math.min(3, k))]);
       }
+    if (crack) {
+      // Трещина через плиту: ломаная, тёмная черта с песчинкой внутри.
+      let x = 6 + (sv * 5) % 18;
+      for (let Y = 3; Y < 29; Y++) {
+        if (hash(Y, sv, 5) < 0.35) x += hash(Y, sv, 6) < 0.5 ? -1 : 1;
+        const lx = x - ox;
+        const ly = Y - oy;
+        if (lx >= 0 && lx < 16 && ly >= 0 && ly < 16) p.set(lx, ly, SANDSTONE[0]);
+        if (lx + 1 >= 0 && lx + 1 < 16 && ly >= 0 && ly < 16) p.set(lx + 1, ly, tone(SANDSTONE, 0.7));
+      }
+    }
     return p;
   });
 }
@@ -3871,6 +4008,8 @@ function barsCell(c: CellCtx): Px {
 
 function mechCell(c: CellCtx): Px | null {
   switch (c.mark) {
+    case 0:
+      return c.tile === 2 ? deckCell(c) : null;
     case MK.brass: {
       const [gx, gy] = gearCenter();
       if (Math.hypot(c.wx + 0.5 - gx, c.wy + 0.5 - gy) < 4) return discCell(c);
@@ -3954,6 +4093,9 @@ function sandCell(c: CellCtx): Px | null {
 
 function dialAreaCell(c: CellCtx): Px | null {
   switch (c.mark) {
+    case 0:
+      // Пол без метки — тот же паркет служебных ходов (с проплешинами).
+      return c.tile === 2 ? parquetCell(c, false) : null;
     case MK.dial:
     case MK.hourlamp:
       return dialCell(c, DIAL_DAY, false);

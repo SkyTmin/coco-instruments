@@ -631,6 +631,8 @@ export const F14: FloorDef = {
         fog: '#0a0703',
       },
       legend: LEGEND_MECH,
+      // Пол без метки рисует этаж: чугунный настил, а не общая плита.
+      paintAll: true,
       mine: 'f14mine',
       spawn: spawnMech,
     },
@@ -669,6 +671,7 @@ export const F14: FloorDef = {
         fog: '#04060c',
       },
       legend: LEGEND_DIAL,
+      paintAll: true,
       spawn: spawnDial,
     },
   ],
