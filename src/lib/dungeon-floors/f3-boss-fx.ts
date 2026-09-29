@@ -141,7 +141,8 @@ class Brush {
     a1 = TAU,
     phase = 0,
   ): void {
-    if (r < 1) return;
+    // Меньше — не кольцо, а ромбик-значок.
+    if (r < 2.5) return;
     const span = a1 - a0;
     const n = Math.max(6, Math.ceil(Math.abs(span) * r * 1.25));
     let lx = 1e9;
@@ -322,9 +323,12 @@ function drop(b: Brush, p: Bit, head: string, a: number, water: boolean, size = 
     const vx = p.vx;
     const vy = p.vy - p.vz;
     const sp = Math.abs(vx) + Math.abs(vy);
-    if (sp > 50) {
+    // Хвост хотя бы в точку и на медленной капле: одиночная светлая точка
+    // на тёмном читается звездой, а не водой.
+    if (sp > 20) {
+      const k = Math.max(1.2 / sp, 0.026);
       b.ink(TEAL, a * 0.7);
-      b.dot(sx - vx * 0.026, sy - vy * 0.026);
+      b.dot(sx - vx * k, sy - vy * k);
     }
     if (sp > 140) {
       b.ink(TEAL_D, a * 0.5);
@@ -336,9 +340,18 @@ function drop(b: Brush, p: Bit, head: string, a: number, water: boolean, size = 
   }
   const u = p.t;
   if (water) {
-    if (u < 0.32) {
-      b.ink(FOAM2, a * 0.75 * (1 - u / 0.32));
-      b.ring(p.x, p.y, 1 + u * 10, 0.6);
+    // Не кружок: маленький замкнутый эллипс в пикселях — «▭», значок, а
+    // «( )» по бокам — скобки. Сперва столбик отскока, потом плоская рваная
+    // рябь — как штрихи бликов на самой воде.
+    if (u < 0.08) {
+      b.ink(FOAM, a);
+      b.dot(p.x, p.y - 1 - Math.round(u * 30), 1, u < 0.04 ? 2 : 1);
+    }
+    if (u < 0.42) {
+      const r = 2.5 + u * 10;
+      const s = (Math.round(p.x * 7) * 73856093) ^ (Math.round(p.y * 7) * 19349663);
+      b.ink(FOAM2, a * 0.7 * (1 - u / 0.42));
+      b.torn(p.x, p.y, r, 0.32, s >>> 0, 0.7);
     }
     return;
   }
