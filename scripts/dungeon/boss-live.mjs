@@ -64,7 +64,9 @@ await p.evaluate(async () => {
   S.useFinanceStore.getState().creativeDungeonSet({ tier: 8, plus: 5 });
 });
 await p.goto(`http://127.0.0.1:${port}/#/dungeon`);
-await p.waitForTimeout(1500);
+// Под нагрузкой лобби приходит не сразу — ждём вкладки, а не секунды.
+await p.waitForSelector('.dgl-floor', { timeout: 120000 });
+await p.waitForTimeout(500);
 // Вкладка этажа — по точному номеру: «1» не должна поймать «15».
 await p.evaluate((n) => {
   const tab = [...document.querySelectorAll('.dgl-floor')].find(
@@ -75,7 +77,10 @@ await p.evaluate((n) => {
 }, floor);
 await p.waitForTimeout(400);
 await p.getByText('Спуститься').click();
-await p.waitForTimeout(4000);
+await p.waitForFunction(() => window.__dg?.world && window.__dg.floor !== undefined, null, {
+  timeout: 120000,
+});
+await p.waitForTimeout(1500);
 await p.evaluate(
   (dy) => {
     const s = window.__dg;
@@ -128,12 +133,17 @@ const meta = await p.evaluate(
     const times = [];
     const t0 = performance.now();
     let n = 0;
+    let last = null;
     await new Promise((done) => {
       const tick = () => {
         const now = performance.now();
         if (now - t0 > secs * 1000) return done();
         if (n++ % every === 0) {
-          const bm = s.mobs.find((m) => s.boss && m.kind === s.boss.def.mob) ?? s.hero;
+          // Босс убит — окно остаётся на его последнем месте: сцена смерти
+          // (\`linger\`) доигрывает там же.
+          const live = s.mobs.find((m) => s.boss && m.kind === s.boss.def.mob);
+          if (live) last = { x: live.x, y: live.y };
+          const bm = live ?? last ?? s.hero;
           const c = r.toScreen(bm.x, bm.y);
           const x = Math.round(c.x * dpr - side / 2);
           const y = Math.round(c.y * dpr - side * 0.62);

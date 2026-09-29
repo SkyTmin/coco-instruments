@@ -1291,6 +1291,27 @@ const KINGLET_SHARE = 0.12;
 
 const kingOf = (sim: Sim) => sim.mobs.find((m) => m.kind === 'king' && m.mode !== 'dying');
 
+/**
+ * v2.85 — только рисунок: зона-картинка без урона и статусов (метка, контакт,
+ * пыль — `f1-boss-fx.ts`). Кладётся мимо `api.zone`, чтобы не тратить
+ * `sim.nextId`: от номеров мобов зависит, с какого бока заходит стая, а
+ * картинка не должна менять бой. `lit` — вторая зона поверх темноты (`…L`).
+ */
+function vfx(
+  sim: Sim,
+  art: string,
+  x: number,
+  y: number,
+  life: number,
+  o: Record<string, number> = {},
+  lit = false,
+): void {
+  const vSeed = Math.floor(sim.time * 1000 + x * 7919 + y * 131) % 1e6;
+  const z = { x, y, r: 0.5, life, art, ...o, vSeed, id: 0, t: 0 };
+  sim.zones.push(z);
+  if (lit) sim.zones.push({ ...z, art: art + 'L', above: true });
+}
+
 function arenaHoles(sim: Sim, api: SimApi): Burrow[] {
   return sim.burrows.filter(
     (x) => x.obj.out && api.inArena(sim, x.obj.out[0] + 0.5, x.obj.out[1] + 0.5),
@@ -1322,6 +1343,10 @@ function summonRats(sim: Sim, m: Mob, api: SimApi): void {
     const mm = api.fromBurrow(sim, hb, 'rat', { elite: i === 0 && sim.rng() < 0.2 });
     mm.t = -i * 0.2;
     mm.data.f1boss = 1;
+    // v2.85 — только рисунок: нора выплёвывает землю, когда крыса лезет.
+    const [ox, oy] = hb.obj.out ?? [hb.obj.x, hb.obj.y];
+    const at = { vDelay: i * 0.2, vDx: ox - hb.obj.x, vDy: oy - hb.obj.y };
+    vfx(sim, 'f1_burst', (hb.obj.x + ox) / 2 + 0.5, (hb.obj.y + oy) / 2 + 0.5, 1.6 + i * 0.2, at);
   }
   m.summonCd = 12;
 }
@@ -1338,6 +1363,10 @@ function splitKing(sim: Sim, b: BossFight, king: Mob, api: SimApi): void {
     sub: 'два малых короля отгрызли хвосты',
   });
   sim.hitstop = Math.max(sim.hitstop, 0.12);
+  // v2.85 — только рисунок: узел хвостов рвётся — вспышка, клочья, обрубки.
+  const kx = king.x - Math.cos(king.face) * 0.7;
+  vfx(sim, 'f1_split_hit', kx, king.y + 0.1, 1.8, { vAng: king.face }, true);
+  sim.events.push({ t: 'flash', k: 0.35, color: '#ffd0c8' });
   for (let i = 0; i < 2; i++) {
     const a = king.face + Math.PI + (i === 0 ? -0.7 : 0.7);
     const k = api.spawnMob(sim, 'kinglet', king.x + Math.cos(a) * 1.2, king.y + Math.sin(a) * 1.2, {
@@ -1372,11 +1401,25 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       const s = m.speed * haste * (blade ? 1.1 : 1);
       const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
       api.steer(sim, m, cx, cy, s, dt);
+      // v2.85 — только рисунок: тяжёлые шаги короля поднимают пыль.
+      if (!small && (m.data.vStep = (m.data.vStep ?? 0) + Math.hypot(m.vx, m.vy) * dt) > 1.1) {
+        m.data.vStep = 0;
+        m.data.vFoot = -(m.data.vFoot ?? 1);
+        const fx = m.x - Math.sin(m.face) * 0.28 * m.data.vFoot;
+        vfx(sim, 'f1_step', fx, m.y + 0.25 + Math.cos(m.face) * 0.12 * m.data.vFoot, 0.7, {
+          vAng: m.face,
+        });
+      }
       if (m.t > (small ? 0.9 : 1.3) / haste) {
         const r = sim.rng();
         if (!small && b.phase >= 1 && m.summonCd <= 0 && r < 0.25) {
           api.setMode(m, 'summon');
           sim.events.push({ t: 'boss', what: 'summon' });
+          // v2.85 — только рисунок: у нор арены вспучивается земля.
+          for (const hb of arenaHoles(sim, api)) {
+            const [ox, oy] = hb.obj.out ?? [hb.obj.x, hb.obj.y];
+            vfx(sim, 'f1_bulge', ox + 0.5, oy + 0.5, 1.9);
+          }
         } else if (blade) {
           // Рельс-двуручник: издали — прыжок, вблизи — тройной взмах.
           if (dist > 3.4 || r < 0.3) {
@@ -1414,6 +1457,11 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       const s = (small ? 10 : 9) * haste;
       m.vx = Math.cos(m.dir) * s;
       m.vy = Math.sin(m.dir) * s;
+      // v2.85 — только рисунок: пыль и солома из-под клубка (≤ 10 в секунду).
+      if ((m.data.vRoll = (m.data.vRoll ?? 0) + s * dt) > (small ? 2.4 : 1.3)) {
+        m.data.vRoll = 0;
+        vfx(sim, 'f1_rolldust', m.x, m.y + m.r * 0.5, 0.9, { vAng: m.dir, vR: m.r });
+      }
       // Качение бьёт один раз: попал — король и сам оглушён ударом, это
       // окно для ответа.
       if (dist < m.r + h.r + 0.1 && h.inv <= 0 && h.mode !== 'dash') {
@@ -1449,6 +1497,9 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           y: m.y + Math.sin(m.dir) * 1.4,
           r: 0,
         });
+        // v2.85 — только рисунок: тесак в пол — рубец, щепа, пыль, искры.
+        vfx(sim, 'f1_cleave_hit', m.x, m.y, 1.7, { vAng: m.dir }, true);
+        sim.events.push({ t: 'shake', k: 0.12 });
         api.setMode(m, 'recover');
         m.data.rec = 0.7;
       }
@@ -1464,6 +1515,7 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         if (dist < r + h.r) api.hurtHero(sim, m.dmg, m.x, m.y, 6, m.kind);
         sim.events.push({ t: 'boss', what: 'whip' });
         sim.events.push({ t: 'boom', x: m.x, y: m.y, r: 0 });
+        vfx(sim, 'f1_whip_hit', m.x, m.y, 1.3, { vR: r }, true); // v2.85 — только рисунок
         api.setMode(m, 'recover');
         m.data.rec = 0.6;
       }
@@ -1496,6 +1548,10 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         // Шаг вперёд на взмахе — двуручник тянет за собой.
         m.vx += Math.cos(m.dir) * 5;
         m.vy += Math.sin(m.dir) * 5;
+        // v2.85 — только рисунок: борозда и веер искр рельса; третий — тяжелее.
+        const vn = 3 - (m.data.combo ?? 3);
+        vfx(sim, 'f1_sweep_hit', m.x, m.y, 1.5, { vAng: m.dir, vN: vn }, true);
+        sim.events.push({ t: 'shake', k: vn >= 2 ? 0.3 : 0.16 });
         m.data.combo = (m.data.combo ?? 3) - 1;
         m.data.swing = 3 - m.data.combo;
         if (m.data.combo > 0) api.setMode(m, 'sweepAim');
@@ -1529,6 +1585,10 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         m.data.sy = m.y;
         m.data.ghost = 1;
         api.setMode(m, 'leap');
+        // v2.85 — только рисунок: толчок от пола.
+        const va = Math.atan2(m.data.ly - m.y, m.data.lx - m.x);
+        vfx(sim, 'f1_takeoff', m.x, m.y, 1.0, { vAng: va });
+        sim.events.push({ t: 'shake', k: 0.06 });
       }
       return;
     }
@@ -1554,6 +1614,9 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         sim.hitstop = Math.max(sim.hitstop, 0.08);
         sim.events.push({ t: 'boom', x: lx, y: ly, r: 0 });
         sim.events.push({ t: 'boss', what: 'roll' });
+        // v2.85 — только рисунок: воронка, глыбы, пыль — самый тяжёлый удар.
+        vfx(sim, 'f1_leap_hit', lx, ly, 2.8, {}, true);
+        sim.events.push({ t: 'shake', k: 0.3 }, { t: 'flash', k: 0.3, color: '#ffe2b0' });
         // За прыжком — волна кольцом: внутри неё безопасно.
         api.strike(sim, {
           shape: 'ring',
@@ -1621,6 +1684,11 @@ registerBrain('king', {
     m.bounces += 1;
     sim.hitstop = Math.max(sim.hitstop, 0.05);
     sim.events.push({ t: 'boom', x: m.x, y: m.y, r: 0 });
+    // v2.85 — только рисунок: осколки от стены в зал.
+    const nl = Math.hypot(nx, ny) || 1;
+    const wo = { vNx: nx / nl, vNy: ny / nl };
+    vfx(sim, 'f1_wall_hit', m.x - wo.vNx * m.r, m.y - wo.vNy * m.r, 1.5, wo, true);
+    sim.events.push({ t: 'shake', k: 0.1 });
     if (m.bounces > 1) api.setMode(m, 'dizzy');
   },
 });
@@ -1628,6 +1696,8 @@ registerBrain('king', {
 registerBoss('king', {
   start(sim, b, lead) {
     lead.summonCd = 8;
+    // v2.85 — только рисунок: смотритель меток на весь бой (пол и свет).
+    vfx(sim, 'f1_kingtele', lead.x, lead.y, 1e9, {}, true);
     // Малые короли ещё на хвостах: их доля полосы — запас с самого начала.
     b.data.kres = lead.maxHp * KINGLET_SHARE * 2;
     b.phase = 0;
@@ -1680,6 +1750,7 @@ registerBoss('king', {
       });
       // Брошенный тесак лежит на полу.
       api.zone(sim, { x: king.x - 0.9, y: king.y + 0.4, r: 0.6, life: 90, art: 'f1_cleaver' });
+      vfx(sim, 'f1_cleaverdrop_hit', king.x - 0.9, king.y + 0.4, 1.3, {}, true); // v2.85 — только рисунок
       callGuards(sim, 1, api);
     }
   },
