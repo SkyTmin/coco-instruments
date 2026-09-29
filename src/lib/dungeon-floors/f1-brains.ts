@@ -1383,6 +1383,9 @@ function splitKing(sim: Sim, b: BossFight, king: Mob, api: SimApi): void {
 }
 
 function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
+  // Метки королей рисует `f1-boss-fx.ts` сам — красная заливка движка
+  // легла бы поверх. v2.85 — только рисунок.
+  m.data.vNoTele = 1;
   const h = sim.hero;
   const b = sim.boss!;
   const { dx, dy, dist } = c;
