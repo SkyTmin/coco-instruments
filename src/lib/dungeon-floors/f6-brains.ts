@@ -2485,10 +2485,12 @@ registerFloor(6, {
         body.x = serp.x;
         body.y = serp.y;
         (body as typeof body & { mob: number }).mob = serp.id;
+        body.above = !!serp.data.ghost; // v2.86 — только рисунок: в небе тело над всем
       }
     } else {
       const body = sim.zones.find((z) => z.art === 'f6_body');
-      if (body) body.life = 0;
+      const bd = body as (typeof body & { vDie?: number }) | undefined; // v2.86 — только рисунок
+      if (bd && bd.vDie === undefined) [bd.vDie, bd.life, bd.above] = [bd.t, bd.t + 1.7, false]; // v2.86 — только рисунок: тело доигрывает смерть кольцами
     }
 
     if (heroDown(sim)) return;
