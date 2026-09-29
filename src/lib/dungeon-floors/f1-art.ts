@@ -27,8 +27,8 @@
 // начатый с рисунков круг застаёт плитки без `hex`.
 import { blit, floorCell } from '../dungeon-tiles';
 import { hex, Px, TS } from '../dungeon-art';
-import { KING_PAL, ratEye, ratPx, ratSize, RAT_FRAMES, spline } from '../dungeon-rats';
-import type { RatAnim } from '../dungeon-rats';
+import { KING_PAL, ratEye, ratPx, ratSize, RAT_FRAMES, shadeOf, spline } from '../dungeon-rats';
+import type { Ell, RatAnim } from '../dungeon-rats';
 import {
   frameLRU,
   paintSim,
@@ -1410,9 +1410,10 @@ interface KP {
   /** Голова: сдвиг от места у шеи. */
   nx: number;
   ny: number;
-  /** Пасть 0…1, морда длиннее, прищур (≥ 0,5). */
+  /** Пасть 0…1, морда длиннее, опущена (1) или задрана (< 0), прищур (≥ 0,5). */
   jaw: number;
   sn: number;
+  dr: number;
   sq: number;
   /** Стопы: x от таза, подъём над землёй (дальняя, ближняя). */
   ffx: number;
@@ -1448,6 +1449,7 @@ const REST: KP = {
   ny: 0,
   jaw: 0,
   sn: 0,
+  dr: 1,
   sq: 0,
   ffx: -2,
   ffl: 0,
@@ -1635,7 +1637,7 @@ function kRig(P: KP, G: Geo): KRig {
     head: z,
     headR: 2.9 * s,
     snout: (2.6 + P.sn) * s,
-    drop: s,
+    drop: P.dr * s,
     jaw: clamp(P.jaw, 0, 1),
     squint: P.sq >= 0.5,
     legFar: [z, z, z],
@@ -1755,8 +1757,8 @@ function tailPts(
   curl: number,
   wave: (k: number) => number,
   gy: number,
+  s = KS,
 ): V[] {
-  const s = KS;
   const rot = (v: V, a: number): V => [
     v[0] * Math.cos(a) - v[1] * Math.sin(a),
     v[0] * Math.sin(a) + v[1] * Math.cos(a),
@@ -1957,12 +1959,26 @@ function paintSmear(px: Px, lit: Px, clip: Clip, a: number, b: number, k: number
     Math.abs(w1.ang - w0.ang) * reach + Math.hypot(w1.hand[0] - w0.hand[0], w1.hand[1] - w0.hand[1]);
   const n = clamp(Math.ceil(move * 1.6) + 2, 3, 64);
   const col = SMEAR[kind];
-  const r0 = o.grip + o.len * (kind === 'rail' ? 0.25 : 0.2);
+  // След — серп у конца клинка, а не веер от кулака.
+  const r0 = o.grip + o.len * (kind === 'rail' ? 0.52 : 0.4);
   const r1 = reach + 1.5;
+  // Дорожку спрашиваем в нескольких точках, между ними — по прямой: след
+  // гладкий, а кадр не пересчитывает скелет сотню раз.
+  const K = 8;
+  const probe = [w0];
+  for (let i = 1; i < K; i++) probe.push(weaponAt(clip, a + ((b - a) * i) / K));
+  probe.push(w1);
   const seen = new Set<number>();
   for (let i = n; i >= 0; i--) {
     const u = i / n;
-    const w = u === 1 ? w1 : u === 0 ? w0 : weaponAt(clip, a + (b - a) * u);
+    const g = Math.min(K - 1, Math.floor(u * K));
+    const v = u * K - g;
+    const pa = probe[g];
+    const pb = probe[g + 1];
+    const w = {
+      hand: lerp(pa.hand, pb.hand, v),
+      ang: pa.ang + (pb.ang - pa.ang) * v,
+    };
     const dx = Math.cos(w.ang);
     const dy = Math.sin(w.ang);
     for (let r = r0; r <= r1; r += 0.5) {
@@ -1973,10 +1989,21 @@ function paintSmear(px: Px, lit: Px, clip: Clip, a: number, b: number, k: number
       seen.add(id);
       const q = (r - r0) / (r1 - r0);
       // Ярус: 0 — кромка, 1 — тело, 2 — тусклый хвост; слабый след — на ярус ниже.
-      let tier = u > 0.72 ? (q > 0.55 ? 0 : 1) : u > 0.35 ? (q > 0.35 ? 1 : 2) : 2;
+      let tier = u > 0.7 ? (q > 0.5 ? 0 : 1) : u > 0.3 ? (q > 0.45 ? 1 : 2) : q > 0.6 ? 2 : 3;
       if (k < 0.75) tier++;
       if (tier > 2) continue;
       if (tier === 2 && ((x + y) & 1) === 1) continue;
+      // По телу — только кромка целиком и тело следа вполсилы: морду и
+      // руки видно сквозь взмах.
+      const i = (y * px.w + x) * 4;
+      if (x >= 0 && y >= 0 && x < px.w && y < px.h && px.data[i + 3]) {
+        if (tier === 2) continue;
+        if (tier === 1) {
+          const c = col[1];
+          px.set(x, y, [c[0], c[1], c[2], 115]);
+          continue;
+        }
+      }
       px.set(x, y, col[tier]);
       if (tier < 2) lit.set(x, y, [col[tier][0], col[tier][1], col[tier][2], tier ? 150 : 220]);
     }
@@ -1993,6 +2020,7 @@ function paintWhirl(
   back: boolean,
   R: number,
   stretch: number,
+  tied = false,
 ): void {
   const cx = G.cx - 1;
   const cy = G.gy - 3;
@@ -2008,14 +2036,28 @@ function paintWhirl(
     // Сколько времени назад хвост был здесь: 0 — сейчас.
     const age = ((ph * TAU - a) % TAU + TAU) % TAU / TAU;
     if (age > frac) continue;
-    const tier = age < 0.18 ? 0 : age < 0.45 ? 1 : 2;
-    for (const dr of tier === 0 ? [-1, 0, 1] : tier === 1 ? [0, 1] : [0]) {
+    const tier = age < 0.2 ? 0 : age < 0.5 ? 1 : 2;
+    // Три хвоста — три пряди: у головы кольца полоса в 4 пикселя, дальше тоньше.
+    for (const dr of tier === 0 ? [-2, -1, 0, 1] : tier === 1 ? [-1, 0.5] : [0]) {
       const x = Math.round(cx + Math.cos(a) * (rx + dr));
       const y = Math.round(cy + sa * (ry + dr * 0.4));
       if (tier === 2 && ((x + y) & 1) === 1) continue;
       px.set(x, y, col[tier]);
       if (lit && tier === 0) lit.set(x, y, [col[0][0], col[0][1], col[0][2], 170]);
     }
+  }
+  if (!tied || frac < 0.4) return;
+  // Привязанные малые летят на концах хвостов — кистени по кругу.
+  for (const da of [0, -0.45]) {
+    const a = ph * TAU + da;
+    const sa = Math.sin(a);
+    if (back !== sa < 0) continue;
+    const x = cx + Math.cos(a) * (rx + 1);
+    const y = cy + sa * ry - 2;
+    const kf = FUR.ratman;
+    oval(px, [x, y], 2.6, 3.4, Math.PI / 2 + a, (k) => tone(kf, k));
+    px.set(Math.round(x - 1), Math.round(y - 3), METAL.gold[2]);
+    px.set(Math.round(x + 1), Math.round(y - 3), METAL.gold[3]);
   }
 }
 
@@ -2045,14 +2087,129 @@ const hash01 = (x: number, y: number, k: number) => {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 };
 
+/** Контур снаружи — как `Px.outline`, но по маске альфы: в разы быстрее. */
+function outlineFast(px: Px, c: RGBA): void {
+  const { w, h, data } = px;
+  const a = new Uint8Array(w * h);
+  for (let i = 0, j = 3; i < a.length; i++, j += 4) a[i] = data[j] > 0 ? 1 : 0;
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      const i = row + x;
+      if (a[i]) continue;
+      if (
+        (x > 0 && a[i - 1]) ||
+        (x < w - 1 && a[i + 1]) ||
+        (y > 0 && a[i - w]) ||
+        (y < h - 1 && a[i + w])
+      ) {
+        const j = i * 4;
+        data[j] = c[0];
+        data[j + 1] = c[1];
+        data[j + 2] = c[2];
+        data[j + 3] = 255;
+      }
+    }
+  }
+}
+
+/** Оружие поверх всего — со своим контуром, в своей рамке (не во весь кадр). */
+function weaponOver(px: Px, hand: V, ang: number, kind: Weapon, show: number): void {
+  if (kind === 'none') return;
+  const o = WPN[kind];
+  const L = o.grip + o.len * show + 2;
+  const dx = Math.cos(ang);
+  const dy = Math.sin(ang);
+  const pad = o.w * 1.2 + 4;
+  const x0 = Math.floor(Math.min(hand[0] - dx * 2, hand[0] + dx * L) - pad);
+  const x1 = Math.ceil(Math.max(hand[0] - dx * 2, hand[0] + dx * L) + pad);
+  const y0 = Math.floor(Math.min(hand[1] - dy * 2, hand[1] + dy * L) - pad);
+  const y1 = Math.ceil(Math.max(hand[1] - dy * 2, hand[1] + dy * L) + pad);
+  const wp = new Px(x1 - x0 + 1, y1 - y0 + 1);
+  drawWeapon(wp, [hand[0] - x0, hand[1] - y0], ang, kind, show);
+  outlineFast(wp, INK);
+  for (let y = 0; y < wp.h; y++) {
+    const ty = y + y0;
+    if (ty < 0 || ty >= px.h) continue;
+    for (let x = 0; x < wp.w; x++) {
+      const tx = x + x0;
+      if (tx < 0 || tx >= px.w) continue;
+      const i = (y * wp.w + x) * 4;
+      if (!wp.data[i + 3]) continue;
+      const j = (ty * px.w + tx) * 4;
+      px.data[j] = wp.data[i];
+      px.data[j + 1] = wp.data[i + 1];
+      px.data[j + 2] = wp.data[i + 2];
+      px.data[j + 3] = 255;
+    }
+  }
+}
+
 interface KPainted {
   img: HTMLCanvasElement;
   lit: HTMLCanvasElement | null;
-  /** Глаз в кадре (смотрит вправо). */
+  /** Глаз в кадре (уже с учётом зеркала). */
   eye: V | null;
-  geo: Geo;
-  /** Кадр отзеркален (смотрит влево). */
-  flip: boolean;
+  /** Точка ног в кадре. */
+  ax: number;
+  ay: number;
+}
+
+/**
+ * Обрезать кадр (и слой поверх темноты — той же рамкой) по содержимому,
+ * отзеркалить, перевести в холсты. Холст меньше — дешевле и в памяти, и на
+ * экране: пустые поля широкого кадра не рисуются.
+ */
+function cropFrame(
+  px: Px,
+  lit: Px | null,
+  ax0: number,
+  ay0: number,
+  eye0: V | null,
+  flip: boolean,
+): KPainted {
+  const { w, h } = px;
+  let x0 = w;
+  let y0 = h;
+  let x1 = -1;
+  let y1 = -1;
+  for (const p of lit ? [px, lit] : [px])
+    for (let y = 0; y < h; y++)
+      for (let x = 0, i = y * w * 4 + 3; x < w; x++, i += 4)
+        if (p.data[i]) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+  if (x1 < 0) {
+    x0 = y0 = 0;
+    x1 = y1 = 0;
+  }
+  const cw = x1 - x0 + 1;
+  const ch = y1 - y0 + 1;
+  const cut = (p: Px): HTMLCanvasElement => {
+    const o = new Px(cw, ch);
+    for (let y = 0; y < ch; y++) {
+      const src = ((y + y0) * w + x0) * 4;
+      if (!flip) o.data.set(p.data.subarray(src, src + cw * 4), y * cw * 4);
+      else
+        for (let x = 0; x < cw; x++) {
+          const i = src + x * 4;
+          const j = (y * cw + (cw - 1 - x)) * 4;
+          o.data[j] = p.data[i];
+          o.data[j + 1] = p.data[i + 1];
+          o.data[j + 2] = p.data[i + 2];
+          o.data[j + 3] = p.data[i + 3];
+        }
+    }
+    return o.canvas();
+  };
+  const ax = flip ? cw - (ax0 - x0) : ax0 - x0;
+  const eye: V | null = eye0
+    ? [flip ? cw - 1 - (eye0[0] - x0) : eye0[0] - x0, eye0[1] - y0]
+    : null;
+  return { img: cut(px), lit: lit ? cut(lit) : null, eye, ax, ay: ay0 - y0 };
 }
 
 /** Нарисовать кадр клипа в миг `T` (вправо, без вспышки). */
@@ -2063,6 +2220,7 @@ function kingPaint(
   elite: boolean,
   left: boolean,
 ): KPainted {
+  const KT = ((globalThis as any).__kt ??= {}); let q0 = performance.now(); const mk = (n: string) => { const q = performance.now(); KT[n] = (KT[n] ?? 0) + q - q0; q0 = q; };
   const G = clip.geo;
   const sh = clip.at(T);
   const P = sh.p;
@@ -2099,7 +2257,8 @@ function kingPaint(
   if (fx.whirl && fx.whirl[1] > 0)
     r.items.push({
       layer: 'back',
-      draw: (px) => paintWhirl(px, lit, G, fx.whirl![0], fx.whirl![1], true, WHIRL_R, wst),
+      draw: (px) =>
+        paintWhirl(px, lit, G, fx.whirl![0], fx.whirl![1], true, WHIRL_R, wst, !look.split),
     });
   if (fx.lidAt) {
     const la: V = [G.cx + fx.lidAt[0], G.gy + fx.lidAt[1]];
@@ -2145,10 +2304,14 @@ function kingPaint(
       draw: (px) => crownLoose(px, [G.cx + cx0, G.gy + cy0], r.headR, ca),
     });
   }
-  let px = drawRig(r, f, G.w, G.h);
+  mk('prep');
+  const px = drawRig(r, f, G.w, G.h);
+  mk('rig');
   if (fx.whirl && fx.whirl[1] > 0)
-    paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], false, WHIRL_R, wst);
-  finish(px, elite ? 'elite' : 'normal');
+    paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], false, WHIRL_R, wst, !look.split);
+  outlineFast(px, INK);
+  mk('outline');
+  if (elite) outlineFast(px, hex('#ffcc40'));
   // Глаз.
   const eyeMode = fx.eye ?? 'open';
   const [gx, gy] = eyeOf(r);
@@ -2173,22 +2336,14 @@ function kingPaint(
     }
   }
   // След — поверх тела, под клинком (он сам поверх следа).
+  mk('eye');
   if (fx.smear) {
     paintSmear(px, lit, clip, fx.smear[0], fx.smear[1], fx.smear[2]);
     litUsed = true;
   }
-  if (wFront) {
-    const wp = new Px(G.w, G.h);
-    drawWeapon(wp, hand, P.wa, fx.weapon, fx.wShow ?? 1);
-    wp.outline(INK);
-    for (let i = 0; i < wp.data.length; i += 4) {
-      if (!wp.data[i + 3]) continue;
-      px.data[i] = wp.data[i];
-      px.data[i + 1] = wp.data[i + 1];
-      px.data[i + 2] = wp.data[i + 2];
-      px.data[i + 3] = 255;
-    }
-  }
+  mk('smear');
+  if (wFront) weaponOver(px, hand, P.wa, fx.weapon, fx.wShow ?? 1);
+  mk('weapon');
   // Блеск на кромке: крест на конце клинка — «сейчас ударит».
   if (fx.glint && fx.glint > 0.05 && fx.weapon !== 'none') {
     const o = WPN[fx.weapon];
@@ -2269,12 +2424,12 @@ function kingPaint(
         }
       }
   }
+  mk('extras');
   // Смотрит влево (или разворачивается) — зеркало кадра, слоя и глаза.
   const flip = left !== !!fx.flip;
-  if (flip) px = px.flipX();
-  const litC = litUsed ? (flip ? lit.flipX() : lit).canvas() : null;
-  if (eye && flip) eye = [G.w - 1 - eye[0], eye[1]];
-  return { img: px.canvas(), lit: litC, eye, geo: G, flip };
+  const out = cropFrame(px, litUsed ? lit : null, G.cx, G.gy + 1, eye, flip);
+  mk('canvas');
+  return out;
 }
 
 // ---- Клипы короля ---------------------------------------------------------
@@ -2601,25 +2756,29 @@ function roarClip(look: KingLook): Clip {
     ts: -1.2,
     cf: 1.1,
   });
+  // Пик рыка: морда задрана к своду, лапы вразлёт — тесак вперёд-вниз,
+  // крышка назад-вверх; морду ничего не закрывает.
   const peak = kp(b0, {
     hy: -0.6,
-    ln: -0.22,
-    nx: -0.45,
-    ny: -1.6,
+    ln: -0.12,
+    nx: -0.1,
+    ny: -1.0,
+    dr: -1.5,
+    sn: 0.3,
     jaw: 1,
-    nhx: 4.6,
-    nhy: -1.4,
-    wa: rail ? -2.5 : -1.0,
+    nhx: rail ? 2.3 : 4.8,
+    nhy: rail ? 2.2 : 2.8,
+    wa: rail ? -2.5 : 0.95,
     fhx: -2.6,
-    fhy: -0.8,
+    fhy: -1.0,
     ebf: -1,
     nfx: 1.8,
     ffx: -2.9,
     tu: 0.9,
     cf: 1.1,
   });
-  const over = kp(peak, { hy: -0.8, ny: -1.9, ln: -0.3 });
-  const hold = kp(peak, { hy: -0.5, ny: -1.5, tu: 0.7, cf: 0.8 });
+  const over = kp(peak, { hy: -0.8, ny: -1.25, dr: -1.8, ln: -0.18 });
+  const hold = kp(peak, { hy: -0.5, ny: -0.9, dr: -1.3, tu: 0.7, cf: 0.8 });
   const keys: Key[] = look.split
     ? [
         { t: 0, p: pain },
@@ -2646,7 +2805,7 @@ function roarClip(look: KingLook): Clip {
       let p = track(keys, T);
       const sustain = T > t1 + 0.06 && T < 0.96;
       // Дрожь рыка: голова и пасть бьются на пиксель, 12 раз в секунду.
-      if (sustain && Math.floor(T * 12) % 2 === 1) p = kp(p, { ny: p.ny + 0.45, jaw: 0.85 });
+      if (sustain && Math.floor(T * 12) % 2 === 1) p = kp(p, { ny: p.ny + 0.45, dr: p.dr + 0.3, jaw: 0.85 });
       const roar = T > t1 && T < 1.0 ? Math.min(1, (T - t1) / 0.08) * (T > 0.85 ? (1 - T) / 0.15 : 1) : 0;
       return {
         p,
@@ -2696,11 +2855,13 @@ function roarClip(look: KingLook): Clip {
 function summonClip(look: KingLook): Clip {
   const b0 = restOf(look);
   const rail = look.blade;
-  const guard = kp(b0, { fhx: 3.4, fhy: 1.6, ln: 0.25, jaw: 0.2 });
-  const up1 = kp(guard, { nhx: 1.4, nhy: -1.8, wa: -1.3, hy: -0.2, jaw: 0.35, tu: 0.2 });
-  const bang = kp(guard, { nhx: 3.2, nhy: 1.4, wa: 0.55, hy: 0.35, jaw: 0.6, ny: 0.3 });
-  const reb = kp(guard, { nhx: 2.8, nhy: 0.6, wa: 0.15, hy: 0.2 });
-  const up2 = kp(guard, { nhx: 1.0, nhy: -3.0, wa: -1.6, hy: -0.35, jaw: 0.5, tu: 0.35 });
+  // Крышка — перед брюхом, как гонг; тесак заносится ЗА голову и бьёт
+  // сверху вниз: морда открыта на всех кадрах.
+  const guard = kp(b0, { fhx: 3.8, fhy: 2.6, ln: 0.25, jaw: 0.2 });
+  const up1 = kp(guard, { nhx: 0.2, nhy: -3.2, wa: -2.05, hy: -0.2, jaw: 0.35, tu: 0.2, ny: -0.2 });
+  const bang = kp(guard, { nhx: 3.6, nhy: 1.9, wa: 0.75, hy: 0.35, jaw: 0.6, ny: 0.3 });
+  const reb = kp(guard, { nhx: 3.0, nhy: 0.8, wa: 0.2, hy: 0.2 });
+  const up2 = kp(guard, { nhx: -0.3, nhy: -3.6, wa: -2.3, hy: -0.35, jaw: 0.5, tu: 0.35, ny: -0.3 });
   const bang2 = kp(bang, { hy: 0.5, jaw: 0.8 });
   const point = kp(b0, {
     ln: 0.48,
@@ -2708,9 +2869,9 @@ function summonClip(look: KingLook): Clip {
     nx: 0.55,
     ny: -0.5,
     jaw: 1,
-    nhx: 5.1,
-    nhy: -1.2,
-    wa: -0.35,
+    nhx: 5.2,
+    nhy: 1.4,
+    wa: -0.12,
     fhx: -1.2,
     fhy: 2.4,
     nfx: 2.2,
@@ -2865,7 +3026,7 @@ function ballPx(R: number, dirA: number, th: number, split: boolean, small: bool
       px.set(x, y, col);
     }
   for (const b of tied) if (b.z >= 0) bump(b);
-  px.outline(INK);
+  outlineFast(px, INK);
   return px;
 }
 
@@ -2883,10 +3044,11 @@ function rollAimClip(D: number, look: KingLook): Clip {
   const b0 = restOf(look);
   const rail = look.blade;
   const crouch = kp(b0, {
-    hy: 1.7,
-    ln: 0.95,
-    nx: 0.45,
-    ny: 1.3,
+    hy: 1.6,
+    ln: 0.8,
+    nx: -0.3,
+    ny: 1.8,
+    dr: 1.8,
     sq: 1,
     nhx: 1.4,
     nhy: 3.0,
@@ -2899,17 +3061,20 @@ function rollAimClip(D: number, look: KingLook): Clip {
     tc: 0.5,
     cf: 0.4,
   });
+  // Комок: спина дугой, голова спрятана к груди, колени к подбородку.
   const curl = kp(crouch, {
-    hy: 2.8,
-    ln: 1.3,
-    nx: 0.6,
-    ny: 1.9,
-    nhx: 1.0,
-    nhy: 2.4,
-    fhx: 0.6,
-    fhy: 2.6,
-    nfx: 1.7,
-    ffx: -0.4,
+    hy: 2.4,
+    ln: 0.95,
+    nx: -1.2,
+    ny: 3.0,
+    dr: 2.4,
+    nhx: 1.8,
+    nhy: 4.6,
+    fhx: 1.4,
+    fhy: 4.8,
+    nfx: 0.9,
+    nfl: 0.8,
+    ffx: -0.8,
     tu: 0.5,
     tc: 1,
     cf: 0.8,
@@ -2944,7 +3109,7 @@ function rollAimClip(D: number, look: KingLook): Clip {
         ],
         T,
       );
-      return { ...XF0, sx: 1 + 0.04 * sq, sy: 1 - 0.05 * sq };
+      return { ...XF0, sx: 1 + 0.07 * sq, sy: 1 - 0.1 * sq };
     },
   };
 }
@@ -2956,8 +3121,10 @@ const BALL_STEPS = { king: 13, kinglet: 8 };
 
 /** Угол раскрутки клубка на месте: разгон от нуля до скорости качения. */
 function revSteps(tau: number, dur: number): number {
-  // Полная скорость — шаг за кадр; θ = ½·α·τ², α — чтобы к концу выйти на неё.
-  return Math.floor((0.5 * FPS * tau * tau) / Math.max(0.05, dur));
+  // Полная скорость — шаг за кадр. Скорость растёт от трети до полной:
+  // θ = v0·τ + ½·α·τ² — видно, что раскручивается, и сразу видно, что крутится.
+  const d = Math.max(0.05, dur);
+  return Math.floor(FPS * (tau / 3 + (tau * tau) / (3 * d)));
 }
 
 /**
@@ -3201,12 +3368,12 @@ function swapClip(front: boolean): Clip {
     hy: 0.3,
     nhx: -0.6,
     nhy: -3.3,
-    wa: 1.95,
+    wa: 2.35,
     fhx: -0.3,
     fhy: -2.6,
     jaw: 0.2,
   });
-  const pull = kp(reach, { hy: -0.2, ln: 0.05, nhx: 0.9, nhy: -5.6, wa: 1.7, ny: -0.3, fhx: 0.2, fhy: -4.8 });
+  const pull = kp(reach, { hy: -0.2, ln: 0.05, nhx: 0.9, nhy: -5.6, wa: 1.95, ny: -0.3, fhx: 0.2, fhy: -4.8 });
   const draw = kp(pull, { nhx: 1.2, nhy: -5.5, wa: -1.3, fhx: -1.6, fhy: 1.0, ebf: -1, jaw: 0.5 });
   const twirl = kp(draw, { wa: -1.3 + R2 });
   const slam = kp(REST, {
@@ -3504,7 +3671,7 @@ function leapClip(wu: number): Clip {
   const lift = kp(REST_RAIL, { nhx: 0.8, nhy: -4.6, wa: -2.0, hy: 0.4, ln: 0.3, nfx: 1.6, ffx: -2.6, fhx: 0.2, fhy: -3.8 });
   const crouch = kp(lift, {
     hy: 2.3,
-    ln: 0.8,
+    ln: 0.55,
     nx: 0.3,
     ny: 1.0,
     nhx: 1.3,
@@ -3550,7 +3717,7 @@ function leapClip(wu: number): Clip {
   const land = kp(REST_RAIL, {
     hx: 0.6,
     hy: 2.4,
-    ln: 1.0,
+    ln: 0.78,
     nx: 0.5,
     ny: 1.2,
     jaw: 1,
@@ -3725,20 +3892,20 @@ function deathClip(look: KingLook): Clip {
     const t = T - 0.05;
     if (t < 0.42) {
       const k = t / 0.42;
-      return [6 + 14 * k, -40 + 46 * k * k - 18 * k, 0.3 + 3.2 * k];
+      return [6 + 22 * k, -40 + 46 * k * k - 18 * k, 0.3 + 3.2 * k];
     }
     if (t < 0.6) {
       const k = (t - 0.42) / 0.18;
-      return [20 + 5 * k, -5 * Math.sin(Math.PI * k), 3.5 + 1.4 * k];
+      return [28 + 7 * k, -5 * Math.sin(Math.PI * k), 3.5 + 1.4 * k];
     }
     if (t < 0.72) {
       const k = (t - 0.6) / 0.12;
-      return [25 + 2 * k, -1.5 * Math.sin(Math.PI * k), 4.9 + 0.8 * k];
+      return [35 + 3 * k, -1.5 * Math.sin(Math.PI * k), 4.9 + 0.8 * k];
     }
     // Катится и качается, пока не ляжет на бок.
     const k = clamp((t - 0.72) / 0.45, 0, 1);
     const wob = Math.sin(k * Math.PI * 3) * (1 - k) * 0.45;
-    return [27 + 6 * EZ.out2(k), 0, 5.7 + 0.9 * EZ.out2(k) + wob];
+    return [38 + 7 * EZ.out2(k), 0, 5.7 + 0.9 * EZ.out2(k) + wob];
   };
   return {
     id: `die${rail ? 'R' : 'C'}`,
@@ -3787,9 +3954,608 @@ function deathClip(look: KingLook): Clip {
         dx: jolt,
         sx: 1 + 0.1 * imp,
         sy: 1 - 0.14 * imp,
-        shadow: T < 0.6 ? 16 : 19,
+        shadow: T < 0.6 ? 16 : T < 1.12 ? 19 : Math.max(0, 19 * (1 - (T - 1.12) / 0.25)),
       };
     },
+  };
+}
+
+// ---- Малые короли ---------------------------------------------------------
+//
+// Малый король — прежняя крыса-король на четырёх лапах (`KING_PAL`, мантия,
+// венчик, узел из трёх хвостов), но поза теперь числа, а не номер кадра:
+// растяжка, «встал на задние», выпад, стопы, хвосты. Геометрия покоя —
+// та же, что у `paintKing(small)` в `dungeon-rats.ts`, поэтому облик прежний.
+
+const QS = 1.35;
+const QFAT = 1.4;
+/** Холст малого: шире прежнего (хвосты не обрезаются), ноги — в (40, 36). */
+const QG = { w: 84, h: 52, cx: 40, base: 40 };
+/** Смещение прежнего кадра 50×28 (ноги в (27, 26)) в новый холст. */
+const QOX = QG.cx - 27;
+const QOY = QG.base - 26;
+
+interface QP {
+  /** Сдвиг всего тела, пиксели; подъём тела (доли роста). */
+  bx: number;
+  by: number;
+  bob: number;
+  /** Растяжка (галоп), встал на задние 0…1, выпад 0…1. */
+  st: number;
+  rear: number;
+  lg: number;
+  /** Голова: сдвиг; пасть; прищур; морда длиннее. */
+  hx: number;
+  hy: number;
+  jaw: number;
+  sq: number;
+  sn: number;
+  /** Стопы: сдвиг по x и подъём (передняя дальняя/ближняя, задняя дальняя/ближняя). */
+  f1x: number;
+  f1l: number;
+  f2x: number;
+  f2l: number;
+  h1x: number;
+  h1l: number;
+  h2x: number;
+  h2l: number;
+  /** Хвосты: подъём над спиной, закрутка, качание. */
+  tu: number;
+  tc: number;
+  ts: number;
+  /** Лёг на бок (смерть) 0…1. */
+  dead: number;
+}
+
+const QREST: QP = {
+  bx: 0,
+  by: 0,
+  bob: 0,
+  st: 0,
+  rear: 0,
+  lg: 0,
+  hx: 0,
+  hy: 0,
+  jaw: 0,
+  sq: 0,
+  sn: 0,
+  f1x: 0,
+  f1l: 0,
+  f2x: 0,
+  f2l: 0,
+  h1x: 0,
+  h1l: 0,
+  h2x: 0,
+  h2l: 0,
+  tu: 0,
+  tc: 0,
+  ts: 0,
+  dead: 0,
+};
+const QP_FIELDS = Object.keys(QREST) as (keyof QP)[];
+const qp = (b: QP, o: Partial<QP>): QP => ({ ...b, ...o });
+function mixQP(a: QP, b: QP, k: number): QP {
+  const o = { ...a };
+  for (const f of QP_FIELDS) o[f] = a[f] + (b[f] - a[f]) * k;
+  return o;
+}
+interface QKey {
+  t: number;
+  p: QP;
+  e?: Ease;
+}
+function qtrack(keys: QKey[], T: number): QP {
+  if (T <= keys[0].t) return keys[0].p;
+  for (let i = 1; i < keys.length; i++) {
+    const b = keys[i];
+    if (T < b.t) {
+      const a = keys[i - 1];
+      return mixQP(a.p, b.p, (b.e ?? EZ.io)((T - a.t) / Math.max(1e-6, b.t - a.t)));
+    }
+  }
+  return keys[keys.length - 1].p;
+}
+
+interface QFx {
+  eye?: 'open' | 'squint' | 'dizzy' | 'dead';
+  wave?: number;
+  waveAmp?: number;
+  whirl?: [number, number];
+  whirlSx?: number;
+  flip?: boolean;
+  stars?: number;
+  crownOff?: [number, number, number];
+  dissolve?: number;
+}
+
+/** Нарисовать малого короля по позе (вправо). */
+function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V | null } {
+  const s = QS;
+  const pal = KING_PAL;
+  const W = QG.w;
+  const H = QG.h;
+  const base = QG.base;
+  const px = new Px(W, H);
+  const lit = new Px(W, H);
+  let litUsed = false;
+  // Покой прежнего кадра, сдвинутый в новый холст.
+  const o = 10 * s;
+  const X = (v: number) => v + QOX + P.bx;
+  const Y = (v: number) => v + QOY + P.by;
+  const d = P.dead;
+  const hx0 = o + 5 * s;
+  const hy0 = 26 - 4.2 * s;
+  const cx0 = o + 10.5 * s;
+  const cy0 = 26 - 3.9 * s;
+  const hrx = 5.4 * s * Math.sqrt(QFAT);
+  const hry = 3.7 * s * QFAT * (1 - 0.2 * d);
+  const crx = 4.3 * s;
+  const cry = 3 * s * (1 - 0.15 * d);
+  const headR = 3 * s;
+  const hx = X(hx0 - P.st * 0.5 * s + (-0.6 * P.rear + 0.8 * P.lg) * s);
+  const hy = Y(hy0 + 0.3 * s * P.rear - P.bob * s + d * 1.6 * s);
+  const cx = X(cx0 + P.st * 0.5 * s + (-1.8 * P.rear + 2.6 * P.lg) * s);
+  const cy = Y(cy0 - 3.4 * s * P.rear + 0.4 * s * P.lg - P.bob * 0.8 * s + d * 1.5 * s);
+  const headX = X(o + 15.2 * s + P.st * 0.7 * s + (-1.6 * P.rear + 4.2 * P.lg + P.hx + 0.8 * d) * s);
+  const headY = Y(26 - 5.2 * s - 5.4 * s * P.rear + P.lg * s + P.hy * s - P.bob * 0.7 * s + d * 2.2 * s);
+  const snout = (2.8 + 0.8 * P.lg + P.sn) * s;
+  const snoutDrop = (1.2 - 0.9 * P.rear) * s;
+  const gnd = Y(base - QOY);
+  // Лапы: у тела — к стопе; вставший на задние держит передние у груди.
+  const front = (fx0: number, l: number, px0: number, py0: number): V => {
+    const g: V = [X(cx0 + fx0 * s), gnd - l * s];
+    const paw: V = [cx + px0 * s, cy + py0 * s];
+    return lerp(g, paw, P.rear);
+  };
+  const deadLeg = (a: V, k: number): V => [a[0] + (k - 0.5) * 3 * s, a[1] - (2.2 + P.f1l) * s];
+  let legs: [V, V][] = [
+    [[cx + 1.2 * s, cy + 1.6 * s], front(1.8 + P.f1x, P.f1l, 3.6, 0.5)],
+    [[cx - 0.3 * s, cy + 1.6 * s], front(0.2 + P.f2x, P.f2l, 3, 1.8)],
+    [[hx + 2 * s, hy + 2.2 * s], [X(hx0 + 2.8 * s + P.h1x * s), gnd - P.h1l * s]],
+    [[hx - 0.5 * s, hy + 2.4 * s], [X(hx0 + 0.3 * s + P.h2x * s), gnd - P.h2l * s]],
+  ];
+  if (d > 0)
+    legs = legs.map(([a, b], i) => [a, lerp(b, deadLeg(a, i / 3), d)] as [V, V]);
+  // Хвосты: узел за задом, три конца — вверх с завитком, назад, по земле.
+  const kx = hx - hrx - 2.6 * s;
+  const ky = hy + 0.6 * s - P.tu * 2.4 * s;
+  const wave = fx.wave ?? T * 6;
+  const amp = fx.waveAmp ?? 0.4;
+  const strands: [V, V][] = [
+    [
+      [-3, -5],
+      [-8, -4.5],
+    ],
+    [
+      [-5, -0.8],
+      [-11.5, -1.2],
+    ],
+    [
+      [-3.5, 2.8],
+      [-10, 2.6],
+    ],
+  ];
+  const tails = strands.map(([m, e], i) =>
+    tailPts(
+      [kx, ky],
+      m,
+      e,
+      P.tu * [0.9, 1.3, 0.7][i] - d * 0.3,
+      P.tc * 1.6 * (i === 2 ? 0.6 : 1),
+      (k) => (P.ts * 0.8 + Math.sin(wave - k * 2.4 + i * 1.3) * amp * (1 - d)) * k * s,
+      gnd + 1,
+      s,
+    ),
+  );
+  const root: V[] = [
+    [hx - hrx * 0.8, hy],
+    [kx + 1.5 * s, ky - 0.5 * s],
+    [kx, ky],
+  ];
+  for (const t of [root, ...tails]) {
+    spline(t, 7).forEach(([x, y], i, arr) => {
+      const k = i / arr.length;
+      px.set(x, y, k < 0.5 ? pal.pink : pal.pinkDark);
+      if (k < 0.6) px.set(x, y + 1, pal.pinkDark);
+    });
+  }
+  // Огрызки хвостов: оторвались от короля.
+  for (const t of tails.slice(0, 2)) {
+    const e = t[t.length - 1];
+    px.set(Math.round(e[0]), Math.round(e[1]), hex('#5a1a1c'));
+  }
+  px.ell(kx, ky, 2.3 * s, 2.3 * s * 0.85, (x, y) =>
+    (x + y) % 3 === 0 ? pal.pinkDark : (x - y) % 4 === 0 ? hex('#e8aaa2') : pal.pink,
+  );
+  // Кольцо хвостов на развороте — за телом.
+  const wst = 1 / (fx.whirlSx ?? 1);
+  const G: Geo = { w: W, h: H, cx: QG.cx + 1, gy: base + 1, id: 'q' };
+  if (fx.whirl && fx.whirl[1] > 0) {
+    paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], true, 1.7 * TS, wst);
+    litUsed = true;
+  }
+  const leg = (l: [V, V], far: boolean) => {
+    const [[x0, y0], [x1, y1]] = l;
+    px.line(x0, y0, x1, y1, far ? pal.dark : pal.fur);
+    px.line(x0 + 1, y0, x1 + 1, y1, far ? pal.dark : pal.fur);
+    px.set(x1, y1, far ? pal.pinkDark : pal.pink);
+    px.set(x1 + 1, y1, far ? pal.pinkDark : pal.pink);
+    px.set(x1 + 2, y1, far ? pal.pinkDark : pal.pink);
+  };
+  leg(legs[0], true);
+  leg(legs[2], true);
+  const haunch: Ell = { x: hx, y: hy, rx: hrx, ry: hry };
+  const chest: Ell = { x: cx, y: cy, rx: crx, ry: cry };
+  const head: Ell = { x: headX, y: headY, rx: headR, ry: headR * 0.92 };
+  const inE = (e: Ell, x: number, y: number) => {
+    const dx = (x + 0.5 - e.x) / e.rx;
+    const dy = (y + 0.5 - e.y) / e.ry;
+    return dx * dx + dy * dy <= 1;
+  };
+  const box = (e: Ell) => [
+    Math.floor(e.x - e.rx - 1),
+    Math.ceil(e.x + e.rx + 1),
+    Math.floor(e.y - e.ry - 1),
+    Math.ceil(e.y + e.ry + 1),
+  ];
+  for (const e of [haunch, chest]) {
+    const [a, b, c, dd] = box(e);
+    for (let y = c; y <= dd; y++)
+      for (let x = a; x <= b; x++) {
+        if (e === chest && inE(haunch, x, y)) continue;
+        if (inE(e, x, y)) px.set(x, y, shadeOf(pal, e, x, y, true));
+      }
+  }
+  // Голова с клином морды к носу.
+  const nx = headX + headR + snout;
+  const ny = headY + snoutDrop;
+  const [ha, hb, hc] = box(head);
+  for (let y = hc; y <= Math.ceil(headY + headR + 2); y++)
+    for (let x = ha; x <= Math.max(hb, Math.ceil(nx + 1)); x++) {
+      const inHead = inE(head, x, y);
+      const tx = (x + 0.5 - headX) / (nx - headX);
+      let inSnout = false;
+      if (tx > 0 && tx <= 1) {
+        const top = headY - headR * 0.75 + (ny - (headY - headR * 0.75)) * tx;
+        const bot =
+          headY + headR * (0.7 - P.jaw * 0.2) + (ny + 0.5 - (headY + headR * 0.7)) * tx;
+        inSnout = y + 0.5 >= top && y + 0.5 <= bot + 0.5;
+      }
+      if (inHead || inSnout)
+        px.set(x, y, inHead ? shadeOf(pal, head, x, y, false) : y + 0.5 < ny - 0.3 ? pal.light : pal.fur);
+    }
+  if (P.jaw > 0.2) {
+    const mx0 = Math.round(headX + headR * 0.3);
+    const my = Math.round(ny + 0.5);
+    const open = Math.round(P.jaw * 2);
+    for (let x = mx0; x <= Math.round(nx) - 1; x++)
+      for (let k = 0; k < open; k++) px.set(x, my + k, hex('#4a1418'));
+    const tooth = hex('#f4ece0');
+    px.set(Math.round(nx) - 1, my, tooth);
+    px.set(Math.round(nx) - 2, my, tooth);
+    for (let x = mx0; x <= Math.round(nx) - 2; x++) px.set(x, my + open, pal.fur);
+  }
+  px.set(Math.round(nx), Math.round(ny), pal.pink);
+  const ex = headX - headR * 0.35;
+  const ey = headY - headR * 0.95;
+  px.ell(ex, ey, 2.2, 2.2, pal.fur);
+  px.ell(ex + 0.3, ey + 0.2, 1.2, 1.2, pal.pink);
+  leg(legs[1], false);
+  leg(legs[3], false);
+  // Мантия по холке.
+  if (d < 0.5) {
+    const mx0 = hx - hrx * 0.5;
+    const mx1 = cx + crx * 0.4;
+    for (let x = Math.floor(mx0); x <= Math.ceil(mx1); x++) {
+      const t = (x - mx0) / (mx1 - mx0);
+      const topY = hy - hry + (cy - cry - (hy - hry)) * t - 0.5;
+      const len = (2.4 + Math.sin(t * Math.PI) * 1.6) * s;
+      for (let y = Math.floor(topY); y <= topY + len; y++) {
+        const edge = y > topY + len - 1;
+        px.set(x, y, edge ? CLOTH.cape[0] : y < topY + 1.2 ? CLOTH.cape[2] : CLOTH.cape[1]);
+      }
+      if (x % 3 === 0) px.set(x, Math.floor(topY + len) + 1, METAL.gold[0]);
+    }
+  }
+  // Венчик — на голове или слетел.
+  const cw = Math.round(headR * 1.7);
+  const drawCrown = (x0: number, y0: number) => {
+    const ch = 3;
+    px.rect(x0, y0, x0 + cw, y0 + 1, METAL.gold[2]);
+    px.rect(x0, y0 + 1, x0 + cw, y0 + 1, METAL.gold[0]);
+    for (const k of [0, 0.5, 1]) {
+      const x = Math.round(x0 + cw * k);
+      px.rect(x, y0 - ch + 1, x, y0, METAL.gold[2]);
+      px.set(x, y0 - ch, METAL.gold[3]);
+    }
+    px.set(Math.round(x0 + cw / 2), y0, hex('#d8203a'));
+  };
+  if (fx.crownOff) {
+    const [ox2, oy2, a] = fx.crownOff;
+    if (Math.abs(a) < 0.6) drawCrown(Math.round(QG.cx + ox2), Math.round(base + oy2 - 1));
+    else {
+      // На боку: обод полоской, зубцы вбок.
+      const x0 = Math.round(QG.cx + ox2);
+      const y0 = Math.round(base + oy2);
+      px.rect(x0, y0 - cw, x0 + 1, y0, METAL.gold[2]);
+      px.set(x0 + 2, y0 - cw, METAL.gold[3]);
+      px.set(x0 + 2, y0 - Math.round(cw / 2), METAL.gold[3]);
+      px.set(x0 + 2, y0, METAL.gold[3]);
+      px.set(x0, y0 - Math.round(cw / 2), hex('#d8203a'));
+    }
+  } else drawCrown(Math.round(headX - headR * 0.9), Math.round(headY - headR * 1.15));
+  outlineFast(px, KING_PAL.ink);
+  if (fx.whirl && fx.whirl[1] > 0) paintWhirl(px, lit, G, fx.whirl[0], fx.whirl[1], false, 1.7 * TS, wst);
+  // Глаз.
+  const gx = Math.round(headX + headR * 0.35);
+  const gy = Math.round(headY - headR * 0.2);
+  let eye: V | null = [gx, gy];
+  const em = fx.eye ?? (P.sq >= 0.5 ? 'squint' : 'open');
+  if (em === 'dead') {
+    px.set(gx - 1, gy - 1, pal.ink);
+    px.set(gx + 1, gy + 1, pal.ink);
+    px.set(gx + 1, gy - 1, pal.ink);
+    px.set(gx - 1, gy + 1, pal.ink);
+    px.set(gx, gy, pal.ink);
+    eye = null;
+  } else if (em === 'squint') {
+    px.set(gx, gy + 1, pal.ink);
+    px.set(gx + 1, gy + 1, pal.ink);
+  } else if (em === 'dizzy') {
+    const q = Math.floor(T * 10) % 4;
+    const ex2 = gx + (q === 1 || q === 2 ? 1 : 0);
+    const ey2 = gy + (q >= 2 ? 1 : 0);
+    px.set(ex2, ey2, pal.eye);
+    eye = [ex2, ey2];
+  } else {
+    px.rect(gx, gy, gx + 1, gy + 1, pal.eye);
+    px.set(gx + 1, gy, pal.eyeHi);
+  }
+  if (fx.stars !== undefined) {
+    for (let i = 0; i < 3; i++) {
+      const a = fx.stars + (i * TAU) / 3;
+      const near = Math.sin(a) > 0;
+      sparkAt(
+        lit,
+        headX - 1 + Math.cos(a) * 5.5,
+        headY - headR - 5 + Math.sin(a) * 1.6,
+        near ? 2 : 1,
+        near ? [255, 220, 90, 255] : [200, 160, 70, 200],
+        [255, 250, 210, 255],
+      );
+    }
+    litUsed = true;
+  }
+  if (fx.dissolve && fx.dissolve > 0) {
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        if (!px.data[i + 3]) continue;
+        const h = hash01(x >> 1, y >> 1, 13) * 0.8 + (1 - y / H) * 0.2;
+        if (h < fx.dissolve) px.data[i + 3] = 0;
+      }
+  }
+  return { px, lit: litUsed ? lit : null, eye };
+}
+
+/** Покой малого: дышит, принюхивается, хвосты ходят (2 с, 8 к/с). */
+function qIdle(T0: number): [QP, QFx] {
+  const T = ((T0 % 2) + 2) % 2;
+  const ph = (T / 2) * TAU;
+  const br = 0.5 - 0.5 * Math.cos(ph * 2);
+  return [
+    qp(QREST, {
+      bob: 0.35 * br,
+      hy: T > 1.1 && T < 1.35 ? -0.5 : 0,
+      sn: T > 1.1 && T < 1.35 ? 0.5 : 0,
+      sq: T > 0.5 && T < 0.62 ? 1 : 0,
+      ts: 0.6 * Math.sin(ph + 1),
+    }),
+    { wave: ph * 2, waveAmp: 0.45 },
+  ];
+}
+
+/** Галоп малого: 8 поз на цикл — растяжка, группировка, полёт. */
+function qRun(u: number): [QP, QFx] {
+  const ph = u * TAU;
+  const st = Math.sin(ph) * 1.9;
+  const bob = Math.max(0, Math.sin(ph + 0.9)) * 1.4;
+  const fr = Math.cos(ph) * 3;
+  const hr = -Math.cos(ph) * 3.2;
+  const lift = (k: number) => Math.max(0, Math.sin(ph + k)) * 1.6;
+  return [
+    qp(QREST, {
+      st,
+      bob,
+      hy: Math.sin(ph) * 0.3,
+      f1x: fr - 0.4,
+      f1l: lift(0.3),
+      f2x: fr * 0.8,
+      f2l: lift(0.9),
+      h1x: hr - 0.8,
+      h1l: lift(3.4),
+      h2x: hr * 0.8,
+      h2l: lift(4),
+      tu: 0.25,
+      ts: -0.4,
+    }),
+    { wave: ph * 2, waveAmp: 0.7 },
+  ];
+}
+
+const Q_CROUCH = qp(QREST, { by: 2.2, st: -1.2, hx: -0.8, hy: 1.4, sq: 1, tu: 0.4, tc: 0.8, f1x: -0.6, h1x: 0.8 });
+
+/** Хлыст малого (замах 0,7): встаёт на задние, хвосты скорпионом над спиной, трещат; разворот с кольцом. */
+function qWhip(T: number, wu: number, rec: number): [QP, QFx, number] {
+  const f = 1 / FPS;
+  const up = qp(QREST, { rear: 0.85, jaw: 0.6, tu: 1.1, tc: 1, hy: -0.3 });
+  const spin = qp(QREST, { rear: 0.2, jaw: 1, tu: 0.3, st: 0.6 });
+  const keys: QKey[] = [
+    { t: 0, p: QREST },
+    { t: Math.min(0.16, wu * 0.25), p: qp(up, { rear: 0.5, tu: 0.7 }), e: EZ.out2 },
+    { t: wu - 0.22, p: up, e: EZ.io },
+    { t: wu - 3 * f, p: up },
+    { t: wu - 2 * f, p: spin, e: EZ.out2 },
+    { t: wu + 3 * f, p: spin },
+    { t: wu + 0.3, p: qp(QREST, { tu: -0.2, ts: 0.6 }), e: EZ.out2 },
+    { t: wu + rec - 0.04, p: QREST, e: EZ.io },
+  ];
+  const p = qtrack(keys, T);
+  const k = Math.floor((T - (wu - 2 * f)) * FPS + 1e-4);
+  const sp = k >= 0 && k < SPIN.length ? SPIN[k] : null;
+  const rattle = T > wu - 0.24 && T < wu - 2 * f;
+  return [
+    p,
+    {
+      flip: sp ? sp[0] : false,
+      whirl: sp ? [sp[2], sp[3]] : undefined,
+      whirlSx: sp ? sp[1] : 1,
+      wave: rattle ? T * 55 : T * 9,
+      waveAmp: rattle ? 0.6 : 0.4,
+    },
+    sp ? sp[1] : 1,
+  ];
+}
+
+const QFR = frameLRU<KPainted>(220);
+
+/** Кадр малого короля. */
+function kingletFrame(m: Mob, pose: MobPose): MobFrame {
+  const st = kstate(m, pose);
+  const h = hasteOf(m);
+  const look: KingLook = { blade: false, split: true };
+  if (pose.mode === 'roll' || pose.mode === 'rollAim') {
+    const b = kingBallFrame(m, pose, look, h, st, true);
+    if (b) return b;
+  }
+  const t = pose.t;
+  let id: string;
+  let Tq: number;
+  let P: QP;
+  let fx: QFx = {};
+  let sx = 1;
+  let sy = 1;
+  let dx = 0;
+  let dy = 0;
+  let rot = 0;
+  let linger: number | undefined;
+  const mode = pose.mode;
+  const rec = m.data?.rec ?? 0;
+  const wu = 0.7 / h;
+  if (mode === 'whipAim' || (mode === 'recover' && Math.abs(rec - 0.6) < 0.01)) {
+    const T = mode === 'whipAim' ? quant(t, wu, true) : wu + quant(t, 0.6, false);
+    Tq = T;
+    id = `qw${wu.toFixed(3)}`;
+    const r = qWhip(T, wu, 0.6);
+    P = r[0];
+    fx = r[1];
+    sx = r[2];
+    const Tc = mode === 'whipAim' ? t : wu + t;
+    if (Tc > wu - 0.24 && Tc < wu - 2 / FPS) dx = Math.sin(Tc * 120) * 0.35;
+  } else if (mode === 'rollAim') {
+    // До клубка: сжался в комок.
+    const D = 0.8 / h;
+    Tq = quant(t, D, false);
+    id = `qa${D.toFixed(3)}`;
+    P = mixQP(QREST, Q_CROUCH, EZ.io(clamp(Tq / (D * BALL_FROM), 0, 1)));
+    fx = { eye: 'squint' };
+    const k = clamp(t / (D * BALL_FROM), 0, 1);
+    sx = 1 + 0.08 * k;
+    sy = 1 - 0.12 * k;
+  } else if (mode === 'dizzy') {
+    Tq = quant(t, 0.8, false);
+    id = 'qd';
+    const w = Math.min(1, Tq / 0.12);
+    P = qp(QREST, {
+      by: 1.2 * (1 - w),
+      hx: 0.4 * Math.cos(Tq * TAU * 1.5),
+      hy: 0.3 * Math.sin(Tq * TAU * 1.5),
+      jaw: 0.5,
+      ts: 0.7 * Math.sin(Tq * 5),
+    });
+    fx = { eye: Tq < 0.66 ? 'dizzy' : 'open', stars: Tq < 0.66 ? Tq * 6 : undefined };
+    rot = 0.08 * Math.sin(t * TAU * 1.2) * Math.min(1, t / 0.12);
+    const pop = Math.max(0, 1 - t / 0.12);
+    sx = 1 + 0.12 * pop;
+    sy = 1 - 0.14 * pop;
+  } else if (mode === 'stun') {
+    // Оторвался от короля: кувырок клубком и шлепок о пол.
+    if (t < 0.24) {
+      const b = kingBallFrame({ ...m, mode: 'roll', dir: m.dir } as Mob, { ...pose, mode: 'roll', t: t * 1.6 }, look, h, st, true);
+      if (b) return { ...b, dy: -10 * Math.sin((t / 0.24) * Math.PI), shadow: 7 };
+    }
+    Tq = quant(t, 0.4, false);
+    id = 'qs';
+    const k = clamp((Tq - 0.24) / 0.16, 0, 1);
+    P = qp(QREST, { by: 1.6 * (1 - k), st: 1.2 * (1 - k), sq: 1, jaw: 0.5, h1x: -1, f1x: 1.2 });
+    fx = { eye: 'squint' };
+    const land = Math.max(0, 1 - (t - 0.24) / 0.14);
+    sx = 1 + 0.2 * land;
+    sy = 1 - 0.22 * land;
+  } else if (mode === 'dying') {
+    Tq = quant(t, 1.0, false);
+    id = 'qx';
+    linger = 1.0;
+    const T = Tq;
+    const flop = EZ.out2(clamp(T / 0.22, 0, 1));
+    const kick = T > 0.3 && T < 0.62 ? Math.max(0, Math.sin((T - 0.3) * 30)) * 1.2 : 0;
+    P = qp(QREST, { dead: flop, jaw: 0.6, f1l: kick, sq: 1 });
+    // Венчик слетает и катится вперёд.
+    const c = T - 0.04;
+    const cr: [number, number, number] | undefined =
+      c < 0
+        ? undefined
+        : c < 0.3
+          ? [8 + 30 * c, -22 + 150 * c * c - 40 * c, 0.3 + c * 6]
+          : [17 + 8 * EZ.out2(clamp((c - 0.3) / 0.4, 0, 1)), 0, 1.4];
+    fx = {
+      eye: T < 0.2 ? 'squint' : 'dead',
+      crownOff: cr,
+      dissolve: T > 0.62 ? Math.min(1, (T - 0.62) / 0.34) : 0,
+      waveAmp: 0.3 * (1 - flop),
+    };
+    const imp = T > 0.14 && T < 0.3 ? 1 - (T - 0.14) / 0.16 : 0;
+    sx = 1 + 0.1 * imp;
+    sy = 1 - 0.14 * imp;
+  } else if (Math.hypot(m.vx, m.vy) > 0.4) {
+    const u = Math.floor(st.run * 8) / 8;
+    Tq = u;
+    id = 'qr';
+    [P, fx] = qRun(u);
+    const c = Math.cos(2 * (u * TAU - 0.9));
+    sx = 1 + 0.03 * c;
+    sy = 1 - 0.04 * c;
+  } else {
+    const T = pose.now % 2;
+    Tq = Math.floor(T * 8) / 8;
+    id = 'qi';
+    [P, fx] = qIdle(Tq);
+  }
+  const hurt = pose.now - st.hitAt < 0.12 && (id === 'qi' || id === 'qr');
+  if (hurt) P = qp(P, { sq: 1, hx: P.hx - 0.6, jaw: 0.5 });
+  const key = `${id}|${Math.round(Tq * 1000)}|${hurt ? 1 : 0}|${pose.left ? 1 : 0}`;
+  let fr = QFR.get(key);
+  if (!fr) {
+    const r = paintQuad(P, fx, Tq);
+    const flip = pose.left !== !!fx.flip;
+    fr = QFR.set(key, cropFrame(r.px, r.lit, QG.cx, QG.base, r.eye, flip));
+  }
+  const rc = recoil(st, pose.now);
+  const sgn = pose.left ? -1 : 1;
+  return {
+    img: pose.flash ? flashOf('q' + key, fr.img) : fr.img,
+    ax: fr.ax,
+    ay: fr.ay,
+    eye: fr.eye,
+    dx: dx * sgn + rc.dx * 0.8,
+    dy,
+    sx: sx * rc.sx,
+    sy: sy * rc.sy,
+    rot: rot * sgn + rc.rot,
+    still: true,
+    shadow: mode === 'dying' ? Math.max(0, 9 * (1 - Math.max(0, t - 0.62) / 0.3)) : 9,
+    lit: fr.lit,
+    linger,
   };
 }
 
@@ -4045,21 +4811,14 @@ function kingBallFrame(m: Mob, pose: MobPose, look: KingLook, h: number, st: KSt
   const key = `ball${small ? 'k' : ''}|${bk.q}|${s}|${look.split ? 1 : 0}|${bk.left ? 1 : 0}`;
   let fr = KFR.get(key);
   if (!fr) {
-    const R = small ? 8 : 12.5;
-    let px = ballPx(R, bk.dirA, (s / steps) * TAU, look.split, small);
-    if (bk.left) px = px.flipX();
-    fr = KFR.set(key, {
-      img: px.canvas(),
-      lit: null,
-      eye: null,
-      geo: { w: px.w, h: px.h, cx: px.w / 2, gy: px.h - 3, id: 'b' },
-      flip: false,
-    });
+    const R = small ? 8.5 : 14;
+    const px = ballPx(R, bk.dirA, (s / steps) * TAU, look.split, small);
+    fr = KFR.set(key, cropFrame(px, null, px.w / 2, px.h - 2, null, bk.left));
   }
   return {
     img: pose.flash ? flashOf(key, fr.img) : fr.img,
-    ax: fr.geo.cx,
-    ay: fr.geo.gy + 1,
+    ax: fr.ax,
+    ay: fr.ay,
     eye: null,
     dx: xf.dx,
     dy: xf.dy,
@@ -4067,7 +4826,7 @@ function kingBallFrame(m: Mob, pose: MobPose, look: KingLook, h: number, st: KSt
     sy: xf.sy,
     rot: 0,
     still: true,
-    shadow: small ? 7 : 12,
+    shadow: small ? 8 : 14,
     ghost: xf.ghost ?? null,
   };
 }
@@ -4121,11 +4880,10 @@ function kingFrame(m: Mob, pose: MobPose): MobFrame {
   const xf = sel.clip.xf?.(sel.Tc, sel.Tq) ?? XF0;
   const rc = recoil(st, pose.now);
   const sgn = pose.left ? -1 : 1;
-  const G = fr.geo;
   return {
     img: pose.flash ? flashOf(key, fr.img) : fr.img,
-    ax: fr.flip ? G.w - G.cx : G.cx,
-    ay: G.gy + 1,
+    ax: fr.ax,
+    ay: fr.ay,
     eye: fr.eye,
     dx: xf.dx * sgn + rc.dx,
     dy: xf.dy + rc.dy,
@@ -4139,28 +4897,6 @@ function kingFrame(m: Mob, pose: MobPose): MobFrame {
     alpha: xf.alpha,
     linger: pose.mode === 'dying' ? DIE_T : undefined,
   };
-}
-
-// Малые короли — прежние (пока).
-const frames2 = new Map<string, MobFrame>();
-function kingletFrame(m: Mob, pose: MobPose): MobFrame {
-  const anim = pose.anim as RatAnim;
-  const n = RAT_FRAMES[anim] ?? 1;
-  const f = ((Math.floor(pose.frame) % n) + n) % n;
-  const key = `kinglet|${anim}|${f}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}`;
-  const hit = frames2.get(key);
-  if (hit) return hit;
-  const size = ratSize('kinglet');
-  const px = ratPx('kinglet', 'normal', anim, f, pose.left, pose.flash);
-  const [ex, ey] = ratEye('kinglet', anim === 'dead' ? 'idle' : anim, f);
-  const out: MobFrame = {
-    img: px.canvas(),
-    ax: pose.left ? size.w - size.body : size.body,
-    ay: size.h - 2,
-    eye: [pose.left ? size.w - 1 - ex : ex, ey],
-  };
-  frames2.set(key, out);
-  return out;
 }
 
 registerMobPainter('f1_king', (m, pose) =>
