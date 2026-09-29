@@ -35,7 +35,7 @@ const alpha = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(a * 25
 const INK = hx('#150f0b');
 const WHITE = hx('#ffffff');
 const GOLD = hx('#ffcc40');
-const TAU = Math.PI * 2;
+export const TAU = Math.PI * 2;
 
 /** Четыре тона формы: тень, основа, свет, блик. */
 type Tones = [RGBA, RGBA, RGBA, RGBA];
@@ -125,7 +125,15 @@ function poly(p: Px, pts: [number, number][], c: RGBA | ((x: number, y: number) 
 }
 
 /** Толстая линия. */
-function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  c: RGBA,
+  w = 1,
+): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -164,7 +172,7 @@ function clear(p: Px, x: number, y: number): void {
 }
 
 /** Детерминированный шум по двум числам. */
-const hash = (a: number, b: number, c = 0) => {
+export const hash = (a: number, b: number, c = 0) => {
   let h = (a * 374761393 + b * 668265263 + c * 1274126177) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
@@ -2674,13 +2682,13 @@ registerCellPainter(F5_ARENA, cellPainter);
 // живой стены, феромон, язык жабы, шипы.
 // ---------------------------------------------------------------------------
 
-type ZoneX = (Zone | Strike) & { ang?: number; len?: number; arc?: number };
+export type ZoneX = (Zone | Strike) & { ang?: number; len?: number; arc?: number };
 
-const rgba = (c: RGBA, a: number) =>
+export const rgba = (c: RGBA, a: number) =>
   `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
 
 /** Сектор (конус) из центра. */
-function cone(
+export function cone(
   g: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -2695,7 +2703,7 @@ function cone(
 }
 
 /** Метка удара наливается: `k` 0…1. */
-const kOf = (z: ZoneX) => {
+export const kOf = (z: ZoneX) => {
   const s = z as Strike;
   if ('warn' in s && typeof s.warn === 'number' && s.warn > 0) return Math.min(1, s.t / s.warn);
   return 1;
@@ -2758,113 +2766,6 @@ registerZonePainter('f5_flame', (g, z, px, py, S, time) => {
     const aa = a + (hash(i, seed, 5) - 0.5) * arc;
     const d = R * (0.7 + hash(i, 4) * 0.4) * reach;
     g.fillRect(Math.round(px + Math.cos(aa) * d), Math.round(py - 5 + Math.sin(aa) * d), 1, 1);
-  }
-  return true;
-});
-
-registerZonePainter('f5_axe', (g, z, px, py, S) => {
-  const zz = z as ZoneX;
-  const k = kOf(zz);
-  const R = zz.r * S;
-  const a = zz.ang ?? 0;
-  const arc = zz.arc ?? 2.3;
-  cone(g, px, py, R, a, arc);
-  g.fillStyle = `rgba(160,20,10,${(0.16 + 0.3 * k).toFixed(3)})`;
-  g.fill();
-  // Трещины по полу к краю удара.
-  g.strokeStyle = `rgba(40,6,4,${(0.4 + 0.5 * k).toFixed(3)})`;
-  g.lineWidth = 1;
-  for (let i = 0; i < 5; i++) {
-    const aa = a - arc / 2 + ((i + 0.5) / 5) * arc;
-    g.beginPath();
-    g.moveTo(px + Math.cos(aa) * R * 0.3, py + Math.sin(aa) * R * 0.3);
-    g.lineTo(
-      px + Math.cos(aa + 0.08) * R * (0.3 + 0.7 * k),
-      py + Math.sin(aa + 0.08) * R * (0.3 + 0.7 * k),
-    );
-    g.stroke();
-  }
-  g.strokeStyle = `rgba(255,${Math.round(90 + 120 * k)},60,${(0.5 + 0.5 * k).toFixed(3)})`;
-  g.beginPath();
-  g.arc(px, py, R, a - arc / 2, a + arc / 2);
-  g.stroke();
-  return true;
-});
-
-registerZonePainter('f5_whirl', (g, z, px, py, S, time) => {
-  const k = kOf(z as ZoneX);
-  const R = z.r * S;
-  g.fillStyle = `rgba(170,20,10,${(0.12 + 0.28 * k).toFixed(3)})`;
-  g.beginPath();
-  g.arc(px, py, R, 0, TAU);
-  g.fill();
-  // Кольцо из штрихов крутится — видно, что сейчас пойдёт вкруговую.
-  g.strokeStyle = `rgba(255,200,120,${(0.4 + 0.6 * k).toFixed(3)})`;
-  g.lineWidth = 1;
-  for (let i = 0; i < 8; i++) {
-    const a0 = time * 6 * (0.5 + k) + (i / 8) * TAU;
-    g.beginPath();
-    g.arc(px, py, R, a0, a0 + 0.4);
-    g.stroke();
-  }
-  return true;
-});
-
-registerZonePainter('f5_roar', (g, z, px, py, S, time) => {
-  const k = kOf(z as ZoneX);
-  const R = z.r * S;
-  g.fillStyle = `rgba(255,220,90,${(0.08 + 0.18 * k).toFixed(3)})`;
-  g.beginPath();
-  g.arc(px, py, R, 0, TAU);
-  g.fill();
-  // Волны рёва сходятся к быку — круг оглушения.
-  g.lineWidth = 1;
-  for (let i = 0; i < 3; i++) {
-    const t = 1 - ((time * 1.8 + i / 3) % 1);
-    g.strokeStyle = `rgba(255,236,140,${(0.25 + 0.5 * k * t).toFixed(3)})`;
-    g.beginPath();
-    g.arc(px, py, R * t, 0, TAU);
-    g.stroke();
-  }
-  g.strokeStyle = `rgba(255,240,160,${(0.6 + 0.4 * k).toFixed(3)})`;
-  g.beginPath();
-  g.arc(px, py, R, 0, TAU);
-  g.stroke();
-  return true;
-});
-
-registerZonePainter('f5_rift', (g, z, px, py, S, time) => {
-  const zz = z as Zone & { ang?: number };
-  const warn = zz.warn ?? 0;
-  const life = zz.life;
-  const on = zz.t >= warn;
-  const fade = Math.min(1, (warn + life - zz.t) / 0.8);
-  const a = (zz.ang ?? 0) + Math.PI / 2;
-  const L = zz.r * S * 1.3;
-  // Трещина поперёк удара.
-  g.strokeStyle = `rgba(20,4,2,${(0.9 * fade).toFixed(3)})`;
-  g.lineWidth = 2;
-  g.beginPath();
-  for (let i = 0; i <= 6; i++) {
-    const k = i / 6 - 0.5;
-    const j = (hash(i, zz.id) - 0.5) * 3;
-    const x = px + Math.cos(a) * L * k * 2 + Math.cos(a + Math.PI / 2) * j;
-    const y = py + Math.sin(a) * L * k * 2 + Math.sin(a + Math.PI / 2) * j;
-    if (i) g.lineTo(x, y);
-    else g.moveTo(x, y);
-  }
-  g.stroke();
-  if (!on) return true;
-  // Огонь в трещине.
-  for (let i = 0; i < 5; i++) {
-    const k = i / 4 - 0.5;
-    const x = px + Math.cos(a) * L * k * 1.8;
-    const y = py + Math.sin(a) * L * k * 1.8;
-    const h = 3 + ((time * 9 + i * 1.7) % 3);
-    g.fillStyle = `rgba(255,120,30,${(0.8 * fade).toFixed(3)})`;
-    g.fillRect(Math.round(x) - 1, Math.round(y - h), 2, Math.round(h));
-    g.fillStyle = `rgba(255,230,120,${(0.9 * fade).toFixed(3)})`;
-    g.fillRect(Math.round(x), Math.round(y - h + 1), 1, Math.round(h * 0.6));
   }
   return true;
 });

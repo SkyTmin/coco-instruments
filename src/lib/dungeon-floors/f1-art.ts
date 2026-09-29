@@ -45,7 +45,7 @@ import { MAP_HAUL, MAP_MOUTH } from './f1-map';
 type RGBA = [number, number, number, number];
 type V = [number, number];
 
-const INK = hex('#150f0b');
+export const INK = hex('#150f0b');
 const WHITE: RGBA = [255, 255, 255, 255];
 
 // Свет сверху-слева-спереди (как у крыс).
@@ -98,7 +98,7 @@ const CLOTH = {
   cape: [hex('#40101c'), hex('#6a1a2a'), hex('#94303e')] as RGBA[],
 };
 
-const METAL = {
+export const METAL = {
   steel: [hex('#3a3e44'), hex('#6a7078'), hex('#a8b0b8'), hex('#e6ecf0')] as RGBA[],
   rust: [hex('#4a2a1a'), hex('#7a4424'), hex('#a8643a'), hex('#d09060')] as RGBA[],
   iron: [hex('#2a2a2e'), hex('#4a4a50'), hex('#76767e'), hex('#b0b0b8')] as RGBA[],
@@ -453,7 +453,7 @@ function paintEye(px: Px, r: Rig, f: Fur, dead = false): void {
  * Клинок от рукояти `a` под углом `ang`: рукоять `grip`, лезвие `len` ×
  * `w`, у тесака — широкий прямоугольник, у рельса — зубья.
  */
-function blade(
+export function blade(
   px: Px,
   a: V,
   ang: number,
@@ -1751,7 +1751,7 @@ registerMobPainter('f1_king', (m, pose) => {
 
 const sprites = new Map<string, Sprite>();
 
-function cachedSprite(key: string, make: () => Sprite): Sprite {
+export function cachedSprite(key: string, make: () => Sprite): Sprite {
   let s = sprites.get(key);
   if (!s) {
     s = make();
@@ -1818,25 +1818,6 @@ registerZonePainter('f1_rock', (g, z, px, py, scale, time) => {
   return true;
 });
 
-/** Волна после прыжка короля: кольцо с пылью. */
-registerZonePainter('f1_shock', (g, z, px, py, scale) => {
-  const st = z as Strike;
-  const k = Math.min(1, st.t / st.warn);
-  const R = st.r * scale;
-  const w = (st.w ?? 0.5) * scale;
-  g.strokeStyle = `rgba(255,120,60,${0.2 + 0.4 * k})`;
-  g.lineWidth = w * 2;
-  g.beginPath();
-  g.arc(px, py, R * (0.4 + 0.6 * k), 0, Math.PI * 2);
-  g.stroke();
-  g.strokeStyle = `rgba(255,220,160,${0.5 + 0.4 * k})`;
-  g.lineWidth = 1;
-  g.beginPath();
-  g.arc(px, py, R, 0, Math.PI * 2);
-  g.stroke();
-  return true;
-});
-
 /** Круг колдовства шамана: сходящиеся руны цвета чары. */
 function castPainter(rgb: string): Parameters<typeof registerZonePainter>[1] {
   return (g, z, px, py, scale, time) => {
@@ -1900,18 +1881,6 @@ registerZonePainter('f1_rattle_cut', (g, _z, px, py) => {
     return { img: p.canvas(), ax: 8, ay: 8 };
   });
   g.drawImage(sp.img, Math.round(px - 8), Math.round(py - 8));
-  return true;
-});
-
-/** Брошенный тесак короля на полу. */
-registerZonePainter('f1_cleaver', (g, _z, px, py) => {
-  const sp = cachedSprite('cleaver-floor', () => {
-    const p = new Px(22, 12);
-    blade(p, [3, 7], -0.15, { grip: 3, len: 12, w: 6, metal: METAL.steel, kind: 'cleaver' });
-    p.outline(INK);
-    return { img: p.canvas(), ax: 11, ay: 6 };
-  });
-  g.drawImage(sp.img, Math.round(px - sp.ax), Math.round(py - sp.ay));
   return true;
 });
 

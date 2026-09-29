@@ -1,10 +1,15 @@
 // Подключение рисовальщиков этажей (для экрана вылазки). Этот файл агенты не
 // правят — свои файлы уже подключены.
 import './f1-art';
+import './f1-boss-fx';
 import './f2-art';
+import './f2-boss-fx';
 import './f3-art';
+import './f3-boss-fx';
 import './f4-art';
+import './f4-boss-fx';
 import './f5-art';
+import './f5-boss-fx';
 import './f6-art';
 import './f7-art';
 import './f8-art';

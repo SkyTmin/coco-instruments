@@ -31,6 +31,11 @@ export interface MobPose {
   flash: boolean;
   /** Элита / альбинос. */
   look: 'normal' | 'elite' | 'albino';
+  /**
+   * Время рендера, с (v2.85). Идёт и во время стоп-кадра, когда `t` стоит:
+   * «дыхание», пламя, запаздывающие части. Технику считать от `t`.
+   */
+  now: number;
 }
 
 export interface MobFrame {
@@ -41,6 +46,34 @@ export interface MobFrame {
   ay: number;
   /** Где глаз в кадре (светится в темноте), или null. */
   eye?: [number, number] | null;
+  // ---- Движок анимаций (v2.85). Всё необязательно: старые кадры те же. ----
+  /** Сдвиг кадра, игровые пиксели, можно дробно: выпад, прыжок, отдача. */
+  dx?: number;
+  dy?: number;
+  /** Сжатие-растяжение от точки ног (1 — как есть). */
+  sx?: number;
+  sy?: number;
+  /** Наклон вокруг точки ног, радианы. */
+  rot?: number;
+  /** Не трясти на замахе и не качать летуна: подготовку рисует сам кадр. */
+  still?: boolean;
+  /** Полуось тени, пиксели; 0 — без тени. Иначе тень считается от ширины холста. */
+  shadow?: number;
+  /**
+   * Слой ПОВЕРХ темноты того же размера и с той же привязкой: глаза, руны,
+   * раскалённый клинок, свечение пасти. Рисуется после маски света.
+   */
+  lit?: HTMLCanvasElement | null;
+  /** Шлейф силуэтов, как у рывка героя: раз в `every` с, живёт `life` с. */
+  ghost?: { every: number; life: number; tint: string; alpha?: number } | null;
+  /** Прозрачность кадра 0…1 (сверх появления). */
+  alpha?: number;
+  /**
+   * Смерть длиннее 0,7 с: сколько секунд режима `dying` рисовать. Движок
+   * держит копию убранного моба и зовёт рисовальщик дальше с растущим `t`;
+   * растворение движка при этом выключено — прозрачность решает `alpha`.
+   */
+  linger?: number;
 }
 
 export type MobPainter = (m: Mob, pose: MobPose) => MobFrame | null;
@@ -112,3 +145,103 @@ export const setPaintSim = (s: Sim | null): void => {
   painting = s;
 };
 export const registerItemArt = (id: string, f: ItemPainter) => void ITEM_ART.set(id, f);
+
+// ---- Движок анимаций (v2.85) ---------------------------------------------
+
+/** Что приземлилось: удар по площади (форма из `StrikeIn`) или снаряд. */
+export interface ImpactRec {
+  art: string;
+  x: number;
+  y: number;
+  shape?: 'circle' | 'line' | 'cone' | 'ring';
+  r?: number;
+  w?: number;
+  ang?: number;
+  arc?: number;
+  /** Скорость снаряда в миг удара (клеток/с). */
+  vx?: number;
+  vy?: number;
+  /** Случайное зерно записи — чтобы осколки двух ударов не совпадали. */
+  seed: number;
+}
+
+/**
+ * Контакт удара: рисует на полу в точке (px, py) — центр удара, `age` —
+ * секунды после приземления (идёт по времени рендера, и в стоп-кадре тоже).
+ * Вернуть false — запись кончилась раньше `life`.
+ */
+export type ImpactPainter = (
+  g: CanvasRenderingContext2D,
+  rec: ImpactRec,
+  px: number,
+  py: number,
+  scale: number,
+  age: number,
+  time: number,
+) => boolean;
+
+export interface ImpactDef {
+  paint: ImpactPainter;
+  /** Сколько живёт запись, с. */
+  life: number;
+  /** Тряска кадра 0…1, если герой ближе 7 клеток (вместо общей 0,12). */
+  shake?: number;
+  /** Вспышка экрана 0…1 и её цвет `'r,g,b'`. */
+  flash?: number;
+  flashRgb?: string;
+  /** Рисовать поверх темноты (после маски света). */
+  above?: boolean;
+  /** Оставить и общий взрыв движка (8 частиц и кольцо). */
+  keepBurst?: boolean;
+}
+
+export const IMPACT_PAINTERS = new Map<string, ImpactDef>();
+/** Контакт удара `art` (удар по площади или снаряд) — вместо общего взрыва. */
+export const registerImpactPainter = (art: string, def: ImpactDef) =>
+  void IMPACT_PAINTERS.set(art, def);
+
+/**
+ * Прогрев кадров: генератор рисует кадры рисовальщика `paintId` по одному
+ * на шаг (`yield` после каждого). Рендер тратит на него до 3 мс за кадр,
+ * пока такой моб есть в мире, — техника не рисуется впервые прямо в бою.
+ */
+export const MOB_WARM = new Map<string, () => Iterator<unknown>>();
+export const registerMobWarm = (paintId: string, gen: () => Iterator<unknown>) =>
+  void MOB_WARM.set(paintId, gen);
+
+/**
+ * Кеш кадров с вытеснением давно не нужных. У этажей кеши — простые `Map`
+ * без предела; для босса на 24 к/с это сотни холстов, поэтому — сюда.
+ */
+export interface FrameLRU<V> {
+  get(key: string): V | undefined;
+  set(key: string, v: V): V;
+  readonly size: number;
+  clear(): void;
+}
+
+export function frameLRU<V>(limit: number): FrameLRU<V> {
+  const m = new Map<string, V>();
+  return {
+    get(key) {
+      const v = m.get(key);
+      if (v !== undefined) {
+        m.delete(key);
+        m.set(key, v);
+      }
+      return v;
+    },
+    set(key, v) {
+      m.delete(key);
+      m.set(key, v);
+      while (m.size > limit) m.delete(m.keys().next().value as string);
+      return v;
+    },
+    get size() {
+      return m.size;
+    },
+    clear() {
+      m.clear();
+    },
+  };
+}

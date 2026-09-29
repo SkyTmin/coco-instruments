@@ -31,7 +31,7 @@ const WHITE: RGBA = [255, 255, 255, 255];
 const BLACK: RGBA = [0, 0, 0, 255];
 const GOLD = hex('#ffcc40');
 const PALE = hex('#f4ece4');
-const TAU = Math.PI * 2;
+export const TAU = Math.PI * 2;
 
 // Акценты этажа.
 const ACID = hex('#b6f24a');
@@ -2523,7 +2523,7 @@ registerCellPainter(F2_RUIN, cellPainter);
 // Лужи, облака и удары по площади.
 // ---------------------------------------------------------------------------
 
-const rgba = (c: RGBA, a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+export const rgba = (c: RGBA, a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
 /** Облако спор: клубы жёлто-зелёной пыли, пылинки кружат. */
 registerZonePainter('f2_spores', (g, z, px, py, scale, time) => {
@@ -2620,29 +2620,6 @@ registerZonePainter('f2_scream', (g, z, px, py, scale, time) => {
   return true;
 });
 
-/** Взмах меча: стальной веер, по краю — светлая дуга клинка. */
-registerZonePainter('f2_sword', (g, z, px, py, scale) => {
-  const st = z as Strike;
-  const k = Math.min(1, st.t / st.warn);
-  const R = st.r * scale;
-  const a = st.ang ?? 0;
-  const h = (st.arc ?? 1) / 2;
-  const S = hex('#c8d4e8');
-  g.fillStyle = rgba(hex('#ff5a3a'), 0.12 + 0.22 * k);
-  g.beginPath();
-  g.moveTo(px, py);
-  g.arc(px, py, R, a - h, a + h);
-  g.closePath();
-  g.fill();
-  // Кромка наливается от края к краю — куда пройдёт клинок.
-  g.strokeStyle = rgba(S, 0.5 + 0.5 * k);
-  g.lineWidth = 1;
-  g.beginPath();
-  g.arc(px, py, R, a - h, a - h + 2 * h * k);
-  g.stroke();
-  return true;
-});
-
 /** Метка приземления слизи: зелёная тень растёт. */
 registerZonePainter('f2_hop', (g, z, px, py, scale) => {
   const st = z as Strike;
@@ -2657,31 +2634,6 @@ registerZonePainter('f2_hop', (g, z, px, py, scale) => {
   g.beginPath();
   g.ellipse(px, py, R, R * 0.7, 0, 0, TAU);
   g.stroke();
-  return true;
-});
-
-/** Прыжок лат: круг с трещинами — сюда рухнут. */
-registerZonePainter('f2_leap', (g, z, px, py, scale) => {
-  const st = z as Strike;
-  const k = Math.min(1, st.t / st.warn);
-  const R = st.r * scale;
-  g.fillStyle = rgba(hex('#ff5a3a'), 0.1 + 0.25 * k);
-  g.beginPath();
-  g.arc(px, py, R * k, 0, TAU);
-  g.fill();
-  g.strokeStyle = rgba(hex('#ff8a5a'), 0.6 + 0.3 * k);
-  g.lineWidth = 1;
-  g.beginPath();
-  g.arc(px, py, R, 0, TAU);
-  g.stroke();
-  g.strokeStyle = rgba(hex('#2a1a14'), 0.5 * k);
-  for (let i = 0; i < 5; i++) {
-    const a = i * 1.26 + 0.3;
-    g.beginPath();
-    g.moveTo(px + Math.cos(a) * 3, py + Math.sin(a) * 3);
-    g.lineTo(px + Math.cos(a) * R * k * 0.9, py + Math.sin(a) * R * k * 0.9);
-    g.stroke();
-  }
   return true;
 });
 

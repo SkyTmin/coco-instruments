@@ -27,10 +27,12 @@ import { FLOORS } from './dungeon-floors';
 import { DEEP_PYRITE, DEEP_WALLROCK } from './dungeon-floors/types';
 import { BOSS_SCRIPTS, BRAINS } from './dungeon-ai';
 import { API, createSim, NO_INPUT, spawnMob, stepSim } from './dungeon-sim';
+import type { SimEvent } from './dungeon-sim';
 import { heroOf } from './dungeon';
 import { arenaCells, buildWorld, liftOf, reachable, Tile, walkableTile } from './dungeon-world';
 import type { World } from './dungeon-world';
 import { x72HasMob } from './dungeon-mobart';
+import { frameLRU } from './dungeon-paint';
 import { DEPTH, MINE_CELLS, ROCKS } from './prison';
 
 /** Достижимо, считая печати стеной: так ходит тот, кто босса не победил. */
@@ -325,8 +327,7 @@ describe('этаж 15: договор «Мира» и «Сердца»', () => {
     expect(f.boss).toBe(F15_BOSS);
     expect(F15_BOSS.id).toBe('f15boss');
     expect(F15_BOSS.area).toBe(F15_HEART_AREA.id);
-    const open = (r: string) =>
-      [...r].map((c, i) => (c === '#' ? -1 : i)).filter((i) => i >= 0);
+    const open = (r: string) => [...r].map((c, i) => (c === '#' ? -1 : i)).filter((i) => i >= 0);
     const want = Array.from({ length: F15_JOIN.x1 - F15_JOIN.x0 + 1 }, (_, i) => F15_JOIN.x0 + i);
     const heart = F15_HEART_AREA.rows;
     expect(open(heart[heart.length - 1]), 'низ «Сердца»').toEqual(want);
@@ -448,7 +449,15 @@ describe('движок 3', () => {
     // Стена между ударом и героем при `los` — мимо.
     const s2 = make().s;
     s2.tiles[hy * wd.w + hx + 2] = Tile.Wall;
-    API.strike(s2, { shape: 'circle', x: hx + 3.5, y: hy + 0.5, r: 4, warn: 0, dmg: 30, los: true });
+    API.strike(s2, {
+      shape: 'circle',
+      x: hx + 3.5,
+      y: hy + 0.5,
+      r: 4,
+      warn: 0,
+      dmg: 30,
+      los: true,
+    });
     const h2 = s2.hero.hp;
     stepSim(s2, 1 / 60, idle);
     expect(s2.hero.hp).toBe(h2);
@@ -579,5 +588,53 @@ describe('движок 3', () => {
     } finally {
       BOSS_SCRIPTS.set(b.def.script, was);
     }
+  });
+});
+
+describe('движок анимаций (v2.85)', () => {
+  it('кеш кадров вытесняет давно не нужный, а не свежий', () => {
+    const c = frameLRU<number>(3);
+    c.set('a', 1);
+    c.set('b', 2);
+    c.set('c', 3);
+    expect(c.get('a')).toBe(1); // «a» снова свежий
+    c.set('d', 4);
+    expect(c.size).toBe(3);
+    expect(c.get('b')).toBeUndefined();
+    expect(c.get('a')).toBe(1);
+    expect(c.get('d')).toBe(4);
+  });
+
+  it('приземлившийся удар несёт форму — рисовальщику контакта', () => {
+    const wd = buildWorld(1);
+    const lift = liftOf(wd, entryArea(1))!;
+    const s = createSim({
+      world: wd,
+      dungeon: DUNGEON_START,
+      stats: heroOf(DUNGEON_START),
+      x: lift.x + 0.5,
+      y: lift.y + 1.5,
+      seed: 5,
+      now: () => 1e12,
+    });
+    s.mobs = [];
+    API.strike(s, {
+      shape: 'cone',
+      x: s.hero.x + 5,
+      y: s.hero.y,
+      r: 2.5,
+      ang: 1,
+      arc: 2,
+      warn: 0.05,
+      dmg: 1,
+      art: 'test_cleave',
+    });
+    let got: Extract<SimEvent, { t: 'strike' }> | null = null;
+    for (let i = 0; i < 20 && !got; i++) {
+      s.events.length = 0;
+      stepSim(s, 1 / 60, NO_INPUT);
+      for (const e of s.events) if (e.t === 'strike' && e.art === 'test_cleave') got = e;
+    }
+    expect(got?.s).toEqual({ shape: 'cone', r: 2.5, w: undefined, ang: 1, arc: 2 });
   });
 });

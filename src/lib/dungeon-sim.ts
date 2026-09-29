@@ -159,7 +159,17 @@ export type SimEvent =
       sub?: string;
     }
   | { t: 'shot'; x: number; y: number; art: string }
-  | { t: 'strike'; x: number; y: number; art: string; big?: boolean }
+  | {
+      t: 'strike';
+      x: number;
+      y: number;
+      art: string;
+      big?: boolean;
+      /** Форма приземлившегося удара — для рисовальщика контакта (v2.85). */
+      s?: Pick<StrikeIn, 'shape' | 'r' | 'w' | 'ang' | 'arc'>;
+      /** Скорость лопнувшего снаряда. */
+      v?: [number, number];
+    }
   | { t: 'status'; kind: StatusKind }
   | { t: 'combo'; n: number }
   | { t: 'streak'; tier: number }
@@ -2911,7 +2921,7 @@ function stepShots(sim: Sim, dt: number): void {
             s.kind,
             s.status ? { kind: s.status, dur: s.dur ?? 2 } : undefined,
           );
-        sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art });
+        sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art, v: [s.vx, s.vy] });
         shotLand(sim, s);
         continue;
       }
@@ -2919,7 +2929,7 @@ function stepShots(sim: Sim, dt: number): void {
       continue;
     }
     if (s.age > s.life || opaque(sim, Math.floor(s.x), Math.floor(s.y))) {
-      sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art });
+      sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art, v: [s.vx, s.vy] });
       if (s.onLand) {
         // Упёрся в стену — лужа у стены, а не в ней.
         s.x -= s.vx * dt;
@@ -2940,7 +2950,7 @@ function stepShots(sim: Sim, dt: number): void {
           s.status ? { kind: s.status, dur: s.dur ?? 2 } : undefined,
         );
       if (h.mode !== 'dash') {
-        sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art });
+        sim.events.push({ t: 'strike', x: s.x, y: s.y, art: s.art, v: [s.vx, s.vy] });
         continue;
       }
     }
@@ -3036,7 +3046,14 @@ function stepStrikes(sim: Sim, dt: number): void {
         if (m.hp <= 0) killMob(sim, m);
       }
     sim.hitstop = Math.max(sim.hitstop, 0.05);
-    sim.events.push({ t: 'strike', x: st.x, y: st.y, art: st.art ?? 'slam', big: true });
+    sim.events.push({
+      t: 'strike',
+      x: st.x,
+      y: st.y,
+      art: st.art ?? 'slam',
+      big: true,
+      s: { shape: st.shape, r: st.r, w: st.w, ang: st.ang, arc: st.arc },
+    });
   }
   sim.strikes = keep;
 }
@@ -3359,9 +3376,7 @@ function hazIndex(w: World, hz: HazardSpec): number {
 /** Ближайшая проходимая клетка (центр) — поиском по кольцам, до 8 клеток. */
 function nearestOpen(sim: Sim, x: number, y: number, fly = false): [number, number] | null {
   const ok = (cx: number, cy: number) =>
-    fly
-      ? !flyGridOf(sim).solid(cx, cy)
-      : !solidTile(sim, cx, cy);
+    fly ? !flyGridOf(sim).solid(cx, cy) : !solidTile(sim, cx, cy);
   if (ok(x, y)) return [x + 0.5, y + 0.5];
   for (let r = 1; r <= 8; r++) {
     let best: [number, number] | null = null;

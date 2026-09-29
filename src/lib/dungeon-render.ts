@@ -45,13 +45,15 @@ import { bladeSprite, fxCount, fxFrame, heroSprite, ROW, spritesReady } from './
 import { ratEye, ratFrame, ratSize } from './dungeon-rats';
 import {
   CELL_PAINTERS,
+  IMPACT_PAINTERS,
   MOB_PAINTERS,
+  MOB_WARM,
   PROP_PAINTERS,
   SHOT_PAINTERS,
   setPaintSim,
   ZONE_PAINTERS,
 } from './dungeon-paint';
-import type { MobFrame, MobPose } from './dungeon-paint';
+import type { ImpactDef, ImpactRec, MobFrame, MobPose } from './dungeon-paint';
 import {
   blobFrame,
   deepPx,
@@ -191,6 +193,58 @@ interface Ghost {
   top: number;
 }
 
+/** Как лёг кадр моба на экран (v2.85): шлейф и слой поверх темноты повторяют его. */
+interface Placed {
+  img: HTMLCanvasElement;
+  /** Точка ног на экране, игровые пиксели. */
+  px: number;
+  py: number;
+  ax: number;
+  ay: number;
+  sx: number;
+  sy: number;
+  rot: number;
+  alpha: number;
+}
+
+/** Силуэт шлейфа моба. */
+interface MobGhost extends Placed {
+  wx: number;
+  wy: number;
+  life: number;
+  max: number;
+  a0: number;
+}
+
+/** Копия убранного босса, чья смерть длиннее, чем живёт моб (`linger`). */
+interface Remains {
+  m: Mob;
+  linger: number;
+}
+
+/** Силуэт кадра цветом шлейфа — один раз на холст и цвет. */
+const tinted = new WeakMap<HTMLCanvasElement, Map<string, HTMLCanvasElement>>();
+function tintOf(img: HTMLCanvasElement, color: string): HTMLCanvasElement {
+  let byColor = tinted.get(img);
+  if (!byColor) {
+    byColor = new Map();
+    tinted.set(img, byColor);
+  }
+  let c = byColor.get(color);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const g = c.getContext('2d')!;
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = color;
+    g.fillRect(0, 0, c.width, c.height);
+    byColor.set(color, c);
+  }
+  return c;
+}
+
 let stairsImg: HTMLCanvasElement | null = null;
 const stairsCanvas = () => (stairsImg ??= stairsPx().canvas());
 
@@ -263,6 +317,20 @@ export class DungeonRenderer {
   private eyes: { x: number; y: number; c: string }[] = [];
   /** Шлейф рывка: силуэты героя, тающие за ним. */
   private ghosts: Ghost[] = [];
+  // ---- Движок анимаций (v2.85) ----
+  /** Контакт ударов: запись живёт `life` секунд после приземления. */
+  private impacts: { rec: ImpactRec; def: ImpactDef; age: number }[] = [];
+  /** Шлейф мобов (`MobFrame.ghost`) и часы шлейфа по мобу. */
+  private mobGhosts: MobGhost[] = [];
+  private ghostClock = new Map<number, number>();
+  /** Слои поверх темноты (`MobFrame.lit`) этого кадра. */
+  private lits: Placed[] = [];
+  /** Долгая смерть (`MobFrame.linger`): копии убранных боссов. */
+  private remains = new Map<number, Remains>();
+  private remainsOf: Sim | null = null;
+  /** Прогрев кадров (`registerMobWarm`): текущий генератор и готовые. */
+  private warmIt: Iterator<unknown> | null = null;
+  private warmDone = new Set<string>();
   private ghostT = 0;
   private dt = 0;
   /** Куски карты нарисованы плитками 0x72 (иначе — прежними). */
@@ -496,9 +564,34 @@ export class DungeonRenderer {
         case 'strike': {
           // Удар по площади, упавший камень, лопнувший снаряд.
           const near = Math.hypot(e.x - sim.hero.x, e.y - sim.hero.y) < 6;
+          // Свой контакт удара этажа (v2.85): волна, пыль, осколки — вместо
+          // общего взрыва; тряска и вспышка — по силе этого удара.
+          const imp = IMPACT_PAINTERS.get(e.art);
+          if (imp) {
+            this.impacts.push({
+              rec: {
+                art: e.art,
+                x: e.x,
+                y: e.y,
+                ...(e.s ?? {}),
+                vx: e.v?.[0],
+                vy: e.v?.[1],
+                seed: Math.floor(Math.random() * 1e9),
+              },
+              def: imp,
+              age: 0,
+            });
+            const close = Math.hypot(e.x - sim.hero.x, e.y - sim.hero.y) < 7;
+            if (close) this.addTrauma(imp.shake ?? 0.12);
+            if (imp.flash && close) {
+              this.flash = Math.max(this.flash, Math.min(0.5, imp.flash * 0.35));
+              this.flashRgb = imp.flashRgb ?? null;
+            }
+            if (!imp.keepBurst) break;
+          }
           this.burst(e.x, e.y, ['#ffffff', '#ffd9a0', '#a08070'], 8, 1.1);
           this.rings.push({ x: e.x, y: e.y, r: 1.2, life: 0, max: 0.3, color: '#ffe0b0' });
-          if (near) this.addTrauma(0.12);
+          if (near && !imp) this.addTrauma(0.12);
           break;
         }
         case 'boss':
@@ -707,6 +800,7 @@ export class DungeonRenderer {
 
     // Метки угроз на полу.
     this.drawTelegraphs(sim, left, top);
+    this.drawImpacts(false, left, top);
 
     // Предметы, мобы, герой, добыча — по глубине.
     type D = { y: number; draw: () => void };
@@ -818,6 +912,33 @@ export class DungeonRenderer {
       if (!inView(m.x, m.y)) continue;
       list.push({ y: m.y + 0.01, draw: () => this.drawMob(sim, m, left, top) });
     }
+    // Долгая смерть босса (v2.85): моб уже убран, а сцена доигрывает.
+    if (this.remainsOf !== sim) {
+      this.remains.clear();
+      this.ghostClock.clear();
+      this.mobGhosts = [];
+      this.impacts = [];
+      this.warmIt = null;
+      this.warmDone.clear();
+      this.remainsOf = sim;
+    }
+    for (const [id, r] of this.remains) {
+      const live = sim.mobs.find((m) => m.id === id);
+      if (live) {
+        // Пока симуляция держит моба, копия идёт за ним.
+        r.m.t = live.t;
+        r.m.x = live.x;
+        r.m.y = live.y;
+        continue;
+      }
+      r.m.t += dt;
+      if (r.m.t >= r.linger) {
+        this.remains.delete(id);
+        continue;
+      }
+      if (!inView(r.m.x, r.m.y)) continue;
+      list.push({ y: r.m.y + 0.01, draw: () => this.drawMob(sim, r.m, left, top) });
+    }
     for (const b of sim.bombs) {
       if (!inView(b.x, b.y)) continue;
       list.push({
@@ -854,6 +975,8 @@ export class DungeonRenderer {
     list.sort((a, b) => a.y - b.y);
     for (const d of list) d.draw();
 
+    this.drawMobGhosts(left, top);
+
     // Частицы.
     this.drawParticles(dt, left, top);
     this.drawSlashes(sim, dt, left, top);
@@ -864,6 +987,9 @@ export class DungeonRenderer {
     this.drawLight(sim, left, top, dt);
     // Поверх темноты (Движок 3): молнии, лазеры, свечение — `above`.
     this.drawTelegraphs(sim, left, top, true);
+    this.drawImpacts(true, left, top);
+    for (const p of this.lits) this.place(p, p.img);
+    this.lits.length = 0;
     for (const e of this.eyes) {
       g.fillStyle = e.c;
       g.globalAlpha = 0.9;
@@ -895,6 +1021,95 @@ export class DungeonRenderer {
     // Цифры — уже в точках экрана.
     g.setTransform(1, 0, 0, 1, 0, 0);
     this.drawFloats(dt, left, top);
+    this.warmStep(sim);
+  }
+
+  // ---- Движок анимаций (v2.85) ----------------------------------------------
+
+  /** Кадр моба на экран: сдвиг, сжатие, наклон от точки ног, прозрачность. */
+  private place(p: Placed, img: HTMLCanvasElement): void {
+    const g = this.bctx;
+    g.globalAlpha = p.alpha;
+    if (p.sx === 1 && p.sy === 1 && p.rot === 0) {
+      g.drawImage(img, this.q(p.px - p.ax), this.q(p.py - p.ay));
+    } else {
+      g.save();
+      g.translate(this.q(p.px), this.q(p.py));
+      if (p.rot) g.rotate(p.rot);
+      g.scale(p.sx, p.sy);
+      g.drawImage(img, -p.ax, -p.ay);
+      g.restore();
+    }
+    g.globalAlpha = 1;
+  }
+
+  /** Контакт ударов (`registerImpactPainter`): на полу или поверх темноты. */
+  private drawImpacts(above: boolean, left: number, top: number): void {
+    if (!this.impacts.length) return;
+    const g = this.bctx;
+    const keep: typeof this.impacts = [];
+    for (const it of this.impacts) {
+      if (!!it.def.above !== above) {
+        keep.push(it);
+        continue;
+      }
+      it.age += this.dt;
+      if (it.age >= it.def.life) continue;
+      const px = this.q(it.rec.x * TS - left);
+      const py = this.q(it.rec.y * TS - top);
+      g.save();
+      const alive = it.def.paint(g, it.rec, px, py, TS, it.age, this.time);
+      g.restore();
+      g.globalAlpha = 1;
+      if (alive !== false) keep.push(it);
+    }
+    this.impacts = keep;
+  }
+
+  /** Шлейф мобов: силуэты тают на месте, где их оставили. */
+  private drawMobGhosts(left: number, top: number): void {
+    if (!this.mobGhosts.length) return;
+    const keep: MobGhost[] = [];
+    for (const gh of this.mobGhosts) {
+      gh.life += this.dt;
+      if (gh.life >= gh.max) continue;
+      keep.push(gh);
+      this.place(
+        {
+          ...gh,
+          px: gh.wx - left,
+          py: gh.wy - top,
+          alpha: gh.a0 * (1 - gh.life / gh.max),
+        },
+        gh.img,
+      );
+    }
+    this.mobGhosts = keep;
+  }
+
+  /** Прогрев: до 3 мс за кадр на генераторы кадров боссов, что есть в мире. */
+  private warmStep(sim: Sim): void {
+    if (!MOB_WARM.size) return;
+    if (!this.warmIt) {
+      for (const m of sim.mobs) {
+        const art = MOBS[m.kind]?.art;
+        if (!art || art.kind !== 'paint' || this.warmDone.has(art.id)) continue;
+        const gen = MOB_WARM.get(art.id);
+        this.warmDone.add(art.id);
+        if (gen) {
+          this.warmIt = gen();
+          break;
+        }
+      }
+      if (!this.warmIt) return;
+    }
+    const t0 = performance.now();
+    while (performance.now() - t0 < 3) {
+      if (this.warmIt.next().done) {
+        this.warmIt = null;
+        return;
+      }
+    }
   }
 
   private prefetch(sim: Sim, c0: number, c1: number, r0: number, r1: number): void {
@@ -1481,6 +1696,7 @@ export class DungeonRenderer {
       left: Math.cos(m.face) < 0,
       flash: m.flash > 0.05,
       look: m.albino ? 'albino' : m.elite ? 'elite' : 'normal',
+      now: this.time,
     };
   }
 
@@ -1535,6 +1751,15 @@ export class DungeonRenderer {
       if (m.t < 0) return;
     } else if (m.fell) {
       // Сорвался — тени под ним нет: под ним пропасть.
+    } else if (fr.shadow !== undefined) {
+      // Тень задал кадр (v2.85): не «дышит» с шириной холста.
+      if (fr.shadow > 0) {
+        g.fillStyle = def?.fly ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.32)';
+        g.beginPath();
+        g.ellipse(px, py + 2, fr.shadow, Math.max(1.5, fr.shadow * 0.28), 0, 0, Math.PI * 2);
+        g.fill();
+      }
+      if (def?.fly) dy = -6 + (fr.still ? 0 : Math.round(Math.sin(this.time * 5 + m.id) * 1.5));
     } else if (!def?.fly) {
       g.fillStyle = 'rgba(0,0,0,0.32)';
       g.beginPath();
@@ -1554,15 +1779,56 @@ export class DungeonRenderer {
       g.beginPath();
       g.ellipse(px, py + 2, Math.max(2, m.r * TS * 0.8), 1.5, 0, 0, Math.PI * 2);
       g.fill();
-      dy = -6 + Math.round(Math.sin(this.time * 5 + m.id) * 1.5);
+      dy = -6 + (fr.still ? 0 : Math.round(Math.sin(this.time * 5 + m.id) * 1.5));
     }
-    if (m.mode === 'dying') alpha = Math.max(0, 1 - Math.max(0, m.t - 0.35) / 0.35);
-    // Замах: мелкая дрожь.
+    if (m.mode === 'dying') {
+      if (fr.linger !== undefined) {
+        // Долгая смерть (v2.85): прозрачность решает кадр, а моб, убранный
+        // симуляцией, доигрывает копией.
+        alpha = 1;
+        if (!this.remains.has(m.id) && fr.linger > m.t)
+          this.remains.set(m.id, { m: { ...m, data: { ...m.data } }, linger: fr.linger });
+      } else alpha = Math.max(0, 1 - Math.max(0, m.t - 0.35) / 0.35);
+    }
+    if (fr.alpha !== undefined) alpha *= fr.alpha;
+    // Замах: мелкая дрожь — если кадр не рисует подготовку сам.
     let jx = 0;
-    if (m.mode === 'windup' || m.mode === 'rollAim' || m.mode === 'whipAim' || m.tele)
+    if (
+      !fr.still &&
+      (m.mode === 'windup' || m.mode === 'rollAim' || m.mode === 'whipAim' || m.tele)
+    )
       jx = Math.round(Math.sin(this.time * 70 + m.id) * (boss ? 1.4 : 0.6));
-    const x0 = px - fr.ax + jx;
-    const y0 = py + 2 - fr.ay + dy;
+    const x0 = px - fr.ax + jx + (fr.dx ?? 0);
+    const y0 = py + 2 - fr.ay + dy + (fr.dy ?? 0);
+    // Движок анимаций (v2.85): трансформ, шлейф, слой поверх темноты.
+    const placed: Placed = {
+      img: fr.img,
+      px: x0 + fr.ax,
+      py: y0 + fr.ay,
+      ax: fr.ax,
+      ay: fr.ay,
+      sx: fr.sx ?? 1,
+      sy: fr.sy ?? 1,
+      rot: fr.rot ?? 0,
+      alpha,
+    };
+    if (fr.ghost && m.mode !== 'dying') {
+      const next = (this.ghostClock.get(m.id) ?? 0) - this.dt;
+      if (next <= 0) {
+        this.mobGhosts.push({
+          ...placed,
+          img: tintOf(fr.img, fr.ghost.tint),
+          wx: placed.px + left,
+          wy: placed.py + top,
+          life: 0,
+          max: fr.ghost.life,
+          a0: (fr.ghost.alpha ?? 0.38) * alpha,
+        });
+        this.ghostClock.set(m.id, fr.ghost.every);
+      } else this.ghostClock.set(m.id, next);
+    }
+    if (fr.lit) this.lits.push({ ...placed, img: fr.lit });
+    const moved = fr.sx !== undefined || fr.sy !== undefined || fr.rot !== undefined;
     g.globalAlpha = alpha;
     if (m.fell) {
       // Сорвался в пропасть (Движок 3): уменьшается, уходя вниз, без тени.
@@ -1586,7 +1852,8 @@ export class DungeonRenderer {
       g.rotate(this.time * 14 * (Math.cos(m.dir) >= 0 ? 1 : -1));
       g.drawImage(fr.img, -fr.ax, -size * 0.55);
       g.restore();
-    } else g.drawImage(fr.img, x0, y0);
+    } else if (moved) this.place(placed, fr.img);
+    else g.drawImage(fr.img, this.q(x0), this.q(y0));
     g.globalAlpha = 1;
     // Глаза светятся поверх темноты — видно, откуда лезут.
     if (
@@ -1597,9 +1864,20 @@ export class DungeonRenderer {
       m.mode !== 'drop' &&
       m.mode !== 'roll'
     ) {
+      // Глаз следует за наклоном и сжатием кадра.
+      let ex = x0 + eye[0];
+      let ey = y0 + eye[1];
+      if (moved) {
+        const lx = (eye[0] - fr.ax) * placed.sx;
+        const ly = (eye[1] - fr.ay) * placed.sy;
+        const c = Math.cos(placed.rot);
+        const sn = Math.sin(placed.rot);
+        ex = placed.px + lx * c - ly * sn;
+        ey = placed.py + lx * sn + ly * c;
+      }
       this.eyes.push({
-        x: x0 + eye[0],
-        y: y0 + eye[1],
+        x: this.q(ex),
+        y: this.q(ey),
         c: m.albino ? '#ff6a88' : m.elite && !boss ? '#ffb020' : (def?.eye ?? '#ff3a28'),
       });
     }

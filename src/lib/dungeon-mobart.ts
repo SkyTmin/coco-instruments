@@ -300,6 +300,7 @@ export function mobPortrait(kind: string): HTMLCanvasElement {
       left: false,
       flash: false,
       look: 'normal',
+      now: 0,
     });
     if (f) return f.img;
   }
