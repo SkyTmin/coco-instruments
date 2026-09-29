@@ -807,6 +807,34 @@ function shedMite(sim: Sim, b: BossFight, m: Mob, api: SimApi): void {
   api.collide(sim, k);
 }
 
+// v2.85 — только рисунок: визуальная зона (пыль, искры, нити роя) без урона,
+// статусов и замедления; рисует `f2-boss-fx.ts`. Кладётся мимо `api.zone` с
+// id −1, чтобы не тратить номер объекта: id мобов (от них — кольцо роя) и
+// весь бой остаются прежними. Больше 30 таких разом не бывает.
+function vfx(
+  sim: Sim,
+  art: string,
+  x: number,
+  y: number,
+  life: number,
+  o: Record<string, number | boolean> = {},
+): void {
+  let n = 0;
+  for (const z of sim.zones) if (z.art?.startsWith('f2v_') && ++n >= 30) return;
+  sim.zones.push({ x, y, r: 0, life, art, ...o, id: -1, t: 0 } as (typeof sim.zones)[number]);
+}
+
+// v2.85 — только рисунок: пыль из-под сабатонов — раз в полклетки пути.
+function vSteps(sim: Sim, m: Mob, dt: number): void {
+  m.data.vStep = (m.data.vStep ?? 0) + Math.hypot(m.vx, m.vy) * dt;
+  if (m.data.vStep < 0.5) return;
+  m.data.vStep = 0;
+  m.data.vFoot = m.data.vFoot ? 0 : 1;
+  const a = Math.atan2(m.vy, m.vx);
+  const side = (m.data.vFoot ? 1 : -1) * 0.16;
+  vfx(sim, 'f2v_step', m.x - Math.sin(a) * side, m.y + Math.cos(a) * side * 0.6, 0.5, { va: a });
+}
+
 registerBrain('f2_armor', {
   raw: true,
   step(sim, m, dt, c, api) {
@@ -820,6 +848,15 @@ registerBrain('f2_armor', {
     m.danger = 0;
     m.bounce = false;
     if (m.mode === 'dying') return;
+    // v2.85 — только рисунок: из трещин лат капает рой.
+    if (angry && m.mode !== 'air' && m.mode !== 'rebuild') {
+      m.data.vDrip = (m.data.vDrip ?? 0.5) - dt;
+      if (m.data.vDrip <= 0) {
+        const j = (m.id * 7 + Math.floor(sim.time * 29)) % 9;
+        m.data.vDrip = 0.55 + (j % 4) * 0.14;
+        vfx(sim, 'f2v_drip', m.x + (j - 4) * 0.05, m.y + 0.06, 1.5);
+      }
+    }
     // От ударов латы трещат: с половины из щелей сыплются латники — не
     // больше пяти за латы (рой должен остаться роем).
     if (hurtOf(m) > 0 && b) {
@@ -836,6 +873,7 @@ registerBrain('f2_armor', {
     }
     switch (m.mode) {
       case 'roar':
+        if (m.t <= dt) vfx(sim, 'f2v_roar', m.x, m.y, 1.2); // v2.85 — только рисунок
         m.vx *= 0.8;
         m.vy *= 0.8;
         if (m.t > 1.2) api.setMode(m, 'chase');
@@ -854,6 +892,7 @@ registerBrain('f2_armor', {
       case 'chase': {
         const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
         api.steer(sim, m, cx, cy, m.speed * haste * (dist < 1.6 ? 0.4 : 1), dt);
+        vSteps(sim, m, dt); // v2.85 — только рисунок
         m.data.think = (m.data.think ?? 0.9) - dt;
         if (m.data.think > 0) return;
         m.data.think = (1 + sim.rng() * 0.4) / haste;
@@ -873,6 +912,9 @@ registerBrain('f2_armor', {
         m.vx *= 0.6;
         m.vy *= 0.6;
         const warn = m.data.warn ?? SWING.warn;
+        // v2.85 — только рисунок: в миг удара ветер клинка поднимает пыль по дуге.
+        if (m.t >= warn && m.t - dt < warn)
+          vfx(sim, 'f2v_swdust', m.x, m.y, 0.9, { va: m.dir, vc: m.data.combo ?? 0, vr: SWING.r });
         if (m.t > warn - 0.25) m.danger = SWING.r + h.r;
         if (m.t >= warn + 0.12) {
           // Ярость: второй взмах вдогонку, с другой руки.
@@ -918,6 +960,7 @@ registerBrain('f2_armor', {
       }
       case 'lunge':
         // Выпад за клинком: с разгона о стену — оглушён и открыт.
+        if (m.t <= dt) vfx(sim, 'f2v_lunge', m.x, m.y, 0.95, { va: m.dir, vm: m.id }); // v2.85 — только рисунок
         m.bounce = true;
         m.vx = Math.cos(m.dir) * 11;
         m.vy = Math.sin(m.dir) * 11;
@@ -954,6 +997,7 @@ registerBrain('f2_armor', {
             art: 'f2_leap',
             from: m.id,
           });
+          vfx(sim, 'f2v_takeoff', m.x, m.y, 0.7); // v2.85 — только рисунок
           api.setMode(m, 'air');
         }
         return;
@@ -997,6 +1041,11 @@ registerBrain('f2_armor', {
     m.bounce = false;
     sim.hitstop = Math.max(sim.hitstop, 0.05);
     sim.events.push({ t: 'boom', x: m.x, y: m.y, r: 0 });
+    // v2.85 — только рисунок: искры рикошетом от стены.
+    vfx(sim, 'f2v_bonk', m.x + Math.cos(m.dir) * m.r, m.y + Math.sin(m.dir) * m.r, 0.6, {
+      va: m.dir,
+      above: true,
+    });
     api.setMode(m, 'dizzy');
   },
 });
@@ -1344,6 +1393,10 @@ function burst(sim: Sim, b: BossFight, armor: Mob, api: SimApi): void {
         art: 'f2_shard',
       });
   }
+  // v2.85 — только рисунок: взрыв лат, слизь роя на плитах, лиловая вспышка.
+  vfx(sim, 'f2v_burst', armor.x, armor.y, 1.25, { above: true });
+  vfx(sim, 'f2v_splat', armor.x, armor.y, 7);
+  sim.events.push({ t: 'flash', k: 0.45, color: '#b07cff' });
 }
 
 /** Рой не добит — латы собираются: всё ползёт к одной точке. */
@@ -1372,6 +1425,7 @@ function startGather(sim: Sim, b: BossFight): void {
     }
   }
   sim.strikes = sim.strikes.filter((s) => s.art !== 'f2_shard');
+  vfx(sim, 'f2v_gather', gx, gy, GATHER_T, { above: true }); // v2.85 — только рисунок
   sim.events.push({
     t: 'boss',
     what: 'phase',
@@ -1406,6 +1460,7 @@ function reform(sim: Sim, b: BossFight, api: SimApi): void {
   b.data.stage = 0;
   b.data.reformHp = a.hp / a.maxHp;
   b.phase = Math.max(b.phase, 1);
+  vfx(sim, 'f2v_reform', gx, gy, 1.1, { above: true }); // v2.85 — только рисунок
   sim.hitstop = Math.max(sim.hitstop, 0.1);
   sim.events.push({
     t: 'boss',
