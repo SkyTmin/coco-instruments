@@ -4342,6 +4342,8 @@ interface DTL {
    * отрезка, после контакта ещё два кадра гаснет на месте.
    */
   trail: [number, number][];
+  /** Отрезок, где острие чертит в небе светлую линию (кольца). */
+  tip?: [number, number];
   /** Где урон (для листа и прогрева). */
   hits: number[];
 }
@@ -5176,23 +5178,27 @@ function tlRings(ph: number): DTL {
     dur,
     post: (p, t) => {
       let o = p;
-      if (t > 0.15 && t < hits[2] + 0.02) {
+      if (t > 0.15 && t < hits[2]) {
+        // Острие ходит по горизонтальному кругу над головой: в ракурсе —
+        // клинок качается и укорачивается, когда острие «к зрителю».
         const th = rev(t);
-        const r = Math.min(1, (t - 0.15) / 0.4);
+        const r = Math.min(1, (t - 0.15) / 0.3) * Math.min(1, (hits[2] - t) / 0.08);
         o = {
           ...o,
-          ang: o.ang + Math.cos(th) * 0.34 * r,
+          ang: o.ang + Math.cos(th) * 0.42 * r,
+          bl: o.bl * (1 - 0.07 * (1 + Math.sin(th)) * r),
           ax: o.ax + Math.cos(th) * 1.2 * r,
           ay: o.ay + Math.sin(th) * 0.6 * r,
         };
       }
-      // Удар кольца — толчок вниз и вспышка (два кадра).
+      // Удар кольца — толчок вниз, луна на острие вспыхивает (два кадра).
       for (const x of hits)
         if (t >= x && t < x + 2 / DFPS)
-          o = { ...o, sy: 0.965, sx: 1.025, glow: 1, halo: 1, dy: 0.6 };
+          o = { ...o, sy: 0.965, sx: 1.025, glow: 1, halo: 1, dy: 0.6, orb: o.orb + 0.7 };
       return pant(o, t, t > pantFrom ? Math.min(1, (t - pantFrom) * 4) * 0.7 : 0);
     },
-    trail: [[0.2, hits[2] + 0.1]],
+    trail: [],
+    tip: [0.2, hits[2]],
     hits,
   };
 }
@@ -6140,6 +6146,8 @@ interface DemonCtx {
   lagB: DP;
   /** След клинка — позы и их возраст (с), новые первыми. */
   trail: { p: DP; age: number }[];
+  /** Линия острия (кольца) — позы и возраст. */
+  tipTrail?: { p: DP; age: number }[];
   dead?: boolean;
 }
 
@@ -6297,6 +6305,27 @@ function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
         };
       }),
     );
+  if (withBlade && cx.tipTrail && cx.tipTrail.length > 1) {
+    // Кольцо в небе: светлая нить по пути острия, старое гаснет.
+    const pts = cx.tipTrail.map(({ p: q, age }) => {
+      const qv = bladeVec(q);
+      const jj = jointsOf(q);
+      const hand = worldOf(q, jj.hand).map((v, i) => v - (i ? dp.dy : dp.dx)) as V;
+      const ql = Math.max(4, Math.round(cx.len * q.bl * qv.k));
+      return { at: toC(bladePts(hand, qv.ang, ql)[ql]), age };
+    });
+    for (let i = pts.length - 2; i >= 0; i--) {
+      const a = 1 - pts[i + 1].age / 0.32;
+      stroke(
+        lit,
+        pts[i].at[0],
+        pts[i].at[1],
+        pts[i + 1].at[0],
+        pts[i + 1].at[1],
+        alpha(i < 4 ? WHITE : hx('#ffe39a'), 0.85 * a),
+      );
+    }
+  }
   if (withBlade) {
     bladeMoon(lit, j.hand, bv.ang, blen, dp.moon);
     tipOrb(lit, j.hand, bv.ang, blen, dp.orb);
@@ -6474,7 +6503,18 @@ function demonBuild(q: DReq): MobFrame {
       trail.push({ p: s.at(tk), age: t - tk });
     }
   }
+  const tipTrail: { p: DP; age: number }[] = [];
+  const tw = s.tl?.tip;
+  if (tw && t >= tw[0] && t <= tw[1] + 0.2) {
+    const t1 = Math.min(t, tw[1]);
+    for (let k = 0; k < 20; k++) {
+      const tk = t1 - k / 60;
+      if (tk < tw[0] || t - tk > 0.32) break;
+      tipTrail.push({ p: s.at(tk), age: t - tk });
+    }
+  }
   const d = demonDraw(dp, {
+    tipTrail,
     ph: q.ph,
     len: bladeLen8(q.ph),
     tt: t,

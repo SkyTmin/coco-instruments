@@ -1692,6 +1692,8 @@ registerBrain('f8_moon', {
     if (m.data.fire && !heroDown(sim)) {
       m.data.fire = 0;
       const a = Math.atan2(sim.hero.y - m.y, sim.hero.x - m.x);
+      m.data.vFire = m.t; // v2.86 — только рисунок
+      m.data.vRay = a; // v2.86 — только рисунок
       api.strike(sim, {
         shape: 'line',
         x: m.x,
