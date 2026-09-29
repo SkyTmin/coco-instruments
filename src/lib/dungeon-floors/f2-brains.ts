@@ -854,7 +854,7 @@ registerBrain('f2_armor', {
       if (m.data.vDrip <= 0) {
         const j = (m.id * 7 + Math.floor(sim.time * 29)) % 9;
         m.data.vDrip = 0.55 + (j % 4) * 0.14;
-        vfx(sim, 'f2v_drip', m.x + (j - 4) * 0.05, m.y + 0.06, 1.5);
+        vfx(sim, 'f2v_drip', m.x + (j - 4) * 0.05, m.y + 0.22, 1.5, { above: true });
       }
     }
     // От ударов латы трещат: с половины из щелей сыплются латники — не
@@ -1294,6 +1294,7 @@ registerBrain(F2_BLADE, {
         return;
       }
       case 'stab':
+        if (m.t <= dt) vfx(sim, 'f2v_stab', m.x, m.y, 0.5, { va: m.dir, vm: m.id, above: true }); // v2.85 — только рисунок
         m.vx = Math.cos(m.dir) * 17;
         m.vy = Math.sin(m.dir) * 17;
         if (!m.data.hit && dist < m.r + h.r + 0.25 && h.mode !== 'dash') {

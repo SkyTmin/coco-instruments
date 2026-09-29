@@ -579,34 +579,49 @@ registerImpactPainter('f2_sword', {
     const Tm = R * 0.46 * (1 - thin) + 2 * thin;
     const Rmax = Math.ceil(R * 1.1);
     const flash = age < 0.06 ? 1 - age / 0.06 : 0;
-    for (let y = Math.max(-Rmax, L.y0); y < Math.min(Rmax, L.y1); y++)
-      for (let x = Math.max(-Rmax, L.x0); x < Math.min(Rmax, L.x1); x++) {
-        const cx = x + 0.5;
-        const cy = y + 0.5;
-        const d = Math.sqrt(cx * cx + cy * cy);
-        if (d < R * 0.3 || d >= Ro) continue;
-        const rel = dir * wrap(Math.atan2(cy, cx) - a0);
-        // Кадр удара: весь конус вспыхивает на миг.
-        if (flash > 0 && rel >= 0 && rel <= 2 * h && d < R) L.set(x, y, WHITE, 0.38 * flash);
-        if (fade <= 0) continue;
-        // Серп волны: толстый у кромки клинка, сходит на нет к хвосту.
-        const u = (rel - (lead - tail)) / tail;
-        if (u < 0 || u > 1) continue;
-        // Толще всего у носа, нос скруглён, к хвосту сходит на нет.
-        const prof = u < 0.82 ? Math.pow(u / 0.82, 0.65) : Math.sqrt(1 - ((u - 0.82) / 0.18) ** 2);
-        const th = Tm * (0.1 + 0.9 * prof);
-        const rin = Ro - th;
-        if (d < rin) continue;
-        const rr = (d - rin) / th;
-        if (u < 0.3 && !L.keep(x, y, u / 0.3)) continue;
-        const v = clamp01(u * 0.72 + rr * 0.38);
-        let lv = v * (WAVE.length - 1);
-        const i0 = Math.floor(lv);
-        lv -= i0;
-        const ci = Math.min(WAVE.length - 1, i0 + (L.keep(x, y, lv) ? 1 : 0));
-        const outer = d >= Ro - 1 && u > 0.3;
-        L.set(x, y, outer ? WHITE : WAVE[ci], (0.6 + 0.4 * v) * Math.max(0.35, fade));
-      }
+    // Обход — только там, где сейчас серп (или весь конус в кадр вспышки).
+    let bx0 = -Rmax;
+    let by0 = -Rmax;
+    let bx1 = Rmax;
+    let by1 = Rmax;
+    if (!flash && fade > 0) {
+      const e0 = a0 + dir * (lead - tail);
+      const e1 = a0 + dir * lead;
+      [bx0, by0, bx1, by1] = arcBox(Math.min(e0, e1), Math.max(e0, e1), Ro - Tm - 1, Ro, 1);
+    }
+    const r0q = (R * 0.3) ** 2;
+    const roq = Ro * Ro;
+    if (flash > 0 || fade > 0)
+      for (let y = Math.max(Math.floor(by0), L.y0); y < Math.min(Math.ceil(by1), L.y1); y++)
+        for (let x = Math.max(Math.floor(bx0), L.x0); x < Math.min(Math.ceil(bx1), L.x1); x++) {
+          const cx = x + 0.5;
+          const cy = y + 0.5;
+          const d2 = cx * cx + cy * cy;
+          if (d2 < r0q || d2 >= roq) continue;
+          const d = Math.sqrt(d2);
+          const rel = dir * wrap(Math.atan2(cy, cx) - a0);
+          // Кадр удара: весь конус вспыхивает на миг.
+          if (flash > 0 && rel >= 0 && rel <= 2 * h && d < R) L.set(x, y, WHITE, 0.38 * flash);
+          if (fade <= 0) continue;
+          // Серп волны: толстый у кромки клинка, сходит на нет к хвосту.
+          const u = (rel - (lead - tail)) / tail;
+          if (u < 0 || u > 1) continue;
+          // Толще всего у носа, нос скруглён, к хвосту сходит на нет.
+          const prof =
+            u < 0.82 ? Math.pow(u / 0.82, 0.65) : Math.sqrt(1 - ((u - 0.82) / 0.18) ** 2);
+          const th = Tm * (0.1 + 0.9 * prof);
+          const rin = Ro - th;
+          if (d < rin) continue;
+          const rr = (d - rin) / th;
+          if (u < 0.3 && !L.keep(x, y, u / 0.3)) continue;
+          const v = clamp01(u * 0.72 + rr * 0.38);
+          let lv = v * (WAVE.length - 1);
+          const i0 = Math.floor(lv);
+          lv -= i0;
+          const ci = Math.min(WAVE.length - 1, i0 + (L.keep(x, y, lv) ? 1 : 0));
+          const outer = d >= Ro - 1 && u > 0.3;
+          L.set(x, y, outer ? WHITE : WAVE[ci], (0.6 + 0.4 * v) * Math.max(0.35, fade));
+        }
     // Разрезанный воздух: две штриховые дуги отходят от серпа и рвутся.
     if (age > 0.04) {
       const k = clamp01((age - 0.04) / 0.32);
@@ -957,6 +972,53 @@ registerZonePainter('f2v_bonk', (g, z, px, py) => {
   return true;
 });
 
+/** Высота летучего клинка над полом, пиксели. */
+const BLADE_Z = 10;
+
+/**
+ * Выпад живого клинка (зона мозга, поверх темноты): белая жила за остриём
+ * по всему пути выпада, штрихи скорости; после — хвост догоняет и тает.
+ */
+const stabLen = new WeakMap<object, number>();
+registerZonePainter('f2v_stab', (g, z, px, py, S) => {
+  const zz = z as Zone & { va?: number; vm?: number };
+  const a = zz.va ?? 0;
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  let len = stabLen.get(zz) ?? 4;
+  const m = mobById(zz.vm);
+  if (m && m.mode === 'stab') {
+    len = Math.hypot(m.x - zz.x, m.y - zz.y);
+    stabLen.set(zz, len);
+  }
+  const D = len * S;
+  const t = zz.t;
+  const tail = D * easeIn((t - 0.2) / 0.22);
+  if (tail >= D - 1) return true;
+  const L = layerBox(...laneBox(0, D + 4, 8, a, 4, -BLADE_Z));
+  const fade = clamp01(1 - (t - 0.2) / 0.25);
+  for (let s = tail; s < D; s += 0.5) {
+    const f = (s - tail) / Math.max(1, D - tail);
+    const x = s * ca;
+    const y = s * sa - BLADE_Z;
+    L.set(x, y, f > 0.6 ? WHITE : EDGE, 0.95 * Math.max(0.4, fade));
+    if (f > 0.3) {
+      L.set(x - sa, y + ca, WAVE[2], 0.6 * fade);
+      L.set(x + sa, y - ca, WAVE[2], 0.6 * fade);
+    }
+  }
+  // Штрихи скорости по бокам жилы.
+  for (const side of [-1, 1]) {
+    const off = side * (4 + 3 * clamp01(t / 0.3));
+    for (let s = tail + 4; s < D - 6; s += 1) {
+      if ((Math.floor(s) + (side > 0 ? 3 : 0)) % 7 > 3) continue;
+      L.set(s * ca - off * sa, s * sa + off * ca - BLADE_Z, SPEC, 0.45 * fade);
+    }
+  }
+  L.blit(g, px, py);
+  return true;
+});
+
 // ---------------------------------------------------------------------------
 // Прыжок `f2_leap`: круг r 1,75 там, куда рухнут латы; полёт 0,72 с.
 // ---------------------------------------------------------------------------
@@ -1208,7 +1270,22 @@ registerZonePainter('f2_shard', (g, z, px, py, S, time) => {
     );
     if (pl) note(key, Math.atan2(st.y - pl.y, st.x - pl.x));
   }
-  const L = layer(R * 2.6 + 6);
+  // Откуда летит обломок сейчас — чтобы протянуть к метке пунктир полёта.
+  const pl = paintSim()?.mobs.find(
+    (m) =>
+      m.kind === F2_PLATE &&
+      m.mode === 'fly' &&
+      Math.abs((m.data.tx ?? 0) - st.x) < 0.01 &&
+      Math.abs((m.data.ty ?? 0) - st.y) < 0.01,
+  );
+  const fx = pl ? (pl.x - st.x) * S : 0;
+  const fy = pl ? (pl.y - st.y) * S : 0;
+  const L = layerBox(
+    Math.min(-R * 2.6 - 6, fx - 4),
+    Math.min(-R * 2.6 - 6, fy - 4),
+    Math.max(R * 2.6 + 6, fx + 4),
+    Math.max(R * 2.6 + 6, fy + 4),
+  );
   const rc = R * (1 + 1.5 * (1 - easeIn(k)));
   const spin = late ? Math.PI / 4 : Math.PI / 4 + time * 1.4;
   const B = Math.ceil(Math.max(rc, R + 4) + 2);
@@ -1236,6 +1313,17 @@ registerZonePainter('f2_shard', (g, z, px, py, S, time) => {
   }
   // Тень падающего обломка темнеет и растёт к удару.
   ring(L, 0, 1, 0, 1 + 3 * easeIn(k), INK, 0.2 + 0.4 * k);
+  // Пунктир полёта от обломка к метке: штрихи бегут к месту падения.
+  const fd = Math.hypot(fx, fy);
+  if (fd > R + 3) {
+    const ux = -fx / fd;
+    const uy = -fy / fd;
+    const run = (time * 60) % 6;
+    for (let s = run; s < fd - R - 1; s += 1) {
+      if (Math.floor(s - run) % 6 > 2) continue;
+      L.set(fx + ux * s, fy + uy * s, HOT, 0.35 + 0.4 * (s / fd));
+    }
+  }
   L.blit(g, px, py);
   return true;
 });
@@ -1342,9 +1430,10 @@ registerZonePainter('f2v_step', (g, z, px, py) => {
 registerZonePainter('f2v_drip', (g, z, px, py) => {
   const zz = z as Zone;
   const t = zz.t;
-  const L = layer(20);
-  const H = 15;
-  const tf = 0.22;
+  const L = layerBox(-8, -26, 8, 6);
+  // Капля срывается из трещины кирасы (высота груди) и падает перед ногами.
+  const H = 20;
+  const tf = 0.26;
   if (t < tf) {
     const y = -H + H * easeIn(t / tf);
     L.set(0, y - 1, VIO_L, 1);
