@@ -1704,7 +1704,7 @@ function canvasOf(p: Px, x0: number, y0: number, w: number, h: number): HTMLCanv
   c.width = w;
   c.height = h;
   const g = c.getContext('2d');
-  if (g) g.putImageData(new ImageData(p.data, p.w, p.h), -x0, -y0, x0, y0, w, h);
+  if (g) g.putImageData(new ImageData(p.data as Uint8ClampedArray<ArrayBuffer>, p.w, p.h), -x0, -y0, x0, y0, w, h);
   return c;
 }
 
@@ -2082,11 +2082,11 @@ function paintRig(r: Rig): SerpArt {
     drawNear();
     wing2(p, nsx, nsy, r, false);
   } else if (back) {
-    // Оглянулся через плечо: голова поверх ближнего крыла.
+    // Оглянулся через плечо: шея — под крылом, голова — поверх.
     drawChest();
+    drawNeck();
     drawNear();
     wing2(p, nsx, nsy, r, false);
-    drawNeck();
     drawHead();
   } else {
     drawChest();
@@ -2241,7 +2241,7 @@ function paintRig(r: Rig): SerpArt {
     for (let i = 0; i < d.length; i += 4) {
       if (!d[i + 3]) continue;
       const l = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) / 255;
-      const o = tone(OBSID, l * 2.2 - 0.25);
+      const o = tone(COOLED, l * 2.2 - 0.25);
       const k = clamp01(r.cool);
       d[i] = d[i] + (o[0] - d[i]) * k;
       d[i + 1] = d[i + 1] + (o[1] - d[i + 1]) * k;
@@ -2477,6 +2477,8 @@ function techBite(t: number, c: TCtx): SPose {
   const hit = { x: ux * 29, y: uy * 29 - 10 };
   const haCoil = aim * 0.75 - 0.12;
   const haHit = aim + 0.3 * Math.cos(aim);
+  const guard = { x: lerp(hit.x, REST.hx, 0.55), y: lerp(hit.y, REST.hy, 0.55) - 2 };
+  const haGuard = lerp(haHit, REST.ha, 0.5);
   const L = laneOf(`bite|${k}`, () =>
     lane(REST, [
       [0, {}],
@@ -2507,8 +2509,13 @@ function techBite(t: number, c: TCtx): SPose {
       [T, { hx: hit.x, hy: hit.y, ha: haHit, jaw: 0, bend: 0.05, by: -1, bx: 1.5, tilt: -0.05, ws: 0.2, wf: -0.4, glow: 0.8 }, EZ.in],
       [T + 0.07, { hx: hit.x + ux * 2, hy: hit.y + uy * 2 + 1, jaw: 0 }, EZ.out2],
       [T + 0.18, { hx: hit.x, hy: hit.y, jaw: 0.05, by: 0, bx: 0.5, wf: 0.1 }, EZ.io],
-      [T + 0.36, { jaw: 0.45, glow: 0.3 }, EZ.out2],
-      [E, { hx: lerp(hit.x, REST.hx, 0.4), hy: lerp(hit.y, REST.hy, 0.4), ha: lerp(haHit, REST.ha, 0.4), jaw: 0.25, angry: 0.4, ws: 0.1, wf: 0, bx: 0, tilt: 0, bend: 0.1, glow: 0.15 }, EZ.io],
+      // Отпустил — голова отскакивает в стойку (не висит вытянутой).
+      [
+        T + 0.44,
+        { hx: guard.x, hy: guard.y, ha: haGuard, jaw: 0.5, bend: -0.35, glow: 0.3, angry: 0.8, ws: 0.15 },
+        EZ.out,
+      ],
+      [E, { hx: guard.x + 1, hy: guard.y - 1.5, ha: haGuard - 0.05, jaw: 0.2, bend: -0.2, angry: 0.5, bx: 0, tilt: 0, glow: 0.15, ws: 0.1, wf: 0 }, EZ.io],
     ]),
   );
   const r = L(t);
@@ -2553,10 +2560,10 @@ function techTail(t: number, c: TCtx): SPose {
       [0, {}],
       [
         0.5 * T,
-        { hx: -13, hy: -33, ha: Math.PI - 0.5, bend: 0.9, bx: 1.5, by: 1, ws: 0.45, wf: 0.2, angry: 1, jaw: 0.3, tongue: 0.6, tilt: 0.08, glow: 0.3 },
+        { hx: -5, hy: -40, ha: Math.PI - 0.62, bend: -0.5, bx: 1.5, by: 1, ws: 0.45, wf: 0.2, angry: 1, jaw: 0.3, tongue: 0.6, tilt: 0.08, glow: 0.3 },
         EZ.out,
       ],
-      [T - 0.07, { hx: -14, hy: -32, ha: Math.PI - 0.42, jaw: 0.45, tongue: 0 }, EZ.io],
+      [T - 0.07, { hx: -6, hy: -40, ha: Math.PI - 0.55, jaw: 0.45, tongue: 0 }, EZ.io],
       [T + 0.02, { hx: 20, hy: -27, ha: 0.45, bend: 0.05, bx: -2.5, ws: 0.95, wf: -0.6, jaw: 0.75, tilt: -0.05 }, EZ.in],
       [T + 0.2, { hx: 19, hy: -29, ha: 0.3, bx: 0.5, ws: 0.7, wf: 0.35, jaw: 0.3 }, EZ.out],
       [E, { hx: 17, hy: -30, ha: 0.25, bend: 0.15, bx: 0, by: 0, ws: 0.1, wf: 0, jaw: 0, angry: 0.4, tilt: 0, glow: 0.12 }, EZ.io],
@@ -2566,16 +2573,12 @@ function techTail(t: number, c: TCtx): SPose {
   // Хвост трещит на взводе — грудь мелко дрожит.
   if (t > 0.5 * T && t < T - 0.07) r.bx += c.f % 2 ? 0.5 : -0.5;
   const ps = pose0(r);
-  if (t > T - 0.07 && t < T + 0.1) {
-    ps.smear = [];
-    for (let i = 1; i <= 4; i++) ps.smear.push(snoutOf(L(Math.max(0, t - i / 60))));
-  }
   return ps;
 }
 
 /** Точка головы на выдохе в сторону прицела a. */
 function breathHead(a: number): { x: number; y: number; ha: number } {
-  return { x: 5 + Math.cos(a) * 21, y: -22 + Math.sin(a) * 21, ha: a + 0.25 * Math.cos(a) };
+  return { x: 9 + Math.cos(a) * 17, y: -36 + Math.sin(a) * 15, ha: a + 0.62 * Math.cos(a) };
 }
 
 /** Волна пламени: встаёт на дыбы, вдох — горло наливается жаром, выброс вперёд-вниз, струя, дым. */
@@ -2590,7 +2593,7 @@ function techBreath(t: number, c: TCtx, T: number, F1: number, E: number): SPose
         EZ.out2,
       ],
       [T - 0.05, { hy: -52, hx: 8.5, glow: 1, jaw: 0.38 }, EZ.io],
-      [T, { by: -3, tilt: -0.05, bx: -1, hx: b.x, hy: b.y, ha: b.ha, bend: 0.2, jaw: 1, fire: 1, bulge: 0.85, paw: 0.25, ws: 0.5, wf: 0, step: TAU }, EZ.in],
+      [T, { by: -6, tilt: -0.22, bx: -1, hx: b.x, hy: b.y, ha: b.ha, bend: 0.95, jaw: 1, fire: 1, bulge: 0.85, paw: 0.35, ws: 0.5, wf: 0, step: TAU }, EZ.in],
       [T + 0.1, { bx: -3.5 }, EZ.out2],
       [F1, { bulge: 0.3, glow: 0.55, bx: -2.5, fire: 0.85 }, EZ.lin],
       [F1 + 0.3, { fire: 0, jaw: 0.4, glow: 0.3, bulge: 0 }, EZ.out2],
@@ -2641,7 +2644,7 @@ function techSweep(t: number, c: TCtx): SPose {
         EZ.out2,
       ],
       [T - 0.05, { hy: -52, hx: 8.5, glow: 1, jaw: 0.38 }, EZ.io],
-      [T, { by: -3, tilt: -0.05, bx: -1, hx: b0.x, hy: b0.y, ha: b0.ha, bend: 0.2, jaw: 1, fire: 1, bulge: 0.85, paw: 0.25, ws: 0.55, wf: 0, step: TAU }, EZ.in],
+      [T, { by: -6, tilt: -0.22, bx: -1, hx: b0.x, hy: b0.y, ha: b0.ha, bend: 0.95, jaw: 1, fire: 1, bulge: 0.85, paw: 0.35, ws: 0.55, wf: 0, step: TAU }, EZ.in],
       [T + S, { hx: b1.x, hy: b1.y, ha: b1.ha, bulge: 0.3, glow: 0.6, fire: 0.85 }, EZ.lin],
       [T + S + 0.3, { fire: 0, jaw: 0.4, glow: 0.3, bulge: 0 }, EZ.out2],
       [E, { by: 0, tilt: 0, bx: 0, hx: 17, hy: -30, ha: 0.25, bend: 0.15, jaw: 0, ws: 0.08, wf: 0, paw: 0, angry: 0.2, glow: 0.12 }, EZ.io],
@@ -3546,7 +3549,7 @@ registerMobPainter('f6boss', (m: Mob, pose: MobPose) => {
     out.dx = Math.cos(a) * off;
     out.dy = Math.sin(a) * off;
   }
-  if (ps.ghost) out.ghost = { every: 0.03, life: 0.2, tint: '#ff6a24', alpha: 0.32 };
+  if (ps.ghost) out.ghost = { every: 0.03, life: 0.2, tint: '#ffa040', alpha: 0.36 };
   if (q.tech === 'death') out.linger = 1.5;
   // Отдача от удара героя: по направлению удара, с возвратом.
   const fl = m.flash ?? 0;
@@ -3660,29 +3663,42 @@ registerMobWarm('f6boss', function* () {
 // камнем и рассыпается. Спрайты колец — в кеше по радиусу, углу и облику.
 // ---------------------------------------------------------------------------
 
-const RING_N = 26;
 const BODY_LEN = 4.6;
 const BODY_S0 = 0.45;
 const A16 = 16;
 
+/** Остывший змей — уголь с фиолетовым отливом обсидиана, а не сиреневый. */
+const COOLED: Tones = [hx('#0c0a0e'), hx('#1c171e'), hx('#342c36'), hx('#5c4e62')];
+
 /** Облик кольца: 0 — обычный, 1 — вспышка, 2…4 — жилы жара, 5…8 — остывает. */
-const ringCache = frameLRU<HTMLCanvasElement>(1400);
+const ringCache = frameLRU<HTMLCanvasElement>(1600);
+
+const mixT = (a: Tones, b: Tones, k: number): Tones => [
+  mixc(a[0], b[0], k),
+  mixc(a[1], b[1], k),
+  mixc(a[2], b[2], k),
+  mixc(a[3], b[3], k),
+];
 
 function ringTones(varnt: number): { sc: Tones; bl: Tones; rim: RGBA } {
   if (varnt >= 5) {
     const k = (varnt - 4) / 4;
-    const mixT = (a: Tones, b: Tones): Tones => [mixc(a[0], b[0], k), mixc(a[1], b[1], k), mixc(a[2], b[2], k), mixc(a[3], b[3], k)];
-    return { sc: mixT(SRP.scale, OBSID), bl: mixT(SRP.belly, OBSID), rim: mixc(SRP.scale[0], OBSID[0], k) };
+    return {
+      sc: mixT(SRP.scale, COOLED, k),
+      bl: mixT(SRP.belly, COOLED, k),
+      rim: mixc(mixc(SRP.scale[1], SRP.scale[0], 0.5), k > 0.4 ? hx('#ff6a1a') : COOLED[0], k > 0.4 ? 1 - k : k),
+    };
   }
   if (varnt >= 2) {
-    const rim = varnt === 2 ? hx('#b02a0c') : varnt === 3 ? LAVA.hot : LAVA.bright;
+    const rim = varnt === 2 ? hx('#c0340e') : varnt === 3 ? LAVA.hot : LAVA.bright;
     return { sc: SRP.scale, bl: SRP.belly, rim };
   }
-  return { sc: SRP.scale, bl: SRP.belly, rim: SRP.scale[0] };
+  return { sc: SRP.scale, bl: SRP.belly, rim: mixc(SRP.scale[1], SRP.scale[0], 0.55) };
 }
 
-function ringSprite(r: number, a16: number, varnt: number, outline: boolean): HTMLCanvasElement {
-  const key = `${r}|${a16}|${varnt}|${outline ? 1 : 0}`;
+/** Кольцо тела: свет поперёк тела (труба), брюхо к камере, край пластины к хвосту. */
+function ringSprite(r: number, a16: number, varnt: number, mode: 0 | 1 | 2): HTMLCanvasElement {
+  const key = `${r}|${a16}|${varnt}|${mode}`;
   const hit = ringCache.get(key);
   if (hit) return hit;
   const S = r * 2 + 6;
@@ -3692,7 +3708,7 @@ function ringSprite(r: number, a16: number, varnt: number, outline: boolean): HT
   const tx = Math.cos(a);
   const ty = Math.sin(a);
   const ry = r * 0.88;
-  if (outline) {
+  if (mode === 0) {
     p.ell(o, o, r + 1, ry + 1, INK);
   } else {
     const { sc, bl, rim } = ringTones(varnt);
@@ -3711,15 +3727,13 @@ function ringSprite(r: number, a16: number, varnt: number, outline: boolean): HT
         const l = nx * LX + ny * LY + nz * LZ;
         let c: RGBA;
         const belly = ny > 0.42 && horiz > 0.3 && ny * horiz > 0.3;
-        if (belly) c = tone(bl, l + 0.25 - (al < -0.55 ? 0.3 : 0));
-        else if (al < -0.62 && ny < 0.5 && d2 > 0.12) c = rim;
+        if (belly) c = tone(bl, l + 0.25 - (mode === 2 && al < -0.6 ? 0.3 : 0));
+        else if (mode === 2 && al < -0.66 && ny < 0.45 && d2 > 0.1) c = rim;
         else c = tone(sc, l);
         p.set(x, y, c);
       }
-    if (varnt === 1) {
-      const q = p.tint(WHITE, 0.85);
-      p.data.set(q.data);
-    }
+    // Вспышка удара — телу слабее, чем груди: длинное белое тело слепит.
+    if (varnt === 1) p.data.set(p.tint(WHITE, 0.55).data);
   }
   const c = p.canvas();
   return ringCache.set(key, c);
@@ -3732,6 +3746,7 @@ function spikeSprite(size: number, lean: number, varnt: number): HTMLCanvasEleme
   if (hit) return hit;
   const p = new Px(9, 9);
   const L = size;
+  const col = varnt >= 5 ? mixc(SRP.scale[1], COOLED[2], (varnt - 4) / 4) : SRP.scale[1];
   poly(
     p,
     [
@@ -3739,9 +3754,11 @@ function spikeSprite(size: number, lean: number, varnt: number): HTMLCanvasEleme
       [4.5 - lean * L * 0.55, 7.4 - L],
       [5.8, 7.2],
     ],
-    varnt >= 5 ? mixc(SRP.horn[1], OBSID[2], (varnt - 4) / 4) : SRP.horn[1],
+    col,
   );
-  p.set(Math.round(4.5 - lean * L * 0.5), Math.round(7.4 - L + 0.6), varnt === 1 ? WHITE : SRP.horn[3]);
+  // Кончик шипа — кость; у основания — светлый край чешуи.
+  p.set(Math.round(4.5 - lean * L * 0.5), Math.round(7.4 - L + 0.6), varnt === 1 ? WHITE : SRP.horn[varnt >= 5 ? 1 : 2]);
+  if (L > 2) p.set(Math.round(4.5 - lean * L * 0.25), Math.round(7.4 - L * 0.5), SRP.scale[2]);
   outlineIn(p, INK, 0, 0, 8, 7);
   const c = p.canvas();
   return ringCache.set(key, c);
@@ -3821,6 +3838,33 @@ export interface SerpBodyView {
   prev?: string;
 }
 
+/** Где на теле кольца: шаг — по толщине (тонкий хвост — чаще), пластины и шипы — по длине. */
+interface BodySample {
+  s: number;
+  k: number;
+  r: number;
+  plate: boolean;
+  spike: boolean;
+}
+const BODY_SAMPLES: BodySample[] = (() => {
+  const out: BodySample[] = [];
+  let s = BODY_S0;
+  let plate = -9;
+  let spike = -9;
+  while (s <= BODY_S0 + BODY_LEN + 1e-6) {
+    const k = (s - BODY_S0) / BODY_LEN;
+    const rf = 7 - 5 * Math.pow(k, 1.1);
+    const px = s * 16;
+    const pl = px - plate >= rf * 0.75 + 1.8;
+    if (pl) plate = px;
+    const sp = px - spike >= 8.5 && k < 0.88;
+    if (sp) spike = px;
+    out.push({ s, k, r: Math.max(2, Math.round(rf)), plate: pl, spike: sp });
+    s += Math.max(1.3, rf * 0.42) / 16;
+  }
+  return out;
+})();
+
 interface Ring {
   x: number;
   y: number;
@@ -3831,19 +3875,21 @@ interface Ring {
   sink: number;
   cool: number;
   gone: number;
+  plate: boolean;
+  spike: boolean;
+  fill?: boolean;
 }
 
-const angDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
-
-/** Сколько свернулось хвостом по кругу к моменту t (рад) и как высоко кончик. */
+/** Хлёст: сколько повернул кончик (рад), вес формы, подъём кончика, скорость (для следа). */
 function whipAt(t: number, T: number): { sweep: number; w: number; up: number; fast: number } {
   let sweep = -0.95 * EZ.out(seg(t, 0, 0.9 * T));
-  let up = 7 * EZ.out(seg(t, 0.2 * T, 0.9 * T));
-  if (t > 0.55 * T && t < T - 0.09) sweep += Math.sin(t * TAU * 16) * 0.06;
+  let up = 8 * EZ.out(seg(t, 0.2 * T, 0.9 * T));
+  // Взведённый хвост трещит.
+  if (t > 0.5 * T && t < T - 0.09) sweep += Math.sin(t * TAU * 15) * 0.07;
   const k = seg(t, T - 0.09, T + 0.1);
   if (k > 0) {
     sweep = lerp(-0.95, TAU + 0.25, EZ.io(k));
-    up = 7 * (1 - k) + 2;
+    up = 8 * (1 - k) + 2 * k;
   }
   const k2 = seg(t, T + 0.1, T + 0.42);
   if (k2 > 0) {
@@ -3853,6 +3899,18 @@ function whipAt(t: number, T: number): { sweep: number; w: number; up: number; f
   const w = EZ.io(seg(t, 0, 0.45 * T)) * (1 - EZ.io(seg(t, T + 0.4, T + 1.25)));
   const fast = Math.sin(clamp01(k) * Math.PI);
   return { sweep, w, up, fast };
+}
+
+/** Кривая Безье второго порядка, выборка по длине: точка на доле u длины. */
+function bezierAt(pts: P2[], lens: number[], u: number): P2 {
+  const L = lens[lens.length - 1];
+  const s = u * L;
+  for (let i = 1; i < lens.length; i++)
+    if (lens[i] >= s) {
+      const k = (s - lens[i - 1]) / Math.max(1e-6, lens[i] - lens[i - 1]);
+      return mixP(pts[i - 1], pts[i], k);
+    }
+  return pts[pts.length - 1];
 }
 
 /** Нарисовать тело змея: g — контекст пола, (px, py) — точка змея на экране. */
@@ -3881,22 +3939,42 @@ export function drawSerpentBody(
   const whip = wt >= 0 ? whipAt(wt, T) : null;
   const cdx = mem?.cdx ?? 0;
   const cdy = mem?.cdy ?? 0;
-  const rings: Ring[] = [];
-  // Направления хлёста: от груди — куда уходит тело; кончик — куда хвост.
-  let thB = 0;
-  let thT0 = 0;
+  const rearNow = mem?.rear ?? 0;
+  // Форма хлёста: от основания у груди к кончику по кругу — дуга, отстающая
+  // от кончика; кольца — по её длине (тело не растягивается бусами).
+  let wpts: P2[] = [];
+  let wlen: number[] = [];
+  let thT = 0;
   let sd = 1;
   if (whip) {
     const b = alongT(tr, 0.7);
     const e = alongT(tr, 3.2);
-    thB = Math.atan2(b[1] - v.y, b[0] - v.x);
-    thT0 = Math.atan2(e[1] - v.y, e[0] - v.x);
-    sd = Math.cos(v.face) >= 0 ? -1 : 1;
+    const thB = Math.atan2(b[1] - v.y, b[0] - v.x);
+    const thT0 = Math.atan2(e[1] - v.y, e[0] - v.x);
+    // Взвод — в сторону камеры: хвост виден, а не за спиной.
+    sd = Math.sin(thT0 - 0.95) > Math.sin(thT0 + 0.95) ? 1 : -1;
+    thT = thT0 + sd * whip.sweep;
+    const B: P2 = [v.x + Math.cos(thB) * 0.6, v.y + Math.sin(thB) * 0.6 * 0.86];
+    const P: P2 = [v.x + Math.cos(thT) * 2.3, v.y + Math.sin(thT) * 2.3 * 0.86];
+    // Хвост отстаёт от кончика тем сильнее, чем быстрее хлёст.
+    const ca = thT - sd * (0.55 + 1.2 * whip.fast);
+    const cr = 2.15 + 0.55 * whip.fast;
+    const C: P2 = [v.x + Math.cos(ca) * cr, v.y + Math.sin(ca) * cr * 0.86];
+    let acc = 0;
+    for (let i = 0; i <= 20; i++) {
+      const u = i / 20;
+      const pt: P2 = [
+        (1 - u) * (1 - u) * B[0] + 2 * u * (1 - u) * C[0] + u * u * P[0],
+        (1 - u) * (1 - u) * B[1] + 2 * u * (1 - u) * C[1] + u * u * P[1],
+      ];
+      if (i) acc += Math.hypot(pt[0] - wpts[i - 1][0], pt[1] - wpts[i - 1][1]);
+      wpts.push(pt);
+      wlen.push(acc);
+    }
   }
-  const rearNow = mem?.rear ?? 0;
-  for (let i = 0; i < RING_N; i++) {
-    const k = i / (RING_N - 1);
-    const s = BODY_S0 + k * BODY_LEN;
+  const rings: Ring[] = [];
+  for (const smp of BODY_SAMPLES) {
+    const { s, k } = smp;
     let [x, y, tx, ty] = alongT(tr, s);
     // Волна ползка стоит на земле: тело скользит по ней.
     const amp = (crawl ? 0.26 : 0.12) * clamp01((k - 0.02) / 0.3);
@@ -3908,28 +3986,20 @@ export function drawSerpentBody(
     x += (cdx / 16) * att;
     y += (cdy / 16) * att;
     let z = 0;
-    // Подъём: кольца идут за грудью с опозданием к хвосту.
     if (mem) {
+      // В небо — за грудью, с опозданием к хвосту; на дыбах — только начало.
       const lagged = liftAt(mem, now - k * 0.55);
       z = lagged * (1 - 0.3 * k);
-      // На дыбах — только начало тела.
       z = Math.max(z, rearNow * att);
       if (lagged > 8) z += Math.sin(time * 5.5 - k * 6) * 2.4 * k;
     }
-    if (whip) {
-      // Спираль вокруг груди: основание у груди, кончик — по кругу.
-      const thT = thT0 + sd * whip.sweep;
-      const span = angDiff(thT, thB) + (whip.sweep > Math.PI ? sd * TAU : 0);
-      const ph2 = thB + span * EZ.io(k);
-      const R = lerp(0.62, 2.28, Math.pow(k, 0.85));
-      const wx = v.x + Math.cos(ph2) * R;
-      const wy = v.y + Math.sin(ph2) * R * 0.86;
-      const w = whip.w * clamp01(k * 1.6);
+    if (whip && wpts.length) {
+      const [wx, wy] = bezierAt(wpts, wlen, k);
+      const w = whip.w * clamp01(k * 1.8);
       x = lerp(x, wx, w);
       y = lerp(y, wy, w);
       z += whip.up * k * k * w;
     }
-    const r = Math.max(2, Math.round(7 - 5 * Math.pow(k, 1.1)));
     let sink = 0;
     let cool = 0;
     let gone = 0;
@@ -3940,13 +4010,42 @@ export function drawSerpentBody(
       gone = seg(v.die, 1.0 + (1 - k) * 0.22, 1.45 + (1 - k) * 0.18);
       z = z * (1 - sink) - sink * 1.2;
     }
-    rings.push({ x, y, z, r, k, a: 0, sink, cool, gone });
+    rings.push({ x, y, z, r: smp.r, k, a: 0, sink, cool, gone, plate: smp.plate, spike: smp.spike });
   }
   // Касательная — к голове, в экранных осях (с высотой).
+  const scr = (rg: Ring): P2 => [rg.x * S, rg.y * S - rg.z];
   for (let i = 0; i < rings.length; i++) {
-    const a = rings[Math.max(0, i - 1)];
-    const b = rings[Math.min(rings.length - 1, i + 1)];
-    rings[i].a = Math.atan2(a.y * S - a.z - (b.y * S - b.z), (a.x - b.x) * S);
+    const [ax, ay] = scr(rings[Math.max(0, i - 1)]);
+    const [bx, by] = scr(rings[Math.min(rings.length - 1, i + 1)]);
+    rings[i].a = Math.atan2(ay - by, ax - bx);
+  }
+  // Разрыв между соседними кольцами (быстрый подъём, пике) — досыпаем
+  // промежуточные: тело тянется, но не рвётся на бусы.
+  const all: Ring[] = [];
+  for (let i = 0; i < rings.length; i++) {
+    const rg = rings[i];
+    if (i > 0) {
+      const pr = rings[i - 1];
+      const [ax, ay] = scr(pr);
+      const [bx, by] = scr(rg);
+      const gap = Math.hypot(bx - ax, by - ay);
+      const lim = Math.min(pr.r, rg.r) * 0.8;
+      const n = Math.min(12, Math.ceil(gap / lim) - 1);
+      for (let j = 1; j <= n; j++) {
+        const u = j / (n + 1);
+        all.push({
+          ...pr,
+          x: lerp(pr.x, rg.x, u),
+          y: lerp(pr.y, rg.y, u),
+          z: lerp(pr.z, rg.z, u),
+          r: Math.round(lerp(pr.r, rg.r, u)),
+          plate: false,
+          spike: false,
+          fill: true,
+        });
+      }
+    }
+    all.push(rg);
   }
   const sx = (rg: Ring) => px + (rg.x - v.x) * S;
   const sy = (rg: Ring) => py + (rg.y - v.y) * S;
@@ -3973,10 +4072,10 @@ export function drawSerpentBody(
     g.ellipse(X, Y, rx, Math.max(1, rx * 0.38), 0, 0, TAU);
   }
   g.fill();
-  const drawRing = (rg: Ring, outline: boolean) => {
+  const a16Of = (a: number) => ((Math.round((a / TAU) * A16) % A16) + A16) % A16;
+  const drawRing = (rg: Ring, mode: 0 | 1 | 2) => {
     if (rg.gone >= 1) return;
-    const a16 = ((Math.round((rg.a / TAU) * A16) % A16) + A16) % A16;
-    const img = ringSprite(rg.r, a16, varOf(rg), outline);
+    const img = ringSprite(rg.r, a16Of(rg.a), varOf(rg), mode);
     const o = img.width / 2;
     const X = sx(rg);
     const Y = sy(rg) - rg.z - rg.r * 0.55;
@@ -3988,15 +4087,17 @@ export function drawSerpentBody(
     } else g.drawImage(img, q(X - o), q(Y - o));
     g.globalAlpha = 1;
   };
-  for (let i = rings.length - 1; i >= 0; i--) drawRing(rings[i], true);
-  for (let i = rings.length - 1; i >= 0; i--) drawRing(rings[i], false);
-  // Шипы хребта — поверх, от дальних к ближним.
+  for (let i = all.length - 1; i >= 0; i--) drawRing(all[i], 0);
+  for (let i = all.length - 1; i >= 0; i--) drawRing(all[i], all[i].plate ? 2 : 1);
+  // Шипы хребта — поверх, от хвоста к груди.
   for (let i = rings.length - 1; i >= 1; i--) {
     const rg = rings[i];
-    if (i % 3 !== 1 || rg.k > 0.9 || rg.gone >= 1) continue;
+    // Гребень виден сбоку; на теле, уходящем от камеры, шипы читались бы каплями.
+    if (!rg.spike || rg.gone >= 1 || Math.abs(Math.cos(rg.a)) < 0.45) continue;
     const size = Math.max(2, Math.round(rg.r * 0.55 + 0.6));
     const lean = Math.cos(rg.a) >= 0 ? 1 : -1;
-    const img = spikeSprite(size, lean * (0.6 + Math.abs(Math.sin(rg.a)) * -0.4), varOf(rg) === 1 ? 1 : varOf(rg) >= 5 ? varOf(rg) : 0);
+    const vr = varOf(rg);
+    const img = spikeSprite(size, lean * 0.6, vr === 1 ? 1 : vr >= 5 ? vr : 0);
     const X = sx(rg);
     const Y = sy(rg) - rg.z - rg.r * 0.55 - rg.r * 0.62 * (1 - rg.sink * 0.3);
     if (rg.gone > 0) g.globalAlpha = 1 - rg.gone;
@@ -4008,8 +4109,7 @@ export function drawSerpentBody(
     const rg = rings[rings.length - 1];
     if (rg.gone < 1) {
       const a = rg.a + Math.PI;
-      const a16 = ((Math.round((a / TAU) * A16) % A16) + A16) % A16;
-      const img = tipSprite(a16, varOf(rg));
+      const img = tipSprite(a16Of(a), varOf(rg));
       const X = sx(rg) + Math.cos(a) * 2;
       const Y = sy(rg) - rg.z - rg.r * 0.55 + Math.sin(a) * 2;
       if (rg.gone > 0) g.globalAlpha = 1 - rg.gone;
@@ -4018,26 +4118,32 @@ export function drawSerpentBody(
     }
   }
   // След хвоста по кругу: дуга там, где прошёл кончик (оружие змея).
-  if (whip && whip.fast > 0.05 && wt > T - 0.1) {
+  if (whip && whip.fast > 0.05) {
     const cx = px;
     const cy = py - 3;
-    const thT = thT0 + sd * whip.sweep;
-    const back = Math.min(2.4, 1.4 + whip.fast * 1.4);
-    const R0 = 1.55 * S;
-    const R1 = 2.45 * S;
-    const n = 14;
+    const back = Math.min(2.6, 1.3 + whip.fast * 1.6);
+    const R0 = 1.5 * S;
+    const R1 = 2.5 * S;
+    const n = 16;
     for (let j = 0; j < n; j++) {
       const f0 = j / n;
       const f1 = (j + 1) / n;
       const a0 = thT - sd * back * f0;
       const a1 = thT - sd * back * f1;
-      const al = (1 - f0) * 0.75 * whip.fast;
-      g.fillStyle = f0 < 0.15 ? `rgba(255,244,190,${al})` : f0 < 0.5 ? `rgba(255,170,60,${al})` : `rgba(220,60,20,${al * 0.8})`;
+      const al = (1 - f0) * 0.78 * whip.fast;
+      g.fillStyle =
+        f0 < 0.12
+          ? `rgba(255,246,200,${al})`
+          : f0 < 0.45
+            ? `rgba(255,176,64,${al})`
+            : `rgba(214,58,20,${al * 0.8})`;
+      // Серп: к концу следа уже — тает к центру.
+      const r0 = lerp(R0, R1 - 4, f0 * 0.6);
       g.beginPath();
       g.moveTo(cx + Math.cos(a0) * R1, cy + Math.sin(a0) * R1 * 0.86);
       g.lineTo(cx + Math.cos(a1) * R1, cy + Math.sin(a1) * R1 * 0.86);
-      g.lineTo(cx + Math.cos(a1) * R0, cy + Math.sin(a1) * R0 * 0.86);
-      g.lineTo(cx + Math.cos(a0) * R0, cy + Math.sin(a0) * R0 * 0.86);
+      g.lineTo(cx + Math.cos(a1) * r0, cy + Math.sin(a1) * r0 * 0.86);
+      g.lineTo(cx + Math.cos(a0) * r0, cy + Math.sin(a0) * r0 * 0.86);
       g.closePath();
       g.fill();
     }
@@ -4047,7 +4153,7 @@ export function drawSerpentBody(
     for (let i = 0; i < rings.length; i += 2) {
       const rg = rings[i];
       if (rg.cool < 0.3 || rg.gone >= 1) continue;
-      const a = ((v.die * 1.3 + hash(i, 5)) % 1 + 1) % 1;
+      const a = (((v.die * 1.3 + hash(i, 5)) % 1) + 1) % 1;
       g.fillStyle = a < 0.5 ? `rgba(255,150,60,${0.7 * (1 - a)})` : `rgba(90,82,80,${0.8 * (1 - a)})`;
       g.fillRect(q(sx(rg) + (hash(i, 9) - 0.5) * rg.r * 2), q(sy(rg) - rg.r - a * 14), 1, 1);
     }
