@@ -3418,10 +3418,21 @@ function whipClip(wu: number, rec: number, look: KingLook): Clip {
 function swapClip(front: boolean): Clip {
   const f = 1 / FPS;
   const R2 = -TAU;
+  // Бросок сверху: в t = 0 тесак уже сорвался с поднятой лапы над головой —
+  // дальше его несёт зона пола (f1-boss-fx: полёт до 0,42 с, отскок до 0,66).
+  // Летит он в мире влево: королю, смотрящему вправо, — за спину (кидает
+  // через плечо), смотрящему влево — вперёд. До t = 0 — только замах в
+  // дорожке (отрицательное время) — из него след броска.
   const pre = kp(REST, {});
+  const wind = front
+    ? kp(REST, { ln: 0.05, nx: -0.2, ny: -0.2, nhx: -2.2, nhy: -2.6, wa: -2.8, jaw: 0.4 })
+    : kp(REST, { ln: 0.5, nhx: 4.4, nhy: 0.6, wa: 0.2, jaw: 0.4 });
   const toss = front
-    ? kp(REST, { ln: 0.62, hx: 0.5, nhx: 5.0, nhy: 3.0, wa: 0.6, jaw: 0.6, nfx: 2.2, fhx: 0.8 })
-    : kp(REST, { ln: 0.42, nx: -0.4, nhx: -1.8, nhy: 3.4, wa: 2.7, jaw: 0.6, ffx: -2.8, fhx: 3.2, fhy: 3.0 });
+    ? kp(REST, { ln: 0.3, hx: 0.2, nhx: -1.1, nhy: -4.4, wa: -1.7, jaw: 0.8, nfx: 1.8, fhx: 0.8 })
+    : kp(REST, { ln: 0.2, nx: -0.3, ny: -0.3, nhx: 0.1, nhy: -4.6, wa: -2.0, jaw: 0.8, ffx: -2.8, fhx: 3.2, fhy: 3.0 });
+  const follow = front
+    ? kp(REST, { ln: 0.6, hx: 0.5, nhx: 4.4, nhy: 0.2, wa: 0.6, jaw: 0.6, nfx: 2.2 })
+    : kp(REST, { ln: 0.05, nx: -0.4, ny: -0.2, nhx: -2.0, nhy: -2.8, wa: -2.8, jaw: 0.6, ffx: -2.8, fhx: 3.0, fhy: 2.6 });
   const empty = kp(REST, { hy: 0.2, jaw: 0.3, nhx: 2.6, nhy: 3.8, wa: 1.9, fhx: -1.6, fhy: 1.4, ebf: -1 });
   const reach = kp(REST, {
     ln: 0.12,
@@ -3477,9 +3488,11 @@ function swapClip(front: boolean): Clip {
   });
   const shoulder = kp(REST_RAIL, { wa: REST_RAIL.wa + R2 });
   const keys: Key[] = [
-    { t: -0.12, p: pre },
+    { t: -0.2, p: pre },
+    { t: -2 * f, p: wind, e: EZ.io },
     { t: 0, p: toss, e: EZ.in2 },
-    { t: 0.14, p: empty, e: EZ.out2 },
+    { t: 0.1, p: follow, e: EZ.out2 },
+    { t: 0.22, p: empty, e: EZ.io },
     { t: 0.34, p: reach, e: EZ.io },
     { t: 0.58, p: pull, e: EZ.io },
     { t: 0.74, p: draw, e: EZ.in2 },
@@ -3495,7 +3508,7 @@ function swapClip(front: boolean): Clip {
     geo: GEO_W,
     at(T) {
       let p = track(keys, T);
-      const weapon: Weapon = T < f - 1e-4 ? 'cleaver' : T < 0.3 ? 'none' : 'rail';
+      const weapon: Weapon = T < 0 ? 'cleaver' : T < 0.3 ? 'none' : 'rail';
       let wShow: number | undefined;
       let far = false;
       if (T >= TW0 && T < TW1) {
@@ -3505,7 +3518,8 @@ function swapClip(front: boolean): Clip {
         far = tw.far;
       } else if (T >= TW1 && T < TW1 + 0.06) wShow = 0.32 + (0.68 * (T - TW1)) / 0.06;
       let smear: KFx['smear'];
-      if (T < f - 1e-4) smear = [-2 * f, 0, 1];
+      if (T < f - 1e-4) smear = [-2 * f, -0.001, 1];
+      else if (T < 2 * f - 1e-4) smear = [-0.5 * f, -0.001, 0.5];
       else if (T >= 0.66 && T < TW0) smear = [T - 1.3 * f, T, 0.8];
       else if (T >= TW0 && T < TW1) smear = [T - 1.5 * f, T, 1];
       else if (T >= TW1 && T < 1.12 + f) smear = [T - 1.6 * f, T, 1];
@@ -4619,6 +4633,7 @@ function kingletFrame(m: Mob, pose: MobPose): MobFrame {
   const key = `${id}|${Math.round(Tq * 1000)}|${hurt ? 1 : 0}|${pose.left ? 1 : 0}`;
   let fr = QFR.get(key);
   if (!fr) {
+    MISS.q++; // TEMP-BENCH
     const r = paintQuad(P, fx, Tq);
     const flip = pose.left !== !!fx.flip;
     fr = QFR.set(key, cropFrame(r.px, r.lit, QG.cx, QG.base, r.eye, flip));
@@ -4910,6 +4925,7 @@ function kingBallFrame(m: Mob, pose: MobPose, look: KingLook, h: number, st: KSt
 
 // ---- Рисовальщик ----------------------------------------------------------
 
+const MISS = { k: 0, b: 0, q: 0, f: 0 }; // TEMP-BENCH
 const KFR = frameLRU<KPainted>(400);
 /** Клубки — отдельно: 8 направлений × 13 шагов не должны вытеснять техники. */
 const BFR = frameLRU<KPainted>(200);
@@ -4924,6 +4940,7 @@ function ballFrame(
   const key = `ball${small ? 'k' : ''}|${bk.q}|${s}|${split ? 1 : 0}|${bk.left ? 1 : 0}`;
   let fr = BFR.get(key);
   if (!fr) {
+    MISS.b++; // TEMP-BENCH
     const px = ballPx(small ? 8.5 : 14, bk.dirA, (s / steps) * TAU, split, small);
     fr = BFR.set(key, cropFrame(px, null, px.w / 2, px.h - 2, null, bk.left));
   }
@@ -4940,7 +4957,10 @@ function kingCached(
 ): { key: string; fr: KPainted } {
   const key = `${clip.id}|${Math.round(Tq * 1000)}|${look.blade ? 1 : 0}${look.split ? 1 : 0}|${left ? 1 : 0}|${lk}`;
   let fr = KFR.get(key);
-  if (!fr) fr = KFR.set(key, kingPaint(clip, Tq, look, lk === 'elite', left));
+  if (!fr) {
+    MISS.k++; // TEMP-BENCH
+    fr = KFR.set(key, kingPaint(clip, Tq, look, lk === 'elite', left));
+  }
   return { key, fr };
 }
 const KFLASH = frameLRU<HTMLCanvasElement>(48);
@@ -4949,6 +4969,7 @@ const KFLASH = frameLRU<HTMLCanvasElement>(48);
 function flashOf(key: string, img: HTMLCanvasElement): HTMLCanvasElement {
   let c = KFLASH.get(key);
   if (c) return c;
+  MISS.f++; // TEMP-BENCH
   c = document.createElement('canvas');
   c.width = img.width;
   c.height = img.height;
@@ -5057,6 +5078,7 @@ registerMobWarm('f1_king', function* () {
 
 // TEMP-BENCH
 (globalThis as unknown as Record<string, unknown>).__f1k = {
+  MISS,
   kingPaint,
   cleaveClip,
   sweepClip,
