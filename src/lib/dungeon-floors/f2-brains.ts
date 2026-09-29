@@ -1339,6 +1339,7 @@ function burst(sim: Sim, b: BossFight, armor: Mob, api: SimApi): void {
   b.data.mites = 0;
   sim.hitstop = Math.max(sim.hitstop, 0.12);
   sim.slowmo = Math.max(sim.slowmo, 0.45);
+  sim.events.push({ t: 'flash', k: 0.7, color: '#b07cff' }); // v2.85 — только рисунок
   sim.events.push({
     t: 'boss',
     what: 'phase',
@@ -1382,6 +1383,7 @@ function burst(sim: Sim, b: BossFight, armor: Mob, api: SimApi): void {
     p.data.T = 0.45 + sim.rng() * 0.15;
     p.data.ghost = 1;
     p.dir = a;
+    p.data.vL = Math.cos(armor.face) < 0 ? 1 : 0; // v2.85 — только рисунок
     if (!blade)
       api.strike(sim, {
         shape: 'circle',
@@ -1449,11 +1451,16 @@ function reform(sim: Sim, b: BossFight, api: SimApi): void {
   }
   const gx = b.data.gx ?? b.obj.x + 0.5;
   const gy = b.data.gy ?? b.obj.y + 0.5;
+  const vPs = sim.mobs.filter((x) => x.kind === F2_PLATE || x.kind === F2_BLADE); // v2.85 — только рисунок
+  const vP: Record<string, number> = {}; // v2.85 — только рисунок
+  for (const x of vPs) vP[`vP${x.kind === F2_BLADE ? 5 : x.data.part}x`] = (x.x - gx) * 16; // v2.85 — только рисунок
+  for (const x of vPs) vP[`vP${x.kind === F2_BLADE ? 5 : x.data.part}y`] = (x.y - gy) * 16; // v2.85 — только рисунок
   sim.mobs = sim.mobs.filter((x) => x.kind !== F2_PLATE && x.kind !== F2_BLADE);
   const level = sim.mobs.find((x) => x.kind === F2_MITE)?.level;
   const a = api.spawnMob(sim, F2_ARMOR, gx, gy, { mode: 'rebuild', level });
   a.hp = a.maxHp * reformShare(inside);
   a.data.hp0 = a.hp;
+  Object.assign(a.data, vP); // v2.85 — только рисунок
   a.data.ghost = 1;
   api.collide(sim, a);
   b.data.mites = inside;
@@ -1484,6 +1491,7 @@ registerBoss('f2_armor', {
       const armor = sim.mobs.find((x) => x.kind === F2_ARMOR && x.mode !== 'dying');
       if (armor && b.phase === 0 && armor.hp < armor.maxHp * 0.5) {
         b.phase = 1;
+        armor.data.vCrack = sim.time; // v2.85 — только рисунок
         sim.events.push({
           t: 'boss',
           what: 'phase',

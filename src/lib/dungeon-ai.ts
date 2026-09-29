@@ -133,6 +133,13 @@ export interface SimApi {
   shoot(sim: Sim, m: Mob, ang: number, spec?: ShotSpec, tx?: number, ty?: number): void;
   strike(sim: Sim, s: StrikeIn): void;
   zone(sim: Sim, z: ZoneIn): void;
+  /**
+   * Зона ТОЛЬКО для картинки (v2.85): пыль, брызги, вспышки, круги. Урона,
+   * статуса и замедления у неё нет, и номер из общего счётчика она не
+   * берёт — от номеров мобов зависит, с какого бока заходит стая, а
+   * картинка не должна менять бой.
+   */
+  vfx(sim: Sim, z: ZoneIn): void;
   inArena(sim: Sim, x: number, y: number): boolean;
   /** Вытолкнуть из стен (круг против клеток). */
   collide(sim: Sim, e: { x: number; y: number; r: number }): boolean;
