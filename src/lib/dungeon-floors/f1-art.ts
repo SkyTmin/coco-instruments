@@ -1328,7 +1328,6 @@ registerMobPainter('f1_rat', (m, pose) => {
   return out;
 });
 
-// ⟦king-begin⟧
 // ---------------------------------------------------------------------------
 // Крысиный король 2.0 и малые короли — анимация (v2.85, библия §14).
 //
@@ -1666,10 +1665,22 @@ function kRig(P: KP, G: Geo): KRig {
   r.legNear = [rn, kn, fn];
   const sh = add(neck, [-0.6 * s, 1.2 * s]);
   const raf = add(sh, [-0.6 * s, 0]);
-  const [ef, hf] = ik2(raf, add(sh, [P.fhx * s, P.fhy * s]), ARM_F[0], ARM_F[1], P.ebf >= 0 ? 1 : -1);
+  const [ef, hf] = ik2(
+    raf,
+    add(sh, [P.fhx * s, P.fhy * s]),
+    ARM_F[0],
+    ARM_F[1],
+    P.ebf >= 0 ? 1 : -1,
+  );
   r.armFar = [raf, ef, hf];
   const ran = add(sh, [0.4 * s, 0.3 * s]);
-  const [en, hn] = ik2(ran, add(sh, [P.nhx * s, P.nhy * s]), ARM_N[0], ARM_N[1], P.ebn >= 0 ? 1 : -1);
+  const [en, hn] = ik2(
+    ran,
+    add(sh, [P.nhx * s, P.nhy * s]),
+    ARM_N[0],
+    ARM_N[1],
+    P.ebn >= 0 ? 1 : -1,
+  );
   r.armNear = [ran, en, hn];
   // Простой хвост по земле (как у всех крысолюдов) — под узлом.
   const t0 = add(hip, [-2.4 * s, 1.2 * s]);
@@ -1737,8 +1748,7 @@ function kingCape2(r: Rig, cf: number, cs: number, gy: number): Item {
       poly(px, pts, (x, y) => {
         const d = (x - o[0]) * 0.35 + (y - o[1]) * 0.08;
         // Крап ткани привязан к плечу — едет вместе с плащом, а не «плывёт».
-        if (((x - Math.round(o[0])) * 3 + (y - Math.round(o[1]))) % 11 === 0)
-          return CLOTH.cape[0];
+        if (((x - Math.round(o[0])) * 3 + (y - Math.round(o[1]))) % 11 === 0) return CLOTH.cape[0];
         return d < -1 ? CLOTH.cape[2] : d < 2 ? CLOTH.cape[1] : CLOTH.cape[0];
       });
       const a = pts[4];
@@ -1924,7 +1934,6 @@ function ermine(r: Rig, s: number): Item {
   };
 }
 
-
 // ---- Кадр короля ----------------------------------------------------------
 
 interface KingLook {
@@ -1962,7 +1971,8 @@ function paintSmear(px: Px, lit: Px, clip: Clip, a: number, b: number, k: number
   const o = WPN[kind];
   const reach = o.grip + o.len;
   const move =
-    Math.abs(w1.ang - w0.ang) * reach + Math.hypot(w1.hand[0] - w0.hand[0], w1.hand[1] - w0.hand[1]);
+    Math.abs(w1.ang - w0.ang) * reach +
+    Math.hypot(w1.hand[0] - w0.hand[0], w1.hand[1] - w0.hand[1]);
   const n = clamp(Math.ceil(move * 1.6) + 2, 3, 64);
   const col = SMEAR[kind];
   // След — серп у конца клинка, а не веер от кулака.
@@ -2068,7 +2078,7 @@ function paintWhirl(
     // Верхняя половина эллипса — за телом, нижняя — перед ним.
     if (back !== sa < 0) continue;
     // Сколько времени назад хвост был здесь: 0 — сейчас.
-    const age = ((ph * TAU - a) % TAU + TAU) % TAU / TAU;
+    const age = ((((ph * TAU - a) % TAU) + TAU) % TAU) / TAU;
     if (age > frac) continue;
     const tier = age < 0.2 ? 0 : age < 0.5 ? 1 : 2;
     // Три хвоста — три пряди: у головы кольца полоса в 4 пикселя, дальше тоньше.
@@ -2249,20 +2259,12 @@ function cropFrame(
     return c;
   };
   const ax = flip ? cw - (ax0 - x0) : ax0 - x0;
-  const eye: V | null = eye0
-    ? [flip ? cw - 1 - (eye0[0] - x0) : eye0[0] - x0, eye0[1] - y0]
-    : null;
+  const eye: V | null = eye0 ? [flip ? cw - 1 - (eye0[0] - x0) : eye0[0] - x0, eye0[1] - y0] : null;
   return { img: cut(px), lit: lit ? cut(lit) : null, eye, ax, ay: ay0 - y0 };
 }
 
 /** Нарисовать кадр клипа в миг `T` (вправо, без вспышки). */
-function kingPaint(
-  clip: Clip,
-  T: number,
-  look: KingLook,
-  elite: boolean,
-  left: boolean,
-): KPainted {
+function kingPaint(clip: Clip, T: number, look: KingLook, elite: boolean, left: boolean): KPainted {
   const G = clip.geo;
   const sh = clip.at(T);
   const P = sh.p;
@@ -2301,7 +2303,18 @@ function kingPaint(
     r.items.push({
       layer: 'back',
       draw: (px) =>
-        paintWhirl(px, lit(), G, fx.whirl![0], fx.whirl![1], true, WHIRL_R, wst, !look.split, !!fx.flip),
+        paintWhirl(
+          px,
+          lit(),
+          G,
+          fx.whirl![0],
+          fx.whirl![1],
+          true,
+          WHIRL_R,
+          wst,
+          !look.split,
+          !!fx.flip,
+        ),
     });
   if (fx.lidAt) {
     const la: V = [G.cx + fx.lidAt[0], G.gy + fx.lidAt[1]];
@@ -2853,7 +2866,8 @@ function roarClip(look: KingLook): Clip {
       let p = track(keys, T);
       const sustain = T > t1 + 0.06 && T < 0.96;
       // Дрожь рыка: голова и пасть бьются на пиксель, 12 раз в секунду.
-      if (sustain && Math.floor(T * 12) % 2 === 1) p = kp(p, { ny: p.ny + 0.45, dr: p.dr + 0.3, jaw: 0.85 });
+      if (sustain && Math.floor(T * 12) % 2 === 1)
+        p = kp(p, { ny: p.ny + 0.45, dr: p.dr + 0.3, jaw: 0.85 });
       return {
         p,
         fx: {
@@ -2908,7 +2922,15 @@ function summonClip(look: KingLook): Clip {
   const up1 = kp(guard, { nhx: 0.2, nhy: -3.2, wa: -2.05, hy: -0.2, jaw: 0.35, tu: 0.2, ny: -0.2 });
   const bang = kp(guard, { nhx: 3.6, nhy: 1.9, wa: 0.75, hy: 0.35, jaw: 0.6, ny: 0.3 });
   const reb = kp(guard, { nhx: 3.0, nhy: 0.8, wa: 0.2, hy: 0.2 });
-  const up2 = kp(guard, { nhx: -0.3, nhy: -3.6, wa: -2.3, hy: -0.35, jaw: 0.5, tu: 0.35, ny: -0.3 });
+  const up2 = kp(guard, {
+    nhx: -0.3,
+    nhy: -3.6,
+    wa: -2.3,
+    hy: -0.35,
+    jaw: 0.5,
+    tu: 0.35,
+    ny: -0.3,
+  });
   const bang2 = kp(bang, { hy: 0.5, jaw: 0.8 });
   const point = kp(b0, {
     ln: 0.48,
@@ -2938,7 +2960,11 @@ function summonClip(look: KingLook): Clip {
     { t: 1.0, p: kp(point, { ny: -0.3, jaw: 0.9 }), e: EZ.io },
   ];
   const sparkAtT = (T: number) =>
-    T >= 0.22 && T < 0.3 ? 0.65 * (1 - (T - 0.22) / 0.1) : T >= 0.48 && T < 0.58 ? 1 - (T - 0.48) / 0.12 : 0;
+    T >= 0.22 && T < 0.3
+      ? 0.65 * (1 - (T - 0.22) / 0.1)
+      : T >= 0.48 && T < 0.58
+        ? 1 - (T - 0.48) / 0.12
+        : 0;
   return {
     id: `summon${rail ? 'R' : 'C'}`,
     geo: GEO_N,
@@ -2967,7 +2993,11 @@ function summonClip(look: KingLook): Clip {
     xf(T) {
       const k = Math.max(
         0,
-        T >= 0.22 && T < 0.34 ? 1 - (T - 0.22) / 0.12 : T >= 0.48 && T < 0.62 ? 1 - (T - 0.48) / 0.14 : 0,
+        T >= 0.22 && T < 0.34
+          ? 1 - (T - 0.22) / 0.12
+          : T >= 0.48 && T < 0.62
+            ? 1 - (T - 0.48) / 0.14
+            : 0,
       );
       return { ...XF0, sx: 1 + 0.035 * k, sy: 1 - 0.045 * k };
     },
@@ -3046,11 +3076,7 @@ function ballPx(R: number, dirA: number, th: number, split: boolean, small: bool
       if (r2 > 1) continue;
       const zs = Math.sqrt(1 - r2);
       const k = xs * LX + ys * LY + zs * LZ;
-      const n: V3 = [
-        xs,
-        -ys * CAM_U[1] + zs * CAM_V[1],
-        -ys * CAM_U[2] + zs * CAM_V[2],
-      ];
+      const n: V3 = [xs, -ys * CAM_U[1] + zs * CAM_V[1], -ys * CAM_U[2] + zs * CAM_V[2]];
       const q = toBall(n);
       let col: RGBA = tone(f, k);
       const dc = dot3(q, B_CAPE);
@@ -3060,7 +3086,17 @@ function ballPx(R: number, dirA: number, th: number, split: boolean, small: bool
       const dy = dot3(q, B_EYE);
       if (Math.abs(Math.sin(q[0] * 9 + q[1] * 4 + q[2] * 7)) > 0.94 && k > 0.05 && k < 0.8)
         col = f.dark;
-      if (!small && dc > 0.42) col = dc < 0.5 ? (k > 0.3 ? gold[2] : gold[1]) : k > 0.45 ? cape[2] : k > 0.05 ? cape[1] : cape[0];
+      if (!small && dc > 0.42)
+        col =
+          dc < 0.5
+            ? k > 0.3
+              ? gold[2]
+              : gold[1]
+            : k > 0.45
+              ? cape[2]
+              : k > 0.05
+                ? cape[1]
+                : cape[0];
       if (ds > 0.5) {
         // Спираль сплетённых хвостов: три витка к центру.
         const a = Math.atan2(dot3(q, [1, 0, 0]), dot3(q, [0, -0.72, 0.7]));
@@ -3069,8 +3105,10 @@ function ballPx(R: number, dirA: number, th: number, split: boolean, small: bool
         if (v < 0.36) col = v < 0.1 || k < 0.1 ? f.pinkDark : f.pink;
       }
       if (!small && de > 0.9) col = k > 0.35 ? hex('#fbf6ee') : hex('#d8d0c2');
-      if (!small && de > 0.9 && Math.abs(Math.sin(q[0] * 31 + q[2] * 23)) > 0.93) col = hex('#1a1414');
-      if (dk > (small ? 0.94 : 0.9)) col = dk > 0.985 ? hex('#d8203a') : k > 0.4 ? gold[3] : k > 0.05 ? gold[2] : gold[1];
+      if (!small && de > 0.9 && Math.abs(Math.sin(q[0] * 31 + q[2] * 23)) > 0.93)
+        col = hex('#1a1414');
+      if (dk > (small ? 0.94 : 0.9))
+        col = dk > 0.985 ? hex('#d8203a') : k > 0.4 ? gold[3] : k > 0.05 ? gold[2] : gold[1];
       if (dy > 0.992) col = f.eye;
       px.set(x, y, col);
     }
@@ -3424,11 +3462,42 @@ function swapClip(front: boolean): Clip {
     : kp(REST, { ln: 0.5, nhx: 4.4, nhy: 0.6, wa: 0.2, jaw: 0.4 });
   const toss = front
     ? kp(REST, { ln: 0.3, hx: 0.2, nhx: -1.1, nhy: -4.4, wa: -1.7, jaw: 0.8, nfx: 1.8, fhx: 0.8 })
-    : kp(REST, { ln: 0.2, nx: -0.3, ny: -0.3, nhx: 0.1, nhy: -4.6, wa: -2.0, jaw: 0.8, ffx: -2.8, fhx: 3.2, fhy: 3.0 });
+    : kp(REST, {
+        ln: 0.2,
+        nx: -0.3,
+        ny: -0.3,
+        nhx: 0.1,
+        nhy: -4.6,
+        wa: -2.0,
+        jaw: 0.8,
+        ffx: -2.8,
+        fhx: 3.2,
+        fhy: 3.0,
+      });
   const follow = front
     ? kp(REST, { ln: 0.6, hx: 0.5, nhx: 4.4, nhy: 0.2, wa: 0.6, jaw: 0.6, nfx: 2.2 })
-    : kp(REST, { ln: 0.05, nx: -0.4, ny: -0.2, nhx: -2.0, nhy: -2.8, wa: -2.8, jaw: 0.6, ffx: -2.8, fhx: 3.0, fhy: 2.6 });
-  const empty = kp(REST, { hy: 0.2, jaw: 0.3, nhx: 2.6, nhy: 3.8, wa: 1.9, fhx: -1.6, fhy: 1.4, ebf: -1 });
+    : kp(REST, {
+        ln: 0.05,
+        nx: -0.4,
+        ny: -0.2,
+        nhx: -2.0,
+        nhy: -2.8,
+        wa: -2.8,
+        jaw: 0.6,
+        ffx: -2.8,
+        fhx: 3.0,
+        fhy: 2.6,
+      });
+  const empty = kp(REST, {
+    hy: 0.2,
+    jaw: 0.3,
+    nhx: 2.6,
+    nhy: 3.8,
+    wa: 1.9,
+    fhx: -1.6,
+    fhy: 1.4,
+    ebf: -1,
+  });
   const reach = kp(REST, {
     ln: 0.12,
     nx: -0.4,
@@ -3441,7 +3510,16 @@ function swapClip(front: boolean): Clip {
     fhy: -2.6,
     jaw: 0.2,
   });
-  const pull = kp(reach, { hy: -0.2, ln: 0.05, nhx: 0.6, nhy: -5.8, wa: 2.25, ny: -0.3, fhx: 0.2, fhy: -4.8 });
+  const pull = kp(reach, {
+    hy: -0.2,
+    ln: 0.05,
+    nhx: 0.6,
+    nhy: -5.8,
+    wa: 2.25,
+    ny: -0.3,
+    fhx: 0.2,
+    fhy: -4.8,
+  });
   const draw = kp(pull, { nhx: 1.0, nhy: -6.0, wa: 0, fhx: -1.6, fhy: 1.0, ebf: -1, jaw: 0.5 });
   // Вертушка над головой: рельс ходит по кругу в плоскости пола — в
   // ракурсе он то длинный (поперёк), то короткий (к нам и от нас).
@@ -3450,8 +3528,13 @@ function swapClip(front: boolean): Clip {
   const TURNS = 1.25;
   const twirlAng = (T: number) => {
     const ph = ((T - TW0) / (TW1 - TW0)) * TAU * TURNS;
-    const g = ph + Math.atan2(0.32 * Math.sin(ph), Math.cos(ph)) - Math.atan2(Math.sin(ph), Math.cos(ph));
-    return { wa: -g, show: Math.hypot(Math.cos(ph), 0.32 * Math.sin(ph)), far: Math.sin(ph) > 0.05 };
+    const g =
+      ph + Math.atan2(0.32 * Math.sin(ph), Math.cos(ph)) - Math.atan2(Math.sin(ph), Math.cos(ph));
+    return {
+      wa: -g,
+      show: Math.hypot(Math.cos(ph), 0.32 * Math.sin(ph)),
+      far: Math.sin(ph) > 0.05,
+    };
   };
   const twirl = kp(draw, { wa: twirlAng(TW1).wa });
   const slam = kp(REST, {
@@ -3579,7 +3662,16 @@ function sweepClip(wa: number, wb: number): Clip {
   const TA = wa;
   const TB = wa + wb;
   const TC = wa + 2 * wb;
-  const hold = kp(REST_RAIL, { nhx: 1.2, nhy: -0.8, wa: -2.2, hy: 0.3, nfx: 1.8, ffx: -2.8, fhx: 0.6, fhy: 2.8 });
+  const hold = kp(REST_RAIL, {
+    nhx: 1.2,
+    nhy: -0.8,
+    wa: -2.2,
+    hy: 0.3,
+    nfx: 1.8,
+    ffx: -2.8,
+    fhx: 0.6,
+    fhy: 2.8,
+  });
   const aWind = kp(hold, {
     hx: -0.6,
     hy: 0.55,
@@ -3612,7 +3704,16 @@ function sweepClip(wa: number, wb: number): Clip {
   });
   const aFol = kp(aHit, { hy: 1.35, ln: 0.95, nhx: 4.6, nhy: 3.6, wa: 1.0 });
   const aEnd = kp(aHit, { hy: 1.2, ln: 0.9, nhx: 3.0, nhy: 4.6, wa: 1.6, jaw: 0.6 });
-  const bWind = kp(aEnd, { hx: -0.3, hy: 1.1, ln: 0.7, nhx: 1.2, nhy: 5.0, wa: 2.35, jaw: 0.5, nx: -0.1 });
+  const bWind = kp(aEnd, {
+    hx: -0.3,
+    hy: 1.1,
+    ln: 0.7,
+    nhx: 1.2,
+    nhy: 5.0,
+    wa: 2.35,
+    jaw: 0.5,
+    nx: -0.1,
+  });
   const bCock = kp(bWind, { hx: -0.45, nhx: 0.8, nhy: 5.2, wa: 2.6 });
   const bS1 = kp(bCock, { hx: 0, hy: 1.0, ln: 0.65, nhx: 3.2, nhy: 4.2, wa: 1.0, jaw: 0.8 });
   const bS2 = kp(bCock, { hx: 0.4, hy: 0.6, ln: 0.45, nhx: 5.0, nhy: 1.2, wa: 0.05, jaw: 0.9 });
@@ -3634,10 +3735,30 @@ function sweepClip(wa: number, wb: number): Clip {
   });
   const bFol = kp(bHit, { nhx: 3.2, nhy: -4.6, wa: -1.35, hy: -0.55 });
   const bEnd = kp(bHit, { nhx: 2.4, nhy: -5.2, wa: -1.7, hy: -0.5, jaw: 0.7 });
-  const cWind = kp(bEnd, { hx: -0.3, hy: -0.7, ln: -0.1, ny: -0.5, nhx: 0.2, nhy: -5.6, wa: -2.4, nfl: 0.6, ffl: 0.3, tu: 0.7 });
+  const cWind = kp(bEnd, {
+    hx: -0.3,
+    hy: -0.7,
+    ln: -0.1,
+    ny: -0.5,
+    nhx: 0.2,
+    nhy: -5.6,
+    wa: -2.4,
+    nfl: 0.6,
+    ffl: 0.3,
+    tu: 0.7,
+  });
   const cCock = kp(cWind, { hy: -0.85, nhx: -0.4, nhy: -5.4, wa: -2.75 });
   const cS1 = kp(cCock, { hy: -0.5, ln: 0.2, nhx: 1.8, nhy: -5.6, wa: -1.6, jaw: 1 });
-  const cS2 = kp(cCock, { hx: 0.5, hy: 0.4, ln: 0.6, nhx: 4.8, nhy: -2.0, wa: -0.3, nfl: 0, ffl: 0 });
+  const cS2 = kp(cCock, {
+    hx: 0.5,
+    hy: 0.4,
+    ln: 0.6,
+    nhx: 4.8,
+    nhy: -2.0,
+    wa: -0.3,
+    nfl: 0,
+    ffl: 0,
+  });
   const cHit = kp(REST_RAIL, {
     hx: 1.1,
     hy: 1.9,
@@ -3654,7 +3775,16 @@ function sweepClip(wa: number, wb: number): Clip {
     cf: 1.2,
   });
   const cBite = kp(cHit, { hy: 2.05, wa: 0.66 });
-  const pullUp = kp(cHit, { hy: 0.8, ln: 0.6, nhx: 3.4, nhy: 2.6, wa: -0.2, jaw: 0.3, tu: 0.1, cf: 0.2 });
+  const pullUp = kp(cHit, {
+    hy: 0.8,
+    ln: 0.6,
+    nhx: 3.4,
+    nhy: 2.6,
+    wa: -0.2,
+    jaw: 0.3,
+    tu: 0.1,
+    cf: 0.2,
+  });
   // Рельс на плечо — через верх назад (угол убывает).
   const keys: Key[] = [
     { t: 0, p: REST_RAIL },
@@ -3759,7 +3889,17 @@ function sweepClip(wa: number, wb: number): Clip {
 function leapClip(wu: number): Clip {
   const f = 1 / FPS;
   const TL = wu + 0.5;
-  const lift = kp(REST_RAIL, { nhx: 0.8, nhy: -4.6, wa: -2.0, hy: 0.4, ln: 0.3, nfx: 1.6, ffx: -2.6, fhx: 0.2, fhy: -3.8 });
+  const lift = kp(REST_RAIL, {
+    nhx: 0.8,
+    nhy: -4.6,
+    wa: -2.0,
+    hy: 0.4,
+    ln: 0.3,
+    nfx: 1.6,
+    ffx: -2.6,
+    fhx: 0.2,
+    fhy: -3.8,
+  });
   const crouch = kp(lift, {
     hy: 2.3,
     ln: 0.55,
@@ -3804,7 +3944,16 @@ function leapClip(wu: number): Clip {
   });
   const apex = kp(tuck, { wa: -2.65, nhx: -0.3, nhy: -5.5, ln: 0.35 });
   const d1 = kp(apex, { nhx: 2.4, nhy: -5.0, wa: -1.5, nfl: 1.2, ffl: 1.0, ln: 0.55, jaw: 1 });
-  const d2 = kp(apex, { nhx: 5.0, nhy: -1.0, wa: -0.2, nfl: 0.4, ffl: 0.3, ln: 0.8, jaw: 1, nfx: 2.2 });
+  const d2 = kp(apex, {
+    nhx: 5.0,
+    nhy: -1.0,
+    wa: -0.2,
+    nfl: 0.4,
+    ffl: 0.3,
+    ln: 0.8,
+    jaw: 1,
+    nfx: 2.2,
+  });
   const land = kp(REST_RAIL, {
     hx: 0.6,
     hy: 2.4,
@@ -3820,7 +3969,16 @@ function leapClip(wu: number): Clip {
     tu: 0.9,
     cf: 1.4,
   });
-  const rise = kp(land, { hy: 0.6, ln: 0.5, nhx: 3.2, nhy: 2.6, wa: -0.3, jaw: 0.3, tu: 0.1, cf: 0.2 });
+  const rise = kp(land, {
+    hy: 0.6,
+    ln: 0.5,
+    nhx: 3.2,
+    nhy: 2.6,
+    wa: -0.3,
+    jaw: 0.3,
+    tu: 0.1,
+    cf: 0.2,
+  });
   const keys: Key[] = [
     { t: 0, p: REST_RAIL },
     { t: Math.min(0.18, wu * 0.28), p: lift, e: EZ.out2 },
@@ -3884,7 +4042,17 @@ function leapClip(wu: number): Clip {
         T,
       );
       const sy = 1 / Math.sqrt(sx) - (sx > 1 ? (sx - 1) * 0.55 : 0);
-      const rot = air ? curve([[0, 0], [0.4, -0.08, EZ.io], [0.8, 0.14, EZ.io], [1, 0.05]], k) : 0;
+      const rot = air
+        ? curve(
+            [
+              [0, 0],
+              [0.4, -0.08, EZ.io],
+              [0.8, 0.14, EZ.io],
+              [1, 0.05],
+            ],
+            k,
+          )
+        : 0;
       return {
         ...XF0,
         dy,
@@ -3964,7 +4132,16 @@ function deathClip(look: KingLook): Clip {
     tu: 0.9,
     cf: 0.2,
   });
-  const flat = kp(down, { ffl: 4.2, nfl: 5.0, ffx: -3.8, nfx: -2.2, nhy: 1.6, fhy: 2.0, tu: -0.3, jaw: 0.35 });
+  const flat = kp(down, {
+    ffl: 4.2,
+    nfl: 5.0,
+    ffx: -3.8,
+    nfx: -2.2,
+    nhy: 1.6,
+    fhy: 2.0,
+    tu: -0.3,
+    jaw: 0.35,
+  });
   const kick = kp(flat, { nfl: 6.2, nfx: -1.4 });
   const keys: Key[] = [
     { t: 0, p: blow },
@@ -4189,8 +4366,12 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
   const hy = Y(hy0 + 0.3 * s * P.rear - P.bob * s + d * 1.6 * s);
   const cx = X(cx0 + P.st * 0.5 * s + (-1.8 * P.rear + 2.6 * P.lg) * s);
   const cy = Y(cy0 - 3.4 * s * P.rear + 0.4 * s * P.lg - P.bob * 0.8 * s + d * 1.5 * s);
-  const headX = X(o + 15.2 * s + P.st * 0.7 * s + (-1.6 * P.rear + 4.2 * P.lg + P.hx + 0.8 * d) * s);
-  const headY = Y(26 - 5.2 * s - 5.4 * s * P.rear + P.lg * s + P.hy * s - P.bob * 0.7 * s + d * 2.2 * s);
+  const headX = X(
+    o + 15.2 * s + P.st * 0.7 * s + (-1.6 * P.rear + 4.2 * P.lg + P.hx + 0.8 * d) * s,
+  );
+  const headY = Y(
+    26 - 5.2 * s - 5.4 * s * P.rear + P.lg * s + P.hy * s - P.bob * 0.7 * s + d * 2.2 * s,
+  );
   const snout = (2.8 + 0.8 * P.lg + P.sn) * s;
   const snoutDrop = (1.2 - 0.9 * P.rear) * s;
   const gnd = Y(base - QOY);
@@ -4204,11 +4385,16 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
   let legs: [V, V][] = [
     [[cx + 1.2 * s, cy + 1.6 * s], front(1.8 + P.f1x, P.f1l, 3.6, 0.5)],
     [[cx - 0.3 * s, cy + 1.6 * s], front(0.2 + P.f2x, P.f2l, 3, 1.8)],
-    [[hx + 2 * s, hy + 2.2 * s], [X(hx0 + 2.8 * s + P.h1x * s), gnd - P.h1l * s]],
-    [[hx - 0.5 * s, hy + 2.4 * s], [X(hx0 + 0.3 * s + P.h2x * s), gnd - P.h2l * s]],
+    [
+      [hx + 2 * s, hy + 2.2 * s],
+      [X(hx0 + 2.8 * s + P.h1x * s), gnd - P.h1l * s],
+    ],
+    [
+      [hx - 0.5 * s, hy + 2.4 * s],
+      [X(hx0 + 0.3 * s + P.h2x * s), gnd - P.h2l * s],
+    ],
   ];
-  if (d > 0)
-    legs = legs.map(([a, b], i) => [a, lerp(b, deadLeg(a, i / 3), d)] as [V, V]);
+  if (d > 0) legs = legs.map(([a, b], i) => [a, lerp(b, deadLeg(a, i / 3), d)] as [V, V]);
   // Хвосты: узел за задом, три конца — вверх с завитком, назад, по земле.
   const kx = hx - hrx - 2.6 * s;
   const ky = hy + 0.6 * s - P.tu * 2.4 * s;
@@ -4309,12 +4495,15 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
       let inSnout = false;
       if (tx > 0 && tx <= 1) {
         const top = headY - headR * 0.75 + (ny - (headY - headR * 0.75)) * tx;
-        const bot =
-          headY + headR * (0.7 - P.jaw * 0.2) + (ny + 0.5 - (headY + headR * 0.7)) * tx;
+        const bot = headY + headR * (0.7 - P.jaw * 0.2) + (ny + 0.5 - (headY + headR * 0.7)) * tx;
         inSnout = y + 0.5 >= top && y + 0.5 <= bot + 0.5;
       }
       if (inHead || inSnout)
-        px.set(x, y, inHead ? shadeOf(pal, head, x, y, false) : y + 0.5 < ny - 0.3 ? pal.light : pal.fur);
+        px.set(
+          x,
+          y,
+          inHead ? shadeOf(pal, head, x, y, false) : y + 0.5 < ny - 0.3 ? pal.light : pal.fur,
+        );
     }
   if (P.jaw > 0.2) {
     const mx0 = Math.round(headX + headR * 0.3);
@@ -4347,6 +4536,24 @@ function paintQuad(P: QP, fx: QFx, T: number): { px: Px; lit: Px | null; eye: V 
         px.set(x, y, edge ? CLOTH.cape[0] : y < topY + 1.2 ? CLOTH.cape[2] : CLOTH.cape[1]);
       }
       if (x % 3 === 0) px.set(x, Math.floor(topY + len) + 1, METAL.gold[0]);
+    }
+  } else {
+    // Перевернулся на спину — мантия не пропадает, а зажата между спиной
+    // и полом: полоса по нижней кромке тела с золотой каймой.
+    const mx0 = hx - hrx * 0.7;
+    const mx1 = cx + crx * 0.5;
+    const under = (x: number, ex: number, ey: number, rx: number, ry: number) => {
+      const u = (x + 0.5 - ex) / rx;
+      return Math.abs(u) < 1 ? ey + ry * Math.sqrt(1 - u * u) : -1e9;
+    };
+    for (let x = Math.floor(mx0); x <= Math.ceil(mx1); x++) {
+      const bot = Math.max(under(x, hx, hy, hrx, hry), under(x, cx, cy, crx, cry));
+      if (bot < -1e8) continue;
+      const y0 = Math.round(bot) - 1;
+      const t = (x - mx0) / (mx1 - mx0);
+      const len = 1 + Math.round(Math.sin(t * Math.PI) * 1.4);
+      for (let k = 0; k <= len; k++) px.set(x, y0 + k, k === len ? CLOTH.cape[0] : CLOTH.cape[1]);
+      if (x % 3 === 0) px.set(x, y0 + len + 1, METAL.gold[0]);
     }
   }
   // Венчик — на голове или слетел.
@@ -4475,7 +4682,17 @@ function qRun(u: number): [QP, QFx] {
   ];
 }
 
-const Q_CROUCH = qp(QREST, { by: 2.2, st: -1.2, hx: -0.8, hy: 1.4, sq: 1, tu: 0.4, tc: 0.8, f1x: -0.6, h1x: 0.8 });
+const Q_CROUCH = qp(QREST, {
+  by: 2.2,
+  st: -1.2,
+  hx: -0.8,
+  hy: 1.4,
+  sq: 1,
+  tu: 0.4,
+  tc: 0.8,
+  f1x: -0.6,
+  h1x: 0.8,
+});
 
 /** Хлыст малого (замах 0,7): встаёт на задние, хвосты скорпионом над спиной, трещат; разворот с кольцом. */
 function qWhip(T: number, wu: number, rec: number): [QP, QFx, number] {
@@ -4573,7 +4790,14 @@ function kingletFrame(m: Mob, pose: MobPose): MobFrame {
   } else if (mode === 'stun') {
     // Оторвался от короля: кувырок клубком и шлепок о пол.
     if (t < 0.24) {
-      const b = kingBallFrame({ ...m, mode: 'roll', dir: m.dir } as Mob, { ...pose, mode: 'roll', t: t * 1.6 }, look, h, st, true);
+      const b = kingBallFrame(
+        { ...m, mode: 'roll', dir: m.dir } as Mob,
+        { ...pose, mode: 'roll', t: t * 1.6 },
+        look,
+        h,
+        st,
+        true,
+      );
       if (b) return { ...b, dy: -10 * Math.sin((t / 0.24) * Math.PI), shadow: 7 };
     }
     Tq = quant(t, 0.4, false);
@@ -4599,7 +4823,12 @@ function kingletFrame(m: Mob, pose: MobPose): MobFrame {
         ? undefined
         : c < 0.3
           ? [8 + 30 * c, -22 + 150 * c * c - 40 * c, 0.3 + c * 6]
-          : [17 + 8 * EZ.out2(clamp((c - 0.3) / 0.4, 0, 1)), 0, 1.4];
+          : // Докатился и встал на обод: на боку венчик читался буквой «Е».
+            [
+              17 + 8 * EZ.out2(clamp((c - 0.3) / 0.4, 0, 1)),
+              0,
+              1.4 * (1 - clamp((c - 0.34) / 0.12, 0, 1)),
+            ];
     fx = {
       eye: T < 0.2 ? 'squint' : 'dead',
       crownOff: cr,
@@ -4717,7 +4946,16 @@ function kstate(m: Mob, pose: MobPose): KSt {
   let st = KST.get(m.id);
   if (!st || pose.now < st.now - 0.5) {
     if (KST.size > 48) KST.clear();
-    st = { now: pose.now, run: 0, fl: 0, hitAt: -9, hitDir: 1, dir: m.dir, bumpAt: -9, bumpX: true };
+    st = {
+      now: pose.now,
+      run: 0,
+      fl: 0,
+      hitAt: -9,
+      hitDir: 1,
+      dir: m.dir,
+      bumpAt: -9,
+      bumpX: true,
+    };
     KST.set(m.id, st);
   }
   const dt = clamp(pose.now - st.now, 0, 0.1);
@@ -4733,9 +4971,13 @@ function kstate(m: Mob, pose: MobPose): KSt {
   }
   st.fl = m.flash;
   // Отскок клубка от стены: направление сменилось — сплющить по оси удара.
-  if (m.mode === 'roll' && Math.abs(Math.atan2(Math.sin(m.dir - st.dir), Math.cos(m.dir - st.dir))) > 0.3) {
+  if (
+    m.mode === 'roll' &&
+    Math.abs(Math.atan2(Math.sin(m.dir - st.dir), Math.cos(m.dir - st.dir))) > 0.3
+  ) {
     st.bumpAt = pose.now;
-    st.bumpX = Math.abs(Math.cos(m.dir) + Math.cos(st.dir)) < Math.abs(Math.sin(m.dir) + Math.sin(st.dir));
+    st.bumpX =
+      Math.abs(Math.cos(m.dir) + Math.cos(st.dir)) < Math.abs(Math.sin(m.dir) + Math.sin(st.dir));
   }
   st.dir = m.dir;
   return st;
@@ -4765,7 +5007,10 @@ function rageClip(base: Clip): Clip {
     at(T) {
       const sh = base.at(T);
       const k = ((T % 1.2) + 1.2) % 1.2;
-      return { p: kp(sh.p, { jaw: 0.25 }), fx: { ...sh.fx, eye: 'angry', steam: k < 0.5 ? k / 0.5 : 0 } };
+      return {
+        p: kp(sh.p, { jaw: 0.25 }),
+        fx: { ...sh.fx, eye: 'angry', steam: k < 0.5 ? k / 0.5 : 0 },
+      };
     },
   };
 }
@@ -4782,17 +5027,41 @@ function kingPick(m: Mob, pose: MobPose, look: KingLook, h: number, st: KSt): Pi
   const leap = (wu: number) => clipOf(`lp${wu}`, () => leapClip(wu));
   switch (pose.mode) {
     case 'roar':
-      return seg(clipOf(`roar${L}`, () => roarClip(look)), 0, t, 1.2, false);
+      return seg(
+        clipOf(`roar${L}`, () => roarClip(look)),
+        0,
+        t,
+        1.2,
+        false,
+      );
     case 'summon':
-      return seg(clipOf(`sum${L}`, () => summonClip(look)), 0, t, 1.0, false);
+      return seg(
+        clipOf(`sum${L}`, () => summonClip(look)),
+        0,
+        t,
+        1.0,
+        false,
+      );
     case 'rollAim': {
       const D = echo ? 0.85 : 0.8 / h;
-      return seg(clipOf(`ra${D}${L}`, () => rollAimClip(D, look)), 0, t, D, false);
+      return seg(
+        clipOf(`ra${D}${L}`, () => rollAimClip(D, look)),
+        0,
+        t,
+        D,
+        false,
+      );
     }
     case 'dizzy':
     case 'stun': {
       const D = echo ? 1.6 : 1.3;
-      return seg(clipOf(`dz${D}${L}`, () => dizzyClip(D, look)), 0, t, D, false);
+      return seg(
+        clipOf(`dz${D}${L}`, () => dizzyClip(D, look)),
+        0,
+        t,
+        D,
+        false,
+      );
     }
     case 'cleaveAim': {
       const wu = 0.75 / h;
@@ -4806,7 +5075,13 @@ function kingPick(m: Mob, pose: MobPose, look: KingLook, h: number, st: KSt): Pi
       return seg(whip(wu), 0, t, wu, true);
     }
     case 'swap':
-      return seg(clipOf(`swap${pose.left ? 'F' : 'B'}`, () => swapClip(pose.left)), 0, t, 1.5, false);
+      return seg(
+        clipOf(`swap${pose.left ? 'F' : 'B'}`, () => swapClip(pose.left)),
+        0,
+        t,
+        1.5,
+        false,
+      );
     case 'sweepAim': {
       const wa = 0.55 / h;
       const wb = 0.38 / h;
@@ -4835,7 +5110,13 @@ function kingPick(m: Mob, pose: MobPose, look: KingLook, h: number, st: KSt): Pi
       break;
     }
     case 'dying':
-      return seg(clipOf(`die${L}`, () => deathClip(look)), 0, t, DIE_T, false);
+      return seg(
+        clipOf(`die${L}`, () => deathClip(look)),
+        0,
+        t,
+        DIE_T,
+        false,
+      );
     default:
       break;
   }
@@ -4857,7 +5138,14 @@ function kingPick(m: Mob, pose: MobPose, look: KingLook, h: number, st: KSt): Pi
 }
 
 /** Клубок: катится (`roll`) или раскручивается на месте в конце прицела. */
-function kingBallFrame(m: Mob, pose: MobPose, look: KingLook, h: number, st: KSt, small: boolean): MobFrame | null {
+function kingBallFrame(
+  m: Mob,
+  pose: MobPose,
+  look: KingLook,
+  h: number,
+  st: KSt,
+  small: boolean,
+): MobFrame | null {
   const t = pose.t;
   const echo = m.kind !== 'king' && m.kind !== 'kinglet';
   const steps = small ? BALL_STEPS.kinglet : BALL_STEPS.king;
@@ -5065,8 +5353,6 @@ registerMobWarm('f1_king', function* () {
     }
   }
 });
-
-// ⟦king-end⟧
 
 // ---------------------------------------------------------------------------
 // Снаряд: камень пращи. Кувыркается — два кадра.
