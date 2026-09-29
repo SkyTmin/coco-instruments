@@ -48,10 +48,10 @@ const TEAL = '#3e8c90';
 const TEAL_D = '#1a5660';
 const DEEP = '#0f3a44';
 const WET = '#0a1c22';
-const MUD = '#1a2224';
-const MUD2 = '#34423e';
-const MUD3 = '#56645c';
-const DUST = '#6a766e';
+const MUD = '#121719';
+const MUD2 = '#262e2e';
+const MUD3 = '#7c887f';
+const DUST = '#8a948c';
 const RED = '#ff4a3a';
 const RED_D = '#a2202a';
 const BLOOD = '#6a1622';
@@ -116,9 +116,48 @@ class Brush {
     this.ox = Math.round(px * s) / s;
     this.oy = Math.round(py * s) / s;
   }
+  private lastC = '';
   ink(c: string, a = 1): void {
-    this.g.fillStyle = c;
+    // Смена кисти — разбор строки цвета: пропускаем, если цвет тот же.
+    if (c !== this.lastC) {
+      this.g.fillStyle = c;
+      this.lastC = c;
+    }
     this.g.globalAlpha = a <= 0 ? 0 : a >= 1 ? 1 : a;
+  }
+  /**
+   * Рваное кольцо: дуги с разрывами по шуму (рябь, пена, борозда) — не
+   * «прицел» из ровных кругов. `keep` — доля, что остаётся; `w` — толщина.
+   */
+  torn(
+    cx: number,
+    cy: number,
+    r: number,
+    sy: number,
+    seed: number,
+    keep = 0.55,
+    w = 1,
+    a0 = 0,
+    a1 = TAU,
+    phase = 0,
+  ): void {
+    if (r < 1) return;
+    const span = a1 - a0;
+    const n = Math.max(6, Math.ceil(Math.abs(span) * r * 1.25));
+    let lx = 1e9;
+    let ly = 1e9;
+    const x0 = this.ox + Math.round(cx);
+    const y0 = this.oy + Math.round(cy);
+    for (let i = 0; i <= n; i++) {
+      const a = a0 + (span * i) / n;
+      if (vn(seed, (a * r) / 6 + phase) > keep) continue;
+      const x = Math.round(Math.cos(a) * r);
+      const y = Math.round(Math.sin(a) * r * sy);
+      if (x === lx && y === ly) continue;
+      lx = x;
+      ly = y;
+      this.g.fillRect(x0 + x, y0 + y, w, 1);
+    }
   }
   dot(x: number, y: number, w = 1, h = 1): void {
     this.g.fillRect(this.ox + Math.round(x), this.oy + Math.round(y), w, h);
@@ -320,10 +359,9 @@ function clod(b: Brush, p: Bit, col: string, a: number, size: number): void {
   }
   b.ink(col, a);
   b.dot(p.x, p.y - p.z, size, size);
-  if (size > 1) {
-    b.ink(MUD3, a);
-    b.dot(p.x, p.y - p.z, 1, 1);
-  }
+  // Мокрый блик сверху-слева — комок читается на тёмном песке.
+  b.ink(MUD3, a * (size > 1 ? 1 : 0.6));
+  b.dot(p.x, p.y - p.z, 1, 1);
 }
 
 /** Вода ли под точкой сейчас (с приливом): капля упадёт кружком, а не пятном. */
@@ -362,35 +400,39 @@ function sheet(b: Brush, seed: number, age: number, front: boolean | null, o: Sh
   if (age >= o.rise + o.fall || age < 0) return;
   const H = sheetH(o, age);
   const rc = sheetR(o, age);
-  const tear = clamp01((age - o.rise) / o.fall) * 1.05;
+  // Рвётся с середины подъёма: сперва тонкие места, к концу — отдельные струи.
+  const tear = 0.1 + clamp01((age - o.rise * 0.6) / o.fall) * 1.0;
   const n = Math.max(12, Math.ceil(TAU * rc));
-  // Три прохода — по цвету (меньше смен кисти): низ, середина, гребень.
-  for (let pass = 0; pass < 3; pass++) {
-    if (pass === 0) b.ink(TEAL_D, 0.9);
-    else if (pass === 1) b.ink(TEAL, 0.85);
+  // Вода, а не лёд: стенка светлая и сквозная, темнее только у земли; верх
+  // раскрыт наружу. Проходы — по цвету: низ, середина, пена, блики.
+  for (let pass = 0; pass < 4; pass++) {
+    if (pass === 0) b.ink(TEAL, 0.55);
+    else if (pass === 1) b.ink(FOAM2, 0.55);
+    else if (pass === 2) b.ink(FOAM, 0.95);
+    else b.ink(GLINT, 1);
     let lx = 1e9;
+    let ly = 1e9;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU;
       const s = Math.sin(a);
       if (front !== null && s >= 0 !== front) continue;
-      const q = vn(seed, (i / n) * 26, 26);
+      const q = vn(seed, (i / n) * 18, 18);
       if (q < tear) continue;
-      const h = Math.round(H * (0.45 + 0.75 * q));
+      const h = Math.round(H * (0.3 + 0.85 * q));
       if (h < 1) continue;
       const c = Math.cos(a);
       const x = Math.round(c * rc);
-      if (x === lx && pass === 2) continue;
+      const y = Math.round(s * rc);
+      if (x === lx && y === ly) continue;
       lx = x;
-      const y = s * rc;
-      const lean = c * h * 0.3;
-      const hb = Math.max(1, Math.round(h * 0.4));
-      if (pass === 0) b.dot(x, y - hb + 1, 1, hb);
+      ly = y;
+      const lean = c * h * 0.5;
+      const hb = Math.max(1, Math.round(h * 0.35));
+      // Столбики в две точки шириной внахлёст — плёнка, а не частокол.
+      if (pass === 0) b.dot(x, y - hb + 1, 2, hb);
       else if (pass === 1) {
-        if (h - hb > 1) b.dot(x + lean * 0.5, y - h + 2, 1, h - hb - 1);
-      } else {
-        b.ink(q > 0.8 ? GLINT : FOAM, 1);
-        b.dot(x + lean, y - h, 1, 2);
-      }
+        if (h - hb > 1) b.dot(x + lean * 0.5, y - h + 2, 2, h - hb - 1);
+      } else if ((pass === 3) === q > 0.82) b.dot(x + lean, y - h, 2, 2);
     }
   }
 }
@@ -504,7 +546,7 @@ const LAND = (R: number): SheetOpts => ({
   r1: R * 1.05,
   h: 18,
   rise: 0.08,
-  fall: 0.36,
+  fall: 0.3,
 });
 
 function crown(b: Brush, seed: number, R: number, age: number, front: boolean | null): void {
@@ -526,7 +568,7 @@ function crown(b: Brush, seed: number, R: number, age: number, front: boolean | 
 registerImpactPainter('f3_splash', {
   life: 1.6,
   shake: 0.5,
-  flash: 0.3,
+  flash: 0.2,
   flashRgb: '255,236,230',
   paint(g, rec, px, py, scale, age) {
     const R = (rec.r ?? 1.45) * scale;
@@ -536,17 +578,19 @@ registerImpactPainter('f3_splash', {
     const wetA = age < 0.06 ? age / 0.06 : 1 - clamp01((age - 0.5) / 1.1);
     b.ink(WET, 0.5 * wetA);
     b.blob(0, 0, R * 1.05, R * 0.95, seed, 0.25);
-    // Вода накатывает по песку от тела и уходит в него.
-    if (age < 0.9) {
-      const k = outCubic(age / 0.32);
-      const rs = R * (0.55 + 0.95 * k);
-      const f = 1 - clamp01((age - 0.28) / 0.62);
-      b.ink(TEAL, 0.32 * f);
-      b.blob(0, 0, rs, rs * 0.92, seed + 11, 0.14);
+    // Вода накатывает по песку от тела и уходит в него: тёмная плёнка,
+    // по краю — рваная пена (не ровный круг).
+    if (age < 0.8) {
+      const k = outCubic(age / 0.3);
+      const rs = R * (0.55 + 0.8 * k);
+      const f = 1 - clamp01((age - 0.22) / 0.58);
+      // Плёнка неровная и гаснет быстро — не купол; пена рвётся, пока бежит.
+      b.ink(TEAL_D, 0.28 * f);
+      b.blob(0, 0, rs, rs * 0.88, seed + 11, 0.3);
       b.ink(FOAM, 0.9 * f);
-      b.ring(0, 0, rs, 0.92, 0, TAU, 3, (seed % 7) + age * 3);
+      b.torn(0, 0, rs, 0.88, seed + 12, 0.62 - 0.3 * k, 2, 0, TAU, age * 2);
       b.ink(FOAM2, 0.6 * f);
-      b.ring(0, 0, rs - 1.5, 0.92, 0, TAU, 2, seed % 5);
+      b.torn(0, 1, rs - 2.5, 0.88, seed + 13, 0.4 - 0.2 * k);
     }
     // Блин пены в кадр удара — прячет склейку тела и земли.
     if (age < 0.08) {
@@ -573,7 +617,7 @@ registerImpactPainter('f3_splash', {
       const c = Math.cos(a);
       const s = Math.sin(a);
       fly(BIT, c * R * 0.3, s * R * 0.3, 3, c * sp, s * sp, vz, G, age, 0.32);
-      clod(b, BIT, i % 3 === 0 ? MUD3 : i % 3 === 1 ? MUD2 : MUD, fade, i % 3 === 0 ? 2 : 1);
+      clod(b, BIT, i % 2 ? MUD2 : MUD, fade, i % 3 === 0 ? 2 : 1);
     }
     // Дальняя половина короны (ближнюю — поверх тела и героя — рисует зона).
     crown(b, seed, R, age, false);
@@ -683,28 +727,32 @@ registerImpactPainter('f3_thrash', {
     }
     const { a0, dir } = sw;
     const seed = rec.seed;
-    // Борозда: полоса содранного песка по кругу, темнеет и сохнет.
+    // Борозда: полоса содранного песка по кругу — рваная, темнеет и сохнет.
     const scuff = (age < 0.08 ? age / 0.08 : 1) * (1 - clamp01((age - 0.5) / 0.7));
-    b.arc(R * 0.76, 0, TAU, 6, WET, 0.5 * scuff, 3);
-    // Ударная волна по песку.
+    if (scuff > 0) {
+      b.ink(WET, 0.55 * scuff);
+      for (let j = 0; j < 3; j++) b.torn(0, 0, R * (0.68 + j * 0.06), 1, seed + j, 0.62, 2);
+    }
+    // Ударная волна по песку — рваная.
     if (age < 0.28) {
       const k = age / 0.28;
       b.ink(FOAM2, 0.8 * (1 - k));
-      b.ring(0, 0, R * (0.85 + 0.5 * outCubic(k)));
+      b.torn(0, 0, R * (0.85 + 0.5 * outCubic(k)), 1, seed + 9, 0.7);
     }
-    // Смаз хвоста: дуга с проводкой на 0,9 рад за точку удара, тает к хвосту.
+    // Смаз хвоста: хвост обошёл тело кругом — смаз по всему кругу, ярче у
+    // головы, гаснет к хвосту; проводка ещё на 0,9 рад за точку удара.
     if (age < 0.26) {
       const k = age / 0.26;
       const head = a0 + dir * (TAU + 0.9 * outCubic(age / 0.16));
-      const len = 2.4 * (1 - 0.6 * k);
-      for (let seg = 0; seg < 4; seg++) {
-        const s0 = head - dir * len * ((seg + 1) / 4);
-        const s1 = head - dir * len * (seg / 4);
-        const fa = (1 - k) * (1 - seg * 0.22);
+      const len = TAU * (1 - 0.55 * k);
+      for (let seg = 0; seg < 6; seg++) {
+        const s0 = head - dir * len * ((seg + 1) / 6);
+        const s1 = head - dir * len * (seg / 6);
+        const fa = (1 - k) * (1 - seg * 0.15);
         const lo = Math.min(s0, s1);
         const hi = Math.max(s0, s1);
-        b.arc(R * 0.72, lo, hi, 7 - seg * 1.4, TEAL, 0.55 * fa);
-        b.arc(R * 0.74, lo, hi, 3.2 - seg * 0.6, FOAM, 0.95 * fa);
+        b.arc(R * 0.72, lo, hi, 8 - seg, TEAL, 0.5 * fa);
+        b.arc(R * 0.75, lo, hi, 3.5 - seg * 0.4, FOAM, 0.95 * fa);
       }
     }
     // Брызги и комья — по касательной, по ходу хвоста.
@@ -722,7 +770,7 @@ registerImpactPainter('f3_thrash', {
       const y0 = s * R * 0.78;
       if (i % 3 === 0) {
         fly(BIT, x0, y0, 2, tx * tsp + c * rsp, ty * tsp + s * rsp, vz, G, age, 0.3);
-        clod(b, BIT, i % 2 ? MUD2 : MUD3, fade, i % 6 === 0 ? 2 : 1);
+        clod(b, BIT, i % 2 ? MUD2 : MUD, fade, i % 6 === 0 ? 2 : 1);
       } else {
         fly(BIT, x0, y0, 3, tx * tsp + c * rsp, ty * tsp + s * rsp, vz, G, age);
         drop(b, BIT, i % 2 ? FOAM : FOAM2, 1, false, i % 5 === 0 ? 2 : 1);
@@ -792,7 +840,11 @@ function waveWall(
   alpha: number,
   time: number,
 ): void {
-  if (thick > 0.5) b.arc(r - thick / 2 - 1, a - half, a + half, thick, TEAL_D, alpha * 0.6);
+  // Тело вала за гребнем: тёмная полоса, у гребня светлее — вода горбом.
+  if (thick > 0.5) {
+    b.arc(r - thick / 2 - 1, a - half, a + half, thick, TEAL_D, alpha * 0.65);
+    b.arc(r - 2, a - half, a + half, Math.min(3, thick * 0.5), TEAL, alpha * 0.8);
+  }
   const n = Math.ceil(2 * half * r * 1.1);
   for (let pass = 0; pass < 3; pass++) {
     if (pass === 0) b.ink(DEEP, alpha * 0.95);
@@ -818,8 +870,11 @@ function waveWall(
       }
     }
   }
-  b.ink(FOAM2, alpha * 0.8);
-  b.ring(0, 0, r + 1, 1, a - half, a + half, 2, time * 17);
+  // Подножие: пена там, где вал бьёт в песок, — рваная, бурлит.
+  b.ink(FOAM2, alpha * 0.85);
+  b.torn(0, 0, r + 1, 1, seed, 0.6, 1, a - half, a + half, time * 4);
+  b.ink(FOAM, alpha * 0.6);
+  b.torn(0, 0, r + 2, 1, seed + 3, 0.35, 1, a - half, a + half, -time * 3);
 }
 
 registerZonePainter('f3_wave', (g, z, px, py, scale, time) => {
@@ -898,26 +953,12 @@ registerImpactPainter('f3_wave', {
     b.sector(WAVE_R0, Math.max(WAVE_R0 + 1, wetR), a, half);
     b.ink(WET, 0.32 * (1 - dry) * (1 - clamp01((age - 1.1) / 0.5)));
     b.sector(Math.max(WAVE_R0, wetR), R, a, half);
-    // Полосы течения: пока вал бежит — наружу, на откате — к пасти.
-    b.ink(FOAM2, 0.4 * dry);
-    for (let j = 0; j < 9; j++) {
-      const aa = a + ((j + 0.5) / 9 - 0.5) * 2 * half * 0.9;
-      const c = Math.cos(aa);
-      const s = Math.sin(aa);
-      for (let q = 0; q < 2; q++) {
-        const base = WAVE_R0 + ((q + rnd(seed, j, q + 60)) / 2) * (R - WAVE_R0);
-        const drift = age < 0.3 ? outCubic(age / 0.3) * 18 : 18 - 70 * inQuad((age - 0.3) / 1.2);
-        const r = Math.min(wetR - 3, base + drift);
-        if (r < WAVE_R0 + 2) continue;
-        b.line(c * r, s * r, c * (r - 4), s * (r - 4));
-      }
-    }
     // Пена отката: рваная линия на краю воды.
     if (age > 0.3 && dry > 0) {
-      b.ink(FOAM, 0.75 * dry);
-      b.ring(0, 0, wetR, 1, a - half, a + half, 3, age * 9);
-      b.ink(FOAM2, 0.5 * dry);
-      b.ring(0, 0, wetR + 1, 1, a - half, a + half, 2, age * 5 + 1);
+      b.ink(FOAM, 0.8 * dry);
+      b.torn(0, 0, wetR, 1, seed + 21, 0.6, 2, a - half, a + half, age * 3);
+      b.ink(FOAM2, 0.55 * dry);
+      b.torn(0, 0, wetR + 2, 1, seed + 22, 0.4, 1, a - half, a + half, -age * 2);
     }
     // Вал добегает до края и ломается: оседает, пена лезет за край.
     if (age < WAVE_RUN + 0.32) {
@@ -925,7 +966,7 @@ registerImpactPainter('f3_wave', {
       waveWall(b, seed, rc + brk * 5, a, half, 7 * (1 - brk), 7 * (1 - brk), 1 - brk * 0.8, time);
     }
     // Пена клочьями: легла, где прошёл вал, и уезжает с откатом.
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 8; i++) {
       const rr = WAVE_R0 + 10 + rnd(seed, i, 1) * (R - WAVE_R0 - 14);
       if (rc < rr) continue;
       const aa = a + (rnd(seed, i, 2) * 2 - 1) * half * 0.85;
@@ -933,10 +974,9 @@ registerImpactPainter('f3_wave', {
       const r = rr - (rr - WAVE_R0) * 0.75 * inQuad(u);
       const al = 0.8 * (1 - clamp01((age - 0.9 - rnd(seed, i, 4) * 0.3) / 0.5));
       if (al <= 0) continue;
-      const len = (3 + rnd(seed, i, 5) * 6) / Math.max(10, r);
-      b.ink(i % 3 ? FOAM2 : FOAM, al);
-      b.ring(0, 0, r, 1, aa - len, aa + len);
-      b.ring(0, 0, r - 1, 1, aa - len * 0.5, aa + len * 0.6);
+      // Клок пены — рваный комок, а не черта и не точка.
+      b.ink(i % 3 ? FOAM2 : FOAM, al * 0.6);
+      b.blob(Math.cos(aa) * r, Math.sin(aa) * r, 2 + rnd(seed, i, 5) * 2, 1.3, seed + i, 0.45);
     }
     // Брызги с гребня по пути.
     for (let i = 0; i < 18; i++) {
@@ -1187,8 +1227,49 @@ interface TideTrack {
   ft: Float32Array;
   /** Когда вода ушла из клетки или −1. */
   et: Float32Array;
+  /** Откуда пришла вода (где озеро): 0 — север, 1 — юг, 2 — запад, 3 — восток. */
+  from: Uint8Array;
 }
 const TRACK = new WeakMap<object, TideTrack>();
+
+/** Сторона, где ближайшая вода озера: по прямым до шести клеток. */
+function lakeSide(tiles: Uint8Array, i: number, ww: number, n: number): number {
+  for (let d = 1; d <= 6; d++) {
+    const cand = [i - d * ww, i + d * ww, i - d, i + d];
+    for (let s = 0; s < 4; s++) {
+      const j = cand[s];
+      if (j < 0 || j >= n) continue;
+      if (s >= 2 && Math.floor(j / ww) !== Math.floor(i / ww)) continue;
+      if (tiles[j] === Tile.Deep) return s;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Полоса клетки от стороны `side` на долю `p` (0…1): прямоугольник от края,
+ * откуда пришла вода. Вернёт [x, y, w, h] и линию фронта.
+ */
+function band(x0: number, y0: number, side: number, p: number): [number, number, number, number] {
+  const L = Math.round(16 * p);
+  if (side === 0) return [x0, y0, 16, L];
+  if (side === 1) return [x0, y0 + 16 - L, 16, L];
+  if (side === 2) return [x0, y0, L, 16];
+  return [x0 + 16 - L, y0, L, 16];
+}
+
+/** Пена по фронту воды: рваная черта поперёк клетки на границе полосы. */
+function front(b: Brush, x0: number, y0: number, side: number, p: number, seed: number): void {
+  const L = Math.round(16 * p);
+  for (let q = 0; q < 16; q++) {
+    if (vn(seed, q / 3) > 0.72) continue;
+    const jag = vn(seed + 5, q / 2) > 0.5 ? 1 : 0;
+    if (side === 0) b.dot(x0 + q, y0 + L - 1 + jag, 1, 2);
+    else if (side === 1) b.dot(x0 + q, y0 + 15 - L - jag, 1, 2);
+    else if (side === 2) b.dot(x0 + L - 1 + jag, y0 + q, 2, 1);
+    else b.dot(x0 + 15 - L - jag, y0 + q, 2, 1);
+  }
+}
 
 registerZonePainter('f3_tidefx', (g, z, px, py, scale, time) => {
   const zz = z as TideZone;
@@ -1198,13 +1279,15 @@ registerZonePainter('f3_tidefx', (g, z, px, py, scale, time) => {
   for (const o of sim.zones) if (o.art === 'f3_tidefx' && o.id > zz.id) return true;
   const cells = zz.cells;
   const n = cells.length;
-  let tr = TRACK.get(zz);
-  if (!tr) {
-    tr = { ft: new Float32Array(n).fill(-1), et: new Float32Array(n).fill(-1) };
-    TRACK.set(zz, tr);
-  }
   const ww = zz.ww;
   const w = sim.world;
+  let tr = TRACK.get(zz);
+  if (!tr) {
+    const from = new Uint8Array(n);
+    for (let k = 0; k < n; k++) from[k] = lakeSide(w.tiles, cells[k], ww, w.w * w.h);
+    tr = { ft: new Float32Array(n).fill(-1), et: new Float32Array(n).fill(-1), from };
+    TRACK.set(zz, tr);
+  }
   const b = new Brush(g, px - zz.x * scale, py - zz.y * scale);
   const dryAt = (i: number, j: number) => j >= 0 && j < w.w * w.h && sim.tiles[j] === w.tiles[i];
   g.save();
@@ -1220,28 +1303,29 @@ registerZonePainter('f3_tidefx', (g, z, px, py, scale, time) => {
     }
     const x0 = (i % ww) * 16;
     const y0 = Math.floor(i / ww) * 16;
+    const side = tr.from[k];
     if (wet) {
       const u = time - tr.ft[k];
-      if (u < 0.6) {
-        // Залило: клетка вскипает пеной, клочья расходятся, капли прыгают.
-        const f = 1 - u / 0.6;
-        b.ink(FOAM, 0.5 * f * f);
-        b.dot(x0 + 1, y0 + 1, 14, 14);
-        b.ink(FOAM2, 0.9 * f);
-        for (let j = 0; j < 5; j++) {
-          const ax = rnd(i, j, 3) * 13;
-          const ay = rnd(i, j, 4) * 15;
-          b.dot(x0 + ax + (ax - 7) * u * 0.5, y0 + ay + (ay - 8) * u * 0.5, 3, 1);
+      if (u < 0.45) {
+        // Вода наползает на клетку со стороны озера: впереди ещё песок,
+        // по фронту — рваная пена, с фронта прыгают капли.
+        const p = outCubic(u / 0.4);
+        const [ax, ay, aw, ah] = band(x0, y0, side ^ 1, 1 - p);
+        if (aw > 0 && ah > 0) {
+          b.ink('#27313a', 0.8);
+          b.dot(ax, ay, aw, ah);
         }
-        for (let j = 0; j < 3; j++) {
+        b.ink(FOAM, 0.95 * (1 - u / 0.45));
+        front(b, x0, y0, side, p, i);
+        for (let j = 0; j < 2; j++) {
           fly(
             BIT,
-            x0 + 8,
-            y0 + 8,
+            x0 + 3 + rnd(i, j, 5) * 10,
+            y0 + 3 + rnd(i, j, 6) * 10,
             1,
-            (rnd(i, j, 5) - 0.5) * 50,
-            (rnd(i, j, 6) - 0.5) * 40,
-            50 + rnd(i, j, 7) * 50,
+            (rnd(i, j, 7) - 0.5) * 30,
+            (rnd(i, j, 8) - 0.5) * 20,
+            40 + rnd(i, j, 9) * 40,
             G,
             u,
           );
@@ -1259,18 +1343,24 @@ registerZonePainter('f3_tidefx', (g, z, px, py, scale, time) => {
         for (let y = 0; y < 16; y++) if ((y + k) % 5) b.dot(x0 + 16 + n0 - 1, y0 + y);
       if (dryAt(i, i - 1)) for (let y = 0; y < 16; y++) if ((y + k) % 5) b.dot(x0 - n0, y0 + y);
     } else if (tr.et[k] >= 0) {
-      // Отлив: дальние клетки сохнут первыми, у озера вода держится дольше.
+      // Отлив: дальние клетки сохнут первыми, у озера вода держится дольше и
+      // уходит к озеру полосой с пеной по краю; песок за ней мокрый и сохнет.
       const u = time - tr.et[k];
       const hold = 0.12 + 0.9 * (1 - k / Math.max(1, n - 1));
-      if (u < hold + 0.3) {
-        const f = u < hold ? 1 : 1 - (u - hold) / 0.3;
-        b.ink('#22656c', 0.85 * f);
+      const out = 0.35;
+      if (u < hold + out) {
+        const p = u < hold ? 1 : 1 - outCubic((u - hold) / out);
+        const [ax, ay, aw, ah] = band(x0, y0, side, p);
+        b.ink(WET, 0.45);
         b.dot(x0, y0, 16, 16);
-        b.ink(FOAM2, 0.7 * f);
-        for (let j = 0; j < 3; j++)
-          b.dot(x0 + Math.floor(rnd(i, j, 8) * 13), y0 + Math.floor(rnd(i, j, 9) * 15), 3, 1);
-      } else if (u < hold + 1.6) {
-        b.ink(WET, 0.45 * (1 - (u - hold - 0.3) / 1.3));
+        if (aw > 0 && ah > 0) {
+          b.ink('#1f5d66', 0.85);
+          b.dot(ax, ay, aw, ah);
+        }
+        b.ink(FOAM, 0.85);
+        front(b, x0, y0, side, p, i + 7);
+      } else if (u < hold + out + 1.4) {
+        b.ink(WET, 0.45 * (1 - (u - hold - out) / 1.4));
         b.dot(x0, y0, 16, 16);
       } else tr.et[k] = -1;
     }
@@ -1295,10 +1385,10 @@ function dive(b: Brush, seed: number, R: number, age: number): void {
   for (let j = 0; j < 3; j++) {
     const u = (age - j * 0.16) / 0.9;
     if (u < 0 || u > 1) continue;
-    b.ink(j ? FOAM2 : FOAM, 0.7 * (1 - u));
-    b.ring(0, 0, R * (0.5 + 1.6 * outCubic(u)), 0.72);
+    b.ink(j ? FOAM2 : FOAM, 0.75 * (1 - u));
+    b.torn(0, 0, R * (0.5 + 1.1 * outCubic(u)), 0.72, seed + j, 0.62, j ? 1 : 2);
   }
-  const o: SheetOpts = { r0: R * 0.35, r1: R * 0.75, h: 11, rise: 0.07, fall: 0.28 };
+  const o: SheetOpts = { r0: R * 0.35, r1: R * 0.75, h: 10, rise: 0.07, fall: 0.28 };
   sheet(b, seed, age, null, o);
   tips(b, seed, age, null, o, 14, 20, 45, true);
   // Вода схлопнулась над телом и выстрелила струёй.
@@ -1337,12 +1427,12 @@ function emerge(
   half: boolean | null,
 ): void {
   if (half !== true) {
+    // Вода вспучилась горбом и лопнула: рваный круг быстро расходится.
     if (age < 0.26) {
       const k = age / 0.26;
       const r = R * (0.4 + 0.7 * outCubic(k));
       b.ink(FOAM, 0.9 * (1 - k));
-      b.ring(0, 0, r, 0.72);
-      b.ring(0, 0, r - 1, 0.72);
+      b.torn(0, 0, r, 0.72, seed + 1, 0.78, 2);
     }
     if (age < 0.8) {
       const k = age / 0.8;
@@ -1352,10 +1442,37 @@ function emerge(
     for (let j = 0; j < 2; j++) {
       const u = (age - 0.12 - j * 0.2) / 0.8;
       if (u < 0 || u > 1) continue;
-      b.ink(FOAM2, 0.55 * (1 - u));
-      b.ring(0, 0, R * (0.7 + 1.4 * outCubic(u)), 0.72);
+      b.ink(FOAM2, 0.6 * (1 - u));
+      b.torn(0, 0, R * (0.7 + 1.0 * outCubic(u)), 0.72, seed + 4 + j, 0.6);
     }
   }
+  if (ang === undefined) {
+    // Всплыла: вода стекает с тела — капли падают по его краю и бьют кружками.
+    for (let i = 0; i < 16; i++) {
+      const a = rnd(seed, i, 60) * TAU;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      if (half !== null && s >= 0 !== half) continue;
+      const t = age - rnd(seed, i, 61) * 0.3;
+      if (t < 0) continue;
+      const sp = 8 + rnd(seed, i, 62) * 18;
+      const z0 = 4 + rnd(seed, i, 63) * 8;
+      fly(
+        BIT,
+        c * R * 0.5,
+        s * R * 0.3,
+        z0,
+        c * sp,
+        s * sp * 0.6,
+        10 + rnd(seed, i, 64) * 25,
+        G,
+        t,
+      );
+      drop(b, BIT, i % 3 ? FOAM2 : FOAM, 1, true);
+    }
+    return;
+  }
+  // Взлёт: тяжёлое тело вырвалось из воды — стенка кольцом, капли с зубцов.
   const o: SheetOpts = {
     r0: R * 0.4,
     r1: R * (0.75 + 0.15 * amp),
@@ -1365,8 +1482,7 @@ function emerge(
   };
   sheet(b, seed, age, half, o);
   tips(b, seed, age, half, o, Math.round(12 * amp), 20, 40 + 20 * amp, true);
-  if (ang === undefined) return;
-  // Взлёт: тело тянет за собой струю — капли уходят вверх вслед за ним.
+  // Тело тянет за собой струю — капли уходят вверх вслед за ним.
   const ux = Math.cos(ang);
   const uy = Math.sin(ang);
   for (let i = 0; i < 12; i++) {
@@ -1399,7 +1515,7 @@ function kick(b: Brush, seed: number, R: number, age: number, ang: number): void
     const s = Math.sin(a);
     const sp = 35 + rnd(seed, i, 2) * 50;
     fly(BIT, c * R * 0.2, s * R * 0.2, 2, c * sp, s * sp, 50 + rnd(seed, i, 3) * 45, G, age, 0.3);
-    clod(b, BIT, i % 2 ? MUD2 : MUD3, fade, i % 3 === 0 ? 2 : 1);
+    clod(b, BIT, i % 2 ? MUD2 : MUD, fade, i % 3 === 0 ? 2 : 1);
   }
   for (let i = 0; i < 6; i++) {
     const u = age - i * 0.03;
@@ -1437,8 +1553,8 @@ registerZonePainter('f3_fx_wake', (g, z, px, py) => {
   const b = new Brush(g, px, py);
   g.save();
   const r = 2 + 17 * outCubic(u);
-  b.ink(FOAM2, 0.5 * (1 - u));
-  b.ring(0, 0, r, 0.68, a + Math.PI - 2.2, a + Math.PI + 2.2);
+  b.ink(FOAM2, 0.55 * (1 - u));
+  b.torn(0, 0, r, 0.68, zz.id, 0.7, 1, a + Math.PI - 2.2, a + Math.PI + 2.2);
   if (u < 0.28) {
     // Пена у плавника — черта поперёк хода.
     const f = 1 - u / 0.28;
@@ -1509,8 +1625,8 @@ registerZonePainter('f3_fx_boil', (g, z, px, py, scale) => {
   g.save();
   for (let j = 0; j < 3; j++) {
     const f = (u * 1.7 + j / 3) % 1;
-    b.ink(FOAM2, (0.2 + 0.5 * u) * Math.sin(f * Math.PI));
-    b.ring(0, 0, R * (1.3 - f), 0.72);
+    b.ink(FOAM2, (0.25 + 0.55 * u) * Math.sin(f * Math.PI));
+    b.torn(0, 0, R * (1.3 - f), 0.72, seed + j, 0.6);
   }
   b.ink(FOAM, 0.2 + 0.6 * u);
   b.blob(0, 0, R * 0.45 * u, R * 0.3 * u, seed, 0.4);
