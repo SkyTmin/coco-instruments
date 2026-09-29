@@ -25,7 +25,7 @@
 // считается от зерна и возраста, а не копится по кадрам: лист кадров и игра
 // рисуют одно и то же, и стоп-кадр держит позу сам.
 import { Px } from '../dungeon-art';
-import { MOB_WARM, paintSim, registerImpactPainter, registerMobWarm, registerZonePainter } from '../dungeon-paint';
+import { paintSim, registerImpactPainter, registerMobWarm, registerZonePainter } from '../dungeon-paint';
 import type { ImpactRec } from '../dungeon-paint';
 import type { Mob, Strike, Zone } from '../dungeon-sim';
 
@@ -1616,15 +1616,40 @@ registerZonePainter(
 // РЫВОК: прицел (`f5_fxlane`) — стрелки бегут по полосе, пока бык водит
 // рогами — тускло; замер — «щелчок» по полосе и стрелки горят; последние
 // 0,28 с (окно уклона) — жёлтые. На конце — куда врежется (звезда трещин у
-// стены) или где его занесёт (стоп-черта). Полоса — поверх всего: движок
-// кладёт на неё свой красный прямоугольник (`m.tele`), под ним стрелки
-// тонули. Бег (`f5_fxdust`) — клубы пыли за копытами, 10 в секунду, на
-// старте — рывок из-под копыт веером. Занос
-// (`f5_fxskid`) — две борозды, песок веером, искры с подков. Стена
+// стены) или где его занесёт (стоп-черта). Красную метку движка (`m.tele`)
+// бык не рисует (`vNoTele`): под ней стрелки тонули. Полоса со своей
+// заливкой лежит на полу, под быком и героем. Бег (`f5_fxdust`) — клубы
+// пыли за копытами, 10 в секунду, на старте — рывок из-под копыт веером.
+// Занос (`f5_fxskid`) — две борозды, песок веером, искры с подков. Стена
 // (`f5_fxwall`, поверх всех: обломки летят в камеру) — трещины в кладке,
-// обломки назад, пыль по стене, песок
-// сыплется сверху; колонна — обломки вперёд и уголья факела.
+// обломки назад, пыль по стене, песок сыплется сверху; колонна — обломки
+// вперёд и уголья факела.
 // =============================================================================
+
+/**
+ * Многоугольник по строкам пикселей (центр пикселя внутри — пиксель наш):
+ * ровный край без сглаживания канвы, полупрозрачная заливка без швов.
+ */
+function fillPoly(p: Pen, xs: number[], ys: number[]): void {
+  const y0 = Math.floor(Math.min(...ys));
+  const y1 = Math.ceil(Math.max(...ys));
+  const n = xs.length;
+  for (let y = y0; y < y1; y++) {
+    const cy = y + 0.5;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      if (cy < ys[i] === cy < ys[j]) continue;
+      const x = xs[i] + ((cy - ys[i]) / (ys[j] - ys[i])) * (xs[j] - xs[i]);
+      if (x < lo) lo = x;
+      if (x > hi) hi = x;
+    }
+    const a = Math.round(lo);
+    const b = Math.round(hi);
+    if (b > a) p.rect(a, y, b - a, 1);
+  }
+}
 
 /** Галочка «>» в два пикселя: остриё в (x, y), смотрит по (ux, uy). */
 function chevron(p: Pen, x: number, y: number, ux: number, uy: number, s: number, c: string, a: number): void {
@@ -1664,6 +1689,29 @@ registerZonePainter(
     const r0 = m.r * S;
     const blink = danger && !reduced() && Math.floor(left / 0.07) % 2 === 0;
     const col = danger ? (blink ? C.white : C.yellow) : lock ? C.orange : C.redHot;
+    // Полоса на полу — своя, вместо красной метки движка (`vNoTele`): тусклая
+    // по всей длине, а от быка к концу наливается по мере прицела; в окне
+    // уклона — ярче и мигает.
+    const band = (u0: number, u1: number) => {
+      const xs = [0, 0, 0, 0];
+      const ys = [0, 0, 0, 0];
+      [
+        [u0, -W],
+        [u1, -W],
+        [u1, W],
+        [u0, W],
+      ].forEach(([u, s], i) => {
+        xs[i] = mx + ux * u + nx * s;
+        ys[i] = my + uy * u + ny * s;
+      });
+      fillPoly(p, xs, ys);
+    };
+    p.col(C.redHot, danger ? (blink ? 0.34 : 0.24) : 0.1 + 0.06 * k);
+    band(r0, L);
+    if (!danger) {
+      p.col(lock ? C.orange : C.redHot, 0.14);
+      band(r0, r0 + (L - r0) * k);
+    }
     // Кромки полосы в два пикселя: пунктир бежит вперёд.
     const run = time * (lock ? 70 : 26);
     for (const s of [-1, 1])
@@ -2088,8 +2136,8 @@ registerZonePainter(
 // =============================================================================
 // ПРОГРЕВ: заготовки техник рисуются до боя, по одной на шаг (движок тратит
 // на прогрев до 3 мс за кадр, пока бык в мире) — первый клуб пыли, камень
-// или язык пламени не рисуется впервые посреди удара. Генератор тела быка
-// (`f5-art` грузится раньше, см. `art.ts`) идёт первым и не теряется.
+// или язык пламени не рисуется впервые посреди удара. Генераторы на один
+// рисовальщик идут по очереди: тело быка (`f5-art`) — первым.
 // =============================================================================
 
 function* warmFx(): Generator<unknown> {
@@ -2118,11 +2166,4 @@ function* warmFx(): Generator<unknown> {
   stunStar(1);
 }
 
-const bodyWarm = MOB_WARM.get('f5_minotaur');
-registerMobWarm('f5_minotaur', function* () {
-  if (bodyWarm) {
-    const it = bodyWarm();
-    while (!it.next().done) yield;
-  }
-  yield* warmFx();
-});
+registerMobWarm('f5_minotaur', warmFx);

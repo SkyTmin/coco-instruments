@@ -913,14 +913,14 @@ const hasteOf = (sim: Sim) => {
   return p >= 2 ? 1.3 : p >= 1 ? 1.12 : 1;
 };
 
-// v2.85 — только рисунок: визуальная зона БЕЗ урона и статусов (пыль, искры,
-// трещины, огонь разлома — рисует `f5-boss-fx.ts`). Своих `f5_fx*` разом не
-// больше 36, пыли движения — не больше 24. ГСЧ боя не трогает.
+// v2.85 — только рисунок: зона-картинка (`api.vfx`: без урона и статусов, номер
+// мимо `nextId`) — пыль, искры, трещины, огонь разлома рисует `f5-boss-fx.ts`.
+// Своих `f5_fx*` разом не больше 36, пыли движения — не больше 24.
 type FxIn = { ang?: number; mid?: number; len?: number; v?: number; n?: number; warn?: number; above?: boolean };
 function fx(sim: Sim, api: SimApi, art: string, x: number, y: number, life: number, o: FxIn = {}, move = false): void {
   let n = 0;
   for (const z of sim.zones) if (z.art?.startsWith('f5_fx')) n++;
-  if (n < (move ? 24 : 36)) api.zone(sim, { x, y, r: 0.5, life, art, ...o } as ZoneIn & FxIn);
+  if (n < (move ? 24 : 36)) api.vfx(sim, { x, y, r: 0.5, life, art, ...o } as ZoneIn & FxIn);
 }
 // v2.85 — только рисунок: тряска по силе удара, вдали от героя — вполсилы.
 const fxShake = (sim: Sim, x: number, y: number, k: number) =>
@@ -1009,7 +1009,7 @@ function startAim(sim: Sim, m: Mob, api: SimApi, next: boolean): void {
   m.data.next = next ? 1 : 0;
   api.setMode(m, 'aim');
   // v2.85 — только рисунок: полоса разбега (стрелки, конец пути, копыто роет).
-  fx(sim, api, 'f5_fxlane', m.x, m.y, (next ? MINO.aimNext : MINO.aim) / hasteOf(sim) + 0.05, { mid: m.id, above: true });
+  fx(sim, api, 'f5_fxlane', m.x, m.y, (next ? MINO.aimNext : MINO.aim) / hasteOf(sim) + 0.05, { mid: m.id });
 }
 
 registerBrain('f5_minotaur', {
@@ -1021,6 +1021,7 @@ registerBrain('f5_minotaur', {
     const phase = sim.boss?.phase ?? 0;
     m.tele = null;
     m.danger = 0;
+    m.data.vNoTele = 1; // v2.85 — только рисунок: полосу рывка рисует `f5_fxlane`
     // Темп фазы — и рисовальщику: замах секиры короче в ярости.
     m.data.haste = haste;
     m.data.axeCd = (m.data.axeCd ?? 1.5) - dt;
