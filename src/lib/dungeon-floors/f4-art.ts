@@ -1425,7 +1425,9 @@ function statueWind(k: number, from: StatueRig, gold: boolean): StatueRig {
     r = mixStatue(r, { ...SP.hit, gold, eyes: 1 }, s);
     // Меч идёт ЧЕРЕЗ верх вперёд: угол растёт от «за головой» к «в пол перед собой».
     r.sa = lerp(prev, SP.hit.sa, s);
-    r.smear = [SP.wind.sa - 0.15, r.sa, 0.9];
+    // След — только когда клинок уже прошёл заметную дугу: иначе у острия
+    // висело бы пятно.
+    if (r.sa - (SP.wind.sa - 0.15) > 0.5) r.smear = [SP.wind.sa - 0.15, r.sa, 0.9];
   }
   return { ...r, eyes: 1, gold };
 }
@@ -1727,6 +1729,7 @@ registerMobPainter('f4_statue', (m, pose) => {
   }
   let rig: StatueRig;
   let sy = 1;
+  let ghost: MobFrame['ghost'] = null;
   const since = now - mem.since;
   if (mode === 'sleep' || mode === 'dormant') rig = { ...SP.rest, gold };
   else if (mode === 'rise' || mode === 'alert') {
@@ -1742,7 +1745,10 @@ registerMobPainter('f4_statue', (m, pose) => {
       });
     }
     rig = statueRise(q24(Math.min(T, 0.8)), gold);
-  } else if (mode === 'still' || mode === 'stun') {
+  } else if (mode === 'stun') {
+    // Оглушён ударом — держит прежнюю позу, отдачу рисует удар.
+    rig = { ...mem.last, smear: null, crumbs: [] };
+  } else if (mode === 'still') {
     // Застыла камнем в новой позе — без перехода: повернулся, а она уже иначе.
     rig = { ...FROZEN[mod(m.data.pose ?? 0, 4)], gold, eyes: m.data.eyes ?? 0 };
   } else if (mode === 'creep' || mode === 'chase') {
@@ -1752,10 +1758,13 @@ registerMobPainter('f4_statue', (m, pose) => {
     const k = clamp01((m.data.wk ?? pose.t) / WIND_T);
     rig = statueWind(k, mem.from, gold);
     rig.eyes = m.data.eyes ?? 1;
+    // Удар — быстрое движение всего тела: шлейф силуэтов, как у рывка героя.
+    if (k > 0.82) ghost = { every: 0.03, life: 0.16, tint: '#c8ccc0', alpha: 0.32 };
   } else if (mode === 'recover') {
     const got = statueRecover(pose.t, gold);
     rig = got.rig;
     sy = got.sy;
+    if (pose.t < 0.05) ghost = { every: 0.03, life: 0.16, tint: '#c8ccc0', alpha: 0.32 };
   } else if (mode === 'bow') {
     const got = statueBow(pose.t, mem.from, gold);
     rig = got.rig;
@@ -1763,7 +1772,9 @@ registerMobPainter('f4_statue', (m, pose) => {
   } else rig = { ...SP.guard, gold, eyes: m.data.eyes ?? 0 };
   rig = { ...rig, cracks };
   mem.last = rig;
-  return out(statueKey(rig), () => paintStatueRig(rig), rig, sy !== 1 ? { sy, sx: 2 - sy } : {});
+  const extra: Partial<MobFrame> = sy !== 1 ? { sy, sx: 2 - sy } : {};
+  if (ghost) extra.ghost = ghost;
+  return out(statueKey(rig), () => paintStatueRig(rig), rig, extra);
 });
 
 /** Прогрев стража: подъём, четыре позы, шаг, замах с ударом, поклон — в обе стороны. */
@@ -2416,9 +2427,11 @@ function paintHand(
     }
     return null;
   };
-  const R = 15;
-  const x0 = Math.round(wx);
-  const y0 = Math.round(wy);
+  // Кисть лежит в круге радиусом 9 вокруг точки на 6 вдоль предплечья —
+  // обходим только его.
+  const R = 9;
+  const x0 = Math.round(wx + ux * 6);
+  const y0 = Math.round(wy + uy * 6);
   const cells: [number, number, RGBA][] = [];
   for (let y = y0 - R; y <= y0 + R; y++)
     for (let x = x0 - R; x <= x0 + R; x++) {
@@ -2430,6 +2443,7 @@ function paintHand(
       if (c) cells.push([x, y, c]);
     }
   // Шов по краю кисти поверх камня — кисть не сливается с грудью и коленом.
+  const own = new Set(cells.map((c) => c[1] * 1000 + c[0]));
   for (const [x, y] of cells)
     for (const [ddx, ddy] of [
       [1, 0],
@@ -2439,7 +2453,7 @@ function paintHand(
     ]) {
       const nx = x + ddx;
       const ny = y + ddy;
-      if (cells.some((c) => c[0] === nx && c[1] === ny)) continue;
+      if (own.has(ny * 1000 + nx)) continue;
       if (p.at(nx, ny)) p.set(nx, ny, BASALT.deep);
     }
   for (const [x, y, c] of cells) p.set(x, y, c);
@@ -2682,6 +2696,9 @@ function idolRule(r: IdolRig, t: number, D: number, J: number, rule: number, now
   let R = mixArm(R0, ARM.grip, a0);
   R.wy += a0 * 1;
   if (a1 > 0) R = mixArm(R, ARM.palmUp, up, [66, 36], [62, 38]);
+  // Кисть раскрывается, едва оторвавшись от колена: плоская «колено» в
+  // воздухе читалась бы кирпичом.
+  if (a1 > 0.06) R.hand = 'palm';
   if (judge > 0) R = mixArm(R, ARM.palmPush, judge);
   r.R = R;
   // Вторая рука держится за колено — напряжение.
@@ -3076,16 +3093,21 @@ function idolBodyKey(r: IdolRig, cracks: number): string {
   ].join('|');
 }
 
-function paintIdolBody(r: IdolRig, cracks: number): Px {
+/**
+ * Кадр тела. `tint` — вспышка (удар героя, раскол): белеет только сам
+ * идол, трон остаётся камнем.
+ */
+function paintIdolBody(r: IdolRig, cracks: number, tint: RGBA | null = null, tk = 0.7): Px {
   const R = Math.round;
   const p = new OPx(ID_W, ID_H, ID_OX, ID_OY);
+  const throne = idolPart('throne', paintThrone);
+  p.data.set(throne.p.data);
   const legs = crackSet('legs', cracks, r.grow, r.deathK);
-  const base = idolPart(`base|${legs.key}`, (q) => {
-    paintThrone(q);
+  const lp = idolPart(`legs|${legs.key}`, (q) => {
     paintLegs(q);
     paintCracks(q, legs, 'legs', r.grow, r.deathK);
   });
-  p.data.set(base.p.data);
+  blit(p, lp.p, 0, 0, lp.box);
   paintCloth(p, R(r.cloth));
   const tx = R(r.tx);
   const ty = R(r.ty);
@@ -3142,6 +3164,24 @@ function paintIdolBody(r: IdolRig, cracks: number): Px {
     const y = R(r.crumbs[i + 1]);
     p.set(x, y, BASALT.lit);
     p.set(x, y + 1, BASALT.sh);
+  }
+  if (tint) {
+    // Белеет всё, что не трон: там, где кадр отличается от голого трона.
+    const d = p.data;
+    const t0 = throne.p.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (!d[i + 3]) continue;
+      if (
+        d[i] === t0[i] &&
+        d[i + 1] === t0[i + 1] &&
+        d[i + 2] === t0[i + 2] &&
+        d[i + 3] === t0[i + 3]
+      )
+        continue;
+      d[i] += (tint[0] - d[i]) * tk;
+      d[i + 1] += (tint[1] - d[i + 1]) * tk;
+      d[i + 2] += (tint[2] - d[i + 2]) * tk;
+    }
   }
   outlineRaw(p, INK);
   return p;
@@ -3298,23 +3338,26 @@ function paintIdolLit(r: IdolRig, cracks: number, lx: number, ly: number): Px | 
     for (const s of [-1, 1])
       p.set(32 + s * 5 + hx, 13 + hy + 1, hex('#ff4a1c', R(90 + 90 * r.ember)));
   }
-  // Лучи из глаз на залпе: вниз, в зал, чуть врозь; гаснут за три кадра.
+  // Лучи из глаз на залпе: вниз, в зал, чуть врозь; у глаза — толще и
+  // белее, к низу кадра — тоньше и краснее. Гаснут за три кадра.
   if (r.beam > 0) {
     any = true;
     const b = stepN(r.beam, 3) / 3;
-    const hotB = mix(hex('#ff7a2a'), WHITE, 0.55 * b);
     for (const s of [-1, 1]) {
       const ex = 32 + s * 5 + hx;
       const ey = 13 + hy;
-      for (let i = 1; i <= 18; i++) {
-        const x = ex + s * Math.round(i * 0.3);
+      // Луч уходит за нижний край кадра — в зал, где его ловит полоса.
+      const n = 88 - ey;
+      for (let i = 1; i <= n; i++) {
+        const f = i / n;
+        const x = ex + s * Math.round(i * 0.14);
         const y = ey + i;
-        const al = 255 * b * (1 - i / 21);
-        p.set(x, y, [hotB[0], hotB[1], hotB[2], R(al)]);
-        if (i > 2) {
-          p.set(x - 1, y, [255, 110, 60, R(al * 0.4)]);
-          p.set(x + 1, y, [255, 110, 60, R(al * 0.4)]);
-        }
+        const al = 255 * b * (1 - f * 0.55);
+        const core = mix(hex('#fff4d0'), hex('#ff6a3a'), f * 0.8);
+        p.set(x, y, [core[0], core[1], core[2], R(al)]);
+        if (f < 0.35) p.set(x + s, y, [core[0], core[1], core[2], R(al * 0.8)]);
+        p.set(x - 1 + (f < 0.35 && s < 0 ? -1 : 0), y, [255, 90, 50, R(al * 0.45)]);
+        p.set(x + 1 + (f < 0.35 && s > 0 ? 1 : 0), y, [255, 90, 50, R(al * 0.45)]);
       }
     }
   }
@@ -3716,7 +3759,7 @@ const idolFrames = frameLRU<HTMLCanvasElement>(260);
 const idolLits = frameLRU<HTMLCanvasElement | null>(150);
 
 /** Числа сценария, что мозг кладёт для рисунка (`v…`), с запасом на их отсутствие. */
-function idolState(m: Mob, pose: MobPose): IdolRig {
+function idolState(m: Mob, pose: MobPose, look = 0): IdolRig {
   const d = m.data;
   const st = d.st ?? 0;
   const t = Math.max(0, pose.t - (d.vT0 ?? 0));
@@ -3748,6 +3791,13 @@ function idolState(m: Mob, pose: MobPose): IdolRig {
     default:
       idolRest(r, now);
   }
+  // Голова не спеша поворачивается к герою — там, где поза её не занимает.
+  if (
+    st === 0 ||
+    (st === 1 && t > 0.6 && t < (d.vJudge ?? D - 1.5)) ||
+    (st === 2 && t > 0.4 && t < D - 0.4)
+  )
+    r.turn = look;
   // Удар рукой поверх любого состояния.
   const slamT = pose.t - (d.vSlam0 ?? -99);
   if (slamT >= 0 && slamT < SLAM_END) idolSlam(r, slamT, d.slamSide ?? 1);
@@ -3775,10 +3825,14 @@ registerMobPainter('f4_idol', (m, pose) => {
     const key = `D|${t.toFixed(4)}|${pose.flash && t < BREAK_T ? 1 : 0}`;
     let img = idolFrames.get(key);
     if (!img) {
-      let px = t < BREAK_T ? paintIdolBody(deathRig(t), 6) : paintIdolCollapse(t);
       // Кадр перед расколом — камень раскалён добела: склейка под вспышкой.
-      if (t >= BREAK_T - 1 / 24 - 1e-6 && t < BREAK_T) px = px.tint(hex('#fff4d8'), 0.55);
-      else if (pose.flash && t < BREAK_T) px = px.tint(WHITE, 0.7);
+      const white = t >= BREAK_T - 1 / 24 - 1e-6 && t < BREAK_T;
+      const px =
+        t >= BREAK_T
+          ? paintIdolCollapse(t)
+          : white
+            ? paintIdolBody(deathRig(t), 6, hex('#fff4d8'), 0.6)
+            : paintIdolBody(deathRig(t), 6, pose.flash ? WHITE : null);
       img = idolFrames.set(key, px.canvas());
     }
     const lkey = `D|${t.toFixed(4)}`;
@@ -3820,7 +3874,7 @@ registerMobPainter('f4_idol', (m, pose) => {
   mem.flash = m.flash;
   mem.now = now;
   const cracks = Math.min(6, (m.data.cracks ?? 0) + (m.data.phase ?? 0));
-  const r = idolState(m, pose);
+  const r = idolState(m, pose, mem.lx);
   // Удар героя: торс и голова отдают на пиксель от героя, трещины и сердце
   // вспыхивают — камень держит удар, но его видно.
   const hk = now - mem.hitAt;
@@ -3835,8 +3889,7 @@ registerMobPainter('f4_idol', (m, pose) => {
   const key = `${idolBodyKey(r, cracks)}|${pose.flash ? 1 : 0}`;
   let img = idolFrames.get(key);
   if (!img) {
-    let px = paintIdolBody(r, cracks);
-    if (pose.flash) px = px.tint(WHITE, 0.7);
+    const px = paintIdolBody(r, cracks, pose.flash ? WHITE : null);
     img = idolFrames.set(key, px.canvas());
   }
   const lkey = idolLitKey(r, cracks, mem.lx, mem.ly);
@@ -4522,3 +4575,22 @@ registerItemArt('f4_ration', () => {
 
 // Пустые обращения — чтобы импорт типов не терялся при чистке.
 export type { Mob, WorldObj };
+
+// TEMP-PERF
+export const __f4dbg = {
+  paintArm,
+  outlineRaw,
+  blit,
+  ARM,
+  paintCloth,
+  paintIdolBody,
+  paintIdolLit,
+  restRig,
+  paintThrone,
+  paintLegs,
+  paintTorso,
+  paintHead,
+  OPx,
+  paintStatueRig,
+  SP,
+};
