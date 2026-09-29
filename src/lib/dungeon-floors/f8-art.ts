@@ -4170,6 +4170,12 @@ interface DP {
   shake: number;
   /** Прозрачность кадра. */
   al: number;
+  /** Клинок в плоскости пола (горизонтальный рез): угол — по полу, рисунок — в ракурсе. */
+  flat: number;
+  /** Блик бежит по клинку от цубы к острию (0…1), 0 — нет. */
+  glint: number;
+  /** Ореол виден (0…1): гаснет при смерти. */
+  hal: number;
 }
 
 const DP_KEYS = [
@@ -4216,6 +4222,9 @@ const DP_KEYS = [
   'rot',
   'shake',
   'al',
+  'flat',
+  'glint',
+  'hal',
 ] as const satisfies readonly (keyof DP)[];
 
 /** Стойка: меч в одной руке, остриём вниз-вперёд, вес на дальней ноге. */
@@ -4263,6 +4272,9 @@ const GUARD: DP = {
   rot: 0,
   shake: 0,
   al: 1,
+  flat: 0,
+  glint: 0,
+  hal: 1,
 };
 
 function mixDP(a: DP, b: DP, k: number): DP {
@@ -4360,6 +4372,9 @@ function shaken(p: DP, t: number): DP {
 
 // ---- Таймлайны техник (тайминги — из мозга, `BOSS8` в f8-brains.ts) ----
 
+/** Отрезок следа вокруг кадра удара: разгон (3 кадра) и угасание (2). */
+const swingWin = (x: number): [number, number] => [x - 3.2 / DFPS, x + 2.2 / DFPS];
+
 /** Длительность окна после каждой техники — как `m.data.rec` в мозге. */
 const REC8: Record<string, number> = {
   fan: 1.05,
@@ -4384,13 +4399,14 @@ function tlOf(id: string, make: () => DTL): DTL {
 function tlRoar(): DTL {
   const keys = track(GUARD, [
     [0, {}],
+    // Вдох: голова вниз, плечи в себя, клинок назад к земле.
     [
       0.24,
       {
-        lean: 0.34,
+        lean: 0.36,
         hy: 1.8,
         hdx: 0.8,
-        hdy: 1.4,
+        hdy: 1.6,
         ax: -1,
         ay: -17.5,
         ang: 2.35,
@@ -4401,38 +4417,57 @@ function tlRoar(): DTL {
         cloak: 0.3,
       },
     ],
-    [0.36, { hy: 2.4, lean: 0.4, glow: 0.45, shake: 0.3 }, EZ.in2],
+    [0.36, { hy: 2.4, lean: 0.42, glow: 0.45, shake: 0.3 }, EZ.in2],
+    // Рёв: грудь вперёд, голова запрокинута, руки врозь, меч к небу.
     [
       0.46,
       {
-        lean: -0.28,
-        hy: -0.8,
-        hx: -0.4,
-        hdx: -1.8,
-        hdy: -1.6,
-        ax: 9.5,
-        ay: -26.5,
-        ang: -0.42,
-        bx: -7.5,
-        by: -24,
+        lean: -0.34,
+        hy: -0.9,
+        hx: -0.6,
+        hdx: -2.4,
+        hdy: -2.2,
+        ax: 8.6,
+        ay: -30,
+        ang: -1.0,
+        bx: -8,
+        by: -27,
         squint: 0,
         mouth: 1,
         wide: 1,
         glow: 1,
         halo: 1,
-        cloak: 2.4,
-        hairUp: 0.75,
+        cloak: 2.6,
+        hairUp: 0.8,
         sx: 0.96,
-        sy: 1.05,
+        sy: 1.06,
         shake: 0,
       },
       EZ.out3,
     ],
     [0.56, { sx: 1, sy: 1, shake: 0.55 }, EZ.out2],
-    [1.2, { glow: 0.8, halo: 0.7, hairUp: 0.55, cloak: 2, shake: 0.35 }, EZ.lin],
+    [1.2, { glow: 0.85, halo: 0.75, hairUp: 0.6, cloak: 2.2, shake: 0.35 }, EZ.lin],
     [1.6, { ...GUARD, glow: 0.2 }, EZ.io],
   ]);
-  return { keys, dur: 1.6, post: shaken, trail: [], hits: [] };
+  return {
+    keys,
+    dur: 1.6,
+    // Пока ревёт — полы и волосы бьются, ореол пульсирует.
+    post: (p, t) => {
+      if (t > 0.46 && t < 1.3) {
+        const k = Math.min(1, (t - 0.46) / 0.1) * Math.min(1, (1.3 - t) / 0.2);
+        p = {
+          ...p,
+          cloak: p.cloak + 0.7 * k * Math.sin(t * 31),
+          wind: 0.9 * k + 0.5 * k * Math.sin(t * 23 + 1),
+          halo: p.halo + 0.25 * k * Math.sin(t * 19),
+        };
+      }
+      return shaken(p, t);
+    },
+    trail: [],
+    hits: [],
+  };
 }
 
 /**
@@ -4471,8 +4506,8 @@ function tlFan(ph: number): DTL {
       { hy: 2.4, lean: 0.24, hdx: 0.6, ax: -6, ay: -14.8, ang: 2.95, glow: 0.7, wide: 0.6 },
     ],
     [c - 3 / DFPS, { ang: 3.06, ay: -14.2, glow: 0.95, shake: 0.4 }, EZ.in2],
-    [c - 2 / DFPS, { ang: 2.25, ax: -2, ay: -15.4, back: 0, shake: 0, lean: 0.28 }, EZ.in2],
-    [c - 1 / DFPS, { ang: 0.95, ax: 3, ay: -17, lean: 0.32, hx: 1, nx: 5 }, EZ.lin],
+    [c - 2 / DFPS, { ang: 2.25, ax: -2, ay: -17.6, back: 0, shake: 0, lean: 0.28 }, EZ.in2],
+    [c - 1 / DFPS, { ang: 0.95, ax: 3, ay: -19, lean: 0.32, hx: 1, nx: 5 }, EZ.lin],
     [
       c,
       {
@@ -4502,9 +4537,10 @@ function tlFan(ph: number): DTL {
   let pantFrom = 0;
   if (!echo) {
     list.push(
-      [c + 9 / DFPS, { ang: -0.86, ax: 6, ay: -24.6, glow: 0.3, dx: 0.6, wide: 0 }, EZ.io],
+      [c + 7 / DFPS, { ang: -0.92, ax: 6, ay: -25, glow: 0.35, dx: 0.8, wide: 0 }, EZ.io],
+      [c + 11 / DFPS, { ang: -0.72, ay: -24.2, dx: 0.5 }, EZ.lin],
       [
-        modeDur + rec * 0.5,
+        modeDur + rec * 0.66,
         {
           ang: 1.0,
           ax: 5.6,
@@ -4523,7 +4559,7 @@ function tlFan(ph: number): DTL {
         EZ.io,
       ],
     );
-    pantFrom = modeDur + rec * 0.35;
+    pantFrom = modeDur + rec * 0.45;
   } else {
     const e = fq(T * 1.6);
     list.push(
@@ -4586,7 +4622,7 @@ function tlFan(ph: number): DTL {
     keys,
     dur,
     post: (p, t) => shaken(pant(p, t, t > pantFrom ? Math.min(1, (t - pantFrom) * 4) * 0.8 : 0), t),
-    trail: hits.map((x) => [x - 0.12, x + 0.12] as [number, number]),
+    trail: hits.map(swingWin),
     hits,
   };
 }
@@ -4655,10 +4691,10 @@ function tlSweep(ph: number): DTL {
     [c + 1 / DFPS, {}, EZ.lin],
     [
       c + 4 / DFPS,
-      { ang: 1.95, ax: 5.5, ay: -14, lean: 0.52, dx: 1.6, sx: 1, sy: 1, glow: 0.5 },
+      { ang: 2.45, ax: 4.4, ay: -13.6, lean: 0.52, dx: 1.6, sx: 1, sy: 1, glow: 0.5, back: 1 },
       EZ.out3,
     ],
-    [c + 10 / DFPS, { glow: 0.2, dx: 1.2 }, EZ.lin],
+    [c + 10 / DFPS, { glow: 0.2, dx: 1.2, ang: 2.35 }, EZ.lin],
     [
       dur - 0.16,
       { ...GUARD, lean: 0.2, hy: 0.6, ang: 1.4, ax: 5.2, ay: -18.4, squint: 0.4, dx: 0.4 },
@@ -4666,7 +4702,7 @@ function tlSweep(ph: number): DTL {
     ],
     [dur, { ...GUARD }, EZ.io],
   ]);
-  return { keys, dur, post: shaken, trail: [[c - 0.12, c + 0.12]], hits: [c] };
+  return { keys, dur, post: shaken, trail: [swingWin(c)], hits: [c] };
 }
 
 /** Иай: присед с клинком у бедра, остриём назад; прищур — блик глаз. */
@@ -4696,8 +4732,10 @@ function tlAim(ph: number): DTL {
       },
       EZ.out2,
     ],
-    [T * 0.6, { glow: 0.55 }, EZ.lin],
-    [T * 0.6 + 2 / DFPS, { wide: 1, glow: 0.9 }, EZ.out2],
+    // Блик: искра бежит по клинку от цубы к острию, глаза вспыхивают.
+    [T * 0.35, { glow: 0.55, glint: 0.02 }, EZ.lin],
+    [T * 0.35 + 6 / DFPS, { wide: 1, glow: 0.9, glint: 0.98 }, EZ.lin],
+    [T * 0.35 + 7 / DFPS, { glint: 0 }, EZ.step],
     [T - 2 / DFPS, { hy: 3.4, hx: -1, dx: -0.8, sx: 1.03, sy: 0.96, wide: 0.5 }, EZ.in2],
     [T, { dx: -1, sx: 1.04, sy: 0.95 }, EZ.lin],
   ]);
@@ -4730,23 +4768,26 @@ function tlDash(ph: number, dFrames: number, fD: number): DTL {
     wide: 0,
     hdx: 1.6,
     hdy: 0.8,
+    flat: 1,
   };
   const list: KP[] = [
     [0, { ...aimEnd(ph) }],
     [1 / DFPS, fly, EZ.out2],
   ];
-  if (tD > 1 / DFPS) list.push([tD - 1e-3, {}, EZ.lin]);
+  // Рез иай — за один кадр до касания и ровно в касание: клинок проходит
+  // горизонтальный круг (в ракурсе — эллипс перед телом), след ложится дугой.
+  if (tD > 1 / DFPS) list.push([tD - 1 / DFPS, {}, EZ.lin]);
   list.push(
     [
       tD,
       { ang: -0.22, ax: 9, ay: -19.2, lean: 0.86, back: 0, g2: 0.3, glow: 1, sx: 1.1, sy: 0.94 },
-      EZ.lin,
+      EZ.out2,
     ],
     [tD + 1 / DFPS, { ang: -0.5, ax: 9.4, ay: -20.6, lean: 0.8 }, EZ.out2],
     [Math.max(D, tD + 2 / DFPS), { ang: -0.58, ax: 9.5, ay: -21 }, EZ.lin],
   );
   const keys = track(GUARD, list);
-  return { keys, dur: Math.max(D, tD + 2 / DFPS), trail: [[tD - 0.1, tD + 0.2]], hits: [tD] };
+  return { keys, dur: Math.max(D, tD + 2 / DFPS), trail: [swingWin(tD)], hits: [tD] };
 }
 
 const AIM_END = new Map<number, DP>();
@@ -4787,11 +4828,24 @@ function tlDashRec(ph: number): DTL {
         cloak: 2,
         hdx: 1.2,
         hdy: 0.6,
+        flat: 1,
       },
     ],
     [
       0.1,
-      { lean: 0.55, hy: 2, fy: 0, sx: 1, sy: 1, dx: 0.6, ang: -0.9, ax: 8, ay: -24, wind: 0.3 },
+      {
+        lean: 0.55,
+        hy: 2,
+        fy: 0,
+        sx: 1,
+        sy: 1,
+        dx: 0.6,
+        ang: -0.9,
+        ax: 8,
+        ay: -24,
+        wind: 0.3,
+        flat: 0,
+      },
       EZ.out2,
     ],
     [
@@ -4815,7 +4869,7 @@ function tlDashRec(ph: number): DTL {
     [c + 5 / DFPS, { ang: 1.55, ax: 6, ay: -17, glow: 0.3, sx: 1, sy: 1, squint: 0.5 }, EZ.out3],
     [rec, { ...GUARD }, EZ.io],
   ]);
-  return { keys, dur: rec, post: shaken, trail: [[c - 0.12, c + 0.12]], hits: [c] };
+  return { keys, dur: rec, post: shaken, trail: [swingWin(c)], hits: [c] };
 }
 
 /**
@@ -4915,7 +4969,7 @@ function tlEyes(ph: number): DTL {
     keys,
     dur,
     post: shaken,
-    trail: m.map((x) => [x - 0.1, x + 0.12] as [number, number]),
+    trail: m.map(swingWin),
     hits: m,
   };
 }
@@ -5040,10 +5094,7 @@ function tlVolley(ph: number): DTL {
     keys,
     dur,
     post: (p, t) => shaken(pant(p, t, t > pantFrom ? Math.min(1, (t - pantFrom) * 4) * 0.7 : 0), t),
-    trail: [
-      [c1 - 0.12, c1 + 0.12],
-      [c2 - 0.12, c2 + 0.12],
-    ],
+    trail: [swingWin(c1), swingWin(c2)],
     hits: [c1, c2],
   };
 }
@@ -5308,13 +5359,17 @@ function tlDeath(): DTL {
       EZ.in2,
     ],
     [0.31, { fb: 1, fbx: 6, fby: -16, fba: 0.9 }, EZ.step],
-    [0.4, { sx: 1, sy: 1, lean: 0.5, hdx: 1.4, hdy: 2.6, mouth: 0.3, halo: 0, eyes: 3 }, EZ.out2],
+    [
+      0.4,
+      { sx: 1, sy: 1, lean: 0.5, hdx: 1.4, hdy: 2.6, mouth: 0.3, halo: 0, eyes: 3, hal: 0.7 },
+      EZ.out2,
+    ],
     [0.47, { fbx: 9.5, fby: -1.4, fba: 0.1 }, EZ.in2],
     [0.52, { fby: -3.2, fba: -0.06 }, EZ.out2],
     [0.57, { fby: -1.4, fba: 0.08, eyes: 0 }, EZ.in2],
-    [0.62, { ax: 7, ay: -6, bx: 4, by: -3, lean: 0.62, hdy: 3.2, glow: 0 }, EZ.io],
-    [0.82, { dis: 0.02 }, EZ.lin],
-    [1.3, { dis: 1 }, EZ.in2],
+    [0.62, { ax: 7, ay: -6, bx: 4, by: -3, lean: 0.62, hdy: 3.2, glow: 0, hal: 0.3 }, EZ.io],
+    [0.72, { dis: 0.02, hal: 0 }, EZ.lin],
+    [1.42, { dis: 1 }, EZ.in2],
     [DEATH_T, { al: 0 }, EZ.lin],
   ]);
   return { keys, dur: DEATH_T, trail: [], hits: [] };
@@ -5365,11 +5420,11 @@ function runAt(t: number): DP {
     ...GUARD,
     lean: 0.38 + 0.03 * Math.cos(2 * a),
     hx: 1,
-    hy: 0.9 - 1.5 * Math.abs(s) + 0.3 * land,
-    nx: 1.2 + 5.2 * c,
-    ny: Math.max(0, s) * 3.4,
-    fx: 0.2 - 5.2 * c,
-    fy: Math.max(0, -s) * 3.4,
+    hy: 1 - 1.8 * Math.abs(s) + 0.35 * land,
+    nx: 1.2 + 6.2 * c,
+    ny: Math.max(0, s) * 4.2,
+    fx: 0.2 - 6.2 * c,
+    fy: Math.max(0, -s) * 4.2,
     ax: -3.2 + 1.3 * c,
     ay: -15.4 + 0.5 * Math.abs(s),
     ang: Math.PI - 0.42 + 0.07 * c,
@@ -5434,6 +5489,19 @@ function ik2(a: V, c: V, l1: number, l2: number, bend: number): V {
   return [a[0] + Math.cos(ang) * l1, a[1] + Math.sin(ang) * l1];
 }
 
+/**
+ * Клинок в кадре: угол и доля длины. Горизонтальный рез (`flat`) идёт по
+ * кругу в плоскости пола — в ракурсе три четверти это эллипс, сжатый по
+ * вертикали: клинок «к зрителю» короткий, вбок — во всю длину.
+ */
+function bladeVec(p: DP): { ang: number; k: number } {
+  if (p.flat <= 0.01) return { ang: p.ang, k: 1 };
+  const s = 1 - 0.62 * clamp01(p.flat);
+  const c = Math.cos(p.ang);
+  const sn = Math.sin(p.ang) * s;
+  return { ang: Math.atan2(sn, c), k: Math.max(0.3, Math.hypot(c, sn)) };
+}
+
 function jointsOf(p: DP): DJ {
   const hip: V = [D_HIP[0] + p.hx, D_HIP[1] + p.hy];
   const neck: V = [hip[0] + Math.sin(p.lean) * D_TORSO, hip[1] - Math.cos(p.lean) * D_TORSO];
@@ -5452,8 +5520,9 @@ function jointsOf(p: DP): DJ {
   const kneeN = ik2(hipN, footN, D_THIGH, D_SHIN, -1);
   // На колене: колено дальней ноги — на полу у таза, голень — назад по полу.
   if (p.kneel > 0) kneeF = lerp(kneeF, [hip[0] + 0.6, -1.4], p.kneel);
-  const ux = Math.cos(p.ang);
-  const uy = Math.sin(p.ang);
+  const bv = bladeVec(p);
+  const ux = Math.cos(bv.ang);
+  const uy = Math.sin(bv.ang);
   const hand: V = [p.ax, p.ay];
   const grip: V = [hand[0] - ux * 2.4, hand[1] - uy * 2.4];
   const farHand = lerp([p.bx, p.by], grip, clamp01(p.g2));
@@ -5753,31 +5822,43 @@ function drawSmear(lit: Px, s: BladeAt[]): void {
   for (let i = 0; i < n - 1; i++)
     if (Math.hypot(tip[i][0] - tip[i + 1][0], tip[i][1] - tip[i + 1][1]) >= 1.2) moving = true;
   if (!moving) return;
-  // Старое — сперва, новое — поверх.
+  // Старое — сперва, новое — поверх. Яркость — от скорости острия: разгон
+  // первого кадра взмаха даёт бледный след, а не белый флаг.
   for (let i = n - 2; i >= 0; i--) {
     const ta = tip[i];
     const tb = tip[i + 1];
-    if (Math.hypot(ta[0] - tb[0], ta[1] - tb[1]) < 1.2) continue;
+    const d = Math.hypot(ta[0] - tb[0], ta[1] - tb[1]);
+    if (d < 1.2) continue;
+    const sp = clamp01((d - 1.2) / 3.6);
     const a0 = i / (n - 1);
     const a1 = (i + 1) / (n - 1);
-    const thick = (a: number) => 0.06 + 0.5 * (1 - a) ** 1.6;
+    const thick = (a: number) => 0.05 + 0.42 * (1 - a) ** 1.6 * (0.5 + 0.5 * sp);
     const ia = toC(bladeAtK(s[i], 1 - thick(a0)));
     const ib = toC(bladeAtK(s[i + 1], 1 - thick(a1)));
     const u = (a0 + a1) / 2;
     const col =
       u < 0.18
-        ? alpha(SMEAR_HEAD, 0.9)
+        ? alpha(SMEAR_HEAD, 0.88 * sp)
         : u < 0.5
-          ? alpha(mixc(SMEAR_HEAD, SMEAR_BODY, (u - 0.18) / 0.32), 0.8 - (u - 0.18) * 0.6)
-          : alpha(mixc(SMEAR_BODY, SMEAR_TAIL, (u - 0.5) / 0.5), 0.6 - (u - 0.5) * 0.8);
+          ? alpha(mixc(SMEAR_HEAD, SMEAR_BODY, (u - 0.18) / 0.32), (0.78 - (u - 0.18) * 0.6) * sp)
+          : alpha(mixc(SMEAR_BODY, SMEAR_TAIL, (u - 0.5) / 0.5), (0.58 - (u - 0.5) * 0.8) * sp);
+    if (col[3] < 12) continue;
     poly(lit, [ta, tb, ib, ia], col);
   }
   // Кромка — тонкая белая нить по пути острия (свежая треть следа).
   for (let i = 0; i < Math.ceil((n - 1) / 3); i++) {
     const ta = tip[i];
     const tb = tip[i + 1];
-    if (Math.hypot(ta[0] - tb[0], ta[1] - tb[1]) < 1.2) continue;
-    stroke(lit, ta[0], ta[1], tb[0], tb[1], alpha(WHITE, 0.95 - i * 0.15));
+    const d = Math.hypot(ta[0] - tb[0], ta[1] - tb[1]);
+    if (d < 2.4) continue;
+    stroke(
+      lit,
+      ta[0],
+      ta[1],
+      tb[0],
+      tb[1],
+      alpha(WHITE, (0.95 - i * 0.15) * clamp01((d - 1.2) / 3.6)),
+    );
   }
 }
 
@@ -5814,31 +5895,31 @@ function faceEyes(p: Px, lit: Px, head: V, wide: number, squint: number): void {
 }
 
 /** Ореол-полумесяц за головой: растёт с фазой, горит в технике. */
-function demonHalo(p: Px, lit: Px, head: V, ph: number, halo: number): void {
+function demonHalo(p: Px, lit: Px, head: V, ph: number, halo: number, hal: number): void {
+  if (hal <= 0.03) return;
   const [hxp, hyp] = head;
   const R = D_HR * (2.35 + ph * 0.15) + Math.round(halo * 1.5);
   const col = ph >= 2 ? hx('#ffe08a') : GILT[1];
-  crescentMark(
-    p,
-    hxp - 1.5,
-    hyp + 0.5,
-    R,
-    Math.PI * 0.5,
-    Math.PI * 1.45,
-    alpha(col, ph >= 3 ? 0.95 : 0.7),
-  );
+  const a0 = Math.PI * 0.5;
+  const a1 = Math.PI * 1.45;
+  // Гаснет — трескается посередине, нижний обломок проседает.
+  const gap = hal < 0.95 ? (1 - hal) * 0.9 : 0;
+  const mid = (a0 + a1) / 2;
+  const drop = (1 - hal) * 4;
+  const arcs: [number, number, number][] = gap
+    ? [
+        [a0, mid - gap / 2, drop],
+        [mid + gap / 2, a1, 0],
+      ]
+    : [[a0, a1, 0]];
+  const base = (ph >= 3 ? 0.95 : 0.7) * clamp01(hal);
+  for (const [b0, b1, dy] of arcs)
+    crescentMark(p, hxp - 1.5, hyp + 0.5 + dy, R, b0, b1, alpha(col, base));
   // Горит поверх темноты только в технике (и чуть — с третьей фазы).
-  const a = (ph >= 3 ? 0.25 : 0) + 0.65 * clamp01(halo);
+  const a = ((ph >= 3 ? 0.25 : 0) + 0.65 * clamp01(halo)) * clamp01(hal);
   if (a > 0.05)
-    crescentMark(
-      lit,
-      hxp - 1.5,
-      hyp + 0.5,
-      R,
-      Math.PI * 0.5,
-      Math.PI * 1.45,
-      alpha(hx('#fff0b8'), clamp01(a)),
-    );
+    for (const [b0, b1, dy] of arcs)
+      crescentMark(lit, hxp - 1.5, hyp + 0.5 + dy, R, b0, b1, alpha(hx('#ffd98a'), clamp01(a)));
 }
 
 /** Аура смены фазы: языки лунного пламени вверх вокруг тела (поверх темноты). */
@@ -5876,6 +5957,33 @@ function bladeMoon(lit: Px, hand: V, ang: number, len: number, k: number): void 
   crescentMark(lit, c[0], c[1], R, ang - 2.2, ang + 0.2, alpha(hx('#fff6d8'), 0.5 + 0.45 * k));
 }
 
+/** Блик (иай): искра бежит по кромке от цубы к острию, у острия — крест. */
+function bladeGlint(lit: Px, hand: V, ang: number, len: number, k: number): void {
+  if (k <= 0.01 || k >= 0.99) return;
+  const pts = bladePts(hand, ang, len);
+  const i = Math.round(2 + (len - 2) * k);
+  const [x, y] = toC(pts[Math.min(len, i)]);
+  const ux = Math.cos(ang);
+  const uy = Math.sin(ang);
+  for (let d = -3; d <= 0; d++) {
+    const q = toC(pts[Math.max(2, Math.min(len, i + d))]);
+    lit.set(
+      Math.round(q[0] - uy * 0.9),
+      Math.round(q[1] + ux * 0.9),
+      alpha(WHITE, 0.4 + 0.15 * (d + 3)),
+    );
+  }
+  const L = k > 0.8 ? 3 : 2;
+  for (let d = 1; d <= L; d++) {
+    const a = alpha(WHITE, 1 - d / (L + 1));
+    lit.set(Math.round(x + d), Math.round(y), a);
+    lit.set(Math.round(x - d), Math.round(y), a);
+    lit.set(Math.round(x), Math.round(y + d), a);
+    lit.set(Math.round(x), Math.round(y - d), a);
+  }
+  lit.set(Math.round(x), Math.round(y), WHITE);
+}
+
 /** Луна на острие (кольца): круг света, растёт к последнему кольцу. */
 function tipOrb(lit: Px, hand: V, ang: number, len: number, k: number): void {
   if (k <= 0.05) return;
@@ -5900,8 +6008,8 @@ function dissolve(p: Px, lit: Px, k: number, tt: number): void {
       if (n < th) {
         p.data[i + 3] = 0;
         // Часть ушедших пикселей — пылинки, всплывают.
-        if (n > th - 0.08 && hash(x, y, 13) < 0.5) {
-          const rise = 2 + (th - n) * 70 + tt * 4;
+        if (n > th - 0.16 && hash(x, y, 13) < 0.55) {
+          const rise = 1 + (th - n) * 110 + tt * 3;
           lit.set(
             x + Math.round(Math.sin(y + tt * 6) * 1.5),
             Math.round(y - rise),
@@ -5940,6 +6048,45 @@ interface DemonPx {
 /** Где тело в кадре (для отставания): таз и голова плюс ход кадра. */
 const worldOf = (p: DP, v: V): V => [v[0] + p.dx, v[1] + p.dy];
 
+/** Контур, как `Px.outline`, но только вокруг нарисованного (холст большой, фигура — треть). */
+function outlineIn(p: Px, c: RGBA): void {
+  const d = p.data;
+  const W = p.w;
+  const H = p.h;
+  let x0 = W;
+  let y0 = H;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++)
+      if (d[(y * W + x) * 4 + 3]) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+  if (x1 < 0) return;
+  const add: number[] = [];
+  for (let y = Math.max(0, y0 - 1); y <= Math.min(H - 1, y1 + 1); y++)
+    for (let x = Math.max(0, x0 - 1); x <= Math.min(W - 1, x1 + 1); x++) {
+      const i = y * W + x;
+      if (d[i * 4 + 3]) continue;
+      if (
+        (x > 0 && d[(i - 1) * 4 + 3]) ||
+        (x < W - 1 && d[(i + 1) * 4 + 3]) ||
+        (y > 0 && d[(i - W) * 4 + 3]) ||
+        (y < H - 1 && d[(i + W) * 4 + 3])
+      )
+        add.push(i);
+    }
+  for (const i of add) {
+    d[i * 4] = c[0];
+    d[i * 4 + 1] = c[1];
+    d[i * 4 + 2] = c[2];
+    d[i * 4 + 3] = 255;
+  }
+}
+
 function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
   const p = new Px(DW, DH);
   const lit = new Px(DW, DH);
@@ -5969,8 +6116,11 @@ function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
     tend: 1,
   };
   const withBlade = dp.fb < 0.5;
+  // Клинок в кадре (горизонтальный рез — в ракурсе).
+  const bv = bladeVec(dp);
+  const blen = Math.max(4, Math.round(len * bv.k));
   // Сзади: полы хаори, хвост, ореол, ножны, клинок за телом, дальняя рука.
-  if (!cx.dead) demonCloak(p, { ...j, neck: C(j.neck), hip: C(j.hip) }, dp.cloak, hipLag, dp.wind);
+  demonCloak(p, { ...j, neck: C(j.neck), hip: C(j.hip) }, dp.cloak, hipLag, dp.wind);
   demonTail(
     p,
     C(j.head),
@@ -5980,10 +6130,10 @@ function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
     dp.wind,
     Math.sin(cx.tt * 2.6) * 0.8,
   );
-  if (!cx.dead) demonHalo(p, lit, C(j.head), cx.ph, dp.halo);
+  demonHalo(p, lit, C(j.head), cx.ph, dp.halo, dp.hal);
   const hp = C(j.hip);
   stroke(p, hp[0] - 7, hp[1] + 2, hp[0] + 3, hp[1] - 1, hx('#140a1a'), 2);
-  if (withBlade && dp.back > 0.5) demonBlade(p, lit, C(j.hand), dp.ang, len, bladeOpt);
+  if (withBlade && dp.back > 0.5) demonBlade(p, lit, C(j.hand), bv.ang, blen, bladeOpt);
   demonArm(p, C(j.shF), C(j.elF), C(j.farHand), true, [farLag[0] * 0.6, farLag[1] * 0.4]);
   // Ноги, торс.
   const rig: Rig = {
@@ -6013,9 +6163,9 @@ function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
   }
   demonHead(p, C(j.head));
   demonArm(p, C(j.shN), C(j.elN), C(j.hand), false, [handLag[0] * 0.6, handLag[1] * 0.4]);
-  if (withBlade && dp.back <= 0.5) demonBlade(p, lit, C(j.hand), dp.ang, len, bladeOpt);
+  if (withBlade && dp.back <= 0.5) demonBlade(p, lit, C(j.hand), bv.ang, blen, bladeOpt);
   if (dp.fb > 0.5) fallenBlade(p, lit, C([dp.fbx, dp.fby]), dp.fba, len, cx.ph, dp.dis);
-  p.outline(INK);
+  outlineIn(p, INK);
   const eye = drawFace(p, rig, BOSS_ST, false);
   if (!cx.dead || dp.dis < 0.5) faceEyes(p, lit, C(j.head), dp.wide, dp.squint);
   // Поверх: след клинка, луна на клинке и на острие, аура.
@@ -6024,16 +6174,18 @@ function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
       lit,
       cx.trail.map((q) => {
         const jj = jointsOf(q);
+        const qv = bladeVec(q);
         return {
           hand: worldOf(q, jj.hand).map((v, i) => v - (i ? dp.dy : dp.dx)) as V,
-          ang: q.ang,
-          len,
+          ang: qv.ang,
+          len: Math.max(4, len * qv.k),
         };
       }),
     );
   if (withBlade) {
-    bladeMoon(lit, j.hand, dp.ang, len, dp.moon);
-    tipOrb(lit, j.hand, dp.ang, len, dp.orb);
+    bladeMoon(lit, j.hand, bv.ang, blen, dp.moon);
+    tipOrb(lit, j.hand, bv.ang, blen, dp.orb);
+    bladeGlint(lit, j.hand, bv.ang, blen, dp.glint);
   }
   demonAura(lit, j, dp.aura, cx.tt);
   if (dp.dis > 0) dissolve(p, lit, dp.dis, cx.tt);
@@ -6165,13 +6317,31 @@ const hasAny = (p: Px) => {
 
 const DFR = frameLRU<MobFrame>(380);
 /** Замер нового кадра (мс) — стенд читает через `f8BossStat()`. */
-const DSTAT = { n: 0, ms: 0, max: 0 };
+const DSTAT = { n: 0, ms: 0, max: 0, draw: 0, crop: 0, canvas: 0 };
 export const f8BossStat = () => ({ ...DSTAT, cache: DFR.size });
+/** Стенд: построить `n` кадров техники заново (без кеша), вернуть мс на кадр. */
+export function f8BossBench(tech: string, ph: number, v = 0): number {
+  const q: DReq = { tech, f: 0, ph, v, fl: 0, br: 0 };
+  const n = framesOf(q);
+  const t0 = performance.now();
+  for (let f = 0; f < n; f++) demonBuild({ ...q, f });
+  return (performance.now() - t0) / n;
+}
 
 function demonFrame(q: DReq): MobFrame {
   const key = `${q.tech}|${q.ph}|${q.v}|${q.f}|${q.fl}|${q.br}`;
   const hit = DFR.get(key);
   if (hit) return hit;
+  const t0 = performance.now();
+  const out = demonBuild(q);
+  const ms = performance.now() - t0;
+  DSTAT.n += 1;
+  DSTAT.ms += ms;
+  DSTAT.max = Math.max(DSTAT.max, ms);
+  return DFR.set(key, out);
+}
+
+function demonBuild(q: DReq): MobFrame {
   const t0 = performance.now();
   const s = srcOf(q);
   const t = s.t;
@@ -6191,12 +6361,20 @@ function demonFrame(q: DReq): MobFrame {
     trail,
     dead: q.tech === 'death',
   });
+  const t1 = performance.now();
   const [x0, y0, x1, y1] = cropBox(d.p, d.lit);
   const w = x1 - x0 + 1;
   const h = y1 - y0 + 1;
+  const t2 = performance.now();
+  const img = cropCanvas(d.p, x0, y0, w, h);
+  const litC = hasAny(d.lit) ? cropCanvas(d.lit, x0, y0, w, h) : null;
+  const t3 = performance.now();
+  DSTAT.draw += t1 - t0;
+  DSTAT.crop += t2 - t1;
+  DSTAT.canvas += t3 - t2;
   const out: MobFrame = {
-    img: cropCanvas(d.p, x0, y0, w, h),
-    lit: hasAny(d.lit) ? cropCanvas(d.lit, x0, y0, w, h) : null,
+    img,
+    lit: litC,
     ax: DOX - x0,
     ay: DOY - y0,
     eye: d.eye && dp.dis < 0.4 ? [d.eye[0] - x0, d.eye[1] - y0] : null,
@@ -6209,11 +6387,7 @@ function demonFrame(q: DReq): MobFrame {
     shadow: 15 * (1 - clamp01(dp.dis) * 0.85),
     alpha: clamp01(dp.al),
   };
-  const ms = performance.now() - t0;
-  DSTAT.n += 1;
-  DSTAT.ms += ms;
-  DSTAT.max = Math.max(DSTAT.max, ms);
-  return DFR.set(key, out);
+  return out;
 }
 
 const mirrorC = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
