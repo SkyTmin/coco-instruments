@@ -982,11 +982,16 @@ registerImpactPainter('f3_wave', {
       const aa = a + (rnd(seed, i, 2) * 2 - 1) * half * 0.85;
       const u = (age - 0.3 - rnd(seed, i, 3) * 0.2) / 1.1;
       const r = rr - (rr - WAVE_R0) * 0.75 * inQuad(u);
-      const al = 0.8 * (1 - clamp01((age - 0.9 - rnd(seed, i, 4) * 0.3) / 0.5));
+      const al = 0.75 * (1 - clamp01((age - 0.6 - rnd(seed, i, 4) * 0.3) / 0.4));
       if (al <= 0) continue;
-      // Клок пены — рваный комок, а не черта и не точка.
-      b.ink(i % 3 ? FOAM2 : FOAM, al * 0.6);
-      b.blob(Math.cos(aa) * r, Math.sin(aa) * r, 2 + rnd(seed, i, 5) * 2, 1.3, seed + i, 0.45);
+      // Клок пены — горсть пузырьков разной величины, а не камешек и не точка.
+      const x = Math.cos(aa) * r;
+      const y = Math.sin(aa) * r;
+      b.ink(FOAM, al);
+      b.dot(x, y, 2, 1);
+      b.ink(FOAM2, al * 0.8);
+      b.dot(x + 2 + (i % 2), y + 1, 1, 1);
+      b.dot(x - 2, y - (i % 2), 2, 1);
     }
     // Брызги с гребня по пути.
     for (let i = 0; i < 18; i++) {
