@@ -58,10 +58,23 @@ function tone(t: Tones, l: number): RGBA {
   return l > 0.78 ? t[3] : l > 0.42 ? t[2] : l > 0.02 ? t[1] : t[0];
 }
 
-export const T = (a: string, b: string, c: string, d: string): Tones => [hx(a), hx(b), hx(c), hx(d)];
+export const T = (a: string, b: string, c: string, d: string): Tones => [
+  hx(a),
+  hx(b),
+  hx(c),
+  hx(d),
+];
 
 /** Овал с объёмом: цвет по нормали. */
-export function shadeEll(p: Px, cx: number, cy: number, rx: number, ry: number, t: Tones, bias = 0): void {
+export function shadeEll(
+  p: Px,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  t: Tones,
+  bias = 0,
+): void {
   if (rx <= 0 || ry <= 0) return;
   p.ell(cx, cy, rx, ry, (x, y) => {
     const dx = (x + 0.5 - cx) / rx;
@@ -114,7 +127,17 @@ function chain(p: Px, pts: [number, number][], r0: number, r1: number, t: Tones,
   for (let i = 0; i < pts.length - 1; i++) {
     const a = i / (pts.length - 1);
     const b = (i + 1) / (pts.length - 1);
-    limb(p, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], r0 + (r1 - r0) * a, r0 + (r1 - r0) * b, t, bias);
+    limb(
+      p,
+      pts[i][0],
+      pts[i][1],
+      pts[i + 1][0],
+      pts[i + 1][1],
+      r0 + (r1 - r0) * a,
+      r0 + (r1 - r0) * b,
+      t,
+      bias,
+    );
   }
 }
 
@@ -145,7 +168,15 @@ function poly(p: Px, pts: [number, number][], c: RGBA | ((x: number, y: number) 
 }
 
 /** Толстая линия. */
-export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  c: RGBA,
+  w = 1,
+): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -191,14 +222,24 @@ export const hash = (a: number, b: number, c = 0) => {
 };
 
 /** Чешуя: тёмные «полумесяцы» шахматкой поверх уже закрашенной формы. */
-function scales(p: Px, x0: number, y0: number, x1: number, y1: number, dk: RGBA, lt: RGBA | null, seed = 0): void {
+function scales(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  dk: RGBA,
+  lt: RGBA | null,
+  seed = 0,
+): void {
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++) {
       if (!p.solid(x, y)) continue;
       const row = Math.floor(y / 2);
       const col = Math.floor((x + (row % 2) * 1) / 2);
       if ((x + row) % 2 === 0 && y % 2 === 1 && hash(col, row, seed) > 0.25) p.set(x, y, dk);
-      else if (lt && (x + row) % 2 === 1 && y % 2 === 0 && hash(col, row, seed + 7) > 0.7) p.set(x, y, lt);
+      else if (lt && (x + row) % 2 === 1 && y % 2 === 0 && hash(col, row, seed + 7) > 0.7)
+        p.set(x, y, lt);
     }
 }
 
@@ -208,8 +249,9 @@ function dissolve(p: Px, k: number, seed = 1): Px {
   q.data.set(p.data);
   for (let y = 0; y < p.h; y++)
     for (let x = 0; x < p.w; x++) {
-      const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5][(y % 4) * 4 + (x % 4)] / 16;
-      if ((bayer + hash(x, y, seed) * 0.12) < k) clear(q, x, y);
+      const bayer =
+        [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5][(y % 4) * 4 + (x % 4)] / 16;
+      if (bayer + hash(x, y, seed) * 0.12 < k) clear(q, x, y);
     }
   return q;
 }
@@ -261,7 +303,13 @@ function finish(key: string, b: Built, look: Look, flash: boolean, left: boolean
   return out;
 }
 
-function frameOf(kind: string, pose: MobPose, anim: string, f: number, build: () => Built): MobFrame {
+function frameOf(
+  kind: string,
+  pose: MobPose,
+  anim: string,
+  f: number,
+  build: () => Built,
+): MobFrame {
   const key = `${kind}|${anim}|${f}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
   const hit = frames.get(key);
   if (hit) return hit;
@@ -431,7 +479,20 @@ function paintLizard(lp: LizPose, anim: string, f: number): Built {
     // Лежит на боку: хвост, тело, копьё рядом.
     const sleep = lp.down;
     stroke(p, 3, 24, 27, 22, LZ_.wood[1], 1);
-    chain(p, spline([[4, 23], [8, 22], [12, 22]], 3), 1.2, 2.4, LZ_.skin);
+    chain(
+      p,
+      spline(
+        [
+          [4, 23],
+          [8, 22],
+          [12, 22],
+        ],
+        3,
+      ),
+      1.2,
+      2.4,
+      LZ_.skin,
+    );
     shadeEll(p, 15, 21.5, 5, 3.2, LZ_.skin);
     shadeEll(p, 15.5, 23, 3.6, 1.3, LZ_.belly);
     shadeEll(p, 21, 20.5, 3.2, 2.3, LZ_.skin);
@@ -439,7 +500,20 @@ function paintLizard(lp: LizPose, anim: string, f: number): Built {
     for (let i = 0; i < 3; i++) p.set(19 + i, 18 - (i % 2), LZ_.crest[2]);
     if (sleep) {
       // Спит, свернувшись: хвост кольцом.
-      chain(p, spline([[10, 22], [9, 19], [12, 17]], 3), 1.6, 0.8, LZ_.skin);
+      chain(
+        p,
+        spline(
+          [
+            [10, 22],
+            [9, 19],
+            [12, 17],
+          ],
+          3,
+        ),
+        1.6,
+        0.8,
+        LZ_.skin,
+      );
     }
     scales(p, 8, 17, 25, 25, LZ_.scaleDk, null, 3);
     p.outline(INK);
@@ -492,7 +566,16 @@ function paintLizard(lp: LizPose, anim: string, f: number): Built {
   shadeEll(p, hxp, hyp, 3.2, 2.5, LZ_.skin);
   limb(p, hxp + 1.5, hyp + 0.3, hxp + 5.2, hyp + 0.9, 1.7, 1.1, LZ_.skin);
   // Нижняя челюсть: открыта в замахе.
-  limb(p, hxp + 0.5, hyp + 1.8 + lp.jaw * 0.4, hxp + 4.8, hyp + 2.2 + lp.jaw * 1.2, 1.1, 0.7, LZ_.belly);
+  limb(
+    p,
+    hxp + 0.5,
+    hyp + 1.8 + lp.jaw * 0.4,
+    hxp + 4.8,
+    hyp + 2.2 + lp.jaw * 1.2,
+    1.1,
+    0.7,
+    LZ_.belly,
+  );
   if (lp.jaw) {
     p.set(Math.round(hxp + 3), Math.round(hyp + 1.6 + lp.jaw * 0.6), hx('#6a1a1a'));
     p.set(Math.round(hxp + 4), Math.round(hyp + 1.6 + lp.jaw * 0.6), hx('#6a1a1a'));
@@ -504,10 +587,14 @@ function paintLizard(lp: LizPose, anim: string, f: number): Built {
     limb(p, gx, gy, gx - 1.6, gy - 2.2 + i * 0.3, 0.9, 0.4, LZ_.crest);
   }
   // Спина: гребень продолжается мелкими шипами.
-  for (let i = 0; i < 4; i++) p.set(Math.round(tx - 3 - i * 0.2), Math.round(9 + i * 2 + by), LZ_.crest[1]);
+  for (let i = 0; i < 4; i++)
+    p.set(Math.round(tx - 3 - i * 0.2), Math.round(9 + i * 2 + by), LZ_.crest[1]);
   scales(p, 0, 4, W - 1, G, LZ_.scaleDk, LZ_.scaleLt, 5);
   // Руки: обе на древке.
-  const grip = (k: number): [number, number] => [sx0 + Math.cos(sa) * sLen * k, sy0 + Math.sin(sa) * sLen * k];
+  const grip = (k: number): [number, number] => [
+    sx0 + Math.cos(sa) * sLen * k,
+    sy0 + Math.sin(sa) * sLen * k,
+  ];
   const [g1x, g1y] = grip(0.42);
   const [g2x, g2y] = grip(0.6);
   // Древко поверх тела.
@@ -856,7 +943,17 @@ function paintKobold(anim: string, f: number, hoard: boolean): Built {
     [0.4, 0.85],
   ] as const) {
     const a = -Math.PI / 2 - 0.35 - ear * 0.4 * k;
-    limb(p, hxp + dx, hyp - 1.5, hxp + dx + Math.cos(a) * 4, hyp - 1.5 + Math.sin(a) * 4, 1.3, 0.5, KB.fur, 0.1);
+    limb(
+      p,
+      hxp + dx,
+      hyp - 1.5,
+      hxp + dx + Math.cos(a) * 4,
+      hyp - 1.5 + Math.sin(a) * 4,
+      1.3,
+      0.5,
+      KB.fur,
+      0.1,
+    );
   }
   shadeEll(p, hxp, hyp, 2.8, 2.4, KB.fur);
   limb(p, hxp + 1.5, hyp + 0.4, hxp + 4.6, hyp + 1.2, 1.3, 0.8, KB.fur);
@@ -946,7 +1043,16 @@ function paintSerpent(anim: string, f: number): Built {
   const p = new Px(W, H);
   const G = 22;
   if (anim === 'dead') {
-    const pts = spline([[3, 20], [9, 21], [15, 19.5], [21, 21], [26, 20]], 3);
+    const pts = spline(
+      [
+        [3, 20],
+        [9, 21],
+        [15, 19.5],
+        [21, 21],
+        [26, 20],
+      ],
+      3,
+    );
     chain(p, pts, 1.6, 2.4, SP.body);
     scales(p, 0, 16, W - 1, G, SP.crack, null, 9);
     p.outline(INK);
@@ -973,7 +1079,14 @@ function paintSerpent(anim: string, f: number): Built {
   // Шея вверх и голова. Во взгляде — выше и с раскрытым капюшоном.
   const hy = gaze ? 5.5 : strike ? 9 : 7.5 + (anim === 'idle' ? [0, 0.5, 0.8, 0.4][f % 4] : 0);
   const hx0 = strike ? 24 : gaze ? 20 : 21;
-  const neck = spline([[18, 16], [19.5, 12], [hx0 - 1.5, hy + 2.5]], 4);
+  const neck = spline(
+    [
+      [18, 16],
+      [19.5, 12],
+      [hx0 - 1.5, hy + 2.5],
+    ],
+    4,
+  );
   chain(p, neck, 2.4, 1.9, SP.body);
   // Капюшон: веер пластин за головой, в центре — «глаза» узора.
   const hood = gaze ? 1 : strike ? 0.3 : 0.55;
@@ -1079,10 +1192,15 @@ function paintWisp(anim: string, f: number): Built {
     p.set(ex, ey, WS.eye);
     p.set(ex + 2, ey, WS.eye);
   }
-  if (flare) for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * TAU + f;
-    p.set(Math.round(cx + Math.cos(a) * (R + 2)), Math.round(cy + Math.sin(a) * (R + 2)), WS.spark);
-  }
+  if (flare)
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU + f;
+      p.set(
+        Math.round(cx + Math.cos(a) * (R + 2)),
+        Math.round(cy + Math.sin(a) * (R + 2)),
+        WS.spark,
+      );
+    }
   return { p, ax: cx, ay: G, eye: [ex + 1, ey] };
 }
 
@@ -1153,7 +1271,20 @@ function paintRoot(anim: string, f: number): Built {
   if (anim === 'dead') {
     for (let i = 0; i < 5; i++) {
       const a = Math.PI + (i / 4) * Math.PI * 0.8 - 0.3;
-      chain(p, spline([[cx, G - 2], [cx + Math.cos(a) * 4, G - 1], [cx + Math.cos(a) * 8, G - 0.5]], 3), 1.2, 0.5, RT.bark);
+      chain(
+        p,
+        spline(
+          [
+            [cx, G - 2],
+            [cx + Math.cos(a) * 4, G - 1],
+            [cx + Math.cos(a) * 8, G - 0.5],
+          ],
+          3,
+        ),
+        1.2,
+        0.5,
+        RT.bark,
+      );
     }
     shadeEll(p, cx, G - 2, 3.4, 2, RT.bark);
     p.outline(INK);
@@ -1173,8 +1304,14 @@ function paintRoot(anim: string, f: number): Built {
     const pts: [number, number][] = [
       base,
       [base[0] + side * 2.5 + Math.sin(ph) * 1.2, base[1] - 3 - lift * 0.6],
-      [base[0] + side * (reach - 3) + Math.sin(ph + 1) * 1.6, base[1] - 5 - lift + Math.cos(ph) * 1.4],
-      [base[0] + side * reach * (whip === 2 && i === 1 ? 1 : 0.8) + Math.sin(ph + 2) * 2, base[1] - 4 - lift * 1.3 + Math.sin(ph) * 2],
+      [
+        base[0] + side * (reach - 3) + Math.sin(ph + 1) * 1.6,
+        base[1] - 5 - lift + Math.cos(ph) * 1.4,
+      ],
+      [
+        base[0] + side * reach * (whip === 2 && i === 1 ? 1 : 0.8) + Math.sin(ph + 2) * 2,
+        base[1] - 4 - lift * 1.3 + Math.sin(ph) * 2,
+      ],
     ];
     chain(p, spline(pts, 3), 1.5, 0.4, i % 3 ? RT.bark : RT.young);
   }
@@ -1203,7 +1340,12 @@ registerMobPainter('f9_root', (m: Mob, pose: MobPose) => {
   }
   let anim: string = pose.anim;
   if (anim === 'run' || anim === 'sleep') anim = 'idle';
-  const f = anim === 'idle' ? cyc(pose.t * 6 + m.id, 4) : anim === 'wind' || anim === 'bite' ? cyc(pose.frame, 2) : 0;
+  const f =
+    anim === 'idle'
+      ? cyc(pose.t * 6 + m.id, 4)
+      : anim === 'wind' || anim === 'bite'
+        ? cyc(pose.frame, 2)
+        : 0;
   return frameOf('f9_root', pose, anim, f, () => paintRoot(anim, f));
 });
 
@@ -1327,10 +1469,30 @@ function paintPriest(anim: string, f: number): Built {
     return { p, ax: 12, ay: G, eye: null };
   }
   const cast = anim === 'cast';
-  const by = anim === 'idle' ? (f % 2 ? 0.4 : 0) : anim === 'run' ? -Math.abs(Math.sin(((f % 4) / 4) * TAU)) * 0.8 : 0;
+  const by =
+    anim === 'idle'
+      ? f % 2
+        ? 0.4
+        : 0
+      : anim === 'run'
+        ? -Math.abs(Math.sin(((f % 4) / 4) * TAU)) * 0.8
+        : 0;
   const bx = 11;
   // Хвост из-под плаща.
-  chain(p, spline([[bx - 3, 23 + by], [bx - 7, 25], [bx - 9, 26.5]], 3), 1.8, 0.5, PR.skin);
+  chain(
+    p,
+    spline(
+      [
+        [bx - 3, 23 + by],
+        [bx - 7, 25],
+        [bx - 9, 26.5],
+      ],
+      3,
+    ),
+    1.8,
+    0.5,
+    PR.skin,
+  );
   // Ноги.
   const la = anim === 'run' ? Math.sin(((f % 4) / 4) * TAU) : 0;
   limb(p, bx - 1, 22 + by, bx - 2 - la, G - 1, 1.3, 1, PR.skin);
@@ -1360,7 +1522,12 @@ function paintPriest(anim: string, f: number): Built {
   shadeEll(p, hxp + 0.5, hyp - 0.8, 2.8, 2, PR.mask, 0.2);
   // Гребень из перьев над маской.
   for (let i = 0; i < 4; i++)
-    limb(p, hxp - 1 + i * 0.8, hyp - 2.2, hxp - 2 + i * 1.2, hyp - 5.5 - (i % 2), 0.6, 0.4, [PR.feather, PR.feather, i % 2 ? PR.featherB : PR.feather, WHITE]);
+    limb(p, hxp - 1 + i * 0.8, hyp - 2.2, hxp - 2 + i * 1.2, hyp - 5.5 - (i % 2), 0.6, 0.4, [
+      PR.feather,
+      PR.feather,
+      i % 2 ? PR.featherB : PR.feather,
+      WHITE,
+    ]);
   // Посох: в руке, в касте — поднят.
   const sx = bx + 5.5;
   const top = cast ? 1 : 5;
@@ -1514,7 +1681,15 @@ function paintBody(anim: string, f: number, risen: boolean): Built {
       [15, 1],
     ] as const) {
       limb(p, cx + dx, cy + 6, cx + dx + s * 4, cy + 12, 3, 2, HY.body);
-      for (let k = -1; k <= 1; k++) stroke(p, cx + dx + s * 4 + k * 1.5, cy + 12, cx + dx + s * 5 + k * 2, cy + 14, HY.spike[3]);
+      for (let k = -1; k <= 1; k++)
+        stroke(
+          p,
+          cx + dx + s * 4 + k * 1.5,
+          cy + 12,
+          cx + dx + s * 5 + k * 2,
+          cy + 14,
+          HY.spike[3],
+        );
     }
   }
   // Воротники шей по краю тела (шеи уходят под них).
@@ -1574,7 +1749,8 @@ function paintBody(anim: string, f: number, risen: boolean): Built {
   } else {
     // Ил налип на брюхо.
     for (let y = cy + 4; y < cy + 12; y++)
-      for (let x = 0; x < W; x++) if (p.solid(x, y) && hash(x, y, 3) < 0.55) p.set(x, y, HY.mud[1 + (y % 2)]);
+      for (let x = 0; x < W; x++)
+        if (p.solid(x, y) && hash(x, y, 3) < 0.55) p.set(x, y, HY.mud[1 + (y % 2)]);
   }
   return { p, ax, ay, eye: null };
 }
@@ -1662,7 +1838,8 @@ function paintHead(el: number, anim: string, f: number, crown = false): Built {
       ],
       anim === 'cast' || anim === 'prism' ? L.glow : hx('#3a0a0e'),
     );
-    if (anim === 'cast' || anim === 'prism') p.ell(hx0 + 6 * s, hy0 + 2.8 * s, 2 * s, 1.4 * s, L.glowHi);
+    if (anim === 'cast' || anim === 'prism')
+      p.ell(hx0 + 6 * s, hy0 + 2.8 * s, 2 * s, 1.4 * s, L.glowHi);
     // Клыки.
     for (let k = 0; k < 3; k++) {
       const x = hx0 + (4 + k * 2.5) * s;
@@ -1699,7 +1876,16 @@ function paintHead(el: number, anim: string, f: number, crown = false): Built {
         [bx - 0.5 * s, hy0 - 7 * s],
         [bx - 3 * s, hy0 - 10 * s],
       ];
-      for (let k = 0; k < 3; k++) stroke(p, pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1], L.crest[2 + (k % 2)], 1.6 * s);
+      for (let k = 0; k < 3; k++)
+        stroke(
+          p,
+          pts[k][0],
+          pts[k][1],
+          pts[k + 1][0],
+          pts[k + 1][1],
+          L.crest[2 + (k % 2)],
+          1.6 * s,
+        );
     }
   } else if (el === 2) {
     // Яд: перепончатый гребень с пятнами.
@@ -1714,9 +1900,28 @@ function paintHead(el: number, anim: string, f: number, crown = false): Built {
       const a = -Math.PI / 2 - 0.9 + k * 0.38;
       const bx = hx0 - 1 * s + Math.cos(a) * 4 * s;
       const by = hy0 - 1 * s + Math.sin(a) * 3.5 * s;
-      limb(p, bx, by, bx + Math.cos(a) * 5 * s - 2 * s, by + Math.sin(a) * 5 * s, 1.1 * s, 0.3 * s, L.crest);
+      limb(
+        p,
+        bx,
+        by,
+        bx + Math.cos(a) * 5 * s - 2 * s,
+        by + Math.sin(a) * 5 * s,
+        1.1 * s,
+        0.3 * s,
+        L.crest,
+      );
     }
-    for (let k = 0; k < 3; k++) limb(p, hx0 - 4 * s, hy0 + k * 1.5 * s, hx0 - 9 * s, hy0 - 1 * s + k * 2.5 * s, 1 * s, 0.4 * s, L.belly);
+    for (let k = 0; k < 3; k++)
+      limb(
+        p,
+        hx0 - 4 * s,
+        hy0 + k * 1.5 * s,
+        hx0 - 9 * s,
+        hy0 - 1 * s + k * 2.5 * s,
+        1 * s,
+        0.4 * s,
+        L.belly,
+      );
   } else {
     // Огонь и свет: два изогнутых рога назад.
     for (const d of [0, 1]) {
@@ -1807,7 +2012,8 @@ function paintWake(f: number): Built {
   const p = new Px(28, 16);
   const cx = 14;
   shadeEll(p, cx, 11, 5 + (f % 2), 2.2, HY.mud);
-  for (let i = 0; i < 3; i++) limb(p, cx - 3 + i * 3, 10, cx - 3 + i * 3 + 1, 7 - (i % 2) - (f % 2), 0.9, 0.3, ELEM[5].crest);
+  for (let i = 0; i < 3; i++)
+    limb(p, cx - 3 + i * 3, 10, cx - 3 + i * 3 + 1, 7 - (i % 2) - (f % 2), 0.9, 0.3, ELEM[5].crest);
   p.outline(INK);
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * TAU + f * 0.4;
@@ -1886,7 +2092,11 @@ function paintStump(el: number, state: string, f: number): Built {
     // Угли по кромке и язык огня.
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * TAU + f;
-      p.set(Math.round(11 + Math.cos(a) * 3.6), Math.round(12.5 + Math.sin(a) * 2), (k + f) % 2 ? hx('#ff7a1a') : hx('#ffd24a'));
+      p.set(
+        Math.round(11 + Math.cos(a) * 3.6),
+        Math.round(12.5 + Math.sin(a) * 2),
+        (k + f) % 2 ? hx('#ff7a1a') : hx('#ffd24a'),
+      );
     }
     // Прижжённый срез не горит — тлеет: дымок, а не пламя (с пламенем
     // обрубок читался свечкой).
@@ -1915,10 +2125,11 @@ registerMobPainter('f9_stump', (m: Mob, pose: MobPose) => {
   const el = m.data.el ?? 0;
   const state = pose.mode === 'seared' ? 'seared' : (m.data.can ?? 0) > 0 ? 'can' : 'bleed';
   const f = state === 'seared' ? cyc(pose.t * 8, 4) : cyc(pose.t * 3, 2);
-  if (pose.anim === 'dead') return frameOf(`f9_stump${el}`, pose, 'dead', 0, () => {
-    const b = paintStump(el, 'bleed', 0);
-    return { ...b, p: dissolve(b.p, 0.5, 3) };
-  });
+  if (pose.anim === 'dead')
+    return frameOf(`f9_stump${el}`, pose, 'dead', 0, () => {
+      const b = paintStump(el, 'bleed', 0);
+      return { ...b, p: dissolve(b.p, 0.5, 3) };
+    });
   return frameOf(`f9_stump${el}`, pose, state, f, () => paintStump(el, state, f));
 });
 
@@ -2075,7 +2286,8 @@ const GLYPH: string[][] = [
 ];
 
 function glyph(p: Px, x0: number, y0: number, g: string[], c: RGBA): void {
-  for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) if (g[y][x] === '#') p.set(x0 + x, y0 + y, c);
+  for (let y = 0; y < 5; y++)
+    for (let x = 0; x < 5; x++) if (g[y][x] === '#') p.set(x0 + x, y0 + y, c);
 }
 
 /** Круг-телепорт: кольцо рун, в центре — руна пары; 8 кадров вращения. */
@@ -2100,7 +2312,7 @@ function ringSprite(col: number, state: number, f: number): Sprite {
       p.set(x, y, dim ? pal[1] : pal[2]);
       const x2 = Math.round(cx + Math.cos(a) * (rx - 2.5));
       const y2 = Math.round(cy + Math.sin(a) * (ry - 1.6));
-      if (!dim || (Math.floor(a * 10) % 3 === 0)) p.set(x2, y2, dim ? pal[0] : pal[1]);
+      if (!dim || Math.floor(a * 10) % 3 === 0) p.set(x2, y2, dim ? pal[0] : pal[1]);
     }
     // Руны по кольцу: шесть штрихов, бегут по кругу.
     for (let i = 0; i < 6; i++) {
@@ -2118,10 +2330,12 @@ function ringSprite(col: number, state: number, f: number): Sprite {
     if (trap) {
       glyph(p, Math.round(cx) - 2, Math.round(cy) - 2, GLYPH[7], RING_PAL[7][f % 2 ? 3 : 2]);
       // Трещина через кольцо.
-      for (let k = 0; k < 7; k++) p.set(Math.round(cx - 6 + k * 2), Math.round(cy - 3 + (k % 2) * 2 + k * 0.6), INK);
+      for (let k = 0; k < 7; k++)
+        p.set(Math.round(cx - 6 + k * 2), Math.round(cy - 3 + (k % 2) * 2 + k * 0.6), INK);
     }
     if (state === RS.dormant)
-      for (let k = 0; k < 6; k++) p.set(Math.round(cx - 7 + k * 2.6), Math.round(cy + 2 - (k % 2) * 3), INK);
+      for (let k = 0; k < 6; k++)
+        p.set(Math.round(cx - 7 + k * 2.6), Math.round(cy + 2 - (k % 2) * 3), INK);
     if (state === RS.charge) {
       // Налился: заполнен светом, искры вверх.
       p.ell(cx, cy, rx - 3, ry - 2, alpha(pal[2], 0.45));
@@ -2178,10 +2392,13 @@ registerPropPainter('f9_shroom', (o, time) => {
     const glow = [0, 0.15, 0.3, 0.15][f];
     for (const [x, y, r] of caps) {
       shadeEll(p, x, y, r, r * 0.62, SHROOM.cap, glow);
-      for (let k = 0; k < 3; k++) p.set(Math.round(x - r * 0.4 + k * r * 0.4), Math.round(y - r * 0.25), SHROOM.spot);
+      for (let k = 0; k < 3; k++)
+        p.set(Math.round(x - r * 0.4 + k * r * 0.4), Math.round(y - r * 0.25), SHROOM.spot);
     }
     p.outline(INK);
-    for (const [x, y, r] of caps) for (let dx = -Math.floor(r * 0.6); dx <= r * 0.6; dx++) p.set(Math.round(x + dx), Math.round(y + r * 0.62), hx('#2a8a70'));
+    for (const [x, y, r] of caps)
+      for (let dx = -Math.floor(r * 0.6); dx <= r * 0.6; dx++)
+        p.set(Math.round(x + dx), Math.round(y + r * 0.62), hx('#2a8a70'));
     // Споры вверх.
     for (let k = 0; k < 4; k++) {
       const y = 8 - ((f * 2 + k * 4) % 9);
@@ -2231,7 +2448,7 @@ registerPropPainter('f9_crystal', (o, time) => {
     p.outline(INK);
     // Блик бежит снизу вверх по большому осколку.
     const [x, b, , h] = shards[0];
-    const y = Math.round(b - 2 - ((f / 6) * (h - 3)));
+    const y = Math.round(b - 2 - (f / 6) * (h - 3));
     p.set(x - 1, y, CRYS[3]);
     p.set(x - 1, y - 1, WHITE);
     p.set(x, y + 1, CRYS[3]);
@@ -2292,7 +2509,10 @@ registerPropPainter('f9_brazier_out', (o, time) => {
 });
 
 /** Камыш: стебли с бархатными початками, качаются. */
-const REED = { stem: T('#1e2a0e', '#3a5018', '#5e7a26', '#86a23a'), head: T('#2a160c', '#5a3218', '#7e4a24', '#a06a3a') };
+const REED = {
+  stem: T('#1e2a0e', '#3a5018', '#5e7a26', '#86a23a'),
+  head: T('#2a160c', '#5a3218', '#7e4a24', '#a06a3a'),
+};
 
 registerPropPainter('f9_reeds', (o, time) => {
   const v = Math.floor(hash(o.x, o.y, 7) * 3);
@@ -2418,7 +2638,9 @@ registerPropPainter('f9_idol', (o, time) => {
   return spriteOf(`idol|${blink ? 1 : 0}`, () => {
     const p = new Px(20, 34);
     // Постамент и столб.
-    for (let y = 28; y <= 32; y++) for (let x = 3; x <= 16; x++) p.set(x, y, tone(STONE, 0.6 - (x - 3) * 0.05 - (y === 32 ? 0.4 : 0)));
+    for (let y = 28; y <= 32; y++)
+      for (let x = 3; x <= 16; x++)
+        p.set(x, y, tone(STONE, 0.6 - (x - 3) * 0.05 - (y === 32 ? 0.4 : 0)));
     limb(p, 10, 27, 10, 13, 4, 3.4, STONE);
     // Кольца змеиного тела по столбу.
     for (let y = 16; y <= 26; y += 4) stroke(p, 6, y, 14, y + 1, STONE[0]);
@@ -2449,7 +2671,9 @@ registerPropPainter('f9_column', (o) => {
   return spriteOf(`column|${v}`, () => {
     const p = new Px(18, 32);
     const top = v ? 10 : 4;
-    for (let y = 26; y <= 30; y++) for (let x = 2; x <= 15; x++) p.set(x, y, tone(STONE, 0.6 - (x - 2) * 0.06 - (y === 30 ? 0.4 : 0)));
+    for (let y = 26; y <= 30; y++)
+      for (let x = 2; x <= 15; x++)
+        p.set(x, y, tone(STONE, 0.6 - (x - 2) * 0.06 - (y === 30 ? 0.4 : 0)));
     for (let y = top + 3; y < 26; y++)
       for (let x = 4; x <= 13; x++) {
         const k = (x - 4) / 9;
@@ -2461,7 +2685,10 @@ registerPropPainter('f9_column', (o) => {
       const t = top + Math.round(hash(x, v, 2) * 3);
       for (let y = t; y < top + 3; y++) p.set(x, y, tone(STONE, 0.6 - (x - 4) * 0.07));
     }
-    if (!v) for (let y = 1; y <= 4; y++) for (let x = 1; x <= 16; x++) p.set(x, y, tone(STONE, 0.65 - (x - 1) * 0.05 - (y === 4 ? 0.4 : 0)));
+    if (!v)
+      for (let y = 1; y <= 4; y++)
+        for (let x = 1; x <= 16; x++)
+          p.set(x, y, tone(STONE, 0.65 - (x - 1) * 0.05 - (y === 4 ? 0.4 : 0)));
     // Мох и плющ снизу вверх.
     for (let k = 0; k < 16; k++) {
       const x = Math.round(3 + hash(k, v, 5) * 12);
@@ -2508,7 +2735,12 @@ registerPropPainter('f9_eggs', (o, time, _alive, flash) => {
       p.ell(x, y, 1.8, 1.5, alpha(hx('#a8c890'), 0.85));
     }
     p.outline(alpha(hx('#2a3a1a'), 0.9));
-    for (let k = 0; k < 9; k++) p.set(Math.round(3 + (k % 4) * 3 + (k > 3 ? 1.5 : 0)), Math.round(5 + Math.floor(k / 4) * 2.5), hx('#1a1a10'));
+    for (let k = 0; k < 9; k++)
+      p.set(
+        Math.round(3 + (k % 4) * 3 + (k > 3 ? 1.5 : 0)),
+        Math.round(5 + Math.floor(k / 4) * 2.5),
+        hx('#1a1a10'),
+      );
     if (flash) p = p.tint(WHITE, 0.85);
     return { img: p.canvas(), ax: 8, ay: 11 };
   });
@@ -2543,12 +2775,21 @@ registerPropPainter('f9_bones', (o) => {
     const sx = v === 1 ? 5 : 14;
     shadeEll(p, sx, 7, 3, 2.7, BONE);
     shadeEll(p, sx + (v === 1 ? -1.2 : 1.2), 9, 1.8, 1.2, BONE);
-    for (let i = 0; i < 3; i++) stroke(p, 5 + i * 2 + (v === 1 ? 5 : 0), 8, 4 + i * 2 + (v === 1 ? 5 : 0), 11, BONE[1]);
+    for (let i = 0; i < 3; i++)
+      stroke(p, 5 + i * 2 + (v === 1 ? 5 : 0), 8, 4 + i * 2 + (v === 1 ? 5 : 0), 11, BONE[1]);
     stroke(p, 1, 11, 9, 9, BONE[2]);
     if (v !== 2) {
       // Сломанное копьё с обсидиановым наконечником.
       stroke(p, 9, 12, 18, 7, hx('#5a3820'));
-      poly(p, [[17, 6], [20, 5], [18, 8]], hx('#3a3a58'));
+      poly(
+        p,
+        [
+          [17, 6],
+          [20, 5],
+          [18, 8],
+        ],
+        hx('#3a3a58'),
+      );
     } else {
       // Ржавый шлем.
       shadeEll(p, 15, 10, 3, 2, T('#3a1a0a', '#6a3a1a', '#8a5a2a', '#b07a3a'));
@@ -2574,7 +2815,13 @@ registerPropPainter('f9_totem', () =>
     }
     // Череп наверху и перья.
     shadeEll(p, 8, 5, 3, 2.6, BONE);
-    for (let k = 0; k < 4; k++) limb(p, 5 + k * 2, 3, 3 + k * 3, -1 + (k % 2), 0.7, 0.4, [hx('#6a1a10'), hx('#a82a1a'), k % 2 ? hx('#2a8ab8') : hx('#e05a2a'), WHITE]);
+    for (let k = 0; k < 4; k++)
+      limb(p, 5 + k * 2, 3, 3 + k * 3, -1 + (k % 2), 0.7, 0.4, [
+        hx('#6a1a10'),
+        hx('#a82a1a'),
+        k % 2 ? hx('#2a8ab8') : hx('#e05a2a'),
+        WHITE,
+      ]);
     p.outline(INK);
     p.set(7, 5, INK);
     p.set(9, 5, INK);
@@ -2605,7 +2852,7 @@ registerPropPainter('f9_runestone', (o, time) => {
     // Руна «вперёд» — в зале Круговорота горит золотом (цвет пары 5).
     const pal = spin ? RING_PAL[1 + (f % 8)] : hall ? RING_PAL[5] : RING_PAL[3];
     glyph(p, 7, 9, GLYPH[5], pal[3]);
-    glyph(p, 7, 9, GLYPH[5], (f % 4) < 2 ? pal[3] : pal[2]);
+    glyph(p, 7, 9, GLYPH[5], f % 4 < 2 ? pal[3] : pal[2]);
     // Столбец малых рун — загораются по одной.
     for (let k = 0; k < 5; k++) {
       const y = 17 + k * 3;
@@ -2805,7 +3052,8 @@ function waterCell(c: CellCtx, P: CellPal, tag: string, pool = false): Px {
         }
         // Рябь — редкие светлые штрихи.
         const r = Math.sin(Y * 0.6 + vnoise(X, Y, 23, 5) * 6);
-        if (r > 0.96 && vnoise(X * 0.8, Y * 1.6, 6, 12) > 0.55) col = mixc(col, P.foam, pool ? 0.35 : 0.45);
+        if (r > 0.96 && vnoise(X * 0.8, Y * 1.6, 6, 12) > 0.55)
+          col = mixc(col, P.foam, pool ? 0.35 : 0.45);
         // Планктон и искры в глубине.
         if (P.speck && hash(X, Y, 71) > 0.992) col = P.speck;
         if (d < 1.4) col = mixc(P.foam, P.bank, 0.35);
@@ -2870,8 +3118,14 @@ function sludgeCell(c: CellCtx, P: CellPal, tag: string, venom: boolean, flood =
 
 /** Корни по полу: тянутся к соседям с корнями, между ними — отростки. */
 function rootsCell(c: CellCtx, P: CellPal, tag: string): Px {
-  const rooty = (mk: number) => mk === F9_MARK.roots || mk === F9_MARK.rootwall || mk === F9_MARK.chapel;
-  const nb = [rooty(c.markAt(0, -1)), rooty(c.markAt(1, 0)), rooty(c.markAt(0, 1)), rooty(c.markAt(-1, 0))];
+  const rooty = (mk: number) =>
+    mk === F9_MARK.roots || mk === F9_MARK.rootwall || mk === F9_MARK.chapel;
+  const nb = [
+    rooty(c.markAt(0, -1)),
+    rooty(c.markAt(1, 0)),
+    rooty(c.markAt(0, 1)),
+    rooty(c.markAt(-1, 0)),
+  ];
   const v = Math.floor(hash(c.wx, c.wy, 33) * 3);
   return cellOf(`r|${tag}|${nb.map((b) => (b ? 1 : 0)).join('')}|${v}`, () => {
     const p = new Px(TS, TS);
@@ -2888,11 +3142,47 @@ function rootsCell(c: CellCtx, P: CellPal, tag: string): Px {
     nb.forEach((b, i) => {
       if (!b) return;
       any = true;
-      chain(p, spline([[cx, cy], [(cx + ends[i][0]) / 2 + (v - 1), (cy + ends[i][1]) / 2 + 1], ends[i]], 3), 1.5, 1.1, bark);
+      chain(
+        p,
+        spline(
+          [[cx, cy], [(cx + ends[i][0]) / 2 + (v - 1), (cy + ends[i][1]) / 2 + 1], ends[i]],
+          3,
+        ),
+        1.5,
+        1.1,
+        bark,
+      );
     });
     // Своя петля корня.
-    chain(p, spline([[cx - 5, cy + 4], [cx, cy], [cx + 4, cy - 3]], 3), any ? 0.9 : 1.4, 0.5, bark);
-    if (!any) chain(p, spline([[cx - 3, cy - 4], [cx + 1, cy + 1], [cx + 5, cy + 5]], 3), 1.1, 0.5, bark);
+    chain(
+      p,
+      spline(
+        [
+          [cx - 5, cy + 4],
+          [cx, cy],
+          [cx + 4, cy - 3],
+        ],
+        3,
+      ),
+      any ? 0.9 : 1.4,
+      0.5,
+      bark,
+    );
+    if (!any)
+      chain(
+        p,
+        spline(
+          [
+            [cx - 3, cy - 4],
+            [cx + 1, cy + 1],
+            [cx + 5, cy + 5],
+          ],
+          3,
+        ),
+        1.1,
+        0.5,
+        bark,
+      );
     // Отростки-волоски.
     for (let i = 0; i < 4; i++) {
       const x = Math.floor(hash(i, v, 9) * 14) + 1;
@@ -2957,9 +3247,12 @@ function mosaicCell(c: CellCtx, P: CellPal, tag: string): Px {
             const X = tx * 2 + x;
             const Y = ty * 2 + y;
             let q: RGBA;
-            if (gone) q = hash(X + c.wx * 16, Y + c.wy * 16, 63) < 0.2 ? mixc(earth, P.tileA, 0.3) : earth;
+            if (gone)
+              q = hash(X + c.wx * 16, Y + c.wy * 16, 63) < 0.2 ? mixc(earth, P.tileA, 0.3) : earth;
             else if (moss) q = x + y === 0 ? P.mossLt : P.moss;
-            else q = x + y === 0 ? mixc(col, WHITE, 0.14) : x + y === 2 ? mixc(col, P.grout, 0.35) : col;
+            else
+              q =
+                x + y === 0 ? mixc(col, WHITE, 0.14) : x + y === 2 ? mixc(col, P.grout, 0.35) : col;
             p.set(X, Y, q);
           }
       }
@@ -2991,8 +3284,15 @@ function chapelCell(c: CellCtx, P: CellPal): Px {
         const X = qx * TS + x;
         const Y = qy * TS + y;
         const seam = X === 0 || Y === 0;
-        const groove = !seam && (X === 3 || Y === 3 || X === 28 || Y === 28) && X >= 3 && Y >= 3 && X <= 28 && Y <= 28;
-        let t = 0.52 + hash(X, Y, 43 + worn) * 0.1 - ((X * 3 + Y * 5 + worn * 7) % 23 === 0 ? 0.2 : 0);
+        const groove =
+          !seam &&
+          (X === 3 || Y === 3 || X === 28 || Y === 28) &&
+          X >= 3 &&
+          Y >= 3 &&
+          X <= 28 &&
+          Y <= 28;
+        let t =
+          0.52 + hash(X, Y, 43 + worn) * 0.1 - ((X * 3 + Y * 5 + worn * 7) % 23 === 0 ? 0.2 : 0);
         if (groove) t = 0.25;
         p.set(x, y, seam ? slab[0] : tone(slab, t));
       }
@@ -3008,7 +3308,8 @@ function chapelCell(c: CellCtx, P: CellPal): Px {
         if (x >= 0 && y >= 0 && x < TS && y < TS) p.set(x, y, slab[0]);
         const x2 = Math.round(cx + Math.cos(a) * r + 0.7);
         const y2 = Math.round(cy + Math.sin(a) * r + 0.7);
-        if (x2 >= 0 && y2 >= 0 && x2 < TS && y2 < TS && (x2 !== x || y2 !== y)) p.set(x2, y2, slab[3]);
+        if (x2 >= 0 && y2 >= 0 && x2 < TS && y2 < TS && (x2 !== x || y2 !== y))
+          p.set(x2, y2, slab[3]);
       }
       const hx0 = cx;
       const hy0 = cy;
@@ -3049,8 +3350,13 @@ function hallCell(c: CellCtx, P: CellPal): Px {
         const Y = oy + y;
         // Плиты 2×2 клетки со швами.
         // Швы плит — в стороне от центра: шов через середину резал круг.
-        const seam = ((X + 16) % 32 + 32) % 32 === 0 || ((Y + 16) % 32 + 32) % 32 === 0;
-        let col = tone(slab, 0.45 + hash(Math.floor((X + 16) / 32), Math.floor((Y + 16) / 32), 47) * 0.2 + hash(X, Y, 48) * 0.08);
+        const seam = (((X + 16) % 32) + 32) % 32 === 0 || (((Y + 16) % 32) + 32) % 32 === 0;
+        let col = tone(
+          slab,
+          0.45 +
+            hash(Math.floor((X + 16) / 32), Math.floor((Y + 16) / 32), 47) * 0.2 +
+            hash(X, Y, 48) * 0.08,
+        );
         if (seam) col = slab[0];
         const r = Math.hypot(X, Y * 1.0);
         const a = Math.atan2(Y, X);
@@ -3086,7 +3392,8 @@ function ambushCell(c: CellCtx, P: CellPal): Px {
     const p = new Px(TS, TS);
     const slab = T('#1e1a1e', '#342e36', '#4a424e', '#625a68');
     for (let y = 0; y < TS; y++)
-      for (let x = 0; x < TS; x++) p.set(x, y, x === 0 || y === 0 ? slab[0] : tone(slab, 0.5 + hash(x, y, v) * 0.15));
+      for (let x = 0; x < TS; x++)
+        p.set(x, y, x === 0 || y === 0 ? slab[0] : tone(slab, 0.5 + hash(x, y, v) * 0.15));
     if (v < 2) {
       // Кровь.
       p.ell(6 + v * 3, 9, 3 + v, 2, hx('#3a0a0e'));
@@ -3121,48 +3428,51 @@ function causewayCell(c: CellCtx, P: CellPal): Px {
   const e = [same(0, -1), same(1, 0), same(0, 1), same(-1, 0)];
   const along0 = vert ? c.wy : c.wx;
   const across0 = vert ? c.wx : c.wy;
-  return cellOf(`cw|${vert ? 1 : 0}|${e.map((b) => (b ? 1 : 0)).join('')}|${along0}|${across0}`, () => {
-    const p = new Px(TS, TS);
-    const wood = T('#1a1108', '#3a2814', '#5a4022', '#7e5e36');
-    const moss = hx('#3e5a22');
-    // Вода под брёвнами (видна в щелях).
-    p.rect(0, 0, 15, 15, P.deep);
-    // Брёвна по 4 точки вдоль хода: светлый верх, тёмный низ, щель.
-    for (let a = 0; a < TS; a++) {
-      const A = along0 * TS + a;
-      const log = Math.floor(A / 4);
-      const k = A % 4;
-      const gap = k === 3 && hash(log, 1, 52) < 0.7;
-      if (gap) continue;
-      const shade = k === 0 ? 0.78 : k === 1 ? 0.6 : 0.36;
-      // Концы брёвен неровные: у кромки гати бревно короче или длиннее.
-      for (let b = 0; b < TS; b++) {
-        const B = across0 * TS + b;
-        const x = vert ? b : a;
-        const y = vert ? a : b;
-        const edgeLo = !(vert ? e[3] : e[0]) && b < Math.floor(hash(log, 2, 53) * 3);
-        const edgeHi = !(vert ? e[1] : e[2]) && b > 15 - Math.floor(hash(log, 3, 54) * 3);
-        if (edgeLo || edgeHi) continue;
-        let col = tone(wood, shade + hash(log, B >> 2, 55) * 0.08);
-        // Сучки и кора кольцами.
-        if (k === 1 && hash(log, B, 56) > 0.93) col = wood[0];
-        // Мох на старых брёвнах.
-        if (vnoise(A, B, 6, 57) > 0.74 && k < 2) col = mixc(col, moss, 0.7);
-        p.set(x, y, col);
+  return cellOf(
+    `cw|${vert ? 1 : 0}|${e.map((b) => (b ? 1 : 0)).join('')}|${along0}|${across0}`,
+    () => {
+      const p = new Px(TS, TS);
+      const wood = T('#1a1108', '#3a2814', '#5a4022', '#7e5e36');
+      const moss = hx('#3e5a22');
+      // Вода под брёвнами (видна в щелях).
+      p.rect(0, 0, 15, 15, P.deep);
+      // Брёвна по 4 точки вдоль хода: светлый верх, тёмный низ, щель.
+      for (let a = 0; a < TS; a++) {
+        const A = along0 * TS + a;
+        const log = Math.floor(A / 4);
+        const k = A % 4;
+        const gap = k === 3 && hash(log, 1, 52) < 0.7;
+        if (gap) continue;
+        const shade = k === 0 ? 0.78 : k === 1 ? 0.6 : 0.36;
+        // Концы брёвен неровные: у кромки гати бревно короче или длиннее.
+        for (let b = 0; b < TS; b++) {
+          const B = across0 * TS + b;
+          const x = vert ? b : a;
+          const y = vert ? a : b;
+          const edgeLo = !(vert ? e[3] : e[0]) && b < Math.floor(hash(log, 2, 53) * 3);
+          const edgeHi = !(vert ? e[1] : e[2]) && b > 15 - Math.floor(hash(log, 3, 54) * 3);
+          if (edgeLo || edgeHi) continue;
+          let col = tone(wood, shade + hash(log, B >> 2, 55) * 0.08);
+          // Сучки и кора кольцами.
+          if (k === 1 && hash(log, B, 56) > 0.93) col = wood[0];
+          // Мох на старых брёвнах.
+          if (vnoise(A, B, 6, 57) > 0.74 && k < 2) col = mixc(col, moss, 0.7);
+          p.set(x, y, col);
+        }
       }
-    }
-    // Верёвки у кромки: вяжут концы брёвен.
-    const rope = hx('#8a7a4a');
-    const ropeDk = hx('#4a3e22');
-    if (vert) {
-      if (!e[3]) for (let y = 0; y < TS; y += 2) p.set(2, y, y % 4 ? ropeDk : rope);
-      if (!e[1]) for (let y = 1; y < TS; y += 2) p.set(13, y, y % 4 === 1 ? rope : ropeDk);
-    } else {
-      if (!e[0]) for (let x = 0; x < TS; x += 2) p.set(x, 2, x % 4 ? ropeDk : rope);
-      if (!e[2]) for (let x = 1; x < TS; x += 2) p.set(x, 13, x % 4 === 1 ? rope : ropeDk);
-    }
-    return p;
-  });
+      // Верёвки у кромки: вяжут концы брёвен.
+      const rope = hx('#8a7a4a');
+      const ropeDk = hx('#4a3e22');
+      if (vert) {
+        if (!e[3]) for (let y = 0; y < TS; y += 2) p.set(2, y, y % 4 ? ropeDk : rope);
+        if (!e[1]) for (let y = 1; y < TS; y += 2) p.set(13, y, y % 4 === 1 ? rope : ropeDk);
+      } else {
+        if (!e[0]) for (let x = 0; x < TS; x += 2) p.set(x, 2, x % 4 ? ropeDk : rope);
+        if (!e[2]) for (let x = 1; x < TS; x += 2) p.set(x, 13, x % 4 === 1 ? rope : ropeDk);
+      }
+      return p;
+    },
+  );
 }
 
 /** Ил на дне ушедшего озера. */
@@ -3221,9 +3531,37 @@ function rootWallCell(c: CellCtx, P: CellPal): Px {
     const n = face ? 6 : 4;
     for (let i = 0; i < n; i++) {
       const y0 = i * (16 / n) + v;
-      chain(p, spline([[-2, y0], [5, y0 + 3 * (i % 2 ? 1 : -1)], [11, y0 - 1], [18, y0 + 2]], 3), 2, 1.6, bark);
+      chain(
+        p,
+        spline(
+          [
+            [-2, y0],
+            [5, y0 + 3 * (i % 2 ? 1 : -1)],
+            [11, y0 - 1],
+            [18, y0 + 2],
+          ],
+          3,
+        ),
+        2,
+        1.6,
+        bark,
+      );
     }
-    for (let i = 0; i < 3; i++) chain(p, spline([[4 + i * 5, -2], [3 + i * 5, 8], [5 + i * 5, 18]], 3), 1.6, 1.3, bark);
+    for (let i = 0; i < 3; i++)
+      chain(
+        p,
+        spline(
+          [
+            [4 + i * 5, -2],
+            [3 + i * 5, 8],
+            [5 + i * 5, 18],
+          ],
+          3,
+        ),
+        1.6,
+        1.3,
+        bark,
+      );
     p.outline(alpha(INK, 0.8));
     // Кора сочится светом там, где корни сплелись с жилой маны.
     if (face) p.set(8, 7 + v, mixc(P.mossLt, hx('#ffb040'), 0.7));
@@ -3342,14 +3680,27 @@ export const lifeK = (z: ZoneX) => {
 };
 export const warned = (z: ZoneX) => (z as Zone).t >= ((z as Zone).warn ?? 0);
 
-export function cone(g: CanvasRenderingContext2D, x: number, y: number, r: number, a: number, arc: number): void {
+export function cone(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  a: number,
+  arc: number,
+): void {
   g.beginPath();
   g.moveTo(x, y);
   g.arc(x, y, r, a - arc / 2, a + arc / 2);
   g.closePath();
 }
 
-export function ringPath(g: CanvasRenderingContext2D, x: number, y: number, r: number, squash = 0.62): void {
+export function ringPath(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  squash = 0.62,
+): void {
   g.beginPath();
   g.ellipse(Math.round(x), Math.round(y), Math.max(0.5, r), Math.max(0.5, r * squash), 0, 0, TAU);
 }
@@ -3378,7 +3729,12 @@ registerZonePainter('f9_warp_in', (g, z, px, py, S, time) => {
     dot(g, x, y, rgba(pal[3], (1 - u) * (0.5 + 0.5 * k)));
   }
   g.fillStyle = rgba(pal[3], 0.2 * k);
-  g.fillRect(Math.round(px - 0.35 * S), Math.round(py - S * 1.6 * k), Math.round(0.7 * S), Math.round(S * 1.6 * k));
+  g.fillRect(
+    Math.round(px - 0.35 * S),
+    Math.round(py - S * 1.6 * k),
+    Math.round(0.7 * S),
+    Math.round(S * 1.6 * k),
+  );
   return true;
 });
 
@@ -3411,7 +3767,12 @@ registerZonePainter('f9_warp_arrive', (g, z, px, py, S) => {
   g.stroke();
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * TAU;
-    dot(g, px + Math.cos(a) * (0.3 + k) * S, py + Math.sin(a) * (0.2 + k * 0.6) * S - k * 6, rgba(pal[3], 1 - k));
+    dot(
+      g,
+      px + Math.cos(a) * (0.3 + k) * S,
+      py + Math.sin(a) * (0.2 + k * 0.6) * S - k * 6,
+      rgba(pal[3], 1 - k),
+    );
   }
   return true;
 });
@@ -3427,7 +3788,13 @@ registerZonePainter('f9_blink', (g, z, px, py, S, time) => {
   g.stroke();
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * TAU + time * 6;
-    dot(g, px + Math.cos(a) * zz.r * S * 0.7, py + Math.sin(a) * zz.r * S * 0.45, rgba(pal[3], 0.6 + 0.4 * k), 2);
+    dot(
+      g,
+      px + Math.cos(a) * zz.r * S * 0.7,
+      py + Math.sin(a) * zz.r * S * 0.45,
+      rgba(pal[3], 0.6 + 0.4 * k),
+      2,
+    );
   }
   g.fillStyle = rgba(pal[2], 0.15 + 0.3 * k);
   ringPath(g, px, py, zz.r * S * k);
@@ -3443,7 +3810,13 @@ registerZonePainter('f9_puff', (g, z, px, py, S) => {
     const r = (0.2 + k * 0.5) * S;
     g.fillStyle = rgba(hx('#8a7aa8'), 0.6 * (1 - k));
     g.beginPath();
-    g.arc(Math.round(px + Math.cos(a) * r), Math.round(py - 6 + Math.sin(a) * r * 0.6 - k * 5), 2 + k * 2, 0, TAU);
+    g.arc(
+      Math.round(px + Math.cos(a) * r),
+      Math.round(py - 6 + Math.sin(a) * r * 0.6 - k * 5),
+      2 + k * 2,
+      0,
+      TAU,
+    );
     g.fill();
   }
   return true;
@@ -3473,7 +3846,7 @@ export function puddle(
   }
   const lk = lifeK(z);
   const fade = lk > 0.8 ? 1 - (lk - 0.8) / 0.2 : 1;
-  const grow = Math.min(1, ((zz.t - (zz.warn ?? 0)) / 0.2));
+  const grow = Math.min(1, (zz.t - (zz.warn ?? 0)) / 0.2);
   g.fillStyle = rgba(base, 0.55 * fade);
   ringPath(g, px, py, R * grow, 0.7);
   g.fill();
@@ -3630,7 +4003,12 @@ registerZonePainter('f9_splash', (g, z, px, py, S) => {
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * TAU;
     const h = Math.sin(k * Math.PI) * 6;
-    dot(g, px + Math.cos(a) * (2 + k * 7), py + Math.sin(a) * (1 + k * 4) - h, rgba(hx('#d8fff4'), 1 - k));
+    dot(
+      g,
+      px + Math.cos(a) * (2 + k * 7),
+      py + Math.sin(a) * (1 + k * 4) - h,
+      rgba(hx('#d8fff4'), 1 - k),
+    );
   }
   return true;
 });
@@ -3680,7 +4058,10 @@ export function blobShot(key: string, core: Tones, tail: RGBA, frames: number) {
   };
 }
 
-registerShotPainter('f9_spit', blobShot('spit', T('#2a4a0a', '#5a8a14', '#a8d83a', '#e8ff9a'), hx('#c8f04a'), 2));
+registerShotPainter(
+  'f9_spit',
+  blobShot('spit', T('#2a4a0a', '#5a8a14', '#a8d83a', '#e8ff9a'), hx('#c8f04a'), 2),
+);
 
 // ---------------------------------------------------------------------------
 // Иконки вещей 10×10.
@@ -3700,7 +4081,20 @@ function meatIcon(meat: Tones, bone: boolean): Px {
 
 registerItemArt('f9_tail', () => {
   const p = new Px(10, 10);
-  chain(p, spline([[1.5, 4], [5, 4.5], [8.5, 7]], 3), 2.2, 0.8, LZ_.skin);
+  chain(
+    p,
+    spline(
+      [
+        [1.5, 4],
+        [5, 4.5],
+        [8.5, 7],
+      ],
+      3,
+    ),
+    2.2,
+    0.8,
+    LZ_.skin,
+  );
   scales(p, 0, 0, 9, 9, LZ_.scaleDk, null, 2);
   p.ell(1.6, 4, 1.2, 1.6, hx('#c83a2a'));
   p.outline(INK);
@@ -3709,7 +4103,21 @@ registerItemArt('f9_tail', () => {
 registerItemArt('f9_frogleg', () => meatIcon(T('#6a4a2a', '#b07a4a', '#e0a870', '#ffd8a8'), true));
 registerItemArt('f9_snake', () => {
   const p = new Px(10, 10);
-  chain(p, spline([[1, 7], [4, 3], [7, 6], [9, 3]], 3), 1.4, 1.1, T('#6a3a2a', '#b0664a', '#e0987a', '#ffc8a8'));
+  chain(
+    p,
+    spline(
+      [
+        [1, 7],
+        [4, 3],
+        [7, 6],
+        [9, 3],
+      ],
+      3,
+    ),
+    1.4,
+    1.1,
+    T('#6a3a2a', '#b0664a', '#e0987a', '#ffc8a8'),
+  );
   p.outline(INK);
   return p;
 });
@@ -3769,8 +4177,35 @@ registerItemArt('f9_mana', () => {
 });
 registerItemArt('f9_root', () => {
   const p = new Px(10, 10);
-  chain(p, spline([[1, 8], [4, 5], [6, 5.5], [9, 2]], 3), 1.3, 0.6, RT.bark);
-  chain(p, spline([[4, 5], [3, 2], [4.5, 1]], 3), 0.8, 0.4, RT.young);
+  chain(
+    p,
+    spline(
+      [
+        [1, 8],
+        [4, 5],
+        [6, 5.5],
+        [9, 2],
+      ],
+      3,
+    ),
+    1.3,
+    0.6,
+    RT.bark,
+  );
+  chain(
+    p,
+    spline(
+      [
+        [4, 5],
+        [3, 2],
+        [4.5, 1],
+      ],
+      3,
+    ),
+    0.8,
+    0.4,
+    RT.young,
+  );
   p.outline(INK);
   p.set(5, 5, RT.knot);
   return p;
