@@ -261,11 +261,12 @@ function circle(r: number): CircPts {
       err += 2 * (y - x) + 1;
     }
   }
-  pts.sort((p, q) => Math.atan2(p[1], p[0]) - Math.atan2(q[1], q[0]));
+  const withA = pts.map(([x0, y0]) => [x0, y0, Math.atan2(y0, x0)]);
+  withA.sort((p, q) => p[2] - q[2]);
   c = {
-    x: Int16Array.from(pts.map((p) => p[0])),
-    y: Int16Array.from(pts.map((p) => p[1])),
-    a: Float32Array.from(pts.map((p) => Math.atan2(p[1], p[0]))),
+    x: Int16Array.from(withA.map((p) => p[0])),
+    y: Int16Array.from(withA.map((p) => p[1])),
+    a: Float32Array.from(withA.map((p) => p[2])),
   };
   circles.set(R, c);
   return c;
@@ -2020,13 +2021,16 @@ registerZonePainter(
       if (u < 0 || u >= 0.42) continue;
       const k = u / 0.42;
       const rr = S * (1.1 + 2.8 * eOut2(k));
-      dustRing(p, sd + Math.round(t0 * 10), cx, cy + 1, rr, 0.95 * (1 - k));
-      dustRing(p, sd + Math.round(t0 * 10) + 1, cx, cy + 1, rr - 3, 0.6 * (1 - k));
+      // Гаснет к концу, а не с первого кадра: волна рёва должна дойти до
+      // края видимой, иначе к середине пути она уже призрак.
+      const live = Math.pow(1 - k, 0.6);
+      dustRing(p, sd + Math.round(t0 * 10), cx, cy + 1, rr, 0.95 * live);
+      dustRing(p, sd + Math.round(t0 * 10) + 1, cx, cy + 1, rr - 3, 0.6 * live);
       // Пыль встаёт по кольцу толчка.
       for (let i = 0; i < 10; i++) {
         const ph = (i / 10) * TAU + hash(sd, i, Math.round(t0 * 10)) * 0.5;
-        const im = puffImg(0, 2 + 3 * k, i);
-        p.col('#000', 0.8 * (1 - k));
+        const im = puffImg(0, 3 + 4 * k, i);
+        p.col('#000', 0.85 * live);
         p.img(im, cx + Math.cos(ph) * rr - im.width / 2, cy + 1 + Math.sin(ph) * rr - 3 * k - im.height / 2);
       }
     }
