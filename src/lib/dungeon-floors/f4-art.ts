@@ -2229,6 +2229,8 @@ const arm = (ex: number, ey: number, wx: number, wy: number, hand: Hand): Arm =>
   wy,
   hand,
 });
+/** Куда ложится ладонь удара (правая рука): пол перед правой ступнёй. */
+const ARM_HIT_W = [47, 64];
 /** Ключевые позы ПРАВОЙ руки; левая — зеркало по оси идола. */
 const ARM = {
   rest: arm(50, 41, 44, 45, 'knee'),
@@ -2236,9 +2238,9 @@ const ARM = {
   lift: arm(53, 40, 47, 41, 'fist'),
   palmUp: arm(60, 26, 58, 14, 'palm'),
   palmPush: arm(58, 32, 55, 24, 'palm'),
-  reach: arm(56, 43, 50, 54, 'reach'),
+  reach: arm(55, 46, 49, 34, 'reach'),
   apex: arm(61, 19, 56, 3, 'palm'),
-  hit: arm(59, 46, 52, 64, 'flat'),
+  hit: arm(60, 44, ARM_HIT_W[0], ARM_HIT_W[1], 'flat'),
   limp: arm(52, 45, 47, 53, 'limp'),
   fist: arm(56, 38, 51, 34, 'fist'),
   roar: arm(58, 36, 54, 30, 'fist'),
@@ -2357,55 +2359,64 @@ function paintHand(
     const tone = (k: number) => BASALT_STEPS[Math.max(0, Math.min(4, Math.floor(k * 5)))];
     switch (hand) {
       case 'fist': {
-        // Кулак: ком 8×7, костяшки швом поперёк.
-        const da = (a - 3.5) / 4;
-        const db = b / 4;
+        // Кулак: ком 9×9, костяшки гребнем, пальцы подогнуты швами, большой
+        // палец обнимает их сбоку.
+        const da = (a - 4.2) / 4.6;
+        const db = b / 4.4;
         if (da * da + db * db > 1) return null;
-        if (Math.round(a) === 5 && Math.abs(b) < 3) return B.deep;
+        if (Math.round(a) <= 1) return Math.abs(b) < 3.6 ? GOLD.dk : null;
         if (Math.round(a) === 6 && Math.round(b) % 2 === 0) return B.hi;
-        return tone(0.35 + lit * 0.5 + da * 0.2);
+        if (Math.round(a) === 5 && Math.abs(Math.round(b)) <= 3 && Math.round(b) % 2 !== 0)
+          return B.deep;
+        if (Math.round(b) === -2 && a > 2 && a < 5) return B.dk;
+        return tone(0.3 + lit * 0.45 + da * 0.25);
       }
       case 'palm':
       case 'reach': {
-        // Ладонь к нам: пясть 7×6, четыре пальца по 1 пикселю через щель,
-        // большой палец в сторону. `reach` — пальцы веером.
-        const fan = hand === 'reach' ? 0.28 : 0;
-        if (a >= 0.5 && a <= 6.5 && Math.abs(b) <= 3.5) {
-          if (Math.round(a) === 1) return GOLD.dk;
-          return tone(0.3 + (Math.abs(b) / 3.5) * 0.25 + (a / 6.5) * 0.15);
+        // Ладонь к нам: пясть 9×7 с браслетом, четыре пальца по пикселю через
+        // щель (средний длиннее), большой палец в сторону. `reach` — веером.
+        const fan = hand === 'reach' ? 0.24 : 0;
+        if (a >= 0.5 && a <= 7.5 && Math.abs(b) <= 4.4) {
+          if (a > 6.6 && Math.abs(b) > 3.6) return null;
+          if (Math.round(a) === 1) return GOLD.mid;
+          if (Math.round(a) === 2) return GOLD.dk;
+          return tone(0.22 + (Math.abs(b) / 4.4) * 0.3 + (a / 7.5) * 0.12);
         }
-        if (a > 6.5 && a <= 10.5) {
-          for (const f of [-3, -1, 1, 3]) {
-            const fb = f * (1 + fan * (a - 6.5));
-            if (Math.abs(b - fb) < 0.62) return a > 9.6 ? B.hi : tone(0.25);
+        if (a > 7.5 && a <= 12.6) {
+          const len = [11.2, 12.6, 12.3, 11];
+          const fs = [-3.3, -1.1, 1.1, 3.3];
+          for (let i = 0; i < 4; i++) {
+            const fb = fs[i] * (1 + fan * (a - 7.5));
+            if (Math.abs(b - fb) < 0.7 && a <= len[i]) return a > len[i] - 0.9 ? B.hi : tone(0.3);
           }
           return null;
         }
-        // Большой палец — с той стороны, куда смотрит поперечная ось.
-        if (a >= 2 && a <= 5 && b <= -3.6 && b >= -5.6 - (a - 2) * 0.4) return tone(0.35);
+        if (a >= 2.5 && a <= 6.8 && b <= -4.4 && b >= -6.6 - (a - 2.5) * 0.35) return tone(0.35);
         return null;
       }
       case 'flat': {
-        // Ладонь на полу, вид сверху: тыльная сторона и растопыренные пальцы.
-        if (a >= 0 && a <= 5 && Math.abs(b) <= 4.5 + a * 0.3) {
-          if (Math.round(a) === 0) return GOLD.dk;
-          if (Math.round(a) === 4 && Math.round(b) % 2 === 0) return B.hi;
-          return tone(0.25 + (b + 5) * 0.06);
+        // Ладонь на полу, вид сверху: тыльная сторона, костяшки, растопыренные
+        // пальцы к зрителю, большой палец в сторону.
+        if (a >= 0 && a <= 6.2 && Math.abs(b) <= 5 + a * 0.25) {
+          if (Math.round(a) === 0) return GOLD.mid;
+          if (Math.round(a) === 1) return GOLD.dk;
+          if (Math.round(a) === 6 && Math.round(b) % 2 === 0) return B.hi;
+          return tone(0.2 + (b + 6) * 0.05 + a * 0.03);
         }
-        if (a > 5 && a <= 9) {
-          for (const f of [-4.5, -1.5, 1.5, 4.5]) {
-            const fb = f * (1 + 0.12 * (a - 5));
-            if (Math.abs(b - fb) < 0.75) return a > 8.2 ? B.dk : tone(0.35);
+        if (a > 6.2 && a <= 11.2) {
+          for (const f of [-5, -1.7, 1.7, 5]) {
+            const fb = f * (1 + 0.1 * (a - 6.2));
+            if (Math.abs(b - fb) < 0.8) return a > 10.3 ? B.dk : tone(0.32);
           }
           return null;
         }
-        if (a >= 1 && a <= 4 && b <= -5 && b >= -7.2) return tone(0.4);
+        if (a >= 1 && a <= 5 && b <= -5.6 && b >= -8.2) return tone(0.4);
         return null;
       }
     }
     return null;
   };
-  const R = 12;
+  const R = 15;
   const x0 = Math.round(wx);
   const y0 = Math.round(wy);
   const cells: [number, number, RGBA][] = [];
@@ -2435,8 +2446,8 @@ function paintHand(
   // Знак заповеди на ладони: вырезан в камне (горит — слоем света).
   if ((hand === 'palm' || hand === 'reach') && rune) {
     for (const [a, b] of runeCells(rune)) {
-      const x = Math.round(wx + (a + 3.5) * ux + b * vx);
-      const y = Math.round(wy + (a + 3.5) * uy + b * vy);
+      const x = Math.round(wx + (a + 4.8) * ux + b * vx);
+      const y = Math.round(wy + (a + 4.8) * uy + b * vy);
       p.set(x, y, B.deep);
     }
   }
@@ -2537,8 +2548,10 @@ interface IdolRig {
   smoke: number;
   /** Крошка: пары x, y в координатах рисунка. */
   crumbs: number[];
-  /** След руки при ударе: сторона, доля и где кисть сейчас. */
+  /** След руки при ударе: сторона, доля пути от и до, яркость. */
   smear: number[] | null;
+  /** Тень руки кадром раньше — на обрушении. */
+  ghost: Arm | null;
   /** Новая трещина растёт 0…1; `deathK` — смертные трещины 0…1. */
   grow: number;
   deathK: number;
@@ -2572,6 +2585,7 @@ function restRig(): IdolRig {
     smoke: -1,
     crumbs: [],
     smear: null,
+    ghost: null,
     grow: 1,
     deathK: 0,
   };
@@ -2613,6 +2627,7 @@ function mixRig(a: IdolRig, b: IdolRig, k: number): IdolRig {
   }
   o.crumbs = [...a.crumbs, ...b.crumbs];
   o.smear = b.smear ?? a.smear;
+  o.ghost = b.ghost ?? a.ghost;
   return o;
 }
 
@@ -2734,8 +2749,10 @@ function idolGaze(r: IdolRig, t: number, W: number, E: number, now: number): voi
   r.eyeMode = 'gaze';
   // Заряд: к первому залпу глаза добела.
   const charge = seg(t, 0.26, W);
-  r.eye =
-    lerp(0.15, 1, dip * (1 - snap)) * 0 + (snap > 0 ? 0.45 + 0.55 * charge : 0.5 - 0.35 * dip);
+  r.eye = snap > 0 ? 0.4 + 0.6 * eIn(charge) : 0.5 - 0.35 * dip;
+  // Последние треть секунды перед залпом накал дрожит — вот-вот ударит.
+  if (t > W - 0.33 && t < W) r.eye = Math.floor(qf(now, 12) * 12) % 2 ? 1 : 0.84;
+  r.ty -= hold * eOut(charge);
   // Волны: вспышка и отдача головы на три кадра.
   let kick = 0;
   let beam = 0;
@@ -2826,68 +2843,93 @@ function idolWrath(r: IdolRig, t: number, from: IdolRig): void {
  */
 const SLAM_HIT = 0.95;
 const SLAM_END = 1.8;
-function idolSlam(r: IdolRig, t: number, side: number, now: number): void {
+/** Путь кисти при обрушении (правая рука): от высшей точки дугой наружу — к полу. */
+const SLAM_PATH = [56, 1, 65, 34, ARM_HIT_W[0], ARM_HIT_W[1]];
+function slamPath(k: number): [number, number] {
+  const [ax, ay, cx, cy, bx, by] = SLAM_PATH;
+  const u = 1 - k;
+  return [u * u * ax + 2 * u * k * cx + k * k * bx, u * u * ay + 2 * u * k * cy + k * k * by];
+}
+/** Правая рука удара ладонью в миг tq; `from` — с чего началась, `back` — куда вернётся. */
+function slamArm(tq: number, from: Arm, back: Arm): Arm {
+  const ant = eInOut(seg(tq, 0, 0.14));
+  const raise = seg(tq, 0.1, 0.56);
+  const hover = seg(tq, 0.56, 0.86);
+  const smash = seg(tq, 0.86, SLAM_HIT);
+  const after = seg(tq, SLAM_HIT, 1.25);
+  const ret = eInOut(seg(tq, 1.25, SLAM_END));
+  if (tq >= SLAM_HIT) {
+    // Проводка: ладонь вдавливается, пальцы растопырены; потом — назад по дуге.
+    let A: Arm = { ...ARM.hit, wy: ARM.hit.wy + Math.sin(after * Math.PI) * 1.5 };
+    if (ret > 0) A = mixArm(A, back, ret, [63, 52], [65, 40]);
+    return A;
+  }
+  let A = mixArm(from, ARM.lift, ant);
+  if (raise > 0) A = mixArm(A, ARM.apex, eInOut(raise), [67, 30], [67, 30]);
+  if (hover > 0) {
+    // Зависание: кисть ещё ползёт вверх — натяжение, а не стоп.
+    A = { ...A, wy: A.wy - eOut(hover) * 2, ey: A.ey - eOut(hover) };
+  }
+  if (smash > 0) {
+    // Обрушение по дуге наружу и вниз, к полу перед правой ступнёй.
+    const [x, y] = slamPath(smash);
+    A = {
+      ex: lerp(A.ex, ARM.hit.ex, smash) + Math.sin(smash * Math.PI) * 4,
+      ey: lerp(A.ey, ARM.hit.ey, smash),
+      wx: x,
+      wy: y,
+      hand: smash > 0.4 ? 'flat' : 'palm',
+    };
+  }
+  return A;
+}
+
+/**
+ * Удар ладонью (фаза гнева), 24 к/с от начала: подготовка (вес на другую
+ * сторону, кисть с колена), подъём по дуге наружу и вверх, зависание с
+ * откинутым корпусом, обрушение за два кадра со следом и тенью руки,
+ * контакт РОВНО в миг урона (0,95 с), проводка (ладонь вдавливается,
+ * корпус доезжает), возврат по дуге.
+ */
+function idolSlam(r: IdolRig, t: number, side: number): void {
   const mir = (a: Arm) => (side > 0 ? a : mirrorArm(a));
   const other = side > 0 ? 'L' : 'R';
   const mine = side > 0 ? 'R' : 'L';
   const tq = q24(t, SLAM_HIT);
   // Куда рука вернётся: поза состояния (заповедь могла начаться, пока бил).
-  const back = r[mine];
+  const back = mir(r[mine]);
+  const from = mir(r[mine]);
   const ant = eInOut(seg(tq, 0, 0.14));
   const raise = seg(tq, 0.1, 0.56);
-  const hover = seg(tq, 0.56, 0.83);
-  const smash = seg(tq, 0.83, SLAM_HIT);
+  const hover = seg(tq, 0.56, 0.86);
+  const smash = seg(tq, 0.86, SLAM_HIT);
   const after = seg(tq, SLAM_HIT, 1.25);
   const ret = eInOut(seg(tq, 1.25, SLAM_END));
-  let A = mixArm(r[mine], mir(ARM.lift), ant);
-  if (raise > 0)
-    A = mixArm(
-      A,
-      mir(ARM.apex),
-      eInOut(raise),
-      side > 0 ? [70, 30] : [-6, 30],
-      side > 0 ? [66, 30] : [-2, 30],
-    );
-  if (hover > 0) {
-    // Зависание: кисть ещё чуть ползёт вверх — натяжение, а не стоп.
-    A = { ...A, wy: A.wy - eOut(hover) * 2, ey: A.ey - eOut(hover) * 1 };
-  }
-  if (smash > 0) {
-    // Обрушение: разгон, кисть по дуге перед коленом.
-    const k = eIn(smash) * 0.35 + smash * 0.65;
-    A = mixArm(A, mir(ARM.hit), k, side > 0 ? [66, 40] : [-2, 40], side > 0 ? [66, 32] : [-2, 32]);
-    if (smash > 0.34) A.hand = 'flat';
-  }
-  if (tq >= SLAM_HIT) A = { ...mir(ARM.hit) };
-  if (after > 0) {
-    // Проводка: ладонь вдавливается на пиксель, пальцы растопырены.
-    const pr = Math.sin(after * Math.PI);
-    A = { ...A, wy: A.wy + pr * 1.5 };
-  }
-  if (ret > 0) A = mixArm(A, back, ret, side > 0 ? [60, 58] : [4, 58]);
-  r[mine] = A;
+  r[mine] = mir(slamArm(tq, from, back));
   // Вторая рука упирается в колено.
   r[other] = mixArm(r[other], side > 0 ? mirrorArm(ARM.grip) : ARM.grip, ant * (1 - ret));
-  // Корпус: отклон назад и в сторону на замахе, бросок вперёд на ударе.
-  const lean = tq < SLAM_HIT ? -eOut(raise) * 1.5 - eOut(hover) * 0.5 : 0;
-  const lunge = smash > 0 && tq < SLAM_HIT ? eIn(smash) * 4 : 0;
-  const hitK = tq >= SLAM_HIT ? (1 - eOut(after)) * 4.5 + eOut(after) * 3.2 : 0;
-  const lungeTotal = tq >= SLAM_HIT ? hitK * (1 - ret) : lunge;
-  r.ty += lean * (1 - smash) + lungeTotal;
-  r.tx +=
-    (-side * eOut(raise) * 1 + side * (smash > 0 ? eIn(smash) * 2 : 0)) * (1 - ret) +
-    (tq >= SLAM_HIT ? side * 2 * (1 - ret) : 0);
-  r.hy += lean * (1 - smash) * 1 + lungeTotal * 0.8;
-  r.nod = tq < 0.83 ? -eOut(raise) : 1 * (1 - ret);
+  // Корпус: отклон назад и от руки на замахе, бросок вперёд на ударе.
+  const hit = tq >= SLAM_HIT;
+  const lean = hit ? 0 : -eOut(raise) * 1.5 - eOut(hover) * 0.6;
+  const lunge = hit ? ((1 - eOut(after)) * 4.5 + eOut(after) * 3.2) * (1 - ret) : eIn(smash) * 4;
+  r.ty += lean * (1 - smash) + lunge;
+  r.tx += hit ? side * 2 * (1 - ret) : -side * eOut(raise) * (1 - smash) + side * eIn(smash) * 2;
+  r.hy += lean * (1 - smash) + lunge * 0.8;
+  r.nod = tq < 0.86 ? -eOut(raise) : 1 - ret;
   r.turn = side * (raise > 0.3 ? 1 : 0) * (1 - ret);
   r.brow = eOut(raise) * (1 - ret);
   r.jaw = smash > 0.5 && ret < 0.5 ? 1 : 0;
   r.eyeMode = 'wrath';
   r.eye = 0.55 + 0.45 * eOut(raise) * (1 - ret);
   r.cloth = side * (smash > 0 ? 2 : 0) * (1 - after) - side * eOut(raise) * (1 - smash);
-  if (smash > 0 && tq < SLAM_HIT + 0.09) {
-    // След: полоса пыли от высшей точки до кисти, гаснет за два кадра после контакта.
-    r.smear = [side, smash, A.wx, A.wy, tq >= SLAM_HIT ? 1 - (tq - SLAM_HIT) / 0.09 : 1];
+  // След: полоса там, где прошла кисть, и тень руки кадром раньше.
+  if (smash > 0 && !hit) {
+    r.smear = [side, 0, smash, 1];
+    r.ghost = mir(slamArm(tq - 1 / 24, from, back));
+  } else if (hit && tq < SLAM_HIT + 0.09) {
+    const f = tq < SLAM_HIT + 0.04 ? 1 : 0.45;
+    r.smear = [side, 0.3, 1, f];
+    if (f > 0.5) r.ghost = mir(slamArm(SLAM_HIT - 1 / 24, from, back));
   }
   if (after > 0 && after < 1) {
     // Крошка с плеча и предплечья от удара.
@@ -2895,7 +2937,6 @@ function idolSlam(r: IdolRig, t: number, side: number, now: number): void {
     const sx = 32 + side * 20;
     r.crumbs.push(sx - side * 2, 27 + k * k * 30, sx + side * 4, 34 + k * k * 34);
   }
-  void now;
 }
 
 /** Смена фазы: рык — голова назад, кулаки с колен, трещины вспыхивают. */
@@ -3026,7 +3067,8 @@ function idolBodyKey(r: IdolRig, cracks: number): string {
     r.rune && r.runeK > 0 ? r.rune : 0,
     r.smoke,
     r.crumbs.map((v) => R(v)).join(','),
-    r.smear ? r.smear.map((v) => R(v * 8)).join(',') : '',
+    r.smear ? r.smear.map((v) => R(v * 24)).join(',') : '',
+    r.ghost ? armKey(r.ghost) : '',
     cracks,
     stepN(r.grow, 5),
     stepN(r.deathK, 6),
@@ -3065,9 +3107,6 @@ function paintIdolBody(r: IdolRig, cracks: number): Px {
     paintCracks(q, hc, 'head', r.grow, r.deathK);
   });
   blit(p, head.p, tx + R(r.hx), ty + R(r.hy), head.box);
-  // След удара: пыль и воздух там, где прошла рука, — под самой рукой.
-  if (r.smear) paintSmear(p, r.smear, tx, ty);
-  const rune = r.rune && r.runeK > 0 ? r.rune : 0;
   const armOf = (a: Arm): Arm => ({
     ...a,
     ex: R(a.ex),
@@ -3075,6 +3114,14 @@ function paintIdolBody(r: IdolRig, cracks: number): Px {
     wx: R(a.wx),
     wy: R(a.wy),
   });
+  // След удара: пыль и воздух там, где прошла рука, и её тень кадром
+  // раньше — под самой рукой.
+  if (r.smear) paintSmear(p, r.smear);
+  if (r.ghost) {
+    const side = r.smear ? r.smear[0] : 1;
+    paintGhostArm(p, side, 32 + side * 18 + tx, 29 + ty, armOf(r.ghost));
+  }
+  const rune = r.rune && r.runeK > 0 ? r.rune : 0;
   paintArm(p, -1, 14 + tx, 29 + ty, armOf(r.L), r.runeArm < 0 ? rune : 0);
   paintArm(p, 1, 50 + tx, 29 + ty, armOf(r.R), r.runeArm > 0 ? rune : 0);
   // Дым из погасших глазниц.
@@ -3100,32 +3147,60 @@ function paintIdolBody(r: IdolRig, cracks: number): Px {
   return p;
 }
 
-/** След обрушения руки: полоса пыли-воздуха от высшей точки до кисти. */
-function paintSmear(p: OPx, sm: number[], tx: number, ty: number): void {
-  const [side, k, wx, wy, fade] = sm;
-  const sx = 32 + side * 18 + tx;
-  const sy = 29 + ty;
-  // Дуга: от поднятой кисти через внешнюю точку к нынешней.
-  const ax = 32 + side * 24;
-  const ay = 3;
-  const cxp = 32 + side * 30;
-  const cyp = 44;
-  const steps = 18;
-  for (let i = 0; i <= steps; i++) {
-    const u = (i / steps) * k;
-    const v = 1 - u;
-    const x = v * v * ax + 2 * v * u * cxp + u * u * wx;
-    const y = v * v * ay + 2 * v * u * cyp + u * u * wy;
-    // Толще к кисти, прозрачнее к хвосту.
-    const w = 1 + (u / Math.max(0.01, k)) * 2.5;
-    const a = Math.round(40 + 150 * (u / Math.max(0.01, k)) * fade);
-    for (let dy = -w; dy <= w; dy++)
-      for (let dx = -w; dx <= w; dx++)
+/**
+ * След обрушения руки: полоса пыли-воздуха по пути кисти (доли k0…k1),
+ * толще и ярче к кисти, со светлой жилой посередине. Прозрачность — по
+ * максимуму, а не накоплением: иначе середина полосы слипалась бы в пятно.
+ */
+function paintSmear(p: OPx, sm: number[]): void {
+  const [side, k0, k1, fade] = sm;
+  const acc = new Map<number, number>();
+  const core = new Map<number, number>();
+  const put = (m: Map<number, number>, x: number, y: number, a: number) => {
+    const key = Math.round(y) * 1000 + Math.round(x);
+    if ((m.get(key) ?? 0) < a) m.set(key, a);
+  };
+  for (let k = k0; k <= k1 + 1e-6; k += 0.015) {
+    const [px, py] = slamPath(k);
+    const x = side > 0 ? px : 64 - px;
+    const f = (k - k0) / Math.max(0.01, k1 - k0);
+    const w = 1.2 + f * 3.4;
+    const a = (50 + 150 * f) * fade;
+    for (let dy = -Math.ceil(w); dy <= Math.ceil(w); dy++)
+      for (let dx = -Math.ceil(w); dx <= Math.ceil(w); dx++)
         if (dx * dx + dy * dy <= w * w)
-          p.set(Math.round(x + dx), Math.round(y + dy), hex('#d8d0bc', a));
+          put(acc, x + dx, py + dy, a * (1 - Math.hypot(dx, dy) / (w + 1)) + a * 0.3);
+    if (f > 0.25) put(core, x, py, (120 + 135 * f) * fade);
   }
-  void sx;
-  void sy;
+  for (const [key, a] of acc) {
+    const y = Math.floor(key / 1000);
+    const x = key - y * 1000;
+    p.set(x, y, hex('#d8d0bc', Math.min(210, Math.round(a))));
+  }
+  for (const [key, a] of core) {
+    const y = Math.floor(key / 1000);
+    const x = key - y * 1000;
+    p.set(x, y, hex('#fff6e0', Math.min(235, Math.round(a))));
+  }
+}
+
+/** Тень руки кадром раньше: светлый полупрозрачный силуэт позади настоящей. */
+function paintGhostArm(p: OPx, side: number, sx: number, sy: number, a: Arm): void {
+  const g = new OPx(ID_W, ID_H, ID_OX, ID_OY);
+  paintArm(g, side, sx, sy, a, 0);
+  const dust = hex('#d8d0bc');
+  for (let i = 0; i < g.data.length; i += 4) {
+    if (!g.data[i + 3]) continue;
+    const c: RGBA = [
+      Math.round((g.data[i] + dust[0]) / 2),
+      Math.round((g.data[i + 1] + dust[1]) / 2),
+      Math.round((g.data[i + 2] + dust[2]) / 2),
+      110,
+    ];
+    const px = (i / 4) % ID_W;
+    const py = Math.floor(i / 4 / ID_W);
+    Px.prototype.set.call(p, px, py, c);
+  }
 }
 
 /** Ключ и рисунок слоя света: глаза, третий глаз, знак, сердце, трещины. */
@@ -3181,31 +3256,40 @@ function paintIdolLit(r: IdolRig, cracks: number, lx: number, ly: number): Px | 
   const hx = tx + R(r.hx) + turn;
   const hy = ty + R(r.hy) + nod;
   const brow = r.brow >= 0.5;
-  // Глаза.
+  // Глаза: у взора накал идёт от красного через оранжевый к белому, ореол
+  // растёт, свет ложится на скулы.
   const eye = stepN(r.eye, 6) / 6;
   if (r.eyeMode !== 'off' && eye > 0) {
     any = true;
-    const base = EYE_COLOR[r.eyeMode];
-    const hot = r.eyeMode === 'gaze' ? mix(base, hex('#fff0d0'), eye * 0.85) : base;
-    const core = mix(hot, WHITE, 0.25 + eye * 0.5);
+    const gaze = r.eyeMode === 'gaze';
+    const hot = gaze
+      ? eye < 0.5
+        ? mix(EYE_RED, hex('#ff7a2a'), eye * 2)
+        : mix(hex('#ff7a2a'), hex('#fff2c0'), (eye - 0.5) * 2)
+      : EYE_COLOR[r.eyeMode];
+    const core = mix(hot, WHITE, 0.3 + eye * 0.5);
+    const tint = (al: number): RGBA => [hot[0], hot[1], hot[2], Math.max(0, Math.min(255, R(al)))];
     for (const s of [-1, 1]) {
       const ex = 32 + s * 5 + hx;
       const ey = 13 + hy;
-      const a = Math.round(90 + 165 * eye);
-      // Ореол вокруг глазницы — только на ярком.
-      if (eye > 0.6)
-        for (const [dx, dy] of [
-          [-3, 0],
-          [3, 0],
-          [-2, -1],
-          [2, -1],
-          [-2, 1],
-          [2, 1],
-        ])
-          p.set(ex + dx, ey + dy, [hot[0], hot[1], hot[2], Math.round(70 * (eye - 0.4))]);
-      p.rect(ex - 1, ey - (brow ? 0 : 1), ex + 1, ey + 1, [hot[0], hot[1], hot[2], a]);
+      const a = 100 + 155 * eye;
+      if (eye > 0.45) {
+        p.set(ex - 2, ey, tint(110 * eye));
+        p.set(ex + 2, ey, tint(110 * eye));
+      }
+      if (gaze && eye > 0.66) {
+        // Ореол: кольцо вокруг глазницы и свет на скуле.
+        for (let dy = -3; dy <= 3; dy++)
+          for (let dx = -4; dx <= 4; dx++) {
+            const d = Math.hypot(dx * 0.8, dy);
+            if (d < 2.1 || d > 3.2) continue;
+            p.set(ex + dx, ey + dy, tint(95 * (eye - 0.5)));
+          }
+        for (let dx = -1; dx <= 1; dx++) p.set(ex + dx, ey + 3, tint(70 * eye));
+      }
+      p.rect(ex - 1, ey - (brow ? 0 : 1), ex + 1, ey + 1, tint(a));
       // Зрачок — самый яркий пиксель; смотрит на героя.
-      p.set(ex + lx, ey + (brow ? 0 : ly), [core[0], core[1], core[2], Math.min(255, a + 40)]);
+      p.set(ex + lx, ey + (brow ? 0 : ly), [core[0], core[1], core[2], Math.min(255, R(a + 40))]);
     }
   }
   // Угольки в погасших глазах.
@@ -3214,21 +3298,24 @@ function paintIdolLit(r: IdolRig, cracks: number, lx: number, ly: number): Px | 
     for (const s of [-1, 1])
       p.set(32 + s * 5 + hx, 13 + hy + 1, hex('#ff4a1c', R(90 + 90 * r.ember)));
   }
-  // Лучи из глаз на залпе.
+  // Лучи из глаз на залпе: вниз, в зал, чуть врозь; гаснут за три кадра.
   if (r.beam > 0) {
     any = true;
     const b = stepN(r.beam, 3) / 3;
+    const hotB = mix(hex('#ff7a2a'), WHITE, 0.55 * b);
     for (const s of [-1, 1]) {
       const ex = 32 + s * 5 + hx;
       const ey = 13 + hy;
-      for (let i = 1; i <= 7; i++)
-        p.set(
-          ex + s * Math.round(i * 0.45),
-          ey + i,
-          mix(EYE_RED, WHITE, 0.6 * b).map((v, j) =>
-            j === 3 ? R(255 * b * (1 - i / 9)) : v,
-          ) as RGBA,
-        );
+      for (let i = 1; i <= 18; i++) {
+        const x = ex + s * Math.round(i * 0.3);
+        const y = ey + i;
+        const al = 255 * b * (1 - i / 21);
+        p.set(x, y, [hotB[0], hotB[1], hotB[2], R(al)]);
+        if (i > 2) {
+          p.set(x - 1, y, [255, 110, 60, R(al * 0.4)]);
+          p.set(x + 1, y, [255, 110, 60, R(al * 0.4)]);
+        }
+      }
     }
   }
   // Третий глаз.
@@ -3252,35 +3339,43 @@ function paintIdolLit(r: IdolRig, cracks: number, lx: number, ly: number): Px | 
       p.set(32 + x + hx, y + jaw - 1, hex('#ff5a28', R(120 + 120 * mouth)));
     }
   }
-  // Знак на ладони.
+  // Знак на ладони: сам знак и тонкий ореол вокруг — видно издалека.
   if (r.rune && r.runeK > 0) {
     any = true;
-    const a = r.runeArm > 0 ? r.R : mirrorArm(r.L);
-    const s = r.runeArm > 0 ? 1 : -1;
-    const wx = R(a.wx);
-    const wy = R(a.wy);
-    const len = Math.hypot(wx - R(a.ex), wy - R(a.ey)) || 1;
-    const ux = (wx - R(a.ex)) / len;
-    const uy = (wy - R(a.ey)) / len;
-    const vx = -uy * s;
-    const vy = ux * s;
+    const A = r.R;
+    const wx = R(A.wx);
+    const wy = R(A.wy);
+    const len = Math.hypot(wx - R(A.ex), wy - R(A.ey)) || 1;
+    const ux = (wx - R(A.ex)) / len;
+    const uy = (wy - R(A.ey)) / len;
+    const vx = -uy;
+    const vy = ux;
     const k = stepN(r.runeK, 4) / 4;
     const c = RUNE_COLOR[r.rune] ?? GOLD.hi;
-    const w = r.runeArm > 0 ? wx : 64 - wx;
-    for (const [aa, bb] of runeCells(r.rune)) {
-      const x = Math.round(w + (aa + 3.5) * ux + bb * vx);
-      const y = Math.round(wy + (aa + 3.5) * uy + bb * vy);
-      p.set(x, y, [c[0], c[1], c[2], R(120 + 135 * k)]);
-    }
+    const cells = runeCells(r.rune).map(([aa, bb]) => [
+      Math.round(wx + (aa + 4.8) * ux + bb * vx),
+      Math.round(wy + (aa + 4.8) * uy + bb * vy),
+    ]);
+    // Свечение — на соседях знака, слабее.
+    for (const [x, y] of cells)
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ])
+        p.set(x + dx, y + dy, [c[0], c[1], c[2], R(55 * k)]);
+    for (const [x, y] of cells)
+      p.set(x, y, mix(c, WHITE, 0.35 * k).map((v, j) => (j === 3 ? R(140 + 115 * k) : v)) as RGBA);
     // Ореол вокруг ладони.
-    const cxp = w + 3.5 * ux;
-    const cyp = wy + 3.5 * uy;
-    for (let dy = -5; dy <= 5; dy++)
-      for (let dx = -5; dx <= 5; dx++) {
+    const cxp = wx + 5.5 * ux;
+    const cyp = wy + 5.5 * uy;
+    for (let dy = -7; dy <= 7; dy++)
+      for (let dx = -7; dx <= 7; dx++) {
         const d = Math.hypot(dx, dy);
-        if (d < 4.2 || d > 5.2) continue;
+        if (d < 5.6 || d > 6.6) continue;
         if ((dx + dy) % 2) continue;
-        p.set(R(cxp + dx), R(cyp + dy), [c[0], c[1], c[2], R(60 * k)]);
+        p.set(R(cxp + dx), R(cyp + dy), [c[0], c[1], c[2], R(70 * k)]);
       }
   }
   // Сердце в раскрытой печати.
@@ -3384,29 +3479,34 @@ function deathRig(t: number): IdolRig {
   return r;
 }
 
-/** Части распада: пень (низ торса и предплечья) и две половины верха. */
+/** Части распада: пень (низ живота) и две половины верха с руками. */
 interface IdolWreck {
   stump: Px;
   halves: [Px, Px];
   boxes: [number[], number[]];
   head: Px;
   headBox: number[];
-  /** Голова на боку — для последних кадров и для предмета «разбит». */
+  /** Где голова стоит в миг раскола и куда падает (сдвиги кадра). */
+  headFrom: [number, number];
+  headTo: [number, number];
+  /** Голова на боку — последние кадры и предмет «разбит». */
   lying: Px;
   lyingBox: number[];
   chunks: Px;
 }
 
 let wreckCache: IdolWreck | null = null;
+/** Миг раскола и поза, в которой идол застыл перед ним. */
+const BREAK_T = 0.62;
 
 /** Разобрать позу распада на куски — один раз на игру. */
 function idolWreck(): IdolWreck {
   if (wreckCache) return wreckCache;
-  const r = deathRig(0.6);
+  const r = deathRig(BREAK_T - 0.01);
   const R = Math.round;
   const tx = R(r.tx);
   const ty = R(r.ty);
-  // Тело без трона: торс и руки.
+  // Тело без трона: торс и руки — ровно как в последнем кадре до раскола.
   const body = new OPx(ID_W, ID_H, ID_OX, ID_OY);
   const tc = crackSet('torso', 6, 1, 1);
   const torso = idolPart(`torso|${tc.key}|0`, (q) => {
@@ -3415,8 +3515,8 @@ function idolWreck(): IdolWreck {
   });
   blit(body, torso.p, tx, ty, torso.box);
   const armOf = (a: Arm): Arm => ({ ...a, ex: R(a.ex), ey: R(a.ey), wx: R(a.wx), wy: R(a.wy) });
-  paintArm(body, -1, 14 + tx, 29 + ty, armOf(mirrorArm(ARM.rest)), 0);
-  paintArm(body, 1, 50 + tx, 29 + ty, armOf(ARM.rest), 0);
+  paintArm(body, -1, 14 + tx, 29 + ty, armOf(r.L), 0);
+  paintArm(body, 1, 50 + tx, 29 + ty, armOf(r.R), 0);
   const stump = new Px(ID_W, ID_H);
   const left = new Px(ID_W, ID_H);
   const right = new Px(ID_W, ID_H);
@@ -3426,9 +3526,7 @@ function idolWreck(): IdolWreck {
       if (!body.data[i + 3]) continue;
       const dx = x - ID_OX;
       const dy = y - ID_OY;
-      // Предплечья и кисти на коленях остаются; плечи уходят с торсом.
-      const keep = dy >= cutY(dx) || (dy >= 40 && Math.abs(dx - 32) > 8);
-      const dst = keep ? stump : dx < 32 ? left : right;
+      const dst = dy >= cutY(dx) ? stump : dx < 32 ? left : right;
       for (let k = 0; k < 4; k++) dst.data[i + k] = body.data[i + k];
     }
   // Шов раскола по пню — свежий излом светлее.
@@ -3441,50 +3539,69 @@ function idolWreck(): IdolWreck {
       stump.data[i + 2] = BASALT.lit[2];
     }
   }
+  // Голова в миг раскола — та же, что в кадре до него (рык, третий глаз).
   const hc = crackSet('head', 6, 1, 1);
-  const head = idolPart(`head|${hc.key}|0|0|0|0|0`, (q) => {
+  const nod = Math.max(-1, Math.min(1, R(r.nod)));
+  const jaw = Math.max(0, Math.min(2, R(r.jaw)));
+  const third = r.third > 0.5;
+  const head = idolPart(`head|${hc.key}|${nod}|0|${jaw}|0|${third ? 1 : 0}`, (q) => {
+    paintHead(q, nod, 0, jaw, 0, third);
+    paintCracks(q, hc, 'head', 1, 1);
+  });
+  // Лежит она уже с сомкнутой ухмылкой — повернуть на четверть по часовой
+  // можно без потерь пикселей.
+  const still = idolPart(`head|${hc.key}|0|0|0|0|0`, (q) => {
     paintHead(q, 0, 0, 0, 0, false);
     paintCracks(q, hc, 'head', 1, 1);
   });
-  // Голова на боку: поворот на четверть по часовой — без потерь пикселей.
-  const [x0, y0, x1, y1] = head.box;
+  const [x0, y0, x1, y1] = still.box;
   const lying = new Px(ID_W, ID_H);
   const hw = x1 - x0 + 1;
   const hh = y1 - y0 + 1;
-  // Центр лежащей головы — на полу у подножия справа.
-  const cxL = 45 + ID_OX;
-  const cyL = 76 + ID_OY;
+  // Центр лежащей головы — на полу у подножия, справа от середины.
+  const cxL = 48 + ID_OX;
+  const cyL = 75 + ID_OY;
   const lx0 = Math.round(cxL - hh / 2);
   const ly0 = Math.round(cyL - hw / 2);
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++) {
       const i = (y * ID_W + x) * 4;
-      if (!head.p.data[i + 3]) continue;
+      if (!still.p.data[i + 3]) continue;
       const nx = lx0 + (y1 - y);
       const ny = ly0 + (x - x0);
       if (nx < 0 || ny < 0 || nx >= ID_W || ny >= ID_H) continue;
       const j = (ny * ID_W + nx) * 4;
-      for (let k = 0; k < 4; k++) lying.data[j + k] = head.p.data[i + k];
+      for (let k = 0; k < 4; k++) lying.data[j + k] = still.p.data[i + k];
     }
-  // Обломки там, где упали половины торса.
+  const headFrom: [number, number] = [tx + R(r.hx), ty + R(r.hy)];
+  const [hx0, hy0, hx1, hy1] = head.box;
+  const headTo: [number, number] = [
+    Math.round(cxL - (hx0 + hx1) / 2),
+    Math.round(cyL - (hy0 + hy1) / 2),
+  ];
+  // Обломки там, где разбились половины торса: слева у подножия, справа на
+  // ступени у колонны.
   const chunks = new OPx(ID_W, ID_H, ID_OX, ID_OY);
   for (const [x, y, w, h] of [
-    [2, 66, 7, 4],
-    [9, 68, 5, 3],
-    [4, 71, 4, 2],
-    [52, 60, 6, 4],
-    [58, 64, 4, 5],
-    [49, 64, 3, 2],
+    [1, 66, 7, 4],
+    [8, 68, 5, 3],
+    [3, 71, 4, 2],
+    [13, 69, 3, 2],
+    [51, 55, 5, 3],
+    [55, 59, 4, 4],
+    [49, 60, 3, 2],
   ])
     basaltRect(chunks, x, y, x + w, y + h);
-  chunks.rect(5, 66, 8, 66, GOLD.dk);
-  chunks.rect(53, 60, 57, 60, GOLD.mid);
+  chunks.rect(4, 66, 8, 66, GOLD.dk);
+  chunks.rect(52, 55, 55, 55, GOLD.mid);
   wreckCache = {
     stump,
     halves: [left, right],
     boxes: [boxOf(left), boxOf(right)],
     head: head.p,
     headBox: head.box,
+    headFrom,
+    headTo,
     lying,
     lyingBox: boxOf(lying),
     chunks,
@@ -3492,22 +3609,26 @@ function idolWreck(): IdolWreck {
   return wreckCache;
 }
 
-/** Пыль от удара о пол: полупрозрачные клочья расходятся и оседают. */
+/** Пыль от удара о пол: клочья по 2 точки расходятся, поднимаются и тают. */
 function dustAt(p: OPx, x: number, y: number, k: number, w: number, seed: number): void {
   if (k <= 0 || k >= 1) return;
-  const n = 7;
+  const n = 8;
   for (let i = 0; i < n; i++) {
     const a = ((i + 0.5) / n) * Math.PI + ((seed * 13 + i * 7) % 5) * 0.08;
-    const d = w * (0.3 + 0.7 * eOut(k));
-    const px = x + Math.cos(a) * d * (i % 2 ? 1 : -1);
-    const py = y - Math.sin(a) * d * 0.35 - k * 2;
-    const al = Math.round(170 * (1 - k));
-    p.set(Math.round(px), Math.round(py), hex('#b8b2a0', al));
-    if (k < 0.5) p.set(Math.round(px) + 1, Math.round(py), hex('#d8d2c0', Math.round(al * 0.6)));
+    const d = w * (0.25 + 0.75 * eOut(k));
+    const px = Math.round(x + Math.cos(a) * d);
+    const py = Math.round(y - Math.sin(a) * d * 0.3 - k * 3);
+    const al = Math.round(160 * (1 - k));
+    const c = i % 2 ? hex('#b8b2a0', al) : hex('#d0caba', al);
+    p.set(px, py, c);
+    if (k < 0.6) {
+      p.set(px + 1, py, c);
+      p.set(px, py - 1, hex('#d8d2c0', Math.round(al * 0.5)));
+    }
   }
 }
 
-/** Кадр распада после раскола (t ≥ 0,62). */
+/** Кадр распада после раскола (t ≥ BREAK_T). */
 function paintIdolCollapse(t: number): Px {
   const W = idolWreck();
   const p = new OPx(ID_W, ID_H, ID_OX, ID_OY);
@@ -3520,42 +3641,37 @@ function paintIdolCollapse(t: number): Px {
   p.data.set(base.p.data);
   paintCloth(p, 0);
   blit(p, W.stump, 0, 0, boxOf(W.stump));
-  const tt = t - 0.62;
-  // Половины торса: разъезжаются по шву, падают с разгоном, бьются о камень.
-  const LAND = 0.34;
+  const tt = t - BREAK_T;
+  // Половины торса: расходятся по шву, падают с разгоном, бьются и крошатся.
+  const LAND = 0.3;
   if (tt < LAND) {
     const k = tt / LAND;
-    const fall = Math.round(k * k * 30);
-    const out = Math.round(1 + k * 7);
-    blit(p, W.halves[0], -out, fall, W.boxes[0]);
-    blit(p, W.halves[1], out, Math.round(k * k * 22), W.boxes[1]);
+    blit(p, W.halves[0], -Math.round(1 + k * 8), Math.round(k * k * 30), W.boxes[0]);
+    blit(p, W.halves[1], Math.round(1 + k * 6), Math.round(k * k * 22), W.boxes[1]);
   } else {
     blit(p, W.chunks, 0, 0, boxOf(W.chunks));
-    dustAt(p, 8, 72, (tt - LAND) / 0.45, 12, 1);
-    dustAt(p, 55, 66, (tt - LAND) / 0.45, 10, 2);
+    dustAt(p, 8, 72, (tt - LAND) / 0.5, 13, 1);
+    dustAt(p, 54, 62, (tt - LAND) / 0.5, 10, 2);
   }
-  // Голова: подброшена расколом, падает дугой к подножию, отскакивает и
-  // валится на бок.
-  const HL = 0.4;
-  const [hx0, hy0] = [0, -3];
-  if (tt < HL + 0.08) {
-    let dx: number;
-    let dy: number;
-    if (tt < HL) {
-      const k = tt / HL;
-      dx = hx0 + k * 12;
-      dy = hy0 - Math.sin(k * Math.PI) * 5 + k * k * 52;
-    } else {
-      const k = (tt - HL) / 0.08;
-      dx = hx0 + 12 + k * 1.5;
-      dy = hy0 + 52 - Math.sin(k * Math.PI) * 2;
-    }
+  // Голова: раскол подбрасывает её, она падает дугой к подножию, отскакивает
+  // и валится на бок.
+  const HL = 0.36;
+  const [fx, fy] = W.headFrom;
+  const [ex, ey] = W.headTo;
+  if (tt < HL) {
+    const k = tt / HL;
+    const dx = lerp(fx, ex, k);
+    const dy = lerp(fy, ey, k * k) - Math.sin(k * Math.PI) * 6;
     blit(p, W.head, Math.round(dx), Math.round(dy), W.headBox);
+  } else if (tt < HL + 0.1) {
+    // Отскок: подпрыгнула на три точки.
+    const k = (tt - HL) / 0.1;
+    blit(p, W.head, ex, Math.round(ey - Math.sin(k * Math.PI) * 3), W.headBox);
+    dustAt(p, 48, 87, k * 0.5, 12, 4);
   } else {
     blit(p, W.lying, 0, 0, W.lyingBox);
-    dustAt(p, 44, 84, (tt - HL - 0.08) / 0.4, 11, 3);
+    dustAt(p, 48, 87, 0.5 + (tt - HL - 0.1) / 0.8, 12, 3);
   }
-  if (tt >= HL && tt < HL + 0.08) dustAt(p, 45, 84, (tt - HL) / 0.4, 11, 4);
   outlineRaw(p, INK);
   return p;
 }
@@ -3567,8 +3683,8 @@ function paintIdolBroken(): Px {
 
 /** Свет сцены смерти: трещины горят, в миг раскола — вспышка, потом гаснет. */
 function paintIdolDeathLit(t: number): Px | null {
-  if (t < 0.62) return paintIdolLit(deathRig(t), 6, 0, 0);
-  const k = 1 - seg(t, 0.62, 1.2);
+  if (t < BREAK_T) return paintIdolLit(deathRig(t), 6, 0, 0);
+  const k = 1 - seg(t, BREAK_T, 1.2);
   if (k <= 0) return null;
   const p = new OPx(ID_W, ID_H, ID_OX, ID_OY);
   const set = crackSet('legs', 6, 1, 1);
@@ -3618,7 +3734,7 @@ function idolState(m: Mob, pose: MobPose): IdolRig {
       break;
     }
     case 3:
-      idolGaze(r, q24(t), d.vWarn ?? D - 1.1, D, now);
+      idolGaze(r, q24(t, d.vWarn ?? D - 1.1), d.vWarn ?? D - 1.1, D, now);
       break;
     case 4:
       idolSpent(r, q24(t), D, now);
@@ -3634,7 +3750,7 @@ function idolState(m: Mob, pose: MobPose): IdolRig {
   }
   // Удар рукой поверх любого состояния.
   const slamT = pose.t - (d.vSlam0 ?? -99);
-  if (slamT >= 0 && slamT < SLAM_END) idolSlam(r, slamT, d.slamSide ?? 1, now);
+  if (slamT >= 0 && slamT < SLAM_END) idolSlam(r, slamT, d.slamSide ?? 1);
   // Смена фазы — рык поверх всего.
   const ph = pose.t - (d.vPh0 ?? -99);
   if (ph >= 0 && ph < 0.95) {
@@ -3656,11 +3772,13 @@ registerMobPainter('f4_idol', (m, pose) => {
     // Сцена смерти: трещины, раскол, голова у подножия.
     const t = q24(Math.min(pose.t, IDOL_LINGER - 0.001));
     idolDeathEnd = Math.max(idolDeathEnd, now - pose.t + IDOL_LINGER);
-    const key = `D|${t.toFixed(4)}|${pose.flash && t < 0.62 ? 1 : 0}`;
+    const key = `D|${t.toFixed(4)}|${pose.flash && t < BREAK_T ? 1 : 0}`;
     let img = idolFrames.get(key);
     if (!img) {
-      let px = t < 0.62 ? paintIdolBody(deathRig(t), 6) : paintIdolCollapse(t);
-      if (pose.flash && t < 0.62) px = px.tint(WHITE, 0.7);
+      let px = t < BREAK_T ? paintIdolBody(deathRig(t), 6) : paintIdolCollapse(t);
+      // Кадр перед расколом — камень раскалён добела: склейка под вспышкой.
+      if (t >= BREAK_T - 1 / 24 - 1e-6 && t < BREAK_T) px = px.tint(hex('#fff4d8'), 0.55);
+      else if (pose.flash && t < BREAK_T) px = px.tint(WHITE, 0.7);
       img = idolFrames.set(key, px.canvas());
     }
     const lkey = `D|${t.toFixed(4)}`;

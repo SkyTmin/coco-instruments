@@ -879,6 +879,7 @@ function startGaze(
   const h = sim.hero;
   d.st = ST.gaze;
   d.stT = 0;
+  idol.data.vWarn = warn; // v2.85 — только рисунок
   // Плиты: ближняя к герою — всегда, и ещё две-три случайные. Второй взор
   // фазы гнева прежнюю ближнюю не зажигает: горит следующая — перебеги.
   const byDist = A.plates
@@ -1039,6 +1040,7 @@ function reformStatues(
     s.face = p.x < A.seatX ? 0 : Math.PI;
     // Собранный заново — тот же камень: опыта второй раз не даёт.
     s.xp = 0;
+    s.data.vRe = 1; // v2.85 — только рисунок
     awake += 1;
     sim.events.push({ t: 'strike', x: s.x, y: s.y, art: 'f4_wake' });
   }
@@ -1254,6 +1256,7 @@ registerBoss('f4_idol', {
       });
       idol.data.slamSide = side;
       idol.data.slamT = 1.15;
+      idol.data.vSlam0 = idol.t; // v2.85 — только рисунок
     }
 
     // Для рисовальщика: что горит на скрижали и у ног героя.
@@ -1277,8 +1280,14 @@ registerBoss('f4_idol', {
         : d.st === ST.rule
           ? Math.min(1, d.stT / P.rule)
           : 0;
+    if ((idol.data.cracks ?? 0) !== (d.broken ?? 0)) idol.data.vCr0 = idol.t + dt; // v2.85 — только рисунок
+    if ((idol.data.phase ?? 0) !== b.phase) idol.data.vPh0 = idol.t + dt; // v2.85 — только рисунок
     idol.data.cracks = d.broken ?? 0;
     idol.data.phase = b.phase;
+    idol.data.vT0 = idol.t + dt - (d.stT ?? 0); // v2.85 — только рисунок
+    idol.data.vDur = [P.rest, P.rule, P.open, d.gazeEnd ?? 3, P.spent, 1.1][d.st] ?? 1; // v2.85 — только рисунок
+    idol.data.vJudge = d.rule === RULES.sheathe ? SHEATHE_GRACE : P.rule - P.judge; // v2.85 — только рисунок
+    idol.data.vRule = d.rule ?? 0; // v2.85 — только рисунок
     // Круг заповеди у ног героя — идёт за ним.
     idol.tele =
       d.st === ST.rule
