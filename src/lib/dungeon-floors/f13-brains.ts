@@ -94,7 +94,6 @@ const tileAt = (sim: Sim, x: number, y: number): number => {
   return sim.tiles[y * w.w + x];
 };
 
-
 const walkable = (t: number) => t === T_FLOOR || t === T_HAZARD || (t >= 3 && t <= 5) || t === 10;
 
 /** Задевает ли линия (из точки по углу, длина, полуширина) круг. */
@@ -160,7 +159,16 @@ function recoverStep(m: Mob, api: SimApi, T: number, next = 'stalk'): void {
 }
 
 /** Одна зона-картинка (без действия) — вспышка, пар, пыль. */
-function puff(api: SimApi, sim: Sim, art: string, x: number, y: number, r: number, life: number, above = false): void {
+function puff(
+  api: SimApi,
+  sim: Sim,
+  art: string,
+  x: number,
+  y: number,
+  r: number,
+  life: number,
+  above = false,
+): void {
   api.zone(sim, { x, y, r, life, art, above });
 }
 
@@ -266,8 +274,7 @@ function hint(sim: Sim, what: 'front' | 'nape'): void {
       text: 'ЛОБ НЕ БЕРЁТ',
       sub: 'зайди за спину — бей в затылок',
     });
-  else
-    sim.events.push({ t: 'boss', what: 'f13_nape', text: 'В ЗАТЫЛОК!', sub: 'втрое сильнее' });
+  else sim.events.push({ t: 'boss', what: 'f13_nape', text: 'В ЗАТЫЛОК!', sub: 'втрое сильнее' });
 }
 
 /** Общий черновик исполина на кадр: затылок, счётчики. */
@@ -373,8 +380,7 @@ function grabStep(sim: Sim, m: Mob, api: SimApi): boolean {
     });
   }
   m.face = Math.atan2(m.data.gy - m.y, m.data.gx - m.x);
-  if (m.t > GRAB.warn - 0.25)
-    m.danger = hypot(m.data.gx - m.x, m.data.gy - m.y) + GRAB.r + 0.3;
+  if (m.t > GRAB.warn - 0.25) m.danger = hypot(m.data.gx - m.x, m.data.gy - m.y) + GRAB.r + 0.3;
   if (m.t >= GRAB.warn) {
     m.data.lit = 0;
     return true;
@@ -935,7 +941,14 @@ registerBrain('f13_armored', {
 export const ABNORMAL = { leapAim: 0.75, air: 0.55, twitch: 1.5, kickWarn: 0.55 };
 
 /** Прыгнуть к точке: метка приземления, в воздухе недосягаем. */
-export function abnormalLeap(sim: Sim, m: Mob, api: SimApi, tx: number, ty: number, aim = ABNORMAL.leapAim): void {
+export function abnormalLeap(
+  sim: Sim,
+  m: Mob,
+  api: SimApi,
+  tx: number,
+  ty: number,
+  aim = ABNORMAL.leapAim,
+): void {
   if (m.mode === 'dying') return;
   api.setMode(m, 'leapAim');
   m.data.lx = tx;
@@ -1557,13 +1570,31 @@ function auraOf(sim: Sim, st: ColState) {
   return st.aura ? sim.zones.find((z) => z.id === st.aura) : undefined;
 }
 
-function setAura(sim: Sim, api: SimApi, st: ColState, m: Mob, art: string | null, r = 0, dps = 0): void {
+function setAura(
+  sim: Sim,
+  api: SimApi,
+  st: ColState,
+  m: Mob,
+  art: string | null,
+  r = 0,
+  dps = 0,
+): void {
   const z = auraOf(sim, st);
   if (z) z.life = 0;
   st.aura = 0;
   if (!art) return;
   // Плащ пара — поверх Колосса (его окутывает), жар — по земле.
-  api.zone(sim, { x: m.x, y: m.y, r, life: 1e6, dps, status: 'burn', dur: 0.8, art, above: art === 'f13_cloak' });
+  api.zone(sim, {
+    x: m.x,
+    y: m.y,
+    r,
+    life: 1e6,
+    dps,
+    status: 'burn',
+    dur: 0.8,
+    art,
+    above: art === 'f13_cloak',
+  });
   st.aura = sim.zones[sim.zones.length - 1]?.id ?? 0;
 }
 
@@ -1630,7 +1661,15 @@ function colStomp(sim: Sim, m: Mob, api: SimApi): boolean {
     m.data.lit = 0;
     sim.events.push({ t: 'shake', k: 0.5 });
     sim.events.push({ t: 'boss', what: 'f13_stomp_wall' });
-    puff(api, sim, 'f13_dust', m.x + Math.cos(m.data.sa) * S.r, m.y + Math.sin(m.data.sa) * S.r, 1.6, 0.8);
+    puff(
+      api,
+      sim,
+      'f13_dust',
+      m.x + Math.cos(m.data.sa) * S.r,
+      m.y + Math.sin(m.data.sa) * S.r,
+      1.6,
+      0.8,
+    );
     return true;
   }
   return false;
@@ -1822,7 +1861,8 @@ function colStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
   m.tele = null;
   m.danger = 0;
   m.data.phase = phase;
-  for (const k of ['ventCd', 'quakeCd', 'ringCd', 'throwCd', 'stompCd']) m.data[k] = (m.data[k] ?? 3) - dt;
+  for (const k of ['ventCd', 'quakeCd', 'ringCd', 'throwCd', 'stompCd'])
+    m.data[k] = (m.data[k] ?? 3) - dt;
   m.data.bareT = (m.data.bareT ?? 0) - dt;
   if (m.mode !== 'rise' && m.mode !== 'roar') shoulder(sim, m);
   if (heroDown(sim)) {
@@ -1939,7 +1979,11 @@ function colStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
   const dist = c.dist;
   const reach = clearLine(sim, api, m.x, m.y, h.x, h.y);
   // Приёмы фаз — по своим часам.
-  if (m.data.spinCd <= 0 && ((m.data.naped ?? 0) >= COL.naps || (m.data.behind ?? 0) > 2.4) && dist < 5) {
+  if (
+    m.data.spinCd <= 0 &&
+    ((m.data.naped ?? 0) >= COL.naps || (m.data.behind ?? 0) > 2.4) &&
+    dist < 5
+  ) {
     api.setMode(m, 'back');
     m.data.spinCd = COL.spin;
     m.data.lit = 0;
@@ -2082,7 +2126,12 @@ registerBoss('f13boss', {
       b.phase = 1;
       api.setMode(m, 'roar');
       setAura(sim, api, st, m, 'f13_cloak', COL.cloak.r, COL.cloak.dps);
-      sim.events.push({ t: 'boss', what: 'phase', text: 'ПАР', sub: 'затылок в пару — крюком за спину' });
+      sim.events.push({
+        t: 'boss',
+        what: 'phase',
+        text: 'ПАР',
+        sub: 'затылок в пару — крюком за спину',
+      });
       sim.events.push({ t: 'flash', color: '#e8f0f0', k: 0.6 });
       api.light(sim, 'colB', { x: cx, y: cy, r: 9, tint: 'cold' });
     }
@@ -2091,7 +2140,12 @@ registerBoss('f13boss', {
       api.setMode(m, 'roar');
       setAura(sim, api, st, m, null);
       m.data.quakeCd = 1.6;
-      sim.events.push({ t: 'boss', what: 'phase', text: 'ТОПОТ', sub: 'Стена сыплется — пушка валит его на колени' });
+      sim.events.push({
+        t: 'boss',
+        what: 'phase',
+        text: 'ТОПОТ',
+        sub: 'Стена сыплется — пушка валит его на колени',
+      });
       api.light(sim, 'colB', null);
       api.light(sim, 'colC', { x: cx, y: y1 - 2, r: 8, tint: 'warm' });
     }
@@ -2100,7 +2154,12 @@ registerBoss('f13boss', {
       api.setMode(m, 'roar');
       setAura(sim, api, st, m, 'f13_heat', COL.heat.r, COL.heat.dps);
       m.data.ringCd = 1.5;
-      sim.events.push({ t: 'boss', what: 'phase', text: 'ИСПАРЕНИЕ', sub: 'он тает — затылок открыт, вокруг жар' });
+      sim.events.push({
+        t: 'boss',
+        what: 'phase',
+        text: 'ИСПАРЕНИЕ',
+        sub: 'он тает — затылок открыт, вокруг жар',
+      });
       sim.events.push({ t: 'flash', color: '#ff8a50', k: 0.6 });
       api.light(sim, 'colD', { x: x0 + 3, y: cy, r: 8, tint: 'red' });
       api.light(sim, 'colE', { x: x1 - 2, y: cy, r: 8, tint: 'red' });
@@ -2141,7 +2200,12 @@ registerBoss('f13boss', {
           if (to !== null) {
             api.hurtEnv(sim, 0.1);
             api.moveHero(sim, (to % W) + 0.5, Math.floor(to / W) + 0.5);
-            sim.events.push({ t: 'boss', what: 'f13_edge_trap', text: 'СОРВАЛСЯ', sub: 'край ушёл из-под ног' });
+            sim.events.push({
+              t: 'boss',
+              what: 'f13_edge_trap',
+              text: 'СОРВАЛСЯ',
+              sub: 'край ушёл из-под ног',
+            });
           }
         }
       }
@@ -2274,7 +2338,6 @@ export const HOOK = { speed: 15, range: 12, cd: 1.2, lift: 0.9 };
 export const CANNON = { warn: 0.45, reload: 7, battery: 2.5, arena: 12, w: 0.9 };
 export const BELL = { r: 7.5, cd: 7, stun: 1.3 };
 
-
 function areaAt(sim: Sim, y: number): string {
   const yy = Math.floor(y);
   for (const b of sim.world.bands) if (yy >= b.top && yy < b.top + b.h) return b.def.id;
@@ -2282,7 +2345,15 @@ function areaAt(sim: Sim, y: number): string {
 }
 
 /** Герой в прямоугольнике района (местные координаты). */
-function heroIn(sim: Sim, st: F13State, area: string, x0: number, y0: number, x1: number, y1: number): boolean {
+function heroIn(
+  sim: Sim,
+  st: F13State,
+  area: string,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): boolean {
   const h = sim.hero;
   const ly = h.y - st.tops[area];
   return h.x >= x0 && h.x <= x1 + 1 && ly >= y0 && ly <= y1 + 1 && areaAt(sim, h.y) === area;
@@ -2310,9 +2381,18 @@ function spawnAt(
   return m;
 }
 
-function reward(sim: Sim, api: SimApi, x: number, y: number, coins: number, tokens: number, mats: [string, number][]): void {
+function reward(
+  sim: Sim,
+  api: SimApi,
+  x: number,
+  y: number,
+  coins: number,
+  tokens: number,
+  mats: [string, number][],
+): void {
   for (let i = 0; i < 5; i++) api.dropAt(sim, 'coin', Math.round(coins / 5), x, y);
-  for (let i = 0; i < Math.min(8, tokens); i++) api.dropAt(sim, 'token', Math.ceil(tokens / 8), x, y);
+  for (let i = 0; i < Math.min(8, tokens); i++)
+    api.dropAt(sim, 'token', Math.ceil(tokens / 8), x, y);
   for (const [id, n] of mats) for (let i = 0; i < n; i++) api.dropAt(sim, id, 1, x, y);
 }
 
@@ -2370,7 +2450,16 @@ function scan(sim: Sim, api: SimApi): F13State {
   }
   for (const o of w.objs) {
     if (o.ref === 'f13_hookc')
-      st.hooks.push({ obj: o, x: o.x + 0.5, y: o.y + 0.5, tx: 0, ty: 0, combat: true, area: o.area, cd: 0 });
+      st.hooks.push({
+        obj: o,
+        x: o.x + 0.5,
+        y: o.y + 0.5,
+        tx: 0,
+        ty: 0,
+        combat: true,
+        area: o.area,
+        cd: 0,
+      });
     if (o.ref === 'f13_cannon') {
       // Пушка на Стене бьёт через зубцы; на площади — вдоль самого длинного
       // прохода.
@@ -2397,7 +2486,8 @@ function scan(sim: Sim, api: SimApi): F13State {
   const wt = tops[F13_WALL];
   if (wt !== undefined)
     for (let ly = 54; ly <= 57; ly++)
-      for (let x = 0; x < W; x++) if (w.mark[(wt + ly) * W + x] === MK.breach) st.breach.push((wt + ly) * W + x);
+      for (let x = 0; x < W; x++)
+        if (w.mark[(wt + ly) * W + x] === MK.breach) st.breach.push((wt + ly) * W + x);
   return st;
 }
 
@@ -2724,8 +2814,21 @@ function fireCannon(sim: Sim, st: F13State, api: SimApi, c: Cannon): boolean {
         m.flash = 0.2;
         a.setMode(m, 'kneel');
         m.data.lit = 0;
-        sim.events.push({ t: 'boss', what: 'f13_kneel', text: 'НА КОЛЕНИ', sub: 'затылок открыт со всех сторон' });
-        sim.events.push({ t: 'hit', x: m.x, y: m.y, dmg: Math.round(m.maxHp * COL.cannonHit), crit: true, kill: false, boss: true });
+        sim.events.push({
+          t: 'boss',
+          what: 'f13_kneel',
+          text: 'НА КОЛЕНИ',
+          sub: 'затылок открыт со всех сторон',
+        });
+        sim.events.push({
+          t: 'hit',
+          x: m.x,
+          y: m.y,
+          dmg: Math.round(m.maxHp * COL.cannonHit),
+          crit: true,
+          kill: false,
+          boss: true,
+        });
       } else knockDown(sim, m, a);
     }
   });
@@ -2747,11 +2850,29 @@ function dropBoulder(sim: Sim, st: F13State, api: SimApi): boolean {
   }
   bx /= st.breach.length;
   by /= st.breach.length;
-  const roll: ZX = { x: b.x, y: b.y, r: 1, life: 0.95, art: 'f13_roll', above: true, tx: bx, ty: by };
+  const roll: ZX = {
+    x: b.x,
+    y: b.y,
+    r: 1,
+    life: 0.95,
+    art: 'f13_roll',
+    above: true,
+    tx: bx,
+    ty: by,
+  };
   api.zone(sim, roll);
   sim.events.push({ t: 'boss', what: 'f13_roll_wall' });
   later(sim, st, 0.9, (a) => {
-    a.strike(sim, { shape: 'circle', x: bx, y: by, r: 2.6, warn: 0, dmg: 0, art: 'f13_crush', mobDmg: Infinity });
+    a.strike(sim, {
+      shape: 'circle',
+      x: bx,
+      y: by,
+      r: 2.6,
+      warn: 0,
+      dmg: 0,
+      art: 'f13_crush',
+      mobDmg: Infinity,
+    });
     for (const i of st.breach) a.setTile(sim, i % W, Math.floor(i / W), T_RUBBLE, MK.sealed);
     st.breachEv.sealed = true;
     sim.events.push({ t: 'shake', k: 0.8 });
@@ -2822,7 +2943,12 @@ function stepFire(sim: Sim, st: F13State, api: SimApi, dt: number): void {
     F.t = 0;
     F.row = 84;
     F.beam = 1.2;
-    sim.events.push({ t: 'boss', what: 'f13_fire_trap', text: 'КВАРТАЛ ГОРИТ', sub: 'огонь за спиной — на север!' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f13_fire_trap',
+      text: 'КВАРТАЛ ГОРИТ',
+      sub: 'огонь за спиной — на север!',
+    });
     for (let i = 0; i < 3; i++) {
       const b = api.pickBurrow(sim, 3, 12);
       if (b) api.fromBurrow(sim, b, 'f13_grin');
@@ -2839,7 +2965,17 @@ function stepFire(sim: Sim, st: F13State, api: SimApi, dt: number): void {
     F.row -= 1;
     const y = top + F.row + 0.5;
     for (let x = 12; x <= 15; x++)
-      api.zone(sim, { x: x + 0.5, y, r: 0.62, life: 7, warn: 0.35, dps: 0.07, status: 'burn', dur: 1.4, art: 'f13_fire' });
+      api.zone(sim, {
+        x: x + 0.5,
+        y,
+        r: 0.62,
+        life: 7,
+        warn: 0.35,
+        dps: 0.07,
+        status: 'burn',
+        dur: 1.4,
+        art: 'f13_fire',
+      });
     if (F.row % 5 === 0) {
       const key = `fire${F.row}`;
       api.light(sim, key, { x: 14, y, r: 3.4, tint: 'warm' });
@@ -2873,7 +3009,12 @@ function stepFire(sim: Sim, st: F13State, api: SimApi, dt: number): void {
   // Добежал до выхода — квартал пройден.
   if (hly < 49.5 && h.x >= 11 && h.x <= 17) {
     F.st = 'done';
-    sim.events.push({ t: 'boss', what: 'f13_fire_call', text: 'ВЫБРАЛСЯ', sub: 'квартал догорает за спиной' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f13_fire_call',
+      text: 'ВЫБРАЛСЯ',
+      sub: 'квартал догорает за спиной',
+    });
     reward(sim, api, 13.5, top + 47.5, 1200, 12, [['f13mat', 2]]);
   } else if (F.t > 60 || hly < 40 || h.x > 24) F.st = 'done';
 }
@@ -2896,7 +3037,12 @@ function stepMarch(sim: Sim, st: F13State, api: SimApi): void {
       m.face = Math.PI / 2;
       M.mobs.push(m.id);
     }
-    sim.events.push({ t: 'boss', what: 'f13_march_trap', text: 'ШЕСТВИЕ', sub: 'в ниши! бей в спину, когда пройдут' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f13_march_trap',
+      text: 'ШЕСТВИЕ',
+      sub: 'в ниши! бей в спину, когда пройдут',
+    });
     sim.events.push({ t: 'shake', k: 0.4 });
     return;
   }
@@ -2904,7 +3050,12 @@ function stepMarch(sim: Sim, st: F13State, api: SimApi): void {
   const alive = M.mobs.filter((id) => sim.mobs.some((m) => m.id === id && m.mode !== 'dying'));
   if (!alive.length) {
     M.st = 'done';
-    sim.events.push({ t: 'boss', what: 'f13_march_call', text: 'ШЕСТВИЕ ОСТАНОВЛЕНО', sub: 'у статуи — добыча' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f13_march_call',
+      text: 'ШЕСТВИЕ ОСТАНОВЛЕНО',
+      sub: 'у статуи — добыча',
+    });
     reward(sim, api, 31.5, top + 28.5, 2000, 18, [
       ['f13_tooth', 2],
       ['f13mat', 2],
@@ -2920,7 +3071,12 @@ function stepBreach(sim: Sim, st: F13State, api: SimApi, dt: number): void {
     B.st = 'on';
     B.t = 0;
     B.wave = 0;
-    sim.events.push({ t: 'boss', what: 'f13_breach_trap', text: 'ПРОЛОМ!', sub: 'лебёдка у пролома — сбрось валун' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f13_breach_trap',
+      text: 'ПРОЛОМ!',
+      sub: 'лебёдка у пролома — сбрось валун',
+    });
     later(sim, st, 2.5, (a) => {
       if (B.sealed) return;
       const m = spawnAt(sim, st, a, 'f13_armored', F13_WALL, 43, 80, 'stalk');
@@ -2929,8 +3085,14 @@ function stepBreach(sim: Sim, st: F13State, api: SimApi, dt: number): void {
     return;
   }
   if (B.st !== 'on') return;
+  if (B.sealed) {
+    B.st = 'done';
+    return;
+  }
+  // Пролом лезет, пока герой рядом со Стеной; ушёл — ждёт.
+  if (areaAt(sim, sim.hero.y) !== F13_WALL) return;
   B.t += dt;
-  if (B.sealed || B.t > 80) {
+  if (B.t > 80) {
     B.st = 'done';
     return;
   }
@@ -2965,10 +3127,17 @@ function stepBattery(sim: Sim, st: F13State, api: SimApi, dt: number): void {
     B.st = 'on';
     B.wave = 0;
     B.gap = 1.5;
-    sim.events.push({ t: 'boss', what: 'f13_battery_trap', text: 'БАТАРЕЯ, К БОЮ', sub: 'пушки заряжаются быстро — бей по полосам' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f13_battery_trap',
+      text: 'БАТАРЕЯ, К БОЮ',
+      sub: 'пушки заряжаются быстро — бей по полосам',
+    });
     return;
   }
   if (B.st !== 'on') return;
+  // Ушёл со Стены и из Предполья — волны ждут, а не лезут вслед по этажу.
+  if (areaAt(sim, h.y) !== F13_WALL || h.y - top > 100) return;
   B.t += dt;
   const alive = B.mobs.filter((id) => sim.mobs.some((m) => m.id === id && m.mode !== 'dying'));
   B.mobs = alive;
@@ -2977,7 +3146,12 @@ function stepBattery(sim: Sim, st: F13State, api: SimApi, dt: number): void {
     if (B.gap > 0) return;
     if (B.wave >= BATTERY_WAVES.length) {
       B.st = 'done';
-      sim.events.push({ t: 'boss', what: 'f13_battery_call', text: 'СТЕНА ВЫСТОЯЛА', sub: 'добыча на Стене' });
+      sim.events.push({
+        t: 'boss',
+        what: 'f13_battery_call',
+        text: 'СТЕНА ВЫСТОЯЛА',
+        sub: 'добыча на Стене',
+      });
       reward(sim, api, h.x, h.y - 0.5, 2400, 22, [
         ['f13_plate', 1],
         ['f13mat', 3],
@@ -3024,7 +3198,12 @@ function stepAlarm(sim: Sim, st: F13State, api: SimApi, dt: number): void {
     A.t = 0;
     A.wave = 0;
     A.tolls = 0;
-    sim.events.push({ t: 'boss', what: 'f13_alarm_trap', text: 'КОЛОКОЛ ТРЕВОГИ', sub: 'ударь в набат — волна глушит толпу' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f13_alarm_trap',
+      text: 'КОЛОКОЛ ТРЕВОГИ',
+      sub: 'ударь в набат — волна глушит толпу',
+    });
     return;
   }
   if (A.st !== 'on') return;
@@ -3060,7 +3239,12 @@ function stepAlarm(sim: Sim, st: F13State, api: SimApi, dt: number): void {
   }
   if (A.wave >= 3 && (!A.mobs.length || A.t > 70)) {
     A.st = 'done';
-    sim.events.push({ t: 'boss', what: 'f13_alarm_call', text: 'ПЛОЩАДЬ ОТБИТА', sub: 'у набата — добыча' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f13_alarm_call',
+      text: 'ПЛОЩАДЬ ОТБИТА',
+      sub: 'у набата — добыча',
+    });
     if (st.bell) reward(sim, api, st.bell.x, st.bell.y + 1.2, 2200, 20, [['f13mat', 3]]);
   }
 }
@@ -3077,7 +3261,12 @@ function stepRift(sim: Sim, st: F13State, api: SimApi, dt: number): void {
     R.st = 'on';
     R.t = 0;
     R.tick = 0.4;
-    sim.events.push({ t: 'boss', what: 'f13_rift_trap', text: 'РАЗЛОМ', sub: 'земля уходит — крюк за крюком' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f13_rift_trap',
+      text: 'РАЗЛОМ',
+      sub: 'земля уходит — крюк за крюком',
+    });
     return;
   }
   if (R.st !== 'on') return;
@@ -3107,12 +3296,18 @@ function stepRift(sim: Sim, st: F13State, api: SimApi, dt: number): void {
   }
   if (!R.crows && R.t > 2) {
     R.crows = true;
-    for (let i = 0; i < 3; i++) api.spawnMob(sim, 'f13_crow', 58.5 - i, top + 74.5, { mode: 'circle' });
+    for (let i = 0; i < 3; i++)
+      api.spawnMob(sim, 'f13_crow', 58.5 - i, top + 74.5, { mode: 'circle' });
   }
   if ((hly < 52.5 && h.x > 33) || R.t > 70 || (!inZone && R.t > 8 && hly > 72)) {
     R.st = 'done';
     if (hly < 52.5)
-      sim.events.push({ t: 'boss', what: 'f13_rift_call', text: 'ПЕРЕБРАЛСЯ', sub: 'дальше — площадь Колосса' });
+      sim.events.push({
+        t: 'boss',
+        what: 'f13_rift_call',
+        text: 'ПЕРЕБРАЛСЯ',
+        sub: 'дальше — площадь Колосса',
+      });
   }
 }
 

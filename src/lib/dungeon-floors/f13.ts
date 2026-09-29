@@ -172,7 +172,10 @@ const LEGEND: Record<string, LegendCell> = {
     mark: M.pad,
     obj: { kind: 'deco', ref: 'f13_hook', solid: 0.2, use: { label: 'Крюк' } },
   },
-  '9': { tile: 'floor', obj: { kind: 'deco', ref: 'f13_hookc', solid: 0.2, use: { label: 'Крюк' } } },
+  '9': {
+    tile: 'floor',
+    obj: { kind: 'deco', ref: 'f13_hookc', solid: 0.2, use: { label: 'Крюк' } },
+  },
   Z: {
     tile: 'floor',
     mark: M.rampart,

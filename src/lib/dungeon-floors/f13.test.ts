@@ -96,7 +96,8 @@ function notice(st: BotState, key: string): [number, boolean] {
   return v;
 }
 
-const floorAt = (s: Sim, x: number, y: number) => walkableTile(s.tiles[Math.floor(y) * W + Math.floor(x)]);
+const floorAt = (s: Sim, x: number, y: number) =>
+  walkableTile(s.tiles[Math.floor(y) * W + Math.floor(x)]);
 
 /** Уйти от ударов, облаков и замахов; null — опасности нет. */
 function dodge(s: Sim, st: BotState): SimInput | null {
@@ -164,7 +165,17 @@ function dodge(s: Sim, st: BotState): SimInput | null {
     const [react, missed] = notice(st, `t${m.id}:${m.mode}:${Math.floor(s.time - m.t)}`);
     if (missed || m.t < react) continue;
     const hit = strikeHits(
-      { shape: t.shape, x: t.x ?? m.x, y: t.y ?? m.y, r: t.r, w: t.w, ang: t.ang, arc: t.arc, warn: 1, dmg: 0 },
+      {
+        shape: t.shape,
+        x: t.x ?? m.x,
+        y: t.y ?? m.y,
+        r: t.r,
+        w: t.w,
+        ang: t.ang,
+        arc: t.arc,
+        warn: 1,
+        dmg: 0,
+      },
       h.x,
       h.y,
       h.r + 0.3,
@@ -287,7 +298,8 @@ function tryHook(s: Sim, st: BotState, g: Mob, force: boolean): SimInput | null 
 function tryCannon(s: Sim, st: BotState, g: Mob): SimInput | null {
   const h = s.hero;
   if (s.time < (st.cannonRest ?? 0)) return null;
-  let best: { c: NonNullable<ReturnType<typeof f13State>>['cannons'][number]; d: number } | null = null;
+  let best: { c: NonNullable<ReturnType<typeof f13State>>['cannons'][number]; d: number } | null =
+    null;
   for (const c of f13State(s)?.cannons ?? []) {
     if (c.reload > 0 || !s.boss || !API.inArena(s, c.x, c.y)) continue;
     const d = Math.hypot(c.x - h.x, c.y - h.y);
@@ -343,7 +355,8 @@ function bot(s: Sim, st: BotState): SimInput {
   const dg = dodge(s, st);
   if (dg) return dg;
   const meat = Object.values(s.sack.meat).reduce<number>((a, b) => a + (b ?? 0), 0);
-  if (h.hp < s.stats.maxHp * 0.4 && meat > 0 && h.mode === 'free' && h.eatCd <= 0) return { ...NO_INPUT, eat: true };
+  if (h.hp < s.stats.maxHp * 0.4 && meat > 0 && h.mode === 'free' && h.eatCd <= 0)
+    return { ...NO_INPUT, eat: true };
   // Колосс — главная цель.
   const col = s.mobs.find((m) => m.kind === 'f13boss' && m.mode !== 'dying');
   if (col && col.mode !== 'rise') {
@@ -357,7 +370,9 @@ function bot(s: Sim, st: BotState): SimInput {
       if (hk) return hk;
     }
     // Мелочь вплотную — сперва её.
-    const pest = s.mobs.find((m) => m !== col && m.mode !== 'dying' && Math.hypot(m.x - h.x, m.y - h.y) < 1.6);
+    const pest = s.mobs.find(
+      (m) => m !== col && m.mode !== 'dying' && Math.hypot(m.x - h.x, m.y - h.y) < 1.6,
+    );
     if (pest) return attackAt(s, st, pest, { ...NO_INPUT });
     const hk = tryHook(s, st, col, false);
     if (hk) return hk;
@@ -391,7 +406,8 @@ function bot(s: Sim, st: BotState): SimInput {
     }
   }
   if (near) {
-    if (F13_GIANTS.has(near.kind) && near.mode !== 'down') return attackAt(s, st, near, circleBehind(s, near));
+    if (F13_GIANTS.has(near.kind) && near.mode !== 'down')
+      return attackAt(s, st, near, circleBehind(s, near));
     const a = Math.atan2(near.y - h.y, near.x - h.x);
     const inp = { ...NO_INPUT };
     if (nd > SWORD.reach * 0.8 + near.r * 0.5) {
@@ -522,7 +538,9 @@ describe('этаж 13: Колосс', () => {
 
 describe.runIf(!!process.env.F13SWEEP)('этаж 13: подбор', () => {
   it('сетка снаряжения', () => {
-    for (const [tier, plus, meat] of (process.env.F13SWEEP ?? '').split(';').map((x) => x.split(',').map(Number)))
+    for (const [tier, plus, meat] of (process.env.F13SWEEP ?? '')
+      .split(';')
+      .map((x) => x.split(',').map(Number)))
       for (const seed of [61, 62, 63]) fight(tier, plus, seed, meat);
   });
 });
@@ -597,7 +615,9 @@ describe('этаж 13: площадь Колосса', () => {
     expect(b.phase).toBe(2);
     toPhase(s, 3, 16);
     expect(b.phase).toBe(3);
-    const changed = [...b.cells].filter((i) => s.tiles[i] !== tiles0[i] || s.world.mark[i] !== marks0[i]);
+    const changed = [...b.cells].filter(
+      (i) => s.tiles[i] !== tiles0[i] || s.world.mark[i] !== marks0[i],
+    );
     expect(changed.length).toBeGreaterThan(4);
     // От места Колосса до ворот путь есть и после разлома.
     const f = field(b.gates[0] % W, Math.floor(b.gates[0] / W), s.tiles);
@@ -683,7 +703,8 @@ describe('этаж 13: механики', () => {
     const top = band(F13_OUTER).top;
     // Между столбом и кольцом — провал.
     let deep = 0;
-    for (let yy = ty + 1; yy < py; yy++) if (world.tiles[(top + yy) * W + tx] === Tile.Deep) deep += 1;
+    for (let yy = ty + 1; yy < py; yy++)
+      if (world.tiles[(top + yy) * W + tx] === Tile.Deep) deep += 1;
     expect(deep).toBeGreaterThan(3);
     const s = sim(8, 5, x + 0.5, y + 1.2, 12);
     s.mobs = [];
@@ -706,14 +727,28 @@ describe('этаж 13: механики', () => {
     const s = sim(8, 5, 20.5, top + 58.6, 13);
     s.mobs = [];
     stepSim(s, DT, NO_INPUT);
-    const c = f13State(s)!.cannons.find((k) => Math.floor(k.x) === 20 && Math.floor(k.y) === top + 60)!;
-    if (LOG) console.log('пушки', f13State(s)!.cannons.map((k) => `${k.x},${k.y - top} ${k.ang.toFixed(2)} ${k.len.toFixed(1)}`).join(' | '));
+    const c = f13State(s)!.cannons.find(
+      (k) => Math.floor(k.x) === 20 && Math.floor(k.y) === top + 60,
+    )!;
+    if (LOG)
+      console.log(
+        'пушки',
+        f13State(s)!
+          .cannons.map((k) => `${k.x},${k.y - top} ${k.ang.toFixed(2)} ${k.len.toFixed(1)}`)
+          .join(' | '),
+      );
     expect(c).toBeDefined();
     const mid = Math.min(c.len - 1, 8);
     s.mobs = [];
-    const g = spawnMob(s, 'f13_walker', c.x + 0.5 + Math.cos(c.ang) * mid, c.y + 0.5 + Math.sin(c.ang) * mid, {
-      mode: 'stalk',
-    });
+    const g = spawnMob(
+      s,
+      'f13_walker',
+      c.x + 0.5 + Math.cos(c.ang) * mid,
+      c.y + 0.5 + Math.sin(c.ang) * mid,
+      {
+        mode: 'stalk',
+      },
+    );
     s.hero.x = c.x + 0.5 - Math.cos(c.ang) * 0.9;
     s.hero.y = c.y + 0.5 - Math.sin(c.ang) * 0.9;
     const u = usableNear(s)!;
@@ -751,7 +786,9 @@ describe('этаж 13: механики', () => {
     s.mobs = [];
     stepSim(s, DT, NO_INPUT);
     s.mobs = [];
-    const grins = [0, 1, 2].map((i) => spawnMob(s, 'f13_grin', bx + 0.5 + (i - 1) * 3, by + 4.5, { mode: 'chase' }));
+    const grins = [0, 1, 2].map((i) =>
+      spawnMob(s, 'f13_grin', bx + 0.5 + (i - 1) * 3, by + 4.5, { mode: 'chase' }),
+    );
     const g = spawnMob(s, 'f13_walker', bx + 5.5, by + 0.5, { mode: 'stalk' });
     const u = usableNear(s)!;
     expect(u.obj.ref).toBe('f13_bell');
@@ -775,7 +812,8 @@ describe('этаж 13: механики', () => {
       for (let t = 0; t < 20 * 60; t++) {
         s.hero.hp = s.stats.maxHp;
         const k = s.mobs.find((m) => m.kind === 'f13boss' && m.mode !== 'dying');
-        if (k && k.mode !== 'rise' && s.boss!.phase < ph) k.hp = Math.min(k.hp, k.maxHp * (COL.hp[ph - 1] - 0.01));
+        if (k && k.mode !== 'rise' && s.boss!.phase < ph)
+          k.hp = Math.min(k.hp, k.maxHp * (COL.hp[ph - 1] - 0.01));
         stepSim(s, DT, { ...NO_INPUT, mx: Math.cos(t / 90), my: Math.sin(t / 90) });
         watch(s);
       }
@@ -821,15 +859,25 @@ describe('этаж 13: механики', () => {
       s.god = true;
       s.mobs = [];
       kinds.forEach((k, i) =>
-        spawnMob(s, k, wx + 0.5 + ((i % 3) - 1) * 2.5, wy + 0.5 - Math.floor(i / 3) * 2.2, { mode: 'chase' }),
+        spawnMob(s, k, wx + 0.5 + ((i % 3) - 1) * 2.5, wy + 0.5 - Math.floor(i / 3) * 2.2, {
+          mode: 'chase',
+        }),
       );
-      const bt: BotState = { lastAtk: -9, react: [0.25, 0.4], miss: 0.1, seed: 18, hooks: 0, cannons: 0 };
+      const bt: BotState = {
+        lastAtk: -9,
+        react: [0.25, 0.4],
+        miss: 0.1,
+        seed: 18,
+        hooks: 0,
+        cannons: 0,
+      };
       for (let t = 0; t < 25 * 60; t++) {
         stepSim(s, DT, t % 30 < 15 ? bot(s, bt) : NO_INPUT);
         if (t % 30 !== 0) continue;
         for (const m of s.mobs) {
           if (m.mode === 'dying' || (m.data.ghost ?? 0) > 0) continue;
-          if (['climb', 'zip', 'air', 'swoop', 'circle', 'flee', 'down', 'emerge'].includes(m.mode)) continue;
+          if (['climb', 'zip', 'air', 'swoop', 'circle', 'flee', 'down', 'emerge'].includes(m.mode))
+            continue;
           const tile = s.tiles[Math.floor(m.y) * W + Math.floor(m.x)];
           if (!walkableTile(tile)) stuck.push(`${m.kind}@${area}:${m.mode}`);
         }
@@ -871,7 +919,8 @@ describe('этаж 13: дорога', () => {
       stepSim(s, DT, bot(s, st));
       let art = '';
       for (const e of s.events) if (e.t === 'strike') art = e.art;
-      for (const e of s.events) if (e.t === 'hurt') hurt.set(art || 'иное', (hurt.get(art || 'иное') ?? 0) + e.dmg);
+      for (const e of s.events)
+        if (e.t === 'hurt') hurt.set(art || 'иное', (hurt.get(art || 'иное') ?? 0) + e.dmg);
       if (s.hero.mode === 'dead') {
         dead = true;
         break;
