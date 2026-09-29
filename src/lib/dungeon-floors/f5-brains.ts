@@ -996,7 +996,7 @@ function minoStun(sim: Sim, m: Mob, api: SimApi, long: boolean): void {
   // v2.85 — только рисунок: кладка трескается, обломки и пыль, тряска, вспышка.
   const wx = m.x + Math.cos(m.dir) * m.r;
   const wy = m.y + Math.sin(m.dir) * m.r;
-  fx(sim, api, 'f5_fxwall', wx, wy, long ? 3.3 : 2.8, { ang: m.dir, n: long ? 1 : 0 });
+  fx(sim, api, 'f5_fxwall', wx, wy, long ? 3.3 : 2.8, { ang: m.dir, n: long ? 1 : 0, above: true });
   fx(sim, api, 'f5_fxspark', wx, wy, long ? 1.2 : 0.5, { ang: m.dir, n: long ? 3 : 1, above: true });
   fxShake(sim, wx, wy, long ? 0.6 : 0.5);
   sim.events.push({ t: 'flash', k: long ? 0.4 : 0.3, color: '#fff0d0' });
@@ -1009,7 +1009,7 @@ function startAim(sim: Sim, m: Mob, api: SimApi, next: boolean): void {
   m.data.next = next ? 1 : 0;
   api.setMode(m, 'aim');
   // v2.85 — только рисунок: полоса разбега (стрелки, конец пути, копыто роет).
-  fx(sim, api, 'f5_fxlane', m.x, m.y, (next ? MINO.aimNext : MINO.aim) / hasteOf(sim) + 0.05, { mid: m.id });
+  fx(sim, api, 'f5_fxlane', m.x, m.y, (next ? MINO.aimNext : MINO.aim) / hasteOf(sim) + 0.05, { mid: m.id, above: true });
 }
 
 registerBrain('f5_minotaur', {
@@ -1160,7 +1160,7 @@ registerBrain('f5_minotaur', {
         // v2.85 — только рисунок: пыль из-под копыт, 10 раз в секунду.
         if (sim.time >= (m.data.vDust ?? 0)) {
           m.data.vDust = sim.time + 0.1;
-          fx(sim, api, 'f5_fxdust', m.x, m.y, 0.9, { ang: m.dir, len: s * 0.1 }, true);
+          fx(sim, api, 'f5_fxdust', m.x, m.y, 0.9, { ang: m.dir, len: s * 0.1, n: m.t < 0.05 ? 1 : 0 }, true);
         }
         if (!m.data.hit && dist < m.r + h.r + 0.1 && h.inv <= 0 && h.mode !== 'dash') {
           // Сшиб — и бежит дальше: остановит его только стена.
