@@ -117,6 +117,10 @@ import {
   laserBeam,
   thunder,
   timeResume,
+  timeStop,
+  hardClang,
+  clockTick,
+  doorLatch,
   trainHorn,
   trainPass,
   windGust,
@@ -644,6 +648,64 @@ const FLOOR_SOUND: Record<string, () => void> = {
   f13_rift_trap: () => stoneGrind(),
   f13_rift_call: () => windGust(0.4),
   f13_smoke: () => steamBurst(),
+  // Этаж 14: колокол «ЧАС», остановка времени, Повелитель часа.
+  f14_bell_call: () => clockChime(3),
+  f14_bell_wind: () => timeStop(2.4),
+  f14_bell: () => clockBell(true),
+  f14_resume: () => timeResume(),
+  f14_clap: () => timeStop(2.2),
+  f14_stop: () => clockBell(true),
+  f14_knives: () => chainRattle(),
+  f14_stuck_wall: () => {
+    hardClang();
+    deepRumble();
+    tapMedium();
+  },
+  f14_rewind_call: () => clockChime(3, true),
+  f14_ritual: () => teleport(),
+  f14_ritual_stone: () => glassBreak(true),
+  f14_toll: () => clockBell(true),
+  f14_midnight_call: () => deepRumble(),
+  f14_wake_call: () => clockChime(3, true),
+  f14_tick: () => clockTick(),
+  f14_gear_trap: () => stoneGrind(),
+  f14_gear_done: () => softChime(2),
+  f14_key_done: () => softChime(2),
+  f14_frame_done: () => softChime(2),
+  f14_key_trap: () => {
+    stoneGrind();
+    clockTick();
+  },
+  f14_wind: () => {
+    clockTick();
+    chainRattle();
+  },
+  f14_lever: () => doorLatch(),
+  f14_pend: () => chainRattle(),
+  f14_thud: () => boom(0.7),
+  f14_flip_trap: () => {
+    deepRumble();
+    stoneGrind();
+  },
+  f14_glass: () => softChime(0),
+  f14_rewind_trap: () => {
+    gateSlam();
+    clockBell(true);
+  },
+  f14_flipback: () => {
+    teleport();
+    clockBell();
+  },
+  f14_rewind_done: () => glassBreak(true),
+  f14_sandpuff: () => windGust(),
+  f14_frame_call: () => clockChime(3),
+  f14_noon_call: () => clockChime(1),
+  f14_handhit: () => hardClang(),
+  f14_cuckoo: () => stringPluck(),
+  f14_rewind: () => teleport(),
+  f14_anchor_stone: () => glassBreak(),
+  f14_haste: () => clockTick(),
+  f14_blink: () => teleport(),
 };
 let beatAt = 0;
 
