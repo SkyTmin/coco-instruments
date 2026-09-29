@@ -57,6 +57,8 @@ export interface MobFrame {
   rot?: number;
   /** Не трясти на замахе и не качать летуна: подготовку рисует сам кадр. */
   still?: boolean;
+  /** Летун: на сколько пикселей поднят над тенью (по умолчанию 6). */
+  lift?: number;
   /** Полуось тени, пиксели; 0 — без тени. Иначе тень считается от ширины холста. */
   shadow?: number;
   /**
@@ -205,9 +207,10 @@ export const registerImpactPainter = (art: string, def: ImpactDef) =>
  * на шаг (`yield` после каждого). Рендер тратит на него до 3 мс за кадр,
  * пока такой моб есть в мире, — техника не рисуется впервые прямо в бою.
  */
-export const MOB_WARM = new Map<string, () => Iterator<unknown>>();
+export const MOB_WARM = new Map<string, (() => Iterator<unknown>)[]>();
+/** Генераторов на рисовальщик может быть несколько (тело, миньоны) — идут по очереди. */
 export const registerMobWarm = (paintId: string, gen: () => Iterator<unknown>) =>
-  void MOB_WARM.set(paintId, gen);
+  void MOB_WARM.set(paintId, [...(MOB_WARM.get(paintId) ?? []), gen]);
 
 /**
  * Кеш кадров с вытеснением давно не нужных. У этажей кеши — простые `Map`
