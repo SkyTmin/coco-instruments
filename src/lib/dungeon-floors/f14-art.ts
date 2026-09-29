@@ -24,22 +24,12 @@ import {
   registerZonePainter,
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
-import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
+import type { Mob, Strike, Zone } from '../dungeon-sim';
 import { heroSprite } from '../dungeon-sprites';
 import type { Dir4 } from '../dungeon-sprites';
-import type { WorldObj } from '../dungeon-world';
 import { F14_DIAL, F14_GEO, F14_MARK, F14_MECH, F14_SAND, F14_TOP } from './f14';
 import { MAP_F14_DIAL, MAP_F14_SAND } from './f14-map';
-import {
-  CUCKOO,
-  F14_FX,
-  KNIFE_ANG,
-  LORD,
-  NOON,
-  REAPER,
-  rewindTrail,
-  worldStopped,
-} from './f14-brains';
+import { F14_FX, KNIFE_ANG, LORD, NOON, REAPER, rewindTrail, worldStopped } from './f14-brains';
 
 type RGBA = [number, number, number, number];
 
@@ -53,8 +43,12 @@ const mixc = (a: RGBA, b: RGBA, k: number): RGBA => [
   Math.round(a[2] + (b[2] - a[2]) * k),
   Math.round(a[3] + (b[3] - a[3]) * k),
 ];
-const alpha = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(Math.max(0, Math.min(1, a)) * 255)];
-const css = (c: RGBA, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const alpha = (c: RGBA, a: number): RGBA => [
+  c[0],
+  c[1],
+  c[2],
+  Math.round(Math.max(0, Math.min(1, a)) * 255),
+];
 
 const INK = hx('#150f0b');
 const WHITE = hx('#ffffff');
@@ -182,59 +176,6 @@ const hash = (a: number, b: number, c = 0) => {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 };
 
-/** Скопировать пиксели в новый холст со сдвигом. */
-function copyAt(src: Px, w: number, h: number, ox: number, oy: number): Px {
-  const o = new Px(w, h);
-  for (let y = 0; y < src.h; y++)
-    for (let x = 0; x < src.w; x++) {
-      const i = (y * src.w + x) * 4;
-      if (!src.data[i + 3]) continue;
-      const tx = x + ox;
-      const ty = y + oy;
-      if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-      const j = (ty * w + tx) * 4;
-      o.data[j] = src.data[i];
-      o.data[j + 1] = src.data[i + 1];
-      o.data[j + 2] = src.data[i + 2];
-      o.data[j + 3] = src.data[i + 3];
-    }
-  return o;
-}
-
-/** Наложить `src` на `dst` (прозрачное пропускаем). */
-function over(dst: Px, src: Px, ox = 0, oy = 0): void {
-  for (let y = 0; y < src.h; y++)
-    for (let x = 0; x < src.w; x++) {
-      const i = (y * src.w + x) * 4;
-      const a = src.data[i + 3];
-      if (!a) continue;
-      dst.set(x + ox, y + oy, [src.data[i], src.data[i + 1], src.data[i + 2], a]);
-    }
-}
-
-/** Повернуть картинку вокруг точки (ближайший сосед, без сглаживания). */
-function rotated(src: Px, ang: number, cx: number, cy: number, w: number, h: number, ox: number, oy: number): Px {
-  const o = new Px(w, h);
-  const c = Math.cos(-ang);
-  const s = Math.sin(-ang);
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const dx = x + 0.5 - ox;
-      const dy = y + 0.5 - oy;
-      const sx = Math.floor(cx + dx * c - dy * s);
-      const sy = Math.floor(cy + dx * s + dy * c);
-      if (sx < 0 || sy < 0 || sx >= src.w || sy >= src.h) continue;
-      const i = (sy * src.w + sx) * 4;
-      if (!src.data[i + 3]) continue;
-      const j = (y * w + x) * 4;
-      o.data[j] = src.data[i];
-      o.data[j + 1] = src.data[i + 1];
-      o.data[j + 2] = src.data[i + 2];
-      o.data[j + 3] = src.data[i + 3];
-    }
-  return o;
-}
-
 /** Обесцветить (статуя, замершее время) с лёгкой сепией. */
 function toGray(p: Px, sepia = 0.25): Px {
   const o = new Px(p.w, p.h);
@@ -264,7 +205,6 @@ const SAND = tn('#6a4a24', '#a8844c', '#d8b878', '#f4e2b0');
 const WOOD = tn('#2a160c', '#4a2816', '#6e3e22', '#9a5e34');
 const REDC = tn('#3a0a0c', '#6a1418', '#a42228', '#d8484a');
 const NAVY = tn('#10142a', '#1e2648', '#34406a', '#5a6aa0');
-const COAT = tn('#0c0a10', '#1a1620', '#2c2634', '#463e50');
 const SKIN = tn('#8a4a38', '#c88a70', '#f0c0a0', '#ffe4cc');
 const GLASS = hx('#bfe8f0', 150);
 const GLASS_HI = hx('#ffffff', 200);
@@ -302,14 +242,14 @@ function cog(
       const d = Math.hypot(dx, dy);
       if (d > r) continue;
       const a = Math.atan2(dy, dx) - rot;
-      const f = (((a / TAU) * teeth) % 1 + 1) % 1;
+      const f = ((((a / TAU) * teeth) % 1) + 1) % 1;
       if (d > body && (f < 0.22 || f > 0.72)) continue;
       if (d < hole) {
         if (o.dark) p.set(x, y, o.dark);
         continue;
       }
       if (spokes && d > win0 && d < win1) {
-        const sf = (((a / TAU) * spokes) % 1 + 1) % 1;
+        const sf = ((((a / TAU) * spokes) % 1) + 1) % 1;
         if (sf > 0.18 && sf < 0.82) {
           if (o.dark) p.set(x, y, o.dark);
           continue;
@@ -424,11 +364,33 @@ function hourglass(
       if ((y + f) % 3 !== 0) p.set(Math.floor(cx - 0.5), y, sand[3]);
   // Блик на стекле.
   for (let y = top + bh + 1; y < mid - 2; y++) p.set(Math.floor(cx - bulb(y) + 1.5), y, GLASS_HI);
-  if (o.glow) for (let y = top + bh; y < top + bh + inner; y += 2) p.set(Math.floor(cx - 0.5), y, alpha(o.glow, 0.5));
+  if (o.glow)
+    for (let y = top + bh; y < top + bh + inner; y += 2)
+      p.set(Math.floor(cx - 0.5), y, alpha(o.glow, 0.5));
   // Плиты и стойки.
-  polyShade(p, [[cx - half, top], [cx + half, top], [cx + half, top + bh], [cx - half, top + bh]], fr);
-  polyShade(p, [[cx - half, top + h - bh], [cx + half, top + h - bh], [cx + half, top + h], [cx - half, top + h]], fr, -0.1);
-  for (const sx of [cx - half + 0.5, cx + half - 1.5]) for (let y = top + bh; y < top + h - bh; y++) p.set(Math.floor(sx), y, sx < cx ? fr[2] : fr[1]);
+  polyShade(
+    p,
+    [
+      [cx - half, top],
+      [cx + half, top],
+      [cx + half, top + bh],
+      [cx - half, top + bh],
+    ],
+    fr,
+  );
+  polyShade(
+    p,
+    [
+      [cx - half, top + h - bh],
+      [cx + half, top + h - bh],
+      [cx + half, top + h],
+      [cx - half, top + h],
+    ],
+    fr,
+    -0.1,
+  );
+  for (const sx of [cx - half + 0.5, cx + half - 1.5])
+    for (let y = top + bh; y < top + h - bh; y++) p.set(Math.floor(sx), y, sx < cx ? fr[2] : fr[1]);
   if (o.broken) {
     // Трещины по стеклу, песок высыпался.
     stroke(p, cx - 2, top + bh + 2, cx + 1, mid - 1, alpha(WHITE, 0.9));
@@ -437,7 +399,17 @@ function hourglass(
 }
 
 /** Пружина зигзагом от точки к точке. */
-function spring(p: Px, x0: number, y0: number, x1: number, y1: number, turns: number, amp: number, c: RGBA, c2: RGBA): void {
+function spring(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  turns: number,
+  amp: number,
+  c: RGBA,
+  c2: RGBA,
+): void {
   const dx = x1 - x0;
   const dy = y1 - y0;
   const L = Math.hypot(dx, dy) || 1;
@@ -473,7 +445,14 @@ interface Built {
 
 const frames = new Map<string, MobFrame>();
 
-function finish(key: string, b: Built, look: Look, flash: boolean, left: boolean, gray = false): MobFrame {
+function finish(
+  key: string,
+  b: Built,
+  look: Look,
+  flash: boolean,
+  left: boolean,
+  gray = false,
+): MobFrame {
   let p = b.p;
   if (look === 'albino') {
     const pale = hx('#f4ece4');
@@ -493,13 +472,21 @@ function finish(key: string, b: Built, look: Look, flash: boolean, left: boolean
   if (look === 'elite') p.outline(GOLDK);
   if (flash) p = p.tint(WHITE, 0.85);
   if (left) p = p.flipX();
-  const eye = b.eye && !gray ? ([left ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number]) : null;
+  const eye =
+    b.eye && !gray ? ([left ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number]) : null;
   const out: MobFrame = { img: p.canvas(), ax: left ? p.w - b.ax : b.ax, ay: b.ay, eye };
   frames.set(key, out);
   return out;
 }
 
-function frameOf(kind: string, pose: MobPose, anim: string, f: number, build: () => Built, gray = false): MobFrame {
+function frameOf(
+  kind: string,
+  pose: MobPose,
+  anim: string,
+  f: number,
+  build: () => Built,
+  gray = false,
+): MobFrame {
   const key = `${kind}|${anim}|${f}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}|${gray ? 1 : 0}`;
   const hit = frames.get(key);
   if (hit) return hit;
@@ -545,7 +532,10 @@ function scatter(p: Px, k: number, seed: number, bits: RGBA[]): Px {
       const ty = Math.min(p.h - 1, y + Math.floor(k * k * 3 * r));
       const tx = x + Math.round((r - 0.5) * k * 3);
       const j = (ty * p.w + Math.max(0, Math.min(p.w - 1, tx))) * 4;
-      const c: RGBA = r < k * 0.4 ? bits[Math.floor(r * 97) % bits.length] : [p.data[i], p.data[i + 1], p.data[i + 2], 255];
+      const c: RGBA =
+        r < k * 0.4
+          ? bits[Math.floor(r * 97) % bits.length]
+          : [p.data[i], p.data[i + 1], p.data[i + 2], 255];
       o.data[j] = c[0];
       o.data[j + 1] = c[1];
       o.data[j + 2] = c[2];
@@ -555,7 +545,8 @@ function scatter(p: Px, k: number, seed: number, bits: RGBA[]): Px {
 }
 
 /** Номер кадра смерти по времени режима. */
-const deathK = (pose: MobPose) => (pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0);
+const deathK = (pose: MobPose) =>
+  pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0;
 
 /** Стереть пиксель (полупрозрачный `set` поверх не стирает). */
 function clear(p: Px, x: number, y: number): void {
@@ -662,7 +653,13 @@ function drawSoldier(o: SoldierPose): Built {
   const hyp = 9.5 + by + (o.slump ? 1 : 0);
   shadeEll(p, hxp, hyp, 2.6, 2.6, SKIN, 0.1);
   p.set(Math.round(hxp + 1.8), Math.round(hyp + 0.6), hx('#e06060'));
-  p.rect(Math.round(hxp), Math.round(hyp + 1.4), Math.round(hxp + 1.5), Math.round(hyp + 1.4), hx('#3a2410'));
+  p.rect(
+    Math.round(hxp),
+    Math.round(hyp + 1.4),
+    Math.round(hxp + 1.5),
+    Math.round(hyp + 1.4),
+    hx('#3a2410'),
+  );
   // Кивер с бляхой.
   polyShade(
     p,
@@ -675,7 +672,13 @@ function drawSoldier(o: SoldierPose): Built {
     SOLD.hat,
     0.1,
   );
-  p.rect(Math.round(hxp - 3), Math.round(hyp - 1.6), Math.round(hxp + 3), Math.round(hyp - 1.6), SOLD.hat[0]);
+  p.rect(
+    Math.round(hxp - 3),
+    Math.round(hyp - 1.6),
+    Math.round(hxp + 3),
+    Math.round(hyp - 1.6),
+    SOLD.hat[0],
+  );
   shadeEll(p, hxp + 0.8, hyp - 4.6, 1.2, 1.3, BRASS, 0.2);
   limb(p, hxp - 0.5, hyp - 7.5, hxp - 0.8, hyp - 10, 1, 0.6, SOLD.plume);
   // Рука и ружьё.
@@ -740,7 +743,14 @@ registerMobPainter('f14_soldier', (m: Mob, pose: MobPose) => {
   } else if (mode === 'f14_rewind' || mode === 'f14_waking') {
     anim = 'rewind';
     fr = spin % 4;
-    o = { walk: 0, gun: 'up', key: fr, lean: 0, slump: mode === 'f14_rewind' && pose.t < 0.4, lit: true };
+    o = {
+      walk: 0,
+      gun: 'up',
+      key: fr,
+      lean: 0,
+      slump: mode === 'f14_rewind' && pose.t < 0.4,
+      lit: true,
+    };
   } else if (pose.anim === 'run') {
     anim = 'run';
     o = { walk: fr, gun: 'up', key: fr, lean: 0.3, slump: false, lit: true };
@@ -791,7 +801,8 @@ function drawBird(p: Px, cx: number, cy: number, right: boolean, open: boolean):
     BIRD.body,
     -0.1,
   );
-  for (let i = 0; i < 3; i++) p.set(Math.round(cx - (7 + i) * s), Math.round(cy + 2.5 + i * 0.6), BIRD.body[0]);
+  for (let i = 0; i < 3; i++)
+    p.set(Math.round(cx - (7 + i) * s), Math.round(cy + 2.5 + i * 0.6), BIRD.body[0]);
   shadeEll(p, cx, cy, 5.5, 4, BIRD.body, 0.05);
   shadeEll(p, cx + 2 * s, cy + 1.3, 3, 2.5, BIRD.breast, 0.2);
   // Крыло распахнуто — резное, в три пера.
@@ -832,7 +843,8 @@ function drawBird(p: Px, cx: number, cy: number, right: boolean, open: boolean):
 
 registerMobPainter('f14_cuckoo', (m: Mob, pose: MobPose) => {
   const mode = pose.mode;
-  if (mode !== 'f14_peck' && mode !== 'f14_out' && mode !== 'f14_back' && mode !== 'dying') return EMPTY();
+  if (mode !== 'f14_peck' && mode !== 'f14_out' && mode !== 'f14_back' && mode !== 'dying')
+    return EMPTY();
   // Пружина — от птицы к часам: направление и длина от места гнезда.
   const nx = m.data.nx ?? m.x;
   const ny = m.data.ny ?? m.y;
@@ -854,7 +866,17 @@ registerMobPainter('f14_cuckoo', (m: Mob, pose: MobPose) => {
   const a = (ab / 32) * TAU;
   // Пружина: латунный зигзаг до часов.
   if (L > 3 && !dk)
-    spring(p, c, c + 1, c + Math.cos(a) * L, c + Math.sin(a) * L, Math.max(2, L / 5), 1.6, BRASS[3], BRASS[1]);
+    spring(
+      p,
+      c,
+      c + 1,
+      c + Math.cos(a) * L,
+      c + Math.sin(a) * L,
+      Math.max(2, L / 5),
+      1.6,
+      BRASS[3],
+      BRASS[1],
+    );
   drawBird(p, c, c, right, open);
   p.outline(INK);
   p.set(Math.round(c + (right ? 5 : -5)), Math.round(c - 3), BIRD.eye);
@@ -897,7 +919,11 @@ function drawSandGhost(o: GhostPose): Built {
       const u = (x - 10) / 7;
       const hgt = Math.max(0, Math.round((1 - u * u) * 4 + Math.sin(x * 1.3 + o.f) * 0.6));
       for (let y = 0; y < hgt; y++)
-        p.set(x, G - 1 - y, y === hgt - 1 ? GHOST.sand[3] : y > hgt - 3 ? GHOST.sand[2] : GHOST.sand[1]);
+        p.set(
+          x,
+          G - 1 - y,
+          y === hgt - 1 ? GHOST.sand[3] : y > hgt - 3 ? GHOST.sand[2] : GHOST.sand[1],
+        );
     }
     for (let i = 0; i < 4; i++)
       p.set(5 + Math.floor(hash(i, o.f) * 12), G - 5 - Math.floor(hash(o.f, i) * 3), GHOST.sand[3]);
@@ -933,7 +959,8 @@ function drawSandGhost(o: GhostPose): Built {
     arm(cx - 1, top + 9, cx + 7, top + 11);
   } else if (o.arms === 'blast') {
     arm(cx + 2, top + 7, cx + 9, top + 6);
-    for (let i = 0; i < 6; i++) p.set(cx + 10 + i, top + 5 + Math.floor(hash(i, o.f, 9) * 3), GHOST.sand[3]);
+    for (let i = 0; i < 6; i++)
+      p.set(cx + 10 + i, top + 5 + Math.floor(hash(i, o.f, 9) * 3), GHOST.sand[3]);
   } else {
     arm(cx - 3, top + 8, cx - 5, top + 13);
     arm(cx + 3, top + 8, cx + 5, top + 13);
@@ -1186,7 +1213,8 @@ function drawReaper(o: ReapPose): Built {
     const x = bx + Math.cos(aa) * r * 0.9;
     const y = by + Math.sin(aa) * r * 0.9;
     const w = 1.7 * (1 - Math.abs(k - 0.35) * 1.4);
-    if (w > 0.3) p.ell(x, y, Math.max(0.5, w), Math.max(0.5, w), k < 0.5 ? REAP.blade[3] : REAP.blade[2]);
+    if (w > 0.3)
+      p.ell(x, y, Math.max(0.5, w), Math.max(0.5, w), k < 0.5 ? REAP.blade[3] : REAP.blade[2]);
   }
   // Груз маятника на стержне.
   shadeEll(p, (hxp + bx) / 2, (hyp + by) / 2, 1.7, 1.7, BRASS, 0.2);
@@ -1267,7 +1295,11 @@ function drawBeetle(o: BeetlePose): Built {
   const G = 14;
   const cx = 9;
   if (o.roll >= 0) {
-    cog(p, cx, 7.5, 6.4, 10, (o.roll / 4) * (TAU / 10), BRASS, { hole: 1.5, spokes: 0, dark: BRASS[0] });
+    cog(p, cx, 7.5, 6.4, 10, (o.roll / 4) * (TAU / 10), BRASS, {
+      hole: 1.5,
+      spokes: 0,
+      dark: BRASS[0],
+    });
     p.outline(INK);
     p.set(cx + 2, 6, TEAL_GLOW);
     return { p, ax: cx, ay: G, eye: [cx + 2, 6] };
@@ -1282,7 +1314,8 @@ function drawBeetle(o: BeetlePose): Built {
   // Панцирь — половина шестерни зубьями вверх.
   const tmp = new Px(20, 16);
   cog(tmp, cx, 11, 6.4 - o.curl * 0.6, 10, 0.16, BRASS, { hole: 1.2, spokes: 0 });
-  for (let y = 0; y <= 11; y++) for (let x = 0; x < 20; x++) if (tmp.solid(x, y)) p.set(x, y, tmp.get(x, y));
+  for (let y = 0; y <= 11; y++)
+    for (let x = 0; x < 20; x++) if (tmp.solid(x, y)) p.set(x, y, tmp.get(x, y));
   // Брюшко и голова.
   p.rect(cx - 5, 10, cx + 4, 11, IRON[1]);
   shadeEll(p, cx + 6, 9.5, 2, 1.8, IRON, 0.1);
@@ -1392,9 +1425,17 @@ function drawKeeper(o: KeeperPose): Built {
   shadeEll(p, cx - 5.5, 11.5, 2, 1.3, BRASS, 0.2);
   shadeEll(p, cx + 5.5, 11.5, 2, 1.3, BRASS, 0.2);
   // Циферблат на груди: переводит — стрелки бегут, светится.
-  dialFace(p, cx, 18, 5, o.spin ? (o.f / 4) * TAU * 3 : (o.f / 16) * TAU, o.spin ? (o.f / 4) * TAU : 2.2, {
-    glow: o.spin ? AMBER : null,
-  });
+  dialFace(
+    p,
+    cx,
+    18,
+    5,
+    o.spin ? (o.f / 4) * TAU * 3 : (o.f / 16) * TAU,
+    o.spin ? (o.f / 4) * TAU : 2.2,
+    {
+      glow: o.spin ? AMBER : null,
+    },
+  );
   // Шлем-колокол со шпилем, щель глаз.
   polyShade(
     p,
@@ -1542,7 +1583,7 @@ function pastSelf(tier: number, dir: Dir4, row: number, fade: number): Px | null
       if (!o) continue;
       const ink = o[0] + o[1] + o[2] < 90;
       const line = y % 4 === 3;
-      const col = ink ? mixc(o, hx('#3a2208'), 0.5) : mixc(o, AMBER, 0.38);
+      const col = ink ? mixc(o, hx('#3a2208'), 0.5) : mixc(o, AMBER, 0.5);
       p.set(x + 2, y + 2, alpha(col, (line ? 0.66 : 0.86) * fade));
     }
   p.outline(hx('#ffcf5a', 210));
@@ -1677,7 +1718,8 @@ function drawSmith(o: { legs: number; blink: number }): Built {
   p.set(cx + 3, 6, hx('#fff0a0'));
   p.set(cx + 4, 6, BRASS[3]);
   if (o.blink > 0)
-    for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) if ((x + y + o.blink) % 2 === 0) clear(p, x, y);
+    for (let y = 0; y < p.h; y++)
+      for (let x = 0; x < p.w; x++) if ((x + y + o.blink) % 2 === 0) clear(p, x, y);
   return { p, ax: cx, ay: G, eye: [cx + 3, 6] };
 }
 
@@ -1782,7 +1824,15 @@ interface LordPose {
 }
 
 /** Минутная стрелка-клинок: кольцо-противовес, ажурный ромб, остриё. */
-function minuteHand(p: Px, x: number, y: number, ang: number, len: number, t: Tones, glow: RGBA | null): void {
+function minuteHand(
+  p: Px,
+  x: number,
+  y: number,
+  ang: number,
+  len: number,
+  t: Tones,
+  glow: RGBA | null,
+): void {
   const ux = Math.cos(ang);
   const uy = Math.sin(ang);
   // Хвост с кольцом за кистью.
@@ -1835,7 +1885,10 @@ function hourHand(p: Px, x: number, y: number, ang: number, len: number, t: Tone
     const w = 3.6 * Math.sin(Math.min(1, k * 1.25) * Math.PI) * (k < 0.8 ? 1 : (1 - k) * 5);
     const cxp = x + ux * len * (0.4 + k * 0.6);
     const cyp = y + uy * len * (0.4 + k * 0.6);
-    if (w > 0.4) p.ell(cxp, cyp, w * 0.7, w * 0.7, (xx, yy) => tone(t, 0.55 - ((xx - cxp) * -uy + (yy - cyp) * ux) * 0.18));
+    if (w > 0.4)
+      p.ell(cxp, cyp, w * 0.7, w * 0.7, (xx, yy) =>
+        tone(t, 0.55 - ((xx - cxp) * -uy + (yy - cyp) * ux) * 0.18),
+      );
   }
   // Прорезь.
   const hx0 = x + ux * len * 0.66;
@@ -1876,7 +1929,7 @@ function drawLord(o: LordPose): Built {
     for (let x = Math.floor(cx + off - hw); x <= Math.ceil(cx + off + hw - 1); x++) {
       const u = (x + 0.5 - (cx + off)) / hw;
       // Складки: тёмные борозды, свет слева.
-      const fold = Math.abs(((u + 1) * 2.5 + (sway * k) / 3) % 1 - 0.5) < 0.12 ? -0.28 : 0;
+      const fold = Math.abs((((u + 1) * 2.5 + (sway * k) / 3) % 1) - 0.5) < 0.12 ? -0.28 : 0;
       p.set(x, y, tone(L.robe, 0.52 - u * 0.55 + fold + (1 - k) * 0.08));
     }
     // Полы: латунный кант по середине.
@@ -1886,7 +1939,11 @@ function drawLord(o: LordPose): Built {
   for (let x = cx - 14; x <= cx + 14; x++) {
     for (const y of [G - 3, G - 2]) {
       if (!p.solid(x, y)) continue;
-      p.set(x, y, (x + (y === G - 2 ? 1 : 0)) % 4 === 0 ? INK : y === G - 3 ? L.trim[2] : L.trim[1]);
+      p.set(
+        x,
+        y,
+        (x + (y === G - 2 ? 1 : 0)) % 4 === 0 ? INK : y === G - 3 ? L.trim[2] : L.trim[1],
+      );
     }
   }
   // Полночь: в балахоне звёзды; отмотка: песок течёт с подола.
@@ -1907,7 +1964,8 @@ function drawLord(o: LordPose): Built {
   p.ell(wx, wy, 4, 5.5, L.trim[1]);
   p.ell(wx, wy, 3, 4.5, hx('#0a0a14'));
   if (o.phase === 2) {
-    for (let i = 0; i < 7; i++) p.set(Math.round(wx - 1 + (i % 3)), Math.round(wy + 3 - ((i * 1.3 + o.mb) % 8)), TEAL_GLOW);
+    for (let i = 0; i < 7; i++)
+      p.set(Math.round(wx - 1 + (i % 3)), Math.round(wy + 3 - ((i * 1.3 + o.mb) % 8)), TEAL_GLOW);
   } else {
     const a = Math.sin((o.mb / 12) * TAU * 2) * 0.55;
     const bx = wx + Math.sin(a) * 3;
@@ -1921,7 +1979,8 @@ function drawLord(o: LordPose): Built {
   cog(p, cx + sh(top), top + 0.5, 5.5, 12, 0, L.trim, { hole: 0.1, spokes: 0 });
   for (const [sx, sy] of [shoulderB, shoulderF]) {
     shadeEll(p, sx, sy - 0.5, 3.6, 3, L.trim, 0.1);
-    for (let x = Math.round(sx - 3); x <= Math.round(sx + 3); x++) p.set(x, Math.round(sy + 2), L.trim[0]);
+    for (let x = Math.round(sx - 3); x <= Math.round(sx + 3); x++)
+      p.set(x, Math.round(sy + 2), L.trim[0]);
   }
   // 6. Голова — циферблат в безеле со шпилями.
   for (const a of [-Math.PI / 2, -Math.PI / 2 - 0.62, -Math.PI / 2 + 0.62]) {
@@ -1947,19 +2006,39 @@ function drawLord(o: LordPose): Built {
         ? [hx('#c8d8f0'), hx('#e8f0ff'), WHITE, WHITE]
         : L.face;
   shadeEll(p, hxp, hy, 7, 7, faceT, 0.25);
-  if (o.face === 'on' || o.face === 'hot') p.ell(hxp, hy, 6, 6, alpha(L.glow, o.face === 'hot' ? 0.5 : 0.25));
+  if (o.face === 'on' || o.face === 'hot')
+    p.ell(hxp, hy, 6, 6, alpha(L.glow, o.face === 'hot' ? 0.5 : 0.25));
   // Риски часов: у III, VI, IX, XII — длинные.
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * TAU;
     const r0 = i % 3 === 0 ? 4.6 : 5.4;
     for (let r = r0; r <= 6.2; r += 0.8)
-      p.set(Math.floor(hxp + Math.sin(a) * r), Math.floor(hy - Math.cos(a) * r), o.phase === 3 ? L.hand : INK);
+      p.set(
+        Math.floor(hxp + Math.sin(a) * r),
+        Math.floor(hy - Math.cos(a) * r),
+        o.phase === 3 ? L.hand : INK,
+      );
   }
   // Стрелки на лице — идут по такту.
   const minA = (o.mb / 12) * TAU;
   const hourA = (o.mb / 12) * (TAU / 12) + (o.phase === 3 ? -0.35 : 1.9);
-  stroke(p, hxp - 0.5, hy - 0.5, hxp - 0.5 + Math.sin(hourA) * 3.4, hy - 0.5 - Math.cos(hourA) * 3.4, L.hand, 2);
-  stroke(p, hxp - 0.5, hy - 0.5, hxp - 0.5 + Math.sin(minA) * 5.4, hy - 0.5 - Math.cos(minA) * 5.4, L.hand);
+  stroke(
+    p,
+    hxp - 0.5,
+    hy - 0.5,
+    hxp - 0.5 + Math.sin(hourA) * 3.4,
+    hy - 0.5 - Math.cos(hourA) * 3.4,
+    L.hand,
+    2,
+  );
+  stroke(
+    p,
+    hxp - 0.5,
+    hy - 0.5,
+    hxp - 0.5 + Math.sin(minA) * 5.4,
+    hy - 0.5 - Math.cos(minA) * 5.4,
+    L.hand,
+  );
   if (o.face === 'crack') {
     stroke(p, hxp - 5, hy - 3, hxp - 1, hy + 1, INK);
     stroke(p, hxp - 1, hy + 1, hxp + 2, hy - 1, INK);
@@ -1971,12 +2050,19 @@ function drawLord(o: LordPose): Built {
     // Отмотка: большие песочные часы в руках (или осколки у ног).
     const gx = cx + 9 + sh(top + 14);
     if (o.glass === 'hold') {
-      hourglass(p, gx, top + 3, 11, 17, o.glassK ?? 0.5, true, o.mb, { sand: TEAL, glow: TEAL_GLOW });
+      hourglass(p, gx, top + 3, 11, 17, o.glassK ?? 0.5, true, o.mb, {
+        sand: TEAL,
+        glow: TEAL_GLOW,
+      });
       limb(p, shoulderF[0], shoulderF[1], gx - 5, top + 11, 2.4, 1.6, L.robe, 0.05);
       shadeEll(p, gx - 5, top + 11, 1.6, 1.6, L.trim, 0.1);
     } else {
       for (let i = 0; i < 9; i++)
-        p.set(Math.round(gx - 5 + hash(i, 5) * 12), G - 1 - Math.floor(hash(i, 9) * 3), i % 2 ? GLASS_HI : TEAL[2]);
+        p.set(
+          Math.round(gx - 5 + hash(i, 5) * 12),
+          G - 1 - Math.floor(hash(i, 9) * 3),
+          i % 2 ? GLASS_HI : TEAL[2],
+        );
       polyShade(
         p,
         [
@@ -1993,7 +2079,15 @@ function drawLord(o: LordPose): Built {
     }
   } else {
     limb(p, shoulderF[0], shoulderF[1], fh[0], fh[1], 2.4, 1.6, L.robe, 0.05);
-    minuteHand(p, fh[0], fh[1], o.fa, 24, L.trim, o.face === 'dim' || o.face === 'crack' ? null : L.glow);
+    minuteHand(
+      p,
+      fh[0],
+      fh[1],
+      o.fa,
+      24,
+      L.trim,
+      o.face === 'dim' || o.face === 'crack' ? null : L.glow,
+    );
     shadeEll(p, fh[0], fh[1], 1.7, 1.7, L.trim, 0.1);
   }
   // Полосы разворота: стрелки идут кругом.
@@ -2001,7 +2095,11 @@ function drawLord(o: LordPose): Built {
     for (let i = 0; i < 18; i++) {
       const a = (i / 18) * TAU + o.spin * 0.35;
       if (i % 3 === 0) continue;
-      p.set(Math.round(cx + Math.cos(a) * 22), Math.round(top + 5 + Math.sin(a) * 7), alpha(L.glow, 0.7));
+      p.set(
+        Math.round(cx + Math.cos(a) * 22),
+        Math.round(top + 5 + Math.sin(a) * 7),
+        alpha(L.glow, 0.7),
+      );
     }
   p.outline(INK);
   // Глаз — ось стрелок: светится поверх контура.
@@ -2058,7 +2156,16 @@ registerMobPainter('f14boss', (_m: Mob, pose: MobPose) => {
   } else if (mode === 'f14_stuck') {
     anim = 'stuck';
     fr = Math.floor(pose.t * 6) % 2;
-    o = { ...o, lean: 3, drop: 2, fh: [37, 40], fa: 0.95, bh: [17, 46], ba: 1.9, face: fr ? 'dim' : 'on' };
+    o = {
+      ...o,
+      lean: 3,
+      drop: 2,
+      fh: [37, 40],
+      fa: 0.95,
+      bh: [17, 46],
+      ba: 1.9,
+      face: fr ? 'dim' : 'on',
+    };
   } else if (mode === 'f14_spin') {
     anim = 'spin';
     fr = Math.floor(pose.t * 10) % 4;
@@ -2075,22 +2182,57 @@ registerMobPainter('f14boss', (_m: Mob, pose: MobPose) => {
   } else if (mode === 'f14_clap') {
     anim = 'clap';
     fr = pose.t > LORD.clap * 0.6 ? 1 : 0;
-    o = { ...o, lean: -1, fh: [28, 8], fa: -1.35, bh: [23, 8], ba: -1.8, face: fr ? 'white' : 'hot' };
+    o = {
+      ...o,
+      lean: -1,
+      fh: [28, 8],
+      fa: -1.35,
+      bh: [23, 8],
+      ba: -1.8,
+      face: fr ? 'white' : 'hot',
+    };
   } else if (mode === 'f14_place' || stopped) {
     anim = 'place';
     o = { ...o, fh: [38, 32], fa: 0.45, bh: [12, 32], ba: 2.7, face: 'white' };
   } else if (mode === 'f14_ritual') {
     anim = 'ritual';
     fr = mb;
-    o = { ...o, drop: 6, bh: [18, 44], ba: 1.9, glass: 'hold', glassK: Math.min(0.95, 0.15 + pose.t / LORD.ritual), face: 'hot' };
+    o = {
+      ...o,
+      drop: 6,
+      bh: [18, 44],
+      ba: 1.9,
+      glass: 'hold',
+      glassK: Math.min(0.95, 0.15 + pose.t / LORD.ritual),
+      face: 'hot',
+    };
   } else if (mode === 'f14_broken') {
     anim = 'broken';
     fr = Math.floor(pose.t * 5) % 2;
-    o = { ...o, lean: 1, drop: 6, fh: [33, 46], fa: 1.25, bh: [18, 46], ba: 1.8, glass: 'broken', face: 'crack' };
+    o = {
+      ...o,
+      lean: 1,
+      drop: 6,
+      fh: [33, 46],
+      fa: 1.25,
+      bh: [18, 46],
+      ba: 1.8,
+      glass: 'broken',
+      face: 'crack',
+    };
   } else if (mode === 'f14_tired') {
     anim = 'tired';
     fr = Math.floor(pose.t * 2) % 2;
-    o = { ...o, lean: 1.5, drop: 3 + fr, fh: [33, 48], fa: 1.35, bh: [18, 48], ba: 1.75, face: 'dim' };
+    o = {
+      ...o,
+      lean: 1.5,
+      drop: 3 + fr,
+      fh: [33, 48],
+      fa: 1.35,
+      bh: [18, 48],
+      ba: 1.75,
+      face: 'dim',
+    };
   } else if (pose.anim === 'run') {
     anim = 'run';
     fr = pose.frame % 4;
@@ -2183,7 +2325,9 @@ registerPropPainter('f14_wallclock', (o) => {
     stroke(p, 8, 12, bx, 14.5, BRASS[1]);
     shadeEll(p, bx, 14.6, 1.2, 1, BRASS, 0.3);
     // Циферблат.
-    dialFace(p, 8, 6.5, 5.6, (mb / 24) * TAU, 5.2, { glow: warn ? (warn === 2 ? hx('#ff5a3a') : AMBER) : null });
+    dialFace(p, 8, 6.5, 5.6, (mb / 24) * TAU, 5.2, {
+      glow: warn ? (warn === 2 ? hx('#ff5a3a') : AMBER) : null,
+    });
     p.outline(INK);
     return { p, ax: 8, ay: 16 };
   });
@@ -2422,7 +2566,10 @@ registerPropPainter('f14_crate', (_o, _t, _alive, flash) =>
       [13, G - 2],
     ])
       p.rect(x, y, x + 1, y + 1, BRASS[2]);
-    cog(p, 8, 11, 3.2, 8, 0.2, tn('#1a0e06', '#2a1a0c', '#3a2410', '#4a3018'), { hole: 1, spokes: 0 });
+    cog(p, 8, 11, 3.2, 8, 0.2, tn('#1a0e06', '#2a1a0c', '#3a2410', '#4a3018'), {
+      hole: 1,
+      spokes: 0,
+    });
     p.outline(INK);
     if (flash) p = p.tint(WHITE, 0.7);
     return { p, ax: 8, ay: G };
@@ -2440,7 +2587,8 @@ registerPropPainter('f14_barrel', (_o, _t, _alive, flash) =>
       }
     p.ell(6.5, 3, 4.6, 1.6, hx('#08080a'));
     p.ell(6.5, 3, 3.2, 1, hx('#141418'));
-    for (const y of [5, 10, 15]) for (let x = 2; x <= 11; x++) p.set(x, y, tone(BRASS, 0.5 - ((x - 6.5) / 5) * 0.7));
+    for (const y of [5, 10, 15])
+      for (let x = 2; x <= 11; x++) p.set(x, y, tone(BRASS, 0.5 - ((x - 6.5) / 5) * 0.7));
     // Потёк масла.
     for (let y = 4; y < 9; y++) p.set(9, y, hx('#050506'));
     p.outline(INK);
@@ -2512,7 +2660,13 @@ registerPropPainter('f14_metronome', (o) => {
     const tx = 7 + Math.sin(a) * 11;
     const ty = G - 4 - Math.cos(a) * 11;
     stroke(p, 7, G - 4, tx, ty, STEEL[2]);
-    p.rect(Math.round(7 + Math.sin(a) * 7) - 1, Math.round(G - 4 - Math.cos(a) * 7), Math.round(7 + Math.sin(a) * 7) + 1, Math.round(G - 4 - Math.cos(a) * 7) + 1, BRASS[3]);
+    p.rect(
+      Math.round(7 + Math.sin(a) * 7) - 1,
+      Math.round(G - 4 - Math.cos(a) * 7),
+      Math.round(7 + Math.sin(a) * 7) + 1,
+      Math.round(G - 4 - Math.cos(a) * 7) + 1,
+      BRASS[3],
+    );
     p.outline(INK);
     return { p, ax: 7, ay: G };
   });
@@ -2575,7 +2729,12 @@ registerPropPainter('f14_hubgear', () => {
   const r = ((Math.round(F14_FX.gearAng / step) % 6) + 6) % 6;
   return sprite(`hub|${r}`, () => {
     const p = new Px(56, 56);
-    cog(p, 28, 28, 25, 16, r * step, BRASS, { hole: 4, spokes: 6, tooth: 3.5, dark: hx('#140c06') });
+    cog(p, 28, 28, 25, 16, r * step, BRASS, {
+      hole: 4,
+      spokes: 6,
+      tooth: 3.5,
+      dark: hx('#140c06'),
+    });
     cog(p, 28, 28, 9, 10, -r * step * 1.8, COPPER, { hole: 2, spokes: 0 });
     shadeEll(p, 28, 28, 2.6, 2.6, STEEL, 0.2);
     p.outline(INK);
@@ -2614,7 +2773,9 @@ registerPropPainter('f14_pendulum', (o) => {
         p.set(bx + x, y, y === Math.round(top) ? STEEL[3] : STEEL[2]);
     }
     p.outline(INK);
-    if (hot) for (let x = -7; x <= 7; x++) p.set(bx + x, Math.round(B + 1 - Math.abs(x) * 0.15), hx('#ff7a4a'));
+    if (hot)
+      for (let x = -7; x <= 7; x++)
+        p.set(bx + x, Math.round(B + 1 - Math.abs(x) * 0.15), hx('#ff7a4a'));
     return { p, ax: cx, ay: B + 12 };
   });
 });
@@ -2732,7 +2893,14 @@ registerPropPainter('f14_sandfall', (o) => {
         const n = hash(x, (y + f * 4) >> 1, 7);
         if (d > 1 ? n < 0.8 : n < 0.08) continue;
         const core = d < 0.45;
-        p.set(x, y, alpha(core ? (n > 0.5 ? SAND_FLOOR[3] : SAND_FLOOR[2]) : SAND_FLOOR[1], core ? 0.95 : 0.7));
+        p.set(
+          x,
+          y,
+          alpha(
+            core ? (n > 0.5 ? SAND_FLOOR[3] : SAND_FLOOR[2]) : SAND_FLOOR[1],
+            core ? 0.95 : 0.7,
+          ),
+        );
       }
     }
     // Горка и брызги.
@@ -2770,7 +2938,8 @@ registerPropPainter('f14_bigglass', () => {
     ])
       shadeEll(p, x, y, 2.4, 2.4, BRASS, 0.2);
     if (G.broken)
-      for (let i = 0; i < 14; i++) p.set(6 + Math.floor(hash(i, 3) * 22), B - 1 - Math.floor(hash(i, 5) * 3), SAND[2]);
+      for (let i = 0; i < 14; i++)
+        p.set(6 + Math.floor(hash(i, 3) * 22), B - 1 - Math.floor(hash(i, 5) * 3), SAND[2]);
     p.outline(INK);
     if (flip) p.ell(17, B / 2 + 2, 12, 22, alpha(WHITE, 0.35));
     return { p, ax: 17, ay: B };
@@ -2999,7 +3168,10 @@ function cellOf(key: string, build: () => Px): Px {
 }
 
 /** Мировая точка пикселя клетки. */
-const wpt = (c: CellCtx, x: number, y: number): [number, number] => [c.wx + (x + 0.5) / 16, c.wy + (y + 0.5) / 16];
+const wpt = (c: CellCtx, x: number, y: number): [number, number] => [
+  c.wx + (x + 0.5) / 16,
+  c.wy + (y + 0.5) / 16,
+];
 
 /** Кромка: сосед не той же породы (по списку меток). */
 function edges(c: CellCtx, same: (k: number) => boolean) {
@@ -3048,7 +3220,8 @@ const TREAD = tn('#2a1c0c', '#5a4020', '#8a6834', '#c09a4c');
  * «ёлочкой» (как на настоящем рифлёном железе), у кромки — фаска и заклёпки.
  */
 function brassCell(c: CellCtx): Px {
-  const same = (k: number) => k === MK.brass || k === MK.stripe || k === MK.rank || k === MK.crack || k === MK.oil;
+  const same = (k: number) =>
+    k === MK.brass || k === MK.stripe || k === MK.rank || k === MK.crack || k === MK.oil;
   const e = edges(c, same);
   const ox = (c.wx & 1) * 16;
   const oy = (c.wy & 1) * 16;
@@ -3078,7 +3251,11 @@ function brassCell(c: CellCtx): Px {
         else if (X % 32 === 31 || Y % 32 === 31) k = 1;
         p.set(x, y, TREAD[k]);
       }
-    if (e.n) for (let x = 0; x < 16; x++) (p.set(x, 0, TREAD[3]), p.set(x, 1, TREAD[2]));
+    if (e.n)
+      for (let x = 0; x < 16; x++) {
+        p.set(x, 0, TREAD[3]);
+        p.set(x, 1, TREAD[2]);
+      }
     if (e.w) for (let y = 0; y < 16; y++) p.set(0, y, TREAD[2]);
     if (e.s) for (let x = 0; x < 16; x++) p.set(x, 15, TREAD[0]);
     if (e.e) for (let y = 0; y < 16; y++) p.set(15, y, TREAD[0]);
@@ -3088,14 +3265,26 @@ function brassCell(c: CellCtx): Px {
       [2, 13],
       [13, 13],
     ])
-      if ((y < 8 ? e.n || oy === 0 : e.s || oy === 16) && (x < 8 ? e.w || ox === 0 : e.e || ox === 16))
+      if (
+        (y < 8 ? e.n || oy === 0 : e.s || oy === 16) &&
+        (x < 8 ? e.w || ox === 0 : e.e || ox === 16)
+      )
         rivet(p, x, y, BRASS);
     return p;
   });
 }
 
 /** Метки, на которые можно положить мелочь (трещину, масло, песок). */
-const FLOOR_LOOK = new Set<number>([0, MK.brass, MK.dune, MK.stone, MK.parquet, MK.still, MK.runner, MK.dial]);
+const FLOOR_LOOK = new Set<number>([
+  0,
+  MK.brass,
+  MK.dune,
+  MK.stone,
+  MK.parquet,
+  MK.still,
+  MK.runner,
+  MK.dial,
+]);
 
 /** Мелочь поверх пола соседей: трещина или пятно ложатся на их узор. */
 function onBase(c: CellCtx, paint: (c: CellCtx) => Px | null, over: Px): Px {
@@ -3186,7 +3375,11 @@ function stripeCell(c: CellCtx): Px {
         const d = (((c.wx * 16 + x - (c.wy * 16 + y)) % 16) + 16) % 16;
         const yel = d < 8;
         const worn = hash(x, y, c.wx) > 0.88;
-        p.set(x, y, yel ? (worn ? hx('#7a5a10') : hx('#b8901c')) : worn ? hx('#2a2418') : hx('#16120c'));
+        p.set(
+          x,
+          y,
+          yel ? (worn ? hx('#7a5a10') : hx('#b8901c')) : worn ? hx('#2a2418') : hx('#16120c'),
+        );
       }
     return p;
   });
@@ -3243,7 +3436,8 @@ function pitCell(c: CellCtx): Px {
     const p = new Px(16, 16);
     const v = (c.wx * 3 + c.wy) % 4;
     for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) p.set(x, y, mixc(hx('#020101'), hx('#0e0804'), hash(x, y, v) * 0.5));
+      for (let x = 0; x < 16; x++)
+        p.set(x, y, mixc(hx('#020101'), hx('#0e0804'), hash(x, y, v) * 0.5));
     for (let i = 0; i < 3; i++) {
       const x = 2 + Math.floor(hash(i, v, 1) * 12);
       const y = 5 + Math.floor(hash(v, i, 2) * 10);
@@ -3456,7 +3650,8 @@ function panelFace(c: CellCtx, kind: 'wood' | 'green' | 'soot' | 'plate'): Px | 
         p.set(x, y, tone(T, l + (hash(x, y, 2) - 0.5) * 0.08 - (x > 12 ? 0.15 : 0)));
       }
     if (kind === 'soot')
-      for (let y = 1; y < 15; y++) for (let x = 1; x < 15; x++) if (hash(x, y, 5) > 0.7) p.set(x, y, alpha(INK, 0.6));
+      for (let y = 1; y < 15; y++)
+        for (let x = 1; x < 15; x++) if (hash(x, y, 5) > 0.7) p.set(x, y, alpha(INK, 0.6));
     for (let x = 0; x < 16; x++) {
       p.set(x, 0, BRASS[2]);
       p.set(x, 15, BRASS[0]);
@@ -3485,7 +3680,13 @@ function glassFace(c: CellCtx): Px | null {
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
         const dune = 9 + Math.sin((c.wx * 16 + x) * 0.3) * 2;
-        p.set(x, y, y > dune ? tone(SAND, 0.4 + (y - dune) * 0.02) : mixc(hx('#0c1418'), hx('#1a2830'), y / 16));
+        p.set(
+          x,
+          y,
+          y > dune
+            ? tone(SAND, 0.4 + (y - dune) * 0.02)
+            : mixc(hx('#0c1418'), hx('#1a2830'), y / 16),
+        );
       }
     for (let i = 0; i < 10; i++) p.set((i + c.wx * 5) % 16, i, alpha(GLASS_HI, 0.35));
     for (let x = 0; x < 16; x++) {
@@ -3507,7 +3708,11 @@ function windowFace(c: CellCtx): Px | null {
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
         if (!inArch(x, y)) {
-          p.set(x, y, tone(tn('#141820', '#262c38', '#3a4252', '#565e70'), 0.45 - (x > 12 ? 0.15 : 0)));
+          p.set(
+            x,
+            y,
+            tone(tn('#141820', '#262c38', '#3a4252', '#565e70'), 0.45 - (x > 12 ? 0.15 : 0)),
+          );
           continue;
         }
         const sky = mixc(hx('#0a1030'), hx('#1c2a5a'), y / 14);
@@ -3621,13 +3826,14 @@ function stoneCell(c: CellCtx): Px {
       }
     if (crack) {
       // Трещина через плиту: ломаная, тёмная черта с песчинкой внутри.
-      let x = 6 + (sv * 5) % 18;
+      let x = 6 + ((sv * 5) % 18);
       for (let Y = 3; Y < 29; Y++) {
         if (hash(Y, sv, 5) < 0.35) x += hash(Y, sv, 6) < 0.5 ? -1 : 1;
         const lx = x - ox;
         const ly = Y - oy;
         if (lx >= 0 && lx < 16 && ly >= 0 && ly < 16) p.set(lx, ly, SANDSTONE[0]);
-        if (lx + 1 >= 0 && lx + 1 < 16 && ly >= 0 && ly < 16) p.set(lx + 1, ly, tone(SANDSTONE, 0.7));
+        if (lx + 1 >= 0 && lx + 1 < 16 && ly >= 0 && ly < 16)
+          p.set(lx + 1, ly, tone(SANDSTONE, 0.7));
       }
     }
     return p;
@@ -3730,7 +3936,11 @@ function sigilOver(fast: boolean): Px {
     const col = fast ? AMBER : TEAL_GLOW;
     for (let i = 0; i < 48; i++) {
       const a = (i / 48) * TAU;
-      p.set(Math.round(7.5 + Math.cos(a) * 6.6), Math.round(7.5 + Math.sin(a) * 6.6), alpha(col, 0.85));
+      p.set(
+        Math.round(7.5 + Math.cos(a) * 6.6),
+        Math.round(7.5 + Math.sin(a) * 6.6),
+        alpha(col, 0.85),
+      );
     }
     poly(
       p,
@@ -3850,21 +4060,23 @@ function dialCell(c: CellCtx, pal: DialPal, withNum: boolean): Px {
       const a = Math.atan2(dy, dx);
       // Гильош «солнце» — только во внутреннем поле, тонкими лучами.
       const inner = r > 3 && r < D.N - 1.4;
-      const sun = inner ? ((((a / TAU) * 120) % 1) + 1) % 1 < 0.5 ? 0.035 : -0.02 : 0;
+      const sun = inner ? (((((a / TAU) * 120) % 1) + 1) % 1 < 0.5 ? 0.035 : -0.02) : 0;
       let col = tone(pal.base, 0.5 + sun + (hash(x, y, c.wx * 7 + c.wy) - 0.5) * 0.04 - r * 0.006);
       if (r > D.R - 0.4) {
         col = tone(pal.bezel, 0.5 - (dx / r) * 0.3 - (dy / r) * 0.4);
-      } else if (Math.abs(r - (D.N + 1.05)) < 0.07 || Math.abs(r - (D.N - 1.05)) < 0.05) col = pal.line;
+      } else if (Math.abs(r - (D.N + 1.05)) < 0.07 || Math.abs(r - (D.N - 1.05)) < 0.05)
+        col = pal.line;
       else if (r > D.N + 0.55 && r < D.N + 1.0) {
-        const m = (((a / TAU) * 60) % 1 + 1) % 1;
+        const m = ((((a / TAU) * 60) % 1) + 1) % 1;
         if (m < 0.1 || m > 0.9) col = pal.line;
       } else if (Math.abs(r - 3) < 0.05) col = pal.line;
       else if (Math.abs(r - (D.N - 2)) < 0.1) {
         // Пояс бусин между кольцом цифр и полем.
-        const m = (((a / TAU) * 96) % 1 + 1) % 1;
+        const m = ((((a / TAU) * 96) % 1) + 1) % 1;
         if (m < 0.3) col = tone(pal.bezel, 0.6);
       }
-      if (pal.star && hash(x, y, c.wx * 31 + c.wy) > 0.985) col = hash(x, y, 7) > 0.5 ? WHITE : hx('#9aa8ff');
+      if (pal.star && hash(x, y, c.wx * 31 + c.wy) > 0.985)
+        col = hash(x, y, 7) > 0.5 ? WHITE : hx('#9aa8ff');
       if (pal.frost && (x + y * 3 + c.wx * 16) % 23 === 0) col = mixc(col, WHITE, 0.6);
       p.set(x, y, col);
     }
@@ -3872,7 +4084,8 @@ function dialCell(c: CellCtx, pal: DialPal, withNum: boolean): Px {
     // Отмотка: гравированные стрелки против часовой.
     const [wx, wy] = wpt(c, 8, 8);
     const a = Math.atan2(wy - D.cy, wx - D.cx) - Math.PI / 2;
-    for (let k = -3; k <= 3; k++) p.set(Math.round(8 + Math.cos(a) * k), Math.round(8 + Math.sin(a) * k), pal.line);
+    for (let k = -3; k <= 3; k++)
+      p.set(Math.round(8 + Math.cos(a) * k), Math.round(8 + Math.sin(a) * k), pal.line);
     p.set(
       Math.round(8 + Math.cos(a) * 3 + Math.cos(a + 2.3) * 2),
       Math.round(8 + Math.sin(a) * 3 + Math.sin(a + 2.3) * 2),
@@ -3915,7 +4128,10 @@ function hubCell(c: CellCtx, pal: DialPal): Px {
         y,
         r > R - 0.12
           ? BRASS[0]
-          : tone(r < 0.3 ? STEEL : BRASS, 0.46 + (ring ? 0.1 : -0.06) - (dx / (r || 1)) * 0.16 - (dy / (r || 1)) * 0.2),
+          : tone(
+              r < 0.3 ? STEEL : BRASS,
+              0.46 + (ring ? 0.1 : -0.06) - (dx / (r || 1)) * 0.16 - (dy / (r || 1)) * 0.2,
+            ),
       );
     }
   return p;
@@ -3937,7 +4153,10 @@ function parquetCell(c: CellCtx, still: boolean): Px {
         const seamY = Y % 4 === 3;
         const seamX = (X + off) % 24 === 0;
         const grain = (X + row * 7) % 7 === 0 ? -0.06 : 0;
-        let col = tone(PARQ, 0.46 + (hash(plank, row, 3) - 0.5) * 0.2 + grain + (seamY || seamX ? -0.3 : 0));
+        let col = tone(
+          PARQ,
+          0.46 + (hash(plank, row, 3) - 0.5) * 0.2 + grain + (seamY || seamX ? -0.3 : 0),
+        );
         if (still) {
           const l = (col[0] * 0.3 + col[1] * 0.55 + col[2] * 0.15) / 255;
           col = mixc([l * 240, l * 245, l * 265, 255], col, 0.3);
@@ -3947,7 +4166,11 @@ function parquetCell(c: CellCtx, still: boolean): Px {
     if (still)
       // Пыль повисла в воздухе: светлые точки не падают.
       for (let i = 0; i < 3; i++)
-        p.set(Math.floor(hash(i, c.wx & 3, 5) * 16), Math.floor(hash(c.wy & 3, i, 6) * 16), alpha(hx('#e8f0ff'), 0.85));
+        p.set(
+          Math.floor(hash(i, c.wx & 3, 5) * 16),
+          Math.floor(hash(c.wy & 3, i, 6) * 16),
+          alpha(hx('#e8f0ff'), 0.85),
+        );
     return p;
   });
 }
@@ -3960,21 +4183,42 @@ function runnerCell(c: CellCtx): Px {
     const p = new Px(16, 16);
     const R = tn('#160808', '#2a0e10', '#3e1618', '#562424');
     for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) p.set(x, y, tone(R, 0.45 + (x % 4 === 1 ? -0.07 : 0) + (hash(x, y, 8) - 0.5) * 0.06));
+      for (let x = 0; x < 16; x++)
+        p.set(x, y, tone(R, 0.45 + (x % 4 === 1 ? -0.07 : 0) + (hash(x, y, 8) - 0.5) * 0.06));
     if (motif) {
       // Узор: маленький циферблат золотой нитью.
       for (let i = 0; i < 24; i++) {
         const a = (i / 24) * TAU;
-        p.set(Math.round(7.5 + Math.cos(a) * 3), Math.round(7.5 + Math.sin(a) * 3), alpha(BRASS[1], 0.8));
+        p.set(
+          Math.round(7.5 + Math.cos(a) * 3),
+          Math.round(7.5 + Math.sin(a) * 3),
+          alpha(BRASS[1], 0.8),
+        );
       }
       p.set(8, 5, BRASS[2]);
       p.set(8, 6, BRASS[2]);
       p.set(9, 8, BRASS[2]);
     }
-    if (e.w) for (let y = 0; y < 16; y++) (p.set(0, y, BRASS[1]), p.set(1, y, R[0]));
-    if (e.e) for (let y = 0; y < 16; y++) (p.set(15, y, BRASS[1]), p.set(14, y, R[0]));
-    if (e.n) for (let x = 0; x < 16; x++) (p.set(x, 0, BRASS[2]), p.set(x, 1, R[0]));
-    if (e.s) for (let x = 0; x < 16; x++) (p.set(x, 15, BRASS[1]), p.set(x, 14, R[0]));
+    if (e.w)
+      for (let y = 0; y < 16; y++) {
+        p.set(0, y, BRASS[1]);
+        p.set(1, y, R[0]);
+      }
+    if (e.e)
+      for (let y = 0; y < 16; y++) {
+        p.set(15, y, BRASS[1]);
+        p.set(14, y, R[0]);
+      }
+    if (e.n)
+      for (let x = 0; x < 16; x++) {
+        p.set(x, 0, BRASS[2]);
+        p.set(x, 1, R[0]);
+      }
+    if (e.s)
+      for (let x = 0; x < 16; x++) {
+        p.set(x, 15, BRASS[1]);
+        p.set(x, 14, R[0]);
+      }
     return p;
   });
 }
@@ -3986,7 +4230,8 @@ function rimSandCell(c: CellCtx): Px {
     for (let x = 0; x < 16; x++) {
       const [wx, wy] = wpt(c, x, y);
       const s = Math.sin(wx * 1.3 + wy * 0.7) + Math.sin(wy * 2.1 - wx * 0.4);
-      if (s > -0.6) p.set(x, y, tone(SAND_FLOOR, 0.42 + (s > 1.1 ? 0.25 : 0) + (hash(x, y, 2) - 0.5) * 0.1));
+      if (s > -0.6)
+        p.set(x, y, tone(SAND_FLOOR, 0.42 + (s > 1.1 ? 0.25 : 0) + (hash(x, y, 2) - 0.5) * 0.1));
     }
   return p;
 }
@@ -4160,9 +4405,17 @@ registerCellPainter(F14_DIAL, dialAreaCell);
 // Метки ударов, сферы, песок, стрелки площади и арены, ножи.
 // ---------------------------------------------------------------------------
 
-type ZoneX = (Zone | Strike) & { ang?: number; arc?: number; w?: number; which?: string; shot?: number; mob?: number };
+type ZoneX = (Zone | Strike) & {
+  ang?: number;
+  arc?: number;
+  w?: number;
+  which?: string;
+  shot?: number;
+  mob?: number;
+};
 
-const rgba = (c: RGBA, a: number) => `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
+const rgba = (c: RGBA, a: number) =>
+  `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
 
 /** Метка удара наливается: `k` 0…1. */
 const kOf = (z: ZoneX) => {
@@ -4177,7 +4430,14 @@ const lifeK = (z: ZoneX) => {
   return zz.life > 0 && zz.life < 1e8 ? Math.min(1, zz.t / zz.life) : 0;
 };
 
-function cone(g: CanvasRenderingContext2D, x: number, y: number, r: number, a: number, arc: number): void {
+function cone(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  a: number,
+  arc: number,
+): void {
   g.beginPath();
   g.moveTo(x, y);
   g.arc(x, y, r, a - arc / 2, a + arc / 2);
@@ -4235,7 +4495,14 @@ function drawHand(
 }
 
 /** Сфера времени: прозрачный шар, по краю — риски часов; стрелка идёт медленно или бешено. */
-function sphere(g: CanvasRenderingContext2D, z: ZoneX, px: number, py: number, S: number, fast: boolean): boolean {
+function sphere(
+  g: CanvasRenderingContext2D,
+  z: ZoneX,
+  px: number,
+  py: number,
+  S: number,
+  fast: boolean,
+): boolean {
   const R = z.r * S;
   const t = F14_FX.clock;
   const col = fast ? HOT : COLD;
@@ -4258,7 +4525,12 @@ function sphere(g: CanvasRenderingContext2D, z: ZoneX, px: number, py: number, S
   g.fillStyle = rgba(col, 0.8 * a);
   for (let i = 0; i < 12; i++) {
     const aa = (i / 12) * TAU;
-    g.fillRect(Math.round(px + Math.cos(aa) * (R - 2)), Math.round(py + Math.sin(aa) * (R - 2)), i % 3 ? 1 : 2, i % 3 ? 1 : 2);
+    g.fillRect(
+      Math.round(px + Math.cos(aa) * (R - 2)),
+      Math.round(py + Math.sin(aa) * (R - 2)),
+      i % 3 ? 1 : 2,
+      i % 3 ? 1 : 2,
+    );
   }
   // Секундная стрелка: в медленной — ползёт, в быстрой — вихрь.
   const sa = t * (fast ? 7 : 0.6) + z.id;
@@ -4315,7 +4587,8 @@ registerZonePainter('f14_flood', (g, _z, px, py, S) => {
     // Жилки — поток песка вверх.
     if (!front)
       for (let i = 0; i < 3; i++) {
-        const wx = F.cx - half + (((hash(i, Math.round(wy * 8)) + t * 0.15 * (i + 1)) % 1) * half * 2);
+        const wx =
+          F.cx - half + ((hash(i, Math.round(wy * 8)) + t * 0.15 * (i + 1)) % 1) * half * 2;
         g.fillStyle = rgba(SAND_FLOOR[3], 0.35);
         g.fillRect(Math.round(X(wx)), Math.round(Y(wy)), 3, 1);
       }
@@ -4326,8 +4599,13 @@ registerZonePainter('f14_flood', (g, _z, px, py, S) => {
   const dy = (F.front - F.cy) / F.ry;
   const half = dy * dy <= 1.05 ? F.rx * Math.sqrt(Math.max(0, 1.05 - dy * dy)) : 3;
   for (let i = 0; i < 20; i++) {
-    const wx = F.cx - half + ((i / 20) * half * 2 + t * 1.3) % (half * 2);
-    g.fillRect(Math.round(X(wx)), Math.round(fy - 1 - Math.abs(Math.sin(i * 1.7 + t * 3)) * 2), 2, 1);
+    const wx = F.cx - half + (((i / 20) * half * 2 + t * 1.3) % (half * 2));
+    g.fillRect(
+      Math.round(X(wx)),
+      Math.round(fy - 1 - Math.abs(Math.sin(i * 1.7 + t * 3)) * 2),
+      2,
+      1,
+    );
   }
   return true;
 });
@@ -4364,7 +4642,17 @@ registerZonePainter('f14_hands', (g, z, px, py, S) => {
   }
   const metal = which === 'arena' ? tn('#3a3e50', '#7a8098', '#c0c6dc', '#f4f6ff') : BRASS;
   drawHand(g, px, py, H.h, hourLen, w * 1.3, metal[1], metal[3], metal[3]);
-  drawHand(g, px, py, H.m, minLen, w, metal[2], metal[3], which === 'arena' ? hx('#c8d8ff') : AMBER);
+  drawHand(
+    g,
+    px,
+    py,
+    H.m,
+    minLen,
+    w,
+    metal[2],
+    metal[3],
+    which === 'arena' ? hx('#c8d8ff') : AMBER,
+  );
   // Ступица.
   g.fillStyle = rgba(metal[1], 1);
   g.beginPath();
@@ -4492,7 +4780,7 @@ registerZonePainter('f14_knifeline', (g, z, px, py, S) => {
   g.stroke();
   const t = F14_FX.clock;
   for (let k = 0; k < 3; k++) {
-    const d = 8 + (((t * 1.2 + k / 3) % 1) * (L - 12));
+    const d = 8 + ((t * 1.2 + k / 3) % 1) * (L - 12);
     g.fillStyle = rgba(hx('#ffd0c0'), 0.8 * (1 - d / L));
     g.fillRect(Math.round(px + ux * d) - 1, Math.round(py + uy * d) - 1, 2, 2);
   }
@@ -4520,7 +4808,12 @@ registerZonePainter('f14_sandrise', (g, z, px, py, S) => {
     const a = hash(i, z.id) * TAU;
     const rr = R * hash(z.id, i) * 0.8;
     g.fillStyle = rgba(SAND[3], 0.8);
-    g.fillRect(Math.round(px + Math.cos(a) * rr), Math.round(py + Math.sin(a) * rr - k * 4 * hash(i, 3)), 1, 1);
+    g.fillRect(
+      Math.round(px + Math.cos(a) * rr),
+      Math.round(py + Math.sin(a) * rr - k * 4 * hash(i, 3)),
+      1,
+      1,
+    );
   }
   return true;
 });
@@ -4588,13 +4881,25 @@ registerZonePainter('f14_hourhand', (g, z, px, py, S) => {
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * TAU;
     g.fillStyle = rgba(HOT, 0.5 + 0.5 * k);
-    g.fillRect(Math.round(px + Math.cos(a) * (R - 2)), Math.round(py + Math.sin(a) * (R - 2)), 1, 1);
+    g.fillRect(
+      Math.round(px + Math.cos(a) * (R - 2)),
+      Math.round(py + Math.sin(a) * (R - 2)),
+      1,
+      1,
+    );
   }
   return true;
 });
 
 /** Минутная стрелка: линия, остриё бежит к концу. */
-function lineStrike(g: CanvasRenderingContext2D, z: ZoneX, px: number, py: number, S: number, heavy: boolean): void {
+function lineStrike(
+  g: CanvasRenderingContext2D,
+  z: ZoneX,
+  px: number,
+  py: number,
+  S: number,
+  heavy: boolean,
+): void {
   const k = kOf(z);
   const L = z.r * S;
   const w = (z.w ?? 0.4) * S;
@@ -4733,7 +5038,10 @@ registerZonePainter('f14_midnight', (g, z, px, py, S) => {
     const a = (i / 12) * TAU;
     g.beginPath();
     g.moveTo(px + Math.cos(a) * inner, py + Math.sin(a) * inner);
-    g.lineTo(px + Math.cos(a) * (inner + (outer - inner) * k), py + Math.sin(a) * (inner + (outer - inner) * k));
+    g.lineTo(
+      px + Math.cos(a) * (inner + (outer - inner) * k),
+      py + Math.sin(a) * (inner + (outer - inner) * k),
+    );
     g.stroke();
   }
   // Спасение — ступица: белое кольцо пульсирует.
@@ -4761,7 +5069,14 @@ registerShotPainter('f14_knife', (s) => {
     const cy = 11;
     // Клинок — стрелка часов в миниатюре: рукоять-кольцо, лезвие, остриё.
     stroke(p, cx - ux * 6, cy - uy * 6, cx + ux * 5, cy + uy * 5, STEEL[2]);
-    stroke(p, cx - ux * 6 - uy * 0.7, cy - uy * 6 + ux * 0.7, cx + ux * 5 - uy * 0.7, cy + uy * 5 + ux * 0.7, STEEL[3]);
+    stroke(
+      p,
+      cx - ux * 6 - uy * 0.7,
+      cy - uy * 6 + ux * 0.7,
+      cx + ux * 5 - uy * 0.7,
+      cy + uy * 5 + ux * 0.7,
+      STEEL[3],
+    );
     poly(
       p,
       [
@@ -4775,7 +5090,11 @@ registerShotPainter('f14_knife', (s) => {
     p.outline(INK);
     if (fly)
       for (let k = 1; k <= 4; k++)
-        p.set(Math.round(cx - ux * (7 + k * 2)), Math.round(cy - uy * (7 + k * 2)), alpha(WHITE, 0.6 - k * 0.12));
+        p.set(
+          Math.round(cx - ux * (7 + k * 2)),
+          Math.round(cy - uy * (7 + k * 2)),
+          alpha(WHITE, 0.6 - k * 0.12),
+        );
     else p.set(Math.round(cx + ux * 8), Math.round(cy + uy * 8), RED);
     return { p, ax: cx, ay: cy + 4 };
   });
@@ -4842,7 +5161,8 @@ registerItemArt('f14_egg', () => {
 registerItemArt('f14_ration', () => {
   const p = new Px(10, 10);
   // Жестяная банка с латунной крышкой.
-  for (let y = 3; y <= 8; y++) for (let x = 2; x <= 7; x++) p.set(x, y, tone(STEEL, 0.55 - (x - 4.5) * 0.15));
+  for (let y = 3; y <= 8; y++)
+    for (let x = 2; x <= 7; x++) p.set(x, y, tone(STEEL, 0.55 - (x - 4.5) * 0.15));
   p.ell(4.5, 3, 2.8, 1.1, BRASS[2]);
   p.rect(2, 5, 7, 6, REDC[2]);
   p.set(4, 5, WHITE);

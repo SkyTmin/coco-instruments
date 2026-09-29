@@ -13,9 +13,28 @@ import { describe, expect, it } from 'vitest';
 import { DUNGEON_START, heroOf, MOBS, SLOTS } from '../dungeon';
 import type { DungeonState, Gear } from '../dungeon';
 import { buildWorld, Tile, walkableTile } from '../dungeon-world';
-import { createSim, NO_INPUT, spawnMob, stepSim, strikeHits, SWORD, usableNear, useObject } from '../dungeon-sim';
+import {
+  createSim,
+  NO_INPUT,
+  spawnMob,
+  stepSim,
+  strikeHits,
+  SWORD,
+  usableNear,
+  useObject,
+} from '../dungeon-sim';
 import type { Mob, Sim, SimInput } from '../dungeon-sim';
-import { F14_FX, f14Flood, f14State, f14Time, KNIFE_ANG, LORD, NOON, REWIND, worldStopped } from './f14-brains';
+import {
+  F14_FX,
+  f14Flood,
+  f14State,
+  f14Time,
+  KNIFE_ANG,
+  LORD,
+  NOON,
+  REWIND,
+  worldStopped,
+} from './f14-brains';
 import { F14_DIAL, F14_GEO, F14_MECH } from './f14';
 
 const world = buildWorld(14);
@@ -25,7 +44,10 @@ const LOG = !!process.env.F14LOG;
 const TAU = Math.PI * 2;
 
 const band = (id: string) => world.bands.find((b) => b.def.id === id)!;
-const geo = (g: { area: string; x: number; y: number }): [number, number] => [g.x, band(g.area).top + g.y];
+const geo = (g: { area: string; x: number; y: number }): [number, number] => [
+  g.x,
+  band(g.area).top + g.y,
+];
 
 function dungeon(tier: number, plus: number): DungeonState {
   const gear = {} as Gear;
@@ -49,7 +71,8 @@ function floorNear(x: number, y: number): [number, number] {
     for (let dy = -r; dy <= r; dy++)
       for (let dx = -r; dx <= r; dx++) {
         const i = Math.floor(y + dy) * W + Math.floor(x + dx);
-        if (world.tiles[i] === Tile.Floor) return [Math.floor(x + dx) + 0.5, Math.floor(y + dy) + 0.5];
+        if (world.tiles[i] === Tile.Floor)
+          return [Math.floor(x + dx) + 0.5, Math.floor(y + dy) + 0.5];
       }
   throw new Error(`нет пола у ${x},${y}`);
 }
@@ -138,7 +161,12 @@ function bot(s: Sim, st: BotState): SimInput {
       // Из двух концов сквозного проёма — тот, что дальше от стен.
       const room = (a: number) => {
         let d = 0;
-        while (d < 4 && walkableTile(s.tiles[Math.floor(h.y + Math.sin(a) * d) * W + Math.floor(h.x + Math.cos(a) * d)]))
+        while (
+          d < 4 &&
+          walkableTile(
+            s.tiles[Math.floor(h.y + Math.sin(a) * d) * W + Math.floor(h.x + Math.cos(a) * d)],
+          )
+        )
           d += 0.25;
         return d;
       };
@@ -150,7 +178,8 @@ function bot(s: Sim, st: BotState): SimInput {
     }
   }
   const flying = s.shots.filter(
-    (q) => KNIFE_ANG.has(q.id) && (q.vx !== 0 || q.vy !== 0) && Math.hypot(q.x - h.x, q.y - h.y) < 7,
+    (q) =>
+      KNIFE_ANG.has(q.id) && (q.vx !== 0 || q.vy !== 0) && Math.hypot(q.x - h.x, q.y - h.y) < 7,
   );
   // Летящий нож вот-вот попадёт — рывок поперёк.
   for (const q of flying) {
@@ -207,7 +236,12 @@ function bot(s: Sim, st: BotState): SimInput {
     if (!t || t.shape !== 'line') continue;
     const [react, missed] = notice(st, `l${m.id}:${Math.round((s.time - m.t) * 10)}`);
     if (missed || m.t < react) continue;
-    const hit = strikeHits({ shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 }, h.x, h.y, h.r + 0.3);
+    const hit = strikeHits(
+      { shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 },
+      h.x,
+      h.y,
+      h.r + 0.3,
+    );
     if (!hit) continue;
     const a = (t.ang ?? 0) + Math.PI / 2;
     const side = Math.cos(a) * (h.x - m.x) + Math.sin(a) * (h.y - m.y) >= 0 ? 1 : -1;
@@ -293,7 +327,12 @@ interface Fight {
 /** Откуда пришёл урон (для подбора): по тому, что творится в кадре. */
 function blame(s: Sim, lord: Mob | undefined): string {
   if (s.strikes.some((z) => z.art === 'f14_midnight' && z.t >= z.warn - 0.05)) return 'полночь';
-  if (s.shots.some((q) => KNIFE_ANG.has(q.id) && (q.vx || q.vy) && Math.hypot(q.x - s.hero.x, q.y - s.hero.y) < 1))
+  if (
+    s.shots.some(
+      (q) =>
+        KNIFE_ANG.has(q.id) && (q.vx || q.vy) && Math.hypot(q.x - s.hero.x, q.y - s.hero.y) < 1,
+    )
+  )
     return 'нож';
   if (lord && ['f14_minute', 'f14_lunge'].includes(lord.mode)) return 'минутная';
   if (lord && lord.mode === 'recover' && lord.data.lit === 0) return 'стрелка/кольцо';
@@ -329,8 +368,17 @@ function fight(tier: number, plus: number, seed: number, meat = 4): Fight {
           console.log(
             `${s.time.toFixed(2)} ${w} -${Math.round((100 * e.dmg) / s.stats.maxHp)}% hero ${s.hero.mode} cd${s.hero.dashCd.toFixed(2)} lord ${k?.mode}@${k?.t.toFixed(2)} d${k ? Math.hypot(k.x - s.hero.x, k.y - s.hero.y).toFixed(1) : '-'} strikes ${s.strikes.map((z) => `${z.art}:${z.t.toFixed(2)}/${z.warn.toFixed(2)}`).join(',')} mobs ${s.mobs
               .filter((m) => m.kind !== 'f14boss' && Math.hypot(m.x - s.hero.x, m.y - s.hero.y) < 6)
-              .map((m) => `${m.kind}:${m.mode}@${Math.hypot(m.x - s.hero.x, m.y - s.hero.y).toFixed(1)}`)
-              .join(',')} shots ${s.shots.filter((q) => Math.hypot(q.x - s.hero.x, q.y - s.hero.y) < 2).map((q) => q.art).join(',')} zones ${s.zones.filter((z) => Math.hypot(z.x - s.hero.x, z.y - s.hero.y) < z.r + 1).map((z) => z.art).join(',')} hp ${s.hero.hp.toFixed(0)}/${s.stats.maxHp}`,
+              .map(
+                (m) =>
+                  `${m.kind}:${m.mode}@${Math.hypot(m.x - s.hero.x, m.y - s.hero.y).toFixed(1)}`,
+              )
+              .join(',')} shots ${s.shots
+              .filter((q) => Math.hypot(q.x - s.hero.x, q.y - s.hero.y) < 2)
+              .map((q) => q.art)
+              .join(',')} zones ${s.zones
+              .filter((z) => Math.hypot(z.x - s.hero.x, z.y - s.hero.y) < z.r + 1)
+              .map((z) => z.art)
+              .join(',')} hp ${s.hero.hp.toFixed(0)}/${s.stats.maxHp}`,
           );
       }
     }
@@ -366,7 +414,9 @@ describe('этаж 14: Повелитель часа', () => {
 
 describe.runIf(!!process.env.F14SWEEP)('этаж 14: подбор', () => {
   it('сетка снаряжения', () => {
-    for (const [tier, plus, meat] of (process.env.F14SWEEP ?? '').split(';').map((x) => x.split(',').map(Number)))
+    for (const [tier, plus, meat] of (process.env.F14SWEEP ?? '')
+      .split(';')
+      .map((x) => x.split(',').map(Number)))
       for (const seed of [61, 62, 63]) fight(tier, plus, seed, meat);
   });
 });
@@ -473,7 +523,8 @@ describe('этаж 14: арена-циферблат', () => {
     const s = sim(8, 5, entry.x + 0.5, entry.y + 1.5, 3);
     // Живой игрок обходит тумбы и колонны: их клетки — не дорога.
     const tiles = Uint8Array.from(world.tiles);
-    for (const p of s.props) if (p.alive && p.r >= 0.3) tiles[Math.floor(p.y) * W + Math.floor(p.x)] = Tile.Wall;
+    for (const p of s.props)
+      if (p.alive && p.r >= 0.3) tiles[Math.floor(p.y) * W + Math.floor(p.x)] = Tile.Wall;
     const fl = field(gate % W, Math.floor(gate / W), tiles);
     const h = s.hero;
     let arrived = -1;
@@ -488,13 +539,26 @@ describe('этаж 14: арена-циферблат', () => {
     }
     if (LOG) {
       const b = world.bands.find((q) => h.y >= q.top && h.y < q.top + q.h)!;
-      console.log(`от лифта до ворот: ${arrived.toFixed(0)} с; стоит в ${b.def.id} ${h.x.toFixed(1)},${(h.y - b.top).toFixed(1)} поле ${f[Math.floor(h.y) * W + Math.floor(h.x)]}`);
+      console.log(
+        `от лифта до ворот: ${arrived.toFixed(0)} с; стоит в ${b.def.id} ${h.x.toFixed(1)},${(h.y - b.top).toFixed(1)} поле ${f[Math.floor(h.y) * W + Math.floor(h.x)]}`,
+      );
       for (let y = Math.floor(h.y) - 4; y <= Math.floor(h.y) + 4; y++) {
         let row = '';
         for (let x = Math.floor(h.x) - 8; x <= Math.floor(h.x) + 8; x++) {
           const t = s.tiles[y * W + x];
-          const pr = s.props.find((p) => p.alive && Math.floor(p.x) === x && Math.floor(p.y) === y && p.r > 0);
-          row += x === Math.floor(h.x) && y === Math.floor(h.y) ? '@' : pr ? 'o' : walkableTile(t) ? '.' : t === Tile.Wall ? '#' : String(t % 10);
+          const pr = s.props.find(
+            (p) => p.alive && Math.floor(p.x) === x && Math.floor(p.y) === y && p.r > 0,
+          );
+          row +=
+            x === Math.floor(h.x) && y === Math.floor(h.y)
+              ? '@'
+              : pr
+                ? 'o'
+                : walkableTile(t)
+                  ? '.'
+                  : t === Tile.Wall
+                    ? '#'
+                    : String(t % 10);
         }
         console.log('  ' + row);
       }
@@ -511,7 +575,8 @@ describe('этаж 14: арена-циферблат', () => {
       const t = world.tiles[Math.floor(p.y) * W + Math.floor(p.x)];
       expect(walkableTile(t)).toBe(true);
       // Кукушка живёт в часах на стене над своим постом.
-      if (p.kind === 'f14_cuckoo') expect(walkableTile(world.tiles[Math.floor(p.y - 1.2) * W + Math.floor(p.x)])).toBe(false);
+      if (p.kind === 'f14_cuckoo')
+        expect(walkableTile(world.tiles[Math.floor(p.y - 1.2) * W + Math.floor(p.x)])).toBe(false);
     }
   });
 });
@@ -521,7 +586,11 @@ describe('этаж 14: арена-циферблат', () => {
 // ---------------------------------------------------------------------------
 
 /** Шагать и собрать слова событий. */
-function runEv(s: Sim, secs: number, inp: SimInput | ((s: Sim) => SimInput) = NO_INPUT): Set<string> {
+function runEv(
+  s: Sim,
+  secs: number,
+  inp: SimInput | ((s: Sim) => SimInput) = NO_INPUT,
+): Set<string> {
   const out = new Set<string>();
   for (let t = 0; t < secs * 60; t++) {
     stepSim(s, DT, typeof inp === 'function' ? inp(s) : inp);
@@ -551,8 +620,19 @@ describe('этаж 14: время', () => {
     const ev = runEv(s, 0.3);
     expect(ev.has('f14_bell_call')).toBe(true);
     expect(worldStopped(s)).toBe(false);
-    const ev2 = runEv(s, 3);
-    expect(ev2.has('f14_bell')).toBe(true);
+    // «Вдох» — за две секунды до удара: звук остановки ложится на удар.
+    let windAt = -1;
+    let bellAt = -1;
+    for (let t = 0; t < 3 * 60 && bellAt < 0; t++) {
+      // Укусы жука дают стоп-кадр удара — он растягивал бы замер.
+      s.hero.inv = 1;
+      stepSim(s, DT, NO_INPUT);
+      if (saw(s, 'f14_bell_wind')) windAt = t * DT;
+      if (saw(s, 'f14_bell')) bellAt = t * DT;
+    }
+    expect(windAt).toBeGreaterThanOrEqual(0);
+    expect(bellAt - windAt).toBeGreaterThan(1.9);
+    expect(bellAt - windAt).toBeLessThan(2.1);
     expect(worldStopped(s)).toBe(true);
     const mx = m.x;
     const hx = s.hero.x;
@@ -599,7 +679,11 @@ describe('этаж 14: время', () => {
       expect(Math.hypot(m.x - s.hero.x, m.y - s.hero.y)).toBeLessThan(2.5);
       s.hero.inv = 0;
       for (let t = 0; t < 90 && m.data.rwAt === undefined; t++)
-        stepSim(s, DT, { ...NO_INPUT, attack: true, aim: { x: m.x - s.hero.x, y: m.y - s.hero.y } });
+        stepSim(s, DT, {
+          ...NO_INPUT,
+          attack: true,
+          aim: { x: m.x - s.hero.x, y: m.y - s.hero.y },
+        });
       expect(m.data.rwAt).toBeDefined();
       const ax = m.data.ax!;
       const ay = m.data.ay!;
@@ -714,7 +798,9 @@ describe('этаж 14: время', () => {
     r.t = 0.05;
     const ev2 = runEv(s, 1.8, still);
     expect(ev2.has('f14_flipback')).toBe(true);
-    expect(s.mobs.filter((m) => r.mobs.has(m.id) && m.mode !== 'dying').length).toBeGreaterThanOrEqual(fallen);
+    expect(
+      s.mobs.filter((m) => r.mobs.has(m.id) && m.mode !== 'dying').length,
+    ).toBeGreaterThanOrEqual(fallen);
     // Якоря разбиты — павшие больше не встают; добил всех — решётки поднялись.
     for (const a of r.anchors) a.alive = false;
     const ev3 = new Set<string>();
@@ -741,7 +827,9 @@ describe('этаж 14: время', () => {
     expect(frozen.length).toBeGreaterThanOrEqual(4);
     const pos = frozen.map((m) => [m.x, m.y]);
     run(s, 3, still);
-    frozen.forEach((m, i) => expect(Math.hypot(m.x - pos[i][0], m.y - pos[i][1])).toBeLessThan(0.05));
+    frozen.forEach((m, i) =>
+      expect(Math.hypot(m.x - pos[i][0], m.y - pos[i][1])).toBeLessThan(0.05),
+    );
     expect(frozen.every((m) => m.mode === 'f14_frozen')).toBe(true);
     const knives = s.shots.filter((q) => fr.knives.some((k) => k.id === q.id));
     expect(knives.length).toBeGreaterThanOrEqual(4);
@@ -754,7 +842,9 @@ describe('этаж 14: время', () => {
     expect(ev.has('f14_frame_call')).toBe(true);
     const ev2 = runEv(s, 3, still);
     expect(ev2.has('f14_resume')).toBe(true);
-    expect(frozen.filter((m) => m.mode !== 'dying').every((m) => m.mode !== 'f14_frozen')).toBe(true);
+    expect(frozen.filter((m) => m.mode !== 'dying').every((m) => m.mode !== 'f14_frozen')).toBe(
+      true,
+    );
   });
 
   it('Полдень: стрелки метут площадь и бьют; в ступице безопасно', () => {
@@ -774,7 +864,8 @@ describe('этаж 14: время', () => {
     // Ступица: ни одна стрелка не достаёт.
     let hx = pz.cx;
     let hy = pz.cy;
-    if (!walkableTile(world.tiles[Math.floor(hy) * W + Math.floor(hx)])) [hx, hy] = floorNear(hx, hy);
+    if (!walkableTile(world.tiles[Math.floor(hy) * W + Math.floor(hx)]))
+      [hx, hy] = floorNear(hx, hy);
     expect(Math.hypot(hx - pz.cx, hy - pz.cy)).toBeLessThan(NOON.hub - 0.3);
     const ev2 = runEv(s, NOON.minPeriod * 1.2, (q) => {
       q.mobs = [];
@@ -800,12 +891,18 @@ describe('этаж 14: Повелитель часа — приёмы', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
       const { s } = lordAt(0.7, seed);
       let found = false;
+      let clapAt = -1;
+      let stopAt = -1;
       for (let t = 0; t < 40 * 60 && !found; t++) {
         immortal(s);
         stepSim(s, DT, NO_INPUT);
+        if (saw(s, 'f14_clap')) clapAt = t * DT;
+        if (saw(s, 'f14_stop')) stopAt = t * DT;
         found = s.events.some((e) => e.t === 'boss' && e.what === 'f14_knives');
       }
       expect(found).toBe(true);
+      // Хлопок — две секунды замаха: под него «вдох» звука остановки.
+      expect(Math.abs(stopAt - clapAt - LORD.clap)).toBeLessThan(0.1);
       const h = s.hero;
       const ks = s.shots.filter((q) => KNIFE_ANG.has(q.id) && q.vx === 0 && q.vy === 0);
       expect(ks.length).toBeGreaterThanOrEqual(LORD.knives - 3);
@@ -851,7 +948,8 @@ describe('этаж 14: Повелитель часа — приёмы', () => {
       let modeAt = '';
       const ev = runEv(s, LORD.ritual + 0.3, (q) => {
         q.hero.inv = 1;
-        if (!modeAt && q.events.some((e) => e.t === 'boss' && e.what === 'f14_ritual_stone')) modeAt = lord.mode;
+        if (!modeAt && q.events.some((e) => e.t === 'boss' && e.what === 'f14_ritual_stone'))
+          modeAt = lord.mode;
         return still(q);
       });
       if (cut) {

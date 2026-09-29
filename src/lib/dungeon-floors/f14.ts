@@ -134,7 +134,15 @@ export const F14_TOP = {
 /** Геометрия залов в местных координатах районов (та же, что в f14.py). */
 export const F14_GEO = {
   /** Зал шестерён: центр, радиусы колец, мест на кольце, проёмы. */
-  gear: { area: F14_MECH, x: 32.5, y: 21.5, r: [10, 6], slots: [60, 36], gaps: [4, 3], gapW: [4, 3] },
+  gear: {
+    area: F14_MECH,
+    x: 32.5,
+    y: 21.5,
+    r: [10, 6],
+    slots: [60, 36],
+    gaps: [4, 3],
+    gapW: [4, 3],
+  },
   /** Нижняя и верхняя колбы. */
   lower: { area: F14_SAND, x: 32, y: 83 },
   upper: { area: F14_SAND, x: 32, y: 35, rx: 16.5, ry: 15.5, neck: 49 },
@@ -200,7 +208,11 @@ const LEGEND_MECH: Record<string, LegendCell> = {
   '|': { tile: 'floor', mark: M.track, obj: { kind: 'deco', ref: 'f14_pendulum', solid: 0 } },
   // Место солдатика в строю и гири под лебёдкой — ставит сценарий.
   A: { tile: 'floor', mark: M.rank },
-  W: { tile: 'floor', mark: M.wspot, obj: { kind: 'deco', ref: 'f14_winch', solid: 0, flat: true } },
+  W: {
+    tile: 'floor',
+    mark: M.wspot,
+    obj: { kind: 'deco', ref: 'f14_winch', solid: 0, flat: true },
+  },
   '&': {
     tile: 'floor',
     mark: M.brass,
