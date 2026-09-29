@@ -4509,8 +4509,8 @@ function tlFan(ph: number): DTL {
       { hy: 2.4, lean: 0.24, hdx: 0.6, ax: -6, ay: -14.8, ang: 2.95, glow: 0.7, wide: 0.6 },
     ],
     [c - 3 / DFPS, { ang: 3.06, ay: -14.2, glow: 0.95, shake: 0.4 }, EZ.in2],
-    [c - 2 / DFPS, { ang: 2.25, ax: -2, ay: -17.6, back: 0, shake: 0, lean: 0.28 }, EZ.in2],
-    [c - 1 / DFPS, { ang: 0.95, ax: 3, ay: -19, lean: 0.32, hx: 1, nx: 5 }, EZ.lin],
+    [c - 2 / DFPS, { ang: 2.68, ax: -3.5, ay: -16.2, back: 0, shake: 0, lean: 0.28 }, EZ.in2],
+    [c - 1 / DFPS, { ang: 1.3, ax: 2, ay: -18.6, lean: 0.32, hx: 1, nx: 5 }, EZ.lin],
     [
       c,
       {
@@ -4571,8 +4571,8 @@ function tlFan(ph: number): DTL {
         e - 3 / DFPS,
         { ang: -2.72, ax: -1.4, ay: -30.2, hy: 1.6, lean: -0.08, glow: 0.95, shake: 0.4, dx: 0 },
       ],
-      [e - 2 / DFPS, { ang: -1.9, ax: 2, ay: -30, back: 0, shake: 0 }, EZ.in2],
-      [e - 1 / DFPS, { ang: -0.6, ax: 6, ay: -26 }, EZ.lin],
+      [e - 2 / DFPS, { ang: -2.3, ax: 0.5, ay: -30.5, back: 0, shake: 0 }, EZ.in2],
+      [e - 1 / DFPS, { ang: -1.0, ax: 5, ay: -28 }, EZ.lin],
       [
         e,
         {
@@ -4670,8 +4670,8 @@ function tlSweep(ph: number): DTL {
         shake: 0.35,
       },
     ],
-    [c - 2 / DFPS, { ang: -1.75, ax: 2, ay: -30, back: 0, shake: 0, lean: 0.05 }, EZ.in2],
-    [c - 1 / DFPS, { ang: -0.35, ax: 6, ay: -25, lean: 0.28, hx: 1.5, nx: 5 }, EZ.lin],
+    [c - 2 / DFPS, { ang: -2.15, ax: 1, ay: -30.5, back: 0, shake: 0, lean: 0.05 }, EZ.in2],
+    [c - 1 / DFPS, { ang: -0.7, ax: 5, ay: -27, lean: 0.28, hx: 1.5, nx: 5 }, EZ.lin],
     [
       c,
       {
@@ -5018,8 +5018,8 @@ function tlVolley(ph: number): DTL {
         cloak: 1.4,
       },
     ],
-    [c1 - 2 / DFPS, { ang: -1.6, ax: 2.5, ay: -31, back: 0, shake: 0 }, EZ.in2],
-    [c1 - 1 / DFPS, { ang: -0.3, ax: 7, ay: -25, lean: 0.3 }, EZ.lin],
+    [c1 - 2 / DFPS, { ang: -2.2, ax: 1, ay: -32, back: 0, shake: 0 }, EZ.in2],
+    [c1 - 1 / DFPS, { ang: -0.8, ax: 6, ay: -28, lean: 0.3 }, EZ.lin],
     [
       c1,
       {
@@ -5059,8 +5059,8 @@ function tlVolley(ph: number): DTL {
         hx: 1,
       },
     ],
-    [c2 - 2 / DFPS, { ang: 2.1, ax: -1, ay: -15, back: 0, shake: 0 }, EZ.in2],
-    [c2 - 1 / DFPS, { ang: 0.9, ax: 4, ay: -17.6 }, EZ.lin],
+    [c2 - 2 / DFPS, { ang: 2.4, ax: -2.5, ay: -14.8, back: 0, shake: 0 }, EZ.in2],
+    [c2 - 1 / DFPS, { ang: 1.2, ax: 3, ay: -16.6 }, EZ.lin],
     [
       c2,
       { ang: -0.76, ax: 8.5, ay: -25, lean: 0.35, hy: 1.2, dx: 1.8, sx: 1.03, sy: 0.98, moon: 0 },
@@ -5728,6 +5728,8 @@ interface BladeOpt {
   bury: boolean;
   /** Отростки (фаза ≥ 2), 0…1 — растут в сцене фазы. */
   tend: number;
+  /** Глаза распахнуты (техника «шесть глаз», сцена фазы): с красным белком. */
+  wide: boolean;
 }
 
 /** Меч из плоти: рукоять, цуба, лиловый клинок с глазами, отростки. */
@@ -5756,7 +5758,8 @@ function demonBlade(p: Px, lit: Px, hand: V, ang: number, len: number, o: BladeO
     }
     // Отростки — меч живой: качаются от времени.
     if (o.ph >= 2 && o.tend > 0 && i % 7 === 5 && i < len - 2) {
-      const sw = Math.sin(o.tt * 5 + i) * 0.45;
+      // Частота кратна циклу покоя (2,4 с): петля без скачка.
+      const sw = Math.sin(o.tt * ((TAU * 2) / 2.4) + i) * 0.45;
       const L1 = 2.9 * o.tend;
       const a1 = ang - Math.PI / 2 + 0.55 + sw;
       stroke(p, x, y, x + Math.cos(a1) * L1, y + Math.sin(a1) * L1, fl[2]);
@@ -5787,11 +5790,13 @@ function demonBlade(p: Px, lit: Px, hand: V, ang: number, len: number, o: BladeO
     }
     const iris = hot ? hx('#fff4c0') : hx('#ffd84a');
     const white = hot ? hx('#ff7a3a') : hx('#8a1020');
-    put(p, ax0, ay0, white);
-    put(p, ax1, ay1, white);
     put(p, x, y, iris);
     put(p, x - uy, y + ux, hx('#2a0a1a'));
     put(lit, x, y, iris);
+    // В покое — золотая точка со зрачком (как прежде), распахнутый — с белком.
+    if (!hot && !o.wide) return;
+    put(p, ax0, ay0, white);
+    put(p, ax1, ay1, white);
     if (hot) {
       put(lit, ax0, ay0, alpha(white, 0.85));
       put(lit, ax1, ay1, alpha(white, 0.85));
@@ -5821,6 +5826,7 @@ function fallenBlade(
     tt: 0,
     bury: true,
     tend: 1 - dis,
+    wide: false,
   });
 }
 
@@ -6021,13 +6027,38 @@ function demonAura(p: Px, lit: Px, k: number, tt: number): void {
   }
 }
 
-/** Луна копится на клинке (залп): полумесяц у острия растёт. */
+/**
+ * Луна копится на клинке (залп): у острия, со стороны изгиба, растёт тонкий
+ * серп лунного света, к нему стягиваются искры — это и есть снаряд.
+ */
 function bladeMoon(lit: Px, hand: V, ang: number, len: number, k: number): void {
   if (k <= 0.05) return;
   const pts = bladePts(hand, ang, len);
-  const c = toC(pts[Math.round(len * 0.7)]);
-  const R = 1.5 + 3 * k;
-  crescentMark(lit, c[0], c[1], R, ang - 2.2, ang + 0.2, alpha(hx('#fff6d8'), 0.5 + 0.45 * k));
+  const tip = toC(pts[len]);
+  const cx = tip[0] + Math.sin(ang) * 3.2 - Math.cos(ang) * 2;
+  const cy = tip[1] - Math.cos(ang) * 3.2 - Math.sin(ang) * 2;
+  const R = 1.8 + 2.4 * k;
+  // Серп: круг минус круг, сдвинутый к клинку — рога смотрят на клинок.
+  const ox = -Math.sin(ang) * R * 0.55;
+  const oy = Math.cos(ang) * R * 0.55;
+  const col = alpha(hx('#fff2c8'), 0.55 + 0.4 * k);
+  for (let y = Math.floor(cy - R - 1); y <= Math.ceil(cy + R + 1); y++)
+    for (let x = Math.floor(cx - R - 1); x <= Math.ceil(cx + R + 1); x++) {
+      const d0 = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      const d1 = Math.hypot(x + 0.5 - cx - ox, y + 0.5 - cy - oy);
+      if (d0 <= R && d1 > R * 0.82)
+        lit.set(x, y, d0 > R - 0.9 ? col : alpha(hx('#d8c0ff'), 0.5 * k));
+    }
+  // Искры стягиваются к серпу.
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * TAU + k * 3;
+    const r = 3 + (1 - k) * 9;
+    lit.set(
+      Math.round(cx + Math.cos(a) * r),
+      Math.round(cy + Math.sin(a) * r),
+      alpha(WHITE, 0.4 + 0.5 * k),
+    );
+  }
 }
 
 /** Блик (иай): искра бежит по кромке от цубы к острию, у острия — крест. */
@@ -6187,6 +6218,7 @@ function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
     tt: cx.tt,
     bury: dp.bury > 0.5,
     tend: 1,
+    wide: dp.wide > 0.5,
   };
   const withBlade = dp.fb < 0.5;
   // Клинок в кадре (горизонтальный рез — в ракурсе).
@@ -6241,6 +6273,15 @@ function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
   outlineIn(p, INK);
   const eye = drawFace(p, rig, BOSS_ST, false);
   if (!cx.dead || dp.dis < 0.5) faceEyes(p, lit, C(j.head), dp.wide, dp.squint);
+  if (dp.mouth > 0.7) {
+    // Рёв: пасть раскрыта, клык.
+    const [hxp, hyp] = C(j.head);
+    const mx = Math.round(hxp + D_HR * 0.5);
+    const my = Math.round(hyp + D_HR * 0.5);
+    p.rect(mx, my, mx + 1, my + 2, hx('#2a0a0a'));
+    p.set(mx + 1, my + 1, hx('#6a1414'));
+    p.set(mx, my, hx('#f4ecd8'));
+  }
   // Поверх: след клинка, луна на клинке и на острие, аура.
   if (cx.trail.length > 1 && withBlade)
     drawSmear(
