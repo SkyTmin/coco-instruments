@@ -3049,7 +3049,8 @@ registerBrain('f11_pylon', {
     m.kx = 0;
     m.ky = 0;
     m.tele = null;
-    if (m.mode !== 'f11_pylon' && m.mode !== 'dying') m.mode = 'f11_pylon';
+    // Уход (купол снят сценарием) доигрывает движок — не возвращать в пост.
+    if (m.mode !== 'f11_pylon' && m.mode !== 'dying' && m.mode !== 'escape') m.mode = 'f11_pylon';
   },
 });
 

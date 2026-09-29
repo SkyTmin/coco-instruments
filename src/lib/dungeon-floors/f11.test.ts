@@ -549,6 +549,22 @@ describe('этаж 11: арена', () => {
     }
     expect(b.data.shield).toBe(0);
     expect(stag).toBe(true);
+    // Купол встал снова, а страж ушёл в «Перегрев» — пилоны уходят, а не
+    // остаются стоять пустыми.
+    for (let t = 0; t < 20 * 60 && !s.mobs.some((m) => m.kind === 'f11_pylon' && m.mode === 'f11_pylon'); t++) {
+      s.hero.hp = s.stats.maxHp;
+      stepSim(s, DT, NO_INPUT);
+    }
+    expect(s.mobs.some((m) => m.kind === 'f11_pylon' && m.mode === 'f11_pylon')).toBe(true);
+    for (let t = 0; t < 4 * 60 && b.phase < 3; t++) {
+      s.hero.hp = s.stats.maxHp;
+      if (k!.mode !== 'f11_shift' && k!.mode !== 'f11_stagger') k!.hp = k!.maxHp * 0.45;
+      b.data.shield = 0;
+      stepSim(s, DT, NO_INPUT);
+    }
+    expect(b.phase).toBe(3);
+    for (let t = 0; t < 60; t++) stepSim(s, DT, NO_INPUT);
+    expect(s.mobs.some((m) => m.kind === 'f11_pylon')).toBe(false);
   });
 });
 
