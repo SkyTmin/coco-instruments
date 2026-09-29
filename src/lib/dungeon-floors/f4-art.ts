@@ -3013,7 +3013,7 @@ function wakeRig(base: IdolRig, t: number): IdolRig {
 // ---- Кадр --------------------------------------------------------------------
 
 /** Кеш частей (торс, голова, неподвижное) — их мало, кадров из них — сотни. */
-const idolParts = new Map<string, { p: Px; box: number[] }>();
+const idolParts = frameLRU<{ p: Px; box: number[] }>(90);
 function idolPart(key: string, make: (p: OPx) => void): { p: Px; box: number[] } {
   let got = idolParts.get(key);
   if (!got) {
@@ -3194,33 +3194,47 @@ function paintIdolBody(r: IdolRig, cracks: number, tint: RGBA | null = null, tk 
  */
 function paintSmear(p: OPx, sm: number[]): void {
   const [side, k0, k1, fade] = sm;
-  const acc = new Map<number, number>();
-  const core = new Map<number, number>();
-  const put = (m: Map<number, number>, x: number, y: number, a: number) => {
-    const key = Math.round(y) * 1000 + Math.round(x);
-    if ((m.get(key) ?? 0) < a) m.set(key, a);
+  const W = ID_W;
+  const acc = new Float32Array(ID_W * ID_H);
+  const core = new Float32Array(ID_W * ID_H);
+  const put = (m: Float32Array, x: number, y: number, a: number) => {
+    const X = Math.round(x) + ID_OX;
+    const Y = Math.round(y) + ID_OY;
+    if (X < 0 || Y < 0 || X >= W || Y >= ID_H) return;
+    const i = Y * W + X;
+    if (m[i] < a) m[i] = a;
   };
-  for (let k = k0; k <= k1 + 1e-6; k += 0.015) {
+  for (let k = k0; k <= k1 + 1e-6; k += 0.02) {
     const [px, py] = slamPath(k);
     const x = side > 0 ? px : 64 - px;
     const f = (k - k0) / Math.max(0.01, k1 - k0);
     const w = 1.2 + f * 3.4;
     const a = (50 + 150 * f) * fade;
-    for (let dy = -Math.ceil(w); dy <= Math.ceil(w); dy++)
-      for (let dx = -Math.ceil(w); dx <= Math.ceil(w); dx++)
-        if (dx * dx + dy * dy <= w * w)
-          put(acc, x + dx, py + dy, a * (1 - Math.hypot(dx, dy) / (w + 1)) + a * 0.3);
+    const c = Math.ceil(w);
+    for (let dy = -c; dy <= c; dy++)
+      for (let dx = -c; dx <= c; dx++) {
+        const d2 = dx * dx + dy * dy;
+        if (d2 <= w * w) put(acc, x + dx, py + dy, a * (1 - Math.sqrt(d2) / (w + 1)) + a * 0.3);
+      }
     if (f > 0.25) put(core, x, py, (120 + 135 * f) * fade);
   }
-  for (const [key, a] of acc) {
-    const y = Math.floor(key / 1000);
-    const x = key - y * 1000;
-    p.set(x, y, hex('#d8d0bc', Math.min(210, Math.round(a))));
-  }
-  for (const [key, a] of core) {
-    const y = Math.floor(key / 1000);
-    const x = key - y * 1000;
-    p.set(x, y, hex('#fff6e0', Math.min(235, Math.round(a))));
+  const dust = hex('#d8d0bc');
+  const hot = hex('#fff6e0');
+  for (let i = 0; i < acc.length; i++) {
+    if (acc[i] > 0)
+      Px.prototype.set.call(p, i % W, Math.floor(i / W), [
+        dust[0],
+        dust[1],
+        dust[2],
+        Math.min(210, Math.round(acc[i])),
+      ] as RGBA);
+    if (core[i] > 0)
+      Px.prototype.set.call(p, i % W, Math.floor(i / W), [
+        hot[0],
+        hot[1],
+        hot[2],
+        Math.min(235, Math.round(core[i])),
+      ] as RGBA);
   }
 }
 
@@ -4577,20 +4591,4 @@ registerItemArt('f4_ration', () => {
 export type { Mob, WorldObj };
 
 // TEMP-PERF
-export const __f4dbg = {
-  paintArm,
-  outlineRaw,
-  blit,
-  ARM,
-  paintCloth,
-  paintIdolBody,
-  paintIdolLit,
-  restRig,
-  paintThrone,
-  paintLegs,
-  paintTorso,
-  paintHead,
-  OPx,
-  paintStatueRig,
-  SP,
-};
+export const __f4dbg = { idolFrames, idolLits, statueFrames, statueLits };
