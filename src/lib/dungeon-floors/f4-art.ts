@@ -1607,8 +1607,8 @@ interface StatueMem {
   now: number;
 }
 const statueMem = new Map<number, StatueMem>();
-const statueFrames = frameLRU<HTMLCanvasElement>(320);
-const statueLits = frameLRU<HTMLCanvasElement | null>(120);
+const statueFrames = frameLRU<HTMLCanvasElement>(240);
+const statueLits = frameLRU<HTMLCanvasElement | null>(100);
 
 function statueKey(r: StatueRig): string {
   const R = Math.round;
@@ -3862,8 +3862,9 @@ const idolMem = new Map<number, IdolMem>();
 /** Когда кончится сцена смерти — до тех пор трон «разбит» не рисуется. */
 let idolDeathEnd = -1;
 
-const idolFrames = frameLRU<HTMLCanvasElement>(260);
-const idolLits = frameLRU<HTMLCanvasElement | null>(150);
+/** Бюджет — 400 кадров на босса: 300 тела и 100 света (свет дешёвый — 0,1 мс). */
+const idolFrames = frameLRU<HTMLCanvasElement>(300);
+const idolLits = frameLRU<HTMLCanvasElement | null>(100);
 
 /** Числа сценария, что мозг кладёт для рисунка (`v…`), с запасом на их отсутствие. */
 function idolState(m: Mob, pose: MobPose, look = 0): IdolRig {
@@ -4016,8 +4017,11 @@ registerMobPainter('f4_idol', (m, pose) => {
 });
 
 /**
- * Прогрев: всё, что игрок видит в первой фазе, — покой (цикл 4,8 с на 10 к/с),
- * заповеди трёх видов, лик открыт, взор, истощение, кара. Кадр на шаг.
+ * Прогрев: части тела с трещинами всех фаз и то, что игрок видит в первой
+ * фазе, — заповеди, лик открыт, взор, истощение, кара (через кадр: части
+ * тела готовы, соседний кадр потом — одна сборка). Покой (цикл 4,8 с на
+ * 10 к/с) — последним: кеш вытесняет давно не нужное, а покой нужен чаще
+ * всего. Всего ~250 кадров — в пределе кеша. Кадр на шаг.
  */
 registerMobWarm('f4_idol', function* () {
   const m = { id: -1, mode: 'roar', t: 0, flash: 0, x: 0, y: 0, data: {} } as unknown as Mob;
@@ -4037,30 +4041,25 @@ registerMobWarm('f4_idol', function* () {
     pose.now = now;
     MOB_PAINTERS.get('f4_idol')?.(m, pose);
   };
-  for (let i = 0; i < 48; i++) {
-    paint({ st: 0, vT0: -10 }, 10, i / 10);
+  // Трещины фаз: торс, голова и ноги с 1…6 трещинами.
+  for (let c = 1; c <= 6; c++) {
+    paint({ st: 0, vT0: -10, cracks: c }, 10, 0);
     yield;
   }
-  for (const rule of [1, 2]) {
-    for (let i = 0; i < 3.8 * 24; i += i < 16 || i > 3.8 * 24 - 40 ? 1 : 3) {
-      paint({ st: 1, vT0: 0, vDur: 3.8, vJudge: 2.3, vRule: rule }, 2 + i / 24, i / 24);
+  const run = function* (data: Record<string, number>, dur: number, stride: number) {
+    for (let i = 0; i < dur * 24; i += stride) {
+      paint(data, 10 + i / 24, i / 24);
       yield;
     }
-  }
-  for (let i = 0; i < 5 * 24; i += i < 12 || i > 5 * 24 - 12 ? 1 : 2) {
-    paint({ st: 2, vT0: 0, vDur: 5, vRule: 1 }, i / 24, i / 24);
-    yield;
-  }
-  for (let i = 0; i < 3.2 * 24; i++) {
-    paint({ st: 3, vT0: 0, vDur: 3.2, vWarn: 2.1 }, i / 24, i / 24);
-    yield;
-  }
-  for (let i = 0; i < 3.6 * 24; i += i < 14 || i > 3.6 * 24 - 16 ? 1 : 2) {
-    paint({ st: 4, vT0: 0, vDur: 3.6 }, i / 24, i / 24);
-    yield;
-  }
-  for (let i = 0; i < 1.1 * 24; i++) {
-    paint({ st: 5, vT0: 0, vDur: 1.1, vRule: 1 }, i / 24, i / 24);
+  };
+  yield* run({ st: 1, vT0: 10, vDur: 3.8, vJudge: 2.3, vRule: 1 }, 3.8, 2);
+  yield* run({ st: 1, vT0: 10, vDur: 3.8, vJudge: 2.3, vRule: 2 }, 3.8, 2);
+  yield* run({ st: 2, vT0: 10, vDur: 5, vRule: 1 }, 5, 3);
+  yield* run({ st: 3, vT0: 10, vDur: 3.2, vWarn: 2.1 }, 3.2, 2);
+  yield* run({ st: 4, vT0: 10, vDur: 3.6 }, 3.6, 3);
+  yield* run({ st: 5, vT0: 10, vDur: 1.1, vRule: 1 }, 1.1, 2);
+  for (let i = 0; i < 48; i++) {
+    paint({ st: 0, vT0: -10 }, 10, i / 10);
     yield;
   }
 });
@@ -4682,6 +4681,3 @@ registerItemArt('f4_ration', () => {
 
 // Пустые обращения — чтобы импорт типов не терялся при чистке.
 export type { Mob, WorldObj };
-
-// TEMP-PERF
-export const __f4dbg = { idolFrames, idolLits, statueFrames, statueLits };
