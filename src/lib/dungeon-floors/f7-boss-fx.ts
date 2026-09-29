@@ -143,9 +143,18 @@ class Pen {
     this.qx = Math.round((px - wx) * sc) / sc;
     this.qy = Math.round((py - wy) * sc) / sc;
   }
+  /** Цвет и прозрачность; строку цвета холст разбирает заново на каждое присвоение — повтор пропускаем. */
   col(c: string, a = 1): void {
-    this.g.fillStyle = c;
+    if (c !== this.last) {
+      this.g.fillStyle = c;
+      this.last = c;
+    }
     this.g.globalAlpha = a < 0 ? 0 : a > 1 ? 1 : a;
+  }
+  private last = "";
+  /** После `restore()` холст вернул прежний цвет — забыть запомненный. */
+  reset(): void {
+    this.last = "";
   }
   dot(x: number, y: number, w = 1, h = 1): void {
     this.g.fillRect(Math.floor(x) + this.qx, Math.floor(y) + this.qy, w, h);
@@ -653,6 +662,56 @@ function shards(p: Pen, s: ShardSpec, age: number, time: number, layer: 'air' | 
   }
 }
 
+/**
+ * Звезда удара по пикселям: n лучей радиуса r (у основания — 0,35 r). Кадр
+ * контакта: белая сердцевина и стеклянный ореол, за 2–3 кадра сжимается.
+ * Строки сливаются в отрезки — вызовов рисования по числу строк.
+ */
+function starRows(p: Pen, cx: number, cy: number, r: number, n: number, rot: number): void {
+  const R = Math.ceil(r) + 1;
+  const x0 = Math.floor(cx);
+  const y0 = Math.floor(cy);
+  for (let y = -R; y <= R; y++) {
+    let run = -1;
+    for (let x = -R; x <= R + 1; x++) {
+      let on = false;
+      if (x <= R) {
+        const dx = x0 + x + 0.5 - cx;
+        const dy = y0 + y + 0.5 - cy;
+        const d = Math.hypot(dx, dy);
+        if (d <= r) {
+          const th = Math.atan2(dy, dx) - rot;
+          const spike = Math.pow(Math.abs(Math.cos((th * n) / 2)), 4);
+          on = d <= r * (0.35 + 0.65 * spike);
+        }
+      }
+      if (on && run < 0) run = x;
+      if (!on && run >= 0) {
+        p.row(y0 + y, x0 + run, x0 + x - 1);
+        run = -1;
+      }
+    }
+  }
+}
+/** Вспышка контакта: звезда `r` за `T` с сжимается, белая → стекло. */
+function impactStar(
+  p: Pen,
+  x: number,
+  y: number,
+  age: number,
+  T: number,
+  r: number,
+  rot: number,
+  vio = false,
+): void {
+  if (age >= T) return;
+  const q = age / T;
+  p.col(vio ? C.v2 : C.cyan, 0.8 * (1 - q));
+  starRows(p, x, y, r * (1.25 - 0.55 * q), 8, rot + 0.2);
+  p.col(q < 0.45 ? C.white : vio ? C.v3 : C.hot, 1);
+  starRows(p, x, y, r * (1 - 0.6 * q), 4, rot);
+}
+
 /** Блёстки: вспыхивают по очереди и гаснут на месте. */
 function glints(
   p: Pen,
@@ -694,6 +753,7 @@ function floorFlash(p: Pen, x: number, y: number, age: number, T: number, rMax: 
   p.col(C.g1, 0.35 * (1 - q));
   ring(p, x, y, 3 + rMax * 0.78 * eOut2(q));
   p.g.restore();
+  p.reset();
 }
 
 /** Пыль клубами: из (x, y) по направлению ± разброс, растёт и тает. */
@@ -1384,11 +1444,7 @@ function cutLit(fx: Fx): void {
   );
   airCrack(p, ck, hx0, hy0, age + 0.025, 0.05, big ? 0.24 : 0.18, c.sd);
   // Кадр контакта: искра и кольцо звона в точке удара.
-  if (age < 0.09) {
-    const im = glintImg(age < 0.045 ? 4 : 3, 0);
-    p.col('#000', 1);
-    p.img(im, hx0 - im.width / 2, hy0 - im.height / 2);
-  }
+  impactStar(p, hx0, hy0, age, 0.09, big ? 9 : 7, c.ang);
   if (age < 0.16) {
     const q = age / 0.16;
     p.col(q < 0.4 ? C.white : C.cyan, 0.9 * (1 - q));
@@ -1437,6 +1493,7 @@ function cutFloor(fx: Fx): void {
     0.28,
   );
   p.g.restore();
+  p.reset();
   shards(p, cutShards(c), age, time, 'ground');
 }
 
@@ -1496,13 +1553,10 @@ function heavyLit(fx: Fx): void {
   const { p, age, time } = fx;
   crescent(p, h.cx, h.cy - LIFT, h.ang, h.arc, h.R, 1, age, 0.08, 0.18, 8, 18);
   // Кадр контакта: звезда удара в точке, где клинок вошёл в пол.
+  impactStar(p, h.bx, h.by - 3, age, 0.13, 15, h.ang);
   if (age < 0.12) {
-    const q = age / 0.12;
-    const im = glintImg(q < 0.35 ? 4 : q < 0.7 ? 3 : 2, 0);
-    p.col('#000', 1);
-    p.img(im, h.bx - im.width / 2, h.by - 3 - im.height / 2);
-    p.col(C.white, 0.9 * (1 - q));
-    ring(p, h.bx, h.by - 2, 5 + 6 * q);
+    p.col(C.white, 0.9 * (1 - age / 0.12));
+    ring(p, h.bx, h.by - 2, 6 + 8 * (age / 0.12));
   }
   // Ударная волна — рваное кольцо от точки удара.
   if (age < 0.36) {
@@ -1682,11 +1736,7 @@ registerZonePainter(
     const a = z.vA ?? 0;
     const big = (z.vK ?? 0) > 0;
     const y = cy - 8;
-    if (age < 0.1) {
-      const im = glintImg(age < 0.05 ? 4 : 3, 0);
-      p.col('#000', 1);
-      p.img(im, cx - im.width / 2, y - im.height / 2);
-    }
+    impactStar(p, cx, y, age, 0.1, big ? 12 : 10, a);
     // Трещина вытянута по ходу выпада: длинная вперёд, короткие вбок и назад.
     const ck = crackOf(`prc|${+big}|${sd % 503}`, sd, [
       [a + (hash(sd, 1, 1) - 0.5) * 0.3, big ? 16 : 13, 2],
@@ -1739,11 +1789,7 @@ registerZonePainter(
     const a = z.vA ?? 0;
     const x = cx + Math.cos(a) * 8;
     const y = cy + Math.sin(a) * 8 - 7;
-    if (age < 0.1) {
-      const im = glintImg(age < 0.05 ? 4 : 3, 0);
-      p.col('#000', 1);
-      p.img(im, x - im.width / 2, y - im.height / 2);
-    }
+    impactStar(p, x, y, age, 0.1, 10, a + Math.PI);
     const ck = crackOf(
       `wal|${sd % 509}`,
       sd,
@@ -1780,11 +1826,7 @@ registerZonePainter(
       p.col(q < 0.3 ? C.white : C.cyan, 1 - q);
       p.line(cx - nx * L, y - ny * L, cx + nx * L, y + ny * L);
     }
-    if (age < 0.1) {
-      const im = glintImg(age < 0.05 ? 4 : 3, 0);
-      p.col('#000', 1);
-      p.img(im, cx - im.width / 2, y - im.height / 2);
-    }
+    impactStar(p, cx, y, age, 0.1, 10, a + 0.4);
     if (age < 0.22) {
       const q = age / 0.22;
       p.col(C.hot, 0.8 * (1 - q));
@@ -1878,11 +1920,7 @@ registerZonePainter(
       p.col(j === 0 ? C.white : C.v3, (j === 0 ? 1 : 0.6) * (1 - q));
       ring(p, cx, cy, r, inside);
     }
-    if (age < 0.08) {
-      const im = glintImg(3, 2);
-      p.col('#000', 1);
-      p.img(im, cx + Math.cos(a) * 6 - im.width / 2, cy + Math.sin(a) * 6 - 14 - im.height / 2);
-    }
+    impactStar(p, cx + Math.cos(a) * 5, cy + Math.sin(a) * 5 - 15, age, 0.1, 8, a, true);
   }),
 );
 
@@ -2152,11 +2190,7 @@ registerZonePainter(
       p.col(tint, 0.7 * (1 - q));
       ring(p, cx, cy - 4, r - 3, (_a, i) => hash(i >> 3, sd, 13) > 0.45);
     }
-    if (age < 0.14) {
-      const im = glintImg(4, ph === 2 ? 2 : ph === 3 ? 1 : 0);
-      p.col('#000', 1);
-      p.img(im, cx - im.width / 2, cy - 16 - im.height / 2);
-    }
+    impactStar(p, cx, cy - 16, age, 0.16, 16, 0.3, ph === 2);
     const ck = crackOf(
       `phl|${ph}|${sd % 1019}`,
       sd + 11 * ph,
@@ -2222,10 +2256,8 @@ registerZonePainter(
       const q = age / 0.16;
       p.col(C.white, 1 - q * 0.5);
       fillSector(p, cx, y, 0, 7 - 4 * q, 0, TAU);
-      const im = glintImg(4, 2);
-      p.col('#000', 1);
-      p.img(im, cx - im.width / 2, y - im.height / 2);
     }
+    impactStar(p, cx, y, age, 0.2, 22, 0.15);
     const ck = crackOf(`dai|${sd % 1039}`, sd, starBranches(sd, 10, 0.1, 10, 24, 2), 0.5, 0.35);
     airCrack(p, ck, cx, y, age + 0.03, 0.08, 0.38, sd);
     glints(
@@ -2319,9 +2351,7 @@ registerImpactPainter('f7_copyburst', {
     const sd = seedOf(rec.x, rec.y);
     if (age < 0.12) {
       const q = age / 0.12;
-      const im = glintImg(q < 0.5 ? 4 : 3, 0);
-      p.col('#000', 1);
-      p.img(im, cx - im.width / 2, cy - 10 - im.height / 2);
+      impactStar(p, cx, cy - 10, age, 0.12, 12, 0.4);
       p.col(C.white, 0.9 * (1 - q));
       fillSector(p, cx, cy - 10, 0, 5 * (1 - q) + 1, 0, TAU);
     }
@@ -2479,6 +2509,8 @@ registerImpactPainter('f7_shardline', {
       p.line(cx + nx, y0 + ny, cx + ux * L + nx, y0 + uy * L + ny);
       p.line(cx - nx, y0 - ny, cx + ux * L - nx, y0 + uy * L - ny);
     }
+    // Зеркало лопается — из него вырывается залп.
+    impactStar(p, cx, y0, age, 0.1, 9, a);
     // След залпа по полосе гаснет за ним.
     const head = Math.min(L, (age + 0.03) * VOLLEY_V);
     const fl = 1 - k01(age / 0.35);
