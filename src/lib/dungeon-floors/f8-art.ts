@@ -4432,7 +4432,7 @@ function tlRoar(): DTL {
     [1.2, { glow: 0.8, halo: 0.7, hairUp: 0.55, cloak: 2, shake: 0.35 }, EZ.lin],
     [1.6, { ...GUARD, glow: 0.2 }, EZ.io],
   ]);
-  return { keys, dur: 1.6, post: shaken, trail: [[0.36, 0.62]], hits: [] };
+  return { keys, dur: 1.6, post: shaken, trail: [], hits: [] };
 }
 
 /**
@@ -5720,50 +5720,64 @@ function fallenBlade(
   });
 }
 
-/**
- * След клинка: серп между прошлыми положениями клинка (внешние 55%),
- * новое — лунно-белое, старое — лиловое и прозрачнее.
- */
-const SMEAR_C = [
-  alpha(hx('#fffaf0'), 0.95),
-  alpha(hx('#f4e8ff'), 0.85),
-  alpha(hx('#d8c0ff'), 0.72),
-  alpha(hx('#b48cf0'), 0.58),
-  alpha(hx('#8a5ad0'), 0.42),
-  alpha(hx('#6a3ab0'), 0.3),
-  alpha(hx('#4a2a90'), 0.2),
-];
-
 interface BladeAt {
   hand: V;
   ang: number;
   len: number;
 }
 
+/** Точка клинка на доле длины `k` (с изгибом катаны; за остриём — продолжение). */
+function bladeAtK(b: BladeAt, k: number): V {
+  const ux = Math.cos(b.ang);
+  const uy = Math.sin(b.ang);
+  const i = b.len * k;
+  const bend = Math.min(1, k) ** 2 * 2;
+  return [b.hand[0] + ux * i + uy * bend, b.hand[1] + uy * i - ux * bend];
+}
+
+const SMEAR_HEAD = hx('#fff8ec');
+const SMEAR_BODY = hx('#d6c0ff');
+const SMEAR_TAIL = hx('#6a3ab8');
+
+/**
+ * След клинка — серп: вдоль пути острия полоса, толстая у свежего края и
+ * сходящая на нет к хвосту; свежее — лунно-белое, хвост — лиловый и
+ * прозрачный. По кромке — белая нить. Выборки — новые первыми.
+ */
 function drawSmear(lit: Px, s: BladeAt[]): void {
-  const edge = (b: BladeAt, k: number): V => {
-    const pts = bladePts(b.hand, b.ang, b.len);
-    const i = Math.max(0, Math.min(b.len, Math.round(b.len * k)));
-    return pts[i];
-  };
+  const n = s.length;
+  if (n < 2) return;
+  const tip: V[] = s.map((b) => toC(bladeAtK(b, 1.03)));
+  // Где начинается «живая» часть: свежие выборки, пока остриё ещё идёт.
+  let moving = false;
+  for (let i = 0; i < n - 1; i++)
+    if (Math.hypot(tip[i][0] - tip[i + 1][0], tip[i][1] - tip[i + 1][1]) >= 1.2) moving = true;
+  if (!moving) return;
   // Старое — сперва, новое — поверх.
-  for (let i = s.length - 2; i >= 0; i--) {
-    const a = s[i];
-    const b = s[i + 1];
-    const ta = edge(a, 1.02);
-    const tb = edge(b, 1.02);
-    if (Math.hypot(ta[0] - tb[0], ta[1] - tb[1]) < 1.4) continue;
-    const ia = edge(a, 0.45);
-    const ib = edge(b, 0.45);
-    const col = SMEAR_C[Math.min(SMEAR_C.length - 1, i)];
-    poly(lit, [toC(ta), toC(tb), toC(ib), toC(ia)], col);
+  for (let i = n - 2; i >= 0; i--) {
+    const ta = tip[i];
+    const tb = tip[i + 1];
+    if (Math.hypot(ta[0] - tb[0], ta[1] - tb[1]) < 1.2) continue;
+    const a0 = i / (n - 1);
+    const a1 = (i + 1) / (n - 1);
+    const thick = (a: number) => 0.06 + 0.5 * (1 - a) ** 1.6;
+    const ia = toC(bladeAtK(s[i], 1 - thick(a0)));
+    const ib = toC(bladeAtK(s[i + 1], 1 - thick(a1)));
+    const u = (a0 + a1) / 2;
+    const col =
+      u < 0.18
+        ? alpha(SMEAR_HEAD, 0.9)
+        : u < 0.5
+          ? alpha(mixc(SMEAR_HEAD, SMEAR_BODY, (u - 0.18) / 0.32), 0.8 - (u - 0.18) * 0.6)
+          : alpha(mixc(SMEAR_BODY, SMEAR_TAIL, (u - 0.5) / 0.5), 0.6 - (u - 0.5) * 0.8);
+    poly(lit, [ta, tb, ib, ia], col);
   }
-  // Кромка — тонкая яркая нить по пути острия (три новых отрезка).
-  for (let i = 0; i < Math.min(3, s.length - 1); i++) {
-    const ta = toC(edge(s[i], 1.04));
-    const tb = toC(edge(s[i + 1], 1.04));
-    if (Math.hypot(ta[0] - tb[0], ta[1] - tb[1]) < 1.4) continue;
-    stroke(lit, ta[0], ta[1], tb[0], tb[1], alpha(WHITE, 0.95 - i * 0.25));
+  // Кромка — тонкая белая нить по пути острия (свежая треть следа).
+  for (let i = 0; i < Math.ceil((n - 1) / 3); i++) {
+    const ta = tip[i];
+    const tb = tip[i + 1];
+    if (Math.hypot(ta[0] - tb[0], ta[1] - tb[1]) < 1.2) continue;
+    stroke(lit, ta[0], ta[1], tb[0], tb[1], alpha(WHITE, 0.95 - i * 0.15));
   }
 }
 
@@ -5802,7 +5816,7 @@ function faceEyes(p: Px, lit: Px, head: V, wide: number, squint: number): void {
 /** Ореол-полумесяц за головой: растёт с фазой, горит в технике. */
 function demonHalo(p: Px, lit: Px, head: V, ph: number, halo: number): void {
   const [hxp, hyp] = head;
-  const R = D_HR * (2.35 + ph * 0.15) + halo * 1.2;
+  const R = D_HR * (2.35 + ph * 0.15) + Math.round(halo * 1.5);
   const col = ph >= 2 ? hx('#ffe08a') : GILT[1];
   crescentMark(
     p,
@@ -5813,7 +5827,8 @@ function demonHalo(p: Px, lit: Px, head: V, ph: number, halo: number): void {
     Math.PI * 1.45,
     alpha(col, ph >= 3 ? 0.95 : 0.7),
   );
-  const a = (ph >= 2 ? 0.35 : 0.18) + 0.6 * clamp01(halo);
+  // Горит поверх темноты только в технике (и чуть — с третьей фазы).
+  const a = (ph >= 3 ? 0.25 : 0) + 0.65 * clamp01(halo);
   if (a > 0.05)
     crescentMark(
       lit,
@@ -6165,7 +6180,7 @@ function demonFrame(q: DReq): MobFrame {
   // След клинка — только на отрезках удара: восемь выборок назад по 1/72 с.
   const trail: DP[] = [];
   if (s.tl && s.tl.trail.some(([a, b]) => t >= a && t <= b))
-    for (let k = 0; k < 8; k++) trail.push(s.at(t - k / 72));
+    for (let k = 0; k < 12; k++) trail.push(s.at(t - k / 120));
   const d = demonDraw(dp, {
     ph: q.ph,
     len: bladeLen8(q.ph),
