@@ -52,9 +52,9 @@ const css = (c: RGBA, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 const INK = hx('#10101a');
 const WHITE = hx('#ffffff');
 const GOLD = hx('#ffcc40');
-const TAU = Math.PI * 2;
-const TS = 16;
-const MAP_W = 64;
+export const TAU = Math.PI * 2;
+export const TS = 16;
+export const MAP_W = 64;
 
 /** Четыре тона формы: тень, основа, свет, блик. */
 type Tones = [RGBA, RGBA, RGBA, RGBA];
@@ -3362,8 +3362,8 @@ registerCellPainter(F7_HALL, painterFor('h'));
 // Рисуют готовые картинки из кеша; векторное — только простые фигуры.
 // ---------------------------------------------------------------------------
 
-type ZoneX = (Zone | Strike) & Record<string, unknown>;
-const zk = (z: ZoneX) => {
+export type ZoneX = (Zone | Strike) & Record<string, unknown>;
+export const zk = (z: ZoneX) => {
   const warn = (z.warn as number | undefined) ?? 0;
   const life = (z as Zone).life ?? warn;
   return Math.max(0, Math.min(1, z.t / Math.max(0.01, warn || life)));
@@ -3646,53 +3646,6 @@ registerZonePainter('f7_reflect', (g, z0, px, py) => {
   return true;
 });
 
-// Тень настоящего Отражения: длинная, от люстры (в фазе теней свет только там).
-registerZonePainter('f7_trueshadow', (g, z0, px, py) => {
-  const z = z0 as ZoneX;
-  const sim = z.sim as Sim | undefined;
-  const m = sim?.mobs.find((q) => q.id === z.mob);
-  if (!m || (m.data.ghost ?? 0) > 0 || m.mode === 'dying') return true;
-  const lx = z.lx as number;
-  const ly = z.ly as number;
-  const a = Math.atan2(m.y - ly, m.x - lx);
-  const d = Math.hypot(m.x - lx, m.y - ly);
-  const len = (1.8 + d * 0.22) * TS;
-  g.save();
-  g.translate(Math.round(px), Math.round(py + 2));
-  g.rotate(a);
-  // Силуэт тени: ноги у тела, к концу — голова и плечи.
-  g.fillStyle = 'rgba(4,2,10,0.62)';
-  g.beginPath();
-  g.moveTo(0, -3);
-  g.lineTo(len * 0.7, -5);
-  g.lineTo(len * 0.86, -3.5);
-  g.lineTo(len, -2);
-  g.lineTo(len, 2);
-  g.lineTo(len * 0.86, 3.5);
-  g.lineTo(len * 0.7, 5);
-  g.lineTo(0, 3);
-  g.closePath();
-  g.fill();
-  g.beginPath();
-  g.ellipse(len * 0.93, 0, 4, 3.5, 0, 0, TAU);
-  g.fill();
-  g.restore();
-  return true;
-});
-
-registerZonePainter('f7_gazeflash', (g, z0, px, py, S) => {
-  const z = z0 as ZoneX;
-  const k = zk(z);
-  const a = (z.ang as number) ?? 0;
-  g.fillStyle = `rgba(190,150,255,${0.45 * (1 - k)})`;
-  g.beginPath();
-  g.moveTo(px, py);
-  g.arc(px, py, (z.r as number) * S, a - 0.45, a + 0.45);
-  g.closePath();
-  g.fill();
-  return true;
-});
-
 registerZonePainter('f7_flash', (g, z0, px, py, S) => {
   const z = z0 as ZoneX;
   const k = zk(z);
@@ -3806,21 +3759,6 @@ registerZonePainter('f7_grow', (g, z0, px, py) => {
   return true;
 });
 
-// Зеркало арены вспыхивает перед залпом осколков.
-registerZonePainter('f7_mirrorglow', (g, z0, px, py, S) => {
-  const z = z0 as ZoneX;
-  const mi = z.mi as number;
-  const k = zk(z);
-  const x = (mi % MAP_W) * S;
-  const y = Math.floor(mi / MAP_W) * S;
-  const ox = px - (z.x as number) * S;
-  const oy = py - (z.y as number) * S;
-  const flick = 0.35 + 0.55 * k * (0.7 + 0.3 * Math.sin(k * 40));
-  g.fillStyle = `rgba(230,210,255,${flick})`;
-  g.fillRect(Math.round(x + ox) + 2, Math.round(y + oy) + 2, S - 4, S - 4);
-  return true;
-});
-
 // Осколки, лежащие на полу (замедляют, режут): рассыпь из кеша по зоне.
 registerZonePainter('f7_shardfloor', (g, z0, px, py, S) => {
   const z = z0 as ZoneX;
@@ -3871,31 +3809,6 @@ registerZonePainter('f7_beam', (g, z0, px, py, S) => {
     const c = RAINBOW[Math.floor(i / 4) % RAINBOW.length];
     g.fillStyle = k > 0.8 ? 'rgba(255,255,255,0.95)' : css(c, 0.5 + 0.4 * k);
     g.fillRect(i, -th / 2 + (k < 0.8 ? Math.sin(i * 0.7 + k * 30) * 0.5 : 0), 2, th);
-  }
-  g.restore();
-  return true;
-});
-
-// Линия осколков арены: метка — красная полоса, по ней — осколки, густеют.
-registerZonePainter('f7_shardline', (g, z0, px, py, S) => {
-  const z = z0 as ZoneX;
-  const k = zk(z);
-  const a = (z.ang as number) ?? 0;
-  const len = (z.r as number) * S;
-  const hw = ((z.w as number) ?? 0.4) * S;
-  g.save();
-  g.translate(px, py);
-  g.rotate(a);
-  g.fillStyle = `rgba(255,60,50,${0.15 + 0.3 * k})`;
-  g.fillRect(0, -hw, len, hw * 2);
-  g.fillStyle = `rgba(255,120,110,${0.5 * k})`;
-  g.fillRect(0, -hw, len, 1);
-  g.fillRect(0, hw - 1, len, 1);
-  const n = Math.floor((len / 6) * k);
-  for (let i = 0; i < n; i++) {
-    const x = (i * 6 + ((k * 40) % 6)) % len;
-    g.fillStyle = i % 2 ? 'rgba(220,245,255,0.9)' : 'rgba(150,200,240,0.9)';
-    g.fillRect(Math.round(x), Math.round(Math.sin(i * 1.7) * hw * 0.5), 2, 1);
   }
   g.restore();
   return true;

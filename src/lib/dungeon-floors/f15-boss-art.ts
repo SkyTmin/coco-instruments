@@ -2964,7 +2964,22 @@ registerMobPainter('f15b_echo', (m: Mob, pose: MobPose) => {
   const fq = Math.round(fade * 5) / 5;
   const s = paintSim();
   const scan = Math.floor((s?.time ?? 0) * 6) % 3;
-  return { img: ghostify(fr.img, fq, scan), ax: fr.ax, ay: fr.ay, eye: fr.eye };
+  // v2.85: ход тела хозяина (выпад, прыжок, наклон) эхо повторяет, а свечение,
+  // шлейф и долгую смерть — нет: эхо само призрачное и тает по-своему.
+  return {
+    img: ghostify(fr.img, fq, scan),
+    ax: fr.ax,
+    ay: fr.ay,
+    eye: fr.eye,
+    dx: fr.dx,
+    dy: fr.dy,
+    sx: fr.sx,
+    sy: fr.sy,
+    rot: fr.rot,
+    still: fr.still,
+    shadow: fr.shadow,
+    lift: fr.lift,
+  };
 });
 
 // ---------------------------------------------------------------------------
