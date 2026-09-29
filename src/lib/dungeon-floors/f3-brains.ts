@@ -819,7 +819,8 @@ function landingFor(sim: Sim, m: Mob, api: SimApi): [number, number] {
 
 // v2.85 — только рисунок: брызги, кильватер, капли с тела — зоны без урона и
 // статусов (`f3-boss-fx.ts`). `k` — вид брызг или высота капли; не чаще 10 в
-// секунду. Игру не трогают: ГСЧ не берут, мобов и ударов не заводят.
+// секунду. Игру не трогают: ГСЧ не берут, мобов и ударов не заводят, номер
+// из `sim.nextId` не тратят (`api.vfx`).
 function vfx(
   sim: Sim,
   api: SimApi,
@@ -833,7 +834,7 @@ function vfx(
   above = false,
 ): void {
   const z: F3Zone = { x, y, r, life, art, k, vAng, above };
-  api.zone(sim, z);
+  api.vfx(sim, z);
 }
 
 // v2.85 — только рисунок: след движения — кильватер в воде, капли в прыжке, мокрый след на берегу.
@@ -1184,7 +1185,7 @@ registerBoss('f3_maw', {
       };
       api.zone(sim, z);
       // v2.85 — только рисунок: след прилива до конца боя — пена по кромке, отлив.
-      api.zone(sim, { ...z, life: 900, art: 'f3_tidefx' });
+      api.vfx(sim, { ...z, life: 900, art: 'f3_tidefx' });
     }
     if (b.phase === 1 && k < 0.3) {
       b.phase = 2;

@@ -27,8 +27,10 @@
 import { Px } from '../dungeon-art';
 import {
   frameLRU,
+  IMPACT_PAINTERS,
   paintSim,
   registerImpactPainter,
+  registerMobWarm,
   registerShotPainter,
   registerZonePainter,
 } from '../dungeon-paint';
@@ -220,6 +222,52 @@ class Brush {
     else g.lineTo(this.ox, this.oy);
     g.closePath();
     g.fill();
+  }
+  /**
+   * Кольцевой сектор строками в игровой пиксель, с рваными боками (`wob` —
+   * размах, пиксели). Плёнка воды по песку: у `sector` край — ровная дуга
+   * пути со сглаживанием, и мокрый клин читался лучом фонаря.
+   */
+  wedge(r0: number, r1: number, a: number, half: number, seed: number, wob: number): void {
+    if (r1 <= r0 || half <= 0) return;
+    const c1 = Math.cos(a - half);
+    const s1 = Math.sin(a - half);
+    const c2 = Math.cos(a + half);
+    const s2 = Math.sin(a + half);
+    const n = Math.ceil(r1);
+    const R1 = r1 * r1;
+    const R0 = r0 * r0;
+    for (let y = -n; y <= n; y++) {
+      const q1 = R1 - y * y;
+      if (q1 <= 0) continue;
+      const X1 = Math.sqrt(q1);
+      let lo = -X1;
+      let hi = X1;
+      // Бок a−half: cross(u1, p) ≥ 0; бок a+half: cross(p, u2) ≥ 0.
+      if (s1 > 1e-6) hi = Math.min(hi, (c1 * y) / s1);
+      else if (s1 < -1e-6) lo = Math.max(lo, (c1 * y) / s1);
+      else if (c1 * y < 0) continue;
+      if (s2 > 1e-6) lo = Math.max(lo, (c2 * y) / s2);
+      else if (s2 < -1e-6) hi = Math.min(hi, (c2 * y) / s2);
+      else if (c2 * y > 0) continue;
+      if (hi < lo) continue;
+      const j0 = wob * (vn(seed, y / 3 + 40) * 2 - 1);
+      const j1 = wob * (vn(seed + 9, y / 3 + 40) * 2 - 1);
+      const X0 = R0 - y * y > 0 ? Math.sqrt(R0 - y * y) : -1;
+      const l = lo + j0;
+      const h = hi + j1;
+      // Внутренний радиус вырезает середину строки.
+      if (X0 < 0) this.row(y, l, h);
+      else {
+        this.row(y, l, Math.min(h, -X0));
+        this.row(y, Math.max(l, X0), h);
+      }
+    }
+  }
+  private row(y: number, l: number, r: number): void {
+    const L = Math.round(l);
+    const R = Math.round(r);
+    if (R >= L) this.g.fillRect(this.ox + L, this.oy + y, R - L + 1, 1);
   }
   /** Дуга штрихом (толстая полоса, пунктир — `dash`). */
   arc(r: number, a0: number, a1: number, width: number, col: string, a: number, dash = 0): void {
@@ -957,14 +1005,16 @@ registerImpactPainter('f3_wave', {
     const b = new Brush(g, px, py);
     const seed = rec.seed;
     const rc = crestAt(age, R);
-    // Откат: с 0,3 с вода уходит обратно к пасти — песок за ней тёмный, сохнет.
-    const backK = inQuad((age - 0.3) / 1.2);
+    // Откат: с 0,25 с вода уходит обратно к пасти — песок за ней тёмный, сохнет.
+    const bu = clamp01((age - 0.25) / 0.95);
+    const backK = bu * bu * (3 - 2 * bu);
     const back = R - (R - WAVE_R0) * backK;
     const wetR = Math.min(rc, back);
-    const dry = 1 - clamp01((age - 0.35) / 1.25);
-    // Вода по песку темнее сухого (мокро) и в бликах — не луч фонаря.
-    b.ink(TEAL_D, 0.42 * dry);
-    b.sector(WAVE_R0, Math.max(WAVE_R0 + 1, wetR), a, half);
+    const dry = 1 - clamp01((age - 0.3) / 1.1);
+    // Плёнка воды по песку: строками с рваными боками и неяркая. Ровный
+    // светлый клин со сглаженной дугой читался лучом фонаря.
+    b.ink(TEAL_D, 0.3 * dry);
+    b.wedge(WAVE_R0, Math.max(WAVE_R0 + 1, wetR), a, half, seed + 31, 2.5);
     // Блики на плёнке: короткие черты поперёк течения, уходят с водой к пасти.
     b.ink(FOAM2, 0.4 * dry);
     for (let i = 0; i < 14; i++) {
@@ -975,7 +1025,7 @@ registerImpactPainter('f3_wave', {
       b.dot(Math.cos(aa) * r - 1, Math.sin(aa) * r, 3, 1);
     }
     b.ink(WET, 0.32 * (1 - dry) * (1 - clamp01((age - 1.1) / 0.5)));
-    b.sector(Math.max(WAVE_R0, wetR), R, a, half);
+    b.wedge(Math.max(WAVE_R0, wetR), R, a, half, seed + 31, 2.5);
     // Пена отката: рваная линия на краю воды.
     if (age > 0.3 && dry > 0) {
       b.ink(FOAM, 0.8 * dry);
@@ -1303,8 +1353,11 @@ registerZonePainter('f3_tidefx', (g, z, px, py, scale, time) => {
   const zz = z as TideZone;
   const sim = paintSim();
   if (!sim || !zz.cells || !zz.ww) return true;
-  // Старый след (прошлый бой до сброса) молчит: рисует последний.
-  for (const o of sim.zones) if (o.art === 'f3_tidefx' && o.id > zz.id) return true;
+  // Старый след (прошлый бой до сброса) молчит: рисует последний по списку
+  // (номера у зон-картинок `api.vfx` отрицательные — по ним не сравнить).
+  let last: object | null = null;
+  for (const o of sim.zones) if (o.art === 'f3_tidefx') last = o;
+  if (last !== zz) return true;
   const cells = zz.cells;
   const n = cells.length;
   const ww = zz.ww;
@@ -1736,4 +1789,34 @@ registerZonePainter('f3_fx_hunger', (g, z, px, py) => {
   }
   g.restore();
   return true;
+});
+
+// ---------------------------------------------------------------------------
+// Прогрев — после кадров тела (движок идёт по генераторам по очереди, до 3 мс
+// за кадр, пока пасть в мире): все 128 кадров сгустка — первый плевок не
+// рисуется впервые посреди боя (новый кадр ≈0,6 мс, самый первый за сессию —
+// до 15 мс на разогреве кода), и по разу каждый контакт на черновике — первый
+// удар не платит за разогрев.
+// ---------------------------------------------------------------------------
+
+registerMobWarm('f3_maw', function* () {
+  for (let d = 0; d < 16; d++)
+    for (let f = 0; f < 8; f++) {
+      const key = `${d}|${f}`;
+      if (!SPIT_FRAMES.get(key)) SPIT_FRAMES.set(key, spitSprite(d, f));
+      yield;
+    }
+  const g = new Px(8, 8).canvas().getContext('2d');
+  if (!g) return;
+  for (const art of ['f3_splash', 'f3_thrash', 'f3_wave', 'f3_spit']) {
+    const def = IMPACT_PAINTERS.get(art);
+    if (!def) continue;
+    const rec: ImpactRec = { art, x: -99, y: -99, r: 2, ang: 0, arc: 1.1, seed: 7 };
+    for (const age of [0.02, 0.2, 0.6, 1.2]) {
+      g.save();
+      def.paint(g, rec, 4, 4, 16, age, age);
+      g.restore();
+      yield;
+    }
+  }
 });
