@@ -497,6 +497,43 @@ describe('этаж 11: арена', () => {
     expect(s.hero.hp).toBeGreaterThan(0);
   });
 
+  // Страж на уходящем краю сам в небо не падает (он босс) — его обязано
+  // вытолкнуть на пол арены. Проверка по жалобе владельца «босс исчез, когда
+  // провалилась платформа»; на 29.09 в симуляции не воспроизводится.
+  const ringCell = (s: Sim): number => {
+    const st = F11_DEBUG.stateOf(s);
+    const edge = [...s.boss!.cells].filter((i) => s.world.mark[i] === F11_MARK.cracking && Math.floor(i / W) + 0.5 < st.arena.cy - 2);
+    expect(edge.length).toBeGreaterThan(0);
+    return edge[0];
+  };
+  const onDeep = (s: Sim, m: Mob) => s.tiles[Math.floor(m.y) * W + Math.floor(m.x)] === Tile.Deep;
+
+  it('страж, застигнутый на уходящем краю, остаётся на полу арены и в кадре', () => {
+    const s = sim(8, 5, bossObj.x + 0.5, bossObj.y + 4.5, 5);
+    const b = s.boss!;
+    for (let k = 0; k < 20 && b.phase < 4; k++) toFall(s, 0.5);
+    toFall(s, 0.8);
+    const st = F11_DEBUG.stateOf(s);
+    const i = ringCell(s);
+    const k = s.mobs.find((m) => m.kind === 'f11boss')!;
+    k.x = (i % W) + 0.5;
+    k.y = Math.floor(i / W) + 0.5;
+    s.hero.x = st.arena.cx;
+    s.hero.y = st.arena.cy + 2;
+    for (let t = 0; t < 3 * 60; t++) {
+      s.hero.hp = s.stats.maxHp;
+      // Занят взглядом — сам с края не уходит: ловит только страховка движка.
+      k.mode = 'f11_gaze';
+      k.t = 0;
+      stepSim(s, DT, NO_INPUT);
+    }
+    expect(s.tiles[i]).toBe(Tile.Deep);
+    expect(onDeep(s, k)).toBe(false);
+    expect(b.cells.has(Math.floor(k.y) * W + Math.floor(k.x))).toBe(true);
+    expect(Math.hypot(k.x - st.arena.cx, k.y - st.arena.cy)).toBeLessThan(7.5);
+    expect(k.mode).not.toBe('dying');
+  });
+
   it('смерть в бою возвращает арену целой и гасит купол', () => {
     const s = sim(8, 5, bossObj.x + 0.5, bossObj.y + 4.5, 7);
     const b = s.boss!;
