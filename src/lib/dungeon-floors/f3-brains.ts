@@ -28,6 +28,8 @@ export interface F3Zone extends ZoneIn {
   cells?: number[];
   /** Ширина мира — чтобы из индекса получить клетку. */
   ww?: number;
+  /** v2.85 — только рисунок: направление брызг и кильватера (`f3-boss-fx.ts`). */
+  vAng?: number;
 }
 
 const angDiff = (a: number, b: number) => {
@@ -815,6 +817,42 @@ function landingFor(sim: Sim, m: Mob, api: SimApi): [number, number] {
   return [lx, ly];
 }
 
+// v2.85 — только рисунок: брызги, кильватер, капли с тела — зоны без урона и
+// статусов (`f3-boss-fx.ts`). `k` — вид брызг или высота капли; не чаще 10 в
+// секунду. Игру не трогают: ГСЧ не берут, мобов и ударов не заводят.
+function vfx(
+  sim: Sim,
+  api: SimApi,
+  art: string,
+  x: number,
+  y: number,
+  r: number,
+  life: number,
+  k = 0,
+  vAng = 0,
+  above = false,
+): void {
+  const z: F3Zone = { x, y, r, life, art, k, vAng, above };
+  api.zone(sim, z);
+}
+
+// v2.85 — только рисунок: след движения — кильватер в воде, капли в прыжке, мокрый след на берегу.
+function vTrail(sim: Sim, m: Mob, dt: number, api: SimApi, kind: 'wake' | 'drip' | 'trail'): void {
+  m.data.vTrail = (m.data.vTrail || 0) - dt;
+  if (m.data.vTrail > 0) return;
+  const sp = Math.hypot(m.vx, m.vy);
+  if (kind === 'wake' && sp > 0.8) {
+    m.data.vTrail = 0.12;
+    vfx(sim, api, 'f3_fx_wake', m.x, m.y, 1, 1.1, 0, Math.atan2(m.vy, m.vx));
+  } else if (kind === 'drip') {
+    m.data.vTrail = 0.11;
+    vfx(sim, api, 'f3_fx_drip', m.x, m.y, 0.5, 0.9, Math.max(0.3, m.data.z || 0));
+  } else if (kind === 'trail' && sp > 0.4) {
+    m.data.vTrail = 0.2;
+    vfx(sim, api, 'f3_fx_drip', m.x, m.y, 0.5, 2.4, 0);
+  }
+}
+
 function startLeap(sim: Sim, m: Mob, api: SimApi, lx: number, ly: number, strike: boolean): void {
   const d = Math.hypot(lx - m.x, ly - m.y);
   const hungry = (sim.boss?.phase ?? 0) >= 2;
@@ -842,6 +880,12 @@ function startLeap(sim: Sim, m: Mob, api: SimApi, lx: number, ly: number, strike
     });
   sim.events.push({ t: 'boss', what: 'roll' });
   api.setMode(m, 'leap');
+  // v2.85 — только рисунок: взлёт из воды — столб брызг за телом и перед ним; с берега — комья назад.
+  if (isDeep(sim, m.x, m.y)) {
+    vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1.3, 1.1, 3, m.face);
+    vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1.3, 1.1, 3, m.face, true);
+    sim.events.push({ t: 'shake', k: 0.12 });
+  } else vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1, 0.9, 4, m.face);
 }
 
 function mawStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
@@ -863,6 +907,11 @@ function mawStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
       m.vx *= 0.8;
       m.vy *= 0.8;
       m.face = Math.atan2(dy, dx);
+      if (!m.data.vRoar) {
+        // v2.85 — только рисунок: рёв бьёт по песку.
+        m.data.vRoar = 1;
+        vfx(sim, api, 'f3_fx_roar', m.x, m.y, 3, 1.3);
+      }
       if (m.t > 1.3) {
         api.setMode(m, 'crawl');
         const w = nearestCell(sim, lake, m.x, m.y);
@@ -898,15 +947,19 @@ function mawStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
       // Держится воды: шаг на сушу гасится.
       if (!isDeep(sim, m.x + Math.sign(m.vx) * 0.5, m.y)) m.vx *= 0.3;
       if (!isDeep(sim, m.x, m.y + Math.sign(m.vy) * 0.5)) m.vy *= 0.3;
+      vTrail(sim, m, dt, api, 'wake'); // v2.85 — только рисунок
       const wait = (ph === 0 ? 2.1 : ph === 1 ? 1.8 : 1.3) / haste;
       if (m.t > wait && !heroDown(sim)) {
         const r = sim.rng();
         if (dist > MAW_JUMP + 1.5) {
+          vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1.1, 0.9, 1); // v2.85 — только рисунок: всплыла
           api.setMode(m, 'spit');
         } else if (ph >= 1 && r < 0.38) {
           api.setMode(m, 'tail');
         } else {
           m.data.series = ph >= 2 ? 3 : 1;
+          // v2.85 — только рисунок: вода вспучивается — сейчас прыгнет.
+          vfx(sim, api, 'f3_fx_boil', m.x, m.y, 1.2, (ph >= 2 ? 0.34 : 0.5) / haste);
           api.setMode(m, 'rise');
         }
       }
@@ -935,10 +988,14 @@ function mawStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
       m.vx = 0;
       m.vy = 0;
       m.data.z = Math.sin(k * Math.PI) * (m.data.hop || 2.5);
+      vTrail(sim, m, dt, api, 'drip'); // v2.85 — только рисунок
       if (k >= 1) {
         m.data.z = 0;
         sim.events.push({ t: 'boom', x: m.x, y: m.y, r: 0 });
         sim.hitstop = Math.max(sim.hitstop, 0.05);
+        // v2.85 — только рисунок: в воду — всплеск; на берег — ближняя половина брызг поверх тела.
+        if (isDeep(sim, m.x, m.y)) vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1.6, 1.1, 0);
+        else vfx(sim, api, 'f3_fx_splash', m.x, m.y, MAW_SPLASH, 1.6, 2, 0, true);
         if (isDeep(sim, m.x, m.y)) {
           // Нырок назад (прыжок в воду после выползания).
           api.setMode(m, 'swim');
@@ -997,11 +1054,13 @@ function mawStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
       }
       if (wet) {
         sim.events.push({ t: 'boss', what: 'f3_dive' });
+        vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1.2, 1.1, 0); // v2.85 — только рисунок: нырок
         api.setMode(m, 'swim');
         return;
       }
       const l = Math.hypot(m.data.wx - m.x, m.data.wy - m.y);
       if (l > 0.1) api.steer(sim, m, (m.data.wx - m.x) / l, (m.data.wy - m.y) / l, 2.6 * haste, dt);
+      vTrail(sim, m, dt, api, 'trail'); // v2.85 — только рисунок
       // Застряла (столб, край) — прыгает в воду.
       if (m.t > 3.2) {
         const w = nearestCell(sim, lake, m.x, m.y);
@@ -1012,6 +1071,7 @@ function mawStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
     case 'tail': {
       // К кромке у героя — и хвостом волной.
       m.data.ghost = 1;
+      vTrail(sim, m, dt, api, 'wake'); // v2.85 — только рисунок
       const t = nearestCell(sim, lake, h.x, h.y);
       if (t && m.t < 1.4) {
         const l = Math.hypot(t[0] - m.x, t[1] - m.y);
@@ -1022,6 +1082,7 @@ function mawStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
       }
       m.vx *= 0.5;
       m.vy *= 0.5;
+      vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1.4, 0.9, 1); // v2.85 — только рисунок: вынырнула
       api.setMode(m, 'surface');
       m.data.ang = Math.atan2(h.y - m.y, h.x - m.x);
       api.strike(sim, {
@@ -1047,6 +1108,7 @@ function mawStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
       m.vx *= 0.6;
       m.vy *= 0.6;
       m.face = m.data.ang;
+      if (m.t > 1.55 / haste) vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1, 1, 0); // v2.85 — только рисунок
       if (m.t > 1.55 / haste) api.setMode(m, 'swim');
       return;
     case 'spit': {
@@ -1074,6 +1136,7 @@ function mawStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
       }
       if (m.t > wind + 0.5) {
         m.data.spat = 0;
+        vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1, 1, 0); // v2.85 — только рисунок: нырок
         api.setMode(m, 'swim');
       }
       return;
@@ -1120,10 +1183,13 @@ registerBoss('f3_maw', {
         ww: sim.world.w,
       };
       api.zone(sim, z);
+      // v2.85 — только рисунок: след прилива до конца боя — пена по кромке, отлив.
+      api.zone(sim, { ...z, life: 900, art: 'f3_tidefx' });
     }
     if (b.phase === 1 && k < 0.3) {
       b.phase = 2;
       sim.events.push({ t: 'boss', what: 'phase', text: 'ГОЛОД', sub: 'прыгает без передышки' });
+      vfx(sim, api, 'f3_fx_hunger', lead.x, lead.y, 3, 1.3); // v2.85 — только рисунок
     }
     if (b.phase >= 1 && b.data.floodAt >= 0 && b.t >= b.data.floodAt) {
       b.data.floodT = (b.data.floodT || 0) - _dt;
