@@ -815,16 +815,24 @@ function marblePx(p: Px, X0: number, Y0: number): void {
     for (let x = 0; x < TS; x++) {
       const X = X0 + x;
       const Y = Y0 + y;
-      const u = ((X % 8) + 8) % 8;
-      const v = ((Y % 8) + 8) % 8;
+      // Плиты 16×12 вразбежку: мелкая сетка 8×8 читалась кафелем ванной.
+      const row = Math.floor(Y / 12);
+      const off = row % 2 ? 8 : 0;
+      const u = (((X + off) % 16) + 16) % 16;
+      const v = ((Y % 12) + 12) % 12;
+      const slab = Math.floor((X + off) / 16) * 977 + row;
       if (u === 0 || v === 0) {
-        p.set(x, y, MARBLE[0]);
+        p.set(x, y, mixc(MARBLE[0], MARBLE[1], 0.35));
         continue;
       }
-      let c = MARBLE[hash(Math.floor(X / 8), Math.floor(Y / 8), 111) < 0.4 ? 1 : 2];
-      if (u === 1 || v === 1) c = MARBLE[3];
-      const vein = Math.abs(vnoise(X, Y, 11, 112) - 0.5);
-      if (vein < 0.025) c = mixc(c, hx('#9a98ae'), 0.6);
+      let c = MARBLE[hash(slab, 111) < 0.35 ? 1 : 2];
+      if (v === 1) c = MARBLE[3];
+      else if (v === 11) c = mixc(c, MARBLE[0], 0.5);
+      // Прожилки: две разной толщины, по мировым пикселям — через швы.
+      const vein = Math.abs(vnoise(X, Y, 13, 112) - 0.5);
+      const vein2 = Math.abs(vnoise(X + 40, Y * 1.3, 7, 113) - 0.5);
+      if (vein < 0.03) c = mixc(c, hx('#8e8ca6'), 0.65);
+      else if (vein2 < 0.018) c = mixc(c, hx('#a6a4bc'), 0.45);
       p.set(x, y, c);
     }
 }
@@ -1469,10 +1477,35 @@ function masonryPx(p: Px, c: CellCtx, face: boolean, area: string, pal: Tones, t
       const Y = Y0 + y;
       let col: RGBA;
       if (y < capH) {
-        // Верх стены: крупные плиты.
-        const u = ((X % 8) + 8) % 8;
-        const v = ((Y % 8) + 8) % 8;
-        col = u === 0 || v === 0 ? pal[0] : u === 1 || v === 1 ? pal[3] : pal[2];
+        // Верх стены. У замка — парапет из светлого камня вдоль края и
+        // сланцевая кровля внутри толщи; у руин — крупные блоки вразбежку.
+        const edge =
+          (!c.open(0, -1) ? 99 : y) > 3 &&
+          (!c.open(-1, 0) ? 99 : x) > 3 &&
+          (!c.open(1, 0) ? 99 : 15 - x) > 3 &&
+          (!c.open(0, 1) ? 99 : 15 - y) > 3
+            ? 0
+            : 1;
+        if (pal === CASTLE && !edge) {
+          const row = Math.floor(Y / 4);
+          const off = row % 2 ? 3 : 0;
+          const u = (((X + off) % 6) + 6) % 6;
+          const v = ((Y % 4) + 4) % 4;
+          col = SLATE[hash(Math.floor((X + off) / 6), row, 254) < 0.4 ? 1 : 2];
+          if (v === 3) col = SLATE[0];
+          else if (v === 0) col = mixc(col, SLATE[3], 0.35);
+          if (u === 0) col = mixc(col, SLATE[0], 0.6);
+        } else {
+          const row = Math.floor(Y / 8);
+          const off = row % 2 ? 6 : 0;
+          const u = (((X + off) % 12) + 12) % 12;
+          const v = ((Y % 8) + 8) % 8;
+          col = pal[hash(Math.floor((X + off) / 12), row, 255) < 0.4 ? 1 : 2];
+          if (u === 0 || v === 0) col = mixc(pal[0], pal[1], 0.4);
+          else if (v === 1) col = pal[3];
+          // Зубцы парапета: через четыре точки — тёмная щель.
+          if (pal === CASTLE && edge && (((X + Y) % 8) + 8) % 8 < 2 && (u === 3 || u === 9)) col = pal[0];
+        }
         if (area === F11_AQUA && vnoise(X, Y, 4, 251) > 0.66) col = MOSS[2];
       } else {
         // Лицо: кладка вперевязку.
@@ -2907,12 +2940,15 @@ registerPropPainter('f11_vane', (_o, time) => {
       for (let x = cx - 13; x <= cx + 13; x++) {
         const u = (x + 0.5 - cx) / 13;
         if (Math.abs(u) > 1) continue;
-        const l = -u * 0.55 + 0.35 + (y > 60 ? -0.3 : 0);
-        let c = tone(RUIN, l);
-        // Кладка рядами.
-        const row = Math.floor((y - 34) / 4);
-        const off = row % 2 ? 3 : 0;
-        if ((y - 34) % 4 === 0 || (Math.round((x + off) / 6) * 6 === x + off && Math.abs(u) < 0.85)) c = mixc(c, RUIN[0], 0.55);
+        // Цилиндр: свет слева, тень справа — четыре полосы тона.
+        let c = u < -0.6 ? RUIN[3] : u < 0.05 ? RUIN[2] : u < 0.62 ? RUIN[1] : RUIN[0];
+        if (y > 60) c = mixc(c, RUIN[0], 0.5);
+        // Кладка: ряды по дуге (середина ниже краёв), швы вразбежку.
+        const yy = y - 34 - Math.round((1 - u * u) * 1.5);
+        const row = Math.floor(yy / 5);
+        const off = row % 2 ? 4 : 0;
+        const joint = (((x + off) % 8) + 8) % 8 === 0 && Math.abs(u) < 0.8;
+        if ((((yy % 5) + 5) % 5 === 0) || joint) c = mixc(c, RUIN[0], 0.45);
         p.set(x, y, c);
       }
     shadeEll(p, cx, 34, 13, 3.5, RUIN, 0.2);

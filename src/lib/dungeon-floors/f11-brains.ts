@@ -310,6 +310,8 @@ export interface F11State {
   garden: HallState;
   bridge: BridgeState;
   tower: HallState & { dirT: number; turn: number; nests: number[] };
+  /** Садов второе событие: «Абордаж» на Верхнем саду. */
+  raid: HallState;
   storm: HallState & { boltT: number; turnT: number };
   gallery: HallState & { valveT: number[] };
   winch: { state: 'down' | 'up' | 'sink'; t: number; cells: number[] };
@@ -503,6 +505,7 @@ function scan(sim: Sim): F11State {
       up: [],
     },
     tower: { ...hall(0, 0, 0), dirT: 0, turn: 0, nests: [] },
+    raid: hall(0, 0, 0),
     storm: { ...hall(0, 0, 0), boltT: 0, turnT: 0 },
     gallery: { ...hall(0, 0, 0), valveT: [0, 0] },
     winch: { state: 'down', t: 0, cells: [] },
@@ -675,6 +678,11 @@ function scanHalls(sim: Sim, st: F11State): void {
     const [cx, cy] = centroid(nests);
     st.tower = { ...hall(cx, cy, 8.5), dirT: 0, turn: 0, nests: [] };
   }
+  // Верхний сад — фонтан у моста на север: там «Абордаж».
+  const upper = objsOf(sim, 'f11_fountain')
+    .filter((o) => o.area === F11_GARDEN)
+    .sort((a, b) => a.y - b.y)[0];
+  if (upper) st.raid = hall(upper.x + 0.5, upper.y + 0.5, 6.5);
   // Внешний двор — статуя стража посреди мозаики.
   const statue = objsOf(sim, 'f11_statue').find((o) => o.area === F11_CASTLE);
   if (statue) st.storm = { ...hall(statue.x + 0.5, statue.y + 0.5, 8), boltT: 0, turnT: 0 };
@@ -1692,6 +1700,109 @@ function pickArrive(sim: Sim, area: string): string {
   return list[0][0];
 }
 
+/**
+ * Абордажник садится на край острова в `r0…r1` клетках от точки: клетка
+ * пола, рядом небо — оттуда он и подлетает на планере (зона `f11_glider`),
+ * пока летит — неуязвим.
+ */
+function landBoarder(sim: Sim, api: SimApi, cx: number, cy: number, r0: number, r1: number, elite = false): Mob | null {
+  const h = sim.hero;
+  let best: [number, number, number] | null = null;
+  let bs = Infinity;
+  for (let i = 0; i < 48; i++) {
+    const a = sim.rng() * TAU;
+    const r = r0 + sim.rng() * (r1 - r0);
+    const x = Math.floor(cx + Math.cos(a) * r);
+    const y = Math.floor(cy + Math.sin(a) * r);
+    if (!walkable(tileAt(sim, x, y))) continue;
+    let sky: number | null = null;
+    for (let k = 0; k < 4; k++) {
+      const dx = [1, -1, 0, 0][k];
+      const dy = [0, 0, 1, -1][k];
+      if (tileAt(sim, x + dx, y + dy) === T_DEEP) sky = Math.atan2(dy, dx);
+    }
+    if (sky === null) continue;
+    if (!api.lineOfSight(sim, x + 0.5, y + 0.5, h.x, h.y)) continue;
+    const s = Math.abs(r - (r0 + r1) / 2) + sim.rng() * 2;
+    if (s < bs) {
+      bs = s;
+      best = [x + 0.5, y + 0.5, sky];
+    }
+  }
+  if (!best) return null;
+  const [x, y, sky] = best;
+  const m = api.spawnMob(sim, 'f11_boarder', x, y, { mode: 'f11_land', elite });
+  m.data.ghost = 1;
+  m.data.from = sky;
+  m.face = sky + PI;
+  const z: ZoneIn & { mob?: number; ang?: number } = { x, y, r: 0.9, life: 1, art: 'f11_glider', above: true };
+  z.mob = m.id;
+  z.ang = sky;
+  api.zone(sim, z);
+  sim.events.push({ t: 'boss', what: 'f11_glide_call' });
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+// Событие Садов (второе): «Абордаж» на Верхнем саду.
+// ---------------------------------------------------------------------------
+
+const RAID = { waves: 3, maxT: 24 };
+
+function stepRaid(sim: Sim, st: F11State, api: SimApi, dt: number): void {
+  const rd = st.raid;
+  if (!rd.r || rd.state === 'done' || heroDown(sim)) return;
+  const h = sim.hero;
+  if (rd.state === 'idle') {
+    if (hypot(h.x - rd.cx, h.y - rd.cy) > rd.r) return;
+    rd.state = 'on';
+    rd.wave = 0;
+    rd.t = 1.6;
+    sim.events.push({
+      t: 'boss',
+      what: 'f11_raid_trap',
+      text: 'АБОРДАЖ',
+      sub: 'с неба планируют — не дай прижать себя к краю',
+    });
+    return;
+  }
+  rd.mobs = rd.mobs.filter((id) => sim.mobs.some((m) => m.id === id && m.mode !== 'dying'));
+  rd.t -= dt;
+  if (rd.mobs.length && rd.t > -RAID.maxT) return;
+  if (rd.t > 0) return;
+  if (rd.wave >= RAID.waves) {
+    rd.state = 'done';
+    if (!rd.paid) {
+      rd.paid = true;
+      for (let i = 0; i < 6; i++) api.dropAt(sim, 'coin', 160, rd.cx, rd.cy + 1.5);
+      for (let i = 0; i < 3; i++) api.dropAt(sim, 'token', 2, rd.cx, rd.cy + 1.5);
+      api.dropAt(sim, 'f11_gear', 2, rd.cx, rd.cy + 1.5);
+    }
+    sim.events.push({ t: 'boss', what: 'f11_calm_call', text: 'НЕБО ЧИСТО', sub: 'абордаж отбит' });
+    return;
+  }
+  // Волна: абордажники с краёв острова, со второй — дроны, с третьей — скат.
+  const n = 2 + rd.wave;
+  for (let i = 0; i < n; i++) {
+    const m = landBoarder(sim, api, rd.cx, rd.cy, 3.5, 9, rd.wave === 2 && i === 0);
+    if (m) {
+      m.cd = 0.8 + i * 0.5;
+      rd.mobs.push(m.id);
+    }
+  }
+  const fly = rd.wave === 1 ? ['f11_drone', 'f11_drone'] : rd.wave === 2 ? ['f11_ray'] : [];
+  for (const k of fly) {
+    const p = spotNear(sim, rd.cx, rd.cy, 9, 12, () => 0, true);
+    if (!p) continue;
+    const m = api.spawnMob(sim, k, p[0], p[1], { mode: 'chase' });
+    m.cd = 1.5;
+    rd.mobs.push(m.id);
+  }
+  rd.wave += 1;
+  rd.t = 1.2;
+  sim.events.push({ t: 'boss', what: 'summon' });
+}
+
 function stepArrivals(sim: Sim, st: F11State, api: SimApi, dt: number): void {
   if (sim.boss?.state === 'fight' || heroDown(sim)) return;
   st.arriveT -= dt;
@@ -1709,47 +1820,7 @@ function stepArrivals(sim: Sim, st: F11State, api: SimApi, dt: number): void {
   if (sim.world.objs.some((o) => o.kind === 'lift' && hypot(o.x - h.x, o.y - h.y) < 8)) return;
   const kind = pickArrive(sim, sim.area);
   if (kind === 'f11_boarder') {
-    // Край острова в 3,5…7 клетках, рядом небо: оттуда и подлетит.
-    let best: [number, number, number] | null = null;
-    let bs = Infinity;
-    for (let i = 0; i < 40; i++) {
-      const a = sim.rng() * TAU;
-      const r = 3.5 + sim.rng() * 3.5;
-      const x = Math.floor(h.x + Math.cos(a) * r);
-      const y = Math.floor(h.y + Math.sin(a) * r);
-      if (!walkable(tileAt(sim, x, y))) continue;
-      let sky: number | null = null;
-      for (let k = 0; k < 4; k++) {
-        const dx = [1, -1, 0, 0][k];
-        const dy = [0, 0, 1, -1][k];
-        if (tileAt(sim, x + dx, y + dy) === T_DEEP) sky = Math.atan2(dy, dx);
-      }
-      if (sky === null) continue;
-      if (!api.lineOfSight(sim, x + 0.5, y + 0.5, h.x, h.y)) continue;
-      const s = Math.abs(r - 5) + sim.rng();
-      if (s < bs) {
-        bs = s;
-        best = [x + 0.5, y + 0.5, sky];
-      }
-    }
-    if (!best) return;
-    const [x, y, sky] = best;
-    const m = api.spawnMob(sim, 'f11_boarder', x, y, { mode: 'f11_land' });
-    m.data.ghost = 1;
-    m.data.from = sky;
-    m.face = sky + PI;
-    const z: ZoneIn & { mob?: number; ang?: number } = {
-      x,
-      y,
-      r: 0.9,
-      life: 1,
-      art: 'f11_glider',
-      above: true,
-    };
-    z.mob = m.id;
-    z.ang = sky;
-    api.zone(sim, z);
-    sim.events.push({ t: 'boss', what: 'f11_glide_call' });
+    landBoarder(sim, api, h.x, h.y, 3.5, 7);
     return;
   }
   // Летуны — из неба за краем кадра.
@@ -1977,6 +2048,7 @@ registerFloor(11, {
     stepBridge(sim, st, api, dt);
     stepWinch(sim, st, api, dt);
     stepTower(sim, st, api, dt);
+    stepRaid(sim, st, api, dt);
     stepGallery(sim, st, api, dt);
     if (heroDown(sim)) return;
     stepPosts(sim, st, api);

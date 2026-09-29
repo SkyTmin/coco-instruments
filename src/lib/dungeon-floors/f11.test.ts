@@ -680,6 +680,57 @@ describe('этаж 11: ветер', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Залы-события: начинаются, когда подходишь, кончаются наградой.
+// ---------------------------------------------------------------------------
+
+/** Пройти событие: герой стоит в зале, всё, что прилетело, гибнет. */
+function runHall(key: 'raid' | 'tower' | 'garden' | 'storm'): { waves: number; done: boolean; paid: boolean; st: ReturnType<typeof F11_DEBUG.stateOf> } {
+  const probe = sim(8, 5, 1, 1, 1);
+  const hs = F11_DEBUG.stateOf(probe)[key];
+  const s = sim(8, 5, hs.cx, hs.cy + 1, 12);
+  s.mobs = [];
+  const st = F11_DEBUG.stateOf(s);
+  let waves = 0;
+  for (let t = 0; t < 120 * 60 && st[key].state !== 'done'; t++) {
+    s.hero.hp = s.stats.maxHp;
+    s.hero.inv = 1;
+    if (key === 'garden' && st.garden.state === 'idle' && t > 30) F11_DEBUG.startGarden(s, st, API);
+    stepSim(s, DT, NO_INPUT);
+    if (s.events.some((e) => e.t === 'boss' && e.what === 'summon')) waves += 1;
+    if (t % 20 === 0)
+      for (const m of [...s.mobs])
+        if (m.mode !== 'dying' && m.mode !== 'f11_land' && (m.data.ghost ?? 0) === 0 && !MOBS[m.kind].boss)
+          API.explode(s, m.x, m.y, 0.1, m.maxHp * 3, 0);
+  }
+  return { waves, done: st[key].state === 'done', paid: st[key].paid, st };
+}
+
+describe('этаж 11: события', () => {
+  it('«Абордаж» в Верхнем саду: три волны с краёв острова, потом награда', () => {
+    const r = runHall('raid');
+    expect(r.done).toBe(true);
+    expect(r.waves).toBe(3);
+    expect(r.paid).toBe(true);
+  });
+
+  it('«Гнездо гарпий»: башня крутит ветер, волны гарпий, потом тишина', () => {
+    const r = runHall('tower');
+    expect(r.done).toBe(true);
+    expect(r.waves).toBeGreaterThanOrEqual(3);
+  });
+
+  it('«Пробуждение сада» с пульта кончается наградой', () => {
+    const r = runHall('garden');
+    expect(r.done).toBe(true);
+  });
+
+  it('«Буря» во Внешнем дворе проходит и стихает', () => {
+    const r = runHall('storm');
+    expect(r.done).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Монстры: не застревают в стенах, не проваливаются сами.
 // ---------------------------------------------------------------------------
 
