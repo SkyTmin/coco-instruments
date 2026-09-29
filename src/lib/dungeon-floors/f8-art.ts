@@ -4337,7 +4337,10 @@ interface DTL {
   keys: DKey[];
   dur: number;
   post?: (p: DP, t: number) => DP;
-  /** Отрезки, где клинок оставляет след (с запасом на угасание). */
+  /**
+   * Отрезки удара [начало взмаха, контакт]: след — только от движения внутри
+   * отрезка, после контакта ещё два кадра гаснет на месте.
+   */
   trail: [number, number][];
   /** Где урон (для листа и прогрева). */
   hits: number[];
@@ -4373,7 +4376,7 @@ function shaken(p: DP, t: number): DP {
 // ---- Таймлайны техник (тайминги — из мозга, `BOSS8` в f8-brains.ts) ----
 
 /** Отрезок следа вокруг кадра удара: разгон (3 кадра) и угасание (2). */
-const swingWin = (x: number): [number, number] => [x - 3.2 / DFPS, x + 2.2 / DFPS];
+const swingWin = (x: number, pre = 3): [number, number] => [x - pre / DFPS - 1e-3, x];
 
 /** Длительность окна после каждой техники — как `m.data.rec` в мозге. */
 const REC8: Record<string, number> = {
@@ -4622,7 +4625,7 @@ function tlFan(ph: number): DTL {
     keys,
     dur,
     post: (p, t) => shaken(pant(p, t, t > pantFrom ? Math.min(1, (t - pantFrom) * 4) * 0.8 : 0), t),
-    trail: hits.map(swingWin),
+    trail: hits.map((x) => swingWin(x)),
     hits,
   };
 }
@@ -4787,7 +4790,7 @@ function tlDash(ph: number, dFrames: number, fD: number): DTL {
     [Math.max(D, tD + 2 / DFPS), { ang: -0.58, ax: 9.5, ay: -21 }, EZ.lin],
   );
   const keys = track(GUARD, list);
-  return { keys, dur: Math.max(D, tD + 2 / DFPS), trail: [swingWin(tD)], hits: [tD] };
+  return { keys, dur: Math.max(D, tD + 2 / DFPS), trail: [swingWin(tD, 1)], hits: [tD] };
 }
 
 const AIM_END = new Map<number, DP>();
@@ -4869,7 +4872,7 @@ function tlDashRec(ph: number): DTL {
     [c + 5 / DFPS, { ang: 1.55, ax: 6, ay: -17, glow: 0.3, sx: 1, sy: 1, squint: 0.5 }, EZ.out3],
     [rec, { ...GUARD }, EZ.io],
   ]);
-  return { keys, dur: rec, post: shaken, trail: [swingWin(c)], hits: [c] };
+  return { keys, dur: rec, post: shaken, trail: [swingWin(c, 1)], hits: [c] };
 }
 
 /**
@@ -4969,7 +4972,7 @@ function tlEyes(ph: number): DTL {
     keys,
     dur,
     post: shaken,
-    trail: m.map(swingWin),
+    trail: [swingWin(m[0], 1), swingWin(m[1], 1), swingWin(m[2], 3)],
     hits: m,
   };
 }
@@ -5263,29 +5266,49 @@ function tlPhase(ph: number): DTL {
       EZ.in2,
     ],
     [0.5, { sx: 1, sy: 1, hdx: 1, hdy: 1.8, squint: 1, mouth: 0, eyes: 0, glow: 0.2 }, EZ.out2],
-    [1.46, { aura: 1, hairUp: 1, cloak: 2.2, halo: 1, glow: 1, eyes: 6, bl: 1, hdy: 1.2 }, EZ.lin],
+    // Аура поднимается от пола, волосы всплывают.
+    [0.78, { aura: 0.5, hairUp: 0.4, cloak: 1.4, halo: 0.4 }, EZ.lin],
+    // Выдёргивает клинок из пола и ставит перед лицом остриём вверх.
     [
-      1.56,
+      0.92,
       {
-        hy: 1,
-        lean: 0.05,
-        hdx: 0,
-        hdy: 0,
-        ax: 3,
-        ay: -30,
-        ang: -1.3,
+        ax: 5.2,
+        ay: -26,
+        ang: -1.57,
         bury: 0,
-        kneel: 0,
+        hdx: 0.6,
+        hdy: 0.2,
         squint: 0,
+        glow: 0.6,
+        lean: 0.2,
+      },
+      EZ.io,
+    ],
+    // Клинок растёт толчками, глаза раскрываются по одному (см. post).
+    [1.46, { aura: 1, hairUp: 1, cloak: 2.2, halo: 1, glow: 1, eyes: 6, bl: 1, wide: 0.6 }, EZ.lin],
+    // Встаёт с рёвом, клинок уходит за спину…
+    [
+      1.58,
+      {
+        hy: 0,
+        lean: -0.12,
+        hdx: -0.8,
+        hdy: -0.8,
+        ax: 1.5,
+        ay: -32,
+        ang: -2.5,
+        kneel: 0,
         wide: 1,
-        mouth: 0.8,
+        mouth: 0.9,
         sy: 1.04,
-        dx: 0,
+        nx: 3,
+        fx: -5,
       },
       EZ.in2,
     ],
-    [1.68, { ang: -2.4, ax: 0, ay: -32, lean: -0.1, hy: -0.5, mouth: 1, sy: 1 }, EZ.out3],
-    [1.86, { ang: 2.3, ax: 6, ay: -16, lean: 0.25, hy: 1, aura: 0.6, mouth: 0.3, g2: 0 }, EZ.io],
+    [1.68, { sy: 1, mouth: 1 }, EZ.out2],
+    // …и полным кругом рубит вниз, в сторону — новый клинок.
+    [1.86, { ang: 2.3, ax: 6, ay: -16, lean: 0.3, hy: 1.2, aura: 0.6, mouth: 0.3, g2: 0 }, EZ.io],
     [2.2, { ...GUARD, glow: 0.25, halo: 0.3 }, EZ.io],
   ]);
   return {
@@ -5293,22 +5316,24 @@ function tlPhase(ph: number): DTL {
     dur: 2.2,
     post: (p, t) => {
       let o = p;
-      // Клинок растёт тремя толчками (0,8–1,45 с), а не ровно.
-      if (t > 0.5 && t < 1.46) {
-        const u = clamp01((t - 0.8) / 0.65);
-        const steps = Math.min(3, Math.floor(u * 3) + EZ.out3((u * 3) % 1));
-        o = { ...o, bl: grow0 + ((1 - grow0) * steps) / 3 };
-      }
-      // Глаза клинка открываются по одному, дыхание в коленопреклонении.
-      if (t > 0.5 && t < 1.46)
+      if (t > 0.5 && t < 0.95) o = { ...o, eyes: 0, bl: grow0 };
+      // Клинок растёт тремя толчками, на каждом — вспышка и дрожь.
+      if (t >= 0.95 && t < 1.46) {
+        const u = clamp01((t - 0.95) / 0.48);
+        const st = Math.min(3, Math.floor(u * 3));
+        const fr = (u * 3) % 1;
+        const e = st >= 3 ? 3 : st + EZ.out3(fr);
         o = {
           ...o,
-          eyes: Math.floor(clamp01((t - 0.6) / 0.7) * 6.99),
+          bl: grow0 + ((1 - grow0) * e) / 3,
+          eyes: Math.floor(clamp01((t - 0.95) / 0.45) * 6.99),
           hy: o.hy + 0.3 * Math.sin(t * 9),
         };
-      return o;
+        if (st < 3 && fr < 0.22) o = { ...o, glow: 1, halo: 1, sy: 0.985, shake: 0.4 };
+      }
+      return shaken(o, t);
     },
-    trail: [[1.5, 1.95]],
+    trail: [[1.68, 1.86]],
     hits: [0.42],
   };
 }
@@ -5744,26 +5769,36 @@ function demonBlade(p: Px, lit: Px, hand: V, ang: number, len: number, o: BladeO
   const tip = pts[len];
   put(p, tip[0], tip[1], fl[3]);
   if (gl > 0) put(lit, tip[0], tip[1], alpha(WHITE, 0.9));
-  // Глаза клинка: открыт — золото и зрачок, закрыт — тёмная щель,
-  // метка ещё впереди — горит белым золотом поверх темноты.
+  // Глаза клинка — как на лице: красный белок, золотая радужка, зрачок на
+  // второй строке клинка. Закрыт — тёмная щель; метка ещё впереди — горит.
   const slots = eyeSlots(len, o.ph);
   slots.forEach((i, k) => {
-    if (i < 2 || i >= len - 1) return;
+    if (i < 3 || i >= len - 2) return;
     const [x, y] = pts[i];
     const open = k < Math.round(o.eyes);
     const hot = o.ph >= 1 && ((o.bright >> Math.floor(k / 2)) & 1) === 1;
+    const [ax0, ay0] = pts[i - 1];
+    const [ax1, ay1] = pts[i + 1];
     if (!open) {
+      put(p, ax0, ay0, FLESH[0]);
       put(p, x, y, FLESH[0]);
+      put(p, ax1, ay1, FLESH[0]);
       return;
     }
     const iris = hot ? hx('#fff4c0') : hx('#ffd84a');
+    const white = hot ? hx('#ff7a3a') : hx('#8a1020');
+    put(p, ax0, ay0, white);
+    put(p, ax1, ay1, white);
     put(p, x, y, iris);
-    put(p, x + uy * 0.8, y - ux * 0.8, hx('#2a0a1a'));
+    put(p, x - uy, y + ux, hx('#2a0a1a'));
     put(lit, x, y, iris);
     if (hot) {
-      put(lit, x - uy, y + ux, alpha(hx('#ffe890'), 0.7));
-      put(lit, x + ux, y + uy, alpha(hx('#ffe890'), 0.45));
-      put(lit, x - ux, y - uy, alpha(hx('#ffe890'), 0.45));
+      put(lit, ax0, ay0, alpha(white, 0.85));
+      put(lit, ax1, ay1, alpha(white, 0.85));
+      put(lit, x + uy, y - ux, alpha(hx('#ffe890'), 0.6));
+    } else {
+      put(lit, ax0, ay0, alpha(white, 0.5));
+      put(lit, ax1, ay1, alpha(white, 0.5));
     }
   });
 }
@@ -5793,7 +5828,13 @@ interface BladeAt {
   hand: V;
   ang: number;
   len: number;
+  /** Возраст выборки следа, с. */
+  age?: number;
 }
+
+/** Сколько живёт след (с) и сколько гаснет после контакта. */
+const SMEAR_T = 0.1;
+const SMEAR_FADE = 2.2 / DFPS;
 
 /** Точка клинка на доле длины `k` (с изгибом катаны; за остриём — продолжение). */
 function bladeAtK(b: BladeAt, k: number): V {
@@ -5830,8 +5871,8 @@ function drawSmear(lit: Px, s: BladeAt[]): void {
     const d = Math.hypot(ta[0] - tb[0], ta[1] - tb[1]);
     if (d < 1.2) continue;
     const sp = clamp01((d - 1.2) / 3.6);
-    const a0 = i / (n - 1);
-    const a1 = (i + 1) / (n - 1);
+    const a0 = clamp01((s[i].age ?? (i / (n - 1)) * SMEAR_T) / SMEAR_T);
+    const a1 = clamp01((s[i + 1].age ?? ((i + 1) / (n - 1)) * SMEAR_T) / SMEAR_T);
     const thick = (a: number) => 0.05 + 0.42 * (1 - a) ** 1.6 * (0.5 + 0.5 * sp);
     const ia = toC(bladeAtK(s[i], 1 - thick(a0)));
     const ib = toC(bladeAtK(s[i + 1], 1 - thick(a1)));
@@ -5846,7 +5887,8 @@ function drawSmear(lit: Px, s: BladeAt[]): void {
     poly(lit, [ta, tb, ib, ia], col);
   }
   // Кромка — тонкая белая нить по пути острия (свежая треть следа).
-  for (let i = 0; i < Math.ceil((n - 1) / 3); i++) {
+  for (let i = 0; i < n - 1; i++) {
+    if ((s[i + 1].age ?? 0) > SMEAR_T * 0.4) break;
     const ta = tip[i];
     const tb = tip[i + 1];
     const d = Math.hypot(ta[0] - tb[0], ta[1] - tb[1]);
@@ -5922,29 +5964,60 @@ function demonHalo(p: Px, lit: Px, head: V, ph: number, halo: number, hal: numbe
       crescentMark(lit, hxp - 1.5, hyp + 0.5 + dy, R, b0, b1, alpha(hx('#ffd98a'), clamp01(a)));
 }
 
-/** Аура смены фазы: языки лунного пламени вверх вокруг тела (поверх темноты). */
-function demonAura(lit: Px, j: DJ, k: number, tt: number): void {
+/**
+ * Аура смены фазы (поверх темноты): кайма света по силуэту — мерцает, внизу
+ * лиловая, к голове золотая, — и искры, всплывающие от пола вдоль тела.
+ */
+function demonAura(p: Px, lit: Px, k: number, tt: number): void {
   if (k <= 0.02) return;
-  const cx = DOX + j.hip[0] + 1;
-  const base = DOY;
-  const top = DOY + j.head[1] - 10;
-  const w = 15;
+  const d = p.data;
+  const W = p.w;
+  const H = p.h;
+  let x0 = W;
+  let y0 = H;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++)
+      if (d[(y * W + x) * 4 + 3]) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+  if (x1 < 0) return;
+  const solid = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < W && y < H && d[(y * W + x) * 4 + 3] > 0;
   const f = Math.floor(tt * 12);
-  for (let i = 0; i < 16; i++) {
-    const x0 = cx - w + ((i * 2 + (f % 2)) * (w * 2)) / 32;
-    const hgt = (base - top) * (0.55 + 0.45 * hash(i, f >> 1, 7)) * k;
-    const sway = Math.sin(tt * 7 + i * 1.7) * 1.2;
-    for (let y = 0; y < hgt; y += 1) {
-      const u = y / Math.max(1, hgt);
-      const x = x0 + sway * u + Math.sin(y * 0.4 + i + tt * 9) * 0.8 * u;
-      const a = (1 - u) * 0.55 * k;
-      if (hash(i, y, f) > 0.72 + u * 0.2) continue;
-      lit.set(
-        Math.round(x),
-        Math.round(base - y),
-        alpha(u < 0.35 ? hx('#b890ff') : hx('#ffe6a0'), a),
-      );
+  const low = hx('#a07aff');
+  const high = hx('#ffe39a');
+  for (let y = Math.max(0, y0 - 2); y <= Math.min(H - 1, y1 + 2); y++) {
+    const up = clamp01((DOY - y) / Math.max(1, DOY - y0));
+    const col = mixc(low, high, up);
+    for (let x = Math.max(0, x0 - 2); x <= Math.min(W - 1, x1 + 2); x++) {
+      if (solid(x, y)) continue;
+      let dist = 9;
+      for (let yy = -2; yy <= 2 && dist > 1; yy++)
+        for (let xx = -2; xx <= 2; xx++)
+          if (solid(x + xx, y + yy)) dist = Math.min(dist, Math.abs(xx) + Math.abs(yy));
+      if (dist > 2) continue;
+      // Мерцание — пламя, а не обводка: кайма рвётся по шуму кадра.
+      if (dist === 2 && hash(x, y, f) < 0.45) continue;
+      lit.set(x, y, alpha(col, (dist === 1 ? 0.8 : 0.4) * k));
     }
+  }
+  // Искры: поднимаются от пола вдоль тела, гаснут к голове.
+  const span = Math.max(8, DOY - y0 + 6);
+  for (let i = 0; i < 12; i++) {
+    const bx = x0 - 2 + hash(i, 3, 17) * (x1 - x0 + 4);
+    const sp = 22 + hash(i, 5, 17) * 26;
+    const ph = (tt * sp + hash(i, 7, 17) * span) % span;
+    const y = DOY - ph;
+    const x = bx + Math.sin(tt * 5 + i) * 1.5;
+    const a = (1 - ph / span) * k;
+    const c = mixc(low, high, ph / span);
+    lit.set(Math.round(x), Math.round(y), alpha(c, 0.9 * a));
+    lit.set(Math.round(x), Math.round(y + 1), alpha(c, 0.5 * a));
   }
 }
 
@@ -6034,8 +6107,8 @@ interface DemonCtx {
   /** Отставание: поза в прошлом (хвост, полы, рукава). */
   lagA: DP;
   lagB: DP;
-  /** След клинка — позы, новые первыми. */
-  trail: DP[];
+  /** След клинка — позы и их возраст (с), новые первыми. */
+  trail: { p: DP; age: number }[];
   dead?: boolean;
 }
 
@@ -6172,13 +6245,14 @@ function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
   if (cx.trail.length > 1 && withBlade)
     drawSmear(
       lit,
-      cx.trail.map((q) => {
+      cx.trail.map(({ p: q, age }) => {
         const jj = jointsOf(q);
         const qv = bladeVec(q);
         return {
           hand: worldOf(q, jj.hand).map((v, i) => v - (i ? dp.dy : dp.dx)) as V,
           ang: qv.ang,
           len: Math.max(4, len * qv.k),
+          age,
         };
       }),
     );
@@ -6187,7 +6261,7 @@ function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
     tipOrb(lit, j.hand, bv.ang, blen, dp.orb);
     bladeGlint(lit, j.hand, bv.ang, blen, dp.glint);
   }
-  demonAura(lit, j, dp.aura, cx.tt);
+  demonAura(p, lit, dp.aura, cx.tt);
   if (dp.dis > 0) dissolve(p, lit, dp.dis, cx.tt);
   return { p, lit, eye };
 }
@@ -6347,10 +6421,18 @@ function demonBuild(q: DReq): MobFrame {
   const t = s.t;
   let dp = s.at(t);
   if (q.fl && canFlinch(q)) dp = flinch(dp, q.fl);
-  // След клинка — только на отрезках удара: восемь выборок назад по 1/72 с.
-  const trail: DP[] = [];
-  if (s.tl && s.tl.trail.some(([a, b]) => t >= a && t <= b))
-    for (let k = 0; k < 12; k++) trail.push(s.at(t - k / 120));
+  // След клинка — только от движения внутри отрезка удара [взмах, контакт]:
+  // выборки по 1/120 с за последние SMEAR_T; после контакта след гаснет на месте.
+  const trail: { p: DP; age: number }[] = [];
+  const win = s.tl?.trail.find(([a, b]) => t >= a && t <= b + SMEAR_FADE);
+  if (win) {
+    const t1 = Math.min(t, win[1]);
+    for (let k = 0; k < 14; k++) {
+      const tk = t1 - k / 120;
+      if (tk < win[0] || t - tk > SMEAR_T) break;
+      trail.push({ p: s.at(tk), age: t - tk });
+    }
+  }
   const d = demonDraw(dp, {
     ph: q.ph,
     len: bladeLen8(q.ph),
