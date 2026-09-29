@@ -494,7 +494,7 @@ registerImpactPainter('f2_sword', {
     const thin = easeOut(after / 0.16);
     const tail = Math.min(lead, 1.3) * (0.35 + 0.65 * fade);
     const Ro = R * 1.04 - thin * 2;
-    const Tm = R * 0.36 * (1 - thin) + 2 * thin;
+    const Tm = R * 0.46 * (1 - thin) + 2 * thin;
     const Rmax = Math.ceil(R * 1.1);
     const flash = age < 0.06 ? 1 - age / 0.06 : 0;
     for (let y = -Rmax; y < Rmax; y++)
@@ -1067,7 +1067,7 @@ registerImpactPainter('f2_leap', {
       const f = fly(tt, Math.cos(ang) * v, Math.sin(ang) * v * 0.8, 0, 0, 4.2, 0, 0);
       const r0 = R * 0.4;
       const y = Math.sin(ang) * r0 + f.y - 9 * easeOut(k);
-      dust(L, Math.cos(ang) * r0 + f.x, y, 4.2 + 1.6 * r(), k, i, DUST_L, PALE, DUST, 0.85);
+      dust(L, Math.cos(ang) * r0 + f.x, y, 4 + 1.6 * r(), k, i, DUST, DUST_L, DUST_D, 0.72);
     }
     // Осколки плит: подлетают, падают с отскоком, лежат и тают.
     for (let i = 0; i < 16; i++) {
@@ -1329,21 +1329,21 @@ registerZonePainter('f2v_burst', (g, z, px, py) => {
     ring(L, 0, 0, rr - th - 2, rr - th, VIO, al * 0.8, 0.8 * (1 - k));
   }
   // Пар роя: клубы от груди наружу и вверх, растут и тают.
-  for (let i = 0; i < 16; i++) {
-    const ang = (i / 16) * TAU + (r() - 0.5) * 0.5;
-    const v = 45 + 55 * r();
-    const life = 0.7 + 0.45 * r();
+  for (let i = 0; i < 12; i++) {
+    const ang = (i / 12) * TAU + (r() - 0.5) * 0.5;
+    const v = 55 + 60 * r();
+    const life = 0.45 + 0.3 * r();
     const k = t / life;
     if (k > 1) continue;
     const f = fly(t, Math.cos(ang) * v, Math.sin(ang) * v * 0.7, 0, 0, 3.2, 0, 0);
-    const lift = CHEST - 4 + 16 * easeOut(k) + Math.sin(ang) * 4;
-    dust(L, f.x, f.y - lift, 7.5, k, i, VAPOR, VAPOR_L, VIO_D);
+    const lift = CHEST - 6 + 9 * easeOut(k) + Math.sin(ang) * 4;
+    dust(L, f.x, f.y - lift, 5, k, i, VAPOR_L, VIO_L, VAPOR, 0.7);
   }
   // Вспышка в груди и лучи — первые кадры.
   if (t < 0.1) {
     const k = t / 0.1;
-    ring(L, 0, -CHEST, 0, 7 + 9 * k, VIO_L, 0.95, 1 - k * 0.7);
-    ring(L, 0, -CHEST, 0, 4 + 4 * k, WHITE, 1, 1 - k * 0.5);
+    ring(L, 0, -CHEST, 0, 7 + 9 * k, VIO_L, 0.95 * (1 - k * 0.6));
+    ring(L, 0, -CHEST, 0, 4 + 4 * k, WHITE, 1 - k * 0.5);
   }
   if (t < 0.18) {
     const k = t / 0.18;
@@ -1498,10 +1498,20 @@ registerZonePainter('f2v_gather', (g, z, px, py, S, time) => {
       0.4 + 0.6 * ph,
     );
   }
-  const core = 2 + 4 * k + Math.sin(time * 10) * 0.8;
-  ring(L, 0, cy, 0, core + 2, VIO, 0.5 + 0.3 * k, 0.6 + 0.4 * k);
-  ring(L, 0, cy, 0, core, VIO_L, 0.7 + 0.3 * k);
-  if (k > 0.85) ring(L, 0, cy, 0, core - 1, WHITE, (k - 0.85) / 0.15);
+  // Ядро — не шар, а вихрь: кольцо искр кружит вокруг светящейся точки,
+  // сжимается и ярчает к концу сборки.
+  const orb = 7 - 3 * k;
+  const spin = time * (4 + 6 * k);
+  for (let i = 0; i < 8; i++) {
+    const ang = spin + (i * TAU) / 8;
+    const x = Math.cos(ang) * orb;
+    const y = cy + Math.sin(ang) * orb * 0.55;
+    L.set(x, y, i % 2 ? VIO_L : VIO, 0.7 + 0.3 * k);
+    L.set(x - Math.cos(ang - 0.5) * 1.5, y - Math.sin(ang - 0.5) * 0.8, VIO, 0.45);
+  }
+  const core = 1 + 1.6 * k + (Math.sin(time * 12) > 0.6 ? 0.6 : 0);
+  ring(L, 0, cy, 0, core + 1, VIO, 0.8);
+  ring(L, 0, cy, 0, core, k > 0.8 ? WHITE : VIO_L, 1);
   L.blit(g, px, py);
   return true;
 });
@@ -1518,8 +1528,8 @@ registerZonePainter('f2v_reform', (g, z, px, py) => {
     ring(L, 0, 0, rr, rr + 2, VIO, 0.5 + 0.4 * k, 0.6);
   } else if (t < 0.36) {
     const k = (t - 0.2) / 0.16;
-    ring(L, 0, -CHEST, 0, 12 - 6 * k, VIO_L, 0.95, 1 - k);
-    ring(L, 0, -CHEST, 0, 6 - 4 * k, WHITE, 1, 1 - k * 0.5);
+    ring(L, 0, -CHEST, 0, 12 - 8 * k, VIO_L, 0.95 * (1 - k));
+    ring(L, 0, -CHEST, 0, 6 - 4 * k, WHITE, 1 - k * 0.5);
     ring(L, 0, 0, 12 + 22 * k - 1, 12 + 22 * k, VIO_L, 0.85, 1 - k);
   }
   // Рой вползает в латы: искры поднимаются от сабатонов к шлему.
