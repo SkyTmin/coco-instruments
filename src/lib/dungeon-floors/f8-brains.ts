@@ -1805,6 +1805,14 @@ function ringOfArcs(
   }
 }
 
+// v2.86 — только рисунок: зона-картинка техник демона (`f8-boss-fx.ts`) —
+// без урона и статусов, номер мимо `nextId`; своих `f8v_*` разом не больше 30.
+function fx8(sim: Sim, api: SimApi, art: string, x: number, y: number, life: number, ang = 0) {
+  let n = 0;
+  for (const z of sim.zones) if (z.id < 0 && z.art?.startsWith('f8v_')) n++;
+  if (n < 30) api.vfx(sim, { x, y, r: 0.5, life, art, ang } as ZoneIn & { ang: number });
+}
+
 function startDash(sim: Sim, m: Mob, api: SimApi): void {
   m.dir = Math.atan2(sim.hero.y - m.y, sim.hero.x - m.x);
   api.setMode(m, 'aim');
@@ -1823,6 +1831,7 @@ registerBrain('f8boss', {
     m.danger = 0;
     m.data.blade = L;
     m.data.phase = phase;
+    m.data.vNoTele = 1; // v2.86 — только рисунок: метки прицела и залпа рисует `f8-boss-fx.ts`
     m.data.eyesCd = (m.data.eyesCd ?? 4) - dt;
     m.data.volleyCd = (m.data.volleyCd ?? 3) - dt;
     m.data.ringCd = (m.data.ringCd ?? 3) - dt;
@@ -1857,6 +1866,12 @@ registerBrain('f8boss', {
         const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
         const close = dist < 2.6;
         api.steer(sim, m, cx, cy, m.speed * haste * (close ? 0.3 : 1), dt);
+        // v2.86 — только рисунок: пыль из-под ступней, не чаще 3 раз в секунду.
+        m.data.vStep = (m.data.vStep ?? 0) - dt;
+        if (m.data.vStep <= 0 && hypot(m.vx, m.vy) > 1.2) {
+          m.data.vStep = 0.32;
+          fx8(sim, api, 'f8v_step', m.x, m.y, 0.7, Math.atan2(m.vy, m.vx));
+        }
         if (m.t < 0.55 / haste || m.cd > 0) return;
         if (dist < BOSS8.sweepR * L * 0.8) {
           m.dir = Math.atan2(dy, dx);
@@ -1968,6 +1983,7 @@ registerBrain('f8boss', {
           m.bounce = true;
           api.setMode(m, 'dash');
           sim.events.push({ t: 'boss', what: 'roll' });
+          fx8(sim, api, 'f8v_launch', m.x, m.y, 0.95, m.dir); // v2.86 — только рисунок
         }
         return;
       }
@@ -2091,6 +2107,7 @@ registerBrain('f8boss', {
 
 /** Конец выпада: за спиной — след серпа по пройденной линии. */
 function endBossDash(sim: Sim, m: Mob, api: SimApi): void {
+  fx8(sim, api, 'f8v_skid', m.x, m.y, 1.1, m.dir); // v2.86 — только рисунок
   m.bounce = false;
   m.vx = 0;
   m.vy = 0;
@@ -2215,6 +2232,8 @@ registerBoss('f8boss', {
     b.data.intro = 0;
     b.data.at = 0;
     arenaOf(sim, b);
+    // v2.86 — только рисунок: «режиссёр» техник демона на весь бой.
+    api.vfx(sim, { x: b.data.acx, y: b.data.acy, r: 0.5, life: 1e6, art: 'f8v_dir' });
     void api;
   },
   step(sim, b, _dt, api) {
