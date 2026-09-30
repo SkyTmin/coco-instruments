@@ -1579,7 +1579,8 @@ function vfx(
   for (const z of sim.zones) if (z.art?.startsWith('f7_fx')) n++;
   if (n >= (move ? 18 : 44)) return;
   api.vfx(sim, { x, y, r: 0, life, art, ...o } as ZoneIn);
-  if (lit > 0) api.vfx(sim, { x, y, r: 0, life: lit, art: art + '_lit', above: true, ...o } as ZoneIn);
+  if (lit > 0)
+    api.vfx(sim, { x, y, r: 0, life: lit, art: art + '_lit', above: true, ...o } as ZoneIn);
 }
 // v2.86 — только рисунок: метка удара (пол и свет) — зона, которая следит за
 // мобом и его `m.tele`; своя у каждого замаха (`vTz`), `vT` — длина замаха.
@@ -1606,7 +1607,17 @@ function vSteps(sim: Sim, m: Mob, api: SimApi, dt: number): void {
   if (m.data.vStep < 0.55) return;
   m.data.vStep = 0;
   m.data.vFoot = m.data.vFoot ? 0 : 1;
-  vfx(sim, api, 'f7_fxstep', m.x, m.y, 1.1, { vA: Math.atan2(m.vy, m.vx), vS: m.data.vFoot }, 0, true);
+  vfx(
+    sim,
+    api,
+    'f7_fxstep',
+    m.x,
+    m.y,
+    1.1,
+    { vA: Math.atan2(m.vy, m.vx), vS: m.data.vFoot },
+    0,
+    true,
+  );
 }
 // v2.86 — только рисунок: выпад (рывок, бег сквозь зал) — толчок, искры, попадание.
 function vLunge(sim: Sim, m: Mob, api: SimApi, dt: number, big: number): void {
@@ -1797,7 +1808,16 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         if (heroOpen(h) && coneHits(m.x, m.y, m.dir, BOSS.heavyR, BOSS.heavyArc, h))
           api.hurtHero(sim, bossDmg(m, 2), m.x, m.y, 9, m.kind);
         // v2.86 — только рисунок: клинок в пол — раскол зеркального пола, волна, осколки.
-        vfx(sim, api, 'f7_fxheavy', m.x, m.y, 1.8, { vA: m.dir, vR: BOSS.heavyR, vArc: BOSS.heavyArc }, 0.9);
+        vfx(
+          sim,
+          api,
+          'f7_fxheavy',
+          m.x,
+          m.y,
+          1.8,
+          { vA: m.dir, vR: BOSS.heavyR, vArc: BOSS.heavyArc },
+          0.9,
+        );
         vShake(sim, m.x, m.y, 0.42); // v2.86 — только рисунок
         if (dist < 7) sim.events.push({ t: 'flash', k: 0.28, color: '#d8ecff' }); // v2.86 — только рисунок
         sim.events.push({ t: 'boom', x: m.x + Math.cos(m.dir), y: m.y + Math.sin(m.dir), r: 0 });
@@ -1896,7 +1916,16 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         if (heroOpen(h) && coneHits(m.x, m.y, m.dir, BOSS.gazeR, BOSS.gazeArc, h))
           api.hurtHero(sim, bossDmg(m, 0.5), m.x, m.y, 1, m.kind, { kind: 'charm', dur: 1.2 });
         // v2.86 — только рисунок: волна взгляда поверх темноты, лиловая вспышка.
-        vfx(sim, api, 'f7_fxgaze', m.x, m.y, 0.7, { vA: m.dir, vR: BOSS.gazeR, vArc: BOSS.gazeArc }, 1.4);
+        vfx(
+          sim,
+          api,
+          'f7_fxgaze',
+          m.x,
+          m.y,
+          0.7,
+          { vA: m.dir, vR: BOSS.gazeR, vArc: BOSS.gazeArc },
+          1.4,
+        );
         vShake(sim, m.x, m.y, 0.12); // v2.86 — только рисунок
         if (dist < 7) sim.events.push({ t: 'flash', k: 0.22, color: '#b58cff' }); // v2.86 — только рисунок
         const z: ZoneIn & { ang: number } = {
@@ -2036,13 +2065,23 @@ registerBrain('f7_boss', {
       m.dir = hit.ang + Math.PI;
       api.setMode(m, 'riposte');
       // v2.86 — только рисунок: удар в зеркальную стойку — блик и звон отражённого удара.
-      vfx(sim, api, 'f7_fxparry', m.x - Math.cos(hit.ang) * 0.55, m.y - Math.sin(hit.ang) * 0.55, 0.5, { vA: hit.ang + Math.PI }, 0.6);
+      vfx(
+        sim,
+        api,
+        'f7_fxparry',
+        m.x - Math.cos(hit.ang) * 0.55,
+        m.y - Math.sin(hit.ang) * 0.55,
+        0.5,
+        { vA: hit.ang + Math.PI },
+        0.6,
+      );
       vShake(sim, m.x, m.y, 0.18); // v2.86 — только рисунок
       return 0;
     }
     void sim;
     return 1;
   },
+  // v2.86 — только рисунок: `api` нужен для зоны-картинки раскола.
   onDeath(sim, m, _mode, api) {
     const st = STATE.get(sim);
     if (st) st.bursts.push({ t: 0.05, x: m.x, y: m.y, n: 0, dmg: 0, kind: m.kind });
@@ -2227,7 +2266,11 @@ function volley(sim: Sim, api: SimApi, st: F7State): void {
       art: 'f7_shardline',
     });
     // v2.86 — только рисунок: осколки залпа ложатся вдоль линии.
-    vfx(sim, api, 'f7_fxvolley', sx, sy, 4, { warn: BOSS.volleyWarn, vA: ang, vL: Math.max(1, len) });
+    vfx(sim, api, 'f7_fxvolley', sx, sy, 4, {
+      warn: BOSS.volleyWarn,
+      vA: ang,
+      vL: Math.max(1, len),
+    });
     // Зеркало трескается — навсегда до конца боя.
     st.cracked.add(i);
     st.bursts.push({ t: BOSS.volleyWarn, x: sx, y: sy, n: -1, dmg: i, kind: 'crack' });
