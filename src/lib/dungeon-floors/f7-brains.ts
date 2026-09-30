@@ -1560,6 +1560,82 @@ function startCombo(m: Mob, api: SimApi): void {
   api.setMode(m, 'combo');
 }
 
+// v2.86 — только рисунок: зоны-картинки Отражения (`api.vfx`: без урона и
+// статусов, номер мимо `nextId`) — рисует `f7-boss-fx.ts`. Своих `f7_fx*`
+// разом не больше 44, следов движения — не больше 18. `lit` — вторая зона
+// того же вида поверх темноты (`<вид>_lit`): свет, искры, трещины в воздухе.
+function vfx(
+  sim: Sim,
+  api: SimApi,
+  art: string,
+  x: number,
+  y: number,
+  life: number,
+  o: Record<string, number> = {},
+  lit = 0,
+  move = false,
+): void {
+  let n = 0;
+  for (const z of sim.zones) if (z.art?.startsWith('f7_fx')) n++;
+  if (n >= (move ? 18 : 44)) return;
+  api.vfx(sim, { x, y, r: 0, life, art, ...o } as ZoneIn);
+  if (lit > 0)
+    api.vfx(sim, { x, y, r: 0, life: lit, art: art + '_lit', above: true, ...o } as ZoneIn);
+}
+// v2.86 — только рисунок: метка удара (пол и свет) — зона, которая следит за
+// мобом и его `m.tele`; своя у каждого замаха (`vTz`), `vT` — длина замаха.
+function vTele(sim: Sim, m: Mob, api: SimApi, dt: number, Tw: number): void {
+  if (m.t > dt + 1e-6) return;
+  const z = { x: m.x, y: m.y, r: 0, life: Tw - m.t + 0.15, vm: m.id, vT: Tw };
+  api.vfx(sim, { ...z, art: 'f7_fxtele' } as ZoneIn);
+  m.data.vTz = sim.zones[sim.zones.length - 1].id;
+  api.vfx(sim, { ...z, art: 'f7_fxtele_lit', above: true } as ZoneIn);
+}
+// v2.86 — только рисунок: тряска по силе удара; вдали от героя — вполсилы.
+const vShake = (sim: Sim, x: number, y: number, k: number) =>
+  sim.events.push({ t: 'shake', k: hypot(sim.hero.x - x, sim.hero.y - y) < 7 ? k : k * 0.5 });
+// v2.86 — только рисунок: контакт взмаха (0–2 — серия, 3 — ответ из стойки).
+function vCut(sim: Sim, m: Mob, api: SimApi, k: number, R: number, arc: number): void {
+  const o = { vA: m.dir, vR: R, vArc: arc, vK: k };
+  vfx(sim, api, 'f7_fxcut', m.x, m.y, 1.2, o, 0.7);
+  vShake(sim, m.x, m.y, k === 2 ? 0.2 : k === 3 ? 0.16 : 0.1);
+}
+// v2.86 — только рисунок: стеклянные следы на зеркальном полу, шаг — полклетки.
+function vSteps(sim: Sim, m: Mob, api: SimApi, dt: number): void {
+  const v = hypot(m.vx, m.vy);
+  m.data.vStep = v < 0.8 ? 0 : (m.data.vStep ?? 0) + v * dt;
+  if (m.data.vStep < 0.55) return;
+  m.data.vStep = 0;
+  m.data.vFoot = m.data.vFoot ? 0 : 1;
+  vfx(
+    sim,
+    api,
+    'f7_fxstep',
+    m.x,
+    m.y,
+    1.1,
+    { vA: Math.atan2(m.vy, m.vx), vS: m.data.vFoot },
+    0,
+    true,
+  );
+}
+// v2.86 — только рисунок: выпад (рывок, бег сквозь зал) — толчок, искры, попадание.
+function vLunge(sim: Sim, m: Mob, api: SimApi, dt: number, big: number): void {
+  if (m.t <= dt + 1e-6) {
+    vfx(sim, api, 'f7_fxkick', m.x, m.y, 0.9, { vA: m.dir, vK: big }, 0.5);
+    if (big) vfx(sim, api, 'f7_fxrun', m.x, m.y, 2.6, { vA: m.dir, vm: m.id }, 2.6);
+  }
+  m.data.vSt = (m.data.vSt ?? 0) + dt;
+  if (m.data.vSt < 0.07) return;
+  m.data.vSt = 0;
+  vfx(sim, api, 'f7_fxstreak', m.x, m.y, 0.35, { vA: m.dir, vK: big }, 0, true);
+}
+function vPierce(sim: Sim, m: Mob, api: SimApi, big: number): void {
+  const h = sim.hero;
+  vfx(sim, api, 'f7_fxpierce', h.x, h.y, 1.1, { vA: m.dir, vK: big }, 0.6);
+  vShake(sim, h.x, h.y, big ? 0.22 : 0.16);
+}
+
 function bossDecide(sim: Sim, m: Mob, c: BrainCtx, api: SimApi): boolean {
   const h = sim.hero;
   const { dx, dy, dist } = c;
@@ -1645,6 +1721,7 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
   m.tele = null;
   m.danger = 0;
   m.bounce = false;
+  m.data.vNoTele = 1; // v2.86 — только рисунок: метки ударов рисует f7-boss-fx
   for (const k of ['dashCd', 'guardCd', 'gazeCd', 'mdCd'] as const)
     m.data[k] = (m.data[k] ?? 0) - dt;
   if (heroDown(sim)) {
@@ -1676,6 +1753,7 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.data.ghost = 0;
       const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
       api.steer(sim, m, cx, cy, m.speed * hs * (dist < 1.7 ? 0.2 : 1), dt);
+      vSteps(sim, m, api, dt); // v2.86 — только рисунок
       if (m.t < 0.35 / hs) return;
       if (bossDecide(sim, m, c, api)) return;
       return;
@@ -1690,10 +1768,12 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.t < Tw * 0.55) m.dir = Math.atan2(dy, dx);
       m.face = m.dir;
       m.tele = { shape: 'cone', r: R, arc, ang: m.dir, k: Math.min(1, m.t / Tw) };
+      vTele(sim, m, api, dt, Tw); // v2.86 — только рисунок
       if (m.t > Tw - 0.24) m.danger = R + 0.5;
       if (m.t >= Tw) {
         if (heroOpen(h) && coneHits(m.x, m.y, m.dir, R, arc, h))
           api.hurtHero(sim, bossDmg(m, k === 2 ? 1.5 : 1), m.x, m.y, k === 2 ? 6 : 3, m.kind);
+        vCut(sim, m, api, k, R, arc); // v2.86 — только рисунок
         sim.events.push({ t: 'boss', what: 'whip' });
         m.vx += Math.cos(m.dir) * 4.5;
         m.vy += Math.sin(m.dir) * 4.5;
@@ -1722,10 +1802,24 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         ang: m.dir,
         k: Math.min(1, m.t / Tw),
       };
+      vTele(sim, m, api, dt, Tw); // v2.86 — только рисунок
       if (m.t > Tw - 0.26) m.danger = BOSS.heavyR + 0.6;
       if (m.t >= Tw) {
         if (heroOpen(h) && coneHits(m.x, m.y, m.dir, BOSS.heavyR, BOSS.heavyArc, h))
           api.hurtHero(sim, bossDmg(m, 2), m.x, m.y, 9, m.kind);
+        // v2.86 — только рисунок: клинок в пол — раскол зеркального пола, волна, осколки.
+        vfx(
+          sim,
+          api,
+          'f7_fxheavy',
+          m.x,
+          m.y,
+          1.8,
+          { vA: m.dir, vR: BOSS.heavyR, vArc: BOSS.heavyArc },
+          0.9,
+        );
+        vShake(sim, m.x, m.y, 0.42); // v2.86 — только рисунок
+        if (dist < 7) sim.events.push({ t: 'flash', k: 0.28, color: '#d8ecff' }); // v2.86 — только рисунок
         sim.events.push({ t: 'boom', x: m.x + Math.cos(m.dir), y: m.y + Math.sin(m.dir), r: 0 });
         sim.events.push({ t: 'boss', what: 'whip' });
         api.setMode(m, 'recover');
@@ -1745,6 +1839,7 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       );
       m.data.len = Math.max(0.5, len);
       m.tele = { shape: 'line', r: m.data.len, w: 0.55, ang: m.dir, k: Math.min(1, m.t / Tw) };
+      vTele(sim, m, api, dt, Tw); // v2.86 — только рисунок
       if (m.t > Tw - 0.24) m.danger = m.data.len + 1;
       if (m.t >= Tw) {
         m.data.run = 0;
@@ -1761,9 +1856,11 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.bounce = true;
       m.data.run = (m.data.run ?? 0) + s * dt;
       m.danger = m.r + h.r + 1;
+      vLunge(sim, m, api, dt, 0); // v2.86 — только рисунок
       if (!m.data.hit && dist < m.r + h.r + 0.15 && heroOpen(h)) {
         m.data.hit = 1;
         api.hurtHero(sim, bossDmg(m, 1.3), m.x, m.y, 7, m.kind);
+        vPierce(sim, m, api, 0); // v2.86 — только рисунок
       }
       if (m.data.run >= m.data.len || m.t > 0.6) {
         m.bounce = false;
@@ -1787,10 +1884,12 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.t < 0.12) m.dir = Math.atan2(dy, dx);
       m.face = m.dir;
       m.tele = { shape: 'cone', r: 2.1, arc: 2.2, ang: m.dir, k: Math.min(1, m.t / Tw) };
+      vTele(sim, m, api, dt, Tw); // v2.86 — только рисунок
       if (m.t > Tw - 0.2) m.danger = 2.6;
       if (m.t >= Tw) {
         if (heroOpen(h) && coneHits(m.x, m.y, m.dir, 2.1, 2.2, h))
           api.hurtHero(sim, bossDmg(m, 1.4), m.x, m.y, 5, m.kind);
+        vCut(sim, m, api, 3, 2.1, 2.2); // v2.86 — только рисунок
         sim.events.push({ t: 'boss', what: 'whip' });
         api.setMode(m, 'recover');
         m.data.rec = 0.8;
@@ -1811,10 +1910,24 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         ang: m.dir,
         k: Math.min(1, m.t / Tw),
       };
+      vTele(sim, m, api, dt, Tw); // v2.86 — только рисунок
       if (m.t > Tw - 0.24) m.danger = BOSS.gazeR;
       if (m.t >= Tw) {
         if (heroOpen(h) && coneHits(m.x, m.y, m.dir, BOSS.gazeR, BOSS.gazeArc, h))
           api.hurtHero(sim, bossDmg(m, 0.5), m.x, m.y, 1, m.kind, { kind: 'charm', dur: 1.2 });
+        // v2.86 — только рисунок: волна взгляда поверх темноты, лиловая вспышка.
+        vfx(
+          sim,
+          api,
+          'f7_fxgaze',
+          m.x,
+          m.y,
+          0.7,
+          { vA: m.dir, vR: BOSS.gazeR, vArc: BOSS.gazeArc },
+          1.4,
+        );
+        vShake(sim, m.x, m.y, 0.12); // v2.86 — только рисунок
+        if (dist < 7) sim.events.push({ t: 'flash', k: 0.22, color: '#b58cff' }); // v2.86 — только рисунок
         const z: ZoneIn & { ang: number } = {
           x: m.x,
           y: m.y,
@@ -1834,6 +1947,7 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.data.ghost = 1;
       m.vx *= 0.5;
       m.vy *= 0.5;
+      if (m.t <= dt + 1e-6) vfx(sim, api, 'f7_fxdive', m.x, m.y, 0.9, {}, 0.7); // v2.86 — только рисунок
       if (m.t >= 0.45) {
         const ex = mirrorExit(sim, api, m);
         if (!ex) {
@@ -1858,6 +1972,8 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.vy = 0;
       m.face = m.dir;
       m.tele = { shape: 'line', r: m.data.len, w: 0.6, ang: m.dir, k: Math.min(1, m.t / Tw) };
+      vTele(sim, m, api, dt, Tw); // v2.86 — только рисунок
+      if (m.t <= dt + 1e-6) vfx(sim, api, 'f7_fxemerge', m.x, m.y, 1.1, { vA: m.dir }, 1.0); // v2.86 — только рисунок
       if (m.t > Tw - 0.24) m.danger = m.data.len + 1;
       if (m.t >= Tw) {
         m.data.ghost = 0;
@@ -1875,9 +1991,11 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.bounce = true;
       m.data.run = (m.data.run ?? 0) + s * dt;
       m.danger = m.r + h.r + 1;
+      vLunge(sim, m, api, dt, 1); // v2.86 — только рисунок
       if (!m.data.hit && dist < m.r + h.r + 0.2 && heroOpen(h)) {
         m.data.hit = 1;
         api.hurtHero(sim, bossDmg(m, 1.4), m.x, m.y, 8, m.kind);
+        vPierce(sim, m, api, 1); // v2.86 — только рисунок
       }
       if (m.data.run >= m.data.len || m.t > 1.6) {
         m.bounce = false;
@@ -1890,9 +2008,11 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.data.ghost = 1;
       m.vx = 0;
       m.vy = 0;
+      if (m.t <= dt + 1e-6) vfx(sim, api, 'f7_fxdive', m.x, m.y, 1.0, { vK: 1 }, 0.8); // v2.86 — только рисунок
       if (m.t >= 0.7) {
         m.x = m.data.nx ?? m.x;
         m.y = m.data.ny ?? m.y;
+        vfx(sim, api, 'f7_fxemerge', m.x, m.y, 1.1, { vA: Math.PI / 2 }, 1.0); // v2.86 — только рисунок
         m.data.quick = 1;
         api.setMode(m, 'intro');
         m.t = 0.5;
@@ -1925,6 +2045,9 @@ registerBrain('f7_boss', {
   },
   onWall(sim, m, _nx, _ny, api) {
     if (m.mode === 'dash' || m.mode === 'mrun') {
+      // v2.86 — только рисунок: стекло о стену — звезда, осколки назад в зал.
+      vfx(sim, api, 'f7_fxwall', m.x, m.y, 1.0, { vA: m.dir }, 0.6);
+      vShake(sim, m.x, m.y, 0.2); // v2.86 — только рисунок
       m.bounce = false;
       m.vx = 0;
       m.vy = 0;
@@ -1941,15 +2064,29 @@ registerBrain('f7_boss', {
     if (m.mode === 'guard') {
       m.dir = hit.ang + Math.PI;
       api.setMode(m, 'riposte');
+      // v2.86 — только рисунок: удар в зеркальную стойку — блик и звон отражённого удара.
+      vfx(
+        sim,
+        api,
+        'f7_fxparry',
+        m.x - Math.cos(hit.ang) * 0.55,
+        m.y - Math.sin(hit.ang) * 0.55,
+        0.5,
+        { vA: hit.ang + Math.PI },
+        0.6,
+      );
+      vShake(sim, m.x, m.y, 0.18); // v2.86 — только рисунок
       return 0;
     }
     void sim;
     return 1;
   },
-  onDeath(sim, m) {
+  // v2.86 — только рисунок: `api` нужен для зоны-картинки раскола.
+  onDeath(sim, m, _mode, api) {
     const st = STATE.get(sim);
     if (st) st.bursts.push({ t: 0.05, x: m.x, y: m.y, n: 0, dmg: 0, kind: m.kind });
     sim.events.push({ t: 'break', x: m.x, y: m.y, kind: 'f7_glass' });
+    vfx(sim, api, 'f7_fxdeath', m.x, m.y, 3.2, {}, 1.6); // v2.86 — только рисунок
   },
 });
 
@@ -1964,6 +2101,9 @@ registerBrain('f7_copy', {
   },
   onWall(_sim, m, _nx, _ny, api) {
     if (m.mode === 'dash') {
+      // v2.86 — только рисунок: как у настоящего — иначе копию выдал бы удар о стену.
+      vfx(_sim, api, 'f7_fxwall', m.x, m.y, 1.0, { vA: m.dir }, 0.6);
+      vShake(_sim, m.x, m.y, 0.2); // v2.86 — только рисунок
       m.bounce = false;
       api.setMode(m, 'recover');
       m.data.rec = 0.7;
@@ -1993,6 +2133,8 @@ function shatterCopy(sim: Sim, api: SimApi, m: Mob): void {
     knock: 4,
     art: 'f7_copyburst',
   });
+  // v2.86 — только рисунок: осколки копии ложатся на пол, когда она лопнет.
+  vfx(sim, api, 'f7_fxburst', m.x, m.y, 3, { warn: 0.4 });
 }
 
 /** Места у люстры посреди арены: кольцо, куда встают копии. */
@@ -2123,6 +2265,12 @@ function volley(sim: Sim, api: SimApi, st: F7State): void {
       knock: 4,
       art: 'f7_shardline',
     });
+    // v2.86 — только рисунок: осколки залпа ложатся вдоль линии.
+    vfx(sim, api, 'f7_fxvolley', sx, sy, 4, {
+      warn: BOSS.volleyWarn,
+      vA: ang,
+      vL: Math.max(1, len),
+    });
     // Зеркало трескается — навсегда до конца боя.
     st.cracked.add(i);
     st.bursts.push({ t: BOSS.volleyWarn, x: sx, y: sy, n: -1, dmg: i, kind: 'crack' });
@@ -2140,6 +2288,7 @@ registerBoss('f7boss', {
     F7_VIEW.bossPhase = 0;
     const st = stateOf(sim, api);
     setArenaLight(sim, st, 0);
+    vfx(sim, api, 'f7_fxemerge', lead.x, lead.y, 1.6, { vA: Math.PI / 2, vK: 1 }, 1.4); // v2.86 — только рисунок
   },
   step(sim, b, dt, api) {
     const st = stateOf(sim, api);
@@ -2162,6 +2311,7 @@ registerBoss('f7boss', {
       b.phase = 1;
       F7_VIEW.bossPhase = 1;
       setArenaLight(sim, st, 1);
+      vfx(sim, api, 'f7_fxphase', lead.x, lead.y, 2.2, { vP: 1 }, 1.4); // v2.86 — только рисунок
       split(sim, api, lead, 3);
       b.data.shuf = BOSS.shuffle;
       b.data.resplit = 0;
@@ -2194,6 +2344,7 @@ registerBoss('f7boss', {
       F7_VIEW.bossPhase = 2;
       for (const c of copies) shatterCopy(sim, api, c);
       setArenaLight(sim, st, 2);
+      vfx(sim, api, 'f7_fxphase', lead.x, lead.y, 2.2, { vP: 2 }, 1.4); // v2.86 — только рисунок
       lead.data.mdCd = 1.5;
       lead.data.gazeCd = 4;
       sim.events.push({
@@ -2209,6 +2360,7 @@ registerBoss('f7boss', {
       b.phase = 3;
       F7_VIEW.bossPhase = 3;
       setArenaLight(sim, st, 3);
+      vfx(sim, api, 'f7_fxphase', lead.x, lead.y, 2.2, { vP: 3 }, 1.4); // v2.86 — только рисунок
       b.data.volley = 1.4;
       sim.events.push({
         t: 'boss',
