@@ -141,7 +141,15 @@ function poly(p: Px, pts: [number, number][], c: RGBA | ((x: number, y: number) 
 }
 
 /** Толстая линия. */
-export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  c: RGBA,
+  w = 1,
+): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -646,7 +654,8 @@ function paintSalSwim(f: number, half: number): Built {
     shadeEll(p, cx - 1, cy - 1 * half, 5 * half + 1, 2 * half + 0.8, SAL.skin);
     shadeEll(p, cx + 4, cy - 1.4 * half, 2.4, 1.6, SAL.skin);
     p.outline(INK);
-    for (let i = 0; i < 3; i++) flame(p, cx - 3 + i * 3, Math.round(cy - 2 * half - 0.5), 2, f + i, 1);
+    for (let i = 0; i < 3; i++)
+      flame(p, cx - 3 + i * 3, Math.round(cy - 2 * half - 0.5), 2, f + i, 1);
   } else {
     // Только глаза и гребень над лавой.
     shadeEll(p, cx + 2, cy - 0.3, 2.2, 1, SAL.skin);
@@ -736,7 +745,15 @@ function paintWisp(dir: number, f: number, swell: number, anim: string): Built |
 }
 
 /** Кольцо по лаве: задняя половина — под телом, передняя — поверх. */
-function lavaRing(p: Px, cx: number, cy: number, rx: number, ry: number, front: boolean, fade: number): void {
+function lavaRing(
+  p: Px,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  front: boolean,
+  fade: number,
+): void {
   for (let a = 0; a < TAU; a += 0.06) {
     const s = Math.sin(a);
     if (s > 0 !== front) continue;
@@ -796,7 +813,11 @@ registerMobPainter('f6_wisp', (m: Mob, pose: MobPose) => {
         for (let y = 0; y <= h; y++) {
           const w = Math.round(Math.sqrt(1 - (y / (h + 0.5)) ** 2) * (3 + k));
           for (let x = -w; x <= w; x++)
-            p.set(b.ax + x, surf - y, y === Math.round(h) || Math.abs(x) === w ? LAVA.hot : LAVA.bright);
+            p.set(
+              b.ax + x,
+              surf - y,
+              y === Math.round(h) || Math.abs(x) === w ? LAVA.hot : LAVA.bright,
+            );
         }
       }
       const low = Math.round((1 - e) * 15);
@@ -871,7 +892,8 @@ registerMobPainter('f6_wisp', (m: Mob, pose: MobPose) => {
       // Угли на месте мигают.
       if (q > 0.5)
         for (let i = 0; i < 3; i++)
-          if (hash(i, k, 5) < 0.6) p.set(b.ax - 2 + i * 2, bottom - (i % 2), i === 1 ? LAVA.hot : LAVA.mid);
+          if (hash(i, k, 5) < 0.6)
+            p.set(b.ax - 2 + i * 2, bottom - (i % 2), i === 1 ? LAVA.hot : LAVA.mid);
       // Дым клубами вверх.
       for (let i = 0; i < 3; i++) {
         const tt = q - 0.2 - i * 0.14;
@@ -1198,7 +1220,8 @@ function paintGolem(gp: GolemPose, plates: number, anim: string): Built {
       p.set(Math.floor(x), Math.floor(y), c);
       // Без корки швы — реки жидкого камня: широкие, с жёлтой сердцевиной.
       if (molten) {
-        if (p.solid(Math.floor(x) + 1, Math.floor(y))) p.set(Math.floor(x) + 1, Math.floor(y), GL.seam[2]);
+        if (p.solid(Math.floor(x) + 1, Math.floor(y)))
+          p.set(Math.floor(x) + 1, Math.floor(y), GL.seam[2]);
         if (i % 2 === 0 && p.solid(Math.floor(x), Math.floor(y) + 1))
           p.set(Math.floor(x), Math.floor(y) + 1, WHITE_HOT);
       } else if (hot && i % 2 === 0) p.set(Math.floor(x), Math.floor(y) + 1, GL.seam[3]);
@@ -1836,7 +1859,16 @@ function canvasOf(p: Px, x0: number, y0: number, w: number, h: number): HTMLCanv
   c.width = w;
   c.height = h;
   const g = c.getContext('2d');
-  if (g) g.putImageData(new ImageData(p.data as Uint8ClampedArray<ArrayBuffer>, p.w, p.h), -x0, -y0, x0, y0, w, h);
+  if (g)
+    g.putImageData(
+      new ImageData(p.data as Uint8ClampedArray<ArrayBuffer>, p.w, p.h),
+      -x0,
+      -y0,
+      x0,
+      y0,
+      w,
+      h,
+    );
   return c;
 }
 
@@ -1897,7 +1929,11 @@ function mixP(a: P2, b: P2, k: number): P2 {
 function mixWing(a: WingShape, b: WingShape, k: number): WingShape {
   return {
     w: mixP(a.w, b.w, k),
-    tips: [mixP(a.tips[0], b.tips[0], k), mixP(a.tips[1], b.tips[1], k), mixP(a.tips[2], b.tips[2], k)],
+    tips: [
+      mixP(a.tips[0], b.tips[0], k),
+      mixP(a.tips[1], b.tips[1], k),
+      mixP(a.tips[2], b.tips[2], k),
+    ],
     att: mixP(a.att, b.att, k),
   };
 }
@@ -1905,7 +1941,10 @@ function mixWing(a: WingShape, b: WingShape, k: number): WingShape {
 /** Крыло: плечо S, запястье, три пальца и перепонка между ними (фестонами). */
 function wing2(p: Px, sx: number, sy: number, r: Rig, far: boolean): void {
   const ws = clamp01(r.ws);
-  let sh = ws < 0.5 ? mixWing(WING_FOLD, WING_HALF, ws * 2) : mixWing(WING_HALF, WING_SPREAD, (ws - 0.5) * 2);
+  let sh =
+    ws < 0.5
+      ? mixWing(WING_FOLD, WING_HALF, ws * 2)
+      : mixWing(WING_HALF, WING_SPREAD, (ws - 0.5) * 2);
   if (r.wd > 0) sh = mixWing(sh, WING_DROOP, clamp01(r.wd));
   // Взмах: всё крыло поворачивается у плеча; раскрытое — сильнее.
   const phi = r.wf * (0.35 + ws * 0.6);
@@ -2113,7 +2152,8 @@ function paintRig(r: Rig): SerpArt {
       }
       const c = i % 2 ? SRP.belly[2] : SRP.belly[1];
       p.set(Math.round(x + bnx * rr * 0.6), Math.round(y + bny * rr * 0.6), c);
-      if (rr > 4.2) p.set(Math.round(x + bnx * rr * 0.35), Math.round(y + bny * rr * 0.35), SRP.belly[1]);
+      if (rr > 4.2)
+        p.set(Math.round(x + bnx * rr * 0.35), Math.round(y + bny * rr * 0.35), SRP.belly[1]);
     });
     // Спинные шипы — с другой стороны.
     neck.forEach(([x, y], i) => {
@@ -2170,7 +2210,10 @@ function paintRig(r: Rig): SerpArt {
         [
           [bx, by],
           [bx - fx * len * 0.5 - nx * 3.2, by - fy * len * 0.5 - ny * 3.2],
-          [bx - fx * len - nx * (4 + (len > 8 ? 2 : 0)), by - fy * len - ny * (4 + (len > 8 ? 2 : 0))],
+          [
+            bx - fx * len - nx * (4 + (len > 8 ? 2 : 0)),
+            by - fy * len - ny * (4 + (len > 8 ? 2 : 0)),
+          ],
         ],
         4,
       );
@@ -2240,7 +2283,7 @@ function paintRig(r: Rig): SerpArt {
         SRP.horn[3],
       );
       p.set(
-        Math.round(jx + jcx * (k * 1.3 - 0.4) - (-jcy) * 1.3 * (ny >= 0 ? 1 : -1)),
+        Math.round(jx + jcx * (k * 1.3 - 0.4) - -jcy * 1.3 * (ny >= 0 ? 1 : -1)),
         Math.round(jy + jcy * (k * 1.3 - 0.4) - jcx * 1.3),
         SRP.horn[3],
       );
@@ -2251,7 +2294,8 @@ function paintRig(r: Rig): SerpArt {
     const L = 1 + r.tongue * 4.5;
     const tx0 = snx + fx * 4 + nx * 1.4;
     const ty0 = sny + fy * 4 + ny * 1.4;
-    for (let i = 0; i <= L; i++) p.set(Math.round(tx0 + fx * i), Math.round(ty0 + fy * i), SRP.tongue);
+    for (let i = 0; i <= L; i++)
+      p.set(Math.round(tx0 + fx * i), Math.round(ty0 + fy * i), SRP.tongue);
     const ex = tx0 + fx * L;
     const ey = ty0 + fy * L;
     p.set(Math.round(ex + fx - nx), Math.round(ey + fy - ny), SRP.tongue);
@@ -2315,7 +2359,12 @@ function paintRig(r: Rig): SerpArt {
       const c = r.glow > 0.7 ? LAVA.white : r.glow > 0.4 ? LAVA.bright : LAVA.hot;
       const a = clamp01(0.35 + r.glow * 0.65);
       lit.set(Math.round(x + bnx * rr * 0.55), Math.round(y + bny * rr * 0.55), alpha(c, a));
-      if (r.bulge > 0.3) lit.set(Math.round(x + bnx * rr * 0.3), Math.round(y + bny * rr * 0.3), alpha(LAVA.hot, a * 0.6));
+      if (r.bulge > 0.3)
+        lit.set(
+          Math.round(x + bnx * rr * 0.3),
+          Math.round(y + bny * rr * 0.3),
+          alpha(LAVA.hot, a * 0.6),
+        );
     }
   }
   if (r.jaw > 0.08) {
@@ -2650,25 +2699,73 @@ function techBite(t: number, c: TCtx): SPose {
       [T - 0.1, { hx: coil.x - 0.8, hy: coil.y - 1, jaw: 0.3, by: 2, glow: 0.5 }, EZ.io],
       [
         T - 0.045,
-        { hx: lerp(coil.x, hit.x, 0.45), hy: lerp(coil.y, hit.y, 0.45), ha: lerp(haCoil, haHit, 0.5), jaw: 1, bend: -0.3 },
+        {
+          hx: lerp(coil.x, hit.x, 0.45),
+          hy: lerp(coil.y, hit.y, 0.45),
+          ha: lerp(haCoil, haHit, 0.5),
+          jaw: 1,
+          bend: -0.3,
+        },
         EZ.in,
       ],
-      [T, { hx: hit.x, hy: hit.y, ha: haHit, jaw: 0, bend: 0.05, by: -1, bx: 1.5, tilt: -0.05, ws: 0.2, wf: -0.4, glow: 0.8 }, EZ.in],
+      [
+        T,
+        {
+          hx: hit.x,
+          hy: hit.y,
+          ha: haHit,
+          jaw: 0,
+          bend: 0.05,
+          by: -1,
+          bx: 1.5,
+          tilt: -0.05,
+          ws: 0.2,
+          wf: -0.4,
+          glow: 0.8,
+        },
+        EZ.in,
+      ],
       [T + 0.07, { hx: hit.x + ux * 2, hy: hit.y + uy * 2 + 1, jaw: 0 }, EZ.out2],
       [T + 0.18, { hx: hit.x, hy: hit.y, jaw: 0.05, by: 0, bx: 0.5, wf: 0.1 }, EZ.io],
       // Отпустил — голова отскакивает в стойку (не висит вытянутой).
       [
         T + 0.44,
-        { hx: guard.x, hy: guard.y, ha: haGuard, jaw: 0.5, bend: -0.35, glow: 0.3, angry: 0.8, ws: 0.15 },
+        {
+          hx: guard.x,
+          hy: guard.y,
+          ha: haGuard,
+          jaw: 0.5,
+          bend: -0.35,
+          glow: 0.3,
+          angry: 0.8,
+          ws: 0.15,
+        },
         EZ.out,
       ],
-      [E, { hx: guard.x + 1, hy: guard.y - 1.5, ha: haGuard - 0.05, jaw: 0.2, bend: -0.2, angry: 0.5, bx: 0, tilt: 0, glow: 0.15, ws: 0.1, wf: 0 }, EZ.io],
+      [
+        E,
+        {
+          hx: guard.x + 1,
+          hy: guard.y - 1.5,
+          ha: haGuard - 0.05,
+          jaw: 0.2,
+          bend: -0.2,
+          angry: 0.5,
+          bx: 0,
+          tilt: 0,
+          glow: 0.15,
+          ws: 0.1,
+          wf: 0,
+        },
+        EZ.io,
+      ],
     ]),
   );
   const r = L(t);
   // Сжатая пружина дрожит; после щелчка — трёпка головой.
   if (t > 0.5 * T && t < T - 0.1) r.hx += c.f % 2 ? 0.5 : -0.5;
-  if (t > T + 0.02 && t < T + 0.32) r.ha += Math.sin((t - T) * TAU * 11) * 0.2 * (1 - seg(t, T, T + 0.32));
+  if (t > T + 0.02 && t < T + 0.32)
+    r.ha += Math.sin((t - T) * TAU * 11) * 0.2 * (1 - seg(t, T, T + 0.32));
   if (t > T + 0.36) r.smoke = ((t - T - 0.36) * 1.8) % 1;
   const lunge = trackOf(`bitel|${k}|${tm.lunge}`, () => [
     [0, 0],
@@ -2707,13 +2804,58 @@ function techTail(t: number, c: TCtx): SPose {
       [0, {}],
       [
         0.5 * T,
-        { hx: -5, hy: -40, ha: Math.PI - 0.62, bend: -0.5, bx: 1.5, by: 1, ws: 0.45, wf: 0.2, angry: 1, jaw: 0.3, tongue: 0.6, tilt: 0.08, glow: 0.3 },
+        {
+          hx: -5,
+          hy: -40,
+          ha: Math.PI - 0.62,
+          bend: -0.5,
+          bx: 1.5,
+          by: 1,
+          ws: 0.45,
+          wf: 0.2,
+          angry: 1,
+          jaw: 0.3,
+          tongue: 0.6,
+          tilt: 0.08,
+          glow: 0.3,
+        },
         EZ.out,
       ],
       [T - 0.07, { hx: -6, hy: -40, ha: Math.PI - 0.55, jaw: 0.45, tongue: 0 }, EZ.io],
-      [T + 0.02, { hx: 20, hy: -27, ha: 0.45, bend: 0.05, bx: -2.5, ws: 0.95, wf: -0.6, jaw: 0.75, tilt: -0.05 }, EZ.in],
+      [
+        T + 0.02,
+        {
+          hx: 20,
+          hy: -27,
+          ha: 0.45,
+          bend: 0.05,
+          bx: -2.5,
+          ws: 0.95,
+          wf: -0.6,
+          jaw: 0.75,
+          tilt: -0.05,
+        },
+        EZ.in,
+      ],
       [T + 0.2, { hx: 19, hy: -29, ha: 0.3, bx: 0.5, ws: 0.7, wf: 0.35, jaw: 0.3 }, EZ.out],
-      [E, { hx: 17, hy: -30, ha: 0.25, bend: 0.15, bx: 0, by: 0, ws: 0.1, wf: 0, jaw: 0, angry: 0.4, tilt: 0, glow: 0.12 }, EZ.io],
+      [
+        E,
+        {
+          hx: 17,
+          hy: -30,
+          ha: 0.25,
+          bend: 0.15,
+          bx: 0,
+          by: 0,
+          ws: 0.1,
+          wf: 0,
+          jaw: 0,
+          angry: 0.4,
+          tilt: 0,
+          glow: 0.12,
+        },
+        EZ.io,
+      ],
     ]),
   );
   const r = L(t);
@@ -2732,7 +2874,13 @@ function breathHead(a: number): { x: number; y: number; ha: number } {
 /** Лента выдоха. У эхо (без веера) волны идут подряд — волна → вторая
  *  волна → «выдохся», — поэтому эхо не возвращается в покой между ними:
  *  вторая волна начинается с позы конца первой, выдох держится до конца. */
-function breathLane(c: TCtx, T: number, F1: number, E: number, from: Rig | null): (t: number) => Rig {
+function breathLane(
+  c: TCtx,
+  T: number,
+  F1: number,
+  E: number,
+  from: Rig | null,
+): (t: number) => Rig {
   const echo = !c.tm.fan;
   return laneOf(`breath|${T}|${F1}|${E}|${c.aim}|${echo ? 1 : 0}|${from ? 1 : 0}`, () => {
     const b = breathHead(c.aim);
@@ -2740,19 +2888,73 @@ function breathLane(c: TCtx, T: number, F1: number, E: number, from: Rig | null)
       [0, from ? { ...from } : {}],
       [
         0.72 * T,
-        { by: -7, tilt: -0.3, bx: -2.5, hx: 10, hy: -50, ha: -0.75, bend: -0.7, bulge: 1, glow: 0.8, jaw: 0.3, ws: 0.7, wf: 0.45, paw: 1, angry: 0.6, step: Math.PI },
+        {
+          by: -7,
+          tilt: -0.3,
+          bx: -2.5,
+          hx: 10,
+          hy: -50,
+          ha: -0.75,
+          bend: -0.7,
+          bulge: 1,
+          glow: 0.8,
+          jaw: 0.3,
+          ws: 0.7,
+          wf: 0.45,
+          paw: 1,
+          angry: 0.6,
+          step: Math.PI,
+        },
         EZ.out2,
       ],
       [T - 0.05, { hy: -52, hx: 8.5, glow: 1, jaw: 0.38 }, EZ.io],
-      [T, { by: -6, tilt: -0.22, bx: -1, hx: b.x, hy: b.y, ha: b.ha, bend: 0.95, jaw: 1, fire: 1, bulge: 0.85, paw: 0.35, ws: 0.5, wf: 0, step: TAU }, EZ.in],
+      [
+        T,
+        {
+          by: -6,
+          tilt: -0.22,
+          bx: -1,
+          hx: b.x,
+          hy: b.y,
+          ha: b.ha,
+          bend: 0.95,
+          jaw: 1,
+          fire: 1,
+          bulge: 0.85,
+          paw: 0.35,
+          ws: 0.5,
+          wf: 0,
+          step: TAU,
+        },
+        EZ.in,
+      ],
       [T + 0.1, { bx: -3.5 }, EZ.out2],
       [F1, { bulge: 0.3, glow: 0.55, bx: -2.5, fire: 0.85 }, EZ.lin],
     ];
-    if (echo) keys.push([E, { fire: 0, jaw: 0.45, glow: 0.3, bulge: 0, by: -3, hy: b.y + 4 }, EZ.out2]);
+    if (echo)
+      keys.push([E, { fire: 0, jaw: 0.45, glow: 0.3, bulge: 0, by: -3, hy: b.y + 4 }, EZ.out2]);
     else
       keys.push(
         [F1 + 0.3, { fire: 0, jaw: 0.4, glow: 0.3, bulge: 0 }, EZ.out2],
-        [E, { by: 0, tilt: 0, bx: 0, hx: 17, hy: -30, ha: 0.25, bend: 0.15, jaw: 0, ws: 0.08, wf: 0, paw: 0, angry: 0.2, glow: 0.12 }, EZ.io],
+        [
+          E,
+          {
+            by: 0,
+            tilt: 0,
+            bx: 0,
+            hx: 17,
+            hy: -30,
+            ha: 0.25,
+            bend: 0.15,
+            jaw: 0,
+            ws: 0.08,
+            wf: 0,
+            paw: 0,
+            angry: 0.2,
+            glow: 0.12,
+          },
+          EZ.io,
+        ],
       );
     return lane(REST, keys);
   });
@@ -2808,14 +3010,67 @@ function techSweep(t: number, c: TCtx): SPose {
       [0, {}],
       [
         0.72 * T,
-        { by: -7, tilt: -0.3, bx: -2.5, hx: 10, hy: -50, ha: -0.75, bend: -0.7, bulge: 1, glow: 0.8, jaw: 0.3, ws: 0.7, wf: 0.45, paw: 1, angry: 0.6, step: Math.PI },
+        {
+          by: -7,
+          tilt: -0.3,
+          bx: -2.5,
+          hx: 10,
+          hy: -50,
+          ha: -0.75,
+          bend: -0.7,
+          bulge: 1,
+          glow: 0.8,
+          jaw: 0.3,
+          ws: 0.7,
+          wf: 0.45,
+          paw: 1,
+          angry: 0.6,
+          step: Math.PI,
+        },
         EZ.out2,
       ],
       [T - 0.05, { hy: -52, hx: 8.5, glow: 1, jaw: 0.38 }, EZ.io],
-      [T, { by: -6, tilt: -0.22, bx: -1, hx: b0.x, hy: b0.y, ha: b0.ha, bend: 0.95, jaw: 1, fire: 1, bulge: 0.85, paw: 0.35, ws: 0.55, wf: 0, step: TAU }, EZ.in],
+      [
+        T,
+        {
+          by: -6,
+          tilt: -0.22,
+          bx: -1,
+          hx: b0.x,
+          hy: b0.y,
+          ha: b0.ha,
+          bend: 0.95,
+          jaw: 1,
+          fire: 1,
+          bulge: 0.85,
+          paw: 0.35,
+          ws: 0.55,
+          wf: 0,
+          step: TAU,
+        },
+        EZ.in,
+      ],
       [T + S, { hx: b1.x, hy: b1.y, ha: b1.ha, bulge: 0.3, glow: 0.6, fire: 0.85 }, EZ.lin],
       [T + S + 0.3, { fire: 0, jaw: 0.4, glow: 0.3, bulge: 0 }, EZ.out2],
-      [E, { by: 0, tilt: 0, bx: 0, hx: 17, hy: -30, ha: 0.25, bend: 0.15, jaw: 0, ws: 0.08, wf: 0, paw: 0, angry: 0.2, glow: 0.12 }, EZ.io],
+      [
+        E,
+        {
+          by: 0,
+          tilt: 0,
+          bx: 0,
+          hx: 17,
+          hy: -30,
+          ha: 0.25,
+          bend: 0.15,
+          jaw: 0,
+          ws: 0.08,
+          wf: 0,
+          paw: 0,
+          angry: 0.2,
+          glow: 0.12,
+        },
+        EZ.io,
+      ],
     ]),
   );
   const r = L(t);
@@ -2841,7 +3096,11 @@ function techSweep(t: number, c: TCtx): SPose {
 
 const TAKEOFF = lane(REST, [
   [0, {}],
-  [0.2, { by: 2.5, tilt: 0.12, hx: 21, hy: -24, ha: 0.4, bend: 0.4, ws: 1, wf: 1, angry: 0.6 }, EZ.out],
+  [
+    0.2,
+    { by: 2.5, tilt: 0.12, hx: 21, hy: -24, ha: 0.4, bend: 0.4, ws: 1, wf: 1, angry: 0.6 },
+    EZ.out,
+  ],
   [0.34, { by: -1, tilt: 0.05, hx: 22, hy: -30, ha: 0.2, wf: -1, tuck: 0.6 }, EZ.in],
   [0.56, { wf: 1, tuck: 1, hy: -29 }, EZ.io],
   [0.7, { wf: -1 }, EZ.in],
@@ -2925,7 +3184,7 @@ function hoverRig(b: number): Rig {
 function techMark(t: number, c: TCtx): SPose {
   const F = c.tm.follow;
   const Lk = c.tm.lock;
-  const b = ((t / HOVER_T) % 1 + 1) % 1;
+  const b = (((t / HOVER_T) % 1) + 1) % 1;
   let r = hoverRig(b);
   let lift = 38 + beat(b, 0.45).up * 2.5;
   let sx = 1;
@@ -2935,7 +3194,18 @@ function techMark(t: number, c: TCtx): SPose {
     // Второй нырок: из камня — снова вверх, мощным махом.
     const k = seg(t, 0.35, 0.72);
     const up = EZ.out2(k);
-    const from: Rig = { ...REST, hx: 19, hy: -6, ha: 1.2, ws: 0.95, wf: -0.75, by: 3, tilt: 0.2, jaw: 0.6, angry: 1 };
+    const from: Rig = {
+      ...REST,
+      hx: 19,
+      hy: -6,
+      ha: 1.2,
+      ws: 0.95,
+      wf: -0.75,
+      by: 3,
+      tilt: 0.2,
+      jaw: 0.6,
+      angry: 1,
+    };
     const w = seg(t, 0.35, 0.5);
     const mid: Rig = { ...from, wf: 1, ws: 1, hy: -24, ha: 0.7, by: 0, tilt: 0.05, tuck: 0.5 };
     r = k < 0.35 ? mixRig(from, mid, EZ.out(w)) : mixRig(mid, r, EZ.io(seg(t, 0.47, 0.72)));
@@ -2951,7 +3221,17 @@ function techMark(t: number, c: TCtx): SPose {
     if (t > F + 0.3 && t < F + 0.4) r.hx += c.f % 2 ? 0.4 : -0.4;
     if (t >= F + 0.4) {
       const kp = seg(t, F + 0.4, F + Lk);
-      const dive: Rig = { ...r, ws: 0.35, wf: 0.3, ha: 1.25, hx: 18, hy: -16, jaw: 0.95, bend: 0.2, tuck: 0.4 };
+      const dive: Rig = {
+        ...r,
+        ws: 0.35,
+        wf: 0.3,
+        ha: 1.25,
+        hx: 18,
+        hy: -16,
+        jaw: 0.95,
+        bend: 0.2,
+        tuck: 0.4,
+      };
       r = mixRig(r, dive, EZ.out2(kp));
       lift = 49 * (1 - EZ.in(kp));
       sx = 1 - 0.14 * EZ.in(kp);
@@ -2969,7 +3249,22 @@ function techMark(t: number, c: TCtx): SPose {
 }
 
 const DIVE = lane(REST, [
-  [0, { hx: 19, hy: -6, ha: 1.25, buried: 0.5, jaw: 0.8, ws: 0.95, wf: -0.75, by: 3, tilt: 0.2, tuck: 0.3, angry: 1 }],
+  [
+    0,
+    {
+      hx: 19,
+      hy: -6,
+      ha: 1.25,
+      buried: 0.5,
+      jaw: 0.8,
+      ws: 0.95,
+      wf: -0.75,
+      by: 3,
+      tilt: 0.2,
+      tuck: 0.3,
+      angry: 1,
+    },
+  ],
   [0.16, { hy: -4, buried: 0.8, jaw: 0.6, wf: -0.6 }, EZ.out2],
 ]);
 /** Пике: удар о землю — сплющило, крылья распластаны, морда в камне. */
@@ -3083,7 +3378,11 @@ function techDizzy(t: number, f: number, Td: number): SPose {
     const pull = Math.sin(seg(tt, 0, 0.2) * Math.PI * 0.5);
     r.bx = -3.5 * pull;
     const pop = EZ.out(seg(tt, 0.18, 0.3));
-    r = mixRig(r, { ...REST, hx: 18, hy: -26, ha: 0.2, jaw: 0.5, wd: 0.3, ws: 0.3, shut: 0.5, bx: 0.5 }, pop);
+    r = mixRig(
+      r,
+      { ...REST, hx: 18, hy: -26, ha: 0.2, jaw: 0.5, wd: 0.3, ws: 0.3, shut: 0.5, bx: 0.5 },
+      pop,
+    );
     if (tt > 0.3) r.ha += Math.sin((tt - 0.3) * TAU * 7) * 0.3 * (1 - seg(tt, 0.3, 0.45));
     r.stars = pop < 0.5 ? 1 + tt : 0;
     sy = 1 + 0.05 * Math.sin(seg(tt, 0.18, 0.34) * Math.PI);
@@ -3097,8 +3396,40 @@ function techDizzy(t: number, f: number, Td: number): SPose {
 
 const ROAR = lane(REST, [
   [0, {}],
-  [0.3, { by: -4, tilt: -0.15, hx: 12, hy: -44, ha: -0.4, bend: -0.5, jaw: 0.2, ws: 0.45, wf: 0.4, bulge: 0.6, glow: 0.5, angry: 0.8 }, EZ.out2],
-  [0.42, { hx: 22, hy: -47, ha: -0.55, jaw: 1, ws: 1, wf: 0.8, bulge: 0.25, glow: 0.9, paw: 0.7, bend: 0.1 }, EZ.in],
+  [
+    0.3,
+    {
+      by: -4,
+      tilt: -0.15,
+      hx: 12,
+      hy: -44,
+      ha: -0.4,
+      bend: -0.5,
+      jaw: 0.2,
+      ws: 0.45,
+      wf: 0.4,
+      bulge: 0.6,
+      glow: 0.5,
+      angry: 0.8,
+    },
+    EZ.out2,
+  ],
+  [
+    0.42,
+    {
+      hx: 22,
+      hy: -47,
+      ha: -0.55,
+      jaw: 1,
+      ws: 1,
+      wf: 0.8,
+      bulge: 0.25,
+      glow: 0.9,
+      paw: 0.7,
+      bend: 0.1,
+    },
+    EZ.in,
+  ],
   [1.05, { hx: 23, hy: -46, jaw: 0.95, wf: 0.7 }, EZ.lin],
   [1.4, { ...REST, angry: 0.4 }, EZ.io],
 ]);
@@ -3121,7 +3452,26 @@ function techRoar(t: number, f: number): SPose {
 
 const SUMMON = lane(REST, [
   [0, {}],
-  [0.45, { by: -8, tilt: -0.35, bx: -1.5, hx: 11, hy: -55, ha: -1.15, bend: -0.4, jaw: 0.5, ws: 0.95, wf: 1, glow: 0.6, heat: 0.5, paw: 1, angry: 0.7 }, EZ.out2],
+  [
+    0.45,
+    {
+      by: -8,
+      tilt: -0.35,
+      bx: -1.5,
+      hx: 11,
+      hy: -55,
+      ha: -1.15,
+      bend: -0.4,
+      jaw: 0.5,
+      ws: 0.95,
+      wf: 1,
+      glow: 0.6,
+      heat: 0.5,
+      paw: 1,
+      angry: 0.7,
+    },
+    EZ.out2,
+  ],
   [0.82, { glow: 1, heat: 1, jaw: 0.8, hy: -57 }, EZ.io],
   [0.92, { wf: -0.8, heat: 1.5, jaw: 1, ha: -1.3, hy: -58, by: -9 }, EZ.in],
   [1.1, { wf: -0.2, heat: 0.8 }, EZ.out],
@@ -3142,9 +3492,48 @@ function techSummon(t: number, f: number): SPose {
 
 const DEATH = lane(REST, [
   [0, { jaw: 0.6, angry: 1 }],
-  [0.2, { by: -4, tilt: -0.2, hx: 13, hy: -50, ha: -0.9, jaw: 1, ws: 0.9, wf: 0.8, glow: 1, fire: 0.35, bulge: 0.4, bend: -0.5, shut: 0 }, EZ.out2],
+  [
+    0.2,
+    {
+      by: -4,
+      tilt: -0.2,
+      hx: 13,
+      hy: -50,
+      ha: -0.9,
+      jaw: 1,
+      ws: 0.9,
+      wf: 0.8,
+      glow: 1,
+      fire: 0.35,
+      bulge: 0.4,
+      bend: -0.5,
+      shut: 0,
+    },
+    EZ.out2,
+  ],
   [0.28, { hy: -49, wf: 0.9 }, EZ.io],
-  [0.62, { by: 3, tilt: 0.18, hx: 25, hy: -5, ha: 0.35, jaw: 0.35, ws: 0.35, wf: 0, wd: 1, glow: 0.15, fire: 0, bulge: 0, bend: 0.3, shut: 1, paw: 0, heat: 1.2 }, EZ.in],
+  [
+    0.62,
+    {
+      by: 3,
+      tilt: 0.18,
+      hx: 25,
+      hy: -5,
+      ha: 0.35,
+      jaw: 0.35,
+      ws: 0.35,
+      wf: 0,
+      wd: 1,
+      glow: 0.15,
+      fire: 0,
+      bulge: 0,
+      bend: 0.3,
+      shut: 1,
+      paw: 0,
+      heat: 1.2,
+    },
+    EZ.in,
+  ],
   [0.7, { by: 3.5, hy: -4 }, EZ.out2],
   [0.85, { heat: 0.9 }, EZ.io],
   [1.12, { cool: 1, heat: 0 }, EZ.io],
@@ -3171,7 +3560,9 @@ function exitPose(from: number, c: TCtx): Rig {
     case 3:
       return techBreath(tm.waveEnd, c, tm.wave, tm.fireEnd, tm.waveEnd).r;
     case 4:
-      return tm.fan ? techSweep(tm.sweepEnd, c).r : techBreath(tm.sweepEnd, c, tm.sweep, 1.3, tm.sweepEnd).r;
+      return tm.fan
+        ? techSweep(tm.sweepEnd, c).r
+        : techBreath(tm.sweepEnd, c, tm.sweep, 1.3, tm.sweepEnd).r;
     case 5:
       return { ...REST, hx: 18, hy: -26, ha: 0.2, jaw: 0.5, wd: 0.3, ws: 0.3, shut: 0.5, bx: 0.5 };
     default:
@@ -3349,19 +3740,6 @@ interface SFrame {
 
 const SFR = frameLRU<SFrame>(400);
 
-function mirrorCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = src.width;
-  c.height = src.height;
-  const g = c.getContext('2d');
-  if (g) {
-    g.translate(src.width, 0);
-    g.scale(-1, 1);
-    g.drawImage(src, 0, 0);
-  }
-  return c;
-}
-
 function flashCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = src.width;
@@ -3386,7 +3764,13 @@ function smearInto(lit: Px, pts: P2[], now: P2): void {
     for (let j = 0; j <= n; j++) {
       const qx = SAX + px + ((x - px) * j) / n;
       const qy = SAY + py + ((y - py) * j) / n;
-      lit.ell(qx, qy, w, w, alpha(k > 0.6 ? LAVA.white : k > 0.3 ? FIRE[2] : FIRE[1], 0.25 + 0.5 * k));
+      lit.ell(
+        qx,
+        qy,
+        w,
+        w,
+        alpha(k > 0.6 ? LAVA.white : k > 0.3 ? FIRE[2] : FIRE[1], 0.25 + 0.5 * k),
+      );
     }
     px = x;
     py = y;
@@ -3398,14 +3782,11 @@ function serpBase(q: SReq): SFrame {
   const key = `b|${q.tech}|${q.f}|${q.hk}|${q.echo}|${q.aim}|${q.v}|${q.ph}|${q.lv}|${q.fl}|${q.look}`;
   const hit = SFR.get(key);
   if (hit) return hit;
-  const T0 = performance.now();
   const ps = poseOf(q);
   let r = ps.r;
   if (q.fl) r = flinch(r, q.fl / 2);
   if (!q.echo) r = { ...r, heat: Math.max(r.heat, PH_HEAT[q.ph] ?? 0) };
-  const T1 = performance.now();
   const art = paintRig(r);
-  const T2 = performance.now();
   if (ps.smear) smearInto(art.lit, ps.smear, snoutOf(r));
   if (q.look === 'elite') art.img.outline(GOLD);
   // Холст — по рисунку: кадры в кеше не держат пустоту.
@@ -3419,8 +3800,6 @@ function serpBase(q: SReq): SFrame {
   const h = y1 - y0 + 1;
   const img = canvasOf(art.img, x0, y0, w, h);
   const lit = b2 ? canvasOf(art.lit, x0, y0, w, h) : null;
-  const T3 = performance.now();
-  ((globalThis as unknown as { __f6t?: number[][] }).__f6t ??= []).push([T1 - T0, T2 - T1, T3 - T2]);
   const fr: MobFrame = {
     img,
     lit,
@@ -3437,29 +3816,22 @@ function serpBase(q: SReq): SFrame {
   return SFR.set(key, { fr, ps });
 }
 
-/** Кадр по запросу: зеркало и вспышка удара — из кадра без них. */
+/** Кадр по запросу: вспышка удара — из кадра без неё (в кеше), зеркало —
+ *  полем кадра (`sx` < 0, движок отражает у якоря): в кеше не лежит вторая
+ *  копия каждого кадра, и прогрев обеих сторон помещается в предел кеша. */
 function serpFrame(q: SReq): SFrame {
-  if (!q.side && !q.flash) return serpBase(q);
-  const key = `v|${q.tech}|${q.f}|${q.hk}|${q.echo}|${q.aim}|${q.v}|${q.ph}|${q.lv}|${q.fl}|${q.look}|${q.side}|${q.flash}`;
+  const base = q.flash ? serpFlash(q) : serpBase(q);
+  if (!q.side) return base;
+  const f = base.fr;
+  return { ps: base.ps, fr: { ...f, sx: -(f.sx ?? 1), dx: -(f.dx ?? 0) } };
+}
+
+function serpFlash(q: SReq): SFrame {
+  const key = `v|${q.tech}|${q.f}|${q.hk}|${q.echo}|${q.aim}|${q.v}|${q.ph}|${q.lv}|${q.fl}|${q.look}|${q.flash}`;
   const hit = SFR.get(key);
   if (hit) return hit;
-  if (q.flash) {
-    const src = serpFrame({ ...q, flash: 0 });
-    return SFR.set(key, { fr: { ...src.fr, img: flashCanvas(src.fr.img) }, ps: src.ps });
-  }
-  const b = serpBase({ ...q, side: 0 });
-  const w = b.fr.img.width;
-  return SFR.set(key, {
-    ps: b.ps,
-    fr: {
-      ...b.fr,
-      img: mirrorCanvas(b.fr.img),
-      lit: b.fr.lit ? mirrorCanvas(b.fr.lit) : null,
-      eye: b.fr.eye ? [w - 1 - b.fr.eye[0], b.fr.eye[1]] : null,
-      ax: w - b.fr.ax,
-      dx: -(b.fr.dx ?? 0),
-    },
-  });
+  const src = serpBase(q);
+  return SFR.set(key, { fr: { ...src.fr, img: flashCanvas(src.fr.img) }, ps: src.ps });
 }
 
 // ---- Память рисовальщика: сторона, взгляд, откуда пришёл, история груди ----
@@ -3586,7 +3958,8 @@ function serpReq(m: Mob, pose: MobPose): { q: SReq; s: SerpMem } {
     fl: 0,
   };
   const c0: TCtx = { h, tm: timing(h, !!echo), aim: 0, v: 0, f: 0 };
-  const at = (tech: Tech, c: TCtx = c0) => Math.min(spanOf(tech, c) - 1, Math.floor(t * SFPS + 1e-6));
+  const at = (tech: Tech, c: TCtx = c0) =>
+    Math.min(spanOf(tech, c) - 1, Math.floor(t * SFPS + 1e-6));
   const aimB = (a: number) => clamp(Math.round(frameAngle(a, s.side) / AIM_STEP), -6, 6);
   switch (pose.mode) {
     case 'roar':
@@ -3664,13 +4037,21 @@ function serpReq(m: Mob, pose: MobPose): { q: SReq; s: SerpMem } {
         if (t < EXH_IN / SFPS) q.f = Math.floor(t * SFPS);
         else if (t < Td - EXH_OUT / SFPS)
           q.f = EXH_IN + (Math.floor((t - EXH_IN / SFPS) * SFPS) % EXH_LOOP);
-        else q.f = Math.min(EXH_IN + EXH_LOOP + EXH_OUT - 1, EXH_IN + EXH_LOOP + Math.floor((t - (Td - EXH_OUT / SFPS)) * SFPS));
+        else
+          q.f = Math.min(
+            EXH_IN + EXH_LOOP + EXH_OUT - 1,
+            EXH_IN + EXH_LOOP + Math.floor((t - (Td - EXH_OUT / SFPS)) * SFPS),
+          );
         break;
       }
       if (t < DIZ_IN / SFPS) q.f = Math.floor(t * SFPS);
       else if (t < Td - DIZ_OUT / SFPS)
         q.f = DIZ_IN + (Math.floor((t - DIZ_IN / SFPS) * SFPS) % DIZ_LOOP);
-      else q.f = Math.min(DIZ_IN + DIZ_LOOP + DIZ_OUT - 1, DIZ_IN + DIZ_LOOP + Math.floor((t - (Td - DIZ_OUT / SFPS)) * SFPS));
+      else
+        q.f = Math.min(
+          DIZ_IN + DIZ_LOOP + DIZ_OUT - 1,
+          DIZ_IN + DIZ_LOOP + Math.floor((t - (Td - DIZ_OUT / SFPS)) * SFPS),
+        );
       break;
     }
     case 'recover': {
@@ -3683,8 +4064,7 @@ function serpReq(m: Mob, pose: MobPose): { q: SReq; s: SerpMem } {
       q.tech = 'recover';
       q.v = from;
       if (from === 1 || from === 3 || from === 4) q.aim = aimB(dir);
-      if (from === 4 && c0.tm.fan && m.data?.sdir !== undefined)
-        q.v = 4;
+      if (from === 4 && c0.tm.fan && m.data?.sdir !== undefined) q.v = 4;
       q.f = at('recover');
       break;
     }
@@ -3717,7 +4097,11 @@ function serpReq(m: Mob, pose: MobPose): { q: SReq; s: SerpMem } {
 
 /** Кайма ярости (смена фазы): поверх темноты, 4 ступени. */
 const flareCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement[]>();
-function flareOf(img: HTMLCanvasElement, lit: HTMLCanvasElement | null, lvl: number): HTMLCanvasElement {
+function flareOf(
+  img: HTMLCanvasElement,
+  lit: HTMLCanvasElement | null,
+  lvl: number,
+): HTMLCanvasElement {
   let arr = flareCache.get(img);
   if (!arr) {
     arr = [];
@@ -3736,7 +4120,8 @@ function flareOf(img: HTMLCanvasElement, lit: HTMLCanvasElement | null, lvl: num
   const src = g.getImageData(0, 0, w, h).data;
   const o = og.createImageData(w, h);
   const a = [0, 0.35, 0.6, 0.85, 1][lvl];
-  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] > 0;
+  const solid = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] > 0;
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
@@ -3752,7 +4137,8 @@ function flareOf(img: HTMLCanvasElement, lit: HTMLCanvasElement | null, lvl: num
       }
       let d = 9;
       for (let yy = -2; yy <= 2; yy++)
-        for (let xx = -2; xx <= 2; xx++) if (solid(x + xx, y + yy)) d = Math.min(d, Math.abs(xx) + Math.abs(yy));
+        for (let xx = -2; xx <= 2; xx++)
+          if (solid(x + xx, y + yy)) d = Math.min(d, Math.abs(xx) + Math.abs(yy));
       if (d > 3) continue;
       const k = d <= 1 ? 1 : d === 2 ? 0.55 : 0.25;
       o.data[i] = 255;
@@ -3801,7 +4187,10 @@ registerMobPainter('f6boss', (m: Mob, pose: MobPose) => {
       ux = dx / d;
       uy = dy / d;
     }
-    const calm = q.tech === 'idle' || q.tech === 'crawl' || q.tech === 'dizzy' || q.tech === 'recover' ? 1 : 0.4;
+    const calm =
+      q.tech === 'idle' || q.tech === 'crawl' || q.tech === 'dizzy' || q.tech === 'recover'
+        ? 1
+        : 0.4;
     const k = Math.sin((age / 0.12) * Math.PI) * 2.2 * calm;
     out.dx = (out.dx ?? 0) + ux * k;
     out.dy = (out.dy ?? 0) + uy * k * 0.6;
@@ -3836,10 +4225,10 @@ registerMobPainter('f6boss', (m: Mob, pose: MobPose) => {
   {
     // Пасть в мире — струе пламени (`serpentMouth`).
     const [snx0, sny0] = snoutOf(ps.r);
-    s.mx = sgn * snx0 * (out.sx ?? 1) + (out.dx ?? 0);
+    s.mx = sgn * snx0 * Math.abs(out.sx ?? 1) + (out.dx ?? 0);
     s.my = sny0 * (out.sy ?? 1) + (out.dy ?? 0) + 2;
   }
-  s.cdx = (out.dx ?? 0);
+  s.cdx = out.dx ?? 0;
   s.cdy = (out.dy ?? 0) + ps.lift;
   s.rear = Math.max(0, -ps.r.by) * 0.9;
   const hist = s.hist;
@@ -3878,7 +4267,33 @@ function liftAt(s: SerpMem | undefined, at: number): number {
 // Прогрев: первая фаза (без спешки) в обе стороны — всё, что игрок видит в
 // первом бою: рёв входа, покой, ползком, укус, хвост, волна, возвраты.
 registerMobWarm('f6boss', function* () {
-  const base = { hk: 100, echo: 0 as const, v: 0, ph: 0, lv: 0, flash: 0 as const, look: 'normal' as Look, fl: 0 };
+  // Сперва тело: оно рисуется всегда, пока змей на экране, и первый его кадр
+  // собирал бы около трёхсот спрайтов колец разом (~0,2 с на стенде).
+  for (let r = 2; r <= 7; r++)
+    for (let a = 0; a < A16; a++)
+      for (const mode of [0, 1, 2] as const) {
+        ringSprite(r, a, 0, mode);
+        yield r;
+      }
+  for (let size = 2; size <= 5; size++)
+    for (const lean of [-0.6, 0.6]) {
+      spikeSprite(size, lean, 0);
+      yield size;
+    }
+  for (let a = 0; a < A16; a++) {
+    tipSprite(a, 0);
+    yield a;
+  }
+  const base = {
+    hk: 100,
+    echo: 0 as const,
+    v: 0,
+    ph: 0,
+    lv: 0,
+    flash: 0 as const,
+    look: 'normal' as Look,
+    fl: 0,
+  };
   const c = ctxOf({ ...base, tech: 'idle', f: 0, aim: 0, side: 0 });
   const list: [Tech, number, number][] = [
     ['roar', 0, 0],
@@ -3898,7 +4313,15 @@ registerMobWarm('f6boss', function* () {
     const n = spanOf(tech, { ...c, v });
     for (const side of [0, 1] as const)
       for (let f = 0; f < n; f++) {
-        serpFrame({ ...base, tech, f, aim, v, side, lv: tech === 'idle' || tech === 'crawl' ? (aim ? 1 : 0) : 0 });
+        serpFrame({
+          ...base,
+          tech,
+          f,
+          aim,
+          v,
+          side,
+          lv: tech === 'idle' || tech === 'crawl' ? (aim ? 1 : 0) : 0,
+        });
         yield f;
       }
   }
@@ -3938,7 +4361,11 @@ function ringTones(varnt: number): { sc: Tones; bl: Tones; rim: RGBA } {
     return {
       sc: mixT(SRP.scale, COOLED, k),
       bl: mixT(SRP.belly, COOLED, k),
-      rim: mixc(mixc(SRP.scale[1], SRP.scale[0], 0.5), k > 0.4 ? hx('#ff6a1a') : COOLED[0], k > 0.4 ? 1 - k : k),
+      rim: mixc(
+        mixc(SRP.scale[1], SRP.scale[0], 0.5),
+        k > 0.4 ? hx('#ff6a1a') : COOLED[0],
+        k > 0.4 ? 1 - k : k,
+      ),
     };
   }
   if (varnt >= 2) {
@@ -4010,7 +4437,11 @@ function spikeSprite(size: number, lean: number, varnt: number): HTMLCanvasEleme
     col,
   );
   // Кончик шипа — кость; у основания — светлый край чешуи.
-  p.set(Math.round(4.5 - lean * L * 0.5), Math.round(7.4 - L + 0.6), varnt === 1 ? WHITE : SRP.horn[varnt >= 5 ? 1 : 2]);
+  p.set(
+    Math.round(4.5 - lean * L * 0.5),
+    Math.round(7.4 - L + 0.6),
+    varnt === 1 ? WHITE : SRP.horn[varnt >= 5 ? 1 : 2],
+  );
   if (L > 2) p.set(Math.round(4.5 - lean * L * 0.25), Math.round(7.4 - L * 0.5), SRP.scale[2]);
   outlineIn(p, INK, 0, 0, 8, 7);
   const c = p.canvas();
@@ -4231,7 +4662,8 @@ export function drawSerpentBody(
     let [x, y, tx, ty] = alongT(tr, s);
     // Волна ползка стоит на земле: тело скользит по ней.
     const amp = (crawl ? 0.26 : 0.12) * clamp01((k - 0.02) / 0.3);
-    const wv = Math.sin((s + walk) * 3.9) * amp + (crawl ? 0 : Math.sin(time * 1.3 - k * 5) * 0.05 * k);
+    const wv =
+      Math.sin((s + walk) * 3.9) * amp + (crawl ? 0 : Math.sin(time * 1.3 - k * 5) * 0.05 * k);
     x += -ty * wv;
     y += tx * wv;
     // Начало тела тянется за грудью (выпад, отдача).
@@ -4265,7 +4697,19 @@ export function drawSerpentBody(
       gone = seg(v.die, 1.0 + (1 - k) * 0.22, 1.45 + (1 - k) * 0.18);
       z = z * (1 - sink) - sink * 1.2;
     }
-    rings.push({ x, y, z, r: smp.r, k, a: 0, sink, cool, gone, plate: smp.plate, spike: smp.spike });
+    rings.push({
+      x,
+      y,
+      z,
+      r: smp.r,
+      k,
+      a: 0,
+      sink,
+      cool,
+      gone,
+      plate: smp.plate,
+      spike: smp.spike,
+    });
   }
   // Касательная — к голове, в экранных осях (с высотой).
   const scr = (rg: Ring): P2 => [rg.x * S, rg.y * S - rg.z];
@@ -4409,7 +4853,8 @@ export function drawSerpentBody(
       const rg = rings[i];
       if (rg.cool < 0.3 || rg.gone >= 1) continue;
       const a = (((v.die * 1.3 + hash(i, 5)) % 1) + 1) % 1;
-      g.fillStyle = a < 0.5 ? `rgba(255,150,60,${0.7 * (1 - a)})` : `rgba(90,82,80,${0.8 * (1 - a)})`;
+      g.fillStyle =
+        a < 0.5 ? `rgba(255,150,60,${0.7 * (1 - a)})` : `rgba(90,82,80,${0.8 * (1 - a)})`;
       g.fillRect(q(sx(rg) + (hash(i, 9) - 0.5) * rg.r * 2), q(sy(rg) - rg.r - a * 14), 1, 1);
     }
   }
@@ -4484,14 +4929,22 @@ registerPropPainter('f6_bubble', (o, time) => {
       for (let i = 0; i < 7; i++) {
         const a = -Math.PI * (0.1 + (i / 6) * 0.8);
         const d = 2 + hash(i, v) * 3;
-        p.set(Math.round(cx + Math.cos(a) * d), Math.round(cy - 1 + Math.sin(a) * d * 1.4), i % 2 ? LAVA.bright : LAVA.white);
+        p.set(
+          Math.round(cx + Math.cos(a) * d),
+          Math.round(cy - 1 + Math.sin(a) * d * 1.4),
+          i % 2 ? LAVA.bright : LAVA.white,
+        );
       }
       p.ell(cx, cy, 2.6, 1.2, LAVA.hot);
     } else if (f <= 6) {
       // Круги расходятся.
       const r = 2 + (f - 4) * 1.6;
       for (let a = 0; a < TAU; a += 0.2)
-        p.set(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r * 0.45), f === 5 ? LAVA.bright : LAVA.hot);
+        p.set(
+          Math.round(cx + Math.cos(a) * r),
+          Math.round(cy + Math.sin(a) * r * 0.45),
+          f === 5 ? LAVA.bright : LAVA.hot,
+        );
     }
     return { img: p.canvas(), ax: 8, ay: 16 };
   });
@@ -4507,7 +4960,15 @@ registerPropPainter('f6_lavafall', (o, time) => {
       for (let x = 8 - w; x <= 8 + w - 1; x++) {
         const band = (y - f * 2 + 16 + Math.floor(Math.abs(x - 8) * 0.8)) % 5;
         const edge = x === 8 - w || x === 8 + w - 1;
-        const c = edge ? LAVA.dark : band === 0 ? LAVA.white : band < 2 ? LAVA.bright : band < 4 ? LAVA.hot : LAVA.mid;
+        const c = edge
+          ? LAVA.dark
+          : band === 0
+            ? LAVA.white
+            : band < 2
+              ? LAVA.bright
+              : band < 4
+                ? LAVA.hot
+                : LAVA.mid;
         p.set(x, y, c);
       }
     }
@@ -4636,7 +5097,8 @@ registerPropPainter('f6_skull', () =>
     // Пепел занёс низ.
     for (let x = 2; x < 31; x++) {
       const h = 2 + Math.round(noise(x, 0, 4, 5) * 3);
-      for (let y = 21 - h; y < 22; y++) p.set(x, y, tone([ASH.dk, ASH.mid, ASH.lt, ASH.hi], 0.5 - (y - 17) * 0.1));
+      for (let y = 21 - h; y < 22; y++)
+        p.set(x, y, tone([ASH.dk, ASH.mid, ASH.lt, ASH.hi], 0.5 - (y - 17) * 0.1));
     }
     return { img: p.canvas(), ax: 16, ay: 22 };
   }),
@@ -4940,7 +5402,8 @@ registerPropPainter('f6_crate', (o, _time, _alive, flash) => {
     p.outline(INK);
     if (v) {
       // Опалённый угол.
-      for (let y = 10; y < 15; y++) for (let x = 10; x < 14; x++) if ((x + y) % 2) p.set(x, y, hx('#1a100a'));
+      for (let y = 10; y < 15; y++)
+        for (let x = 10; x < 14; x++) if ((x + y) % 2) p.set(x, y, hx('#1a100a'));
     }
     p = flashed(p, flash);
     return { img: p.canvas(), ax: 8, ay: 15 };
@@ -5037,7 +5500,14 @@ interface StyleDef {
 
 const STYLES: Record<Style, StyleDef> = {
   gallery: {
-    lava: [hx('#4a0c06'), hx('#8a1c08'), hx('#c8360c'), hx('#f0641a'), hx('#ffa42c'), hx('#ffe08a')],
+    lava: [
+      hx('#4a0c06'),
+      hx('#8a1c08'),
+      hx('#c8360c'),
+      hx('#f0641a'),
+      hx('#ffa42c'),
+      hx('#ffe08a'),
+    ],
     ramp: [0.3, 0.5, 0.68, 0.84, 0.95],
     raft: 0.55,
     seam: [hx('#5a1206'), hx('#b8300c'), hx('#ff7a1e'), hx('#ffc048')],
@@ -5045,7 +5515,14 @@ const STYLES: Record<Style, StyleDef> = {
     ash: 1,
   },
   lakes: {
-    lava: [hx('#7a1606'), hx('#c0300a'), hx('#ee5210'), hx('#ff8a1e'), hx('#ffc440'), hx('#fff4b0')],
+    lava: [
+      hx('#7a1606'),
+      hx('#c0300a'),
+      hx('#ee5210'),
+      hx('#ff8a1e'),
+      hx('#ffc440'),
+      hx('#fff4b0'),
+    ],
     ramp: [0.22, 0.4, 0.58, 0.78, 0.92],
     raft: 0.63,
     seam: [hx('#6a1606'), hx('#d8420e'), hx('#ff9a24'), hx('#ffe07a')],
@@ -5053,7 +5530,14 @@ const STYLES: Record<Style, StyleDef> = {
     ash: 0.7,
   },
   nest: {
-    lava: [hx('#3a0406'), hx('#7a0c0c'), hx('#b81a10'), hx('#e8401a'), hx('#ff8a30'), hx('#ffd070')],
+    lava: [
+      hx('#3a0406'),
+      hx('#7a0c0c'),
+      hx('#b81a10'),
+      hx('#e8401a'),
+      hx('#ff8a30'),
+      hx('#ffd070'),
+    ],
     ramp: [0.26, 0.46, 0.64, 0.82, 0.94],
     raft: 0.59,
     seam: [hx('#4a0808'), hx('#a81810'), hx('#f0501a'), hx('#ffb040')],
@@ -5185,7 +5669,15 @@ function ashTex(): Px {
       // Гребни ряби — рваные и редкие, основное — зернистая пыль.
       const ridge = r < 0.045 && m > 0.45;
       const g = hash(x, y, 54);
-      const c = ridge ? (g < 0.5 ? ASH.hi : ASH.lt) : g < 0.3 ? ASH.lt : m > 0.55 ? ASH.mid : ASH.dk;
+      const c = ridge
+        ? g < 0.5
+          ? ASH.hi
+          : ASH.lt
+        : g < 0.3
+          ? ASH.lt
+          : m > 0.55
+            ? ASH.mid
+            : ASH.dk;
       const a = 0.14 + n * 0.28 + (ridge ? 0.12 : 0);
       t.set(x, y, alpha(c, a));
       if (hash(x, y, 52) < 0.015) t.set(x, y, alpha(hx('#1a1412'), 0.7));
@@ -5235,7 +5727,14 @@ function lavaCell(c: CellCtx, style: Style): Px {
   const sw = !s && !w && !lava(-1, 1);
   const se = !s && !e && !lava(1, 1);
   const mask =
-    (n ? 1 : 0) | (e ? 2 : 0) | (s ? 4 : 0) | (w ? 8 : 0) | (nw ? 16 : 0) | (ne ? 32 : 0) | (sw ? 64 : 0) | (se ? 128 : 0);
+    (n ? 1 : 0) |
+    (e ? 2 : 0) |
+    (s ? 4 : 0) |
+    (w ? 8 : 0) |
+    (nw ? 16 : 0) |
+    (ne ? 32 : 0) |
+    (sw ? 64 : 0) |
+    (se ? 128 : 0);
   const P = LTEX / 16;
   const ox = ((c.wx % P) + P) % P;
   const oy = ((c.wy % P) + P) % P;
@@ -5293,7 +5792,14 @@ function lavaCell(c: CellCtx, style: Style): Px {
 }
 
 /** Край, рваный к соседям другого вида: стираем пиксели у кромки. */
-function fringe(p: Px, c: CellCtx, keep: (m: number) => boolean, seed: number, depth: number, fade = false): void {
+function fringe(
+  p: Px,
+  c: CellCtx,
+  keep: (m: number) => boolean,
+  seed: number,
+  depth: number,
+  fade = false,
+): void {
   const sides: [number, number][] = [
     [0, -1],
     [1, 0],
@@ -5414,7 +5920,10 @@ function fissureCell(c: CellCtx, style: Style): Px {
       spline(
         [
           mid,
-          [(mid[0] + e[0]) / 2 + (hash(e[0], e[1], v) - 0.5) * 4, (mid[1] + e[1]) / 2 + (hash(e[1], e[0], v) - 0.5) * 4],
+          [
+            (mid[0] + e[0]) / 2 + (hash(e[0], e[1], v) - 0.5) * 4,
+            (mid[1] + e[1]) / 2 + (hash(e[1], e[0], v) - 0.5) * 4,
+          ],
           e,
         ],
         6,
@@ -5429,7 +5938,9 @@ function fissureCell(c: CellCtx, style: Style): Px {
         p.set(Math.floor(x) + 1, Math.floor(y), hx('#140806'));
       }
     for (const path of paths)
-      path.forEach(([x, y], i) => p.set(Math.floor(x), Math.floor(y), i % 3 === 0 ? sd.seam[3] : sd.seam[2]));
+      path.forEach(([x, y], i) =>
+        p.set(Math.floor(x), Math.floor(y), i % 3 === 0 ? sd.seam[3] : sd.seam[2]),
+      );
     return p;
   });
 }
@@ -5447,7 +5958,11 @@ function ventCell(c: CellCtx): Px {
     for (let i = 0; i < 9; i++) {
       const a = hash(i, v, 81) * TAU;
       const r = 4.6 + hash(i, v, 82) * 2.2;
-      p.set(Math.round(8 + Math.cos(a) * r), Math.round(8.5 + Math.sin(a) * r * 0.8), i % 3 ? hx('#c8bc40') : hx('#f0e070'));
+      p.set(
+        Math.round(8 + Math.cos(a) * r),
+        Math.round(8.5 + Math.sin(a) * r * 0.8),
+        i % 3 ? hx('#c8bc40') : hx('#f0e070'),
+      );
     }
     return p;
   });
@@ -5456,7 +5971,8 @@ function ventCell(c: CellCtx): Px {
 /** Обсидиановый мост: плиты стекла, к лаве — кромка с отсветом снизу. */
 function bridgeCell(c: CellCtx): Px {
   const lava = (dx: number, dy: number) => isLavaMark(c.markAt(dx, dy));
-  const mask = (lava(0, -1) ? 1 : 0) | (lava(1, 0) ? 2 : 0) | (lava(0, 1) ? 4 : 0) | (lava(-1, 0) ? 8 : 0);
+  const mask =
+    (lava(0, -1) ? 1 : 0) | (lava(1, 0) ? 2 : 0) | (lava(0, 1) ? 4 : 0) | (lava(-1, 0) ? 8 : 0);
   const v = Math.floor(hash(c.wx, c.wy, 83) * 3);
   const row = ((c.wy % 2) + 2) % 2;
   return cellOf(`bridge|${mask}|${v}|${row}`, () => {
@@ -5504,7 +6020,8 @@ function bridgeCell(c: CellCtx): Px {
 function rimCell(c: CellCtx): Px {
   const k = c.mark;
   const other = (dx: number, dy: number) => c.markAt(dx, dy) !== k;
-  const mask = (other(0, -1) ? 1 : 0) | (other(1, 0) ? 2 : 0) | (other(0, 1) ? 4 : 0) | (other(-1, 0) ? 8 : 0);
+  const mask =
+    (other(0, -1) ? 1 : 0) | (other(1, 0) ? 2 : 0) | (other(0, 1) ? 4 : 0) | (other(-1, 0) ? 8 : 0);
   const v = Math.floor(hash(c.wx, c.wy, 85) * 3);
   return cellOf(`rim|${k}|${mask}|${v}`, () => {
     const p = new Px(16, 16);
@@ -5553,9 +6070,14 @@ function arenaCell(c: CellCtx): Px {
       p.set(x0 - 1, y0 - 1, hx('#c05a3a'));
     }
     if (wallN)
-      for (let y = 0; y < 3; y++) for (let x = 0; x < 16; x++) p.set(x, y, mixc(p.get(x, y), hx('#050303'), 0.55 - y * 0.15));
-    if (wallW) for (let x = 0; x < 2; x++) for (let y = 0; y < 16; y++) p.set(x, y, mixc(p.get(x, y), hx('#050303'), 0.4 - x * 0.15));
-    if (wallE) for (let x = 14; x < 16; x++) for (let y = 0; y < 16; y++) p.set(x, y, mixc(p.get(x, y), hx('#050303'), 0.25));
+      for (let y = 0; y < 3; y++)
+        for (let x = 0; x < 16; x++) p.set(x, y, mixc(p.get(x, y), hx('#050303'), 0.55 - y * 0.15));
+    if (wallW)
+      for (let x = 0; x < 2; x++)
+        for (let y = 0; y < 16; y++) p.set(x, y, mixc(p.get(x, y), hx('#050303'), 0.4 - x * 0.15));
+    if (wallE)
+      for (let x = 14; x < 16; x++)
+        for (let y = 0; y < 16; y++) p.set(x, y, mixc(p.get(x, y), hx('#050303'), 0.25));
     return p;
   });
 }
@@ -5612,7 +6134,9 @@ function veinWall(c: CellCtx, style: Style): Px | null {
     for (const path of [main, br])
       for (const [x, y] of path) p.ell(x, y, 1.6, 1.3, alpha(sd.seam[1], 0.4));
     for (const path of [main, br])
-      path.forEach(([x, y], i) => p.set(Math.floor(x), Math.floor(y), i % 2 ? sd.seam[3] : sd.seam[2]));
+      path.forEach(([x, y], i) =>
+        p.set(Math.floor(x), Math.floor(y), i % 2 ? sd.seam[3] : sd.seam[2]),
+      );
     return p;
   });
 }
@@ -5649,14 +6173,12 @@ function rockWall(c: CellCtx, style: Style): Px {
     const p = new Px(16, 16);
     const W = WALL_WASH[style];
     if (!face) {
-      for (let y = 0; y < 16; y++)
-        for (let x = 0; x < 16; x++) p.set(x, y, alpha(W.top, 0.5));
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, alpha(W.top, 0.5));
       // Редкие угли в породе.
       if (v === 1) p.set(5 + v * 2, 9, alpha(LAVA.hot, 0.5));
       return p;
     }
-    for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) p.set(x, y, alpha(W.face, 0.4));
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, alpha(W.face, 0.4));
     // Столбчатая отдельность: вертикальные швы с кромкой к свету.
     for (const x0 of [2 + v, 7 + (v % 2), 12 - (v % 3)]) {
       const y0 = 3 + ((x0 * 7 + v) % 4);
@@ -5666,7 +6188,8 @@ function rockWall(c: CellCtx, style: Style): Px {
       }
       // Поперечный скол столба.
       const yb = y0 + 5 + (v % 3);
-      if (yb < 15) for (let x = x0 - 2; x < x0; x++) if (x >= 0) p.set(x, yb, alpha(hx('#080404'), 0.5));
+      if (yb < 15)
+        for (let x = x0 - 2; x < x0; x++) if (x >= 0) p.set(x, yb, alpha(hx('#080404'), 0.5));
     }
     // Отсвет лавы с пола у подножия.
     for (let y = 12; y < 16; y++) {
@@ -5733,7 +6256,13 @@ function painter(style: Style) {
           const p = new Px(16, 16);
           p.data.set(base.data);
           for (let i = 0; i < f.data.length; i += 4)
-            if (f.data[i + 3]) p.set((i / 4) % 16, Math.floor(i / 64), [f.data[i], f.data[i + 1], f.data[i + 2], f.data[i + 3]]);
+            if (f.data[i + 3])
+              p.set((i / 4) % 16, Math.floor(i / 64), [
+                f.data[i],
+                f.data[i + 1],
+                f.data[i + 2],
+                f.data[i + 3],
+              ]);
           return p;
         });
       }
@@ -5927,7 +6456,12 @@ registerZonePainter('f6_snuff', (g, z, px, py) => {
     const a = hash(i, zz.id) * TAU;
     const d = 2 + t * 10;
     g.fillStyle = i % 2 ? rgba(FIRE[3], 1 - t) : rgba(hx('#8a8078'), 0.7 * (1 - t));
-    g.fillRect(Math.round(px + Math.cos(a) * d), Math.round(py - 6 + Math.sin(a) * d - t * 6), 1, 1);
+    g.fillRect(
+      Math.round(px + Math.cos(a) * d),
+      Math.round(py - 6 + Math.sin(a) * d - t * 6),
+      1,
+      1,
+    );
   }
   return true;
 });
@@ -6015,7 +6549,12 @@ registerZonePainter('f6_lavapool', (g, z, px, py, S, time) => {
   g.fillStyle = rgba(LAVA.bright, 0.9 * a);
   for (let i = 0; i < 3; i++) {
     const aa = time * 1.5 + i * 2.1 + zz.id;
-    g.fillRect(Math.round(px + Math.cos(aa) * R * 0.4), Math.round(py + Math.sin(aa) * R * 0.25), 2, 1);
+    g.fillRect(
+      Math.round(px + Math.cos(aa) * R * 0.4),
+      Math.round(py + Math.sin(aa) * R * 0.25),
+      2,
+      1,
+    );
   }
   return true;
 });
@@ -6062,7 +6601,12 @@ registerZonePainter('f6_geyser', (g, z, px, py, S, time) => {
     g.stroke();
     g.fillStyle = rgba(hx('#f0ece4'), 0.5 * k);
     for (let i = 0; i < 3; i++)
-      g.fillRect(Math.round(px - 2 + i * 2), Math.round(py - 3 - ((time * 8 + i) % 4) * k * 2), 1, 1);
+      g.fillRect(
+        Math.round(px - 2 + i * 2),
+        Math.round(py - 3 - ((time * 8 + i) % 4) * k * 2),
+        1,
+        1,
+      );
     return true;
   }
   // Столб: у основания огонь, выше — пар; к концу опадает.
@@ -6103,20 +6647,36 @@ registerZonePainter('f6_crumble', (g, z, px, py, S) => {
     const t = (zz.t - warn) / Math.max(0.01, zz.life);
     g.fillStyle = rgba(OBSID[2], 1 - t);
     for (let i = 0; i < 5; i++)
-      g.fillRect(Math.round(px - h + hash(i, zz.id, 5) * S), Math.round(py - h + hash(i, zz.id, 6) * S + t * 6), 2, 2);
+      g.fillRect(
+        Math.round(px - h + hash(i, zz.id, 5) * S),
+        Math.round(py - h + hash(i, zz.id, 6) * S + t * 6),
+        2,
+        2,
+      );
   }
   return true;
 });
 
 // Лава поднимается: по клетке бегут трещины, из них сочится жар.
-export function riseMark(g: CanvasRenderingContext2D, zz: Zone, px: number, py: number, S: number, time: number, big: boolean) {
+export function riseMark(
+  g: CanvasRenderingContext2D,
+  zz: Zone,
+  px: number,
+  py: number,
+  S: number,
+  time: number,
+  big: boolean,
+) {
   const warn = zz.warn ?? 1.4;
   const k = Math.min(1, zz.t / warn);
   const h = S / 2;
   const pulse = 0.5 + 0.5 * Math.sin(time * (8 + k * 12));
   // Клетка налита целиком: кольцо, куда придёт лава, читается сплошной
   // полосой, а не россыпью значков.
-  g.fillStyle = rgba(big ? hx('#b81a10') : hx('#a8300c'), (0.28 + 0.42 * k) * (0.75 + 0.25 * pulse));
+  g.fillStyle = rgba(
+    big ? hx('#b81a10') : hx('#a8300c'),
+    (0.28 + 0.42 * k) * (0.75 + 0.25 * pulse),
+  );
   g.fillRect(Math.round(px - h), Math.round(py - h), S, S);
   // Ближе к удару — жар ровнее и ярче; клетки кольца сливаются в полосу.
   g.fillStyle = rgba(LAVA.hot, (0.06 + 0.3 * k * k) * pulse);
@@ -6125,11 +6685,24 @@ export function riseMark(g: CanvasRenderingContext2D, zz: Zone, px: number, py: 
   const n = big ? 4 : 3;
   for (let i = 0; i < n; i++) {
     const ph = (time * (1.2 + k * 2.5) + hash(i, zz.id, 7)) % 1;
-    const bx = px - h + 3 + hash(i, zz.id, Math.floor(time * (1.2 + k * 2.5) + hash(i, zz.id, 7))) * (S - 6);
-    const by = py - h + 3 + hash(i, zz.id, 9 + Math.floor(time * (1.2 + k * 2.5) + hash(i, zz.id, 7))) * (S - 6);
+    const bx =
+      px - h + 3 + hash(i, zz.id, Math.floor(time * (1.2 + k * 2.5) + hash(i, zz.id, 7))) * (S - 6);
+    const by =
+      py -
+      h +
+      3 +
+      hash(i, zz.id, 9 + Math.floor(time * (1.2 + k * 2.5) + hash(i, zz.id, 7))) * (S - 6);
     const r = ph < 0.8 ? 1 + ph * 2 : 1;
-    g.fillStyle = rgba(ph < 0.8 ? LAVA.bright : LAVA.white, (0.5 + 0.5 * k) * (ph < 0.8 ? 1 : 1 - (ph - 0.8) * 5));
-    g.fillRect(Math.round(bx - r / 2), Math.round(by - r / 2), Math.max(1, Math.round(r)), Math.max(1, Math.round(r)));
+    g.fillStyle = rgba(
+      ph < 0.8 ? LAVA.bright : LAVA.white,
+      (0.5 + 0.5 * k) * (ph < 0.8 ? 1 : 1 - (ph - 0.8) * 5),
+    );
+    g.fillRect(
+      Math.round(bx - r / 2),
+      Math.round(by - r / 2),
+      Math.max(1, Math.round(r)),
+      Math.max(1, Math.round(r)),
+    );
   }
 }
 
