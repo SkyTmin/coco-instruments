@@ -3045,16 +3045,17 @@ registerMobPainter('f7_boss', (m: Mob, pose: MobPose) => {
   }
   // Смена фазы: свежая трещина прорастает, вспыхивает и гаснет.
   // На листе кадров смену фазы задаёт `vPcT` (время режима = время после смены).
+  // Трещины и их вспышка — у копий те же, что у настоящего: иначе фаза копий
+  // решалась бы с одного взгляда (настоящего выдаёт только тень от люстры).
   const pc = m.data.vPcT ? pose.t : pose.now - s.phaseT;
-  const lead = !copy;
-  const rv = lead && pc < 0.3 ? Math.min(4, 1 + Math.floor(pc / 0.07)) : 4;
-  const cg = lead && pc >= 0 && pc < 0.9 ? (pc < 0.1 ? 4 : pc < 0.3 ? 3 : pc < 0.55 ? 2 : 1) : 0;
+  const rv = pc < 0.3 ? Math.min(4, 1 + Math.floor(pc / 0.07)) : 4;
+  const cg = pc >= 0 && pc < 0.9 ? (pc < 0.1 ? 4 : pc < 0.3 ? 3 : pc < 0.55 ? 2 : 1) : 0;
   const loose = tech === 'idle' || tech === 'run' || tech === 'daze' || tech === 'rec';
   const fl0 = m.flash ?? 0;
   const q: BReq = {
     tier,
     copy,
-    cr: copy ? 0 : Math.min(3, phase),
+    cr: Math.min(3, phase),
     rv,
     cg,
     tech,
@@ -3085,7 +3086,7 @@ registerMobPainter('f7_boss', (m: Mob, pose: MobPose) => {
   if (tech === 'die') out.linger = DIE_T;
   if (tech === 'dieC') out.linger = DIEC_T;
   // Смена фазы: тело вздрагивает, пока трещина прорастает.
-  if (lead && pc >= 0 && pc < 0.45)
+  if (pc >= 0 && pc < 0.45)
     out.dx = (out.dx ?? 0) + Math.sin(pc * TAU * 16) * 0.9 * (1 - pc / 0.45);
   // Отдача от удара героя: от героя, с возвратом (в технике — слабее).
   if (fl0 > 0 && pose.mode !== 'dying') {
