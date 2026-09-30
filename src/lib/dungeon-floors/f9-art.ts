@@ -2149,7 +2149,7 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
       }
   }
   // Шея у затылка — сливается с шеей на полу; брюшко светлее.
-  limb(p, g.stub[0], g.stub[1], g.nape[0], g.nape[1], 4.2 * s, 3.7 * s, L.skin);
+  limb(p, g.stub[0], g.stub[1], g.nape[0], g.nape[1], 3.9 * s, 3.4 * s, L.skin);
   {
     const a = g.stubA;
     const nx = -Math.sin(a);
@@ -3032,7 +3032,7 @@ function headEnd(m: Mob, hp: HeadPose): NeckEnd {
     E: [sx, sy],
     D: [(sx - nx) / l, (sy - ny) / l],
     lift,
-    r1: 4 * g.s,
+    r1: 3.7 * g.s,
     under: clamp01(-hp.rig.lift / 22),
   };
 }
@@ -3563,6 +3563,8 @@ interface TailRig {
   psi: number;
   smear: number;
   slap: number;
+  /** 0…1: хвост уходит под воду от основания к кончику, лёжа на ней. */
+  sink: number;
 }
 
 /** Хвост: E, SE, S, NE, N (запад — зеркалом). */
@@ -3811,11 +3813,22 @@ function tailGeo(t: TailRig, dir: number): TailPt[] {
     if (t.emerge > 0.98 && h < 0.5) h = 0.5;
     push(i + 1);
   }
+  // Уходит под воду не разом: кромка воды бежит от основания к кончику.
+  if (t.sink > 0)
+    for (let i = 0; i < pts.length; i++) pts[i].h -= Math.max(0, t.sink * (N + 3) - i) * 2.2;
   return pts;
 }
 
 /** Взведённый хвост — откуда начинается взмах (для следа). */
-const TAIL_COCK: TailRig = { emerge: 1, phi: 1.45, curl: -0.11, psi: 1.35, smear: 0, slap: 0 };
+const TAIL_COCK: TailRig = {
+  emerge: 1,
+  phi: 1.45,
+  curl: -0.11,
+  psi: 1.35,
+  smear: 0,
+  slap: 0,
+  sink: 0,
+};
 
 const TAIL_L = frameLRU<Layer>(140);
 
@@ -3828,6 +3841,7 @@ function tailLayer(t: TailRig, dir: number, drip: number): Layer {
     Math.round(t.psi * 50),
     Math.round(t.smear * 10),
     Math.round(t.slap * 10),
+    Math.round(t.sink * 16),
     drip,
   ].join('|');
   const hit = TAIL_L.get(key);
@@ -3845,7 +3859,7 @@ function tailLayer(t: TailRig, dir: number, drip: number): Layer {
       a = { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), h: 0, r: lerp(a.r, b.r, k) };
       surf = a;
     }
-    limb(p, a.x, a.y, b.x, b.y, a.r, b.r, HY.body);
+    limb(p, a.x, a.y, b.x, b.y, a.r, b.r, HY.body, 0.14);
     // Брюхо — светлой полосой с нижней стороны.
     const dx = b.x - a.x;
     const dy = b.y - a.y;
@@ -4037,7 +4051,15 @@ const bodyDie = lane<BodyDyn>({ ...BODY0, legs: 1, up: 4, water: 40, mud: 0.5 },
 ]);
 
 /** Хвост: из воды → взведён → держит → взмах → шлепок в кадре урона → тонет. */
-const TAIL0: TailRig = { emerge: 0, phi: 1.5, curl: -0.02, psi: 0.6, smear: 0, slap: 0 };
+const TAIL0: TailRig = {
+  emerge: 0,
+  phi: 1.5,
+  curl: -0.02,
+  psi: 0.6,
+  smear: 0,
+  slap: 0,
+  sink: 0,
+};
 const TAIL_HIT = q24(1.15);
 /**
  * Хвост: встаёт из воды, заваливается дугой вбок (крюк над водой), держит,
@@ -4045,7 +4067,7 @@ const TAIL_HIT = q24(1.15);
  * перелётом, потом тонет. Вбок — потому что сверху «вверх-вниз» не видно:
  * хвост к камере и от неё читался бы столбом.
  */
-const tailLane = lane<TailRig>(TAIL0, [
+const tailKeys = lane<TailRig>(TAIL0, [
   [0, {}],
   [4, { emerge: 0.3 }, EZ.in],
   [9, { emerge: 0.9, phi: 1.45, curl: -0.05, psi: 0.9 }, EZ.out],
@@ -4056,10 +4078,25 @@ const tailLane = lane<TailRig>(TAIL0, [
   [TAIL_HIT, { phi: 0.12, curl: -0.01, psi: 0, smear: 0.8, slap: 1 }, EZ.lin],
   [TAIL_HIT + 2, { phi: 0.03, curl: -0.02, psi: -0.22, smear: 0, slap: 0.6 }, EZ.out],
   [TAIL_HIT + 6, { phi: 0.08, curl: 0, psi: -0.06, slap: 0 }, EZ.io],
-  [TAIL_HIT + 11, { emerge: 1 }, EZ.io],
-  [TAIL_HIT + 19, { emerge: 0 }, EZ.in],
+  [TAIL_HIT + 10, { sink: 0 }, EZ.io],
+  [TAIL_HIT + 19, { sink: 1 }, EZ.io],
 ]);
 const TAIL_END = TAIL_HIT + 19;
+const HOLD0 = 12;
+const HOLD1 = TAIL_HIT - 6;
+
+/** Ключи хвоста + дрожь на удержании: взведённый хвост живой, а не прибит. */
+function tailLane(x: number): TailRig {
+  const t = tailKeys(x);
+  if (x <= HOLD0 || x >= HOLD1) return t;
+  const k = (x - HOLD0) / (HOLD1 - HOLD0);
+  const env = Math.sin(k * Math.PI);
+  return {
+    ...t,
+    psi: t.psi + 0.07 * env * Math.sin((x - HOLD0) * 0.95),
+    phi: t.phi + 0.04 * env * Math.sin((x - HOLD0) * 0.95 + 1.3),
+  };
+}
 
 /** Ход тела на взмахе: оседает, закручивается против взмаха, бросается в него. */
 const lashFx = lane<{ rot: number; sx: number; sy: number; dy: number; crest: number }>(
@@ -4131,6 +4168,7 @@ function bodyFrame(
         Math.round(tail.psi * 50),
         Math.round(tail.smear * 10),
         Math.round(tail.slap * 10),
+        Math.round(tail.sink * 16),
         drip,
       ].join(',')
     : '-';
@@ -4701,7 +4739,7 @@ registerZonePainter('f9_necks', (g, z, px, py, S, time) => {
         R,
         E,
         D,
-        r0: 4.8,
+        r0: 4.6,
         r1,
         coil: rig.coil,
         bulge: rig.bulge,
@@ -4721,8 +4759,8 @@ registerZonePainter('f9_necks', (g, z, px, py, S, time) => {
         R,
         E,
         D: [(R[0] - E[0]) / l, (R[1] - E[1]) / l],
-        r0: 4.8,
-        r1: 4.4,
+        r0: 4.6,
+        r1: 4.2,
         coil: 0,
         bulge: 0,
         bulgeA: 0,
