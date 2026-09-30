@@ -1469,6 +1469,23 @@ const hasteOf = (sim: Sim) => {
   return p >= 3 ? 1.25 : p >= 2 ? 1.15 : p >= 1 ? 1.05 : 1;
 };
 
+// v2.86 — только рисунок: зона-картинка техник змея (`api.vfx`: без урона и
+// статусов, номер не из общего счётчика); `cap` — потолок таких зон разом.
+function fx6(
+  sim: Sim,
+  api: SimApi,
+  art: string,
+  x: number,
+  y: number,
+  life: number,
+  o: Record<string, unknown> = {},
+  cap = 40,
+): void {
+  let n = 0;
+  for (const z of sim.zones) if (z.art?.startsWith('f6_fx')) n++;
+  if (n < cap) api.vfx(sim, { x, y, r: 0.5, life, art, ...o } as ZoneIn);
+}
+
 /** Хвост змея — точки пути головы (для рисунка тела). */
 const TRAILS = new WeakMap<Mob, number[]>();
 export const serpentTrail = (m: Mob): readonly number[] => TRAILS.get(m) ?? [];
@@ -1658,6 +1675,7 @@ function startWave(sim: Sim, m: Mob, api: SimApi): void {
   m.dir = Math.atan2(h.y - m.y, h.x - m.x);
   m.face = m.dir;
   api.setMode(m, 'f6_wave');
+  fx6(sim, api, 'f6_fxinhale', m.x, m.y, SERP.waveWarn / hasteOf(sim), { mob: m.id }); // v2.86 — только рисунок
   const phase = sim.boss?.phase ?? 0;
   fireWave(sim, m, api, m.dir, 0);
   // В разломе — вторая волна поперёк: безопасны только «клетки» сетки.
@@ -1675,6 +1693,17 @@ registerBrain('f6boss', {
     m.tele = null;
     m.danger = 0;
     m.data.haste = haste;
+    // v2.86 — только рисунок: метки рисует этаж; слой огня поверх темноты;
+    // смена фазы — жар кольцом и вспышка.
+    m.data.vNoTele = 1;
+    if (m.mode !== 'f6_mark') m.data.vShadow = 0;
+    if (!sim.zones.some((z) => z.art === 'f6_fxsky'))
+      api.vfx(sim, { x: m.x, y: m.y, r: 0.1, life: 1e9, art: 'f6_fxsky', above: true });
+    if ((m.data.vPh ?? 0) < phase) {
+      m.data.vPh = phase;
+      fx6(sim, api, 'f6_fxphase', m.x, m.y, 1.8);
+      sim.events.push({ t: 'flash', k: 0.3, color: '#ff8a2a' });
+    }
     m.data.biteCd = (m.data.biteCd ?? 1) - dt;
     m.data.tailCd = (m.data.tailCd ?? 3) - dt;
     m.data.waveCd = (m.data.waveCd ?? 4) - dt;
@@ -1710,12 +1739,19 @@ registerBrain('f6boss', {
         cy += cx * z;
         const l = hypot(cx, cy) || 1;
         api.steer(sim, m, cx / l, cy / l, m.speed * haste * (dist < 2 ? 0.35 : 1), dt);
+        // v2.86 — только рисунок: брюхо трёт пол — пыль и искры, 5 раз в секунду.
+        m.data.vCrawl = (m.data.vCrawl ?? 0) - dt;
+        if (m.data.vCrawl <= 0 && hypot(m.vx, m.vy) > 0.8) {
+          m.data.vCrawl = 0.2;
+          fx6(sim, api, 'f6_fxcrawl', m.x, m.y, 0.8, { ang: Math.atan2(m.vy, m.vx) }, 30);
+        }
         if (m.t < 0.5 / haste) return;
         const a = Math.atan2(dy, dx);
         const behind = Math.abs(angDiff(a, m.face)) > 2.1;
         if (phase >= 1 && m.data.flyCd <= 0 && dist > 1.2) {
           api.setMode(m, 'f6_takeoff');
           sim.events.push({ t: 'boss', what: 'roar' });
+          fx6(sim, api, 'f6_fxgust', m.x, m.y, 1.3, { mob: m.id }); // v2.86 — только рисунок
           return;
         }
         if (phase >= 2 && m.data.sumCd <= 0) {
@@ -1764,6 +1800,7 @@ registerBrain('f6boss', {
           m.data.sdir = sim.rng() < 0.5 ? 1 : -1;
           api.setMode(m, 'f6_sweep');
           fireSweep(sim, m, api, a, m.data.sdir);
+          fx6(sim, api, 'f6_fxinhale', m.x, m.y, 1 / haste, { mob: m.id }); // v2.86 — только рисунок
           sim.events.push({ t: 'boss', what: 'roar' });
           return;
         }
@@ -1895,6 +1932,13 @@ registerBrain('f6boss', {
         m.data.ghost = 1;
         const F = SERP.markFollow / haste;
         const L = SERP.markLock;
+        // v2.86 — только рисунок: тень змея кружит над героем, пока круг ищет.
+        if (!m.data.vShadow) {
+          m.data.vShadow = 1;
+          fx6(sim, api, 'f6_fxshadow', m.data.gx, m.data.gy, Math.max(0.1, F - m.t + 0.05), {
+            mob: m.id,
+          });
+        }
         // Круг ходит за героем, потом замирает — тень змея над ним.
         if (m.t < F) {
           m.data.gx += (h.x - m.data.gx) * Math.min(1, dt * 6);
@@ -1976,6 +2020,7 @@ registerBrain('f6boss', {
           m.data.called = 1;
           summonSpirits(sim, api, phase >= 3 ? 3 : 2);
           sim.events.push({ t: 'boss', what: 'summon' });
+          fx6(sim, api, 'f6_fxroar', m.x, m.y, 0.9, { mob: m.id }); // v2.86 — только рисунок
         }
         if (m.t >= 1.5) {
           m.data.called = 0;
@@ -2164,6 +2209,12 @@ registerBoss('f6boss', {
           art: 'f6_crack',
         });
       q.pend = ring.slice();
+      // v2.86 — только рисунок: лава выходит кольцом — брызги, языки, дым.
+      fx6(sim, api, 'f6_fxquake', sim.hero.x, sim.hero.y, 1.4, {
+        warn: 1.6,
+        cells: ring.slice(),
+        W,
+      });
       q.warnAt = sim.time + 1.6;
       q.step += 1;
       q.next = sim.time + 9;
@@ -2173,6 +2224,7 @@ registerBoss('f6boss', {
     void dt;
   },
   onPartDown(sim, _b, _m, api) {
+    fx6(sim, api, 'f6_fxdeath', _m.x, _m.y, 3.2); // v2.86 — только рисунок
     // Змей пал — лава на арене застывает: выход открыт.
     const st = stateOf(sim);
     cool(sim, api, st.arena);
