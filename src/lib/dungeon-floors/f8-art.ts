@@ -6821,7 +6821,11 @@ registerMobWarm('f8boss', function* () {
     const q: DReq = { tech, f: 0, ph: 0, v, fl: 0, br: 0 };
     const n = framesOf(q);
     for (let f = 0; f < n; f++) {
-      demonFrame({ ...q, f });
+      const fr = demonFrame({ ...q, f });
+      yield f;
+      // И в обе стороны: зеркало — свой холст, в бою он тоже новый кадр.
+      mirrorOf(fr.img);
+      if (fr.lit) mirrorOf(fr.lit);
       yield f;
     }
   }
