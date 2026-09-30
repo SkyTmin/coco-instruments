@@ -2096,13 +2096,6 @@ function paintRig(r: Rig): SerpArt {
     wing2(p, nsx, nsy, r, false);
   }
 
-  // Морда в камне: всё, что ниже земли у головы, срезано.
-  if (r.buried > 0) {
-    const cut = SAY - 1 + Math.round((1 - r.buried) * 6);
-    for (let y = cut; y < SH; y++)
-      for (let x = Math.round(HX - 12); x <= Math.round(HX + 14); x++) clear(p, x, y);
-  }
-
   const bb = bboxOf(p);
   if (bb) outlineIn(p, INK, bb[0], bb[1], bb[2], bb[3]);
 
@@ -2154,6 +2147,23 @@ function paintRig(r: Rig): SerpArt {
   p.set(Math.round(nosX), Math.round(nosY), INK);
   if (r.smoke >= 0) puff(p, nosX + fx, nosY - 1, r.smoke, fx >= 0 ? -0.6 : 0.6);
 
+  // Морда в камне: всё, что ниже земли у головы, срезано (и зубы тоже), по
+  // краю — вывороченные камешки.
+  if (r.buried > 0) {
+    const cutY = SAY - 1 + Math.round((1 - r.buried) * 6);
+    for (let y = cutY; y < SH; y++)
+      for (let x = Math.round(HX - 12); x <= Math.round(HX + 14); x++) clear(p, x, y);
+    if (r.buried > 0.4) {
+      const bx0 = Math.round(snx);
+      for (let i = 0; i < 6; i++) {
+        const x = bx0 - 6 + Math.round(hash(i, 3) * 13);
+        const y = cutY - (hash(i, 7) < 0.4 ? 1 : 0);
+        p.set(x, y, BASALT[hash(i, 9) < 0.5 ? 2 : 3]);
+        p.set(x + 1, y, BASALT[1]);
+        p.set(x, y + 1, INK);
+      }
+    }
+  }
   // Жар: горло светится сквозь щитки, пасть горит, пламя.
   if (r.glow > 0.22) {
     const n = Math.round(2 + r.glow * 9);
@@ -2218,21 +2228,26 @@ function paintRig(r: Rig): SerpArt {
     });
   }
   if (r.stars > 0.02) {
-    // Звёзды над головой — кружат (фаза — в `stars` дробью).
+    // Звёзды над головой — кружат (фаза — в `stars` дробью), ближняя крупнее.
     const ph = r.stars * TAU;
     const c1 = hx('#fff27a');
+    const c2 = hx('#ffb030');
     for (let i = 0; i < 3; i++) {
       const a = ph + (i / 3) * TAU;
-      const x = Math.round(HX + Math.cos(a) * 6);
-      const y = Math.round(HY - 8 + Math.sin(a) * 2.2);
-      const big = Math.sin(a) > 0;
+      const x = Math.round(HX + Math.cos(a) * 7.5);
+      const y = Math.round(HY - 9 + Math.sin(a) * 2.6);
+      const near = Math.sin(a) > -0.2;
       lit.set(x, y, WHITE);
-      if (big) {
-        lit.set(x - 1, y, c1);
-        lit.set(x + 1, y, c1);
-        lit.set(x, y - 1, c1);
-        lit.set(x, y + 1, c1);
-      } else lit.set(x + 1, y, alpha(c1, 0.6));
+      lit.set(x - 1, y, c1);
+      lit.set(x + 1, y, c1);
+      lit.set(x, y - 1, c1);
+      lit.set(x, y + 1, c1);
+      if (near) {
+        lit.set(x - 2, y, alpha(c2, 0.8));
+        lit.set(x + 2, y, alpha(c2, 0.8));
+        lit.set(x, y - 2, alpha(c2, 0.8));
+        lit.set(x, y + 2, alpha(c2, 0.8));
+      }
     }
   }
   // Смерть: остывает в обсидиан, трещины гаснут, потом рассыпается пеплом.
@@ -2241,7 +2256,7 @@ function paintRig(r: Rig): SerpArt {
     for (let i = 0; i < d.length; i += 4) {
       if (!d[i + 3]) continue;
       const l = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) / 255;
-      const o = tone(COOLED, l * 2.2 - 0.25);
+      const o = tone(COOLED, l * 1.7 - 0.25);
       const k = clamp01(r.cool);
       d[i] = d[i] + (o[0] - d[i]) * k;
       d[i + 1] = d[i + 1] + (o[1] - d[i + 1]) * k;
@@ -3988,7 +4003,9 @@ export function drawSerpentBody(
     let z = 0;
     if (mem) {
       // В небо — за грудью, с опозданием к хвосту; на дыбах — только начало.
-      const lagged = liftAt(mem, now - k * 0.55);
+      // Вверх тело отрывается медленно, кольцо за кольцом; вниз (пике)
+      // падает за грудью быстро — не стоит башней.
+      const lagged = Math.min(liftAt(mem, now - k * 0.55), liftAt(mem, now - k * 0.2));
       z = lagged * (1 - 0.3 * k);
       z = Math.max(z, rearNow * att);
       if (lagged > 8) z += Math.sin(time * 5.5 - k * 6) * 2.4 * k;
@@ -4093,7 +4110,7 @@ export function drawSerpentBody(
   for (let i = rings.length - 1; i >= 1; i--) {
     const rg = rings[i];
     // Гребень виден сбоку; на теле, уходящем от камеры, шипы читались бы каплями.
-    if (!rg.spike || rg.gone >= 1 || Math.abs(Math.cos(rg.a)) < 0.45) continue;
+    if (!rg.spike || rg.gone >= 1 || Math.abs(Math.cos(rg.a)) < 0.7) continue;
     const size = Math.max(2, Math.round(rg.r * 0.55 + 0.6));
     const lean = Math.cos(rg.a) >= 0 ? 1 : -1;
     const vr = varOf(rg);
