@@ -4627,7 +4627,9 @@ function tlFan(ph: number): DTL {
     keys,
     dur,
     post: (p, t) => shaken(pant(p, t, t > pantFrom ? Math.min(1, (t - pantFrom) * 4) * 0.8 : 0), t),
-    trail: hits.map((x) => swingWin(x)),
+    // След — с кадра разгона, не с замаха: замах давал белый «флажок» у
+    // острия за кадр до дуги (живая запись фазы 2, у головы — особенно).
+    trail: hits.map((x) => swingWin(x, 2)),
     hits,
   };
 }
@@ -4707,7 +4709,7 @@ function tlSweep(ph: number): DTL {
     ],
     [dur, { ...GUARD }, EZ.io],
   ]);
-  return { keys, dur, post: shaken, trail: [swingWin(c)], hits: [c] };
+  return { keys, dur, post: shaken, trail: [swingWin(c, 2)], hits: [c] };
 }
 
 /** Иай: присед с клинком у бедра, остриём назад; прищур — блик глаз. */
@@ -5099,7 +5101,7 @@ function tlVolley(ph: number): DTL {
     keys,
     dur,
     post: (p, t) => shaken(pant(p, t, t > pantFrom ? Math.min(1, (t - pantFrom) * 4) * 0.7 : 0), t),
-    trail: [swingWin(c1), swingWin(c2)],
+    trail: [swingWin(c1, 2), swingWin(c2, 2)],
     hits: [c1, c2],
   };
 }
