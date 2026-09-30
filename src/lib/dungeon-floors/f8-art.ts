@@ -5692,10 +5692,26 @@ function crescentMark(
   a1: number,
   c: RGBA,
 ): void {
+  // Точки дуги ложатся друг на друга по многу раз. Полупрозрачный цвет,
+  // положенный n раз, — это один раз с прозрачностью 1 − (1 − a)ⁿ: вид тот
+  // же, а смешиваний в разы меньше (ореол — самая дорогая дуга кадра).
+  const hits = new Map<number, number>();
   for (let a = a0; a <= a1; a += 0.04) {
     const k = Math.sin(((a - a0) / (a1 - a0)) * Math.PI);
-    for (let d = 0; d <= Math.max(0, k * 2.2); d += 0.5)
-      p.set(Math.round(cx + Math.cos(a) * (R - d)), Math.round(cy + Math.sin(a) * (R - d)), c);
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    for (let d = 0; d <= Math.max(0, k * 2.2); d += 0.5) {
+      const x = Math.round(cx + ca * (R - d));
+      const y = Math.round(cy + sa * (R - d));
+      if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;
+      const i = y * p.w + x;
+      hits.set(i, (hits.get(i) ?? 0) + 1);
+    }
+  }
+  const a = c[3] / 255;
+  for (const [i, n] of hits) {
+    const col: RGBA = a >= 1 ? c : [c[0], c[1], c[2], Math.round(255 * (1 - (1 - a) ** n))];
+    p.set(i % p.w, Math.floor(i / p.w), col);
   }
 }
 
@@ -5980,6 +5996,23 @@ function demonHalo(p: Px, lit: Px, head: V, ph: number, halo: number, hal: numbe
  * Аура смены фазы (поверх темноты): кайма света по силуэту — мерцает, внизу
  * лиловая, к голове золотая, — и искры, всплывающие от пола вдоль тела.
  */
+const AURA_N1: V[] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+const AURA_N2: V[] = [
+  [2, 0],
+  [-2, 0],
+  [0, 2],
+  [0, -2],
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+];
+
 function demonAura(p: Px, lit: Px, k: number, tt: number): void {
   if (k <= 0.02) return;
   const d = p.data;
@@ -6008,10 +6041,19 @@ function demonAura(p: Px, lit: Px, k: number, tt: number): void {
     const col = mixc(low, high, up);
     for (let x = Math.max(0, x0 - 2); x <= Math.min(W - 1, x1 + 2); x++) {
       if (solid(x, y)) continue;
+      // Расстояние (по клеткам) до силуэта: сперва четыре соседа, потом кольцо 2.
       let dist = 9;
-      for (let yy = -2; yy <= 2 && dist > 1; yy++)
-        for (let xx = -2; xx <= 2; xx++)
-          if (solid(x + xx, y + yy)) dist = Math.min(dist, Math.abs(xx) + Math.abs(yy));
+      for (const [xx, yy] of AURA_N1)
+        if (solid(x + xx, y + yy)) {
+          dist = 1;
+          break;
+        }
+      if (dist > 1)
+        for (const [xx, yy] of AURA_N2)
+          if (solid(x + xx, y + yy)) {
+            dist = 2;
+            break;
+          }
       if (dist > 2) continue;
       // Мерцание — пламя, а не обводка: кайма рвётся по шуму кадра.
       if (dist === 2 && hash(x, y, f) < 0.45) continue;
@@ -6199,9 +6241,20 @@ function outlineIn(p: Px, c: RGBA): void {
   }
 }
 
+/**
+ * Два холста рисунка на все кадры: кадр копируется в свой обрезанный canvas
+ * сразу после рисования, а 2×57 КБ на кадр кормили сборщик мусора.
+ */
+let DPX: [Px, Px] | null = null;
+function demonPx(): [Px, Px] {
+  if (!DPX) DPX = [new Px(DW, DH), new Px(DW, DH)];
+  DPX[0].data.fill(0);
+  DPX[1].data.fill(0);
+  return DPX;
+}
+
 function demonDraw(dp: DP, cx: DemonCtx): DemonPx {
-  const p = new Px(DW, DH);
-  const lit = new Px(DW, DH);
+  const [p, lit] = demonPx();
   const j = jointsOf(dp);
   const jA = jointsOf(cx.lagA);
   const jB = jointsOf(cx.lagB);
