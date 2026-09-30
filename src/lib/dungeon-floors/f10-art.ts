@@ -15,9 +15,12 @@
 
 import { Px } from '../dungeon-art';
 import {
+  frameLRU,
+  paintSim,
   registerCellPainter,
   registerItemArt,
   registerMobPainter,
+  registerMobWarm,
   registerPropPainter,
   registerShotPainter,
   registerZonePainter,
@@ -40,7 +43,12 @@ const mixc = (a: RGBA, b: RGBA, k: number): RGBA => [
   Math.round(a[2] + (b[2] - a[2]) * k),
   Math.round(a[3] + (b[3] - a[3]) * k),
 ];
-const alpha = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(Math.max(0, Math.min(1, a)) * 255)];
+const alpha = (c: RGBA, a: number): RGBA => [
+  c[0],
+  c[1],
+  c[2],
+  Math.round(Math.max(0, Math.min(1, a)) * 255),
+];
 
 const INK = hx('#150f0b');
 export const WHITE = hx('#ffffff');
@@ -151,7 +159,15 @@ function polyShade(p: Px, pts: [number, number][], t: Tones, bias = 0): void {
 }
 
 /** Толстая линия. */
-export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  c: RGBA,
+  w = 1,
+): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -255,7 +271,17 @@ function copyAt(src: Px, w: number, h: number, ox: number, oy: number): Px {
 // ---------------------------------------------------------------------------
 
 /** Порядок клеток листа — тот же, что `SHEET` в `scripts/dungeon/f10.py`. */
-const F10_SHEET = ['devil', 'lord', 'iron', 'polearm', 'font0', 'font1', 'flame0', 'flame1', 'skulls'];
+const F10_SHEET = [
+  'devil',
+  'lord',
+  'iron',
+  'polearm',
+  'font0',
+  'font1',
+  'flame0',
+  'flame1',
+  'skulls',
+];
 
 let sheet: ImageData | null = null;
 let sheetLoading = false;
@@ -403,7 +429,8 @@ function ashen(p: Px, k: number, seed: number): Px {
 }
 
 /** Номер кадра смерти по времени режима. */
-const deathK = (pose: MobPose) => (pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0);
+const deathK = (pose: MobPose) =>
+  pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0;
 
 // ---------------------------------------------------------------------------
 // Палитры.
@@ -547,15 +574,42 @@ registerMobPainter('f10_hound', (m: Mob, pose: MobPose) => {
   } else if (mode === 'aim') {
     anim = 'aim';
     fr = pose.t < 0.2 ? 0 : 1;
-    hp = { ...base, body: 2, tilt: 3, head: [22, 9], jaw: 1, legs: [0.5, 0.5, -0.4, -0.4], tail: 3, mane: fr };
+    hp = {
+      ...base,
+      body: 2,
+      tilt: 3,
+      head: [22, 9],
+      jaw: 1,
+      legs: [0.5, 0.5, -0.4, -0.4],
+      tail: 3,
+      mane: fr,
+    };
   } else if (mode === 'pounce') {
     anim = 'pounce';
     fr = Math.floor(pose.t * 10) % 2;
-    hp = { ...base, body: -2, tilt: -1, stretch: 2, head: [24, 5], jaw: 3, legs: [-1, -1, 1.1, 1.1], tail: -1, mane: 7 + fr };
+    hp = {
+      ...base,
+      body: -2,
+      tilt: -1,
+      stretch: 2,
+      head: [24, 5],
+      jaw: 3,
+      legs: [-1, -1, 1.1, 1.1],
+      tail: -1,
+      mane: 7 + fr,
+    };
   } else if (mode === 'windup') {
     anim = 'wind';
     fr = pose.t < 0.2 ? 0 : 1;
-    hp = { ...base, body: 1, tilt: 1, head: [20, 8], jaw: 2, legs: [0.3, 0.3, -0.3, -0.3], mane: 2 + fr };
+    hp = {
+      ...base,
+      body: 1,
+      tilt: 1,
+      head: [20, 8],
+      jaw: 2,
+      legs: [0.3, 0.3, -0.3, -0.3],
+      mane: 2 + fr,
+    };
   } else if (mode === 'recover' && pose.t < 0.2) {
     anim = 'bite';
     hp = { ...base, head: [24, 7], jaw: 3, stretch: 1, mane: 4 };
@@ -569,7 +623,12 @@ registerMobPainter('f10_hound', (m: Mob, pose: MobPose) => {
       tilt: Math.sin(ph) * 1.2,
       stretch: Math.sin(ph) * 1,
       head: [21, 7 + Math.round(Math.sin(ph + 1) * 0.7)],
-      legs: [Math.sin(ph) * 1.1, Math.sin(ph + 0.6) * 1.1, Math.sin(ph + Math.PI) * 1.1, Math.sin(ph + Math.PI + 0.6) * 1.1],
+      legs: [
+        Math.sin(ph) * 1.1,
+        Math.sin(ph + 0.6) * 1.1,
+        Math.sin(ph + Math.PI) * 1.1,
+        Math.sin(ph + Math.PI + 0.6) * 1.1,
+      ],
       tail: Math.round(Math.cos(ph) * 1.2) + 1,
       mane: fr,
     };
@@ -579,7 +638,13 @@ registerMobPainter('f10_hound', (m: Mob, pose: MobPose) => {
   } else {
     anim = 'idle';
     fr = f % 4;
-    hp = { ...base, body: fr === 1 || fr === 2 ? 1 : 0, head: [21, 7 + (fr === 2 ? 1 : 0)], tail: fr % 2, mane: fr };
+    hp = {
+      ...base,
+      body: fr === 1 || fr === 2 ? 1 : 0,
+      head: [21, 7 + (fr === 2 ? 1 : 0)],
+      tail: fr % 2,
+      mane: fr,
+    };
   }
   return frameOf('f10_hound', pose, anim, fr, () => {
     const b = drawHound(hp);
@@ -685,8 +750,15 @@ function drawGuard(gp: GuardPose): Built {
     ],
     (x, y) => tone(RED, 0.55 - (y - hip) * 0.05 + (x < cx ? -0.2 : 0.1)),
   );
-  for (let y = hip; y < G - 4; y++) p.set(Math.round(cx + 3.5 + (gp.step * 0.5 * (y - hip)) / 10), y, GOLD[1]);
-  p.rect(Math.round(cx - 1 + gp.step * 0.5), G - 5, Math.round(cx + 3 + gp.step * 0.5), G - 5, GOLD[2]);
+  for (let y = hip; y < G - 4; y++)
+    p.set(Math.round(cx + 3.5 + (gp.step * 0.5 * (y - hip)) / 10), y, GOLD[1]);
+  p.rect(
+    Math.round(cx - 1 + gp.step * 0.5),
+    G - 5,
+    Math.round(cx + 3 + gp.step * 0.5),
+    G - 5,
+    GOLD[2],
+  );
   // Корпус: кираса, расширенная к плечам.
   polyShade(
     p,
@@ -741,21 +813,52 @@ registerMobPainter('f10_guard', (m: Mob, pose: MobPose) => {
     anim = 'sweep';
     fr = Math.min(3, Math.floor(k * 4));
     const a = [-1.6, -2.1, -2.5, -2.7][fr];
-    gp = { pole: a, grip: [1, 1], push: -2, bob: fr > 1 ? 1 : 0, step: -1, lean: -1, swing: fr === 3 };
+    gp = {
+      pole: a,
+      grip: [1, 1],
+      push: -2,
+      bob: fr > 1 ? 1 : 0,
+      step: -1,
+      lean: -1,
+      swing: fr === 3,
+    };
   } else if (mode === 'thrust') {
     const k = Math.min(1, pose.t / (GUARD.thrustWarn - 0.05));
     anim = 'thrust';
     fr = Math.min(2, Math.floor(k * 3));
-    gp = { pole: -0.05, grip: [0, 5], push: -3 - fr, bob: 0, step: -1, lean: -1 - (fr > 0 ? 1 : 0), swing: fr === 2 };
+    gp = {
+      pole: -0.05,
+      grip: [0, 5],
+      push: -3 - fr,
+      bob: 0,
+      step: -1,
+      lean: -1 - (fr > 0 ? 1 : 0),
+      swing: fr === 2,
+    };
   } else if (mode === 'recover' && pose.t < 0.3) {
     // Следом за ударом: лезвие внизу впереди или древко выброшено.
     anim = 'strike';
     fr = pose.t < 0.14 ? 0 : 1;
-    gp = { pole: fr ? 0.55 : 0.2, grip: [6, 5], push: fr ? 2 : 5, bob: 1, step: 2, lean: 2, swing: true };
+    gp = {
+      pole: fr ? 0.55 : 0.2,
+      grip: [6, 5],
+      push: fr ? 2 : 5,
+      bob: 1,
+      step: 2,
+      lean: 2,
+      swing: true,
+    };
   } else if (mode === 'f10_stand' || mode === 'alertpost') {
     anim = mode === 'alertpost' ? 'alert' : 'stand';
     fr = f % 4;
-    gp = { pole: -Math.PI / 2 + 0.08, grip: [5, 5], push: 3, bob: fr === 2 ? 1 : 0, step: 0, lean: 0 };
+    gp = {
+      pole: -Math.PI / 2 + 0.08,
+      grip: [5, 5],
+      push: 3,
+      bob: fr === 2 ? 1 : 0,
+      step: 0,
+      lean: 0,
+    };
   } else if (pose.anim === 'run') {
     anim = 'run';
     fr = f % 4;
@@ -867,7 +970,9 @@ function drawKnight(kp: KnightPose): Built {
     (x, y) => tone(RED, 0.6 - (y - hipY) * 0.06 - (x - hipX) * 0.01),
   );
   for (let x = hipX + 3; x <= shX - 3; x++) {
-    const y = Math.round(hipY + 3 + rear * 0.3 + ((shY - hipY - rear * 0.3) * (x - hipX - 3)) / (shX - hipX - 6));
+    const y = Math.round(
+      hipY + 3 + rear * 0.3 + ((shY - hipY - rear * 0.3) * (x - hipX - 3)) / (shX - hipX - 6),
+    );
     p.set(x, y, GOLD[2]);
   }
   // Ближние ноги.
@@ -907,7 +1012,8 @@ function drawKnight(kp: KnightPose): Built {
   const ty = gy + uy * (L - 7);
   stroke(p, bx, byy, tx, ty, hx('#2a2230'));
   stroke(p, bx + 0.3, byy - 0.4, tx + 0.3, ty - 0.4, hx('#4a4054'));
-  for (const k of [0.3, 0.55]) p.set(Math.round(bx + (tx - bx) * k), Math.round(byy + (ty - byy) * k), GOLD[2]);
+  for (const k of [0.3, 0.55])
+    p.set(Math.round(bx + (tx - bx) * k), Math.round(byy + (ty - byy) * k), GOLD[2]);
   poly(
     p,
     [
@@ -926,7 +1032,8 @@ function drawKnight(kp: KnightPose): Built {
     const x = Math.round(shX + 1 + (nx - shX - 1) * k) - 1;
     const y = Math.round(shY - 4 + (ny - shY + 2) * k);
     const hgt = 2 + Math.floor(hash(i, kp.mane) * 3);
-    for (let j = 0; j < hgt; j++) p.set(x - Math.floor(j / 2), y - j, j === 0 ? FIRE[1] : j === hgt - 1 ? FIRE[3] : FIRE[2]);
+    for (let j = 0; j < hgt; j++)
+      p.set(x - Math.floor(j / 2), y - j, j === 0 ? FIRE[1] : j === hgt - 1 ? FIRE[3] : FIRE[2]);
   }
   // Глаз коня и щель шлема.
   p.set(Math.round(hdx), Math.round(hdy - 1), EYE);
@@ -945,7 +1052,15 @@ registerMobPainter('f10_knight', (m: Mob, pose: MobPose) => {
   const f = pose.frame;
   let anim = 'idle';
   let fr = 0;
-  const base: KnightPose = { legs: [0, 0, 0, 0], body: 0, rear: 0, neck: 0, lance: -1.1, push: 0, mane: 0 };
+  const base: KnightPose = {
+    legs: [0, 0, 0, 0],
+    body: 0,
+    rear: 0,
+    neck: 0,
+    lance: -1.1,
+    push: 0,
+    mane: 0,
+  };
   let kp: KnightPose = base;
   if (mode === 'dying') {
     anim = 'dead';
@@ -960,14 +1075,26 @@ registerMobPainter('f10_knight', (m: Mob, pose: MobPose) => {
     anim = 'aim';
     fr = Math.floor(pose.t * 8) % 4;
     const k = Math.min(1, pose.t / 0.8);
-    kp = { ...base, rear: fr % 2 ? 2 : 1, legs: [0, 0, fr % 2 ? -1.2 : 0.3, 0], lance: -1.1 + k * 1.1, neck: 1, mane: fr };
+    kp = {
+      ...base,
+      rear: fr % 2 ? 2 : 1,
+      legs: [0, 0, fr % 2 ? -1.2 : 0.3, 0],
+      lance: -1.1 + k * 1.1,
+      neck: 1,
+      mane: fr,
+    };
   } else if (mode === 'charge') {
     anim = 'charge';
     fr = Math.floor(pose.t * 14) % 4;
     const ph = (fr / 4) * TAU;
     kp = {
       ...base,
-      legs: [Math.sin(ph) * 1.4, Math.sin(ph + 0.5) * 1.4, Math.sin(ph + Math.PI) * 1.4, Math.sin(ph + Math.PI + 0.5) * 1.4],
+      legs: [
+        Math.sin(ph) * 1.4,
+        Math.sin(ph + 0.5) * 1.4,
+        Math.sin(ph + Math.PI) * 1.4,
+        Math.sin(ph + Math.PI + 0.5) * 1.4,
+      ],
       body: fr % 2,
       lance: 0.02,
       push: 4,
@@ -978,7 +1105,15 @@ registerMobPainter('f10_knight', (m: Mob, pose: MobPose) => {
   } else if (mode === 'dizzy') {
     anim = 'dizzy';
     fr = Math.floor(pose.t * 6) % 4;
-    kp = { ...base, rear: 4 - (fr % 2), neck: -2, lance: -1.7, legs: [0.4, 0, -1.2, -0.6], mane: fr, dizzy: fr };
+    kp = {
+      ...base,
+      rear: 4 - (fr % 2),
+      neck: -2,
+      lance: -1.7,
+      legs: [0.4, 0, -1.2, -0.6],
+      mane: fr,
+      dizzy: fr,
+    };
   } else if (mode === 'lance') {
     anim = 'lance';
     fr = pose.t < 0.35 ? 0 : 1;
@@ -992,7 +1127,12 @@ registerMobPainter('f10_knight', (m: Mob, pose: MobPose) => {
     const ph = (fr / 4) * TAU;
     kp = {
       ...base,
-      legs: [Math.sin(ph) * 1, Math.sin(ph + 0.5) * 1, Math.sin(ph + Math.PI) * 1, Math.sin(ph + Math.PI + 0.5) * 1],
+      legs: [
+        Math.sin(ph) * 1,
+        Math.sin(ph + 0.5) * 1,
+        Math.sin(ph + Math.PI) * 1,
+        Math.sin(ph + Math.PI + 0.5) * 1,
+      ],
       body: fr % 2,
       lance: -0.8,
       mane: fr,
@@ -1003,7 +1143,13 @@ registerMobPainter('f10_knight', (m: Mob, pose: MobPose) => {
   } else {
     anim = 'idle';
     fr = f % 4;
-    kp = { ...base, body: fr === 2 ? 1 : 0, neck: fr === 1 ? 1 : 0, legs: [0, 0, fr === 3 ? 0.4 : 0, 0], mane: fr };
+    kp = {
+      ...base,
+      body: fr === 2 ? 1 : 0,
+      neck: fr === 1 ? 1 : 0,
+      legs: [0, 0, fr === 3 ? 0.4 : 0, 0],
+      mane: fr,
+    };
   }
   return frameOf('f10_knight', pose, anim, fr, () => {
     const b = drawKnight(kp);
@@ -1068,10 +1214,16 @@ function batWing(
     const fl = len * (1 - i * 0.12);
     fingers.push([sx + Math.cos(fa) * fl, sy + Math.sin(fa) * fl]);
   }
-  const elbow: [number, number] = [sx + Math.cos(a - 0.5) * len * 0.45, sy + Math.sin(a - 0.5) * len * 0.45];
+  const elbow: [number, number] = [
+    sx + Math.cos(a - 0.5) * len * 0.45,
+    sy + Math.sin(a - 0.5) * len * 0.45,
+  ];
   // Перепонка: многоугольник плечо → локоть → кончики → назад к плечу.
   const edge: [number, number][] = [[sx, sy], elbow, ...fingers];
-  const low: [number, number] = [sx + Math.cos(a + 1.1 * spread) * len * 0.35, sy + Math.sin(a + 1.1 * spread) * len * 0.35];
+  const low: [number, number] = [
+    sx + Math.cos(a + 1.1 * spread) * len * 0.35,
+    sy + Math.sin(a + 1.1 * spread) * len * 0.35,
+  ];
   poly(p, [...edge, low], (x, y) => {
     const d = Math.hypot(x - sx, y - sy) / len;
     return tone(t, 0.62 - d * 0.5 + ((x + y) % 3 === 0 ? -0.1 : 0));
@@ -1099,7 +1251,16 @@ function drawSuccubus(sp: SucPose): Built {
   }
   // Крылья — за спиной; дальнее чуть выше и темнее.
   const wa = -Math.PI * 0.72 - sp.wing * 0.45 + sp.lean * 0.05;
-  batWing(p, cx - 2, sh + 1, wa - 0.25, 13, tn('#08040a', '#180a16', '#2a1426', '#401e38'), SUC.bone, 0.9);
+  batWing(
+    p,
+    cx - 2,
+    sh + 1,
+    wa - 0.25,
+    13,
+    tn('#08040a', '#180a16', '#2a1426', '#401e38'),
+    SUC.bone,
+    0.9,
+  );
   batWing(p, cx - 1, sh + 2, wa + 0.2, 15, SUC.wing, SUC.bone, 1);
   // Хвост с сердцем.
   const tail = spline(
@@ -1229,7 +1390,13 @@ registerMobPainter('f10_succubus', (m: Mob, pose: MobPose) => {
   } else {
     anim = 'fly';
     fr = Math.floor(f * (pose.anim === 'run' ? 0.9 : 0.7)) % 4;
-    sp = { wing: flap(fr), lean: pose.anim === 'run' ? 1 : 0, arm: 1.3, head: 0, legs: fr === 2 ? 1 : 0 };
+    sp = {
+      wing: flap(fr),
+      lean: pose.anim === 'run' ? 1 : 0,
+      arm: 1.3,
+      head: 0,
+      legs: fr === 2 ? 1 : 0,
+    };
   }
   return frameOf('f10_succubus', pose, anim, fr, () => {
     const b = drawSuccubus(sp);
@@ -1301,7 +1468,8 @@ function drawMage(mp: MagePose): Built {
     },
   );
   // Золотая кайма подола и вертикальная вязь.
-  for (let x = Math.round(cx - 7 + hem * 0.5); x <= Math.round(cx + 7 + hem); x++) p.set(x, G - 1, MAGE_T.trim[2]);
+  for (let x = Math.round(cx - 7 + hem * 0.5); x <= Math.round(cx + 7 + hem); x++)
+    p.set(x, G - 1, MAGE_T.trim[2]);
   for (let y = sh + 3; y < G - 1; y++) {
     p.set(cx + 1, y, (y + mp.orb) % 4 === 0 ? MAGE_T.trim[3] : MAGE_T.trim[1]);
     if ((y + 1) % 5 === 0) p.set(cx + 2, y, hx('#b080ff'));
@@ -1350,7 +1518,11 @@ function drawMage(mp: MagePose): Built {
     // Руна над головой: кольцо точек крутится.
     for (let i = 0; i < 8; i++) {
       const ra = (i / 8) * TAU + mp.runes * 0.4;
-      p.set(Math.round(hdx + Math.cos(ra) * 5.5), Math.round(hdy - 9 + Math.sin(ra) * 1.8), i % 2 ? O[2] : O[3]);
+      p.set(
+        Math.round(hdx + Math.cos(ra) * 5.5),
+        Math.round(hdy - 9 + Math.sin(ra) * 1.8),
+        i % 2 ? O[2] : O[3],
+      );
     }
   }
   let out = p;
@@ -1367,7 +1539,11 @@ function drawMage(mp: MagePose): Built {
         out.set(x, y, [p.data[i], p.data[i + 1], p.data[i + 2], 255]);
       }
     for (let i = 0; i < 6; i++)
-      out.set(cx + Math.round((hash(i, mp.squash * 10) - 0.5) * 12), 6 + Math.round(hash(i, 4) * 30), O[2]);
+      out.set(
+        cx + Math.round((hash(i, mp.squash * 10) - 0.5) * 12),
+        6 + Math.round(hash(i, 4) * 30),
+        O[2],
+      );
   }
   return { p: out, ax: 14, ay: G, eye: [Math.round(hdx + 2), Math.round(hdy)] };
 }
@@ -1455,9 +1631,20 @@ function drawExec(ep: ExePose): Built {
   const lhx = cx - 5;
   const lhy = sh + 8;
   const bx = ep.over ? cx + Math.cos(ep.ball) * ep.ballR : lhx + Math.cos(ep.ball) * ep.ballR;
-  const by = ep.over ? sh - 7 + Math.sin(ep.ball) * ep.ballR * 0.35 : lhy + Math.sin(ep.ball) * ep.ballR;
+  const by = ep.over
+    ? sh - 7 + Math.sin(ep.ball) * ep.ballR * 0.35
+    : lhy + Math.sin(ep.ball) * ep.ballR;
   const hand: [number, number] = ep.over ? [cx + 1, sh - 7] : [lhx, lhy];
-  limb(p, cx - 3, sh + 2, hand[0], hand[1], 2.2, 1.8, tn('#1e1210', '#3e2822', '#5e3e32', '#7e5a48'));
+  limb(
+    p,
+    cx - 3,
+    sh + 2,
+    hand[0],
+    hand[1],
+    2.2,
+    1.8,
+    tn('#1e1210', '#3e2822', '#5e3e32', '#7e5a48'),
+  );
   // Цепь — звенья.
   const n = 7;
   for (let i = 1; i <= n; i++) {
@@ -1468,8 +1655,26 @@ function drawExec(ep: ExePose): Built {
   }
   // Ноги — толстые, в сапогах.
   const st = ep.step;
-  limb(p, cx - 2, hip, cx - 3 - st, G - 1, 2.8, 2.4, tn('#100a08', '#24160e', '#3a2616', '#523820'));
-  limb(p, cx + 3, hip, cx + 4 + st, G - 1, 2.9, 2.5, tn('#1a100a', '#342014', '#4e321e', '#6a482a'));
+  limb(
+    p,
+    cx - 2,
+    hip,
+    cx - 3 - st,
+    G - 1,
+    2.8,
+    2.4,
+    tn('#100a08', '#24160e', '#3a2616', '#523820'),
+  );
+  limb(
+    p,
+    cx + 3,
+    hip,
+    cx + 4 + st,
+    G - 1,
+    2.9,
+    2.5,
+    tn('#1a100a', '#342014', '#4e321e', '#6a482a'),
+  );
   // Живот и грудь: голый торс.
   shadeEll(p, cx + 1, hip - 3, 6, 5, EXE.skin, 0.05);
   shadeEll(p, cx, sh + 3, 6.4, 4.4, EXE.skin, 0.12);
@@ -1500,7 +1705,8 @@ function drawExec(ep: ExePose): Built {
     p.set(x + Math.round(st * 0.3), y, hx('#4a0a0e'));
   // Грудь и живот: складка груди, пупок, шрам — голый торс, а не мешок.
   const skinD = mixc(EXE.skin[0], EXE.skin[1], 0.5);
-  for (let x = cx - 4; x <= cx + 4; x++) if (x !== cx) p.set(x, sh + 5 + (Math.abs(x - cx) > 2 ? 0 : 1), skinD);
+  for (let x = cx - 4; x <= cx + 4; x++)
+    if (x !== cx) p.set(x, sh + 5 + (Math.abs(x - cx) > 2 ? 0 : 1), skinD);
   p.set(cx, sh + 3, skinD);
   p.set(cx, sh + 4, skinD);
   p.set(cx + 1, hip - 8, EXE.skin[0]);
@@ -1590,18 +1796,39 @@ registerMobPainter('f10_exec', (m: Mob, pose: MobPose) => {
   } else if (mode === 'f10_stand' || mode === 'alertpost') {
     anim = 'stand';
     fr = f % 4;
-    ep = { axe: 1.3, ball: 1.57 + Math.sin(fr) * 0.2, ballR: 5, over: false, bob: fr === 2 ? 1 : 0, step: 0 };
+    ep = {
+      axe: 1.3,
+      ball: 1.57 + Math.sin(fr) * 0.2,
+      ballR: 5,
+      over: false,
+      bob: fr === 2 ? 1 : 0,
+      step: 0,
+    };
   } else if (pose.anim === 'run') {
     anim = 'run';
     fr = f % 4;
-    ep = { axe: -0.6, ball: 1.57 + [0.4, 0, -0.4, 0][fr], ballR: 5, over: false, bob: fr % 2, step: [2, 0, -2, 0][fr] };
+    ep = {
+      axe: -0.6,
+      ball: 1.57 + [0.4, 0, -0.4, 0][fr],
+      ballR: 5,
+      over: false,
+      bob: fr % 2,
+      step: [2, 0, -2, 0][fr],
+    };
   } else if (pose.anim === 'hurt') {
     anim = 'hurt';
     ep = { axe: -1.2, ball: 2.2, ballR: 5, over: false, bob: 1, step: -1 };
   } else {
     anim = 'idle';
     fr = f % 4;
-    ep = { axe: -0.7, ball: 1.57 + [0.25, 0.1, -0.15, 0.1][fr], ballR: 5, over: false, bob: fr === 1 || fr === 2 ? 1 : 0, step: 0 };
+    ep = {
+      axe: -0.7,
+      ball: 1.57 + [0.25, 0.1, -0.15, 0.1][fr],
+      ballR: 5,
+      over: false,
+      bob: fr === 1 || fr === 2 ? 1 : 0,
+      step: 0,
+    };
   }
   return frameOf('f10_exec', pose, anim, fr, () => {
     const b = drawExec(ep);
@@ -1919,7 +2146,8 @@ function drawGarg(gp: GargPose, seed: number): Built {
   if (gp.stone > 0) p = stoneOf(p, gp.stone);
   p = wingShift(p, gp.wing);
   if (gp.cracks > 0) gargCracks(p, gp.cracks, seed);
-  if (gp.eyes) for (const [x, y] of gargEyes) p.set(x, y, gp.stone > 0.5 ? hx('#ff6a3a') : hx('#ff3a2a'));
+  if (gp.eyes)
+    for (const [x, y] of gargEyes) p.set(x, y, gp.stone > 0.5 ? hx('#ff6a3a') : hx('#ff3a2a'));
   else if (gp.stone > 0) for (const [x, y] of gargEyes) p.set(x, y, hx('#1a1418'));
   if (gp.lean) {
     // Наклон вперёд или назад: ряды сверху сдвинуты сильнее.
@@ -1941,7 +2169,16 @@ registerMobPainter('f10_gargoyle', (m: Mob, pose: MobPose) => {
   const f = pose.frame;
   let anim = 'idle';
   let fr = 0;
-  const base: GargPose = { stone: 0, wing: 0, bob: 0, lean: 0, z: 0, cracks: 0, eyes: true, plinth: false };
+  const base: GargPose = {
+    stone: 0,
+    wing: 0,
+    bob: 0,
+    lean: 0,
+    z: 0,
+    cracks: 0,
+    eyes: true,
+    plinth: false,
+  };
   let gp = base;
   if (mode === 'dying') {
     anim = 'dead';
@@ -1955,7 +2192,14 @@ registerMobPainter('f10_gargoyle', (m: Mob, pose: MobPose) => {
   } else if (mode === 'f10_wake') {
     anim = 'wake';
     fr = Math.min(3, Math.floor(pose.t / 0.21));
-    gp = { ...base, stone: 1 - fr * 0.25, cracks: (fr + 1) / 4, eyes: fr >= 1, plinth: fr < 3, wing: fr === 3 ? -1 : 0 };
+    gp = {
+      ...base,
+      stone: 1 - fr * 0.25,
+      cracks: (fr + 1) / 4,
+      eyes: fr >= 1,
+      plinth: fr < 3,
+      wing: fr === 3 ? -1 : 0,
+    };
   } else if (mode === 'f10_petrify') {
     anim = 'petrify';
     fr = Math.min(3, Math.floor(pose.t / 0.4));
@@ -1992,10 +2236,20 @@ registerMobPainter('f10_gargoyle', (m: Mob, pose: MobPose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Король демонов. Чёрные латы с золотой каймой, багровый плащ, рогатая
-// корона, белые волосы, глаза-угли, двуручный чёрный меч с кровавой
-// кромкой; с третьей фазы — крылья. На троне и в переходах фаз — лицом к
-// зрителю, в бою — в профиль. Кадр 80×100, земля — ряд 90.
+// Король демонов (v2.86 — анимация тела). Облик прежний: чёрные латы с
+// золотой каймой, багровый плащ, рогатая корона, белые волосы, глаза-угли,
+// двуручный чёрный меч с кровавой кромкой; с фазы 2 — крылья.
+//
+// Тело — риг: поза — набор чисел (таз, наклон, ступни, хват меча, крылья,
+// плащ…), техника — ключевые позы по времени с кривыми разгона и
+// торможения, кадр — поза в момент `floor(t · 24) / 24`, а кадр, в
+// который мозг наносит урон, — ровно в этот миг. Меч живёт в 3D (хват и
+// направление клинка), проекция — вид 3/4 сверху: горизонтальное
+// рассечение ложится на экран эллипсом, рубка — дугой в плоскости экрана.
+// След меча — выборки той же позы в прошлом, полумесяцем.
+// На троне, в сценах фаз и в грозе — анфас, в бою — профиль.
+// Рисуется в свой быстрый растр (Uint32), кадры — в `frameLRU`, прогрев —
+// `registerMobWarm`. Мозг — метроном: тайминги берутся из `KING`.
 // ---------------------------------------------------------------------------
 
 const KG = {
@@ -2012,133 +2266,490 @@ const KG = {
   gem: hx('#ff2a2a'),
 };
 
-/** Двуручный меч: от рукояти по углу, лезвие с кровавой кромкой. */
-function kingSword(p: Px, x: number, y: number, a: number, len: number, glow: number): void {
-  const ux = Math.cos(a);
-  const uy = Math.sin(a);
+// ---- Быстрый растр: Uint32 поверх `Px` (порядок байт — RGBA в памяти). ----
+
+const c32 = (c: RGBA): number => ((c[3] << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
+type T4 = [number, number, number, number];
+const t4 = (t: Tones): T4 => [c32(t[0]), c32(t[1]), c32(t[2]), c32(t[3])];
+const lv = (t: T4, l: number): number =>
+  l > 0.78 ? t[3] : l > 0.42 ? t[2] : l > 0.02 ? t[1] : t[0];
+
+const K4 = {
+  armor: t4(KG.armor),
+  armorFar: t4(tn('#08060a', '#141018', '#26202c', '#3a3242')),
+  gold: t4(GOLD),
+  cape: t4(KG.cape),
+  capeIn: t4(KG.capeIn),
+  hair: t4(KG.hair),
+  face: t4(KG.face),
+  wing: t4(KG.wing),
+  wingFar: t4(tn('#060406', '#10080c', '#1c0e14', '#2a141c')),
+  bone: t4(tn('#2a1a20', '#4a3038', '#6e4a54', '#94707a')),
+  boneFar: t4(tn('#1a1016', '#2a1a22', '#3a2630', '#4a3440')),
+  blade: t4(KG.blade),
+  horn: t4(tn('#0a080a', '#1c181c', '#34303a', '#5a5462')),
+  spike: t4(HORN),
+};
+const C = {
+  ink: c32(INK),
+  gem: c32(KG.gem),
+  gemHi: c32(hx('#ffb0a0')),
+  eyeHi: c32(hx('#ffb080')),
+  eyeLid: c32(hx('#ff9070')),
+  edge: c32(hx('#a0202a')),
+  edgeHot: c32(hx('#ff3a2a')),
+  edgeWhite: c32(hx('#ffd0a0')),
+  rune: c32(hx('#7a1418')),
+  runeHot: c32(hx('#ffb080')),
+  grip: c32(hx('#2a1a14')),
+  vein: c32(KG.vein),
+  mouth: c32(hx('#ff5a2a')),
+  mouthIn: c32(hx('#3a0404')),
+  ember: c32(hx('#ff6a2a')),
+  emberHi: c32(hx('#ffc070')),
+  ash: c32(hx('#3a2a28')),
+  ashLt: c32(hx('#5a4642')),
+  arc: c32(hx('#e8dcff')),
+  arcMid: c32(hx('#b890ff')),
+  arcDim: c32(hx('#6a50c8')),
+  smW: c32(hx('#fff4d8')),
+  smY: c32(hx('#ffb060')),
+  smR: c32(hx('#e8402c')),
+  smD: c32(hx('#8a141c')),
+};
+
+/** Кадр 96×104, земля — ряд 92, середина тела — 46 (смотрит вправо). */
+const KW = 96;
+const KH = 104;
+const KGY = 92;
+const KX0 = 46;
+
+class KB {
+  readonly w: number;
+  readonly h: number;
+  readonly px: Px;
+  readonly d: Uint32Array;
+  used = false;
+  constructor(w = KW, h = KH) {
+    this.w = w;
+    this.h = h;
+    this.px = new Px(w, h);
+    this.d = new Uint32Array(this.px.data.buffer, this.px.data.byteOffset, w * h);
+  }
+  /** Целые координаты. */
+  set(x: number, y: number, c: number): void {
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+    this.d[y * this.w + x] = c;
+    this.used = true;
+  }
+  /** Точка детали: округление, как у `Px.set`. */
+  put(x: number, y: number, c: number): void {
+    this.set(Math.round(x), Math.round(y), c);
+  }
+  /** Полупрозрачное поверх (для слоя света). */
+  mix(x: number, y: number, c: number, a: number): void {
+    x = Math.round(x);
+    y = Math.round(y);
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h || a <= 0) return;
+    const i = y * this.w + x;
+    const o = this.d[i];
+    const oa = (o >>> 24) / 255;
+    const na = Math.min(1, a + oa * (1 - a));
+    const k = a / (na || 1);
+    const r = (c & 255) * k + (o & 255) * (1 - k);
+    const g = ((c >>> 8) & 255) * k + ((o >>> 8) & 255) * (1 - k);
+    const bl = ((c >>> 16) & 255) * k + ((o >>> 16) & 255) * (1 - k);
+    this.d[i] =
+      ((Math.round(na * 255) << 24) |
+        (Math.round(bl) << 16) |
+        (Math.round(g) << 8) |
+        Math.round(r)) >>>
+      0;
+    this.used = true;
+  }
+  solid(x: number, y: number): boolean {
+    return x >= 0 && y >= 0 && x < this.w && y < this.h && this.d[y * this.w + x] >>> 24 !== 0;
+  }
+}
+
+/** Овал с объёмом (свет сверху-слева). */
+function kEll(b: KB, cx: number, cy: number, rx: number, ry: number, t: T4, bias = 0): void {
+  if (rx <= 0 || ry <= 0) return;
+  const y0 = Math.floor(cy - ry - 1);
+  const y1 = Math.ceil(cy + ry + 1);
+  const x0 = Math.floor(cx - rx - 1);
+  const x1 = Math.ceil(cx + rx + 1);
+  for (let y = y0; y <= y1; y++) {
+    const dy = (y + 0.5 - cy) / ry;
+    for (let x = x0; x <= x1; x++) {
+      const dx = (x + 0.5 - cx) / rx;
+      const q = dx * dx + dy * dy;
+      if (q > 1) continue;
+      b.set(x, y, lv(t, dx * LX + dy * LY + Math.sqrt(1 - q) * LZ + bias));
+    }
+  }
+}
+
+/** Овал одним цветом. */
+function kDisc(b: KB, cx: number, cy: number, rx: number, ry: number, c: number): void {
+  for (let y = Math.floor(cy - ry - 1); y <= Math.ceil(cy + ry + 1); y++)
+    for (let x = Math.floor(cx - rx - 1); x <= Math.ceil(cx + rx + 1); x++) {
+      const dx = (x + 0.5 - cx) / rx;
+      const dy = (y + 0.5 - cy) / ry;
+      if (dx * dx + dy * dy <= 1) b.set(x, y, c);
+    }
+}
+
+/** Конечность — сужающаяся капсула со светом по нормали. */
+function kCap(
+  b: KB,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  r0: number,
+  r1: number,
+  t: T4,
+  bias = 0,
+): void {
+  const minX = Math.floor(Math.min(x0 - r0, x1 - r1)) - 1;
+  const maxX = Math.ceil(Math.max(x0 + r0, x1 + r1)) + 1;
+  const minY = Math.floor(Math.min(y0 - r0, y1 - r1)) - 1;
+  const maxY = Math.ceil(Math.max(y0 + r0, y1 + r1)) + 1;
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const L2 = dx * dx + dy * dy || 1e-6;
+  for (let y = minY; y <= maxY; y++)
+    for (let x = minX; x <= maxX; x++) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      let k = ((px - x0) * dx + (py - y0) * dy) / L2;
+      k = k < 0 ? 0 : k > 1 ? 1 : k;
+      const ex = px - (x0 + dx * k);
+      const ey = py - (y0 + dy * k);
+      const r = r0 + (r1 - r0) * k;
+      const d2 = ex * ex + ey * ey;
+      if (d2 > r * r) continue;
+      const nx = ex / (r || 1);
+      const ny = ey / (r || 1);
+      b.set(
+        x,
+        y,
+        lv(t, nx * LX + ny * LY + Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny)) * LZ + bias),
+      );
+    }
+}
+
+const XS = new Float64Array(64);
+/**
+ * Многоугольник построчно: `fn(x, y, xa, xb)` — цвет точки; `xa…xb` — края
+ * пролёта в этой строке (складки плаща идут от края, а не от экрана).
+ */
+function kPoly(
+  b: KB,
+  pts: number[],
+  fn: number | ((x: number, y: number, xa: number, xb: number) => number),
+): void {
+  const n = pts.length >> 1;
+  if (n < 3) return;
+  let minY = 1e9;
+  let maxY = -1e9;
+  for (let i = 0; i < n; i++) {
+    const y = pts[i * 2 + 1];
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const ya = Math.max(0, Math.floor(minY));
+  const yb = Math.min(b.h - 1, Math.ceil(maxY));
+  for (let y = ya; y <= yb; y++) {
+    const py = y + 0.5;
+    let m = 0;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const xi = pts[i * 2];
+      const yi = pts[i * 2 + 1];
+      const xj = pts[j * 2];
+      const yj = pts[j * 2 + 1];
+      if (yi > py !== yj > py && m < 64) XS[m++] = ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+    }
+    if (m < 2) continue;
+    // Сортировка вставками — точек мало.
+    for (let i = 1; i < m; i++) {
+      const v = XS[i];
+      let j = i - 1;
+      while (j >= 0 && XS[j] > v) {
+        XS[j + 1] = XS[j];
+        j--;
+      }
+      XS[j + 1] = v;
+    }
+    for (let k = 0; k + 1 < m; k += 2) {
+      const xa = XS[k];
+      const xb = XS[k + 1];
+      // Точка внутри, если её середина между краями.
+      const x0 = Math.max(0, Math.ceil(xa - 0.5));
+      const x1 = Math.min(b.w - 1, Math.floor(xb - 0.5));
+      if (typeof fn === 'number') for (let x = x0; x <= x1; x++) b.set(x, y, fn);
+      else for (let x = x0; x <= x1; x++) b.set(x, y, fn(x, y, xa, xb));
+    }
+  }
+}
+
+/** Линия (толщина 1 — пиксели, больше — диски). */
+function kLine(b: KB, x0: number, y0: number, x1: number, y1: number, c: number, w = 1): void {
+  const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
+  for (let i = 0; i <= n; i++) {
+    const x = x0 + ((x1 - x0) * i) / n;
+    const y = y0 + ((y1 - y0) * i) / n;
+    if (w <= 1) b.set(Math.floor(x), Math.floor(y), c);
+    else kDisc(b, x, y, w / 2, w / 2, c);
+  }
+}
+
+/** Контур снаружи фигуры одним проходом. */
+function kOutline(b: KB, c: number): void {
+  const { w, h, d } = b;
+  const add: number[] = [];
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      const i = row + x;
+      if (d[i] >>> 24) continue;
+      if (
+        (x > 0 && d[i - 1] >>> 24) ||
+        (x < w - 1 && d[i + 1] >>> 24) ||
+        (y > 0 && d[i - w] >>> 24) ||
+        (y < h - 1 && d[i + w] >>> 24)
+      )
+        add.push(i);
+    }
+  }
+  for (const i of add) d[i] = c;
+}
+
+/** Жар по краю силуэта (слой света): власть, ярость, гроза. */
+function kAura(b: KB, lit: KB, k: number): void {
+  if (k <= 0.03) return;
+  const { w, h, d } = b;
+  const deep = c32(hx('#b01818'));
+  for (let y = 2; y < h - 2; y++)
+    for (let x = 2; x < w - 2; x++) {
+      const i = y * w + x;
+      if (d[i] >>> 24) continue;
+      if (d[i - 1] >>> 24 || d[i + 1] >>> 24 || d[i - w] >>> 24 || d[i + w] >>> 24) {
+        lit.mix(x, y, C.edgeHot, 0.62 * k);
+        continue;
+      }
+      if (
+        d[i - 2] >>> 24 ||
+        d[i + 2] >>> 24 ||
+        d[i - 2 * w] >>> 24 ||
+        d[i + 2 * w] >>> 24 ||
+        d[i - w - 1] >>> 24 ||
+        d[i - w + 1] >>> 24 ||
+        d[i + w - 1] >>> 24 ||
+        d[i + w + 1] >>> 24
+      )
+        lit.mix(x, y, deep, 0.34 * k);
+    }
+}
+
+/** Слой поверх другого (непрозрачные точки). */
+function kOver(dst: KB, src: KB): void {
+  const a = dst.d;
+  const s = src.d;
+  for (let i = 0; i < s.length; i++) if (s[i] >>> 24) a[i] = s[i];
+  if (src.used) dst.used = true;
+}
+
+// ---- Геометрия ----
+
+const clampK = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+
+/**
+ * Два звена: сустав между `a` и `b` (длины `l1`, `l2`), сгиб — в сторону
+ * `pole`. Цель дальше досягаемого — прижимается (кисть не отрывается от
+ * рукояти: хват правит вызывающий).
+ */
+function ik2(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  l1: number,
+  l2: number,
+  polx: number,
+  poly: number,
+): [number, number] {
+  let dx = bx - ax;
+  let dy = by - ay;
+  let d = Math.hypot(dx, dy) || 1e-6;
+  dx /= d;
+  dy /= d;
+  d = clampK(d, Math.abs(l1 - l2) + 0.01, l1 + l2 - 0.01);
+  const ca = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d);
+  const sa = Math.sqrt(Math.max(0, 1 - ca * ca));
+  const e1x = ax + l1 * (dx * ca - dy * sa);
+  const e1y = ay + l1 * (dy * ca + dx * sa);
+  const e2x = ax + l1 * (dx * ca + dy * sa);
+  const e2y = ay + l1 * (dy * ca - dx * sa);
+  return (e1x - ax) * polx + (e1y - ay) * poly >= (e2x - ax) * polx + (e2y - ay) * poly
+    ? [e1x, e1y]
+    : [e2x, e2y];
+}
+
+/** Проекция вида 3/4: x — вперёд (вправо), y — вверх, z — к камере (вниз по экрану). */
+const PZ = 0.5;
+const projX = (x: number) => x;
+const projY = (y: number, z: number) => -y + z * PZ;
+
+/** Клинок: хват на экране, единичное направление, длина, глубина. */
+interface Blade {
+  gx: number;
+  gy: number;
+  ux: number;
+  uy: number;
+  len: number;
+  /** Куда смотрит клинок по глубине (<0 — от камеры, за телом). */
+  z: number;
+}
+
+/** Направление клинка по рысканию и тангажу → экран. */
+function bladeDir(
+  yaw: number,
+  pit: number,
+  L: number,
+): { ux: number; uy: number; len: number; z: number } {
+  const cp = Math.cos(pit);
+  const x = cp * Math.cos(yaw);
+  const y = Math.sin(pit);
+  const z = cp * Math.sin(yaw);
+  const sx = projX(x);
+  const sy = projY(y, z);
+  const n = Math.hypot(sx, sy);
+  // Клинок в камеру: коротко, но не точкой.
+  const len = Math.max(5, L * n);
+  return n < 1e-3 ? { ux: 0, uy: 1, len, z } : { ux: sx / n, uy: sy / n, len, z };
+}
+
+// ---- Части тела ----
+
+/** Двуручный меч от хвата: рукоять с навершием, золотая гарда, клинок с кровавой кромкой. */
+function kSword(b: KB, lit: KB, bl: Blade, glow: number, clipY: number, rage: boolean): void {
+  const { gx: x, gy: y, ux, uy, len } = bl;
   const nx = -uy;
   const ny = ux;
-  // Рукоять и навершие.
-  stroke(p, x - ux * 5, y - uy * 5, x, y, hx('#2a1a14'));
-  p.ell(x - ux * 6, y - uy * 6, 1.2, 1.2, KG.gold[2]);
-  p.set(Math.round(x - ux * 6), Math.round(y - uy * 6), KG.gem);
-  // Гарда — золотые рога.
-  stroke(p, x - nx * 4 - ux, y - ny * 4 - uy, x + nx * 4 - ux, y + ny * 4 - uy, KG.gold[2], 1.6);
-  p.set(Math.round(x - nx * 4 - ux * 2), Math.round(y - ny * 4 - uy * 2), KG.gold[3]);
-  p.set(Math.round(x + nx * 4 - ux * 2), Math.round(y + ny * 4 - uy * 2), KG.gold[3]);
+  // Рукоять укорачивается вместе с клинком (клинок к камере).
+  const hk = clampK(len / 27, 0.35, 1);
+  kLine(b, x - ux * 5 * hk, y - uy * 5 * hk, x, y, C.grip);
+  kEll(b, x - ux * 6 * hk, y - uy * 6 * hk, 1.3, 1.3, K4.gold, 0.1);
+  b.put(x - ux * 6 * hk, y - uy * 6 * hk, C.gem);
+  // Гарда — золотые рога поперёк.
+  const gw = 4;
+  kLine(b, x - nx * gw - ux, y - ny * gw - uy, x + nx * gw - ux, y + ny * gw - uy, K4.gold[2], 1.6);
+  b.put(x - nx * gw - ux * 2, y - ny * gw - uy * 2, K4.gold[3]);
+  b.put(x + nx * gw - ux * 2, y + ny * gw - uy * 2, K4.gold[3]);
   // Клинок: широкий у гарды, к острию сужается.
-  const pts: [number, number][] = [
-    [x + nx * 2.2, y + ny * 2.2],
-    [x + ux * len * 0.8 + nx * 1.8, y + uy * len * 0.8 + ny * 1.8],
-    [x + ux * len, y + uy * len],
-    [x + ux * len * 0.8 - nx * 1.8, y + uy * len * 0.8 - ny * 1.8],
-    [x - nx * 2.2, y - ny * 2.2],
+  const pts = [
+    x + nx * 2.2,
+    y + ny * 2.2,
+    x + ux * len * 0.8 + nx * 1.8,
+    y + uy * len * 0.8 + ny * 1.8,
+    x + ux * len,
+    y + uy * len,
+    x + ux * len * 0.8 - nx * 1.8,
+    y + uy * len * 0.8 - ny * 1.8,
+    x - nx * 2.2,
+    y - ny * 2.2,
   ];
-  poly(p, pts, (px, py) => {
+  const hot = glow > 0;
+  const edgeC = hot ? (glow > 0.8 ? C.edgeWhite : C.edgeHot) : C.edge;
+  const litEdge = glow > 0.25;
+  const la = clampK(glow, 0, 1);
+  kPoly(b, pts, (px, py) => {
+    if (py > clipY) return 0;
     const e = (px + 0.5 - x) * nx + (py + 0.5 - y) * ny;
     const along = ((px - x) * ux + (py - y) * uy) / len;
-    if (Math.abs(e) > 1.3) return glow > 0 ? mixc(KG.edge, hx('#ffd0a0'), glow * 0.5) : hx('#a0202a');
-    return tone(KG.blade, 0.5 + e * 0.35 - along * 0.2);
-  });
-  // Руны по долу.
-  for (let i = 2; i < len * 0.7; i += 3)
-    p.set(Math.round(x + ux * i), Math.round(y + uy * i), glow > 0.5 ? hx('#ffb080') : hx('#7a1418'));
-}
-
-interface KingPose {
-  view: 'front' | 'side';
-  /** Сидит на троне. */
-  sit?: boolean;
-  /** Меч: угол и длина; в профиле — от кисти. */
-  sword: number;
-  /** Кисть: смещение от плеча. */
-  hand: [number, number];
-  glow: number;
-  /** Крылья: 0 — нет, 0…1 раскрыты, взмах. */
-  wings: number;
-  flap: number;
-  step: number;
-  bob: number;
-  lean: number;
-  /** Плащ: колыхание. */
-  cape: number;
-  /** Поднятая свободная рука (фронт: призыв / раскинутые руки). */
-  raise?: number;
-  /** Голова запрокинута (рёв). */
-  roar?: boolean;
-  dead?: boolean;
-}
-
-/** Крыло короля: кости и перепонка с кровавыми жилами. */
-function kingWing(p: Px, sx: number, sy: number, a: number, len: number, open: number, far: boolean): void {
-  const t = far ? tn('#060406', '#10080c', '#1c0e14', '#2a141c') : KG.wing;
-  const bone = far ? tn('#1a1016', '#2a1a22', '#3a2630', '#4a3440') : tn('#2a1a20', '#4a3038', '#6e4a54', '#94707a');
-  const spread = 0.3 + open * 0.7;
-  const elbow: [number, number] = [sx + Math.cos(a - 0.4) * len * 0.42, sy + Math.sin(a - 0.4) * len * 0.42];
-  const tips: [number, number][] = [];
-  for (let i = 0; i < 4; i++) {
-    const fa = a + (i - 0.5) * 0.36 * spread;
-    const fl = len * (1 - i * 0.1);
-    tips.push([elbow[0] + Math.cos(fa) * fl * 0.62, elbow[1] + Math.sin(fa) * fl * 0.62]);
-  }
-  const low: [number, number] = [sx + Math.cos(a + 1.2 * spread) * len * 0.3, sy + Math.sin(a + 1.2 * spread) * len * 0.3];
-  poly(p, [[sx, sy], elbow, ...tips, low], (x, y) => {
-    const d = Math.hypot(x - sx, y - sy) / len;
-    return tone(t, 0.6 - d * 0.45 + ((x * 3 + y) % 7 === 0 ? -0.15 : 0));
-  });
-  // Жилы в перепонке.
-  if (!far)
-    for (const [tx, ty] of tips.slice(0, 3)) {
-      const mx = (elbow[0] + tx) / 2 + (low[0] - elbow[0]) * 0.2;
-      const my = (elbow[1] + ty) / 2 + (low[1] - elbow[1]) * 0.2;
-      p.set(Math.round(mx), Math.round(my), KG.vein);
-      p.set(Math.round((mx + tx) / 2), Math.round((my + ty) / 2), KG.vein);
+    if (Math.abs(e) > 1.3) {
+      if (litEdge) lit.mix(px, py, rage ? C.smY : C.edgeHot, 0.35 + la * 0.55);
+      return edgeC;
     }
-  limb(p, sx, sy, elbow[0], elbow[1], 1.5, 1.1, bone);
-  for (const [tx, ty] of tips) stroke(p, elbow[0], elbow[1], tx, ty, bone[2]);
-  // Коготь на сгибе.
-  limb(p, elbow[0], elbow[1], elbow[0] - 1, elbow[1] - 3, 0.8, 0.3, HORN);
+    return lv(K4.blade, 0.5 + e * 0.35 - along * 0.2);
+  });
+  // Вырезанное ниже земли (клинок в полу) — прозрачное.
+  // Руны по долу.
+  for (let i = 2; i < len * 0.7; i += 3) {
+    const rx = x + ux * i;
+    const ry = y + uy * i;
+    if (ry > clipY) break;
+    b.put(rx, ry, glow > 0.5 ? C.runeHot : C.rune);
+    if (glow > 0.5) lit.mix(rx, ry, C.runeHot, 0.5 + la * 0.4);
+  }
 }
 
-/** Голова: корона-рога, белые волосы, тёмное лицо и глаза-угли. */
-function kingHead(p: Px, x: number, y: number, side: boolean, roar: boolean): [number, number] {
-  // Волосы — за головой, до лопаток.
+/** Голова: корона-рога, белые волосы, тёмное лицо, глаза-угли. Возвращает глаз. */
+function kHead(
+  b: KB,
+  lit: KB,
+  x: number,
+  y: number,
+  side: boolean,
+  tilt: number,
+  jaw: number,
+  wind: number,
+  eyes: number,
+  nod = 0,
+): [number, number] {
+  const ct = Math.cos(tilt);
+  const st = Math.sin(tilt);
+  const ox = x;
+  const oy = y + 1;
+  const R = (px: number, py: number): [number, number] => {
+    const dx = px - ox;
+    const dy = py - oy;
+    return [ox + dx * ct - dy * st, oy + dx * st + dy * ct];
+  };
+  // Волосы — за головой, до лопаток; ветер тянет их назад и вверх.
   for (let i = 0; i < 6; i++) {
     const off = side ? -1 - i * 0.6 : (i - 2.5) * 1.4;
+    const wx = side ? -wind * (3 + i * 0.5) : off * wind * 0.4;
+    const wy = -wind * (side ? 3 + (i % 3) : 4);
     const hair = spline(
       [
-        [x + off * 0.4, y - 3],
-        [x + off - (side ? 2 : 0), y + 2],
-        [x + off * 1.2 - (side ? 4 : 0), y + 7 + (i % 2)],
-        [x + off * 1.3 - (side ? 5 : 0), y + 11 + (i % 3)],
+        R(x + off * 0.4, y - 3),
+        R(x + off - (side ? 2 : 0) + wx * 0.3, y + 2 + wy * 0.3),
+        R(x + off * 1.2 - (side ? 4 : 0) + wx * 0.7, y + 7 + (i % 2) + wy * 0.7),
+        R(x + off * 1.3 - (side ? 5 : 0) + wx, y + 11 + (i % 3) + wy),
       ],
       4,
     );
-    hair.forEach(([hx0, hy0], n) => p.set(Math.round(hx0), Math.round(hy0), KG.hair[n % 4 === 0 ? 3 : n % 2 ? 2 : 1]));
+    for (let n = 0; n < hair.length; n++)
+      b.put(hair[n][0], hair[n][1], K4.hair[n % 4 === 0 ? 3 : n % 2 ? 2 : 1]);
   }
-  shadeEll(p, x, y, 3.8, 4.2, KG.face, 0.05);
+  const [fx, fy] = R(x, y);
+  kEll(b, fx, fy, 3.8, 4.2, K4.face, 0.05);
   // Корона: золотой обод с зубцами.
   for (let dx = -4; dx <= 4; dx++) {
-    p.set(Math.round(x + dx), Math.round(y - 3), KG.gold[dx < 0 ? 1 : 2]);
-    if (dx % 2 === 0) p.set(Math.round(x + dx), Math.round(y - 4), KG.gold[3]);
+    const [ax, ay] = R(x + dx, y - 3);
+    b.put(ax, ay, K4.gold[dx < 0 ? 1 : 2]);
+    if (dx % 2 === 0) {
+      const [bx2, by2] = R(x + dx, y - 4);
+      b.put(bx2, by2, K4.gold[3]);
+    }
   }
-  p.set(Math.round(x), Math.round(y - 5), KG.gold[3]);
-  p.set(Math.round(x), Math.round(y - 4), KG.gem);
+  const [tx, ty] = R(x, y - 5);
+  b.put(tx, ty, K4.gold[3]);
+  const [gx2, gy2] = R(x, y - 4);
+  b.put(gx2, gy2, C.gem);
   // Рога — большие, изогнутые.
   const horn = (s: number) => {
     const pts = spline(
-      [
-        [x + s * 2.5, y - 3],
-        [x + s * 6, y - 6],
-        [x + s * 6.5, y - 11],
-        [x + s * 4.5, y - 14],
-      ],
+      [R(x + s * 2.5, y - 3), R(x + s * 6, y - 6), R(x + s * 6.5, y - 11), R(x + s * 4.5, y - 14)],
       4,
     );
-    pts.forEach(([hx0, hy0], n) => {
+    for (let n = 0; n < pts.length; n++) {
       const r = 1.6 * (1 - n / pts.length) + 0.4;
-      shadeEll(p, hx0, hy0, r, r, tn('#0a080a', '#1c181c', '#34303a', '#5a5462'));
-    });
+      kEll(b, pts[n][0], pts[n][1], r, r, K4.horn);
+    }
   };
   if (side) {
     horn(-1);
@@ -2147,321 +2758,2680 @@ function kingHead(p: Px, x: number, y: number, side: boolean, roar: boolean): [n
     horn(-1);
     horn(1);
   }
-  // Лицо: тень под короной и глаза.
+  // Лицо: глаза и пасть.
   const ex = side ? x + 1.5 : x;
-  const ey = y + (roar ? -0.5 : 0.5);
+  // Анфас: запрокинул голову — глаза и пасть ближе к короне, опустил — ниже.
+  const ey = y + 0.5 - jaw * 1 + (side ? 0 : nod * 1.8);
+  const eg = eyes >= 2 ? C.emberHi : C.gem;
+  let eye: [number, number];
   if (side) {
-    p.set(Math.round(ex + 1), Math.round(ey), KG.gem);
-    p.set(Math.round(ex + 2), Math.round(ey), hx('#ffb080'));
+    const [e1x, e1y] = R(ex + 1, ey);
+    const [e2x, e2y] = R(ex + 2, ey);
+    b.put(e1x, e1y, eg);
+    b.put(e2x, e2y, C.eyeHi);
+    eye = [Math.round(e1x), Math.round(e1y)];
+    // Обычный взгляд светит сам движок (`eye`); слой света — когда угли разгораются.
+    if (eyes >= 2) {
+      lit.mix(e1x, e1y, eg, 0.9);
+      lit.mix(e2x, e2y, C.eyeHi, 0.9);
+      // Угли разгораются: отсвет и искра назад по ходу головы.
+      lit.mix(e2x + 1, e2y, C.ember, 0.45);
+      lit.mix(e1x, e1y - 1, C.ember, 0.35);
+      if (eyes >= 3) {
+        lit.mix(e1x - 1, e1y, C.ember, 0.6);
+        lit.mix(e1x - 2, e1y - 1, C.ember, 0.35);
+      }
+    }
   } else {
-    p.set(Math.round(ex - 1.5), Math.round(ey), KG.gem);
-    p.set(Math.round(ex + 1.5), Math.round(ey), KG.gem);
-    p.set(Math.round(ex - 1.5), Math.round(ey) - 1, hx('#ff9070'));
-    p.set(Math.round(ex + 1.5), Math.round(ey) - 1, hx('#ff9070'));
+    const [l1x, l1y] = R(ex - 1.5, ey);
+    const [r1x, r1y] = R(ex + 1.5, ey);
+    const [l2x, l2y] = R(ex - 1.5, ey - 1);
+    const [r2x, r2y] = R(ex + 1.5, ey - 1);
+    b.put(l1x, l1y, eg);
+    b.put(r1x, r1y, eg);
+    b.put(l2x, l2y, C.eyeLid);
+    b.put(r2x, r2y, C.eyeLid);
+    eye = [Math.round(l1x), Math.round(l1y)];
+    if (eyes >= 2) {
+      lit.mix(l1x, l1y, eg, 0.9);
+      lit.mix(r1x, r1y, eg, 0.9);
+      lit.mix(l2x, l2y, C.ember, 0.5);
+      lit.mix(r2x, r2y, C.ember, 0.5);
+      if (eyes >= 3) {
+        lit.mix(l1x - 1, l1y, C.ember, 0.4);
+        lit.mix(r1x + 1, r1y, C.ember, 0.4);
+      }
+    }
   }
-  if (roar) {
-    for (let dx = -1; dx <= 1; dx++) p.set(Math.round(ex + dx + (side ? 1 : 0)), Math.round(ey + 2.5), hx('#ff5a2a'));
+  if (jaw > 0.2) {
+    // Пасть: тёмный провал и угли внутри; шире — сильнее рёв.
+    const w = jaw > 0.65 ? 2 : 1;
+    const hgt = jaw > 0.65 ? 2 : 1;
+    const mx = side ? ex + 1.5 : ex;
+    for (let dy = 0; dy < hgt; dy++)
+      for (let dx = -w; dx <= w - (side ? 1 : 0); dx++) {
+        const [px, py] = R(mx + dx, ey + 2.5 + dy);
+        const inner = dy > 0 || Math.abs(dx) < w;
+        b.put(px, py, inner && jaw > 0.65 ? C.mouthIn : C.mouth);
+        if (!inner || jaw <= 0.65) lit.mix(px, py, C.mouth, 0.7);
+      }
+    if (jaw > 0.65) {
+      const [px, py] = R(mx, ey + 3.5);
+      lit.mix(px, py, C.ember, 0.8);
+    }
+  } else if (jaw > 0.05) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const [px, py] = R(ex + dx + (side ? 1 : 0), ey + 2.5);
+      b.put(px, py, C.mouth);
+    }
   }
-  return [Math.round(side ? ex + 1 : ex - 1.5), Math.round(ey)];
+  return eye;
 }
 
-function drawKingFront(kp: KingPose): Built {
-  const W = 84;
-  const p = new Px(W, 100);
-  const G = 90;
-  const cx = 42;
-  const sit = !!kp.sit;
-  const hip = sit ? G - 18 : G - 24 + kp.bob;
-  const sh = hip - 16;
-  // Крылья — за всем.
-  if (kp.wings > 0) {
-    const a0 = -Math.PI / 2 - 0.9 * kp.wings - kp.flap * 0.2;
-    kingWing(p, cx - 5, sh + 2, a0 - 0.2, 26 * (0.5 + kp.wings * 0.5), kp.wings, false);
-    // Правое крыло — зеркально.
-    const q = new Px(W, 100);
-    kingWing(q, cx - 5, sh + 2, a0 - 0.2, 26 * (0.5 + kp.wings * 0.5), kp.wings, false);
-    const qf = q.flipX();
-    for (let i = 0; i < qf.data.length; i += 4)
-      if (qf.data[i + 3]) {
-        p.data[i] = qf.data[i];
-        p.data[i + 1] = qf.data[i + 1];
-        p.data[i + 2] = qf.data[i + 2];
-        p.data[i + 3] = 255;
-      }
+/**
+ * Крыло: плечо → локоть → запястье, три пальца веером и перепонка с
+ * фестонами между ними. `s` — куда раскрывается (+1 вправо, −1 влево),
+ * `wf` — взмах (+ вниз), `open` 0 — сложено за спиной, 1 — настежь.
+ */
+function kWing(
+  b: KB,
+  rx: number,
+  ry: number,
+  s: number,
+  wf: number,
+  open: number,
+  L: number,
+  far: boolean,
+): void {
+  const t = far ? K4.wingFar : K4.wing;
+  const bone = far ? K4.boneFar : K4.bone;
+  const o = clampK(open, 0, 1);
+  const a = -Math.PI / 2 + s * (0.55 + 0.25 * o) + s * wf;
+  const ex = rx + Math.cos(a) * L * 0.36;
+  const ey = ry + Math.sin(a) * L * 0.36;
+  // Предплечье: сложенное — назад и вниз вдоль руки, раскрытое — наружу.
+  const a2 = a + s * (2.75 - 2.3 * o);
+  const wx = ex + Math.cos(a2) * L * 0.34;
+  const wy = ey + Math.sin(a2) * L * 0.34;
+  const spread = 0.12 + 0.88 * o;
+  const tips: number[] = [];
+  for (let k = 0; k < 3; k++) {
+    const fa = a2 + s * (0.25 + k * 0.62 * spread);
+    const fl = L * (0.62 - k * 0.1) * (0.6 + 0.4 * o);
+    tips.push(wx + Math.cos(fa) * fl, wy + Math.sin(fa) * fl);
   }
-  // Плащ за спиной: от плеч до земли, расходится.
-  const capeW = 12 + (kp.raise ? 2 : 0);
-  poly(
-    p,
+  // Крепление к спине — ниже плеча.
+  const bx = rx - s * 1;
+  const by = ry + L * (0.22 + 0.12 * o);
+  // Перепонка с фестонами: между концами пальцев край прогибается к запястью.
+  const mem: number[] = [rx, ry, ex, ey, wx, wy, tips[0], tips[1]];
+  for (let k = 0; k < 2; k++) {
+    const mx = (tips[k * 2] + tips[k * 2 + 2]) / 2;
+    const my = (tips[k * 2 + 1] + tips[k * 2 + 3]) / 2;
+    mem.push(mx + (wx - mx) * 0.28, my + (wy - my) * 0.28, tips[k * 2 + 2], tips[k * 2 + 3]);
+  }
+  const lx = (tips[4] + bx) / 2;
+  const ly = (tips[5] + by) / 2;
+  mem.push(lx + (wx - lx) * 0.3, ly + (wy - ly) * 0.3, bx, by);
+  kPoly(b, mem, (x, y) => {
+    const d = Math.hypot(x - rx, y - ry) / L;
+    const vein = (((x * 3 + y) % 7) + 7) % 7 === 0 ? -0.15 : 0;
+    return lv(t, 0.62 - d * 0.5 + vein);
+  });
+  // Жилы в перепонке — от запястья к фестонам.
+  if (!far)
+    for (let k = 0; k < 3; k++) {
+      const mx = (wx + tips[k * 2]) / 2 + (bx - wx) * 0.15;
+      const my = (wy + tips[k * 2 + 1]) / 2 + (by - wy) * 0.15;
+      b.put(mx, my, C.vein);
+      b.put((mx + tips[k * 2]) / 2, (my + tips[k * 2 + 1]) / 2, C.vein);
+    }
+  kCap(b, rx, ry, ex, ey, 1.6, 1.2, bone);
+  kCap(b, ex, ey, wx, wy, 1.2, 0.9, bone);
+  for (let k = 0; k < 3; k++) kLine(b, wx, wy, tips[k * 2], tips[k * 2 + 1], bone[2]);
+  // Коготь на сгибе — вверх.
+  kCap(b, wx, wy, wx - s * 0.5, wy - 3, 0.8, 0.3, K4.spike);
+}
+
+/** Плоская грань со светом по положению (как `polyShade`). */
+function kPolyShade(b: KB, pts: number[], t: T4, bias = 0): void {
+  const n = pts.length >> 1;
+  let cx = 0;
+  let cy = 0;
+  let r = 1;
+  for (let i = 0; i < n; i++) {
+    cx += pts[i * 2];
+    cy += pts[i * 2 + 1];
+  }
+  cx /= n;
+  cy /= n;
+  for (let i = 0; i < n; i++) r = Math.max(r, Math.hypot(pts[i * 2] - cx, pts[i * 2 + 1] - cy));
+  kPoly(b, pts, (x, y) => lv(t, ((x + 0.5 - cx) * LX + (y + 0.5 - cy) * LY) / r + 0.45 + bias));
+}
+
+/** Латная ступня: клин носком вперёд (`s` — куда смотрит). */
+function kSabaton(b: KB, fx: number, fy: number, s: number, t: T4): void {
+  kPoly(
+    b,
+    [fx - 2 * s, fy - 2.5, fx + 2 * s, fy - 2.5, fx + 5 * s, fy + 0.5, fx - 2.5 * s, fy + 0.5],
+    (x, y) => lv(t, 0.55 - (y - fy) * 0.12 + (x - fx) * s * 0.02),
+  );
+  kLine(b, fx - 2 * s, fy, fx + 4 * s, fy, t[2]);
+}
+
+/** Латная перчатка с золотой костяшкой. */
+function kFist(b: KB, x: number, y: number, t: T4, gold: boolean): void {
+  kEll(b, x, y, 2, 1.8, t, 0.2);
+  if (gold) b.put(x + 0.5, y - 1, K4.gold[2]);
+}
+
+// ---- След меча: полумесяц по выборкам клинка в прошлом ----
+
+/** `sm[0]` — сейчас, дальше — назад во времени. */
+function kSmear(b: KB, lit: KB, sm: Blade[], clipY: number): void {
+  const n = sm.length - 1;
+  if (n < 1) return;
+  const tip = (s: Blade, f: number): [number, number] => [
+    s.gx + s.ux * s.len * f,
+    s.gy + s.uy * s.len * f,
+  ];
+  for (let i = n - 1; i >= 0; i--) {
+    const A = sm[i];
+    const B = sm[i + 1];
+    // Клинок за телом — его след тоже там: не рисуем поверх тела.
+    if (A.z < -0.45 && B.z < -0.45) continue;
+    const [ax, ay] = tip(A, 1);
+    const [bx, by] = tip(B, 1);
+    if (Math.hypot(ax - bx, ay - by) < 2.2) continue;
+    const ka = i / n;
+    const kb = (i + 1) / n;
+    // Полумесяц: у свежего края полоса во весь клинок, к хвосту — только у острия.
+    const fa = 0.36 + 0.5 * ka;
+    const fb = 0.36 + 0.5 * kb;
+    const [iax, iay] = tip(A, fa);
+    const [ibx, iby] = tip(B, fb);
+    const age = (ka + kb) / 2;
+    const gx = A.gx;
+    const gy = A.gy;
+    const L = A.len || 1;
+    kPoly(b, [iax, iay, ax, ay, bx, by, ibx, iby], (x, y) => {
+      if (y > clipY) return b.d[y * b.w + x];
+      // Хвост — через точку: тает, а не обрывается.
+      if (age > 0.62 && (x + y) % 2) return b.d[y * b.w + x];
+      const u = (Math.hypot(x + 0.5 - gx, y + 0.5 - gy) / L - fa) / (1 - fa);
+      let c: number;
+      if (u > 0.8) c = age < 0.3 ? C.smW : C.smY;
+      else if (u > 0.45) c = age < 0.45 ? C.smY : C.smR;
+      else c = age < 0.5 ? C.smR : C.smD;
+      if (u > 0.45 && age < 0.7)
+        lit.mix(x, y, u > 0.8 ? C.smW : C.smY, (0.85 - age) * (u > 0.8 ? 1 : 0.6));
+      return c;
+    });
+  }
+}
+
+// ---- Профиль ----
+
+const SK = [
+  'bx',
+  'by',
+  'lean',
+  'tw',
+  'hd',
+  'nfx',
+  'nfy',
+  'ffx',
+  'ffy',
+  'gx',
+  'gy',
+  'gz',
+  'yaw',
+  'pit',
+  'two',
+  'ox',
+  'oy',
+  'ep',
+  'glow',
+  'clip',
+  'pin',
+  'pnx',
+  'pny',
+  'cape',
+  'cup',
+  'hair',
+  'cw',
+  'wo',
+  'wf',
+  'jaw',
+  'eyes',
+  'lift',
+  'fdx',
+  'fdy',
+  'fsx',
+  'fsy',
+  'frot',
+  'aura',
+  'puff',
+] as const;
+type SKey = (typeof SK)[number];
+type SRig = Record<SKey, number>;
+
+/** Стойка: меч в ближней руке остриём вперёд-вниз, вес на обе ноги. */
+const KGUARD: SRig = {
+  bx: 0,
+  by: 0,
+  lean: 0.05,
+  tw: 0,
+  hd: 0,
+  nfx: 3.5,
+  nfy: 0,
+  ffx: -2.5,
+  ffy: 0,
+  gx: 3,
+  gy: -4,
+  gz: 2,
+  yaw: 0.3,
+  pit: -0.82,
+  two: 0,
+  ox: 1.5,
+  oy: 9,
+  ep: 1.9,
+  glow: 0,
+  clip: 0,
+  pin: 0,
+  pnx: 0,
+  pny: 0,
+  cape: 0,
+  cup: 0,
+  hair: 0,
+  cw: 0,
+  wo: 0.12,
+  wf: 0,
+  jaw: 0,
+  eyes: 1,
+  lift: 0,
+  fdx: 0,
+  fdy: 0,
+  fsx: 1,
+  fsy: 1,
+  frot: 0,
+  aura: 0,
+  puff: 0,
+};
+
+interface SideGeo {
+  px: number;
+  py: number;
+  T: (u: number, v: number) => [number, number];
+  sn: [number, number];
+  sf: [number, number];
+}
+
+function sideGeo(r: SRig): SideGeo {
+  const px = KX0 + r.bx;
+  const py = KGY - 24 + r.by;
+  const cl = Math.cos(r.lean);
+  const sl = Math.sin(r.lean);
+  const T = (u: number, v: number): [number, number] => [
+    px + u * cl + v * sl,
+    py + u * sl - v * cl,
+  ];
+  return { px, py, T, sn: T(3 - r.tw, 13), sf: T(-1 + r.tw * 0.5, 13) };
+}
+
+const ARM = 15.2;
+
+/** Клинок в профиль: хват от ближнего плеча, направление — 3D или к точке в полу. */
+function sideBlade(r: SRig, g: SideGeo): Blade {
+  let gx = projX(r.gx);
+  let gy = projY(r.gy, r.gz);
+  const d = Math.hypot(gx, gy);
+  if (d > ARM - 0.3) {
+    gx *= (ARM - 0.3) / d;
+    gy *= (ARM - 0.3) / d;
+  }
+  const x = g.sn[0] + gx;
+  const y = g.sn[1] + gy;
+  if (r.pin > 0.5) {
+    const dx = r.pnx - x;
+    const dy = r.pny - y;
+    const n = Math.hypot(dx, dy) || 1;
+    return { gx: x, gy: y, ux: dx / n, uy: dy / n, len: 27, z: 0 };
+  }
+  const bd = bladeDir(r.yaw, r.pit, 27);
+  return { gx: x, gy: y, ux: bd.ux, uy: bd.uy, len: bd.len, z: bd.z };
+}
+
+interface KOpt {
+  wings: boolean;
+  /** Кромка светится с фазы 1. */
+  glow: number;
+  rage: boolean;
+  smear: Blade[] | null;
+  /** Номер кадра — зерно разрядов молнии. */
+  arcF?: number;
+  /** Молния с неба в острие (кадр удара грозы). */
+  bolt?: boolean;
+}
+
+interface KOut {
+  p: Px;
+  lit: Px | null;
+  eye: [number, number] | null;
+  /** Слой крыльев отдельно (смерть осыпает их раньше тела). */
+  wings?: KB | null;
+  body?: KB;
+  litB?: KB;
+  sword?: KB;
+}
+
+function sideCape(b: KB, r: SRig, g: SideGeo): void {
+  const G = KGY;
+  const [ax, ay] = g.T(-3, 16);
+  const [bx, by] = g.T(4, 15);
+  const back = 9 + r.cape;
+  const w1 = Math.sin(r.cw) * (0.8 + Math.abs(r.cape) * 0.12);
+  const w2 = Math.sin(r.cw - 1.3) * (1.4 + Math.abs(r.cape) * 0.18);
+  const cx = g.px - 1 + r.cup * 0.1;
+  const cy = Math.min(G - 1, G - 1 - r.cup * 0.35);
+  const dx = g.px - back - 3 + w2 - r.cup * 0.25;
+  const dy = G - 2 - r.cup;
+  const ex = g.px - back + w1 * 0.6 - r.cup * 0.1;
+  const ey = g.py - r.cup * 0.45;
+  const edge = spline(
     [
-      [cx - 9, sh],
-      [cx + 9, sh],
-      [cx + capeW + kp.cape, G - 1],
-      [cx - capeW + kp.cape, G - 1],
+      [dx, dy],
+      [ex, ey],
+      [ax, ay],
     ],
-    (x, y) => {
-      const k = Math.abs(x - cx) / capeW;
-      const fold = (x + Math.floor((y - sh) / 5)) % 4 === 0 ? -0.25 : 0;
-      return tone(KG.capeIn, 0.7 - k * 0.5 + fold);
+    5,
+  );
+  const pts: number[] = [bx, by, cx, cy];
+  for (const [x, y] of edge) pts.push(x, y);
+  const top = Math.min(ay, by);
+  kPoly(b, pts, (x, y, xa) => {
+    const s = x - xa;
+    const fold = Math.floor(s + (y - top) * 0.22) % 5 === 0 ? -0.25 : 0;
+    return lv(K4.cape, 0.6 - (g.px - x) * 0.04 + fold);
+  });
+  kLine(b, dx, dy, cx, cy, K4.gold[1]);
+}
+
+function sideLeg(b: KB, hip: [number, number], fx: number, fy: number, t: T4, near: boolean): void {
+  const [kx, ky] = ik2(hip[0], hip[1], fx, fy - 0.5, 11.8, 11.6, 1, -0.25);
+  kCap(b, hip[0], hip[1], kx, ky, near ? 3 : 2.8, near ? 2.6 : 2.4, t);
+  kCap(b, kx, ky, fx, fy - 1.5, near ? 2.5 : 2.3, near ? 2.7 : 2.5, t);
+  kSabaton(b, fx, fy, 1, t);
+  if (near) b.put(kx, ky, K4.gold[2]);
+}
+
+function paintSide(r: SRig, o: KOpt, split = false): KOut {
+  const b = new KB();
+  const lit = new KB();
+  const wl = split ? new KB() : b;
+  const sb = split ? new KB() : b;
+  const G = KGY;
+  const g = sideGeo(r);
+  const bl = sideBlade(r, g);
+  const clipY = r.clip > 0.5 ? G + 1 : 1e9;
+  const glow = Math.max(r.glow, o.glow);
+  const wr = g.T(-3, 13);
+  // Дальнее крыло.
+  // Дальнее крыло выше и чуть отстаёт — видно из-за ближнего.
+  if (o.wings) kWing(wl, wr[0] + 3, wr[1] - 2, -1, r.wf - 0.18, r.wo, 30, true);
+  sideCape(b, r, g);
+  // Дальняя рука: на рукояти или свободна.
+  const tk = clampK(r.two, 0, 1);
+  const hx = (g.sf[0] + r.ox) * (1 - tk) + (bl.gx - bl.ux * 3.2) * tk;
+  const hy = (g.sf[1] + r.oy) * (1 - tk) + (bl.gy - bl.uy * 3.2) * tk;
+  const fe = ik2(g.sf[0], g.sf[1], hx, hy, 7.2, 7.5, -0.3, 1);
+  kCap(b, g.sf[0], g.sf[1], fe[0], fe[1], 2.4, 2.1, K4.armorFar);
+  kCap(b, fe[0], fe[1], hx, hy, 2.1, 1.9, K4.armorFar);
+  kFist(b, hx, hy, K4.armorFar, false);
+  // Ноги: дальняя, ближняя.
+  sideLeg(b, g.T(-1, 0), KX0 + r.ffx, G - 1 - r.ffy, K4.armorFar, false);
+  sideLeg(b, g.T(2, 0), KX0 + r.nfx, G - 1 - r.nfy, K4.armor, true);
+  // Набедренник и кираса.
+  const skirt = [...g.T(-5, 3), ...g.T(6, 3), ...g.T(7, -3), ...g.T(-5, -3)];
+  kPolyShade(b, skirt, K4.armor);
+  kLine(b, ...g.T(-5, -3), ...g.T(7, -3), K4.gold[1]);
+  kPolyShade(b, [...g.T(-5, 15), ...g.T(7, 14), ...g.T(6, 3), ...g.T(-4, 3)], K4.armor);
+  const cu = 5 + r.tw;
+  for (let v = 4; v <= 13; v++) b.put(...g.T(cu, v), K4.gold[1]);
+  const [gmx, gmy] = g.T(cu, 9);
+  kDisc(b, gmx, gmy, 1.2, 1.6, C.gem);
+  // Ближнее крыло.
+  if (o.wings) kWing(wl, wr[0], wr[1], -1, r.wf, r.wo, 32, false);
+  const behind = bl.z < -0.35;
+  if (behind) kSword(sb, lit, bl, glow, clipY, o.rage);
+  // Наплечник.
+  const pu = 2 - r.tw * 1.5;
+  const [pax, pay] = g.T(pu, 14);
+  kEll(b, pax, pay, 5, 3.6, K4.armor, 0.12);
+  for (let i = 0; i < 3; i++) {
+    const [s0x, s0y] = g.T(pu - 2 + i * 2.5, 16);
+    const [s1x, s1y] = g.T(pu - 3 + i * 2.8, 20 + (i === 1 ? 1 : 0));
+    kCap(b, s0x, s0y, s1x, s1y, 0.9, 0.3, K4.spike);
+  }
+  for (let u = -3; u <= 5; u++) b.put(...g.T(pu + u, 11), K4.gold[2]);
+  // Голова: наклон корпуса наполовину гасит шея.
+  const [hdx, hdy] = g.T(2, 20);
+  const tilt = r.lean * 0.55 + r.hd;
+  const eye = kHead(b, lit, hdx, hdy, true, tilt, r.jaw, r.hair, r.eyes);
+  // Выдох углями из пасти (после натуги): клуб растёт и уходит вперёд-вверх.
+  if (r.puff > 0.02) {
+    const ct = Math.cos(tilt);
+    const st = Math.sin(tilt);
+    const mx = hdx + 4 * ct - 3.5 * st;
+    const my = hdy + 1 + 4 * st + 3.5 * ct;
+    const k = r.puff;
+    for (let i = 0; i < 5; i++) {
+      const a = -0.5 + (hash(i, 3, 17) - 0.5) * 1.1;
+      const d = 1 + k * (3 + i * 1.2);
+      const px = mx + Math.cos(a) * d;
+      const py = my + Math.sin(a) * d - k * k * 3;
+      lit.mix(px, py, i < 2 ? C.emberHi : C.ember, (1 - k) * 0.85);
+    }
+  }
+  // Ближняя рука с мечом.
+  const ee = ik2(g.sn[0], g.sn[1], bl.gx, bl.gy, 7.5, 7.7, Math.cos(r.ep), Math.sin(r.ep));
+  kCap(b, g.sn[0], g.sn[1], ee[0], ee[1], 2.5, 2.2, K4.armor);
+  kCap(b, ee[0], ee[1], bl.gx, bl.gy, 2.2, 2.0, K4.armor);
+  if (!behind) kSword(sb, lit, bl, glow, clipY, o.rage);
+  kFist(b, bl.gx, bl.gy, K4.armor, true);
+  if (split) {
+    kOutline(wl, C.ink);
+    return { p: b.px, lit: null, eye, wings: wl, body: b, litB: lit, sword: sb };
+  }
+  kOutline(b, C.ink);
+  kAura(b, lit, r.aura);
+  if (o.smear) kSmear(b, lit, o.smear, clipY);
+  return { p: b.px, lit: lit.used ? lit.px : null, eye };
+}
+
+// ---- Анфас ----
+
+const FK = [
+  'sit',
+  'by',
+  'bow',
+  'hd',
+  'hs',
+  'gx',
+  'gy',
+  'gz',
+  'yaw',
+  'pit',
+  'ron',
+  'lon',
+  'rx',
+  'ry',
+  'lx',
+  'ly',
+  'glow',
+  'clip',
+  'cape',
+  'cup',
+  'hair',
+  'cw',
+  'wo',
+  'wf',
+  'jaw',
+  'eyes',
+  'st',
+  'arc',
+  'lift',
+  'fdx',
+  'fdy',
+  'fsx',
+  'fsy',
+  'frot',
+  'aura',
+  'claw',
+] as const;
+type FKey = (typeof FK)[number];
+type FRig = Record<FKey, number>;
+
+/** На троне: сидит, меч воткнут перед ним, руки на навершии. */
+const SEAT: FRig = {
+  sit: 1,
+  by: 0,
+  bow: 0,
+  hd: 0,
+  hs: 0,
+  gx: 0,
+  gy: -12,
+  gz: 2,
+  yaw: 0,
+  pit: -Math.PI / 2,
+  ron: 1,
+  lon: 1,
+  rx: 3,
+  ry: 9,
+  lx: -3,
+  ly: 9,
+  glow: 0,
+  clip: 1,
+  cape: 0,
+  cup: 0,
+  hair: 0,
+  cw: 0,
+  wo: 0,
+  wf: 0,
+  jaw: 0,
+  eyes: 1,
+  st: 0,
+  arc: 0,
+  lift: 0,
+  fdx: 0,
+  fdy: 0,
+  fsx: 1,
+  fsy: 1,
+  frot: 0,
+  aura: 0,
+  claw: 0,
+};
+
+/** Стоит лицом к зрителю, меч в правой руке у бедра. */
+const FRONT: FRig = {
+  ...SEAT,
+  sit: 0,
+  gx: 12,
+  gy: -9,
+  gz: 3,
+  yaw: 0.25,
+  pit: -1.1,
+  ron: 1,
+  lon: 0,
+  lx: -2,
+  ly: 12,
+  clip: 0,
+};
+
+const FCX = 48;
+
+interface FrontGeo {
+  hip: number;
+  sh: number;
+}
+
+function frontGeo(r: FRig): FrontGeo {
+  const hip = KGY - 24 + 6 * r.sit + r.by;
+  return { hip, sh: hip - 16 + r.bow * 2 };
+}
+
+function frontBlade(r: FRig, g: FrontGeo): Blade {
+  const x = FCX + projX(r.gx);
+  const y = g.sh + 4 + projY(r.gy, r.gz);
+  const bd = bladeDir(r.yaw, r.pit, 26);
+  return { gx: x, gy: y, ux: bd.ux, uy: bd.uy, len: bd.len, z: bd.z };
+}
+
+/** Кисть на рукояти: `k` — от хвата к навершию. */
+const onGrip = (bl: Blade, k: number): [number, number] => [bl.gx - bl.ux * k, bl.gy - bl.uy * k];
+
+function paintFront(r: FRig, o: KOpt, split = false): KOut {
+  const b = new KB();
+  const lit = new KB();
+  const wl = split ? new KB() : b;
+  const G = KGY;
+  const cx = FCX;
+  const g = frontGeo(r);
+  const { hip, sh } = g;
+  const bl = frontBlade(r, g);
+  const clipY = r.clip > 0.5 ? G + 1 : 1e9;
+  const glow = Math.max(r.glow, o.glow);
+  // Крылья — за всем.
+  if (o.wings && r.wo > 0.02) {
+    const L = 30;
+    kWing(wl, cx - 5, sh + 2, -1, r.wf, r.wo, L, false);
+    kWing(wl, cx + 5, sh + 2, 1, r.wf, r.wo, L, false);
+  }
+  // Плащ за спиной: от плеч до земли, расходится; ветер поднимает подол.
+  const cw = 12 + r.cape;
+  const w1 = Math.sin(r.cw) * 1.2;
+  const w2 = Math.sin(r.cw + 1.9) * 1.2;
+  const cb = G - 1 - r.cup;
+  kPoly(
+    b,
+    [cx - 9, sh, cx + 9, sh, cx + cw + w1 + r.cup * 0.25, cb, cx - cw + w2 - r.cup * 0.25, cb],
+    (x, y, xa) => {
+      const k = Math.abs(x - cx) / cw;
+      const fold = Math.floor(x - xa + (y - sh) / 5) % 4 === 0 ? -0.25 : 0;
+      return lv(K4.capeIn, 0.7 - k * 0.5 + fold);
     },
   );
-  for (let x = cx - capeW + Math.round(kp.cape); x <= cx + capeW + Math.round(kp.cape); x++) p.set(x, G - 1, KG.gold[1]);
-  if (sit) {
-    // Бёдра к зрителю — колени, голени вниз.
-    for (const s of [-1, 1]) {
-      shadeEll(p, cx + s * 5, hip + 1, 4, 3.4, KG.armor, 0.1);
-      limb(p, cx + s * 6, hip + 3, cx + s * 6.5, G - 2, 2.8, 2.4, KG.armor);
-      p.rect(cx + s * 6.5 - 3, G - 2, cx + s * 6.5 + 3, G - 1, KG.armor[2]);
-      p.set(cx + s * 5, hip - 1, KG.gold[2]);
-    }
-  } else {
-    for (const s of [-1, 1]) {
-      const st = s * kp.step;
-      limb(p, cx + s * 4, hip, cx + s * 5 + st, G - 7, 3, 2.6, KG.armor);
-      limb(p, cx + s * 5 + st, G - 7, cx + s * 5.5 + st, G - 1, 2.5, 2.7, KG.armor);
-      p.set(Math.round(cx + s * 5 + st), G - 7, KG.gold[2]);
-    }
+  kLine(b, cx - cw + w2 - r.cup * 0.25, cb, cx + cw + w1 + r.cup * 0.25, cb, K4.gold[1]);
+  // Ноги: сидя — колени к зрителю, стоя — прямо, в стойке — шире.
+  for (const s of [-1, 1]) {
+    const hx0 = cx + s * 4;
+    const fx = cx + s * (5.5 + r.st);
+    const fy = G - 1;
+    const kxS = cx + s * 5.5;
+    const kyS = hip + 1.5;
+    const kxT = (hx0 + fx) / 2 + s * r.by * 0.35;
+    const kyT = (hip + fy) / 2 + r.by * 0.2;
+    const kx = kxS * r.sit + kxT * (1 - r.sit);
+    const ky = kyS * r.sit + kyT * (1 - r.sit);
+    if (r.sit > 0.5) kEll(b, kx, ky, 4, 3.4, K4.armor, 0.1);
+    else kCap(b, hx0, hip, kx, ky, 3, 2.6, K4.armor);
+    kCap(b, kx, ky, fx, fy - 1.5, 2.5, 2.7, K4.armor);
+    kPoly(b, [fx - 3, fy - 2, fx + 3, fy - 2, fx + 3.5, fy + 0.5, fx - 3.5, fy + 0.5], (x, y) =>
+      lv(K4.armor, 0.6 - (y - fy) * 0.1),
+    );
+    b.put(kx - s * 1, ky - (r.sit > 0.5 ? 2 : 0), K4.gold[2]);
   }
   // Набедренник: пластины с золотой каймой.
-  poly(
-    p,
-    [
-      [cx - 8, hip - 3],
-      [cx + 8, hip - 3],
-      [cx + 9, hip + 3],
-      [cx - 9, hip + 3],
-    ],
-    (x, y) => tone(KG.armor, 0.55 - (x - cx) * 0.03 - ((y - hip) % 3 === 0 ? 0.25 : 0)),
+  kPoly(b, [cx - 8, hip - 3, cx + 8, hip - 3, cx + 9, hip + 3, cx - 9, hip + 3], (x, y) =>
+    lv(K4.armor, 0.55 - (x - cx) * 0.03 - ((((y - hip) % 3) + 3) % 3 === 0 ? 0.25 : 0)),
   );
-  p.rect(cx - 9, hip + 3, cx + 9, hip + 3, KG.gold[1]);
+  kLine(b, cx - 9, hip + 3, cx + 9, hip + 3, K4.gold[1]);
   // Кираса.
-  polyShade(
-    p,
-    [
-      [cx - 9, sh],
-      [cx + 9, sh],
-      [cx + 7, hip - 2],
-      [cx - 7, hip - 2],
-    ],
-    KG.armor,
-  );
-  // Золото по вороту, по середине — камень-сердце.
-  for (let x = -7; x <= 7; x++) p.set(cx + x, sh + 1, KG.gold[x < 0 ? 1 : 2]);
-  for (let y = sh + 2; y < hip - 2; y++) p.set(cx, y, KG.gold[1]);
-  p.ell(cx, sh + 7, 1.8, 2, KG.gem);
-  p.set(cx - 1, sh + 6, hx('#ffb0a0'));
+  kPolyShade(b, [cx - 9, sh, cx + 9, sh, cx + 7, hip - 2, cx - 7, hip - 2], K4.armor);
+  for (let x = -7; x <= 7; x++) b.set(cx + x, Math.round(sh + 1), K4.gold[x < 0 ? 1 : 2]);
+  for (let y = Math.round(sh + 2); y < hip - 2; y++) b.set(cx, y, K4.gold[1]);
+  kDisc(b, cx, sh + 7, 1.8, 2, C.gem);
+  b.put(cx - 1, sh + 6, C.gemHi);
+  lit.mix(cx, sh + 7, C.gem, 0.35 + glow * 0.3);
+  // Голова.
+  const eye = kHead(b, lit, cx, sh - 5 + r.hd * 1.5, false, r.hs, r.jaw, r.hair, r.eyes, r.hd);
+  // Руки: правая (экранная правая) держит меч, левая — на рукояти или свободна.
+  const rs: [number, number] = [cx + 9, sh + 3];
+  const ls: [number, number] = [cx - 9, sh + 3];
+  const mixP = (a: [number, number], b: [number, number], k: number): [number, number] => {
+    const q = clampK(k, 0, 1);
+    return [a[0] + (b[0] - a[0]) * q, a[1] + (b[1] - a[1]) * q];
+  };
+  const rh = mixP([rs[0] + r.rx, rs[1] + r.ry], onGrip(bl, 1), r.ron);
+  const lh = mixP([ls[0] + r.lx, ls[1] + r.ly], onGrip(bl, 3.4), r.lon);
+  const re = ik2(rs[0], rs[1], rh[0], rh[1], 7.3, 7.6, 1, 0.6);
+  const le = ik2(ls[0], ls[1], lh[0], lh[1], 7.3, 7.6, -1, 0.6);
+  kCap(b, ls[0], ls[1], le[0], le[1], 2.5, 2.2, K4.armor);
+  kCap(b, le[0], le[1], lh[0], lh[1], 2.2, 2.0, K4.armor);
+  kCap(b, rs[0], rs[1], re[0], re[1], 2.5, 2.2, K4.armor);
+  kCap(b, re[0], re[1], rh[0], rh[1], 2.2, 2.0, K4.armor);
+  kSword(b, lit, bl, glow, clipY, o.rage);
+  if (r.arc > 0) kArcs(b, lit, bl, r.arc, o.arcF ?? 0, !!o.bolt);
   // Наплечники — шипастые.
   for (const s of [-1, 1]) {
-    shadeEll(p, cx + s * 9, sh + 1, 5, 3.6, KG.armor, s < 0 ? 0.15 : -0.05);
-    for (let i = 0; i < 3; i++) limb(p, cx + s * (7 + i * 2.5), sh - 1, cx + s * (7.5 + i * 3), sh - 5 - (i === 1 ? 1 : 0), 0.9, 0.3, HORN);
-    for (let x = -4; x <= 4; x++) p.set(cx + s * 9 + x, sh + 4, KG.gold[2]);
+    kEll(b, cx + s * 9, sh + 1, 5, 3.6, K4.armor, s < 0 ? 0.15 : -0.05);
+    for (let i = 0; i < 3; i++)
+      kCap(
+        b,
+        cx + s * (7 + i * 2.5),
+        sh - 1,
+        cx + s * (7.5 + i * 3),
+        sh - 5 - (i === 1 ? 1 : 0),
+        0.9,
+        0.3,
+        K4.spike,
+      );
+    for (let x = -4; x <= 4; x++) b.put(cx + s * 9 + x, sh + 4, K4.gold[2]);
   }
-  // Руки и меч.
-  const raise = kp.raise ?? 0;
-  let eye: [number, number];
-  if (sit && raise <= 0) {
-    // Меч воткнут перед ним, руки на навершии.
-    kingSword(p, cx, hip - 3, Math.PI / 2, 26, kp.glow);
-    for (const s of [-1, 1]) limb(p, cx + s * 9, sh + 3, cx + s * 2, hip - 4, 2.4, 2, KG.armor);
-    shadeEll(p, cx, hip - 4, 3, 2, KG.armor, 0.2);
-    eye = kingHead(p, cx, sh - 5, false, false);
-  } else if (raise > 0 && sit) {
-    // Зов: правая рука с мечом вверх, левая — на подлокотнике.
-    limb(p, cx - 9, sh + 3, cx - 12, hip - 2, 2.4, 2, KG.armor);
-    limb(p, cx + 9, sh + 2, cx + 12, sh - 8 * raise, 2.4, 2, KG.armor);
-    kingSword(p, cx + 12, sh - 8 * raise, -Math.PI / 2 + 0.1, 26, kp.glow);
-    eye = kingHead(p, cx, sh - 5, false, false);
-  } else {
-    // Стоит лицом к зрителю: руки раскинуты (рёв, крылья) или меч у ноги.
-    const spread = raise;
-    limb(p, cx - 9, sh + 3, cx - 12 - spread * 5, sh + 10 - spread * 12, 2.4, 2, KG.armor);
-    limb(p, cx + 9, sh + 3, cx + 12 + spread * 5, sh + 10 - spread * 12, 2.4, 2, KG.armor);
-    kingSword(p, cx + 12 + spread * 5, sh + 10 - spread * 12, Math.PI / 2 - spread * 1.2, 26, kp.glow);
-    eye = kingHead(p, cx, sh - 5, false, !!kp.roar);
+  // Свободная левая — растопыренные когти (зов, гроза, рёв).
+  if (r.lon < 0.5 && r.claw > 0.3)
+    for (let i = -1; i <= 1; i++) {
+      const dx = lh[0] - ls[0];
+      const dy = lh[1] - ls[1];
+      const n = Math.hypot(dx, dy) || 1;
+      const ux = dx / n;
+      const uy = dy / n;
+      const cx2 = lh[0] + ux * 1.5 - uy * i * 1.2;
+      const cy2 = lh[1] + uy * 1.5 + ux * i * 1.2;
+      kCap(
+        b,
+        cx2,
+        cy2,
+        cx2 + (ux - uy * i * 0.5) * 2.6 * r.claw,
+        cy2 + (uy + ux * i * 0.5) * 2.6 * r.claw,
+        0.7,
+        0.3,
+        K4.spike,
+      );
+    }
+  kFist(b, lh[0], lh[1], K4.armor, true);
+  kFist(b, rh[0], rh[1], K4.armor, true);
+  if (split) {
+    kOutline(b, C.ink);
+    kOutline(wl, C.ink);
+    return { p: b.px, lit: null, eye, wings: wl, body: b, litB: lit };
   }
-  p.outline(INK);
-  return { p, ax: cx, ay: G, eye };
+  kOutline(b, C.ink);
+  kAura(b, lit, r.aura);
+  if (o.smear) kSmear(b, lit, o.smear, clipY);
+  return { p: b.px, lit: lit.used ? lit.px : null, eye };
 }
 
-function drawKingSide(kp: KingPose): Built {
-  const W = 84;
-  const p = new Px(W, 100);
-  const G = 90;
-  const cx = 40 + kp.lean;
-  const hip = G - 24 + kp.bob;
-  const sh = hip - 15;
-  // Дальнее крыло.
-  if (kp.wings > 0) kingWing(p, cx - 3, sh + 2, -Math.PI * 0.72 - kp.flap * 0.35, 30 * (0.55 + kp.wings * 0.45), kp.wings, true);
-  // Плащ — назад, по ходу колышется.
-  const back = 9 + kp.cape;
-  poly(
-    p,
+// ---- Ключи и кривые ----
+
+type Ease = (x: number) => number;
+const eLin: Ease = (x) => x;
+const eIn: Ease = (x) => x * x;
+const eOut: Ease = (x) => 1 - (1 - x) * (1 - x);
+const eOut3: Ease = (x) => 1 - (1 - x) * (1 - x) * (1 - x);
+const eIO: Ease = (x) => (x < 0.5 ? 2 * x * x : 1 - 2 * (1 - x) * (1 - x));
+
+type Key<K extends string> = [number, Partial<Record<K, number>>, Ease?];
+
+/**
+ * Ключевые позы: ключ меняет только названные каналы, остальные ДЕРЖАТ
+ * значение прошлого ключа (поза не «плывёт» к далёкому ключу). Между
+ * ключами — кривая следующего ключа. `lag` — запаздывание частей (плащ,
+ * волосы, крылья): они смотрят позу чуть в прошлом.
+ */
+function track<K extends string>(
+  names: readonly K[],
+  keys: Key<K>[],
+  t: number,
+  base: Record<K, number>,
+  lag?: Partial<Record<K, number>>,
+): Record<K, number> {
+  const out = { ...base };
+  if (!keys.length) return out;
+  for (const ch of names) {
+    const tt = lag?.[ch] ? Math.max(0, t - lag[ch]!) : t;
+    let pt = keys[0][0];
+    let pv = keys[0][1][ch] ?? base[ch];
+    let v = pv;
+    if (tt > pt) {
+      for (let i = 1; i < keys.length; i++) {
+        const [kt, kv, ke] = keys[i];
+        const cv = kv[ch] ?? pv;
+        if (tt < kt) {
+          v = STEP.has(ch)
+            ? pv
+            : pv + (cv - pv) * (ke ?? eIO)(clampK((tt - pt) / (kt - pt || 1), 0, 1));
+          break;
+        }
+        pt = kt;
+        pv = cv;
+        v = cv;
+      }
+    }
+    out[ch] = v;
+  }
+  return out;
+}
+
+/** Каналы «да/нет» и точки, которые меняются скачком: меч в полу, вторая рука. */
+const STEP = new Set<string>(['pin', 'pnx', 'pny', 'clip']);
+
+const SLAG: Partial<SRig> = { cape: 0.07, cup: 0.06, hair: 0.06, wo: 0.03, wf: 0.035, hd: 0.035 };
+const FLAG: Partial<FRig> = { cape: 0.07, cup: 0.06, hair: 0.06, wf: 0.035, hs: 0.035 };
+const sTrack = (keys: Key<SKey>[], t: number, base = KGUARD) => track(SK, keys, t, base, SLAG);
+const fTrack = (keys: Key<FKey>[], t: number, base: FRig) => track(FK, keys, t, base, FLAG);
+const blendS = (a: SRig, b: SRig, k: number): SRig => {
+  const o = { ...a };
+  for (const ch of SK) o[ch] = a[ch] + (b[ch] - a[ch]) * k;
+  return o;
+};
+const blendF = (a: FRig, b: FRig, k: number): FRig => {
+  const o = { ...a };
+  for (const ch of FK) o[ch] = a[ch] + (b[ch] - a[ch]) * k;
+  return o;
+};
+
+const FPS = 24;
+const F1 = 1 / FPS;
+
+// ---- Тайминги мозга (метроном). `echo` — отголосок на 15-м. ----
+
+interface KT {
+  h: number;
+  echo: boolean;
+}
+const tSlash = (k: KT) => KING.slashWarn / k.h;
+const tRec = (k: KT) => (k.echo ? 0.6 : 0.75 / k.h);
+const tCleave = (k: KT) => KING.cleaveWarn / k.h;
+const tStuck = (k: KT) => (k.echo ? 1.35 : KING.stuck / Math.sqrt(k.h));
+const tStormCall = (k: KT) => (k.echo ? 0.3 : 0.35);
+const tStormEnd = (k: KT) => (k.echo ? 1.65 : KING.storm);
+const tLanded = (k: KT) => KING.landed / Math.sqrt(k.h);
+
+// ---- Профиль: покой, шаг ----
+
+/** Покой: дыхание (плечи на пиксель), плащ, волосы, меч покачивается, раз за круг моргает. */
+function sIdle(ph: number, rage: boolean): SRig {
+  const a = ph * TAU;
+  const r = { ...KGUARD };
+  // Дыхание — целыми пикселями: плечи, рука и меч поднимаются вместе.
+  // Поворотов (голова, клинок) в покое нет: мелкий поворот перерисовывает
+  // рога и кромку по-новому, и контур «кипит».
+  r.by = Math.round(0.5 - 0.5 * Math.cos(a * 2));
+  r.oy = KGUARD.oy + Math.round(Math.sin(a * 2));
+  r.cw = a;
+  r.cape = 0.6 + 0.6 * Math.sin(a);
+  r.hair = 0.15 + 0.12 * Math.sin(a + 1);
+  r.wf = 0.05 * Math.sin(a * 2);
+  r.wo = KGUARD.wo + 0.04 * Math.sin(a * 2);
+  r.eyes = ph > 0.86 && ph < 0.92 ? 0 : rage ? 2 : 1;
+  return r;
+}
+
+/** Шаг: опорная нога едет назад по земле, переносимая — дугой вперёд; таз ниже на опоре. */
+function sWalk(ph: number, rage: boolean): SRig {
+  const a = ph * TAU;
+  const r = { ...KGUARD };
+  const S = 7;
+  const foot = (p: number): [number, number] => {
+    const q = ((p % 1) + 1) % 1;
+    if (q < 0.5) return [S - q * 4 * S + 0.5, 0];
+    const k = (q - 0.5) * 2;
+    return [-S + k * 2 * S + 0.5, Math.sin(k * Math.PI) * 3.2];
+  };
+  [r.nfx, r.nfy] = foot(ph);
+  [r.ffx, r.ffy] = foot(ph + 0.5);
+  r.ffx -= 1;
+  r.by = Math.round(Math.cos(a * 2));
+  r.lean = 0.14;
+  r.gx = KGUARD.gx + 1.3 * Math.sin(a);
+  r.gy = KGUARD.gy + 0.6 * Math.cos(a * 2);
+  r.pit = -0.72;
+  r.ox = KGUARD.ox - 2.2 * Math.sin(a);
+  r.cape = 3 + 0.8 * Math.sin(a * 2);
+  r.cup = 0.8;
+  r.cw = a * 2;
+  r.hair = 0.45 + 0.15 * Math.sin(a * 2);
+  r.wf = 0.06 * Math.sin(a * 2);
+  r.eyes = rage ? 2 : 1;
+  return r;
+}
+
+// ---- Профиль: рассечение (горизонтальный взмах) ----
+
+function sSlash(t: number, k: KT): SRig {
+  const T = tSlash(k);
+  const R = tRec(k);
+  const keys: Key<SKey>[] = [
+    [0, {}],
+    // Подхват второй рукой, шаг назад: меч уходит за бедро, корпус отворачивается.
     [
-      [cx - 3, sh - 1],
-      [cx + 4, sh],
-      [cx - 1, G - 1],
-      [cx - back - 3, G - 2],
-      [cx - back, hip],
+      0.3 * T,
+      {
+        two: 1,
+        gx: -5,
+        gy: -2,
+        gz: 3,
+        yaw: 2.4,
+        pit: 0.1,
+        lean: -0.1,
+        tw: -0.8,
+        bx: -2,
+        by: 1,
+        nfx: 6.5,
+        ffx: -5,
+        hd: 0.12,
+        eyes: 2,
+        glow: 0.5,
+        cape: 2,
+        ep: 2.4,
+      },
+      eIO,
     ],
-    (x, y) => {
-      const fold = (x * 2 + Math.floor((y - sh) / 4)) % 5 === 0 ? -0.25 : 0;
-      return tone(KG.cape, 0.6 - (cx - x) * 0.04 + fold);
-    },
-  );
-  for (let x = Math.round(cx - back - 3); x <= cx - 1; x++) p.set(x, G - 2, KG.gold[1]);
-  // Ноги: шаг.
-  const st = kp.step;
-  limb(p, cx - 1, hip, cx - 2 - st, G - 8, 2.8, 2.4, tn('#08060a', '#141018', '#26202c', '#3a3242'));
-  limb(p, cx - 2 - st, G - 8, cx - 2 - st * 1.2, G - 1, 2.3, 2.5, tn('#08060a', '#141018', '#26202c', '#3a3242'));
-  limb(p, cx + 2, hip, cx + 3 + st, G - 8, 3, 2.6, KG.armor);
-  limb(p, cx + 3 + st, G - 8, cx + 3 + st * 1.2, G - 1, 2.5, 2.7, KG.armor);
-  p.rect(Math.round(cx + 2 + st * 1.2), G - 1, Math.round(cx + 7 + st * 1.2), G - 1, KG.armor[2]);
-  p.set(Math.round(cx + 3 + st), G - 8, KG.gold[2]);
-  // Набедренник и кираса.
-  polyShade(
-    p,
+    // Пружина: плечи довернуты, клинок накаляется — отсюда ударит.
     [
-      [cx - 5, hip - 3],
-      [cx + 6, hip - 3],
-      [cx + 7, hip + 3],
-      [cx - 5, hip + 3],
+      T - 4 * F1,
+      {
+        gx: -7.5,
+        gy: -1,
+        gz: 3.5,
+        yaw: 2.85,
+        pit: 0.2,
+        lean: -0.17,
+        tw: -1.2,
+        bx: -3,
+        by: 2,
+        hd: 0.18,
+        eyes: 3,
+        glow: 1,
+        cape: 3,
+      },
+      eOut,
     ],
-    KG.armor,
-  );
-  p.rect(cx - 5, hip + 3, cx + 7, hip + 3, KG.gold[1]);
-  polyShade(
-    p,
+    // Взмах: клинок идёт через сторону камеры вперёд.
     [
-      [cx - 5, sh],
-      [cx + 7, sh + 1],
-      [cx + 6, hip - 3],
-      [cx - 4, hip - 3],
+      T - 2 * F1,
+      { gx: -1, gy: -2, gz: 6, yaw: 1.65, pit: -0.05, lean: 0.02, tw: -0.2, bx: 0, by: 1.5 },
+      eIn,
     ],
-    KG.armor,
+    [
+      T - F1,
+      { gx: 6, gy: -2.5, gz: 4.5, yaw: 0.75, pit: -0.15, lean: 0.16, tw: 0.4, bx: 2.5, nfx: 8.5 },
+      eLin,
+    ],
+    // Контакт: выпад на всю руку, клинок впереди.
+    [
+      T,
+      {
+        gx: 11,
+        gy: -3,
+        gz: 1,
+        yaw: 0,
+        pit: -0.22,
+        lean: 0.26,
+        tw: 0.8,
+        bx: 4.5,
+        by: 2.5,
+        nfx: 10.5,
+        ffx: -5,
+        hd: 0.05,
+        cape: -1,
+        ep: 2.2,
+      },
+      eOut,
+    ],
+    // Проводка с перелётом: клинок уходит за дальний бок, корпус проваливается.
+    [
+      T + 0.1,
+      {
+        gx: 6,
+        gy: -4,
+        gz: -4.5,
+        yaw: -1.25,
+        pit: -0.35,
+        lean: 0.34,
+        tw: 1.1,
+        bx: 5.5,
+        by: 3.2,
+        cape: -2,
+        eyes: 2,
+      },
+      eOut,
+    ],
+    [
+      T + 0.26,
+      {
+        gx: 5,
+        gy: -5,
+        gz: -2.5,
+        yaw: -0.8,
+        pit: -0.42,
+        lean: 0.27,
+        tw: 0.8,
+        bx: 4.5,
+        by: 2.4,
+        glow: 0.4,
+      },
+      eIO,
+    ],
+    [
+      T + R - 0.3,
+      {
+        gx: 5,
+        gy: -5,
+        gz: -1.5,
+        yaw: -0.55,
+        pit: -0.5,
+        lean: 0.22,
+        by: 2,
+        bx: 4,
+        eyes: 1,
+        glow: 0,
+      },
+      eIO,
+    ],
+    [T + R, { ...KGUARD }, eIO],
+  ];
+  // Выпад: переносимая нога чуть отрывается.
+  const r = sTrack(keys, t);
+  // Пружина сжата до предела: хват подрагивает — сейчас сорвётся.
+  if (t > T - 0.3 && t < T - 4 * F1) r.gy += (hash(Math.floor(t * FPS), 41) - 0.5) * 0.9;
+  if (t > T - 2 * F1 && t < T) r.nfy = 1.5;
+  // Тяжёлое дыхание на проводке.
+  if (t > T + 0.26 && t < T + R - 0.3)
+    r.by += Math.round(0.5 - 0.5 * Math.cos((t - T - 0.26) * 11));
+  return r;
+}
+
+// ---- Профиль: рубка сверху → меч в полу → рывок ----
+
+/** Где клинок входит в пол на кадре контакта. */
+function cleavePin(k: KT): [number, number] {
+  const r = sTrack(cleaveKeys(k, null), tCleave(k));
+  const g = sideGeo(r);
+  const bl = sideBlade(r, g);
+  const s = (KGY - bl.gy) / (bl.uy || 1e-3);
+  return [bl.gx + bl.ux * s, KGY];
+}
+
+function cleaveKeys(k: KT, pin: [number, number] | null): Key<SKey>[] {
+  const T = tCleave(k);
+  const S = tStuck(k);
+  const keys: Key<SKey>[] = [
+    [0, {}],
+    // Собрался: вторая рука на рукоять, присел.
+    [
+      0.14 * T,
+      { two: 1, gx: 3, gy: -5, gz: 2, yaw: 0, pit: -0.4, lean: 0.12, by: 2.5, bx: 0.5, eyes: 2 },
+      eIO,
+    ],
+    // Меч над головой, корпус выгнут назад, на носках.
+    [
+      0.52 * T,
+      {
+        gx: -1.5,
+        gy: 10.5,
+        gz: 1,
+        pit: 2.25,
+        lean: -0.14,
+        by: -1,
+        tw: 0.2,
+        hd: -0.15,
+        nfx: 5,
+        ffx: -4,
+        glow: 0.8,
+        cape: 1.5,
+        ep: 0.4,
+      },
+      eIO,
+    ],
+    [
+      T - 4 * F1,
+      {
+        gx: -2.5,
+        gy: 12,
+        pit: 2.6,
+        lean: -0.2,
+        by: -2,
+        hd: -0.22,
+        glow: 1,
+        eyes: 3,
+        cape: 2.5,
+        hair: 0.4,
+      },
+      eOut,
+    ],
+    // Рубка: через верх — вперёд — в пол.
+    [T - 2 * F1, { gx: 3, gy: 12.5, pit: 1.25, lean: 0.02, by: -1.5, hd: -0.05, ep: 0.2 }, eIn],
+    [T - F1, { gx: 9, gy: 5, pit: 0.05, lean: 0.28, by: 1.5, bx: 2, nfx: 8, ep: 1.2 }, eLin],
+    [
+      T,
+      {
+        gx: 10,
+        gy: -8,
+        gz: 1,
+        pit: -1.02,
+        lean: 0.5,
+        by: 5.5,
+        bx: 3.5,
+        nfx: 10,
+        ffx: -6,
+        hd: 0.28,
+        fsx: 1.08,
+        fsy: 0.92,
+        clip: 1,
+        cape: 3,
+        cup: 3,
+        hair: 0.8,
+        ep: 1.9,
+      },
+      eOut,
+    ],
+  ];
+  if (!pin) return keys;
+  const P = { pin: 1, pnx: pin[0], pny: pin[1] };
+  keys.push(
+    [T + 0.001, P, eLin],
+    [T + 0.12, { fsx: 1, fsy: 1, by: 4.5, lean: 0.46, cup: 0, hair: 0.3, glow: 0.6 }, eOut],
   );
-  for (let y = sh + 2; y < hip - 3; y++) p.set(cx + 5, y, KG.gold[1]);
-  p.ell(cx + 5, sh + 6, 1.2, 1.6, KG.gem);
-  // Ближнее крыло сложено за спиной или раскрыто.
-  if (kp.wings > 0) kingWing(p, cx - 1, sh + 3, -Math.PI * 0.8 - kp.flap * 0.4, 32 * (0.55 + kp.wings * 0.45), kp.wings, false);
-  // Наплечник.
-  shadeEll(p, cx + 2, sh + 1, 5, 3.6, KG.armor, 0.12);
-  for (let i = 0; i < 3; i++) limb(p, cx + i * 2.5, sh - 1, cx + i * 2.8 - 1, sh - 5 - (i === 1 ? 1 : 0), 0.9, 0.3, HORN);
-  for (let x = -3; x <= 5; x++) p.set(cx + 2 + x, sh + 4, KG.gold[2]);
-  // Голова в профиль.
-  const eye = kingHead(p, cx + 2, sh - 5, true, !!kp.roar);
-  // Рука и меч.
-  const [hdx, hdy] = kp.hand;
-  const gx = cx + 3 + hdx;
-  const gy = sh + 4 + hdy;
-  limb(p, cx + 3, sh + 2, gx, gy, 2.4, 2, KG.armor);
-  shadeEll(p, gx, gy, 2, 1.8, KG.armor, 0.2);
-  kingSword(p, gx, gy, kp.sword, 27, kp.glow);
-  p.outline(INK);
-  return { p, ax: 40, ay: G, eye };
+  // Три рывка: тянет — клинок качается на острие в полу — срывается обратно.
+  const t0 = T + 0.22;
+  const tugs = 3;
+  const span = (S - 0.42) / tugs;
+  for (let i = 0; i < tugs; i++) {
+    const a = t0 + i * span;
+    const pull = 1 + i * 0.4;
+    keys.push(
+      [a, { gx: 10, gy: -8, lean: 0.46, by: 4.6, hd: 0.25, eyes: 2, jaw: 0, fdx: 0 }, eIO],
+      [
+        a + span * 0.45,
+        {
+          gx: 10 - 2.2 * pull,
+          gy: -8 + 1.5 * pull,
+          lean: 0.46 - 0.12 * pull,
+          by: 4.6 - 0.8 * pull,
+          hd: -0.12 * pull,
+          eyes: 3,
+          jaw: 0.5,
+          fdx: -0.5 * pull,
+        },
+        eOut,
+      ],
+      [
+        a + span * 0.8,
+        { gx: 9.7, gy: -8.2, lean: 0.48, by: 4.8, hd: 0.3, eyes: 2, jaw: 0, fdx: 0 },
+        eIn,
+      ],
+    );
+  }
+  // Последний рывок: упёрся, клинок раскалён — сейчас выдернет.
+  keys.push([
+    T + S - 0.18,
+    { gx: 6.5, gy: -5, lean: 0.28, by: 3.5, hd: 0.05, eyes: 3, glow: 1, bx: 2.5 },
+    eIO,
+  ]);
+  return keys;
+}
+
+function sCleave(t: number, k: KT): SRig {
+  const T = tCleave(k);
+  const S = tStuck(k);
+  const R = tRec(k);
+  const pin = cleavePin(k);
+  const keys = cleaveKeys(k, pin);
+  // Угол клинка к полу в последний миг — с него начинается рывок (без скачка).
+  const at = sTrack(keys, T + S);
+  const g = sideGeo(at);
+  const bl = sideBlade(at, g);
+  const pp = Math.atan2(-bl.uy, bl.ux);
+  keys.push(
+    [T + S, { yaw: 0, pit: pp }, eLin],
+    [T + S + 0.001, { pin: 0, clip: 0 }, eLin],
+    // Рывок: меч вылетает из пола вверх, король отшатывается.
+    [
+      T + S + 0.1,
+      {
+        gx: -1,
+        gy: 5,
+        pit: 1.05,
+        lean: -0.06,
+        by: 1,
+        bx: -1.5,
+        fsx: 0.96,
+        fsy: 1.04,
+        eyes: 2,
+        glow: 0.7,
+        cup: 2,
+      },
+      eOut3,
+    ],
+    // Кладёт на плечо, выдох.
+    [
+      T + S + 0.32,
+      {
+        gx: -1.5,
+        gy: 1.5,
+        pit: 2.45,
+        two: 0,
+        ox: 2,
+        oy: 8,
+        lean: 0.02,
+        bx: -0.5,
+        by: 0.5,
+        fsx: 1,
+        fsy: 1,
+        glow: 0.3,
+        cup: 0,
+      },
+      eIO,
+    ],
+    [T + S + R, { ...KGUARD }, eIO],
+  );
+  const r = sTrack(keys, t);
+  // Меч над головой: хват подрагивает от напряжения перед рубкой.
+  if (t > T - 0.3 && t < T - 4 * F1) r.gx += (hash(Math.floor(t * FPS), 43) - 0.5) * 0.9;
+  // Руки дрожат от натуги: сдвиг кисти на пиксель по кадрам рывка.
+  if (t > T + 0.2 && t < T + S) r.gy += (hash(Math.floor(t * FPS), 5) - 0.5) * 0.8;
+  // После каждого рывка — выдох углями.
+  if (t > T + 0.22 && t < T + S - 0.2) {
+    const q = ((((t - T - 0.22) / ((S - 0.42) / 3)) % 1) + 1) % 1;
+    r.puff = q > 0.5 && q < 0.95 ? (q - 0.5) / 0.45 : 0;
+  }
+  return r;
+}
+
+// ---- Профиль: взлёт, парение, пике, посадка ----
+
+const AIR_H = 48;
+const FLAP = 0.46;
+
+/** Взмах: вниз — быстро (0,4 цикла), вверх — медленно и сложив крыло. */
+function flap(t: number): { wf: number; wo: number; bob: number } {
+  const q = (((t / FLAP) % 1) + 1) % 1;
+  if (q < 0.4) {
+    const k = eOut(q / 0.4);
+    return { wf: -0.9 + 1.85 * k, wo: 1, bob: 3 * k };
+  }
+  const k = eIO((q - 0.4) / 0.6);
+  return { wf: 0.95 - 1.85 * k, wo: 1 - 0.45 * Math.sin(k * Math.PI), bob: 3 * (1 - k) };
+}
+
+const AIRPOSE: Partial<SRig> = {
+  lean: 0.12,
+  nfx: -1,
+  nfy: -1,
+  ffx: -5,
+  ffy: 1,
+  gx: 3,
+  gy: -6,
+  gz: 2,
+  yaw: 0.2,
+  pit: -1.25,
+  two: 0,
+  ox: -1,
+  oy: 8,
+  cup: 6,
+  hair: 0.6,
+  wo: 1,
+  eyes: 2,
+};
+
+function sTakeoff(t: number): SRig {
+  const keys: Key<SKey>[] = [
+    [0, { wo: 0.12 }],
+    // Присел, крылья вскинуты — сейчас оттолкнётся.
+    [
+      0.12,
+      {
+        by: 4,
+        lean: 0.22,
+        fsx: 1.1,
+        fsy: 0.9,
+        wo: 1,
+        wf: -1.0,
+        gx: 2,
+        gy: -6,
+        pit: -1.2,
+        cape: 1,
+        eyes: 2,
+        hair: 0.3,
+      },
+      eOut,
+    ],
+    // Удар крыльями вниз — толчок.
+    [
+      0.24,
+      {
+        by: -2,
+        lean: 0.05,
+        fsx: 0.93,
+        fsy: 1.1,
+        wf: 0.95,
+        lift: 14,
+        nfy: 3,
+        ffy: 5,
+        ffx: -4,
+        cape: -1,
+        cup: 7,
+        hair: 0.8,
+      },
+      eOut3,
+    ],
+    [0.36, { wf: -0.8, lift: 24, fsx: 1, fsy: 1, by: 0, cup: 8, lean: 0.1 }, eIO],
+    [0.48, { wf: 0.9, lift: 40 }, eOut],
+    [0.6, { ...AIRPOSE, wf: -0.9, lift: AIR_H }, eIO],
+  ];
+  const r = sTrack(keys, t);
+  r.cw = t * 16;
+  return r;
+}
+
+function sAir(t: number): SRig {
+  const lock = KING.airT - KING.lock;
+  const fl = flap(t);
+  const base = { ...KGUARD, ...AIRPOSE } as SRig;
+  base.wf = fl.wf;
+  base.wo = fl.wo;
+  base.lift = AIR_H + fl.bob;
+  base.by = -Math.round(fl.bob * 0.4);
+  base.cw = t * 14;
+  base.cup = 6 + 1.5 * Math.sin(t * 9);
+  base.hair = 0.6 + 0.2 * Math.sin(t * 7);
+  if (t < lock) return base;
+  // Метка замерла: крылья вверх, меч назад за голову, колени поджаты — сейчас упадёт.
+  const from = sAir(lock - 1e-4);
+  const keys: Key<SKey>[] = [
+    [0, {}],
+    [
+      0.28,
+      {
+        wf: -1.15,
+        wo: 0.9,
+        lift: 56,
+        two: 1,
+        gx: -3,
+        gy: 7,
+        gz: 1,
+        yaw: 0,
+        pit: 1.9,
+        lean: -0.12,
+        nfy: 7,
+        ffy: 7,
+        nfx: 3,
+        ffx: -2,
+        eyes: 3,
+        glow: 1,
+        cup: 3,
+      },
+      eOut,
+    ],
+    [0.55, { wf: -1.25, lift: 58, lean: -0.2, gy: 8, pit: 2.1 }, eIO],
+    [KING.lock, { lift: 57, lean: -0.1 }, eIO],
+  ];
+  const r = track(SK, keys, t - lock, from, SLAG);
+  r.cw = t * 14;
+  return r;
+}
+
+/** Поза пике: тело вытянуто по ходу, крылья назад, меч остриём вниз-вперёд. */
+const DIVE: Partial<SRig> = {
+  lean: 0.6,
+  wf: -1.3,
+  wo: 0.55,
+  two: 1,
+  gx: 8,
+  gy: -4,
+  gz: 1,
+  yaw: 0,
+  pit: -1.1,
+  nfx: -4,
+  nfy: 8,
+  ffx: -7,
+  ffy: 6,
+  cup: 14,
+  hair: 1,
+  eyes: 3,
+  glow: 1,
+  fsx: 0.9,
+  fsy: 1.12,
+};
+
+function sDive(t: number): SRig {
+  const k = clampK(t / 0.18, 0, 1);
+  // Первые два кадра меч из-за головы рушится вниз (след), дальше — пике.
+  const from = sAir(KING.airT - 1e-4);
+  const keys: Key<SKey>[] = [
+    [0, {}],
+    [0.075, { ...DIVE }, eIn],
+  ];
+  const r = track(SK, keys, t, from);
+  r.cw = t * 20;
+  r.lift = from.lift * (1 - k * k);
+  return r;
+}
+
+function sLanded(t: number, k: KT): SRig {
+  const L = tLanded(k);
+  const tt = t * (1.8 / L);
+  const keys: Key<SKey>[] = [
+    [
+      0,
+      {
+        by: 10,
+        lean: 0.45,
+        bx: 2,
+        nfx: -5,
+        ffx: 7,
+        gx: 9,
+        gy: -9,
+        gz: 1,
+        yaw: 0,
+        pit: -1.35,
+        two: 1,
+        clip: 1,
+        wo: 1,
+        wf: 1.15,
+        fsx: 1.16,
+        fsy: 0.86,
+        cape: 2,
+        cup: 10,
+        hair: 1,
+        eyes: 3,
+        hd: 0.3,
+        glow: 1,
+      },
+    ],
+    [0.12, { fsx: 1, fsy: 1, by: 9, cup: 2, hair: 0.5 }, eOut],
+    [0.4, { cup: 0, hair: 0.2, wf: 1.0, wo: 0.9, eyes: 2, glow: 0.5 }, eIO],
+    [1.2, { by: 8.5, wo: 0.45, wf: 0.5, hd: 0.2, eyes: 1 }, eIO],
+    // Встаёт, вытаскивая меч.
+    [1.42, { by: 3, lean: 0.2, bx: 1, gx: 6, gy: -4, pit: -1.2, nfx: 1, ffx: 4, eyes: 2 }, eOut],
+    [1.43, { clip: 0 }, eLin],
+    [1.56, { pit: 0.6, gx: 2, gy: 3, two: 0, by: 1, lean: 0.05, bx: 0 }, eOut],
+    [1.8, { ...KGUARD }, eIO],
+  ];
+  const base = { ...KGUARD, wo: 1, wf: 1.15, clip: 1, by: 10 } as SRig;
+  const r = track(SK, keys, tt, base, SLAG);
+  // Тяжело дышит, стоя на колене: на каждом выдохе — клуб углей из пасти.
+  if (tt > 0.2 && tt < 1.25) {
+    const ph = (tt - 0.2) * 7;
+    r.by += Math.round(0.5 - 0.5 * Math.cos(ph));
+    const q = (((ph / TAU) % 1) + 1) % 1;
+    r.puff = q < 0.45 ? q / 0.45 : 0;
+    r.jaw = q < 0.3 ? 0.4 : 0;
+  }
+  return r;
+}
+
+// ---- Профиль: смерть ----
+
+const DEATH_T = 1.45;
+
+function sDeath(t: number): SRig {
+  const keys: Key<SKey>[] = [
+    [0, {}],
+    // Удар отбрасывает: голова назад, руки врозь.
+    [
+      0.1,
+      {
+        lean: -0.3,
+        bx: -3,
+        by: 1,
+        hd: -0.45,
+        jaw: 0.8,
+        eyes: 3,
+        gx: 6,
+        gy: -2,
+        gz: 3,
+        pit: -0.3,
+        yaw: 0.6,
+        two: 0,
+        ox: -4,
+        oy: 4,
+        fdx: -1.5,
+        cape: 3,
+        cup: 2,
+        hair: 0.6,
+        wo: 0.8,
+        wf: -0.4,
+      },
+      eOut,
+    ],
+    // Падает на колено, опершись на воткнутый меч.
+    [
+      0.32,
+      {
+        lean: 0.35,
+        by: 9,
+        bx: 1,
+        nfx: -5,
+        ffx: 6,
+        hd: 0.55,
+        jaw: 0.3,
+        eyes: 2,
+        gx: 8,
+        gy: -10,
+        gz: 2,
+        yaw: 0,
+        pit: -1.35,
+        clip: 1,
+        ox: 5,
+        oy: 6,
+        wf: 0.6,
+        wo: 0.9,
+        cape: 1,
+        cup: 0,
+        fdx: -0.5,
+        fsx: 1.06,
+        fsy: 0.94,
+      },
+      eIn,
+    ],
+    [0.42, { fsx: 1, fsy: 1, by: 8.5 }, eOut],
+    [0.9, { lean: 0.42, hd: 0.65, eyes: 1, wf: 0.95, wo: 0.8, jaw: 0 }, eIO],
+    [DEATH_T, { lean: 0.5, hd: 0.72, eyes: 0 }, eLin],
+  ];
+  return sTrack(keys, t);
+}
+
+/**
+ * Пепел: крылья осыпаются с концов, потом тело — сверху вниз; крошка
+ * падает и ложится горкой, угли летят вверх. Меч остаётся воткнутым.
+ */
+function crumble(
+  out: KOut,
+  sword: KB,
+  t: number,
+  rootX: number,
+  rootY: number,
+): { p: Px; lit: Px | null } {
+  const body = out.body!;
+  const wl = out.wings!;
+  const litIn = out.litB!;
+  const res = new KB();
+  const lit = new KB();
+  const W = KW;
+  const G = KGY;
+  // Верх тела — для порядка осыпания.
+  let top = KH;
+  for (let i = 0; i < body.d.length; i++)
+    if (body.d[i] >>> 24) {
+      top = Math.floor(i / W);
+      break;
+    }
+  let wmax = 1;
+  for (let i = 0; i < wl.d.length; i++)
+    if (wl.d[i] >>> 24) {
+      const d = Math.hypot((i % W) - rootX, Math.floor(i / W) - rootY);
+      if (d > wmax) wmax = d;
+    }
+  let landed = 0;
+  let total = 0;
+  const layer = (src: KB, isWing: boolean) => {
+    for (let i = 0; i < src.d.length; i++) {
+      const c = src.d[i];
+      if (!(c >>> 24)) continue;
+      const x = i % W;
+      const y = Math.floor(i / W);
+      total++;
+      const n = hash(x, y, 71);
+      const tau = isWing
+        ? 0.46 + 0.42 * (1 - Math.hypot(x - rootX, y - rootY) / wmax) + n * 0.1
+        : 0.82 + 0.42 * clampK((y - top) / Math.max(1, G - top), 0, 1) + n * 0.1;
+      // Перед осыпанием: трещины угля по латам.
+      if (t < tau) {
+        res.d[i] = c;
+        if (!isWing && t > 0.55 && hash(x * 3, y * 5, 9) < (t - 0.55) * 0.22) {
+          res.d[i] = C.ember;
+          lit.mix(x, y, C.ember, 0.75);
+        }
+        continue;
+      }
+      const a = t - tau;
+      if (a < 0.05) {
+        res.set(x, y, C.emberHi);
+        lit.mix(x, y, C.ember, 0.9);
+        continue;
+      }
+      if (n < 0.18) {
+        // Уголь: вверх и гаснет.
+        if (a > 0.4) continue;
+        const ux = x + (hash(x, y, 3) - 0.5) * a * 8;
+        const uy = y - a * 22 - a * a * 10;
+        lit.mix(ux, uy, n < 0.08 ? C.emberHi : C.ember, 0.9 - a * 2);
+        continue;
+      }
+      // Пепел: падает с разгоном и ложится.
+      const fy = y + a * 6 + a * a * 55;
+      if (fy >= G) {
+        landed++;
+        continue;
+      }
+      const fx = x + (hash(x, y, 4) - 0.5) * a * 10;
+      res.put(fx, fy, n < 0.5 ? C.ash : C.ashLt);
+    }
+  };
+  layer(wl, true);
+  layer(body, false);
+  // Горка пепла у колена растёт с упавшим.
+  const k = total ? landed / total : 0;
+  if (k > 0.02) {
+    const hgt = 1 + k * 5;
+    const wdt = 5 + k * 10;
+    kEll(
+      res,
+      KX0 + 1,
+      G - hgt * 0.5,
+      wdt,
+      hgt,
+      t4(tn('#1a1210', '#2e2220', '#46342e', '#5e4a42')),
+      -0.1,
+    );
+    for (let i = 0; i < 6; i++) {
+      const ex = KX0 + 1 + (hash(i, 7, 1) - 0.5) * wdt * 1.6;
+      if (hash(i, Math.floor(t * 12), 2) < 0.5) lit.mix(ex, G - hgt * 0.4, C.ember, 0.6);
+    }
+  }
+  // Меч стоит до конца.
+  kOver(res, sword);
+  kOutline(res, C.ink);
+  // Свет углей тела поверх.
+  for (let i = 0; i < litIn.d.length; i++) if (litIn.d[i] >>> 24 && t < 0.8) lit.d[i] = litIn.d[i];
+  return { p: res.px, lit: lit.used ? lit.px : null };
+}
+
+// ---- Анфас: трон, приказ, подъём, гроза, крылья, рёв ----
+
+function fThrone(ph: number): FRig {
+  const a = ph * TAU;
+  const r = { ...SEAT };
+  r.bow = -0.5 * Math.round(0.5 - 0.5 * Math.cos(a * 2));
+  r.cw = a;
+  r.cape = 0.4 * Math.sin(a);
+  r.eyes = ph > 0.88 && ph < 0.93 ? 0 : 1;
+  // Барабанит когтями по навершию: два удара за круг.
+  const tap = (c: number) => Math.max(0, 1 - Math.abs(ph - c) / 0.035);
+  r.ron = 1 - 0.28 * Math.max(tap(0.3), tap(0.38));
+  return r;
+}
+
+function fCommand(t: number): FRig {
+  const keys: Key<FKey>[] = [
+    [0, {}],
+    // Подался вперёд, упёрся в навершие — сейчас встанет.
+    [0.22, { bow: 1, hd: 0.3, eyes: 2, by: 0.5, cape: 1 }, eIO],
+    // Встал, меч выдернут из помоста и поднят в правой руке.
+    [
+      0.55,
+      {
+        sit: 0,
+        bow: 0,
+        hd: -0.1,
+        by: 0,
+        lon: 0,
+        gx: 12,
+        gy: 7,
+        gz: 1,
+        yaw: 0.15,
+        pit: 1.3,
+        clip: 0,
+        lx: -4,
+        ly: 3,
+        eyes: 2,
+        cape: 2,
+        cup: 1,
+        st: 1,
+      },
+      eOut,
+    ],
+    // Замах свободной рукой через грудь…
+    [0.72, { lx: 6, ly: -4, hs: 0.1, bow: 0.3 }, eOut],
+    // …и взмах к дверям: «СТРАЖА!»
+    [
+      0.8,
+      {
+        lx: -14,
+        ly: 2,
+        jaw: 1,
+        eyes: 3,
+        hs: -0.14,
+        hd: -0.2,
+        bow: -0.3,
+        cape: 4,
+        cup: 3,
+        hair: 0.8,
+        st: 2,
+        fsx: 1.04,
+        fsy: 0.96,
+        aura: 0.6,
+        claw: 1,
+      },
+      eOut3,
+    ],
+    [0.95, { fsx: 1, fsy: 1, aura: 0.3 }, eOut],
+    [1.3, { jaw: 0.6, cape: 2, cup: 1, hair: 0.4, lx: -13, ly: 1, hd: -0.1, bow: 0, aura: 0 }, eIO],
+    [2.1, { jaw: 0.1, eyes: 2, lx: -12, ly: 2, cape: 1, cup: 0.5, hair: 0.2 }, eIO],
+    // Садится обратно, меч — в помост.
+    [
+      2.45,
+      { sit: 0.35, lx: -4, ly: 8, pit: -1.0, gy: -4, gx: 6, hs: 0, st: 0, hd: 0.1, claw: 0 },
+      eIO,
+    ],
+    [KING.cmd, { ...SEAT }, eIO],
+  ];
+  const r = fTrack(keys, t, SEAT);
+  r.cw = t * 5;
+  // Пока ждёт стражу — дышит, рука подрагивает, плащ ходит.
+  if (t > 0.95 && t < 2.1) {
+    r.by += Math.round(0.5 - 0.5 * Math.cos((t - 0.95) * 6));
+    r.ly += Math.sin((t - 0.95) * 6) * 0.6;
+  }
+  return r;
+}
+
+const RISE_HIT = 1.4;
+
+function fRise(t: number, from: FRig | null): FRig {
+  const keys: Key<FKey>[] = [
+    [0, {}],
+    // Удар до засечки: вздрогнул, угли глаз вспыхнули.
+    [0.1, { bow: -0.4, hd: -0.3, eyes: 3, fdy: -1, aura: 0.3 }, eOut],
+    // Голова падает — поднимается тяжело, опираясь на меч.
+    [0.22, { bow: 0.8, hd: 0.35, fdy: 0, sit: 0.6, by: 1 }, eIO],
+    [
+      0.5,
+      {
+        sit: 0,
+        bow: 0.6,
+        hd: 0.3,
+        by: 1.5,
+        ron: 1,
+        lon: 1,
+        gx: 0,
+        gy: -8,
+        gz: 3,
+        pit: -Math.PI / 2,
+        clip: 1,
+        cape: 1.5,
+        aura: 0.5,
+        glow: 0.4,
+      },
+      eIO,
+    ],
+    // Поднимает голову — сила собирается, плащ и волосы встают.
+    [
+      0.85,
+      { bow: 0.2, hd: -0.05, by: 1, eyes: 3, aura: 0.8, cup: 3, hair: 0.6, cape: 2.5, glow: 0.7 },
+      eIO,
+    ],
+    // Выдёргивает меч и заносит над правым плечом.
+    [
+      1.12,
+      {
+        lon: 0,
+        lx: -6,
+        ly: 2,
+        gx: 10,
+        gy: 10,
+        gz: 0,
+        yaw: 0,
+        pit: 1.35,
+        clip: 0,
+        bow: -0.4,
+        hd: -0.25,
+        by: -1,
+        jaw: 0.4,
+        glow: 1,
+        aura: 1,
+      },
+      eOut,
+    ],
+    [RISE_HIT - 2 * F1, { gx: 9, gy: 12, pit: 1.85, by: -2, hd: -0.3, lx: -8, ly: -2 }, eOut],
+    // Рубит наискось в помост — волна (урон) в этот кадр.
+    [
+      RISE_HIT,
+      {
+        gx: -1,
+        gy: -8,
+        gz: 5,
+        yaw: Math.PI / 2 + 0.35,
+        pit: -1.1,
+        clip: 1,
+        by: 4,
+        bow: 1,
+        hd: 0.35,
+        jaw: 1,
+        lon: 1,
+        fsx: 1.08,
+        fsy: 0.9,
+        cape: 5,
+        cup: 5,
+        hair: 1,
+        arc: 1,
+        aura: 1,
+      },
+      eIn,
+    ],
+    [RISE_HIT + 0.1, { fsx: 1, fsy: 1, by: 3, cup: 2, arc: 0.4 }, eOut],
+    [1.6, { jaw: 0.2, hair: 0.4, eyes: 2, arc: 0, aura: 0.4, cup: 1 }, eIO],
+    // Выпрямился и сошёл с помоста к зрителю (мозг сдвинет его на 0,6 клетки).
+    [KING.rise, { ...FRONT, glow: 0.3, eyes: 2, fdy: 9.6, cape: 1, aura: 0 }, eIO],
+  ];
+  const r = fTrack(keys, t, SEAT);
+  r.cw = t * 6;
+  // Плечи ходят от тяжёлого дыхания, пока собирается сила.
+  if (t > 0.5 && t < 1.05) r.by += Math.round(0.5 - 0.5 * Math.cos((t - 0.5) * 11));
+  if (from && t < 0.35) return blendF(from, r, eIO(t / 0.35));
+  return r;
+}
+
+function fStorm(t: number, k: KT): FRig {
+  const Tc = tStormCall(k);
+  const Te = tStormEnd(k);
+  const keys: Key<FKey>[] = [
+    [0, {}],
+    // Присел, обе руки на рукояти у правого бедра.
+    [
+      Tc * 0.55,
+      {
+        by: 3,
+        bow: 0.8,
+        hd: 0.3,
+        lon: 1,
+        gx: 6,
+        gy: -8,
+        gz: 2,
+        yaw: 0.3,
+        pit: -1.3,
+        eyes: 2,
+        glow: 0.6,
+        cape: 1,
+        aura: 0.3,
+      },
+      eIO,
+    ],
+    // Меч — в небо над правым плечом, левая рука вверх.
+    [
+      Tc - F1,
+      {
+        by: -1,
+        bow: -0.3,
+        hd: -0.2,
+        lon: 0,
+        lx: -4,
+        ly: -9,
+        gx: 10,
+        gy: 9,
+        gz: 0,
+        yaw: 0,
+        pit: 1.35,
+        glow: 0.9,
+        eyes: 3,
+      },
+      eOut3,
+    ],
+    // Молния в клинок.
+    [
+      Tc,
+      {
+        by: -2,
+        gx: 11,
+        gy: 12,
+        pit: Math.PI / 2,
+        lx: -2,
+        ly: -14,
+        claw: 1,
+        bow: -0.6,
+        hd: -0.4,
+        jaw: 0.8,
+        arc: 1,
+        glow: 1,
+        cape: 3,
+        cup: 3,
+        hair: 1,
+        fsx: 0.96,
+        fsy: 1.06,
+        aura: 0.9,
+      },
+      eOut,
+    ],
+    [Tc + 0.15, { fsx: 1, fsy: 1, jaw: 0.5, arc: 0.8, aura: 0.6 }, eOut],
+    [Te - 0.3, { arc: 0.45, jaw: 0.2, by: -1.5, hair: 0.8, cup: 2, aura: 0.4 }, eIO],
+    [Te - 0.14, { arc: 0, aura: 0.1 }, eLin],
+    [Te, { ...FRONT, eyes: 2 }, eIO],
+  ];
+  const r = fTrack(keys, t, FRONT);
+  r.cw = t * 9;
+  // Держит грозу: тело дрожит от разряда.
+  if (t > Tc && t < Te - 0.3) r.fdx += (hash(Math.floor(t * FPS), 21) - 0.5) * 0.9;
+  return r;
+}
+
+function fUnfurl(t: number): FRig {
+  const keys: Key<FKey>[] = [
+    [0, { wo: 0, wf: 0.3 }],
+    // Сгорбился: из спины рвутся крылья.
+    [
+      0.28,
+      {
+        by: 3,
+        bow: 1.2,
+        hd: 0.4,
+        lx: 4,
+        ly: 4,
+        gx: 8,
+        gy: -8,
+        pit: -1.3,
+        eyes: 2,
+        wo: 0.08,
+        wf: 0.6,
+        cape: 1,
+        fsx: 1.05,
+        fsy: 0.95,
+        aura: 0.4,
+      },
+      eIO,
+    ],
+    [
+      0.55,
+      { by: 1, bow: 0.4, hd: 0.1, wo: 0.4, wf: -0.9, eyes: 3, fsx: 1, fsy: 1, aura: 0.7 },
+      eIO,
+    ],
+    // Настежь, вверх — голова запрокинута.
+    [
+      0.78,
+      {
+        by: -1,
+        bow: -0.5,
+        hd: -0.35,
+        wo: 1,
+        wf: -0.7,
+        jaw: 0.8,
+        lx: -13,
+        ly: -4,
+        gx: 14,
+        gy: 2,
+        pit: 0.3,
+        cape: 3,
+        cup: 2,
+        hair: 0.6,
+        aura: 1,
+      },
+      eOut,
+    ],
+    // Первый взмах — ветер.
+    [0.95, { wf: 0.7, by: 1, fsx: 1.03, fsy: 0.97, cape: 5, cup: 5, hair: 1 }, eOut3],
+    [1.15, { wf: -0.2, wo: 0.95, by: 0, jaw: 0.2, fsx: 1, fsy: 1, cup: 1, aura: 0.3 }, eIO],
+    [KING.unfurl, { ...FRONT, wo: 0.7, wf: 0, eyes: 2 }, eIO],
+  ];
+  const r = fTrack(keys, t, { ...FRONT, wo: 0, wf: 0.3 });
+  r.cw = t * 8;
+  return r;
+}
+
+function fRoar(t: number, f: number): FRig {
+  const keys: Key<FKey>[] = [
+    [0, {}],
+    // Вдох: грудь вперёд, голова вниз, крылья прижаты.
+    [
+      0.35,
+      {
+        by: 2,
+        bow: 1,
+        hd: 0.45,
+        wo: 0.35,
+        wf: 0.3,
+        lx: 3,
+        ly: 5,
+        gx: 6,
+        gy: -6,
+        pit: -1.2,
+        eyes: 2,
+        cape: 0,
+        aura: 0.3,
+      },
+      eIO,
+    ],
+    // Рёв: голова назад, руки и крылья врозь.
+    [
+      0.5,
+      {
+        by: -1,
+        bow: -0.7,
+        hd: -0.5,
+        jaw: 1,
+        wo: 1,
+        wf: -0.5,
+        lx: -14,
+        ly: -6,
+        claw: 1,
+        gx: 15,
+        gy: 4,
+        gz: 1,
+        yaw: 0,
+        pit: 0.6,
+        eyes: 3,
+        glow: 1,
+        cape: 4,
+        cup: 3,
+        hair: 1,
+        aura: 1,
+      },
+      eOut3,
+    ],
+    [1.3, { jaw: 0.9, wf: -0.35, cape: 4, cup: 3, aura: 0.8 }, eLin],
+    [KING.roar, { ...FRONT, wo: 0.5, jaw: 0, eyes: 2, aura: 0.3 }, eIO],
+  ];
+  const r = fTrack(keys, t, { ...FRONT, wo: 0.6 });
+  r.cw = t * 12;
+  // Дрожь рёва — от шума кадра, а не два кадра по очереди.
+  if (t > 0.5 && t < 1.3) {
+    r.fdx += (hash(f, 11) - 0.5) * 1.4;
+    r.fdy += (hash(f, 12) - 0.5) * 0.8;
+    r.aura += (hash(f, 13) - 0.5) * 0.3;
+  }
+  return r;
+}
+
+/** Разряды по клинку и молния сверху в острие (слой света). */
+function kArcs(b: KB, lit: KB, bl: Blade, k: number, f: number, strike: boolean): void {
+  if (k <= 0) return;
+  const tx = bl.gx + bl.ux * bl.len;
+  const ty = bl.gy + bl.uy * bl.len;
+  const nx = -bl.uy;
+  const ny = bl.ux;
+  const n = 2 + Math.round(k * 2);
+  for (let a = 0; a < n; a++) {
+    let px = bl.gx + bl.ux * (3 + hash(f, a, 1) * 6);
+    let py = bl.gy + bl.uy * (3 + hash(f, a, 1) * 6);
+    const steps = 4 + Math.floor(hash(f, a, 2) * 4);
+    for (let s = 0; s < steps; s++) {
+      const along = (bl.len / steps) * (0.6 + hash(f, a * 7 + s, 3) * 0.6);
+      const side = (hash(f, a * 7 + s, 4) - 0.5) * 6 * k;
+      const qx = px + bl.ux * along + nx * side;
+      const qy = py + bl.uy * along + ny * side;
+      const m = Math.ceil(Math.max(Math.abs(qx - px), Math.abs(qy - py)));
+      for (let i = 0; i <= m; i++) {
+        const x = px + ((qx - px) * i) / (m || 1);
+        const y = py + ((qy - py) * i) / (m || 1);
+        lit.mix(x, y, i % 3 ? C.arcMid : C.arc, 0.95);
+        if (k > 0.6) lit.mix(x + nx, y + ny, C.arcDim, 0.4);
+      }
+      px = qx;
+      py = qy;
+    }
+  }
+  // Корона искр на острие.
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * TAU + f * 0.7;
+    const r = 1.5 + hash(f, i, 5) * 2.5 * k;
+    lit.mix(tx + Math.cos(a) * r, ty + Math.sin(a) * r, C.arc, 0.9);
+  }
+  lit.mix(tx, ty, C.smW, 1);
+  b.put(tx, ty, C.arc);
+  if (!strike) return;
+  // Молния с неба в острие.
+  let x = tx + (hash(f, 9) - 0.5) * 6;
+  let y = 0;
+  while (y < ty - 1) {
+    const ny2 = Math.min(ty, y + 3 + hash(f, y, 6) * 4);
+    const nx2 = ny2 >= ty ? tx : x + (hash(f, y, 7) - 0.5) * 5;
+    const m = Math.ceil(Math.max(Math.abs(nx2 - x), ny2 - y));
+    for (let i = 0; i <= m; i++) {
+      const xx = x + ((nx2 - x) * i) / (m || 1);
+      const yy = y + ((ny2 - y) * i) / (m || 1);
+      lit.mix(xx, yy, C.smW, 1);
+      lit.mix(xx - 1, yy, C.arcMid, 0.55);
+      lit.mix(xx + 1, yy, C.arcMid, 0.55);
+    }
+    x = nx2;
+    y = ny2;
+  }
+}
+
+// ---- Кадр: техника + номер → риг → растр → холсты (кеш, зеркало, вспышка) ----
+
+type KTech =
+  | 'idle'
+  | 'walk'
+  | 'slash'
+  | 'cleave'
+  | 'takeoff'
+  | 'air'
+  | 'dive'
+  | 'landed'
+  | 'death'
+  | 'throne'
+  | 'command'
+  | 'rise'
+  | 'storm'
+  | 'unfurl'
+  | 'roar';
+
+const FRONT_TECH: Partial<Record<KTech, boolean>> = {
+  throne: true,
+  command: true,
+  rise: true,
+  storm: true,
+  unfurl: true,
+  roar: true,
+};
+
+interface KReq {
+  tech: KTech;
+  f: number;
+  /** Вариант начала (откуда пришли) — только у первых кадров подъёма. */
+  v: number;
+  hk: number;
+  echo: boolean;
+  wings: boolean;
+  glow: boolean;
+  rage: boolean;
+  /** Вздрог от удара героя (покой и шаг): 0…2. */
+  fl: number;
+  flip: boolean;
+  flash: boolean;
+}
+
+/** Сколько кадров в технике и когда урон (−1 — нет). */
+function kSpan(tech: KTech, k: KT): { n: number; hit: number } {
+  const n = (s: number) => Math.ceil(s * FPS - 1e-6) + 1;
+  switch (tech) {
+    case 'idle':
+    case 'throne':
+      return { n: 24, hit: -1 };
+    case 'walk':
+      return { n: 8, hit: -1 };
+    case 'slash':
+      return { n: n(tSlash(k) + tRec(k)), hit: tSlash(k) };
+    case 'cleave':
+      return { n: n(tCleave(k) + tStuck(k) + tRec(k)), hit: tCleave(k) };
+    case 'takeoff':
+      return { n: n(0.6), hit: -1 };
+    case 'air':
+      return { n: n(KING.airT), hit: -1 };
+    case 'dive':
+      return { n: 5, hit: -1 };
+    case 'landed':
+      return { n: n(tLanded(k)), hit: -1 };
+    case 'death':
+      return { n: n(DEATH_T), hit: -1 };
+    case 'command':
+      return { n: n(KING.cmd), hit: 0.8 };
+    case 'rise':
+      return { n: n(KING.rise), hit: RISE_HIT };
+    case 'storm':
+      return { n: n(tStormEnd(k)), hit: tStormCall(k) };
+    case 'unfurl':
+      return { n: n(KING.unfurl), hit: -1 };
+    case 'roar':
+      return { n: n(KING.roar), hit: -1 };
+  }
+}
+
+/** Время кадра: 24 к/с, а кадр, в котором урон, — ровно в миг урона. */
+function kTime(f: number, hit: number): number {
+  const t = f / FPS;
+  if (hit >= 0 && hit >= t && hit < t + F1) return hit;
+  return t;
+}
+
+function sideAt(tech: KTech, t: number, k: KT, rage: boolean): SRig {
+  switch (tech) {
+    case 'walk':
+      return sWalk(t, rage);
+    case 'slash':
+      return sSlash(t, k);
+    case 'cleave':
+      return sCleave(t, k);
+    case 'takeoff':
+      return sTakeoff(t);
+    case 'air':
+      return sAir(t);
+    case 'dive':
+      return sDive(t);
+    case 'landed':
+      return sLanded(t, k);
+    case 'death':
+      return sDeath(t);
+    default:
+      return sIdle(t, rage);
+  }
+}
+
+function frontAt(tech: KTech, t: number, k: KT, v: number, f: number): FRig {
+  switch (tech) {
+    case 'command':
+      return fCommand(t);
+    case 'rise':
+      return fRise(t, v > 0 ? fCommand((v - 1) / FPS) : null);
+    case 'storm':
+      return fStorm(t, k);
+    case 'unfurl':
+      return fUnfurl(t);
+    case 'roar':
+      return fRoar(t, f);
+    default:
+      return fThrone(t);
+  }
+}
+
+/** Время позы для кадра запроса (петли — фаза 0…1). */
+function reqTime(q: KReq, k: KT): number {
+  if (q.tech === 'idle' || q.tech === 'throne') return q.f / 24;
+  if (q.tech === 'walk') return q.f / 8;
+  return kTime(q.f, kSpan(q.tech, k).hit);
+}
+
+/** Когда тянется след меча: только удар (и рывок из пола), а не замах. */
+function smearWin(tech: KTech, k: KT): [number, number][] {
+  switch (tech) {
+    case 'slash':
+      return [[tSlash(k) - 3.5 * F1, tSlash(k) + 0.14]];
+    case 'cleave': {
+      const T = tCleave(k);
+      const S = tStuck(k);
+      return [
+        [T - 3.5 * F1, T + 0.1],
+        [T + S + 0.01, T + S + 0.2],
+      ];
+    }
+    case 'rise':
+      return [[RISE_HIT - 3 * F1, RISE_HIT + 0.1]];
+    case 'storm':
+      return [[tStormCall(k) - 2.5 * F1, tStormCall(k) + 0.06]];
+    case 'dive':
+      return [[0, 0.2]];
+    default:
+      return [];
+  }
+}
+
+/** Выборки клинка назад во времени, не раньше начала окна следа. */
+function smearTimes(tech: KTech, k: KT, t: number): number[] | null {
+  for (const [a, b] of smearWin(tech, k)) {
+    if (t < a || t > b) continue;
+    const out: number[] = [];
+    for (let i = 0; i <= 9; i++) {
+      const s = t - i / 72;
+      if (s < a - 1e-6) break;
+      out.push(s);
+    }
+    return out.length > 1 ? out : null;
+  }
+  return null;
+}
+
+const KFR = frameLRU<MobFrame>(500);
+
+/** Холст из растра, обрезанный по рамке (`x0, y0` — левый верх). */
+function cutCanvas(p: Px, x0: number, y0: number, w: number, h: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  if (g) {
+    // Только рамка: строки копируются срезами, без полного холста.
+    const img = g.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      const o = ((y0 + y) * p.w + x0) * 4;
+      img.data.set(p.data.subarray(o, o + w * 4), y * w * 4);
+    }
+    g.putImageData(img, 0, 0);
+  }
+  return c;
+}
+
+function bbox(p: Px, box: number[]): void {
+  const d = new Uint32Array(p.data.buffer, p.data.byteOffset, p.w * p.h);
+  for (let y = 0; y < p.h; y++) {
+    const row = y * p.w;
+    for (let x = 0; x < p.w; x++)
+      if (d[row + x] >>> 24) {
+        if (x < box[0]) box[0] = x;
+        if (y < box[1]) box[1] = y;
+        if (x > box[2]) box[2] = x;
+        if (y > box[3]) box[3] = y;
+      }
+  }
+}
+
+/** Кадр без зеркала и вспышки. */
+function kingBase(q: KReq): MobFrame {
+  const key = `b|${q.tech}|${q.v}|${q.hk}|${q.echo ? 1 : 0}|${q.f}|${q.wings ? 1 : 0}|${q.glow ? 1 : 0}|${q.rage ? 1 : 0}|${q.fl}`;
+  const got = KFR.get(key);
+  if (got) return got;
+  const k: KT = { h: q.hk / 100, echo: q.echo };
+  const t = reqTime(q, k);
+  const o: KOpt = { wings: q.wings, glow: q.glow ? 0.3 : 0, rage: q.rage, smear: null, arcF: q.f };
+  const front = !!FRONT_TECH[q.tech];
+  let p: Px;
+  let lit: Px | null;
+  let eye: [number, number] | null;
+  let ax: number;
+  let tf: { fdx: number; fdy: number; fsx: number; fsy: number; frot: number; lift: number };
+  if (front) {
+    const r = frontAt(q.tech, t, k, q.v, q.f);
+    if (q.tech === 'throne' && q.fl) {
+      r.aura = 1;
+      r.eyes = 3;
+    }
+    const st = smearTimes(q.tech, k, t);
+    if (st)
+      o.smear = st.map((s, i) => {
+        const rr = i ? frontAt(q.tech, s, k, q.v, q.f) : r;
+        return frontBlade(rr, frontGeo(rr));
+      });
+    o.bolt = q.tech === 'storm' && Math.abs(t - tStormCall(k)) < 1e-6;
+    const out = paintFront(r, o);
+    p = out.p;
+    lit = out.lit;
+    eye = out.eye;
+    ax = FCX;
+    tf = r;
+  } else {
+    const r = sideAt(q.tech, t, k, q.rage);
+    // Третья фаза: король горит — жар по краю силуэта, неровный, как пламя.
+    if (q.rage && q.tech !== 'death') r.aura = Math.max(r.aura, 0.22 + 0.14 * hash(q.f, 31));
+    if (q.fl > 0) {
+      const s = q.fl / 2;
+      r.lean -= 0.12 * s;
+      r.hd -= 0.3 * s;
+      r.jaw = Math.max(r.jaw, 0.45 * s);
+      r.eyes = 3;
+      r.cape += 1.5 * s;
+      r.gx -= 1 * s;
+    }
+    const st = smearTimes(q.tech, k, t);
+    if (st)
+      o.smear = st.map((s, i) => {
+        const rr = i ? sideAt(q.tech, s, k, q.rage) : r;
+        return sideBlade(rr, sideGeo(rr));
+      });
+    if (q.tech === 'death') {
+      const out = paintSide(r, o, true);
+      const g = sideGeo(r);
+      const wr = g.T(-3, 13);
+      const c = crumble(out, out.sword!, t, wr[0], wr[1]);
+      p = c.p;
+      lit = c.lit;
+      eye = t < 0.8 ? out.eye : null;
+    } else {
+      const out = paintSide(r, o);
+      p = out.p;
+      lit = out.lit;
+      eye = out.eye;
+    }
+    ax = KX0;
+    tf = r;
+  }
+  // Холст — по рамке нарисованного (кадров сотни — память).
+  const box = [KW, KH, -1, -1];
+  bbox(p, box);
+  if (lit) bbox(lit, box);
+  if (box[2] < 0) box.splice(0, 4, ax, KGY - 1, ax, KGY);
+  const x0 = Math.max(0, box[0] - 1);
+  const y0 = Math.max(0, box[1] - 1);
+  const w = Math.min(KW, box[2] + 2) - x0;
+  const h = Math.min(KH, box[3] + 2) - y0;
+  const air = tf.lift;
+  const out: MobFrame = {
+    img: cutCanvas(p, x0, y0, w, h),
+    lit: lit ? cutCanvas(lit, x0, y0, w, h) : null,
+    ax: ax - x0,
+    ay: KGY - y0,
+    eye: eye ? [eye[0] - x0, eye[1] - y0] : null,
+    dx: tf.fdx,
+    dy: tf.fdy - air,
+    sx: tf.fsx,
+    sy: tf.fsy,
+    rot: tf.frot,
+    still: true,
+    shadow: (front ? 16 : 15) * (1 - clampK(air / AIR_H, 0, 1.2) * 0.3),
+  };
+  return KFR.set(key, out);
+}
+
+function mirrorK(src: HTMLCanvasElement): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d');
+  if (g) {
+    g.translate(src.width, 0);
+    g.scale(-1, 1);
+    g.drawImage(src, 0, 0);
+  }
+  return c;
+}
+
+function flashK(src: HTMLCanvasElement): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d');
+  if (g) {
+    g.drawImage(src, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    g.fillRect(0, 0, c.width, c.height);
+  }
+  return c;
+}
+
+function kingFrame(q: KReq): MobFrame {
+  if (!q.flip && !q.flash) return kingBase(q);
+  const key = `v|${q.tech}|${q.v}|${q.hk}|${q.echo ? 1 : 0}|${q.f}|${q.wings ? 1 : 0}|${q.glow ? 1 : 0}|${q.rage ? 1 : 0}|${q.fl}|${q.flip ? 1 : 0}|${q.flash ? 1 : 0}`;
+  const got = KFR.get(key);
+  if (got) return got;
+  if (q.flash) {
+    const src = kingFrame({ ...q, flash: false });
+    return KFR.set(key, { ...src, img: flashK(src.img) });
+  }
+  const b = kingBase({ ...q, flip: false });
+  const w = b.img.width;
+  return KFR.set(key, {
+    ...b,
+    img: mirrorK(b.img),
+    lit: b.lit ? mirrorK(b.lit) : null,
+    eye: b.eye ? [w - 1 - b.eye[0], b.eye[1]] : null,
+    ax: w - b.ax,
+    dx: -(b.dx ?? 0),
+    rot: -(b.rot ?? 0),
+  });
+}
+
+// ---- Рисовальщик: режим мозга → техника и кадр; память о прошлом режиме. ----
+
+interface KMem {
+  mode: string;
+  prev: string;
+  lastT: number;
+  prevT: number;
+  walk: number;
+  now: number;
+  flip: boolean;
+}
+const kMem = new WeakMap<Mob, KMem>();
+
+function kMemOf(m: Mob, pose: MobPose): { s: KMem; fresh: boolean } {
+  let s = kMem.get(m);
+  const fresh = !s;
+  if (!s) {
+    s = {
+      mode: pose.mode,
+      prev: '',
+      lastT: pose.t,
+      prevT: 0,
+      walk: 0,
+      now: pose.now,
+      flip: pose.left,
+    };
+    kMem.set(m, s);
+  }
+  if (pose.mode !== s.mode) {
+    s.prev = s.mode;
+    s.prevT = s.lastT;
+    s.mode = pose.mode;
+  }
+  s.lastT = pose.t;
+  const dt = clampK(pose.now - s.now, 0, 0.1);
+  s.now = pose.now;
+  s.walk += Math.hypot(m.vx ?? 0, m.vy ?? 0) * 16 * dt;
+  return { s, fresh };
+}
+
+const WALK_STRIDE = 28;
+
+function kingReq(m: Mob, pose: MobPose): KReq {
+  const { s, fresh } = kMemOf(m, pose);
+  const echo = m.kind !== 'f10boss';
+  const phase = m.data?.phase ?? 0;
+  const h = echo ? 1 : phase >= 3 ? 1.3 : phase >= 2 ? 1.15 : 1;
+  const k: KT = { h, echo };
+  const t = Math.max(0, pose.t);
+  const q: KReq = {
+    tech: 'idle',
+    f: 0,
+    v: 0,
+    hk: Math.round(h * 100),
+    echo,
+    wings: !echo && phase >= 2,
+    glow: phase >= 1,
+    rage: !echo && phase >= 3,
+    fl: 0,
+    flip: pose.left,
+    // Смерть белым не мигает: копия убранного моба держит последнюю вспышку.
+    flash: pose.flash && (pose.mode !== 'dying' || pose.t < 0.08),
+  };
+  const at = (tech: KTech, tt: number) => {
+    q.tech = tech;
+    q.f = Math.min(kSpan(tech, k).n - 1, Math.floor(tt * FPS + 1e-6));
+  };
+  switch (pose.mode) {
+    case 'f10_throne':
+      q.tech = 'throne';
+      q.f = Math.floor(pose.now * 10 + (m.id ?? 0) * 3.7) % 24;
+      q.flip = false;
+      // Удар по сидящему отбивает тьма: не белая вспышка, а жар по силуэту.
+      if ((m.flash ?? 0) > 0) {
+        q.fl = 1;
+        q.flash = false;
+      }
+      break;
+    case 'f10_command':
+      at('command', t);
+      q.flip = false;
+      break;
+    case 'f10_rise': {
+      at('rise', t);
+      // Подъём прерывает приказ: первые кадры — из той позы, где его застал.
+      const hint = m.data?.vCmd;
+      const cmdT = hint !== undefined ? hint : s.prev === 'f10_command' ? s.prevT : -1;
+      if (q.f < 9 && cmdT >= 0)
+        q.v = Math.min(kSpan('command', k).n - 1, Math.floor(cmdT * FPS)) + 1;
+      q.flip = false;
+      break;
+    }
+    case 'f10_storm':
+      at('storm', t);
+      q.flip = false;
+      break;
+    case 'f10_unfurl':
+      at('unfurl', t);
+      q.flip = false;
+      break;
+    case 'f10_roar':
+      at('roar', t);
+      q.flip = false;
+      break;
+    case 'slash':
+      at('slash', t);
+      break;
+    case 'cleave':
+      at('cleave', t);
+      break;
+    case 'stuck':
+      at('cleave', tCleave(k) + t);
+      break;
+    case 'recover': {
+      const hint = m.data?.vFrom;
+      const from = hint ?? (s.prev === 'slash' ? 1 : s.prev === 'stuck' ? 2 : 0);
+      if (from === 1) at('slash', tSlash(k) + t);
+      else if (from === 2) at('cleave', tCleave(k) + tStuck(k) + t);
+      else q.tech = 'idle';
+      break;
+    }
+    case 'f10_takeoff':
+      at('takeoff', t);
+      break;
+    case 'f10_air':
+      at('air', t);
+      // В воздухе смотрит туда, куда летит.
+      if (Math.abs(m.vx ?? 0) > 0.6) s.flip = (m.vx ?? 0) < 0;
+      else if (fresh) s.flip = pose.left;
+      q.flip = s.flip;
+      break;
+    case 'f10_dive': {
+      at('dive', t);
+      const ddx = (m.data?.dx ?? m.x) - (m.data?.sx ?? m.x);
+      if (Math.abs(ddx) > 0.2) s.flip = ddx < 0;
+      q.flip = s.flip;
+      break;
+    }
+    case 'f10_landed':
+      at('landed', t);
+      q.flip = s.flip;
+      break;
+    case 'dying':
+      at('death', t);
+      break;
+    default:
+      if (pose.anim === 'run' || Math.hypot(m.vx ?? 0, m.vy ?? 0) > 0.4) {
+        q.tech = 'walk';
+        const d = fresh ? pose.now * Math.hypot(m.vx ?? 0, m.vy ?? 0) * 16 : s.walk;
+        q.f = Math.floor(((d / WALK_STRIDE) % 1) * 8) % 8;
+      } else {
+        q.tech = 'idle';
+        q.f = Math.floor(pose.now * 10 + (m.id ?? 0) * 3.7) % 24;
+      }
+      const fl = m.flash ?? 0;
+      q.fl = fl > 0.07 ? 2 : fl > 0.01 ? 1 : 0;
+  }
+  if (pose.mode !== 'f10_air' && pose.mode !== 'f10_dive' && pose.mode !== 'f10_landed')
+    s.flip = q.flip;
+  return q;
 }
 
 registerMobPainter('f10boss', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const f = pose.frame;
-  const phase = m.data.phase ?? 0;
-  const winged = phase >= 2 ? 1 : 0;
-  const z = Math.round((m.data.z ?? 0) * 4) * 4;
-  let anim = mode;
-  let fr = 0;
-  const side: KingPose = {
-    view: 'side',
-    sword: 0.9,
-    hand: [3, 4],
-    glow: phase >= 1 ? 0.3 : 0,
-    wings: winged * 0.25,
-    flap: 0,
-    step: 0,
-    bob: 0,
-    lean: 0,
-    cape: 0,
+  const q = kingReq(m, pose);
+  const fr = kingFrame(q);
+  const out: MobFrame = { ...fr };
+  const k: KT = { h: q.hk / 100, echo: q.echo };
+  const t = Math.max(0, pose.t);
+  // Шлейф: пике, толчок взлёта, взмах меча.
+  if (q.tech === 'dive') out.ghost = { every: 0.025, life: 0.22, tint: '#c01c2a', alpha: 0.42 };
+  else if (q.tech === 'takeoff' && t > 0.14 && t < 0.5)
+    out.ghost = { every: 0.045, life: 0.2, tint: '#7a1422', alpha: 0.28 };
+  else if (q.tech === 'slash' || q.tech === 'cleave') {
+    const T = q.tech === 'slash' ? tSlash(k) : tCleave(k);
+    const tt = q.f / FPS;
+    if (tt > T - 3.5 * F1 && tt < T + F1)
+      out.ghost = { every: 0.03, life: 0.14, tint: '#8a1020', alpha: 0.22 };
+  }
+  if (q.tech === 'death') out.linger = DEATH_T;
+  // Высота полёта — плавно по времени режима, а не ступеньками кадров 24 к/с:
+  // тень и мир движутся на каждом кадре экрана, король — вместе с ними.
+  if (q.tech === 'takeoff' || q.tech === 'air' || q.tech === 'dive') {
+    const lq = sideAt(q.tech, reqTime(q, k), k, false).lift;
+    const le = sideAt(q.tech, Math.min(t, kSpan(q.tech, k).n / FPS), k, false).lift;
+    out.dy = (out.dy ?? 0) + lq - le;
+  }
+  // В воздухе: крен вперёд по скорости полёта (только трансформ, кадр тот же).
+  if (q.tech === 'air') {
+    const v = Math.min(7, Math.hypot(m.vx ?? 0, m.vy ?? 0));
+    out.rot = (out.rot ?? 0) + v * 0.024 * (q.flip ? -1 : 1);
+  }
+  // Смерть гаснет в самом конце.
+  if (q.tech === 'death' && t > DEATH_T - 0.15) out.alpha = clampK((DEATH_T - t) / 0.15, 0, 1);
+  // Отдача от удара героя: по направлению удара, с возвратом.
+  const fl = m.flash ?? 0;
+  if (fl > 0 && pose.mode !== 'dying') {
+    const sim = paintSim();
+    const age = clampK(0.12 - fl, 0, 0.12);
+    let ux = q.flip ? 1 : -1;
+    let uy = 0;
+    if (sim) {
+      const dx = m.x - sim.hero.x;
+      const dy = m.y - sim.hero.y;
+      const d = Math.hypot(dx, dy) || 1;
+      ux = dx / d;
+      uy = dy / d;
+    }
+    const soft =
+      q.tech === 'idle' || q.tech === 'walk' || q.tech === 'landed' || q.tech === 'command';
+    const kk = Math.sin((age / 0.12) * Math.PI) * (soft ? 2.2 : 0.9);
+    out.dx = (out.dx ?? 0) + ux * kk;
+    out.dy = (out.dy ?? 0) + uy * kk * 0.6;
+  }
+  return out;
+});
+
+// Прогрев: первый бой — трон, приказ, подъём (анфас), потом профиль фазы 1.
+registerMobWarm('f10boss', function* () {
+  const base = {
+    v: 0,
+    hk: 100,
+    echo: false,
+    wings: false,
+    rage: false,
+    fl: 0,
+    flip: false,
+    flash: false,
   };
-  let kp: KingPose = side;
-  switch (mode) {
-    case 'f10_throne':
-      fr = f % 4;
-      kp = { ...side, view: 'front', sit: true, glow: 0, cape: fr === 2 ? 1 : 0, bob: 0 };
-      break;
-    case 'f10_command':
-      fr = Math.min(3, Math.floor(pose.t / 0.25));
-      kp = { ...side, view: 'front', sit: true, raise: Math.min(1, pose.t / 0.7), glow: 1, cape: fr % 2 };
-      fr = fr * 4 + (Math.floor(pose.t * 8) % 4);
-      break;
-    case 'f10_rise':
-      fr = Math.min(3, Math.floor(pose.t / (KING.rise / 4)));
-      kp = { ...side, view: 'front', sit: fr < 2, raise: fr >= 2 ? 0.2 : 0, glow: fr / 3, bob: fr === 2 ? 2 : 0 };
-      break;
-    case 'f10_unfurl':
-      fr = Math.min(3, Math.floor(pose.t / (KING.unfurl / 4)));
-      kp = { ...side, view: 'front', wings: (fr + 1) / 4, raise: 0.6 + fr * 0.1, glow: 1, flap: fr % 2 };
-      break;
-    case 'f10_roar':
-      fr = Math.floor(pose.t * 8) % 4;
-      kp = { ...side, view: 'front', wings: 1, raise: 1, roar: true, glow: 1, flap: fr % 2 ? 0.6 : -0.3, cape: fr % 2 };
-      break;
-    case 'slash':
-      fr = pose.t < 0.3 ? 0 : 1;
-      kp = { ...side, sword: fr ? -2.4 : -1.9, hand: [-3, -6], lean: -2, step: -1, glow: 0.7 };
-      break;
-    case 'cleave':
-      fr = pose.t < 0.35 ? 0 : 1;
-      kp = { ...side, sword: fr ? -1.75 : -1.5, hand: [0, -9], lean: -1, step: -1, glow: 0.9 };
-      break;
-    case 'stuck':
-      fr = Math.floor(pose.t * 5) % 2;
-      kp = { ...side, sword: 1.2, hand: [6, 9], lean: 3, bob: 3, step: 2, glow: 0.4 + fr * 0.3 };
-      break;
-    case 'recover':
-      fr = pose.t < 0.2 ? 0 : 1;
-      kp = fr === 0 ? { ...side, sword: 0.7, hand: [7, 5], lean: 3, step: 2, glow: 0.8 } : { ...side, sword: 0.8, hand: [4, 5] };
-      break;
-    case 'f10_storm':
-      fr = Math.floor(pose.t * 8) % 4;
-      kp = { ...side, sword: -1.62, hand: [1, -11], glow: 1, lean: -1, cape: fr % 2 };
-      break;
-    case 'f10_takeoff':
-    case 'f10_air':
-      fr = Math.floor(pose.t * 8) % 4;
-      kp = { ...side, wings: 1, flap: [1, 0.3, -0.8, -0.2][fr], sword: 0.3, hand: [4, 2], step: -2, lean: 1, cape: 2 };
-      break;
-    case 'f10_dive':
-      kp = { ...side, wings: 1, flap: 1, sword: 1.1, hand: [5, 6], lean: 4, step: -3, glow: 1 };
-      break;
-    case 'f10_landed':
-      fr = Math.floor(pose.t * 4) % 2;
-      kp = { ...side, wings: 0.8, flap: -1, sword: 1.35, hand: [7, 10], bob: 4, lean: 3, step: 3, glow: 0.3 };
-      break;
-    case 'dying':
-      fr = deathK(pose);
-      kp = { ...side, view: 'front', wings: winged, raise: 0.4, bob: 3, glow: 0, roar: true };
-      break;
-    default:
-      if (pose.anim === 'run') {
-        anim = 'walk';
-        fr = f % 4;
-        kp = { ...side, step: [3, 0, -3, 0][fr], bob: fr % 2 ? 0 : 1, cape: fr % 2 ? 1 : 0 };
-      } else {
-        anim = 'idle';
-        fr = f % 4;
-        kp = { ...side, bob: fr === 1 || fr === 2 ? 1 : 0, cape: fr % 2 };
+  const list: [KTech, boolean][] = [
+    ['throne', false],
+    ['command', false],
+    ['rise', true],
+    ['idle', true],
+    ['walk', true],
+    ['slash', true],
+    ['cleave', true],
+    ['storm', true],
+  ];
+  for (const [tech, glow] of list) {
+    const n = kSpan(tech, { h: 1, echo: false }).n;
+    const front = !!FRONT_TECH[tech];
+    for (let f = 0; f < n; f++) {
+      kingBase({ ...base, tech, f, glow });
+      yield f;
+      // Профиль — в обе стороны (зеркало из готового кадра, дёшево).
+      if (!front) {
+        kingFrame({ ...base, tech, f, glow, flip: true });
+        yield f;
       }
+    }
   }
-  const zq = mode === 'f10_air' || mode === 'f10_takeoff' || mode === 'f10_dive' ? z : 0;
-  const key = `f10boss|${anim}|${fr}|${winged}|${phase >= 1 ? 1 : 0}|${zq}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}`;
-  const hit = frames.get(key);
-  if (hit) return hit;
-  const b = kp.view === 'front' ? drawKingFront(kp) : drawKingSide(kp);
-  if (mode === 'dying') b.p = ashen(b.p, fr, 3);
-  if (zq) {
-    // В воздухе: кадр ниже земли на zq — сам король рисуется выше тени.
-    b.p = copyAt(b.p, b.p.w, b.p.h + zq, 0, 0);
-    b.ay += zq;
-  }
-  return finish(key, b, 'normal', pose.flash, pose.left);
 });
 
 // ---------------------------------------------------------------------------
@@ -2481,7 +5451,11 @@ function sprite(key: string, make: () => { p: Px; ax: number; ay: number } | nul
   return s;
 }
 
-const flashed = (key: string, flash: boolean, make: () => { p: Px; ax: number; ay: number } | null) =>
+const flashed = (
+  key: string,
+  flash: boolean,
+  make: () => { p: Px; ax: number; ay: number } | null,
+) =>
   sprite(`${key}|${flash ? 1 : 0}`, () => {
     const b = make();
     if (!b) return null;
@@ -2597,7 +5571,8 @@ registerPropPainter('f10_brazier', (o, time) => {
     p.rect(3, G - 11, 13, G - 11, GOLD[1]);
     for (let x = 4; x <= 12; x += 2) p.set(x, G - 11, GOLD[3]);
     // Угли.
-    for (let x = 4; x <= 12; x++) p.set(x, G - 12, hash(x, f) > 0.5 ? hx('#ff6a1a') : hx('#8a1a06'));
+    for (let x = 4; x <= 12; x++)
+      p.set(x, G - 12, hash(x, f) > 0.5 ? hx('#ff6a1a') : hx('#8a1a06'));
     p.outline(INK);
     flame(p, 8, G - 13, 8, 10, f, o.x);
     return { p, ax: 8, ay: G };
@@ -2772,7 +5747,8 @@ registerPropPainter('f10_cage', (o, time) => {
     stroke(p, 4, G - 30, 16, G - 30, hx('#3a2216'));
     const sw = [0, 1, 0, -1][f];
     // Цепь.
-    for (let y = G - 29; y < G - 23; y++) p.set(15 + Math.round((sw * (y - G + 29)) / 6), y, (y % 2 ? IRON[2] : IRON[1]));
+    for (let y = G - 29; y < G - 23; y++)
+      p.set(15 + Math.round((sw * (y - G + 29)) / 6), y, y % 2 ? IRON[2] : IRON[1]);
     // Клетка: прутья и скелет внутри.
     const cx = 15 + sw;
     const top = G - 23;
@@ -2795,7 +5771,8 @@ registerPropPainter('f10_post', () =>
     const p = new Px(8, 18);
     const G = 17;
     for (let y = G - 14; y <= G; y++)
-      for (let x = 2; x <= 5; x++) p.set(x, y, tone(tn('#1a100a', '#3a2414', '#5a3a1e', '#7a522e'), 0.8 - (x - 2) * 0.25));
+      for (let x = 2; x <= 5; x++)
+        p.set(x, y, tone(tn('#1a100a', '#3a2414', '#5a3a1e', '#7a522e'), 0.8 - (x - 2) * 0.25));
     p.rect(1, G - 15, 6, G - 14, IRON[2]);
     p.outline(INK);
     p.set(6, G - 9, IRON[3]);
@@ -2868,7 +5845,8 @@ registerPropPainter('f10_throne', () =>
         shadeEll(p, x, y, r, r, HORN);
       });
       // Шипы по краю спинки.
-      for (let k = 0; k < 3; k++) limb(p, cx + s * 13, G - 26 - k * 6, cx + s * 16, G - 28 - k * 6, 0.9, 0.3, stone);
+      for (let k = 0; k < 3; k++)
+        limb(p, cx + s * 13, G - 26 - k * 6, cx + s * 16, G - 28 - k * 6, 0.9, 0.3, stone);
     }
     // Сиденье, подлокотники с черепами, ступени.
     polyShade(
@@ -2885,7 +5863,15 @@ registerPropPainter('f10_throne', () =>
     p.rect(cx - 9, G - 17, cx + 9, G - 16, RED[1]);
     for (const s of [-1, 1]) {
       p.rect(cx + s * 12 - 2, G - 24, cx + s * 12 + 2, G - 12, stone[2]);
-      shadeEll(p, cx + s * 12, G - 25, 2.6, 2.4, tn('#4e4234', '#8a7c62', '#c2b494', '#ece2c6'), 0.1);
+      shadeEll(
+        p,
+        cx + s * 12,
+        G - 25,
+        2.6,
+        2.4,
+        tn('#4e4234', '#8a7c62', '#c2b494', '#ece2c6'),
+        0.1,
+      );
     }
     p.rect(cx - 16, G - 9, cx + 16, G - 5, stone[1]);
     p.rect(cx - 16, G - 9, cx + 16, G - 9, stone[3]);
@@ -2947,7 +5933,11 @@ registerPropPainter('f10_banner', (o, time) => {
       const sx = Math.round(Math.sin((y - top) * 0.45 + f * 1.3) * 0.6);
       for (let x = 3; x <= 12; x++) {
         const edge = x === 3 || x === 12;
-        p.set(x + sx, y, edge ? GOLD[1] : tone(RED, 0.55 - (x - 3) * 0.03 + ((x + y) % 5 === 0 ? -0.15 : 0)));
+        p.set(
+          x + sx,
+          y,
+          edge ? GOLD[1] : tone(RED, 0.55 - (x - 3) * 0.03 + ((x + y) % 5 === 0 ? -0.15 : 0)),
+        );
       }
     }
     // Хвост полотнища — два язычка.
@@ -3052,7 +6042,9 @@ function wallShade(p: Px, n: boolean, w: boolean, e: boolean): void {
   if (n)
     for (let y = 0; y < 3; y++)
       for (let x = 0; x < 16; x++) p.set(x, y, alpha(sh, 0.55 - y * 0.16));
-  if (w) for (let x = 0; x < 2; x++) for (let y = 0; y < 16; y++) p.set(x, y, alpha(sh, 0.35 - x * 0.15));
+  if (w)
+    for (let x = 0; x < 2; x++)
+      for (let y = 0; y < 16; y++) p.set(x, y, alpha(sh, 0.35 - x * 0.15));
   if (e) for (let x = 14; x < 16; x++) for (let y = 0; y < 16; y++) p.set(x, y, alpha(sh, 0.22));
 }
 
@@ -3195,8 +6187,7 @@ function scatterCell(c: CellCtx, kind: number): Px {
         shadeEll(p, 11, 11, 2, 1.8, bone, 0.1);
         p.set(10, 11, INK);
         p.set(12, 11, INK);
-      } else
-        for (let i = 0; i < 3; i++) stroke(p, 9 + i * 2, 13, 10 + i * 2, 10, bone[1]);
+      } else for (let i = 0; i < 3; i++) stroke(p, 9 + i * 2, 13, 10 + i * 2, 10, bone[1]);
       p.outline(alpha(INK, 0.8));
     } else if (kind === MK.blood) {
       // Засохшая кровь: неровное пятно тёмно-бурым, от него потёк; у
@@ -3215,7 +6206,8 @@ function scatterCell(c: CellCtx, kind: number): Px {
         // Потёк вниз-вправо.
         for (let i = 0; i < 4; i++) p.set(cx + 2 + i, cy + 2 + (i >> 1), R0);
       }
-      for (let i = 0; i < 4 + v; i++) p.set(Math.floor(hash(i, v, 2) * 16), Math.floor(hash(i, v, 3) * 16), R0);
+      for (let i = 0; i < 4 + v; i++)
+        p.set(Math.floor(hash(i, v, 2) * 16), Math.floor(hash(i, v, 3) * 16), R0);
     } else if (kind === MK.soot) {
       for (let y = 0; y < 16; y++)
         for (let x = 0; x < 16; x++) {
@@ -3309,13 +6301,16 @@ function bridgeCell(c: CellCtx): Px {
     // Край над пропастью: брус, столбик и провис цепи.
     const railSide = (side: 'w' | 'e' | 'n' | 's') => {
       for (let j = 0; j < 16; j++) {
-        const [x, y] = side === 'w' ? [0, j] : side === 'e' ? [15, j] : side === 'n' ? [j, 0] : [j, 15];
+        const [x, y] =
+          side === 'w' ? [0, j] : side === 'e' ? [15, j] : side === 'n' ? [j, 0] : [j, 15];
         p.set(x, y, INK);
-        const [x2, y2] = side === 'w' ? [1, j] : side === 'e' ? [14, j] : side === 'n' ? [j, 1] : [j, 14];
+        const [x2, y2] =
+          side === 'w' ? [1, j] : side === 'e' ? [14, j] : side === 'n' ? [j, 1] : [j, 14];
         p.set(x2, y2, wood[0]);
       }
       if (post) {
-        const [px0, py0] = side === 'w' ? [1, 6] : side === 'e' ? [13, 6] : side === 'n' ? [6, 1] : [6, 13];
+        const [px0, py0] =
+          side === 'w' ? [1, 6] : side === 'e' ? [13, 6] : side === 'n' ? [6, 1] : [6, 13];
         p.rect(px0, py0, px0 + 1, py0 + 2, IRON[2]);
         p.set(px0, py0, IRON[3]);
       }
@@ -3433,7 +6428,8 @@ function spikeCell(c: CellCtx): Px {
     // Решётка шипов: тёмная плита, прорези — острия прячутся внутри.
     const p = new Px(16, 16);
     const plate = tn('#16121a', '#2a2430', '#403846', '#5a5060');
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, tone(plate, 0.5 - (x + y) * 0.012));
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 16; x++) p.set(x, y, tone(plate, 0.5 - (x + y) * 0.012));
     for (let i = 0; i < 16; i++) {
       p.set(i, 0, INK);
       p.set(0, i, INK);
@@ -3461,7 +6457,9 @@ function daisCell(c: CellCtx): Px {
     // Багровый мрамор помоста: плиты 16×16 с тёмным швом, ровный тон.
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
-        const k = 0.35 + Math.sin((x + (c.wx % 4) * 5) * 0.4) * Math.cos((y + (c.wy % 4) * 3) * 0.35) * 0.25;
+        const k =
+          0.35 +
+          Math.sin((x + (c.wx % 4) * 5) * 0.4) * Math.cos((y + (c.wy % 4) * 3) * 0.35) * 0.25;
         p.set(x, y, mixc(D[1], D[2], Math.max(0, Math.min(1, k))));
       }
     for (let i = 0; i < 16; i++) {
@@ -3495,7 +6493,8 @@ function stormCell(c: CellCtx): Px {
     const p = new Px(16, 16);
     const Sl = tn('#0a0810', '#15121c', '#221c2c', '#342a42');
     for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) p.set(x, y, tone(Sl, 0.5 + (hash(x, y, gx * 3 + gy) - 0.5) * 0.2));
+      for (let x = 0; x < 16; x++)
+        p.set(x, y, tone(Sl, 0.5 + (hash(x, y, gx * 3 + gy) - 0.5) * 0.2));
     const line = hx('#3a2458');
     const line2 = hx('#5a3a8a');
     if (gx === 0) for (let y = 0; y < 16; y++) p.set(0, y, y % 4 ? line : line2);
@@ -3529,7 +6528,12 @@ function vaultCell(c: CellCtx): Px {
     const p = new Px(16, 16);
     const T = tn('#08060a', '#14101a', '#1e1826', '#302838');
     for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) p.set(x, y, mixc(T[1], T[2], 0.3 + (hash(x, y, v + 9) > 0.9 ? 0.4 : 0) + (x + y < 10 ? 0.15 : 0)));
+      for (let x = 0; x < 16; x++)
+        p.set(
+          x,
+          y,
+          mixc(T[1], T[2], 0.3 + (hash(x, y, v + 9) > 0.9 ? 0.4 : 0) + (x + y < 10 ? 0.15 : 0)),
+        );
     const seam = mixc(GOLD[0], T[1], 0.45);
     for (let i = 0; i < 16; i++) {
       p.set(i, 0, seam);
@@ -3621,7 +6625,8 @@ function runeCell(c: CellCtx): Px {
       if (a % 6 === 5) continue;
       p.set(Math.round(8 + Math.cos(t) * 6), Math.round(8 + Math.sin(t) * 6), cut);
     }
-    for (let i = 0; i < g.length - 1; i++) stroke(p, g[i][0], g[i][1], g[i + 1][0], g[i + 1][1], R0);
+    for (let i = 0; i < g.length - 1; i++)
+      stroke(p, g[i][0], g[i][1], g[i + 1][0], g[i + 1][1], R0);
     p.set(g[0][0], g[0][1], R1);
     if (v % 2) p.set(g[g.length - 1][0], g[g.length - 1][1], R1);
     return p;
@@ -3636,12 +6641,14 @@ function windowFace(c: CellCtx, broken: boolean): Px | null {
     const p = new Px(16, 16);
     // Каменное обрамление стрельчатого окна.
     for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) p.set(x, y, tone(STONE, 0.45 + (y < 2 ? 0.2 : 0) - (x > 12 ? 0.2 : 0)));
+      for (let x = 0; x < 16; x++)
+        p.set(x, y, tone(STONE, 0.45 + (y < 2 ? 0.2 : 0) - (x > 12 ? 0.2 : 0)));
     for (let x = 0; x < 16; x++) {
       p.set(x, 0, STONE[3]);
       p.set(x, 15, INK);
     }
-    const inArch = (x: number, y: number) => x >= 4 && x <= 11 && (y > 5 || Math.abs(x - 7.5) < (y - 1.2) * 1.25) && y <= 13;
+    const inArch = (x: number, y: number) =>
+      x >= 4 && x <= 11 && (y > 5 || Math.abs(x - 7.5) < (y - 1.2) * 1.25) && y <= 13;
     const panes = [
       [hx('#8a1c26'), hx('#c8323a')],
       [hx('#4a2a8a'), hx('#7a4ac8')],
@@ -3761,7 +6768,11 @@ function baseUnder(c: CellCtx, area: string): Px | null {
       best = k;
     }
   if (bn < 2 && !(bn === 1 && best === MK.bridge)) return null;
-  const cc: CellCtx = { ...c, mark: best, markAt: (dx, dy) => (dx || dy ? c.markAt(dx, dy) : best) };
+  const cc: CellCtx = {
+    ...c,
+    mark: best,
+    markAt: (dx, dy) => (dx || dy ? c.markAt(dx, dy) : best),
+  };
   if (best === MK.bridge) return bridgeCell(cc);
   if (best === MK.carpet) return carpetCell(cc, area);
   if (best === MK.marble) return marbleCell(cc, area);
@@ -3781,7 +6792,13 @@ function onBase(c: CellCtx, area: string, over: Px): Px {
     q = new Px(16, 16);
     q.data.set(base.data);
     for (let i = 0; i < over.data.length; i += 4)
-      if (over.data[i + 3]) q.set((i / 4) % 16, Math.floor(i / 64), [over.data[i], over.data[i + 1], over.data[i + 2], over.data[i + 3]]);
+      if (over.data[i + 3])
+        q.set((i / 4) % 16, Math.floor(i / 64), [
+          over.data[i],
+          over.data[i + 1],
+          over.data[i + 2],
+          over.data[i + 3],
+        ]);
     m.set(over, q);
   }
   return q;
@@ -3869,7 +6886,14 @@ export const kOf = (z: ZoneX) => {
   return 1;
 };
 
-export function cone(g: CanvasRenderingContext2D, x: number, y: number, r: number, a: number, arc: number): void {
+export function cone(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  a: number,
+  arc: number,
+): void {
   g.beginPath();
   g.moveTo(x, y);
   g.arc(x, y, r, a - arc / 2, a + arc / 2);
@@ -3970,7 +6994,14 @@ registerZonePainter('f10_claws', (g, z, px, py, S) => {
 });
 
 /** Молния: зигзаг с неба в точку. */
-function bolt(g: CanvasRenderingContext2D, x: number, y: number, h: number, seed: number, a: number): void {
+function bolt(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  h: number,
+  seed: number,
+  a: number,
+): void {
   const pts: [number, number][] = [];
   const n = 7;
   for (let i = 0; i <= n; i++) {
@@ -4027,14 +7058,26 @@ registerZonePainter('f10_bolt_line', (g, z, px, py, S, time) => {
   // Разряды бегают по полосе.
   g.fillStyle = rgba(WHITE, 0.7);
   for (let i = 0; i < L / 6; i++)
-    g.fillRect(Math.round((i * 6 + time * 40) % L), Math.round((hash(i, Math.floor(time * 12)) - 0.5) * w * 1.6), 2, 1);
+    g.fillRect(
+      Math.round((i * 6 + time * 40) % L),
+      Math.round((hash(i, Math.floor(time * 12)) - 0.5) * w * 1.6),
+      2,
+      1,
+    );
   g.restore();
   if (k > 0.85) {
     const ux = Math.cos(zz.ang ?? 0);
     const uy = Math.sin(zz.ang ?? 0);
     for (let i = 0; i < 3; i++) {
       const t = (i + 0.5) / 3;
-      bolt(g, px + ux * L * t, py + uy * L * t, 80, zz.id * 3 + i + Math.floor(time * 30), (k - 0.85) / 0.15);
+      bolt(
+        g,
+        px + ux * L * t,
+        py + uy * L * t,
+        80,
+        zz.id * 3 + i + Math.floor(time * 30),
+        (k - 0.85) / 0.15,
+      );
     }
   }
   return true;
@@ -4053,7 +7096,7 @@ registerZonePainter('f10_bolt_ring', (g, z, px, py, S, time) => {
   g.strokeStyle = rgba(WHITE, 0.4 + 0.5 * k);
   g.lineWidth = 1;
   g.beginPath();
-  g.arc(px, py, R + (time * 10) % 2, 0, TAU);
+  g.arc(px, py, R + ((time * 10) % 2), 0, TAU);
   g.stroke();
   return true;
 });
@@ -4096,7 +7139,12 @@ registerZonePainter('f10_blinkmark', (g, z, px, py, S, time) => {
   g.fillStyle = rgba(WHITE, 0.8);
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * TAU + time * 5;
-    g.fillRect(Math.round(px + Math.cos(a) * z.r * S * 0.6), Math.round(py + Math.sin(a) * z.r * S * 0.4), 1, 1);
+    g.fillRect(
+      Math.round(px + Math.cos(a) * z.r * S * 0.6),
+      Math.round(py + Math.sin(a) * z.r * S * 0.4),
+      1,
+      1,
+    );
   }
   return true;
 });
@@ -4229,10 +7277,16 @@ registerZonePainter('f10_mend', (g, z, px, py, S) => {
   const k = Math.min(1, zz.t / zz.life);
   // Доски возвращаются: золотистая пыль и звенья цепей.
   g.fillStyle = rgba(GOLD[2], 1 - k);
-  for (let i = 0; i < 4; i++) g.fillRect(Math.round(px - 6 + i * 4), Math.round(py - 6 + (1 - k) * 8), 1, 2);
+  for (let i = 0; i < 4; i++)
+    g.fillRect(Math.round(px - 6 + i * 4), Math.round(py - 6 + (1 - k) * 8), 1, 2);
   g.strokeStyle = rgba(hx('#7a7684'), 1 - k);
   g.lineWidth = 1;
-  g.strokeRect(Math.round(px - z.r * S), Math.round(py - z.r * S), Math.round(z.r * S * 2), Math.round(z.r * S * 2));
+  g.strokeRect(
+    Math.round(px - z.r * S),
+    Math.round(py - z.r * S),
+    Math.round(z.r * S * 2),
+    Math.round(z.r * S * 2),
+  );
   return true;
 });
 
@@ -4241,7 +7295,8 @@ registerZonePainter('f10_barsfall', (g, z, px, py, S) => {
   const k = Math.min(1, zz.t / zz.life);
   // Решётка рушится сверху: пыль у основания.
   g.fillStyle = rgba(hx('#7a6a5a'), 0.8 * (1 - k));
-  for (let i = 0; i < 5; i++) g.fillRect(Math.round(px - 7 + i * 3), Math.round(py + 4 + k * 3), 2, 1);
+  for (let i = 0; i < 5; i++)
+    g.fillRect(Math.round(px - 7 + i * 3), Math.round(py + 4 + k * 3), 2, 1);
   void S;
   return true;
 });
@@ -4279,7 +7334,8 @@ registerZonePainter('f10_emblem', (g, z, px, py, S) => {
   g.stroke();
   g.fillStyle = 'rgba(216,162,58,0.6)';
   g.fillRect(Math.round(px - 6), Math.round(py), 13, 2);
-  for (const dx of [-6, -3, 0, 3, 6]) g.fillRect(Math.round(px + dx), Math.round(py - (dx === 0 ? 4 : 2)), 1, 2);
+  for (const dx of [-6, -3, 0, 3, 6])
+    g.fillRect(Math.round(px + dx), Math.round(py - (dx === 0 ? 4 : 2)), 1, 2);
   g.fillStyle = 'rgba(200,30,30,0.7)';
   g.fillRect(Math.round(px), Math.round(py - 1), 1, 1);
   return true;
@@ -4398,7 +7454,8 @@ registerItemArt('f10_sigil', () => {
   p.ell(5, 5.5, 3.6, 3.6, GOLD[2]);
   p.ell(5, 5.5, 2.2, 2.2, [0, 0, 0, 0]);
   for (let y = 0; y < 10; y++)
-    for (let x = 0; x < 10; x++) if (Math.hypot(x + 0.5 - 5, y + 0.5 - 5.5) < 2.2) p.data[(y * 10 + x) * 4 + 3] = 0;
+    for (let x = 0; x < 10; x++)
+      if (Math.hypot(x + 0.5 - 5, y + 0.5 - 5.5) < 2.2) p.data[(y * 10 + x) * 4 + 3] = 0;
   shadeEll(p, 5, 2.2, 1.8, 1.6, tn('#3a1a6a', '#6a3aaa', '#a070ff', '#e0d0ff'));
   p.outline(INK);
   p.set(4, 5, GOLD[3]);
