@@ -1896,7 +1896,7 @@ function duelStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         if (heroOpen(h) && coneHits(m.x, m.y, m.dir, BOSS.gazeR, BOSS.gazeArc, h))
           api.hurtHero(sim, bossDmg(m, 0.5), m.x, m.y, 1, m.kind, { kind: 'charm', dur: 1.2 });
         // v2.86 — только рисунок: волна взгляда поверх темноты, лиловая вспышка.
-        vfx(sim, api, 'f7_fxgaze', m.x, m.y, 0.7, { vA: m.dir, vR: BOSS.gazeR, vArc: BOSS.gazeArc }, 0.7);
+        vfx(sim, api, 'f7_fxgaze', m.x, m.y, 0.7, { vA: m.dir, vR: BOSS.gazeR, vArc: BOSS.gazeArc }, 1.4);
         vShake(sim, m.x, m.y, 0.12); // v2.86 — только рисунок
         if (dist < 7) sim.events.push({ t: 'flash', k: 0.22, color: '#b58cff' }); // v2.86 — только рисунок
         const z: ZoneIn & { ang: number } = {

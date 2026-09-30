@@ -756,6 +756,42 @@ function floorFlash(p: Pen, x: number, y: number, age: number, T: number, rMax: 
   p.reset();
 }
 
+/**
+ * Стеклянная крошка: светлые точки разлетаются с сопротивлением и
+ * подскоком, мерцают (то белая, то стекло) и гаснут. Клуб пыли на тёмном
+ * зеркальном полу читается серым пятном — стекло крошится искрами.
+ */
+function specks(
+  p: Pen,
+  seed: number,
+  age: number,
+  x: number,
+  y: number,
+  n: number,
+  ang: number,
+  spread: number,
+  v0: number,
+  dv: number,
+  life: number,
+  up = 0,
+): void {
+  if (reduced()) n = Math.ceil(n / 2);
+  for (let i = 0; i < n; i++) {
+    const h1 = hash(seed, i, 26);
+    const h2 = hash(seed, i, 27);
+    const h3 = hash(seed, i, 28);
+    const L = life * (0.55 + 0.6 * h3);
+    if (age >= L) continue;
+    const k = age / L;
+    const th = ang + (h1 - 0.5) * 2 * spread;
+    const d = ((v0 + dv * h2) / 4) * (1 - Math.exp(-4 * age));
+    const z = Math.max(0, up * (0.5 + h2) * age - 150 * age * age);
+    const tw = hash(seed, i, Math.floor(age * 24));
+    p.col(tw < 0.3 ? C.white : i % 3 ? C.cyan : C.g2, 1 - k * k);
+    p.dot(x + Math.cos(th) * d, y + Math.sin(th) * d * 0.8 - z);
+  }
+}
+
 /** Пыль клубами: из (x, y) по направлению ± разброс, растёт и тает. */
 function dust(
   p: Pen,
@@ -1648,7 +1684,7 @@ function kickFloor(fx: Fx): void {
       );
     }
   }
-  dust(p, sd, age, cx, cy, big ? 6 : 4, back, 0.8, 26, 30, 2, 4, 3, 0.6, 0.5);
+  specks(p, sd, age, cx, cy, big ? 16 : 11, back, 0.9, 34, 50, 0.5, 26);
 }
 function kickLit(fx: Fx): void {
   const { p, age, cx, cy, sd, z } = fx;
@@ -1921,6 +1957,34 @@ registerZonePainter(
       ring(p, cx, cy, r, inside);
     }
     impactStar(p, cx + Math.cos(a) * 5, cy + Math.sin(a) * 5 - 15, age, 0.1, 8, a, true);
+    // Взгляд попал — над героем кружат лиловые осколки-зеркальца, пока он
+    // очарован (джойстик наоборот): видно, ПОЧЕМУ ноги идут не туда.
+    const h = paintSim()?.hero;
+    const ch = h?.status?.charm?.t ?? 0;
+    if (h && ch > 0 && age > 0.05) {
+      const hx0 = h.x * 16;
+      const hy0 = h.y * 16 - 22;
+      const fade = Math.min(1, ch / 0.25);
+      const n = 3;
+      for (let i = 0; i < n; i++) {
+        const an = age * 5.5 + (i / n) * TAU;
+        const x = hx0 + Math.cos(an) * 7;
+        const y = hy0 + Math.sin(an) * 2.5;
+        const im = shardImg(2, mod(Math.floor(age * 14) + i * 3, SHARD_FRAMES), 2);
+        p.col('#000', fade * (Math.sin(an) > -0.2 ? 1 : 0.55));
+        p.img(im, x - im.width / 2, y - im.height / 2);
+      }
+      // Глаз-знак: миндаль с лиловым зрачком, мигает раз в полсекунды.
+      if (Math.floor(age * 4) % 2 === 0 || reduced()) {
+        p.col(C.v3, 0.9 * fade);
+        p.g.fillRect(Math.floor(hx0) - 2 + p.qx, Math.floor(hy0) - 4 + p.qy, 5, 1);
+        p.g.fillRect(Math.floor(hx0) - 2 + p.qx, Math.floor(hy0) - 2 + p.qy, 5, 1);
+        p.g.fillRect(Math.floor(hx0) - 3 + p.qx, Math.floor(hy0) - 3 + p.qy, 1, 1);
+        p.g.fillRect(Math.floor(hx0) + 3 + p.qx, Math.floor(hy0) - 3 + p.qy, 1, 1);
+        p.col(C.v1, fade);
+        p.g.fillRect(Math.floor(hx0) + p.qx, Math.floor(hy0) - 3 + p.qy, 1, 1);
+      }
+    }
   }),
 );
 
