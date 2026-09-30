@@ -1408,6 +1408,19 @@ const hasteOf = (sim: Sim) => {
   return p >= 3 ? 1.3 : p >= 2 ? 1.15 : 1;
 };
 
+// v2.86 — только рисунок: зона-картинка (`api.vfx`: без урона и статусов, номер
+// мимо `nextId`) — пыль, посадка, рёв, двери, обвал рисует `f10-boss-fx.ts`.
+// Своих `f10_fx*` разом не больше 36, пыли движения — не больше 24.
+type VfxIn = { ang?: number; vd?: number; n?: number; cells?: number[]; ww?: number; above?: boolean };
+function vfx(sim: Sim, api: SimApi, art: string, x: number, y: number, life: number, o: VfxIn = {}, move = false): void {
+  let n = 0;
+  for (const z of sim.zones) if (z.art?.startsWith('f10_fx')) n++;
+  if (n < (move ? 24 : 36)) api.vfx(sim, { x, y, r: 0.5, life, art, ...o } as ZoneIn & VfxIn);
+}
+// v2.86 — только рисунок: тряска по силе удара, вдали от героя — вполсилы.
+const vShake = (sim: Sim, x: number, y: number, k: number) =>
+  sim.events.push({ t: 'shake', k: hypot(sim.hero.x - x, sim.hero.y - y) < 7 ? k : k * 0.5 });
+
 /** Трон как предмет: пока король сидит — насквозь, встал — стоит. */
 const throneProp = (sim: Sim): Prop | undefined =>
   sim.props.find((p) => p.kind === 'deco' && p.obj.ref === 'f10_throne');
@@ -1429,6 +1442,9 @@ function summonWave(sim: Sim, api: SimApi, b: BossFight): void {
     mm.t = -i * 0.3;
     mm.rush = true;
     st.summoned.add(mm.id);
+    // v2.86 — только рисунок: дверь распахивается — свет и пыль, по очереди со стражей.
+    const out = hb.obj.out ?? [hb.obj.x, hb.obj.y + 1];
+    vfx(sim, api, 'f10_fxgate', hb.obj.x + 0.5, hb.obj.y + 0.5, 1.6 + i * 0.3, { ang: Math.atan2(out[1] - hb.obj.y, out[0] - hb.obj.x), vd: i * 0.3 });
   }
   void b;
 }
@@ -1661,6 +1677,13 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.data.z = 0;
       const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
       api.steer(sim, m, cx, cy, m.speed * haste * (dist < 2.4 ? 0.35 : 1), dt);
+      // v2.86 — только рисунок: тяжёлый шаг — пыль из-под сапога, сапоги по очереди.
+      m.data.vfxWalk = (m.data.vfxWalk ?? 0) + hypot(m.vx, m.vy) * dt;
+      if (m.data.vfxWalk > 0.8) {
+        m.data.vfxWalk = 0;
+        m.data.vfxFoot = 1 - (m.data.vfxFoot ?? 0);
+        vfx(sim, api, 'f10_fxstep', m.x, m.y, 0.8, { ang: Math.atan2(m.vy, m.vx), n: m.data.vfxFoot }, true);
+      }
       if (m.t < 0.7 / haste) return;
       const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
       if (phase >= 2 && m.data.flyCd <= 0) {
@@ -1782,6 +1805,9 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.vx *= 0.7;
       m.vy *= 0.7;
       m.face = Math.PI / 2;
+      // v2.86 — только рисунок: ветер закручивается к королю, в 0,9 с крылья распахиваются — порыв.
+      if (m.t <= dt) vfx(sim, api, 'f10_fxgust', m.x, m.y, KING.unfurl + 0.9);
+      if (m.t >= 0.9 && m.t - dt < 0.9) vShake(sim, m.x, m.y, 0.3);
       if (m.t >= KING.unfurl) {
         m.data.ghost = 0;
         m.data.flyCd = 2.5;
@@ -1791,6 +1817,8 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
     case 'f10_takeoff':
       m.vx *= 0.6;
       m.vy *= 0.6;
+      // v2.86 — только рисунок: крылья бьют в пол — пыль кольцом.
+      if (m.t <= dt) vfx(sim, api, 'f10_fxwing', m.x, m.y, 1.1);
       m.data.z = Math.min(1, m.t / 0.6) * 3;
       m.data.ghost = m.t > 0.3 ? 1 : 0;
       if (m.t >= 0.6) {
@@ -1813,6 +1841,11 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       // Кружит над ареной, пока метка идёт за героем; перья пламени.
       m.data.ghost = 1;
       m.data.z = 3 + Math.sin(m.t * 5) * 0.3;
+      // v2.86 — только рисунок: взмах крыльев поднимает пыль под королём.
+      if (sim.time >= (m.data.vfxFlap ?? 0)) {
+        m.data.vfxFlap = sim.time + 0.4;
+        vfx(sim, api, 'f10_fxflap', m.x, m.y, 0.7, {}, true);
+      }
       const mark = sim.zones.find((z) => z.art === 'f10_divemark' && (z as ZoneIn & { mob?: number }).mob === m.id);
       if (mark) {
         const ex = mark.x - m.x;
@@ -1831,7 +1864,7 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         const x = h.x + Math.cos(a) * r;
         const y = h.y + Math.sin(a) * r;
         if (!api.solidTile(sim, Math.floor(x), Math.floor(y)))
-          api.strike(sim, { shape: 'circle', x, y, r: 0.6, warn: 0.9, dmg: m.dmg * 0.7, knock: 2, art: 'f10_feather', from: m.id });
+          api.strike(sim, { shape: 'circle', x, y, r: 0.6, warn: 0.9, dmg: m.dmg * 0.7, knock: 2, art: 'f10_feather', from: m.id, above: true }); // v2.86 — только рисунок: `above`
       }
       if (m.t >= KING.airT - KING.lock && !m.data.locked && mark) {
         // Метка замерла: через 0,75 с сюда упадёт король.
@@ -1873,6 +1906,10 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         m.data.ghost = 0;
         sim.events.push({ t: 'boom', x: m.x, y: m.y, r: 0 });
         sim.events.push({ t: 'boss', what: 'f10_land_wall' });
+        // v2.86 — только рисунок: посадка — воронка, трещины, обломки; тряска и вспышка.
+        vfx(sim, api, 'f10_fxtouch', m.x, m.y, 1.8);
+        vShake(sim, m.x, m.y, 0.3);
+        sim.events.push({ t: 'flash', k: 0.2, color: '#ff6a3a' });
         // Ударная волна от приземления — кольцом.
         api.strike(sim, {
           shape: 'ring',
@@ -1899,6 +1936,11 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       return;
     case 'f10_roar':
       m.data.ghost = m.t < KING.roar - 0.2 ? 1 : 0;
+      // v2.86 — только рисунок: кольца рёва от головы, пол дрожит.
+      if (m.t <= dt) {
+        vfx(sim, api, 'f10_fxroar', m.x, m.y, KING.roar + 0.4, { above: true });
+        vfx(sim, api, 'f10_fxquake', m.x, m.y, KING.roar + 0.6);
+      }
       m.vx *= 0.7;
       m.vy *= 0.7;
       m.face = Math.PI / 2;
@@ -2002,6 +2044,9 @@ registerBoss('f10boss', {
           st.falling.set(i, sim.time + KING.collapseWarn);
         }
         sim.events.push({ t: 'boss', what: 'f10_crumble_trap', text: 'ПОЛ ТРЕЩИТ', sub: 'отойди от края' });
+        // v2.86 — только рисунок: трещины наливаются жаром снизу, пол вздрагивает.
+        vfx(sim, api, 'f10_fxcrack', lead.x, lead.y, KING.collapseWarn + 0.1, { cells: r.filter((i) => st.falling.has(i)), ww: W });
+        vShake(sim, lead.x, lead.y, 0.15);
         st.ringNext = sim.time + KING.collapseEvery;
       } else st.ringNext = 0;
     }
@@ -2009,11 +2054,13 @@ registerBoss('f10boss', {
       const h = sim.hero;
       const hi = Math.floor(h.y) * W + Math.floor(h.x);
       let fell = 0;
+      const vFell: number[] = []; // v2.86 — только рисунок
       for (const [i, at] of st.falling) {
         if (sim.time < at) continue;
         st.falling.delete(i);
         retile(sim, api, i, T_DEEP, F10_MARK.fallen);
         fell += 1;
+        vFell.push(i); // v2.86 — только рисунок
         // Стоял на краю — сорвался: удар и на ближнюю твёрдую клетку.
         const cx = (i % W) + 0.5;
         const cy = Math.floor(i / W) + 0.5;
@@ -2034,6 +2081,12 @@ registerBoss('f10boss', {
           }
       }
       if (fell) sim.events.push({ t: 'boom', x: lead.x, y: lead.y, r: 0 });
+      // v2.86 — только рисунок: плиты уходят в бездну, оттуда — огонь и угольки.
+      if (vFell.length) {
+        vfx(sim, api, 'f10_fxfall', lead.x, lead.y, 1.3, { cells: vFell, ww: W });
+        vfx(sim, api, 'f10_fxember', lead.x, lead.y, 1.7, { cells: vFell, ww: W, above: true });
+        vShake(sim, lead.x, lead.y, 0.25);
+      }
     }
     // Зов стражи — только пока сидит на троне.
     void dt;
