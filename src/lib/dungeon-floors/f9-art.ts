@@ -4209,7 +4209,7 @@ registerMobPainter('f9_body', (m: Mob, pose: MobPose) => {
   const bi = Math.floor(now * 10) % 24;
   const breathOf = (i: number) => 0.5 - 0.5 * Math.cos((i / 24) * TAU);
   let r: BodyRig = { ...BODY0, breath: breathOf(bi), wave: bi / 24 };
-  let tail: TailRig | null = null;
+  const tail: TailRig | null = null;
   let dir = 2;
   let flip = false;
   let drip = 0;
@@ -4243,7 +4243,10 @@ registerMobPainter('f9_body', (m: Mob, pose: MobPose) => {
           ? Math.atan2(sim.hero.y - m.y, sim.hero.x - m.x)
           : Math.PI / 2);
       [dir, flip] = tailDir(ang);
-      tail = tailLane(x);
+      // Сам хвост рисует зона `f9_tailfx` (f9-boss-fx.ts): он длинный и
+      // заметает весь сектор удара (r 8,5) — видно, откуда уворачиваться.
+      // Короткий хвост тела (`tailLane`) рядом с ним был бы вторым хвостом;
+      // тело даёт только ход корпуса на взмахе.
       drip = x % 8;
       const f = lashFx(x);
       const side = dir === 2 || dir === 4 ? 0 : flip ? -1 : 1;
