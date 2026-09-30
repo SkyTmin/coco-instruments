@@ -43,6 +43,7 @@ import {
 } from '../dungeon-paint';
 import type { ImpactRec, MobPose } from '../dungeon-paint';
 import type { Mob, Strike, Zone } from '../dungeon-sim';
+import { serpentMouth } from './f6-art';
 
 type RGBA = [number, number, number, number];
 
@@ -326,38 +327,45 @@ function mouthOf(m: Mob, time: number): Mouth {
   const air = AIR.has(m.mode);
   let dx = dir * 22;
   let dy = air ? -56 : -30;
-  try {
-    const paint = MOB_PAINTERS.get('f6boss');
-    const speed = Math.hypot(m.vx, m.vy);
-    const tt = time + m.id * 0.37;
-    const hurt = m.flash > 0 && m.mode !== 'dying';
-    const base = speed > 0.4 ? 'run' : 'idle';
-    const pose: MobPose = {
-      anim: hurt ? 'hurt' : base,
-      frame: base === 'run' ? Math.floor(tt * (8 + speed * 2.2)) : Math.floor(tt * 4),
-      mode: m.mode,
-      t: m.t,
-      left,
-      flash: m.flash > 0.05,
-      look: 'normal',
-      now: time,
-    };
-    const fr = paint?.(m, pose);
-    if (fr && fr.eye) {
-      const sx = fr.sx ?? 1;
-      const sy = fr.sy ?? 1;
-      const rot = fr.rot ?? 0;
-      // Пасть — чуть впереди и ниже глаза, по морде.
-      const lx = (fr.eye[0] + dir * 5 - fr.ax) * sx;
-      const ly = (fr.eye[1] + 3 - fr.ay) * sy;
-      const c = Math.cos(rot);
-      const s = Math.sin(rot);
-      dx = lx * c - ly * s + (fr.dx ?? 0);
-      dy = lx * s + ly * c + 2 + (fr.dy ?? 0);
+  // Пасть, которую «Тело» записало в своём последнем кадре (с зеркалом,
+  // выпадом и подъёмом) — точнее глаза; расчёт по глазу — запасной.
+  const said = serpentMouth(m.id);
+  if (said) {
+    dx = said.x;
+    dy = said.y;
+  } else
+    try {
+      const paint = MOB_PAINTERS.get('f6boss');
+      const speed = Math.hypot(m.vx, m.vy);
+      const tt = time + m.id * 0.37;
+      const hurt = m.flash > 0 && m.mode !== 'dying';
+      const base = speed > 0.4 ? 'run' : 'idle';
+      const pose: MobPose = {
+        anim: hurt ? 'hurt' : base,
+        frame: base === 'run' ? Math.floor(tt * (8 + speed * 2.2)) : Math.floor(tt * 4),
+        mode: m.mode,
+        t: m.t,
+        left,
+        flash: m.flash > 0.05,
+        look: 'normal',
+        now: time,
+      };
+      const fr = paint?.(m, pose);
+      if (fr && fr.eye) {
+        const sx = fr.sx ?? 1;
+        const sy = fr.sy ?? 1;
+        const rot = fr.rot ?? 0;
+        // Пасть — чуть впереди и ниже глаза, по морде.
+        const lx = (fr.eye[0] + dir * 5 - fr.ax) * sx;
+        const ly = (fr.eye[1] + 3 - fr.ay) * sy;
+        const c = Math.cos(rot);
+        const s = Math.sin(rot);
+        dx = lx * c - ly * s + (fr.dx ?? 0);
+        dy = lx * s + ly * c + 2 + (fr.dy ?? 0);
+      }
+    } catch {
+      // Кадр не дался — средние числа.
     }
-  } catch {
-    // Кадр не дался — средние числа.
-  }
   const v: Mouth = { x: m.x * TS + dx, y: m.y * TS + dy, z: Math.max(4, -dy), dir };
   mouthCache.set(m.id, { t: time, v });
   if (mouthCache.size > 8) mouthCache.delete(mouthCache.keys().next().value as number);

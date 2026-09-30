@@ -2522,7 +2522,11 @@ registerFloor(6, {
       api.zone(sim, { x: lair.x + 0.5, y: lair.y + 1.5, r: 2.4, life: 1e9, art: 'f6_emblem' });
     const serp = sim.mobs.find((m) => m.kind === 'f6boss' && m.mode !== 'dying');
     if (serp) {
-      const body = sim.zones.find((z) => z.art === 'f6_body');
+      // v2.86 — только рисунок: тело, доигрывающее смерть (`vDie`), живому
+      // змею не годится — новое заводится в тот же шаг, что и раньше.
+      const body = sim.zones.find(
+        (z) => z.art === 'f6_body' && (z as { vDie?: number }).vDie === undefined,
+      );
       if (!body) {
         const z: ZoneIn & { mob: number } = {
           x: serp.x,
