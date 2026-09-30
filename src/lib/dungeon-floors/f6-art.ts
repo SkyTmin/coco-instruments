@@ -2729,11 +2729,15 @@ function breathHead(a: number): { x: number; y: number; ha: number } {
 }
 
 /** Волна пламени: встаёт на дыбы, вдох — горло наливается жаром, выброс вперёд-вниз, струя, дым. */
-function techBreath(t: number, c: TCtx, T: number, F1: number, E: number): SPose {
-  const b = breathHead(c.aim);
-  const L = laneOf(`breath|${T}|${F1}|${E}|${c.aim}`, () =>
-    lane(REST, [
-      [0, {}],
+/** Лента выдоха. У эхо (без веера) волны идут подряд — волна → вторая
+ *  волна → «выдохся», — поэтому эхо не возвращается в покой между ними:
+ *  вторая волна начинается с позы конца первой, выдох держится до конца. */
+function breathLane(c: TCtx, T: number, F1: number, E: number, from: Rig | null): (t: number) => Rig {
+  const echo = !c.tm.fan;
+  return laneOf(`breath|${T}|${F1}|${E}|${c.aim}|${echo ? 1 : 0}|${from ? 1 : 0}`, () => {
+    const b = breathHead(c.aim);
+    const keys: Key[] = [
+      [0, from ? { ...from } : {}],
       [
         0.72 * T,
         { by: -7, tilt: -0.3, bx: -2.5, hx: 10, hy: -50, ha: -0.75, bend: -0.7, bulge: 1, glow: 0.8, jaw: 0.3, ws: 0.7, wf: 0.45, paw: 1, angry: 0.6, step: Math.PI },
@@ -2743,10 +2747,27 @@ function techBreath(t: number, c: TCtx, T: number, F1: number, E: number): SPose
       [T, { by: -6, tilt: -0.22, bx: -1, hx: b.x, hy: b.y, ha: b.ha, bend: 0.95, jaw: 1, fire: 1, bulge: 0.85, paw: 0.35, ws: 0.5, wf: 0, step: TAU }, EZ.in],
       [T + 0.1, { bx: -3.5 }, EZ.out2],
       [F1, { bulge: 0.3, glow: 0.55, bx: -2.5, fire: 0.85 }, EZ.lin],
-      [F1 + 0.3, { fire: 0, jaw: 0.4, glow: 0.3, bulge: 0 }, EZ.out2],
-      [E, { by: 0, tilt: 0, bx: 0, hx: 17, hy: -30, ha: 0.25, bend: 0.15, jaw: 0, ws: 0.08, wf: 0, paw: 0, angry: 0.2, glow: 0.12 }, EZ.io],
-    ]),
-  );
+    ];
+    if (echo) keys.push([E, { fire: 0, jaw: 0.45, glow: 0.3, bulge: 0, by: -3, hy: b.y + 4 }, EZ.out2]);
+    else
+      keys.push(
+        [F1 + 0.3, { fire: 0, jaw: 0.4, glow: 0.3, bulge: 0 }, EZ.out2],
+        [E, { by: 0, tilt: 0, bx: 0, hx: 17, hy: -30, ha: 0.25, bend: 0.15, jaw: 0, ws: 0.08, wf: 0, paw: 0, angry: 0.2, glow: 0.12 }, EZ.io],
+      );
+    return lane(REST, keys);
+  });
+}
+
+/** Поза эхо в конце волны (v=0) или второй волны (v=1). */
+function echoBreathEnd(c: TCtx, v: number): Rig {
+  const w = breathLane(c, c.tm.wave, c.tm.fireEnd, c.tm.waveEnd, null)(c.tm.waveEnd);
+  if (v === 0) return w;
+  return breathLane(c, c.tm.sweep, 1.3, c.tm.sweepEnd, w)(c.tm.sweepEnd);
+}
+
+function techBreath(t: number, c: TCtx, T: number, F1: number, E: number): SPose {
+  const from = !c.tm.fan && c.v === 1 ? echoBreathEnd(c, 0) : null;
+  const L = breathLane(c, T, F1, E, from);
   const r = L(t);
   if (t < T) r.smoke = (t * 2.2) % 1;
   else if (t > F1) r.smoke = ((t - F1) * 1.6) % 1;
@@ -2978,6 +2999,59 @@ const DIZZY_BASE: Rig = {
 const DIZ_LOOP = 24;
 const DIZ_IN = 8;
 const DIZ_OUT = 11;
+
+/** Эхо выдыхается после двух волн (без пике): оседает, морда к земле, пасть
+ *  открыта — часто дышит, из ноздрей дымок; потом встряхивается. */
+const EXH_IN = 6;
+const EXH_LOOP = 12;
+const EXH_OUT = 7;
+const EXHAUST: Rig = {
+  ...REST,
+  by: 3,
+  tilt: 0.22,
+  hx: 19,
+  hy: -12,
+  ha: 0.75,
+  jaw: 0.5,
+  bend: 0.55,
+  wd: 1,
+  ws: 0.2,
+  shut: 0.55,
+  glow: 0.04,
+};
+
+function techExhaust(t: number, f: number, c: TCtx): SPose {
+  let r: Rig;
+  let sy = 1;
+  if (f < EXH_IN) {
+    // Из позы конца второй волны — голова оседает к земле.
+    const k = EZ.out2(clamp01((f + 1) / EXH_IN));
+    r = mixRig({ ...echoBreathEnd(c, 1), smoke: -1 }, EXHAUST, k);
+    sy = 1 - 0.06 * Math.sin(k * Math.PI);
+  } else if (f < EXH_IN + EXH_LOOP) {
+    const q = (f - EXH_IN) / EXH_LOOP;
+    // Два вдоха за петлю (≈4 в секунду): грудь и пасть ходят вместе.
+    const br = 0.5 - 0.5 * Math.cos(q * TAU * 2);
+    r = { ...EXHAUST };
+    r.by = 3 - br * 1.2;
+    r.hy = -12 - br * 1.5;
+    r.jaw = 0.35 + br * 0.4;
+    r.wf = -0.15 * br;
+    r.smoke = (q * 2) % 1;
+    r.stars = q;
+    sy = 1 + 0.035 * br;
+  } else {
+    const k = clamp01((f - EXH_IN - EXH_LOOP) / (EXH_OUT - 1));
+    r = mixRig(EXHAUST, { ...REST, jaw: 0.2, shut: 0.3 }, EZ.out(k));
+    // Встряхнул мордой.
+    r.ha += Math.sin(k * TAU * 1.5) * 0.25 * (1 - k);
+    r.stars = k < 0.4 ? 1 : 0;
+  }
+  void t;
+  const ps = pose0(r);
+  ps.sy = sy;
+  return ps;
+}
 
 /** Голова в камне: звёзды, два рывка «вытащить голову», вырвался и тряхнул мордой. */
 function techDizzy(t: number, f: number, Td: number): SPose {
@@ -3219,7 +3293,7 @@ function spanOf(tech: Tech, c: TCtx): number {
     case 'dive':
       return 4;
     case 'dizzy':
-      return DIZ_IN + DIZ_LOOP + DIZ_OUT;
+      return c.v === 1 ? EXH_IN + EXH_LOOP + EXH_OUT : DIZ_IN + DIZ_LOOP + DIZ_OUT;
     case 'summon':
       return n(1.5);
     case 'recover':
@@ -3258,7 +3332,7 @@ function poseOf(q: SReq): SPose {
     case 'dive':
       return techDive(t);
     case 'dizzy':
-      return techDizzy(t, q.f, c.tm.dizzy);
+      return q.v === 1 ? techExhaust(t, q.f, c) : techDizzy(t, q.f, c.tm.dizzy);
     case 'summon':
       return techSummon(t, q.f);
     case 'recover':
@@ -3583,6 +3657,16 @@ function serpReq(m: Mob, pose: MobPose): { q: SReq; s: SerpMem } {
     case 'dizzy': {
       q.tech = 'dizzy';
       const Td = c0.tm.dizzy;
+      if (echo) {
+        // Эхо уходит в «выдохся» после волн, а не после пике: морда не в камне.
+        q.v = 1;
+        q.aim = aimB(dir);
+        if (t < EXH_IN / SFPS) q.f = Math.floor(t * SFPS);
+        else if (t < Td - EXH_OUT / SFPS)
+          q.f = EXH_IN + (Math.floor((t - EXH_IN / SFPS) * SFPS) % EXH_LOOP);
+        else q.f = Math.min(EXH_IN + EXH_LOOP + EXH_OUT - 1, EXH_IN + EXH_LOOP + Math.floor((t - (Td - EXH_OUT / SFPS)) * SFPS));
+        break;
+      }
       if (t < DIZ_IN / SFPS) q.f = Math.floor(t * SFPS);
       else if (t < Td - DIZ_OUT / SFPS)
         q.f = DIZ_IN + (Math.floor((t - DIZ_IN / SFPS) * SFPS) % DIZ_LOOP);
