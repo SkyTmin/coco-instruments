@@ -721,7 +721,7 @@ function paintWisp(dir: number, f: number, swell: number, anim: string): Built |
     p.ell(cx, cy, R * 0.7, R * 0.55, alpha(FIRE[1], 0.35 + swell * 0.3));
   }
   let body = base;
-  if (swell > 0) body = base.tint(hx('#fff6c8'), 0.15 + swell * 0.55);
+  if (swell > 0) body = base.tint(hx('#fff6c8'), 0.1 + swell * 0.38);
   if (anim === 'hurt') body = base.tint(hx('#ffffff'), 0.3);
   paste(p, body, ox + (swell > 0.66 ? (f % 2 ? 1 : -1) : 0), oy);
   if (swell > 0.5) {
@@ -735,24 +735,156 @@ function paintWisp(dir: number, f: number, swell: number, anim: string): Built |
   return { p, ax: cx, ay: oy + 16 - FLY + 1, eye: dir === 1 ? null : [cx - 2, cy - 2] };
 }
 
+/** Кольцо по лаве: задняя половина — под телом, передняя — поверх. */
+function lavaRing(p: Px, cx: number, cy: number, rx: number, ry: number, front: boolean, fade: number): void {
+  for (let a = 0; a < TAU; a += 0.06) {
+    const s = Math.sin(a);
+    if (s > 0 !== front) continue;
+    const x = Math.round(cx + Math.cos(a) * rx);
+    const y = Math.round(cy + s * ry);
+    p.set(x, y, alpha(front ? LAVA.bright : LAVA.hot, fade));
+    if (front) p.set(x, y + 1, alpha(LAVA.dark, 0.8 * fade));
+  }
+}
+
+/** Тройной такт раздувания: пульс учащается от 3 до 10 Гц. */
+function wispPulse(t: number): number {
+  const T = WISP.swell;
+  const ph = 3 * t + (7 * t * t * t) / (3 * T * T);
+  const s = Math.sin(ph * TAU);
+  return s > 0 ? s * s : 0;
+}
+
 registerMobPainter('f6_wisp', (m: Mob, pose: MobPose) => {
   const dir = dir4(m.face);
   const f = ((Math.floor(pose.t * 8) % 4) + 4) % 4;
   if (pose.mode === 'f6_swell') {
-    const k = Math.min(3, Math.floor((pose.t / WISP.swell) * 4));
-    return frameDir('f6_wisp', pose, `swell${k}`, dir, f, () => paintWisp(dir, f, (k + 1) / 4, 'swell'));
+    // v2.86: раздувается ровно (12 ступеней, пламя 12 к/с) и пульсирует,
+    // как фитиль: такт учащается к взрыву. Масштаб — полем кадра, без
+    // новых картинок; дрожь движка выключена.
+    const k = Math.min(11, Math.floor((pose.t / WISP.swell) * 12));
+    const ff = ((Math.floor(pose.t * 12) % 4) + 4) % 4;
+    const fr = frameDir('f6_wisp', pose, `swell3${k}`, dir, ff, () =>
+      paintWisp(dir, ff, (k + 1) / 12, 'swell'),
+    );
+    if (!fr) return null;
+    const q = Math.min(1, pose.t / WISP.swell);
+    const pu = wispPulse(pose.t);
+    const sc = 1 + q * 0.18 + pu * (0.05 + q * 0.07);
+    return { ...fr, still: true, sx: sc, sy: sc * (1 - pu * 0.04) };
   }
   if (pose.mode === 'f6_rise') {
-    const k = Math.min(3, Math.floor((pose.t / 0.6) * 4));
-    return frameDir('f6_wisp', pose, `rise${k}`, dir, f, () => {
-      const b = paintWisp(dir, f, 0, 'idle');
+    // v2.86: поднимается из лавы (раньше кадры шли задом наперёд — дух
+    // тонул): лава вспучивается, из-под поверхности выходят языки, потом
+    // всё тело; кольцо по лаве расходится и гаснет.
+    const k = Math.min(14, Math.max(0, Math.floor(pose.t * 24)));
+    const fr = frameDir('f6_wisp', pose, `rise3${k}`, dir, k % 4, () => {
+      const b = paintWisp(dir, k % 4, 0, 'idle');
       if (!b) return null;
-      // Поднимается из лавы: нижняя часть ещё в огне поверхности.
-      const cut = 30 - Math.round(((k + 1) / 4) * 20);
-      for (let y = Math.max(0, cut); y < b.p.h; y++) for (let x = 0; x < b.p.w; x++) clear(b.p, x, y);
-      ripple(b.p, b.ax, Math.min(b.p.h - 2, cut), 5, 1.6, f);
-      return b;
+      const q = (k + 1) / 15;
+      const e = 1 - (1 - q) * (1 - q) * (1 - q);
+      const p = new Px(b.p.w, b.p.h);
+      // Поверхность лавы — на земле кадра (дух висит на 6 px выше тени).
+      const surf = b.ay + FLY;
+      const rx = 3 + q * 7;
+      const ry = 1 + q * 1.6;
+      const fade = q < 0.6 ? 1 : 1 - (q - 0.6) / 0.5;
+      lavaRing(p, b.ax, surf, rx, ry, false, fade);
+      if (k < 3) {
+        // Лава вспучивается куполом, раньше чем покажется пламя.
+        const h = 1.5 + k;
+        for (let y = 0; y <= h; y++) {
+          const w = Math.round(Math.sqrt(1 - (y / (h + 0.5)) ** 2) * (3 + k));
+          for (let x = -w; x <= w; x++)
+            p.set(b.ax + x, surf - y, y === Math.round(h) || Math.abs(x) === w ? LAVA.hot : LAVA.bright);
+        }
+      }
+      const low = Math.round((1 - e) * 15);
+      const body = new Px(b.p.w, b.p.h);
+      paste(body, b.p, 0, low);
+      for (let y = surf; y < body.h; y++) for (let x = 0; x < body.w; x++) clear(body, x, y);
+      paste(p, body, 0, 0);
+      lavaRing(p, b.ax, surf, rx, ry, true, fade);
+      // Брызги лавы из-под поверхности — в начале подъёма, по дуге вниз.
+      if (q < 0.7)
+        for (let i = 0; i < 6; i++) {
+          const side = hash(i, 19) < 0.5 ? -1 : 1;
+          const v = 0.6 + hash(i, 17) * 0.8;
+          const tt = q * 1.6;
+          const x = Math.round(b.ax + side * (2 + tt * 6 * v));
+          const y = Math.round(surf - 1 - tt * 9 * v + tt * tt * 7);
+          if (y < surf) p.set(x, y, i % 2 ? LAVA.bright : FIRE[2]);
+        }
+      return { ...b, p };
     });
+    return fr ? { ...fr, still: true } : null;
+  }
+  if (pose.mode === 'dying') {
+    if (m.data.ghost === 1) {
+      // Сгорел во взрыве: ядро схлопывается за три кадра под вспышкой
+      // взрыва — раздутое тело не «сдувается» обратно в маленькое.
+      const k = Math.min(3, Math.floor(pose.t * 24));
+      if (k >= 3) {
+        const fr = frameDir('f6_wisp', pose, 'idle', dir, 0, () => paintWisp(dir, 0, 0, 'idle'));
+        return fr ? { ...fr, alpha: 0, shadow: 0, still: true, eye: null } : null;
+      }
+      const fr = frameDir('f6_wisp', pose, `pop${k}`, dir, 0, () => {
+        const b = paintWisp(dir, 0, 1, 'swell');
+        if (!b) return null;
+        const p = new Px(b.p.w, b.p.h);
+        const R = 7 - k * 2.2;
+        const cy = b.ay - 3;
+        p.ell(b.ax, cy, R + 1.5, (R + 1.5) * 0.85, alpha(FIRE[2], 0.85));
+        p.ell(b.ax, cy, R, R * 0.85, LAVA.white);
+        p.ell(b.ax, cy, R * 0.55, R * 0.5, hx('#ffffff'));
+        return { ...b, p, eye: null };
+      });
+      return fr ? { ...fr, still: true, sx: 1.3, sy: 1.3 } : null;
+    }
+    // Погас: вспышка удара, потом пламя оседает к низу (сжимается, а не
+    // срезается), темнеет до угля; сверху уходит дымок.
+    const k = Math.min(16, Math.floor(pose.t * 24));
+    const fr = frameDir('f6_wisp', pose, `out${k}`, dir, k % 4, () => {
+      const b = paintWisp(dir, k % 4, 0, k < 2 ? 'hurt' : 'idle');
+      if (!b) return null;
+      const q = k / 16;
+      const p = new Px(b.p.w, b.p.h);
+      const src = b.p.tint(LAVA.deep, Math.min(0.8, Math.max(0, q - 0.1) * 1.3));
+      const bottom = b.ay + FLY - 2;
+      const sy = Math.max(0.18, 1 - q * q * 0.95);
+      const sxk = 1 + q * 0.25;
+      for (let y = 0; y < p.h; y++) {
+        const sy0 = Math.round(bottom - (bottom - y) / sy);
+        if (sy0 < 0 || sy0 >= src.h) continue;
+        for (let x = 0; x < p.w; x++) {
+          const sx0 = Math.round(b.ax + (x - b.ax) / sxk);
+          if (sx0 < 0 || sx0 >= src.w) continue;
+          const i = (sy0 * src.w + sx0) * 4;
+          if (src.data[i + 3] === 0) continue;
+          const o = (y * p.w + x) * 4;
+          p.data[o] = src.data[i];
+          p.data[o + 1] = src.data[i + 1];
+          p.data[o + 2] = src.data[i + 2];
+          p.data[o + 3] = src.data[i + 3];
+        }
+      }
+      // Угли на месте мигают.
+      if (q > 0.5)
+        for (let i = 0; i < 3; i++)
+          if (hash(i, k, 5) < 0.6) p.set(b.ax - 2 + i * 2, bottom - (i % 2), i === 1 ? LAVA.hot : LAVA.mid);
+      // Дым клубами вверх.
+      for (let i = 0; i < 3; i++) {
+        const tt = q - 0.2 - i * 0.14;
+        if (tt <= 0) continue;
+        const y = bottom - 6 - tt * 16;
+        const x = b.ax + Math.sin(tt * 7 + i * 2) * 2;
+        const r = 1.4 + tt * 3;
+        p.ell(x, y, r, r * 0.8, alpha(hx('#7a6e66'), 0.7 * (1 - tt)));
+        p.ell(x - 0.5, y - 0.5, r * 0.5, r * 0.4, alpha(hx('#a09088'), 0.5 * (1 - tt)));
+      }
+      return { ...b, p, eye: null };
+    });
+    return fr ? { ...fr, still: true } : null;
   }
   const anim = pose.anim === 'hurt' ? 'hurt' : 'idle';
   return frameDir('f6_wisp', pose, anim, dir, f, () => paintWisp(dir, f, 0, anim));
@@ -3280,6 +3412,9 @@ interface SerpMem {
   cdy: number;
   /** На дыбах: насколько поднята грудь (начало тела идёт за ней). */
   rear: number;
+  /** Пасть сейчас: сдвиг от точки змея (мир, px), с подъёмом и выпадом. */
+  mx: number;
+  my: number;
   flash: number;
 }
 
@@ -3306,6 +3441,8 @@ function memOf(m: Mob, pose: MobPose): SerpMem {
       cdx: 0,
       cdy: 0,
       rear: 0,
+      mx: 0,
+      my: 0,
       flash: 0,
     };
     serpMem.set(m, s);
@@ -3612,6 +3749,12 @@ registerMobPainter('f6boss', (m: Mob, pose: MobPose) => {
     out.lit = both;
   }
   // История груди — телу: подъём и сдвиг (мир, px).
+  {
+    // Пасть в мире — струе пламени (`serpentMouth`).
+    const [snx0, sny0] = snoutOf(ps.r);
+    s.mx = sgn * snx0 * (out.sx ?? 1) + (out.dx ?? 0);
+    s.my = sny0 * (out.sy ?? 1) + (out.dy ?? 0) + 2;
+  }
   s.cdx = (out.dx ?? 0);
   s.cdy = (out.dy ?? 0) + ps.lift;
   s.rear = Math.max(0, -ps.r.by) * 0.9;
@@ -3624,6 +3767,16 @@ registerMobPainter('f6boss', (m: Mob, pose: MobPose) => {
 });
 
 const overlayCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
+/**
+ * Где пасть змея в этом кадре: сдвиг от точки моба в пикселях мира (с
+ * подъёмом в небо и выпадом), или null. Для струи пламени «Техник»: огонь
+ * выходит из пасти, а не из середины груди.
+ */
+export function serpentMouth(mobId: number): { x: number; y: number } | null {
+  const s = serpMemById.get(mobId);
+  return s ? { x: s.mx, y: s.my } : null;
+}
 
 /** Подъём груди в момент `at` (для колец тела с опозданием). */
 function liftAt(s: SerpMem | undefined, at: number): number {
@@ -3705,7 +3858,8 @@ function ringTones(varnt: number): { sc: Tones; bl: Tones; rim: RGBA } {
     };
   }
   if (varnt >= 2) {
-    const rim = varnt === 2 ? hx('#c0340e') : varnt === 3 ? LAVA.hot : LAVA.bright;
+    // Жилы между пластин: во 2-й фазе тлеют, в «Разломе» — горят, на призыве — вспыхивают.
+    const rim = varnt === 2 ? hx('#9a2a0e') : varnt === 3 ? hx('#d04410') : LAVA.hot;
     return { sc: SRP.scale, bl: SRP.belly, rim };
   }
   return { sc: SRP.scale, bl: SRP.belly, rim: mixc(SRP.scale[1], SRP.scale[0], 0.55) };
@@ -4067,7 +4221,7 @@ export function drawSerpentBody(
   const sx = (rg: Ring) => px + (rg.x - v.x) * S;
   const sy = (rg: Ring) => py + (rg.y - v.y) * S;
   const vflash = v.flash > 0.05 && v.die < 0;
-  const heatV = ph >= 3 ? 4 : ph >= 2 ? 3 : 0;
+  const heatV = ph >= 3 ? 3 : ph >= 2 ? 2 : 0;
   const summon = v.mode === 'f6_summon' ? Math.sin(seg(v.t, 0.4, 1.2) * Math.PI) : 0;
   const varOf = (rg: Ring) => {
     if (vflash) return 1;
