@@ -1893,6 +1893,7 @@ interface HGeo {
   jawTip: V2;
   nape: V2;
   stub: V2;
+  stubA: number;
 }
 
 function headGeo(r: HeadRig, B: HBox): HGeo {
@@ -1914,8 +1915,9 @@ function headGeo(r: HeadRig, B: HBox): HGeo {
   };
   const ja = 0.18 + r.jaw * 0.55;
   const nape = P(-4.5, 2.2);
-  // Шея уходит от затылка назад и вниз и гнётся с головой лишь отчасти.
-  const a = Math.PI - 0.5 + r.pitch * 0.35;
+  // Шея уходит от затылка назад и вниз и гнётся с головой лишь отчасти;
+  // у отрубленной это просто кусок шеи — крутится вместе с головой.
+  const a = Math.PI - 0.5 + r.pitch * (r.cut ? 1 : 0.35);
   const stub: V2 = [nape[0] + Math.cos(a) * 7 * s, nape[1] + Math.sin(a) * 7 * s];
   return {
     P,
@@ -1929,6 +1931,7 @@ function headGeo(r: HeadRig, B: HBox): HGeo {
     jawTip: P(1 + Math.cos(ja) * 10, 3 + Math.sin(ja) * 10),
     nape,
     stub,
+    stubA: a,
   };
 }
 
@@ -2127,35 +2130,28 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
   const LIT = () => (lit ??= new Px(B.W, B.H));
   const g = headGeo(r, B);
   const { P, Q, s } = g;
-  // Нимб белой — за затылком: светлеет, когда голова копит свет.
+  // Нимб белой — за затылком (рисуется в конце, только по пустому).
+  const halo: [number, number, number][] = [];
   if (el === 4 && r.cut === 0 && r.roll < 0.5) {
     const [hx0, hy0] = P(-2, -1);
     const R = 7 * s + r.glow * 2.2;
-    for (let a = 0; a < TAU; a += 0.09) {
-      const x = Math.round(hx0 + Math.cos(a) * R);
-      const y = Math.round(hy0 + Math.sin(a) * R * 0.9);
-      p.set(x, y, alpha(L.glow, 0.5));
-      if (r.glow > 0.05) LIT().set(x, y, alpha(L.glowHi, 0.35 + 0.6 * r.glow));
-    }
+    for (let a = 0; a < TAU; a += 0.09)
+      halo.push([Math.round(hx0 + Math.cos(a) * R), Math.round(hy0 + Math.sin(a) * R * 0.9), 0]);
     if (r.glow > 0.35)
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * TAU + r.spark * 0.2;
-        const r0 = R + 1.5;
-        const r1 = R + 1.5 + r.glow * 3;
-        stroke(
-          LIT(),
-          hx0 + Math.cos(a) * r0,
-          hy0 + Math.sin(a) * r0 * 0.9,
-          hx0 + Math.cos(a) * r1,
-          hy0 + Math.sin(a) * r1 * 0.9,
-          alpha(L.glowHi, 0.55 * r.glow),
-        );
+        for (let d = 1.5; d <= 1.5 + r.glow * 3; d += 0.7)
+          halo.push([
+            Math.round(hx0 + Math.cos(a) * (R + d)),
+            Math.round(hy0 + Math.sin(a) * (R + d) * 0.9),
+            1,
+          ]);
       }
   }
   // Шея у затылка — сливается с шеей на полу; брюшко светлее.
   limb(p, g.stub[0], g.stub[1], g.nape[0], g.nape[1], 4.2 * s, 3.7 * s, L.skin);
   {
-    const a = Math.PI - 0.5 + r.pitch * 0.35;
+    const a = g.stubA;
     const nx = -Math.sin(a);
     const ny = Math.cos(a);
     const off = 2.4 * s * (ny >= 0 ? 1 : -1);
@@ -2171,21 +2167,19 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
       0.1,
     );
   }
-  // Горло: раздувается перед выдохом; изнутри светится стихией.
-  if (r.swell > 0.04) {
-    const [tx, ty] = P(-1.4, 4.4);
-    shadeEll(p, tx, ty, (1.8 + 2.4 * r.swell) * s, (1.3 + 1.8 * r.swell) * s, L.belly, 0.15);
-    if (r.glow > 0.2 && el !== 5)
-      LIT().ell(
-        tx,
-        ty,
-        (0.8 + 1.6 * r.swell) * s,
-        (0.6 + 1.1 * r.swell) * s,
-        alpha(L.glow, 0.45 * r.glow * r.swell),
-      );
-  }
   // Нижняя челюсть.
   limb(p, g.hinge[0], g.hinge[1], g.jawTip[0], g.jawTip[1], 2.4 * s, 1.3 * s, L.belly);
+  // Горло: мешок под челюстью раздувается перед выдохом, изнутри — свет.
+  if (r.swell > 0.04) {
+    const [tx, ty] = P(-0.8, 4.6 + r.swell * 0.8);
+    const rx = (1.8 + 2.8 * r.swell) * s;
+    const ry = (1.3 + 2.1 * r.swell) * s;
+    shadeEll(p, tx, ty, rx, ry, L.belly, 0.2);
+    if (r.glow > 0.2 && el !== 5) {
+      LIT().ell(tx + 0.5, ty + 0.3, rx * 0.55, ry * 0.5, alpha(L.glow, 0.55 * r.glow * r.swell));
+      p.ell(tx + 0.5, ty + 0.3, rx * 0.45, ry * 0.4, mixc(L.belly[3], L.glow, 0.5 * r.glow));
+    }
+  }
   // Череп и морда.
   const [c0, c1] = P(0, 0);
   shadeEll(p, c0, c1, 6.2 * s, 4.8 * s * g.sq, L.skin);
@@ -2373,6 +2367,58 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
     }
     if (eye && eye[1] >= cy) eye = null;
   }
+  // Дым из ноздрей огненной, пока копит жар.
+  if (el === 0 && r.glow > 0.2 && r.glow < 0.97)
+    for (let i = 0; i < 4; i++) {
+      const [x, y] = Q(10.2 - i * 0.9 + ((r.spark + i) % 2) * 0.6, -1.6 - i * 1.4);
+      const xi = Math.round(x);
+      const yi = Math.round(y);
+      if (!p.solid(xi, yi)) p.set(xi, yi, alpha(hx('#8a8078'), 0.75 - i * 0.16));
+    }
+  // Гроза копит разряд: дуга пляшет между рогами.
+  if (el === 3 && r.glow > 0.3 && r.glow < 0.97) {
+    const k = r.crest;
+    const a = P(-1 - 3, -3.5 - 6.5 * k);
+    const b = P(-4 - 3, -3.5 - 6.5 * k);
+    const lp = LIT();
+    let prev = a;
+    for (let i = 1; i <= 4; i++) {
+      const u = i / 4;
+      const j = i === 4 ? 0 : (hash(i, r.spark, 17) - 0.5) * 4;
+      const q: V2 = [lerp(a[0], b[0], u), lerp(a[1], b[1], u) - 1.5 + j];
+      stroke(lp, prev[0], prev[1], q[0], q[1], alpha(i % 2 ? WHITE : L.glow, 0.95));
+      prev = q;
+    }
+  }
+  // Корона: цветные искры пяти стихий слетаются в пасть.
+  if (el === 5 && r.glow > 0.1 && r.jaw > 0.5) {
+    const [mx, my] = P(5, 2.4);
+    const lp = LIT();
+    const R = (1 - r.glow) * 13 + 3;
+    for (let i = 0; i < 5; i++) {
+      const a = r.spark * 0.5 + (i / 5) * TAU;
+      const x = mx + Math.cos(a) * R;
+      const y = my + Math.sin(a) * R * 0.7;
+      lp.set(x, y, ELEM[i].glowHi);
+      lp.set(x - Math.cos(a) * 1.2, y - Math.sin(a) * 0.9, alpha(ELEM[i].glow, 0.8));
+    }
+  }
+  // Захлоп: блик на зубах в кадре контакта.
+  if (r.smear > 0.5) {
+    const [x, y] = Q(11.2, 1.8);
+    const lp = LIT();
+    const c = alpha(WHITE, 0.95);
+    lp.set(x, y, c);
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+      [2, 0],
+      [0, 2],
+    ])
+      lp.set(x + dx, y + dy, alpha(L.glowHi, 0.8));
+  }
   // След захлопнувшихся челюстей: серпы по дугам кончиков.
   if (r.smear > 0.05) {
     const jaOpen = 0.18 + 1.3 * 0.55;
@@ -2413,8 +2459,8 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
     p.ell(sx, sy, 0.9 * s, 0.7 * s, FLESH[3]);
     for (let i = 0; i < 6 * r.blood; i++) {
       const d = 2 + i * 1.6;
-      const x = sx - Math.cos(0.5 + r.pitch * 0.35) * d * (0.6 + hash(i, 3) * 0.6);
-      const y = sy + Math.sin(0.5) * d + hash(i, 4) * 2 - 1;
+      const x = sx + Math.cos(g.stubA) * d * (0.6 + hash(i, 3) * 0.6);
+      const y = sy + Math.sin(g.stubA) * d * 0.4 + d * 0.5 + hash(i, 4) * 2 - 1;
       p.set(x, y, i % 2 ? FLESH[2] : FLESH[1]);
     }
   }
@@ -2428,6 +2474,11 @@ function paintHeadRig(el: number, r: HeadRig, B: HBox, clip: number, mud: boolea
       const y = Math.round(by + fall);
       if (y < clip - 1 && !p.solid(x, y)) p.set(x, y, alpha(c, 0.9 * Math.min(1, r.wet * 1.6)));
     }
+  }
+  for (const [x, y, ray] of halo) {
+    if (y >= clip || p.solid(x, y)) continue;
+    if (!ray) p.set(x, y, alpha(L.glow, 0.55));
+    if (r.glow > 0.05) LIT().set(x, y, alpha(L.glowHi, ray ? 0.5 * r.glow : 0.35 + 0.6 * r.glow));
   }
   return { p, lit, eye };
 }
@@ -2514,7 +2565,7 @@ function castLane(el: number, T: number, E: number): HL {
         { fx: -3.5, fy: -5, pitch: -0.42, jaw: 0.36, swell: 1, glow: 0.55, bulge: 1, bulgeA: 1 },
         EZ.io,
       ],
-      [H - 2, { fx: -2, fy: -3, pitch: -0.22, jaw: 0.85, glow: 0.9, bulgeA: 0 }, EZ.in],
+      [H - 1, { fx: -2, fy: -3, pitch: -0.22, jaw: 0.85, glow: 0.9, bulgeA: 0 }, EZ.in],
       [H, { fx: 3, fy: 1.5, pitch: 0.16, jaw: 1.2, glow: 1, swell: 0.25, crest: 1.5 }, EZ.out],
       [H + 3, { fx: 1.8, fy: 0.6, pitch: 0.1, jaw: 1.12, glow: 0.95 }, EZ.io],
       [e - 3, { fx: 0.6, fy: 0, pitch: 0.04, jaw: 0.5, glow: 0.35, swell: 0, crest: 1.1 }, EZ.io],
@@ -2547,7 +2598,7 @@ function castLane(el: number, T: number, E: number): HL {
         { fy: -6, pitch: -0.25, crest: 1.7, glow: 0.45, eye: 0, jaw: 0.12, lift: 7 },
         EZ.out,
       ],
-      [H - 2, { fy: -7.5, pitch: -0.32, glow: 0.85, lift: 7.5 }, EZ.io],
+      [H - 1, { fy: -7.5, pitch: -0.32, glow: 0.85, lift: 7.5 }, EZ.io],
       [H, { fy: -3, pitch: -0.55, jaw: 1.2, glow: 1, eye: 2 }, EZ.out],
       [H + 4, { fy: -2, pitch: -0.22, jaw: 0.45, glow: 0.35, eye: 1 }, EZ.io],
       [e, REST_MOVE, EZ.io],
@@ -2589,6 +2640,7 @@ const healLane: HL = lane<HeadRig>(HREST, [
 const riseLane: HL = lane<HeadRig>(HREST, [
   [0, { s: 0.4, lift: -9, pitch: -1.15, jaw: 0, crest: 0.3, eye: 0, wet: 1 }],
   [5, { s: 0.55, lift: -4, pitch: -1.2, jaw: 0.15 }, EZ.out],
+  [7, { s: 0.8, lift: 4, pitch: -1.1, jaw: 0.7, crest: 1.1 }, EZ.in],
   [9, { s: 1.06, lift: 13, pitch: -0.95, jaw: 1.2, crest: 1.55, eye: 2 }, EZ.out],
   [13, { s: 1, lift: 8, pitch: -0.3, jaw: 0.6, wet: 0.65 }, EZ.io],
   [16, { lift: 5.5, pitch: 0.16, jaw: 0.2, wet: 0.35 }, EZ.io],
@@ -2811,8 +2863,10 @@ function headPose(m: Mob, now: number, t: number, crown: boolean): HeadPose {
       rig = laneOf('cbite', () => biteLane(0.62, 1.2, 1.25))(spark);
       ghost = spark >= q24(0.62) - 2 && spark <= q24(0.62) + 1;
     } else if (mode === 'prism') {
-      spark = q24(t);
-      rig = laneOf('prism', () => prismLane(0.95, 1.5))(spark);
+      const x = q24(t);
+      rig = laneOf('prism', () => prismLane(0.95, 1.5))(x);
+      // Свет в глотке раскручивается с разгоном: шаг кольца растёт.
+      spark = x <= q24(0.95) ? Math.floor((x * x) / 14) : x;
     } else if (mode === 'dive') {
       spark = q24(t);
       rig = crownDive(spark);
@@ -2839,6 +2893,9 @@ function headPose(m: Mob, now: number, t: number, crown: boolean): HeadPose {
     spark = q24(mode === 'recover' ? 0.77 + t : t);
     rig = f(spark);
     ghost = spark >= q24(T) - 2 && spark <= q24(T) + 1;
+    // Взведена: шея дрожит пружиной — сейчас бросок (сдвигом, без рисунка).
+    const H = q24(T);
+    if (spark >= H - 5 && spark <= H - 3) rig = { ...rig, fx: rig.fx + (spark % 2 ? 0.6 : -0.6) };
   } else if (mode === 'cast' || (mode === 'recover' && mem.prev === 'cast')) {
     if (echo) {
       spark = q24(mode === 'recover' ? 0.75 + t : t);
@@ -3311,16 +3368,28 @@ function paintStump2(el: number, r: StumpRig): { p: Px; lit: Px | null } {
   // «Прижги!» — золотая стрелка на срез, подпрыгивает.
   if (r.arrow >= 0) {
     const lp = LIT();
-    const byA = Math.round(topY - 12 + [0, 1, 2, 1][r.arrow % 4]);
-    for (let i = 0; i < 4; i++) {
-      for (const q of [p, lp]) {
-        q.set(tx - 3 + i, byA + i, GOLD);
-        q.set(tx + 3 - i, byA + i, GOLD);
-      }
-    }
-    for (const q of [p, lp]) {
-      q.set(tx, byA + 4, hx('#fff4b0'));
-      q.set(tx, byA + 5, hx('#ff7a1a'));
+    const ay = Math.round(topY - 13 + [0, 1, 2, 1][r.arrow % 4]);
+    const ax = Math.round(tx);
+    const cells: [number, number, RGBA][] = [];
+    for (let y = 0; y < 3; y++) cells.push([ax, ay + y, GOLD]);
+    for (let row = 0; row < 4; row++)
+      for (let x = -3 + row; x <= 3 - row; x++)
+        cells.push([
+          ax + x,
+          ay + 3 + row,
+          row === 3 ? hx('#ff7a1a') : x === 0 ? hx('#fff4b0') : GOLD,
+        ]);
+    for (const [x, y] of cells)
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ])
+        if (!p.solid(x + dx, y + dy)) p.set(x + dx, y + dy, INK);
+    for (const [x, y, c] of cells) {
+      p.set(x, y, c);
+      lp.set(x, y, alpha(c, 0.9));
     }
   }
   // Под воду: срезать ниже поверхности, пена кругом.
@@ -3720,8 +3789,8 @@ function tailGeo(t: TailRig, dir: number): TailPt[] {
   const sa = Math.sin(A);
   const N = 11;
   const L = 3.9;
-  let u = 21;
-  let v = 9;
+  let u = 19;
+  let v = 11;
   let h = -3 - (1 - t.emerge) * 42;
   const pts: TailPt[] = [];
   const push = (i: number) =>
@@ -3734,7 +3803,7 @@ function tailGeo(t: TailRig, dir: number): TailPt[] {
   push(0);
   for (let i = 0; i < N; i++) {
     const phi = t.phi + t.curl * i * (1 + i * 0.05);
-    const psi = t.psi * (0.25 + (0.75 * i) / (N - 1));
+    const psi = t.psi * (0.45 + (0.55 * i) / (N - 1));
     u += Math.cos(phi) * Math.cos(psi) * L;
     v += Math.cos(phi) * Math.sin(psi) * L;
     h += Math.sin(phi) * L;
@@ -3746,7 +3815,7 @@ function tailGeo(t: TailRig, dir: number): TailPt[] {
 }
 
 /** Взведённый хвост — откуда начинается взмах (для следа). */
-const TAIL_COCK: TailRig = { emerge: 1, phi: 1.9, curl: 0.165, psi: 0.62, smear: 0, slap: 0 };
+const TAIL_COCK: TailRig = { emerge: 1, phi: 1.45, curl: -0.11, psi: 1.35, smear: 0, slap: 0 };
 
 const TAIL_L = frameLRU<Layer>(140);
 
@@ -3892,9 +3961,8 @@ function tailLayer(t: TailRig, dir: number, drip: number): Layer {
       );
       if (prev)
         for (const [j, w] of [
-          [q.length - 1, 2.2],
-          [q.length - 3, 1.4],
-          [q.length - 5, 1],
+          [q.length - 1, 2],
+          [q.length - 3, 1],
         ] as const) {
           const a = prev[j];
           const b = q[j];
@@ -3902,7 +3970,7 @@ function tailLayer(t: TailRig, dir: number, drip: number): Layer {
           for (let i = 0; i <= n; i++) {
             const x = lerp(a.x, b.x, i / n);
             const y = lerp(a.y, b.y, i / n);
-            const al = t.smear * (0.25 + 0.6 * k);
+            const al = t.smear * (0.15 + 0.5 * k);
             for (let d = -w / 2; d <= w / 2; d += 1) under(p, x, y + d, alpha(hx('#e8fff4'), al));
           }
         }
@@ -3969,19 +4037,25 @@ const bodyDie = lane<BodyDyn>({ ...BODY0, legs: 1, up: 4, water: 40, mud: 0.5 },
 ]);
 
 /** Хвост: из воды → взведён → держит → взмах → шлепок в кадре урона → тонет. */
-const TAIL0: TailRig = { emerge: 0, phi: 1.45, curl: 0.1, psi: 0.6, smear: 0, slap: 0 };
+const TAIL0: TailRig = { emerge: 0, phi: 1.5, curl: -0.02, psi: 0.6, smear: 0, slap: 0 };
 const TAIL_HIT = q24(1.15);
+/**
+ * Хвост: встаёт из воды, заваливается дугой вбок (крюк над водой), держит,
+ * добирает замах — и хлещет поперёк, ложась вдоль удара в кадре урона; с
+ * перелётом, потом тонет. Вбок — потому что сверху «вверх-вниз» не видно:
+ * хвост к камере и от неё читался бы столбом.
+ */
 const tailLane = lane<TailRig>(TAIL0, [
   [0, {}],
   [4, { emerge: 0.3 }, EZ.in],
-  [9, { emerge: 0.9, phi: 1.62, curl: 0.12, psi: 0.55 }, EZ.out],
-  [12, { emerge: 1, phi: 1.75, curl: 0.13, psi: 0.5 }, EZ.out],
-  [TAIL_HIT - 6, { phi: 1.9, curl: 0.165, psi: 0.62 }, EZ.io],
-  [TAIL_HIT - 2, { phi: 1.35, curl: 0.03, psi: 0.36 }, EZ.in],
-  [TAIL_HIT - 1, { phi: 0.7, curl: -0.05, psi: 0.15, smear: 1 }, EZ.in],
-  [TAIL_HIT, { phi: 0.1, curl: -0.012, psi: 0, smear: 0.8, slap: 1 }, EZ.lin],
-  [TAIL_HIT + 2, { phi: 0.02, curl: -0.03, psi: -0.13, smear: 0, slap: 0.6 }, EZ.out],
-  [TAIL_HIT + 6, { phi: 0.08, curl: 0, psi: -0.04, slap: 0 }, EZ.io],
+  [9, { emerge: 0.9, phi: 1.45, curl: -0.05, psi: 0.9 }, EZ.out],
+  [12, { emerge: 1, phi: 1.35, curl: -0.09, psi: 1.15 }, EZ.out],
+  [TAIL_HIT - 6, { phi: 1.45, curl: -0.11, psi: 1.35 }, EZ.io],
+  [TAIL_HIT - 2, { phi: 1.25, curl: -0.08, psi: 0.95 }, EZ.in],
+  [TAIL_HIT - 1, { phi: 0.75, curl: -0.05, psi: 0.45, smear: 1 }, EZ.in],
+  [TAIL_HIT, { phi: 0.12, curl: -0.01, psi: 0, smear: 0.8, slap: 1 }, EZ.lin],
+  [TAIL_HIT + 2, { phi: 0.03, curl: -0.02, psi: -0.22, smear: 0, slap: 0.6 }, EZ.out],
+  [TAIL_HIT + 6, { phi: 0.08, curl: 0, psi: -0.06, slap: 0 }, EZ.io],
   [TAIL_HIT + 11, { emerge: 1 }, EZ.io],
   [TAIL_HIT + 19, { emerge: 0 }, EZ.in],
 ]);
@@ -4218,16 +4292,21 @@ const NMEM = new Map<string, NeckMem>();
 let FALLS: NeckFall[] = [];
 let neckSim: object | null = null;
 
-/** Диск шеи: тело с объёмом и светлым брюхом снизу; `ink` — контур шире на пиксель. */
+/**
+ * Диск шеи: тело с объёмом и светлым брюхом снизу. `kind`: 0 — контур
+ * (шире на пиксель), 1 — тело, 2 — тело с тёмным кольцом: следующий диск
+ * закрывает его почти целиком, и от кольца остаётся дуга — стык чешуйчатых
+ * колец, а не гладкая трубка.
+ */
 const DISC = new Map<string, HTMLCanvasElement>();
-function neckDisc(el: number, cut: number, r: number, ink: boolean): HTMLCanvasElement {
-  const key = `${el}|${cut}|${r}|${ink ? 1 : 0}`;
+function neckDisc(el: number, cut: number, r: number, kind: 0 | 1 | 2): HTMLCanvasElement {
+  const key = `${el}|${cut}|${r}|${kind}`;
   let c = DISC.get(key);
   if (c) return c;
   const S = 2 * r + 4;
   const p = new Px(S, S);
   const o = r + 2;
-  if (ink) p.ell(o, o, r + 1, r + 1, INK);
+  if (kind === 0) p.ell(o, o, r + 1, r + 1, INK);
   else {
     const L = ELEM[el];
     const skin = cut === 2 ? CHAR : L.skin;
@@ -4242,7 +4321,14 @@ function neckDisc(el: number, cut: number, r: number, ink: boolean): HTMLCanvasE
         const nz = Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy));
         p.set(x, y, tone(belly, dx * LX + dy * LY + nz * LZ + 0.35));
       }
-    // Чешуйка — редкая, по кругу, чтобы стык дисков не читался бусами.
+    if (kind === 2)
+      for (let y = 0; y < S; y++)
+        for (let x = 0; x < S; x++) {
+          const d = Math.hypot(x + 0.5 - o, y + 0.5 - o);
+          if (d > r - 0.3 || d < r - 1.3) continue;
+          const c0 = p.get(x, y);
+          p.set(x, y, mixc(c0, skin[0], 0.7));
+        }
     if (r >= 4 && cut !== 2) {
       p.set(o - Math.round(r * 0.4), o - Math.round(r * 0.35), skin[3]);
       p.set(o + Math.round(r * 0.25), o - Math.round(r * 0.1), skin[0]);
@@ -4263,15 +4349,15 @@ function neckSpike(el: number, cut: number, di: number, big: boolean): HTMLCanva
   const a = (di / 16) * TAU;
   const ux = Math.cos(a);
   const uy = Math.sin(a);
-  const len = big ? 4.5 : 3.6;
+  const len = big ? 5.5 : 4.4;
   // Шип наклонён назад — к корню шеи (перпендикуляр повёрнут на 0,5 рад).
   const tip: V2 = [6.5 + ux * len, 6.5 + uy * len];
   const nx = -uy;
   const ny = ux;
   const L = ELEM[el];
-  const col = cut === 2 ? CHAR : el === 5 ? L.crest : L.crest[1] ? L.crest : L.skin;
-  poly(p, [[6.5 + nx * 1.6, 6.5 + ny * 1.6], tip, [6.5 - nx * 1.6, 6.5 - ny * 1.6]], (x, y) =>
-    tone(col, 0.9 - Math.hypot(x - tip[0], y - tip[1]) * 0.12),
+  const col = cut === 2 ? CHAR : L.crest;
+  poly(p, [[6.5 + nx * 1.8, 6.5 + ny * 1.8], tip, [6.5 - nx * 1.8, 6.5 - ny * 1.8]], (x, y) =>
+    tone(col, 1.05 - Math.hypot(x - tip[0], y - tip[1]) * 0.16),
   );
   inkOut(p);
   c = p.canvas();
@@ -4378,14 +4464,14 @@ function drawNeckPts(
   g: CanvasRenderingContext2D,
   pts: NeckSample[],
   n: NeckNow,
-  left: number,
-  top: number,
+  ox: number,
+  oy: number,
 ): void {
   // Контур всей шеи, потом шипы, потом тело: стыки дисков не видны.
   for (const s of pts) {
-    const img = neckDisc(n.el, n.cut, s.r, true);
+    const img = neckDisc(n.el, n.cut, s.r, 0);
     const o = s.r + 2;
-    g.drawImage(img, Math.round(s.x) - o - left, Math.round(s.y) - o - top);
+    g.drawImage(img, Math.round(s.x) - o - ox, Math.round(s.y) - o - oy);
   }
   let acc = 0;
   for (let i = 1; i < pts.length - 1; i++) {
@@ -4406,15 +4492,65 @@ function drawNeckPts(
     const img = neckSpike(n.el, n.cut, di, n.big);
     g.drawImage(
       img,
-      Math.round(s.x + nx * s.r * 0.75) - 6 - left,
-      Math.round(s.y + ny * s.r * 0.75) - 6 - top,
+      Math.round(s.x + nx * s.r * 0.7) - 6 - ox,
+      Math.round(s.y + ny * s.r * 0.7) - 6 - oy,
     );
   }
-  for (const s of pts) {
-    const img = neckDisc(n.el, n.cut, s.r, false);
+  // Тело: каждое третье звено — с кольцом (дуги колец — чешуйчатые стыки).
+  let ring = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const s = pts[i];
+    if (i > 0) ring += Math.hypot(s.x - pts[i - 1].x, s.y - pts[i - 1].y);
+    let kind: 1 | 2 = 1;
+    if (ring >= 4.2 && i < pts.length - 2) {
+      ring = 0;
+      kind = 2;
+    }
+    const img = neckDisc(n.el, n.cut, s.r, kind);
     const o = s.r + 2;
-    g.drawImage(img, Math.round(s.x) - o - left, Math.round(s.y) - o - top);
+    g.drawImage(img, Math.round(s.x) - o - ox, Math.round(s.y) - o - oy);
   }
+}
+
+/**
+ * Холст шей на кадр: все шеи ложатся в мировых пикселях 1:1, на экран —
+ * одним блитом с масштабом. Сотни мелких дисков прямо на экранный холст
+ * (каждый с масштабом ×2–3) стоили бы кадру в разы дороже.
+ */
+let NB: HTMLCanvasElement | null = null;
+let NBG: CanvasRenderingContext2D | null = null;
+interface NeckJob {
+  pts: NeckSample[];
+  n: NeckNow;
+}
+function neckBoard(g: CanvasRenderingContext2D, jobs: NeckJob[], left: number, top: number): void {
+  let x0 = 1e9;
+  let y0 = 1e9;
+  let x1 = -1e9;
+  let y1 = -1e9;
+  for (const j of jobs)
+    for (const s of j.pts) {
+      x0 = Math.min(x0, s.x - s.r - 8);
+      y0 = Math.min(y0, s.y - s.r - 8);
+      x1 = Math.max(x1, s.x + s.r + 8);
+      y1 = Math.max(y1, s.y + s.r + 8);
+    }
+  if (x1 < x0) return;
+  x0 = Math.floor(x0);
+  y0 = Math.floor(y0);
+  const w = Math.ceil(x1) - x0;
+  const h = Math.ceil(y1) - y0;
+  if (!NB || NB.width < w || NB.height < h) {
+    NB = document.createElement('canvas');
+    NB.width = Math.max(w, NB?.width ?? 0, 64) + 64;
+    NB.height = Math.max(h, NB?.height ?? 0, 64) + 64;
+    NBG = NB.getContext('2d');
+  }
+  const ng = NBG;
+  if (!ng) return;
+  ng.clearRect(0, 0, w, h);
+  for (const j of jobs) drawNeckPts(ng, j.pts, j.n, x0, y0);
+  g.drawImage(NB, 0, 0, w, h, x0 - left, y0 - top, w, h);
 }
 
 function ripple(
@@ -4433,14 +4569,16 @@ function ripple(
   g.stroke();
 }
 
+interface Ripple {
+  x: number;
+  y: number;
+  R: number;
+  a: number;
+  mud: boolean;
+}
+
 /** Шея без головы: конец падает в воду, дуга опадает, шея уходит под воду к телу. */
-function drawFall(
-  g: CanvasRenderingContext2D,
-  f: NeckFall,
-  time: number,
-  left: number,
-  top: number,
-): boolean {
+function fallJob(f: NeckFall, time: number, jobs: NeckJob[], rips: Ripple[]): boolean {
   const age = time - f.t0;
   if (age > 1.2) return false;
   const n = f.n;
@@ -4462,16 +4600,17 @@ function drawFall(
     1 - EZ.in(k2) * 0.97,
     1 - 0.3 * k2,
   );
-  if (pts.length > 1) drawNeckPts(g, pts, n, left, top);
+  if (pts.length > 1) jobs.push({ pts, n });
   if (a >= 0.38) {
     const last = pts[pts.length - 1];
-    if (last) ripple(g, last.x - left, last.y - top, 3 + (a - 0.38) * 14, 0.6 * (1 - k2), f.mud);
+    if (last)
+      rips.push({ x: last.x, y: last.y, R: 3 + (a - 0.38) * 14, a: 0.6 * (1 - k2), mud: f.mud });
     for (let i = 0; i < 3; i++) {
       const st = 0.38 + i * 0.14;
       const q = pts[Math.floor(pts.length * (0.8 - i * 0.28))];
       if (!q || a < st) continue;
       const k = (a - st) / 0.6;
-      ripple(g, q.x - left, q.y - top, 2 + k * 10, 0.45 * (1 - k), f.mud);
+      rips.push({ x: q.x, y: q.y, R: 2 + k * 10, a: 0.45 * (1 - k), mud: f.mud });
     }
   }
   return true;
@@ -4562,7 +4701,7 @@ registerZonePainter('f9_necks', (g, z, px, py, S, time) => {
         R,
         E,
         D,
-        r0: 5.2,
+        r0: 4.8,
         r1,
         coil: rig.coil,
         bulge: rig.bulge,
@@ -4582,8 +4721,8 @@ registerZonePainter('f9_necks', (g, z, px, py, S, time) => {
         R,
         E,
         D: [(R[0] - E[0]) / l, (R[1] - E[1]) / l],
-        r0: 5.2,
-        r1: 4.6,
+        r0: 4.8,
+        r1: 4.4,
         coil: 0,
         bulge: 0,
         bulgeA: 0,
@@ -4596,16 +4735,31 @@ registerZonePainter('f9_necks', (g, z, px, py, S, time) => {
   if (cr && body && crownNeckOn(cr)) {
     const hp = headPose(cr, time, cr.t, true);
     const e = headEnd(cr, hp);
+    // Из ила шея выходит там, где вынырнула голова, и лишь потом ложится
+    // к телу: у выныривания корень — под самой головой.
+    const ground: V2 = [cr.x * S, cr.y * S + 2];
+    const home = rootOf(body, cr.x, cr.y);
+    const cm = memOf(cr, time);
+    let R = home;
+    if (cr.mode === 'rise' || cr.mode === 'whirl') R = ground;
+    else if (
+      cr.mode === 'up' &&
+      (cm.prev === 'rise' || cm.prev === 'whirl') &&
+      time - cm.at < 0.6
+    ) {
+      const k = EZ.io(clamp01((time - cm.at - 0.1) / 0.5));
+      R = [lerp(ground[0], home[0], k), lerp(ground[1], home[1], k)];
+    }
     live.push({
       key: `c${cr.id}`,
       id: cr.id,
       el: 5,
       big: true,
       cut: 0,
-      R: rootOf(body, cr.x, cr.y),
+      R,
       E: e.E,
       D: e.D,
-      r0: 6.6,
+      r0: 6.2,
       r1: e.r1,
       coil: hp.rig.coil,
       bulge: hp.rig.bulge,
@@ -4681,7 +4835,9 @@ registerZonePainter('f9_necks', (g, z, px, py, S, time) => {
     mm.at = time;
     mm.n = n;
   }
-  FALLS = FALLS.filter((f) => drawFall(g, f, time, left, top));
+  const jobs: NeckJob[] = [];
+  const rips: Ripple[] = [];
+  FALLS = FALLS.filter((f) => fallJob(f, time, jobs, rips));
   live.sort((a, b) => a.E[1] - b.E[1]);
   for (const n of live) {
     const mm = NMEM.get(n.key);
@@ -4700,15 +4856,17 @@ registerZonePainter('f9_necks', (g, z, px, py, S, time) => {
       }
     }
     const pts = sampleNeck(n.R, mm.c1, mm.c2, E, n.r0, r1, n, 1 - n.under * 0.92, 1);
-    if (pts.length > 1) drawNeckPts(g, pts, n, left, top);
+    if (pts.length > 1) jobs.push({ pts, n });
     if (n.under > 0.05 && pts.length) {
       const q = pts[pts.length - 1];
-      ripple(g, q.x - left, q.y - top, q.r + 3, 0.7, n.big || phase === 3);
+      rips.push({ x: q.x, y: q.y, R: q.r + 3, a: 0.7, mud: n.big || phase === 3 });
     }
   }
+  if (jobs.length) neckBoard(g, jobs, left, top);
+  for (const r of rips) ripple(g, r.x - left, r.y - top, r.R, r.a, r.mud);
   // Скрытая голова под илом: над ней вздыблен ил — шея ползёт под землёй.
   const hid = mobs.find(
-    (m) => m.kind === 'f9_crown' && (m.mode === 'hunt' || (m.mode === 'whirl' && m.t < 0.9)),
+    (m) => m.kind === 'f9_crown' && (m.mode === 'hunt' || m.mode === 'whirl' || m.mode === 'rise'),
   );
   if (hid && body) {
     const R = rootOf(body, hid.x, hid.y);
