@@ -1651,7 +1651,8 @@ function heavyFloor(fx: Fx): void {
   // Выбоина у точки удара.
   p.col(C.deep, 0.9 * fade);
   fillSector(p, h.bx, h.by, 0, 2.6, 0, TAU);
-  dust(p, h.sd, age, h.bx, h.by, 8, h.ang, 1.6, 26, 34, 2, 6, 7, 0.9, 0.55);
+  specks(p, h.sd, age, h.bx, h.by, 18, h.ang, 1.7, 40, 60, 0.7, 36);
+  dust(p, h.sd, age, h.bx, h.by, 5, h.ang, 1.6, 26, 34, 2, 5, 7, 0.9, 0.45);
   shards(p, heavyShards(h), age, time, 'ground');
 }
 
@@ -2269,7 +2270,7 @@ registerZonePainter(
 function deathShards(fx: Fx): ShardSpec {
   return {
     seed: fx.sd,
-    n: 34,
+    n: 26,
     x: fx.cx,
     y: fx.cy,
     z0: 14,
@@ -2296,7 +2297,8 @@ registerZonePainter(
     drawCrack(p, ck, cx + 1, cy + 1, reach);
     p.col(C.deep, 0.95 * fade);
     drawCrack(p, ck, cx, cy, reach);
-    dust(p, sd, age, cx, cy, 12, 0, Math.PI, 20, 40, 2, 7, 9, 1.2, 0.55);
+    specks(p, sd, age, cx, cy, 26, 0, Math.PI, 30, 60, 0.9, 40);
+    dust(p, sd, age, cx, cy, 6, 0, Math.PI, 20, 30, 2, 6, 8, 1.0, 0.45);
     shards(p, deathShards(fx), age, time, 'ground');
   }),
 );
@@ -2321,9 +2323,9 @@ registerZonePainter(
       p.col(C.white, 1 - q * 0.5);
       fillSector(p, cx, y, 0, 7 - 4 * q, 0, TAU);
     }
-    impactStar(p, cx, y, age, 0.2, 22, 0.15);
+    impactStar(p, cx, y, age, 0.18, 18, 0.15);
     const ck = crackOf(`dai|${sd % 1039}`, sd, starBranches(sd, 10, 0.1, 10, 24, 2), 0.5, 0.35);
-    airCrack(p, ck, cx, y, age + 0.03, 0.08, 0.38, sd);
+    airCrack(p, ck, cx, y, age + 0.03, 0.08, 0.3, sd);
     glints(
       p,
       sd,
