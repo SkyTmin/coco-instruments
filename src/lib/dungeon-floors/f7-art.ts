@@ -22,9 +22,12 @@ import { heroSprite } from '../dungeon-sprites';
 import type { Dir4 } from '../dungeon-sprites';
 import { floorCell, wallCell } from '../dungeon-tiles';
 import {
+  frameLRU,
+  paintSim,
   registerCellPainter,
   registerItemArt,
   registerMobPainter,
+  registerMobWarm,
   registerPropPainter,
   registerShotPainter,
   registerZonePainter,
@@ -32,7 +35,7 @@ import {
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import type { Mob, Sim, Strike, Zone } from '../dungeon-sim';
 import { F7_CRYSTAL, F7_GALLERY, F7_HALL, F7_MARK } from './f7';
-import { F7_VIEW } from './f7-brains';
+import { BOSS, F7_VIEW } from './f7-brains';
 
 type RGBA = [number, number, number, number];
 
@@ -220,47 +223,6 @@ function fromCanvas(c: HTMLCanvasElement): Px {
   return p;
 }
 
-/** Scale2x (EPX): вдвое крупнее без «лесенки» по диагоналям. */
-function scale2x(p: Px): Px {
-  const o = new Px(p.w * 2, p.h * 2);
-  const key = (x: number, y: number): number => {
-    if (x < 0 || y < 0 || x >= p.w || y >= p.h) return -1;
-    const i = (y * p.w + x) * 4;
-    if (!p.data[i + 3]) return -1;
-    return (p.data[i] << 16) | (p.data[i + 1] << 8) | p.data[i + 2];
-  };
-  const put = (x: number, y: number, sx: number, sy: number) => {
-    if (sx < 0 || sy < 0 || sx >= p.w || sy >= p.h) return;
-    const i = (sy * p.w + sx) * 4;
-    const j = (y * o.w + x) * 4;
-    for (let k = 0; k < 4; k++) o.data[j + k] = p.data[i + k];
-  };
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++) {
-      const P = key(x, y);
-      const A = key(x, y - 1);
-      const B = key(x + 1, y);
-      const C = key(x - 1, y);
-      const D = key(x, y + 1);
-      const pick = [
-        C === A && C !== D && A !== B ? [x, y - 1] : [x, y],
-        A === B && A !== C && B !== D ? [x + 1, y] : [x, y],
-        D === C && D !== B && C !== A ? [x - 1, y] : [x, y],
-        B === D && B !== A && D !== C ? [x, y + 1] : [x, y],
-      ];
-      if (P < 0) {
-        // Пустое: заполняем только если сосед «перетекает» внутрь.
-        const q = pick.map(([sx, sy]) => key(sx, sy));
-        pick.forEach(([sx, sy], k) => {
-          if (q[k] >= 0) put(x * 2 + (k % 2), y * 2 + (k >> 1), sx, sy);
-        });
-        continue;
-      }
-      pick.forEach(([sx, sy], k) => put(x * 2 + (k % 2), y * 2 + (k >> 1), sx, sy));
-    }
-  return o;
-}
-
 // ---------------------------------------------------------------------------
 // Снаряжение героя — для отражений. Рисовальщику симуляция не видна, поэтому
 // ступень берётся из стора (ленивым импортом: статический замкнул бы
@@ -346,22 +308,6 @@ function frameOf(
   const b = build();
   if (!b) return null;
   return finish(key, b, pose.look, pose.flash, left);
-}
-
-/** Звёздочки над головой оглушённого (кадр f из 4). */
-function stars(p: Px, cx: number, cy: number, rx: number, f: number): void {
-  const c1 = hx('#c8f0ff');
-  const c2 = hx('#ffffff');
-  for (let i = 0; i < 3; i++) {
-    const a = (f / 4) * TAU + (i / 3) * TAU;
-    const x = Math.round(cx + Math.cos(a) * rx);
-    const y = Math.round(cy + Math.sin(a) * rx * 0.35);
-    p.set(x, y, c2);
-    p.set(x - 1, y, c1);
-    p.set(x + 1, y, c1);
-    p.set(x, y - 1, c1);
-    p.set(x, y + 1, c1);
-  }
 }
 
 /** Разлёт осколками: кадр `p`, разрезанный клиньями, разлетается от середины (k 0…1). */
@@ -638,9 +584,21 @@ registerMobPainter('f7_echo', (m: Mob, pose: MobPose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Отражение героя (босс): герой вдвое крупнее, из глубокого стекла, с
-// фиолетовой сердцевиной, трещины растут с фазой боя. Копии рисуются ТЕМ ЖЕ
-// кадром: отличить настоящего можно только по тени на полу.
+// Отражение героя (босс), v2.86 — движение. Облик прежний: лист героя ×2
+// (Scale2x), холодное стекло, фиолетовая сердцевина, трещины по фазам. Но
+// фигура теперь — риг:
+//   • тело гнёт карта «присед — наклон — шлем»: выборка из фигуры ×4 (два
+//     прохода Scale2x), как RotSprite — пиксель остаётся пикселем, палитра
+//     та же, контур не «кипит»;
+//   • рука с клинком рисуется кодом от плеча, клинок идёт по дуге, как меч
+//     героя (подготовка ease-in, удар ease-out, проводка с перелётом);
+//   • след-серп — площадь, выметенная клинком за последние кадры (по той же
+//     кривой, что сам клинок), поверх темноты;
+//   • всё — от времени режима мозга на 24 к/с; мозг — метроном: кадр
+//     контакта — ровно тот, в котором мозг наносит урон.
+// Копии (Отблески) — те же кадры, но без трещин: трещины — это удары
+// героя, их носит только настоящее. Тень у всех одна (настоящую выдаёт
+// тень от люстры, `f7_trueshadow`).
 // ---------------------------------------------------------------------------
 
 /** Трещины босса по фазам (координаты — в фигуре 32×32). */
@@ -683,31 +641,1175 @@ const BOSS_CRACKS: [number, number][][][] = [
   ],
 ];
 
-type BossPose =
-  | 'idle'
-  | 'run'
-  | 'raise'
-  | 'strike'
-  | 'heavy'
-  | 'lunge'
-  | 'guard'
-  | 'gaze'
-  | 'rest'
-  | 'daze'
-  | 'hurt';
+/** Паутина смерти: лучи от сердцевины к краям фигуры (растут по кадрам). */
+const DEATH_WEB: [number, number][][] = (() => {
+  const out: [number, number][][] = [];
+  for (let i = 0; i < 8; i++) {
+    const a0 = (i / 8) * TAU + hash(i, 41) * 0.5;
+    const pts: [number, number][] = [[16, 24]];
+    let a = a0;
+    let r = 0;
+    for (let s = 0; s < 3; s++) {
+      r += 4.5 + hash(i, s, 7) * 3.5;
+      a += (hash(i, s, 9) - 0.5) * 0.7;
+      pts.push([16 + Math.cos(a) * r * 1.05, 24 + Math.sin(a) * r * 1.2]);
+    }
+    out.push(pts);
+  }
+  return out;
+})();
 
-function paintBoss(
-  tier: number,
-  dir: Dir4,
-  row: number,
-  bp: BossPose,
-  k: number,
-  phase: number,
-  f: number,
-): Built | null {
+// ---- Время, кривые, риг -----------------------------------------------------
+
+const RFPS = 24;
+type Ease = (x: number) => number;
+const eIn: Ease = (x) => x * x;
+const eOut: Ease = (x) => 1 - (1 - x) * (1 - x);
+const eOut3: Ease = (x) => 1 - (1 - x) * (1 - x) * (1 - x);
+const eIO: Ease = (x) => (x < 0.5 ? 2 * x * x : 1 - 2 * (1 - x) * (1 - x));
+const cl = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const sstep = (a: number, b: number, x: number) => {
+  const k = cl((x - a) / (b - a));
+  return k * k * (3 - 2 * k);
+};
+
+/**
+ * Поза отражения. Угол клинка `b` — от взгляда (по часовой — плюс);
+ * всё в пикселях кадра. `lean` — вперёд(+)/назад, `tilt` — крен на экране,
+ * `crouch` — присед (минус — вытянулся), `hx/hy` — шлем отдельно от тела
+ * (запаздывает), `arm/lift/hf/hl` — рука: вынос вдоль клинка, подъём,
+ * вперёд и поперёк, `fwd/hop` — ход всего тела (кадром движка), `vis` —
+ * сколько отражения по эту сторону зеркала, `seam/pane` — само зеркало.
+ */
+interface BRig {
+  row: number;
+  lean: number;
+  tilt: number;
+  crouch: number;
+  hx: number;
+  hy: number;
+  b: number;
+  arm: number;
+  lift: number;
+  hf: number;
+  hl: number;
+  len: number;
+  hot: number;
+  eyes: number;
+  core: number;
+  gz: number;
+  fwd: number;
+  hop: number;
+  sq: number;
+  vis: number;
+  seam: number;
+  pane: number;
+  /** Клинок перед телом (1) или за ним (−1); 0 — по углу. */
+  front: number;
+}
+type RigCh = Exclude<keyof BRig, 'row'>;
+const RIG0: BRig = {
+  row: 0,
+  lean: 0,
+  tilt: 0,
+  crouch: 0,
+  hx: 0,
+  hy: 0,
+  b: 0,
+  arm: 5,
+  lift: 0,
+  hf: 0,
+  hl: 0,
+  len: 17,
+  hot: 0,
+  eyes: 0.55,
+  core: 0.4,
+  gz: 0,
+  fwd: 0,
+  hop: 0,
+  sq: 0,
+  vis: 1,
+  seam: 0,
+  pane: 0,
+  front: 0,
+};
+const RIG_CH = (Object.keys(RIG0) as (keyof BRig)[]).filter((k) => k !== 'row') as RigCh[];
+/**
+ * Ключ: время (с), каналы, кривая ПОДХОДА к ключу (по умолчанию — плавно) и
+ * `spin` — угол клинка как есть (полный оборот мельницы). Без него угол
+ * берётся ближайшим по модулю оборота к прошлому ключу: клинок не крутит
+ * лишний оборот, переходя в соседнюю позу через «длинную» сторону.
+ */
+type BKey = [number, Partial<BRig>, Ease?, boolean?];
+
+/** Дорожка ключей: каждый канал — между ключами, где он задан; строка листа — дискретно. */
+function trackB(keys0: BKey[], t: number, base: BRig): BRig {
+  const out = { ...base };
+  let prevB = base.b;
+  const keys = keys0.map((k): BKey => {
+    const b = k[1].b;
+    if (b === undefined) return k;
+    // Разворот больше ~206° — почти наверняка «не в ту сторону»; меньше —
+    // как задумано (замах через спину тоже бывает).
+    const v = k[3] || Math.abs(b - prevB) < 3.6 ? b : b + TAU * Math.round((prevB - b) / TAU);
+    prevB = v;
+    return v === b ? k : [k[0], { ...k[1], b: v }, k[2]];
+  });
+  for (const ch of RIG_CH) {
+    let t0 = 0;
+    let v0 = base[ch];
+    let t1 = -1;
+    let v1 = 0;
+    let e: Ease = eIO;
+    for (const [kt, kv, ke] of keys) {
+      const v = kv[ch];
+      if (v === undefined) continue;
+      if (kt <= t) {
+        t0 = kt;
+        v0 = v;
+      } else {
+        t1 = kt;
+        v1 = v;
+        e = ke ?? eIO;
+        break;
+      }
+    }
+    out[ch] = t1 < 0 ? v0 : v0 + (v1 - v0) * e(cl((t - t0) / (t1 - t0 || 1)));
+  }
+  for (const [kt, kv] of keys) if (kv.row !== undefined && kt <= t) out.row = kv.row;
+  return out;
+}
+
+/** Три стороны рисуются, левая — зеркало правой. */
+type BDir = 'down' | 'up' | 'right';
+
+/** Что нужно технике: сторона, взгляд (правый эквивалент), темп фазы. */
+interface BCtx {
+  dir: BDir;
+  phi: number;
+  /** Темп: 1 / 1,12 / 1,22 по фазам, у копии ×0,82. */
+  hs: number;
+  /** Замахи копии ×1,15. */
+  cw: number;
+  /** Отдых после удара (`m.data.rec`), с до деления на темп. */
+  rec: number;
+}
+
+/** Низкая стойка: клинок у бедра остриём вперёд-вниз. */
+const GUARD_B: Record<BDir, number> = { right: 0.75, down: -0.55, up: -2.59 };
+/** Клинок опущен к полу сбоку (взгляд). */
+const LOW_B: Record<BDir, number> = { right: 1.95, down: -0.3, up: -2.85 };
+/** Остриём в пол (оглушение). */
+const DROOP_B: Record<BDir, number> = { right: 1.25, down: -0.12, up: -3.0 };
+/** Клинок стоймя перед собой (стойка, салют, шаг в зеркало). */
+const vertB = (c: BCtx) => -Math.PI / 2 - c.phi;
+
+/** Плечо руки с клинком в фигуре 32×32. */
+const SHOULDER: Record<BDir, [number, number]> = {
+  right: [19.5, 21.5],
+  down: [22.5, 22.5],
+  up: [9.5, 22.5],
+};
+
+/** Тот же угол `v` по модулю оборота, ближайший к `ref`. */
+const nearB = (v: number, ref: number) => v + TAU * Math.round((ref - v) / TAU);
+
+/** Стойка «готов». */
+const ready = (c: BCtx): BRig => ({ ...RIG0, b: GUARD_B[c.dir] });
+
+// ---- Техники: поза во времени ------------------------------------------------
+
+/** Что ещё рисовать поверх позы. */
+interface BFx {
+  /** След-серп: окно, с (0 — нет). */
+  smear?: number;
+  /** Тяжёлый след: шире и двойной. */
+  heavy?: boolean;
+  /** Сила следа 0…1 (гаснет в проводке). */
+  sk?: number;
+  /** Клинок вспыхивает белым (миг контакта) 0…1. */
+  bflash?: number;
+  /** Кольцо набора вокруг тела 0…1 — как у тяжёлого удара героя. */
+  ring?: number;
+  /** Отбив: стекло защиты вспыхивает белым 0…1. */
+  pflash?: number;
+  /** Блик на острие перед ударом 0…1 — «сейчас ударит». */
+  glint?: number;
+  /** Искры набора, стекающие к клинку 0…1. */
+  motes?: number;
+  /** Искра отбива (звон стойки) 0…1. */
+  spark?: number;
+  /** Полосы скорости 0…1. */
+  streak?: number;
+  /** Звёзды оглушения: фаза 0…1. */
+  stars?: number;
+  /** Дрожь, пиксели (сдвигом кадра). */
+  tremble?: number;
+  /** Блик, бегущий по стеклу (позиция полосы). */
+  sheen?: number;
+  /** Паутина трещин смерти 0…6. */
+  web?: number;
+  /** Свет изнутри (перед раскалом) 0…1. */
+  inner?: number;
+}
+interface BTech {
+  r: BRig;
+  fx: BFx;
+}
+
+/** Взмахи серии: замах, контакт, перелёт (от взгляда), подъём руки, присед. */
+const SWING = [
+  { W: -2.1, C: 0.86, over: 0.55, liftW: 11, liftC: 0, crW: 1.8, sw: 0.12, hfW: 0, fr: 1 },
+  { W: 2.5, C: -0.86, over: -0.5, liftW: -2, liftC: 2, crW: 1.4, sw: 0.1, hfW: -2, fr: 0 },
+  { W: -2.35, C: 1.15, over: 0.25, liftW: 13, liftC: -3, crW: 2.6, sw: 0.13, hfW: 0, fr: 1 },
+];
+const comboT = (k: number, c: BCtx) => (BOSS.combo[k] / c.hs) * c.cw;
+const followT = (c: BCtx) => 0.1 / c.hs;
+
+/** Взмах k серии: [0, T], контакт — ровно в T. */
+function techSwing(k: number, t: number, c: BCtx): BTech {
+  const T = comboT(k, c);
+  // Обратный взмах анфас заводится влево (за голову — не видно).
+  const S = k === 1 && c.dir === 'down' ? { ...SWING[1], W: 1.75 } : SWING[k];
+  const sw = Math.min(S.sw, T * 0.34);
+  const tB = T - sw;
+  const tA = tB * 0.42;
+  const base = k === 0 ? ready(c) : techFollow(k - 1, followT(c), c).r;
+  const keys: BKey[] = [
+    [
+      tA,
+      {
+        b: S.W * 0.86,
+        lift: S.liftW * 0.8,
+        arm: 4.2,
+        lean: -0.1,
+        crouch: S.crW * 0.7,
+        hy: 0.4,
+        eyes: 0.85,
+        fwd: -0.8,
+        hot: 0.3,
+        hf: S.hfW,
+        front: S.fr,
+        row: 0,
+      },
+      eIO,
+    ],
+    [
+      tB,
+      {
+        b: S.W,
+        lift: S.liftW,
+        arm: 4,
+        lean: -0.17,
+        crouch: S.crW,
+        hy: 0.8,
+        eyes: 1,
+        hot: 1,
+        fwd: -1.3,
+        hf: S.hfW,
+        front: S.fr,
+      },
+      eIO,
+    ],
+    [
+      T,
+      {
+        b: S.C,
+        lift: S.liftC,
+        arm: 7,
+        lean: 0.2,
+        crouch: 0.3,
+        hy: -0.6,
+        fwd: 2.6,
+        hot: 1,
+        hf: 0,
+        front: 0,
+        row: 0,
+      },
+      eOut3,
+      true,
+    ],
+  ];
+  if (k === 2) {
+    // Финал серии — с подскоком: вниз, вверх (вытянулся), приземление = удар.
+    keys.splice(
+      0,
+      2,
+      [
+        tA * 0.55,
+        { crouch: 3, lean: -0.08, b: S.W * 0.5, lift: 3, eyes: 0.9, front: 1, row: 0 },
+        eOut,
+      ],
+      [tA, { crouch: -1.2, hop: 5, b: S.W * 0.9, lift: S.liftW * 0.9, lean: -0.14, hy: 0.6 }, eOut],
+      [
+        tB,
+        { hop: 5.6, crouch: -0.8, b: S.W, lift: S.liftW, lean: -0.18, eyes: 1, hot: 1, front: 1 },
+        eIO,
+      ],
+    );
+    keys[keys.length - 1][1] = { ...keys[keys.length - 1][1], hop: 0, crouch: 2.4 };
+  }
+  const r = trackB(keys, cl(t, 0, T), base);
+  // След — только у удара (замах — подготовка, он без следа).
+  const fx: BFx = { smear: t >= tB - 0.02 ? 0.08 : 0, heavy: k === 2 };
+  // Блик на острие за два кадра до удара — «сейчас».
+  if (t >= tB - 2 / RFPS && t < tB) fx.glint = 1 - (tB - t) * RFPS * 0.35;
+  return { r, fx };
+}
+
+/** Проводка взмаха k: перелёт за точку контакта и торможение. */
+function techFollow(k: number, t: number, c: BCtx): BTech {
+  if (t < 0) return techSwing(k, comboT(k, c) + t, c);
+  const S = SWING[k];
+  const d = followT(c);
+  const base = techSwing(k, comboT(k, c), c).r;
+  const r = trackB(
+    [
+      [
+        d,
+        {
+          b: S.C + S.over,
+          lift: S.liftC - 1,
+          arm: 6,
+          lean: 0.12,
+          crouch: 0.9,
+          hy: 0.2,
+          fwd: 3,
+          hot: 0.4,
+        },
+        eOut,
+      ],
+    ],
+    cl(t, 0, d),
+    base,
+  );
+  return {
+    r,
+    fx: { smear: 0.08, heavy: k === 2, sk: 1 - 0.65 * (t / d), bflash: t < 0.02 ? 1 : 0 },
+  };
+}
+
+/** Тяжёлый: шаг назад, клинок за плечо, набор, взрыв — дуга 3,8. */
+function techHeavy(t: number, c: BCtx): BTech {
+  const T = (BOSS.heavy / c.hs) * c.cw;
+  const sw = 0.1;
+  const tB = T - sw;
+  const r = trackB(
+    [
+      [
+        T * 0.16,
+        {
+          fwd: -3,
+          crouch: 1.3,
+          lean: -0.12,
+          b: -2.45,
+          lift: 11,
+          arm: 4,
+          hy: 0.6,
+          eyes: 0.8,
+          core: 0.7,
+          hot: 0.2,
+          front: 1,
+          row: 0,
+        },
+        eOut,
+      ],
+      [
+        T * 0.78,
+        { fwd: -3.4, crouch: 2.4, lean: -0.22, b: -2.7, lift: 12, hot: 1, core: 1, eyes: 1, hy: 1 },
+        eIO,
+      ],
+      [tB, { fwd: -4, crouch: 3.2, lean: -0.3, b: -2.95, lift: 13 }, eIn],
+      [
+        T,
+        {
+          fwd: 4.5,
+          crouch: -0.8,
+          lean: 0.36,
+          b: 1.8,
+          lift: -1,
+          arm: 8,
+          hy: -1,
+          len: 18,
+          front: 0,
+          row: 0,
+        },
+        eOut3,
+        true,
+      ],
+    ],
+    cl(t, 0, T),
+    ready(c),
+  );
+  const charge = cl((t - T * 0.2) / (T * 0.7));
+  const fx: BFx = {
+    smear: t >= tB - 0.02 ? 0.1 : 0,
+    heavy: true,
+    motes: t > T * 0.2 && t < tB ? charge : 0,
+    ring: t > T * 0.2 && t < tB ? charge : 0,
+    tremble: t > T * 0.25 && t < tB ? 0.35 + charge * 0.5 : 0,
+  };
+  if (t >= tB - 2.5 / RFPS && t < tB) fx.glint = 1;
+  return { r, fx };
+}
+
+/** Прицел выпада: низкая стойка спринтера, клинок назад-вниз, дрожь. */
+function techAim(t: number, c: BCtx): BTech {
+  const T = (BOSS.dashAim / c.hs) * c.cw;
+  const r = trackB(
+    [
+      [
+        0.14,
+        {
+          crouch: 2.6,
+          lean: 0.22,
+          b: 2.65,
+          lift: -1,
+          arm: 6,
+          fwd: -2.5,
+          row: 5,
+          eyes: 1,
+          hy: 0.6,
+          hot: 0.5,
+        },
+        eOut,
+      ],
+      [T * 0.8, { crouch: 3, lean: 0.26, b: 2.78, fwd: -3, hot: 1 }, eIO],
+      [T, { crouch: 3.4, lean: 0.31, fwd: -3.6, b: 2.85 }, eIn],
+    ],
+    cl(t, 0, T),
+    ready(c),
+  );
+  const fx: BFx = { tremble: t > 0.14 ? 0.3 + 0.5 * cl((t - 0.14) / (T - 0.14)) : 0 };
+  if (t >= T - 2.5 / RFPS) fx.glint = 1;
+  return { r, fx };
+}
+
+/** Выпад: вытянулся в струну, клинок вперёд, 4 кадра петлёй. */
+function techDash(t: number, c: BCtx): BTech {
+  if (t < 0) return techAim((BOSS.dashAim / c.hs) * c.cw + t, c);
+  const base = techAim(99, c).r;
+  const tt = t < 2 / RFPS ? t : 2 / RFPS + ((t - 2 / RFPS) % (4 / RFPS));
+  const r = trackB(
+    [
+      [
+        0.06,
+        {
+          crouch: -1.2,
+          lean: 0.36,
+          b: 0.06,
+          arm: 8.5,
+          lift: 1,
+          len: 19,
+          fwd: 3,
+          row: 5,
+          hot: 1,
+          sq: 0.08,
+          hy: -0.4,
+        },
+        eOut3,
+      ],
+    ],
+    tt,
+    base,
+  );
+  const f = Math.floor(tt * RFPS);
+  r.hy += f >= 2 && f % 2 ? 0.4 : 0;
+  return { r, fx: { smear: t < 0.07 ? 0.07 : 0, streak: f >= 2 ? 1 + (f % 2) : 0 } };
+}
+
+/** Стойка «зеркальная защита»: клинок стоймя, перед собой — стекло. */
+function techGuard(t: number, c: BCtx): BTech {
+  const r = trackB(
+    [
+      [
+        0.1,
+        {
+          b: vertB(c),
+          arm: 3,
+          lift: 5,
+          hl: 4,
+          hf: 2,
+          crouch: 1.6,
+          lean: -0.06,
+          hy: 0.4,
+          eyes: 0.9,
+          pane: 1,
+          front: 1,
+          row: 0,
+        },
+        eOut,
+      ],
+    ],
+    t,
+    ready(c),
+  );
+  // Дышит под стойкой, но клинок не дрожит — он держит.
+  const k = cl((t - 0.1) / 0.2);
+  r.crouch += Math.sin(t * TAU * 1.6) * 0.35 * k;
+  r.hy += Math.sin(t * TAU * 1.6 - 0.7) * 0.3 * k;
+  return { r, fx: { sheen: t > 0.1 ? ((t - 0.1) / 0.42) % 1 : -1 } };
+}
+
+/** Ответ: отбив (звон), короткий замах, удар — контакт в 0,32. */
+function techRiposte(t: number, c: BCtx): BTech {
+  const T = BOSS.riposte;
+  const g = techGuard(0.95, c).r;
+  const r = trackB(
+    [
+      [
+        0.05,
+        { b: vertB(c) - 0.45, fwd: -1.6, lean: -0.18, crouch: 1.2, pane: 0.3, eyes: 1, front: 1 },
+        eOut,
+      ],
+      [
+        0.2,
+        {
+          b: -1.65,
+          lift: 3,
+          arm: 4.5,
+          hl: 0,
+          hf: 0,
+          lean: -0.12,
+          crouch: 1.6,
+          fwd: -1.2,
+          hot: 1,
+          pane: 0,
+        },
+        eIO,
+      ],
+      [T, { b: 0.95, lift: 0, arm: 7, lean: 0.22, crouch: 0.3, fwd: 3, row: 0 }, eOut3],
+    ],
+    cl(t, 0, T),
+    g,
+  );
+  const fx: BFx = {
+    smear: t >= 0.18 ? 0.09 : 0,
+    spark: t < 0.12 ? 1 - t / 0.12 : 0,
+    pflash: t < 0.1 ? 1 - t / 0.1 : 0,
+  };
+  if (t >= 0.2 - 2 / RFPS && t < 0.2) fx.glint = 1;
+  return { r, fx };
+}
+
+/** Взгляд: клинок опущен, голова поднята, глаза разгораются — вспышка в T. */
+function techGaze(t: number, c: BCtx): BTech {
+  const T = BOSS.gaze / c.hs;
+  const r = trackB(
+    [
+      [
+        0.18,
+        {
+          b: LOW_B[c.dir],
+          arm: 4,
+          lift: -2,
+          crouch: -0.6,
+          hy: -1.2,
+          lean: -0.06,
+          eyes: 1,
+          gz: 0.25,
+        },
+        eOut,
+      ],
+      [T - 0.1, { hy: -1.6, crouch: -0.9, gz: 1, core: 1 }, eIn],
+      [T, { lean: 0.12, hy: -0.4, crouch: 0.2, gz: 1.25, fwd: 1 }, eOut3],
+    ],
+    cl(t, 0, T),
+    ready(c),
+  );
+  return { r, fx: {} };
+}
+
+/** Нырок в зеркало: клинок стоймя, стекло встаёт, фигура уходит полосами. */
+function techDive(t: number, c: BCtx): BTech {
+  const r = trackB(
+    [
+      [
+        0.1,
+        { b: vertB(c), lift: 5, arm: 3, hl: 3, hf: 2, crouch: 1.4, hy: 0.4, seam: 0.8, front: 1 },
+        eOut,
+      ],
+      [0.14, { vis: 1 }],
+      [0.42, { vis: 0, seam: 1, crouch: 0.6 }, eIn],
+      [0.45, { seam: 0.7 }],
+    ],
+    t,
+    ready(c),
+  );
+  return { r, fx: {} };
+}
+
+/** Выход из зеркала у стены и прицел через весь зал. */
+function techMaim(t: number, c: BCtx): BTech {
+  const T = BOSS.mirrorAim / c.hs;
+  const base: BRig = {
+    ...ready(c),
+    vis: 0,
+    seam: 1,
+    crouch: 2,
+    lean: 0.2,
+    b: 2.6,
+    lift: -1,
+    arm: 6,
+    row: 5,
+    eyes: 1,
+  };
+  const r = trackB(
+    [
+      [T * 0.42, { vis: 1, seam: 0.35 }, eOut],
+      [T * 0.55, { crouch: 3.2, lean: 0.32, b: 2.8, fwd: -3, seam: 0, hot: 0.6 }, eIO],
+      [T * 0.9, { crouch: 3.6, fwd: -3.8, b: 2.86, hot: 1 }, eIO],
+      [T, { crouch: 3.8, lean: 0.36, fwd: -4 }, eIn],
+    ],
+    cl(t, 0, T),
+    base,
+  );
+  const fx: BFx = { tremble: t > T * 0.55 ? 0.5 : 0 };
+  if (t >= T - 2.5 / RFPS) fx.glint = 1;
+  return { r, fx };
+}
+
+/** Пробежка через зал: спринт 8 кадров на 24 к/с, клинок волочится сзади. */
+function techSprint(t: number, c: BCtx): BTech {
+  if (t < 0) return techMaim(BOSS.mirrorAim / c.hs + t, c);
+  const base = techMaim(99, c).r;
+  if (t < 2 / RFPS) {
+    const r = trackB(
+      [[2 / RFPS, { crouch: 1, lean: 0.34, fwd: 2, sq: 0.06, row: 0 }, eOut]],
+      t,
+      base,
+    );
+    return { r, fx: { streak: 1 } };
+  }
+  const f = Math.floor((t - 2 / RFPS) * RFPS) % 8;
+  const ph = f / 8;
+  const r: BRig = {
+    ...base,
+    row: [0, 1, 2, 3][Math.floor(f / 2)],
+    lean: 0.34,
+    crouch: 1 + 0.9 * Math.abs(Math.sin(ph * TAU)),
+    hy: 0.5 + 0.5 * Math.cos(ph * 2 * TAU - 0.8),
+    b: 2.8 + 0.1 * Math.sin(ph * TAU),
+    arm: 7,
+    lift: -1 + 0.6 * Math.sin(ph * TAU),
+    hot: 0.7,
+    fwd: 2,
+    sq: 0.06,
+    seam: 0,
+    vis: 1,
+  };
+  return { r, fx: { streak: 1 + (f % 2) } };
+}
+
+/** Оглушение: споткнулся, клинок в пол, качается; звёзды; встряхнулся. */
+function techDaze(t: number, c: BCtx): BTech {
+  const D = 2.1 / c.hs;
+  const stun: Partial<BRig> = {
+    lean: -0.28,
+    crouch: 2.3,
+    fwd: -2,
+    b: DROOP_B[c.dir],
+    lift: -3,
+    arm: 4,
+    eyes: 0.25,
+    hy: 1.3,
+    core: 0.2,
+    row: 0,
+  };
+  if (t < 0.3) {
+    const r = trackB([[0.14, stun, eOut]], t, ready(c));
+    return { r, fx: { stars: t > 0.1 ? (t - 0.1) / 1.08 : -1 } };
+  }
+  const end = D - 0.35;
+  const base = { ...ready(c), ...stun };
+  if (t < end) {
+    // Петля 13 кадров на 12 к/с: качается, шлем опаздывает, глаза мигают.
+    const f = Math.floor((t - 0.3) * 12) % 13;
+    const ph = f / 13;
+    const r: BRig = {
+      ...base,
+      tilt: 0.11 * Math.sin(ph * TAU),
+      hx: 1.3 * Math.sin(ph * TAU - 0.9),
+      hy: 1.2 + 0.4 * Math.sin(ph * 2 * TAU),
+      lean: -0.18,
+      crouch: 1.7 + 0.3 * Math.cos(ph * TAU),
+      fwd: -1.2,
+      eyes: f % 5 === 0 ? 0.6 : 0.25,
+    };
+    return { r, fx: { stars: ph } };
+  }
+  // Встряхнулся: мотнул шлемом, поднял клинок, стойка.
+  const tt = t - end;
+  const r = trackB(
+    [
+      [0.07, { hx: 1.8, hy: 0.6, tilt: 0.05 }, eOut],
+      [0.14, { hx: -1.6, tilt: -0.05, eyes: 1 }, eIO],
+      [0.21, { hx: 0.6, tilt: 0 }, eIO],
+      [0.35, { ...ready(c), hx: 0 }, eIO],
+    ],
+    cl(tt, 0, 0.35),
+    { ...base, lean: -0.18, crouch: 1.7, fwd: -1.2 },
+  );
+  return { r, fx: {} };
+}
+
+/** Шаг сквозь зеркало (фаза теней, перетасовка). */
+function techShift(t: number, c: BCtx): BTech {
+  const r = trackB(
+    [
+      [
+        0.12,
+        { b: vertB(c), lift: 5, arm: 3, hl: 3, hf: 2, crouch: 1, hy: 0.3, seam: 0.7, front: 1 },
+        eOut,
+      ],
+      [0.18, { vis: 1 }],
+      [0.4, { seam: 1 }],
+      [0.6, { vis: 0 }, eIn],
+      [0.7, { seam: 0 }],
+    ],
+    t,
+    ready(c),
+  );
+  return { r, fx: { sheen: t < 0.3 ? t / 0.3 : -1 } };
+}
+
+/** Выход после шага (intro с 0,5): полосы собираются, взмах — стойка. */
+function techIntroQuick(t: number, c: BCtx): BTech {
+  const base: BRig = {
+    ...ready(c),
+    vis: 0,
+    seam: 1,
+    b: vertB(c),
+    lift: 5,
+    arm: 3,
+    hl: 3,
+    hf: 2,
+    crouch: 1,
+    front: 1,
+  };
+  const r = trackB(
+    [
+      [0.3, { vis: 1, seam: 0.2 }, eOut],
+      [
+        0.42,
+        { b: GUARD_B[c.dir] - 0.5, lift: 1, hl: 0, hf: 0, arm: 5, crouch: 0.2, seam: 0, front: 0 },
+        eOut,
+      ],
+      [0.7, { ...ready(c) }, eIO],
+    ],
+    t,
+    base,
+  );
+  return { r, fx: { smear: t > 0.28 && t < 0.52 ? 0.1 : 0, sk: 0.7 } };
+}
+
+/** Первый выход: из зеркала, салют клинком у забрала, мельница, стойка. */
+function techIntro(t: number, c: BCtx): BTech {
+  const V = vertB(c);
+  const r = trackB(
+    [
+      [0.14, { seam: 1, vis: 0 }],
+      [0.5, { vis: 1, seam: 0.3 }, eOut],
+      [
+        0.66,
+        {
+          b: V,
+          lift: 8,
+          arm: 2,
+          hl: 5,
+          hf: 3,
+          hy: -0.4,
+          crouch: -0.3,
+          seam: 0,
+          eyes: 0.8,
+          front: 1,
+        },
+        eOut,
+      ],
+      [0.86, { eyes: 1, core: 0.7, front: 1 }],
+      [1.12, { b: V - TAU, lift: 3, arm: 5, hl: 1, hf: 0, crouch: 0.6, front: 0 }, eIO, true],
+      [1.4, { ...ready(c), b: GUARD_B[c.dir] - TAU }, eIO],
+    ],
+    t,
+    { ...ready(c), vis: 0, seam: 0 },
+  );
+  return { r, fx: { smear: t > 0.86 && t < 1.2 ? 0.12 : 0 } };
+}
+
+/** Миг контакта (t = 0 отдыха): след в полную силу, клинок вспыхивает. */
+const contact = (t: number): BFx => ({ sk: 1 - t / 0.14, bflash: t < 0.02 ? 1 : 0 });
+
+/** Отдых после удара: проводка (контакт в t = 0), тяжёлое дыхание, стойка. */
+function techRec(from: number, t: number, c: BCtx): BTech {
+  const R = c.rec / c.hs;
+  if (t < 0) {
+    if (from === 1) return techSwing(2, comboT(2, c) + t, c);
+    if (from === 2) return techHeavy((BOSS.heavy / c.hs) * c.cw + t, c);
+    if (from === 3) return techDash(t + 0.3, c);
+    if (from === 4) return techRiposte(BOSS.riposte + t, c);
+    if (from === 5) return techGaze(BOSS.gaze / c.hs + t, c);
+  }
+  const breath = (k: number, a: number, b: number) =>
+    Math.sin(t * TAU * 2.2) * k * sstep(a, a + 0.08, t) * (1 - sstep(b - 0.1, b, t));
+  // Стойка — тем же углом по модулю оборота, но ближайшим к тому, откуда
+  // клинок идёт: иначе он возвращался бы в стойку через лишний оборот.
+  const gN = (ref: number) => nearB(GUARD_B[c.dir], ref);
+  const rdN = (ref: number): BRig => ({ ...ready(c), b: gN(ref) });
+  switch (from) {
+    case 1: {
+      const S = SWING[2];
+      const r = trackB(
+        [
+          [
+            0.12,
+            {
+              b: S.C + S.over,
+              lift: -4,
+              arm: 6,
+              lean: 0.3,
+              crouch: 2.6,
+              hy: 0.8,
+              fwd: 3,
+              hot: 0.4,
+            },
+            eOut,
+          ],
+          [R * 0.45, { lean: 0.18, crouch: 1.6, b: S.C + S.over - 0.1, hot: 0, row: 0 }, eIO],
+          [R, rdN(S.C + S.over), eIO],
+        ],
+        t,
+        techSwing(2, comboT(2, c), c).r,
+      );
+      r.crouch += breath(0.6, 0.12, R * 0.8);
+      r.hy += breath(0.7, 0.14, R * 0.8);
+      return { r, fx: { smear: t < 0.14 ? 0.09 : 0, heavy: true, ...contact(t) } };
+    }
+    case 2: {
+      const r = trackB(
+        [
+          [
+            0.12,
+            { b: 2.4, lift: -4.5, arm: 7, lean: 0.42, crouch: 2.8, fwd: 5, hy: 1, hot: 0.5 },
+            eOut,
+          ],
+          [
+            R * 0.5,
+            { b: 2.35, lift: -4.5, lean: 0.3, crouch: 1.9, fwd: 4, hot: 0, core: 0.5, eyes: 0.6 },
+            eIO,
+          ],
+          [
+            R * 0.82,
+            { b: gN(2.35), lift: 0, arm: 5, lean: 0, crouch: 0.5, fwd: 1, hy: 0.2, row: 0 },
+            eIO,
+          ],
+          [R, rdN(2.35), eIO],
+        ],
+        t,
+        techHeavy((BOSS.heavy / c.hs) * c.cw, c).r,
+      );
+      r.crouch += breath(0.8, 0.12, R * 0.8);
+      r.hy += breath(0.9, 0.14, R * 0.8);
+      r.core = Math.max(r.core, 0.5 + breath(0.4, 0.12, R * 0.8));
+      return { r, fx: { smear: t < 0.14 ? 0.1 : 0, heavy: true, ...contact(t) } };
+    }
+    case 3: {
+      const r = trackB(
+        [
+          [
+            0.1,
+            { lean: -0.26, crouch: 2.2, fwd: 1, b: 0.5, arm: 6, len: 17, sq: -0.06, hot: 0.3 },
+            eOut,
+          ],
+          [
+            R * 0.55,
+            { lean: -0.04, crouch: 0.8, b: gN(0.5), fwd: 0.5, row: 0, sq: 0, hot: 0 },
+            eIO,
+          ],
+          [R, rdN(0.5), eIO],
+        ],
+        t,
+        techDash(0.3, c).r,
+      );
+      return { r, fx: {} };
+    }
+    case 4: {
+      const r = trackB(
+        [
+          [
+            0.1,
+            { b: 0.95 + 0.5, lift: -1, arm: 6, lean: 0.12, crouch: 0.9, fwd: 3, hot: 0.4 },
+            eOut,
+          ],
+          [
+            R * 0.6,
+            { b: gN(1.45), lift: 0, arm: 5, lean: 0, crouch: 0.4, fwd: 0.8, hot: 0, row: 0 },
+            eIO,
+          ],
+          [R, rdN(1.45), eIO],
+        ],
+        t,
+        techRiposte(BOSS.riposte, c).r,
+      );
+      return { r, fx: { smear: t < 0.12 ? 0.09 : 0, ...contact(t) } };
+    }
+    case 5: {
+      const r = trackB(
+        [
+          [0.22, { gz: 0.35, hy: -0.2, lean: 0, fwd: 0.6 }, eOut],
+          [R * 0.55, { gz: 0, b: gN(LOW_B[c.dir]), arm: 5, lift: 0, crouch: 0.2, hy: 0 }, eIO],
+          [R, rdN(LOW_B[c.dir]), eIO],
+        ],
+        t,
+        techGaze(BOSS.gaze / c.hs, c).r,
+      );
+      return { r, fx: {} };
+    }
+    default: {
+      const rd = ready(c);
+      const r = trackB([[R, rd, eIO]], t, { ...rd, crouch: 1.2, lean: -0.05, eyes: 0.7 });
+      r.crouch += breath(0.4, 0, R);
+      return { r, fx: {} };
+    }
+  }
+}
+
+/** Покой: дыхание 2,4 с (24 кадра на 10 к/с), шлем опаздывает, блик по стеклу. */
+function techIdle(t: number, c: BCtx): BTech {
+  const ph = (t / 2.4) % 1;
+  const s = Math.sin(ph * TAU);
+  const r: BRig = {
+    ...ready(c),
+    crouch: 0.4 + 0.45 * s,
+    hy: 0.5 * Math.sin(ph * TAU - 0.7),
+    b: GUARD_B[c.dir] + 0.06 * Math.sin(ph * TAU - 1.1),
+    lift: 0.5 * Math.sin(ph * TAU - 0.9),
+    core: 0.4 + 0.2 * Math.sin(ph * TAU * 2),
+  };
+  return { r, fx: { sheen: ph < 0.34 ? ph / 0.34 : -1 } };
+}
+
+/** Бег: 8 кадров на шаг (по пройденному пути), вес на каждом шаге. */
+function techRun(ph: number, c: BCtx, fast: number): BTech {
+  const f = Math.floor(ph * 8) % 8;
+  const p = f / 8;
+  const r: BRig = {
+    ...ready(c),
+    row: [0, 1, 2, 3][Math.floor(f / 2)],
+    // Два шага за цикл: на каждом — осел, между — подлетел.
+    crouch: 0.2 + 0.8 * (0.5 + 0.5 * Math.cos(p * 2 * TAU)),
+    hy: 0.4 + 0.5 * Math.cos(p * 2 * TAU - 0.9),
+    lean: 0.06 + 0.08 * fast,
+    tilt: c.dir === 'right' ? 0 : 0.03 * Math.sin(p * TAU),
+    b: GUARD_B[c.dir] + 0.12 * Math.sin(p * TAU) + (c.dir === 'right' ? 0.25 * fast : 0),
+    lift: 0.6 * Math.sin(p * TAU - 0.6),
+    hf: -1 * fast,
+  };
+  return { r, fx: {} };
+}
+
+/** Смерть (настоящее, 1,45 с): удар, паутина трещин, клинок падает, свет, раскол. */
+const DIE_T = 1.45;
+const DIE_SHATTER = 0.58;
+/** Отблеск (0,95 с): трещины и свет за 0,4 — взрыв осколками (удар `f7_copyburst`). */
+const DIEC_T = 0.95;
+const DIEC_SHATTER = 0.4;
+
+function techDie(t: number, c: BCtx, copy: boolean): BTech {
+  const S = copy ? DIEC_SHATTER : DIE_SHATTER;
+  const tt = Math.min(t, S - 0.02);
+  const r = trackB(
+    [
+      [0.06, { lean: -0.26, hy: -1.1, crouch: 1, eyes: 1, core: 1, fwd: -1.5 }, eOut],
+      [
+        S * 0.85,
+        { lean: 0.14, hy: 1.6, crouch: 2.4, eyes: 0.3, fwd: -0.5, b: DROOP_B[c.dir], lift: -3 },
+        eIO,
+      ],
+    ],
+    tt,
+    ready(c),
+  );
+  const web = Math.min(6, Math.max(0, Math.floor((tt - 0.05) / ((S - 0.12) / 6)) + 1));
+  const fx: BFx = {
+    web,
+    tremble: tt > 0.1 ? 0.3 + (tt / S) * 0.8 : 0,
+    inner: cl((tt - S * 0.6) / (S * 0.4)),
+  };
+  r.eyes = web >= 5 ? (Math.floor(tt * RFPS) % 2 ? 1 : 0.2) : r.eyes;
+  return { r, fx };
+}
+
+/** Поза техники в момент t (секунды от начала её отрезка). */
+function techAt(tech: string, v: number, t: number, c: BCtx): BTech {
+  switch (tech) {
+    case 'idle':
+      return techIdle(t, c);
+    case 'run':
+      return techRun(t, c, v / 10);
+    case 'swing':
+      return techSwing(v, t, c);
+    case 'follow':
+      return techFollow(v, t, c);
+    case 'heavy':
+      return techHeavy(t, c);
+    case 'aim':
+      return techAim(t, c);
+    case 'dash':
+      return techDash(t, c);
+    case 'guard':
+      return techGuard(t, c);
+    case 'riposte':
+      return techRiposte(t, c);
+    case 'gaze':
+      return techGaze(t, c);
+    case 'mdive':
+      return techDive(t, c);
+    case 'maim':
+      return techMaim(t, c);
+    case 'mrun':
+      return techSprint(t, c);
+    case 'daze':
+      return techDaze(t, c);
+    case 'shift':
+      return techShift(t, c);
+    case 'introQ':
+      return techIntroQuick(t, c);
+    case 'intro0':
+      return techIntro(t, c);
+    case 'rec':
+      return techRec(v, t, c);
+    case 'die':
+      return techDie(t, c, false);
+    case 'dieC':
+      return techDie(t, c, true);
+  }
+  return techIdle(0, c);
+}
+
+// ---- Фигура: стекло из листа героя, ×4 для выборки ---------------------------
+
+/** Холст кадра до обрезки и точка ног в нём. */
+const BW = 96;
+const BH = 92;
+const BAX = 48;
+const BAY = 66;
+
+interface BodySrc {
+  /** Фигура ×4 (128×128) — из неё выбирается согнутое тело. */
+  hi: Px;
+  /** Маска 32×32: R — глаза, G — сердцевина, B — свежая трещина. */
+  mask: Px;
+}
+const BODY = frameLRU<BodySrc | null>(48);
+
+/**
+ * Scale2x (EPX) на типизированных массивах — вдвое крупнее без «лесенки» по
+ * диагоналям и без выделений на пиксель: фигура босса проходит его трижды
+ * (×2 — облик, ещё ×4 — источник для выборки согнутого тела).
+ */
+function scale2xFast(p: Px): Px {
+  const w = p.w;
+  const h = p.h;
+  const o = new Px(w * 2, h * 2);
+  const s = new Uint32Array(w * h);
+  const sv = new Uint32Array(p.data.buffer, p.data.byteOffset, w * h);
+  for (let i = 0; i < w * h; i++) s[i] = p.data[i * 4 + 3] ? sv[i] : 0;
+  const d = new Uint32Array(o.data.buffer, o.data.byteOffset, w * h * 4);
+  const W2 = w * 2;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const P = s[y * w + x];
+      const A = y > 0 ? s[(y - 1) * w + x] : 0;
+      const B = x < w - 1 ? s[y * w + x + 1] : 0;
+      const C = x > 0 ? s[y * w + x - 1] : 0;
+      const D = y < h - 1 ? s[(y + 1) * w + x] : 0;
+      const j = y * 2 * W2 + x * 2;
+      d[j] = C === A && C !== D && A !== B ? A : P;
+      d[j + 1] = A === B && A !== C && B !== D ? B : P;
+      d[j + W2] = D === C && D !== B && C !== A ? C : P;
+      d[j + W2 + 1] = B === D && B !== A && D !== C ? D : P;
+    }
+  return o;
+}
+
+/** Часть ломаных: каждая растёт от начала на долю `k` своей длины. */
+function cutLines(lines: [number, number][][], k: number): [number, number][][] {
+  if (k >= 1) return lines;
+  const out: [number, number][][] = [];
+  for (const ln of lines) {
+    let total = 0;
+    for (let i = 0; i + 1 < ln.length; i++)
+      total += Math.hypot(ln[i + 1][0] - ln[i][0], ln[i + 1][1] - ln[i][1]);
+    let left = total * k;
+    const part: [number, number][] = [ln[0]];
+    for (let i = 0; i + 1 < ln.length && left > 0; i++) {
+      const [x0, y0] = ln[i];
+      const [x1, y1] = ln[i + 1];
+      const d = Math.hypot(x1 - x0, y1 - y0);
+      const q = Math.min(1, left / (d || 1));
+      part.push([x0 + (x1 - x0) * q, y0 + (y1 - y0) * q]);
+      left -= d;
+    }
+    if (part.length > 1) out.push(part);
+  }
+  return out;
+}
+
+/** Трещины в фигуру (тёмная черта, светлый край) и, если надо, в маску. */
+function crackInto(
+  p: Px,
+  mask: Px | null,
+  lines: [number, number][][],
+  dark: RGBA,
+  lit: RGBA,
+): void {
+  for (const ln of lines)
+    for (let i = 0; i + 1 < ln.length; i++) {
+      const [x0, y0] = ln[i];
+      const [x1, y1] = ln[i + 1];
+      const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+      for (let k = 0; k <= n; k++) {
+        const x = Math.round(x0 + ((x1 - x0) * k) / n);
+        const y = Math.round(y0 + ((y1 - y0) * k) / n);
+        if (!p.solid(x, y)) continue;
+        p.set(x, y, dark);
+        if (p.solid(x - 1, y - 1)) p.set(x - 1, y - 1, lit);
+        if (mask) {
+          const m = mask.get(x, y);
+          mask.set(x, y, [m[0], m[1], 255, 255]);
+        }
+      }
+    }
+}
+
+/** Где глаза (прорези забрала) в фигуре 32×32. */
+const EYES: Record<BDir, [number, number][]> = {
+  down: [
+    [12, 14],
+    [13, 14],
+    [18, 14],
+    [19, 14],
+  ],
+  right: [
+    [20, 14],
+    [21, 14],
+  ],
+  up: [],
+};
+
+/**
+ * Стекло фигуры: ступень робы, сторона, строка листа; `cr` — сколько фаз
+ * трещин (у копий 0), `rv` — насколько проросла свежая (1…4), `dw` —
+ * паутина смерти (0…6).
+ */
+function bodySrc(tier: number, dir: BDir, row: number, cr: number, rv: number, dw: number) {
+  const key = `${tier}|${dir}|${row}|${cr}|${rv}|${dw}`;
+  const hit = BODY.get(key);
+  if (hit !== undefined) return hit;
   const src = heroPx(tier, dir, row);
   if (!src) return null;
-  const body = glassify(scale2x(src), BOSS_RAMP, INK, 3, 0.9, 0.75);
+  const body = glassify(scale2xFast(src), BOSS_RAMP, INK, 3, 0.9, 0.75);
+  const mask = new Px(32, 32);
   // Сердцевина: фиолетовый огонь сквозь стекло груди (у спины не видно).
   if (dir !== 'up')
     for (let y = 24; y <= 29; y++)
@@ -717,125 +1819,634 @@ function paintBoss(
         const c = body.get(x, y);
         if (c[0] === INK[0] && c[1] === INK[1]) continue;
         body.set(x, y, d < 1.4 ? VIO[3] : mixc(c, VIO[2], 0.65));
+        mask.set(x, y, [0, d < 1.4 ? 255 : 150, 0, 255]);
       }
-  // Трещины копятся по фазам, но светлый край — только у свежих: старые
-  // темнеют, иначе к финалу фигура покрывалась белыми каракулями.
-  for (let s = 1; s <= Math.min(3, phase); s++)
-    crackLines(body, BOSS_CRACKS[s], hx('#0a0c1c'), s === phase ? hx('#f0fcff') : hx('#3e5298'));
-  // Глаза — прорези забрала; во взгляде — фиолетовое пламя.
-  const eyeC = bp === 'gaze' ? VIO[3] : CYAN_HOT;
-  const eyes =
-    dir === 'down' ? [12, 13, 18, 19] : dir === 'left' ? [10, 11] : dir === 'right' ? [20, 21] : [];
-  for (const ex of eyes) {
-    body.set(ex, 14, eyeC);
-    if (bp === 'gaze') body.set(ex, 13, alpha(VIO[2], 0.8));
+  // Трещины копятся по фазам; светлый край — только у свежей.
+  for (let s = 1; s <= Math.min(3, cr); s++) {
+    const fresh = s === cr;
+    const lines = fresh ? cutLines(BOSS_CRACKS[s], rv / 4) : BOSS_CRACKS[s];
+    crackInto(
+      body,
+      fresh ? mask : null,
+      lines,
+      hx('#0a0c1c'),
+      fresh ? hx('#f0fcff') : hx('#3e5298'),
+    );
   }
-  const W0 = 60;
-  const H0 = 54;
-  const p = new Px(W0, H0);
-  const ox = 14;
-  const oy = 12;
-  const face =
-    dir === 'down' ? Math.PI / 2 : dir === 'up' ? -Math.PI / 2 : dir === 'left' ? Math.PI : 0;
-  const side = dir === 'left' ? -1 : 1;
-  // Рука с клинком: у правого бока фигуры (в кадре).
-  const hand: [number, number] =
-    dir === 'down'
-      ? [ox + 25, oy + 22]
-      : dir === 'up'
-        ? [ox + 7, oy + 20]
-        : dir === 'left'
-          ? [ox + 9, oy + 22]
-          : [ox + 23, oy + 22];
-  let bladeAng = face + side * 0.9;
-  let len = 17;
-  let hot = 0;
-  switch (bp) {
-    case 'idle':
-    case 'run':
-      bladeAng = Math.PI / 2 + side * 0.25;
-      break;
-    case 'rest':
-      bladeAng = Math.PI / 2 + side * 0.05;
-      len = 15;
-      break;
-    case 'raise':
-      // Замах: клинок назад-вверх, дрожит сильнее к концу.
-      bladeAng = face + Math.PI + side * (0.9 - k * 0.25);
-      hot = k > 2 ? 1 : 0;
-      break;
-    case 'strike':
-      bladeAng = face + side * 0.25;
-      len = 19;
-      hot = 1;
-      break;
-    case 'heavy':
-      bladeAng = -Math.PI / 2 - side * 0.35;
-      len = 19;
-      hot = k >= 2 ? 1 : 0;
-      break;
-    case 'lunge':
-      bladeAng = face;
-      len = 19;
-      hot = 1;
-      break;
-    case 'guard':
-      bladeAng = face + Math.PI / 2;
-      len = 18;
-      hot = f % 2;
-      break;
-    case 'gaze':
-      bladeAng = Math.PI / 2 + side * 0.4;
-      break;
-    case 'daze':
-      bladeAng = Math.PI / 2 + side * 1.1;
-      len = 14;
-      break;
-    case 'hurt':
-      bladeAng = Math.PI / 2 + side * 0.6;
-      break;
+  if (dw > 0) crackInto(body, mask, cutLines(DEATH_WEB, dw / 6), hx('#0a0c1c'), hx('#f0fcff'));
+  // Прорезь забрала (чернила внутри шлема) — горит во взгляде.
+  for (let y = 6; y < 20; y++)
+    for (let x = 3; x < 29; x++) {
+      const c = body.get(x, y);
+      if (!c[3] || c[0] !== INK[0] || c[1] !== INK[1]) continue;
+      let inside = 0;
+      for (const [dx, dy] of [
+        [-3, 0],
+        [3, 0],
+        [0, -3],
+        [0, 3],
+      ])
+        if (body.solid(x + dx, y + dy)) inside++;
+      if (inside === 4) mask.set(x, y, [128, 0, 0, 255]);
+    }
+  for (const [x, y] of EYES[dir]) {
+    body.set(x, y, CYAN_HOT);
+    const m = mask.get(x, y);
+    mask.set(x, y, [255, m[1], m[2], 255]);
   }
-  const behind = dir === 'up' || (bp === 'raise' && dir === 'down');
-  if (behind) glassBlade(p, hand[0], hand[1], bladeAng, len, 1.7, hot);
-  over(p, body, ox, oy + (bp === 'lunge' || bp === 'heavy' ? 1 : 0));
-  if (!behind) glassBlade(p, hand[0], hand[1], bladeAng, len, 1.7, hot);
-  // Удар: дуга следа по ходу взмаха.
-  if (bp === 'strike') {
-    for (let i = 0; i < 16; i++) {
-      const a = face - 1 + (i / 15) * 2;
-      const r = 20 + (i % 3);
-      const x = W0 / 2 + Math.cos(a) * r;
-      const y = oy + 20 + Math.sin(a) * r * 0.75;
-      p.set(Math.round(x), Math.round(y), alpha(CYAN_HOT, 0.4 + 0.5 * (i / 15)));
-      p.set(Math.round(x - Math.cos(a)), Math.round(y - Math.sin(a) * 0.75), alpha(GL[2], 0.5));
+  const out = { hi: scale2xFast(scale2xFast(body)), mask };
+  BODY.set(key, out);
+  return out;
+}
+
+// ---- Карта тела: присед, наклон, шлем ---------------------------------------
+
+/** Высота «ног» в фигуре: присед сжимает их, остальное опускается целиком. */
+const CL = 11;
+const crF = (h: number, c: number) => (h <= CL ? (h * (CL - c)) / CL : h - c);
+const crI = (h: number, c: number) => (h <= CL - c ? (h * CL) / (CL - c) : h + c);
+/** Доля шлема на высоте h (от ног): шлем гнётся отдельно, шея — плавно. */
+const headW = (h: number) => sstep(12, 17, h);
+
+interface BPlace {
+  fx: number;
+  fy: number;
+  rot: number;
+  crouch: number;
+  hx: number;
+  hy: number;
+}
+
+function placeOf(r: BRig, c: BCtx): BPlace {
+  let rot = r.tilt;
+  let hy = r.hy;
+  let crouch = r.crouch;
+  if (c.dir === 'right') rot += r.lean;
+  else if (c.dir === 'down') {
+    // Анфас наклон вперёд — шлем к зрителю (ниже), спина — выше. Мягче, чем
+    // в профиль: анфас присед сплющивает фигуру в блин.
+    hy += r.lean * 4;
+    crouch = crouch * 0.75 + Math.max(0, r.lean);
+  } else {
+    hy -= r.lean * 4;
+    crouch *= 0.75;
+  }
+  return { fx: BAX, fy: BAY, rot, crouch: cl(crouch, -4, 6), hx: r.hx, hy };
+}
+
+/** Точка фигуры (u, v) → точка кадра. */
+function fmap(u: number, v: number, P: BPlace): [number, number] {
+  const h = 32 - v;
+  const w = headW(h);
+  const x = u - 16 + w * P.hx;
+  const y = -(crF(h, P.crouch) - w * P.hy);
+  const cs = Math.cos(P.rot);
+  const sn = Math.sin(P.rot);
+  return [P.fx + x * cs - y * sn, P.fy + x * sn + y * cs];
+}
+
+interface GlowPx {
+  x: number;
+  y: number;
+  /** 0 — глаз, 1 — сердцевина, 2 — свежая трещина, 3 — прорезь забрала. */
+  k: number;
+  v: number;
+}
+
+/**
+ * Тело в кадр: обратная карта каждого пикселя кадра в фигуру ×4. `vis` < 1
+ * — фигура по ту сторону зеркала: видны только часть полос, и они
+ * разъехались вбок. `sheen` — полоса блика по стеклу (−1 — нет).
+ */
+function drawBody(dst: Px, glow: GlowPx[], S: BodySrc, P: BPlace, sheen: number): void {
+  const cs = Math.cos(P.rot);
+  const sn = Math.sin(P.rot);
+  const hi = S.hi.data;
+  const md = S.mask.data;
+  const band = sheen >= 0 ? -14 + sheen * 44 : -999;
+  for (let y = P.fy - 46; y <= P.fy + 6; y++) {
+    for (let x = P.fx - 34; x <= P.fx + 34; x++) {
+      const X1 = x + 0.5 - P.fx;
+      const Y1 = y + 0.5 - P.fy;
+      const X = X1 * cs + Y1 * sn;
+      const Y = -X1 * sn + Y1 * cs;
+      const hp = -Y;
+      if (hp < -0.5 || hp > 40) continue;
+      let h = crI(hp, P.crouch);
+      h = crI(hp + headW(h) * P.hy, P.crouch);
+      h = crI(hp + headW(h) * P.hy, P.crouch);
+      const u = X - headW(h) * P.hx + 16;
+      const v = 32 - h;
+      if (u < 0 || v < 0 || u >= 32 || v >= 32) continue;
+      const i = (Math.floor(v * 4) * 128 + Math.floor(u * 4)) * 4;
+      if (!hi[i + 3]) continue;
+      let c: RGBA = [hi[i], hi[i + 1], hi[i + 2], 255];
+      const ink = c[0] === INK[0] && c[1] === INK[1] && c[2] === INK[2];
+      if (!ink && Math.abs(u - v * 0.9 - band) < 1.3) c = mixc(c, WHITE, 0.42);
+      dst.set(x, y, c);
+      const mi = (Math.floor(v) * 32 + Math.floor(u)) * 4;
+      if (!md[mi + 3]) continue;
+      if (md[mi] === 128) glow.push({ x, y, k: 3, v: 128 });
+      else if (md[mi]) glow.push({ x, y, k: 0, v: md[mi] });
+      else if (md[mi + 2]) glow.push({ x, y, k: 2, v: md[mi + 2] });
+      else if (md[mi + 1]) glow.push({ x, y, k: 1, v: md[mi + 1] });
     }
   }
-  // Выпад: полосы скорости позади.
-  if (bp === 'lunge')
-    for (let i = 0; i < 5; i++) {
-      const y = oy + 10 + i * 4 + (f % 2);
-      const x0 = dir === 'left' ? ox + 30 : dir === 'right' ? ox - 6 : ox + 6 + i * 4;
-      if (dir === 'left' || dir === 'right') stroke(p, x0, y, x0 + side * -8, y, alpha(CYAN, 0.45));
-      else if (i % 2 === 0) {
-        // Вверх-вниз: три тающие черты по краям силуэта, а не «гребёнка».
-        const ys = dir === 'down' ? oy + 2 : oy + 30;
-        const len = 3 + ((i + f) % 3) * 2;
-        stroke(p, x0, ys, x0, ys + (dir === 'down' ? -len : len), alpha(CYAN, 0.3));
-      }
+}
+
+/**
+ * Фигура по ту сторону зеркала: видна часть полос по 2 px, и они разъехались
+ * вбок в разные стороны (`vis` 1 — вся здесь, 0 — ушла целиком).
+ */
+function sliceFig(p: Px, vis: number): Px {
+  const o = new Px(p.w, p.h);
+  for (let y = 0; y < p.h; y++) {
+    const sI = Math.floor((y - BAY + 48) / 2);
+    const th = hash(sI, 11) * 0.7 + 0.3 * Math.min(1, Math.abs(sI - 11) / 12);
+    if (th >= vis) continue;
+    const side = sI % 2 ? 1 : -1;
+    const off = Math.round(side * Math.pow(1 - vis, 1.4) * (7 + 12 * hash(sI, 13)));
+    const k = 0.6 + 0.4 * vis;
+    for (let x = 0; x < p.w; x++) {
+      const i = (y * p.w + x) * 4;
+      if (!p.data[i + 3]) continue;
+      o.set(x + off, y, [p.data[i], p.data[i + 1], p.data[i + 2], Math.round(p.data[i + 3] * k)]);
     }
-  // Стойка: блеск по клинку и мерцающий щит-отблеск.
-  if (bp === 'guard')
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * TAU;
-      p.set(
-        Math.round(W0 / 2 + Math.cos(a) * 17),
-        Math.round(oy + 17 + Math.sin(a) * 14),
-        alpha(CYAN_HOT, f % 2 ? 0.7 : 0.35),
+  }
+  return o;
+}
+
+// ---- Рука и клинок -----------------------------------------------------------
+
+const ARM_T: Tones = [BOSS_RAMP[0], BOSS_RAMP[1], BOSS_RAMP[2], BOSS_RAMP[4]];
+
+interface BGeom {
+  sx: number;
+  sy: number;
+  hx: number;
+  hy: number;
+  a: number;
+  tx: number;
+  ty: number;
+}
+
+/** Плечо, кулак, остриё: кулак ходит по дуге вокруг плеча вслед за клинком. */
+function bladeGeom(r: BRig, c: BCtx, P: BPlace): BGeom {
+  const [su, sv] = SHOULDER[c.dir];
+  const [sx, sy] = fmap(su, sv, P);
+  const a = c.phi + r.b;
+  let ox = r.hf;
+  let oy = 0;
+  if (c.dir === 'down') {
+    ox = -r.hl;
+    oy = r.hf * 0.5;
+  } else if (c.dir === 'up') {
+    ox = r.hl;
+    oy = -r.hf * 0.5;
+  }
+  const hx = sx + Math.cos(a) * r.arm + ox;
+  const hy = sy + Math.sin(a) * r.arm * 0.7 - r.lift + oy;
+  return { sx, sy, hx, hy, a, tx: hx + Math.cos(a) * r.len, ty: hy + Math.sin(a) * r.len };
+}
+
+function drawArm(p: Px, g: BGeom): void {
+  limb(p, g.sx, g.sy, g.hx, g.hy, 1.7, 1.35, ARM_T, 0.1);
+  shadeEll(p, g.hx, g.hy, 1.9, 1.7, ARM_T, 0.3);
+}
+
+/** Звезда-блик (поверх темноты). */
+function glintAt(p: Px, x: number, y: number, s: number, a: number): void {
+  const X = Math.round(x);
+  const Y = Math.round(y);
+  p.set(X, Y, alpha(WHITE, a));
+  for (let i = 1; i <= s; i++) {
+    const k = a * (1 - (i - 1) / (s + 0.5));
+    const c = i === 1 ? alpha(CYAN_HOT, k) : alpha(CYAN, k * 0.85);
+    p.set(X + i, Y, c);
+    p.set(X - i, Y, c);
+    p.set(X, Y + i, c);
+    p.set(X, Y - i, c);
+  }
+  if (s >= 3) {
+    const c = alpha(CYAN, a * 0.5);
+    p.set(X + 1, Y + 1, c);
+    p.set(X - 1, Y - 1, c);
+    p.set(X + 1, Y - 1, c);
+    p.set(X - 1, Y + 1, c);
+  }
+}
+
+/** Промежуточное положение клинка между двумя выборками (для гладкого серпа). */
+function lerpGeom(A: BGeom, B: BGeom, k: number): BGeom {
+  const hx = A.hx + (B.hx - A.hx) * k;
+  const hy = A.hy + (B.hy - A.hy) * k;
+  const a = A.a + (B.a - A.a) * k;
+  const la = Math.hypot(A.tx - A.hx, A.ty - A.hy);
+  const lb = Math.hypot(B.tx - B.hx, B.ty - B.hy);
+  const len = la + (lb - la) * k;
+  return { sx: A.sx, sy: A.sy, hx, hy, a, tx: hx + Math.cos(a) * len, ty: hy + Math.sin(a) * len };
+}
+
+/**
+ * След-серп: площадь, которую клинок вымел за `win` секунд до t, — по
+ * настоящей кривой техники. У клинка след во всю длину лезвия, по дуге назад
+ * — только у острия (серп) и тусклее; ход тела за это время вычтен (след
+ * лежит в мире). `sk` — сила следа: 1 на ударе и в миг контакта, к концу
+ * проводки гаснет.
+ */
+function drawSmear(
+  lit: Px,
+  tech: string,
+  v: number,
+  t: number,
+  c: BCtx,
+  win: number,
+  heavy: boolean,
+  cur: BRig,
+  sk: number,
+): void {
+  const n = 12;
+  const raw: BGeom[] = [];
+  for (let i = n; i >= 0; i--) {
+    const r = techAt(tech, v, t - (win * i) / n, c).r;
+    const g = bladeGeom(r, c, placeOf(r, c));
+    // Ход тела за это время: старый клинок стоял там, где было тело тогда.
+    const df = r.fwd - cur.fwd;
+    const ox = df * Math.cos(c.phi);
+    const oy = df * Math.sin(c.phi) * 0.7 - (r.hop - cur.hop);
+    g.hx += ox;
+    g.hy += oy;
+    g.tx += ox;
+    g.ty += oy;
+    raw.push(g);
+  }
+  // Гуще там, где клинок летел быстро: иначе дуга ломается углами.
+  const seq: BGeom[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (i) {
+      const m = Math.ceil(Math.abs(raw[i].a - raw[i - 1].a) / 0.09);
+      for (let j = 1; j < m; j++) seq.push(lerpGeom(raw[i - 1], raw[i], j / m));
+    }
+    seq.push(raw[i]);
+  }
+  let total = 0;
+  for (let i = 1; i < seq.length; i++) total += Math.abs(seq[i].a - seq[i - 1].a);
+  if (total < 0.35) return;
+  const dim = sk >= 0.8 ? 0 : sk >= 0.45 ? 1 : 2;
+  const buf = new Px(lit.w, lit.h);
+  const tiers: RGBA[] = [
+    [0, 0, 0, 0],
+    alpha(GL[2], 0.4),
+    alpha(CYAN, 0.62),
+    alpha(CYAN_HOT, 0.86),
+    alpha(WHITE, 0.95),
+  ];
+  const ext = heavy ? 2.5 : 1.2;
+  const pt = (g: BGeom, d: number): [number, number] => [
+    g.hx + Math.cos(g.a) * d,
+    g.hy + Math.sin(g.a) * d,
+  ];
+  // От хвоста к клинку: новое ложится поверх старого.
+  let cum = total;
+  for (let i = 0; i + 1 < seq.length; i++) {
+    const A = seq[i];
+    const B = seq[i + 1];
+    const da = Math.abs(B.a - A.a);
+    const frA = cum / total;
+    cum -= da;
+    const frB = cum / total;
+    if (da < 0.004) continue;
+    const lenA = Math.hypot(A.tx - A.hx, A.ty - A.hy);
+    const lenB = Math.hypot(B.tx - B.hx, B.ty - B.hy);
+    const inA = lenA * (0.4 + 0.52 * Math.pow(frA, 0.8));
+    const inB = lenB * (0.4 + 0.52 * Math.pow(frB, 0.8));
+    const outA = lenA + ext * (1 - frA * 0.6);
+    const outB = lenB + ext * (1 - frB * 0.6);
+    const tier = (frB < 0.28 ? 3 : frB < 0.62 ? 2 : 1) - dim;
+    if (tier <= 0) continue;
+    if (heavy && frB < 0.8)
+      poly(
+        buf,
+        [pt(A, outA), pt(A, outA + 2.5), pt(B, outB + 2.5), pt(B, outB)],
+        [Math.max(1, tier - 1), 0, 0, 255],
       );
+    poly(buf, [pt(A, inA), pt(A, outA), pt(B, outB), pt(B, inB)], [tier, 0, 0, 255]);
+    if (frB < 0.5 && !dim)
+      poly(buf, [pt(A, outA - 1.3), pt(A, outA), pt(B, outB), pt(B, outB - 1.3)], [4, 0, 0, 255]);
+  }
+  for (let i = 0; i < buf.data.length; i += 4) {
+    const k = buf.data[i + 3] ? buf.data[i] : 0;
+    if (!k) continue;
+    lit.set((i / 4) % lit.w, Math.floor(i / 4 / lit.w), tiers[k]);
+  }
+}
+
+// ---- Кадр ------------------------------------------------------------------
+
+interface BReq {
+  tier: number;
+  copy: boolean;
+  /** Трещины: фаз (у копии 0), свежая проросла на rv/4, светится cg (0…3). */
+  cr: number;
+  rv: number;
+  cg: number;
+  tech: string;
+  v: number;
+  /** Кадр отрезка (24 к/с; у покоя и бега — свой счёт). */
+  f: number;
+  /** Время кадра, с (для покоя и бега — фаза). */
+  t: number;
+  dir: BDir;
+  /** Взгляд — 1/16 оборота (правый эквивалент). */
+  q: number;
+  hk: number;
+  rk: number;
+  /** Вздрог от удара героя 0…2. */
+  fl: number;
+  look: Look;
+}
+
+interface BFrame extends MobFrame {
+  /** Сдвиг кадра от хода тела (вдоль взгляда и подскок), до зеркала. */
+  bx: number;
+  by: number;
+}
+
+// ~440 кадров: обрезанный кадр с подсветкой в среднем ~15 КБ, это ≈7 МБ — в
+// бюджете библии (≈11 МБ на 400 кадров 88×80).
+const BFR = frameLRU<BFrame>(440);
+
+/** Для замеров стенда: сколько кадров отражения в кеше и сброс кеша. */
+export const f7BossCache = {
+  size: () => BFR.size,
+  clear: (all = false) => {
+    BFR.clear();
+    if (all) {
+      BODY.clear();
+      INTACT.clear();
     }
-  if (bp === 'daze') stars(p, W0 / 2, oy + 1, 8, f);
+  },
+};
+
+function ctxOf(q: BReq): BCtx {
+  return {
+    dir: q.dir,
+    phi: (q.q * TAU) / 16,
+    hs: q.hk / 100,
+    cw: q.copy ? 1.15 : 1,
+    rec: q.rk / 100,
+  };
+}
+
+/** Кадр без зеркала и вспышки. */
+function bossBase(q: BReq): BFrame | null {
+  const key = `b|${q.tier}|${q.copy ? 1 : 0}|${q.cr}|${q.rv}|${q.cg}|${q.tech}|${q.v}|${q.f}|${q.dir}|${q.q}|${q.hk}|${q.rk}|${q.fl}|${q.look}`;
+  const hit = BFR.get(key);
+  if (hit) return hit;
+  const c = ctxOf(q);
+  const { r, fx } = techAt(q.tech, q.v, q.t, c);
+  if (q.fl > 0) {
+    // Вздрог от удара героя: шлем назад, присел, глаза вспыхнули.
+    const k = q.fl / 2;
+    r.lean -= 0.16 * k;
+    r.hy -= 1.1 * k;
+    r.crouch += 0.7 * k;
+    r.eyes = 1;
+    r.b += 0.22 * k;
+  }
+  const dying = q.tech === 'die' || q.tech === 'dieC';
+  const shatterAt = q.tech === 'die' ? DIE_SHATTER : DIEC_SHATTER;
+  if (dying && q.t >= shatterAt) return dieShards(q, c);
+  const S = bodySrc(q.tier, q.dir, r.row, q.cr, q.rv, fx.web ?? 0);
+  if (!S) return null;
+  const P = placeOf(r, c);
+  let p = new Px(BW, BH);
+  let lit = new Px(BW, BH);
+  const glow: GlowPx[] = [];
+  const g = bladeGeom(r, c, P);
+  const bladeOn = !(q.tech === 'die' && q.t > 0.12);
+  const sn = Math.sin(g.a);
+  const behind =
+    r.front > 0.5 ? false : r.front < -0.5 ? true : sn < -0.3 || (c.dir === 'up' && sn < 0.45);
+  const blade = () => {
+    if (!bladeOn) return;
+    glassBlade(p, g.hx, g.hy, g.a, r.len, 1.7, r.hot > 0.5 ? 1 : 0);
+  };
+  if (behind) {
+    blade();
+    drawArm(p, g);
+  }
+  drawBody(p, glow, S, P, fx.sheen ?? -1);
+  if (!behind) {
+    drawArm(p, g);
+    blade();
+  }
+  if (q.tech === 'die' && q.t > 0.12) dropBlade(p, lit, q.t, c);
+  if (q.look === 'elite') p.outline(GOLD);
   p.outline(alpha(INK, 0.6));
-  return { p, ax: W0 / 2, ay: oy + 32, eye: dir === 'up' ? null : [W0 / 2, oy + 14] };
+
+  // ---- Поверх темноты ----
+  const eyeC = r.gz > 0.05 ? mixc(CYAN_HOT, VIO[3], Math.min(1, r.gz * 1.5)) : CYAN_HOT;
+  const eyesAt = glow.filter((gp) => gp.k === 0).map((gp) => [gp.x, gp.y] as const);
+  for (const gp of glow) {
+    if (gp.k === 0) {
+      lit.set(gp.x, gp.y, alpha(eyeC, cl(0.3 + 0.7 * r.eyes)));
+      if (r.eyes > 0.85 || r.gz > 0.3) {
+        const h = alpha(r.gz > 0.3 ? VIO[2] : CYAN, 0.3);
+        lit.set(gp.x, gp.y - 1, h);
+        lit.set(gp.x, gp.y + 1, h);
+      }
+    } else if (gp.k === 1 && r.core > 0.45)
+      lit.set(gp.x, gp.y, alpha(gp.v > 200 ? VIO[3] : VIO[2], cl((r.core - 0.45) * 1.8)));
+    else if (gp.k === 3 && r.gz > 0.1) {
+      // Прорезь забрала наливается фиолетовым огнём от глаз к краям: чем
+      // ближе к глазу и чем дальше взгляд, тем горячее; редкие искры мерцают.
+      let d = 9;
+      for (const e of eyesAt) d = Math.min(d, Math.abs(e[0] - gp.x) + Math.abs(e[1] - gp.y));
+      const heat = r.gz * 1.6 - d * 0.28 + (hash(gp.x, gp.y, q.f) > 0.9 ? 0.35 : 0);
+      if (heat > 0.05) {
+        const c0 = heat > 1.1 ? WHITE : heat > 0.7 ? VIO[3] : heat > 0.35 ? VIO[2] : VIO[1];
+        lit.set(gp.x, gp.y, alpha(c0, cl(0.35 + heat * 0.6)));
+      }
+    } else if (gp.k === 2 && (q.cg > 0 || dying))
+      lit.set(
+        gp.x,
+        gp.y,
+        alpha(CYAN_HOT, dying ? 0.5 + (fx.inner ?? 0) * 0.5 : Math.min(1, q.cg / 3)),
+      );
+  }
+  // Взгляд: пламя из прорезей, кайма фиолетом, вспышка в миг удара.
+  if (r.gz > 0.15) gazeFire(lit, p, glow, r.gz, q.f);
+  // Клинок накалён — кромка светится.
+  if (bladeOn && r.hot > 0.15) {
+    const ux = Math.cos(g.a);
+    const uy = Math.sin(g.a);
+    const L = r.len;
+    for (let i = 2; i <= L; i++)
+      lit.set(
+        Math.round(g.hx + ux * i - uy * 0.6),
+        Math.round(g.hy + uy * i + ux * 0.6),
+        alpha(CYAN_HOT, (0.25 + 0.6 * r.hot) * (0.5 + (0.5 * i) / L)),
+      );
+  }
+  // По ту сторону зеркала — полосами (и тело, и его свет).
+  if (r.vis < 0.999) {
+    p = sliceFig(p, r.vis);
+    lit = sliceFig(lit, r.vis);
+  }
+  if (fx.smear && bladeOn) drawSmear(lit, q.tech, q.v, q.t, c, fx.smear, !!fx.heavy, r, fx.sk ?? 1);
+  if (fx.glint && bladeOn) glintAt(lit, g.tx, g.ty, fx.glint > 0.7 ? 3 : 2, cl(fx.glint));
+  if (fx.bflash && bladeOn) {
+    // Миг контакта: лезвие белое целиком, на острие — звезда.
+    const ux = Math.cos(g.a);
+    const uy = Math.sin(g.a);
+    for (let i = 2; i <= r.len; i++)
+      for (const w of [-0.7, 0, 0.7])
+        lit.set(
+          Math.round(g.hx + ux * i - uy * w),
+          Math.round(g.hy + uy * i + ux * w),
+          alpha(WHITE, 0.9 * fx.bflash),
+        );
+    glintAt(lit, g.tx, g.ty, 3, fx.bflash);
+  }
+  if (fx.ring) chargeRing(lit, P, fx.ring, q.f);
+  if (fx.motes) motes(lit, g, fx.motes, q.t);
+  if (fx.spark) {
+    const mx = g.hx + Math.cos(g.a) * r.len * 0.55;
+    const my = g.hy + Math.sin(g.a) * r.len * 0.55;
+    glintAt(lit, mx, my, Math.round(2 + fx.spark * 3), cl(fx.spark * 1.2));
+  }
+  if (fx.streak) streaks(lit, P, c, fx.streak);
+  if (fx.stars !== undefined && fx.stars >= 0) dazeStars(lit, P, r, fx.stars);
+  if (r.pane > 0.05) pane(lit, P, c, r.pane, fx.sheen ?? 0, fx.pflash ?? 0);
+  if (r.seam > 0.02) seam(lit, P, r.seam);
+  if (fx.inner) innerLight(lit, p, fx.inner);
+  // Смена фазы: первый миг — стекло вспыхивает насквозь, как от удара.
+  if (q.cg === 4) innerLight(lit, p, 0.55);
+
+  // Дрожь подготовки — сдвигом кадра, свой на каждый кадр техники.
+  const tr = fx.tremble ?? 0;
+  const jx = tr ? (hash(q.f, 17, q.v) - 0.5) * 2 * tr : 0;
+  const jy = tr ? (hash(q.f, 23, q.v) - 0.5) * 0.8 * tr : 0;
+  const shadowK = r.vis * (1 - r.hop * 0.05);
+  return cropped(key, p, lit, glow, r, c, jx, jy, shadowK);
+}
+
+/** Обрезать пустое, собрать кадр движка. */
+function cropped(
+  key: string,
+  p: Px,
+  lit: Px,
+  glow: GlowPx[],
+  r: BRig,
+  c: BCtx,
+  jx: number,
+  jy: number,
+  shadowK: number,
+): BFrame {
+  let x0 = p.w;
+  let y0 = p.h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++) {
+      const i = (y * p.w + x) * 4;
+      if (!p.data[i + 3] && !lit.data[i + 3]) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  if (x1 < 0) {
+    x0 = BAX;
+    y0 = BAY;
+    x1 = BAX;
+    y1 = BAY;
+  }
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  const crop = (s: Px) => {
+    const o = new Px(w, h);
+    for (let y = 0; y < h; y++)
+      o.data.set(
+        s.data.subarray(((y + y0) * s.w + x0) * 4, ((y + y0) * s.w + x0 + w) * 4),
+        y * w * 4,
+      );
+    return o;
+  };
+  let litOn = false;
+  for (let i = 3; i < lit.data.length; i += 4)
+    if (lit.data[i]) {
+      litOn = true;
+      break;
+    }
+  const eye = glow.find((gp) => gp.k === 0);
+  const sq = r.sq;
+  const side = c.dir === 'right';
+  const out: BFrame = {
+    img: crop(p).canvas(),
+    lit: litOn ? crop(lit).canvas() : null,
+    ax: BAX - x0,
+    ay: BAY - y0,
+    eye: eye && r.vis > 0.5 ? [eye.x - x0, eye.y - y0] : null,
+    bx: r.fwd * Math.cos(c.phi) + jx,
+    by: r.fwd * Math.sin(c.phi) * 0.7 - r.hop + jy,
+    sx: side ? 1 + sq : 1 - sq * 0.4,
+    sy: side ? 1 - sq * 0.5 : 1 + sq * 0.6,
+    still: true,
+    shadow: Math.max(0, 11 * shadowK),
+  };
+  return BFR.set(key, out);
+}
+
+function mirrorCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
+  const o = document.createElement('canvas');
+  o.width = src.width;
+  o.height = src.height;
+  const g = o.getContext('2d');
+  if (g) {
+    g.translate(src.width, 0);
+    g.scale(-1, 1);
+    g.drawImage(src, 0, 0);
+  }
+  return o;
+}
+
+function flashCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
+  const o = document.createElement('canvas');
+  o.width = src.width;
+  o.height = src.height;
+  const g = o.getContext('2d');
+  if (g) {
+    g.drawImage(src, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    g.fillRect(0, 0, o.width, o.height);
+  }
+  return o;
+}
+
+/** Кадр по запросу: левая сторона — зеркало правой, вспышка — поверх. */
+function bossFrame(q: BReq, left: boolean, flash: boolean): BFrame | null {
+  if (!left && !flash) return bossBase(q);
+  const key = `v|${q.tier}|${q.copy ? 1 : 0}|${q.cr}|${q.rv}|${q.cg}|${q.tech}|${q.v}|${q.f}|${q.dir}|${q.q}|${q.hk}|${q.rk}|${q.fl}|${q.look}|${left ? 1 : 0}|${flash ? 1 : 0}`;
+  const hit = BFR.get(key);
+  if (hit) return hit;
+  if (flash) {
+    const src = bossFrame(q, left, false);
+    if (!src) return null;
+    return BFR.set(key, { ...src, img: flashCanvas(src.img) });
+  }
+  const b = bossBase(q);
+  if (!b) return null;
+  return BFR.set(key, {
+    ...b,
+    img: mirrorCanvas(b.img),
+    lit: b.lit ? mirrorCanvas(b.lit) : null,
+    eye: b.eye ? [b.img.width - 1 - b.eye[0], b.eye[1]] : null,
+    ax: b.img.width - b.ax,
+    bx: -b.bx,
+  });
 }
 
 /** Сквозь зеркало: фигура распадается полосами-осколками (k 0…1). */
@@ -860,130 +2471,713 @@ function slices(p: Px, k: number, out: boolean): Px {
   return o;
 }
 
-registerMobPainter('f7_boss', (m: Mob, pose: MobPose) => {
-  const gear = heroGear();
-  const tier = gear.robe;
-  const phase = Math.max(0, F7_VIEW.bossPhase);
-  const dir = dirOf(m.face);
-  const mode = pose.mode;
-  let bp: BossPose = 'idle';
-  let row = 0;
-  let k = 0;
-  let f = 0;
-  let dissolve = -1;
-  let appear = -1;
-  switch (mode) {
-    case 'chase':
-      bp = 'run';
-      row = pose.frame % 4;
-      break;
+// ---- Всё, что светится вокруг тела ------------------------------------------
+
+/**
+ * Кольцо набора вокруг тела — то же, что у тяжёлого удара героя: растёт с
+ * набором, полное — белое.
+ */
+function chargeRing(lit: Px, P: BPlace, k: number, f: number): void {
+  const R = 7 + k * 12;
+  const cx = P.fx;
+  const cy = P.fy - 12;
+  const full = k > 0.95;
+  const c = full ? WHITE : CYAN;
+  const n = Math.ceil(R * 7);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * TAU;
+    // Дуга «бежит»: на каждом кадре гаснет своя четверть.
+    const gap = (i / n + f * 0.07) % 1 < 0.18 && !full;
+    if (gap) continue;
+    lit.set(
+      Math.round(cx + Math.cos(a) * R),
+      Math.round(cy + Math.sin(a) * R * 0.62),
+      alpha(c, 0.35 + 0.5 * k),
+    );
+  }
+}
+
+/** Искры набора: стекают к острию по спирали, ярче у клинка. */
+function motes(lit: Px, g: BGeom, k: number, t: number): void {
+  for (let i = 0; i < 6; i++) {
+    const fr = (t * 1.7 + hash(i, 3)) % 1;
+    const ang = hash(i, 5) * TAU + t * 3.2;
+    const rad = 17 * (1 - fr) + 1;
+    const x = g.tx + Math.cos(ang) * rad;
+    const y = g.ty + Math.sin(ang) * rad * 0.8;
+    const a = (0.25 + 0.75 * fr) * k;
+    lit.set(Math.round(x), Math.round(y), alpha(CYAN_HOT, a));
+    if (fr > 0.55)
+      lit.set(
+        Math.round(x - Math.cos(ang) * 1.2),
+        Math.round(y - Math.sin(ang)),
+        alpha(CYAN, a * 0.6),
+      );
+  }
+}
+
+/** Полосы скорости позади тела (выпад, пробежка). */
+function streaks(lit: Px, P: BPlace, c: BCtx, k: number): void {
+  const ux = Math.cos(c.phi);
+  const uy = Math.sin(c.phi);
+  for (let i = 0; i < 4; i++) {
+    // Полосы — вдоль хода, позади, по высоте тела; две фазы мигают.
+    const lat = [-9, -2, 5, 11][i] + (k === 2 ? 1 : 0);
+    const h = [26, 18, 10, 20][i];
+    const back = 10 + ((i * 5 + k * 3) % 7);
+    const L = 7 + ((i * 3 + k) % 4) * 2;
+    const x0 = P.fx - ux * back - uy * lat;
+    const y0 = P.fy - h * (Math.abs(ux) > 0.5 ? 1 : 0.4) - uy * back * 0.7 + ux * lat * 0.4;
+    for (let s = 0; s < L; s++) {
+      const q = s / L;
+      lit.set(
+        Math.round(x0 - ux * s),
+        Math.round(y0 - uy * s * 0.7),
+        alpha(q < 0.3 ? CYAN_HOT : CYAN, 0.55 * (1 - q)),
+      );
+    }
+  }
+}
+
+/** Звёзды оглушения: три по кругу над шлемом, задняя — тусклее. */
+function dazeStars(lit: Px, P: BPlace, r: BRig, ph: number): void {
+  const [cx, cy] = fmap(16 + r.hx, 1, P);
+  for (let i = 0; i < 3; i++) {
+    const a = ph * TAU + (i / 3) * TAU;
+    const x = Math.round(cx + Math.cos(a) * 9);
+    const y = Math.round(cy - 3 + Math.sin(a) * 2.6);
+    const k = Math.sin(a) < 0 ? 0.5 : 1;
+    lit.set(x, y, alpha(WHITE, k));
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ])
+      lit.set(x + dx, y + dy, alpha(hx('#c8f0ff'), 0.8 * k));
+  }
+}
+
+/** Зеркальная защита: стекло перед телом, по нему бежит блик. */
+function pane(lit: Px, P: BPlace, c: BCtx, k: number, sheen: number, fl = 0): void {
+  const rim = mixc(CYAN, WHITE, fl);
+  const side = c.dir === 'right';
+  const cx = P.fx + (side ? 9 : 0);
+  const cy = P.fy - 16 + (c.dir === 'down' ? 3 : 0);
+  const rx = side ? 3.2 : 12;
+  const ry = 16;
+  const back = c.dir === 'up' ? 0.5 : 1;
+  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
+    for (let x = Math.floor(cx - rx - 1); x <= Math.ceil(cx + rx + 1); x++) {
+      const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry);
+      if (d > 1.04) continue;
+      const band = Math.abs(x - cx - (y - cy) * 0.5 - (sheen * 2 - 1) * rx * 1.6) < 1.2;
+      if (d > 0.86) lit.set(x, y, alpha(rim, (0.55 + 0.4 * fl) * Math.max(k, fl) * back));
+      else if (fl > 0.3 && (x + y) % 2 === 0) lit.set(x, y, alpha(WHITE, 0.35 * fl));
+      else if (band && sheen >= 0) lit.set(x, y, alpha(CYAN_HOT, 0.5 * k * back));
+      else if ((x + y) % 2 === 0) lit.set(x, y, alpha(CYAN, 0.07 * k * back));
+    }
+}
+
+/** Шов зеркала: черта встаёт, потом раскрывается овалом. */
+function seam(lit: Px, P: BPlace, k: number): void {
+  const cx = P.fx;
+  const cy = P.fy - 16;
+  const h = 17 * Math.min(1, k / 0.45);
+  for (let y = Math.round(cy - h); y <= Math.round(cy + h); y++) {
+    const e = 1 - Math.abs(y - cy) / (h + 1);
+    lit.set(cx, y, alpha(WHITE, 0.95 * e));
+    lit.set(cx - 1, y, alpha(CYAN, 0.45 * e));
+    lit.set(cx + 1, y, alpha(CYAN, 0.45 * e));
+  }
+  if (k <= 0.45) return;
+  const rx = 12 * Math.min(1, (k - 0.45) / 0.45);
+  if (rx < 1) return;
+  for (let y = Math.floor(cy - 17); y <= Math.ceil(cy + 17); y++)
+    for (let x = Math.floor(cx - rx - 1); x <= Math.ceil(cx + rx + 1); x++) {
+      const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / 17);
+      if (d > 1.05) continue;
+      if (d > 0.88) lit.set(x, y, alpha(CYAN, 0.6));
+      else if ((x + y) % 3 === 0) lit.set(x, y, alpha(CYAN, 0.1));
+    }
+}
+
+/** Взгляд: пламя из прорезей, фиолетовая кайма по силуэту, вспышка. */
+function gazeFire(lit: Px, p: Px, glow: GlowPx[], gz: number, f: number): void {
+  const k = Math.min(1, gz);
+  let ex0 = 1e9;
+  let ex1 = -1e9;
+  let ey = 0;
+  let ne = 0;
+  for (const gp of glow) {
+    if (gp.k !== 0) continue;
+    ex0 = Math.min(ex0, gp.x);
+    ex1 = Math.max(ex1, gp.x);
+    ey += gp.y;
+    ne++;
+    // Глаз — белое ядро; над ним язык пламени, колышется по кадрам.
+    if (k > 0.5) lit.set(gp.x, gp.y, alpha(WHITE, 0.9));
+    const h = Math.round(2 + 7 * k * (0.45 + 0.55 * hash(f, gp.x, 3)));
+    const sway = Math.round((hash(f >> 1, gp.x, 5) - 0.5) * 2);
+    for (let i = 1; i <= h; i++) {
+      const q = i / (h + 1);
+      const x = gp.x + (q > 0.5 ? sway : 0);
+      const col = q < 0.25 ? WHITE : q < 0.5 ? VIO[3] : q < 0.8 ? VIO[2] : VIO[1];
+      lit.set(x, gp.y - i, alpha(col, 0.95 - q * 0.55));
+    }
+  }
+  // Кайма: снаружи силуэта, где рядом тело.
+  const a = 0.5 * k;
+  if (a > 0.05)
+    for (let y = 1; y < p.h - 1; y++)
+      for (let x = 1; x < p.w - 1; x++) {
+        if (p.solid(x, y)) continue;
+        if (p.solid(x - 1, y) || p.solid(x + 1, y) || p.solid(x, y - 1) || p.solid(x, y + 1))
+          if ((x + y + f) % 2 === 0 || k > 0.7) lit.set(x, y, alpha(VIO[2], a));
+      }
+  if (gz > 1.02 && ne) {
+    // Вспышка взгляда: черта через забрало, белое ядро.
+    const y = Math.round(ey / ne);
+    const s = cl((gz - 1) / 0.25);
+    for (let x = ex0 - 10; x <= ex1 + 10; x++) {
+      const d = x < ex0 ? ex0 - x : x > ex1 ? x - ex1 : 0;
+      const q = 1 - d / 11;
+      lit.set(x, y, alpha(d < 3 ? WHITE : VIO[3], q * s));
+      if (d < 5) {
+        lit.set(x, y - 1, alpha(VIO[2], q * s * 0.6));
+        lit.set(x, y + 1, alpha(VIO[2], q * s * 0.6));
+      }
+    }
+  }
+}
+
+/** Свет изнутри перед раскалом: стекло светится насквозь. */
+function innerLight(lit: Px, p: Px, k: number): void {
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++) {
+      const i = (y * p.w + x) * 4;
+      if (p.data[i + 3] < 200) continue;
+      const ink = p.data[i] === INK[0] && p.data[i + 1] === INK[1] && p.data[i + 2] === INK[2];
+      lit.set(x, y, alpha(ink ? CYAN : CYAN_HOT, (ink ? 0.35 : 0.7) * k));
+    }
+}
+
+/** Смерть: клинок выпал из руки при 0,12 и лежит на полу (отскок). */
+function dropBlade(p: Px, lit: Px, t: number, c: BCtx): void {
+  const r0 = techDie(0.12, c, false).r;
+  const g0 = bladeGeom(r0, c, placeOf(r0, c));
+  const len = r0.len;
+  const mx0 = g0.hx + Math.cos(g0.a) * len * 0.5;
+  const my0 = g0.hy + Math.sin(g0.a) * len * 0.5;
+  const floor = BAY + 3;
+  const tau = t - 0.12;
+  const G = 280;
+  const vy0 = -26;
+  // Время падения на пол: my0 + vy0·τ + G·τ²/2 = floor.
+  const D = floor - my0;
+  const tl = (-vy0 + Math.sqrt(vy0 * vy0 + 2 * G * Math.max(0, D))) / G;
+  const land = Math.cos(g0.a) >= 0 ? 0.18 : Math.PI - 0.18;
+  let mx: number;
+  let my: number;
+  let a: number;
+  const spin = Math.cos(g0.a) >= 0 ? 6.5 : -6.5;
+  if (tau < tl) {
+    mx = mx0 + Math.cos(c.phi) * 9 * tau;
+    my = my0 + vy0 * tau + (G * tau * tau) / 2;
+    a = g0.a + (land - g0.a) * eIn(tau / tl) + Math.sin((tau / tl) * Math.PI) * spin * 0.15;
+  } else {
+    const b = tau - tl;
+    mx = mx0 + Math.cos(c.phi) * 9 * tl + Math.cos(c.phi) * 3 * Math.min(b, 0.1);
+    // Отскок: звякнул и лёг.
+    my = floor - (b < 0.1 ? Math.sin((b / 0.1) * Math.PI) * 2 : 0);
+    a = land + (b < 0.1 ? Math.sin((b / 0.1) * Math.PI) * 0.25 : 0);
+  }
+  const hx0 = mx - Math.cos(a) * len * 0.5;
+  const hy0 = my - Math.sin(a) * len * 0.5;
+  glassBlade(p, hx0, hy0, a, len, 1.6, 0);
+  if (tau >= tl && tau < tl + 0.12) glintAt(lit, mx, my - 1, 2, 1 - (tau - tl) / 0.12);
+}
+
+/**
+ * Раскол: последний целый кадр режется на осколки (ближайшее из 13 зёрен с
+ * рваной кромкой), они разлетаются от сердцевины, падают на пол, звякают
+ * и лежат, мерцая гранью, потом гаснут. У отблеска — резче и дальше.
+ */
+interface Intact {
+  src: Px;
+  ox: number;
+  oy: number;
+  /** Номер осколка каждого пикселя (−1 — пусто) и низ каждого осколка. */
+  seedOf: Int16Array;
+  bottom: number[];
+  seeds: [number, number][];
+}
+const INTACT = frameLRU<Intact>(8);
+const SHARDS = 18;
+
+/** Последний целый кадр, разрезанный на осколки (ближайшее зерно, рваная кромка). */
+function intactOf(q: BReq, S0: number): Intact | null {
+  const key = `${q.tech}|${q.dir}|${q.q}|${q.tier}|${q.copy ? 1 : 0}|${q.cr}|${q.hk}|${q.look}`;
+  const hit = INTACT.get(key);
+  if (hit) return hit;
+  const base = bossBase({ ...q, f: -1, t: S0 - 0.02 });
+  if (!base) return null;
+  const src = fromCanvas(base.img);
+  const ox = BAX - base.ax;
+  const oy = BAY - base.ay;
+  const seeds: [number, number][] = [];
+  for (let i = 0; i < SHARDS; i++)
+    seeds.push([
+      BAX - 14 + hash(i, 61) * 28,
+      BAY - 34 + (i / (SHARDS - 1)) * 32 + (hash(i, 67) - 0.5) * 6,
+    ]);
+  const seedOf = new Int16Array(src.w * src.h).fill(-1);
+  const bottom = new Array<number>(SHARDS).fill(-1e9);
+  for (let y = 0; y < src.h; y++)
+    for (let x = 0; x < src.w; x++) {
+      if (!src.data[(y * src.w + x) * 4 + 3]) continue;
+      const X = x + ox;
+      const Y = y + oy;
+      let best = 0;
+      let bd = 1e9;
+      for (let s = 0; s < SHARDS; s++) {
+        const d =
+          (X - seeds[s][0]) ** 2 + (Y - seeds[s][1]) ** 2 * 1.4 + hash(X >> 1, Y >> 1, s) * 30;
+        if (d < bd) {
+          bd = d;
+          best = s;
+        }
+      }
+      seedOf[y * src.w + x] = best;
+      bottom[best] = Math.max(bottom[best], Y);
+    }
+  return INTACT.set(key, { src, ox, oy, seedOf, bottom, seeds });
+}
+
+/**
+ * Раскол: последний целый кадр разлетается осколками от сердцевины —
+ * большинство падает у ног, редкие улетают дальше; упав, осколок звякает,
+ * ложится плашмя (сплющивается к своему низу) и мерцает гранью, потом всё
+ * гаснет. У отблеска — резче и дальше (его осколки режут, `f7_copyburst`).
+ */
+function dieShards(q: BReq, c: BCtx): BFrame {
+  const copy = q.tech === 'dieC';
+  const S0 = copy ? DIEC_SHATTER : DIE_SHATTER;
+  const end = copy ? DIEC_T : DIE_T;
+  const it = intactOf(q, S0);
+  const p = new Px(BW, BH);
+  const lit = new Px(BW, BH);
+  if (it) {
+    const { src, ox, oy, seedOf, bottom, seeds } = it;
+    const tau = q.t - S0;
+    const fade = 1 - cl((q.t - (end - 0.4)) / 0.4);
+    const cx = BAX;
+    const cy = BAY - 11;
+    const path = seeds.map(([sx, sy], i) => {
+      const ang = Math.atan2(sy - cy, sx - cx) + (hash(i, 71) - 0.5) * 0.9;
+      const h = hash(i, 73);
+      const sp = copy ? 35 + h * 85 : 10 + h * h * 75;
+      let x = 0;
+      let y = 0;
+      let vx = Math.cos(ang) * sp;
+      let vy = Math.sin(ang) * sp * 0.4 - (copy ? 50 : 35) - hash(i, 79) * 50;
+      const floor = BAY + 1 + (hash(i, 83) - 0.35) * 10 - bottom[i];
+      let landed = -1;
+      const dt = 1 / 120;
+      for (let st = 0; st * dt < tau; st++) {
+        vy += 720 * dt;
+        x += vx * dt;
+        y += vy * dt;
+        if (y > floor) {
+          y = floor;
+          if (landed < 0) landed = st * dt;
+          vy = vy > 60 ? -vy * 0.3 : 0;
+          vx *= 0.4;
+        }
+      }
+      const flat = landed >= 0 ? cl((tau - landed) / 0.06) : 0;
+      return { dx: Math.round(x), dy: Math.round(y), landed, flat };
+    });
+    for (let y = 0; y < src.h; y++)
+      for (let x = 0; x < src.w; x++) {
+        const s = seedOf[y * src.w + x];
+        if (s < 0) continue;
+        const i = (y * src.w + x) * 4;
+        const m = path[s];
+        const X = x + ox + m.dx;
+        const Y0 = y + oy;
+        // Лёг плашмя: осколок сплющивается к своему низу.
+        const Y = Math.round(bottom[s] + (Y0 - bottom[s]) * (1 - 0.5 * m.flat)) + m.dy;
+        p.set(X, Y, [
+          src.data[i],
+          src.data[i + 1],
+          src.data[i + 2],
+          Math.round(src.data[i + 3] * fade),
+        ]);
+        // Грань ловит свет: вспышка в миг раскола, потом мерцание на полу.
+        if (tau < 0.1) lit.set(X, Y, alpha(CYAN_HOT, (1 - tau / 0.1) * 0.8 * fade));
+        else if (m.landed >= 0 && (x * 7 + y * 3 + s + q.f) % 23 === 0)
+          lit.set(X, Y, alpha(WHITE, 0.8 * fade));
+      }
+  }
+  const key = `s|${q.tech}|${q.f}|${q.dir}|${q.q}|${q.tier}|${q.copy ? 1 : 0}|${q.cr}|${q.hk}|${q.look}`;
+  return cropped(key, p, lit, [], { ...RIG0 }, c, 0, 0, 0);
+}
+
+// ---- Рисовальщик: режим мозга → техника и кадр -------------------------------
+
+/** Что рисовальщик помнит об отражении между кадрами (только для рисунка). */
+interface BMem {
+  dir: Dir4;
+  mode: string;
+  prev: string;
+  walk: number;
+  now: number;
+  phase: number;
+  phaseT: number;
+}
+const bMem = new WeakMap<Mob, BMem>();
+
+/** Сторона с запасом (как у героя): по диагонали не мигает бок/спина. */
+function dirPick(face: number, prev: Dir4 | null): Dir4 {
+  const c = Math.cos(face);
+  const s = Math.sin(face);
+  const side = Math.abs(c) > Math.abs(s);
+  if (!prev) return side ? (c < 0 ? 'left' : 'right') : s < 0 ? 'up' : 'down';
+  const prevSide = prev === 'left' || prev === 'right';
+  const keep = side === prevSide || Math.abs(Math.abs(c) - Math.abs(s)) < 0.2;
+  const useSide = keep ? prevSide : side;
+  return useSide ? (c < 0 ? 'left' : 'right') : s < 0 ? 'up' : 'down';
+}
+
+function bMemOf(m: Mob, pose: MobPose): { s: BMem; fresh: boolean } {
+  let s = bMem.get(m);
+  const fresh = !s;
+  if (!s) {
+    s = {
+      dir: dirPick(m.face, null),
+      mode: pose.mode,
+      prev: '',
+      walk: 0,
+      now: pose.now,
+      phase: Math.max(0, F7_VIEW.bossPhase),
+      phaseT: -9,
+    };
+    bMem.set(m, s);
+  } else s.dir = dirPick(m.face, s.dir);
+  if (pose.mode !== s.mode) {
+    s.prev = s.mode;
+    s.mode = pose.mode;
+  }
+  const dt = cl(pose.now - s.now, 0, 0.1);
+  s.now = pose.now;
+  s.walk += Math.hypot(m.vx, m.vy) * TS * dt;
+  const ph = Math.max(0, F7_VIEW.bossPhase);
+  if (ph > s.phase) s.phaseT = pose.now;
+  s.phase = ph;
+  return { s, fresh };
+}
+
+/** Темп фазы, как в мозге (`haste`). */
+function bossHaste(copy: boolean): number {
+  const p = F7_VIEW.bossPhase;
+  const base = p >= 3 ? 1.22 : p >= 2 ? 1.12 : 1;
+  return copy ? base * 0.82 : base;
+}
+
+/** Откуда пришёл отдых: память рисовальщика, запасной путь — `rec`, на листе — `vFrom`. */
+function recFrom(m: Mob, s: BMem): number {
+  const hint = m.data.vFrom;
+  if (hint) return hint;
+  switch (s.prev) {
     case 'combo':
+      return 1;
+    case 'heavy':
+      return 2;
+    case 'dash':
+      return 3;
     case 'riposte':
-      if (pose.t < 0) {
-        bp = 'strike';
-        row = 4;
+      return 4;
+    case 'gaze':
+      return 5;
+  }
+  const r = m.data.rec;
+  return r === 0.95 ? 1 : r === 1.15 ? 2 : r === 0.8 ? 4 : 0;
+}
+
+const STRIDE = 26;
+
+registerMobPainter('f7_boss', (m: Mob, pose: MobPose) => {
+  const copy = m.kind === 'f7boss_copy';
+  const { s, fresh } = bMemOf(m, pose);
+  const tier = heroGear().robe;
+  const phase = Math.max(0, F7_VIEW.bossPhase);
+  const hs = bossHaste(copy);
+  const left = s.dir === 'left';
+  const dir: BDir = left ? 'right' : (s.dir as BDir);
+  let qi = ((Math.round(m.face / (TAU / 16)) % 16) + 16) % 16;
+  if (left) qi = (8 - qi + 16) % 16;
+  const hk = Math.round(hs * 100);
+  const cw = copy ? 1.15 : 1;
+  const t = pose.t;
+  let tech = 'idle';
+  let v = 0;
+  let f = 0;
+  let tf = 0;
+  let rk = 80;
+  const at = (ts: number, T: number) => {
+    const n = Math.ceil(T * RFPS - 1e-6);
+    f = Math.max(0, Math.min(n, Math.floor(ts * RFPS + 1e-6)));
+    tf = Math.min(f / RFPS, T);
+  };
+  switch (pose.mode) {
+    case 'combo': {
+      const k = Math.min(3, m.data.k ?? 0);
+      if (t < 0 && k >= 1) {
+        tech = 'follow';
+        v = Math.min(1, k - 1);
+        at(t + 0.1 / hs, 0.1 / hs);
       } else {
-        bp = 'raise';
-        row = 4;
-        k = Math.min(3, Math.floor(pose.t / 0.12));
+        tech = 'swing';
+        v = Math.min(2, k);
+        at(t, (BOSS.combo[v] / hs) * cw);
       }
       break;
+    }
     case 'heavy':
-      bp = 'heavy';
-      row = 5;
-      k = Math.min(3, Math.floor(pose.t / 0.3));
+      tech = 'heavy';
+      at(t, (BOSS.heavy / hs) * cw);
       break;
     case 'dashAim':
-    case 'maim':
-      bp = 'raise';
-      row = 5;
-      k = 3;
+      tech = 'aim';
+      at(t, (BOSS.dashAim / hs) * cw);
       break;
-    case 'dash':
-    case 'mrun':
-      bp = 'lunge';
-      row = 4;
-      f = pose.frame % 2;
+    case 'dash': {
+      tech = 'dash';
+      const n = Math.floor(Math.max(0, t) * RFPS + 1e-6);
+      f = n < 2 ? n : 2 + ((n - 2) % 4);
+      tf = f / RFPS;
       break;
+    }
     case 'guard':
-      bp = 'guard';
-      f = pose.frame % 2;
+      tech = 'guard';
+      at(t, BOSS.guard);
+      break;
+    case 'riposte':
+      tech = 'riposte';
+      at(t, BOSS.riposte);
       break;
     case 'gaze':
-      bp = 'gaze';
-      break;
-    case 'recover':
-      bp = pose.t < 0.15 ? 'strike' : 'rest';
-      row = pose.t < 0.15 ? 4 : 0;
-      break;
-    case 'daze':
-      bp = 'daze';
-      f = pose.frame % 4;
+      tech = 'gaze';
+      at(t, BOSS.gaze / hs);
       break;
     case 'mdive':
+      tech = 'mdive';
+      at(t, 0.45);
+      break;
+    case 'maim':
+      tech = 'maim';
+      at(t, BOSS.mirrorAim / hs);
+      break;
+    case 'mrun': {
+      tech = 'mrun';
+      const n = Math.floor(Math.max(0, t) * RFPS + 1e-6);
+      f = n < 2 ? n : 2 + ((n - 2) % 8);
+      tf = f / RFPS;
+      break;
+    }
+    case 'daze': {
+      tech = 'daze';
+      const end = 2.1 / hs - 0.35;
+      if (t < 0.3) {
+        f = Math.floor(Math.max(0, t) * RFPS + 1e-6);
+        tf = f / RFPS;
+      } else if (t < end) {
+        const n = Math.floor((t - 0.3) * 12) % 13;
+        f = 8 + n;
+        tf = 0.3 + n / 12;
+      } else {
+        const n = Math.min(8, Math.floor((t - end) * RFPS + 1e-6));
+        f = 21 + n;
+        tf = end + n / RFPS;
+      }
+      break;
+    }
     case 'shift':
-      dissolve = Math.min(3, Math.floor((pose.t / 0.5) * 4));
+      tech = 'shift';
+      at(t, 0.7);
       break;
     case 'intro':
     case 'roar':
-      appear = Math.min(3, Math.floor((pose.t / 0.6) * 4));
+      if (m.data.quick) {
+        tech = 'introQ';
+        at(t - 0.5, 0.7);
+      } else {
+        tech = 'intro0';
+        at(t, 1.4);
+      }
       break;
+    case 'recover': {
+      tech = 'rec';
+      v = recFrom(m, s);
+      rk = Math.round((m.data.rec ?? 0.8) * 100);
+      at(t, rk / 100 / hs);
+      break;
+    }
     case 'dying':
+      tech = copy ? 'dieC' : 'die';
+      at(t, copy ? DIEC_T : DIE_T);
       break;
-    default:
-      bp = pose.anim === 'run' ? 'run' : 'idle';
-      row = pose.anim === 'run' ? pose.frame % 4 : 0;
+    default: {
+      const sp = Math.hypot(m.vx, m.vy);
+      if (sp > 0.4) {
+        tech = 'run';
+        v = sp > 2.5 ? 10 : sp > 1.2 ? 5 : 0;
+        const d = fresh ? pose.now * sp * TS : s.walk;
+        f = Math.floor(((d / STRIDE) % 1) * 8) % 8;
+        tf = f / 8;
+      } else {
+        tech = 'idle';
+        f = Math.floor(pose.now * 10 + m.id * 3.7) % 24;
+        tf = f / 10;
+      }
+    }
   }
-  if (pose.anim === 'dead' || mode === 'dying') {
-    const kk = Math.min(4, Math.floor(pose.t / 0.14));
-    return frameOf(
-      `f7b${tier}${dir}${phase}`,
-      pose,
-      'dead',
-      kk,
-      () => {
-        const b = paintBoss(tier, dir, 0, 'hurt', 0, phase, 0);
-        if (!b) return null;
-        return { ...b, p: shatter(b.p, b.ax, b.ay - 16, (kk + 1) / 5, 11) };
-      },
-      false,
-    );
+  // Смена фазы: свежая трещина прорастает, вспыхивает и гаснет.
+  // На листе кадров смену фазы задаёт `vPcT` (время режима = время после смены).
+  const pc = m.data.vPcT ? pose.t : pose.now - s.phaseT;
+  const lead = !copy;
+  const rv = lead && pc < 0.3 ? Math.min(4, 1 + Math.floor(pc / 0.07)) : 4;
+  const cg = lead && pc >= 0 && pc < 0.9 ? (pc < 0.1 ? 4 : pc < 0.3 ? 3 : pc < 0.55 ? 2 : 1) : 0;
+  const loose = tech === 'idle' || tech === 'run' || tech === 'daze' || tech === 'rec';
+  const fl0 = m.flash ?? 0;
+  const q: BReq = {
+    tier,
+    copy,
+    cr: copy ? 0 : Math.min(3, phase),
+    rv,
+    cg,
+    tech,
+    v,
+    f,
+    t: tf,
+    dir,
+    q: qi,
+    hk,
+    rk,
+    fl: loose && pose.mode !== 'dying' ? (fl0 > 0.07 ? 2 : fl0 > 0.01 ? 1 : 0) : 0,
+    look: pose.look,
+  };
+  // Белая вспышка удара героя; у трупа — только в первый миг.
+  const flash = pose.flash && (pose.mode !== 'dying' || t < 0.1);
+  const fr = bossFrame(q, left, flash);
+  if (!fr) return null;
+  const out: MobFrame = { ...fr, dx: fr.bx, dy: fr.by };
+  // Шлейф: выпад и пробежка — как рывок героя; тяжёлый — на взрыве.
+  if (tech === 'dash' || tech === 'mrun')
+    out.ghost = { every: 0.03, life: 0.22, tint: '#8fd8ff', alpha: 0.4 };
+  else if (
+    (tech === 'heavy' && tf > (BOSS.heavy / hs) * cw - 0.11) ||
+    (tech === 'rec' && v === 2 && tf < 0.14) ||
+    (tech === 'swing' && v === 2 && tf > 0.1)
+  )
+    out.ghost = { every: 0.035, life: 0.16, tint: '#c0d4ff', alpha: 0.28 };
+  if (tech === 'die') out.linger = DIE_T;
+  if (tech === 'dieC') out.linger = DIEC_T;
+  // Смена фазы: тело вздрагивает, пока трещина прорастает.
+  if (lead && pc >= 0 && pc < 0.45)
+    out.dx = (out.dx ?? 0) + Math.sin(pc * TAU * 16) * 0.9 * (1 - pc / 0.45);
+  // Отдача от удара героя: от героя, с возвратом (в технике — слабее).
+  if (fl0 > 0 && pose.mode !== 'dying') {
+    const sim = paintSim();
+    const age = cl(0.12 - fl0, 0, 0.12);
+    let ux = pose.left ? 1 : -1;
+    let uy = 0;
+    if (sim) {
+      const dx = m.x - sim.hero.x;
+      const dy = m.y - sim.hero.y;
+      const d = Math.hypot(dx, dy) || 1;
+      ux = dx / d;
+      uy = dy / d;
+    }
+    const k = Math.sin((age / 0.12) * Math.PI) * 2.2 * (loose ? 1 : 0.4);
+    out.dx = (out.dx ?? 0) + ux * k;
+    out.dy = (out.dy ?? 0) + uy * k * 0.6;
   }
-  if (dissolve >= 0)
-    return frameOf(
-      `f7b${tier}${dir}${phase}`,
-      pose,
-      'out',
-      dissolve,
-      () => {
-        const b = paintBoss(tier, dir, 0, 'idle', 0, phase, 0);
-        if (!b) return null;
-        return { ...b, p: slices(b.p, (dissolve + 1) / 4, true) };
-      },
-      false,
-    );
-  if (appear >= 0 && appear < 3)
-    return frameOf(
-      `f7b${tier}${dir}${phase}`,
-      pose,
-      'in',
-      appear,
-      () => {
-        const b = paintBoss(tier, dir, 0, 'idle', 0, phase, 0);
-        if (!b) return null;
-        return { ...b, p: slices(b.p, (appear + 1) / 4, false) };
-      },
-      false,
-    );
-  // Замах — дрожь движок добавит сам; вспышку удара — через `flash`.
-  return frameOf(
-    `f7b${tier}${dir}${phase}`,
-    pose,
-    bp,
-    row * 100 + k * 10 + f,
-    () => paintBoss(tier, dir, row, bp, k, phase, f),
-    false,
-  );
+  return out;
+});
+
+// Прогрев: первый бой — выход, покой, бег и все техники первой фазы; анфас
+// (герой обычно снизу) целиком, бок в обе стороны — самое частое.
+registerMobWarm('f7_boss', function* () {
+  const tier = heroGear().robe;
+  const base = {
+    tier,
+    copy: false,
+    cr: 0,
+    rv: 4,
+    cg: 0,
+    hk: 100,
+    rk: 80,
+    fl: 0,
+    look: 'normal' as Look,
+  };
+  const span = (tech: string, v: number, rk: number): [number, number] => {
+    const c: Record<string, number> = {
+      intro0: 1.4,
+      swing: BOSS.combo[Math.min(2, v)],
+      follow: 0.1,
+      heavy: BOSS.heavy,
+      aim: BOSS.dashAim,
+      guard: BOSS.guard,
+      riposte: BOSS.riposte,
+      rec: rk / 100,
+    };
+    const T = c[tech] ?? 0;
+    return [Math.ceil(T * RFPS - 1e-6) + 1, T];
+  };
+  const list: [string, number, number][] = [
+    ['intro0', 0, 80],
+    ['idle', 0, 80],
+    ['run', 10, 80],
+    ['swing', 0, 80],
+    ['follow', 0, 80],
+    ['swing', 1, 80],
+    ['follow', 1, 80],
+    ['swing', 2, 80],
+    ['rec', 1, 95],
+    ['heavy', 0, 80],
+    ['rec', 2, 115],
+    ['aim', 0, 80],
+    ['dash', 0, 80],
+    ['rec', 3, 60],
+    ['guard', 0, 80],
+    ['riposte', 0, 80],
+    ['rec', 4, 80],
+  ];
+  const sides: [BDir, number, boolean][] = [
+    ['down', 4, false],
+    ['right', 0, false],
+    ['right', 0, true],
+  ];
+  for (const [dir, qq, left] of sides)
+    for (const [tech, v, rk] of list) {
+      // Бок — только самое частое (покой, бег, первый взмах): кеш на ~440
+      // кадров, и прогрев не должен вытеснять сам себя.
+      if (dir !== 'down' && !['idle', 'run', 'swing', 'follow'].includes(tech)) continue;
+      if (dir !== 'down' && v > 0 && tech !== 'run') continue;
+      let n: number;
+      let T = 0;
+      if (tech === 'idle') n = 24;
+      else if (tech === 'run') n = 8;
+      else if (tech === 'dash') n = 6;
+      else [n, T] = span(tech, v, rk);
+      for (let f = 0; f < n; f++) {
+        const tf = tech === 'idle' ? f / 10 : tech === 'run' ? f / 8 : Math.min(f / RFPS, T || 99);
+        bossFrame({ ...base, tech, v, f, t: tf, dir, q: qq, rk }, left, false);
+        yield f;
+      }
+    }
 });
 
 // ---------------------------------------------------------------------------
