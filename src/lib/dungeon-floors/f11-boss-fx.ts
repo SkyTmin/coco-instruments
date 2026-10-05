@@ -146,6 +146,12 @@ class Pen {
   readonly g: CanvasRenderingContext2D;
   readonly qx: number;
   readonly qy: number;
+  /**
+   * Заслон: прямоугольники тел ближе к камере (x0, y0, x1, y1 — мир), их
+   * пиксели не рисуются. Вычитается из каждой строки — без `clip()`: клип
+   * сложной формы растеризует маску на весь холст, и луч «тормозил».
+   */
+  occ: number[] | null = null;
   constructor(g: CanvasRenderingContext2D, px: number, py: number, wx: number, wy: number) {
     this.g = g;
     const sc = g.getTransform().a || 1;
@@ -159,14 +165,76 @@ class Pen {
   alpha(a: number): void {
     this.g.globalAlpha = a < 0 ? 0 : a > 1 ? 1 : a;
   }
+  /** Строка [x, x + w) на высоте y (целые пиксели мира) — с вычетом заслона. */
+  span(x: number, y: number, w: number): void {
+    const o = this.occ;
+    if (o) {
+      let hit = false;
+      for (let i = 0; i < o.length; i += 4)
+        if (y >= o[i + 1] && y < o[i + 3] && x < o[i + 2] && x + w > o[i]) {
+          hit = true;
+          break;
+        }
+      if (hit) {
+        let segs = [x, x + w];
+        for (let i = 0; i < o.length; i += 4) {
+          if (y < o[i + 1] || y >= o[i + 3]) continue;
+          const next: number[] = [];
+          for (let k = 0; k < segs.length; k += 2) {
+            const s0 = segs[k];
+            const s1 = segs[k + 1];
+            if (o[i + 2] <= s0 || o[i] >= s1) {
+              next.push(s0, s1);
+              continue;
+            }
+            if (o[i] > s0) next.push(s0, o[i]);
+            if (o[i + 2] < s1) next.push(o[i + 2], s1);
+          }
+          segs = next;
+        }
+        for (let k = 0; k < segs.length; k += 2)
+          this.g.fillRect(segs[k] + this.qx, y + this.qy, segs[k + 1] - segs[k], 1);
+        return;
+      }
+    }
+    this.g.fillRect(x + this.qx, y + this.qy, w, 1);
+  }
   dot(x: number, y: number, w = 1, h = 1): void {
-    this.g.fillRect(Math.floor(x) + this.qx, Math.floor(y) + this.qy, w, h);
+    this.rect(Math.floor(x), Math.floor(y), w, h);
   }
   rect(x: number, y: number, w: number, h: number): void {
-    this.g.fillRect(x + this.qx, y + this.qy, w, h);
+    if (!this.occ) {
+      this.g.fillRect(x + this.qx, y + this.qy, w, h);
+      return;
+    }
+    for (let r = 0; r < h; r++) this.span(x, y + r, w);
   }
   img(c: HTMLCanvasElement, x: number, y: number): void {
-    this.g.drawImage(c, Math.floor(x) + this.qx, Math.floor(y) + this.qy);
+    const X = Math.floor(x);
+    const Y = Math.floor(y);
+    const o = this.occ;
+    let hit = false;
+    if (o)
+      for (let i = 0; i < o.length; i += 4)
+        if (Y < o[i + 3] && Y + c.height > o[i + 1] && X < o[i + 2] && X + c.width > o[i]) {
+          hit = true;
+          break;
+        }
+    if (!hit || !o) {
+      this.g.drawImage(c, X + this.qx, Y + this.qy);
+      return;
+    }
+    // Картинку за телом режем клипом — их мало (клубы пара у тела).
+    const g = this.g;
+    g.save();
+    for (let i = 0; i < o.length; i += 4) {
+      g.beginPath();
+      g.rect(X + this.qx - 1, Y + this.qy - 1, c.width + 2, c.height + 2);
+      g.rect(o[i] + this.qx, o[i + 1] + this.qy, o[i + 2] - o[i], o[i + 3] - o[i + 1]);
+      g.clip('evenodd');
+    }
+    g.drawImage(c, X + this.qx, Y + this.qy);
+    g.restore();
   }
   /** Линия по пикселям (Брезенхэм); `keep(i)` — пунктир по номеру пикселя. */
   line(x0: number, y0: number, x1: number, y1: number, keep?: (i: number) => boolean): void {
@@ -179,8 +247,12 @@ class Pen {
     const sx = x < xe ? 1 : -1;
     const sy = y < ye ? 1 : -1;
     let err = dx + dy;
+    const occ = !!this.occ;
     for (let n = 0; n < 900; n++) {
-      if (!keep || keep(n)) this.g.fillRect(x + this.qx, y + this.qy, 1, 1);
+      if (!keep || keep(n)) {
+        if (occ) this.span(x, y, 1);
+        else this.g.fillRect(x + this.qx, y + this.qy, 1, 1);
+      }
       if (x === xe && y === ye) break;
       const e2 = 2 * err;
       if (e2 >= dy) {
@@ -279,7 +351,7 @@ function fillSector(
         }
         const xa = Math.ceil(cx + lo - 0.5);
         const xb = Math.floor(cx + up - 0.5);
-        if (xb >= xa) g.fillRect(xa + p.qx, Y + p.qy, xb - xa + 1, 1);
+        if (xb >= xa) p.span(xa, Y, xb - xa + 1);
       }
     }
   }
@@ -346,9 +418,8 @@ function fillPoly(p: Pen, pts: number[], dither = false): void {
     const xa = Math.ceil(lo - 0.5);
     const xb = Math.floor(up - 0.5);
     if (xb < xa) continue;
-    if (dither)
-      for (let x = xa + ((xa + Y) & 1); x <= xb; x += 2) g.fillRect(x + p.qx, Y + p.qy, 1, 1);
-    else g.fillRect(xa + p.qx, Y + p.qy, xb - xa + 1, 1);
+    if (dither) for (let x = xa + ((xa + Y) & 1); x <= xb; x += 2) p.span(x, Y, 1);
+    else p.span(xa, Y, xb - xa + 1);
   }
   if (pat) g.fillStyle = solid;
 }
@@ -422,9 +493,8 @@ function disc(p: Pen, cx: number, cy: number, r: number, dither = false): void {
     const xa = Math.ceil(cx - h - 0.5);
     const xb = Math.floor(cx + h - 0.5);
     if (xb < xa) continue;
-    if (dither)
-      for (let x = xa + ((xa + Y) & 1); x <= xb; x += 2) g.fillRect(x + p.qx, Y + p.qy, 1, 1);
-    else g.fillRect(xa + p.qx, Y + p.qy, xb - xa + 1, 1);
+    if (dither) for (let x = xa + ((xa + Y) & 1); x <= xb; x += 2) p.span(x, Y, 1);
+    else p.span(xa, Y, xb - xa + 1);
   }
   if (pat) g.fillStyle = solid;
 }
@@ -1356,26 +1426,21 @@ function bodiesOf(sim: Sim | null, S: number): Body[] {
  * прямоугольникам (каждое — своим `clip`, пересечение дополнений).
  */
 function front(p: Pen, bodies: Body[], depth: number, draw: () => void): void {
-  const g = p.g;
-  let clipped = false;
+  const prev = p.occ;
+  let occ: number[] | null = null;
   for (const b of bodies) {
     if (b.fy <= depth + 1) continue;
-    if (!clipped) {
-      g.save();
-      clipped = true;
-    }
-    g.beginPath();
-    g.rect(-1e5, -1e5, 2e5, 2e5);
-    g.rect(
-      Math.floor(b.x - b.hw) + p.qx,
-      Math.floor(b.fy - b.h) + p.qy,
-      Math.ceil(b.hw * 2),
-      Math.ceil(b.h),
+    occ ??= prev ? prev.slice() : [];
+    occ.push(
+      Math.floor(b.x - b.hw),
+      Math.floor(b.fy - b.h),
+      Math.ceil(b.x + b.hw),
+      Math.ceil(b.fy),
     );
-    g.clip('evenodd');
   }
+  if (occ) p.occ = occ;
   draw();
-  if (clipped) g.restore();
+  p.occ = prev;
 }
 
 /**
@@ -3572,9 +3637,9 @@ registerZonePainter(
       const out = Math.atan2(cy - acy, cx - acx);
       const d = 0.25 * ((v % 101) / 101);
       // Оторвалась — и пошла вверх с разгоном, уплывая к обрыву по ветру.
-      const u = k01((t - d) / 2.4);
-      const lift = 72 * eIn2(u) + 12 * u;
-      const drift = 26 * eIn2(u);
+      const u = k01((t - d) / (2.0 + (0.8 * ((v >> 7) % 97)) / 97));
+      const lift = (72 * eIn2(u) + 12 * u) * (0.75 + (0.5 * ((v >> 3) % 89)) / 89);
+      const drift = 26 * eIn2(u) + Math.sin(t * 2 + n) * 1.5 * u;
       const x = cx + Math.cos(out) * drift;
       const y = cy + Math.sin(out) * drift * 0.5 - lift;
       // Пыль из-под плиты сдувает к обрыву.
