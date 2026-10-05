@@ -36,6 +36,7 @@ import { registerBrain, registerFloor } from '../dungeon-ai';
 import type { Brain, BrainCtx, SimApi } from '../dungeon-ai';
 import type { Mob, Shot, Sim, Zone } from '../dungeon-sim';
 import type { WorldObj } from '../dungeon-world';
+import type { StatusKind } from './types';
 import { F15_MARK, F15_OBS, F15_ORBIT, F15_ROOTS, F15_SPOT_LIST, spotNum } from './f15';
 
 const TAU = Math.PI * 2;
@@ -372,15 +373,20 @@ export interface Star {
   key: string;
 }
 
+/** Дуга рывка кометы вокруг колодца: радиус R → R1, угол a0 → a1. */
 export interface Arc {
   id: number;
   cx: number;
   cy: number;
   R: number;
+  R1: number;
   a0: number;
   a1: number;
+  /** С начала замаха; замах `aim`, весь путь — `T`. */
   t: number;
+  aim: number;
   T: number;
+  zone: Zone | null;
 }
 
 export interface F15State {
@@ -1892,7 +1898,11 @@ registerFloor(15, {
     // Дуги комет живут, пока комета в рывке.
     for (const [id, a] of st.arcs) {
       a.t += dt;
-      if (a.t > a.T + 0.6) st.arcs.delete(id);
+      if (a.t > a.T + 0.6) {
+        dropZone(sim, a.zone);
+        if (a.zone) st.zmap.delete(a.zone);
+        st.arcs.delete(id);
+      }
     }
     if (heroDown(sim) || quiet) return;
     stepPosts(sim, st, api);
@@ -1901,4 +1911,1045 @@ registerFloor(15, {
   },
   onUse,
   useLabel: labelOf,
+});
+
+// ---------------------------------------------------------------------------
+// ИИ монстров. Общее: обёртка тяжести, погоня с фланга, укус конусом,
+// удар на бегу.
+// ---------------------------------------------------------------------------
+
+/** Тяжесть замедляет моба (не летуна); удар героя из тяжести — ×1,4. */
+function grav(b: Brain): Brain {
+  return {
+    ...b,
+    step(sim, m, dt, c, api) {
+      if (m.data.tvx !== undefined) {
+        m.vx = m.data.tvx;
+        m.vy = m.data.tvy ?? 0;
+        delete m.data.tvx;
+        delete m.data.tvy;
+      }
+      m.tele = null;
+      m.danger = 0;
+      b.step(sim, m, dt, c, api);
+      if (!c.def.fly && heavyAt(sim, m.x, m.y)) {
+        m.data.tvx = m.vx;
+        m.data.tvy = m.vy;
+        m.vx *= HEAVY.mobK;
+        m.vy *= HEAVY.mobK;
+      }
+    },
+    onHit(sim, m, hit, api) {
+      let k = b.onHit ? (b.onHit(sim, m, hit, api) ?? 1) : 1;
+      if (k > 0 && heavyAt(sim, sim.hero.x, sim.hero.y)) k *= HEAVY.hitK;
+      return k;
+    },
+  };
+}
+
+const brain = (id: string, b: Brain) => registerBrain(id, grav(b));
+
+function chase(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi, k = 1): void {
+  const h = sim.hero;
+  let tx = h.x;
+  let ty = h.y;
+  if (!m.rush && c.dist > 1.6) {
+    const side = ((m.id * 2.399) % TAU) - Math.PI;
+    const r = Math.min(1.4, c.dist * 0.35);
+    tx += Math.cos(side) * r;
+    ty += Math.sin(side) * r;
+  }
+  const [cx, cy] = api.chaseDir(sim, m, tx, ty);
+  api.steer(sim, m, cx, cy, m.speed * k * (c.dist < 1.4 ? 0.6 : 1), dt);
+  m.face = Math.atan2(c.dy, c.dx);
+}
+
+interface BiteOpts {
+  T: number;
+  arc?: number;
+  reach?: number;
+  dmg?: number;
+  push?: number;
+  status?: { kind: StatusKind; dur: number };
+  next?: string;
+}
+
+/**
+ * Замах и укус конусом: метка растёт весь замах (направление ловит героя
+ * первую треть), опасность — последние 0,24 с. `true` — в миг удара.
+ */
+function bite(sim: Sim, m: Mob, c: BrainCtx, api: SimApi, o: BiteOpts): boolean {
+  const h = sim.hero;
+  const arc = o.arc ?? 1.3;
+  const R = (o.reach ?? c.def.reach) + m.r;
+  m.vx *= 0.75;
+  m.vy *= 0.75;
+  if (m.t < o.T * 0.35) m.face = Math.atan2(c.dy, c.dx);
+  m.tele = { shape: 'cone', r: R + 0.3, ang: m.face, arc, k: clamp(m.t / o.T, 0, 1) };
+  if (m.t > o.T - 0.24) m.danger = R + h.r + 0.2;
+  if (m.t < o.T) return false;
+  const off = Math.abs(angDiff(Math.atan2(c.dy, c.dx), m.face));
+  if (c.dist < R + h.r + 0.15 && off < arc / 2 + 0.25 && canHurt(sim))
+    api.hurtHero(sim, o.dmg ?? m.dmg, m.x, m.y, o.push ?? c.def.hit?.push ?? 2, m.kind, o.status);
+  m.vx += Math.cos(m.face) * 3;
+  m.vy += Math.sin(m.face) * 3;
+  m.cd = c.def.rest * (0.8 + sim.rng() * 0.4);
+  api.setMode(m, o.next ?? 'recover');
+  return true;
+}
+
+/** Удар на бегу (таран, качение, пике) — один раз за рывок. */
+function contact(sim: Sim, m: Mob, api: SimApi, dmg: number, push: number): void {
+  const h = sim.hero;
+  m.danger = m.r + h.r + 0.5;
+  if (m.data.hit) return;
+  if (hypot(h.x - m.x, h.y - m.y) < m.r + h.r + 0.12 && canHurt(sim)) {
+    m.data.hit = 1;
+    api.hurtHero(sim, dmg, m.x - m.vx * 0.05, m.y - m.vy * 0.05, push, m.kind);
+  }
+}
+
+/** Колодец, который сейчас тянет над этой точкой. */
+function pullingWell(sim: Sim, x: number, y: number): Well | null {
+  const w = wellNear(sim, x, y, 0, true);
+  return w && w.state === 2 ? w : null;
+}
+
+const seeHero = (sim: Sim, m: Mob, api: SimApi) => api.lineOfSight(sim, m.x, m.y, sim.hero.x, sim.hero.y);
+
+// ---------------------------------------------------------------------------
+// Кристальный ёж: сворачивается (линия), катится 8 кл/с с отскоком от стен,
+// у колодца путь гнётся; о две стены — оглушён; раскрывшись — веер игл.
+// ---------------------------------------------------------------------------
+
+export const URCHIN = { curl: 0.6, roll: 8, rollT: 1.5, open: 0.55, dizzy: 1.1, see: 6.5 };
+
+brain('f15_urchin', {
+  step(sim, m, dt, c, api) {
+    m.bounce = m.mode === 'f15_roll';
+    switch (m.mode) {
+      case 'chase':
+        if (c.dist < URCHIN.see && c.dist > 1.3 && m.cd <= 0 && seeHero(sim, m, api)) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          api.setMode(m, 'f15_curl');
+          return;
+        }
+        if (c.dist < c.def.reach + m.r + sim.hero.r + 0.2 && m.cd <= 0) {
+          api.setMode(m, 'windup');
+          return;
+        }
+        chase(sim, m, dt, c, api);
+        return;
+      case 'windup':
+        bite(sim, m, c, api, { T: c.def.windup, arc: 1.4 });
+        return;
+      case 'f15_curl': {
+        m.vx *= 0.7;
+        m.vy *= 0.7;
+        if (m.t < URCHIN.curl * 0.5) m.dir = Math.atan2(c.dy, c.dx);
+        m.face = m.dir;
+        const len = clearDist(sim, api, m.x, m.y, m.dir, 7);
+        m.tele = { shape: 'line', r: len, w: 0.45, ang: m.dir, k: clamp(m.t / URCHIN.curl, 0, 1) };
+        if (m.t > URCHIN.curl - 0.24) m.danger = 1.3;
+        if (m.t >= URCHIN.curl) {
+          m.data.hit = 0;
+          m.bounces = 0;
+          m.vx = Math.cos(m.dir) * URCHIN.roll;
+          m.vy = Math.sin(m.dir) * URCHIN.roll;
+          api.setMode(m, 'f15_roll');
+        }
+        return;
+      }
+      case 'f15_roll': {
+        const w = pullingWell(sim, m.x, m.y);
+        if (w) bendShot(m, w, dt);
+        const sp = hypot(m.vx, m.vy) || 1;
+        m.vx = (m.vx / sp) * URCHIN.roll;
+        m.vy = (m.vy / sp) * URCHIN.roll;
+        m.dir = Math.atan2(m.vy, m.vx);
+        m.face = m.dir;
+        contact(sim, m, api, m.dmg, 3);
+        if (m.t > URCHIN.rollT) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          api.setMode(m, 'f15_open');
+        }
+        return;
+      }
+      case 'f15_dizzy':
+        m.vx *= 0.8;
+        m.vy *= 0.8;
+        if (m.t > URCHIN.dizzy) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          api.setMode(m, 'f15_open');
+        }
+        return;
+      case 'f15_open': {
+        m.vx *= 0.7;
+        m.vy *= 0.7;
+        if (m.t < URCHIN.open * 0.5) m.dir = Math.atan2(c.dy, c.dx);
+        m.face = m.dir;
+        m.tele = { shape: 'cone', r: 4.5, ang: m.dir, arc: 1.1, k: clamp(m.t / URCHIN.open, 0, 1) };
+        if (m.t >= URCHIN.open) {
+          api.shoot(sim, m, m.dir);
+          m.cd = c.def.rest * 2.2;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'recover':
+        recoverStep(m, api, 0.6);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+  onWall(sim, m, nx, ny, api) {
+    if (m.mode !== 'f15_roll') return;
+    const l = hypot(nx, ny) || 1;
+    const ux = nx / l;
+    const uy = ny / l;
+    const d = m.vx * ux + m.vy * uy;
+    if (d < 0) {
+      m.vx -= 2 * d * ux;
+      m.vy -= 2 * d * uy;
+    }
+    m.bounces += 1;
+    sim.events.push({ t: 'clank', x: m.x, y: m.y });
+    if (m.bounces >= 2) {
+      m.vx *= 0.2;
+      m.vy *= 0.2;
+      api.setMode(m, 'f15_dizzy');
+    }
+  },
+  onHit(_sim, m) {
+    return m.mode === 'f15_roll' ? 0.5 : m.mode === 'f15_dizzy' ? 1.5 : 1;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Метеор-жук: прицел линией, таран; у тянущего колодца таран заворачивает.
+// О стену — оглушён и открыт (×1,6).
+// ---------------------------------------------------------------------------
+
+export const METEOR = { aim: 0.8, speed: 9.5, maxT: 1.3, dizzy: 1.4, see: 7 };
+
+brain('f15_meteor', {
+  step(sim, m, dt, c, api) {
+    m.bounce = m.mode === 'f15_charge';
+    switch (m.mode) {
+      case 'chase':
+        if (c.dist < METEOR.see && c.dist > 1.5 && m.cd <= 0 && seeHero(sim, m, api)) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          api.setMode(m, 'aim');
+          return;
+        }
+        if (c.dist < c.def.reach + m.r + sim.hero.r + 0.2 && m.cd <= 0) {
+          api.setMode(m, 'windup');
+          return;
+        }
+        chase(sim, m, dt, c, api);
+        return;
+      case 'windup':
+        bite(sim, m, c, api, { T: c.def.windup, arc: 1.5 });
+        return;
+      case 'aim': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        if (m.t < METEOR.aim * 0.55) m.dir = Math.atan2(c.dy, c.dx);
+        m.face = m.dir;
+        const len = clearDist(sim, api, m.x, m.y, m.dir, 10);
+        m.tele = { shape: 'line', r: len, w: 0.85, ang: m.dir, k: clamp(m.t / METEOR.aim, 0, 1) };
+        if (m.t > METEOR.aim - 0.24) m.danger = 1.6;
+        if (m.t >= METEOR.aim) {
+          m.data.hit = 0;
+          api.setMode(m, 'f15_charge');
+        }
+        return;
+      }
+      case 'f15_charge': {
+        const w = pullingWell(sim, m.x, m.y);
+        if (w) {
+          const s = { x: m.x, y: m.y, vx: Math.cos(m.dir), vy: Math.sin(m.dir) };
+          bendShot(s, w, dt);
+          m.dir = Math.atan2(s.vy, s.vx);
+        }
+        m.vx = Math.cos(m.dir) * METEOR.speed;
+        m.vy = Math.sin(m.dir) * METEOR.speed;
+        m.face = m.dir;
+        contact(sim, m, api, m.dmg, c.def.hit?.push ?? 5);
+        if (m.t > METEOR.maxT) {
+          m.cd = c.def.rest;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'f15_dizzy':
+        m.vx *= 0.8;
+        m.vy *= 0.8;
+        if (m.t > METEOR.dizzy) {
+          m.cd = c.def.rest;
+          api.setMode(m, 'chase');
+        }
+        return;
+      case 'recover':
+        recoverStep(m, api, 0.7);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+  onWall(sim, m, _nx, _ny, api) {
+    if (m.mode !== 'f15_charge') return;
+    m.vx = 0;
+    m.vy = 0;
+    sim.events.push({ t: 'shake', k: 0.18 });
+    sim.events.push({ t: 'clank', x: m.x, y: m.y });
+    say(sim, 'f15_bonk');
+    api.setMode(m, 'f15_dizzy');
+  },
+  onHit(_sim, m) {
+    return m.mode === 'f15_dizzy' ? 1.6 : 1;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Комета-гончая: у колодца рывок по дуге вокруг него — заходит сбоку; дуга
+// видна весь замах. Без колодца — прямой выпад по линии.
+// ---------------------------------------------------------------------------
+
+export const COMET = { aim: 0.55, dash: 12, range: 6, lunge: 4.8, over: 1.25 };
+
+function arcPoint(a: Arc, s: number): [number, number] {
+  const r = a.R + (a.R1 - a.R) * Math.min(1, s);
+  const ang = a.a0 + angDiff(a.a1, a.a0) * s;
+  return [a.cx + Math.cos(ang) * r, a.cy + Math.sin(ang) * r];
+}
+
+brain('f15_comet', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    const st = stateOf(sim, api);
+    switch (m.mode) {
+      case 'chase': {
+        if (c.dist < COMET.range && c.dist > 1.4 && m.cd <= 0 && seeHero(sim, m, api)) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          m.data.arc = 0;
+          const w = wellNear(sim, m.x, m.y, 4);
+          if (w) {
+            const R0 = hypot(m.x - w.x, m.y - w.y);
+            const R1 = hypot(h.x - w.x, h.y - w.y);
+            const a0 = Math.atan2(m.y - w.y, m.x - w.x);
+            const a1 = Math.atan2(h.y - w.y, h.x - w.x);
+            if (Math.abs(angDiff(a1, a0)) > 0.45 && R0 > 1.2 && R1 > 1.2) {
+              const arc: Arc = { id: m.id, cx: w.x, cy: w.y, R: R0, R1, a0, a1, t: 0, aim: COMET.aim, T: 0, zone: null };
+              const len = Math.abs(angDiff(a1, a0)) * (R0 + R1) * 0.5 * COMET.over + Math.abs(R1 - R0);
+              arc.T = COMET.aim + len / COMET.dash;
+              arc.zone = anchorZone(sim, api, w.x, w.y, Math.max(R0, R1) + 1, 'f15_arc');
+              st.zmap.set(arc.zone, arc);
+              const old = st.arcs.get(m.id);
+              if (old) {
+                dropZone(sim, old.zone);
+                if (old.zone) st.zmap.delete(old.zone);
+              }
+              st.arcs.set(m.id, arc);
+              m.data.arc = 1;
+            }
+          }
+          api.setMode(m, 'aim');
+          return;
+        }
+        chase(sim, m, dt, c, api);
+        return;
+      }
+      case 'aim': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        const k = clamp(m.t / COMET.aim, 0, 1);
+        if (m.data.arc) {
+          m.tele = { shape: 'circle', r: 0.55, k };
+          m.face = Math.atan2(c.dy, c.dx);
+        } else {
+          if (m.t < COMET.aim * 0.5) m.dir = Math.atan2(c.dy, c.dx);
+          m.face = m.dir;
+          const len = Math.min(COMET.lunge, clearDist(sim, api, m.x, m.y, m.dir, COMET.lunge));
+          m.tele = { shape: 'line', r: len, w: 0.5, ang: m.dir, k };
+        }
+        if (m.t > COMET.aim - 0.24) m.danger = 1.2;
+        if (m.t >= COMET.aim) {
+          m.data.hit = 0;
+          api.setMode(m, 'f15_dash');
+        }
+        return;
+      }
+      case 'f15_dash': {
+        const a = m.data.arc ? st.arcs.get(m.id) : undefined;
+        if (a) {
+          const dur = a.T - a.aim;
+          const s = (m.t / dur) * COMET.over;
+          const [px, py] = arcPoint(a, s);
+          const vx = (px - m.x) / Math.max(dt, 1e-3);
+          const vy = (py - m.y) / Math.max(dt, 1e-3);
+          const v = hypot(vx, vy);
+          const cap = COMET.dash * 1.6;
+          m.vx = v > cap ? (vx / v) * cap : vx;
+          m.vy = v > cap ? (vy / v) * cap : vy;
+          m.face = Math.atan2(m.vy, m.vx);
+          contact(sim, m, api, m.dmg, 3);
+          if (s >= COMET.over || hypot(px - m.x, py - m.y) > 2) {
+            m.cd = c.def.rest;
+            api.setMode(m, 'recover');
+          }
+        } else {
+          m.vx = Math.cos(m.dir) * COMET.dash;
+          m.vy = Math.sin(m.dir) * COMET.dash;
+          m.face = m.dir;
+          contact(sim, m, api, m.dmg, 3);
+          if (m.t > COMET.lunge / COMET.dash) {
+            m.cd = c.def.rest;
+            api.setMode(m, 'recover');
+          }
+        }
+        return;
+      }
+      case 'recover':
+        recoverStep(m, api, 0.45);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Гравитонный страж: щит спереди (×0,15, из тяжести — полный удар), спина
+// ×1,35; поворачивается медленно. Кулак — круг перед собой, оставляет пятно
+// тяжести: встань в него — и щит пробивается.
+// ---------------------------------------------------------------------------
+
+export const GRAVITON = { turn: 2.1, punchR: 1.45, punchAt: 1.15, shield: 0.15, back: 1.35, front: 1.1 };
+
+brain('f15_graviton', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    const turn = (to: number, k = 1) => {
+      m.face += clamp(angDiff(to, m.face), -GRAVITON.turn * k * dt, GRAVITON.turn * k * dt);
+    };
+    switch (m.mode) {
+      case 'chase': {
+        turn(Math.atan2(c.dy, c.dx));
+        if (c.dist < GRAVITON.punchAt + GRAVITON.punchR && m.cd <= 0) {
+          api.setMode(m, 'windup');
+          return;
+        }
+        const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
+        api.steer(sim, m, cx, cy, m.speed * (c.dist < 1.6 ? 0.4 : 1), dt);
+        return;
+      }
+      case 'windup': {
+        const T = c.def.windup;
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        if (m.t < T * 0.5) turn(Math.atan2(c.dy, c.dx), 0.8);
+        const px = m.x + Math.cos(m.face) * GRAVITON.punchAt;
+        const py = m.y + Math.sin(m.face) * GRAVITON.punchAt;
+        m.tele = { shape: 'circle', x: px, y: py, r: GRAVITON.punchR, k: clamp(m.t / T, 0, 1) };
+        if (m.t > T - 0.24) m.danger = GRAVITON.punchAt + GRAVITON.punchR + 0.3;
+        if (m.t >= T) {
+          if (hypot(h.x - px, h.y - py) < GRAVITON.punchR + h.r && canHurt(sim))
+            api.hurtHero(sim, m.dmg, m.x, m.y, c.def.hit?.push ?? 4, m.kind);
+          api.zone(sim, {
+            x: px,
+            y: py,
+            r: HEAVY.zoneR,
+            life: HEAVY.zoneLife,
+            slow: HEAVY.zoneSlow,
+            art: 'f15_heavy',
+          });
+          sim.events.push({ t: 'shake', k: 0.22 });
+          say(sim, 'f15_slam');
+          m.cd = c.def.rest;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'recover':
+        recoverStep(m, api, 0.9);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+  onHit(sim, m, hit) {
+    if (m.mode === 'dying') return 1;
+    const off = Math.abs(angDiff(hit.ang + Math.PI, m.face));
+    if (off < GRAVITON.front) return heavyAt(sim, sim.hero.x, sim.hero.y) ? 1 : GRAVITON.shield;
+    return off > 2.2 ? GRAVITON.back : 1;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Звездочёт: держит дистанцию 5–7; малый колодец под ноги (круг 0,9 с) и
+// три звёздные стрелы (линия 0,75 с) — стрелы гнутся у колодцев и
+// отбиваются клинком. Три камня на орбите гасят удары по одному (тяжёлый
+// сбивает все).
+// ---------------------------------------------------------------------------
+
+export const ASTRO = { near: 4.6, far: 7.2, castWell: 0.9, castBolt: 0.75, wellR: 2.8, wellOn: 2, stones: 3, regen: 5 };
+
+brain('f15_astro', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    const st = stateOf(sim, api);
+    if (m.data.stones === undefined) m.data.stones = ASTRO.stones;
+    if (m.data.stones < ASTRO.stones) {
+      m.data.regen = (m.data.regen ?? 0) + dt;
+      if (m.data.regen > ASTRO.regen) {
+        m.data.regen = 0;
+        m.data.stones += 1;
+      }
+    }
+    switch (m.mode) {
+      case 'chase': {
+        m.face = Math.atan2(c.dy, c.dx);
+        const see = seeHero(sim, m, api);
+        if (see && m.cd <= 0 && c.dist < 9) {
+          const well = (m.data.cast ?? 0) % 2 === 0;
+          m.data.cast = (m.data.cast ?? 0) + 1;
+          m.data.px = h.x;
+          m.data.py = h.y;
+          m.dir = Math.atan2(c.dy, c.dx);
+          api.setMode(m, well ? 'f15_cast_well' : 'f15_cast_bolt');
+          return;
+        }
+        if (!see || c.dist > ASTRO.far) {
+          const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
+          api.steer(sim, m, cx, cy, m.speed, dt);
+        } else if (c.dist < ASTRO.near) {
+          const away = api.flowDir(sim, m.x, m.y, true) ?? [-c.dx / (c.dist || 1), -c.dy / (c.dist || 1)];
+          api.steer(sim, m, away[0], away[1], m.speed, dt);
+        } else {
+          const s = m.id % 2 ? 1 : -1;
+          api.steer(sim, m, (-c.dy / c.dist) * s, (c.dx / c.dist) * s, m.speed * 0.6, dt);
+        }
+        return;
+      }
+      case 'f15_cast_well': {
+        const T = ASTRO.castWell;
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        if (m.t < T * 0.45) {
+          m.data.px = h.x;
+          m.data.py = h.y;
+        }
+        m.tele = { shape: 'circle', x: m.data.px, y: m.data.py, r: ASTRO.wellR, k: clamp(m.t / T, 0, 1) };
+        if (m.t >= T) {
+          tempWell(sim, st, api, m.data.px, m.data.py, ASTRO.wellR, 0.05, ASTRO.wellOn, 'astro', { burn: 0.7 });
+          say(sim, 'f15_cast');
+          m.cd = c.def.rest;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'f15_cast_bolt': {
+        const T = ASTRO.castBolt;
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        if (m.t < T * 0.5) m.dir = Math.atan2(c.dy, c.dx);
+        m.face = m.dir;
+        m.tele = { shape: 'line', r: 7, w: 0.35, ang: m.dir, k: clamp(m.t / T, 0, 1) };
+        if (m.t >= T) {
+          const spec = c.def.shot;
+          if (spec) api.shoot(sim, m, m.dir, { ...spec, n: 3, spread: 0.34 });
+          m.cd = c.def.rest;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'recover':
+        recoverStep(m, api, 0.4);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+  onHit(sim, m, hit, api) {
+    const s = m.data.stones ?? ASTRO.stones;
+    if (s <= 0 || m.mode === 'dying') return 1;
+    m.data.regen = 0;
+    api.vfx(sim, { x: m.x, y: m.y - 0.4, r: 0.9, life: 0.3, art: 'f15_spark' });
+    if (hit.heavy) {
+      m.data.stones = 0;
+      return 0.6;
+    }
+    m.data.stones = s - 1;
+    return 0;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Страж созвездия: встаёт из звёздной карты, держится у своего места
+// (≤ 2,2 клетки), кусает вспышкой; линии фигуры хлещут (stepCharts).
+// ---------------------------------------------------------------------------
+
+export const CONSTEL_MOB = { leash: 2.2, pulse: 0.95 };
+
+brain('f15_constel', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    switch (m.mode) {
+      case 'f15_rise':
+        m.data.ghost = 1;
+        m.vx = 0;
+        m.vy = 0;
+        if (m.t > CONSTEL.wake) {
+          m.data.ghost = 0;
+          api.setMode(m, 'chase');
+        }
+        return;
+      case 'chase': {
+        m.face = Math.atan2(c.dy, c.dx);
+        if (c.dist < CONSTEL_MOB.pulse + h.r + 0.1 && m.cd <= 0) {
+          api.setMode(m, 'windup');
+          return;
+        }
+        let tx = h.x;
+        let ty = h.y;
+        const dh = hypot(tx - m.hx, ty - m.hy);
+        if (dh > CONSTEL_MOB.leash) {
+          tx = m.hx + ((tx - m.hx) / dh) * CONSTEL_MOB.leash;
+          ty = m.hy + ((ty - m.hy) / dh) * CONSTEL_MOB.leash;
+        }
+        const d = hypot(tx - m.x, ty - m.y);
+        if (d > 0.2) api.steer(sim, m, (tx - m.x) / d, (ty - m.y) / d, m.speed * Math.min(1, d), dt);
+        else {
+          m.vx *= 0.8;
+          m.vy *= 0.8;
+        }
+        return;
+      }
+      case 'windup': {
+        const T = c.def.windup;
+        m.vx *= 0.7;
+        m.vy *= 0.7;
+        m.tele = { shape: 'circle', r: CONSTEL_MOB.pulse, k: clamp(m.t / T, 0, 1) };
+        if (m.t > T - 0.24) m.danger = CONSTEL_MOB.pulse + h.r;
+        if (m.t >= T) {
+          if (c.dist < CONSTEL_MOB.pulse + h.r && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 2, m.kind);
+          m.cd = c.def.rest;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'recover':
+        recoverStep(m, api, 0.5);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Пожиратель света: летит к зажжённой лампе и гасит её (замах 1 с, круг на
+// лампе); хватает конусом. Во тьме затмения удары его не берут — тяни под
+// лампу; в свете получает ×1,3.
+// ---------------------------------------------------------------------------
+
+export const DEVOURER = { snuff: 1, seek: 7, snuffCd: 8, lit: 1.3 };
+
+brain('f15_devourer', {
+  step(sim, m, dt, c, api) {
+    const st = stateOf(sim, api);
+    m.data.snuffCd = (m.data.snuffCd ?? 0) - dt;
+    switch (m.mode) {
+      case 'chase': {
+        m.face = Math.atan2(c.dy, c.dx);
+        if (m.data.snuffCd <= 0) {
+          let best = -1;
+          let bd = DEVOURER.seek;
+          st.lamps.forEach((l, i) => {
+            const d = hypot(l.x - m.x, l.y - m.y);
+            if (l.lit && d < bd) {
+              bd = d;
+              best = i;
+            }
+          });
+          if (best >= 0) {
+            const l = st.lamps[best];
+            if (bd < 1.3) {
+              m.data.lamp = best;
+              api.setMode(m, 'f15_snuff');
+              return;
+            }
+            api.steer(sim, m, (l.x - m.x) / bd, (l.y - m.y) / bd, m.speed, dt);
+            return;
+          }
+        }
+        if (c.dist < c.def.reach + m.r + sim.hero.r + 0.2 && m.cd <= 0) {
+          api.setMode(m, 'windup');
+          return;
+        }
+        chase(sim, m, dt, c, api);
+        return;
+      }
+      case 'f15_snuff': {
+        const l = st.lamps[m.data.lamp ?? -1];
+        m.vx *= 0.7;
+        m.vy *= 0.7;
+        if (!l || !l.lit) {
+          api.setMode(m, 'chase');
+          return;
+        }
+        m.face = Math.atan2(l.y - m.y, l.x - m.x);
+        m.tele = { shape: 'circle', x: l.x, y: l.y, r: 0.8, k: clamp(m.t / DEVOURER.snuff, 0, 1) };
+        if (m.t >= DEVOURER.snuff) {
+          setLamp(sim, l, api, false);
+          say(sim, 'f15_snuff');
+          m.data.snuffCd = DEVOURER.snuffCd;
+          api.setMode(m, 'chase');
+        }
+        return;
+      }
+      case 'windup':
+        bite(sim, m, c, api, { T: c.def.windup, arc: 1.6, status: { kind: 'chill', dur: 1.5 } });
+        return;
+      case 'recover':
+        recoverStep(m, api, 0.55);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+  onHit(sim, m) {
+    if (inDark(sim, m.x, m.y)) return 0;
+    return nearLit(sim, m.x, m.y) ? DEVOURER.lit : 1;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Отражение: монстр прошлого этажа из памяти; общий укус и коронный приём
+// своего мотива (крыса — выпад, гриб — споры, лава — огненный след, зеркало —
+// шаг за спину, небо — порыв, часы — кольцо замедления).
+// ---------------------------------------------------------------------------
+
+export const ECHO = { born: 0.7, lunge: 0.5, spore: 0.7, gust: 0.7, tick: 0.9, blink: 0.45 };
+
+brain('f15_echo', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    const motif = m.data.motif ?? 0;
+    m.data.sp = (m.data.sp ?? 1.5) - dt;
+    switch (m.mode) {
+      case 'f15_born':
+        m.data.ghost = 1;
+        m.vx = 0;
+        m.vy = 0;
+        if (m.t > ECHO.born) {
+          m.data.ghost = 0;
+          api.setMode(m, 'chase');
+        }
+        return;
+      case 'chase': {
+        const see = seeHero(sim, m, api);
+        if (m.data.sp <= 0 && see) {
+          if (motif === 0 && c.dist > 2 && c.dist < 4) {
+            m.dir = Math.atan2(c.dy, c.dx);
+            api.setMode(m, 'f15_lunge_aim');
+            return;
+          }
+          if (motif === 1 && c.dist < 2.6) {
+            api.setMode(m, 'f15_spore');
+            return;
+          }
+          if (motif === 3 && c.dist > 1.4 && c.dist < 4) {
+            const ux = c.dx / c.dist;
+            const uy = c.dy / c.dist;
+            const p = openNear(sim, h.x + ux * 1.4, h.y + uy * 1.4, 1);
+            if (p) {
+              m.data.bx = p[0];
+              m.data.by = p[1];
+              api.setMode(m, 'f15_blink');
+              return;
+            }
+          }
+          if (motif === 4 && c.dist < 3) {
+            m.dir = Math.atan2(c.dy, c.dx);
+            api.setMode(m, 'f15_gust');
+            return;
+          }
+          if (motif === 5 && c.dist < 2.4) {
+            api.setMode(m, 'f15_tick');
+            return;
+          }
+        }
+        if (motif === 2) {
+          m.data.trail = (m.data.trail ?? 0) - dt;
+          if (m.data.trail <= 0) {
+            m.data.trail = 0.45;
+            api.zone(sim, {
+              x: m.x,
+              y: m.y,
+              r: 0.55,
+              life: 2.4,
+              warn: 0.45,
+              dps: 0.03,
+              status: 'burn',
+              dur: 1.5,
+              art: 'f15_ember',
+            });
+          }
+        }
+        if (c.dist < c.def.reach + m.r + h.r + 0.2 && m.cd <= 0) {
+          api.setMode(m, 'windup');
+          return;
+        }
+        chase(sim, m, dt, c, api);
+        return;
+      }
+      case 'windup':
+        bite(sim, m, c, api, { T: c.def.windup });
+        return;
+      case 'f15_lunge_aim': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        if (m.t < ECHO.lunge * 0.5) m.dir = Math.atan2(c.dy, c.dx);
+        m.face = m.dir;
+        const len = Math.min(3.6, clearDist(sim, api, m.x, m.y, m.dir, 3.6));
+        m.tele = { shape: 'line', r: len, w: 0.5, ang: m.dir, k: clamp(m.t / ECHO.lunge, 0, 1) };
+        if (m.t > ECHO.lunge - 0.24) m.danger = 1.2;
+        if (m.t >= ECHO.lunge) {
+          m.data.hit = 0;
+          api.setMode(m, 'f15_lunge');
+        }
+        return;
+      }
+      case 'f15_lunge':
+        m.vx = Math.cos(m.dir) * 11;
+        m.vy = Math.sin(m.dir) * 11;
+        contact(sim, m, api, m.dmg, 3);
+        if (m.t > 0.32) {
+          m.data.sp = 4;
+          m.cd = c.def.rest;
+          api.setMode(m, 'recover');
+        }
+        return;
+      case 'f15_spore': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        m.tele = { shape: 'circle', r: 1.7, k: clamp(m.t / ECHO.spore, 0, 1) };
+        if (m.t > ECHO.spore - 0.24) m.danger = 1.7 + h.r;
+        if (m.t >= ECHO.spore) {
+          api.zone(sim, { x: m.x, y: m.y, r: 1.7, life: 3, dps: 0.02, status: 'poison', dur: 2, art: 'f15_spore' });
+          m.data.sp = 6;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'f15_blink':
+        m.data.ghost = m.t > 0.2 ? 1 : 0;
+        m.vx = 0;
+        m.vy = 0;
+        m.tele = { shape: 'circle', x: m.data.bx, y: m.data.by, r: 0.5, k: clamp(m.t / ECHO.blink, 0, 1) };
+        if (m.t >= ECHO.blink) {
+          m.x = m.data.bx;
+          m.y = m.data.by;
+          m.data.ghost = 0;
+          m.data.sp = 6;
+          api.vfx(sim, { x: m.x, y: m.y, r: 1, life: 0.35, art: 'f15_memflash' });
+          api.setMode(m, 'windup');
+        }
+        return;
+      case 'f15_gust': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        if (m.t < ECHO.gust * 0.5) m.dir = Math.atan2(c.dy, c.dx);
+        m.face = m.dir;
+        m.tele = { shape: 'cone', r: 3.2, ang: m.dir, arc: 1.1, k: clamp(m.t / ECHO.gust, 0, 1) };
+        if (m.t > ECHO.gust - 0.24) m.danger = 3.2;
+        if (m.t >= ECHO.gust) {
+          const off = Math.abs(angDiff(Math.atan2(c.dy, c.dx), m.dir));
+          if (c.dist < 3.2 + h.r && off < 0.65 && canHurt(sim)) api.hurtHero(sim, m.dmg * 0.5, m.x, m.y, 8, m.kind);
+          m.data.sp = 5;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'f15_tick': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        m.tele = { shape: 'ring', r: 1.6, w: 0.8, k: clamp(m.t / ECHO.tick, 0, 1) };
+        if (m.t > ECHO.tick - 0.24) m.danger = 2.4 + h.r;
+        if (m.t >= ECHO.tick) {
+          if (Math.abs(c.dist - 1.6) < 0.8 + h.r && canHurt(sim))
+            api.hurtHero(sim, m.dmg * 0.7, m.x, m.y, 2, m.kind, { kind: 'slow', dur: 1.5 });
+          m.data.sp = 6;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'recover':
+        recoverStep(m, api, 0.5);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Спутник: кружит вокруг героя, сужая орбиту; на малой — прицел линией и
+// пике.
+// ---------------------------------------------------------------------------
+
+export const MOON = { R: 3.8, rMin: 1.9, shrink: 0.4, w: 2.1, aim: 0.6, dive: 12, diveT: 0.34 };
+
+brain('f15_moon', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    switch (m.mode) {
+      case 'chase': {
+        const R = Math.max(MOON.rMin, (m.data.R ?? MOON.R) - MOON.shrink * dt);
+        m.data.R = R;
+        const s = m.id % 2 ? 1 : -1;
+        const th = (m.data.th ?? Math.atan2(m.y - h.y, m.x - h.x)) + s * MOON.w * dt;
+        m.data.th = th;
+        const tx = h.x + Math.cos(th) * R;
+        const ty = h.y + Math.sin(th) * R;
+        const d = hypot(tx - m.x, ty - m.y);
+        if (d > 0.05) api.steer(sim, m, (tx - m.x) / d, (ty - m.y) / d, Math.min(m.speed * 1.4, d * 6), dt);
+        m.face = Math.atan2(c.dy, c.dx);
+        if (R <= MOON.rMin + 0.05 && m.cd <= 0 && c.dist < 3.2 && seeHero(sim, m, api)) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          api.setMode(m, 'aim');
+        }
+        return;
+      }
+      case 'aim': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        if (m.t < MOON.aim * 0.5) m.dir = Math.atan2(c.dy, c.dx);
+        m.face = m.dir;
+        m.tele = { shape: 'line', r: MOON.dive * MOON.diveT, w: 0.45, ang: m.dir, k: clamp(m.t / MOON.aim, 0, 1) };
+        if (m.t > MOON.aim - 0.24) m.danger = 1.2;
+        if (m.t >= MOON.aim) {
+          m.data.hit = 0;
+          api.setMode(m, 'f15_dive');
+        }
+        return;
+      }
+      case 'f15_dive':
+        m.vx = Math.cos(m.dir) * MOON.dive;
+        m.vy = Math.sin(m.dir) * MOON.dive;
+        contact(sim, m, api, m.dmg, 2.5);
+        if (m.t > MOON.diveT) {
+          m.data.R = MOON.R;
+          m.data.th = Math.atan2(m.y - h.y, m.x - h.x);
+          m.cd = c.def.rest;
+          api.setMode(m, 'recover');
+        }
+        return;
+      case 'recover':
+        recoverStep(m, api, 0.45);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Сверхновая: копит свет 1,4 с (кольцо 1,1…3,3 — вплотную безопасно) и
+// вспыхивает; погибнув, схлопывается в колодец на 6 с.
+// ---------------------------------------------------------------------------
+
+export const NOVA = { gather: 1.4, ringR: 2.2, ringW: 1.1, at: 3, wellR: 4.5, warn: 0.4, on: 6, burn: 1.2, k: 1.3 };
+
+brain('f15_nova', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    const key = `f15_nova:${m.id}`;
+    switch (m.mode) {
+      case 'chase':
+        if (c.dist < NOVA.at && m.cd <= 0) {
+          api.setMode(m, 'f15_gather');
+          return;
+        }
+        chase(sim, m, dt, c, api);
+        return;
+      case 'f15_gather': {
+        const k = clamp(m.t / NOVA.gather, 0, 1);
+        m.vx *= 0.5;
+        m.vy *= 0.5;
+        m.tele = { shape: 'ring', r: NOVA.ringR, w: NOVA.ringW, k };
+        api.light(sim, key, { x: m.x, y: m.y, r: 2 + k * 3.5, tint: 'warm' });
+        if (m.t > NOVA.gather - 0.24) m.danger = NOVA.ringR + NOVA.ringW + h.r;
+        if (m.t >= NOVA.gather) {
+          if (Math.abs(c.dist - NOVA.ringR) < NOVA.ringW + h.r && canHurt(sim))
+            api.hurtHero(sim, m.dmg, m.x, m.y, 5, m.kind, { kind: 'burn', dur: 2 });
+          api.vfx(sim, { x: m.x, y: m.y, r: NOVA.ringR + NOVA.ringW, life: 0.5, art: 'f15_novaburst', above: true });
+          api.light(sim, key, null);
+          sim.events.push({ t: 'shake', k: 0.25 });
+          sim.events.push({ t: 'flash', color: '#fff0b0', k: 0.35 });
+          say(sim, 'f15_nova');
+          m.cd = c.def.rest * 1.5;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'recover':
+        recoverStep(m, api, 0.8);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+  onDeath(sim, m, _mode, api) {
+    const st = stateOf(sim, api);
+    api.light(sim, `f15_nova:${m.id}`, null);
+    tempWell(sim, st, api, m.x, m.y, NOVA.wellR, NOVA.warn, NOVA.on, 'nova', { burn: NOVA.burn, k: NOVA.k });
+    say(sim, 'f15_collapse', 'СВЕРХНОВАЯ СХЛОПНУЛАСЬ', 'колодец на шесть секунд — уводи туда врагов');
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Золотой метеорит (редкий): удирает зигзагом, у колодцев закручивается по
+// спирали; каждый удар сыплет монеты; через 14 с, оторвавшись, улетает.
+// ---------------------------------------------------------------------------
+
+export const GOLDBUG = { escape: 14, coinsPerHit: 40 };
+
+brain('f15_goldbug', {
+  step(sim, m, dt, c, api) {
+    if (m.mode !== 'flee' && m.mode !== 'chase') api.setMode(m, 'flee');
+    m.data.age = (m.data.age ?? 0) + dt;
+    const w = wellNear(sim, m.x, m.y, 3);
+    let ux: number;
+    let uy: number;
+    if (w && c.dist < 9) {
+      const dx = m.x - w.x;
+      const dy = m.y - w.y;
+      const d = hypot(dx, dy) || 1;
+      const s = m.id % 2 ? 1 : -1;
+      const inward = d > w.r * 0.7 ? -0.35 : 0.35;
+      ux = (-dy / d) * s + (dx / d) * inward;
+      uy = (dx / d) * s + (dy / d) * inward;
+    } else {
+      const away = api.flowDir(sim, m.x, m.y, true) ?? [-c.dx / (c.dist || 1), -c.dy / (c.dist || 1)];
+      const z = Math.sin(sim.time * 6 + m.id) * 0.45;
+      ux = away[0] - away[1] * z;
+      uy = away[1] + away[0] * z;
+    }
+    const l = hypot(ux, uy) || 1;
+    api.steer(sim, m, ux / l, uy / l, m.speed, dt);
+    m.face = Math.atan2(m.vy, m.vx);
+    if (m.data.age > GOLDBUG.escape && c.dist > 6) {
+      api.setMode(m, 'escape');
+      m.hp = 0;
+      say(sim, 'f15_gold_gone');
+    }
+  },
+  onHit(sim, m, _hit, api) {
+    api.dropAt(sim, 'coin', GOLDBUG.coinsPerHit, m.x, m.y);
+    return 1;
+  },
 });
