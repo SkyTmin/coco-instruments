@@ -59,6 +59,10 @@ export default defineConfig({
           '**/ui/pets/**',
           '**/hub/**',
         ],
+        // Общий кусок с рисовальщиками пятнадцати этажей подземелья (боссы
+        // кадрами, v2.85–v2.86) перерос 2 МБ по умолчанию — без него игра
+        // не открывается, поэтому в прекеше ему место.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],
         cleanupOutdatedCaches: true,
