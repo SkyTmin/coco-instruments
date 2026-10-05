@@ -2598,41 +2598,45 @@ function featherShot(d: number, f: number): Sprite {
   const key = 95000 + d * 4 + f;
   let img = sprites.get(key);
   if (!img) {
-    const p = new Px(26, 26);
+    const p = new Px(30, 30);
     const a = (d / 16) * TAU;
     const ux = Math.cos(a);
     const uy = Math.sin(a);
-    const flut = [1, 0.62, 0.22, 0.62][f];
+    const flut = [1, 0.62, 0.25, 0.62][f];
     const side = f === 1 ? 1 : f === 3 ? -1 : 0;
     const draw = (q: Px, ox: number, oy: number, al: number, ghost: boolean) => {
-      for (let s = -6; s <= 6; s += 0.5) {
-        const x = 13 + ox + ux * s;
-        const y = 13 + oy + uy * s;
-        const u = (s + 6) / 12;
-        const w = 2.4 * Math.sin(Math.PI * Math.min(1, u * 1.15)) * flut;
+      for (let s = -7; s <= 7; s += 0.5) {
+        const x = 15 + ox + ux * s;
+        const y = 15 + oy + uy * s;
+        const u = (s + 7) / 14;
+        const w = 3.1 * Math.sin(Math.PI * Math.min(1, u * 1.12)) * flut;
         for (let o = -w; o <= w; o += 0.5) {
-          const xx = x - uy * (o + side * 0.5);
-          const yy = y + ux * (o + side * 0.5);
-          const c = ghost ? hx(C.stone[3], Math.round(al * 255)) : hx(o < -0.5 ? C.stone[4] : o > 0.8 ? C.stone[2] : C.stone[3]);
+          const xx = x - uy * (o + side * 0.6);
+          const yy = y + ux * (o + side * 0.6);
+          const c = ghost
+            ? hx(C.stone[4], Math.round(al * 255))
+            : hx(o < -0.6 ? C.stone[5] : o > 1 ? C.stone[2] : (Math.round(s * 2) & 3) === 0 ? C.stone[3] : C.stone[4]);
           q.set(Math.round(xx), Math.round(yy), c);
         }
-        if (!ghost) q.set(Math.round(x), Math.round(y), s > 3.5 ? hx(s > 5 ? C.ember[4] : C.ember[3]) : hx(C.stone[5]));
+        // Стержень: светлый, у острия — раскалён.
+        if (!ghost) q.set(Math.round(x), Math.round(y), s > 4 ? hx(s > 5.5 ? C.white : C.ember[4]) : s > 1.5 ? hx(C.ember[3]) : hx(C.stone[5]));
       }
     };
     // След: два тающих силуэта и искры позади.
-    draw(p, -ux * 9, -uy * 9, 0.18, true);
-    draw(p, -ux * 4.5, -uy * 4.5, 0.38, true);
-    const q = new Px(26, 26);
+    draw(p, -ux * 11, -uy * 11, 0.22, true);
+    draw(p, -ux * 5.5, -uy * 5.5, 0.45, true);
+    const q = new Px(30, 30);
     draw(q, 0, 0, 1, false);
     q.outline(hx(C.ink));
     for (let i = 0; i < q.data.length; i += 4) if (q.data[i + 3]) p.data.set(q.data.subarray(i, i + 4), i);
     const sw = [0, 1, 0, -1][f];
-    p.set(Math.round(13 - ux * 11 - uy * sw), Math.round(13 - uy * 11 + ux * sw), hx(C.ember[3]));
-    p.set(Math.round(13 - ux * 13 + uy * sw), Math.round(13 - uy * 13 - ux * sw), hx(C.ember[2], 200));
+    p.set(Math.round(15 - ux * 13 - uy * sw), Math.round(15 - uy * 13 + ux * sw), hx(C.ember[4]));
+    p.set(Math.round(15 - ux * 15 + uy * sw), Math.round(15 - uy * 15 - ux * sw), hx(C.ember[3], 220));
+    p.set(Math.round(15 - ux * 17), Math.round(15 - uy * 17), hx(C.ember[2], 160));
     img = p.canvas();
     sprites.set(key, img);
   }
-  return { img, ax: 13, ay: 13 };
+  return { img, ax: 15, ay: 15 };
 }
 
 registerShotPainter('f15b_feather', (s: Shot, time: number) => {
