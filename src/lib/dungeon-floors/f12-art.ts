@@ -12,10 +12,12 @@
 
 import { Px } from '../dungeon-art';
 import {
+  frameLRU,
   paintSim,
   registerCellPainter,
   registerItemArt,
   registerMobPainter,
+  registerMobWarm,
   registerPropPainter,
   registerShotPainter,
   registerZonePainter,
@@ -3357,7 +3359,7 @@ registerMobPainter('f12_dodger', (m: Mob, pose: MobPose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Столб территории и чаша храма. Кадр 14×28, земля — 26.
+// Столб территории (и прежняя чаша — `bowlFrame` ниже). Кадр 14×28, земля — 26.
 // ---------------------------------------------------------------------------
 
 function drawPillar(rise: number, f: number, bowl: boolean): Built {
@@ -3406,8 +3408,148 @@ function drawPillar(rise: number, f: number, bowl: boolean): Built {
   return { p, ax: 8, ay: G, eye: h > 18 ? [8, top + 2] : null };
 }
 
+// --- Чаша храма (v2.87): огонь дышит, от удара плещет, разбита — осколки. ---
+// Кадр 44×40, земля — ряд 36, середина — 22. Огонь — в слое света.
+
+const BOWL_ST = tn('#1e1822', '#342a3a', '#4a3e54', '#66587a');
+const BOWL_W = 44;
+const BOWL_H = 40;
+const BOWL_G = 36;
+const BOWL_X = 22;
+const BOWL_BREAK = 0.9;
+const bowlFr = frameLRU<MobFrame>(120);
+/** Когда чашу ударили в последний раз (по времени рендера) — плеск длиннее вспышки. */
+const bowlHit = new Map<number, { fl: number; at: number; now: number }>();
+
+interface BowlQ {
+  /** 0…1 — встаёт из пола. */
+  rise: number;
+  /** Высота огня (дыхание). */
+  fh: number;
+  fi: number;
+  /** Плеск после удара, 0…1 по времени; −1 — нет. */
+  sp: number;
+  /** Раскол, 0…1 по времени; −1 — цела. */
+  brk: number;
+}
+
+function drawBowl(q: BowlQ): { p: Px; lit: Px } {
+  const p = new Px(BOWL_W, BOWL_H);
+  const lit = new Px(BOWL_W, BOWL_H);
+  const cx = BOWL_X;
+  const G = BOWL_G;
+  // Встаёт из пола: всё ниже на недоросшую часть, ниже земли — срезано.
+  const sink = Math.round((1 - q.rise) * 15);
+  const rimY = G - 13 + sink;
+  if (q.brk < 0.15) {
+    polyShade(p, [[cx - 3, rimY + 1], [cx + 3, rimY + 1], [cx + 4, G + sink], [cx - 4, G + sink]], BOWL_ST);
+    shadeEll(p, cx, rimY, 6, 2.4, BOWL_ST, 0.1);
+    for (let x = cx - 5; x <= cx + 5; x++) p.set(x, rimY, BLOODC[2]);
+    for (const x of [cx - 2, cx + 2]) {
+      p.set(x, rimY + 6, BONE[3]);
+      p.set(x, rimY + 7, INK);
+    }
+    if (q.brk >= 0) {
+      // Трещины перед расколом.
+      stroke(p, cx - 1, rimY - 1, cx + 1, rimY + 4, INK, 1);
+      stroke(p, cx + 3, rimY, cx + 2, rimY + 3, INK, 1);
+    }
+    for (let y = G + 1; y < BOWL_H; y++) for (let x = 0; x < BOWL_W; x++) clr(p, x, y);
+    p.outline(INK);
+    for (let y = G + 1; y < BOWL_H; y++) for (let x = 0; x < BOWL_W; x++) clr(p, x, y);
+  } else {
+    // Раскол: обломки разлетаются, падают и лежат; постамент — пенёк.
+    const tb = (q.brk - 0.15) * BOWL_BREAK;
+    polyShade(p, [[cx - 3, G - 5], [cx - 1, G - 7], [cx + 2, G - 6], [cx + 3, G - 4], [cx + 4, G], [cx - 4, G]], BOWL_ST);
+    for (let i = 0; i < 9; i++) {
+      const s0 = (i / 8) * 2 - 1;
+      const vx = s0 * 42 + (hash(i, 7) - 0.5) * 16;
+      const vy = -46 - hash(i, 3) * 40;
+      const x = cx + s0 * 5 + vx * tb;
+      const y = Math.min(G - 1, rimY - 1 + vy * tb + 0.5 * 300 * tb * tb);
+      const c = i % 3 === 0 ? BONE[2] : BOWL_ST[i % 2 ? 2 : 1];
+      p.rect(Math.round(x), Math.round(y), Math.round(x) + 1, Math.round(y) + (i % 2), c);
+    }
+    p.outline(INK);
+  }
+  // Огонь: дышит, от удара плещет через край.
+  const lift = q.sp >= 0 ? Math.round(Math.sin(Math.min(1, q.sp * 2.5) * Math.PI) * 4) : 0;
+  if (q.rise >= 0.98 && q.brk < 0.15) {
+    flame(lit, cx, rimY - 1, 8, q.fh + lift + (q.brk >= 0 ? 4 : 0), q.fi, VFIRE, 3);
+    glowDot(lit, cx, rimY - 2, VFIRE[2], 2);
+  } else if (q.rise > 0.7 && q.brk < 0) {
+    // Вспыхивает, едва вышла из пола.
+    flame(lit, cx, rimY - 1, 6, Math.round((q.rise - 0.7) * 20), q.fi, VFIRE, 3);
+  }
+  if (q.sp >= 0 && q.sp < 1 && q.brk < 0) {
+    // Капли проклятого огня летят через край и гаснут на полу.
+    const tt = q.sp * 0.45;
+    for (let i = 0; i < 6; i++) {
+      const sd = i % 2 ? 1 : -1;
+      const vx = sd * (14 + i * 4);
+      const vy = -34 - (i % 3) * 10;
+      const x = cx + sd * 4 + vx * tt;
+      const y = Math.min(G, rimY - 2 + vy * tt + 0.5 * 260 * tt * tt);
+      lit.set(x, y, alpha(VFIRE[y >= G ? 1 : 2], 1 - q.sp));
+      if (y < G) lit.set(x, y - 1, alpha(VFIRE[3], 0.7 * (1 - q.sp)));
+    }
+  }
+  if (q.brk >= 0) {
+    // Огонь выплёскивается и растекается лужей, гаснет.
+    const k = Math.max(0, 1 - q.brk);
+    if (q.brk < 0.3) glowDot(lit, cx, rimY - 4, WHITE, 3);
+    for (let i = 0; i < 5; i++) {
+      const x = cx + (i - 2) * 3 + Math.round((hash(i, 5) - 0.5) * 2);
+      const h = Math.round((2 + hash(i, q.fi) * 3) * k);
+      if (h > 0) flame(lit, x, G, 3, h, q.fi + i, VFIRE, i);
+    }
+    for (let x = cx - 7; x <= cx + 7; x++) lit.set(x, G, alpha(VFIRE[1], 0.6 * k));
+  }
+  return { p, lit };
+}
+
+function bowlFrame(m: Mob, pose: MobPose): MobFrame {
+  const now = pose.now;
+  // Удар: вспышка движка коротка (0,12 с) — плеск держим по своим часам.
+  let h = bowlHit.get(m.id);
+  if (!h || now < h.now - 1e-3) h = { fl: 0, at: -9, now };
+  if ((m.flash ?? 0) > h.fl + 1e-3) h.at = now;
+  h.fl = m.flash ?? 0;
+  h.now = now;
+  bowlHit.set(m.id, h);
+  const dead = pose.mode === 'dying' || pose.mode === 'escape';
+  const q: BowlQ = {
+    rise: pose.mode === 'f12_rise' ? Math.round(Math.min(1, pose.t / 0.55) * 12) / 12 : 1,
+    fh: 9 + Math.round(Math.sin(now * 2.6 + m.id) * 1.6),
+    fi: Math.floor(now * 10 + m.id) % 8,
+    sp: now - h.at < 0.45 ? Math.floor(((now - h.at) / 0.45) * 11) / 11 : -1,
+    brk: dead ? Math.min(1, Math.floor((pose.t / BOWL_BREAK) * 22) / 22) : -1,
+  };
+  const fl = pose.flash && !dead;
+  const key = `${q.rise}|${q.fh}|${q.fi}|${q.sp}|${q.brk}|${fl ? 1 : 0}`;
+  let fr = bowlFr.get(key);
+  if (!fr) {
+    const d = drawBowl(q);
+    const img = fl ? d.p.tint(WHITE, 0.85) : d.p;
+    fr = bowlFr.set(key, {
+      img: img.canvas(),
+      lit: d.lit.canvas(),
+      ax: BOWL_X,
+      ay: BOWL_G,
+      eye: null,
+      still: true,
+      shadow: q.brk >= 0.15 ? 0 : 6,
+      linger: dead ? BOWL_BREAK : undefined,
+    });
+  }
+  // От удара чаша вздрагивает.
+  if (q.sp >= 0 && q.sp < 0.3 && q.brk < 0) return { ...fr, dx: q.sp < 0.15 ? 1 : -1 };
+  return fr;
+}
+
 registerMobPainter('f12_pillar', (m: Mob, pose: MobPose) => {
   const bowl = (m.data.bowl ?? 0) > 0;
+  if (bowl) return bowlFrame(m, pose);
   const rise = pose.mode === 'f12_rise' ? Math.min(1, pose.t / 0.55) : 1;
   const rf = Math.round(rise * 4);
   const f = pose.frame % 4;
@@ -3545,11 +3687,21 @@ registerMobPainter('f12_train', (m: Mob, pose: MobPose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Двуликий король проклятий. Кадр 56×68, земля — 64. Смотрит вправо.
-// Белое кимоно, тёмные хакама, четыре руки, розовые вихры, чёрные полосы
+// Двуликий король проклятий (v2.87 — анимация тела). Анфас, смотрит вправо.
+// Белое кимоно с рукавами-фурисодэ, тёмные хакама, четыре руки (верхняя
+// пара режет, нижняя держит знак и пояс), розовые вихры, чёрные полосы
 // татуировки. Второе лицо — костяная маска, наросшая на щеку (для зрителя —
-// слева): до «ПЛАМЕНИ» глаз маски закрыт. На поясе — рот: раскрывается,
-// когда король складывает знак и сидит в храме.
+// слева): до «ПЛАМЕНИ» её глаз закрыт. На поясе — рот.
+//
+// Тело — риг: поза — набор чисел (таз, наклон, колени и ступни, локти и
+// кисти четырёх рук, лицо, пояс, пламя…). Техника — ключевые позы по
+// времени с кривыми разгона и торможения; кадр — поза в момент
+// `floor(t · 24) / 24`, и кадр контакта совпадает с уроном мозга. Рукава и
+// вихры догоняют тело пружиной, посчитанной по позам в прошлом (кадр
+// остаётся функцией времени), след руки — выборки той же позы в прошлом.
+// Светится (глаза, пламя, следы, знак, кромка) — слой `lit`. Кадры — в
+// `frameLRU`, прогрев — `registerMobWarm`. Мозг — метроном: тайминги
+// берутся из `KING`.
 // ---------------------------------------------------------------------------
 
 const K_ROBE = tn('#6e685e', '#b4ac9c', '#dcd5c6', '#f6f2e8');
@@ -3561,433 +3713,2463 @@ const K_MASK = tn('#6a6252', '#a09680', '#cfc4a8', '#f0e8d2');
 const K_TAT = hx('#120608');
 const K_EYE = hx('#ff2030');
 const K_GHOST = hx('#ff2a5a');
+const K_MOUTH = hx('#5a0a12');
+const K_GUM = hx('#8a0a18');
+const K_TONGUE = hx('#d0404e');
+const K_PINK = hx('#ffb0b8');
+const K_CUT = [hx('#ffffff'), hx('#ffd0d8'), hx('#ff4a62'), hx('#8a0a22')];
+const K_ASH = [hx('#120a10'), hx('#2a1e24'), hx('#3e3036')];
 
-/** Рука от плеча: локоть и кисть, x — НАРУЖУ от тела. */
-type Arm = [number, number, number, number];
+const KFPS = 24;
+const KF = 1 / KFPS;
+const kc = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 
-interface KingPose {
-  body: 'stand' | 'sit' | 'kneel';
-  step: number;
-  bob: number;
-  tilt: number;
-  ru: Arm;
-  rl: Arm;
-  lu: Arm;
-  ll: Arm;
-  roar: boolean;
-  glow: number;
-  face2: boolean;
-  belly: boolean;
-  fx: 'none' | 'cut0' | 'cut1' | 'bow' | 'pyre' | 'sign' | 'claw';
-  /** Натяжение тетивы, 0…1. */
-  draw: number;
-  f: number;
-  stars: boolean;
-  aura: number;
-  ghost: boolean;
+type KEase = (x: number) => number;
+const kLin: KEase = (x) => x;
+const kIn: KEase = (x) => x * x;
+const kOut: KEase = (x) => 1 - (1 - x) * (1 - x);
+const kOut3: KEase = (x) => 1 - (1 - x) * (1 - x) * (1 - x);
+const kIO: KEase = (x) => (x < 0.5 ? 2 * x * x : 1 - 2 * (1 - x) * (1 - x));
+/** С перелётом за цель и возвратом (жетон, рывок руки, удар головы). */
+const kBack: KEase = (x) => 1 + 2.7 * (x - 1) ** 3 + 1.7 * (x - 1) ** 2;
+
+// ---- Каналы рига ----------------------------------------------------------
+
+const KCH = [
+  // Тело: сдвиг таза, высота таза над землёй, плечи вбок, сутулость, вдох, поворот.
+  'bx', 'by', 'hip', 'lean', 'bend', 'br', 'tw',
+  // Ноги: колено и ступня — от середины тела по x, высота над землёй по y.
+  'lkx', 'lky', 'lfx', 'lfy', 'rkx', 'rky', 'rfx', 'rfy',
+  // Голова: сдвиг, взгляд вбок, кивок, рот, глаза; маска: глаз, оскал, трещины.
+  'hx', 'hy', 'look', 'nod', 'jaw', 'eyes', 'm2', 'mjaw', 'crack', 'mb',
+  // Четыре руки: локоть и кисть от плеча (x — НАРУЖУ), вид кисти, за спиной.
+  'ruex', 'ruey', 'ruhx', 'ruhy', 'ruk', 'rub',
+  'rlex', 'rley', 'rlhx', 'rlhy', 'rlk',
+  'luex', 'luey', 'luhx', 'luhy', 'luk', 'lub',
+  'llex', 'lley', 'llhx', 'llhy', 'llk',
+  // Свет и приёмы.
+  'aura', 'flare', 'glow', 'belly', 'fing', 'claw', 'bow', 'draw', 'arrow', 'rel',
+  'pyre', 'crawl', 'sign', 'palm', 'stars', 'click', 'baim',
+  // Общий ход кадра (трансформ движка).
+  'fdx', 'fdy', 'fsx', 'fsy', 'frot', 'air',
+] as const;
+type KC = (typeof KCH)[number];
+type KR = Record<KC, number>;
+type K4 = 'ru' | 'rl' | 'lu' | 'll';
+const K4S: K4[] = ['rl', 'll', 'ru', 'lu'];
+
+/**
+ * Скачком, а не плавно: вид кисти (кулак, коготь, два пальца, знак), рука
+ * за спиной, звёзды, ступень трещины маски. Полуоткрытый кулак на
+ * промежуточном кадре читался бы как сбой.
+ */
+const KSTEP = new Set<string>(['ruk', 'rlk', 'luk', 'llk', 'rub', 'lub', 'stars', 'crack']);
+
+/** Виды кисти. */
+const HK = { open: 0, fist: 1, claw: 2, two: 3, palm: 4, sign: 5, grip: 6 } as const;
+
+/** Боевая стойка: верхние руки свободно, нижняя правая на поясе, левая — знак у груди. */
+const KB0: KR = {
+  bx: 0, by: 0, hip: 16, lean: 0, bend: 0, br: 0, tw: 0,
+  lkx: -7, lky: 8, lfx: -7.5, lfy: 0, rkx: 7, rky: 8, rfx: 7.5, rfy: 0,
+  hx: 0, hy: 0, look: 0, nod: 0, jaw: 0, eyes: 1, m2: 0, mjaw: 0, crack: 0, mb: 0,
+  ruex: 4, ruey: 7, ruhx: 5, ruhy: 14, ruk: HK.open, rub: 0,
+  rlex: 4, rley: 6, rlhx: -1, rlhy: 12, rlk: HK.fist,
+  luex: 4, luey: 7, luhx: 5, luhy: 14, luk: HK.open, lub: 0,
+  llex: 4, lley: 5, llhx: -5, llhy: 4, llk: HK.two,
+  aura: 0, flare: 0, glow: 0.6, belly: 0, fing: 0, claw: 0, bow: 0, draw: 0, arrow: 0, rel: 0,
+  pyre: 0, crawl: 0, sign: 0, palm: 0, stars: 0, click: 0, baim: 0,
+  fdx: 0, fdy: 0, fsx: 1, fsy: 1, frot: 0, air: 0,
+};
+
+/** Сидит на помосте, скрестив ноги: верхние — знак храма, нижние — на коленях. */
+const KSIT: Partial<KR> = {
+  hip: 5, lkx: -14, lky: 3, lfx: 4, lfy: 1.5, rkx: 14, rky: 3, rfx: -4, rfy: 1.5,
+  ruex: 4, ruey: 7, ruhx: -8, ruhy: 3, ruk: HK.sign,
+  luex: 4, luey: 7, luhx: -8, luhy: 3, luk: HK.sign,
+  rlex: 6, rley: 8, rlhx: 6, rlhy: 15, rlk: HK.palm,
+  llex: 6, lley: 8, llhx: 6, llhy: 15, llk: HK.palm,
+};
+
+/** На одном колене: левое на земле, правое поднято, рука на нём. */
+const KKNEEL: Partial<KR> = {
+  hip: 9, bend: 1, lkx: -7, lky: 1.5, lfx: -3, lfy: 3, rkx: 8, rky: 9.5, rfx: 8.5, rfy: 0,
+  ruex: 3, ruey: 8, ruhx: 4, ruhy: 15, ruk: HK.open,
+  rlex: 3, rley: 5, rlhx: 1, rlhy: 9, rlk: HK.open,
+  luex: 3, luey: 8, luhx: 4, luhy: 15, luk: HK.open,
+  llex: 3, lley: 7, llhx: 3, llhy: 13, llk: HK.open,
+};
+
+type KKey = [number, Partial<KR>, KEase?];
+
+/**
+ * Ключевые позы: ключ меняет только названные каналы, остальные ДЕРЖАТ
+ * значение прошлого ключа. Между ключами — кривая следующего ключа.
+ */
+function kTrack(keys: KKey[], t: number, base: KR): KR {
+  const out = { ...base };
+  if (!keys.length) return out;
+  for (const ch of KCH) {
+    let pt = keys[0][0];
+    let pv = keys[0][1][ch] ?? base[ch];
+    let v = pv;
+    if (t > pt) {
+      for (let i = 1; i < keys.length; i++) {
+        const [kt, kv, ke] = keys[i];
+        const cv = kv[ch] ?? pv;
+        if (t < kt) {
+          v = KSTEP.has(ch) ? pv : pv + (cv - pv) * (ke ?? kIO)(kc((t - pt) / (kt - pt || 1), 0, 1));
+          break;
+        }
+        pt = kt;
+        pv = cv;
+        v = cv;
+      }
+    }
+    out[ch] = v;
+  }
+  return out;
 }
 
-const A_REST: [Arm, Arm] = [
-  [4, 7, 5, 14],
-  [3, 6, 4, 12],
-];
-const A_SIT: [Arm, Arm] = [
-  [5, 6, 6, 11],
-  [4, 6, 1, 10],
-];
-const A_LIMP: [Arm, Arm] = [
-  [3, 8, 4, 15],
-  [2, 7, 2, 13],
-];
-const A_CLAW0: [Arm, Arm] = [
-  [7, -3, 13, -6],
-  [7, 3, 13, 5],
-];
-const A_CLAW1: [Arm, Arm] = [
-  [6, 5, 3, 11],
-  [5, 6, 1, 11],
-];
-const A_PYRE: [Arm, Arm] = [
-  [5, -4, 8, -10],
-  [6, 1, 10, -3],
-];
-const A_SIGN: [Arm, Arm] = [
-  [3, 5, -7, 4],
-  [3, 6, -5, 9],
-];
-const A_CROSS: Arm = [-1, 5, -6, 6];
+const kStepE: KEase = () => 0;
 
-const kingBase = (): KingPose => ({
-  body: 'stand',
-  step: 0,
-  bob: 0,
-  tilt: 0,
-  ru: A_REST[0],
-  rl: A_REST[1],
-  lu: A_REST[0],
-  ll: A_REST[1],
-  roar: false,
-  glow: 0.6,
-  face2: false,
-  belly: false,
-  fx: 'none',
-  draw: 0,
-  f: 0,
-  stars: false,
-  aura: 0,
-  ghost: false,
-});
+/**
+ * Те же ключи, собранные один раз: у каждого канала — свои отрезки
+ * (откуда, куда, кривая). Поза в миг t — один проход по каналам без
+ * перебора ключей и без новых массивов: пружины рукавов и следы рук берут
+ * десятки поз на кадр.
+ */
+function kCompile(keys: KKey[], base: KR): (t: number) => KR {
+  const v0: number[] = [];
+  const segs: [number, number, number, number, KEase][][] = [];
+  for (const ch of KCH) {
+    const step = KSTEP.has(ch);
+    let pv = keys[0][1][ch] ?? base[ch];
+    v0.push(pv);
+    const list: [number, number, number, number, KEase][] = [];
+    for (let i = 1; i < keys.length; i++) {
+      const cv = keys[i][1][ch];
+      if (cv === undefined || cv === pv) continue;
+      list.push([keys[i - 1][0], keys[i][0], pv, cv, step ? kStepE : (keys[i][2] ?? kIO)]);
+      pv = cv;
+    }
+    segs.push(list);
+  }
+  const n = KCH.length;
+  return (t: number) => {
+    const out = {} as KR;
+    for (let c = 0; c < n; c++) {
+      let v = v0[c];
+      const list = segs[c];
+      for (let i = 0; i < list.length; i++) {
+        const sg = list[i];
+        if (t >= sg[1]) {
+          v = sg[3];
+          continue;
+        }
+        if (t > sg[0]) v = sg[2] + (sg[3] - sg[2]) * sg[4]((t - sg[0]) / (sg[1] - sg[0] || 1));
+        break;
+      }
+      out[KCH[c]] = v;
+    }
+    return out;
+  };
+}
 
-function kingArm(p: Px, sx: number, sy: number, side: number, a: Arm, upper: boolean, claw: boolean): [number, number] {
-  const ex = sx + a[0] * side;
-  const ey = sy + a[1];
-  const hx0 = sx + a[2] * side;
-  const hy0 = sy + a[3];
-  if (upper) {
-    // Широкий рукав кимоно до локтя.
+// ---- Геометрия ------------------------------------------------------------
+
+/** Рабочий холст: 100×100, земля — ряд 86, середина тела — 50. Кадр режется по рамке. */
+const KW = 100;
+const KH = 100;
+const KGY = 86;
+const KCX = 50;
+
+interface KGeo {
+  cx: number;
+  hipY: number;
+  sy: number;
+  L: number;
+  hcx: number;
+  hcy: number;
+  S: Record<K4, [number, number]>;
+  E: Record<K4, [number, number]>;
+  H: Record<K4, [number, number]>;
+}
+
+const armCh = (a: K4, s: 'ex' | 'ey' | 'hx' | 'hy' | 'k') => `${a}${s}` as KC;
+
+function kGeo(r: KR): KGeo {
+  const cx = KCX + Math.round(r.bx);
+  const hipY = KGY - Math.round(r.hip + r.by);
+  const sy = hipY - 21 + Math.round(r.bend) - Math.round(r.br);
+  const L = Math.round(r.lean);
+  const S = {} as Record<K4, [number, number]>;
+  const E = {} as Record<K4, [number, number]>;
+  const H = {} as Record<K4, [number, number]>;
+  for (const a of K4S) {
+    const side = a[0] === 'r' ? 1 : -1;
+    const up = a[1] === 'u';
+    const sx = up ? cx + L + 9 * side : cx + Math.round(L * 0.6) + 8 * side;
+    const syy = up ? sy + 1 : sy + 7;
+    S[a] = [sx, syy];
+    E[a] = [sx + r[armCh(a, 'ex')] * side, syy + r[armCh(a, 'ey')]];
+    H[a] = [sx + r[armCh(a, 'hx')] * side, syy + r[armCh(a, 'hy')]];
+  }
+  return { cx, hipY, sy, L, hcx: cx + L + Math.round(r.hx), hcy: sy - 9 + Math.round(r.hy), S, E, H };
+}
+
+// ---- Вторичное движение: рукава и вихры догоняют тело ------------------
+
+interface KSec {
+  /** Конец свисающего рукава от точки подвеса (верхние руки). */
+  ru: [number, number];
+  lu: [number, number];
+  /** Вихры: наклон и подъём. */
+  hs: number;
+  hl: number;
+}
+
+/** Сколько свисает рукав под предплечьем, px. */
+const DRAPE = 4;
+
+/** Где подвешен рукав: на предплечье у локтя (плюс общий ход кадра). */
+function hangOf(g: KGeo, r: KR, a: 'ru' | 'lu'): [number, number] {
+  const [sx, sy] = g.S[a];
+  const [ex, ey] = g.E[a];
+  return [sx + (ex - sx) * 0.75 + r.fdx, sy + (ey - sy) * 0.75 + 1 + r.fdy];
+}
+
+/**
+ * Пружина по прошлым позам: конец рукава и вихры отстают от тела и
+ * доигрывают после остановки. Считается от `t − 0,45 с` до `t` шагом 1/40 —
+ * кадр остаётся функцией времени (тот же t — те же пиксели).
+ */
+function kSecAt(at: (t: number) => KR, t: number, t0 = -1e9): KSec {
+  const start = Math.max(t0, t - 0.45);
+  const n = Math.max(1, Math.round((t - start) * 40));
+  const dt = (t - start) / n;
+  const r0 = at(start);
+  const g0 = kGeo(r0);
+  const pts = { ru: hangOf(g0, r0, 'ru'), lu: hangOf(g0, r0, 'lu') };
+  const st = {
+    ru: { x: pts.ru[0], y: pts.ru[1] + DRAPE, vx: 0, vy: 0 },
+    lu: { x: pts.lu[0], y: pts.lu[1] + DRAPE, vx: 0, vy: 0 },
+  };
+  const hd0: [number, number] = [g0.hcx + r0.fdx, g0.hcy + r0.fdy];
+  const hair = { x: hd0[0], y: hd0[1], vx: 0, vy: 0 };
+  let last: { g: KGeo; r: KR } = { g: g0, r: r0 };
+  for (let i = 1; i <= n; i++) {
+    const s = start + i * dt;
+    const r = at(s);
+    const g = kGeo(r);
+    last = { g, r };
+    for (const a of ['ru', 'lu'] as const) {
+      const [mx, my] = hangOf(g, r, a);
+      const q = st[a];
+      // Ткань: тянется к свисающему положению, гасится, не длиннее рукава.
+      const ax = 210 * (mx - q.x) - 15 * q.vx;
+      const ay = 210 * (my + DRAPE - q.y) - 15 * q.vy + 40;
+      q.vx += ax * dt;
+      q.vy += ay * dt;
+      q.x += q.vx * dt;
+      q.y += q.vy * dt;
+      const dx = q.x - mx;
+      const dy = q.y - my;
+      const d = Math.hypot(dx, dy);
+      if (d > 7) {
+        q.x = mx + (dx / d) * 7;
+        q.y = my + (dy / d) * 7;
+      }
+    }
+    const hx0 = g.hcx + r.fdx;
+    const hy0 = g.hcy + r.fdy;
+    const ax = 420 * (hx0 - hair.x) - 24 * hair.vx;
+    const ay = 420 * (hy0 - hair.y) - 24 * hair.vy;
+    hair.vx += ax * dt;
+    hair.vy += ay * dt;
+    hair.x += hair.vx * dt;
+    hair.y += hair.vy * dt;
+  }
+  const out: KSec = { ru: [0, DRAPE], lu: [0, DRAPE], hs: 0, hl: 0 };
+  for (const a of ['ru', 'lu'] as const) {
+    const [mx, my] = hangOf(last.g, last.r, a);
+    out[a] = [kc(st[a].x - mx, -6, 6), kc(st[a].y - my, -3, 7)];
+  }
+  const hx1 = last.g.hcx + last.r.fdx;
+  const hy1 = last.g.hcy + last.r.fdy;
+  out.hs = kc((hair.x - hx1) * 0.8, -2.5, 2.5);
+  out.hl = kc((hy1 - hair.y) * 0.6, -1.5, 2.5);
+  return out;
+}
+
+// ---- Рисунок тела ---------------------------------------------------------
+
+/** Что видно поверх позы: следы рук, разрез в воздухе, кромка, смерть. */
+interface KOpt {
+  /** Номер кадра — мерцание огня и ауры. */
+  fi: number;
+  edge: boolean;
+  rage: boolean;
+  sec: KSec;
+  /** Следы рук: точки от нового к старому, ширина, вид. */
+  smears: KSmear[];
+  /** Разрез в воздухе после взмаха. */
+  trail: KTrail | null;
+  /** Маску не рисовать (смерть — она падает отдельно). */
+  noMask?: boolean;
+  /** Время для звёзд (кружат плавно). */
+  st: number;
+}
+
+interface KSmear {
+  pts: [number, number][];
+  w: number;
+  kind: 'cut' | 'claw' | 'fire';
+}
+
+interface KTrail {
+  pts: [number, number][];
+  /** Разрыв когтями: несколько прямых борозд вместо дуги взмаха. */
+  tear?: [number, number, number, number][];
+  /** Сколько прошло после контакта, с. */
+  age: number;
+  /** Разрезов подряд и через сколько каждый. */
+  n: number;
+  gap: number;
+}
+
+/** Штанина хакама: отрезок полосой, шире книзу, складка по середине. */
+function kSeg(p: Px, x0: number, y0: number, x1: number, y1: number, w0: number, w1: number, bias: number): void {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const L = Math.hypot(dx, dy) || 1;
+  const nx = -dy / L;
+  const ny = dx / L;
+  polyShade(
+    p,
+    [
+      [x0 + nx * w0, y0 + ny * w0],
+      [x1 + nx * w1, y1 + ny * w1],
+      [x1 - nx * w1, y1 - ny * w1],
+      [x0 - nx * w0, y0 - ny * w0],
+    ],
+    K_HAK,
+    bias,
+  );
+}
+
+function kLegs(p: Px, g: KGeo, r: KR): void {
+  const legs: [number, number, number, number, number][] = [
+    [1, r.rkx, r.rky, r.rfx, r.rfy],
+    [-1, r.lkx, r.lky, r.lfx, r.lfy],
+  ];
+  // Сидит, скрестив ноги: левая голень ложится поверх правой.
+  for (const [side, kx0, ky0, fx0, fy0] of legs) {
+    const hx0 = g.cx + 5 * side;
+    const hy0 = g.hipY - 1;
+    const kx = g.cx + kx0;
+    const ky = KGY - ky0;
+    const fx = g.cx + fx0;
+    const fy = KGY - fy0;
+    const bias = side < 0 ? -0.05 : 0.05;
+    kSeg(p, hx0, hy0, kx, ky, 4.4, 4, bias);
+    kSeg(p, kx, ky, fx, fy - 1.5, 4, 4.8, bias);
+    shadeEll(p, kx, ky, 4, 4, K_HAK, bias - 0.05);
+    // Складка штанины — от пояса к подолу.
+    stroke(p, hx0 + side, hy0 + 3, kx + side * 0.5, ky, K_HAK[0], 1);
+    if (fy - ky > 3) stroke(p, kx + side * 0.5, ky, fx + side, fy - 3, K_HAK[0], 1);
+  }
+  for (const [side, , ky0, fx0, fy0] of legs) {
+    const fx = g.cx + fx0;
+    const fy = KGY - fy0;
+    // Босая ступня под подолом — только когда голень стоит.
+    if (fy0 < 2.5 && (KGY - ky0) < fy - 3) {
+      p.rect(Math.round(fx - 2.5), Math.round(fy - 1), Math.round(fx + 2.5), Math.round(fy), K_SKIN[1]);
+      p.set(Math.round(fx + 2.5 * side), Math.round(fy - 1), K_SKIN[2]);
+    }
+  }
+  // Сидит: подошвы поверх бёдер.
+  if (r.hip < 8)
+    for (const fx0 of [r.lfx, r.rfx]) {
+      const fx = Math.round(g.cx + fx0);
+      p.rect(fx - 1, KGY - 4, fx + 2, KGY - 3, K_SKIN[1]);
+      p.set(fx, KGY - 4, K_SKIN[2]);
+    }
+}
+
+function kTorso(p: Px, lit: Px, g: KGeo, r: KR): void {
+  const { cx, hipY, sy } = g;
+  const tl = cx + g.L;
+  polyShade(p, [[tl - 10, sy - 1], [tl + 10, sy - 1], [cx + 9, hipY], [cx - 9, hipY]], K_ROBE);
+  stroke(p, tl - 1, sy + 7, cx - 6, hipY - 1, K_ROBE[0], 1);
+  // Ворот буквой V: кожа и татуировка на груди.
+  const vx = tl + Math.round(r.tw * 1.5);
+  poly(p, [[vx - 4, sy - 1], [vx + 4, sy - 1], [vx, sy + 8]], K_SKIN[2]);
+  stroke(p, vx - 4, sy - 1, vx, sy + 8, K_OBI[2], 1);
+  stroke(p, vx + 4, sy - 1, vx, sy + 8, K_OBI[2], 1);
+  for (const x of [-2, -1, 1, 2]) p.set(vx + x, sy + 1, K_TAT);
+  p.set(vx, sy + 3, K_TAT);
+  // Пояс.
+  for (let y = hipY - 6; y <= hipY - 2; y++)
+    for (let x = cx - 9; x <= cx + 9; x++) p.set(x, y, y === hipY - 6 ? K_OBI[3] : y === hipY - 2 ? K_OBI[0] : K_OBI[1]);
+  kBelly(p, lit, cx, hipY - 4, r.belly, r.glow);
+  // Узел пояса.
+  const kx = cx + 6 + Math.round(r.tw);
+  p.rect(kx, hipY - 3, kx + 2, hipY + 2, K_OBI[2]);
+  p.set(kx + 1, hipY + 3, K_OBI[1]);
+}
+
+/** Рот на поясе: сомкнут (зубы видны) → раскрыт с языком и красным светом изнутри. */
+function kBelly(p: Px, lit: Px, cx: number, my: number, b: number, glow: number): void {
+  if (b >= 0.12 && b < 0.3) {
+    // Губы чуть разошлись: тёмная щель, зубы рядом.
+    for (let x = cx - 4; x <= cx + 4; x++) p.set(x, my, K_MOUTH);
+    for (let x = cx - 3; x <= cx + 3; x += 2) p.set(x, my, BONE[3]);
+    p.set(cx - 5, my - 1, K_TAT);
+    p.set(cx + 5, my - 1, K_TAT);
+    p.set(cx + 1, my + 1, K_TONGUE);
+    return;
+  }
+  if (b < 0.12) {
+    for (let x = cx - 4; x <= cx + 4; x++) p.set(x, my, K_TAT);
+    p.set(cx - 5, my - 1, K_TAT);
+    p.set(cx + 5, my - 1, K_TAT);
+    p.set(cx - 2, my + 1, BONE[2]);
+    p.set(cx + 2, my + 1, BONE[2]);
+    return;
+  }
+  const oh = 1 + Math.round(b * 4);
+  const top = my - Math.floor(oh / 2) - 1;
+  const bot = top + oh + 1;
+  for (let y = top; y <= bot; y++) {
+    const u = (y - (top + bot) / 2) / ((bot - top) / 2 + 0.6);
+    const hw = Math.round(5.5 * Math.sqrt(Math.max(0, 1 - u * u * 0.55)));
+    for (let x = cx - hw; x <= cx + hw; x++) {
+      const edge = y === top || y === bot;
+      let c: RGBA = edge ? K_TAT : y > bot - 2 && b > 0.5 && Math.abs(x - cx) < 3 ? K_TONGUE : y - top < 2 ? K_MOUTH : K_GUM;
+      // Зубы по губам: через пиксель.
+      if (y === top + 1 && (x + cx) % 2 === 0) c = BONE[3];
+      if (y === bot - 1 && (x + cx) % 2 === 1 && !(b > 0.5 && Math.abs(x - cx) < 3)) c = BONE[2];
+      p.set(x, y, c);
+    }
+  }
+  if (b > 0.3) {
+    const a = 0.35 + 0.45 * Math.min(1, glow);
+    for (let x = cx - 2; x <= cx + 2; x++) lit.set(x, my, alpha(hx('#ff3a4a'), a * (1 - Math.abs(x - cx) * 0.15)));
+    if (b > 0.7) lit.set(cx, my + 1, alpha(hx('#ff8a6a'), a));
+  }
+}
+
+const K_RIM = hx('#6a6358');
+const K_EDGE_INK = hx('#3a0610');
+
+/** Тень вокруг конечности — только там, где под ней уже что-то нарисовано. */
+function limbRim(p: Px, x0: number, y0: number, x1: number, y1: number, r0: number, r1: number, c: RGBA): void {
+  const minX = Math.floor(Math.min(x0 - r0, x1 - r1)) - 2;
+  const maxX = Math.ceil(Math.max(x0 + r0, x1 + r1)) + 2;
+  const minY = Math.floor(Math.min(y0 - r0, y1 - r1)) - 2;
+  const maxY = Math.ceil(Math.max(y0 + r0, y1 + r1)) + 2;
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const L2 = dx * dx + dy * dy || 1e-6;
+  for (let y = minY; y <= maxY; y++)
+    for (let x = minX; x <= maxX; x++) {
+      if (!p.solid(x, y)) continue;
+      const k = Math.max(0, Math.min(1, ((x + 0.5 - x0) * dx + (y + 0.5 - y0) * dy) / L2));
+      const d = Math.hypot(x + 0.5 - (x0 + dx * k), y + 0.5 - (y0 + dy * k));
+      if (d <= r0 + (r1 - r0) * k + 1) p.set(x, y, c);
+    }
+}
+
+/** Рука от плеча: рукав (у верхних), предплечье, татуировка, кисть нужного вида. */
+function kArm(p: Px, lit: Px, g: KGeo, r: KR, a: K4): void {
+  const [sx, sy] = g.S[a];
+  const [ex, ey] = g.E[a];
+  const [hx0, hy0] = g.H[a];
+  const up = a[1] === 'u';
+  const k = r[armCh(a, 'k')];
+  // Внутренний контур: где рука лежит на теле, её обводит тень — руки не
+  // сливаются с кимоно и друг с другом (скрещённые читаются крестом).
+  if (up) {
+    limbRim(p, sx, sy, ex, ey, 3.3, 2.8, K_RIM);
+    limbRim(p, ex, ey, hx0, hy0, 1.6, 1.3, K_SKIN[0]);
     limb(p, sx, sy, ex, ey, 3.3, 2.8, K_ROBE);
     limb(p, ex, ey, hx0, hy0, 1.6, 1.3, K_SKIN);
   } else {
+    limbRim(p, sx, sy, ex, ey, 1.9, 1.6, K_SKIN[0]);
+    limbRim(p, ex, ey, hx0, hy0, 1.6, 1.25, K_SKIN[0]);
     limb(p, sx, sy, ex, ey, 1.9, 1.6, K_SKIN, -0.05);
     limb(p, ex, ey, hx0, hy0, 1.6, 1.25, K_SKIN, -0.05);
   }
-  // Полосы татуировки у запястья.
   const dx = hx0 - ex;
   const dy = hy0 - ey;
   const L = Math.hypot(dx, dy) || 1;
-  for (const u of [0.55, 0.72]) {
+  const nx = dx / L;
+  const ny = dy / L;
+  for (const u of up ? [0.55, 0.72] : [0.6]) {
     const bx = ex + dx * u;
     const by = ey + dy * u;
-    p.set(bx - (dy / L) * 1.2, by + (dx / L) * 1.2, K_TAT);
+    p.set(bx - ny * 1.2, by + nx * 1.2, K_TAT);
     p.set(bx, by, K_TAT);
-    p.set(bx + (dy / L) * 1.2, by - (dx / L) * 1.2, K_TAT);
+    p.set(bx + ny * 1.2, by - nx * 1.2, K_TAT);
   }
-  shadeEll(p, hx0, hy0, 1.7, 1.7, K_SKIN, 0.1);
-  if (claw)
-    for (let i = -1; i <= 1; i++) {
-      const nx = dx / L;
-      const ny = dy / L;
-      const ox = hx0 + nx * 1.4 - ny * i * 1.2;
-      const oy = hy0 + ny * 1.4 + nx * i * 1.2;
-      stroke(p, ox, oy, ox + nx * 3, oy + ny * 3, hx('#2a0a10'), 1);
-      p.set(ox + nx * 3, oy + ny * 3, hx('#ff5a6a'));
+  switch (k) {
+    case HK.sign:
+      return;
+    case HK.fist:
+    case HK.grip:
+      shadeEll(p, hx0, hy0, 1.9, 1.8, K_SKIN, 0.05);
+      p.set(hx0 + nx * 1.2, hy0 + ny * 1.2, K_SKIN[0]);
+      return;
+    case HK.palm:
+      shadeEll(p, hx0 + nx * 0.6, hy0 + ny * 0.6, 2.3, 1.4, K_SKIN, 0.1);
+      return;
+    case HK.claw: {
+      shadeEll(p, hx0, hy0, 1.7, 1.7, K_SKIN, 0.1);
+      for (let i = -1; i <= 1; i++) {
+        const ox = hx0 + nx * 1.4 - ny * i * 1.2;
+        const oy = hy0 + ny * 1.4 + nx * i * 1.2;
+        stroke(p, ox, oy, ox + nx * 3, oy + ny * 3, hx('#2a0a10'), 1);
+        p.set(ox + nx * 3, oy + ny * 3, hx('#ff5a6a'));
+        if (r.claw > 0.05) lit.set(ox + nx * 3, oy + ny * 3, alpha(K_PINK, 0.4 + 0.6 * r.claw));
+      }
+      return;
     }
-  return [hx0, hy0];
+    case HK.two: {
+      shadeEll(p, hx0, hy0, 1.7, 1.7, K_SKIN, 0.1);
+      // Указательный и средний: у верхних — продолжение предплечья (ведут
+      // взмах), у нижних — вверх (знак у живота).
+      const fx = up ? nx : 0;
+      const fy = up ? ny : -1;
+      for (const j of [-0.55, 0.55]) {
+        const ox = hx0 + fx * 1.2 - fy * j;
+        const oy = hy0 + fy * 1.2 + fx * j;
+        stroke(p, ox, oy, ox + fx * 3.2, oy + fy * 3.2, K_SKIN[2], 1);
+      }
+      p.set(hx0 + fx * 4.4, hy0 + fy * 4.4, K_SKIN[3]);
+      if (r.fing > 0.02 && up) {
+        const tx = Math.round(hx0 + nx * 4.6);
+        const ty = Math.round(hy0 + ny * 4.6);
+        const rad = r.fing > 0.66 ? 2 : 1;
+        glowDot(lit, tx, ty, r.fing > 0.85 ? K_PINK : K_EYE, rad);
+        if (r.fing > 0.85) {
+          // Накал: искры по кругу у кончика.
+          for (let i = 0; i < 3; i++) {
+            const an = (i / 3) * TAU + r.fing * 9;
+            lit.set(tx + Math.round(Math.cos(an) * 3), ty + Math.round(Math.sin(an) * 3), alpha(WHITE, 0.8));
+          }
+        }
+      }
+      return;
+    }
+    default:
+      shadeEll(p, hx0, hy0, 1.7, 1.7, K_SKIN, 0.1);
+  }
 }
 
-function drawKing(kp: KingPose): Built {
-  const W = 56;
-  const p = new Px(W, 68);
-  const G = 64;
-  const cx = 28;
-  const hipY = (kp.body === 'stand' ? G - 16 : kp.body === 'kneel' ? G - 9 : G - 5) + kp.bob;
-  const sy = hipY - 21;
-  const headY = sy - 9;
-  const hxc = cx + kp.tilt;
-  // Ноги: хакама.
-  if (kp.body === 'stand') {
-    const s = kp.step;
-    polyShade(p, [[cx - 9, hipY - 2], [cx - 1, hipY - 2], [cx - 3 + s * 2, G - 2], [cx - 12 + s * 2, G - 2]], K_HAK, -0.05);
-    polyShade(p, [[cx + 1, hipY - 2], [cx + 9, hipY - 2], [cx + 12 - s * 2, G - 2], [cx + 3 - s * 2, G - 2]], K_HAK, 0.05);
-    // Складки.
-    stroke(p, cx - 5, hipY + 2, cx - 7 + s * 2, G - 4, K_HAK[0], 1);
-    stroke(p, cx + 5, hipY + 2, cx + 7 - s * 2, G - 4, K_HAK[0], 1);
-    // Босые ступни.
-    p.rect(cx - 10 + s * 2, G - 2, cx - 5 + s * 2, G - 1, K_SKIN[1]);
-    p.rect(cx + 5 - s * 2, G - 2, cx + 10 - s * 2, G - 1, K_SKIN[1]);
-  } else if (kp.body === 'sit') {
-    // Скрещённые ноги: широкий подол на полу.
-    shadeEll(p, cx, G - 4, 15, 4.5, K_HAK);
-    stroke(p, cx - 9, G - 4, cx + 9, G - 3, K_HAK[0], 1);
-    p.rect(cx - 12, G - 3, cx - 9, G - 2, K_SKIN[1]);
-    p.rect(cx + 9, G - 3, cx + 12, G - 2, K_SKIN[1]);
-  } else {
-    // На одном колене.
-    shadeEll(p, cx - 3, G - 4, 11, 4, K_HAK);
-    polyShade(p, [[cx + 2, hipY - 2], [cx + 10, hipY - 2], [cx + 12, G - 3], [cx + 5, G - 3]], K_HAK, 0.05);
-    p.rect(cx + 5, G - 2, cx + 11, G - 1, K_SKIN[1]);
-  }
-  // Кимоно.
-  polyShade(p, [[cx - 10, sy - 1], [cx + 10, sy - 1], [cx + 9, hipY], [cx - 9, hipY]], K_ROBE);
-  stroke(p, cx - 1, sy + 7, cx - 6, hipY - 1, K_ROBE[0], 1);
-  // Ворот буквой V: кожа и тату на груди.
-  poly(p, [[cx - 4, sy - 1], [cx + 4, sy - 1], [cx, sy + 8]], K_SKIN[2]);
-  stroke(p, cx - 4, sy - 1, cx, sy + 8, K_OBI[2], 1);
-  stroke(p, cx + 4, sy - 1, cx, sy + 8, K_OBI[2], 1);
-  p.set(cx - 2, sy + 1, K_TAT);
-  p.set(cx - 1, sy + 1, K_TAT);
-  p.set(cx + 1, sy + 1, K_TAT);
-  p.set(cx + 2, sy + 1, K_TAT);
-  p.set(cx, sy + 3, K_TAT);
-  // Пояс и рот на нём.
-  for (let y = hipY - 6; y <= hipY - 2; y++)
-    for (let x = cx - 9; x <= cx + 9; x++) p.set(x, y, y === hipY - 6 ? K_OBI[3] : y === hipY - 2 ? K_OBI[0] : K_OBI[1]);
-  if (kp.belly) {
-    for (let x = cx - 5; x <= cx + 5; x++) for (let y = hipY - 5; y <= hipY - 3; y++) p.set(x, y, y === hipY - 4 ? hx('#ff3a4a') : hx('#8a0a18'));
-    for (let x = cx - 5; x <= cx + 5; x += 2) {
-      p.set(x, hipY - 5, BONE[3]);
-      p.set(x + 1, hipY - 3, BONE[3]);
+/** Рукав-фурисодэ: свисает под предплечьем и отстаёт от руки. */
+function kDrape(p: Px, g: KGeo, r: KR, a: 'ru' | 'lu', d: [number, number]): void {
+  const [mx, my] = hangOf(g, r, a);
+  const x0 = mx - r.fdx;
+  const y0 = my - r.fdy;
+  const x1 = x0 + d[0];
+  const y1 = y0 + d[1];
+  limbRim(p, x0, y0, x1, y1, 2.5, 2, K_RIM);
+  limb(p, x0, y0, x1, y1, 2.5, 2, K_ROBE, -0.08);
+  // Край рукава — тень.
+  p.set(x1 + (d[0] > 0 ? 1 : -1), y1 + 1, K_ROBE[0]);
+  p.set(x1, y1 + 2, K_ROBE[0]);
+}
+
+/** Знак храма: сцепленные кисти, два пальца вверх; нижние — кулак в ладони. */
+function kSignHands(p: Px, lit: Px, g: KGeo, r: KR, fi: number): void {
+  if (r.ruk === HK.sign && r.luk === HK.sign) {
+    const x = Math.round((g.H.ru[0] + g.H.lu[0]) / 2);
+    const y = Math.round((g.H.ru[1] + g.H.lu[1]) / 2);
+    // Ладони сложены стоймя, пальцы сцеплены, два пальца вверх.
+    limbRim(p, x, y - 4, x, y + 1, 2.6, 2.6, K_SKIN[0]);
+    shadeEll(p, x - 1, y, 1.9, 2.7, K_SKIN, 0.12);
+    shadeEll(p, x + 1, y, 1.9, 2.7, K_SKIN, -0.05);
+    stroke(p, x, y - 1, x, y + 2, K_SKIN[0], 1);
+    for (const dx of [-2, 2]) p.set(x + dx, y - 1, K_TAT);
+    p.set(x - 2, y + 1, K_SKIN[0]);
+    p.set(x + 2, y + 1, K_SKIN[0]);
+    stroke(p, x - 1, y - 3, x - 1, y - 7, K_SKIN[2], 1);
+    stroke(p, x, y - 3, x, y - 7, K_SKIN[1], 1);
+    p.set(x - 1, y - 8, K_SKIN[3]);
+    if (r.sign > 0.02) {
+      const R = 2.5 + r.sign * 2.5;
+      for (let i = 0; i < 8; i++) {
+        const an = (i / 8) * TAU + fi * 0.26;
+        lit.set(x + Math.cos(an) * R, y - 3 + Math.sin(an) * R * 0.8, alpha(K_GHOST, 0.5 + 0.45 * r.sign));
+      }
+      glowDot(lit, x - 1, y - 8, K_GHOST, r.sign > 0.6 ? 2 : 1);
     }
-  } else {
-    for (let x = cx - 4; x <= cx + 4; x++) p.set(x, hipY - 4, K_TAT);
-    p.set(cx - 5, hipY - 5, K_TAT);
-    p.set(cx + 5, hipY - 5, K_TAT);
-    p.set(cx - 2, hipY - 3, BONE[2]);
-    p.set(cx + 2, hipY - 3, BONE[2]);
+  } else if (r.ruk === HK.sign || r.luk === HK.sign) {
+    const a = r.ruk === HK.sign ? 'ru' : 'lu';
+    shadeEll(p, g.H[a][0], g.H[a][1], 1.8, 1.8, K_SKIN, 0.05);
   }
-  // Узел пояса.
-  p.rect(cx + 6, hipY - 3, cx + 8, hipY + 2, K_OBI[2]);
-  p.set(cx + 7, hipY + 3, K_OBI[1]);
-  // Руки: нижние, потом верхние.
-  const claw = kp.fx === 'claw';
-  const rl = kingArm(p, cx + 8, sy + 7, 1, kp.rl, false, claw);
-  const ll = kingArm(p, cx - 8, sy + 7, -1, kp.ll, false, claw);
-  const ru = kingArm(p, cx + 9, sy + 1, 1, kp.ru, true, claw);
-  const lu = kingArm(p, cx - 9, sy + 1, -1, kp.lu, true, claw);
-  // Шея и голова.
-  p.rect(hxc - 2, headY + 5, hxc + 2, sy, K_SKIN[1]);
+  if (r.rlk === HK.sign && r.llk === HK.sign) {
+    const x = Math.round((g.H.rl[0] + g.H.ll[0]) / 2);
+    const y = Math.round((g.H.rl[1] + g.H.ll[1]) / 2);
+    shadeEll(p, x, y, 2.8, 2, K_SKIN, 0);
+    p.set(x - 1, y, K_SKIN[0]);
+    p.set(x + 1, y, K_SKIN[0]);
+    if (r.sign > 0.3) glowDot(lit, x, y, K_GHOST, 1);
+  } else if (r.rlk === HK.sign || r.llk === HK.sign) {
+    const a = r.rlk === HK.sign ? 'rl' : 'll';
+    shadeEll(p, g.H[a][0], g.H[a][1], 1.8, 1.8, K_SKIN, 0.05);
+  }
+  if (r.click > 0.02) {
+    // Щелчок знака: вспышка и кольцо в сцепленных руках.
+    let n = 0;
+    let x = 0;
+    let y = 0;
+    for (const a of K4S)
+      if (r[armCh(a, 'k')] === HK.sign) {
+        x += g.H[a][0];
+        y += g.H[a][1];
+        n++;
+      }
+    if (n) {
+      x = Math.round(x / n);
+      y = Math.round(y / n);
+      glowDot(lit, x, y, K_PINK, 1 + Math.round(r.click * 2));
+      const R = 3 + (1 - r.click) * 6;
+      for (let i = 0; i < 10; i++) {
+        const an = (i / 10) * TAU;
+        lit.set(x + Math.cos(an) * R, y + Math.sin(an) * R * 0.8, alpha(WHITE, r.click * 0.9));
+      }
+    }
+  }
+}
+
+/** Голова: шея, лицо, вихры, татуировка, глаза, рот; маска — второе лицо. */
+function kHead(p: Px, lit: Px, g: KGeo, r: KR, o: KOpt): void {
+  const hxc = g.hcx;
+  const headY = g.hcy;
+  const lk = Math.round(r.look);
+  const nd = Math.round(r.nod);
+  p.rect(hxc - 2, headY + 5, hxc + 2, g.sy, K_SKIN[1]);
   shadeEll(p, hxc, headY, 5.2, 6, K_SKIN);
-  // Вихры: шапка до бровей, зубцы вверх и в стороны, виски.
+  // Вихры: шапка до бровей, зубцы вверх и в стороны — гнутся отставая.
   p.ell(hxc, headY - 4, 6.2, 3.6, (x, y) =>
     tone(K_HAIR, ((x + 0.5 - hxc) / 6.2) * LX + ((y + 0.5 - (headY - 4)) / 3.6) * LY + 0.5),
   );
+  const hs = o.sec.hs;
+  const hl = o.sec.hl;
   for (let i = -3; i <= 3; i++) {
     const bx = hxc + i * 2;
-    const tip = headY - 10 - (i % 2 === 0 ? 2 : 0) - (i === 0 ? 1 : 0);
-    polyShade(p, [[bx - 1.6, headY - 5], [bx + 1.6, headY - 5], [bx + i * 1.1, tip]], K_HAIR, 0.1);
+    const tip = headY - 10 - (i % 2 === 0 ? 2 : 0) - (i === 0 ? 1 : 0) - hl * (0.6 + Math.abs(i) * 0.1);
+    const tx = bx + i * 1.1 + hs * (0.5 + Math.abs(i) * 0.15);
+    polyShade(p, [[bx - 1.6, headY - 5], [bx + 1.6, headY - 5], [tx, tip]], K_HAIR, 0.1);
   }
-  for (const sx of [-1, 1]) {
-    p.set(hxc + sx * 5, headY - 2, K_HAIR[1]);
-    p.set(hxc + sx * 5, headY - 1, K_HAIR[0]);
+  for (const s of [-1, 1]) {
+    p.set(hxc + s * 5, headY - 2, K_HAIR[1]);
+    p.set(hxc + s * 5, headY - 1, K_HAIR[0]);
   }
-  // Лоб: чёрная полоса татуировки под чёлкой.
-  for (let x = hxc - 3; x <= hxc + 3; x++) p.set(x, headY - 2, x === hxc ? K_SKIN[2] : K_TAT);
-  // Глаза: косые, красные, с тяжёлым веком; под ними — вторая пара.
-  const eyeC = kp.glow > 0.8 ? hx('#ff6a70') : K_EYE;
-  for (const sx of [-1, 1]) {
-    const ex = hxc + sx * 2;
-    p.set(ex, headY, eyeC);
-    p.set(ex + sx, headY, K_TAT);
-    p.set(ex, headY - 1, K_TAT);
-    p.set(ex - sx, headY - 1, K_TAT);
-    p.set(ex + sx, headY + 1, hx('#b01020'));
-    // Полосы на скулах.
-    p.set(hxc + sx * 4, headY + 2, K_TAT);
-    p.set(hxc + sx * 5, headY + 2, K_TAT);
-    p.set(hxc + sx * 4, headY + 3, K_TAT);
+  // Лоб: чёрная полоса под чёлкой.
+  for (let x = hxc - 3; x <= hxc + 3; x++) p.set(x + lk, headY - 2 + nd, x === hxc ? K_SKIN[2] : K_TAT);
+  // Глаза: косые, красные, тяжёлое веко; под ними — вторая пара.
+  const eyeC = r.glow > 0.8 || r.eyes > 2.5 ? hx('#ff6a70') : K_EYE;
+  for (const s of [-1, 1]) {
+    const ex = hxc + s * 2 + lk;
+    const ey = headY + nd;
+    if (r.eyes < 0.5) {
+      p.set(ex, ey, K_TAT);
+      p.set(ex + s, ey, K_TAT);
+      p.set(ex - s, ey, K_TAT);
+    } else {
+      p.set(ex, ey, eyeC);
+      p.set(ex + s, ey, K_TAT);
+      p.set(ex, ey - 1, K_TAT);
+      p.set(ex - s, ey - 1, K_TAT);
+      if (r.eyes > 1.5) p.set(ex - s, ey, eyeC);
+    }
+    p.set(ex + s, ey + 1, r.eyes > 2.5 ? hx('#ff3040') : hx('#b01020'));
+    p.set(hxc + s * 4, headY + 2, K_TAT);
+    p.set(hxc + s * 5, headY + 2, K_TAT);
+    p.set(hxc + s * 4, headY + 3, K_TAT);
+    if (r.eyes > 0.5 && r.glow > 0.5) {
+      lit.set(ex, ey, eyeC);
+      if (r.eyes > 1.5) lit.set(ex - s, ey, alpha(eyeC, 0.85));
+    }
   }
-  if (kp.roar) {
-    p.rect(hxc - 2, headY + 3, hxc + 2, headY + 5, hx('#5a0a12'));
-    for (const x of [hxc - 2, hxc, hxc + 2]) p.set(x, headY + 3, BONE[3]);
-    p.set(hxc - 1, headY + 5, BONE[2]);
-    p.set(hxc + 1, headY + 5, BONE[2]);
+  if (r.eyes > 0.5 && (r.glow > 0.8 || r.eyes > 2.5))
+    for (const s of [-1, 1]) glowDot(lit, hxc + s * 2 + lk, headY + nd, K_EYE, r.eyes > 2.5 ? 2 : 1);
+  // Рот: ухмылка → оскал зубами → рёв.
+  const my = headY + 3 + nd;
+  const mx = hxc + lk;
+  if (r.jaw < 0.25) {
+    for (let x = mx - 2; x <= mx + 1; x++) p.set(x, my + 1, K_TAT);
+    p.set(mx + 2, my, K_TAT);
+  } else if (r.jaw < 0.62) {
+    for (let x = mx - 2; x <= mx + 2; x++) {
+      p.set(x, my, K_TAT);
+      p.set(x, my + 1, x % 2 ? BONE[2] : BONE[3]);
+      p.set(x, my + 2, K_TAT);
+    }
+    p.set(mx - 3, my, K_TAT);
+    p.set(mx + 3, my, K_TAT);
   } else {
-    for (let x = hxc - 2; x <= hxc + 1; x++) p.set(x, headY + 4, K_TAT);
-    p.set(hxc + 2, headY + 3, K_TAT);
+    const h = r.jaw > 0.9 ? 3 : 2;
+    p.rect(mx - 2, my, mx + 2, my + h, K_MOUTH);
+    for (const x of [mx - 2, mx, mx + 2]) p.set(x, my, BONE[3]);
+    p.set(mx - 1, my + h, BONE[2]);
+    p.set(mx + 1, my + h, BONE[2]);
+    if (r.glow > 0.8) lit.set(mx, my + 1, alpha(hx('#ff4a3a'), 0.6));
   }
-  // Второе лицо — костяная маска, наросшая на щеку: свой глаз и зубы.
-  const mcx = hxc - 6;
-  shadeEll(p, mcx, headY + 0.8, 2.8, 4, K_MASK, 0.05);
-  p.set(mcx + 2, headY - 2, K_MASK[1]);
+  if (!o.noMask) kMask(p, lit, hxc - 6 + Math.round(r.look * 0.5), headY + 0.8 + nd * 0.5, r);
+}
+
+/** Маска — второе лицо: свой глаз, свои зубы, трещины после храма. */
+function kMask(p: Px, lit: Px, mcx: number, my: number, r: KR): void {
+  shadeEll(p, mcx, my, 2.8, 4, K_MASK, 0.05);
   const mx = Math.round(mcx);
-  if (kp.face2) {
-    p.set(mx, headY, hx('#ffb040'));
-    p.set(mx - 1, headY, K_EYE);
-    p.set(mx, headY - 1, K_TAT);
-    p.set(mx - 1, headY + 1, K_TAT);
+  const ey = Math.round(my - 0.8);
+  p.set(mx + 2, ey - 2, K_MASK[1]);
+  if (r.m2 > 0.66) {
+    p.set(mx, ey, hx('#ffb040'));
+    p.set(mx - 1, ey, K_EYE);
+    p.set(mx, ey - 1, K_TAT);
+    p.set(mx - 1, ey + 1, K_TAT);
+    lit.set(mx, ey, hx('#ffb040'));
+    lit.set(mx - 1, ey, alpha(K_EYE, 0.8));
+    if (r.glow > 0.5) glowDot(lit, mx, ey, hx('#ff8a40'), r.m2 > 1.2 ? 2 : 1);
+  } else if (r.m2 > 0.25) {
+    // Приоткрыт: щёлочка света.
+    p.set(mx - 1, ey, K_TAT);
+    p.set(mx, ey, hx('#ff8a40'));
+    p.set(mx + 1, ey + 1, K_MASK[0]);
+    lit.set(mx, ey, alpha(hx('#ffb040'), 0.8));
   } else {
-    p.set(mx - 1, headY, K_TAT);
-    p.set(mx, headY, K_TAT);
-    p.set(mx + 1, headY + 1, K_MASK[0]);
+    p.set(mx - 1, ey, K_TAT);
+    p.set(mx, ey, K_TAT);
+    p.set(mx + 1, ey + 1, K_MASK[0]);
   }
-  for (let x = mx - 2; x <= mx + 1; x++) p.set(x, headY + 3, x % 2 ? BONE[3] : K_TAT);
-  p.set(mx - 1, headY + 4, K_TAT);
-  p.outline(kp.ghost ? hx('#3a0610') : INK);
-  // Приёмы — поверх контура: свет не обводится тушью.
-  if (kp.fx === 'cut0') {
-    // Два пальца вверх — блик.
-    p.set(ru[0], ru[1] - 2, WHITE);
-    p.set(ru[0] + 1, ru[1] - 3, hx('#ffd0d0'));
-    glowDot(p, ru[0], ru[1] - 3, hx('#ff5060'), 2);
+  // Зубы маски: сомкнуты или разведены оскалом.
+  const ty = ey + 3;
+  const gap = Math.round(r.mjaw * 2);
+  for (let x = mx - 2; x <= mx + 1; x++) p.set(x, ty, x % 2 ? BONE[3] : K_TAT);
+  if (gap > 0) {
+    for (let x = mx - 2; x <= mx + 1; x++) {
+      p.set(x, ty + 1, K_MOUTH);
+      if (gap > 1) p.set(x, ty + 2, x % 2 ? K_TAT : BONE[2]);
+    }
+    if (r.glow > 0.7) lit.set(mx - 1, ty + 1, alpha(hx('#ff6a30'), 0.55));
+  } else p.set(mx - 1, ty + 1, K_TAT);
+  // Трещины: ступень 1 — шов, 2 — ветка, 3 — скол.
+  if (r.crack >= 1) {
+    p.set(mx + 1, ey - 3, K_TAT);
+    p.set(mx + 1, ey - 2, K_TAT);
+    p.set(mx, ey - 1, K_TAT);
   }
-  if (kp.fx === 'cut1')
-    for (let i = 0; i < 3; i++) {
-      const ox = ru[0] - 9 + i * 3;
-      stroke(p, ox, ru[1] - 13 + i, ox + 8, ru[1] + 2 + i, alpha(i ? hx('#ffb0b8') : WHITE, 0.9 - i * 0.25), 1);
-    }
-  if (kp.fx === 'bow') {
-    // Лук из пламени в передней руке: дуга выгнута вперёд, тетива — к задней
-    // руке, стрела горит.
-    const bx = ru[0];
-    const by = ru[1];
-    const pull = lu[0] - 3 * kp.draw;
-    for (let i = -9; i <= 9; i++) {
-      const x = bx + 3.6 * Math.cos((i / 9) * (Math.PI / 2));
-      const c = FIRE[Math.abs(i) < 4 ? 3 : 1 + ((i + kp.f) & 1)];
-      p.set(x, by + i, c);
-      p.set(x + 1, by + i, FIRE[1]);
-    }
-    stroke(p, bx, by - 9, pull, lu[1], alpha(hx('#ffe0a0'), 0.7), 1);
-    stroke(p, bx, by + 9, pull, lu[1], alpha(hx('#ffe0a0'), 0.7), 1);
-    stroke(p, pull, lu[1], bx + 7, by, FIRE[3], 1);
-    flame(p, bx + 8, by + 2, 4, 5, kp.f, FIRE, 2);
-    glowDot(p, bx + 8, by, FIRE[2], 2);
+  if (r.crack >= 2) {
+    p.set(mx - 1, ey + 1, K_TAT);
+    p.set(mx - 2, ey + 2, K_TAT);
+    p.set(mx + 2, ey + 1, K_TAT);
   }
-  if (kp.fx === 'pyre')
-    for (const [x, y] of [ru, lu, rl, ll]) {
-      flame(p, x, y - 1, 4, 7, kp.f, FIRE, x);
-      glowDot(p, Math.round(x), Math.round(y - 3), FIRE[2], 1);
-    }
-  if (kp.fx === 'sign') {
-    // Знак храма в сложенных руках.
-    const gx = cx;
-    const gy = Math.round((ru[1] + rl[1]) / 2);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * TAU + kp.f * 0.6;
-      p.set(gx + Math.cos(a) * 3, gy + Math.sin(a) * 2, alpha(K_GHOST, 0.9));
-    }
-    glowDot(p, gx, gy, K_GHOST, 2);
+  if (r.crack >= 3) {
+    clr(p, mx - 3, ey - 2);
+    clr(p, mx - 2, ey - 3);
+    p.set(mx - 2, ey - 2, K_MASK[0]);
   }
-  // Аура: язычки проклятого пламени по кругу у пола.
-  if (kp.aura > 0)
-    for (let i = 0; i < 14; i++) {
-      if (hash(i, 3) > kp.aura) continue;
-      const a = (i / 14) * TAU + kp.f * 0.45;
-      const x = Math.round(cx + Math.cos(a) * 20);
-      const y = Math.round(G - 6 + Math.sin(a) * 6);
-      const hgt = 2 + ((i + kp.f) % 3);
-      for (let k = 0; k < hgt; k++) p.set(x, y - k, alpha(k === hgt - 1 ? hx('#ffb0c8') : K_GHOST, 0.85 - k * 0.15));
+  if (r.mb > 0.02) {
+    // Глаз маски распахнулся: вспышка.
+    glowDot(lit, mx, ey, hx('#ffb040'), 2 + Math.round(r.mb * 2));
+    for (let i = 0; i < 6; i++) {
+      const an = (i / 6) * TAU;
+      const d = 3 + r.mb * 4;
+      lit.set(mx + Math.cos(an) * d, ey + Math.sin(an) * d, alpha(hx('#ffd080'), 0.9 * r.mb));
     }
-  if (kp.ghost)
-    // Проклятая кромка: недосягаем, пока светится (через пиксель — не шум).
-    for (let y = 1; y < p.h - 1; y++)
-      for (let x = 1; x < p.w - 1; x++) {
-        if (p.solid(x, y) || (x + y + kp.f) % 2) continue;
-        if (p.solid(x - 1, y) || p.solid(x + 1, y) || p.solid(x, y - 1)) p.set(x, y, alpha(K_GHOST, 0.55));
+  }
+}
+
+/** Аура — язычки проклятого пламени по кругу у пола; задние — за телом. */
+const K_CFIRE = [hx('#5a0a1e'), hx('#c0143a'), hx('#ff3a64'), hx('#ffd0dc')];
+
+/** Язык проклятого пламени: основание шире, сердцевина светлее, верх качается. */
+function kTongue(dst: Px, cx: number, by: number, h: number, f: number, seed: number, mask: Px | null, a: number): void {
+  for (let y = 0; y < h; y++) {
+    const k = y / h;
+    const half = 1.5 * (1 - k * k) + 0.15;
+    const sway = Math.round(Math.sin(k * 3 + f * 0.9 + seed) * k * 1.4);
+    for (let x = -1; x <= 1; x++) {
+      if (Math.abs(x) > half) continue;
+      const hot = 1 - Math.max(Math.abs(x) / (half + 0.6), k);
+      const c = hot > 0.6 ? K_CFIRE[3] : hot > 0.36 ? K_CFIRE[2] : hot > 0.14 ? K_CFIRE[1] : K_CFIRE[0];
+      const px = cx + x + sway;
+      const py = by - y;
+      if (mask && mask.solid(px, py)) continue;
+      dst.set(px, py, alpha(c, a));
+    }
+  }
+}
+
+/**
+ * Аура — язычки проклятого пламени по кругу у пола. Задние рисуются после
+ * контура только в пустоте (за телом, без обводки), передние — в свете.
+ */
+function kAura(p: Px, lit: Px, g: KGeo, r: KR, fi: number, back: boolean): void {
+  const k = Math.min(1, r.aura + r.flare);
+  if (k <= 0.05) return;
+  const R = 19 + r.flare * 4;
+  for (let i = 0; i < 14; i++) {
+    if (hash(i, 3) > k) continue;
+    const a = (i / 14) * TAU + fi * 0.13;
+    const isBack = Math.sin(a) < 0;
+    if (isBack !== back) continue;
+    const x = Math.round(g.cx + Math.cos(a) * R);
+    const y = Math.round(KGY - 2 + Math.sin(a) * 5);
+    const hgt = 4 + ((i * 7 + (fi >> 1)) % 3) + Math.round(r.flare * 3);
+    if (back) kTongue(p, x, y, hgt, fi, i, p, 0.75);
+    else kTongue(lit, x, y, hgt, fi, i, null, 0.95);
+  }
+}
+
+/** Следы: лента от нового к старому — белая сердцевина, багровый край. */
+function kSmearDraw(lit: Px, s: KSmear): void {
+  const n = s.pts.length;
+  if (n < 2) return;
+  const pal = s.kind === 'fire' ? [hx('#fff0a0'), hx('#ffa030'), hx('#e05010'), hx('#8a1a06')] : K_CUT;
+  for (let pass = 0; pass < 2; pass++)
+    for (let i = n - 1; i > 0; i--) {
+      const [x0, y0] = s.pts[i - 1];
+      const [x1, y1] = s.pts[i];
+      const k = (i - 1) / (n - 1);
+      const w = Math.max(1, s.w * (1 - k * 0.7));
+      if (s.kind === 'claw') {
+        // Три борозды когтей.
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        const L = Math.hypot(dx, dy) || 1;
+        const nx = -dy / L;
+        const ny = dx / L;
+        if (pass) continue;
+        for (const j of [-2, 0, 2]) {
+          const c = k < 0.25 ? pal[0] : k < 0.55 ? pal[1] : alpha(pal[2], 0.9 - k * 0.6);
+          stroke(lit, x0 + nx * j, y0 + ny * j, x1 + nx * j, y1 + ny * j, c, 1);
+        }
+        continue;
       }
-  if (kp.glow > 0.5) glowDot(p, hxc + 2, headY, K_EYE, 1);
-  if (kp.face2 && kp.glow > 0.5) glowDot(p, mx, headY, hx('#ff8a40'), 1);
-  if (kp.stars) stars(p, hxc, headY - 13, 7, kp.f & 3);
-  return { p, ax: cx, ay: G, eye: [hxc + 2, headY] };
+      if (pass === 0) stroke(lit, x0, y0, x1, y1, alpha(k < 0.5 ? pal[2] : pal[3], 0.9 - k * 0.55), w + 1);
+      else if (k < 0.55) stroke(lit, x0, y0, x1, y1, k < 0.2 ? pal[0] : pal[1], Math.max(1, w - 1));
+    }
+}
+
+/** Разрез в воздухе: тонкая нить по пути взмаха, расходится надвое и гаснет. */
+function kTrailDraw(lit: Px, tr: KTrail): void {
+  if (tr.tear) {
+    // Крест когтями: по три борозды на линию, расходятся, осыпаются, гаснут.
+    const age = tr.age;
+    if (age < 0 || age > 0.26) return;
+    const a = 1 - age / 0.26;
+    for (const [x0, y0, x1, y1] of tr.tear) {
+      const L = Math.hypot(x1 - x0, y1 - y0) || 1;
+      const nx = -(y1 - y0) / L;
+      const ny = (x1 - x0) / L;
+      const sp = 2 + age * 8;
+      for (const j of [-1, 0, 1]) {
+        const c = age < 0.03 && j === 0 ? WHITE : j === 0 ? K_CUT[1] : K_CUT[2];
+        // Борозда чуть выгнута — коготь идёт дугой.
+        let px0 = x0 + nx * j * sp;
+        let py0 = y0 + ny * j * sp;
+        for (let i = 1; i <= 8; i++) {
+          const u = i / 8;
+          const bow = Math.sin(u * Math.PI) * 2;
+          const px1 = x0 + (x1 - x0) * u + nx * (j * sp + bow);
+          const py1 = y0 + (y1 - y0) * u + ny * (j * sp + bow);
+          stroke(lit, px0, py0, px1, py1, alpha(c, a * (0.55 + 0.45 * u)), 1);
+          px0 = px1;
+          py0 = py1;
+        }
+      }
+      if (age > 0.06)
+        for (let i = 0; i < 5; i++) {
+          const u = hash(i, Math.round(x0), 31);
+          lit.set(x0 + (x1 - x0) * u + (hash(i, 2) - 0.5) * 4, y0 + (y1 - y0) * u + age * age * 110, alpha(K_PINK, a));
+        }
+    }
+    return;
+  }
+  const pts = tr.pts;
+  if (pts.length < 2) return;
+  const [ax, ay] = pts[0];
+  const [bx, by] = pts[pts.length - 1];
+  const L = Math.hypot(bx - ax, by - ay) || 1;
+  const nx = -(by - ay) / L;
+  const ny = (bx - ax) / L;
+  for (let j = 0; j < tr.n; j++) {
+    const age = tr.age - j * tr.gap;
+    if (age < 0 || age > 0.36) continue;
+    const a = 1 - age / 0.36;
+    const off = j * 3;
+    const split = age * 9;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1];
+      const [x1, y1] = pts[i];
+      if (age < 0.07)
+        stroke(lit, x0 + nx * off, y0 + ny * off, x1 + nx * off, y1 + ny * off, alpha(WHITE, a), 1);
+      else
+        for (const s of [-1, 1]) {
+          const d = off + s * split * 0.5;
+          stroke(lit, x0 + nx * d, y0 + ny * d, x1 + nx * d, y1 + ny * d, alpha(s < 0 ? K_CUT[1] : K_CUT[2], a * 0.9), 1);
+        }
+    }
+    // Осколки разреза осыпаются.
+    if (age > 0.05)
+      for (let i = 0; i < 4; i++) {
+        const u = hash(i, j, 77);
+        const [px0, py0] = pts[Math.floor(u * (pts.length - 1))];
+        lit.set(px0 + nx * off + (hash(i, j, 3) - 0.5) * 4, py0 + ny * off + age * age * 90 + i, alpha(K_PINK, a));
+      }
+  }
+}
+
+/** Лук из пламени: дуга растёт из кулака, тетива к руке, стрела накаляется. */
+function kBowDraw(lit: Px, g: KGeo, r: KR, fi: number): void {
+  if (r.bow <= 0.02) return;
+  const [bx, by] = g.H.ru;
+  const half = 10;
+  const n = Math.round(9 * Math.min(1, r.bow));
+  // Оси лука: вдоль выстрела и поперёк; рукоять в кулаке, плечи загибаются к лучнику.
+  const ax = Math.cos(r.baim);
+  const ay = Math.sin(r.baim);
+  const P = (along: number, across: number): [number, number] => [bx + ax * along - ay * across, by + ay * along + ax * across];
+  const bend = Math.min(1, r.draw) * 3;
+  for (let i = -n; i <= n; i++) {
+    const u = i / 9;
+    const [x, y] = P(3.6 * (Math.cos(u * (Math.PI / 2)) - 1) - bend * u * u, u * half);
+    const hot = Math.abs(i) < 3 ? 3 : 1 + ((i + fi) & 1);
+    lit.set(x, y, FIRE[r.rel > 0.5 ? 3 : hot]);
+    const [x2, y2] = P(3.6 * (Math.cos(u * (Math.PI / 2)) - 1) - bend * u * u + 1, u * half);
+    lit.set(x2, y2, FIRE[1]);
+    if (r.bow > 0.6 && (i + fi) % 4 === 0) {
+      const [x3, y3] = P(3.6 * (Math.cos(u * (Math.PI / 2)) - 1) - bend * u * u + 2, u * half - 1);
+      lit.set(x3, y3, alpha(FIRE[2], 0.8));
+    }
+  }
+  if (n < 9) return;
+  const back = 3.6 + bend;
+  const t0 = P(-back, -half);
+  const t1 = P(-back, half);
+  const strC = alpha(hx('#ffe0a0'), 0.85);
+  if (r.draw > 0.02) {
+    const [dx0, dy0] = g.H.rl;
+    // Тетива на полном натяге дрожит.
+    const jit = r.draw > 0.95 ? (fi % 2 ? 1 : 0) : 0;
+    stroke(lit, t0[0], t0[1], dx0 - ay * jit, dy0 - ax * jit, strC, 1);
+    stroke(lit, t1[0], t1[1], dx0 + ay * jit, dy0 + ax * jit, strC, 1);
+    if (r.arrow > 0.02) {
+      // Стрела: древко огнём от руки за лук, наконечник добела.
+      const [hx1, hy1] = P(7, 0);
+      stroke(lit, dx0, dy0, hx1, hy1, FIRE[r.arrow > 0.7 ? 3 : 2], 1);
+      if (r.arrow > 0.4) stroke(lit, dx0 + ay, dy0 - ax, hx1 - ax * 2 + ay, hy1 - ay * 2 - ax, alpha(FIRE[1], 0.7), 1);
+      flame(lit, Math.round(dx0), Math.round(dy0 + 1), 3, 3 + Math.round(r.arrow * 3), fi, FIRE, 5);
+      glowDot(lit, Math.round(hx1), Math.round(hy1), r.arrow > 0.8 ? WHITE : FIRE[2], r.arrow > 0.8 ? 3 : r.arrow > 0.4 ? 2 : 1);
+    }
+  } else {
+    // Спущена: тетива бьётся и гаснет.
+    const amp = r.rel * 2.5 * (fi % 2 ? 1 : -1);
+    const [mx, my] = P(-back - amp, 0);
+    stroke(lit, t0[0], t0[1], mx, my, strC, 1);
+    stroke(lit, mx, my, t1[0], t1[1], strC, 1);
+  }
+  if (r.rel > 0.3) {
+    const [gx0, gy0] = P(2, 0);
+    glowDot(lit, Math.round(gx0), Math.round(gy0), WHITE, 3);
+  }
+  // Распад лука: угли от дуги.
+  if (r.bow < 0.99 && r.rel < 0.1 && r.draw < 0.02)
+    for (let i = 0; i < 6; i++) {
+      const u = hash(i, fi >> 2, 9) * 2 - 1;
+      const [x, y] = P(3 * (Math.cos(u * 1.5) - 1) + hash(i, 4) * 2, u * half);
+      lit.set(x, y + (1 - r.bow) * 6 * hash(i, 7), alpha(FIRE[2], r.bow));
+    }
+}
+
+/** Огонь ползёт по рукам к ладоням; ладони на земле светят в пол. */
+function kPyreDraw(lit: Px, g: KGeo, r: KR, fi: number): void {
+  if (r.pyre > 0.02) {
+    for (const a of K4S) {
+      const [sx, sy] = g.S[a];
+      const [ex, ey] = g.E[a];
+      const [hx0, hy0] = g.H[a];
+      const at = (u: number): [number, number] =>
+        u < 0.5
+          ? [sx + (ex - sx) * u * 2, sy + (ey - sy) * u * 2]
+          : [ex + (hx0 - ex) * (u - 0.5) * 2, ey + (hy0 - ey) * (u - 0.5) * 2];
+      for (let j = 0; j < 4; j++) {
+        const u = r.crawl - j * 0.12;
+        if (u < 0 || u > 1) continue;
+        const [x, y] = at(u);
+        const s = 1 - j * 0.2;
+        flame(lit, Math.round(x), Math.round(y), 3 * s + 1, Math.round((3 + r.pyre * 3) * s), fi + j, FIRE, a.length + j);
+      }
+      if (r.crawl > 0.9) {
+        flame(lit, Math.round(hx0), Math.round(hy0), 4, Math.round(4 + r.pyre * 4), fi, FIRE, hx0);
+        glowDot(lit, Math.round(hx0), Math.round(hy0 - 2), FIRE[2], 1);
+      }
+    }
+  }
+  if (r.palm > 0.02)
+    for (const a of ['rl', 'll'] as K4[]) {
+      const [hx0] = g.H[a];
+      const y = KGY - 1;
+      for (let dx = -5; dx <= 5; dx++) {
+        const k = (1 - Math.abs(dx) / 5.5) * r.palm;
+        lit.set(hx0 + dx, y, alpha(FIRE[2], 0.75 * k));
+        if (Math.abs(dx) < 3) lit.set(hx0 + dx, y - 1, alpha(FIRE[3], 0.6 * k));
+      }
+      // Трещинки света от ладони.
+      for (let i = 0; i < 3; i++) {
+        const dir = (i - 1) * 0.9 + (a === 'rl' ? 0.3 : -0.3);
+        const len = 3 + r.palm * 4;
+        stroke(lit, hx0, y, hx0 + Math.sin(dir) * len, y + 1 - Math.abs(Math.cos(dir)) * 0.5, alpha(FIRE[1], 0.7 * r.palm), 1);
+      }
+    }
+}
+
+/** Звёзды кружат над головой оглушённого. */
+function kStarsDraw(lit: Px, g: KGeo, t: number): void {
+  for (let i = 0; i < 3; i++) {
+    const a = t * 5.2 + (i / 3) * TAU;
+    const x = Math.round(g.hcx + Math.cos(a) * 8);
+    const y = Math.round(g.hcy - 14 + Math.sin(a) * 2.5);
+    const far = Math.sin(a) < 0;
+    const c1 = alpha(hx('#fff27a'), far ? 0.55 : 1);
+    lit.set(x, y, far ? alpha(WHITE, 0.6) : WHITE);
+    lit.set(x - 1, y, c1);
+    lit.set(x + 1, y, c1);
+    lit.set(x, y - 1, c1);
+    lit.set(x, y + 1, c1);
+  }
+}
+
+/** Пиксели холста 32-битными словами (байты в памяти — RGBA). */
+const u32 = (p: Px) => new Uint32Array(p.data.buffer, p.data.byteOffset, p.w * p.h);
+const c32k = (c: RGBA) => ((c[3] << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
+
+/** Рамка непрозрачного [x0, y0, x1, y1]; пусто — x1 < 0. */
+function kBoxOf(p: Px): number[] {
+  const d = u32(p);
+  const w = p.w;
+  let x0 = w;
+  let y0 = p.h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < p.h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++)
+      if (d[row + x] >>> 24) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        y1 = y;
+      }
+  }
+  return [x0, y0, x1, y1];
+}
+
+/** Контур снаружи фигуры — только в пределах рамки рисунка. */
+function kOutline(p: Px, c: RGBA): void {
+  const [bx0, by0, bx1, by1] = kBoxOf(p);
+  if (bx1 < 0) return;
+  const d = u32(p);
+  const w = p.w;
+  const h = p.h;
+  const cv = c32k(c);
+  const add: number[] = [];
+  for (let y = Math.max(0, by0 - 1); y <= Math.min(h - 1, by1 + 1); y++)
+    for (let x = Math.max(0, bx0 - 1); x <= Math.min(w - 1, bx1 + 1); x++) {
+      const i = y * w + x;
+      if (d[i] >>> 24) continue;
+      if ((x > 0 && d[i - 1] >>> 24) || (x < w - 1 && d[i + 1] >>> 24) || (y > 0 && d[i - w] >>> 24) || (y < h - 1 && d[i + w] >>> 24))
+        add.push(i);
+    }
+  for (const i of add) d[i] = cv;
+}
+
+/** Кромка недосягаемости: пиксели вокруг силуэта через один, медленно бегут. */
+function kEdge(p: Px, lit: Px, fi: number): void {
+  const ph = (fi >> 2) & 1;
+  const [bx0, by0, bx1, by1] = kBoxOf(p);
+  if (bx1 < 0) return;
+  const d = u32(p);
+  const w = p.w;
+  const ec = alpha(K_GHOST, 0.42);
+  for (let y = Math.max(1, by0 - 1); y <= Math.min(p.h - 2, by1 + 1); y++)
+    for (let x = Math.max(1, bx0 - 1); x <= Math.min(w - 2, bx1 + 1); x++) {
+      const i = y * w + x;
+      if (d[i] >>> 24 || (x + y + ph) % 2) continue;
+      if (d[i - 1] >>> 24 || d[i + 1] >>> 24 || d[i - w] >>> 24 || d[i + w] >>> 24) lit.set(x, y, ec);
+    }
+}
+
+/** Тело целиком: позы, затем контур, затем свет. */
+function kPaint(r: KR, o: KOpt): { p: Px; lit: Px; g: KGeo } {
+  const p = new Px(KW, KH);
+  const lit = new Px(KW, KH);
+  const g = kGeo(r);
+  // Рука за спиной (замах за голову): рукав и рука — до тела.
+  for (const a of ['ru', 'lu'] as const)
+    if (r[a === 'ru' ? 'rub' : 'lub'] > 0.5) {
+      kDrape(p, g, r, a, o.sec[a]);
+      kArm(p, lit, g, r, a);
+    }
+  kLegs(p, g, r);
+  kTorso(p, lit, g, r);
+  kArm(p, lit, g, r, 'rl');
+  kArm(p, lit, g, r, 'll');
+  for (const a of ['ru', 'lu'] as const)
+    if (r[a === 'ru' ? 'rub' : 'lub'] <= 0.5) {
+      kDrape(p, g, r, a, o.sec[a]);
+      kArm(p, lit, g, r, a);
+    }
+  kSignHands(p, lit, g, r, o.fi);
+  kHead(p, lit, g, r, o);
+  kOutline(p, o.edge ? K_EDGE_INK : INK);
+  // Свет — поверх контура: светящееся тушью не обводится.
+  if (o.edge) kEdge(p, lit, o.fi);
+  kAura(p, lit, g, r, o.fi, true);
+  kAura(p, lit, g, r, o.fi, false);
+  for (const s of o.smears) kSmearDraw(lit, s);
+  if (o.trail) kTrailDraw(lit, o.trail);
+  kBowDraw(lit, g, r, o.fi);
+  kPyreDraw(lit, g, r, o.fi);
+  if (r.stars > 0.5) kStarsDraw(lit, g, o.st);
+  if (o.rage) {
+    // Третья фаза: татуировка тлеет.
+    const d = u32(p);
+    const tat = c32k(K_TAT);
+    const tc = alpha(hx('#ff2a4a'), 0.45);
+    const [bx0, by0, bx1, by1] = kBoxOf(p);
+    for (let y = by0; y <= by1; y++)
+      for (let x = bx0; x <= bx1; x++)
+        if (d[y * p.w + x] === tat && (x * 7 + y * 3 + (o.fi >> 1)) % 3 === 0) lit.set(x, y, tc);
+  }
+  return { p, lit, g };
+}
+
+// ---- Техники: ключевые позы по времени (метроном — `KING`) -------------
+
+interface KT {
+  /** Спешка третьей фазы. */
+  h: number;
+  /** Стойка с поправками фазы (маска, глаза, аура, трещины). */
+  b: KR;
+  /** Разрезов в «Рассечении». */
+  n: number;
+  /** Куда кувыркается сбитый поездом: ±1. */
+  dir: number;
+  /** Куда бьёт (рад, в кадре «смотрит вправо»): 0 — вбок, +π/2 — вниз, −π/2 — вверх. */
+  aim: number;
+}
+
+const tCut = (k: KT) => KING.cutAim / k.h;
+const tCutEnd = (k: KT) => tCut(k) + 0.1 + 0.9 / k.h;
+const tClaw = (k: KT) => 0.62 / k.h;
+const tCross = (k: KT) => KING.cleaveWarn / k.h;
+const tCleaveEnd = (k: KT) => tCross(k) + 0.1 + 0.9 / k.h;
+const tBow = (k: KT) => KING.bowDraw / k.h;
+const tBowEnd = (k: KT) => tBow(k) + 0.9 / k.h;
+/** Столбы: режим 0,7 с, дальше король встаёт уже в погоне. */
+const PYRE_T = 0.7;
+const PYRE_END = 1.15;
+/** Сетка храма: метка → разрез → возврат в знак. */
+const GRID_T = KING.gridWarn;
+const GRID_END = KING.gridWarn + KING.gridCut + 0.45;
+/** Разрезы с помоста: первая линия через 0,9 с. */
+const DCUT_T = 0.9;
+const DCUT_END = 1.3;
+const DSIT_END = 0.5;
+const DEATH_T = 1.45;
+/** Шаг: 8 кадров на 26 px пути. */
+const K_STRIDE = 26;
+const RUN_T = K_STRIDE / (2.6 * 16);
+
+/** Храм: верхние — знак у груди, нижние — кулак в ладони у живота. */
+const KSIT2: Partial<KR> = {
+  ...KSIT,
+  rlex: 3, rley: 6, rlhx: -7, rlhy: 4, rlk: HK.sign,
+  llex: 3, lley: 6, llhx: -7, llhy: 4, llk: HK.sign,
+};
+
+function kIdle(ph: number, b: KR): KR {
+  const r = { ...b };
+  const a = ph * TAU;
+  // Дыхание — целыми пикселями: плечи и руки поднимаются вместе.
+  r.br = Math.round(0.5 - 0.5 * Math.cos(a));
+  // Кулаки верхних рук сжимаются по очереди — хрустит костяшками.
+  if (ph > 0.62 && ph < 0.71) r.ruk = HK.fist;
+  if (ph > 0.12 && ph < 0.21) r.luk = HK.fist;
+  // Глаза моргают, глаз маски — в свой черёд: у второго лица своя жизнь.
+  if (ph > 0.87 && ph < 0.92) r.eyes = 0;
+  if (b.m2 > 0.5) {
+    if (ph > 0.37 && ph < 0.42) r.m2 = 0.4;
+    if ((ph > 0.54 && ph < 0.59) || (ph > 0.66 && ph < 0.71)) r.mjaw = 1;
+  }
+  // Взгляд в сторону, рот на поясе облизывается.
+  if (ph > 0.54 && ph < 0.79) r.look = 1;
+  if (ph > 0.27 && ph < 0.36) r.belly = 0.2;
+  return r;
+}
+
+function kRun(ph: number, b: KR): KR {
+  const r = { ...b };
+  const s = Math.sin(ph * TAU);
+  const up = Math.max(0, s);
+  const dn = Math.max(0, -s);
+  // Таз переносится на опорную ногу; ступни при этом стоят на месте.
+  r.bx = Math.round(s * 0.9);
+  r.lfy = up * 4;
+  r.lky = 8 + up * 3;
+  r.lkx = -7 - up * 1.2 - r.bx;
+  r.lfx = -7.5 + up * 0.8 - r.bx;
+  r.rfy = dn * 4;
+  r.rky = 8 + dn * 3;
+  r.rkx = 7 + dn * 1.2 - r.bx;
+  r.rfx = 7.5 - dn * 0.8 - r.bx;
+  // Таз выше всего, когда нога проходит под телом.
+  r.by = Math.round(Math.abs(s));
+  r.lean = 1;
+  r.look = 1;
+  // Верхние руки — навстречу ногам, рукава отстают; нижние держат знак и пояс.
+  r.ruhx = 5 + s * 2;
+  r.ruhy = 14 - s * 2.5;
+  r.ruex = 4 + s * 0.8;
+  r.luhx = 5 - s * 2;
+  r.luhy = 14 + s * 2.5;
+  r.luex = 4 - s * 0.8;
+  return r;
+}
+
+function kIntro(k: KT): (t: number) => KR {
+  const b = k.b;
+  const sit: Partial<KR> = { ...KSIT, nod: 1, hy: 1, eyes: 0, m2: 0, aura: 0.15, glow: 0.3 };
+  const keys: KKey[] = [
+    [0, sit],
+    [0.5, { aura: 0.3, br: 1 }, kIO],
+    [0.6, { br: 0 }, kIO],
+    // Глаза открываются: вспышка, голова поднимается.
+    [0.68, { eyes: 3, nod: 0, hy: 0, glow: 1, aura: 0.6, flare: 0.5 }, kOut],
+    [0.95, { flare: 0, aura: 0.5, eyes: 2 }, kIO],
+    // Ладони в колени, кисти расцепились; таз вверх, ноги расплетаются.
+    [1.12, {
+      hip: 9, bend: 2, nod: 1, lkx: -11, lky: 6, lfx: -6, lfy: 0, rkx: 11, rky: 6, rfx: 6, rfy: 0,
+      ruk: HK.open, luk: HK.open, ruhx: -6, luhx: -6, ruhy: 4, luhy: 4,
+      rlex: 5, rley: 7, rlhx: 4, rlhy: 13, llex: 5, lley: 7, llhx: 4, llhy: 13,
+    }, kIO],
+    // Встал во весь рост, руки разведены.
+    [1.45, {
+      hip: 16, bend: 0, nod: 0, br: 1, lkx: -7, lky: 8, lfx: -7.5, rkx: 7, rky: 8, rfx: 7.5,
+      rlex: 4, rley: 6, rlhx: -1, rlhy: 12, rlk: HK.fist, llex: 4, lley: 5, llhx: -5, llhy: 4, llk: HK.two,
+      ruex: 7, ruey: 2, ruhx: 13, ruhy: 3, luex: 7, luey: 2, luhx: 13, luhy: 3,
+    }, kOut],
+    // Разминает шею.
+    [1.65, { hx: 1, ruhy: 1, luhy: 1 }, kIO],
+    [1.82, { hx: -1, br: 0 }, kIO],
+    // Оскал: челюсть, аура вспыхивает, наклон вперёд, когти.
+    [2.0, {
+      hx: 0, jaw: 1, eyes: 3, lean: 1, bend: 1, flare: 1, aura: 1, claw: 0.7,
+      ruex: 6, ruey: 4, ruhx: 11, ruhy: 8, ruk: HK.claw, luex: 6, luey: 4, luhx: 11, luhy: 8, luk: HK.claw,
+    }, kBack],
+    [2.3, { jaw: 0.5, flare: 0.3, claw: 0.3 }, kIO],
+    [KING.intro, { ...b }, kIO],
+  ];
+  return kCompile(keys, b);
+}
+
+/**
+ * Рассечение: знак двумя пальцами → пружина → взмах ровно в первую линию.
+ * Взмах идёт туда, куда легли линии: вбок, вниз (герой ниже) или вверх.
+ * Выпад вперёд (`fdx`) поворачивает к цели `kRigFn`.
+ */
+function kCut(k: KT): (t: number) => KR {
+  const T = tCut(k);
+  const b = k.b;
+  const v = k.aim > 0.9 ? 1 : k.aim < -0.9 ? -1 : 0;
+  const cross: Partial<KR> = {
+    rlex: -1, rley: 5, rlhx: -6, rlhy: 6, rlk: HK.fist, llex: -1, lley: 5, llhx: -6, llhy: 7, llk: HK.fist,
+  };
+  const keys: KKey[] =
+    v < 0
+      ? [
+          [0, {}],
+          // Снизу вверх: два пальца у бедра, присел — рубит над собой.
+          [0.22 * T, { ...cross, ruex: 5, ruey: 6, ruhx: 6, ruhy: 12, ruk: HK.two, luex: 5, luey: 5, luhx: 9, luhy: 9, look: 0, nod: -1, jaw: 0.35, fing: 0.3, eyes: 2 }, kOut],
+          [0.6 * T, { ruex: 5, ruey: 7, ruhx: 3, ruhy: 14, hip: 15, bend: 1, fing: 0.65, rfx: 8.5, rkx: 8, lfx: -8, lkx: -8 }, kIO],
+          [T - 4 * KF, { ruex: 4, ruey: 7, ruhx: -1, ruhy: 15, hip: 14.5, bend: 1.5, lean: -1, fing: 1, eyes: 3, jaw: 0.5 }, kOut],
+          [T - 2 * KF, { ruex: 8, ruey: 3, ruhx: 10, ruhy: 5, hip: 15.5, bend: 0, lean: 0 }, kIn],
+          [T - KF, { ruex: 8, ruey: -2, ruhx: 12, ruhy: -5, hip: 16.5, by: 0.5 }, kLin],
+          [T, { ruex: 5, ruey: -6, ruhx: 6, ruhy: -15, hip: 16.5, by: 1, lean: 1, fdx: 1.5, fing: 0.45, jaw: 0.85, nod: -1, luex: 6, luey: 3, luhx: 11, luhy: 6 }, kLin],
+          [T + 0.12, { ruex: 3, ruey: -7, ruhx: 0, ruhy: -17, by: 1, fdx: 2, fing: 0, jaw: 0.5 }, kOut],
+          [T + 0.35, { ruex: 4, ruey: -5, ruhx: 3, ruhy: -12, by: 0, hip: 16, br: 1 }, kIO],
+          [T + 0.55, { br: 0 }, kIO],
+          [tCutEnd(k), { ...b }, kIO],
+        ]
+      : [
+          [0, {}],
+          // Знак: два пальца у лица, левая верхняя отведена, нижние крест-накрест.
+          [0.22 * T, { ...cross, ruex: 6, ruey: -5, ruhx: 4, ruhy: -13, ruk: HK.two, luex: 5, luey: 6, luhx: 9, luhy: 11, lean: -0.5, look: v ? 0 : 1, jaw: 0.35, fing: 0.3, eyes: 2 }, kOut],
+          // Выше головы, вытянулся; ноги шире.
+          [0.6 * T, { ruex: 4, ruey: -7, ruhx: 2, ruhy: -15, bend: -1, fing: 0.65, rfx: 8.5, rkx: 7.5, lfx: -8, lkx: -7.5 }, kIO],
+          // Пружина: кисть заведена за плечо, корпус откинут.
+          [T - 4 * KF, { ruex: 7, ruey: -5, ruhx: 2, ruhy: -15, lean: -2, tw: -0.6, fing: 1, eyes: 3, jaw: 0.5, hx: -1, bend: 0 }, kOut],
+          // Взмах.
+          ...(v > 0
+            ? ([
+                // Вниз, к герою под ногами: рука идёт перед грудью, корпус кланяется.
+                [T - 2 * KF, { ruex: 8, ruey: -5, ruhx: 9, ruhy: -8, lean: -1, tw: 0 }, kIn],
+                [T - KF, { ruex: 7, ruey: 0, ruhx: 5, ruhy: 2, lean: 0.5, hx: 0, nod: 1 }, kLin],
+                [T, { ruex: 5, ruey: 4, ruhx: -1, ruhy: 12, lean: 1, bend: 2, hip: 15, fdx: 1.5, fing: 0.45, jaw: 0.85, nod: 1, luex: 6, luey: 3, luhx: 11, luhy: 6 }, kLin],
+                [T + 0.12, { ruex: 4, ruey: 6, ruhx: -5, ruhy: 15, bend: 3, hip: 14.5, fdx: 2, fing: 0, jaw: 0.5 }, kOut],
+              ] as KKey[])
+            : ([
+                [T - 2 * KF, { ruex: 8, ruey: -5, ruhx: 11, ruhy: -11, lean: -1, tw: 0 }, kIn],
+                [T - KF, { ruex: 8, ruey: -2, ruhx: 15, ruhy: -1, lean: 0.5, tw: 0.4, hx: 0 }, kLin],
+                // Контакт: рука вытянута вперёд-вниз, шаг вперёд.
+                [T, { ruex: 8, ruey: 1, ruhx: 14, ruhy: 7, lean: 2, tw: 0.6, rfx: 10, rkx: 9, fdx: 1.5, fing: 0.45, jaw: 0.85, hx: 1, luex: 6, luey: 3, luhx: 11, luhy: 6 }, kLin],
+                // Проводка с перелётом: кисть проходит через тело вниз, корпус проваливается.
+                [T + 0.12, { ruex: 6, ruey: 6, ruhx: 2, ruhy: 13, lean: 3, bend: 2, hip: 15, fdx: 2, fing: 0, jaw: 0.5 }, kOut],
+              ] as KKey[])),
+          [T + 0.35, { ruex: 5, ruey: 7, ruhx: 3, ruhy: 14, lean: v ? 1 : 2, bend: 1.5, br: 1, nod: 0 }, kIO],
+          [T + 0.55, { br: 0 }, kIO],
+          [tCutEnd(k), { ...b }, kIO],
+        ];
+  return kCompile(keys, b);
+}
+
+function kCleave(k: KT): (t: number) => KR {
+  const Tc = tClaw(k);
+  const X = tCross(k);
+  const b = k.b;
+  const keys: KKey[] = [
+    [0, {}],
+    // Вскинул верхние руки когтями вверх, нижние — кулаки у бёдер; присел, вдох.
+    [0.32 * Tc, {
+      hip: 14.5, lkx: -8.5, rkx: 8.5, lky: 7, rky: 7, lfx: -9, rfx: 9,
+      ruex: 6, ruey: -5, ruhx: 9, ruhy: -13, ruk: HK.claw, luex: 6, luey: -5, luhx: 9, luhy: -13, luk: HK.claw,
+      rlex: 4, rley: 5, rlhx: 3, rlhy: 10, rlk: HK.fist, llex: 4, lley: 5, llhx: 3, llhy: 10, llk: HK.fist,
+      claw: 0.4, eyes: 2, nod: -1, jaw: 0.5, br: 1, lean: -0.5,
+    }, kOut],
+    // Пружина: когти выше и шире, таз ниже, накал.
+    [Tc - 3 * KF, {
+      hip: 13, ruex: 5, ruey: -7, ruhx: 8, ruhy: -16, luex: 5, luey: -7, luhx: 8, luhy: -16,
+      claw: 1, eyes: 3, jaw: 0.7, lean: -1.5, fdx: -1,
+    }, kIO],
+    // Крест-накрест: обе руки рвут вниз через тело — следы скрещиваются.
+    [Tc - 2 * KF, { ruex: 8, ruey: -4, ruhx: 6, ruhy: -10, luex: 8, luey: -4, luhx: 6, luhy: -10, nod: 0, lean: 0, hip: 14.5, br: 0 }, kIn],
+    [Tc - KF, { ruex: 5, ruey: 2, ruhx: -2, ruhy: -1, luex: 5, luey: 2, luhx: -2, luhy: -1, lean: 1.5, fdx: 1.5 }, kLin],
+    [Tc, {
+      ruex: 2, ruey: 6, ruhx: -11, ruhy: 9, luex: 2, luey: 6, luhx: -11, luhy: 10, lean: 2.5, hip: 14, bend: 1,
+      fdx: 3, jaw: 1, claw: 0.7, rlhx: 6, rlhy: 12, llhx: 6, llhy: 12, rfx: 9.5, lfx: -9.5,
+    }, kLin],
+    // Проводка: руки скрещены внизу, корпус догоняет.
+    [Tc + 0.1, { ruhx: -12, ruhy: 12, luhx: -12, luhy: 13, fdx: 3.5, lean: 2, hip: 13.5, bend: 1.5, claw: 0.4 }, kOut],
+    // Щелчок: крест рвётся наружу — под героем крест.
+    [X - 2 * KF, {
+      ruk: HK.fist, luk: HK.fist, claw: 0, ruex: 3, ruey: 6, ruhx: -9, ruhy: 10, luex: 3, luey: 6, luhx: -9, luhy: 11, jaw: 0.4,
+    }, kIO],
+    [X, { ruex: 7, ruey: 4, ruhx: 12, ruhy: 10, luex: 7, luey: 4, luhx: 12, luhy: 11, jaw: 0.8, by: 1, hip: 15 }, kOut],
+    [X + 0.12, { by: 0 }, kIO],
+    [X + 0.3, { fdx: 1, lean: 1, hip: 16, bend: 0, br: 1 }, kIO],
+    [X + 0.5, { br: 0 }, kIO],
+    [tCleaveEnd(k), { ...b }, kIO],
+  ];
+  return kCompile(keys, b);
+}
+
+/** Локоть по плечу и кисти: две кости по 8 px, сгиб наружу и вниз. */
+function kElbow(sx: number, sy: number, hx0: number, hy0: number, side: number): [number, number] {
+  const a = 8;
+  const dx = hx0 - sx;
+  const dy = hy0 - sy;
+  const d = Math.hypot(dx, dy) || 1e-3;
+  const dc = Math.min(d, 2 * a - 0.3);
+  const ux = dx / d;
+  const uy = dy / d;
+  const along = dc / 2;
+  const h = Math.sqrt(Math.max(0, a * a - along * along));
+  let px = -uy;
+  let py = ux;
+  if (px * side + py * 0.5 < 0) {
+    px = -px;
+    py = -py;
+  }
+  return [sx + ux * along + px * h, sy + uy * along + py * h];
+}
+
+/**
+ * Лук целится в героя: кисти, что держат лук и тетиву, поворачиваются вокруг
+ * груди на угол прицела (каждая — с того мига, как взялась), локти
+ * сгибаются заново. Лук рисуется в том же повороте (`baim`).
+ */
+function kAimBow(r: KR, th: number, w: Record<K4, number>): void {
+  if (!th) return;
+  const g = kGeo(r);
+  const cx = g.cx + g.L + 2;
+  const cy = g.sy + 1;
+  for (const a of K4S) {
+    const wa = w[a];
+    if (wa <= 0) continue;
+    const side = a[0] === 'r' ? 1 : -1;
+    const [sx, sy] = g.S[a];
+    const [hx0, hy0] = g.H[a];
+    const an = th * wa;
+    const c = Math.cos(an);
+    const sn = Math.sin(an);
+    const nx = cx + (hx0 - cx) * c - (hy0 - cy) * sn;
+    const ny = cy + (hx0 - cx) * sn + (hy0 - cy) * c;
+    const [ex, ey] = kElbow(sx, sy, nx, ny, side);
+    r[armCh(a, 'hx')] = (nx - sx) * side;
+    r[armCh(a, 'hy')] = ny - sy;
+    r[armCh(a, 'ex')] = (ex - sx) * side;
+    r[armCh(a, 'ey')] = ey - sy;
+  }
+  r.baim = th * w.ru;
+}
+
+function kBow(k: KT): (t: number) => KR {
+  const T = tBow(k);
+  const A = T - 0.45;
+  const b = k.b;
+  const keys: KKey[] = [
+    [0, {}],
+    // Пламя собирается в кулаке; стойка шире, взгляд на цель.
+    [0.16 * T, { ruex: 7, ruey: 0, ruhx: 9, ruhy: -3, ruk: HK.grip, bow: 0.3, lfx: -9.5, lkx: -8.5, rfx: 9.5, rkx: 8.5, lean: -0.5, look: 1, hx: 1, eyes: 2 }, kOut],
+    // Правая нижняя берёт тетиву у лука.
+    [0.26 * T, { bow: 1, rlex: 7, rley: -1, rlhx: 9, rlhy: -6, rlk: HK.fist, arrow: 0.1 }, kIO],
+    // Ступень 1: натяг на треть.
+    [0.4 * T, { rlex: 6, rley: 1, rlhx: 2, rlhy: -6, draw: 0.4, arrow: 0.25, lean: -1 }, kOut],
+    // Ступень 2: левая верхняя ложится на тетиву.
+    [0.48 * T, { luex: -3, luey: 4, luhx: -11, luhy: -1, luk: HK.fist }, kIO],
+    [0.6 * T, { rlex: 3, rley: 0, rlhx: -4, rlhy: -6, luhx: -11, luhy: -2, draw: 0.75, arrow: 0.55, lean: -1.5, tw: 0.4, glow: 1, flare: 0.2 }, kOut],
+    // Ступень 3: левая нижняя — полный натяг тремя руками; маска скалится.
+    [0.68 * T, { llex: -2, lley: 3, llhx: -7, llhy: -3, llk: HK.fist }, kIO],
+    [A, {
+      rlex: -1, rley: -2, rlhx: -9, rlhy: -6, luhx: -7, luhy: -3, llhx: -5, llhy: -4,
+      draw: 1, arrow: 1, lean: -2, tw: 0.7, jaw: 0.35, mjaw: 1, m2: 1.5, flare: 0.4, eyes: 3,
+    }, kOut],
+    // Замер: прицел пойман.
+    [T - KF, { jaw: 0.5 }, kLin],
+    // Выстрел: тетива сорвалась, руки разлетелись, отдача корпусом назад.
+    [T, {
+      draw: 0, rel: 1, arrow: 0, rlex: 2, rley: -4, rlhx: -6, rlhy: -11, luex: 5, luey: -3, luhx: 6, luhy: -8,
+      llex: 4, lley: 0, llhx: 6, llhy: -2, lean: -3, fdx: -2.5, jaw: 0.95, flare: 0.8,
+    }, kLin],
+    [T + 0.12, { rel: 0.3, lean: -2.5, fdx: -2, flare: 0.3 }, kOut],
+    [T + 0.3, { rel: 0, bow: 0.55, lean: -1, fdx: -0.5, jaw: 0.4, mjaw: 0.5 }, kIO],
+    [T + 0.5, {
+      bow: 0, ruex: 4, ruey: 7, ruhx: 5, ruhy: 14, ruk: HK.open, luex: 4, luey: 7, luhx: 5, luhy: 14, luk: HK.open,
+      rlex: 4, rley: 6, rlhx: -1, rlhy: 12, llex: 4, lley: 5, llhx: -5, llhy: 4, llk: HK.two, m2: 1,
+    }, kIO],
+    [tBowEnd(k), { ...b }, kIO],
+  ];
+  const ev = kCompile(keys, b);
+  if (!k.aim) return ev;
+  // Кто когда взялся за лук и тетиву; после выстрела руки возвращаются.
+  const on = (t: number, a0: number, a1: number) => kc((t - a0) / (a1 - a0), 0, 1);
+  const off = (t: number) => 1 - kOut(kc((t - T - 0.3) / 0.2, 0, 1));
+  return (t: number) => {
+    const r = ev(t);
+    const o = off(t);
+    kAimBow(r, k.aim, {
+      ru: kOut(on(t, 0, 0.16 * T)) * o,
+      rl: on(t, 0.16 * T, 0.26 * T) * o,
+      lu: on(t, 0.4 * T, 0.48 * T) * o,
+      ll: on(t, 0.6 * T, 0.68 * T) * o,
+    });
+    return r;
+  };
+}
+
+function kPyre(k: KT): (t: number) => KR {
+  const b = k.b;
+  const keys: KKey[] = [
+    [0, {}],
+    // Вдох: четыре руки вверх, огонь вспыхивает у плеч и ползёт по рукам.
+    [0.15, {
+      ruex: 5, ruey: -4, ruhx: 8, ruhy: -11, ruk: HK.palm, luex: 5, luey: -4, luhx: 8, luhy: -11, luk: HK.palm,
+      rlex: 6, rley: 0, rlhx: 11, rlhy: -4, rlk: HK.palm, llex: 6, lley: 0, llhx: 11, llhy: -4, llk: HK.palm,
+      nod: -1, jaw: 0.75, eyes: 3, glow: 1, pyre: 0.4, crawl: 0.15, by: 1,
+    }, kOut],
+    [0.3, { pyre: 1, crawl: 1, ruhy: -12, luhy: -12, by: 1.5 }, kIO],
+    // Удар ладонями в землю: глубокий присед.
+    [0.375, {
+      by: 0, hip: 6, bend: 3, lkx: -11, lky: 7.5, lfx: -9.5, rkx: 11, rky: 7.5, rfx: 9.5,
+      ruex: 6, ruey: 7, ruhx: 9, ruhy: 14, luex: 6, luey: 7, luhx: 9, luhy: 14,
+      rlex: 6, rley: 7, rlhx: 6, rlhy: 16, llex: 6, lley: 7, llhx: 6, llhy: 16,
+      nod: 1, jaw: 1, palm: 1, fsx: 1.07, fsy: 0.93,
+    }, kIn],
+    [0.46, { fsx: 1, fsy: 1, palm: 0.8, jaw: 0.6 }, kOut],
+    [PYRE_T, { pyre: 0.5, palm: 0.6 }, kIO],
+    // Встаёт (уже в погоне): угли осыпаются с пальцев.
+    [PYRE_END, { ...b }, kIO],
+  ];
+  return kCompile(keys, b);
+}
+
+function kCast(k: KT): (t: number) => KR {
+  const b = k.b;
+  const keys: KKey[] = [
+    [0, {}],
+    // Скользит к помосту: ступни над полом, рукава назад.
+    [0.15, {
+      by: 2, lfy: 2, rfy: 2, lky: 9, rky: 9, lean: -1, nod: 1, eyes: 3, glow: 1, aura: 0.4,
+      ruex: 5, ruey: 6, ruhx: 9, ruhy: 11, luex: 5, luey: 6, luhx: 9, luhy: 11,
+    }, kOut],
+    [0.6, { by: 2.5 }, kIO],
+    [0.75, { by: 0, lfy: 0, rfy: 0, lky: 8, rky: 8, lean: 0, fsx: 1.05, fsy: 0.95 }, kIn],
+    [0.9, { fsx: 1, fsy: 1, ruex: 4, ruey: 7, ruhx: 5, ruhy: 14, luex: 4, luey: 7, luhx: 5, luhy: 14 }, kOut],
+    [1.2, { aura: 0.45 }, kIO],
+    // Руки складываются в знак по одной: щелчок — свет.
+    [1.45, { rlex: 3, rley: 6, rlhx: -7, rlhy: 4, rlk: HK.sign, sign: 0.3, aura: 0.55 }, kOut],
+    [1.7, { llex: 3, lley: 6, llhx: -7, llhy: 4, llk: HK.sign, sign: 0.45, belly: 0.3, aura: 0.7 }, kOut],
+    [1.95, { ruex: 4, ruey: 7, ruhx: -8, ruhy: 3, ruk: HK.sign, sign: 0.65, belly: 0.6, aura: 0.85, nod: 0 }, kOut],
+    [2.2, { luex: 4, luey: 7, luhx: -8, luhy: 3, luk: HK.sign, sign: 1, belly: 1, aura: 1, mjaw: 1 }, kOut],
+    // Последнее усилие: голова назад, всё горит.
+    [2.45, { nod: -1, hy: -1, jaw: 0.75, flare: 0.6, br: 1 }, kIO],
+    [KING.cast, { flare: 1 }, kIn],
+  ];
+  const ev = kCompile(keys, b);
+  // Каждая рука встала в знак — щелчок света; в конце — самый сильный.
+  const clicks = [1.45, 1.7, 1.95, 2.2, KING.cast - 0.05];
+  return (t: number) => {
+    const r = ev(t);
+    let c = 0;
+    for (let i = 0; i < clicks.length; i++) {
+      const x = t - clicks[i];
+      const v = x < -0.04 || x > 0.14 ? 0 : x < 0 ? (x + 0.04) / 0.04 : 1 - x / 0.14;
+      c = Math.max(c, v * (i === clicks.length - 1 ? 1 : 0.7));
+    }
+    r.click = c;
+    return r;
+  };
+}
+
+/** Храм: сидит в знаке, дышит, рот на поясе открыт. */
+function kMed(ph: number, k: KT): KR {
+  const r = { ...k.b, ...KSIT2, aura: 1, sign: 0.7, belly: 0.75, glow: 1, m2: 1 } as KR;
+  const a = ph * TAU;
+  r.br = Math.round(0.5 - 0.5 * Math.cos(a));
+  r.belly = r.br ? 1 : 0.75;
+  r.sign = r.br ? 0.9 : 0.7;
+  if (ph > 0.6 && ph < 0.66) r.m2 = 0.4;
+  if (ph > 0.25 && ph < 0.5) r.mjaw = 1;
+  return r;
+}
+
+function kDsit(k: KT): (t: number) => KR {
+  const from = kCast(k)(KING.cast);
+  const keys: KKey[] = [
+    [0, {}],
+    [0.06, { flare: 0.6 }, kOut],
+    [0.3, { ...KSIT2, nod: 0, hy: 0, jaw: 0.6, fsx: 1.06, fsy: 0.93, aura: 1 }, kIn],
+    [DSIT_END, { fsx: 1, fsy: 1, flare: 0, jaw: 0, sign: 0.7, br: 0, belly: 0.75 }, kOut],
+  ];
+  return kCompile(keys, from);
+}
+
+/** Сетка храма: ладони чертят линии, замах вверх, приговор вниз — ровно в разрез. */
+function kDgrid(k: KT): (t: number) => KR {
+  const med = kMed(0, k);
+  const keys: KKey[] = [
+    [0, {}],
+    [0.18, {
+      eyes: 3, nod: -1, ruk: HK.open, luk: HK.open, ruex: 6, ruey: -2, ruhx: 5, ruhy: -9,
+      luex: 6, luey: -2, luhx: 5, luhy: -9, sign: 0.4, jaw: 0.3,
+    }, kOut],
+    [0.7, { ruex: 8, ruey: -1, ruhx: 14, ruhy: -4, luex: 8, luey: -1, luhx: 14, luhy: -4, ruk: HK.two, luk: HK.two, fing: 0.6 }, kIO],
+    [GRID_T - 3 * KF, { ruex: 6, ruey: -6, ruhx: 9, ruhy: -14, luex: 6, luey: -6, luhx: 9, luhy: -14, fing: 1, mjaw: 1, flare: 0.3 }, kOut],
+    [GRID_T, {
+      ruex: 8, ruey: 2, ruhx: 14, ruhy: 9, luex: 8, luey: 2, luhx: 14, luhy: 9,
+      jaw: 1, belly: 1, fsy: 0.96, fsx: 1.03, flare: 0.9, nod: 0, fing: 0.5,
+    }, kIn],
+    [GRID_T + 0.18, { fsy: 1, fsx: 1, fing: 0 }, kOut],
+    [GRID_T + KING.gridCut, { flare: 0.3, jaw: 0.6 }, kIO],
+    [GRID_END, { ...med }, kIO],
+  ];
+  return kCompile(keys, med);
+}
+
+/** Разрезы с помоста: правая верхняя выходит из знака, два пальца — взмах. */
+function kDcut(k: KT): (t: number) => KR {
+  const med = kMed(0, k);
+  const keys: KKey[] = [
+    [0, {}],
+    [0.14, { ruk: HK.two, ruex: 6, ruey: -5, ruhx: 4, ruhy: -13, fing: 0.3, eyes: 2 }, kOut],
+    [DCUT_T - 3 * KF, { ruex: 3, ruey: -8, ruhx: -2, ruhy: -14, fing: 1, jaw: 0.4 }, kIO],
+    [DCUT_T, { ruex: 8, ruey: 1, ruhx: 14, ruhy: 6, fing: 0.4, jaw: 0.8 }, kIn],
+    [DCUT_T + 0.15, { ruex: 6, ruey: 6, ruhx: 3, ruhy: 12, fing: 0, jaw: 0.3 }, kOut],
+    [DCUT_END, { ...med }, kIO],
+  ];
+  return kCompile(keys, med);
+}
+
+function kBroken(k: KT): (t: number) => KR {
+  const b = k.b;
+  const from = { ...b, ...KSIT2, aura: 1, sign: 0.7, belly: 1, glow: 1, m2: 1, crack: 0 } as KR;
+  const keys: KKey[] = [
+    [0, {}],
+    // Храм рухнул: рывок, голова назад, крик; маска трескается.
+    [0.12, {
+      hip: 10, by: 1, hy: -2, nod: -1, jaw: 1, eyes: 3, crack: 1, sign: 0, aura: 0.3, flare: 0.8,
+      ruk: HK.open, luk: HK.open, rlk: HK.open, llk: HK.open,
+      ruex: 7, ruey: -2, ruhx: 12, ruhy: -6, luex: 7, luey: -2, luhx: 12, luhy: -6,
+      rlex: 6, rley: 2, rlhx: 11, rlhy: 4, llex: 6, lley: 2, llhx: 11, llhy: 4,
+      lkx: -10, lky: 6, rkx: 10, rky: 6, lfx: -6, rfx: 6, lfy: 0, rfy: 0,
+    }, kOut],
+    [0.2, { crack: 2 }, kLin],
+    [0.28, { crack: 3, flare: 0 }, kLin],
+    // Оседает на колено.
+    [0.42, { ...KKNEEL, by: 0, hy: 2, nod: 1, jaw: 0.4, eyes: 2, belly: 0.4, fsx: 1.07, fsy: 0.92, glow: 0.3, mjaw: 0, m2: 0.4, aura: 0 }, kIn],
+    [0.55, { fsx: 1, fsy: 1, stars: 1 }, kOut],
+    [3.45, { stars: 1 }, kLin],
+    // Мотает головой, приходит в себя.
+    [3.6, { stars: 0, hy: 0, nod: 0, hx: 1, eyes: 1 }, kIO],
+    [3.72, { hx: -1 }, kIO],
+    [3.82, { hx: 0, eyes: 2, glow: 0.8, m2: 1 }, kIO],
+    [KING.broken, { ...b, crack: 3 }, kIO],
+  ];
+  const ev = kCompile(keys, from);
+  return (t: number) => {
+    const r = ev(t);
+    // Тяжело дышит: плечи ходят, рот на поясе хватает воздух.
+    if (t > 0.55 && t < 3.6) {
+      const a = ((t - 0.55) / 0.6) * TAU;
+      r.br = Math.round(0.5 - 0.5 * Math.cos(a));
+      r.belly = r.br ? 0.55 : 0.25;
+      r.hy += Math.round(Math.sin(a * 0.5));
+    }
+    return r;
+  };
+}
+
+function kTrain(k: KT): (t: number) => KR {
+  const b = k.b;
+  const d = k.dir;
+  const curled: Partial<KR> = {
+    hip: 12, lkx: -6, lky: 13, lfx: -5, lfy: 7, rkx: 6, rky: 13, rfx: 5, rfy: 7,
+    ruex: 2, ruey: 5, ruhx: -7, ruhy: 1, luex: 2, luey: 5, luhx: -7, luhy: 1,
+    rlex: 2, rley: 4, rlhx: -6, rlhy: 6, llex: 2, lley: 4, llhx: -6, llhy: 7,
+    ruk: HK.fist, luk: HK.fist, rlk: HK.fist, llk: HK.fist, nod: 1, eyes: 3, jaw: 1,
+  };
+  const keys: KKey[] = [
+    [0, { jaw: 1, eyes: 3, hy: -1, lean: -2 }],
+    // Кувырок вбок: поджался, оборот в воздухе.
+    [0.08, { ...curled, frot: d * 1.3, air: 9, hy: 0, lean: 0 }, kOut],
+    [0.3, { frot: d * TAU * 0.86, air: 9 }, kLin],
+    // Упал на колено, сплющился.
+    [0.42, { ...KKNEEL, frot: d * TAU, air: 0, fsx: 1.12, fsy: 0.86, jaw: 0.5, eyes: 2, nod: 1, hy: 2 }, kIn],
+    [0.54, { fsx: 1, fsy: 1, stars: 1 }, kOut],
+    [1.9, { stars: 1 }, kLin],
+    [2.05, { stars: 0, hy: 0, nod: 0, hx: 1 }, kIO],
+    [KING.trainStun, { ...b, frot: d * TAU }, kIO],
+  ];
+  const ev = kCompile(keys, b);
+  return (t: number) => {
+    const r = ev(t);
+    if (t > 0.54 && t < 2.0) {
+      const a = ((t - 0.54) / 0.55) * TAU;
+      r.br = Math.round(0.5 - 0.5 * Math.cos(a));
+      r.hx += Math.round(Math.sin(a * 0.5));
+    }
+    return r;
+  };
+}
+
+function kDeath(k: KT): (t: number) => KR {
+  const b = k.b;
+  const keys: KKey[] = [
+    [0, {}],
+    // Добит: голова назад, крик, руки вразлёт.
+    [0.08, {
+      hy: -2, nod: -1, jaw: 1, eyes: 3, glow: 1, lean: -1, flare: 1, mjaw: 1,
+      ruex: 7, ruey: -3, ruhx: 13, ruhy: -8, ruk: HK.claw, luex: 7, luey: -3, luhx: 13, luhy: -8, luk: HK.claw,
+      rlex: 6, rley: 1, rlhx: 11, rlhy: 1, rlk: HK.open, llex: 6, lley: 1, llhx: 11, llhy: 1, llk: HK.open,
+    }, kOut],
+    // Колени подламываются.
+    [0.3, { hip: 11, lkx: -8, lky: 4, rkx: 8, rky: 4, lfx: -5, rfx: 5, lfy: 2, rfy: 2, flare: 0.4, lean: 0 }, kIO],
+    // На коленях, голова упала.
+    [0.5, {
+      hip: 8, bend: 2, lkx: -7, lky: 1.5, rkx: 7, rky: 1.5, lfx: -3, lfy: 3, rfx: 3, rfy: 3,
+      hy: 2, nod: 2, jaw: 0.3, eyes: 0, glow: 0, flare: 0, aura: 0, mjaw: 0, m2: 0,
+      ruex: 3, ruey: 8, ruhx: 4, ruhy: 15, ruk: HK.open, luex: 3, luey: 8, luhx: 4, luhy: 15, luk: HK.open,
+      rlex: 3, rley: 7, rlhx: 3, rlhy: 13, llex: 3, lley: 7, llhx: 3, llhy: 13, fsx: 1.04, fsy: 0.95,
+    }, kIn],
+    [0.6, { fsx: 1, fsy: 1 }, kOut],
+  ];
+  return kCompile(keys, b);
+}
+
+/** Смена фазы поверх любой позы. 1 — глаз маски распахивается; 3 — рёв. */
+function kOverlay(r: KR, ov: number, t: number): KR {
+  if (ov === 1) {
+    const keys: KKey[] = [
+      [0, { m2: 0, mb: 0, mjaw: 0 }],
+      [0.1, { hx: r.hx - 1 }, kOut],
+      [0.22, { m2: 0.4, hx: r.hx }, kIO],
+      [0.34, { m2: 1.5, mb: 1, mjaw: 1, eyes: 2 }, kOut],
+      [0.7, { mb: 0.2 }, kIO],
+      [0.9, { m2: 1, mb: 0, mjaw: 0, eyes: r.eyes }, kIO],
+    ];
+    return kTrack(keys, t, r);
+  }
+  const keys: KKey[] = [
+    [0, {}],
+    [0.14, { jaw: 1, eyes: 3, flare: 1, br: 1, glow: 1, nod: -1 }, kOut],
+    [0.55, { jaw: 1, flare: 0.8 }, kLin],
+    [0.8, { jaw: r.jaw, flare: r.flare, br: r.br, nod: r.nod }, kIO],
+  ];
+  return kTrack(keys, t, r);
+}
+
+// ---- Смерть: пепел снизу вверх, маска падает последней ---------------------
+
+const K_EMBER = hx('#ff3a6a');
+/** Маска отрывается в этот миг смерти. */
+const MASK_OFF = 0.6;
+
+/** Тело осыпается: сверху вниз пиксели вспыхивают углём, пепел оседает кучкой. */
+function kCrumble(p: Px, lit: Px, t: number): Px {
+  if (t < MASK_OFF) return p;
+  let y0 = KH;
+  let y1 = 0;
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++)
+      if (p.data[(y * p.w + x) * 4 + 3]) {
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+        break;
+      }
+  const o = new Px(p.w, p.h);
+  const span = Math.max(1, y1 - y0);
+  const fade = t > 1.2 ? Math.max(0, 1 - (t - 1.2) / 0.22) : 1;
+  for (let y = y0; y <= y1; y++)
+    for (let x = 0; x < p.w; x++) {
+      const i = (y * p.w + x) * 4;
+      if (!p.data[i + 3]) continue;
+      const ts = MASK_OFF + ((y - y0) / span) * 0.46 + hash(x, y, 5) * 0.12;
+      if (t < ts) {
+        o.data[i] = p.data[i];
+        o.data[i + 1] = p.data[i + 1];
+        o.data[i + 2] = p.data[i + 2];
+        o.data[i + 3] = p.data[i + 3];
+        continue;
+      }
+      const a = t - ts;
+      const r = hash(x, y, 9);
+      if (a < 0.05) {
+        o.set(x, y, K_ASH[2]);
+        lit.set(x, y, alpha(hx('#ff6a4a'), 0.9));
+        continue;
+      }
+      if (r < 0.17) {
+        // Уголёк уходит вверх и гаснет.
+        if (a < 0.5)
+          lit.set(x + (hash(x, y, 2) - 0.5) * a * 12, y - a * 20 - a * a * 10, alpha(r < 0.06 ? hx('#ffc080') : K_EMBER, 1 - a / 0.5));
+      } else if (fade > 0) {
+        // Пепел оседает в кучку у ног.
+        const yy = Math.min(KGY - (hash(x, y, 4) < 0.4 ? 1 : 0), y + a * a * 170);
+        o.set(x + (hash(x, y, 2) - 0.5) * a * 7, yy, alpha(K_ASH[Math.floor(hash(x, y, 6) * 3)], fade));
+      }
+    }
+  return o;
+}
+
+/** Повернуть маленький холст и положить в точку (ближайший пиксель). */
+function kBlitRot(dst: Px, src: Px, cx: number, cy: number, ang: number, a: number): void {
+  const c = Math.cos(ang);
+  const s = Math.sin(ang);
+  const R = Math.ceil(Math.hypot(src.w, src.h) / 2) + 1;
+  const ox = src.w / 2;
+  const oy = src.h / 2;
+  for (let y = -R; y <= R; y++)
+    for (let x = -R; x <= R; x++) {
+      const u = Math.floor(x * c + y * s + ox);
+      const v = Math.floor(-x * s + y * c + oy);
+      if (u < 0 || v < 0 || u >= src.w || v >= src.h) continue;
+      const i = (v * src.w + u) * 4;
+      if (!src.data[i + 3]) continue;
+      dst.set(Math.round(cx + x), Math.round(cy + y), [src.data[i], src.data[i + 1], src.data[i + 2], Math.round(src.data[i + 3] * a)]);
+    }
+}
+
+/** Маска отрывается от лица, падает с оборотом, подскакивает, лежит, раскалывается и гаснет последней. */
+function kMaskFall(p: Px, t: number, k: KT): void {
+  if (t < MASK_OFF) return;
+  const r0 = kRigFn('death', k)(MASK_OFF);
+  const g0 = kGeo(r0);
+  const mx0 = g0.hcx - 6 + Math.round(r0.look * 0.5);
+  const my0 = g0.hcy + 0.8 + Math.round(r0.nod) * 0.5;
+  const tt = t - MASK_OFF;
+  const floorY = KGY - 2;
+  const G = 360;
+  const tl = Math.sqrt((2 * Math.max(1, floorY - my0)) / G);
+  let x: number;
+  let y: number;
+  let ang: number;
+  if (tt < tl) {
+    x = mx0 - tt * 12;
+    y = my0 + 0.5 * G * tt * tt;
+    ang = -tt * 7;
+  } else {
+    const tb = tt - tl;
+    const k1 = Math.min(1, tb / 0.18);
+    x = mx0 - tl * 12 - k1 * 3;
+    y = floorY - Math.sin(k1 * Math.PI) * 3;
+    ang = -tl * 7 + (-Math.PI / 2 + tl * 7) * kOut(k1);
+  }
+  const m = new Px(9, 11);
+  shadeEll(m, 4.5, 5.5, 2.9, 4.1, K_MASK, 0.05);
+  m.set(4, 5, K_TAT);
+  m.set(3, 5, K_TAT);
+  for (let xx = 2; xx <= 5; xx++) m.set(xx, 8, xx % 2 ? BONE[3] : K_TAT);
+  m.set(5, 2, K_TAT);
+  m.set(5, 3, K_TAT);
+  m.set(4, 4, K_TAT);
+  m.set(3, 6, K_TAT);
+  if (t > 1.12) for (let yy = 1; yy < 10; yy++) clr(m, 4 + (yy % 2), yy);
+  m.outline(INK);
+  const a = t > 1.3 ? Math.max(0, 1 - (t - 1.3) / 0.15) : 1;
+  kBlitRot(p, m, x, y, ang, a);
+}
+
+// ---- Кадр: режим мозга → техника, кадр; кеш, зеркало, вспышка ----------
+
+type KTech =
+  | 'idle' | 'run' | 'intro' | 'cut' | 'cleave' | 'bow' | 'pyre' | 'cast'
+  | 'dsit' | 'dmed' | 'dgrid' | 'dcut' | 'broken' | 'train' | 'death';
+
+interface KQ {
+  tech: KTech;
+  f: number;
+  hk: number;
+  p1: boolean;
+  rage: boolean;
+  crack: number;
+  edge: boolean;
+  /** Вздрог от удара героя: 0, 1, 2 (в покое и на ходу). */
+  fl: number;
+  /** Смена фазы поверх позы (1 или 3) и её кадр. */
+  ov: number;
+  of: number;
+  dir: number;
+  /** Угол удара шагом 30°: −3…3. */
+  aim: number;
+  flip: boolean;
+  flash: boolean;
+}
+
+const LOOPS: Partial<Record<KTech, number>> = { idle: 24, dmed: 24, run: 8 };
+const fr1 = (x: number) => ((x % 1) + 1) % 1;
+
+function kCtx(q: KQ): KT {
+  const b = { ...KB0 };
+  b.m2 = q.p1 ? 1 : 0;
+  b.glow = q.rage ? 1 : 0.6;
+  b.aura = q.rage ? 0.3 : 0;
+  b.crack = q.crack;
+  return { h: q.hk / 100, b, n: q.rage ? 5 : 3, dir: q.dir, aim: (q.aim * Math.PI) / 6 };
+}
+
+/** Длительность техники и её такт (сетка кадров выровнена так, что такт — ровно кадр). */
+function kSpan(tech: KTech, k: KT): { dur: number; beat: number } {
+  switch (tech) {
+    case 'intro':
+      return { dur: KING.intro, beat: 0 };
+    case 'cut':
+      return { dur: tCutEnd(k), beat: tCut(k) };
+    case 'cleave':
+      return { dur: tCleaveEnd(k), beat: tClaw(k) };
+    case 'bow':
+      return { dur: tBowEnd(k), beat: tBow(k) };
+    case 'pyre':
+      return { dur: PYRE_END, beat: 0 };
+    case 'cast':
+      return { dur: KING.cast, beat: 0 };
+    case 'dsit':
+      return { dur: DSIT_END, beat: 0 };
+    case 'dgrid':
+      return { dur: GRID_END, beat: GRID_T };
+    case 'dcut':
+      return { dur: DCUT_END, beat: DCUT_T };
+    case 'broken':
+      return { dur: KING.broken, beat: 0 };
+    case 'train':
+      return { dur: KING.trainStun, beat: 0 };
+    case 'death':
+      return { dur: DEATH_T, beat: 0 };
+    default:
+      return { dur: 1, beat: 0 };
+  }
+}
+
+const kDelta = (beat: number) => beat - Math.floor(beat * KFPS + 1e-6) / KFPS;
+
+function kCount(tech: KTech, k: KT): number {
+  const lp = LOOPS[tech];
+  if (lp) return lp;
+  const { dur, beat } = kSpan(tech, k);
+  return Math.floor((dur - kDelta(beat)) * KFPS + 1e-6) + 1;
+}
+
+/**
+ * Номер кадра техники в миг `t` режима. Кадр стоит полкадра до своей
+ * выборки и полкадра после: кадр контакта центрирован на миге урона.
+ */
+function kFrameAt(tech: KTech, k: KT, t: number): number {
+  const d = kDelta(kSpan(tech, k).beat);
+  return kc(Math.floor((t - d) * KFPS + 0.5 + 1e-6), 0, kCount(tech, k) - 1);
+}
+
+/** Когда снят кадр f. */
+function kTimeOf(tech: KTech, f: number, k: KT): number {
+  if (tech === 'idle' || tech === 'dmed') return f / 10;
+  if (tech === 'run') return (f / 8) * RUN_T;
+  return Math.max(0, f / KFPS + kDelta(kSpan(tech, k).beat));
+}
+
+const KFN = new Map<string, (t: number) => KR>();
+
+/** Поза техники как функция времени; собирается один раз на технику и фазу. */
+function kRigFn(tech: KTech, k: KT): (t: number) => KR {
+  const key = `${tech}|${k.h}|${k.b.m2}|${k.b.glow}|${k.b.aura}|${k.b.crack}|${k.dir}|${k.aim}`;
+  const got = KFN.get(key);
+  if (got) return got;
+  let fn: (t: number) => KR;
+  switch (tech) {
+    case 'idle':
+      fn = (t) => kIdle(fr1(t / 2.4), k.b);
+      break;
+    case 'run':
+      fn = (t) => kRun(fr1(t / RUN_T), k.b);
+      break;
+    case 'dmed':
+      fn = (t) => kMed(fr1(t / 2.4), k);
+      break;
+    case 'intro':
+      fn = kIntro(k);
+      break;
+    case 'cut':
+      fn = kCut(k);
+      break;
+    case 'cleave':
+      fn = kCleave(k);
+      break;
+    case 'bow':
+      fn = kBow(k);
+      break;
+    case 'pyre':
+      fn = kPyre(k);
+      break;
+    case 'cast':
+      fn = kCast(k);
+      break;
+    case 'dsit':
+      fn = kDsit(k);
+      break;
+    case 'dgrid':
+      fn = kDgrid(k);
+      break;
+    case 'dcut':
+      fn = kDcut(k);
+      break;
+    case 'broken':
+      fn = kBroken(k);
+      break;
+    case 'train':
+      fn = kTrain(k);
+      break;
+    case 'death':
+      fn = kDeath(k);
+      break;
+  }
+  if ((tech === 'cut' || tech === 'cleave' || tech === 'bow') && k.aim) {
+    // Выпад и отдача — по направлению удара, а не только вбок.
+    const raw = fn;
+    const c = Math.cos(k.aim);
+    const sn = Math.sin(k.aim);
+    fn = (t) => {
+      const r = raw(t);
+      const v = r.fdx;
+      r.fdx = v * c;
+      r.fdy += v * sn;
+      return r;
+    };
+  }
+  KFN.set(key, fn);
+  return fn;
+}
+
+/** Путь кисти назад во времени, в координатах текущего кадра. */
+function kPath(at: (t: number) => KR, a: K4, t: number, from: number, now: KR, step = 1 / 72): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = 0; i <= 12; i++) {
+    const s = t - i * step;
+    if (s < from - 1e-6) break;
+    const r = i ? at(s) : now;
+    const g = kGeo(r);
+    out.push([g.H[a][0] + r.fdx - now.fdx, g.H[a][1] + r.fdy - now.fdy]);
+  }
+  return out;
+}
+
+function kSmearsOf(tech: KTech, t: number, k: KT, at: (t: number) => KR, r: KR): KSmear[] {
+  const win = (a: number, b: number) => t >= a && t <= b;
+  if (tech === 'cut') {
+    const T = tCut(k);
+    if (win(T - 2 * KF, T + 2 * KF)) return [{ pts: kPath(at, 'ru', t, T - 2 * KF, r), w: 3, kind: 'cut' }];
+  }
+  if (tech === 'cleave') {
+    const T = tClaw(k);
+    if (win(T - 2 * KF, T))
+      return (['ru', 'lu'] as K4[]).map((a) => ({ pts: kPath(at, a, t, T - 2 * KF, r), w: 2, kind: 'claw' as const }));
+  }
+  if (tech === 'dgrid' && win(GRID_T - 3 * KF, GRID_T + KF))
+    return (['ru', 'lu'] as K4[]).map((a) => ({ pts: kPath(at, a, t, GRID_T - 3 * KF, r), w: 3, kind: 'cut' as const }));
+  if (tech === 'dcut' && win(DCUT_T - 3 * KF, DCUT_T + 2 * KF))
+    return [{ pts: kPath(at, 'ru', t, DCUT_T - 3 * KF, r), w: 3, kind: 'cut' }];
+  return [];
+}
+
+function kTrailOf(tech: KTech, t: number, k: KT, at: (t: number) => KR, r: KR): KTrail | null {
+  if (tech === 'cleave') {
+    const Tc = tClaw(k);
+    if (t < Tc || t > Tc + 0.28) return null;
+    // Две косые борозды через грудь — от вскинутых когтей до скрещённых рук.
+    const rc = at(Tc);
+    const g = kGeo(rc);
+    const ox = rc.fdx - r.fdx;
+    const oy = rc.fdy - r.fdy;
+    const cx = g.cx + g.L + ox;
+    const cy = g.sy + 1 + oy;
+    return {
+      pts: [],
+      tear: [
+        [cx + 16, cy - 9, cx - 12, cy + 15],
+        [cx - 16, cy - 9, cx + 12, cy + 15],
+      ],
+      age: t - Tc,
+      n: 1,
+      gap: 0,
+    };
+  }
+  let T = -1;
+  let n = 3;
+  let gap = 0.07;
+  if (tech === 'cut') {
+    T = tCut(k);
+    n = k.n;
+    gap = 0.07 / k.h;
+  } else if (tech === 'dcut') T = DCUT_T;
+  if (T < 0 || t < T || t > T + gap * (n - 1) + 0.4) return null;
+  // Разрез — дуга взмаха вокруг контакта, продлённая за концы: воздух
+  // рассечён дальше, чем прошла рука. В координатах текущего кадра.
+  const rc = at(T + KF);
+  const pts = kPath(at, 'ru', T + KF, T - 2 * KF, rc, 1 / 48).map(([x, y]) => [x + rc.fdx - r.fdx, y + rc.fdy - r.fdy] as [number, number]);
+  if (pts.length >= 2) {
+    const ext = (a: [number, number], b: [number, number]): [number, number] => {
+      const dx = a[0] - b[0];
+      const dy = a[1] - b[1];
+      const d = Math.hypot(dx, dy) || 1;
+      return [a[0] + (dx / d) * 5, a[1] + (dy / d) * 5];
+    };
+    pts.unshift(ext(pts[0], pts[1]));
+    pts.push(ext(pts[pts.length - 1], pts[pts.length - 2]));
+  }
+  return { pts, age: t - T, n, gap };
+}
+
+const KFR = frameLRU<MobFrame>(440);
+
+function kKey(q: KQ, v: boolean): string {
+  const s = `${q.tech}|${q.f}|${q.hk}|${q.p1 ? 1 : 0}${q.rage ? 1 : 0}${q.crack}${q.edge ? 1 : 0}|${q.fl}|${q.ov}:${q.of}|${q.tech === 'train' ? q.dir : 0}|${q.aim}`;
+  return v ? `v|${s}|${q.flip ? 1 : 0}${q.flash ? 1 : 0}` : `b|${s}`;
+}
+
+/** Рамка нарисованного (по обоим слоям). */
+function kBox(p: Px, box: number[]): void {
+  const [x0, y0, x1, y1] = kBoxOf(p);
+  if (x1 < 0) return;
+  if (x0 < box[0]) box[0] = x0;
+  if (y0 < box[1]) box[1] = y0;
+  if (x1 > box[2]) box[2] = x1;
+  if (y1 > box[3]) box[3] = y1;
+}
+
+function kCanvas(p: Px, x0: number, y0: number, w: number, h: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  if (g) {
+    const img = g.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      const o = ((y0 + y) * p.w + x0) * 4;
+      img.data.set(p.data.subarray(o, o + w * 4), y * w * 4);
+    }
+    g.putImageData(img, 0, 0);
+  }
+  return c;
+}
+
+/** Кадр без зеркала и вспышки. */
+function kingBuilt(q: KQ): MobFrame {
+  const key = kKey(q, false);
+  const got = KFR.get(key);
+  if (got) return got;
+  const k = kCtx(q);
+  const at = kRigFn(q.tech, k);
+  const t = kTimeOf(q.tech, q.f, k);
+  let r = at(t);
+  if (q.ov) r = kOverlay(r, q.ov, q.of / KFPS);
+  if (q.fl) {
+    // Вздрог: голова назад, плечи вверх, оскал сквозь зубы.
+    r.hy -= q.fl;
+    r.br = 1;
+    r.eyes = Math.max(r.eyes, 2);
+    r.jaw = Math.max(r.jaw, 0.4);
+    r.lean -= q.fl * 0.5;
+  }
+  const loop = !!LOOPS[q.tech];
+  const sec = kSecAt(at, t, loop ? -1e9 : 0);
+  if (q.tech === 'idle' || q.tech === 'dmed') sec.hs += Math.round(Math.sin((t / 2.4) * TAU + 1)) * 0.6;
+  const o: KOpt = {
+    fi: q.f,
+    edge: q.edge,
+    rage: q.rage,
+    sec,
+    smears: kSmearsOf(q.tech, t, k, at, r),
+    trail: kTrailOf(q.tech, t, k, at, r),
+    noMask: q.tech === 'death' && t >= MASK_OFF,
+    st: t,
+  };
+  const painted = kPaint(r, o);
+  let p = painted.p;
+  const lit = painted.lit;
+  const g = painted.g;
+  let eye: [number, number] | null = [g.hcx + 2 + Math.round(r.look), g.hcy + Math.round(r.nod)];
+  if (q.tech === 'death') {
+    p = kCrumble(p, lit, t);
+    kMaskFall(p, t, k);
+    if (t > 0.45) eye = null;
+  }
+  const box = [KW, KH, -1, -1];
+  kBox(p, box);
+  const litBox = [KW, KH, -1, -1];
+  kBox(lit, litBox);
+  const hasLit = litBox[2] >= 0;
+  if (hasLit) {
+    box[0] = Math.min(box[0], litBox[0]);
+    box[1] = Math.min(box[1], litBox[1]);
+    box[2] = Math.max(box[2], litBox[2]);
+    box[3] = Math.max(box[3], litBox[3]);
+  }
+  if (box[2] < 0) box.splice(0, 4, KCX, KGY - 1, KCX, KGY);
+  const x0 = Math.max(0, box[0] - 1);
+  const y0 = Math.max(0, box[1] - 1);
+  const w = Math.min(KW, box[2] + 2) - x0;
+  const h = Math.min(KH, box[3] + 2) - y0;
+  // Наклон движок делает вокруг ног; кувырок — вокруг середины тела.
+  const rot = Math.atan2(Math.sin(r.frot), Math.cos(r.frot));
+  const C = 20;
+  const cdx = rot ? -C * Math.sin(rot) : 0;
+  const cdy = rot ? -C + C * Math.cos(rot) : 0;
+  const out: MobFrame = {
+    img: kCanvas(p, x0, y0, w, h),
+    lit: hasLit ? kCanvas(lit, x0, y0, w, h) : null,
+    ax: KCX - x0,
+    ay: KGY - y0,
+    eye: eye ? [eye[0] - x0, eye[1] - y0] : null,
+    dx: r.fdx + cdx,
+    dy: r.fdy - r.air + cdy,
+    sx: r.fsx,
+    sy: r.fsy,
+    rot,
+    still: true,
+    shadow: Math.round((r.hip < 8 ? 17 : 14) * (1 - Math.min(0.5, r.air / 24))),
+  };
+  if (q.tech === 'death') out.linger = DEATH_T;
+  return KFR.set(key, out);
+}
+
+function kMirror(src: HTMLCanvasElement): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d');
+  if (g) {
+    g.translate(src.width, 0);
+    g.scale(-1, 1);
+    g.drawImage(src, 0, 0);
+  }
+  return c;
+}
+
+function kWhite(src: HTMLCanvasElement): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d');
+  if (g) {
+    g.drawImage(src, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    g.fillRect(0, 0, c.width, c.height);
+  }
+  return c;
+}
+
+function kingFrame(q: KQ): MobFrame {
+  if (!q.flip && !q.flash) return kingBuilt(q);
+  const key = kKey(q, true);
+  const got = KFR.get(key);
+  if (got) return got;
+  if (q.flash) {
+    const src = kingFrame({ ...q, flash: false });
+    return KFR.set(key, { ...src, img: kWhite(src.img) });
+  }
+  const b = kingBuilt({ ...q, flip: false });
+  const w = b.img.width;
+  return KFR.set(key, {
+    ...b,
+    img: kMirror(b.img),
+    lit: b.lit ? kMirror(b.lit) : null,
+    eye: b.eye ? [w - 1 - b.eye[0], b.eye[1]] : null,
+    ax: w - b.ax,
+    dx: -(b.dx ?? 0),
+    rot: -(b.rot ?? 0),
+  });
+}
+
+// ---- Память о прошлом режиме (стол, шаг, смена фазы, кувырок) ----------
+
+interface KMem {
+  mode: string;
+  prev: string;
+  now: number;
+  walk: number;
+  phase: number;
+  phAt: number;
+  phTo: number;
+  dir: number;
+}
+const kMem = new Map<number, KMem>();
+
+function kMemOf(m: Mob, pose: MobPose): { s: KMem; fresh: boolean } {
+  let s = kMem.get(m.id);
+  const fresh = !s || pose.now < s.now - 1e-3 || pose.now - s.now > 3;
+  if (!s || fresh) {
+    s = { mode: pose.mode, prev: '', now: pose.now, walk: 0, phase: m.data.phase ?? 0, phAt: -1e9, phTo: 0, dir: 1 };
+    kMem.set(m.id, s);
+  }
+  if (pose.mode !== s.mode) {
+    s.prev = s.mode;
+    s.mode = pose.mode;
+  }
+  const dt = kc(pose.now - s.now, 0, 0.1);
+  s.now = pose.now;
+  s.walk += Math.hypot(m.vx ?? 0, m.vy ?? 0) * 16 * dt;
+  const ph = m.data.phase ?? 0;
+  if (ph > s.phase) {
+    s.phAt = pose.now;
+    s.phTo = ph;
+  }
+  s.phase = ph;
+  if (pose.mode === 'f12_trainhit' && pose.t < 0.2 && Math.abs(m.ky ?? 0) > 1) s.dir = Math.sign(m.ky);
+  return { s, fresh };
+}
+
+function kingReq(m: Mob, pose: MobPose): KQ {
+  const { s, fresh } = kMemOf(m, pose);
+  const phase = m.data.phase ?? 0;
+  const mode = pose.mode;
+  const q: KQ = {
+    tech: 'idle',
+    f: 0,
+    hk: phase >= 3 ? 130 : 100,
+    p1: phase >= 1,
+    rage: phase >= 3,
+    crack: phase >= 2 && mode !== 'f12_cast' && mode !== 'f12_domain' ? 3 : 0,
+    edge: (m.data.ghost ?? 0) > 0,
+    fl: 0,
+    ov: 0,
+    of: 0,
+    dir: m.data.vKy ? Math.sign(m.data.vKy) : s.dir,
+    aim: 0,
+    flip: pose.left,
+    // Смерть белым не мигает: копия убранного моба держит последнюю вспышку.
+    flash: pose.flash && (mode !== 'dying' || pose.t < 0.08),
+  };
+  // Угол на цель в кадре «смотрит вправо» (зеркало сделает кадр): шагом 30°.
+  const aimOf = (a: number) => {
+    const th = Math.atan2(Math.sin(a), Math.abs(Math.cos(a)));
+    return kc(Math.round(th / (Math.PI / 6)), -3, 3);
+  };
+  const vAim = m.data.vAim;
+  if (mode === 'f12_cut' || mode === 'f12_cleave' || mode === 'f12_bow' || mode === 'recover')
+    q.aim = aimOf(vAim ?? (mode === 'f12_bow' || (mode === 'recover' && (m.data.bowCd ?? 0) > 5) ? (m.data.ang ?? m.face) : m.face));
+  const k = kCtx(q);
+  const t = Math.max(0, pose.t);
+  const at = (tech: KTech, tt: number) => {
+    q.tech = tech;
+    q.f = kFrameAt(tech, k, tt);
+  };
+  switch (mode) {
+    case 'f12_intro':
+      at('intro', t);
+      q.flip = false;
+      break;
+    case 'f12_cut':
+      at('cut', t);
+      break;
+    case 'f12_cleave':
+      at('cleave', t);
+      break;
+    case 'f12_bow':
+      at('bow', Math.min(t, tBow(k) - 1e-3));
+      break;
+    case 'f12_pyre':
+      at('pyre', t);
+      break;
+    case 'f12_cast':
+      at('cast', t);
+      q.flip = false;
+      break;
+    case 'f12_domain': {
+      q.flip = false;
+      if (t < DSIT_END) {
+        at('dsit', t);
+        break;
+      }
+      const sim = paintSim();
+      const ks = sim ? f12King(sim) : null;
+      const tg = sim && ks && ks.cutAt > 0 ? sim.time - (ks.cutAt - KING.gridWarn) : -1;
+      const tc = 4.2 - (m.data.cutCd ?? 0);
+      const sg = m.data.vSheetGrid ? fr1((t - DSIT_END) / (GRID_END + 0.4)) * (GRID_END + 0.4) : -1;
+      const sc = m.data.vSheetCut ? fr1((t - DSIT_END) / (DCUT_END + 0.4)) * (DCUT_END + 0.4) : -1;
+      if (tg >= 0 && tg < GRID_END) at('dgrid', tg);
+      else if (sg >= 0 && sg < GRID_END) at('dgrid', sg);
+      else if (ks && tc >= 0 && tc < DCUT_END) at('dcut', tc);
+      else if (sc >= 0 && sc < DCUT_END) at('dcut', sc);
+      else {
+        q.tech = 'dmed';
+        q.f = Math.floor(pose.now * 10 + (m.id ?? 0) * 3.7) % 24;
+      }
+      break;
+    }
+    case 'f12_broken':
+      at('broken', t);
+      q.flip = false;
+      break;
+    case 'f12_trainhit':
+      at('train', t);
+      break;
+    case 'recover': {
+      // Чем кончился удар — по откату мозга: стрела ставит 6–8,5, рассечение 3,2.
+      if ((m.data.bowCd ?? 0) > 5) at('bow', tBow(k) + t);
+      else if ((m.data.cutCd ?? 0) > 2.25) at('cut', tCut(k) + 0.1 + t);
+      else at('cleave', tCross(k) + 0.1 + t);
+      break;
+    }
+    case 'dying':
+      at('death', t);
+      break;
+    default: {
+      // Только что был столб пламени — встаёт из приседа.
+      const tp = (7.5 - (m.data.pyreCd ?? 0)) / k.h;
+      if ((s.prev === 'f12_pyre' || (tp > PYRE_T - 0.05 && tp < PYRE_END)) && t < PYRE_END - PYRE_T) {
+        at('pyre', PYRE_T + t);
+        break;
+      }
+      const sp = Math.hypot(m.vx ?? 0, m.vy ?? 0);
+      if (pose.anim === 'run' || sp > 0.4) {
+        q.tech = 'run';
+        const d = fresh ? pose.now * sp * 16 : s.walk;
+        q.f = Math.floor(fr1(d / K_STRIDE) * 8) % 8;
+      } else {
+        q.tech = 'idle';
+        q.f = Math.floor(pose.now * 10 + (m.id ?? 0) * 3.7) % 24;
+      }
+      const fl = m.flash ?? 0;
+      q.fl = fl > 0.07 ? 2 : fl > 0.01 ? 1 : 0;
+    }
+  }
+  // Смена фазы: глаз маски распахивается (1), рёв (3) — поверх позы.
+  const pa = m.data.vSheetPh ? t : pose.now - s.phAt;
+  const pto = m.data.vSheetPh ? phase : s.phTo;
+  if (mode !== 'dying' && (pto === 1 || pto === 3) && pa >= 0 && pa < (pto === 1 ? 0.9 : 0.8)) {
+    q.ov = pto;
+    q.of = Math.floor(pa * KFPS);
+  }
+  return q;
 }
 
 registerMobPainter('f12boss', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const f = pose.frame;
-  const phase = m.data.phase ?? 0;
-  const ghost = (m.data.ghost ?? 0) > 0;
-  const base = kingBase();
-  base.face2 = phase >= 1;
-  base.glow = phase >= 3 ? 1 : 0.6;
-  base.ghost = ghost;
-  let kp: KingPose = base;
-  let anim = mode;
-  let fr = 0;
-  const arms = (a: [Arm, Arm], b: [Arm, Arm] = a) => ({ ru: a[0], rl: a[1], lu: b[0], ll: b[1] });
-  switch (mode) {
-    case 'f12_intro':
-      fr = Math.min(3, Math.floor(pose.t / (KING.intro / 4)));
-      kp =
-        fr < 2
-          ? { ...base, body: 'sit', ...arms(A_SIT), glow: fr ? 0.9 : 0.3, face2: false, aura: fr * 0.5, f: fr }
-          : fr === 2
-            ? { ...base, body: 'kneel', ...arms(A_LIMP), glow: 1, face2: false, aura: 0.8, f: fr }
-            : { ...base, ...arms(A_CLAW0), roar: true, glow: 1, face2: false, aura: 1, f: fr };
-      break;
-    case 'f12_cut':
-      fr = pose.t < KING.cutAim * 0.7 ? 0 : 1;
-      kp =
-        fr === 0
-          ? { ...base, ru: [3, -6, 2, -13], rl: A_CROSS, lu: A_REST[0], ll: A_CROSS, fx: 'cut0', tilt: 1 }
-          : { ...base, ru: [7, 0, 13, 6], rl: A_CROSS, lu: A_REST[0], ll: A_CROSS, fx: 'cut1', tilt: 1, step: 1 };
-      break;
-    case 'f12_cleave':
-      fr = pose.t < 0.6 ? 0 : 1;
-      kp = fr === 0 ? { ...base, ...arms(A_CLAW0), fx: 'claw', bob: -1 } : { ...base, ...arms(A_CLAW1), fx: 'claw', roar: true, step: 1 };
-      break;
-    case 'f12_bow': {
-      const st = Math.min(2, Math.floor(pose.t / (KING.bowDraw / 3)));
-      fr = st * 2 + (f & 1);
-      kp = {
-        ...base,
-        ru: [7, -1, 14, -1],
-        lu: [4, 2, -2, 0],
-        rl: [5, 4, 8, 9],
-        ll: A_REST[1],
-        fx: 'bow',
-        draw: st / 2,
-        f: f & 1,
-        glow: 1,
-        face2: true,
-        step: -1,
-      };
-      break;
+  const q = kingReq(m, pose);
+  const fr = kingFrame(q);
+  const out: MobFrame = { ...fr };
+  const k = kCtx(q);
+  const t = kTimeOf(q.tech, q.f, k);
+  // Шлейф: рывок когтей, взмах, отдача лука, кувырок, скольжение к помосту.
+  if (q.tech === 'cleave' && t > tClaw(k) - 3 * KF && t < tClaw(k) + 2 * KF)
+    out.ghost = { every: 0.03, life: 0.16, tint: '#c0103a', alpha: 0.35 };
+  else if (q.tech === 'cut' && t > tCut(k) - 2 * KF && t < tCut(k) + KF)
+    out.ghost = { every: 0.03, life: 0.12, tint: '#ff4a62', alpha: 0.22 };
+  else if (q.tech === 'bow' && t >= tBow(k) && t < tBow(k) + 0.14)
+    out.ghost = { every: 0.03, life: 0.16, tint: '#ff8a30', alpha: 0.3 };
+  else if (q.tech === 'train' && t > 0.02 && t < 0.42)
+    out.ghost = { every: 0.025, life: 0.2, tint: '#ffffff', alpha: 0.35 };
+  else if (q.tech === 'cast' && t > 0.1 && t < 0.72)
+    out.ghost = { every: 0.05, life: 0.3, tint: '#ff2a5a', alpha: 0.3 };
+  // Отдача от удара героя: по направлению удара, с возвратом.
+  const fl = m.flash ?? 0;
+  if (fl > 0 && pose.mode !== 'dying' && q.tech !== 'dmed' && q.tech !== 'dsit') {
+    const sim = paintSim();
+    const age = kc(0.12 - fl, 0, 0.12);
+    let ux = q.flip ? 1 : -1;
+    let uy = 0;
+    if (sim) {
+      const dx = m.x - sim.hero.x;
+      const dy = m.y - sim.hero.y;
+      const d = Math.hypot(dx, dy) || 1;
+      ux = dx / d;
+      uy = dy / d;
     }
-    case 'f12_pyre':
-      fr = f & 3;
-      kp = { ...base, ...arms(A_PYRE), fx: 'pyre', roar: true, f: fr, glow: 1 };
-      break;
-    case 'f12_cast':
-      fr = (Math.floor(pose.t * 6) & 1) + (pose.t > 1.2 ? 2 : 0);
-      kp = { ...base, ...arms(A_SIGN), fx: 'sign', belly: pose.t > 1.2, aura: pose.t > 1.2 ? 1 : 0.5, glow: 1, f: fr };
-      break;
-    case 'f12_domain':
-      fr = f & 3;
-      kp = {
-        ...base,
-        body: 'sit',
-        ...arms(A_SIT),
-        bob: [0, -1, -1, 0][fr],
-        belly: true,
-        glow: 1,
-        face2: true,
-        aura: 1,
-        f: fr,
-      };
-      break;
-    case 'f12_broken':
-      fr = f & 3;
-      kp = { ...base, body: 'kneel', ...arms(A_LIMP), tilt: 2, stars: true, glow: 0.2, f: fr, bob: 1 };
-      break;
-    case 'f12_trainhit':
-      fr = f & 3;
-      kp = { ...base, body: 'kneel', ...arms(A_LIMP), tilt: -3, stars: true, glow: 0.2, f: fr, bob: 2 };
-      break;
-    case 'recover':
-      fr = 0;
-      kp = { ...base, ...arms(A_LIMP), bob: 1 };
-      break;
-    case 'dying':
-      fr = deathK(pose);
-      kp = { ...base, body: 'kneel', ...arms(A_LIMP), roar: true, glow: 0, tilt: 2 };
-      anim = 'dead';
-      break;
-    default:
-      if (pose.anim === 'run') {
-        anim = 'run';
-        fr = f & 3;
-        const s = [1, 0, -1, 0][fr];
-        kp = {
-          ...base,
-          step: s,
-          bob: fr & 1 ? -1 : 0,
-          ru: [4, 7, 5, 14 - 2 * s],
-          lu: [4, 7, 5, 14 + 2 * s],
-          rl: [3, 6, 4, 12 + s],
-          ll: [3, 6, 4, 12 - s],
-        };
-      } else {
-        anim = 'idle';
-        fr = f & 3;
-        kp = { ...base, bob: fr === 2 ? 1 : 0 };
-      }
+    const soft = q.tech === 'idle' || q.tech === 'run' || q.tech === 'broken' || q.tech === 'train';
+    const kk = Math.sin((age / 0.12) * Math.PI) * (soft ? 2.2 : 0.9);
+    out.dx = (out.dx ?? 0) + ux * kk;
+    out.dy = (out.dy ?? 0) + uy * kk * 0.6;
   }
-  const tag = `${anim}|${phase >= 1 ? 1 : 0}${phase >= 3 ? 1 : 0}${ghost ? 1 : 0}`;
-  return frameOf('f12boss', pose, tag, fr, () => {
-    const b = drawKing(kp);
-    if (anim === 'dead') b.p = ashen(b.p, fr, 11, hx('#ff2a4a'));
-    return b;
-  });
+  return out;
+});
+
+// Прогрев: первый бой — пробуждение, покой, шаг, рассечение и расщепление в обе стороны.
+registerMobWarm('f12boss', function* () {
+  const base: KQ = {
+    tech: 'intro', f: 0, hk: 100, p1: false, rage: false, crack: 0, edge: false,
+    fl: 0, ov: 0, of: 0, dir: 1, aim: 0, flip: false, flash: false,
+  };
+  const list: [KTech, boolean, boolean][] = [
+    ['intro', true, false],
+    ['idle', false, true],
+    ['run', false, true],
+    ['cut', false, true],
+    ['cleave', false, true],
+  ];
+  for (const [tech, edge, both] of list) {
+    const n = kCount(tech, kCtx({ ...base, tech }));
+    for (let f = 0; f < n; f++) {
+      kingBuilt({ ...base, tech, f, edge });
+      yield f;
+      if (both) {
+        kingFrame({ ...base, tech, f, edge, flip: true });
+        yield f;
+      }
+    }
+  }
 });
 
 // ===========================================================================
