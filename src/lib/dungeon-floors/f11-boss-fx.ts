@@ -235,8 +235,19 @@ function fillSector(
     bx.push(Math.cos(a));
     by.push(Math.sin(a));
   }
-  const y0 = Math.floor(cy - r1) - 1;
-  const y1 = Math.ceil(cy + r1) + 1;
+  // Строки только там, где кусок бывает: узкий клин не гоняет весь круг.
+  let ylo = -r1;
+  let yhi = r1;
+  if (!full) {
+    const sa = Math.sin(a0);
+    const sb = Math.sin(a1);
+    ylo = Math.min(sa * r0, sa * r1, sb * r0, sb * r1);
+    yhi = Math.max(sa * r0, sa * r1, sb * r0, sb * r1);
+    if (inArc(-PI / 2, a0, a1 - a0)) ylo = -r1;
+    if (inArc(PI / 2, a0, a1 - a0)) yhi = r1;
+  }
+  const y0 = Math.floor(cy + ylo) - 1;
+  const y1 = Math.ceil(cy + yhi) + 1;
   const g = p.g;
   for (let Y = y0; Y <= y1; Y++) {
     const yy = Y + 0.5 - cy;
@@ -274,6 +285,32 @@ function fillSector(
   }
 }
 
+/**
+ * «Через пиксель» одной заливкой строки: узор-шахматка 2×2 цвета `c`,
+ * привязанный к сетке МИРА (сдвиг пера), — вместо пикселя на `fillRect`.
+ */
+const checkers = new Map<string, CanvasPattern | null>();
+function checker(g: CanvasRenderingContext2D, c: string, p: Pen): CanvasPattern | null {
+  let pat = checkers.get(c);
+  if (pat === undefined) {
+    const cv = document.createElement('canvas');
+    cv.width = 2;
+    cv.height = 2;
+    const x = cv.getContext('2d');
+    if (x) {
+      x.fillStyle = c;
+      x.fillRect(0, 0, 1, 1);
+      x.fillRect(1, 1, 1, 1);
+    }
+    pat = g.createPattern(cv, 'repeat');
+    if (checkers.size > 64) checkers.delete(checkers.keys().next().value as string);
+    checkers.set(c, pat);
+  }
+  if (pat && typeof pat.setTransform === 'function')
+    pat.setTransform({ a: 1, b: 0, c: 0, d: 1, e: p.qx, f: p.qy });
+  return pat;
+}
+
 /** Выпуклый многоугольник строками пикселей (точки — пары x, y мира). */
 function fillPoly(p: Pen, pts: number[], dither = false): void {
   const n = pts.length / 2;
@@ -284,6 +321,12 @@ function fillPoly(p: Pen, pts: number[], dither = false): void {
     ymax = Math.max(ymax, pts[i * 2 + 1]);
   }
   const g = p.g;
+  const solid = g.fillStyle;
+  const pat = dither && typeof solid === 'string' ? checker(g, solid, p) : null;
+  if (pat) {
+    g.fillStyle = pat;
+    dither = false;
+  }
   for (let Y = Math.floor(ymin); Y <= Math.ceil(ymax); Y++) {
     const yy = Y + 0.5;
     let lo = 1e9;
@@ -307,6 +350,7 @@ function fillPoly(p: Pen, pts: number[], dither = false): void {
       for (let x = xa + ((xa + Y) & 1); x <= xb; x += 2) g.fillRect(x + p.qx, Y + p.qy, 1, 1);
     else g.fillRect(xa + p.qx, Y + p.qy, xb - xa + 1, 1);
   }
+  if (pat) g.fillStyle = solid;
 }
 
 /** Полоса вдоль (ux, uy) от l0 до l1, полуширина hw — строками пикселей. */
@@ -365,6 +409,12 @@ function disc(p: Pen, cx: number, cy: number, r: number, dither = false): void {
     return;
   }
   const g = p.g;
+  const solid = g.fillStyle;
+  const pat = dither && typeof solid === 'string' ? checker(g, solid, p) : null;
+  if (pat) {
+    g.fillStyle = pat;
+    dither = false;
+  }
   for (let Y = Math.floor(cy - r); Y <= Math.ceil(cy + r); Y++) {
     const yy = Y + 0.5 - cy;
     if (Math.abs(yy) > r) continue;
@@ -376,6 +426,7 @@ function disc(p: Pen, cx: number, cy: number, r: number, dither = false): void {
       for (let x = xa + ((xa + Y) & 1); x <= xb; x += 2) g.fillRect(x + p.qx, Y + p.qy, 1, 1);
     else g.fillRect(xa + p.qx, Y + p.qy, xb - xa + 1, 1);
   }
+  if (pat) g.fillStyle = solid;
 }
 
 // ---- Окружности по пикселям (средняя точка), кеш по радиусу -----------------
@@ -1480,7 +1531,7 @@ function beamCurve(
   const fy0 = by + uy * sE - h;
   const ox = src[0] - fx0;
   const oy = src[1] - fy0;
-  const n = Math.max(2, Math.ceil((s1 - sE) / 3));
+  const n = Math.max(2, Math.ceil((s1 - sE) / 4));
   const out: [number, number, number][] = [[src[0], src[1], by + uy * sE]];
   for (let i = 1; i <= n; i++) {
     const s = sE + ((s1 - sE) * i) / n;
@@ -1512,25 +1563,25 @@ function drawBeam(
   if (L <= sE + 1) return;
   const sMid = Math.min(s1, L);
   const pts = beamCurve(src, bx, by, ux, uy, sE, s1, h);
-  for (let i = 1; i < pts.length; i++) {
-    const s = sE + ((s1 - sE) * i) / (pts.length - 1);
-    if (s > sMid + 0.01) break;
-    const [x0, y0] = pts[i - 1];
-    const [x1, y1, d] = pts[i];
-    front(p, bodies, d, () => {
-      for (const [hw, c, dith] of layers) {
+  // Слой за слоем по ВСЕЙ длине: иначе ореол следующего куска ложится на ядро
+  // прошлого, и сход читается «молнией-застёжкой».
+  for (const [hw, c, dith] of layers) {
+    for (let i = 1; i < pts.length; i++) {
+      const s = sE + ((s1 - sE) * i) / (pts.length - 1);
+      if (s > sMid + 0.01) break;
+      const [x0, y0] = pts[i - 1];
+      const [x1, y1, d] = pts[i];
+      front(p, bodies, d, () => {
         p.col(c, a);
         fillSeg(p, x0, y0, x1, y1, hw, dith);
         disc(p, x1, y1, hw, dith);
-      }
-    });
-  }
-  frontRun(p, bodies, bx, by, ux, uy, sMid, L, (s0, s2) => {
-    for (const [hw, c, dith] of layers) {
+      });
+    }
+    frontRun(p, bodies, bx, by, ux, uy, sMid, L, (s0, s2) => {
       p.col(c, a);
       fillLane(p, bx, by - h, ux, uy, s0, s2, hw, dith);
-    }
-  });
+    });
+  }
 }
 
 /**
@@ -1975,8 +2026,8 @@ function slamSky(p: Pen, m: Mob, S: number, time: number): void {
     }
   }
   // Свет рун от кулаков на земле — ближе, ярче.
-  p.col(C.rune, 0.1 + 0.25 * u);
-  disc(p, tx, ty + 1, 6 + 12 * u, true);
+  p.col(C.rune, 0.06 + 0.16 * u);
+  disc(p, tx, ty + 1, 6 + 12 * u);
   // Проекция появляется из света: сначала полупрозрачная, к земле — плотная.
   // Костяшки — в 2 px над полом в миг удара.
   p.alpha(fadeIn * (0.55 + 0.45 * u));
@@ -2228,7 +2279,7 @@ registerImpactPainter('f11_stomp', {
     );
     // Пыль кольцом по внешней кромке — по ветру.
     const [wx, wy] = windPx(paintSim(), rec.x, rec.y);
-    const nD = few ? 8 : 16;
+    const nD = few ? 8 : 18;
     dust(
       p,
       sd,
@@ -2238,14 +2289,14 @@ registerImpactPainter('f11_stomp', {
       nD,
       0,
       0.25,
-      26,
-      18,
-      2,
-      7,
-      5,
-      1.1,
+      28,
+      20,
+      3,
+      9,
+      6,
+      1.2,
       0,
-      0.7,
+      0.85,
       (i) => 0.06 + 0.06 * hash(sd, i, 8),
       (i) => {
         const th = (i / nD) * TAU;
@@ -2253,6 +2304,39 @@ registerImpactPainter('f11_stomp', {
       },
       [wx * 8, wy * 8],
     );
+    // Из-под ступни — юбка пыли в стороны: ступня весит тонны.
+    dust(
+      p,
+      sd + 3,
+      age,
+      cx,
+      cy,
+      few ? 4 : 8,
+      0,
+      0.2,
+      40,
+      20,
+      3,
+      8,
+      3,
+      0.9,
+      0,
+      0.85,
+      undefined,
+      (i) => {
+        const side = i % 2 ? 1 : -1;
+        return [
+          cx + side * 10,
+          cy + 1,
+          side > 0 ? 0.15 * (i - 4) * 0.2 : PI + 0.15 * (i - 4) * 0.2,
+        ];
+      },
+    );
+    // Миг удара: весь пояс вспыхивает — «досюда».
+    if (age < 0.08) {
+      p.col(C.cream, 0.45 * (1 - age / 0.08));
+      fillSector(p, cx, cy, R0, R1, 0, TAU);
+    }
   }),
 });
 
@@ -2789,7 +2873,7 @@ function spinFloor(p: Pen, sim: Sim, z: FxZone, S: number, time: number): void {
   const out = stage === 2 ? 1 - k : 1;
   const run = stage === 1 ? Math.min(1, (m.t - SPIN_CH) / 0.6) : 1;
   for (const a0 of [sa, sa + PI]) {
-    const N = 7;
+    const N = 5;
     const span = 0.55 * run;
     for (let i = N - 1; i >= 0; i--) {
       const a1 = a0 - sdir * span * ((i + 1) / N);
@@ -3033,6 +3117,9 @@ function steamSky(p: Pen, sim: Sim, z: Zone, S: number, time: number, bodies: Bo
         (_a, i) => hash(i >> 2, sd, 9) > 0.3,
       );
     }
+    // Первый миг — клубы рвутся из решётки во все стороны: у струи сразу объём.
+    if (lt < 0.45)
+      dust(p, sd + 5, lt, cx, cy - 2, few ? 3 : 6, -PI / 2, 1.3, 40, 30, 2, 7, 10, 0.45, 3, 0.9);
     // Струя: клубы бьют вверх быстро и узко, к верху тормозят, раздуваются
     // и уходят по ветру — столб, а не облако.
     const dt = few ? 0.06 : 0.03;
