@@ -2670,6 +2670,8 @@ export const f12King = (sim: Sim) => KSTATE.get(sim) ?? null;
 const kingOf = (sim: Sim) => sim.mobs.find((x) => x.kind === 'f12boss' && x.mode !== 'dying');
 
 const hasteOf = (sim: Sim) => ((sim.boss?.phase ?? 0) >= 3 ? 1.3 : 1);
+/** Зона-картинка: поля `v…` читает `f12-boss-fx.ts`. */ // v2.87 — только рисунок
+const vfx = (sim: Sim, api: SimApi, z: ZoneIn & Record<string, number | string | boolean>) => api.vfx(sim, z); // v2.87 — только рисунок
 
 /** Сменить клетку, запомнив, какой она была (для сброса боя). */
 function retile(sim: Sim, api: SimApi, i: number, tile: number, mark: number): void {
@@ -2712,6 +2714,7 @@ function bossTrainHit(sim: Sim, api: SimApi, m: Mob): void {
   const t = arenaTrack(sim);
   const cy = t ? t.y + 1 : m.y;
   m.ky += m.y < cy ? -26 : 26;
+  vfx(sim, api, { x: m.x, y: m.y, r: 1, life: 1.5, art: 'f12v_train', above: true, vFrom: m.id, vDir: m.y < cy ? -1 : 1 }); // v2.87 — только рисунок
   void api;
 }
 
@@ -2876,6 +2879,7 @@ function openDomain(sim: Sim, b: BossFight, api: SimApi, m: Mob): void {
   ks.wave = buildWave(sim, b, ks.dais);
   ks.waveAt = sim.time;
   ks.waveBack = false;
+  vfx(sim, api, { x: ks.dais[0], y: ks.dais[1], r: ks.wave.length * 2.2 + 2.2, life: ks.wave.length * 0.09 + 0.9, art: 'f12v_wave', above: true, vBack: 0, vX0: ks.box[0], vY0: ks.box[1], vX1: ks.box[2] + 1, vY1: ks.box[3] + 1 }); // v2.87 — только рисунок
   ks.gridAt = sim.time + 2.4;
   ks.gridDone = true;
   const at = arenaTrack(sim);
@@ -2922,6 +2926,7 @@ function closeDomain(sim: Sim, api: SimApi, m: Mob, broken: boolean): void {
   ks.domainOn = false;
   ks.waveBack = true;
   ks.waveAt = sim.time;
+  vfx(sim, api, { x: ks.dais[0], y: ks.dais[1], r: ks.wave.length * 2.2 + 2.2, life: ks.wave.length * 0.09 + 0.9, art: 'f12v_wave', above: true, vBack: 1, vX0: ks.box[0], vY0: ks.box[1], vX1: ks.box[2] + 1, vY1: ks.box[3] + 1 }); // v2.87 — только рисунок
   ks.gridCutUntil = 0;
   ks.gridDone = true;
   ks.gridAt = 1e9;
@@ -3039,6 +3044,7 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
   const ks = kingState(sim);
   m.tele = null;
   m.danger = 0;
+  m.data.vNoTele = 1; // v2.87 — только рисунок: прицел лука рисует f12-boss-fx
   m.data.phase = phase;
   m.data.cutCd = (m.data.cutCd ?? 1.5) - dt * haste;
   m.data.bowCd = (m.data.bowCd ?? 4) - dt * haste;
@@ -3101,6 +3107,7 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (phase >= 1 && m.data.bowCd <= 0 && dist > 3 && dist < 16) {
         api.setMode(m, 'f12_bow');
         m.data.ang = want;
+        vfx(sim, api, { x: m.x, y: m.y, r: hypot(ks.box[2] - ks.box[0], ks.box[3] - ks.box[1]) + 2, life: KING.bowDraw / haste + 0.1, art: 'f12v_bow', above: true, vFrom: m.id, vT: KING.bowDraw / haste, vAng: want, vW: KING.bowW }); // v2.87 — только рисунок
         return;
       }
       if (phase >= 1 && m.data.pyreCd <= 0 && dist < 10) {
@@ -3117,6 +3124,8 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       }
       m.face = want;
       walk(h.x, h.y, dist < 2 ? 0.4 : 1);
+      // v2.87 — только рисунок: шаг короля — пыль и угольки проклятия.
+      if ((m.data.vStep = (m.data.vStep ?? 0) - dt) <= 0 && hypot(m.vx, m.vy) > 0.8) { m.data.vStep = 0.42; m.data.vFoot = 1 - (m.data.vFoot ?? 0); vfx(sim, api, { x: m.x, y: m.y, r: 0.4, life: 0.9, art: 'f12v_step', above: true, vKind: m.data.vFoot, vAng: Math.atan2(m.vy, m.vx) }); } // v2.87 — только рисунок
       return;
     }
     case 'f12_cut':
@@ -3252,6 +3261,7 @@ registerBoss('f12boss', {
     lead.face = Math.PI / 2;
     api.setMode(lead, 'f12_intro');
     lead.data.ghost = 1;
+    vfx(sim, api, { x: ks.dais[0], y: ks.dais[1], r: 3, life: KING.intro + 1, art: 'f12v_intro', above: true, vFrom: lead.id }); // v2.87 — только рисунок
     // Вход камерой: зал, король встаёт.
     api.camera(sim, ks.dais[0], ks.dais[1] + 1.5, 2.8);
     sim.events.push({ t: 'shake', k: 0.5 });
@@ -3304,10 +3314,12 @@ registerBoss('f12boss', {
       lead.data.bowCd = 1.2;
       sim.events.push({ t: 'boss', what: 'phase', text: 'ПЛАМЯ', sub: 'второе лицо открыло глаза — стрела через весь храм' });
       sim.events.push({ t: 'flash', color: '#ff6a10', k: 0.5 });
+      vfx(sim, api, { x: lead.x, y: lead.y, r: 3, life: 1.3, art: 'f12v_phase', above: true, vFrom: lead.id, vKind: 1 }); // v2.87 — только рисунок
     }
     if (b.phase === 1 && k <= KING.hp[1] && lead.mode !== 'f12_bow') {
       b.phase = 2;
       api.setMode(lead, 'f12_cast');
+      vfx(sim, api, { x: ks.dais[0], y: ks.dais[1], r: 2.4, life: KING.cast + 0.35, art: 'f12v_cast', above: true, vFrom: lead.id }); // v2.87 — только рисунок
       sim.strikes = sim.strikes.filter((s) => s.from !== lead.id);
       sim.events.push({ t: 'boss', what: 'f12_cast_call', text: 'ЗНАК', sub: 'король складывает руки…' });
     }
@@ -3317,6 +3329,7 @@ registerBoss('f12boss', {
       const at = arenaTrack(sim);
       if (at) at.cfg = { ...at.cfg, period: 9 };
       sim.events.push({ t: 'boss', what: 'phase', text: 'ВСЁ СРАЗУ', sub: 'разрезы, пламя, храм на миг и поезд вдвое чаще' });
+      vfx(sim, api, { x: lead.x, y: lead.y, r: 3, life: 1.3, art: 'f12v_phase', above: true, vFrom: lead.id, vKind: 3 }); // v2.87 — только рисунок
     }
     // Последняя фаза: храм вспыхивает на миг — сетка с двумя оберегами.
     if (b.phase >= 3 && !ks.domainOn) {
