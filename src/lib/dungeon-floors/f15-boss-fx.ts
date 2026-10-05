@@ -38,7 +38,7 @@ import {
 import type { ImpactRec, Sprite } from '../dungeon-paint';
 import type { Mob, Shot, Sim, Strike, Zone } from '../dungeon-sim';
 import { F15B_MARK } from './f15-boss';
-import { beatK, f15bView, HEART, LION } from './f15-boss-brains';
+import { beatK, f15bView, LION } from './f15-boss-brains';
 import type { F15BState } from './f15-boss-brains';
 import { heartTop, TRUNK, trunkX, veinEnds, veinPoint, VEINS } from './f15-boss-art';
 
@@ -59,7 +59,6 @@ const k01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const eOut2 = (t: number) => 1 - (1 - t) * (1 - t);
 const eOut3 = (t: number) => 1 - (1 - t) * (1 - t) * (1 - t);
 const eIn2 = (t: number) => t * t;
-const eInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
 /** Остаток всегда положительный: у зон `api.vfx` номера отрицательные. */
 const mod = (x: number, n: number) => ((x % n) + n) % n;
 /** Зерно из номера удара/зоны: у зон `api.vfx` номер отрицательный. */
@@ -176,14 +175,19 @@ function occOf(S: number): Box[] {
   const sim = paintSim();
   const out: Box[] = [];
   if (!sim) return out;
+  const hero = sim.hero;
   for (const m of sim.mobs) {
     if (m.mode === 'dying' && m.t > 0.4) continue;
     const lift = Math.round((m.data.z ?? 0) * 3) * 5;
     let hw: number;
     let h: number;
     if (m.kind === 'f15boss') {
-      hw = 2.3 * S;
-      h = 4.2 * S;
+      // Герой за тушей — рисовальщик тела делает её полупрозрачной (`faded`):
+      // тогда она ничего не заслоняет, иначе вырезанный прямоугольник
+      // просвечивал бы сквозь неё рамкой.
+      if (hero.y < m.y - 0.2 && m.y - hero.y < 5.5 && Math.abs(hero.x - m.x) < 3.4) continue;
+      hw = 1.6 * S;
+      h = 3.6 * S;
     } else if (m.kind === 'f15boss_heart') {
       hw = 1.3 * S;
       h = 3.4 * S;
@@ -197,7 +201,6 @@ function occOf(S: number): Box[] {
     const fy = m.y * S + 2;
     out.push({ x0: m.x * S - hw, x1: m.x * S + hw, y0: fy - lift - h, y1: fy - lift, fy });
   }
-  const hero = sim.hero;
   const fy = hero.y * S + 2;
   out.push({ x0: hero.x * S - 0.42 * S, x1: hero.x * S + 0.42 * S, y0: fy - 1.25 * S, y1: fy, fy });
   return out;
@@ -1581,20 +1584,28 @@ registerImpactPainter('f15b_claw', {
     const g0 = 0.1;
     const gspan = arc - 0.16;
     const fade = 1 - k01((age - 1.05) / 0.45);
-    const reveal = k01((front - g0) / gspan);
-    const when = (u: number) => sweepT(g0 + u * gspan, span, CLAW_SWEEP);
     const wounds: Gash[] = [];
+    // Где на дуге рана j: начало и длина (доли пути взмаха).
+    const wo: number[] = [];
+    const wl: number[] = [];
+    const sAt = (j: number, u: number) => g0 + wo[j] + u * wl[j];
     for (let j = 0; j < 3; j++) {
-      const gs = gashOf(sd + j * 7, R * CLAW_R[j] - 1, at(g0), dir, gspan * (0.88 + 0.12 * hash(sd, j, 3)), j !== 1);
+      // Когти рвут не весь веер: каждый — свой кусок дуги, вразнобой.
+      const j0 = gspan * (0.08 + 0.22 * hash(sd, j, 4));
+      const jl = gspan * (0.5 + 0.2 * hash(sd, j, 3));
+      const gs = gashOf(sd + j * 7, R * CLAW_R[j] - 1, at(g0 + j0), dir, jl, j !== 1);
       wounds.push(gs);
-      drawWound(p, gs, cx, cy, age, reveal, when, 0.9, fade);
+      wo.push(j0);
+      wl.push(jl);
+      const rv = k01((front - g0 - j0) / jl);
+      drawWound(p, gs, cx, cy, age, rv, (u) => sweepT(g0 + j0 + u * jl, span, CLAW_SWEEP), 0.9, fade);
     }
     // Кровь проступает каплями по ране и стекает на пиксель-два.
     if (age > 0.18 && fade > 0) {
       for (let i = 0; i < (few ? 6 : 14); i++) {
         const gs = wounds[i % 3];
         const pi = Math.floor(hash(sd, i, 71) * gs.x.length);
-        const t = age - when(gs.u[pi]) - 0.12 - 0.3 * hash(sd, i, 72);
+        const t = age - sweepT(sAt(i % 3, gs.u[pi]), span, CLAW_SWEEP) - 0.12 - 0.3 * hash(sd, i, 72);
         if (t < 0) continue;
         const run = Math.min(3, Math.floor(t * 6));
         p.col(C.blood[3], 0.9 * fade);
@@ -1615,7 +1626,7 @@ registerImpactPainter('f15b_claw', {
       few ? 8 : 22,
       (i) => {
         const [gs, j] = pick(i);
-        const th = at(g0 + gs.u[j] * gspan) + dir * (Math.PI / 2 - 0.35);
+        const th = at(sAt(i % 3, gs.u[j])) + dir * (Math.PI / 2 - 0.35);
         return [cx + gs.x[j], cy + gs.y[j], th];
       },
       40,
@@ -1624,7 +1635,7 @@ registerImpactPainter('f15b_claw', {
       45,
       (i) => {
         const [gs, j] = pick(i);
-        return when(gs.u[j]);
+        return sweepT(sAt(i % 3, gs.u[j]), span, CLAW_SWEEP);
       },
       bloodCol,
       C.blood[2],
@@ -2266,7 +2277,6 @@ registerZonePainter(
     const cx = st.x * S;
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
-    p.occ = occOf(S);
     const a = st.ang ?? 0;
     const ux = Math.cos(a);
     const uy = Math.sin(a);
@@ -2313,7 +2323,6 @@ registerZonePainter(
     }
     // Конец полосы — планка: дальше пике не идёт.
     p.lineS(cx + ux * L + nx * hw, cy + uy * L + ny * hw, cx + ux * L - nx * hw, cy + uy * L - ny * hw, edge, 0.85, 0.6);
-    p.occ = null;
   }),
 );
 
@@ -4191,7 +4200,6 @@ registerZonePainter(
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
     const R = st.r * S;
-    const sd = seedOf(st.id);
     const isCone = st.shape === 'cone';
     const a = st.ang ?? Math.PI / 2;
     const arc = st.arc ?? 1.3;
@@ -4447,7 +4455,6 @@ registerZonePainter(
     const R = st.r * S;
     const sd = seedOf(st.id);
     // На полу (за телами — нет): круг и руна.
-    p.occ = occOf(S);
     p.col(C.vio[0], 0.42 + 0.1 * k);
     oval(p, cx, cy, R, R * 0.75);
     const rf = R * Math.pow(k, 1.5);
@@ -4466,7 +4473,6 @@ registerZonePainter(
       p.col(sig ? (tk ? C.white : C.vio[3]) : C.vio[2], 0.9);
       p.dot(cx + pts.x[i], cy + pts.y[i] * 0.75);
     }
-    p.occ = null;
     // Заряд стягивается к центру.
     for (let i = 0; i < 8; i++) {
       const ph = mod(time * (0.8 + 2 * k) + hash(sd, i, 1), 1);
@@ -4839,7 +4845,6 @@ registerZonePainter(
     const cx = st.x * S;
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
-    p.occ = occOf(S);
     const R = st.r * S;
     const w = (st.w ?? 0.55) * S;
     const sd = seedOf(st.id);
@@ -4866,14 +4871,12 @@ registerZonePainter(
     const run = Math.floor(time * (16 + 34 * k));
     const edge = sig ? (tk ? C.white : C.ember[4]) : k > 0.5 ? C.blood[4] : C.blood[3];
     ring(p, cx, cy, R + w, edge, 0.75 + 0.25 * k, sig ? undefined : (_a, i) => mod(i - run, 9) < 6, 0.6);
-    p.occ = null;
   }),
 );
 
 registerImpactPainter('f15b_pulse', {
   life: 1.1,
   shake: 0.1,
-  above: true,
   paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number) => {
     const cx = rec.x * S;
     const cy = rec.y * S;
@@ -4882,7 +4885,6 @@ registerImpactPainter('f15b_pulse', {
     const w = (rec.w ?? 0.55) * S;
     const sd = rec.seed >>> 0;
     const few = reduced();
-    p.occ = occOf(S);
     if (age < 0.45) {
       const k = age / 0.45;
       const rc = R + S * 1.2 * eOut2(k);
@@ -4898,7 +4900,6 @@ registerImpactPainter('f15b_pulse', {
       const th = ((i + 0.5) / nD) * TAU;
       return [cx + Math.cos(th) * R, cy + Math.sin(th) * R, th];
     });
-    p.occ = null;
     const nB = few ? 8 : Math.min(28, Math.round(R / 3));
     drops(p, sd + 1, age, nB, (i) => {
       const th = ((i + 0.3) / nB) * TAU;
@@ -4941,7 +4942,6 @@ registerZonePainter(
     const cx = st.x * S;
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
-    p.occ = occOf(S);
     const a = st.ang ?? 0;
     const ux = Math.cos(a);
     const uy = Math.sin(a);
@@ -4975,14 +4975,12 @@ registerZonePainter(
       }
     }
     p.lineS(cx + ux * L + nx * hw, cy + uy * L + ny * hw, cx + ux * L - nx * hw, cy + uy * L - ny * hw, edge, 0.85, 0.6);
-    p.occ = null;
   }),
 );
 
 registerImpactPainter('f15b_artery', {
   life: 1.2,
   shake: 0.16,
-  above: true,
   paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number, time: number) => {
     const cx = rec.x * S;
     const cy = rec.y * S;
@@ -4995,9 +4993,7 @@ registerImpactPainter('f15b_artery', {
     const L = (rec.r ?? 6) * S;
     const sd = rec.seed >>> 0;
     const few = reduced();
-    const occ = occOf(S);
     const LASH = 0.1;
-    p.occ = occ;
     // Сосуд: прямой в миг щелчка, потом уползает к сердцу.
     const back = eIn2(k01((age - 0.16) / 0.42));
     const tip = L * (1 - back);
@@ -5013,7 +5009,6 @@ registerImpactPainter('f15b_artery', {
         p.dot(cx + ux * s - 1, cy + uy * s - 1, 3, 3);
       }
     }
-    p.occ = null;
     // Щелчок на конце.
     hitStar(p, cx + ux * L, cy + uy * L - 2, age - LASH, 0.1, 11, a, C.blood[4]);
     if (age > LASH && age < LASH + 0.3) ring(p, cx + ux * L, cy + uy * L, 3 + 14 * eOut2((age - LASH) / 0.3), C.bloodHi, 0.85 * (1 - (age - LASH) / 0.3), (_a, i) => i % 3 !== 2, 0.5);
@@ -5056,13 +5051,13 @@ function swellDraw(p: Pen, s: Sim, v: Readonly<F15BState>, cells: number[], ox: 
   for (const i of cells) {
     const X = (i % W) * S - ox;
     const Y = Math.floor(i / W) * S - oy;
-    p.col(C.blood[0], 0.35 + 0.3 * k);
+    p.col(C.blood[0], 0.22 + 0.22 * k);
     p.rect(Math.floor(X) + 1, Math.floor(Y) + 1, S - 2, S - 2);
     // Два волдыря на клетку.
     for (let b = 0; b < 2; b++) {
       const bx = X + 3 + 10 * hash(i, b, 1);
       const by = Y + 3 + 10 * hash(i, b, 2);
-      const r = 1.2 + 3.3 * k * (0.7 + 0.3 * hash(i, b, 3)) + throb;
+      const r = 1.5 + 4.2 * k * (0.7 + 0.3 * hash(i, b, 3)) + throb;
       p.col(C.ink, 0.6);
       oval(p, bx + 1, by + 1, r, r * 0.8);
       p.col(C.flesh[3], 0.95);
@@ -5444,7 +5439,7 @@ registerZonePainter(
     const age = zz.t;
     const sd = seedOf(zz.id);
     const few = reduced();
-    hitStar(p, cx, cy - 14, age, 0.14, 30, 0.2, C.ember[4]);
+    hitStar(p, cx, cy - 14, age, 0.1, 17, 0.2, C.ember[4]);
     chunks(p, sd, age, cx, cy - 10, few ? 8 : 22, 0, Math.PI, 40, 70, 90, 120, [1.2, 1.6], 0.45, 2);
     chunks(p, sd + 1, age, cx, cy - 10, few ? 3 : 8, 0, Math.PI, 30, 50, 70, 90, [1.2, 1.6], 0.2, 1);
     drops(p, sd + 2, age, few ? 12 : 34, (i) => [cx + (hash(sd, i, 1) - 0.5) * 14, cy - 12, TAU * hash(sd, i, 2)], 30, 60, 60, 90, (i) => 0.08 * hash(sd, i, 3), (q) => (q < 0.25 ? C.ember[4] : q < 0.6 ? C.blood[4] : C.blood[3]), C.blood[2], [1.2, 1.6]);

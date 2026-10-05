@@ -963,7 +963,7 @@ function demonStorm(sim: Sim, b: BossFight, m: Mob, api: SimApi): void {
         knock: 3,
         art: 'f15b_bolt',
         from: m.id,
-        above: true,
+        above: false, // v2.87 — только рисунок: метка лежит на полу, тела закрывают её по силуэту
       });
     }
 }
@@ -1488,7 +1488,7 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           knock: 10,
           art: 'f15b_swoop',
           from: m.id,
-          above: true,
+          above: false, // v2.87 — только рисунок: метка лежит на полу, тела закрывают её по силуэту
         });
       }
       m.face = m.dir;
@@ -2166,7 +2166,7 @@ function heartBeat(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
         knock: 7,
         art: 'f15b_pulse',
         from: heart.id,
-        above: true,
+        above: false, // v2.87 — только рисунок: метка лежит на полу, тела закрывают её по силуэту
       }),
     );
     sim.events.push({ t: 'shake', k: 0.22 });
@@ -2230,7 +2230,7 @@ function stepHeartPhase(sim: Sim, b: BossFight, st: F15BState, api: SimApi): voi
         knock: 7,
         art: 'f15b_artery',
         from: heart.id,
-        above: true,
+        above: false, // v2.87 — только рисунок: метка лежит на полу, тела закрывают её по силуэту
       });
     }
   }
