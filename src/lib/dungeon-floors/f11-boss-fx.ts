@@ -71,7 +71,7 @@ const tick = (left: number) => left < SIG && left > 0 && Math.floor(left / 0.05)
 const C = {
   ink: '#1d2130',
   shade: '#3c3848',
-  groove: '#24202e',
+  groove: '#4a4658',
   lip: '#f6f5fa',
   dust: '#e8e0d0',
   pebble: '#8a8698',
@@ -341,13 +341,21 @@ function fillLane(
 }
 
 /** Толстый отрезок от (x0, y0) до (x1, y1) полушириной hw (экранные точки мира). */
-function fillSeg(p: Pen, x0: number, y0: number, x1: number, y1: number, hw: number): void {
+function fillSeg(
+  p: Pen,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  hw: number,
+  dither = false,
+): void {
   const L = Math.hypot(x1 - x0, y1 - y0);
   if (L < 0.01) {
-    disc(p, x0, y0, hw);
+    disc(p, x0, y0, hw, dither);
     return;
   }
-  fillLane(p, x0, y0, (x1 - x0) / L, (y1 - y0) / L, 0, L, hw);
+  fillLane(p, x0, y0, (x1 - x0) / L, (y1 - y0) / L, 0, L, hw, dither);
 }
 
 /** Круг по пикселям. */
@@ -507,13 +515,15 @@ const spr = (key: number, make: () => Px): HTMLCanvasElement => {
 
 /** Пыль: тень снизу-справа, основа, свет сверху-слева. */
 const PUFF_PAL: [RGBA, RGBA, RGBA][] = [
-  [hx('#8a8070'), hx('#c4bba9'), hx('#ece6d8')], // 0 — мраморная пыль, теплее пола
+  // 0 — мраморная пыль: теплее и темнее пола, иначе пропадает на светлых плитах.
+  [hx('#6e6252'), hx('#ab9f88'), hx('#ddd2bc')],
   [hx('#1c1a22'), hx('#33303c'), hx('#4e4a58')], // 1 — копоть
-  [hx('#666470'), hx('#9896a2'), hx('#cfcdd8')], // 2 — дым ракеты
-  [hx('#9aaac2'), hx('#d6e0ee'), hx('#ffffff')], // 3 — пар
+  [hx('#5e5c6a'), hx('#8c8a98'), hx('#c4c2ce')], // 2 — дым гуще
+  [hx('#8494b0'), hx('#d6e0ee'), hx('#ffffff')], // 3 — пар: белый, низ — холодная тень
   [hx('#b8380c'), hx('#ff8a2a'), hx('#ffe48a')], // 4 — огонь, выхлоп
   [hx('#1e7a84'), hx('#5fd6cc'), hx('#c8fcf4')], // 5 — рунная пыль
-  [hx('#3a4a2a'), hx('#5a6e3e'), hx('#86a05e')], // 6 — мох и земля
+  [hx('#4a3a26'), hx('#6e5a3c'), hx('#9a845c')], // 6 — земля и труха
+  [hx('#6c6a7c'), hx('#dedce8'), hx('#ffffff')], // 7 — дым ракет: белый, снизу серый
 ];
 
 /** Клуб радиуса r (1…16), вариант v (0…3): три доли — край рваный. */
@@ -686,45 +696,73 @@ function slabImg(v: number): HTMLCanvasElement {
  */
 function fistImg(mir: boolean): HTMLCanvasElement {
   return spr(60000 + (mir ? 1 : 0), () => {
-    const W = 15;
-    const H = 15;
-    const p = new Px(W + 2, H + 2);
+    // 22×21 + кайма: запястье сверху (выходит из света), тыльная сторона
+    // кисти, четыре согнутых пальца костяшками вниз, большой палец поперёк.
+    const W = 22;
+    const H = 21;
+    const p = new Px(W + 4, H + 4);
     const T = C.bronze.map((c) => hx(c));
-    const cx = 8;
-    for (let y = 1; y <= H; y++)
-      for (let x = 1; x <= W; x++) {
-        const dx = (x - cx) / 6.4;
-        const dy = (y - 8) / 6.6;
-        // Ком кулака: тело и четыре костяшки внизу, большой палец сбоку.
-        let inside = dx * dx * 1.05 + dy * dy < 1;
-        const kn = Math.floor((x - 2) / 3);
-        if (!inside && y >= 11 && y <= 14 && x >= 2 && x <= 13) {
-          const kx = 3.5 + kn * 3;
-          inside = (x - kx) ** 2 + (y - 12) ** 2 < 2.6;
+    const put = (x: number, y: number, c: RGBA) => p.set(2 + (mir ? W - 1 - x : x), 2 + y, c);
+    const shade = (l: number) => (l > 0.55 ? T[4] : l > 0.15 ? T[3] : l > -0.3 ? T[2] : l > -0.7 ? T[1] : T[0]);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const X = x + 0.5;
+        const Y = y + 0.5;
+        // Запястье: сужается кверху.
+        const wrist = Y < 6 && Math.abs(X - 12) < 3.6 + Y * 0.25;
+        // Тыльная сторона кисти: скруглённый брус.
+        const bx2 = Math.max(0, Math.abs(X - 11.5) - 6.5);
+        const by2 = Math.max(0, Math.abs(Y - 10) - 3.5);
+        const back = bx2 * bx2 + by2 * by2 < 9;
+        // Пальцы: четыре столбика, низ — костяшки.
+        const fi = Math.floor((X - 3) / 4.25);
+        const fcx = 3 + fi * 4.25 + 2.1;
+        const finger = fi >= 0 && fi < 4 && Y > 10 && Math.abs(X - fcx) < 2.05 && (Y < 17.5 || (X - fcx) ** 2 + (Y - 17.5) ** 2 < 4.4);
+        // Большой палец — поперёк пальцев.
+        const thumb = (X - 8) ** 2 / 30 + (Y - 12.4) ** 2 / 2.8 < 1 && X > 1.5;
+        if (!wrist && !back && !finger && !thumb) continue;
+        let c: RGBA;
+        if (thumb) {
+          const l = -(Y - 12.4) / 1.7 * 0.8 - (X - 8) / 10 * 0.3;
+          c = shade(l + 0.25);
+          if (X > 11.5 && X < 13.5 && Y < 12.6) c = T[4];
+          if (Y > 13.4) c = T[1];
+        } else if (finger) {
+          // Цилиндр пальца: светлее к левому верху, костяшка блестит.
+          const l = -(X - fcx) / 2.05 * 0.55 - (Y - 15) / 4 * 0.5;
+          c = shade(l);
+          if (Math.abs(X - fcx) > 1.7) c = T[0];
+          if (Y > 16.6 && Y < 17.6 && X - fcx < -0.2 && X - fcx > -1.2) c = T[4];
+        } else if (back) {
+          const l = -(X - 11.5) / 8 * 0.5 - (Y - 10) / 4 * 0.6;
+          c = shade(l + 0.1);
+        } else {
+          const l = -(X - 12) / 4 * 0.6;
+          c = shade(l - 0.1);
         }
-        if (!inside && x >= 12 && x <= 15 && y >= 6 && y <= 11)
-          inside = (x - 13) ** 2 * 1.4 + (y - 8.5) ** 2 < 5;
-        if (!inside) continue;
-        const l = (x - cx) * -0.45 + (y - 8) * -0.75;
-        let c = l > 3.2 ? T[4] : l > 0.8 ? T[3] : l > -2.5 ? T[2] : T[1];
-        // Пальцы: тёмные швы.
-        if (y >= 10 && (x - 2) % 3 === 0 && x < 14) c = T[0];
-        p.set(mir ? W + 1 - x : x, y, c);
+        put(x, y, c);
       }
-    // Вязь рун по тыльной стороне.
+    // Вязь рун: по тыльной стороне и кольцом по запястью.
     const rune = hx(C.rune);
+    const runeHi = hx('#d8fff8');
     for (const [x, y] of [
-      [5, 5],
-      [6, 4],
-      [7, 4],
-      [8, 5],
-      [9, 6],
-      [7, 6],
-      [6, 7],
-      [8, 7],
+      [9, 3],
+      [10, 3],
+      [11, 3],
+      [12, 3],
+      [13, 3],
+      [14, 3],
+      [13, 7],
+      [14, 8],
+      [15, 8],
+      [16, 7],
+      [14, 9],
+      [15, 10],
     ])
-      p.set(mir ? W + 1 - x : x, y, rune);
-    p.outline(hx('#9ff8f0'));
+      put(x, y, y === 3 ? runeHi : rune);
+    p.outline(hx(C.ink));
+    // Кромка-сияние проекции: вторым кольцом, бирюза.
+    p.outline(hx('#7af6ff', 170));
     return p;
   });
 }
@@ -1379,6 +1417,82 @@ function wallDist(sim: Sim | null, x: number, y: number, ang: number, max: numbe
   return max;
 }
 
+/** Слой луча: полуширина, цвет, через пиксель (ореол без швов при наложении). */
+type BeamLayer = [number, string, boolean];
+
+/**
+ * Путь луча из поднятой точки (линза, ядро): от `src` луч плавно опускается
+ * (квадратичный сход — без излома, касательная к полу в конце схода) к
+ * высоте `h` над полом на расстоянии `s1` по оси от стража. Точки — с
+ * глубиной (y опоры на полу) для заслона телами.
+ */
+function beamCurve(
+  src: [number, number],
+  bx: number,
+  by: number,
+  ux: number,
+  uy: number,
+  sE: number,
+  s1: number,
+  h: number,
+): [number, number, number][] {
+  const fx0 = bx + ux * sE;
+  const fy0 = by + uy * sE - h;
+  const ox = src[0] - fx0;
+  const oy = src[1] - fy0;
+  const n = Math.max(2, Math.ceil((s1 - sE) / 3));
+  const out: [number, number, number][] = [[src[0], src[1], by + uy * sE]];
+  for (let i = 1; i <= n; i++) {
+    const s = sE + ((s1 - sE) * i) / n;
+    const f = (1 - (s - sE) / (s1 - sE)) ** 2;
+    out.push([bx + ux * s + ox * f, by + uy * s - h + oy * f, by + uy * s]);
+  }
+  return out;
+}
+
+/**
+ * Луч целиком: сход из поднятой точки (`beamCurve`) и дальше вдоль пола до
+ * `L` на высоте `h`. Слои — от ореола к ядру; тела ближе к камере заслоняют.
+ */
+function drawBeam(
+  p: Pen,
+  bodies: Body[],
+  src: [number, number],
+  bx: number,
+  by: number,
+  ux: number,
+  uy: number,
+  sE: number,
+  s1: number,
+  L: number,
+  h: number,
+  layers: BeamLayer[],
+  a = 1,
+): void {
+  if (L <= sE + 1) return;
+  const sMid = Math.min(s1, L);
+  const pts = beamCurve(src, bx, by, ux, uy, sE, s1, h);
+  for (let i = 1; i < pts.length; i++) {
+    const s = sE + ((s1 - sE) * i) / (pts.length - 1);
+    if (s > sMid + 0.01) break;
+    const [x0, y0] = pts[i - 1];
+    const [x1, y1, d] = pts[i];
+    front(p, bodies, d, () => {
+      for (const [hw, c, dith] of layers) {
+        p.col(c, a);
+        fillSeg(p, x0, y0, x1, y1, hw, dith);
+        disc(p, x1, y1, hw, dith);
+      }
+    });
+  }
+  frontRun(p, bodies, bx, by, ux, uy, sMid, L, (s0, s2) => {
+    for (const [hw, c, dith] of layers) {
+      p.col(c, a);
+      fillLane(p, bx, by - h, ux, uy, s0, s2, hw, dith);
+    }
+  });
+}
+
 /**
  * Обёртка рисовальщика: сохранить и вернуть контекст (зоны рисуются без
  * `save/restore` движка — прозрачность не должна утечь в соседей).
@@ -1422,8 +1536,9 @@ type FxZone = Zone & {
 const GAZE_T = BOSS.gazeTrack + BOSS.gazeLock;
 /** Высота луча над полом, px: на уровне колен героя — читается «по ногам». */
 const BEAM_H = 6;
-/** Где луч из линзы касается пола, px от стража. */
-const BEAM_S1 = 1.5;
+/** Сход луча из линзы: начинается под линзой и кончается в 2,6 клетки от стража. */
+const BEAM_SE = 0.3;
+const BEAM_S1 = 2.6;
 
 function gazeFloor(p: Pen, m: Mob, S: number, time: number): void {
   const tl = m.tele;
@@ -1509,19 +1624,22 @@ function gazeSky(p: Pen, sim: Sim, m: Mob, S: number, time: number, bodies: Body
   const bx = m.x * S;
   const by = m.y * S;
   const L = tl.r * S;
-  const s1 = BEAM_S1 * S;
+  const s1 = Math.min(BEAM_S1 * S, L);
+  const sE = BEAM_SE * S;
   const [ex, ey] = bossEye(m, time, S);
   const kf = k01(t / GAZE_T);
-  // Прицел: из линзы на пол перед стражем — и по полу к стене.
+  // Прицел: из линзы плавно к полу перед стражем — и по полу к стене.
   const c = sig ? (tk ? C.white : C.yellow) : lock ? C.hot : C.red;
   const fl = lock ? 0.95 : 0.45 + 0.35 * kf + (Math.floor(time * 24) % 3 === 0 ? 0.15 : 0);
-  const fx = bx + ux * s1;
-  const fy = by + uy * s1 - 2;
-  const dropDepth = by + uy * s1;
-  front(p, bodies, dropDepth, () => {
-    p.col(c, fl);
-    p.line(ex, ey, fx, fy);
-  });
+  const pts = beamCurve([ex, ey], bx, by, ux, uy, sE, BEAM_S1 * S, 2);
+  for (let i = 1; i < pts.length; i++) {
+    const s = sE + ((BEAM_S1 * S - sE) * i) / (pts.length - 1);
+    if (s > s1 + 0.01) break;
+    front(p, bodies, pts[i][2], () => {
+      p.col(c, fl);
+      p.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+    });
+  }
   frontRun(p, bodies, bx, by, ux, uy, s1, L, (s0, s2) => {
     p.col(c, fl);
     p.line(bx + ux * s0, by + uy * s0 - 2, bx + ux * s2, by + uy * s2 - 2);
@@ -1589,35 +1707,25 @@ registerZonePainter(
     const w = t < 0.15 ? 1 : 1 - eIn2(k01((t - 0.15) / (life - 0.15)));
     if (w <= 0) return;
     const jit = Math.floor(time * 30) % 2;
+    const sE = BEAM_SE * S;
     const s1 = BEAM_S1 * S;
-    const Lc = s1 + (L - s1) * ext;
-    const fx = bx + ux * s1;
-    const fy = by + uy * s1 - BEAM_H;
+    const Lc = sE + (L - sE) * ext;
     const bodies = bodiesOf(sim, S);
-    const layers: [number, string, number][] = [
-      [(BOSS.gazeW * S + jit) * w, C.red, 0.5],
-      [5.2 * w, C.hot, 0.85],
-      [3.2 * w, C.yellow, 1],
-      [Math.max(0.6, 1.4 * w), C.white, 1],
+    // Ореол через пиксель (ширина — ровно удар), дальше сплошные слои к ядру.
+    const layers: BeamLayer[] = [
+      [(BOSS.gazeW * S + jit) * w, C.red, true],
+      [5.2 * w, C.hot, false],
+      [3.2 * w, C.yellow, false],
+      [Math.max(0.6, 1.4 * w), C.white, false],
     ];
-    front(p, bodies, by + uy * s1, () => {
-      for (const [hw, c, al] of layers) {
-        p.col(c, al);
-        fillSeg(p, ex, ey, fx, fy, hw * 0.75);
-      }
-    });
-    frontRun(p, bodies, bx, by, ux, uy, s1, Lc, (s0, s2) => {
-      for (const [hw, c, al] of layers) {
-        p.col(c, al);
-        fillLane(p, bx, by - BEAM_H, ux, uy, s0, s2, hw);
-      }
-    });
-    // Перехлёст у пола: свет ложится на плиты под лучом.
-    p.col(C.orange, 0.25 * w);
-    fillLane(p, bx, by, ux, uy, s1, Lc, BOSS.gazeW * S * 0.7);
+    // Свет ложится на плиты под лучом.
+    p.col(C.orange, 0.3 * w);
+    fillLane(p, bx, by, ux, uy, s1 * 0.6, Lc, BOSS.gazeW * S * 0.7);
+    drawBeam(p, bodies, [ex, ey], bx, by, ux, uy, sE, s1, Lc, BEAM_H, layers);
     // Дульная вспышка у линзы и огонь в торце.
-    p.col(C.white, 1);
-    star(p, ex, ey, 4 + 7 * w, 6, time * 3);
+    p.col(C.hot, 0.8 * w);
+    disc(p, ex, ey, 4 + 2 * w);
+    flare(p, ex, ey, Math.round(5 + 7 * w), C.white, 1);
     if (ext >= 1) {
       const tx = bx + ux * L;
       const ty = by + uy * L - BEAM_H;
@@ -1655,24 +1763,38 @@ registerImpactPainter('f11_beam', {
       p.col(C.orange, 0.42 * (1 - age / 0.14));
       fillLane(p, bx, by, ux, uy, s0, L, BOSS.gazeW * S);
     }
-    // Копоть вдоль шва.
-    p.col(C.soot, 0.38 * fade);
-    fillLane(p, bx, by, ux, uy, s0, L, 2.5, true);
-    // Шов: волнистая раскалённая нить, остывает от белого к тёмному.
+    // Копоть вдоль шва: плотная у оси, через пиксель по краям.
+    p.col(C.soot, 0.22 * fade);
+    fillLane(p, bx, by, ux, uy, s0, L, 4.5, true);
+    p.col(C.soot, 0.4 * fade);
+    fillLane(p, bx, by, ux, uy, s0, L, 2.2);
+    // Шов: волнистая раскалённая нить в два пикселя, остывает от белого к
+    // багровому; пока горяч — светлый ореол по краям.
     const cool = k01(age / 1.3);
-    p.col(heatCol(cool), (0.95 - 0.35 * cool) * fade);
-    let px0 = 0;
-    let py0 = 0;
-    for (let s = s0, i = 0; s <= L; s += 2, i++) {
-      const off = Math.round(Math.sin(s * 0.31 + (sd % 7)) * 0.9 + (hash(sd, i, 3) - 0.5) * 1.1);
-      const qx = bx + ux * s + nx * off;
-      const qy = by + uy * s + ny * off;
-      if (i) p.line(px0, py0, qx, qy);
-      px0 = qx;
-      py0 = qy;
+    const hot = 1 - k01(age / 0.6);
+    for (let pass = 0; pass < 2; pass++) {
+      if (pass === 0 && hot <= 0) continue;
+      p.col(pass ? heatCol(cool) : C.orange, pass ? (0.95 - 0.3 * cool) * fade : 0.5 * hot);
+      let px0 = 0;
+      let py0 = 0;
+      for (let s = s0, i = 0; s <= L; s += 2, i++) {
+        const off = Math.round(Math.sin(s * 0.31 + (sd % 7)) * 0.9 + (hash(sd, i, 3) - 0.5) * 1.1);
+        const qx = bx + ux * s + nx * off;
+        const qy = by + uy * s + ny * off;
+        if (i) {
+          p.line(px0, py0, qx, qy);
+          p.line(px0 + nx, py0 + ny, qx + nx, qy + ny);
+          if (!pass) {
+            p.line(px0 - nx, py0 - ny, qx - nx, qy - ny);
+            p.line(px0 + 2 * nx, py0 + 2 * ny, qx + 2 * nx, qy + 2 * ny);
+          }
+        }
+        px0 = qx;
+        py0 = qy;
+      }
     }
     // Дым вдоль шва.
-    const nD = few ? 4 : 9;
+    const nD = few ? 5 : 12;
     const [wx, wy] = windPx(paintSim(), rec.x, rec.y);
     dust(
       p,
@@ -1687,10 +1809,10 @@ registerImpactPainter('f11_beam', {
       6,
       2,
       6,
-      14,
-      1.3,
+      16,
+      1.4,
       1,
-      0.5,
+      0.7,
       (i) => 0.06 + 0.35 * hash(sd, i, 5),
       (i) => {
         const s = s0 + (L - s0) * ((i + hash(sd, i, 6)) / nD);
