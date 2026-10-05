@@ -30,10 +30,13 @@
 // обломки — с тёмным контуром.
 import { Px } from '../dungeon-art';
 import {
+  IMPACT_PAINTERS,
   paintSim,
   registerImpactPainter,
+  registerMobWarm,
   registerShotPainter,
   registerZonePainter,
+  ZONE_PAINTERS,
 } from '../dungeon-paint';
 import type { ImpactRec, Sprite } from '../dungeon-paint';
 import type { Mob, Shot, Sim, Strike, Zone } from '../dungeon-sim';
@@ -2879,34 +2882,53 @@ const regions = new WeakMap<number[], Region>();
  * её цвета; по краю четверти — кайма. `flash` — та же форма, залитая
  * цветом, для вспышки перемены.
  */
+/** Холст четверти строится по 14 клеток за вызов: целиком — 20–40 мс разом. */
+interface RegionBuild {
+  p: Px;
+  f: Px;
+  set: Set<number>;
+  i: number;
+  x0: number;
+  y0: number;
+}
+const building = new WeakMap<number[], RegionBuild>();
+
 function regionOf(qd: QuadV, cells: number[], W: number, S: number): Region | null {
   let r = regions.get(cells);
   if (r) return r;
   if (!cells.length) return null;
-  let x0 = 1e9;
-  let y0 = 1e9;
-  let x1 = -1e9;
-  let y1 = -1e9;
-  for (const i of cells) {
-    x0 = Math.min(x0, i % W);
-    x1 = Math.max(x1, i % W);
-    y0 = Math.min(y0, Math.floor(i / W));
-    y1 = Math.max(y1, Math.floor(i / W));
+  let bd = building.get(cells);
+  if (!bd) {
+    let x0 = 1e9;
+    let y0 = 1e9;
+    let x1 = -1e9;
+    let y1 = -1e9;
+    for (const i of cells) {
+      x0 = Math.min(x0, i % W);
+      x1 = Math.max(x1, i % W);
+      y0 = Math.min(y0, Math.floor(i / W));
+      y1 = Math.max(y1, Math.floor(i / W));
+    }
+    const pw = (x1 - x0 + 1) * S;
+    const ph = (y1 - y0 + 1) * S;
+    bd = { p: new Px(pw, ph), f: new Px(pw, ph), set: new Set(cells), i: 0, x0, y0 };
+    building.set(cells, bd);
+    return null;
   }
-  const pw = (x1 - x0 + 1) * S;
-  const ph = (y1 - y0 + 1) * S;
-  const p = new Px(pw, ph);
-  const f = new Px(pw, ph);
-  const set = new Set(cells);
+  const p = bd.p;
+  const f = bd.f;
+  const set = bd.set;
   const qc = hx(QUAD_HEX[qd.q] ?? '#ffffff');
   const tint = hx(QUAD_HEX[qd.q] ?? '#ffffff', 34);
   const flashC = hx(QUAD_HEX[qd.q] ?? '#ffffff', 150);
   const sd = 31 + qd.q * 17;
-  for (const i of cells) {
+  const end = Math.min(cells.length, bd.i + 14);
+  for (; bd.i < end; bd.i++) {
+    const i = cells[bd.i];
     const cxl = i % W;
     const cyl = Math.floor(i / W);
-    const ox = (cxl - x0) * S;
-    const oy = (cyl - y0) * S;
+    const ox = (cxl - bd.x0) * S;
+    const oy = (cyl - bd.y0) * S;
     const to = qd.to.get(i);
     const mk = to ? to[1] : -1;
     for (let v = 0; v < S; v++)
@@ -2961,7 +2983,9 @@ function regionOf(qd: QuadV, cells: number[], W: number, S: number): Region | nu
         f.set(ox + u, oy + v, flashC);
       }
   }
-  r = { img: p.canvas(), flash: f.canvas(), x0: x0 * S, y0: y0 * S };
+  if (bd.i < cells.length) return null;
+  r = { img: p.canvas(), flash: f.canvas(), x0: bd.x0 * S, y0: bd.y0 * S };
+  building.delete(cells);
   regions.set(cells, r);
   return r;
 }
@@ -4458,7 +4482,7 @@ registerZonePainter(
     p.col(C.vio[0], 0.42 + 0.1 * k);
     oval(p, cx, cy, R, R * 0.75);
     const rf = R * Math.pow(k, 1.5);
-    p.col(sig ? C.vio[2] : C.vio[1], (tk ? 0.65 : 0.38) + 0.12 * k);
+    p.col(C.vio[1], (tk ? 0.6 : 0.36) + 0.12 * k);
     oval(p, cx, cy, rf, rf * 0.75);
     const spin = time * (1 + 3 * k);
     for (let i = 0; i < 6; i++) {
@@ -5496,3 +5520,127 @@ registerZonePainter(
     dust(p, sd + 1, age, cx, cy, 3, 0, Math.PI, 12, 10, 2, 6, 4, 0.6, 7, 0.5);
   }),
 );
+
+// =============================================================================
+// ПРОГРЕВ — пока лев в мире (бой начинается коконом), рендер тратит до 3 мс
+// за кадр на этот генератор: все спрайты техник, окружности и «сухой прогон»
+// каждого рисовальщика на холсте-черновике (кеши трещин и JIT). Без него
+// первый контакт пламени эха строился 86 мс, первый взмах — 24 мс.
+// =============================================================================
+
+/** Пробы ударов для сухого прогона: вид, форма, радиус и прочее. */
+const WARM_STRIKES: [string, 'circle' | 'line' | 'cone' | 'ring', number, number?, number?][] = [
+  ['f15b_claw', 'cone', 3.1, undefined, 1.8],
+  ['f15b_pounce', 'circle', 1.9],
+  ['f15b_shards', 'ring', 3.2, 0.55],
+  ['f15b_shock', 'ring', 2.6, 0.45],
+  ['f15b_spike', 'circle', 0.85],
+  ['f15b_swoop', 'line', 9, 1.05],
+  ['f15b_quill', 'circle', 0.75],
+  ['f15b_gust', 'cone', 5.6, undefined, 1.5],
+  ['f15b_erupt', 'circle', 1.15],
+  ['f15b_geyser', 'circle', 1.3],
+  ['f15b_beam', 'line', 8, 0.38],
+  ['f15b_hbite', 'circle', 1.45],
+  ['f15b_slash', 'cone', 3.1, undefined, 2.3],
+  ['f15b_cleave', 'line', 6, 0.72],
+  ['f15b_axe', 'circle', 1.5],
+  ['f15b_bite', 'cone', 2.5, undefined, 1.3],
+  ['f15b_bite', 'circle', 1.15],
+  ['f15b_flame', 'line', 8, 0.5],
+  ['f15b_bolt', 'circle', 1.45],
+  ['f15b_pulse', 'ring', 5.2, 0.55],
+  ['f15b_artery', 'line', 7, 0.5],
+];
+const WARM_SHOTS = ['f15b_feather', 'f15b_fireball', 'f15b_ice'];
+const WARM_FX = ['f15b_fxstep', 'f15b_fxflap', 'f15b_fxtakeoff', 'f15b_fxland', 'f15b_fxleap', 'f15b_fxroar', 'f15b_fxburst', 'f15b_fxrip', 'f15b_fxpop', 'f15b_swirl', 'f15b_warp', 'f15b_flames', 'f15b_miasma', 'f15b_pool', 'f15b_mist'];
+
+function* warmFx(): Generator<void> {
+  for (let pal = 0; pal < 3; pal++)
+    for (let h = 3; h <= 14; h++) {
+      for (let f = 0; f < 4; f++) flameImg(h, f, pal);
+      yield;
+    }
+  for (let pal = 0; pal < PUFF_PAL.length; pal++)
+    for (let r = 1; r <= 12; r++) {
+      for (let v = 0; v < 4; v++) puffImg(pal, r, v);
+      yield;
+    }
+  for (let pal = 0; pal < CHUNK_PAL.length; pal++) {
+    for (let sz = 1; sz <= 4; sz++) for (let f = 0; f < 4; f++) chunkImg(sz, f, pal);
+    yield;
+  }
+  for (let h = 1; h <= 10; h++) for (let v = 0; v < 8; v++) shardImg(h, v);
+  yield;
+  for (let h = 1; h <= 26; h++) {
+    for (let v = 0; v < 4; v++) spikeImg(h, v);
+    yield;
+  }
+  for (let t = -2; t <= 2; t++) for (let hot = 0; hot < 4; hot++) quillImg(t, hot);
+  yield;
+  for (let d = 0; d < 16; d++) {
+    for (let f = 0; f < 4; f++) featherShot(d, f);
+    for (let f = 0; f < 2; f++) iceShot(d, f);
+    yield;
+  }
+  for (let f = 0; f < 4; f++) for (let d = 0; d < 8; d++) ghostFireball(f, d);
+  hydraHead(0);
+  hydraHead(1);
+  ghostAxe();
+  yield;
+  for (let h = 2; h <= 56; h += 2) {
+    for (let f = 0; f < 4; f++) waterCol(h, f);
+    yield;
+  }
+  for (let r = 3; r <= 20; r++) for (let v = 0; v < 4; v++) poolImg(r, v);
+  yield;
+  for (let r = 2; r <= 20; r++) for (let t = 0; t < 3; t++) scorchImg(r, t);
+  yield;
+  for (let v = 0; v < 8; v++) boltCol(v, 96);
+  yield;
+  for (let r = 1; r <= 140; r += 10) {
+    for (let q = r; q < r + 10; q++) circle(q);
+    yield;
+  }
+  const sim = paintSim();
+  if (sim) veinEnds(sim);
+  yield;
+  // Сухой прогон: каждый рисовальщик — несколько кадров на черновике.
+  const c = document.createElement('canvas');
+  c.width = 200;
+  c.height = 200;
+  const g = c.getContext('2d');
+  if (!g) return;
+  let n = 0;
+  for (const [art, shape, r, w, arc] of WARM_STRIKES) {
+    const zp = ZONE_PAINTERS.get(art);
+    const imp = IMPACT_PAINTERS.get(art);
+    const warn = 0.8;
+    for (const k of [0.3, 0.9]) {
+      const st = { shape, x: 0, y: 0, r, w, arc, ang: 0.4, warn, dmg: 0, t: warn * k, id: 900 + n++, art } as Strike;
+      zp?.(g, st, 100, 100, 16, 1);
+      yield;
+    }
+    for (const age of [0, 0.06, 0.2, 0.5]) {
+      imp?.paint(g, { art, x: 0, y: 0, shape, r, w, arc, ang: 0.4, seed: 4242 + n, vx: 3, vy: 1 }, 100, 100, 16, age, 1);
+      yield;
+    }
+  }
+  for (const art of WARM_SHOTS) {
+    const imp = IMPACT_PAINTERS.get(art);
+    for (const age of [0, 0.1, 0.4]) {
+      imp?.paint(g, { art, x: 0, y: 0, seed: 77, vx: 4, vy: 2 }, 100, 100, 16, age, 1);
+      yield;
+    }
+  }
+  for (const art of WARM_FX) {
+    const zp = ZONE_PAINTERS.get(art);
+    for (const t of [0.05, 0.4]) {
+      zp?.(g, { x: 0, y: 0, r: 1, life: 1, t, id: -1 - n++, art } as Zone, 100, 100, 16, 1);
+      yield;
+    }
+  }
+  g.clearRect(0, 0, 200, 200);
+}
+
+registerMobWarm('f15boss', warmFx);
