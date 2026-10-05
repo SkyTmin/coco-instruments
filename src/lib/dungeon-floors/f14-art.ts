@@ -1771,8 +1771,9 @@ registerMobPainter('f14_smith', (_m: Mob, pose: MobPose) => {
 // `pose.t`, между ключами — кривые разгона и торможения; полы, маятник и
 // голова отстают на 1–2 кадра сами (`LLAG`). Кадр контакта — кадр, в
 // котором мозг бьёт. След клинка — серп по выборкам рига в прошлом.
-// Кадры — в `frameLRU`, зеркало — `sx < 0` (вторая копия в кеше не нужна),
-// прогрев первой фазы — `registerMobWarm`. Холст 120×112, земля 86,
+// Кадры — в `frameLRU`. Влево — своим кадром, а не `sx < 0`: лицо — сам
+// Повелитель, и отражённый циферблат шёл бы против часовой. Прогрев первой
+// фазы в обе стороны — `registerMobWarm`. Холст 120×112, земля 86,
 // обрезается по нарисованному.
 // ---------------------------------------------------------------------------
 
@@ -1952,7 +1953,9 @@ class ClipPx extends Px {
  *     вокруг себя 0…1: вид спереди, сбоку, со спины), pend (маятник в груди);
  *   голова: hx, hy (сдвиг), hd (наклон шпилей), halo (поворот нимба), hs
  *     (нимб больше — удар колокола), fm, fh (стрелки лица: 0 — XII, по
- *     часовой), glow (накал лица), white (белеет), dim (гаснет), crack;
+ *     часовой; fdir — стрелки УКАЗЫВАЮТ на цель, а не идут, и при взгляде
+ *     влево отражаются вместе с телом), glow (накал лица), white (белеет),
+ *     dim (гаснет), crack;
  *   руки: f* — правая с минутной, b* — левая с часовой: кисть (x, y), угол
  *     клинка, длина, изгиб локтя (−1…1), перед телом (z), клинок в полу
  *     (pin: 1 — держит воткнутый, 2 — воткнут и брошен, 3 — выронен),
@@ -1976,6 +1979,7 @@ const LK = [
   'hs',
   'fm',
   'fh',
+  'fdir',
   'glow',
   'white',
   'dim',
@@ -2036,6 +2040,7 @@ const L0: LRig = {
   hs: 0,
   fm: 0,
   fh: 1.9,
+  fdir: 0,
   glow: 0.5,
   white: 0,
   dim: 0,
@@ -2082,7 +2087,18 @@ const L0: LRig = {
 type LKf = [number, Partial<LRig>, LEase?];
 
 /** Каналы «да/нет» и точки, которые меняются скачком. */
-const LSTEP = new Set<LKey>(['fz', 'bz', 'fpin', 'bpin', 'fpx', 'fpy', 'bpx', 'bpy', 'gl']);
+const LSTEP = new Set<LKey>([
+  'fz',
+  'bz',
+  'fpin',
+  'bpin',
+  'fpx',
+  'fpy',
+  'bpx',
+  'bpy',
+  'gl',
+  'fdir',
+]);
 /** Запаздывание частей: полы, маятник, голова смотрят позу чуть в прошлом. */
 const LLAG: Partial<Record<LKey, number>> = { hem: 0.07, pend: 0.1, hx: 0.04, hy: 0.04 };
 
@@ -3217,6 +3233,7 @@ function lHour(t: number, A: number, h: number): LRig {
   } else if (t < T + R - 3 * LF1) {
     r.fm = fA;
     r.fh = fA - 0.35;
+    r.fdir = 1;
     r.halo = 0.52;
   } else {
     r.fm = 0;
@@ -3348,6 +3365,7 @@ function lMinute(t: number, A: number, h: number): LRig {
   const r = ltrack(keys, t);
   const fA = A + Math.PI / 2;
   const n = Math.floor(t * LFPS);
+  r.fdir = t < S1 - 0.08 ? 1 : 0;
   if (t < 0.3) {
     // Наводка: щелчками каждые два кадра — к цели.
     r.fm = fA - lTickQ(Math.max(0, 0.3 - t), 0.083) * 9;
@@ -4155,7 +4173,7 @@ function lToll(t: number): LRig {
   return ltrack(keys, t);
 }
 
-// ---- Кадр: запрос → риг → холст; кеш `frameLRU`, зеркало — `sx < 0` ----
+// ---- Кадр: запрос → риг → холст; кеш `frameLRU`, влево — свой кадр ----
 
 type LTech =
   | 'idle'
@@ -4186,6 +4204,8 @@ interface LReq {
   ph: number;
   /** Своё у техники: трещины часов в ритуале. */
   x: number;
+  /** Смотрит влево: кадр отражён целиком, но циферблат идёт по часовой. */
+  left: boolean;
 }
 
 /** Медленные техники идут на 12 к/с: [начало, к/с] по участкам. */
@@ -4322,14 +4342,23 @@ function lBox(p: Px, box: number[]): boolean {
   return any;
 }
 
-/** Кадры босса: ~420 холстов с вытеснением давно не нужных. */
-const LFR = frameLRU<MobFrame>(420);
+/** Кадры босса (обе стороны — отдельно): ~700 холстов с вытеснением давно не нужных. */
+const LFR = frameLRU<MobFrame>(700);
+/** Белые копии для вспышки удара: живут 0,12 с и делаются дёшево — свой кеш. */
+const LFL = frameLRU<MobFrame>(80);
 
 /** Сколько кадров нарисовано заново (замер стенда). */
-export const F14_LORD_STAT = { drawn: 0, ms: 0, max: 0 };
+export const F14_LORD_STAT = {
+  drawn: 0,
+  ms: 0,
+  max: 0,
+  get cached() {
+    return LFR.size;
+  },
+};
 
 function lordBase(q: LReq): MobFrame {
-  const key = `b|${q.tech}|${q.f}|${q.q}|${q.ph}|${q.x}`;
+  const key = `b|${q.tech}|${q.f}|${q.q}|${q.ph}|${q.x}|${q.left ? 1 : 0}`;
   const got = LFR.get(key);
   if (got) return got;
   const t0 = performance.now();
@@ -4374,7 +4403,17 @@ function lordBase(q: LReq): MobFrame {
     o.noHalo = t > 0.6;
     o.post = (p, lit, g, LL) => lDeathPost(p, lit, g, LL, t);
   }
-  const { p, lit, eye } = paintLord(r, o);
+  // Влево — кадр отражается целиком, а циферблат нет: лицо, нимб и
+  // воротник рисуются с отражёнными углами, и после отражения кадра их
+  // стрелки снова идут по часовой (движковое `sx < 0` отразило бы и их).
+  const own = r.fdir >= 0.5;
+  const rd = q.left
+    ? { ...r, fm: own ? r.fm : -r.fm, fh: own ? r.fh : -r.fh, halo: -r.halo }
+    : r;
+  const pl = paintLord(rd, o);
+  let p: Px = pl.p;
+  let lit: Px = pl.lit;
+  let eye = pl.eye;
   // След клинков (после контура: у следа нет тёмной каймы).
   const sm = LSMEAR[q.tech];
   if (sm) {
@@ -4426,6 +4465,12 @@ function lordBase(q: LReq): MobFrame {
         if (p.solid(x, sy + dy))
           lit.set(x, sy + dy, alpha(mixc(L.glow, WHITE, 0.6), dy ? 0.5 : 0.95));
   }
+  if (q.left) {
+    // Холст симметричен относительно точки ног (LW = 2·LCX): якорь на месте.
+    p = p.flipX();
+    lit = lit.flipX();
+    if (eye) eye = [LW - 1 - eye[0], eye[1]];
+  }
   // Холст — по рамке нарисованного.
   const box = [LW, LH, -1, -1];
   lBox(p, box);
@@ -4441,11 +4486,11 @@ function lordBase(q: LReq): MobFrame {
     ax: LCX - x0,
     ay: LG - y0,
     eye: eye ? [eye[0] - x0, eye[1] - y0] : null,
-    dx: r.dx,
+    dx: q.left ? -r.dx : r.dx,
     dy: r.dy,
     sx: r.sx,
     sy: r.sy,
-    rot: r.rot,
+    rot: q.left ? -r.rot : r.rot,
     still: true,
     shadow: 13 * lclamp(r.op, 0.25, 1),
   };
@@ -4522,10 +4567,10 @@ function lFlashImg(src: HTMLCanvasElement): HTMLCanvasElement {
 function lordFrame(q: LReq, flash: boolean): MobFrame {
   const b = lordBase(q);
   if (!flash) return b;
-  const key = `f|${q.tech}|${q.f}|${q.q}|${q.ph}|${q.x}`;
-  const got = LFR.get(key);
+  const key = `f|${q.tech}|${q.f}|${q.q}|${q.ph}|${q.x}|${q.left ? 1 : 0}`;
+  const got = LFL.get(key);
   if (got) return got;
-  return LFR.set(key, { ...b, img: lFlashImg(b.img) });
+  return LFL.set(key, { ...b, img: lFlashImg(b.img) });
 }
 
 // ---- Рисовальщик: режим мозга → техника и кадр ----
@@ -4564,7 +4609,7 @@ function lordReq(m: Mob, pose: MobPose): LReq {
   s.ph = ph;
   if (F14_FX.midnight > s.toll && ph >= 3) s.tollAt = pose.now;
   s.toll = F14_FX.midnight;
-  const q: LReq = { tech: 'idle', f: 0, q: 0, ph, x: 0 };
+  const q: LReq = { tech: 'idle', f: 0, q: 0, ph, x: 0, left: pose.left };
   const t = Math.max(0, pose.t);
   const at = (tech: LTech, tt: number, end = Infinity) => {
     q.tech = tech;
@@ -4719,12 +4764,10 @@ registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
     if (e >= 0.3 && e < 0.4) slide(0.3, m.data?.vAx, m.data?.vAy);
     if (e >= 1.1 && e < 1.2) slide(1.1, m.data?.vBx, m.data?.vBy);
   }
-  // Зеркало кадра — трансформом: движок отражает у якоря вместе с `lit`.
-  const sx = out.sx ?? 1;
-  out.sx = left ? -sx : sx;
-  out.dx = (left ? -(out.dx ?? 0) : (out.dx ?? 0)) + rx;
+  // Влево кадр уже отражён в пикселях (циферблат — нет), сдвиг и наклон —
+  // уже в сторону взгляда: добавить только отдачу и доезд.
+  out.dx = (out.dx ?? 0) + rx;
   out.dy = (out.dy ?? 0) + ry;
-  out.rot = left ? -(out.rot ?? 0) : (out.rot ?? 0);
   // Шлейф — на быстром: выпад, рывки остановки, оборот, рубка часовой.
   const tt = lTimeOf(q.tech, q.f);
   const h = lHaste(q.ph);
@@ -4748,15 +4791,16 @@ registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
   return out;
 });
 
-// Прогрев: первая фаза — покой, шаг, пробуждение, обе стрелки (прицел
-// вперёд), вращение, отдача. Зеркало — трансформом, кадров вдвое меньше.
+// Прогрев: первая фаза в обе стороны — покой, шаг, пробуждение, обе
+// стрелки (прицел вперёд), вращение, отдача, часовая вверх и вниз.
 registerMobWarm('f14boss', function* () {
-  const q: LReq = { tech: 'idle', f: 0, q: 0, ph: 0, x: 0 };
+  const q: LReq = { tech: 'idle', f: 0, q: 0, ph: 0, x: 0, left: false };
   const run = function* (tech: LTech, n: number, aim = 0) {
-    for (let f = 0; f < n; f++) {
-      lordBase({ ...q, tech, f, q: aim });
-      yield f;
-    }
+    for (let f = 0; f < n; f++)
+      for (const left of [false, true]) {
+        lordBase({ ...q, tech, f, q: aim, left });
+        yield f;
+      }
   };
   yield* run('idle', IDLE_N);
   yield* run('walk', WALK_N);
