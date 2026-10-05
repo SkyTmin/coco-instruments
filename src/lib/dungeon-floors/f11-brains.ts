@@ -82,10 +82,12 @@ const markAt = (sim: Sim, x: number, y: number): number => {
 
 const walkable = (t: number) => t === T_FLOOR || t === T_HAZ || t === T_LIFT || (t >= 3 && t <= 5);
 
-const isDeep = (sim: Sim, x: number, y: number) => tileAt(sim, Math.floor(x), Math.floor(y)) === T_DEEP;
+const isDeep = (sim: Sim, x: number, y: number) =>
+  tileAt(sim, Math.floor(x), Math.floor(y)) === T_DEEP;
 
 /** Можно ли встать: проходимо и не глубина (пол, вода, лифт). */
-const standable = (sim: Sim, x: number, y: number) => walkable(tileAt(sim, Math.floor(x), Math.floor(y)));
+const standable = (sim: Sim, x: number, y: number) =>
+  walkable(tileAt(sim, Math.floor(x), Math.floor(y)));
 
 /** Задевает ли линия (из точки по углу, длина, полуширина) круг. */
 export function lineHits(
@@ -379,7 +381,8 @@ interface Hook {
 const STATE = new WeakMap<Sim, F11State>();
 
 /** Состояние этажа вылазки (для рисовальщика — `paintSim()`). */
-export const f11State = (sim: Sim | null): F11State | null => (sim ? (STATE.get(sim) ?? null) : null);
+export const f11State = (sim: Sim | null): F11State | null =>
+  sim ? (STATE.get(sim) ?? null) : null;
 
 /** Свет, вспышки и прочий общий визуал кадра (не состояние мира). */
 export const F11_FX = {
@@ -583,7 +586,8 @@ export function windAt(
       wy += Math.sin(g.dir) * g.k;
     }
     if (!noGust && st.gust.phase === 2) {
-      const k = st.gust.k * gustEnv(st.gust) * (st.gust.forced ? Math.max(0.55, st.expo[i]) : st.expo[i]);
+      const k =
+        st.gust.k * gustEnv(st.gust) * (st.gust.forced ? Math.max(0.55, st.expo[i]) : st.expo[i]);
       wx += Math.cos(st.gust.dir) * k;
       wy += Math.sin(st.gust.dir) * k;
     }
@@ -699,8 +703,24 @@ function scanHalls(sim: Sim, st: F11State): void {
     const [low, ...rest] = mills;
     rest.sort((a, b) => a.x - b.x);
     st.mills = [
-      { obj: low, turns: [[0, 1], [1, 1]], cd: 0, at: -9 },
-      { obj: rest[0], turns: [[1, -1], [2, -1]], cd: 0, at: -9 },
+      {
+        obj: low,
+        turns: [
+          [0, 1],
+          [1, 1],
+        ],
+        cd: 0,
+        at: -9,
+      },
+      {
+        obj: rest[0],
+        turns: [
+          [1, -1],
+          [2, -1],
+        ],
+        cd: 0,
+        at: -9,
+      },
       { obj: rest[1], turns: [[2, -1]], cd: 0, at: -9 },
     ];
   }
@@ -732,7 +752,8 @@ function scanHalls(sim: Sim, st: F11State): void {
     for (let y = y1; y >= y0; y -= 3) {
       const span: number[] = [];
       for (let yy = y; yy > y - 3 && yy >= y0; yy--)
-        for (let x = x0; x <= x1; x++) if (sim.world.mark[yy * W + x] === MK.plate) span.push(yy * W + x);
+        for (let x = x0; x <= x1; x++)
+          if (sim.world.mark[yy * W + x] === MK.plate) span.push(yy * W + x);
       cells.push(span);
     }
     st.bridge = {
@@ -767,7 +788,11 @@ function scanPosts(sim: Sim, st: F11State): void {
 function postHalls(st: F11State): void {
   for (const p of st.posts) {
     const g = st.garden;
-    if ((p.kind === 'gardener' || p.kind === 'moss') && g.r && hypot(p.x - g.cx, p.y - g.cy) < g.r + 2)
+    if (
+      (p.kind === 'gardener' || p.kind === 'moss') &&
+      g.r &&
+      hypot(p.x - g.cx, p.y - g.cy) < g.r + 2
+    )
       p.hall = 'garden';
     if (p.kind === 'sentry') p.hall = 'gallery';
     if (p.kind === 'guard' && st.storm.r && hypot(p.x - st.storm.cx, p.y - st.storm.cy) < 16)
@@ -1001,7 +1026,8 @@ function pushHero(sim: Sim, st: F11State, api: SimApi, dt: number): void {
 /** Ветер двигает мобов: лёгких сильнее; ходячих прижало к краю — в небо. */
 function pushMobs(sim: Sim, st: F11State, api: SimApi, dt: number): void {
   for (const m of sim.mobs) {
-    if (m.mode === 'dying' || m.mode === 'emerge' || m.mode === 'drop' || m.mode === 'escape') continue;
+    if (m.mode === 'dying' || m.mode === 'emerge' || m.mode === 'drop' || m.mode === 'escape')
+      continue;
     if (m.t < 0 || (m.data.ghost ?? 0) > 0 || m.data.nowind) continue;
     const def = api.def(m.kind);
     if (def.boss || m.kind === 'f11_pylon') continue;
@@ -1020,7 +1046,8 @@ function pushMobs(sim: Sim, st: F11State, api: SimApi, dt: number): void {
       m.data.slip = (m.data.slip ?? 0) + dt;
       if (m.data.slip > 0.35) {
         api.fall(sim, m);
-        const loud = st.gallery.state === 'on' || m.kind === 'f11_guard' || m.kind === 'f11_gardener';
+        const loud =
+          st.gallery.state === 'on' || m.kind === 'f11_guard' || m.kind === 'f11_gardener';
         sim.events.push({
           t: 'boss',
           what: 'f11_sky_fall',
@@ -1233,9 +1260,13 @@ function stepGarden(sim: Sim, st: F11State, api: SimApi, dt: number): void {
       const db = hypot((b % st.w) + 0.5 - h.x, Math.floor(b / st.w) + 0.5 - h.y);
       return da - db;
     });
-    const pick = [vents[0], ...vents.slice(1).sort(() => sim.rng() - 0.5).slice(0, 2)].filter(
-      (v) => v !== undefined,
-    );
+    const pick = [
+      vents[0],
+      ...vents
+        .slice(1)
+        .sort(() => sim.rng() - 0.5)
+        .slice(0, 2),
+    ].filter((v) => v !== undefined);
     for (const v of pick) {
       const x = (v % st.w) + 0.5;
       const y = Math.floor(v / st.w) + 0.5;
@@ -1252,7 +1283,16 @@ function stepGarden(sim: Sim, st: F11State, api: SimApi, dt: number): void {
       after(st, 0.95, () => {
         // Струя вверх и порыв во все стороны от форсунки.
         for (let k = 0; k < 4; k++)
-          blast(sim, { x, y, ang: (k * PI) / 2 + PI / 4, arc: PI / 2 + 0.1, w: 0, r: 2.6, k: 5, life: 0.45 });
+          blast(sim, {
+            x,
+            y,
+            ang: (k * PI) / 2 + PI / 4,
+            arc: PI / 2 + 0.1,
+            w: 0,
+            r: 2.6,
+            k: 5,
+            life: 0.45,
+          });
         api.zone(sim, { x, y, r: 1.2, life: 0.7, art: 'f11_spray' });
       });
     }
@@ -1267,7 +1307,12 @@ function stepGarden(sim: Sim, st: F11State, api: SimApi, dt: number): void {
       api.dropAt(sim, 'f11_gear', 1, g.cx, g.cy + 1);
       api.dropAt(sim, 'f11_fruit', 2, g.cx, g.cy + 1);
     }
-    sim.events.push({ t: 'boss', what: 'f11_calm_call', text: 'САД УСНУЛ', sub: 'у пульта — награда садовников' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f11_calm_call',
+      text: 'САД УСНУЛ',
+      sub: 'у пульта — награда садовников',
+    });
   }
 }
 
@@ -1403,7 +1448,12 @@ function stepTower(sim: Sim, st: F11State, api: SimApi, dt: number): void {
         for (let i = 0; i < 3; i++) api.dropAt(sim, 'token', 2, tw.cx, tw.cy + 3);
         api.dropAt(sim, 'f11_feather', 2, tw.cx, tw.cy + 3);
       }
-      sim.events.push({ t: 'boss', what: 'f11_calm_call', text: 'БАШНЯ СТИХЛА', sub: 'гнёзда пусты' });
+      sim.events.push({
+        t: 'boss',
+        what: 'f11_calm_call',
+        text: 'БАШНЯ СТИХЛА',
+        sub: 'гнёзда пусты',
+      });
       return;
     }
     const nests = sim.props.filter((p) => p.alive && p.obj.ref === 'f11_nest').length;
@@ -1413,7 +1463,10 @@ function stepTower(sim: Sim, st: F11State, api: SimApi, dt: number): void {
       const p = spotNear(sim, tw.cx, tw.cy, 11, 14, () => 0, true);
       const x = p ? p[0] : tw.cx + Math.cos(a) * 12;
       const y = p ? p[1] : tw.cy + Math.sin(a) * 12;
-      const m = api.spawnMob(sim, 'f11_harpy', x, y, { mode: 'chase', elite: tw.wave === 2 && i === 0 });
+      const m = api.spawnMob(sim, 'f11_harpy', x, y, {
+        mode: 'chase',
+        elite: tw.wave === 2 && i === 0,
+      });
       m.cd = 1 + i * 0.4;
       tw.mobs.push(m.id);
     }
@@ -1525,7 +1578,12 @@ function stepStorm(sim: Sim, st: F11State, api: SimApi, dt: number): void {
       for (let i = 0; i < 4; i++) api.dropAt(sim, 'token', 2, s.cx, s.cy + 1);
       api.dropAt(sim, 'f11mat', 2, s.cx, s.cy + 1);
     }
-    sim.events.push({ t: 'boss', what: 'f11_calm_call', text: 'БУРЯ УШЛА', sub: 'у статуи — то, что принёс ветер' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f11_calm_call',
+      text: 'БУРЯ УШЛА',
+      sub: 'у статуи — то, что принёс ветер',
+    });
   }
 }
 
@@ -1587,7 +1645,11 @@ function stepGallery(sim: Sim, st: F11State, api: SimApi, dt: number): void {
   if (gl.state === 'idle') {
     if (hypot(h.x - gl.cx, h.y - gl.cy) > 4.5) {
       // Разбудил стража ударом — просыпается весь караул.
-      if (!sentries.some((p) => sim.mobs.find((m) => m.id === p.mob && m.mode !== 'f11_dormant' && m.mode !== 'dying')))
+      if (
+        !sentries.some((p) =>
+          sim.mobs.find((m) => m.id === p.mob && m.mode !== 'f11_dormant' && m.mode !== 'dying'),
+        )
+      )
         return;
     }
     gl.state = 'on';
@@ -1640,7 +1702,12 @@ function stepWinch(sim: Sim, st: F11State, api: SimApi, dt: number): void {
       w.state = 'sink';
       w.t = WINCH.crack;
       for (const i of w.cells) setCell(sim, st, api, i, T_FLOOR, MK.cracking);
-      sim.events.push({ t: 'boss', what: 'f11_winch_trap', text: 'ЦЕПЬ ОСЛАБЛА', sub: 'плиты уходят вниз' });
+      sim.events.push({
+        t: 'boss',
+        what: 'f11_winch_trap',
+        text: 'ЦЕПЬ ОСЛАБЛА',
+        sub: 'плиты уходят вниз',
+      });
     }
   } else if (w.state === 'sink') {
     w.t -= dt;
@@ -1662,7 +1729,12 @@ function pullWinch(sim: Sim, st: F11State, api: SimApi): boolean {
     setCell(sim, st, api, i, T_DEEP, MK.rising);
     after(st, 0.08 * Math.floor(n / 3) + 0.25, () => setCell(sim, st, api, i, T_FLOOR, MK.plate));
   });
-  sim.events.push({ t: 'boss', what: 'f11_winch_call', text: 'ЛЕБЁДКА', sub: 'плиты держатся сорок секунд' });
+  sim.events.push({
+    t: 'boss',
+    what: 'f11_winch_call',
+    text: 'ЛЕБЁДКА',
+    sub: 'плиты держатся сорок секунд',
+  });
   return true;
 }
 
@@ -1705,7 +1777,15 @@ function pickArrive(sim: Sim, area: string): string {
  * пола, рядом небо — оттуда он и подлетает на планере (зона `f11_glider`),
  * пока летит — неуязвим.
  */
-function landBoarder(sim: Sim, api: SimApi, cx: number, cy: number, r0: number, r1: number, elite = false): Mob | null {
+function landBoarder(
+  sim: Sim,
+  api: SimApi,
+  cx: number,
+  cy: number,
+  r0: number,
+  r1: number,
+  elite = false,
+): Mob | null {
   const h = sim.hero;
   let best: [number, number, number] | null = null;
   let bs = Infinity;
@@ -1735,7 +1815,14 @@ function landBoarder(sim: Sim, api: SimApi, cx: number, cy: number, r0: number, 
   m.data.ghost = 1;
   m.data.from = sky;
   m.face = sky + PI;
-  const z: ZoneIn & { mob?: number; ang?: number } = { x, y, r: 0.9, life: 1, art: 'f11_glider', above: true };
+  const z: ZoneIn & { mob?: number; ang?: number } = {
+    x,
+    y,
+    r: 0.9,
+    life: 1,
+    art: 'f11_glider',
+    above: true,
+  };
   z.mob = m.id;
   z.ang = sky;
   api.zone(sim, z);
@@ -1950,11 +2037,21 @@ function stepHooks(sim: Sim, st: F11State, api: SimApi, dt: number): void {
           // Попал: тянет к хозяину, а тот уже замахнулся.
           const a = Math.atan2(h.y - m.y, h.x - m.x);
           api.hurtHero(sim, m.dmg * 0.4, hk.x, hk.y, 0, m.kind);
-          api.pullHero(sim, m.x + Math.cos(a) * (m.r + h.r + 0.25), m.y + Math.sin(a) * (m.r + h.r + 0.25), {
-            speed: HOOK.pull,
-            max: 0.9,
+          api.pullHero(
+            sim,
+            m.x + Math.cos(a) * (m.r + h.r + 0.25),
+            m.y + Math.sin(a) * (m.r + h.r + 0.25),
+            {
+              speed: HOOK.pull,
+              max: 0.9,
+            },
+          );
+          sim.events.push({
+            t: 'boss',
+            what: 'f11_hook_call',
+            text: 'КРЮК',
+            sub: m.data.warned ? undefined : 'рывок в сторону — и мимо',
           });
-          sim.events.push({ t: 'boss', what: 'f11_hook_call', text: 'КРЮК', sub: m.data.warned ? undefined : 'рывок в сторону — и мимо' });
           m.data.warned = 1;
           api.setMode(m, 'f11_reel');
           m.data.hooked = 1;
@@ -2027,7 +2124,8 @@ registerFloor(11, {
     const st = scan(sim);
     STATE.set(sim, st);
     // Плиты «Бегущего моста» и причала — внизу, пока их не поднимут.
-    for (const span of st.bridge.cells) for (const i of span) setCell(sim, st, api, i, T_DEEP, MK.fallen);
+    for (const span of st.bridge.cells)
+      for (const i of span) setCell(sim, st, api, i, T_DEEP, MK.fallen);
     for (const i of st.winch.cells) setCell(sim, st, api, i, T_DEEP, MK.fallen);
     keepZones(sim, st, api);
   },
@@ -2123,11 +2221,21 @@ function coneHit(sim: Sim, m: Mob, r: number, arc: number): boolean {
   const dy = h.y - m.y;
   const d = hypot(dx, dy);
   if (d > r + h.r) return false;
-  return Math.abs(angDiff(Math.atan2(dy, dx), m.face)) < arc / 2 + Math.atan(h.r / Math.max(0.2, d));
+  return (
+    Math.abs(angDiff(Math.atan2(dy, dx), m.face)) < arc / 2 + Math.atan(h.r / Math.max(0.2, d))
+  );
 }
 
 /** Лететь к точке напрямую (летуны: над небом можно). */
-function flyTo(sim: Sim, m: Mob, api: SimApi, tx: number, ty: number, speed: number, dt: number): void {
+function flyTo(
+  sim: Sim,
+  m: Mob,
+  api: SimApi,
+  tx: number,
+  ty: number,
+  speed: number,
+  dt: number,
+): void {
   const dx = tx - m.x;
   const dy = ty - m.y;
   const d = hypot(dx, dy);
@@ -2146,7 +2254,9 @@ function edgeDir(sim: Sim, x: number, y: number, R = 5): number | null {
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * TAU;
     for (let r = 0.8; r <= R; r += 0.5) {
-      if (tileAt(sim, Math.floor(x + Math.cos(a) * r), Math.floor(y + Math.sin(a) * r)) === T_DEEP) {
+      if (
+        tileAt(sim, Math.floor(x + Math.cos(a) * r), Math.floor(y + Math.sin(a) * r)) === T_DEEP
+      ) {
         if (r < bd) {
           bd = r;
           best = a;
@@ -2175,7 +2285,15 @@ registerBrain('f11_ray', {
         const sgn = m.id % 2 ? 1 : -1;
         const a = Math.atan2(m.y - h.y, m.x - h.x) + 0.75 * sgn;
         // Круг над краем: точка круга, что дальше от острова, — лучше.
-        flyTo(sim, m, api, h.x + Math.cos(a) * RAY.orbit, h.y + Math.sin(a) * RAY.orbit, m.speed, dt);
+        flyTo(
+          sim,
+          m,
+          api,
+          h.x + Math.cos(a) * RAY.orbit,
+          h.y + Math.sin(a) * RAY.orbit,
+          m.speed,
+          dt,
+        );
         if (m.cd <= 0 && dist > 2.2 && dist < 7.2 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
           api.setMode(m, 'aim');
           m.dir = Math.atan2(dy, dx);
@@ -2306,7 +2424,8 @@ registerBrain('f11_gardener', {
         m.tele = { shape: 'cone', r, arc: 1.7, ang: m.face, k: m.t / GARDENER.snip };
         if (m.t > GARDENER.snip - 0.25) m.danger = r + 0.5;
         if (m.t >= GARDENER.snip) {
-          if (coneHit(sim, m, r, 1.7) && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 4, m.kind);
+          if (coneHit(sim, m, r, 1.7) && canHurt(sim))
+            api.hurtHero(sim, m.dmg, m.x, m.y, 4, m.kind);
           sim.events.push({ t: 'boss', what: 'f11_snip' });
           api.setMode(m, 'recover');
           m.cd = def.rest;
@@ -2336,8 +2455,25 @@ registerBrain('f11_gardener', {
             art: 'f11_jet',
             from: m.id,
           });
-          blast(sim, { x: m.x, y: m.y, ang: m.face, arc: 0, w: 0.9, r: len + 1, k: 6.5, life: 0.55 });
-          api.zone(sim, { x: m.x, y: m.y, r: len, life: 0.45, art: 'f11_jetfx', above: true, ...{ ang: m.face } } as ZoneIn);
+          blast(sim, {
+            x: m.x,
+            y: m.y,
+            ang: m.face,
+            arc: 0,
+            w: 0.9,
+            r: len + 1,
+            k: 6.5,
+            life: 0.55,
+          });
+          api.zone(sim, {
+            x: m.x,
+            y: m.y,
+            r: len,
+            life: 0.45,
+            art: 'f11_jetfx',
+            above: true,
+            ...{ ang: m.face },
+          } as ZoneIn);
           api.setMode(m, 'recover');
           m.cd = def.rest * 1.3;
         }
@@ -2409,7 +2545,8 @@ registerBrain('f11_guard', {
         // Держит дистанцию 3,5: ближе — пятится щитом вперёд.
         const want = dist > 4.5 ? 1 : dist < 2.6 ? -0.6 : 0;
         if (want) {
-          const [cx, cy] = want > 0 ? api.chaseDir(sim, m, h.x, h.y) : [-dx / (dist || 1), -dy / (dist || 1)];
+          const [cx, cy] =
+            want > 0 ? api.chaseDir(sim, m, h.x, h.y) : [-dx / (dist || 1), -dy / (dist || 1)];
           api.steer(sim, m, cx, cy, m.speed * Math.abs(want), dt);
         } else {
           m.vx *= 0.85;
@@ -2442,7 +2579,15 @@ registerBrain('f11_guard', {
             los: true,
             from: m.id,
           });
-          const z = { x: m.x, y: m.y, r: len, life: 0.3, art: 'f11_laserfx', above: true, ang: m.face };
+          const z = {
+            x: m.x,
+            y: m.y,
+            r: len,
+            life: 0.3,
+            art: 'f11_laserfx',
+            above: true,
+            ang: m.face,
+          };
           api.zone(sim, z as ZoneIn);
           sim.events.push({ t: 'boss', what: 'f11_laser' });
           api.setMode(m, 'f11_vent');
@@ -2464,7 +2609,8 @@ registerBrain('f11_guard', {
         m.tele = { shape: 'cone', r: 1.8, arc: 1.9, ang: m.face, k: m.t / GUARD.bash };
         if (m.t > GUARD.bash - 0.22) m.danger = 2.3;
         if (m.t >= GUARD.bash) {
-          if (coneHit(sim, m, 1.8, 1.9) && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 7, m.kind);
+          if (coneHit(sim, m, 1.8, 1.9) && canHurt(sim))
+            api.hurtHero(sim, m.dmg, m.x, m.y, 7, m.kind);
           api.setMode(m, 'recover');
           m.cd = 1.2;
         }
@@ -2543,7 +2689,8 @@ registerBrain('f11_harpy', {
       case 'f11_flap': {
         m.vx *= 0.8;
         m.vy *= 0.8;
-        if (m.t < HARPY.lock) m.dir += clamp(angDiff(Math.atan2(dy, dx), m.dir), -2.4 * dt, 2.4 * dt);
+        if (m.t < HARPY.lock)
+          m.dir += clamp(angDiff(Math.atan2(dy, dx), m.dir), -2.4 * dt, 2.4 * dt);
         m.face = m.dir;
         m.tele = { shape: 'cone', r: HARPY.r, arc: HARPY.arc, ang: m.dir, k: m.t / HARPY.flap };
         if (m.t > HARPY.flap - 0.25) m.danger = HARPY.r + 0.4;
@@ -2561,8 +2708,25 @@ registerBrain('f11_harpy', {
             art: 'f11_gustcone',
             from: m.id,
           });
-          blast(sim, { x: m.x, y: m.y, ang: m.dir, arc: HARPY.arc, w: 0, r: HARPY.r + 0.8, k: 7.5, life: 0.65 });
-          api.zone(sim, { x: m.x, y: m.y, r: HARPY.r, life: 0.5, art: 'f11_flapfx', above: true, ...{ ang: m.dir } } as ZoneIn);
+          blast(sim, {
+            x: m.x,
+            y: m.y,
+            ang: m.dir,
+            arc: HARPY.arc,
+            w: 0,
+            r: HARPY.r + 0.8,
+            k: 7.5,
+            life: 0.65,
+          });
+          api.zone(sim, {
+            x: m.x,
+            y: m.y,
+            r: HARPY.r,
+            life: 0.5,
+            art: 'f11_flapfx',
+            above: true,
+            ...{ ang: m.dir },
+          } as ZoneIn);
           sim.events.push({ t: 'boss', what: 'f11_flap' });
           api.setMode(m, 'recover');
           m.cd = def.rest * 1.6;
@@ -2695,7 +2859,13 @@ registerBrain('f11_boarder', {
           m.face = Math.atan2(dy, dx);
           return;
         }
-        if (m.cd <= 0 && !m.data.hook && dist > 2.4 && dist < 6.2 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
+        if (
+          m.cd <= 0 &&
+          !m.data.hook &&
+          dist > 2.4 &&
+          dist < 6.2 &&
+          api.lineOfSight(sim, m.x, m.y, h.x, h.y)
+        ) {
           api.setMode(m, 'f11_aimhook');
           m.face = Math.atan2(dy, dx);
           return;
@@ -2734,7 +2904,8 @@ registerBrain('f11_boarder', {
         m.tele = { shape: 'cone', r: 1.7, arc: 1.8, ang: m.face, k: m.t / BOARDER.reel };
         if (m.t > BOARDER.reel - 0.2) m.danger = 2.2;
         if (m.t >= BOARDER.reel) {
-          if (coneHit(sim, m, 1.7, 1.8) && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 6, m.kind);
+          if (coneHit(sim, m, 1.7, 1.8) && canHurt(sim))
+            api.hurtHero(sim, m.dmg, m.x, m.y, 6, m.kind);
           sim.events.push({ t: 'boss', what: 'whip' });
           api.setMode(m, 'recover');
           m.cd = def.rest;
@@ -2747,7 +2918,8 @@ registerBrain('f11_boarder', {
         m.tele = { shape: 'cone', r: 1.6, arc: 1.7, ang: m.face, k: m.t / BOARDER.slash };
         if (m.t > BOARDER.slash - 0.22) m.danger = 2.1;
         if (m.t >= BOARDER.slash) {
-          if (coneHit(sim, m, 1.6, 1.7) && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 5, m.kind);
+          if (coneHit(sim, m, 1.6, 1.7) && canHurt(sim))
+            api.hurtHero(sim, m.dmg, m.x, m.y, 5, m.kind);
           api.setMode(m, 'recover');
           m.cd = def.rest;
         }
@@ -2800,7 +2972,11 @@ registerBrain('f11_moss', {
           // Цель — где герой будет, но только по полу и без неба на пути.
           let tx = h.x + h.vx * 0.3;
           let ty = h.y + h.vy * 0.3;
-          for (let k = 0; k < 6 && !(standable(sim, tx, ty) && floorLine(sim, m.x, m.y, tx, ty)); k++) {
+          for (
+            let k = 0;
+            k < 6 && !(standable(sim, tx, ty) && floorLine(sim, m.x, m.y, tx, ty));
+            k++
+          ) {
             tx = m.x + (tx - m.x) * 0.7;
             ty = m.y + (ty - m.y) * 0.7;
           }
@@ -2818,7 +2994,13 @@ registerBrain('f11_moss', {
       case 'f11_crouch':
         m.vx *= 0.6;
         m.vy *= 0.6;
-        m.tele = { shape: 'circle', r: MOSS.r, x: m.data.tx, y: m.data.ty, k: (m.t / (MOSS.crouch + MOSS.air)) * 0.9 };
+        m.tele = {
+          shape: 'circle',
+          r: MOSS.r,
+          x: m.data.tx,
+          y: m.data.ty,
+          k: (m.t / (MOSS.crouch + MOSS.air)) * 0.9,
+        };
         if (m.t >= MOSS.crouch) {
           api.setMode(m, 'f11_jump');
           m.data.sx = m.x;
@@ -2955,7 +3137,15 @@ registerBrain('f11_drone', {
       case 'chase': {
         m.tele = null;
         const a = Math.atan2(m.y - h.y, m.x - h.x) + 0.6 * (m.id % 2 ? 1 : -1);
-        flyTo(sim, m, api, h.x + Math.cos(a) * DRONE.orbit, h.y + Math.sin(a) * DRONE.orbit, m.speed, dt);
+        flyTo(
+          sim,
+          m,
+          api,
+          h.x + Math.cos(a) * DRONE.orbit,
+          h.y + Math.sin(a) * DRONE.orbit,
+          m.speed,
+          dt,
+        );
         m.face = Math.atan2(dy, dx);
         if (m.cd <= 0 && dist < 7.5 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
           api.setMode(m, 'aim');
@@ -2966,7 +3156,8 @@ registerBrain('f11_drone', {
       case 'aim':
         m.vx *= 0.85;
         m.vy *= 0.85;
-        if (m.t < DRONE.aim - 0.2) m.dir += clamp(angDiff(Math.atan2(dy, dx), m.dir), -3 * dt, 3 * dt);
+        if (m.t < DRONE.aim - 0.2)
+          m.dir += clamp(angDiff(Math.atan2(dy, dx), m.dir), -3 * dt, 3 * dt);
         m.face = m.dir;
         lineTele(m, m.dir, 6, 0.24, m.t / DRONE.aim);
         if (m.t > DRONE.aim - 0.2) m.danger = 3;
@@ -3159,7 +3350,14 @@ registerBrain('f11boss', {
             m.data.vWalk = 0;
             m.data.vFoot = m.data.vFoot ? 0 : 1;
             const fa = Math.atan2(m.vy, m.vx) + (m.data.vFoot ? 1.4 : -1.4);
-            api.vfx(sim, { x: m.x + Math.cos(fa) * 0.42, y: m.y + 0.05, r: 0.5, life: 0.9, art: 'f11v_step', ...{ ang: fa + (m.data.vFoot ? 0.5 : -0.5) } } as ZoneIn);
+            api.vfx(sim, {
+              x: m.x + Math.cos(fa) * 0.42,
+              y: m.y + 0.05,
+              r: 0.5,
+              life: 0.9,
+              art: 'f11v_step',
+              ...{ ang: fa + (m.data.vFoot ? 0.5 : -0.5) },
+            } as ZoneIn);
           }
         } else {
           m.vx *= 0.8;
@@ -3173,7 +3371,15 @@ registerBrain('f11boss', {
           m.data.sdir = sim.rng() < 0.5 ? 1 : -1;
           sim.events.push({ t: 'boss', what: 'f11_spin_call' });
           // v2.87 — только рисунок: лучи вращения — одна зона-картинка на весь режим.
-          api.vfx(sim, { x: m.x, y: m.y, r: BOSS.beamLen, life: BOSS.spinCharge + BOSS.spinDur + 0.6, art: 'f11v_spin', above: true, ...{ boss: m.id } } as ZoneIn);
+          api.vfx(sim, {
+            x: m.x,
+            y: m.y,
+            r: BOSS.beamLen,
+            life: BOSS.spinCharge + BOSS.spinDur + 0.6,
+            art: 'f11v_spin',
+            above: true,
+            ...{ boss: m.id },
+          } as ZoneIn);
           return;
         }
         if (dist < 2.9) {
@@ -3221,7 +3427,15 @@ registerBrain('f11boss', {
             los: true,
             from: m.id,
           });
-          api.zone(sim, { x: m.x, y: m.y, r: len, life: 0.35, art: 'f11_beamfx', above: true, ...{ ang: m.face } } as ZoneIn);
+          api.zone(sim, {
+            x: m.x,
+            y: m.y,
+            r: len,
+            life: 0.35,
+            art: 'f11_beamfx',
+            above: true,
+            ...{ ang: m.face },
+          } as ZoneIn);
           sim.events.push({ t: 'boss', what: 'f11_beam' });
           sim.events.push({ t: 'shake', k: 0.2 });
           api.setMode(m, 'recover');
@@ -3233,8 +3447,15 @@ registerBrain('f11boss', {
         m.vx *= 0.6;
         m.vy *= 0.6;
         turnTo(m, Math.atan2(m.data.ty - m.y, m.data.tx - m.x), 2, dt);
-        m.tele = { shape: 'circle', r: BOSS.slamR, x: m.data.tx, y: m.data.ty, k: m.t / BOSS.slamWarn };
-        if (m.t > BOSS.slamWarn - 0.25) m.danger = hypot(m.data.tx - m.x, m.data.ty - m.y) + BOSS.slamR + 0.4;
+        m.tele = {
+          shape: 'circle',
+          r: BOSS.slamR,
+          x: m.data.tx,
+          y: m.data.ty,
+          k: m.t / BOSS.slamWarn,
+        };
+        if (m.t > BOSS.slamWarn - 0.25)
+          m.danger = hypot(m.data.tx - m.x, m.data.ty - m.y) + BOSS.slamR + 0.4;
         if (m.t >= BOSS.slamWarn) {
           api.strike(sim, {
             shape: 'circle',
@@ -3396,7 +3617,9 @@ function raisePylons(sim: Sim, st: F11State, b: BossFight, api: SimApi): void {
       const p = spotNear(sim, x, y, 0, 1.8, (px, py) => hypot(px - a.cx, py - a.cy));
       if (p) [x, y] = p;
     }
-    const m = api.spawnMob(sim, 'f11_pylon', Math.floor(x) + 0.5, Math.floor(y) + 0.5, { mode: 'f11_pylon' });
+    const m = api.spawnMob(sim, 'f11_pylon', Math.floor(x) + 0.5, Math.floor(y) + 0.5, {
+      mode: 'f11_pylon',
+    });
     ids.push(m.id);
     const z = { x: m.x, y: m.y, r: 0.5, life: 1e9, art: 'f11_pylonbeam', above: true, pylon: m.id };
     api.zone(sim, z as ZoneIn);
@@ -3501,13 +3724,33 @@ function crumbleRing(sim: Sim, st: F11State, b: BossFight, api: SimApi, r: numbe
   const cells = ringCells(sim, st, b, r);
   for (const i of cells) setCell(sim, st, api, i, T_FLOOR, MK.cracking);
   // v2.87 — только рисунок: край трещит (жар по трещинам, пыль) и уходит в бездну (плиты падают).
-  api.vfx(sim, { x: st.arena.cx, y: st.arena.cy, r: r, life: 2.1, art: 'f11v_crack', ...{ cells: cells.slice() } } as ZoneIn);
-  sim.events.push({ t: 'boss', what: 'f11_crumble_trap', text: 'КРАЙ ТРЕЩИТ', sub: 'отойди к середине' });
+  api.vfx(sim, {
+    x: st.arena.cx,
+    y: st.arena.cy,
+    r: r,
+    life: 2.1,
+    art: 'f11v_crack',
+    ...{ cells: cells.slice() },
+  } as ZoneIn);
+  sim.events.push({
+    t: 'boss',
+    what: 'f11_crumble_trap',
+    text: 'КРАЙ ТРЕЩИТ',
+    sub: 'отойди к середине',
+  });
   after(st, 2, () => {
     if (sim.boss?.state !== 'fight' && sim.boss?.state !== 'won') return;
     const sunk = cells.filter((i) => sim.world.mark[i] === MK.cracking); // v2.87 — только рисунок
-    for (const i of cells) if (sim.world.mark[i] === MK.cracking) sinkCell(sim, st, api, i, MK.fallen);
-    api.vfx(sim, { x: st.arena.cx, y: st.arena.cy, r: r, life: 3, art: 'f11v_fall', ...{ cells: sunk } } as ZoneIn); // v2.87 — только рисунок
+    for (const i of cells)
+      if (sim.world.mark[i] === MK.cracking) sinkCell(sim, st, api, i, MK.fallen);
+    api.vfx(sim, {
+      x: st.arena.cx,
+      y: st.arena.cy,
+      r: r,
+      life: 3,
+      art: 'f11v_fall',
+      ...{ cells: sunk },
+    } as ZoneIn); // v2.87 — только рисунок
     sim.events.push({ t: 'shake', k: 0.6 });
     sim.events.push({ t: 'boss', what: 'f11_crumble_fall' });
   });
@@ -3562,13 +3805,23 @@ registerBoss('f11boss', {
         bd.pylonT = 0;
         api.setMode(boss, 'f11_stagger');
         sim.zones = sim.zones.filter((z) => z.art !== 'f11_pylonbeam');
-        sim.events.push({ t: 'boss', what: 'f11_shield_trap', text: 'КУПОЛ ПАЛ', sub: 'страж на колене — бей!' });
+        sim.events.push({
+          t: 'boss',
+          what: 'f11_shield_trap',
+          text: 'КУПОЛ ПАЛ',
+          sub: 'страж на колене — бей!',
+        });
         sim.events.push({ t: 'flash', color: '#bfe8ff', k: 0.6 });
       } else if (!bd.shield) {
         bd.pylonT = (bd.pylonT ?? 0) + dt;
         if (bd.pylonT > BOSS.pylonBack && boss.mode !== 'f11_stagger') {
           raisePylons(sim, st, b, api);
-          sim.events.push({ t: 'boss', what: 'f11_shield_call', text: 'КУПОЛ СНОВА', sub: 'пилоны поднялись' });
+          sim.events.push({
+            t: 'boss',
+            what: 'f11_shield_call',
+            text: 'КУПОЛ СНОВА',
+            sub: 'пилоны поднялись',
+          });
         }
       }
       a.k = 3;
@@ -3578,7 +3831,8 @@ registerBoss('f11boss', {
       if (bd.ventT <= 0) {
         bd.ventT = 2.5;
         const vents: number[] = [];
-        for (const i of b.cells) if (sim.world.mark[i] === MK.vent && walkable(sim.tiles[i])) vents.push(i);
+        for (const i of b.cells)
+          if (sim.world.mark[i] === MK.vent && walkable(sim.tiles[i])) vents.push(i);
         const h = sim.hero;
         vents.sort(
           (p, q) =>
@@ -3627,10 +3881,18 @@ registerBoss('f11boss', {
       } else a.k = 2;
     }
   },
-  onPartDown(sim, _b, m, api) { // v2.87 — только рисунок: `api` — для зоны-картинки смерти
+  onPartDown(sim, _b, m, api) {
+    // v2.87 — только рисунок: `api` — для зоны-картинки смерти
     if (m.kind !== 'f11boss') return false;
     const st = stateOf(sim);
-    api.vfx(sim, { x: m.x, y: m.y, r: 1.3, life: 3.2, art: 'f11v_death', ...{ left: Math.cos(m.face) < 0 ? 1 : 0 } } as ZoneIn); // v2.87 — только рисунок
+    api.vfx(sim, {
+      x: m.x,
+      y: m.y,
+      r: 1.3,
+      life: 3.2,
+      art: 'f11v_death',
+      ...{ left: Math.cos(m.face) < 0 ? 1 : 0 },
+    } as ZoneIn); // v2.87 — только рисунок
     dropPylons(sim);
     st.arena.mode = 0;
     st.arena.k = 0;
@@ -3655,4 +3917,3 @@ registerBoss('f11boss', {
     st.hooks = [];
   },
 });
-

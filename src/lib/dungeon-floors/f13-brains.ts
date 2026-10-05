@@ -1702,7 +1702,15 @@ function colBack(sim: Sim, m: Mob, api: SimApi): boolean {
   }
   if (m.t > S.warn - 0.25) m.danger = S.r + 0.5;
   if (m.t >= S.warn) {
-    if (!m.data.vPiv) api.vfx(sim, { x: m.x, y: m.y + 0.1, r: 1.4, life: 0.8, art: 'f13_colpivot', k: m.data.vSpin } as ZX); // v2.87 — только рисунок
+    if (!m.data.vPiv)
+      api.vfx(sim, {
+        x: m.x,
+        y: m.y + 0.1,
+        r: 1.4,
+        life: 0.8,
+        art: 'f13_colpivot',
+        k: m.data.vSpin,
+      } as ZX); // v2.87 — только рисунок
     m.data.vPiv = 1; // v2.87 — только рисунок
     const k = Math.min(1, (m.t - S.warn) / 0.5);
     m.face += angDiff(m.data.sa, m.face) * k;
@@ -1787,7 +1795,16 @@ function colQuake(sim: Sim, m: Mob, api: SimApi, b: BossFight): boolean {
         vc.push(i); // v2.87 — только рисунок
       }
       const W0 = sim.world.w; // v2.87 — только рисунок
-      if (vc.length) api.vfx(sim, { x: (vc[0] % W0) + 0.5, y: Math.floor(vc[0] / W0) + 0.5, r: 1, life: Q.crack + 0.25, art: 'f13_colfault', cells: vc, ww: W0 } as ZX); // v2.87 — только рисунок
+      if (vc.length)
+        api.vfx(sim, {
+          x: (vc[0] % W0) + 0.5,
+          y: Math.floor(vc[0] / W0) + 0.5,
+          r: 1,
+          life: Q.crack + 0.25,
+          art: 'f13_colfault',
+          cells: vc,
+          ww: W0,
+        } as ZX); // v2.87 — только рисунок
       sim.events.push({
         t: 'boss',
         what: 'f13_crack_trap',
@@ -1806,7 +1823,15 @@ function colThrow(sim: Sim, m: Mob, api: SimApi, dt: number): boolean {
   m.vx *= 0.6;
   m.vy *= 0.6;
   turnTo(m, Math.atan2(h.y - m.y, h.x - m.x), 1.6, dt);
-  if (!m.data.vRip) api.vfx(sim, { x: m.x, y: m.y, r: 1.2, life: COL.throw.windup + 0.4, art: 'f13_colrip', ang: m.face } as ZX); // v2.87 — только рисунок
+  if (!m.data.vRip)
+    api.vfx(sim, {
+      x: m.x,
+      y: m.y,
+      r: 1.2,
+      life: COL.throw.windup + 0.4,
+      art: 'f13_colrip',
+      ang: m.face,
+    } as ZX); // v2.87 — только рисунок
   m.data.vRip = 1; // v2.87 — только рисунок
   if (m.t >= COL.throw.windup) {
     const tx = h.x + h.vx * 0.3;
@@ -1832,7 +1857,16 @@ function colThrow(sim: Sim, m: Mob, api: SimApi, dt: number): boolean {
     const vx0 = m.x + Math.cos(va) * (m.r + 0.1); // v2.87 — только рисунок
     const vy0 = m.y + Math.sin(va) * (m.r + 0.1); // v2.87 — только рисунок
     const vT = Math.max(0.35, hypot(tx - vx0, ty - vy0) / 8); // v2.87 — только рисунок
-    api.vfx(sim, { x: tx, y: ty, r: 1.1, life: vT, art: 'f13_colaim', k: vT, sx: vx0, sy: vy0 } as ZX); // v2.87 — только рисунок
+    api.vfx(sim, {
+      x: tx,
+      y: ty,
+      r: 1.1,
+      life: vT,
+      art: 'f13_colaim',
+      k: vT,
+      sx: vx0,
+      sy: vy0,
+    } as ZX); // v2.87 — только рисунок
     m.data.vRip = 0; // v2.87 — только рисунок
     return true;
   }
@@ -2053,7 +2087,18 @@ function colStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
   const near = dist < m.r + 1.4;
   stride(m, Math.atan2(cy, cx), near ? 0 : m.speed * COL.walk[phase], COL.turn[phase], dt);
   m.data.vWalk = (m.data.vWalk ?? 0) + hypot(m.vx, m.vy) * dt; // v2.87 — только рисунок: шаги по пройденному пути
-  if (m.data.vWalk > 0.9) { m.data.vWalk = 0; m.data.vFoot = m.data.vFoot ? 0 : 1; api.vfx(sim, { x: m.x + (m.data.vFoot ? 0.5 : -0.5), y: m.y + 0.15, r: 0.7, life: 0.85, art: 'f13_colstep', k: phase } as ZX); } // v2.87 — только рисунок
+  if (m.data.vWalk > 0.9) {
+    m.data.vWalk = 0;
+    m.data.vFoot = m.data.vFoot ? 0 : 1;
+    api.vfx(sim, {
+      x: m.x + (m.data.vFoot ? 0.5 : -0.5),
+      y: m.y + 0.15,
+      r: 0.7,
+      life: 0.85,
+      art: 'f13_colstep',
+      k: phase,
+    } as ZX);
+  } // v2.87 — только рисунок
 }
 
 registerBrain('f13boss', {
@@ -2179,8 +2224,23 @@ registerBoss('f13boss', {
       b.phase = 3;
       api.setMode(m, 'roar');
       setAura(sim, api, st, m, 'f13_heat', COL.heat.r, COL.heat.dps);
-      api.vfx(sim, { x: m.x, y: m.y, r: 4.5, life: COL.roar, art: 'f13_colroar', k: 3, above: true } as ZX); // v2.87 — только рисунок
-      api.vfx(sim, { x: m.x, y: m.y, r: COL.heat.r, life: 1e6, art: 'f13_colheatlit', above: true }); // v2.87 — только рисунок: угли жара
+      api.vfx(sim, {
+        x: m.x,
+        y: m.y,
+        r: 4.5,
+        life: COL.roar,
+        art: 'f13_colroar',
+        k: 3,
+        above: true,
+      } as ZX); // v2.87 — только рисунок
+      api.vfx(sim, {
+        x: m.x,
+        y: m.y,
+        r: COL.heat.r,
+        life: 1e6,
+        art: 'f13_colheatlit',
+        above: true,
+      }); // v2.87 — только рисунок: угли жара
       m.data.ringCd = 1.5;
       sim.events.push({
         t: 'boss',
@@ -2240,7 +2300,16 @@ registerBoss('f13boss', {
           }
         }
       }
-      if (fell.length) api.vfx(sim, { x: (fell[0] % W) + 0.5, y: Math.floor(fell[0] / W) + 0.5, r: 1, life: 1.7, art: 'f13_colrift', cells: fell, ww: W } as ZX); // v2.87 — только рисунок
+      if (fell.length)
+        api.vfx(sim, {
+          x: (fell[0] % W) + 0.5,
+          y: Math.floor(fell[0] / W) + 0.5,
+          r: 1,
+          life: 1.7,
+          art: 'f13_colrift',
+          cells: fell,
+          ww: W,
+        } as ZX); // v2.87 — только рисунок
     }
     // ИСПАРЕНИЕ: площадь чернеет под его шагами.
     if (b.phase === 3) {

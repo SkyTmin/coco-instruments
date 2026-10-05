@@ -18,6 +18,7 @@ import {
   stackMax,
   thingKey,
 } from './inventory';
+import { BUNK_MATS_VER } from './inventory';
 import type { BunkState, InvRef } from './inventory';
 import { DUNGEON_START } from './dungeon';
 import type { DungeonState } from './dungeon';
@@ -385,6 +386,7 @@ describe('сундук из сохранения', () => {
   it('непонятные вещи выбрасываются, лишнее в стопке урезается', () => {
     const b = normalizeBunk({
       big: false,
+      matsVer: BUNK_MATS_VER,
       slots: [
         { thing: { t: 'mat', id: 'ore:2' }, n: 500 },
         { thing: { t: 'item', id: 'nuke' }, n: 3 },
@@ -394,6 +396,7 @@ describe('сундук из сохранения', () => {
         { thing: { t: 'book', book: { id: 'nope', lvl: 1, chance: 50 } }, n: 1 },
         { thing: { t: 'rune', rune: { id: -3, kind: 'sell', tier: 9, roll: 500 } }, n: 1 },
         { thing: { t: 'mat', id: 'skin' }, n: 0 },
+        { thing: { t: 'mat', id: 'gone_mat' }, n: 3 },
         null,
         'garbage',
       ],
@@ -412,7 +415,33 @@ describe('сундук из сохранения', () => {
       n: 1,
     });
     expect(b.slots[7]).toBeNull();
+    expect(b.slots[8]).toBeNull();
     expect(b.slots.length).toBe(BUNK_SLOTS);
+  });
+
+  it('сундук до сброса подземелья теряет его материалы, остальное на месте', () => {
+    const raw = {
+      big: false,
+      slots: [
+        { thing: { t: 'mat', id: 'skin' }, n: 5 },
+        { thing: { t: 'mat', id: 'block:9' }, n: 2 },
+        { thing: { t: 'egg', egg: 'moss' }, n: 1 },
+        { thing: { t: 'item', id: 'lens' }, n: 4 },
+      ],
+    };
+    for (const matsVer of [undefined, 1]) {
+      const b = normalizeBunk({ ...raw, matsVer });
+      expect(b.slots.slice(0, 4)).toEqual([
+        null,
+        null,
+        { thing: { t: 'egg', egg: 'moss' }, n: 1 },
+        { thing: { t: 'item', id: 'lens' }, n: 4 },
+      ]);
+      expect(b.matsVer).toBe(BUNK_MATS_VER);
+    }
+    const now = normalizeBunk({ ...raw, matsVer: BUNK_MATS_VER });
+    expect(now.slots[0]).toEqual({ thing: { t: 'mat', id: 'skin' }, n: 5 });
+    expect(now.slots[1]).toEqual({ thing: { t: 'mat', id: 'block:9' }, n: 2 });
   });
 
   it('вещи за краем малого сундука переезжают в пустые ячейки', () => {
@@ -428,6 +457,7 @@ describe('сундук из сохранения', () => {
   it('повторное чтение ничего не меняет', () => {
     const once = normalizeBunk({
       big: true,
+      matsVer: BUNK_MATS_VER,
       slots: [
         { thing: { t: 'mat', id: 'block:9' }, n: 16 },
         null,

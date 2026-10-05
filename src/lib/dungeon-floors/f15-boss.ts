@@ -131,15 +131,33 @@ const LEGEND: Record<string, LegendCell> = {
   Z: wallObj('f15b_relic_sword', M.relic, { r: 2.4, tint: 'violet' }),
   '7': wallObj('f15b_relic_empty', M.relic, { r: 1.6, tint: 'cold' }),
   // Кокон — под K: пока бой не начался, это он; в бою его рисует босс.
-  F: { tile: 'floor', mark: M.plate, obj: { kind: 'deco', ref: 'f15b_cocoon', solid: 1.1 }, light: { r: 7.5, tint: 'red' } },
+  F: {
+    tile: 'floor',
+    mark: M.plate,
+    obj: { kind: 'deco', ref: 'f15b_cocoon', solid: 1.1 },
+    light: { r: 7.5, tint: 'red' },
+  },
   g: floorObj('f15b_rib', 0.3),
   p: floorObj('f15b_tendon', 0.4),
-  s: { tile: 'floor', mark: M.flesh, obj: { kind: 'breakable', ref: 'f15b_pustule', solid: 0.34, hp: 2, loot: 'f15b_ichor' } },
+  s: {
+    tile: 'floor',
+    mark: M.flesh,
+    obj: { kind: 'breakable', ref: 'f15b_pustule', solid: 0.34, hp: 2, loot: 'f15b_ichor' },
+  },
   d: floorObj('f15b_drip', 0),
   e: floorObj('f15b_vent', 0, { r: 1.6, tint: 'warm' }),
   t: floorObj('f15b_teeth', 0.3),
-  '5': { tile: 'floor', mark: M.flesh, obj: { kind: 'deco', ref: 'f15b_bones', solid: 0.26, flat: true } },
-  '6': { tile: 'floor', mark: M.vein, obj: { kind: 'deco', ref: 'f15b_node', solid: 0, flat: true }, light: { r: 2, tint: 'red' } },
+  '5': {
+    tile: 'floor',
+    mark: M.flesh,
+    obj: { kind: 'deco', ref: 'f15b_bones', solid: 0.26, flat: true },
+  },
+  '6': {
+    tile: 'floor',
+    mark: M.vein,
+    obj: { kind: 'deco', ref: 'f15b_node', solid: 0, flat: true },
+    light: { r: 2, tint: 'red' },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -237,10 +255,18 @@ export const F15_BOSS_MOBS: MobDef[] = [
   },
   echo('f15b_echo_king', 'Эхо Крысиного короля', 'эх Крысиного короля', 120, 22, 3.1, 0.75),
   echo('f15b_echo_mino', 'Эхо Минотавра', 'эх Минотавра', 135, 25, 2.7, 0.8, { mass: 16 }),
-  echo('f15b_echo_serpent', 'Эхо Красного змея', 'эх Красного змея', 135, 24, 2.3, 0.95, { mass: 16 }),
+  echo('f15b_echo_serpent', 'Эхо Красного змея', 'эх Красного змея', 135, 24, 2.3, 0.95, {
+    mass: 16,
+  }),
   echo('f15b_echo_hydra', 'Эхо гидры', 'эх гидры', 40, 22, 0, 1.2, { mass: 99, mats: [] }),
-  echo('f15b_echo_head', 'Голова эха', 'голов эха', 52, 22, 0, 0.5, { mass: 99, fly: true, mats: [['f15b_echo', 0.3]] }),
-  echo('f15b_echo_demon', 'Эхо Короля демонов', 'эх Короля демонов', 150, 26, 2.5, 0.95, { mass: 18 }),
+  echo('f15b_echo_head', 'Голова эха', 'голов эха', 52, 22, 0, 0.5, {
+    mass: 99,
+    fly: true,
+    mats: [['f15b_echo', 0.3]],
+  }),
+  echo('f15b_echo_demon', 'Эхо Короля демонов', 'эх Короля демонов', 150, 26, 2.5, 0.95, {
+    mass: 18,
+  }),
   {
     id: 'f15b_clot',
     name: 'Кровяной сгусток',

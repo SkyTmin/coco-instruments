@@ -86,8 +86,7 @@ for (const f of FLOORS) {
 /** Все готовые этажи, и за заготовками тоже: их видит креатив владельца. */
 export const READY_FLOORS = FLOORS.filter((f) => !f.draft);
 /** Готов ли этаж (есть и не заготовка). */
-export const floorReady = (id: number): boolean =>
-  FLOORS.some((f) => f.id === id && !f.draft);
+export const floorReady = (id: number): boolean => FLOORS.some((f) => f.id === id && !f.draft);
 export const floorOf = (id: number): FloorDef => FLOORS.find((f) => f.id === id) ?? FLOORS[0];
 /** Этаж, к которому относится район. */
 export const floorOfArea = (area: AreaId): number => areaOf(area).floor;
@@ -696,6 +695,9 @@ export function matDef(id: MatId): MatDef {
   return { id, name: id, price: 0, lead: '', stack: 32 };
 }
 
+/** Вещь рюкзака известна игре: материал этажа, руда или блок шахты. */
+export const knownMat = (id: string): boolean => id in BASE_MATS || itemRock(id) !== null;
+
 /** Материалы по id — для старого кода (`MATS[id].name`). */
 export const MATS: Record<MatId, MatDef> = new Proxy(BASE_MATS, {
   get: (t, k: string) => (typeof k === 'string' ? (t[k] ?? matDef(k)) : undefined),
@@ -1221,7 +1223,18 @@ export interface DungeonState {
    * его привязанное к клеткам.
    */
   mapVers: Partial<Record<string, number>>;
+  /** Версия сохранения подземелья (`DUNGEON_SAVE_VER`). */
+  saveVer: number;
 }
+
+/**
+ * Версия сохранения подземелья. Сохранение с меньшей — с чистого старта
+ * (v2.89.0: владелец сбросил подземелье перед новыми этажами 12, 13 и 15;
+ * играет только он, и только проверяет). Поднять — сбросить ещё раз; вместе
+ * с ней поднять `BUNK_MATS_VER` (`inventory.ts`), иначе материалы
+ * подземелья в сундуке у койки останутся.
+ */
+export const DUNGEON_SAVE_VER = 2;
 
 /**
  * Версия планировки до этажей (v2.61–v2.80): мир 64×410 из двух районов.
@@ -1247,6 +1260,7 @@ export const DUNGEON_START: DungeonState = {
   intro: false,
   reached: 1,
   mapVers: Object.fromEntries(FLOORS.map((f) => [String(f.id), f.mapVer])),
+  saveVer: DUNGEON_SAVE_VER,
 };
 
 /** Подземелье открывается с этого ранга шахты (или после престижа). */
@@ -1268,10 +1282,14 @@ function normPiece(v: unknown): GearPiece {
   return { tier, plus };
 }
 
-function normCounts<K extends string>(v: unknown): Partial<Record<K, number>> {
+function normCounts<K extends string>(
+  v: unknown,
+  ok: (k: string) => boolean = () => true,
+): Partial<Record<K, number>> {
   const out: Partial<Record<K, number>> = {};
   if (!v || typeof v !== 'object') return out;
   for (const [k, n] of Object.entries(v as Record<string, unknown>)) {
+    if (!ok(k)) continue;
     const x = num(n, 0);
     if (x > 0) out[k as K] = Math.floor(x);
   }
@@ -1281,8 +1299,8 @@ function normCounts<K extends string>(v: unknown): Partial<Record<K, number>> {
 export function normalizeSack(v: unknown): Sack {
   const o = (v ?? {}) as Partial<Sack>;
   return {
-    meat: normCounts<MeatId>(o.meat),
-    mats: normCounts<MatId>(o.mats),
+    meat: normCounts<MeatId>(o.meat, isMeat),
+    mats: normCounts<MatId>(o.mats, knownMat),
     tokens: Math.max(0, Math.floor(num(o.tokens))),
     keys: Math.max(0, Math.floor(num(o.keys))),
     coins: Math.max(0, Math.floor(num(o.coins))),
@@ -1296,6 +1314,8 @@ const areaOfId = (id: string) => id.slice(0, id.indexOf(':'));
 export function normalizeDungeon(v: unknown): DungeonState {
   if (!v || typeof v !== 'object') return { ...DUNGEON_START };
   const o = v as Partial<DungeonState> & { mapVer?: number };
+  // Сохранение старой версии — с чистого старта (`DUNGEON_SAVE_VER`).
+  if (num(o.saveVer, 1) < DUNGEON_SAVE_VER) return { ...DUNGEON_START };
   const g = (o.gear ?? {}) as Partial<Gear>;
   const run = o.run as Partial<RunState> | null | undefined;
   // Версии карт по этажам. Сохранение до этажей (одно число `mapVer`) — это
@@ -1345,9 +1365,10 @@ export function normalizeDungeon(v: unknown): DungeonState {
       boots: normPiece(g.boots),
     },
     xp: Math.max(0, num(o.xp)),
-    kills: normCounts<MobId>(o.kills),
+    // Неизвестные id (этаж переделан, вещь или монстр убраны) — мимо.
+    kills: normCounts<MobId>(o.kills, (id) => id in MOBS),
     stats: normCounts<StatId>(o.stats),
-    stash: normCounts<MatId>(o.stash),
+    stash: normCounts<MatId>(o.stash, knownMat),
     lifts: [...lifts],
     opened: strs(o.opened).filter(keep),
     lamps: strs(o.lamps).filter(keep),
@@ -1394,6 +1415,7 @@ export function normalizeDungeon(v: unknown): DungeonState {
     intro: o.intro === true,
     reached,
     mapVers: Object.fromEntries(FLOORS.map((f) => [String(f.id), f.mapVer])),
+    saveVer: DUNGEON_SAVE_VER,
   };
 }
 

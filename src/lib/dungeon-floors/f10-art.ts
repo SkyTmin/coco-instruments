@@ -5326,7 +5326,7 @@ function kingReq(m: Mob, pose: MobPose): KReq {
     case 'dying':
       at('death', t);
       break;
-    default:
+    default: {
       if (pose.anim === 'run' || Math.hypot(m.vx ?? 0, m.vy ?? 0) > 0.4) {
         q.tech = 'walk';
         const d = fresh ? pose.now * Math.hypot(m.vx ?? 0, m.vy ?? 0) * 16 : s.walk;
@@ -5337,6 +5337,7 @@ function kingReq(m: Mob, pose: MobPose): KReq {
       }
       const fl = m.flash ?? 0;
       q.fl = fl > 0.07 ? 2 : fl > 0.01 ? 1 : 0;
+    }
   }
   if (pose.mode !== 'f10_air' && pose.mode !== 'f10_dive' && pose.mode !== 'f10_landed')
     s.flip = q.flip;

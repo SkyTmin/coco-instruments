@@ -8,7 +8,6 @@
 //
 // The output is committed; the app never fetches the list at runtime.
 
-/* global process, fetch, console */
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const SRC =

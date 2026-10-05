@@ -66,7 +66,8 @@ describe('рыбалка: справочники', () => {
       expect(SPOTS[i].skill).toBeGreaterThan(SPOTS[i - 1].skill);
       expect(SPOTS[i].base).toBeGreaterThan(SPOTS[i - 1].base * 1.6);
     }
-    for (let s = 0; s < SPOTS.length; s++) expect(FISH.filter((f) => f.spot === s).length).toBeGreaterThanOrEqual(5);
+    for (let s = 0; s < SPOTS.length; s++)
+      expect(FISH.filter((f) => f.spot === s).length).toBeGreaterThanOrEqual(5);
   });
 
   it('удочки: сильнее и дороже по порядку', () => {
@@ -189,7 +190,13 @@ describe('рыбалка: поклёвка и цена', () => {
   });
 
   it('битое сохранение не ломает рыбалку', () => {
-    const s = normalizeFishing({ xp: -5, rod: 99, spot: 4, bite: [5, -1], records: { pike: 3, nope: 9 } } as never);
+    const s = normalizeFishing({
+      xp: -5,
+      rod: 99,
+      spot: 4,
+      bite: [5, -1],
+      records: { pike: 3, nope: 9 },
+    } as never);
     expect(s.xp).toBe(0);
     expect(s.rod).toBe(RODS.length - 1);
     // Место моря закрыто без мастерства — возвращаем на пруд.

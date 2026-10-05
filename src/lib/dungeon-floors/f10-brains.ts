@@ -236,7 +236,8 @@ registerBrain('f10_hound', {
             m.vy *= 0.7;
             m.face = Math.atan2(dy, dx);
           }
-          if (hd < m.data.len + 4 && sim.rng() < dt * 0.6) sim.events.push({ t: 'squeak', x: m.x, y: m.y });
+          if (hd < m.data.len + 4 && sim.rng() < dt * 0.6)
+            sim.events.push({ t: 'squeak', x: m.x, y: m.y });
           return;
         }
         // Прыжок — по очереди: пока прыгает сосед, этот обходит.
@@ -277,7 +278,10 @@ registerBrain('f10_hound', {
         m.vy *= 0.6;
         if (m.t < POUNCE.aim * 0.55) m.dir = Math.atan2(dy, dx);
         m.face = m.dir;
-        let len = Math.min(POUNCE.max + 0.6, clearDist(sim, api, m.x, m.y, m.dir, POUNCE.max + 0.6));
+        let len = Math.min(
+          POUNCE.max + 0.6,
+          clearDist(sim, api, m.x, m.y, m.dir, POUNCE.max + 0.6),
+        );
         if (chained) {
           const [tx, ty] = chainReach(m, m.x + Math.cos(m.dir) * len, m.y + Math.sin(m.dir) * len);
           len = Math.min(len, hypot(tx - m.x, ty - m.y));
@@ -515,7 +519,12 @@ function knightFall(sim: Sim, m: Mob, api: SimApi): void {
   m.data.fx = Math.cos(m.dir);
   m.data.fy = Math.sin(m.dir);
   api.setMode(m, 'f10_fall');
-  sim.events.push({ t: 'boss', what: 'f10_fall', text: 'В БЕЗДНУ!', sub: 'рыцарь ада проскочил край' });
+  sim.events.push({
+    t: 'boss',
+    what: 'f10_fall',
+    text: 'В БЕЗДНУ!',
+    sub: 'рыцарь ада проскочил край',
+  });
 }
 
 registerBrain('f10_knight', {
@@ -566,7 +575,13 @@ registerBrain('f10_knight', {
         if (m.t < KNIGHT.aim * 0.55) m.dir = Math.atan2(dy, dx);
         m.face = m.dir;
         const len = Math.min(KNIGHT.max, clearDist(sim, api, m.x, m.y, m.dir, KNIGHT.max));
-        m.tele = { shape: 'line', r: len + m.r * 0.5, w: m.r * 0.9, ang: m.dir, k: Math.min(1, m.t / KNIGHT.aim) };
+        m.tele = {
+          shape: 'line',
+          r: len + m.r * 0.5,
+          w: m.r * 0.9,
+          ang: m.dir,
+          k: Math.min(1, m.t / KNIGHT.aim),
+        };
         if (m.t > KNIGHT.aim - 0.26) m.danger = 4.6;
         if (m.t >= KNIGHT.aim) {
           m.data.hit = 0;
@@ -626,7 +641,13 @@ registerBrain('f10_knight', {
         m.vy *= 0.7;
         if (m.t < 0.2) m.dir = Math.atan2(dy, dx);
         m.face = m.dir;
-        m.tele = { shape: 'line', r: 2.1, w: 0.34, ang: m.dir, k: Math.min(1, m.t / KNIGHT.lanceWarn) };
+        m.tele = {
+          shape: 'line',
+          r: 2.1,
+          w: 0.34,
+          ang: m.dir,
+          k: Math.min(1, m.t / KNIGHT.lanceWarn),
+        };
         if (m.t > KNIGHT.lanceWarn - 0.22) m.danger = 2.6;
         if (m.t >= KNIGHT.lanceWarn) {
           if (canHurt(sim) && lineHits(m.x, m.y, m.dir, 2.1, 0.34, h.x, h.y, h.r))
@@ -756,7 +777,8 @@ registerBrain('f10_succubus', {
         if (ed > 0.4 && dist < 9) {
           // Летит напрямую (над пропастью), сквозь стены — по полю.
           let [cx, cy] = [ex / ed, ey / ed];
-          if (!api.lineOfSight(sim, m.x, m.y, m.data.tx, m.data.ty)) [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
+          if (!api.lineOfSight(sim, m.x, m.y, m.data.tx, m.data.ty))
+            [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
           const w = Math.sin(sim.time * 3 + m.id) * 0.4;
           api.steer(sim, m, cx - cy * w, cy + cx * w, m.speed, dt);
         } else if (dist >= 9) {
@@ -774,7 +796,13 @@ registerBrain('f10_succubus', {
         m.vx *= 0.8;
         m.vy *= 0.8;
         if (m.t < SUCC.kiss * 0.6) m.face = Math.atan2(dy, dx);
-        m.tele = { shape: 'line', r: SUCC.shot, w: 0.22, ang: m.face, k: Math.min(1, m.t / SUCC.kiss) };
+        m.tele = {
+          shape: 'line',
+          r: SUCC.shot,
+          w: 0.22,
+          ang: m.face,
+          k: Math.min(1, m.t / SUCC.kiss),
+        };
         if (m.t >= SUCC.kiss) {
           api.shoot(sim, m, m.face, {
             speed: 5.6,
@@ -802,7 +830,13 @@ registerBrain('f10_succubus', {
         m.vy *= 0.7;
         if (m.t < SUCC.swoopAim * 0.6) m.dir = Math.atan2(dy, dx);
         m.face = m.dir;
-        m.tele = { shape: 'line', r: Math.min(6.5, dist + 1), w: 0.36, ang: m.dir, k: Math.min(1, m.t / SUCC.swoopAim) };
+        m.tele = {
+          shape: 'line',
+          r: Math.min(6.5, dist + 1),
+          w: 0.36,
+          ang: m.dir,
+          k: Math.min(1, m.t / SUCC.swoopAim),
+        };
         if (m.t > SUCC.swoopAim - 0.2) m.danger = dist + 1;
         if (m.t >= SUCC.swoopAim) {
           m.data.hit = 0;
@@ -830,7 +864,13 @@ registerBrain('f10_succubus', {
         m.vy *= 0.7;
         const T = 0.5;
         m.face = m.t < 0.15 ? Math.atan2(dy, dx) : m.face;
-        m.tele = { shape: 'cone', r: def.reach + m.r + 0.7, arc: 1.7, ang: m.face, k: Math.min(1, m.t / T) };
+        m.tele = {
+          shape: 'cone',
+          r: def.reach + m.r + 0.7,
+          arc: 1.7,
+          ang: m.face,
+          k: Math.min(1, m.t / T),
+        };
         if (m.t > T - 0.2) m.danger = 1.8;
         if (m.t >= T) {
           const off = Math.abs(angDiff(Math.atan2(dy, dx), m.face));
@@ -952,11 +992,22 @@ registerBrain('f10_gargoyle', {
         if (!m.data.stoned && m.hp < m.maxHp * 0.35) {
           m.data.stoned = 1;
           api.setMode(m, 'f10_petrify');
-          sim.events.push({ t: 'boss', what: 'f10_stone', text: 'КАМЕНЬ', sub: 'горгулья затягивает раны' });
+          sim.events.push({
+            t: 'boss',
+            what: 'f10_stone',
+            text: 'КАМЕНЬ',
+            sub: 'горгулья затягивает раны',
+          });
           return;
         }
         const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
-        if (see && dist > 2.6 && dist < 6.5 && m.data.leapCd <= 0 && clearLine(sim, api, m.x, m.y, h.x, h.y)) {
+        if (
+          see &&
+          dist > 2.6 &&
+          dist < 6.5 &&
+          m.data.leapCd <= 0 &&
+          clearLine(sim, api, m.x, m.y, h.x, h.y)
+        ) {
           startLeap(sim, m, api, h.x, h.y);
           return;
         }
@@ -1008,7 +1059,8 @@ registerBrain('f10_gargoyle', {
         if (m.t >= GARG.stone) {
           m.data.ghost = 0;
           // Из камня — сразу прыжком.
-          if (dist > 1.6 && dist < 6.5 && clearLine(sim, api, m.x, m.y, h.x, h.y)) startLeap(sim, m, api, h.x, h.y);
+          if (dist > 1.6 && dist < 6.5 && clearLine(sim, api, m.x, m.y, h.x, h.y))
+            startLeap(sim, m, api, h.x, h.y);
           else api.setMode(m, 'chase');
         }
         return;
@@ -1106,7 +1158,13 @@ registerBrain('f10_mage', {
             m.data.bx = to[0];
             m.data.by = to[1];
             api.setMode(m, 'blink');
-            api.zone(sim, { x: to[0], y: to[1], r: 0.7, life: MAGE.blinkT + 0.1, art: 'f10_blinkmark' });
+            api.zone(sim, {
+              x: to[0],
+              y: to[1],
+              r: 0.7,
+              life: MAGE.blinkT + 0.1,
+              art: 'f10_blinkmark',
+            });
             return;
           }
         }
@@ -1411,8 +1469,24 @@ const hasteOf = (sim: Sim) => {
 // v2.86 — только рисунок: зона-картинка (`api.vfx`: без урона и статусов, номер
 // мимо `nextId`) — пыль, посадка, рёв, двери, обвал рисует `f10-boss-fx.ts`.
 // Своих `f10_fx*` разом не больше 36, пыли движения — не больше 24.
-type VfxIn = { ang?: number; vd?: number; n?: number; cells?: number[]; ww?: number; above?: boolean };
-function vfx(sim: Sim, api: SimApi, art: string, x: number, y: number, life: number, o: VfxIn = {}, move = false): void {
+type VfxIn = {
+  ang?: number;
+  vd?: number;
+  n?: number;
+  cells?: number[];
+  ww?: number;
+  above?: boolean;
+};
+function vfx(
+  sim: Sim,
+  api: SimApi,
+  art: string,
+  x: number,
+  y: number,
+  life: number,
+  o: VfxIn = {},
+  move = false,
+): void {
   let n = 0;
   for (const z of sim.zones) if (z.art?.startsWith('f10_fx')) n++;
   if (n < (move ? 24 : 36)) api.vfx(sim, { x, y, r: 0.5, life, art, ...o } as ZoneIn & VfxIn);
@@ -1429,7 +1503,9 @@ const throneProp = (sim: Sim): Prop | undefined =>
 function summonWave(sim: Sim, api: SimApi, b: BossFight): void {
   const st = kingState(sim);
   const live = sim.mobs.filter((x) => st.summoned.has(x.id) && x.mode !== 'dying').length;
-  const holes = sim.burrows.filter((x) => x.obj.out && api.inArena(sim, x.obj.out[0] + 0.5, x.obj.out[1] + 0.5));
+  const holes = sim.burrows.filter(
+    (x) => x.obj.out && api.inArena(sim, x.obj.out[0] + 0.5, x.obj.out[1] + 0.5),
+  );
   if (!holes.length) return;
   st.wave += 1;
   const kinds =
@@ -1444,7 +1520,10 @@ function summonWave(sim: Sim, api: SimApi, b: BossFight): void {
     st.summoned.add(mm.id);
     // v2.86 — только рисунок: дверь распахивается — свет и пыль, по очереди со стражей.
     const out = hb.obj.out ?? [hb.obj.x, hb.obj.y + 1];
-    vfx(sim, api, 'f10_fxgate', hb.obj.x + 0.5, hb.obj.y + 0.5, 1.6 + i * 0.3, { ang: Math.atan2(out[1] - hb.obj.y, out[0] - hb.obj.x), vd: i * 0.3 });
+    vfx(sim, api, 'f10_fxgate', hb.obj.x + 0.5, hb.obj.y + 0.5, 1.6 + i * 0.3, {
+      ang: Math.atan2(out[1] - hb.obj.y, out[0] - hb.obj.x),
+      vd: i * 0.3,
+    });
   }
   void b;
 }
@@ -1682,7 +1761,16 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.data.vfxWalk > 0.8) {
         m.data.vfxWalk = 0;
         m.data.vfxFoot = 1 - (m.data.vfxFoot ?? 0);
-        vfx(sim, api, 'f10_fxstep', m.x, m.y, 0.8, { ang: Math.atan2(m.vy, m.vx), n: m.data.vfxFoot }, true);
+        vfx(
+          sim,
+          api,
+          'f10_fxstep',
+          m.x,
+          m.y,
+          0.8,
+          { ang: Math.atan2(m.vy, m.vx), n: m.data.vfxFoot },
+          true,
+        );
       }
       if (m.t < 0.7 / haste) return;
       const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
@@ -1760,7 +1848,12 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.t >= KING.cleaveWarn / haste) {
         m.data.lit = 0;
         sim.hitstop = Math.max(sim.hitstop, 0.06);
-        sim.events.push({ t: 'boom', x: m.x + Math.cos(m.dir) * 2, y: m.y + Math.sin(m.dir) * 2, r: 0 });
+        sim.events.push({
+          t: 'boom',
+          x: m.x + Math.cos(m.dir) * 2,
+          y: m.y + Math.sin(m.dir) * 2,
+          r: 0,
+        });
         // Трещина по полу вдоль удара — картинка, без урона.
         const z: ZoneIn & { ang: number; len: number } = {
           x: m.x,
@@ -1834,7 +1927,12 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           mob: m.id,
         };
         api.zone(sim, z);
-        sim.events.push({ t: 'boss', what: 'f10_swoop_trap', text: 'С НЕБА', sub: 'метка ходит за тобой — уйди, когда замрёт' });
+        sim.events.push({
+          t: 'boss',
+          what: 'f10_swoop_trap',
+          text: 'С НЕБА',
+          sub: 'метка ходит за тобой — уйди, когда замрёт',
+        });
       }
       return;
     case 'f10_air': {
@@ -1846,7 +1944,9 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         m.data.vfxFlap = sim.time + 0.4;
         vfx(sim, api, 'f10_fxflap', m.x, m.y, 0.7, {}, true);
       }
-      const mark = sim.zones.find((z) => z.art === 'f10_divemark' && (z as ZoneIn & { mob?: number }).mob === m.id);
+      const mark = sim.zones.find(
+        (z) => z.art === 'f10_divemark' && (z as ZoneIn & { mob?: number }).mob === m.id,
+      );
       if (mark) {
         const ex = mark.x - m.x;
         const ey = mark.y - m.y;
@@ -1864,7 +1964,18 @@ function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         const x = h.x + Math.cos(a) * r;
         const y = h.y + Math.sin(a) * r;
         if (!api.solidTile(sim, Math.floor(x), Math.floor(y)))
-          api.strike(sim, { shape: 'circle', x, y, r: 0.6, warn: 0.9, dmg: m.dmg * 0.7, knock: 2, art: 'f10_feather', from: m.id, above: true }); // v2.86 — только рисунок: `above`
+          api.strike(sim, {
+            shape: 'circle',
+            x,
+            y,
+            r: 0.6,
+            warn: 0.9,
+            dmg: m.dmg * 0.7,
+            knock: 2,
+            art: 'f10_feather',
+            from: m.id,
+            above: true,
+          }); // v2.86 — только рисунок: `above`
       }
       if (m.t >= KING.airT - KING.lock && !m.data.locked && mark) {
         // Метка замерла: через 0,75 с сюда упадёт король.
@@ -1986,7 +2097,12 @@ registerBoss('f10boss', {
     lead.data.hurlCd = 2.2;
     lead.face = Math.PI / 2;
     api.setMode(lead, 'f10_throne');
-    sim.events.push({ t: 'boss', what: 'f10_wake_call', text: 'КОРОЛЬ ДЕМОНОВ', sub: 'на троне — не достать; бей, когда зовёт стражу' });
+    sim.events.push({
+      t: 'boss',
+      what: 'f10_wake_call',
+      text: 'КОРОЛЬ ДЕМОНОВ',
+      sub: 'на троне — не достать; бей, когда зовёт стражу',
+    });
   },
   step(sim, b, dt, api) {
     API_REF.api = api;
@@ -1996,17 +2112,31 @@ registerBoss('f10boss', {
     const k = lead.hp / lead.maxHp;
     const W = sim.world.w;
     // Смена фаз по засечкам.
-    if (b.phase === 0 && k <= KING.hp[0] && (lead.mode === 'f10_throne' || lead.mode === 'f10_command')) {
+    if (
+      b.phase === 0 &&
+      k <= KING.hp[0] &&
+      (lead.mode === 'f10_throne' || lead.mode === 'f10_command')
+    ) {
       b.phase = 1;
       api.setMode(lead, 'f10_rise');
-      sim.events.push({ t: 'boss', what: 'phase', text: 'КОРОЛЬ ВСТАЁТ', sub: 'меч и молнии — смотри под ноги' });
+      sim.events.push({
+        t: 'boss',
+        what: 'phase',
+        text: 'КОРОЛЬ ВСТАЁТ',
+        sub: 'меч и молнии — смотри под ноги',
+      });
       // Арена: жаровни вспыхивают красным, по плитам — отсвет.
       api.zone(sim, { x: b.obj.x + 0.5, y: b.obj.y + 0.5, r: 13, life: 1e9, art: 'f10_redglow' });
     }
     if (b.phase === 1 && k <= KING.hp[1]) {
       b.phase = 2;
       api.setMode(lead, 'f10_unfurl');
-      sim.events.push({ t: 'boss', what: 'phase', text: 'КРЫЛЬЯ', sub: 'взлетает — следи за меткой пике' });
+      sim.events.push({
+        t: 'boss',
+        what: 'phase',
+        text: 'КРЫЛЬЯ',
+        sub: 'взлетает — следи за меткой пике',
+      });
       // Витражи арены вылетают: стекло сыплется у северной стены.
       for (const i of b.cells) {
         const up = i - W;
@@ -2028,11 +2158,22 @@ registerBoss('f10boss', {
           });
       }
     }
-    if (b.phase === 2 && k <= KING.hp[2] && lead.mode !== 'f10_air' && lead.mode !== 'f10_dive' && lead.mode !== 'f10_takeoff') {
+    if (
+      b.phase === 2 &&
+      k <= KING.hp[2] &&
+      lead.mode !== 'f10_air' &&
+      lead.mode !== 'f10_dive' &&
+      lead.mode !== 'f10_takeoff'
+    ) {
       b.phase = 3;
       api.setMode(lead, 'f10_roar');
       st.ringNext = sim.time + 1;
-      sim.events.push({ t: 'boss', what: 'phase', text: 'БЕЗДНА', sub: 'края зала рушатся — держись ковра' });
+      sim.events.push({
+        t: 'boss',
+        what: 'phase',
+        text: 'БЕЗДНА',
+        sub: 'края зала рушатся — держись ковра',
+      });
     }
     // Обвал краёв: кольцо трещит, потом рушится.
     if (b.phase >= 3 && st.ringNext > 0 && sim.time >= st.ringNext) {
@@ -2043,9 +2184,17 @@ registerBoss('f10boss', {
           retile(sim, api, i, T_FLOOR, F10_MARK.cracking);
           st.falling.set(i, sim.time + KING.collapseWarn);
         }
-        sim.events.push({ t: 'boss', what: 'f10_crumble_trap', text: 'ПОЛ ТРЕЩИТ', sub: 'отойди от края' });
+        sim.events.push({
+          t: 'boss',
+          what: 'f10_crumble_trap',
+          text: 'ПОЛ ТРЕЩИТ',
+          sub: 'отойди от края',
+        });
         // v2.86 — только рисунок: трещины наливаются жаром снизу, пол вздрагивает.
-        vfx(sim, api, 'f10_fxcrack', lead.x, lead.y, KING.collapseWarn + 0.1, { cells: r.filter((i) => st.falling.has(i)), ww: W });
+        vfx(sim, api, 'f10_fxcrack', lead.x, lead.y, KING.collapseWarn + 0.1, {
+          cells: r.filter((i) => st.falling.has(i)),
+          ww: W,
+        });
         vShake(sim, lead.x, lead.y, 0.15);
         st.ringNext = sim.time + KING.collapseEvery;
       } else st.ringNext = 0;
@@ -2064,18 +2213,31 @@ registerBoss('f10boss', {
         // Стоял на краю — сорвался: удар и на ближнюю твёрдую клетку.
         const cx = (i % W) + 0.5;
         const cy = Math.floor(i / W) + 0.5;
-        if (i === hi || (Math.abs(h.x - cx) < 0.5 + h.r * 0.6 && Math.abs(h.y - cy) < 0.5 + h.r * 0.6)) {
+        if (
+          i === hi ||
+          (Math.abs(h.x - cx) < 0.5 + h.r * 0.6 && Math.abs(h.y - cy) < 0.5 + h.r * 0.6)
+        ) {
           const to = safeCell(sim, hi, (j) => st.falling.has(j) || sim.tiles[j] === T_DEEP);
           if (to !== null && !heroDown(sim)) {
             api.moveHero(sim, (to % W) + 0.5, Math.floor(to / W) + 0.5);
             h.inv = 0;
             api.hurtHero(sim, rawShare(sim, 0.12), cx, cy, 0);
-            sim.events.push({ t: 'boss', what: 'f10_edge_trap', text: 'СОРВАЛСЯ', sub: 'край ушёл из-под ног' });
+            sim.events.push({
+              t: 'boss',
+              what: 'f10_edge_trap',
+              text: 'СОРВАЛСЯ',
+              sub: 'край ушёл из-под ног',
+            });
           }
         }
         // Мобы на краю — вниз.
         for (const mm of sim.mobs)
-          if (!mm.kind.endsWith('boss') && mm.mode !== 'dying' && Math.floor(mm.x) === i % W && Math.floor(mm.y) === Math.floor(i / W)) {
+          if (
+            !mm.kind.endsWith('boss') &&
+            mm.mode !== 'dying' &&
+            Math.floor(mm.x) === i % W &&
+            Math.floor(mm.y) === Math.floor(i / W)
+          ) {
             mm.hp = 0;
             api.setMode(mm, 'escape');
           }
@@ -2379,7 +2541,14 @@ export const f10Events = (sim: Sim) => {
     : null;
 };
 
-function saveTile(sim: Sim, st: F10State, api: SimApi, i: number, tile: number, mark: number): void {
+function saveTile(
+  sim: Sim,
+  st: F10State,
+  api: SimApi,
+  i: number,
+  tile: number,
+  mark: number,
+): void {
   const w = sim.world;
   if (!st.saved.has(i)) st.saved.set(i, { tile: sim.tiles[i], mark: w.mark[i] });
   api.setTile(sim, i % w.w, Math.floor(i / w.w), tile, mark);
@@ -2451,7 +2620,9 @@ const SPIKE = { period: 3, warn: 0.6, up: 0.7 };
 function stepSpikes(sim: Sim, st: F10State, api: SimApi, dt: number): void {
   if (!st.spikes.length) return;
   const h = sim.hero;
-  const near = st.spikes.some((r) => Math.abs(r.y + 0.5 - h.y) < 12 && Math.abs((r.x0 + r.x1) / 2 + 0.5 - h.x) < 10);
+  const near = st.spikes.some(
+    (r) => Math.abs(r.y + 0.5 - h.y) < 12 && Math.abs((r.x0 + r.x1) / 2 + 0.5 - h.x) < 10,
+  );
   if (!near) return;
   const t0 = st.spikeT;
   st.spikeT += dt;
@@ -2500,11 +2671,22 @@ function stepBridge(sim: Sim, st: F10State, api: SimApi): void {
     case 'idle': {
       // Прошёл ветхий пролёт на север — доски за спиной трещат.
       const onBridge = sim.world.mark[hy * W + hx] === F10_MARK.bridge;
-      if (onBridge && hy < st.fragTop - 1 && hx >= st.bridgeX0 && hx <= st.bridgeX1 && sim.time - st.bridgeOn < 5) {
+      if (
+        onBridge &&
+        hy < st.fragTop - 1 &&
+        hx >= st.bridgeX0 &&
+        hx <= st.bridgeX1 &&
+        sim.time - st.bridgeOn < 5
+      ) {
         st.bridgeState = 'crack';
         st.bridgeT = sim.time + 1.25;
         for (const i of st.fragile) saveTile(sim, st, api, i, T_FLOOR, F10_MARK.cracking);
-        sim.events.push({ t: 'boss', what: 'f10_bridge_trap', text: 'МОСТ РУШИТСЯ', sub: 'рыцари ада на том берегу — вперёд' });
+        sim.events.push({
+          t: 'boss',
+          what: 'f10_bridge_trap',
+          text: 'МОСТ РУШИТСЯ',
+          sub: 'рыцари ада на том берегу — вперёд',
+        });
         // Рыцари — с того берега, скачут на мост.
         for (const [x, y] of st.knightSpot) {
           const m = api.spawnMob(sim, 'f10_knight', x, y, { mode: 'chase' });
@@ -2530,13 +2712,23 @@ function stepBridge(sim: Sim, st: F10State, api: SimApi): void {
         }
         api.setTile(sim, x, y, T_DEEP, F10_MARK.fallen);
         for (const m of sim.mobs)
-          if (m.mode !== 'dying' && !MOB_FLY.has(m.kind) && Math.floor(m.x) === x && Math.floor(m.y) === y)
+          if (
+            m.mode !== 'dying' &&
+            !MOB_FLY.has(m.kind) &&
+            Math.floor(m.x) === x &&
+            Math.floor(m.y) === y
+          )
             api.fall(sim, m);
       }
       if (!left) {
         st.bridgeState = 'fallen';
         st.bridgeT = sim.time + 40;
-        sim.events.push({ t: 'boom', x: (st.bridgeX0 + st.bridgeX1) / 2 + 0.5, y: st.fragTop + 4, r: 0 });
+        sim.events.push({
+          t: 'boom',
+          x: (st.bridgeX0 + st.bridgeX1) / 2 + 0.5,
+          y: st.fragTop + 4,
+          r: 0,
+        });
       }
       return;
     }
@@ -2562,10 +2754,21 @@ function stepBridgeMend(sim: Sim, st: F10State, api: SimApi): void {
   const W = sim.world.w;
   for (const i of st.fragile) {
     restoreTile(sim, st, api, i);
-    api.zone(sim, { x: (i % W) + 0.5, y: Math.floor(i / W) + 0.5, r: 0.5, life: 0.8, art: 'f10_mend' });
+    api.zone(sim, {
+      x: (i % W) + 0.5,
+      y: Math.floor(i / W) + 0.5,
+      r: 0.5,
+      life: 0.8,
+      art: 'f10_mend',
+    });
   }
   st.bridgeState = 'done';
-  sim.events.push({ t: 'boss', what: 'f10_mend_call', text: 'ЦЕПИ ЗАСКРЕЖЕТАЛИ', sub: 'мост снова цел' });
+  sim.events.push({
+    t: 'boss',
+    what: 'f10_mend_call',
+    text: 'ЦЕПИ ЗАСКРЕЖЕТАЛИ',
+    sub: 'мост снова цел',
+  });
 }
 
 /** Гроза в Витражном зале: волны молний с безопасными клетками. */
@@ -2599,12 +2802,40 @@ function stormWave(sim: Sim, st: F10State, api: SimApi): void {
     for (let y = y0; y <= y1; y += 3)
       for (let x = x0; x <= x1; x += 3) {
         if ((Math.floor((x - x0) / 3) + Math.floor((y - y0) / 3) + (n >> 2)) % 2) continue;
-        api.strike(sim, { shape: 'circle', x: x + 1.5, y: y + 1.5, r: 1.45, warn: STORM.warn, dmg, knock: 3, art: 'f10_bolt' });
+        api.strike(sim, {
+          shape: 'circle',
+          x: x + 1.5,
+          y: y + 1.5,
+          r: 1.45,
+          warn: STORM.warn,
+          dmg,
+          knock: 3,
+          art: 'f10_bolt',
+        });
       }
   } else {
     // Кольцо вокруг героя: стоять — нельзя, выйти — наружу или внутрь.
-    api.strike(sim, { shape: 'ring', x: h.x, y: h.y, r: 2.4, w: 0.8, warn: STORM.warn, dmg, knock: 3, art: 'f10_bolt_ring' });
-    api.strike(sim, { shape: 'circle', x: h.x, y: h.y, r: 0.9, warn: STORM.warn + 0.5, dmg, knock: 3, art: 'f10_bolt' });
+    api.strike(sim, {
+      shape: 'ring',
+      x: h.x,
+      y: h.y,
+      r: 2.4,
+      w: 0.8,
+      warn: STORM.warn,
+      dmg,
+      knock: 3,
+      art: 'f10_bolt_ring',
+    });
+    api.strike(sim, {
+      shape: 'circle',
+      x: h.x,
+      y: h.y,
+      r: 0.9,
+      warn: STORM.warn + 0.5,
+      dmg,
+      knock: 3,
+      art: 'f10_bolt',
+    });
   }
   // Стёкла сыплются у северной стены.
   for (const wi of st.stormWindows) {
@@ -2640,7 +2871,12 @@ function stepStorm(sim: Sim, st: F10State, api: SimApi): void {
       st.stormState = 'on';
       st.stormWave = 0;
       st.stormNext = sim.time + 1.2;
-      sim.events.push({ t: 'boss', what: 'f10_storm_trap', text: 'ГРОЗА', sub: 'молнии бьют по клеткам — смотри метки' });
+      sim.events.push({
+        t: 'boss',
+        what: 'f10_storm_trap',
+        text: 'ГРОЗА',
+        sub: 'молнии бьют по клеткам — смотри метки',
+      });
       return;
     case 'on': {
       // Выбежал из зала — гроза стихает без добычи и ждёт следующего раза.
@@ -2671,7 +2907,12 @@ function stepStorm(sim: Sim, st: F10State, api: SimApi): void {
           for (let i = 0; i < 6; i++) api.dropAt(sim, 'coin', 120, cx, cy);
           for (let i = 0; i < 3; i++) api.dropAt(sim, 'token', 2, cx, cy);
           api.dropAt(sim, 'f10_sigil', 1, cx, cy);
-          sim.events.push({ t: 'boss', what: 'f10_calm_call', text: 'ГРОЗА СТИХЛА', sub: 'витражи выбиты — на полу добыча' });
+          sim.events.push({
+            t: 'boss',
+            what: 'f10_calm_call',
+            text: 'ГРОЗА СТИХЛА',
+            sub: 'витражи выбиты — на полу добыча',
+          });
         } else sim.events.push({ t: 'boss', what: 'f10_calm_call', text: 'ГРОЗА СТИХЛА' });
         return;
       }
@@ -2711,7 +2952,13 @@ function stepVault(sim: Sim, st: F10State, api: SimApi): void {
       st.vaultT = sim.time + 90;
       for (const i of st.vaultDoor) {
         saveTile(sim, st, api, i, T_WALL, F10_MARK.bars);
-        api.zone(sim, { x: (i % W) + 0.5, y: Math.floor(i / W) + 0.5, r: 0.5, life: 0.5, art: 'f10_barsfall' });
+        api.zone(sim, {
+          x: (i % W) + 0.5,
+          y: Math.floor(i / W) + 0.5,
+          r: 0.5,
+          life: 0.5,
+          art: 'f10_barsfall',
+        });
       }
       // Оживают по очереди, с первой — через 0,6 с.
       garg.forEach((p, n) => {
@@ -2726,7 +2973,12 @@ function stepVault(sim: Sim, st: F10State, api: SimApi): void {
         }
         m.data.wakeAt = sim.time + 0.6 + n * 0.45;
       });
-      sim.events.push({ t: 'boss', what: 'f10_vault_trap', text: 'ЛОВУШКА', sub: 'решётка упала — горгульи ожили' });
+      sim.events.push({
+        t: 'boss',
+        what: 'f10_vault_trap',
+        text: 'ЛОВУШКА',
+        sub: 'решётка упала — горгульи ожили',
+      });
       return;
     }
     case 'shut': {
@@ -2740,7 +2992,12 @@ function stepVault(sim: Sim, st: F10State, api: SimApi): void {
         restoreTile(sim, st, api, i);
       }
       st.vaultState = 'done';
-      sim.events.push({ t: 'boss', what: 'f10_bars_call', text: 'РЕШЁТКА ПОДНЯЛАСЬ', sub: 'сокровищница твоя' });
+      sim.events.push({
+        t: 'boss',
+        what: 'f10_bars_call',
+        text: 'РЕШЁТКА ПОДНЯЛАСЬ',
+        sub: 'сокровищница твоя',
+      });
       return;
     }
     case 'done':

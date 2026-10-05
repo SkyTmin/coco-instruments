@@ -169,7 +169,16 @@ function hurtMob(sim: Sim, api: SimApi, m: Mob, dmg: number): void {
     m.hp = Math.max(1, m.hp - dmg);
     return;
   }
-  api.strike(sim, { shape: 'circle', x: m.x, y: m.y, r: 0.15, warn: 0, dmg: 0, mobDmg: 1e9, art: 'f15_crush' });
+  api.strike(sim, {
+    shape: 'circle',
+    x: m.x,
+    y: m.y,
+    r: 0.15,
+    warn: 0,
+    dmg: 0,
+    mobDmg: 1e9,
+    art: 'f15_crush',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -336,7 +345,8 @@ function unstick(sim: Sim, api: SimApi): void {
 }
 
 /** Состояние этажа — для рисовальщика (`paintSim()`), тестов и стенда. */
-export const f15View = (sim: Sim | null): F15State | null => (sim ? (STATE.get(sim) ?? null) : null);
+export const f15View = (sim: Sim | null): F15State | null =>
+  sim ? (STATE.get(sim) ?? null) : null;
 
 /** Метка «чужак» 0…100 — для агента «Сердце» и тестов. */
 export const f15Alien = (sim: Sim): number => STATE.get(sim)?.alien ?? 0;
@@ -383,7 +393,7 @@ function scan(sim: Sim): F15State {
       return k === M.band || k === M.valve || k === M.door || k === M.leaflet;
     };
     let dx = 0;
-    let dy = 0;
+    const dy = 0;
     if (kind === 'band') {
       // К середине хода: в сторону, где нет стены.
       // Середина хода — там, где вена или кольцо: к ним и толкает.
@@ -450,7 +460,14 @@ function scan(sim: Sim): F15State {
   for (const s of F15_SPOT_LIST) {
     const top = bandTop(s.area);
     if (s.kind === 'box') {
-      boxes[s.name!] = { name: s.name!, area: s.area, x0: s.x, y0: top + s.y, x1: s.x1!, y1: top + s.y1! };
+      boxes[s.name!] = {
+        name: s.name!,
+        area: s.area,
+        x0: s.x,
+        y0: top + s.y,
+        x1: s.x1!,
+        y1: top + s.y1!,
+      };
       continue;
     }
     const pm = s.kind === 'group' ? null : POST_MOB[s.kind];
@@ -495,7 +512,8 @@ function scan(sim: Sim): F15State {
   const ab = boxes.aorta;
   if (ab)
     for (let y = ab.y0; y <= ab.y1; y++)
-      for (let x = ab.x0; x <= ab.x1; x++) if (w.mark[y * W + x] === M.clot) clotCells.push(y * W + x);
+      for (let x = ab.x0; x <= ab.x1; x++)
+        if (w.mark[y * W + x] === M.clot) clotCells.push(y * W + x);
   return {
     lives,
     byObj,
@@ -518,7 +536,13 @@ function scan(sim: Sim): F15State {
     relaxed: -9,
     cough: { state: 'idle', t: 0, front: -1, hit: false, cd: 0, done: false },
     tonsils: { state: 'idle' },
-    digest: { state: 'idle', t: 0, stage: 0, paid: false, cells: [cells(M.ring1), cells(M.ring2), cells(M.ring3)] },
+    digest: {
+      state: 'idle',
+      t: 0,
+      stage: 0,
+      paid: false,
+      cells: [cells(M.ring1), cells(M.ring2), cells(M.ring3)],
+    },
     brood: { state: 'idle', t: 0 },
     clot: { state: 'idle', t: 0, wave: 0, cells: clotCells, paid: false },
     valves: { state: 'idle', top: false },
@@ -543,7 +567,15 @@ function stateOf(sim: Sim): F15State {
 const inBox = (b: Box | undefined, x: number, y: number, pad = 0) =>
   !!b && x >= b.x0 - pad && x < b.x1 + 1 + pad && y >= b.y0 - pad && y < b.y1 + 1 + pad;
 
-function saveTile(sim: Sim, st: F15State, api: SimApi, i: number, tile: number, mark: number, haz?: HazardSpec | null): void {
+function saveTile(
+  sim: Sim,
+  st: F15State,
+  api: SimApi,
+  i: number,
+  tile: number,
+  mark: number,
+  haz?: HazardSpec | null,
+): void {
   const w = sim.world;
   if (!st.saved.has(i)) {
     const k = w.haz[i];
@@ -589,7 +621,13 @@ export const PULSE = { throat: 1.6, gut: 1.35, veins: 1.1, alarm: 0.3 };
  * Дыхание Горла: период 4,6 с; кромки смыкаются на вдохе (фаза ≥ 0,5),
  * набухают с 0,38 — это предупреждение; сфинктеры открыты 0,08…0,44.
  */
-export const BREATH = { period: 4.6, warnAt: 0.36, closeAt: 0.5, valveOpen: 0.08, valveClose: 0.44 };
+export const BREATH = {
+  period: 4.6,
+  warnAt: 0.36,
+  closeAt: 0.5,
+  valveOpen: 0.08,
+  valveClose: 0.44,
+};
 /** Клапаны Чрева (Кардия, Привратник): цикл 3,8 с, открыты 55%. */
 export const GUT_VALVE = { period: 3.8, open: 0.55 };
 /** Толчок течения на удар сердца, клеток; створки сердца открыты долю периода. */
@@ -614,7 +652,10 @@ function beat(sim: Sim, st: F15State, api: SimApi): void {
     const f = flowAt(sim, h.x, h.y);
     if (f) {
       const L = here === F15_GUT ? SURGE.gut : SURGE.veins;
-      api.pullHero(sim, h.x + f[0] * L, h.y + f[1] * L, { speed: SURGE.speed, max: L / SURGE.speed + 0.05 });
+      api.pullHero(sim, h.x + f[0] * L, h.y + f[1] * L, {
+        speed: SURGE.speed,
+        max: L / SURGE.speed + 0.05,
+      });
     }
   }
   for (const m of sim.mobs) {
@@ -698,7 +739,11 @@ function setLive(sim: Sim, st: F15State, api: SimApi, l: Live, closed: boolean):
       dx = 0;
       dy = h.y >= l.cy ? 1 : -1;
     }
-    if (!h.pull) api.pullHero(sim, l.cx + dx * 1.3, h.y + dy * 1.3 + (dy ? l.cy - h.y : 0), { speed: 11, max: 0.3 });
+    if (!h.pull)
+      api.pullHero(sim, l.cx + dx * 1.3, h.y + dy * 1.3 + (dy ? l.cy - h.y : 0), {
+        speed: 11,
+        max: 0.3,
+      });
     if (sim.time - st.squeezeAt > 0.6) {
       st.squeezeAt = sim.time;
       api.hurtEnv(sim, 0.045);
@@ -767,7 +812,15 @@ function stepLives(sim: Sim, st: F15State, api: SimApi): void {
 // 2 из 6 прогонов — этаж душил числом. Причина — петля: убийство поднимало
 // метку (1,6), метка звала волну, волну убивали. Убийство теперь весит втрое
 // меньше, патрули реже (было 16/10 с) и не больше четырёх антител разом.
-export const ALIEN = { passive: 0.12, kill: 0.5, killAb: 0.15, mucus: 24, patrol: [24, 16], response: 25, cap: 4 };
+export const ALIEN = {
+  passive: 0.12,
+  kill: 0.5,
+  killAb: 0.15,
+  mucus: 24,
+  patrol: [24, 16],
+  response: 25,
+  cap: 4,
+};
 
 function stepAlien(sim: Sim, st: F15State, api: SimApi, dt: number): void {
   const h = sim.hero;
@@ -782,7 +835,8 @@ function stepAlien(sim: Sim, st: F15State, api: SimApi, dt: number): void {
   if (!ours || heroDown(sim)) return;
   let d = ALIEN.passive * dt;
   for (const e of sim.events) {
-    if (e.t === 'kill') d += e.mob === 'f15_mob' || e.mob === 'f15_larva' ? ALIEN.killAb : ALIEN.kill;
+    if (e.t === 'kill')
+      d += e.mob === 'f15_mob' || e.mob === 'f15_larva' ? ALIEN.killAb : ALIEN.kill;
     if (e.t === 'swing') st.noise += e.heavy ? 1.4 : 0.6;
     if (e.t === 'dash') st.noise += 0.5;
     if (e.t === 'kill') st.noise += 1.2;
@@ -828,7 +882,8 @@ function immuneResponse(sim: Sim, st: F15State, api: SimApi): void {
   say(sim, 'f15_immune_trap', 'ИММУННЫЙ ОТВЕТ', 'организм бросил на чужака всё, что есть');
   sim.events.push({ t: 'flash', color: '#ff2a4a', k: 0.8 });
   sim.events.push({ t: 'shake', k: 0.4 });
-  const extra = sim.area === F15_GUT ? 'f15_parasite' : sim.area === F15_VEINS ? 'f15_drone' : 'f15_mhound';
+  const extra =
+    sim.area === F15_GUT ? 'f15_parasite' : sim.area === F15_VEINS ? 'f15_drone' : 'f15_mhound';
   for (let w = 0; w < 1; w++) {
     const b = api.pickBurrow(sim, 5, 14);
     if (!b) continue;
@@ -877,7 +932,10 @@ function spawnGroup(sim: Sim, api: SimApi, p: Post): void {
       x = p.x;
       y = p.y;
     }
-    const m = api.spawnMob(sim, kinds[i % kinds.length], x, y, { mode: 'sleep', elite: lead && i === 0 });
+    const m = api.spawnMob(sim, kinds[i % kinds.length], x, y, {
+      mode: 'sleep',
+      elite: lead && i === 0,
+    });
     api.collide(sim, m);
   }
 }
@@ -901,7 +959,7 @@ function stepPosts(sim: Sim, st: F15State, api: SimApi): void {
     if (fight) continue;
     const d = hypot(p.x - h.x, p.y - h.y);
     if (p.kind === 'group') {
-      if (d < 14 && !(sim.safe.some((z) => hypot(z.x - p.x, z.y - p.y) < 9))) {
+      if (d < 14 && !sim.safe.some((z) => hypot(z.x - p.x, z.y - p.y) < 9)) {
         p.dead = true;
         spawnGroup(sim, api, p);
       }
@@ -1059,14 +1117,24 @@ function stepTonsils(sim: Sim, st: F15State, api: SimApi): void {
 // Через 36 с сок уходит, двери открыты, в середине — переваренное.
 // ---------------------------------------------------------------------------
 
-export const DIGEST = { rise: [3.6, 13, 22.5], warn: 1.5, end: 36, spawns: [5, 10, 15, 19, 24, 29] };
+export const DIGEST = {
+  rise: [3.6, 13, 22.5],
+  warn: 1.5,
+  end: 36,
+  spawns: [5, 10, 15, 19, 24, 29],
+};
 
 function digestStart(sim: Sim, st: F15State): void {
   const d = st.digest;
   d.state = 'on';
   d.t = 0;
   d.stage = 0;
-  say(sim, 'f15_digest_trap', 'ПЕРЕВАРИВАНИЕ', 'сфинктеры сомкнулись, сок встаёт от краёв — к середине!');
+  say(
+    sim,
+    'f15_digest_trap',
+    'ПЕРЕВАРИВАНИЕ',
+    'сфинктеры сомкнулись, сок встаёт от краёв — к середине!',
+  );
   sim.events.push({ t: 'shake', k: 0.35 });
 }
 
@@ -1111,9 +1179,16 @@ function stepDigest(sim: Sim, st: F15State, api: SimApi, dt: number): void {
   // Растворяет и тех, кто забрёл в сок потом (не своих).
   if (d.stage > 0 && Math.floor(t1 * 4) !== Math.floor(t0 * 4))
     for (const m of sim.mobs) {
-      if (m.mode === 'dying' || m.kind === 'f15_msala' || m.kind === 'f15_acid' || (m.data.ghost ?? 0) > 0) continue;
+      if (
+        m.mode === 'dying' ||
+        m.kind === 'f15_msala' ||
+        m.kind === 'f15_acid' ||
+        (m.data.ghost ?? 0) > 0
+      )
+        continue;
       if (api.def(m.kind).boss || api.def(m.kind).fly) continue;
-      if (markAt(sim, Math.floor(m.x), Math.floor(m.y)) === M.acidRise) hurtMob(sim, api, m, m.maxHp * 0.12);
+      if (markAt(sim, Math.floor(m.x), Math.floor(m.y)) === M.acidRise)
+        hurtMob(sim, api, m, m.maxHp * 0.12);
     }
   // Из сока выходят подражатели-саламандры и пузыри.
   for (const ts of DIGEST.spawns)
@@ -1265,7 +1340,9 @@ function stepClot(sim: Sim, st: F15State, api: SimApi, dt: number): void {
     kinds.forEach((kind, n) => {
       // Из сгустка: у его грани, с той стороны, где герой дальше.
       const y = Math.abs(h.y - top) > Math.abs(h.y - bot) ? top + 1.5 : bot - 0.5;
-      const xs = c.cells.filter((i) => Math.floor(i / W) === (y < h.y ? top : bot)).map((i) => i % W);
+      const xs = c.cells
+        .filter((i) => Math.floor(i / W) === (y < h.y ? top : bot))
+        .map((i) => i % W);
       const x = xs.length ? xs[(n * 3 + k) % xs.length] + 0.5 : h.x;
       if (api.solidTile(sim, Math.floor(x), Math.floor(y))) return;
       const m = api.spawnMob(sim, kind, x, y, { mode: 'stun' });
@@ -1273,8 +1350,13 @@ function stepClot(sim: Sim, st: F15State, api: SimApi, dt: number): void {
       sim.events.push({ t: 'emerge', x, y });
     });
   }
-  const alive = sim.mobs.filter((m) => m.mode !== 'dying' && inBox(b, m.x, m.y) && !api.def(m.kind).boss).length;
-  if ((c.wave >= CLOT.waves.length && c.t > CLOT.waves[CLOT.waves.length - 1] + 3 && alive <= 2) || c.t > CLOT.end) {
+  const alive = sim.mobs.filter(
+    (m) => m.mode !== 'dying' && inBox(b, m.x, m.y) && !api.def(m.kind).boss,
+  ).length;
+  if (
+    (c.wave >= CLOT.waves.length && c.t > CLOT.waves[CLOT.waves.length - 1] + 3 && alive <= 2) ||
+    c.t > CLOT.end
+  ) {
     for (const i of c.cells) restoreTile(sim, st, api, i);
     c.state = 'done';
     if (!c.paid) {
@@ -1354,7 +1436,12 @@ function onUse(sim: Sim, obj: WorldObj, api: SimApi): boolean {
       st.relaxed = sim.time + NERVE.relax;
       st.alien = Math.min(99, st.alien + NERVE.alien);
       sim.events.push({ t: 'flash', color: '#c890ff', k: 0.4 });
-      say(sim, 'f15_nerve_call', 'НЕРВ ДЁРНУТ', 'сфинктеры Горла разжались на 12 секунд — организм это почуял');
+      say(
+        sim,
+        'f15_nerve_call',
+        'НЕРВ ДЁРНУТ',
+        'сфинктеры Горла разжались на 12 секунд — организм это почуял',
+      );
       return true;
     }
     case 'f15_wheel': {
@@ -1488,7 +1575,8 @@ function latchStep(sim: Sim, m: Mob, dt: number, api: SimApi, maxT: number): boo
   let a = (m.data.la ?? 0) + Math.sin(sim.time * 3 + m.id) * 0.15;
   const R = m.r + h.r + 0.04;
   // Не в стену: сдвинуться по кругу героя, а негде — отвалиться.
-  const solidAt = (q: number) => api.solidTile(sim, Math.floor(h.x + Math.cos(q) * R), Math.floor(h.y + Math.sin(q) * R));
+  const solidAt = (q: number) =>
+    api.solidTile(sim, Math.floor(h.x + Math.cos(q) * R), Math.floor(h.y + Math.sin(q) * R));
   if (solidAt(a)) {
     let found = false;
     for (let k = 1; k <= 8 && !found; k++)
@@ -1520,7 +1608,14 @@ function latchStep(sim: Sim, m: Mob, dt: number, api: SimApi, maxT: number): boo
 // медленнее) и метит «чужака». Рывок стряхивает всех разом.
 // ---------------------------------------------------------------------------
 
-export const ANTIBODY = { maxLatch: 4, hold: 5, slowPer: 0.13, slowMax: 0.55, bite: 1.1, alien: 1.2 };
+export const ANTIBODY = {
+  maxLatch: 4,
+  hold: 5,
+  slowPer: 0.13,
+  slowMax: 0.55,
+  bite: 1.1,
+  alien: 1.2,
+};
 
 registerBrain('f15_antibody', {
   step(sim, m, dt, c, api) {
@@ -1633,7 +1728,11 @@ registerBrain('f15_macro', {
       }
       sim.drops = sim.drops.filter((d) => d.x > -50);
       for (const o of sim.mobs)
-        if (o.kind === 'f15_larva' && o.mode !== 'dying' && hypot(o.x - m.x, o.y - m.y) < m.r + 0.3) {
+        if (
+          o.kind === 'f15_larva' &&
+          o.mode !== 'dying' &&
+          hypot(o.x - m.x, o.y - m.y) < m.r + 0.3
+        ) {
           o.hp = 0;
           api.setMode(o, 'escape');
           m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.12);
@@ -1681,7 +1780,10 @@ registerBrain('f15_macro', {
           api.setMode(m, 'f15_spit');
           m.cd = def.rest * 1.5;
           if (!heroDown(sim) && h.mode !== 'dash')
-            api.pullHero(sim, m.x + Math.cos(a) * 2.2, m.y + Math.sin(a) * 2.2, { speed: 12, max: 0.4 });
+            api.pullHero(sim, m.x + Math.cos(a) * 2.2, m.y + Math.sin(a) * 2.2, {
+              speed: 12,
+              max: 0.4,
+            });
           return;
         }
         // Герой — в середине амёбы: ровно в её точке (толкотни нет).
@@ -2034,9 +2136,19 @@ registerBrain('f15_drone', {
     switch (m.mode) {
       case 'chase': {
         const busy = sim.mobs.some(
-          (o) => o !== m && o.kind === 'f15_drone' && (o.mode === 'f15_aim' || o.mode === 'f15_ram') && hypot(o.x - m.x, o.y - m.y) < 6,
+          (o) =>
+            o !== m &&
+            o.kind === 'f15_drone' &&
+            (o.mode === 'f15_aim' || o.mode === 'f15_ram') &&
+            hypot(o.x - m.x, o.y - m.y) < 6,
         );
-        if (dist < DRONE.max && dist > 1.4 && m.cd <= 0 && !busy && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
+        if (
+          dist < DRONE.max &&
+          dist > 1.4 &&
+          m.cd <= 0 &&
+          !busy &&
+          api.lineOfSight(sim, m.x, m.y, h.x, h.y)
+        ) {
           m.dir = Math.atan2(dy, dx);
           api.setMode(m, 'f15_aim');
           return;
@@ -2160,7 +2272,8 @@ registerBrain('f15_larva', {
         m.vy *= 0.7;
         if (m.t > def.windup - 0.18) m.danger = def.reach + m.r + h.r + 0.3;
         if (m.t < def.windup) return;
-        if (dist < def.reach + m.r + h.r + 0.15 && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 1.5, m.kind);
+        if (dist < def.reach + m.r + h.r + 0.15 && canHurt(sim))
+          api.hurtHero(sim, m.dmg, m.x, m.y, 1.5, m.kind);
         m.vx += Math.cos(m.face) * 3;
         m.vy += Math.sin(m.face) * 3;
         api.setMode(m, 'recover');
@@ -2176,7 +2289,9 @@ registerBrain('f15_larva', {
         m.tele = { shape: 'circle', r: 0.55, k: Math.min(1, m.t / LARVA.cocoon) };
         if (m.t < LARVA.cocoon) return;
         const kind = mimicFor(sim, m.x, m.y);
-        const o = api.spawnMob(sim, kind, m.x, m.y, { mode: kind === 'f15_msala' ? 'chase' : 'stun' });
+        const o = api.spawnMob(sim, kind, m.x, m.y, {
+          mode: kind === 'f15_msala' ? 'chase' : 'stun',
+        });
         o.data.fromLarva = 1;
         api.collide(sim, o);
         sim.events.push({ t: 'emerge', x: m.x, y: m.y });
@@ -2200,7 +2315,15 @@ registerBrain('f15_larva', {
 // моргает — тогда открыт; с открытым глазом удар по хрусталику слаб.
 // ---------------------------------------------------------------------------
 
-export const WATCHER = { see: 8.5, half: 0.5, lock: 0.85, warn: 0.42, blink: 1.6, len: 9.5, sweep: 0.75 };
+export const WATCHER = {
+  see: 8.5,
+  half: 0.5,
+  lock: 0.85,
+  warn: 0.42,
+  blink: 1.6,
+  len: 9.5,
+  sweep: 0.75,
+};
 
 const GAZE = new WeakMap<Mob, Zone>();
 
@@ -2344,7 +2467,11 @@ registerBrain('f15_mhound', {
     switch (m.mode) {
       case 'chase': {
         const busy = sim.mobs.some(
-          (o) => o !== m && o.kind === 'f15_mhound' && (o.mode === 'aim' || o.mode === 'pounce') && hypot(o.x - m.x, o.y - m.y) < 7,
+          (o) =>
+            o !== m &&
+            o.kind === 'f15_mhound' &&
+            (o.mode === 'aim' || o.mode === 'pounce') &&
+            hypot(o.x - m.x, o.y - m.y) < 7,
         );
         if (
           dist > 1.5 &&
@@ -2377,7 +2504,10 @@ registerBrain('f15_mhound', {
         m.vy *= 0.6;
         if (m.t < T * 0.55) m.dir = Math.atan2(dy, dx);
         m.face = m.dir;
-        const len = Math.min(MHOUND.max + 0.6, clearDist(sim, api, m.x, m.y, m.dir, MHOUND.max + 0.6));
+        const len = Math.min(
+          MHOUND.max + 0.6,
+          clearDist(sim, api, m.x, m.y, m.dir, MHOUND.max + 0.6),
+        );
         m.data.len2 = len;
         m.tele = { shape: 'line', r: len, w: 0.32, ang: m.dir, k: Math.min(1, m.t / T) };
         if (m.t > T - 0.2) m.danger = len + 0.6;
@@ -2429,7 +2559,8 @@ registerBrain('f15_mhound', {
         m.vy *= 0.75;
         if (m.t > def.windup - 0.2) m.danger = def.reach + m.r + h.r + 0.4;
         if (m.t < def.windup) return;
-        if (dist < def.reach + m.r + h.r + 0.18 && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 2.2, m.kind);
+        if (dist < def.reach + m.r + h.r + 0.18 && canHurt(sim))
+          api.hurtHero(sim, m.dmg, m.x, m.y, 2.2, m.kind);
         m.vx += Math.cos(m.face) * 3;
         m.vy += Math.sin(m.face) * 3;
         api.setMode(m, 'recover');
@@ -2451,11 +2582,26 @@ registerBrain('f15_mhound', {
 // сока плюётся желчью навесом (лужа там, где лёг плевок).
 // ---------------------------------------------------------------------------
 
-export const MSALA = { rise: 0.72, riseR: 0.95, lunge: 3.2, lungeSpeed: 9, spit: 0.7, diveCd: 4.5, swims: 2 };
+export const MSALA = {
+  rise: 0.72,
+  riseR: 0.95,
+  lunge: 3.2,
+  lungeSpeed: 9,
+  spit: 0.7,
+  diveCd: 4.5,
+  swims: 2,
+};
 
-const isAcid = (sim: Sim, x: number, y: number) => markAt(sim, Math.floor(x), Math.floor(y)) === M.acid;
+const isAcid = (sim: Sim, x: number, y: number) =>
+  markAt(sim, Math.floor(x), Math.floor(y)) === M.acid;
 
-function acidNear(sim: Sim, x: number, y: number, r: number, score: (cx: number, cy: number) => number): [number, number] | null {
+function acidNear(
+  sim: Sim,
+  x: number,
+  y: number,
+  r: number,
+  score: (cx: number, cy: number) => number,
+): [number, number] | null {
   let best: [number, number] | null = null;
   let bs = Infinity;
   for (let yy = Math.floor(y - r); yy <= Math.floor(y + r); yy++)
@@ -2470,7 +2616,15 @@ function acidNear(sim: Sim, x: number, y: number, r: number, score: (cx: number,
   return best;
 }
 
-function swimTo(sim: Sim, m: Mob, tx: number, ty: number, speed: number, dt: number, api: SimApi): void {
+function swimTo(
+  sim: Sim,
+  m: Mob,
+  tx: number,
+  ty: number,
+  speed: number,
+  dt: number,
+  api: SimApi,
+): void {
   const l = hypot(tx - m.x, ty - m.y);
   if (l < 0.12) {
     m.vx *= 0.7;
@@ -2496,7 +2650,11 @@ registerBrain('f15_msala', {
     // «вынырнула — укусила — нырнула» делал её неуязвимой навсегда, и бот
     // на Т8+5 гиб в Чреве, убив три саламандры из десятков.
     const swims = m.data.swims ?? 0;
-    if (wet && swims < MSALA.swims && ['chase', 'recover', 'windup', 'aim', 'f15_spit'].includes(m.mode)) {
+    if (
+      wet &&
+      swims < MSALA.swims &&
+      ['chase', 'recover', 'windup', 'aim', 'f15_spit'].includes(m.mode)
+    ) {
       api.setMode(m, 'f15_swim');
       m.data.swims = swims + 1;
       m.data.ghost = 1;
@@ -2504,7 +2662,11 @@ registerBrain('f15_msala', {
     switch (m.mode) {
       case 'chase': {
         m.data.ghost = 0;
-        if ((m.data.swims ?? 0) < MSALA.swims && m.data.diveCd <= 0 && (m.hp < m.maxHp * 0.7 || dist > 3.6)) {
+        if (
+          (m.data.swims ?? 0) < MSALA.swims &&
+          m.data.diveCd <= 0 &&
+          (m.hp < m.maxHp * 0.7 || dist > 3.6)
+        ) {
           const lv = acidNear(sim, m.x, m.y, 2, (cx, cy) => hypot(cx - m.x, cy - m.y));
           if (lv && hypot(lv[0] - m.x, lv[1] - m.y) < 1.8) {
             m.data.tx = lv[0];
@@ -2519,7 +2681,13 @@ registerBrain('f15_msala', {
           return;
         }
         const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
-        if (see && dist > 1.8 && dist < MSALA.lunge + 0.8 && m.cd <= 0 && clearLine(sim, api, m.x, m.y, h.x, h.y)) {
+        if (
+          see &&
+          dist > 1.8 &&
+          dist < MSALA.lunge + 0.8 &&
+          m.cd <= 0 &&
+          clearLine(sim, api, m.x, m.y, h.x, h.y)
+        ) {
           m.dir = Math.atan2(dy, dx);
           api.setMode(m, 'aim');
           return;
@@ -2534,7 +2702,14 @@ registerBrain('f15_msala', {
         cx += -cy * z;
         cy += cx * z;
         const l = hypot(cx, cy) || 1;
-        api.steer(sim, m, cx / l, cy / l, m.speed * (0.75 + 0.45 * Math.max(0, Math.sin(sim.time * 11 + m.id))), dt);
+        api.steer(
+          sim,
+          m,
+          cx / l,
+          cy / l,
+          m.speed * (0.75 + 0.45 * Math.max(0, Math.sin(sim.time * 11 + m.id))),
+          dt,
+        );
         return;
       }
       case 'f15_spit': {
@@ -2624,7 +2799,13 @@ registerBrain('f15_msala', {
           m.data.re = 0.3;
           const t = heroDown(sim)
             ? null
-            : acidNear(sim, m.x, m.y, 7, (cx, cy) => hypot(cx - h.x, cy - h.y) + hypot(cx - m.x, cy - m.y) * 0.15);
+            : acidNear(
+                sim,
+                m.x,
+                m.y,
+                7,
+                (cx, cy) => hypot(cx - h.x, cy - h.y) + hypot(cx - m.x, cy - m.y) * 0.15,
+              );
           m.data.tx = t ? t[0] : m.x;
           m.data.ty = t ? t[1] : m.y;
           m.data.far = t ? hypot(t[0] - h.x, t[1] - h.y) : 99;
@@ -2657,8 +2838,15 @@ registerBrain('f15_msala', {
         m.data.ghost = m.t < T - 0.12 ? 1 : 0;
         m.face = Math.atan2(m.data.gy - m.y, m.data.gx - m.x);
         if (!m.data.walk) {
-          m.tele = { shape: 'circle', r: MSALA.riseR, k: Math.min(1, m.t / T), x: m.data.gx, y: m.data.gy };
-          if (m.t > T - 0.25 && hypot(h.x - m.data.gx, h.y - m.data.gy) < MSALA.riseR + h.r) m.danger = dist + 0.6;
+          m.tele = {
+            shape: 'circle',
+            r: MSALA.riseR,
+            k: Math.min(1, m.t / T),
+            x: m.data.gx,
+            y: m.data.gy,
+          };
+          if (m.t > T - 0.25 && hypot(h.x - m.data.gx, h.y - m.data.gy) < MSALA.riseR + h.r)
+            m.danger = dist + 0.6;
         }
         if (m.t >= T) {
           m.data.ghost = 0;
@@ -2704,7 +2892,15 @@ registerBrain('f15_msala', {
 // стоит открытым — бей в спину.
 // ---------------------------------------------------------------------------
 
-export const MKNIGHT = { aim: 0.62, bash: 3.4, speed: 8, open: 1.25, shield: 2, regrow: 10, front: 1.15 };
+export const MKNIGHT = {
+  aim: 0.62,
+  bash: 3.4,
+  speed: 8,
+  open: 1.25,
+  shield: 2,
+  regrow: 10,
+  front: 1.15,
+};
 
 registerBrain('f15_mknight', {
   step(sim, m, dt, c, api) {
@@ -2730,7 +2926,12 @@ registerBrain('f15_mknight', {
         // Щитом к герою: поворачивается медленно.
         const want = Math.atan2(dy, dx);
         m.face += Math.max(-dt * 3, Math.min(dt * 3, angDiff(want, m.face)));
-        if (dist > 2 && dist < MKNIGHT.bash + 0.8 && m.cd <= 0 && clearLine(sim, api, m.x, m.y, h.x, h.y)) {
+        if (
+          dist > 2 &&
+          dist < MKNIGHT.bash + 0.8 &&
+          m.cd <= 0 &&
+          clearLine(sim, api, m.x, m.y, h.x, h.y)
+        ) {
           m.dir = want;
           api.setMode(m, 'aim');
           return;
@@ -2789,7 +2990,8 @@ registerBrain('f15_mknight', {
         m.face = Math.atan2(dy, dx);
         if (m.t > def.windup - 0.2) m.danger = def.reach + m.r + h.r + 0.4;
         if (m.t < def.windup) return;
-        if (dist < def.reach + m.r + h.r + 0.2 && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 3, m.kind);
+        if (dist < def.reach + m.r + h.r + 0.2 && canHurt(sim))
+          api.hurtHero(sim, m.dmg, m.x, m.y, 3, m.kind);
         api.setMode(m, 'recover');
         m.data.bcd = def.rest;
         return;
@@ -2965,7 +3167,8 @@ registerBrain('f15_tonsil', {
         m.cd = TONSIL.spit;
         return;
       default:
-        if (m.cd <= 0 && dist < 8 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) api.setMode(m, 'f15_spit');
+        if (m.cd <= 0 && dist < 8 && api.lineOfSight(sim, m.x, m.y, h.x, h.y))
+          api.setMode(m, 'f15_spit');
     }
   },
   onDeath(sim, m) {
@@ -2993,7 +3196,9 @@ registerBrain('f15_matron', {
     m.data.lay = (m.data.lay ?? 3) - dt;
     if (m.data.lay <= 0) {
       m.data.lay = MATRON.lay;
-      const sacs = sim.mobs.filter((o) => o.kind === 'f15_sac' && o.mode !== 'dying' && hypot(o.x - m.x, o.y - m.y) < 14).length;
+      const sacs = sim.mobs.filter(
+        (o) => o.kind === 'f15_sac' && o.mode !== 'dying' && hypot(o.x - m.x, o.y - m.y) < 14,
+      ).length;
       if (sacs < MATRON.sacs) {
         const sp = spotNear(sim, api, m.x, m.y, 2, 4.5, h);
         if (sp) {
@@ -3010,7 +3215,8 @@ registerBrain('f15_matron', {
         m.tele = { shape: 'circle', r: MATRON.slamR, k: Math.min(1, m.t / MATRON.slamWarn) };
         if (m.t > MATRON.slamWarn - 0.25) m.danger = MATRON.slamR + 0.3;
         if (m.t < MATRON.slamWarn) return;
-        if (dist < MATRON.slamR + h.r && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 7, m.kind);
+        if (dist < MATRON.slamR + h.r && canHurt(sim))
+          api.hurtHero(sim, m.dmg, m.x, m.y, 7, m.kind);
         api.setMode(m, 'f15_idle');
         m.cd = 2.2;
         return;

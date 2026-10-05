@@ -412,6 +412,7 @@ import { deriveStatus, paidSoFar, resolve } from '@/lib/finance-calc';
 // ---- Инвентарь и сундук у койки (v2.81) ----
 import {
   BUNK_KEY,
+  BUNK_MATS_VER,
   BUNK_START,
   bunkBuyBig as bunkBuyBigOf,
   bunkPut as bunkPutOf,
@@ -576,7 +577,7 @@ const persistFishing = (f: FishingState) => writeFishing({ version: 1, ...f });
 // Сундук у койки (v2.81): перекладка редкая, пишется быстро. Вместе с ним
 // меняются каторга и склад — после переноса все записи сбрасываются разом.
 const writeBunk = makePersister<BunkBlob>(BUNK_KEY, 1000);
-const persistBunk = (b: BunkState) => writeBunk({ version: 1, ...b });
+const persistBunk = (b: BunkState) => writeBunk({ version: 1, ...b, matsVer: BUNK_MATS_VER });
 
 /**
  * Посылки зреют от любой добычи — блоков шахты и брёвен леса. Новая

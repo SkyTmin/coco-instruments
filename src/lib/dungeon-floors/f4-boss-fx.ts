@@ -1154,7 +1154,7 @@ zonePainter('f4_sign', (g, z, px, py, scale, time) => {
   // Над головой героя.
   const drop = eOut(t / 0.28);
   const bob = judging || calm() ? 0 : Math.round(Math.sin(time * 4) * 1);
-  let gx = V.hx;
+  const gx = V.hx;
   let gy = V.hy - 31 - (1 - drop) * 26 + bob;
   if (V.verdict === 2) gy += 22 * eIn(vu);
   const color = V.verdict === 2 ? C.red : late && blink ? C.white : judging ? col.hi : col.mid;

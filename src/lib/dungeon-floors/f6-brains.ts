@@ -44,8 +44,7 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 // ---------------------------------------------------------------------------
 
 const heroDown = (sim: Sim) => sim.hero.mode === 'dying' || sim.hero.mode === 'dead';
-const heroOpen = (sim: Sim) =>
-  sim.hero.inv <= 0 && sim.hero.mode !== 'dash' && !heroDown(sim);
+const heroOpen = (sim: Sim) => sim.hero.inv <= 0 && sim.hero.mode !== 'dash' && !heroDown(sim);
 
 const idx = (sim: Sim, x: number, y: number) => Math.floor(y) * sim.world.w + Math.floor(x);
 const inb = (sim: Sim, x: number, y: number) =>
@@ -480,7 +479,11 @@ function retile(
   const y = Math.floor(i / W);
   if (tile === T_DEEP) {
     const h = sim.hero;
-    if (!heroDown(sim) && Math.abs(h.x - x - 0.5) < 0.5 + h.r && Math.abs(h.y - y - 0.5) < 0.5 + h.r)
+    if (
+      !heroDown(sim) &&
+      Math.abs(h.x - x - 0.5) < 0.5 + h.r &&
+      Math.abs(h.y - y - 0.5) < 0.5 + h.r
+    )
       return false;
     // Под ходячим монстром тоже не заливаем: залитый по пояс, он терял
     // опору и проходил сквозь стены (столкновение изнутри стены не держит).
@@ -831,8 +834,7 @@ registerBrain('f6_wisp', {
   },
   onDeath(sim, m, mode, api) {
     // Добил раздутого — искры без вреда: видно, что успел.
-    if (mode === 'f6_swell')
-      api.zone(sim, { x: m.x, y: m.y, r: 0.9, life: 0.4, art: 'f6_snuff' });
+    if (mode === 'f6_swell') api.zone(sim, { x: m.x, y: m.y, r: 0.9, life: 0.4, art: 'f6_snuff' });
   },
 });
 
@@ -1307,7 +1309,13 @@ registerBrain('f6_worm', {
           m.data.gy = h.y;
         }
         m.face = Math.atan2(m.data.gy - m.y, m.data.gx - m.x);
-        m.tele = { shape: 'circle', r: 0.8, k: clamp(m.t / WORM.aim, 0, 1), x: m.data.gx, y: m.data.gy };
+        m.tele = {
+          shape: 'circle',
+          r: 0.8,
+          k: clamp(m.t / WORM.aim, 0, 1),
+          x: m.data.gx,
+          y: m.data.gy,
+        };
         if (dist < def.reach + m.r + h.r) {
           api.setMode(m, 'windup');
           return;
@@ -2337,7 +2345,8 @@ function stepBridge(sim: Sim, api: SimApi, br: Bridge): void {
   const h = sim.hero;
   const W = sim.world.w;
   const hy = Math.floor(h.y);
-  const onBridge = Math.abs(h.x - br.cx) < 2.2 && hy <= br.ys[0] + 1 && hy >= br.ys[br.ys.length - 1] - 1;
+  const onBridge =
+    Math.abs(h.x - br.cx) < 2.2 && hy <= br.ys[0] + 1 && hy >= br.ys[br.ys.length - 1] - 1;
   if (br.state === 'idle') {
     if (onBridge && hy > br.mid) br.armed = true;
     if (!onBridge) br.armed = false;
@@ -2374,7 +2383,13 @@ function stepBridge(sim: Sim, api: SimApi, br: Bridge): void {
       for (const i of br.rows[k]) {
         if (sim.tiles[i] === T_DEEP) continue;
         if (!retile(sim, api, i, T_DEEP, F6_MARK.lava, null)) all = false;
-        else sim.events.push({ t: 'break', x: (i % W) + 0.5, y: Math.floor(i / W) + 0.5, kind: 'crack' });
+        else
+          sim.events.push({
+            t: 'break',
+            x: (i % W) + 0.5,
+            y: Math.floor(i / W) + 0.5,
+            kind: 'crack',
+          });
       }
       if (all) br.cracked.delete(k);
     }
@@ -2474,8 +2489,7 @@ function spawnFromLava(sim: Sim, api: SimApi, e: Eruption, n: number): void {
     .flat()
     .filter(
       (i) =>
-        sim.tiles[i] === T_DEEP &&
-        hypot((i % W) + 0.5 - h.x, Math.floor(i / W) + 0.5 - h.y) > 3,
+        sim.tiles[i] === T_DEEP && hypot((i % W) + 0.5 - h.x, Math.floor(i / W) + 0.5 - h.y) > 3,
     );
   for (let k = 0; k < n && lava.length; k++) {
     const j = Math.floor(sim.rng() * lava.length);

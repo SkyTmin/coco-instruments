@@ -185,7 +185,12 @@ function bot(s: Sim, st: BotState): SimInput {
     if (!t || t.shape !== 'line') continue;
     const [react, missed] = notice(st, `l${m.id}:${Math.round((s.time - m.t) * 10)}`);
     if (missed || m.t < react) continue;
-    const hit = strikeHits({ shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 }, h.x, h.y, h.r + 0.3);
+    const hit = strikeHits(
+      { shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 },
+      h.x,
+      h.y,
+      h.r + 0.3,
+    );
     if (!hit) continue;
     const a = (t.ang ?? 0) + Math.PI / 2;
     const side = Math.cos(a) * (h.x - m.x) + Math.sin(a) * (h.y - m.y) >= 0 ? 1 : -1;
@@ -216,8 +221,16 @@ function bot(s: Sim, st: BotState): SimInput {
       // Ближняя безопасная сторона — вверх или вниз.
       let dir = 0;
       for (let k = 1; k < 6 && !dir; k++) {
-        if (trackDanger(s, h.x, h.y - k, 0.35) > 3 && walkableTile(s.tiles[Math.floor(h.y - k) * W + Math.floor(h.x)])) dir = -1;
-        else if (trackDanger(s, h.x, h.y + k, 0.35) > 3 && walkableTile(s.tiles[Math.floor(h.y + k) * W + Math.floor(h.x)])) dir = 1;
+        if (
+          trackDanger(s, h.x, h.y - k, 0.35) > 3 &&
+          walkableTile(s.tiles[Math.floor(h.y - k) * W + Math.floor(h.x)])
+        )
+          dir = -1;
+        else if (
+          trackDanger(s, h.x, h.y + k, 0.35) > 3 &&
+          walkableTile(s.tiles[Math.floor(h.y + k) * W + Math.floor(h.x)])
+        )
+          dir = 1;
       }
       inp.my = dir || 1;
       if (td < 0.6 && h.dashCd <= 0) inp.dash = true;
@@ -239,7 +252,8 @@ function bot(s: Sim, st: BotState): SimInput {
   let td2 = 1e9;
   const bowls = ks?.domainOn ? new Set(ks.bowls) : null;
   for (const m of s.mobs) {
-    if (m.mode === 'dying' || m.mode === 'escape' || m.mode === 'emerge' || m.mode === 'f12_rise') continue;
+    if (m.mode === 'dying' || m.mode === 'escape' || m.mode === 'emerge' || m.mode === 'f12_rise')
+      continue;
     if ((m.data.ghost ?? 0) > 0 || m.kind === 'f12_train') continue;
     if (bowls && !bowls.has(m.id)) continue;
     let d = Math.hypot(m.x - h.x, m.y - h.y);
@@ -368,7 +382,9 @@ describe('этаж 12: Двуликий король проклятий', () => 
 
 describe.runIf(!!process.env.F12SWEEP)('этаж 12: подбор', () => {
   it('сетка снаряжения', () => {
-    for (const [tier, plus, meat] of (process.env.F12SWEEP ?? '').split(';').map((x) => x.split(',').map(Number)))
+    for (const [tier, plus, meat] of (process.env.F12SWEEP ?? '')
+      .split(';')
+      .map((x) => x.split(',').map(Number)))
       for (const seed of [61, 62, 63]) fight(tier, plus, seed, meat);
   });
 });
@@ -453,7 +469,15 @@ describe('этаж 12: жертвенный храм', () => {
     for (let t = 0; t < 2 * 60; t++) stepSim(s, DT, NO_INPUT);
     for (const m of s.mobs)
       if (ks.bowls.includes(m.id))
-        API.strike(s, { shape: 'circle', x: m.x, y: m.y, r: 0.3, warn: 0, dmg: 0, mobDmg: Infinity });
+        API.strike(s, {
+          shape: 'circle',
+          x: m.x,
+          y: m.y,
+          r: 0.3,
+          warn: 0,
+          dmg: 0,
+          mobDmg: Infinity,
+        });
     let broken = false;
     for (let t = 0; t < 3 * 60; t++) {
       s.hero.hp = s.stats.maxHp;
@@ -495,7 +519,9 @@ describe('этаж 12: карта', () => {
     const b = s.boss!;
     const f = field(s, lift.x, lift.y + 1, false);
     // Ворота арены: клетка перед воротами снаружи достижима.
-    const outside = b.gates.flatMap((g) => [g + W, g - W, g + 1, g - 1]).filter((i) => !b.cells.has(i) && walkableTile(world.tiles[i]));
+    const outside = b.gates
+      .flatMap((g) => [g + W, g - W, g + 1, g - 1])
+      .filter((i) => !b.cells.has(i) && walkableTile(world.tiles[i]));
     expect(outside.some((i) => f[i] > 0)).toBe(true);
     // После победы: печати открыты, лестница достижима из арены.
     const stairs = world.objs.find((o) => o.kind === 'stairs')!;
@@ -556,7 +582,9 @@ describe('этаж 12: поезда и ленты', () => {
       const [px, py] = at(F12_PLAT, 30, 17);
       const s = sim(8, 5, px + 0.5, py + 0.5, 4);
       stepSim(s, DT, NO_INPUT);
-      const t = f12State(s).tracks.find((k) => k.area === F12_PLAT && k.y === band(F12_PLAT).top + 14)!;
+      const t = f12State(s).tracks.find(
+        (k) => k.area === F12_PLAT && k.y === band(F12_PLAT).top + 14,
+      )!;
       let hurt = 0;
       let passed = false;
       s.mobs = [];
@@ -659,7 +687,16 @@ describe('этаж 12: поезда и ленты', () => {
     expect(hurt).toBeGreaterThan(s.stats.maxHp * 0.08);
     const tr = st.terrs[0];
     for (const m of s.mobs)
-      if (tr.pillars.includes(m.id)) API.strike(s, { shape: 'circle', x: m.x, y: m.y, r: 0.3, warn: 0, dmg: 0, mobDmg: Infinity });
+      if (tr.pillars.includes(m.id))
+        API.strike(s, {
+          shape: 'circle',
+          x: m.x,
+          y: m.y,
+          r: 0.3,
+          warn: 0,
+          dmg: 0,
+          mobDmg: Infinity,
+        });
     let dazed = false;
     let broke = false;
     for (let k = 0; k < 60; k++) {

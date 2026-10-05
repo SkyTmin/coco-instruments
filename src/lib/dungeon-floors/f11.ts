@@ -173,7 +173,11 @@ export const F11_LEGEND: Record<string, LegendCell> = {
   '&': thing('f11_windmill', 0.55, { use: { label: 'Повернуть' } }),
   '*': thing('f11_fountain', 0.62),
   '+': thing('f11_lantern', 0.22, {}, { r: 3.2, tint: 'warm' }),
-  ':': { tile: 'floor', mark: M.under, obj: { kind: 'breakable', ref: 'f11_urn', solid: 0.28, hp: 1 } },
+  ':': {
+    tile: 'floor',
+    mark: M.under,
+    obj: { kind: 'breakable', ref: 'f11_urn', solid: 0.28, hp: 1 },
+  },
   ';': {
     tile: 'floor',
     mark: M.under,
@@ -190,7 +194,11 @@ export const F11_LEGEND: Record<string, LegendCell> = {
   '<': thing('f11_console', 0.4, { use: { label: 'Пульт' } }),
   '0': thing('f11_crystal', 0.3, {}, { r: 2.6, tint: 'teal' }),
   '4': thing('f11_wreck', 0.42),
-  '6': { tile: 'floor', mark: M.under, obj: { kind: 'breakable', ref: 'f11_barrel', solid: 0.34, hp: 2 } },
+  '6': {
+    tile: 'floor',
+    mark: M.under,
+    obj: { kind: 'breakable', ref: 'f11_barrel', solid: 0.34, hp: 2 },
+  },
   '8': {
     tile: 'floor',
     mark: M.under,

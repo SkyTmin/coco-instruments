@@ -200,7 +200,8 @@ export function loadMap(id: string): HubMap {
   const stand = new Uint8Array(cw * ch);
   for (let j = 0; j < ch; j++)
     for (let i = 0; i < cw; i++)
-      if (!overlapsGrid(grid, (i + 0.5) / sub, (j + 0.5) / sub, HERO_R - 0.02)) stand[j * cw + i] = 1;
+      if (!overlapsGrid(grid, (i + 0.5) / sub, (j + 0.5) / sub, HERO_R - 0.02))
+        stand[j * cw + i] = 1;
   const m: HubMap = { id, data, w: data.w, h: data.h, sub, solid, grid, stand, doors: [] };
   m.doors = data.doors.map((d, i) => doorInfo(m, d, i));
   maps.set(id, m);

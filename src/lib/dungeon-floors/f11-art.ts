@@ -61,7 +61,12 @@ const mixc = (a: RGBA, b: RGBA, k: number): RGBA => [
   Math.round(a[2] + (b[2] - a[2]) * k),
   Math.round(a[3] + (b[3] - a[3]) * k),
 ];
-export const alpha = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(Math.max(0, Math.min(1, a)) * 255)];
+export const alpha = (c: RGBA, a: number): RGBA => [
+  c[0],
+  c[1],
+  c[2],
+  Math.round(Math.max(0, Math.min(1, a)) * 255),
+];
 const css = (c: RGBA, a = c[3] / 255) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
 export const TAU = Math.PI * 2;
@@ -155,7 +160,12 @@ function voronoi(
 
 /** Четыре тона формы: тень, основа, свет, блик. */
 type Tones = [RGBA, RGBA, RGBA, RGBA];
-export const tn = (a: string, b: string, c: string, d: string): Tones => [hx(a), hx(b), hx(c), hx(d)];
+export const tn = (a: string, b: string, c: string, d: string): Tones => [
+  hx(a),
+  hx(b),
+  hx(c),
+  hx(d),
+];
 
 const LX = -0.45;
 const LY = -0.72;
@@ -256,7 +266,15 @@ function polyShade(p: Px, pts: [number, number][], t: Tones, bias = 0): void {
 }
 
 /** Толстая линия. */
-export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  c: RGBA,
+  w = 1,
+): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -279,7 +297,8 @@ function spline(pts: [number, number][], n = 6): [number, number][] {
       const t2 = t * t;
       const t3 = t2 * t;
       const f = (a: number, b: number, c: number, d: number) =>
-        0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+        0.5 *
+        (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
       out.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
     }
   }
@@ -804,10 +823,15 @@ function waterPx(p: Px, X0: number, Y0: number): void {
       const X = X0 + x;
       const Y = Y0 + y;
       const v = vnoise(X, Y * 0.5, 10, 101);
-      let c = v > 0.7 ? mixc(WATER[1], WATER[2], 0.6) : v < 0.24 ? mixc(WATER[0], WATER[1], 0.5) : WATER[1];
+      let c =
+        v > 0.7
+          ? mixc(WATER[1], WATER[2], 0.6)
+          : v < 0.24
+            ? mixc(WATER[0], WATER[1], 0.5)
+            : WATER[1];
       // Рябь поперёк течения: короткие светлые штрихи, редко.
       const r = vnoise(X * 0.5, Y, 3, 102);
-      if (r > 0.78 && ((Y + Math.floor(v * 4)) % 6 === 0)) c = mixc(WATER[2], WATER[3], 0.6);
+      if (r > 0.78 && (Y + Math.floor(v * 4)) % 6 === 0) c = mixc(WATER[2], WATER[3], 0.6);
       p.set(x, y, c);
     }
 }
@@ -895,7 +919,8 @@ function plankPx(p: Px, X0: number, Y0: number, c: CellCtx): void {
   const skyE = nearOf(c, 1, 0) === 'sky';
   const skyN = nearOf(c, 0, -1) === 'sky';
   const skyS = nearOf(c, 0, 1) === 'sky';
-  const vert = (skyW || skyE) && !(skyN || skyS) ? true : (skyN || skyS) && !(skyW || skyE) ? false : true;
+  const vert =
+    (skyW || skyE) && !(skyN || skyS) ? true : (skyN || skyS) && !(skyW || skyE) ? false : true;
   for (let y = 0; y < TS; y++)
     for (let x = 0; x < TS; x++) {
       const X = X0 + x;
@@ -931,13 +956,19 @@ function plankPx(p: Px, X0: number, Y0: number, c: CellCtx): void {
         edge === 'W' ? [1, i] : edge === 'E' ? [14, i] : edge === 'N' ? [i, 1] : [i, 14];
       const sag = edge === 'W' || edge === 'E' ? 0 : 0;
       p.set(x, y + sag, ROPE[2]);
-      p.set(edge === 'W' ? 0 : edge === 'E' ? 15 : x, edge === 'N' ? 0 : edge === 'S' ? 15 : y, ROPE[0]);
+      p.set(
+        edge === 'W' ? 0 : edge === 'E' ? 15 : x,
+        edge === 'N' ? 0 : edge === 'S' ? 15 : y,
+        ROPE[0],
+      );
     }
-    const post = ((vert ? Y0 / TS : X0 / TS) % 3 + 3) % 3 === 0;
+    const post = (((vert ? Y0 / TS : X0 / TS) % 3) + 3) % 3 === 0;
     if (post) {
-      const [px, py] = edge === 'W' ? [0, 6] : edge === 'E' ? [13, 6] : edge === 'N' ? [6, 0] : [6, 13];
+      const [px, py] =
+        edge === 'W' ? [0, 6] : edge === 'E' ? [13, 6] : edge === 'N' ? [6, 0] : [6, 13];
       for (let dy = 0; dy < 3; dy++)
-        for (let dx = 0; dx < 3; dx++) p.set(px + dx, py + dy, dx === 0 || dy === 0 ? PLANK[2] : PLANK[0]);
+        for (let dx = 0; dx < 3; dx++)
+          p.set(px + dx, py + dy, dx === 0 || dy === 0 ? PLANK[2] : PLANK[0]);
     }
   };
   if (skyW) rail('W');
@@ -958,14 +989,50 @@ function cobblePx(p: Px, X0: number, Y0: number, c: CellCtx): void {
       }
       const toLight = v.ox * LX + v.oy * LY;
       const r = hash(v.id, 7);
-      p.set(x, y, v.edge < 1.8 && toLight > 0.6 ? COBBLE[3] : v.edge < 1.8 && toLight < -0.6 ? COBBLE[0] : COBBLE[r < 0.35 ? 1 : 2]);
+      p.set(
+        x,
+        y,
+        v.edge < 1.8 && toLight > 0.6
+          ? COBBLE[3]
+          : v.edge < 1.8 && toLight < -0.6
+            ? COBBLE[0]
+            : COBBLE[r < 0.35 ? 1 : 2],
+      );
     }
   // Парапет над небом: светлый камень, тёмный наружный край.
   const edges: [number, number, (i: number) => [number, number][]][] = [
-    [-1, 0, (i) => [[0, i], [1, i]]],
-    [1, 0, (i) => [[15, i], [14, i]]],
-    [0, -1, (i) => [[i, 0], [i, 1]]],
-    [0, 1, (i) => [[i, 15], [i, 14]]],
+    [
+      -1,
+      0,
+      (i) => [
+        [0, i],
+        [1, i],
+      ],
+    ],
+    [
+      1,
+      0,
+      (i) => [
+        [15, i],
+        [14, i],
+      ],
+    ],
+    [
+      0,
+      -1,
+      (i) => [
+        [i, 0],
+        [i, 1],
+      ],
+    ],
+    [
+      0,
+      1,
+      (i) => [
+        [i, 15],
+        [i, 14],
+      ],
+    ],
   ];
   for (const [dx, dy, f] of edges) {
     if (nearOf(c, dx, dy) !== 'sky') continue;
@@ -978,7 +1045,16 @@ function cobblePx(p: Px, X0: number, Y0: number, c: CellCtx): void {
 }
 
 /** Плиты: ровный тон камня, фаска светом сверху-слева, шов. */
-function flagPx(p: Px, X0: number, Y0: number, size: number, seed: number, pal: Tones, grout: RGBA, jit = 0.6): void {
+function flagPx(
+  p: Px,
+  X0: number,
+  Y0: number,
+  size: number,
+  seed: number,
+  pal: Tones,
+  grout: RGBA,
+  jit = 0.6,
+): void {
   for (let y = 0; y < TS; y++)
     for (let x = 0; x < TS; x++) {
       const X = X0 + x;
@@ -1081,7 +1157,12 @@ function crackPx(p: Px, wx: number, wy: number, k: number): void {
     }
   }
   // Пыль и красный отсвет — «сейчас уйдёт».
-  for (let i = 0; i < 6; i++) p.set(1 + Math.floor(hash(seed, i, 6) * 14), 1 + Math.floor(hash(seed, i, 7) * 14), hx('#e86a4a'));
+  for (let i = 0; i < 6; i++)
+    p.set(
+      1 + Math.floor(hash(seed, i, 6) * 14),
+      1 + Math.floor(hash(seed, i, 7) * 14),
+      hx('#e86a4a'),
+    );
 }
 
 /** Нарисовать пол вида `mark` в клетку. */
@@ -1184,7 +1265,11 @@ function floorEdges(p: Px, area: string, mark: number, c: CellCtx): void {
   if (mark === MK.bed) {
     const bed = (dx: number, dy: number) => {
       const mk = c.markAt(dx, dy);
-      return mk === MK.bed || mk === MK.gardenerPost || (mk === MK.under && underFloor(c, area) === MK.bed);
+      return (
+        mk === MK.bed ||
+        mk === MK.gardenerPost ||
+        (mk === MK.under && underFloor(c, area) === MK.bed)
+      );
     };
     for (let i = 0; i < TS; i++) {
       if (!bed(0, -1)) {
@@ -1207,7 +1292,8 @@ function floorEdges(p: Px, area: string, mark: number, c: CellCtx): void {
   }
   // Кайма канала: каменный бортик.
   if (mark === MK.water) {
-    const wet = (dx: number, dy: number) => c.markAt(dx, dy) === MK.water || nearOf(c, dx, dy) === 'sky';
+    const wet = (dx: number, dy: number) =>
+      c.markAt(dx, dy) === MK.water || nearOf(c, dx, dy) === 'sky';
     for (let i = 0; i < TS; i++) {
       if (!wet(0, -1)) {
         p.set(i, 0, SAND[0]);
@@ -1294,13 +1380,26 @@ function skyCellPx(area: string, c: CellCtx): Px {
       p.set(x, y, col);
     }
   // Обрывы островов: земля, корни, порода, тёмный низ.
-  const up = [islandAbove(c, -2), islandAbove(c, -1), islandAbove(c, 0), islandAbove(c, 1), islandAbove(c, 2)];
+  const up = [
+    islandAbove(c, -2),
+    islandAbove(c, -1),
+    islandAbove(c, 0),
+    islandAbove(c, 1),
+    islandAbove(c, 2),
+  ];
   const has = (k: number) => (k > 0 ? 1 : 0);
   const grassTop = (() => {
     const k = up[2];
     if (k <= 0) return false;
     const mk = c.markAt(0, -k);
-    return mk === MK.grass || mk === MK.moss || mk === MK.bed || mk === MK.under || mk === MK.hedge || mk === 0;
+    return (
+      mk === MK.grass ||
+      mk === MK.moss ||
+      mk === MK.bed ||
+      mk === MK.under ||
+      mk === MK.hedge ||
+      mk === 0
+    );
   })();
   for (let x = 0; x < TS; x++) {
     const k = up[2];
@@ -1309,7 +1408,7 @@ function skyCellPx(area: string, c: CellCtx): Px {
     // Толщина острова: сколько земли вокруг сверху — сужается к краям.
     const fl = (x + 0.5) / TS;
     const frac =
-      (has(up[1]) * (1 - fl) + has(up[2]) + has(up[3]) * fl) / 2 * 0.7 +
+      ((has(up[1]) * (1 - fl) + has(up[2]) + has(up[3]) * fl) / 2) * 0.7 +
       ((has(up[0]) + has(up[4])) / 2) * 0.3;
     const Hc = (7 + 38 * Math.pow(frac, 1.4)) * (0.82 + 0.36 * vnoise(X, 0, 6, 221));
     for (let y = 0; y < TS; y++) {
@@ -1453,7 +1552,8 @@ function rockPx(p: Px, c: CellCtx, face: boolean, area: string, pal: Tones = ROC
         const v = voronoi(X, Y, 6, 242);
         const l = -(v.ox * LX + v.oy * LY) / 4 + 0.45;
         col = v.edge < 0.9 ? pal[0] : tone(pal, l);
-        if (area !== F11_CASTLE && vnoise(X, Y, 5, 243) > 0.62) col = GRASS[vnoise(X, Y, 2, 244) > 0.5 ? 2 : 1];
+        if (area !== F11_CASTLE && vnoise(X, Y, 5, 243) > 0.62)
+          col = GRASS[vnoise(X, Y, 2, 244) > 0.5 ? 2 : 1];
       } else {
         // Лицо: пласты и трещины, свет слева.
         const strata = vnoise(X * 0.35, Y, 3, 245);
@@ -1469,7 +1569,14 @@ function rockPx(p: Px, c: CellCtx, face: boolean, area: string, pal: Tones = ROC
     for (let x = 0; x < TS; x++) if (hash(X0 + x, Y0, 247) < 0.25) p.set(x, capH - 1, GRASS[2]);
 }
 
-function masonryPx(p: Px, c: CellCtx, face: boolean, area: string, pal: Tones, trim: Tones | null): void {
+function masonryPx(
+  p: Px,
+  c: CellCtx,
+  face: boolean,
+  area: string,
+  pal: Tones,
+  trim: Tones | null,
+): void {
   const X0 = c.wx * TS;
   const Y0 = c.wy * TS;
   const capH = face ? 4 : 16;
@@ -1506,7 +1613,8 @@ function masonryPx(p: Px, c: CellCtx, face: boolean, area: string, pal: Tones, t
           if (u === 0 || v === 0) col = mixc(pal[0], pal[1], 0.4);
           else if (v === 1) col = pal[3];
           // Зубцы парапета: через четыре точки — тёмная щель.
-          if (pal === CASTLE && edge && (((X + Y) % 8) + 8) % 8 < 2 && (u === 3 || u === 9)) col = pal[0];
+          if (pal === CASTLE && edge && (((X + Y) % 8) + 8) % 8 < 2 && (u === 3 || u === 9))
+            col = pal[0];
         }
         if (area === F11_AQUA && vnoise(X, Y, 4, 251) > 0.66) col = MOSS[2];
       } else {
@@ -1518,7 +1626,8 @@ function masonryPx(p: Px, c: CellCtx, face: boolean, area: string, pal: Tones, t
         col = pal[hash(Math.floor((X + off) / 8), row + c.wy * 4, 252) < 0.5 ? 1 : 2];
         if (v === 0) col = pal[3];
         if (v === 3 || u === 0) col = pal[0];
-        if (trim && y >= capH && y < capH + 3) col = y === capH + 2 ? GOLD[2] : trim[y === capH ? 3 : 1];
+        if (trim && y >= capH && y < capH + 3)
+          col = y === capH + 2 ? GOLD[2] : trim[y === capH ? 3 : 1];
         if (y > 13) col = mixc(col, INK, 0.25);
         if (area === F11_AQUA && y > 12 && hash(X, Y, 253) < 0.4) col = MOSS[1];
       }
@@ -1798,7 +1907,8 @@ registerZonePainter('f11_air', (g, z, px, py, _s, time) => {
       // Дождь — косые штрихи по ветру.
       g.globalAlpha = 0.35;
       const lx = wx * 0.9;
-      for (let k = 0; k < 5; k++) g.fillRect(Math.round(x - lx * k * 0.3), Math.round(y - k * 1.6), 1, 1);
+      for (let k = 0; k < 5; k++)
+        g.fillRect(Math.round(x - lx * k * 0.3), Math.round(y - k * 1.6), 1, 1);
       g.globalAlpha = 1;
       continue;
     }
@@ -1817,7 +1927,13 @@ registerZonePainter('f11_air', (g, z, px, py, _s, time) => {
     const uy = Math.sin(dir);
     const hx0 = h.x * TS - left;
     const hy0 = h.y * TS - top - 6;
-    const k = arenaGust ? (st.arena.gust === 1 ? Math.min(1, 1 - st.arena.gustT) : 1) : warn > 0 ? warn : 1;
+    const k = arenaGust
+      ? st.arena.gust === 1
+        ? Math.min(1, 1 - st.arena.gustT)
+        : 1
+      : warn > 0
+        ? warn
+        : 1;
     if (warn > 0 || (arenaGust && st.arena.gust === 1)) {
       // Стена штрихов, идущая поперёк ветра.
       const dist = (1 - k) * 110;
@@ -1828,7 +1944,8 @@ registerZonePainter('f11_air', (g, z, px, py, _s, time) => {
         const jit = hash(j, Math.floor(time * 20), 411) * 8;
         const bx = fx - uy * j * 5 - ux * jit;
         const by = fy + ux * j * 5 - uy * jit;
-        for (let s = 0; s < 7; s++) g.fillRect(Math.round(bx - ux * s * 1.5), Math.round(by - uy * s * 1.5), 1, 1);
+        for (let s = 0; s < 7; s++)
+          g.fillRect(Math.round(bx - ux * s * 1.5), Math.round(by - uy * s * 1.5), 1, 1);
       }
     }
     // Стрелки вокруг героя — куда дунет.
@@ -1851,7 +1968,14 @@ registerZonePainter('f11_air', (g, z, px, py, _s, time) => {
 // --- Разовые вспышки ветра и ударов --------------------------------------------
 
 /** Кольцо-вихрь: сдуло (откуда) и поставило на землю (куда). */
-function swirl(g: CanvasRenderingContext2D, px: number, py: number, k: number, r: number, col: string): void {
+function swirl(
+  g: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  k: number,
+  r: number,
+  col: string,
+): void {
   g.strokeStyle = col;
   g.lineWidth = 1;
   for (let i = 0; i < 3; i++) {
@@ -1912,14 +2036,27 @@ registerZonePainter('f11_spray', (g, z, px, py) => {
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * TAU;
     const r = 4 + k * 16;
-    g.fillRect(Math.round(px + Math.cos(a) * r), Math.round(py - H * 0.3 + Math.sin(a) * r * 0.5), 1, 1);
+    g.fillRect(
+      Math.round(px + Math.cos(a) * r),
+      Math.round(py - H * 0.3 + Math.sin(a) * r * 0.5),
+      1,
+      1,
+    );
   }
   g.globalAlpha = 1;
   return true;
 });
 
 /** Лента-луч: вода, лазер, взгляд стража (`ang` — в зоне). */
-export function beamFx(g: CanvasRenderingContext2D, z: Zone, px: number, py: number, w: number, core: string, glow: string): void {
+export function beamFx(
+  g: CanvasRenderingContext2D,
+  z: Zone,
+  px: number,
+  py: number,
+  w: number,
+  core: string,
+  glow: string,
+): void {
   const k = Math.min(1, z.t / z.life);
   const ang = (z as Zone & { ang?: number }).ang ?? 0;
   const L = z.r * TS;
@@ -2117,7 +2254,15 @@ function dropShadow(p: Px, cx: number, by: number, rx: number, ry = 2): void {
 
 // --- Деревья ---------------------------------------------------------------
 
-function canopy(p: Px, cx: number, cy: number, r: number, t: Tones, seed: number, blossom?: RGBA): void {
+function canopy(
+  p: Px,
+  cx: number,
+  cy: number,
+  r: number,
+  t: Tones,
+  seed: number,
+  blossom?: RGBA,
+): void {
   // Шапка из пяти-шести пухлых комков со светом сверху-слева.
   const lobes: [number, number, number][] = [
     [0, 0, r],
@@ -2141,7 +2286,10 @@ function canopy(p: Px, cx: number, cy: number, r: number, t: Tones, seed: number
   }
 }
 
-function treePx(kind: 'tree' | 'sakura' | 'cypress', sway: number): { p: Px; ax: number; ay: number } {
+function treePx(
+  kind: 'tree' | 'sakura' | 'cypress',
+  sway: number,
+): { p: Px; ax: number; ay: number } {
   const W = kind === 'cypress' ? 16 : 30;
   const H = kind === 'cypress' ? 38 : 36;
   const p = new Px(W, H);
@@ -2168,9 +2316,22 @@ function treePx(kind: 'tree' | 'sakura' | 'cypress', sway: number): { p: Px; ax:
   limb(p, cx, H - 3, cx + 3.5, H - 1.5, 1.2, 0.6, BARK);
   limb(p, cx - 0.5, H - 12, cx - 5, H - 17, 1, 0.7, BARK);
   const leaves = kind === 'sakura' ? tn('#b0567a', '#e088a8', '#f4b4c8', '#fde2ea') : GRASS;
-  canopy(p, cx + sway, H - 22, 9.5, leaves, kind === 'sakura' ? 7 : 3, kind === 'sakura' ? undefined : hx('#b4dc78'));
+  canopy(
+    p,
+    cx + sway,
+    H - 22,
+    9.5,
+    leaves,
+    kind === 'sakura' ? 7 : 3,
+    kind === 'sakura' ? undefined : hx('#b4dc78'),
+  );
   if (kind === 'sakura')
-    for (let i = 0; i < 5; i++) p.set(4 + Math.floor(hash(i, 9, 521) * 22), H - 3 + Math.floor(hash(i, 8, 522) * 2), hx('#f4b4c8'));
+    for (let i = 0; i < 5; i++)
+      p.set(
+        4 + Math.floor(hash(i, 9, 521) * 22),
+        H - 3 + Math.floor(hash(i, 8, 522) * 2),
+        hx('#f4b4c8'),
+      );
   return { p: ink(p), ax: W / 2, ay: H };
 }
 
@@ -2251,7 +2412,15 @@ function pinwheelPx(f: number, set: number): { p: Px; ax: number; ay: number } {
     const ay = cy + Math.sin(a) * 6;
     const bx = cx + Math.cos(a + 0.9) * 4.2;
     const by = cy + Math.sin(a + 0.9) * 4.2;
-    polyShade(p, [[cx, cy], [ax, ay], [bx, by]], [mixc(cols[k], INK, 0.3), cols[k], mixc(cols[k], WHITE, 0.3), mixc(cols[k], WHITE, 0.6)]);
+    polyShade(
+      p,
+      [
+        [cx, cy],
+        [ax, ay],
+        [bx, by],
+      ],
+      [mixc(cols[k], INK, 0.3), cols[k], mixc(cols[k], WHITE, 0.3), mixc(cols[k], WHITE, 0.6)],
+    );
   }
   p.set(7, 7, hx('#f6d24a'));
   p.set(8, 7, hx('#b08a2a'));
@@ -2274,16 +2443,42 @@ function windmillPx(f: number, dir: number, hot: boolean): { p: Px; ax: number; 
   const cx = 17;
   dropShadow(p, cx + 2, H - 3, 10, 3);
   // Башня: камень снизу, дерево сверху.
-  polyShade(p, [[cx - 8, H - 3], [cx + 8, H - 3], [cx + 5.5, H - 22], [cx - 5.5, H - 22]], ROCK);
+  polyShade(
+    p,
+    [
+      [cx - 8, H - 3],
+      [cx + 8, H - 3],
+      [cx + 5.5, H - 22],
+      [cx - 5.5, H - 22],
+    ],
+    ROCK,
+  );
   for (let y = H - 20; y < H - 3; y += 4)
     for (let x = cx - 8; x <= cx + 8; x++) if (p.solid(x, y)) p.set(x, y, ROCK[0]);
-  polyShade(p, [[cx - 6, H - 22], [cx + 6, H - 22], [cx + 4, H - 30], [cx - 4, H - 30]], PLANK);
+  polyShade(
+    p,
+    [
+      [cx - 6, H - 22],
+      [cx + 6, H - 22],
+      [cx + 4, H - 30],
+      [cx - 4, H - 30],
+    ],
+    PLANK,
+  );
   // Дверь.
   p.rect(cx - 2, H - 10, cx + 1, H - 4, hx('#3a2616'));
   p.set(cx - 2, H - 11, PLANK[3]);
   p.set(cx + 1, H - 11, PLANK[3]);
   // Крыша.
-  polyShade(p, [[cx - 6, H - 30], [cx + 6, H - 30], [cx, H - 36]], tn('#6a2a26', '#9a3e34', '#c05a48', '#e08068'));
+  polyShade(
+    p,
+    [
+      [cx - 6, H - 30],
+      [cx + 6, H - 30],
+      [cx, H - 36],
+    ],
+    tn('#6a2a26', '#9a3e34', '#c05a48', '#e08068'),
+  );
   // Флюгер: стрелка по ветру поверх крыши.
   const vx = Math.cos(dir);
   const vy = Math.sin(dir) * 0.5;
@@ -2332,7 +2527,7 @@ registerPropPainter('f11_windmill', (o, time) => {
   const hot = since >= 0 && since < 0.6;
   const spin = 7 + (hot ? 18 : 0);
   const f = Math.floor(time * spin + o.x) % 8;
-  const q = Math.round(((dir % TAU) + TAU) % TAU / (PI / 4)) % 8;
+  const q = Math.round((((dir % TAU) + TAU) % TAU) / (PI / 4)) % 8;
   return sprite(`mill|${f}|${q}|${hot ? 1 : 0}`, () => windmillPx(f, (q * PI) / 4, hot));
 });
 
@@ -2378,12 +2573,39 @@ registerPropPainter('f11_lantern', (o, time) => {
   return sprite(`lantern|${f}`, () => {
     const p = new Px(12, 22);
     dropShadow(p, 6, 20, 5, 2);
-    polyShade(p, [[3, 20], [9, 20], [8, 17], [4, 17]], ROCK);
+    polyShade(
+      p,
+      [
+        [3, 20],
+        [9, 20],
+        [8, 17],
+        [4, 17],
+      ],
+      ROCK,
+    );
     limb(p, 6, 17, 6, 12, 1.4, 1.4, ROCK);
-    polyShade(p, [[2, 12], [10, 12], [9, 7], [3, 7]], ROCK);
+    polyShade(
+      p,
+      [
+        [2, 12],
+        [10, 12],
+        [9, 7],
+        [3, 7],
+      ],
+      ROCK,
+    );
     p.rect(4, 8, 7, 11, [255, 200 + f * 12, 110, 255]);
     p.set(5, 9, WHITE);
-    polyShade(p, [[0, 7], [12, 7], [8, 3], [4, 3]], tn('#5a5a60', '#7c7c84', '#9c9ca4', '#bcbcc4'));
+    polyShade(
+      p,
+      [
+        [0, 7],
+        [12, 7],
+        [8, 3],
+        [4, 3],
+      ],
+      tn('#5a5a60', '#7c7c84', '#9c9ca4', '#bcbcc4'),
+    );
     p.set(6, 2, ROCK[3]);
     return { p: ink(p), ax: 6, ay: 21 };
   });
@@ -2395,7 +2617,10 @@ registerPropPainter('f11_urn', (o, _t, _alive, flash) =>
   sprite(`urn|${o.area}|${flash ? 1 : 0}`, () => {
     const p = new Px(12, 14);
     dropShadow(p, 6, 12, 5, 2);
-    const t = o.area === F11_CASTLE ? tn('#4a5a8a', '#6a82b8', '#8ea6d8', '#c0d2f0') : tn('#8a4a2a', '#b8683a', '#d88a52', '#f0b078');
+    const t =
+      o.area === F11_CASTLE
+        ? tn('#4a5a8a', '#6a82b8', '#8ea6d8', '#c0d2f0')
+        : tn('#8a4a2a', '#b8683a', '#d88a52', '#f0b078');
     shadeEll(p, 6, 8, 4.5, 4.2, t);
     limb(p, 6, 4, 6, 2, 1.8, 2.2, t);
     p.set(4, 8, t[3]);
@@ -2454,7 +2679,14 @@ registerPropPainter('f11_nest', (_o, time, _alive, flash) =>
       const r = 5 + hash(i, 2, 532) * 3;
       const x = 9 + Math.cos(a) * r;
       const y = 7 + Math.sin(a) * r * 0.45;
-      stroke(p, x, y, x + Math.cos(a + 1.6) * 2.5, y + Math.sin(a + 1.6) * 1, i % 3 ? PLANK[1] : PLANK[3]);
+      stroke(
+        p,
+        x,
+        y,
+        x + Math.cos(a + 1.6) * 2.5,
+        y + Math.sin(a + 1.6) * 1,
+        i % 3 ? PLANK[1] : PLANK[3],
+      );
     }
     p.ell(9, 6.5, 4.5, 1.8, hx('#3a2616'));
     shadeEll(p, 7.5, 5.5, 1.8, 2.2, tn('#b0a890', '#e8e0c8', '#f8f4e8', '#ffffff'));
@@ -2471,10 +2703,22 @@ registerPropPainter('f11_nest', (_o, time, _alive, flash) =>
 /** Статуя древнего стража: круглая голова, длинные руки, мох и цветы. */
 function statuePx(area: string): { p: Px; ax: number; ay: number } {
   const p = new Px(26, 34);
-  const stone = area === F11_CASTLE ? tn('#7c7c88', '#a2a2ae', '#c4c4ce', '#e2e2ea') : tn('#76705e', '#9a927c', '#bab29a', '#d6cfb8');
+  const stone =
+    area === F11_CASTLE
+      ? tn('#7c7c88', '#a2a2ae', '#c4c4ce', '#e2e2ea')
+      : tn('#76705e', '#9a927c', '#bab29a', '#d6cfb8');
   dropShadow(p, 14, 31, 11, 3);
   // Постамент.
-  polyShade(p, [[4, 32], [22, 32], [21, 28], [5, 28]], stone);
+  polyShade(
+    p,
+    [
+      [4, 32],
+      [22, 32],
+      [21, 28],
+      [5, 28],
+    ],
+    stone,
+  );
   // Тело-цилиндр.
   shadeEll(p, 13, 20, 6.5, 7.5, stone);
   // Руки до земли.
@@ -2507,7 +2751,16 @@ registerPropPainter('f11_column', (o) =>
     const broken = (o.x * 7 + o.y) % 3;
     const top = 4 + broken * 3;
     dropShadow(p, 7, 26, 6, 2);
-    polyShade(p, [[1, 26], [13, 26], [12, 23], [2, 23]], t);
+    polyShade(
+      p,
+      [
+        [1, 26],
+        [13, 26],
+        [12, 23],
+        [2, 23],
+      ],
+      t,
+    );
     for (let y = top; y < 23; y++)
       for (let x = 3; x <= 10; x++) {
         const fl = (x - 3) % 2 === 0 ? -0.15 : 0.1;
@@ -2519,9 +2772,24 @@ registerPropPainter('f11_column', (o) =>
       for (let y = top; y < top + d; y++) clearPx(p, x, y);
       p.set(x, top + d, t[3]);
     }
-    if (!broken) polyShade(p, [[1, top], [13, top], [12, top - 3], [2, top - 3]], t);
+    if (!broken)
+      polyShade(
+        p,
+        [
+          [1, top],
+          [13, top],
+          [12, top - 3],
+          [2, top - 3],
+        ],
+        t,
+      );
     if (o.area !== F11_CASTLE)
-      for (let i = 0; i < 6; i++) p.set(3 + Math.floor(hash(i, broken, 552) * 8), 12 + Math.floor(hash(i, 5, 553) * 10), MOSS[2]);
+      for (let i = 0; i < 6; i++)
+        p.set(
+          3 + Math.floor(hash(i, broken, 552) * 8),
+          12 + Math.floor(hash(i, 5, 553) * 10),
+          MOSS[2],
+        );
     return { p: ink(p), ax: 7, ay: 27 };
   }),
 );
@@ -2548,7 +2816,16 @@ registerPropPainter('f11_bench', () =>
   sprite('bench', () => {
     const p = new Px(18, 12);
     dropShadow(p, 9, 10, 8, 2);
-    polyShade(p, [[1, 5], [17, 5], [17, 8], [1, 8]], PATH);
+    polyShade(
+      p,
+      [
+        [1, 5],
+        [17, 5],
+        [17, 8],
+        [1, 8],
+      ],
+      PATH,
+    );
     p.rect(3, 8, 4, 10, PATH[0]);
     p.rect(13, 8, 14, 10, PATH[0]);
     for (let x = 1; x < 17; x++) p.set(x, 5, PATH[3]);
@@ -2600,13 +2877,20 @@ registerPropPainter('f11_wheel', (_o, time) => {
     dropShadow(p, cx, 26, 11, 2);
     p.ell(cx, cy, 11.5, 11.5, PLANK[0]);
     for (let y = 0; y < 26; y++)
-      for (let x = 0; x < 26; x++) if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) < 9.5) clearPx(p, x, y);
+      for (let x = 0; x < 26; x++)
+        if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) < 9.5) clearPx(p, x, y);
     for (let k = 0; k < 8; k++) {
       const a = (k * PI) / 4 + (f * PI) / 24;
       stroke(p, cx, cy, cx + Math.cos(a) * 11, cy + Math.sin(a) * 11, PLANK[1], 1);
       const bx = cx + Math.cos(a) * 11;
       const by = cy + Math.sin(a) * 11;
-      p.rect(Math.round(bx) - 1, Math.round(by) - 1, Math.round(bx) + 1, Math.round(by) + 1, PLANK[2]);
+      p.rect(
+        Math.round(bx) - 1,
+        Math.round(by) - 1,
+        Math.round(bx) + 1,
+        Math.round(by) + 1,
+        PLANK[2],
+      );
       // Вода стекает с лопаток.
       if (Math.sin(a) > 0.3) p.set(Math.round(bx), Math.round(by) + 2, WATER[3]);
     }
@@ -2624,7 +2908,8 @@ registerPropPainter('f11_winch', (o) => {
     dropShadow(p, 9, 16, 8, 2);
     p.rect(2, 8, 3, 15, PLANK[1]);
     p.rect(14, 8, 15, 15, PLANK[1]);
-    for (let y = 6; y < 13; y++) for (let x = 4; x < 14; x++) p.set(x, y, tone(PLANK, (9.5 - y) / 4));
+    for (let y = 6; y < 13; y++)
+      for (let x = 4; x < 14; x++) p.set(x, y, tone(PLANK, (9.5 - y) / 4));
     for (let x = 4; x < 14; x += 2) p.set(x, 9, IRON[up ? 3 : 1]);
     // Рукоять.
     stroke(p, 15, 9, 17, up ? 5 : 13, IRON[2]);
@@ -2647,7 +2932,8 @@ registerPropPainter('f11_valve', (o, time) => {
     p.rect(9, 6, 15, 11, IRON[1]);
     p.rect(9, 6, 15, 6, IRON[3]);
     p.ell(7, 9, 5.5, 5.5, IRON[2]);
-    for (let y = 5; y < 14; y++) for (let x = 3; x < 12; x++) if (Math.hypot(x + 0.5 - 7, y + 0.5 - 9) < 3.5) clearPx(p, x, y);
+    for (let y = 5; y < 14; y++)
+      for (let x = 3; x < 12; x++) if (Math.hypot(x + 0.5 - 7, y + 0.5 - 9) < 3.5) clearPx(p, x, y);
     for (let s = 0; s < 4; s++) {
       const a = (s * PI) / 2 + f * 0.4;
       stroke(p, 7, 9, 7 + Math.cos(a) * 5, 9 + Math.sin(a) * 5, IRON[3]);
@@ -2665,13 +2951,32 @@ registerPropPainter('f11_console', (_o, time) => {
   return sprite(`console|${s}|${f}`, () => {
     const p = new Px(16, 22);
     dropShadow(p, 8, 20, 7, 2);
-    polyShade(p, [[2, 20], [14, 20], [12, 9], [4, 9]], tn('#6a6a58', '#8e8c76', '#aeab92', '#cac7b0'));
+    polyShade(
+      p,
+      [
+        [2, 20],
+        [14, 20],
+        [12, 9],
+        [4, 9],
+      ],
+      tn('#6a6a58', '#8e8c76', '#aeab92', '#cac7b0'),
+    );
     // Скрижаль с рунами.
-    polyShade(p, [[3, 9], [13, 9], [12, 3], [4, 3]], tn('#3a4a5a', '#4e6478', '#66809a', '#8aa4bc'));
+    polyShade(
+      p,
+      [
+        [3, 9],
+        [13, 9],
+        [12, 3],
+        [4, 3],
+      ],
+      tn('#3a4a5a', '#4e6478', '#66809a', '#8aa4bc'),
+    );
     const c = s === 'on' ? hx('#ff6a4a') : s === 'done' ? hx('#8a9aa8') : hx('#7af0c8');
     for (let i = 0; i < 4; i++) p.set(5 + i * 2, 5 + ((i + f) % 2), c);
     p.set(8, 7, c);
-    for (let i = 0; i < 8; i++) p.set(3 + Math.floor(hash(i, 1, 571) * 10), 12 + Math.floor(hash(i, 2, 572) * 7), MOSS[2]);
+    for (let i = 0; i < 8; i++)
+      p.set(3 + Math.floor(hash(i, 1, 571) * 10), 12 + Math.floor(hash(i, 2, 572) * 7), MOSS[2]);
     return { p: ink(p), ax: 8, ay: 21 };
   });
 });
@@ -2688,7 +2993,16 @@ registerPropPainter('f11_crystal', (o, time) => {
       [5, 16, 3, 11],
     ];
     for (const [bx, by, tx, ty] of shards) {
-      polyShade(p, [[bx - 2, by], [bx + 2, by], [tx + 1, ty], [tx - 1, ty]], CRYSTAL);
+      polyShade(
+        p,
+        [
+          [bx - 2, by],
+          [bx + 2, by],
+          [tx + 1, ty],
+          [tx - 1, ty],
+        ],
+        CRYSTAL,
+      );
     }
     const glow = [hx('#bff8ee'), hx('#8af0e0'), hx('#ffffff'), hx('#8af0e0')][f];
     p.set(7, 5, glow);
@@ -2737,7 +3051,8 @@ registerPropPainter('f11_cloud', (o, time) => {
       shadeEll(p, cx, cy, r, r * 0.8, pal.cloud, 0.25);
     }
     // Плоское дно облака.
-    for (let x = 0; x < W; x++) for (let y = H - 5; y < H; y++) if (p.solid(x, y)) p.set(x, y, alpha(pal.cloud[0], 0.9));
+    for (let x = 0; x < W; x++)
+      for (let y = H - 5; y < H; y++) if (p.solid(x, y)) p.set(x, y, alpha(pal.cloud[0], 0.9));
     return { p, ax: W / 2, ay: H - 2 };
   });
   // Облако плывёт туда-сюда вдоль своей клетки.
@@ -2757,11 +3072,25 @@ registerPropPainter('f11_floatrock', (o, time) => {
       const w = 8 * (1 - k * k) + 1;
       for (let x = -Math.round(w); x <= Math.round(w); x++) {
         const l = -x / w;
-        p.set(10 + x, y, k < 0.35 ? tone(pal.earth, l * 0.5 + 0.4) : tone(pal.rock, l * 0.6 + 0.2 - k * 0.3));
+        p.set(
+          10 + x,
+          y,
+          k < 0.35 ? tone(pal.earth, l * 0.5 + 0.4) : tone(pal.rock, l * 0.6 + 0.2 - k * 0.3),
+        );
       }
     }
     shadeEll(p, 10, 6, 8.5, 3, area === F11_CASTLE ? MARBLE : GRASS);
-    if (v) polyShade(p, [[9, 24], [12, 24], [11, 20], [9, 20]], CRYSTAL);
+    if (v)
+      polyShade(
+        p,
+        [
+          [9, 24],
+          [12, 24],
+          [11, 20],
+          [9, 20],
+        ],
+        CRYSTAL,
+      );
     else for (let i = 0; i < 3; i++) p.set(6 + i * 3, 23 - i, hx('#3a2a20'));
     if (area !== F11_CASTLE) {
       p.set(7, 3, GRASS[3]);
@@ -2829,7 +3158,17 @@ registerPropPainter('f11_sconce', (o, time) => {
   return sprite(`sconce|${f}`, () => {
     const p = new Px(10, 12);
     p.rect(3, 8, 6, 9, GOLD[1]);
-    polyShade(p, [[2, 8], [7, 8], [6, 2], [3, 2]], CRYSTAL, f * 0.15);
+    polyShade(
+      p,
+      [
+        [2, 8],
+        [7, 8],
+        [6, 2],
+        [3, 2],
+      ],
+      CRYSTAL,
+      f * 0.15,
+    );
     p.set(4, 3 + f, WHITE);
     return { p: ink(p, hx('#1a3a44')), ax: 5, ay: 13 };
   });
@@ -2876,7 +3215,7 @@ registerPropPainter('f11_vane', (_o, time) => {
         const row = Math.floor(yy / 5);
         const off = row % 2 ? 4 : 0;
         const joint = (((x + off) % 8) + 8) % 8 === 0 && Math.abs(u) < 0.8;
-        if ((((yy % 5) + 5) % 5 === 0) || joint) c = mixc(c, RUIN[0], 0.45);
+        if (((yy % 5) + 5) % 5 === 0 || joint) c = mixc(c, RUIN[0], 0.45);
         p.set(x, y, c);
       }
     shadeEll(p, cx, 34, 13, 3.5, RUIN, 0.2);
@@ -2900,7 +3239,8 @@ registerPropPainter('f11_vane', (_o, time) => {
       ],
       roof,
     );
-    for (let k = 0; k < 5; k++) stroke(p, cx, 13, cx - 13 + k * 6.5, 35, mixc(roof[0], roof[1], 0.5));
+    for (let k = 0; k < 5; k++)
+      stroke(p, cx, 13, cx - 13 + k * 6.5, 35, mixc(roof[0], roof[1], 0.5));
     for (let x = cx - 15; x <= cx + 15; x++) if (p.solid(x, 35)) p.set(x, 35, GOLD[1]);
     // Мачта и флюгер-стрела по ветру (в перспективе: вбок — длинно, вглубь — коротко).
     p.rect(cx, 4, cx, 12, IRON[2]);
@@ -2939,7 +3279,11 @@ registerPropPainter('f11_vane', (_o, time) => {
     if (hot)
       for (let k = 0; k < 10; k++) {
         const aa = (k / 10) * TAU;
-        out.set(Math.round(cx + Math.cos(aa) * 13), Math.round(8 + Math.sin(aa) * 5), alpha(hx('#ffe060'), 0.55));
+        out.set(
+          Math.round(cx + Math.cos(aa) * 13),
+          Math.round(8 + Math.sin(aa) * 5),
+          alpha(hx('#ffe060'), 0.55),
+        );
       }
     return { p: out, ax: cx, ay: H - 2 };
   });
@@ -2951,7 +3295,16 @@ function gliderSprite(): HTMLCanvasElement {
   if (gliderImg) return gliderImg;
   const p = new Px(26, 14);
   const sail = tn('#8a3a2a', '#c05a3a', '#e08a5a', '#f4b888');
-  polyShade(p, [[1, 6], [13, 1], [25, 6], [13, 4]], sail);
+  polyShade(
+    p,
+    [
+      [1, 6],
+      [13, 1],
+      [25, 6],
+      [13, 4],
+    ],
+    sail,
+  );
   for (let x = 2; x < 25; x += 4) stroke(p, 13, 2, x, 6, PLANK[0]);
   // Человечек под крылом.
   limb(p, 13, 6, 13, 10, 1.4, 1.2, tn('#3a2a22', '#5a4030', '#7a5a40', '#9a7a58'));
@@ -2994,7 +3347,13 @@ const GOLDK = hx('#ffd24a');
 const CYAN = hx('#7af6ff');
 const LENS_RIM = hx('#20242c');
 
-function finishMob(key: string, b: Built, look: MobPose['look'], flash: boolean, left: boolean): MobFrame {
+function finishMob(
+  key: string,
+  b: Built,
+  look: MobPose['look'],
+  flash: boolean,
+  left: boolean,
+): MobFrame {
   let p = b.p;
   if (look === 'albino') {
     const pale = hx('#f6f0ea');
@@ -3102,7 +3461,8 @@ function rayPx(fy: number, kind: 'glide' | 'aim' | 'swoop' | 'hurt' | 'dead', f:
     polyShade(p, [...lead, ...trail], body, s < 0 ? 0.12 : -0.04);
     // Светлая кромка — брюхо, видное снизу.
     for (const [x, y] of lead) p.set(Math.floor(x), Math.floor(y), RAY_E[dead ? 3 : 1]);
-    if (fy < -1 && !dead) for (const [x, y] of lead.slice(2)) p.set(Math.floor(x), Math.floor(y) + 1, RAY_E[2]);
+    if (fy < -1 && !dead)
+      for (const [x, y] of lead.slice(2)) p.set(Math.floor(x), Math.floor(y) + 1, RAY_E[2]);
   }
   // Тело — бугор на спине.
   shadeEll(p, cx, cy, 4.6, 5.2, body, 0.15);
@@ -3135,7 +3495,8 @@ function rayPx(fy: number, kind: 'glide' | 'aim' | 'swoop' | 'hurt' | 'dead', f:
 }
 
 registerMobPainter('f11_ray', (m: Mob, pose: MobPose) => {
-  if (pose.mode === 'dying' || pose.anim === 'dead') return mobFrame('ray', pose, 'dead', () => rayPx(2, 'dead', 0));
+  if (pose.mode === 'dying' || pose.anim === 'dead')
+    return mobFrame('ray', pose, 'dead', () => rayPx(2, 'dead', 0));
   if (pose.mode === 'aim') {
     const f = Math.floor(pose.t * 10) % 2;
     return mobFrame('ray', pose, `aim${f}`, () => rayPx(-5 + f, 'aim', 0));
@@ -3145,8 +3506,10 @@ registerMobPainter('f11_ray', (m: Mob, pose: MobPose) => {
     return mobFrame('ray', pose, `swoop${f}`, () => rayPx(0, 'swoop', f * 3));
   }
   if (pose.anim === 'hurt') return mobFrame('ray', pose, 'hurt', () => rayPx(2, 'hurt', 1));
-  const f = (((Math.floor((paintSim()?.time ?? 0) * 9 + m.id * 1.7) % 8) + 8) % 8);
-  return mobFrame('ray', pose, `glide${f}`, () => rayPx(Math.round(Math.sin((f / 8) * TAU) * 4.5), 'glide', f));
+  const f = ((Math.floor((paintSim()?.time ?? 0) * 9 + m.id * 1.7) % 8) + 8) % 8;
+  return mobFrame('ray', pose, `glide${f}`, () =>
+    rayPx(Math.round(Math.sin((f / 8) * TAU) * 4.5), 'glide', f),
+  );
 });
 
 // --- Роботы: садовник и страж ----------------------------------------------------
@@ -3306,13 +3669,23 @@ registerMobPainter('f11_gardener', (m: Mob, pose: MobPose) => {
     headDy: 0,
     eye,
   };
-  if (pose.mode === 'dying' || pose.anim === 'dead') return mobFrame('gard', pose, 'dead', gardenerDead);
+  if (pose.mode === 'dying' || pose.anim === 'dead')
+    return mobFrame('gard', pose, 'dead', gardenerDead);
   const f4 = ((pose.frame % 4) + 4) % 4;
   switch (pose.mode) {
     case 'f11_tend': {
       const f = Math.floor(pose.t * 1.6 + m.id) % 2;
       return mobFrame('gard', pose, `tend${f}`, () =>
-        gardenerPx({ ...base, lean: 1, headDy: 1 + f * 0.5, armF: [18, 13, 22, 20, 23, 26 - f], tool: 'flower' }, 0),
+        gardenerPx(
+          {
+            ...base,
+            lean: 1,
+            headDy: 1 + f * 0.5,
+            armF: [18, 13, 22, 20, 23, 26 - f],
+            tool: 'flower',
+          },
+          0,
+        ),
       );
     }
     case 'f11_rage': {
@@ -3335,21 +3708,38 @@ registerMobPainter('f11_gardener', (m: Mob, pose: MobPose) => {
       const strike = pose.t > GARDENER.snip - 0.18;
       if (!strike)
         return mobFrame('gard', pose, `snipw${tag}`, () =>
-          gardenerPx({ ...base, lean: -1, eyeBright: true, armF: [18, 13, 20, 7, 16, 3], tool: 'shears-open' }, 0),
+          gardenerPx(
+            {
+              ...base,
+              lean: -1,
+              eyeBright: true,
+              armF: [18, 13, 20, 7, 16, 3],
+              tool: 'shears-open',
+            },
+            0,
+          ),
         );
       return mobFrame('gard', pose, `snips${tag}`, () =>
-        gardenerPx({ ...base, lean: 2, legF: 2, legB: -1, armF: [19, 13, 22, 14, 25, 15], tool: 'shears' }, 0),
+        gardenerPx(
+          { ...base, lean: 2, legF: 2, legB: -1, armF: [19, 13, 22, 14, 25, 15], tool: 'shears' },
+          0,
+        ),
       );
     }
     case 'f11_hose': {
       const f = Math.floor(pose.t * 12) % 2;
       return mobFrame('gard', pose, `hose${f}${tag}`, () =>
-        gardenerPx({ ...base, lean: 1, eyeBright: true, armF: [18, 13, 21, 15, 24, 14 + f], tool: 'hose' }, 0),
+        gardenerPx(
+          { ...base, lean: 1, eyeBright: true, armF: [18, 13, 21, 15, 24, 14 + f], tool: 'hose' },
+          0,
+        ),
       );
     }
   }
   if (pose.anim === 'hurt')
-    return mobFrame('gard', pose, `hurt${tag}`, () => gardenerPx({ ...base, lean: -1, headDy: -1, eye: WHITE }, 0));
+    return mobFrame('gard', pose, `hurt${tag}`, () =>
+      gardenerPx({ ...base, lean: -1, headDy: -1, eye: WHITE }, 0),
+    );
   if (pose.anim === 'run') {
     const sw = [-2, 0, 2, 0][f4];
     return mobFrame('gard', pose, `run${f4}${tag}`, () =>
@@ -3368,7 +3758,15 @@ registerMobPainter('f11_gardener', (m: Mob, pose: MobPose) => {
   }
   const b = f4 === 1 || f4 === 2 ? 0.5 : 0;
   return mobFrame('gard', pose, `idle${f4}${tag}`, () =>
-    gardenerPx({ ...base, headDy: b, armB: [8, 13, 6, 19 + b, 5, 24 + b], armF: [18, 13, 20, 19 + b, 20, 24 + b] }, 0),
+    gardenerPx(
+      {
+        ...base,
+        headDy: b,
+        armB: [8, 13, 6, 19 + b, 5, 24 + b],
+        armF: [18, 13, 20, 19 + b, 20, 24 + b],
+      },
+      0,
+    ),
   );
 });
 
@@ -3503,7 +3901,8 @@ registerMobPainter('f11_guard', (_m: Mob, pose: MobPose) => {
     eye: EYE_ANGRY,
     tool: 'blade',
   };
-  if (pose.mode === 'dying' || pose.anim === 'dead') return mobFrame('guard', pose, 'dead', guardDead);
+  if (pose.mode === 'dying' || pose.anim === 'dead')
+    return mobFrame('guard', pose, 'dead', guardDead);
   const f4 = ((pose.frame % 4) + 4) % 4;
   switch (pose.mode) {
     case 'f11_dormant':
@@ -3523,7 +3922,9 @@ registerMobPainter('f11_guard', (_m: Mob, pose: MobPose) => {
       );
     case 'f11_post': {
       const f = Math.floor(pose.t * 1.2) % 2;
-      return mobFrame('guard', pose, `post${f}`, () => guardPx({ ...base, eye: f ? hx('#ffb040') : hx('#c87a30') }, 0));
+      return mobFrame('guard', pose, `post${f}`, () =>
+        guardPx({ ...base, eye: f ? hx('#ffb040') : hx('#c87a30') }, 0),
+      );
     }
     case 'f11_rise': {
       const f = pose.t < 0.4 ? 0 : 1;
@@ -3546,7 +3947,10 @@ registerMobPainter('f11_guard', (_m: Mob, pose: MobPose) => {
       const k = Math.min(1, pose.t / (GUARD.track + GUARD.lock));
       const f = 1 + Math.min(3, Math.floor(k * 4));
       return mobFrame('guard', pose, `aim${f}`, () =>
-        guardPx({ ...base, lean: 1, headDy: 0.5, eyeBright: true, armF: [21, 14, 24, 18, 24, 23] }, f),
+        guardPx(
+          { ...base, lean: 1, headDy: 0.5, eyeBright: true, armF: [21, 14, 24, 18, 24, 23] },
+          f,
+        ),
       );
     }
     case 'f11_vent': {
@@ -3574,12 +3978,17 @@ registerMobPainter('f11_guard', (_m: Mob, pose: MobPose) => {
           guardPx({ ...base, lean: -1, eyeBright: true, armF: [21, 14, 22, 7, 17, 3] }, 0),
         );
       return mobFrame('guard', pose, 'bashs', () =>
-        guardPx({ ...base, lean: 2, legF: 3, legB: -2, eyeBright: true, armF: [21, 14, 25, 17, 27, 23] }, 0),
+        guardPx(
+          { ...base, lean: 2, legF: 3, legB: -2, eyeBright: true, armF: [21, 14, 25, 17, 27, 23] },
+          0,
+        ),
       );
     }
   }
   if (pose.anim === 'hurt')
-    return mobFrame('guard', pose, 'hurt', () => guardPx({ ...base, lean: -1, headDy: -1, eye: WHITE }, 0));
+    return mobFrame('guard', pose, 'hurt', () =>
+      guardPx({ ...base, lean: -1, headDy: -1, eye: WHITE }, 0),
+    );
   if (pose.anim === 'run') {
     const sw = [-2, 0, 2, 0][f4];
     return mobFrame('guard', pose, `run${f4}`, () =>
@@ -3596,7 +4005,9 @@ registerMobPainter('f11_guard', (_m: Mob, pose: MobPose) => {
       ),
     );
   }
-  return mobFrame('guard', pose, `idle${f4 >> 1}`, () => guardPx({ ...base, headDy: f4 >> 1 ? 0.5 : 0 }, 0));
+  return mobFrame('guard', pose, `idle${f4 >> 1}`, () =>
+    guardPx({ ...base, headDy: f4 >> 1 ? 0.5 : 0 }, 0),
+  );
 });
 
 /** Наложить готовый (уже обведённый) рисунок поверх. */
@@ -3617,7 +4028,16 @@ const HAIR = tn('#1a3c40', '#28585c', '#3a787a', '#5a9c98');
 const TALON = tn('#6a5a20', '#a88c30', '#d8b848', '#f4dc80');
 
 /** Крыло: кость от плеча, веер маховых от запястья, кроющие по кости. */
-function wing(p: Px, sx: number, sy: number, s: number, a: number, len: number, spread: number, bias: number): void {
+function wing(
+  p: Px,
+  sx: number,
+  sy: number,
+  s: number,
+  a: number,
+  len: number,
+  spread: number,
+  bias: number,
+): void {
   const wx = sx + s * Math.cos(a) * len * 0.5;
   const wy = sy - Math.sin(a) * len * 0.5;
   // Маховые — веером, длиннее к краю.
@@ -3662,7 +4082,8 @@ function harpyPx(q: HarpyPose): Built {
   // Дальнее крыло.
   if (!q.perch) wing(p, cx - 2, cy - 2, -1, q.a, q.len, q.spread, -0.2);
   // Хвост.
-  for (let i = 0; i < 3; i++) limb(p, cx - 1, cy + 5, cx - 5 + i * 2, cy + 11 - Math.abs(i - 1), 1.3, 0.6, FEATH, -0.1);
+  for (let i = 0; i < 3; i++)
+    limb(p, cx - 1, cy + 5, cx - 5 + i * 2, cy + 11 - Math.abs(i - 1), 1.3, 0.6, FEATH, -0.1);
   // Ноги.
   const lx = q.claw ? cx + 5 : cx + 1;
   const ly = q.claw ? cy + 7 : cy + 11;
@@ -3728,14 +4149,17 @@ function harpyPx(q: HarpyPose): Built {
   } else wing(p, cx + 3, cy - 2, 1, q.a, q.len, q.spread, 0.05);
   const out = ink(p);
   if (q.speed)
-    for (let i = 0; i < 4; i++) for (let x = 0; x < 6; x++) out.set(x + i, 6 + i * 4, alpha(WHITE, 0.2 + x * 0.06));
+    for (let i = 0; i < 4; i++)
+      for (let x = 0; x < 6; x++) out.set(x + i, 6 + i * 4, alpha(WHITE, 0.2 + x * 0.06));
   return { p: out, ax: 17, ay: H - 2, eye: [hx0 + 2, hy0] };
 }
 
 registerMobPainter('f11_harpy', (m: Mob, pose: MobPose) => {
   const base: HarpyPose = { a: 0.4, len: 12, spread: 0.2, claw: 0, tilt: 0, eye: hx('#f6c83a') };
   if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('harpy', pose, 'dead', () => harpyPx({ ...base, a: -1, len: 10, spread: 0.1, hurt: true, eye: INK }));
+    return mobFrame('harpy', pose, 'dead', () =>
+      harpyPx({ ...base, a: -1, len: 10, spread: 0.1, hurt: true, eye: INK }),
+    );
   switch (pose.mode) {
     case 'f11_perch':
       return mobFrame('harpy', pose, `perch${Math.floor(pose.t * 0.8 + m.id) % 2}`, () =>
@@ -3748,16 +4172,32 @@ registerMobPainter('f11_harpy', (m: Mob, pose: MobPose) => {
       );
     }
     case 'f11_claw':
-      return mobFrame('harpy', pose, 'claw', () => harpyPx({ ...base, a: 1.25, len: 13, claw: 1, tilt: -1, eye: hx('#ff6a3a') }));
+      return mobFrame('harpy', pose, 'claw', () =>
+        harpyPx({ ...base, a: 1.25, len: 13, claw: 1, tilt: -1, eye: hx('#ff6a3a') }),
+      );
     case 'f11_lunge':
       return mobFrame('harpy', pose, 'lunge', () =>
-        harpyPx({ ...base, a: 1.45, len: 11, spread: 0.12, claw: 1, tilt: 1, eye: hx('#ff6a3a'), speed: true }),
+        harpyPx({
+          ...base,
+          a: 1.45,
+          len: 11,
+          spread: 0.12,
+          claw: 1,
+          tilt: 1,
+          eye: hx('#ff6a3a'),
+          speed: true,
+        }),
       );
   }
-  if (pose.anim === 'hurt') return mobFrame('harpy', pose, 'hurt', () => harpyPx({ ...base, a: -0.3, hurt: true, eye: WHITE }));
-  const f = (((Math.floor((paintSim()?.time ?? 0) * 8 + m.id * 1.3) % 4) + 4) % 4);
+  if (pose.anim === 'hurt')
+    return mobFrame('harpy', pose, 'hurt', () =>
+      harpyPx({ ...base, a: -0.3, hurt: true, eye: WHITE }),
+    );
+  const f = ((Math.floor((paintSim()?.time ?? 0) * 8 + m.id * 1.3) % 4) + 4) % 4;
   const A = [1.05, 0.45, -0.35, 0.3][f];
-  return mobFrame('harpy', pose, `fly${f}`, () => harpyPx({ ...base, a: A, len: 12 + (f === 2 ? 1 : 0) }));
+  return mobFrame('harpy', pose, `fly${f}`, () =>
+    harpyPx({ ...base, a: A, len: 12 + (f === 2 ? 1 : 0) }),
+  );
 });
 
 // --- Облачная медуза -------------------------------------------------------------
@@ -3827,15 +4267,18 @@ function jellyPx(f: number, zap: number, dim: boolean): Built {
 }
 
 registerMobPainter('f11_jelly', (m: Mob, pose: MobPose) => {
-  if (pose.mode === 'dying' || pose.anim === 'dead') return mobFrame('jelly', pose, 'dead', () => jellyPx(1, 0, true));
+  if (pose.mode === 'dying' || pose.anim === 'dead')
+    return mobFrame('jelly', pose, 'dead', () => jellyPx(1, 0, true));
   if (pose.mode === 'f11_zap') {
     const on = pose.t > JELLY.zap - 0.25;
     const f = Math.floor(pose.t * (on ? 20 : 10)) % 2;
-    return mobFrame('jelly', pose, `zap${on ? 1 : 0}${f}`, () => jellyPx(f + (on ? 2 : 0), on ? 1 : f, false));
+    return mobFrame('jelly', pose, `zap${on ? 1 : 0}${f}`, () =>
+      jellyPx(f + (on ? 2 : 0), on ? 1 : f, false),
+    );
   }
   if (pose.mode === 'recover') return mobFrame('jelly', pose, 'rest', () => jellyPx(1, 0, true));
   if (pose.anim === 'hurt') return mobFrame('jelly', pose, 'hurt', () => jellyPx(0, 0, true));
-  const f = (((Math.floor((paintSim()?.time ?? 0) * 4 + m.id) % 6) + 6) % 6);
+  const f = ((Math.floor((paintSim()?.time ?? 0) * 4 + m.id) % 6) + 6) % 6;
   return mobFrame('jelly', pose, `idle${f}`, () => jellyPx(f, 0, false));
 });
 
@@ -3974,7 +4417,15 @@ registerMobPainter('f11_boarder', (m: Mob, pose: MobPose) => {
   if (pose.mode === 'f11_land') return mobFrame('board', pose, 'land', () => BLANK);
   if (pose.mode === 'dying' || pose.anim === 'dead')
     return mobFrame('board', pose, 'dead', () =>
-      boarderPx({ ...base, lean: -2, legF: 4, legB: 3, armF: [16, 12, 20, 14, 23, 13], hook: null, scarf: 2 }),
+      boarderPx({
+        ...base,
+        lean: -2,
+        legF: 4,
+        legB: 3,
+        armF: [16, 12, 20, 14, 23, 13],
+        hook: null,
+        scarf: 2,
+      }),
     );
   const f4 = ((pose.frame % 4) + 4) % 4;
   switch (pose.mode) {
@@ -3994,7 +4445,15 @@ registerMobPainter('f11_boarder', (m: Mob, pose: MobPose) => {
     }
     case 'f11_throw':
       return mobFrame('board', pose, 'throw', () =>
-        boarderPx({ ...base, lean: 2, legF: 2, legB: -2, armF: [16, 12, 20, 12, 24, 11], hook: null, scarf: 1 }),
+        boarderPx({
+          ...base,
+          lean: 2,
+          legF: 2,
+          legB: -2,
+          armF: [16, 12, 20, 12, 24, 11],
+          hook: null,
+          scarf: 1,
+        }),
       );
     case 'f11_reel': {
       const f = Math.floor(pose.t * 10) % 2;
@@ -4016,12 +4475,29 @@ registerMobPainter('f11_boarder', (m: Mob, pose: MobPose) => {
       const strike = pose.t > 0.35;
       return mobFrame('board', pose, strike ? 'slashs' : 'slashw', () =>
         strike
-          ? boarderPx({ ...base, lean: 2, legF: 3, legB: -2, armF: [16, 12, 20, 14, 22, 15], hook: null, blade: 'down', scarf: 1 })
-          : boarderPx({ ...base, lean: -1, armF: [16, 12, 17, 7, 15, 4], hook: null, blade: 'up', scarf: 0 }),
+          ? boarderPx({
+              ...base,
+              lean: 2,
+              legF: 3,
+              legB: -2,
+              armF: [16, 12, 20, 14, 22, 15],
+              hook: null,
+              blade: 'down',
+              scarf: 1,
+            })
+          : boarderPx({
+              ...base,
+              lean: -1,
+              armF: [16, 12, 17, 7, 15, 4],
+              hook: null,
+              blade: 'up',
+              scarf: 0,
+            }),
       );
     }
   }
-  if (pose.anim === 'hurt') return mobFrame('board', pose, 'hurt', () => boarderPx({ ...base, lean: -2, scarf: 3 }));
+  if (pose.anim === 'hurt')
+    return mobFrame('board', pose, 'hurt', () => boarderPx({ ...base, lean: -2, scarf: 3 }));
   if (pose.anim === 'run') {
     const sw = [-2, 0, 2, 0][f4];
     return mobFrame('board', pose, `run${f4}`, () =>
@@ -4038,7 +4514,7 @@ registerMobPainter('f11_boarder', (m: Mob, pose: MobPose) => {
     );
   }
   const t = paintSim()?.time ?? 0;
-  const f = (((Math.floor(t * 3 + m.id) % 4) + 4) % 4);
+  const f = ((Math.floor(t * 3 + m.id) % 4) + 4) % 4;
   return mobFrame('board', pose, `idle${f}`, () => boarderPx({ ...base, scarf: f }));
 });
 
@@ -4125,34 +4601,48 @@ function springPx(
 }
 
 registerMobPainter('f11_moss', (m: Mob, pose: MobPose) => {
-  if (pose.mode === 'dying' || pose.anim === 'dead') return mobFrame('moss', pose, 'dead', () => springPx(1, 0, 1.5, 'closed', 1));
+  if (pose.mode === 'dying' || pose.anim === 'dead')
+    return mobFrame('moss', pose, 'dead', () => springPx(1, 0, 1.5, 'closed', 1));
   switch (pose.mode) {
     case 'f11_hide':
-      return mobFrame('moss', pose, `hide${Math.floor(pose.t * 0.7 + m.id) % 3 === 0 ? 1 : 0}`, () =>
-        springPx(0, 0, 0, Math.floor(pose.t * 0.7 + m.id) % 3 === 0 ? 'closed' : 'peek', 0, true),
+      return mobFrame(
+        'moss',
+        pose,
+        `hide${Math.floor(pose.t * 0.7 + m.id) % 3 === 0 ? 1 : 0}`,
+        () =>
+          springPx(0, 0, 0, Math.floor(pose.t * 0.7 + m.id) % 3 === 0 ? 'closed' : 'peek', 0, true),
       );
     case 'f11_pop': {
       const f = Math.min(3, Math.floor(pose.t * 10));
-      return mobFrame('moss', pose, `pop${f}`, () => springPx([1, 6, 5, 3][f], [0, 3, 1, 0][f], [1, -1, -0.5, 0][f], 'angry'));
+      return mobFrame('moss', pose, `pop${f}`, () =>
+        springPx([1, 6, 5, 3][f], [0, 3, 1, 0][f], [1, -1, -0.5, 0][f], 'angry'),
+      );
     }
     case 'f11_crouch': {
       const f = pose.t < MOSS_AI.crouch * 0.5 ? 0 : 1;
-      return mobFrame('moss', pose, `crouch${f}`, () => springPx(f ? 0.8 : 1.6, 0, f ? 1.6 : 1, 'angry'));
+      return mobFrame('moss', pose, `crouch${f}`, () =>
+        springPx(f ? 0.8 : 1.6, 0, f ? 1.6 : 1, 'angry'),
+      );
     }
     case 'f11_jump': {
       const k = Math.min(1, pose.t / MOSS_AI.air);
       const f = Math.min(5, Math.floor(k * 6));
       const h = Math.round(Math.sin(((f + 0.5) / 6) * PI) * 9);
-      return mobFrame('moss', pose, `jump${f}`, () => springPx(f < 3 ? 6 : 4, h, f < 2 ? -1 : 0, 'angry'));
+      return mobFrame('moss', pose, `jump${f}`, () =>
+        springPx(f < 3 ? 6 : 4, h, f < 2 ? -1 : 0, 'angry'),
+      );
     }
     case 'f11_tired': {
       const f = Math.floor(pose.t * 2) % 2;
       return mobFrame('moss', pose, `tired${f}`, () => springPx(2, 0, 1 + f * 0.3, 'closed', 1));
     }
   }
-  if (pose.anim === 'hurt') return mobFrame('moss', pose, 'hurt', () => springPx(2, 0, 1.2, 'closed'));
+  if (pose.anim === 'hurt')
+    return mobFrame('moss', pose, 'hurt', () => springPx(2, 0, 1.2, 'closed'));
   const f4 = ((pose.frame % 4) + 4) % 4;
-  return mobFrame('moss', pose, `idle${f4}`, () => springPx([3, 4, 3, 2][f4], 0, [0, -0.5, 0, 0.6][f4], 'open'));
+  return mobFrame('moss', pose, `idle${f4}`, () =>
+    springPx([3, 4, 3, 2][f4], 0, [0, -0.5, 0, 0.6][f4], 'open'),
+  );
 });
 
 // --- Ветряной дух ----------------------------------------------------------------
@@ -4171,7 +4661,11 @@ function spiritPx(f: number, cast: boolean, dim: boolean): Built {
     const sway = Math.sin(k * 5 + f * 0.9) * 2 * k;
     for (let x = Math.floor(cx - w + sway); x <= cx + w + sway; x++) {
       const e = Math.abs(x - cx - sway) / w;
-      p.set(x, y, alpha(e > 0.75 ? hx('#3a8aa8') : hx('#9ad8ec'), (e > 0.75 ? 0.55 : 0.28) * (dim ? 0.6 : 1)));
+      p.set(
+        x,
+        y,
+        alpha(e > 0.75 ? hx('#3a8aa8') : hx('#9ad8ec'), (e > 0.75 ? 0.55 : 0.28) * (dim ? 0.6 : 1)),
+      );
     }
   }
   // Вихрь: три ленты кругами вверх, в два пикселя у основания.
@@ -4212,12 +4706,13 @@ function spiritPx(f: number, cast: boolean, dim: boolean): Built {
 
 registerMobPainter('f11_spirit', (m: Mob, pose: MobPose) => {
   const t = paintSim()?.time ?? 0;
-  if (pose.mode === 'dying' || pose.anim === 'dead') return mobFrame('spirit', pose, 'dead', () => spiritPx(0, false, true));
+  if (pose.mode === 'dying' || pose.anim === 'dead')
+    return mobFrame('spirit', pose, 'dead', () => spiritPx(0, false, true));
   if (pose.mode === 'cast') {
     const f = (Math.floor(pose.t * (pose.t > SPIRIT.cast - 0.3 ? 18 : 10)) % 6) + 6;
     return mobFrame('spirit', pose, `cast${f % 6}`, () => spiritPx(f % 6, true, false));
   }
-  const f = (((Math.floor(t * 7 + m.id) % 6) + 6) % 6);
+  const f = ((Math.floor(t * 7 + m.id) % 6) + 6) % 6;
   const dim = pose.mode === 'recover' || pose.anim === 'hurt';
   return mobFrame('spirit', pose, `idle${f}${dim ? 'd' : ''}`, () => spiritPx(f, false, dim));
 });
@@ -4266,8 +4761,9 @@ function dronePx(f: number, lensC: RGBA, fire: boolean): Built {
 
 registerMobPainter('f11_drone', (m: Mob, pose: MobPose) => {
   const t = paintSim()?.time ?? 0;
-  const f = (((Math.floor(t * 24 + m.id) % 6) + 6) % 6);
-  if (pose.mode === 'dying' || pose.anim === 'dead') return mobFrame('drone', pose, 'dead', () => dronePx(0, EYE_OFF, false));
+  const f = ((Math.floor(t * 24 + m.id) % 6) + 6) % 6;
+  if (pose.mode === 'dying' || pose.anim === 'dead')
+    return mobFrame('drone', pose, 'dead', () => dronePx(0, EYE_OFF, false));
   if (pose.mode === 'aim') {
     const b = Math.floor(pose.t * 12) % 2;
     return mobFrame('drone', pose, `aim${f}${b}`, () => dronePx(f, b ? WHITE : EYE_ANGRY, false));
@@ -4297,7 +4793,8 @@ function beetlePx(f: number, fly: boolean): Built {
   }
   // Крылья — при побеге.
   if (fly)
-    for (const s of [-1, 1]) p.ell(cx + s * 5, cy - 4 - (f % 2), 4, 2.4, alpha(hx('#e8f4ff'), 0.55));
+    for (const s of [-1, 1])
+      p.ell(cx + s * 5, cy - 4 - (f % 2), 4, 2.4, alpha(hx('#e8f4ff'), 0.55));
   // Панцирь-копилка.
   shadeEll(p, cx, cy, 6.2, 4.6, GOLD, 0.05);
   stroke(p, cx - 3, cy - 2, cx + 2, cy - 2, GOLD[0]);
@@ -4319,8 +4816,9 @@ function beetlePx(f: number, fly: boolean): Built {
 registerMobPainter('f11_beetle', (m: Mob, pose: MobPose) => {
   const t = paintSim()?.time ?? 0;
   const run = pose.mode === 'flee' || pose.anim === 'run';
-  const f = (((Math.floor(t * (run ? 16 : 4) + m.id) % 4) + 4) % 4);
-  if (pose.mode === 'dying' || pose.anim === 'dead') return mobFrame('beetle', pose, 'dead', () => beetlePx(0, false));
+  const f = ((Math.floor(t * (run ? 16 : 4) + m.id) % 4) + 4) % 4;
+  if (pose.mode === 'dying' || pose.anim === 'dead')
+    return mobFrame('beetle', pose, 'dead', () => beetlePx(0, false));
   if (pose.mode === 'escape') return mobFrame('beetle', pose, `fly${f}`, () => beetlePx(f, true));
   return mobFrame('beetle', pose, `walk${f}`, () => beetlePx(f, false));
 });
@@ -4365,8 +4863,16 @@ const vnorm = (a: V3): V3 => {
   const l = vlen(a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 };
-const vcross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const vlerp = (a: V3, b: V3, k: number): V3 => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+const vcross = (a: V3, b: V3): V3 => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
+const vlerp = (a: V3, b: V3, k: number): V3 => [
+  a[0] + (b[0] - a[0]) * k,
+  a[1] + (b[1] - a[1]) * k,
+  a[2] + (b[2] - a[2]) * k,
+];
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const clampR = (x: number, a: number, b: number) => (x < a ? a : x > b ? b : x);
 
@@ -4455,7 +4961,12 @@ const G_TUBE = 8;
 const G_LID = 9;
 
 /** Буферы кадра — одни на все кадры: кадр копируется в свой холст сразу. */
-const G_POOL = { p: new Px(GW, GH), lit: new Px(GW, GH), z: new Float32Array(GW * GH), id: new Uint8Array(GW * GH) };
+const G_POOL = {
+  p: new Px(GW, GH),
+  lit: new Px(GW, GH),
+  z: new Float32Array(GW * GH),
+  id: new Uint8Array(GW * GH),
+};
 function gbuf(yaw: number): GBuf {
   G_POOL.z.fill(-1e9);
   G_POOL.id.fill(0);
@@ -4464,7 +4975,15 @@ function gbuf(yaw: number): GBuf {
   return { ...G_POOL, cam: gcam(yaw), x0: GW, y0: GH, x1: -1, y1: -1 };
 }
 
-function gput(b: GBuf, x: number, y: number, d: number, c: RGBA, id: number, lc: RGBA | null): void {
+function gput(
+  b: GBuf,
+  x: number,
+  y: number,
+  d: number,
+  c: RGBA,
+  id: number,
+  lc: RGBA | null,
+): void {
   if (x < 0 || y < 0 || x >= GW || y >= GH) return;
   const i = y * GW + x;
   if (d <= b.z[i]) return;
@@ -4490,10 +5009,24 @@ function gput(b: GBuf, x: number, y: number, d: number, c: RGBA, id: number, lc:
 }
 
 /** Пиксель шара: нормаль экрана (ny — вниз) → цвет и свечение; null — дыра. */
-type GShade = (nx: number, ny: number, nz: number, x: number, y: number) => [RGBA, RGBA | null] | null;
+type GShade = (
+  nx: number,
+  ny: number,
+  nz: number,
+  x: number,
+  y: number,
+) => [RGBA, RGBA | null] | null;
 
 /** Шар (эллипсоид в экранных радиусах). Всё, что ниже `clip` над полом, срезано. */
-function gBall(b: GBuf, c: V3, rx: number, ry: number, id: number, shade: GShade, clip = -0.6): void {
+function gBall(
+  b: GBuf,
+  c: V3,
+  rx: number,
+  ry: number,
+  id: number,
+  shade: GShade,
+  clip = -0.6,
+): void {
   const [sx, sy, d] = gproj(b.cam, c);
   const x0 = Math.floor(sx - rx - 1);
   const x1 = Math.ceil(sx + rx + 1);
@@ -4522,7 +5055,18 @@ const gStone = (t: Tones, bias = 0, lc: RGBA | null = null): GShade => {
 };
 
 /** Капсула от a до e (радиусы ra → re), со светом по нормали. */
-function gLimb(b: GBuf, a: V3, e: V3, ra: number, re: number, id: number, t: Tones, bias = 0, lc: RGBA | null = null, clip = -0.6): void {
+function gLimb(
+  b: GBuf,
+  a: V3,
+  e: V3,
+  ra: number,
+  re: number,
+  id: number,
+  t: Tones,
+  bias = 0,
+  lc: RGBA | null = null,
+  clip = -0.6,
+): void {
   const [ax, ay, ad] = gproj(b.cam, a);
   const [ex, ey, ed] = gproj(b.cam, e);
   const dx = ex - ax;
@@ -4549,12 +5093,28 @@ function gLimb(b: GBuf, a: V3, e: V3, ra: number, re: number, id: number, t: Ton
       const ny = oy / r;
       const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
       if (a[1] + (e[1] - a[1]) * k - oy * CPH + nz * r * SPH < clip) continue;
-      gput(b, x, y, ad + (ed - ad) * k + nz * r, tone(t, nx * LX + ny * LY + nz * LZ + bias), id, lc);
+      gput(
+        b,
+        x,
+        y,
+        ad + (ed - ad) * k + nz * r,
+        tone(t, nx * LX + ny * LY + nz * LZ + bias),
+        id,
+        lc,
+      );
     }
 }
 
 /** Треугольник в экранных точках с глубиной — крышки люков, осколки. */
-function gTri(b: GBuf, p0: [number, number, number], p1: [number, number, number], p2: [number, number, number], c: RGBA, id: number, lc: RGBA | null = null): void {
+function gTri(
+  b: GBuf,
+  p0: [number, number, number],
+  p1: [number, number, number],
+  p2: [number, number, number],
+  c: RGBA,
+  id: number,
+  lc: RGBA | null = null,
+): void {
   const x0 = Math.floor(Math.min(p0[0], p1[0], p2[0]));
   const x1 = Math.ceil(Math.max(p0[0], p1[0], p2[0]));
   const y0 = Math.floor(Math.min(p0[1], p1[1], p2[1]));
@@ -4618,7 +5178,8 @@ function gnoise(x: number, y: number, z: number, seed: number): number {
 }
 
 /** Шестигранник «остриём вверх»: расстояние до центра по граням. */
-const hexD = (u: number, v: number) => Math.max(Math.abs(u), Math.abs(0.5 * u + 0.866 * v), Math.abs(-0.5 * u + 0.866 * v));
+const hexD = (u: number, v: number) =>
+  Math.max(Math.abs(u), Math.abs(0.5 * u + 0.866 * v), Math.abs(-0.5 * u + 0.866 * v));
 
 // ---- Риг: каналы, ключи, кривые ----
 //
@@ -4633,12 +5194,53 @@ const hexD = (u: number, v: number) => Math.max(Math.abs(u), Math.abs(0.5 * u + 
 // клонится, trx — ветер в кроне, crk — трещины, stm — пар, dom — купол.
 // q* — трансформ кадра для движка (вес, удар), alp — прозрачность.
 const GCH = [
-  'bx', 'by', 'bz', 'pit', 'rol', 'tw', 'ht', 'hn', 'hf', 'hu',
-  'lx', 'ly', 'lz', 'rx', 'ry', 'rz', 'lfi', 'rfi',
-  'fLx', 'fLy', 'fLz', 'fRx', 'fRy', 'fRz',
-  'iris', 'lsz', 'lon', 'lfl', 'run', 'swp', 'glo', 'cor', 'hat', 'tub',
-  'mos', 'tre', 'trx', 'crk', 'stm', 'dom', 'heat',
-  'qsx', 'qsy', 'qdx', 'qdy', 'qrot', 'alp',
+  'bx',
+  'by',
+  'bz',
+  'pit',
+  'rol',
+  'tw',
+  'ht',
+  'hn',
+  'hf',
+  'hu',
+  'lx',
+  'ly',
+  'lz',
+  'rx',
+  'ry',
+  'rz',
+  'lfi',
+  'rfi',
+  'fLx',
+  'fLy',
+  'fLz',
+  'fRx',
+  'fRy',
+  'fRz',
+  'iris',
+  'lsz',
+  'lon',
+  'lfl',
+  'run',
+  'swp',
+  'glo',
+  'cor',
+  'hat',
+  'tub',
+  'mos',
+  'tre',
+  'trx',
+  'crk',
+  'stm',
+  'dom',
+  'heat',
+  'qsx',
+  'qsy',
+  'qdx',
+  'qdy',
+  'qrot',
+  'alp',
 ] as const;
 type GCh = (typeof GCH)[number];
 type GRig = Record<GCh, number>;
@@ -4688,15 +5290,54 @@ function gTrack(keys: GKey[], t: number, base: GRig, lag?: Partial<Record<GCh, n
 /** Покой фазы: руны, ядро, трещины и пар — по фазе боя. */
 function gBase(ph: number, sh: boolean): GRig {
   return {
-    bx: 0, by: 0, bz: 0, pit: 0.03, rol: 0, tw: 0, ht: 0, hn: 0, hf: 0, hu: 0,
-    lx: -21, ly: -18, lz: 1.5, rx: 21, ry: -18, rz: 1.5, lfi: 0.2, rfi: 0.2,
-    fLx: -7.6, fLy: 0, fLz: 0.8, fRx: 7.6, fRy: 0, fRz: -0.8,
-    iris: 0.7, lsz: 1, lon: 1, lfl: 0,
+    bx: 0,
+    by: 0,
+    bz: 0,
+    pit: 0.03,
+    rol: 0,
+    tw: 0,
+    ht: 0,
+    hn: 0,
+    hf: 0,
+    hu: 0,
+    lx: -21,
+    ly: -18,
+    lz: 1.5,
+    rx: 21,
+    ry: -18,
+    rz: 1.5,
+    lfi: 0.2,
+    rfi: 0.2,
+    fLx: -7.6,
+    fLy: 0,
+    fLz: 0.8,
+    fRx: 7.6,
+    fRy: 0,
+    fRz: -0.8,
+    iris: 0.7,
+    lsz: 1,
+    lon: 1,
+    lfl: 0,
     run: ph === 2 ? 1 : ph === 3 ? 0.85 : ph === 4 ? 0.95 : 0.55,
-    swp: 1, glo: 0, cor: ph >= 3 ? 1 : 0, hat: 0, tub: 0,
+    swp: 1,
+    glo: 0,
+    cor: ph >= 3 ? 1 : 0,
+    hat: 0,
+    tub: 0,
     // После «Падения острова» мох наполовину осыпался, деревце покосилось.
-    mos: ph >= 4 ? 0.82 : 1, tre: ph >= 4 ? 0.12 : 0, trx: 0, crk: ph >= 4 ? 1 : 0, stm: ph >= 3 ? 1 : 0, dom: sh ? 1 : 0,
-    heat: 1, qsx: 1, qsy: 1, qdx: 0, qdy: 0, qrot: 0, alp: 1,
+    mos: ph >= 4 ? 0.82 : 1,
+    tre: ph >= 4 ? 0.12 : 0,
+    trx: 0,
+    crk: ph >= 4 ? 1 : 0,
+    stm: ph >= 3 ? 1 : 0,
+    dom: sh ? 1 : 0,
+    heat: 1,
+    qsx: 1,
+    qsy: 1,
+    qdx: 0,
+    qdy: 0,
+    qrot: 0,
+    alp: 1,
   };
 }
 
@@ -4735,7 +5376,10 @@ function gSkel(r: GRig): GSkel {
   const head = vadd(C, rot([0, 18.4 + r.hu, 2.6 + r.hf]));
   const hrot = (v: V3) => rot(rotYv(rotXv(v, r.hn), r.ht));
   const hinv = (v: V3) => rotXv(rotYv(inv(v), -r.ht), -r.hn);
-  const sh: [V3, V3] = [vadd(C, rot([-SHOULDER[0], SHOULDER[1], SHOULDER[2]])), vadd(C, rot(SHOULDER))];
+  const sh: [V3, V3] = [
+    vadd(C, rot([-SHOULDER[0], SHOULDER[1], SHOULDER[2]])),
+    vadd(C, rot(SHOULDER)),
+  ];
   const tgt = (x: number, y: number, z: number): V3 => vadd(C, rotYv([x, y, z], r.tw));
   const poleL = rotYv([-0.75, -0.1, -0.65], r.tw);
   const poleR = rotYv([0.75, -0.1, -0.65], r.tw);
@@ -4819,19 +5463,20 @@ const CRACKS: V3[][] = (() => {
 })();
 
 /** Отрезки трещин заранее: начало, вектор, длина, путь от начала ломаной. */
-const CRACK_SEG: { a: V3; d: V3; l: number; l2: number; at: number; total: number }[][] = CRACKS.map((line) => {
-  let total = 0;
-  for (let i = 1; i < line.length; i++) total += vlen(vsub(line[i], line[i - 1]));
-  let at = 0;
-  const out: { a: V3; d: V3; l: number; l2: number; at: number; total: number }[] = [];
-  for (let i = 1; i < line.length; i++) {
-    const d = vsub(line[i], line[i - 1]);
-    const l = vlen(d);
-    out.push({ a: line[i - 1], d, l, l2: l * l, at, total });
-    at += l;
-  }
-  return out;
-});
+const CRACK_SEG: { a: V3; d: V3; l: number; l2: number; at: number; total: number }[][] =
+  CRACKS.map((line) => {
+    let total = 0;
+    for (let i = 1; i < line.length; i++) total += vlen(vsub(line[i], line[i - 1]));
+    let at = 0;
+    const out: { a: V3; d: V3; l: number; l2: number; at: number; total: number }[] = [];
+    for (let i = 1; i < line.length; i++) {
+      const d = vsub(line[i], line[i - 1]);
+      const l = vlen(d);
+      out.push({ a: line[i - 1], d, l, l2: l * l, at, total });
+      at += l;
+    }
+    return out;
+  });
 
 /** Расстояние (в пикселях по шару) до видимой части трещин: рост `crk` 0…1. */
 function crackHit(n0: number, n1: number, n2: number, crk: number): number {
@@ -4942,14 +5587,24 @@ function bodyShade(b: GBuf, s: GSkel, lk: GLook, mossMask: Uint8Array): GShade {
         if (rr <= R) {
           // Ядро: раскалённый шар, к середине — белее; стробит с кадром.
           const k = 1 - rr / Math.max(1, R);
-          const hot = clamp01(0.35 + k * 0.6 + glow * 0.5 + ((lk.f % 4) < 2 ? 0.06 : 0));
-          const c0 = hot > 0.92 ? CORE_HOT[3] : hot > 0.7 ? CORE_HOT[2] : hot > 0.45 ? CORE_HOT[1] : CORE_HOT[0];
+          const hot = clamp01(0.35 + k * 0.6 + glow * 0.5 + (lk.f % 4 < 2 ? 0.06 : 0));
+          const c0 =
+            hot > 0.92
+              ? CORE_HOT[3]
+              : hot > 0.7
+                ? CORE_HOT[2]
+                : hot > 0.45
+                  ? CORE_HOT[1]
+                  : CORE_HOT[0];
           // Остывает (смерть): к тёмному железу, свет гаснет.
           const c = heat < 1 ? mixc(IRON[k > 0.6 ? 1 : 0], c0, heat) : c0;
           if (rr < 1.2 && u < 0 && v > 0 && heat > 0.5) return ret(WHITE, alpha(WHITE, heat));
           return ret(c, alpha(c0, (0.75 + 0.25 * hot) * heat));
         }
-        return ret(hd > 4.9 ? IRON[2] : IRON[0], hd > 4.9 ? null : alpha(CORE_HOT[0], 0.25 * r.cor));
+        return ret(
+          hd > 4.9 ? IRON[2] : IRON[0],
+          hd > 4.9 ? null : alpha(CORE_HOT[0], 0.25 * r.cor),
+        );
       }
       // Кольцо рун вокруг ядра и четыре луча от него.
       const psi = Math.atan2(v, u);
@@ -4957,9 +5612,11 @@ function bodyShade(b: GBuf, s: GSkel, lk: GLook, mossMask: Uint8Array): GShade {
       const spoke =
         a > 0.62 &&
         a < 0.8 &&
-        [0.785, 2.356, -0.785, -2.356].some((q) => Math.abs(Math.atan2(Math.sin(psi - q), Math.cos(psi - q))) < 0.11);
+        [0.785, 2.356, -0.785, -2.356].some(
+          (q) => Math.abs(Math.atan2(Math.sin(psi - q), Math.cos(psi - q))) < 0.11,
+        );
       if (ring || spoke) {
-        const seg = (((Math.PI / 2 - psi) / TAU) % 1 + 1) % 1;
+        const seg = ((((Math.PI / 2 - psi) / TAU) % 1) + 1) % 1;
         const on = clamp01((r.swp * 8 - Math.floor(seg * 8)) * 1);
         const fresh = on > 0 && on < 1;
         let br = r.run * (spoke ? 0.85 : 1) * on;
@@ -4970,7 +5627,10 @@ function bodyShade(b: GBuf, s: GSkel, lk: GLook, mossMask: Uint8Array): GShade {
         if (fresh) br = 1.4;
         // Погасшая руна — просто высеченный жёлоб.
         if (br < 0.05) return ret(mixc(tone(ANC, l), ANC_SEAM, 0.45), null);
-        const c = br > 1.15 ? mixc(lk.runeC, WHITE, 0.6) : mixc(ANC[1], lk.runeC, 0.25 + 0.75 * clamp01(br));
+        const c =
+          br > 1.15
+            ? mixc(lk.runeC, WHITE, 0.6)
+            : mixc(ANC[1], lk.runeC, 0.25 + 0.75 * clamp01(br));
         return ret(c, alpha(br > 1.15 ? WHITE : lk.runeC, 0.25 + 0.7 * clamp01(br)));
       }
     }
@@ -4985,7 +5645,9 @@ function bodyShade(b: GBuf, s: GSkel, lk: GLook, mossMask: Uint8Array): GShade {
         const slat = ((Math.floor(v + 10) % 2) + 2) % 2 === 0;
         const hot = (r.cor * 0.5 + glow) * heat;
         if (slat) return ret(IRON[1], null);
-        return hot > 0.1 ? [mixc(IRON[0], CORE_HOT[1], clamp01(hot)), alpha(CORE_HOT[1], clamp01(hot))] : [IRON[0], null];
+        return hot > 0.1
+          ? [mixc(IRON[0], CORE_HOT[1], clamp01(hot)), alpha(CORE_HOT[1], clamp01(hot))]
+          : [IRON[0], null];
       }
     }
     // --- Люки ракет.
@@ -5002,23 +5664,36 @@ function bodyShade(b: GBuf, s: GSkel, lk: GLook, mossMask: Uint8Array): GShade {
       }
       const rim = Math.abs(u) > 2.5 || Math.abs(v) > 1.7;
       if (rim) return ret(ANC_SEAM, null);
-      if (Math.abs(u) < 0.6 && Math.abs(v) < 0.6 && lk.ph % 2 === 0) return ret(hx('#e84a3a'), alpha(hx('#ff5a3a'), 0.8));
+      if (Math.abs(u) < 0.6 && Math.abs(v) < 0.6 && lk.ph % 2 === 0)
+        return ret(hx('#e84a3a'), alpha(hx('#ff5a3a'), 0.8));
       return ret(tone(IRON, l + 0.25), null);
     }
     // --- Трещины.
     if (r.crk > 0.01) {
       const d = crackHit(n[0], n[1], n[2], r.crk);
       if (d < 0.62) return ret(hx('#1c1210'), heat > 0.05 ? alpha(CORE_HOT[1], 0.85 * heat) : null);
-      if (d < 1.2) return ret(mixc(tone(ANC, l), CORE_HOT[0], 0.35 * heat), heat > 0.05 ? alpha(CORE_HOT[0], 0.35 * heat) : null);
+      if (d < 1.2)
+        return ret(
+          mixc(tone(ANC, l), CORE_HOT[0], 0.35 * heat),
+          heat > 0.05 ? alpha(CORE_HOT[0], 0.35 * heat) : null,
+        );
     }
     // --- Сад: мох на макушке и цветы.
     if (n[1] > 0.38) {
       // Сад — на плечах и на спине, а не на «лице»: спереди порог выше; пятнами.
-      let th = 0.7 + 0.3 * (gnoise(n[0] * 4 + 3, n[1] * 4, n[2] * 4, 811) - 0.5) + 0.14 * Math.max(0, n[2]);
+      let th =
+        0.7 +
+        0.3 * (gnoise(n[0] * 4 + 3, n[1] * 4, n[2] * 4, 811) - 0.5) +
+        0.14 * Math.max(0, n[2]);
       if (r.mos > 1) th -= (r.mos - 1) * 0.9;
       let moss = n[1] > th;
       // Осыпается клочьями: крупные клетки по поверхности.
-      if (moss && r.mos < 1 && hash(Math.floor(n[0] * 3.5 + 9), Math.floor(n[2] * 3.5 + 9), 815) > r.mos) moss = false;
+      if (
+        moss &&
+        r.mos < 1 &&
+        hash(Math.floor(n[0] * 3.5 + 9), Math.floor(n[2] * 3.5 + 9), 815) > r.mos
+      )
+        moss = false;
       for (const [fd, k] of FLOWERS)
         if (vdot(n, fd) > 0.9965 && (r.mos >= 1 || hash(k, 7, 816) < r.mos)) {
           mossMask[y * GW + x] = 2;
@@ -5034,11 +5709,15 @@ function bodyShade(b: GBuf, s: GSkel, lk: GLook, mossMask: Uint8Array): GShade {
     if (n[1] > -0.31 && n[1] < -0.22) return ret(ANC_SEAM, null);
     if (n[1] > -0.4 && n[1] < -0.32) {
       const lon = Math.atan2(n[0], n[2]);
-      const q = ((lon / (TAU / 18)) % 1 + 1) % 1;
+      const q = (((lon / (TAU / 18)) % 1) + 1) % 1;
       if (q < 0.16) return ret(l > 0 ? ANC[3] : ANC[2], null);
     }
     let c = tone(ANC, l);
-    const sp = hash(Math.floor(n[0] * 13 + 40), Math.floor(n[1] * 13 + 40), Math.floor(n[2] * 13 + 40) + 801);
+    const sp = hash(
+      Math.floor(n[0] * 13 + 40),
+      Math.floor(n[1] * 13 + 40),
+      Math.floor(n[2] * 13 + 40) + 801,
+    );
     if (sp < 0.09) c = ANC[0];
     else if (sp < 0.16) c = ANC[1];
     // Свет ядра на камне вокруг (третья фаза, вращение).
@@ -5092,7 +5771,13 @@ function headShade(b: GBuf, s: GSkel, lk: GLook, mossMask: Uint8Array): GShade {
     const nn = n;
     if (nn[1] > -0.56 && nn[1] < -0.42) return ret(ANC_SEAM, null);
     // На голове — шапочка мха на темени, лоб над линзой чистый.
-    if (nn[1] > 0.7 + 0.3 * (gnoise(nn[0] * 4 + 5, 0, nn[2] * 4, 821) - 0.5) + 0.15 * Math.max(0, nn[2]) - (r.mos > 1 ? (r.mos - 1) * 0.8 : 0)) {
+    if (
+      nn[1] >
+      0.7 +
+        0.3 * (gnoise(nn[0] * 4 + 5, 0, nn[2] * 4, 821) - 0.5) +
+        0.15 * Math.max(0, nn[2]) -
+        (r.mos > 1 ? (r.mos - 1) * 0.8 : 0)
+    ) {
       if (r.mos >= 1 || hash(Math.floor(nn[0] * 3 + 9), Math.floor(nn[2] * 3 + 9), 822) < r.mos) {
         mossMask[y * GW + x] = 1;
         return ret(tone(MOSS, l + 0.1), null);
@@ -5276,7 +5961,10 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
     // Заряд (`armCharge`) гонит свет от плеча к кулаку, кулак разгорается.
     const ch = fx.armCharge ?? 0;
     for (let k = 0; k < 7; k++) {
-      const pt = k < 4 ? vlerp(s.sh[i], s.el[i], 0.2 + k * 0.2) : vlerp(s.el[i], s.hand[i], 0.25 + (k - 4) * 0.25);
+      const pt =
+        k < 4
+          ? vlerp(s.sh[i], s.el[i], 0.2 + k * 0.2)
+          : vlerp(s.el[i], s.hand[i], 0.25 + (k - 4) * 0.25);
       const [px, py] = gproj(b.cam, pt);
       const X = Math.floor(px);
       const Y = Math.floor(py);
@@ -5288,13 +5976,15 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
       if (ch > 0 && front > 0) br = Math.max(br, front < 1 ? 1.4 : 1);
       if (br < 0.08) continue;
       const o = j * 4;
-      const c = br > 1.2 ? mixc(lk.runeC, WHITE, 0.6) : mixc(ANC[1], lk.runeC, 0.3 + 0.7 * clamp01(br));
+      const c =
+        br > 1.2 ? mixc(lk.runeC, WHITE, 0.6) : mixc(ANC[1], lk.runeC, 0.3 + 0.7 * clamp01(br));
       b.p.data[o] = c[0];
       b.p.data[o + 1] = c[1];
       b.p.data[o + 2] = c[2];
       b.lit.set(X, Y, alpha(br > 1.2 ? WHITE : lk.runeC, 0.3 + 0.6 * clamp01(br)));
     }
-    if (ch > 0.85) gdisc(b.lit, hx0, hy0, 3.2 + (ch - 0.85) * 8, lk.runeC, 0.35 * clamp01((ch - 0.85) / 0.15));
+    if (ch > 0.85)
+      gdisc(b.lit, hx0, hy0, 3.2 + (ch - 0.85) * 8, lk.runeC, 0.35 * clamp01((ch - 0.85) / 0.15));
   }
 
   // Деревце на левом плече: ствол и крона, крона отстаёт от тела.
@@ -5360,7 +6050,12 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
           gLimb(b, base, tip, 1.6, 1.4, G_TUBE, IRON, 0.1);
           const empty = k < lk.fired;
           gBall(b, vadd(tip, vmul(dir, 0.5)), 1.6, 1.4, G_TUBE, (nx, ny, nz) =>
-            empty ? [HOLE, null] : [tone(tn('#8a2018', '#c83a2a', '#ee6a4a', '#ffb090'), nx * LX + ny * LY + nz * LZ), null],
+            empty
+              ? [HOLE, null]
+              : [
+                  tone(tn('#8a2018', '#c83a2a', '#ee6a4a', '#ffb090'), nx * LX + ny * LY + nz * LZ),
+                  null,
+                ],
           );
         });
       }
@@ -5377,7 +6072,8 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
     const xb = Math.min(GW - 1, b.x1 + 1);
     const ya = Math.max(0, b.y0 - 1);
     const yb = Math.min(GH - 1, b.y1 + 1);
-    const on = (x: number, y: number) => x >= 0 && y >= 0 && x < GW && y < GH && D[(y * GW + x) * 4 + 3] > 0;
+    const on = (x: number, y: number) =>
+      x >= 0 && y >= 0 && x < GW && y < GH && D[(y * GW + x) * 4 + 3] > 0;
     for (let y = ya; y <= yb; y++)
       for (let x = xa; x <= xb; x++) {
         if (D[(y * GW + x) * 4 + 3]) continue;
@@ -5430,7 +6126,8 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
   if (fx.smear)
     for (const trail of fx.smear) {
       let len = 0;
-      for (let k = 1; k < trail.length; k++) len += Math.hypot(trail[k].x - trail[k - 1].x, trail[k].y - trail[k - 1].y);
+      for (let k = 1; k < trail.length; k++)
+        len += Math.hypot(trail[k].x - trail[k - 1].x, trail[k].y - trail[k - 1].y);
       if (len < 5) continue;
       let bx0 = GW;
       let by0 = GH;
@@ -5462,8 +6159,16 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
           const y = a.y + ((e.y - a.y) * st) / steps;
           const rr = a.r * (1 - u * 0.75);
           const al = 0.85 * (1 - u) * (1 - u * 0.3);
-          for (let yy = Math.max(by0, Math.floor(y - rr)); yy <= Math.min(by1, Math.ceil(y + rr)); yy++)
-            for (let xx = Math.max(bx0, Math.floor(x - rr)); xx <= Math.min(bx1, Math.ceil(x + rr)); xx++) {
+          for (
+            let yy = Math.max(by0, Math.floor(y - rr));
+            yy <= Math.min(by1, Math.ceil(y + rr));
+            yy++
+          )
+            for (
+              let xx = Math.max(bx0, Math.floor(x - rr));
+              xx <= Math.min(bx1, Math.ceil(x + rr));
+              xx++
+            ) {
               const d = Math.hypot(xx + 0.5 - x, yy + 0.5 - y);
               if (d > rr) continue;
               const j = (yy - by0) * bw + (xx - bx0);
@@ -5491,7 +6196,14 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
       for (let k = 0; k < 3; k++) {
         const ph = (((lk.cyc * 2 + k / 3 + i * 0.37) % 1) + 1) % 1;
         const rr = 1 + ph * 2.2 * r.stm;
-        gdisc(p, vx + Math.sin(k * 2.1 + lk.f * 0.3 + i) * 2 * ph, vy - 2 - ph * 9 * r.stm, rr, WHITE, 0.5 * r.stm * (1 - ph));
+        gdisc(
+          p,
+          vx + Math.sin(k * 2.1 + lk.f * 0.3 + i) * 2 * ph,
+          vy - 2 - ph * 9 * r.stm,
+          rr,
+          WHITE,
+          0.5 * r.stm * (1 - ph),
+        );
       }
     });
   }
@@ -5509,7 +6221,14 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
       const [tx, ty] = gproj(b.cam, tip);
       const k2 = age / 0.7;
       for (let q = 0; q < 3; q++)
-        gdisc(p, tx + (q - 1) * 1.5 * k2, ty - 3 - k2 * 10 - q * 2, 1.4 + k2 * 2.4, hx('#d8d4cc'), 0.6 * (1 - k2));
+        gdisc(
+          p,
+          tx + (q - 1) * 1.5 * k2,
+          ty - 3 - k2 * 10 - q * 2,
+          1.4 + k2 * 2.4,
+          hx('#d8d4cc'),
+          0.6 * (1 - k2),
+        );
     });
 
   // Вспышка пуска, блик выстрела взгляда, заряд, дуги лопастей — свет.
@@ -5525,8 +6244,16 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
     gdisc(lit, tx, ty, 2.2, WHITE, 1);
     for (let k = 3; k <= 7; k++) {
       lit.set(Math.round(tx), Math.round(ty - k), alpha(WHITE, 1 - k * 0.12));
-      lit.set(Math.round(tx - k * 0.7), Math.round(ty + k * 0.2), alpha(hx('#ffb060'), 0.8 - k * 0.1));
-      lit.set(Math.round(tx + k * 0.7), Math.round(ty + k * 0.2), alpha(hx('#ffb060'), 0.8 - k * 0.1));
+      lit.set(
+        Math.round(tx - k * 0.7),
+        Math.round(ty + k * 0.2),
+        alpha(hx('#ffb060'), 0.8 - k * 0.1),
+      );
+      lit.set(
+        Math.round(tx + k * 0.7),
+        Math.round(ty + k * 0.2),
+        alpha(hx('#ffb060'), 0.8 - k * 0.1),
+      );
     }
   }
   if (r.lon > 0.05 && lensVis) {
@@ -5551,20 +6278,37 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
   } else if (r.lon > 0.05 && !lensVis) {
     // Смотрит от нас: свет линзы обнимает край головы.
     const [hx2, hy2] = gproj(b.cam, s.head);
-    gdisc(lit, hx2 + (lsx - hx2) * 0.6, hy2 + (lsy - hy2) * 0.6, 6, lk.eye, 0.12 * r.lon + 0.25 * clamp01(r.lfl));
+    gdisc(
+      lit,
+      hx2 + (lsx - hx2) * 0.6,
+      hy2 + (lsy - hy2) * 0.6,
+      6,
+      lk.eye,
+      0.12 * r.lon + 0.25 * clamp01(r.lfl),
+    );
   }
   if (fx.impact) {
     // Контакт: белая вспышка там, где камень встретил землю, кольцо рун и лучи.
     const k = clamp01(fx.impact.k);
     const pts: [number, number][] =
-      fx.impact.at === 'hands' ? handsScr : [gproj(b.cam, s.foot[fx.impact.at]).slice(0, 2) as [number, number]];
+      fx.impact.at === 'hands'
+        ? handsScr
+        : [gproj(b.cam, s.foot[fx.impact.at]).slice(0, 2) as [number, number]];
     for (const [ix, iy] of pts) {
       gdisc(lit, ix, iy + 2, 5.5 * (1 - k) + 1.5, WHITE, 0.95 * (1 - k));
       const R = 3 + 7 * k;
-      for (let a = 0; a < TAU; a += 0.35) gdot(lit, ix + Math.cos(a) * R, iy + 2 + Math.sin(a) * R * 0.45, lk.runeC, 0.7 * (1 - k));
+      for (let a = 0; a < TAU; a += 0.35)
+        gdot(lit, ix + Math.cos(a) * R, iy + 2 + Math.sin(a) * R * 0.45, lk.runeC, 0.7 * (1 - k));
       for (let q = 0; q < 5; q++) {
         const a = Math.PI + (q / 4) * Math.PI;
-        for (let r = 3; r < 3 + 6 * (1 - k * 0.5); r++) gdot(lit, ix + Math.cos(a) * r * (1 + k), iy + 2 + Math.sin(a) * r * 0.8, WHITE, 0.8 * (1 - k) * (1 - r / 10));
+        for (let r = 3; r < 3 + 6 * (1 - k * 0.5); r++)
+          gdot(
+            lit,
+            ix + Math.cos(a) * r * (1 + k),
+            iy + 2 + Math.sin(a) * r * 0.8,
+            WHITE,
+            0.8 * (1 - k) * (1 - r / 10),
+          );
       }
     }
   }
@@ -5574,7 +6318,13 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
       const ph = (((fx.charge * 2.2 + i / 6) % 1) + 1) % 1;
       const ang = i * 1.7 + ph * 3;
       const d = (1 - ph) * 13;
-      gdot(lit, lsx + Math.cos(ang) * d, lsy + Math.sin(ang) * d * 0.7, mixc(lk.eye, WHITE, 0.5), 0.9 * ph);
+      gdot(
+        lit,
+        lsx + Math.cos(ang) * d,
+        lsy + Math.sin(ang) * d * 0.7,
+        mixc(lk.eye, WHITE, 0.5),
+        0.9 * ph,
+      );
     }
   }
   if (fx.spin) {
@@ -5646,7 +6396,8 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
   // Купол защитного протокола: полусфера на земле, соты, кромка светится.
   const dk = fx.domeK ?? r.dom;
   if (dk > 0.01) gDome(p, lit, b, s, dk, lk, !!fx.domeHit);
-  if (fx.shards !== undefined && fx.shards >= 0 && fx.shards < 0.75) gShards(p, lit, s, b, fx.shards);
+  if (fx.shards !== undefined && fx.shards >= 0 && fx.shards < 0.75)
+    gShards(p, lit, s, b, fx.shards);
 
   return {
     p,
@@ -5696,7 +6447,15 @@ function gDomeGeo(): DomeGeo {
   const w = R * 2 + 4;
   const h = R * 2 + 4;
   const n = w * h * 2;
-  const g: DomeGeo = { w, h, Y: new Float32Array(n).fill(NaN), lat: new Float32Array(n), fres: new Float32Array(n), line: new Uint8Array(n), rim: new Uint8Array(n) };
+  const g: DomeGeo = {
+    w,
+    h,
+    Y: new Float32Array(n).fill(NaN),
+    lat: new Float32Array(n),
+    fres: new Float32Array(n),
+    line: new Uint8Array(n),
+    rim: new Uint8Array(n),
+  };
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const dx = (x + 0.5 - (R + 2)) / R;
@@ -5752,13 +6511,18 @@ function gDomeLayer(k: number, hit: boolean, sh: number): DomeLayer {
       const band = Math.abs(G.lat[j] / Math.PI + 0.5 - shim) < 0.05;
       const edge = Math.abs(Y - hTop) < 1.3 && k < 0.99;
       // Середина почти прозрачна — страж под куполом читается; к краю плотнее.
-      let a = (shl ? 0.015 : 0.025) + 0.22 * fres * fres + (line ? 0.08 + 0.22 * fres * fres : 0) + (band ? 0.1 : 0);
+      let a =
+        (shl ? 0.015 : 0.025) +
+        0.22 * fres * fres +
+        (line ? 0.08 + 0.22 * fres * fres : 0) +
+        (band ? 0.1 : 0);
       if (rim || ground) a += 0.45;
       if (edge) a = 0.95;
       if (hit) a = Math.min(1, a * 1.7 + 0.1);
       const c = edge || rim || ground ? WHITE : line || band ? LINE : CYAN;
       put(shl ? back : front, i, c, Math.min(0.85, a));
-      if (!shl && (rim || edge || ground || (line && fres > 0.3) || hit)) put(glow, i, c, Math.min(1, a * (hit ? 1 : 0.7)));
+      if (!shl && (rim || edge || ground || (line && fres > 0.3) || hit))
+        put(glow, i, c, Math.min(1, a * (hit ? 1 : 0.7)));
     }
   const L: DomeLayer = { w, h, ox: DOME_R + 2, oy: DOME_R + 2, front, back, glow };
   // Ступени роста купола (смена протокола) — не копить: они бывают раз в бой.
@@ -5849,7 +6613,7 @@ function gIdle(t: number, base: GRig): GRig {
  * плечи крутятся против бёдер, руки маятником.
  */
 function gWalk(t: number, base: GRig): GRig {
-  const c = ((t / WALK_T) % 1 + 1) % 1;
+  const c = (((t / WALK_T) % 1) + 1) % 1;
   const a = c * TAU;
   const r = { ...base };
   const S = 6.2;
@@ -5885,22 +6649,129 @@ function gWalk(t: number, base: GRig): GRig {
  */
 function gWake(t: number, base: GRig): GRig {
   const dorm: Partial<GRig> = {
-    by: -11, pit: 0.26, hn: 0.42, hu: -1.8, lon: 0, run: 0, swp: 0, mos: 1.32, iris: 0.2, glo: 0, stm: 0,
-    lx: -11, ly: -13.5, lz: 12, rx: 11, ry: -13.5, rz: 12, lfi: 0.3, rfi: 0.3, fLx: -9.5, fRx: 9.5, fLz: 6, fRz: 6,
+    by: -11,
+    pit: 0.26,
+    hn: 0.42,
+    hu: -1.8,
+    lon: 0,
+    run: 0,
+    swp: 0,
+    mos: 1.32,
+    iris: 0.2,
+    glo: 0,
+    stm: 0,
+    lx: -11,
+    ly: -13.5,
+    lz: 12,
+    rx: 11,
+    ry: -13.5,
+    rz: 12,
+    lfi: 0.3,
+    rfi: 0.3,
+    fLx: -9.5,
+    fRx: 9.5,
+    fLz: 6,
+    fRz: 6,
   };
   const keys: GKey[] = [
     [0, dorm],
     [0.36, {}],
-    [0.48, { by: -9.4, pit: 0.22, swp: 0.14, run: 0.7, mos: 1.25, ly: -15, ry: -15, lx: -13, rx: 13, fLz: 5, fRz: 5 }, gOut3],
+    [
+      0.48,
+      {
+        by: -9.4,
+        pit: 0.22,
+        swp: 0.14,
+        run: 0.7,
+        mos: 1.25,
+        ly: -15,
+        ry: -15,
+        lx: -13,
+        rx: 13,
+        fLz: 5,
+        fRz: 5,
+      },
+      gOut3,
+    ],
     [0.62, { swp: 0.3 }, gLin],
-    [0.72, { by: -7.6, pit: 0.19, swp: 0.45, mos: 1.18, ly: -16.5, ry: -16.5, lx: -15, rx: 15, lz: 10, rz: 10, fLz: 3.5, fRz: 3.5 }, gOut3],
+    [
+      0.72,
+      {
+        by: -7.6,
+        pit: 0.19,
+        swp: 0.45,
+        mos: 1.18,
+        ly: -16.5,
+        ry: -16.5,
+        lx: -15,
+        rx: 15,
+        lz: 10,
+        rz: 10,
+        fLz: 3.5,
+        fRz: 3.5,
+      },
+      gOut3,
+    ],
     [0.86, { swp: 0.62 }, gLin],
-    [0.96, { by: -5.6, pit: 0.16, swp: 0.8, mos: 1.11, hn: 0.34, ly: -18.5, ry: -18.5, lx: -17, rx: 17, lz: 8, rz: 8, fLz: 2, fRz: 2 }, gOut3],
+    [
+      0.96,
+      {
+        by: -5.6,
+        pit: 0.16,
+        swp: 0.8,
+        mos: 1.11,
+        hn: 0.34,
+        ly: -18.5,
+        ry: -18.5,
+        lx: -17,
+        rx: 17,
+        lz: 8,
+        rz: 8,
+        fLz: 2,
+        fRz: 2,
+      },
+      gOut3,
+    ],
     [1.1, { swp: 1, run: 1 }, gLin],
     [1.3, { hn: 0.3 }],
     [1.48, { hn: -0.12, hu: 0, iris: 0.8 }, gOut3],
-    [1.64, { by: -1.6, pit: 0.03, lx: -24, ly: -9, lz: 3, rx: 24, ry: -9, rz: 3, lfi: 0.6, rfi: 0.6, mos: 1, fLz: 0.8, fRz: -0.8 }, gIO],
-    [1.9, { by: 1.8, pit: -0.17, lx: -16, ly: 27, lz: -1, rx: 16, ry: 27, rz: -1, lfi: 1, rfi: 1, run: 1.3, hn: -0.2 }, gOut3],
+    [
+      1.64,
+      {
+        by: -1.6,
+        pit: 0.03,
+        lx: -24,
+        ly: -9,
+        lz: 3,
+        rx: 24,
+        ry: -9,
+        rz: 3,
+        lfi: 0.6,
+        rfi: 0.6,
+        mos: 1,
+        fLz: 0.8,
+        fRz: -0.8,
+      },
+      gIO,
+    ],
+    [
+      1.9,
+      {
+        by: 1.8,
+        pit: -0.17,
+        lx: -16,
+        ly: 27,
+        lz: -1,
+        rx: 16,
+        ry: 27,
+        rz: -1,
+        lfi: 1,
+        rfi: 1,
+        run: 1.3,
+        hn: -0.2,
+      },
+      gOut3,
+    ],
     [2.12, { by: 1.3, pit: -0.15, ly: 28.5, ry: 28.5, lx: -17, rx: 17 }, gIO],
     [BOSS.wake, { ...base }, gIO],
   ];
@@ -5927,19 +6798,96 @@ function gWake(t: number, base: GRig): GRig {
 function gGaze(t: number, base: GRig): GRig {
   const T = T_GAZE;
   const aim: Partial<GRig> = {
-    by: -1.7, pit: 0.06, hf: 2, hn: 0.02, lsz: 1.28, iris: 0.9, lfl: 0.12,
-    lx: -20, ly: -19.5, lz: 5.5, rx: 20, ry: -19.5, rz: 5.5, fLx: -9.2, fRx: 9.2, fLz: 2, fRz: -2.2, lfi: 0.7, rfi: 0.7,
+    by: -1.7,
+    pit: 0.06,
+    hf: 2,
+    hn: 0.02,
+    lsz: 1.28,
+    iris: 0.9,
+    lfl: 0.12,
+    lx: -20,
+    ly: -19.5,
+    lz: 5.5,
+    rx: 20,
+    ry: -19.5,
+    rz: 5.5,
+    fLx: -9.2,
+    fRx: 9.2,
+    fLz: 2,
+    fRz: -2.2,
+    lfi: 0.7,
+    rfi: 0.7,
   };
   const keys: GKey[] = [
     [0, {}],
-    [0.13, { by: -0.5, pit: -0.06, hf: 1.4, hn: -0.08, iris: 1, lsz: 1.22, lfl: 0.35, lz: 4, rz: 4, ly: -20, ry: -20, fLx: -8.6, fRx: 8.6 }, gOut3],
+    [
+      0.13,
+      {
+        by: -0.5,
+        pit: -0.06,
+        hf: 1.4,
+        hn: -0.08,
+        iris: 1,
+        lsz: 1.22,
+        lfl: 0.35,
+        lz: 4,
+        rz: 4,
+        ly: -20,
+        ry: -20,
+        fLx: -8.6,
+        fRx: 8.6,
+      },
+      gOut3,
+    ],
     [0.34, aim, gIO],
     [BOSS.gazeTrack, { ...aim, iris: 0.82, lsz: 1.32, lfl: 0.2 }, gLin],
     [BOSS.gazeTrack + 0.08, { by: -2.3, hf: 2.6, iris: 0.2, lsz: 1.2, lfl: 0.5, pit: 0.08 }, gOut3],
     [T - 0.004, { by: -2.6, hf: 2.9, iris: 0.12, lfl: 0.95, pit: 0.09, lsz: 1.16 }, gIn],
-    [T, { by: -1.2, bz: -2.6, pit: -0.13, hf: -1.1, hn: -0.15, iris: 0.06, lfl: 1, lsz: 1.3, lz: -2.5, rz: -2.5, ly: -16, ry: -16, qsx: 0.97, qsy: 1.035 }, gLin],
-    [T + 0.09, { bz: -3.6, pit: -0.17, hn: -0.18, hf: -1.5, lfl: 0.92, qsx: 1, qsy: 1, lz: -3.5, rz: -3.5 }, gOut],
-    [T + 0.33, { bz: -1.4, by: -0.5, pit: -0.03, hf: 0, hn: -0.04, lfl: 0.3, iris: 0.5, lsz: 1.08, lz: 2, rz: 2, ly: -18, ry: -18, lfi: 0.4, rfi: 0.4 }, gIO],
+    [
+      T,
+      {
+        by: -1.2,
+        bz: -2.6,
+        pit: -0.13,
+        hf: -1.1,
+        hn: -0.15,
+        iris: 0.06,
+        lfl: 1,
+        lsz: 1.3,
+        lz: -2.5,
+        rz: -2.5,
+        ly: -16,
+        ry: -16,
+        qsx: 0.97,
+        qsy: 1.035,
+      },
+      gLin,
+    ],
+    [
+      T + 0.09,
+      { bz: -3.6, pit: -0.17, hn: -0.18, hf: -1.5, lfl: 0.92, qsx: 1, qsy: 1, lz: -3.5, rz: -3.5 },
+      gOut,
+    ],
+    [
+      T + 0.33,
+      {
+        bz: -1.4,
+        by: -0.5,
+        pit: -0.03,
+        hf: 0,
+        hn: -0.04,
+        lfl: 0.3,
+        iris: 0.5,
+        lsz: 1.08,
+        lz: 2,
+        rz: 2,
+        ly: -18,
+        ry: -18,
+        lfi: 0.4,
+        rfi: 0.4,
+      },
+      gIO,
+    ],
     [T + T_REC, { ...base }, gIO],
   ];
   const r = gTrack(keys, t, base, { lx: 0.05, rx: 0.05, lz: 0.05, rz: 0.05 });
@@ -5958,22 +6906,147 @@ function gGaze(t: number, base: GRig): GRig {
 function gSlam(t: number, base: GRig): GRig {
   const T = T_SLAM;
   const top: Partial<GRig> = {
-    by: 2.4, pit: -0.2, bz: -0.6, hn: -0.18, lx: -6, ly: 31, lz: -3, rx: 6, ry: 31, rz: -3, lfi: 1, rfi: 1,
-    fLx: -9.5, fRx: 9.5, fLz: 2.4, fRz: -0.6, run: base.run + 0.3,
+    by: 2.4,
+    pit: -0.2,
+    bz: -0.6,
+    hn: -0.18,
+    lx: -6,
+    ly: 31,
+    lz: -3,
+    rx: 6,
+    ry: 31,
+    rz: -3,
+    lfi: 1,
+    rfi: 1,
+    fLx: -9.5,
+    fRx: 9.5,
+    fLz: 2.4,
+    fRz: -0.6,
+    run: base.run + 0.3,
   };
   const keys: GKey[] = [
     [0, {}],
-    [0.14, { by: -2.6, pit: 0.12, hn: 0.12, lx: -19, ly: -20, lz: -4.5, rx: 19, ry: -20, rz: -4.5, lfi: 0.7, rfi: 0.7, qsx: 1.035, qsy: 0.965 }, gOut],
-    [0.32, { by: 0.4, pit: -0.05, lx: -12, ly: 6, lz: 16, rx: 12, ry: 6, rz: 16, qsx: 1, qsy: 1, hn: -0.05 }, gIn],
+    [
+      0.14,
+      {
+        by: -2.6,
+        pit: 0.12,
+        hn: 0.12,
+        lx: -19,
+        ly: -20,
+        lz: -4.5,
+        rx: 19,
+        ry: -20,
+        rz: -4.5,
+        lfi: 0.7,
+        rfi: 0.7,
+        qsx: 1.035,
+        qsy: 0.965,
+      },
+      gOut,
+    ],
+    [
+      0.32,
+      {
+        by: 0.4,
+        pit: -0.05,
+        lx: -12,
+        ly: 6,
+        lz: 16,
+        rx: 12,
+        ry: 6,
+        rz: 16,
+        qsx: 1,
+        qsy: 1,
+        hn: -0.05,
+      },
+      gIn,
+    ],
     [0.5, { ...top, qsx: 0.98, qsy: 1.03 }, gOut3],
-    [0.76, { ...top, by: 3.1, pit: -0.25, ly: 33, ry: 33, lz: -5.5, rz: -5.5, hn: -0.22, qsx: 0.975, qsy: 1.035, lfl: 0.25 }, gIO],
-    [0.835, { by: 1.2, pit: -0.02, bz: 1, lx: -6, ly: 24, lz: 14, rx: 6, ry: 24, rz: 14, qsx: 1, qsy: 1, hn: -0.05 }, gIn],
-    [0.876, { by: -3.8, pit: 0.18, bz: 3.4, lx: -5.5, ly: 4, lz: 23, rx: 5.5, ry: 4, rz: 23, hn: 0.08 }, gLin],
-    [T - 0.003, { by: -6, pit: 0.27, bz: 4.8, lx: -5, ly: -13, lz: 21, rx: 5, ry: -13, rz: 21, hn: 0.12 }, gLin],
-    [T, { by: -7.4, pit: 0.33, bz: 5.6, hn: 0.15, lx: -5.5, ly: -22.5, lz: 20.5, rx: 5.5, ry: -22.5, rz: 20.5, qsx: 1.075, qsy: 0.9, lfl: 0, fLz: 4.2, fRz: 0.8 }, gLin],
+    [
+      0.76,
+      {
+        ...top,
+        by: 3.1,
+        pit: -0.25,
+        ly: 33,
+        ry: 33,
+        lz: -5.5,
+        rz: -5.5,
+        hn: -0.22,
+        qsx: 0.975,
+        qsy: 1.035,
+        lfl: 0.25,
+      },
+      gIO,
+    ],
+    [
+      0.835,
+      {
+        by: 1.2,
+        pit: -0.02,
+        bz: 1,
+        lx: -6,
+        ly: 24,
+        lz: 14,
+        rx: 6,
+        ry: 24,
+        rz: 14,
+        qsx: 1,
+        qsy: 1,
+        hn: -0.05,
+      },
+      gIn,
+    ],
+    [
+      0.876,
+      { by: -3.8, pit: 0.18, bz: 3.4, lx: -5.5, ly: 4, lz: 23, rx: 5.5, ry: 4, rz: 23, hn: 0.08 },
+      gLin,
+    ],
+    [
+      T - 0.003,
+      { by: -6, pit: 0.27, bz: 4.8, lx: -5, ly: -13, lz: 21, rx: 5, ry: -13, rz: 21, hn: 0.12 },
+      gLin,
+    ],
+    [
+      T,
+      {
+        by: -7.4,
+        pit: 0.33,
+        bz: 5.6,
+        hn: 0.15,
+        lx: -5.5,
+        ly: -22.5,
+        lz: 20.5,
+        rx: 5.5,
+        ry: -22.5,
+        rz: 20.5,
+        qsx: 1.075,
+        qsy: 0.9,
+        lfl: 0,
+        fLz: 4.2,
+        fRz: 0.8,
+      },
+      gLin,
+    ],
     [T + 0.07, { by: -6.6, qsx: 1.02, qsy: 0.985, pit: 0.31 }, gOut],
     [T + 0.25, { by: -6.9, pit: 0.32 }, gIO],
-    [T + 0.36, { by: -2.8, pit: 0.15, bz: 2.8, ly: -12, lz: 13, ry: -12, rz: 13, lfi: 0.6, rfi: 0.6, run: base.run }, gOut3],
+    [
+      T + 0.36,
+      {
+        by: -2.8,
+        pit: 0.15,
+        bz: 2.8,
+        ly: -12,
+        lz: 13,
+        ry: -12,
+        rz: 13,
+        lfi: 0.6,
+        rfi: 0.6,
+        run: base.run,
+      },
+      gOut3,
+    ],
     [T + T_REC, { ...base }, gIO],
   ];
   return gTrack(keys, t, base);
@@ -6013,10 +7086,53 @@ function gStomp(t: number, base: GRig): GRig {
   const keys: GKey[] = [
     [0, {}],
     [0.1, { bx: -2.4, rol: -0.08, by: -1.2, lx: -24, ly: -14, rx: 24, ry: -14, fLx: -7.2 }, gOut],
-    [0.4, { bx: -3.2, rol: -0.11, by: 2.2, pit: -0.1, fRx: 8.2, fRy: 15, fRz: 6, lx: -25, ly: -8, lz: 3, rx: 26, ry: -6, rz: -2, hn: 0.22, lfi: 0.8, rfi: 0.8 }, gOut3],
+    [
+      0.4,
+      {
+        bx: -3.2,
+        rol: -0.11,
+        by: 2.2,
+        pit: -0.1,
+        fRx: 8.2,
+        fRy: 15,
+        fRz: 6,
+        lx: -25,
+        ly: -8,
+        lz: 3,
+        rx: 26,
+        ry: -6,
+        rz: -2,
+        hn: 0.22,
+        lfi: 0.8,
+        rfi: 0.8,
+      },
+      gOut3,
+    ],
     [0.58, { bx: -3.4, rol: -0.12, by: 3, fRy: 17, fRz: 6.5, ly: -6, ry: -4, pit: -0.13 }, gIO],
-    [T - 0.003, { bx: -1.6, rol: -0.03, by: -2.4, fRy: 2.2, fRz: 3.4, ly: -12, ry: -11, pit: 0.04 }, gIn],
-    [T, { bx: -0.8, rol: 0.03, by: -4.2, fRy: 0, fRz: 3.4, pit: 0.09, lx: -22, ly: -19, rx: 23, ry: -19, qsx: 1.075, qsy: 0.9, hn: 0.15 }, gLin],
+    [
+      T - 0.003,
+      { bx: -1.6, rol: -0.03, by: -2.4, fRy: 2.2, fRz: 3.4, ly: -12, ry: -11, pit: 0.04 },
+      gIn,
+    ],
+    [
+      T,
+      {
+        bx: -0.8,
+        rol: 0.03,
+        by: -4.2,
+        fRy: 0,
+        fRz: 3.4,
+        pit: 0.09,
+        lx: -22,
+        ly: -19,
+        rx: 23,
+        ry: -19,
+        qsx: 1.075,
+        qsy: 0.9,
+        hn: 0.15,
+      },
+      gLin,
+    ],
     [T + 0.07, { by: -3.2, qsx: 1.02, qsy: 0.985 }, gOut],
     [T + 0.24, { by: -2.8, rol: 0.01 }, gIO],
     [T + T_REC, { ...base }, gIO],
@@ -6035,7 +7151,28 @@ function gRock(t: number, base: GRig): GRig {
     [0, {}],
     [0.07, { hat: 0.12, by: -0.8 }, gOut],
     [0.14, { hat: 0.1 }],
-    [0.32, { hat: 1, by: -2.6, pit: -0.1, hn: -0.28, lx: -25, ly: -19, lz: -2, rx: 25, ry: -19, rz: -2, fLx: -9.6, fRx: 9.6, fLz: 1.6, fRz: -1.6, lfi: 1, rfi: 1 }, gBack],
+    [
+      0.32,
+      {
+        hat: 1,
+        by: -2.6,
+        pit: -0.1,
+        hn: -0.28,
+        lx: -25,
+        ly: -19,
+        lz: -2,
+        rx: 25,
+        ry: -19,
+        rz: -2,
+        fLx: -9.6,
+        fRx: 9.6,
+        fLz: 1.6,
+        fRz: -1.6,
+        lfi: 1,
+        rfi: 1,
+      },
+      gBack,
+    ],
     [0.56, { tub: 1 }, gOut3],
     [rocketAt(BOSS.rockets - 1) + 0.12, { tub: 1, hn: -0.3 }],
     [1.38, { tub: 0, hn: -0.1, by: -1.8 }, gIO],
@@ -6068,11 +7205,37 @@ function gSpin(t: number, base: GRig): GRig {
   const C = BOSS.spinCharge;
   const keys: GKey[] = [
     [0, {}],
-    [0.24, { by: -2.6, fLx: -10.5, fRx: 10.5, fLz: 0.5, fRz: -0.5, lx: -32, ly: -4, lz: 0, rx: 32, ry: -4, rz: 0, hu: -1.6, lsz: 0.9, glo: 0.25, lfi: 0, rfi: 0, stm: 1 }, gOut3],
+    [
+      0.24,
+      {
+        by: -2.6,
+        fLx: -10.5,
+        fRx: 10.5,
+        fLz: 0.5,
+        fRz: -0.5,
+        lx: -32,
+        ly: -4,
+        lz: 0,
+        rx: 32,
+        ry: -4,
+        rz: 0,
+        hu: -1.6,
+        lsz: 0.9,
+        glo: 0.25,
+        lfi: 0,
+        rfi: 0,
+        stm: 1,
+      },
+      gOut3,
+    ],
     [C - 0.003, { by: -3.2, lx: -40, ly: 1.5, rx: 40, ry: 1.5, glo: 1, run: 1.3 }, gIn],
     [C + 0.12, { glo: 1.25, by: -2.6 }, gOut],
     [T_SPIN, { glo: 1.1 }, gLin],
-    [T_SPIN + 0.18, { lx: -24, ly: -10, lz: 2, rx: 24, ry: -10, rz: 2, glo: 0.5, by: -2, hu: -0.6 }, gOut],
+    [
+      T_SPIN + 0.18,
+      { lx: -24, ly: -10, lz: 2, rx: 24, ry: -10, rz: 2, glo: 0.5, by: -2, hu: -0.6 },
+      gOut,
+    ],
     [T_SPIN + T_REC, { ...base }, gIO],
   ];
   const r = gTrack(keys, t, base);
@@ -6113,19 +7276,90 @@ function gShift(t: number, base: GRig, ph: number): GRig {
     keys = [
       [0, { dom: 0 }],
       ...jolt,
-      [0.42, { by: -2.8, lx: 6, ly: 4, lz: 18.5, rx: -6, ry: 6.5, rz: 19.5, lfi: 1, rfi: 1, hu: -2, hn: 0.2, pit: 0.1, swp: 0.1 }, gOut3],
+      [
+        0.42,
+        {
+          by: -2.8,
+          lx: 6,
+          ly: 4,
+          lz: 18.5,
+          rx: -6,
+          ry: 6.5,
+          rz: 19.5,
+          lfi: 1,
+          rfi: 1,
+          hu: -2,
+          hn: 0.2,
+          pit: 0.1,
+          swp: 0.1,
+        },
+        gOut3,
+      ],
       [0.62, { swp: 0.4 }, gLin],
       [0.98, { swp: 1, run: 1.35 }, gLin],
-      [1.08, { by: -1.5, lx: -27, ly: -6, lz: 3, rx: 27, ry: -6, rz: 3, hu: 0, hn: -0.08, pit: -0.06, qsx: 0.97, qsy: 1.03 }, gOut3],
+      [
+        1.08,
+        {
+          by: -1.5,
+          lx: -27,
+          ly: -6,
+          lz: 3,
+          rx: 27,
+          ry: -6,
+          rz: 3,
+          hu: 0,
+          hn: -0.08,
+          pit: -0.06,
+          qsx: 0.97,
+          qsy: 1.03,
+        },
+        gOut3,
+      ],
       [BOSS.shift, { ...base }, gIO],
     ];
   else if (ph === 3)
     keys = [
       [0, { cor: 0, glo: 0, stm: 0 }],
       ...jolt,
-      [0.44, { by: -3, pit: 0.16, hn: 0.22, lx: -14, ly: -6, lz: 9, rx: 14, ry: -6, rz: 9, lfi: 1, rfi: 1, glo: 0.6 }, gIO],
+      [
+        0.44,
+        {
+          by: -3,
+          pit: 0.16,
+          hn: 0.22,
+          lx: -14,
+          ly: -6,
+          lz: 9,
+          rx: 14,
+          ry: -6,
+          rz: 9,
+          lfi: 1,
+          rfi: 1,
+          glo: 0.6,
+        },
+        gIO,
+      ],
       [0.5, { cor: 0.15 }, gLin],
-      [0.6, { cor: 1, glo: 1.2, by: 0.8, pit: -0.24, hn: -0.22, lx: -27, ly: -8, lz: -7, rx: 27, ry: -8, rz: -7, qsx: 0.96, qsy: 1.05, stm: 1 }, gOut3],
+      [
+        0.6,
+        {
+          cor: 1,
+          glo: 1.2,
+          by: 0.8,
+          pit: -0.24,
+          hn: -0.22,
+          lx: -27,
+          ly: -8,
+          lz: -7,
+          rx: 27,
+          ry: -8,
+          rz: -7,
+          qsx: 0.96,
+          qsy: 1.05,
+          stm: 1,
+        },
+        gOut3,
+      ],
       [0.95, { glo: 0.9, by: 0.4, pit: -0.2, qsx: 1, qsy: 1 }, gIO],
       [BOSS.shift, { ...base }, gIO],
     ];
@@ -6134,10 +7368,46 @@ function gShift(t: number, base: GRig, ph: number): GRig {
       [0, { mos: 1, tre: 0, crk: 0 }],
       ...jolt,
       [0.48, { crk: 1, by: -2.6, hn: 0.18 }, gIn],
-      [0.62, { by: -4, pit: 0.22, bz: 2.2, fRz: 4.5, fRx: 8.4, hn: 0.25, lx: -23, ly: -15, lz: 8, rx: 22, ry: -20, rz: 6, mos: base.mos, tre: 0.25 }, gIn],
+      [
+        0.62,
+        {
+          by: -4,
+          pit: 0.22,
+          bz: 2.2,
+          fRz: 4.5,
+          fRx: 8.4,
+          hn: 0.25,
+          lx: -23,
+          ly: -15,
+          lz: 8,
+          rx: 22,
+          ry: -20,
+          rz: 6,
+          mos: base.mos,
+          tre: 0.25,
+        },
+        gIn,
+      ],
       [0.72, { qsx: 1.05, qsy: 0.94 }, gLin],
       [0.84, { qsx: 1, qsy: 1, by: -3.2 }, gOut],
-      [1.12, { by: 0.9, pit: 0.04, bz: 0.5, hn: -0.1, lsz: 1.2, lfi: 1, rfi: 1, lx: -23, ly: -16, rx: 23, ry: -16, tre: base.tre }, gOut3],
+      [
+        1.12,
+        {
+          by: 0.9,
+          pit: 0.04,
+          bz: 0.5,
+          hn: -0.1,
+          lsz: 1.2,
+          lfi: 1,
+          rfi: 1,
+          lx: -23,
+          ly: -16,
+          rx: 23,
+          ry: -16,
+          tre: base.tre,
+        },
+        gOut3,
+      ],
       [BOSS.shift, { ...base }, gIO],
     ];
   const r = gTrack(keys, t, base);
@@ -6194,10 +7464,30 @@ const STAG_LOOP_FPS = 8;
  */
 function gStag(t: number, base: GRig): GRig {
   const kneel: Partial<GRig> = {
-    by: -8.2, bz: 2, pit: 0.2, rol: -0.05, hn: 0.38, hu: -1.8,
-    fLx: -8.5, fLz: 5.5, fLy: 0, fRx: 8, fRz: -7.5, fRy: 0,
-    rx: 15, ry: -19.5, rz: 9, rfi: 0, lx: -19, ly: -14, lz: 5, lfi: 0.3,
-    lon: 0.35, iris: 0.3, run: base.run * 0.4, dom: 0,
+    by: -8.2,
+    bz: 2,
+    pit: 0.2,
+    rol: -0.05,
+    hn: 0.38,
+    hu: -1.8,
+    fLx: -8.5,
+    fLz: 5.5,
+    fLy: 0,
+    fRx: 8,
+    fRz: -7.5,
+    fRy: 0,
+    rx: 15,
+    ry: -19.5,
+    rz: 9,
+    rfi: 0,
+    lx: -19,
+    ly: -14,
+    lz: 5,
+    lfi: 0.3,
+    lon: 0.35,
+    iris: 0.3,
+    run: base.run * 0.4,
+    dom: 0,
   };
   const keys: GKey[] = [
     [0, { dom: 0 }],
@@ -6213,7 +7503,22 @@ function gStag(t: number, base: GRig): GRig {
     [STAG_RISE, {}],
     [4.75, { lon: 1, lfl: 0.9, iris: 1, hn: 0.1 }, gOut],
     [5.1, { by: -3, pit: 0.08, bz: 1, fRz: 2, ry: -12, rz: 5, hn: -0.05, hu: 0, lfl: 0.3 }, gIO],
-    [5.36, { by: 0.8, pit: -0.02, bz: 0, rol: 0, fLx: base.fLx, fLz: base.fLz, fRx: base.fRx, fRz: base.fRz, lfl: 0.1, run: base.run }, gOut3],
+    [
+      5.36,
+      {
+        by: 0.8,
+        pit: -0.02,
+        bz: 0,
+        rol: 0,
+        fLx: base.fLx,
+        fLz: base.fLz,
+        fRx: base.fRx,
+        fRz: base.fRz,
+        lfl: 0.1,
+        run: base.run,
+      },
+      gOut3,
+    ],
     [BOSS.stagger, { ...base, dom: 0 }, gIO],
   ];
   const r = gTrack(keys, t, base, { lx: 0.06, ly: 0.06 });
@@ -6237,14 +7542,42 @@ function gDie(t: number, base: GRig): GRig {
     [0, {}],
     [0.1, { by: 1, pit: -0.12, hn: -0.2, iris: 1 }, gOut],
     [0.32, { by: 0, pit: -0.05, hn: 0.05 }, gIO],
-    [0.95, { by: -11.4, pit: 0.3, bz: 1.5, hn: 0.48, hu: -2.2, lx: -23, ly: -12, lz: 6, rx: 23, ry: -12, rz: 6, lfi: 0, rfi: 0, fLx: -9, fLz: 5, fRx: 9, fRz: 5 }, gIn],
+    [
+      0.95,
+      {
+        by: -11.4,
+        pit: 0.3,
+        bz: 1.5,
+        hn: 0.48,
+        hu: -2.2,
+        lx: -23,
+        ly: -12,
+        lz: 6,
+        rx: 23,
+        ry: -12,
+        rz: 6,
+        lfi: 0,
+        rfi: 0,
+        fLx: -9,
+        fLz: 5,
+        fRx: 9,
+        fRz: 5,
+      },
+      gIn,
+    ],
     [1.02, { qsx: 1.06, qsy: 0.93, by: -11.8 }, gLin],
     [1.14, { qsx: 1, qsy: 1, by: -11.2 }, gOut],
     [T_DIE, { by: -11.4 }],
   ];
   const r = gTrack(keys, t, base, { lx: 0.08, rx: 0.06, ly: 0.08, ry: 0.06 });
   const seq: [number, number][] = [
-    [0, 1], [0.16, 0.3], [0.2, 0.9], [0.27, 0.15], [0.33, 0.55], [0.4, 0.1], [0.46, 0],
+    [0, 1],
+    [0.16, 0.3],
+    [0.2, 0.9],
+    [0.27, 0.15],
+    [0.33, 0.55],
+    [0.4, 0.1],
+    [0.46, 0],
   ];
   r.lon = 1;
   for (const [at, v] of seq) if (t >= at) r.lon = v;
@@ -6255,7 +7588,8 @@ function gDie(t: number, base: GRig): GRig {
   r.stm = t < 0.5 ? base.stm : 0;
   r.mos = base.mos * (1 - 0.8 * clamp01((t - 0.55) / 0.8));
   const k = clamp01((t - 0.6) / 0.55);
-  const bounce = t > 1.15 ? Math.sin((t - 1.15) * 18) * 0.12 * Math.max(0, 1 - (t - 1.15) / 0.3) : 0;
+  const bounce =
+    t > 1.15 ? Math.sin((t - 1.15) * 18) * 0.12 * Math.max(0, 1 - (t - 1.15) / 0.3) : 0;
   r.tre = base.tre + gIn(k) * (1.05 - base.tre) - bounce;
   r.alp = 1 - clamp01((t - 1.25) / 0.35);
   return r;
@@ -6263,7 +7597,19 @@ function gDie(t: number, base: GRig): GRig {
 
 // ---- Кадр по запросу: техника, кадр, сторона, фаза ----
 
-type GTech = 'idle' | 'walk' | 'turn' | 'wake' | 'gaze' | 'slam' | 'stomp' | 'rock' | 'spin' | 'shift' | 'stag' | 'die';
+type GTech =
+  | 'idle'
+  | 'walk'
+  | 'turn'
+  | 'wake'
+  | 'gaze'
+  | 'slam'
+  | 'stomp'
+  | 'rock'
+  | 'spin'
+  | 'shift'
+  | 'stag'
+  | 'die';
 
 /** Откуда пришёл `recover` (подсказка листу кадров — `m.data.vFrom`). */
 const G_FROM: Record<number, GTech> = { 1: 'gaze', 2: 'slam', 3: 'stomp', 4: 'rock', 5: 'spin' };
@@ -6275,7 +7621,13 @@ const G_FROM_MODE: Record<string, GTech> = {
   f11_spin: 'spin',
 };
 /** Время удара (граница с `recover`) и число кадров с возвратом. */
-const G_HIT: Partial<Record<GTech, number>> = { gaze: T_GAZE, slam: T_SLAM, stomp: T_STOMP, rock: T_ROCK, spin: T_SPIN };
+const G_HIT: Partial<Record<GTech, number>> = {
+  gaze: T_GAZE,
+  slam: T_SLAM,
+  stomp: T_STOMP,
+  rock: T_ROCK,
+  spin: T_SPIN,
+};
 function gSpan(tech: GTech): number {
   const T = G_HIT[tech];
   if (T !== undefined) return fAt(T) + Math.ceil(T_REC * GFPS);
@@ -6310,7 +7662,10 @@ function gStagF(t: number): number {
     return 100 + (Math.floor((t - from) * STAG_LOOP_FPS) % STAG_LOOP_N);
   }
   if (t < STAG_TRY_END) return 200 + Math.floor((t - STAG_TRY) * GFPS);
-  return 300 + Math.min(Math.ceil((BOSS.stagger - STAG_RISE) * GFPS) - 1, Math.floor((t - STAG_RISE) * GFPS));
+  return (
+    300 +
+    Math.min(Math.ceil((BOSS.stagger - STAG_RISE) * GFPS) - 1, Math.floor((t - STAG_RISE) * GFPS))
+  );
 }
 
 function gRigAt(tech: GTech, t: number, base: GRig, ph: number, mir = false, sd = 0): GRig {
@@ -6399,18 +7754,27 @@ function gFxOf(q: GReq, t: number, base: GRig, s: GSkel, at: (tt: number) => GSk
       break;
     case 'slam':
       if (t > 0.79 && t < T_SLAM + 0.05) {
-        fx.smear = [0, 1].map((i) => trail((sk) => vadd(sk.hand[i], vmul(vnorm(vsub(sk.hand[i], sk.el[i])), 1.2)), 4.2, 7, 1 / 110));
+        fx.smear = [0, 1].map((i) =>
+          trail(
+            (sk) => vadd(sk.hand[i], vmul(vnorm(vsub(sk.hand[i], sk.el[i])), 1.2)),
+            4.2,
+            7,
+            1 / 110,
+          ),
+        );
         fx.smearLit = mixc(runeOf(q.ph), WHITE, 0.3);
       }
       if (t > 0.42 && t < T_SLAM) fx.armCharge = clamp01((t - 0.42) / 0.4);
-      if (t >= T_SLAM - 1e-6 && t < T_SLAM + 0.1) fx.impact = { at: 'hands', k: (t - T_SLAM) / 0.1 };
+      if (t >= T_SLAM - 1e-6 && t < T_SLAM + 0.1)
+        fx.impact = { at: 'hands', k: (t - T_SLAM) / 0.1 };
       break;
     case 'stomp':
       if (t > 0.58 && t < T_STOMP + 0.04) {
         const i = Math.sin(q.yb * YAW_STEP) > 0 ? 0 : 1;
         fx.smear = [trail((sk) => sk.foot[i], 4, 6, 1 / 100)];
       }
-      if (t >= T_STOMP - 1e-6 && t < T_STOMP + 0.1) fx.impact = { at: Math.sin(q.yb * YAW_STEP) > 0 ? 0 : 1, k: (t - T_STOMP) / 0.1 };
+      if (t >= T_STOMP - 1e-6 && t < T_STOMP + 0.1)
+        fx.impact = { at: Math.sin(q.yb * YAW_STEP) > 0 ? 0 : 1, k: (t - T_STOMP) / 0.1 };
       break;
     case 'rock': {
       fx.smoke = [];
@@ -6504,7 +7868,8 @@ function gBuild(q: GReq): MobFrame {
       if (q.f >= fk) fired = k + 1;
       if (q.f === fk || q.f === fk + 1) flash = k;
     }
-  const loop = q.tech === 'idle' || q.tech === 'walk' || (q.tech === 'stag' && q.f >= 100 && q.f < 200);
+  const loop =
+    q.tech === 'idle' || q.tech === 'walk' || (q.tech === 'stag' && q.f >= 100 && q.f < 200);
   const lk: GLook = {
     ph: q.ph,
     eye: eyeOf(q.ph),
@@ -6628,7 +7993,20 @@ function gMemOf(m: Mob, pose: MobPose): { s: GMem; fresh: boolean } {
   let s = gMem.get(m);
   const fresh = !s;
   if (!s) {
-    s = { yb: -1, mode: pose.mode, prev: '', walk: 0, now: pose.now, ph: 1, fr: null, dx: 0, dy: 0, turnFrom: 0, turnAt: -9, turnDir: 0 };
+    s = {
+      yb: -1,
+      mode: pose.mode,
+      prev: '',
+      walk: 0,
+      now: pose.now,
+      ph: 1,
+      fr: null,
+      dx: 0,
+      dy: 0,
+      turnFrom: 0,
+      turnAt: -9,
+      turnDir: 0,
+    };
     gMem.set(m, s);
   }
   if (pose.mode !== s.mode) {
@@ -6689,7 +8067,10 @@ function guardReq(m: Mob, pose: MobPose): { q: GReq; s: GMem } {
     q.f = Math.min(gSpan(tech) - 1, Math.max(0, f));
   };
   const rec = (tech: GTech) => at(tech, fAt(G_HIT[tech] ?? 0) + Math.floor(t * GFPS + 1e-6));
-  let yb = m.data?.vYaw !== undefined ? ((Math.round(th / YAW_STEP) % YAW_N) + YAW_N) % YAW_N : gFacing(s, th, pose.now, pose.mode === 'chase' && pose.anim !== 'run');
+  let yb =
+    m.data?.vYaw !== undefined
+      ? ((Math.round(th / YAW_STEP) % YAW_N) + YAW_N) % YAW_N
+      : gFacing(s, th, pose.now, pose.mode === 'chase' && pose.anim !== 'run');
   let ub = yb;
   switch (pose.mode) {
     case 'roar':
@@ -6716,7 +8097,10 @@ function guardReq(m: Mob, pose: MobPose): { q: GReq; s: GMem } {
       const sdir = m.data?.sdir ?? 1;
       // Лист кадров: угол растёт от времени, как в мозге (`vSa0` — угол на старте).
       const sa0h = m.data?.vSa0;
-      const sa = sa0h !== undefined ? sa0h + sdir * BOSS.spinW * Math.max(0, t - BOSS.spinCharge) : (m.data?.sa ?? m.face ?? 0);
+      const sa =
+        sa0h !== undefined
+          ? sa0h + sdir * BOSS.spinW * Math.max(0, t - BOSS.spinCharge)
+          : (m.data?.sa ?? m.face ?? 0);
       const sa0 = sa - sdir * BOSS.spinW * Math.max(0, t - BOSS.spinCharge);
       yb = (((Math.round(gYawOf(sa0) / (TAU / 16)) * 4) % YAW_N) + YAW_N) % YAW_N;
       ub = ((Math.round(gYawOf(sa) / YAW_STEP) % YAW_N) + YAW_N) % YAW_N;
@@ -6747,7 +8131,10 @@ function guardReq(m: Mob, pose: MobPose): { q: GReq; s: GMem } {
         // Ноги догоняют корпус, развернувшийся за вращение.
         const sdir = m.data?.sdir ?? 1;
         const sa0h = m.data?.vSa0;
-        const sa = sa0h !== undefined ? sa0h + sdir * BOSS.spinW * BOSS.spinDur : (m.data?.sa ?? m.face ?? 0);
+        const sa =
+          sa0h !== undefined
+            ? sa0h + sdir * BOSS.spinW * BOSS.spinDur
+            : (m.data?.sa ?? m.face ?? 0);
         const legs = gYawOf(sa - sdir * BOSS.spinW * BOSS.spinDur);
         const end = Math.round(gYawOf(sa) / (TAU / 16)) * (TAU / 16);
         const k = gIO(clamp01(t / T_REC));
@@ -6774,7 +8161,7 @@ function guardReq(m: Mob, pose: MobPose): { q: GReq; s: GMem } {
         const diff = ((((yb - s.turnFrom + YAW_N * 1.5) % YAW_N) + YAW_N) % YAW_N) - YAW_N / 2;
         const k = gIO(clamp01((q.f + 1) / gSpan('turn')));
         ub = yb;
-        yb = (((Math.round(s.turnFrom + diff * k) % YAW_N) + YAW_N) % YAW_N);
+        yb = ((Math.round(s.turnFrom + diff * k) % YAW_N) + YAW_N) % YAW_N;
       } else {
         q.tech = 'idle';
         q.f = Math.floor(pose.now * (IDLE_N / IDLE_T) + (m.id ?? 0) * 0.37) % IDLE_N;
@@ -6793,7 +8180,10 @@ registerMobPainter('f11boss', (m: Mob, pose: MobPose) => {
   if (q.tech === 'die') out.linger = T_DIE;
   // Шлейф на быстром: кулаки вниз, стопа вниз, вращение.
   const t = gTimeOf(q.tech, q.f);
-  if ((q.tech === 'slam' && t > 0.8 && t < T_SLAM + 0.08) || (q.tech === 'stomp' && t > 0.58 && t < T_STOMP + 0.06))
+  if (
+    (q.tech === 'slam' && t > 0.8 && t < T_SLAM + 0.08) ||
+    (q.tech === 'stomp' && t > 0.58 && t < T_STOMP + 0.06)
+  )
     out.ghost = { every: 0.03, life: 0.14, tint: '#e8e2c8', alpha: 0.3 };
   if (q.tech === 'spin' && t > BOSS.spinCharge && t < T_SPIN)
     out.ghost = { every: 0.035, life: 0.17, tint: '#ffa860', alpha: 0.24 };
@@ -6843,7 +8233,10 @@ export function f11GuardPoints(m: Mob): {
   const pts = gPts.get(s.fr);
   if (!pts) return null;
   const fr = s.fr;
-  const at = (p: [number, number]): [number, number] => [p[0] - fr.ax + s.dx, p[1] - fr.ay + 2 + s.dy];
+  const at = (p: [number, number]): [number, number] => [
+    p[0] - fr.ax + s.dx,
+    p[1] - fr.ay + 2 + s.dy,
+  ];
   const e = pts.emit;
   return {
     lens: pts.lens ? at(pts.lens) : null,
@@ -6859,7 +8252,15 @@ export function f11GuardPoints(m: Mob): {
 // Прогрев: пробуждение (вход камерой), покой со всех сторон, шаг и первая
 // фаза спереди — всё, что игрок увидит в первые секунды боя.
 registerMobWarm('f11boss', function* () {
-  const base: Omit<GReq, 'tech' | 'f' | 'yb' | 'ub'> = { hd: 0, sd: 0, ph: 1, sh: 0, look: 'normal', flash: false, dh: false };
+  const base: Omit<GReq, 'tech' | 'f' | 'yb' | 'ub'> = {
+    hd: 0,
+    sd: 0,
+    ph: 1,
+    sh: 0,
+    look: 'normal',
+    flash: false,
+    dh: false,
+  };
   const front = 0;
   for (let f = 0; f < gSpan('wake'); f++) {
     gBuild({ ...base, tech: 'wake', f, yb: front, ub: front });
@@ -6883,7 +8284,15 @@ registerMobWarm('f11boss', function* () {
     }
 });
 registerMobWarm('f11boss', function* () {
-  const base: Omit<GReq, 'tech' | 'f' | 'yb' | 'ub'> = { hd: 0, sd: 0, ph: 1, sh: 0, look: 'normal', flash: false, dh: false };
+  const base: Omit<GReq, 'tech' | 'f' | 'yb' | 'ub'> = {
+    hd: 0,
+    sd: 0,
+    ph: 1,
+    sh: 0,
+    look: 'normal',
+    flash: false,
+    dh: false,
+  };
   for (let yb = 12; yb <= 52; yb += 4)
     for (let f = 0; f < IDLE_N; f++) {
       gBuild({ ...base, tech: 'idle', f, yb, ub: yb });
@@ -6904,21 +8313,58 @@ const PY_DIE = 0.8;
 const PY_SINK = 0.4;
 
 /** Сам пилон в холст `p` со сдвигом вниз `dy` (уходит в пол — срезается землёй). */
-function pyDraw(p: Px, lit: Px, dy: number, glow: number, f: number, crack: number, top: boolean, bottom: boolean): void {
+function pyDraw(
+  p: Px,
+  lit: Px,
+  dy: number,
+  glow: number,
+  f: number,
+  crack: number,
+  top: boolean,
+  bottom: boolean,
+): void {
   const cx = PYX;
   const gy = PYG + dy;
   const q = new Px(PYW, PYH + 40);
   const crys = glow > 0.05 ? CRYSTAL : PY_DEAD;
   if (bottom) {
-    polyShade(q, [[cx - 7, gy], [cx + 7, gy], [cx + 5, gy - 6], [cx - 5, gy - 6]], ROCK);
+    polyShade(
+      q,
+      [
+        [cx - 7, gy],
+        [cx + 7, gy],
+        [cx + 5, gy - 6],
+        [cx - 5, gy - 6],
+      ],
+      ROCK,
+    );
     for (let x = cx - 5; x <= cx + 5; x += 2) q.set(x, gy - 3, glow > 0.05 ? RUNE : ROCK[0]);
-    polyShade(q, [[cx - 3.5, gy - 6], [cx + 3.5, gy - 6], [cx + 2.6, gy - 20], [cx - 2.6, gy - 20]], crys);
+    polyShade(
+      q,
+      [
+        [cx - 3.5, gy - 6],
+        [cx + 3.5, gy - 6],
+        [cx + 2.6, gy - 20],
+        [cx - 2.6, gy - 20],
+      ],
+      crys,
+    );
     stroke(q, cx, gy - 20, cx, gy - 7, glow > 0.05 ? CRYSTAL[3] : PY_DEAD[2]);
     q.rect(cx - 3, gy - 12, cx + 3, gy - 11, GOLD[1]);
     q.rect(cx - 3, gy - 12, cx + 3, gy - 12, GOLD[3]);
   }
   if (top) {
-    polyShade(q, [[cx - 2.6, gy - 20], [cx + 2.6, gy - 20], [cx + 2, gy - 30], [cx, gy - 34], [cx - 2, gy - 30]], crys);
+    polyShade(
+      q,
+      [
+        [cx - 2.6, gy - 20],
+        [cx + 2.6, gy - 20],
+        [cx + 2, gy - 30],
+        [cx, gy - 34],
+        [cx - 2, gy - 30],
+      ],
+      crys,
+    );
     stroke(q, cx, gy - 33, cx, gy - 20, glow > 0.05 ? CRYSTAL[3] : PY_DEAD[2]);
     q.rect(cx - 3, gy - 22, cx + 3, gy - 21, GOLD[1]);
     q.rect(cx - 3, gy - 22, cx + 3, gy - 22, GOLD[3]);
@@ -6947,7 +8393,8 @@ function pyDraw(p: Px, lit: Px, dy: number, glow: number, f: number, crack: numb
   const py = gy - 7 - (f / 12) * 27;
   for (let x = cx - 3; x <= cx + 3; x++)
     for (const yy of [Math.round(py), Math.round(py) + 1])
-      if (yy <= PYG && q.get(x, yy)[3]) lit.set(x, yy, alpha(WHITE, (yy === Math.round(py) ? 0.9 : 0.5) * glow));
+      if (yy <= PYG && q.get(x, yy)[3])
+        lit.set(x, yy, alpha(WHITE, (yy === Math.round(py) ? 0.9 : 0.5) * glow));
   if (top) {
     const tw = f % 4 < 2 ? 1 : 0.6;
     lit.set(cx, gy - 35, alpha(WHITE, glow * tw));
@@ -6955,7 +8402,8 @@ function pyDraw(p: Px, lit: Px, dy: number, glow: number, f: number, crack: numb
     lit.set(cx + 1, gy - 35, alpha(CYAN, 0.6 * glow * tw));
     lit.set(cx, gy - 36, alpha(CYAN, 0.7 * glow * tw));
   }
-  for (let x = cx - 5; x <= cx + 5; x += 2) if (gy - 3 <= PYG) lit.set(x, gy - 3, alpha(RUNE, 0.8 * glow));
+  for (let x = cx - 5; x <= cx + 5; x += 2)
+    if (gy - 3 <= PYG) lit.set(x, gy - 3, alpha(RUNE, 0.8 * glow));
 }
 
 /** Кольцо рун на орбите вокруг кристалла: задние за ним, передние перед. */
@@ -7090,10 +8538,15 @@ registerMobPainter('f11_pylon', (m: Mob, pose: MobPose) => {
   const t = Math.max(0, pose.t);
   let fr: MobFrame;
   if (pose.mode === 'dying') {
-    fr = pyFrame('die', Math.min(Math.ceil(PY_DIE * GFPS) - 1, Math.floor(t * GFPS)), pose.flash && t < 0.06);
+    fr = pyFrame(
+      'die',
+      Math.min(Math.ceil(PY_DIE * GFPS) - 1, Math.floor(t * GFPS)),
+      pose.flash && t < 0.06,
+    );
     return { ...fr, linger: PY_DIE };
   }
-  if (pose.mode === 'escape') return pyFrame('sink', Math.min(Math.ceil(PY_SINK * GFPS) - 1, Math.floor(t * GFPS)), false);
+  if (pose.mode === 'escape')
+    return pyFrame('sink', Math.min(Math.ceil(PY_SINK * GFPS) - 1, Math.floor(t * GFPS)), false);
   if (t < PY_RISE) return pyFrame('rise', Math.floor(t * GFPS), pose.flash);
   return pyFrame('hum', ((Math.floor(pose.now * 12 + (m.id ?? 0) * 3) % 12) + 12) % 12, pose.flash);
 });
@@ -7147,7 +8600,13 @@ registerItemArt('f11_gear', () => {
   const p = new Px(10, 10);
   for (let k = 0; k < 8; k++) {
     const a = (k * TAU) / 8;
-    p.rect(Math.round(5 + Math.cos(a) * 3.6) - 0, Math.round(5 + Math.sin(a) * 3.6) - 0, Math.round(5 + Math.cos(a) * 3.6), Math.round(5 + Math.sin(a) * 3.6), BRASS[1]);
+    p.rect(
+      Math.round(5 + Math.cos(a) * 3.6) - 0,
+      Math.round(5 + Math.sin(a) * 3.6) - 0,
+      Math.round(5 + Math.cos(a) * 3.6),
+      Math.round(5 + Math.sin(a) * 3.6),
+      BRASS[1],
+    );
   }
   shadeEll(p, 5, 5, 3.2, 3.2, BRASS, 0.1);
   p.ell(5, 5, 1.2, 1.2, BRASS[0]);
@@ -7192,7 +8651,10 @@ registerItemArt('f11_core', () => {
   const p = new Px(10, 10);
   poly(
     p,
-    [0, 1, 2, 3, 4, 5].map((k) => [5 + Math.cos((k * PI) / 3 + PI / 6) * 4.6, 5 + Math.sin((k * PI) / 3 + PI / 6) * 4.6]),
+    [0, 1, 2, 3, 4, 5].map((k) => [
+      5 + Math.cos((k * PI) / 3 + PI / 6) * 4.6,
+      5 + Math.sin((k * PI) / 3 + PI / 6) * 4.6,
+    ]),
     ANC[1],
   );
   shadeEll(p, 5, 5, 2.6, 2.6, CORE_HOT, 0.25);

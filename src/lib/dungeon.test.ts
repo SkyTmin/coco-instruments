@@ -16,6 +16,7 @@ import {
   DEEP_BASE,
   DEEP_MINES,
   DEEP_ROCKS,
+  DUNGEON_SAVE_VER,
   DUNGEON_START,
   EMPTY_SACK,
   heroOf,
@@ -176,8 +177,43 @@ describe('подземелье: правила', () => {
     expect(DEEP_ROCKS.length).toBeGreaterThan(1);
   });
 
+  it('сброс подземелья: старая версия — с нуля, новая — как есть, неизвестное — мимо', () => {
+    const played: DungeonState = {
+      ...DUNGEON_START,
+      xp: 900,
+      reached: 4,
+      kills: { rat: 12, gone_mob: 3 },
+      stash: { skin: 5, 'ore:2': 7, gone_mat: 9 },
+      run: {
+        lift: 'mouth',
+        floor: 1,
+        area: 'mouth',
+        x: 3,
+        y: 4,
+        hp: 20,
+        sack: { ...EMPTY_SACK, mats: { skin: 1, gone_mat: 2 }, meat: { gone_meat: 1 } },
+        started: 1,
+        killed: 0,
+      },
+    };
+    // Сохранение до сброса (без версии или со старой) — чистый старт.
+    for (const saveVer of [undefined, 1])
+      expect(normalizeDungeon({ ...played, saveVer })).toEqual(DUNGEON_START);
+    // Текущая версия — прогресс цел, неизвестные id выброшены.
+    const d = normalizeDungeon(played);
+    expect(d.saveVer).toBe(DUNGEON_SAVE_VER);
+    expect(d.xp).toBe(900);
+    expect(d.reached).toBe(4);
+    expect(d.kills).toEqual({ rat: 12 });
+    expect(d.stash).toEqual({ skin: 5, 'ore:2': 7 });
+    expect(d.run!.sack.mats).toEqual({ skin: 1 });
+    expect(d.run!.sack.meat).toEqual({});
+    expect(normalizeDungeon(JSON.parse(JSON.stringify(d)))).toEqual(d);
+  });
+
   it('битое сохранение не роняет игру', () => {
     const d = normalizeDungeon({
+      saveVer: DUNGEON_SAVE_VER,
       gear: { weapon: { tier: 99, plus: -3 } },
       kills: { rat: 'x' },
       run: { area: 'nope' },

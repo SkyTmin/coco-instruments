@@ -158,7 +158,8 @@ export function creativeDungeon(d: DungeonState, o: DungeonPatch): DungeonState 
   }
   if (o.bosses) {
     const bosses: DungeonState['bosses'] = {};
-    for (const [id, b] of Object.entries(q.bosses)) if (b) bosses[id as keyof typeof bosses] = { ...b, at: 0 };
+    for (const [id, b] of Object.entries(q.bosses))
+      if (b) bosses[id as keyof typeof bosses] = { ...b, at: 0 };
     q = { ...q, bosses };
   }
   if (o.stash) {

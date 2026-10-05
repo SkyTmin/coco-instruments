@@ -160,7 +160,12 @@ export function PetArt({
       {!ghost && def.rarity >= 1 && <i className="pet__aura" aria-hidden="true" />}
       {!ghost && (v === 2 || def.rarity >= 4) && <i className="pet__rays" aria-hidden="true" />}
       {still || ghost || !st ? (
-        <img className="pet__thumb" src={`/ui/pets/${id}/thumb.webp?v=${PET_REV}`} alt="" draggable={false} />
+        <img
+          className="pet__thumb"
+          src={`/ui/pets/${id}/thumb.webp?v=${PET_REV}`}
+          alt=""
+          draggable={false}
+        />
       ) : (
         <span
           className="pet__frame"

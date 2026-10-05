@@ -120,7 +120,12 @@ function bot(s: Sim, st: BotState): SimInput {
     if (!t || t.shape !== 'line') continue;
     const [react, missed] = notice(st, `l${m.id}:${Math.round((s.time - m.t) * 10)}`);
     if (missed || m.t < react) continue;
-    const hit = strikeHits({ shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 }, h.x, h.y, h.r + 0.3);
+    const hit = strikeHits(
+      { shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 },
+      h.x,
+      h.y,
+      h.r + 0.3,
+    );
     if (!hit) continue;
     const a = (t.ang ?? 0) + Math.PI / 2;
     const side = Math.cos(a) * (h.x - m.x) + Math.sin(a) * (h.y - m.y) >= 0 ? 1 : -1;
@@ -242,7 +247,9 @@ function fight(tier: number, plus: number, seed: number, meat = 5, limit = 600):
   const src = new Map<string, number>();
   for (let t = 0; t < limit * 60; t++) {
     const hp0 = s.hero.hp;
-    const firing = s.strikes.filter((z) => z.t + DT >= z.warn && strikeHits(z, s.hero.x, s.hero.y, s.hero.r));
+    const firing = s.strikes.filter(
+      (z) => z.t + DT >= z.warn && strikeHits(z, s.hero.x, s.hero.y, s.hero.r),
+    );
     stepSim(s, DT, bot(s, st));
     if (LOG && s.hero.hp < hp0 - 1) {
       const who =
@@ -252,12 +259,17 @@ function fight(tier: number, plus: number, seed: number, meat = 5, limit = 600):
             .filter((m) => Math.hypot(m.x - s.hero.x, m.y - s.hero.y) < 3)
             .map((m) => `${m.kind}:${m.mode}`)[0] ||
           (s.shots.length ? 'shot' : '?'));
-      src.set(`${s.boss?.phase}:${who}`, (src.get(`${s.boss?.phase}:${who}`) ?? 0) + (hp0 - s.hero.hp) / s.stats.maxHp);
+      src.set(
+        `${s.boss?.phase}:${who}`,
+        (src.get(`${s.boss?.phase}:${who}`) ?? 0) + (hp0 - s.hero.hp) / s.stats.maxHp,
+      );
     }
     low = Math.min(low, s.hero.hp / s.stats.maxHp);
     if (process.env.F15DBG && t % 600 === 0 && (s.boss?.phase ?? 0) >= 4) {
       const hh = s.mobs.find((m) => m.kind === 'f15boss_heart');
-      console.log(`  t=${s.time.toFixed(0)} hero ${s.hero.x.toFixed(1)},${s.hero.y.toFixed(1)} ${s.hero.mode} hp ${Math.round((100 * s.hero.hp) / s.stats.maxHp)}% heart ${hh ? `${hh.hp.toFixed(0)}/${hh.maxHp} ${hh.mode} @${hh.x.toFixed(1)},${hh.y.toFixed(1)}` : '-'} slow ${s.slowmo.toFixed(1)} mobs ${s.mobs.map((m) => m.kind.replace('f15b', '') + ':' + m.mode).join(' ')}`);
+      console.log(
+        `  t=${s.time.toFixed(0)} hero ${s.hero.x.toFixed(1)},${s.hero.y.toFixed(1)} ${s.hero.mode} hp ${Math.round((100 * s.hero.hp) / s.stats.maxHp)}% heart ${hh ? `${hh.hp.toFixed(0)}/${hh.maxHp} ${hh.mode} @${hh.x.toFixed(1)},${hh.y.toFixed(1)}` : '-'} slow ${s.slowmo.toFixed(1)} mobs ${s.mobs.map((m) => m.kind.replace('f15b', '') + ':' + m.mode).join(' ')}`,
+      );
     }
     for (const e of s.events) {
       if (e.t === 'boss' && e.what === 'dead') won = s.time;
@@ -292,7 +304,9 @@ function fight(tier: number, plus: number, seed: number, meat = 5, limit = 600):
 
 describe('этаж 15: Хозяин подземелья', () => {
   it('на Т8+5 с едой бот проходит все пять фаз за 4–8 минут, не всегда без риска', () => {
-    const res = (process.env.F15SEEDS ?? '41,42,43,44').split(',').map((seed) => fight(8, 5, Number(seed)));
+    const res = (process.env.F15SEEDS ?? '41,42,43,44')
+      .split(',')
+      .map((seed) => fight(8, 5, Number(seed)));
     const wins = res.filter((r) => r.won > 0);
     expect(wins.length).toBeGreaterThanOrEqual(2);
     for (const r of wins) {
@@ -374,7 +388,9 @@ describe('этаж 15: механики боя', () => {
     const mk = s.world.mark;
     expect(count(s, (i) => s.tiles[i] === Tile.Deep && mk[i] === MK.lava)).toBeGreaterThan(3);
     expect(count(s, (i) => s.tiles[i] === Tile.Deep && mk[i] === MK.abyss)).toBeGreaterThan(3);
-    expect(count(s, (i) => s.tiles[i] === Tile.Wall && mk[i] === MK.mirror)).toBeGreaterThanOrEqual(3);
+    expect(count(s, (i) => s.tiles[i] === Tile.Wall && mk[i] === MK.mirror)).toBeGreaterThanOrEqual(
+      3,
+    );
     expect(count(s, (i) => mk[i] === MK.circleA)).toBe(2);
     expect(count(s, (i) => mk[i] === MK.circleB)).toBe(2);
     // От ворот до сердца и до каждой клетки пола арены — дорога есть.
@@ -436,7 +452,10 @@ describe('этаж 15: механики боя', () => {
       if (!walkableTile(s.tiles[hi])) bad += 1;
       if (t % 60 === 0) {
         if (!reach(s, s.hero.x, s.hero.y).has(heartCell(s))) cut += 1;
-        squeezed = Math.max(squeezed, count(s, (i) => s.world.mark[i] === MK.swell && s.tiles[i] === Tile.Wall));
+        squeezed = Math.max(
+          squeezed,
+          count(s, (i) => s.world.mark[i] === MK.swell && s.tiles[i] === Tile.Wall),
+        );
       }
     }
     expect(squeezed).toBeGreaterThan(0);
@@ -456,13 +475,17 @@ describe('этаж 15: механики боя', () => {
     API.hurtEnv(s, 5);
     for (let t = 0; t < 12 * 60 && s.boss?.state === 'fight'; t++) stepSim(s, DT, NO_INPUT);
     expect(s.boss?.state).not.toBe('fight');
-    expect(count(s, (i) => s.tiles[i] !== world.tiles[i] || s.world.mark[i] !== world.mark[i])).toBe(0);
+    expect(
+      count(s, (i) => s.tiles[i] !== world.tiles[i] || s.world.mark[i] !== world.mark[i]),
+    ).toBe(0);
     // Победа: арена цела, финал один, ворота выпускают.
     const r = fight(8, 5, 42);
     expect(r.won).toBeGreaterThan(0);
     expect(r.finale).toBe(1);
     const w = r.s;
-    expect(count(w, (i) => w.tiles[i] !== world.tiles[i] || w.world.mark[i] !== world.mark[i])).toBe(0);
+    expect(
+      count(w, (i) => w.tiles[i] !== world.tiles[i] || w.world.mark[i] !== world.mark[i]),
+    ).toBe(0);
     let out = false;
     for (let t = 0; t < 20 * 60 && !out; t++) {
       const h = w.hero;
@@ -478,7 +501,9 @@ describe('этаж 15: механики боя', () => {
 
 describe.runIf(!!process.env.F15SWEEP)('этаж 15: подбор', () => {
   it('сетка снаряжения', () => {
-    for (const [tier, plus, meat] of (process.env.F15SWEEP ?? '').split(';').map((x) => x.split(',').map(Number)))
+    for (const [tier, plus, meat] of (process.env.F15SWEEP ?? '')
+      .split(';')
+      .map((x) => x.split(',').map(Number)))
       for (const seed of [61, 62, 63]) fight(tier, plus, seed, meat);
   });
 });

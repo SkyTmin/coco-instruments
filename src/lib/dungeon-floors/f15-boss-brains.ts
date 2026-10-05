@@ -88,10 +88,45 @@ export const ECHO = {
   ] as [number, number][],
 };
 
-export const KING_E = { rollAim: 0.85, rollSpeed: 10.5, rollMax: 2.4, bounces: 2, dizzy: 1.6, rollCd: 4.2 };
-export const MINO_E = { axeWarn: 0.85, axeR: 1.5, axeAhead: 1.25, aim: 0.95, speed: 12.5, goreMax: 1.4, dizzy: 1.9, cd: 4.2 };
-export const SERP_E = { biteR: 2.5, biteArc: 1.3, biteWarn: 0.62, rear: 1.05, sweep: 1.0, gap: 2.3, laneW: 0.5, cd: 5.6 };
-export const HYDRA_E = { cast: 0.75, every: 4.2, biteR: 1.15, biteWarn: 0.62, heads: [[-1.9, -0.2], [0, -1.35], [1.9, -0.2]] as [number, number][] };
+export const KING_E = {
+  rollAim: 0.85,
+  rollSpeed: 10.5,
+  rollMax: 2.4,
+  bounces: 2,
+  dizzy: 1.6,
+  rollCd: 4.2,
+};
+export const MINO_E = {
+  axeWarn: 0.85,
+  axeR: 1.5,
+  axeAhead: 1.25,
+  aim: 0.95,
+  speed: 12.5,
+  goreMax: 1.4,
+  dizzy: 1.9,
+  cd: 4.2,
+};
+export const SERP_E = {
+  biteR: 2.5,
+  biteArc: 1.3,
+  biteWarn: 0.62,
+  rear: 1.05,
+  sweep: 1.0,
+  gap: 2.3,
+  laneW: 0.5,
+  cd: 5.6,
+};
+export const HYDRA_E = {
+  cast: 0.75,
+  every: 4.2,
+  biteR: 1.15,
+  biteWarn: 0.62,
+  heads: [
+    [-1.9, -0.2],
+    [0, -1.35],
+    [1.9, -0.2],
+  ] as [number, number][],
+};
 export const DEMON_E = {
   slashR: 3.1,
   slashArc: 2.3,
@@ -368,12 +403,27 @@ function restoreArena(sim: Sim, st: F15BState, api: SimApi): void {
   st.lights.clear();
 }
 
-function light(sim: Sim, st: F15BState, key: string, x: number, y: number, r: number, tint: 'warm' | 'cold' | 'teal' | 'red' | 'violet' | 'green'): void {
+function light(
+  sim: Sim,
+  st: F15BState,
+  key: string,
+  x: number,
+  y: number,
+  r: number,
+  tint: 'warm' | 'cold' | 'teal' | 'red' | 'violet' | 'green',
+): void {
   st.api.light(sim, key, { x, y, r, tint });
   st.lights.add(key);
 }
 
-function say(sim: Sim, st: F15BState, key: string, what: string, text?: string, sub?: string): void {
+function say(
+  sim: Sim,
+  st: F15BState,
+  key: string,
+  what: string,
+  text?: string,
+  sub?: string,
+): void {
   if (key && st.told.has(key)) {
     sim.events.push({ t: 'boss', what });
     return;
@@ -390,8 +440,24 @@ const centerOf = (b: BossFight): [number, number] => [b.obj.x + 0.5, b.obj.y + 0
 // v2.87 — только рисунок: зона-картинка (`api.vfx`: без урона и статусов, номер
 // мимо `nextId`) — шаги, взмахи, посадки, рёв рисует `f15-boss-fx.ts`. Своих
 // `f15b_fx*` разом не больше 30, пыли шагов и взмахов — не больше 20.
-type VfxIn = { ang?: number; n?: number; q?: number; mob?: number; cells?: number[]; above?: boolean };
-function vfx(sim: Sim, api: SimApi, art: string, x: number, y: number, life: number, o: VfxIn = {}, move = false): void {
+type VfxIn = {
+  ang?: number;
+  n?: number;
+  q?: number;
+  mob?: number;
+  cells?: number[];
+  above?: boolean;
+};
+function vfx(
+  sim: Sim,
+  api: SimApi,
+  art: string,
+  x: number,
+  y: number,
+  life: number,
+  o: VfxIn = {},
+  move = false,
+): void {
   let n = 0;
   for (const z of sim.zones) if (z.art?.startsWith('f15b_fx')) n++;
   if (n < (move ? 20 : 30)) api.vfx(sim, { x, y, r: 0.5, life, art, ...o } as ZoneIn & VfxIn);
@@ -408,7 +474,14 @@ function echoRise(sim: Sim, m: Mob, api: SimApi): boolean {
     mist.x = m.x;
     mist.y = m.y + 0.15;
   } else if (m.mode !== 'dying')
-    tagZone(sim, api, { x: m.x, y: m.y, r: Math.max(0.9, m.r * 1.3), life: 1e9, art: 'f15b_mist', mob: m.id });
+    tagZone(sim, api, {
+      x: m.x,
+      y: m.y,
+      r: Math.max(0.9, m.r * 1.3),
+      life: 1e9,
+      art: 'f15b_mist',
+      mob: m.id,
+    });
   if (m.mode !== 'f15e_rise') return false;
   m.data.ghost = 1;
   m.vx = 0;
@@ -427,13 +500,24 @@ function echoGone(sim: Sim, m: Mob): void {
 }
 
 /** Удар вплотную конусом (режим `windup` — движок рисует конус и засчитывает уклон). */
-function meleeWindup(sim: Sim, m: Mob, c: BrainCtx, api: SimApi, mult: number, knock: number): void {
+function meleeWindup(
+  sim: Sim,
+  m: Mob,
+  c: BrainCtx,
+  api: SimApi,
+  mult: number,
+  knock: number,
+): void {
   m.vx *= 0.7;
   m.vy *= 0.7;
   if (m.t >= c.def.windup) {
     const h = sim.hero;
     const a = Math.atan2(h.y - m.y, h.x - m.x);
-    if (c.dist < c.def.reach + m.r + h.r + 0.2 && Math.abs(angDiff(a, m.face)) < 0.75 && canHurt(sim))
+    if (
+      c.dist < c.def.reach + m.r + h.r + 0.2 &&
+      Math.abs(angDiff(a, m.face)) < 0.75 &&
+      canHurt(sim)
+    )
       api.hurtHero(sim, m.dmg * mult, m.x, m.y, knock, m.kind);
     api.setMode(m, 'recover');
   }
@@ -484,7 +568,13 @@ registerBrain('f15b_echo_king', {
         if (m.t < KING_E.rollAim * 0.6) m.dir = Math.atan2(c.dy, c.dx);
         m.face = m.dir;
         const len = clearDist(sim, api, m.x, m.y, m.dir, 12);
-        m.tele = { shape: 'line', r: len, w: m.r, ang: m.dir, k: Math.min(1, m.t / KING_E.rollAim) };
+        m.tele = {
+          shape: 'line',
+          r: len,
+          w: m.r,
+          ang: m.dir,
+          k: Math.min(1, m.t / KING_E.rollAim),
+        };
         m.danger = KING_E.rollAim - m.t < 0.25 ? 2.2 : 0;
         if (m.t >= KING_E.rollAim) {
           m.tele = null;
@@ -565,7 +655,12 @@ registerBrain('f15b_echo_mino', {
         if (c.dist < 2.5 && m.t > 0.45) {
           m.dir = Math.atan2(c.dy, c.dx);
           api.setMode(m, 'axe');
-        } else if (m.data.cd <= 0 && c.dist > 3 && c.dist < 13 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
+        } else if (
+          m.data.cd <= 0 &&
+          c.dist > 3 &&
+          c.dist < 13 &&
+          api.lineOfSight(sim, m.x, m.y, h.x, h.y)
+        ) {
           m.dir = Math.atan2(c.dy, c.dx);
           api.setMode(m, 'aim');
         }
@@ -767,7 +862,14 @@ registerBrain('f15b_echo_serpent', {
         if (!m.data.lit && m.t >= 0.05) {
           m.data.lit = 1;
           flameLanes(sim, m, api, [-2, -1, 0, 1, 2], SERP_E.rear - 0.05);
-          say(sim, stateOf(sim, api), 'lanes', 'f15b_flame_trap', 'ПОЛОСЫ ПЛАМЕНИ', 'стой в просвете между ними');
+          say(
+            sim,
+            stateOf(sim, api),
+            'lanes',
+            'f15b_flame_trap',
+            'ПОЛОСЫ ПЛАМЕНИ',
+            'стой в просвете между ними',
+          );
         }
         if (m.t >= SERP_E.rear + 0.3) {
           m.data.lit = 0;
@@ -818,7 +920,17 @@ const FIRE_LOB: ShotSpec = {
   dur: 1,
   onLand: { r: 1.05, life: 2, dps: 0.02, art: 'f15b_flames', above: true }, // v2.87 — только рисунок: above
 };
-const ICE_FAN: ShotSpec = { speed: 8.5, r: 0.35, life: 2.2, dmg: 0.7, art: 'f15b_ice', status: 'chill', dur: 1.6, n: 3, spread: 0.55 };
+const ICE_FAN: ShotSpec = {
+  speed: 8.5,
+  r: 0.35,
+  life: 2.2,
+  dmg: 0.7,
+  art: 'f15b_ice',
+  status: 'chill',
+  dur: 1.6,
+  n: 3,
+  spread: 0.55,
+};
 
 registerBrain('f15b_echo_hydra', {
   raw: true,
@@ -993,7 +1105,11 @@ registerBrain('f15b_echo_demon', {
         if (c.dist < DEMON_E.slashR - 0.3) {
           m.dir = Math.atan2(c.dy, c.dx);
           api.setMode(m, 'slash');
-        } else if (c.dist < DEMON_E.cleaveR - 0.4 && m.t > 1.2 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
+        } else if (
+          c.dist < DEMON_E.cleaveR - 0.4 &&
+          m.t > 1.2 &&
+          api.lineOfSight(sim, m.x, m.y, h.x, h.y)
+        ) {
           m.dir = Math.atan2(c.dy, c.dx);
           api.setMode(m, 'cleave');
         }
@@ -1066,7 +1182,14 @@ registerBrain('f15b_echo_demon', {
         if (!m.data.lit && m.t >= 0.3 && b) {
           m.data.lit = 1;
           demonStorm(sim, b, m, api);
-          say(sim, stateOf(sim, api), 'storm', 'f15b_storm_trap', 'ГРОЗА', 'молнии бьют клетками — встань между');
+          say(
+            sim,
+            stateOf(sim, api),
+            'storm',
+            'f15b_storm_trap',
+            'ГРОЗА',
+            'молнии бьют клетками — встань между',
+          );
         }
         if (m.data.lit === 1 && m.t >= 0.3 + DEMON_E.stormWarn) {
           m.data.lit = 2;
@@ -1130,8 +1253,7 @@ function landSpot(sim: Sim, b: BossFight, x: number, y: number): [number, number
 const hasteOf = (sim: Sim) => ((sim.boss?.phase ?? 0) >= 3 ? 1.15 : 1);
 
 /** Мода, которую можно прервать сменой фазы. */
-const calm = (m: Mob) =>
-  m.mode === 'chase' || m.mode === 'f15_recover' || m.mode === 'f15_landed';
+const calm = (m: Mob) => m.mode === 'chase' || m.mode === 'f15_recover' || m.mode === 'f15_landed';
 
 function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
   const h = sim.hero;
@@ -1174,7 +1296,18 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           [2.6, 0.45],
           [4.6, 0.55],
         ])
-          api.strike(sim, { shape: 'ring', x: m.x, y: m.y, r, w, warn: 0.45 + r * 0.06, dmg: m.dmg * 0.7, knock: 12, art: 'f15b_shock', from: m.id });
+          api.strike(sim, {
+            shape: 'ring',
+            x: m.x,
+            y: m.y,
+            r,
+            w,
+            warn: 0.45 + r * 0.06,
+            dmg: m.dmg * 0.7,
+            knock: 12,
+            art: 'f15b_shock',
+            from: m.id,
+          });
         sim.events.push({ t: 'shake', k: 0.8 });
         sim.events.push({ t: 'flash', color: '#ff7050', k: 0.7 });
         vfx(sim, api, 'f15b_fxburst', m.x, m.y, 1.6, { above: true }); // v2.87 — только рисунок
@@ -1201,7 +1334,8 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
     case 'f15_call': {
       m.vx *= 0.7;
       m.vy *= 0.7;
-      const T = m.mode === 'f15_memory' ? LION.memory : m.mode === 'f15_unfurl' ? LION.unfurl : LION.call;
+      const T =
+        m.mode === 'f15_memory' ? LION.memory : m.mode === 'f15_unfurl' ? LION.unfurl : LION.call;
       m.data.ghost = m.mode !== 'f15_call' && m.t < T - 0.3 ? 1 : 0;
       // v2.87 — только рисунок: память и зов — рёв.
       if (!m.data.vRoar && m.mode !== 'f15_unfurl') {
@@ -1215,7 +1349,18 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.mode === 'f15_unfurl' && !m.data.lit && m.t >= 1.2) {
         m.data.lit = 1;
         sim.events.push({ t: 'shake', k: 0.6 });
-        api.strike(sim, { shape: 'ring', x: m.x, y: m.y, r: 3, w: 0.6, warn: 0.4, dmg: m.dmg * 0.6, knock: 13, art: 'f15b_shock', from: m.id });
+        api.strike(sim, {
+          shape: 'ring',
+          x: m.x,
+          y: m.y,
+          r: 3,
+          w: 0.6,
+          warn: 0.4,
+          dmg: m.dmg * 0.6,
+          knock: 13,
+          art: 'f15b_shock',
+          from: m.id,
+        });
       }
       if (m.t >= T) {
         m.data.ghost = 0;
@@ -1238,7 +1383,16 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.data.vWalk > 0.85) {
         m.data.vWalk = 0;
         m.data.vFoot = 1 - (m.data.vFoot ?? 0);
-        vfx(sim, api, 'f15b_fxstep', m.x, m.y, 0.8, { ang: Math.atan2(m.vy, m.vx), n: m.data.vFoot }, true);
+        vfx(
+          sim,
+          api,
+          'f15b_fxstep',
+          m.x,
+          m.y,
+          0.8,
+          { ang: Math.atan2(m.vy, m.vx), n: m.data.vFoot },
+          true,
+        );
       }
       if (m.t < 0.45 / haste) return;
       const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
@@ -1357,7 +1511,18 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         m.data.z = 0;
         m.data.ghost = 0;
         airborne(m, false);
-        api.strike(sim, { shape: 'ring', x: m.x, y: m.y, r: LION.shardR, w: 0.55, warn: 0.35, dmg: m.dmg * 0.8, knock: 7, art: 'f15b_shards', from: m.id });
+        api.strike(sim, {
+          shape: 'ring',
+          x: m.x,
+          y: m.y,
+          r: LION.shardR,
+          w: 0.55,
+          warn: 0.35,
+          dmg: m.dmg * 0.8,
+          knock: 7,
+          art: 'f15b_shards',
+          from: m.id,
+        });
         sim.events.push({ t: 'boom', x: m.x, y: m.y, r: 0 });
         sim.events.push({ t: 'boss', what: 'f15b_land_wall' });
         m.data.pounceCd = 5.5 / haste;
@@ -1453,12 +1618,27 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.data.fanT <= 0) {
         m.data.fanT = 1.15;
         const aim = Math.atan2(h.y - m.y, h.x - m.x);
-        api.shoot(sim, m, aim, { speed: 7, r: 0.3, life: 2.4, dmg: 0.5, art: 'f15b_feather', n: 5, spread: 1.15 });
+        api.shoot(sim, m, aim, {
+          speed: 7,
+          r: 0.3,
+          life: 2.4,
+          dmg: 0.5,
+          art: 'f15b_feather',
+          n: 5,
+          spread: 1.15,
+        });
       }
       if (m.t >= LION.fly) {
         delete m.data.orb;
         api.setMode(m, 'f15_swoopAim');
-        say(sim, stateOf(sim, api), 'swoop', 'f15b_swoop_trap', 'ПИКЕ', 'линия через весь зал — сойди с неё');
+        say(
+          sim,
+          stateOf(sim, api),
+          'swoop',
+          'f15b_swoop_trap',
+          'ПИКЕ',
+          'линия через весь зал — сойди с неё',
+        );
       }
       return;
     }
@@ -1586,7 +1766,15 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         m.data.fans = i + 1;
         vfx(sim, api, 'f15b_fxflap', m.x, m.y, 0.6, {}, true); // v2.87 — только рисунок
         const aim = Math.atan2(h.y - m.y, h.x - m.x) + (i % 2 ? 0.09 : -0.09);
-        api.shoot(sim, m, aim, { speed: 8, r: 0.3, life: 2.2, dmg: 0.55, art: 'f15b_feather', n: 5, spread: 1 });
+        api.shoot(sim, m, aim, {
+          speed: 8,
+          r: 0.3,
+          life: 2.2,
+          dmg: 0.55,
+          art: 'f15b_feather',
+          n: 5,
+          spread: 1,
+        });
       }
       if (m.t >= LION.fan) {
         m.data.fans = 0;
@@ -1719,7 +1907,8 @@ registerBrain('f15b_clot', {
         }
         if (m.t >= T) {
           vfx(sim, api, 'f15b_fxpop', m.x, m.y, 0.9); // v2.87 — только рисунок
-          if (c.dist < 1.25 + h.r && canHurt(sim)) api.hurtHero(sim, m.dmg * 1.6, m.x, m.y, 6, m.kind);
+          if (c.dist < 1.25 + h.r && canHurt(sim))
+            api.hurtHero(sim, m.dmg * 1.6, m.x, m.y, 6, m.kind);
           api.zone(sim, { x: m.x, y: m.y, r: 1.15, life: 3, slow: 0.62, art: 'f15b_pool' });
           sim.events.push({ t: 'kill', x: m.x, y: m.y, mob: m.kind, elite: false, albino: false });
           m.hp = 0;
@@ -1757,7 +1946,8 @@ function planQuads(sim: Sim, b: BossFight): Quad[] {
   const W = sim.world.w;
   const [kx, ky] = centerOf(b);
   const solidProp = new Set<number>();
-  for (const p of sim.props) if (p.alive && p.r > 0) solidProp.add(Math.floor(p.y) * W + Math.floor(p.x));
+  for (const p of sim.props)
+    if (p.alive && p.r > 0) solidProp.add(Math.floor(p.y) * W + Math.floor(p.x));
   const quads: Quad[] = QUADS.map((kind, q) => ({
     kind,
     q,
@@ -1789,9 +1979,17 @@ function planQuads(sim: Sim, b: BossFight): Quad[] {
     if (edge) continue;
     cand[q].push(i);
   }
-  const blob = (qd: Quad, list: number[], seed: number, cut: number, deep: [number, number], rim: [number, number, HazardSpec]) => {
+  const blob = (
+    qd: Quad,
+    list: number[],
+    seed: number,
+    cut: number,
+    deep: [number, number],
+    rim: [number, number, HazardSpec],
+  ) => {
     const set = new Set<number>();
-    for (const i of list) if (vnoise((i % W) * 0.42, Math.floor(i / W) * 0.42, seed) > cut) set.add(i);
+    for (const i of list)
+      if (vnoise((i % W) * 0.42, Math.floor(i / W) * 0.42, seed) > cut) set.add(i);
     for (const i of set) {
       qd.to.set(i, [deep[0], deep[1], null]);
       qd.pools.push(i);
@@ -1820,13 +2018,18 @@ function planQuads(sim: Sim, b: BossFight): Quad[] {
     if (!mir.to.has(i)) {
       const x = i % W;
       const y = Math.floor(i / W);
-      if (mir.mirrors.some((j) => Math.max(Math.abs((j % W) - x), Math.abs(Math.floor(j / W) - y)) <= 1))
+      if (
+        mir.mirrors.some(
+          (j) => Math.max(Math.abs((j % W) - x), Math.abs(Math.floor(j / W) - y)) <= 1,
+        )
+      )
         mir.to.set(i, [T_FLOOR, MK.mirrorFloor, null]);
     }
   // Гидра: топь пятнами и две пары кругов-телепортов.
   const hyd = quads[3];
   for (const i of cand[3])
-    if (vnoise((i % W) * 0.5, Math.floor(i / W) * 0.5, 83) > 0.64) hyd.to.set(i, [T_HAZARD, MK.bog, HAZ_BOG]);
+    if (vnoise((i % W) * 0.5, Math.floor(i / W) * 0.5, 83) > 0.64)
+      hyd.to.set(i, [T_HAZARD, MK.bog, HAZ_BOG]);
   const free = cand[3].filter((i) => !hyd.to.has(i));
   const pick: number[] = [];
   const hx0 = kx + 6;
@@ -1843,7 +2046,10 @@ function planQuads(sim: Sim, b: BossFight): Quad[] {
     for (const i of free) {
       if (pick.includes(i)) continue;
       const d = hypot((i % W) + 0.5 - (hx0 + ox), Math.floor(i / W) + 0.5 - (hy0 + oy));
-      if (d < bd && pick.every((j) => hypot((j % W) - (i % W), Math.floor(j / W) - Math.floor(i / W)) > 3)) {
+      if (
+        d < bd &&
+        pick.every((j) => hypot((j % W) - (i % W), Math.floor(j / W) - Math.floor(i / W)) > 3)
+      ) {
         bd = d;
         best = i;
       }
@@ -1863,7 +2069,8 @@ function planQuads(sim: Sim, b: BossFight): Quad[] {
   // Связность: от сердца обязано быть можно дойти до каждой клетки пола.
   for (let pass = 0; pass < 24; pass++) {
     const block = new Set<number>();
-    for (const qd of quads) for (const [i, [t]] of qd.to) if (t === T_DEEP || t === T_WALL) block.add(i);
+    for (const qd of quads)
+      for (const [i, [t]] of qd.to) if (t === T_DEEP || t === T_WALL) block.add(i);
     const start = Math.floor(ky) * W + Math.floor(kx);
     const seen = new Set<number>([start]);
     const q = [start];
@@ -1918,8 +2125,23 @@ function wakeQuad(sim: Sim, b: BossFight, st: F15BState, api: SimApi, qd: Quad):
   qd.next = sim.time + 2.2 + qd.q * 0.4;
   // Свет памяти: лава горит, бездна мерцает, зеркала холодны, круги зелены.
   const tint = (['red', 'teal', 'cold', 'green'] as const)[qd.q];
-  const pts = qd.kind === 'mirror' ? qd.mirrors : qd.kind === 'hydra' ? qd.circles.flat() : qd.pools.filter((_, k) => k % 7 === 0).slice(0, 4);
-  pts.forEach((i, n) => light(sim, st, `f15b_q${qd.q}_${n}`, (i % W) + 0.5, Math.floor(i / W) + 0.5, qd.kind === 'lava' ? 3.6 : 2.4, tint));
+  const pts =
+    qd.kind === 'mirror'
+      ? qd.mirrors
+      : qd.kind === 'hydra'
+        ? qd.circles.flat()
+        : qd.pools.filter((_, k) => k % 7 === 0).slice(0, 4);
+  pts.forEach((i, n) =>
+    light(
+      sim,
+      st,
+      `f15b_q${qd.q}_${n}`,
+      (i % W) + 0.5,
+      Math.floor(i / W) + 0.5,
+      qd.kind === 'lava' ? 3.6 : 2.4,
+      tint,
+    ),
+  );
   sim.events.push({ t: 'boss', what: `f15b_${qd.kind}_trap` });
   sim.events.push({ t: 'shake', k: 0.25 });
   vfx(sim, api, 'f15b_fxqwake', centerOf(b)[0], centerOf(b)[1], 1.0, { q: qd.q, above: true }); // v2.87 — только рисунок
@@ -1937,7 +2159,18 @@ function quadHazard(sim: Sim, b: BossFight, st: F15BState, api: SimApi, qd: Quad
       const spots = qd.area.filter((i) => walkT(sim.tiles[i]) && near(i) < 4.5);
       for (let n = 0; n < 2 * power && spots.length; n++) {
         const i = spots[Math.floor(sim.rng() * spots.length)];
-        api.strike(sim, { shape: 'circle', x: (i % W) + 0.5, y: Math.floor(i / W) + 0.5, r: 1.15, warn: 1, dmg, knock: 5, status: 'burn', dur: 1.5, art: 'f15b_erupt' });
+        api.strike(sim, {
+          shape: 'circle',
+          x: (i % W) + 0.5,
+          y: Math.floor(i / W) + 0.5,
+          r: 1.15,
+          warn: 1,
+          dmg,
+          knock: 5,
+          status: 'burn',
+          dur: 1.5,
+          art: 'f15b_erupt',
+        });
       }
       return;
     }
@@ -1960,12 +2193,26 @@ function quadHazard(sim: Sim, b: BossFight, st: F15BState, api: SimApi, qd: Quad
       const [ex, ey] = landSpot(sim, b, px + Math.cos(a) * 1.3, py + Math.sin(a) * 1.3);
       st.swirl = { x: ex, y: ey, at: sim.time + 0.95, px, py };
       api.zone(sim, { x: px, y: py, r: 2.6, life: 1.9, art: 'f15b_swirl' });
-      api.strike(sim, { shape: 'circle', x: ex, y: ey, r: 1.3, warn: 1.95, dmg: dmg * 1.05, knock: 12, status: 'chill', dur: 1.6, art: 'f15b_geyser' });
+      api.strike(sim, {
+        shape: 'circle',
+        x: ex,
+        y: ey,
+        r: 1.3,
+        warn: 1.95,
+        dmg: dmg * 1.05,
+        knock: 12,
+        status: 'chill',
+        dur: 1.6,
+        art: 'f15b_geyser',
+      });
       return;
     }
     case 'mirror': {
       for (let n = 0; n < power; n++) {
-        const seen = qd.mirrors.filter((i) => near(i) < 11 && api.lineOfSight(sim, (i % W) + 0.5, Math.floor(i / W) + 0.5, h.x, h.y));
+        const seen = qd.mirrors.filter(
+          (i) =>
+            near(i) < 11 && api.lineOfSight(sim, (i % W) + 0.5, Math.floor(i / W) + 0.5, h.x, h.y),
+        );
         if (!seen.length) return;
         const i = seen[(st.beats + n) % seen.length];
         const x = (i % W) + 0.5;
@@ -1993,7 +2240,18 @@ function quadHazard(sim: Sim, b: BossFight, st: F15BState, api: SimApi, qd: Quad
       cs.sort((a2, b2) => near(a2) - near(b2));
       for (let n = 0; n < Math.min(power, cs.length); n++) {
         const i = cs[n];
-        api.strike(sim, { shape: 'circle', x: (i % W) + 0.5, y: Math.floor(i / W) + 0.5, r: 1.45, warn: 0.85, dmg, knock: 6, status: 'poison', dur: 1.5, art: 'f15b_hbite' });
+        api.strike(sim, {
+          shape: 'circle',
+          x: (i % W) + 0.5,
+          y: Math.floor(i / W) + 0.5,
+          r: 1.45,
+          warn: 0.85,
+          dmg,
+          knock: 6,
+          status: 'poison',
+          dur: 1.5,
+          art: 'f15b_hbite',
+        });
       }
     }
   }
@@ -2016,7 +2274,10 @@ function stepQuads(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
     if (!qd.on) continue;
     const mine = quadAt(sim, b, h.x, h.y) === qd;
     if (sim.time >= qd.next) {
-      qd.next = sim.time + (qd.kind === 'lava' ? 3.2 : qd.kind === 'abyss' ? 4.2 : qd.kind === 'mirror' ? 2.9 : 3.8) / hasteOf(sim);
+      qd.next =
+        sim.time +
+        (qd.kind === 'lava' ? 3.2 : qd.kind === 'abyss' ? 4.2 : qd.kind === 'mirror' ? 2.9 : 3.8) /
+          hasteOf(sim);
       if (mine && !heroDown(sim)) quadHazard(sim, b, st, api, qd);
     }
   }
@@ -2044,7 +2305,14 @@ function stepQuads(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
         if (to < 0) continue;
         st.tp = { to, at: sim.time + 0.55 };
         for (const i of [hi, to])
-          api.zone(sim, { x: (i % W) + 0.5, y: Math.floor(i / W) + 0.5, r: 0.9, life: 0.6, art: 'f15b_warp', above: true }); // v2.87 — только рисунок: above
+          api.zone(sim, {
+            x: (i % W) + 0.5,
+            y: Math.floor(i / W) + 0.5,
+            r: 0.9,
+            life: 0.6,
+            art: 'f15b_warp',
+            above: true,
+          }); // v2.87 — только рисунок: above
         break;
       }
   }
@@ -2063,10 +2331,11 @@ function drainQuads(sim: Sim, st: F15BState, api: SimApi): void {
     qd.on = false;
     qd.at = 0;
   }
-  for (const k of [...st.lights]) if (k.startsWith('f15b_q')) {
-    api.light(sim, k, null);
-    st.lights.delete(k);
-  }
+  for (const k of [...st.lights])
+    if (k.startsWith('f15b_q')) {
+      api.light(sim, k, null);
+      st.lights.delete(k);
+    }
   st.tp = null;
   st.swirl = null;
 }
@@ -2107,7 +2376,13 @@ function buildRings(sim: Sim, b: BossFight, husk: Mob | undefined): number[][] {
     if (y - ky > 3 && Math.abs(x - kx) < 3.6) continue;
     if (hypot(x - kx, y - ky) < 6.5) continue;
     if (husk && hypot(x - husk.x, y - husk.y) < 2.6) continue;
-    if (sim.props.some((p) => p.alive && p.r > 0 && Math.floor(p.x) === i % W && Math.floor(p.y) === Math.floor(i / W))) continue;
+    if (
+      sim.props.some(
+        (p) =>
+          p.alive && p.r > 0 && Math.floor(p.x) === i % W && Math.floor(p.y) === Math.floor(i / W),
+      )
+    )
+      continue;
     rings[d].push(i);
   }
   // Карманов не бывает: после каждого кольца любая открытая клетка арены
@@ -2176,7 +2451,9 @@ function heartBeat(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
     const h = sim.hero;
     const hi = Math.floor(h.y) * W + Math.floor(h.x);
     const crushed = st.pending.includes(hi);
-    for (const i of st.pending) if (walkT(sim.tiles[i]) || sim.tiles[i] === T_DEEP) retile(sim, st, i, T_WALL, MK.swell, null);
+    for (const i of st.pending)
+      if (walkT(sim.tiles[i]) || sim.tiles[i] === T_DEEP)
+        retile(sim, st, i, T_WALL, MK.swell, null);
     // v2.87 — только рисунок: стена сомкнулась — плоть шлёпает по всему кольцу.
     vfx(sim, api, 'f15b_fxsqueeze', kx, ky, 0.9, { cells: st.pending });
     sim.events.push({ t: 'shake', k: 0.3 });
@@ -2185,9 +2462,21 @@ function heartBeat(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
       api.hurtEnv(sim, 0.08);
       say(sim, st, '', 'f15b_squeeze_trap', 'СТЕНА ДАВИТ', 'держись ближе к сердцу');
     }
-    say(sim, st, 'squeeze', 'f15b_squeeze_wall', 'СТЕНЫ СЖИМАЮТСЯ', 'каждые четыре удара — на шаг ближе');
+    say(
+      sim,
+      st,
+      'squeeze',
+      'f15b_squeeze_wall',
+      'СТЕНЫ СЖИМАЮТСЯ',
+      'каждые четыре удара — на шаг ближе',
+    );
     for (const m of sim.mobs)
-      if (st.clots.has(m.id) && m.mode !== 'dying' && !walkT(tileAt(sim, Math.floor(m.x), Math.floor(m.y)))) api.fall(sim, m);
+      if (
+        st.clots.has(m.id) &&
+        m.mode !== 'dying' &&
+        !walkT(tileAt(sim, Math.floor(m.x), Math.floor(m.y)))
+      )
+        api.fall(sim, m);
   } else if (
     !st.pending.length &&
     st.squeeze < HEART.squeezeMax &&
@@ -2199,7 +2488,14 @@ function heartBeat(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
     if (ring.length) {
       st.pending = ring;
       st.pendingAt = sim.time + HEART.squeezeWarn;
-      tagZone(sim, api, { x: kx, y: ky, r: 0.1, life: HEART.squeezeWarn + 0.2, art: 'f15b_swellwarn', cells: ring });
+      tagZone(sim, api, {
+        x: kx,
+        y: ky,
+        r: 0.1,
+        life: HEART.squeezeWarn + 0.2,
+        art: 'f15b_swellwarn',
+        cells: ring,
+      });
       // v2.87 — только рисунок: метка держится до настоящего сжатия (на ударе после 1,7 с).
       vfx(sim, api, 'f15b_fxswell', kx, ky, HEART.squeezeWarn + 1.6, { cells: ring });
     }
@@ -2237,7 +2533,8 @@ function stepHeartPhase(sim: Sim, b: BossFight, st: F15BState, api: SimApi): voi
   // Сгустки капают со свода.
   if (sim.time >= st.clotAt) {
     st.clotAt = sim.time + HEART.clotEvery;
-    for (const id of [...st.clots]) if (!sim.mobs.some((m) => m.id === id && m.mode !== 'dying')) st.clots.delete(id);
+    for (const id of [...st.clots])
+      if (!sim.mobs.some((m) => m.id === id && m.mode !== 'dying')) st.clots.delete(id);
     const W = sim.world.w;
     const h = sim.hero;
     const spots = [...b.cells].filter((i) => {
@@ -2247,7 +2544,9 @@ function stepHeartPhase(sim: Sim, b: BossFight, st: F15BState, api: SimApi): voi
     });
     for (let n = 0; n < 2 && st.clots.size < HEART.clotMax && spots.length; n++) {
       const i = spots[Math.floor(sim.rng() * spots.length)];
-      const c = api.spawnMob(sim, 'f15b_clot', (i % W) + 0.5, Math.floor(i / W) + 0.5, { mode: 'drop' });
+      const c = api.spawnMob(sim, 'f15b_clot', (i % W) + 0.5, Math.floor(i / W) + 0.5, {
+        mode: 'drop',
+      });
       c.t = -n * 0.3;
       st.clots.add(c.id);
     }
@@ -2282,7 +2581,18 @@ function echoDown(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
   if (lion) {
     api.setMode(lion, 'f15_crack');
     // Кокон вздрагивает: толчок от него (метка кольцом).
-    api.strike(sim, { shape: 'ring', x: lion.x, y: lion.y, r: 2.4, w: 0.55, warn: 0.5, dmg: lion.dmg * 0.4, knock: 9, art: 'f15b_shock', from: lion.id });
+    api.strike(sim, {
+      shape: 'ring',
+      x: lion.x,
+      y: lion.y,
+      r: 2.4,
+      w: 0.55,
+      warn: 0.5,
+      dmg: lion.dmg * 0.4,
+      knock: 9,
+      art: 'f15b_shock',
+      from: lion.id,
+    });
   }
   sim.events.push({
     t: 'boss',
@@ -2304,24 +2614,52 @@ function toPhase(sim: Sim, b: BossFight, st: F15BState, api: SimApi, lion: Mob, 
   if (p === 1) {
     api.setMode(lion, 'f15_wake');
     api.camera(sim, lion.x, lion.y - 1, 3.2);
-    sim.events.push({ t: 'boss', what: 'phase', text: 'ХОЗЯИН ПОДЗЕМЕЛЬЯ', sub: 'кокон лопнул — он проснулся' });
+    sim.events.push({
+      t: 'boss',
+      what: 'phase',
+      text: 'ХОЗЯИН ПОДЗЕМЕЛЬЯ',
+      sub: 'кокон лопнул — он проснулся',
+    });
   } else if (p === 2) {
     api.setMode(lion, 'f15_memory');
     st.quads = planQuads(sim, b);
     st.quads.forEach((qd) => {
       qd.at = sim.time + MEMORY.first + qd.q * MEMORY.stagger + MEMORY.warn;
-      tagZone(sim, api, { x: kx, y: ky, r: 0.1, life: MEMORY.first + qd.q * MEMORY.stagger + MEMORY.warn + 0.2, art: 'f15b_qwarn', q: qd.q, cells: qd.area });
+      tagZone(sim, api, {
+        x: kx,
+        y: ky,
+        r: 0.1,
+        life: MEMORY.first + qd.q * MEMORY.stagger + MEMORY.warn + 0.2,
+        art: 'f15b_qwarn',
+        q: qd.q,
+        cells: qd.area,
+      });
     });
     api.camera(sim, kx, ky - 1, 3.4);
-    sim.events.push({ t: 'boss', what: 'phase', text: 'ПОДЗЕМЕЛЬЕ ПОМНИТ', sub: 'лава, бездна, зеркала, круги — у каждой четверти своя беда' });
+    sim.events.push({
+      t: 'boss',
+      what: 'phase',
+      text: 'ПОДЗЕМЕЛЬЕ ПОМНИТ',
+      sub: 'лава, бездна, зеркала, круги — у каждой четверти своя беда',
+    });
   } else if (p === 3) {
     api.setMode(lion, 'f15_unfurl');
-    sim.events.push({ t: 'boss', what: 'phase', text: 'КРЫЛЬЯ', sub: 'взлетает — смотри на линию пике' });
+    sim.events.push({
+      t: 'boss',
+      what: 'phase',
+      text: 'КРЫЛЬЯ',
+      sub: 'взлетает — смотри на линию пике',
+    });
   } else if (p === 4) {
     api.setMode(lion, 'f15_rip');
     drainQuads(sim, st, api);
     st.husk = lion.id;
-    sim.events.push({ t: 'boss', what: 'phase', text: 'СЕРДЦЕ', sub: 'бей, когда оно раскрылось — стены сжимаются' });
+    sim.events.push({
+      t: 'boss',
+      what: 'phase',
+      text: 'СЕРДЦЕ',
+      sub: 'бей, когда оно раскрылось — стены сжимаются',
+    });
   }
 }
 
@@ -2360,7 +2698,9 @@ export function f15bForce(sim: Sim, api: SimApi, p: number): boolean {
   const st = stateOf(sim, api);
   sim.mobs = sim.mobs.filter((m) => !m.kind.startsWith('f15b_echo_'));
   sim.strikes = [];
-  sim.zones = sim.zones.filter((z) => !z.art?.startsWith('f15b_') || z.art === 'f15b_qwarn' || z.art === 'f15b_veins');
+  sim.zones = sim.zones.filter(
+    (z) => !z.art?.startsWith('f15b_') || z.art === 'f15b_qwarn' || z.art === 'f15b_veins',
+  );
   st.echo = ECHO.order.length;
   st.echoAt = 0;
   st.wakeAt = 0;
@@ -2407,7 +2747,10 @@ registerBoss('f15boss', {
     const [kx, ky] = centerOf(b);
     for (const i of b.cells)
       if (sim.world.mark[i] === MK.vein || sim.world.mark[i] === MK.root)
-        fresh.veins.push(i, Math.round(hypot((i % W) + 0.5 - kx, Math.floor(i / W) + 0.5 - ky) * 10));
+        fresh.veins.push(
+          i,
+          Math.round(hypot((i % W) + 0.5 - kx, Math.floor(i / W) + 0.5 - ky) * 10),
+        );
     light(sim, fresh, 'f15b_core', kx, ky, 5.5, 'red');
     // Пульс по венам арены — рисунок (зона без вреда, живёт весь бой).
     api.zone(sim, { x: kx, y: ky, r: 0.1, life: 1e6, art: 'f15b_veins' });
@@ -2420,7 +2763,11 @@ registerBoss('f15boss', {
       const heart = heartOf(sim);
       const hk = heart ? heart.hp / heart.maxHp : 1;
       st.period =
-        b.phase === 0 ? 1.5 : b.phase < 4 ? 1.15 : HEART.period[1] + (HEART.period[0] - HEART.period[1]) * hk;
+        b.phase === 0
+          ? 1.5
+          : b.phase < 4
+            ? 1.15
+            : HEART.period[1] + (HEART.period[0] - HEART.period[1]) * hk;
       st.beatAt = sim.time;
       st.beatNext = sim.time + st.period;
       st.beats += 1;
@@ -2430,7 +2777,12 @@ registerBoss('f15boss', {
     }
     if (!st.said && b.t > 1.3) {
       st.said = true;
-      sim.events.push({ t: 'boss', what: 'f15b_intro_call', text: 'ОТГОЛОСКИ', sub: 'кокон спит — его стерегут пять прошлых владык' });
+      sim.events.push({
+        t: 'boss',
+        what: 'f15b_intro_call',
+        text: 'ОТГОЛОСКИ',
+        sub: 'кокон спит — его стерегут пять прошлых владык',
+      });
     }
     if (!lion) return;
     if (b.phase === 0) {
@@ -2458,7 +2810,15 @@ registerBoss('f15boss', {
     // Свет сердца: в фазе «СЕРДЦЕ» — с ним в центре, раньше — в груди льва.
     const heart = heartOf(sim);
     const src = heart ?? lion;
-    light(sim, st, 'f15b_core', src.x, src.y - 0.3, b.phase === 4 ? 6.5 : b.phase === 0 ? 5.5 : 3.2, 'red');
+    light(
+      sim,
+      st,
+      'f15b_core',
+      src.x,
+      src.y - 0.3,
+      b.phase === 4 ? 6.5 : b.phase === 0 ? 5.5 : 3.2,
+      'red',
+    );
     void dt;
   },
   onPartDown(sim, b, m, api) {
@@ -2500,7 +2860,10 @@ registerBoss('f15boss', {
     if (b.phase === 0) {
       const done = st?.echo ?? 0;
       let cur = 1;
-      const parts = sim.mobs.filter((x) => x.kind.startsWith('f15b_echo_') && x.kind !== 'f15b_echo_hydra' && x.mode !== 'dying');
+      const parts = sim.mobs.filter(
+        (x) =>
+          x.kind.startsWith('f15b_echo_') && x.kind !== 'f15b_echo_hydra' && x.mode !== 'dying',
+      );
       if (parts.length) {
         let hp = 0;
         let max = 0;

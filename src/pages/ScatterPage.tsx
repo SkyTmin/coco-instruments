@@ -1836,11 +1836,7 @@ export function ScatterPage() {
           </button>
         </div>
 
-        {broke && (
-          <p className="slot-bonus-hint">
-            Монеты кончились — заработай в шахте
-          </p>
-        )}
+        {broke && <p className="slot-bonus-hint">Монеты кончились — заработай в шахте</p>}
 
         {/* Ставка Ante и покупка бонуса — оба пути к фриспинам */}
         {!inBonus && (

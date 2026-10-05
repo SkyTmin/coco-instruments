@@ -29,6 +29,7 @@
 import {
   isMeat,
   itemRock,
+  knownMat,
   matDef,
   MEAT_NAMES,
   sackSlots,
@@ -97,7 +98,17 @@ export interface BunkState {
   big: boolean;
   /** Ячейки по порядку; длина — размер сундука, пустая — null. */
   slots: (BunkStack | null)[];
+  /** Версия материалов подземелья в сундуке (`BUNK_MATS_VER`). */
+  matsVer?: number;
 }
+
+/**
+ * Версия материалов подземелья в сундуке. Сундук с меньшей при чтении
+ * теряет все материалы подземелья (`{t:'mat'}`) — так сброс подземелья
+ * (`DUNGEON_SAVE_VER`, v2.89.0) забирает и то, что лежало у койки.
+ * Остальное в сундуке (вещи, яйца, книги, руны) не трогается.
+ */
+export const BUNK_MATS_VER = 2;
 
 export const bunkSize = (b: Pick<BunkState, 'big'>): number =>
   b.big ? BUNK_BIG_SLOTS : BUNK_SLOTS;
@@ -105,6 +116,7 @@ export const bunkSize = (b: Pick<BunkState, 'big'>): number =>
 export const BUNK_START: BunkState = {
   big: false,
   slots: Array.from({ length: BUNK_SLOTS }, () => null),
+  matsVer: BUNK_MATS_VER,
 };
 
 /** Сколько расходников в одной ячейке — как эндер-жемчуг и снежки в Майнкрафте. */
@@ -341,7 +353,7 @@ export function bunkBuyBig(b: BunkState, coins: number): { b: BunkState; cost: n
   if (b.big || coins < BUNK_BIG_PRICE) return null;
   const slots = b.slots.slice(0, BUNK_SLOTS);
   while (slots.length < BUNK_BIG_SLOTS) slots.push(null);
-  return { b: { big: true, slots }, cost: BUNK_BIG_PRICE };
+  return { b: { ...b, big: true, slots }, cost: BUNK_BIG_PRICE };
 }
 
 // ---------------------------------------------------------------------------
@@ -361,9 +373,7 @@ function normThing(v: unknown): BunkThing | null {
   const o = v as Record<string, unknown>;
   switch (o.t) {
     case 'mat':
-      return typeof o.id === 'string' && o.id.length > 0 && o.id.length < 64
-        ? { t: 'mat', id: o.id }
-        : null;
+      return typeof o.id === 'string' && knownMat(o.id) ? { t: 'mat', id: o.id } : null;
     case 'item':
       return typeof o.id === 'string' && ITEM_IDS.includes(o.id)
         ? { t: 'item', id: o.id as ItemId }
@@ -404,10 +414,12 @@ export function normalizeBunk(raw: unknown): BunkState {
   const list = Array.isArray(o.slots) ? o.slots.slice(0, BUNK_BIG_SLOTS * 2) : [];
   const slots: (BunkStack | null)[] = Array.from({ length: size }, () => null);
   const extra: BunkStack[] = [];
+  // Сундук до сброса подземелья — его материалы уходят вместе с ним.
+  const oldMats = (typeof o.matsVer === 'number' ? o.matsVer : 1) < BUNK_MATS_VER;
   list.forEach((v, i) => {
     const s = (v ?? null) as Partial<BunkStack> | null;
     const thing = s ? normThing(s.thing) : null;
-    if (!thing) return;
+    if (!thing || (oldMats && thing.t === 'mat')) return;
     const n = int(s!.n, 0, stackMax(thing), 0);
     if (n <= 0) return;
     if (i < size) slots[i] = { thing, n };
@@ -418,7 +430,7 @@ export function normalizeBunk(raw: unknown): BunkState {
     if (at < 0) break;
     slots[at] = s;
   }
-  return { big, slots };
+  return { big, slots, matsVer: BUNK_MATS_VER };
 }
 
 // ---------------------------------------------------------------------------

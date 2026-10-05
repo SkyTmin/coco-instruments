@@ -43,7 +43,8 @@ function sim(tier: number, plus: number, x: number, y: number, seed = 7, meat = 
   return s;
 }
 
-const standable = (s: Sim, x: number, y: number) => walkableTile(s.tiles[Math.floor(y) * W + Math.floor(x)]);
+const standable = (s: Sim, x: number, y: number) =>
+  walkableTile(s.tiles[Math.floor(y) * W + Math.floor(x)]);
 
 interface BotState {
   lastAtk: number;
@@ -124,7 +125,8 @@ function bot(s: Sim, st: BotState): SimInput {
       inp.mx = -inp.my;
       inp.my = ax / l;
     }
-    if (left < 0.22 && h.dashCd <= 0 && safeFloor(s, h.x + inp.mx * 2.4, h.y + inp.my * 2.4)) inp.dash = true;
+    if (left < 0.22 && h.dashCd <= 0 && safeFloor(s, h.x + inp.mx * 2.4, h.y + inp.my * 2.4))
+      inp.dash = true;
     return inp;
   }
   // Линии прицела (взгляд стража, лазер, скат) — вбок.
@@ -133,7 +135,12 @@ function bot(s: Sim, st: BotState): SimInput {
     if (!t || t.shape !== 'line') continue;
     const [react, missed] = notice(st, `l${m.id}:${Math.round((s.time - m.t) * 10)}`);
     if (missed || m.t < react) continue;
-    const hit = strikeHits({ shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 }, h.x, h.y, h.r + 0.3);
+    const hit = strikeHits(
+      { shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 },
+      h.x,
+      h.y,
+      h.r + 0.3,
+    );
     if (!hit) continue;
     const a = (t.ang ?? 0) + Math.PI / 2;
     const side = Math.cos(a) * (h.x - m.x) + Math.sin(a) * (h.y - m.y) >= 0 ? 1 : -1;
@@ -299,7 +306,9 @@ describe('этаж 11: Древний страж', () => {
 
 describe.runIf(!!process.env.F11SWEEP)('этаж 11: подбор', () => {
   it('сетка снаряжения', () => {
-    for (const [tier, plus, meat] of (process.env.F11SWEEP ?? '').split(';').map((x) => x.split(',').map(Number)))
+    for (const [tier, plus, meat] of (process.env.F11SWEEP ?? '')
+      .split(';')
+      .map((x) => x.split(',').map(Number)))
       for (const seed of [61, 62, 63, 64]) fight(tier, plus, seed, meat);
   });
 });
@@ -309,7 +318,12 @@ describe.runIf(!!process.env.F11SWEEP)('этаж 11: подбор', () => {
 // ---------------------------------------------------------------------------
 
 /** Поле расстояний до цели — бот идёт по нему. `extra` — что считать полом. */
-function field(tx: number, ty: number, tiles: Uint8Array = world.tiles, extra?: (i: number) => boolean): Int32Array {
+function field(
+  tx: number,
+  ty: number,
+  tiles: Uint8Array = world.tiles,
+  extra?: (i: number) => boolean,
+): Int32Array {
   const f = new Int32Array(W * world.h).fill(-1);
   const q = [ty * W + tx];
   f[q[0]] = 0;
@@ -370,7 +384,11 @@ describe('этаж 11: дорога', () => {
       const y = Math.floor(i / W) - aq;
       return x >= 40 && x <= 48 && y >= 36 && y <= 80;
     };
-    const n2 = field(44, aq + 50, s.tiles.map((t, i) => (viaAqueductOnly(i) ? t : Tile.Wall)) as Uint8Array);
+    const n2 = field(
+      44,
+      aq + 50,
+      s.tiles.map((t, i) => (viaAqueductOnly(i) ? t : Tile.Wall)) as Uint8Array,
+    );
     expect(n2[southI]).toBe(-1);
     expect(north[southI]).toBeGreaterThan(0);
   });
@@ -445,7 +463,13 @@ function toFall(s: Sim, secs: number): void {
     h.hp = s.stats.maxHp;
     const k = s.mobs.find((m) => m.kind === 'f11boss');
     const b = s.boss!;
-    if (k && b.state === 'fight' && b.phase < 4 && k.mode !== 'f11_wake' && k.mode !== 'f11_shift') {
+    if (
+      k &&
+      b.state === 'fight' &&
+      b.phase < 4 &&
+      k.mode !== 'f11_wake' &&
+      k.mode !== 'f11_shift'
+    ) {
       k.hp = k.maxHp * (b.phase === 1 ? 0.7 : b.phase === 2 ? 0.45 : 0.2);
       b.data.shield = 0;
     }
@@ -469,7 +493,10 @@ describe('этаж 11: арена', () => {
     const deep = [...b.cells].filter((i) => s.tiles[i] === Tile.Deep);
     expect(deep.length - before).toBeGreaterThan(40);
     const st = F11_DEBUG.stateOf(s);
-    for (const i of deep) expect(Math.hypot((i % W) + 0.5 - st.arena.cx, Math.floor(i / W) + 0.5 - st.arena.cy)).toBeGreaterThan(5.5);
+    for (const i of deep)
+      expect(
+        Math.hypot((i % W) + 0.5 - st.arena.cx, Math.floor(i / W) + 0.5 - st.arena.cy),
+      ).toBeGreaterThan(5.5);
     const f = field(b.gates[0] % W, Math.floor(b.gates[0] / W), s.tiles);
     expect(f[Math.floor(st.arena.cy) * W + Math.floor(st.arena.cx)]).toBeGreaterThan(0);
   });
@@ -502,7 +529,9 @@ describe('этаж 11: арена', () => {
   // провалилась платформа»; на 29.09 в симуляции не воспроизводится.
   const ringCell = (s: Sim): number => {
     const st = F11_DEBUG.stateOf(s);
-    const edge = [...s.boss!.cells].filter((i) => s.world.mark[i] === F11_MARK.cracking && Math.floor(i / W) + 0.5 < st.arena.cy - 2);
+    const edge = [...s.boss!.cells].filter(
+      (i) => s.world.mark[i] === F11_MARK.cracking && Math.floor(i / W) + 0.5 < st.arena.cy - 2,
+    );
     expect(edge.length).toBeGreaterThan(0);
     return edge[0];
   };
@@ -588,7 +617,11 @@ describe('этаж 11: арена', () => {
     expect(stag).toBe(true);
     // Купол встал снова, а страж ушёл в «Перегрев» — пилоны уходят, а не
     // остаются стоять пустыми.
-    for (let t = 0; t < 20 * 60 && !s.mobs.some((m) => m.kind === 'f11_pylon' && m.mode === 'f11_pylon'); t++) {
+    for (
+      let t = 0;
+      t < 20 * 60 && !s.mobs.some((m) => m.kind === 'f11_pylon' && m.mode === 'f11_pylon');
+      t++
+    ) {
       s.hero.hp = s.stats.maxHp;
       stepSim(s, DT, NO_INPUT);
     }
@@ -737,7 +770,12 @@ describe('этаж 11: ветер', () => {
 // ---------------------------------------------------------------------------
 
 /** Пройти событие: герой стоит в зале, всё, что прилетело, гибнет. */
-function runHall(key: 'raid' | 'tower' | 'garden' | 'storm'): { waves: number; done: boolean; paid: boolean; st: ReturnType<typeof F11_DEBUG.stateOf> } {
+function runHall(key: 'raid' | 'tower' | 'garden' | 'storm'): {
+  waves: number;
+  done: boolean;
+  paid: boolean;
+  st: ReturnType<typeof F11_DEBUG.stateOf>;
+} {
   const probe = sim(8, 5, 1, 1, 1);
   const hs = F11_DEBUG.stateOf(probe)[key];
   const s = sim(8, 5, hs.cx, hs.cy + 1, 12);
@@ -752,7 +790,12 @@ function runHall(key: 'raid' | 'tower' | 'garden' | 'storm'): { waves: number; d
     if (s.events.some((e) => e.t === 'boss' && e.what === 'summon')) waves += 1;
     if (t % 20 === 0)
       for (const m of [...s.mobs])
-        if (m.mode !== 'dying' && m.mode !== 'f11_land' && (m.data.ghost ?? 0) === 0 && !MOBS[m.kind].boss)
+        if (
+          m.mode !== 'dying' &&
+          m.mode !== 'f11_land' &&
+          (m.data.ghost ?? 0) === 0 &&
+          !MOBS[m.kind].boss
+        )
           API.explode(s, m.x, m.y, 0.1, m.maxHp * 3, 0);
   }
   return { waves, done: st[key].state === 'done', paid: st[key].paid, st };
@@ -793,7 +836,17 @@ describe('этаж 11: монстры', () => {
     [F11_AQUA, 30, 30],
     [F11_CASTLE, 32, 76],
   ];
-  const kinds = ['f11_ray', 'f11_gardener', 'f11_guard', 'f11_harpy', 'f11_jelly', 'f11_boarder', 'f11_moss', 'f11_spirit', 'f11_drone'];
+  const kinds = [
+    'f11_ray',
+    'f11_gardener',
+    'f11_guard',
+    'f11_harpy',
+    'f11_jelly',
+    'f11_boarder',
+    'f11_moss',
+    'f11_spirit',
+    'f11_drone',
+  ];
   for (const [area, lx, ly] of spots)
     it(`в районе ${area} за 25 с боя никто не сидит в стене`, () => {
       const [x, y] = at(area, lx, ly);

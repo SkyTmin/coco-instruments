@@ -4098,7 +4098,7 @@ function minoBase(q: MinoReq): MobFrame {
     rage: h >= 1.29 ? 1 : 0,
     sparks: ps.sparks,
   });
-  let p = b.p;
+  const p = b.p;
   if (q.look === 'elite') p.outline(GOLD);
   const fwd = r.tdx;
   let dx = 0;

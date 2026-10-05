@@ -120,7 +120,12 @@ function bot(s: Sim, st: BotState): SimInput {
     if (!t || t.shape !== 'line') continue;
     const [react, missed] = notice(st, `l${m.id}:${Math.round((s.time - m.t) * 10)}`);
     if (missed || m.t < react) continue;
-    const hit = strikeHits({ shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 }, h.x, h.y, h.r + 0.3);
+    const hit = strikeHits(
+      { shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 },
+      h.x,
+      h.y,
+      h.r + 0.3,
+    );
     if (!hit) continue;
     const a = (t.ang ?? 0) + Math.PI / 2;
     const side = Math.cos(a) * (h.x - m.x) + Math.sin(a) * (h.y - m.y) >= 0 ? 1 : -1;
@@ -266,7 +271,9 @@ describe('этаж 10: Король демонов', () => {
 
 describe.runIf(!!process.env.F10SWEEP)('этаж 10: подбор', () => {
   it('сетка снаряжения', () => {
-    for (const [tier, plus, meat] of (process.env.F10SWEEP ?? '').split(';').map((x) => x.split(',').map(Number)))
+    for (const [tier, plus, meat] of (process.env.F10SWEEP ?? '')
+      .split(';')
+      .map((x) => x.split(',').map(Number)))
       for (const seed of [61, 62, 63]) fight(tier, plus, seed, meat);
   });
 });
@@ -470,7 +477,8 @@ function floorNear(s: Sim, x: number, y: number, n: number): [number, number] {
     const px = x + Math.cos(a) * n;
     const py = y + Math.sin(a) * n;
     let ok = true;
-    for (let t = 0.1; t <= 1; t += 0.05) if (solidAt(s, x + (px - x) * t, y + (py - y) * t)) ok = false;
+    for (let t = 0.1; t <= 1; t += 0.05)
+      if (solidAt(s, x + (px - x) * t, y + (py - y) * t)) ok = false;
     if (ok) return [px, py];
   }
   throw new Error('нет пола рядом');
@@ -494,7 +502,8 @@ describe('этаж 10: монстры', () => {
     // Подошёл на 3,5 клетки и бьёт воздух — камень молчит.
     s.hero.y = py + 3.5;
     const hp0 = g!.hp;
-    for (let t = 0; t < 2 * 60; t++) stepSim(s, DT, { ...NO_INPUT, attack: t % 10 === 0, aim: { x: 0, y: -1 } });
+    for (let t = 0; t < 2 * 60; t++)
+      stepSim(s, DT, { ...NO_INPUT, attack: t % 10 === 0, aim: { x: 0, y: -1 } });
     expect(g!.mode).toBe('f10_stone');
     expect(g!.hp).toBe(hp0);
     expect(g!.x).toBeCloseTo(px, 5);
@@ -610,7 +619,8 @@ describe('этаж 10: монстры', () => {
     stepSim(s, DT, NO_INPUT);
     const posts = f10Posts(s);
     const kinds = new Set(posts.map((p) => p.kind));
-    for (const k of ['f10_guard', 'f10_exec', 'f10_gargoyle', 'f10_knight', 'f10_hound']) expect(kinds.has(k)).toBe(true);
+    for (const k of ['f10_guard', 'f10_exec', 'f10_gargoyle', 'f10_knight', 'f10_hound'])
+      expect(kinds.has(k)).toBe(true);
     // Палач: кольцо цепа не задевает стоящего вплотную.
     const [x, y] = at(F10_GATES, 12, 56);
     const s2 = sim(8, 5, x + 0.5, y + 0.5, 9);
@@ -631,7 +641,15 @@ describe('этаж 10: монстры', () => {
   });
 
   it('монстры этажа не застревают в стенах и не падают в бездну сами', () => {
-    const kinds = ['f10_hound', 'f10_guard', 'f10_knight', 'f10_succubus', 'f10_mage', 'f10_exec', 'f10_imp'];
+    const kinds = [
+      'f10_hound',
+      'f10_guard',
+      'f10_knight',
+      'f10_succubus',
+      'f10_mage',
+      'f10_exec',
+      'f10_imp',
+    ];
     const spots = [
       at(F10_GATES, 31, 64),
       at(F10_GATES, 36, 51),
@@ -660,15 +678,23 @@ describe('этаж 10: монстры', () => {
         stepSim(s, DT, bot(s, st));
         if (t % 10) continue;
         for (const m of s.mobs) {
-          if (['dying', 'emerge', 'escape', 'f10_fall', 'f10_puff'].includes(m.mode) || m.t < 0) continue;
+          if (['dying', 'emerge', 'escape', 'f10_fall', 'f10_puff'].includes(m.mode) || m.t < 0)
+            continue;
           if (m.kind === 'f10_succubus' || (m.data.ghost ?? 0) > 0) continue;
           checks += 1;
           const tl = s.tiles[Math.floor(m.y) * W + Math.floor(m.x)];
           if (tl === Tile.Deep) {
             lost += 1;
-            if (LOG) console.log('в бездне', m.kind, m.mode, m.x.toFixed(2), m.y.toFixed(2), m.t.toFixed(2));
-          }
-          else if (solidAt(s, m.x, m.y)) stuck += 1;
+            if (LOG)
+              console.log(
+                'в бездне',
+                m.kind,
+                m.mode,
+                m.x.toFixed(2),
+                m.y.toFixed(2),
+                m.t.toFixed(2),
+              );
+          } else if (solidAt(s, m.x, m.y)) stuck += 1;
         }
         if (s.hero.mode === 'dead') break;
       }
@@ -684,7 +710,13 @@ describe('этаж 10: монстры', () => {
     const [x, y] = at(F10_GALLERY, 31, 66);
     const s = sim(8, 5, x + 0.5, y + 0.5, 12);
     s.mobs = [];
-    for (const [j, kind] of ['f10_guard', 'f10_mage', 'f10_exec', 'f10_gargoyle', 'f10_hound'].entries()) {
+    for (const [j, kind] of [
+      'f10_guard',
+      'f10_mage',
+      'f10_exec',
+      'f10_gargoyle',
+      'f10_hound',
+    ].entries()) {
       const [mx, my] = floorNear(s, x + 0.5, y + 0.5, 2.5 + (j % 2));
       spawnMob(s, kind, mx, my, { mode: 'chase' });
     }
@@ -704,7 +736,9 @@ describe('этаж 10: монстры', () => {
 
 describe('этаж 10: районы', () => {
   it('шипы Врат бьют волной по рядам: метка за 0,6 с, ряды не разом', () => {
-    const rows = [...new Set(cellsWith(F10_MARK.spike).map((i) => Math.floor(i / W)))].sort((a, b) => b - a);
+    const rows = [...new Set(cellsWith(F10_MARK.spike).map((i) => Math.floor(i / W)))].sort(
+      (a, b) => b - a,
+    );
     expect(rows.length).toBeGreaterThanOrEqual(3);
     const cx = cellsWith(F10_MARK.spike)[0] % W;
     const s = sim(8, 5, cx + 0.5, rows[0] + 2.5, 13);
@@ -782,7 +816,14 @@ describe('этаж 10: районы', () => {
         let safe = 0;
         for (let y = y0; y <= y1; y++)
           for (let x = x0; x <= x1; x++)
-            if (!s.strikes.some((z) => z.art?.startsWith('f10_bolt') && z.t < 0.05 && strikeHits(z, x + 0.5, y + 0.5, 0.35)))
+            if (
+              !s.strikes.some(
+                (z) =>
+                  z.art?.startsWith('f10_bolt') &&
+                  z.t < 0.05 &&
+                  strikeHits(z, x + 0.5, y + 0.5, 0.35),
+              )
+            )
               safe += 1;
         expect(safe).toBeGreaterThan(8);
       }
@@ -799,7 +840,9 @@ describe('этаж 10: районы', () => {
     stepSim(s, DT, NO_INPUT);
     const ev = f10Events(s)!;
     expect(ev.vaultDoor.length).toBeGreaterThan(0);
-    const chest = s.props.find((p) => p.kind === 'secret' && world.rowArea[Math.floor(p.y)] === F10_THRONE)!;
+    const chest = s.props.find(
+      (p) => p.kind === 'secret' && world.rowArea[Math.floor(p.y)] === F10_THRONE,
+    )!;
     s.hero.x = chest.x;
     s.hero.y = chest.y + 1.5;
     s.mobs = [];
@@ -851,7 +894,8 @@ describe('этаж 10: районы', () => {
       for (; t < 600 * 60; t++) {
         const inp = bot(s, st);
         // Никого рядом и никаких меток — идти к цели.
-        if (!inp.mx && !inp.my && !inp.attack && !inp.eat) Object.assign(inp, follow(s, goal, gx, gy), { dash: false });
+        if (!inp.mx && !inp.my && !inp.attack && !inp.eat)
+          Object.assign(inp, follow(s, goal, gx, gy), { dash: false });
         stepSim(s, DT, inp);
         if (Math.hypot(s.hero.x - gx - 0.5, s.hero.y - gy - 0.5) < 1.5) break;
         if (s.hero.mode === 'dead') break;

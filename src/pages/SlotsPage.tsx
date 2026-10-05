@@ -1345,11 +1345,7 @@ export function SlotsPage() {
           </button>
         </div>
 
-        {broke && (
-          <p className="slot-bonus-hint">
-            Монеты кончились — заработай в шахте
-          </p>
-        )}
+        {broke && <p className="slot-bonus-hint">Монеты кончились — заработай в шахте</p>}
 
         {history.length > 0 && (
           <div className="slot-history">

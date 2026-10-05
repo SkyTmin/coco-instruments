@@ -164,7 +164,15 @@ function polyShade(p: Px, pts: [number, number][], t: Tones, bias = 0): void {
 }
 
 /** Толстая линия. */
-export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  c: RGBA,
+  w = 1,
+): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -195,7 +203,16 @@ function vnoise(x: number, y: number, s: number, seed: number): number {
 }
 
 /** Огонь: язык пламени снизу вверх, кадр f меняет рисунок. */
-function flame(p: Px, cx: number, by: number, w: number, h: number, f: number, pal: RGBA[], seed = 0): void {
+function flame(
+  p: Px,
+  cx: number,
+  by: number,
+  w: number,
+  h: number,
+  f: number,
+  pal: RGBA[],
+  seed = 0,
+): void {
   for (let y = 0; y < h; y++) {
     const k = y / h;
     const half = w * 0.5 * (1 - k * k) * (0.85 + 0.3 * hash(y, f, seed));
@@ -296,7 +313,8 @@ function text(p: Px, s: string, x: number, y: number, c: RGBA): number {
   let cx = x;
   for (const ch of s) {
     const g = FONT[ch] ?? FONT[' '];
-    for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) if (g[r][k] === '#') p.set(cx + k, y + r, c);
+    for (let r = 0; r < 5; r++)
+      for (let k = 0; k < 3; k++) if (g[r][k] === '#') p.set(cx + k, y + r, c);
     cx += 4;
   }
   return cx;
@@ -344,7 +362,14 @@ function finish(key: string, b: Built, look: Look, flash: boolean, left: boolean
   return out;
 }
 
-function frameOf(kind: string, pose: MobPose, anim: string, f: number, build: () => Built, left = pose.left): MobFrame {
+function frameOf(
+  kind: string,
+  pose: MobPose,
+  anim: string,
+  f: number,
+  build: () => Built,
+  left = pose.left,
+): MobFrame {
   const key = `${kind}|${anim}|${f}|${left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
   const hit = frames.get(key);
   if (hit) return hit;
@@ -380,7 +405,8 @@ function ashen(p: Px, k: number, seed: number, ember = hx('#ff3a6a')): Px {
       if (r < k * 0.26) continue;
       const ty = Math.min(p.h - 1, y + Math.floor(k * k * 2 * r));
       const j = (ty * p.w + x) * 4;
-      const c: RGBA = r < k * 0.33 ? ember : r < k * 0.55 ? ash : [p.data[i], p.data[i + 1], p.data[i + 2], 255];
+      const c: RGBA =
+        r < k * 0.33 ? ember : r < k * 0.55 ? ash : [p.data[i], p.data[i + 1], p.data[i + 2], 255];
       o.data[j] = c[0];
       o.data[j + 1] = c[1];
       o.data[j + 2] = c[2];
@@ -390,7 +416,8 @@ function ashen(p: Px, k: number, seed: number, ember = hx('#ff3a6a')): Px {
 }
 
 /** Номер кадра смерти по времени режима. */
-const deathK = (pose: MobPose) => (pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0);
+const deathK = (pose: MobPose) =>
+  pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0;
 
 // ---------------------------------------------------------------------------
 // Палитры станции и храма.
@@ -413,7 +440,12 @@ const GOLD = [hx('#5e4210'), hx('#8a6a1a'), hx('#c09a30'), hx('#f0d060')];
 export const PAPER = [hx('#8a8068'), hx('#b3aa8c'), hx('#d2c9aa'), hx('#ece4c6')];
 const CURSE = [hx('#2a0e30'), hx('#55206a'), hx('#8e3aa8'), hx('#d27aff')];
 const BLOODC = [hx('#2a0408'), hx('#4a0a12'), hx('#7a1420'), hx('#b02030')];
-const NEON = { teal: hx('#5affe0'), tealD: hx('#1a8a7a'), pink: hx('#ff5ab0'), pinkD: hx('#8a2060') };
+const NEON = {
+  teal: hx('#5affe0'),
+  tealD: hx('#1a8a7a'),
+  pink: hx('#ff5ab0'),
+  pinkD: hx('#8a2060'),
+};
 const BONE = [hx('#6a6050'), hx('#9a8e76'), hx('#c4b89a'), hx('#e8dec0')];
 
 // ---------------------------------------------------------------------------
@@ -509,7 +541,9 @@ function concreteCell(wx: number, wy: number): Px {
   const p = new Px(16, 16);
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
-      const n = tnoise((wx & 3) * 16 + x, (wy & 3) * 16 + y, 8, 64, 21) * 0.7 + hash(wx * 16 + x, wy * 16 + y, 3) * 0.3;
+      const n =
+        tnoise((wx & 3) * 16 + x, (wy & 3) * 16 + y, 8, 64, 21) * 0.7 +
+        hash(wx * 16 + x, wy * 16 + y, 3) * 0.3;
       p.set(x, y, CONC[n > 0.72 ? 3 : n > 0.48 ? 2 : n > 0.26 ? 1 : 0]);
     }
   // Шов заливки раз в две клетки.
@@ -589,8 +623,10 @@ function mosaicCell(c: CellCtx): Px {
 
 /** Тактильная полоса у края платформы: жёлтые рифы; край — обрыв к путям. */
 function edgeCell(c: CellCtx): Px {
-  const southRail = c.markAt(0, 1) === MK.railN || c.markAt(0, 1) === MK.crossN || c.markAt(0, 1) === MK.tunnelN;
-  const northRail = c.markAt(0, -1) === MK.railS || c.markAt(0, -1) === MK.crossS || c.markAt(0, -1) === MK.tunnelS;
+  const southRail =
+    c.markAt(0, 1) === MK.railN || c.markAt(0, 1) === MK.crossN || c.markAt(0, 1) === MK.tunnelN;
+  const northRail =
+    c.markAt(0, -1) === MK.railS || c.markAt(0, -1) === MK.crossS || c.markAt(0, -1) === MK.tunnelS;
   const key = `edge|${southRail ? 1 : 0}${northRail ? 1 : 0}|${c.wx & 1}`;
   return cellOf(key, () => {
     const p = graniteCell(c.wx & 1, 3, 1);
@@ -637,7 +673,8 @@ function railCell(c: CellCtx, north: boolean, cross: boolean, tunnel: boolean): 
       if (gx > 3) continue;
       const y0 = north ? 3 : 0;
       const y1 = north ? 15 : 12;
-      for (let y = y0; y <= y1; y++) p.set(x, y, SLEEPER[gx === 0 ? 3 : gx === 3 ? 0 : 1 + ((y + x) % 2)]);
+      for (let y = y0; y <= y1; y++)
+        p.set(x, y, SLEEPER[gx === 0 ? 3 : gx === 3 ? 0 : 1 + ((y + x) % 2)]);
     }
     if (cross) {
       // Настил переезда: доски вдоль.
@@ -666,7 +703,8 @@ function railCell(c: CellCtx, north: boolean, cross: boolean, tunnel: boolean): 
         if ((c.wx * 16 + x) % 14 === 0) p.set(x, 3, hx('#6a6060'));
       }
     }
-    if (tunnel) for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, [0, 0, 0, 30]);
+    if (tunnel)
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, [0, 0, 0, 30]);
     return p;
   });
 }
@@ -747,19 +785,27 @@ function escCell(c: CellCtx, kind: number): Px {
         p.set(x, y, col);
       }
     // Жёлтая кромка ступени.
-    for (let x = 0; x < 16; x++) for (const y of [1, 9]) p.set(x, (y + (c.wy % 2) * 0) % 16, YELLOW[kind === MK.esc0 ? 1 : 2]);
+    for (let x = 0; x < 16; x++)
+      for (const y of [1, 9]) p.set(x, (y + (c.wy % 2) * 0) % 16, YELLOW[kind === MK.esc0 ? 1 : 2]);
     // Щиты балюстрады.
-    if (wl) for (let y = 0; y < 16; y++) {
-      p.set(0, y, hx('#1a1c1e'));
-      p.set(1, y, hx('#8a9098'));
-    }
-    if (wr) for (let y = 0; y < 16; y++) {
-      p.set(15, y, hx('#1a1c1e'));
-      p.set(14, y, hx('#5a6068'));
-    }
+    if (wl)
+      for (let y = 0; y < 16; y++) {
+        p.set(0, y, hx('#1a1c1e'));
+        p.set(1, y, hx('#8a9098'));
+      }
+    if (wr)
+      for (let y = 0; y < 16; y++) {
+        p.set(15, y, hx('#1a1c1e'));
+        p.set(14, y, hx('#5a6068'));
+      }
     if (kind === MK.esc0)
       // Стоит: пыль и мусор на ступенях.
-      for (let i = 0; i < 5; i++) p.set(2 + Math.floor(hash(c.wx, c.wy, i) * 12), Math.floor(hash(c.wy, c.wx, i) * 16), alpha(hx('#2a2622'), 0.8));
+      for (let i = 0; i < 5; i++)
+        p.set(
+          2 + Math.floor(hash(c.wx, c.wy, i) * 12),
+          Math.floor(hash(c.wy, c.wx, i) * 16),
+          alpha(hx('#2a2622'), 0.8),
+        );
     return p;
   });
 }
@@ -787,7 +833,8 @@ function hatchCell(c: CellCtx): Px {
   return cellOf(`hatch|${c.wx % 2}`, () => {
     const p = concreteCell(c.wx % 2, 1);
     for (let y = 2; y < 14; y++)
-      for (let x = 2; x < 14; x++) p.set(x, y, Math.floor((x + y + c.wx * 16) / 3) % 2 === 0 ? YELLOW[2] : hx('#1a1a18'));
+      for (let x = 2; x < 14; x++)
+        p.set(x, y, Math.floor((x + y + c.wx * 16) / 3) % 2 === 0 ? YELLOW[2] : hx('#1a1a18'));
     return p;
   });
 }
@@ -797,7 +844,7 @@ function grateCell(c: CellCtx): Px {
   return cellOf(`grate|${c.wx & 1}`, () => {
     const p = graniteCell(c.wx & 1, c.wy & 1, 2);
     for (let y = 4; y < 12; y++)
-      for (let x = 4; x < 12; x++) p.set(x, y, (x % 2 === 0 ? STEEL[1] : hx('#08090a')));
+      for (let x = 4; x < 12; x++) p.set(x, y, x % 2 === 0 ? STEEL[1] : hx('#08090a'));
     for (let x = 3; x < 13; x++) {
       p.set(x, 3, STEEL[3]);
       p.set(x, 12, STEEL[0]);
@@ -819,7 +866,8 @@ function stainOver(base: Px, kind: number, wx: number, wy: number): Px {
         if (d < 1) p.set(x, y, d < 0.45 ? BLOODC[2] : d < 0.75 ? BLOODC[1] : alpha(BLOODC[0], 0.8));
       }
     // Брызги и отпечаток ладони проклятия.
-    for (let i = 0; i < 5; i++) p.set(Math.floor(hash(wx, i, 7) * 16), Math.floor(hash(wy, i, 8) * 16), BLOODC[1]);
+    for (let i = 0; i < 5; i++)
+      p.set(Math.floor(hash(wx, i, 7) * 16), Math.floor(hash(wy, i, 8) * 16), BLOODC[1]);
     p.set(Math.round(cx) + 3, Math.round(cy) - 3, CURSE[2]);
   } else if (kind === MK.soot) {
     for (let y = 0; y < 16; y++)
@@ -897,7 +945,14 @@ function mosaicFace(c: CellCtx): Px {
   const idx = run % 2;
   return cellOf(`qface|${idx}|${c.markAt(1, 0) === MK.wMosaic ? 1 : 0}`, () => {
     const p = tileFace(0, 0, 0);
-    const sm = [hx('#2a3a6a'), hx('#3a5a9a'), hx('#c8a040'), hx('#a03030'), hx('#e8e0c8'), hx('#1a2a4a')];
+    const sm = [
+      hx('#2a3a6a'),
+      hx('#3a5a9a'),
+      hx('#c8a040'),
+      hx('#a03030'),
+      hx('#e8e0c8'),
+      hx('#1a2a4a'),
+    ];
     for (let y = 4; y < 13; y++)
       for (let x = 0; x < 16; x++) {
         const gx = x + idx * 16;
@@ -932,7 +987,8 @@ function nameFace(c: CellCtx): Px {
     const W = len * 16;
     const plate = new Px(W, 16);
     for (let y = 4; y < 12; y++)
-      for (let x = 1; x < W - 1; x++) plate.set(x, y, y === 4 ? hx('#3a4a6a') : y === 11 ? hx('#0a0e18') : hx('#141c30'));
+      for (let x = 1; x < W - 1; x++)
+        plate.set(x, y, y === 4 ? hx('#3a4a6a') : y === 11 ? hx('#0a0e18') : hx('#141c30'));
     const word = len >= 3 ? 'ПРОКЛЯТАЯ' : 'ВЫХОД';
     const tw = word.length * 4 - 1;
     text(plate, word, Math.floor((W - tw) / 2), 6, hx('#f0ecd8'));
@@ -940,10 +996,12 @@ function nameFace(c: CellCtx): Px {
     plate.set(Math.floor(W * 0.6), 5, hx('#7a1420'));
     plate.set(Math.floor(W * 0.6), 6, hx('#7a1420'));
     plate.set(Math.floor(W * 0.6), 7, hx('#4a0a12'));
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-      const i = (y * W + x + run * 16) * 4;
-      if (plate.data[i + 3]) p.set(x, y, [plate.data[i], plate.data[i + 1], plate.data[i + 2], 255]);
-    }
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 16; x++) {
+        const i = (y * W + x + run * 16) * 4;
+        if (plate.data[i + 3])
+          p.set(x, y, [plate.data[i], plate.data[i + 1], plate.data[i + 2], 255]);
+      }
     return p;
   });
 }
@@ -962,7 +1020,7 @@ function tunnelFace(wx: number, v: number): Px {
       }
     capRim(p, TUNNEL);
     // Болты у стыков.
-    for (let y of [6, 11]) {
+    for (const y of [6, 11]) {
       const bx = (12 - ((wx * 16) % 12)) % 12;
       if (bx < 15) {
         p.set(bx + 2, y, hx('#6a6660'));
@@ -1006,7 +1064,13 @@ function posterFace(c: CellCtx): Px {
       // Схема линий.
       for (let x = x0 + 1; x < x1; x++) p.set(x, 7, hx('#c02828'));
       for (let y = 5; y < 12; y++) p.set(8, y, hx('#2a5aa0'));
-      for (const [x, y] of [[4, 7], [8, 7], [11, 7], [8, 5], [8, 10]] as [number, number][]) {
+      for (const [x, y] of [
+        [4, 7],
+        [8, 7],
+        [11, 7],
+        [8, 5],
+        [8, 10],
+      ] as [number, number][]) {
         p.set(x, y, WHITE);
         p.set(x, y + 1, INK);
       }
@@ -1041,7 +1105,8 @@ function ofudaFace(c: CellCtx, onRock: boolean): Px {
           p.set(xx, y, PAPER[x === 0 ? 1 : 3]);
         }
       // Знак: столбик штрихов кармином.
-      for (let y = top + 2; y < 12; y += 2) p.set(x0 + 1 + Math.round(((y - top) / 10) * tilt), y, hx('#a01420'));
+      for (let y = top + 2; y < 12; y += 2)
+        p.set(x0 + 1 + Math.round(((y - top) / 10) * tilt), y, hx('#a01420'));
       p.set(x0 + 1, top + 1, hx('#d02a3a'));
       // Опалённый край.
       p.set(x0, 13, hx('#3a2a1a'));
@@ -1113,7 +1178,7 @@ function carCell(c: CellCtx): Px {
       for (let y = 3; y < 9; y++)
         for (let x = 2; x < 14; x++) {
           const g = y === 3 ? hx('#3a4a58') : hx('#0e1620');
-          p.set(x, y, (x === 7 || x === 8) ? body[1] : g);
+          p.set(x, y, x === 7 || x === 8 ? body[1] : g);
         }
       // Силуэт в окне: кто-то сидит в пустом вагоне.
       if (hash(c.wx, c.wy, 2) > 0.5) {
@@ -1163,23 +1228,26 @@ function armFace(c: CellCtx): Px {
 function balusCell(c: CellCtx): Px {
   const face = c.open(0, 1);
   const top = !c.open(0, -1) && c.markAt(0, -1) !== MK.wBalus;
-  return cellOf(`balus|${face ? 1 : 0}|${top ? 1 : 0}|${c.markAt(-1, 0) === MK.wBalus ? 1 : 0}`, () => {
-    const p = new Px(16, 16);
-    const leftHalf = c.markAt(1, 0) === MK.wBalus;
-    for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) {
-        // Деревянная крышка, по краям — поручни.
-        let col = hx('#4a2e1c');
-        if ((leftHalf && x < 3) || (!leftHalf && x > 12)) col = hx('#0c0c0e');
-        else if ((leftHalf && x === 3) || (!leftHalf && x === 12)) col = hx('#3a3a40');
-        else col = y % 6 === 0 ? hx('#3a2414') : x % 5 === 0 ? hx('#5a3a24') : hx('#6a4630');
-        p.set(x, y, col);
-      }
-    if (face)
-      for (let x = 0; x < 16; x++)
-        for (let y = 10; y < 16; y++) p.set(x, y, y < 12 ? hx('#2a2c30') : hx('#101114'));
-    return p;
-  });
+  return cellOf(
+    `balus|${face ? 1 : 0}|${top ? 1 : 0}|${c.markAt(-1, 0) === MK.wBalus ? 1 : 0}`,
+    () => {
+      const p = new Px(16, 16);
+      const leftHalf = c.markAt(1, 0) === MK.wBalus;
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++) {
+          // Деревянная крышка, по краям — поручни.
+          let col = hx('#4a2e1c');
+          if ((leftHalf && x < 3) || (!leftHalf && x > 12)) col = hx('#0c0c0e');
+          else if ((leftHalf && x === 3) || (!leftHalf && x === 12)) col = hx('#3a3a40');
+          else col = y % 6 === 0 ? hx('#3a2414') : x % 5 === 0 ? hx('#5a3a24') : hx('#6a4630');
+          p.set(x, y, col);
+        }
+      if (face)
+        for (let x = 0; x < 16; x++)
+          for (let y = 10; y < 16; y++) p.set(x, y, y < 12 ? hx('#2a2c30') : hx('#101114'));
+      return p;
+    },
+  );
 }
 
 /** Кассовое окно: плитка, светлое окошко с решёткой, табличка. */
@@ -1188,7 +1256,8 @@ function kassaFace(c: CellCtx): Px {
     const p = tileFace(c.wx, c.wy, 1);
     for (let y = 4; y < 12; y++)
       for (let x = 3; x < 13; x++) p.set(x, y, y < 6 ? hx('#e8d8a0') : hx('#b89a58'));
-    for (let x = 3; x < 13; x++) if (x % 2 === 0) for (let y = 6; y < 12; y++) p.set(x, y, hx('#4a4030'));
+    for (let x = 3; x < 13; x++)
+      if (x % 2 === 0) for (let y = 6; y < 12; y++) p.set(x, y, hx('#4a4030'));
     for (let x = 2; x < 14; x++) {
       p.set(x, 3, STEEL[3]);
       p.set(x, 12, STEEL[1]);
@@ -1341,10 +1410,30 @@ function runeOver(base: Px, wx: number, wy: number): Px {
   p.data.set(base.data);
   const v = Math.floor(hash(wx, wy, 4) * 4);
   const pts: [number, number][][] = [
-    [[3, 3], [12, 12], [3, 12], [12, 3]],
-    [[8, 2], [8, 14], [3, 8], [13, 8]],
-    [[3, 4], [8, 12], [13, 4], [3, 4]],
-    [[4, 3], [12, 3], [8, 13], [4, 3]],
+    [
+      [3, 3],
+      [12, 12],
+      [3, 12],
+      [12, 3],
+    ],
+    [
+      [8, 2],
+      [8, 14],
+      [3, 8],
+      [13, 8],
+    ],
+    [
+      [3, 4],
+      [8, 12],
+      [13, 4],
+      [3, 4],
+    ],
+    [
+      [4, 3],
+      [12, 3],
+      [8, 13],
+      [4, 3],
+    ],
   ];
   const ptsV = pts[v];
   for (let i = 0; i < ptsV.length - 1; i++) {
@@ -1362,37 +1451,40 @@ function daisCell(c: CellCtx): Px {
   const s = c.markAt(0, 1) !== MK.dais;
   const w = c.markAt(-1, 0) !== MK.dais;
   const e = c.markAt(1, 0) !== MK.dais;
-  return cellOf(`dais|${n ? 1 : 0}${s ? 1 : 0}${w ? 1 : 0}${e ? 1 : 0}|${c.wx % 3}|${c.wy & 1}`, () => {
-    // Помост: тёмные лакированные доски — красные метки ударов на нём
-    // обязаны читаться, поэтому сам он почти чёрный.
-    const wood = [hx('#140a0c'), hx('#1e0f12'), hx('#2a1418'), hx('#3a1c20')];
-    const p = new Px(16, 16);
-    for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) {
-        const gy = (c.wy & 1) * 16 + y;
-        const board = Math.floor(gy / 4);
-        const gx = (c.wx % 3) * 16 + x;
-        const t = hash(board, Math.floor((gx + board * 13) / 24), 2) > 0.5 ? 2 : 1;
-        let col = wood[t];
-        if (gy % 4 === 0) col = wood[0];
-        else if ((gx + board * 13) % 24 === 0) col = wood[0];
-        else if (hash(gx, gy, 8) > 0.9) col = wood[t + 1];
-        p.set(x, y, col);
+  return cellOf(
+    `dais|${n ? 1 : 0}${s ? 1 : 0}${w ? 1 : 0}${e ? 1 : 0}|${c.wx % 3}|${c.wy & 1}`,
+    () => {
+      // Помост: тёмные лакированные доски — красные метки ударов на нём
+      // обязаны читаться, поэтому сам он почти чёрный.
+      const wood = [hx('#140a0c'), hx('#1e0f12'), hx('#2a1418'), hx('#3a1c20')];
+      const p = new Px(16, 16);
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++) {
+          const gy = (c.wy & 1) * 16 + y;
+          const board = Math.floor(gy / 4);
+          const gx = (c.wx % 3) * 16 + x;
+          const t = hash(board, Math.floor((gx + board * 13) / 24), 2) > 0.5 ? 2 : 1;
+          let col = wood[t];
+          if (gy % 4 === 0) col = wood[0];
+          else if ((gx + board * 13) % 24 === 0) col = wood[0];
+          else if (hash(gx, gy, 8) > 0.9) col = wood[t + 1];
+          p.set(x, y, col);
+        }
+      for (let i = 0; i < 16; i++) {
+        if (n) {
+          p.set(i, 0, GOLD[1]);
+          p.set(i, 1, GOLD[3]);
+        }
+        if (s) {
+          p.set(i, 14, GOLD[2]);
+          p.set(i, 15, INK);
+        }
+        if (w) p.set(0, i, GOLD[1]);
+        if (e) p.set(15, i, GOLD[1]);
       }
-    for (let i = 0; i < 16; i++) {
-      if (n) {
-        p.set(i, 0, GOLD[1]);
-        p.set(i, 1, GOLD[3]);
-      }
-      if (s) {
-        p.set(i, 14, GOLD[2]);
-        p.set(i, 15, INK);
-      }
-      if (w) p.set(0, i, GOLD[1]);
-      if (e) p.set(15, i, GOLD[1]);
-    }
-    return p;
-  });
+      return p;
+    },
+  );
 }
 
 /** Провал: тьма с обломанным краем. */
@@ -1412,7 +1504,8 @@ function abyssCell(c: CellCtx): Px {
         p.set(x, d, INK);
       }
     // Далёкие огоньки внизу.
-    if (hash(c.wx, c.wy, 9) > 0.7) p.set(4 + Math.floor(hash(c.wy, c.wx, 3) * 8), 9, alpha(CURSE[3], 0.5));
+    if (hash(c.wx, c.wy, 9) > 0.7)
+      p.set(4 + Math.floor(hash(c.wy, c.wx, 3) * 8), 9, alpha(CURSE[3], 0.5));
     return p;
   });
 }
@@ -1425,8 +1518,16 @@ function groundCell(wx: number, wy: number): Px {
     const p = new Px(16, 16);
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
-        const n = tnoise(ix * 16 + x, iy * 16 + y, 8, 64, 31) * 0.6 + hash(ix * 16 + x, iy * 16 + y, 7) * 0.4;
-        p.set(x, y, [hx('#161016'), hx('#201820'), hx('#2a2028'), hx('#372a34')][n > 0.75 ? 3 : n > 0.5 ? 2 : n > 0.25 ? 1 : 0]);
+        const n =
+          tnoise(ix * 16 + x, iy * 16 + y, 8, 64, 31) * 0.6 +
+          hash(ix * 16 + x, iy * 16 + y, 7) * 0.4;
+        p.set(
+          x,
+          y,
+          [hx('#161016'), hx('#201820'), hx('#2a2028'), hx('#372a34')][
+            n > 0.75 ? 3 : n > 0.5 ? 2 : n > 0.25 ? 1 : 0
+          ],
+        );
       }
     return p;
   });
@@ -1490,22 +1591,40 @@ function stationFloor(c: CellCtx, area: string): Px {
   const k = c.mark;
   // База: плитка станции / бетон служебных ходов / камень святилища.
   const granite = (m: number) =>
-    m === MK.tile || m === MK.sleepPost || m === MK.eyePost || m === MK.guardPost || m === MK.dollPost || m === MK.mosaic;
+    m === MK.tile ||
+    m === MK.sleepPost ||
+    m === MK.eyePost ||
+    m === MK.guardPost ||
+    m === MK.dollPost ||
+    m === MK.mosaic;
   // Пятно (кровь, сажа, лужа, трещина) лежит на полу соседей: на плитке —
   // плиткой, в служебном ходу — бетоном.
-  const stainy = k === MK.blood || k === MK.soot || k === MK.wet || k === MK.crack || k === MK.bones || k === MK.rune;
+  const stainy =
+    k === MK.blood ||
+    k === MK.soot ||
+    k === MK.wet ||
+    k === MK.crack ||
+    k === MK.bones ||
+    k === MK.rune;
   const onGranite =
-    stainy && [c.markAt(-1, 0), c.markAt(1, 0), c.markAt(0, -1), c.markAt(0, 1)].filter(granite).length >= 2;
+    stainy &&
+    [c.markAt(-1, 0), c.markAt(1, 0), c.markAt(0, -1), c.markAt(0, 1)].filter(granite).length >= 2;
   const baseOf = (): Px => {
-    if (area === F12_SHRINE) return k === MK.ballast || k === MK.edge ? shrineFloor(c.wx, c.wy) : c.tile === 2 && k === 0 ? groundCell(c.wx, c.wy) : shrineFloor(c.wx, c.wy);
-    if (granite(k) || onGranite)
-    {
+    if (area === F12_SHRINE)
+      return k === MK.ballast || k === MK.edge
+        ? shrineFloor(c.wx, c.wy)
+        : c.tile === 2 && k === 0
+          ? groundCell(c.wx, c.wy)
+          : shrineFloor(c.wx, c.wy);
+    if (granite(k) || onGranite) {
       // Плита — 2×2 клетки: камень и оттенок общие на плиту.
       const sx = c.wx >> 1;
       const sy = c.wy >> 1;
       const tone = (sx + sy) & 1;
       const v = Math.floor(hash(sx, sy, 1) * 7);
-      return cellOf(`gran|${c.wx & 1}|${c.wy & 1}|${tone}|${v}`, () => graniteCell(c.wx & 1, c.wy & 1, v, tone));
+      return cellOf(`gran|${c.wx & 1}|${c.wy & 1}|${tone}|${v}`, () =>
+        graniteCell(c.wx & 1, c.wy & 1, v, tone),
+      );
     }
     return cellOf(`conc|${c.wx & 3}|${c.wy & 3}`, () => concreteCell(c.wx & 3, c.wy & 3));
   };
@@ -1518,7 +1637,12 @@ function stationFloor(c: CellCtx, area: string): Px {
       return edgeCell(c);
     case MK.railN:
     case MK.railS:
-      return railCell(c, k === MK.railN, false, area === F12_PLAT && (c.markAt(0, k === MK.railN ? -1 : 1) === MK.ballast));
+      return railCell(
+        c,
+        k === MK.railN,
+        false,
+        area === F12_PLAT && c.markAt(0, k === MK.railN ? -1 : 1) === MK.ballast,
+      );
     case MK.crossN:
     case MK.crossS:
       return railCell(c, k === MK.crossN, true, false);
@@ -1542,25 +1666,38 @@ function stationFloor(c: CellCtx, area: string): Px {
       return domainCell(c);
     case MK.linePost:
       // Пост обходчика: у путей — щебень, в ходу — бетон.
-      if ([c.markAt(-1, 0), c.markAt(1, 0), c.markAt(0, -1), c.markAt(0, 1)].includes(MK.ballast)) return ballastCell(c);
+      if ([c.markAt(-1, 0), c.markAt(1, 0), c.markAt(0, -1), c.markAt(0, 1)].includes(MK.ballast))
+        return ballastCell(c);
       p = baseOf();
       break;
     default:
       p = baseOf();
   }
   if (k === MK.blood || k === MK.soot || k === MK.wet || k === MK.crack)
-    p = cellOf(`stain|${k}|${area === F12_SHRINE ? 1 : onGranite ? 2 : 0}|${c.wx % 5}|${c.wy % 5}`, () => stainOver(baseOf(), k, c.wx, c.wy));
-  if (k === MK.bones) p = cellOf(`bones|${area === F12_SHRINE ? 1 : onGranite ? 2 : 0}|${c.wx % 6}|${c.wy % 6}`, () => bonesOver(baseOf(), c.wx, c.wy));
-  if (k === MK.rune) p = cellOf(`rune|${area === F12_SHRINE ? 1 : onGranite ? 2 : 0}|${c.wx % 4}|${c.wy % 4}`, () => runeOver(baseOf(), c.wx, c.wy));
+    p = cellOf(
+      `stain|${k}|${area === F12_SHRINE ? 1 : onGranite ? 2 : 0}|${c.wx % 5}|${c.wy % 5}`,
+      () => stainOver(baseOf(), k, c.wx, c.wy),
+    );
+  if (k === MK.bones)
+    p = cellOf(`bones|${area === F12_SHRINE ? 1 : onGranite ? 2 : 0}|${c.wx % 6}|${c.wy % 6}`, () =>
+      bonesOver(baseOf(), c.wx, c.wy),
+    );
+  if (k === MK.rune)
+    p = cellOf(`rune|${area === F12_SHRINE ? 1 : onGranite ? 2 : 0}|${c.wx % 4}|${c.wy % 4}`, () =>
+      runeOver(baseOf(), c.wx, c.wy),
+    );
   if (k === MK.shrine) p = shrineFloor(c.wx, c.wy);
   if (!e.n && !e.w && !e.e && !e.rim) return p;
-  return cellOf(`${keyOfPx(p)}|sh${e.n ? 1 : 0}${e.w ? 1 : 0}${e.e ? 1 : 0}${e.rim ? 1 : 0}`, () => {
-    const q = new Px(16, 16);
-    q.data.set(p.data);
-    wallShade(q, e.n, e.w, e.e);
-    if (e.rim) rimBelow(q);
-    return q;
-  });
+  return cellOf(
+    `${keyOfPx(p)}|sh${e.n ? 1 : 0}${e.w ? 1 : 0}${e.e ? 1 : 0}${e.rim ? 1 : 0}`,
+    () => {
+      const q = new Px(16, 16);
+      q.data.set(p.data);
+      wallShade(q, e.n, e.w, e.e);
+      if (e.rim) rimBelow(q);
+      return q;
+    },
+  );
 }
 
 /** Ключ кеша для готового холста — по ссылке (холсты клеток постоянные). */
@@ -1611,30 +1748,39 @@ function stationWall(c: CellCtx, area: string): Px | null {
     case MK.wFix: {
       // Под часами, неоном и лампой — стена соседей.
       const nb = c.markAt(-1, 0) || c.markAt(1, 0);
-      if (nb === MK.wTunnel || area === F12_PLAT && (c.markAt(0, 1) === MK.ballast || c.markAt(0, 1) === MK.niche))
+      if (
+        nb === MK.wTunnel ||
+        (area === F12_PLAT && (c.markAt(0, 1) === MK.ballast || c.markAt(0, 1) === MK.niche))
+      )
         return tunnelFace(c.wx, c.wy);
-      if (area === F12_SHRINE) return cellOf(`shr|${c.wx % 6}|${c.wy % 2}`, () => shrineFace(c.wx % 6, c.wy % 2, 0));
+      if (area === F12_SHRINE)
+        return cellOf(`shr|${c.wx % 6}|${c.wy % 2}`, () => shrineFace(c.wx % 6, c.wy % 2, 0));
       return cellOf(`tile|${c.wx % 4}|${c.wy % 2}`, () => tileFace(c.wx % 4, c.wy % 2, 0));
     }
     case MK.domainWall:
       return cellOf(`dwall|${c.wx % 4}`, () => {
         const p = shrineFace(c.wx, 0, 1);
-        for (let y = 7; y < 14; y++) for (let x = 0; x < 16; x++) if ((x + y) % 4 === 0) p.set(x, y, BLOODC[2]);
+        for (let y = 7; y < 14; y++)
+          for (let x = 0; x < 16; x++) if ((x + y) % 4 === 0) p.set(x, y, BLOODC[2]);
         return p;
       });
   }
   // Лицо стены без метки (нора, шахта, трещина, плакат-заготовка) — по району.
   if (c.tile === T_WALL || c.tile === T_CRACK) {
-    if (area === F12_SHRINE) return cellOf(`shr|${c.wx % 6}|${c.wy % 2}`, () => shrineFace(c.wx % 6, c.wy % 2, 0));
+    if (area === F12_SHRINE)
+      return cellOf(`shr|${c.wx % 6}|${c.wy % 2}`, () => shrineFace(c.wx % 6, c.wy % 2, 0));
     const tunnel = c.markAt(-1, 0) === MK.wTunnel || c.markAt(1, 0) === MK.wTunnel;
-    return tunnel ? tunnelFace(c.wx, c.wy) : cellOf(`tile|${c.wx % 4}|${c.wy % 2}`, () => tileFace(c.wx % 4, c.wy % 2, 0));
+    return tunnel
+      ? tunnelFace(c.wx, c.wy)
+      : cellOf(`tile|${c.wx % 4}|${c.wy % 2}`, () => tileFace(c.wx % 4, c.wy % 2, 0));
   }
   return null;
 }
 
 function f12Cell(c: CellCtx, area: string): Px | null {
   if (c.tile === T_DEEP) {
-    if (c.mark === MK.tunnelN || c.mark === MK.tunnelS) return tunnelDeepCell(c, c.mark === MK.tunnelN);
+    if (c.mark === MK.tunnelN || c.mark === MK.tunnelS)
+      return tunnelDeepCell(c, c.mark === MK.tunnelN);
     if (c.mark === MK.abyss) return abyssCell(c);
     return null;
   }
@@ -1663,7 +1809,11 @@ function sprite(key: string, make: () => { p: Px; ax: number; ay: number } | nul
   return s;
 }
 
-const flashed = (key: string, flash: boolean, make: () => { p: Px; ax: number; ay: number } | null) =>
+const flashed = (
+  key: string,
+  flash: boolean,
+  make: () => { p: Px; ax: number; ay: number } | null,
+) =>
   sprite(`${key}|${flash ? 1 : 0}`, () => {
     const r = make();
     if (!r) return null;
@@ -1702,7 +1852,16 @@ function turnstilePx(red: boolean): Px {
   const p = new Px(16, 20);
   floorShadow(p, 8, 19, 6);
   // Тумба.
-  polyShade(p, [[5, 6], [11, 6], [11, 18], [5, 18]], [STEEL[1], STEEL[2], STEEL[3], STEEL[4]]);
+  polyShade(
+    p,
+    [
+      [5, 6],
+      [11, 6],
+      [11, 18],
+      [5, 18],
+    ],
+    [STEEL[1], STEEL[2], STEEL[3], STEEL[4]],
+  );
   for (let y = 7; y < 18; y++) p.set(10, y, STEEL[1]);
   // Крышка и табло.
   for (let x = 4; x <= 12; x++) {
@@ -1782,14 +1941,24 @@ registerPropPainter('f12_bench', (o) =>
 function sodaPx(f: number, dark: boolean): Px {
   const p = new Px(16, 26);
   floorShadow(p, 8, 25, 7);
-  polyShade(p, [[2, 3], [14, 3], [14, 24], [2, 24]], tn('#4a0e12', '#7a1a1e', '#a0282a', '#c84a40'));
+  polyShade(
+    p,
+    [
+      [2, 3],
+      [14, 3],
+      [14, 24],
+      [2, 24],
+    ],
+    tn('#4a0e12', '#7a1a1e', '#a0282a', '#c84a40'),
+  );
   // Стекло с бутылками.
   const lit = !dark && f !== 3;
   for (let y = 6; y < 17; y++)
     for (let x = 4; x < 11; x++) {
       const shelf = (y - 6) % 4 === 3;
       let c = lit ? hx('#2a4a4a') : hx('#141c1c');
-      if (!shelf && x % 2 === 0) c = lit ? [hx('#5affe0'), hx('#ffd04a'), hx('#ff6a7a')][((x + y) >> 1) % 3] : hx('#20282a');
+      if (!shelf && x % 2 === 0)
+        c = lit ? [hx('#5affe0'), hx('#ffd04a'), hx('#ff6a7a')][((x + y) >> 1) % 3] : hx('#20282a');
       if (shelf) c = STEEL[2];
       p.set(x, y, c);
     }
@@ -1802,7 +1971,8 @@ function sodaPx(f: number, dark: boolean): Px {
     p.set(x, 20, hx('#1a1a1a'));
   }
   // Вывеска сверху.
-  for (let x = 3; x < 14; x++) for (let y = 3; y < 5; y++) p.set(x, y, lit ? NEON.teal : NEON.tealD);
+  for (let x = 3; x < 14; x++)
+    for (let y = 3; y < 5; y++) p.set(x, y, lit ? NEON.teal : NEON.tealD);
   p.outline(INK);
   if (lit) glowDot(p, 8, 4, NEON.teal, 2);
   return p;
@@ -1822,7 +1992,16 @@ registerPropPainter('f12_ticketer', (o, time) => {
   return sprite(`tick|${f}`, () => {
     const p = new Px(14, 22);
     floorShadow(p, 7, 21, 6);
-    polyShade(p, [[2, 4], [12, 4], [12, 20], [2, 20]], [STEEL[1], STEEL[2], STEEL[3], STEEL[4]]);
+    polyShade(
+      p,
+      [
+        [2, 4],
+        [12, 4],
+        [12, 20],
+        [2, 20],
+      ],
+      [STEEL[1], STEEL[2], STEEL[3], STEEL[4]],
+    );
     for (let y = 6; y < 12; y++)
       for (let x = 4; x < 11; x++) {
         let c = f === 9 ? hx('#0a0e14') : hx('#1a3a7a');
@@ -1830,7 +2009,8 @@ registerPropPainter('f12_ticketer', (o, time) => {
         if (f !== 9 && y === 10 && (x + f) % 3 === 0) c = hx('#e8f0ff');
         p.set(x, y, c);
       }
-    for (let y = 13; y < 17; y++) for (let x = 4; x < 9; x++) p.set(x, y, (x + y) % 2 ? STEEL[4] : STEEL[1]);
+    for (let y = 13; y < 17; y++)
+      for (let x = 4; x < 9; x++) p.set(x, y, (x + y) % 2 ? STEEL[4] : STEEL[1]);
     p.set(10, 14, hx('#0a0a0a'));
     p.set(10, 15, hx('#c8a040'));
     for (let x = 3; x < 12; x++) p.set(x, 4, hx('#2a5ab0'));
@@ -1865,7 +2045,15 @@ registerPropPainter('f12_column', (o) =>
     }
     // Кровавая ладонь — на одной из двух.
     if ((o.x + o.y) % 2)
-      for (const [x, y] of [[6, 20], [7, 19], [8, 20], [7, 21], [7, 22], [5, 19], [9, 19]] as [number, number][])
+      for (const [x, y] of [
+        [6, 20],
+        [7, 19],
+        [8, 20],
+        [7, 21],
+        [7, 22],
+        [5, 19],
+        [9, 19],
+      ] as [number, number][])
         p.set(x, y, BLOODC[2]);
     p.outline(INK);
     return { p, ax: 7, ay: 40 };
@@ -1926,7 +2114,11 @@ function semaphorePx(sig: number, blink: boolean): Px {
 registerPropPainter('f12_semaphore', (o, time) => {
   const sig = F12_FX.sig.get(`${o.x},${o.y}`) ?? 0;
   const blink = Math.floor(time * 4) % 2 === 0;
-  return sprite(`sem|${sig}|${blink ? 1 : 0}`, () => ({ p: semaphorePx(sig, blink), ax: 5, ay: 28 }));
+  return sprite(`sem|${sig}|${blink ? 1 : 0}`, () => ({
+    p: semaphorePx(sig, blink),
+    ax: 5,
+    ay: 28,
+  }));
 });
 
 // --- Сигнал на стене тоннеля. -----------------------------------------------
@@ -1961,12 +2153,47 @@ registerPropPainter('f12_lantern', (o, time) => {
     const p = new Px(14, 22);
     floorShadow(p, 7, 21, 5);
     const st = tn('#2a2430', '#453c4c', '#625670', '#86789a');
-    polyShade(p, [[4, 16], [10, 16], [11, 20], [3, 20]], st);
-    polyShade(p, [[6, 11], [8, 11], [8, 16], [6, 16]], st);
-    polyShade(p, [[3, 6], [11, 6], [11, 11], [3, 11]], st);
+    polyShade(
+      p,
+      [
+        [4, 16],
+        [10, 16],
+        [11, 20],
+        [3, 20],
+      ],
+      st,
+    );
+    polyShade(
+      p,
+      [
+        [6, 11],
+        [8, 11],
+        [8, 16],
+        [6, 16],
+      ],
+      st,
+    );
+    polyShade(
+      p,
+      [
+        [3, 6],
+        [11, 6],
+        [11, 11],
+        [3, 11],
+      ],
+      st,
+    );
     for (let y = 7; y < 10; y++) for (let x = 5; x < 10; x++) p.set(x, y, hx('#1a0c06'));
     flame(p, 7, 9, 3, 3, f, FIRE, o.x);
-    polyShade(p, [[1, 6], [7, 1], [13, 6]], st);
+    polyShade(
+      p,
+      [
+        [1, 6],
+        [7, 1],
+        [13, 6],
+      ],
+      st,
+    );
     p.set(7, 0, st[3]);
     p.outline(INK);
     glowDot(p, 7, 8, hx('#ffb040'), 2);
@@ -1982,7 +2209,16 @@ registerPropPainter('f12_torii', (_o, time) => {
     const p = new Px(44, 34);
     // Столбы.
     for (const x0 of [8, 34]) {
-      polyShade(p, [[x0, 7], [x0 + 3, 7], [x0 + 3, 33], [x0, 33]], [LACQUER[0], LACQUER[2], LACQUER[3], LACQUER[4]]);
+      polyShade(
+        p,
+        [
+          [x0, 7],
+          [x0 + 3, 7],
+          [x0 + 3, 33],
+          [x0, 33],
+        ],
+        [LACQUER[0], LACQUER[2], LACQUER[3], LACQUER[4]],
+      );
       for (let x = x0 - 1; x < x0 + 5; x++) {
         p.set(x, 32, hx('#1a1012'));
         p.set(x, 33, hx('#0a0608'));
@@ -2025,9 +2261,31 @@ registerPropPainter('f12_candles', (o, time) => {
     const p = new Px(14, 14);
     floorShadow(p, 7, 13, 6);
     const wax = tn('#8a806a', '#c0b69a', '#e0d8bc', '#f8f2e0');
-    const set: [number, number][] = o.x % 2 ? [[3, 6], [6, 8], [9, 5], [11, 9]] : [[2, 8], [5, 5], [8, 7], [11, 6]];
+    const set: [number, number][] =
+      o.x % 2
+        ? [
+            [3, 6],
+            [6, 8],
+            [9, 5],
+            [11, 9],
+          ]
+        : [
+            [2, 8],
+            [5, 5],
+            [8, 7],
+            [11, 6],
+          ];
     set.forEach(([x, h], i) => {
-      polyShade(p, [[x, 13 - h], [x + 1, 13 - h], [x + 1, 12], [x, 12]], wax);
+      polyShade(
+        p,
+        [
+          [x, 13 - h],
+          [x + 1, 13 - h],
+          [x + 1, 12],
+          [x, 12],
+        ],
+        wax,
+      );
       p.set(x, 13 - h + 1, wax[3]);
       flame(p, x + 0.5, 12 - h, 2, 3, (f + i) % 4, FIRE, x);
     });
@@ -2067,7 +2325,16 @@ registerPropPainter('f12_altar', (o, time) => {
     const p = new Px(20, 26);
     floorShadow(p, 10, 25, 9);
     const st = tn('#1e1822', '#342a3a', '#4a3e54', '#66587a');
-    polyShade(p, [[2, 13], [18, 13], [17, 24], [3, 24]], st);
+    polyShade(
+      p,
+      [
+        [2, 13],
+        [18, 13],
+        [17, 24],
+        [3, 24],
+      ],
+      st,
+    );
     for (let x = 1; x < 19; x++) {
       p.set(x, 12, st[3]);
       p.set(x, 13, st[2]);
@@ -2102,7 +2369,8 @@ registerPropPainter('f12_buffer', () =>
       p.set(13, y, STEEL[1]);
     }
     for (let y = 3; y < 9; y++)
-      for (let x = 2; x < 14; x++) p.set(x, y, Math.floor((x + y) / 2) % 2 ? hx('#e8e0d0') : hx('#c02020'));
+      for (let x = 2; x < 14; x++)
+        p.set(x, y, Math.floor((x + y) / 2) % 2 ? hx('#e8e0d0') : hx('#c02020'));
     stroke(p, 3, 9, 7, 14, STEEL[1], 1);
     stroke(p, 12, 9, 9, 14, STEEL[1], 1);
     p.outline(INK);
@@ -2120,7 +2388,8 @@ registerPropPainter('f12_drum', (_o, _t, _alive, flash) =>
     shadeEll(p, 7, 7, 6, 6, wood);
     shadeEll(p, 7, 7, 3.5, 3.5, tn('#0a0a0a', '#1a1a1e', '#2a2a30', '#3a3a44'));
     shadeEll(p, 7, 7, 1.4, 1.4, wood);
-    for (let a = 0; a < 6; a++) p.set(Math.round(7 + Math.cos(a) * 5), Math.round(7 + Math.sin(a) * 5), wood[0]);
+    for (let a = 0; a < 6; a++)
+      p.set(Math.round(7 + Math.cos(a) * 5), Math.round(7 + Math.sin(a) * 5), wood[0]);
     p.outline(INK);
     return { p, ax: 7, ay: 14 };
   }),
@@ -2159,7 +2428,16 @@ registerPropPainter('f12_handcar', () =>
   sprite('handcar', () => {
     const p = new Px(22, 16);
     floorShadow(p, 11, 15, 10);
-    polyShade(p, [[2, 8], [20, 8], [20, 12], [2, 12]], tn('#2a1a10', '#4a2e1c', '#6a4428', '#8a5c36'));
+    polyShade(
+      p,
+      [
+        [2, 8],
+        [20, 8],
+        [20, 12],
+        [2, 12],
+      ],
+      tn('#2a1a10', '#4a2e1c', '#6a4428', '#8a5c36'),
+    );
     for (const x of [5, 17]) shadeEll(p, x, 13, 2.2, 2.2, [STEEL[0], STEEL[1], STEEL[2], STEEL[3]]);
     // Коромысло насоса.
     stroke(p, 11, 8, 11, 3, STEEL[2], 1);
@@ -2178,10 +2456,21 @@ registerPropPainter('f12_kiosk', (o) => {
   return sprite(`kiosk|${dark ? 1 : 0}`, () => {
     const p = new Px(18, 26);
     floorShadow(p, 9, 25, 8);
-    polyShade(p, [[1, 6], [17, 6], [17, 24], [1, 24]], [STEEL[0], STEEL[1], STEEL[2], STEEL[3]]);
+    polyShade(
+      p,
+      [
+        [1, 6],
+        [17, 6],
+        [17, 24],
+        [1, 24],
+      ],
+      [STEEL[0], STEEL[1], STEEL[2], STEEL[3]],
+    );
     for (let y = 8; y < 18; y++)
       for (let x = 3; x < 15; x++) {
-        const mag = [hx('#c04040'), hx('#3a6ab0'), hx('#d8c040'), hx('#e8e0d0'), hx('#40a060')][(x * 3 + (y >> 2)) % 5];
+        const mag = [hx('#c04040'), hx('#3a6ab0'), hx('#d8c040'), hx('#e8e0d0'), hx('#40a060')][
+          (x * 3 + (y >> 2)) % 5
+        ];
         p.set(x, y, dark ? shade(mag, 0.35) : mag);
       }
     for (let x = 3; x < 15; x++) {
@@ -2204,11 +2493,21 @@ registerPropPainter('f12_lever', (_o, time) => {
   return sprite(`lever|${thrown ? 1 : 0}|${blink ? 1 : 0}`, () => {
     const p = new Px(16, 22);
     floorShadow(p, 8, 21, 6);
-    polyShade(p, [[3, 14], [13, 14], [13, 20], [3, 20]], [STEEL[0], STEEL[1], STEEL[2], STEEL[3]]);
+    polyShade(
+      p,
+      [
+        [3, 14],
+        [13, 14],
+        [13, 20],
+        [3, 20],
+      ],
+      [STEEL[0], STEEL[1], STEEL[2], STEEL[3]],
+    );
     // Рукоять: стоит или брошена.
     const [tx, ty] = thrown ? [14, 12] : [5, 2];
     stroke(p, 8, 15, tx, ty, STEEL[3], 2);
-    for (let i = 0; i < 3; i++) p.set(tx + (thrown ? -i : i), ty + (thrown ? 0 : i), i % 2 ? WHITE : hx('#c02020'));
+    for (let i = 0; i < 3; i++)
+      p.set(tx + (thrown ? -i : i), ty + (thrown ? 0 : i), i % 2 ? WHITE : hx('#c02020'));
     // Лампа на коробе: мигает, пока рычаг можно тронуть.
     p.set(11, 16, !thrown && blink ? hx('#ffd040') : hx('#5a4a10'));
     for (let x = 4; x < 12; x++) p.set(x, 18, x % 2 ? YELLOW[2] : INK);
@@ -2229,7 +2528,16 @@ registerPropPainter('f12_bell', (_o, time) => {
       p.set(5, y, STEEL[3]);
       p.set(6, y, STEEL[1]);
     }
-    polyShade(p, [[2, 7], [10, 7], [10, 14], [2, 14]], tn('#3a0a0a', '#7a1a1a', '#a82a24', '#d04a3a'));
+    polyShade(
+      p,
+      [
+        [2, 7],
+        [10, 7],
+        [10, 14],
+        [2, 14],
+      ],
+      tn('#3a0a0a', '#7a1a1a', '#a82a24', '#d04a3a'),
+    );
     shadeEll(p, 6, 10, 2, 2, tn('#5a4410', '#9a7a20', '#d8b040', '#fff0a0'));
     // Звонок сверху.
     shadeEll(p, 6, 4, 3, 2.4, tn('#5a4410', '#9a7a20', '#d8b040', '#fff0a0'));
@@ -2277,21 +2585,41 @@ registerPropPainter('f12_neon', (o, time) => {
     // Буква «М» метро или стрелка «выход».
     const pts: [number, number][][] = kind
       ? [
-          [[3, 11], [3, 4], [8, 9], [13, 4], [13, 11]],
+          [
+            [3, 11],
+            [3, 4],
+            [8, 9],
+            [13, 4],
+            [13, 11],
+          ],
         ]
       : [
-          [[2, 8], [12, 8]],
-          [[9, 5], [12, 8], [9, 11]],
+          [
+            [2, 8],
+            [12, 8],
+          ],
+          [
+            [9, 5],
+            [12, 8],
+            [9, 11],
+          ],
         ];
     for (const line of pts)
-      for (let i = 0; i < line.length - 1; i++) stroke(p, line[i][0], line[i][1], line[i + 1][0], line[i + 1][1], col, 1);
+      for (let i = 0; i < line.length - 1; i++)
+        stroke(p, line[i][0], line[i][1], line[i + 1][0], line[i + 1][1], col, 1);
     if (on) {
       const glow = new Px(16, 16);
       for (let y = 0; y < 16; y++)
         for (let x = 0; x < 16; x++) {
           if (p.solid(x, y)) continue;
           let n = 0;
-          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (p.solid(x + dx, y + dy)) n++;
+          for (const [dx, dy] of [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+          ])
+            if (p.solid(x + dx, y + dy)) n++;
           if (n) glow.set(x, y, alpha(c, 0.35));
         }
       over(glow, p);
@@ -2324,7 +2652,16 @@ registerPropPainter('f12_breaker', (_o, time) => {
   const blink = Math.floor(time * 3) % 2 === 0;
   return sprite(`brk|${dark ? 1 : 0}|${blink ? 1 : 0}`, () => {
     const p = new Px(14, 16);
-    polyShade(p, [[2, 2], [12, 2], [12, 13], [2, 13]], [STEEL[0], STEEL[1], STEEL[2], STEEL[3]]);
+    polyShade(
+      p,
+      [
+        [2, 2],
+        [12, 2],
+        [12, 13],
+        [2, 13],
+      ],
+      [STEEL[0], STEEL[1], STEEL[2], STEEL[3]],
+    );
     for (let x = 3; x < 12; x++) p.set(x, 3, YELLOW[2]);
     // Молния-знак.
     stroke(p, 8, 5, 6, 8, INK, 1);
@@ -2353,7 +2690,8 @@ registerPropPainter('f12_torch', (o) => {
     for (let x = 2; x < 8; x++) p.set(x, 26, GOLD[1]);
     // Плафон — матовый цилиндр.
     for (let y = 0; y < 8; y++)
-      for (let x = 2; x < 8; x++) p.set(x, y, dark ? hx('#5a5040') : x === 3 ? hx('#fff8e0') : hx('#f0d898'));
+      for (let x = 2; x < 8; x++)
+        p.set(x, y, dark ? hx('#5a5040') : x === 3 ? hx('#fff8e0') : hx('#f0d898'));
     for (let x = 2; x < 8; x++) {
       p.set(x, 0, GOLD[3]);
       p.set(x, 7, GOLD[2]);
@@ -2545,7 +2883,12 @@ registerMobPainter('f12_manyface', (m: Mob, pose: MobPose) => {
   } else if (pose.anim === 'run') {
     anim = 'run';
     fr = f % 4;
-    fp = { ...fp, bob: fr % 2 ? -1 : 0, lean: fr < 2 ? 1 : -1, step: fr === 0 ? 2 : fr === 2 ? -2 : 0 };
+    fp = {
+      ...fp,
+      bob: fr % 2 ? -1 : 0,
+      lean: fr < 2 ? 1 : -1,
+      step: fr === 0 ? 2 : fr === 2 ? -2 : 0,
+    };
   } else if (pose.anim === 'hurt') {
     anim = 'hurt';
     fp = { ...fp, bob: 1, lean: -2, mouth: 0.6 };
@@ -2566,7 +2909,13 @@ registerMobPainter('f12_manyface', (m: Mob, pose: MobPose) => {
 
 const ARMSKIN = tn('#3e4a3e', '#63705e', '#8a987e', '#b0bca0');
 
-function drawLongarm(len: number, ang: number, open: number, grip: boolean, limp: boolean): { p: Px; ox: number; oy: number } {
+function drawLongarm(
+  len: number,
+  ang: number,
+  open: number,
+  grip: boolean,
+  limp: boolean,
+): { p: Px; ox: number; oy: number } {
   // Холст с запасом во все стороны: начало руки — в центре.
   const R = Math.ceil(len * 16) + 14;
   const S = R * 2 + 2;
@@ -2603,7 +2952,11 @@ function drawLongarm(len: number, ang: number, open: number, grip: boolean, limp
       const sx = ex + Math.cos(a) * 2;
       const sy = ey + Math.sin(a) * 2;
       limb(p, sx, sy, sx + Math.cos(a) * fl, sy + Math.sin(a) * fl, 0.9, 0.7, ARMSKIN, 0.1);
-      p.set(Math.round(sx + Math.cos(a) * (fl + 0.6)), Math.round(sy + Math.sin(a) * (fl + 0.6)), hx('#d8d0b8'));
+      p.set(
+        Math.round(sx + Math.cos(a) * (fl + 0.6)),
+        Math.round(sy + Math.sin(a) * (fl + 0.6)),
+        hx('#d8d0b8'),
+      );
     }
   }
   p.outline(INK);
@@ -2642,12 +2995,18 @@ registerMobPainter('f12_longarm', (m: Mob, pose: MobPose) => {
   const ll = Math.round(len * 3);
   const qa = (la / 16) * TAU;
   const key = `${la}|${ll}|${open > 0.6 ? 2 : open > 0 ? 1 : 0}|${grip ? 1 : 0}|${limp ? 1 : 0}`;
-  const fr = frameOf('f12_longarm', { ...pose, left: false }, key, mode === 'dying' ? deathK(pose) : 0, () => {
-    const { p, ox, oy } = drawLongarm(ll / 3, qa, open, grip, limp);
-    const b: Built = { p, ax: ox, ay: oy, eye: [ox + 2, oy - 3] };
-    if (mode === 'dying') b.p = ashen(b.p, deathK(pose), m.id % 5);
-    return b;
-  });
+  const fr = frameOf(
+    'f12_longarm',
+    { ...pose, left: false },
+    key,
+    mode === 'dying' ? deathK(pose) : 0,
+    () => {
+      const { p, ox, oy } = drawLongarm(ll / 3, qa, open, grip, limp);
+      const b: Built = { p, ax: ox, ay: oy, eye: [ox + 2, oy - 3] };
+      if (mode === 'dying') b.p = ashen(b.p, deathK(pose), m.id % 5);
+      return b;
+    },
+  );
   // Кадр привязан к трещине: сдвигаем опору к точке моба.
   return { img: fr.img, ax: fr.ax - bx, ay: fr.ay - by - 2, eye: fr.eye };
 });
@@ -2710,7 +3069,16 @@ function drawSleeper(sp: SleepPose): Built {
   limb(p, 9, hipY, 8 + sp.legs[0] * 2, G - 1, 1.6, 1.3, COAT, -0.1);
   limb(p, 11, hipY, 12 + sp.legs[1] * 2, G - 1, 1.6, 1.3, COAT);
   // Полы пальто.
-  poly(p, [[7, hipY - 2], [13, hipY - 2], [15 + c * 0.5, hipY + 4], [5, hipY + 4]], COAT[1]);
+  poly(
+    p,
+    [
+      [7, hipY - 2],
+      [13, hipY - 2],
+      [15 + c * 0.5, hipY + 4],
+      [5, hipY + 4],
+    ],
+    COAT[1],
+  );
   // Туловище, сгорбленное вперёд.
   limb(p, 10, hipY, 12 + c * 0.8, hipY - 7 + c * 0.5, 3.2, 3, COAT);
   // Руки длинные, висят до земли.
@@ -2735,7 +3103,8 @@ function drawSleeper(sp: SleepPose): Built {
     p.set(hx0, hy0 + 1, hx('#9a1428'));
   }
   // Кепка.
-  for (let x = hx0 - 3 - spread; x <= hx0 + 3 + spread; x++) p.set(x, hy0 - 3 - (sp.maw > 0.5 ? 1 : 0), hx('#14161c'));
+  for (let x = hx0 - 3 - spread; x <= hx0 + 3 + spread; x++)
+    p.set(x, hy0 - 3 - (sp.maw > 0.5 ? 1 : 0), hx('#14161c'));
   p.set(hx0 + 4 + spread, hy0 - 2, hx('#14161c'));
   p.outline(INK);
   // Глаза — на разошедшихся половинах.
@@ -2778,7 +3147,13 @@ registerMobPainter('f12_sleeper', (m: Mob, pose: MobPose) => {
     anim = 'run';
     fr = f % 6;
     const ph = (fr / 6) * TAU;
-    sp = { ...base, crouch: 2 + Math.round(Math.sin(ph * 2)), head: [14, 9 + Math.round(Math.sin(ph * 2))], legs: [Math.sin(ph), -Math.sin(ph)], arms: Math.sin(ph) * 0.6 };
+    sp = {
+      ...base,
+      crouch: 2 + Math.round(Math.sin(ph * 2)),
+      head: [14, 9 + Math.round(Math.sin(ph * 2))],
+      legs: [Math.sin(ph), -Math.sin(ph)],
+      arms: Math.sin(ph) * 0.6,
+    };
   } else if (pose.anim === 'hurt') {
     anim = 'hurt';
     sp = { ...base, crouch: 1, head: [11, 8], maw: 0.8 };
@@ -2798,7 +3173,14 @@ registerMobPainter('f12_sleeper', (m: Mob, pose: MobPose) => {
 // Кадр 22×30, земля — 28 (летун: висит выше).
 // ---------------------------------------------------------------------------
 
-function drawEye(open: number, px: number, py: number, spot: boolean, tears: number, f: number): Built {
+function drawEye(
+  open: number,
+  px: number,
+  py: number,
+  spot: boolean,
+  tears: number,
+  f: number,
+): Built {
   const p = new Px(22, 30);
   const cx = 11;
   const cy = 18;
@@ -2821,7 +3203,12 @@ function drawEye(open: number, px: number, py: number, spot: boolean, tears: num
     // Прожилки.
     for (let i = 0; i < 5; i++) {
       const a = hash(i, 3) * TAU;
-      for (let r = 3; r < 6; r++) p.set(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r * 0.8), spot ? hx('#d01020') : hx('#c05060'));
+      for (let r = 3; r < 6; r++)
+        p.set(
+          Math.round(cx + Math.cos(a) * r),
+          Math.round(cy + Math.sin(a) * r * 0.8),
+          spot ? hx('#d01020') : hx('#c05060'),
+        );
     }
     // Радужка и зрачок.
     const ix = cx + px * 2.2;
@@ -2855,7 +3242,7 @@ registerMobPainter('f12_eye', (m: Mob, pose: MobPose) => {
   } else if (mode === 'f12_spot') spot = true;
   else if (mode === 'f12_blink') {
     open = Math.floor(pose.t * 3) % 2 ? 0.35 : 0.8;
-    tears = Math.floor(pose.t * 6) % 3 + 1;
+    tears = (Math.floor(pose.t * 6) % 3) + 1;
   } else if (mode === 'dying') {
     open = 0.5;
     anim = 'dead';
@@ -2900,7 +3287,16 @@ function drawDoll(dp: DollPose): Built {
   p.rect(cx - 2 + dp.legs, G - 3, cx - 1 + dp.legs, G - 1, PORC[1]);
   p.rect(cx + 1 - dp.legs, G - 3, cx + 2 - dp.legs, G - 1, PORC[1]);
   // Кимоно — колокол.
-  polyShade(p, [[cx - 2, top + 6], [cx + 2, top + 6], [cx + 5, G - 3], [cx - 5, G - 3]], KIMONO);
+  polyShade(
+    p,
+    [
+      [cx - 2, top + 6],
+      [cx + 2, top + 6],
+      [cx + 5, G - 3],
+      [cx - 5, G - 3],
+    ],
+    KIMONO,
+  );
   for (let x = cx - 3; x <= cx + 3; x++) p.set(x, top + 9, GOLD[2]);
   for (let x = cx - 3; x <= cx + 3; x++) p.set(x, top + 10, GOLD[1]);
   // Руки-рукава.
@@ -2918,7 +3314,8 @@ function drawDoll(dp: DollPose): Built {
     for (let y = hy0 - 4; y <= hy0 + 3; y++) {
       const e = Math.hypot((x - hx0) / 4.2, (y - hy0 + 0.5) / 4.2);
       if (e > 1) continue;
-      if (y < hy0 - 1 || Math.abs(x - hx0) > 2.6) p.set(x, y, y < hy0 - 2 ? hx('#1a1418') : hx('#0c0a0e'));
+      if (y < hy0 - 1 || Math.abs(x - hx0) > 2.6)
+        p.set(x, y, y < hy0 - 2 ? hx('#1a1418') : hx('#0c0a0e'));
     }
   // Трещина по лицу.
   p.set(hx0 + 1, hy0, hx('#4a3a3a'));
@@ -2970,7 +3367,12 @@ registerMobPainter('f12_doll', (m: Mob, pose: MobPose) => {
     anim = 'run';
     fr = f % 4;
     // Дёрганая походка: голова дёргается не в такт.
-    dp = { ...dp, bob: fr % 2 ? -1 : 0, tilt: fr === 1 ? 1 : fr === 3 ? -1 : 0, legs: fr < 2 ? 1 : -1 };
+    dp = {
+      ...dp,
+      bob: fr % 2 ? -1 : 0,
+      tilt: fr === 1 ? 1 : fr === 3 ? -1 : 0,
+      legs: fr < 2 ? 1 : -1,
+    };
   } else if (pose.anim === 'hurt') {
     anim = 'hurt';
     dp = { ...dp, tilt: -2, bob: 1 };
@@ -2990,7 +3392,15 @@ registerMobPainter('f12_doll', (m: Mob, pose: MobPose) => {
 // человеком; смят в ком. Кадр 20×34, земля — 32.
 // ---------------------------------------------------------------------------
 
-function posterSheet(p: Px, x0: number, y0: number, w: number, h: number, skew: number, eyes: RGBA): void {
+function posterSheet(
+  p: Px,
+  x0: number,
+  y0: number,
+  w: number,
+  h: number,
+  skew: number,
+  eyes: RGBA,
+): void {
   for (let y = 0; y < h; y++) {
     const sx = Math.round((skew * y) / h);
     for (let x = 0; x < w; x++) {
@@ -3003,12 +3413,16 @@ function posterSheet(p: Px, x0: number, y0: number, w: number, h: number, skew: 
   // Напечатанная фигура: голова, улыбка, плечи в синем пиджаке.
   const cx = x0 + Math.floor(w / 2) + Math.round(skew / 2);
   shadeEll(p, cx, y0 + 4, 2.6, 2.8, tn('#8a6a58', '#b8927a', '#d8b69a', '#f0d8c0'));
-  for (let x = cx - 3; x <= cx + 3; x++) for (let y = y0 + 7; y < y0 + Math.min(h - 1, 12); y++) p.set(x, y, hx('#2a4a8a'));
+  for (let x = cx - 3; x <= cx + 3; x++)
+    for (let y = y0 + 7; y < y0 + Math.min(h - 1, 12); y++) p.set(x, y, hx('#2a4a8a'));
   p.set(cx - 1, y0 + 4, eyes);
   p.set(cx + 1, y0 + 4, eyes);
-  for (let x = cx - 2; x <= cx + 2; x++) p.set(x, y0 + 6, x === cx - 2 || x === cx + 2 ? INK : hx('#b02020'));
+  for (let x = cx - 2; x <= cx + 2; x++)
+    p.set(x, y0 + 6, x === cx - 2 || x === cx + 2 ? INK : hx('#b02020'));
   // Надпись.
-  if (h > 13) for (let x = x0 + 1; x < x0 + w - 1; x++) if (x % 2) p.set(x + Math.round(skew), y0 + h - 3, hx('#c02020'));
+  if (h > 13)
+    for (let x = x0 + 1; x < x0 + w - 1; x++)
+      if (x % 2) p.set(x + Math.round(skew), y0 + h - 3, hx('#c02020'));
 }
 
 function drawPoster(stage: string, f: number): Built {
@@ -3028,13 +3442,15 @@ function drawPoster(stage: string, f: number): Built {
   }
   if (stage === 'ball') {
     shadeEll(p, 10, G - 4, 4.5, 4, [PAPER[0], PAPER[1], PAPER[2], PAPER[3]]);
-    for (let i = 0; i < 6; i++) p.set(7 + Math.floor(hash(i, 3) * 7), G - 7 + Math.floor(hash(i, 4) * 6), PAPER[0]);
+    for (let i = 0; i < 6; i++)
+      p.set(7 + Math.floor(hash(i, 3) * 7), G - 7 + Math.floor(hash(i, 4) * 6), PAPER[0]);
     p.set(11, G - 5, eyes);
     p.outline(INK);
     return { p, ax: 10, ay: G, eye: [11, G - 5] };
   }
   if (stage === 'lie') {
-    for (let y = G - 3; y < G; y++) for (let x = 3; x < 17; x++) p.set(x, y, PAPER[y === G - 3 ? 3 : 2]);
+    for (let y = G - 3; y < G; y++)
+      for (let x = 3; x < 17; x++) p.set(x, y, PAPER[y === G - 3 ? 3 : 2]);
     p.set(8, G - 2, eyes);
     p.outline(INK);
     return { p, ax: 10, ay: G, eye: null };
@@ -3079,11 +3495,18 @@ registerMobPainter('f12_poster', (m: Mob, pose: MobPose) => {
     stage = 'ball';
     fr = deathK(pose);
   }
-  return frameOf('f12_poster', pose, stage, fr, () => {
-    const b = drawPoster(stage, fr);
-    if (mode === 'dying') b.p = ashen(b.p, fr, m.id % 5, hx('#ff8a3a'));
-    return b;
-  }, stage === 'flat' || stage === 'peel' ? false : pose.left);
+  return frameOf(
+    'f12_poster',
+    pose,
+    stage,
+    fr,
+    () => {
+      const b = drawPoster(stage, fr);
+      if (mode === 'dying') b.p = ashen(b.p, fr, m.id % 5, hx('#ff8a3a'));
+      return b;
+    },
+    stage === 'flat' || stage === 'peel' ? false : pose.left,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -3116,19 +3539,56 @@ function drawGate(gp: GatePose): Built {
   const cx = 16 + gp.lean;
   const top = 6 + gp.bob;
   // Ноги.
-  polyShade(p, [[cx - 6 - gp.step, G - 7], [cx - 2 - gp.step, G - 7], [cx - 2 - gp.step, G - 1], [cx - 7 - gp.step, G - 1]], [STEEL[0], STEEL[1], STEEL[2], STEEL[3]]);
-  polyShade(p, [[cx + 2 + gp.step, G - 7], [cx + 6 + gp.step, G - 7], [cx + 7 + gp.step, G - 1], [cx + 2 + gp.step, G - 1]], [STEEL[0], STEEL[1], STEEL[2], STEEL[3]]);
+  polyShade(
+    p,
+    [
+      [cx - 6 - gp.step, G - 7],
+      [cx - 2 - gp.step, G - 7],
+      [cx - 2 - gp.step, G - 1],
+      [cx - 7 - gp.step, G - 1],
+    ],
+    [STEEL[0], STEEL[1], STEEL[2], STEEL[3]],
+  );
+  polyShade(
+    p,
+    [
+      [cx + 2 + gp.step, G - 7],
+      [cx + 6 + gp.step, G - 7],
+      [cx + 7 + gp.step, G - 1],
+      [cx + 2 + gp.step, G - 1],
+    ],
+    [STEEL[0], STEEL[1], STEEL[2], STEEL[3]],
+  );
   // Дальний трипод.
   tripod(p, cx - 8, top + 10, -gp.spin, gp.out, true);
   // Туловище-тумба.
-  polyShade(p, [[cx - 7, top + 3], [cx + 7, top + 3], [cx + 7, G - 6], [cx - 7, G - 6]], [STEEL[1], STEEL[2], STEEL[3], STEEL[4]]);
+  polyShade(
+    p,
+    [
+      [cx - 7, top + 3],
+      [cx + 7, top + 3],
+      [cx + 7, G - 6],
+      [cx - 7, G - 6],
+    ],
+    [STEEL[1], STEEL[2], STEEL[3], STEEL[4]],
+  );
   for (let y = top + 4; y < G - 6; y++) p.set(cx + 6, y, STEEL[1]);
   // Щит спереди: красный круг «нет входа».
   shadeEll(p, cx + 3, top + 13, 3.6, 3.6, tn('#5a0a0a', '#a01414', '#d02a2a', '#ff5a4a'));
   for (let x = cx + 1; x <= cx + 5; x++) p.set(x, top + 13, WHITE);
   // Голова-табло.
-  polyShade(p, [[cx - 5, top - 3], [cx + 6, top - 3], [cx + 6, top + 3], [cx - 5, top + 3]], [STEEL[0], STEEL[1], STEEL[2], STEEL[3]]);
-  for (let x = cx - 3; x <= cx + 5; x++) for (let y = top - 2; y <= top + 2; y++) p.set(x, y, hx('#08090a'));
+  polyShade(
+    p,
+    [
+      [cx - 5, top - 3],
+      [cx + 6, top - 3],
+      [cx + 6, top + 3],
+      [cx - 5, top + 3],
+    ],
+    [STEEL[0], STEEL[1], STEEL[2], STEEL[3]],
+  );
+  for (let x = cx - 3; x <= cx + 5; x++)
+    for (let y = top - 2; y <= top + 2; y++) p.set(x, y, hx('#08090a'));
   // Жетоноприёмник.
   p.set(cx - 3, top + 7, GOLD[3]);
   p.set(cx - 3, top + 8, INK);
@@ -3314,8 +3774,26 @@ function drawDodger(legs: number, bob: number, hop: number, coin: number): Built
   const G = 22 - hop;
   const cx = 8;
   const hip = G - 7 + bob;
-  limb(p, cx, hip, cx - 1 + legs * 2, G - 1, 1.4, 1.2, tn('#141820', '#222a3a', '#34405a', '#4a5a7a'));
-  limb(p, cx + 1, hip, cx + 2 - legs * 2, G - 1, 1.4, 1.2, tn('#141820', '#222a3a', '#34405a', '#4a5a7a'));
+  limb(
+    p,
+    cx,
+    hip,
+    cx - 1 + legs * 2,
+    G - 1,
+    1.4,
+    1.2,
+    tn('#141820', '#222a3a', '#34405a', '#4a5a7a'),
+  );
+  limb(
+    p,
+    cx + 1,
+    hip,
+    cx + 2 - legs * 2,
+    G - 1,
+    1.4,
+    1.2,
+    tn('#141820', '#222a3a', '#34405a', '#4a5a7a'),
+  );
   p.set(cx - 1 + legs * 2, G, WHITE);
   p.set(cx + 2 - legs * 2, G, WHITE);
   limb(p, cx, hip, cx + 1, hip - 6, 2.8, 2.6, HOOD);
@@ -3367,7 +3845,16 @@ function drawPillar(rise: number, f: number, bowl: boolean): Built {
   const G = 28;
   if (bowl) {
     const st = tn('#1e1822', '#342a3a', '#4a3e54', '#66587a');
-    polyShade(p, [[5, G - 12], [11, G - 12], [12, G], [4, G]], st);
+    polyShade(
+      p,
+      [
+        [5, G - 12],
+        [11, G - 12],
+        [12, G],
+        [4, G],
+      ],
+      st,
+    );
     shadeEll(p, 8, G - 13, 6, 2.4, st, 0.1);
     for (let x = 3; x <= 13; x++) p.set(x, G - 13, BLOODC[2]);
     if (rise >= 1) flame(p, 8, G - 14, 7, 9, f, VFIRE, 3);
@@ -3390,7 +3877,10 @@ function drawPillar(rise: number, f: number, bowl: boolean): Built {
   // Верёвка и офуда.
   if (h > 10) {
     for (let x = 4; x < 12; x++) p.set(x, top + 5, hx('#8a7a50'));
-    for (const [x, d] of [[5, 0], [10, 1]] as [number, number][]) {
+    for (const [x, d] of [
+      [5, 0],
+      [10, 1],
+    ] as [number, number][]) {
       const sway = (f + d) % 2;
       for (let y = top + 6; y < top + 12; y++) p.set(x + (y > top + 9 ? sway : 0), y, PAPER[3]);
       p.set(x, top + 8, hx('#c01a2a'));
@@ -3442,7 +3932,16 @@ function drawBowl(q: BowlQ): { p: Px; lit: Px } {
   const sink = Math.round((1 - q.rise) * 15);
   const rimY = G - 13 + sink;
   if (q.brk < 0.15) {
-    polyShade(p, [[cx - 3, rimY + 1], [cx + 3, rimY + 1], [cx + 4, G + sink], [cx - 4, G + sink]], BOWL_ST);
+    polyShade(
+      p,
+      [
+        [cx - 3, rimY + 1],
+        [cx + 3, rimY + 1],
+        [cx + 4, G + sink],
+        [cx - 4, G + sink],
+      ],
+      BOWL_ST,
+    );
     shadeEll(p, cx, rimY, 6, 2.4, BOWL_ST, 0.1);
     for (let x = cx - 5; x <= cx + 5; x++) p.set(x, rimY, BLOODC[2]);
     for (const x of [cx - 2, cx + 2]) {
@@ -3460,7 +3959,18 @@ function drawBowl(q: BowlQ): { p: Px; lit: Px } {
   } else {
     // Раскол: обломки разлетаются, падают и лежат; постамент — пенёк.
     const tb = (q.brk - 0.15) * BOWL_BREAK;
-    polyShade(p, [[cx - 3, G - 5], [cx - 1, G - 7], [cx + 2, G - 6], [cx + 3, G - 4], [cx + 4, G], [cx - 4, G]], BOWL_ST);
+    polyShade(
+      p,
+      [
+        [cx - 3, G - 5],
+        [cx - 1, G - 7],
+        [cx + 2, G - 6],
+        [cx + 3, G - 4],
+        [cx + 4, G],
+        [cx - 4, G],
+      ],
+      BOWL_ST,
+    );
     for (let i = 0; i < 9; i++) {
       const s0 = (i / 8) * 2 - 1;
       const vx = s0 * 42 + (hash(i, 7) - 0.5) * 16;
@@ -3570,10 +4080,20 @@ registerMobPainter('f12_pillar', (m: Mob, pose: MobPose) => {
 const TRAIN_W = CAR_LEN * 16;
 const TRAIN_H = 46;
 
-function drawCar(head: boolean, dirRight: boolean, ghost: boolean, flick: number, doors: boolean): Px {
+function drawCar(
+  head: boolean,
+  dirRight: boolean,
+  ghost: boolean,
+  flick: number,
+  doors: boolean,
+): Px {
   const p = new Px(TRAIN_W, TRAIN_H);
-  const body = ghost ? tn('#7a9a8a', '#a8c8b8', '#c8e8d8', '#eafff4') : tn('#1a2838', '#2a4058', '#3c5a78', '#5a7c9c');
-  const roof = ghost ? tn('#8aa89a', '#b0d0c0', '#d0ecdf', '#f0fff8') : [STEEL[1], STEEL[2], STEEL[3], STEEL[4]] as Tones;
+  const body = ghost
+    ? tn('#7a9a8a', '#a8c8b8', '#c8e8d8', '#eafff4')
+    : tn('#1a2838', '#2a4058', '#3c5a78', '#5a7c9c');
+  const roof = ghost
+    ? tn('#8aa89a', '#b0d0c0', '#d0ecdf', '#f0fff8')
+    : ([STEEL[1], STEEL[2], STEEL[3], STEEL[4]] as Tones);
   const R0 = 4;
   const R1 = 18;
   const S1 = 40;
@@ -3583,7 +4103,7 @@ function drawCar(head: boolean, dirRight: boolean, ghost: boolean, flick: number
       const l = (y - R0) / (R1 - R0);
       let c = l < 0.15 ? roof[3] : l < 0.7 ? roof[2] : roof[1];
       // Вентиляция и токоприёмник.
-      if (y > 8 && y < 13 && (x % 26 > 8 && x % 26 < 17)) c = roof[0];
+      if (y > 8 && y < 13 && x % 26 > 8 && x % 26 < 17) c = roof[0];
       if (y === 10 && x % 26 > 9 && x % 26 < 16) c = roof[3];
       p.set(x, y, c);
     }
@@ -3614,7 +4134,7 @@ function drawCar(head: boolean, dirRight: boolean, ghost: boolean, flick: number
     if (wx0 < 4 || wx0 > TRAIN_W - 12) continue;
     for (let y = R1 + 3; y < 29; y++)
       for (let x = wx0; x < wx0 + 9; x++) {
-        let c = y === R1 + 3 ? body[0] : lit;
+        const c = y === R1 + 3 ? body[0] : lit;
         p.set(x, y, c);
       }
     // Силуэты пассажиров: кто-то смотрит красными глазами.
@@ -3642,8 +4162,10 @@ function drawCar(head: boolean, dirRight: boolean, ghost: boolean, flick: number
       for (let k = 2; k < 10; k++) p.set(nx + sgn * k, y, ghost ? hx('#1a3a30') : hx('#0a1420'));
     for (let k = 2; k < 10; k++) p.set(nx + sgn * k, R1 + 2, ghost ? hx('#8affc0') : hx('#6a8aaa'));
     // Табло маршрута.
-    for (let k = 3; k < 12; k++) for (let y = R0 + 7; y < R0 + 11; y++) p.set(nx + sgn * k, y, hx('#0a0a0a'));
-    for (let k = 4; k < 11; k += 2) p.set(nx + sgn * k, R0 + 9, ghost ? hx('#6affb0') : hx('#ff8a2a'));
+    for (let k = 3; k < 12; k++)
+      for (let y = R0 + 7; y < R0 + 11; y++) p.set(nx + sgn * k, y, hx('#0a0a0a'));
+    for (let k = 4; k < 11; k += 2)
+      p.set(nx + sgn * k, R0 + 9, ghost ? hx('#6affb0') : hx('#ff8a2a'));
     // Фары.
     for (const y of [34, 35]) {
       p.set(nx + sgn * 1, y, WHITE);
@@ -3656,7 +4178,8 @@ function drawCar(head: boolean, dirRight: boolean, ghost: boolean, flick: number
   }
   // Тележки и колёса.
   for (const bx of [14, TRAIN_W - 18]) {
-    for (let y = S1; y < TRAIN_H - 2; y++) for (let x = bx - 2; x < bx + 10; x++) p.set(x, y, hx('#0c0d0e'));
+    for (let y = S1; y < TRAIN_H - 2; y++)
+      for (let x = bx - 2; x < bx + 10; x++) p.set(x, y, hx('#0c0d0e'));
     for (const wx0 of [bx, bx + 7]) {
       p.ell(wx0 + 1, TRAIN_H - 4, 2.4, 2.2, hx('#1a1c1e'));
       p.set(wx0 + 1, TRAIN_H - 5, STEEL[3]);
@@ -3680,7 +4203,12 @@ registerMobPainter('f12_train', (m: Mob, pose: MobPose) => {
   let fr = frames.get(key);
   if (!fr) {
     const p = drawCar(head, dirRight, ghost, flick, doors);
-    fr = { img: p.canvas(), ax: TRAIN_W / 2, ay: TRAIN_H - 2, eye: head ? [dirRight ? TRAIN_W - 3 : 2, 34] : null };
+    fr = {
+      img: p.canvas(),
+      ax: TRAIN_W / 2,
+      ay: TRAIN_H - 2,
+      eye: head ? [dirRight ? TRAIN_W - 3 : 2, 34] : null,
+    };
     frames.set(key, fr);
   }
   return fr;
@@ -3737,21 +4265,81 @@ const kBack: KEase = (x) => 1 + 2.7 * (x - 1) ** 3 + 1.7 * (x - 1) ** 2;
 
 const KCH = [
   // Тело: сдвиг таза, высота таза над землёй, плечи вбок, сутулость, вдох, поворот.
-  'bx', 'by', 'hip', 'lean', 'bend', 'br', 'tw',
+  'bx',
+  'by',
+  'hip',
+  'lean',
+  'bend',
+  'br',
+  'tw',
   // Ноги: колено и ступня — от середины тела по x, высота над землёй по y.
-  'lkx', 'lky', 'lfx', 'lfy', 'rkx', 'rky', 'rfx', 'rfy',
+  'lkx',
+  'lky',
+  'lfx',
+  'lfy',
+  'rkx',
+  'rky',
+  'rfx',
+  'rfy',
   // Голова: сдвиг, взгляд вбок, кивок, рот, глаза; маска: глаз, оскал, трещины.
-  'hx', 'hy', 'look', 'nod', 'jaw', 'eyes', 'm2', 'mjaw', 'crack', 'mb',
+  'hx',
+  'hy',
+  'look',
+  'nod',
+  'jaw',
+  'eyes',
+  'm2',
+  'mjaw',
+  'crack',
+  'mb',
   // Четыре руки: локоть и кисть от плеча (x — НАРУЖУ), вид кисти, за спиной.
-  'ruex', 'ruey', 'ruhx', 'ruhy', 'ruk', 'rub',
-  'rlex', 'rley', 'rlhx', 'rlhy', 'rlk',
-  'luex', 'luey', 'luhx', 'luhy', 'luk', 'lub',
-  'llex', 'lley', 'llhx', 'llhy', 'llk',
+  'ruex',
+  'ruey',
+  'ruhx',
+  'ruhy',
+  'ruk',
+  'rub',
+  'rlex',
+  'rley',
+  'rlhx',
+  'rlhy',
+  'rlk',
+  'luex',
+  'luey',
+  'luhx',
+  'luhy',
+  'luk',
+  'lub',
+  'llex',
+  'lley',
+  'llhx',
+  'llhy',
+  'llk',
   // Свет и приёмы.
-  'aura', 'flare', 'glow', 'belly', 'fing', 'claw', 'bow', 'draw', 'arrow', 'rel',
-  'pyre', 'crawl', 'sign', 'palm', 'stars', 'click', 'baim',
+  'aura',
+  'flare',
+  'glow',
+  'belly',
+  'fing',
+  'claw',
+  'bow',
+  'draw',
+  'arrow',
+  'rel',
+  'pyre',
+  'crawl',
+  'sign',
+  'palm',
+  'stars',
+  'click',
+  'baim',
   // Общий ход кадра (трансформ движка).
-  'fdx', 'fdy', 'fsx', 'fsy', 'frot', 'air',
+  'fdx',
+  'fdy',
+  'fsx',
+  'fsy',
+  'frot',
+  'air',
 ] as const;
 type KC = (typeof KCH)[number];
 type KR = Record<KC, number>;
@@ -3770,34 +4358,143 @@ const HK = { open: 0, fist: 1, claw: 2, two: 3, palm: 4, sign: 5, grip: 6 } as c
 
 /** Боевая стойка: верхние руки свободно, нижняя правая на поясе, левая — знак у груди. */
 const KB0: KR = {
-  bx: 0, by: 0, hip: 16, lean: 0, bend: 0, br: 0, tw: 0,
-  lkx: -7, lky: 8, lfx: -7.5, lfy: 0, rkx: 7, rky: 8, rfx: 7.5, rfy: 0,
-  hx: 0, hy: 0, look: 0, nod: 0, jaw: 0, eyes: 1, m2: 0, mjaw: 0, crack: 0, mb: 0,
-  ruex: 4, ruey: 7, ruhx: 5, ruhy: 14, ruk: HK.open, rub: 0,
-  rlex: 4, rley: 6, rlhx: -1, rlhy: 12, rlk: HK.fist,
-  luex: 4, luey: 7, luhx: 5, luhy: 14, luk: HK.open, lub: 0,
-  llex: 4, lley: 5, llhx: -5, llhy: 4, llk: HK.two,
-  aura: 0, flare: 0, glow: 0.6, belly: 0, fing: 0, claw: 0, bow: 0, draw: 0, arrow: 0, rel: 0,
-  pyre: 0, crawl: 0, sign: 0, palm: 0, stars: 0, click: 0, baim: 0,
-  fdx: 0, fdy: 0, fsx: 1, fsy: 1, frot: 0, air: 0,
+  bx: 0,
+  by: 0,
+  hip: 16,
+  lean: 0,
+  bend: 0,
+  br: 0,
+  tw: 0,
+  lkx: -7,
+  lky: 8,
+  lfx: -7.5,
+  lfy: 0,
+  rkx: 7,
+  rky: 8,
+  rfx: 7.5,
+  rfy: 0,
+  hx: 0,
+  hy: 0,
+  look: 0,
+  nod: 0,
+  jaw: 0,
+  eyes: 1,
+  m2: 0,
+  mjaw: 0,
+  crack: 0,
+  mb: 0,
+  ruex: 4,
+  ruey: 7,
+  ruhx: 5,
+  ruhy: 14,
+  ruk: HK.open,
+  rub: 0,
+  rlex: 4,
+  rley: 6,
+  rlhx: -1,
+  rlhy: 12,
+  rlk: HK.fist,
+  luex: 4,
+  luey: 7,
+  luhx: 5,
+  luhy: 14,
+  luk: HK.open,
+  lub: 0,
+  llex: 4,
+  lley: 5,
+  llhx: -5,
+  llhy: 4,
+  llk: HK.two,
+  aura: 0,
+  flare: 0,
+  glow: 0.6,
+  belly: 0,
+  fing: 0,
+  claw: 0,
+  bow: 0,
+  draw: 0,
+  arrow: 0,
+  rel: 0,
+  pyre: 0,
+  crawl: 0,
+  sign: 0,
+  palm: 0,
+  stars: 0,
+  click: 0,
+  baim: 0,
+  fdx: 0,
+  fdy: 0,
+  fsx: 1,
+  fsy: 1,
+  frot: 0,
+  air: 0,
 };
 
 /** Сидит на помосте, скрестив ноги: верхние — знак храма, нижние — на коленях. */
 const KSIT: Partial<KR> = {
-  hip: 5, lkx: -14, lky: 3, lfx: 4, lfy: 1.5, rkx: 14, rky: 3, rfx: -4, rfy: 1.5,
-  ruex: 4, ruey: 7, ruhx: -8, ruhy: 3, ruk: HK.sign,
-  luex: 4, luey: 7, luhx: -8, luhy: 3, luk: HK.sign,
-  rlex: 6, rley: 8, rlhx: 6, rlhy: 15, rlk: HK.palm,
-  llex: 6, lley: 8, llhx: 6, llhy: 15, llk: HK.palm,
+  hip: 5,
+  lkx: -14,
+  lky: 3,
+  lfx: 4,
+  lfy: 1.5,
+  rkx: 14,
+  rky: 3,
+  rfx: -4,
+  rfy: 1.5,
+  ruex: 4,
+  ruey: 7,
+  ruhx: -8,
+  ruhy: 3,
+  ruk: HK.sign,
+  luex: 4,
+  luey: 7,
+  luhx: -8,
+  luhy: 3,
+  luk: HK.sign,
+  rlex: 6,
+  rley: 8,
+  rlhx: 6,
+  rlhy: 15,
+  rlk: HK.palm,
+  llex: 6,
+  lley: 8,
+  llhx: 6,
+  llhy: 15,
+  llk: HK.palm,
 };
 
 /** На одном колене: левое на земле, правое поднято, рука на нём. */
 const KKNEEL: Partial<KR> = {
-  hip: 9, bend: 1, lkx: -7, lky: 1.5, lfx: -3, lfy: 3, rkx: 8, rky: 9.5, rfx: 8.5, rfy: 0,
-  ruex: 3, ruey: 8, ruhx: 4, ruhy: 15, ruk: HK.open,
-  rlex: 3, rley: 5, rlhx: 1, rlhy: 9, rlk: HK.open,
-  luex: 3, luey: 8, luhx: 4, luhy: 15, luk: HK.open,
-  llex: 3, lley: 7, llhx: 3, llhy: 13, llk: HK.open,
+  hip: 9,
+  bend: 1,
+  lkx: -7,
+  lky: 1.5,
+  lfx: -3,
+  lfy: 3,
+  rkx: 8,
+  rky: 9.5,
+  rfx: 8.5,
+  rfy: 0,
+  ruex: 3,
+  ruey: 8,
+  ruhx: 4,
+  ruhy: 15,
+  ruk: HK.open,
+  rlex: 3,
+  rley: 5,
+  rlhx: 1,
+  rlhy: 9,
+  rlk: HK.open,
+  luex: 3,
+  luey: 8,
+  luhx: 4,
+  luhy: 15,
+  luk: HK.open,
+  llex: 3,
+  lley: 7,
+  llhx: 3,
+  llhy: 13,
+  llk: HK.open,
 };
 
 type KKey = [number, Partial<KR>, KEase?];
@@ -3818,7 +4515,9 @@ function kTrack(keys: KKey[], t: number, base: KR): KR {
         const [kt, kv, ke] = keys[i];
         const cv = kv[ch] ?? pv;
         if (t < kt) {
-          v = KSTEP.has(ch) ? pv : pv + (cv - pv) * (ke ?? kIO)(kc((t - pt) / (kt - pt || 1), 0, 1));
+          v = KSTEP.has(ch)
+            ? pv
+            : pv + (cv - pv) * (ke ?? kIO)(kc((t - pt) / (kt - pt || 1), 0, 1));
           break;
         }
         pt = kt;
@@ -3915,7 +4614,17 @@ function kGeo(r: KR): KGeo {
     E[a] = [sx + r[armCh(a, 'ex')] * side, syy + r[armCh(a, 'ey')]];
     H[a] = [sx + r[armCh(a, 'hx')] * side, syy + r[armCh(a, 'hy')]];
   }
-  return { cx, hipY, sy, L, hcx: cx + L + Math.round(r.hx), hcy: sy - 9 + Math.round(r.hy), S, E, H };
+  return {
+    cx,
+    hipY,
+    sy,
+    L,
+    hcx: cx + L + Math.round(r.hx),
+    hcy: sy - 9 + Math.round(r.hy),
+    S,
+    E,
+    H,
+  };
 }
 
 // ---- Вторичное движение: рукава и вихры догоняют тело ------------------
@@ -4039,7 +4748,16 @@ interface KTrail {
 }
 
 /** Штанина хакама: отрезок полосой, шире книзу, складка по середине. */
-function kSeg(p: Px, x0: number, y0: number, x1: number, y1: number, w0: number, w1: number, bias: number): void {
+function kSeg(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  w0: number,
+  w1: number,
+  bias: number,
+): void {
   const dx = x1 - x0;
   const dy = y1 - y0;
   const L = Math.hypot(dx, dy) || 1;
@@ -4083,8 +4801,14 @@ function kLegs(p: Px, g: KGeo, r: KR): void {
     const fx = g.cx + fx0;
     const fy = KGY - fy0;
     // Босая ступня под подолом — только когда голень стоит.
-    if (fy0 < 2.5 && (KGY - ky0) < fy - 3) {
-      p.rect(Math.round(fx - 2.5), Math.round(fy - 1), Math.round(fx + 2.5), Math.round(fy), K_SKIN[1]);
+    if (fy0 < 2.5 && KGY - ky0 < fy - 3) {
+      p.rect(
+        Math.round(fx - 2.5),
+        Math.round(fy - 1),
+        Math.round(fx + 2.5),
+        Math.round(fy),
+        K_SKIN[1],
+      );
       p.set(Math.round(fx + 2.5 * side), Math.round(fy - 1), K_SKIN[2]);
     }
   }
@@ -4100,18 +4824,36 @@ function kLegs(p: Px, g: KGeo, r: KR): void {
 function kTorso(p: Px, lit: Px, g: KGeo, r: KR): void {
   const { cx, hipY, sy } = g;
   const tl = cx + g.L;
-  polyShade(p, [[tl - 10, sy - 1], [tl + 10, sy - 1], [cx + 9, hipY], [cx - 9, hipY]], K_ROBE);
+  polyShade(
+    p,
+    [
+      [tl - 10, sy - 1],
+      [tl + 10, sy - 1],
+      [cx + 9, hipY],
+      [cx - 9, hipY],
+    ],
+    K_ROBE,
+  );
   stroke(p, tl - 1, sy + 7, cx - 6, hipY - 1, K_ROBE[0], 1);
   // Ворот буквой V: кожа и татуировка на груди.
   const vx = tl + Math.round(r.tw * 1.5);
-  poly(p, [[vx - 4, sy - 1], [vx + 4, sy - 1], [vx, sy + 8]], K_SKIN[2]);
+  poly(
+    p,
+    [
+      [vx - 4, sy - 1],
+      [vx + 4, sy - 1],
+      [vx, sy + 8],
+    ],
+    K_SKIN[2],
+  );
   stroke(p, vx - 4, sy - 1, vx, sy + 8, K_OBI[2], 1);
   stroke(p, vx + 4, sy - 1, vx, sy + 8, K_OBI[2], 1);
   for (const x of [-2, -1, 1, 2]) p.set(vx + x, sy + 1, K_TAT);
   p.set(vx, sy + 3, K_TAT);
   // Пояс.
   for (let y = hipY - 6; y <= hipY - 2; y++)
-    for (let x = cx - 9; x <= cx + 9; x++) p.set(x, y, y === hipY - 6 ? K_OBI[3] : y === hipY - 2 ? K_OBI[0] : K_OBI[1]);
+    for (let x = cx - 9; x <= cx + 9; x++)
+      p.set(x, y, y === hipY - 6 ? K_OBI[3] : y === hipY - 2 ? K_OBI[0] : K_OBI[1]);
   kBelly(p, lit, cx, hipY - 4, r.belly, r.glow);
   // Узел пояса.
   const kx = cx + 6 + Math.round(r.tw);
@@ -4146,7 +4888,13 @@ function kBelly(p: Px, lit: Px, cx: number, my: number, b: number, glow: number)
     const hw = Math.round(5.5 * Math.sqrt(Math.max(0, 1 - u * u * 0.55)));
     for (let x = cx - hw; x <= cx + hw; x++) {
       const edge = y === top || y === bot;
-      let c: RGBA = edge ? K_TAT : y > bot - 2 && b > 0.5 && Math.abs(x - cx) < 3 ? K_TONGUE : y - top < 2 ? K_MOUTH : K_GUM;
+      let c: RGBA = edge
+        ? K_TAT
+        : y > bot - 2 && b > 0.5 && Math.abs(x - cx) < 3
+          ? K_TONGUE
+          : y - top < 2
+            ? K_MOUTH
+            : K_GUM;
       // Зубы по губам: через пиксель.
       if (y === top + 1 && (x + cx) % 2 === 0) c = BONE[3];
       if (y === bot - 1 && (x + cx) % 2 === 1 && !(b > 0.5 && Math.abs(x - cx) < 3)) c = BONE[2];
@@ -4155,7 +4903,8 @@ function kBelly(p: Px, lit: Px, cx: number, my: number, b: number, glow: number)
   }
   if (b > 0.3) {
     const a = 0.35 + 0.45 * Math.min(1, glow);
-    for (let x = cx - 2; x <= cx + 2; x++) lit.set(x, my, alpha(hx('#ff3a4a'), a * (1 - Math.abs(x - cx) * 0.15)));
+    for (let x = cx - 2; x <= cx + 2; x++)
+      lit.set(x, my, alpha(hx('#ff3a4a'), a * (1 - Math.abs(x - cx) * 0.15)));
     if (b > 0.7) lit.set(cx, my + 1, alpha(hx('#ff8a6a'), a));
   }
 }
@@ -4164,7 +4913,16 @@ const K_RIM = hx('#6a6358');
 const K_EDGE_INK = hx('#3a0610');
 
 /** Тень вокруг конечности — только там, где под ней уже что-то нарисовано. */
-function limbRim(p: Px, x0: number, y0: number, x1: number, y1: number, r0: number, r1: number, c: RGBA): void {
+function limbRim(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  r0: number,
+  r1: number,
+  c: RGBA,
+): void {
   const minX = Math.floor(Math.min(x0 - r0, x1 - r1)) - 2;
   const maxX = Math.ceil(Math.max(x0 + r0, x1 + r1)) + 2;
   const minY = Math.floor(Math.min(y0 - r0, y1 - r1)) - 2;
@@ -4256,7 +5014,11 @@ function kArm(p: Px, lit: Px, g: KGeo, r: KR, a: K4): void {
           // Накал: искры по кругу у кончика.
           for (let i = 0; i < 3; i++) {
             const an = (i / 3) * TAU + r.fing * 9;
-            lit.set(tx + Math.round(Math.cos(an) * 3), ty + Math.round(Math.sin(an) * 3), alpha(WHITE, 0.8));
+            lit.set(
+              tx + Math.round(Math.cos(an) * 3),
+              ty + Math.round(Math.sin(an) * 3),
+              alpha(WHITE, 0.8),
+            );
           }
         }
       }
@@ -4301,7 +5063,11 @@ function kSignHands(p: Px, lit: Px, g: KGeo, r: KR, fi: number): void {
       const R = 2.5 + r.sign * 2.5;
       for (let i = 0; i < 8; i++) {
         const an = (i / 8) * TAU + fi * 0.26;
-        lit.set(x + Math.cos(an) * R, y - 3 + Math.sin(an) * R * 0.8, alpha(K_GHOST, 0.5 + 0.45 * r.sign));
+        lit.set(
+          x + Math.cos(an) * R,
+          y - 3 + Math.sin(an) * R * 0.8,
+          alpha(K_GHOST, 0.5 + 0.45 * r.sign),
+        );
       }
       glowDot(lit, x - 1, y - 8, K_GHOST, r.sign > 0.6 ? 2 : 1);
     }
@@ -4360,16 +5126,27 @@ function kHead(p: Px, lit: Px, g: KGeo, r: KR, o: KOpt): void {
   const hl = o.sec.hl;
   for (let i = -3; i <= 3; i++) {
     const bx = hxc + i * 2;
-    const tip = headY - 10 - (i % 2 === 0 ? 2 : 0) - (i === 0 ? 1 : 0) - hl * (0.6 + Math.abs(i) * 0.1);
+    const tip =
+      headY - 10 - (i % 2 === 0 ? 2 : 0) - (i === 0 ? 1 : 0) - hl * (0.6 + Math.abs(i) * 0.1);
     const tx = bx + i * 1.1 + hs * (0.5 + Math.abs(i) * 0.15);
-    polyShade(p, [[bx - 1.6, headY - 5], [bx + 1.6, headY - 5], [tx, tip]], K_HAIR, 0.1);
+    polyShade(
+      p,
+      [
+        [bx - 1.6, headY - 5],
+        [bx + 1.6, headY - 5],
+        [tx, tip],
+      ],
+      K_HAIR,
+      0.1,
+    );
   }
   for (const s of [-1, 1]) {
     p.set(hxc + s * 5, headY - 2, K_HAIR[1]);
     p.set(hxc + s * 5, headY - 1, K_HAIR[0]);
   }
   // Лоб: чёрная полоса под чёлкой.
-  for (let x = hxc - 3; x <= hxc + 3; x++) p.set(x + lk, headY - 2 + nd, x === hxc ? K_SKIN[2] : K_TAT);
+  for (let x = hxc - 3; x <= hxc + 3; x++)
+    p.set(x + lk, headY - 2 + nd, x === hxc ? K_SKIN[2] : K_TAT);
   // Глаза: косые, красные, тяжёлое веко; под ними — вторая пара.
   const eyeC = r.glow > 0.8 || r.eyes > 2.5 ? hx('#ff6a70') : K_EYE;
   for (const s of [-1, 1]) {
@@ -4396,7 +5173,8 @@ function kHead(p: Px, lit: Px, g: KGeo, r: KR, o: KOpt): void {
     }
   }
   if (r.eyes > 0.5 && (r.glow > 0.8 || r.eyes > 2.5))
-    for (const s of [-1, 1]) glowDot(lit, hxc + s * 2 + lk, headY + nd, K_EYE, r.eyes > 2.5 ? 2 : 1);
+    for (const s of [-1, 1])
+      glowDot(lit, hxc + s * 2 + lk, headY + nd, K_EYE, r.eyes > 2.5 ? 2 : 1);
   // Рот: ухмылка → оскал зубами → рёв.
   const my = headY + 3 + nd;
   const mx = hxc + lk;
@@ -4489,7 +5267,16 @@ function kMask(p: Px, lit: Px, mcx: number, my: number, r: KR): void {
 const K_CFIRE = [hx('#5a0a1e'), hx('#c0143a'), hx('#ff3a64'), hx('#ffd0dc')];
 
 /** Язык проклятого пламени: основание шире, сердцевина светлее, верх качается. */
-function kTongue(dst: Px, cx: number, by: number, h: number, f: number, seed: number, mask: Px | null, a: number): void {
+function kTongue(
+  dst: Px,
+  cx: number,
+  by: number,
+  h: number,
+  f: number,
+  seed: number,
+  mask: Px | null,
+  a: number,
+): void {
   for (let y = 0; y < h; y++) {
     const k = y / h;
     const half = 1.5 * (1 - k * k) + 0.15;
@@ -4497,7 +5284,8 @@ function kTongue(dst: Px, cx: number, by: number, h: number, f: number, seed: nu
     for (let x = -1; x <= 1; x++) {
       if (Math.abs(x) > half) continue;
       const hot = 1 - Math.max(Math.abs(x) / (half + 0.6), k);
-      const c = hot > 0.6 ? K_CFIRE[3] : hot > 0.36 ? K_CFIRE[2] : hot > 0.14 ? K_CFIRE[1] : K_CFIRE[0];
+      const c =
+        hot > 0.6 ? K_CFIRE[3] : hot > 0.36 ? K_CFIRE[2] : hot > 0.14 ? K_CFIRE[1] : K_CFIRE[0];
       const px = cx + x + sway;
       const py = by - y;
       if (mask && mask.solid(px, py)) continue;
@@ -4531,7 +5319,8 @@ function kAura(p: Px, lit: Px, g: KGeo, r: KR, fi: number, back: boolean): void 
 function kSmearDraw(lit: Px, s: KSmear): void {
   const n = s.pts.length;
   if (n < 2) return;
-  const pal = s.kind === 'fire' ? [hx('#fff0a0'), hx('#ffa030'), hx('#e05010'), hx('#8a1a06')] : K_CUT;
+  const pal =
+    s.kind === 'fire' ? [hx('#fff0a0'), hx('#ffa030'), hx('#e05010'), hx('#8a1a06')] : K_CUT;
   for (let pass = 0; pass < 2; pass++)
     for (let i = n - 1; i > 0; i--) {
       const [x0, y0] = s.pts[i - 1];
@@ -4552,7 +5341,8 @@ function kSmearDraw(lit: Px, s: KSmear): void {
         }
         continue;
       }
-      if (pass === 0) stroke(lit, x0, y0, x1, y1, alpha(k < 0.5 ? pal[2] : pal[3], 0.9 - k * 0.55), w + 1);
+      if (pass === 0)
+        stroke(lit, x0, y0, x1, y1, alpha(k < 0.5 ? pal[2] : pal[3], 0.9 - k * 0.55), w + 1);
       else if (k < 0.55) stroke(lit, x0, y0, x1, y1, k < 0.2 ? pal[0] : pal[1], Math.max(1, w - 1));
     }
 }
@@ -4587,7 +5377,11 @@ function kTrailDraw(lit: Px, tr: KTrail): void {
       if (age > 0.06)
         for (let i = 0; i < 5; i++) {
           const u = hash(i, Math.round(x0), 31);
-          lit.set(x0 + (x1 - x0) * u + (hash(i, 2) - 0.5) * 4, y0 + (y1 - y0) * u + age * age * 110, alpha(K_PINK, a));
+          lit.set(
+            x0 + (x1 - x0) * u + (hash(i, 2) - 0.5) * 4,
+            y0 + (y1 - y0) * u + age * age * 110,
+            alpha(K_PINK, a),
+          );
         }
     }
     return;
@@ -4613,7 +5407,15 @@ function kTrailDraw(lit: Px, tr: KTrail): void {
       else
         for (const s of [-1, 1]) {
           const d = off + s * split * 0.5;
-          stroke(lit, x0 + nx * d, y0 + ny * d, x1 + nx * d, y1 + ny * d, alpha(s < 0 ? K_CUT[1] : K_CUT[2], a * 0.9), 1);
+          stroke(
+            lit,
+            x0 + nx * d,
+            y0 + ny * d,
+            x1 + nx * d,
+            y1 + ny * d,
+            alpha(s < 0 ? K_CUT[1] : K_CUT[2], a * 0.9),
+            1,
+          );
         }
     }
     // Осколки разреза осыпаются.
@@ -4621,7 +5423,11 @@ function kTrailDraw(lit: Px, tr: KTrail): void {
       for (let i = 0; i < 4; i++) {
         const u = hash(i, j, 77);
         const [px0, py0] = pts[Math.floor(u * (pts.length - 1))];
-        lit.set(px0 + nx * off + (hash(i, j, 3) - 0.5) * 4, py0 + ny * off + age * age * 90 + i, alpha(K_PINK, a));
+        lit.set(
+          px0 + nx * off + (hash(i, j, 3) - 0.5) * 4,
+          py0 + ny * off + age * age * 90 + i,
+          alpha(K_PINK, a),
+        );
       }
   }
 }
@@ -4635,7 +5441,10 @@ function kBowDraw(lit: Px, g: KGeo, r: KR, fi: number): void {
   // Оси лука: вдоль выстрела и поперёк; рукоять в кулаке, плечи загибаются к лучнику.
   const ax = Math.cos(r.baim);
   const ay = Math.sin(r.baim);
-  const P = (along: number, across: number): [number, number] => [bx + ax * along - ay * across, by + ay * along + ax * across];
+  const P = (along: number, across: number): [number, number] => [
+    bx + ax * along - ay * across,
+    by + ay * along + ax * across,
+  ];
   const bend = Math.min(1, r.draw) * 3;
   for (let i = -n; i <= n; i++) {
     const u = i / 9;
@@ -4664,9 +5473,24 @@ function kBowDraw(lit: Px, g: KGeo, r: KR, fi: number): void {
       // Стрела: древко огнём от руки за лук, наконечник добела.
       const [hx1, hy1] = P(7, 0);
       stroke(lit, dx0, dy0, hx1, hy1, FIRE[r.arrow > 0.7 ? 3 : 2], 1);
-      if (r.arrow > 0.4) stroke(lit, dx0 + ay, dy0 - ax, hx1 - ax * 2 + ay, hy1 - ay * 2 - ax, alpha(FIRE[1], 0.7), 1);
+      if (r.arrow > 0.4)
+        stroke(
+          lit,
+          dx0 + ay,
+          dy0 - ax,
+          hx1 - ax * 2 + ay,
+          hy1 - ay * 2 - ax,
+          alpha(FIRE[1], 0.7),
+          1,
+        );
       flame(lit, Math.round(dx0), Math.round(dy0 + 1), 3, 3 + Math.round(r.arrow * 3), fi, FIRE, 5);
-      glowDot(lit, Math.round(hx1), Math.round(hy1), r.arrow > 0.8 ? WHITE : FIRE[2], r.arrow > 0.8 ? 3 : r.arrow > 0.4 ? 2 : 1);
+      glowDot(
+        lit,
+        Math.round(hx1),
+        Math.round(hy1),
+        r.arrow > 0.8 ? WHITE : FIRE[2],
+        r.arrow > 0.8 ? 3 : r.arrow > 0.4 ? 2 : 1,
+      );
     }
   } else {
     // Спущена: тетива бьётся и гаснет.
@@ -4704,7 +5528,16 @@ function kPyreDraw(lit: Px, g: KGeo, r: KR, fi: number): void {
         if (u < 0 || u > 1) continue;
         const [x, y] = at(u);
         const s = 1 - j * 0.2;
-        flame(lit, Math.round(x), Math.round(y), 3 * s + 1, Math.round((3 + r.pyre * 3) * s), fi + j, FIRE, a.length + j);
+        flame(
+          lit,
+          Math.round(x),
+          Math.round(y),
+          3 * s + 1,
+          Math.round((3 + r.pyre * 3) * s),
+          fi + j,
+          FIRE,
+          a.length + j,
+        );
       }
       if (r.crawl > 0.9) {
         flame(lit, Math.round(hx0), Math.round(hy0), 4, Math.round(4 + r.pyre * 4), fi, FIRE, hx0);
@@ -4725,7 +5558,15 @@ function kPyreDraw(lit: Px, g: KGeo, r: KR, fi: number): void {
       for (let i = 0; i < 3; i++) {
         const dir = (i - 1) * 0.9 + (a === 'rl' ? 0.3 : -0.3);
         const len = 3 + r.palm * 4;
-        stroke(lit, hx0, y, hx0 + Math.sin(dir) * len, y + 1 - Math.abs(Math.cos(dir)) * 0.5, alpha(FIRE[1], 0.7 * r.palm), 1);
+        stroke(
+          lit,
+          hx0,
+          y,
+          hx0 + Math.sin(dir) * len,
+          y + 1 - Math.abs(Math.cos(dir)) * 0.5,
+          alpha(FIRE[1], 0.7 * r.palm),
+          1,
+        );
       }
     }
 }
@@ -4784,7 +5625,12 @@ function kOutline(p: Px, c: RGBA): void {
     for (let x = Math.max(0, bx0 - 1); x <= Math.min(w - 1, bx1 + 1); x++) {
       const i = y * w + x;
       if (d[i] >>> 24) continue;
-      if ((x > 0 && d[i - 1] >>> 24) || (x < w - 1 && d[i + 1] >>> 24) || (y > 0 && d[i - w] >>> 24) || (y < h - 1 && d[i + w] >>> 24))
+      if (
+        (x > 0 && d[i - 1] >>> 24) ||
+        (x < w - 1 && d[i + 1] >>> 24) ||
+        (y > 0 && d[i - w] >>> 24) ||
+        (y < h - 1 && d[i + w] >>> 24)
+      )
         add.push(i);
     }
   for (const i of add) d[i] = cv;
@@ -4802,7 +5648,8 @@ function kEdge(p: Px, lit: Px, fi: number): void {
     for (let x = Math.max(1, bx0 - 1); x <= Math.min(w - 2, bx1 + 1); x++) {
       const i = y * w + x;
       if (d[i] >>> 24 || (x + y + ph) % 2) continue;
-      if (d[i - 1] >>> 24 || d[i + 1] >>> 24 || d[i - w] >>> 24 || d[i + w] >>> 24) lit.set(x, y, ec);
+      if (d[i - 1] >>> 24 || d[i + 1] >>> 24 || d[i - w] >>> 24 || d[i + w] >>> 24)
+        lit.set(x, y, ec);
     }
 }
 
@@ -4891,8 +5738,16 @@ const RUN_T = K_STRIDE / (2.6 * 16);
 /** Храм: верхние — знак у груди, нижние — кулак в ладони у живота. */
 const KSIT2: Partial<KR> = {
   ...KSIT,
-  rlex: 3, rley: 6, rlhx: -7, rlhy: 4, rlk: HK.sign,
-  llex: 3, lley: 6, llhx: -7, llhy: 4, llk: HK.sign,
+  rlex: 3,
+  rley: 6,
+  rlhx: -7,
+  rlhy: 4,
+  rlk: HK.sign,
+  llex: 3,
+  lley: 6,
+  llhx: -7,
+  llhy: 4,
+  llk: HK.sign,
 };
 
 function kIdle(ph: number, b: KR): KR {
@@ -4955,25 +5810,100 @@ function kIntro(k: KT): (t: number) => KR {
     [0.68, { eyes: 3, nod: 0, hy: 0, glow: 1, aura: 0.6, flare: 0.5 }, kOut],
     [0.95, { flare: 0, aura: 0.5, eyes: 2 }, kIO],
     // Ладони в колени, кисти расцепились; таз вверх, ноги расплетаются.
-    [1.12, {
-      hip: 9, bend: 2, nod: 1, lkx: -11, lky: 6, lfx: -6, lfy: 0, rkx: 11, rky: 6, rfx: 6, rfy: 0,
-      ruk: HK.open, luk: HK.open, ruhx: -6, luhx: -6, ruhy: 4, luhy: 4,
-      rlex: 5, rley: 7, rlhx: 4, rlhy: 13, llex: 5, lley: 7, llhx: 4, llhy: 13,
-    }, kIO],
+    [
+      1.12,
+      {
+        hip: 9,
+        bend: 2,
+        nod: 1,
+        lkx: -11,
+        lky: 6,
+        lfx: -6,
+        lfy: 0,
+        rkx: 11,
+        rky: 6,
+        rfx: 6,
+        rfy: 0,
+        ruk: HK.open,
+        luk: HK.open,
+        ruhx: -6,
+        luhx: -6,
+        ruhy: 4,
+        luhy: 4,
+        rlex: 5,
+        rley: 7,
+        rlhx: 4,
+        rlhy: 13,
+        llex: 5,
+        lley: 7,
+        llhx: 4,
+        llhy: 13,
+      },
+      kIO,
+    ],
     // Встал во весь рост, руки разведены.
-    [1.45, {
-      hip: 16, bend: 0, nod: 0, br: 1, lkx: -7, lky: 8, lfx: -7.5, rkx: 7, rky: 8, rfx: 7.5,
-      rlex: 4, rley: 6, rlhx: -1, rlhy: 12, rlk: HK.fist, llex: 4, lley: 5, llhx: -5, llhy: 4, llk: HK.two,
-      ruex: 7, ruey: 2, ruhx: 13, ruhy: 3, luex: 7, luey: 2, luhx: 13, luhy: 3,
-    }, kOut],
+    [
+      1.45,
+      {
+        hip: 16,
+        bend: 0,
+        nod: 0,
+        br: 1,
+        lkx: -7,
+        lky: 8,
+        lfx: -7.5,
+        rkx: 7,
+        rky: 8,
+        rfx: 7.5,
+        rlex: 4,
+        rley: 6,
+        rlhx: -1,
+        rlhy: 12,
+        rlk: HK.fist,
+        llex: 4,
+        lley: 5,
+        llhx: -5,
+        llhy: 4,
+        llk: HK.two,
+        ruex: 7,
+        ruey: 2,
+        ruhx: 13,
+        ruhy: 3,
+        luex: 7,
+        luey: 2,
+        luhx: 13,
+        luhy: 3,
+      },
+      kOut,
+    ],
     // Разминает шею.
     [1.65, { hx: 1, ruhy: 1, luhy: 1 }, kIO],
     [1.82, { hx: -1, br: 0 }, kIO],
     // Оскал: челюсть, аура вспыхивает, наклон вперёд, когти.
-    [2.0, {
-      hx: 0, jaw: 1, eyes: 3, lean: 1, bend: 1, flare: 1, aura: 1, claw: 0.7,
-      ruex: 6, ruey: 4, ruhx: 11, ruhy: 8, ruk: HK.claw, luex: 6, luey: 4, luhx: 11, luhy: 8, luk: HK.claw,
-    }, kBack],
+    [
+      2.0,
+      {
+        hx: 0,
+        jaw: 1,
+        eyes: 3,
+        lean: 1,
+        bend: 1,
+        flare: 1,
+        aura: 1,
+        claw: 0.7,
+        ruex: 6,
+        ruey: 4,
+        ruhx: 11,
+        ruhy: 8,
+        ruk: HK.claw,
+        luex: 6,
+        luey: 4,
+        luhx: 11,
+        luhy: 8,
+        luk: HK.claw,
+      },
+      kBack,
+    ],
     [2.3, { jaw: 0.5, flare: 0.3, claw: 0.3 }, kIO],
     [KING.intro, { ...b }, kIO],
   ];
@@ -4990,20 +5920,104 @@ function kCut(k: KT): (t: number) => KR {
   const b = k.b;
   const v = k.aim > 0.9 ? 1 : k.aim < -0.9 ? -1 : 0;
   const cross: Partial<KR> = {
-    rlex: -1, rley: 5, rlhx: -6, rlhy: 6, rlk: HK.fist, llex: -1, lley: 5, llhx: -6, llhy: 7, llk: HK.fist,
+    rlex: -1,
+    rley: 5,
+    rlhx: -6,
+    rlhy: 6,
+    rlk: HK.fist,
+    llex: -1,
+    lley: 5,
+    llhx: -6,
+    llhy: 7,
+    llk: HK.fist,
   };
   const keys: KKey[] =
     v < 0
       ? [
           [0, {}],
           // Снизу вверх: два пальца у бедра, присел — рубит над собой.
-          [0.22 * T, { ...cross, ruex: 5, ruey: 6, ruhx: 6, ruhy: 12, ruk: HK.two, luex: 5, luey: 5, luhx: 9, luhy: 9, look: 0, nod: -1, jaw: 0.35, fing: 0.3, eyes: 2 }, kOut],
-          [0.6 * T, { ruex: 5, ruey: 7, ruhx: 3, ruhy: 14, hip: 15, bend: 1, fing: 0.65, rfx: 8.5, rkx: 8, lfx: -8, lkx: -8 }, kIO],
-          [T - 4 * KF, { ruex: 4, ruey: 7, ruhx: -1, ruhy: 15, hip: 14.5, bend: 1.5, lean: -1, fing: 1, eyes: 3, jaw: 0.5 }, kOut],
+          [
+            0.22 * T,
+            {
+              ...cross,
+              ruex: 5,
+              ruey: 6,
+              ruhx: 6,
+              ruhy: 12,
+              ruk: HK.two,
+              luex: 5,
+              luey: 5,
+              luhx: 9,
+              luhy: 9,
+              look: 0,
+              nod: -1,
+              jaw: 0.35,
+              fing: 0.3,
+              eyes: 2,
+            },
+            kOut,
+          ],
+          [
+            0.6 * T,
+            {
+              ruex: 5,
+              ruey: 7,
+              ruhx: 3,
+              ruhy: 14,
+              hip: 15,
+              bend: 1,
+              fing: 0.65,
+              rfx: 8.5,
+              rkx: 8,
+              lfx: -8,
+              lkx: -8,
+            },
+            kIO,
+          ],
+          [
+            T - 4 * KF,
+            {
+              ruex: 4,
+              ruey: 7,
+              ruhx: -1,
+              ruhy: 15,
+              hip: 14.5,
+              bend: 1.5,
+              lean: -1,
+              fing: 1,
+              eyes: 3,
+              jaw: 0.5,
+            },
+            kOut,
+          ],
           [T - 2 * KF, { ruex: 8, ruey: 3, ruhx: 10, ruhy: 5, hip: 15.5, bend: 0, lean: 0 }, kIn],
           [T - KF, { ruex: 8, ruey: -2, ruhx: 12, ruhy: -5, hip: 16.5, by: 0.5 }, kLin],
-          [T, { ruex: 5, ruey: -6, ruhx: 6, ruhy: -15, hip: 16.5, by: 1, lean: 1, fdx: 1.5, fing: 0.45, jaw: 0.85, nod: -1, luex: 6, luey: 3, luhx: 11, luhy: 6 }, kLin],
-          [T + 0.12, { ruex: 3, ruey: -7, ruhx: 0, ruhy: -17, by: 1, fdx: 2, fing: 0, jaw: 0.5 }, kOut],
+          [
+            T,
+            {
+              ruex: 5,
+              ruey: -6,
+              ruhx: 6,
+              ruhy: -15,
+              hip: 16.5,
+              by: 1,
+              lean: 1,
+              fdx: 1.5,
+              fing: 0.45,
+              jaw: 0.85,
+              nod: -1,
+              luex: 6,
+              luey: 3,
+              luhx: 11,
+              luhy: 6,
+            },
+            kLin,
+          ],
+          [
+            T + 0.12,
+            { ruex: 3, ruey: -7, ruhx: 0, ruhy: -17, by: 1, fdx: 2, fing: 0, jaw: 0.5 },
+            kOut,
+          ],
           [T + 0.35, { ruex: 4, ruey: -5, ruhx: 3, ruhy: -12, by: 0, hip: 16, br: 1 }, kIO],
           [T + 0.55, { br: 0 }, kIO],
           [tCutEnd(k), { ...b }, kIO],
@@ -5011,29 +6025,158 @@ function kCut(k: KT): (t: number) => KR {
       : [
           [0, {}],
           // Знак: два пальца у лица, левая верхняя отведена, нижние крест-накрест.
-          [0.22 * T, { ...cross, ruex: 6, ruey: -5, ruhx: 4, ruhy: -13, ruk: HK.two, luex: 5, luey: 6, luhx: 9, luhy: 11, lean: -0.5, look: v ? 0 : 1, jaw: 0.35, fing: 0.3, eyes: 2 }, kOut],
+          [
+            0.22 * T,
+            {
+              ...cross,
+              ruex: 6,
+              ruey: -5,
+              ruhx: 4,
+              ruhy: -13,
+              ruk: HK.two,
+              luex: 5,
+              luey: 6,
+              luhx: 9,
+              luhy: 11,
+              lean: -0.5,
+              look: v ? 0 : 1,
+              jaw: 0.35,
+              fing: 0.3,
+              eyes: 2,
+            },
+            kOut,
+          ],
           // Выше головы, вытянулся; ноги шире.
-          [0.6 * T, { ruex: 4, ruey: -7, ruhx: 2, ruhy: -15, bend: -1, fing: 0.65, rfx: 8.5, rkx: 7.5, lfx: -8, lkx: -7.5 }, kIO],
+          [
+            0.6 * T,
+            {
+              ruex: 4,
+              ruey: -7,
+              ruhx: 2,
+              ruhy: -15,
+              bend: -1,
+              fing: 0.65,
+              rfx: 8.5,
+              rkx: 7.5,
+              lfx: -8,
+              lkx: -7.5,
+            },
+            kIO,
+          ],
           // Пружина: кисть заведена за плечо, корпус откинут.
-          [T - 4 * KF, { ruex: 7, ruey: -5, ruhx: 2, ruhy: -15, lean: -2, tw: -0.6, fing: 1, eyes: 3, jaw: 0.5, hx: -1, bend: 0 }, kOut],
+          [
+            T - 4 * KF,
+            {
+              ruex: 7,
+              ruey: -5,
+              ruhx: 2,
+              ruhy: -15,
+              lean: -2,
+              tw: -0.6,
+              fing: 1,
+              eyes: 3,
+              jaw: 0.5,
+              hx: -1,
+              bend: 0,
+            },
+            kOut,
+          ],
           // Взмах.
           ...(v > 0
             ? ([
                 // Вниз, к герою под ногами: рука идёт перед грудью, корпус кланяется.
                 [T - 2 * KF, { ruex: 8, ruey: -5, ruhx: 9, ruhy: -8, lean: -1, tw: 0 }, kIn],
                 [T - KF, { ruex: 7, ruey: 0, ruhx: 5, ruhy: 2, lean: 0.5, hx: 0, nod: 1 }, kLin],
-                [T, { ruex: 5, ruey: 4, ruhx: -1, ruhy: 12, lean: 1, bend: 2, hip: 15, fdx: 1.5, fing: 0.45, jaw: 0.85, nod: 1, luex: 6, luey: 3, luhx: 11, luhy: 6 }, kLin],
-                [T + 0.12, { ruex: 4, ruey: 6, ruhx: -5, ruhy: 15, bend: 3, hip: 14.5, fdx: 2, fing: 0, jaw: 0.5 }, kOut],
+                [
+                  T,
+                  {
+                    ruex: 5,
+                    ruey: 4,
+                    ruhx: -1,
+                    ruhy: 12,
+                    lean: 1,
+                    bend: 2,
+                    hip: 15,
+                    fdx: 1.5,
+                    fing: 0.45,
+                    jaw: 0.85,
+                    nod: 1,
+                    luex: 6,
+                    luey: 3,
+                    luhx: 11,
+                    luhy: 6,
+                  },
+                  kLin,
+                ],
+                [
+                  T + 0.12,
+                  {
+                    ruex: 4,
+                    ruey: 6,
+                    ruhx: -5,
+                    ruhy: 15,
+                    bend: 3,
+                    hip: 14.5,
+                    fdx: 2,
+                    fing: 0,
+                    jaw: 0.5,
+                  },
+                  kOut,
+                ],
               ] as KKey[])
             : ([
                 [T - 2 * KF, { ruex: 8, ruey: -5, ruhx: 11, ruhy: -11, lean: -1, tw: 0 }, kIn],
-                [T - KF, { ruex: 8, ruey: -2, ruhx: 15, ruhy: -1, lean: 0.5, tw: 0.4, hx: 0 }, kLin],
+                [
+                  T - KF,
+                  { ruex: 8, ruey: -2, ruhx: 15, ruhy: -1, lean: 0.5, tw: 0.4, hx: 0 },
+                  kLin,
+                ],
                 // Контакт: рука вытянута вперёд-вниз, шаг вперёд.
-                [T, { ruex: 8, ruey: 1, ruhx: 14, ruhy: 7, lean: 2, tw: 0.6, rfx: 10, rkx: 9, fdx: 1.5, fing: 0.45, jaw: 0.85, hx: 1, luex: 6, luey: 3, luhx: 11, luhy: 6 }, kLin],
+                [
+                  T,
+                  {
+                    ruex: 8,
+                    ruey: 1,
+                    ruhx: 14,
+                    ruhy: 7,
+                    lean: 2,
+                    tw: 0.6,
+                    rfx: 10,
+                    rkx: 9,
+                    fdx: 1.5,
+                    fing: 0.45,
+                    jaw: 0.85,
+                    hx: 1,
+                    luex: 6,
+                    luey: 3,
+                    luhx: 11,
+                    luhy: 6,
+                  },
+                  kLin,
+                ],
                 // Проводка с перелётом: кисть проходит через тело вниз, корпус проваливается.
-                [T + 0.12, { ruex: 6, ruey: 6, ruhx: 2, ruhy: 13, lean: 3, bend: 2, hip: 15, fdx: 2, fing: 0, jaw: 0.5 }, kOut],
+                [
+                  T + 0.12,
+                  {
+                    ruex: 6,
+                    ruey: 6,
+                    ruhx: 2,
+                    ruhy: 13,
+                    lean: 3,
+                    bend: 2,
+                    hip: 15,
+                    fdx: 2,
+                    fing: 0,
+                    jaw: 0.5,
+                  },
+                  kOut,
+                ],
               ] as KKey[])),
-          [T + 0.35, { ruex: 5, ruey: 7, ruhx: 3, ruhy: 14, lean: v ? 1 : 2, bend: 1.5, br: 1, nod: 0 }, kIO],
+          [
+            T + 0.35,
+            { ruex: 5, ruey: 7, ruhx: 3, ruhy: 14, lean: v ? 1 : 2, bend: 1.5, br: 1, nod: 0 },
+            kIO,
+          ],
           [T + 0.55, { br: 0 }, kIO],
           [tCutEnd(k), { ...b }, kIO],
         ];
@@ -5047,31 +6190,179 @@ function kCleave(k: KT): (t: number) => KR {
   const keys: KKey[] = [
     [0, {}],
     // Вскинул верхние руки когтями вверх, нижние — кулаки у бёдер; присел, вдох.
-    [0.32 * Tc, {
-      hip: 14.5, lkx: -8.5, rkx: 8.5, lky: 7, rky: 7, lfx: -9, rfx: 9,
-      ruex: 6, ruey: -5, ruhx: 9, ruhy: -13, ruk: HK.claw, luex: 6, luey: -5, luhx: 9, luhy: -13, luk: HK.claw,
-      rlex: 4, rley: 5, rlhx: 3, rlhy: 10, rlk: HK.fist, llex: 4, lley: 5, llhx: 3, llhy: 10, llk: HK.fist,
-      claw: 0.4, eyes: 2, nod: -1, jaw: 0.5, br: 1, lean: -0.5,
-    }, kOut],
+    [
+      0.32 * Tc,
+      {
+        hip: 14.5,
+        lkx: -8.5,
+        rkx: 8.5,
+        lky: 7,
+        rky: 7,
+        lfx: -9,
+        rfx: 9,
+        ruex: 6,
+        ruey: -5,
+        ruhx: 9,
+        ruhy: -13,
+        ruk: HK.claw,
+        luex: 6,
+        luey: -5,
+        luhx: 9,
+        luhy: -13,
+        luk: HK.claw,
+        rlex: 4,
+        rley: 5,
+        rlhx: 3,
+        rlhy: 10,
+        rlk: HK.fist,
+        llex: 4,
+        lley: 5,
+        llhx: 3,
+        llhy: 10,
+        llk: HK.fist,
+        claw: 0.4,
+        eyes: 2,
+        nod: -1,
+        jaw: 0.5,
+        br: 1,
+        lean: -0.5,
+      },
+      kOut,
+    ],
     // Пружина: когти выше и шире, таз ниже, накал.
-    [Tc - 3 * KF, {
-      hip: 13, ruex: 5, ruey: -7, ruhx: 8, ruhy: -16, luex: 5, luey: -7, luhx: 8, luhy: -16,
-      claw: 1, eyes: 3, jaw: 0.7, lean: -1.5, fdx: -1,
-    }, kIO],
+    [
+      Tc - 3 * KF,
+      {
+        hip: 13,
+        ruex: 5,
+        ruey: -7,
+        ruhx: 8,
+        ruhy: -16,
+        luex: 5,
+        luey: -7,
+        luhx: 8,
+        luhy: -16,
+        claw: 1,
+        eyes: 3,
+        jaw: 0.7,
+        lean: -1.5,
+        fdx: -1,
+      },
+      kIO,
+    ],
     // Крест-накрест: обе руки рвут вниз через тело — следы скрещиваются.
-    [Tc - 2 * KF, { ruex: 8, ruey: -4, ruhx: 6, ruhy: -10, luex: 8, luey: -4, luhx: 6, luhy: -10, nod: 0, lean: 0, hip: 14.5, br: 0 }, kIn],
-    [Tc - KF, { ruex: 5, ruey: 2, ruhx: -2, ruhy: -1, luex: 5, luey: 2, luhx: -2, luhy: -1, lean: 1.5, fdx: 1.5 }, kLin],
-    [Tc, {
-      ruex: 2, ruey: 6, ruhx: -11, ruhy: 9, luex: 2, luey: 6, luhx: -11, luhy: 10, lean: 2.5, hip: 14, bend: 1,
-      fdx: 3, jaw: 1, claw: 0.7, rlhx: 6, rlhy: 12, llhx: 6, llhy: 12, rfx: 9.5, lfx: -9.5,
-    }, kLin],
+    [
+      Tc - 2 * KF,
+      {
+        ruex: 8,
+        ruey: -4,
+        ruhx: 6,
+        ruhy: -10,
+        luex: 8,
+        luey: -4,
+        luhx: 6,
+        luhy: -10,
+        nod: 0,
+        lean: 0,
+        hip: 14.5,
+        br: 0,
+      },
+      kIn,
+    ],
+    [
+      Tc - KF,
+      {
+        ruex: 5,
+        ruey: 2,
+        ruhx: -2,
+        ruhy: -1,
+        luex: 5,
+        luey: 2,
+        luhx: -2,
+        luhy: -1,
+        lean: 1.5,
+        fdx: 1.5,
+      },
+      kLin,
+    ],
+    [
+      Tc,
+      {
+        ruex: 2,
+        ruey: 6,
+        ruhx: -11,
+        ruhy: 9,
+        luex: 2,
+        luey: 6,
+        luhx: -11,
+        luhy: 10,
+        lean: 2.5,
+        hip: 14,
+        bend: 1,
+        fdx: 3,
+        jaw: 1,
+        claw: 0.7,
+        rlhx: 6,
+        rlhy: 12,
+        llhx: 6,
+        llhy: 12,
+        rfx: 9.5,
+        lfx: -9.5,
+      },
+      kLin,
+    ],
     // Проводка: руки скрещены внизу, корпус догоняет.
-    [Tc + 0.1, { ruhx: -12, ruhy: 12, luhx: -12, luhy: 13, fdx: 3.5, lean: 2, hip: 13.5, bend: 1.5, claw: 0.4 }, kOut],
+    [
+      Tc + 0.1,
+      {
+        ruhx: -12,
+        ruhy: 12,
+        luhx: -12,
+        luhy: 13,
+        fdx: 3.5,
+        lean: 2,
+        hip: 13.5,
+        bend: 1.5,
+        claw: 0.4,
+      },
+      kOut,
+    ],
     // Щелчок: крест рвётся наружу — под героем крест.
-    [X - 2 * KF, {
-      ruk: HK.fist, luk: HK.fist, claw: 0, ruex: 3, ruey: 6, ruhx: -9, ruhy: 10, luex: 3, luey: 6, luhx: -9, luhy: 11, jaw: 0.4,
-    }, kIO],
-    [X, { ruex: 7, ruey: 4, ruhx: 12, ruhy: 10, luex: 7, luey: 4, luhx: 12, luhy: 11, jaw: 0.8, by: 1, hip: 15 }, kOut],
+    [
+      X - 2 * KF,
+      {
+        ruk: HK.fist,
+        luk: HK.fist,
+        claw: 0,
+        ruex: 3,
+        ruey: 6,
+        ruhx: -9,
+        ruhy: 10,
+        luex: 3,
+        luey: 6,
+        luhx: -9,
+        luhy: 11,
+        jaw: 0.4,
+      },
+      kIO,
+    ],
+    [
+      X,
+      {
+        ruex: 7,
+        ruey: 4,
+        ruhx: 12,
+        ruhy: 10,
+        luex: 7,
+        luey: 4,
+        luhx: 12,
+        luhy: 11,
+        jaw: 0.8,
+        by: 1,
+        hip: 15,
+      },
+      kOut,
+    ],
     [X + 0.12, { by: 0 }, kIO],
     [X + 0.3, { fdx: 1, lean: 1, hip: 16, bend: 0, br: 1 }, kIO],
     [X + 0.5, { br: 0 }, kIO],
@@ -5137,33 +6428,132 @@ function kBow(k: KT): (t: number) => KR {
   const keys: KKey[] = [
     [0, {}],
     // Пламя собирается в кулаке; стойка шире, взгляд на цель.
-    [0.16 * T, { ruex: 7, ruey: 0, ruhx: 9, ruhy: -3, ruk: HK.grip, bow: 0.3, lfx: -9.5, lkx: -8.5, rfx: 9.5, rkx: 8.5, lean: -0.5, look: 1, hx: 1, eyes: 2 }, kOut],
+    [
+      0.16 * T,
+      {
+        ruex: 7,
+        ruey: 0,
+        ruhx: 9,
+        ruhy: -3,
+        ruk: HK.grip,
+        bow: 0.3,
+        lfx: -9.5,
+        lkx: -8.5,
+        rfx: 9.5,
+        rkx: 8.5,
+        lean: -0.5,
+        look: 1,
+        hx: 1,
+        eyes: 2,
+      },
+      kOut,
+    ],
     // Правая нижняя берёт тетиву у лука.
     [0.26 * T, { bow: 1, rlex: 7, rley: -1, rlhx: 9, rlhy: -6, rlk: HK.fist, arrow: 0.1 }, kIO],
     // Ступень 1: натяг на треть.
     [0.4 * T, { rlex: 6, rley: 1, rlhx: 2, rlhy: -6, draw: 0.4, arrow: 0.25, lean: -1 }, kOut],
     // Ступень 2: левая верхняя ложится на тетиву.
     [0.48 * T, { luex: -3, luey: 4, luhx: -11, luhy: -1, luk: HK.fist }, kIO],
-    [0.6 * T, { rlex: 3, rley: 0, rlhx: -4, rlhy: -6, luhx: -11, luhy: -2, draw: 0.75, arrow: 0.55, lean: -1.5, tw: 0.4, glow: 1, flare: 0.2 }, kOut],
+    [
+      0.6 * T,
+      {
+        rlex: 3,
+        rley: 0,
+        rlhx: -4,
+        rlhy: -6,
+        luhx: -11,
+        luhy: -2,
+        draw: 0.75,
+        arrow: 0.55,
+        lean: -1.5,
+        tw: 0.4,
+        glow: 1,
+        flare: 0.2,
+      },
+      kOut,
+    ],
     // Ступень 3: левая нижняя — полный натяг тремя руками; маска скалится.
     [0.68 * T, { llex: -2, lley: 3, llhx: -7, llhy: -3, llk: HK.fist }, kIO],
-    [A, {
-      rlex: -1, rley: -2, rlhx: -9, rlhy: -6, luhx: -7, luhy: -3, llhx: -5, llhy: -4,
-      draw: 1, arrow: 1, lean: -2, tw: 0.7, jaw: 0.35, mjaw: 1, m2: 1.5, flare: 0.4, eyes: 3,
-    }, kOut],
+    [
+      A,
+      {
+        rlex: -1,
+        rley: -2,
+        rlhx: -9,
+        rlhy: -6,
+        luhx: -7,
+        luhy: -3,
+        llhx: -5,
+        llhy: -4,
+        draw: 1,
+        arrow: 1,
+        lean: -2,
+        tw: 0.7,
+        jaw: 0.35,
+        mjaw: 1,
+        m2: 1.5,
+        flare: 0.4,
+        eyes: 3,
+      },
+      kOut,
+    ],
     // Замер: прицел пойман.
     [T - KF, { jaw: 0.5 }, kLin],
     // Выстрел: тетива сорвалась, руки разлетелись, отдача корпусом назад.
-    [T, {
-      draw: 0, rel: 1, arrow: 0, rlex: 2, rley: -4, rlhx: -6, rlhy: -11, luex: 5, luey: -3, luhx: 6, luhy: -8,
-      llex: 4, lley: 0, llhx: 6, llhy: -2, lean: -3, fdx: -2.5, jaw: 0.95, flare: 0.8,
-    }, kLin],
+    [
+      T,
+      {
+        draw: 0,
+        rel: 1,
+        arrow: 0,
+        rlex: 2,
+        rley: -4,
+        rlhx: -6,
+        rlhy: -11,
+        luex: 5,
+        luey: -3,
+        luhx: 6,
+        luhy: -8,
+        llex: 4,
+        lley: 0,
+        llhx: 6,
+        llhy: -2,
+        lean: -3,
+        fdx: -2.5,
+        jaw: 0.95,
+        flare: 0.8,
+      },
+      kLin,
+    ],
     [T + 0.12, { rel: 0.3, lean: -2.5, fdx: -2, flare: 0.3 }, kOut],
     [T + 0.3, { rel: 0, bow: 0.55, lean: -1, fdx: -0.5, jaw: 0.4, mjaw: 0.5 }, kIO],
-    [T + 0.5, {
-      bow: 0, ruex: 4, ruey: 7, ruhx: 5, ruhy: 14, ruk: HK.open, luex: 4, luey: 7, luhx: 5, luhy: 14, luk: HK.open,
-      rlex: 4, rley: 6, rlhx: -1, rlhy: 12, llex: 4, lley: 5, llhx: -5, llhy: 4, llk: HK.two, m2: 1,
-    }, kIO],
+    [
+      T + 0.5,
+      {
+        bow: 0,
+        ruex: 4,
+        ruey: 7,
+        ruhx: 5,
+        ruhy: 14,
+        ruk: HK.open,
+        luex: 4,
+        luey: 7,
+        luhx: 5,
+        luhy: 14,
+        luk: HK.open,
+        rlex: 4,
+        rley: 6,
+        rlhx: -1,
+        rlhy: 12,
+        llex: 4,
+        lley: 5,
+        llhx: -5,
+        llhy: 4,
+        llk: HK.two,
+        m2: 1,
+      },
+      kIO,
+    ],
     [tBowEnd(k), { ...b }, kIO],
   ];
   const ev = kCompile(keys, b);
@@ -5189,19 +6579,77 @@ function kPyre(k: KT): (t: number) => KR {
   const keys: KKey[] = [
     [0, {}],
     // Вдох: четыре руки вверх, огонь вспыхивает у плеч и ползёт по рукам.
-    [0.15, {
-      ruex: 5, ruey: -4, ruhx: 8, ruhy: -11, ruk: HK.palm, luex: 5, luey: -4, luhx: 8, luhy: -11, luk: HK.palm,
-      rlex: 6, rley: 0, rlhx: 11, rlhy: -4, rlk: HK.palm, llex: 6, lley: 0, llhx: 11, llhy: -4, llk: HK.palm,
-      nod: -1, jaw: 0.75, eyes: 3, glow: 1, pyre: 0.4, crawl: 0.15, by: 1,
-    }, kOut],
+    [
+      0.15,
+      {
+        ruex: 5,
+        ruey: -4,
+        ruhx: 8,
+        ruhy: -11,
+        ruk: HK.palm,
+        luex: 5,
+        luey: -4,
+        luhx: 8,
+        luhy: -11,
+        luk: HK.palm,
+        rlex: 6,
+        rley: 0,
+        rlhx: 11,
+        rlhy: -4,
+        rlk: HK.palm,
+        llex: 6,
+        lley: 0,
+        llhx: 11,
+        llhy: -4,
+        llk: HK.palm,
+        nod: -1,
+        jaw: 0.75,
+        eyes: 3,
+        glow: 1,
+        pyre: 0.4,
+        crawl: 0.15,
+        by: 1,
+      },
+      kOut,
+    ],
     [0.3, { pyre: 1, crawl: 1, ruhy: -12, luhy: -12, by: 1.5 }, kIO],
     // Удар ладонями в землю: глубокий присед.
-    [0.375, {
-      by: 0, hip: 6, bend: 3, lkx: -11, lky: 7.5, lfx: -9.5, rkx: 11, rky: 7.5, rfx: 9.5,
-      ruex: 6, ruey: 7, ruhx: 9, ruhy: 14, luex: 6, luey: 7, luhx: 9, luhy: 14,
-      rlex: 6, rley: 7, rlhx: 6, rlhy: 16, llex: 6, lley: 7, llhx: 6, llhy: 16,
-      nod: 1, jaw: 1, palm: 1, fsx: 1.07, fsy: 0.93,
-    }, kIn],
+    [
+      0.375,
+      {
+        by: 0,
+        hip: 6,
+        bend: 3,
+        lkx: -11,
+        lky: 7.5,
+        lfx: -9.5,
+        rkx: 11,
+        rky: 7.5,
+        rfx: 9.5,
+        ruex: 6,
+        ruey: 7,
+        ruhx: 9,
+        ruhy: 14,
+        luex: 6,
+        luey: 7,
+        luhx: 9,
+        luhy: 14,
+        rlex: 6,
+        rley: 7,
+        rlhx: 6,
+        rlhy: 16,
+        llex: 6,
+        lley: 7,
+        llhx: 6,
+        llhy: 16,
+        nod: 1,
+        jaw: 1,
+        palm: 1,
+        fsx: 1.07,
+        fsy: 0.93,
+      },
+      kIn,
+    ],
     [0.46, { fsx: 1, fsy: 1, palm: 0.8, jaw: 0.6 }, kOut],
     [PYRE_T, { pyre: 0.5, palm: 0.6 }, kIO],
     // Встаёт (уже в погоне): угли осыпаются с пальцев.
@@ -5215,19 +6663,65 @@ function kCast(k: KT): (t: number) => KR {
   const keys: KKey[] = [
     [0, {}],
     // Скользит к помосту: ступни над полом, рукава назад.
-    [0.15, {
-      by: 2, lfy: 2, rfy: 2, lky: 9, rky: 9, lean: -1, nod: 1, eyes: 3, glow: 1, aura: 0.4,
-      ruex: 5, ruey: 6, ruhx: 9, ruhy: 11, luex: 5, luey: 6, luhx: 9, luhy: 11,
-    }, kOut],
+    [
+      0.15,
+      {
+        by: 2,
+        lfy: 2,
+        rfy: 2,
+        lky: 9,
+        rky: 9,
+        lean: -1,
+        nod: 1,
+        eyes: 3,
+        glow: 1,
+        aura: 0.4,
+        ruex: 5,
+        ruey: 6,
+        ruhx: 9,
+        ruhy: 11,
+        luex: 5,
+        luey: 6,
+        luhx: 9,
+        luhy: 11,
+      },
+      kOut,
+    ],
     [0.6, { by: 2.5 }, kIO],
     [0.75, { by: 0, lfy: 0, rfy: 0, lky: 8, rky: 8, lean: 0, fsx: 1.05, fsy: 0.95 }, kIn],
-    [0.9, { fsx: 1, fsy: 1, ruex: 4, ruey: 7, ruhx: 5, ruhy: 14, luex: 4, luey: 7, luhx: 5, luhy: 14 }, kOut],
+    [
+      0.9,
+      { fsx: 1, fsy: 1, ruex: 4, ruey: 7, ruhx: 5, ruhy: 14, luex: 4, luey: 7, luhx: 5, luhy: 14 },
+      kOut,
+    ],
     [1.2, { aura: 0.45 }, kIO],
     // Руки складываются в знак по одной: щелчок — свет.
     [1.45, { rlex: 3, rley: 6, rlhx: -7, rlhy: 4, rlk: HK.sign, sign: 0.3, aura: 0.55 }, kOut],
-    [1.7, { llex: 3, lley: 6, llhx: -7, llhy: 4, llk: HK.sign, sign: 0.45, belly: 0.3, aura: 0.7 }, kOut],
-    [1.95, { ruex: 4, ruey: 7, ruhx: -8, ruhy: 3, ruk: HK.sign, sign: 0.65, belly: 0.6, aura: 0.85, nod: 0 }, kOut],
-    [2.2, { luex: 4, luey: 7, luhx: -8, luhy: 3, luk: HK.sign, sign: 1, belly: 1, aura: 1, mjaw: 1 }, kOut],
+    [
+      1.7,
+      { llex: 3, lley: 6, llhx: -7, llhy: 4, llk: HK.sign, sign: 0.45, belly: 0.3, aura: 0.7 },
+      kOut,
+    ],
+    [
+      1.95,
+      {
+        ruex: 4,
+        ruey: 7,
+        ruhx: -8,
+        ruhy: 3,
+        ruk: HK.sign,
+        sign: 0.65,
+        belly: 0.6,
+        aura: 0.85,
+        nod: 0,
+      },
+      kOut,
+    ],
+    [
+      2.2,
+      { luex: 4, luey: 7, luhx: -8, luhy: 3, luk: HK.sign, sign: 1, belly: 1, aura: 1, mjaw: 1 },
+      kOut,
+    ],
     // Последнее усилие: голова назад, всё горит.
     [2.45, { nod: -1, hy: -1, jaw: 0.75, flare: 0.6, br: 1 }, kIO],
     [KING.cast, { flare: 1 }, kIn],
@@ -5276,16 +6770,81 @@ function kDgrid(k: KT): (t: number) => KR {
   const med = kMed(0, k);
   const keys: KKey[] = [
     [0, {}],
-    [0.18, {
-      eyes: 3, nod: -1, ruk: HK.open, luk: HK.open, ruex: 6, ruey: -2, ruhx: 5, ruhy: -9,
-      luex: 6, luey: -2, luhx: 5, luhy: -9, sign: 0.4, jaw: 0.3,
-    }, kOut],
-    [0.7, { ruex: 8, ruey: -1, ruhx: 14, ruhy: -4, luex: 8, luey: -1, luhx: 14, luhy: -4, ruk: HK.two, luk: HK.two, fing: 0.6 }, kIO],
-    [GRID_T - 3 * KF, { ruex: 6, ruey: -6, ruhx: 9, ruhy: -14, luex: 6, luey: -6, luhx: 9, luhy: -14, fing: 1, mjaw: 1, flare: 0.3 }, kOut],
-    [GRID_T, {
-      ruex: 8, ruey: 2, ruhx: 14, ruhy: 9, luex: 8, luey: 2, luhx: 14, luhy: 9,
-      jaw: 1, belly: 1, fsy: 0.96, fsx: 1.03, flare: 0.9, nod: 0, fing: 0.5,
-    }, kIn],
+    [
+      0.18,
+      {
+        eyes: 3,
+        nod: -1,
+        ruk: HK.open,
+        luk: HK.open,
+        ruex: 6,
+        ruey: -2,
+        ruhx: 5,
+        ruhy: -9,
+        luex: 6,
+        luey: -2,
+        luhx: 5,
+        luhy: -9,
+        sign: 0.4,
+        jaw: 0.3,
+      },
+      kOut,
+    ],
+    [
+      0.7,
+      {
+        ruex: 8,
+        ruey: -1,
+        ruhx: 14,
+        ruhy: -4,
+        luex: 8,
+        luey: -1,
+        luhx: 14,
+        luhy: -4,
+        ruk: HK.two,
+        luk: HK.two,
+        fing: 0.6,
+      },
+      kIO,
+    ],
+    [
+      GRID_T - 3 * KF,
+      {
+        ruex: 6,
+        ruey: -6,
+        ruhx: 9,
+        ruhy: -14,
+        luex: 6,
+        luey: -6,
+        luhx: 9,
+        luhy: -14,
+        fing: 1,
+        mjaw: 1,
+        flare: 0.3,
+      },
+      kOut,
+    ],
+    [
+      GRID_T,
+      {
+        ruex: 8,
+        ruey: 2,
+        ruhx: 14,
+        ruhy: 9,
+        luex: 8,
+        luey: 2,
+        luhx: 14,
+        luhy: 9,
+        jaw: 1,
+        belly: 1,
+        fsy: 0.96,
+        fsx: 1.03,
+        flare: 0.9,
+        nod: 0,
+        fing: 0.5,
+      },
+      kIn,
+    ],
     [GRID_T + 0.18, { fsy: 1, fsx: 1, fing: 0 }, kOut],
     [GRID_T + KING.gridCut, { flare: 0.3, jaw: 0.6 }, kIO],
     [GRID_END, { ...med }, kIO],
@@ -5313,17 +6872,72 @@ function kBroken(k: KT): (t: number) => KR {
   const keys: KKey[] = [
     [0, {}],
     // Храм рухнул: рывок, голова назад, крик; маска трескается.
-    [0.12, {
-      hip: 10, by: 1, hy: -2, nod: -1, jaw: 1, eyes: 3, crack: 1, sign: 0, aura: 0.3, flare: 0.8,
-      ruk: HK.open, luk: HK.open, rlk: HK.open, llk: HK.open,
-      ruex: 7, ruey: -2, ruhx: 12, ruhy: -6, luex: 7, luey: -2, luhx: 12, luhy: -6,
-      rlex: 6, rley: 2, rlhx: 11, rlhy: 4, llex: 6, lley: 2, llhx: 11, llhy: 4,
-      lkx: -10, lky: 6, rkx: 10, rky: 6, lfx: -6, rfx: 6, lfy: 0, rfy: 0,
-    }, kOut],
+    [
+      0.12,
+      {
+        hip: 10,
+        by: 1,
+        hy: -2,
+        nod: -1,
+        jaw: 1,
+        eyes: 3,
+        crack: 1,
+        sign: 0,
+        aura: 0.3,
+        flare: 0.8,
+        ruk: HK.open,
+        luk: HK.open,
+        rlk: HK.open,
+        llk: HK.open,
+        ruex: 7,
+        ruey: -2,
+        ruhx: 12,
+        ruhy: -6,
+        luex: 7,
+        luey: -2,
+        luhx: 12,
+        luhy: -6,
+        rlex: 6,
+        rley: 2,
+        rlhx: 11,
+        rlhy: 4,
+        llex: 6,
+        lley: 2,
+        llhx: 11,
+        llhy: 4,
+        lkx: -10,
+        lky: 6,
+        rkx: 10,
+        rky: 6,
+        lfx: -6,
+        rfx: 6,
+        lfy: 0,
+        rfy: 0,
+      },
+      kOut,
+    ],
     [0.2, { crack: 2 }, kLin],
     [0.28, { crack: 3, flare: 0 }, kLin],
     // Оседает на колено.
-    [0.42, { ...KKNEEL, by: 0, hy: 2, nod: 1, jaw: 0.4, eyes: 2, belly: 0.4, fsx: 1.07, fsy: 0.92, glow: 0.3, mjaw: 0, m2: 0.4, aura: 0 }, kIn],
+    [
+      0.42,
+      {
+        ...KKNEEL,
+        by: 0,
+        hy: 2,
+        nod: 1,
+        jaw: 0.4,
+        eyes: 2,
+        belly: 0.4,
+        fsx: 1.07,
+        fsy: 0.92,
+        glow: 0.3,
+        mjaw: 0,
+        m2: 0.4,
+        aura: 0,
+      },
+      kIn,
+    ],
     [0.55, { fsx: 1, fsy: 1, stars: 1 }, kOut],
     [3.45, { stars: 1 }, kLin],
     // Мотает головой, приходит в себя.
@@ -5350,10 +6964,38 @@ function kTrain(k: KT): (t: number) => KR {
   const b = k.b;
   const d = k.dir;
   const curled: Partial<KR> = {
-    hip: 12, lkx: -6, lky: 13, lfx: -5, lfy: 7, rkx: 6, rky: 13, rfx: 5, rfy: 7,
-    ruex: 2, ruey: 5, ruhx: -7, ruhy: 1, luex: 2, luey: 5, luhx: -7, luhy: 1,
-    rlex: 2, rley: 4, rlhx: -6, rlhy: 6, llex: 2, lley: 4, llhx: -6, llhy: 7,
-    ruk: HK.fist, luk: HK.fist, rlk: HK.fist, llk: HK.fist, nod: 1, eyes: 3, jaw: 1,
+    hip: 12,
+    lkx: -6,
+    lky: 13,
+    lfx: -5,
+    lfy: 7,
+    rkx: 6,
+    rky: 13,
+    rfx: 5,
+    rfy: 7,
+    ruex: 2,
+    ruey: 5,
+    ruhx: -7,
+    ruhy: 1,
+    luex: 2,
+    luey: 5,
+    luhx: -7,
+    luhy: 1,
+    rlex: 2,
+    rley: 4,
+    rlhx: -6,
+    rlhy: 6,
+    llex: 2,
+    lley: 4,
+    llhx: -6,
+    llhy: 7,
+    ruk: HK.fist,
+    luk: HK.fist,
+    rlk: HK.fist,
+    llk: HK.fist,
+    nod: 1,
+    eyes: 3,
+    jaw: 1,
   };
   const keys: KKey[] = [
     [0, { jaw: 1, eyes: 3, hy: -1, lean: -2 }],
@@ -5361,7 +7003,11 @@ function kTrain(k: KT): (t: number) => KR {
     [0.08, { ...curled, frot: d * 1.3, air: 9, hy: 0, lean: 0 }, kOut],
     [0.3, { frot: d * TAU * 0.86, air: 9 }, kLin],
     // Упал на колено, сплющился.
-    [0.42, { ...KKNEEL, frot: d * TAU, air: 0, fsx: 1.12, fsy: 0.86, jaw: 0.5, eyes: 2, nod: 1, hy: 2 }, kIn],
+    [
+      0.42,
+      { ...KKNEEL, frot: d * TAU, air: 0, fsx: 1.12, fsy: 0.86, jaw: 0.5, eyes: 2, nod: 1, hy: 2 },
+      kIn,
+    ],
     [0.54, { fsx: 1, fsy: 1, stars: 1 }, kOut],
     [1.9, { stars: 1 }, kLin],
     [2.05, { stars: 0, hy: 0, nod: 0, hx: 1 }, kIO],
@@ -5384,20 +7030,104 @@ function kDeath(k: KT): (t: number) => KR {
   const keys: KKey[] = [
     [0, {}],
     // Добит: голова назад, крик, руки вразлёт.
-    [0.08, {
-      hy: -2, nod: -1, jaw: 1, eyes: 3, glow: 1, lean: -1, flare: 1, mjaw: 1,
-      ruex: 7, ruey: -3, ruhx: 13, ruhy: -8, ruk: HK.claw, luex: 7, luey: -3, luhx: 13, luhy: -8, luk: HK.claw,
-      rlex: 6, rley: 1, rlhx: 11, rlhy: 1, rlk: HK.open, llex: 6, lley: 1, llhx: 11, llhy: 1, llk: HK.open,
-    }, kOut],
+    [
+      0.08,
+      {
+        hy: -2,
+        nod: -1,
+        jaw: 1,
+        eyes: 3,
+        glow: 1,
+        lean: -1,
+        flare: 1,
+        mjaw: 1,
+        ruex: 7,
+        ruey: -3,
+        ruhx: 13,
+        ruhy: -8,
+        ruk: HK.claw,
+        luex: 7,
+        luey: -3,
+        luhx: 13,
+        luhy: -8,
+        luk: HK.claw,
+        rlex: 6,
+        rley: 1,
+        rlhx: 11,
+        rlhy: 1,
+        rlk: HK.open,
+        llex: 6,
+        lley: 1,
+        llhx: 11,
+        llhy: 1,
+        llk: HK.open,
+      },
+      kOut,
+    ],
     // Колени подламываются.
-    [0.3, { hip: 11, lkx: -8, lky: 4, rkx: 8, rky: 4, lfx: -5, rfx: 5, lfy: 2, rfy: 2, flare: 0.4, lean: 0 }, kIO],
+    [
+      0.3,
+      {
+        hip: 11,
+        lkx: -8,
+        lky: 4,
+        rkx: 8,
+        rky: 4,
+        lfx: -5,
+        rfx: 5,
+        lfy: 2,
+        rfy: 2,
+        flare: 0.4,
+        lean: 0,
+      },
+      kIO,
+    ],
     // На коленях, голова упала.
-    [0.5, {
-      hip: 8, bend: 2, lkx: -7, lky: 1.5, rkx: 7, rky: 1.5, lfx: -3, lfy: 3, rfx: 3, rfy: 3,
-      hy: 2, nod: 2, jaw: 0.3, eyes: 0, glow: 0, flare: 0, aura: 0, mjaw: 0, m2: 0,
-      ruex: 3, ruey: 8, ruhx: 4, ruhy: 15, ruk: HK.open, luex: 3, luey: 8, luhx: 4, luhy: 15, luk: HK.open,
-      rlex: 3, rley: 7, rlhx: 3, rlhy: 13, llex: 3, lley: 7, llhx: 3, llhy: 13, fsx: 1.04, fsy: 0.95,
-    }, kIn],
+    [
+      0.5,
+      {
+        hip: 8,
+        bend: 2,
+        lkx: -7,
+        lky: 1.5,
+        rkx: 7,
+        rky: 1.5,
+        lfx: -3,
+        lfy: 3,
+        rfx: 3,
+        rfy: 3,
+        hy: 2,
+        nod: 2,
+        jaw: 0.3,
+        eyes: 0,
+        glow: 0,
+        flare: 0,
+        aura: 0,
+        mjaw: 0,
+        m2: 0,
+        ruex: 3,
+        ruey: 8,
+        ruhx: 4,
+        ruhy: 15,
+        ruk: HK.open,
+        luex: 3,
+        luey: 8,
+        luhx: 4,
+        luhy: 15,
+        luk: HK.open,
+        rlex: 3,
+        rley: 7,
+        rlhx: 3,
+        rlhy: 13,
+        llex: 3,
+        lley: 7,
+        llhx: 3,
+        llhy: 13,
+        fsx: 1.04,
+        fsy: 0.95,
+      },
+      kIn,
+    ],
     [0.6, { fsx: 1, fsy: 1 }, kOut],
   ];
   return kCompile(keys, b);
@@ -5468,11 +7198,19 @@ function kCrumble(p: Px, lit: Px, t: number): Px {
       if (r < 0.17) {
         // Уголёк уходит вверх и гаснет.
         if (a < 0.5)
-          lit.set(x + (hash(x, y, 2) - 0.5) * a * 12, y - a * 20 - a * a * 10, alpha(r < 0.06 ? hx('#ffc080') : K_EMBER, 1 - a / 0.5));
+          lit.set(
+            x + (hash(x, y, 2) - 0.5) * a * 12,
+            y - a * 20 - a * a * 10,
+            alpha(r < 0.06 ? hx('#ffc080') : K_EMBER, 1 - a / 0.5),
+          );
       } else if (fade > 0) {
         // Пепел оседает в кучку у ног.
         const yy = Math.min(KGY - (hash(x, y, 4) < 0.4 ? 1 : 0), y + a * a * 170);
-        o.set(x + (hash(x, y, 2) - 0.5) * a * 7, yy, alpha(K_ASH[Math.floor(hash(x, y, 6) * 3)], fade));
+        o.set(
+          x + (hash(x, y, 2) - 0.5) * a * 7,
+          yy,
+          alpha(K_ASH[Math.floor(hash(x, y, 6) * 3)], fade),
+        );
       }
     }
   return o;
@@ -5492,7 +7230,12 @@ function kBlitRot(dst: Px, src: Px, cx: number, cy: number, ang: number, a: numb
       if (u < 0 || v < 0 || u >= src.w || v >= src.h) continue;
       const i = (v * src.w + u) * 4;
       if (!src.data[i + 3]) continue;
-      dst.set(Math.round(cx + x), Math.round(cy + y), [src.data[i], src.data[i + 1], src.data[i + 2], Math.round(src.data[i + 3] * a)]);
+      dst.set(Math.round(cx + x), Math.round(cy + y), [
+        src.data[i],
+        src.data[i + 1],
+        src.data[i + 2],
+        Math.round(src.data[i + 3] * a),
+      ]);
     }
 }
 
@@ -5539,8 +7282,21 @@ function kMaskFall(p: Px, t: number, k: KT): void {
 // ---- Кадр: режим мозга → техника, кадр; кеш, зеркало, вспышка ----------
 
 type KTech =
-  | 'idle' | 'run' | 'intro' | 'cut' | 'cleave' | 'bow' | 'pyre' | 'cast'
-  | 'dsit' | 'dmed' | 'dgrid' | 'dcut' | 'broken' | 'train' | 'death';
+  | 'idle'
+  | 'run'
+  | 'intro'
+  | 'cut'
+  | 'cleave'
+  | 'bow'
+  | 'pyre'
+  | 'cast'
+  | 'dsit'
+  | 'dmed'
+  | 'dgrid'
+  | 'dcut'
+  | 'broken'
+  | 'train'
+  | 'death';
 
 interface KQ {
   tech: KTech;
@@ -5704,7 +7460,14 @@ function kRigFn(tech: KTech, k: KT): (t: number) => KR {
 }
 
 /** Путь кисти назад во времени, в координатах текущего кадра. */
-function kPath(at: (t: number) => KR, a: K4, t: number, from: number, now: KR, step = 1 / 72): [number, number][] {
+function kPath(
+  at: (t: number) => KR,
+  a: K4,
+  t: number,
+  from: number,
+  now: KR,
+  step = 1 / 72,
+): [number, number][] {
   const out: [number, number][] = [];
   for (let i = 0; i <= 12; i++) {
     const s = t - i * step;
@@ -5720,15 +7483,24 @@ function kSmearsOf(tech: KTech, t: number, k: KT, at: (t: number) => KR, r: KR):
   const win = (a: number, b: number) => t >= a && t <= b;
   if (tech === 'cut') {
     const T = tCut(k);
-    if (win(T - 2 * KF, T + 2 * KF)) return [{ pts: kPath(at, 'ru', t, T - 2 * KF, r), w: 3, kind: 'cut' }];
+    if (win(T - 2 * KF, T + 2 * KF))
+      return [{ pts: kPath(at, 'ru', t, T - 2 * KF, r), w: 3, kind: 'cut' }];
   }
   if (tech === 'cleave') {
     const T = tClaw(k);
     if (win(T - 2 * KF, T))
-      return (['ru', 'lu'] as K4[]).map((a) => ({ pts: kPath(at, a, t, T - 2 * KF, r), w: 2, kind: 'claw' as const }));
+      return (['ru', 'lu'] as K4[]).map((a) => ({
+        pts: kPath(at, a, t, T - 2 * KF, r),
+        w: 2,
+        kind: 'claw' as const,
+      }));
   }
   if (tech === 'dgrid' && win(GRID_T - 3 * KF, GRID_T + KF))
-    return (['ru', 'lu'] as K4[]).map((a) => ({ pts: kPath(at, a, t, GRID_T - 3 * KF, r), w: 3, kind: 'cut' as const }));
+    return (['ru', 'lu'] as K4[]).map((a) => ({
+      pts: kPath(at, a, t, GRID_T - 3 * KF, r),
+      w: 3,
+      kind: 'cut' as const,
+    }));
   if (tech === 'dcut' && win(DCUT_T - 3 * KF, DCUT_T + 2 * KF))
     return [{ pts: kPath(at, 'ru', t, DCUT_T - 3 * KF, r), w: 3, kind: 'cut' }];
   return [];
@@ -5768,7 +7540,9 @@ function kTrailOf(tech: KTech, t: number, k: KT, at: (t: number) => KR, r: KR): 
   // Разрез — дуга взмаха вокруг контакта, продлённая за концы: воздух
   // рассечён дальше, чем прошла рука. В координатах текущего кадра.
   const rc = at(T + KF);
-  const pts = kPath(at, 'ru', T + KF, T - 2 * KF, rc, 1 / 48).map(([x, y]) => [x + rc.fdx - r.fdx, y + rc.fdy - r.fdy] as [number, number]);
+  const pts = kPath(at, 'ru', T + KF, T - 2 * KF, rc, 1 / 48).map(
+    ([x, y]) => [x + rc.fdx - r.fdx, y + rc.fdy - r.fdy] as [number, number],
+  );
   if (pts.length >= 2) {
     const ext = (a: [number, number], b: [number, number]): [number, number] => {
       const dx = a[0] - b[0];
@@ -5835,7 +7609,8 @@ function kingBuilt(q: KQ): MobFrame {
   }
   const loop = !!LOOPS[q.tech];
   const sec = kSecAt(at, t, loop ? -1e9 : 0);
-  if (q.tech === 'idle' || q.tech === 'dmed') sec.hs += Math.round(Math.sin((t / 2.4) * TAU + 1)) * 0.6;
+  if (q.tech === 'idle' || q.tech === 'dmed')
+    sec.hs += Math.round(Math.sin((t / 2.4) * TAU + 1)) * 0.6;
   const o: KOpt = {
     fi: q.f,
     edge: q.edge,
@@ -5962,7 +7737,16 @@ function kMemOf(m: Mob, pose: MobPose): { s: KMem; fresh: boolean } {
   let s = kMem.get(m.id);
   const fresh = !s || pose.now < s.now - 1e-3 || pose.now - s.now > 3;
   if (!s || fresh) {
-    s = { mode: pose.mode, prev: '', now: pose.now, walk: 0, phase: m.data.phase ?? 0, phAt: -1e9, phTo: 0, dir: 1 };
+    s = {
+      mode: pose.mode,
+      prev: '',
+      now: pose.now,
+      walk: 0,
+      phase: m.data.phase ?? 0,
+      phAt: -1e9,
+      phTo: 0,
+      dir: 1,
+    };
     kMem.set(m.id, s);
   }
   if (pose.mode !== s.mode) {
@@ -5978,7 +7762,8 @@ function kMemOf(m: Mob, pose: MobPose): { s: KMem; fresh: boolean } {
     s.phTo = ph;
   }
   s.phase = ph;
-  if (pose.mode === 'f12_trainhit' && pose.t < 0.2 && Math.abs(m.ky ?? 0) > 1) s.dir = Math.sign(m.ky);
+  if (pose.mode === 'f12_trainhit' && pose.t < 0.2 && Math.abs(m.ky ?? 0) > 1)
+    s.dir = Math.sign(m.ky);
   return { s, fresh };
 }
 
@@ -6010,7 +7795,12 @@ function kingReq(m: Mob, pose: MobPose): KQ {
   };
   const vAim = m.data.vAim;
   if (mode === 'f12_cut' || mode === 'f12_cleave' || mode === 'f12_bow' || mode === 'recover')
-    q.aim = aimOf(vAim ?? (mode === 'f12_bow' || (mode === 'recover' && (m.data.bowCd ?? 0) > 5) ? (m.data.ang ?? m.face) : m.face));
+    q.aim = aimOf(
+      vAim ??
+        (mode === 'f12_bow' || (mode === 'recover' && (m.data.bowCd ?? 0) > 5)
+          ? (m.data.ang ?? m.face)
+          : m.face),
+    );
   const k = kCtx(q);
   const t = Math.max(0, pose.t);
   const at = (tech: KTech, tt: number) => {
@@ -6080,7 +7870,10 @@ function kingReq(m: Mob, pose: MobPose): KQ {
     default: {
       // Только что был столб пламени — встаёт из приседа.
       const tp = (7.5 - (m.data.pyreCd ?? 0)) / k.h;
-      if ((s.prev === 'f12_pyre' || (tp > PYRE_T - 0.05 && tp < PYRE_END)) && t < PYRE_END - PYRE_T) {
+      if (
+        (s.prev === 'f12_pyre' || (tp > PYRE_T - 0.05 && tp < PYRE_END)) &&
+        t < PYRE_END - PYRE_T
+      ) {
         at('pyre', PYRE_T + t);
         break;
       }
@@ -6149,8 +7942,20 @@ registerMobPainter('f12boss', (m: Mob, pose: MobPose) => {
 // Прогрев: первый бой — пробуждение, покой, шаг, рассечение и расщепление в обе стороны.
 registerMobWarm('f12boss', function* () {
   const base: KQ = {
-    tech: 'intro', f: 0, hk: 100, p1: false, rage: false, crack: 0, edge: false,
-    fl: 0, ov: 0, of: 0, dir: 1, aim: 0, flip: false, flash: false,
+    tech: 'intro',
+    f: 0,
+    hk: 100,
+    p1: false,
+    rage: false,
+    crack: 0,
+    edge: false,
+    fl: 0,
+    ov: 0,
+    of: 0,
+    dir: 1,
+    aim: 0,
+    flip: false,
+    flash: false,
   };
   const list: [KTech, boolean, boolean][] = [
     ['intro', true, false],
@@ -6213,7 +8018,10 @@ registerZonePainter('f12_rails', (g, z, px, py, S, time) => {
   const col = v.ghost ? hx('#5affb0') : v.sig === 1 ? AMBER : RED;
   const hz = v.sig === 1 ? 1.6 : v.sig === 2 ? 4.5 : 2;
   const pulse = 0.5 + 0.5 * Math.sin(time * hz * TAU);
-  g.fillStyle = rgba(col, v.sig === 1 ? 0.05 + 0.07 * pulse : v.sig === 2 ? 0.12 + 0.16 * pulse : 0.07);
+  g.fillStyle = rgba(
+    col,
+    v.sig === 1 ? 0.05 + 0.07 * pulse : v.sig === 2 ? 0.12 + 0.16 * pulse : 0.07,
+  );
   g.fillRect(X0, top, X1 - X0, bot - top);
   // Кромки полосы — бегущий пунктир по ходу поезда.
   g.fillStyle = rgba(col, 0.35 + 0.45 * pulse);
@@ -6417,16 +8225,44 @@ export function shrinePx(f: number): Px {
   const wood = tn('#1a0a0c', '#2e1014', '#4a181c', '#6a2426');
   const tile = tn('#0e0c12', '#1c1822', '#2a2432', '#3c3446');
   // Стена-тело.
-  polyShade(p, [[16, 34], [80, 34], [82, G - 8], [14, G - 8]], [SHRINE[1], SHRINE[2], SHRINE[3], SHRINE[4]], -0.1);
+  polyShade(
+    p,
+    [
+      [16, 34],
+      [80, 34],
+      [82, G - 8],
+      [14, G - 8],
+    ],
+    [SHRINE[1], SHRINE[2], SHRINE[3], SHRINE[4]],
+    -0.1,
+  );
   for (let x = 18; x < 80; x += 6) for (let y = 36; y < G - 9; y++) p.set(x, y, SHRINE[0]);
   // Столбы из лака.
-  for (const x0 of [12, 78]) polyShade(p, [[x0, 30], [x0 + 6, 30], [x0 + 6, G - 6], [x0, G - 6]], wood);
+  for (const x0 of [12, 78])
+    polyShade(
+      p,
+      [
+        [x0, 30],
+        [x0 + 6, 30],
+        [x0 + 6, G - 6],
+        [x0, G - 6],
+      ],
+      wood,
+    );
   // Пасть вместо дверей.
   const my = 58;
   p.ell(cx, my, 17, 12.5, (x, y) => {
     const d = Math.hypot((x + 0.5 - cx) / 17, (y + 0.5 - my) / 12.5);
     const hot = 1 - d;
-    return hot > 0.55 ? (f ? hx('#ff7a4a') : hx('#ff5a3a')) : hot > 0.3 ? hx('#c01a24') : hot > 0.1 ? hx('#6a0a14') : hx('#2a0408');
+    return hot > 0.55
+      ? f
+        ? hx('#ff7a4a')
+        : hx('#ff5a3a')
+      : hot > 0.3
+        ? hx('#c01a24')
+        : hot > 0.1
+          ? hx('#6a0a14')
+          : hx('#2a0408');
   });
   // Клыки сверху и снизу.
   for (let i = -6; i <= 6; i++) {
@@ -6434,12 +8270,36 @@ export function shrinePx(f: number): Px {
     const topY = my - 12.5 * Math.sqrt(Math.max(0, 1 - ((tx - cx) / 17) ** 2));
     const botY = my + 12.5 * Math.sqrt(Math.max(0, 1 - ((tx - cx) / 17) ** 2));
     const L = 4 - Math.abs(i) * 0.35;
-    poly(p, [[tx - 1.1, topY - 0.5], [tx + 1.1, topY - 0.5], [tx, topY + L]], BONE[i % 2 ? 2 : 3]);
-    poly(p, [[tx - 1.1, botY + 0.5], [tx + 1.1, botY + 0.5], [tx, botY - L]], BONE[i % 2 ? 3 : 2]);
+    poly(
+      p,
+      [
+        [tx - 1.1, topY - 0.5],
+        [tx + 1.1, topY - 0.5],
+        [tx, topY + L],
+      ],
+      BONE[i % 2 ? 2 : 3],
+    );
+    poly(
+      p,
+      [
+        [tx - 1.1, botY + 0.5],
+        [tx + 1.1, botY + 0.5],
+        [tx, botY - L],
+      ],
+      BONE[i % 2 ? 3 : 2],
+    );
   }
   // Глаза храма над пастью.
   for (const s of [-1, 1]) {
-    poly(p, [[cx + s * 7, 42], [cx + s * 15, 39], [cx + s * 14, 43]], f ? hx('#ffd0a0') : hx('#ff4a3a'));
+    poly(
+      p,
+      [
+        [cx + s * 7, 42],
+        [cx + s * 15, 39],
+        [cx + s * 14, 43],
+      ],
+      f ? hx('#ffd0a0') : hx('#ff4a3a'),
+    );
     p.set(cx + s * 11, 41, WHITE);
   }
   // Нижний карниз и кости у подножия.
@@ -6455,13 +8315,55 @@ export function shrinePx(f: number): Px {
     p.set(bx + 1, by, INK);
   }
   // Нижний ярус крыши: изогнутые карнизы.
-  poly(p, [[2, 22], [10, 31], [86, 31], [94, 22], [84, 27], [12, 27]], wood[2]);
-  polyShade(p, [[12, 27], [84, 27], [74, 18], [22, 18]], tile);
+  poly(
+    p,
+    [
+      [2, 22],
+      [10, 31],
+      [86, 31],
+      [94, 22],
+      [84, 27],
+      [12, 27],
+    ],
+    wood[2],
+  );
+  polyShade(
+    p,
+    [
+      [12, 27],
+      [84, 27],
+      [74, 18],
+      [22, 18],
+    ],
+    tile,
+  );
   for (let x = 12; x < 85; x++) p.set(x, 27, LACQUER[3]);
-  for (let x = 24; x < 74; x += 4) for (let y = 19; y < 27; y++) p.set(x + Math.round((y - 19) * 0.2 * Math.sign(x - cx)), y, tile[0]);
+  for (let x = 24; x < 74; x += 4)
+    for (let y = 19; y < 27; y++)
+      p.set(x + Math.round((y - 19) * 0.2 * Math.sign(x - cx)), y, tile[0]);
   // Верхний ярус.
-  poly(p, [[16, 12], [22, 19], [74, 19], [80, 12], [72, 16], [24, 16]], wood[2]);
-  polyShade(p, [[24, 16], [72, 16], [62, 7], [34, 7]], tile);
+  poly(
+    p,
+    [
+      [16, 12],
+      [22, 19],
+      [74, 19],
+      [80, 12],
+      [72, 16],
+      [24, 16],
+    ],
+    wood[2],
+  );
+  polyShade(
+    p,
+    [
+      [24, 16],
+      [72, 16],
+      [62, 7],
+      [34, 7],
+    ],
+    tile,
+  );
   for (let x = 24; x < 73; x++) p.set(x, 16, LACQUER[3]);
   // Конёк: золотые рога.
   for (const s of [-1, 1]) {
@@ -6578,7 +8480,15 @@ registerShotPainter('f12_tear', (_s, time) => {
     const p = new Px(8, 10);
     const T = tn('#4a0610', '#8a1020', '#c8283a', '#ff8a9a');
     shadeEll(p, 4, 6.2, 2.6, 2.8, T);
-    poly(p, [[2.4, 5], [5.6, 5], [4, 1]], T[2]);
+    poly(
+      p,
+      [
+        [2.4, 5],
+        [5.6, 5],
+        [4, 1],
+      ],
+      T[2],
+    );
     p.set(3, 5, f ? WHITE : T[3]);
     p.outline(INK);
     return { p, ax: 4, ay: 9 };
@@ -6694,7 +8604,16 @@ registerItemArt('f12_snack', () => {
 registerItemArt('f12_stew', () => {
   // Тушёнка обходчика: банка с синей этикеткой.
   const p = new Px(10, 10);
-  polyShade(p, [[2, 3], [8, 3], [8, 9], [2, 9]], [STEEL[1], STEEL[2], STEEL[3], STEEL[4]]);
+  polyShade(
+    p,
+    [
+      [2, 3],
+      [8, 3],
+      [8, 9],
+      [2, 9],
+    ],
+    [STEEL[1], STEEL[2], STEEL[3], STEEL[4]],
+  );
   p.rect(2, 5, 8, 7, hx('#2a4a8a'));
   p.set(4, 6, hx('#e8d8a0'));
   p.set(5, 6, hx('#e8d8a0'));

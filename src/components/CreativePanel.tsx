@@ -106,8 +106,8 @@ function Panel({ onClose }: { onClose: () => void }) {
           ранг, кирку и снаряжение выбираешь сам.
         </p>
         <p className="crv__lead">
-          Настоящее сохранение не трогается: креатив пишется в отдельные записи. Выйдешь — всё вернётся
-          как было, а сделанное в креативе останется в креативе.
+          Настоящее сохранение не трогается: креатив пишется в отдельные записи. Выйдешь — всё
+          вернётся как было, а сделанное в креативе останется в креативе.
         </p>
         <button
           type="button"
@@ -233,7 +233,11 @@ function Panel({ onClose }: { onClose: () => void }) {
           >
             Боссы готовы
           </button>
-          <button type="button" className="gx-btn gx-btn--sm" onClick={() => setDungeon({ stash: true })}>
+          <button
+            type="button"
+            className="gx-btn gx-btn--sm"
+            onClick={() => setDungeon({ stash: true })}
+          >
             Склад по 99
           </button>
         </div>

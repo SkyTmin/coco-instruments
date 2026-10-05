@@ -4745,7 +4745,7 @@ function kingletFrame(m: Mob, pose: MobPose): MobFrame {
   let sx = 1;
   let sy = 1;
   let dx = 0;
-  let dy = 0;
+  const dy = 0;
   let rot = 0;
   let linger: number | undefined;
   const mode = pose.mode;

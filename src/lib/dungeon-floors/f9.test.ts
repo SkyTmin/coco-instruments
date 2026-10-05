@@ -74,7 +74,8 @@ function field(s: Sim | null, tx: number, ty: number, pass: Set<number> = new Se
   return f;
 }
 
-const solid = (s: Sim, x: number, y: number) => !walkableTile(s.tiles[Math.floor(y) * W + Math.floor(x)]);
+const solid = (s: Sim, x: number, y: number) =>
+  !walkableTile(s.tiles[Math.floor(y) * W + Math.floor(x)]);
 
 interface BotState {
   lastAtk: number;
@@ -182,9 +183,19 @@ function dodge(s: Sim, st: BotState, inp: SimInput): boolean {
     const oy = t.y ?? m.y;
     let hit = false;
     if (t.shape === 'line')
-      hit = strikeHits({ shape: 'line', x: ox, y: oy, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 }, h.x, h.y, h.r + 0.3);
+      hit = strikeHits(
+        { shape: 'line', x: ox, y: oy, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 },
+        h.x,
+        h.y,
+        h.r + 0.3,
+      );
     else if (t.shape === 'cone')
-      hit = strikeHits({ shape: 'cone', x: ox, y: oy, r: t.r, ang: t.ang, arc: t.arc, warn: 1, dmg: 0 }, h.x, h.y, h.r + 0.3);
+      hit = strikeHits(
+        { shape: 'cone', x: ox, y: oy, r: t.r, ang: t.ang, arc: t.arc, warn: 1, dmg: 0 },
+        h.x,
+        h.y,
+        h.r + 0.3,
+      );
     else if ((t.shape === 'circle' || t.shape === 'ring') && m.kind !== 'f9_stump')
       hit = Math.hypot(h.x - ox, h.y - oy) < t.r + h.r + 0.3;
     if (!hit) continue;
@@ -236,7 +247,11 @@ function dodge(s: Sim, st: BotState, inp: SimInput): boolean {
     }
   }
   // Пиявка присосалась — стряхнуть рывком.
-  if (s.mobs.some((m) => m.kind === 'f9_leech' && m.mode === 'latch') && h.dashCd <= 0 && notice(st, `l${Math.floor(s.time)}`)[0] < 0.4) {
+  if (
+    s.mobs.some((m) => m.kind === 'f9_leech' && m.mode === 'latch') &&
+    h.dashCd <= 0 &&
+    notice(st, `l${Math.floor(s.time)}`)[0] < 0.4
+  ) {
     inp.dash = true;
     inp.mx = Math.cos(h.face + Math.PI);
     inp.my = Math.sin(h.face + Math.PI);
@@ -328,7 +343,11 @@ function hydraBot(s: Sim, st: BotState): SimInput {
     if ((stump.data.can ?? 0) > 0 || hasFire) {
       const d = Math.hypot(stump.x - h.x, stump.y - h.y);
       if (d > SWORD.reach * 0.7) goTo(s, st, stump.x, stump.y, inp);
-      if (d < SWORD.reach + stump.r && s.time - st.lastAtk > 0.14 && (stump.data.ghost ?? 0) === 0) {
+      if (
+        d < SWORD.reach + stump.r &&
+        s.time - st.lastAtk > 0.14 &&
+        (stump.data.ghost ?? 0) === 0
+      ) {
         inp.attack = true;
         inp.aim = { x: stump.x - h.x, y: stump.y - h.y };
         st.lastAtk = s.time;
@@ -336,7 +355,9 @@ function hydraBot(s: Sim, st: BotState): SimInput {
       return inp;
     }
     const lit = fs.arena?.braziers.filter((p) => !fs.arena!.out.has(p.id)) ?? [];
-    const br = lit.sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0];
+    const br = lit.sort(
+      (a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y),
+    )[0];
     // Голова вплотную — сперва отмахнуться.
     const close = heads.find((m) => Math.hypot(m.x - h.x, m.y - h.y) < 1.4);
     if (close) return hitNear(s, st, inp, close) ? inp : inp;
@@ -440,7 +461,9 @@ describe('этаж 9: гидра', () => {
     expect(els).toContain(EL.bolt);
     expect(els).toContain(EL.light);
     const A = f9State(s).arena!;
-    expect(A.shore.some((i) => s.tiles[i] === Tile.Hazard && s.world.mark[i] === F9_MARK.flood)).toBe(true);
+    expect(
+      A.shore.some((i) => s.tiles[i] === Tile.Hazard && s.world.mark[i] === F9_MARK.flood),
+    ).toBe(true);
     // 0,5 → две жаровни гаснут.
     body.hp = body.maxHp * 0.49;
     stepSim(s, DT, NO_INPUT);
@@ -465,7 +488,9 @@ describe('этаж 9: гидра', () => {
     for (let k = 0; k < 5; k++) stepSim(s, DT, NO_INPUT);
     expect(s.boss!.state).toBe('idle');
     expect(A.pool.every((i) => s.tiles[i] === Tile.Deep)).toBe(true);
-    expect(A.shore.every((i) => s.tiles[i] !== Tile.Hazard || s.world.mark[i] !== F9_MARK.flood)).toBe(true);
+    expect(
+      A.shore.every((i) => s.tiles[i] !== Tile.Hazard || s.world.mark[i] !== F9_MARK.flood),
+    ).toBe(true);
     expect(s.mobs.some((m) => m.kind === 'f9_stump')).toBe(false);
     void HYDRA_NOTCH;
   });
@@ -619,7 +644,9 @@ describe('этаж 9: круги', () => {
   });
 
   it('встал в круг — вспышка в точке выхода, потом перенос; сошёл раньше — отмена', () => {
-    const r = st0.rings.find((x) => x.kind === 'pair' && x.k === 1 && x.area === F9_RUINS && x.y > 250)!;
+    const r = st0.rings.find(
+      (x) => x.kind === 'pair' && x.k === 1 && x.area === F9_RUINS && x.y > 250,
+    )!;
     const to = st0.rings[r.to];
     const s = sim(8, 5, r.x + 0.5, r.y + 1.5, 2);
     s.hero.inv = 99;
@@ -628,7 +655,11 @@ describe('этаж 9: круги', () => {
     s.hero.y = r.y + 0.5;
     stepSim(s, DT, NO_INPUT);
     // Вспышка на том конце — сразу.
-    expect(s.zones.some((z) => z.art === 'f9_warp_out' && Math.hypot(z.x - to.x - 0.5, z.y - to.y - 0.5) < 0.1)).toBe(true);
+    expect(
+      s.zones.some(
+        (z) => z.art === 'f9_warp_out' && Math.hypot(z.x - to.x - 0.5, z.y - to.y - 0.5) < 0.1,
+      ),
+    ).toBe(true);
     const w0 = s.warps;
     for (let k = 0; k < (WARP_T * 60) / 2; k++) stepSim(s, DT, NO_INPUT);
     expect(s.warps).toBe(w0);
@@ -816,7 +847,8 @@ function openSpot(area: string, r = 3, skip = 0): [number, number] {
       for (let dy = -r; dy <= r && ok; dy++)
         for (let dx = -r; dx <= r && ok; dx++) {
           const i = (y + dy) * W + x + dx;
-          if (world.tiles[i] !== Tile.Floor || isRingMark(world.mark[i]) || objCells.has(i)) ok = false;
+          if (world.tiles[i] !== Tile.Floor || isRingMark(world.mark[i]) || objCells.has(i))
+            ok = false;
         }
       if (ok && n++ >= skip) return [x + 0.5, y + 0.5];
     }
@@ -925,7 +957,9 @@ describe('этаж 9: монстры', () => {
 
   it('корневая хваталка: невидима в трясине, круг корней держит, потом открыта', () => {
     const bog = [...Array(world.h * W).keys()].find(
-      (i) => world.mark[i] === F9_MARK.bog && world.rowArea[Math.floor(i / W)] === F9_RUINS &&
+      (i) =>
+        world.mark[i] === F9_MARK.bog &&
+        world.rowArea[Math.floor(i / W)] === F9_RUINS &&
         [1, -1, W, -W].every((d) => world.mark[i + d] === F9_MARK.bog),
     )!;
     const s = sim(8, 5, cellX(bog) + 1, cellY(bog), 25);
@@ -1022,7 +1056,16 @@ describe('этаж 9: монстры', () => {
   });
 
   it('монстры этажа не застревают в стенах и воде', () => {
-    const kinds = ['f9_lizard', 'f9_toad', 'f9_kobold', 'f9_serpent', 'f9_wisp', 'f9_leech', 'f9_priest', 'f9_hoarder'];
+    const kinds = [
+      'f9_lizard',
+      'f9_toad',
+      'f9_kobold',
+      'f9_serpent',
+      'f9_wisp',
+      'f9_leech',
+      'f9_priest',
+      'f9_hoarder',
+    ];
     let stuck = 0;
     let checks = 0;
     const spots: [string, number][] = [

@@ -161,7 +161,15 @@ function polyShade(p: Px, pts: [number, number][], t: Tones, bias = 0): void {
 }
 
 /** Линия (толщиной `w`). */
-export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  c: RGBA,
+  w = 1,
+): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -2087,18 +2095,7 @@ const L0: LRig = {
 type LKf = [number, Partial<LRig>, LEase?];
 
 /** Каналы «да/нет» и точки, которые меняются скачком. */
-const LSTEP = new Set<LKey>([
-  'fz',
-  'bz',
-  'fpin',
-  'bpin',
-  'fpx',
-  'fpy',
-  'bpx',
-  'bpy',
-  'gl',
-  'fdir',
-]);
+const LSTEP = new Set<LKey>(['fz', 'bz', 'fpin', 'bpin', 'fpx', 'fpy', 'bpx', 'bpy', 'gl', 'fdir']);
 /** Запаздывание частей: полы, маятник, голова смотрят позу чуть в прошлом. */
 const LLAG: Partial<Record<LKey, number>> = { hem: 0.07, pend: 0.1, hx: 0.04, hy: 0.04 };
 
@@ -4407,9 +4404,7 @@ function lordBase(q: LReq): MobFrame {
   // воротник рисуются с отражёнными углами, и после отражения кадра их
   // стрелки снова идут по часовой (движковое `sx < 0` отразило бы и их).
   const own = r.fdir >= 0.5;
-  const rd = q.left
-    ? { ...r, fm: own ? r.fm : -r.fm, fh: own ? r.fh : -r.fh, halo: -r.halo }
-    : r;
+  const rd = q.left ? { ...r, fm: own ? r.fm : -r.fm, fh: own ? r.fh : -r.fh, halo: -r.halo } : r;
   const pl = paintLord(rd, o);
   let p: Px = pl.p;
   let lit: Px = pl.lit;

@@ -34,15 +34,7 @@ import { registerBoss, registerBrain, registerFloor } from '../dungeon-ai';
 import type { BrainCtx, SimApi, ZoneIn } from '../dungeon-ai';
 import type { BossFight, Mob, Prop, Sim, Zone } from '../dungeon-sim';
 import type { Light } from '../dungeon-world';
-import {
-  F9_LAIR,
-  F9_MARK,
-  F9_MAZE,
-  F9_RUINS,
-  isBogMark,
-  isRingMark,
-  isWaterMark,
-} from './f9';
+import { F9_LAIR, F9_MARK, F9_MAZE, F9_RUINS, isBogMark, isRingMark, isWaterMark } from './f9';
 
 const TAU = Math.PI * 2;
 const hypot = Math.hypot;
@@ -122,7 +114,8 @@ function zoneId(sim: Sim, api: SimApi, z: ZoneX): number {
 }
 
 /** Зона-картинка (`api.vfx`), `above` — поверх темноты. */ // v2.86 — только рисунок
-function vfx(sim: Sim, api: SimApi, z: ZoneX, above = false): void { // v2.86 — только рисунок
+function vfx(sim: Sim, api: SimApi, z: ZoneX, above = false): void {
+  // v2.86 — только рисунок
   api.vfx(sim, above ? { ...z, above: true } : z); // v2.86 — только рисунок
 } // v2.86 — только рисунок
 const zoneById = (sim: Sim, id: number): Zone | undefined =>
@@ -426,7 +419,9 @@ function scan(sim: Sim): F9State {
     const byK = (list: number[]) =>
       list
         .map((i) => ringAt.get(i)!)
-        .sort((a, b) => rings[a].k - rings[b].k || rings[a].y - rings[b].y || rings[a].x - rings[b].x);
+        .sort(
+          (a, b) => rings[a].k - rings[b].k || rings[a].y - rings[b].y || rings[a].x - rings[b].x,
+        );
     const s = byK(slots);
     const d = byK(dests);
     hall = {
@@ -588,7 +583,12 @@ function stateOf(sim: Sim): F9State {
 export const f9State = (sim: Sim) => stateOf(sim);
 
 /** Сказать один раз за `gap` секунд. */
-function sayOnce(sim: Sim, key: string, gap: number, e: { what: string; text: string; sub?: string }) {
+function sayOnce(
+  sim: Sim,
+  key: string,
+  gap: number,
+  e: { what: string; text: string; sub?: string },
+) {
   const st = stateOf(sim);
   if (sim.time - (st.said[key] ?? -1e9) < gap) return;
   st.said[key] = sim.time;
@@ -638,7 +638,8 @@ function updateRingView(sim: Sim, st: F9State): void {
     let s: number = RS.on;
     if (r.kind === 'exit') s = RS.exit;
     else if (r.kind === 'trap') s = RS.trap;
-    else if (spin && (r.kind === 'slot' || r.kind === 'dest') && inBox(st.hall!, r.x, r.y)) s = RS.spin;
+    else if (spin && (r.kind === 'slot' || r.kind === 'dest') && inBox(st.hall!, r.x, r.y))
+      s = RS.spin;
     else if (r.k === 3 && !st.awake3 && r.area !== F9_LAIR) s = RS.dormant;
     else if (!ringActive(sim, st, ri)) s = RS.off;
     if (st.charge && (st.charge.ring === ri || st.rings[st.charge.ring].to === ri)) s = RS.charge;
@@ -674,7 +675,11 @@ function stepRings(sim: Sim, st: F9State, dt: number, api: SimApi): void {
     const r = st.rings[c.ring];
     const [rx, ry] = ringCenter(r);
     const zin = zoneById(sim, c.zin);
-    if (hypot(h.x - rx, h.y - ry) > RING_R + 0.18 || !ringActive(sim, st, c.ring) || heroDown(sim)) {
+    if (
+      hypot(h.x - rx, h.y - ry) > RING_R + 0.18 ||
+      !ringActive(sim, st, c.ring) ||
+      heroDown(sim)
+    ) {
       // Сошёл — перенос отменён, вспышки гаснут.
       killZone(sim, c.zin);
       killZone(sim, c.zout);
@@ -914,7 +919,9 @@ function stepChapel(sim: Sim, st: F9State, dt: number, api: SimApi): void {
     const i = cellOf(sim, h.x, h.y);
     if (!c.cells.has(i)) return;
     const W = sim.world.w;
-    const nearDoor = c.doors.some((d) => hypot((d % W) + 0.5 - h.x, Math.floor(d / W) + 0.5 - h.y) < 2.6);
+    const nearDoor = c.doors.some(
+      (d) => hypot((d % W) + 0.5 - h.x, Math.floor(d / W) + 0.5 - h.y) < 2.6,
+    );
     if (nearDoor) return;
     c.state = 1;
     c.t = sim.time;
@@ -1188,7 +1195,9 @@ function stepSwamp(sim: Sim, st: F9State, dt: number, api: SimApi): void {
   st.leechT -= dt;
   if (st.leechT <= 0) {
     st.leechT = 7 + sim.rng() * 5;
-    const wet = st.shore.some((i) => hypot((i % W) + 0.5 - h.x, Math.floor(i / W) + 0.5 - h.y) < 2.4);
+    const wet = st.shore.some(
+      (i) => hypot((i % W) + 0.5 - h.x, Math.floor(i / W) + 0.5 - h.y) < 2.4,
+    );
     if (wet && !nearLift && live < 16) leap(sim, st, api, 1 + Math.floor(sim.rng() * 2), 5);
   }
   // Болотный огонь — над водой, где темно.
@@ -1257,7 +1266,10 @@ registerBrain('f9_lizard', {
         const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
         const busy = sim.mobs.some(
           (o) =>
-            o !== m && o.kind === 'f9_lizard' && (o.mode === 'aim' || o.mode === 'lunge') && hypot(o.x - m.x, o.y - m.y) < 7,
+            o !== m &&
+            o.kind === 'f9_lizard' &&
+            (o.mode === 'aim' || o.mode === 'lunge') &&
+            hypot(o.x - m.x, o.y - m.y) < 7,
         );
         if (see && dist > 1.5 && dist < LUNGE - 0.2 && m.cd <= 0 && !busy) {
           m.dir = Math.atan2(dy, dx);
@@ -1383,7 +1395,8 @@ registerBrain('f9_toad', {
         }
         // Держит дистанцию плевка: близко — отпрыгивает.
         let dir: [number, number];
-        if (dist < 2.8 && see) dir = api.flowDir(sim, m.x, m.y, true) ?? [-dx / (dist || 1), -dy / (dist || 1)];
+        if (dist < 2.8 && see)
+          dir = api.flowDir(sim, m.x, m.y, true) ?? [-dx / (dist || 1), -dy / (dist || 1)];
         else dir = api.chaseDir(sim, m, h.x, h.y);
         const hop = 0.3 + 1.3 * Math.max(0, Math.sin(m.t * 7 + m.id));
         const k = dist < 5.5 && dist > 2.8 ? 0.25 : 1;
@@ -1632,11 +1645,18 @@ registerBrain('f9_serpent', {
         // Голову доводит до героя, потом взгляд застывает.
         if (m.t < GAZE_T * 0.5) m.dir = Math.atan2(dy, dx);
         m.face = m.dir;
-        m.tele = { shape: 'cone', r: GAZE_R, arc: GAZE_ARC, ang: m.dir, k: Math.min(1, m.t / GAZE_T) };
+        m.tele = {
+          shape: 'cone',
+          r: GAZE_R,
+          arc: GAZE_ARC,
+          ang: m.dir,
+          k: Math.min(1, m.t / GAZE_T),
+        };
         if (m.t > GAZE_T - 0.25) m.danger = GAZE_R + 0.3;
         if (m.t >= GAZE_T) {
           const off = Math.abs(angDiff(Math.atan2(dy, dx), m.dir));
-          const inCone = dist < GAZE_R + h.r && off < GAZE_ARC / 2 + Math.atan(h.r / Math.max(0.3, dist));
+          const inCone =
+            dist < GAZE_R + h.r && off < GAZE_ARC / 2 + Math.atan(h.r / Math.max(0.3, dist));
           // За стеной не достанет: взгляд идёт по прямой.
           const seen = inCone && api.lineOfSight(sim, m.x, m.y, h.x, h.y);
           const hitNow = seen && canHit(sim);
@@ -1741,7 +1761,7 @@ registerBrain('f9_wisp', {
         const l = hypot(ddx, ddy) || 1;
         const bob = Math.sin(sim.time * 2.3 + m.id) * 0.5;
         const sp = dist > 7 ? m.speed : m.speed * 0.6;
-        api.steer(sim, m, ddx / l + -ddy / l * bob, ddy / l + (ddx / l) * bob, sp, dt);
+        api.steer(sim, m, ddx / l + (-ddy / l) * bob, ddy / l + (ddx / l) * bob, sp, dt);
         if (dist > 6.5) m.cd = Math.min(m.cd, 0.5);
         return;
       }
@@ -1868,12 +1888,21 @@ registerBrain('f9_root', {
           m.data.gx = h.x;
           m.data.gy = h.y;
         }
-        m.tele = { shape: 'circle', r: GRAB_R, k: Math.min(1, m.t / GRAB_T), x: m.data.gx, y: m.data.gy };
+        m.tele = {
+          shape: 'circle',
+          r: GRAB_R,
+          k: Math.min(1, m.t / GRAB_T),
+          x: m.data.gx,
+          y: m.data.gy,
+        };
         if (m.t > GRAB_T - 0.25) m.danger = 9;
         if (m.t >= GRAB_T) {
           const hit = hypot(h.x - m.data.gx, h.y - m.data.gy) < GRAB_R + h.r;
           if (hit && canHit(sim)) {
-            api.hurtHero(sim, m.dmg * 0.8, m.data.gx, m.data.gy, 0, m.kind, { kind: 'slow', dur: 1.5 });
+            api.hurtHero(sim, m.dmg * 0.8, m.data.gx, m.data.gy, 0, m.kind, {
+              kind: 'slow',
+              dur: 1.5,
+            });
             api.heroStatus(sim, 'slow', 1.5, 0.7);
           }
           api.zone(sim, { x: m.data.gx, y: m.data.gy, r: GRAB_R, life: 0.9, art: 'f9_grab' });
@@ -2050,7 +2079,13 @@ registerBrain('f9_priest', {
             art: 'f9_rune',
           });
           // Точка выхода — у ног жреца, вспышка видна сразу.
-          const p = floorNear(sim, api, m.x + Math.cos(Math.atan2(dy, dx)) * 1.1, m.y + Math.sin(Math.atan2(dy, dx)) * 1.1, 2);
+          const p = floorNear(
+            sim,
+            api,
+            m.x + Math.cos(Math.atan2(dy, dx)) * 1.1,
+            m.y + Math.sin(Math.atan2(dy, dx)) * 1.1,
+            2,
+          );
           m.data.px = p ? p[0] : m.x;
           m.data.py = p ? p[1] : m.y;
           m.data.oz = zoneId(sim, api, {
@@ -2066,7 +2101,8 @@ registerBrain('f9_priest', {
         }
         // Держится подальше: подходит на 5–7, близко — отступает.
         let dir: [number, number];
-        if (dist < 4 && see) dir = api.flowDir(sim, m.x, m.y, true) ?? [-dx / (dist || 1), -dy / (dist || 1)];
+        if (dist < 4 && see)
+          dir = api.flowDir(sim, m.x, m.y, true) ?? [-dx / (dist || 1), -dy / (dist || 1)];
         else dir = api.chaseDir(sim, m, h.x, h.y);
         const k = dist < 7 && dist > 4 ? 0.2 : 1;
         api.steer(sim, m, dir[0], dir[1], m.speed * k, dt);
@@ -2076,8 +2112,16 @@ registerBrain('f9_priest', {
         m.vx *= 0.6;
         m.vy *= 0.6;
         m.face = Math.atan2(dy, dx);
-        m.tele = { shape: 'ring', r: RUNE_R, w: 0.14, k: Math.min(1, m.t / RUNE_T), x: m.data.gx, y: m.data.gy };
-        if (m.t > RUNE_T - 0.25 && hypot(h.x - m.data.gx, h.y - m.data.gy) < RUNE_R + 0.3) m.danger = 99;
+        m.tele = {
+          shape: 'ring',
+          r: RUNE_R,
+          w: 0.14,
+          k: Math.min(1, m.t / RUNE_T),
+          x: m.data.gx,
+          y: m.data.gy,
+        };
+        if (m.t > RUNE_T - 0.25 && hypot(h.x - m.data.gx, h.y - m.data.gy) < RUNE_R + 0.3)
+          m.danger = 99;
         if (m.t >= RUNE_T) {
           const inside = hypot(h.x - m.data.gx, h.y - m.data.gy) < RUNE_R + h.r * 0.3;
           if (inside && canHit(sim)) {
@@ -2196,7 +2240,16 @@ const stumpsOf = (sim: Sim) => sim.mobs.filter((m) => m.kind === 'f9_stump' && m
 
 /** Основание шеи на краю тела: головы веером вокруг. */
 function anchorOf(body: Mob, slot: number): [number, number] {
-  const angs = [Math.PI / 2, Math.PI / 2 - 1.05, Math.PI / 2 + 1.05, -Math.PI / 2, -0.4, Math.PI + 0.4, -Math.PI / 2 - 0.9, -Math.PI / 2 + 0.9];
+  const angs = [
+    Math.PI / 2,
+    Math.PI / 2 - 1.05,
+    Math.PI / 2 + 1.05,
+    -Math.PI / 2,
+    -0.4,
+    Math.PI + 0.4,
+    -Math.PI / 2 - 0.9,
+    -Math.PI / 2 + 0.9,
+  ];
   const a = angs[slot % angs.length];
   return [body.x + Math.cos(a) * 1.25, body.y + Math.sin(a) * 0.95];
 }
@@ -2209,7 +2262,14 @@ function freeSlot(sim: Sim): number {
   return Math.floor(sim.rng() * 8);
 }
 
-function spawnHead(sim: Sim, api: SimApi, el: number, slot: number, x?: number, y?: number): Mob | null {
+function spawnHead(
+  sim: Sim,
+  api: SimApi,
+  el: number,
+  slot: number,
+  x?: number,
+  y?: number,
+): Mob | null {
   const body = bodyOf(sim);
   if (!body) return null;
   const [ax, ay] = anchorOf(body, slot);
@@ -2275,7 +2335,7 @@ function headBusy(sim: Sim, except: Mob): number {
 /** Где голова хочет быть: к герою, но на длину шеи, веером по номеру. */
 function headSpot(sim: Sim, m: Mob, ax: number, ay: number): [number, number] {
   const h = sim.hero;
-  const a = Math.atan2(h.y - ay, h.x - ax) + ((m.data.slot ?? 0) % 3 - 1) * 0.35;
+  const a = Math.atan2(h.y - ay, h.x - ax) + (((m.data.slot ?? 0) % 3) - 1) * 0.35;
   const d = Math.min(NECK, Math.max(1.2, hypot(h.x - ax, h.y - ay) - 1.6));
   return [ax + Math.cos(a) * d, ay + Math.sin(a) * d];
 }
@@ -2346,7 +2406,15 @@ registerBrain('f9_head', {
         const ddy = ty - m.y;
         const l = hypot(ddx, ddy);
         const sway = Math.sin(sim.time * 1.8 + m.id) * 0.6;
-        if (l > 0.3) api.steer(sim, m, ddx / l - (ddy / l) * sway * 0.3, ddy / l + (ddx / l) * sway * 0.3, m.speed * haste, dt);
+        if (l > 0.3)
+          api.steer(
+            sim,
+            m,
+            ddx / l - (ddy / l) * sway * 0.3,
+            ddy / l + (ddx / l) * sway * 0.3,
+            m.speed * haste,
+            dt,
+          );
         else {
           m.vx *= 0.8;
           m.vy *= 0.8;
@@ -2385,7 +2453,12 @@ registerBrain('f9_head', {
           if (hurt) {
             m.data.target = hurt.id;
             api.setMode(m, 'heal');
-            vfx(sim, api, { x: m.x, y: m.y, r: 0.5, life: 1.5, art: 'f9_healbeam', from: m.id, tgt: hurt.id }, true); // v2.86 — только рисунок
+            vfx(
+              sim,
+              api,
+              { x: m.x, y: m.y, r: 0.5, life: 1.5, art: 'f9_healbeam', from: m.id, tgt: hurt.id },
+              true,
+            ); // v2.86 — только рисунок
             return;
           }
           if (dist > 3) return;
@@ -2504,11 +2577,30 @@ function castElement(sim: Sim, api: SimApi, m: Mob, el: number, haste: number): 
       sim,
       m,
       Math.atan2(ty - m.y, tx - m.x),
-      { speed: 6.5, r: 0.55, life: 2, dmg: 0.9, art: 'f9_iceball', status: 'chill', dur: 1.6, lob: true },
+      {
+        speed: 6.5,
+        r: 0.55,
+        life: 2,
+        dmg: 0.9,
+        art: 'f9_iceball',
+        status: 'chill',
+        dur: 1.6,
+        lob: true,
+      },
       tx,
       ty,
     );
-    api.zone(sim, { x: tx, y: ty, r: 1.25, life: 5, warn: T, slow: 0.55, status: 'chill', dur: 1.2, art: 'f9_frost' });
+    api.zone(sim, {
+      x: tx,
+      y: ty,
+      r: 1.25,
+      life: 5,
+      warn: T,
+      slow: 0.55,
+      status: 'chill',
+      dur: 1.2,
+      art: 'f9_frost',
+    });
   } else if (el === EL.venom) {
     for (let k = 0; k < 3; k++) {
       const a = ang + Math.PI / 2;
@@ -2520,7 +2612,16 @@ function castElement(sim: Sim, api: SimApi, m: Mob, el: number, haste: number): 
         sim,
         m,
         Math.atan2(ty - m.y, tx - m.x),
-        { speed: 6, r: 0.5, life: 2, dmg: 0.7, art: 'f9_venomglob', status: 'poison', dur: 2.2, lob: true },
+        {
+          speed: 6,
+          r: 0.5,
+          life: 2,
+          dmg: 0.7,
+          art: 'f9_venomglob',
+          status: 'poison',
+          dur: 2.2,
+          lob: true,
+        },
         tx,
         ty,
       );
@@ -2542,7 +2643,16 @@ function castElement(sim: Sim, api: SimApi, m: Mob, el: number, haste: number): 
       art: 'f9_bolt',
       from: m.id,
     });
-    vfx(sim, api, { x: m.x, y: m.y, r: 9, life: 1.3, warn: 0.75 / haste, art: 'f9_boltscar', ang, from: m.id }); // v2.86 — только рисунок
+    vfx(sim, api, {
+      x: m.x,
+      y: m.y,
+      r: 9,
+      life: 1.3,
+      warn: 0.75 / haste,
+      art: 'f9_boltscar',
+      ang,
+      from: m.id,
+    }); // v2.86 — только рисунок
   } else {
     // Белая — вспышка светом вокруг себя (когда лечить некого).
     api.strike(sim, {
@@ -2589,7 +2699,12 @@ registerBrain('f9_stump', {
     const T = m.data.T ?? 8;
     const left = T - m.t;
     // Круг на полу сжимается — столько осталось до новых голов.
-    m.tele = { shape: 'ring', r: 0.5 + 0.9 * Math.max(0, left / T), w: 0.1, k: Math.min(1, m.t / T) };
+    m.tele = {
+      shape: 'ring',
+      r: 0.5 + 0.9 * Math.max(0, left / T),
+      w: 0.1,
+      k: Math.min(1, m.t / T),
+    };
     if (left <= 0) regrow(sim, api, m);
     void dt;
     void c;
@@ -2635,7 +2750,8 @@ function regrow(sim: Sim, api: SimApi, m: Mob): void {
   const pool = phase >= 1 ? [0, 1, 2, 3] : [0, 1, 2];
   const second = pool[Math.floor(sim.rng() * pool.length)];
   spawnHead(sim, api, el, slot, m.x, m.y);
-  if (room >= 2) spawnHead(sim, api, second === el ? (el + 1) % pool.length : second, freeSlot(sim), m.x, m.y);
+  if (room >= 2)
+    spawnHead(sim, api, second === el ? (el + 1) % pool.length : second, freeSlot(sim), m.x, m.y);
   woundBody(sim, -REGROW_HEAL);
   api.zone(sim, { x: m.x, y: m.y, r: 1.2, life: 0.7, art: 'f9_regrow', above: true }); // v2.86 — только рисунок
   sim.events.push({ t: 'shake', k: 0.2 }); // v2.86 — только рисунок
@@ -2699,7 +2815,17 @@ registerBrain('f9_crown', {
           m.dir = Math.atan2(dy, dx);
           const bx = m.x + Math.cos(m.dir) * 1.2;
           const by = m.y + Math.sin(m.dir) * 1.2;
-          api.strike(sim, { shape: 'circle', x: bx, y: by, r: 1, warn: 0.62, dmg: m.dmg * 1.2, knock: 6, art: 'f9_bite', from: m.id });
+          api.strike(sim, {
+            shape: 'circle',
+            x: bx,
+            y: by,
+            r: 1,
+            warn: 0.62,
+            dmg: m.dmg * 1.2,
+            knock: 6,
+            art: 'f9_bite',
+            from: m.id,
+          });
           api.setMode(m, 'bite');
           return;
         }
@@ -2789,7 +2915,17 @@ registerBrain('f9_crown', {
         if (m.t > 1.1 || dist < 1.2) {
           m.data.wx = h.x;
           m.data.wy = h.y;
-          api.strike(sim, { shape: 'circle', x: h.x, y: h.y, r: 1.35, warn: WHIRL_T, dmg: m.dmg * 1.35, knock: 7, art: 'f9_whirl', from: m.id });
+          api.strike(sim, {
+            shape: 'circle',
+            x: h.x,
+            y: h.y,
+            r: 1.35,
+            warn: WHIRL_T,
+            dmg: m.dmg * 1.35,
+            knock: 7,
+            art: 'f9_whirl',
+            from: m.id,
+          });
           api.setMode(m, 'whirl');
         }
         return;
@@ -2856,7 +2992,15 @@ function arenaOf(sim: Sim, b: BossFight): ArenaState {
 }
 
 /** Сменить клетку арены, запомнив, как было (сброс боя вернёт). */
-function retile(sim: Sim, api: SimApi, A: ArenaState, i: number, tile: number, mark: number, haz: number): void {
+function retile(
+  sim: Sim,
+  api: SimApi,
+  A: ArenaState,
+  i: number,
+  tile: number,
+  mark: number,
+  haz: number,
+): void {
   const W = sim.world.w;
   if (!A.changed.some((c) => c.i === i))
     A.changed.push({ i, tile: sim.tiles[i], mark: sim.world.mark[i], haz: sim.world.haz[i] });
@@ -2987,7 +3131,13 @@ registerBoss('f9boss', {
     if (b.phase === 0 && bar <= HYDRA_NOTCH[0]) {
       b.phase = 1;
       floodShore(sim, api, A);
-      vfx(sim, api, { x: A.cx, y: A.cy, r: Math.sqrt(A.pool.length / (0.75 * Math.PI)), life: 1.4, art: 'f9_flood' }); // v2.86 — только рисунок
+      vfx(sim, api, {
+        x: A.cx,
+        y: A.cy,
+        r: Math.sqrt(A.pool.length / (0.75 * Math.PI)),
+        life: 1.4,
+        art: 'f9_flood',
+      }); // v2.86 — только рисунок
       spawnHead(sim, api, EL.bolt, freeSlot(sim));
       spawnHead(sim, api, EL.light, freeSlot(sim));
       sim.events.push({
@@ -2999,7 +3149,9 @@ registerBoss('f9boss', {
     } else if (b.phase === 1 && bar <= HYDRA_NOTCH[1]) {
       b.phase = 2;
       toppleBraziers(sim, A);
-      for (const p of A.braziers) if (A.out.has(p.id)) vfx(sim, api, { x: p.x, y: p.y, r: 1, life: 1.2, art: 'f9_douse' }, true); // v2.86 — только рисунок
+      for (const p of A.braziers)
+        if (A.out.has(p.id))
+          vfx(sim, api, { x: p.x, y: p.y, r: 1, life: 1.2, art: 'f9_douse' }, true); // v2.86 — только рисунок
       b.data.geyser = sim.time + 2;
       sim.events.push({
         t: 'boss',
@@ -3018,9 +3170,18 @@ registerBoss('f9boss', {
           m.t = 0.35;
         }
       drainPool(sim, api, A, b);
-      vfx(sim, api, { x: A.cx, y: A.cy, r: Math.sqrt(A.pool.length / (0.75 * Math.PI)), life: 1.7, art: 'f9_drain' }); // v2.86 — только рисунок
+      vfx(sim, api, {
+        x: A.cx,
+        y: A.cy,
+        r: Math.sqrt(A.pool.length / (0.75 * Math.PI)),
+        life: 1.7,
+        art: 'f9_drain',
+      }); // v2.86 — только рисунок
       body.data.risen = 1;
-      const cr = api.spawnMob(sim, 'f9_crown', A.cx, A.cy + 1.4, { mode: 'rise', level: body.level });
+      const cr = api.spawnMob(sim, 'f9_crown', A.cx, A.cy + 1.4, {
+        mode: 'rise',
+        level: body.level,
+      });
       cr.data.ghost = 1;
       vfx(sim, api, { x: cr.x, y: cr.y, r: 1.3, life: 0.6, warn: 1.3, art: 'f9_mud' }); // v2.86 — только рисунок
       sim.events.push({
@@ -3040,7 +3201,18 @@ registerBoss('f9boss', {
         const i = cells[Math.floor(sim.rng() * cells.length)];
         const x = (i % W) + 0.5;
         const y = Math.floor(i / W) + 0.5;
-        api.strike(sim, { shape: 'circle', x, y, r: 1.1, warn: 1.1, dmg: body.dmg * 0.8, knock: 3, status: 'poison', dur: 2, art: 'f9_geyser' });
+        api.strike(sim, {
+          shape: 'circle',
+          x,
+          y,
+          r: 1.1,
+          warn: 1.1,
+          dmg: body.dmg * 0.8,
+          knock: 3,
+          status: 'poison',
+          dur: 2,
+          art: 'f9_geyser',
+        });
         venomPool(sim, api, x, y, 1.1, 1);
       }
     }
@@ -3066,7 +3238,17 @@ registerBoss('f9boss', {
         });
         body.data.lash = sim.time;
         body.data.vLashA = ang; // v2.86 — только рисунок: куда хлещет хвост
-        vfx(sim, api, { x: body.x, y: body.y, r: 8.5, life: 1.3, warn: 1.15, art: 'f9_tailfx', ang, arc: 1.25, from: body.id }); // v2.86 — только рисунок
+        vfx(sim, api, {
+          x: body.x,
+          y: body.y,
+          r: 8.5,
+          life: 1.3,
+          warn: 1.15,
+          art: 'f9_tailfx',
+          ang,
+          arc: 1.25,
+          from: body.id,
+        }); // v2.86 — только рисунок
         sim.events.push({ t: 'boss', what: 'roll' });
       }
     }
@@ -3079,7 +3261,8 @@ registerBoss('f9boss', {
           b.data.sprout = SPROUT_T;
           const pool = b.phase >= 1 ? [0, 1, 2, 3, 4] : [0, 1, 2];
           const m = spawnHead(sim, api, pool[Math.floor(sim.rng() * pool.length)], freeSlot(sim));
-          if (m) api.zone(sim, { x: m.x, y: m.y, r: 1.2, life: 0.7, art: 'f9_regrow', above: true }); // v2.86 — только рисунок
+          if (m)
+            api.zone(sim, { x: m.x, y: m.y, r: 1.2, life: 0.7, art: 'f9_regrow', above: true }); // v2.86 — только рисунок
           sayOnce(sim, 'sprout', 30, {
             what: 'f9_sprout',
             text: 'НОВАЯ ГОЛОВА',
@@ -3089,7 +3272,8 @@ registerBoss('f9boss', {
       } else b.data.sprout = SPROUT_T;
     }
     // Обрубки: срок отрастания по фазе.
-    for (const s of stumpsOf(sim)) if (s.data.T === undefined) s.data.T = REGROW_T[Math.min(2, b.phase)];
+    for (const s of stumpsOf(sim))
+      if (s.data.T === undefined) s.data.T = REGROW_T[Math.min(2, b.phase)];
     // Огонь жаровен: подошёл — огонь в руке.
     stepFire(sim, st, A, api);
     // Шеи для рисовальщика. Шея выходит из тела В СТОРОНУ своей головы:
@@ -3106,10 +3290,28 @@ registerBoss('f9boss', {
         const sub = m.kind === 'f9_crown' && (m.data.ghost ?? 0) > 0;
         if (sub) continue;
         const [ax, ay] = rootOf(m.x, m.y);
-        necks.push({ ax, ay, hx: m.x, hy: m.y, el: m.kind === 'f9_crown' ? 5 : (m.data.el ?? 0), id: m.id, cut: 0, big: m.kind === 'f9_crown' ? 1 : 0 });
+        necks.push({
+          ax,
+          ay,
+          hx: m.x,
+          hy: m.y,
+          el: m.kind === 'f9_crown' ? 5 : (m.data.el ?? 0),
+          id: m.id,
+          cut: 0,
+          big: m.kind === 'f9_crown' ? 1 : 0,
+        });
       } else if (m.kind === 'f9_stump' && m.mode !== 'dying') {
         const [ax, ay] = rootOf(m.x, m.y);
-        necks.push({ ax, ay, hx: m.x, hy: m.y, el: m.data.el ?? 0, id: 0, cut: m.mode === 'seared' ? 2 : 1, big: 0 });
+        necks.push({
+          ax,
+          ay,
+          hx: m.x,
+          hy: m.y,
+          el: m.data.el ?? 0,
+          id: 0,
+          cut: m.mode === 'seared' ? 2 : 1,
+          big: 0,
+        });
       }
     }
     F9_VIEW.necks = necks;
@@ -3128,7 +3330,14 @@ registerBoss('f9boss', {
       s.data.T = REGROW_T[Math.min(2, b.phase)];
       s.data.ghost = 1;
       s.data.vNoTele = 1; // v2.86 — только рисунок
-      vfx(sim, api, { x: f[0], y: f[1], r: 1.4, life: s.data.T + 0.5, art: 'f9_stumpclock', from: s.id }); // v2.86 — только рисунок
+      vfx(sim, api, {
+        x: f[0],
+        y: f[1],
+        r: 1.4,
+        life: s.data.T + 0.5,
+        art: 'f9_stumpclock',
+        from: s.id,
+      }); // v2.86 — только рисунок
       vfx(sim, api, { x: m.x, y: m.y, r: 1, life: 0.9, art: 'f9_sever' }, true); // v2.86 — только рисунок
       sayOnce(sim, 'stump', 999, {
         what: 'f9_stump',
@@ -3197,7 +3406,8 @@ function stepFire(sim: Sim, st: F9State, A: ArenaState, api: SimApi): void {
   F9_VIEW.fire = on ? (st.fire - sim.time) / FIRE_T : 0;
   const z = zoneById(sim, st.fireZone);
   if (on) {
-    if (!z) st.fireZone = zoneId(sim, api, { x: h.x, y: h.y, r: 0.7, life: 1e9, art: 'f9_handfire' });
+    if (!z)
+      st.fireZone = zoneId(sim, api, { x: h.x, y: h.y, r: 0.7, life: 1e9, art: 'f9_handfire' });
     else {
       z.x = h.x;
       z.y = h.y;

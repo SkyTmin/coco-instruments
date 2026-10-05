@@ -448,9 +448,12 @@ describe('этаж 6: монстры', () => {
       }
     s.hero.x = (shore % W) + 0.5;
     s.hero.y = Math.floor(shore / W) + 0.5;
-    const off = (i: number) => Math.abs(Math.hypot((i % W) + 0.5 - s.hero.x, Math.floor(i / W) + 0.5 - s.hero.y) - 4);
+    const off = (i: number) =>
+      Math.abs(Math.hypot((i % W) + 0.5 - s.hero.x, Math.floor(i / W) + 0.5 - s.hero.y) - 4);
     const cell = lake.cells.reduce((a, b) => (off(a) < off(b) ? a : b));
-    const m = spawnMob(s, 'f6_salamander', (cell % W) + 0.5, Math.floor(cell / W) + 0.5, { mode: 'f6_swim' });
+    const m = spawnMob(s, 'f6_salamander', (cell % W) + 0.5, Math.floor(cell / W) + 0.5, {
+      mode: 'f6_swim',
+    });
     m.data.ghost = 1;
     let ghostInLava = false;
     let tele = -1;
@@ -505,7 +508,15 @@ describe('этаж 6: монстры', () => {
   });
 
   it('никто не застревает в стенах', () => {
-    const kinds = ['f6_salamander', 'f6_wisp', 'f6_golem', 'f6_ashbat', 'f6_beetle', 'f6_ore', 'f6_imp'];
+    const kinds = [
+      'f6_salamander',
+      'f6_wisp',
+      'f6_golem',
+      'f6_ashbat',
+      'f6_beetle',
+      'f6_ore',
+      'f6_imp',
+    ];
     const spots: [number, number][] = [
       [38, 300],
       [30, 226],
@@ -535,12 +546,15 @@ describe('этаж 6: монстры', () => {
           stuck.set(m.id, n);
           if (LOG) {
             const tr = trail.get(m.id) ?? [];
-            tr.push(`${s.time.toFixed(2)} ${m.x.toFixed(2)},${m.y.toFixed(2)} ${m.mode} v=${m.vx.toFixed(1)},${m.vy.toFixed(1)}`);
+            tr.push(
+              `${s.time.toFixed(2)} ${m.x.toFixed(2)},${m.y.toFixed(2)} ${m.mode} v=${m.vx.toFixed(1)},${m.vy.toFixed(1)}`,
+            );
             if (tr.length > 90) tr.shift();
             trail.set(m.id, tr);
             if (n > 45) console.log(tr.join('\n'));
           }
-          if (n > 45) throw new Error(`${m.kind} в стене у ${m.x.toFixed(1)},${m.y.toFixed(1)} (${m.mode})`);
+          if (n > 45)
+            throw new Error(`${m.kind} в стене у ${m.x.toFixed(1)},${m.y.toFixed(1)} (${m.mode})`);
         }
       }
     }

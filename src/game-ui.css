@@ -8946,7 +8946,10 @@ button.fg-slot {
   border: 0;
   border-radius: 8px 0 0 8px;
   writing-mode: vertical-rl;
-  font: 900 11px/1 GxRubik, system-ui, sans-serif;
+  font:
+    900 11px/1 GxRubik,
+    system-ui,
+    sans-serif;
   letter-spacing: 1.5px;
   color: #fff;
   background: linear-gradient(180deg, #d0369e, #7a2bd6);

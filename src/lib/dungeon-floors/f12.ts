@@ -224,7 +224,11 @@ const LEGEND: Record<string, LegendCell> = {
     light: { r: 1.8, tint: 'cold' },
   },
   '5': { tile: 'floor', mark: M.tile, obj: { kind: 'deco', ref: 'f12_column', solid: 0.46 } },
-  '6': { tile: 'floor', mark: M.tile, obj: { kind: 'breakable', ref: 'f12_bin', solid: 0.26, hp: 1 } },
+  '6': {
+    tile: 'floor',
+    mark: M.tile,
+    obj: { kind: 'breakable', ref: 'f12_bin', solid: 0.26, hp: 1 },
+  },
   '7': { tile: 'floor', obj: { kind: 'deco', ref: 'f12_semaphore', solid: 0.2 } },
   '0': {
     tile: 'floor',
@@ -255,7 +259,10 @@ const LEGEND: Record<string, LegendCell> = {
   P: { tile: 'floor', obj: { kind: 'deco', ref: 'f12_handcar', solid: 0.5 } },
   B: { tile: 'floor', mark: M.tile, obj: { kind: 'deco', ref: 'f12_kiosk', solid: 0.5 } },
   // Действия этажа: стрелочный рычаг и колокол дежурной (щиток — на стене).
-  '!': { tile: 'floor', obj: { kind: 'deco', ref: 'f12_lever', solid: 0.22, use: { label: 'Перевести стрелку' } } },
+  '!': {
+    tile: 'floor',
+    obj: { kind: 'deco', ref: 'f12_lever', solid: 0.22, use: { label: 'Перевести стрелку' } },
+  },
   l: {
     tile: 'floor',
     mark: M.tile,
@@ -397,7 +404,16 @@ const MOBS: MobDef[] = [
     noAlbino: true,
     eye: '#ffd040',
     light: 1.6,
-    shot: { speed: 6, r: 0.5, life: 2, dmg: 1, art: 'f12_tear', lob: true, status: 'slow', dur: 1.4 },
+    shot: {
+      speed: 6,
+      r: 0.5,
+      life: 2,
+      dmg: 1,
+      art: 'f12_tear',
+      lob: true,
+      status: 'slow',
+      dur: 1.4,
+    },
     gore: ['#4a0a14', '#c01430', '#f0e0d0', '#1a0408'],
   },
   {

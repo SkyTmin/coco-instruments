@@ -140,7 +140,15 @@ function poly(p: Px, pts: [number, number][], c: RGBA | ((x: number, y: number) 
 }
 
 /** Толстая линия. */
-export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  c: RGBA,
+  w = 1,
+): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -2368,7 +2376,11 @@ function cSkeleton(sk: CSk): void {
         // От хребта сзади, вокруг бока, к грудине спереди; на боку провисает.
         const P = vAdd(
           sk.chest,
-          mApp(sk.Rc, [-6.5 * Math.cos(a), sd * (w * Math.sin(a) + 1.5 * (a / Math.PI)), zz - Math.sin(a) * 1.2]),
+          mApp(sk.Rc, [
+            -6.5 * Math.cos(a),
+            sd * (w * Math.sin(a) + 1.5 * (a / Math.PI)),
+            zz - Math.sin(a) * 1.2,
+          ]),
         );
         if (prev) rCap(prev, P, 1.05, 1.05, mb);
         prev = P;
@@ -2655,7 +2667,8 @@ function cRim(p: Px, c: RGBA, a: number): void {
       let near = 9;
       for (let yy = -2; yy <= 2 && near > 1; yy++)
         for (let xx = -2; xx <= 2; xx++)
-          if (d[((y + yy) * CW + x + xx) * 4 + 3]) near = Math.min(near, Math.abs(xx) + Math.abs(yy));
+          if (d[((y + yy) * CW + x + xx) * 4 + 3])
+            near = Math.min(near, Math.abs(xx) + Math.abs(yy));
       if (near > 2) continue;
       litPut(x, y, c, a * (near <= 1 ? 1 : 0.45));
     }
@@ -2827,7 +2840,7 @@ function cWalk(u: number): CPose {
   r.ar = 26.8;
   r.br = 26.8;
   // Голова кивает с опозданием на удар стопы.
-  const wl = (((u - 0.06) % 0.5) + 0.5) % 0.5 / 0.5;
+  const wl = ((((u - 0.06) % 0.5) + 0.5) % 0.5) / 0.5;
   const bl = wl < 0.1 ? eOut(wl / 0.1) : Math.max(0, 1 - eIO((wl - 0.1) / 0.5));
   r.hp = 0.08 + 0.07 * bl;
   r.hy = 0.05 * Math.cos(a);
@@ -3028,7 +3041,17 @@ function cSwipe(t: number, h: number): CPose {
     // Замах: левая нога шагает вперёд, правая рука уходит назад-вверх, плечо разворачивается.
     [
       0.44 * T,
-      { fa: 5, fh: 4.5, pa: -0.6, twist: -0.34, aaz: 1.35, ael: 0.05, ar: 27, ah: 0.85, lean: 0.02 },
+      {
+        fa: 5,
+        fh: 4.5,
+        pa: -0.6,
+        twist: -0.34,
+        aaz: 1.35,
+        ael: 0.05,
+        ar: 27,
+        ah: 0.85,
+        lean: 0.02,
+      },
       eIO,
     ],
     [
@@ -3085,7 +3108,17 @@ function cSwipe(t: number, h: number): CPose {
     // Проводка: рука уходит дальше по дуге, корпус доворачивается.
     [
       T + 0.09,
-      { twist: 0.74, aaz: -0.88, ael: -0.72, lean: 0.43, ph: 25.4, tsx: 1, tsy: 1, hy: -0.3, tdx: 2 },
+      {
+        twist: 0.74,
+        aaz: -0.88,
+        ael: -0.72,
+        lean: 0.43,
+        ph: 25.4,
+        tsx: 1,
+        tsy: 1,
+        hy: -0.3,
+        tdx: 2,
+      },
       eOut,
     ],
     [T + 0.3, { twist: 0.62, aaz: -0.66, ael: -0.78, lean: 0.38, jaw: 0.32, tdx: 1.6 }, eIO],
@@ -3186,7 +3219,11 @@ function cStomp(t: number, h: number, side: number): CPose {
   if (t > 0.74 * T && t < T - F1) r.pb += jit(t, 0.25);
   if (side) r = cMirror(r);
   const slam = t > T - 2.2 * F1 && t < T + 0.07;
-  return { r, trail: slam ? (side ? 'b' : 'a') : undefined, ghost: t > T - 1.5 * F1 && t < T + 0.03 };
+  return {
+    r,
+    trail: slam ? (side ? 'b' : 'a') : undefined,
+    ghost: t > T - 1.5 * F1 && t < T + 0.03,
+  };
 }
 
 /** Модель поворота мозга в `back`: доля пройденного полуоборота через τ после удара. */
@@ -3211,12 +3248,32 @@ function cBack(t: number, h: number): CPose & { legs: number } {
     // Рука уходит через грудь к левому плечу, корпус закручивается влево.
     [
       0.2,
-      { twist: 0.35, aaz: -0.9, ael: -0.42, ar: 21, ah: 0, ph: 28.4, lean: 0.18, hy: -0.25, baz: 0.6 },
+      {
+        twist: 0.35,
+        aaz: -0.9,
+        ael: -0.42,
+        ar: 21,
+        ah: 0,
+        ph: 28.4,
+        lean: 0.18,
+        hy: -0.25,
+        baz: 0.6,
+      },
       eIO,
     ],
     [
       0.58,
-      { twist: 0.68, aaz: -1.4, ael: -0.22, ar: 18.5, ph: 27.6, lean: 0.12, hy: -0.5, pb: 1.5, jaw: 0.3 },
+      {
+        twist: 0.68,
+        aaz: -1.4,
+        ael: -0.22,
+        ar: 18.5,
+        ph: 27.6,
+        lean: 0.12,
+        hy: -0.5,
+        pb: 1.5,
+        jaw: 0.3,
+      },
       eIO,
     ],
     [T - 2.5 * F1, { ...QUIET, twist: 0.76, aaz: -1.5, ael: -0.18, hy: -0.54 }, eOut],
@@ -3332,7 +3389,11 @@ function cVent(t: number, h: number): CPose {
       eOut3,
     ],
     [T + 0.1, { ph: 29.4, lean: -0.22, tsy: 1, tsx: 1, tdy: 0.5, aaz: 1.85, ael: 0.42 }, eOut],
-    [T + 0.36, { open: 0.6, glow: 0.5, steam: 1.1, jaw: 0.6, hp: -0.35, rim: 0, eyes: 0.3, tdy: 0 }, eIO],
+    [
+      T + 0.36,
+      { open: 0.6, glow: 0.5, steam: 1.1, jaw: 0.6, hp: -0.35, rim: 0, eyes: 0.3, tdy: 0 },
+      eIO,
+    ],
     [T + R, { ...CREADY, steam: 0.6 }, eIO],
   ];
   const r = cTrack(keys, t, CREADY, CLAG2);
@@ -3627,7 +3688,7 @@ function cKneel(t: number): CPose {
       },
       eIn,
     ],
-    HOLD(0.5, { aw: 0 , bw: 0 }),
+    HOLD(0.5, { aw: 0, bw: 0 }),
     // Ладони шлёпают о землю, голова повисает.
     [0.58, { ...down, ph: 13.8, tsx: 1, tsy: 1 }, eIn],
     [0.7, { ...down }, eOut],
@@ -3865,7 +3926,13 @@ const cMark = (name: string, t: number) => {
   return n;
 };
 
-function cCanvas(src: Uint8ClampedArray, x0: number, y0: number, w: number, h: number): HTMLCanvasElement {
+function cCanvas(
+  src: Uint8ClampedArray,
+  x0: number,
+  y0: number,
+  w: number,
+  h: number,
+): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -3949,7 +4016,8 @@ function cBuild(q: CReq, r: CRig, ps: CPose & { legs?: number }): CFrame {
     }
     RX.cs = Math.cos(yaw);
     RX.sn = Math.sin(yaw);
-    for (const k of ['A', 'B', 'a', 'b']) if (tr[k].length > 1) cSmear(p, tr[k], k === k.toUpperCase());
+    for (const k of ['A', 'B', 'a', 'b'])
+      if (tr[k].length > 1) cSmear(p, tr[k], k === k.toUpperCase());
   }
   if (ps.dirt) cCrumbs(p, [sk.shA, sk.shB, vAdd(sk.head, [0, 0, 6]), sk.chest], time, 14, 3);
   if (ps.crumbs && sk.rock) cCrumbs(p, [vAdd(sk.rock, [0, 0, -7])], time, 6, 9);
@@ -4443,7 +4511,18 @@ registerMobPainter('f13boss', (m, pose) => {
  * минимум, медиану и p90 времени нового кадра, мс. Игра это не зовёт.
  */
 export function colBench(reps = 1): { min: number; med: number; p90: number; n: number } {
-  const base: CReq = { tech: 'idle', f: 0, v: 0, hk: 100, yq: 2, ph: 0, lk: 0, fl: 0, bl: 0, bs: '' };
+  const base: CReq = {
+    tech: 'idle',
+    f: 0,
+    v: 0,
+    hk: 100,
+    yq: 2,
+    ph: 0,
+    lk: 0,
+    fl: 0,
+    bl: 0,
+    bs: '',
+  };
   const ts: number[] = [];
   for (let rep = 0; rep < reps; rep++)
     for (const [tech, step] of [

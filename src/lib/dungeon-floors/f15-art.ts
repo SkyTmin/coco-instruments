@@ -48,7 +48,12 @@ const mixc = (a: RGBA, b: RGBA, k: number): RGBA => [
   Math.round(a[2] + (b[2] - a[2]) * k),
   Math.round(a[3] + (b[3] - a[3]) * k),
 ];
-const alpha = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(Math.max(0, Math.min(1, a)) * 255)];
+const alpha = (c: RGBA, a: number): RGBA => [
+  c[0],
+  c[1],
+  c[2],
+  Math.round(Math.max(0, Math.min(1, a)) * 255),
+];
 const rgba = (c: RGBA, a: number) =>
   `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -186,7 +191,8 @@ function spline(pts: [number, number][], n = 6): [number, number][] {
       const t2 = t * t;
       const t3 = t2 * t;
       const f = (a: number, b: number, c: number, d: number) =>
-        0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+        0.5 *
+        (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
       out.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
     }
   }
@@ -233,7 +239,14 @@ function tnoise2(x: number, y: number, sx: number, sy: number, per: number, seed
 }
 
 /** Бесшовные ячейки Вороного: (расстояние до ближней, до второй, номер). */
-function voro(x: number, y: number, cell: number, per: number, seed: number, jit = 0.8): [number, number, number] {
+function voro(
+  x: number,
+  y: number,
+  cell: number,
+  per: number,
+  seed: number,
+  jit = 0.8,
+): [number, number, number] {
   const P = Math.round(per / cell);
   const cx = Math.floor(x / cell);
   const cy = Math.floor(y / cell);
@@ -299,7 +312,13 @@ function finish(key: string, b: Built, look: Look, flash: boolean, left: boolean
   return out;
 }
 
-function frameOf(kind: string, pose: MobPose, anim: string, f: number, build: () => Built): MobFrame {
+function frameOf(
+  kind: string,
+  pose: MobPose,
+  anim: string,
+  f: number,
+  build: () => Built,
+): MobFrame {
   const key = `${kind}|${anim}|${f}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
   const hit = frames.get(key);
   if (hit) return hit;
@@ -317,7 +336,11 @@ function sprite(key: string, make: () => { p: Px; ax: number; ay: number } | nul
   return s;
 }
 
-const flashed = (key: string, flash: boolean, make: () => { p: Px; ax: number; ay: number } | null) =>
+const flashed = (
+  key: string,
+  flash: boolean,
+  make: () => { p: Px; ax: number; ay: number } | null,
+) =>
   sprite(`${key}|${flash ? 1 : 0}`, () => {
     const b = make();
     if (!b) return null;
@@ -409,7 +432,8 @@ const PAL: Record<Style, Pal> = {
   },
 };
 
-const styleOf = (area: string): Style => (area === F15_GUT ? 'gut' : area === F15_VEINS ? 'veins' : 'throat');
+const styleOf = (area: string): Style =>
+  area === F15_GUT ? 'gut' : area === F15_VEINS ? 'veins' : 'throat';
 
 // ---------------------------------------------------------------------------
 // Большие бесшовные текстуры района (считаются один раз). Периоды шума —
@@ -822,7 +846,8 @@ function veinOver(p: Px, c: CellCtx, P: Pal, node = false): void {
   for (const l of lines) for (const [x, y] of l) p.ell(x, y, 1.9, 1.9, alpha(P.veinDark, 0.85));
   for (const l of lines) for (const [x, y] of l) p.ell(x, y, 1.05, 1.05, P.vein);
   for (const l of lines)
-    for (let i = 1; i < l.length; i += 4) p.set(Math.floor(l[i][0] - 0.5), Math.floor(l[i][1] - 0.5), P.veinHi);
+    for (let i = 1; i < l.length; i += 4)
+      p.set(Math.floor(l[i][0] - 0.5), Math.floor(l[i][1] - 0.5), P.veinHi);
   if (node) {
     // Узел — утолщение; живой свет даёт предмет поверх.
     p.ell(8, 8, 3.6, 3.2, P.veinDark);
@@ -933,7 +958,14 @@ function liquidCell(c: CellCtx, st: Style, kind: 'acid' | 'blood'): Px {
 }
 
 /** Мелкая жидкость (слизь, мелкий сок, кровь течения) поверх пола пятнами. */
-function puddleOver(p: Px, c: CellCtx, same: (k: number) => boolean, col: RGBA, hi: RGBA, a: number): void {
+function puddleOver(
+  p: Px,
+  c: CellCtx,
+  same: (k: number) => boolean,
+  col: RGBA,
+  hi: RGBA,
+  a: number,
+): void {
   const n = same(c.markAt(0, -1));
   const s = same(c.markAt(0, 1));
   const w = same(c.markAt(-1, 0));
@@ -981,7 +1013,12 @@ function foldCell(c: CellCtx): Px {
 }
 
 /** Кости, сгустки, сор — мелочь поверх пола. */
-function litterOver(p: Px, c: CellCtx, kind: 'bones' | 'gore' | 'debris' | 'scar', st: Style): void {
+function litterOver(
+  p: Px,
+  c: CellCtx,
+  kind: 'bones' | 'gore' | 'debris' | 'scar',
+  st: Style,
+): void {
   const h = (k: number) => hash(c.wx, c.wy, k);
   if (kind === 'bones') {
     const BONE = tn('#6a5e50', '#a89a84', '#d8ccb4', '#f4ecdc');
@@ -1010,10 +1047,21 @@ function litterOver(p: Px, c: CellCtx, kind: 'bones' | 'gore' | 'debris' | 'scar
     return;
   }
   if (kind === 'gore') {
-    const G = st === 'gut' ? tn('#3a0e06', '#6a1c10', '#9a3020', '#d05a3a') : tn('#2a0206', '#5a0612', '#8a0e20', '#d02a40');
+    const G =
+      st === 'gut'
+        ? tn('#3a0e06', '#6a1c10', '#9a3020', '#d05a3a')
+        : tn('#2a0206', '#5a0612', '#8a0e20', '#d02a40');
     const n = 2 + Math.floor(h(2) * 3);
     for (let i = 0; i < n; i++)
-      shadeEll(p, 2 + h(50 + i) * 12, 2 + h(60 + i) * 12, 1 + h(70 + i) * 2.2, 0.8 + h(80 + i) * 1.4, G, 0.1);
+      shadeEll(
+        p,
+        2 + h(50 + i) * 12,
+        2 + h(60 + i) * 12,
+        1 + h(70 + i) * 2.2,
+        0.8 + h(80 + i) * 1.4,
+        G,
+        0.1,
+      );
     return;
   }
   if (kind === 'debris') {
@@ -1056,15 +1104,17 @@ function wallFace(c: CellCtx, st: Style): Px {
     p.set(x, 14, mixc(p.get(x, 14), hx('#000000'), 0.3));
   }
   // Торцы: где сбоку пол — край мышцы скруглён светом/тенью.
-  if (c.open(-1, 0)) for (let y = 0; y < 16; y++) {
-    p.set(0, y, INK);
-    p.set(1, y, P.rim[2]);
-    p.set(2, y, mixc(p.get(2, y), P.rim[1], 0.5));
-  }
-  if (c.open(1, 0)) for (let y = 0; y < 16; y++) {
-    p.set(15, y, INK);
-    p.set(14, y, P.rim[0]);
-  }
+  if (c.open(-1, 0))
+    for (let y = 0; y < 16; y++) {
+      p.set(0, y, INK);
+      p.set(1, y, P.rim[2]);
+      p.set(2, y, mixc(p.get(2, y), P.rim[1], 0.5));
+    }
+  if (c.open(1, 0))
+    for (let y = 0; y < 16; y++) {
+      p.set(15, y, INK);
+      p.set(14, y, P.rim[0]);
+    }
   const bl = c.open(-1, 0) && c.open(-1, 1);
   const br = c.open(1, 0) && c.open(1, 1);
   if (bl || br) roundCorners(p, c, st, false, false, bl, br);
@@ -1084,7 +1134,8 @@ function wallTop(c: CellCtx, st: Style): Px {
   const faceL = !oL && c.open(-1, 1);
   const faceR = !oR && c.open(1, 1);
   const R = P.rim;
-  const lip = (x: number, y: number, k: number) => p.set(x, y, k > 2.5 ? INK : tone(R, 0.95 - k * 0.3));
+  const lip = (x: number, y: number, k: number) =>
+    p.set(x, y, k > 2.5 ? INK : tone(R, 0.95 - k * 0.3));
   // Край плоти волнистый: шум по мировым координатам, стыки клеток сходятся.
   const wv = (t: number, seed: number) => Math.round((tnoise(t, seed, 8, 1 << 20, 131) - 0.5) * 4);
   if (faceD)
@@ -1126,7 +1177,15 @@ function wallTop(c: CellCtx, st: Style): Px {
 }
 
 /** Скруглить углы клетки стены: за дугой — пол района, по дуге — губа. */
-function roundCorners(p: Px, c: CellCtx, st: Style, tl: boolean, tr: boolean, bl: boolean, br: boolean): void {
+function roundCorners(
+  p: Px,
+  c: CellCtx,
+  st: Style,
+  tl: boolean,
+  tr: boolean,
+  bl: boolean,
+  br: boolean,
+): void {
   const P = PAL[st];
   const floor = fleshFloor(c, st);
   const R0 = 6;
@@ -1172,17 +1231,25 @@ function relicOver(p: Px, c: CellCtx): void {
     }
     case 2: {
       // 3 — друза бирюзы.
-      polyShade(p, [
-        [5, 13],
-        [6, 5],
-        [8, 3],
-        [9, 13],
-      ], tn('#0a3a4a', '#1a7a8a', '#40c8d0', '#c0ffff'));
-      polyShade(p, [
-        [9, 13],
-        [11, 6],
-        [12, 13],
-      ], tn('#0a3a4a', '#1a6a7a', '#30a8b8', '#a0f0f8'));
+      polyShade(
+        p,
+        [
+          [5, 13],
+          [6, 5],
+          [8, 3],
+          [9, 13],
+        ],
+        tn('#0a3a4a', '#1a7a8a', '#40c8d0', '#c0ffff'),
+      );
+      polyShade(
+        p,
+        [
+          [9, 13],
+          [11, 6],
+          [12, 13],
+        ],
+        tn('#0a3a4a', '#1a6a7a', '#30a8b8', '#a0f0f8'),
+      );
       break;
     }
     case 3: {
@@ -1206,24 +1273,32 @@ function relicOver(p: Px, c: CellCtx): void {
     }
     case 5: {
       // 6 — обсидиан с лавовой прожилкой.
-      polyShade(p, [
-        [3, 12],
-        [5, 5],
-        [11, 4],
-        [13, 11],
-      ], tn('#08060c', '#1a1620', '#342c40', '#6a5a80'));
+      polyShade(
+        p,
+        [
+          [3, 12],
+          [5, 5],
+          [11, 4],
+          [13, 11],
+        ],
+        tn('#08060c', '#1a1620', '#342c40', '#6a5a80'),
+      );
       stroke(p, 5, 10, 11, 6, k('#ff6a1a'));
       p.set(8, 8, k('#ffd060'));
       break;
     }
     case 6: {
       // 7 — осколок зеркала.
-      polyShade(p, [
-        [4, 13],
-        [6, 3],
-        [12, 6],
-        [10, 13],
-      ], tn('#5a6a7a', '#8aa0b4', '#c0d8e8', '#ffffff'));
+      polyShade(
+        p,
+        [
+          [4, 13],
+          [6, 3],
+          [12, 6],
+          [10, 13],
+        ],
+        tn('#5a6a7a', '#8aa0b4', '#c0d8e8', '#ffffff'),
+      );
       stroke(p, 6, 11, 10, 5, alpha(WHITE, 0.8));
       break;
     }
@@ -1245,28 +1320,40 @@ function relicOver(p: Px, c: CellCtx): void {
     }
     case 9: {
       // 10 — золотой зубец короны и красный камень.
-      polyShade(p, [
-        [3, 12],
-        [5, 5],
-        [8, 9],
-        [11, 5],
-        [13, 12],
-      ], tn('#6a4a10', '#a07a20', '#e0b840', '#fff0a0'));
+      polyShade(
+        p,
+        [
+          [3, 12],
+          [5, 5],
+          [8, 9],
+          [11, 5],
+          [13, 12],
+        ],
+        tn('#6a4a10', '#a07a20', '#e0b840', '#fff0a0'),
+      );
       shadeEll(p, 8, 11, 1.6, 1.4, tn('#4a0408', '#8a0a14', '#e02030', '#ff9aa0'));
       break;
     }
     case 10: {
       // 11 — лопасть ветряка.
-      polyShade(p, [
-        [8, 8],
-        [3, 4],
-        [5, 3],
-      ], tn('#5a4a30', '#8a7450', '#b8a070', '#e8d8a8'));
-      polyShade(p, [
-        [8, 8],
-        [13, 12],
-        [11, 13],
-      ], tn('#5a4a30', '#8a7450', '#b8a070', '#e8d8a8'));
+      polyShade(
+        p,
+        [
+          [8, 8],
+          [3, 4],
+          [5, 3],
+        ],
+        tn('#5a4a30', '#8a7450', '#b8a070', '#e8d8a8'),
+      );
+      polyShade(
+        p,
+        [
+          [8, 8],
+          [13, 12],
+          [11, 13],
+        ],
+        tn('#5a4a30', '#8a7450', '#b8a070', '#e8d8a8'),
+      );
       shadeEll(p, 8, 8, 1.6, 1.6, tn('#4a3a20', '#8a6a30', '#c8a040', '#f0e080'));
       break;
     }
@@ -1299,7 +1386,8 @@ function relicOver(p: Px, c: CellCtx): void {
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
       const d = Math.min(x, y, 15 - x, 15 - y);
-      if (d < 2 && hash(c.wx * 16 + x, c.wy * 16 + y, 202) > 0.45) p.set(x, y, alpha(hx('#5a1624'), 0.7));
+      if (d < 2 && hash(c.wx * 16 + x, c.wy * 16 + y, 202) > 0.45)
+        p.set(x, y, alpha(hx('#5a1624'), 0.7));
     }
 }
 
@@ -1360,17 +1448,26 @@ function painter(area: string) {
     // Пол.
     const k = c.mark;
     let p: Px;
-    if (k === M.fold || k === M.flowW || k === M.flowS || k === M.flowE || (k === M.flowN && st === 'gut'))
+    if (
+      k === M.fold ||
+      k === M.flowW ||
+      k === M.flowS ||
+      k === M.flowE ||
+      (k === M.flowN && st === 'gut')
+    )
       p = foldCell(c);
     else if (k === M.ring1 || k === M.ring2 || k === M.ring3) {
       p = foldCell(c);
       // Кольца зала: чем глубже к краю, тем темнее — видно, где встанет сок.
       const a = k === M.ring1 ? 0.3 : k === M.ring2 ? 0.18 : 0.08;
-      over(p, cellOf(`dim|${Math.round(a * 100)}`, () => {
-        const q = new Px(16, 16);
-        q.rect(0, 0, 15, 15, alpha(hx('#1a2004'), a));
-        return q;
-      }));
+      over(
+        p,
+        cellOf(`dim|${Math.round(a * 100)}`, () => {
+          const q = new Px(16, 16);
+          q.rect(0, 0, 15, 15, alpha(hx('#1a2004'), a));
+          return q;
+        }),
+      );
     } else p = fleshFloor(c, st);
     switch (k) {
       case M.ring:
@@ -1386,7 +1483,14 @@ function painter(area: string) {
         puddleOver(p, c, (m) => m === M.mucus, hx('#6a9a7a'), hx('#c8f0d0'), 0.62);
         break;
       case M.shallow:
-        puddleOver(p, c, (m) => m === M.shallow || m === M.acid, hx('#6a8a14'), hx('#d8f060'), 0.55);
+        puddleOver(
+          p,
+          c,
+          (m) => m === M.shallow || m === M.acid,
+          hx('#6a8a14'),
+          hx('#d8f060'),
+          0.55,
+        );
         break;
       case M.acidRise:
         puddleOver(p, c, (m) => m === M.acidRise, hx('#7a9a18'), hx('#e8ff70'), 0.85);
@@ -1523,7 +1627,13 @@ function slabPx(
   const p = new Px(16, 16 + HMAX);
   const depth = side < 0 ? 16 : Math.max(2, Math.round(16 * k));
   const H = Math.round(
-    kind === 'leaflet' ? 1 + 2 * k : kind === 'band' ? 2 + 8 * k : kind === 'door' ? 3 + 7 * k : 2 + 6 * k,
+    kind === 'leaflet'
+      ? 1 + 2 * k
+      : kind === 'band'
+        ? 2 + 8 * k
+        : kind === 'door'
+          ? 3 + 7 * k
+          : 2 + 6 * k,
   );
   let top: Tones = P.rim;
   let face: Tones = P.face;
@@ -1541,13 +1651,31 @@ function slabPx(
   }
   // Местные координаты: u — от стены внутрь, v — вдоль стены.
   const xy = (u: number, v: number): [number, number] =>
-    side === 0 ? [u, v] : side === 1 ? [15 - u, v] : side === 2 ? [v, u] : side === 3 ? [v, 15 - u] : [u, v];
+    side === 0
+      ? [u, v]
+      : side === 1
+        ? [15 - u, v]
+        : side === 2
+          ? [v, u]
+          : side === 3
+            ? [v, 15 - u]
+            : [u, v];
   const edge = (v: number) =>
-    side < 0 || k >= 0.97 ? 16 : Math.min(16, depth + Math.round(Math.sin(v * 0.8 + side * 1.7) * 1.2) + trem);
+    side < 0 || k >= 0.97
+      ? 16
+      : Math.min(16, depth + Math.round(Math.sin(v * 0.8 + side * 1.7) * 1.2) + trem);
   const inFoot = (x: number, y: number) => {
     if (x < 0 || x > 15 || y < 0 || y > 15) return false;
     const [u, v] =
-      side === 0 ? [x, y] : side === 1 ? [15 - x, y] : side === 2 ? [y, x] : side === 3 ? [15 - y, x] : [x, y];
+      side === 0
+        ? [x, y]
+        : side === 1
+          ? [15 - x, y]
+          : side === 2
+            ? [y, x]
+            : side === 3
+              ? [15 - y, x]
+              : [x, y];
     return u < edge(v);
   };
   const facesLight = side === 1 || side === 3;
@@ -1579,7 +1707,8 @@ function slabPx(
         else if (fold > 0.45) l += 0.14;
         l -= Math.max(0, 6 - r) * 0.06;
         if (r < 2.2 && k > 0.9) l = -1;
-      } else if (kind === 'lymph' && hash(x >> 2, y >> 2, 73) > 0.7 && ((x + y) & 3) === 0) l += 0.3;
+      } else if (kind === 'lymph' && hash(x >> 2, y >> 2, 73) > 0.7 && ((x + y) & 3) === 0)
+        l += 0.3;
       const d = e - u;
       if (d <= 1 && side >= 0 && k < 0.97) l += facesLight ? 0.35 : -0.3;
       else if (d === 2 && side >= 0 && k < 0.97) l += facesLight ? 0.12 : -0.1;
@@ -1641,10 +1770,14 @@ function livePainter(kind: LiveKind) {
       if (!l.closed) {
         if (kind === 'band' && S.relaxed <= time && S.cough.state !== 'on') {
           const b = S.breath;
-          if (b >= BREATH.warnAt && b < BREATH.closeAt) warn = (b - BREATH.warnAt) / (BREATH.closeAt - BREATH.warnAt);
+          if (b >= BREATH.warnAt && b < BREATH.closeAt)
+            warn = (b - BREATH.warnAt) / (BREATH.closeAt - BREATH.warnAt);
         } else if (kind === 'valve') {
           const b = l.area === F15_THROAT ? S.breath : S.digestP;
-          const [w0, w1] = l.area === F15_THROAT ? [0.34, BREATH.valveClose] : [GUT_VALVE.open - 0.1, GUT_VALVE.open];
+          const [w0, w1] =
+            l.area === F15_THROAT
+              ? [0.34, BREATH.valveClose]
+              : [GUT_VALVE.open - 0.1, GUT_VALVE.open];
           if (b >= w0 && b < w1) warn = (b - w0) / (w1 - w0);
         }
         if (warn > 0) {
@@ -1678,11 +1811,26 @@ function livePainter(kind: LiveKind) {
     const hq = qn(hot, 3);
     const rk = Math.round(rank * 2) / 2;
     const ok = `${Math.round(ox * 2) / 2},${Math.round(oy * 2) / 2}`;
-    return flashed(`live|${st}|${kind}|${side}|${step}|${trem}|${hq}|${rk}|${ok}|${span}`, flash, () => ({
-      p: slabPx(st, kind, side, step / 10, trem, hq / 3, Math.round(ox * 2) / 2, Math.round(oy * 2) / 2, rk, span * 16),
-      ax: 8,
-      ay: 16 + HMAX,
-    }));
+    return flashed(
+      `live|${st}|${kind}|${side}|${step}|${trem}|${hq}|${rk}|${ok}|${span}`,
+      flash,
+      () => ({
+        p: slabPx(
+          st,
+          kind,
+          side,
+          step / 10,
+          trem,
+          hq / 3,
+          Math.round(ox * 2) / 2,
+          Math.round(oy * 2) / 2,
+          rk,
+          span * 16,
+        ),
+        ax: 8,
+        ay: 16 + HMAX,
+      }),
+    );
   };
 }
 
@@ -1766,14 +1914,20 @@ registerPropPainter('f15_walleye', (o, time, _a, flash) => {
       const iy = 8.2 + ly * (open === 2 ? 1 : 0.4);
       p.ell(ix, iy, 2.4, Math.min(oh, 2.4), hx('#d8a020'));
       p.ell(ix, iy, 1.2, Math.min(oh, 2.4), hx('#6a3a08'));
-      p.rect(Math.round(ix - 0.5), Math.round(iy - Math.min(oh, 2.4) + 0.5), Math.round(ix - 0.5), Math.round(iy + Math.min(oh, 2.4) - 1.5), INK);
+      p.rect(
+        Math.round(ix - 0.5),
+        Math.round(iy - Math.min(oh, 2.4) + 0.5),
+        Math.round(ix - 0.5),
+        Math.round(iy + Math.min(oh, 2.4) - 1.5),
+        INK,
+      );
       p.set(Math.round(ix - 1.5), Math.round(iy - 1.5), WHITE);
       // Веко сверху отбрасывает тень.
       for (let x = 3; x < 13; x++) p.set(x, Math.round(8.2 - oh), alpha(INK, 0.6));
     } else {
       // Закрыт: шов век с ресницами.
       for (let x = 2; x < 14; x++) {
-        const y = 8 + Math.round(Math.sin((x - 2) / 12 * Math.PI) * 1.2);
+        const y = 8 + Math.round(Math.sin(((x - 2) / 12) * Math.PI) * 1.2);
         p.set(x, y, INK);
         if (x % 3 === 0) p.set(x, y + 1, alpha(INK, 0.7));
       }
@@ -1873,7 +2027,8 @@ registerPropPainter('f15_spike', (o, _t, _a, flash) => {
       K,
     );
     // Кольца роста.
-    for (let y = 5; y < 15; y += 3) stroke(p, 3 + (15 - y) * 0.1, y, 9 - (15 - y) * 0.1, y, alpha(K[0], 0.6));
+    for (let y = 5; y < 15; y += 3)
+      stroke(p, 3 + (15 - y) * 0.1, y, 9 - (15 - y) * 0.1, y, alpha(K[0], 0.6));
     // Мясо у основания.
     shadeEll(p, 6, 14.5, 5, 1.8, PAL.throat.rim);
     p.outline(INK);
@@ -2050,12 +2205,16 @@ registerPropPainter(
   relic('cart', 20, 16, (p) => {
     // Вагонетка Крысиных нор: ржавый короб, накренилась, колесо в мясе.
     const R = tn('#3a2418', '#6a3e24', '#9a5a32', '#c88a50');
-    polyShade(p, [
-      [2, 5],
-      [17, 3],
-      [16, 12],
-      [4, 13],
-    ], R);
+    polyShade(
+      p,
+      [
+        [2, 5],
+        [17, 3],
+        [16, 12],
+        [4, 13],
+      ],
+      R,
+    );
     stroke(p, 2, 5, 17, 3, hx('#d8a060'));
     for (const x of [6, 11]) stroke(p, x, 4.5, x + 0.5, 12.5, alpha(R[0], 0.9));
     // Руда пирита сверху.
@@ -2077,7 +2236,8 @@ registerPropPainter('f15_shrooms', (o, time, _a, flash) => {
       [11, 5, 5],
       [15, 10, 3],
     ];
-    for (const [x, y, r] of caps) limb(p, x, 15, x, y + 1, 1, 0.8, tn('#6a6254', '#a09888', '#d0c8b8', '#f0ecdc'));
+    for (const [x, y, r] of caps)
+      limb(p, x, 15, x, y + 1, 1, 0.8, tn('#6a6254', '#a09888', '#d0c8b8', '#f0ecdc'));
     for (const [x, y, r] of caps) {
       shadeEll(p, x, y, r, r * 0.6, G, glow);
       p.set(x - 1, y - 1, mixc(G[3], WHITE, 0.4 + glow));
@@ -2093,23 +2253,37 @@ registerPropPainter(
   'f15_druse',
   relic('druse', 16, 16, (p) => {
     const T = tn('#0a3a4a', '#1a7a8a', '#40c8d0', '#c0ffff');
-    polyShade(p, [
-      [3, 15],
-      [4, 6],
-      [6, 3],
-      [8, 15],
-    ], T);
-    polyShade(p, [
-      [7, 15],
-      [9, 4],
-      [11, 1],
-      [12, 15],
-    ], T, 0.1);
-    polyShade(p, [
-      [11, 15],
-      [13, 8],
-      [14, 15],
-    ], T, -0.1);
+    polyShade(
+      p,
+      [
+        [3, 15],
+        [4, 6],
+        [6, 3],
+        [8, 15],
+      ],
+      T,
+    );
+    polyShade(
+      p,
+      [
+        [7, 15],
+        [9, 4],
+        [11, 1],
+        [12, 15],
+      ],
+      T,
+      0.1,
+    );
+    polyShade(
+      p,
+      [
+        [11, 15],
+        [13, 8],
+        [14, 15],
+      ],
+      T,
+      -0.1,
+    );
     stroke(p, 9.5, 4, 10.5, 12, alpha(WHITE, 0.7));
     overgrow(p, 8, 16, 7);
   }),
@@ -2162,20 +2336,28 @@ registerPropPainter(
   relic('mirror', 14, 20, (p) => {
     // Осколок зеркала в раме — в нём отражается мясо.
     const F = tn('#3a2a14', '#6a5024', '#a88438', '#e8c870');
-    poly(p, [
-      [2, 19],
-      [2, 4],
-      [7, 1],
-      [12, 5],
-      [12, 19],
-    ], F[1]);
-    poly(p, [
-      [3.5, 18],
-      [3.5, 5],
-      [7, 2.8],
-      [10.5, 5.6],
-      [10.5, 18],
-    ], (x, y) => (y < 9 ? hx('#c89aa8') : y < 13 ? hx('#9a5a6a') : hx('#6a2a3a')));
+    poly(
+      p,
+      [
+        [2, 19],
+        [2, 4],
+        [7, 1],
+        [12, 5],
+        [12, 19],
+      ],
+      F[1],
+    );
+    poly(
+      p,
+      [
+        [3.5, 18],
+        [3.5, 5],
+        [7, 2.8],
+        [10.5, 5.6],
+        [10.5, 18],
+      ],
+      (x, y) => (y < 9 ? hx('#c89aa8') : y < 13 ? hx('#9a5a6a') : hx('#6a2a3a')),
+    );
     stroke(p, 4, 15, 9, 6, alpha(WHITE, 0.75));
     stroke(p, 6, 10, 10.5, 13, INK);
     overgrow(p, 7, 20, 6);
@@ -2187,20 +2369,28 @@ registerPropPainter(
   relic('shoji', 18, 18, (p) => {
     // Сёдзи Бесконечного замка: рама, бумага порвана, в пятнах.
     const W = hx('#5a3a24');
-    poly(p, [
-      [2, 17],
-      [4, 2],
-      [16, 3],
-      [15, 17],
-    ], hx('#e8dcc0'));
+    poly(
+      p,
+      [
+        [2, 17],
+        [4, 2],
+        [16, 3],
+        [15, 17],
+      ],
+      hx('#e8dcc0'),
+    );
     for (let i = 0; i <= 3; i++) stroke(p, 2 + i * 4.3, 17, 4 + i * 4, 2.3, W);
     for (let i = 0; i <= 3; i++) stroke(p, 2.5, 3 + i * 4.6, 16, 3.5 + i * 4.4, W);
-    poly(p, [
-      [8, 8],
-      [12, 7],
-      [11, 12],
-      [9, 11],
-    ], hx('#2a1a14'));
+    poly(
+      p,
+      [
+        [8, 8],
+        [12, 7],
+        [11, 12],
+        [9, 11],
+      ],
+      hx('#2a1a14'),
+    );
     p.ell(6, 13, 1.6, 1.2, alpha(hx('#8a0a14'), 0.8));
     overgrow(p, 9, 18, 8);
   }),
@@ -2212,12 +2402,16 @@ registerPropPainter('f15_rune', (o, time, _a, flash) => {
     const p = new Px(18, 14);
     const S = tn('#1a2420', '#34443a', '#5a6e60', '#90a494');
     // Кусок плиты круга Лабиринта гидры.
-    polyShade(p, [
-      [1, 12],
-      [3, 5],
-      [15, 3],
-      [17, 11],
-    ], S);
+    polyShade(
+      p,
+      [
+        [1, 12],
+        [3, 5],
+        [15, 3],
+        [17, 11],
+      ],
+      S,
+    );
     const glow = mixc(hx('#20a070'), hx('#a0ffd0'), [0.2, 0.6, 1, 0.6][f]);
     stroke(p, 4, 9, 14, 6, glow);
     stroke(p, 7, 5, 8, 10, glow);
@@ -2233,12 +2427,16 @@ registerPropPainter(
   relic('blade', 12, 22, (p) => {
     // Обломок меча Короля демонов — воткнут остриём.
     const B = tn('#140e18', '#2a2232', '#4a3e58', '#8a7aa0');
-    polyShade(p, [
-      [4, 20],
-      [5, 6],
-      [8, 5],
-      [8, 20],
-    ], B);
+    polyShade(
+      p,
+      [
+        [4, 20],
+        [5, 6],
+        [8, 5],
+        [8, 20],
+      ],
+      B,
+    );
     stroke(p, 7.5, 6, 7.5, 19, hx('#c8203a'));
     p.rect(2, 3, 10, 4, hx('#6a5020'));
     p.rect(2, 3, 10, 3, hx('#c8a040'));
@@ -2253,13 +2451,18 @@ registerPropPainter(
     // Лопасть ветряка Небесного архипелага: рейки и полотно.
     const Wd = tn('#4a3420', '#7a5a38', '#a88458', '#dcc090');
     limb(p, 3, 17, 16, 3, 1.2, 1, Wd);
-    poly(p, [
-      [7, 12],
-      [14, 5],
-      [18, 8],
-      [11, 15],
-    ], hx('#e8e0cc'));
-    for (let i = 0; i < 3; i++) stroke(p, 9 + i * 2.4, 13 - i * 2.2, 15.5 + i * 0.8, 6.2 + i * 1.1, hx('#a89a80'));
+    poly(
+      p,
+      [
+        [7, 12],
+        [14, 5],
+        [18, 8],
+        [11, 15],
+      ],
+      hx('#e8e0cc'),
+    );
+    for (let i = 0; i < 3; i++)
+      stroke(p, 9 + i * 2.4, 13 - i * 2.2, 15.5 + i * 0.8, 6.2 + i * 1.1, hx('#a89a80'));
     stroke(p, 12, 12, 15, 9, alpha(hx('#8a2a3a'), 0.7));
     overgrow(p, 6, 18, 5);
   }),
@@ -2271,18 +2474,26 @@ registerPropPainter(
     // Табличка перрона Проклятой станции, погнутая.
     p.rect(7, 8, 8, 19, hx('#5a5a60'));
     p.rect(7, 8, 7, 19, hx('#8a8a90'));
-    poly(p, [
-      [1, 2],
-      [15, 1],
-      [15, 8],
-      [1, 9],
-    ], hx('#f0f0ea'));
-    poly(p, [
-      [1, 4.2],
-      [15, 3.4],
-      [15, 5.6],
-      [1, 6.4],
-    ], hx('#2a4aa0'));
+    poly(
+      p,
+      [
+        [1, 2],
+        [15, 1],
+        [15, 8],
+        [1, 9],
+      ],
+      hx('#f0f0ea'),
+    );
+    poly(
+      p,
+      [
+        [1, 4.2],
+        [15, 3.4],
+        [15, 5.6],
+        [1, 6.4],
+      ],
+      hx('#2a4aa0'),
+    );
     for (let x = 3; x < 14; x += 2) p.set(x, 7, hx('#1a1a20'));
     stroke(p, 10, 2, 13, 8, alpha(hx('#8a1a2a'), 0.6));
     overgrow(p, 8, 20, 5);
@@ -2317,7 +2528,14 @@ registerPropPainter(
     p.ell(9, 9, 1.2, 1.2, INK);
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * TAU + 0.4;
-      stroke(p, 9 + Math.cos(a) * 2.6, 9 + Math.sin(a) * 2.6, 9 + Math.cos(a) * 5.4, 9 + Math.sin(a) * 5.4, G[0]);
+      stroke(
+        p,
+        9 + Math.cos(a) * 2.6,
+        9 + Math.sin(a) * 2.6,
+        9 + Math.cos(a) * 5.4,
+        9 + Math.sin(a) * 5.4,
+        G[0],
+      );
     }
     overgrow(p, 9, 18, 8);
   }),
@@ -2333,7 +2551,9 @@ registerPropPainter('f15_gland', (o, time, _a, flash) => {
   const f = empty ? 0 : Math.floor(time * 2 + hash(o.x, o.y, 15) * 4) % 4;
   return flashed(`gland|${empty ? 1 : 0}|${f}`, flash, () => {
     const p = new Px(16, 16);
-    const G = empty ? tn('#3a2a14', '#5a4424', '#7a6234', '#9a8248') : tn('#4a5a14', '#7a9a24', '#b0d044', '#eaffa0');
+    const G = empty
+      ? tn('#3a2a14', '#5a4424', '#7a6234', '#9a8248')
+      : tn('#4a5a14', '#7a9a24', '#b0d044', '#eaffa0');
     shadeEll(p, 8, 10, 6, empty ? 3.6 : 5, G);
     if (!empty) {
       // Пора и капля слизи — набухает.
@@ -2358,7 +2578,9 @@ registerPropPainter('f15_nervecord', (o, time, _a, flash) => {
   const f = used ? 0 : Math.floor(time * 6 + hash(o.x, o.y, 16) * 6) % 3;
   return flashed(`ncord|${used ? 1 : 0}|${f}`, flash, () => {
     const p = new Px(14, 22);
-    const N = used ? tn('#2a1a3a', '#4a3060', '#6a4a8a', '#8a6aa8') : tn('#3a0a5a', '#7a2ac0', '#c070ff', '#f4dcff');
+    const N = used
+      ? tn('#2a1a3a', '#4a3060', '#6a4a8a', '#8a6aa8')
+      : tn('#3a0a5a', '#7a2ac0', '#c070ff', '#f4dcff');
     // Тяж нерва от пола к стене: натянут (жив) или провис (расслаблен).
     const sag = used ? 3 : 0;
     const pts = spline(
@@ -2403,7 +2625,14 @@ registerPropPainter('f15_wheel', (o, _t, _a, flash) => {
     }
     for (let x = 0; x < 20; x++) {
       const pinch = shut && Math.abs(x - 10) < 3;
-      shadeEll(p, x + 0.5, 16, pinch ? 0.8 : 2, pinch ? 0.7 : 1.6, pinch ? tn('#6a6a8a', '#9a9ab8', '#c8c8e0', '#f0f0ff') : V);
+      shadeEll(
+        p,
+        x + 0.5,
+        16,
+        pinch ? 0.8 : 2,
+        pinch ? 0.7 : 1.6,
+        pinch ? tn('#6a6a8a', '#9a9ab8', '#c8c8e0', '#f0f0ff') : V,
+      );
     }
     // Костяное колесо-ворот на вене: обод, четыре спицы, рукоять.
     const cx = 10;
@@ -2419,7 +2648,16 @@ registerPropPainter('f15_wheel', (o, _t, _a, flash) => {
     }
     shadeEll(p, cx, cy, 1.6, 1.6, BONE, 0.2);
     const ha = a0 - 0.8;
-    limb(p, cx + Math.cos(ha) * 6, cy + Math.sin(ha) * 6, cx + Math.cos(ha) * 8.2, cy + Math.sin(ha) * 8.2, 1.2, 1.2, BONE);
+    limb(
+      p,
+      cx + Math.cos(ha) * 6,
+      cy + Math.sin(ha) * 6,
+      cx + Math.cos(ha) * 8.2,
+      cy + Math.sin(ha) * 8.2,
+      1.2,
+      1.2,
+      BONE,
+    );
     p.set(cx - 3, Math.floor(cy - 5), BONE[3]);
     return { p, ax: 10, ay: 20 };
   });
@@ -2429,7 +2667,8 @@ registerPropPainter('f15_wheel', (o, _t, _a, flash) => {
 // Монстры «Мира». Кадр — из кеша по (вид, поза, номер); глаз светится.
 // ---------------------------------------------------------------------------
 
-const deathK = (pose: MobPose) => (pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0);
+const deathK = (pose: MobPose) =>
+  pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0;
 const mod = (a: number, n: number) => ((a % n) + n) % n;
 
 /** Антитело: белковый «Y», кончики-захваты светятся. Кувыркается к цели. */
@@ -2552,7 +2791,13 @@ function paintMacro(ph: number, open: number, squash: number, dead: number): Bui
     if (!open) {
       shadeEll(p, cx + 4, cy + 3, 1.6, 1.2, BONE);
       p.ell(cx - 5, cy + 4, 1.2, 1, hx('#8a1a2a'));
-      p.rect(Math.floor(cx), Math.floor(cy + 5), Math.floor(cx + 2), Math.floor(cy + 5), hx('#5a4a3a'));
+      p.rect(
+        Math.floor(cx),
+        Math.floor(cy + 5),
+        Math.floor(cx + 2),
+        Math.floor(cy + 5),
+        hx('#5a4a3a'),
+      );
     }
   }
   p.outline(INK);
@@ -2598,7 +2843,9 @@ function paintNerve(glow: number, spark: number, dead: number): Built {
   const W = 30;
   const H = 24;
   const p = new Px(W, H);
-  const N = dead ? tn('#2a2a34', '#4a4a58', '#6a6a7a', '#8a8a9a') : tn('#3a0a5a', '#7a2ac0', '#c070ff', '#f4dcff');
+  const N = dead
+    ? tn('#2a2a34', '#4a4a58', '#6a6a7a', '#8a8a9a')
+    : tn('#3a0a5a', '#7a2ac0', '#c070ff', '#f4dcff');
   const cx = 15;
   const cy = 12;
   // Дендриты.
@@ -2789,11 +3036,19 @@ function paintDrone(kind: string, f: number): Built {
   const cy = 10;
   const rx = kind === 'ram' ? 7.5 : 6.2;
   const ry = kind === 'ram' ? 3.6 : 4.4;
-  if (kind === 'ram') for (let i = 0; i < 3; i++) stroke(p, 1 + i, cy - 2 + i * 2, 8, cy - 1 + i, alpha(RBC[2], 0.5));
+  if (kind === 'ram')
+    for (let i = 0; i < 3; i++) stroke(p, 1 + i, cy - 2 + i * 2, 8, cy - 1 + i, alpha(RBC[2], 0.5));
   // Шипы венца.
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * TAU + f * 0.39;
-    stroke(p, cx + Math.cos(a) * rx * 0.8, cy + Math.sin(a) * ry * 0.8, cx + Math.cos(a) * (rx + 2), cy + Math.sin(a) * (ry + 1.6), RBC[1]);
+    stroke(
+      p,
+      cx + Math.cos(a) * rx * 0.8,
+      cy + Math.sin(a) * ry * 0.8,
+      cx + Math.cos(a) * (rx + 2),
+      cy + Math.sin(a) * (ry + 1.6),
+      RBC[1],
+    );
   }
   shadeEll(p, cx, cy, rx, ry, RBC);
   // Двояковогнутый: тёмная ямка в середине.
@@ -2885,20 +3140,31 @@ function paintWatcher(dir: number, kind: string, f: number): Built {
   stroke(p, ex + 6, ey - 1, ex + 3, ey + 1, hx('#c04050'));
   if (kind === 'blink') {
     shadeEll(p, ex, ey, 6.4, 6, R);
-    for (let x = -5; x <= 5; x++) p.set(Math.floor(ex + x), Math.floor(ey + Math.abs(x) * 0.15), INK);
+    for (let x = -5; x <= 5; x++)
+      p.set(Math.floor(ex + x), Math.floor(ey + Math.abs(x) * 0.15), INK);
   } else {
     const a = (dir / 8) * TAU;
     const ix = ex + Math.cos(a) * 2.6;
     const iy = ey + Math.sin(a) * 2.2;
     const hot = kind === 'lock' || kind === 'fire';
-    const iris = hot ? tn('#6a0a0a', '#c02010', '#ff6a2a', '#fff0a0') : tn('#4a3a08', '#a08018', '#e0c040', '#fff4a0');
+    const iris = hot
+      ? tn('#6a0a0a', '#c02010', '#ff6a2a', '#fff0a0')
+      : tn('#4a3a08', '#a08018', '#e0c040', '#fff4a0');
     shadeEll(p, ix, iy, 2.8, 2.6, iris, kind === 'fire' ? 0.4 : 0);
     p.ell(ix, iy, 1.2, kind === 'fire' ? 0.8 : 1.4, INK);
     p.set(Math.floor(ix - 1.5), Math.floor(iy - 1.5), WHITE);
   }
   p.outline(INK);
   const a = (dir / 8) * TAU;
-  return { p, ax: 11, ay: 27, eye: kind === 'blink' ? null : [Math.round(ex + Math.cos(a) * 2.6), Math.round(ey + Math.sin(a) * 2.2)] };
+  return {
+    p,
+    ax: 11,
+    ay: 27,
+    eye:
+      kind === 'blink'
+        ? null
+        : [Math.round(ex + Math.cos(a) * 2.6), Math.round(ey + Math.sin(a) * 2.2)],
+  };
 }
 
 registerMobPainter('f15_watcher', (m, pose) => {
@@ -2968,11 +3234,15 @@ function paintSac(swell: number, burst: number, f: number): Built {
     shadeEll(p, 11, 18, 8, 3, tn('#4a0a1a', '#8a2a3a', '#c05060', '#f09aa8'));
     for (let i = 0; i < 5; i++) {
       const a = -Math.PI / 2 + (i - 2) * 0.6;
-      poly(p, [
-        [11 + Math.cos(a - 0.3) * 3, 17],
-        [11 + Math.cos(a) * (6 + burst), 17 - 5 - burst],
-        [11 + Math.cos(a + 0.3) * 3, 17],
-      ], alpha(S[2], 0.85));
+      poly(
+        p,
+        [
+          [11 + Math.cos(a - 0.3) * 3, 17],
+          [11 + Math.cos(a) * (6 + burst), 17 - 5 - burst],
+          [11 + Math.cos(a + 0.3) * 3, 17],
+        ],
+        alpha(S[2], 0.85),
+      );
     }
     p.outline(INK);
     return { p, ax: 11, ay: 20, eye: null };
@@ -3029,7 +3299,8 @@ function paintTonsil(open: number, f: number, dead: number): Built {
     [7, 19, 5],
   ];
   const puff = [0, 0.3, 0.5, 0.3][f];
-  for (const [x, y, r] of lobes) shadeEll(p, x, y - dead * 2, r + puff * 0.4 - dead, r * 0.85 - dead, T, -0.02);
+  for (const [x, y, r] of lobes)
+    shadeEll(p, x, y - dead * 2, r + puff * 0.4 - dead, r * 0.85 - dead, T, -0.02);
   // Лакуны — тёмные ямки; открыты — в них мокрота.
   const pits: [number, number][] = [
     [9, 14],
@@ -3259,7 +3530,10 @@ function mimic(srcId: string, g: Grad, eyeC: string, map: (mode: string) => stri
   };
 }
 
-registerMobPainter('f15_mhound', mimic('f10_hound', MIMIC_FLESH, '#e0ff60', (md) => md));
+registerMobPainter(
+  'f15_mhound',
+  mimic('f10_hound', MIMIC_FLESH, '#e0ff60', (md) => md),
+);
 registerMobPainter(
   'f15_msala',
   mimic('f6_salamander', MIMIC_BILE, '#e0ff60', (md) =>
@@ -3490,7 +3764,14 @@ registerZonePainter('f15_coat', (g, z, px, py, S, time) => {
 
 /** Лужа: неровное пятно с кромкой и пузырями. */
 function puddle(color: [number, number, number], rim: [number, number, number], bubbles: boolean) {
-  return (g: CanvasRenderingContext2D, z: Zone | Strike, px: number, py: number, S: number, time: number) => {
+  return (
+    g: CanvasRenderingContext2D,
+    z: Zone | Strike,
+    px: number,
+    py: number,
+    S: number,
+    time: number,
+  ) => {
     const zz = z as Zone;
     const warn = zz.warn ?? 0;
     const k = zz.t < warn ? zz.t / Math.max(0.01, warn) : lifeK(zz);
@@ -3542,7 +3823,15 @@ registerZonePainter('f15_phlegm', (g, z, px, py, S) => {
   const R = st.r * S;
   g.fillStyle = `rgba(20,30,10,${0.15 + 0.3 * k})`;
   g.beginPath();
-  g.ellipse(Math.round(px), Math.round(py), R * (0.4 + 0.6 * k), R * 0.5 * (0.4 + 0.6 * k), 0, 0, TAU);
+  g.ellipse(
+    Math.round(px),
+    Math.round(py),
+    R * (0.4 + 0.6 * k),
+    R * 0.5 * (0.4 + 0.6 * k),
+    0,
+    0,
+    TAU,
+  );
   g.fill();
   g.strokeStyle = `rgba(220,250,190,${0.3 + 0.5 * k})`;
   g.lineWidth = 1;
@@ -3664,11 +3953,15 @@ registerItemArt('f15_heartlet', () => {
   const H = tn('#4a0610', '#8a1222', '#d0344a', '#ff9aa8');
   shadeEll(p, 3.6, 4, 2.2, 2.2, H, 0.1);
   shadeEll(p, 6.4, 4, 2.2, 2.2, H);
-  poly(p, [
-    [1.4, 4.5],
-    [8.6, 4.5],
-    [5, 9],
-  ], H[1]);
+  poly(
+    p,
+    [
+      [1.4, 4.5],
+      [8.6, 4.5],
+      [5, 9],
+    ],
+    H[1],
+  );
   p.set(3, 3, hx('#ffd0d8'));
   p.outline(INK);
   return p;
@@ -3676,13 +3969,17 @@ registerItemArt('f15_heartlet', () => {
 
 registerItemArt('f15_tissue', () => {
   const p = new Px(10, 10);
-  polyShade(p, [
-    [1, 7],
-    [2, 2],
-    [8, 1],
-    [9, 7],
-    [5, 9],
-  ], PAL.throat.rim);
+  polyShade(
+    p,
+    [
+      [1, 7],
+      [2, 2],
+      [8, 1],
+      [9, 7],
+      [5, 9],
+    ],
+    PAL.throat.rim,
+  );
   stroke(p, 2, 6, 8, 3, hx('#d82e64'));
   p.set(4, 3, hx('#f0c0c8'));
   p.outline(INK);
@@ -3692,11 +3989,15 @@ registerItemArt('f15_tissue', () => {
 registerItemArt('f15_lymph', () => {
   const p = new Px(10, 10);
   const L = tn('#5a6a2a', '#a0b050', '#d8e490', '#fbffe0');
-  poly(p, [
-    [5, 1],
-    [8, 6],
-    [2, 6],
-  ], L[2]);
+  poly(
+    p,
+    [
+      [5, 1],
+      [8, 6],
+      [2, 6],
+    ],
+    L[2],
+  );
   shadeEll(p, 5, 6.5, 3, 2.6, L);
   p.set(4, 5, WHITE);
   p.outline(INK);
@@ -3706,11 +4007,15 @@ registerItemArt('f15_lymph', () => {
 registerItemArt('f15_bile', () => {
   const p = new Px(10, 10);
   const B = tn('#3a3a08', '#7a8414', '#bcc838', '#f4ff9a');
-  poly(p, [
-    [5, 0.5],
-    [8, 6],
-    [2, 6],
-  ], B[2]);
+  poly(
+    p,
+    [
+      [5, 0.5],
+      [8, 6],
+      [2, 6],
+    ],
+    B[2],
+  );
   shadeEll(p, 5, 6.5, 3, 2.6, B);
   p.set(4, 5, WHITE);
   p.outline(INK);

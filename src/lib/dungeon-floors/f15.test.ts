@@ -12,7 +12,16 @@ import { describe, expect, it } from 'vitest';
 import { DUNGEON_START, heroOf, MOBS, SLOTS } from '../dungeon';
 import type { DungeonState, Gear } from '../dungeon';
 import { buildWorld, liftOf, Tile, walkableTile } from '../dungeon-world';
-import { createSim, NO_INPUT, spawnMob, stepSim, strikeHits, SWORD, usableNear, useObject } from '../dungeon-sim';
+import {
+  createSim,
+  NO_INPUT,
+  spawnMob,
+  stepSim,
+  strikeHits,
+  SWORD,
+  usableNear,
+  useObject,
+} from '../dungeon-sim';
 import type { Mob, Sim, SimInput } from '../dungeon-sim';
 import { FLOORS } from './index';
 import { F15_BEASTS, F15_GUT, F15_MARK, F15_THROAT, F15_VEINS } from './f15';
@@ -58,7 +67,8 @@ function sim(tier: number, plus: number, x: number, y: number, seed = 7, meat = 
   return s;
 }
 
-const solidAt = (s: Sim, x: number, y: number) => !walkableTile(s.tiles[Math.floor(y) * W + Math.floor(x)]);
+const solidAt = (s: Sim, x: number, y: number) =>
+  !walkableTile(s.tiles[Math.floor(y) * W + Math.floor(x)]);
 
 function floorNear(s: Sim, x: number, y: number, r: number): [number, number] {
   for (let k = 0; k < 64; k++) {
@@ -167,7 +177,12 @@ function bot(s: Sim, st: BotState): SimInput {
     if (!t || t.shape !== 'line') continue;
     const [react, missed] = notice(st, `l${m.id}:${Math.round((s.time - m.t) * 10)}`);
     if (missed || m.t < react) continue;
-    const hit = strikeHits({ shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 }, h.x, h.y, h.r + 0.3);
+    const hit = strikeHits(
+      { shape: 'line', x: m.x, y: m.y, r: t.r, w: t.w, ang: t.ang, warn: 1, dmg: 0 },
+      h.x,
+      h.y,
+      h.r + 0.3,
+    );
     if (!hit) continue;
     const a = (t.ang ?? 0) + Math.PI / 2;
     const side = Math.cos(a) * (h.x - m.x) + Math.sin(a) * (h.y - m.y) >= 0 ? 1 : -1;
@@ -312,7 +327,9 @@ describe('этаж 15: договор с «Сердцем»', () => {
     for (const m of ours) expect(m.id.startsWith('f15_'), m.id).toBe(true);
     expect(f.mats[0].id).toBe('f15_tissue');
     expect(F15_BEASTS.length).toBeGreaterThanOrEqual(10);
-    expect(F15_BEASTS.filter((id) => ['f15_mhound', 'f15_msala', 'f15_mknight'].includes(id)).length).toBe(3);
+    expect(
+      F15_BEASTS.filter((id) => ['f15_mhound', 'f15_msala', 'f15_mknight'].includes(id)).length,
+    ).toBe(3);
   });
 
   it('от лифта Горла до ворот арены есть путь по клеткам', () => {
@@ -498,8 +515,25 @@ describe('этаж 15: события Чрева и Сосудов', () => {
 
 describe('этаж 15: монстры', () => {
   it('монстры этажа не застревают в стенах', () => {
-    const kinds = ['f15_mob', 'f15_macro', 'f15_parasite', 'f15_drone', 'f15_mhound', 'f15_msala', 'f15_mknight', 'f15_gold', 'f15_larva'];
-    const spots = [at(F15_THROAT, 33, 46), at(F15_THROAT, 12, 34), at(F15_GUT, 31, 28), at(F15_GUT, 31, 84), at(F15_VEINS, 25, 90), at(F15_VEINS, 18, 38)];
+    const kinds = [
+      'f15_mob',
+      'f15_macro',
+      'f15_parasite',
+      'f15_drone',
+      'f15_mhound',
+      'f15_msala',
+      'f15_mknight',
+      'f15_gold',
+      'f15_larva',
+    ];
+    const spots = [
+      at(F15_THROAT, 33, 46),
+      at(F15_THROAT, 12, 34),
+      at(F15_GUT, 31, 28),
+      at(F15_GUT, 31, 84),
+      at(F15_VEINS, 25, 90),
+      at(F15_VEINS, 18, 38),
+    ];
     let stuck = 0;
     let checks = 0;
     const why = new Map<string, number>();
@@ -518,7 +552,11 @@ describe('этаж 15: монстры', () => {
         stepSim(s, DT, bot(s, st));
         if (t % 10) continue;
         for (const m of s.mobs) {
-          if (['dying', 'emerge', 'f15_burrow', 'f15_swim', 'f15_latch'].includes(m.mode) || m.t < 0) continue;
+          if (
+            ['dying', 'emerge', 'f15_burrow', 'f15_swim', 'f15_latch'].includes(m.mode) ||
+            m.t < 0
+          )
+            continue;
           if ((m.data.ghost ?? 0) > 0 || MOBS[m.kind].fly) continue;
           checks += 1;
           if (solidAt(s, m.x, m.y)) {
@@ -539,14 +577,21 @@ describe('этаж 15: монстры', () => {
     const [x, y] = at(F15_GUT, 31, 28);
     const s = sim(8, 5, x + 0.5, y + 0.5, 12);
     s.mobs = [];
-    for (const [j, kind] of ['f15_nerve', 'f15_watcher', 'f15_tonsil', 'f15_mknight', 'f15_matron'].entries()) {
+    for (const [j, kind] of [
+      'f15_nerve',
+      'f15_watcher',
+      'f15_tonsil',
+      'f15_mknight',
+      'f15_matron',
+    ].entries()) {
       const [mx, my] = floorNear(s, x + 0.5, y + 0.5, 2.5 + (j % 2));
       spawnMob(s, kind, mx, my);
     }
     for (let t = 0; t < 25 * 60; t++) {
       s.hero.hp = s.stats.maxHp;
       stepSim(s, DT, NO_INPUT);
-      for (const z of s.strikes) if (z.dmg && !arts.has(z.art ?? z.shape)) arts.set(z.art ?? z.shape, z.warn);
+      for (const z of s.strikes)
+        if (z.dmg && !arts.has(z.art ?? z.shape)) arts.set(z.art ?? z.shape, z.warn);
     }
     if (LOG) console.log('метки', [...arts]);
     expect(arts.size).toBeGreaterThanOrEqual(1);
@@ -607,11 +652,13 @@ describe('этаж 15: проходимость', () => {
       let lastArea = '';
       for (; t < 1200 * 60; t++) {
         const inp = bot(s, st);
-        if (!inp.mx && !inp.my && !inp.attack && !inp.eat && !inp.dash) Object.assign(inp, follow(s, goal, gx, gy));
+        if (!inp.mx && !inp.my && !inp.attack && !inp.eat && !inp.dash)
+          Object.assign(inp, follow(s, goal, gx, gy));
         const hp0 = s.hero.hp;
         stepSim(s, DT, inp);
         if (LOG) {
-          for (const e of s.events) if (e.t === 'kill') kills.set(e.mob, (kills.get(e.mob) ?? 0) + 1);
+          for (const e of s.events)
+            if (e.t === 'kill') kills.set(e.mob, (kills.get(e.mob) ?? 0) + 1);
           if (s.hero.hp < hp0) {
             let src = 'среда';
             let bd = 2.5;
@@ -626,12 +673,18 @@ describe('этаж 15: проходимость', () => {
           }
           if (process.env.F15TRACE && t % (20 * 60) === 0) {
             const d = goal[Math.floor(s.hero.y) * W + Math.floor(s.hero.x)];
-            const near = s.mobs.filter((m) => m.mode !== 'dying' && Math.hypot(m.x - s.hero.x, m.y - s.hero.y) < 7);
-            console.log(`  · ${(t / 60).toFixed(0)} с ${s.area} ${s.hero.x.toFixed(1)},${(s.hero.y - band(s.area).top).toFixed(1)} до цели ${d}, hp ${Math.round((100 * s.hero.hp) / s.stats.maxHp)}%, чужак ${f15Alien(s).toFixed(0)}, рядом ${near.map((m) => m.kind.slice(4) + ':' + m.mode).join(',')}`);
+            const near = s.mobs.filter(
+              (m) => m.mode !== 'dying' && Math.hypot(m.x - s.hero.x, m.y - s.hero.y) < 7,
+            );
+            console.log(
+              `  · ${(t / 60).toFixed(0)} с ${s.area} ${s.hero.x.toFixed(1)},${(s.hero.y - band(s.area).top).toFixed(1)} до цели ${d}, hp ${Math.round((100 * s.hero.hp) / s.stats.maxHp)}%, чужак ${f15Alien(s).toFixed(0)}, рядом ${near.map((m) => m.kind.slice(4) + ':' + m.mode).join(',')}`,
+            );
           }
           if (s.area !== lastArea) {
             lastArea = s.area;
-            console.log(`  ${(t / 60).toFixed(0)} с — ${s.area}, здоровье ${Math.round((100 * s.hero.hp) / s.stats.maxHp)}%, мяса ${s.sack.meat.f15_heartlet ?? 0}`);
+            console.log(
+              `  ${(t / 60).toFixed(0)} с — ${s.area}, здоровье ${Math.round((100 * s.hero.hp) / s.stats.maxHp)}%, мяса ${s.sack.meat.f15_heartlet ?? 0}`,
+            );
           }
         }
         if (Math.hypot(s.hero.x - gx - 0.5, s.hero.y - gy - 0.5) < 1.5) break;
@@ -643,8 +696,20 @@ describe('этаж 15: проходимость', () => {
           `путь ${seed}: ${s.hero.mode === 'dead' ? 'погиб' : t < 1200 * 60 ? `${(t / 60).toFixed(0)} с` : 'не дошёл'}, убито ${s.killed}, где ${s.area} ${s.hero.x.toFixed(0)},${(s.hero.y - band(s.area).top).toFixed(0)}, мяса ${s.sack.meat.f15_heartlet ?? 0}, чужак ${ev.alien.toFixed(0)}`,
           JSON.stringify(ev),
         );
-        console.log('  убиты', [...kills].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}:${n}`).join(' '));
-        console.log('  урон от', [...hurt].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}:${Math.round(n)}`).join(' '));
+        console.log(
+          '  убиты',
+          [...kills]
+            .sort((a, b) => b[1] - a[1])
+            .map(([k, n]) => `${k}:${n}`)
+            .join(' '),
+        );
+        console.log(
+          '  урон от',
+          [...hurt]
+            .sort((a, b) => b[1] - a[1])
+            .map(([k, n]) => `${k}:${Math.round(n)}`)
+            .join(' '),
+        );
       }
       if (s.hero.mode !== 'dead' && t < 1200 * 60) arrived += 1;
     }

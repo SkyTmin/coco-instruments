@@ -54,9 +54,24 @@ function gapMap(): string {
       bits[k >> 3] |= 0x80 >> (k & 7);
     }
   HUB_MAPS[id] = {
-    id, name: '', kind: 'indoor', w: 4, h: 3, ambient: 1, music: '', bg: '#000', sub: 4,
+    id,
+    name: '',
+    kind: 'indoor',
+    w: 4,
+    h: 3,
+    ambient: 1,
+    music: '',
+    bg: '#000',
+    sub: 4,
     solid: btoa(String.fromCharCode(...bits)),
-    objs: [], npcs: [], doors: [], lights: [], fx: [], spawns: { in: [1.875, 0.5, 0] }, marks: {}, searchlights: [],
+    objs: [],
+    npcs: [],
+    doors: [],
+    lights: [],
+    fx: [],
+    spawns: { in: [1.875, 0.5, 0] },
+    marks: {},
+    searchlights: [],
   };
   return id;
 }

@@ -4626,8 +4626,8 @@ export function drawSerpentBody(
   const rearNow = mem?.rear ?? 0;
   // Форма хлёста: от основания у груди к кончику по кругу — дуга, отстающая
   // от кончика; кольца — по её длине (тело не растягивается бусами).
-  let wpts: P2[] = [];
-  let wlen: number[] = [];
+  const wpts: P2[] = [];
+  const wlen: number[] = [];
   let thT = 0;
   let sd = 1;
   if (whip) {
@@ -4659,7 +4659,9 @@ export function drawSerpentBody(
   const rings: Ring[] = [];
   for (const smp of BODY_SAMPLES) {
     const { s, k } = smp;
-    let [x, y, tx, ty] = alongT(tr, s);
+    const [x0, y0, tx, ty] = alongT(tr, s);
+    let x = x0;
+    let y = y0;
     // Волна ползка стоит на земле: тело скользит по ней.
     const amp = (crawl ? 0.26 : 0.12) * clamp01((k - 0.02) / 0.3);
     const wv =
