@@ -1127,6 +1127,10 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
+/* Креатив: два телепорта — ряд на всю ширину. */
+.dgx-menu__row--two {
+  grid-template-columns: repeat(2, 1fr);
+}
 .dgx-menu__row .gx-btn {
   flex-direction: column;
   gap: 2px;

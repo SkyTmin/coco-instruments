@@ -43,6 +43,7 @@ import {
   bossBar,
   bossNotches,
   createSim,
+  creativeWarp,
   dropFromSack,
   fogOf,
   heroStuck,
@@ -820,6 +821,8 @@ export function DungeonRun({
   const [liftArea, setLiftArea] = useState<AreaId>(() => entryArea(world.floor));
   const [dying, setDying] = useState(false);
   const [lowHp, setLowHp] = useState(false);
+  /** Креатив владельца: в паузе — телепорт к боссу и к лифту. */
+  const creativeOn = useFinanceStore((s) => s.creative.on);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -2036,6 +2039,30 @@ export function DungeonRun({
                 Кнопки
               </button>
             </div>
+            {creativeOn && (
+              <div className="dgx-menu__row dgx-menu__row--two">
+                {(['boss', 'lift'] as const).map((to) => (
+                  <button
+                    key={to}
+                    className="gx-btn"
+                    disabled={dying}
+                    onClick={() => {
+                      const sim = simRef.current;
+                      if (!sim || !creativeWarp(sim, to)) {
+                        note(to === 'boss' ? 'Логова на этаже нет' : 'Лифта на этаже нет');
+                        return;
+                      }
+                      setSheet(null);
+                      pushHud(sim);
+                      save();
+                    }}
+                  >
+                    <GxIcon name={to === 'boss' ? 'crown' : 'lift'} />
+                    {to === 'boss' ? 'ТП к боссу' : 'ТП к лифту'}
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               className="gx-btn gx-btn--grey gx-btn--block"
               onClick={() => {

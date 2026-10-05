@@ -26,7 +26,7 @@ import type { DungeonState } from './dungeon';
 import { FLOORS } from './dungeon-floors';
 import { DEEP_PYRITE, DEEP_WALLROCK } from './dungeon-floors/types';
 import { BOSS_SCRIPTS, BRAINS } from './dungeon-ai';
-import { API, createSim, NO_INPUT, spawnMob, stepSim } from './dungeon-sim';
+import { API, createSim, creativeWarp, NO_INPUT, spawnMob, stepSim } from './dungeon-sim';
 import type { SimEvent } from './dungeon-sim';
 import { heroOf } from './dungeon';
 import { arenaCells, buildWorld, liftOf, reachable, Tile, walkableTile } from './dungeon-world';
@@ -335,6 +335,58 @@ describe('этаж 15: договор «Мира» и «Сердца»', () => {
     expect(open(world[0]), 'верх «Мира»').toEqual(want);
     expect(f.mats.some((m) => m.id === 'f15mat')).toBe(true);
   });
+});
+
+describe('креатив: ТП к боссу и к лифту', () => {
+  for (const f of FLOORS)
+    it(`этаж ${f.id}: к воротам снаружи, бой стартует сам; лифт сбрасывает бой`, () => {
+      const wd = buildWorld(f.id);
+      const lift = liftOf(wd, entryArea(f.id))!;
+      const s = createSim({
+        world: wd,
+        dungeon: DUNGEON_START,
+        stats: heroOf(DUNGEON_START),
+        x: lift.x + 0.5,
+        y: lift.y + 0.5,
+        seed: 3,
+        now: () => 1e12,
+        god: true,
+      });
+      const b = s.boss!;
+      const w = wd.w;
+      const cell = () => Math.floor(s.hero.y) * w + Math.floor(s.hero.x);
+      const near = (g: number) =>
+        Math.hypot((g % w) + 0.5 - s.hero.x, Math.floor(g / w) + 0.5 - s.hero.y);
+      // Отдыхающий босс просыпается.
+      b.state = 'rest';
+      b.readyAt = 2e12;
+      expect(creativeWarp(s, 'boss')).toBe(true);
+      expect(b.state).toBe('idle');
+      expect(b.cells.has(cell()), 'снаружи арены').toBe(false);
+      expect(walkableTile(s.tiles[cell()])).toBe(true);
+      const gate = [...b.gates].sort((p, q) => near(p) - near(q))[0];
+      expect(near(gate)).toBeLessThan(1.6);
+      expect(s.tiles[gate], 'ворота открыты').toBe(Tile.Floor);
+      // Шаг за ворота — бой начинается сам.
+      const inside = [1, -1, w, -w].map((d) => gate + d).find((i) => b.cells.has(i))!;
+      API.moveHero(s, (inside % w) + 0.5, Math.floor(inside / w) + 0.5);
+      stepSim(s, 1 / 60, { ...NO_INPUT });
+      expect(b.state).toBe('fight');
+      // Повторный ТП в бою — рядом с боссом, на арене.
+      expect(creativeWarp(s, 'boss')).toBe(true);
+      expect(b.cells.has(cell()), 'на арене').toBe(true);
+      expect(b.state).toBe('fight');
+      // К лифту: бой сброшен, ворота открыты, герой на лифте.
+      expect(creativeWarp(s, 'lift')).toBe(true);
+      expect(b.state).toBe('idle');
+      for (const g of b.gates) expect(s.tiles[g]).toBe(Tile.Floor);
+      expect(
+        wd.objs.some(
+          (o) => o.kind === 'lift' && o.x === Math.floor(s.hero.x) && o.y === Math.floor(s.hero.y),
+        ),
+      ).toBe(true);
+      expect(s.mobs.some((m) => MOBS[m.kind]?.boss)).toBe(false);
+    });
 });
 
 describe('движок 3', () => {

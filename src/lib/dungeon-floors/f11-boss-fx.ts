@@ -1401,10 +1401,11 @@ interface Body {
   h: number;
 }
 
-function bodiesOf(sim: Sim | null, S: number): Body[] {
+function bodiesOf(sim: Sim | null, S: number, skip?: Mob): Body[] {
   const out: Body[] = [];
   if (!sim) return out;
   for (const m of sim.mobs) {
+    if (m === skip) continue;
     if (m.mode === 'dying' && m.t > 0.5) continue;
     if (m.kind === 'f11boss') out.push({ x: m.x * S, fy: m.y * S + 2, hw: 20, h: 64 });
     else if (m.kind === 'f11_pylon') out.push({ x: m.x * S, fy: m.y * S + 2, hw: 6, h: 37 });
@@ -2840,16 +2841,17 @@ registerZonePainter(
 // (от 1,7 клетки, до стены, не длиннее 13) крутятся 1,2 рад/с в сторону
 // `sdir`; угол — `m.data.sa`, тот же, что считает урон. Одна зона мозга
 // `f11v_spin` на весь режим (поверх темноты); пол под лучами рисует
-// «режиссёр» на полу. Заряд: в ядро стягиваются искры жара, свечение
-// растёт; на полу — две направляющие до стены пунктиром и шевроны поперёк:
-// КУДА повернут лучи; клин первых мгновений хода наливается. Последние
-// 0,2 с — направляющие белые, «тик-тик». Пуск: вспышка ядра, лучи выходят
-// из груди и опускаются к колену героя (так читается «по ногам», а не над
-// головой); ядро белое, жёлтое, оранжевое, ореол — ширина как удар; по лучу
+// «режиссёр» на полу. Заряд: в голову (линза и затылок) стягиваются искры
+// жара, свечение растёт; на полу — две направляющие до стены пунктиром и
+// шевроны поперёк: КУДА повернут лучи; клин первых мгновений хода
+// наливается. Последние 0,2 с — направляющие белые, «тик-тик». Пуск:
+// вспышка в голове, лучи растут из линзы и затылка (v2.88: раньше оба — из
+// ядра на груди) и одинаково опускаются к колену героя (так читается «по
+// ногам», а не над головой); ядро белое, жёлтое, оранжевое, ореол — ширина как удар; по лучу
 // бегут сгустки — энергия идёт наружу; у стены — фонтан искр и раскалённое
 // пятно. На полу под лучом — жаркая полоса, за лучом — выжженный клин,
 // остывающий в копоть; перед лучом — слабый отсвет «сейчас сюда».
-// Тела ближе к камере луч заслоняют. Конец: лучи втягиваются в ядро.
+// Тела ближе к камере луч заслоняют. Конец: лучи втягиваются в голову.
 // =============================================================================
 
 const SPIN_CH = BOSS.spinCharge;
@@ -2889,6 +2891,41 @@ function spinReach(sim: Sim, m: Mob, a: number, S: number): [number, number, boo
   const y0 = m.y + Math.sin(a) * BOSS.beamR0;
   const len = wallDist(sim, x0, y0, a, BOSS.beamLen);
   return [BOSS.beamR0 * S, (BOSS.beamR0 + len) * S, len < BOSS.beamLen - 0.3];
+}
+
+/** Излучатель луча: точка головы в пикселях мира, видна ли (не за головой). */
+interface Emit {
+  x: number;
+  y: number;
+  vis: boolean;
+}
+
+/**
+ * Излучатели лучей `sa` и `sa+π` (v2.88): линза и затылок из рига «Тела».
+ * Каждому лучу — точка головы, смотрящая в его сторону (проекция на луч):
+ * так оба луча одинаково выходят из головы при любом повороте верха.
+ * Раньше оба шли из ядра на груди — встречный пересекал корпус и читался
+ * прямым, а рос от `beamR0` на полу, не из головы.
+ */
+function spinEmitters(m: Mob, sa: number, time: number, S: number): [Emit, Emit] {
+  const ux = Math.cos(sa);
+  const uy = Math.sin(sa);
+  const g = f11GuardPoints(m);
+  if (!g) {
+    const [ex, ey] = bossEye(m, time, S);
+    return [
+      { x: ex + ux * 5, y: ey + uy * 3, vis: uy >= 0 },
+      { x: ex - ux * 5, y: ey - uy * 3, vis: uy < 0 },
+    ];
+  }
+  const bx = m.x * S + 0.5;
+  const by = m.y * S + 0.5;
+  const hx = bx + g.head[0];
+  const hy = by + g.head[1];
+  const front: Emit = { x: bx + g.front[0], y: by + g.front[1], vis: g.frontVis };
+  const rear: Emit = { x: bx + g.rear[0], y: by + g.rear[1], vis: g.rearVis };
+  const along = (e: Emit) => (e.x - hx) * ux + (e.y - hy) * uy;
+  return along(front) >= along(rear) ? [front, rear] : [rear, front];
 }
 
 /** Пол: направляющие и клин на заряде; жаркая полоса, выжженный след на ходу. */
@@ -2981,35 +3018,55 @@ registerZonePainter(
     const bx = m.x * S;
     const by = m.y * S;
     const p = new Pen(g, px, py, z.x * S, z.y * S);
+    const coreOpen = !!f11GuardPoints(m)?.core;
     const [cx, cy] = bossCore(m, time, S);
+    const em = spinEmitters(m, sa, time, S);
     const few = reduced();
     const bodies = bodiesOf(sim, S);
+    // Видимый излучатель (голова к камере) свой корпус не заслоняет; луч из
+    // затылка, отвёрнутого от нас, прячется за телом, пока не выйдет из-за него.
+    const others = bodiesOf(sim, S, m);
+    const occOf = (e: Emit) => (e.vis ? others : bodies);
+    const dOf = (e: Emit) => by + (e.vis ? 1 : -3);
     if (stage === 0) {
-      // Заряд: искры жара стягиваются в ядро, свечение растёт.
+      // Заряд: искры жара стягиваются в голову — к обоим излучателям.
       const n = few ? 4 : 10;
       for (let i = 0; i < n; i++) {
+        const e = em[i % 2];
         const ph = mod(time * (1 + 2 * k) + i / n, 1);
-        const rr = 26 * (1 - eIn2(ph));
+        const rr = 22 * (1 - eIn2(ph));
         const aa = i * 2.39 + time * 4 * sdir;
-        p.col(ph > 0.6 ? C.yellow : C.orange, 0.3 + 0.7 * ph);
-        p.dot(cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr * 0.75);
+        front(p, occOf(e), dOf(e), () => {
+          p.col(ph > 0.6 ? C.yellow : C.orange, 0.3 + 0.7 * ph);
+          p.dot(e.x + Math.cos(aa) * rr, e.y + Math.sin(aa) * rr * 0.75);
+        });
       }
-      p.col(C.orange, 0.3 + 0.3 * k);
-      disc(p, cx, cy, 2 + 5 * k);
-      p.col(C.yellow, 0.9);
-      disc(p, cx, cy, 1 + 2.5 * k);
-      if (SPIN_CH - m.t < SIG) flare(p, cx, cy, 6 + Math.round(6 * k), C.white, 0.95);
+      for (const e of em)
+        front(p, occOf(e), dOf(e), () => {
+          p.col(C.orange, 0.3 + 0.3 * k);
+          disc(p, e.x, e.y, 1.5 + 3.5 * k);
+          p.col(C.yellow, 0.9);
+          disc(p, e.x, e.y, 0.8 + 1.8 * k);
+          if (SPIN_CH - m.t < SIG) flare(p, e.x, e.y, 5 + Math.round(5 * k), C.white, 0.95);
+        });
       return;
     }
     const tl = stage === 1 ? m.t - SPIN_CH : 0;
-    const ign = stage === 1 ? eOut2(k01(tl / 0.05)) : 1;
+    // Пуск: за 0,1 с луч вырастает ИЗ ГОЛОВЫ до стены (урон мозг считает
+    // сразу по всей длине; >100 клеток/с — на глаз не опережает).
+    const ign = stage === 1 ? eOut2(k01(tl / 0.1)) : 1;
     const out = stage === 2 ? 1 - k : 1;
     const jit = Math.floor(time * 30) % 2;
-    for (const a of [sa, sa + PI]) {
+    const sE = 0.2 * S;
+    for (let bi = 0; bi < 2; bi++) {
+      const a = bi === 0 ? sa : sa + PI;
+      const e = em[bi];
+      const occ = occOf(e);
       const [s0, s1full, wall] = spinReach(sim, m, a, S);
-      // Втягивается: конец рывком бежит к ядру, толщина держится — луч
-      // заглатывается, а не тает ниткой (тающая нитка читалась указкой).
-      const s1 = stage === 2 ? s0 + (s1full - s0) * (1 - eOut2(k)) : s0 + (s1full - s0) * ign;
+      // Растёт из головы и втягивается обратно в голову; толщина держится —
+      // луч заглатывается, а не тает ниткой (тающая нитка читалась указкой).
+      const reach = stage === 2 ? 1 - eOut2(k) : ign;
+      const s1 = sE + (s1full - sE) * reach;
       const ux = Math.cos(a);
       const uy = Math.sin(a);
       const w = (stage === 2 ? 1 - 0.45 * k : 1) * (0.85 + 0.15 * Math.sin(time * 40 + a));
@@ -3020,16 +3077,16 @@ registerZonePainter(
         [2.6 * w, C.yellow, false],
         [Math.max(0.6, 1.1 * w), C.white, false],
       ];
-      // Из груди луч плавно опускается к колену героя и идёт к стене.
+      // Из своей точки головы луч плавно опускается к колену героя и идёт к
+      // стене — у обоих лучей один и тот же сход.
       const sCurve = s0 + 0.9 * S;
-      drawBeam(p, bodies, [cx, cy], bx, by, ux, uy, 0.2 * S, sCurve, s1, SPIN_H, layers);
-      // Сгустки бегут наружу — энергия идёт из ядра.
+      drawBeam(p, occ, [e.x, e.y], bx, by, ux, uy, sE, sCurve, s1, SPIN_H, layers);
+      // Сгустки бегут наружу — энергия идёт из головы.
       p.col(C.white, 0.9 * out);
       for (let j = 0; j < 5; j++) {
-        const s =
-          sCurve + mod(time * 240 + j * 47 + (a > sa ? 23 : 0), Math.max(1, s1full - sCurve));
+        const s = sCurve + mod(time * 240 + j * 47 + bi * 23, Math.max(1, s1full - sCurve));
         if (s > s1) continue;
-        front(p, bodies, by + uy * s, () => disc(p, bx + ux * s, by + uy * s - SPIN_H, 2.2 * w));
+        front(p, occ, by + uy * s, () => disc(p, bx + ux * s, by + uy * s - SPIN_H, 2.2 * w));
       }
       // У стены — раскалённое пятно и фонтан искр (искра помнит, где был луч).
       if (stage === 1 && ign >= 1) {
@@ -3067,22 +3124,31 @@ registerZonePainter(
         }
       }
     }
-    // Ядро пылает.
-    p.col(C.orange, 0.5 * out);
-    disc(p, cx, cy, 5 + jit);
-    p.col(C.white, out);
-    disc(p, cx, cy, 2.5);
-    if (stage === 1 && tl < 0.12) {
-      const kk = tl / 0.12;
-      p.col(C.white, 1 - kk);
-      star(p, cx, cy, 20 * (1 - 0.5 * kk), 8, 0.2);
-      ring(p, cx, cy, 8 + 30 * eOut2(kk), C.yellow, 1 - kk);
-    } else if (stage === 2) {
-      // Глоток: ядро вспыхивает, когда лучи вошли, кольцо сжимается в него.
-      p.col(C.white, 1 - 0.6 * k);
-      star(p, cx, cy, 8 + 10 * k, 6, 0.2);
-      ring(p, cx, cy, 22 * (1 - eOut2(k)) + 3, C.yellow, 1 - k);
-    } else flare(p, cx, cy, 4 + jit * 2, C.cream, 0.8 * out);
+    // Ядро в груди открыто и пылает (перегрев), но лучи идут из головы.
+    if (coreOpen) {
+      p.col(C.orange, 0.35 * out);
+      disc(p, cx, cy, 4 + jit);
+      p.col(C.white, 0.8 * out);
+      disc(p, cx, cy, 2);
+    }
+    // Излучатели горят; пуск — вспышка в голове, конец — глоток в голову.
+    for (const e of em)
+      front(p, occOf(e), dOf(e), () => {
+        p.col(C.orange, 0.5 * out);
+        disc(p, e.x, e.y, 3.5 + jit);
+        p.col(C.white, out);
+        disc(p, e.x, e.y, 2);
+        if (stage === 1 && tl < 0.12) {
+          const kk = tl / 0.12;
+          p.col(C.white, 1 - kk);
+          star(p, e.x, e.y, 14 * (1 - 0.5 * kk), 8, 0.2);
+          ring(p, e.x, e.y, 6 + 22 * eOut2(kk), C.yellow, 1 - kk);
+        } else if (stage === 2) {
+          p.col(C.white, 1 - 0.6 * k);
+          star(p, e.x, e.y, 6 + 8 * k, 6, 0.2);
+          ring(p, e.x, e.y, 16 * (1 - eOut2(k)) + 2, C.yellow, 1 - k);
+        } else flare(p, e.x, e.y, 3 + jit * 2, C.cream, 0.8 * out);
+      });
   }),
 );
 

@@ -3553,3 +3553,86 @@ export const API: SimApi = {
 };
 
 export { tileAt, heroStatus, strikeHits };
+
+/** Клетка годится, чтобы на неё встать: пол без опасности. */
+function standable(sim: Sim, i: number): boolean {
+  const w = sim.world.w;
+  return walkableTile(sim.tiles[i]) && !hazardAt(sim.world, i % w, Math.floor(i / w));
+}
+
+/**
+ * Креатив: телепорт к логову босса или к лифту (кнопки в паузе).
+ * К боссу — снаружи у ворот, ближних к его месту: в бой входишь сам, со
+ * своей камерой входа. Идёт бой — рядом с боссом на арене. Отдыхающий
+ * босс просыпается. К лифту — ближайший лифт; идущий бой сбрасывается,
+ * иначе ворота остались бы закрыты, а босс дрался бы с пустой ареной.
+ */
+export function creativeWarp(sim: Sim, to: 'boss' | 'lift'): boolean {
+  const h = sim.hero;
+  if (h.mode === 'dying' || h.mode === 'dead') return false;
+  const w = sim.world.w;
+  const b = sim.boss;
+  let at: { x: number; y: number } | null = null;
+  if (to === 'lift') {
+    let best = Infinity;
+    for (const o of sim.world.objs) {
+      if (o.kind !== 'lift') continue;
+      const d = Math.hypot(o.x + 0.5 - h.x, o.y + 0.5 - h.y);
+      if (d < best) {
+        best = d;
+        at = { x: o.x + 0.5, y: o.y + 0.5 };
+      }
+    }
+    if (!at) return false;
+    if (b?.state === 'fight') resetBoss(sim);
+  } else {
+    if (!b) return false;
+    const kx = b.obj.x + 0.5;
+    const ky = b.obj.y + 0.5;
+    if (b.state === 'fight') {
+      const lead = sim.mobs.find((m) => defOf(m.kind).boss && m.mode !== 'dying');
+      const cx = lead?.x ?? kx;
+      const cy = lead?.y ?? ky;
+      let best = Infinity;
+      for (const i of b.cells) {
+        if (!standable(sim, i)) continue;
+        const d = Math.abs(Math.hypot((i % w) + 0.5 - cx, Math.floor(i / w) + 0.5 - cy) - 4);
+        if (d < best) {
+          best = d;
+          at = { x: (i % w) + 0.5, y: Math.floor(i / w) + 0.5 };
+        }
+      }
+    } else {
+      if (b.state === 'rest') {
+        b.state = 'idle';
+        b.readyAt = sim.now();
+      }
+      let best = Infinity;
+      for (const g of b.gates)
+        for (const [dx, dy] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ]) {
+          const x = (g % w) + dx;
+          const y = Math.floor(g / w) + dy;
+          if (x < 0 || y < 0 || x >= w || y >= sim.world.h) continue;
+          const i = y * w + x;
+          if (b.cells.has(i) || b.gates.includes(i) || !standable(sim, i)) continue;
+          const d = Math.hypot(x + 0.5 - kx, y + 0.5 - ky);
+          if (d < best) {
+            best = d;
+            at = { x: x + 0.5, y: y + 0.5 };
+          }
+        }
+    }
+    if (!at) return false;
+  }
+  API.moveHero(sim, at.x, at.y);
+  h.pull = null;
+  h.lock = null;
+  h.inv = Math.max(h.inv, 2);
+  updateGates(sim);
+  return true;
+}

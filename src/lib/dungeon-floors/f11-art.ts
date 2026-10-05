@@ -5144,7 +5144,18 @@ interface GOut {
   lit: Px;
   lens: [number, number] | null;
   core: [number, number] | null;
+  /** Излучатели головы для лучей вращения: линза спереди и затылок. */
+  emit: GEmit;
   hands: [number, number][];
+}
+
+/** Точки головы на экране кадра и видна ли точка (не за головой). */
+interface GEmit {
+  head: [number, number];
+  front: [number, number];
+  rear: [number, number];
+  frontVis: boolean;
+  rearVis: boolean;
 }
 
 /** Тёмная линия по краю ближней части на дальней: части читаются. */
@@ -5400,6 +5411,18 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
   const coreP = vadd(s.C, vmul(coreN, BR));
   const [csx, csy, csd] = gproj(b.cam, coreP);
   const coreVis = csd > dC + 3;
+  // Излучатели лучей вращения: линза и такая же точка на затылке — оба луча
+  // выходят из головы, каждый со своей стороны (v2.88).
+  const rearP = vadd(s.head, vmul(s.hrot(vnorm([0, -0.06, -1])), HRX * 0.92));
+  const [rsx, rsy, rsd] = gproj(b.cam, rearP);
+  const [hsx, hsy, hsd] = gproj(b.cam, s.head);
+  const emit: GEmit = {
+    head: [hsx, hsy],
+    front: [lsx, lsy],
+    rear: [rsx, rsy],
+    frontVis: lensVis,
+    rearVis: rsd > hsd - 1.5,
+  };
 
   // Смаз: сплошная лента по прошлым положениям кулака/стопы — сужается и
   // тает к хвосту, как смаз-кадр в пиксельной анимации. Прозрачность пикселя
@@ -5630,6 +5653,7 @@ function gPaint(yaw: number, s: GSkel, lk: GLook, fx: GFx): GOut {
     lit,
     lens: lensVis || r.lon > 0 ? [lsx, lsy] : null,
     core: coreVis ? [csx, csy] : null,
+    emit,
     hands: handsScr,
   };
 }
@@ -6428,7 +6452,10 @@ function gFxOf(q: GReq, t: number, base: GRig, s: GSkel, at: (tt: number) => GSk
 
 const GFR = frameLRU<MobFrame>(420);
 /** Где линза и ядро в кадре (для «Техник»: луч из линзы, лучи из ядра). */
-const gPts = new WeakMap<MobFrame, { lens: [number, number] | null; core: [number, number] | null }>();
+const gPts = new WeakMap<
+  MobFrame,
+  { lens: [number, number] | null; core: [number, number] | null; emit: GEmit }
+>();
 
 function gCanvas(p: Px, x0: number, y0: number, w: number, h: number): HTMLCanvasElement {
   const c = document.createElement('canvas');
@@ -6532,9 +6559,17 @@ function gBuild(q: GReq): MobFrame {
     shadow: q.tech === 'die' ? 21 : 19,
     alpha: r.alp,
   };
+  const e = out.emit;
   gPts.set(fr, {
     lens: out.lens ? [out.lens[0] - x0, out.lens[1] - y0] : null,
     core: out.core ? [out.core[0] - x0, out.core[1] - y0] : null,
+    emit: {
+      head: [e.head[0] - x0, e.head[1] - y0],
+      front: [e.front[0] - x0, e.front[1] - y0],
+      rear: [e.rear[0] - x0, e.rear[1] - y0],
+      frontVis: e.frontVis,
+      rearVis: e.rearVis,
+    },
   });
   const ms = performance.now() - t0;
   f11GuardStat.frames += 1;
@@ -6793,15 +6828,32 @@ registerMobPainter('f11boss', (m: Mob, pose: MobPose) => {
  * (m.x·16, m.y·16). Для «Техник»: луч взгляда — из линзы, лучи вращения —
  * из ядра. null — ещё не рисовался или линза не видна (смотрит от нас).
  */
-export function f11GuardPoints(m: Mob): { lens: [number, number] | null; core: [number, number] | null } | null {
+export function f11GuardPoints(m: Mob): {
+  lens: [number, number] | null;
+  core: [number, number] | null;
+  /** Голова, линза и затылок — излучатели лучей вращения (всегда есть). */
+  head: [number, number];
+  front: [number, number];
+  rear: [number, number];
+  frontVis: boolean;
+  rearVis: boolean;
+} | null {
   const s = gMem.get(m);
   if (!s?.fr) return null;
   const pts = gPts.get(s.fr);
   if (!pts) return null;
   const fr = s.fr;
-  const at = (p: [number, number] | null): [number, number] | null =>
-    p ? [p[0] - fr.ax + s.dx, p[1] - fr.ay + 2 + s.dy] : null;
-  return { lens: at(pts.lens), core: at(pts.core) };
+  const at = (p: [number, number]): [number, number] => [p[0] - fr.ax + s.dx, p[1] - fr.ay + 2 + s.dy];
+  const e = pts.emit;
+  return {
+    lens: pts.lens ? at(pts.lens) : null,
+    core: pts.core ? at(pts.core) : null,
+    head: at(e.head),
+    front: at(e.front),
+    rear: at(e.rear),
+    frontVis: e.frontVis,
+    rearVis: e.rearVis,
+  };
 }
 
 // Прогрев: пробуждение (вход камерой), покой со всех сторон, шаг и первая
