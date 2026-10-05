@@ -269,15 +269,25 @@ export function stringsOf(m: Mob): StringSeg[] {
   const spider = m.kind === 'f13_spider';
   const W = giant ? 1.3 : n >= 3 ? 0.56 : 0.46;
   const vg = giant ? VAGA.get(m) : undefined;
+  // Нити исполина расходятся поперёк направления к ваге: Кукловод сбоку —
+  // веер стоит вертикально, и один взмах не режет все четыре.
+  let px = 1;
+  let py = 0;
+  if (vg) {
+    const L = Math.hypot(vg.x - m.x, vg.y - m.y) || 1;
+    px = -(vg.y - m.y) / L;
+    py = (vg.x - m.x) / L;
+    if (px < 0) [px, py] = [-px, -py];
+  }
   for (let i = 0; i < n; i++) {
     const ox = n === 1 ? 0 : (i / (n - 1) - 0.5) * W;
-    const ax = m.x + ox;
-    const ay = m.y - (giant ? 0.55 : 0.18);
+    const ax = m.x + ox * px;
+    const ay = m.y - (giant ? 0.55 : 0.18) + ox * py;
     let bx = m.x + ox * 1.6;
     let by = m.y - (spider ? 3 : STR.len);
     if (vg) {
-      bx = vg.x + ox * 0.5;
-      by = vg.y + 0.25;
+      bx = vg.x + ox * 0.5 * px;
+      by = vg.y + 0.25 + ox * 0.5 * py;
     }
     out.push({ i, ax, ay, bx, by, cut: (cut & (1 << i)) !== 0 });
   }
@@ -2493,7 +2503,9 @@ export const BOSS = {
   swap: 1.3,
   wake: 2.4,
   // I
-  hangUp: 2.6,
+  // Кукловод водит исполина сбоку, с мостика: иначе тот целиком его заслоняет.
+  hangUp: 0.9,
+  hangSide: 3.4,
   dip: 2,
   dipK: 1.2,
   open: 6,
@@ -2565,6 +2577,8 @@ interface BState {
   lowerT: number;
   /** Нос или корма корабля, куда спускается Кукловод во «Буре». */
   lowX: number;
+  /** С какого бока исполина висит Кукловод в I акте (+1 — восток). */
+  side: number;
   waves: Wave[];
   stars: Star[];
   starsBack: number;
@@ -2597,6 +2611,7 @@ function newBState(): BState {
     boltT: 3,
     lowerT: 7,
     lowX: ACX,
+    side: 1,
     waves: [],
     stars: [],
     starsBack: 0,
@@ -2709,7 +2724,7 @@ function enterAct(sim: Sim, s: BState, api: SimApi, lead: Mob, act: number): voi
     // Исполина ставит шаг сценария: движок при начале боя убирает с арены
     // всех, кроме самого босса.
     s.giant = 0;
-    lead.x = ACX;
+    lead.x = ACX + BOSS.hangSide;
     lead.y = ACY + 3.5 - BOSS.hangUp;
     s.knightT = 12;
   } else if (act === 1) {
@@ -2978,7 +2993,10 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
     const g = giantOf(sim, s);
     const dip = sim.time < s.dipUntil;
     if (g) {
-      const [tx, ty] = clampArena(g.x, g.y - BOSS.hangUp);
+      // Бок меняет, только когда исполин ушёл к краю: не мечется.
+      if (g.x < ACX - 4) s.side = 1;
+      else if (g.x > ACX + 4) s.side = -1;
+      const [tx, ty] = clampArena(g.x + s.side * BOSS.hangSide, g.y - BOSS.hangUp);
       if (!open) glide(m, tx, ty, dt, 3);
       else {
         m.vx *= 0.8;
@@ -2986,7 +3004,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       }
       VAGA.set(g, { x: m.x, y: m.y });
     }
-    m.face = Math.PI / 2;
+    // Вполоборота к исполину и к зрителю.
+    m.face = Math.atan2(1, -s.side);
     m.data.ghost = open || dip ? 0 : 1;
     liftTo(open ? 0 : dip ? 0.45 : 1);
     s.knightT -= dt;

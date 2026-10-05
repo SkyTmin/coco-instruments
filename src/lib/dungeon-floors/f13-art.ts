@@ -138,7 +138,8 @@ function fill(p: Px, f: (x: number, y: number) => RGBA): void {
 
 function marble(p: Px, c: CellCtx): void {
   const L = [hx('#9c9284'), hx('#c4b8a6'), hx('#dcd0bc'), hx('#efe6d4')];
-  const D = [hx('#1e1824'), hx('#2c2434'), hx('#3e3448'), hx('#5a4e66')];
+  // Тёмная плитка — бордовый мрамор, а не чёрный: шахматка не рябит.
+  const D = [hx('#4a2c2e'), hx('#6a4040'), hx('#80524e'), hx('#9a6a62')];
   fill(p, (x, y) => {
     const X = c.wx * 16 + x;
     const Y = c.wy * 16 + y;
@@ -154,7 +155,7 @@ function marble(p: Px, c: CellCtx): void {
     const s = hash(tx, ty, 3);
     const v = Math.sin((lx + ly * 0.6) * 0.9 + s * 9) * 2.6 + 3.5 - ly * (0.4 + s * 0.4);
     if (Math.abs(v - (s > 0.5 ? lx * 0.5 : 6 - lx * 0.6)) < 0.45) return T[0];
-    return hash(X, Y, 1) < 0.08 ? T[2] : T[1];
+    return hash(X, Y, 1) < 0.05 ? mixc(T[1], T[2], 0.5) : T[1];
   });
 }
 
@@ -202,8 +203,9 @@ function carpet(p: Px, c: CellCtx, deep = false): void {
     if (!deep && d > 2.6 && d < 3.6) return mixc(T[1], g[1], 0.45);
     if (!deep && lx === 3 && ly === 3) return g[2];
     if (deep && (X % 6 === 0 && Y % 6 === 3)) return T[2];
+    // Ворс: ровный, редкие ворсинки — без «снега».
     const n = hash(X, Y, 4);
-    return n < 0.12 ? T[2] : n > 0.94 ? T[0] : T[1];
+    return n < 0.03 ? mixc(T[1], T[2], 0.5) : n > 0.985 ? mixc(T[1], T[0], 0.5) : (X + Y) % 2 ? T[1] : mixc(T[1], T[0], 0.12);
   });
 }
 
@@ -250,7 +252,7 @@ function boards(p: Px, c: CellCtx, T: Tone, chalk = true): void {
   }
 }
 
-const STAGE = [hx('#1c1218'), hx('#33231e'), hx('#4a3426'), hx('#6a4c34')];
+const STAGE = [hx('#24160f'), hx('#432c1e'), hx('#5c3f2a'), hx('#7c5838')];
 const PIT = [hx('#120e18'), hx('#1e1824'), hx('#2a2230'), hx('#3e3448')];
 const NIGHT_BOARDS = [hx('#080a1a'), hx('#10142a'), hx('#1a2040'), hx('#2a3460')];
 
@@ -441,17 +443,19 @@ function nightFloor(p: Px, c: CellCtx): void {
 function castleFloor(p: Px, c: CellCtx): void {
   // Двор замка, нарисованный на досках: булыжник крашеной краской.
   boards(p, c, STAGE, false);
-  const T = P.castle;
+  // Песчаник задника: тёплая краска плоскими тонами, швы тушью.
+  const T = [hx('#3a2a22'), hx('#8a7258'), hx('#a88e6c'), hx('#cdb48a')];
   fill(p, (x, y) => {
     const X = c.wx * 16 + x;
     const Y = c.wy * 16 + y;
-    const row = Math.floor(Y / 5);
-    const bx = Math.floor((X + (row & 1) * 4) / 8);
-    const lx = (X + (row & 1) * 4) % 8;
-    const ly = Y % 5;
-    if (lx === 7 || ly === 4) return withA(T[0], 0.9);
+    const row = Math.floor(Y / 8);
+    const bx = Math.floor((X + (row & 1) * 6) / 12);
+    const lx = (X + (row & 1) * 6) % 12;
+    const ly = Y % 8;
+    if (lx === 11 || ly === 7) return withA(T[0], 0.9);
+    if (lx === 10 || ly === 6) return withA(darken(T[1], 0.25), 0.92);
     const n = hash(bx, row, 44);
-    const base = n < 0.4 ? T[1] : n < 0.8 ? mixc(T[1], T[2], 0.4) : mixc(T[1], P.forest[1], 0.5);
+    const base = n < 0.4 ? T[1] : n < 0.8 ? mixc(T[1], T[2], 0.5) : mixc(T[1], P.forest[2], 0.35);
     // Краска облезла: местами видны доски.
     if (hash(X >> 2, Y >> 2, 45) < 0.12) return [0, 0, 0, 0];
     return lx === 0 || ly === 0 ? lighten(base, 0.12) : withA(base, 0.92);
@@ -3629,6 +3633,12 @@ const LORD_BODY: Body = {
 /** Время смерти-сцены: лопнули нити → куча → встал → поклон → занавес. */
 export const LORD_DEATH = 5.2;
 
+/** На сколько пикселей Кукловод над полом; вагу считает по ней `f13-boss-fx.ts`. */
+export function lordLiftPx(m: Mob): number {
+  if (m.mode === 'dying') return 0;
+  return (m.data.lift ?? 0) * 30;
+}
+
 interface LordQ {
   q: Pose;
   key: string;
@@ -3865,7 +3875,7 @@ paintMob('f13boss', (m, pose) => {
   const open = !!m.data.open || m.mode === 'f13_spent';
   const ghost = !!m.data.ghost && m.mode !== 'dying';
   const fr = lordFrame(m, pose.now, pose.flash, open, ghost, act);
-  const lift = m.mode === 'dying' ? 0 : (m.data.lift ?? 0) * 30;
+  const lift = lordLiftPx(m);
   const t = m.t;
   const extra: Partial<MobFrame> = {
     dy: -lift,

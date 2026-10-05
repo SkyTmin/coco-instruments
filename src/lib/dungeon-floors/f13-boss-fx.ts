@@ -16,7 +16,7 @@ import type { ImpactRec, Sprite } from '../dungeon-paint';
 import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
 import { Px } from '../dungeon-art';
 import { BOSS, F13_FX, F13_SCENERY, SPOT, stringsOf } from './f13-brains';
-import { css, hash, hx, INK, P, spiderLift, TAU } from './f13-art';
+import { css, hash, hx, INK, lordLiftPx, P, spiderLift, TAU } from './f13-art';
 import type { RGBA } from './f13-art';
 
 const GOLD = P.gold;
@@ -53,12 +53,13 @@ function shoulderH(m: Mob): number {
   return 18;
 }
 
-function vagaScreen(to: (x: number, y: number) => [number, number]): [number, number] | null {
+/** Вага Кукловода на экране: [x, y, сдвиг от его точки на полу по y]. */
+function vagaScreen(to: (x: number, y: number) => [number, number]): [number, number, number] | null {
   const lord = F13_FX.mobs.find((q) => q.kind === 'f13boss' && q.mode !== 'dying');
   if (!lord) return null;
   const [x, y] = to(lord.x, lord.y);
-  const lift = (lord.data.lift ?? 0) * 30;
-  return [x - 2, y - 37 - lift];
+  const dy = -37 - lordLiftPx(lord);
+  return [x - 2, y + dy, dy];
 }
 
 /** Нить: чуть провисшая, с бегущим бликом. */
@@ -111,9 +112,10 @@ function drawStrings(g: CanvasRenderingContext2D, to: (x: number, y: number) => 
       const [x0, y0] = to(s.ax, s.ay);
       const lx = x0;
       const ly = y0 + (giant ? 0.55 : 0.18) * 16 - sh;
-      let [x1, y1] = to(s.bx, s.by);
-      y1 -= giant ? 0 : 18;
-      if (giant && vaga) [x1, y1] = [vaga[0] + (s.i - 1.5) * 3, vaga[1] + 2];
+      const [x1, y0b] = to(s.bx, s.by);
+      // Нить исполина уходит в вагу в руке Кукловода (точка нити — на 4 px
+      // ниже ваги), у кукол — к их крестовине над головой.
+      const y1 = giant ? (vaga ? y0b - 4 + vaga[2] + 2 : y0b - 40) : y0b - 18;
       if (s.cut) {
         // Обрывки: кусок висит от плеча и от ваги, качается.
         const sw = Math.sin(time * 4 + s.i + m.id) * 1.5;
