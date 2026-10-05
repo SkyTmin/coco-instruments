@@ -1,60 +1,55 @@
-// Этаж 12 «Проклятая станция» — правила этажа, ИИ монстров и сценарий
-// Двуликого короля проклятий.
+// Этаж 12 «Полярная ночь» — ИИ монстров, правила этажа и сценарий босса.
 //
-// ПОЕЗДА (`registerFloor(12)`):
-//   • каждый путь с тоннелем в темноту на конце — живая линия со своим
-//     расписанием. Семафор (столб `7`, сигнал `}` на стене) зелёный → жёлтый
-//     за 6 с → красный за 2,6 с: рельсы наливаются красным, свет фар встаёт
-//     из тоннеля, гудок, пол дрожит — и состав проходит линию целиком;
-//   • кого застал на путях — сбит: герой — тяжёлый удар и отброс с путей
-//     (рывок вдоль не спасает: состав идёт дольше неуязвимости рывка),
-//     монстры — насмерть и в зачёт (удар по своим, `mobDmg`). Стаю можно
-//     заманить на рельсы под поезд; Двуликого короля — тоже;
-//   • в тоннелях поезд занимает и щебень по краям: спасение — ниши в стене;
-//   • колокол дежурной (действие) зовёт состав на ближний путь сейчас;
-//     стрелочный рычаг узловой (действие) уводит поезда на 15 с;
-//     путевой обходчик машет фонарём — зовёт поезд на путь, где ты стоишь.
-// ЭСКАЛАТОРЫ — ленты: несут героя и монстров, в событиях разгоняются и
-//   идут вспять.
-// ТЕРРИТОРИИ — круг со своими правилами: внутри метка «верного удара» ходит
-//   за героем, наливается и бьёт — мимо брони; рывок не спасает (метка ждёт,
-//   пока рывок кончится). Выход — за край круга или разбить три столба.
-// СОБЫТИЯ (по два на район): «Час пик» и «Бегущая лестница» (Вестибюль),
-//   «Сбой света» и «Встречный» (Платформы), «Малая территория» и «Последний
-//   поезд» (Святилище).
+// Глагол — ЛЁД И МОРОЗ (подробно — шапка `f12.ts`):
+//   • СКОЛЬЖЕНИЕ: на льду герой и монстры идут по инерции. Движок ведёт
+//     героя как обычно, а правило этажа после его шага пересчитывает
+//     скорость с «ледяным» разгоном и торможением и досдвигает героя
+//     (`api.collide` — сквозь стену не проскочит). Монстров — обёртка мозга:
+//     перемена скорости за шаг урезается, отброс гаснет втрое медленнее;
+//     сбитый к полынье моб уходит под лёд (`api.fall`).
+//   • ТОНКИЙ ЛЁД: нагрузка клетки копится под героем (стоит — быстрее, рывок
+//     и тяжёлый удар — сразу +1) и под тяжёлыми мобами; три стадии трещин
+//     рисует слой пола, на четвёртой клетка — полынья (`setTile` → глубина).
+//     Через ~22 с полынья замерзает обратно тонким льдом.
+//   • МОРОЗ: три доли, копятся вне тепла (на Озере и в Чертоге) и от
+//     ледяных ударов (статус `chill`). Три доли — заморозка на 1 с; удар по
+//     замёрзшему разбивает лёд (урон больше, зато свободен). Тепло —
+//     жаровни, костры, факелы, лампы, тёплый источник — снимает иней.
+//   • ДЕЙСТВИЯ: жаровня «Зажечь», затвор «Разбить», гонг «Ударить в гонг»,
+//     лебёдка «Крутить».
+//   • ЗАЛЫ-СОБЫТИЯ: «Сияние» (Купол), «Оттепель» (Зал вмёрзших), «Ледолом»
+//     (Стремнина), «Ледоход» (Протока), «Вьюга» (Снежное поле), «Безмолвие»
+//     (Зал гонга).
 //
-// Честность: у всего, что бьёт, есть метка и время на ответ — у поезда
-// семафор, красные рельсы и свет фар; у метки территории — кольцо, которое
-// наливается; у разрезов храма — сетка и загорающиеся обереги.
+// Честность: всё, что бьёт, видно заранее — тень сосульки, линия тюленя и
+// ежа, точка прыжка песца, конус воина и духа, кольцо голема, занавес
+// хранителя, линия набега мамонта, снежные валы с проёмом, трещины льда.
 //
 // Движок сюда не импортируется значениями (круг модулей) — только `api`.
 
 import { registerBoss, registerBrain, registerFloor } from '../dungeon-ai';
-import type { BrainCtx, SimApi, StrikeIn, ZoneIn } from '../dungeon-ai';
+import type { Brain, BrainCtx, SimApi, ZoneIn } from '../dungeon-ai';
 import type { BossFight, Mob, Sim, Zone } from '../dungeon-sim';
 import type { WorldObj } from '../dungeon-world';
-import { F12_HALL, F12_MARK, F12_PLAT, F12_SHRINE } from './f12';
+import { F12_GEO, F12_GROTTO, F12_LAKE, F12_MARK, F12_SHRINE } from './f12';
 
 const TAU = Math.PI * 2;
 const hypot = Math.hypot;
-const MK = F12_MARK;
 
 // Клетки мира (копия `Tile` из `dungeon-world.ts`: значениями движок не
 // импортируется).
 const T_WALL = 1;
 const T_FLOOR = 2;
+const T_DEEP = 11;
+const T_HAZARD = 12;
+
+const MK = F12_MARK;
 
 // ---------------------------------------------------------------------------
 // Общее.
 // ---------------------------------------------------------------------------
 
 const heroDown = (sim: Sim) => sim.hero.mode === 'dying' || sim.hero.mode === 'dead';
-
-const markAt = (sim: Sim, x: number, y: number): number => {
-  const w = sim.world;
-  if (x < 0 || y < 0 || x >= w.w || y >= w.h) return 0;
-  return w.mark[y * w.w + x];
-};
 
 const angDiff = (a: number, b: number) => {
   let d = a - b;
@@ -63,28 +58,27 @@ const angDiff = (a: number, b: number) => {
   return d;
 };
 
-/** Урон, который после брони героя станет долей его здоровья. */
-const rawShare = (sim: Sim, share: number) =>
-  (sim.stats.maxHp * share * (100 + Math.max(0, sim.stats.armor))) / 100;
+const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
-/** Задевает ли линия (из точки по углу, длина, полуширина) круг. */
-function lineHits(
-  x: number,
-  y: number,
-  ang: number,
-  len: number,
-  w: number,
-  hx: number,
-  hy: number,
-  hr: number,
-): boolean {
-  const dx = hx - x;
-  const dy = hy - y;
+/** Сколько клеток до преграды (стена или провал) по направлению. */
+function clearDist(sim: Sim, api: SimApi, x: number, y: number, ang: number, max: number): number {
   const ux = Math.cos(ang);
   const uy = Math.sin(ang);
-  const along = dx * ux + dy * uy;
-  const across = Math.abs(-dx * uy + dy * ux);
-  return along > -hr && along < len + hr && across < w + hr;
+  for (let d = 0.2; d <= max; d += 0.2)
+    if (api.solidTile(sim, Math.floor(x + ux * d), Math.floor(y + uy * d))) return d;
+  return max + 1;
+}
+
+/** Прямая от точки до точки идёт только по полу. */
+function clearLine(sim: Sim, api: SimApi, ax: number, ay: number, bx: number, by: number): boolean {
+  const d = hypot(bx - ax, by - ay);
+  const n = Math.ceil(d * 3);
+  for (let i = 1; i <= n; i++) {
+    const x = ax + ((bx - ax) * i) / n;
+    const y = ay + ((by - ay) * i) / n;
+    if (api.solidTile(sim, Math.floor(x), Math.floor(y))) return false;
+  }
+  return true;
 }
 
 /** Попал ли удар вплотную: рывок и неуязвимость спасают. */
@@ -99,34 +93,36 @@ function recoverStep(m: Mob, api: SimApi, T: number, next = 'chase'): void {
   if (m.t > T) api.setMode(m, next);
 }
 
-/** Сколько клеток до стены по направлению. */
-function clearDist(sim: Sim, api: SimApi, x: number, y: number, ang: number, max: number): number {
-  const ux = Math.cos(ang);
-  const uy = Math.sin(ang);
-  for (let d = 0.2; d <= max; d += 0.2)
-    if (api.solidTile(sim, Math.floor(x + ux * d), Math.floor(y + uy * d))) return d;
-  return max + 1;
-}
-
-/** Точка пола вокруг (x, y) на расстоянии r0…r1, дальняя от героя. */
-function spotAway(
+/** Точка пола рядом с (x, y) на расстоянии `r0…r1`, по оценке `score`. */
+function spotNear(
   sim: Sim,
   api: SimApi,
   x: number,
   y: number,
   r0: number,
   r1: number,
+  score: (px: number, py: number) => number,
+  line = true,
 ): [number, number] | null {
-  const h = sim.hero;
   let best: [number, number] | null = null;
   let bs = -1e9;
-  for (let i = 0; i < 20; i++) {
-    const a = (i / 20) * TAU + sim.rng() * 0.3;
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * TAU + sim.rng() * 0.2;
     const r = r0 + sim.rng() * (r1 - r0);
-    const cx = Math.floor(x + Math.cos(a) * r);
-    const cy = Math.floor(y + Math.sin(a) * r);
-    if (api.solidTile(sim, cx, cy) || onTrack(sim, cx + 0.5, cy + 0.5)) continue;
-    const s = hypot(cx + 0.5 - h.x, cy + 0.5 - h.y) + sim.rng();
+    const px = x + Math.cos(a) * r;
+    const py = y + Math.sin(a) * r;
+    const cx = Math.floor(px);
+    const cy = Math.floor(py);
+    if (!standable(sim, cx, cy)) continue;
+    if (
+      !standable(sim, cx + 1, cy) ||
+      !standable(sim, cx - 1, cy) ||
+      !standable(sim, cx, cy + 1) ||
+      !standable(sim, cx, cy - 1)
+    )
+      continue;
+    if (line && !clearLine(sim, api, x, y, cx + 0.5, cy + 0.5)) continue;
+    const s = score(cx + 0.5, cy + 0.5) + sim.rng() * 0.3;
     if (s > bs) {
       bs = s;
       best = [cx + 0.5, cy + 0.5];
@@ -135,264 +131,409 @@ function spotAway(
   return best;
 }
 
-/** Сказать один раз за `gap` секунд. */
-function sayOnce(
-  sim: Sim,
-  key: string,
-  gap: number,
-  e: { what: string; text?: string; sub?: string },
-): void {
-  const st = stateOf(sim);
-  if (sim.time - (st.said[key] ?? -1e9) < gap) return;
-  st.said[key] = sim.time;
-  sim.events.push({ t: 'boss', ...e });
+/** Район по мировому ряду (без импорта движка). */
+function areaAt(sim: Sim, y: number): string {
+  const w = sim.world;
+  return w.rowArea[clamp(Math.floor(y), 0, w.h - 1)] ?? '';
 }
 
-// ---------------------------------------------------------------------------
-// Общий черновик для рисовальщиков (один мир на экране).
-// ---------------------------------------------------------------------------
-
-/** Сигнал семафора: 0 — зелёный, 1 — жёлтый, 2 — красный, 3 — идёт, 4 — стрелка увела. */
-export type SigState = 0 | 1 | 2 | 3 | 4;
-
-/** Путь для рисовальщика рельсов (зона `f12_rails`). */
-export interface TrackView {
-  y: number;
-  x0: number;
-  x1: number;
-  pad: number;
-  dir: 1 | -1;
-  sig: SigState;
-  /** Сколько осталось до поезда, с (для пульса рельсов). */
-  left: number;
-  /** Где сейчас голова поезда (мир, x) — NaN, если поезда нет. */
-  front: number;
-  ghost: boolean;
+/** Первый мировой ряд района. */
+function topOf(sim: Sim, area: string): number {
+  return sim.world.bands.find((b) => b.def.id === area)?.top ?? 0;
 }
 
-/** Лента эскалатора (зона `f12_esc`). */
-export interface EscView {
-  x0: number;
-  x1: number;
-  y0: number;
-  y1: number;
-  /** −1 — на север, 1 — на юг, 0 — стоит. */
-  dir: number;
-  speed: number;
+/**
+ * Убить моба окружением (полынья, обвал): удар по своим без урона герою —
+ * движок засчитает убийство и бросит добычу.
+ */
+function envKill(sim: Sim, api: SimApi, m: Mob): void {
+  api.strike(sim, {
+    shape: 'circle',
+    x: m.x,
+    y: m.y,
+    r: 0.01,
+    warn: 0,
+    dmg: 0,
+    mobDmg: Infinity,
+    art: 'f12_none',
+  });
 }
 
-/** Территория (зона `f12_domain`) и метка на герое (`f12_mark`). */
-export interface TerrView {
-  r: number;
-  age: number;
-  /** Налилась метка, 0…1. */
-  charge: number;
-  /** Метка ждёт (герой в рывке). */
-  hold: boolean;
-  /** Разбита — трещит и гаснет. */
-  broken: number;
-  kind: 'doll' | 'hall';
+/** Урон окружения по мобу: лёгкий — сразу, смертельный — ударом движка. */
+function envHurt(sim: Sim, api: SimApi, m: Mob, frac: number): void {
+  const d = m.maxHp * frac;
+  if (m.hp - d <= 0) envKill(sim, api, m);
+  else {
+    m.hp -= d;
+    m.flash = Math.max(m.flash, 0.12);
+  }
 }
 
-/** Сетка разрезов храма (зона `f12_grid`). */
-export interface GridView {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-  off: number;
-  step: number;
-  /** Когда режет (время мира) и сколько. */
-  at: number;
-  cut: number;
+/** Картинка без урона (v2.85): `api.vfx`, номер положительный не нужен. */
+function fx(sim: Sim, api: SimApi, z: ZoneIn): void {
+  api.vfx(sim, z);
 }
 
-export const F12_FX = {
-  /** Семафоры: «x,y» клетки → сигнал. */
-  sig: new Map<string, SigState>(),
-  /** Сбой света в прямоугольнике [x0, y0, x1, y1] (мир) — неон и лампы гаснут. */
-  dark: null as null | [number, number, number, number],
-  /** Храм развёрнут: 0…1 (рисовальщики стен и босса). */
-  domain: 0,
-  /** Рычаг узловой повёрнут до этого времени мира. */
-  lever: 0,
-  /** Время мира — для анимации в рисовальщиках предметов. */
-  time: 0,
+const idx = (sim: Sim, x: number, y: number) => y * sim.world.w + x;
+const markAt = (sim: Sim, x: number, y: number) => {
+  const w = sim.world;
+  if (x < 0 || y < 0 || x >= w.w || y >= w.h) return 0;
+  return w.mark[y * w.w + x];
+};
+const tileAt = (sim: Sim, x: number, y: number) => {
+  const w = sim.world;
+  if (x < 0 || y < 0 || x >= w.w || y >= w.h) return T_WALL;
+  return sim.tiles[y * w.w + x];
 };
 
-// ---------------------------------------------------------------------------
-// Состояние вылазки.
-// ---------------------------------------------------------------------------
+/** Скользко: лёд, тонкий, полированный, лёд арены, ледник. */
+export const slippery = (mk: number) =>
+  mk === MK.ice ||
+  mk === MK.thin ||
+  mk === MK.polish ||
+  mk === MK.arena ||
+  mk === MK.postWar ||
+  mk === MK.glacier;
 
-interface TrackCfg {
-  period: number;
-  first: number;
-  dir: 1 | -1;
-  cars: number;
-  speed: number;
-  kind: 'normal' | 'ghost' | 'arena';
+/** На клетке можно стоять (и это не вода протоки). */
+function standable(sim: Sim, x: number, y: number): boolean {
+  const t = tileAt(sim, x, y);
+  if (t !== T_FLOOR && t !== T_HAZARD) return false;
+  return markAt(sim, x, y) !== MK.current;
 }
 
-/** Расписание путей: район и местный ряд северного рельса. */
-const TRACK_CFG: Record<string, TrackCfg> = {
-  // Вестибюль: служебная ветка — первый поезд в первые секунды.
-  [`${F12_HALL}:81`]: { period: 17, first: 7.5, dir: 1, cars: 3, speed: 17, kind: 'normal' },
-  // Платформы: станция на две линии.
-  [`${F12_PLAT}:94`]: { period: 21, first: 6, dir: 1, cars: 4, speed: 16, kind: 'normal' },
-  [`${F12_PLAT}:85`]: { period: 23, first: 16, dir: -1, cars: 4, speed: 16, kind: 'normal' },
-  // Перегоны: поезд занимает тоннель целиком — в ниши.
-  [`${F12_PLAT}:62`]: { period: 24, first: 12, dir: -1, cars: 3, speed: 15, kind: 'normal' },
-  [`${F12_PLAT}:38`]: { period: 22, first: 9, dir: 1, cars: 3, speed: 15, kind: 'normal' },
-  // Узловая: четыре пути, часто.
-  [`${F12_PLAT}:24`]: { period: 12, first: 4, dir: 1, cars: 2, speed: 18, kind: 'normal' },
-  [`${F12_PLAT}:19`]: { period: 13, first: 8, dir: -1, cars: 2, speed: 18, kind: 'normal' },
-  [`${F12_PLAT}:14`]: { period: 11, first: 2, dir: 1, cars: 2, speed: 19, kind: 'normal' },
-  [`${F12_PLAT}:9`]: { period: 14, first: 10, dir: -1, cars: 2, speed: 18, kind: 'normal' },
-  // Святилище: старый перегон — поезд-призрак (после события), и арена.
-  [`${F12_SHRINE}:54`]: { period: 30, first: 1e9, dir: -1, cars: 3, speed: 13, kind: 'ghost' },
-  [`${F12_SHRINE}:16`]: { period: 16, first: 9, dir: 1, cars: 3, speed: 17, kind: 'arena' },
+// ---------------------------------------------------------------------------
+// Числа правил (их читают тесты и рисовальщик).
+// ---------------------------------------------------------------------------
+
+/** Скольжение: разгон и торможение героя на льду (доля за секунду). */
+export const ICE = {
+  acc: 3.2,
+  brake: 1.5,
+  /** Отброс монстров на льду гаснет так (движок — 9). */
+  knockDecay: 3,
+  /** Монстр на льду: разгон по массе — `mob / sqrt(масса)`. */
+  mob: 3.4,
+  /** Сбитый быстрее этого к полынье — уходит под лёд. */
+  dunk: 3,
 };
 
-/** Длина вагона, клеток (рисовальщик рисует столько же). */
-export const CAR_LEN = 5;
-const CAR_GAP = 0.25;
-/** За сколько до поезда семафор жёлтый и красный, с. */
-export const SIG_YELLOW = 6;
-export const SIG_RED = 2.6;
-const HORN = 1.6;
-/** Доля здоровья, которую снимает поезд (после брони). */
-export const TRAIN_HIT = 0.3;
+/** Тонкий лёд: нагрузка в секунду и рубежи стадий (3 — пролом). */
+export const THIN = {
+  stand: 0.85,
+  walk: 0.42,
+  dash: 1,
+  heavy: 1,
+  /** Тяжёлый моб (масса ≥ 3) — за единицу массы сверх двух. */
+  mob: 0.3,
+  decay: 0.03,
+  /** Пролом передаёт соседям. */
+  chain: 0.55,
+  refreeze: 22,
+  slush: 12,
+};
 
-interface Train {
-  /** Время мира, когда голова была в точке старта. */
-  t0: number;
-  x0: number;
-  speed: number;
-  cars: number;
-  dir: 1 | -1;
-  ghost: boolean;
-  /** Мобы-вагоны (может не быть: далеко от героя). */
-  pieces: (Mob | null)[];
-  /** Кого уже сбили (id). */
-  hit: Set<number>;
-  horn: boolean;
-  shakeT: number;
-  /** Поезд-призрак стоит у платформы до этого времени. */
-  stopAt: number;
-  stopUntil: number;
-  stopped: boolean;
-  bossHit: boolean;
-  express: boolean;
-}
+/** Мороз: доли, скорость копления, тепло, заморозка. */
+export const FROST = {
+  max: 3,
+  /** Доля в секунду вне тепла по районам. */
+  rate: { [F12_GROTTO]: 0, [F12_LAKE]: 1 / 42, [F12_SHRINE]: 1 / 34 } as Record<string, number>,
+  /** Тепло снимает в секунду. */
+  thaw: 0.6,
+  /** Ледяной удар (`chill`) добавляет. */
+  hit: 0.4,
+  freeze: 1,
+  /** Урон, когда разбили лёд на замёрзшем, — доля здоровья. */
+  shatter: 0.05,
+  /** Замедление за долю. */
+  slow: 0.07,
+};
 
-interface Track {
-  id: number;
-  area: string;
-  /** Мировой ряд северного рельса. */
-  y: number;
-  /** Весь путь поезда (с тоннелями) и проходимая часть. */
-  x0: number;
-  x1: number;
-  wx0: number;
-  wx1: number;
-  /** Смертельных рядов по краям (в тоннеле — щебень). */
-  pad: number;
-  cfg: TrackCfg;
-  dir: 1 | -1;
-  /** Когда голова войдёт в проходимую часть (время мира). */
-  next: number;
-  train: Train | null;
-  /** Поезда уведены стрелкой до этого времени. */
-  hold: number;
-  view: TrackView;
-  zone: Zone | null;
-  /** Следующий поезд — экспресс (короткое предупреждение). */
-  express: boolean;
-  off: boolean;
-  /** Направление, к которому путь вернётся после встречного. */
-  restore: 1 | -1 | 0;
-  /** Свет фар на полу (зона `f12_beam`). */
-  beam: Zone | null;
-}
+export const FALL = { dmg: 0.08, inv: 1 };
 
-interface Lane {
-  x0: number;
-  x1: number;
-  y0: number;
-  y1: number;
-  base: number;
-  view: EscView;
-  zone: Zone | null;
-}
-
-interface Territory {
-  id: number;
-  x: number;
-  y: number;
-  r: number;
-  kind: 'doll' | 'hall';
-  owner: number;
-  pillars: number[];
-  born: number;
-  life: number;
-  /** Сколько наливается метка до удара, с; доля урона. */
-  chargeT: number;
-  hitK: number;
-  charge: number;
-  view: TerrView;
-  zone: Zone | null;
-  mark: Zone | null;
-  broken: number;
-  cutT: number;
-}
+// ---------------------------------------------------------------------------
+// Состояние этажа.
+// ---------------------------------------------------------------------------
 
 interface Post {
   id: number;
   kind: string;
   x: number;
   y: number;
-  /** Моб, если стоит; −2 — убит в этой вылазке. */
   mob: number;
-  /** Для длиннорукого — клетка стены (куда тянет). */
-  wx?: number;
-  wy?: number;
+  dead: boolean;
+  area: string;
+  /** Отрастает (сосулька): когда можно поставить снова. */
+  regrow: number;
 }
 
-type EvState = 'idle' | 'on' | 'done';
+export interface Floe {
+  id: number;
+  x: number;
+  y: number;
+  /** Полуоси, клеток. */
+  rx: number;
+  ry: number;
+  vx: number;
+  vy: number;
+  ph: number;
+  lamp: boolean;
+  /** Качка: наклон рисунка. */
+  tilt: number;
+}
 
-interface F12State {
-  tracks: Track[];
-  lanes: Lane[];
-  terrs: Territory[];
+interface Dome {
+  state: 'idle' | 'on' | 'done';
+  t: number;
+  wave: number;
+  waveT: number;
+  mobs: Set<number>;
+  cx: number;
+  cy: number;
+  r: number;
+  /** Ленты сияния: углы и фазы — свет на ходу. */
+  bands: { x: number; y: number }[];
+}
+
+interface Thaw {
+  state: 'idle' | 'on' | 'melt' | 'done';
+  t: number;
+  box: [number, number, number, number];
+  wall: number[];
+}
+
+interface Rapids {
+  state: 'idle' | 'on' | 'frozen' | 'done';
+  t: number;
+  front: number;
+  box: [number, number, number, number];
+  stop: number;
+  fell: boolean;
+}
+
+interface Drift {
+  on: boolean;
+  told: boolean;
+  floes: Floe[];
+  spawnT: number;
+  surgeT: number;
+  box: [number, number, number, number];
+  nextId: number;
+  seen: boolean;
+}
+
+interface Storm {
+  state: 'idle' | 'on' | 'done';
+  t: number;
+  k: number;
+  gustT: number;
+  gust: { ang: number; t: number; warn: number } | null;
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+}
+
+interface Hush {
+  state: 'idle' | 'on' | 'done';
+  t: number;
+  box: [number, number, number, number];
+  mobs: Set<number>;
+  torches: string[];
+}
+
+export interface F12State {
+  /** Последнее твёрдое место героя (не тонкий лёд, не вода, не у края). */
+  safe: [number, number];
+  /** Скорость героя, которую выставило правило льда в прошлый шаг. */
+  u: [number, number];
+  invSeen: number;
+  onIce: boolean;
+  slide: number;
+  glideCd: number;
+  frost: number;
+  frozenT: number;
+  frozenHp: number;
+  freezes: number;
+  shatters: number;
+  chillSeen: number;
+  falls: number;
+  /** Клетка, по которой рывок уже ударил (−1 — не в рывке). */
+  dashAt: number;
+  /** Нагрузка тонкого льда по клеткам (0…3). */
+  thin: Map<number, number>;
+  /** Полыньи, которые замерзают обратно. */
+  holes: { i: number; t: number }[];
+  /** Битый лёд Ледолома: клетка → время с пролома (меньше нуля — трещит). */
+  broken: Map<number, number>;
+  lit: Set<string>;
+  braziers: WorldObj[];
+  torches: WorldObj[];
+  torchOn: Set<string>;
+  /** Постоянное тепло по клеткам (костры, факелы, лампы, источник). */
+  warm: Uint8Array;
+  gates: Map<string, number>;
+  winch: { obj: WorldObj | null; step: number; cd: number };
+  gong: { obj: WorldObj | null; cd: number };
+  /** Вспышка гонга/сияния: невидимки видны, с. */
+  reveal: number;
   posts: Post[];
-  said: Record<string, number>;
-  nextTerr: number;
-  /** Час пик: клетки барьера и щиты, волны. */
-  rush: { st: EvState; t: number; wave: number; cells: number[]; row: number; x0: number; x1: number };
-  /** Бегущая лестница. */
-  stairs: { st: EvState; t: number; wave: number };
-  /** Сбой света: прямоугольник станции, погашенный свет, аварийки. */
-  dark: {
-    st: EvState;
-    t: number;
-    rect: [number, number, number, number];
-    saved: Map<number, number>;
-    emerg: [number, number][];
-  };
-  /** Встречный в перегоне T1. */
-  meet: { st: EvState; t: number };
-  /** Малая территория в зале святилища. */
-  hall: { st: EvState; t: number; terr: Territory | null; wave: number; cx: number; cy: number };
-  /** Последний поезд. */
-  ghost: { st: EvState; t: number; spawned: boolean };
-  /** Кулдауны действий: id предмета → время мира. */
-  useCd: Record<string, number>;
-  /** Семафоры: клетка → путь. */
-  sigTrack: Map<string, Track>;
-  scanned: boolean;
+  dome: Dome;
+  thaw: Thaw;
+  rapids: Rapids;
+  drift: Drift;
+  storm: Storm;
+  hush: Hush;
+  /** Слой пола и слой неба — зоны-картинки, едут за героем. */
+  floorFx: Zone | null;
+  skyFx: Zone | null;
+  told: Set<string>;
 }
 
 const STATE = new WeakMap<Sim, F12State>();
+
+/** Состояние этажа — для рисовальщика, тестов и стенда. */
+export const f12State = (sim: Sim | null) => (sim ? (STATE.get(sim) ?? null) : null);
+
+function scan(sim: Sim): F12State {
+  const w = sim.world;
+  const posts: Post[] = [];
+  let pid = 1;
+  const braziers: WorldObj[] = [];
+  const torches: WorldObj[] = [];
+  const warm = new Uint8Array(w.w * w.h);
+  const heat = (x: number, y: number, r: number) => {
+    for (let yy = Math.floor(y - r); yy <= Math.ceil(y + r); yy++)
+      for (let xx = Math.floor(x - r); xx <= Math.ceil(x + r); xx++) {
+        if (xx < 0 || yy < 0 || xx >= w.w || yy >= w.h) continue;
+        if (hypot(xx + 0.5 - x, yy + 0.5 - y) <= r) warm[yy * w.w + xx] = 1;
+      }
+  };
+  let winch: WorldObj | null = null;
+  let gong: WorldObj | null = null;
+  for (const o of w.objs) {
+    if (o.ref === 'f12_brazier') braziers.push(o);
+    else if (o.ref === 'f12_torch') torches.push(o);
+    else if (o.ref === 'f12_hearth') heat(o.x + 0.5, o.y + 0.5, 3.4);
+    else if (o.ref === 'f12_winch') winch = o;
+    else if (o.ref === 'f12_gong') gong = o;
+    else if (o.kind === 'lamp') heat(o.x + 0.5, o.y + 1.4, 2.4);
+  }
+  for (let y = 0; y < w.h; y++)
+    for (let x = 0; x < w.w; x++) {
+      const mk = w.mark[y * w.w + x];
+      if (mk === MK.spring || mk === MK.warm) heat(x + 0.5, y + 0.5, 1.3);
+      const area = w.rowArea[y];
+      const p = (kind: string) =>
+        posts.push({
+          id: pid++,
+          kind,
+          x: x + 0.5,
+          y: y + 0.5,
+          mob: 0,
+          dead: false,
+          area,
+          regrow: 0,
+        });
+      if (mk === MK.postIce) p('f12_icicle');
+      else if (mk === MK.postWar) p('f12_warrior');
+      else if (mk === MK.foxDrift) p('f12_fox');
+      else if (mk === MK.sealHole) p('f12_seal');
+    }
+  const g = (a: string) => topOf(sim, a);
+  const dg = F12_GEO.dome;
+  const fz = F12_GEO.frozen;
+  const rp = F12_GEO.rapids;
+  const ch = F12_GEO.channel;
+  const fl = F12_GEO.field;
+  const gh = F12_GEO.gongHall;
+  const gt = g(F12_GROTTO);
+  const lt = g(F12_LAKE);
+  const stp = g(F12_SHRINE);
+  const wall: number[] = [];
+  for (let x = fz.wallX[0]; x <= fz.wallX[1]; x++) wall.push(idx(sim, x, gt + fz.wallY));
+  const domeBands = [0, 1, 2].map(() => ({ x: dg.x, y: gt + dg.y }));
+  return {
+    safe: [sim.hero.x, sim.hero.y],
+    u: [0, 0],
+    invSeen: sim.hero.inv,
+    onIce: false,
+    slide: 0,
+    glideCd: 0,
+    frost: 0,
+    frozenT: 0,
+    frozenHp: 0,
+    freezes: 0,
+    shatters: 0,
+    chillSeen: 0,
+    falls: 0,
+    dashAt: -1,
+    thin: new Map(),
+    holes: [],
+    broken: new Map(),
+    lit: new Set(),
+    braziers,
+    torches,
+    torchOn: new Set(torches.map((o) => o.id)),
+    warm,
+    gates: new Map(),
+    winch: { obj: winch, step: 0, cd: 0 },
+    gong: { obj: gong, cd: 0 },
+    reveal: 0,
+    posts,
+    dome: {
+      state: 'idle',
+      t: 0,
+      wave: 0,
+      waveT: 0,
+      mobs: new Set(),
+      cx: dg.x,
+      cy: gt + dg.y,
+      r: dg.r,
+      bands: domeBands,
+    },
+    thaw: { state: 'idle', t: 0, box: [fz.x0, gt + fz.y0, fz.x1, gt + fz.y1], wall },
+    rapids: {
+      state: 'idle',
+      t: 0,
+      front: lt + rp.y1 + 2,
+      box: [rp.x0, lt + rp.y0, rp.x1, lt + rp.y1],
+      stop: lt + rp.y0 + 3,
+      fell: false,
+    },
+    drift: {
+      on: false,
+      told: false,
+      floes: [],
+      spawnT: 0,
+      surgeT: 4,
+      box: [ch.x0, lt + ch.y0, ch.x1, lt + ch.y1],
+      nextId: 1,
+      seen: false,
+    },
+    storm: {
+      state: 'idle',
+      t: 0,
+      k: 0,
+      gustT: 3,
+      gust: null,
+      cx: fl.x,
+      cy: stp + fl.y,
+      rx: fl.rx,
+      ry: fl.ry,
+    },
+    hush: {
+      state: 'idle',
+      t: 0,
+      box: [gh.x0, stp + gh.y0, gh.x1, stp + gh.y1],
+      mobs: new Set(),
+      torches: [],
+    },
+    floorFx: null,
+    skyFx: null,
+    told: new Set(),
+  };
+}
 
 function stateOf(sim: Sim): F12State {
   let st = STATE.get(sim);
@@ -403,1296 +544,1319 @@ function stateOf(sim: Sim): F12State {
   return st;
 }
 
-/** Для тестов и бота: пути, ленты, территории, события. */
-export const f12State = (sim: Sim) => stateOf(sim);
+/** Подсказка один раз за вылазку: текст события и строка под ним. */
+function say(sim: Sim, st: F12State, what: string, text: string, sub?: string, key = what): void {
+  const first = !st.told.has(key);
+  st.told.add(key);
+  sim.events.push({ t: 'boss', what, text, sub: first ? sub : undefined });
+}
 
-const isRailN = (k: number) => k === MK.railN || k === MK.crossN || k === MK.tunnelN;
-const isRailS = (k: number) => k === MK.railS || k === MK.crossS || k === MK.tunnelS;
+// ---------------------------------------------------------------------------
+// Тепло и свет.
+// ---------------------------------------------------------------------------
 
-function scan(sim: Sim): F12State {
+/** Горит ли жаровня (для рисовальщика). */
+export const f12Lit = (sim: Sim | null, id: string) => !!sim && !!STATE.get(sim)?.lit.has(id);
+/** Горит ли факел (дух гасит, «Безмолвие» гасит). */
+export const f12Torch = (sim: Sim | null, id: string) =>
+  !sim || !STATE.get(sim) || STATE.get(sim)!.torchOn.has(id);
+
+function lightBrazier(sim: Sim, st: F12State, api: SimApi, o: WorldObj, melt = true): void {
+  if (st.lit.has(o.id)) return;
+  st.lit.add(o.id);
+  api.light(sim, `f12b:${o.id}`, { x: o.x + 0.5, y: o.y + 0.3, r: 5.4, tint: 'warm' });
+  sim.events.push({ t: 'boss', what: 'f12_light' });
+  fx(sim, api, { x: o.x + 0.5, y: o.y + 0.5, r: 2.6, life: 0.9, art: 'f12_ignite' });
+  if (!melt) return;
+  // Вокруг тает лёд: лёд → мокрый камень (без арены — там лёд нужен бою).
+  if (api.inArena(sim, o.x + 0.5, o.y + 0.5)) return;
+  for (let y = o.y - 3; y <= o.y + 3; y++)
+    for (let x = o.x - 3; x <= o.x + 3; x++) {
+      if (hypot(x - o.x, y - o.y) > 2.3) continue;
+      const mk = markAt(sim, x, y);
+      if (tileAt(sim, x, y) !== T_FLOOR) continue;
+      if (mk === MK.ice || mk === MK.thin || mk === MK.polish) {
+        st.thin.delete(idx(sim, x, y));
+        api.setTile(sim, x, y, T_FLOOR, MK.melt);
+      }
+    }
+}
+
+function douseBrazier(sim: Sim, st: F12State, api: SimApi, o: WorldObj): void {
+  if (!st.lit.delete(o.id)) return;
+  api.light(sim, `f12b:${o.id}`, null);
+  sim.events.push({ t: 'boss', what: 'f12_blowout' });
+  fx(sim, api, { x: o.x + 0.5, y: o.y + 0.3, r: 1.6, life: 1.2, art: 'f12_smoke' });
+}
+
+function setTorch(sim: Sim, st: F12State, api: SimApi, o: WorldObj, on: boolean): void {
+  if (on === st.torchOn.has(o.id)) return;
+  if (on) {
+    st.torchOn.add(o.id);
+    api.light(sim, `f12t:${o.id}`, { x: o.x + 0.5, y: o.y + 0.1, r: 4, tint: 'warm' });
+  } else {
+    st.torchOn.delete(o.id);
+    api.light(sim, `f12t:${o.id}`, null);
+    fx(sim, api, { x: o.x + 0.5, y: o.y - 0.2, r: 1, life: 1, art: 'f12_smoke' });
+  }
+}
+
+/** Тепло в точке: костры, факелы, лампы, источник, горящие жаровни. */
+export function warmAt(sim: Sim, x: number, y: number): boolean {
+  const st = STATE.get(sim);
+  if (!st) return false;
+  const cx = Math.floor(x);
+  const cy = Math.floor(y);
   const w = sim.world;
-  const tracks: Track[] = [];
-  let tid = 0;
-  for (let y = 0; y < w.h - 1; y++) {
-    let x = 0;
-    while (x < w.w) {
-      if (!(isRailN(markAt(sim, x, y)) && isRailS(markAt(sim, x, y + 1)))) {
-        x++;
-        continue;
-      }
-      let xb = x;
-      while (xb + 1 < w.w && isRailN(markAt(sim, xb + 1, y)) && isRailS(markAt(sim, xb + 1, y + 1)))
-        xb++;
-      let tunnel = false;
-      let wx0 = 1e9;
-      let wx1 = -1;
-      for (let k = x; k <= xb; k++) {
-        if (markAt(sim, k, y) === MK.tunnelN) tunnel = true;
-        else {
-          wx0 = Math.min(wx0, k);
-          wx1 = Math.max(wx1, k);
-        }
-      }
-      const band = w.bands.find((b) => y >= b.top && y < b.top + b.h);
-      const area = band?.def.id ?? '';
-      const cfg = TRACK_CFG[`${area}:${y - (band?.top ?? 0)}`];
-      if (tunnel && wx1 >= wx0 && cfg) {
-        const edge = markAt(sim, Math.floor((wx0 + wx1) / 2), y - 1);
-        const pad = edge === MK.ballast ? 1 : 0;
-        const view: TrackView = {
-          y,
-          x0: wx0,
-          x1: wx1 + 1,
-          pad,
-          dir: cfg.dir,
-          sig: 0,
-          left: 99,
-          front: NaN,
-          ghost: cfg.kind === 'ghost',
-        };
-        tracks.push({
-          id: tid++,
-          area,
-          y,
-          x0: x,
-          x1: xb + 1,
-          wx0,
-          wx1: wx1 + 1,
-          pad,
-          cfg,
-          dir: cfg.dir,
-          next: cfg.first,
-          train: null,
-          hold: 0,
-          view,
-          zone: null,
-          express: false,
-          off: false,
-          restore: 0,
-          beam: null,
-        });
-      }
-      x = xb + 1;
-    }
-  }
-  // Ленты эскалаторов: столбцы одной метки подряд.
-  const lanes: Lane[] = [];
-  const used = new Set<number>();
-  for (let y = 0; y < w.h; y++)
-    for (let x = 0; x < w.w; x++) {
-      const k = markAt(sim, x, y);
-      if ((k !== MK.escN && k !== MK.escS && k !== MK.esc0) || used.has(y * w.w + x)) continue;
-      let x1 = x;
-      while (markAt(sim, x1 + 1, y) === k) x1++;
-      let y1 = y;
-      while (markAt(sim, x, y1 + 1) === k) y1++;
-      for (let yy = y; yy <= y1; yy++) for (let xx = x; xx <= x1; xx++) used.add(yy * w.w + xx);
-      const base = k === MK.escN ? -1 : k === MK.escS ? 1 : 0;
-      lanes.push({
-        x0: x,
-        x1: x1 + 1,
-        y0: y,
-        y1: y1 + 1,
-        base,
-        view: { x0: x, x1: x1 + 1, y0: y, y1: y1 + 1, dir: base, speed: ESC_SPEED },
-        zone: null,
-      });
-    }
-  // Посты жителей станции.
-  const posts: Post[] = [];
-  let pid = 0;
-  for (let y = 0; y < w.h; y++)
-    for (let x = 0; x < w.w; x++) {
-      const k = markAt(sim, x, y);
-      const kind =
-        k === MK.sleepPost
-          ? 'f12_sleeper'
-          : k === MK.eyePost
-            ? 'f12_eye'
-            : k === MK.linePost
-              ? 'f12_lineman'
-              : k === MK.dollPost
-                ? 'f12_doll'
-                : k === MK.guardPost
-                  ? 'f12_turnstile'
-                  : '';
-      if (kind) posts.push({ id: pid++, kind, x: x + 0.5, y: y + 0.5, mob: -1 });
-      // Трещина длиннорукого — в стене; сам он у стены, на полу рядом.
-      if (k === MK.wArm) {
-        const dirs: [number, number][] = [
-          [0, 1],
-          [1, 0],
-          [-1, 0],
-          [0, -1],
-        ];
-        for (const [dx, dy] of dirs) {
-          if (sim.tiles[(y + dy) * w.w + x + dx] !== T_FLOOR) continue;
-          posts.push({
-            id: pid++,
-            kind: 'f12_longarm',
-            x: x + dx + 0.5,
-            y: y + dy + 0.5,
-            mob: -1,
-            wx: x + 0.5,
-            wy: y + 0.5,
-          });
-          break;
-        }
-      }
-      // Плакат на стене — дом ожившего плаката (не каждый).
-      if (k === MK.wPoster && sim.tiles[(y + 1) * w.w + x] === T_FLOOR && (x * 7 + y * 3) % 4 === 0)
-        posts.push({ id: pid++, kind: 'f12_poster', x: x + 0.5, y: y + 1.5, mob: -1, wx: x + 0.5, wy: y + 0.5 });
-    }
-  // Семафоры и сигналы — к ближнему пути своего района.
-  const sigTrack = new Map<string, Track>();
-  for (const o of w.objs) {
-    if (o.ref !== 'f12_semaphore' && o.ref !== 'f12_signal') continue;
-    let best: Track | null = null;
-    let bd = 9;
-    for (const t of tracks) {
-      const d = Math.abs(o.y + 0.5 - (t.y + 1));
-      if (d < bd) {
-        bd = d;
-        best = t;
-      }
-    }
-    if (best) sigTrack.set(`${o.x},${o.y}`, best);
-  }
-  // Барьер турникетов Вестибюля: ряд, где стоят створки.
-  const hallBand = w.bands.find((b) => b.def.id === F12_HALL);
-  let row = -1;
-  let bx0 = 99;
-  let bx1 = -1;
-  const cells: number[] = [];
-  if (hallBand)
-    for (const o of w.objs) {
-      if (o.ref !== 'f12_turnstile' || o.area !== F12_HALL) continue;
-      row = o.y;
-      bx0 = Math.min(bx0, o.x);
-      bx1 = Math.max(bx1, o.x);
-    }
-  if (row >= 0) {
-    for (let x = 1; x < w.w - 1; x++) {
-      const i = row * w.w + x;
-      if (sim.tiles[i] !== T_FLOOR) continue;
-      if (w.objs.some((o) => o.x === x && o.y === row && o.ref === 'f12_turnstile')) continue;
-      cells.push(i);
-    }
-    // Двери платной зоны (запад) и низ эскалаторов — тоже на замок.
-    for (let y = row - 9; y < row; y++)
-      for (const x of [7]) if (sim.tiles[y * w.w + x] === T_FLOOR && markAt(sim, x, y) === MK.tile) cells.push(y * w.w + x);
-    for (let y = row - 16; y < row - 9; y++)
-      for (let x = 1; x < w.w - 1; x++)
-        if (markAt(sim, x, y) === MK.comb && markAt(sim, x, y - 1) !== MK.comb && sim.tiles[(y - 1) * w.w + x] === T_FLOOR && markAt(sim, x, y - 1) !== MK.tile)
-          cells.push(y * w.w + x);
-  }
-  // Станция Платформ: прямоугольник для сбоя света.
-  const plat = w.bands.find((b) => b.def.id === F12_PLAT);
-  const rect: [number, number, number, number] = plat
-    ? [3, plat.top + 74, 61, plat.top + 104]
-    : [0, 0, 0, 0];
-  const emerg: [number, number][] = [];
-  if (plat) for (const x of [8, 20, 32, 44, 56]) emerg.push([x + 0.5, plat.top + 76.5], [x + 0.5, plat.top + 102.5]);
-  const shrine = w.bands.find((b) => b.def.id === F12_SHRINE);
-  return {
-    tracks,
-    lanes,
-    terrs: [],
-    posts,
-    said: {},
-    nextTerr: 1,
-    rush: { st: 'idle', t: 0, wave: 0, cells, row, x0: bx0, x1: bx1 },
-    stairs: { st: 'idle', t: 0, wave: 0 },
-    dark: { st: 'idle', t: 0, rect, saved: new Map(), emerg },
-    meet: { st: 'idle', t: 0 },
-    hall: {
-      st: 'idle',
-      t: 0,
-      terr: null,
-      wave: 0,
-      cx: 17.5,
-      cy: (shrine?.top ?? 0) + 56.5,
-    },
-    ghost: { st: 'idle', t: 0, spawned: false },
-    useCd: {},
-    sigTrack,
-    scanned: true,
-  };
-}
-
-/** Держать свою «вечную» зону рисунка (сброс боя чистит все зоны). */
-function keepZone(sim: Sim, api: SimApi, cur: Zone | null, make: () => ZoneIn): Zone {
-  if (cur && sim.zones.includes(cur)) return cur;
-  api.zone(sim, make());
-  return sim.zones[sim.zones.length - 1];
+  if (cx >= 0 && cy >= 0 && cx < w.w && cy < w.h && st.warm[cy * w.w + cx]) return true;
+  for (const o of st.braziers)
+    if (st.lit.has(o.id) && hypot(o.x + 0.5 - x, o.y + 0.5 - y) < 3.1) return true;
+  for (const o of st.torches)
+    if (st.torchOn.has(o.id) && hypot(o.x + 0.5 - x, o.y + 0.5 - y) < 2.3) return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
-// Поезда.
+// Падение в воду: герой — урон, мороз и на твёрдое; моб — под лёд.
 // ---------------------------------------------------------------------------
 
-/** Стоит ли точка на смертельной полосе какого-нибудь пути (для ИИ и бота). */
-export function onTrack(sim: Sim, x: number, y: number): Track | null {
-  const st = STATE.get(sim);
-  if (!st) return null;
-  for (const t of st.tracks) {
-    if (t.off) continue;
-    if (x < t.wx0 - 0.3 || x > t.wx1 + 0.3) continue;
-    if (y >= t.y - t.pad && y <= t.y + 2 + t.pad) return t;
-  }
-  return null;
-}
-
-/**
- * Опасность пути для бота и ИИ: секунд до того, как в точке пройдёт поезд
- * (0 — идёт прямо сейчас), Infinity — безопасно.
- */
-export function trackDanger(sim: Sim, x: number, y: number, r = 0.3): number {
-  const st = STATE.get(sim);
-  if (!st) return Infinity;
-  let best = Infinity;
-  for (const t of st.tracks) {
-    if (t.off) continue;
-    if (x < t.wx0 - r || x > t.wx1 + r) continue;
-    if (y < t.y - t.pad - r || y > t.y + 2 + t.pad + r) continue;
-    const tr = t.train;
-    if (tr) {
-      const [a, b] = trainSpan(sim, tr);
-      if (x > a - 3 && x < b + 3) return 0;
-      // Голова ещё не дошла: сколько ей ехать.
-      const f = tr.dir > 0 ? b : a;
-      const d = (x - f) * tr.dir;
-      if (d > 0) best = Math.min(best, d / tr.speed);
-      continue;
-    }
-    if (t.hold > sim.time) continue;
-    best = Math.min(best, Math.max(0, t.next - sim.time));
-  }
-  return best;
-}
-
-/** Где голова поезда сейчас. */
-function frontOf(sim: Sim, tr: Train): number {
-  const dtRun = sim.time - tr.t0;
-  if (tr.ghost && tr.stopAt > 0) {
-    // Призрак: доезжает до платформы, стоит, уезжает.
-    const tStop = (tr.stopAt - tr.x0) / (tr.speed * tr.dir);
-    if (dtRun < tStop) return tr.x0 + tr.dir * tr.speed * dtRun;
-    const wait = tr.stopUntil - tr.t0 - tStop;
-    if (dtRun < tStop + wait) return tr.stopAt;
-    return tr.stopAt + tr.dir * tr.speed * (dtRun - tStop - wait);
-  }
-  return tr.x0 + tr.dir * tr.speed * dtRun;
-}
-
-const trainLen = (cars: number) => cars * CAR_LEN + (cars - 1) * CAR_GAP;
-
-/** Пролёт поезда [слева, справа] по x. */
-function trainSpan(sim: Sim, tr: Train): [number, number] {
-  const f = frontOf(sim, tr);
-  const L = trainLen(tr.cars);
-  return tr.dir > 0 ? [f - L, f] : [f, f + L];
-}
-
-/** Выпустить поезд на путь. */
-function launch(sim: Sim, t: Track): void {
-  const cfg = t.cfg;
-  const speed = t.express ? cfg.speed * 1.35 : cfg.speed;
-  const x0 = t.dir > 0 ? t.x0 - 3 : t.x1 + 3;
-  // Голова дойдёт до проходимой части ровно к `next`.
-  const edge = t.dir > 0 ? t.wx0 : t.wx1;
-  const t0 = t.next - Math.abs(edge - x0) / speed;
-  const ghost = cfg.kind === 'ghost';
-  const tr: Train = {
-    t0,
-    x0,
-    speed,
-    cars: cfg.cars,
-    dir: t.dir,
-    ghost,
-    pieces: [],
-    hit: new Set(),
-    horn: false,
-    shakeT: 0,
-    stopAt: 0,
-    stopUntil: 0,
-    stopped: false,
-    bossHit: false,
-    express: t.express,
-  };
-  if (ghost && stateOf(sim).ghost.st === 'on' && !stateOf(sim).ghost.spawned) {
-    // Последний поезд: встаёт у платформы (середина пути), стоит 10 с.
-    const L = trainLen(cfg.cars);
-    const mid = (t.wx0 + t.wx1) / 2;
-    tr.stopAt = t.dir > 0 ? mid + L / 2 : mid - L / 2;
-    const tStop = Math.abs(tr.stopAt - x0) / speed;
-    tr.stopUntil = t0 + tStop + 10;
-    stateOf(sim).ghost.spawned = true;
-  }
-  t.train = tr;
-  t.express = false;
-}
-
-/** Вагоны — мобы только рядом с героем (дальше их всё равно не видно). */
-function placePieces(sim: Sim, api: SimApi, t: Track, tr: Train): void {
-  const f = frontOf(sim, tr);
+function fallIn(sim: Sim, st: F12State, api: SimApi, why: string): void {
   const h = sim.hero;
-  const yb = t.y + 1.95;
-  for (let i = 0; i < tr.cars; i++) {
-    const back = i * (CAR_LEN + CAR_GAP) + CAR_LEN / 2;
-    const cx = f - tr.dir * back;
-    const near = Math.abs(cx - h.x) < 26 && Math.abs(yb - h.y) < 22;
-    let m = tr.pieces[i] ?? null;
-    if (m && (!sim.mobs.includes(m) || m.mode === 'dying')) m = null;
-    if (!near) {
-      if (m) sim.mobs = sim.mobs.filter((x) => x !== m);
-      tr.pieces[i] = null;
-      continue;
-    }
-    if (!m) {
-      m = api.spawnMob(sim, 'f12_train', cx, yb, { mode: 'drop' });
-      m.t = 1;
-      m.data.ghost = 1;
-      tr.pieces[i] = m;
-    }
-    m.x = cx;
-    m.y = yb;
-    m.vx = 0;
-    m.vy = 0;
-    m.kx = 0;
-    m.ky = 0;
-    m.face = tr.dir > 0 ? 0 : Math.PI;
-    m.data.car = i;
-    m.data.cars = tr.cars;
-    m.data.dir = tr.dir;
-    m.data.spirit = tr.ghost ? 1 : 0;
-    m.data.stop = tr.stopped ? 1 : 0;
-    m.data.track = t.id;
-    // Уклон в последний миг: рывок прочь с путей перед самой головой.
-    m.danger = 0;
-    if (i === 0 && !tr.stopped) {
-      const d = (h.x - f) * tr.dir;
-      if (d > -0.5 && d < 2.6 && onTrack(sim, h.x, h.y) === t) m.danger = 3;
-    }
+  if (heroDown(sim)) return;
+  const fromX = h.x;
+  const fromY = h.y;
+  fx(sim, api, { x: fromX, y: fromY, r: 1.4, life: 1.1, art: 'f12_splash' });
+  api.hurtEnv(sim, FALL.dmg);
+  addFrost(sim, st, 1);
+  let [sx, sy] = st.safe;
+  if (!standable(sim, Math.floor(sx), Math.floor(sy)) || brokenAt(st, sim, sx, sy)) {
+    const near = spotNear(sim, api, h.x, h.y, 1, 8, (px, py) => -hypot(px - h.x, py - h.y), false);
+    if (near) [sx, sy] = near;
   }
-}
-
-function clearPieces(sim: Sim, tr: Train): void {
-  const set = new Set(tr.pieces.filter(Boolean) as Mob[]);
-  if (set.size) sim.mobs = sim.mobs.filter((m) => !set.has(m));
-  tr.pieces = [];
-}
-
-/** Кого накрыл состав: герой — удар и отброс, монстры — насмерть. */
-function trainHits(sim: Sim, api: SimApi, t: Track, tr: Train): void {
-  if (tr.stopped) return;
-  const [a, b] = trainSpan(sim, tr);
-  const y0 = t.y - t.pad;
-  const y1 = t.y + 2 + t.pad;
-  const h = sim.hero;
-  const cy = t.y + 1;
-  if (!heroDown(sim) && h.x > a - h.r && h.x < b + h.r && h.y > y0 - h.r * 0.5 && h.y < y1 + h.r * 0.5) {
-    if (h.inv <= 0) {
-      // Отброс — к ближнему краю путей и по ходу поезда.
-      const fy = h.y < cy ? h.y + 1 : h.y - 1;
-      const fx = h.x - tr.dir * 0.8;
-      api.hurtHero(sim, rawShare(sim, tr.ghost ? TRAIN_HIT * 0.8 : TRAIN_HIT), fx, fy, 13, 'f12_train');
-      sim.events.push({ t: 'shake', k: 0.7 });
-      sayOnce(sim, 'train-hit', 6, { what: 'f12_train_hit', text: 'ПОД ПОЕЗДОМ', sub: 'на путях не стоят' });
-    }
-  }
-  for (const m of sim.mobs) {
-    if (m.mode === 'dying' || tr.hit.has(m.id)) continue;
-    if (m.kind === 'f12_train' || m.kind === 'f12_eye') continue;
-    if (m.x < a - m.r || m.x > b + m.r || m.y < y0 - m.r || m.y > y1 + m.r) continue;
-    if (m.kind === 'f12boss') {
-      if (tr.bossHit || (m.data.ghost ?? 0) > 0) continue;
-      tr.bossHit = true;
-      bossTrainHit(sim, api, m);
-      continue;
-    }
-    if ((m.data.ghost ?? 0) > 0 || m.mode === 'emerge') continue;
-    tr.hit.add(m.id);
-    // Удар по своим (Движок 3): насмерть и в зачёт; героя этот круг не задевает.
-    api.strike(sim, {
-      shape: 'circle',
-      x: m.x,
-      y: m.y,
-      r: Math.max(0.08, m.r * 0.4),
-      warn: 0,
-      dmg: 0,
-      mobDmg: Infinity,
-      art: 'f12_trainhit',
-    });
-  }
-}
-
-function stepTracks(sim: Sim, st: F12State, api: SimApi, dt: number): void {
-  const h = sim.hero;
-  const now = sim.time;
-  for (const t of st.tracks) {
-    const v = t.view;
-    // Арена в храме: путь переписан — поездов нет.
-    if (t.off) {
-      if (t.train) {
-        clearPieces(sim, t.train);
-        t.train = null;
-      }
-      v.sig = 0;
-      v.front = NaN;
-      continue;
-    }
-    const near = Math.abs(h.y - (t.y + 1)) < 30;
-    // Рисунок рельсов (метка беды) — вечная зона на пути.
-    if (near)
-      t.zone = keepZone(sim, api, t.zone, () => {
-        const z: ZoneIn & { f12?: TrackView } = {
-          x: t.wx0,
-          y: t.y,
-          r: 0.1,
-          life: 1e9,
-          art: 'f12_rails',
-          f12: v,
-        };
-        return z;
-      });
-    if (t.train) {
-      const tr = t.train;
-      const [a, b] = trainSpan(sim, tr);
-      const f = tr.dir > 0 ? b : a;
-      v.front = f;
-      v.sig = tr.stopped ? 1 : 3;
-      v.left = 0;
-      if (tr.ghost && tr.stopAt > 0) {
-        const was = tr.stopped;
-        tr.stopped = Math.abs(f - tr.stopAt) < 0.01 && now < tr.stopUntil;
-        if (tr.stopped && !was) ghostStop(sim, api, t, tr);
-        if (!tr.stopped && was) sayOnce(sim, 'ghost-go', 5, { what: 'f12_ghost_call', text: 'ДВЕРИ ЗАКРЫВАЮТСЯ', sub: 'уходи с путей' });
-      }
-      placePieces(sim, api, t, tr);
-      trainHits(sim, api, t, tr);
-      // Свет фар — впереди головы, и сноп света по рельсам поверх темноты.
-      if (near && !tr.stopped) {
-        api.light(sim, `f12_train${t.id}`, {
-          x: f + tr.dir * 1.6,
-          y: t.y + 1,
-          r: tr.ghost ? 4.2 : 5.4,
-          tint: tr.ghost ? 'green' : 'warm',
-        });
-        t.beam = keepZone(sim, api, t.beam, () => {
-          const z: ZoneIn & { f12?: { dir: number; ghost: boolean } } = {
-            x: f,
-            y: t.y + 1,
-            r: 0.1,
-            life: 1e9,
-            art: 'f12_beam',
-            above: true,
-            f12: { dir: tr.dir, ghost: tr.ghost },
-          };
-          return z;
-        });
-        t.beam.x = f;
-        t.beam.y = t.y + 1;
-      } else {
-        api.light(sim, `f12_train${t.id}`, null);
-        if (t.beam) {
-          sim.zones = sim.zones.filter((z) => z !== t.beam);
-          t.beam = null;
-        }
-      }
-      // Пол дрожит, пока состав рядом.
-      tr.shakeT -= dt;
-      const dx = h.x < a ? a - h.x : h.x > b ? h.x - b : 0;
-      const dy = Math.abs(h.y - (t.y + 1));
-      if (!tr.stopped && tr.shakeT <= 0 && dx < 7 && dy < 7) {
-        tr.shakeT = 0.22;
-        sim.events.push({ t: 'shake', k: 0.22 * (1 - Math.max(dx, dy) / 8) });
-      }
-      // Ушёл за край — поезда нет; следующий по расписанию.
-      const gone = tr.dir > 0 ? a > t.x1 + 3 : b < t.x0 - 3;
-      if (gone) {
-        clearPieces(sim, tr);
-        api.light(sim, `f12_train${t.id}`, null);
-        sim.zones = sim.zones.filter((z) => z !== t.beam);
-        t.beam = null;
-        t.train = null;
-        v.front = NaN;
-        if (t.restore) {
-          t.dir = t.restore;
-          v.dir = t.restore;
-          t.restore = 0;
-        }
-        const per = t.cfg.period * (0.85 + sim.rng() * 0.3);
-        t.next = Math.max(now + 4, t.hold) + per;
-        if (t.cfg.kind === 'ghost' && st.ghost.st !== 'done') t.next = 1e9;
-      }
-      continue;
-    }
-    v.front = NaN;
-    if (t.hold > now) {
-      v.sig = 4;
-      v.left = 99;
-      if (t.next < t.hold + 3) t.next = t.hold + 3;
-      continue;
-    }
-    const left = t.next - now;
-    v.left = left;
-    v.sig = left > SIG_YELLOW ? 0 : left > SIG_RED ? 1 : 2;
-    // Гудок и гул — пока поезд ещё в тоннеле.
-    if (left < HORN && left > HORN - dt * 1.5 && near) {
-      // Гудок из тоннеля (звук — `trainHorn`); призрак гудит иначе.
-      sim.events.push({ t: 'boss', what: t.cfg.kind === 'ghost' ? 'f12_ghost_horn' : 'f12_horn' });
-      // Спящие рядом с путями просыпаются от гудка.
-      wakeSleepers(sim, api, (t.wx0 + t.wx1) / 2, t.y + 1, 99, 4.2);
-    }
-    // Голова выходит из-за края мира заранее: свет встаёт из темноты.
-    const edge = t.dir > 0 ? t.wx0 : t.wx1;
-    const x0 = t.dir > 0 ? t.x0 - 3 : t.x1 + 3;
-    const speed = t.express ? t.cfg.speed * 1.35 : t.cfg.speed;
-    if (left <= Math.abs(edge - x0) / speed) {
-      launch(sim, t);
-      // Гул состава с Доплером (`trainPass`) — только рядом с героем.
-      if (near) sim.events.push({ t: 'boss', what: 'f12_pass' });
-    }
-  }
-  // Семафоры для рисовальщика.
-  for (const [key, t] of st.sigTrack) F12_FX.sig.set(key, t.view.sig);
-}
-
-/** Позвать поезд на путь сейчас (колокол, обходчик, событие). */
-function callTrain(sim: Sim, t: Track, lead: number, express = true): boolean {
-  if (t.off || t.train || t.hold > sim.time) return false;
-  if (t.next - sim.time < lead) return false;
-  t.next = sim.time + lead;
-  t.express = express;
-  return true;
-}
-
-/** Ближний путь к точке (по ряду), если ближе `maxDy`. */
-function trackNear(st: F12State, x: number, y: number, maxDy: number): Track | null {
-  let best: Track | null = null;
-  let bd = maxDy;
-  for (const t of st.tracks) {
-    if (t.off || x < t.wx0 - 2 || x > t.wx1 + 2) continue;
-    const d = Math.abs(y - (t.y + 1));
-    if (d < bd) {
-      bd = d;
-      best = t;
-    }
-  }
-  return best;
-}
-
-// ---------------------------------------------------------------------------
-// Эскалаторы.
-// ---------------------------------------------------------------------------
-
-/** Скорость ленты, клеток в секунду. */
-export const ESC_SPEED = 2.9;
-
-function laneAt(st: F12State, x: number, y: number): Lane | null {
-  for (const l of st.lanes) if (x >= l.x0 && x < l.x1 && y >= l.y0 && y < l.y1) return l;
-  return null;
-}
-
-function stepLanes(sim: Sim, st: F12State, api: SimApi, dt: number): void {
-  const h = sim.hero;
-  for (const l of st.lanes) {
-    if (Math.abs(h.y - (l.y0 + l.y1) / 2) < 40)
-      l.zone = keepZone(sim, api, l.zone, () => {
-        const z: ZoneIn & { f12?: EscView } = {
-          x: l.x0,
-          y: l.y0,
-          r: 0.1,
-          life: 1e9,
-          art: 'f12_esc',
-          f12: l.view,
-        };
-        return z;
-      });
-  }
-  // Лента несёт героя (не в рывке, не на крюке).
-  if (!heroDown(sim) && !h.pull) {
-    const l = laneAt(st, h.x, h.y);
-    if (l && l.view.dir) {
-      h.y += l.view.dir * l.view.speed * dt * (h.mode === 'dash' ? 0.4 : 1);
-      api.collide(sim, h);
-    }
-  }
-  // И монстров — кроме летающих и сидящих в стене.
-  for (const m of sim.mobs) {
-    if (m.mode === 'dying' || m.mode === 'drop' || m.mode === 'emerge') continue;
-    const def = api.def(m.kind);
-    if (def.fly || def.boss || def.speed <= 0) continue;
-    const l = laneAt(st, m.x, m.y);
-    if (!l || !l.view.dir) continue;
-    m.y += l.view.dir * l.view.speed * dt;
-    api.collide(sim, m);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Территории.
-// ---------------------------------------------------------------------------
-
-/** Метка налилась — удар «верный»: мимо брони, но рывок переждёт. */
-function terrHit(sim: Sim, api: SimApi, tr: Territory): void {
-  const h = sim.hero;
-  api.hurtEnv(sim, tr.hitK);
-  sim.events.push({ t: 'flash', color: '#ff2a6a', k: 0.55 });
+  api.moveHero(sim, sx, sy);
+  st.u = [0, 0];
+  h.inv = Math.max(h.inv, FALL.inv);
+  st.invSeen = h.inv;
+  st.falls += 1;
   sim.events.push({ t: 'shake', k: 0.35 });
-  sim.events.push({ t: 'strike', x: h.x, y: h.y, art: 'f12_markcut', big: false });
+  sim.events.push({ t: 'flash', color: '#bfe8ff', k: 0.5 });
+  say(sim, st, 'f12_splash', why, 'вода не держит — обходи трещины и тёмные пятна', 'fall');
 }
 
-/** Поставить территорию: круг, три столба по краю. */
-function openTerritory(
-  sim: Sim,
-  api: SimApi,
-  x: number,
-  y: number,
-  r: number,
-  kind: 'doll' | 'hall',
-  owner: number,
-): Territory {
-  const st = stateOf(sim);
-  const view: TerrView = { r, age: 0, charge: 0, hold: false, broken: 0, kind };
-  const tr: Territory = {
-    id: st.nextTerr++,
-    x,
-    y,
-    r,
-    kind,
-    owner,
-    pillars: [],
-    born: sim.time,
-    life: kind === 'hall' ? 1e9 : 15,
-    chargeT: kind === 'hall' ? 1.25 : 1.45,
-    hitK: kind === 'hall' ? 0.085 : 0.1,
-    charge: 0,
-    view,
-    zone: null,
-    mark: null,
-    broken: 0,
-    cutT: 0,
-  };
-  const rot = sim.rng() * TAU;
-  const pr = r - 0.7;
-  for (let i = 0; i < 3; i++) {
-    const a = rot + (i / 3) * TAU;
-    let px = x + Math.cos(a) * pr;
-    let py = y + Math.sin(a) * pr;
-    // Столб — на пол: ищем ближе к центру, если попал в стену.
-    for (let k = 0; k < 8 && (api.solidTile(sim, Math.floor(px), Math.floor(py)) || onTrack(sim, px, py)); k++) {
-      px = x + Math.cos(a) * pr * (1 - (k + 1) * 0.11);
-      py = y + Math.sin(a) * pr * (1 - (k + 1) * 0.11);
-    }
-    const p = api.spawnMob(sim, 'f12_pillar', Math.floor(px) + 0.5, Math.floor(py) + 0.5, { mode: 'f12_rise' });
-    p.data.terr = tr.id;
-    tr.pillars.push(p.id);
-  }
-  st.terrs.push(tr);
-  return tr;
+function mobFalls(sim: Sim, api: SimApi, m: Mob): void {
+  if (m.mode === 'dying' || m.fell) return;
+  sim.events.push({ t: 'boss', what: 'f12_dunk' });
+  api.vfx(sim, { x: m.x, y: m.y, r: 1.2, life: 1, art: 'f12_splash' });
+  api.fall(sim, m);
 }
 
-function closeTerritory(sim: Sim, tr: Territory, broken: boolean): void {
-  if (tr.broken) return;
-  tr.broken = sim.time;
-  tr.view.broken = 1;
-  if (broken) {
-    sim.events.push({ t: 'flash', color: '#ffffff', k: 0.5 });
-    sim.events.push({ t: 'shake', k: 0.5 });
-    sim.events.push({
-      t: 'boss',
-      what: 'f12_domain_trap',
-      text: 'ТЕРРИТОРИЯ РАЗБИТА',
-      sub: 'столбы пали — круг рассыпался',
-    });
-  }
-  // Столбы — в пыль.
-  for (const m of sim.mobs)
-    if (m.kind === 'f12_pillar' && m.data.terr === tr.id && m.mode !== 'dying') {
-      m.hp = 0;
-      m.mode = 'escape';
-      m.t = 0;
-    }
+/** Битый лёд Ледолома под точкой (после трещин — вода). */
+function brokenAt(st: F12State, sim: Sim, x: number, y: number): boolean {
+  const v = st.broken.get(idx(sim, Math.floor(x), Math.floor(y)));
+  return v !== undefined && v >= 0;
 }
 
-function stepTerritories(sim: Sim, st: F12State, api: SimApi, dt: number): void {
+// ---------------------------------------------------------------------------
+// Мороз.
+// ---------------------------------------------------------------------------
+
+function addFrost(sim: Sim, st: F12State, n: number): void {
+  if (heroDown(sim) || st.frozenT > 0) return;
+  st.frost = Math.min(FROST.max, st.frost + n);
+}
+
+function stepFrost(sim: Sim, st: F12State, api: SimApi, dt: number): void {
   const h = sim.hero;
-  const keep: Territory[] = [];
-  for (const tr of st.terrs) {
-    tr.view.age = sim.time - tr.born;
-    if (tr.broken) {
-      tr.view.broken = Math.min(1, (sim.time - tr.broken) / 0.8);
-      if (sim.time - tr.broken < 0.9) {
-        tr.zone = keepZone(sim, api, tr.zone, () => domainZone(tr));
-        keep.push(tr);
-      } else {
-        sim.zones = sim.zones.filter((z) => z !== tr.zone && z !== tr.mark);
-      }
-      continue;
-    }
-    tr.zone = keepZone(sim, api, tr.zone, () => domainZone(tr));
-    // Столбы пали — круг рассыпается.
-    const alive = sim.mobs.filter((m) => tr.pillars.includes(m.id) && m.mode !== 'dying' && m.mode !== 'escape');
-    const owner = tr.owner >= 0 ? sim.mobs.find((m) => m.id === tr.owner && m.mode !== 'dying') : null;
-    if (!alive.length) {
-      closeTerritory(sim, tr, true);
-      // Хозяин круга оглушён отдачей.
-      if (owner) api.setMode(owner, 'f12_dazed');
-      if (tr.kind === 'hall') hallWon(sim, st, api, tr);
-      keep.push(tr);
-      continue;
-    }
-    if ((tr.owner >= 0 && !owner) || sim.time - tr.born > tr.life) {
-      closeTerritory(sim, tr, false);
-      keep.push(tr);
-      continue;
-    }
-    // Метка «верного удара»: ходит за героем внутри круга.
-    const inside = hypot(h.x - tr.x, h.y - tr.y) < tr.r && !heroDown(sim);
-    if (inside) {
-      tr.mark = keepZone(sim, api, tr.mark, () => {
-        const z: ZoneIn & { f12?: TerrView } = {
-          x: h.x,
-          y: h.y,
-          r: 0.7,
-          life: 1e9,
-          art: 'f12_mark',
-          above: true,
-          f12: tr.view,
-        };
-        return z;
-      });
-      tr.mark.x = h.x;
-      tr.mark.y = h.y;
-      if (tr.cutT > 0) {
-        tr.cutT -= dt;
-        tr.charge = 0;
-      } else tr.charge = Math.min(1, tr.charge + dt / tr.chargeT);
-      tr.view.charge = tr.charge;
-      // Налилась: рывок и неуязвимость не спасают — метка ждёт.
-      const busy = h.mode === 'dash' || h.inv > 0;
-      tr.view.hold = tr.charge >= 1 && busy;
-      if (tr.charge >= 1 && !busy) {
-        terrHit(sim, api, tr);
-        tr.charge = 0;
-        tr.cutT = 0.35;
-      }
-      sayOnce(sim, `terr-in-${tr.kind}`, 40, {
-        what: 'f12_domain_call',
-        text: 'ПРОКЛЯТАЯ ТЕРРИТОРИЯ',
-        sub: 'метка не промахнётся — за край круга или разбей три столба',
-      });
-    } else {
-      tr.charge = Math.max(0, tr.charge - dt * 2.5);
-      tr.view.charge = tr.charge;
-      tr.view.hold = false;
-      if (tr.mark) {
-        sim.zones = sim.zones.filter((z) => z !== tr.mark);
-        tr.mark = null;
-      }
-    }
-    keep.push(tr);
+  if (heroDown(sim)) {
+    st.frost = 0;
+    st.frozenT = 0;
+    return;
   }
-  st.terrs = keep;
+  // Ледяной удар (статус `chill` от снаряда, дыхания, занавеса) — иней.
+  const ch = h.status.chill?.t ?? 0;
+  if (ch > st.chillSeen + 0.05) addFrost(sim, st, FROST.hit);
+  st.chillSeen = ch;
+
+  if (st.frozenT > 0) {
+    st.frozenT -= dt;
+    // Удар по замёрзшему разбивает лёд: урон больше, но ты свободен.
+    if (h.hp < st.frozenHp - 0.5) {
+      st.frozenT = 0;
+      delete h.status.stun;
+      api.hurtEnv(sim, FROST.shatter);
+      st.shatters += 1;
+      api.vfx(sim, { x: h.x, y: h.y, r: 1.3, life: 0.8, art: 'f12_shatter' });
+      sim.events.push({ t: 'boss', what: 'f12_shatter' });
+      sim.events.push({ t: 'shake', k: 0.25 });
+    }
+    st.frozenHp = Math.max(0, Math.min(st.frozenHp, h.hp));
+    return;
+  }
+  const area = areaAt(sim, h.y);
+  const warmHere = warmAt(sim, h.x, h.y);
+  if (warmHere) st.frost = Math.max(0, st.frost - FROST.thaw * dt);
+  else {
+    let rate = FROST.rate[area] ?? 0;
+    if (st.storm.state === 'on' && st.storm.k > 0.3 && !inDrift(sim, h.x, h.y)) rate *= 3;
+    const b = sim.boss;
+    if (b?.state === 'fight' && b.phase === 2) rate = 1 / 12;
+    else if (b?.state === 'fight' && b.phase >= 1) rate = Math.max(rate, 1 / 30);
+    st.frost = Math.min(FROST.max, st.frost + rate * dt);
+  }
+  const shares = Math.floor(st.frost + 1e-6);
+  if (shares >= 1) api.heroStatus(sim, 'slow', 0.25, FROST.slow * shares);
+  if (st.frost >= FROST.max - 1e-6) {
+    st.frost = 0;
+    st.frozenT = FROST.freeze;
+    st.frozenHp = h.hp;
+    st.freezes += 1;
+    api.heroStatus(sim, 'stun', FROST.freeze);
+    api.vfx(sim, { x: h.x, y: h.y, r: 1, life: FROST.freeze, art: 'f12_iceblock' });
+    say(
+      sim,
+      st,
+      'f12_freeze',
+      'ЗАМЁРЗ',
+      'тепло снимает иней: жаровни, костры, факелы, тёплый источник',
+    );
+  }
 }
 
-function domainZone(tr: Territory): ZoneIn {
-  const z: ZoneIn & { f12?: TerrView } = {
-    x: tr.x,
-    y: tr.y,
-    r: tr.r,
-    life: 1e9,
-    art: 'f12_domain',
-    f12: tr.view,
-  };
-  return z;
-}
-
-// ---------------------------------------------------------------------------
-// Посты: жители станции встают на свои места, когда герой рядом.
-// ---------------------------------------------------------------------------
-
-const POST_R: Record<string, number> = {
-  f12_sleeper: 13,
-  f12_eye: 12,
-  f12_lineman: 16,
-  f12_doll: 12,
-  f12_turnstile: 14,
-  f12_longarm: 11,
-  f12_poster: 11,
+const inDrift = (sim: Sim, x: number, y: number) => {
+  const mk = markAt(sim, Math.floor(x), Math.floor(y));
+  return mk === MK.drift || mk === MK.foxDrift;
 };
+
+/** Доли мороза героя 0…3 и заморожен ли (для рисовальщика). */
+export function f12Frost(sim: Sim | null): { frost: number; frozen: number } {
+  const st = sim ? STATE.get(sim) : null;
+  return { frost: st?.frost ?? 0, frozen: st?.frozenT ?? 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Скольжение героя.
+// ---------------------------------------------------------------------------
+
+function onFloe(st: F12State, x: number, y: number): Floe | null {
+  for (const f of st.drift.floes) {
+    const dx = (x - f.x) / (f.rx + 0.05);
+    const dy = (y - f.y) / (f.ry + 0.05);
+    if (dx * dx + dy * dy <= 1) return f;
+  }
+  return null;
+}
+
+function stepIce(sim: Sim, st: F12State, api: SimApi, dt: number): void {
+  const h = sim.hero;
+  const cx = Math.floor(h.x);
+  const cy = Math.floor(h.y);
+  const mk = markAt(sim, cx, cy);
+  // Ударили в прошлом шаге (неуязвимость выросла) — отброс оставляем движку.
+  const hit = h.inv > st.invSeen + 1e-6;
+  const ice =
+    slippery(mk) &&
+    tileAt(sim, cx, cy) === T_FLOOR &&
+    h.mode !== 'dash' &&
+    !h.pull &&
+    !heroDown(sim) &&
+    !hit &&
+    dt > 0;
+  st.glideCd -= dt;
+  if (!ice) {
+    st.u = [h.vx, h.vy];
+    st.onIce = false;
+    st.slide = 0;
+    st.invSeen = h.inv;
+    return;
+  }
+  // Движок в этом шаге: v = u + (T − u)·a. Отсюда желаемое T − u.
+  const a = Math.min(1, dt * 14);
+  const [ux, uy] = st.onIce ? st.u : [h.vx, h.vy];
+  const ex = (h.vx - ux) / a;
+  const ey = (h.vy - uy) / a;
+  const tx = ux + ex;
+  const ty = uy + ey;
+  const want = hypot(tx, ty) > 0.4;
+  const k = Math.min(1, dt * (want ? ICE.acc : ICE.brake));
+  let vx = ux + ex * k;
+  let vy = uy + ey * k;
+  // Досдвиг: движок уже сдвинул на v·dt, разница — наша.
+  h.x += (vx - h.vx) * dt;
+  h.y += (vy - h.vy) * dt;
+  api.collide(sim, h);
+  // В стену — скорость гаснет (лёгкий отскок).
+  const r = h.r + 0.06;
+  if (
+    Math.abs(vx) > 0.01 &&
+    api.solidTile(sim, Math.floor(h.x + Math.sign(vx) * r), Math.floor(h.y))
+  )
+    vx = Math.abs(vx) > 3 ? -vx * 0.2 : 0;
+  if (
+    Math.abs(vy) > 0.01 &&
+    api.solidTile(sim, Math.floor(h.x), Math.floor(h.y + Math.sign(vy) * r))
+  )
+    vy = Math.abs(vy) > 3 ? -vy * 0.2 : 0;
+  h.vx = vx;
+  h.vy = vy;
+  st.u = [vx, vy];
+  st.onIce = true;
+  st.invSeen = h.inv;
+  // Юз: скорость есть, а желания нет (или против хода) — шорох конька.
+  const sp = hypot(vx, vy);
+  const skid = sp > 1.8 && (!want || (tx * vx + ty * vy) / (hypot(tx, ty) * sp + 1e-6) < 0.3);
+  st.slide = skid ? Math.min(1, st.slide + dt * 4) : Math.max(0, st.slide - dt * 3);
+  if (skid && st.glideCd <= 0) {
+    st.glideCd = 1.1;
+    sim.events.push({ t: 'boss', what: 'f12_glide' });
+  }
+}
+
+/** Скорость героя на льду и юз 0…1 (для рисовальщика: отражение, искры). */
+export function f12Ice(sim: Sim | null): { on: boolean; slide: number } {
+  const st = sim ? STATE.get(sim) : null;
+  return { on: !!st?.onIce, slide: st?.slide ?? 0 };
+}
+
+/** Последнее твёрдое место: не тонкий лёд, не вода, не край полыньи. */
+function stepSafe(sim: Sim, st: F12State): void {
+  const h = sim.hero;
+  if (heroDown(sim) || h.mode === 'dash') return;
+  const cx = Math.floor(h.x);
+  const cy = Math.floor(h.y);
+  const mk = markAt(sim, cx, cy);
+  if (!standable(sim, cx, cy) || mk === MK.thin || brokenAt(st, sim, h.x, h.y)) return;
+  if (onFloe(st, h.x, h.y)) return;
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      const t = tileAt(sim, cx + dx, cy + dy);
+      const m2 = markAt(sim, cx + dx, cy + dy);
+      if (t === T_DEEP || m2 === MK.current || m2 === MK.thin) return;
+      if (st.broken.has(idx(sim, cx + dx, cy + dy))) return;
+    }
+  st.safe = [h.x, h.y];
+}
+
+// ---------------------------------------------------------------------------
+// Тонкий лёд.
+// ---------------------------------------------------------------------------
+
+/** Стадия трещин клетки 0…2 (для рисовальщика). */
+export function f12Thin(sim: Sim | null): Map<number, number> | null {
+  return sim ? (STATE.get(sim)?.thin ?? null) : null;
+}
+
+function loadThin(sim: Sim, st: F12State, api: SimApi, x: number, y: number, n: number): void {
+  if (markAt(sim, x, y) !== MK.thin || tileAt(sim, x, y) !== T_FLOOR) return;
+  const i = idx(sim, x, y);
+  const was = st.thin.get(i) ?? 0;
+  const now = was + n;
+  if (Math.floor(now) > Math.floor(was) && now < 3) {
+    sim.events.push({ t: 'boss', what: 'f12_crack' });
+  }
+  if (now >= 3) breakThin(sim, st, api, x, y);
+  else st.thin.set(i, now);
+}
+
+function breakThin(sim: Sim, st: F12State, api: SimApi, x: number, y: number): void {
+  const i = idx(sim, x, y);
+  st.thin.delete(i);
+  api.setTile(sim, x, y, T_DEEP, MK.holeNew);
+  st.holes.push({ i, t: 0 });
+  sim.events.push({ t: 'boss', what: 'f12_break' });
+  api.vfx(sim, { x: x + 0.5, y: y + 0.5, r: 1.1, life: 1, art: 'f12_splash' });
+  const h = sim.hero;
+  if (Math.floor(h.x) === x && Math.floor(h.y) === y) fallIn(sim, st, api, 'ПРОВАЛИЛСЯ ПОД ЛЁД');
+  for (const m of sim.mobs) {
+    if (m.mode === 'dying' || api.def(m.kind).fly || api.def(m.kind).boss) continue;
+    if (Math.floor(m.x) === x && Math.floor(m.y) === y) mobFalls(sim, api, m);
+  }
+  // Трещина бежит к соседям.
+  for (const [dx, dy] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (markAt(sim, nx, ny) === MK.thin && tileAt(sim, nx, ny) === T_FLOOR) {
+      const j = idx(sim, nx, ny);
+      const v = (st.thin.get(j) ?? 0) + THIN.chain;
+      if (v < 3) st.thin.set(j, v);
+    }
+  }
+}
+
+function stepThin(sim: Sim, st: F12State, api: SimApi, dt: number): void {
+  const h = sim.hero;
+  const cx = Math.floor(h.x);
+  const cy = Math.floor(h.y);
+  if (!heroDown(sim) && markAt(sim, cx, cy) === MK.thin && !h.pull) {
+    const sp = hypot(h.vx, h.vy);
+    let n = (sp < 1.5 ? THIN.stand : THIN.walk) * dt;
+    const i = idx(sim, cx, cy);
+    // Рывок бьёт по каждой клетке пути один раз.
+    if (h.mode === 'dash' && st.dashAt !== i) {
+      st.dashAt = i;
+      n += THIN.dash;
+    }
+    if (h.mode === 'heavy' && h.t < dt * 1.5) n += THIN.heavy;
+    loadThin(sim, st, api, cx, cy, n);
+  }
+  if (h.mode !== 'dash') st.dashAt = -1;
+  for (const m of sim.mobs) {
+    if (m.mode === 'dying' || m.t < 0) continue;
+    const def = api.def(m.kind);
+    if (def.fly || (def.mass ?? 1) < 3) continue;
+    const mx = Math.floor(m.x);
+    const my = Math.floor(m.y);
+    if (markAt(sim, mx, my) !== MK.thin) continue;
+    if (def.boss) continue;
+    loadThin(sim, st, api, mx, my, THIN.mob * ((def.mass ?? 3) - 1.5) * dt);
+  }
+  // Трещины медленно смерзаются.
+  for (const [i, v] of st.thin) {
+    const nv = v - THIN.decay * dt;
+    if (nv <= 0) st.thin.delete(i);
+    else st.thin.set(i, nv);
+  }
+  // Полыньи замерзают обратно тонким льдом.
+  for (let k = st.holes.length - 1; k >= 0; k--) {
+    const hl = st.holes[k];
+    hl.t += dt;
+    if (hl.t < THIN.refreeze) continue;
+    const x = hl.i % sim.world.w;
+    const y = Math.floor(hl.i / sim.world.w);
+    const busy =
+      (Math.floor(h.x) === x && Math.floor(h.y) === y) ||
+      sim.mobs.some((m) => Math.floor(m.x) === x && Math.floor(m.y) === y);
+    if (busy) continue;
+    api.setTile(sim, x, y, T_FLOOR, MK.thin);
+    st.thin.set(hl.i, 1.2);
+    st.holes.splice(k, 1);
+  }
+}
+
+/** Полыньи, что замерзают (для рисовальщика шуги). */
+export function f12Holes(sim: Sim | null): readonly { i: number; t: number }[] {
+  return (sim && STATE.get(sim)?.holes) || [];
+}
+
+// ---------------------------------------------------------------------------
+// Посты: сосульки на сводах, вмёрзшие воины, песцы в сугробах, тюлени у
+// лунок — ставятся, когда герой подходит.
+// ---------------------------------------------------------------------------
+
+/** Режим, в котором пост ждёт героя. */
+const POST_MODE: Record<string, string> = {
+  f12_icicle: 'f12_hang',
+  f12_warrior: 'f12_frozen',
+  f12_fox: 'f12_hide',
+  f12_seal: 'f12_under',
+};
+
+function postDead(sim: Sim, m: Mob): void {
+  const st = STATE.get(sim);
+  const p = st?.posts.find((x) => x.id === m.data.post);
+  if (!p) return;
+  p.mob = 0;
+  // Сосулька отрастает на своде, остальные — насовсем.
+  if (p.kind === 'f12_icicle') p.regrow = sim.time + 28;
+  else p.dead = true;
+}
 
 function stepPosts(sim: Sim, st: F12State, api: SimApi): void {
   const h = sim.hero;
-  const b = sim.boss;
   for (const p of st.posts) {
-    if (p.mob === -2) continue;
-    const d = hypot(p.x - h.x, p.y - h.y);
-    if (p.mob >= 0) {
-      const m = sim.mobs.find((x) => x.id === p.mob);
-      if (!m) {
-        // Ушёл (далеко) — встанет снова; убит — нет.
-        p.mob = -1;
-        continue;
-      }
-      if (m.mode === 'dying') p.mob = -2;
+    if (p.dead) continue;
+    if (p.mob) {
+      // Убран без смерти (сброс боя, привязь) — встанет снова.
+      if (!sim.mobs.some((m) => m.id === p.mob)) p.mob = 0;
       continue;
     }
-    if (d > (POST_R[p.kind] ?? 12) || d < 3) continue;
-    if (b && b.state === 'fight' && api.inArena(sim, p.x, p.y)) continue;
-    const mode =
-      p.kind === 'f12_sleeper'
-        ? 'f12_doze'
-        : p.kind === 'f12_eye'
-          ? 'f12_shut'
-          : p.kind === 'f12_lineman'
-            ? 'f12_patrol'
-            : p.kind === 'f12_turnstile'
-              ? 'f12_post'
-              : p.kind === 'f12_longarm'
-                ? 'f12_hide'
-                : p.kind === 'f12_poster'
-                  ? 'f12_flat'
-                  : 'chase';
-    const m = api.spawnMob(sim, p.kind, p.x, p.y, { mode });
-    m.hx = p.x;
-    m.hy = p.y;
-    m.data.post = p.id;
-    if (p.wx !== undefined) {
-      m.data.wx = p.wx;
-      m.data.wy = p.wy ?? p.y;
+    if (p.regrow > sim.time) continue;
+    const d = hypot(p.x - h.x, p.y - h.y);
+    if (d > 17 || d < 2.5) continue;
+    let x = p.x;
+    let y = p.y;
+    if (p.kind === 'f12_seal') {
+      // Тюлень ждёт подо льдом: встаёт на кромку у лунки.
+      const edge = spotNear(
+        sim,
+        api,
+        p.x,
+        p.y,
+        1.5,
+        2.6,
+        (px, py) => -hypot(px - p.x, py - p.y),
+        false,
+      );
+      if (!edge) continue;
+      [x, y] = edge;
     }
-    if (p.kind === 'f12_longarm' || p.kind === 'f12_poster' || p.kind === 'f12_eye') m.data.ghost = 1;
-    if (p.kind === 'f12_turnstile') m.face = Math.PI / 2;
+    const m = api.spawnMob(sim, p.kind, x, y, { mode: POST_MODE[p.kind] });
+    m.data.post = p.id;
+    m.data.hx = p.x;
+    m.data.hy = p.y;
+    m.hx = x;
+    m.hy = y;
+    m.face = Math.PI / 2;
+    m.data.hide = p.kind === 'f12_warrior' ? 0 : 1;
+    m.data.ghost = m.data.hide;
+    m.data.vNoTele = 1;
     p.mob = m.id;
   }
 }
 
 // ---------------------------------------------------------------------------
-// События районов.
+// Монстры на льду: обёртка мозга (инерция, слепота от гонга, невидимость в
+// «Безмолвии»); отброс и полыньи — в шаге этажа.
 // ---------------------------------------------------------------------------
 
-/** Спящие рядом с точкой просыпаются. */
-function wakeSleepers(sim: Sim, api: SimApi, x: number, y: number, rx: number, ry: number): void {
-  for (const m of sim.mobs)
-    if (m.kind === 'f12_sleeper' && m.mode === 'f12_doze' && Math.abs(m.x - x) < rx && Math.abs(m.y - y) < ry)
-      api.setMode(m, 'f12_wake');
-}
+/** Режимы, в которых невидимка «Безмолвия» остаётся невидимой. */
+const HUSH_HIDE = new Set(['chase', 'f12_perch', 'f12_hover', 'f12_drift']);
 
-/** Выпустить монстра «из ниоткуда» рядом с точкой: падает со свода. */
-function dropNear(sim: Sim, api: SimApi, kind: string, x: number, y: number, r0: number, r1: number, delay = 0): Mob | null {
-  for (let k = 0; k < 12; k++) {
-    const a = sim.rng() * TAU;
-    const r = r0 + sim.rng() * (r1 - r0);
-    const px = x + Math.cos(a) * r;
-    const py = y + Math.sin(a) * r;
-    if (api.solidTile(sim, Math.floor(px), Math.floor(py)) || onTrack(sim, px, py)) continue;
-    const m = api.spawnMob(sim, kind, Math.floor(px) + 0.5, Math.floor(py) + 0.5, { mode: 'drop' });
-    m.t = -delay;
-    return m;
-  }
-  return null;
-}
-
-/** Час пик: барьер на замок, волны толпы, страж. */
-function stepRush(sim: Sim, st: F12State, api: SimApi): void {
-  const ev = st.rush;
-  const h = sim.hero;
-  const w = sim.world;
-  if (ev.row < 0 || ev.st === 'done') return;
-  if (ev.st === 'idle') {
-    // Перешёл барьер на север — в платную зону.
-    if (sim.area === F12_HALL && h.y < ev.row - 1.2 && h.y > ev.row - 9 && h.x > ev.x0 && h.x < ev.x1 + 1) {
-      ev.st = 'on';
-      ev.t = sim.time;
-      ev.wave = 0;
-      for (const i of ev.cells) {
-        const x = i % w.w;
-        const y = Math.floor(i / w.w);
-        api.setTile(sim, x, y, T_WALL, MK.locked);
+function iced(b: Brain): Brain {
+  return {
+    ...b,
+    step(sim, m, dt, c, api) {
+      const st = STATE.get(sim);
+      // Ослеплён вспышкой гонга: стоит, щурится.
+      if ((m.data.blind ?? 0) > 0) {
+        m.data.blind -= dt;
+        m.vx *= 0.8;
+        m.vy *= 0.8;
+        m.tele = null;
+        m.danger = 0;
+        m.data.ghost = 0;
+        m.data.dark = 0;
+        return;
       }
+      const pvx = m.vx;
+      const pvy = m.vy;
+      b.step(sim, m, dt, c, api);
+      // Невидимка «Безмолвия»: видны только глаза, пока не нападёт.
+      const dark = (m.data.hush ?? 0) > 0 && (st?.reveal ?? 0) <= 0 && HUSH_HIDE.has(m.mode);
+      m.data.dark = dark ? 1 : 0;
+      m.data.ghost = (m.data.hide ?? 0) > 0 || dark ? 1 : 0;
+      if (c.def.fly || dt <= 0 || (m.data.noIce ?? 0) > 0) return;
+      const mk = markAt(sim, Math.floor(m.x), Math.floor(m.y));
+      if (!slippery(mk)) return;
+      const rate = clamp(ICE.mob / Math.sqrt(c.def.mass ?? 1), 1.1, 5);
+      const k = Math.min(1, dt * rate) / Math.min(1, dt * 10);
+      m.vx = pvx + (m.vx - pvx) * k;
+      m.vy = pvy + (m.vy - pvy) * k;
+    },
+    onDeath(sim, m, mode, api) {
+      if (m.data.post) postDead(sim, m);
+      b.onDeath?.(sim, m, mode, api);
+    },
+  };
+}
+
+const brain = (id: string, b: Brain) => registerBrain(id, iced(b));
+
+function stepMobsIce(sim: Sim, st: F12State, api: SimApi, dt: number): void {
+  const grow = Math.exp((9 - ICE.knockDecay) * dt);
+  for (const m of sim.mobs) {
+    if (m.mode === 'dying' || m.t < 0 || m.fell) continue;
+    const def = api.def(m.kind);
+    if (def.fly || def.boss || (m.data.hide ?? 0) > 0) continue;
+    const cx = Math.floor(m.x);
+    const cy = Math.floor(m.y);
+    const mk = markAt(sim, cx, cy);
+    if ((mk === MK.current && !onFloe(st, m.x, m.y)) || brokenAt(st, sim, m.x, m.y)) {
+      mobFalls(sim, api, m);
+      continue;
+    }
+    if (!slippery(mk)) continue;
+    // Отброс на льду гаснет втрое медленнее: сбитый едет.
+    m.kx *= grow;
+    m.ky *= grow;
+    const k = hypot(m.kx, m.ky);
+    if (k > ICE.dunk) {
+      const ux = m.kx / k;
+      const uy = m.ky / k;
+      const ax = Math.floor(m.x + ux * (m.r + 0.3));
+      const ay = Math.floor(m.y + uy * (m.r + 0.3));
+      if (tileAt(sim, ax, ay) === T_DEEP || markAt(sim, ax, ay) === MK.current)
+        mobFalls(sim, api, m);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ледоход: льдины по протоке. Клетки не меняются — вода проходима, но без
+// льдины под ногами проваливаешься; льдины рисует слой пола.
+// ---------------------------------------------------------------------------
+
+export const FLOES = {
+  gap: [2, 2.9] as [number, number],
+  vy: [-1.05, -1.5] as [number, number],
+  surge: [5.5, 7.5] as [number, number],
+  surgeWarn: 0.9,
+};
+
+function newFloe(sim: Sim, dr: Drift, y: number): Floe {
+  const [x0, , x1] = dr.box;
+  const rx = 1.45 + sim.rng() * 0.7;
+  const ry = 1.15 + sim.rng() * 0.4;
+  return {
+    id: dr.nextId++,
+    x: x0 + 0.5 + rx + sim.rng() * Math.max(0.1, x1 - x0 + 1 - 2 * rx),
+    y,
+    rx,
+    ry,
+    vx: 0,
+    vy: FLOES.vy[0] + (FLOES.vy[1] - FLOES.vy[0]) * sim.rng(),
+    ph: sim.rng() * TAU,
+    lamp: sim.rng() < 0.3,
+    tilt: 0,
+  };
+}
+
+/** Льдины протоки (для рисовальщика). */
+export const f12Floes = (sim: Sim | null): readonly Floe[] =>
+  (sim && STATE.get(sim)?.drift.floes) || [];
+
+function stepFloes(sim: Sim, st: F12State, api: SimApi, dt: number): void {
+  const dr = st.drift;
+  const h = sim.hero;
+  const [x0, y0, x1, y1] = dr.box;
+  const near = h.x > x0 - 12 && h.x < x1 + 12 && h.y > y0 - 12 && h.y < y1 + 12;
+  if (!near) {
+    if (dr.on) {
+      dr.on = false;
+      for (const f of dr.floes) if (f.lamp) api.light(sim, `f12f:${f.id}`, null);
+      dr.floes.length = 0;
+    }
+    return;
+  }
+  if (!dr.on) {
+    dr.on = true;
+    dr.spawnT = 0;
+    // Протока уже идёт: льдины по всей длине.
+    for (let y = y1 - 0.5; y > y0 + 1; y -= 3.1) dr.floes.push(newFloe(sim, dr, y));
+  }
+  if (!dr.seen && h.y < y1 + 5 && h.y > y0 - 5 && h.x > x0 - 3 && h.x < x1 + 4) {
+    dr.seen = true;
+    say(
+      sim,
+      st,
+      'f12_drift_call',
+      'ЛЕДОХОД',
+      'вода не держит — прыгай по льдинам, рывок перелетает',
+    );
+  }
+  dr.spawnT -= dt;
+  if (dr.spawnT <= 0) {
+    dr.spawnT = FLOES.gap[0] + sim.rng() * (FLOES.gap[1] - FLOES.gap[0]);
+    dr.floes.push(newFloe(sim, dr, y1 + 1.6));
+  }
+  const ride = onFloe(st, h.x, h.y);
+  for (let k = dr.floes.length - 1; k >= 0; k--) {
+    const f = dr.floes[k];
+    f.ph += dt;
+    f.vx = 0.4 * Math.sin(f.ph * 0.8);
+    f.tilt = 0.06 * Math.sin(f.ph * 1.3);
+    f.x = clamp(f.x + f.vx * dt, x0 + 0.5 + f.rx * 0.8, x1 + 0.5 - f.rx * 0.8);
+    f.y += f.vy * dt;
+    if (f.lamp) api.light(sim, `f12f:${f.id}`, { x: f.x, y: f.y - 0.4, r: 3.2, tint: 'warm' });
+    if (f.y + f.ry < y0 - 0.2) {
+      if (f.lamp) api.light(sim, `f12f:${f.id}`, null);
+      dr.floes.splice(k, 1);
+    }
+  }
+  // Герой на льдине едет вместе с ней.
+  if (ride && !heroDown(sim) && h.mode !== 'dash') {
+    h.x += ride.vx * dt;
+    h.y += ride.vy * dt;
+    api.collide(sim, h);
+  }
+  // Тюлень из-под воды толкает с льдины: пузыри — потом толчок.
+  if (ride) {
+    dr.surgeT -= dt;
+    if (dr.surgeT <= 0) {
+      dr.surgeT = FLOES.surge[0] + sim.rng() * (FLOES.surge[1] - FLOES.surge[0]);
+      const side = sim.rng() < 0.5 ? -1 : 1;
+      api.strike(sim, {
+        shape: 'circle',
+        x: h.x + side * (ride.rx * 0.6),
+        y: h.y,
+        r: 1.25,
+        warn: FLOES.surgeWarn,
+        dmg: 8,
+        knock: 7,
+        art: 'f12_surge',
+      });
+    }
+  } else dr.surgeT = Math.max(dr.surgeT, 2.5);
+}
+
+// ---------------------------------------------------------------------------
+// Ледолом: шагнул на середину Стремнины — лёд за спиной трещит и рушится
+// волной с юга на север. Островки и берег — твёрдые.
+// ---------------------------------------------------------------------------
+
+export const RAPIDS = { speed: 2.3, crack: 0.75, hold: 16, refreeze: 3.6 };
+
+function stepRapids(sim: Sim, st: F12State, api: SimApi, dt: number): void {
+  const rp = st.rapids;
+  const h = sim.hero;
+  const [x0, y0, x1, y1] = rp.box;
+  if (rp.state === 'idle') {
+    if (h.x >= x0 && h.x <= x1 + 1 && h.y < y1 - 8 && h.y > y0 + 4 && !heroDown(sim)) {
+      rp.state = 'on';
+      rp.t = 0;
+      rp.front = y1 + 1;
       sim.events.push({ t: 'shake', k: 0.4 });
-      sim.events.push({ t: 'boss', what: 'f12_rush_trap', text: 'ЧАС ПИК', sub: 'турникеты заперло — продержись или свали стража' });
+      say(
+        sim,
+        st,
+        'f12_rapids_trap',
+        'ЛЕДОЛОМ',
+        'лёд рушится за спиной — беги на север или на островок',
+      );
     }
     return;
   }
-  const t = sim.time - ev.t;
-  // Ушёл из вестибюля (лифтом, смертью) — час пик кончился без награды.
-  if (sim.area !== F12_HALL) {
-    ev.st = 'done';
-    for (const i of ev.cells) api.setTile(sim, i % w.w, Math.floor(i / w.w), T_FLOOR, MK.tile);
-    return;
-  }
-  const guard = st.posts.find((p) => p.kind === 'f12_turnstile');
-  const guardDead = !guard || guard.mob === -2;
-  // Волны толпы: мухи, пассажиры, многоликий.
-  const waves = [1.2, 8, 15, 22];
-  if (ev.wave < waves.length && t > waves[ev.wave]) {
-    const kinds =
-      ev.wave === 0
-        ? ['f12_flies', 'f12_flies', 'f12_flies', 'f12_flies']
-        : ev.wave === 1
-          ? ['f12_sleeper', 'f12_flies', 'f12_flies', 'f12_sleeper']
-          : ev.wave === 2
-            ? ['f12_manyface', 'f12_flies', 'f12_flies']
-            : ['f12_sleeper', 'f12_poster', 'f12_flies', 'f12_flies'];
-    for (let i = 0; i < kinds.length; i++) {
-      const m = dropNear(sim, api, kinds[i], h.x, h.y, 2.5, 5, i * 0.15);
-      if (m && kinds[i] === 'f12_sleeper') m.data.woke = 1;
-    }
-    ev.wave += 1;
-    if (ev.wave > 1) sayOnce(sim, `rush${ev.wave}`, 3, { what: 'f12_rush_call', text: 'ТОЛПА', sub: `волна ${ev.wave} из ${waves.length}` });
-  }
-  const clear = ev.wave >= waves.length && !sim.mobs.some((m) => m.mode !== 'dying' && (m.kind === 'f12_flies' || m.kind === 'f12_sleeper') && hypot(m.x - h.x, m.y - h.y) < 9);
-  if (guardDead || (t > 30 && clear) || t > 45 || heroDown(sim)) {
-    ev.st = heroDown(sim) ? 'idle' : 'done';
-    for (const i of ev.cells) {
-      const x = i % w.w;
-      const y = Math.floor(i / w.w);
-      api.setTile(sim, x, y, T_FLOOR, MK.tile);
-    }
-    if (!heroDown(sim)) {
-      sim.events.push({ t: 'boss', what: 'f12_rush_call', text: 'ТУРНИКЕТЫ ОТКРЫТЫ', sub: guardDead ? 'страж пал' : 'час пик схлынул' });
-      for (let i = 0; i < 4; i++) api.dropAt(sim, 'coin', 180, h.x, h.y);
-      api.dropAt(sim, 'f12mat', 2, h.x, h.y);
-      api.dropAt(sim, 'token', 3, h.x, h.y);
-    }
-  }
-}
-
-/** Бегущая лестница: ленты идут вспять и вдвое быстрее, со свода — мухи. */
-function stepStairs(sim: Sim, st: F12State, api: SimApi): void {
-  const ev = st.stairs;
-  const h = sim.hero;
-  if (ev.st === 'done' || !st.lanes.length) return;
-  const on = laneAt(st, h.x, h.y);
-  if (ev.st === 'idle') {
-    if (on && h.y < on.y1 - 8 && h.y > on.y0 + 6) {
-      ev.st = 'on';
-      ev.t = sim.time;
-      ev.wave = 0;
-      for (const l of st.lanes) {
-        l.view.dir = l.base === 0 ? 0 : 1;
-        l.view.speed = ESC_SPEED * 2.1;
+  for (const [i, v] of st.broken) st.broken.set(i, v + dt);
+  if (rp.state === 'on') {
+    rp.t += dt;
+    const was = rp.front;
+    rp.front = Math.max(rp.stop, rp.front - RAPIDS.speed * dt);
+    for (let y = Math.floor(rp.front); y < Math.floor(was); y++) {
+      for (let x = x0; x <= x1; x++) {
+        const i = idx(sim, x, y);
+        if (st.broken.has(i) || tileAt(sim, x, y) !== T_FLOOR) continue;
+        const mk = markAt(sim, x, y);
+        if (mk !== MK.ice && mk !== MK.thin && mk !== MK.grit) continue;
+        st.broken.set(i, -RAPIDS.crack - sim.rng() * 0.35);
       }
-      sim.events.push({ t: 'shake', k: 0.35 });
-      sim.events.push({ t: 'boss', what: 'f12_stairs_trap', text: 'БЕГУЩАЯ ЛЕСТНИЦА', sub: 'ленты пошли вспять — держись стоячей' });
-      wakeSleepers(sim, api, h.x, h.y, 10, 16);
+    }
+    if (Math.floor(rp.t / 0.45) !== Math.floor((rp.t - dt) / 0.45))
+      sim.events.push({ t: 'boss', what: 'f12_crack' });
+    if (rp.front <= rp.stop) {
+      rp.state = 'frozen';
+      rp.t = 0;
+      if (!rp.fell) {
+        say(sim, st, 'f12_rapids_call', 'ЛЕДОЛОМ ПРОЙДЕН');
+        api.dropAt(sim, 'f12mat', 1, h.x, h.y);
+        api.dropAt(sim, 'coin', 700, h.x, h.y);
+      }
+    }
+  } else if (rp.state === 'frozen') {
+    rp.t += dt;
+    if (rp.t > RAPIDS.hold) {
+      // Смерзается рядами с юга.
+      const row = y1 + 1 - Math.floor((rp.t - RAPIDS.hold) * RAPIDS.refreeze);
+      for (const [i] of st.broken) if (Math.floor(i / sim.world.w) >= row) st.broken.delete(i);
+      if (st.broken.size === 0) rp.state = 'done';
+    }
+  }
+}
+
+/** Битый лёд Ледолома (для рисовальщика): клетка → время с пролома. */
+export const f12Broken = (sim: Sim | null): Map<number, number> | null =>
+  sim ? (STATE.get(sim)?.broken ?? null) : null;
+
+// ---------------------------------------------------------------------------
+// Сияние: Купол. Над тонким сводом вспыхивает сияние, ленты света ползут по
+// залу (свет на ходу); совы пикируют на того, кто стоит в свете.
+// ---------------------------------------------------------------------------
+
+export const DOME = { waves: 3, waveT: 15, bandR: 3.4 };
+
+function domeWindows(sim: Sim, d: Dome): [number, number][] {
+  const out: [number, number][] = [];
+  for (let y = Math.floor(d.cy - d.r - 2); y <= d.cy + d.r + 2; y++)
+    for (let x = Math.max(1, Math.floor(d.cx - d.r - 2)); x <= d.cx + d.r + 2; x++) {
+      if (markAt(sim, x, y) !== MK.window) continue;
+      if (standable(sim, x, y + 1)) out.push([x + 0.5, y + 1.6]);
+    }
+  return out;
+}
+
+/** Ленты сияния Купола (для рисовальщика). */
+export function f12Aurora(sim: Sim | null): { x: number; y: number; k: number }[] {
+  const st = sim ? STATE.get(sim) : null;
+  if (!st || st.dome.state !== 'on') return [];
+  const k = clamp(st.dome.t / 1.5, 0, 1);
+  return st.dome.bands.map((b) => ({ x: b.x, y: b.y, k }));
+}
+
+/** Стоит ли точка в ленте сияния Купола (совы видят добычу). */
+export function inAurora(sim: Sim, x: number, y: number): boolean {
+  const st = STATE.get(sim);
+  if (!st || st.dome.state !== 'on') return false;
+  return st.dome.bands.some((b) => hypot(b.x - x, b.y - y) < DOME.bandR);
+}
+
+function stepDome(sim: Sim, st: F12State, api: SimApi, dt: number): void {
+  const d = st.dome;
+  const h = sim.hero;
+  if (d.state === 'idle') {
+    if (hypot(h.x - d.cx, h.y - d.cy) < d.r - 1.5 && !heroDown(sim)) {
+      d.state = 'on';
+      d.t = 0;
+      d.wave = 0;
+      d.waveT = 1.5;
+      say(
+        sim,
+        st,
+        'f12_dome_call',
+        'СИЯНИЕ',
+        'совы пикируют на того, кто в свете: встань в ленту и лови их',
+      );
     }
     return;
   }
-  const t = sim.time - ev.t;
-  if (ev.wave < 3 && t > 1 + ev.wave * 5 && sim.area === F12_HALL) {
-    for (let i = 0; i < 3 + ev.wave; i++) dropNear(sim, api, 'f12_flies', h.x, h.y - 2, 1.5, 4, i * 0.12);
-    ev.wave += 1;
-  }
-  if (t > 18 || heroDown(sim)) {
-    for (const l of st.lanes) {
-      l.view.dir = l.base;
-      l.view.speed = ESC_SPEED;
-    }
-    ev.st = heroDown(sim) ? 'idle' : 'done';
-    if (ev.st === 'done') sim.events.push({ t: 'boss', what: 'f12_stairs_call', text: 'ЛЕНТЫ ВСТАЛИ', sub: 'эскалатор снова в своём ходу' });
-  }
-}
-
-/** Сбой света на станции: свет гаснет, аварийки мигают, спящие встают. */
-function stepDark(sim: Sim, st: F12State, api: SimApi): void {
-  const ev = st.dark;
-  const h = sim.hero;
-  const [x0, y0, x1, y1] = ev.rect;
-  if (ev.st === 'done' || x1 <= x0) return;
-  if (ev.st === 'idle') {
-    // Вступил на островную платформу.
-    const plat = sim.world.bands.find((b) => b.def.id === F12_PLAT);
-    if (!plat) return;
-    const ly = h.y - plat.top;
-    if (ly > 87.5 && ly < 93 && h.x > 6 && h.x < 58) darkOn(sim, st, api);
-    return;
-  }
-  const t = sim.time - ev.t;
-  // Аварийные лампы мигают красным.
-  const on = Math.floor(t * 2.2) % 2 === 0;
-  ev.emerg.forEach(([x, y], i) =>
-    api.light(sim, `f12_emerg${i}`, { x, y, r: on ? 2.6 : 1.2, tint: 'red' }),
-  );
-  if (t > 34 || heroDown(sim)) darkOff(sim, st, api, heroDown(sim));
-}
-
-function darkOn(sim: Sim, st: F12State, api: SimApi): void {
-  const ev = st.dark;
-  const [x0, y0, x1, y1] = ev.rect;
-  ev.st = 'on';
-  ev.t = sim.time;
-  const lights = sim.world.lights;
-  // Свет у вылазки свой (копия): гасим станцию, не трогая мир страницы.
-  for (let i = 0; i < lights.length; i++) {
-    const l = lights[i];
-    if (l.x < x0 || l.x > x1 || l.y < y0 || l.y > y1) continue;
-    if ([...sim.lightKeys.values()].includes(l)) continue;
-    ev.saved.set(i, l.r);
-    lights[i] = { ...l, r: 0 };
-  }
-  F12_FX.dark = [x0, y0, x1, y1];
-  wakeSleepers(sim, api, (x0 + x1) / 2, (y0 + y1) / 2, 40, 20);
-  sim.events.push({ t: 'flash', color: '#000000', k: 0.8 });
-  sim.events.push({ t: 'boss', what: 'f12_dark_trap', text: 'СБОЙ СВЕТА', sub: 'щиток — на северной стене, у края платформы' });
-  // Поезд в темноте — сейчас.
-  const tr = trackNear(st, sim.hero.x, sim.hero.y, 6);
-  if (tr) callTrain(sim, tr, 4.5, false);
-}
-
-function darkOff(sim: Sim, st: F12State, api: SimApi, reset = false): void {
-  const ev = st.dark;
-  const lights = sim.world.lights;
-  for (const [i, r] of ev.saved) if (lights[i]) lights[i] = { ...lights[i], r };
-  ev.saved.clear();
-  ev.emerg.forEach((_, i) => api.light(sim, `f12_emerg${i}`, null));
-  F12_FX.dark = null;
-  ev.st = reset ? 'idle' : 'done';
-  if (!reset) sim.events.push({ t: 'boss', what: 'f12_dark_call', text: 'СВЕТ ДАН', sub: 'станция снова видна' });
-}
-
-/** Встречный: в перегоне T1 экспресс навстречу — к нишам. */
-function stepMeet(sim: Sim, st: F12State): void {
-  const ev = st.meet;
-  if (ev.st !== 'idle') return;
-  const h = sim.hero;
-  const t = st.tracks.find((k) => k.area === F12_PLAT && k.pad > 0 && k.dir < 0);
-  if (!t) return;
-  if (h.y < t.y - 1.5 || h.y > t.y + 3.5 || h.x > 44 || h.x < 26) return;
-  if (t.train) return;
-  ev.st = 'done';
-  ev.t = sim.time;
-  // Экспресс с запада, навстречу идущему от лестницы; потом линия снова в
-  // своём ходу (см. `stepTracks`: поезд ушёл — направление вернулось).
-  t.restore = t.dir;
-  t.dir = 1;
-  t.view.dir = 1;
-  t.next = sim.time + 3.4;
-  t.express = true;
-  sim.events.push({ t: 'shake', k: 0.3 });
-  sim.events.push({ t: 'boss', what: 'f12_meet_trap', text: 'ВСТРЕЧНЫЙ', sub: 'фары из тоннеля — в нишу!' });
-}
-
-/** Малая территория в зале святилища. */
-function stepHall(sim: Sim, st: F12State, api: SimApi): void {
-  const ev = st.hall;
-  const h = sim.hero;
-  if (ev.st === 'done') return;
-  if (ev.st === 'idle') {
-    if (hypot(h.x - ev.cx, h.y - ev.cy) < 3.2) {
-      ev.st = 'on';
-      ev.t = sim.time;
-      ev.wave = 0;
-      ev.terr = openTerritory(sim, api, ev.cx, ev.cy, 7.4, 'hall', -1);
-      sim.events.push({ t: 'flash', color: '#b0206a', k: 0.7 });
-      sim.events.push({ t: 'shake', k: 0.5 });
-      sim.events.push({ t: 'boss', what: 'f12_hall_trap', text: 'МАЛАЯ ТЕРРИТОРИЯ', sub: 'метка ходит за тобой — разбей три столба' });
-    }
-    return;
-  }
-  const t = sim.time - ev.t;
-  if (ev.wave < 3 && t > 2 + ev.wave * 7) {
-    const kinds = ev.wave === 1 ? ['f12_doll', 'f12_flies', 'f12_flies'] : ['f12_flies', 'f12_flies', 'f12_manyface'];
-    for (let i = 0; i < kinds.length; i++) dropNear(sim, api, kinds[i], ev.cx, ev.cy, 2.5, 5.5, i * 0.2);
-    ev.wave += 1;
-  }
-  if (heroDown(sim) && ev.terr) {
-    closeTerritory(sim, ev.terr, false);
-    ev.terr = null;
-    ev.st = 'idle';
-  }
-}
-
-function hallWon(sim: Sim, st: F12State, api: SimApi, tr: Territory): void {
-  const ev = st.hall;
-  if (ev.terr !== tr) return;
-  ev.st = 'done';
-  ev.terr = null;
-  for (let i = 0; i < 5; i++) api.dropAt(sim, 'coin', 260, tr.x, tr.y);
-  api.dropAt(sim, 'f12_talisman', 2, tr.x, tr.y);
-  api.dropAt(sim, 'token', 4, tr.x, tr.y);
-  if (sim.rng() < 0.35) api.dropAt(sim, 'f12_finger', 1, tr.x, tr.y);
-}
-
-/** Последний поезд: призрак встаёт у платформы и выпускает пассажиров. */
-function stepGhost(sim: Sim, st: F12State): void {
-  const ev = st.ghost;
-  if (ev.st !== 'idle') return;
-  const h = sim.hero;
-  const t = st.tracks.find((k) => k.cfg.kind === 'ghost');
-  if (!t) return;
-  if (h.y < t.y - 9 || h.y > t.y + 12 || h.x < t.wx0 || h.x > t.wx1) return;
-  ev.st = 'on';
-  ev.t = sim.time;
-  t.next = sim.time + 5.5;
-  sim.events.push({ t: 'boss', what: 'f12_ghost_call', text: 'ПОСЛЕДНИЙ ПОЕЗД', sub: 'с того света без машиниста — отойди от края' });
-}
-
-function ghostStop(sim: Sim, api: SimApi, t: Track, tr: Train): void {
-  const st = stateOf(sim);
-  sim.events.push({ t: 'boss', what: 'f12_ghost_trap', text: 'ДВЕРИ ОТКРЫВАЮТСЯ', sub: 'пассажиры выходят' });
-  const [a, b] = trainSpan(sim, tr);
-  const kinds = ['f12_sleeper', 'f12_sleeper', 'f12_manyface', 'f12_sleeper', 'f12_flies', 'f12_flies'];
-  // Выходят на платформу к северу от путей.
-  kinds.forEach((k, i) => {
-    const x = a + ((i + 0.5) / kinds.length) * (b - a);
-    const y = t.y - 1.5;
-    if (api.solidTile(sim, Math.floor(x), Math.floor(y))) return;
-    const m = api.spawnMob(sim, k, x, y, { mode: k === 'f12_sleeper' ? 'f12_wake' : 'stun' });
-    m.t = -i * 0.25;
-    m.data.woke = 1;
+  if (d.state !== 'on') return;
+  d.t += dt;
+  d.bands.forEach((b, k) => {
+    b.x = d.cx + (d.r - 3) * Math.sin(d.t * 0.42 + k * 2.1);
+    b.y = d.cy + (d.r - 3.4) * Math.sin(d.t * 0.31 + k * 1.37 + 0.6);
+    api.light(sim, `f12a:${k}`, { x: b.x, y: b.y, r: 4.4, tint: k % 2 ? 'teal' : 'green' });
   });
-  st.ghost.st = 'done';
-  st.ghost.t = sim.time;
+  for (const id of [...d.mobs])
+    if (!sim.mobs.some((m) => m.id === id && m.mode !== 'dying')) d.mobs.delete(id);
+  d.waveT -= dt;
+  const cleared = d.mobs.size === 0 && d.wave > 0 && d.waveT < DOME.waveT - 4;
+  if (d.wave < DOME.waves && (d.waveT <= 0 || cleared)) {
+    d.wave += 1;
+    d.waveT = DOME.waveT;
+    const wins = domeWindows(sim, d);
+    const kinds =
+      d.wave === 1
+        ? ['f12_owl', 'f12_owl', 'f12_spirit']
+        : d.wave === 2
+          ? ['f12_owl', 'f12_owl', 'f12_owl']
+          : ['f12_owl', 'f12_owl', 'f12_spirit', 'f12_spirit'];
+    kinds.forEach((kind, i) => {
+      const [wx, wy] = wins.length ? wins[(i * 3 + d.wave) % wins.length] : [d.cx, d.cy - d.r + 2];
+      const m = api.spawnMob(sim, kind, wx, wy, {
+        mode: kind === 'f12_owl' ? 'f12_perch' : 'chase',
+      });
+      m.data.dome = 1;
+      m.hx = d.cx;
+      m.hy = d.cy;
+      d.mobs.add(m.id);
+    });
+    sim.events.push({ t: 'boss', what: 'f12_dome_wave' });
+  }
+  if (d.wave >= DOME.waves && d.mobs.size === 0) {
+    d.state = 'done';
+    for (let k = 0; k < d.bands.length; k++) api.light(sim, `f12a:${k}`, null);
+    say(sim, st, 'f12_dome_end', 'СИЯНИЕ ГАСНЕТ');
+    api.dropAt(sim, 'f12_crystal', 2, d.cx, d.cy);
+    api.dropAt(sim, 'f12mat', 1, d.cx, d.cy);
+    api.dropAt(sim, 'token', 3, d.cx, d.cy);
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Действия этажа: рычаг, щиток, колокол.
+// Оттепель: Зал вмёрзших. Три жаровни — тает стена ниши, но каждая жаровня
+// оживляет двух ближних воинов.
 // ---------------------------------------------------------------------------
 
-const LEVER_HOLD = 15;
-const LEVER_CD = 32;
-const BELL_CD = 18;
-
-function useLabel(sim: Sim, o: WorldObj): string | null {
-  const st = stateOf(sim);
-  const cd = st.useCd[o.id] ?? 0;
-  if (o.ref === 'f12_lever') return sim.time < cd ? null : 'Перевести стрелку';
-  if (o.ref === 'f12_breaker') return st.dark.st === 'on' ? 'Дать свет' : null;
-  if (o.ref === 'f12_bell') return sim.time < cd ? null : 'Вызвать поезд';
-  return null;
+function inBox(b: [number, number, number, number], x: number, y: number, pad = 0): boolean {
+  return x >= b[0] - pad && x <= b[2] + 1 + pad && y >= b[1] - pad && y <= b[3] + 1 + pad;
 }
+
+function thawNear(sim: Sim, api: SimApi, x: number, y: number, n: number, r: number): void {
+  const frozen = sim.mobs
+    .filter((m) => m.kind === 'f12_warrior' && m.mode === 'f12_frozen')
+    .map((m) => ({ m, d: hypot(m.x - x, m.y - y) }))
+    .filter((e) => e.d < r)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, n);
+  for (const { m } of frozen) api.setMode(m, 'f12_thaw');
+}
+
+function stepThaw(sim: Sim, st: F12State, api: SimApi, dt: number): void {
+  const th = st.thaw;
+  const h = sim.hero;
+  if (th.state === 'idle') {
+    if (inBox(th.box, h.x, h.y, -1) && !heroDown(sim)) {
+      th.state = 'on';
+      say(
+        sim,
+        st,
+        'f12_thaw_call',
+        'ОТТЕПЕЛЬ',
+        'зажги три жаровни — лёд растает, но вмёрзшие оживут',
+      );
+    }
+    return;
+  }
+  if (th.state === 'on') {
+    const mine = st.braziers.filter((o) => inBox(th.box, o.x + 0.5, o.y + 0.5));
+    if (mine.length && mine.every((o) => st.lit.has(o.id))) {
+      th.state = 'melt';
+      th.t = 0;
+      sim.events.push({ t: 'boss', what: 'f12_thaw_wall' });
+    }
+    return;
+  }
+  if (th.state === 'melt') {
+    th.t += dt;
+    const n = Math.min(th.wall.length, Math.floor(th.t / 0.45));
+    for (let k = 0; k < n; k++) {
+      const i = th.wall[k];
+      const x = i % sim.world.w;
+      const y = Math.floor(i / sim.world.w);
+      if (tileAt(sim, x, y) === T_WALL) {
+        api.setTile(sim, x, y, T_FLOOR, MK.melt);
+        fx(sim, api, { x: x + 0.5, y: y + 0.5, r: 1, life: 1.2, art: 'f12_steampuff' });
+      }
+    }
+    if (n >= th.wall.length) {
+      th.state = 'done';
+      say(sim, st, 'f12_thaw_end', 'ЛЁД РАСТАЯЛ', 'ниша открыта');
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Вьюга: Снежное поле. Порывы с предупреждением толкают (по льду — юзом),
+// видимость падает, мороз копится втрое; в сугробе тихо.
+// ---------------------------------------------------------------------------
+
+export const STORM = {
+  dur: 40,
+  ramp: 3,
+  gap: [3.6, 5.2] as [number, number],
+  warn: 1,
+  push: 0.6,
+  force: 5.5,
+};
+
+/** Вьюга: сила 0…1 и порыв (для рисовальщика). */
+export function f12Storm(sim: Sim | null): {
+  k: number;
+  gust: { ang: number; t: number; warn: number } | null;
+} {
+  const st = sim ? STATE.get(sim) : null;
+  return { k: st?.storm.k ?? 0, gust: st?.storm.gust ?? null };
+}
+
+function stepStorm(sim: Sim, st: F12State, api: SimApi, dt: number): void {
+  const s = st.storm;
+  const h = sim.hero;
+  const nx = (h.x - s.cx) / s.rx;
+  const ny = (h.y - s.cy) / s.ry;
+  const e = nx * nx + ny * ny;
+  // Вьюга мамонта (вторая фаза) — та же, только на арене.
+  const boss = sim.boss?.state === 'fight' && sim.boss.phase === 1;
+  if (s.state === 'idle' && e < 0.7 && !heroDown(sim)) {
+    s.state = 'on';
+    s.t = 0;
+    say(
+      sim,
+      st,
+      'f12_storm_call',
+      'ВЬЮГА',
+      'порывы толкают по льду; в сугробе не дует и не морозит',
+    );
+  }
+  const active = (s.state === 'on' && e < 1.2) || boss;
+  if (s.state === 'on') {
+    s.t += dt;
+    if (s.t > STORM.dur) {
+      s.state = 'done';
+      say(sim, st, 'f12_storm_end', 'ВЬЮГА СТИХЛА');
+      api.dropAt(sim, 'f12_fur', 1, h.x, h.y);
+      api.dropAt(sim, 'coin', 600, h.x, h.y);
+    }
+  }
+  const goal = active ? 1 : 0;
+  s.k += (goal - s.k) * Math.min(1, (dt / STORM.ramp) * 2);
+  if (!active && s.k < 0.05) {
+    s.gust = null;
+    return;
+  }
+  // Порыв: предупреждение (стрелы позёмки по полу) — потом толчок.
+  if (s.gust) {
+    const g = s.gust;
+    g.t += dt;
+    if (g.t > g.warn && g.t < g.warn + STORM.push && !heroDown(sim) && h.mode !== 'dash') {
+      const ux = Math.cos(g.ang);
+      const uy = Math.sin(g.ang);
+      if (!inDrift(sim, h.x, h.y)) {
+        if (st.onIce) {
+          st.u = [st.u[0] + ux * STORM.force * dt * 2.2, st.u[1] + uy * STORM.force * dt * 2.2];
+          h.vx = st.u[0];
+          h.vy = st.u[1];
+        } else {
+          h.x += ux * STORM.force * 0.45 * dt;
+          h.y += uy * STORM.force * 0.45 * dt;
+          api.collide(sim, h);
+        }
+      }
+      for (const m of sim.mobs) {
+        if (m.mode === 'dying' || api.def(m.kind).boss) continue;
+        if (hypot(m.x - h.x, m.y - h.y) > 12) continue;
+        m.kx += ux * 3 * dt;
+        m.ky += uy * 3 * dt;
+      }
+    }
+    if (g.t > g.warn + STORM.push) s.gust = null;
+  } else if (active) {
+    s.gustT -= dt;
+    if (s.gustT <= 0) {
+      s.gustT = STORM.gap[0] + sim.rng() * (STORM.gap[1] - STORM.gap[0]);
+      // Ветер с севера, косой — то с запада, то с востока.
+      const ang = Math.PI / 2 + (sim.rng() - 0.5) * 1.8;
+      s.gust = { ang, t: 0, warn: STORM.warn };
+      sim.events.push({ t: 'boss', what: 'f12_gust' });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Безмолвие: Зал гонга. Огни гаснут, видны только глаза; гонг — вспышка
+// сияния: все видны, ближние ослеплены.
+// ---------------------------------------------------------------------------
+
+export const GONG = { reveal: 6, cd: 11, blind: 1.7, r: 11 };
+
+function strikeGong(sim: Sim, st: F12State, api: SimApi, o: WorldObj): void {
+  st.gong.cd = GONG.cd;
+  st.reveal = GONG.reveal;
+  const x = o.x + 0.5;
+  const y = o.y + 0.5;
+  for (const m of sim.mobs) {
+    if (m.mode === 'dying' || api.def(m.kind).boss) continue;
+    if (hypot(m.x - x, m.y - y) > GONG.r) continue;
+    m.data.blind = GONG.blind;
+    if (m.mode === 'f12_perch' || m.mode === 'f12_hide') {
+      m.data.hide = 0;
+      api.setMode(m, 'chase');
+    }
+  }
+  api.light(sim, 'f12gong', { x, y, r: 10, tint: 'teal' });
+  fx(sim, api, { x, y, r: GONG.r, life: 1.4, art: 'f12_gongwave', above: true });
+  sim.events.push({ t: 'boss', what: 'f12_gong' });
+  sim.events.push({ t: 'flash', color: '#7affd8', k: 0.55 });
+  sim.events.push({ t: 'shake', k: 0.3 });
+}
+
+function stepHush(sim: Sim, st: F12State, api: SimApi, dt: number): void {
+  const hs = st.hush;
+  const h = sim.hero;
+  if (hs.state === 'idle') {
+    if (!inBox(hs.box, h.x, h.y, -2) || heroDown(sim)) return;
+    hs.state = 'on';
+    hs.t = 0;
+    for (const o of st.torches)
+      if (inBox(hs.box, o.x + 0.5, o.y + 0.5, 1)) {
+        hs.torches.push(o.id);
+        setTorch(sim, st, api, o, false);
+      }
+    const [x0, y0, x1, y1] = hs.box;
+    const mx = (x0 + x1) / 2 + 0.5;
+    const spots: [string, number, number][] = [
+      ['f12_owl', x0 + 3.5, y0 + 2.5],
+      ['f12_owl', x1 - 2.5, y0 + 2.5],
+      ['f12_spirit', x0 + 3.5, y1 - 1.5],
+      ['f12_spirit', x1 - 2.5, y1 - 1.5],
+      ['f12_spirit', mx + 6, y0 + 3.5],
+      ['f12_keeper', mx - 6, y0 + 3.5],
+    ];
+    for (const [kind, x, y] of spots) {
+      const p = standable(sim, Math.floor(x), Math.floor(y))
+        ? [x, y]
+        : (spotNear(sim, api, x, y, 0.5, 3, () => 0, false) ?? [mx, (y0 + y1) / 2]);
+      const m = api.spawnMob(sim, kind, p[0], p[1], {
+        mode: kind === 'f12_owl' ? 'f12_perch' : 'chase',
+      });
+      m.data.hush = 1;
+      m.hx = p[0];
+      m.hy = p[1];
+      hs.mobs.add(m.id);
+    }
+    sim.events.push({ t: 'shake', k: 0.2 });
+    say(
+      sim,
+      st,
+      'f12_hush_trap',
+      'БЕЗМОЛВИЕ',
+      'огни погасли — бей в гонг: вспышка покажет невидимок',
+    );
+    return;
+  }
+  if (hs.state !== 'on') return;
+  hs.t += dt;
+  for (const id of [...hs.mobs])
+    if (!sim.mobs.some((m) => m.id === id && m.mode !== 'dying')) hs.mobs.delete(id);
+  if (hs.mobs.size === 0 && hs.t > 2) {
+    hs.state = 'done';
+    for (const o of st.torches) if (hs.torches.includes(o.id)) setTorch(sim, st, api, o, true);
+    say(sim, st, 'f12_hush_end', 'БЕЗМОЛВИЕ ОТСТУПИЛО');
+    const [x0, y0, x1, y1] = hs.box;
+    const cx = (x0 + x1) / 2 + 0.5;
+    const cy = (y0 + y1) / 2 + 2.5;
+    api.dropAt(sim, 'f12_crystal', 1, cx, cy);
+    api.dropAt(sim, 'token', 3, cx, cy);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Действия этажа: жаровня, ледяной затвор, гонг, лебёдка.
+// ---------------------------------------------------------------------------
+
+export const GATE_HITS = 3;
+export const WINCH_STEPS = 3;
+
+/** Затвор бьют только с северной стороны: короткий путь открывают «сверху». */
+const gateSide = (sim: Sim, o: WorldObj) => sim.hero.y < o.y + 0.3;
 
 function onUse(sim: Sim, o: WorldObj, api: SimApi): boolean {
   const st = stateOf(sim);
-  if (useLabel(sim, o) === null) return false;
-  if (o.ref === 'f12_lever') {
-    // Стрелка уводит поезда узловой на обход: пути свободны 15 с.
-    const band = sim.world.bands.find((b) => o.y >= b.top && o.y < b.top + b.h);
-    for (const t of st.tracks) {
-      if (t.area !== band?.def.id || t.y > o.y || o.y - t.y > 22) continue;
-      t.hold = sim.time + LEVER_HOLD;
+  switch (o.ref) {
+    case 'f12_brazier': {
+      if (st.lit.has(o.id)) return false;
+      lightBrazier(sim, st, api, o);
+      // Тепло будит вмёрзших рядом (двух ближних).
+      thawNear(sim, api, o.x + 0.5, o.y + 0.5, 2, 9);
+      return true;
     }
-    F12_FX.lever = sim.time + LEVER_HOLD;
-    st.useCd[o.id] = sim.time + LEVER_CD;
-    sim.events.push({ t: 'clank', x: o.x + 0.5, y: o.y + 0.5 });
-    sim.events.push({ t: 'boss', what: 'f12_lever_call', text: 'СТРЕЛКА ПЕРЕВЕДЕНА', sub: 'поезда ушли на обход — 15 секунд' });
-    return true;
-  }
-  if (o.ref === 'f12_breaker') {
-    darkOff(sim, st, api);
-    sim.events.push({ t: 'clank', x: o.x + 0.5, y: o.y + 1 });
-    return true;
-  }
-  if (o.ref === 'f12_bell') {
-    const t = trackNear(st, o.x + 0.5, o.y + 0.5, 7);
-    if (!t || !callTrain(sim, t, 3.2, false)) {
-      sayOnce(sim, 'bell-no', 3, { what: 'f12_bell_call', text: 'ПУТЬ ЗАНЯТ', sub: 'поезд и так идёт' });
-      return false;
+    case 'f12_icegate': {
+      if (!gateSide(sim, o)) return false;
+      const n = (st.gates.get(o.id) ?? 0) + 1;
+      st.gates.set(o.id, n);
+      fx(sim, api, { x: o.x + 0.5, y: o.y + 0.6, r: 1.4, life: 0.7, art: 'f12_gatehit' });
+      sim.events.push({ t: 'shake', k: 0.25 });
+      if (n < GATE_HITS) {
+        sim.events.push({ t: 'boss', what: 'f12_gate_hit' });
+        return true;
+      }
+      for (let dx = -2; dx <= 2; dx++) {
+        const x = o.x + dx;
+        const mk = markAt(sim, x, o.y);
+        if (mk === MK.iceGate || mk === MK.gateSide) {
+          api.setTile(sim, x, o.y, T_FLOOR, MK.ice);
+          fx(sim, api, { x: x + 0.5, y: o.y + 0.5, r: 1.2, life: 1, art: 'f12_shatter' });
+        }
+      }
+      say(sim, st, 'f12_gate_wall', 'ЗАТВОР РАЗБИТ', 'короткий путь открыт');
+      return true;
     }
-    st.useCd[o.id] = sim.time + BELL_CD;
-    sim.events.push({ t: 'boss', what: 'f12_bell_call', text: 'ПОЕЗД ВЫЗВАН', sub: 'через три секунды — заманивай на рельсы' });
-    return true;
+    case 'f12_gong': {
+      if (st.gong.cd > 0) return false;
+      strikeGong(sim, st, api, o);
+      return true;
+    }
+    case 'f12_winch': {
+      if (st.winch.step >= WINCH_STEPS || st.winch.cd > 0) return false;
+      st.winch.step += 1;
+      st.winch.cd = 1.1;
+      const sg = F12_GEO.strait;
+      const y = topOf(sim, F12_LAKE) + sg.y1 - (st.winch.step - 1);
+      for (let x = sg.bx0; x <= sg.bx1; x++) {
+        api.setTile(sim, x, y, T_FLOOR, MK.bridge);
+        fx(sim, api, { x: x + 0.5, y: y + 0.5, r: 0.9, life: 0.8, art: 'f12_splash' });
+      }
+      sim.events.push({ t: 'boss', what: 'f12_winch' });
+      if (st.winch.step >= WINCH_STEPS) say(sim, st, 'f12_bridge_call', 'МОСТ ОПУЩЕН');
+      return true;
+    }
   }
   return false;
 }
 
+function useLabel(sim: Sim, o: WorldObj): string | null {
+  const st = stateOf(sim);
+  switch (o.ref) {
+    case 'f12_brazier':
+      return st.lit.has(o.id) ? null : 'Зажечь';
+    case 'f12_icegate': {
+      if (!gateSide(sim, o)) return null;
+      const n = st.gates.get(o.id) ?? 0;
+      return n ? `Разбить (${n}/${GATE_HITS})` : 'Разбить';
+    }
+    case 'f12_gong':
+      return st.gong.cd > 0 ? null : 'Ударить в гонг';
+    case 'f12_winch':
+      return st.winch.step >= WINCH_STEPS ? null : st.winch.cd > 0 ? 'Крутится…' : 'Крутить';
+  }
+  return o.use?.label ?? null;
+}
+
+/** Лебёдка: сколько досок моста опущено (для рисовальщика). */
+export const f12Winch = (sim: Sim | null) => (sim ? (STATE.get(sim)?.winch.step ?? 0) : 0);
+/** Удары по затвору (для рисовальщика трещин). */
+export const f12Gate = (sim: Sim | null, id: string) =>
+  sim ? (STATE.get(sim)?.gates.get(id) ?? 0) : 0;
+
 // ---------------------------------------------------------------------------
-// Правила этажа.
+// Правило этажа.
 // ---------------------------------------------------------------------------
+
+/** Слои пола и неба — две зоны-картинки, едут за героем. */
+function ensureFx(sim: Sim, st: F12State, api: SimApi): void {
+  const h = sim.hero;
+  if (!st.floorFx || !sim.zones.includes(st.floorFx)) {
+    fx(sim, api, { x: h.x, y: h.y, r: 14, life: 1e9, art: 'f12_floor' });
+    st.floorFx = sim.zones[sim.zones.length - 1];
+  }
+  if (!st.skyFx || !sim.zones.includes(st.skyFx)) {
+    fx(sim, api, { x: h.x, y: h.y, r: 14, life: 1e9, art: 'f12_sky', above: true });
+    st.skyFx = sim.zones[sim.zones.length - 1];
+  }
+  for (const z of [st.floorFx, st.skyFx]) {
+    z.x = h.x;
+    z.y = h.y;
+    z.t = 0;
+  }
+}
 
 registerFloor(12, {
   start(sim, api) {
-    STATE.delete(sim);
     const st = stateOf(sim);
-    // Вылазка начинается: у лифта первый поезд — через несколько секунд
-    // (глагол этажа виден сразу), остальные — по расписанию.
-    for (const t of st.tracks) t.next = sim.time + t.cfg.first;
-    F12_FX.dark = null;
-    F12_FX.domain = 0;
-    F12_FX.lever = 0;
-    void api;
+    for (const o of st.torches)
+      api.light(sim, `f12t:${o.id}`, { x: o.x + 0.5, y: o.y + 0.1, r: 4, tint: 'warm' });
+    ensureFx(sim, st, api);
   },
   step(sim, dt, api) {
     const st = stateOf(sim);
-    F12_FX.time = sim.time;
+    const h = sim.hero;
+    ensureFx(sim, st, api);
+    stepIce(sim, st, api, dt);
+    stepFloes(sim, st, api, dt);
+    stepRapids(sim, st, api, dt);
+    // Вода без льдины и битый лёд — провалился (рывок перелетает).
+    if (!heroDown(sim) && h.mode !== 'dash' && !h.pull) {
+      const mk = markAt(sim, Math.floor(h.x), Math.floor(h.y));
+      if (mk === MK.current && !onFloe(st, h.x, h.y)) fallIn(sim, st, api, 'В ВОДУ');
+      else if (brokenAt(st, sim, h.x, h.y)) {
+        st.rapids.fell = true;
+        fallIn(sim, st, api, 'ЛЁД ПРОЛОМИЛСЯ');
+      }
+    }
+    stepSafe(sim, st);
+    stepThin(sim, st, api, dt);
+    stepMobsIce(sim, st, api, dt);
+    stepFrost(sim, st, api, dt);
+    stepDome(sim, st, api, dt);
+    stepThaw(sim, st, api, dt);
+    stepStorm(sim, st, api, dt);
+    stepHush(sim, st, api, dt);
     stepPosts(sim, st, api);
-    stepTracks(sim, st, api, dt);
-    stepLanes(sim, st, api, dt);
-    stepTerritories(sim, st, api, dt);
-    stepRush(sim, st, api);
-    stepStairs(sim, st, api);
-    stepDark(sim, st, api);
-    stepMeet(sim, st);
-    stepHall(sim, st, api);
-    stepGhost(sim, st);
-    // Король пал, пока храм сворачивался: сценарий босса больше не ходит —
-    // зал и путь арены возвращаем здесь, разом.
-    if (sim.boss && sim.boss.state !== 'fight' && KSTATE.has(sim)) restoreArena(sim, api);
+    st.reveal = Math.max(0, st.reveal - dt);
+    st.gong.cd = Math.max(0, st.gong.cd - dt);
+    st.winch.cd = Math.max(0, st.winch.cd - dt);
+    if (st.reveal <= 0) api.light(sim, 'f12gong', null);
   },
   onUse,
   useLabel,
 });
 
 // ---------------------------------------------------------------------------
-// Поезд (вагоны и фары): двигает правило этажа, ИИ ничего не делает.
+// Монстры. Кадр контакта = кадр урона: рисовальщик берёт фазу из режима и
+// `m.t`, урон приходит ровно в конце замаха.
 // ---------------------------------------------------------------------------
 
-registerBrain('f12_train', {
-  raw: true,
-  step(_sim, m) {
-    m.vx = 0;
-    m.vy = 0;
-  },
-  onHit: () => 0,
-});
+function hit(
+  sim: Sim,
+  api: SimApi,
+  m: Mob,
+  dmg: number,
+  knock: number,
+  status?: { kind: 'chill' | 'slow' | 'stun'; dur: number },
+): boolean {
+  if (!canHurt(sim)) return false;
+  api.hurtHero(sim, dmg, m.x, m.y, knock, m.kind, status);
+  return true;
+}
 
-// ---------------------------------------------------------------------------
-// Рой мух: облако, зигзаг, укус с ядом. Летает — и над тоннелями.
-// ---------------------------------------------------------------------------
+function inCone(sim: Sim, x: number, y: number, ang: number, r: number, arc: number): boolean {
+  const h = sim.hero;
+  const d = hypot(h.x - x, h.y - y);
+  if (d > r + h.r) return false;
+  if (d < 0.6) return true;
+  return Math.abs(angDiff(Math.atan2(h.y - y, h.x - x), ang)) <= arc / 2 + h.r / Math.max(1, d);
+}
 
-export const FLIES = { bite: 0.36 };
+function inLine(sim: Sim, x: number, y: number, ang: number, len: number, w: number): boolean {
+  const h = sim.hero;
+  const ux = Math.cos(ang);
+  const uy = Math.sin(ang);
+  const hx = h.x - x;
+  const hy = h.y - y;
+  const al = hx * ux + hy * uy;
+  const ac = Math.abs(-hx * uy + hy * ux);
+  return al > -0.3 && al < len + h.r && ac < w / 2 + h.r;
+}
 
-registerBrain('f12_flies', {
+/** Ближайшая клетка с меткой из набора в радиусе (центр клетки). */
+function nearestMark(
+  sim: Sim,
+  x: number,
+  y: number,
+  r: number,
+  ok: (mk: number, t: number) => boolean,
+): [number, number] | null {
+  let best: [number, number] | null = null;
+  let bd = r;
+  for (let yy = Math.floor(y - r); yy <= y + r; yy++)
+    for (let xx = Math.floor(x - r); xx <= x + r; xx++) {
+      if (!ok(markAt(sim, xx, yy), tileAt(sim, xx, yy))) continue;
+      const d = hypot(xx + 0.5 - x, yy + 0.5 - y);
+      if (d < bd) {
+        bd = d;
+        best = [xx + 0.5, yy + 0.5];
+      }
+    }
+  return best;
+}
+
+// --- Лемминг: стайка, зигзаг, прыжок-укус ---------------------------------
+
+export const LEMMING = { aim: 0.32, hop: 0.16, hopV: 8, rest: 0.55 };
+
+brain('f12_lemming', {
   step(sim, m, dt, c, api) {
     const h = sim.hero;
-    const { dx, dy, dist, def } = c;
+    m.tele = null;
+    m.danger = 0;
     switch (m.mode) {
       case 'chase': {
-        m.tele = null;
-        m.danger = 0;
-        if (dist < def.reach + m.r + h.r + 0.1 && m.cd <= 0) {
+        if (c.dist < 1.25 + m.r && m.cd <= 0) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          m.face = m.dir;
           api.setMode(m, 'windup');
-          m.face = Math.atan2(dy, dx);
           return;
         }
-        let [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-        const z = Math.sin(sim.time * 11 + m.id * 1.7) * 0.8;
-        cx += -cy * z;
-        cy += cx * z;
-        const l = hypot(cx, cy) || 1;
-        api.steer(sim, m, cx / l, cy / l, m.speed * (dist < 1.3 ? 0.55 : 1), dt);
+        const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+        // Зигзаг: бок по синусу, у каждого свой такт.
+        const w = Math.sin(sim.time * 7 + m.id * 1.7) * (c.dist > 2 ? 0.75 : 0.2);
+        api.steer(sim, m, dx - dy * w, dy + dx * w, m.speed, dt);
         return;
       }
       case 'windup':
-        m.vx *= 0.8;
-        m.vy *= 0.8;
-        if (m.t > def.windup - 0.22) m.danger = 1.2;
-        if (m.t >= def.windup) {
-          if (dist < def.reach + m.r + h.r + 0.2)
-            api.hurtHero(sim, m.dmg, m.x, m.y, 1, m.kind, { kind: 'poison', dur: 1.6 });
-          m.vx += Math.cos(m.face) * 4;
-          m.vy += Math.sin(m.face) * 4;
+        // Присел перед прыжком.
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        m.tele = { shape: 'line', r: 1.3, w: 0.4, ang: m.dir, k: clamp(m.t / LEMMING.aim, 0, 1) };
+        if (m.t > LEMMING.aim - 0.15) m.danger = 1.4;
+        if (m.t >= LEMMING.aim) api.setMode(m, 'f12_hop');
+        return;
+      case 'f12_hop':
+        m.vx = Math.cos(m.dir) * LEMMING.hopV;
+        m.vy = Math.sin(m.dir) * LEMMING.hopV;
+        if (!m.data.bit && hypot(h.x - m.x, h.y - m.y) < m.r + h.r + 0.25) {
+          m.data.bit = 1;
+          hit(sim, api, m, m.dmg, 2.5);
+        }
+        if (m.t >= LEMMING.hop) {
+          m.data.bit = 0;
+          m.cd = LEMMING.rest + sim.rng() * 0.4;
           api.setMode(m, 'recover');
-          m.cd = def.rest * (0.8 + sim.rng() * 0.5);
         }
         return;
       case 'recover':
-        recoverStep(m, api, 0.45);
+        recoverStep(m, api, 0.4);
         return;
       default:
         api.setMode(m, 'chase');
@@ -1700,93 +1864,492 @@ registerBrain('f12_flies', {
   },
 });
 
-// ---------------------------------------------------------------------------
-// Многоликий: удар сверху конусом и КРИК — три кольца волной.
-// ---------------------------------------------------------------------------
+// --- Ёж-ледышка: сворачивается и катится, иглы с инеем ---------------------
 
-export const FACES = {
-  slamR: 1.7,
-  slamArc: 1.7,
-  screamCharge: 1.05,
-  rings: [1.5, 2.8, 4.1],
-  ringW: 0.5,
-  ringStep: 0.28,
+export const URCHIN = {
+  curl: 0.7,
+  roll: 8,
+  rollT: 1.7,
+  bounces: 3,
+  dizzy: 1.3,
+  quills: 0.6,
+  needles: 10,
+  see: 7.5,
 };
 
-registerBrain('f12_manyface', {
+brain('f12_urchin', {
   step(sim, m, dt, c, api) {
     const h = sim.hero;
-    const { dx, dy, dist, def } = c;
-    m.data.scd = (m.data.scd ?? 3 + sim.rng() * 3) - dt;
+    m.tele = null;
+    m.danger = 0;
     switch (m.mode) {
       case 'chase': {
-        m.tele = null;
-        m.danger = 0;
-        if (dist < def.reach + m.r + h.r + 0.2 && m.cd <= 0) {
-          api.setMode(m, 'f12_slam');
-          m.face = Math.atan2(dy, dx);
+        const see = c.dist < URCHIN.see && api.lineOfSight(sim, m.x, m.y, h.x, h.y);
+        if (see && m.cd <= 0) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          m.face = m.dir;
+          api.setMode(m, c.dist < 2.4 ? 'f12_bristle' : 'f12_curl');
           return;
         }
-        if (dist > 2 && dist < 5.5 && m.data.scd <= 0 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
-          api.setMode(m, 'f12_scream');
+        const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+        api.steer(sim, m, dx, dy, m.speed, dt);
+        return;
+      }
+      case 'f12_curl': {
+        // Сворачивается, прицел дрожит за героем до последней четверти.
+        m.vx *= 0.5;
+        m.vy *= 0.5;
+        if (m.t < URCHIN.curl * 0.7) m.dir = Math.atan2(h.y - m.y, h.x - m.x);
+        m.face = m.dir;
+        const len = Math.min(9, clearDist(sim, api, m.x, m.y, m.dir, 9));
+        m.tele = { shape: 'line', r: len, w: 0.9, ang: m.dir, k: clamp(m.t / URCHIN.curl, 0, 1) };
+        if (m.t > URCHIN.curl - 0.2) m.danger = 1.5;
+        if (m.t >= URCHIN.curl) {
+          m.bounce = true;
+          m.bounces = 0;
+          m.data.bit = 0;
+          api.setMode(m, 'f12_roll');
+          sim.events.push({ t: 'boss', what: 'f12_roll' });
+        }
+        return;
+      }
+      case 'f12_roll': {
+        m.vx = Math.cos(m.dir) * URCHIN.roll;
+        m.vy = Math.sin(m.dir) * URCHIN.roll;
+        m.danger = 1;
+        if (!m.data.bit && hypot(h.x - m.x, h.y - m.y) < m.r + h.r + 0.1) {
+          if (hit(sim, api, m, m.dmg, 6)) m.data.bit = 1;
+        }
+        if (m.t > URCHIN.rollT || m.bounces >= URCHIN.bounces) {
+          m.bounce = false;
+          api.setMode(m, 'dizzy');
+        }
+        return;
+      }
+      case 'dizzy':
+        m.vx *= 0.85;
+        m.vy *= 0.85;
+        if (m.t > URCHIN.dizzy) {
+          m.cd = 1 + sim.rng() * 0.8;
+          api.setMode(m, 'chase');
+        }
+        return;
+      case 'f12_bristle':
+        // Иглы дыбом — потом кольцо игл с инеем.
+        m.vx *= 0.5;
+        m.vy *= 0.5;
+        m.tele = { shape: 'ring', r: 3, w: 0.5, k: clamp(m.t / URCHIN.quills, 0, 1) };
+        if (m.t > URCHIN.quills - 0.2) m.danger = 3;
+        if (m.t >= URCHIN.quills) {
+          const n = URCHIN.needles;
+          const a0 = sim.rng() * TAU;
+          for (let k = 0; k < n; k++)
+            api.shoot(sim, m, a0 + (k / n) * TAU, {
+              speed: 7.5,
+              r: 0.2,
+              life: 0.55,
+              dmg: m.dmg * 0.6,
+              art: 'f12_quill',
+              status: 'chill',
+              dur: 1.2,
+            });
+          m.cd = 1.6 + sim.rng() * 0.8;
+          api.setMode(m, 'recover');
+        }
+        return;
+      case 'recover':
+        recoverStep(m, api, 0.6);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+  onWall(sim, m, nx, ny) {
+    if (m.mode !== 'f12_roll') return;
+    // Отскок от стены — зеркально.
+    const vx = Math.cos(m.dir);
+    const vy = Math.sin(m.dir);
+    const d = vx * nx + vy * ny;
+    m.dir = Math.atan2(vy - 2 * d * ny, vx - 2 * d * nx);
+    m.bounces += 1;
+    sim.events.push({ t: 'shake', k: 0.12 });
+  },
+  onHit(_sim, m) {
+    // Свёрнутый — шар игл: удар скользит.
+    if (m.mode === 'f12_roll' || m.mode === 'f12_curl') return 0.35;
+    return 1;
+  },
+});
+
+// --- Тюлень: ждёт у лунки, выныривает, скользит на брюхе -------------------
+
+export const SEAL = { wake: 5.5, rise: 0.55, aim: 0.65, slide: 7.5, slideT: 1.1, see: 9 };
+
+brain('f12_seal', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    m.tele = null;
+    m.danger = 0;
+    switch (m.mode) {
+      case 'f12_under':
+        m.vx = 0;
+        m.vy = 0;
+        m.data.hide = 1;
+        if (c.dist < SEAL.wake && !heroDown(sim)) {
+          api.setMode(m, 'f12_rise');
+          sim.events.push({ t: 'boss', what: 'f12_seal_splash' });
+          fx(sim, api, {
+            x: m.data.hx ?? m.x,
+            y: m.data.hy ?? m.y,
+            r: 1.3,
+            life: 0.9,
+            art: 'f12_splash',
+          });
+        }
+        return;
+      case 'f12_rise':
+        m.data.hide = m.t < 0.15 ? 1 : 0;
+        m.face = Math.atan2(c.dy, c.dx);
+        if (m.t >= SEAL.rise) {
+          m.cd = 0.3;
+          api.setMode(m, 'chase');
+        }
+        return;
+      case 'chase': {
+        m.data.hide = 0;
+        const see = c.dist < SEAL.see && api.lineOfSight(sim, m.x, m.y, h.x, h.y);
+        if (see && m.cd <= 0 && c.dist > 1.6) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          api.setMode(m, 'windup');
           return;
         }
-        const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-        api.steer(sim, m, cx, cy, m.speed, dt);
+        if (c.dist < 1.6 && m.cd <= 0) {
+          // Вплотную — удар ластом-боком.
+          m.dir = Math.atan2(c.dy, c.dx);
+          api.setMode(m, 'f12_flip');
+          return;
+        }
+        const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+        // Переваливается: скорость пульсирует.
+        const k = 0.55 + 0.45 * Math.abs(Math.sin(m.t * 5));
+        api.steer(sim, m, dx, dy, m.speed * k, dt);
+        return;
+      }
+      case 'windup': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        if (m.t < SEAL.aim * 0.6) m.dir = Math.atan2(h.y - m.y, h.x - m.x);
+        m.face = m.dir;
+        const len = Math.min(8, clearDist(sim, api, m.x, m.y, m.dir, 8));
+        m.tele = { shape: 'line', r: len, w: 1.2, ang: m.dir, k: clamp(m.t / SEAL.aim, 0, 1) };
+        if (m.t > SEAL.aim - 0.2) m.danger = 1.6;
+        if (m.t >= SEAL.aim) {
+          m.data.bit = 0;
+          api.setMode(m, 'f12_slide');
+          sim.events.push({ t: 'boss', what: 'f12_glide' });
+        }
+        return;
+      }
+      case 'f12_slide': {
+        // На брюхе: разгон сразу, к концу тормозит (на льду — дольше).
+        const ice = slippery(markAt(sim, Math.floor(m.x), Math.floor(m.y)));
+        const T = SEAL.slideT * (ice ? 1.5 : 1);
+        const v = SEAL.slide * (1 - (m.t / T) ** 2);
+        m.vx = Math.cos(m.dir) * v;
+        m.vy = Math.sin(m.dir) * v;
+        m.danger = 1.2;
+        if (!m.data.bit && hypot(h.x - m.x, h.y - m.y) < m.r + h.r + 0.15) {
+          if (hit(sim, api, m, m.dmg, 9)) m.data.bit = 1;
+        }
+        if (m.t >= T) {
+          m.cd = 1.4 + sim.rng() * 0.8;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'f12_flip': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        m.face = m.dir;
+        m.tele = { shape: 'cone', r: 1.9, arc: 1.7, ang: m.dir, k: clamp(m.t / 0.5, 0, 1) };
+        if (m.t > 0.3) m.danger = 1.9;
+        if (m.t >= 0.5) {
+          if (inCone(sim, m.x, m.y, m.dir, 1.9, 1.7)) hit(sim, api, m, m.dmg * 0.8, 6);
+          m.cd = 1 + sim.rng() * 0.5;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'recover':
+        recoverStep(m, api, 0.8);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+  onHit(_sim, m) {
+    if (m.mode === 'f12_under') return 0;
+    // Жир на спине: в лоб слабо, в скольжении — бока открыты.
+    if (m.mode === 'f12_slide') return 1.3;
+    return 1;
+  },
+});
+
+// --- Сосулька: висит на своде, трещит, падает, торчит ----------------------
+
+export const ICICLE = { trig: 1.7, crack: 0.8, stuck: 3, regrow: 25, r: 1.05 };
+
+function icicleRegrow(sim: Sim, m: Mob): void {
+  const st = STATE.get(sim);
+  const p = st?.posts.find((x) => x.id === m.data.post);
+  if (p) p.regrow = sim.time + ICICLE.regrow;
+}
+
+brain('f12_icicle', {
+  step(sim, m, _dt, _c, api) {
+    const h = sim.hero;
+    m.vx = 0;
+    m.vy = 0;
+    m.tele = null;
+    m.danger = 0;
+    m.data.noIce = 1;
+    switch (m.mode) {
+      case 'f12_hang':
+        m.data.hide = 1;
+        // Герой под ней (или моб тяжёлый) — треск.
+        if (!heroDown(sim) && hypot(h.x - m.x, h.y - m.y) < ICICLE.trig) {
+          api.setMode(m, 'f12_crack');
+          sim.events.push({ t: 'boss', what: 'f12_crack' });
+          api.strike(sim, {
+            shape: 'circle',
+            x: m.x,
+            y: m.y,
+            r: ICICLE.r,
+            warn: ICICLE.crack,
+            dmg: m.dmg,
+            knock: 3,
+            status: 'chill',
+            dur: 1.4,
+            art: 'f12_iciclefall',
+            from: m.id,
+            mobDmg: 40,
+          });
+        }
+        return;
+      case 'f12_crack':
+        m.data.hide = 1;
+        if (m.t >= ICICLE.crack) {
+          api.setMode(m, 'f12_stuck');
+          sim.events.push({ t: 'boss', what: 'f12_shatter' });
+          sim.events.push({ t: 'shake', k: 0.22 });
+        }
+        return;
+      case 'f12_stuck':
+        // Воткнулась — бей, пока торчит (за неё дают осколок).
+        m.data.hide = 0;
+        if (m.t >= ICICLE.stuck) {
+          icicleRegrow(sim, m);
+          m.data.post = 0;
+          fx(sim, api, { x: m.x, y: m.y, r: 1, life: 0.8, art: 'f12_shatter' });
+          api.setMode(m, 'escape');
+        }
+        return;
+      default:
+        api.setMode(m, 'f12_hang');
+    }
+  },
+  onHit(_sim, m) {
+    return m.mode === 'f12_stuck' ? 1.5 : 0;
+  },
+});
+
+// --- Полярная сова: сидит в нише, видит того, кто в свете, пикирует --------
+
+export const OWL = {
+  spot: 0.7,
+  dive: 10.5,
+  ground: 1.1,
+  rise: 0.55,
+  hover: [1.8, 3] as [number, number],
+};
+
+brain('f12_owl', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    m.tele = null;
+    m.danger = 0;
+    const dome = (m.data.dome ?? 0) > 0;
+    // В Куполе совы видят только того, кто стоит в ленте сияния.
+    const prey = !heroDown(sim) && (dome ? inAurora(sim, h.x, h.y) : c.dist < 8.5);
+    switch (m.mode) {
+      case 'f12_perch':
+        m.vx *= 0.5;
+        m.vy *= 0.5;
+        m.data.hide = 1;
+        if (prey && c.dist < 13 && m.cd <= 0) api.setMode(m, 'f12_spot');
+        else if (dome && m.t > 2.5) api.setMode(m, 'f12_hover');
+        return;
+      case 'f12_hover': {
+        // Кружит под сводом: недосягаема, ждёт, когда встанешь в свет.
+        m.data.hide = 1;
+        const a = sim.time * 0.9 + m.id;
+        const r = 4.5;
+        const tx = (dome ? m.hx : h.x) + Math.cos(a) * r;
+        const ty = (dome ? m.hy : h.y) + Math.sin(a) * r * 0.7;
+        api.steer(sim, m, tx - m.x, ty - m.y, m.speed, dt);
+        m.face = Math.atan2(m.vy, m.vx);
+        if (prey && m.cd <= 0 && m.t > (m.data.hov ?? 1.5)) api.setMode(m, 'f12_spot');
+        return;
+      }
+      case 'f12_spot': {
+        // Глаза вспыхнули: метка ведёт героя до последней трети.
+        m.data.hide = 0;
+        m.vx *= 0.7;
+        m.vy *= 0.7;
+        if (m.t < OWL.spot * 0.66) m.dir = Math.atan2(h.y - m.y, h.x - m.x);
+        m.face = m.dir;
+        const len = Math.min(12, hypot(h.x - m.x, h.y - m.y) + 1.5);
+        m.data.len = len;
+        m.tele = { shape: 'line', r: len, w: 0.8, ang: m.dir, k: clamp(m.t / OWL.spot, 0, 1) };
+        if (m.t > OWL.spot - 0.2) m.danger = 1.4;
+        if (m.t >= OWL.spot) {
+          m.data.bit = 0;
+          api.setMode(m, 'f12_dive');
+          sim.events.push({ t: 'boss', what: 'f12_owl_dive' });
+        }
+        return;
+      }
+      case 'f12_dive': {
+        m.data.hide = 0;
+        m.vx = Math.cos(m.dir) * OWL.dive;
+        m.vy = Math.sin(m.dir) * OWL.dive;
+        m.danger = 1;
+        if (!m.data.bit && hypot(h.x - m.x, h.y - m.y) < m.r + h.r + 0.2) {
+          if (hit(sim, api, m, m.dmg, 4)) m.data.bit = 1;
+        }
+        if (m.t * OWL.dive >= (m.data.len ?? 8)) api.setMode(m, 'f12_ground');
+        return;
+      }
+      case 'f12_ground':
+        // Промахнулась — сидит на земле, крылья врастопырку: бей.
+        m.data.hide = 0;
+        m.vx *= 0.75;
+        m.vy *= 0.75;
+        if (m.t >= OWL.ground) api.setMode(m, 'f12_rise');
+        return;
+      case 'f12_rise':
+        m.data.hide = 0;
+        m.vx *= 0.8;
+        m.vy *= 0.8;
+        if (m.t >= OWL.rise) {
+          m.cd = 0.6;
+          m.data.hov = OWL.hover[0] + sim.rng() * (OWL.hover[1] - OWL.hover[0]);
+          api.setMode(m, 'f12_hover');
+        }
+        return;
+      case 'chase':
+        // Из «Безмолвия» или после гонга — сразу в небо.
+        api.setMode(m, 'f12_hover');
+        return;
+      default:
+        api.setMode(m, 'f12_hover');
+    }
+  },
+  onHit(_sim, m) {
+    if (m.mode === 'f12_ground') return 1.6;
+    return 1;
+  },
+});
+
+// --- Вмёрзший воин: глыба льда, оживает от тепла или трёх ударов ----------
+
+export const WARRIOR = {
+  near: 1.5,
+  nearT: 1.2,
+  thaw: 1.1,
+  wind: 0.75,
+  slam: 0.95,
+  rest: 0.8,
+  hits: 3,
+};
+
+brain('f12_warrior', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    m.tele = null;
+    m.danger = 0;
+    switch (m.mode) {
+      case 'f12_frozen':
+        m.vx = 0;
+        m.vy = 0;
+        m.data.hide = 0;
+        if (!heroDown(sim) && c.dist < WARRIOR.near) m.data.near = (m.data.near ?? 0) + dt;
+        else m.data.near = Math.max(0, (m.data.near ?? 0) - dt);
+        if ((m.data.near ?? 0) > WARRIOR.nearT || (m.data.hits ?? 0) >= WARRIOR.hits)
+          api.setMode(m, 'f12_thaw');
+        return;
+      case 'f12_thaw':
+        // Лёд трескается и слетает кусками.
+        m.vx = 0;
+        m.vy = 0;
+        m.face = Math.atan2(c.dy, c.dx);
+        if (m.t < dt * 1.5) {
+          sim.events.push({ t: 'boss', what: 'f12_shatter' });
+          fx(sim, api, { x: m.x, y: m.y, r: 1.5, life: 1, art: 'f12_shatter' });
+        }
+        if (m.t >= WARRIOR.thaw) {
+          m.cd = 0.4;
+          api.setMode(m, 'chase');
+        }
+        return;
+      case 'chase': {
+        if (c.dist < m.r + h.r + 1.1 && m.cd <= 0) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          m.face = m.dir;
+          m.data.n = (m.data.n ?? 0) + 1;
+          api.setMode(m, m.data.n % 3 === 0 ? 'f12_slam' : 'windup');
+          return;
+        }
+        const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+        api.steer(sim, m, dx, dy, m.speed, dt);
+        return;
+      }
+      case 'windup': {
+        // Рубка топором: конус спереди.
+        m.vx *= 0.5;
+        m.vy *= 0.5;
+        if (m.t < WARRIOR.wind * 0.5) m.dir = Math.atan2(h.y - m.y, h.x - m.x);
+        m.face = m.dir;
+        m.tele = { shape: 'cone', r: 2, arc: 1.7, ang: m.dir, k: clamp(m.t / WARRIOR.wind, 0, 1) };
+        if (m.t > WARRIOR.wind - 0.22) m.danger = 2;
+        if (m.t >= WARRIOR.wind) {
+          if (inCone(sim, m.x, m.y, m.dir, 2, 1.7)) hit(sim, api, m, m.dmg, 5);
+          m.vx = Math.cos(m.dir) * 3;
+          m.vy = Math.sin(m.dir) * 3;
+          m.cd = WARRIOR.rest + sim.rng() * 0.5;
+          api.setMode(m, 'recover');
+        }
         return;
       }
       case 'f12_slam': {
-        m.vx *= 0.7;
-        m.vy *= 0.7;
-        const k = Math.min(1, m.t / def.windup);
-        m.tele = { shape: 'cone', r: FACES.slamR, ang: m.face, arc: FACES.slamArc, k };
-        if (m.t > def.windup - 0.25) m.danger = FACES.slamR + 0.4;
-        if (m.t >= def.windup) {
-          const off = Math.abs(angDiff(Math.atan2(h.y - m.y, h.x - m.x), m.face));
-          if (dist < FACES.slamR + h.r && off < FACES.slamArc / 2 + 0.25 && canHurt(sim))
-            api.hurtHero(sim, m.dmg, m.x, m.y, 5, m.kind);
-          sim.events.push({ t: 'strike', x: m.x + Math.cos(m.face), y: m.y + Math.sin(m.face), art: 'f12_slam' });
-          m.tele = null;
-          m.danger = 0;
+        // Сверху вниз: круг впереди, иней.
+        m.vx *= 0.5;
+        m.vy *= 0.5;
+        m.face = m.dir;
+        const x = m.x + Math.cos(m.dir) * 1.2;
+        const y = m.y + Math.sin(m.dir) * 1.2;
+        m.tele = { shape: 'circle', r: 1.35, x, y, k: clamp(m.t / WARRIOR.slam, 0, 1) };
+        if (m.t > WARRIOR.slam - 0.22) m.danger = 2.5;
+        if (m.t >= WARRIOR.slam) {
+          if (hypot(h.x - x, h.y - y) < 1.35 + h.r)
+            hit(sim, api, m, m.dmg * 1.15, 6, { kind: 'chill', dur: 1.5 });
+          fx(sim, api, { x, y, r: 1.4, life: 0.7, art: 'f12_frostburst' });
+          sim.events.push({ t: 'shake', k: 0.2 });
+          m.cd = WARRIOR.rest + 0.4;
           api.setMode(m, 'recover');
-          m.cd = def.rest * (0.9 + sim.rng() * 0.3);
         }
         return;
       }
-      case 'f12_scream': {
-        m.vx *= 0.7;
-        m.vy *= 0.7;
-        const k = Math.min(1, m.t / FACES.screamCharge);
-        m.tele = { shape: 'ring', r: FACES.rings[0], w: 0.25, k };
-        if (m.t >= FACES.screamCharge) {
-          m.tele = null;
-          // Волна: кольцо за кольцом — рывком сквозь или вне досягаемости.
-          FACES.rings.forEach((r, i) =>
-            api.strike(sim, {
-              shape: 'ring',
-              x: m.x,
-              y: m.y,
-              r,
-              w: FACES.ringW,
-              warn: 0.3 + i * FACES.ringStep,
-              dmg: m.dmg * 0.55,
-              knock: 3,
-              status: 'stun',
-              dur: 0.45,
-              art: 'f12_scream',
-              from: m.id,
-            }),
-          );
-          sim.events.push({ t: 'boss', what: 'f12_scream_call' });
-          api.setMode(m, 'f12_after');
-          m.data.scd = 7 + sim.rng() * 3;
-        }
-        return;
-      }
-      case 'f12_after':
-        // Кричал — открыт: рты хватают воздух.
-        recoverStep(m, api, 1.3);
-        return;
       case 'recover':
         recoverStep(m, api, 0.7);
         return;
@@ -1794,615 +2357,467 @@ registerBrain('f12_manyface', {
         api.setMode(m, 'chase');
     }
   },
-  onHit(_sim, m) {
-    return m.mode === 'f12_after' ? 1.4 : 1;
+  onHit(sim, m) {
+    if (m.mode === 'f12_frozen') {
+      // Лёд держит: трещит от ударов, после третьего — воин на свободе.
+      m.data.hits = (m.data.hits ?? 0) + 1;
+      sim.events.push({ t: 'boss', what: 'f12_crack' });
+      return 0.3;
+    }
+    if (m.mode === 'f12_thaw') return 1.4;
+    return 1;
   },
 });
 
-// ---------------------------------------------------------------------------
-// Длиннорукий: живёт в треснувшей стене. Рука линией через проход — хватает
-// и тянет к стене, пасть в трещине кусает. Пока рука снаружи — открыт.
-// ---------------------------------------------------------------------------
+// --- Дух стужи: гасит огни, дышит инеем, боится жаровни -------------------
 
-export const ARM = { aim: 0.75, lock: 0.3, reach: 4.6, w: 0.42, pull: 9, maul: 0.55, out: 1.7, hide: 2.4 };
+export const SPIRIT = { see: 9, keep: 2.8, wind: 0.6, cone: 2.8, arc: 1, douse: 0.85, hurt: 0.22 };
 
-registerBrain('f12_longarm', {
-  raw: true,
+function litNear(sim: Sim, st: F12State, x: number, y: number, r: number): WorldObj | null {
+  let best: WorldObj | null = null;
+  let bd = r;
+  for (const o of st.torches) {
+    if (!st.torchOn.has(o.id)) continue;
+    const d = hypot(o.x + 0.5 - x, o.y + 0.5 - y);
+    if (d < bd) {
+      bd = d;
+      best = o;
+    }
+  }
+  return best;
+}
+
+brain('f12_spirit', {
   step(sim, m, dt, c, api) {
     const h = sim.hero;
-    const { dist } = c;
-    const wx = m.data.wx ?? m.x;
-    const wy = m.data.wy ?? m.y;
-    m.vx = 0;
-    m.vy = 0;
-    m.x = m.hx;
-    m.y = m.hy;
-    const toHero = Math.atan2(h.y - wy, h.x - wx);
-    const out = Math.atan2(m.hy - wy, m.hx - wx);
-    switch (m.mode) {
-      case 'dying':
-        return;
-      case 'f12_hide':
-      case 'stun': {
-        m.data.ghost = 1;
-        m.tele = null;
-        m.danger = 0;
-        if (heroDown(sim)) return;
-        // Герой в досягаемости и перед трещиной (не за стеной).
-        const d = hypot(h.x - wx, h.y - wy);
-        if (m.t > (m.data.cool ?? 0) && d < ARM.reach && Math.abs(angDiff(toHero, out)) < 1.25 && api.lineOfSight(sim, m.hx, m.hy, h.x, h.y)) {
-          api.setMode(m, 'aim');
-          m.data.ang = toHero;
-          m.face = toHero;
-        }
-        return;
-      }
-      case 'aim': {
-        m.data.ghost = 1;
-        // Целится до `lock`, потом рука замирает — окно отойти с линии.
-        if (m.t < ARM.aim - ARM.lock) m.data.ang = Math.atan2(h.y - wy, h.x - wx);
-        m.face = m.data.ang;
-        const k = Math.min(1, m.t / ARM.aim);
-        m.tele = { shape: 'line', r: ARM.reach, w: ARM.w, ang: m.data.ang, k, x: wx, y: wy };
-        if (m.t > ARM.aim - 0.24) m.danger = 1.6;
-        if (m.t >= ARM.aim) {
-          m.tele = null;
-          m.danger = 0;
-          const hit = lineHits(wx, wy, m.data.ang, ARM.reach, ARM.w, h.x, h.y, h.r) && canHurt(sim);
-          if (hit) {
-            api.hurtHero(sim, m.dmg * 0.6, wx, wy, 0, m.kind);
-            // Тянет к стене, к пасти в трещине.
-            api.pullHero(sim, m.hx, m.hy, { speed: ARM.pull, max: 0.7 });
-            sim.events.push({ t: 'boss', what: 'f12_grab_call', text: 'СХВАТИЛ', sub: 'бей руку — она открыта' });
-            api.setMode(m, 'f12_maul');
-          } else api.setMode(m, 'f12_reach');
-          m.data.ghost = 0;
-        }
-        return;
-      }
-      case 'f12_maul': {
-        m.data.ghost = 0;
-        const k = Math.min(1, m.t / ARM.maul);
-        m.tele = { shape: 'circle', r: 1.1, k, x: m.hx, y: m.hy };
-        if (m.t > ARM.maul - 0.22) m.danger = 1.5;
-        if (m.t >= ARM.maul) {
-          if (dist < 1.1 + h.r && canHurt(sim)) api.hurtHero(sim, m.dmg, wx, wy, 6, m.kind);
-          m.tele = null;
-          m.danger = 0;
-          api.setMode(m, 'f12_reach');
-        }
-        return;
-      }
-      case 'f12_reach':
-        // Рука лежит на полу — открыт.
-        m.data.ghost = 0;
-        m.tele = null;
-        if (m.t >= ARM.out) {
-          api.setMode(m, 'f12_hide');
-          m.data.cool = ARM.hide;
-          m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.1);
-        }
-        return;
-      default:
-        api.setMode(m, 'f12_hide');
-    }
-  },
-  onHit(_sim, m) {
-    if ((m.data.ghost ?? 0) > 0) return 0;
-    return m.mode === 'f12_reach' ? 1.3 : 1;
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Спящий пассажир: дремлет; разбудил — пасть раскрывается, рывок по линии.
-// ---------------------------------------------------------------------------
-
-export const SLEEP = { aim: 0.6, lunge: 11, max: 3.2, wake: 0.7, back: 12 };
-
-registerBrain('f12_sleeper', {
-  step(sim, m, dt, c, api) {
-    const h = sim.hero;
-    const { dx, dy, dist, def } = c;
-    switch (m.mode) {
-      case 'f12_doze': {
-        m.vx *= 0.7;
-        m.vy *= 0.7;
-        m.tele = null;
-        // Бегом рядом — просыпается; тихо мимо — спит.
-        const run = hypot(h.vx, h.vy);
-        m.data.near = dist < 1.4 ? (m.data.near ?? 0) + dt : 0;
-        if ((dist < 2.4 && run > 4.4) || m.data.near > 1.6) api.setMode(m, 'f12_wake');
-        return;
-      }
-      case 'f12_wake':
-        m.vx *= 0.7;
-        m.vy *= 0.7;
-        m.face = Math.atan2(dy, dx);
-        if (m.t >= SLEEP.wake) {
-          m.data.woke = 1;
-          m.data.lost = 0;
-          api.setMode(m, 'chase');
-        }
-        return;
-      case 'chase': {
-        m.tele = null;
-        m.danger = 0;
-        if (dist > 9) {
-          m.data.lost = (m.data.lost ?? 0) + dt;
-          if (m.data.lost > SLEEP.back) {
-            api.setMode(m, 'f12_doze');
-            return;
-          }
-        } else m.data.lost = 0;
-        if (dist < SLEEP.max && dist > 1 && m.cd <= 0 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
-          api.setMode(m, 'aim');
-          m.data.ang = Math.atan2(dy, dx);
-          return;
-        }
-        if (dist <= 1 && m.cd <= 0) {
-          api.setMode(m, 'aim');
-          m.data.ang = Math.atan2(dy, dx);
-          return;
-        }
-        const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-        api.steer(sim, m, cx, cy, m.speed, dt);
-        return;
-      }
-      case 'aim': {
-        m.vx *= 0.6;
-        m.vy *= 0.6;
-        if (m.t < SLEEP.aim - 0.2) m.data.ang = Math.atan2(dy, dx);
-        m.face = m.data.ang;
-        const k = Math.min(1, m.t / SLEEP.aim);
-        m.tele = { shape: 'line', r: SLEEP.max, w: 0.4, ang: m.data.ang, k };
-        if (m.t > SLEEP.aim - 0.24) m.danger = SLEEP.max;
-        if (m.t >= SLEEP.aim) {
-          m.tele = null;
-          m.danger = 0;
-          m.data.hitDone = 0;
-          m.data.sx = m.x;
-          m.data.sy = m.y;
-          api.setMode(m, 'f12_lunge');
-        }
-        return;
-      }
-      case 'f12_lunge': {
-        const a = m.data.ang;
-        m.vx = Math.cos(a) * SLEEP.lunge;
-        m.vy = Math.sin(a) * SLEEP.lunge;
-        if (!m.data.hitDone && dist < m.r + h.r + 0.35 && canHurt(sim)) {
-          m.data.hitDone = 1;
-          api.hurtHero(sim, m.dmg, m.x, m.y, 4, m.kind);
-        }
-        if (m.t > SLEEP.max / SLEEP.lunge || hypot(m.x - m.data.sx, m.y - m.data.sy) > SLEEP.max) {
-          api.setMode(m, 'recover');
-          m.cd = def.rest * (0.9 + sim.rng() * 0.4);
-        }
-        return;
-      }
-      case 'recover':
-        recoverStep(m, api, 0.9);
-        return;
-      default:
-        api.setMode(m, m.data.woke ? 'chase' : 'f12_doze');
-    }
-  },
-  onHit(sim, m, _hit, api) {
-    // Удар будит — но первый удар по спящему вдвое сильнее.
-    if (m.mode === 'f12_doze') {
-      api.setMode(m, 'f12_wake');
-      return 2;
-    }
-    void sim;
-    return m.mode === 'recover' ? 1.3 : 1;
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Глаз на своде: прожектор взгляда; заметил — слеза навесом и мухи; потом
-// моргает — открыт.
-// ---------------------------------------------------------------------------
-
-export const EYE = { wake: 9, sweep: 0.55, arc: 0.72, r: 6.2, spot: 0.7, blink: 1.6, shut: 2.2 };
-
-registerBrain('f12_eye', {
-  raw: true,
-  step(sim, m, dt, c, api) {
-    const h = sim.hero;
-    const { dist, def } = c;
-    m.x = m.hx;
-    m.y = m.hy;
-    m.vx = 0;
-    m.vy = 0;
-    const toHero = Math.atan2(h.y - m.y, h.x - m.x);
-    switch (m.mode) {
-      case 'dying':
-        return;
-      case 'f12_shut':
-      case 'stun':
-        m.data.ghost = 1;
-        m.tele = null;
-        m.danger = 0;
-        if (!heroDown(sim) && dist < EYE.wake && m.t > (m.data.cool ?? 0.6)) {
-          api.setMode(m, 'f12_look');
-          m.data.base = toHero;
-          m.data.seen = 0;
-        }
-        return;
-      case 'f12_look': {
-        m.data.ghost = 0;
-        // Взгляд обводит зал конусом — медленно, туда-сюда.
-        const a = (m.data.base ?? 0) + Math.sin(m.t * EYE.sweep * 2) * 1.1;
-        m.face = a;
-        m.tele = { shape: 'cone', r: EYE.r, ang: a, arc: EYE.arc, k: 0.35 };
-        const inCone =
-          dist < EYE.r && Math.abs(angDiff(toHero, a)) < EYE.arc / 2 && api.lineOfSight(sim, m.x, m.y, h.x, h.y);
-        m.data.seen = inCone ? (m.data.seen ?? 0) + dt : Math.max(0, (m.data.seen ?? 0) - dt * 2);
-        if (m.data.seen > EYE.spot && !heroDown(sim)) {
-          api.setMode(m, 'f12_spot');
-          m.data.shots = 0;
-          sim.events.push({ t: 'boss', what: 'f12_eye_call', text: 'ЗАМЕЧЕН', sub: 'глаз на своде — уходи из-под взгляда' });
-        }
-        if (m.t > 9 || dist > EYE.wake + 3) {
-          api.setMode(m, 'f12_shut');
-          m.data.cool = 1.2;
-        }
-        return;
-      }
-      case 'f12_spot': {
-        m.data.ghost = 0;
-        m.face = toHero;
-        m.tele = { shape: 'cone', r: EYE.r, ang: toHero, arc: EYE.arc * 0.7, k: 1 };
-        // Две слезы навесом по месту героя, и мухи с потолка.
-        if (m.data.shots < 2 && m.t > 0.35 + m.data.shots * 0.55) {
-          m.data.shots += 1;
-          const def2 = def.shot!;
-          api.shoot(sim, m, toHero, { ...def2, onLand: { r: 0.9, life: 3, slow: 0.55, art: 'f12_tearpool' } }, h.x, h.y);
-          if (m.data.shots === 1) for (let i = 0; i < 2; i++) dropNear(sim, api, 'f12_flies', h.x, h.y, 2, 3.5, i * 0.2);
-        }
-        if (m.t > 1.5) {
-          m.tele = null;
-          api.setMode(m, 'f12_blink');
-        }
-        return;
-      }
-      case 'f12_blink':
-        // Слезится и моргает — открыт.
-        m.data.ghost = 0;
-        m.tele = null;
-        if (m.t > EYE.blink) {
-          api.setMode(m, 'f12_shut');
-          m.data.cool = EYE.shut;
-        }
-        return;
-      default:
-        api.setMode(m, 'f12_shut');
-    }
-  },
-  onHit(_sim, m) {
-    if ((m.data.ghost ?? 0) > 0) return 0;
-    return m.mode === 'f12_blink' ? 1.5 : 1;
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Кукла-заклинатель: держится за спинами, иглы веером, МАЛАЯ ТЕРРИТОРИЯ.
-// ---------------------------------------------------------------------------
-
-export const DOLL = { keep: [3.6, 6.2], aim: 0.85, cast: 1.3, terrR: 3.4, terrCd: 17 };
-
-registerBrain('f12_doll', {
-  step(sim, m, dt, c, api) {
-    const h = sim.hero;
-    const { dx, dy, dist, def } = c;
     const st = stateOf(sim);
-    m.data.tcd = (m.data.tcd ?? 3 + sim.rng() * 3) - dt;
-    const mine = st.terrs.find((t) => t.owner === m.id && !t.broken);
+    m.tele = null;
+    m.danger = 0;
+    // У горящей жаровни дух тает.
+    for (const o of st.braziers)
+      if (st.lit.has(o.id) && hypot(o.x + 0.5 - m.x, o.y + 0.5 - m.y) < 2.4) {
+        envHurt(sim, api, m, SPIRIT.hurt * dt);
+        m.flash = Math.max(m.flash, 0.05);
+        if (m.mode !== 'f12_flee') api.setMode(m, 'f12_flee');
+      }
     switch (m.mode) {
       case 'chase': {
-        m.tele = null;
-        m.danger = 0;
-        const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
-        if (!mine && m.data.tcd <= 0 && dist < 6.5 && see) {
-          api.setMode(m, 'cast');
-          m.data.cx = h.x;
-          m.data.cy = h.y;
+        // Огонь рядом — сперва гасить.
+        const t = m.cd <= 0 && (m.data.douse ?? 0) <= 0 ? litNear(sim, st, m.x, m.y, 7) : null;
+        if (t) {
+          m.data.tx = t.x + 0.5;
+          m.data.ty = t.y + 0.6;
+          m.data.tid = st.torches.indexOf(t);
+          api.setMode(m, 'f12_douse');
           return;
         }
-        if (see && dist < def.reach && dist > 2 && m.cd <= 0) {
-          api.setMode(m, 'aim');
-          m.data.ang = Math.atan2(dy, dx);
+        if (c.dist < SPIRIT.cone && m.cd <= 0) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          api.setMode(m, 'windup');
           return;
         }
-        // Держит дистанцию, прячась за своих.
-        let tx = h.x;
-        let ty = h.y;
-        const [k0, k1] = DOLL.keep;
-        if (dist < k0) {
-          tx = m.x - dx;
-          ty = m.y - dy;
-        } else if (dist < k1) {
-          tx = m.x + (-dy / (dist || 1)) * 2 * (m.id % 2 ? 1 : -1);
-          ty = m.y + (dx / (dist || 1)) * 2 * (m.id % 2 ? 1 : -1);
-        }
-        const [cx, cy] = api.chaseDir(sim, m, tx, ty);
-        api.steer(sim, m, cx, cy, m.speed, dt);
+        // Держится на расстоянии дыхания, плывёт волной.
+        const k = c.dist > SPIRIT.keep ? 1 : -0.4;
+        const w = Math.sin(sim.time * 2.3 + m.id) * 0.6;
+        const ux = c.dx / (c.dist || 1);
+        const uy = c.dy / (c.dist || 1);
+        api.steer(sim, m, ux * k - uy * w, uy * k + ux * w, m.speed, dt);
+        m.face = Math.atan2(c.dy, c.dx);
         return;
       }
-      case 'aim': {
+      case 'f12_douse': {
+        const tx = m.data.tx;
+        const ty = m.data.ty;
+        const d = hypot(tx - m.x, ty - m.y);
+        if (d > 1) {
+          api.steer(sim, m, tx - m.x, ty - m.y, m.speed * 1.2, dt);
+          m.face = Math.atan2(ty - m.y, tx - m.x);
+          m.data.blow = 0;
+          if (m.t > 5) api.setMode(m, 'chase');
+          return;
+        }
         m.vx *= 0.7;
         m.vy *= 0.7;
-        if (m.t < DOLL.aim - 0.25) m.data.ang = Math.atan2(dy, dx);
-        m.face = m.data.ang;
-        const k = Math.min(1, m.t / DOLL.aim);
-        m.tele = { shape: 'cone', r: 5, ang: m.data.ang, arc: 0.55, k };
-        if (m.t >= DOLL.aim) {
-          m.tele = null;
-          api.shoot(sim, m, m.data.ang);
-          api.setMode(m, 'recover');
-          m.cd = def.rest * (0.9 + sim.rng() * 0.4);
-        }
-        return;
-      }
-      case 'cast': {
-        m.vx *= 0.6;
-        m.vy *= 0.6;
-        // Круг встаёт вокруг героя — видно, где он ляжет.
-        m.data.cx += (h.x - m.data.cx) * Math.min(1, dt * 3);
-        m.data.cy += (h.y - m.data.cy) * Math.min(1, dt * 3);
-        const k = Math.min(1, m.t / DOLL.cast);
-        m.tele = { shape: 'ring', r: DOLL.terrR, w: 0.18, k, x: m.data.cx, y: m.data.cy };
-        if (m.t >= DOLL.cast) {
-          m.tele = null;
-          openTerritory(sim, api, m.data.cx, m.data.cy, DOLL.terrR, 'doll', m.id);
-          sim.events.push({ t: 'flash', color: '#8a2060', k: 0.4 });
-          sim.events.push({ t: 'boss', what: 'f12_doll_call', text: 'МАЛАЯ ТЕРРИТОРИЯ', sub: 'кукла замкнула круг — за край или по столбам' });
-          m.data.tcd = DOLL.terrCd;
-          api.setMode(m, 'recover');
-        }
-        return;
-      }
-      case 'f12_dazed':
-        // Круг разбит — отдача: кукла обмякла и открыта.
-        m.vx *= 0.8;
-        m.vy *= 0.8;
-        m.tele = null;
-        if (m.t > 2) api.setMode(m, 'chase');
-        return;
-      case 'recover':
-        recoverStep(m, api, 0.8);
-        return;
-      default:
-        api.setMode(m, 'chase');
-    }
-  },
-  onHit(_sim, m) {
-    // Колдует или обмякла — открыта: отдача рвёт нити.
-    return m.mode === 'cast' || m.mode === 'f12_dazed' ? 1.5 : 1;
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Оживший плакат: плоский на стене (недосягаем); отлипает — три бумажных
-// пореза; смят — открыт; потом обратно на стену.
-// ---------------------------------------------------------------------------
-
-export const POSTER = { wake: 4.2, peel: 0.55, cuts: 3, cutWarn: 0.36, cutGap: 0.24, cutR: 1.35, cutArc: 1.5, crumple: 1.5 };
-
-registerBrain('f12_poster', {
-  raw: true,
-  step(sim, m, dt, c, api) {
-    const h = sim.hero;
-    const { dx, dy, dist, def } = c;
-    switch (m.mode) {
-      case 'dying':
-        return;
-      case 'f12_flat':
-        m.data.ghost = 1;
-        m.vx = 0;
-        m.vy = 0;
-        m.tele = null;
-        if (!heroDown(sim) && dist < POSTER.wake && m.t > 0.8) api.setMode(m, 'f12_peel');
-        return;
-      case 'f12_peel':
-        m.data.ghost = 1;
-        m.face = Math.atan2(dy, dx);
-        if (m.t >= POSTER.peel) {
-          m.data.ghost = 0;
+        m.data.blow = (m.data.blow ?? 0) + dt;
+        if (m.data.blow >= SPIRIT.douse) {
+          const o = st.torches[m.data.tid];
+          if (o) {
+            setTorch(sim, st, api, o, false);
+            sim.events.push({ t: 'boss', what: 'f12_blowout' });
+            // Держит огонь в себе: убьёшь — факел вспыхнет снова.
+            m.data.held = m.data.tid + 1;
+          }
+          m.data.douse = 1;
+          m.cd = 0.6;
           api.setMode(m, 'chase');
         }
         return;
-      case 'stun':
-        m.tele = null;
-        m.danger = 0;
-        m.vx *= 0.8;
-        m.vy *= 0.8;
-        if (m.t > 0.3) api.setMode(m, 'chase');
-        return;
-      case 'chase': {
-        m.data.ghost = 0;
-        m.tele = null;
-        m.danger = 0;
-        if (heroDown(sim)) return;
-        if (dist < def.reach + m.r + h.r + 0.4 && m.cd <= 0) {
-          api.setMode(m, 'f12_cuts');
-          m.data.n = 0;
-          return;
-        }
-        // Порхает: мелкая волна поперёк хода.
-        let [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-        const z = Math.sin(sim.time * 7 + m.id) * 0.45;
-        cx += -cy * z;
-        cy += cx * z;
-        const l = hypot(cx, cy) || 1;
-        api.steer(sim, m, cx / l, cy / l, m.speed, dt);
-        return;
       }
-      case 'f12_cuts': {
-        m.vx *= 0.75;
-        m.vy *= 0.75;
-        m.face = Math.atan2(dy, dx);
-        // Три пореза веером: каждый — своя метка и свой миг.
-        if (m.data.n < POSTER.cuts && m.t > m.data.n * POSTER.cutGap) {
-          const a = m.face + (m.data.n - 1) * 0.35;
-          api.strike(sim, {
-            shape: 'cone',
+      case 'windup': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        if (m.t < SPIRIT.wind * 0.6) m.dir = Math.atan2(h.y - m.y, h.x - m.x);
+        m.face = m.dir;
+        m.tele = {
+          shape: 'cone',
+          r: SPIRIT.cone,
+          arc: SPIRIT.arc,
+          ang: m.dir,
+          k: clamp(m.t / SPIRIT.wind, 0, 1),
+        };
+        if (m.t > SPIRIT.wind - 0.2) m.danger = SPIRIT.cone;
+        if (m.t >= SPIRIT.wind) {
+          if (inCone(sim, m.x, m.y, m.dir, SPIRIT.cone, SPIRIT.arc))
+            hit(sim, api, m, m.dmg, 2, { kind: 'chill', dur: 1.8 });
+          fx(sim, api, {
             x: m.x,
             y: m.y,
-            r: POSTER.cutR,
-            ang: a,
-            arc: POSTER.cutArc,
-            warn: POSTER.cutWarn,
-            dmg: m.dmg * 0.55,
-            knock: 2,
-            art: 'f12_papercut',
-            from: m.id,
+            r: SPIRIT.cone,
+            life: 0.55,
+            art: 'f12_breath',
+            dur: m.dir,
           });
-          m.data.n += 1;
-          // Порез тянет плакат за собой.
-          m.vx += Math.cos(a) * 3;
-          m.vy += Math.sin(a) * 3;
-        }
-        if (m.t > POSTER.cutGap * POSTER.cuts + POSTER.cutWarn + 0.05) {
-          api.setMode(m, 'f12_crumple');
-          m.cd = def.rest;
+          m.cd = 1.3 + sim.rng() * 0.6;
+          api.setMode(m, 'recover');
         }
         return;
       }
-      case 'f12_crumple':
-        // Смят и лежит — открыт.
-        m.vx *= 0.8;
-        m.vy *= 0.8;
-        if (m.t > POSTER.crumple) api.setMode(m, m.hp < m.maxHp * 0.5 && m.data.wx !== undefined ? 'f12_return' : 'chase');
-        return;
-      case 'f12_return': {
-        // Обратно на свою стену — там заклеится и подлечится.
-        const tx = m.hx;
-        const ty = m.hy;
-        const d = hypot(tx - m.x, ty - m.y);
-        if (d < 0.3 || m.t > 5) {
-          m.x = tx;
-          m.y = ty;
-          m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.3);
-          api.setMode(m, 'f12_flat');
-          return;
-        }
-        const [cx, cy] = api.chaseDir(sim, m, tx, ty);
-        api.steer(sim, m, cx, cy, m.speed * 1.2, dt);
+      case 'f12_flee': {
+        const away = Math.atan2(m.y - h.y, m.x - h.x);
+        api.steer(sim, m, Math.cos(away), Math.sin(away), m.speed * 1.3, dt);
+        if (m.t > 1.2) api.setMode(m, 'chase');
         return;
       }
+      case 'recover':
+        recoverStep(m, api, 0.6);
+        return;
       default:
         api.setMode(m, 'chase');
     }
   },
-  onHit(_sim, m) {
-    if ((m.data.ghost ?? 0) > 0) return 0;
-    return m.mode === 'f12_crumple' ? 1.5 : 1;
+  onDeath(sim, m, _mode, api) {
+    const st = STATE.get(sim);
+    const o = st && m.data.held ? st.torches[m.data.held - 1] : null;
+    if (!st || !o) return;
+    // Факелы «Безмолвия» вспыхнут, только когда зал отступит.
+    if (st.hush.state === 'on' && st.hush.torches.includes(o.id)) return;
+    setTorch(sim, st, api, o, true);
   },
 });
 
-// ---------------------------------------------------------------------------
-// Турникетный страж: щит спереди, створки махом, таран по линии.
-// ---------------------------------------------------------------------------
+// --- Песец: ждёт в сугробе, прыгает, кусает сериями; ниже половины —
+// встаёт оборотнем ---------------------------------------------------------
 
-export const GATE = { wake: 6.5, turn: 2.2, barR: 2.1, barArc: 2.2, aim: 0.85, speed: 9.5, max: 1.1, dizzy: 1.8, front: 1.2 };
+export const FOX = { wake: 4.2, leap: 0.6, land: 1.05, bite: 0.32, gap: 0.2, burrow: 1.4 };
 
-registerBrain('f12_turnstile', {
+brain('f12_fox', {
   step(sim, m, dt, c, api) {
     const h = sim.hero;
-    const { dx, dy, dist, def } = c;
-    const want = Math.atan2(dy, dx);
-    const turn = (to: number, k = 1) => {
-      const d = angDiff(to, m.face);
-      m.face += Math.max(-GATE.turn * k * dt, Math.min(GATE.turn * k * dt, d));
-    };
+    m.tele = null;
+    m.danger = 0;
+    const were = m.hp < m.maxHp * 0.5;
+    if (were && !m.data.were) {
+      m.data.were = 1;
+      m.speed *= 1.2;
+      m.dmg *= 1.25;
+      sim.events.push({ t: 'boss', what: 'f12_fox_howl' });
+    }
     switch (m.mode) {
-      case 'f12_post':
-        m.vx = 0;
-        m.vy = 0;
-        m.tele = null;
-        if (!heroDown(sim) && dist < GATE.wake) {
-          api.setMode(m, 'chase');
-          sim.events.push({ t: 'boss', what: 'f12_gate_call', text: 'ПРОХОД ЗАКРЫТ', sub: 'щит спереди — заходи сбоку' });
+      case 'f12_hide':
+        m.vx *= 0.5;
+        m.vy *= 0.5;
+        m.data.hide = 1;
+        if (!heroDown(sim) && c.dist < FOX.wake && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
+          m.data.lx = h.x;
+          m.data.ly = h.y;
+          m.data.ox = m.x;
+          m.data.oy = m.y;
+          api.setMode(m, 'f12_leap');
+          fx(sim, api, { x: m.x, y: m.y, r: 1.3, life: 0.8, art: 'f12_snowburst' });
+          sim.events.push({ t: 'boss', what: 'f12_fox_leap' });
         }
         return;
+      case 'f12_leap': {
+        // Дуга из сугроба на то место, где герой был при прыжке.
+        m.data.hide = 0;
+        const k = clamp(m.t / FOX.leap, 0, 1);
+        const tx = m.data.lx;
+        const ty = m.data.ly;
+        m.tele = { shape: 'circle', r: FOX.land, x: tx, y: ty, k };
+        m.danger = k > 0.7 ? 1.2 : 0;
+        const nx = m.data.ox + (tx - m.data.ox) * k;
+        const ny = m.data.oy + (ty - m.data.oy) * k;
+        m.vx = (nx - m.x) / Math.max(dt, 1e-3);
+        m.vy = (ny - m.y) / Math.max(dt, 1e-3);
+        m.face = Math.atan2(ty - m.data.oy, tx - m.data.ox);
+        if (k >= 1) {
+          m.vx = 0;
+          m.vy = 0;
+          if (hypot(h.x - tx, h.y - ty) < FOX.land + h.r) hit(sim, api, m, m.dmg * 1.1, 4);
+          fx(sim, api, { x: tx, y: ty, r: 1.2, life: 0.6, art: 'f12_snowburst' });
+          m.data.combo = 0;
+          m.cd = 0.25;
+          api.setMode(m, 'chase');
+        }
+        return;
+      }
       case 'chase': {
-        m.tele = null;
-        m.danger = 0;
-        turn(want);
-        if (dist < GATE.barR + h.r - 0.2 && m.cd <= 0) {
+        m.data.hide = 0;
+        // После двух серий — назад в сугроб (если рядом есть).
+        if ((m.data.combo ?? 0) >= 2 && !m.data.were) {
+          const d = nearestMark(
+            sim,
+            m.x,
+            m.y,
+            7,
+            (mk, t) => (mk === MK.drift || mk === MK.foxDrift) && t !== T_WALL,
+          );
+          if (d) {
+            m.data.bx = d[0];
+            m.data.by = d[1];
+            api.setMode(m, 'f12_burrow');
+            return;
+          }
+          m.data.combo = 0;
+        }
+        if (c.dist < m.r + h.r + 0.9 && m.cd <= 0) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          m.data.bites = 0;
           api.setMode(m, 'windup');
           return;
         }
-        if (dist > 3 && dist < 8 && m.cd <= 0 && Math.abs(angDiff(want, m.face)) < 0.3 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
-          api.setMode(m, 'f12_aim');
-          m.data.ang = want;
-          return;
-        }
-        const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-        // Идёт лицом вперёд: боком медленнее.
-        const k = 0.45 + 0.55 * Math.max(0, Math.cos(angDiff(Math.atan2(cy, cx), m.face)));
-        m.vx += (cx * m.speed * k - m.vx) * Math.min(1, dt * 8);
-        m.vy += (cy * m.speed * k - m.vy) * Math.min(1, dt * 8);
+        const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+        api.steer(sim, m, dx, dy, m.speed, dt);
         return;
       }
       case 'windup': {
-        m.vx *= 0.7;
-        m.vy *= 0.7;
-        turn(want, 0.4);
-        const k = Math.min(1, m.t / def.windup);
-        m.tele = { shape: 'cone', r: GATE.barR, ang: m.face, arc: GATE.barArc, k };
-        if (m.t > def.windup - 0.25) m.danger = GATE.barR + 0.3;
-        if (m.t >= def.windup) {
-          const off = Math.abs(angDiff(want, m.face));
-          if (dist < GATE.barR + h.r && off < GATE.barArc / 2 + 0.2 && canHurt(sim))
-            api.hurtHero(sim, m.dmg, m.x, m.y, 6, m.kind);
-          sim.events.push({ t: 'clank', x: m.x + Math.cos(m.face), y: m.y + Math.sin(m.face) });
-          m.tele = null;
-          m.danger = 0;
+        m.vx *= 0.55;
+        m.vy *= 0.55;
+        m.dir = Math.atan2(h.y - m.y, h.x - m.x);
+        m.face = m.dir;
+        const T = (m.data.bites ?? 0) === 0 ? FOX.bite : FOX.gap;
+        m.tele = { shape: 'cone', r: 1.5, arc: 1.3, ang: m.dir, k: clamp(m.t / T, 0, 1) };
+        if (m.t > T - 0.15) m.danger = 1.5;
+        if (m.t >= T) {
+          if (inCone(sim, m.x, m.y, m.dir, 1.5, 1.3)) hit(sim, api, m, m.dmg * 0.7, 2.5);
+          m.vx = Math.cos(m.dir) * 3.5;
+          m.vy = Math.sin(m.dir) * 3.5;
+          m.data.bites = (m.data.bites ?? 0) + 1;
+          if (m.data.bites < (m.data.were ? 3 : 2)) {
+            m.t = 0;
+            return;
+          }
+          m.data.combo = (m.data.combo ?? 0) + 1;
+          m.cd = 0.8 + sim.rng() * 0.5;
           api.setMode(m, 'recover');
-          m.cd = def.rest;
         }
         return;
       }
-      case 'f12_aim': {
-        m.vx *= 0.6;
-        m.vy *= 0.6;
-        if (m.t < GATE.aim - 0.3) m.data.ang = Math.atan2(dy, dx);
-        m.face = m.data.ang;
-        const k = Math.min(1, m.t / GATE.aim);
-        m.tele = { shape: 'line', r: 7.5, w: 0.6, ang: m.face, k };
-        if (m.t > GATE.aim - 0.25) m.danger = 2.2;
-        if (m.t >= GATE.aim) {
-          m.tele = null;
-          m.danger = 0;
-          m.bounce = true;
-          m.data.hitDone = 0;
-          api.setMode(m, 'charge');
+      case 'f12_burrow': {
+        const tx = m.data.bx;
+        const ty = m.data.by;
+        const d = hypot(tx - m.x, ty - m.y);
+        if (d > 0.5 && m.t < 3) {
+          api.steer(sim, m, tx - m.x, ty - m.y, m.speed * 1.3, dt);
+          m.face = Math.atan2(m.vy, m.vx);
+          m.data.dug = 0;
+          return;
+        }
+        m.vx = 0;
+        m.vy = 0;
+        m.data.dug = (m.data.dug ?? 0) + dt;
+        if (m.data.dug > 0.3) m.data.hide = 1;
+        if (m.data.dug >= FOX.burrow) {
+          m.data.combo = 0;
+          api.setMode(m, 'f12_hide');
         }
         return;
       }
-      case 'charge': {
-        const a = m.data.ang;
-        m.vx = Math.cos(a) * GATE.speed;
-        m.vy = Math.sin(a) * GATE.speed;
-        m.face = a;
-        if (!m.data.hitDone && dist < m.r + h.r + 0.3 && canHurt(sim)) {
-          m.data.hitDone = 1;
-          api.hurtHero(sim, m.dmg * 1.1, m.x, m.y, 9, m.kind);
+      case 'recover':
+        recoverStep(m, api, 0.5);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+});
+
+// --- Ледяной голем: кулак, каждый третий — топот кольцом, ломает лёд -------
+
+export const GOLEM = { wind: 0.9, stomp: 1.15, ring: 2.7, rest: 1 };
+
+brain('f12_golem', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    m.tele = null;
+    m.danger = 0;
+    switch (m.mode) {
+      case 'chase': {
+        if (c.dist < m.r + h.r + 1.3 && m.cd <= 0) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          m.face = m.dir;
+          m.data.n = (m.data.n ?? 0) + 1;
+          api.setMode(m, m.data.n % 3 === 0 ? 'f12_stomp' : 'windup');
+          return;
         }
-        if (m.t > GATE.max) {
-          m.bounce = false;
+        const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+        api.steer(sim, m, dx, dy, m.speed, dt);
+        m.face = Math.atan2(c.dy, c.dx);
+        return;
+      }
+      case 'windup': {
+        m.vx *= 0.4;
+        m.vy *= 0.4;
+        if (m.t < GOLEM.wind * 0.5) m.dir = Math.atan2(h.y - m.y, h.x - m.x);
+        m.face = m.dir;
+        const x = m.x + Math.cos(m.dir) * 1.4;
+        const y = m.y + Math.sin(m.dir) * 1.4;
+        m.tele = { shape: 'circle', r: 1.25, x, y, k: clamp(m.t / GOLEM.wind, 0, 1) };
+        if (m.t > GOLEM.wind - 0.22) m.danger = 2.6;
+        if (m.t >= GOLEM.wind) {
+          if (hypot(h.x - x, h.y - y) < 1.25 + h.r) hit(sim, api, m, m.dmg, 7);
+          fx(sim, api, { x, y, r: 1.3, life: 0.6, art: 'f12_frostburst' });
+          sim.events.push({ t: 'shake', k: 0.25 });
+          m.cd = GOLEM.rest + sim.rng() * 0.5;
           api.setMode(m, 'recover');
-          m.cd = def.rest;
         }
         return;
       }
-      case 'dizzy':
-        m.vx *= 0.8;
-        m.vy *= 0.8;
-        m.tele = null;
-        if (m.t > GATE.dizzy) api.setMode(m, 'chase');
+      case 'f12_stomp': {
+        m.vx *= 0.3;
+        m.vy *= 0.3;
+        m.tele = { shape: 'circle', r: GOLEM.ring, k: clamp(m.t / GOLEM.stomp, 0, 1) };
+        if (m.t > GOLEM.stomp - 0.25) m.danger = GOLEM.ring;
+        if (m.t >= GOLEM.stomp) {
+          if (hypot(h.x - m.x, h.y - m.y) < GOLEM.ring + h.r)
+            hit(sim, api, m, m.dmg * 0.9, 8, { kind: 'chill', dur: 1.6 });
+          fx(sim, api, { x: m.x, y: m.y, r: GOLEM.ring, life: 0.8, art: 'f12_stompring' });
+          sim.events.push({ t: 'shake', k: 0.4 });
+          sim.events.push({ t: 'boss', what: 'f12_stomp' });
+          // Тонкий лёд вокруг трескается.
+          const st = stateOf(sim);
+          for (let y = Math.floor(m.y - 3); y <= m.y + 3; y++)
+            for (let x = Math.floor(m.x - 3); x <= m.x + 3; x++)
+              if (hypot(x + 0.5 - m.x, y + 0.5 - m.y) < GOLEM.ring)
+                loadThin(sim, st, api, x, y, 1.2);
+          m.cd = GOLEM.rest + 0.6;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'recover':
+        recoverStep(m, api, 0.9);
+        return;
+      default:
+        api.setMode(m, 'chase');
+    }
+  },
+  onHit(sim, m, hitIn) {
+    // Ядро светится в спине: сзади ×1,5, в лоб лёд держит.
+    const back = Math.abs(angDiff(hitIn.ang, m.face)) < 1.1;
+    if (back) return 1.5;
+    return m.mode === 'recover' ? 1 : 0.75;
+  },
+});
+
+// --- Хранитель сияния: щит, занавес, зовёт духов ---------------------------
+
+export const KEEPER = {
+  keep: [4, 6.5] as [number, number],
+  cast: 0.85,
+  warn: 0.95,
+  len: 9,
+  w: 1.4,
+  spent: 3,
+  summonCd: 12,
+  summon: 1,
+  shield: 0.3,
+};
+
+brain('f12_keeper', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    m.tele = null;
+    m.danger = 0;
+    if (m.data.sum === undefined) m.data.sum = 5;
+    m.data.sum -= dt;
+    m.data.spent = Math.max(0, (m.data.spent ?? 0) - dt);
+    switch (m.mode) {
+      case 'chase': {
+        if (m.data.sum <= 0) {
+          const kids = sim.mobs.filter((x) => x.kind === 'f12_spirit' && x.mode !== 'dying').length;
+          if (kids < 4) {
+            api.setMode(m, 'f12_summon');
+            return;
+          }
+          m.data.sum = 4;
+        }
+        const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
+        if (see && c.dist < KEEPER.len && m.cd <= 0) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          api.setMode(m, 'windup');
+          return;
+        }
+        // Держит дистанцию: подходит до 4, отходит, если ближе.
+        const ux = c.dx / (c.dist || 1);
+        const uy = c.dy / (c.dist || 1);
+        let k = 0;
+        if (c.dist > KEEPER.keep[1] || !see) {
+          const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+          api.steer(sim, m, dx, dy, m.speed, dt);
+        } else {
+          k = c.dist < KEEPER.keep[0] ? -1 : 0;
+          const w = Math.sin(sim.time * 0.8 + m.id) * 0.8;
+          api.steer(sim, m, ux * k - uy * w, uy * k + ux * w, m.speed * 0.8, dt);
+        }
+        m.face = Math.atan2(c.dy, c.dx);
+        return;
+      }
+      case 'windup':
+        // Посох вверх — занавес сияния падает линией.
+        m.vx *= 0.5;
+        m.vy *= 0.5;
+        m.dir = Math.atan2(h.y - m.y, h.x - m.x);
+        m.face = m.dir;
+        if (m.t >= KEEPER.cast) {
+          const len = Math.min(KEEPER.len, clearDist(sim, api, m.x, m.y, m.dir, KEEPER.len));
+          api.strike(sim, {
+            shape: 'line',
+            x: m.x,
+            y: m.y,
+            r: len,
+            w: KEEPER.w,
+            ang: m.dir,
+            warn: KEEPER.warn,
+            dmg: m.dmg,
+            knock: 3,
+            status: 'chill',
+            dur: 1.8,
+            art: 'f12_curtain',
+            from: m.id,
+          });
+          m.data.spent = KEEPER.spent;
+          m.cd = 2.6 + sim.rng() * 0.8;
+          api.setMode(m, 'recover');
+        }
+        return;
+      case 'f12_summon':
+        m.vx *= 0.5;
+        m.vy *= 0.5;
+        if (m.t >= KEEPER.summon) {
+          for (const s of [-1, 1]) {
+            const a = m.face + (s * Math.PI) / 2;
+            const x = m.x + Math.cos(a) * 1.6;
+            const y = m.y + Math.sin(a) * 1.6;
+            const kid = api.spawnMob(sim, 'f12_spirit', x, y, { mode: 'chase' });
+            kid.data.hush = m.data.hush ?? 0;
+            fx(sim, api, { x, y, r: 1, life: 0.8, art: 'f12_ignite' });
+          }
+          sim.events.push({ t: 'boss', what: 'f12_summon' });
+          m.data.sum = KEEPER.summonCd;
+          m.data.spent = KEEPER.spent;
+          api.setMode(m, 'recover');
+        }
         return;
       case 'recover':
         recoverStep(m, api, 0.9);
@@ -2411,940 +2826,831 @@ registerBrain('f12_turnstile', {
         api.setMode(m, 'chase');
     }
   },
-  onWall(sim, m, _nx, _ny, api) {
-    if (m.mode !== 'charge') return;
-    m.bounce = false;
-    m.vx = 0;
-    m.vy = 0;
-    api.setMode(m, 'dizzy');
-    sim.events.push({ t: 'boss', what: 'f12_gate_wall' });
-  },
-  onHit(_sim, m, hit) {
-    if (m.mode === 'dizzy') return 1.6;
-    // Щит — створки спереди.
-    const from = hit.ang + Math.PI;
-    const front = Math.abs(angDiff(from, m.face)) < GATE.front;
-    if (front) return hit.heavy ? 0.35 : 0.12;
-    return 1.35;
+  onHit(sim, m) {
+    const st = STATE.get(sim);
+    const warm = st?.braziers.some(
+      (o) => st.lit.has(o.id) && hypot(o.x + 0.5 - m.x, o.y + 0.5 - m.y) < 3.2,
+    );
+    if (warm || (m.data.spent ?? 0) > 0 || m.mode === 'windup' || m.mode === 'f12_summon') return 1;
+    return KEEPER.shield;
   },
 });
 
-// ---------------------------------------------------------------------------
-// Путевой обходчик: красный фонарь; машет им — зовёт поезд на твой путь.
-// ---------------------------------------------------------------------------
+// --- Песец с мешком: удирает, роняет монеты -------------------------------
 
-export const LINE = { see: 9, wave: 1.5, waveCd: 14, swing: 0.7, swingR: 1.3, swingArc: 1.6 };
-
-registerBrain('f12_lineman', {
-  step(sim, m, dt, c, api) {
-    const h = sim.hero;
-    const { dx, dy, dist, def } = c;
-    const st = stateOf(sim);
-    m.data.wcd = (m.data.wcd ?? 2 + sim.rng() * 2) - dt;
-    switch (m.mode) {
-      case 'f12_patrol': {
-        // Ходит вдоль путей, светит фонарём.
-        const dir = m.data.pdir ?? (m.id % 2 ? 1 : -1);
-        m.data.pdir = dir;
-        api.steer(sim, m, dir, 0, m.speed * 0.45, dt);
-        if (api.solidTile(sim, Math.floor(m.x + dir * 0.8), Math.floor(m.y)) || Math.abs(m.x - m.hx) > 9) m.data.pdir = -dir;
-        if (!heroDown(sim) && dist < LINE.see && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) api.setMode(m, 'chase');
-        return;
-      }
-      case 'chase': {
-        m.tele = null;
-        m.danger = 0;
-        const t = trackNear(st, h.x, h.y, 3.5);
-        if (t && m.data.wcd <= 0 && dist > 2.2 && dist < 10 && !t.train && t.next - sim.time > 4 && onTrack(sim, h.x, h.y)) {
-          api.setMode(m, 'f12_wave');
-          m.data.track = t.id;
-          return;
-        }
-        if (dist < def.reach + m.r + h.r + 0.2 && m.cd <= 0) {
-          api.setMode(m, 'windup');
-          m.face = Math.atan2(dy, dx);
-          return;
-        }
-        const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-        api.steer(sim, m, cx, cy, m.speed, dt);
-        return;
-      }
-      case 'f12_wave': {
-        // Машет фонарём: сбить — поезда не будет.
-        m.vx *= 0.6;
-        m.vy *= 0.6;
-        m.face = Math.atan2(dy, dx);
-        if (m.t >= LINE.wave) {
-          const t = st.tracks.find((k) => k.id === m.data.track);
-          if (t && callTrain(sim, t, 2.8, true))
-            sim.events.push({ t: 'boss', what: 'f12_signal_trap', text: 'ОБХОДЧИК ВЫЗВАЛ ПОЕЗД', sub: 'экспресс — с путей!' });
-          m.data.wcd = LINE.waveCd;
-          api.setMode(m, 'recover');
-        }
-        return;
-      }
-      case 'windup': {
-        m.vx *= 0.7;
-        m.vy *= 0.7;
-        const k = Math.min(1, m.t / def.windup);
-        m.tele = { shape: 'cone', r: LINE.swingR, ang: m.face, arc: LINE.swingArc, k };
-        if (m.t > def.windup - 0.22) m.danger = LINE.swingR + 0.3;
-        if (m.t >= def.windup) {
-          const off = Math.abs(angDiff(Math.atan2(dy, dx), m.face));
-          if (dist < LINE.swingR + h.r && off < LINE.swingArc / 2 + 0.2 && canHurt(sim))
-            api.hurtHero(sim, m.dmg, m.x, m.y, 4, m.kind);
-          m.tele = null;
-          m.danger = 0;
-          api.setMode(m, 'recover');
-          m.cd = def.rest;
-        }
-        return;
-      }
-      case 'recover':
-        recoverStep(m, api, 0.8);
-        return;
-      default:
-        api.setMode(m, 'chase');
-    }
-  },
-  onHit(_sim, m, _hit, api) {
-    // Сбил с замаха фонарём — поезда не будет.
-    if (m.mode === 'f12_wave') {
-      api.setMode(m, 'stun');
-      m.data.wcd = LINE.waveCd * 0.6;
-      return 1.3;
-    }
-    return 1;
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Безбилетник: удирает с мешком, от ударов сыплет монеты.
-// ---------------------------------------------------------------------------
-
-registerBrain('f12_dodger', {
-  step(sim, m, dt, c, api) {
-    const { dx, dy, dist } = c;
-    const away = api.flowDir(sim, m.x, m.y, true);
-    const d = away ?? [-dx / (dist || 1), -dy / (dist || 1)];
-    const z = Math.sin(sim.time * 6 + m.id) * 0.4;
-    api.steer(sim, m, d[0] - d[1] * z, d[1] + d[0] * z, m.speed, dt);
-    m.data.age = (m.data.age ?? 0) + dt;
-    if (m.data.age > 22 && dist > 6) {
-      api.setMode(m, 'escape');
-      m.hp = 0;
-    }
-  },
-  onHit(sim, m, _hit, api) {
-    api.dropAt(sim, 'coin', 60, m.x, m.y);
-    return 1;
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Столб территории: стоит, держит круг. Встаёт из пола.
-// ---------------------------------------------------------------------------
-
-registerBrain('f12_pillar', {
-  raw: true,
-  step(_sim, m, _dt, _c, api) {
-    m.vx = 0;
-    m.vy = 0;
-    m.kx = 0;
-    m.ky = 0;
+brain('f12_sackfox', {
+  step(sim, m, dt, _c, api) {
     m.tele = null;
-    if (m.mode === 'dying' || m.mode === 'escape') return;
-    if (m.mode === 'f12_rise') {
-      m.data.ghost = m.t < 0.5 ? 1 : 0;
-      if (m.t > 0.6) api.setMode(m, 'f12_stand');
+    m.danger = 0;
+    m.data.life = (m.data.life ?? 0) + dt;
+    if (m.data.life > 14) {
+      fx(sim, api, { x: m.x, y: m.y, r: 1.2, life: 0.8, art: 'f12_snowburst' });
+      api.setMode(m, 'escape');
       return;
     }
-    m.data.ghost = 0;
+    const d = api.flowDir(sim, m.x, m.y, true);
+    const w = Math.sin(sim.time * 6 + m.id) * 0.5;
+    if (d) api.steer(sim, m, d[0] - d[1] * w, d[1] + d[0] * w, m.speed, dt);
+    m.face = Math.atan2(m.vy, m.vx);
+    if (m.mode !== 'flee') api.setMode(m, 'flee');
+  },
+  onHit(sim, m, _h, api) {
+    // Звенит мешок: пара монет на каждый удар.
+    api.dropAt(sim, 'coin', 120, m.x, m.y);
+    return 1;
   },
 });
 
 // ---------------------------------------------------------------------------
-// Двуликий король проклятий. Ведёт все режимы сам.
-//   f12_intro   — сидит у храма, встаёт; недосягаем;
-//   chase       — идёт к герою;
-//   f12_cut     — «Рассечение»: три параллельных разреза к герою;
-//   f12_cleave  — «Расщепление»: крест разрезов под героем и конус вплотную;
-//   f12_bow     — «Огненная стрела» (с фазы 1): тетива, линия через арену,
-//                 горящий след; пока натягивает — спина открыта;
-//   f12_pyre    — столбы пламени у героя;
-//   f12_cast    — «РАСШИРЕНИЕ ТЕРРИТОРИИ» (фаза 2): зал переписывается;
-//   f12_domain  — сидит в храме (недосягаем): разрезы сеткой, обереги,
-//                 три чаши держат храм;
-//   f12_broken  — храм рухнул: оглушён и открыт вдвое;
-//   f12_trainhit — сбит поездом: оглушён и открыт;
-//   recover     — после удара открыт.
+// Босс: Ледниковый мамонт и шаманка сияния у него на спине.
+// Ходит «танком»: разворачивается медленно, боком не ходит. Набег в стену —
+// оглушён, треснувший бивень светится (урон ×2).
 // ---------------------------------------------------------------------------
 
-export const KING = {
-  hp: [0.75, 0.5, 0.25],
-  intro: 2.6,
-  cutAim: 0.78,
-  cutLen: 10,
-  cutW: 0.36,
-  cutGap: 1.35,
-  cleaveWarn: 0.82,
-  cleaveLen: 4.8,
-  coneR: 2.3,
-  coneArc: 1.9,
-  bowDraw: 1.65,
-  bowW: 1.05,
-  pyreWarn: 0.95,
-  cast: 2.6,
-  gridEvery: 3.4,
-  gridWarn: 1.35,
-  gridCut: 0.45,
-  gridStep: 3,
-  wardR: 1.15,
-  domainMax: 48,
-  broken: 4.2,
-  trainStun: 2.4,
-  trainDmg: 0.08,
+export const MAMMOTH = {
+  notches: [0.75, 0.5, 0.25],
+  turn: 1.5,
+  intro: 2.4,
+  rear: 1.6,
+  tusk: { hit: 0.85, end: 1.35, r: 2.9, arc: 2.0 },
+  stomp: { hit: 1.0, end: 1.55, r: 2.7 },
+  paw: 1.05,
+  charge: { v: 11, acc: 9, steer: 0.15, max: 2.3, skid: 0.85 },
+  stun: 2.4,
+  drum: { beat: 0.35, end: 1.5, walls: 3 },
+  spikes: { hit: 0.9, end: 1.4, len: 9.5, warn: 0.7 },
+  blow: { hit: 0.9, end: 1.3 },
+  cd: { charge: [7, 4.5], stomp: 5, drum: 9, spikes: 6, douse: 9 },
 };
 
-interface KingState {
-  /** Клетки, сменённые боем: вернуть на сброс. */
-  changed: Map<number, { tile: number; mark: number }>;
-  /** Храм: волна переписи (клетки по удалённости от помоста). */
-  wave: number[][];
-  waveAt: number;
-  waveBack: boolean;
-  domainOn: boolean;
-  domainT: number;
-  /** Разрез сеткой: когда следующая метка, когда удар и до каких пор. */
-  gridAt: number;
-  cutAt: number;
-  gridCutUntil: number;
-  gridDone: boolean;
-  cutHit: boolean;
-  cutOn: boolean;
-  wards: { x: number; y: number; z: Zone | null; lit: number }[];
-  grid: Zone | null;
-  bowls: number[];
-  shrine: Zone | null;
-  box: [number, number, number, number];
-  dais: [number, number];
-  fire: number;
-  miniAt: number;
+interface Mammoth {
+  /** Ледник: клетка → прежние клетка и метка. */
+  saved: Map<number, [number, number]>;
+  layers: number[][];
+  layer: number;
+  layerT: number;
+  chargeCd: number;
+  stompCd: number;
+  drumCd: number;
+  spikesCd: number;
+  douseCd: number;
+  shaman: number;
+  /** Сколько стен-валов вьюги ещё выпустить и когда. */
+  walls: number;
+  wallT: number;
 }
 
-const KSTATE = new WeakMap<Sim, KingState>();
+const MAM = new WeakMap<Sim, Mammoth>();
 
-function kingState(sim: Sim): KingState {
-  let st = KSTATE.get(sim);
-  if (!st) {
-    st = {
-      changed: new Map(),
-      wave: [],
-      waveAt: 0,
-      waveBack: false,
-      domainOn: false,
-      domainT: 0,
-      gridAt: 1e9,
-      cutAt: 0,
-      gridCutUntil: 0,
-      gridDone: true,
-      cutHit: false,
-      cutOn: false,
-      wards: [],
-      grid: null,
-      bowls: [],
-      shrine: null,
-      box: [0, 0, 0, 0],
-      dais: [0, 0],
-      fire: 0,
-      miniAt: 0,
+function mamOf(sim: Sim): Mammoth {
+  let s = MAM.get(sim);
+  if (!s) {
+    s = {
+      saved: new Map(),
+      layers: [],
+      layer: 0,
+      layerT: 0,
+      chargeCd: 6,
+      stompCd: 3,
+      drumCd: 2,
+      spikesCd: 2,
+      douseCd: 4,
+      shaman: 0,
+      walls: 0,
+      wallT: 0,
     };
-    KSTATE.set(sim, st);
+    MAM.set(sim, s);
   }
-  return st;
+  return s;
 }
 
-/** Для тестов и бота: храм, обереги, чаши. */
-export const f12King = (sim: Sim) => KSTATE.get(sim) ?? null;
+/** Мамонт для рисовальщика шаманки и для эффектов. */
+export const f12Mammoth = (sim: Sim | null): Mob | null =>
+  sim?.mobs.find((m) => m.kind === 'f12boss') ?? null;
 
-const kingOf = (sim: Sim) => sim.mobs.find((x) => x.kind === 'f12boss' && x.mode !== 'dying');
-
-const hasteOf = (sim: Sim) => ((sim.boss?.phase ?? 0) >= 3 ? 1.3 : 1);
-/** Зона-картинка: поля `v…` читает `f12-boss-fx.ts`. */ // v2.87 — только рисунок
-const vfx = (sim: Sim, api: SimApi, z: ZoneIn & Record<string, number | string | boolean>) => api.vfx(sim, z); // v2.87 — только рисунок
-
-/** Сменить клетку, запомнив, какой она была (для сброса боя). */
-function retile(sim: Sim, api: SimApi, i: number, tile: number, mark: number): void {
-  const ks = kingState(sim);
-  const w = sim.world;
-  if (!ks.changed.has(i)) ks.changed.set(i, { tile: sim.tiles[i], mark: w.mark[i] });
-  api.setTile(sim, i % w.w, Math.floor(i / w.w), tile, mark);
+/** Слои ледника арены: внешний обод и второй ряд, без жаровен. */
+function glacierLayers(sim: Sim, b: BossFight): number[][] {
+  const w = sim.world.w;
+  const st = stateOf(sim);
+  const keep = new Set<number>();
+  for (const o of st.braziers)
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) keep.add(idx(sim, o.x + dx, o.y + dy));
+  const open = (i: number) => b.cells.has(i) && sim.tiles[i] === T_FLOOR;
+  const rim = (i: number, inner: Set<number> | null) =>
+    [1, -1, w, -w].some((d) => (inner ? inner.has(i + d) : !open(i + d)));
+  const l1: number[] = [];
+  for (const i of b.cells) if (open(i) && !keep.has(i) && rim(i, null)) l1.push(i);
+  const s1 = new Set(l1);
+  const l2: number[] = [];
+  for (const i of b.cells) if (open(i) && !s1.has(i) && !keep.has(i) && rim(i, s1)) l2.push(i);
+  return [l1, l2];
 }
 
-function restoreArena(sim: Sim, api: SimApi): void {
-  const ks = KSTATE.get(sim);
-  if (ks) {
-    const W = sim.world.w;
-    for (const [i, v] of ks.changed) api.setTile(sim, i % W, Math.floor(i / W), v.tile, v.mark);
-    sim.zones = sim.zones.filter((z) => z !== ks.grid && z !== ks.shrine && !ks.wards.some((w) => w.z === z));
+function raiseGlacier(sim: Sim, api: SimApi, cells: number[]): void {
+  const s = mamOf(sim);
+  const w = sim.world.w;
+  for (const i of cells) {
+    if (sim.tiles[i] !== T_FLOOR) continue;
+    s.saved.set(i, [sim.tiles[i], sim.world.mark[i]]);
+    api.setTile(sim, i % w, Math.floor(i / w), T_WALL, MK.glacier);
   }
-  KSTATE.delete(sim);
-  api.light(sim, 'f12_shrine', null);
-  F12_FX.domain = 0;
-  const st = STATE.get(sim);
-  if (st) for (const t of st.tracks) if (t.cfg.kind === 'arena') t.off = false;
+  sim.events.push({ t: 'boss', what: 'f12_glacier' });
+  sim.events.push({ t: 'shake', k: 0.45 });
 }
 
-/** Путь арены. */
-const arenaTrack = (sim: Sim) => STATE.get(sim)?.tracks.find((t) => t.cfg.kind === 'arena') ?? null;
-
-/** Поезд сбил короля: тяжёлый урон, оглушение, открыт. */
-function bossTrainHit(sim: Sim, api: SimApi, m: Mob): void {
-  const dmg = m.maxHp * KING.trainDmg;
-  m.hp = Math.max(m.maxHp * 0.01, m.hp - dmg);
-  m.flash = 0.25;
-  m.tele = null;
-  m.danger = 0;
-  sim.events.push({ t: 'hit', x: m.x, y: m.y, dmg: Math.round(dmg), crit: true, kill: false, boss: true });
-  sim.events.push({ t: 'shake', k: 0.9 });
-  sim.events.push({ t: 'flash', color: '#fff0c0', k: 0.6 });
-  sim.events.push({ t: 'boss', what: 'f12_train_wall', text: 'ПОД ПОЕЗД!', sub: 'король оглушён — бей' });
-  api.setMode(m, 'f12_trainhit');
-  // Сбит с путей — отлетает вбок.
-  const t = arenaTrack(sim);
-  const cy = t ? t.y + 1 : m.y;
-  m.ky += m.y < cy ? -26 : 26;
-  vfx(sim, api, { x: m.x, y: m.y, r: 1, life: 1.5, art: 'f12v_train', above: true, vFrom: m.id, vDir: m.y < cy ? -1 : 1 }); // v2.87 — только рисунок
-  void api;
+function meltGlacier(sim: Sim, api: SimApi): void {
+  const s = mamOf(sim);
+  const w = sim.world.w;
+  for (const [i, [t, mk]] of s.saved) api.setTile(sim, i % w, Math.floor(i / w), t, mk);
+  s.saved.clear();
+  s.layer = 0;
+  s.layers = [];
 }
 
-/** Прямоугольник арены и помост. */
-function arenaBox(sim: Sim, b: BossFight): [number, number, number, number] {
-  const w = sim.world;
-  let x0 = 1e9;
-  let x1 = -1;
-  let y0 = 1e9;
-  let y1 = -1;
-  for (const i of b.cells) {
-    const x = i % w.w;
-    const y = Math.floor(i / w.w);
-    x0 = Math.min(x0, x);
-    x1 = Math.max(x1, x);
-    y0 = Math.min(y0, y);
-    y1 = Math.max(y1, y);
-  }
-  return [x0, y0, x1, y1];
+/** Ход танком: разворот с ограничением, скорость — по косинусу. */
+function tankStep(m: Mob, dt: number, tx: number, ty: number, v: number): void {
+  const want = Math.atan2(ty - m.y, tx - m.x);
+  const d = angDiff(want, m.face);
+  const turn = MAMMOTH.turn * dt;
+  const rot = clamp(d, -turn, turn);
+  m.face += rot;
+  const c = Math.max(0, Math.cos(d));
+  const sp = v * c * c;
+  m.vx = Math.cos(m.face) * sp;
+  m.vy = Math.sin(m.face) * sp;
+  // Шаг ног: путь плюс переступ на развороте (поворот на месте тоже шагает).
+  m.data.walk = (m.data.walk ?? 0) + sp * dt + Math.abs(rot) * 1.6;
+  m.data.turn = clamp(d, -1, 1);
 }
 
-function daisOf(sim: Sim, b: BossFight): [number, number] {
-  const w = sim.world;
-  let sx = 0;
-  let sy = 0;
-  let n = 0;
-  for (const i of b.cells)
-    if (w.mark[i] === MK.dais) {
-      sx += (i % w.w) + 0.5;
-      sy += Math.floor(i / w.w) + 0.5;
-      n++;
+/** Ближайшая горящая жаровня арены. */
+function litBrazierNear(sim: Sim, m: Mob, api: SimApi): WorldObj | null {
+  const st = stateOf(sim);
+  let best: WorldObj | null = null;
+  let bd = 1e9;
+  for (const o of st.braziers) {
+    if (!st.lit.has(o.id) || !api.inArena(sim, o.x + 0.5, o.y + 0.5)) continue;
+    const d = hypot(o.x + 0.5 - m.x, o.y + 0.5 - m.y);
+    if (d < bd) {
+      bd = d;
+      best = o;
     }
-  return n ? [sx / n, sy / n] : [b.obj.x + 0.5, b.obj.y + 0.5];
+  }
+  return best;
 }
 
-/** Разрезы «Рассечения»: три параллельные линии к герою. */
-function kingCuts(sim: Sim, api: SimApi, m: Mob, n = 3, warn = KING.cutAim): void {
+/** Валы вьюги: линии поперёк арены с проёмом, одна за другой к герою. */
+function snowWall(sim: Sim, api: SimApi, m: Mob, k: number): void {
   const h = sim.hero;
-  const a = Math.atan2(h.y - m.y, h.x - m.x);
-  const px = -Math.sin(a);
-  const py = Math.cos(a);
-  for (let i = 0; i < n; i++) {
-    const off = (i - (n - 1) / 2) * KING.cutGap;
-    const sx = m.x + px * off - Math.cos(a) * 1.5;
-    const sy = m.y + py * off - Math.sin(a) * 1.5;
-    const s: StrikeIn = {
-      shape: 'line',
-      x: sx,
-      y: sy,
-      r: KING.cutLen,
-      w: KING.cutW,
-      ang: a,
-      warn: (warn + i * 0.07) / hasteOf(sim),
-      dmg: m.dmg * 0.9,
-      knock: 4,
-      art: 'f12_cut',
-      from: m.id,
-      above: true,
-    };
-    api.strike(sim, s);
-  }
-}
-
-/** «Расщепление»: крест под героем и конус вплотную. */
-function kingCleave(sim: Sim, api: SimApi, m: Mob): void {
-  const h = sim.hero;
-  const base = sim.rng() * Math.PI;
-  for (const a of [base, base + Math.PI / 2]) {
-    api.strike(sim, {
-      shape: 'line',
-      x: h.x - Math.cos(a) * KING.cleaveLen / 2,
-      y: h.y - Math.sin(a) * KING.cleaveLen / 2,
-      r: KING.cleaveLen,
-      w: 0.42,
-      ang: a,
-      warn: KING.cleaveWarn / hasteOf(sim),
-      dmg: m.dmg,
-      knock: 4,
-      art: 'f12_cut',
-      from: m.id,
-      above: true,
-    });
-  }
-}
-
-/** «Огненная стрела»: линия через всю арену и горящий след. */
-function kingArrow(sim: Sim, api: SimApi, m: Mob, a: number): void {
-  const ks = kingState(sim);
-  const [x0, y0, x1, y1] = ks.box;
-  const L = hypot(x1 - x0, y1 - y0) + 2;
-  api.strike(sim, {
-    shape: 'line',
-    x: m.x,
-    y: m.y,
-    r: L,
-    w: KING.bowW,
-    ang: a,
-    warn: 0.05,
-    dmg: m.dmg * 1.3,
-    knock: 7,
-    status: 'burn',
-    dur: 2.2,
-    art: 'f12_arrow',
-    from: m.id,
-    above: true,
-  });
-  // Горящий след — по линии, пока в арене.
-  for (let d = 1.6; d < L; d += 1.3) {
-    const x = m.x + Math.cos(a) * d;
-    const y = m.y + Math.sin(a) * d;
-    if (x < x0 || x > x1 + 1 || y < y0 || y > y1 + 1) break;
-    if (api.solidTile(sim, Math.floor(x), Math.floor(y))) continue;
-    api.zone(sim, { x, y, r: 0.75, life: 4.5, dps: 0.045, status: 'burn', dur: 0.8, warn: 0.15, art: 'f12_fire', above: true });
-  }
-  sim.events.push({ t: 'flash', color: '#ff8a20', k: 0.35 });
-}
-
-/** Столбы пламени у героя. */
-function kingPyre(sim: Sim, api: SimApi, m: Mob, n = 3): void {
-  const h = sim.hero;
-  for (let i = 0; i < n; i++) {
-    const a = sim.rng() * TAU;
-    const r = i === 0 ? 0 : 1.6 + sim.rng() * 1.8;
-    const x = h.x + Math.cos(a) * r;
-    const y = h.y + Math.sin(a) * r;
-    if (api.solidTile(sim, Math.floor(x), Math.floor(y))) continue;
-    api.strike(sim, {
-      shape: 'circle',
-      x,
-      y,
-      r: 1.15,
-      warn: KING.pyreWarn / hasteOf(sim) + i * 0.12,
-      dmg: m.dmg * 0.95,
-      knock: 3,
-      status: 'burn',
-      dur: 1.5,
-      art: 'f12_pyre',
-      from: m.id,
-      above: true,
-    });
-  }
-}
-
-/** Храм: клетки арены по удалённости от помоста — перепись волной. */
-function buildWave(sim: Sim, b: BossFight, dais: [number, number]): number[][] {
-  const w = sim.world;
-  const rings: number[][] = [];
-  for (const i of b.cells) {
-    const x = i % w.w;
-    const y = Math.floor(i / w.w);
-    const d = Math.floor(hypot(x + 0.5 - dais[0], y + 0.5 - dais[1]) / 2.2);
-    (rings[d] ??= []).push(i);
-  }
-  return rings.filter(Boolean);
-}
-
-/** Развернуть храм: зал переписывается волной, пути гаснут, три чаши. */
-function openDomain(sim: Sim, b: BossFight, api: SimApi, m: Mob): void {
-  const ks = kingState(sim);
-  ks.domainOn = true;
-  ks.domainT = sim.time;
-  ks.wave = buildWave(sim, b, ks.dais);
-  ks.waveAt = sim.time;
-  ks.waveBack = false;
-  vfx(sim, api, { x: ks.dais[0], y: ks.dais[1], r: ks.wave.length * 2.2 + 2.2, life: ks.wave.length * 0.09 + 0.9, art: 'f12v_wave', above: true, vBack: 0, vX0: ks.box[0], vY0: ks.box[1], vX1: ks.box[2] + 1, vY1: ks.box[3] + 1 }); // v2.87 — только рисунок
-  ks.gridAt = sim.time + 2.4;
-  ks.gridDone = true;
-  const at = arenaTrack(sim);
-  if (at) at.off = true;
-  // Три чаши: слева, справа и у ворот — пока горят, храм стоит.
-  const [x0, y0, x1, y1] = ks.box;
-  const spots: [number, number][] = [
-    [x0 + 3.5, (y0 + y1) / 2 - 3.5],
-    [x1 - 2.5, (y0 + y1) / 2 - 3.5],
-    [(x0 + x1 + 1) / 2, y1 - 1.5],
+  const top = topOf(sim, F12_SHRINE);
+  const ar = F12_GEO.arena;
+  const x0 = ar.x - ar.rx - 0.5;
+  const x1 = ar.x + ar.rx + 0.5;
+  // Валы идут от мамонта к герою по рядам.
+  const dir = Math.sign(h.y - m.y) || 1;
+  const y = clamp(m.y + dir * (2.2 + k * 2.6), top + ar.y - ar.ry, top + ar.y + ar.ry);
+  const gap = clamp(h.x + (sim.rng() - 0.5) * 6, x0 + 2.5, x1 - 2.5);
+  const gw = 1.4;
+  const warn = 1.15;
+  const base = { shape: 'line' as const, y, w: 1.1, ang: 0, warn, dmg: m.dmg * 0.8, knock: 6 };
+  const segs: [number, number][] = [
+    [x0, gap - gw],
+    [gap + gw, x1],
   ];
-  ks.bowls = spots.map(([x, y]) => {
-    const p = api.spawnMob(sim, 'f12_pillar', Math.floor(x) + 0.5, Math.floor(y) + 0.5, { mode: 'f12_rise' });
-    p.data.bowl = 1;
-    p.maxHp *= 1.1;
-    p.hp = p.maxHp;
-    return p.id;
-  });
-  ks.shrine = keepZone(sim, api, ks.shrine, () => ({
-    x: ks.dais[0],
-    y: ks.dais[1] - 1.2,
-    r: 0.1,
-    life: 1e9,
-    art: 'f12_shrine',
-  }));
-  // Храм светится своим красным: иначе в тёмном зале его не видно.
-  api.light(sim, 'f12_shrine', { x: ks.dais[0], y: ks.dais[1] - 1.5, r: 7, tint: 'red' });
-  api.camera(sim, ks.dais[0], ks.dais[1] + 2, 2.4);
-  api.slowmo(sim, 0.9, 0.35);
-  sim.events.push({ t: 'flash', color: '#c01030', k: 0.9 });
-  sim.events.push({ t: 'shake', k: 0.8 });
-  sim.events.push({
-    t: 'boss',
-    what: 'phase',
-    text: 'РАСШИРЕНИЕ ТЕРРИТОРИИ',
-    sub: 'ЖЕРТВЕННЫЙ ХРАМ — встань в оберег, разбей три чаши',
-  });
-  void m;
+  for (const [a, bx] of segs)
+    if (bx - a > 0.5)
+      api.strike(sim, {
+        ...base,
+        x: a,
+        r: bx - a,
+        status: 'chill',
+        dur: 1.6,
+        art: 'f12_snowwall',
+        from: m.id,
+      });
 }
 
-function closeDomain(sim: Sim, api: SimApi, m: Mob, broken: boolean): void {
-  const ks = kingState(sim);
-  if (!ks.domainOn) return;
-  ks.domainOn = false;
-  ks.waveBack = true;
-  ks.waveAt = sim.time;
-  vfx(sim, api, { x: ks.dais[0], y: ks.dais[1], r: ks.wave.length * 2.2 + 2.2, life: ks.wave.length * 0.09 + 0.9, art: 'f12v_wave', above: true, vBack: 1, vX0: ks.box[0], vY0: ks.box[1], vX1: ks.box[2] + 1, vY1: ks.box[3] + 1 }); // v2.87 — только рисунок
-  ks.gridCutUntil = 0;
-  ks.gridDone = true;
-  ks.gridAt = 1e9;
-  sim.zones = sim.zones.filter((z) => z !== ks.grid && !ks.wards.some((w) => w.z === z));
-  ks.grid = null;
-  ks.wards = [];
-  for (const mm of sim.mobs)
-    if (ks.bowls.includes(mm.id) && mm.mode !== 'dying') {
-      mm.hp = 0;
-      mm.mode = 'escape';
-      mm.t = 0;
-    }
-  ks.bowls = [];
-  sim.events.push({ t: 'flash', color: '#ffffff', k: 0.8 });
-  sim.events.push({ t: 'shake', k: 0.9 });
-  sim.events.push({
-    t: 'boss',
-    what: 'phase',
-    text: broken ? 'ХРАМ РУХНУЛ' : 'ХРАМ ИССЯК',
-    sub: 'король оглушён — бей вдвое',
-  });
-  api.setMode(m, 'f12_broken');
-  m.data.ghost = 0;
-}
-
-/** Обереги: 3–4 круга загораются у героя до разреза сеткой. */
-function lightWards(sim: Sim, api: SimApi, n: number): void {
-  const ks = kingState(sim);
+function shamanStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
   const h = sim.hero;
-  sim.zones = sim.zones.filter((z) => !ks.wards.some((w) => w.z === z));
-  ks.wards = [];
-  const [x0, y0, x1, y1] = ks.box;
-  let tries = 0;
-  while (ks.wards.length < n && tries++ < 60) {
-    const a = sim.rng() * TAU;
-    const r = (ks.wards.length === 0 ? 2.2 : 3) + sim.rng() * 3.6;
-    const x = Math.floor(h.x + Math.cos(a) * r) + 0.5;
-    const y = Math.floor(h.y + Math.sin(a) * r) + 0.5;
-    if (x < x0 + 1 || x > x1 || y < y0 + 1 || y > y1) continue;
-    if (api.solidTile(sim, Math.floor(x), Math.floor(y))) continue;
-    if (ks.wards.some((w) => hypot(w.x - x, w.y - y) < 3)) continue;
-    const wd = { x, y, z: null as Zone | null, lit: sim.time };
-    api.zone(sim, { x, y, r: KING.wardR, life: KING.gridWarn + KING.gridCut + 0.4, art: 'f12_ward', above: true });
-    wd.z = sim.zones[sim.zones.length - 1];
-    ks.wards.push(wd);
-  }
-}
-
-/** Безопасен ли герой от разреза сеткой (в горящем обереге). */
-export function inWard(sim: Sim, x: number, y: number): boolean {
-  const ks = KSTATE.get(sim);
-  if (!ks) return false;
-  return ks.wards.some((w) => hypot(w.x - x, w.y - y) < KING.wardR);
-}
-
-/** Разрез сеткой по храму: метка, потом «верный» удар мимо оберегов. */
-function stepGrid(sim: Sim, api: SimApi, m: Mob, every: number, local = false): void {
-  const ks = kingState(sim);
-  const h = sim.hero;
-  if (ks.gridDone && sim.time >= ks.gridAt) {
-    ks.gridDone = false;
-    ks.cutHit = false;
-    ks.cutOn = false;
-    lightWards(sim, api, local ? 2 : 3 + (sim.rng() < 0.4 ? 1 : 0));
-    const [x0, y0, x1, y1] = ks.box;
-    sim.zones = sim.zones.filter((z) => z !== ks.grid);
-    ks.cutAt = sim.time + KING.gridWarn;
-    ks.gridCutUntil = ks.cutAt + KING.gridCut;
-    const z: ZoneIn & { f12?: GridView } = {
-      x: (x0 + x1 + 1) / 2,
-      y: (y0 + y1 + 1) / 2,
-      r: 0.1,
-      life: KING.gridWarn + KING.gridCut + 0.25,
-      art: 'f12_grid',
-      above: true,
-      f12: {
-        x0,
-        y0,
-        x1: x1 + 1,
-        y1: y1 + 1,
-        off: Math.floor(sim.rng() * KING.gridStep),
-        step: KING.gridStep,
-        at: ks.cutAt,
-        cut: KING.gridCut,
-      },
-    };
-    api.zone(sim, z);
-    ks.grid = sim.zones[sim.zones.length - 1];
-    sim.events.push({ t: 'boss', what: 'f12_grid_call' });
-  }
-  if (ks.gridDone || sim.time < ks.cutAt) return;
-  // Разрез идёт `gridCut` секунд: рывок столько не держит — «верный».
-  if (!ks.cutOn) {
-    ks.cutOn = true;
-    sim.events.push({ t: 'shake', k: 0.35 });
-    sim.events.push({ t: 'strike', x: m.x, y: m.y, art: 'f12_gridcut', big: true });
-  }
-  if (!ks.cutHit && !heroDown(sim) && h.inv <= 0 && h.mode !== 'dash' && api.inArena(sim, h.x, h.y) && !inWard(sim, h.x, h.y)) {
-    ks.cutHit = true;
-    api.hurtEnv(sim, local ? 0.12 : 0.15);
-    sim.events.push({ t: 'flash', color: '#ff3040', k: 0.5 });
-  }
-  if (sim.time >= ks.gridCutUntil) {
-    ks.gridDone = true;
-    ks.gridAt = sim.time + every - KING.gridWarn;
-  }
-}
-
-function kingStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
-  const h = sim.hero;
-  const { dx, dy, dist } = c;
-  const b = sim.boss;
-  const phase = b?.phase ?? 0;
-  const haste = hasteOf(sim);
-  const ks = kingState(sim);
+  const ar = F12_GEO.arena;
+  const cx = ar.x;
+  const cy = topOf(sim, F12_SHRINE) + ar.y;
   m.tele = null;
   m.danger = 0;
-  m.data.vNoTele = 1; // v2.87 — только рисунок: прицел лука рисует f12-boss-fx
+  m.data.vNoTele = 1;
+  switch (m.mode) {
+    case 'f12s_jump': {
+      // Спрыгнула со спины мамонта и взмыла.
+      m.data.hide = 1;
+      m.vx *= 0.8;
+      m.vy *= 0.8;
+      if (m.t > 0.9) api.setMode(m, 'f12s_high');
+      return;
+    }
+    case 'f12s_high': {
+      // Высоко под сводом, кругами: недосягаема.
+      m.data.hide = 1;
+      const a = sim.time * 0.55 + m.id;
+      const tx = cx + Math.cos(a) * (ar.rx - 3);
+      const ty = cy + Math.sin(a) * (ar.ry - 2);
+      api.steer(sim, m, tx - m.x, ty - m.y, m.speed * 1.4, dt);
+      m.face = Math.atan2(m.vy, m.vx);
+      if (m.t > 0.6 && m.cd <= 0 && !heroDown(sim)) {
+        const p = spotNear(
+          sim,
+          api,
+          h.x,
+          h.y,
+          3.5,
+          5,
+          (px, py) => -hypot(px - m.x, py - m.y),
+          false,
+        );
+        if (p) {
+          m.data.lx = p[0];
+          m.data.ly = p[1];
+          api.setMode(m, 'f12s_dive');
+        }
+      }
+      return;
+    }
+    case 'f12s_dive': {
+      // Снижается к месту колдовства.
+      m.data.hide = m.t < 0.25 ? 1 : 0;
+      api.steer(sim, m, m.data.lx - m.x, m.data.ly - m.y, m.speed * 2.2, dt);
+      m.face = Math.atan2(c.dy, c.dx);
+      if (m.t > 0.45) api.setMode(m, 'f12s_cast');
+      return;
+    }
+    case 'f12s_cast': {
+      // Руки вверх: два занавеса сияния крест-накрест на героя.
+      m.data.hide = 0;
+      m.vx *= 0.6;
+      m.vy *= 0.6;
+      m.face = Math.atan2(c.dy, c.dx);
+      if (m.t < dt * 1.5) {
+        const a = sim.rng() * Math.PI;
+        for (const ang of [a, a + Math.PI / 2]) {
+          const L = 15;
+          api.strike(sim, {
+            shape: 'line',
+            x: h.x - Math.cos(ang) * (L / 2),
+            y: h.y - Math.sin(ang) * (L / 2),
+            r: L,
+            w: 1.3,
+            ang,
+            warn: 1.1,
+            dmg: m.dmg,
+            knock: 3,
+            status: 'chill',
+            dur: 1.8,
+            art: 'f12_curtain',
+            from: m.id,
+            above: true,
+          });
+        }
+        sim.events.push({ t: 'boss', what: 'f12_aurora' });
+      }
+      if (m.t >= 1.1) api.setMode(m, 'f12s_low');
+      return;
+    }
+    case 'f12s_low':
+      // Устала после заклинания: низко, бей.
+      m.data.hide = 0;
+      m.vx *= 0.85;
+      m.vy *= 0.85;
+      if (m.t > 1.05) api.setMode(m, 'f12s_rise');
+      return;
+    case 'f12s_rise':
+      m.data.hide = m.t > 0.3 ? 1 : 0;
+      m.vx *= 0.8;
+      m.vy *= 0.8;
+      if (m.t > 0.45) {
+        m.cd = 0.4;
+        api.setMode(m, 'f12s_high');
+      }
+      return;
+    default:
+      api.setMode(m, 'f12s_high');
+  }
+}
+
+registerBrain('f12_shaman', {
+  step(sim, m, dt, c, api) {
+    shamanStep(sim, m, dt, c, api);
+    m.data.ghost = (m.data.hide ?? 0) > 0 ? 1 : 0;
+  },
+  onHit(_sim, m) {
+    return m.mode === 'f12s_low' ? 1.4 : 1;
+  },
+  onDeath(sim, m, _mode, api) {
+    const boss = f12Mammoth(sim);
+    fx(sim, api, { x: m.x, y: m.y, r: 2.2, life: 1.6, art: 'f12_auroraburst', above: true });
+    if (boss && boss.mode !== 'dying') {
+      api.setMode(boss, 'f12b_stunned');
+      boss.data.stunT = 3;
+      boss.tele = null;
+    }
+    sim.events.push({ t: 'flash', color: '#7affd8', k: 0.6 });
+    sim.events.push({
+      t: 'boss',
+      what: 'f12_shaman_down',
+      text: 'ШАМАНКА ПАЛА',
+      sub: 'мамонт оглушён — бей',
+    });
+  },
+});
+
+function mammothStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
+  const h = sim.hero;
+  const b = sim.boss;
+  const s = mamOf(sim);
+  m.data.vNoTele = 1;
+  m.tele = null;
+  m.danger = 0;
+  const phase = b?.phase ?? 0;
+  s.chargeCd -= dt;
+  s.stompCd -= dt;
+  s.drumCd -= dt;
+  s.spikesCd -= dt;
+  s.douseCd -= dt;
   m.data.phase = phase;
-  m.data.cutCd = (m.data.cutCd ?? 1.5) - dt * haste;
-  m.data.bowCd = (m.data.bowCd ?? 4) - dt * haste;
-  m.data.pyreCd = (m.data.pyreCd ?? 6) - dt * haste;
+  m.data.rider = s.shaman || phase >= 3 ? 0 : 1;
   if (heroDown(sim)) {
-    m.vx *= 0.85;
-    m.vy *= 0.85;
+    m.vx *= 0.8;
+    m.vy *= 0.8;
     return;
   }
-  const want = Math.atan2(dy, dx);
-  const walk = (tx: number, ty: number, k = 1) => {
-    const [cx, cy] = api.chaseDir(sim, m, tx, ty);
-    api.steer(sim, m, cx, cy, m.speed * haste * k, dt);
-  };
-  // В последней фазе король видит поезд и уходит с путей (если не бьёт).
-  const at = arenaTrack(sim);
-  const dodgeTrain = () => {
-    if (phase < 3 || !at || at.off) return false;
-    if (!(at.view.sig >= 2)) return false;
-    if (m.y < at.y - 1.2 || m.y > at.y + 3.2) return false;
-    const ty = m.y < at.y + 1 ? at.y - 2.2 : at.y + 4.2;
-    walk(m.x, ty, 1.2);
-    return true;
-  };
+  const T = MAMMOTH;
   switch (m.mode) {
-    case 'f12_intro': {
-      m.data.ghost = 1;
+    case 'roar':
+      // Вход: камера на мамонта, рёв, шаманка бьёт в бубен.
       m.vx = 0;
       m.vy = 0;
       m.face = Math.PI / 2;
-      if (m.t >= KING.intro) {
-        m.data.ghost = 0;
+      if (m.t >= T.intro) api.setMode(m, 'chase');
+      return;
+    case 'f12b_rear':
+      // Смена фазы: встаёт на дыбы, кольцо снега отталкивает.
+      m.vx *= 0.7;
+      m.vy *= 0.7;
+      if (m.t >= 0.9 && !m.data.reared) {
+        m.data.reared = 1;
+        fx(sim, api, { x: m.x, y: m.y, r: 3.6, life: 0.9, art: 'f12_stompring' });
+        if (c.dist < 3.6 + h.r && canHurt(sim)) {
+          const a = Math.atan2(h.y - m.y, h.x - m.x);
+          h.vx += Math.cos(a) * 9;
+          h.vy += Math.sin(a) * 9;
+        }
+        sim.events.push({ t: 'shake', k: 0.5 });
+      }
+      if (m.t >= T.rear) {
+        m.data.reared = 0;
+        api.setMode(m, 'chase');
+      }
+      return;
+    case 'chase': {
+      // Выбор приёма.
+      const ahead = Math.abs(angDiff(Math.atan2(c.dy, c.dx), m.face));
+      const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
+      if (phase >= 2 && s.douseCd <= 0) {
+        const o = litBrazierNear(sim, m, api);
+        if (o) {
+          m.data.bx = o.x + 0.5;
+          m.data.by = o.y + 0.5;
+          s.douseCd = T.cd.douse;
+          api.setMode(m, 'f12b_douse');
+          return;
+        }
+      }
+      if (phase === 1 && s.drumCd <= 0 && m.data.rider) {
+        s.drumCd = T.cd.drum;
+        api.setMode(m, 'f12b_drum');
+        return;
+      }
+      if (phase >= 2 && s.spikesCd <= 0 && c.dist < 9 && see && ahead < 0.9) {
+        s.spikesCd = T.cd.spikes;
+        m.dir = Math.atan2(c.dy, c.dx);
+        api.setMode(m, 'f12b_spikes');
+        return;
+      }
+      if (c.dist < m.r + h.r + 1.6 && ahead < 0.75 && m.cd <= 0) {
+        api.setMode(m, 'f12b_tusk');
+        return;
+      }
+      if (c.dist < m.r + h.r + 1.6 && ahead >= 0.75 && s.stompCd <= 0) {
+        s.stompCd = T.cd.stomp;
+        api.setMode(m, 'f12b_stomp');
+        return;
+      }
+      if (c.dist > 5 && see && s.chargeCd <= 0) {
+        s.chargeCd = phase >= 3 ? T.cd.charge[1] : T.cd.charge[0];
+        api.setMode(m, 'f12b_paw');
+        return;
+      }
+      tankStep(m, dt, h.x, h.y, m.speed * (phase >= 3 ? 1.15 : 1));
+      return;
+    }
+    case 'f12b_tusk': {
+      // Бивни снизу вверх: замах головой — удар конусом — проводка.
+      m.vx *= 0.7;
+      m.vy *= 0.7;
+      if (m.t < T.tusk.hit * 0.55) {
+        const d = angDiff(Math.atan2(h.y - m.y, h.x - m.x), m.face);
+        m.face += clamp(d, -T.turn * dt, T.turn * dt);
+      }
+      if (m.t > T.tusk.hit - 0.25 && m.t < T.tusk.hit) m.danger = T.tusk.r;
+      if (m.t >= T.tusk.hit && !m.data.hit) {
+        m.data.hit = 1;
+        if (inCone(sim, m.x, m.y, m.face, T.tusk.r, T.tusk.arc)) hit(sim, api, m, m.dmg, 9);
+        sim.events.push({ t: 'shake', k: 0.25 });
+      }
+      if (m.t >= T.tusk.end) {
+        m.data.hit = 0;
+        m.cd = 0.7 + sim.rng() * 0.5;
         api.setMode(m, 'chase');
       }
       return;
     }
-    case 'chase': {
-      m.data.ghost = 0;
-      if (dodgeTrain()) return;
-      if (dist < 2.6 && m.cd <= 0) {
-        api.setMode(m, 'f12_cleave');
-        m.face = want;
-        kingCleave(sim, api, m);
-        api.strike(sim, {
-          shape: 'cone',
-          x: m.x,
-          y: m.y,
-          r: KING.coneR,
-          ang: want,
-          arc: KING.coneArc,
-          warn: 0.62 / haste,
-          dmg: m.dmg,
-          knock: 5,
-          art: 'f12_claw',
-          from: m.id,
-          above: true,
-        });
-        return;
+    case 'f12b_stomp': {
+      // Встаёт на дыбы — передние ноги в лёд: круг и сосульки со свода.
+      m.vx *= 0.6;
+      m.vy *= 0.6;
+      if (m.t > T.stomp.hit - 0.25 && m.t < T.stomp.hit) m.danger = T.stomp.r;
+      if (m.t >= T.stomp.hit && !m.data.hit) {
+        m.data.hit = 1;
+        if (c.dist < T.stomp.r + h.r) hit(sim, api, m, m.dmg * 0.9, 8);
+        fx(sim, api, { x: m.x, y: m.y, r: T.stomp.r, life: 0.9, art: 'f12_stompring' });
+        sim.events.push({ t: 'shake', k: 0.5 });
+        sim.events.push({ t: 'boss', what: 'f12_stomp' });
+        const n = 3 + phase;
+        for (let k = 0; k < n; k++) {
+          const p = spotNear(sim, api, h.x, h.y, 0.5, 5, () => sim.rng(), false);
+          if (!p) continue;
+          api.strike(sim, {
+            shape: 'circle',
+            x: p[0],
+            y: p[1],
+            r: 0.95,
+            warn: 0.95 + k * 0.18,
+            dmg: m.dmg * 0.7,
+            knock: 2,
+            status: 'chill',
+            dur: 1.2,
+            art: 'f12_iciclefall',
+            from: m.id,
+          });
+        }
       }
-      if (phase >= 1 && m.data.bowCd <= 0 && dist > 3 && dist < 16) {
-        api.setMode(m, 'f12_bow');
-        m.data.ang = want;
-        vfx(sim, api, { x: m.x, y: m.y, r: hypot(ks.box[2] - ks.box[0], ks.box[3] - ks.box[1]) + 2, life: KING.bowDraw / haste + 0.1, art: 'f12v_bow', above: true, vFrom: m.id, vT: KING.bowDraw / haste, vAng: want, vW: KING.bowW }); // v2.87 — только рисунок
-        return;
+      if (m.t >= T.stomp.end) {
+        m.data.hit = 0;
+        api.setMode(m, 'chase');
       }
-      if (phase >= 1 && m.data.pyreCd <= 0 && dist < 10) {
-        api.setMode(m, 'f12_pyre');
-        kingPyre(sim, api, m, phase >= 3 ? 4 : 3);
-        m.data.pyreCd = 7.5;
-        return;
-      }
-      if (m.data.cutCd <= 0 && dist < 9 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
-        api.setMode(m, 'f12_cut');
-        m.face = want;
-        kingCuts(sim, api, m, phase >= 3 ? 5 : 3);
-        return;
-      }
-      m.face = want;
-      walk(h.x, h.y, dist < 2 ? 0.4 : 1);
-      // v2.87 — только рисунок: шаг короля — пыль и угольки проклятия.
-      if ((m.data.vStep = (m.data.vStep ?? 0) - dt) <= 0 && hypot(m.vx, m.vy) > 0.8) { m.data.vStep = 0.42; m.data.vFoot = 1 - (m.data.vFoot ?? 0); vfx(sim, api, { x: m.x, y: m.y, r: 0.4, life: 0.9, art: 'f12v_step', above: true, vKind: m.data.vFoot, vAng: Math.atan2(m.vy, m.vx) }); } // v2.87 — только рисунок
       return;
     }
-    case 'f12_cut':
-      // Рука поднята — разрезы летят; потом открыт.
+    case 'f12b_paw': {
+      // Роет копытом: разворот к герою, линия набега.
+      m.vx *= 0.6;
+      m.vy *= 0.6;
+      const d = angDiff(Math.atan2(h.y - m.y, h.x - m.x), m.face);
+      m.face += clamp(d, -T.turn * 1.3 * dt, T.turn * 1.3 * dt);
+      m.dir = m.face;
+      const len = Math.min(14, clearDist(sim, api, m.x, m.y, m.face, 14));
+      m.data.len = len;
+      m.data.k = clamp(m.t / T.paw, 0, 1);
+      if (m.t > T.paw - 0.25) m.danger = 2;
+      if (m.t >= T.paw) {
+        m.bounce = true;
+        m.data.hit = 0;
+        m.data.v = 2;
+        api.setMode(m, 'f12b_charge');
+        sim.events.push({ t: 'boss', what: 'f12_charge' });
+      }
+      return;
+    }
+    case 'f12b_charge': {
+      const d = angDiff(Math.atan2(h.y - m.y, h.x - m.x), m.face);
+      m.face += clamp(d, -T.charge.steer * dt, T.charge.steer * dt);
+      m.data.v = Math.min(T.charge.v, (m.data.v ?? 0) + T.charge.acc * dt);
+      m.vx = Math.cos(m.face) * m.data.v;
+      m.vy = Math.sin(m.face) * m.data.v;
+      m.data.walk = (m.data.walk ?? 0) + m.data.v * dt;
+      m.danger = 2;
+      if (!m.data.hit && c.dist < m.r + h.r + 0.3) {
+        if (hit(sim, api, m, m.dmg * 1.3, 12)) {
+          m.data.hit = 1;
+          sim.events.push({ t: 'shake', k: 0.4 });
+        }
+      }
+      if (m.t >= T.charge.max) {
+        m.bounce = false;
+        api.setMode(m, 'f12b_skid');
+      }
+      return;
+    }
+    case 'f12b_skid': {
+      // Юзом по льду арены — тормозит.
+      const v = (m.data.v ?? 0) * Math.max(0, 1 - m.t / T.charge.skid);
+      m.vx = Math.cos(m.face) * v;
+      m.vy = Math.sin(m.face) * v;
+      if (m.t >= T.charge.skid) {
+        m.cd = 0.5;
+        api.setMode(m, 'chase');
+      }
+      return;
+    }
+    case 'f12b_stunned': {
+      // В стене: бивень треснул и светится.
       m.vx *= 0.7;
       m.vy *= 0.7;
-      if (m.t > KING.cutAim / haste + 0.1) {
-        api.setMode(m, 'recover');
-        m.data.cutCd = 3.2;
+      m.bounce = false;
+      const dur = m.data.stunT || T.stun;
+      if (m.t >= dur) {
+        m.data.stunT = 0;
+        api.setMode(m, 'f12b_getup');
       }
       return;
-    case 'f12_cleave':
+    }
+    case 'f12b_getup':
+      m.vx *= 0.7;
+      m.vy *= 0.7;
+      if (m.t >= 0.6) api.setMode(m, 'chase');
+      return;
+    case 'f12b_drum': {
+      // Шаманка бьёт в бубен — валы вьюги идут к герою.
       m.vx *= 0.6;
       m.vy *= 0.6;
-      if (m.t > 0.6 / haste) m.danger = KING.coneR + 0.3;
-      if (m.t > KING.cleaveWarn / haste + 0.1) {
-        api.setMode(m, 'recover');
-        m.cd = 1.6;
+      const beat = Math.floor(m.t / T.drum.beat);
+      if (beat > (m.data.beat ?? -1)) {
+        m.data.beat = beat;
+        if (beat >= 1 && beat <= T.drum.walls) {
+          snowWall(sim, api, m, beat - 1);
+          sim.events.push({ t: 'boss', what: 'f12_drum' });
+        }
       }
-      return;
-    case 'f12_bow': {
-      m.vx *= 0.5;
-      m.vy *= 0.5;
-      // Тетива: целится, в конце замирает — окно уйти с линии.
-      const T = KING.bowDraw / haste;
-      if (m.t < T - 0.45) m.data.ang = want;
-      m.face = m.data.ang;
-      const [x0, y0, x1, y1] = ks.box;
-      const L = hypot(x1 - x0, y1 - y0) + 2;
-      m.tele = { shape: 'line', r: L, w: KING.bowW, ang: m.data.ang, k: Math.min(1, m.t / T) };
-      if (m.t > T - 0.25) m.danger = 3;
-      if (m.t >= T) {
-        m.tele = null;
-        kingArrow(sim, api, m, m.data.ang);
-        api.setMode(m, 'recover');
-        m.data.bowCd = phase >= 3 ? 6 : 8.5;
+      if (m.t >= T.drum.end) {
+        m.data.beat = -1;
+        api.setMode(m, 'chase');
       }
       return;
     }
-    case 'f12_pyre':
+    case 'f12b_spikes': {
+      // Хобот вверх — удар в лёд: шипы веером к герою.
       m.vx *= 0.6;
       m.vy *= 0.6;
-      if (m.t > 0.7) api.setMode(m, 'chase');
-      return;
-    case 'f12_cast': {
-      // Идёт к помосту и складывает знак.
-      m.data.ghost = 1;
-      const d = hypot(m.x - ks.dais[0], m.y - ks.dais[1]);
-      if (d > 0.4 && m.t < 1.2) {
-        m.x += ((ks.dais[0] - m.x) * Math.min(1, dt * 5));
-        m.y += ((ks.dais[1] - m.y) * Math.min(1, dt * 5));
+      if (m.t < T.spikes.hit * 0.5) {
+        const d = angDiff(Math.atan2(h.y - m.y, h.x - m.x), m.face);
+        m.face += clamp(d, -T.turn * dt, T.turn * dt);
       }
-      m.vx = 0;
-      m.vy = 0;
-      m.face = Math.PI / 2;
-      if (m.t >= KING.cast) {
-        if (b) openDomain(sim, b, api, m);
-        api.setMode(m, 'f12_domain');
+      if (m.t >= T.spikes.hit && !m.data.hit) {
+        m.data.hit = 1;
+        for (const off of [-0.38, 0, 0.38]) {
+          const ang = m.face + off;
+          const x = m.x + Math.cos(ang) * (m.r + 0.4);
+          const y = m.y + Math.sin(ang) * (m.r + 0.4);
+          const len = Math.min(T.spikes.len, clearDist(sim, api, x, y, ang, T.spikes.len));
+          api.strike(sim, {
+            shape: 'line',
+            x,
+            y,
+            r: len,
+            w: 0.9,
+            ang,
+            warn: T.spikes.warn,
+            dmg: m.dmg * 0.85,
+            knock: 4,
+            status: 'chill',
+            dur: 1.4,
+            art: 'f12_spikes',
+            from: m.id,
+          });
+        }
+        sim.events.push({ t: 'shake', k: 0.3 });
+      }
+      if (m.t >= T.spikes.end) {
+        m.data.hit = 0;
+        api.setMode(m, 'chase');
       }
       return;
     }
-    case 'f12_domain': {
-      m.data.ghost = 1;
-      m.vx = 0;
-      m.vy = 0;
-      m.x = ks.dais[0];
-      m.y = ks.dais[1];
-      m.face = Math.PI / 2;
-      stepGrid(sim, api, m, KING.gridEvery);
-      // Между сетками — разрезы с помоста.
-      if (m.data.cutCd <= 0 && ks.gridDone && sim.time < ks.gridAt - 0.8) {
-        kingCuts(sim, api, m, 3, 0.9);
-        m.data.cutCd = 4.2;
+    case 'f12b_douse': {
+      // Идёт к горящей жаровне — задуть её.
+      const tx = m.data.bx;
+      const ty = m.data.by;
+      const st = stateOf(sim);
+      const o = st.braziers.find((x) => x.x + 0.5 === tx && x.y + 0.5 === ty);
+      if (!o || !st.lit.has(o.id) || m.t > 6) {
+        api.setMode(m, 'chase');
+        return;
       }
-      const alive = sim.mobs.filter((x) => ks.bowls.includes(x.id) && x.mode !== 'dying' && x.mode !== 'escape');
-      if (!alive.length) closeDomain(sim, api, m, true);
-      else if (sim.time - ks.domainT > KING.domainMax) closeDomain(sim, api, m, false);
+      if (hypot(tx - m.x, ty - m.y) < m.r + 1.4) {
+        m.face = Math.atan2(ty - m.y, tx - m.x);
+        api.setMode(m, 'f12b_blow');
+        return;
+      }
+      // По пути не забывает про героя рядом.
+      if (c.dist < m.r + h.r + 1.4 && m.cd <= 0) {
+        api.setMode(m, 'f12b_tusk');
+        return;
+      }
+      tankStep(m, dt, tx, ty, m.speed * 1.1);
       return;
     }
-    case 'f12_broken':
-      m.data.ghost = 0;
-      m.vx *= 0.8;
-      m.vy *= 0.8;
-      if (m.t > KING.broken) api.setMode(m, 'chase');
+    case 'f12b_blow': {
+      m.vx *= 0.6;
+      m.vy *= 0.6;
+      if (m.t >= T.blow.hit && !m.data.hit) {
+        m.data.hit = 1;
+        const st = stateOf(sim);
+        const o = st.braziers.find((x) => x.x + 0.5 === m.data.bx && x.y + 0.5 === m.data.by);
+        if (o) douseBrazier(sim, st, api, o);
+        fx(sim, api, { x: m.data.bx, y: m.data.by, r: 1.8, life: 1, art: 'f12_frostburst' });
+      }
+      if (m.t >= T.blow.end) {
+        m.data.hit = 0;
+        api.setMode(m, 'chase');
+      }
       return;
-    case 'f12_trainhit':
-      m.vx *= 0.85;
-      m.vy *= 0.85;
-      if (m.t > KING.trainStun) api.setMode(m, 'chase');
-      return;
-    case 'recover':
-      m.vx *= 0.8;
-      m.vy *= 0.8;
-      if (dodgeTrain()) return;
-      if (m.t > 0.9 / haste) api.setMode(m, 'chase');
+    }
+    case 'f12b_drop':
+      // Сияние: шаманка спрыгивает со спины.
+      m.vx *= 0.6;
+      m.vy *= 0.6;
+      if (m.t >= 0.7 && !s.shaman) {
+        const sh = api.spawnMob(sim, 'f12_shaman', m.x, m.y - 0.6, { mode: 'f12s_jump' });
+        sh.data.vNoTele = 1;
+        sh.data.hide = 1;
+        sh.cd = 1.2;
+        s.shaman = sh.id;
+        fx(sim, api, { x: m.x, y: m.y, r: 2.5, life: 1.2, art: 'f12_auroraburst', above: true });
+      }
+      if (m.t >= 1.2) api.setMode(m, 'chase');
       return;
     default:
       api.setMode(m, 'chase');
   }
-  // Последняя фаза: храм вспыхивает на миг — сетка с двумя оберегами.
-  void ks;
 }
 
 registerBrain('f12boss', {
   raw: true,
-  step(sim, m, dt, c, api) {
-    kingStep(sim, m, dt, c, api);
+  step: mammothStep,
+  onWall(sim, m, _nx, _ny, api) {
+    if (m.mode !== 'f12b_charge') return;
+    m.bounce = false;
+    m.vx = 0;
+    m.vy = 0;
+    m.data.stunT = MAMMOTH.stun;
+    api.setMode(m, 'f12b_stunned');
+    fx(sim, api, {
+      x: m.x + Math.cos(m.face) * m.r,
+      y: m.y + Math.sin(m.face) * m.r,
+      r: 2.4,
+      life: 1.2,
+      art: 'f12_wallhit',
+    });
+    sim.events.push({ t: 'shake', k: 0.8 });
+    sim.events.push({
+      t: 'boss',
+      what: 'f12_wall_stun',
+      text: 'БИВЕНЬ ТРЕСНУЛ',
+      sub: 'оглушён — бей по трещине',
+    });
   },
-  onHit(sim, m, hit) {
-    if ((m.data.ghost ?? 0) > 0) return 0;
-    if (m.mode === 'f12_broken') return 2;
-    if (m.mode === 'f12_trainhit') return 1.6;
-    // Натягивает тетиву — спина открыта.
-    if (m.mode === 'f12_bow') {
-      const from = hit.ang + Math.PI;
-      return Math.abs(angDiff(from, m.face)) > 1.9 ? 1.7 : 1;
-    }
-    if (m.mode === 'recover' || m.mode === 'f12_cut') return 1.15;
-    void sim;
+  onHit(_sim, m) {
+    if (m.mode === 'f12b_stunned') return 2;
+    if (m.mode === 'f12b_getup' || m.mode === 'f12b_skid') return 1.3;
+    if (m.mode === 'roar' || m.mode === 'f12b_rear') return 0.5;
     return 1;
   },
 });
 
+const PHASES: { text: string; sub: string; color: string }[] = [
+  { text: 'НАБЕГ', sub: 'не стой на линии набега — пусть врежется в стену', color: '#bfe8ff' },
+  { text: 'ВЬЮГА', sub: 'бубен шаманки гонит валы снега — ищи проём', color: '#e8f4ff' },
+  {
+    text: 'ЛЕДНИКОВЫЙ ПЕРИОД',
+    sub: 'лёд сжимает арену, мамонт гасит жаровни — держи огонь',
+    color: '#7ac8ff',
+  },
+  { text: 'СИЯНИЕ', sub: 'шаманка в небе: бей, когда снизится колдовать', color: '#7affd8' },
+];
+
+function enterPhase(sim: Sim, b: BossFight, m: Mob, api: SimApi, p: number): void {
+  b.phase = p;
+  const s = mamOf(sim);
+  const st = stateOf(sim);
+  api.setMode(m, 'f12b_rear');
+  m.tele = null;
+  const ph = PHASES[p];
+  sim.events.push({ t: 'flash', color: ph.color, k: 0.7 });
+  sim.events.push({ t: 'boss', what: 'phase', text: ph.text, sub: ph.sub });
+  fx(sim, api, {
+    x: m.x,
+    y: m.y,
+    r: 12,
+    life: 1.6,
+    art: 'f12_phase',
+    above: true,
+    dur: p,
+  } as ZoneIn);
+  if (p === 1) {
+    // Вьюга задувает жаровни арены.
+    for (const o of st.braziers)
+      if (api.inArena(sim, o.x + 0.5, o.y + 0.5)) douseBrazier(sim, st, api, o);
+    s.drumCd = 2.2;
+  }
+  if (p === 2) {
+    s.layers = glacierLayers(sim, b);
+    s.layer = 0;
+    s.layerT = 1.8;
+    s.spikesCd = 2.5;
+    s.douseCd = 5;
+  }
+  if (p === 3) {
+    api.setMode(m, 'f12b_drop');
+    s.chargeCd = Math.min(s.chargeCd, 3);
+  }
+}
+
 registerBoss('f12boss', {
   start(sim, b, lead, api) {
-    restoreArena(sim, api);
-    const ks = kingState(sim);
-    ks.box = arenaBox(sim, b);
-    ks.dais = daisOf(sim, b);
-    // Король ждёт у храма, на помосте.
-    lead.x = ks.dais[0];
-    lead.y = ks.dais[1];
+    meltGlacier(sim, api);
+    MAM.delete(sim);
+    const st = stateOf(sim);
+    b.phase = 0;
     lead.face = Math.PI / 2;
-    api.setMode(lead, 'f12_intro');
-    lead.data.ghost = 1;
-    vfx(sim, api, { x: ks.dais[0], y: ks.dais[1], r: 3, life: KING.intro + 1, art: 'f12v_intro', above: true, vFrom: lead.id }); // v2.87 — только рисунок
-    // Вход камерой: зал, король встаёт.
-    api.camera(sim, ks.dais[0], ks.dais[1] + 1.5, 2.8);
-    sim.events.push({ t: 'shake', k: 0.5 });
+    lead.data.vNoTele = 1;
+    lead.data.rider = 1;
+    api.setMode(lead, 'roar');
+    // Жаровни арены горят к началу боя: тепло есть, пока его не задуют.
+    for (const o of st.braziers)
+      if (api.inArena(sim, o.x + 0.5, o.y + 0.5)) lightBrazier(sim, st, api, o, false);
+    api.camera(sim, lead.x, lead.y, 2.2);
+    fx(sim, api, { x: lead.x, y: lead.y, r: 12, life: 2.6, art: 'f12_wake', above: true });
+    sim.events.push({ t: 'shake', k: 0.35 });
     sim.events.push({
       t: 'boss',
       what: 'f12_wake_call',
-      text: 'ДВУЛИКИЙ КОРОЛЬ ПРОКЛЯТИЙ',
-      sub: 'через храм идёт поезд — подставь под него короля',
+      text: 'ЛЕДНИКОВЫЙ МАМОНТ',
+      sub: 'боком не ходит — заходи сбоку; набег в стену оглушает',
     });
-    const at = arenaTrack(sim);
-    if (at) {
-      at.off = false;
-      at.next = Math.max(at.next, sim.time + 7);
-    }
   },
   step(sim, b, dt, api) {
-    const lead = kingOf(sim);
-    if (!lead) return;
-    const ks = kingState(sim);
-    const k = lead.hp / lead.maxHp;
-    F12_FX.domain = ks.domainOn ? Math.min(1, (sim.time - ks.domainT) / 1.2) : Math.max(0, F12_FX.domain - dt);
-    // Перепись храма волной (и обратно).
-    if (ks.wave.length && (ks.domainOn || ks.waveBack)) {
-      const n = Math.floor((sim.time - ks.waveAt) / 0.09);
-      const rings = ks.waveBack ? [...ks.wave].reverse() : ks.wave;
-      for (let i = 0; i < Math.min(n, rings.length); i++) {
-        for (const c of rings[i]) {
-          if (ks.waveBack) {
-            const v = ks.changed.get(c);
-            if (v && sim.tiles[c] === T_FLOOR && sim.world.mark[c] === MK.domain) api.setTile(sim, c % sim.world.w, Math.floor(c / sim.world.w), v.tile, v.mark);
-          } else if (sim.world.mark[c] !== MK.domain) retile(sim, api, c, T_FLOOR, MK.domain);
-        }
+    const m = f12Mammoth(sim);
+    if (!m || m.mode === 'dying') return;
+    const s = mamOf(sim);
+    const k = m.hp / m.maxHp;
+    const free = m.mode === 'chase';
+    if (free && b.phase < 3 && k <= MAMMOTH.notches[b.phase])
+      enterPhase(sim, b, m, api, b.phase + 1);
+    // Ледник растёт слоями: сперва иней по кромке, потом стена.
+    if (b.phase >= 2 && s.layer < s.layers.length) {
+      s.layerT -= dt;
+      if (s.layerT <= 1.2 && !m.data[`warn${s.layer}`]) {
+        m.data[`warn${s.layer}`] = 1;
+        fx(sim, api, {
+          x: m.x,
+          y: m.y,
+          r: 16,
+          life: 1.25,
+          art: 'f12_glacierwarn',
+          dur: s.layer,
+        } as ZoneIn);
+        sim.events.push({ t: 'boss', what: 'f12_crack' });
       }
-      if (n >= rings.length && ks.waveBack) {
-        ks.waveBack = false;
-        ks.wave = [];
-        api.light(sim, 'f12_shrine', null);
-        sim.zones = sim.zones.filter((z) => z !== ks.shrine);
-        ks.shrine = null;
-        const at = arenaTrack(sim);
-        if (at) {
-          at.off = false;
-          at.next = sim.time + 6;
-        }
+      if (s.layerT <= 0) {
+        raiseGlacier(sim, api, s.layers[s.layer]);
+        s.layer += 1;
+        s.layerT = 9;
       }
     }
-    // Фазы по засечкам.
-    if (b.phase === 0 && k <= KING.hp[0]) {
-      b.phase = 1;
-      lead.data.bowCd = 1.2;
-      sim.events.push({ t: 'boss', what: 'phase', text: 'ПЛАМЯ', sub: 'второе лицо открыло глаза — стрела через весь храм' });
-      sim.events.push({ t: 'flash', color: '#ff6a10', k: 0.5 });
-      vfx(sim, api, { x: lead.x, y: lead.y, r: 3, life: 1.3, art: 'f12v_phase', above: true, vFrom: lead.id, vKind: 1 }); // v2.87 — только рисунок
-    }
-    if (b.phase === 1 && k <= KING.hp[1] && lead.mode !== 'f12_bow') {
-      b.phase = 2;
-      api.setMode(lead, 'f12_cast');
-      vfx(sim, api, { x: ks.dais[0], y: ks.dais[1], r: 2.4, life: KING.cast + 0.35, art: 'f12v_cast', above: true, vFrom: lead.id }); // v2.87 — только рисунок
-      sim.strikes = sim.strikes.filter((s) => s.from !== lead.id);
-      sim.events.push({ t: 'boss', what: 'f12_cast_call', text: 'ЗНАК', sub: 'король складывает руки…' });
-    }
-    if (b.phase === 2 && k <= KING.hp[2] && !ks.domainOn && lead.mode !== 'f12_cast') {
-      b.phase = 3;
-      ks.miniAt = sim.time + 6;
-      const at = arenaTrack(sim);
-      if (at) at.cfg = { ...at.cfg, period: 9 };
-      sim.events.push({ t: 'boss', what: 'phase', text: 'ВСЁ СРАЗУ', sub: 'разрезы, пламя, храм на миг и поезд вдвое чаще' });
-      vfx(sim, api, { x: lead.x, y: lead.y, r: 3, life: 1.3, art: 'f12v_phase', above: true, vFrom: lead.id, vKind: 3 }); // v2.87 — только рисунок
-    }
-    // Последняя фаза: храм вспыхивает на миг — сетка с двумя оберегами.
-    if (b.phase >= 3 && !ks.domainOn) {
-      if (sim.time >= ks.miniAt && ks.gridDone && lead.mode !== 'f12_trainhit' && lead.mode !== 'f12_broken') {
-        ks.gridAt = sim.time;
-        ks.miniAt = sim.time + 13;
-        sayOnce(sim, 'mini', 10, { what: 'f12_grid_trap', text: 'ХРАМ — НА МИГ', sub: 'в оберег!' });
-      }
-      stepGrid(sim, api, lead, 99, true);
-    }
+    if (s.shaman && !sim.mobs.some((x) => x.id === s.shaman)) s.shaman = -1;
   },
-  notches: () => KING.hp,
+  onPartDown(sim, _b, m, api) {
+    if (m.kind !== 'f12boss') return false;
+    const s = mamOf(sim);
+    // Шаманка улетает с сиянием: бой кончен.
+    for (const x of sim.mobs)
+      if (x.kind === 'f12_shaman' && x.mode !== 'dying') {
+        fx(sim, api, { x: x.x, y: x.y, r: 2.4, life: 1.6, art: 'f12_auroraburst', above: true });
+        api.setMode(x, 'escape');
+      }
+    fx(sim, api, { x: m.x, y: m.y, r: 3, life: 3, art: 'f12_mamdeath', dur: m.face } as ZoneIn);
+    meltGlacier(sim, api);
+    s.shaman = 0;
+    sim.events.push({ t: 'shake', k: 0.9 });
+    return false;
+  },
+  notches() {
+    return MAMMOTH.notches;
+  },
   reset(sim, _b, api) {
-    restoreArena(sim, api);
-    // Чаши и столбы — прочь.
-    sim.mobs = sim.mobs.filter((m) => m.kind !== 'f12_pillar' || !api.inArena(sim, m.x, m.y));
+    meltGlacier(sim, api);
+    sim.mobs = sim.mobs.filter((x) => x.kind !== 'f12_shaman');
+    const st = stateOf(sim);
+    for (const o of st.braziers)
+      if (api.inArena(sim, o.x + 0.5, o.y + 0.5)) douseBrazier(sim, st, api, o);
+    MAM.delete(sim);
   },
 });
