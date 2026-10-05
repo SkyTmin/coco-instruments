@@ -584,13 +584,16 @@ function ring(
   }
 }
 
+const NO_RUN = -1e9;
+
 /** Повёрнутый овал по пикселям: вдоль (ux, uy) полуось `l`, поперёк — `w`. */
 function lens(p: Pen, cx: number, cy: number, ux: number, uy: number, l: number, w: number, dither = false): void {
   const R = Math.ceil(Math.max(l, w)) + 1;
   const x0 = Math.floor(cx);
   const y0 = Math.floor(cy);
   for (let y = -R; y <= R; y++) {
-    let run = -1;
+    // Начало строки: x бывает отрицательным, поэтому «нет строки» — не −1.
+    let run = NO_RUN;
     for (let x = -R; x <= R + 1; x++) {
       let inside = false;
       if (x <= R) {
@@ -600,11 +603,11 @@ function lens(p: Pen, cx: number, cy: number, ux: number, uy: number, l: number,
         const b = (-dx * uy + dy * ux) / w;
         inside = a * a + b * b <= 1 && !(dither && (x0 + x + y0 + y) & 1);
       }
-      if (inside && run < 0) run = x;
-      if (!inside && run >= 0) {
+      if (inside && run === NO_RUN) run = x;
+      if (!inside && run !== NO_RUN) {
         if (dither) for (let q = run; q < x; q++) p.rect(x0 + q, y0 + y, 1, 1);
         else p.rect(x0 + run, y0 + y, x - run, 1);
-        run = -1;
+        run = NO_RUN;
       }
     }
   }
@@ -623,7 +626,7 @@ function star(p: Pen, cx: number, cy: number, r: number, n: number, rot: number)
   const x0 = Math.floor(cx);
   const y0 = Math.floor(cy);
   for (let y = -R; y <= R; y++) {
-    let run = -1;
+    let run = NO_RUN;
     for (let x = -R; x <= R + 1; x++) {
       let on = false;
       if (x <= R) {
@@ -636,10 +639,10 @@ function star(p: Pen, cx: number, cy: number, r: number, n: number, rot: number)
           on = d <= r * (0.4 + 0.6 * spike);
         }
       }
-      if (on && run < 0) run = x;
-      if (!on && run >= 0) {
+      if (on && run === NO_RUN) run = x;
+      if (!on && run !== NO_RUN) {
         p.rect(x0 + run, y0 + y, x - run, 1);
-        run = -1;
+        run = NO_RUN;
       }
     }
   }
@@ -3170,20 +3173,43 @@ registerImpactPainter('f15b_erupt', {
     const sd = rec.seed >>> 0;
     const few = reduced();
     const occ = occOf(S);
-    // Воронка светится и остывает — на полу.
+    // Воронка: корка разорвана, внутри — лава, остывает от краёв к середине.
     p.occ = occ;
     const cool = k01(age / 1.1);
     const fade = 1 - k01((age - 1.2) / 0.5);
-    p.col(C.crust[0], 0.7 * fade);
-    oval(p, cx, cy, R * 0.75, R * 0.55);
-    p.col(heatCol(0.2 + cool * 0.8), 0.95 * fade);
-    oval(p, cx, cy, R * 0.55 * (1 - 0.4 * cool), R * 0.38 * (1 - 0.4 * cool));
+    p.col(C.crust[0], 0.8 * fade);
+    oval(p, cx, cy, R * 0.8, R * 0.56);
+    p.col(heatCol(0.45 + cool * 0.55), 0.95 * fade);
+    oval(p, cx, cy, R * 0.6 * (1 - 0.3 * cool), R * 0.4 * (1 - 0.3 * cool));
+    p.col(heatCol(0.15 + cool * 0.7), fade);
+    oval(p, cx - 1, cy, R * 0.32 * (1 - 0.5 * cool), R * 0.2 * (1 - 0.5 * cool));
+    // Корка по краю воронки — тёмные плиты, вывернутые наружу.
+    for (let i = 0; i < 7; i++) {
+      const th = (i / 7) * TAU + hash(sd, i, 9) * 0.5;
+      const x = cx + Math.cos(th) * R * 0.7;
+      const y = cy + Math.sin(th) * R * 0.5;
+      p.col(C.crust[2], fade);
+      p.dot(x - 1, y - 1, 3, 2);
+      p.col(C.crust[4], fade);
+      p.dot(x - 1, y - 1, 2, 1);
+    }
+    // Струя лавы: два языка друг на друге, оседает за 0,3 с.
+    p.occ = null;
+    const jet = 1 - eIn2(k01(age / 0.32));
+    if (jet > 0.05) {
+      for (let j = 0; j < 2; j++) {
+        const im = flameImg(14 * jet, mod(Math.floor(age * 30) + j, 4), 2);
+        p.alpha(1);
+        p.img(im, cx - im.width / 2 + (j ? 1 : -1), cy - im.height * (j + 1) * 0.9 + 2);
+      }
+    }
+    p.occ = occ;
     // Капли на полу: падают из столба и гаснут.
-    const n = few ? 10 : 24;
+    const n = few ? 12 : 30;
     for (let i = 0; i < n; i++) {
       const th = TAU * hash(sd, i, 1);
       const v = 14 + 40 * hash(sd, i, 2);
-      const vz = 110 + 120 * hash(sd, i, 3);
+      const vz = 110 + 130 * hash(sd, i, 3);
       const t = age - 0.02 * (i % 4);
       if (t < 0) continue;
       const T = (2 * vz) / 430;
@@ -3192,9 +3218,12 @@ registerImpactPainter('f15b_erupt', {
       if (t < T) {
         p.occ = null;
         const zz = vz * t - 215 * t * t;
-        const sz = hash(sd, i, 4) < 0.35 ? 2 : 1;
+        const sz = hash(sd, i, 4) < 0.45 ? 3 : 2;
+        // Сгусток с тёмной каймой: светлое ядро остывает на лету.
+        p.col(C.lava[1], 1);
+        p.dot(gx - 1, gy - zz - 1, sz + 1, sz + 1);
         p.col(heatCol(k01(t / T) * 0.6), 1);
-        p.dot(gx, gy - zz, sz, sz + (zz > 10 ? 1 : 0));
+        p.dot(gx - 1, gy - zz - 1, sz, sz);
         p.occ = occ;
       } else {
         const c = k01((t - T) / 0.7);
@@ -3542,36 +3571,71 @@ registerImpactPainter('f15b_beam', {
 /** Голова гидры (вид спереди-сверху), челюсти: 0 — раскрыты, 1 — сомкнуты. */
 function hydraHead(shut: number): HTMLCanvasElement {
   return sprite(110000 + shut, () => {
-    const p = new Px(21, 26);
-    const scale = (x: number, y: number) => ((x + y) % 3 === 0 ? hx(C.bog[4]) : hx(C.bog[3]));
-    // Шея — снизу.
-    for (let y = 14; y < 26; y++) for (let x = 7; x < 14; x++) p.set(x, y, x < 9 ? hx(C.bog[4]) : x > 11 ? hx(C.bog[2]) : scale(x, y));
-    // Голова — клин.
-    for (let y = 2; y < 17; y++) {
-      const t = (y - 2) / 15;
-      const hw = 4 + 4.5 * Math.sin(Math.PI * Math.min(1, t * 1.2));
-      for (let x = 0; x < 21; x++) {
-        const d = x + 0.5 - 10.5;
+    const W = 26;
+    const p = new Px(W, 31);
+    const SC = ['#0e2a0c', '#1e4a16', '#3a7a24', '#6ab03a', '#b0e070'].map((c) => hx(c));
+    const belly = hx('#a8c070');
+    const bone = hx('#e8dcc0');
+    const cx = W / 2;
+    // Шея: изгиб из топи, брюшные щитки посередине.
+    for (let y = 17; y < 31; y++) {
+      const c0 = cx + Math.sin(((y - 17) / 14) * Math.PI) * 1.6;
+      for (let x = 0; x < W; x++) {
+        const d = x + 0.5 - c0;
+        if (Math.abs(d) > 4.2) continue;
+        const scaleRow = (y + (x >> 1)) % 3 === 0;
+        p.set(x, y, Math.abs(d + 0.4) < 1.6 ? (y % 2 ? belly : SC[3]) : d < -2.2 ? SC[3] : d > 2.4 ? SC[1] : scaleRow ? SC[3] : SC[2]);
+      }
+    }
+    // Голова: череп сверху, морда книзу — смотрит на героя.
+    for (let y = 1; y < 21; y++) {
+      const t = (y - 1) / 19;
+      const hw = t < 0.35 ? 4 + 9 * t : t < 0.7 ? 7.2 - (t - 0.35) * 2 : 6.5 - (t - 0.7) * 9;
+      for (let x = 0; x < W; x++) {
+        const d = x + 0.5 - cx;
         if (Math.abs(d) > hw) continue;
-        p.set(x, y, d < -hw * 0.4 ? hx(C.bog[4]) : d > hw * 0.5 ? hx(C.bog[2]) : scale(x, y));
+        const l = -d / hw - (t - 0.4);
+        const scaleRow = (x + y * 2) % 4 === 0;
+        p.set(x, y, l > 0.7 ? SC[4] : l > 0.1 ? (scaleRow ? SC[4] : SC[3]) : l > -0.6 ? SC[2] : SC[1]);
       }
     }
-    // Пасть: раскрыта — тёмный провал с зубами, сомкнута — шов.
+    // Гребень: костяные шипы по бокам черепа.
+    for (const [y, len] of [
+      [4, 3],
+      [7, 4],
+      [10, 3],
+    ]) {
+      for (let q = 0; q < len; q++) {
+        p.set(Math.round(cx - 7 - q), y - Math.floor(q / 2), bone);
+        p.set(Math.round(cx + 6 + q), y - Math.floor(q / 2), bone);
+      }
+    }
+    // Пасть.
     if (!shut) {
-      for (let y = 8; y < 15; y++) for (let x = 6; x < 15; x++) if (Math.abs(x + 0.5 - 10.5) < 4.5 - (y - 8) * 0.35) p.set(x, y, hx('#1a0606'));
-      for (let x = 6; x < 15; x += 2) {
-        p.set(x, 8, hx('#f4ead8'));
-        p.set(x + 1, 14, hx('#f4ead8'));
+      for (let y = 12; y < 20; y++) {
+        const hw = 4.6 - (y - 12) * 0.35;
+        for (let x = 0; x < W; x++) if (Math.abs(x + 0.5 - cx) < hw) p.set(x, y, hx('#160404'));
       }
+      p.set(Math.round(cx), 16, hx(C.bog[5]));
+      p.set(Math.round(cx) - 1, 17, hx(C.bog[4]));
+      for (const x of [-4, -2, 2, 4]) {
+        p.set(Math.round(cx + x - 0.5), 12, bone);
+        p.set(Math.round(cx + x - 0.5), 13, bone);
+      }
+      for (const x of [-3, 0, 3]) p.set(Math.round(cx + x - 0.5), 18, bone);
     } else {
-      for (let x = 5; x < 16; x++) p.set(x, 11, hx(C.ink));
-      for (let x = 6; x < 15; x += 2) p.set(x, 12, hx('#f4ead8'));
+      for (let x = Math.round(cx - 5); x <= Math.round(cx + 4); x++) {
+        p.set(x, 15, hx('#160404'));
+        p.set(x, x % 2 ? 14 : 16, bone);
+      }
     }
-    // Глаза.
-    p.set(6, 5, hx('#ffe060'));
-    p.set(14, 5, hx('#ffe060'));
-    p.set(7, 5, hx('#fff8c0'));
-    p.set(13, 5, hx('#fff8c0'));
+    // Глаза горят.
+    for (const s of [-1, 1]) {
+      const ex = Math.round(cx + s * 4.5 - 0.5);
+      p.set(ex, 7, hx('#ffe060'));
+      p.set(ex + (s < 0 ? 1 : -1), 7, hx('#fff8c0'));
+      p.set(ex, 8, hx('#c08010'));
+    }
     p.outline(hx('#081004'));
     return p;
   });
@@ -3661,14 +3725,14 @@ registerImpactPainter('f15b_hbite', {
       const im = hydraHead(age > 0.06 && age < 0.4 ? 1 : 0);
       const vis = Math.round(im.height * h);
       // Видна только часть над топью: голова поднимается из круга.
-      const X = Math.floor(cx - 10.5);
+      const X = Math.floor(cx - im.width / 2);
       const Y = Math.floor(cy + 2 - vis);
       p.alpha(1);
       p.g.drawImage(im, 0, 0, im.width, vis, X + p.qx, Y + p.qy, im.width, vis);
     }
     p.occ = null;
     // Щелчок челюстей.
-    hitStar(p, cx, cy - 12 * up, age - 0.06, 0.1, 10, 0.4, C.bog[5]);
+    hitStar(p, cx, cy - 14 * up, age - 0.06, 0.1, 10, 0.4, C.bog[5]);
     // Яд брызгами, пузыри, пар.
     drops(p, sd, age, few ? 6 : 16, (i) => [cx, cy - 10, (i / 16) * TAU], 20, 40, 40, 60, (i) => 0.06 + 0.02 * (i % 3), (q) => (q < 0.4 ? C.bog[5] : C.bog[4]), C.bog[2], [0.9, 1.3]);
     dust(p, sd + 1, age - 0.3, cx, cy - 2, few ? 2 : 5, -Math.PI / 2, 1.2, 8, 10, 2, 7, 10, 0.9, 6, 0.5);
@@ -3713,11 +3777,13 @@ registerZonePainter(
       p.col(C.bog[5], Math.sin(Math.PI * ph));
       p.dot(cx + Math.cos(th) * r, cy + Math.sin(th) * r * 0.7 - ph * 6);
     }
-    // Перенос: белая вспышка.
+    // Перенос: столб вспыхивает белым и сжимается в нить.
     if (t > 0.5) {
       const u = k01((t - 0.5) / 0.1);
-      p.col(C.white, 0.9 * (1 - u));
-      oval(p, cx, cy - 6, R * (0.6 + u), R * (1.4 + u));
+      const w = Math.max(1, R * 0.6 * (1 - u));
+      p.col(C.white, 0.95 * (1 - u * 0.6));
+      p.rect(Math.floor(cx - w), Math.floor(cy - 48), Math.ceil(w * 2), 48);
+      ring(p, cx, cy, R * (1 + 0.8 * u), C.white, 1 - u, (_a, i) => i % 2 === 0);
     }
   }),
 );
@@ -4080,17 +4146,37 @@ registerImpactPainter('f15b_axe', {
 
 // ---- Челюсти: укус змея (конус) и головы гидры (круг) -----------------------
 
-/** Ряд зубов поперёк (nx, ny): `n` клыков, остриём к `dir`. */
+/**
+ * Челюсть: дёсна — полумесяц вдоль (nx, ny), выгнутый от пасти, и `n`
+ * клыков треугольниками остриём к (dx, dy) — к середине пасти.
+ */
 function teeth(p: Pen, x: number, y: number, nx: number, ny: number, dx: number, dy: number, n: number, gapT: number, c: string, a: number): void {
+  const half = ((n - 1) / 2) * gapT + 2;
+  // Дёсна: дуга, концы загнуты к пасти.
+  p.col(G[2], 0.85 * a);
+  for (let s = -half; s <= half; s += 0.5) {
+    const bend = (s / half) * (s / half) * 3;
+    const gx = x + nx * s + dx * bend;
+    const gy = y + ny * s + dy * bend;
+    p.dot(gx - dx, gy - dy, 1, 1);
+    p.dot(gx - dx * 2, gy - dy * 2, 1, 1);
+  }
   for (let i = 0; i < n; i++) {
     const s = (i - (n - 1) / 2) * gapT;
-    const bx = x + nx * s;
-    const by = y + ny * s;
-    const len = 3 - Math.abs(i - (n - 1) / 2) * 0.35;
-    p.col(C.ink, a * 0.6);
-    p.line(bx + 1, by + 1, bx + dx * len + 1, by + dy * len + 1);
-    p.col(c, a);
-    p.line(bx, by, bx + dx * len, by + dy * len);
+    const q = Math.abs(s / half);
+    const bend = q * q * 3;
+    const bx = x + nx * s + dx * bend;
+    const by = y + ny * s + dy * bend;
+    const len = 4.2 - q * 1.6;
+    // Клык: основание в два пикселя, остриё — один.
+    for (let t = 0; t <= len; t += 0.5) {
+      const w = t < len * 0.5 ? 1 : 0;
+      p.col(C.ink, a * 0.55);
+      p.dot(bx + dx * t + 1, by + dy * t + 1);
+      p.col(t > len - 1 ? C.white : c, a);
+      p.dot(bx + dx * t, by + dy * t);
+      if (w) p.dot(bx + dx * t + nx, by + dy * t + ny);
+    }
   }
 }
 
@@ -4141,8 +4227,8 @@ registerZonePainter(
     const ny = ax;
     const gap = (isCone ? R * 0.45 : R * 0.62) * (1 - Math.pow(k, 1.6)) + 2;
     const c = sig ? C.white : k > 0.6 ? G[5] : G[4];
-    teeth(p, jx - nx * gap, jy - ny * gap, ax, ay, nx, ny, 6, 3, c, 0.45 + 0.55 * k);
-    teeth(p, jx + nx * gap, jy + ny * gap, ax, ay, -nx, -ny, 6, 3, c, 0.45 + 0.55 * k);
+    teeth(p, jx - nx * gap, jy - ny * gap, ax, ay, nx, ny, 5, 4, c, 0.45 + 0.55 * k);
+    teeth(p, jx + nx * gap, jy + ny * gap, ax, ay, -nx, -ny, 5, 4, c, 0.45 + 0.55 * k);
   }),
 );
 
@@ -4168,8 +4254,8 @@ registerImpactPainter('f15b_bite', {
     if (age < 0.35) {
       const al = 1 - age / 0.35;
       p.scan = scanOf(time);
-      teeth(p, jx - nx * 2, jy - ny * 2, ax, ay, nx, ny, 6, 3, age < 0.06 ? C.white : G[5], al);
-      teeth(p, jx + nx * 2, jy + ny * 2, ax, ay, -nx, -ny, 6, 3, age < 0.06 ? C.white : G[5], al);
+      teeth(p, jx - nx * 2, jy - ny * 2, ax, ay, nx, ny, 5, 4, age < 0.06 ? C.white : G[5], al);
+      teeth(p, jx + nx * 2, jy + ny * 2, ax, ay, -nx, -ny, 5, 4, age < 0.06 ? C.white : G[5], al);
       p.scan = -1;
     }
     hitStar(p, jx, jy - 2, age, 0.1, 12, a + 0.4, G[4]);
@@ -4259,12 +4345,12 @@ registerImpactPainter('f15b_flame', {
     fillLane(p, cx, cy, ux, uy, 0, L, hw * 0.8, true);
     // Языки призрачного пламени встают по полосе от змея к концу.
     const step = few ? 9 : 5;
-    for (let s = 2; s < L; s += step) {
-      const t = age - 0.13 * (s / L);
+    for (let s = 2; s < L; s += step * (0.6 + 0.8 * hash(sd, Math.floor(s), 9))) {
+      const t = age - 0.13 * (s / L) - 0.06 * hash(sd, Math.floor(s), 8);
       if (t < 0) continue;
-      const life = 0.55 + 0.25 * hash(sd, Math.floor(s), 1);
+      const life = 0.4 + 0.45 * hash(sd, Math.floor(s), 1);
       if (t > life) continue;
-      const hgt = (5 + 7 * hash(sd, Math.floor(s), 2)) * eOut2(k01(t / 0.07)) * (1 - eIn2(k01((t - life * 0.55) / (life * 0.45))));
+      const hgt = (3 + 10 * hash(sd, Math.floor(s), 2)) * eOut2(k01(t / 0.07)) * (1 - eIn2(k01((t - life * 0.5) / (life * 0.5))));
       if (hgt < 2) continue;
       const o = (hash(sd, Math.floor(s), 3) - 0.5) * hw * 1.2;
       const im = flameImg(hgt, mod(Math.floor(time * 12) + Math.floor(s), 4), 1);
@@ -4764,10 +4850,9 @@ registerZonePainter(
     // Гребень давления бежит от прошлого кольца (от сердца) к полосе.
     const r0 = Math.max(S * 0.9, R - S * 2.4);
     const rf = r0 + (R - w - r0) * Math.pow(k, 1.3);
-    ring(p, cx, cy, rf, sig ? C.white : C.bloodHi, 0.85, (_a, i) => hash(i >> 2, sd, 3) > 0.2, 0.5);
-    ring(p, cx, cy, rf - 2, C.blood[3], 0.5, (_a, i) => hash(i >> 2, sd, 4) > 0.45);
+    ring(p, cx, cy, rf, sig ? C.white : C.bloodHi, 0.6 + 0.3 * k, (_a, i) => hash(i >> 2, sd, 3) > 0.35, 0.5);
     // Узлы вен вспухают по полосе.
-    const nb = 18;
+    const nb = k > 0.35 ? 12 : 0;
     for (let i = 0; i < nb; i++) {
       const th = (i / nb) * TAU + hash(sd, i, 5) * 0.3;
       const x = cx + Math.cos(th) * R;
@@ -4781,7 +4866,6 @@ registerZonePainter(
     const run = Math.floor(time * (16 + 34 * k));
     const edge = sig ? (tk ? C.white : C.ember[4]) : k > 0.5 ? C.blood[4] : C.blood[3];
     ring(p, cx, cy, R + w, edge, 0.75 + 0.25 * k, sig ? undefined : (_a, i) => mod(i - run, 9) < 6, 0.6);
-    ring(p, cx, cy, R - w, C.blood[3], 0.5, (_a, i) => i % 4 === 0);
     p.occ = null;
   }),
 );
