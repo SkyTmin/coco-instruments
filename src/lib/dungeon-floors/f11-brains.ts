@@ -3113,6 +3113,7 @@ registerBrain('f11boss', {
     const ph = b?.phase ?? 1;
     const toHero = Math.atan2(dy, dx);
     m.danger = 0;
+    m.data.vNoTele = 1; // v2.87 — только рисунок: метки ударов рисует `f11-boss-fx.ts`
     m.kx *= 0.5;
     m.ky *= 0.5;
     switch (m.mode) {
@@ -3152,6 +3153,14 @@ registerBrain('f11boss', {
         if (dist > 3.4) {
           const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
           api.steer(sim, m, cx, cy, m.speed * (ph === 4 ? 1.15 : 1), dt);
+          // v2.87 — только рисунок: пыль из-под ступней, шаг через 0,55 клетки.
+          m.data.vWalk = (m.data.vWalk ?? 0) + hypot(m.vx, m.vy) * dt;
+          if (m.data.vWalk > 0.55) {
+            m.data.vWalk = 0;
+            m.data.vFoot = m.data.vFoot ? 0 : 1;
+            const fa = Math.atan2(m.vy, m.vx) + (m.data.vFoot ? 1.4 : -1.4);
+            api.vfx(sim, { x: m.x + Math.cos(fa) * 0.42, y: m.y + 0.05, r: 0.5, life: 0.9, art: 'f11v_step', ...{ ang: fa + (m.data.vFoot ? 0.5 : -0.5) } } as ZoneIn);
+          }
         } else {
           m.vx *= 0.8;
           m.vy *= 0.8;
@@ -3163,6 +3172,8 @@ registerBrain('f11boss', {
           m.data.sa = m.face;
           m.data.sdir = sim.rng() < 0.5 ? 1 : -1;
           sim.events.push({ t: 'boss', what: 'f11_spin_call' });
+          // v2.87 — только рисунок: лучи вращения — одна зона-картинка на весь режим.
+          api.vfx(sim, { x: m.x, y: m.y, r: BOSS.beamLen, life: BOSS.spinCharge + BOSS.spinDur + 0.6, art: 'f11v_spin', above: true, ...{ boss: m.id } } as ZoneIn);
           return;
         }
         if (dist < 2.9) {
@@ -3341,7 +3352,11 @@ registerBrain('f11boss', {
   onHit(sim, m, hit) {
     const b = sim.boss;
     if (!b) return 1;
-    if (b.data.shield) return 0;
+    if (b.data.shield) {
+      m.data.vDomeT = sim.time; // v2.87 — только рисунок: соты купола вспыхивают от удара
+      m.data.vDomeA = hit.ang; // v2.87 — только рисунок
+      return 0;
+    }
     if (m.mode === 'f11_shift') return 0;
     if (m.mode === 'f11_stagger') return 1.7;
     if (b.phase === 3) {
@@ -3387,6 +3402,7 @@ function raisePylons(sim: Sim, st: F11State, b: BossFight, api: SimApi): void {
     api.zone(sim, z as ZoneIn);
   }
   b.data.shield = 1;
+  b.data.vUp = sim.time; // v2.87 — только рисунок: купол собирается от лучей пилонов
   b.data.p0 = ids[0];
   b.data.p1 = ids[1];
   b.data.p2 = ids[2];
@@ -3449,6 +3465,7 @@ function enterPhase(sim: Sim, st: F11State, b: BossFight, boss: Mob, api: SimApi
     });
   } else if (n === 3) {
     dropPylons(sim);
+    if (b.data.shield) b.data.vFall = sim.time; // v2.87 — только рисунок: купол осыпается
     b.data.shield = 0;
     st.arena.mode = 3;
     st.arena.k = 0;
@@ -3483,10 +3500,14 @@ function enterPhase(sim: Sim, st: F11State, b: BossFight, boss: Mob, api: SimApi
 function crumbleRing(sim: Sim, st: F11State, b: BossFight, api: SimApi, r: number): void {
   const cells = ringCells(sim, st, b, r);
   for (const i of cells) setCell(sim, st, api, i, T_FLOOR, MK.cracking);
+  // v2.87 — только рисунок: край трещит (жар по трещинам, пыль) и уходит в бездну (плиты падают).
+  api.vfx(sim, { x: st.arena.cx, y: st.arena.cy, r: r, life: 2.1, art: 'f11v_crack', ...{ cells: cells.slice() } } as ZoneIn);
   sim.events.push({ t: 'boss', what: 'f11_crumble_trap', text: 'КРАЙ ТРЕЩИТ', sub: 'отойди к середине' });
   after(st, 2, () => {
     if (sim.boss?.state !== 'fight' && sim.boss?.state !== 'won') return;
+    const sunk = cells.filter((i) => sim.world.mark[i] === MK.cracking); // v2.87 — только рисунок
     for (const i of cells) if (sim.world.mark[i] === MK.cracking) sinkCell(sim, st, api, i, MK.fallen);
+    api.vfx(sim, { x: st.arena.cx, y: st.arena.cy, r: r, life: 3, art: 'f11v_fall', ...{ cells: sunk } } as ZoneIn); // v2.87 — только рисунок
     sim.events.push({ t: 'shake', k: 0.6 });
     sim.events.push({ t: 'boss', what: 'f11_crumble_fall' });
   });
@@ -3501,6 +3522,9 @@ registerBoss('f11boss', {
     st.arena = { ...st.arena, mode: 1, cx, cy, k: 1.1, gust: 0, gustT: 0, phase: 1 };
     api.setMode(lead, 'f11_wake');
     lead.face = PI / 2;
+    // v2.87 — только рисунок: «режиссёры» техник стража на весь бой — на полу и поверх темноты.
+    api.vfx(sim, { x: cx, y: cy, r: 0.5, life: 1e6, art: 'f11v_dir' });
+    api.vfx(sim, { x: cx, y: cy, r: 0.5, life: 1e6, art: 'f11v_sky', above: true });
     api.camera(sim, lead.x, lead.y + 0.5, 2.6);
     api.light(sim, 'f11core', { x: lead.x, y: lead.y, r: 3.2, tint: 'teal' });
     sim.events.push({
@@ -3534,6 +3558,7 @@ registerBoss('f11boss', {
       // Купол: пилоны пали — страж на колене; через 16 с встают снова.
       if (bd.shield && !pylonsAlive(sim, b)) {
         bd.shield = 0;
+        bd.vFall = sim.time; // v2.87 — только рисунок: купол осыпается
         bd.pylonT = 0;
         api.setMode(boss, 'f11_stagger');
         sim.zones = sim.zones.filter((z) => z.art !== 'f11_pylonbeam');
@@ -3602,9 +3627,10 @@ registerBoss('f11boss', {
       } else a.k = 2;
     }
   },
-  onPartDown(sim, _b, m) {
+  onPartDown(sim, _b, m, api) { // v2.87 — только рисунок: `api` — для зоны-картинки смерти
     if (m.kind !== 'f11boss') return false;
     const st = stateOf(sim);
+    api.vfx(sim, { x: m.x, y: m.y, r: 1.3, life: 3.2, art: 'f11v_death', ...{ left: Math.cos(m.face) < 0 ? 1 : 0 } } as ZoneIn); // v2.87 — только рисунок
     dropPylons(sim);
     st.arena.mode = 0;
     st.arena.k = 0;
