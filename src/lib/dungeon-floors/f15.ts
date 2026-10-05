@@ -113,76 +113,69 @@
 
 import type { MobDef } from '../dungeon';
 import { F15_BOSS, F15_BOSS_MATS, F15_BOSS_MEATS, F15_BOSS_MOBS, F15_HEART_AREA } from './f15-boss';
-import { F15_GUT_MAP, F15_SPOTS, F15_THROAT_MAP, F15_VEINS_MAP } from './f15-map';
-import type { AreaSpec, FloorDef, HazardSpec, LegendCell, SpawnSpec } from './types';
+import { F15_OBS_MAP, F15_ORBIT_MAP, F15_ROOTS_MAP, F15_SPOTS } from './f15-map';
+import type { AreaSpec, FloorDef, LegendCell, SpawnSpec } from './types';
 
-/** Районы «Мира». `f15` — вход: на нём могут стоять сохранения игроков. */
-export const F15_THROAT = 'f15';
-export const F15_GUT = 'f15gut';
-export const F15_VEINS = 'f15veins';
-export const F15_WORLD_AREAS = [F15_THROAT, F15_GUT, F15_VEINS] as const;
+/** Районы «Мира». id старые (на них лифты и шахты), `f15` — вход. */
+export const F15_ROOTS = 'f15';
+export const F15_OBS = 'f15gut';
+export const F15_ORBIT = 'f15veins';
+export const F15_WORLD_AREAS = [F15_ROOTS, F15_OBS, F15_ORBIT] as const;
 
 /** Свои клетки этажа: номер вида для рисовальщика и правил этажа. */
 export const F15_MARK = {
-  flesh: 1,
-  ring: 2,
+  /** Кристаллы в полу. */
+  xfloor: 1,
+  /** Крошка породы, старый штрек. */
+  grit: 2,
+  /** Светящаяся жила в полу. */
   vein: 3,
-  node: 4,
-  mucus: 5,
-  fold: 6,
-  acid: 7,
-  shallow: 8,
-  ring1: 9,
-  ring2: 10,
-  ring3: 11,
-  blood: 12,
-  flowN: 13,
-  flowS: 14,
-  flowW: 15,
-  flowE: 16,
-  gore: 17,
-  bones: 18,
-  vessel: 19,
-  scar: 20,
-  debris: 21,
-  band: 22,
-  valve: 23,
-  clot: 24,
-  leaflet: 25,
-  door: 26,
-  lymphDoor: 27,
-  // Стены.
-  wall: 40,
-  relic: 41,
-  polyp: 42,
-  eye: 43,
-  tendril: 44,
-  artery: 45,
-  // Сменённые на ходу (`setTile`).
-  acidRise: 50,
-  clotWall: 51,
-  shut: 52,
+  /** Край кратера колодца — сетка пола выгнута к ядру. */
+  rim: 4,
+  /** Ядро колодца (глубина, осколок звезды). */
+  core: 5,
+  /** Яма кратера (глубина). */
+  pit: 6,
+  /** Пустота и бездна (глубина): звёздное небо внизу. */
+  void: 7,
+  /** Кристальная стена. */
+  xwall: 8,
+  /** Кристалл памяти в стене. */
+  memory: 9,
+  /** Пол невесомости: плывёт пыль. */
+  float: 10,
+  /** Пол тяжести: тёмная сетка, вязнет. */
+  heavy: 11,
+  /** Звёздная карта на полу Обсерватории. */
+  chart: 12,
+  /** Узел созвездия на карте. */
+  node: 13,
+  /** Латунное кольцо в полу. */
+  brass: 14,
+  /** Ковровая дорожка. */
+  runner: 15,
+  /** Мозаика купола. */
+  mosaic: 16,
+  /** Стена обсерватории (кладка с латунным поясом). */
+  obswall: 17,
+  /** Звёздное окно в стене. */
+  window: 18,
+  /** Звёздная дверь (закрыта — стена). */
+  door: 19,
+  /** Порог растаявшей звёздной двери. */
+  doorOpen: 20,
+  /** Дорожка орбиты (глубина). */
+  lane: 21,
+  /** Остров на орбите (едет). */
+  island: 22,
+  /** Причал. */
+  dock: 23,
+  /** Каменный мост. */
+  bridge: 24,
+  /** Пылевой вихрь (глубина). */
+  vortex: 25,
 } as const;
-
 const M = F15_MARK;
-
-/** Опасности клеток: сок, мелкий сок, слизь, течение. */
-export const F15_HAZ: Record<string, HazardSpec> = {
-  shallow: { status: 'poison', dur: 1.4, dps: 0.012, slow: 0.82 },
-  acid: { status: 'poison', dur: 2, dps: 0.07, slow: 0.62 },
-  mucus: { slow: 0.74 },
-  flow: { slow: 0.92 },
-};
-
-/** Течение клетки (складки и русло): куда толкает удар сердца. */
-export const F15_FLOW: Partial<Record<number, [number, number]>> = {
-  [M.flowN]: [0, -1],
-  [M.flowS]: [0, 1],
-  [M.flowW]: [-1, 0],
-  [M.flowE]: [1, 0],
-};
-
-type Tint = 'warm' | 'cold' | 'teal' | 'red' | 'violet' | 'green';
 
 const prop = (
   ref: string,
@@ -190,627 +183,469 @@ const prop = (
   extra: Partial<NonNullable<LegendCell['obj']>> = {},
 ): NonNullable<LegendCell['obj']> => ({ kind: 'deco', ref, solid, ...extra });
 
-/** Свои буквы карты. `polyp` — оттенок светляков района. */
-function legendOf(polyp: Tint): Record<string, LegendCell> {
-  return {
-    // Пол.
-    '.': { tile: 'floor', mark: M.flesh },
-    r: { tile: 'floor', mark: M.ring },
-    y: { tile: 'floor', mark: M.vein },
-    j: { tile: 'floor', mark: M.node, obj: prop('f15_node', 0, { flat: true }) },
-    m: { tile: 'hazard', mark: M.mucus, hazard: F15_HAZ.mucus },
-    f: { tile: 'floor', mark: M.fold },
-    _: { tile: 'deep', mark: M.acid },
-    ':': { tile: 'hazard', mark: M.shallow, hazard: F15_HAZ.shallow },
-    '1': { tile: 'floor', mark: M.ring1 },
-    '3': { tile: 'floor', mark: M.ring2 },
-    '5': { tile: 'floor', mark: M.ring3 },
-    h: { tile: 'deep', mark: M.blood },
-    '8': { tile: 'hazard', mark: M.flowN, hazard: F15_HAZ.flow },
-    '2': { tile: 'hazard', mark: M.flowS, hazard: F15_HAZ.flow },
-    '4': { tile: 'hazard', mark: M.flowW, hazard: F15_HAZ.flow },
-    '6': { tile: 'hazard', mark: M.flowE, hazard: F15_HAZ.flow },
-    x: { tile: 'floor', mark: M.gore },
-    k: { tile: 'floor', mark: M.bones },
-    e: { tile: 'floor', mark: M.vessel },
-    z: { tile: 'floor', mark: M.scar },
-    d: { tile: 'floor', mark: M.debris },
-    // Дышащая кромка, сфинктеры, сгусток, створки: пол, на котором стоит
-    // «живая» стенка (предмет): сомкнулась — держит, как стена.
-    w: { tile: 'floor', mark: M.band, obj: prop('f15_band', 0) },
-    s: { tile: 'floor', mark: M.valve, obj: prop('f15_valve', 0) },
-    Q: { tile: 'floor', mark: M.door, obj: prop('f15_door', 0) },
-    H: { tile: 'floor', mark: M.lymphDoor, obj: prop('f15_lymphdoor', 0.5) },
-    t: { tile: 'floor', mark: M.clot },
-    q: { tile: 'floor', mark: M.leaflet, obj: prop('f15_leaflet', 0) },
-    // Стены.
-    '#': { tile: 'wall', mark: M.wall },
-    O: { tile: 'wall', mark: M.relic },
-    F: {
-      tile: 'wall',
-      mark: M.polyp,
-      obj: prop('f15_polyp', 0),
-      light: { r: 3.2, tint: polyp },
-    },
-    J: { tile: 'wall', mark: M.eye, obj: prop('f15_walleye', 0) },
-    I: { tile: 'wall', mark: M.tendril, obj: prop('f15_tendrils', 0) },
-    V: {
-      tile: 'wall',
-      mark: M.artery,
-      obj: prop('f15_artery', 0),
-      light: { r: 2.2, tint: 'red' },
-    },
-    // Предметы: живое.
-    '^': { tile: 'floor', obj: prop('f15_spike', 0.26) },
-    '&': { tile: 'floor', obj: prop('f15_rib', 0.42) },
-    '*': { tile: 'floor', obj: { kind: 'breakable', ref: 'f15_cyst', solid: 0.3, hp: 2 } },
-    '-': {
-      tile: 'floor',
-      mark: M.gore,
-      obj: { kind: 'breakable', ref: 'f15_eggs', solid: 0.28, hp: 1, loot: 'f15_lymph' },
-    },
-    '+': { tile: 'floor', mark: M.gore, obj: prop('f15_clot', 0.36) },
-    '|': {
-      tile: 'floor',
-      obj: prop('f15_heartpod', 0.32),
-      light: { r: 2.4, tint: 'red' },
-    },
-    // Переваренное: обломки прошлых этажей.
-    '(': { tile: 'floor', mark: M.debris, obj: prop('f15_cart', 0.42) },
-    '}': {
-      tile: 'floor',
-      obj: prop('f15_shrooms', 0.28),
-      light: { r: 2.4, tint: 'green' },
-    },
-    '{': { tile: 'floor', obj: prop('f15_druse', 0.34), light: { r: 2.6, tint: 'teal' } },
-    '7': { tile: 'floor', mark: M.bones, obj: prop('f15_skull', 0.5) },
-    '9': { tile: 'floor', obj: prop('f15_obsidian', 0.4), light: { r: 2, tint: 'red' } },
-    ']': { tile: 'floor', obj: prop('f15_mirror', 0.3), light: { r: 1.4, tint: 'cold' } },
-    '[': { tile: 'floor', mark: M.debris, obj: prop('f15_shoji', 0.34) },
-    U: { tile: 'floor', obj: prop('f15_rune', 0.34), light: { r: 1.8, tint: 'teal' } },
-    '/': { tile: 'floor', mark: M.debris, obj: prop('f15_blade', 0.2) },
-    '<': { tile: 'floor', obj: prop('f15_vane', 0.3) },
-    '?': { tile: 'floor', mark: M.debris, obj: prop('f15_sign', 0.3) },
-    '0': { tile: 'floor', mark: M.debris, obj: prop('f15_cannon', 0.44) },
-    ')': { tile: 'floor', mark: M.debris, obj: prop('f15_gear', 0.42) },
-    // Действия этажа.
-    g: {
-      tile: 'floor',
-      mark: M.mucus,
-      obj: prop('f15_gland', 0.36, { use: { label: 'Выдавить слизь' } }),
-      light: { r: 1.6, tint: 'green' },
-    },
-    N: {
-      tile: 'floor',
-      obj: prop('f15_nervecord', 0.28, { use: { label: 'Дёрнуть нерв' } }),
-      light: { r: 1.5, tint: 'violet' },
-    },
-    W: {
-      tile: 'floor',
-      obj: prop('f15_wheel', 0.34, { use: { label: 'Сжать вену' } }),
-    },
-  };
-}
+/** Буквы всех трёх районов: кристалл, колодцы, лампы, действия. */
+const COMMON: Record<string, LegendCell> = {
+  x: { tile: 'floor', mark: M.xfloor },
+  g: { tile: 'floor', mark: M.grit },
+  j: { tile: 'floor', mark: M.vein },
+  r: { tile: 'floor', mark: M.rim },
+  '*': { tile: 'deep', mark: M.core, obj: prop('f15_core', 0), light: { r: 3.4, tint: 'teal' } },
+  '-': { tile: 'deep', mark: M.pit },
+  d: { tile: 'deep', mark: M.pit, obj: prop('f15_bigshard', 0), light: { r: 4.4, tint: 'teal' } },
+  _: { tile: 'deep', mark: M.void },
+  W: { tile: 'wall', mark: M.xwall },
+  Q: { tile: 'wall', mark: M.memory, obj: prop('f15_memory', 0), light: { r: 2.3, tint: 'violet' } },
+  i: { tile: 'floor', obj: prop('f15_lamp', 0.3, { use: { label: 'Зажечь кристалл' } }) },
+  k: { tile: 'floor', obj: prop('f15_druse', 0.32), light: { r: 1.7, tint: 'cold' } },
+  I: { tile: 'floor', obj: prop('f15_pillar', 0.45) },
+  q: { tile: 'floor', obj: prop('f15_stalag', 0.3) },
+  U: {
+    tile: 'floor',
+    obj: { kind: 'breakable', ref: 'f15_geode', solid: 0.36, hp: 2, loot: 'f15_shard' },
+  },
+  Z: { tile: 'floor', obj: prop('f15_rock', 0.45), light: { r: 2.4, tint: 'warm' } },
+  f: { tile: 'floor', mark: M.float },
+  y: { tile: 'hazard', mark: M.heavy, hazard: { slow: 0.62 } },
+  '&': { tile: 'floor', obj: prop('f15_anchor', 0.3, { use: { label: 'Зацепиться' } }) },
+  J: { tile: 'floor', obj: prop('f15_lever', 0.3, { use: { label: 'Рычаг колодца' } }) },
+  V: { tile: 'floor', obj: prop('f15_telescope', 0.42, { use: { label: 'Навести телескоп' } }) },
+  '+': { tile: 'floor', obj: prop('f15_beacon', 0.3), light: { r: 2.2, tint: 'cold' } },
+};
+
+const LEGEND_OBS: Record<string, LegendCell> = {
+  ...COMMON,
+  h: { tile: 'floor', mark: M.chart },
+  z: { tile: 'floor', mark: M.node, light: { r: 1.2, tint: 'warm' } },
+  w: { tile: 'floor', mark: M.brass },
+  t: { tile: 'floor', mark: M.runner },
+  m: { tile: 'floor', mark: M.mosaic },
+  H: { tile: 'wall', mark: M.obswall },
+  F: { tile: 'wall', mark: M.window, light: { r: 2.6, tint: 'violet' } },
+  // Звёздная дверь: на карте — пол (путь по клеткам есть), правила этажа
+  // закрывают её стеной на старте вылазки; телескоп растапливает.
+  '|': { tile: 'floor', mark: M.door },
+  O: { tile: 'floor', obj: prop('f15_column', 0.46) },
+  A: { tile: 'floor', obj: prop('f15_armillary', 0.55) },
+  N: { tile: 'floor', obj: prop('f15_orrery', 0.7), light: { r: 2.6, tint: 'warm' } },
+  e: { tile: 'floor', obj: prop('f15_brazier', 0.36), light: { r: 2.8, tint: 'warm' } },
+  '6': { tile: 'floor', obj: prop('f15_globe', 0.4) },
+  '7': { tile: 'floor', obj: prop('f15_lectern', 0.34) },
+  '8': {
+    tile: 'floor',
+    obj: { kind: 'breakable', ref: 'f15_cabinet', solid: 0.42, hp: 2, loot: 'f15_lens' },
+  },
+  '9': { tile: 'floor', obj: prop('f15_statue', 0.46) },
+};
+
+const LEGEND_ORBIT: Record<string, LegendCell> = {
+  ...COMMON,
+  ':': { tile: 'deep', mark: M.lane },
+  '0': { tile: 'floor', mark: M.island },
+  p: { tile: 'floor', mark: M.dock },
+  ';': { tile: 'floor', mark: M.bridge },
+  '^': { tile: 'deep', mark: M.void, obj: prop('f15_float', 0) },
+  '(': { tile: 'deep', mark: M.vortex, obj: prop('f15_vortex', 0), light: { r: 3, tint: 'violet' } },
+};
 
 // ---------------------------------------------------------------------------
-// Посты и залы-события: `F15_SPOTS` из карты («вид район x y …»).
+// Места карты: колодцы, кольца орбит, залы-события, кристаллы памяти, посты.
 // ---------------------------------------------------------------------------
 
 export interface F15Spot {
   kind: string;
   area: string;
-  x: number;
-  y: number;
-  /** Для рамок (`box`): имя и правый нижний угол. */
-  name?: string;
-  x1?: number;
-  y1?: number;
+  /** Остальные поля строки как есть. */
+  args: string[];
 }
 
 export const F15_SPOT_LIST: F15Spot[] = F15_SPOTS.map((s) => {
-  const p = s.split(' ');
-  if (p[0] === 'box')
-    return {
-      kind: 'box',
-      area: p[1],
-      name: p[2],
-      x: Number(p[3]),
-      y: Number(p[4]),
-      x1: Number(p[5]),
-      y1: Number(p[6]),
-    };
-  return { kind: p[0], area: p[1], x: Number(p[2]), y: Number(p[3]) };
+  const [kind, area, ...args] = s.split(' ');
+  return { kind, area, args };
 });
 
+/** Число из поля места. */
+export const spotNum = (s: F15Spot, i: number) => Number(s.args[i]);
+
 // ---------------------------------------------------------------------------
-// Монстры. Базовые числа — этаж 10 ×1,5 (§12в): районы на уровне 9.
+// Монстры. Сила — этаж 10 ×1,5 базовыми числами (уровень районов 9).
+// Брызги — осколки кристалла и звёздная пыль, не кровь.
 // ---------------------------------------------------------------------------
 
-const GORE_FLESH = ['#5a1420', '#c83a4a', '#ff8a8a', '#2a0a10'];
-const GORE_BILE = ['#6a7a14', '#c8e040', '#3a2a10', '#f0ff90'];
+const SHARDS = ['#3a8ad8', '#7cd0ff', '#d8f6ff', '#1a1440'];
+const STARDUST = ['#c89a3a', '#ffd56a', '#fff4c0', '#2a1c40'];
+const VOIDDUST = ['#2a1450', '#5a2a8a', '#b890ff', '#05030e'];
 
 const MOBS: MobDef[] = [
   {
-    // Антитело: «Y» из белка. Лезет стаей, прилипает к чужаку и метит его.
-    id: 'f15_mob',
-    name: 'Антитело',
-    many: 'антител',
-    hp: 18,
-    dmg: 12,
-    speed: 4.3,
-    radius: 0.26,
-    windup: 0.45,
-    reach: 0.36,
-    rest: 0.8,
-    xp: 7,
-    meat: null,
+    // Кристальный ёж: сворачивается в шар и катится (у колодца путь
+    // гнётся), раскрывшись — веер игл.
+    id: 'f15_urchin',
+    name: 'Кристальный ёж',
+    many: 'кристальных ежей',
+    hp: 33,
+    dmg: 19,
+    speed: 3,
+    radius: 0.32,
+    windup: 0.6,
+    reach: 0.42,
+    rest: 0.9,
+    xp: 9,
+    meat: ['f15_honey', 0.18, 1],
     mats: [
-      ['f15_tissue', 0.12],
-      ['f15_lymph', 0.1],
+      ['f15_shard', 0.2],
+      ['f15_dust', 0.06],
     ],
     beast: true,
-    brain: 'f15_antibody',
-    art: { kind: 'paint', id: 'f15_antibody' },
-    mass: 0.8,
-    flinch: 0.5,
-    eye: '#ffe0f0',
-    gore: ['#6a3a7a', '#e8c8ff', '#ff8aa8', '#2a1430'],
+    brain: 'f15_urchin',
+    art: { kind: 'paint', id: 'f15_urchin' },
+    mass: 1.2,
+    flinch: 0.4,
+    shot: { speed: 7, r: 0.16, life: 0.9, dmg: 0.55, art: 'f15_needle', n: 5, spread: 0.9 },
+    eye: '#9fe8ff',
+    gore: SHARDS,
   },
   {
-    // Макрофаг: большая амёба. Поглощает — изнутри его бьют вдвое, рывок
-    // вырывает. Ест добычу с пола и личинок.
-    id: 'f15_macro',
-    name: 'Макрофаг',
-    many: 'макрофагов',
+    // Метеор-жук: панцирь из метеорита, прицел линией и таран. О стену —
+    // оглушён и открыт; у колодца таран заворачивает.
+    id: 'f15_meteor',
+    name: 'Метеор-жук',
+    many: 'метеор-жуков',
+    hp: 66,
+    dmg: 30,
+    speed: 2.4,
+    radius: 0.44,
+    windup: 0.8,
+    reach: 0.5,
+    rest: 1,
+    xp: 16,
+    meat: ['f15_honey', 0.22, 1],
+    mats: [
+      ['f15_meteorite', 0.24],
+      ['f15_shard', 0.2],
+    ],
+    beast: true,
+    brain: 'f15_meteor',
+    art: { kind: 'paint', id: 'f15_meteor' },
+    mass: 4,
+    flinch: 0.1,
+    stunT: 0.3,
+    hit: { push: 5 },
+    eye: '#ffb060',
+    gore: ['#5a3a2a', '#ff9a4a', '#ffd56a', '#1a1020'],
+  },
+  {
+    // Комета-гончая: рывок по дуге вокруг колодца — заходит сбоку.
+    id: 'f15_comet',
+    name: 'Комета-гончая',
+    many: 'комет-гончих',
+    hp: 33,
+    dmg: 20,
+    speed: 4.6,
+    radius: 0.3,
+    windup: 0.55,
+    reach: 0.45,
+    rest: 0.8,
+    xp: 12,
+    meat: ['f15_honey', 0.16, 1],
+    mats: [
+      ['f15_dust', 0.2],
+      ['f15_shard', 0.14],
+    ],
+    beast: true,
+    brain: 'f15_comet',
+    art: { kind: 'paint', id: 'f15_comet' },
+    mass: 1,
+    flinch: 0.45,
+    eye: '#bff4ff',
+    light: 1.2,
+    gore: SHARDS,
+  },
+  {
+    // Гравитонный страж: щит гасит удар спереди, кулак оставляет тяжесть.
+    id: 'f15_graviton',
+    name: 'Гравитонный страж',
+    many: 'гравитонных стражей',
     hp: 96,
-    dmg: 26,
-    speed: 1.9,
-    radius: 0.62,
+    dmg: 33,
+    speed: 1.7,
+    radius: 0.56,
     windup: 0.95,
-    reach: 0.9,
+    reach: 0.75,
+    rest: 1.3,
+    xp: 30,
+    meat: ['f15_ration', 0.25, 1],
+    mats: [
+      ['f15_meteorite', 0.3],
+      ['f15_void', 0.12],
+    ],
+    beast: true,
+    brain: 'f15_graviton',
+    art: { kind: 'paint', id: 'f15_graviton' },
+    mass: 7,
+    flinch: 0.05,
+    stunT: 0.3,
+    hit: { push: 4 },
+    eye: '#c8a0ff',
+    gore: VOIDDUST,
+  },
+  {
+    // Звездочёт: малый колодец под ноги, звёздные стрелы гнутся к колодцам;
+    // три камня на орбите вокруг него отводят удары.
+    id: 'f15_astro',
+    name: 'Звездочёт',
+    many: 'звездочётов',
+    hp: 48,
+    dmg: 24,
+    speed: 2.2,
+    radius: 0.34,
+    windup: 0.9,
+    reach: 7,
+    rest: 1.6,
+    xp: 22,
+    meat: ['f15_ration', 0.3, 1],
+    mats: [
+      ['f15_lens', 0.16],
+      ['f15_dust', 0.2],
+    ],
+    beast: true,
+    brain: 'f15_astro',
+    art: { kind: 'paint', id: 'f15_astro' },
+    mass: 1,
+    flinch: 0.5,
+    shot: { speed: 6, r: 0.2, life: 2.4, dmg: 0.8, art: 'f15_starbolt' },
+    eye: '#ffe08a',
+    light: 1.6,
+    gore: STARDUST,
+  },
+  {
+    // Страж созвездия: звезда-узел фигуры на звёздной карте. Бьётся только
+    // узел; линии между узлами неуязвимы и жгут, когда фигура хлещет.
+    id: 'f15_constel',
+    name: 'Страж созвездия',
+    many: 'звёзд созвездий',
+    hp: 26,
+    dmg: 22,
+    speed: 1.4,
+    radius: 0.32,
+    windup: 0.8,
+    reach: 0.4,
+    rest: 1.2,
+    xp: 10,
+    meat: null,
+    mats: [
+      ['f15_dust', 0.3],
+      ['f15_shard', 0.1],
+    ],
+    beast: true,
+    brain: 'f15_constel',
+    art: { kind: 'paint', id: 'f15_constel' },
+    fly: true,
+    mass: 2,
+    flinch: 0.2,
+    eye: '#fff4c0',
+    light: 1.6,
+    gore: STARDUST,
+  },
+  {
+    // Пожиратель света: во тьме неуязвим, в свете — уязвим; гасит лампы.
+    id: 'f15_devourer',
+    name: 'Пожиратель света',
+    many: 'пожирателей света',
+    hp: 75,
+    dmg: 27,
+    speed: 2.5,
+    radius: 0.46,
+    windup: 0.85,
+    reach: 0.8,
     rest: 1.2,
     xp: 26,
-    meat: ['f15_offal', 0.35, 1],
-    mats: [
-      ['f15_tissue', 0.6],
-      ['f15_lymph', 0.3],
-    ],
-    beast: true,
-    brain: 'f15_macro',
-    art: { kind: 'paint', id: 'f15_macro' },
-    mass: 8,
-    flinch: 0.04,
-    stunT: 0.35,
-    eye: '#ffd060',
-    gore: ['#c8a0a8', '#f0d8d8', '#8a3a4a', '#fff0f0'],
-  },
-  {
-    // Нервный узел: сидит на узле вен. Увидел — сигнал: разряды по полу,
-    // метка «чужак» и антитела из пор. Убит — вены вокруг гаснут.
-    id: 'f15_nerve',
-    name: 'Нервный узел',
-    many: 'нервных узлов',
-    hp: 70,
-    dmg: 22,
-    speed: 0,
-    radius: 0.44,
-    windup: 1.1,
-    reach: 8,
-    rest: 3.6,
-    xp: 22,
     meat: null,
     mats: [
-      ['f15_nerve', 0.55],
-      ['f15_tissue', 0.3],
+      ['f15_void', 0.3],
+      ['f15_dust', 0.15],
     ],
     beast: true,
-    brain: 'f15_nerve',
-    art: { kind: 'paint', id: 'f15_nerve' },
-    mass: 99,
-    flinch: 0,
-    noAlbino: true,
-    eye: '#d08aff',
-    light: 1.8,
-    gore: ['#3a1a4a', '#d08aff', '#f4d8ff', '#1a0a20'],
-  },
-  {
-    // Паразит: пиявка под слизистой. Бугор ползёт к тебе, выныривает
-    // прыжком, присасывается — сбить рывком. Промахнулся — открыт.
-    id: 'f15_parasite',
-    name: 'Паразит',
-    many: 'паразитов',
-    hp: 30,
-    dmg: 14,
-    speed: 4.2,
-    radius: 0.28,
-    windup: 0.55,
-    reach: 0.4,
-    rest: 1,
-    xp: 12,
-    meat: ['f15_offal', 0.2, 1],
-    mats: [['f15_tissue', 0.3]],
-    beast: true,
-    brain: 'f15_parasite',
-    art: { kind: 'paint', id: 'f15_parasite' },
-    mass: 1,
-    flinch: 0.4,
-    eye: '#ffe86a',
-    gore: GORE_FLESH,
-  },
-  {
-    // Кислотный пузырь: плывёт над соком. Раздувается и лопается лужей —
-    // ударь раньше, и он улетит лопаться туда, куда отбил (и во врагов).
-    id: 'f15_acid',
-    name: 'Кислотный пузырь',
-    many: 'кислотных пузырей',
-    hp: 16,
-    dmg: 22,
-    speed: 1.9,
-    radius: 0.34,
-    windup: 0.85,
-    reach: 1.2,
-    rest: 1,
-    xp: 9,
-    meat: null,
-    mats: [['f15_bile', 0.4]],
-    beast: true,
-    brain: 'f15_acid',
-    art: { kind: 'paint', id: 'f15_acid' },
-    mass: 0.4,
-    flinch: 1,
+    brain: 'f15_devourer',
+    art: { kind: 'paint', id: 'f15_devourer' },
     fly: true,
-    noAlbino: true,
-    eye: '#e0ff60',
-    light: 1.6,
-    gore: GORE_BILE,
+    mass: 3,
+    flinch: 0.2,
+    eye: '#d0b0ff',
+    gore: VOIDDUST,
   },
   {
-    // Кровяной дрон: эритроцит-таран. Тройками, прицел линией и таран; на
-    // русле удар сердца несёт его, как и тебя. О стену — оглушён.
-    id: 'f15_drone',
-    name: 'Кровяной дрон',
-    many: 'кровяных дронов',
-    hp: 36,
-    dmg: 18,
-    speed: 3.4,
+    // Отражение: монстр прошлого этажа из кристалла памяти — рисунок тех
+    // этажей, перекрашенный звёздным светом.
+    id: 'f15_echo',
+    name: 'Отражение',
+    many: 'отражений',
+    hp: 40,
+    dmg: 22,
+    speed: 3.6,
     radius: 0.34,
     windup: 0.6,
-    reach: 0.4,
-    rest: 1.2,
+    reach: 0.5,
+    rest: 0.9,
     xp: 14,
     meat: null,
     mats: [
-      ['f15_plasma', 0.4],
-      ['f15_tissue', 0.15],
+      ['f15_memory', 0.12],
+      ['f15_shard', 0.2],
     ],
     beast: true,
-    brain: 'f15_drone',
-    art: { kind: 'paint', id: 'f15_drone' },
-    mass: 2.2,
-    flinch: 0.25,
-    stunT: 0.3,
-    fly: true,
-    eye: '#ffb0a0',
-    gore: ['#8a0a14', '#e02a3a', '#ff9a9a', '#3a0408'],
-  },
-  {
-    // Личинка: из мешков. Не добил за 14 с — окукливается и выходит
-    // подражателем: подземелье вспоминает монстров сверху.
-    id: 'f15_larva',
-    name: 'Личинка',
-    many: 'личинок',
-    hp: 10,
-    dmg: 8,
-    speed: 4.4,
-    radius: 0.2,
-    windup: 0.35,
-    reach: 0.3,
-    rest: 0.7,
-    xp: 3,
-    meat: null,
-    mats: [['f15_tissue', 0.06]],
-    beast: true,
-    brain: 'f15_larva',
-    art: { kind: 'paint', id: 'f15_larva' },
-    mass: 0.4,
-    flinch: 1,
-    eye: '#ff6a4a',
-    gore: ['#e8dcc8', '#fff4e0', '#c83a4a', '#8a7a60'],
-  },
-  {
-    // Смотритель: глаз на стебле. Водит конусом взгляда; увидел — метит
-    // «чужака» и бьёт лучом. Прячься за колоннами; моргнул — открыт.
-    id: 'f15_watcher',
-    name: 'Смотритель',
-    many: 'смотрителей',
-    hp: 60,
-    dmg: 26,
-    speed: 0,
-    radius: 0.42,
-    windup: 0.9,
-    reach: 9,
-    rest: 1.4,
-    xp: 20,
-    meat: null,
-    mats: [
-      ['f15_lens', 0.5],
-      ['f15_tissue', 0.3],
-    ],
-    beast: true,
-    brain: 'f15_watcher',
-    art: { kind: 'paint', id: 'f15_watcher' },
-    mass: 99,
-    flinch: 0,
-    noAlbino: true,
-    eye: '#fff4a0',
+    brain: 'f15_echo',
+    art: { kind: 'paint', id: 'f15_echo' },
+    mass: 1.2,
+    flinch: 0.4,
+    eye: '#e0f4ff',
     light: 1.4,
-    gore: GORE_FLESH,
+    gore: SHARDS,
   },
   {
-    // Подражатель: гончая — адский пёс Трона, переваренный и собранный
-    // заново. Прыжок оставляет лужу желчи; промахнулся — прыгает ещё раз.
-    id: 'f15_mhound',
-    name: 'Подражатель: гончая',
-    many: 'подражателей-гончих',
-    hp: 33,
-    dmg: 14,
-    speed: 4.6,
-    radius: 0.32,
-    windup: 0.4,
-    reach: 0.42,
-    rest: 0.8,
-    xp: 13,
-    meat: ['f15_offal', 0.35, 1],
-    mats: [
-      ['f15_mold', 0.18],
-      ['f15_tissue', 0.2],
-    ],
-    beast: true,
-    brain: 'f15_mhound',
-    art: { kind: 'paint', id: 'f15_mhound' },
-    mass: 1.3,
-    flinch: 0.35,
-    eye: '#e0ff60',
-    gore: GORE_FLESH,
-  },
-  {
-    // Подражатель: саламандра — ныряет в желудочный сок, как её образец в
-    // лаву, и выныривает у берега с плевком.
-    id: 'f15_msala',
-    name: 'Подражатель: саламандра',
-    many: 'подражателей-саламандр',
-    hp: 45,
-    dmg: 14,
-    speed: 3.2,
-    radius: 0.34,
-    windup: 0.5,
-    reach: 0.45,
-    rest: 0.9,
-    xp: 16,
-    meat: ['f15_offal', 0.3, 1],
-    mats: [
-      ['f15_mold', 0.22],
-      ['f15_bile', 0.25],
-    ],
-    beast: true,
-    fly: true,
-    brain: 'f15_msala',
-    art: { kind: 'paint', id: 'f15_msala' },
-    mass: 1.6,
-    flinch: 0.3,
-    eye: '#e0ff60',
-    shot: {
-      speed: 7,
-      r: 0.36,
-      life: 1.4,
-      dmg: 0.6,
-      art: 'f15_spit',
-      lob: true,
-      status: 'poison',
-      dur: 2,
-      onLand: { r: 1, life: 2.6, dps: 0.012, status: 'poison', dur: 1.2, art: 'f15_bilepool' },
-    },
-    gore: GORE_BILE,
-  },
-  {
-    // Подражатель: латник — рыцарь крипты, щит у него из кости. Спереди
-    // не берёт; после тарана щитом открыт со спины. Два тяжёлых по щиту —
-    // щит треснул.
-    id: 'f15_mknight',
-    name: 'Подражатель: латник',
-    many: 'подражателей-латников',
-    hp: 72,
+    // Спутник: малая луна кружит вокруг героя, сужает орбиту и пикирует.
+    id: 'f15_moon',
+    name: 'Спутник',
+    many: 'спутников',
+    hp: 30,
     dmg: 20,
-    speed: 2.5,
-    radius: 0.4,
-    windup: 0.75,
-    reach: 0.55,
-    rest: 1.1,
-    xp: 22,
+    speed: 4.2,
+    radius: 0.3,
+    windup: 0.6,
+    reach: 0.35,
+    rest: 1,
+    xp: 12,
     meat: null,
     mats: [
-      ['f15_mold', 0.35],
-      ['f15_tissue', 0.3],
+      ['f15_void', 0.12],
+      ['f15_dust', 0.16],
     ],
     beast: true,
-    brain: 'f15_mknight',
-    art: { kind: 'paint', id: 'f15_mknight' },
-    mass: 4,
-    flinch: 0.08,
-    stunT: 0.3,
-    eye: '#e0ff60',
-    gore: GORE_FLESH,
+    brain: 'f15_moon',
+    art: { kind: 'paint', id: 'f15_moon' },
+    fly: true,
+    mass: 0.9,
+    flinch: 0.5,
+    eye: '#d8e0ff',
+    light: 1.1,
+    gore: ['#8a8aa8', '#d8e0ff', '#5a5a7a', '#1a1a2a'],
   },
   {
-    // Златожил (редкий): золотая жила-червь. Удирает по венам, от ударов
-    // сыплет монетами, не догнал — уходит в стену.
-    id: 'f15_gold',
-    name: 'Златожил',
-    many: 'златожилов',
-    hp: 30,
-    dmg: 6,
-    speed: 5.6,
-    radius: 0.26,
+    // Сверхновая: звёздный голем копит свет и вспыхивает кольцом; погибнув,
+    // схлопывается в колодец на 6 с.
+    id: 'f15_nova',
+    name: 'Сверхновая',
+    many: 'сверхновых',
+    hp: 150,
+    dmg: 36,
+    speed: 1.5,
+    radius: 0.64,
+    windup: 1.4,
+    reach: 0.8,
+    rest: 1.6,
+    xp: 60,
+    meat: ['f15_ration', 0.6, 2],
+    mats: [
+      ['f15_shard', 0.8],
+      ['f15_void', 0.3],
+      ['f15_memory', 0.12],
+    ],
+    beast: true,
+    brain: 'f15_nova',
+    art: { kind: 'paint', id: 'f15_nova' },
+    mass: 10,
+    flinch: 0.02,
+    stunT: 0.25,
+    eye: '#fff0b0',
+    light: 2.6,
+    gore: STARDUST,
+  },
+  {
+    // Золотой метеорит: редкий беглец с мешком монет, закручивается вокруг
+    // колодцев.
+    id: 'f15_goldbug',
+    name: 'Золотой метеорит',
+    many: 'золотых метеоритов',
+    hp: 36,
+    dmg: 9,
+    speed: 5,
+    radius: 0.3,
     windup: 0.4,
     reach: 0.3,
     rest: 1,
     xp: 40,
     meat: null,
-    mats: [['f15_tissue', 0.8]],
+    mats: [
+      ['f15_shard', 0.6],
+      ['f15_meteorite', 0.4],
+    ],
     beast: true,
-    brain: 'f15_gold',
-    art: { kind: 'paint', id: 'f15_gold' },
+    brain: 'f15_goldbug',
+    art: { kind: 'paint', id: 'f15_goldbug' },
     mass: 0.8,
     flinch: 1,
-    coins: 2400,
+    coins: 2200,
     resume: 'flee',
-    eye: '#ffe060',
-    light: 1.6,
-    gore: ['#8a6a14', '#ffd040', '#fff4a0', '#5a1420'],
-  },
-  // --- Не звери, а органы: в бестиарий не идут.
-  {
-    // Мешок-рождение: слушает шум. Набух — лопается выводком личинок.
-    id: 'f15_sac',
-    name: 'Мешок-рождение',
-    many: 'мешков',
-    hp: 12,
-    dmg: 0,
-    speed: 0,
-    radius: 0.42,
-    windup: 1,
-    reach: 0,
-    rest: 1,
-    xp: 8,
-    meat: ['f15_heartlet', 0.1, 1],
-    mats: [['f15_tissue', 0.4]],
-    beast: false,
-    brain: 'f15_sac',
-    art: { kind: 'paint', id: 'f15_sac' },
-    mass: 99,
-    flinch: 0,
-    noAlbino: true,
-    gore: ['#e8a0a8', '#fff0f0', '#c83a4a', '#8a2a3a'],
-  },
-  {
-    // Миндалина: железа Горла. Рожает антитела и плюётся слизью.
-    id: 'f15_tonsil',
-    name: 'Миндалина',
-    many: 'миндалин',
-    hp: 50,
-    dmg: 14,
-    speed: 0,
-    radius: 0.62,
-    windup: 0.9,
-    reach: 7,
-    rest: 2,
-    xp: 40,
-    meat: ['f15_heartlet', 0.35, 1],
-    mats: [
-      ['f15_lymph', 0.9],
-      ['f15_tissue', 0.5],
-    ],
-    beast: false,
-    brain: 'f15_tonsil',
-    art: { kind: 'paint', id: 'f15_tonsil' },
-    mass: 99,
-    flinch: 0,
-    noAlbino: true,
-    shot: {
-      speed: 6,
-      r: 0.4,
-      life: 1.6,
-      dmg: 1,
-      art: 'f15_phlegm',
-      lob: true,
-      status: 'slow',
-      dur: 2,
-      onLand: { r: 1.1, life: 3, slow: 0.55, art: 'f15_slime' },
-    },
-    gore: ['#e8a0a8', '#fff0f0', '#c8e0a0', '#8a2a3a'],
-  },
-  {
-    // Матка Выводка: рожает мешки. Убил — выводок завял.
-    id: 'f15_matron',
-    name: 'Матка выводка',
-    many: 'маток выводка',
-    hp: 120,
-    dmg: 18,
-    speed: 0,
-    radius: 0.9,
-    windup: 1,
-    reach: 1.6,
-    rest: 2,
-    xp: 60,
-    meat: ['f15_heartlet', 0.8, 2],
-    mats: [
-      ['f15_mold', 0.8],
-      ['f15_tissue', 0.8],
-    ],
-    beast: false,
-    brain: 'f15_matron',
-    art: { kind: 'paint', id: 'f15_matron' },
-    mass: 99,
-    flinch: 0,
-    noAlbino: true,
-    eye: '#ffe86a',
-    light: 2.2,
-    gore: GORE_FLESH,
+    eye: '#ffd040',
+    light: 1.4,
+    gore: STARDUST,
   },
 ];
 
+/** Виды «Мира» — для тестов и отчёта. */
+export const F15_BEASTS = MOBS.map((m) => m.id);
+
 // ---------------------------------------------------------------------------
-// Кто водится в районах.
+// Кто водится в районах. Отражения, созвездия, пожиратели и сверхновые —
+// только в своих местах (их выпускают правила этажа).
 // ---------------------------------------------------------------------------
 
-const spawnThroat: SpawnSpec = {
+const spawnRoots: SpawnSpec = {
   mobs: [
-    ['f15_mob', 60],
-    ['f15_mhound', 16],
-    ['f15_parasite', 14],
-    ['f15_larva', 10],
+    ['f15_urchin', 42],
+    ['f15_meteor', 26],
+    ['f15_comet', 22],
   ],
   density: 0.6,
   pack: [1, 2],
-  filler: 'f15_mob',
-  group: (i) => (i < 3 ? 'f15_mhound' : 'f15_mob'),
+  filler: 'f15_urchin',
+  group: (i) => (i < 2 ? 'f15_comet' : i < 3 ? 'f15_meteor' : 'f15_urchin'),
   horde: null,
-  treasure: 'f15_gold',
-  nest: () => 'f15_larva',
+  treasure: 'f15_goldbug',
+  nest: () => 'f15_urchin',
 };
 
-const spawnGut: SpawnSpec = {
+const spawnObs: SpawnSpec = {
   mobs: [
-    ['f15_mob', 38],
-    ['f15_parasite', 26],
-    ['f15_mhound', 10],
-    ['f15_msala', 14],
-    ['f15_larva', 12],
+    ['f15_astro', 24],
+    ['f15_urchin', 24],
+    ['f15_comet', 20],
+    ['f15_meteor', 16],
+    ['f15_graviton', 10],
+  ],
+  density: 0.6,
+  pack: [1, 2],
+  filler: 'f15_urchin',
+  group: (i) => (i < 1 ? 'f15_astro' : i < 3 ? 'f15_comet' : 'f15_urchin'),
+  horde: null,
+  treasure: 'f15_goldbug',
+  nest: () => 'f15_urchin',
+};
+
+const spawnOrbit: SpawnSpec = {
+  mobs: [
+    ['f15_moon', 30],
+    ['f15_comet', 22],
+    ['f15_meteor', 18],
+    ['f15_astro', 14],
+    ['f15_graviton', 12],
   ],
   density: 0.62,
   pack: [1, 2],
-  filler: 'f15_mob',
-  group: (i) => (i < 2 ? 'f15_parasite' : i < 3 ? 'f15_mhound' : 'f15_mob'),
+  filler: 'f15_moon',
+  group: (i) => (i < 2 ? 'f15_moon' : i < 3 ? 'f15_comet' : 'f15_meteor'),
   horde: null,
-  treasure: 'f15_gold',
-  nest: () => 'f15_larva',
-};
-
-const spawnVeins: SpawnSpec = {
-  mobs: [
-    ['f15_mob', 36],
-    ['f15_drone', 30],
-    ['f15_mknight', 16],
-    ['f15_mhound', 12],
-    ['f15_parasite', 6],
-  ],
-  density: 0.64,
-  pack: [1, 2],
-  filler: 'f15_mob',
-  group: (i) => (i < 3 ? 'f15_drone' : i < 4 ? 'f15_mknight' : 'f15_mob'),
-  horde: null,
-  treasure: 'f15_gold',
-  nest: () => 'f15_larva',
+  treasure: 'f15_goldbug',
+  nest: () => 'f15_moon',
 };
 
 const area = (
@@ -819,9 +654,11 @@ const area = (
   lead: string,
   rows: string[],
   ambient: number,
+  floor: 'slab' | 'ground',
+  wall: 'brick' | 'rock',
   tint: AreaSpec['skin']['tint'],
   fog: string,
-  polyp: Tint,
+  legend: Record<string, LegendCell>,
   spawn: SpawnSpec,
   mine: string,
 ): AreaSpec => ({
@@ -832,8 +669,8 @@ const area = (
   level: 9,
   ambient,
   rows,
-  skin: { floor: 'ground', wall: 'rock', tint, fog },
-  legend: legendOf(polyp),
+  skin: { floor, wall, tint, fog },
+  legend,
   mine,
   spawn,
   paintAll: true,
@@ -841,56 +678,62 @@ const area = (
 
 export const F15_AREAS: AreaSpec[] = [
   area(
-    F15_THROAT,
-    'Горло',
-    'Стены дышат. Здесь ты — чужой.',
-    F15_THROAT_MAP,
-    0.44,
-    { mul: [0.82, 0.52, 0.56], mix: '#3a0a14', k: 0.16 },
-    '#0e0306',
-    'teal',
-    spawnThroat,
+    F15_ROOTS,
+    'Кристальные корни',
+    'Порода здесь становится кристаллом. Осколки звезды тянут к себе всё — и тебя тоже.',
+    F15_ROOTS_MAP,
+    0.42,
+    'ground',
+    'rock',
+    { mul: [0.62, 0.6, 0.95], mix: '#140c38', k: 0.2 },
+    '#07051a',
+    COMMON,
+    spawnRoots,
     'f15mine',
   ),
   area(
-    F15_GUT,
-    'Чрево',
-    'Всё, что было выше, переварено здесь.',
-    F15_GUT_MAP,
-    0.46,
-    { mul: [0.8, 0.56, 0.44], mix: '#2a1a06', k: 0.14 },
-    '#0a0703',
-    'green',
-    spawnGut,
+    F15_OBS,
+    'Обсерватория строителей',
+    'Строители подземелья смотрели отсюда на звезду. Купола, кольца, карты неба на полу.',
+    F15_OBS_MAP,
+    0.4,
+    'slab',
+    'brick',
+    { mul: [0.7, 0.62, 0.9], mix: '#1a0c34', k: 0.18 },
+    '#06041a',
+    LEGEND_OBS,
+    spawnObs,
     'f15mine2',
   ),
   area(
-    F15_VEINS,
-    'Сосуды',
-    'Кровь течёт к сердцу. И ты — с ней.',
-    F15_VEINS_MAP,
-    0.38,
-    { mul: [0.78, 0.4, 0.48], mix: '#2a020a', k: 0.18 },
-    '#0c0206',
-    'red',
-    spawnVeins,
+    F15_ORBIT,
+    'Пояс орбит',
+    'Пустота вокруг ядра. Обломки ходят по кругу, и в них почти ничего не весит.',
+    F15_ORBIT_MAP,
+    0.5,
+    'ground',
+    'rock',
+    { mul: [0.6, 0.58, 0.92], mix: '#10082a', k: 0.22 },
+    '#04020c',
+    LEGEND_ORBIT,
+    spawnOrbit,
     'f15mine3',
   ),
 ];
 
 export const F15: FloorDef = {
   id: 15,
-  name: 'Сердце подземелья',
-  lead: 'Подземелье живое. Оно переварило всё, что выше, — и слышит, как ты идёшь.',
-  mapVer: 2,
+  name: 'Ядро подземелья',
+  lead: 'На дне лежит упавшая звезда. Подземелье выросло вокруг неё — и тянется к ней.',
+  mapVer: 3,
   flowR: 30,
   areas: [...F15_AREAS, F15_HEART_AREA],
   boss: F15_BOSS,
   mines: [
     {
       id: 'f15mine',
-      name: 'Хрящевая шахта',
-      area: F15_THROAT,
+      name: 'Кристальная жила',
+      area: F15_ROOTS,
       windowMs: 60 * 60_000,
       ores: [28, 29],
       share: [0.24, 0.3, 0.38, 0.46, 0.55],
@@ -899,8 +742,8 @@ export const F15: FloorDef = {
     },
     {
       id: 'f15mine2',
-      name: 'Шахта в желчном камне',
-      area: F15_GUT,
+      name: 'Шахта под куполом',
+      area: F15_OBS,
       windowMs: 2 * 60 * 60_000,
       ores: [28, 29],
       share: [0.28, 0.34, 0.42, 0.5, 0.58],
@@ -909,8 +752,8 @@ export const F15: FloorDef = {
     },
     {
       id: 'f15mine3',
-      name: 'Кальцинат',
-      area: F15_VEINS,
+      name: 'Метеоритный обломок',
+      area: F15_ORBIT,
       windowMs: 3 * 60 * 60_000,
       ores: [28, 29],
       share: [0.3, 0.38, 0.46, 0.54, 0.62],
@@ -920,59 +763,50 @@ export const F15: FloorDef = {
   ],
   mobs: [...MOBS, ...F15_BOSS_MOBS],
   meats: [
-    { id: 'f15_offal', name: 'Требуха подражателя', price: 70, heal: 0.3 },
-    { id: 'f15_heartlet', name: 'Сердечко', price: 140, heal: 0.5 },
+    { id: 'f15_honey', name: 'Кристальный мёд', price: 70, heal: 0.3 },
+    { id: 'f15_ration', name: 'Паёк звездочёта', price: 140, heal: 0.5 },
     ...F15_BOSS_MEATS,
   ],
   // Ходовой материал этажа — первый со стопкой больше 1 (им чинят лифты).
   mats: [
     {
-      id: 'f15_tissue',
-      name: 'Живая ткань',
+      id: 'f15_shard',
+      name: 'Звёздный осколок',
       price: 600,
-      lead: 'Тёплая, ещё дышит. Из неё подземелье строит себя.',
+      lead: 'Тёплый на ощупь и тянет к себе пыль. Из таких выросло всё подземелье.',
     },
     {
-      id: 'f15_lymph',
-      name: 'Лимфа',
+      id: 'f15_dust',
+      name: 'Звёздная пыль',
       price: 640,
-      lead: 'Прозрачная, густая. Иммунитет узнаёт по ней своих.',
+      lead: 'Сыплется вверх, если разжать кулак.',
     },
     {
-      id: 'f15_bile',
-      name: 'Желчь',
-      price: 680,
-      lead: 'Разъедает железо. Держать в стекле и не нюхать.',
-    },
-    {
-      id: 'f15_nerve',
-      name: 'Нервное волокно',
-      price: 760,
-      lead: 'Дёргается в руке. Помнит сигнал, который не успело передать.',
+      id: 'f15_meteorite',
+      name: 'Метеоритное железо',
+      price: 700,
+      lead: 'Тяжелее, чем выглядит. Компас рядом с ним крутится.',
     },
     {
       id: 'f15_lens',
-      name: 'Хрусталик смотрителя',
+      name: 'Линза обсерватории',
+      price: 760,
+      lead: 'Шлифовка строителей. Сквозь неё видно звёзды даже под землёй.',
+    },
+    {
+      id: 'f15_void',
+      name: 'Осколок пустоты',
       price: 820,
-      lead: 'Сквозь него видно то, что было на этом месте раньше.',
+      lead: 'Кусок ночи. Свет в него падает и не возвращается.',
     },
     {
-      id: 'f15_plasma',
-      name: 'Сгусток плазмы',
-      price: 720,
-      lead: 'Бьётся сам по себе — в такт тому, что наверху.',
-    },
-    {
-      id: 'f15_mold',
-      name: 'Слепок подражателя',
+      id: 'f15_memory',
+      name: 'Кристалл памяти',
       price: 900,
-      lead: 'Оболочка чудовища с верхних этажей. Подземелье учится по ним.',
+      lead: 'Внутри что-то шевелится: крысы, грибы, лава — всё, что было выше.',
     },
     ...F15_BOSS_MATS,
   ],
   music: { explore: 'depths', boss: 'finale' },
   cover: '/ui/areas/f15.png',
 };
-
-/** Сколько видов монстров «Мира» (без органов) — для отчёта и тестов. */
-export const F15_BEASTS = MOBS.filter((m) => m.beast).map((m) => m.id);
