@@ -1906,6 +1906,8 @@ function onUse(sim: Sim, obj: WorldObj, api: SimApi): boolean {
         T: Math.max(0.25, d / ORBIT.anchorV),
         ring: t.ring,
       };
+      // Картинка троса (только рисунок, номер зоны отрицательный).
+      api.vfx(sim, { x: obj.x + 0.5, y: obj.y + 0.5, r: d + 1, life: st.tether.T + 0.05, art: 'f15_tether' });
       say(sim, 'f15_anchor');
       return true;
     }

@@ -2781,3 +2781,931 @@ registerMobWarm(
   'f15_astro',
   warm('astro', range(16).map((f): [string, number, () => Built] => ['idle', 3 * 16 + f, () => astroBody({ step: 0, stones: 3, f, cast: 0, kind: 0, dk: 0 })])),
 );
+
+// ---------------------------------------------------------------------------
+// Метки и картинки механик. Рисуются контекстом в игровых пикселях; (px, py) —
+// экранная точка центра зоны, мировая точка (wx, wy) → (wx·TS − L, wy·TS − T).
+// ---------------------------------------------------------------------------
+
+/** Сдвиг экрана по зоне: мировые клетки → игровые пиксели экрана. */
+const viewOf = (z: { x: number; y: number }, px: number, py: number) => {
+  const L = z.x * TS - px;
+  const T = z.y * TS - py;
+  return (wx: number, wy: number): [number, number] => [wx * TS - L, wy * TS - T];
+};
+
+const zoneOf = <K>(z: Zone | Strike): K | null => {
+  const st = stNow();
+  return st ? ((st.zmap.get(z as Zone) as K | undefined) ?? null) : null;
+};
+
+/** Краски колодцев по роду: карта — бирюза, звездочёт — золото, сверхновая — пламя. */
+function wellColors(w: Well): { c: string; hot: string } {
+  if (w.mode < 0) return { c: '184,144,255', hot: '240,220,255' };
+  switch (w.kind) {
+    case 'astro':
+      return { c: '255,208,96', hot: '255,244,200' };
+    case 'nova':
+      return { c: '255,150,60', hot: '255,240,190' };
+    case 'star':
+      return { c: '230,236,255', hot: '255,255,255' };
+    default:
+      return { c: '108,240,255', hot: '230,255,255' };
+  }
+}
+
+/**
+ * Колодец: тихо — пунктир границы и редкая пыль; предупреждает — граница
+ * мигает, шевроны бегут к ядру; тянет — спираль частиц течёт внутрь
+ * (толкает — наружу), ядро ожога горит белым с красной каймой.
+ */
+registerZonePainter('f15_well', (g, z, px, py, _s, time) => {
+  const w = zoneOf<Well>(z);
+  if (!w) return true;
+  const { c, hot } = wellColors(w);
+  const R = w.r * TS;
+  const s = w.state;
+  const dir = w.mode < 0 ? -1 : 1;
+  g.save();
+  // Граница.
+  const pulse = s === 1 ? 0.5 + 0.5 * Math.sin(time * 14) : 0;
+  g.strokeStyle = `rgba(${c},${s === 0 ? 0.16 : s === 1 ? 0.35 + pulse * 0.45 : 0.55})`;
+  g.lineWidth = 1;
+  g.setLineDash(s === 0 ? [2, 6] : [5, 3]);
+  g.lineDashOffset = -time * 8 * dir;
+  g.beginPath();
+  g.ellipse(px, py, R, R, 0, 0, TAU);
+  g.stroke();
+  g.setLineDash([]);
+  if (s === 2) {
+    // Засветка поля.
+    const gr = g.createRadialGradient(px, py, 0, px, py, R);
+    gr.addColorStop(0, `rgba(${c},0.22)`);
+    gr.addColorStop(0.6, `rgba(${c},0.07)`);
+    gr.addColorStop(1, `rgba(${c},0)`);
+    g.fillStyle = gr;
+    g.beginPath();
+    g.arc(px, py, R, 0, TAU);
+    g.fill();
+  }
+  // Частицы: тянет — внутрь по спирали; предупреждает — шевроны; тихо — пыль.
+  const n = Math.round((s === 2 ? 46 : s === 1 ? 10 : 8) * Math.max(0.7, w.r / 5));
+  for (let i = 0; i < n; i++) {
+    const h0 = hash(i, w.id, 2001);
+    const speed = s === 2 ? 0.55 * w.k : 0.12;
+    let u = (time * speed + h0) % 1;
+    if (dir < 0) u = 1 - u;
+    const rr = R * (1 - u) + w.burn * TS * u;
+    const a = h0 * TAU + (1 - u) * 2.6 * dir;
+    const x = px + Math.cos(a) * rr;
+    const y = py + Math.sin(a) * rr;
+    if (s === 1) {
+      // Шеврон к ядру (от ядра — если толкает).
+      const ux = -Math.cos(a) * dir;
+      const uy = -Math.sin(a) * dir;
+      g.strokeStyle = `rgba(${c},${0.5 + pulse * 0.4})`;
+      g.beginPath();
+      g.moveTo(x - ux * 2 - uy * 2, y - uy * 2 + ux * 2);
+      g.lineTo(x, y);
+      g.lineTo(x - ux * 2 + uy * 2, y - uy * 2 - ux * 2);
+      g.stroke();
+    } else {
+      g.fillStyle = `rgba(${s === 2 && u > 0.7 ? hot : c},${(s === 2 ? 0.35 + u * 0.6 : 0.25) * (1 - Math.abs(u - 0.5) * 0.6)})`;
+      const sz = s === 2 && h0 > 0.7 ? 2 : 1;
+      g.fillRect(Math.round(x), Math.round(y), sz, sz);
+      if (s === 2 && h0 < 0.3) {
+        // Хвостик частицы — по ходу спирали.
+        const a2 = a - 0.18 * dir;
+        const r2 = rr + 3 * dir;
+        g.fillRect(Math.round(px + Math.cos(a2) * r2), Math.round(py + Math.sin(a2) * r2), 1, 1);
+      }
+    }
+  }
+  // Ядро ожога: белое пламя, красная кайма (здесь жжёт).
+  if (w.burn > 0 && s === 2) {
+    const B = w.burn * TS;
+    const gr = g.createRadialGradient(px, py, 0, px, py, B);
+    gr.addColorStop(0, `rgba(${hot},0.75)`);
+    gr.addColorStop(0.7, `rgba(${c},0.35)`);
+    gr.addColorStop(1, 'rgba(255,90,70,0.2)');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.arc(px, py, B, 0, TAU);
+    g.fill();
+    g.strokeStyle = `rgba(255,110,80,${0.55 + 0.3 * Math.sin(time * 9)})`;
+    g.beginPath();
+    g.arc(px, py, B, 0, TAU);
+    g.stroke();
+  }
+  g.restore();
+  return true;
+});
+
+// --- Острова орбит --------------------------------------------------------------
+
+interface IslandArt {
+  top: HTMLCanvasElement;
+  sil: HTMLCanvasElement;
+  glowC: HTMLCanvasElement;
+  C: number;
+}
+
+const ISLANDS = new Map<string, IslandArt>();
+
+/** Остров кольца: сектор-кольцо вокруг угла 0, холст с центром кольца в середине. */
+function islandArt(r: Ring): IslandArt {
+  const key = `${r.name}|${r.r0}|${r.r1}|${r.half}`;
+  const hit = ISLANDS.get(key);
+  if (hit) return hit;
+  const R1 = r.r1 * TS;
+  const R0 = r.r0 * TS;
+  const C = Math.ceil(R1) + 2;
+  const top = new Px(C * 2, C * 2);
+  const sil = new Px(C * 2, C * 2);
+  const glowP = new Px(C * 2, C * 2);
+  const half = r.half;
+  for (let y = 0; y < C * 2; y++)
+    for (let x = 0; x < C * 2; x++) {
+      const dx = x + 0.5 - C;
+      const dy = y + 0.5 - C;
+      const d = Math.hypot(dx, dy);
+      const a = Math.atan2(dy, dx);
+      // Края острова неровные — шум по углу и радиусу.
+      const wob = (vnoise(a * 60, d, 4, 2010) - 0.5) * 3;
+      const inR = d >= R0 + 0.5 + wob * 0.6 && d < R1 - 0.5 + wob;
+      const inA = Math.abs(a) * d <= half * d - 1 + wob;
+      if (!inR || !inA) {
+        // Ореол левитации — чуть шире острова.
+        if (d >= R0 - 3 && d < R1 + 3 && Math.abs(a) * d <= half * d + 3) glowP.set(x, y, alpha(TEAL_GLOW, 0.22));
+        continue;
+      }
+      glowP.set(x, y, alpha(TEAL_GLOW, 0.3));
+      sil.set(x, y, hx('#ffffff'));
+      // Край — светлая кромка, внутри — реголит с кратерами.
+      const edge = Math.min(d - R0, R1 - d, (half - Math.abs(a)) * d);
+      const n = fbm(x, y, 9, 2011);
+      const v = voronoi(x, y, 7, 2012);
+      let l = (n - 0.5) * 0.8 + 0.42;
+      if (v.id < 0.3 && v.d1 < 0.32) l += v.d1 > 0.24 ? 0.18 : -0.3;
+      let col = tone(tn('#241e34', '#363048', '#4c4562', '#6c6488'), l);
+      if (edge < 1.5) col = hx('#8a84a8');
+      else if (edge < 2.5) col = mixc(col, hx('#6a6488'), 0.5);
+      if (hash(x, y, 2013) < 0.006) col = CRYST[3];
+      top.set(x, y, col);
+    }
+  // Маячки: латунные кольца на оси острова, по два.
+  for (const k of [0.3, 0.7]) {
+    const rr = R0 + (R1 - R0) * k;
+    const x = C + rr;
+    const y = C;
+    top.ell(x, y, 1.6, 1.6, BRASS[2]);
+    top.set(x, y, BRASS[3]);
+  }
+  const out: IslandArt = { top: top.canvas(), sil: sil.canvas(), glowC: glowP.canvas(), C };
+  // Тёмный силуэт для толщи острова.
+  const g2 = out.sil.getContext('2d');
+  if (g2) {
+    g2.globalCompositeOperation = 'source-in';
+    g2.fillStyle = '#17121f';
+    g2.fillRect(0, 0, out.sil.width, out.sil.height);
+  }
+  ISLANDS.set(key, out);
+  return out;
+}
+
+/** Кольцо орбиты: острова плавно едут по кругу; парад — золото по краю. */
+registerZonePainter('f15_ring', (g, z, px, py, _s, time) => {
+  const r = zoneOf<Ring>(z);
+  if (!r) return true;
+  const art = islandArt(r);
+  const C = art.C;
+  g.save();
+  const prev = g.imageSmoothingEnabled;
+  g.imageSmoothingEnabled = false;
+  for (let k = 0; k < r.n; k++) {
+    const ang = PI / 2 + (k * TAU) / r.n + r.vis;
+    const bob = Math.sin(time * 1.3 + k * 2) * 0.6;
+    // Ореол снизу, толща (камень уходит вниз), затем верх.
+    const draw = (img: HTMLCanvasElement, dy: number, a = 1) => {
+      g.save();
+      g.globalAlpha = a;
+      g.translate(px, py + dy + bob);
+      g.rotate(ang);
+      g.drawImage(img, -C, -C);
+      g.restore();
+    };
+    draw(art.glowC, 7, 0.6 + 0.2 * Math.sin(time * 2 + k));
+    for (let dy = 5; dy >= 1; dy--) draw(art.sil, dy, 1);
+    draw(art.top, 0);
+    if (r.parade) {
+      g.save();
+      g.translate(px, py + bob);
+      g.rotate(ang);
+      g.strokeStyle = `rgba(255,214,110,${0.5 + 0.3 * Math.sin(time * 6)})`;
+      g.beginPath();
+      g.arc(0, 0, r.r1 * TS - 1, -r.half, r.half);
+      g.stroke();
+      g.restore();
+    }
+  }
+  g.imageSmoothingEnabled = prev;
+  g.restore();
+  return true;
+});
+
+// --- Созвездие на карте ----------------------------------------------------------
+
+/** Фигура созвездия: спит — тусклые точки; проснулась — нити горят; собрана — золото. */
+registerZonePainter('f15_figure', (g, z, px, py, _s, time) => {
+  const ch = zoneOf<Chart>(z);
+  if (!ch) return true;
+  const at = viewOf(z, px, py);
+  const pts = ch.nodes.map(([x, y]) => at(x + 0.5, y + 0.5));
+  g.save();
+  const awake = ch.state === 'awake';
+  const done = ch.state === 'done';
+  const col = done ? '255,214,110' : awake ? '170,200,255' : '120,140,220';
+  const a = done ? 0.55 : awake ? 0.45 + 0.25 * Math.sin(time * 5) : 0.18;
+  g.strokeStyle = `rgba(${col},${a})`;
+  g.lineWidth = 1;
+  g.setLineDash(done ? [] : [3, 3]);
+  g.lineDashOffset = -time * 6;
+  g.beginPath();
+  pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+  g.stroke();
+  g.setLineDash([]);
+  for (const [x, y] of pts) {
+    g.fillStyle = `rgba(${col},${a + 0.25})`;
+    g.fillRect(Math.round(x) - 1, Math.round(y), 3, 1);
+    g.fillRect(Math.round(x), Math.round(y) - 1, 1, 3);
+  }
+  g.restore();
+  return true;
+});
+
+// --- Дуга рывка кометы ---------------------------------------------------------------
+
+/**
+ * Дуга кометы — её метка: на замахе по дуге бежит налив от кометы к концу
+ * (здесь пройдёт), в рывке — тающий светлый след.
+ */
+registerZonePainter('f15_arc', (g, z, px, py, _s, time) => {
+  const arc = zoneOf<Arc>(z);
+  if (!arc) return true;
+  const at = viewOf(z, px, py);
+  const aim = arc.t < arc.aim;
+  const k = aim ? arc.t / arc.aim : 1;
+  const fade = aim ? 1 : Math.max(0, 1 - (arc.t - arc.aim) / Math.max(0.1, arc.T - arc.aim));
+  if (fade <= 0) return true;
+  const N = 28;
+  const pt = (u: number) => {
+    const a = arc.a0 + (arc.a1 - arc.a0) * u;
+    const R = arc.R + (arc.R1 - arc.R) * u;
+    return at(arc.cx + Math.cos(a) * R, arc.cy + Math.sin(a) * R);
+  };
+  g.save();
+  // Полоса пути: тусклая целиком, налив — до k.
+  g.lineCap = 'round';
+  g.lineWidth = 7;
+  g.strokeStyle = `rgba(255,90,70,${0.14 * fade})`;
+  g.beginPath();
+  for (let i = 0; i <= N; i++) {
+    const [x, y] = pt(i / N);
+    if (i) g.lineTo(x, y);
+    else g.moveTo(x, y);
+  }
+  g.stroke();
+  g.lineWidth = aim ? 3 : 2;
+  g.strokeStyle = aim ? `rgba(255,140,110,${0.35 + 0.4 * k})` : `rgba(190,245,255,${0.6 * fade})`;
+  g.beginPath();
+  for (let i = 0; i <= Math.ceil(N * k); i++) {
+    const [x, y] = pt(Math.min(k, i / N));
+    if (i) g.lineTo(x, y);
+    else g.moveTo(x, y);
+  }
+  g.stroke();
+  // Шевроны по ходу.
+  if (aim)
+    for (let i = 1; i < 6; i++) {
+      const u = (i / 6 + time * 0.8) % 1;
+      const [x, y] = pt(u);
+      const [x2, y2] = pt(Math.min(1, u + 0.02));
+      const a = Math.atan2(y2 - y, x2 - x);
+      g.strokeStyle = `rgba(255,220,200,${0.7 * k})`;
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(x - Math.cos(a - 0.7) * 3, y - Math.sin(a - 0.7) * 3);
+      g.lineTo(x, y);
+      g.lineTo(x - Math.cos(a + 0.7) * 3, y - Math.sin(a + 0.7) * 3);
+      g.stroke();
+    }
+  g.restore();
+  return true;
+});
+
+// --- Отбитый снаряд ----------------------------------------------------------------------
+
+/** Отбитый снаряд — теперь твой: бирюзовая игла со следом. */
+registerZonePainter('f15_fshot', (g, z, px, py) => {
+  const s = zoneOf<FShot>(z);
+  if (!s) return true;
+  const sp = Math.hypot(s.vx, s.vy) || 1;
+  const ux = s.vx / sp;
+  const uy = s.vy / sp;
+  g.save();
+  for (let i = 0; i < 8; i++) {
+    g.fillStyle = `rgba(140,250,255,${0.6 - i * 0.07})`;
+    g.fillRect(Math.round(px - ux * i * 1.6) - 1, Math.round(py - uy * i * 1.6) - 1, 2, 2);
+  }
+  const gr = g.createRadialGradient(px, py, 0, px, py, 6);
+  gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+  gr.addColorStop(0.4, 'rgba(120,240,255,0.6)');
+  gr.addColorStop(1, 'rgba(120,240,255,0)');
+  g.fillStyle = gr;
+  g.beginPath();
+  g.arc(px, py, 6, 0, TAU);
+  g.fill();
+  g.restore();
+  return true;
+});
+
+// --- Короткие вспышки ---------------------------------------------------------------------
+
+const lifeK = (z: Zone | Strike) => {
+  const life = (z as Zone).life ?? 0.4;
+  return Math.min(1, z.t / Math.max(0.01, life));
+};
+
+/** Искры: звёздочки разлетаются и гаснут. */
+registerZonePainter('f15_spark', (g, z, px, py) => {
+  const k = lifeK(z);
+  g.save();
+  for (let i = 0; i < 9; i++) {
+    const a = hash(i, z.id, 2020) * TAU;
+    const d = z.r * TS * (0.2 + k * (0.6 + hash(i, z.id, 2021) * 0.6));
+    const x = Math.round(px + Math.cos(a) * d);
+    const y = Math.round(py + Math.sin(a) * d * 0.8 - k * 3);
+    g.fillStyle = `rgba(${i % 3 ? '170,245,255' : '255,255,255'},${1 - k})`;
+    g.fillRect(x, y, 1, 1);
+    if (k < 0.5) {
+      g.fillRect(x - 1, y, 3, 1);
+      g.fillRect(x, y - 1, 1, 3);
+    }
+  }
+  g.restore();
+  return true;
+});
+
+/** Вспышка памяти: фиолетовое кольцо расходится, вверх летят пылинки. */
+registerZonePainter('f15_memflash', (g, z, px, py) => {
+  const k = lifeK(z);
+  g.save();
+  g.strokeStyle = `rgba(200,170,255,${(1 - k) * 0.8})`;
+  g.lineWidth = 2 - k;
+  g.beginPath();
+  g.ellipse(px, py, z.r * TS * (0.3 + k * 0.8), z.r * TS * (0.2 + k * 0.55), 0, 0, TAU);
+  g.stroke();
+  for (let i = 0; i < 10; i++) {
+    const x = px + (hash(i, z.id, 2030) - 0.5) * z.r * TS * 1.4;
+    const y = py - k * 14 * (0.5 + hash(i, z.id, 2031));
+    g.fillStyle = `rgba(230,210,255,${1 - k})`;
+    g.fillRect(Math.round(x), Math.round(y), 1, 2);
+  }
+  g.restore();
+  return true;
+});
+
+/** Тяжесть после удара гравитона: вдавленный круг, кольца сжимаются, трещины. */
+registerZonePainter('f15_heavy', (g, z, px, py, _s, time) => {
+  const zz = z as Zone;
+  const fade = Math.min(1, (zz.life - zz.t) / 0.6, zz.t / 0.15);
+  const R = z.r * TS;
+  g.save();
+  const gr = g.createRadialGradient(px, py, 0, px, py, R);
+  gr.addColorStop(0, `rgba(30,10,50,${0.45 * fade})`);
+  gr.addColorStop(0.8, `rgba(60,20,90,${0.3 * fade})`);
+  gr.addColorStop(1, 'rgba(60,20,90,0)');
+  g.fillStyle = gr;
+  g.beginPath();
+  g.ellipse(px, py, R, R * 0.8, 0, 0, TAU);
+  g.fill();
+  for (let i = 0; i < 3; i++) {
+    const u = 1 - ((time * 0.7 + i / 3) % 1);
+    g.strokeStyle = `rgba(184,144,255,${0.45 * fade * (1 - u * 0.5)})`;
+    g.beginPath();
+    g.ellipse(px, py, R * u, R * u * 0.8, 0, 0, TAU);
+    g.stroke();
+  }
+  // Трещины.
+  g.strokeStyle = `rgba(10,4,20,${0.7 * fade})`;
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * TAU + hash(i, z.id, 2040);
+    g.beginPath();
+    g.moveTo(px + Math.cos(a) * 3, py + Math.sin(a) * 2.4);
+    g.lineTo(px + Math.cos(a + 0.2) * R * 0.5, py + Math.sin(a + 0.2) * R * 0.4);
+    g.lineTo(px + Math.cos(a - 0.1) * R * 0.85, py + Math.sin(a - 0.1) * R * 0.68);
+    g.stroke();
+  }
+  g.restore();
+  return true;
+});
+
+/** Шторм: тяжесть на весь зал — фиолетовая дымка, сверху давят полосы. */
+registerZonePainter('f15_heavyall', (g, z, px, py, _s, time) => {
+  const zz = z as Zone;
+  const fade = Math.min(1, (zz.life - zz.t) / 0.6, zz.t / 0.4);
+  const R = z.r * TS;
+  g.save();
+  g.fillStyle = `rgba(50,16,80,${0.22 * fade})`;
+  g.beginPath();
+  g.arc(px, py, R, 0, TAU);
+  g.fill();
+  g.fillStyle = `rgba(200,160,255,${0.35 * fade})`;
+  for (let i = 0; i < 60; i++) {
+    const x = px + (hash(i, 1, 2050) - 0.5) * R * 1.8;
+    const y = py - R + ((hash(i, 2, 2050) * R * 2 + time * 60) % (R * 2));
+    g.fillRect(Math.round(x), Math.round(y), 1, 3);
+  }
+  g.restore();
+  return true;
+});
+
+/** Шторм: предупреждение — волны от середины зала. */
+registerZonePainter('f15_stormwarn', (g, z, px, py) => {
+  const k = lifeK(z);
+  const st = stNow();
+  const heavy = st ? st.storm !== 1 : true;
+  g.save();
+  for (let i = 0; i < 3; i++) {
+    const u = (k * 1.5 + i / 3) % 1;
+    g.strokeStyle = heavy ? `rgba(184,120,255,${(1 - u) * 0.6})` : `rgba(160,230,255,${(1 - u) * 0.6})`;
+    g.lineWidth = 2;
+    g.beginPath();
+    g.ellipse(px, py, z.r * TS * u, z.r * TS * u * 0.7, 0, 0, TAU);
+    g.stroke();
+  }
+  g.restore();
+  return true;
+});
+
+/** Тень затмения: темнота поверх всего, дыры — у зажжённых ламп и малая у героя. */
+registerZonePainter('f15_dark', (g, z, px, py) => {
+  const st = stNow();
+  const sim = paintSim();
+  if (!st || !sim || st.dark <= 0.01) return true;
+  const at = viewOf(z, px, py);
+  const holes: [number, number, number][] = [];
+  for (const l of st.lamps) if (l.lit) holes.push([...at(l.x, l.y), 3.6 * TS]);
+  holes.push([...at(sim.hero.x, sim.hero.y - 0.3), 1.7 * TS]);
+  const W = g.canvas.width;
+  const H = g.canvas.height;
+  const m = g.getTransform();
+  const sc = m.a || 1;
+  const x0 = -m.e / sc - 32;
+  const y0 = -m.f / sc - 32;
+  const x1 = x0 + W / sc + 64;
+  const y1 = y0 + H / sc + 64;
+  const A = 0.8 * st.dark;
+  g.save();
+  g.fillStyle = `rgba(4,2,12,${A})`;
+  g.beginPath();
+  g.rect(x0, y0, x1 - x0, y1 - y0);
+  for (const [x, y, r] of holes) {
+    g.moveTo(x + r, y);
+    g.arc(x, y, r, 0, TAU, true);
+  }
+  g.fill('evenodd');
+  // Мягкий край дыр.
+  for (const [x, y, r] of holes) {
+    const gr = g.createRadialGradient(x, y, r * 0.55, x, y, r);
+    gr.addColorStop(0, 'rgba(4,2,12,0)');
+    gr.addColorStop(1, `rgba(4,2,12,${A})`);
+    g.fillStyle = gr;
+    g.beginPath();
+    g.arc(x, y, r, 0, TAU);
+    g.fill();
+  }
+  g.restore();
+  return true;
+});
+
+/** Падающая звезда: на полу наливается круг, с неба летит звезда со шлейфом. */
+registerZonePainter('f15_star', (g, z, px, py, _s, time) => {
+  const s = z as Strike;
+  const k = Math.min(1, s.t / Math.max(0.01, s.warn));
+  const R = z.r * TS;
+  g.save();
+  g.fillStyle = `rgba(255,214,110,${0.1 + k * 0.18})`;
+  g.beginPath();
+  g.ellipse(px, py, R, R * 0.8, 0, 0, TAU);
+  g.fill();
+  g.strokeStyle = `rgba(255,230,160,${0.4 + k * 0.5})`;
+  g.lineWidth = 1;
+  g.beginPath();
+  g.ellipse(px, py, R, R * 0.8, 0, 0, TAU);
+  g.stroke();
+  g.fillStyle = `rgba(255,190,90,${0.35 + k * 0.3})`;
+  g.beginPath();
+  g.ellipse(px, py, R * k, R * k * 0.8, 0, 0, TAU);
+  g.fill();
+  // Звезда в небе: из-за верхнего левого края к центру.
+  const d = (1 - k) * 90;
+  const sx = px - d * 0.55;
+  const sy = py - d;
+  for (let i = 0; i < 10; i++) {
+    g.fillStyle = `rgba(255,240,200,${0.6 - i * 0.055})`;
+    g.fillRect(Math.round(sx - i * 2.2), Math.round(sy - i * 4), 2, 2);
+  }
+  const gr = g.createRadialGradient(sx, sy, 0, sx, sy, 7);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.5, 'rgba(255,220,140,0.6)');
+  gr.addColorStop(1, 'rgba(255,220,140,0)');
+  g.fillStyle = gr;
+  g.beginPath();
+  g.arc(sx, sy, 7, 0, TAU);
+  g.fill();
+  void time;
+  g.restore();
+  return true;
+});
+
+/** Звезда упала: кольцо, вспышка, брызги золота. */
+registerZonePainter('f15_starland', (g, z, px, py) => {
+  const k = lifeK(z);
+  const R = z.r * TS;
+  g.save();
+  const gr = g.createRadialGradient(px, py, 0, px, py, R * (0.5 + k * 0.6));
+  gr.addColorStop(0, `rgba(255,255,240,${(1 - k) * 0.9})`);
+  gr.addColorStop(1, 'rgba(255,200,100,0)');
+  g.fillStyle = gr;
+  g.beginPath();
+  g.arc(px, py, R * (0.5 + k * 0.6), 0, TAU);
+  g.fill();
+  g.strokeStyle = `rgba(255,220,150,${1 - k})`;
+  g.lineWidth = 2;
+  g.beginPath();
+  g.ellipse(px, py, R * (0.4 + k), R * (0.3 + k * 0.75), 0, 0, TAU);
+  g.stroke();
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * TAU + hash(i, z.id, 2060);
+    const d = R * (0.3 + k * 1.1);
+    g.fillStyle = `rgba(255,${200 + (i % 3) * 20},120,${1 - k})`;
+    g.fillRect(Math.round(px + Math.cos(a) * d), Math.round(py + Math.sin(a) * d * 0.75 - Math.sin(k * PI) * 5), 1, 1);
+  }
+  g.restore();
+  return true;
+});
+
+registerImpactPainter('f15_star', {
+  life: 1.6,
+  shake: 0.25,
+  paint: (g, rec, px, py, _s, age) => {
+    // Обожжённый след: тлеет и гаснет.
+    const k = Math.min(1, age / 1.6);
+    const R = (rec.r ?? 1.3) * TS * 0.7;
+    const gr = g.createRadialGradient(px, py, 0, px, py, R);
+    gr.addColorStop(0, `rgba(255,170,80,${0.45 * (1 - k)})`);
+    gr.addColorStop(0.6, `rgba(60,30,30,${0.35 * (1 - k)})`);
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.ellipse(px, py, R, R * 0.8, 0, 0, TAU);
+    g.fill();
+    return true;
+  },
+});
+
+/** Нить созвездия: свет бежит от звезды к звезде, вспыхивает ударом. */
+registerZonePainter('f15_lash', (g, z, px, py, _s, time) => {
+  const s = z as Strike;
+  const k = Math.min(1, s.t / Math.max(0.01, s.warn));
+  const L = z.r * TS;
+  const a = s.ang ?? 0;
+  const W = (s.w ?? 0.3) * TS;
+  const ux = Math.cos(a);
+  const uy = Math.sin(a);
+  g.save();
+  // Полоса удара (тусклая) — где опасно.
+  g.strokeStyle = `rgba(255,110,90,${0.12 + k * 0.2})`;
+  g.lineWidth = W * 2;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(px, py);
+  g.lineTo(px + ux * L, py + uy * L);
+  g.stroke();
+  // Нить света — наливается к концу.
+  g.strokeStyle = `rgba(200,220,255,${0.5 + 0.4 * k})`;
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(px, py);
+  g.lineTo(px + ux * L * k, py + uy * L * k);
+  g.stroke();
+  const fx = px + ux * L * k;
+  const fy = py + uy * L * k;
+  g.fillStyle = `rgba(255,255,255,${0.6 + 0.4 * Math.sin(time * 30)})`;
+  g.fillRect(Math.round(fx) - 1, Math.round(fy), 3, 1);
+  g.fillRect(Math.round(fx), Math.round(fy) - 1, 1, 3);
+  g.restore();
+  return true;
+});
+
+/** Луч телескопа: столб света с неба, искры по краю. */
+registerZonePainter('f15_beam', (g, z, px, py, _s, time) => {
+  const k = lifeK(z);
+  const W = z.r * TS * (1 - k * 0.6);
+  const a = k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85;
+  g.save();
+  const gr = g.createLinearGradient(px - W, 0, px + W, 0);
+  gr.addColorStop(0, 'rgba(255,240,190,0)');
+  gr.addColorStop(0.5, `rgba(255,250,230,${0.75 * a})`);
+  gr.addColorStop(1, 'rgba(255,240,190,0)');
+  g.fillStyle = gr;
+  g.fillRect(px - W, py - 220, W * 2, 220 + W * 0.3);
+  const gr2 = g.createRadialGradient(px, py, 0, px, py, W * 1.4);
+  gr2.addColorStop(0, `rgba(255,255,255,${0.8 * a})`);
+  gr2.addColorStop(1, 'rgba(255,230,160,0)');
+  g.fillStyle = gr2;
+  g.beginPath();
+  g.ellipse(px, py, W * 1.4, W * 0.9, 0, 0, TAU);
+  g.fill();
+  for (let i = 0; i < 14; i++) {
+    const y = py - ((hash(i, 3, 2070) * 200 + time * 120) % 200);
+    const x = px + (hash(i, 4, 2070) - 0.5) * W * 1.6;
+    g.fillStyle = `rgba(255,255,255,${a})`;
+    g.fillRect(Math.round(x), Math.round(y), 1, 2);
+  }
+  g.restore();
+  return true;
+});
+
+/** Сверхновая вспыхнула: огненное кольцо по метке и белая вспышка. */
+registerZonePainter('f15_novaburst', (g, z, px, py) => {
+  const k = lifeK(z);
+  const R = z.r * TS;
+  g.save();
+  const gr = g.createRadialGradient(px, py, R * 0.2, px, py, R * (0.6 + k * 0.5));
+  gr.addColorStop(0, `rgba(255,255,240,${(1 - k) * 0.8})`);
+  gr.addColorStop(0.6, `rgba(255,190,80,${(1 - k) * 0.5})`);
+  gr.addColorStop(1, 'rgba(255,120,40,0)');
+  g.fillStyle = gr;
+  g.beginPath();
+  g.arc(px, py, R * (0.6 + k * 0.5), 0, TAU);
+  g.fill();
+  g.strokeStyle = `rgba(255,230,160,${1 - k})`;
+  g.lineWidth = 3 * (1 - k) + 1;
+  g.beginPath();
+  g.ellipse(px, py, R * (0.7 + k * 0.4), R * (0.6 + k * 0.35), 0, 0, TAU);
+  g.stroke();
+  g.restore();
+  return true;
+});
+
+/** След саламандры-эха: призрачный голубой огонёк; сперва метка, потом жжёт. */
+registerZonePainter('f15_ember', (g, z, px, py, _s, time) => {
+  const zz = z as Zone;
+  const warn = zz.warn ?? 0;
+  const R = z.r * TS;
+  g.save();
+  if (zz.t < warn) {
+    const k = zz.t / warn;
+    g.strokeStyle = `rgba(140,200,255,${0.3 + k * 0.5})`;
+    g.beginPath();
+    g.ellipse(px, py, R, R * 0.75, 0, 0, TAU);
+    g.stroke();
+    g.fillStyle = `rgba(140,200,255,${0.15 * k})`;
+    g.fill();
+  } else {
+    const fade = Math.min(1, (zz.life - zz.t) / 0.5);
+    for (let i = 0; i < 5; i++) {
+      const ph = (time * 3 + i * 0.37 + hash(i, z.id, 2080)) % 1;
+      const x = px + (hash(i, z.id, 2081) - 0.5) * R * 1.4;
+      const y = py + 2 - ph * 8;
+      g.fillStyle = `rgba(${ph < 0.4 ? '230,245,255' : '120,170,255'},${(1 - ph) * 0.85 * fade})`;
+      g.fillRect(Math.round(x), Math.round(y), 2, 2 + (ph < 0.3 ? 1 : 0));
+    }
+    g.fillStyle = `rgba(90,140,255,${0.22 * fade})`;
+    g.beginPath();
+    g.ellipse(px, py, R, R * 0.75, 0, 0, TAU);
+    g.fill();
+  }
+  g.restore();
+  return true;
+});
+
+/** Споры гриба-эха: облачко бирюзово-фиолетовых пылинок. */
+registerZonePainter('f15_spore', (g, z, px, py, _s, time) => {
+  const zz = z as Zone;
+  const fade = Math.min(1, (zz.life - zz.t) / 0.6, zz.t / 0.3);
+  const R = z.r * TS;
+  g.save();
+  const gr = g.createRadialGradient(px, py, 0, px, py, R);
+  gr.addColorStop(0, `rgba(120,200,220,${0.25 * fade})`);
+  gr.addColorStop(1, 'rgba(120,120,220,0)');
+  g.fillStyle = gr;
+  g.beginPath();
+  g.ellipse(px, py, R, R * 0.8, 0, 0, TAU);
+  g.fill();
+  for (let i = 0; i < 18; i++) {
+    const a = hash(i, z.id, 2090) * TAU + time * (0.3 + hash(i, 1, 2090) * 0.5);
+    const d = R * Math.sqrt(hash(i, 2, 2090));
+    g.fillStyle = `rgba(${i % 2 ? '180,240,255' : '200,170,255'},${0.7 * fade})`;
+    g.fillRect(Math.round(px + Math.cos(a) * d), Math.round(py + Math.sin(a) * d * 0.8 - Math.sin(time * 2 + i) * 2), 1, 1);
+  }
+  g.restore();
+  return true;
+});
+
+/** Удар окружения по мобу — без картинки. */
+registerZonePainter('f15_none', () => true);
+registerImpactPainter('f15_none', { life: 0.01, paint: () => false });
+
+/** Трос якоря: светящаяся нить от якоря к точке зацепа, по ней скользит искра. */
+registerZonePainter('f15_tether', (g, z, px, py, _s, time) => {
+  const st = stNow();
+  const t = st?.tether;
+  if (!t) return true;
+  const at = viewOf(z, px, py);
+  const [ax, ay] = at(t.ax, t.ay - 0.6);
+  const [bx, by] = at(t.x1, t.y1);
+  const k = Math.min(1, t.t / t.T);
+  g.save();
+  g.strokeStyle = 'rgba(30,20,50,0.6)';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(ax, ay + 1);
+  g.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 6 * (1 - k), bx, by + 1);
+  g.stroke();
+  g.strokeStyle = `rgba(150,240,255,${0.75 + 0.2 * Math.sin(time * 20)})`;
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(ax, ay);
+  g.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 6 * (1 - k), bx, by);
+  g.stroke();
+  // Крюк-кристалл на конце.
+  g.fillStyle = 'rgba(230,255,255,0.95)';
+  g.fillRect(Math.round(bx) - 1, Math.round(by) - 1, 3, 3);
+  g.restore();
+  return true;
+});
+
+// ---------------------------------------------------------------------------
+// Снаряды и их контакт.
+// ---------------------------------------------------------------------------
+
+/** Игла ежа: кристальная, остриём по ходу, за ней блёстки. */
+registerShotPainter('f15_needle', (s: Shot) => {
+  const b = dirBucket(Math.atan2(s.vy, s.vx), 16);
+  return sprite(`needle|${b}`, () => {
+    const p = new Px(18, 18);
+    const a = (b / 16) * TAU;
+    const ux = Math.cos(a);
+    const uy = Math.sin(a);
+    for (let i = 1; i <= 4; i++) p.set(9 - ux * (3 + i * 1.5), 9 - uy * (3 + i * 1.5), alpha(TEAL_GLOW, 0.55 - i * 0.12));
+    spike(p, 9 - ux * 3, 9 - uy * 3, a, 8, 2.4, CRYST, WHITE);
+    p.outline(alpha(INK, 0.6));
+    return { p, ax: 9, ay: 11 };
+  });
+});
+
+/** Звёздный болт звездочёта: золотая звезда крутится, за ней хвост. */
+registerShotPainter('f15_starbolt', (s: Shot, time: number) => {
+  const b = dirBucket(Math.atan2(s.vy, s.vx), 8);
+  const f = Math.floor(time * 16) % 4;
+  return sprite(`starbolt|${b}|${f}`, () => {
+    const p = new Px(26, 26);
+    const a = (b / 8) * TAU;
+    const ux = Math.cos(a);
+    const uy = Math.sin(a);
+    for (let i = 1; i <= 6; i++) glow(p, 13 - ux * i * 1.8, 13 - uy * i * 1.8, 3 - i * 0.35, GOLDK, 0.5 - i * 0.07);
+    glow(p, 13, 13, 6, hx('#ffd060'), 0.6);
+    const rot = (f / 4) * (PI / 2);
+    const pts: [number, number][] = [];
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 ? 1.6 : 4;
+      const t = rot + (i / 10) * TAU - PI / 2;
+      pts.push([13 + Math.cos(t) * r, 13 + Math.sin(t) * r]);
+    }
+    poly(p, pts, (x, y) => (x + y < 26 ? GOLD[3] : GOLD[2]));
+    p.set(13, 13, WHITE);
+    return { p, ax: 13, ay: 15 };
+  });
+});
+
+registerImpactPainter('f15_needle', {
+  life: 0.3,
+  paint: (g, rec, px, py, _s, age) => {
+    const k = age / 0.3;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * TAU + rec.seed;
+      const d = 2 + k * 6;
+      g.fillStyle = `rgba(${i % 2 ? '200,250,255' : '110,220,255'},${1 - k})`;
+      g.fillRect(Math.round(px + Math.cos(a) * d), Math.round(py + Math.sin(a) * d - k * 2), 1, 1);
+    }
+    return true;
+  },
+});
+
+registerImpactPainter('f15_starbolt', {
+  life: 0.4,
+  paint: (g, rec, px, py, _s, age) => {
+    const k = age / 0.4;
+    g.strokeStyle = `rgba(255,220,130,${1 - k})`;
+    g.beginPath();
+    g.arc(px, py, 2 + k * 8, 0, TAU);
+    g.stroke();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU + rec.seed;
+      g.fillStyle = `rgba(255,245,200,${1 - k})`;
+      g.fillRect(Math.round(px + Math.cos(a) * (3 + k * 9)), Math.round(py + Math.sin(a) * (3 + k * 9)), 1, 1);
+    }
+    return true;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Иконки вещей (10×10).
+// ---------------------------------------------------------------------------
+
+registerItemArt('f15_shard', () => {
+  const p = new Px(10, 10);
+  crystal(p, 5, 9.5, 4, 9, 1, CRYST, 0.6);
+  p.set(4, 3, WHITE);
+  p.outline(INK);
+  return p;
+});
+
+registerItemArt('f15_dust', () => {
+  const p = new Px(10, 10);
+  // Мешочек звёздной пыли: синий бархат, золотая завязка, искры.
+  shadeEll(p, 5, 6.3, 3.6, 3.1, LAPIS, 0.15);
+  p.rect(4, 2, 6, 3, LAPIS[2]);
+  p.rect(3, 3, 7, 3, GOLD[2]);
+  p.set(4, 6, STAR_C);
+  p.set(6, 7, GOLD[3]);
+  p.set(5, 5, WHITE);
+  p.outline(INK);
+  return p;
+});
+
+registerItemArt('f15_meteorite', () => {
+  const p = new Px(10, 10);
+  poly(p, [[1, 7], [2, 3], [5, 1], [8, 2], [9, 6], [7, 9], [3, 9]], (x, y) => tone(METEOR, (5 - x) * 0.08 + (5 - y) * 0.1 + 0.35));
+  stroke(p, 3, 5, 5, 6, hx('#ffb040'));
+  stroke(p, 5, 6, 7, 4, hx('#ffe080'));
+  p.outline(INK);
+  return p;
+});
+
+registerItemArt('f15_lens', () => {
+  const p = new Px(10, 10);
+  p.ell(5, 5, 4, 4, BRASS[2]);
+  p.ell(5, 5, 3, 3, hx('#7ab8ff'));
+  p.ell(4.5, 4.5, 1.6, 1.6, hx('#c8e8ff'));
+  p.set(4, 4, WHITE);
+  p.outline(INK);
+  return p;
+});
+
+registerItemArt('f15_void', () => {
+  const p = new Px(10, 10);
+  // Шарик пустоты: чёрный, по краю фиолетовый ободок, внутри звезда.
+  p.ell(5, 5, 4, 4, VIOLET[1]);
+  p.ell(5, 5, 3.2, 3.2, hx('#05030c'));
+  p.set(6, 4, WHITE);
+  p.set(3, 6, alpha(VIOLET_GLOW, 0.8));
+  p.outline(INK);
+  return p;
+});
+
+registerItemArt('f15_memory', () => {
+  const p = new Px(10, 10);
+  poly(p, [[2, 3], [4, 1], [6, 1], [8, 3], [8, 7], [6, 9], [4, 9], [2, 7]], (x, y) => mixc(VIOLET[3], VIOLET[1], (x + y) / 16));
+  p.set(4, 3, WHITE);
+  p.set(5, 5, hx('#fff0ff'));
+  p.set(6, 6, alpha(WHITE, 0.6));
+  p.outline(INK);
+  return p;
+});
+
+registerItemArt('f15_honey', () => {
+  const p = new Px(10, 10);
+  // Кристальный мёд: соты-шестигранник, светится бирюзой.
+  poly(p, [[2, 3], [5, 1], [8, 3], [8, 7], [5, 9], [2, 7]], (x, y) => tone(TEAL, (5 - x) * 0.1 + (5 - y) * 0.1 + 0.55));
+  stroke(p, 5, 1, 5, 9, alpha(TEAL[0], 0.6));
+  stroke(p, 2, 5, 8, 5, alpha(TEAL[0], 0.4));
+  p.set(4, 3, WHITE);
+  p.outline(INK);
+  return p;
+});
+
+registerItemArt('f15_ration', () => {
+  const p = new Px(10, 10);
+  // Паёк звездочёта: свёрток в синей ткани, перевязан латунью, сверху звезда.
+  p.rect(1, 3, 8, 8, LAPIS[2]);
+  p.rect(1, 3, 8, 3, LAPIS[3]);
+  p.rect(8, 4, 8, 8, LAPIS[1]);
+  p.rect(4, 3, 5, 8, BRASS[2]);
+  sparkle(p, 5, 1, GOLD[3], 1);
+  p.outline(INK);
+  return p;
+});
