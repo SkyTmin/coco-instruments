@@ -11,10 +11,12 @@
 
 import { Px } from '../dungeon-art';
 import {
+  frameLRU,
   paintSim,
   registerCellPainter,
   registerItemArt,
   registerMobPainter,
+  registerMobWarm,
   registerPropPainter,
   registerShotPainter,
   registerZonePainter,
@@ -1351,30 +1353,19 @@ registerMobPainter('f13_grin', (m, pose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Колосс: исполин без кожи — красное мясо, светлые жилы, рёбра, зубы без
-// губ, пар из плеч. Тает по фазам: в «Паре» окутан белым, в «Испарении»
-// худеет и светится изнутри, как угли.
+// Колосс (v2.87): исполин без кожи — красное мясо, светлые жилы, рёбра, зубы
+// без губ, пар из суставов. Облик прежний, движение — новое.
+//
+// Мини-3D риг: суставы считаются в осях тела (x — вперёд, y — влево, z —
+// вверх), части — капсулы и шары в z-буфере, свет сверху-слева по нормали,
+// как у прежней фигуры; жилы, рёбра, лицо и затылок — наклейки на
+// поверхность. Тело поворачивается непрерывно (румбы по 22,5°, влево —
+// зеркалом), голова ведёт взгляд за героем, части опаздывают за корпусом.
+// Каждая техника — дорожка ключевых поз на 24 к/с от `pose.t`; кадр
+// контакта — ровно в миг урона мозга (первый кадр `recover` после удара).
+// Кадры — в `frameLRU`, техники первой фазы греются заранее.
 // ---------------------------------------------------------------------------
 
-const COL_LOOK: GiantLook = {
-  H: 76,
-  skin: MUSCLE,
-  hair: null,
-  hairStyle: 'bald',
-  bulk: 1.38,
-  belly: 0.1,
-  arms: 1.14,
-  legs: 0.9,
-  head: 0.23,
-  grin: 1.02,
-  eyes: 'blank',
-};
-const COL_THIN: GiantLook = {
-  ...COL_LOOK,
-  bulk: 1.08,
-  arms: 1.08,
-  skin: tn('#240605', '#5e130f', '#9a2c1a', '#e06a30'),
-};
 const EMBER = [hx('#ff5a18'), hx('#ffa030'), hx('#ffe07a')];
 
 /** Пар без контура: три пояса прозрачности — ядро, тело, край. */
@@ -1391,365 +1382,3133 @@ function puff(p: Px, cx: number, cy: number, r: number, a: number, seed: number)
     }
 }
 
+/** Тона тающего Колосса (фаза «Испарение»): мясо темнее, свет — угли. */
+const COL_SKIN3 = tn('#240605', '#5e130f', '#9a2c1a', '#e06a30');
+const COL_ROCK = tn('#241c18', '#4a3e36', '#766858', '#a8987e');
+const COL_DIRT = [hx('#2a1e14'), hx('#4a3826'), hx('#6e5638')];
+const COL_SOCKET = hx('#1a0405');
+const COL_PUPIL = hx('#fff2c0');
+const COL_GUM = tone(MUSCLE, 0.95);
+const COL_TOOTH2 = mixc(TEETH, BONE[1], 0.45);
+const COL_HALO = hx('#ffb070');
+
+// ---- Векторы и повороты -------------------------------------------------------
+
+type V3 = [number, number, number];
+/** Матрица 3×3 по строкам. */
+type M3 = number[];
+
+const cClamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+const vAdd = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const vSub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const vMul = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
+const vDot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const vLen = (a: V3) => Math.hypot(a[0], a[1], a[2]);
+const vNorm = (a: V3): V3 => vMul(a, 1 / (vLen(a) || 1));
+const vLerp = (a: V3, b: V3, k: number): V3 => [
+  a[0] + (b[0] - a[0]) * k,
+  a[1] + (b[1] - a[1]) * k,
+  a[2] + (b[2] - a[2]) * k,
+];
+const mApp = (m: M3, v: V3): V3 => [
+  m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+  m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
+  m[6] * v[0] + m[7] * v[1] + m[8] * v[2],
+];
+function mMul(a: M3, b: M3): M3 {
+  const o = new Array<number>(9);
+  for (let r = 0; r < 3; r++)
+    for (let c = 0; c < 3; c++)
+      o[r * 3 + c] = a[r * 3] * b[c] + a[r * 3 + 1] * b[3 + c] + a[r * 3 + 2] * b[6 + c];
+  return o;
+}
+/** Поворот вокруг вертикали: «вперёд» уходит «влево». */
+function yawM(a: number): M3 {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return [c, -s, 0, s, c, 0, 0, 0, 1];
+}
+/** Наклон: «верх» уходит «вперёд». */
+function pitchM(a: number): M3 {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return [c, 0, s, 0, 1, 0, -s, 0, c];
+}
+/** Крен: «верх» уходит «влево». */
+function rollM(a: number): M3 {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return [1, 0, 0, 0, c, s, 0, -s, c];
+}
+
+/** Две кости: плечо и предплечье (бедро и голень), сгиб — в сторону `pole`. */
+function ik2(s: V3, target: V3, l1: number, l2: number, pole: V3): [V3, V3] {
+  let d = vSub(target, s);
+  let len = vLen(d);
+  const max = l1 + l2 - 0.15;
+  if (len > max) {
+    d = vMul(d, max / len);
+    len = max;
+  }
+  const end = vAdd(s, d);
+  const dir = vMul(d, 1 / (len || 1));
+  const a = (l1 * l1 - l2 * l2 + len * len) / (2 * (len || 1));
+  const hgt = Math.sqrt(Math.max(0, l1 * l1 - a * a));
+  const perp = vNorm(vSub(pole, vMul(dir, vDot(pole, dir))));
+  return [vAdd(vAdd(s, vMul(dir, a)), vMul(perp, hgt)), end];
+}
+
+// ---- Поза: каналы рига ----------------------------------------------------------
+
 /**
- * Мясо без кожи — жилами, а не точками: волокна идут косыми нитями только по
- * освещённой стороне (по тени они читаются сыпью). В «Испарении» те же нити
- * горят изнутри.
+ * Поза Колосса. Руки: A — правая (ближняя в профиль), B — левая; кисть
+ * задаётся от плеча (длина, азимут наружу, возвышение) в осях груди без
+ * наклона — опущенная рука висит вниз, как ни гнись, — или прямо точкой на
+ * земле (`aw` — доля: ладони в землю). Стопы — в осях корня, `nb`/`fb` —
+ * наружу.
  */
-function fibers(p: Px, from: number, to: number, hot: boolean, f: number): void {
-  const sinew = alpha(SINEW, 0.5);
-  for (let y = Math.max(0, Math.floor(from)); y < Math.min(p.h, to); y++)
-    for (let x = 0; x < p.w; x++) {
-      const i = (y * p.w + x) * 4;
-      if (p.data[i + 3] < 255) continue;
-      const r = p.data[i];
-      // Только мышца (красное), не зубы, не кость, не контур.
-      if (r < 90 || p.data[i + 1] > 150) continue;
-      const lit = r > (hot ? 150 : 170);
-      const lane = (x * 2 + Math.floor(y / 3)) % 7;
-      if (hot) {
-        if (lane === 0 && hash(x, Math.floor(y / 4), 17) > 0.25)
-          p.set(x, y, EMBER[(Math.floor(y / 2) + f) % 3 === 0 ? 2 : lit ? 1 : 0]);
-      } else if (lit && lane === 0) p.set(x, y, sinew);
+interface CRig {
+  /** Таз: вперёд, влево, высота над землёй. */
+  pa: number;
+  pb: number;
+  ph: number;
+  /** Корпус: наклон вперёд, крен влево, разворот груди влево. */
+  lean: number;
+  roll: number;
+  twist: number;
+  /** Вдох, грудь раскрыта (выброс пара), плечи вверх (px). */
+  breath: number;
+  open: number;
+  shr: number;
+  /** Голова: вынос вперёд (px), кивок вниз, поворот влево, наклон, пасть. */
+  nk: number;
+  hp: number;
+  hy: number;
+  hr: number;
+  jaw: number;
+  /** Правая кисть: длина, азимут наружу, возвышение, ладонь раскрыта, на земле (доля, точка). */
+  ar: number;
+  aaz: number;
+  ael: number;
+  ah: number;
+  aw: number;
+  agx: number;
+  agy: number;
+  agz: number;
+  /** Левая кисть. */
+  br: number;
+  baz: number;
+  bel: number;
+  bh: number;
+  bw: number;
+  bgx: number;
+  bgy: number;
+  bgz: number;
+  /** Стопы: вперёд, наружу, подъём. */
+  na: number;
+  nb: number;
+  nh: number;
+  fa: number;
+  fb: number;
+  fh: number;
+  /** Ход кадра целиком: вперёд, вверх (px), сжатие, наклон. */
+  tdx: number;
+  tdy: number;
+  tsx: number;
+  tsy: number;
+  trot: number;
+  /** Пар из суставов, жар в жилах, свет в груди, вспышка глаз, звёзды. */
+  steam: number;
+  heat: number;
+  glow: number;
+  eyes: number;
+  stars: number;
+  /** Под землёй (px), испарение 0…1, глыба в руках, худоба (фаза 3), кайма, прозрачность. */
+  sink: number;
+  melt: number;
+  rock: number;
+  thin: number;
+  rim: number;
+  alpha: number;
+}
+type CKey = keyof CRig;
+
+const CREADY: CRig = {
+  pa: 0.5,
+  pb: 0,
+  ph: 29.4,
+  lean: 0.1,
+  roll: 0,
+  twist: 0,
+  breath: 0,
+  open: 0,
+  shr: 0,
+  nk: 1.4,
+  hp: 0.06,
+  hy: 0,
+  hr: 0,
+  jaw: 0.1,
+  ar: 26.5,
+  aaz: 0.32,
+  ael: -1.3,
+  ah: 0.15,
+  aw: 0,
+  agx: 10,
+  agy: 12,
+  agz: 0,
+  br: 26.5,
+  baz: 0.32,
+  bel: -1.3,
+  bh: 0.15,
+  bw: 0,
+  bgx: 10,
+  bgy: 12,
+  bgz: 0,
+  na: 1.8,
+  nb: 8.6,
+  nh: 0,
+  fa: -1.8,
+  fb: 8.6,
+  fh: 0,
+  tdx: 0,
+  tdy: 0,
+  tsx: 1,
+  tsy: 1,
+  trot: 0,
+  steam: 0.35,
+  heat: 0,
+  glow: 0,
+  eyes: 0,
+  stars: 0,
+  sink: 0,
+  melt: 0,
+  rock: 0,
+  thin: 0,
+  rim: 0,
+  alpha: 1,
+};
+const CKEYS = Object.keys(CREADY) as CKey[];
+
+/** Зеркало позы: левое ↔ правое (вторая нога топота, разворот влево). */
+function cMirror(r: CRig): CRig {
+  return {
+    ...r,
+    pb: -r.pb,
+    roll: -r.roll,
+    twist: -r.twist,
+    hy: -r.hy,
+    hr: -r.hr,
+    ar: r.br,
+    aaz: r.baz,
+    ael: r.bel,
+    ah: r.bh,
+    aw: r.bw,
+    agx: r.bgx,
+    agy: r.bgy,
+    agz: r.bgz,
+    br: r.ar,
+    baz: r.aaz,
+    bel: r.ael,
+    bh: r.ah,
+    bw: r.aw,
+    bgx: r.agx,
+    bgy: r.agy,
+    bgz: r.agz,
+    na: r.fa,
+    nb: r.fb,
+    nh: r.fh,
+    fa: r.na,
+    fb: r.nb,
+    fh: r.nh,
+  };
+}
+
+function cLerp(a: CRig, b: CRig, k: number): CRig {
+  const o = { ...a };
+  for (const ch of CKEYS) o[ch] = a[ch] + (b[ch] - a[ch]) * k;
+  return o;
+}
+
+type Ease = (x: number) => number;
+const eLin: Ease = (x) => x;
+const eIn: Ease = (x) => x * x;
+const eIn3: Ease = (x) => x * x * x;
+const eOut: Ease = (x) => 1 - (1 - x) * (1 - x);
+const eOut3: Ease = (x) => 1 - (1 - x) * (1 - x) * (1 - x);
+const eIO: Ease = (x) => (x < 0.5 ? 2 * x * x : 1 - 2 * (1 - x) * (1 - x));
+const eStep: Ease = (x) => (x < 1 ? 0 : 1);
+
+/** Ключ: время (с), каналы, кривая подхода к ключу (по умолчанию — плавно). */
+type CKf = [number, Partial<CRig>, Ease?];
+
+/**
+ * Дорожка ключей: каждый канал идёт между ключами, где он задан, по кривой
+ * подхода. `lag` — опоздание части (с): голова, вторая рука, пасть.
+ */
+function cTrack(keys: CKf[], t: number, base: CRig, lag?: Partial<Record<CKey, number>>): CRig {
+  const out = { ...base };
+  for (const ch of CKEYS) {
+    const tt = lag?.[ch] ? Math.max(0, t - lag[ch]!) : t;
+    let t0 = 0;
+    let v0 = base[ch];
+    let t1 = -1;
+    let v1 = 0;
+    let e: Ease = eIO;
+    for (const [kt, kv, ke] of keys) {
+      const v = kv[ch];
+      if (v === undefined) continue;
+      if (kt <= tt) {
+        t0 = kt;
+        v0 = v;
+      } else {
+        t1 = kt;
+        v1 = v;
+        e = ke ?? eIO;
+        break;
+      }
+    }
+    out[ch] = t1 < 0 ? v0 : v0 + (v1 - v0) * e(cClamp((tt - t0) / (t1 - t0 || 1), 0, 1));
+  }
+  return out;
+}
+
+/** Опоздания по умолчанию: голова, пасть, плечи и свободная левая рука. */
+const CLAG: Partial<Record<CKey, number>> = {
+  hp: 0.05,
+  hy: 0.06,
+  hr: 0.06,
+  nk: 0.04,
+  jaw: 0.03,
+  shr: 0.04,
+  baz: 0.05,
+  bel: 0.05,
+  br: 0.05,
+};
+/** Обе руки опаздывают (топот, рёв): корпус ведёт, руки догоняют. */
+const CLAG2: Partial<Record<CKey, number>> = { ...CLAG, aaz: 0.05, ael: 0.05, ar: 0.05 };
+
+// ---- Скелет ---------------------------------------------------------------------
+
+interface CSk {
+  pel: V3;
+  waist: V3;
+  chest: V3;
+  Rp: M3;
+  Rw: M3;
+  Rc: M3;
+  Rh: M3;
+  Rj: M3;
+  neck: V3;
+  head: V3;
+  shA: V3;
+  shB: V3;
+  elA: V3;
+  elB: V3;
+  wrA: V3;
+  wrB: V3;
+  hipA: V3;
+  hipB: V3;
+  knA: V3;
+  knB: V3;
+  anA: V3;
+  anB: V3;
+  rock: V3 | null;
+}
+
+/** Длины костей (px): бедро, голень, плечо, предплечье. */
+const CD = { thigh: 13.4, shin: 12.8, up: 15.2, fore: 14.2 };
+
+function cSkel(r: CRig): CSk {
+  const pel: V3 = [r.pa, r.pb, r.ph - r.sink];
+  const Rp = mMul(rollM(r.roll * 0.3), yawM(r.twist * 0.12));
+  const Rw = mMul(rollM(r.roll * 0.7), mMul(pitchM(r.lean * 0.55), yawM(r.twist * 0.45)));
+  const Rc = mMul(rollM(r.roll), mMul(pitchM(r.lean), yawM(r.twist)));
+  const waist = vAdd(pel, mApp(Rw, [0, 0, 7.4]));
+  const chest = vAdd(waist, mApp(Rc, [0, 0, 8.4]));
+  const up = 5.2 + r.shr + r.breath * 0.7;
+  const shw = 14.2 - r.thin * 1.6;
+  const shA = vAdd(chest, mApp(Rc, [-0.6, -shw, up]));
+  const shB = vAdd(chest, mApp(Rc, [-0.6, shw, up]));
+  const neck = vAdd(chest, mApp(Rc, [0.4, 0, 9.4 + r.shr * 0.35]));
+  // Голова держится ровнее корпуса: морда смотрит вперёд, как ни гнись.
+  const Rn = mMul(rollM(r.roll * 0.5), mMul(pitchM(r.lean * 0.5), yawM(r.twist)));
+  const Rh = mMul(
+    rollM(r.roll * 0.4 + r.hr),
+    mMul(pitchM(r.lean * 0.3 + r.hp), yawM(r.twist + r.hy)),
+  );
+  const head = vAdd(neck, mApp(Rn, [1.2 + r.nk, 0, 7.6]));
+  const Rj = mMul(Rh, pitchM(r.jaw * 0.5));
+  // Кисти — в осях груди без наклона: висящая рука висит вниз.
+  const Ra = yawM(r.twist);
+  const polar = (rr: number, az: number, el: number, side: number): V3 =>
+    mApp(Ra, [
+      rr * Math.cos(el) * Math.cos(az),
+      side * rr * Math.cos(el) * Math.sin(az),
+      rr * Math.sin(el),
+    ]);
+  let tA = vAdd(shA, polar(r.ar, r.aaz, r.ael, -1));
+  if (r.aw > 0.001) tA = vLerp(tA, [r.agx, -r.agy, r.agz + 3.2], r.aw);
+  let tB = vAdd(shB, polar(r.br, r.baz, r.bel, 1));
+  if (r.bw > 0.001) tB = vLerp(tB, [r.bgx, r.bgy, r.bgz + 3.2], r.bw);
+  const [elA, wrA] = ik2(shA, tA, CD.up, CD.fore, mApp(Rc, [-1, -0.75, -0.45]));
+  const [elB, wrB] = ik2(shB, tB, CD.up, CD.fore, mApp(Rc, [-1, 0.75, -0.45]));
+  const hipA = vAdd(pel, mApp(Rp, [0, -6.6, -1.5]));
+  const hipB = vAdd(pel, mApp(Rp, [0, 6.6, -1.5]));
+  const [knA, anA] = ik2(
+    hipA,
+    [r.na, -r.nb, r.nh + 3 - r.sink],
+    CD.thigh,
+    CD.shin,
+    [1, -0.18, 0.12],
+  );
+  const [knB, anB] = ik2(hipB, [r.fa, r.fb, r.fh + 3 - r.sink], CD.thigh, CD.shin, [1, 0.18, 0.12]);
+  let rock: V3 | null = null;
+  if (r.rock > 0.5) rock = vAdd(vLerp(wrA, wrB, 0.5), [0, 0, 5.5]);
+  return {
+    pel,
+    waist,
+    chest,
+    Rp,
+    Rw,
+    Rc,
+    Rh,
+    Rj,
+    neck,
+    head,
+    shA,
+    shB,
+    elA,
+    elB,
+    wrA,
+    wrB,
+    hipA,
+    hipB,
+    knA,
+    knB,
+    anA,
+    anB,
+    rock,
+  };
+}
+
+// ---- Растр: z-буфер, свет по нормали, наклейки ----------------------------------
+
+/** Холст кадра (потом обрезается по рисунку) и точка ног в нём. */
+const CW = 136;
+const CH = 136;
+const CAX = 68;
+const CAY = 118;
+/** Ракурс: на сколько пол уходит вниз на клетку «к нам». */
+const KP = 0.42;
+const KS = Math.sqrt(1 + KP * KP);
+
+const RC = new Uint8ClampedArray(CW * CH * 4);
+const RZ = new Float32Array(CW * CH);
+const RID = new Uint8Array(CW * CH);
+/** Слой поверх темноты: глаза, затылок, угли, свет в груди. */
+const RL = new Uint8ClampedArray(CW * CH * 4);
+
+/** Части — для тонкого внутреннего контура (ближняя поверх дальней). */
+const CID = { body: 1, head: 2, armA: 3, armB: 4, legA: 5, legB: 6, rock: 7, bone: 8 };
+
+/** Состояние растра на кадр: поворот, срез землёй, жар, испарение. */
+const RX = {
+  cs: 1,
+  sn: 0,
+  clip: false,
+  heat: 0,
+  t: 0,
+  melt: -1,
+  mz: 999,
+  bodyD: 0,
+  lit: false,
+  /** Скорость волны жара: в петле — целое число волн на круг. */
+  wave: 0.9,
+};
+
+/** Рамка нарисованного (чистим и обходим только её, а не весь холст). */
+const DB = { x0: 0, y0: 0, x1: CW - 1, y1: CH - 1 };
+function dbGrow(x0: number, y0: number, x1: number, y1: number): void {
+  if (x0 < DB.x0) DB.x0 = Math.max(0, Math.floor(x0));
+  if (y0 < DB.y0) DB.y0 = Math.max(0, Math.floor(y0));
+  if (x1 > DB.x1) DB.x1 = Math.min(CW - 1, Math.ceil(x1));
+  if (y1 > DB.y1) DB.y1 = Math.min(CH - 1, Math.ceil(y1));
+}
+
+function rClear(): void {
+  if (DB.x1 >= DB.x0)
+    for (let y = DB.y0; y <= DB.y1; y++) {
+      const a = y * CW + DB.x0;
+      const b = y * CW + DB.x1 + 1;
+      RC.fill(0, a * 4, b * 4);
+      RL.fill(0, a * 4, b * 4);
+      RZ.fill(-1e9, a, b);
+      RID.fill(0, a, b);
+    }
+  DB.x0 = CW;
+  DB.y0 = CH;
+  DB.x1 = -1;
+  DB.y1 = -1;
+  RX.lit = false;
+}
+
+/** Точка тела → экран кадра: x, y и глубина (больше — ближе к нам). */
+function cProj(p: V3): [number, number, number] {
+  const X = RX.cs * p[0] + RX.sn * p[1];
+  const Y = RX.sn * p[0] - RX.cs * p[1];
+  return [CAX + X, CAY - p[2] + KP * Y, Y + KP * p[2]];
+}
+
+/** Нормаль тела → нормаль экрана (вправо, вниз, к нам). */
+function cNorm(n: V3): [number, number, number] {
+  const X = RX.cs * n[0] + RX.sn * n[1];
+  const Y = RX.sn * n[0] - RX.cs * n[1];
+  return [X, (KP * Y - n[2]) / KS, (Y + KP * n[2]) / KS];
+}
+const cLit = (n: [number, number, number]) => n[0] * LX + n[1] * LY + n[2] * LZ;
+
+/** Высота точки над землёй по пикселю и глубине. */
+const cZOf = (y: number, d: number) => (KP * d - (y + 0.5 - CAY)) / (1 + KP * KP);
+
+function rPut(i: number, c: RGBA, z: number, id: number): void {
+  const j = i * 4;
+  RC[j] = c[0];
+  RC[j + 1] = c[1];
+  RC[j + 2] = c[2];
+  RC[j + 3] = 255;
+  RZ[i] = z;
+  RID[i] = id;
+}
+
+function rMix(i: number, c: RGBA, a: number): void {
+  const j = i * 4;
+  RC[j] += (c[0] - RC[j]) * a;
+  RC[j + 1] += (c[1] - RC[j + 1]) * a;
+  RC[j + 2] += (c[2] - RC[j + 2]) * a;
+}
+
+/** Свет поверх темноты: не ярче уже лежащего. */
+function litPut(x: number, y: number, c: RGBA, a = 1): void {
+  if (x < 0 || y < 0 || x >= CW || y >= CH) return;
+  const j = (y * CW + x) * 4;
+  const na = Math.round(a * 255);
+  if (RL[j + 3] >= na) return;
+  RL[j] = c[0];
+  RL[j + 1] = c[1];
+  RL[j + 2] = c[2];
+  RL[j + 3] = na;
+  RX.lit = true;
+  if (x < DB.x0 || x > DB.x1 || y < DB.y0 || y > DB.y1) dbGrow(x, y, x, y);
+}
+
+interface CMat {
+  t: Tones;
+  id: number;
+  /** Жилы: зерно полос (0 — без жил) и их наклон вдоль кости. */
+  fib: number;
+  fa: number;
+  /** Плоский цвет (пасть). */
+  flat?: RGBA;
+  /** Кость: не тает, жил нет. */
+  bone?: boolean;
+  /** Конечность: в жару по ней вдоль тянется тлеющая жила. */
+  vein?: boolean;
+  bias: number;
+}
+
+/** Пиксель части: свет по нормали, жилы, испарение, срез землёй. */
+function cShade(
+  x: number,
+  y: number,
+  z: number,
+  nx: number,
+  ny: number,
+  nz: number,
+  m: CMat,
+  e: number,
+  k: number,
+): void {
+  const i = y * CW + x;
+  if (z <= RZ[i]) return;
+  if (RX.clip && cZOf(y, z) < 0) return;
+  if (x < DB.x0 || x > DB.x1 || y < DB.y0 || y > DB.y1) dbGrow(x, y, x, y);
+  if (m.flat) {
+    rPut(i, m.flat, z, m.id);
+    return;
+  }
+  // Испарение: мясо сходит сверху вниз неровным краем, по кромке — угли.
+  if (RX.melt >= 0 && !m.bone) {
+    const nse = hash(m.id * 7 + Math.floor(k * 4), Math.floor((e + 1) * 2.5), 5) * 9;
+    const over = cZOf(y, z) + nse - RX.mz;
+    if (over > 0) return;
+    if (over > -3.2) {
+      const hot = over > -1.4;
+      rPut(i, hot ? EMBER[1] : EMBER[0], z, m.id);
+      litPut(x, y, hot ? EMBER[2] : EMBER[0], hot ? 0.85 : 0.5);
+      return;
+    }
+  }
+  const l = nx * LX + ny * LY + nz * LZ + m.bias;
+  let c = tone(m.t, l);
+  if (m.fib) {
+    let lane = (e * 2.2 + k * m.fa + m.fib) % 1;
+    if (lane < 0) lane += 1;
+    if (RX.heat > 0.05) {
+      // Жар: по конечности вдоль тянется тлеющая жила (в тени — на свету
+      // угли не видны), по ней бежит волна огня: течёт, а не мерцает.
+      if (m.vein && Math.abs(Math.abs(e) - 0.46) < 0.14 && l < 0.55) {
+        let w = (k * 0.35 - RX.t * RX.wave + m.fib * 3) % 1;
+        if (w < 0) w += 1;
+        const hot = w < 0.22 ? 2 : w < 0.55 ? 1 : 0;
+        const hk = Math.min(1, RX.heat);
+        c = mixc(c, EMBER[hot], hk * (hot ? 0.9 : 0.55));
+        litPut(x, y, EMBER[hot], (0.15 + 0.25 * hot) * hk);
+      }
+    } else if (lane < 0.19 && l > 0.3) c = mixc(c, SINEW, l > 0.6 ? 0.55 : 0.32);
+  }
+  rPut(i, c, z, m.id);
+}
+
+/** Шар (части тела, суставы, кулак). */
+function rSph(c: V3, r: number, m: CMat): void {
+  if (r <= 0.2) return;
+  const [cu, cv, cd] = cProj(c);
+  const x0 = Math.max(0, Math.floor(cu - r));
+  const x1 = Math.min(CW - 1, Math.ceil(cu + r));
+  const y0 = Math.max(0, Math.floor(cv - r));
+  const y1 = Math.min(CH - 1, Math.ceil(cv + r));
+  const bias = m.bias + cClamp((cd - RX.bodyD) / 14, -1, 1) * 0.2;
+  const mm = bias === m.bias ? m : { ...m, bias };
+  const ca = Math.cos(m.fa * 7);
+  const sa = Math.sin(m.fa * 7);
+  const r2 = r * r;
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const dx = x + 0.5 - cu;
+      const dy = y + 0.5 - cv;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const nz = Math.sqrt(1 - d2 / r2);
+      const e = (dx * ca + dy * sa) / r;
+      const k = (-dx * sa + dy * ca) / r;
+      cShade(x, y, cd + nz * r, dx / r, dy / r, nz, mm, e, (k + 1) * 3);
     }
 }
 
-/** Лицо Колосса: глазницы, горящие зрачки, щёки-волокна, зубы без губ. */
-function colFace(p: Px, g: Geo, roar: boolean, phase: number): void {
-  const { headCx: cx, headCy: cy, headRx: rx, headRy: ry } = g;
-  const sock = hx('#1a0405');
-  const pupil = phase >= 3 ? EMBER[2] : hx('#fff2c0');
-  // Лоб — кость, чуть светлее мяса.
-  for (let x = Math.round(cx - rx * 0.7); x <= Math.round(cx + rx * 0.7); x++) {
-    const k = (x - cx) / (rx * 0.7);
-    const y0 = Math.round(cy - ry * 0.75 + k * k * ry * 0.3);
-    p.set(x, y0, tone(BONE, 0.55 - k * 0.2));
-    p.set(x, y0 + 1, tone(BONE, 0.35 - k * 0.2));
+/** Конечность: сужающаяся капсула от a к b. */
+function rCap(a: V3, b: V3, ra: number, rb: number, m: CMat): void {
+  const [au, av, ad] = cProj(a);
+  const [bu, bv, bd] = cProj(b);
+  const dx = bu - au;
+  const dy = bv - av;
+  const L2 = dx * dx + dy * dy || 1e-6;
+  const L = Math.sqrt(L2);
+  const len3 = vLen(vSub(b, a));
+  const rm = Math.max(ra, rb);
+  const x0 = Math.max(0, Math.floor(Math.min(au, bu) - rm));
+  const x1 = Math.min(CW - 1, Math.ceil(Math.max(au, bu) + rm));
+  const y0 = Math.max(0, Math.floor(Math.min(av, bv) - rm));
+  const y1 = Math.min(CH - 1, Math.ceil(Math.max(av, bv) + rm));
+  const bias = m.bias + cClamp(((ad + bd) / 2 - RX.bodyD) / 14, -1, 1) * 0.2;
+  const mm = bias === m.bias ? m : { ...m, bias };
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      const k = cClamp(((px - au) * dx + (py - av) * dy) / L2, 0, 1);
+      const r = ra + (rb - ra) * k;
+      const ex = px - (au + dx * k);
+      const ey = py - (av + dy * k);
+      const d2 = ex * ex + ey * ey;
+      if (d2 > r * r) continue;
+      const nz = Math.sqrt(1 - d2 / (r * r));
+      const e = (ex * -dy + ey * dx) / (L * r);
+      cShade(x, y, ad + (bd - ad) * k + nz * r, ex / r, ey / r, nz, mm, e, k * len3 * 0.11);
+    }
+}
+
+/**
+ * Наклейка на поверхность: видна, если там есть тело и ничто не ближе её
+ * больше чем на `tol` (ребро спереди не просвечивает со спины).
+ */
+function dPut(p: V3, c: RGBA, tol = 2.6, id = 0): [number, number] | null {
+  const [u, v, d] = cProj(p);
+  const x = Math.floor(u);
+  const y = Math.floor(v);
+  if (x < 0 || y < 0 || x >= CW || y >= CH) return null;
+  const i = y * CW + x;
+  if (RZ[i] < -1e8 || RZ[i] > d + tol) return null;
+  if (id && RID[i] !== id) return null;
+  if (RX.clip && cZOf(y, RZ[i]) < 0) return null;
+  if (RX.melt >= 0 && RC[i * 4] > 230 && RC[i * 4 + 1] > 80) return null;
+  if (c[3] < 255) rMix(i, c, c[3] / 255);
+  else {
+    RC[i * 4] = c[0];
+    RC[i * 4 + 1] = c[1];
+    RC[i * 4 + 2] = c[2];
   }
-  // Глазницы — глубокие, зрачок светится.
-  const ey = Math.round(cy - ry * 0.2);
+  return [x, y];
+}
+
+/** Тон кости по нормали в точке (наклейка «освещена» как поверхность). */
+const boneLit = (n: V3, k = 0) => tone(BONE, 0.3 + cLit(cNorm(n)) * 0.75 + k);
+
+/** Внутренний контур (ближняя часть поверх дальней) и наружный — по буферу. */
+function rFinishCol(): Px {
+  const p = new Px(CW, CH);
+  p.data.set(RC);
+  const d = p.data;
+  const X0 = Math.max(1, DB.x0);
+  const X1 = Math.min(CW - 2, DB.x1);
+  const Y0 = Math.max(1, DB.y0);
+  const Y1 = Math.min(CH - 2, DB.y1);
+  for (let y = Y0; y <= Y1; y++)
+    for (let x = X0; x <= X1; x++) {
+      const i = y * CW + x;
+      const id = RID[i];
+      if (!id) continue;
+      const z = RZ[i] + 3.2;
+      const near = (j: number) => RID[j] !== 0 && RID[j] !== id && RZ[j] > z;
+      if (!(near(i - 1) || near(i + 1) || near(i - CW) || near(i + CW))) continue;
+      const j = i * 4;
+      if (RX.heat > 0.3 && id !== CID.bone) {
+        // Жар: шов между частями тела — трещина с углём.
+        const c = (x + y) % 3 ? EMBER[0] : EMBER[1];
+        d[j] = c[0];
+        d[j + 1] = c[1];
+        d[j + 2] = c[2];
+        litPut(x, y, c, 0.45 * Math.min(1, RX.heat));
+        continue;
+      }
+      d[j] = Math.round(d[j] * 0.42 + INK[0] * 0.58);
+      d[j + 1] = Math.round(d[j + 1] * 0.42 + INK[1] * 0.58);
+      d[j + 2] = Math.round(d[j + 2] * 0.42 + INK[2] * 0.58);
+    }
+  dbGrow(DB.x0 - 1, DB.y0 - 1, DB.x1 + 1, DB.y1 + 1);
+  const edge: number[] = [];
+  for (let y = DB.y0; y <= DB.y1; y++)
+    for (let x = DB.x0; x <= DB.x1; x++) {
+      const i = y * CW + x;
+      if (d[i * 4 + 3]) continue;
+      if (
+        (x > 0 && d[i * 4 - 1]) ||
+        (x < CW - 1 && d[i * 4 + 7]) ||
+        (y > 0 && d[(i - CW) * 4 + 3]) ||
+        (y < CH - 1 && d[(i + CW) * 4 + 3])
+      )
+        edge.push(i);
+    }
+  for (const i of edge) {
+    d[i * 4] = INK[0];
+    d[i * 4 + 1] = INK[1];
+    d[i * 4 + 2] = INK[2];
+    d[i * 4 + 3] = 255;
+  }
+  return p;
+}
+
+// ---- Тело ------------------------------------------------------------------------
+
+/** Тона кожи по худобе (фаза 3 и рёв перехода в неё): мясо темнеет, свет — угли. */
+function colTones(thin: number): Tones {
+  if (thin <= 0.01) return MUSCLE;
+  if (thin >= 0.99) return COL_SKIN3;
+  return [0, 1, 2, 3].map((i) => mixc(MUSCLE[i], COL_SKIN3[i], thin)) as Tones;
+}
+
+const cMat = (t: Tones, id: number, fib: number, fa = 0.6, bias = 0): CMat => ({
+  t,
+  id,
+  fib,
+  fa,
+  bias,
+});
+
+/** Ладонь раскрытая (удар, опора) или кулак. */
+function cHand(el: V3, wr: V3, open: number, k: number, m: CMat, flat = 0): void {
+  let dir = vNorm(vSub(wr, el));
+  if (flat > 0.5 && open >= 0.5) {
+    // Опора: ладонь легла на землю — пальцы вперёд по горизонтали.
+    const hz: V3 = [dir[0], dir[1], 0];
+    dir = vLen(hz) > 0.2 ? vNorm(hz) : [1, 0, 0];
+    const base: V3 = [wr[0], wr[1], Math.max(1.6, wr[2] - 1.4)];
+    rCap(base, vAdd(base, vMul(dir, 7.6)), 3.9 * k, 2.8 * k, m);
+    rSph(base, 3.8 * k, m);
+    return;
+  }
+  if (open < 0.5) {
+    rSph(vAdd(wr, vMul(dir, 2.3)), 4.5 * k, m);
+    return;
+  }
+  // Ладонь — широкая лопата пальцев, у запястья — бугор большого пальца.
+  rCap(vAdd(wr, vMul(dir, 0.8)), vAdd(wr, vMul(dir, 7.4)), 4.2 * k, 2.9 * k, m);
+  rSph(vAdd(wr, vMul(dir, 1.6)), 4.0 * k, m);
+}
+
+/**
+ * Голова в своих осях: череп, верхняя челюсть, нижняя на шарнире (`HJ`),
+ * тёмная пасть за зубами, скулы. Нижняя челюсть задана в закрытом виде и
+ * поворачивается вокруг шарнира на `jaw`.
+ */
+const HJ: V3 = [-1.6, 0, -2.6];
+const HSK: V3 = [-0.6, 0, 1.0];
+const HR = 8.6;
+
+/** Точка нижней челюсти (в осях головы, закрытая) → тело, с поворотом пасти. */
+function jawPt(sk: CSk, p: V3): V3 {
+  const hinge = vAdd(sk.head, mApp(sk.Rh, HJ));
+  return vAdd(hinge, mApp(sk.Rj, vSub(p, HJ)));
+}
+
+/** Голова: череп, челюсти, пасть, скулы. */
+function cHead(sk: CSk, T: Tones, kb: number): void {
+  const H = sk.head;
+  const hp = (x: number, y: number, z: number): V3 => vAdd(H, mApp(sk.Rh, [x, y, z]));
+  const mh = cMat(T, CID.head, 0.9, 0.45);
+  rSph(hp(HSK[0], HSK[1], HSK[2]), HR * kb, mh);
+  rCap(hp(2.6, -3.6, -3.4), hp(2.6, 3.6, -3.4), 5.2 * kb, 5.2 * kb, mh);
+  rCap(jawPt(sk, [2.2, -3.3, -7.0]), jawPt(sk, [2.2, 3.3, -7.0]), 4.4 * kb, 4.4 * kb, mh);
+  // Пасть — тёмная глубина за зубами: видна, когда челюсть открыта.
+  rSph(hp(3.0, 0, -5.8), 4.3 * kb, { ...mh, flat: MOUTH, fib: 0 });
+  // Скулы — жгуты мышц от виска вниз, над зубами (в профиль зубы не прячут).
+  const cheek = cMat(T, CID.head, 0.3, 0.2, 0.2);
+  rCap(hp(4.8, -5.3, 0.6), hp(4.3, -5.9, -2.6), 1.5, 1.3, cheek);
+  rCap(hp(4.8, 5.3, 0.6), hp(4.3, 5.9, -2.6), 1.5, 1.3, cheek);
+}
+
+/** Лицо наклейками: лобная кость, глазницы со зрачками, ноздри, зубы двумя рядами. */
+function cFace(sk: CSk, r: CRig, phase: number): [number, number] | null {
+  const H = sk.head;
+  const hp = (x: number, y: number, z: number): V3 => vAdd(H, mApp(sk.Rh, [x, y, z]));
+  const c0 = hp(HSK[0], HSK[1], HSK[2]);
+  const onSkull = (dir: V3, rr = HR): V3 => vAdd(c0, mApp(sk.Rh, vMul(vNorm(dir), rr)));
+  // Лоб — кость, чуть светлее мяса: дуга в два ряда над глазами.
+  for (let y = -5.6; y <= 5.6; y += 0.4) {
+    const k = y / 5.6;
+    const z = 3.6 - k * k * 1.5;
+    const n = mApp(sk.Rh, vNorm([7, y, z - 1]));
+    dPut(onSkull([7, y, z]), boneLit(n, 0.05 - Math.abs(k) * 0.2), 2.4, CID.head);
+    dPut(onSkull([7, y, z - 1.1]), boneLit(n, -0.22 - Math.abs(k) * 0.2), 2.4, CID.head);
+  }
+  let eye: [number, number] | null = null;
+  let eyeD = -1e9;
+  const hot = phase >= 3 || r.heat > 0.6;
+  const pupil = hot ? EMBER[2] : COL_PUPIL;
   for (const s of [-1, 1]) {
-    const ex = cx + s * rx * 0.42;
-    p.ell(ex, ey, 1.9, 1.4, sock);
-    p.set(Math.round(ex), ey, pupil);
-    if (phase >= 3) p.set(Math.round(ex) - s, ey, EMBER[1]);
-  }
-  // Нос — две щели.
-  p.set(Math.round(cx - 0.6), Math.round(cy + ry * 0.12), sock);
-  p.set(Math.round(cx + 0.6), Math.round(cy + ry * 0.12), sock);
-  // Щёки — волокна вниз к челюсти.
-  for (const s of [-1, 1])
-    for (let k = 0; k < 3; k++) {
-      const x = Math.round(cx + s * (rx * 0.55 + k));
-      stroke(p, x, cy + ry * 0.05, x - s * 0.5, cy + ry * 0.55, tone(MUSCLE, 0.75 - k * 0.15));
-    }
-  // Зубы без губ: два ряда во всю ширину челюсти.
-  const my = Math.round(cy + ry * 0.5);
-  const w = rx * 0.82;
-  const gap = roar ? 3 : 0;
-  for (let x = Math.round(cx - w); x <= Math.round(cx + w); x++) {
-    const k = (x - cx) / w;
-    const drop = Math.round(k * k * 1.2);
-    const tooth = x % 2 === 0 ? TEETH : mixc(TEETH, BONE[1], 0.45);
-    // Дёсны — светлое мясо над и под.
-    p.set(x, my - 3 + drop, tone(MUSCLE, 0.95));
-    p.set(x, my - 2 + drop, tooth);
-    p.set(x, my - 1 + drop, tooth);
-    for (let y = 0; y <= gap; y++) p.set(x, my + drop + y, MOUTH);
-    p.set(x, my + 1 + gap + drop, tooth);
-    p.set(x, my + 2 + gap + drop, tooth);
-    p.set(x, my + 3 + gap + drop, tone(MUSCLE, 0.9));
-  }
-}
-
-/** Рёбра анфас, хребет и лопатки со спины. */
-function colBones(p: Px, g: Geo, view: View): void {
-  if (view === 'front') {
-    for (let r = 0; r < 5; r++) {
-      const y = g.chestY + 3 + r * 3;
-      const w = g.shW * (0.74 - r * 0.07);
-      for (let x = Math.round(g.cx - w); x <= Math.round(g.cx + w); x++) {
-        if (Math.abs(x - g.cx) < 1.5) continue;
-        const k = (x - g.cx) / w;
-        const c = tone(BONE, 0.72 - Math.abs(k) * 0.35);
-        p.set(x, Math.round(y + k * k * 2.5), c);
+    const dir: V3 = [7.1, s * 3.6, 0.6];
+    const [u, v, d] = cProj(onSkull(dir));
+    const x = Math.floor(u);
+    const y = Math.floor(v);
+    if (x < 2 || y < 2 || x >= CW - 2 || y >= CH - 2) continue;
+    const i = y * CW + x;
+    if (RZ[i] < -1e8 || RZ[i] > d + 2.2 || RID[i] !== CID.head) continue;
+    // Глазница: тёмный овал; в профиль — уже (поверхность уходит вбок).
+    const face = cNorm(mApp(sk.Rh, vNorm(dir)))[2];
+    const w = 1.1 + 1.0 * Math.max(0, face);
+    for (let yy = -1; yy <= 1; yy++)
+      for (let xx = -2; xx <= 2; xx++) {
+        if ((xx / w) ** 2 + (yy / 1.35) ** 2 > 1.05) continue;
+        const j = (y + yy) * CW + x + xx;
+        if (RID[j] === CID.head) RC.set(COL_SOCKET.slice(0, 3), j * 4);
       }
+    if (r.melt > 0.5) continue;
+    RC.set(pupil.slice(0, 3), i * 4);
+    litPut(x, y, pupil, 0.95);
+    if (r.eyes > 0.3) {
+      // Глаза вспыхнули: крест света вокруг зрачка.
+      for (const [ox, oy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ])
+        litPut(x + ox, y + oy, hot ? EMBER[1] : hx('#ffd890'), 0.6 * Math.min(1, r.eyes));
+    } else if (hot) litPut(x - s, y, EMBER[1], 0.7);
+    if (d > eyeD) {
+      eyeD = d;
+      eye = [x, y];
     }
-    // Грудина.
-    for (let y = Math.round(g.chestY + 2); y < Math.round(g.chestY + 16); y++)
-      p.set(Math.round(g.cx), y, tone(BONE, 0.5));
-  } else if (view === 'back') {
-    // Хребет — позвонки, лопатки — кость.
-    for (let y = Math.round(g.neckY + 2); y < Math.round(g.hipY - 1); y += 2) {
-      p.set(Math.round(g.cx), y, tone(BONE, 0.75));
-      p.set(Math.round(g.cx) - 1, y, tone(BONE, 0.35));
-      p.set(Math.round(g.cx) + 1, y, tone(BONE, 0.35));
-    }
-    for (const s of [-1, 1]) {
-      const x0 = g.cx + s * g.shW * 0.3;
-      const x1 = g.cx + s * g.shW * 0.72;
-      stroke(p, x0, g.chestY + 3, x1, g.chestY + 4, tone(BONE, 0.6));
-      stroke(p, x0, g.chestY + 3, x0 + s * 1.5, g.chestY + 11, tone(BONE, 0.45));
-      stroke(p, x1, g.chestY + 4, x0 + s * 1.5, g.chestY + 11, tone(BONE, 0.3));
-    }
-  } else {
-    for (let r = 0; r < 4; r++)
-      stroke(p, g.cx - 3, g.chestY + 4 + r * 3, g.cx + 4, g.chestY + 5 + r * 3, tone(BONE, 0.55));
-    // Хребет по спине.
-    for (let y = Math.round(g.neckY + 2); y < Math.round(g.hipY - 1); y += 2)
-      p.set(Math.round(g.cx - g.shW * 0.5), y, tone(BONE, 0.6));
   }
-}
-
-interface ColLook {
-  phase: number;
-  view: View;
-  f: number;
-  back: boolean;
-  cut: boolean;
-  cloaked: boolean;
-  roar: boolean;
-  kneel: boolean;
-  rock: boolean;
-}
-
-function colDeco(c: ColLook) {
-  return (p: Px, g: Geo) => {
-    fibers(p, g.chestY - 2, g.ay + 1, c.phase >= 3, c.f);
-    colBones(p, g, c.view);
-    if (c.view === 'front') colFace(p, g, c.roar, c.phase);
-    else if (c.view === 'side') {
-      // Профиль: зубы без губ до самого уха.
-      const my = Math.round(g.headCy + g.headRy * 0.5);
-      for (
-        let x = Math.round(g.headCx - g.headRx * 0.3);
-        x <= Math.round(g.headCx + g.headRx + 0.5);
-        x++
-      ) {
-        p.set(x, my - 1, x % 2 ? TEETH : mixc(TEETH, BONE[1], 0.45));
-        p.set(x, my + 1 + (c.roar ? 2 : 0), x % 2 ? mixc(TEETH, BONE[1], 0.45) : TEETH);
-      }
-      p.set(
-        Math.round(g.headCx + g.headRx * 0.5),
-        Math.round(g.headCy - g.headRy * 0.2),
-        c.phase >= 3 ? EMBER[2] : hx('#fff2c0'),
-      );
-    }
-    if (c.rock) {
-      // Глыба кладки над головой: бурый камень с кирпичными швами.
-      const rx = g.headCx;
-      const ry = g.headCy - g.headRy - 7;
-      shadeEll(p, rx, ry, 9, 6.5, tn('#241c18', '#4a3e36', '#766858', '#a8987e'));
-      const seam = hx('#2a201a');
-      for (let y = Math.round(ry - 4); y <= Math.round(ry + 4); y += 3) {
-        for (let x = Math.round(rx - 7); x <= Math.round(rx + 7); x++)
-          if (p.solid(x, y)) p.set(x, y, seam);
-        const off = (y / 3) % 2 ? 0 : 2;
-        for (let x = Math.round(rx - 6 + off); x <= Math.round(rx + 6); x += 4)
-          for (let yy = y + 1; yy < y + 3; yy++) if (p.solid(x, yy)) p.set(x, yy, seam);
+  // Ноздри — две щели.
+  dPut(onSkull([7.6, -0.8, -2.0]), COL_SOCKET, 2.2, CID.head);
+  dPut(onSkull([7.6, 0.8, -2.0]), COL_SOCKET, 2.2, CID.head);
+  // Зубы без губ: дуга вокруг морды до самых ушей. Верх — дёсны, два ряда,
+  // тёмная щель; низ — два ряда и дёсны, на нижней челюсти (ходит с ней).
+  const rows = (lower: boolean, zs: [number, RGBA | null][]) => {
+    for (let i = 0; i <= 44; i++) {
+      const a = -1.55 + (3.1 * i) / 44;
+      const lx = 1.8 + 5.7 * Math.cos(a);
+      const ly = 7.5 * Math.sin(a);
+      for (const [lz, c] of zs) {
+        const P = lower ? jawPt(sk, [lx, ly, lz]) : hp(lx, ly, lz);
+        const [u, v, d] = cProj(P);
+        const x = Math.floor(u);
+        const y = Math.floor(v);
+        if (x < 0 || y < 0 || x >= CW || y >= CH) continue;
+        const j = y * CW + x;
+        if (RZ[j] < -1e8 || RZ[j] > d + 2.4 || RID[j] !== CID.head) continue;
+        const cc = c ?? (x % 2 === 0 ? TEETH : COL_TOOTH2);
+        RC.set(cc.slice(0, 3), j * 4);
       }
     }
   };
+  rows(false, [
+    [-3.5, COL_GUM],
+    [-4.4, null],
+    [-5.3, null],
+    [-6.1, MOUTH],
+  ]);
+  rows(true, [
+    [-6.9, null],
+    [-7.8, null],
+    [-8.7, COL_GUM],
+  ]);
+  return eye;
 }
 
-/** После контура: затылок, пар, звёзды. */
-function colPost(c: ColLook) {
-  return (p: Px, g: Geo) => {
-    const nx = g.side ? g.headCx - g.headRx * 0.8 : g.headCx;
-    if (c.kneel) {
-      // Склонил голову — затылок открыт с любой стороны: спиной и в профиль
-      // он горит на шее (рисует сам исполин), анфас — над склонённой макушкой.
-      if (c.view === 'front')
-        nape(p, Math.round(nx), Math.round(g.headCy - g.headRy - 1), true, c.cut, 2);
-      stars(p, Math.round(g.headCx), Math.round(g.headCy - g.headRy - 7), 9, c.f);
-    } else if (c.cloaked && c.view !== 'front') {
-      // Плащ пара закрывает затылок — крюк за спину, чтобы сорвать.
-      puff(p, nx, g.neckY - 1, 7, 0.95, c.f + 40);
-    } else if (c.view === 'front' && c.back) {
-      // Ты за спиной: затылок горит ореолом по обе стороны шеи.
-      for (const s of [-1, 1])
-        for (let k = 0; k < 4; k++)
-          p.set(
-            Math.round(g.headCx + s * (g.headRx + 1 + k * 0.4)),
-            Math.round(g.headCy + g.headRy * 0.6 + k),
-            alpha(NAPE_GLOW, 0.95 - k * 0.2),
-          );
-    }
-    // Пар из плеч — редкими клубами, выше в «Испарении».
-    const n = c.cloaked ? 5 : c.phase >= 3 ? 4 : 2;
-    for (let i = 0; i < n; i++) {
-      const s = i % 2 ? 1 : -1;
-      const x = g.cx + s * g.shW * (0.6 + hash(i, c.f) * 0.5);
-      const rise = ((c.f + i * 2) % 4) * 2.5;
-      const y = g.chestY - 3 - rise - hash(c.f, i, 3) * 4;
-      puff(
-        p,
-        x,
-        y,
-        2.4 + hash(i, c.f, 5) * 2 + rise * 0.3,
-        (c.cloaked ? 0.75 : 0.55) * (1 - rise / 14),
-        i * 13 + c.f,
-      );
-    }
+/** Рёбра спереди, грудина, ключицы; со спины — хребет и лопатки. */
+function cBones(sk: CSk, r: CRig, kb: number): void {
+  const Rc = sk.Rc;
+  const cr = (9.2 + r.breath * 0.7 + r.open * 0.6) * kb;
+  const half = 6.4 * kb;
+  const cc = vAdd(sk.chest, mApp(Rc, [0.8, 0, 0]));
+  const surf = (yy: number, zz: number, back = false): [V3, V3] | null => {
+    const ex = Math.max(0, Math.abs(yy) - half);
+    const xx2 = cr * cr - zz * zz - ex * ex;
+    if (xx2 <= 0) return null;
+    const lx = (back ? -1 : 1) * (Math.sqrt(xx2) + 0.2);
+    const n: V3 = [lx, Math.sign(yy) * ex, zz];
+    return [vAdd(cc, mApp(Rc, [lx, yy, zz])), mApp(Rc, vNorm(n))];
   };
+  // Свет из груди (выброс пара, испарение): щели между рёбрами — горит
+  // нутро, рёбра поверх. Раскрытая грудь — щели шире и ярче.
+  const gap = 2.7 + r.open * 0.9;
+  if (r.glow > 0.05)
+    for (let ri = 0; ri < 4; ri++) {
+      const zc = 3.4 - (ri + 0.5) * gap;
+      const w = (11.4 - ri * 1.1) * kb;
+      const hh = 0.55 + r.open * 0.75;
+      for (let zz = zc - hh; zz <= zc + hh + 0.01; zz += 0.5)
+        for (let yy = -w; yy <= w; yy += 0.5) {
+          if (Math.abs(yy) < 1.4) continue;
+          const s = surf(yy, zz - (yy / w) ** 2 * 2.4);
+          if (!s) continue;
+          const q = 1 - Math.abs(zz - zc) / (hh + 0.3) - (Math.abs(yy) / w) * 0.45;
+          const g = cClamp(q * r.glow, 0, 1);
+          const c = g > 0.62 ? EMBER[2] : g > 0.32 ? EMBER[1] : EMBER[0];
+          const pt = dPut(s[0], c, 2.6, CID.body);
+          if (pt) litPut(pt[0], pt[1], c, 0.3 + 0.6 * g);
+        }
+    }
+  // Рёбра: дуги, к бокам загибаются вниз; раскрытая грудь — шире зазоры.
+  for (let ri = 0; ri < 5; ri++) {
+    const zz = 3.4 - ri * gap;
+    const w = (12.6 - ri * 1.1) * kb;
+    for (let yy = -w; yy <= w; yy += 0.6) {
+      if (Math.abs(yy) < 1.3) continue;
+      const s = surf(yy, zz - (yy / w) ** 2 * 2.4);
+      if (s) dPut(s[0], boneLit(s[1]), 2.6, CID.body);
+    }
+  }
+  // Грудина и ключицы.
+  for (let zz = 5; zz >= -8; zz -= 0.5) {
+    const s = surf(0, zz);
+    if (s) dPut(s[0], boneLit(s[1], -0.1), 2.6, CID.body);
+  }
+  for (const sd of [-1, 1])
+    for (let k = 0; k <= 1; k += 0.05) {
+      const s = surf(sd * (1.5 + k * 11.5), 6.6 - k * 1.2);
+      if (s) dPut(s[0], boneLit(s[1], 0.1), 2.6, CID.body);
+    }
+  // Хребет — позвонки по спине, лопатки — костяные клинья.
+  for (let zz = 7.5; zz >= -7; zz -= 2.1) {
+    const s = surf(0, zz, true);
+    if (!s) continue;
+    const at = dPut(s[0], boneLit(s[1], 0.15), 2.6, CID.body);
+    if (at) {
+      dPut(vAdd(s[0], mApp(Rc, [0, -1, 0])), boneLit(s[1], -0.25), 2.6, CID.body);
+      dPut(vAdd(s[0], mApp(Rc, [0, 1, 0])), boneLit(s[1], -0.25), 2.6, CID.body);
+    }
+  }
+  for (let zz = -1; zz >= -8; zz -= 2.1) {
+    const P = vAdd(sk.waist, mApp(sk.Rw, [-7.6 * kb, 0, zz + 6]));
+    dPut(P, boneLit(mApp(sk.Rw, [-1, 0, 0]), 0.1), 2.8, CID.body);
+  }
+  // Лопатки: ость наискось к плечу и внутренний край — приглушённо, это рельеф.
+  for (const sd of [-1, 1])
+    for (let k = 0; k <= 1; k += 0.07) {
+      const a = surf(sd * (3.6 + k * 6.4) * kb, 5.4 - k * 0.6, true);
+      if (a) dPut(a[0], boneLit(a[1], -0.12), 2.6, CID.body);
+      const b = surf(sd * (3.8 + k * 1.4) * kb, 4.6 - k * 7.2, true);
+      if (b) dPut(b[0], boneLit(b[1], -0.32), 2.6, CID.body);
+    }
 }
 
-function colPose(m: Mob, pose: MobPose): { g: GPose; key: string } {
-  const view = viewOf(m.face);
-  const back = (m.data.back ?? 0) > 0 || pose.mode === 'kneel';
-  const cut = (m.data.cut ?? 0) > 0.12;
-  const g: GPose = { ...GP0, view, back, cut };
-  const t = pose.t;
-  let key = pose.mode;
-  switch (pose.mode) {
-    case 'swipe': {
-      const k = t / COL.swipe.warn;
-      g.armL =
-        k < 0.8
-          ? view === 'side'
-            ? [-0.8, -0.5]
-            : [0.95, -0.55]
-          : view === 'side'
-            ? [0.95, 0.25]
-            : [-0.7, 0.45];
-      g.lean = k < 0.8 ? -2 : 4;
-      key = `sw${k < 0.8 ? 0 : 1}`;
-      break;
+/** Скелет под мясом (испарение): череп, хребет, рёбра, кости рук и ног. */
+function cSkeleton(sk: CSk): void {
+  const mb = { ...cMat(BONE, CID.bone, 0), bone: true };
+  const H = sk.head;
+  const hp = (x: number, y: number, z: number): V3 => vAdd(H, mApp(sk.Rh, [x, y, z]));
+  rSph(hp(-0.4, 0, 1.0), 7.4, mb);
+  rCap(hp(2.4, -3.0, -3.6), hp(2.4, 3.0, -3.6), 3.8, 3.8, mb);
+  rCap(jawPt(sk, [2.0, -2.7, -7.0]), jawPt(sk, [2.0, 2.7, -7.0]), 2.8, 2.8, mb);
+  const sock: CMat = { ...mb, flat: COL_SOCKET };
+  rSph(hp(5.3, -2.6, 0.4), 1.9, sock);
+  rSph(hp(5.3, 2.6, 0.4), 1.9, sock);
+  rCap(sk.pel, sk.neck, 1.9, 1.7, mb);
+  rCap(sk.neck, hp(-1, 0, -4), 1.6, 1.5, mb);
+  // Рёбра — дуги из капсул вокруг груди.
+  for (let ri = 0; ri < 5; ri++) {
+    const zz = 4 - ri * 2.8;
+    const w = 10.5 - ri * 0.8;
+    for (const sd of [-1, 1]) {
+      let prev: V3 | null = null;
+      for (let q = 0; q <= 6; q++) {
+        const a = (q / 6) * Math.PI;
+        // От хребта сзади, вокруг бока, к грудине спереди; на боку провисает.
+        const P = vAdd(
+          sk.chest,
+          mApp(sk.Rc, [-6.5 * Math.cos(a), sd * (w * Math.sin(a) + 1.5 * (a / Math.PI)), zz - Math.sin(a) * 1.2]),
+        );
+        if (prev) rCap(prev, P, 1.05, 1.05, mb);
+        prev = P;
+      }
     }
+  }
+  rCap(vAdd(sk.pel, mApp(sk.Rp, [0, -6, 1])), vAdd(sk.pel, mApp(sk.Rp, [0, 6, 1])), 2.6, 2.6, mb);
+  for (const [a, b, c] of [
+    [sk.shA, sk.elA, sk.wrA],
+    [sk.shB, sk.elB, sk.wrB],
+    [sk.hipA, sk.knA, sk.anA],
+    [sk.hipB, sk.knB, sk.anB],
+  ] as [V3, V3, V3][]) {
+    rCap(a, b, 1.9, 1.6, mb);
+    rCap(b, c, 1.7, 1.4, mb);
+    rSph(b, 2.2, mb);
+  }
+  rCap(sk.shA, sk.shB, 1.5, 1.5, mb);
+}
+
+/** Всё тело: ноги, таз, торс, плечи, руки, шея, голова. */
+function cBody(sk: CSk, r: CRig): void {
+  const T = colTones(r.thin);
+  const kb = 1 - r.thin * 0.14;
+  const mBody = cMat(T, CID.body, 0.37, 0.5);
+  // Ноги.
+  for (const [hip, kn, an, sd, id] of [
+    [sk.hipA, sk.knA, sk.anA, -1, CID.legA],
+    [sk.hipB, sk.knB, sk.anB, 1, CID.legB],
+  ] as [V3, V3, V3, number, number][]) {
+    const ml: CMat = { ...cMat(T, id, 0.21 + id * 0.11, 0.9), vein: true };
+    rCap(hip, kn, 5.4 * kb, 4.4 * kb, ml);
+    rSph(vAdd(kn, [0.8, 0, 0.3]), 3.9 * kb, ml);
+    // Икра — бугор сзади голени.
+    rCap(kn, an, 4.4 * kb, 3.1 * kb, ml);
+    rSph(vLerp(kn, an, 0.32), 4.0 * kb, ml);
+    const lift = cClamp((an[2] - 3) / 6, 0, 1);
+    const heel = vAdd(an, [-1.6, 0, -2.3]);
+    const toe = vAdd(an, [5.4 - lift * 1.2, sd * 0.8, -2.5 - lift * 2.2]);
+    rCap(heel, toe, 2.9, 2.3, ml);
+  }
+  // Таз, живот, талия, грудь, спина.
+  rCap(
+    vAdd(sk.pel, mApp(sk.Rp, [0, -4.6, 1.4])),
+    vAdd(sk.pel, mApp(sk.Rp, [0, 4.6, 1.4])),
+    6.6 * kb,
+    6.6 * kb,
+    mBody,
+  );
+  rSph(vAdd(sk.pel, mApp(sk.Rw, [1.5, 0, 7.6])), 7.9 * kb, mBody);
+  rCap(sk.waist, sk.chest, 7.4 * kb, 8.4 * kb, mBody);
+  const cr = (9.2 + r.breath * 0.7 + r.open * 0.6) * kb;
+  const cc = vAdd(sk.chest, mApp(sk.Rc, [0.8, 0, 0]));
+  rCap(
+    vAdd(cc, mApp(sk.Rc, [0, -6.4 * kb, 0])),
+    vAdd(cc, mApp(sk.Rc, [0, 6.4 * kb, 0])),
+    cr,
+    cr,
+    mBody,
+  );
+  rCap(
+    vAdd(sk.chest, mApp(sk.Rc, [-3, -7.4 * kb, 0.8])),
+    vAdd(sk.chest, mApp(sk.Rc, [-3, 7.4 * kb, 0.8])),
+    7.6 * kb,
+    7.6 * kb,
+    mBody,
+  );
+  // Трапеции — от шеи к плечам: исполин сутулый, шея утоплена.
+  rCap(
+    vAdd(sk.neck, mApp(sk.Rc, [-1.8, -2.2, -3.2])),
+    vAdd(sk.shA, mApp(sk.Rc, [-0.6, 2.6, 1.2])),
+    4.6 * kb,
+    3.9 * kb,
+    mBody,
+  );
+  rCap(
+    vAdd(sk.neck, mApp(sk.Rc, [-1.8, 2.2, -3.2])),
+    vAdd(sk.shB, mApp(sk.Rc, [-0.6, -2.6, 1.2])),
+    4.6 * kb,
+    3.9 * kb,
+    mBody,
+  );
+  // Руки: дельта, плечо, локоть, предплечье, кисть.
+  for (const [sh, el, wr, open, sd, id, flat] of [
+    [sk.shA, sk.elA, sk.wrA, r.ah, -1, CID.armA, r.aw],
+    [sk.shB, sk.elB, sk.wrB, r.bh, 1, CID.armB, r.bw],
+  ] as [V3, V3, V3, number, number, number, number][]) {
+    const ma: CMat = { ...cMat(T, id, 0.13 + id * 0.17, 0.8), vein: true };
+    rSph(vAdd(sh, mApp(sk.Rc, [0, sd * 1.0, 0.7])), 5.9 * kb, ma);
+    rCap(sh, el, 5.0 * kb, 4.3 * kb, ma);
+    rSph(vLerp(sh, el, 0.45), 4.8 * kb, ma);
+    rSph(el, 4.2 * kb, ma);
+    rCap(el, wr, 4.6 * kb, 3.5 * kb, ma);
+    cHand(el, wr, open, kb, ma, flat);
+  }
+  // Шея и голова.
+  const mh = cMat(T, CID.head, 0.55, 0.4);
+  rCap(sk.neck, vAdd(sk.head, mApp(sk.Rh, [-1.4, 0, -5])), 5.4 * kb, 4.7 * kb, mh);
+  cHead(sk, T, 1 - r.thin * 0.06);
+  if (sk.rock) {
+    // Глыба кладки: бурый камень со швами кирпича.
+    const mr: CMat = { ...cMat(COL_ROCK, CID.rock, 0), bone: true };
+    rSph(sk.rock, 8.6, mr);
+    rSph(vAdd(sk.rock, [2.5, -3, 2.5]), 5.2, mr);
+  }
+}
+
+/** Швы кирпича на глыбе — наклейкой по её поверхности. */
+function cRockSeams(c: V3): void {
+  const seam = hx('#2a201a');
+  for (let zz = -6; zz <= 6; zz += 3)
+    for (let a = -1.6; a <= 1.6; a += 0.08) {
+      const rr = Math.sqrt(Math.max(0, 74 - zz * zz));
+      dPut(vAdd(c, [Math.cos(a) * rr * 0.2, -Math.sin(a) * rr, zz]), seam, 2.6, CID.rock);
+      dPut(vAdd(c, [Math.cos(a) * rr, Math.sin(a) * rr * 0.2, zz]), seam, 2.6, CID.rock);
+    }
+}
+
+/** Затылок: центр и куда смотрит (для свечения поверх темноты). */
+interface CNape {
+  x: number;
+  y: number;
+  d: number;
+  /** Смотрит к нам (> 0) или от нас. */
+  face: number;
+}
+
+function cNapeOf(sk: CSk): CNape {
+  const P = vAdd(sk.head, mApp(sk.Rh, [-6.1, 0, -5.2]));
+  const [x, y, d] = cProj(P);
+  const n = cNorm(mApp(sk.Rh, [-1, 0, -0.25]));
+  return { x, y, d, face: n[2] };
+}
+
+/**
+ * Пиксели свечения затылка (индекс·4 + ступень): горит, где его не закрывает
+ * ближнее; со спины виден целиком, спереди — ореолом из-за шеи.
+ */
+function cNapePixels(n: CNape, big: number): Int32Array {
+  const out: number[] = [];
+  const R = (n.face > -0.15 ? 4.2 : 5.6) * big;
+  for (let y = Math.floor(n.y - R - 1); y <= Math.ceil(n.y + R + 1); y++)
+    for (let x = Math.floor(n.x - R * 1.3 - 1); x <= Math.ceil(n.x + R * 1.3 + 1); x++) {
+      if (x < 0 || y < 0 || x >= CW || y >= CH) continue;
+      const dd = Math.hypot((x + 0.5 - n.x) / 1.3, y + 0.5 - n.y);
+      if (dd > R + 0.5) continue;
+      const i = y * CW + x;
+      if (RZ[i] > n.d + 2.4) continue;
+      let lv = 0;
+      if (n.face > -0.15) lv = dd < R * 0.45 ? 3 : dd < R - 0.6 ? 2 : 1;
+      else if (RZ[i] < -1e8) {
+        // Спереди затылок не виден — горит каймой вокруг шеи и головы.
+        let near = 9;
+        for (let yy = -2; yy <= 2; yy++)
+          for (let xx = -2; xx <= 2; xx++) {
+            const xs = x + xx;
+            const ys = y + yy;
+            if (xs < 0 || ys < 0 || xs >= CW || ys >= CH) continue;
+            if (RID[ys * CW + xs]) near = Math.min(near, Math.max(Math.abs(xx), Math.abs(yy)));
+          }
+        lv = near <= 1 ? 2 : near <= 2 ? 1 : 0;
+      }
+      if (lv) out.push(i * 4 + lv);
+    }
+  return Int32Array.from(out);
+}
+
+/** Пар из суставов: клубы рождаются у плеч, шеи, локтей, колен и всплывают. */
+function cSteam(p: Px, sk: CSk, r: CRig, t: number, cloak: boolean, loop: number): void {
+  const amt = r.steam + (cloak ? 0.55 : 0);
+  if (amt < 0.05) return;
+  const em: [V3, number][] = [
+    [vAdd(sk.shA, mApp(sk.Rc, [-1.2, -1.5, 4.5])), 1],
+    [vAdd(sk.shB, mApp(sk.Rc, [-1.2, 1.5, 4.5])), 1],
+    [vAdd(sk.neck, mApp(sk.Rc, [-4, 0, 1])), 0.8],
+    [sk.elA, 0.45],
+    [sk.elB, 0.45],
+    [sk.knA, 0.35],
+    [sk.knB, 0.35],
+    [vAdd(sk.chest, mApp(sk.Rc, [-5, -5, -2])), 0.5],
+    [vAdd(sk.chest, mApp(sk.Rc, [-5, 5, -2])), 0.5],
+  ];
+  // В петле (покой, шаг) период кратен её длине: клубы сходятся на стыке.
+  const period = loop ? loop / Math.max(1, Math.round(loop / 0.5)) : 0.5;
+  const life = 1.05;
+  em.forEach(([P, w], e) => {
+    const lvl = Math.min(1.25, amt * w);
+    if (lvl < 0.18) return;
+    const ph = hash(e, 3, 11) * period;
+    const [u, v] = cProj(P);
+    const n0 = Math.ceil((t - life - ph) / period);
+    const n1 = Math.floor((t - ph) / period);
+    for (let n = n0; n <= n1; n++) {
+      const age = t - ph - n * period;
+      if (age < 0 || age >= life) continue;
+      const k = age / life;
+      const sx = (hash(e, n, 1) - 0.5) * 6;
+      const x = u + sx * k + Math.sin(k * 3 + e) * 1.5;
+      const y = v - 2 - k * (9 + lvl * 7);
+      const rad = (1.8 + k * (3.4 + lvl * 1.6)) * Math.min(1.25, 0.65 + lvl * 0.35);
+      dbGrow(x - rad * 1.2 - 2, y - rad - 2, x + rad * 1.2 + 2, y + rad + 2);
+      puff(p, x, y, rad, Math.min(0.85, 0.5 * lvl + 0.15) * (1 - k * k), e * 31 + n);
+    }
+  });
+}
+
+/** Земля сыплется с плеч (подъём) и крошка с глыбы: точки падают с разгоном. */
+function cCrumbs(p: Px, from: V3[], t: number, n: number, seed: number): void {
+  for (let i = 0; i < n; i++) {
+    const P = from[i % from.length];
+    const [u, v] = cProj(P);
+    const t0 = hash(i, seed, 3) * 0.6;
+    const age = (((t - t0) % 0.6) + 0.6) % 0.6;
+    const x = Math.round(u + (hash(i, seed, 5) - 0.5) * 10 + (hash(i, seed) - 0.5) * age * 8);
+    const y = Math.round(v + age * age * 70 + age * 6);
+    dbGrow(x, y, x, y);
+    p.set(x, y, COL_DIRT[i % 3]);
+  }
+}
+
+/** Капли — тело течёт (испарение): тлеющие капли срываются вниз. */
+function cDrips(p: Px, from: V3[], t: number, n: number): void {
+  for (let i = 0; i < n; i++) {
+    const P = from[i % from.length];
+    const [u, v] = cProj(P);
+    const age = (((t + hash(i, 7) * 0.7) % 0.7) + 0.7) % 0.7;
+    const x = Math.round(u + (hash(i, 9) - 0.5) * 8);
+    const y = Math.round(v + 2 + age * age * 60);
+    dbGrow(x, y - 1, x, y);
+    p.set(x, y, EMBER[1]);
+    p.set(x, y - 1, alpha(EMBER[0], 0.7));
+    litPut(x, y, EMBER[2], 0.85);
+  }
+}
+
+/** След ладони (глыбы): полоса по пути кисти, тает к хвосту, за ближним — нет. */
+function cSmear(p: Px, pts: [number, number, number, number][], warm: boolean): void {
+  const n = pts.length - 1;
+  if (n < 1) return;
+  const c0 = warm ? hx('#fff0dc') : hx('#e8dccc');
+  const c1 = warm ? hx('#f4a888') : hx('#a89884');
+  const c2 = warm ? hx('#c45a40') : hx('#6e6052');
+  for (let i = n - 1; i >= 0; i--) {
+    const [ax, ay, ad, ar] = pts[i];
+    const [bx, by, bd, br] = pts[i + 1];
+    const age = (i + 0.5) / n;
+    const L = Math.hypot(bx - ax, by - ay);
+    if (L < 0.6) continue;
+    const steps = Math.ceil(L * 2);
+    for (let s = 0; s <= steps; s++) {
+      const k = s / steps;
+      const cx = ax + (bx - ax) * k;
+      const cy = ay + (by - ay) * k;
+      const d = ad + (bd - ad) * k;
+      const rr = (ar + (br - ar) * k) * (1 - age * 0.55);
+      for (let y = Math.floor(cy - rr); y <= Math.ceil(cy + rr); y++)
+        for (let x = Math.floor(cx - rr); x <= Math.ceil(cx + rr); x++) {
+          if (x < 0 || y < 0 || x >= CW || y >= CH) continue;
+          const q = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / (rr || 1);
+          if (q > 1) continue;
+          const i2 = y * CW + x;
+          if (RZ[i2] > d + 1) continue;
+          // Хвост — через точку: тает, а не обрывается.
+          if (age > 0.6 && (x + y) % 2) continue;
+          const c = q < 0.45 && age < 0.4 ? c0 : q < 0.8 && age < 0.75 ? c1 : c2;
+          dbGrow(x, y, x, y);
+          p.set(x, y, alpha(c, 0.92 - age * 0.5));
+        }
+    }
+  }
+}
+
+/** Кайма вокруг силуэта поверх темноты (смена фазы, смертный жар). */
+function cRim(p: Px, c: RGBA, a: number): void {
+  const d = p.data;
+  const X0 = Math.max(2, DB.x0 - 2);
+  const X1 = Math.min(CW - 3, DB.x1 + 2);
+  const Y0 = Math.max(2, DB.y0 - 2);
+  const Y1 = Math.min(CH - 3, DB.y1 + 2);
+  for (let y = Y0; y <= Y1; y++)
+    for (let x = X0; x <= X1; x++) {
+      const i = y * CW + x;
+      if (d[i * 4 + 3]) continue;
+      let near = 9;
+      for (let yy = -2; yy <= 2 && near > 1; yy++)
+        for (let xx = -2; xx <= 2; xx++)
+          if (d[((y + yy) * CW + x + xx) * 4 + 3]) near = Math.min(near, Math.abs(xx) + Math.abs(yy));
+      if (near > 2) continue;
+      litPut(x, y, c, a * (near <= 1 ? 1 : 0.45));
+    }
+}
+
+// ---- Техники: дорожки ключевых поз --------------------------------------------
+
+const CFPS = 24;
+const F1 = 1 / CFPS;
+
+type CTech =
+  | 'idle'
+  | 'walk'
+  | 'turn'
+  | 'rise'
+  | 'roar'
+  | 'swipe'
+  | 'stomp'
+  | 'back'
+  | 'vent'
+  | 'quake'
+  | 'throw'
+  | 'rings'
+  | 'kneel'
+  | 'death';
+
+/** Что ещё рисовать в кадре, кроме тела. */
+interface CPose {
+  r: CRig;
+  /** След кисти: 'A', 'B', обе, глыба. */
+  /** След: буквы — `A`/`B` кисти, `a`/`b` стопы (правая/левая). */
+  trail?: string;
+  /** Шлейф силуэтов (самые быстрые кадры). */
+  ghost?: boolean;
+  /** Земля с плеч (подъём), крошка с глыбы, капли (испарение). */
+  dirt?: number;
+  crumbs?: number;
+  drips?: number;
+  /** Затылок горит с любой стороны (на коленях). */
+  nape?: boolean;
+}
+
+/** Длительности мозга: удар в T, отдых R (с поправкой на темп фазы 3). */
+function cTimes(tech: CTech, h: number): { T: number; R: number; hits: number[] } {
+  const R = 0.85 / h;
+  switch (tech) {
+    case 'swipe':
+      return { T: COL.swipe.warn / h, R, hits: [COL.swipe.warn / h] };
     case 'stomp':
-    case 'quake': {
-      const w = pose.mode === 'quake' ? COL.quake.warn : COL.stomp.warn;
-      const up = t < w - 0.1;
-      g.knee = up ? 1 : 0;
-      g.squat = up ? 0 : 4;
-      g.armL = pose.mode === 'quake' && up ? [0.5, -0.9] : [0.55, 0.55];
-      g.armR = pose.mode === 'quake' && up ? [-0.5, -0.9] : [-0.55, 0.55];
-      g.roar = pose.mode === 'quake';
-      key = `${pose.mode}${up ? 0 : 1}`;
-      break;
-    }
+      return { T: COL.stomp.warn / h, R, hits: [COL.stomp.warn / h] };
     case 'back':
-      g.armL = view === 'side' ? [-0.95, 0] : [-0.95, 0.15];
-      g.armR = [0.95, 0.1];
-      g.lean = -3;
-      key = `bk${t < COL.back.warn ? 0 : 1}`;
-      break;
+      return { T: COL.back.warn, R, hits: [COL.back.warn] };
     case 'vent':
-      g.armL = [0.95, -0.2];
-      g.armR = [-0.95, -0.2];
-      g.roar = true;
-      key = 'vent';
-      break;
+      return { T: COL.vent.warn, R, hits: [COL.vent.warn] };
+    case 'quake':
+      return { T: COL.quake.warn, R, hits: [COL.quake.warn] };
     case 'throw':
-      g.armL = view === 'side' ? [0.1, -0.98] : [-0.3, -0.95];
-      g.armR = view === 'side' ? [-0.1, -0.98] : [0.3, -0.95];
-      g.lean = -2;
-      key = 'thr';
-      break;
-    case 'rings':
-      g.armL = [0.9, 0.3];
-      g.armR = [-0.9, 0.3];
-      g.roar = true;
-      key = 'rings';
-      break;
-    case 'roar':
-    case 'rise':
-      g.roar = true;
-      g.armL = [0.7, 0.2];
-      g.armR = [-0.7, 0.2];
-      g.lean = -1;
-      key = 'roar';
-      break;
-    case 'kneel':
-      // На колено, ладони в землю, голова вниз.
-      g.squat = 17;
-      g.lean = 6;
-      g.armL = view === 'side' ? [0.75, 0.75] : [0.45, 0.85];
-      g.armR = view === 'side' ? [0.55, 0.8] : [-0.45, 0.85];
-      key = 'kneel';
-      break;
-    case 'recover':
-      g.lean = 2;
-      key = 'rec';
-      break;
+      return { T: COL.throw.windup, R, hits: [COL.throw.windup] };
+    case 'rings': {
+      const g = COL.rings;
+      const hits = g.radii.map((_, i) => g.warn + i * g.gap);
+      return { T: hits[hits.length - 1], R, hits };
+    }
     default:
-      if (pose.anim === 'run' || Math.hypot(m.vx, m.vy) > 0.25) {
-        g.walk = true;
-        g.step = Math.floor(pose.frame / 3) % 4;
-        key = `w${g.step}`;
-      } else key = `i${Math.floor(pose.frame / 4) % 2}`;
+      return { T: 0, R: 0, hits: [] };
   }
-  return { g, key: `${view}|${key}` };
 }
 
-/** Срезать низ кадра на `cut` точек и опустить — фигура встаёт из земли. */
-function fromGround(b: Built, cut: number): Built {
-  if (cut <= 0) return b;
-  const o = new Px(b.p.w, b.p.h);
-  for (let y = 0; y < b.ay - cut; y++)
-    for (let x = 0; x < b.p.w; x++) {
-      const i = (y * b.p.w + x) * 4;
-      if (!b.p.data[i + 3]) continue;
-      o.set(x, y + cut, [b.p.data[i], b.p.data[i + 1], b.p.data[i + 2], b.p.data[i + 3]]);
+/** Конец разворота (`back`): удар, потом поворот за 0,5 с. */
+const BACK_END = COL.back.warn + 0.5;
+
+/** Сколько кадров у техники (24 к/с) и в какие миги удары. */
+function cSpan(tech: CTech, h: number): { n: number; hits: number[] } {
+  switch (tech) {
+    case 'idle':
+      return { n: 24, hits: [] };
+    case 'walk':
+      return { n: 16, hits: [] };
+    case 'turn':
+      return { n: 12, hits: [] };
+    case 'rise':
+      return { n: Math.ceil(COL.rise * CFPS), hits: [] };
+    case 'roar':
+      return { n: Math.ceil(COL.roar * CFPS), hits: [] };
+    case 'kneel':
+      return { n: Math.ceil(COL.kneel * CFPS), hits: [] };
+    case 'death':
+      return { n: Math.ceil(COL_DEATH * CFPS), hits: [] };
+    case 'back': {
+      const { R, hits } = cTimes(tech, h);
+      return { n: Math.ceil((BACK_END + R) * CFPS) + 1, hits };
     }
-  // Земля расходится: пар по кромке.
-  for (let i = 0; i < 5; i++)
-    puff(o, b.ax + (i - 2) * 7, b.ay - 2, 4 + (i % 2) * 2, 0.8, i * 5 + cut);
-  return { ...b, p: o };
+    default: {
+      const { T, R, hits } = cTimes(tech, h);
+      return { n: Math.ceil((T + R) * CFPS) + 1, hits };
+    }
+  }
+}
+
+/** Время кадра f: 24 к/с, а кадр, в котором удар, — ровно в миг удара. */
+function cFrameTime(f: number, hits: number[]): number {
+  const t = f / CFPS;
+  for (const h of hits) if (h >= t && h < t + F1 - 1e-9) return h;
+  return t;
+}
+
+const COL_DEATH = 1.6;
+
+/** Дрожь натуги: ±a пикселя через кадр (24 к/с — читается как вибрация). */
+const jit = (t: number, a: number) => (Math.floor(t * CFPS) % 2 ? a : -a);
+
+/** Покой: вдох грудью, плечи, голова, руки качаются с опозданием. `u` — 0…1. */
+function cIdle(u: number): CPose {
+  const r = { ...CREADY };
+  const b = u < 0.42 ? eIO(u / 0.42) : 1 - eIO((u - 0.42) / 0.58);
+  const a = u * TAU;
+  r.breath = b;
+  r.shr = b * 0.9;
+  r.ph = CREADY.ph + b * 0.45;
+  r.lean = CREADY.lean - b * 0.035;
+  r.hp = CREADY.hp - b * 0.07;
+  r.jaw = CREADY.jaw + (u > 0.46 && u < 0.78 ? 0.14 * Math.sin(((u - 0.46) / 0.32) * Math.PI) : 0);
+  r.aaz = CREADY.aaz + 0.05 * Math.sin(a - 0.9);
+  r.baz = CREADY.baz + 0.05 * Math.sin(a - 1.2);
+  r.ael = CREADY.ael + 0.035 * Math.sin(a - 1.4);
+  r.bel = CREADY.bel + 0.035 * Math.sin(a - 1.0);
+  r.pb = 0.55 * Math.sin(a);
+  r.roll = -0.012 * Math.sin(a + 0.3);
+  r.steam = 0.3 + (u > 0.45 && u < 0.85 ? 0.35 : 0);
+  return { r };
+}
+
+/** Ходьба: тяжёлый шаг — перенос веса, удар стопы, просадка корпуса. `u` — 0…1. */
+const WALK_STEP = 15;
+function cWalk(u: number): CPose {
+  const r = { ...CREADY };
+  const S = WALK_STEP;
+  const leg = (ph: number): [number, number] => {
+    // Опора: стопа едет назад ровно со скоростью хода (не скользит).
+    if (ph < 0.5) return [S / 2 - S * (ph / 0.5), 0];
+    const k = (ph - 0.5) / 0.5;
+    return [-S / 2 + S * eIO(k), Math.sin(k * Math.PI) * 5.2 * (1 - k * 0.25)];
+  };
+  const [ra, rh] = leg(u);
+  const [la, lh] = leg((u + 0.5) % 1);
+  r.na = ra + 0.8;
+  r.nh = rh;
+  r.fa = la + 0.8;
+  r.fh = lh;
+  r.nb = 8;
+  r.fb = 8;
+  // Таз: сразу после удара пятки — ниже всего (вес принят), на проходе — выше.
+  const w = (u % 0.5) / 0.5;
+  const bump = w < 0.1 ? eOut(w / 0.1) : Math.max(0, 1 - eIO((w - 0.1) / 0.5));
+  r.ph = CREADY.ph + 0.7 - 3.0 * bump;
+  r.tsy = 1 - 0.018 * (w < 0.18 ? Math.sin((w / 0.18) * Math.PI) : 0);
+  r.tsx = 1 + 0.012 * (w < 0.18 ? Math.sin((w / 0.18) * Math.PI) : 0);
+  const a = u * TAU;
+  // Вес над опорной ногой, плечи — встречным разворотом.
+  r.pb = -1.7 * Math.sin(a);
+  r.roll = -0.045 * Math.sin(a - 0.3);
+  r.twist = -0.13 * Math.cos(a);
+  r.lean = 0.17 + 0.03 * bump;
+  // Руки — против ног (правая вперёд, когда впереди левая нога).
+  r.ael = -1.38 - 0.3 * Math.cos(a - 0.35);
+  r.bel = -1.38 + 0.3 * Math.cos(a - 0.35);
+  r.aaz = 0.3;
+  r.baz = 0.3;
+  r.ar = 26.8;
+  r.br = 26.8;
+  // Голова кивает с опозданием на удар стопы.
+  const wl = (((u - 0.06) % 0.5) + 0.5) % 0.5 / 0.5;
+  const bl = wl < 0.1 ? eOut(wl / 0.1) : Math.max(0, 1 - eIO((wl - 0.1) / 0.5));
+  r.hp = 0.08 + 0.07 * bl;
+  r.hy = 0.05 * Math.cos(a);
+  r.steam = 0.4;
+  return { r };
+}
+
+/** Разворот на месте: переступает, голова и плечи ведут, ноги догоняют. */
+function cTurn(u: number, dir: number): CPose {
+  const r = { ...CREADY };
+  const a = u * TAU;
+  // Правая стопа переступает в u ∈ [0, 0.42], левая — в [0.5, 0.92].
+  const step = (k: number) => (k > 0 && k < 1 ? Math.sin(k * Math.PI) : 0);
+  const sA = step(u / 0.42);
+  const sB = step((u - 0.5) / 0.42);
+  r.nh = sA * 4.2;
+  r.fh = sB * 4.2;
+  r.na = CREADY.na + dir * sA * 2.5;
+  r.fa = CREADY.fa - dir * sB * 2.5;
+  r.nb = CREADY.nb + sA * 1.5;
+  r.fb = CREADY.fb + sB * 1.5;
+  // Приземлился — вес принят: таз проседает сразу после постановки стопы.
+  const plant = (p0: number) => {
+    const d = (((u - p0) % 1) + 1) % 1;
+    return d < 0.22 ? Math.sin((d / 0.22) * Math.PI) : 0;
+  };
+  r.ph = CREADY.ph - 1.5 * (plant(0.42) + plant(0.92));
+  r.pb = (sA - sB) * 1.6;
+  r.twist = dir * 0.2;
+  r.hy = dir * 0.28;
+  r.roll = (sB - sA) * 0.04;
+  r.aaz = CREADY.aaz + 0.12 * Math.sin(a);
+  r.baz = CREADY.baz - 0.12 * Math.sin(a);
+  r.steam = 0.4;
+  return { r };
+}
+
+/**
+ * Ключ удержания: каналы стоят на месте до этого мига. Канал, заданный
+ * только в ключе удара (сжатие, ладонь в землю, кайма), иначе полз бы к
+ * нему с самого начала техники.
+ */
+const HOLD = (t: number, ch: Partial<CRig>): CKf => [t, ch, eLin];
+/** Каналы «удара» в покое — для ключей удержания перед ударом. */
+const QUIET: Partial<CRig> = { tsx: 1, tsy: 1, tdx: 0, tdy: 0, rim: 0, eyes: 0, aw: 0, bw: 0 };
+
+/** Подъём из пара: рука прорывает землю, вторая, опора, голова, колено, встал. */
+function cRise(t: number): CPose {
+  const keys: CKf[] = [
+    [
+      0,
+      {
+        sink: 96,
+        ph: 15,
+        lean: 0.55,
+        hp: -0.15,
+        aaz: 0.15,
+        ael: 1.2,
+        ar: 27,
+        ah: 1,
+        baz: 0.3,
+        bel: -0.6,
+        bh: 1,
+        na: 6,
+        fa: -6,
+        steam: 1.1,
+        aw: 0,
+        bw: 0,
+      },
+    ],
+    [0.32, { sink: 64, ael: 1.38 }, eLin],
+    // Правая рука вырывается из земли по локоть и тянется вверх…
+    [0.5, { sink: 50, ael: 1.42, aaz: 0.2, aw: 0 }, eOut],
+    // …и шлёпает ладонью о землю впереди справа.
+    [0.66, { aw: 1, agx: 14, agy: 15, agz: 0, sink: 51 }, eIn],
+    [0.7, { sink: 50 }, eOut],
+    // Левая тянется вверх.
+    [0.84, { bel: 1.38, baz: 0.2, br: 27, sink: 47, bw: 0 }, eOut],
+    [0.98, { bw: 1, bgx: 14, bgy: 15, bgz: 0, sink: 48 }, eIn],
+    [1.02, { sink: 47 }, eOut],
+    // Вытягивает себя: плечи и голова выходят между ладоней.
+    [1.3, { sink: 40, lean: 0.62, hp: 0.1, jaw: 0.5 }, eIn],
+    [1.65, { sink: 26, lean: 0.48, hp: -0.2, jaw: 0.7, ph: 16 }, eOut],
+    // Колено вверх: правая стопа встаёт на землю впереди.
+    [1.95, { sink: 9, ph: 17, na: 7, nb: 9, fa: -9, lean: 0.45, jaw: 0.4, aw: 1, bw: 1 }, eIO],
+    // Встаёт, руки отрываются от земли.
+    [2.12, { sink: 2, aw: 0.6, bw: 0.6, ph: 20 }, eIn],
+    [
+      2.36,
+      {
+        sink: 0,
+        ph: 29.8,
+        lean: 0.06,
+        aw: 0,
+        bw: 0,
+        aaz: 0.55,
+        ael: -1.1,
+        baz: 0.55,
+        bel: -1.1,
+        ah: 0.3,
+        bh: 0.3,
+        na: 3,
+        fa: -2,
+        hp: -0.12,
+        jaw: 0.55,
+        steam: 1.2,
+      },
+      eOut,
+    ],
+    [2.6, { ...CREADY, steam: 0.8 }, eIO],
+  ];
+  const r = cTrack(keys, t, CREADY, CLAG);
+  return { r, dirt: t > 0.35 && t < 2.3 ? 1 : 0 };
+}
+
+/** Рёв (смена фазы): вдох, грудь раздувается, голова назад — и рёв с дрожью. */
+function cRoar(t: number, ph: number): CPose {
+  const keys: CKf[] = [
+    [0, {}],
+    // Вдох: грудь раздувается, плечи вверх, кулаки назад, голова запрокинута.
+    [
+      0.32,
+      {
+        ...QUIET,
+        breath: 1,
+        shr: 2.6,
+        hp: -0.34,
+        lean: -0.1,
+        ph: 30.2,
+        aaz: 1.1,
+        ael: -1.0,
+        ar: 23,
+        baz: 1.1,
+        bel: -1.0,
+        br: 23,
+        ah: 0,
+        bh: 0,
+        jaw: 0.2,
+        steam: 0.5,
+      },
+      eIO,
+    ],
+    // Рёв: рывок вперёд, пасть настежь, руки в стороны, присел.
+    [
+      0.42,
+      {
+        breath: 0.6,
+        shr: 0.5,
+        hp: -0.05,
+        nk: 3.4,
+        lean: 0.28,
+        ph: 26.6,
+        jaw: 1,
+        aaz: 1.3,
+        ael: -0.38,
+        ar: 27,
+        baz: 1.3,
+        bel: -0.38,
+        br: 27,
+        tsx: 1.045,
+        tsy: 0.955,
+        eyes: 1,
+        steam: 1.5,
+        rim: 1,
+      },
+      eIn,
+    ],
+    [0.55, { tsx: 1, tsy: 1 }, eOut],
+    [1.0, { jaw: 0.95, rim: 0.35, steam: 1.2 }, eLin],
+    [1.12, { jaw: 0.55, eyes: 0.4, rim: 0 }, eIO],
+    [1.3, { ...CREADY, steam: 0.6 }, eIO],
+  ];
+  const r = cTrack(keys, t, CREADY, CLAG2);
+  // Рёв дрожит: голова и пасть, 4 кадра на 12 к/с.
+  if (t > 0.45 && t < 1.08) {
+    const q = Math.floor(t * 12) % 4;
+    r.hr += [0.05, 0, -0.05, 0][q];
+    r.hy += [0, 0.05, 0, -0.05][q];
+    r.jaw -= [0, 0.08, 0, 0.08][q];
+    r.pb += jit(t, 0.35);
+  }
+  // Переход в «Испарение»: тело тает прямо во время рёва.
+  if (ph === 3) {
+    r.thin = cClamp((t - 0.3) / 0.7, 0, 1);
+    r.heat = cClamp((t - 0.35) / 0.4, 0, 1);
+  }
+  if (ph === 1) r.steam += 0.6;
+  return { r };
+}
+
+/** Ладонь: замах с разворотом плеча на всю метку, хлёст по дуге ровно в T, проводка. */
+function cSwipe(t: number, h: number): CPose {
+  const { T, R } = cTimes('swipe', h);
+  const keys: CKf[] = [
+    [0, {}],
+    // Предвестие: плечо чуть вперёд и вниз — противоход перед замахом.
+    [0.14 * T, { twist: 0.1, ph: 28.4, aaz: 0.25, ael: -1.2, lean: 0.16, ah: 0.4 }, eIO],
+    // Замах: левая нога шагает вперёд, правая рука уходит назад-вверх, плечо разворачивается.
+    [
+      0.44 * T,
+      { fa: 5, fh: 4.5, pa: -0.6, twist: -0.34, aaz: 1.35, ael: 0.05, ar: 27, ah: 0.85, lean: 0.02 },
+      eIO,
+    ],
+    [
+      0.72 * T,
+      {
+        fa: 10,
+        fh: 0,
+        pa: -1.8,
+        ph: 28.4,
+        twist: -0.66,
+        lean: -0.12,
+        aaz: 2.05,
+        ael: 0.55,
+        ar: 28.2,
+        ah: 1,
+        hy: 0.48,
+        baz: 0.6,
+        bel: -0.42,
+        br: 24,
+        jaw: 0.28,
+      },
+      eIO,
+    ],
+    // Натяжение: дотягивает назад — видно, что сейчас хлестнёт.
+    [
+      T - 3 * F1,
+      { ...QUIET, twist: -0.76, aaz: 2.22, ael: 0.62, lean: -0.15, ph: 28.1, hy: 0.55 },
+      eOut,
+    ],
+    // Хлёст: два кадра по дуге — ладонь проходит перед телом.
+    [T - 1.6 * F1, { twist: -0.12, aaz: 1.3, ael: 0.28, ar: 30, lean: 0.1, pa: 1, hy: 0.2 }, eIn],
+    [
+      T,
+      {
+        twist: 0.46,
+        aaz: 0,
+        ael: -0.42,
+        ar: 30.6,
+        lean: 0.36,
+        pa: 3,
+        ph: 26,
+        hy: -0.12,
+        hp: 0.16,
+        jaw: 0.78,
+        baz: 1.5,
+        bel: -0.95,
+        br: 25,
+        tsx: 1.045,
+        tsy: 0.955,
+        tdx: 1.5,
+      },
+      eIn,
+    ],
+    // Проводка: рука уходит дальше по дуге, корпус доворачивается.
+    [
+      T + 0.09,
+      { twist: 0.74, aaz: -0.88, ael: -0.72, lean: 0.43, ph: 25.4, tsx: 1, tsy: 1, hy: -0.3, tdx: 2 },
+      eOut,
+    ],
+    [T + 0.3, { twist: 0.62, aaz: -0.66, ael: -0.78, lean: 0.38, jaw: 0.32, tdx: 1.6 }, eIO],
+    // Возврат: рука назад, левая нога приставляется.
+    [
+      T + R * 0.62,
+      {
+        twist: 0.14,
+        aaz: 0.24,
+        ael: -1.18,
+        lean: 0.2,
+        ph: 28.2,
+        fa: 3.5,
+        fh: 2.6,
+        ah: 0.35,
+        pa: 1,
+        tdx: 0.6,
+        hy: 0,
+      },
+      eIO,
+    ],
+    [T + R, CREADY, eIO],
+  ];
+  const r = cTrack(keys, t, CREADY, { ...CLAG, hy: 0.04 });
+  if (t > T - 3 * F1 - 0.12 && t < T - 2 * F1) r.pb += jit(t, 0.3);
+  const strike = t > T - 2.2 * F1 && t < T + 0.13;
+  return { r, trail: strike ? 'A' : undefined, ghost: t > T - 2 * F1 && t < T + 0.06 };
+}
+
+/** Топот: колено медленно вверх, зависание, удар стопой — присед и отдача. */
+function cStomp(t: number, h: number, side: number): CPose {
+  const { T, R } = cTimes('stomp', h);
+  const keys: CKf[] = [
+    [0, {}],
+    // Вес на левую ногу.
+    [
+      0.18 * T,
+      { pb: 2.9, roll: 0.07, ph: 28.6, lean: 0.14, baz: 0.6, bel: -1.0, aaz: 0.7, ael: -0.9 },
+      eIO,
+    ],
+    // Колено к груди, руки в стороны и чуть вверх (локти согнуты), взгляд — на стопу.
+    [
+      0.74 * T,
+      {
+        na: 6,
+        nh: 18.5,
+        nb: 9.5,
+        ph: 29.4,
+        lean: -0.1,
+        roll: 0.11,
+        pb: 3.4,
+        aaz: 1.2,
+        ael: -0.05,
+        ar: 22,
+        baz: 1.15,
+        bel: -0.2,
+        br: 22,
+        hp: 0.3,
+        jaw: 0.3,
+        twist: 0.08,
+      },
+      eIO,
+    ],
+    [T - 2.5 * F1, { ...QUIET, nh: 20, na: 6.6, aaz: 1.28, ael: 0.02, lean: -0.12 }, eOut],
+    // Удар: стопа падает с разгоном.
+    [T - F1, { nh: 6, na: 7.2, lean: 0.12, ph: 27.8, roll: 0.04, pb: 1.5 }, eIn],
+    [
+      T,
+      {
+        nh: 0,
+        na: 7.6,
+        ph: 24.4,
+        pb: 0,
+        roll: 0,
+        lean: 0.32,
+        aaz: 0.85,
+        ael: -0.75,
+        baz: 0.8,
+        bel: -0.85,
+        hp: 0.34,
+        jaw: 0.65,
+        tsx: 1.07,
+        tsy: 0.925,
+      },
+      eIn,
+    ],
+    // Отдача: корпус пружинит вверх и снова оседает.
+    [T + 0.07, { ph: 25.8, tsx: 1, tsy: 1.018, lean: 0.25 }, eOut],
+    [T + 0.18, { ph: 25.2, tsy: 1, lean: 0.28 }, eIO],
+    [
+      T + R * 0.55,
+      { ph: 28.2, lean: 0.18, na: 5, nh: 2.4, aaz: 0.4, ael: -1.2, baz: 0.4, bel: -1.25 },
+      eIO,
+    ],
+    [T + R, CREADY, eIO],
+  ];
+  let r = cTrack(keys, t, CREADY, CLAG2);
+  if (t > 0.74 * T && t < T - F1) r.pb += jit(t, 0.25);
+  if (side) r = cMirror(r);
+  const slam = t > T - 2.2 * F1 && t < T + 0.07;
+  return { r, trail: slam ? (side ? 'b' : 'a') : undefined, ghost: t > T - 1.5 * F1 && t < T + 0.03 };
+}
+
+/** Модель поворота мозга в `back`: доля пройденного полуоборота через τ после удара. */
+function backTurn(tau: number): number {
+  if (tau <= 0) return 0;
+  const n = Math.min(40, Math.floor(tau * 60));
+  let left = 1;
+  for (let i = 1; i <= n; i++) left *= 1 - Math.min(1, i / 30);
+  return 1 - left;
+}
+
+/**
+ * Разворот: рука через грудь — хлёст тыльной стороной за спину (удар в 0,8),
+ * потом корпус уводит, ноги переступают — лицом туда, где был затылок.
+ * Поворот ног — в рисунке, а не по `face`: он идёт в сторону хлёста всегда.
+ */
+function cBack(t: number, h: number): CPose & { legs: number } {
+  const T = COL.back.warn;
+  const { R } = cTimes('back', h);
+  const keys: CKf[] = [
+    [0, {}],
+    // Рука уходит через грудь к левому плечу, корпус закручивается влево.
+    [
+      0.2,
+      { twist: 0.35, aaz: -0.9, ael: -0.42, ar: 21, ah: 0, ph: 28.4, lean: 0.18, hy: -0.25, baz: 0.6 },
+      eIO,
+    ],
+    [
+      0.58,
+      { twist: 0.68, aaz: -1.4, ael: -0.22, ar: 18.5, ph: 27.6, lean: 0.12, hy: -0.5, pb: 1.5, jaw: 0.3 },
+      eIO,
+    ],
+    [T - 2.5 * F1, { ...QUIET, twist: 0.76, aaz: -1.5, ael: -0.18, hy: -0.54 }, eOut],
+    // Хлёст: корпус раскручивается, тыльная сторона кисти — плоско за спину.
+    [T - F1, { twist: -0.4, aaz: 0.9, ael: -0.1, ar: 28, hy: -0.1 }, eIn],
+    [
+      T,
+      {
+        twist: -1.5,
+        aaz: 2.25,
+        ael: -0.18,
+        ar: 30,
+        lean: 0.22,
+        ph: 27.2,
+        hy: 0.55,
+        jaw: 0.72,
+        pb: -1.5,
+        tsx: 1.04,
+        tsy: 0.965,
+      },
+      eIn,
+    ],
+    [T + 0.07, { twist: -2.05, aaz: 1.75, ael: -0.35, tsx: 1, tsy: 1 }, eOut],
+    // Корпус довёл — ноги переступают следом (доля поворота ниже).
+    [T + 0.22, { twist: -2.75, aaz: 0.9, ael: -0.75, hy: 0.3, lean: 0.25 }, eIO],
+    [BACK_END, { twist: -Math.PI, aaz: 0.5, ael: -1.05, hy: 0, lean: 0.22, ph: 27.6 }, eIO],
+    [BACK_END + R * 0.6, { aaz: 0.3, ael: -1.25, ph: 28.8, lean: 0.14 }, eIO],
+    [BACK_END + R, { twist: -Math.PI }, eIO],
+  ];
+  const r = cTrack(keys, t, CREADY, CLAG);
+  // Ноги: поворот на π в сторону хлёста — его вычитаем из разворота груди.
+  const legs = -Math.PI * backTurn(t - T);
+  r.twist -= legs;
+  // Переступает: правая нога шагает по кругу, пока ноги догоняют.
+  const st = cClamp((t - T) / 0.3, 0, 1);
+  r.nh += Math.sin(st * Math.PI) * 4;
+  r.na += Math.sin(st * Math.PI) * -3;
+  const st2 = cClamp((t - T - 0.18) / 0.3, 0, 1);
+  r.fh += Math.sin(st2 * Math.PI) * 3.5;
+  if (t > 0.58 && t < T - F1) r.pb += jit(t, 0.25);
+  const strike = t > T - 1.6 * F1 && t < T + 0.12;
+  return { r, legs, trail: strike ? 'A' : undefined, ghost: t > T - 1.5 * F1 && t < T + 0.25 };
+}
+
+/** Выброс пара: сжался, обхватил себя, свет в груди копится — и грудь раскрывается. */
+function cVent(t: number, h: number): CPose {
+  const { T, R } = cTimes('vent', h);
+  const keys: CKf[] = [
+    [0, {}],
+    [
+      0.24,
+      {
+        ph: 27.8,
+        lean: 0.32,
+        shr: 1.6,
+        aaz: -0.95,
+        ael: 0.05,
+        ar: 17,
+        baz: -0.95,
+        bel: 0.05,
+        br: 17,
+        ah: 0,
+        bh: 0,
+        hp: 0.3,
+        glow: 0.3,
+        steam: 0.6,
+      },
+      eIO,
+    ],
+    [
+      T - 2 * F1,
+      {
+        ...QUIET,
+        ph: 26.8,
+        lean: 0.42,
+        shr: 2.6,
+        hp: 0.42,
+        aaz: -1.15,
+        ael: 0.16,
+        baz: -1.15,
+        bel: 0.16,
+        glow: 1,
+        steam: 0.9,
+      },
+      eIO,
+    ],
+    // Взрыв: руки настежь, грудь вперёд и раскрыта, голова назад, пар из всех суставов.
+    [
+      T,
+      {
+        ph: 30,
+        lean: -0.3,
+        shr: -1,
+        hp: -0.52,
+        jaw: 1,
+        aaz: 1.75,
+        ael: 0.36,
+        ar: 30,
+        baz: 1.75,
+        bel: 0.36,
+        br: 30,
+        open: 1,
+        glow: 1,
+        steam: 1.6,
+        tsy: 1.05,
+        tsx: 0.97,
+        tdy: 1.5,
+        ah: 1,
+        bh: 1,
+        eyes: 1,
+        rim: 0.7,
+      },
+      eOut3,
+    ],
+    [T + 0.1, { ph: 29.4, lean: -0.22, tsy: 1, tsx: 1, tdy: 0.5, aaz: 1.85, ael: 0.42 }, eOut],
+    [T + 0.36, { open: 0.6, glow: 0.5, steam: 1.1, jaw: 0.6, hp: -0.35, rim: 0, eyes: 0.3, tdy: 0 }, eIO],
+    [T + R, { ...CREADY, steam: 0.6 }, eIO],
+  ];
+  const r = cTrack(keys, t, CREADY, CLAG2);
+  if (t > 0.45 && t < T) r.pb += jit(t, 0.25 + 0.35 * cClamp((t - 0.45) / 0.3, 0, 1));
+  return { r, ghost: t >= T && t < T + 0.05 };
+}
+
+/** Землетрясение: колено к груди, кулаки сцеплены над головой — удар стопой и кулаками в землю. */
+function cQuake(t: number, h: number): CPose {
+  const { T, R } = cTimes('quake', h);
+  const keys: CKf[] = [
+    [0, {}],
+    [0.2, { ph: 27.2, lean: 0.25, aaz: 0.5, ael: -0.7, baz: 0.5, bel: -0.7, ah: 0, bh: 0 }, eIO],
+    [
+      0.75,
+      {
+        na: 2,
+        nb: 14.5,
+        nh: 19,
+        ph: 29.2,
+        pb: 3.4,
+        roll: 0.13,
+        lean: -0.18,
+        aaz: -0.35,
+        ael: 1.32,
+        ar: 25,
+        baz: -0.35,
+        bel: 1.36,
+        br: 25,
+        hp: -0.42,
+        jaw: 0.95,
+        steam: 0.8,
+      },
+      eIO,
+    ],
+    [T - 3 * F1, { ...QUIET, nh: 20.5, ael: 1.42, bel: 1.45, lean: -0.22 }, eOut],
+    [T - F1, { nh: 6, ph: 26.4, lean: 0.25, ael: 0.25, bel: 0.3, pb: 1.5, roll: 0.05 }, eIn],
+    [
+      T,
+      {
+        nh: 0,
+        na: 3,
+        nb: 13,
+        ph: 21.9,
+        pb: 0,
+        roll: 0,
+        lean: 0.6,
+        aw: 1,
+        agx: 15,
+        agy: 6,
+        agz: 0.4,
+        bw: 1,
+        bgx: 15,
+        bgy: 6,
+        bgz: 0.4,
+        hp: 0.28,
+        jaw: 0.75,
+        tsx: 1.08,
+        tsy: 0.91,
+        tdy: -1,
+      },
+      eIn,
+    ],
+    [T + 0.08, { ph: 23.4, tsx: 1, tsy: 1.02, tdy: 0 }, eOut],
+    [T + 0.25, { ph: 22.9, tsy: 1 }, eIO],
+    [
+      T + R * 0.6,
+      { aw: 0, bw: 0, ph: 27.4, lean: 0.25, aaz: 0.45, ael: -1.1, baz: 0.45, bel: -1.1, nb: 10 },
+      eIO,
+    ],
+    [T + R, CREADY, eIO],
+  ];
+  const r = cTrack(keys, t, CREADY, { ...CLAG, aw: 0, bw: 0 });
+  if (t > 0.75 && t < T - F1) r.pb += jit(t, 0.35);
+  const slam = t > T - 2.2 * F1 && t < T + 0.07;
+  return {
+    r,
+    trail: slam ? 'aAB' : undefined,
+    ghost: t > T - 1.5 * F1 && t < T + 0.04,
+    dirt: t > T && t < T + 0.5 ? 0.5 : 0,
+  };
+}
+
+/** Бросок: нагнулся, выломал глыбу, поднял над головой — бросок с отдачей. */
+function cThrow(t: number, h: number): CPose {
+  const { T, R } = cTimes('throw', h);
+  const keys: CKf[] = [
+    [0, {}],
+    [
+      0.3,
+      {
+        ph: 20.4,
+        lean: 0.78,
+        pa: 1,
+        aw: 1,
+        agx: 13,
+        agy: 3.5,
+        agz: 1,
+        bw: 1,
+        bgx: 13,
+        bgy: 3.5,
+        bgz: 1,
+        hp: 0.35,
+        na: 4,
+        fa: -4,
+        ah: 1,
+        bh: 1,
+        rock: 0,
+      },
+      eIO,
+    ],
+    [0.31, { rock: 1 }, eStep],
+    // Выламывает: рывок вверх, глыба отрывается от земли.
+    [0.47, { ph: 22.9, lean: 0.55, agz: 8, bgz: 8, agx: 12, bgx: 12, hp: 0.2, jaw: 0.55 }, eOut],
+    // Над головой: прогнулся назад, вес на задней ноге, левая — вперёд.
+    [
+      0.86,
+      {
+        ph: 30,
+        lean: -0.3,
+        pa: -2,
+        aw: 0,
+        bw: 0,
+        aaz: 0.1,
+        ael: 1.42,
+        ar: 24,
+        baz: 0.1,
+        bel: 1.42,
+        br: 24,
+        hp: -0.3,
+        jaw: 0.6,
+        fa: 7,
+        na: -3,
+      },
+      eIO,
+    ],
+    [T - 2 * F1, { ...QUIET, lean: -0.37, ael: 1.5, bel: 1.5, pa: -2.4, rock: 1 }, eOut],
+    // Бросок: руки хлещут вперёд, глыба уходит ровно в T.
+    [T - F1, { lean: 0.05, ael: 1.0, bel: 1.0, pa: 0.5, ar: 28, br: 28 }, eIn],
+    [T, { rock: 0 }, eStep],
+    [
+      T,
+      {
+        lean: 0.34,
+        pa: 3,
+        ph: 27.4,
+        ael: 0.3,
+        bel: 0.3,
+        aaz: 0.15,
+        baz: 0.15,
+        ar: 30,
+        br: 30,
+        jaw: 0.85,
+        hp: 0.05,
+        tsx: 1.03,
+        tsy: 0.97,
+        tdx: 2,
+      },
+      eIn,
+    ],
+    [T + 0.1, { lean: 0.46, ael: -0.35, bel: -0.35, ph: 26.6, tsx: 1, tsy: 1, tdx: 2.5 }, eOut],
+    [T + R * 0.6, { lean: 0.25, ael: -1.0, bel: -1.0, ph: 28.4, fa: 3, fh: 2, tdx: 1 }, eIO],
+    [T + R, CREADY, eIO],
+  ];
+  const r = cTrack(keys, t, CREADY, { ...CLAG, aw: 0, bw: 0, baz: 0, bel: 0, br: 0 });
+  if (t > 0.3 && t < 0.47) r.pb += jit(t, 0.3);
+  const thr = t > T - 2 * F1 && t < T + 0.1;
+  return {
+    r,
+    trail: thr ? 'AB' : undefined,
+    ghost: t > T - 1.5 * F1 && t < T + 0.05,
+    crumbs: t > 0.31 && t < T ? 1 : 0,
+  };
+}
+
+/** Кольца испарения: руки в стороны ладонями вверх, тело дрожит и течёт, удар — с каждым кольцом. */
+function cRings(t: number, h: number): CPose {
+  const { T, R, hits } = cTimes('rings', h);
+  const keys: CKf[] = [
+    [0, {}],
+    [
+      0.32,
+      {
+        aaz: 1.2,
+        ael: -0.05,
+        ar: 28,
+        baz: 1.2,
+        bel: -0.05,
+        br: 28,
+        ah: 1,
+        bh: 1,
+        hp: -0.3,
+        jaw: 0.8,
+        lean: -0.05,
+        ph: 28.9,
+        heat: 1,
+        steam: 0.9,
+      },
+      eIO,
+    ],
+    HOLD(hits[0] - 0.06, { ...QUIET, ael: 0.08, bel: 0.08, hp: -0.38, breath: 0.2 }),
+  ];
+  for (const hi of hits) {
+    keys.push([
+      hi,
+      { breath: 1, tsy: 0.95, tsx: 1.04, ph: 27.8, open: 0.55, glow: 0.8, eyes: 1 },
+      eIn,
+    ]);
+    keys.push([
+      hi + 0.12,
+      { breath: 0.25, tsy: 1, tsx: 1, ph: 28.9, open: 0, glow: 0.25, eyes: 0.2 },
+      eOut,
+    ]);
+  }
+  keys.push([
+    T + R * 0.5,
+    { aaz: 0.6, ael: -0.9, baz: 0.6, bel: -0.9, hp: 0.1, jaw: 0.3, heat: 1 },
+    eIO,
+  ]);
+  keys.push([T + R, { ...CREADY, heat: 1 }, eIO]);
+  const r = cTrack(keys, t, CREADY, CLAG2);
+  r.thin = 1;
+  if (t > 0.3 && t < T) r.pb += jit(t, 0.3);
+  return { r, drips: t > 0.25 && t < T + 0.3 ? 1 : 0 };
+}
+
+/** На коленях: ядро бьёт — колени подламываются, ладони в землю, дышит, встаёт с усилием. */
+function cKneel(t: number): CPose {
+  const down = {
+    ph: 14.8,
+    lean: 0.64,
+    na: -11,
+    nb: 8,
+    nh: 0,
+    fa: -11.5,
+    fb: 8,
+    fh: 0,
+    aw: 1,
+    agx: 12.5,
+    agy: 16,
+    agz: 0,
+    bw: 1,
+    bgx: 12.5,
+    bgy: 16,
+    bgz: 0,
+    hp: 0.8,
+    nk: 3,
+    ah: 1,
+    bh: 1,
+  };
+  const keys: CKf[] = [
+    [0, {}],
+    // Ядро: корпус дёргает назад, голову запрокидывает, руки отбрасывает.
+    [
+      0.08,
+      {
+        tdx: -3,
+        hp: -0.4,
+        jaw: 0.9,
+        aaz: 1.5,
+        ael: -0.75,
+        baz: 1.3,
+        bel: -0.8,
+        lean: -0.15,
+        twist: 0.25,
+        eyes: 1,
+      },
+      eOut,
+    ],
+    [0.2, { tdx: -2, ph: 24.4, lean: 0.12 }, eIO],
+    // Колени бьют в землю.
+    HOLD(0.4, { ...QUIET, tdx: -0.5 }),
+    [
+      0.46,
+      {
+        ph: 14.8,
+        lean: 0.32,
+        na: -11,
+        nb: 8,
+        fa: -11.5,
+        fb: 8,
+        tdx: 0,
+        twist: 0,
+        hp: 0.3,
+        aaz: 0.3,
+        ael: -1.3,
+        baz: 0.3,
+        bel: -1.3,
+        tsx: 1.06,
+        tsy: 0.94,
+        eyes: 0,
+      },
+      eIn,
+    ],
+    HOLD(0.5, { aw: 0 , bw: 0 }),
+    // Ладони шлёпают о землю, голова повисает.
+    [0.58, { ...down, ph: 13.8, tsx: 1, tsy: 1 }, eIn],
+    [0.7, { ...down }, eOut],
+    [2.55, { ...down }, eLin],
+    // Встаёт: правая стопа вперёд, колено вверх, отталкивается руками.
+    [2.82, { na: 6, nb: 9, nh: 3, ph: 16.4, lean: 0.55, hp: 0.4 }, eIO],
+    [2.92, { nh: 0 }, eIn],
+    [
+      3.2,
+      {
+        ph: 26.4,
+        lean: 0.24,
+        aw: 0,
+        bw: 0,
+        na: 4,
+        fa: -6,
+        fh: 2,
+        hp: 0.05,
+        nk: 1.4,
+        aaz: 0.6,
+        ael: -1.0,
+        baz: 0.6,
+        bel: -1.0,
+        ah: 0.3,
+        bh: 0.3,
+      },
+      eIO,
+    ],
+    [COL.kneel, CREADY, eIO],
+  ];
+  const r = cTrack(keys, t, CREADY, { ...CLAG, aw: 0, bw: 0 });
+  // Тяжело дышит на четвереньках: спина ходит, голова качается.
+  if (t > 0.7 && t < 2.75) {
+    const b = 0.5 - 0.5 * Math.cos((t - 0.7) * TAU * 0.9);
+    r.breath = b;
+    r.ph += b * 0.8;
+    r.lean -= b * 0.04;
+    r.hp += 0.06 * Math.sin((t - 0.7) * TAU * 0.45);
+    r.steam = 0.5 + b * 0.4;
+    r.stars = 1;
+  }
+  return { r, nape: t > 0.42 && t < 2.95 };
+}
+
+/** Смерть: удар, колени подламываются, мясо испаряется — кости проступают, оседает. */
+function cDeath(t: number): CPose {
+  const kneel = { ph: 14.4, na: -11, nb: 8, fa: -11.5, fb: 8 };
+  const keys: CKf[] = [
+    [
+      0,
+      {
+        hp: -0.55,
+        jaw: 1,
+        lean: -0.2,
+        aaz: 1.4,
+        ael: 0.2,
+        baz: 1.4,
+        bel: 0.2,
+        ar: 29,
+        br: 29,
+        eyes: 1,
+        heat: 1,
+        steam: 1.6,
+        tdx: -2,
+        glow: 0.8,
+        rim: 1,
+      },
+      eOut,
+    ],
+    [0.14, { hp: -0.68, rim: 0.6 }, eLin],
+    HOLD(0.4, { tsx: 1, tsy: 1 }),
+    [
+      0.5,
+      {
+        ...kneel,
+        lean: 0.25,
+        aaz: 0.4,
+        ael: -1.2,
+        baz: 0.4,
+        bel: -1.2,
+        hp: 0.4,
+        jaw: 0.5,
+        tdx: 0,
+        melt: 0.3,
+        tsx: 1.05,
+        tsy: 0.95,
+        rim: 0.15,
+        eyes: 0,
+      },
+      eIn,
+    ],
+    [0.6, { tsx: 1, tsy: 1, rim: 0 }, eOut],
+    [1.05, { lean: 0.5, hp: 0.7, melt: 0.86, ph: 12.9, steam: 1.8 }, eIO],
+    [COL_DEATH, { lean: 0.95, ph: 7.4, melt: 1, sink: 7, steam: 1.2 }, eIn],
+  ];
+  const r = cTrack(keys, t, CREADY, CLAG2);
+  r.thin = 1;
+  r.alpha = t > 1.2 ? cClamp(1 - (t - 1.2) / (COL_DEATH - 1.2), 0, 1) : 1;
+  return { r, drips: t < 1.2 ? 1 : 0 };
+}
+
+/** Поза кадра — чистая функция техники, времени, темпа и варианта. */
+function cPoseAt(tech: CTech, t: number, h: number, v: number): CPose & { legs?: number } {
+  switch (tech) {
+    case 'idle':
+      return cIdle(t);
+    case 'walk':
+      return cWalk(t);
+    case 'turn':
+      return cTurn(t, v ? -1 : 1);
+    case 'rise':
+      return cRise(t);
+    case 'roar':
+      return cRoar(t, v);
+    case 'swipe':
+      return cSwipe(t, h);
+    case 'stomp':
+      return cStomp(t, h, v);
+    case 'back':
+      return cBack(t, h);
+    case 'vent':
+      return cVent(t, h);
+    case 'quake':
+      return cQuake(t, h);
+    case 'throw':
+      return cThrow(t, h);
+    case 'rings':
+      return cRings(t, h);
+    case 'kneel':
+      return cKneel(t);
+    case 'death':
+      return cDeath(t);
+  }
+}
+
+// ---- Кадр: запрос, сборка, кеш -----------------------------------------------------
+
+/** Запрос кадра — всё, от чего зависит картинка (ключ кеша). */
+interface CReq {
+  tech: CTech;
+  f: number;
+  /** Вариант: сторона топота, фаза рёва, направление разворота на месте. */
+  v: number;
+  /** Темп ×100 (фаза 3 — быстрее). */
+  hk: number;
+  /** Румб тела: −4…4 по 22,5° (0 — профиль вправо, 4 — к нам, −4 — спиной). */
+  yq: number;
+  /** Облик: 0 — обычный, 1 — в плаще пара, 3 — тает. */
+  ph: number;
+  /** Взгляд за героем: −2…2. */
+  lk: number;
+  /** Вздрог от удара героя: 0; 1–2 — в лоб и бок; 3–4 — в затылок. */
+  fl: number;
+  /** Смешивание с прошлой позой: ступень 1…4 и откуда (ключ позы). */
+  bl: number;
+  bs: string;
+}
+
+const cKeyOf = (q: CReq) =>
+  `${q.tech}|${q.f}|${q.v}|${q.hk}|${q.yq}|${q.ph}|${q.lk}|${q.fl}|${q.bl}|${q.bs}`;
+/** Ключ позы без смешивания — от него смешивают следующую технику. */
+const cSrcOf = (q: CReq) => `${q.tech}|${q.f}|${q.v}|${q.hk}|${q.lk}|${q.fl}|${q.ph}`;
+
+/** Время позы кадра (петли — доля круга 0…1). */
+function cReqTime(q: CReq): number {
+  switch (q.tech) {
+    case 'idle':
+      return q.f / 24;
+    case 'walk':
+      return q.f / 16;
+    case 'turn':
+      return q.f / 12;
+    default:
+      return cFrameTime(q.f, cSpan(q.tech, q.hk / 100).hits);
+  }
+}
+
+/** Длина петли в секундах (для пара, чтобы клубы сходились на стыке). */
+const LOOP_S: Partial<Record<CTech, number>> = { idle: 2.4, walk: 1.6, turn: 1.2 };
+
+/** Поза запроса: техника, взгляд, вздрог (без смешивания). */
+function cPoseOf(q: CReq): CPose & { legs?: number } {
+  const ps = cPoseAt(q.tech, cReqTime(q), q.hk / 100, q.v);
+  const r = ps.r;
+  if (q.lk) {
+    r.hy += q.lk * 0.26;
+    r.twist += q.lk * 0.07;
+  }
+  if (q.fl) {
+    const k = q.fl === 2 || q.fl === 4 ? 1 : 0.55;
+    if (q.fl >= 3) {
+      // В затылок: голова дёргается вниз-вперёд, плечи к ушам, пасть настежь.
+      r.hp += 0.34 * k;
+      r.nk += 2 * k;
+      r.lean += 0.1 * k;
+      r.shr += 2.4 * k;
+      r.jaw = Math.max(r.jaw, 0.7 * k);
+      r.aaz += 0.25 * k;
+      r.baz += 0.25 * k;
+      r.eyes = Math.max(r.eyes, k);
+    } else {
+      // В лоб и бок: едва поводит головой — «лоб не берёт».
+      r.hp -= 0.08 * k;
+      r.hy += 0.06 * k;
+      r.shr += 0.8 * k;
+      r.jaw += 0.1 * k;
+    }
+  }
+  // «Испарение»: тощий и тлеет (рёв перехода тает сам — у него своя дорожка).
+  if (q.ph === 3 && !(q.tech === 'roar' && q.v === 3)) {
+    r.thin = Math.max(r.thin, 1);
+    r.heat = Math.max(r.heat, 0.85);
+  }
+  return ps;
+}
+
+/** Готовый кадр: картинка, свет, затылок (для свечения), поза (для смешивания). */
+interface CFrame {
+  fr: MobFrame;
+  /** Свечение затылка и разруб (пиксели обрезанного кадра: индекс·4 + ступень). */
+  nape: Int32Array;
+  cut: Int32Array;
+  r: CRig;
+  ghost: boolean;
+}
+
+const CFR = frameLRU<CFrame>(330);
+/** Варианты: вспышка, просвет, свет затылка. */
+const CVAR = frameLRU<HTMLCanvasElement>(90);
+/** Сколько кадров нарисовано и во что это обошлось (замер стенда). */
+export const COL_STATS = { built: 0, ms: 0, max: 0, ph: {} as Record<string, number> };
+const cMark = (name: string, t: number) => {
+  const n = performance.now();
+  COL_STATS.ph[name] = (COL_STATS.ph[name] ?? 0) + n - t;
+  return n;
+};
+
+function cCanvas(src: Uint8ClampedArray, x0: number, y0: number, w: number, h: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  if (g) {
+    const img = g.createImageData(w, h);
+    for (let y = 0; y < h; y++)
+      img.data.set(src.subarray(((y0 + y) * CW + x0) * 4, ((y0 + y) * CW + x0 + w) * 4), y * w * 4);
+    g.putImageData(img, 0, 0);
+  }
+  return c;
+}
+
+/** Нарисовать кадр запроса (без зеркала, вспышки, просвета, свечения затылка). */
+function cBuild(q: CReq, r: CRig, ps: CPose & { legs?: number }): CFrame {
+  const t0 = performance.now();
+  const h = q.hk / 100;
+  const time = cReqTime(q);
+  const loop = LOOP_S[q.tech] ?? 0;
+  const st = loop ? time * loop : time;
+  rClear();
+  let tm = cMark('clear', t0);
+  const yaw = q.yq * (Math.PI / 8) + (ps.legs ?? 0);
+  RX.cs = Math.cos(yaw);
+  RX.sn = Math.sin(yaw);
+  RX.clip = r.sink > 0.01;
+  RX.heat = r.heat;
+  RX.t = st;
+  RX.wave = loop ? Math.max(1, Math.round(0.9 * loop)) / loop : 0.9;
+  RX.melt = r.melt > 0.001 ? r.melt : -1;
+  RX.mz = 74 - r.melt * 86;
+  const sk = cSkel(r);
+  RX.bodyD = cProj(sk.chest)[2];
+  if (RX.melt >= 0) cSkeleton(sk);
+  tm = cMark('pre', tm);
+  cBody(sk, r);
+  tm = cMark('body', tm);
+  if (sk.rock) cRockSeams(sk.rock);
+  const kb = 1 - r.thin * 0.14;
+  cBones(sk, r, kb);
+  // Коленные чашечки — кость спереди колена.
+  for (const kn of [sk.knA, sk.knB]) dPut(vAdd(kn, [4.2, 0, 0.6]), tone(BONE, 0.6), 2.4);
+  tm = cMark('bones', tm);
+  const eye = cFace(sk, r, q.ph);
+  const nape = cNapeOf(sk);
+  const napePx = cNapePixels(nape, ps.nape ? 1.9 : 1.6);
+  tm = cMark('face', tm);
+  const p = rFinishCol();
+  if (r.rim > 0.02)
+    cRim(p, q.ph === 3 || q.v === 3 ? EMBER[1] : q.v === 1 ? hx('#eef4ff') : COL_HALO, r.rim);
+  tm = cMark('finish', tm);
+  // След: кисти в прошлые мгновения, по свежести.
+  if (ps.trail) {
+    const tr: Record<string, [number, number, number, number][]> = { A: [], B: [], a: [], b: [] };
+    for (let i = 0; i <= 9; i++) {
+      const s = time - i / 96;
+      if (s < 0) break;
+      const pp = i === 0 ? ps : cPoseAt(q.tech, s, h, q.v);
+      const sk2 = i === 0 ? sk : cSkel(pp.r);
+      const y2 = q.yq * (Math.PI / 8) + (pp.legs ?? 0);
+      RX.cs = Math.cos(y2);
+      RX.sn = Math.sin(y2);
+      for (const [arm, el, wr, open] of [
+        ['A', sk2.elA, sk2.wrA, pp.r.ah],
+        ['B', sk2.elB, sk2.wrB, pp.r.bh],
+      ] as ['A' | 'B', V3, V3, number][]) {
+        if (!ps.trail.includes(arm)) continue;
+        const dir = vNorm(vSub(wr, el));
+        const [u, v, d] = cProj(vAdd(wr, vMul(dir, open > 0.5 ? 4 : 2.3)));
+        tr[arm].push([u, v, d, open > 0.5 ? 4.6 : 4.4]);
+      }
+      // Стопа: падает с разгоном — след тянется над ней.
+      for (const [ft, an] of [
+        ['a', sk2.anA],
+        ['b', sk2.anB],
+      ] as [string, V3][]) {
+        if (!ps.trail.includes(ft)) continue;
+        const [u, v, d] = cProj(vAdd(an, [1.6, 0, -1.2]));
+        tr[ft].push([u, v, d, 3.6]);
+      }
+    }
+    RX.cs = Math.cos(yaw);
+    RX.sn = Math.sin(yaw);
+    for (const k of ['A', 'B', 'a', 'b']) if (tr[k].length > 1) cSmear(p, tr[k], k === k.toUpperCase());
+  }
+  if (ps.dirt) cCrumbs(p, [sk.shA, sk.shB, vAdd(sk.head, [0, 0, 6]), sk.chest], time, 14, 3);
+  if (ps.crumbs && sk.rock) cCrumbs(p, [vAdd(sk.rock, [0, 0, -7])], time, 6, 9);
+  if (ps.drips) cDrips(p, [sk.wrA, sk.wrB, sk.elA, sk.elB, sk.chest, sk.head], st, 7);
+  tm = cMark('fx', tm);
+  cSteam(p, sk, r, st, q.ph === 1, loop);
+  tm = cMark('steam', tm);
+  if (r.stars > 0.05) {
+    const [u, v] = cProj(vAdd(sk.head, [0, 0, 10]));
+    const sp = new Px(CW, CH);
+    stars(sp, Math.round(u), Math.round(v), 9, Math.floor(time * 8) % 4);
+    for (let i = 0; i < sp.data.length; i += 4)
+      if (sp.data[i + 3]) {
+        const j = i / 4;
+        litPut(j % CW, Math.floor(j / CW), [sp.data[i], sp.data[i + 1], sp.data[i + 2], 255]);
+      }
+  }
+  tm = cMark('fx2', tm);
+  // Рамка рисунка: тело, свет, пар (рамка росла по ходу рисования) и затылок.
+  let x0 = DB.x0;
+  let y0 = DB.y0;
+  let x1 = DB.x1;
+  let y1 = DB.y1;
+  const pd = p.data;
+  for (let k = 0; k < napePx.length; k++) {
+    const i = napePx[k] >> 2;
+    const x = i % CW;
+    const y = Math.floor(i / CW);
+    x0 = Math.min(x0, x);
+    x1 = Math.max(x1, x);
+    y0 = Math.min(y0, y);
+    y1 = Math.max(y1, y);
+  }
+  if (x1 < 0) {
+    x0 = CAX;
+    y0 = CAY;
+    x1 = CAX;
+    y1 = CAY;
+  }
+  const w = x1 - x0 + 1;
+  const hh = y1 - y0 + 1;
+  tm = cMark('bbox', tm);
+  const img = cCanvas(pd, x0, y0, w, hh);
+  const lit = RX.lit ? cCanvas(RL, x0, y0, w, hh) : null;
+  // Пиксели затылка — в рамку обрезанного кадра.
+  const nape2 = new Int32Array(napePx.length);
+  for (let k = 0; k < napePx.length; k++) {
+    const i = napePx[k] >> 2;
+    nape2[k] = (((Math.floor(i / CW) - y0) * w + (i % CW) - x0) << 2) | (napePx[k] & 3);
+  }
+  const cut: number[] = [];
+  if (nape.face > -0.15) {
+    const big = 1.6;
+    const add = (x: number, y: number, lv: number) => {
+      const xx = Math.floor(x) - x0;
+      const yy = Math.floor(y) - y0;
+      if (xx >= 0 && yy >= 0 && xx < w && yy < hh) cut.push(((yy * w + xx) << 2) | lv);
+    };
+    for (let s = -1; s <= 1; s += 0.08) add(nape.x + s * 3 * big, nape.y + s * 2 * big, 1);
+    add(nape.x + 3 * big + 1, nape.y + 2 * big + 1, 2);
+    add(nape.x - 3 * big - 1, nape.y - 2 * big, 2);
+  }
+  // Ход кадра: вперёд по взгляду, вверх, сжатие, наклон (в профиль).
+  const fr: MobFrame = {
+    img,
+    ax: CAX - x0,
+    ay: CAY - y0,
+    eye: eye ? [eye[0] - x0, eye[1] - y0] : null,
+    lit,
+    dx: r.tdx * Math.cos(yaw),
+    dy: r.tdx * Math.sin(yaw) * KP - r.tdy,
+    sx: r.tsx,
+    sy: r.tsy,
+    rot: r.trot * Math.cos(yaw),
+    still: true,
+    shadow: Math.round(24 * cClamp(1 - r.sink / 70, 0, 1) * (1 - r.melt * 0.5)),
+  };
+  if (r.alpha < 0.999) fr.alpha = Math.max(0, r.alpha);
+  cMark('canvas', tm);
+  const dt = performance.now() - t0;
+  COL_STATS.built++;
+  COL_STATS.ms += dt;
+  COL_STATS.max = Math.max(COL_STATS.max, dt);
+  return { fr, nape: nape2, cut: Int32Array.from(cut), r, ghost: !!ps.ghost };
+}
+
+function cMirrorCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d');
+  if (g) {
+    g.translate(src.width, 0);
+    g.scale(-1, 1);
+    g.drawImage(src, 0, 0);
+  }
+  return c;
+}
+
+function cMirrorIdx(a: Int32Array, w: number): Int32Array {
+  const o = new Int32Array(a.length);
+  for (let k = 0; k < a.length; k++) {
+    const i = a[k] >> 2;
+    const x = i % w;
+    const y = Math.floor(i / w);
+    o[k] = ((y * w + (w - 1 - x)) << 2) | (a[k] & 3);
+  }
+  return o;
+}
+
+/** Кадр по запросу (без зеркала) — из кеша или нарисовать. */
+function cBase(q: CReq, blendFrom: CRig | null): CFrame {
+  const key = 'b|' + cKeyOf(q);
+  const hit = CFR.get(key);
+  if (hit) return hit;
+  const ps = cPoseOf(q);
+  let r = ps.r;
+  if (q.bl && blendFrom) r = cLerp(blendFrom, r, eIO(q.bl / 5));
+  return CFR.set(key, cBuild(q, r, { ...ps, r }));
+}
+
+/** Кадр в зеркале (смотрит влево). */
+function cFlipped(q: CReq, blendFrom: CRig | null): CFrame {
+  const key = 'm|' + cKeyOf(q);
+  const hit = CFR.get(key);
+  if (hit) return hit;
+  const b = cBase(q, blendFrom);
+  const w = b.fr.img.width;
+  return CFR.set(key, {
+    ...b,
+    fr: {
+      ...b.fr,
+      img: cMirrorCanvas(b.fr.img),
+      lit: b.fr.lit ? cMirrorCanvas(b.fr.lit) : null,
+      eye: b.fr.eye ? [w - 1 - b.fr.eye[0], b.fr.eye[1]] : null,
+      ax: w - b.fr.ax,
+      dx: -(b.fr.dx ?? 0),
+      rot: -(b.fr.rot ?? 0),
+    },
+    nape: cMirrorIdx(b.nape, w),
+    cut: cMirrorIdx(b.cut, w),
+  });
+}
+
+/** Свет кадра со свечением затылка (герой за спиной) и разрубом. */
+function cNapeLit(key: string, cf: CFrame, glow: boolean, cut: boolean): HTMLCanvasElement | null {
+  const base = cf.fr.lit ?? null;
+  if ((!glow || !cf.nape.length) && (!cut || !cf.cut.length)) return base;
+  const k = `n|${key}|${+glow}|${+cut}`;
+  const hit = CVAR.get(k);
+  if (hit) return hit;
+  const w = cf.fr.img.width;
+  const h = cf.fr.img.height;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  if (!g) return base;
+  if (base) g.drawImage(base, 0, 0);
+  const id = g.getImageData(0, 0, w, h);
+  const put = (i: number, col: RGBA, a: number) => {
+    const j = i * 4;
+    if (j < 0 || j >= id.data.length) return;
+    const na = Math.round(a * 255);
+    if (id.data[j + 3] > na) return;
+    id.data[j] = col[0];
+    id.data[j + 1] = col[1];
+    id.data[j + 2] = col[2];
+    id.data[j + 3] = na;
+  };
+  if (glow)
+    for (let q = 0; q < cf.nape.length; q++) {
+      const i = cf.nape[q] >> 2;
+      const lv = cf.nape[q] & 3;
+      if (lv === 3) put(i, NAPE_HOT, 1);
+      else if (lv === 2) put(i, mixc(NAPE_GLOW, NAPE_HOT, 0.35), 1);
+      else put(i, NAPE_GLOW, 0.55);
+    }
+  if (cut)
+    for (let q = 0; q < cf.cut.length; q++)
+      put(cf.cut[q] >> 2, (cf.cut[q] & 3) === 2 ? hx('#e05040') : hx('#fff8f0'), 1);
+  g.putImageData(id, 0, 0);
+  return CVAR.set(k, c);
+}
+
+function cFlash(key: string, img: HTMLCanvasElement): HTMLCanvasElement {
+  const k = 'f|' + key;
+  const hit = CVAR.get(k);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const g = c.getContext('2d');
+  if (g) {
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(255,255,255,0.8)';
+    g.fillRect(0, 0, c.width, c.height);
+  }
+  return CVAR.set(k, c);
+}
+
+/** Герой за ним — тело просвечивает (затылок горит в слое света). */
+function cSeeThrough(key: string, img: HTMLCanvasElement): HTMLCanvasElement {
+  const k = 'h|' + key;
+  const hit = CVAR.get(k);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const g = c.getContext('2d');
+  if (g) {
+    g.globalAlpha = 0.5;
+    g.drawImage(img, 0, 0);
+  }
+  return CVAR.set(k, c);
+}
+
+// ---- Рисовальщик: режим мозга → техника и кадр ------------------------------------
+
+/** Что рисовальщик помнит о Колоссе между кадрами (только для рисунка). */
+interface CMem {
+  flip: boolean;
+  yq: number;
+  lk: number;
+  mode: string;
+  prev: string;
+  /** Режим только что сменился (первый кадр нового режима). */
+  enter: boolean;
+  side: number;
+  walk: number;
+  turnA: number;
+  turnV: number;
+  face: number;
+  now: number;
+  /** Разворот: румб и зеркало на старте (держатся до конца отдыха). */
+  byq: number;
+  bflip: boolean;
+  /** Смешивание: техника сменилась — первые 0,2 с из прошлой позы. */
+  tech: string;
+  rig: CRig | null;
+  src: string;
+  bFrom: CRig | null;
+  bSrc: string;
+  bAt: number;
+}
+const COLMEM = new WeakMap<Mob, CMem>();
+
+const wrapA = (a: number) => {
+  let d = a % TAU;
+  if (d > Math.PI) d -= TAU;
+  if (d < -Math.PI) d += TAU;
+  return d;
+};
+
+const FROM_CODE: Record<string, number> = {
+  swipe: 1,
+  stomp: 2,
+  back: 3,
+  vent: 4,
+  quake: 5,
+  throw: 6,
+  rings: 7,
+};
+const CODE_FROM: CTech[] = ['idle', 'swipe', 'stomp', 'back', 'vent', 'quake', 'throw', 'rings'];
+
+function cMemOf(m: Mob, pose: MobPose, face: number): { s: CMem; fresh: boolean } {
+  let s = COLMEM.get(m);
+  const fresh = !s;
+  const c = Math.cos(face);
+  if (!s) {
+    s = {
+      flip: c < 0,
+      yq: 0,
+      lk: 0,
+      mode: pose.mode,
+      prev: '',
+      enter: true,
+      side: 0,
+      walk: 0,
+      turnA: 0,
+      turnV: 0,
+      face,
+      now: pose.now,
+      byq: 0,
+      bflip: false,
+      tech: '',
+      rig: null,
+      src: '',
+      bFrom: null,
+      bSrc: '',
+      bAt: -9,
+    };
+    COLMEM.set(m, s);
+  } else s.enter = false;
+  const dt = cClamp(pose.now - s.now, 0, 0.1);
+  s.now = pose.now;
+  // Зеркало — с запасом: анфас и со спины не мигает влево-вправо.
+  if (c < -0.15) s.flip = true;
+  else if (c > 0.15) s.flip = false;
+  const df = wrapA(face - s.face);
+  s.face = face;
+  s.turnA += Math.abs(df);
+  if (dt > 0) s.turnV += (df / dt - s.turnV) * Math.min(1, dt * 8);
+  s.walk += Math.hypot(m.vx, m.vy) * 16 * dt;
+  if (pose.mode !== s.mode) {
+    s.prev = s.mode;
+    s.mode = pose.mode;
+    s.enter = true;
+  }
+  return { s, fresh };
+}
+
+/** Режим мозга → запрос кадра. */
+function colReq(m: Mob, pose: MobPose): { q: CReq; s: CMem; flip: boolean } {
+  const face = m.data.vFace ?? m.face;
+  const { s, fresh } = cMemOf(m, pose, face);
+  const sim = paintSim();
+  const phase = m.data.phase ?? 0;
+  const h = phase >= 3 ? 1.2 : 1;
+  // Румб в зеркальной половине (лицом вправо): ψ ∈ [−π/2, π/2].
+  const psi = wrapA(s.flip ? Math.PI - face : face);
+  if (fresh || Math.abs(psi - s.yq * (Math.PI / 8)) > Math.PI / 16 + 0.05)
+    s.yq = cClamp(Math.round(psi / (Math.PI / 8)), -4, 4);
+  const cloaked = phase === 1 && !((m.data.bareT ?? 0) > 0);
+  const q: CReq = {
+    tech: 'idle',
+    f: 0,
+    v: 0,
+    hk: Math.round(h * 100),
+    yq: s.yq,
+    ph: phase >= 3 ? 3 : cloaked ? 1 : 0,
+    lk: 0,
+    fl: 0,
+    bl: 0,
+    bs: '',
+  };
+  let flip = s.flip;
+  const t = Math.max(0, pose.t);
+  const setTech = (tc: CTech, tau: number, v = 0) => {
+    q.tech = tc;
+    q.v = v;
+    q.f = Math.min(cSpan(tc, h).n - 1, Math.floor(tau * CFPS + 1e-6));
+  };
+  const mode = pose.mode;
+  // Разворот держит румб и зеркало старта — тело крутится в рисунке, а не по `face`.
+  const lockBack = () => {
+    q.yq = s.byq;
+    flip = s.bflip;
+  };
+  // Взгляд на старте разворота. Подсказка листа (`vFace`) — это и есть старт;
+  // в игре мозг уже повернул взгляд после удара (на π к концу).
+  const backStart = (turned: number) => {
+    const f0 = m.data.vFace !== undefined ? face : face + Math.PI * turned;
+    s.bflip = Math.cos(f0) < 0;
+    s.byq = cClamp(Math.round(wrapA(s.bflip ? Math.PI - f0 : f0) / (Math.PI / 8)), -4, 4);
+  };
+  let from = 0;
+  if (mode === 'recover') from = m.data.vFrom ?? (fresh ? 0 : (FROM_CODE[s.prev] ?? 0));
+  if (mode === 'rise') setTech('rise', t);
+  else if (mode === 'roar') setTech('roar', t, phase);
+  else if (mode === 'swipe') setTech('swipe', t);
+  else if (mode === 'stomp') {
+    // Нога — со стороны героя (в миг начала): справа — A, слева — B; в зеркале — наоборот.
+    if (s.enter || fresh) {
+      let v = m.data.vSide ?? 0;
+      if (m.data.vSide === undefined && sim) {
+        const rel = wrapA(Math.atan2(sim.hero.y - m.y, sim.hero.x - m.x) - m.face);
+        v = rel > 0 !== s.flip ? 0 : 1;
+      }
+      s.side = v;
+    }
+    setTech('stomp', t, s.side);
+  } else if (mode === 'back') {
+    // До удара взгляд не меняется (мозг крутит после 0,8 с).
+    if (s.enter || fresh) backStart(backTurn(t - COL.back.warn));
+    lockBack();
+    setTech('back', t);
+  } else if (mode === 'vent' || mode === 'quake' || mode === 'throw' || mode === 'rings')
+    setTech(mode, t);
+  else if (mode === 'kneel') setTech('kneel', t);
+  else if (mode === 'dying') setTech('death', t);
+  else if (from) {
+    const tc = CODE_FROM[from];
+    if (tc === 'back') {
+      // Отдых после разворота: память пуста (лист, или рисовальщик пропустил
+      // разворот) — значит, мозг уже довернул взгляд на π.
+      if (fresh || s.prev !== 'back') backStart(1);
+      lockBack();
+    }
+    setTech(tc, (tc === 'back' ? BACK_END : cTimes(tc, h).T) + t, tc === 'stomp' ? s.side : 0);
+  } else {
+    // Ходьба, разворот на месте или покой; голова ведёт взгляд за героем.
+    const speed = Math.hypot(m.vx, m.vy);
+    if (pose.anim === 'run' || speed > 0.25) {
+      const d = fresh ? pose.now * speed * 16 : s.walk;
+      q.tech = 'walk';
+      q.f = Math.floor(((d / (WALK_STEP * 2) + (flip ? 0.5 : 0)) % 1) * 16) % 16;
+    } else if (m.data.vTurn !== undefined || (!fresh && Math.abs(s.turnV) > 0.3)) {
+      // Разворот на месте (подсказка листа `vTurn` — направление; в игре её нет).
+      const tv = m.data.vTurn ?? s.turnV;
+      const ta = m.data.vTurn !== undefined ? pose.now * 0.9 : s.turnA;
+      q.tech = 'turn';
+      q.v = tv > 0 !== flip ? 1 : 0;
+      q.f = Math.floor(((ta / 0.9) % 1) * 12) % 12;
+    } else {
+      q.tech = 'idle';
+      q.f = Math.floor(pose.now * 10 + m.id * 3.7) % 24;
+    }
+    if (sim) {
+      let rel = wrapA(Math.atan2(sim.hero.y - m.y, sim.hero.x - m.x) - m.face);
+      if (flip) rel = -rel;
+      // rel > 0 — герой справа от взгляда; поворот головы вправо — со знаком минус.
+      const tgt = cClamp(-rel / 0.38, -2, 2);
+      if (Math.abs(tgt - s.lk) > 0.75) s.lk = Math.round(tgt);
+      q.lk = s.lk;
+      // Вздрог от удара героя — в покое и на ходу.
+      const fl = m.flash ?? 0;
+      if (fl > 0.01) {
+        const back = Math.abs(wrapA(Math.atan2(sim.hero.y - m.y, sim.hero.x - m.x) - m.face));
+        q.fl = (fl > 0.07 ? 2 : 1) + (back > 2.05 ? 2 : 0);
+      }
+    }
+    // Подсказка листа: вздрог без героя рядом.
+    if (m.data.vFl !== undefined) q.fl = m.data.vFl;
+  }
+  // Смешивание: техника сменилась — 0,2 с из прошлой позы (без рывка ног и рук).
+  const tKey = `${q.tech}|${q.v}`;
+  if (!fresh && s.tech && tKey !== s.tech && s.rig && s.src) {
+    s.bFrom = s.rig;
+    s.bSrc = s.src;
+    s.bAt = pose.now;
+  }
+  s.tech = tKey;
+  const since = pose.now - s.bAt;
+  if (s.bFrom && since < 0.2 && q.tech !== 'rise') {
+    q.bl = Math.min(4, 1 + Math.floor((since / 0.2) * 4));
+    q.bs = s.bSrc;
+  }
+  return { q, s, flip };
 }
 
 registerMobPainter('f13boss', (m, pose) => {
-  const phase = m.data.phase ?? 0;
-  const cloaked = phase === 1 && !((m.data.bareT ?? 0) > 0);
-  const lk = phase >= 3 ? COL_THIN : COL_LOOK;
-  const f = Math.floor(pose.frame / 2) % 4;
-  const dk = deathK(pose);
-  const view = viewOf(m.face);
-  if (pose.mode === 'dying') {
-    return frameOf(`col|die|${view}|${dk}`, pose, () => {
-      const c: ColLook = {
-        phase: 3,
-        view,
-        f: dk,
-        back: false,
-        cut: false,
-        cloaked: false,
-        roar: true,
-        kneel: false,
-        rock: false,
-      };
-      const b = drawGiant(
-        lk,
-        { ...GP0, view, squat: dk * 5, roar: true, lean: dk * 2 },
-        3,
-        colDeco(c),
-      );
-      return { ...b, p: evaporate(b.p, dk, 3) };
-    });
+  const { q, s, flip } = colReq(m, pose);
+  const key = cKeyOf(q);
+  const cf = flip ? cFlipped(q, s.bFrom) : cBase(q, s.bFrom);
+  s.rig = cf.r;
+  // Смешанная поза сама источником не бывает: цепочка ключей росла бы без конца.
+  s.src = q.bl ? '' : cSrcOf(q);
+  const fkey = `${key}|${+flip}`;
+  const out: MobFrame = { ...cf.fr };
+  // Затылок: герой за спиной — горит; на коленях — горит с любой стороны.
+  const kneelNape = q.tech === 'kneel' && q.f > 10 && q.f < 70;
+  const back = (m.data.back ?? 0) > 0 || kneelNape;
+  const cut = (m.data.cut ?? 0) > 0.12;
+  out.lit = cNapeLit(fkey, cf, back, cut);
+  // Вспышка удара героя (смерть белым не мигает).
+  const flash = pose.flash && (pose.mode !== 'dying' || pose.t < 0.1);
+  let img = cf.fr.img;
+  if (flash) img = cFlash(fkey, img);
+  if (heroHidden(m, 5.4) && pose.mode !== 'dying') img = cSeeThrough(`${fkey}|${+flash}`, img);
+  out.img = img;
+  if (q.tech === 'death') out.linger = COL_DEATH;
+  // Шлейф — на самых быстрых кадрах хлёста, броска, удара.
+  if (cf.ghost) out.ghost = { every: 0.03, life: 0.16, tint: '#ffd8c0', alpha: 0.2 };
+  // Отдача от удара героя: по направлению удара, с возвратом.
+  const fl = m.flash ?? 0;
+  if (fl > 0 && pose.mode !== 'dying') {
+    const sim = paintSim();
+    const age = cClamp(0.12 - fl, 0, 0.12);
+    let ux = flip ? 1 : -1;
+    let uy = 0;
+    if (sim) {
+      const dx = m.x - sim.hero.x;
+      const dy = m.y - sim.hero.y;
+      const d = Math.hypot(dx, dy) || 1;
+      ux = dx / d;
+      uy = dy / d;
+    }
+    const big = q.fl >= 3 ? 1.6 : 1;
+    const loose = q.tech === 'idle' || q.tech === 'walk' || q.tech === 'turn' ? 1 : 0.4;
+    const k = Math.sin((age / 0.12) * Math.PI) * 1.6 * big * loose;
+    out.dx = (out.dx ?? 0) + ux * k;
+    out.dy = (out.dy ?? 0) + uy * k * 0.6;
   }
-  const { g, key } = colPose(m, pose);
-  const c: ColLook = {
-    phase,
-    view: g.view,
-    f,
-    back: g.back,
-    cut: g.cut,
-    cloaked,
-    roar: g.roar,
-    kneel: pose.mode === 'kneel',
-    rock: pose.mode === 'throw',
+  return out;
+});
+
+/**
+ * Замер стенда: собрать кадры техник заново (кеш сбрасывается) и вернуть
+ * минимум, медиану и p90 времени нового кадра, мс. Игра это не зовёт.
+ */
+export function colBench(reps = 1): { min: number; med: number; p90: number; n: number } {
+  const base: CReq = { tech: 'idle', f: 0, v: 0, hk: 100, yq: 2, ph: 0, lk: 0, fl: 0, bl: 0, bs: '' };
+  const ts: number[] = [];
+  for (let rep = 0; rep < reps; rep++)
+    for (const [tech, step] of [
+      ['idle', 3],
+      ['walk', 2],
+      ['swipe', 3],
+      ['stomp', 4],
+      ['vent', 5],
+    ] as [CTech, number][]) {
+      const n = cSpan(tech, 1).n;
+      for (let f = 0; f < n; f += step) {
+        CFR.clear();
+        const t0 = performance.now();
+        cBase({ ...base, tech, f }, null);
+        ts.push(performance.now() - t0);
+      }
+    }
+  ts.sort((a, b) => a - b);
+  return {
+    min: ts[0],
+    med: ts[Math.floor(ts.length / 2)],
+    p90: ts[Math.floor(ts.length * 0.9)],
+    n: ts.length,
   };
-  const rise = pose.mode === 'rise' ? Math.min(5, Math.floor((pose.t / COL.rise) * 6)) : 5;
-  const k = `col|${key}|${phase >= 3 ? 3 : 0}|${+cloaked}|${+g.back}|${+g.cut}|${f}|${rise}`;
-  return frameOf(
-    k,
-    pose,
-    () => {
-      const b = drawGiant(lk, g, 3, colDeco(c), colPost(c));
-      return rise < 5 ? fromGround(b, Math.round((1 - rise / 5) * 60)) : b;
-    },
-    heroHidden(m, 5.4),
-  );
+}
+
+// Прогрев: всё, что игрок увидит в первом бою (покой, шаг, ладонь, топот,
+// разворот; подъём анфас — последним: он нужен первым, а кеш вытесняет
+// давно сделанное). Зеркало и вторая нога дорисуются на лету (зеркало —
+// копия холста). Всего 285 кадров при кеше на 330.
+registerMobWarm('f13boss', function* () {
+  const base: CReq = {
+    tech: 'idle',
+    f: 0,
+    v: 0,
+    hk: 100,
+    yq: 0,
+    ph: 0,
+    lk: 0,
+    fl: 0,
+    bl: 0,
+    bs: '',
+  };
+  const list: [CTech, number, number, boolean][] = [
+    ['idle', 0, 0, false],
+    ['walk', 0, 0, false],
+    ['idle', 0, 4, false],
+    ['walk', 0, 4, false],
+    ['swipe', 0, 0, false],
+    ['stomp', 0, 0, false],
+    ['back', 0, 0, false],
+    ['rise', 0, 4, false],
+  ];
+  for (const [tech, v, yq, both] of list) {
+    const n = cSpan(tech, 1).n;
+    for (let f = 0; f < n; f++) {
+      const q = { ...base, tech, v, yq, f };
+      cBase(q, null);
+      yield f;
+      if (both) {
+        cFlipped(q, null);
+        yield f;
+      }
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------
