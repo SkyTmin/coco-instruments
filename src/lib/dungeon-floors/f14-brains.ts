@@ -3281,11 +3281,15 @@ function lordPlace(sim: Sim, m: Mob, api: SimApi): void {
     if (to) {
       m.data.vAx = m.x; // v2.87 — только рисунок
       m.data.vAy = m.y; // v2.87 — только рисунок
+      api.vfx(sim, { x: m.x, y: m.y, r: 1, life: 0.5, art: 'f14b_blink', n: 0, above: true } as ZoneIn); // v2.87 — только рисунок
       m.x = to[0];
       m.y = to[1];
       m.face = Math.atan2(h.y - m.y, h.x - m.x);
+      api.vfx(sim, { x: m.x, y: m.y, r: 1, life: 0.5, art: 'f14b_blink', n: 1, above: true } as ZoneIn); // v2.87 — только рисунок
     }
     knifeRing(sim, m, ph >= 3 ? LORD.knives + 2 : LORD.knives, ph >= 3 ? 2 : 1);
+    // v2.87 — только рисунок: свои ножи — вспышка, ожидание, след, звон.
+    api.vfx(sim, { x: h.x, y: h.y, r: LORD.knifeR, life: 2.6, art: 'f14b_knives', above: true, ids: s.knives.map((k) => k.id) } as ZoneIn); // v2.87 — только рисунок
     sim.events.push({ t: 'boss', what: 'f14_knives' });
   }
   if (s.placed === 1 && t > 1.1) {
@@ -3302,8 +3306,10 @@ function lordPlace(sim: Sim, m: Mob, api: SimApi): void {
     if (to) {
       m.data.vBx = m.x; // v2.87 — только рисунок
       m.data.vBy = m.y; // v2.87 — только рисунок
+      api.vfx(sim, { x: m.x, y: m.y, r: 1, life: 0.5, art: 'f14b_blink', n: 0, above: true } as ZoneIn); // v2.87 — только рисунок
       m.x = to[0];
       m.y = to[1];
+      api.vfx(sim, { x: m.x, y: m.y, r: 1, life: 0.5, art: 'f14b_blink', n: 1, above: true } as ZoneIn); // v2.87 — только рисунок
     }
   }
 }
@@ -3330,6 +3336,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
   }
   if (s.own) {
     s.own = false;
+    sim.events.push({ t: 'shake', k: 0.22 }); // v2.87 — только рисунок: время пошло — волна
     s.launchAt = sim.time + LORD.knifeDelay;
     if (m.mode === 'f14_place') {
       m.data.vFrom = 4; // v2.87 — только рисунок
@@ -3367,6 +3374,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         // он стоит — окно.
         api.setMode(m, 'f14_clap');
         sim.events.push({ t: 'boss', what: 'f14_clap' });
+        // v2.87 — только рисунок: вдох, остановка, пуск — на всю арену.
+        api.vfx(sim, { x: m.x, y: m.y, r: 10, life: LORD.clap + 1.4, art: 'f14b_stop', above: true, mob: m.id } as ZoneIn); // v2.87 — только рисунок
         return;
       }
       if (ph === 2 && s.ritualCd <= 0) {
@@ -3386,11 +3395,20 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         if (dist < LORD.minLen - 0.3 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
           m.dir = Math.atan2(dy, dx);
           api.setMode(m, 'f14_minute');
+          // v2.87 — только рисунок: метка минутной (дорожка, остриё, крест).
+          api.vfx(sim, { x: m.x, y: m.y, r: 0.5, life: LORD.minWarn / haste + 0.1, art: 'f14b_minmark', mob: m.id } as ZoneIn); // v2.87 — только рисунок
           return;
         }
       }
       const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
       api.steer(sim, m, cx, cy, m.speed * haste * (dist < 2 ? 0.4 : 1), dt);
+      // v2.87 — только рисунок: шаги тикают (не чаще 2,5 раза в секунду).
+      m.data.vStep = (m.data.vStep ?? 0) - dt; // v2.87 — только рисунок
+      if (m.data.vStep <= 0 && hypot(m.vx, m.vy) > 0.9) { // v2.87 — только рисунок
+        m.data.vStep = 0.4; // v2.87 — только рисунок
+        m.data.vTick = m.data.vTick ? 0 : 1; // v2.87 — только рисунок
+        api.vfx(sim, { x: m.x, y: m.y + 0.1, r: 0.4, life: 0.5, art: 'f14b_step', n: m.data.vTick } as ZoneIn); // v2.87 — только рисунок
+      } // v2.87 — только рисунок
       return;
     }
     case 'f14_hour': {
@@ -3450,6 +3468,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         m.data.ly = m.y + uy * Math.max(0, len - 0.6);
         m.data.sx = m.x;
         m.data.sy = m.y;
+        // v2.87 — только рисунок: след выпада.
+        api.vfx(sim, { x: m.x, y: m.y, r: 0.5, life: 1.1, art: 'f14b_lunge', ang: m.dir, len, above: true } as ZoneIn); // v2.87 — только рисунок
         api.setMode(m, 'f14_lunge');
       }
       return;
@@ -3463,6 +3483,10 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (k >= 1) {
         sim.events.push({ t: 'boss', what: 'f14_stuck_wall' });
         sim.events.push({ t: 'shake', k: 0.3 });
+        // v2.87 — только рисунок: стрелка в полу — конец дорожки метки.
+        const vx = m.x + Math.cos(m.dir) * 0.6; // v2.87 — только рисунок
+        const vy = m.y + Math.sin(m.dir) * 0.6; // v2.87 — только рисунок
+        api.vfx(sim, { x: vx, y: vy, r: 0.5, life: LORD.stuck + 0.9, art: 'f14b_stab', ang: m.dir, above: true } as ZoneIn); // v2.87 — только рисунок
         api.setMode(m, 'f14_stuck');
       }
       return;
@@ -3569,6 +3593,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         api.setMode(m, 'f14_broken');
         s.ritualCd = LORD.ritualEvery;
         sim.zones = sim.zones.filter((z) => z.art !== 'f14_glassring');
+        api.vfx(sim, { x: ax, y: ay, r: 2.4, life: 1.8, art: 'f14b_glassbreak', above: true }); // v2.87 — только рисунок
         sim.events.push({ t: 'shake', k: 0.4 });
         sim.events.push({
           t: 'boss',
@@ -3584,6 +3609,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         const gain = clamp(back - m.hp, 0, m.maxHp * LORD.regain);
         m.hp += gain;
         s.ritualCd = LORD.ritualEvery;
+        api.vfx(sim, { x: ax, y: ay, r: 2.4, life: 1.1, art: 'f14b_rewound', above: true }); // v2.87 — только рисунок
         sim.events.push({ t: 'flash', color: '#8fe8ff', k: 0.6 });
         sim.events.push({
           t: 'boss',
@@ -3635,9 +3661,12 @@ registerBoss('f14boss', {
     s.stopCd = 7;
     s.ritualCd = 0;
     lead.face = Math.PI / 2;
+    lead.data.vNoTele = 1; // v2.87 — только рисунок: метки рисует f14-boss-fx
     F14_FX.bossPhase = 0;
     F14_FX.midnight = 0;
     api.setMode(lead, 'roar');
+    const [vwx, vwy] = geoWorld(sim, F14_GEO.arena); // v2.87 — только рисунок
+    api.vfx(sim, { x: vwx, y: vwy, r: 10.6, life: 2.6, art: 'f14b_wake', above: true }); // v2.87 — только рисунок
     api.camera(sim, lead.x, lead.y, 2.2);
     sim.events.push({ t: 'shake', k: 0.3 });
     sim.events.push({
@@ -3665,6 +3694,7 @@ registerBoss('f14boss', {
       b.phase = 1;
       F14_FX.bossPhase = 1;
       arenaLook(sim, api, b, 1);
+      api.vfx(sim, { x: lead.x, y: lead.y, r: 12, life: 1.6, art: 'f14b_phase', n: 1, above: true } as ZoneIn); // v2.87 — только рисунок
       s.stopCd = 1.2;
       sim.events.push({ t: 'flash', color: '#e8ecf4', k: 0.8 });
       sim.events.push({
@@ -3678,6 +3708,7 @@ registerBoss('f14boss', {
       b.phase = 2;
       F14_FX.bossPhase = 2;
       arenaLook(sim, api, b, 2);
+      api.vfx(sim, { x: lead.x, y: lead.y, r: 12, life: 1.6, art: 'f14b_phase', n: 2, above: true } as ZoneIn); // v2.87 — только рисунок
       s.ritualCd = 1;
       sim.events.push({ t: 'flash', color: '#8fe8ff', k: 0.8 });
       sim.events.push({
@@ -3691,6 +3722,7 @@ registerBoss('f14boss', {
       b.phase = 3;
       F14_FX.bossPhase = 3;
       arenaLook(sim, api, b, 3);
+      api.vfx(sim, { x: lead.x, y: lead.y, r: 12, life: 1.6, art: 'f14b_phase', n: 3, above: true } as ZoneIn); // v2.87 — только рисунок
       s.tolls = 0;
       s.nextToll = sim.time + 1.5;
       s.min = 0;
@@ -3731,7 +3763,11 @@ registerBoss('f14boss', {
         lightLamps(sim, st, api, Math.min(12, s.tolls));
         s.nextToll = sim.time + LORD.toll;
         sim.events.push({ t: 'boss', what: 'f14_toll' });
+        // v2.87 — только рисунок: звон от ступицы, гаснет лампа этого часа.
+        if (s.tolls <= 12) api.vfx(sim, { x: ax, y: ay, r: 10.6, life: 1.7, art: 'f14b_toll', n: s.tolls, above: true } as ZoneIn); // v2.87 — только рисунок
         if (s.tolls === 12) {
+          // v2.87 — только рисунок: ночь ложится на пол за стрелкой.
+          api.vfx(sim, { x: ax, y: ay, r: 11.1, life: LORD.midnightWarn + 1.5, art: 'f14b_night' }); // v2.87 — только рисунок
           // Двенадцатый удар: всё, кроме ступицы.
           api.strike(sim, {
             shape: 'ring',
