@@ -33,7 +33,7 @@ import { F14_FX, KNIFE_ANG, LORD, NOON, REAPER, rewindTrail, worldStopped } from
 
 type RGBA = [number, number, number, number];
 
-const hx = (h: string, a = 255): RGBA => {
+export const hx = (h: string, a = 255): RGBA => {
   const v = parseInt(h.slice(1), 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255, a];
 };
@@ -50,10 +50,10 @@ const alpha = (c: RGBA, a: number): RGBA => [
   Math.round(Math.max(0, Math.min(1, a)) * 255),
 ];
 
-const INK = hx('#150f0b');
+export const INK = hx('#150f0b');
 const WHITE = hx('#ffffff');
 const GOLDK = hx('#ffcc40');
-const TAU = Math.PI * 2;
+export const TAU = Math.PI * 2;
 
 /** Четыре тона формы: тень, основа, свет, блик. */
 type Tones = [RGBA, RGBA, RGBA, RGBA];
@@ -159,7 +159,7 @@ function polyShade(p: Px, pts: [number, number][], t: Tones, bias = 0): void {
 }
 
 /** Линия (толщиной `w`). */
-function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -200,15 +200,15 @@ const COPPER = tn('#3a1a10', '#6a3420', '#a8583a', '#e0906a');
 const IRON = tn('#16161c', '#2e2e38', '#4e4e5a', '#8a8a98');
 const STEEL = tn('#2a3038', '#58626e', '#98a4b0', '#e4ecf4');
 const ENAMEL = tn('#8a8478', '#c8c0b0', '#ece6d8', '#fffaf0');
-const TEAL = tn('#0e3a44', '#1e7a88', '#4cc8d8', '#b8f4ff');
-const SAND = tn('#6a4a24', '#a8844c', '#d8b878', '#f4e2b0');
+export const TEAL = tn('#0e3a44', '#1e7a88', '#4cc8d8', '#b8f4ff');
+export const SAND = tn('#6a4a24', '#a8844c', '#d8b878', '#f4e2b0');
 const WOOD = tn('#2a160c', '#4a2816', '#6e3e22', '#9a5e34');
 const REDC = tn('#3a0a0c', '#6a1418', '#a42228', '#d8484a');
 const NAVY = tn('#10142a', '#1e2648', '#34406a', '#5a6aa0');
 const SKIN = tn('#8a4a38', '#c88a70', '#f0c0a0', '#ffe4cc');
 const GLASS = hx('#bfe8f0', 150);
 const GLASS_HI = hx('#ffffff', 200);
-const TEAL_GLOW = hx('#8fe8ff');
+export const TEAL_GLOW = hx('#8fe8ff');
 const AMBER = hx('#ffb040');
 
 // ---------------------------------------------------------------------------
@@ -4409,7 +4409,7 @@ registerCellPainter(F14_DIAL, dialAreaCell);
 // Метки ударов, сферы, песок, стрелки площади и арены, ножи.
 // ---------------------------------------------------------------------------
 
-type ZoneX = (Zone | Strike) & {
+export type ZoneX = (Zone | Strike) & {
   ang?: number;
   arc?: number;
   w?: number;
@@ -4418,23 +4418,23 @@ type ZoneX = (Zone | Strike) & {
   mob?: number;
 };
 
-const rgba = (c: RGBA, a: number) =>
+export const rgba = (c: RGBA, a: number) =>
   `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
 
 /** Метка удара наливается: `k` 0…1. */
-const kOf = (z: ZoneX) => {
+export const kOf = (z: ZoneX) => {
   const s = z as Strike;
   if ('warn' in s && typeof s.warn === 'number' && s.warn > 0) return Math.min(1, s.t / s.warn);
   return 1;
 };
 
 /** Доля жизни зоны (0 — только легла). */
-const lifeK = (z: ZoneX) => {
+export const lifeK = (z: ZoneX) => {
   const zz = z as Zone;
   return zz.life > 0 && zz.life < 1e8 ? Math.min(1, zz.t / zz.life) : 0;
 };
 
-function cone(
+export function cone(
   g: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -4448,8 +4448,8 @@ function cone(
   g.closePath();
 }
 
-const RED = hx('#ff3a28');
-const HOT = hx('#ffe0a0');
+export const RED = hx('#ff3a28');
+export const HOT = hx('#ffe0a0');
 const COLD = hx('#9ad8ff');
 
 /** Стрелка часов из центра (угол 0 — XII, по часовой): клинок с остриём и хвостом. */
@@ -4667,32 +4667,6 @@ registerZonePainter('f14_hands', (g, z, px, py, S) => {
   g.stroke();
   g.fillStyle = rgba(metal[3], 1);
   g.fillRect(Math.round(px) - 1, Math.round(py) - 2, 2, 2);
-  return true;
-});
-
-/** Отмотка Повелителя: кольцо песка течёт к центру, против часовой. */
-registerZonePainter('f14_glassring', (g, z, px, py, S) => {
-  const R = z.r * S;
-  const t = F14_FX.clock;
-  const k = lifeK(z as ZoneX);
-  g.strokeStyle = rgba(TEAL_GLOW, 0.5);
-  g.lineWidth = 1;
-  g.beginPath();
-  g.arc(px, py, R, 0, TAU);
-  g.stroke();
-  // Сектор — сколько времени у тебя осталось.
-  g.fillStyle = rgba(TEAL[2], 0.14);
-  g.beginPath();
-  g.moveTo(px, py);
-  g.arc(px, py, R, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - k));
-  g.closePath();
-  g.fill();
-  for (let i = 0; i < 18; i++) {
-    const a = -(i / 18) * TAU - t * 1.4;
-    const rr = R * (1 - ((i * 0.37 + t * 0.8) % 1));
-    g.fillStyle = rgba(i % 3 ? SAND[3] : TEAL_GLOW, 0.8);
-    g.fillRect(Math.round(px + Math.cos(a) * rr), Math.round(py + Math.sin(a) * rr), 1, 1);
-  }
   return true;
 });
 
@@ -4964,96 +4938,6 @@ registerZonePainter('f14_echostomp', (g, z, px, py, S) => {
   g.beginPath();
   g.arc(px, py, R * k, 0, TAU);
   g.fill();
-  return true;
-});
-
-/** Часовая Повелителя: тяжёлый конус, по нему проходит тень стрелки. */
-registerZonePainter('f14_lordhour', (g, z, px, py, S) => {
-  const zz = z as ZoneX;
-  const k = kOf(zz);
-  const R = z.r * S;
-  const a = zz.ang ?? 0;
-  const arc = zz.arc ?? 1.9;
-  cone(g, px, py, R, a, arc);
-  g.fillStyle = rgba(RED, 0.14 + 0.3 * k);
-  g.fill();
-  g.strokeStyle = rgba(RED, 0.7 + 0.3 * k);
-  g.lineWidth = 1;
-  g.stroke();
-  // Тень стрелки ползёт от края к краю.
-  const sa = a - arc / 2 + arc * k;
-  g.strokeStyle = rgba(INK, 0.55);
-  g.lineWidth = 3;
-  g.beginPath();
-  g.moveTo(px, py);
-  g.lineTo(px + Math.cos(sa) * R, py + Math.sin(sa) * R);
-  g.stroke();
-  return true;
-});
-
-/** Разворот стрелок: кольцо, по нему бегут два клинка. */
-registerZonePainter('f14_lordspin', (g, z, px, py, S) => {
-  const zz = z as ZoneX;
-  const k = kOf(zz);
-  const R = z.r * S;
-  const w = (zz.w ?? 0.72) * S;
-  g.strokeStyle = rgba(RED, 0.16 + 0.3 * k);
-  g.lineWidth = w * 2;
-  g.beginPath();
-  g.arc(px, py, R, 0, TAU);
-  g.stroke();
-  g.strokeStyle = rgba(RED, 0.7);
-  g.lineWidth = 1;
-  for (const rr of [R - w, R + w]) {
-    g.beginPath();
-    g.arc(px, py, rr, 0, TAU);
-    g.stroke();
-  }
-  for (let i = 0; i < 2; i++) {
-    const a = k * TAU * 1.5 + i * Math.PI;
-    g.strokeStyle = rgba(HOT, 0.9);
-    g.lineWidth = 2;
-    g.beginPath();
-    g.arc(px, py, R, a - 0.4, a);
-    g.stroke();
-  }
-  return true;
-});
-
-/**
- * Двенадцатый удар: темнеет вся арена, кроме ступицы. Ступица светится —
- * куда бежать, видно сразу; двенадцать лучей часов по полу.
- */
-registerZonePainter('f14_midnight', (g, z, px, py, S) => {
-  const zz = z as ZoneX;
-  const k = kOf(zz);
-  const R = z.r * S;
-  const w = (zz.w ?? 4.5) * S;
-  const inner = R - w;
-  const outer = R + w;
-  g.fillStyle = rgba(hx('#2a0a3a'), 0.25 + 0.4 * k);
-  g.beginPath();
-  g.arc(px, py, outer, 0, TAU);
-  g.arc(px, py, inner, 0, TAU, true);
-  g.fill('evenodd');
-  g.strokeStyle = rgba(RED, 0.6 + 0.4 * k);
-  g.lineWidth = 1;
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * TAU;
-    g.beginPath();
-    g.moveTo(px + Math.cos(a) * inner, py + Math.sin(a) * inner);
-    g.lineTo(
-      px + Math.cos(a) * (inner + (outer - inner) * k),
-      py + Math.sin(a) * (inner + (outer - inner) * k),
-    );
-    g.stroke();
-  }
-  // Спасение — ступица: белое кольцо пульсирует.
-  g.strokeStyle = rgba(hx('#dfe8ff'), 0.7 + 0.3 * Math.sin(k * 30));
-  g.lineWidth = 2;
-  g.beginPath();
-  g.arc(px, py, inner - 2, 0, TAU);
-  g.stroke();
   return true;
 });
 

@@ -49,7 +49,7 @@ import type { F11State } from './f11-brains';
 
 type RGBA = [number, number, number, number];
 
-const hx = (h: string, a = 255): RGBA => {
+export const hx = (h: string, a = 255): RGBA => {
   const v = parseInt(h.slice(1), 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255, a];
 };
@@ -59,13 +59,13 @@ const mixc = (a: RGBA, b: RGBA, k: number): RGBA => [
   Math.round(a[2] + (b[2] - a[2]) * k),
   Math.round(a[3] + (b[3] - a[3]) * k),
 ];
-const alpha = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(Math.max(0, Math.min(1, a)) * 255)];
+export const alpha = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(Math.max(0, Math.min(1, a)) * 255)];
 const css = (c: RGBA, a = c[3] / 255) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
-const TAU = Math.PI * 2;
+export const TAU = Math.PI * 2;
 const PI = Math.PI;
 const MK = F11_MARK;
-const TS = 16;
+export const TS = 16;
 
 /** Контур этажа: тёмный сине-серый — дневной свет, а не подземная тьма. */
 const INK = hx('#1d2130');
@@ -75,7 +75,7 @@ const WHITE = hx('#ffffff');
 // Шум и хеши — в мировых пикселях, чтобы клетки стыковались.
 // ---------------------------------------------------------------------------
 
-const hash = (a: number, b: number, c = 0) => {
+export const hash = (a: number, b: number, c = 0) => {
   let h = (a * 374761393 + b * 668265263 + c * 1274126177) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
@@ -153,7 +153,7 @@ function voronoi(
 
 /** Четыре тона формы: тень, основа, свет, блик. */
 type Tones = [RGBA, RGBA, RGBA, RGBA];
-const tn = (a: string, b: string, c: string, d: string): Tones => [hx(a), hx(b), hx(c), hx(d)];
+export const tn = (a: string, b: string, c: string, d: string): Tones => [hx(a), hx(b), hx(c), hx(d)];
 
 const LX = -0.45;
 const LY = -0.72;
@@ -175,7 +175,7 @@ function shadeEll(p: Px, cx: number, cy: number, rx: number, ry: number, t: Tone
 }
 
 /** Капсула от (x0, y0) до (x1, y1) со светом по нормали — руки, ноги, стебли. */
-function limb(
+export function limb(
   p: Px,
   x0: number,
   y0: number,
@@ -254,7 +254,7 @@ function polyShade(p: Px, pts: [number, number][], t: Tones, bias = 0): void {
 }
 
 /** Толстая линия. */
-function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -286,7 +286,7 @@ function spline(pts: [number, number][], n = 6): [number, number][] {
 }
 
 /** Контур снаружи фигуры (со светлой стороны — светлее: мягче на светлом полу). */
-function ink(p: Px, c: RGBA = INK, diag = false): Px {
+export function ink(p: Px, c: RGBA = INK, diag = false): Px {
   p.outline(c, diag);
   // Тени на полу кладутся ПОСЛЕ контура и только под фигурой: иначе контур
   // обвёл бы и тень.
@@ -327,7 +327,7 @@ function cv(key: string, make: () => Px): HTMLCanvasElement {
 
 /** Спрайт из пикселей — с кешем. */
 const spriteCache = new Map<string, Sprite>();
-function sprite(key: string, make: () => { p: Px; ax: number; ay: number }): Sprite {
+export function sprite(key: string, make: () => { p: Px; ax: number; ay: number }): Sprite {
   let s = spriteCache.get(key);
   if (!s) {
     const r = make();
@@ -1917,7 +1917,7 @@ registerZonePainter('f11_spray', (g, z, px, py) => {
 });
 
 /** Лента-луч: вода, лазер, взгляд стража (`ang` — в зоне). */
-function beamFx(g: CanvasRenderingContext2D, z: Zone, px: number, py: number, w: number, core: string, glow: string): void {
+export function beamFx(g: CanvasRenderingContext2D, z: Zone, px: number, py: number, w: number, core: string, glow: string): void {
   const k = Math.min(1, z.t / z.life);
   const ang = (z as Zone & { ang?: number }).ang ?? 0;
   const L = z.r * TS;
@@ -1939,10 +1939,6 @@ registerZonePainter('f11_jetfx', (g, z, px, py) => {
 });
 registerZonePainter('f11_laserfx', (g, z, px, py) => {
   beamFx(g, z as Zone, px, py, 3, 'rgba(255,250,240,1)', 'rgba(255,60,40,0.7)');
-  return true;
-});
-registerZonePainter('f11_beamfx', (g, z, px, py) => {
-  beamFx(g, z as Zone, px, py, 5, 'rgba(255,255,245,1)', 'rgba(255,70,40,0.75)');
   return true;
 });
 
@@ -2069,76 +2065,6 @@ registerZonePainter('f11_bolt', (g, z, px, py, _s, time) => {
       g.lineTo(Math.round(x), Math.round(y));
     }
     g.stroke();
-  }
-  return true;
-});
-
-/** Пар из решётки: метка — дрожание, потом столб пара. */
-registerZonePainter('f11_steam', (g, z, px, py, _s, time) => {
-  const zz = z as Zone;
-  const warn = zz.warn ?? 0;
-  if (zz.t < warn) {
-    const k = zz.t / warn;
-    g.strokeStyle = `rgba(255,140,90,${0.4 + 0.5 * k})`;
-    g.lineWidth = 1;
-    g.beginPath();
-    g.arc(px, py, zz.r * TS, 0, TAU);
-    g.stroke();
-    g.fillStyle = 'rgba(255,220,200,0.7)';
-    for (let i = 0; i < 3; i++) g.fillRect(Math.round(px - 4 + i * 4), Math.round(py - 2 - ((time * 20 + i * 3) % 6)), 1, 1);
-    return true;
-  }
-  const k = (zz.t - warn) / zz.life;
-  g.globalAlpha = 0.7 * (1 - k * 0.8);
-  g.fillStyle = '#f4f0ee';
-  for (let i = 0; i < 8; i++) {
-    const t = (time * 1.4 + i * 0.13) % 1;
-    const r = 3 + t * 7;
-    g.beginPath();
-    g.arc(px + Math.sin(time * 3 + i) * 3, py - t * 30, r, 0, TAU);
-    g.fill();
-  }
-  g.globalAlpha = 1;
-  return true;
-});
-
-/** Лужа огня от ракеты. */
-registerZonePainter('f11_scorch', (g, z, px, py, _s, time) => {
-  const zz = z as Zone;
-  const k = Math.min(1, zz.t / zz.life);
-  g.fillStyle = `rgba(40,30,30,${0.4 * (1 - k)})`;
-  g.beginPath();
-  g.ellipse(px, py, zz.r * TS, zz.r * TS * 0.6, 0, 0, TAU);
-  g.fill();
-  g.fillStyle = `rgba(255,140,50,${0.8 * (1 - k)})`;
-  for (let i = 0; i < 6; i++) {
-    const a = i + time * 2;
-    const r = zz.r * TS * 0.6 * hash(i, 3, 441);
-    g.fillRect(Math.round(px + Math.cos(a) * r), Math.round(py + Math.sin(a) * r * 0.6 - ((time * 12 + i * 4) % 5)), 1, 2);
-  }
-  return true;
-});
-
-/** Лучи пилонов к стражу — купол держится ими. */
-registerZonePainter('f11_pylonbeam', (g, z, px, py, _s, time) => {
-  const sim = paintSim();
-  if (!sim) return true;
-  const zz = z as Zone & { pylon?: number };
-  const pylon = sim.mobs.find((m) => m.id === zz.pylon && m.mode !== 'dying');
-  const boss = sim.mobs.find((m) => m.kind === 'f11boss' && m.mode !== 'dying');
-  if (!pylon || !boss) return true;
-  const sx = px + (pylon.x - z.x) * TS;
-  const sy = py + (pylon.y - z.y) * TS - 14;
-  const ex = px + (boss.x - z.x) * TS;
-  const ey = py + (boss.y - z.y) * TS - 22;
-  const n = Math.ceil(Math.hypot(ex - sx, ey - sy));
-  for (let i = 0; i < n; i += 1) {
-    const t = i / n;
-    const wob = Math.sin(t * 20 - time * 14) * 1.2;
-    const x = sx + (ex - sx) * t - ((ey - sy) / n) * wob;
-    const y = sy + (ey - sy) * t + ((ex - sx) / n) * wob;
-    g.fillStyle = (i + Math.floor(time * 40)) % 5 === 0 ? 'rgba(255,255,255,0.95)' : 'rgba(120,220,255,0.7)';
-    g.fillRect(Math.round(x), Math.round(y), 1, 1);
   }
   return true;
 });
@@ -4822,26 +4748,6 @@ registerMobPainter('f11boss', (m: Mob, pose: MobPose) => {
 });
 
 // --- Снаряды ----------------------------------------------------------------------
-
-registerShotPainter('f11_rocket', (s, time) => {
-  const a = Math.atan2(s.vy - (s.lob ? 1 : 0), s.vx);
-  const q = ((Math.round((a / TAU) * 8) % 8) + 8) % 8;
-  const f = Math.floor(time * 16) % 2;
-  return sprite(`rocket|${q}|${f}`, () => {
-    const p = new Px(14, 14);
-    const dx = Math.cos((q * TAU) / 8);
-    const dy = Math.sin((q * TAU) / 8);
-    // Пламя сзади.
-    for (let k = 2; k < 6 + f; k++) {
-      const x = 7 - dx * k;
-      const y = 7 - dy * k;
-      p.set(Math.round(x), Math.round(y), k < 4 ? hx('#fff0a0') : alpha(hx('#ff8a3a'), 1 - (k - 3) * 0.2));
-    }
-    limb(p, 7 - dx * 2, 7 - dy * 2, 7 + dx * 3, 7 + dy * 3, 1.5, 1.2, tn('#4a4a50', '#7a7a84', '#aaaab4', '#dcdce4'));
-    p.set(Math.round(7 + dx * 3.5), Math.round(7 + dy * 3.5), hx('#e84a3a'));
-    return { p: ink(p), ax: 7, ay: 7 };
-  });
-});
 
 registerShotPainter('f11_dart', (s, time) => {
   const a = Math.atan2(s.vy, s.vx);

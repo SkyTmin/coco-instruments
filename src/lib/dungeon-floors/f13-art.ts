@@ -27,7 +27,7 @@ import { BELL, CANNON, COL, f13State } from './f13-brains';
 
 type RGBA = [number, number, number, number];
 
-const hx = (h: string, a = 255): RGBA => {
+export const hx = (h: string, a = 255): RGBA => {
   const v = parseInt(h.slice(1), 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255, a];
 };
@@ -47,7 +47,7 @@ const alpha = (c: RGBA, a: number): RGBA => [
 const INK = hx('#150f0b');
 const WHITE = hx('#ffffff');
 const GOLDK = hx('#ffcc40');
-const TAU = Math.PI * 2;
+export const TAU = Math.PI * 2;
 
 /** Четыре тона формы: тень, основа, свет, блик. */
 type Tones = [RGBA, RGBA, RGBA, RGBA];
@@ -138,7 +138,7 @@ function poly(p: Px, pts: [number, number][], c: RGBA | ((x: number, y: number) 
 }
 
 /** Толстая линия. */
-function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -3801,7 +3801,7 @@ registerPropPainter('f13_torch', (o, time) => {
 // крюк, трос, пушка и набат — золото и сталь (это твоё); пар — белый.
 // ---------------------------------------------------------------------------
 
-type ZoneX = (Zone | Strike) & {
+export type ZoneX = (Zone | Strike) & {
   ang?: number;
   len?: number;
   arc?: number;
@@ -3812,22 +3812,22 @@ type ZoneX = (Zone | Strike) & {
   k?: number;
 };
 
-const rgba = (c: RGBA, a: number) =>
+export const rgba = (c: RGBA, a: number) =>
   `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
-const RED = hx('#e8402a');
+export const RED = hx('#e8402a');
 const HOT = hx('#ffd27a');
 const GOLD = hx('#f0b040');
 const STEEL = hx('#e8eef4');
-const STEAMC = hx('#f4f1ec');
+export const STEAMC = hx('#f4f1ec');
 
 /** Доля метки 0…1 (удар — по `warn`; облако — по своему `warn`). */
-const kOf = (z: ZoneX) => {
+export const kOf = (z: ZoneX) => {
   const w = (z as Strike).warn;
   if (typeof w === 'number' && w > 0) return Math.min(1, z.t / w);
   return 1;
 };
 /** Облако тает к концу жизни. */
-const fadeOf = (z: ZoneX) => {
+export const fadeOf = (z: ZoneX) => {
   const life = (z as Zone).life;
   if (typeof life !== 'number') return 1;
   return Math.max(0, Math.min(1, (life - z.t) / 0.5));
@@ -3868,7 +3868,7 @@ function ringPath(
 }
 
 /** Пиксельная пыль по кругу: квадратики 2×2, сдвиг по времени. */
-function specks(
+export function specks(
   g: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -3888,7 +3888,7 @@ function specks(
 }
 
 /** Клубы пара/пыли: мягкие круги, поднимаются. */
-function billow(
+export function billow(
   g: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -3970,7 +3970,7 @@ registerZonePainter('f13_backhand', (g, z, px, py, S) => {
   return true;
 });
 
-function stompRing(
+export function stompRing(
   g: CanvasRenderingContext2D,
   zz: ZoneX,
   px: number,
@@ -4019,17 +4019,6 @@ function stompRing(
 
 registerZonePainter('f13_stomp', (g, z, px, py, S) => {
   stompRing(g, z as ZoneX, px, py, S, RED, true);
-  return true;
-});
-registerZonePainter('f13_foot', (g, z, px, py, S) => {
-  stompRing(g, z as ZoneX, px, py, S, RED, true);
-  return true;
-});
-registerZonePainter('f13_steamring', (g, z, px, py, S, time) => {
-  const zz = z as ZoneX;
-  stompRing(g, zz, px, py, S, hx('#ffb080'), false);
-  const k = kOf(zz);
-  if (k > 0.6) specks(g, px, py, zz.r * S, 18, STEAMC, (k - 0.6) * 2, time, zz.id);
   return true;
 });
 registerZonePainter('f13_shards', (g, z, px, py, S, time) => {
@@ -4174,102 +4163,6 @@ registerZonePainter('f13_smoke', (g, z, px, py, S) => {
   const R = zz.r * S;
   billow(g, px, py, R, hx('#4a4642'), 0.7 * fadeOf(zz), zz.t * 0.35, zz.id, 3, 8);
   billow(g, px, py, R * 0.7, hx('#6a6660'), 0.5 * fadeOf(zz), zz.t * 0.3 + 0.5, zz.id + 2, 4, 5);
-  return true;
-});
-
-registerZonePainter('f13_cloak', (g, z, px, py, S, time) => {
-  const zz = z as ZoneX;
-  const R = zz.r * S;
-  const sim = paintSim();
-  const col = sim?.mobs.find((m) => m.kind === 'f13boss');
-  // Сорван крюком — плащ редеет, затылок виден.
-  const bare = (col?.data.bareT ?? 0) > 0;
-  const a0 = (bare ? 0.12 : 0.34) * fadeOf(zz);
-  // Туман у ног — плотный, кольцом.
-  g.fillStyle = rgba(STEAMC, a0 * 0.7);
-  g.beginPath();
-  g.ellipse(px, py, R * 1.1, R * 0.5, 0, 0, TAU);
-  g.fill();
-  // Клубы по всему росту: поднимаются и кружат вокруг тела.
-  for (let i = 0; i < 14; i++) {
-    const ph = (time * 0.35 + i / 14) % 1;
-    const a = (i / 14) * TAU + time * 0.6;
-    const x = px + Math.cos(a) * R * (0.7 + 0.25 * Math.sin(i));
-    const y = py + Math.sin(a) * R * 0.35 - ph * 70;
-    const rr = 5 + ph * 7 + (i % 3);
-    g.fillStyle = rgba(STEAMC, a0 * (1 - ph * 0.7));
-    g.beginPath();
-    g.arc(Math.round(x), Math.round(y), rr, 0, TAU);
-    g.fill();
-  }
-  return true;
-});
-
-registerZonePainter('f13_heat', (g, z, px, py, S, time) => {
-  const zz = z as ZoneX;
-  const R = zz.r * S;
-  // Жар вокруг: оранжевое кольцо дрожит, угли взлетают.
-  g.strokeStyle = rgba(hx('#ff6a1a'), 0.3 + 0.12 * Math.sin(time * 7));
-  g.lineWidth = 2;
-  g.beginPath();
-  g.ellipse(px, py, R, R * 0.6, 0, 0, TAU);
-  g.stroke();
-  g.fillStyle = rgba(hx('#ff5a18'), 0.1 * fadeOf(zz));
-  g.fill();
-  specks(g, px, py - 6, R, 12, hx('#ffb040'), 0.8 * fadeOf(zz), time, zz.id);
-  return true;
-});
-
-registerZonePainter('f13_jet', (g, z, px, py, S, time) => {
-  const zz = z as ZoneX;
-  const warn = (zz as Zone).warn ?? 0;
-  const R = zz.r * S;
-  if (zz.t < warn) {
-    // Отдушина раскаляется: кольцо и шипение.
-    const k = zz.t / warn;
-    g.strokeStyle = rgba(hx('#ff8a2a'), 0.4 + 0.6 * k);
-    g.lineWidth = 1;
-    g.beginPath();
-    g.arc(px, py, R, 0, TAU);
-    g.stroke();
-    g.fillStyle = rgba(hx('#ff6a1a'), 0.12 + 0.25 * k);
-    g.fill();
-    specks(g, px, py, R * 0.6, 6, STEAMC, 0.5 * k, time, zz.id);
-    return true;
-  }
-  // Столб пара.
-  const t = (zz.t - warn) / Math.max(0.1, ((zz as Zone).life ?? 1.2) - warn);
-  for (let i = 0; i < 7; i++) {
-    const h = i * 6 + ((time * 40) % 6);
-    const rr = R * (0.45 + i * 0.08);
-    g.fillStyle = rgba(STEAMC, (0.6 - i * 0.07) * (1 - t * 0.6));
-    g.beginPath();
-    g.arc(Math.round(px + Math.sin(i + time * 5) * 1.5), Math.round(py - h), rr, 0, TAU);
-    g.fill();
-  }
-  return true;
-});
-
-registerZonePainter('f13_ventburst', (g, z, px, py, S, time) => {
-  const zz = z as ZoneX;
-  const warn = (zz as Zone).warn ?? 0;
-  const R = zz.r * S;
-  if (zz.t < warn) {
-    const k = zz.t / warn;
-    g.fillStyle = rgba(hx('#ffb080'), 0.08 + 0.2 * k);
-    g.beginPath();
-    g.arc(px, py, R, 0, TAU);
-    g.fill();
-    g.strokeStyle = rgba(STEAMC, 0.4 + 0.6 * k);
-    g.lineWidth = 1;
-    g.stroke();
-    g.beginPath();
-    g.arc(px, py, R * k, 0, TAU);
-    g.stroke();
-    return true;
-  }
-  const t = (zz.t - warn) / Math.max(0.1, ((zz as Zone).life ?? 2) - warn);
-  billow(g, px, py, R * (0.8 + t * 0.4), STEAMC, 0.55 * (1 - t), time * 0.8, zz.id, 8, 12);
   return true;
 });
 

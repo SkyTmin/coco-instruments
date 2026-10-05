@@ -29,7 +29,7 @@ import type { EscView, GridView, TerrView, TrackView } from './f12-brains';
 
 type RGBA = [number, number, number, number];
 
-const hx = (h: string, a = 255): RGBA => {
+export const hx = (h: string, a = 255): RGBA => {
   const v = parseInt(h.slice(1), 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255, a];
 };
@@ -53,9 +53,9 @@ const shade = (c: RGBA, k: number): RGBA => [
 ];
 
 const INK = hx('#150f0b');
-const WHITE = hx('#ffffff');
+export const WHITE = hx('#ffffff');
 const GOLDK = hx('#ffcc40');
-const TAU = Math.PI * 2;
+export const TAU = Math.PI * 2;
 const MK = F12_MARK;
 
 /** Четыре тона формы: тень, основа, свет, блик. */
@@ -162,7 +162,7 @@ function polyShade(p: Px, pts: [number, number][], t: Tones, bias = 0): void {
 }
 
 /** Толстая линия. */
-function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
+export function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, w = 1): void {
   const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -408,7 +408,7 @@ const TUNNEL = [hx('#1b1d1f'), hx('#26292b'), hx('#323538'), hx('#3f4246'), hx('
 const SHRINE = [hx('#1c141e'), hx('#271c2b'), hx('#33263a'), hx('#403049'), hx('#50405a')];
 const LACQUER = [hx('#2a080c'), hx('#4e1016'), hx('#781a1e'), hx('#a52a26'), hx('#d04a36')];
 const GOLD = [hx('#5e4210'), hx('#8a6a1a'), hx('#c09a30'), hx('#f0d060')];
-const PAPER = [hx('#8a8068'), hx('#b3aa8c'), hx('#d2c9aa'), hx('#ece4c6')];
+export const PAPER = [hx('#8a8068'), hx('#b3aa8c'), hx('#d2c9aa'), hx('#ece4c6')];
 const CURSE = [hx('#2a0e30'), hx('#55206a'), hx('#8e3aa8'), hx('#d27aff')];
 const BLOODC = [hx('#2a0408'), hx('#4a0a12'), hx('#7a1420'), hx('#b02030')];
 const NEON = { teal: hx('#5affe0'), tealD: hx('#1a8a7a'), pink: hx('#ff5ab0'), pinkD: hx('#8a2060') };
@@ -3994,21 +3994,21 @@ registerMobPainter('f12boss', (m: Mob, pose: MobPose) => {
 // Метки на полу: рельсы, лента, территории, храм, удары короля.
 // ===========================================================================
 
-type ZX = (Zone | Strike) & { f12?: unknown; w?: number; ang?: number; arc?: number };
+export type ZX = (Zone | Strike) & { f12?: unknown; w?: number; ang?: number; arc?: number };
 
-const rgba = (c: RGBA, a: number) =>
+export const rgba = (c: RGBA, a: number) =>
   `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
 
 /** Метка удара наливается: 0…1. */
-const kOf = (z: Zone | Strike) => {
+export const kOf = (z: Zone | Strike) => {
   const s = z as Strike;
   if (typeof s.warn === 'number' && s.warn > 0) return Math.min(1, s.t / s.warn);
   return 1;
 };
 
-const RED = hx('#ff2a2a');
+export const RED = hx('#ff2a2a');
 const AMBER = hx('#ffb030');
-const CRIMSON = hx('#ff2a5a');
+export const CRIMSON = hx('#ff2a5a');
 const VIOLET = hx('#c050ff');
 
 // --- Рельсы: путь предупреждает о поезде. -------------------------------
@@ -4223,101 +4223,12 @@ registerZonePainter('f12_beam', (g, z, px, py, S) => {
 
 // --- Храм: сетка разрезов и круги-обереги. ------------------------------
 
-registerZonePainter('f12_grid', (g, z, px, py, S) => {
-  const v = (z as ZX).f12 as GridView | undefined;
-  const sim = paintSim();
-  if (!v || !sim) return true;
-  const now = sim.time;
-  const warnK = Math.max(0, Math.min(1, 1 - (v.at - now) / KING.gridWarn));
-  const cutting = now >= v.at && now < v.at + v.cut;
-  if (now >= v.at + v.cut) return true;
-  const ks = f12King(sim);
-  const wards = ks ? ks.wards : [];
-  const R = KING.wardR;
-  const sx = (wx: number) => Math.round(px + (wx - z.x) * S);
-  const sy = (wy: number) => Math.round(py + (wy - z.y) * S);
-  const lines: [boolean, number][] = [];
-  for (let x = v.x0 + v.off; x <= v.x1; x += v.step) lines.push([false, x]);
-  for (let y = v.y0 + v.off; y <= v.y1; y += v.step) lines.push([true, y]);
-  for (const [hz, c] of lines) {
-    let segs: [number, number][] = [[hz ? v.x0 : v.y0, hz ? v.x1 : v.y1]];
-    for (const w of wards) {
-      const d = hz ? Math.abs(w.y - c) : Math.abs(w.x - c);
-      if (d >= R) continue;
-      const half = Math.sqrt(R * R - d * d);
-      const m = hz ? w.x : w.y;
-      const out: [number, number][] = [];
-      for (const [a, b] of segs) {
-        if (m - half > a) out.push([a, Math.min(b, m - half)]);
-        if (m + half < b) out.push([Math.max(a, m + half), b]);
-      }
-      segs = out.filter(([a, b]) => b > a);
-    }
-    for (const [a, b] of segs) {
-      const x0 = hz ? sx(a) : sx(c);
-      const y0 = hz ? sy(c) : sy(a);
-      const len = hz ? sx(b) - x0 : sy(b) - y0;
-      if (cutting) {
-        g.fillStyle = rgba(RED, 0.55);
-        if (hz) g.fillRect(x0, y0 - 1, len, 3);
-        else g.fillRect(x0 - 1, y0, 3, len);
-        g.fillStyle = rgba(WHITE, 1);
-        if (hz) g.fillRect(x0, y0, len, 1);
-        else g.fillRect(x0, y0, 1, len);
-      } else {
-        g.fillStyle = rgba(RED, 0.18 + 0.6 * warnK);
-        if (hz) g.fillRect(x0, y0, len, 1);
-        else g.fillRect(x0, y0, 1, len);
-        if (warnK > 0.6) {
-          g.fillStyle = rgba(RED, (warnK - 0.6) * 0.6);
-          if (hz) g.fillRect(x0, y0 - 1, len, 3);
-          else g.fillRect(x0 - 1, y0, 3, len);
-        }
-      }
-    }
-  }
-  return true;
-});
-
-registerZonePainter('f12_ward', (g, zz, px, py, S, time) => {
-  const z = zz as Zone;
-  const k = Math.min(1, z.t / 0.25);
-  const a = Math.min(1, (z.life - z.t) / 0.3) * k;
-  if (a <= 0) return true;
-  const R = z.r * S * (0.4 + 0.6 * k);
-  const gold = hx('#ffe08a');
-  g.fillStyle = rgba(gold, 0.18 * a);
-  g.beginPath();
-  g.arc(px, py, R, 0, TAU);
-  g.fill();
-  g.lineWidth = 1;
-  g.strokeStyle = rgba(hx('#fff4c8'), 0.95 * a);
-  g.beginPath();
-  g.arc(px, py, R, 0, TAU);
-  g.stroke();
-  g.strokeStyle = rgba(hx('#ffb030'), 0.6 * a);
-  g.beginPath();
-  g.arc(px, py, Math.max(1, R - 3), 0, TAU);
-  g.stroke();
-  // Четыре бумажных печати по кругу.
-  for (let i = 0; i < 4; i++) {
-    const an = time * 0.8 + (i / 4) * TAU;
-    const x = Math.round(px + Math.cos(an) * R);
-    const y = Math.round(py + Math.sin(an) * R);
-    g.fillStyle = rgba(PAPER[3], a);
-    g.fillRect(x - 1, y - 2, 3, 5);
-    g.fillStyle = rgba(hx('#c01a2a'), a);
-    g.fillRect(x, y, 1, 1);
-  }
-  return true;
-});
-
 // --- Жертвенный храм: встаёт из пола позади короля. ---------------------
 
-const SHRINE_W = 96;
-const SHRINE_H = 84;
+export const SHRINE_W = 96;
+export const SHRINE_H = 84;
 
-function shrinePx(f: number): Px {
+export function shrinePx(f: number): Px {
   const p = new Px(SHRINE_W, SHRINE_H);
   const cx = SHRINE_W / 2;
   const G = SHRINE_H - 2;
@@ -4386,24 +4297,12 @@ function shrinePx(f: number): Px {
   return p;
 }
 
-const shrineImg: HTMLCanvasElement[] = [];
-
-registerZonePainter('f12_shrine', (g, _z, px, py, _S, time) => {
-  const k = F12_FX.domain;
-  if (k <= 0) return true;
-  const f = Math.floor(time * 3) % 2;
-  if (!shrineImg[f]) shrineImg[f] = shrinePx(f).canvas();
-  const img = shrineImg[f];
-  // Храм встаёт из пола: сначала крыша, потом пасть.
-  const hk = Math.max(1, Math.round(SHRINE_H * k));
-  g.drawImage(img, 0, 0, SHRINE_W, hk, Math.round(px - SHRINE_W / 2), Math.round(py - hk), SHRINE_W, hk);
-  return true;
-});
+export const shrineImg: HTMLCanvasElement[] = [];
 
 // --- Огонь, лужа слёз, поезд по своим. ----------------------------------
 
 const fireImg: HTMLCanvasElement[] = [];
-function fireFrame(f: number): HTMLCanvasElement {
+export function fireFrame(f: number): HTMLCanvasElement {
   if (!fireImg[f]) {
     const p = new Px(10, 13);
     flame(p, 5, 12, 7, 10, f, FIRE, 1);
@@ -4411,25 +4310,6 @@ function fireFrame(f: number): HTMLCanvasElement {
   }
   return fireImg[f];
 }
-
-registerZonePainter('f12_fire', (g, zz, px, py, S, time) => {
-  const z = zz as Zone;
-  const a = Math.min(1, (z.life - z.t) / 0.6, z.t / 0.15);
-  if (a <= 0) return true;
-  g.fillStyle = rgba(hx('#ff6a10'), 0.16 * a);
-  g.beginPath();
-  g.arc(px, py, z.r * S * 0.8, 0, TAU);
-  g.fill();
-  g.globalAlpha = a;
-  for (let i = 0; i < 2; i++) {
-    const f = (Math.floor(time * 10) + z.id + i * 2) % 4;
-    const ox = i ? 3 : -5;
-    const oy = i ? 2 : 0;
-    g.drawImage(fireFrame(f), Math.round(px + ox - 5), Math.round(py + oy - 12));
-  }
-  g.globalAlpha = 1;
-  return true;
-});
 
 registerZonePainter('f12_tearpool', (g, zz, px, py, S, time) => {
   const z = zz as Zone;
@@ -4505,94 +4385,6 @@ registerZonePainter('f12_papercut', (g, z, px, py, S) => {
 });
 
 // --- Удары короля. ------------------------------------------------------
-
-registerZonePainter('f12_cut', (g, z, px, py, S) => {
-  const s = z as ZX;
-  const k = kOf(z);
-  const L = s.r * S;
-  const w = Math.max(2, (s.w ?? 0.36) * S);
-  g.save();
-  g.translate(px, py);
-  g.rotate(s.ang ?? 0);
-  g.fillStyle = rgba(RED, 0.08 + 0.22 * k);
-  g.fillRect(0, -w, L, w * 2);
-  g.fillStyle = rgba(RED, 0.45 + 0.5 * k);
-  g.fillRect(0, -w, L, 1);
-  g.fillRect(0, w - 1, L, 1);
-  // Разрез проступает от короля к концу линии.
-  g.fillStyle = rgba(WHITE, 0.4 + 0.6 * k);
-  g.fillRect(0, 0, Math.round(L * k), 1);
-  g.fillRect(Math.round(L * k) - 2, -1, 3, 3);
-  g.restore();
-  return true;
-});
-
-registerZonePainter('f12_arrow', (g, z, px, py, S) => {
-  const s = z as ZX;
-  const L = s.r * S;
-  const w = Math.max(2, (s.w ?? 1) * S * 0.5);
-  g.save();
-  g.translate(px, py);
-  g.rotate(s.ang ?? 0);
-  g.fillStyle = rgba(hx('#ff6a10'), 0.55);
-  g.fillRect(0, -w, L, w * 2);
-  g.fillStyle = rgba(hx('#ffd060'), 0.9);
-  g.fillRect(0, -2, L, 4);
-  g.fillStyle = rgba(WHITE, 1);
-  g.fillRect(0, -1, L, 2);
-  g.restore();
-  return true;
-});
-
-registerZonePainter('f12_pyre', (g, z, px, py, S, time) => {
-  const k = kOf(z);
-  const R = z.r * S;
-  g.fillStyle = rgba(hx('#ff3a10'), 0.08 + 0.25 * k);
-  g.beginPath();
-  g.arc(px, py, R, 0, TAU);
-  g.fill();
-  g.lineWidth = 1;
-  g.strokeStyle = rgba(hx('#ffb040'), 0.5 + 0.5 * k);
-  g.beginPath();
-  g.arc(px, py, R, 0, TAU);
-  g.stroke();
-  // Знак огня сжимается к центру; искры поднимаются.
-  g.strokeStyle = rgba(hx('#ff6a20'), 0.6 * k);
-  g.beginPath();
-  g.arc(px, py, R * (1 - 0.6 * k), time * 3, time * 3 + Math.PI * 1.4);
-  g.stroke();
-  g.fillStyle = rgba(hx('#ffe080'), 0.8 * k);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * TAU + z.id;
-    const u = (time * 1.4 + i * 0.17) % 1;
-    g.fillRect(Math.round(px + Math.cos(a) * R * 0.7), Math.round(py + Math.sin(a) * R * 0.5 - u * 10 * k), 1, 2);
-  }
-  return true;
-});
-
-registerZonePainter('f12_claw', (g, z, px, py, S) => {
-  const s = z as ZX;
-  const k = kOf(z);
-  const R = s.r * S;
-  const a = s.ang ?? 0;
-  const arc = s.arc ?? 1.9;
-  g.fillStyle = rgba(CRIMSON, 0.1 + 0.22 * k);
-  g.beginPath();
-  g.moveTo(px, py);
-  g.arc(px, py, R, a - arc / 2, a + arc / 2);
-  g.closePath();
-  g.fill();
-  // Четыре руки — четыре когтя, дугами.
-  g.lineWidth = 1;
-  for (let i = 0; i < 4; i++) {
-    const r = R * (0.45 + i * 0.17);
-    g.strokeStyle = rgba(i % 2 ? WHITE : hx('#ffb0c0'), 0.3 + 0.6 * k);
-    g.beginPath();
-    g.arc(px, py, r, a - arc / 2, a - arc / 2 + arc * k);
-    g.stroke();
-  }
-  return true;
-});
 
 // ===========================================================================
 // Снаряды: кровавая слеза глаза, иглы куклы.
