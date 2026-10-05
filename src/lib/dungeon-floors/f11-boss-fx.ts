@@ -3000,11 +3000,12 @@ registerZonePainter(
     const jit = Math.floor(time * 30) % 2;
     for (const a of [sa, sa + PI]) {
       const [s0, s1full, wall] = spinReach(sim, m, a, S);
-      // Втягивается: конец бежит к корню.
-      const s1 = stage === 2 ? s0 + (s1full - s0) * (1 - eIn2(k)) : s0 + (s1full - s0) * ign;
+      // Втягивается: конец рывком бежит к ядру, толщина держится — луч
+      // заглатывается, а не тает ниткой (тающая нитка читалась указкой).
+      const s1 = stage === 2 ? s0 + (s1full - s0) * (1 - eOut2(k)) : s0 + (s1full - s0) * ign;
       const ux = Math.cos(a);
       const uy = Math.sin(a);
-      const w = out * (0.85 + 0.15 * Math.sin(time * 40 + a));
+      const w = (stage === 2 ? 1 - 0.45 * k : 1) * (0.85 + 0.15 * Math.sin(time * 40 + a));
       // Ореол через пиксель (ширина — ровно удар), дальше сплошные слои к ядру.
       const layers: BeamLayer[] = [
         [(SPIN_HW * S + jit * 0.8) * w, C.red, true],
@@ -3069,6 +3070,11 @@ registerZonePainter(
       p.col(C.white, 1 - kk);
       star(p, cx, cy, 20 * (1 - 0.5 * kk), 8, 0.2);
       ring(p, cx, cy, 8 + 30 * eOut2(kk), C.yellow, 1 - kk);
+    } else if (stage === 2) {
+      // Глоток: ядро вспыхивает, когда лучи вошли, кольцо сжимается в него.
+      p.col(C.white, 1 - 0.6 * k);
+      star(p, cx, cy, 8 + 10 * k, 6, 0.2);
+      ring(p, cx, cy, 22 * (1 - eOut2(k)) + 3, C.yellow, 1 - k);
     } else flare(p, cx, cy, 4 + jit * 2, C.cream, 0.8 * out);
   }),
 );
