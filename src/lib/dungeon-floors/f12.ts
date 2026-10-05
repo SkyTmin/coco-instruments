@@ -651,7 +651,7 @@ const MOBS: MobDef[] = [
     id: 'f12boss',
     name: 'Ледниковый мамонт',
     many: 'ледниковых мамонтов',
-    hp: 1100,
+    hp: 1250,
     dmg: 24,
     speed: 2.3,
     radius: 1.45,

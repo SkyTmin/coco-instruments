@@ -213,7 +213,7 @@ function bot(s: Sim, st: BotState): SimInput {
   // Замах вплотную — отскок.
   for (const m of s.mobs) {
     const melee =
-      m.mode === 'windup' ||
+      m.mode === 'f12_wind' ||
       m.mode === 'f12_slam' ||
       m.mode === 'f12_stomp' ||
       m.mode === 'f12_bristle' ||
@@ -565,7 +565,10 @@ describe('этаж 12: от лифта до арены', () => {
           const u = usableNear(s);
           if (u?.obj === winch && fs && fs.winch.cd <= 0) useObject(s, u);
         }
+        const hp0 = s.hero.hp;
         stepSim(s, DT, inp);
+        // Ни один удар не сносит больше 40% (иглы ежа однажды били квадратом урона).
+        expect(hp0 - s.hero.hp).toBeLessThan(s.stats.maxHp * 0.4);
         if (s.hero.mode === 'dead' || s.hero.mode === 'dying') {
           deaths += 1;
           break;
@@ -581,6 +584,8 @@ describe('этаж 12: от лифта до арены', () => {
             `убито ${s.killed}, провалов ${f12State(s)?.falls}, замёрз ${f12State(s)?.freezes}, у героя ${Math.round((100 * s.hero.hp) / s.stats.maxHp)}% (${s.hero.x.toFixed(0)},${s.hero.y.toFixed(0)})`,
         );
       expect(arrived).toBeGreaterThan(0);
+      // Герой не проваливается раз за разом: возврат — только на твёрдое.
+      expect(f12State(s)?.falls ?? 0).toBeLessThan(30);
     });
   }
 });

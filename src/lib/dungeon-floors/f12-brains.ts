@@ -629,8 +629,18 @@ function fallIn(sim: Sim, st: F12State, api: SimApi, why: string): void {
   api.hurtEnv(sim, FALL.dmg);
   addFrost(sim, st, 1);
   let [sx, sy] = st.safe;
-  if (!standable(sim, Math.floor(sx), Math.floor(sy)) || brokenAt(st, sim, sx, sy)) {
-    const near = spotNear(sim, api, h.x, h.y, 1, 8, (px, py) => -hypot(px - h.x, py - h.y), false);
+  // Твёрдое — не битый лёд Ледолома и не тонкий: иначе герой падал снова
+  // каждый кадр (в Ледоломе — 300 «провалов» за пять секунд).
+  const firm = (px: number, py: number) =>
+    standable(sim, Math.floor(px), Math.floor(py)) &&
+    !brokenAt(st, sim, px, py) &&
+    markAt(sim, Math.floor(px), Math.floor(py)) !== MK.thin;
+  if (!firm(sx, sy)) {
+    const score = (px: number, py: number) =>
+      (firm(px, py) ? 0 : -1000) - hypot(px - h.x, py - h.y);
+    let near = spotNear(sim, api, h.x, h.y, 1, 8, score, false);
+    if (!near || !firm(near[0], near[1]))
+      near = spotNear(sim, api, h.x, h.y, 8, 20, score, false) ?? near;
     if (near) [sx, sy] = near;
   }
   api.moveHero(sim, sx, sy);
@@ -1050,6 +1060,21 @@ function iced(b: Brain): Brain {
     onDeath(sim, m, mode, api) {
       if (m.data.post) postDead(sim, m);
       b.onDeath?.(sim, m, mode, api);
+    },
+    // Замах этажа зовётся `f12_wind`, а не `windup`: движок рисовал бы под
+    // нашей меткой свой конус. Сбить его ударом — как движок сбивает `windup`.
+    onHit(sim, m, hit, api) {
+      const k = b.onHit?.(sim, m, hit, api);
+      if (m.mode === 'f12_wind' && (k ?? 1) > 0) {
+        const fl = api.def(m.kind).flinch ?? 0.35;
+        if (hit.heavy || hit.crit || fl >= 1 || (fl > 0 && sim.rng() < fl)) {
+          m.mode = 'stun';
+          m.t = 0;
+          m.tele = null;
+          m.danger = 0;
+        }
+      }
+      return k;
     },
   };
 }
@@ -1825,7 +1850,7 @@ brain('f12_lemming', {
         if (c.dist < 1.25 + m.r && m.cd <= 0) {
           m.dir = Math.atan2(c.dy, c.dx);
           m.face = m.dir;
-          api.setMode(m, 'windup');
+          api.setMode(m, 'f12_wind');
           return;
         }
         const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
@@ -1834,7 +1859,7 @@ brain('f12_lemming', {
         api.steer(sim, m, dx - dy * w, dy + dx * w, m.speed, dt);
         return;
       }
-      case 'windup':
+      case 'f12_wind':
         // Присел перед прыжком.
         m.vx *= 0.6;
         m.vy *= 0.6;
@@ -1948,7 +1973,8 @@ brain('f12_urchin', {
               speed: 7.5,
               r: 0.2,
               life: 0.55,
-              dmg: m.dmg * 0.6,
+              // Доля урона моба (`ShotSpec.dmg`), не сам урон.
+              dmg: 0.6,
               art: 'f12_quill',
               status: 'chill',
               dur: 1.2,
@@ -2020,7 +2046,7 @@ brain('f12_seal', {
         const see = c.dist < SEAL.see && api.lineOfSight(sim, m.x, m.y, h.x, h.y);
         if (see && m.cd <= 0 && c.dist > 1.6) {
           m.dir = Math.atan2(c.dy, c.dx);
-          api.setMode(m, 'windup');
+          api.setMode(m, 'f12_wind');
           return;
         }
         if (c.dist < 1.6 && m.cd <= 0) {
@@ -2035,7 +2061,7 @@ brain('f12_seal', {
         api.steer(sim, m, dx, dy, m.speed * k, dt);
         return;
       }
-      case 'windup': {
+      case 'f12_wind': {
         m.vx *= 0.6;
         m.vy *= 0.6;
         if (m.t < SEAL.aim * 0.6) m.dir = Math.atan2(h.y - m.y, h.x - m.x);
@@ -2307,14 +2333,14 @@ brain('f12_warrior', {
           m.dir = Math.atan2(c.dy, c.dx);
           m.face = m.dir;
           m.data.n = (m.data.n ?? 0) + 1;
-          api.setMode(m, m.data.n % 3 === 0 ? 'f12_slam' : 'windup');
+          api.setMode(m, m.data.n % 3 === 0 ? 'f12_slam' : 'f12_wind');
           return;
         }
         const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
         api.steer(sim, m, dx, dy, m.speed, dt);
         return;
       }
-      case 'windup': {
+      case 'f12_wind': {
         // Рубка топором: конус спереди.
         m.vx *= 0.5;
         m.vy *= 0.5;
@@ -2413,7 +2439,7 @@ brain('f12_spirit', {
         }
         if (c.dist < SPIRIT.cone && m.cd <= 0) {
           m.dir = Math.atan2(c.dy, c.dx);
-          api.setMode(m, 'windup');
+          api.setMode(m, 'f12_wind');
           return;
         }
         // Держится на расстоянии дыхания, плывёт волной.
@@ -2453,7 +2479,7 @@ brain('f12_spirit', {
         }
         return;
       }
-      case 'windup': {
+      case 'f12_wind': {
         m.vx *= 0.6;
         m.vy *= 0.6;
         if (m.t < SPIRIT.wind * 0.6) m.dir = Math.atan2(h.y - m.y, h.x - m.x);
@@ -2583,14 +2609,14 @@ brain('f12_fox', {
         if (c.dist < m.r + h.r + 0.9 && m.cd <= 0) {
           m.dir = Math.atan2(c.dy, c.dx);
           m.data.bites = 0;
-          api.setMode(m, 'windup');
+          api.setMode(m, 'f12_wind');
           return;
         }
         const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
         api.steer(sim, m, dx, dy, m.speed, dt);
         return;
       }
-      case 'windup': {
+      case 'f12_wind': {
         m.vx *= 0.55;
         m.vy *= 0.55;
         m.dir = Math.atan2(h.y - m.y, h.x - m.x);
@@ -2657,7 +2683,7 @@ brain('f12_golem', {
           m.dir = Math.atan2(c.dy, c.dx);
           m.face = m.dir;
           m.data.n = (m.data.n ?? 0) + 1;
-          api.setMode(m, m.data.n % 3 === 0 ? 'f12_stomp' : 'windup');
+          api.setMode(m, m.data.n % 3 === 0 ? 'f12_stomp' : 'f12_wind');
           return;
         }
         const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
@@ -2665,7 +2691,7 @@ brain('f12_golem', {
         m.face = Math.atan2(c.dy, c.dx);
         return;
       }
-      case 'windup': {
+      case 'f12_wind': {
         m.vx *= 0.4;
         m.vy *= 0.4;
         if (m.t < GOLEM.wind * 0.5) m.dir = Math.atan2(h.y - m.y, h.x - m.x);
@@ -2755,7 +2781,7 @@ brain('f12_keeper', {
         const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
         if (see && c.dist < KEEPER.len && m.cd <= 0) {
           m.dir = Math.atan2(c.dy, c.dx);
-          api.setMode(m, 'windup');
+          api.setMode(m, 'f12_wind');
           return;
         }
         // Держит дистанцию: подходит до 4, отходит, если ближе.
@@ -2773,7 +2799,7 @@ brain('f12_keeper', {
         m.face = Math.atan2(c.dy, c.dx);
         return;
       }
-      case 'windup':
+      case 'f12_wind':
         // Посох вверх — занавес сияния падает линией.
         m.vx *= 0.5;
         m.vy *= 0.5;
@@ -2831,7 +2857,7 @@ brain('f12_keeper', {
     const warm = st?.braziers.some(
       (o) => st.lit.has(o.id) && hypot(o.x + 0.5 - m.x, o.y + 0.5 - m.y) < 3.2,
     );
-    if (warm || (m.data.spent ?? 0) > 0 || m.mode === 'windup' || m.mode === 'f12_summon') return 1;
+    if (warm || (m.data.spent ?? 0) > 0 || m.mode === 'f12_wind' || m.mode === 'f12_summon') return 1;
     return KEEPER.shield;
   },
 });
