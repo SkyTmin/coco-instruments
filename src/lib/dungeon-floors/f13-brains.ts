@@ -1487,13 +1487,23 @@ function useLabel(sim: Sim, obj: WorldObj): string | null {
 // Правило этажа.
 // ---------------------------------------------------------------------------
 
+/**
+ * Две зоны-режиссёра у героя (только картинка, `api.vfx`): `f13_strings`
+ * поверх темноты — нити, лучи, волны, звёзды, метки Кукловода; `f13_stage`
+ * на полу — пятна софитов, тени звёзд, пена волн.
+ */
 function stringsZone(sim: Sim, api: SimApi): void {
   const h = sim.hero;
-  const z = sim.zones.find((q) => q.art === 'f13_strings');
-  if (z) {
-    z.x = h.x;
-    z.y = h.y;
-  } else api.vfx(sim, { x: h.x, y: h.y, r: 1, life: 1e9, art: 'f13_strings', above: true });
+  for (const [art, above] of [
+    ['f13_strings', true],
+    ['f13_stage', false],
+  ] as const) {
+    const z = sim.zones.find((q) => q.art === art);
+    if (z) {
+      z.x = h.x;
+      z.y = h.y;
+    } else api.vfx(sim, { x: h.x, y: h.y, r: 1, life: 1e9, art, above });
+  }
 }
 
 registerFloor(13, {
