@@ -387,6 +387,16 @@ const heartOf = (sim: Sim) =>
   sim.mobs.find((x) => x.kind === 'f15boss_heart' && x.mode !== 'dying');
 const centerOf = (b: BossFight): [number, number] => [b.obj.x + 0.5, b.obj.y + 0.5];
 
+// v2.87 — только рисунок: зона-картинка (`api.vfx`: без урона и статусов, номер
+// мимо `nextId`) — шаги, взмахи, посадки, рёв рисует `f15-boss-fx.ts`. Своих
+// `f15b_fx*` разом не больше 30, пыли шагов и взмахов — не больше 20.
+type VfxIn = { ang?: number; n?: number; q?: number; mob?: number; cells?: number[]; above?: boolean };
+function vfx(sim: Sim, api: SimApi, art: string, x: number, y: number, life: number, o: VfxIn = {}, move = false): void {
+  let n = 0;
+  for (const z of sim.zones) if (z.art?.startsWith('f15b_fx')) n++;
+  if (n < (move ? 20 : 30)) api.vfx(sim, { x, y, r: 0.5, life, art, ...o } as ZoneIn & VfxIn);
+}
+
 // ---------------------------------------------------------------------------
 // Отголоски: общее.
 // ---------------------------------------------------------------------------
@@ -806,7 +816,7 @@ const FIRE_LOB: ShotSpec = {
   lob: true,
   status: 'burn',
   dur: 1,
-  onLand: { r: 1.05, life: 2, dps: 0.02, art: 'f15b_flames' },
+  onLand: { r: 1.05, life: 2, dps: 0.02, art: 'f15b_flames', above: true }, // v2.87 — только рисунок: above
 };
 const ICE_FAN: ShotSpec = { speed: 8.5, r: 0.35, life: 2.2, dmg: 0.7, art: 'f15b_ice', status: 'chill', dur: 1.6, n: 3, spread: 0.55 };
 
@@ -953,7 +963,7 @@ function demonStorm(sim: Sim, b: BossFight, m: Mob, api: SimApi): void {
         knock: 3,
         art: 'f15b_bolt',
         from: m.id,
-        above: true,
+        above: false, // v2.87 — только рисунок: метка лежит на полу, тела закрывают её по силуэту
       });
     }
 }
@@ -1167,10 +1177,17 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           api.strike(sim, { shape: 'ring', x: m.x, y: m.y, r, w, warn: 0.45 + r * 0.06, dmg: m.dmg * 0.7, knock: 12, art: 'f15b_shock', from: m.id });
         sim.events.push({ t: 'shake', k: 0.8 });
         sim.events.push({ t: 'flash', color: '#ff7050', k: 0.7 });
+        vfx(sim, api, 'f15b_fxburst', m.x, m.y, 1.6, { above: true }); // v2.87 — только рисунок
+      }
+      // v2.87 — только рисунок: вышел из кокона — рёв.
+      if (!m.data.vRoar && m.t >= 2.0) {
+        m.data.vRoar = 1;
+        vfx(sim, api, 'f15b_fxroar', m.x, m.y, LION.wake - 2.0);
       }
       if (m.t >= LION.wake) {
         m.data.ghost = 0;
         m.data.waved = 0;
+        m.data.vRoar = 0; // v2.87 — только рисунок
         m.data.clawCd = 1;
         m.data.pounceCd = 2.5;
         m.data.stompCd = 4;
@@ -1186,6 +1203,11 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.vy *= 0.7;
       const T = m.mode === 'f15_memory' ? LION.memory : m.mode === 'f15_unfurl' ? LION.unfurl : LION.call;
       m.data.ghost = m.mode !== 'f15_call' && m.t < T - 0.3 ? 1 : 0;
+      // v2.87 — только рисунок: память и зов — рёв.
+      if (!m.data.vRoar && m.mode !== 'f15_unfurl') {
+        m.data.vRoar = 1;
+        vfx(sim, api, 'f15b_fxroar', m.x, m.y, T);
+      }
       if (m.mode === 'f15_call' && !m.data.lit && m.t >= 0.55 && b) {
         m.data.lit = 1;
         flareQuad(sim, b, stateOf(sim, api), api, 2);
@@ -1198,6 +1220,7 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.t >= T) {
         m.data.ghost = 0;
         m.data.lit = 0;
+        m.data.vRoar = 0; // v2.87 — только рисунок
         if (m.mode === 'f15_call') m.data.callCd = LION.callCd;
         if (m.mode === 'f15_unfurl') m.data.flyCd = 1.5;
         api.setMode(m, 'chase');
@@ -1210,6 +1233,13 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       airborne(m, false);
       const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
       api.steer(sim, m, cx, cy, m.speed * haste * (c.dist < 2.6 ? 0.3 : 1), dt);
+      // v2.87 — только рисунок: тяжёлые шаги — пыль из-под лап.
+      m.data.vWalk = (m.data.vWalk ?? 0) + hypot(m.vx, m.vy) * dt;
+      if (m.data.vWalk > 0.85) {
+        m.data.vWalk = 0;
+        m.data.vFoot = 1 - (m.data.vFoot ?? 0);
+        vfx(sim, api, 'f15b_fxstep', m.x, m.y, 0.8, { ang: Math.atan2(m.vy, m.vx), n: m.data.vFoot }, true);
+      }
       if (m.t < 0.45 / haste) return;
       const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
       if (c.dist < LION.clawR - 0.3 && m.data.clawCd <= 0) {
@@ -1309,6 +1339,7 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.face = m.dir;
       if (m.t >= LION.crouch) {
         m.data.lit = 0;
+        vfx(sim, api, 'f15b_fxleap', m.x, m.y, 0.9, { ang: m.dir }); // v2.87 — только рисунок
         airborne(m, true);
         api.setMode(m, 'f15_leap');
       }
@@ -1388,7 +1419,13 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.data.z = Math.min(1, m.t / LION.takeoff) * 3;
       m.data.ghost = m.t > 0.25 ? 1 : 0;
       if (m.t > 0.25) airborne(m, true);
+      // v2.87 — только рисунок: оторвался от пола — удар крыльями.
+      if (m.t > 0.25 && !m.data.vUp) {
+        m.data.vUp = 1;
+        vfx(sim, api, 'f15b_fxtakeoff', m.x, m.y, 1.0);
+      }
       if (m.t >= LION.takeoff) {
+        m.data.vUp = 0; // v2.87 — только рисунок
         m.data.ghost = 1;
         m.data.fanT = 0.5;
         api.setMode(m, 'f15_fly');
@@ -1407,6 +1444,11 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.x += (tx - m.x) * Math.min(1, dt * 3);
       m.y += (ty - m.y) * Math.min(1, dt * 3);
       m.face = Math.atan2(ty - m.y, tx - m.x);
+      // v2.87 — только рисунок: взмахи над полом — пыль разбегается.
+      if (sim.time >= (m.data.vFlap ?? 0)) {
+        m.data.vFlap = sim.time + 0.44;
+        vfx(sim, api, 'f15b_fxflap', m.x, m.y, 0.6, {}, true);
+      }
       m.data.fanT = (m.data.fanT ?? 0.5) - dt;
       if (m.data.fanT <= 0) {
         m.data.fanT = 1.15;
@@ -1446,10 +1488,15 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           knock: 10,
           art: 'f15b_swoop',
           from: m.id,
-          above: true,
+          above: false, // v2.87 — только рисунок: метка лежит на полу, тела закрывают её по силуэту
         });
       }
       m.face = m.dir;
+      // v2.87 — только рисунок: висит на взмахах — пыль под ним.
+      if (sim.time >= (m.data.vFlap ?? 0)) {
+        m.data.vFlap = sim.time + 0.44;
+        vfx(sim, api, 'f15b_fxflap', m.x, m.y, 0.6, {}, true);
+      }
       m.danger = LION.swoopAim - m.t < 0.25 ? 99 : 0;
       if (m.t >= LION.swoopAim) {
         m.data.lit = 0;
@@ -1495,6 +1542,7 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         sim.events.push({ t: 'boom', x: m.x, y: m.y, r: 0 });
         sim.events.push({ t: 'boss', what: 'f15b_land_wall' });
         sim.events.push({ t: 'shake', k: 0.5 });
+        vfx(sim, api, 'f15b_fxland', m.x, m.y, 1.3, { ang: m.dir }); // v2.87 — только рисунок
         m.data.flyCd = 9 / haste;
         m.data.air = 1;
         api.setMode(m, 'f15_landed');
@@ -1536,6 +1584,7 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       const i = m.data.fans ?? 0;
       if (i < shots.length && m.t >= shots[i]) {
         m.data.fans = i + 1;
+        vfx(sim, api, 'f15b_fxflap', m.x, m.y, 0.6, {}, true); // v2.87 — только рисунок
         const aim = Math.atan2(h.y - m.y, h.x - m.x) + (i % 2 ? 0.09 : -0.09);
         api.shoot(sim, m, aim, { speed: 8, r: 0.3, life: 2.2, dmg: 0.55, art: 'f15b_feather', n: 5, spread: 1 });
       }
@@ -1559,6 +1608,7 @@ function lionStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         hd.data.sx = hd.x;
         hd.data.sy = hd.y;
         st.heart = hd.id;
+        vfx(sim, api, 'f15b_fxrip', hd.x, hd.y, 1.6, { above: true }); // v2.87 — только рисунок
         sim.events.push({ t: 'flash', color: '#ff3040', k: 0.8 });
         sim.events.push({ t: 'shake', k: 0.7 });
         api.camera(sim, centerOf(b)[0], centerOf(b)[1] - 0.5, 2.4);
@@ -1661,7 +1711,14 @@ registerBrain('f15b_clot', {
         const T = c.def.windup;
         m.tele = { shape: 'circle', r: 1.25, k: Math.min(1, m.t / T) };
         m.danger = T - m.t < 0.25 ? 1.6 : 0;
+        // v2.87 — только рисунок: метку раздувания рисует этаж (идёт за сгустком).
+        if (!m.data.vSwell) {
+          m.data.vSwell = 1;
+          m.data.vNoTele = 1;
+          vfx(sim, api, 'f15b_fxclot', m.x, m.y, T + 0.1, { mob: m.id });
+        }
         if (m.t >= T) {
+          vfx(sim, api, 'f15b_fxpop', m.x, m.y, 0.9); // v2.87 — только рисунок
           if (c.dist < 1.25 + h.r && canHurt(sim)) api.hurtHero(sim, m.dmg * 1.6, m.x, m.y, 6, m.kind);
           api.zone(sim, { x: m.x, y: m.y, r: 1.15, life: 3, slow: 0.62, art: 'f15b_pool' });
           sim.events.push({ t: 'kill', x: m.x, y: m.y, mob: m.kind, elite: false, albino: false });
@@ -1865,6 +1922,7 @@ function wakeQuad(sim: Sim, b: BossFight, st: F15BState, api: SimApi, qd: Quad):
   pts.forEach((i, n) => light(sim, st, `f15b_q${qd.q}_${n}`, (i % W) + 0.5, Math.floor(i / W) + 0.5, qd.kind === 'lava' ? 3.6 : 2.4, tint));
   sim.events.push({ t: 'boss', what: `f15b_${qd.kind}_trap` });
   sim.events.push({ t: 'shake', k: 0.25 });
+  vfx(sim, api, 'f15b_fxqwake', centerOf(b)[0], centerOf(b)[1], 1.0, { q: qd.q, above: true }); // v2.87 — только рисунок
 }
 
 /** Беда четверти: извержение, водоворот, луч зеркала, голова из круга. */
@@ -1986,7 +2044,7 @@ function stepQuads(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
         if (to < 0) continue;
         st.tp = { to, at: sim.time + 0.55 };
         for (const i of [hi, to])
-          api.zone(sim, { x: (i % W) + 0.5, y: Math.floor(i / W) + 0.5, r: 0.9, life: 0.6, art: 'f15b_warp' });
+          api.zone(sim, { x: (i % W) + 0.5, y: Math.floor(i / W) + 0.5, r: 0.9, life: 0.6, art: 'f15b_warp', above: true }); // v2.87 — только рисунок: above
         break;
       }
   }
@@ -2108,7 +2166,7 @@ function heartBeat(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
         knock: 7,
         art: 'f15b_pulse',
         from: heart.id,
-        above: true,
+        above: false, // v2.87 — только рисунок: метка лежит на полу, тела закрывают её по силуэту
       }),
     );
     sim.events.push({ t: 'shake', k: 0.22 });
@@ -2119,6 +2177,9 @@ function heartBeat(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
     const hi = Math.floor(h.y) * W + Math.floor(h.x);
     const crushed = st.pending.includes(hi);
     for (const i of st.pending) if (walkT(sim.tiles[i]) || sim.tiles[i] === T_DEEP) retile(sim, st, i, T_WALL, MK.swell, null);
+    // v2.87 — только рисунок: стена сомкнулась — плоть шлёпает по всему кольцу.
+    vfx(sim, api, 'f15b_fxsqueeze', kx, ky, 0.9, { cells: st.pending });
+    sim.events.push({ t: 'shake', k: 0.3 });
     st.pending = [];
     if (crushed) {
       api.hurtEnv(sim, 0.08);
@@ -2139,6 +2200,8 @@ function heartBeat(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
       st.pending = ring;
       st.pendingAt = sim.time + HEART.squeezeWarn;
       tagZone(sim, api, { x: kx, y: ky, r: 0.1, life: HEART.squeezeWarn + 0.2, art: 'f15b_swellwarn', cells: ring });
+      // v2.87 — только рисунок: метка держится до настоящего сжатия (на ударе после 1,7 с).
+      vfx(sim, api, 'f15b_fxswell', kx, ky, HEART.squeezeWarn + 1.6, { cells: ring });
     }
   }
 }
@@ -2167,7 +2230,7 @@ function stepHeartPhase(sim: Sim, b: BossFight, st: F15BState, api: SimApi): voi
         knock: 7,
         art: 'f15b_artery',
         from: heart.id,
-        above: true,
+        above: false, // v2.87 — только рисунок: метка лежит на полу, тела закрывают её по силуэту
       });
     }
   }
@@ -2278,6 +2341,7 @@ function finale(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
     }
   sim.strikes = [];
   sim.zones = sim.zones.filter((z) => !z.art?.startsWith('f15b_'));
+  vfx(sim, api, 'f15b_fxfinale', centerOf(b)[0], centerOf(b)[1] - 0.2, 2.0, { above: true }); // v2.87 — только рисунок
   restoreArena(sim, st, api);
   api.slowmo(sim, 2.4, 0.22);
   sim.events.push({ t: 'flash', color: '#ffe0c0', k: 1 });
