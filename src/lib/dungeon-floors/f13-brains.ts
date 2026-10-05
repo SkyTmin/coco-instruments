@@ -1,65 +1,50 @@
-// Этаж 13 «Город за стенами» — ИИ исполинов и их свиты, сценарий Колосса,
-// правила этажа и действия этажа (крюк, пушка, валун, набат).
-//
-// ГЛАГОЛ — ИСПОЛИНЫ И КРЮКИ.
-//   • Исполин поворачивается медленно и ходит только вперёд. Удар по нему
-//     решает УГОЛ: в затылок (герой за спиной) — втрое, в бок — вполсилы, в
-//     лоб — десятая доля (`giantHit`). Когда герой за спиной, затылок
-//     светится (`m.data.back`, рисует `f13-art.ts`). Два удара в затылок —
-//     исполин разворачивается с размаху (удар по кругу за спиной) — вовремя
-//     отойди. Пушка валит исполина, лёжа он открыт со всех сторон.
-//   • Крюк — действие у столба-якоря (`FloorScript.onUse`): столб выносит к
-//     своему кольцу за провал или на Стену, столб у исполинов — за спину
-//     ближнему исполину. В полёте героя не достать. Над провалом и Стеной
-//     трос несёт героя своим полётом (`api.pullHero` упирается в край
-//     глубины как в стену — см. отчёт этажа), по земле — `api.pullHero` с
-//     поворотом цели по дуге.
+// Этаж 13 «Театр марионеток» — правила этажа, монстры и Кукловод.
 //
 // Правила этажа (`registerFloor(13)`):
-//   • ПОСТЫ: исполины стоят на своих местах (метки 1…6) и встают, когда
-//     герой подходит; убитый не встаёт до конца вылазки;
-//   • ДЕЙСТВИЯ: крюк, пушка (линия по полосе, валит исполинов, мелочь
-//     насмерть), валун (заваливает Пролом), набат (волна глушит мелочь);
-//   • ЗАЛЫ-СОБЫТИЯ: «Пожар» и «Шествие» (Внешний район), «Пролом» и
-//     «Батарея» (Стена), «Колокол тревоги» и «Разлом» (Площадь колокола);
-//   • ИСПАРЕНИЕ: убитый исполин парит остовом, вороны слетаются;
-//   • ПОДСКАЗКИ: первый удар в лоб и первый удар в затылок — надписью.
+//  * НИТИ. У кукол (рыцарь, щелкунчик, барабанщик, скрипач, балерина) в
+//    `m.data` число нитей `sn` и маска перерезанных `cut`. Нить на полу —
+//    отрезок от плеч куклы на север (вверх по экрану) к балке. Режут её
+//    взмах меча (сектор удара задел точку нити), рывок поперёк, нота
+//    скрипача и мешок противовеса. Нити целы — кукла бьёт ×1,25 и
+//    отдёргивается от удара; срезана нить — шатается 0,6 с; все — лёгкая
+//    падает и рассыпается, тяжёлая ползёт (скорость ×0,45, урон ×0,7, по
+//    ней ×1,5). Паук вяжет нити обратно.
+//  * СВЕТ И ТЕНЬ (Зал и Колосники). Софиты ходят по дорожкам в такт
+//    (такт 0,75 с, сдвиг на сильную долю). В луче тебя видят все в 12
+//    клетках, удары по тебе ×1,2. В тени (не в луче и не у люстры) мобы
+//    дальше 4,5 клетки теряют тебя (`f13_lost`), удар по потерявшему —
+//    «из тени», ×2. Тени-актёры живут только в луче.
+//  * ЛЮКИ сцены, ямы и поворотного круга открываются по очереди
+//    (предупреждение 1,2 с, открыт 2 с): мобы падают (`api.fall`), героя
+//    люк роняет на край (`hurtEnv` 7%).
+//  * События: «Гардероб оживает», «Антракт» (Фойе); «Премьера»,
+//    «Увертюра» (Зал); «Третий звонок», «Пожарный занавес» (Колосники).
+//  * Действия: противовес, софит, занавес, люки, палочка, звонок, стопор.
 //
-// Честность: всё, что бьёт, видно заранее — конус ладони, кольцо топота,
-// тень хвата, дуга разворота, линия тарана и броска, метка прыжка, кольцо
-// осколков, метки обломков и пушки.
-//
-// Движок сюда не импортируется значениями (круг модулей) — только `api`.
+// Кукловод — `registerBoss('f13boss')`, четыре акта (внизу файла).
 
-import { BRAINS, registerBoss, registerBrain, registerFloor } from '../dungeon-ai';
-import type { BrainCtx, SimApi, ZoneIn } from '../dungeon-ai';
-
-/**
- * Зона-картинка со своими полями для рисовальщика: трос (куда), след
- * полёта, линия пушки, чей удар. Движок копирует лишние поля как есть.
- */
-export type ZX = ZoneIn & {
-  tx?: number;
-  ty?: number;
-  mob?: number;
-  ang?: number;
-  len?: number;
-  k?: number;
-  seed?: number;
-};
+import { registerBoss, registerBrain, registerFloor } from '../dungeon-ai';
+import type { Brain, BrainCtx, SimApi, ZoneIn } from '../dungeon-ai';
 import type { BossFight, Mob, Sim } from '../dungeon-sim';
 import type { WorldObj } from '../dungeon-world';
-import { F13_BELL, F13_GIANTS, F13_MARK, F13_OUTER, F13_POSTS, F13_WALL } from './f13';
-import { F13_HOOKS } from './f13-map';
+import {
+  F13_FLIES,
+  F13_FOYER,
+  F13_GEO,
+  F13_HALL,
+  F13_MARK,
+  F13_POSTS,
+  F13_ROWS,
+  F13_TOP,
+} from './f13';
 
 const TAU = Math.PI * 2;
 const hypot = Math.hypot;
 
-// Клетки мира (копия `Tile` из `dungeon-world.ts`: значениями движок не
+// Номера клеток движка (`Tile` в `dungeon-world.ts`, значением не
 // импортируется).
 const T_WALL = 1;
 const T_FLOOR = 2;
-const T_RUBBLE = 9;
 const T_DEEP = 11;
 const T_HAZARD = 12;
 
@@ -79,44 +64,19 @@ const angDiff = (a: number, b: number) => {
 };
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+const smooth = (k: number) => k * k * (3 - 2 * k);
 
 /** Урон, который после брони героя станет долей его здоровья. */
 const rawShare = (sim: Sim, share: number) =>
   (sim.stats.maxHp * share * (100 + Math.max(0, sim.stats.armor))) / 100;
 
-/** Попал ли удар вплотную: рывок, крюк и неуязвимость спасают. */
-const canHurt = (sim: Sim) =>
-  sim.hero.inv <= 0 && sim.hero.mode !== 'dash' && !sim.hero.pull && !heroDown(sim);
+/** Попал ли удар вплотную: рывок и неуязвимость спасают. */
+const canHurt = (sim: Sim) => sim.hero.inv <= 0 && sim.hero.mode !== 'dash' && !heroDown(sim);
 
-const tileAt = (sim: Sim, x: number, y: number): number => {
-  const w = sim.world;
-  if (x < 0 || y < 0 || x >= w.w || y >= w.h) return T_WALL;
-  return sim.tiles[y * w.w + x];
-};
+const isGhost = (m: Mob) =>
+  m.mode === 'dying' || m.mode === 'emerge' || m.mode === 'escape' || (m.data.ghost ?? 0) > 0;
 
-const walkable = (t: number) => t === T_FLOOR || t === T_HAZARD || (t >= 3 && t <= 5) || t === 10;
-
-/** Задевает ли линия (из точки по углу, длина, полуширина) круг. */
-function lineHits(
-  x: number,
-  y: number,
-  ang: number,
-  len: number,
-  w: number,
-  hx: number,
-  hy: number,
-  hr: number,
-): boolean {
-  const dx = hx - x;
-  const dy = hy - y;
-  const ux = Math.cos(ang);
-  const uy = Math.sin(ang);
-  const along = dx * ux + dy * uy;
-  const across = Math.abs(-dx * uy + dy * ux);
-  return along > -hr && along < len + hr && across < w + hr;
-}
-
-/** Сколько клеток до преграды по направлению (стена или глубина). */
+/** Сколько клеток до стены по направлению. */
 function clearDist(sim: Sim, api: SimApi, x: number, y: number, ang: number, max: number): number {
   const ux = Math.cos(ang);
   const uy = Math.sin(ang);
@@ -125,32 +85,8 @@ function clearDist(sim: Sim, api: SimApi, x: number, y: number, ang: number, max
   return max + 1;
 }
 
-/** Прямая от точки до точки идёт только по полу. */
-function clearLine(sim: Sim, api: SimApi, ax: number, ay: number, bx: number, by: number): boolean {
-  const d = hypot(bx - ax, by - ay);
-  const n = Math.ceil(d * 3);
-  for (let i = 1; i <= n; i++) {
-    const x = ax + ((bx - ax) * i) / n;
-    const y = ay + ((by - ay) * i) / n;
-    if (api.solidTile(sim, Math.floor(x), Math.floor(y))) return false;
-  }
-  return true;
-}
-
-/** Круг тела встаёт в точку: клетка и её соседи — пол. */
-function roomFor(sim: Sim, api: SimApi, x: number, y: number, r: number): boolean {
-  const pts = [
-    [x, y],
-    [x + r, y],
-    [x - r, y],
-    [x, y + r],
-    [x, y - r],
-  ];
-  return pts.every(([px, py]) => !api.solidTile(sim, Math.floor(px), Math.floor(py)));
-}
-
 /** Отдых после удара: гасит скорость, потом снова в погоню. */
-function recoverStep(m: Mob, api: SimApi, T: number, next = 'stalk'): void {
+function recoverStep(m: Mob, api: SimApi, T: number, next = 'chase'): void {
   m.vx *= 0.8;
   m.vy *= 0.8;
   m.tele = null;
@@ -158,2381 +94,521 @@ function recoverStep(m: Mob, api: SimApi, T: number, next = 'stalk'): void {
   if (m.t > T) api.setMode(m, next);
 }
 
-/** Одна зона-картинка (без действия) — вспышка, пар, пыль. */
-function puff(
-  api: SimApi,
-  sim: Sim,
-  art: string,
-  x: number,
-  y: number,
-  r: number,
-  life: number,
-  above = false,
-): void {
-  api.zone(sim, { x, y, r, life, art, above });
+/** Район по мировому ряду. */
+function areaAt(sim: Sim, y: number): string {
+  const w = sim.world;
+  return w.rowArea[clamp(Math.floor(y), 0, w.h - 1)] ?? '';
 }
 
-/** Черновик визуала этажа: общий на кадр (рисовальщик читает). */
-export const F13_FX = {
-  /** Время последнего залпа пушки (performance, с) — дым над Стеной. */
-  cannon: -9,
-};
+/** Мировая точка из местных координат района (`F13_GEO`). */
+const gw = (area: string, x: number, y: number): [number, number] => [x, y + (F13_TOP[area] ?? 0)];
 
-// ---------------------------------------------------------------------------
-// Исполины: затылок, поворот, ход вперёд, удары.
-// ---------------------------------------------------------------------------
-
-/** Числа исполинов: поворот (рад/с), множители удара по углу. */
-export interface GiantSpec {
-  turn: number;
-  back: number;
-  side: number;
-  front: number;
-  /** Лёжа (пушка, набат) — со всех сторон. */
-  down: number;
-  /** Сколько ударов в затылок до разворота с размаху. */
-  naps: number;
+/** Рамка района в мировых координатах: [x0, y0, x1, y1] включительно. */
+function boxW(area: string, b: readonly number[]): [number, number, number, number] {
+  const t = F13_TOP[area] ?? 0;
+  return [b[0], b[1] + t, b[2], b[3] + t];
 }
 
-export const GIANT: Record<string, GiantSpec> = {
-  f13_walker: { turn: 1.5, back: 3, side: 0.5, front: 0.1, down: 2.2, naps: 2 },
-  f13_climber: { turn: 2, back: 3, side: 0.55, front: 0.12, down: 2.2, naps: 2 },
-  f13_thrower: { turn: 1.4, back: 3, side: 0.5, front: 0.1, down: 2.2, naps: 2 },
-  f13_armored: { turn: 1.2, back: 2.3, side: 0.25, front: 0, down: 2.6, naps: 3 },
-  f13_abnormal: { turn: 3.4, back: 3, side: 0.6, front: 0.1, down: 2.2, naps: 2 },
-  f13_crystal: { turn: 2.8, back: 3, side: 0.5, front: 0.12, down: 2.2, naps: 1 },
-  f13_crawler: { turn: 4, back: 2.5, side: 1, front: 0.25, down: 2, naps: 3 },
-};
+const inBox = (b: readonly number[], x: number, y: number) =>
+  x >= b[0] && x < b[2] + 1 && y >= b[1] && y < b[3] + 1;
 
-/** Откуда пришёл удар по мобу: 'back' — герой за спиной. */
-export function napeSide(m: Mob, ang: number): 'back' | 'side' | 'front' {
-  const off = Math.abs(angDiff(ang, m.face));
-  return off < 1.05 ? 'back' : off > 2.1 ? 'front' : 'side';
+/** Расстояние от точки до отрезка. */
+function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const vx = bx - ax;
+  const vy = by - ay;
+  const L = vx * vx + vy * vy || 1e-9;
+  const k = clamp(((px - ax) * vx + (py - ay) * vy) / L, 0, 1);
+  return hypot(px - ax - vx * k, py - ay - vy * k);
 }
 
-/** Где герой относительно взгляда моба: 0 — прямо перед ним, π — за спиной. */
-const heroRel = (sim: Sim, m: Mob) =>
-  Math.abs(angDiff(Math.atan2(sim.hero.y - m.y, sim.hero.x - m.x), m.face));
-
-function turnTo(m: Mob, a: number, rate: number, dt: number): void {
-  const d = angDiff(a, m.face);
-  const s = rate * dt;
-  m.face += clamp(d, -s, s);
-}
-
-/** Шаг вперёд — туда, куда смотрит; боком и задом исполин не ходит. */
-function stride(m: Mob, want: number, speed: number, turn: number, dt: number): void {
-  turnTo(m, want, turn, dt);
-  const al = Math.cos(angDiff(want, m.face));
-  const v = speed * Math.max(0.1, al);
-  const k = Math.min(1, dt * 6);
-  m.vx += (Math.cos(m.face) * v - m.vx) * k;
-  m.vy += (Math.sin(m.face) * v - m.vy) * k;
-}
-
-/** Исполин — стена из мяса: героя выталкивает (рывком — между ног). */
-function shoulder(sim: Sim, m: Mob): void {
-  const h = sim.hero;
-  if (h.mode === 'dash' || h.pull || heroDown(sim) || h.r < 0.05) return;
-  const dx = h.x - m.x;
-  const dy = h.y - m.y;
-  const d = hypot(dx, dy);
-  const min = m.r * 0.9 + h.r;
-  if (d < min && d > 1e-4) {
-    h.x = m.x + (dx / d) * min;
-    h.y = m.y + (dy / d) * min;
-  }
-}
-
-/** Удар клинка по исполину: угол решает (и свечение, и подсказки). */
-function giantHit(sim: Sim, m: Mob, ang: number): number {
-  const g = GIANT[m.kind] ?? GIANT.f13_walker;
-  if (m.mode === 'down' || m.mode === 'getup') {
-    m.data.cut = 0.3;
-    return g.down;
-  }
-  const side = napeSide(m, ang);
-  if (side === 'back') {
-    m.data.cut = 0.3;
-    m.data.naped = (m.data.naped ?? 0) + 1;
-    hint(sim, 'nape');
-    return g.back;
-  }
-  if (side === 'front') hint(sim, 'front');
-  return side === 'side' ? g.side : g.front;
-}
-
-/** Один раз за вылазку — подсказка надписью (лоб не берёт / затылок). */
-function hint(sim: Sim, what: 'front' | 'nape'): void {
-  const key = what === 'front' ? 'hintFront' : 'hintNape';
-  if (sim.floorData[key]) return;
-  sim.floorData[key] = 1;
-  if (what === 'front')
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_hint',
-      text: 'ЛОБ НЕ БЕРЁТ',
-      sub: 'зайди за спину — бей в затылок',
-    });
-  else sim.events.push({ t: 'boss', what: 'f13_nape', text: 'В ЗАТЫЛОК!', sub: 'втрое сильнее' });
-}
-
-/** Общий черновик исполина на кадр: затылок, счётчики. */
-function giantTick(sim: Sim, m: Mob, dt: number): void {
-  const h = sim.hero;
-  m.data.cut = Math.max(0, (m.data.cut ?? 0) - dt);
-  const d = hypot(h.x - m.x, h.y - m.y);
-  // Затылок светится, когда герой за спиной и близко: видно, куда бить.
-  m.data.back = !heroDown(sim) && d < 5.5 && heroRel(sim, m) > 2.0 ? 1 : 0;
-  m.data.gCd = (m.data.gCd ?? 0) - dt;
-  m.data.spinCd = (m.data.spinCd ?? 0) - dt;
-  if (m.data.back && d < 3.2) m.data.behind = (m.data.behind ?? 0) + dt;
-  else m.data.behind = Math.max(0, (m.data.behind ?? 0) - dt * 2);
-}
-
-export const SWIPE = { r: 3, arc: 1.8, warn: 0.85, dmg: 1.3 };
-export const STOMP = { r: 1.7, w: 0.75, warn: 0.8, dmg: 1.1 };
-export const GRAB = { r: 0.95, warn: 1, dmg: 1.5 };
-export const SPIN = { r: 3, arc: 2.4, warn: 0.6, dmg: 1.2 };
-
-/** Хлопок ладонью: конус перед собой. */
-function swipeStep(sim: Sim, m: Mob, api: SimApi, scale = 1): boolean {
-  m.vx *= 0.7;
-  m.vy *= 0.7;
-  const T = SWIPE.warn * scale;
-  if (!m.data.lit) {
-    m.data.lit = 1;
-    api.strike(sim, {
-      shape: 'cone',
-      x: m.x,
-      y: m.y,
-      r: SWIPE.r * (m.r / 0.8) ** 0.5,
-      ang: m.face,
-      arc: SWIPE.arc,
-      warn: T,
-      dmg: m.dmg * SWIPE.dmg,
-      knock: 7,
-      art: 'f13_palm',
-      from: m.id,
-    });
-  }
-  if (m.t > T - 0.25) m.danger = SWIPE.r + 0.6;
-  if (m.t >= T) {
-    m.data.lit = 0;
-    sim.events.push({ t: 'shake', k: 0.18 });
-    return true;
-  }
-  return false;
-}
-
-/** Топот: кольцо вокруг ног (вплотную к ногам и снаружи — чисто). */
-function stompStep(sim: Sim, m: Mob, api: SimApi, scale = 1): boolean {
-  m.vx *= 0.7;
-  m.vy *= 0.7;
-  const T = STOMP.warn * scale;
-  const k = m.r / 0.8;
-  if (!m.data.lit) {
-    m.data.lit = 1;
-    api.strike(sim, {
-      shape: 'ring',
-      x: m.x,
-      y: m.y,
-      r: STOMP.r * k,
-      w: STOMP.w * k,
-      warn: T,
-      dmg: m.dmg * STOMP.dmg,
-      knock: 6,
-      art: 'f13_stomp',
-      from: m.id,
-    });
-  }
-  if (m.t > T - 0.25) m.danger = (STOMP.r + STOMP.w) * k + 0.4;
-  if (m.t >= T) {
-    m.data.lit = 0;
-    sim.events.push({ t: 'shake', k: 0.3 });
-    puff(api, sim, 'f13_dust', m.x, m.y, 2.4 * k, 0.7);
-    return true;
-  }
-  return false;
-}
-
-/** Хват: тень ладони на герое, потом рука падает. */
-function grabStep(sim: Sim, m: Mob, api: SimApi): boolean {
-  m.vx *= 0.7;
-  m.vy *= 0.7;
-  const h = sim.hero;
-  if (!m.data.lit) {
-    m.data.lit = 1;
-    m.data.gx = h.x;
-    m.data.gy = h.y;
-    api.strike(sim, {
-      shape: 'circle',
-      x: h.x,
-      y: h.y,
-      r: GRAB.r,
-      warn: GRAB.warn,
-      dmg: m.dmg * GRAB.dmg,
-      knock: 2,
-      status: 'stun',
-      dur: 0.6,
-      art: 'f13_grab',
-      from: m.id,
-    });
-  }
-  m.face = Math.atan2(m.data.gy - m.y, m.data.gx - m.x);
-  if (m.t > GRAB.warn - 0.25) m.danger = hypot(m.data.gx - m.x, m.data.gy - m.y) + GRAB.r + 0.3;
-  if (m.t >= GRAB.warn) {
-    m.data.lit = 0;
-    return true;
-  }
-  return false;
-}
-
-/** Разворот с размаху: дуга за спиной, потом лицом к герою. */
-function spinStep(sim: Sim, m: Mob, api: SimApi): boolean {
-  m.vx *= 0.7;
-  m.vy *= 0.7;
-  const k = (m.r / 0.8) ** 0.5;
-  if (!m.data.lit) {
-    m.data.lit = 1;
-    m.data.sa = m.face + Math.PI;
-    api.strike(sim, {
-      shape: 'cone',
-      x: m.x,
-      y: m.y,
-      r: SPIN.r * k,
-      ang: m.data.sa,
-      arc: SPIN.arc,
-      warn: SPIN.warn,
-      dmg: m.dmg * SPIN.dmg,
-      knock: 8,
-      art: 'f13_backhand',
-      from: m.id,
-    });
-  }
-  if (m.t > SPIN.warn - 0.25) m.danger = SPIN.r * k + 0.5;
-  if (m.t >= SPIN.warn) {
-    // Развернулся: теперь смотрит туда, где был затылок.
-    const f = m.data.sa;
-    m.face += angDiff(f, m.face) * Math.min(1, (m.t - SPIN.warn) / 0.35);
-    if (m.t >= SPIN.warn + 0.35) {
-      m.face = f;
-      m.data.lit = 0;
-      m.data.naped = 0;
-      m.data.behind = 0;
-      return true;
-    }
-  }
-  return false;
-}
-
-/** Лежит (пушка, набат): открыт со всех сторон, встаёт через `T`. */
-function downStep(sim: Sim, m: Mob, api: SimApi): void {
-  m.vx *= 0.8;
-  m.vy *= 0.8;
-  m.tele = null;
-  m.danger = 0;
-  if (m.mode === 'down' && m.t > (m.data.downT ?? 2.8)) api.setMode(m, 'getup');
-  else if (m.mode === 'getup' && m.t > 0.6) api.setMode(m, 'stalk');
-  void sim;
-}
-
-/** Уложить исполина (пушка): полежит и встанет. */
-export function knockDown(sim: Sim, m: Mob, api: SimApi, T = 2.8): void {
-  if (!F13_GIANTS.has(m.kind) || m.mode === 'dying' || m.kind === 'f13boss') return;
-  api.setMode(m, 'down');
-  m.data.downT = T;
-  m.data.lit = 0;
-  m.tele = null;
-  m.danger = 0;
-  sim.events.push({ t: 'shake', k: 0.35 });
-  puff(api, sim, 'f13_dust', m.x, m.y + 0.3, 2.2, 0.9);
-}
-
-/** Дом исполина — его пост: дальше `leash` клеток не уходит. */
-function homeOf(m: Mob): [number, number] {
-  return [m.data.px ?? m.hx, m.data.py ?? m.hy];
+/** Пересекаются ли отрезки AB и CD. */
+function segCross(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+  dx: number,
+  dy: number,
+): boolean {
+  const d1 = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+  const d2 = (bx - ax) * (dy - ay) - (by - ay) * (dx - ax);
+  const d3 = (dx - cx) * (ay - cy) - (dy - cy) * (ax - cx);
+  const d4 = (dx - cx) * (by - cy) - (dy - cy) * (bx - cx);
+  return d1 * d2 < 0 && d3 * d4 < 0;
 }
 
 /**
- * Общий ход исполина: бродит у поста, видит — идёт, выбирает удар.
- * `pick` — свой выбор удара вида (вернуть режим или null).
+ * Убить моба окружением (люк, мешок, обвал декорации): удар по своим без
+ * урона герою — движок засчитает убийство и бросит добычу.
  */
-function giantStalk(
-  sim: Sim,
-  m: Mob,
-  dt: number,
-  c: BrainCtx,
-  api: SimApi,
-  pick: (rel: number) => string | null,
-): void {
-  const h = sim.hero;
-  const g = GIANT[m.kind] ?? GIANT.f13_walker;
-  const [hx, hy] = homeOf(m);
-  const fromHome = hypot(m.x - hx, m.y - hy);
-  const see = c.dist < 11 && api.lineOfSight(sim, m.x, m.y, h.x, h.y);
-  const leash = m.data.leash ?? 16;
-  if (m.mode === 'wander') {
-    if (see && c.dist < 8.5) {
-      api.setMode(m, 'stalk');
-      sim.events.push({ t: 'boss', what: 'f13_notice' });
-      return;
-    }
-    // Бродит у поста: цель — точка в пяти клетках, меняется раз в 4–7 с.
-    if (!m.data.wx || m.t > (m.data.wt ?? 5)) {
-      const a = sim.rng() * TAU;
-      const r = 1 + sim.rng() * 4;
-      const tx = hx + Math.cos(a) * r;
-      const ty = hy + Math.sin(a) * r;
-      if (roomFor(sim, api, tx, ty, m.r)) {
-        m.data.wx = tx;
-        m.data.wy = ty;
-      } else {
-        m.data.wx = hx;
-        m.data.wy = hy;
-      }
-      m.data.wt = 4 + sim.rng() * 3;
-      m.t = 0;
-    }
-    const dx = m.data.wx - m.x;
-    const dy = m.data.wy - m.y;
-    if (hypot(dx, dy) > 0.6) stride(m, Math.atan2(dy, dx), m.speed * 0.45, g.turn * 0.6, dt);
-    else {
-      m.vx *= 0.8;
-      m.vy *= 0.8;
-    }
-    return;
-  }
-  if (m.mode === 'home') {
-    const dx = hx - m.x;
-    const dy = hy - m.y;
-    if (hypot(dx, dy) < 1.5) {
-      api.setMode(m, 'wander');
-      return;
-    }
-    if (see && c.dist < 5) {
-      api.setMode(m, 'stalk');
-      return;
-    }
-    const [cx, cy] = clearLine(sim, api, m.x, m.y, hx, hy)
-      ? [dx / (hypot(dx, dy) || 1), dy / (hypot(dx, dy) || 1)]
-      : [dx / (hypot(dx, dy) || 1), dy / (hypot(dx, dy) || 1)];
-    stride(m, Math.atan2(cy, cx), m.speed * 0.7, g.turn, dt);
-    return;
-  }
-  // stalk: к герою, лицом к нему.
-  if (fromHome > leash && c.dist > 6) {
-    api.setMode(m, 'home');
-    return;
-  }
-  if (!see && c.dist > 14) {
-    api.setMode(m, 'home');
-    return;
-  }
-  const rel = heroRel(sim, m);
-  // Долго за спиной или два удара в затылок — разворот с размаху.
-  if (
-    m.data.spinCd <= 0 &&
-    ((m.data.naped ?? 0) >= g.naps || (m.data.behind ?? 0) > 2.2) &&
-    c.dist < 3.6
-  ) {
-    api.setMode(m, 'spin');
-    m.data.spinCd = 3;
-    return;
-  }
-  if (m.cd <= 0 && see) {
-    const next = pick(rel);
-    if (next) {
-      api.setMode(m, next);
-      m.data.lit = 0;
-      return;
-    }
-  }
-  const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-  const near = c.dist < m.r + 1.2;
-  stride(m, Math.atan2(cy, cx), near ? 0 : m.speed, g.turn, dt);
-}
-
-/** Общий выбор удара шагающего исполина. */
-function walkerPick(sim: Sim, m: Mob, c: BrainCtx, rel: number): string | null {
-  const k = m.r / 0.8;
-  if (rel < 0.9 && c.dist < 3 * k + 0.2) return 'swipe';
-  if (rel >= 0.9 && c.dist < (STOMP.r + STOMP.w) * k + 0.1) return 'stomp';
-  if (rel < 0.8 && c.dist > 3.2 && c.dist < 5.4 && m.data.gCd <= 0) {
-    m.data.gCd = 6 + sim.rng() * 3;
-    return 'grab';
-  }
-  return null;
-}
-
-/** Общий шаг ударов исполина (режимы swipe, stomp, grab, spin, down). */
-function giantMoves(sim: Sim, m: Mob, api: SimApi, rest: number): boolean {
-  switch (m.mode) {
-    case 'swipe':
-      if (swipeStep(sim, m, api)) {
-        api.setMode(m, 'recover');
-        m.cd = rest;
-      }
-      return true;
-    case 'stomp':
-      if (stompStep(sim, m, api)) {
-        api.setMode(m, 'recover');
-        m.cd = rest * 0.9;
-      }
-      return true;
-    case 'grab':
-      if (grabStep(sim, m, api)) {
-        api.setMode(m, 'recover');
-        m.cd = rest * 1.1;
-      }
-      return true;
-    case 'spin':
-      if (spinStep(sim, m, api)) {
-        api.setMode(m, 'recover');
-        m.cd = rest * 0.6;
-      }
-      return true;
-    case 'recover':
-      recoverStep(m, api, 0.75);
-      return true;
-    case 'down':
-    case 'getup':
-      downStep(sim, m, api);
-      return true;
-  }
-  return false;
-}
-
-// ---------------------------------------------------------------------------
-// Бродячий исполин: ладонь, топот, хват, разворот. Шествие — строем.
-// ---------------------------------------------------------------------------
-
-registerBrain('f13_walker', {
-  step(sim, m, dt, c, api) {
-    giantTick(sim, m, dt);
-    shoulder(sim, m);
-    m.tele = null;
-    m.danger = 0;
-    if (heroDown(sim)) {
-      m.vx *= 0.9;
-      m.vy *= 0.9;
-      return;
-    }
-    if (m.mode === 'march') {
-      marchStep(sim, m, dt, c, api);
-      return;
-    }
-    if (giantMoves(sim, m, api, 1.2)) return;
-    if (m.mode === 'chase' || m.mode === 'alert' || m.mode === 'stun') api.setMode(m, 'stalk');
-    if (m.mode !== 'wander' && m.mode !== 'stalk' && m.mode !== 'home') api.setMode(m, 'stalk');
-    giantStalk(sim, m, dt, c, api, (rel) => walkerPick(sim, m, c, rel));
-  },
-  onHit(sim, m, hit) {
-    return giantHit(sim, m, hit.ang);
-  },
-  onDeath(sim, m, _mode, api) {
-    giantDeath(sim, m, api);
-  },
-});
-
-/** Шествие: идёт строем на юг проспекта, топает, вплотную — ладонь. */
-function marchStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
-  const g = GIANT.f13_walker;
-  const tx = m.data.mx ?? m.x;
-  const ty = m.data.my ?? m.y + 20;
-  const dx = tx - m.x;
-  const dy = ty - m.y;
-  m.data.st = (m.data.st ?? 1) - dt;
-  if (hypot(dx, dy) < 1.2) {
-    // Дошёл до конца проспекта — теперь охотится.
-    api.setMode(m, 'stalk');
-    m.data.leash = 22;
-    return;
-  }
-  const rel = heroRel(sim, m);
-  if (rel < 0.8 && c.dist < 3 && m.cd <= 0) {
-    api.setMode(m, 'swipe');
-    m.data.lit = 0;
-    return;
-  }
-  if (m.data.st <= 0) {
-    m.data.st = 2.4;
-    // Топот на ходу: кольцо, в нишах не достаёт.
-    api.strike(sim, {
-      shape: 'ring',
-      x: m.x,
-      y: m.y,
-      r: 2,
-      w: 0.8,
-      warn: 0.75,
-      dmg: m.dmg * 0.9,
-      knock: 5,
-      art: 'f13_stomp',
-      from: m.id,
-    });
-  }
-  stride(m, Math.atan2(dy, dx), m.speed * 0.8, g.turn, dt);
-}
-
-/** Исполин пал: остов парит, вороны слетаются. */
-function giantDeath(sim: Sim, m: Mob, api: SimApi): void {
-  const big = m.kind === 'f13boss';
-  api.zone(sim, {
+function envKill(sim: Sim, api: SimApi, m: Mob): void {
+  m.data.ghost = 0;
+  api.strike(sim, {
+    shape: 'circle',
     x: m.x,
     y: m.y,
-    r: big ? 3.4 : 1.6 * (m.r / 0.8),
-    life: big ? 9 : 4.5,
-    art: big ? 'f13_evapbig' : 'f13_evap',
+    r: 0.01,
+    warn: 0,
+    dmg: 0,
+    mobDmg: Infinity,
+    art: 'f13_none',
   });
-  sim.events.push({ t: 'boss', what: 'f13_evap' });
-  const st = STATE.get(sim);
-  if (st) st.kills += 1;
+}
+
+/** Урон окружения по мобу: лёгкий — сразу, смертельный — ударом движка. */
+function envHurt(sim: Sim, api: SimApi, m: Mob, frac: number): void {
+  const d = m.maxHp * frac;
+  if (m.hp - d <= 0) envKill(sim, api, m);
+  else {
+    m.hp -= d;
+    m.flash = 0.15;
+  }
+}
+
+/** Вспышка-картинка (только рисунок, номер из своего счётчика). */
+function fx(sim: Sim, api: SimApi, art: string, x: number, y: number, r: number, life: number, extra: Record<string, number> = {}, above = false): void {
+  api.vfx(sim, { x, y, r, life, art, above, ...extra } as ZoneIn);
 }
 
 // ---------------------------------------------------------------------------
-// Стенолаз: лезет через зубцы Стены (руки на камне — видно заранее), дальше
-// — как бродячий, только проворнее.
+// Числа этажа (тесты и рисовальщики читают их отсюда).
 // ---------------------------------------------------------------------------
 
-export const CLIMB = { hands: 1.8 };
-
-registerBrain('f13_climber', {
-  step(sim, m, dt, c, api) {
-    giantTick(sim, m, dt);
-    m.tele = null;
-    m.danger = 0;
-    if (m.mode === 'climb') {
-      // Висит на зубцах: только руки над камнем, достать нельзя.
-      m.data.ghost = 1;
-      m.vx = 0;
-      m.vy = 0;
-      m.face = -Math.PI / 2;
-      if (m.t > CLIMB.hands) {
-        m.data.ghost = 0;
-        m.y -= 1.3;
-        api.collide(sim, m);
-        api.setMode(m, 'stalk');
-        sim.events.push({ t: 'shake', k: 0.2 });
-        puff(api, sim, 'f13_dust', m.x, m.y + 0.4, 1.4, 0.6);
-      }
-      return;
-    }
-    shoulder(sim, m);
-    if (heroDown(sim)) {
-      m.vx *= 0.9;
-      m.vy *= 0.9;
-      return;
-    }
-    if (giantMoves(sim, m, api, 1)) return;
-    if (m.mode !== 'wander' && m.mode !== 'stalk' && m.mode !== 'home') api.setMode(m, 'stalk');
-    giantStalk(sim, m, dt, c, api, (rel) => walkerPick(sim, m, c, rel));
-  },
-  onHit(sim, m, hit) {
-    return giantHit(sim, m, hit.ang);
-  },
-  onDeath(sim, m, _mode, api) {
-    giantDeath(sim, m, api);
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Метатель: держит дистанцию и бросает глыбы навесом (метка падения, щебень
-// замедляет). Раз в три броска — горсть камней веером. Вплотную — топот.
-// ---------------------------------------------------------------------------
-
-export const THROW = { windup: 1.1, keep: [5, 10] as const, volley: 3 };
-
-registerBrain('f13_thrower', {
-  step(sim, m, dt, c, api) {
-    giantTick(sim, m, dt);
-    shoulder(sim, m);
-    m.tele = null;
-    m.danger = 0;
-    if (heroDown(sim)) {
-      m.vx *= 0.9;
-      m.vy *= 0.9;
-      return;
-    }
-    const h = sim.hero;
-    if (m.mode === 'throw') {
-      m.vx *= 0.7;
-      m.vy *= 0.7;
-      turnTo(m, Math.atan2(h.y - m.y, h.x - m.x), 2, dt);
-      if (m.t >= THROW.windup) {
-        const n = (m.data.thr = (m.data.thr ?? 0) + 1);
-        const volley = n % THROW.volley === 0;
-        // Упреждение: туда, куда герой идёт.
-        const tx = h.x + h.vx * 0.35;
-        const ty = h.y + h.vy * 0.35;
-        const a = Math.atan2(ty - m.y, tx - m.x);
-        if (volley) {
-          for (let i = -1; i <= 1; i++) {
-            const aa = a + i * 0.32;
-            const d = hypot(tx - m.x, ty - m.y);
-            api.shoot(
-              sim,
-              m,
-              aa,
-              {
-                speed: 7.5,
-                r: 0.55,
-                life: 3,
-                dmg: 0.7,
-                art: 'f13_pebble',
-                lob: true,
-                onLand: { r: 0.8, life: 2.2, slow: 0.7, art: 'f13_rubble' },
-              },
-              m.x + Math.cos(aa) * d,
-              m.y + Math.sin(aa) * d,
-            );
-          }
-        } else
-          api.shoot(
-            sim,
-            m,
-            a,
-            {
-              speed: 7,
-              r: 0.85,
-              life: 3,
-              dmg: 1.15,
-              art: 'f13_rock',
-              lob: true,
-              onLand: { r: 1.2, life: 3, slow: 0.6, art: 'f13_rubble' },
-            },
-            tx,
-            ty,
-          );
-        api.setMode(m, 'recover');
-        m.cd = 1.6 + sim.rng() * 0.8;
-      }
-      return;
-    }
-    if (giantMoves(sim, m, api, 1.3)) return;
-    if (m.mode !== 'wander' && m.mode !== 'stalk' && m.mode !== 'home') api.setMode(m, 'stalk');
-    if (m.mode === 'stalk') {
-      // Держит дистанцию: близко — пятится лицом к герою.
-      const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y) || c.dist > 4;
-      if (c.dist < 2.6 && m.cd <= 0) {
-        api.setMode(m, 'stomp');
-        m.data.lit = 0;
-        return;
-      }
-      if (m.cd <= 0 && c.dist < 13 && c.dist > 3.2 && see) {
-        api.setMode(m, 'throw');
-        return;
-      }
-      if (c.dist < THROW.keep[0]) {
-        turnTo(m, Math.atan2(h.y - m.y, h.x - m.x), GIANT.f13_thrower.turn, dt);
-        const a = Math.atan2(m.y - h.y, m.x - h.x);
-        m.vx += (Math.cos(a) * m.speed * 0.5 - m.vx) * Math.min(1, dt * 5);
-        m.vy += (Math.sin(a) * m.speed * 0.5 - m.vy) * Math.min(1, dt * 5);
-        return;
-      }
-    }
-    giantStalk(sim, m, dt, c, api, () => null);
-  },
-  onHit(sim, m, hit) {
-    return giantHit(sim, m, hit.ang);
-  },
-  onDeath(sim, m, _mode, api) {
-    giantDeath(sim, m, api);
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Бронированный: спереди броня (удар отбит), с боков — царапина, затылок —
-// щель в латах. Таран по линии; о стену — оглушён, латы треснули: открыт.
-// ---------------------------------------------------------------------------
-
-export const ARMOR = { aim: 0.95, speed: 9, max: 11, dizzy: 2.2 };
-
-registerBrain('f13_armored', {
-  step(sim, m, dt, c, api) {
-    giantTick(sim, m, dt);
-    shoulder(sim, m);
-    m.tele = null;
-    m.danger = 0;
-    m.bounce = m.mode === 'charge';
-    if (heroDown(sim)) {
-      m.vx *= 0.9;
-      m.vy *= 0.9;
-      return;
-    }
-    const h = sim.hero;
-    switch (m.mode) {
-      case 'aim': {
-        m.vx *= 0.7;
-        m.vy *= 0.7;
-        if (m.t < ARMOR.aim * 0.55) turnTo(m, Math.atan2(h.y - m.y, h.x - m.x), 2.4, dt);
-        const len = Math.min(ARMOR.max, clearDist(sim, api, m.x, m.y, m.face, ARMOR.max));
-        m.tele = { shape: 'line', r: len, w: m.r, ang: m.face, k: Math.min(1, m.t / ARMOR.aim) };
-        if (m.t > ARMOR.aim - 0.25) m.danger = len;
-        if (m.t >= ARMOR.aim) {
-          api.setMode(m, 'charge');
-          m.data.cx = m.x;
-          m.data.cy = m.y;
-          m.data.hit = 0;
-          sim.events.push({ t: 'boss', what: 'f13_charge' });
-        }
-        return;
-      }
-      case 'charge': {
-        m.vx = Math.cos(m.face) * ARMOR.speed;
-        m.vy = Math.sin(m.face) * ARMOR.speed;
-        if (!m.data.hit && canHurt(sim) && hypot(h.x - m.x, h.y - m.y) < m.r + h.r + 0.2) {
-          m.data.hit = 1;
-          api.hurtHero(sim, m.dmg * 1.6, m.x, m.y, 9, m.kind);
-        }
-        if (hypot(m.x - m.data.cx, m.y - m.data.cy) > ARMOR.max || m.t > 1.6) {
-          api.setMode(m, 'recover');
-          m.cd = 1.4;
-        }
-        return;
-      }
-      case 'dizzy':
-        m.vx *= 0.8;
-        m.vy *= 0.8;
-        if (m.t > ARMOR.dizzy) {
-          api.setMode(m, 'stalk');
-          m.cd = 0.6;
-        }
-        return;
-    }
-    if (giantMoves(sim, m, api, 1.4)) return;
-    if (m.mode !== 'wander' && m.mode !== 'stalk' && m.mode !== 'home') api.setMode(m, 'stalk');
-    giantStalk(sim, m, dt, c, api, (rel) => {
-      if (rel < 0.6 && c.dist > 3.4 && c.dist < 10 && clearLine(sim, api, m.x, m.y, h.x, h.y))
-        return 'aim';
-      return walkerPick(sim, m, c, rel);
-    });
-  },
-  onWall(sim, m, _nx, _ny, api) {
-    if (m.mode !== 'charge') return;
-    api.setMode(m, 'dizzy');
-    m.vx = -Math.cos(m.face) * 2;
-    m.vy = -Math.sin(m.face) * 2;
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_armor_wall',
-      text: 'ЛАТЫ ТРЕСНУЛИ',
-      sub: 'бей — он открыт со всех сторон',
-    });
-    sim.events.push({ t: 'shake', k: 0.45 });
-    puff(api, sim, 'f13_dust', m.x, m.y, 2, 0.8);
-  },
-  onHit(sim, m, hit) {
-    if (m.mode === 'dizzy') {
-      m.data.cut = 0.3;
-      return 2.5;
-    }
-    return giantHit(sim, m, hit.ang);
-  },
-  onDeath(sim, m, _mode, api) {
-    giantDeath(sim, m, api);
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Аномальный: бежит зигзагом, прыгает с меткой приземления, иногда застывает
-// спиной (окно). Чует крюк: прыгает туда, куда тебя несёт трос.
-// ---------------------------------------------------------------------------
-
-export const ABNORMAL = { leapAim: 0.75, air: 0.55, twitch: 1.5, kickWarn: 0.55 };
-
-/** Прыгнуть к точке: метка приземления, в воздухе недосягаем. */
-export function abnormalLeap(
-  sim: Sim,
-  m: Mob,
-  api: SimApi,
-  tx: number,
-  ty: number,
-  aim = ABNORMAL.leapAim,
-): void {
-  if (m.mode === 'dying') return;
-  api.setMode(m, 'leapAim');
-  m.data.lx = tx;
-  m.data.ly = ty;
-  m.data.la = aim;
-  m.data.lit = 0;
-  m.face = Math.atan2(ty - m.y, tx - m.x);
-}
-
-registerBrain('f13_abnormal', {
-  step(sim, m, dt, c, api) {
-    giantTick(sim, m, dt);
-    m.danger = 0;
-    if (m.mode !== 'leapAim') m.tele = null;
-    if (m.mode !== 'air') shoulder(sim, m);
-    if (heroDown(sim)) {
-      m.vx *= 0.9;
-      m.vy *= 0.9;
-      m.data.ghost = 0;
-      return;
-    }
-    const h = sim.hero;
-    m.data.leapCd = (m.data.leapCd ?? 2) - dt;
-    switch (m.mode) {
-      case 'leapAim': {
-        m.vx *= 0.6;
-        m.vy *= 0.6;
-        const T = m.data.la ?? ABNORMAL.leapAim;
-        if (!m.data.lit) {
-          m.data.lit = 1;
-          api.strike(sim, {
-            shape: 'circle',
-            x: m.data.lx,
-            y: m.data.ly,
-            r: 1.35,
-            warn: T + ABNORMAL.air,
-            dmg: m.dmg * 1.4,
-            knock: 8,
-            art: 'f13_land',
-            from: m.id,
-          });
-        }
-        if (m.t >= T) {
-          api.setMode(m, 'air');
-          m.data.sx = m.x;
-          m.data.sy = m.y;
-          m.data.ghost = 1;
-        }
-        return;
-      }
-      case 'air': {
-        const k = Math.min(1, m.t / ABNORMAL.air);
-        m.x = m.data.sx + (m.data.lx - m.data.sx) * k;
-        m.y = m.data.sy + (m.data.ly - m.data.sy) * k;
-        m.vx = 0;
-        m.vy = 0;
-        m.data.z = Math.sin(k * Math.PI);
-        if (k >= 1) {
-          m.data.ghost = 0;
-          m.data.z = 0;
-          api.collide(sim, m);
-          sim.events.push({ t: 'shake', k: 0.35 });
-          puff(api, sim, 'f13_dust', m.x, m.y + 0.2, 1.8, 0.7);
-          // Приземлился — иногда застывает спиной: окно для затылка.
-          if (sim.rng() < 0.45) {
-            api.setMode(m, 'twitch');
-            m.data.tf = Math.atan2(h.y - m.y, h.x - m.x) + Math.PI + (sim.rng() - 0.5) * 1.2;
-          } else {
-            api.setMode(m, 'recover');
-            m.cd = 0.7;
-          }
-          m.data.leapCd = 3 + sim.rng() * 2;
-        }
-        return;
-      }
-      case 'twitch':
-        m.vx *= 0.7;
-        m.vy *= 0.7;
-        m.face += angDiff(m.data.tf, m.face) * Math.min(1, dt * 8);
-        if (m.t > ABNORMAL.twitch) {
-          api.setMode(m, 'stalk');
-          m.cd = 0.3;
-        }
-        return;
-      case 'kick': {
-        m.vx *= 0.6;
-        m.vy *= 0.6;
-        if (!m.data.lit) {
-          m.data.lit = 1;
-          api.strike(sim, {
-            shape: 'line',
-            x: m.x,
-            y: m.y,
-            r: 3.2,
-            w: 0.55,
-            ang: m.face,
-            warn: ABNORMAL.kickWarn,
-            dmg: m.dmg * 1.25,
-            knock: 7,
-            art: 'f13_kick',
-            from: m.id,
-          });
-        }
-        if (m.t > ABNORMAL.kickWarn - 0.22) m.danger = 3.6;
-        if (m.t >= ABNORMAL.kickWarn) {
-          m.data.lit = 0;
-          api.setMode(m, 'recover');
-          m.cd = 1;
-        }
-        return;
-      }
-    }
-    if (giantMoves(sim, m, api, 1)) return;
-    if (m.mode !== 'wander' && m.mode !== 'stalk' && m.mode !== 'home') api.setMode(m, 'stalk');
-    if (m.mode === 'stalk' && m.cd <= 0 && m.data.leapCd <= 0 && c.dist > 3 && c.dist < 8.5) {
-      if (roomFor(sim, api, h.x, h.y, m.r * 0.8) && clearLine(sim, api, m.x, m.y, h.x, h.y)) {
-        abnormalLeap(sim, m, api, h.x, h.y);
-        return;
-      }
-    }
-    if (m.mode === 'stalk' && c.dist > 2.5) {
-      // Бег зигзагом, рывками.
-      const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-      const z = Math.sin(sim.time * 3.1 + m.id) * 0.9;
-      const a = Math.atan2(cy, cx) + z;
-      stride(m, a, m.speed, GIANT.f13_abnormal.turn, dt);
-      return;
-    }
-    giantStalk(sim, m, dt, c, api, (rel) => {
-      if (rel < 0.7 && c.dist < 3.6) return 'kick';
-      return walkerPick(sim, m, c, rel);
-    });
-  },
-  onHit(sim, m, hit) {
-    if (m.mode === 'air') return 0;
-    return giantHit(sim, m, hit.ang);
-  },
-  onDeath(sim, m, _mode, api) {
-    m.data.ghost = 0;
-    giantDeath(sim, m, api);
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Кристальная особь: быстрая, пинок линией и мах конусом. Зашёл за спину —
-// затвердевает кристаллом (удар отбит), кристалл лопается кольцом осколков,
-// и особь на миг голая — вот тогда бей. В своём дворе твердеет чаще.
-// ---------------------------------------------------------------------------
-
-export const CRYSTAL = { harden: 1.3, shatterWarn: 0.5, bare: 1.4, cd: 6, cdHome: 3.5 };
-
-registerBrain('f13_crystal', {
-  step(sim, m, dt, c, api) {
-    giantTick(sim, m, dt);
-    shoulder(sim, m);
-    m.tele = null;
-    m.danger = 0;
-    if (heroDown(sim)) {
-      m.vx *= 0.9;
-      m.vy *= 0.9;
-      return;
-    }
-    const h = sim.hero;
-    m.data.hardCd = (m.data.hardCd ?? 0) - dt;
-    const home = hypot(m.x - (m.data.px ?? m.hx), m.y - (m.data.py ?? m.hy)) < 7;
-    switch (m.mode) {
-      case 'harden':
-        m.vx *= 0.6;
-        m.vy *= 0.6;
-        // Во дворе с кристаллами затягивается.
-        if (home) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.015 * dt);
-        m.tele = { shape: 'ring', r: 1.9, w: 0.7, k: Math.min(1, m.t / CRYSTAL.harden) };
-        if (m.t >= CRYSTAL.harden) {
-          api.setMode(m, 'shatter');
-          api.strike(sim, {
-            shape: 'ring',
-            x: m.x,
-            y: m.y,
-            r: 1.9,
-            w: 0.7,
-            warn: CRYSTAL.shatterWarn,
-            dmg: m.dmg * 1.1,
-            knock: 7,
-            art: 'f13_shards',
-            from: m.id,
-          });
-        }
-        return;
-      case 'shatter':
-        m.vx *= 0.6;
-        m.vy *= 0.6;
-        if (m.t > CRYSTAL.shatterWarn - 0.22) m.danger = 2.8;
-        if (m.t >= CRYSTAL.shatterWarn) {
-          api.setMode(m, 'bare');
-          sim.events.push({ t: 'boss', what: 'f13_crystal_stone' });
-          sim.events.push({ t: 'flash', color: '#bff4ff', k: 0.3 });
-        }
-        return;
-      case 'bare':
-        m.vx *= 0.7;
-        m.vy *= 0.7;
-        if (m.t > CRYSTAL.bare) {
-          api.setMode(m, 'stalk');
-          m.cd = 0.4;
-        }
-        return;
-      case 'kick': {
-        m.vx *= 0.6;
-        m.vy *= 0.6;
-        if (!m.data.lit) {
-          m.data.lit = 1;
-          api.strike(sim, {
-            shape: 'line',
-            x: m.x,
-            y: m.y,
-            r: 3,
-            w: 0.5,
-            ang: m.face,
-            warn: 0.55,
-            dmg: m.dmg * 1.3,
-            knock: 7,
-            art: 'f13_kick',
-            from: m.id,
-          });
-        }
-        if (m.t > 0.33) m.danger = 3.4;
-        if (m.t >= 0.55) {
-          m.data.lit = 0;
-          api.setMode(m, 'recover');
-          m.cd = 0.8;
-        }
-        return;
-      }
-    }
-    // Зашёл за спину — затвердеть (раз в несколько секунд).
-    if (
-      m.mode !== 'wander' &&
-      m.mode !== 'home' &&
-      m.data.hardCd <= 0 &&
-      ((m.data.behind ?? 0) > 0.45 || (m.data.naped ?? 0) >= 1) &&
-      c.dist < 3.2
-    ) {
-      api.setMode(m, 'harden');
-      m.data.hardCd = home ? CRYSTAL.cdHome : CRYSTAL.cd;
-      m.data.naped = 0;
-      sim.events.push({ t: 'boss', what: 'f13_crystal_stone' });
-      return;
-    }
-    if (giantMoves(sim, m, api, 1.1)) return;
-    if (m.mode !== 'wander' && m.mode !== 'stalk' && m.mode !== 'home') api.setMode(m, 'stalk');
-    giantStalk(sim, m, dt, c, api, (rel) => {
-      if (rel < 0.5 && c.dist > 1.6 && c.dist < 3.2) return 'kick';
-      if (rel < 0.9 && c.dist < 2.6) return 'swipe';
-      if (rel >= 0.9 && c.dist < 2.3) return 'stomp';
-      return null;
-    });
-    void h;
-  },
-  onHit(sim, m, hit) {
-    if (m.mode === 'harden' || m.mode === 'shatter') return 0;
-    if (m.mode === 'bare') {
-      m.data.cut = 0.3;
-      return 3.5;
-    }
-    return giantHit(sim, m, hit.ang);
-  },
-  onDeath(sim, m, _mode, api) {
-    giantDeath(sim, m, api);
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Ползун: низкий, на четвереньках, живёт в подвалах, где исполину тесно.
-// Рывок линией с укусом; после рывка лежит — окно. Лоб — в броне из черепа.
-// ---------------------------------------------------------------------------
-
-export const CRAWL = { aim: 0.55, speed: 8, dur: 0.45 };
-
-registerBrain('f13_crawler', {
-  step(sim, m, dt, c, api) {
-    giantTick(sim, m, dt);
-    m.tele = null;
-    m.danger = 0;
-    if (heroDown(sim)) {
-      m.vx *= 0.9;
-      m.vy *= 0.9;
-      return;
-    }
-    const h = sim.hero;
-    switch (m.mode) {
-      case 'lungeAim': {
-        m.vx *= 0.6;
-        m.vy *= 0.6;
-        if (m.t < CRAWL.aim * 0.6) turnTo(m, Math.atan2(h.y - m.y, h.x - m.x), 5, dt);
-        const len = Math.min(CRAWL.speed * CRAWL.dur, clearDist(sim, api, m.x, m.y, m.face, 4));
-        m.tele = { shape: 'line', r: len, w: 0.5, ang: m.face, k: Math.min(1, m.t / CRAWL.aim) };
-        if (m.t > CRAWL.aim - 0.22) m.danger = len + 0.3;
-        if (m.t >= CRAWL.aim) {
-          api.setMode(m, 'lunge');
-          m.data.hit = 0;
-        }
-        return;
-      }
-      case 'lunge':
-        m.vx = Math.cos(m.face) * CRAWL.speed;
-        m.vy = Math.sin(m.face) * CRAWL.speed;
-        if (!m.data.hit && canHurt(sim) && hypot(h.x - m.x, h.y - m.y) < m.r + h.r + 0.15) {
-          m.data.hit = 1;
-          api.hurtHero(sim, m.dmg * 1.3, m.x, m.y, 5, m.kind);
-        }
-        if (m.t >= CRAWL.dur) {
-          api.setMode(m, 'recover');
-          m.cd = 0.9 + sim.rng() * 0.4;
-        }
-        return;
-      case 'recover':
-        recoverStep(m, api, 0.9, 'stalk');
-        return;
-      case 'down':
-      case 'getup':
-        downStep(sim, m, api);
-        return;
-    }
-    if (m.mode !== 'stalk') api.setMode(m, 'stalk');
-    if (m.cd <= 0 && c.dist < 3.4 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
-      api.setMode(m, 'lungeAim');
-      m.face = Math.atan2(h.y - m.y, h.x - m.x);
-      return;
-    }
-    const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-    stride(m, Math.atan2(cy, cx), c.dist < 1.2 ? 0 : m.speed, GIANT.f13_crawler.turn, dt);
-  },
-  onHit(sim, m, hit) {
-    if (m.mode === 'recover') {
-      m.data.cut = 0.3;
-      return 1.6;
-    }
-    return giantHit(sim, m, hit.ang);
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Ухмылка: мелкий исполин стаей. Кусает, как крыса (библиотека `melee`),
-// но удар в лоб его тоже почти не берёт — привыкай к затылку с малых.
-// ---------------------------------------------------------------------------
-
-registerBrain('f13_grin', {
-  step(sim, m, dt, c, api) {
-    BRAINS.get('melee')?.step(sim, m, dt, c, api);
-  },
-  onHit(_sim, m, hit) {
-    const side = napeSide(m, hit.ang);
-    if (side === 'back') {
-      m.data.cut = 0.25;
-      return 1.6;
-    }
-    return side === 'front' ? 0.75 : 1;
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Ворона: кружит над героем, пикирует по линии (метка), летает над
-// провалами. Спит на насесте, пока не подойдёшь.
-// ---------------------------------------------------------------------------
-
-export const CROW = { orbit: 2.6, aim: 0.45, swoop: 9, dur: 0.55 };
-
-registerBrain('f13_crow', {
-  step(sim, m, dt, c, api) {
-    m.tele = null;
-    m.danger = 0;
-    const h = sim.hero;
-    if (heroDown(sim)) {
-      m.vx *= 0.9;
-      m.vy *= 0.9;
-      return;
-    }
-    switch (m.mode) {
-      case 'swoopAim': {
-        m.vx *= 0.8;
-        m.vy *= 0.8;
-        if (m.t < CROW.aim * 0.6) m.face = Math.atan2(h.y - m.y, h.x - m.x);
-        const len = CROW.swoop * CROW.dur;
-        m.tele = { shape: 'line', r: len, w: 0.3, ang: m.face, k: Math.min(1, m.t / CROW.aim) };
-        if (m.t > CROW.aim - 0.2) m.danger = len;
-        if (m.t >= CROW.aim) {
-          api.setMode(m, 'swoop');
-          m.data.hit = 0;
-        }
-        return;
-      }
-      case 'swoop':
-        m.vx = Math.cos(m.face) * CROW.swoop;
-        m.vy = Math.sin(m.face) * CROW.swoop;
-        if (!m.data.hit && canHurt(sim) && hypot(h.x - m.x, h.y - m.y) < m.r + h.r + 0.1) {
-          m.data.hit = 1;
-          api.hurtHero(sim, m.dmg, m.x, m.y, 2, m.kind);
-        }
-        if (m.t >= CROW.dur) {
-          api.setMode(m, 'circle');
-          m.cd = 1.4 + sim.rng() * 1.4;
-        }
-        return;
-      case 'flee': {
-        // Набат спугнул — улетает прочь и возвращается.
-        const a = Math.atan2(m.y - h.y, m.x - h.x);
-        api.steer(sim, m, Math.cos(a), Math.sin(a), m.speed, dt);
-        if (m.t > 2.5) api.setMode(m, 'circle');
-        return;
-      }
-    }
-    if (m.mode !== 'circle') api.setMode(m, 'circle');
-    // Кружит: своя сторона орбиты у каждой вороны.
-    const phase = sim.time * (0.9 + (m.id % 3) * 0.15) + m.id;
-    const r = CROW.orbit + Math.sin(phase * 1.7) * 0.5;
-    const tx = h.x + Math.cos(phase) * r;
-    const ty = h.y + Math.sin(phase) * r * 0.8;
-    const dx = tx - m.x;
-    const dy = ty - m.y;
-    const d = hypot(dx, dy) || 1;
-    api.steer(sim, m, dx / d, dy / d, m.speed * Math.min(1, d / 1.5), dt);
-    if (m.cd <= 0 && c.dist < 4.5) {
-      api.setMode(m, 'swoopAim');
-      m.face = Math.atan2(h.y - m.y, h.x - m.x);
-    }
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Контрабандист: удирает с мешком, бросает дымовую шашку и уходит СВОИМ
-// крюкомётом через провал к кольцу столба. От ударов сыплет монеты.
-// ---------------------------------------------------------------------------
-
-export const SMUG = { smokeCd: 4, zip: 0.35 };
-
-registerBrain('f13_smuggler', {
-  step(sim, m, dt, c, api) {
-    m.tele = null;
-    m.danger = 0;
-    const h = sim.hero;
-    m.data.smoke = (m.data.smoke ?? 1) - dt;
-    if (m.mode === 'zip') {
-      // Летит на тросе к кольцу — через провал, недосягаем.
-      const k = Math.min(1, m.t / SMUG.zip);
-      m.data.ghost = 1;
-      m.x = m.data.sx + (m.data.tx - m.data.sx) * k;
-      m.y = m.data.sy + (m.data.ty - m.data.sy) * k;
-      m.vx = 0;
-      m.vy = 0;
-      if (k >= 1) {
-        m.data.ghost = 0;
-        api.setMode(m, 'flee');
-        m.data.zipCd = 6;
-      }
-      return;
-    }
-    m.data.zipCd = (m.data.zipCd ?? 0) - dt;
-    if (m.mode !== 'flee') api.setMode(m, 'flee');
-    if (c.dist < 2.4 && m.data.smoke <= 0) {
-      m.data.smoke = SMUG.smokeCd;
-      api.zone(sim, { x: m.x, y: m.y, r: 1.7, life: 3, slow: 0.55, art: 'f13_smoke' });
-      sim.events.push({ t: 'boss', what: 'f13_smoke' });
-    }
-    // Столб рядом, а герой на хвосте — уйти тросом.
-    const st = STATE.get(sim);
-    if (st && m.data.zipCd <= 0 && c.dist < 7) {
-      for (const hk of st.hooks) {
-        if (hk.combat) continue;
-        const d = hypot(hk.x - m.x, hk.y - m.y);
-        if (d > 1.4) continue;
-        if (hypot(hk.tx - h.x, hk.ty - h.y) < 3) continue;
-        api.setMode(m, 'zip');
-        m.data.sx = m.x;
-        m.data.sy = m.y;
-        m.data.tx = hk.tx;
-        m.data.ty = hk.ty;
-        const rope: ZX = {
-          x: hk.x,
-          y: hk.y,
-          r: 0.5,
-          life: SMUG.zip + 0.15,
-          art: 'f13_rope',
-          above: true,
-          tx: hk.tx,
-          ty: hk.ty,
-          mob: m.id,
-        };
-        api.zone(sim, rope);
-        sim.events.push({ t: 'boss', what: 'f13_zip' });
-        return;
-      }
-    }
-    // Бежит прочь; в тупике — к ближнему столбу.
-    let dir = api.flowDir(sim, m.x, m.y, true);
-    if (st && (!dir || c.dist < 3)) {
-      let best: HookRec | null = null;
-      let bd = 12;
-      for (const hk of st.hooks) {
-        if (hk.combat) continue;
-        const d = hypot(hk.x - m.x, hk.y - m.y);
-        if (d < bd && hypot(hk.x - h.x, hk.y - h.y) > d) {
-          bd = d;
-          best = hk;
-        }
-      }
-      if (best) {
-        const [cx, cy] = [best.x - m.x, best.y - m.y];
-        const l = hypot(cx, cy) || 1;
-        dir = [cx / l, cy / l];
-      }
-    }
-    const [fx, fy] = dir ?? [-(h.x - m.x) / (c.dist || 1), -(h.y - m.y) / (c.dist || 1)];
-    api.steer(sim, m, fx, fy, m.speed * (c.dist < 6 ? 1 : 0.5), dt);
-  },
-  onHit(sim, m, _hit, api) {
-    // Мешок рвётся — монеты на мостовую.
-    api.dropAt(sim, 'coin', 90, m.x, m.y);
-    return 1;
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Колосс (4×4). Нога — дуга кольца, рука — конус. Четыре фазы:
-//   0 «КОЛОСС»    — ладонь, топот, разворот; столбы по краям — за спину;
-//   1 «ПАР»       — окутан паром: затылок закрыт, пар жжёт вплотную, из
-//                   решёток бьют струи. Крюк за спину срывает пар на 2,6 с;
-//   2 «ТОПОТ»     — топот обваливает Стену: обломки дождём, площадь
-//                   трескается по линиям разлома (крюк через трещину),
-//                   издали швыряет глыбы; пушки по краям валят на колени;
-//   3 «ИСПАРЕНИЕ» — тает: жар вокруг, кольца пара расходятся волнами,
-//                   площадь чернеет под его шагами.
-// ---------------------------------------------------------------------------
-
-export const COL = {
-  hp: [0.75, 0.5, 0.25],
-  rise: 2.6,
-  roar: 1.3,
-  turn: [0.8, 0.8, 0.85, 1.1],
-  walk: [1.15, 1.1, 1.15, 1.4],
-  swipe: { r: 5.2, arc: 1.5, warn: 1, dmg: 1.3 },
-  stomp: { r: 2.9, w: 0.8, arc: 2.4, warn: 0.9, dmg: 1.05, cd: 3.2 },
-  back: { r: 3.9, arc: 2.2, warn: 0.8, dmg: 1.1 },
-  /** Разворот не чаще — окно для затылка между наказаниями. */
-  spin: 4.4,
-  naps: 3,
-  vent: { r: 3.4, warn: 0.8, life: 2.2, dps: 0.05, cd: 7 },
-  cloak: { r: 2.4, dps: 0.02 },
-  bare: 2.6,
-  quake: { warn: 1.15, r: 3.3, w: 1.1, cd: 9, debris: 12, crack: 1.6 },
-  throw: { windup: 1.1, cd: 5 },
-  rings: { cd: 8, warn: 0.75, gap: 0.32, radii: [2.6, 4.6, 6.6, 8.6] },
-  heat: { r: 2.3, dps: 0.03 },
-  kneel: 3.4,
-  /** Пушка по Колоссу: доля здоровья и множитель удара, пока он на коленях. */
-  cannonHit: 0.05,
-  kneelMul: 1.5,
+export const STR = {
+  /** Длина нити по полу (на север), клеток. */
+  len: 2.4,
+  /** Срезанная нить — кукла шатается, с. */
+  reel: 0.6,
+  /** Нити целы — удар куклы сильнее. */
+  intact: 1.25,
+  crawlSpeed: 0.45,
+  crawlDmg: 0.7,
+  crawlHit: 1.5,
+  /** Нити отдёргивают от удара: множитель урона и перезарядка. */
+  yank: 0.4,
+  yankCd: 3.5,
+  /** Мешок противовеса режет нити в этом радиусе. */
+  bagR: 1.6,
 };
 
-interface ColState {
-  /** Клетки, сменённые боем (вернуть на сброс). */
-  changed: Map<number, { tile: number; mark: number }>;
-  /** Линии разлома: клетки, ещё не раскрытые. */
-  faults: number[][];
-  /** Трескающиеся клетки: когда станут пропастью. */
-  cracking: Map<number, number>;
-  /** Плащ пара / жар (зона, что ходит за ним). */
-  aura: number;
-  vents: number[];
-  ventT: number;
-  ventPar: number;
-  scorchT: number;
+/** Сколько нитей у вида. */
+export const STRINGS: Record<string, number> = {
+  f13_knight: 2,
+  f13_nutcracker: 3,
+  f13_drummer: 2,
+  f13_fiddler: 1,
+  f13_ballerina: 1,
+};
+/** Лёгкие куклы без нитей падают и рассыпаются. */
+const LIGHT_PUPPET = new Set(['f13_fiddler', 'f13_ballerina']);
+
+export const SPOT = { beat: 0.75, fastBeat: 0.5, r: 2.2, light: 3.4, turn: 14, see: 12 };
+export const SHADOW = { lose: 4.5, find: 3.6, chand: 3.6, back: 2 };
+export const TRAP = { period: 6, warn: 1.2, open: 2, near: 16, hurt: 0.07, leverCd: 10 };
+export const IRON = { gap: 6, step: 0.9, warn: 1, hold: 2.4, share: 0.16, jam: 14 };
+export const SCENE = { warn: 2, hold: 14, changes: 3, crushHero: 0.08, crushMob: 0.4 };
+export const ACT_CD = { weight: 14, winch: 25, hold: 14, baton: 20, hush: 8, bell: 8, stopper: 16 };
+
+// ---------------------------------------------------------------------------
+// Видимое для рисовальщиков: кадр — одна вылазка на экране.
+// ---------------------------------------------------------------------------
+
+export interface SpotFx {
+  x: number;
+  y: number;
+  /** Где стоит фонарь (луч тянется от него). */
+  lx: number;
+  ly: number;
+  on: boolean;
+  /** Повёрнут на вторую дорожку. */
+  turned: boolean;
 }
 
-const COLST = new WeakMap<Sim, ColState>();
+export const F13_FX = {
+  /** Мобы текущей вылазки — нити рисует одна зона поверх темноты. */
+  mobs: [] as Mob[],
+  time: 0,
+  spots: [] as SpotFx[],
+  beat: 0,
+  beatLen: SPOT.beat,
+  /** Сцена Кукловода: акт, переход, окно. */
+  act: 0,
+  trans: 0,
+  open: 0,
+  vaga: { x: 0, y: 0 },
+  waves: [] as { y: number; dir: number; gaps: number[]; gapW: number; t: number }[],
+  stars: [] as { px: number; py: number; x: number; y: number; cut: number; L: number }[],
+  moon: { x: 0, y: 0, r: 0 },
+};
 
-function colState(sim: Sim): ColState {
-  let st = COLST.get(sim);
-  if (!st) {
-    st = {
-      changed: new Map(),
-      faults: [],
-      cracking: new Map(),
-      aura: 0,
-      vents: [],
-      ventT: 0,
-      ventPar: 0,
-      scorchT: 0,
-    };
-    COLST.set(sim, st);
-  }
-  return st;
+// ---------------------------------------------------------------------------
+// Нити.
+// ---------------------------------------------------------------------------
+
+export interface StringSeg {
+  i: number;
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+  cut: boolean;
 }
 
-const colossusOf = (sim: Sim) => sim.mobs.find((x) => x.kind === 'f13boss' && x.mode !== 'dying');
+/** Где крестовина Кукловода (концы нитей исполина) — ставит сценарий. */
+const VAGA = new WeakMap<Mob, { x: number; y: number }>();
 
-/** Сменить клетку арены, запомнив прежнюю (для сброса боя). */
-function retile(sim: Sim, api: SimApi, i: number, tile: number, mark: number): void {
-  const st = colState(sim);
-  const w = sim.world;
-  if (!st.changed.has(i)) st.changed.set(i, { tile: sim.tiles[i], mark: w.mark[i] });
-  api.setTile(sim, i % w.w, Math.floor(i / w.w), tile, mark);
-}
-
-/** Вернуть арену: плиты, трещины, копоть, свет. */
-function restoreArena(sim: Sim, api: SimApi): void {
-  const st = COLST.get(sim);
-  if (st) {
-    const W = sim.world.w;
-    for (const [i, v] of st.changed) api.setTile(sim, i % W, Math.floor(i / W), v.tile, v.mark);
-    const au = sim.zones.find((z) => z.id === st.aura);
-    if (au) au.life = 0;
-  }
-  COLST.delete(sim);
-  for (const k of ['colA', 'colB', 'colC', 'colD', 'colE']) api.light(sim, k, null);
-}
-
-/** Зона, которая ходит за Колоссом (плащ пара, жар). */
-function auraOf(sim: Sim, st: ColState) {
-  return st.aura ? sim.zones.find((z) => z.id === st.aura) : undefined;
-}
-
-function setAura(
-  sim: Sim,
-  api: SimApi,
-  st: ColState,
-  m: Mob,
-  art: string | null,
-  r = 0,
-  dps = 0,
-): void {
-  const z = auraOf(sim, st);
-  if (z) z.life = 0;
-  st.aura = 0;
-  if (!art) return;
-  // Плащ пара — поверх Колосса (его окутывает), жар — по земле.
-  api.zone(sim, {
-    x: m.x,
-    y: m.y,
-    r,
-    life: 1e6,
-    dps,
-    status: 'burn',
-    dur: 0.8,
-    art,
-    above: art === 'f13_cloak',
-  });
-  st.aura = sim.zones[sim.zones.length - 1]?.id ?? 0;
-}
-
-const hasteOf = (sim: Sim) => ((sim.boss?.phase ?? 0) >= 3 ? 1.2 : 1);
-
-/** Рука: конус перед собой. */
-function colSwipe(sim: Sim, m: Mob, api: SimApi): boolean {
-  const S = COL.swipe;
-  const T = S.warn / hasteOf(sim);
-  m.vx *= 0.7;
-  m.vy *= 0.7;
-  if (!m.data.lit) {
-    m.data.lit = 1;
-    api.strike(sim, {
-      shape: 'cone',
-      x: m.x,
-      y: m.y,
-      r: S.r,
-      ang: m.face,
-      arc: S.arc,
-      warn: T,
-      dmg: m.dmg * S.dmg,
-      knock: 9,
-      art: 'f13_colpalm', // v2.87 — только рисунок
-      from: m.id,
-    });
-  }
-  if (m.t > T - 0.25) m.danger = S.r + 0.6;
-  if (m.t >= T) {
-    m.data.lit = 0;
-    sim.events.push({ t: 'shake', k: 0.35 });
-    return true;
-  }
-  return false;
-}
-
-/** Нога: дуга кольца на стороне героя — уйди вбок, внутрь или наружу. */
-function colStomp(sim: Sim, m: Mob, api: SimApi): boolean {
-  const S = COL.stomp;
-  const T = S.warn / hasteOf(sim);
-  const h = sim.hero;
-  m.vx *= 0.7;
-  m.vy *= 0.7;
-  if (!m.data.lit) {
-    m.data.lit = 1;
-    m.data.sa = Math.atan2(h.y - m.y, h.x - m.x);
-    api.strike(sim, {
-      shape: 'ring',
-      x: m.x,
-      y: m.y,
-      r: S.r,
-      w: S.w,
-      ang: m.data.sa,
-      arc: S.arc,
-      warn: T,
-      dmg: m.dmg * S.dmg,
-      knock: 7,
-      art: 'f13_foot',
-      from: m.id,
-    });
-  }
-  if (m.t > T - 0.25) m.danger = S.r + S.w + 0.4;
-  if (m.t >= T) {
-    m.data.lit = 0;
-    sim.events.push({ t: 'shake', k: 0.5 });
-    sim.events.push({ t: 'boss', what: 'f13_stomp_wall' });
-    puff(
-      api,
-      sim,
-      'f13_coldust', // v2.87 — только рисунок
-      m.x + Math.cos(m.data.sa) * S.r,
-      m.y + Math.sin(m.data.sa) * S.r,
-      1.6,
-      0.8,
-    );
-    // v2.87 — только рисунок: нога опустилась — раскол и пыль у ног.
-    api.vfx(sim, { x: m.x, y: m.y + 0.2, r: 1.5, life: 1.1, art: 'f13_colplant' }); // v2.87 — только рисунок
-    return true;
-  }
-  return false;
-}
-
-/** Разворот: дуга за спиной, потом лицом туда. */
-function colBack(sim: Sim, m: Mob, api: SimApi): boolean {
-  const S = COL.back;
-  m.vx *= 0.7;
-  m.vy *= 0.7;
-  if (!m.data.lit) {
-    m.data.lit = 1;
-    m.data.sa = m.face + Math.PI;
-    m.data.vSpin = angDiff(m.data.sa, m.face) < 0 ? -1 : 1; // v2.87 — только рисунок: куда повернётся
-    api.strike(sim, {
-      shape: 'cone',
-      x: m.x,
-      y: m.y,
-      r: S.r,
-      ang: m.data.sa,
-      arc: S.arc,
-      warn: S.warn,
-      dmg: m.dmg * S.dmg,
-      knock: 9,
-      art: 'f13_colback', // v2.87 — только рисунок
-      from: m.id,
-    });
-  }
-  if (m.t > S.warn - 0.25) m.danger = S.r + 0.5;
-  if (m.t >= S.warn) {
-    if (!m.data.vPiv) api.vfx(sim, { x: m.x, y: m.y + 0.1, r: 1.4, life: 0.8, art: 'f13_colpivot', k: m.data.vSpin } as ZX); // v2.87 — только рисунок
-    m.data.vPiv = 1; // v2.87 — только рисунок
-    const k = Math.min(1, (m.t - S.warn) / 0.5);
-    m.face += angDiff(m.data.sa, m.face) * k;
-    if (k >= 1) {
-      m.face = m.data.sa;
-      m.data.vPiv = 0; // v2.87 — только рисунок
-      m.data.lit = 0;
-      m.data.naped = 0;
-      m.data.behind = 0;
-      return true;
+/** Нити моба: от плеч на север к балке (у исполина — к ваге Кукловода). */
+export function stringsOf(m: Mob): StringSeg[] {
+  const n = m.data.sn ?? 0;
+  if (n <= 0) return [];
+  const cut = m.data.cut ?? 0;
+  const out: StringSeg[] = [];
+  const giant = m.kind === 'f13_giant';
+  const spider = m.kind === 'f13_spider';
+  const W = giant ? 1.3 : n >= 3 ? 0.56 : 0.46;
+  const vg = giant ? VAGA.get(m) : undefined;
+  for (let i = 0; i < n; i++) {
+    const ox = n === 1 ? 0 : (i / (n - 1) - 0.5) * W;
+    const ax = m.x + ox;
+    const ay = m.y - (giant ? 0.55 : 0.18);
+    let bx = m.x + ox * 1.6;
+    let by = m.y - (spider ? 3 : STR.len);
+    if (vg) {
+      bx = vg.x + ox * 0.5;
+      by = vg.y + 0.25;
     }
+    out.push({ i, ax, ay, bx, by, cut: (cut & (1 << i)) !== 0 });
   }
-  return false;
+  return out;
 }
 
-/** Топот фазы 2: кольцо у ног, обломки дождём, трещина по линии разлома. */
-function colQuake(sim: Sim, m: Mob, api: SimApi, b: BossFight): boolean {
-  const Q = COL.quake;
-  m.vx *= 0.6;
-  m.vy *= 0.6;
-  if (!m.data.lit) {
-    m.data.lit = 1;
-    api.strike(sim, {
-      shape: 'ring',
-      x: m.x,
-      y: m.y,
-      r: Q.r,
-      w: Q.w,
-      warn: Q.warn,
-      dmg: m.dmg * 1.2,
-      knock: 8,
-      art: 'f13_colquake', // v2.87 — только рисунок
-      from: m.id,
-    });
-    // Обломки Стены — по всей площади, с метками.
-    const cells = [...b.cells];
-    for (let i = 0; i < Q.debris; i++) {
-      const cell = cells[Math.floor(sim.rng() * cells.length)];
-      const x = (cell % sim.world.w) + 0.5;
-      const y = Math.floor(cell / sim.world.w) + 0.5;
-      if (hypot(x - m.x, y - m.y) < 2.4) continue;
-      api.strike(sim, {
-        shape: 'circle',
-        x,
-        y,
-        r: 0.95,
-        warn: Q.warn + 0.2 + sim.rng() * 0.7,
-        dmg: m.dmg * 0.8,
-        knock: 3,
-        art: 'f13_coldebris', // v2.87 — только рисунок
-        from: m.id,
-      });
+const stringsLeft = (m: Mob) => {
+  const n = m.data.sn ?? 0;
+  let k = 0;
+  for (let i = 0; i < n; i++) if (!((m.data.cut ?? 0) & (1 << i))) k++;
+  return k;
+};
+
+/** Кукла ещё на нитях (хотя бы одна цела). */
+const hung = (m: Mob) => (m.data.sn ?? 0) > 0 && stringsLeft(m) > 0;
+
+/** Можно ли сейчас резать нити этого моба. */
+function cuttable(m: Mob): boolean {
+  if (m.mode === 'dying' || !hung(m)) return false;
+  if (m.kind === 'f13_ballerina' && m.mode === 'f13_spin') return false;
+  if (m.kind === 'f13_spider') return m.mode === 'f13_hang';
+  if (m.kind === 'f13_giant') return m.mode !== 'f13_rebuild' && m.mode !== 'f13_slump';
+  return !isGhost(m);
+}
+
+/** Слушатели среза для сценария босса (исполин). */
+const CUT_HOOK: { giant: ((sim: Sim, m: Mob, api: SimApi) => void) | null } = { giant: null };
+
+function cutString(sim: Sim, m: Mob, i: number, api: SimApi): void {
+  const segs = stringsOf(m);
+  const s = segs[i];
+  if (!s || s.cut) return;
+  m.data.cut = (m.data.cut ?? 0) | (1 << i);
+  m.data.cutAt = sim.time;
+  fx(sim, api, 'f13_snap', s.ax, s.ay, 0.6, 0.5, { bx: s.bx, by: s.by }, true);
+  sim.events.push({ t: 'boss', what: 'f13_snap_fall' });
+  if (m.kind === 'f13_giant') {
+    CUT_HOOK.giant?.(sim, m, api);
+    return;
+  }
+  if (m.kind === 'f13_spider') {
+    m.data.sn = 0;
+    m.data.ghost = 0;
+    api.setMode(m, 'f13_fallen');
+    return;
+  }
+  if (stringsLeft(m) > 0) {
+    if (m.mode !== 'f13_spin') {
+      m.tele = null;
+      m.danger = 0;
+      api.setMode(m, 'f13_reel');
     }
-    // И обязательно — одна у героя: стоять на месте нельзя.
-    api.strike(sim, {
-      shape: 'circle',
-      x: sim.hero.x,
-      y: sim.hero.y,
-      r: 1,
-      warn: Q.warn + 0.5,
-      dmg: m.dmg * 0.8,
-      knock: 3,
-      art: 'f13_coldebris', // v2.87 — только рисунок
-      from: m.id,
-    });
+    return;
   }
-  if (m.t > Q.warn - 0.25) m.danger = Q.r + Q.w + 0.4;
-  if (m.t >= Q.warn) {
-    m.data.lit = 0;
-    sim.events.push({ t: 'shake', k: 0.85 });
-    sim.events.push({ t: 'boss', what: 'f13_quake_wall' });
-    puff(api, sim, 'f13_coldust', m.x, m.y, 4, 1.1); // v2.87 — только рисунок
-    // Площадь трескается по очередной линии разлома.
-    const st = colState(sim);
-    const line = st.faults.shift();
-    if (line) {
-      const vc: number[] = []; // v2.87 — только рисунок
-      for (const i of line) {
-        if (sim.tiles[i] === T_DEEP) continue;
-        retile(sim, api, i, T_FLOOR, MK.cracking);
-        st.cracking.set(i, sim.time + Q.crack);
-        vc.push(i); // v2.87 — только рисунок
-      }
-      const W0 = sim.world.w; // v2.87 — только рисунок
-      if (vc.length) api.vfx(sim, { x: (vc[0] % W0) + 0.5, y: Math.floor(vc[0] / W0) + 0.5, r: 1, life: Q.crack + 0.25, art: 'f13_colfault', cells: vc, ww: W0 } as ZX); // v2.87 — только рисунок
-      sim.events.push({
-        t: 'boss',
-        what: 'f13_crack_trap',
-        text: 'ПЛОЩАДЬ ТРЕСКАЕТСЯ',
-        sub: 'сойди с трещины — через разлом крюком',
-      });
-    }
-    return true;
+  // Все нити: лёгкая падает, тяжёлая ползёт.
+  if (LIGHT_PUPPET.has(m.kind)) {
+    fx(sim, api, 'f13_collapse', m.x, m.y, 0.8, 0.9, { k: m.kind === 'f13_ballerina' ? 1 : 0 });
+    envKill(sim, api, m);
+    return;
   }
-  return false;
-}
-
-/** Бросок глыбы из обломков, когда до героя не дойти. */
-function colThrow(sim: Sim, m: Mob, api: SimApi, dt: number): boolean {
-  const h = sim.hero;
-  m.vx *= 0.6;
-  m.vy *= 0.6;
-  turnTo(m, Math.atan2(h.y - m.y, h.x - m.x), 1.6, dt);
-  if (!m.data.vRip) api.vfx(sim, { x: m.x, y: m.y, r: 1.2, life: COL.throw.windup + 0.4, art: 'f13_colrip', ang: m.face } as ZX); // v2.87 — только рисунок
-  m.data.vRip = 1; // v2.87 — только рисунок
-  if (m.t >= COL.throw.windup) {
-    const tx = h.x + h.vx * 0.3;
-    const ty = h.y + h.vy * 0.3;
-    api.shoot(
-      sim,
-      m,
-      Math.atan2(ty - m.y, tx - m.x),
-      {
-        speed: 8,
-        r: 1.1,
-        life: 3,
-        dmg: 1.1,
-        art: 'f13_colrock', // v2.87 — только рисунок
-        lob: true,
-        onLand: { r: 1.4, life: 3, slow: 0.6, art: 'f13_colrubble' }, // v2.87 — только рисунок
-      },
-      tx,
-      ty,
-    );
-    // v2.87 — только рисунок: метка падения (полёт — как в `shoot`).
-    const va = Math.atan2(ty - m.y, tx - m.x); // v2.87 — только рисунок
-    const vx0 = m.x + Math.cos(va) * (m.r + 0.1); // v2.87 — только рисунок
-    const vy0 = m.y + Math.sin(va) * (m.r + 0.1); // v2.87 — только рисунок
-    const vT = Math.max(0.35, hypot(tx - vx0, ty - vy0) / 8); // v2.87 — только рисунок
-    api.vfx(sim, { x: tx, y: ty, r: 1.1, life: vT, art: 'f13_colaim', k: vT, sx: vx0, sy: vy0 } as ZX); // v2.87 — только рисунок
-    m.data.vRip = 0; // v2.87 — только рисунок
-    return true;
+  if (!m.data.crawl) {
+    m.data.crawl = 1;
+    m.speed *= STR.crawlSpeed;
   }
-  return false;
-}
-
-/** Испарение: кольца пара расходятся от него волнами. */
-function colRings(sim: Sim, m: Mob, api: SimApi): boolean {
-  const R = COL.rings;
-  m.vx *= 0.6;
-  m.vy *= 0.6;
-  if (!m.data.lit) {
-    m.data.lit = 1;
-    R.radii.forEach((r, i) =>
-      api.strike(sim, {
-        shape: 'ring',
-        x: m.x,
-        y: m.y,
-        r,
-        w: 0.7,
-        warn: R.warn + i * R.gap,
-        dmg: m.dmg * 0.9,
-        knock: 5,
-        status: 'burn',
-        dur: 1.5,
-        art: 'f13_steamring',
-        from: m.id,
-      }),
-    );
-    sim.events.push({ t: 'boss', what: 'f13_evap_call' });
-  }
-  if (m.t > R.warn - 0.25) m.danger = 3.4;
-  if (m.t >= R.warn + R.gap * (R.radii.length - 1)) {
-    m.data.lit = 0;
-    return true;
-  }
-  return false;
-}
-
-function colStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
-  const h = sim.hero;
-  const b = sim.boss;
-  const phase = b?.phase ?? 0;
-  giantTick(sim, m, dt);
   m.tele = null;
   m.danger = 0;
-  m.data.phase = phase;
-  for (const k of ['ventCd', 'quakeCd', 'ringCd', 'throwCd', 'stompCd'])
-    m.data[k] = (m.data[k] ?? 3) - dt;
-  m.data.bareT = (m.data.bareT ?? 0) - dt;
-  if (m.mode !== 'rise' && m.mode !== 'roar') shoulder(sim, m);
-  if (heroDown(sim)) {
-    m.vx *= 0.85;
-    m.vy *= 0.85;
-    return;
-  }
-  const st = colState(sim);
-  // Аура ходит за ним: плащ пара (фаза 1) или жар (фаза 3).
-  const au = auraOf(sim, st);
-  if (au) {
-    au.x = m.x;
-    au.y = m.y;
-    // Пар сорван крюком — плащ не жжёт.
-    if (phase === 1) au.dps = m.data.bareT > 0 ? 0 : COL.cloak.dps;
-  }
-  switch (m.mode) {
-    case 'rise':
-      m.data.ghost = 1;
-      m.vx = 0;
-      m.vy = 0;
-      m.face = Math.PI / 2;
-      if (m.t >= COL.rise) {
-        m.data.ghost = 0;
-        api.setMode(m, 'stalk');
-        m.cd = 1;
-      }
-      return;
-    case 'roar':
-      m.vx *= 0.7;
-      m.vy *= 0.7;
-      if (m.t >= COL.roar) {
-        api.setMode(m, 'stalk');
-        m.cd = 0.6;
-      }
-      return;
-    case 'swipe':
-      if (colSwipe(sim, m, api)) {
-        api.setMode(m, 'recover');
-        m.cd = 1;
-      }
-      return;
-    case 'stomp':
-      if (colStomp(sim, m, api)) {
-        api.setMode(m, 'recover');
-        m.cd = 0.9;
-      }
-      return;
-    case 'back':
-      if (colBack(sim, m, api)) {
-        api.setMode(m, 'recover');
-        m.cd = 0.6;
-      }
-      return;
-    case 'vent': {
-      m.vx *= 0.6;
-      m.vy *= 0.6;
-      const V = COL.vent;
-      if (!m.data.lit) {
-        m.data.lit = 1;
-        api.zone(sim, {
-          x: m.x,
-          y: m.y,
-          r: V.r,
-          life: V.life,
-          warn: V.warn,
-          dps: V.dps,
-          status: 'burn',
-          dur: 1.2,
-          art: 'f13_ventburst',
-        });
-        sim.events.push({ t: 'boss', what: 'f13_steam_call' });
-      }
-      if (m.t > V.warn - 0.22) m.danger = V.r + 0.4;
-      if (m.t >= V.warn) {
-        sim.events.push({ t: 'shake', k: 0.3 }); // v2.87 — только рисунок: выброс пара
-        api.vfx(sim, { x: m.x, y: m.y, r: V.r, life: V.life, art: 'f13_colvent', above: true }); // v2.87 — только рисунок
-        m.data.lit = 0;
-        api.setMode(m, 'recover');
-        m.cd = 0.8;
-      }
-      return;
-    }
-    case 'quake':
-      if (b && colQuake(sim, m, api, b)) {
-        api.setMode(m, 'recover');
-        m.cd = 1.2;
-      }
-      return;
-    case 'throw':
-      if (colThrow(sim, m, api, dt)) {
-        api.setMode(m, 'recover');
-        m.cd = 1;
-      }
-      return;
-    case 'rings':
-      if (colRings(sim, m, api)) {
-        api.setMode(m, 'recover');
-        m.cd = 0.7;
-      }
-      return;
-    case 'kneel':
-      m.vx *= 0.7;
-      m.vy *= 0.7;
-      if (m.t >= COL.kneel) {
-        api.vfx(sim, { x: m.x, y: m.y + 0.1, r: 1.6, life: 0.9, art: 'f13_colkneel', k: 0 } as ZX); // v2.87 — только рисунок
-        api.setMode(m, 'stalk');
-        m.cd = 0.5;
-      }
-      return;
-    case 'recover':
-      recoverStep(m, api, 0.85 / hasteOf(sim));
-      return;
-  }
-  if (m.mode !== 'stalk') api.setMode(m, 'stalk');
-  const rel = heroRel(sim, m);
-  const dist = c.dist;
-  const reach = clearLine(sim, api, m.x, m.y, h.x, h.y);
-  // Приёмы фаз — по своим часам.
-  if (
-    m.data.spinCd <= 0 &&
-    ((m.data.naped ?? 0) >= COL.naps || (m.data.behind ?? 0) > 2.4) &&
-    dist < 5
-  ) {
-    api.setMode(m, 'back');
-    m.data.spinCd = COL.spin;
-    m.data.lit = 0;
-    return;
-  }
-  if (phase === 1 && m.data.ventCd <= 0 && dist < 5) {
-    api.setMode(m, 'vent');
-    m.data.ventCd = COL.vent.cd;
-    m.data.lit = 0;
-    return;
-  }
-  if (phase === 2 && m.data.quakeCd <= 0) {
-    api.setMode(m, 'quake');
-    m.data.quakeCd = COL.quake.cd;
-    m.data.lit = 0;
-    return;
-  }
-  if (phase === 3 && m.data.ringCd <= 0) {
-    api.setMode(m, 'rings');
-    m.data.ringCd = COL.rings.cd;
-    m.data.lit = 0;
-    return;
-  }
-  if (m.cd <= 0) {
-    if (rel < 0.75 && dist < COL.swipe.r + 0.2) {
-      api.setMode(m, 'swipe');
-      m.data.lit = 0;
-      return;
-    }
-    // Нога — не чаще раза в `stompCd`: между топотами за спиной есть окно
-    // для затылка (иначе топот шёл бы без продыху и затылок не бился).
-    if (rel >= 0.75 && dist < COL.stomp.r + COL.stomp.w && m.data.stompCd <= 0) {
-      api.setMode(m, 'stomp');
-      m.data.stompCd = COL.stomp.cd;
-      m.data.lit = 0;
-      return;
-    }
-    if (phase >= 2 && m.data.throwCd <= 0 && (dist > 7.5 || !reach)) {
-      api.setMode(m, 'throw');
-      m.data.throwCd = COL.throw.cd;
-      return;
-    }
-  }
-  const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
-  const near = dist < m.r + 1.4;
-  stride(m, Math.atan2(cy, cx), near ? 0 : m.speed * COL.walk[phase], COL.turn[phase], dt);
-  m.data.vWalk = (m.data.vWalk ?? 0) + hypot(m.vx, m.vy) * dt; // v2.87 — только рисунок: шаги по пройденному пути
-  if (m.data.vWalk > 0.9) { m.data.vWalk = 0; m.data.vFoot = m.data.vFoot ? 0 : 1; api.vfx(sim, { x: m.x + (m.data.vFoot ? 0.5 : -0.5), y: m.y + 0.15, r: 0.7, life: 0.85, art: 'f13_colstep', k: phase } as ZX); } // v2.87 — только рисунок
+  api.setMode(m, 'f13_reel');
 }
 
-registerBrain('f13boss', {
-  raw: true,
-  step: colStep,
-  onHit(sim, m, hit) {
-    if (m.mode === 'rise' || m.mode === 'roar') return 0;
-    if (m.mode === 'kneel') {
-      m.data.cut = 0.3;
-      return COL.kneelMul;
+/** Паук связал нить обратно. */
+function retie(m: Mob): void {
+  const cut = m.data.cut ?? 0;
+  if (!cut) return;
+  for (let i = 0; i < (m.data.sn ?? 0); i++)
+    if (cut & (1 << i)) {
+      m.data.cut = cut & ~(1 << i);
+      break;
     }
-    const side = napeSide(m, hit.ang);
-    const phase = sim.boss?.phase ?? 0;
-    // Пар закрыл затылок: пока крюк его не сорвёт — почти впустую.
-    if (phase === 1 && !((m.data.bareT ?? 0) > 0)) return side === 'back' ? 0.06 : 0.04;
-    if (side === 'back') {
-      m.data.cut = 0.3;
-      m.data.naped = (m.data.naped ?? 0) + 1;
-      hint(sim, 'nape');
-      return 1;
-    }
-    if (side === 'front') hint(sim, 'front');
-    return side === 'side' ? 0.22 : 0.07;
-  },
-  onDeath(sim, m, _mode, api) {
-    giantDeath(sim, m, api);
-    api.slowmo(sim, 1.4, 0.3);
-    sim.events.push({ t: 'shake', k: 1 });
-    sim.events.push({ t: 'flash', color: '#fff4e0', k: 0.9 });
-    const st = COLST.get(sim);
-    if (st) setAura(sim, api, st, m, null);
-  },
-});
-
-function arenaBox(sim: Sim, b: BossFight): [number, number, number, number] {
-  const W = sim.world.w;
-  let x0 = 1e9;
-  let x1 = -1e9;
-  let y0 = 1e9;
-  let y1 = -1e9;
-  for (const i of b.cells) {
-    const x = i % W;
-    const y = Math.floor(i / W);
-    x0 = Math.min(x0, x);
-    x1 = Math.max(x1, x);
-    y0 = Math.min(y0, y);
-    y1 = Math.max(y1, y);
+  if (m.data.crawl) {
+    m.data.crawl = 0;
+    m.speed /= STR.crawlSpeed;
   }
-  return [x0, y0, x1, y1];
+  m.data.tieAt = 1;
 }
 
-/** Колосс в бою (для крюка «за спину», пушек, теста). */
-export const f13Colossus = colossusOf;
-
-registerBoss('f13boss', {
-  start(sim, b, lead, api) {
-    restoreArena(sim, api);
-    const st = colState(sim);
-    b.phase = 0;
-    // Линии разлома: две — западная и восточная.
-    const W = sim.world.w;
-    const west: number[] = [];
-    const east: number[] = [];
-    for (const i of b.cells)
-      if (sim.world.mark[i] === MK.fault) (i % W < b.obj.x ? west : east).push(i);
-    st.faults = [west, east];
-    for (const i of b.cells) if (sim.world.mark[i] === MK.vent) st.vents.push(i);
-    lead.face = Math.PI / 2;
-    api.setMode(lead, 'rise');
-    // Вход камерой: встаёт из пара у колокольни.
-    api.camera(sim, lead.x, lead.y - 1.5, COL.rise + 0.4);
-    puff(api, sim, 'f13_colrise', lead.x, lead.y, 4.5, COL.rise); // v2.87 — только рисунок
-    sim.events.push({ t: 'shake', k: 0.9 });
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_rise_call',
-      text: 'КОЛОСС',
-      sub: 'бей в затылок — крюки по краям площади',
-    });
-    const [x0, y0, x1] = arenaBox(sim, b);
-    api.light(sim, 'colA', { x: (x0 + x1) / 2 + 0.5, y: y0 + 3, r: 7, tint: 'warm' });
-  },
-  step(sim, b, dt, api) {
-    const m = colossusOf(sim);
-    if (!m) return;
-    const st = colState(sim);
-    const k = m.hp / m.maxHp;
-    const W = sim.world.w;
-    const [x0, y0, x1, y1] = arenaBox(sim, b);
-    const cx = (x0 + x1) / 2 + 0.5;
-    const cy = (y0 + y1) / 2 + 0.5;
-    const busy = m.mode === 'rise' || m.mode === 'roar' || m.mode === 'back';
-    if (b.phase === 0 && k <= COL.hp[0] && !busy) {
-      b.phase = 1;
-      api.setMode(m, 'roar');
-      setAura(sim, api, st, m, 'f13_cloak', COL.cloak.r, COL.cloak.dps);
-      api.vfx(sim, { x: m.x, y: m.y, r: 4, life: COL.roar, art: 'f13_colroar', k: 1 } as ZX); // v2.87 — только рисунок
-      sim.events.push({
-        t: 'boss',
-        what: 'phase',
-        text: 'ПАР',
-        sub: 'затылок в пару — крюком за спину',
-      });
-      sim.events.push({ t: 'flash', color: '#e8f0f0', k: 0.6 });
-      api.light(sim, 'colB', { x: cx, y: cy, r: 9, tint: 'cold' });
-    }
-    if (b.phase === 1 && k <= COL.hp[1] && !busy) {
-      b.phase = 2;
-      api.setMode(m, 'roar');
-      setAura(sim, api, st, m, null);
-      api.vfx(sim, { x: m.x, y: m.y, r: 4.5, life: COL.roar, art: 'f13_colroar', k: 2 } as ZX); // v2.87 — только рисунок
-      m.data.quakeCd = 1.6;
-      sim.events.push({
-        t: 'boss',
-        what: 'phase',
-        text: 'ТОПОТ',
-        sub: 'Стена сыплется — пушка валит его на колени',
-      });
-      api.light(sim, 'colB', null);
-      api.light(sim, 'colC', { x: cx, y: y1 - 2, r: 8, tint: 'warm' });
-    }
-    if (b.phase === 2 && k <= COL.hp[2] && !busy) {
-      b.phase = 3;
-      api.setMode(m, 'roar');
-      setAura(sim, api, st, m, 'f13_heat', COL.heat.r, COL.heat.dps);
-      api.vfx(sim, { x: m.x, y: m.y, r: 4.5, life: COL.roar, art: 'f13_colroar', k: 3, above: true } as ZX); // v2.87 — только рисунок
-      api.vfx(sim, { x: m.x, y: m.y, r: COL.heat.r, life: 1e6, art: 'f13_colheatlit', above: true }); // v2.87 — только рисунок: угли жара
-      m.data.ringCd = 1.5;
-      sim.events.push({
-        t: 'boss',
-        what: 'phase',
-        text: 'ИСПАРЕНИЕ',
-        sub: 'он тает — затылок открыт, вокруг жар',
-      });
-      sim.events.push({ t: 'flash', color: '#ff8a50', k: 0.6 });
-      api.light(sim, 'colD', { x: x0 + 3, y: cy, r: 8, tint: 'red' });
-      api.light(sim, 'colE', { x: x1 - 2, y: cy, r: 8, tint: 'red' });
-    }
-    // ПАР: струи из решёток — чётные и нечётные по очереди.
-    if (b.phase === 1 && st.vents.length) {
-      st.ventT -= dt;
-      if (st.ventT <= 0) {
-        st.ventT = 2.3;
-        st.ventPar ^= 1;
-        st.vents.forEach((i, n) => {
-          if (n % 2 !== st.ventPar) return;
-          api.zone(sim, {
-            x: (i % W) + 0.5,
-            y: Math.floor(i / W) + 0.5,
-            r: 1,
-            life: 1.2,
-            warn: 0.75,
-            dps: 0.06,
-            status: 'burn',
-            dur: 1,
-            art: 'f13_jet',
-            above: true, // v2.87 — только рисунок
-          });
-        });
-      }
-    }
-    // Трещины раскрываются в пропасть.
-    if (st.cracking.size) {
-      const h = sim.hero;
-      const hi = Math.floor(h.y) * W + Math.floor(h.x);
-      const fell: number[] = []; // v2.87 — только рисунок
-      for (const [i, at] of st.cracking) {
-        if (sim.time < at) continue;
-        st.cracking.delete(i);
-        fell.push(i); // v2.87 — только рисунок
-        const onIt = i === hi && !h.pull && h.r > 0.05;
-        retile(sim, api, i, T_DEEP, MK.rift);
-        if (onIt && !heroDown(sim)) {
-          const to = safeCell(sim, hi);
-          if (to !== null) {
-            api.hurtEnv(sim, 0.1);
-            api.moveHero(sim, (to % W) + 0.5, Math.floor(to / W) + 0.5);
-            sim.events.push({
-              t: 'boss',
-              what: 'f13_edge_trap',
-              text: 'СОРВАЛСЯ',
-              sub: 'край ушёл из-под ног',
-            });
-          }
-        }
-      }
-      if (fell.length) api.vfx(sim, { x: (fell[0] % W) + 0.5, y: Math.floor(fell[0] / W) + 0.5, r: 1, life: 1.7, art: 'f13_colrift', cells: fell, ww: W } as ZX); // v2.87 — только рисунок
-    }
-    // ИСПАРЕНИЕ: площадь чернеет под его шагами.
-    if (b.phase === 3) {
-      st.scorchT -= dt;
-      if (st.scorchT <= 0) {
-        st.scorchT = 0.45;
-        const i = Math.floor(m.y + 0.6) * W + Math.floor(m.x + (sim.rng() - 0.5) * 2);
-        const mk = sim.world.mark[i];
-        if (b.cells.has(i) && sim.tiles[i] === T_FLOOR && (mk === MK.mosaic || mk === 0))
-          retile(sim, api, i, T_FLOOR, MK.scorch);
-      }
-    }
-    void y0;
-  },
-  notches: () => COL.hp,
-  reset(sim, _b, api) {
-    restoreArena(sim, api);
-  },
-});
-
-/** Ближняя целая клетка пола — туда сносит сорвавшегося. */
-function safeCell(sim: Sim, from: number): number | null {
-  const W = sim.world.w;
-  const st = COLST.get(sim);
-  const seen = new Set([from]);
-  const q = [from];
-  while (q.length) {
-    const i = q.shift()!;
-    if (i !== from && walkable(sim.tiles[i]) && !st?.cracking.has(i)) return i;
-    for (const d of [1, -1, W, -W]) {
-      const j = i + d;
-      if (seen.has(j) || j < 0 || j >= sim.tiles.length || sim.tiles[j] === T_WALL) continue;
-      seen.add(j);
-      if (seen.size > 400) return null;
-      q.push(j);
-    }
-  }
-  return null;
+function initStrings(m: Mob): void {
+  if (m.data.sn !== undefined) return;
+  m.data.sn = STRINGS[m.kind] ?? 0;
+  m.data.cut = 0;
 }
 
 // ---------------------------------------------------------------------------
-// Правила этажа: посты, крюки, пушки, валун, набат, залы-события.
+// Состояние этажа.
 // ---------------------------------------------------------------------------
-
-/** Столб-якорь: где стоит и куда выносит (у столба исполинов — за спину). */
-export interface HookRec {
-  obj: WorldObj;
-  x: number;
-  y: number;
-  tx: number;
-  ty: number;
-  combat: boolean;
-  area: string;
-  cd: number;
-}
-
-interface Cannon {
-  obj: WorldObj;
-  x: number;
-  y: number;
-  ang: number;
-  len: number;
-  reload: number;
-  area: string;
-}
 
 interface Post {
+  id: number;
   kind: string;
+  mode: string;
   x: number;
   y: number;
   mob: number;
   dead: boolean;
+}
+
+interface TrapG {
+  cells: number[];
+  cx: number;
+  cy: number;
+  room: 'stage' | 'pit' | 'turn';
+  /** 0 закрыт, 1 горит, 2 открыт. */
+  state: number;
+  left: number;
+  wait: number;
+}
+
+interface Spot {
+  lx: number;
+  ly: number;
+  room: 'stage' | 'parterre' | 'boxes';
+  a: [number, number][];
+  b: [number, number][];
+  x: number;
+  y: number;
+  on: boolean;
+  turnUntil: number;
+}
+
+interface Chand {
+  key: string;
+  x: number;
+  y: number;
+  on: boolean;
   area: string;
 }
 
-/** Полёт на тросе. `own` — своим ходом над провалом и Стеной. */
-interface Flight {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-  cx: number;
-  cy: number;
-  t: number;
-  T: number;
-  r0: number;
-  lift: number;
-  target: number;
-  own: boolean;
+interface IronRow {
+  y: number;
+  cells: number[];
+  /** Когда упадёт (время мира), 0 — не назначено. */
+  fallAt: number;
+  liftAt: number;
+  jamUntil: number;
+  /** Когда загорится метка ряда (волна идёт с севера). */
+  startAt: number;
 }
 
-interface Timer {
-  at: number;
-  fn: (api: SimApi) => void;
-}
-
-type Ev = 'idle' | 'on' | 'done';
-
-export interface F13State {
-  tops: Record<string, number>;
+interface F13State {
   posts: Post[];
-  hooks: HookRec[];
-  cannons: Cannon[];
-  boulder: { obj: WorldObj; x: number; y: number; used: boolean } | null;
-  breach: number[];
-  bell: { obj: WorldObj; x: number; y: number; cd: number } | null;
-  roosts: { x: number; y: number; done: boolean }[];
-  flight: Flight | null;
-  /** Тень героя на земле, пока он летит на тросе (рисовальщик). */
-  shadow: [number, number] | null;
-  timers: Timer[];
-  kills: number;
-  fire: { st: Ev; t: number; row: number; beam: number; lights: number };
-  march: { st: Ev; mobs: number[] };
-  breachEv: { st: Ev; t: number; wave: number; sealed: boolean; paid: boolean };
-  battery: { st: Ev; wave: number; t: number; mobs: number[]; gap: number };
-  alarm: { st: Ev; wave: number; t: number; mobs: number[]; tolls: number };
-  rift: { st: Ev; t: number; tick: number; crows: boolean };
+  traps: TrapG[];
+  spots: Spot[];
+  chands: Chand[];
+  beatT: number;
+  beatN: number;
+  onBeat: boolean;
+  beatLen: number;
+  lit: boolean;
+  dark: boolean;
+  litScan: number;
+  hpx: number;
+  hpy: number;
+  bags: { x: number; y: number; t: number }[];
+  saved: Map<number, { tile: number; mark: number }>;
+  cds: Map<string, number>;
+  doors: { cells: number[]; until: number }[];
+  hushUntil: number;
+  // события
+  cloak: { state: number; t: number; wave: number; ids: number[] };
+  inter: { state: number; t: number; rushed: boolean; ids: number[] };
+  prem: { state: number; t: number; ids: number[] };
+  over: { state: number; t: number; ids: number[] };
+  turn: { state: number; t: number; lay: number; next: number; ids: number[]; warned: number };
+  iron: { state: number; waveAt: number; rows: IronRow[] };
 }
 
 const STATE = new WeakMap<Sim, F13State>();
+let postSeq = 1;
 
-/** Состояние этажа вылазки (для тестов и стенда). */
-export const f13State = (sim: Sim): F13State | undefined => STATE.get(sim);
-
-export const HOOK = { speed: 15, range: 12, cd: 1.2, lift: 0.9 };
-export const CANNON = { warn: 0.45, reload: 7, battery: 2.5, arena: 12, w: 0.9 };
-export const BELL = { r: 7.5, cd: 7, stun: 1.3 };
-
-function areaAt(sim: Sim, y: number): string {
-  const yy = Math.floor(y);
-  for (const b of sim.world.bands) if (yy >= b.top && yy < b.top + b.h) return b.def.id;
-  return sim.world.bands[sim.world.bands.length - 1].def.id;
-}
-
-/** Герой в прямоугольнике района (местные координаты). */
-function heroIn(
-  sim: Sim,
-  st: F13State,
-  area: string,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-): boolean {
-  const h = sim.hero;
-  const ly = h.y - st.tops[area];
-  return h.x >= x0 && h.x <= x1 + 1 && ly >= y0 && ly <= y1 + 1 && areaAt(sim, h.y) === area;
-}
-
-function later(sim: Sim, st: F13State, dt: number, fn: (api: SimApi) => void): void {
-  st.timers.push({ at: sim.time + dt, fn });
-}
-
-function spawnAt(
-  sim: Sim,
-  st: F13State,
-  api: SimApi,
-  kind: string,
-  area: string,
-  lx: number,
-  ly: number,
-  mode = 'stalk',
-  elite = false,
-): Mob {
-  const m = api.spawnMob(sim, kind, lx + 0.5, st.tops[area] + ly + 0.5, { mode, elite });
-  m.data.px = m.x;
-  m.data.py = m.y;
-  api.collide(sim, m);
-  return m;
-}
-
-function reward(
-  sim: Sim,
-  api: SimApi,
-  x: number,
-  y: number,
-  coins: number,
-  tokens: number,
-  mats: [string, number][],
-): void {
-  for (let i = 0; i < 5; i++) api.dropAt(sim, 'coin', Math.round(coins / 5), x, y);
-  for (let i = 0; i < Math.min(8, tokens); i++)
-    api.dropAt(sim, 'token', Math.ceil(tokens / 8), x, y);
-  for (const [id, n] of mats) for (let i = 0; i < n; i++) api.dropAt(sim, id, 1, x, y);
-}
+const cellI = (sim: Sim, x: number, y: number) => y * sim.world.w + x;
 
 function scan(sim: Sim, api: SimApi): F13State {
   const w = sim.world;
-  const W = w.w;
-  const tops: Record<string, number> = {};
-  for (const b of w.bands) tops[b.def.id] = b.top;
-  const st: F13State = {
-    tops,
-    posts: [],
-    hooks: [],
-    cannons: [],
-    boulder: null,
-    breach: [],
-    bell: null,
-    roosts: [],
-    flight: null,
-    shadow: null,
-    timers: [],
-    kills: 0,
-    fire: { st: 'idle', t: 0, row: 0, beam: 0, lights: 0 },
-    march: { st: 'idle', mobs: [] },
-    breachEv: { st: 'idle', t: 0, wave: 0, sealed: false, paid: false },
-    battery: { st: 'idle', wave: 0, t: 0, mobs: [], gap: 0 },
-    alarm: { st: 'idle', wave: 0, t: 0, mobs: [], tolls: 0 },
-    rift: { st: 'idle', t: 0, tick: 0, crows: false },
-  };
-  for (let i = 0; i < w.mark.length; i++) {
-    const kind = F13_POSTS[w.mark[i]];
-    if (!kind) continue;
-    const x = i % W;
-    const y = Math.floor(i / W);
-    st.posts.push({ kind, x: x + 0.5, y: y + 0.5, mob: 0, dead: false, area: areaAt(sim, y) });
-  }
-  const objAt = (x: number, y: number, ref: string) =>
-    w.objs.find((o) => o.x === x && o.y === y && o.ref === ref);
-  for (const [area, list] of Object.entries(F13_HOOKS)) {
-    const top = tops[area];
-    if (top === undefined) continue;
-    for (const [x, ly, tx, tly] of list) {
-      const obj = objAt(x, top + ly, 'f13_hook');
-      if (!obj) continue;
-      st.hooks.push({
-        obj,
-        x: x + 0.5,
-        y: top + ly + 0.5,
-        tx: tx + 0.5,
-        ty: top + tly + 0.5,
-        combat: false,
-        area,
-        cd: 0,
-      });
-    }
-  }
-  for (const o of w.objs) {
-    if (o.ref === 'f13_hookc')
-      st.hooks.push({
-        obj: o,
-        x: o.x + 0.5,
-        y: o.y + 0.5,
-        tx: 0,
-        ty: 0,
-        combat: true,
-        area: o.area,
-        cd: 0,
-      });
-    if (o.ref === 'f13_cannon') {
-      // Пушка на Стене бьёт через зубцы; на площади — вдоль самого длинного
-      // прохода.
-      let ang = Math.PI / 2;
-      let len = 30;
-      if (w.mark[(o.y + 1) * W + o.x] !== MK.parapet) {
-        let best = -1;
-        for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
-          const d = clearDist(sim, api, o.x + 0.5, o.y + 0.5, a, 40);
-          if (d > best) {
-            best = d;
-            ang = a;
-          }
-        }
-        len = best;
+  const posts: Post[] = [];
+  for (const area of [F13_FOYER, F13_HALL, F13_FLIES]) {
+    const rows = F13_ROWS[area];
+    const top = F13_TOP[area];
+    for (let y = 0; y < rows.length; y++)
+      for (let x = 0; x < rows[y].length; x++) {
+        const kind = F13_POSTS[rows[y][x]];
+        if (!kind) continue;
+        const mode =
+          kind === 'f13_spider'
+            ? 'f13_up'
+            : kind === 'f13_prompter'
+              ? 'f13_hide'
+              : kind === 'f13_shade'
+                ? 'chase'
+                : 'sleep';
+        posts.push({ id: postSeq++, kind, mode, x: x + 0.5, y: top + y + 0.5, mob: 0, dead: false });
       }
-      st.cannons.push({ obj: o, x: o.x + 0.5, y: o.y + 0.5, ang, len, reload: 0, area: o.area });
-    }
-    if (o.ref === 'f13_boulder') st.boulder = { obj: o, x: o.x + 0.5, y: o.y + 0.5, used: false };
-    if (o.ref === 'f13_bell') st.bell = { obj: o, x: o.x + 0.5, y: o.y + 0.5, cd: 0 };
-    if (o.ref === 'f13_roost') st.roosts.push({ x: o.x + 0.5, y: o.y + 0.5, done: false });
   }
-  // Устье Пролома — его заваливает валун (ряды 54…57 района Стены).
-  const wt = tops[F13_WALL];
-  if (wt !== undefined)
-    for (let ly = 54; ly <= 57; ly++)
-      for (let x = 0; x < W; x++)
-        if (w.mark[(wt + ly) * W + x] === MK.breach) st.breach.push((wt + ly) * W + x);
-  return st;
+  // Люки.
+  const traps: TrapG[] = [];
+  const addTraps = (area: string, groups: readonly (readonly (readonly number[])[])[], room: TrapG['room']) =>
+    groups.forEach((g, gi) => {
+      const cells = g.map(([x, y]) => {
+        const [wx, wy] = gw(area, x, y);
+        return cellI(sim, wx, wy);
+      });
+      const cx = g.reduce((s, p) => s + p[0], 0) / g.length + 0.5;
+      const cy = g.reduce((s, p) => s + p[1], 0) / g.length + 0.5 + (F13_TOP[area] ?? 0);
+      traps.push({ cells, cx, cy, room, state: 0, left: 0, wait: 1.5 + gi * 1.4 });
+    });
+  addTraps(F13_HALL, F13_GEO.f13wall.stageTraps, 'stage');
+  addTraps(F13_HALL, F13_GEO.f13wall.pitTraps, 'pit');
+  addTraps(F13_FLIES, F13_GEO.f13bell.turnTraps, 'turn');
+  // Софиты: фонарь и две дорожки луча (местные клетки Зала).
+  const H = F13_TOP[F13_HALL];
+  const P = (pts: number[][]): [number, number][] => pts.map(([x, y]) => [x + 0.5, y + H + 0.5]);
+  const spots: Spot[] = [];
+  const addSpot = (room: Spot['room'], lamp: readonly number[], a: number[][], b: number[][]) => {
+    const pa = P(a);
+    spots.push({
+      lx: lamp[0] + 0.5,
+      ly: lamp[1] + H + 0.5,
+      room,
+      a: pa,
+      b: P(b),
+      x: pa[0][0],
+      y: pa[0][1],
+      on: room !== 'parterre',
+      turnUntil: 0,
+    });
+  };
+  const gz = F13_GEO.f13wall;
+  addSpot('stage', gz.stageZ[0], [[20, 37], [27, 31], [19, 26], [26, 24]], [[35, 25], [42, 31], [35, 37], [30, 32]]);
+  addSpot('stage', gz.stageZ[1], [[43, 37], [36, 31], [44, 26], [37, 24]], [[28, 25], [21, 31], [28, 37], [33, 32]]);
+  addSpot('parterre', gz.parterreZ[0], [[12, 88], [22, 82], [14, 74], [24, 66]], [[31, 90], [31, 78], [31, 66], [20, 72]]);
+  addSpot('parterre', gz.parterreZ[1], [[51, 88], [41, 82], [49, 74], [39, 66]], [[32, 84], [32, 72], [43, 70], [44, 86]]);
+  addSpot('parterre', gz.parterreZ[2], [[46, 62], [36, 62], [26, 62], [16, 62]], [[20, 70], [31, 74], [42, 70], [31, 62]]);
+  addSpot('boxes', gz.boxesZ[0], [[59, 26], [59, 32], [59, 38], [59, 32]], [[56, 24], [59, 28], [59, 36], [59, 40]]);
+  addSpot('boxes', gz.boxesZ[1], [[59, 44], [59, 50], [59, 56], [59, 50]], [[59, 42], [59, 60], [57, 60], [59, 52]]);
+  // Люстры: свой свет, чтобы гасить его на «Премьере».
+  const chands: Chand[] = [];
+  let ci = 0;
+  for (const o of w.objs)
+    if (o.ref === 'f13_chandelier') {
+      const c: Chand = { key: `f13ch${ci++}`, x: o.x + 0.5, y: o.y + 0.5, on: true, area: o.area };
+      chands.push(c);
+      api.light(sim, c.key, { x: c.x, y: c.y - 0.6, r: 4.6, tint: 'warm' });
+    }
+  // Пожарный занавес: ряды желобов галереи.
+  const gal = boxW(F13_FLIES, F13_GEO.f13bell.gallery);
+  const rows: IronRow[] = [];
+  for (const ly of F13_GEO.f13bell.ironRows) {
+    const y = ly + F13_TOP[F13_FLIES];
+    const cells: number[] = [];
+    for (let x = gal[0]; x <= gal[2]; x++) {
+      const i = cellI(sim, x, y);
+      if (w.mark[i] === MK.groove) cells.push(i);
+    }
+    rows.push({ y, cells, fallAt: 0, liftAt: 0, jamUntil: 0, startAt: 0 });
+  }
+  return {
+    posts,
+    traps,
+    spots,
+    chands,
+    beatT: 0,
+    beatN: 0,
+    onBeat: false,
+    beatLen: SPOT.beat,
+    lit: false,
+    dark: false,
+    litScan: 0,
+    hpx: sim.hero.x,
+    hpy: sim.hero.y,
+    bags: [],
+    saved: new Map(),
+    cds: new Map(),
+    doors: [],
+    hushUntil: 0,
+    cloak: { state: 0, t: 0, wave: 0, ids: [] },
+    inter: { state: 0, t: 0, rushed: false, ids: [] },
+    prem: { state: 0, t: 0, ids: [] },
+    over: { state: 0, t: 0, ids: [] },
+    turn: { state: 0, t: 0, lay: -1, next: 0, ids: [], warned: -1 },
+    iron: { state: 0, waveAt: 0, rows },
+  };
 }
 
-function stateOf(sim: Sim, api: SimApi): F13State {
+const API_REF: { api: SimApi | null } = { api: null };
+
+function stateOf(sim: Sim): F13State {
   let st = STATE.get(sim);
   if (!st) {
-    st = scan(sim, api);
+    st = scan(sim, API_REF.api!);
     STATE.set(sim, st);
   }
   return st;
 }
 
-// ---- Посты -------------------------------------------------------------------
+/** Состояние этажа — для тестов и стенда. */
+export const f13State = (sim: Sim) => STATE.get(sim) ?? null;
+
+function saveTile(sim: Sim, st: F13State, api: SimApi, i: number, tile: number, mark: number, haz?: { slow: number } | null): void {
+  const w = sim.world;
+  if (!st.saved.has(i)) st.saved.set(i, { tile: sim.tiles[i], mark: w.mark[i] });
+  api.setTile(sim, i % w.w, Math.floor(i / w.w), tile, mark, haz);
+}
+
+function restoreTile(sim: Sim, st: F13State, api: SimApi, i: number): void {
+  const v = st.saved.get(i);
+  if (!v) return;
+  const w = sim.world;
+  api.setTile(sim, i % w.w, Math.floor(i / w.w), v.tile, v.mark, null);
+  st.saved.delete(i);
+}
+
+// ---------------------------------------------------------------------------
+// Посты: куклы на своих местах с начала вылазки.
+// ---------------------------------------------------------------------------
+
+function postDead(sim: Sim, m: Mob): void {
+  const st = STATE.get(sim);
+  const p = st?.posts.find((x) => x.id === m.data.post);
+  if (p) {
+    p.dead = true;
+    p.mob = 0;
+  }
+}
 
 function stepPosts(sim: Sim, st: F13State, api: SimApi): void {
   const h = sim.hero;
@@ -2540,886 +616,2871 @@ function stepPosts(sim: Sim, st: F13State, api: SimApi): void {
     if (p.dead) continue;
     if (p.mob) {
       const m = sim.mobs.find((x) => x.id === p.mob);
-      if (!m || m.mode === 'dying') {
-        // Пропал (далеко ушёл герой — движок убрал) — встанет снова; убит — нет.
-        if (m?.mode === 'dying' || !m) p.dead = !!m || p.dead;
-        if (!m && !p.dead) p.mob = 0;
-        if (m?.mode === 'dying') p.mob = 0;
+      if (m && m.mode !== 'dying' && m.mode !== 'escape') continue;
+      if (m) {
+        p.dead = true;
+        p.mob = 0;
+        continue;
       }
-      continue;
+      p.mob = 0;
     }
-    const d = hypot(p.x - h.x, p.y - h.y);
-    if (d > 18 || d < 5) continue;
+    if (hypot(p.x - h.x, p.y - h.y) > 17) continue;
     if (sim.boss?.state === 'fight' && api.inArena(sim, p.x, p.y)) continue;
-    const m = api.spawnMob(sim, p.kind, p.x, p.y, {
-      mode: p.kind === 'f13_crawler' ? 'stalk' : 'wander',
-      elite: sim.rng() < 0.14,
-    });
-    m.data.px = p.x;
-    m.data.py = p.y;
-    m.face = sim.rng() * TAU;
+    const m = api.spawnMob(sim, p.kind, p.x, p.y, { mode: p.mode });
+    m.data.post = p.id;
+    m.face = Math.PI / 2;
     p.mob = m.id;
   }
-  // Насесты: вороны спят, пока не подойдёшь.
-  for (const r of st.roosts) {
-    if (r.done || hypot(r.x - h.x, r.y - h.y) > 14) continue;
-    r.done = true;
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * TAU;
-      const m = api.spawnMob(sim, 'f13_crow', r.x + Math.cos(a) * 0.5, r.y + Math.sin(a) * 0.4, {
-        mode: 'sleep',
-      });
-      m.data.perch = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Такт, софиты, свет и тень.
+// ---------------------------------------------------------------------------
+
+function stepBeat(sim: Sim, st: F13State, dt: number): void {
+  st.beatLen = st.over.state === 1 ? SPOT.fastBeat : SPOT.beat;
+  st.beatT += dt;
+  st.onBeat = false;
+  if (st.beatT >= st.beatLen) {
+    st.beatT -= st.beatLen;
+    st.beatN += 1;
+    st.onBeat = true;
+  }
+  F13_FX.beat = st.beatN + st.beatT / st.beatLen;
+  F13_FX.beatLen = st.beatLen;
+}
+
+/** Где луч сейчас: на сильную долю едет к следующей точке, три доли стоит. */
+function spotAt(st: F13State, s: Spot, now: number): [number, number] {
+  const path = now < s.turnUntil ? s.b : s.a;
+  const bar = Math.floor(st.beatN / 4);
+  const inBar = (st.beatN % 4) + st.beatT / st.beatLen;
+  const i = bar % path.length;
+  const j = (i + 1) % path.length;
+  const k = smooth(clamp(inBar, 0, 1));
+  return [path[i][0] + (path[j][0] - path[i][0]) * k, path[i][1] + (path[j][1] - path[i][1]) * k];
+}
+
+function stepSpots(sim: Sim, st: F13State, api: SimApi): void {
+  const h = sim.hero;
+  F13_FX.spots.length = 0;
+  st.spots.forEach((s, i) => {
+    s.on = s.room !== 'parterre' || st.prem.state === 1;
+    const near = hypot(s.lx - h.x, s.ly - h.y) < 40;
+    if (near) {
+      const [x, y] = spotAt(st, s, sim.time);
+      s.x = x;
+      s.y = y;
+    }
+    api.light(sim, `f13spot${i}`, s.on && near ? { x: s.x, y: s.y, r: SPOT.light, tint: 'warm' } : null);
+    F13_FX.spots.push({ x: s.x, y: s.y, lx: s.lx, ly: s.ly, on: s.on, turned: sim.time < s.turnUntil });
+  });
+}
+
+/** Точка в луче какого-нибудь софита. */
+export function inBeam(sim: Sim, x: number, y: number, pad = 0): number {
+  const st = STATE.get(sim);
+  if (!st) return -1;
+  for (let i = 0; i < st.spots.length; i++) {
+    const s = st.spots[i];
+    if (s.on && hypot(s.x - x, s.y - y) < SPOT.r + pad) return i;
+  }
+  return -1;
+}
+
+function stepLight(sim: Sim, st: F13State, api: SimApi, dt: number): void {
+  const h = sim.hero;
+  const area = areaAt(sim, h.y);
+  const fight = sim.boss?.state === 'fight' && api.inArena(sim, h.x, h.y);
+  const wasLit = st.lit;
+  st.lit = !fight && area !== F13_FOYER && inBeam(sim, h.x, h.y) >= 0;
+  const nearCh = st.chands.some((c) => c.on && hypot(c.x - h.x, c.y - h.y) < SHADOW.chand);
+  st.dark = !fight && area !== F13_FOYER && !st.lit && !nearCh;
+  // В луче тебя видят все вокруг.
+  st.litScan -= dt;
+  if (st.lit && (st.litScan <= 0 || !wasLit)) {
+    st.litScan = 0.4;
+    for (const m of sim.mobs) {
+      if (m.mode !== 'sleep' && m.mode !== 'f13_lost') continue;
+      if (hypot(m.x - h.x, m.y - h.y) > SPOT.see) continue;
+      if (!api.lineOfSight(sim, m.x, m.y, h.x, h.y)) continue;
+      api.setMode(m, 'alert');
     }
   }
 }
 
-// ---- Крюк ------------------------------------------------------------------
+/** Герой ушёл в тень дальше 4,5 клетки — моб его теряет. */
+function lostCheck(sim: Sim, m: Mob, c: BrainCtx, api: SimApi): boolean {
+  const st = STATE.get(sim);
+  if (!st || !st.dark || c.dist <= SHADOW.lose) return false;
+  m.data.lx = sim.hero.x + (sim.rng() - 0.5) * 3;
+  m.data.ly = sim.hero.y + (sim.rng() - 0.5) * 3;
+  m.tele = null;
+  m.danger = 0;
+  api.setMode(m, 'f13_lost');
+  return true;
+}
 
-/** Ближний исполин у точки (живой, не в воздухе). */
-function giantNear(sim: Sim, x: number, y: number, r: number): Mob | null {
-  let best: Mob | null = null;
-  let bd = r;
+function lostStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
+  const st = STATE.get(sim);
+  m.tele = null;
+  m.danger = 0;
+  if (!st || !st.dark || c.dist < SHADOW.find) {
+    api.setMode(m, 'alert');
+    return;
+  }
+  if (m.t > 12) {
+    m.data.lx = m.hx;
+    m.data.ly = m.hy;
+  }
+  const tx = (m.data.lx ?? m.x) + Math.cos(m.t * 0.6 + m.id) * 1.2;
+  const ty = (m.data.ly ?? m.y) + Math.sin(m.t * 0.6 + m.id) * 1.2;
+  const d = hypot(tx - m.x, ty - m.y);
+  if (d > 0.5 && api.lineOfSight(sim, m.x, m.y, tx, ty))
+    api.steer(sim, m, (tx - m.x) / d, (ty - m.y) / d, m.speed * 0.4, dt);
+  else {
+    m.vx *= 0.85;
+    m.vy *= 0.85;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Люки.
+// ---------------------------------------------------------------------------
+
+function trapOpen(sim: Sim, st: F13State, g: TrapG, api: SimApi): void {
+  const w = sim.world;
+  for (const i of g.cells) api.setTile(sim, i % w.w, Math.floor(i / w.w), T_DEEP, MK.trapOpen);
+  sim.events.push({ t: 'clank', x: g.cx, y: g.cy });
+  const onTrap = (x: number, y: number) => g.cells.includes(cellI(sim, Math.floor(x), Math.floor(y)));
   for (const m of sim.mobs) {
-    if (!F13_GIANTS.has(m.kind) || m.mode === 'dying' || (m.data.ghost ?? 0) > 0) continue;
-    const d = hypot(m.x - x, m.y - y);
+    if (m.mode === 'dying' || isGhost(m)) continue;
+    const d = api.def(m.kind);
+    if (d.fly || d.boss) continue;
+    if (onTrap(m.x, m.y)) api.fall(sim, m);
+  }
+  const h = sim.hero;
+  if (!heroDown(sim) && h.mode !== 'dash' && onTrap(h.x, h.y)) {
+    api.hurtEnv(sim, TRAP.hurt);
+    // На край люка: ближайшая клетка пола вне люка.
+    let best: [number, number] | null = null;
+    let bd = 1e9;
+    const hx = Math.floor(h.x);
+    const hy = Math.floor(h.y);
+    for (let dy = -3; dy <= 3; dy++)
+      for (let dx = -3; dx <= 3; dx++) {
+        const x = hx + dx;
+        const y = hy + dy;
+        if (api.solidTile(sim, x, y) || g.cells.includes(cellI(sim, x, y))) continue;
+        const d = hypot(x + 0.5 - h.x, y + 0.5 - h.y);
+        if (d < bd) {
+          bd = d;
+          best = [x + 0.5, y + 0.5];
+        }
+      }
+    if (best) api.moveHero(sim, best[0], best[1]);
+    fx(sim, api, 'f13_dust', h.x, h.y, 0.8, 0.6);
+  }
+  void st;
+}
+
+function trapClose(sim: Sim, g: TrapG, api: SimApi): void {
+  const w = sim.world;
+  for (const i of g.cells) api.setTile(sim, i % w.w, Math.floor(i / w.w), T_FLOOR, MK.trap);
+}
+
+function trapWarn(sim: Sim, g: TrapG, api: SimApi, warn: number): void {
+  g.state = 1;
+  g.left = warn;
+  fx(sim, api, 'f13_trapwarn', g.cx, g.cy, 1.2, warn);
+}
+
+function stepTraps(sim: Sim, st: F13State, api: SimApi, dt: number): void {
+  const h = sim.hero;
+  const fight = sim.boss?.state === 'fight';
+  for (const g of st.traps) {
+    const near = hypot(g.cx - h.x, g.cy - h.y) < TRAP.near;
+    const live = near && !fight && (g.room !== 'pit' || st.over.state === 1);
+    if (g.state === 0) {
+      if (!live) continue;
+      g.wait -= dt;
+      if (g.wait <= 0) trapWarn(sim, g, api, TRAP.warn);
+      continue;
+    }
+    g.left -= dt;
+    if (g.left > 0) continue;
+    if (g.state === 1) {
+      g.state = 2;
+      g.left = TRAP.open;
+      trapOpen(sim, st, g, api);
+    } else {
+      g.state = 0;
+      g.wait = TRAP.period - TRAP.warn - TRAP.open + (g.room === 'pit' ? -1.5 : 0);
+      trapClose(sim, g, api);
+    }
+  }
+}
+
+/** Люк под точкой (для арлекина): ближайшая группа в радиусе. */
+function trapNear(sim: Sim, x: number, y: number, r: number): TrapG | null {
+  const st = STATE.get(sim);
+  if (!st) return null;
+  let best: TrapG | null = null;
+  let bd = r;
+  for (const g of st.traps) {
+    const d = hypot(g.cx - x, g.cy - y);
     if (d < bd) {
       bd = d;
-      best = m;
+      best = g;
     }
   }
   return best;
 }
 
-/** Точка за спиной исполина, куда встать. */
-function behindOf(sim: Sim, api: SimApi, g: Mob): [number, number] | null {
-  for (const da of [0, 0.45, -0.45, 0.9, -0.9]) {
-    for (const extra of [1.05, 1.5, 0.8]) {
-      const a = g.face + Math.PI + da;
-      const d = g.r + extra;
-      const x = g.x + Math.cos(a) * d;
-      const y = g.y + Math.sin(a) * d;
-      if (roomFor(sim, api, x, y, 0.3)) return [x, y];
+// ---------------------------------------------------------------------------
+// Резка нитей: взмах, рывок, ноты, мешки.
+// ---------------------------------------------------------------------------
+
+function stepCuts(sim: Sim, st: F13State, api: SimApi, dt: number): void {
+  const h = sim.hero;
+  // Взмахи этого шага.
+  for (const e of sim.events) {
+    if (e.t !== 'swing') continue;
+    const reach = e.reach + 0.15;
+    for (const m of sim.mobs) {
+      if (!cuttable(m)) continue;
+      if (hypot(m.x - e.x, m.y - e.y) > reach + 4.5) continue;
+      let budget = e.heavy ? 2 : 1;
+      for (const s of stringsOf(m)) {
+        if (s.cut || budget <= 0) continue;
+        let hit = false;
+        // Нить над головой куклы: удар в саму куклу снизу её не берёт.
+        for (let k = m.kind === 'f13_giant' ? 0.08 : 0.24; k <= 1.001 && !hit; k += 0.08) {
+          const px = s.ax + (s.bx - s.ax) * k;
+          const py = s.ay + (s.by - s.ay) * k;
+          const d = hypot(px - e.x, py - e.y);
+          if (d > reach) continue;
+          if (Math.abs(angDiff(Math.atan2(py - e.y, px - e.x), e.ang)) <= e.arc / 2 + 0.1) hit = true;
+        }
+        if (hit) {
+          cutString(sim, m, s.i, api);
+          budget--;
+        }
+      }
     }
+  }
+  // Рывок поперёк нити.
+  if (h.mode === 'dash') {
+    for (const m of sim.mobs) {
+      if (!cuttable(m) || hypot(m.x - h.x, m.y - h.y) > 5) continue;
+      for (const s of stringsOf(m))
+        if (!s.cut && segCross(st.hpx, st.hpy, h.x, h.y, s.ax, s.ay, s.bx, s.by))
+          cutString(sim, m, s.i, api);
+    }
+  }
+  // Ноты скрипача режут чужие нити и летят дугой.
+  for (const s of sim.shots) {
+    if (s.art !== 'f13_note') continue;
+    const turn = (s.id % 2 ? 1 : -1) * 0.9 * dt;
+    const c = Math.cos(turn);
+    const n = Math.sin(turn);
+    const vx = s.vx * c - s.vy * n;
+    s.vy = s.vx * n + s.vy * c;
+    s.vx = vx;
+    if (s.age < 0.25) continue;
+    for (const m of sim.mobs) {
+      if (!cuttable(m) || m.kind === 'f13_giant' || hypot(m.x - s.x, m.y - s.y) > 3.2) continue;
+      for (const g of stringsOf(m))
+        if (!g.cut && segDist(s.x, s.y, g.ax, g.ay, g.bx, g.by) < 0.28) {
+          cutString(sim, m, g.i, api);
+          s.life = s.age;
+          break;
+        }
+    }
+  }
+  // Мешки противовеса легли.
+  st.bags = st.bags.filter((b) => {
+    if (sim.time < b.t) return true;
+    for (const m of sim.mobs) {
+      if (!cuttable(m) || m.kind === 'f13_giant') continue;
+      for (const s of stringsOf(m))
+        if (!s.cut && (hypot(s.ax - b.x, s.ay - b.y) < STR.bagR || segDist(b.x, b.y, s.ax, s.ay, s.bx, s.by) < STR.bagR * 0.7))
+          cutString(sim, m, s.i, api);
+    }
+    return false;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// События.
+// ---------------------------------------------------------------------------
+
+const BOX = {
+  cloak: boxW(F13_FOYER, F13_GEO.f13.cloak),
+  buffet: boxW(F13_FOYER, F13_GEO.f13.buffet),
+  lobbyW: boxW(F13_FOYER, F13_GEO.f13.lobbyW),
+  lobbyE: boxW(F13_FOYER, F13_GEO.f13.lobbyE),
+  parterre: boxW(F13_HALL, F13_GEO.f13wall.parterre),
+  pit: boxW(F13_HALL, F13_GEO.f13wall.pit),
+  gallery: boxW(F13_FLIES, F13_GEO.f13bell.gallery),
+  arena: boxW(F13_FLIES, F13_GEO.f13bell.arena),
+};
+
+const TURN = (() => {
+  const [cx, cy, R] = F13_GEO.f13bell.turn;
+  return { cx, cy: cy + F13_TOP[F13_FLIES], R };
+})();
+
+/**
+ * Декорации поворотного круга: лес (купы картонных деревьев), замок
+ * (зубчатое кольцо с четырьмя воротами), море (полосы волн — вязко).
+ * Клетки — мировые, только пол круга (`q`), не ступица и не люки.
+ */
+export const F13_SCENERY: { name: string; kind: 'wall' | 'sea'; mark: number; cells: [number, number][] }[] =
+  (() => {
+    const rows = F13_ROWS[F13_FLIES];
+    const top = F13_TOP[F13_FLIES];
+    const ok = (x: number, y: number) => {
+      const ly = y - top;
+      if (ly < 0 || ly >= rows.length || rows[ly][x] !== 'q') return false;
+      const d = hypot(x + 0.5 - TURN.cx, y + 0.5 - TURN.cy);
+      return d > 2.4 && d < TURN.R - 0.7;
+    };
+    const uniq = (cells: [number, number][]) => {
+      const seen = new Set<number>();
+      return cells.filter(([x, y]) => {
+        const k = y * 64 + x;
+        if (seen.has(k) || !ok(x, y)) return false;
+        seen.add(k);
+        return true;
+      });
+    };
+    const forest: [number, number][] = [];
+    const clump = (a: number, r: number) => {
+      const x = Math.floor(TURN.cx + Math.cos(a) * r - 0.5);
+      const y = Math.floor(TURN.cy + Math.sin(a) * r - 0.5);
+      forest.push([x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]);
+    };
+    for (let k = 0; k < 6; k++) clump((k * Math.PI) / 3 + 0.26, 6.2);
+    for (let k = 0; k < 4; k++) clump((k * Math.PI) / 2 + Math.PI / 4, 10.2);
+    const castle: [number, number][] = [];
+    const sea: [number, number][] = [];
+    for (let y = Math.floor(TURN.cy - TURN.R); y <= TURN.cy + TURN.R; y++)
+      for (let x = Math.floor(TURN.cx - TURN.R); x <= TURN.cx + TURN.R; x++) {
+        const dx = x + 0.5 - TURN.cx;
+        const dy = y + 0.5 - TURN.cy;
+        const d = hypot(dx, dy);
+        if (Math.abs(d - 7.5) < 0.55) {
+          const a = Math.atan2(dy, dx);
+          const gate = [0, Math.PI / 2, Math.PI, -Math.PI / 2].some((g) => Math.abs(angDiff(a, g)) < 0.26);
+          if (!gate) castle.push([x, y]);
+        }
+        const ry = Math.round(dy);
+        if ((ry === -6 || ry === -2 || ry === 2 || ry === 6) && Math.abs(dy - ry) < 0.5) sea.push([x, y]);
+      }
+    return [
+      { name: 'лес', kind: 'wall' as const, mark: MK.setTree, cells: uniq(forest) },
+      { name: 'замок', kind: 'wall' as const, mark: MK.setCastle, cells: uniq(castle) },
+      { name: 'море', kind: 'sea' as const, mark: MK.setSea, cells: uniq(sea) },
+    ];
+  })();
+
+const SEA_HAZ = { slow: 0.55 };
+
+const aliveIds = (sim: Sim, ids: number[]) =>
+  ids.filter((id) => sim.mobs.some((m) => m.id === id && m.mode !== 'dying'));
+
+/** Точка пола в рамке рядом с (x, y) на расстоянии r0…r1. */
+function floorNear(
+  sim: Sim,
+  api: SimApi,
+  x: number,
+  y: number,
+  r0: number,
+  r1: number,
+  box?: readonly number[],
+): [number, number] | null {
+  for (let i = 0; i < 30; i++) {
+    const a = sim.rng() * TAU;
+    const r = r0 + sim.rng() * (r1 - r0);
+    const px = Math.floor(x + Math.cos(a) * r);
+    const py = Math.floor(y + Math.sin(a) * r);
+    if (box && !inBox(box, px + 0.5, py + 0.5)) continue;
+    if (api.solidTile(sim, px, py)) continue;
+    if (api.solidTile(sim, px + 1, py) || api.solidTile(sim, px - 1, py)) continue;
+    return [px + 0.5, py + 0.5];
   }
   return null;
 }
 
-/** Куда вынесет столб прямо сейчас (null — некуда). */
-function hookTarget(
-  sim: Sim,
-  st: F13State,
-  api: SimApi,
-  hk: HookRec,
-): { x: number; y: number; target: number } | null {
-  if (!hk.combat) return { x: hk.tx, y: hk.ty, target: 0 };
-  const g = giantNear(sim, hk.x, hk.y, HOOK.range);
-  if (g) {
-    const p = behindOf(sim, api, g);
-    if (p) return { x: p[0], y: p[1], target: g.id };
-  }
-  // Исполина рядом нет — к другому столбу через площадь.
-  let best: HookRec | null = null;
-  let bd = 0;
-  for (const o of st.hooks) {
-    if (!o.combat || o === hk || o.area !== hk.area) continue;
-    const d = hypot(o.x - hk.x, o.y - hk.y);
-    if (d < 6 || d > 20) continue;
-    if (!best || d < bd) {
-      best = o;
-      bd = d;
-    }
-  }
-  if (!best) return null;
-  const a = Math.atan2(hk.y - best.y, hk.x - best.x);
-  return { x: best.x + Math.cos(a) * 0.8, y: best.y + Math.sin(a) * 0.8, target: 0 };
-}
-
-/** Точка на дуге полёта (квадратичная кривая + подъём над землёй). */
-function flightAt(f: Flight, k: number): [number, number] {
-  const e = k < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k);
-  const u = 1 - e;
-  const x = u * u * f.x0 + 2 * u * e * f.cx + e * e * f.x1;
-  const y = u * u * f.y0 + 2 * u * e * f.cy + e * e * f.y1 - Math.sin(Math.PI * k) * f.lift;
-  return [x, y];
-}
-
-function fireHook(sim: Sim, st: F13State, api: SimApi, hk: HookRec): boolean {
-  const h = sim.hero;
-  if (st.flight || h.pull || heroDown(sim) || hk.cd > 0) return false;
-  const tg = hookTarget(sim, st, api, hk);
-  if (!tg) return false;
-  hk.cd = HOOK.cd;
-  const x0 = h.x;
-  const y0 = h.y;
-  const dist = hypot(tg.x - x0, tg.y - y0);
-  // Дуга: у исполина — в обход его бока, над провалом — вверх.
-  let cx = (x0 + tg.x) / 2;
-  let cy = (y0 + tg.y) / 2;
-  const g = tg.target ? sim.mobs.find((m) => m.id === tg.target) : null;
-  if (g) {
-    const px = -(tg.y - y0) / (dist || 1);
-    const py = (tg.x - x0) / (dist || 1);
-    const s = (g.x - cx) * px + (g.y - cy) * py > 0 ? -1 : 1;
-    const off = Math.min(3, g.r + 1.2);
-    cx += px * off * s;
-    cy += py * off * s;
-  }
-  // Над провалом и Стеной — своим полётом: у движка трос упирается в край.
-  const own = !clearLine(sim, api, x0, y0, tg.x, tg.y);
-  const T = Math.max(0.35, (dist * (g ? 1.25 : 1)) / HOOK.speed);
-  const f: Flight = {
-    x0,
-    y0,
-    x1: tg.x,
-    y1: tg.y,
-    cx,
-    cy,
-    t: 0,
-    T,
-    r0: h.r,
-    lift: own ? Math.min(1.6, HOOK.lift + dist * 0.06) : 0.25,
-    target: tg.target,
-    own,
-  };
-  st.flight = f;
-  if (own) {
-    h.r = 0;
-    h.vx = 0;
-    h.vy = 0;
-    if (h.mode === 'dash') h.mode = 'free';
-    sim.events.push({ t: 'pull', x: h.x, y: h.y, end: false });
-  } else {
-    const [px, py] = flightAt(f, 0.2);
-    api.pullHero(sim, px, py, { speed: HOOK.speed, inv: true, max: T + 0.8 });
-  }
-  // Трос: от кольца к герою, поверх темноты.
-  const rope: ZX = {
-    x: tg.x,
-    y: tg.y,
-    r: 0.4,
-    life: T + 0.12,
-    art: 'f13_rope',
-    above: true,
-    mob: -1,
-    tx: hk.x,
-    ty: hk.y,
-  };
-  api.zone(sim, rope);
-  sim.events.push({ t: 'boss', what: 'f13_hook_call' });
-  // Аномальный чует трос: прыгает туда, куда несёт героя.
-  for (const m of sim.mobs) {
-    if (m.kind !== 'f13_abnormal' || m.mode === 'dying') continue;
-    if (m.mode !== 'stalk' && m.mode !== 'recover' && m.mode !== 'wander') continue;
-    if (hypot(m.x - tg.x, m.y - tg.y) > HOOK.range || (m.data.leapCd ?? 0) > 0.6) continue;
-    abnormalLeap(sim, m, api, tg.x, tg.y, Math.max(0.35, T - 0.1));
-    m.data.leapCd = 4;
-    break;
-  }
-  return true;
-}
-
-function stepFlight(sim: Sim, st: F13State, api: SimApi, dt: number): void {
-  const f = st.flight;
-  if (!f) return;
-  const h = sim.hero;
-  f.t += dt;
-  const k = Math.min(1, f.t / f.T);
-  if (heroDown(sim)) {
-    h.r = f.r0;
-    st.flight = null;
-    return;
-  }
-  if (f.own) {
-    const [x, y] = flightAt(f, k);
-    h.face = Math.atan2(y - h.y, x - h.x) || h.face;
-    h.x = x;
-    h.y = y;
-    h.vx = 0;
-    h.vy = 0;
-    // Неуязвим весь полёт; выше 0,5 рендер героя не мигает (мигание —
-    // знак «укусили», а тут герой летит).
-    h.inv = Math.max(h.inv, 0.6);
-    // Тень на земле — там, куда он опустится.
-    if (k < 1) {
-      const e = k < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k);
-      const gx = f.x0 + (f.x1 - f.x0) * e;
-      const gy = f.y0 + (f.y1 - f.y0) * e;
-      st.shadow = [gx, gy];
-    }
-    if (k >= 1) {
-      h.r = f.r0;
-      h.x = f.x1;
-      h.y = f.y1;
-      api.collide(sim, h);
-      sim.events.push({ t: 'pull', x: h.x, y: h.y, end: true });
-      land(sim, st, api, f);
-    }
-    return;
-  }
-  // По земле — движковый трос; цель ведём по дуге.
-  if (!h.pull) {
-    land(sim, st, api, f);
-    return;
-  }
-  const [x, y] = flightAt(f, Math.min(1, k + 0.22));
-  h.pull.tx = k > 0.78 ? f.x1 : x;
-  h.pull.ty = k > 0.78 ? f.y1 : y;
-}
-
-/** Приземлился: пыль, лицом к исполину; Колоссу в паре — пар сорван. */
-function land(sim: Sim, st: F13State, api: SimApi, f: Flight): void {
-  const h = sim.hero;
-  st.flight = null;
-  st.shadow = null;
-  // Сел — неуязвимость полёта кончилась без мигания.
-  if (h.inv > 0.5) h.inv = 0.08;
-  puff(api, sim, 'f13_dust', h.x, h.y + 0.2, 1, 0.45);
-  const g = f.target ? sim.mobs.find((m) => m.id === f.target && m.mode !== 'dying') : null;
-  if (!g) return;
-  h.face = Math.atan2(g.y - h.y, g.x - h.x);
-  if (g.kind === 'f13boss' && (sim.boss?.phase ?? 0) === 1) {
-    g.data.bareT = COL.bare;
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_steam_off',
-      text: sim.floorData.bared ? undefined : 'ПАР СОРВАН',
-      sub: sim.floorData.bared ? undefined : 'бей в затылок, пока не затянуло',
-    });
-    sim.floorData.bared = 1;
-  }
-}
-
-// ---- Пушка -------------------------------------------------------------------
-
-function fireCannon(sim: Sim, st: F13State, api: SimApi, c: Cannon): boolean {
-  if (c.reload > 0) return false;
-  const arena = !!sim.boss && api.inArena(sim, c.x, c.y);
-  c.reload = st.battery.st === 'on' ? CANNON.battery : arena ? CANNON.arena : CANNON.reload;
-  const ux = Math.cos(c.ang);
-  const uy = Math.sin(c.ang);
-  const x0 = c.x + ux * 1.1;
-  const y0 = c.y + uy * 1.1;
-  const lvl = sim.world.bands[0].def.level;
-  const mobDmg = 24 * Math.pow(1.8, lvl);
-  api.strike(sim, {
-    shape: 'line',
-    x: x0,
-    y: y0,
-    r: c.len,
-    w: CANNON.w,
-    ang: c.ang,
-    warn: CANNON.warn,
-    dmg: rawShare(sim, 0.12),
-    knock: 7,
-    art: 'f13_lane',
-    mobDmg,
+/** «Аплодисменты»: публика бросает на сцену монеты, нити и конфеты. */
+function applause(sim: Sim, api: SimApi, x: number, y: number, big: number): void {
+  sim.events.push({
+    t: 'boss',
+    what: 'f13_applause_fall',
+    text: 'АПЛОДИСМЕНТЫ',
+    sub: 'публика бросает на сцену монеты и цветы',
   });
-  const ball: ZX = {
-    x: x0,
-    y: y0,
-    r: 0.4,
-    life: CANNON.warn + 0.4,
-    art: 'f13_ball',
-    above: true,
-    ang: c.ang,
-    len: c.len,
-    k: CANNON.warn,
-  };
-  api.zone(sim, ball);
-  puff(api, sim, 'f13_muzzle', x0, y0, 1.3, 0.9, true);
-  sim.events.push({ t: 'boss', what: 'f13_cannon_wall' });
-  sim.events.push({ t: 'flash', color: '#ffc070', k: 0.35 });
-  sim.events.push({ t: 'shake', k: 0.45 });
-  const key = `cn${c.obj.id}`;
-  api.light(sim, key, { x: x0, y: y0, r: 5, tint: 'warm' });
-  F13_FX.cannon = sim.time;
-  later(sim, st, 0.25, (a) => a.light(sim, key, null));
-  // Попадание: исполины валятся, Колосс — на колени.
-  later(sim, st, CANNON.warn, (a) => {
-    for (const m of sim.mobs) {
-      if (m.mode === 'dying' || !F13_GIANTS.has(m.kind)) continue;
-      if (!lineHits(x0, y0, c.ang, c.len, CANNON.w, m.x, m.y, m.r)) continue;
-      if (m.kind === 'f13boss') {
-        if (m.mode === 'rise' || m.mode === 'roar') continue;
-        m.hp = Math.max(1, m.hp - m.maxHp * COL.cannonHit);
-        m.flash = 0.2;
-        a.setMode(m, 'kneel');
-        a.vfx(sim, { x: m.x, y: m.y + 0.1, r: 2, life: 1.3, art: 'f13_colkneel', k: 1 } as ZX); // v2.87 — только рисунок
-        m.data.lit = 0;
-        sim.events.push({
-          t: 'boss',
-          what: 'f13_kneel',
-          text: 'НА КОЛЕНИ',
-          sub: 'затылок открыт со всех сторон',
-        });
-        sim.events.push({
-          t: 'hit',
-          x: m.x,
-          y: m.y,
-          dmg: Math.round(m.maxHp * COL.cannonHit),
-          crit: true,
-          kill: false,
-          boss: true,
-        });
-      } else knockDown(sim, m, a);
-    }
-  });
-  return true;
+  for (let i = 0; i < 3 + big; i++) api.dropAt(sim, 'coin', 600, x, y);
+  api.dropAt(sim, 'f13mat', 1 + big, x, y);
+  api.dropAt(sim, 'f13_candy', 1, x, y);
+  if (big > 1) api.dropAt(sim, 'token', 2, x, y);
+  fx(sim, api, 'f13_flowers', x, y, 2.4, 2.2);
 }
 
-// ---- Валун ---------------------------------------------------------------------
+const call = (sim: Sim, what: string, text: string, sub: string) =>
+  sim.events.push({ t: 'boss', what, text, sub });
 
-function dropBoulder(sim: Sim, st: F13State, api: SimApi): boolean {
-  const b = st.boulder;
-  if (!b || b.used || st.breachEv.sealed || !st.breach.length) return false;
-  b.used = true;
-  const W = sim.world.w;
-  let bx = 0;
-  let by = 0;
-  for (const i of st.breach) {
-    bx += (i % W) + 0.5;
-    by += Math.floor(i / W) + 0.5;
-  }
-  bx /= st.breach.length;
-  by /= st.breach.length;
-  const roll: ZX = {
-    x: b.x,
-    y: b.y,
-    r: 1,
-    life: 0.95,
-    art: 'f13_roll',
-    above: true,
-    tx: bx,
-    ty: by,
-  };
-  api.zone(sim, roll);
-  sim.events.push({ t: 'boss', what: 'f13_roll_wall' });
-  later(sim, st, 0.9, (a) => {
-    a.strike(sim, {
-      shape: 'circle',
-      x: bx,
-      y: by,
-      r: 2.6,
-      warn: 0,
-      dmg: 0,
-      art: 'f13_crush',
-      mobDmg: Infinity,
-    });
-    for (const i of st.breach) a.setTile(sim, i % W, Math.floor(i / W), T_RUBBLE, MK.sealed);
-    st.breachEv.sealed = true;
-    sim.events.push({ t: 'shake', k: 0.8 });
-    puff(a, sim, 'f13_dust', bx, by + 1, 3, 1.2);
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_seal_wall',
-      text: 'ПРОЛОМ ЗАВАЛЕН',
-      sub: 'назад в поле — калиткой на западе',
-    });
-    if (!st.breachEv.paid) {
-      st.breachEv.paid = true;
-      reward(sim, a, b.x, b.y + 1.2, 1600, 16, [
-        ['f13mat', 2],
-        ['f13_plate', 1],
-      ]);
-    }
-  });
-  return true;
-}
+// ---- Фойе: «Гардероб оживает» ---------------------------------------------
 
-// ---- Набат -------------------------------------------------------------------
-
-function ringBell(sim: Sim, st: F13State, api: SimApi, free = false): boolean {
-  const b = st.bell;
-  if (!b || (!free && b.cd > 0)) return false;
-  if (!free) b.cd = BELL.cd;
-  const wave: ZX = { x: b.x, y: b.y, r: BELL.r, life: 0.9, art: 'f13_bellwave', above: true };
-  api.zone(sim, wave);
-  sim.events.push({ t: 'boss', what: 'f13_bell_call' });
-  sim.events.push({ t: 'flash', color: '#ffe8a0', k: 0.25 });
-  api.light(sim, 'bell', { x: b.x, y: b.y, r: 6, tint: 'warm' });
-  later(sim, st, 0.4, (a) => a.light(sim, 'bell', null));
-  if (free) return true;
-  // Волна глушит мелочь и спугивает ворон; исполинов шатает.
-  for (const m of sim.mobs) {
-    if (m.mode === 'dying' || api.def(m.kind).boss) continue;
-    const d = hypot(m.x - b.x, m.y - b.y);
-    if (d > BELL.r) continue;
-    if (m.kind === 'f13_crow') {
-      api.setMode(m, 'flee');
-      continue;
-    }
-    const a = Math.atan2(m.y - b.y, m.x - b.x);
-    const mass = api.def(m.kind).mass ?? 1;
-    m.kx += (Math.cos(a) * 7) / Math.max(1, mass * 0.4);
-    m.ky += (Math.sin(a) * 7) / Math.max(1, mass * 0.4);
-    m.hp = Math.max(1, m.hp - m.maxHp * 0.08);
-    m.flash = 0.15;
-    if (F13_GIANTS.has(m.kind) && m.kind !== 'f13_crawler') knockDown(sim, m, api, 1.4);
-    else {
-      api.setMode(m, 'stun');
-      m.t = -BELL.stun;
-    }
-  }
-  return true;
-}
-
-// ---- Залы-события ------------------------------------------------------------
-
-/** «Пожар квартала» (Внешний район): огонь идёт за спиной, балки падают. */
-function stepFire(sim: Sim, st: F13State, api: SimApi, dt: number): void {
-  const F = st.fire;
-  const top = st.tops[F13_OUTER];
-  if (F.st === 'idle') {
-    if (!heroIn(sim, st, F13_OUTER, 11, 66, 16, 82)) return;
-    F.st = 'on';
-    F.t = 0;
-    F.row = 84;
-    F.beam = 1.2;
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_fire_trap',
-      text: 'КВАРТАЛ ГОРИТ',
-      sub: 'огонь за спиной — на север!',
-    });
-    for (let i = 0; i < 3; i++) {
-      const b = api.pickBurrow(sim, 3, 12);
-      if (b) api.fromBurrow(sim, b, 'f13_grin');
-    }
-    return;
-  }
-  if (F.st !== 'on') return;
-  F.t += dt;
-  const h = sim.hero;
-  const hly = h.y - top;
-  // Фронт огня ползёт на север по улице.
-  const rowT = 0.55;
-  while (F.t > (84 - F.row + 1) * rowT && F.row > 47) {
-    F.row -= 1;
-    const y = top + F.row + 0.5;
-    for (let x = 12; x <= 15; x++)
-      api.zone(sim, {
-        x: x + 0.5,
-        y,
-        r: 0.62,
-        life: 7,
-        warn: 0.35,
-        dps: 0.07,
-        status: 'burn',
-        dur: 1.4,
-        art: 'f13_fire',
-      });
-    if (F.row % 5 === 0) {
-      const key = `fire${F.row}`;
-      api.light(sim, key, { x: 14, y, r: 3.4, tint: 'warm' });
-      later(sim, st, 7.5, (a) => a.light(sim, key, null));
-    }
-  }
-  // Балки с горящих крыш — впереди героя, с метками.
-  F.beam -= dt;
-  if (F.beam <= 0 && hly > 48 && h.x < 17) {
-    F.beam = 1.25;
-    const ly = Math.max(48, Math.floor(hly - 2 - sim.rng() * 4));
-    const x = 12 + Math.floor(sim.rng() * 4);
-    api.strike(sim, {
-      shape: 'circle',
-      x: x + 0.5,
-      y: top + ly + 0.5,
-      r: 0.95,
-      warn: 0.9,
-      dmg: rawShare(sim, 0.12),
-      knock: 4,
-      status: 'burn',
-      dur: 1.2,
-      art: 'f13_beam',
-    });
-  }
-  if (F.t > 8 && F.t - dt <= 8)
-    for (let i = 0; i < 2; i++) {
-      const b = api.pickBurrow(sim, 3, 10);
-      if (b) api.fromBurrow(sim, b, 'f13_grin');
-    }
-  // Добежал до выхода — квартал пройден.
-  if (hly < 49.5 && h.x >= 11 && h.x <= 17) {
-    F.st = 'done';
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_fire_call',
-      text: 'ВЫБРАЛСЯ',
-      sub: 'квартал догорает за спиной',
-    });
-    reward(sim, api, 13.5, top + 47.5, 1200, 12, [['f13mat', 2]]);
-  } else if (F.t > 60 || hly < 40 || h.x > 24) F.st = 'done';
-}
-
-/** «Шествие» (Большой проспект): колонна исполинов идёт на юг. */
-function stepMarch(sim: Sim, st: F13State, api: SimApi): void {
-  const M = st.march;
-  const top = st.tops[F13_OUTER];
-  if (M.st === 'idle') {
-    if (!heroIn(sim, st, F13_OUTER, 24, 30, 39, 46)) return;
-    M.st = 'on';
-    for (const [x, y] of [
-      [29, 2],
-      [31, 5],
-      [33, 2],
-    ]) {
-      const m = spawnAt(sim, st, api, 'f13_walker', F13_OUTER, x, y, 'march', x === 31);
-      m.data.mx = x + 0.5;
-      m.data.my = top + 43.5;
-      m.face = Math.PI / 2;
-      M.mobs.push(m.id);
-    }
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_march_trap',
-      text: 'ШЕСТВИЕ',
-      sub: 'в ниши! бей в спину, когда пройдут',
-    });
-    sim.events.push({ t: 'shake', k: 0.4 });
-    return;
-  }
-  if (M.st !== 'on') return;
-  const alive = M.mobs.filter((id) => sim.mobs.some((m) => m.id === id && m.mode !== 'dying'));
-  if (!alive.length) {
-    M.st = 'done';
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_march_call',
-      text: 'ШЕСТВИЕ ОСТАНОВЛЕНО',
-      sub: 'у статуи — добыча',
-    });
-    reward(sim, api, 31.5, top + 28.5, 2000, 18, [
-      ['f13_tooth', 2],
-      ['f13mat', 2],
-    ]);
-  }
-}
-
-/** «Пролом в воротах»: исполины лезут, пока валун не завалит проход. */
-function stepBreach(sim: Sim, st: F13State, api: SimApi, dt: number): void {
-  const B = st.breachEv;
-  if (B.st === 'idle') {
-    if (!heroIn(sim, st, F13_WALL, 38, 44, 50, 66)) return;
-    B.st = 'on';
-    B.t = 0;
-    B.wave = 0;
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_breach_trap',
-      text: 'ПРОЛОМ!',
-      sub: 'лебёдка у пролома — сбрось валун',
-    });
-    later(sim, st, 2.5, (a) => {
-      if (B.sealed) return;
-      const m = spawnAt(sim, st, a, 'f13_armored', F13_WALL, 43, 80, 'stalk');
-      m.data.leash = 40;
-    });
-    return;
-  }
-  if (B.st !== 'on') return;
-  if (B.sealed) {
-    B.st = 'done';
-    return;
-  }
-  // Пролом лезет, пока герой рядом со Стеной; ушёл — ждёт.
-  if (areaAt(sim, sim.hero.y) !== F13_WALL) return;
-  B.t += dt;
-  if (B.t > 80) {
-    B.st = 'done';
-    return;
-  }
-  if (B.t > B.wave * 6 + 1) {
-    B.wave += 1;
-    const n = 2 + (B.wave % 2);
-    for (let i = 0; i < n; i++) {
-      const m = spawnAt(sim, st, api, 'f13_grin', F13_WALL, 42 + i, 69, 'chase');
-      m.rush = true;
-      m.t = -i * 0.3;
-    }
-  }
-}
-
-/** «Батарея» (дорожка Стены): волны исполинов через поле, стенолазы. */
-const BATTERY_WAVES: string[][] = [
-  ['f13_walker', 'f13_walker', 'f13_thrower'],
-  ['f13_armored', 'f13_walker', 'f13_abnormal'],
-  ['f13_walker', 'f13_walker', 'f13_thrower', 'f13_armored'],
+const CLOAK_WAVES = [
+  ['f13_knight', 'f13_knight', 'f13_ballerina'],
+  ['f13_harlequin', 'f13_knight', 'f13_ballerina'],
+  ['f13_nutcracker', 'f13_knight', 'f13_fiddler'],
 ];
-const CLIMBERS = [2, 2, 3];
 
-function stepBattery(sim: Sim, st: F13State, api: SimApi, dt: number): void {
-  const B = st.battery;
-  const top = st.tops[F13_WALL];
+function stepCloak(sim: Sim, st: F13State, api: SimApi, dt: number): void {
+  const ev = st.cloak;
   const h = sim.hero;
-  if (B.st === 'idle') {
-    const i = Math.floor(h.y) * sim.world.w + Math.floor(h.x);
-    if (areaAt(sim, h.y) !== F13_WALL || sim.world.mark[i] !== MK.rampart) return;
-    const ly = h.y - top;
-    if (ly < 57.5 || ly > 61) return;
-    B.st = 'on';
-    B.wave = 0;
-    B.gap = 1.5;
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_battery_trap',
-      text: 'БАТАРЕЯ, К БОЮ',
-      sub: 'пушки заряжаются быстро — бей по полосам',
-    });
+  const inside = inBox(BOX.cloak, h.x, h.y);
+  if (ev.state === 0) {
+    if (!inside || heroDown(sim)) return;
+    ev.state = 1;
+    ev.t = 0;
+    ev.wave = 0;
+    call(sim, 'f13_bell_call', 'ГАРДЕРОБ ОЖИВАЕТ', 'костюмы падают с вешалок — режь нити');
     return;
   }
-  if (B.st !== 'on') return;
-  // Ушёл со Стены и из Предполья — волны ждут, а не лезут вслед по этажу.
-  if (areaAt(sim, h.y) !== F13_WALL || h.y - top > 100) return;
-  B.t += dt;
-  const alive = B.mobs.filter((id) => sim.mobs.some((m) => m.id === id && m.mode !== 'dying'));
-  B.mobs = alive;
-  if (B.gap > 0) {
-    B.gap -= dt;
-    if (B.gap > 0) return;
-    if (B.wave >= BATTERY_WAVES.length) {
-      B.st = 'done';
-      sim.events.push({
-        t: 'boss',
-        what: 'f13_battery_call',
-        text: 'СТЕНА ВЫСТОЯЛА',
-        sub: 'добыча на Стене',
-      });
-      reward(sim, api, h.x, h.y - 0.5, 2400, 22, [
-        ['f13_plate', 1],
-        ['f13mat', 3],
-      ]);
-      return;
-    }
-    const list = BATTERY_WAVES[B.wave];
-    list.forEach((kind, n) => {
-      const x = 8 + Math.floor(((n + 0.5) / list.length) * 46 + (sim.rng() - 0.5) * 6);
-      const m = spawnAt(sim, st, api, kind, F13_WALL, x, 90 + Math.floor(sim.rng() * 4), 'stalk');
-      m.data.leash = 60;
-      m.face = -Math.PI / 2;
-      B.mobs.push(m.id);
+  if (ev.state !== 1) return;
+  ev.t += dt;
+  ev.ids = aliveIds(sim, ev.ids);
+  if (!inside) return;
+  const due = ev.wave === 0 ? ev.t > 1.2 : ev.ids.length === 0 || ev.t > 10;
+  if (due && ev.wave < CLOAK_WAVES.length) {
+    const racks = F13_GEO.f13.cloakRacks;
+    const kinds = CLOAK_WAVES[ev.wave];
+    const used = new Set<number>();
+    kinds.forEach((kind) => {
+      let k = Math.floor(sim.rng() * racks.length);
+      for (let n = 0; n < racks.length && used.has(k); n++) k = (k + 1) % racks.length;
+      used.add(k);
+      const [wx, wy] = gw(F13_FOYER, racks[k][0], racks[k][1] + 1);
+      const m = api.spawnMob(sim, kind, wx + 0.5, wy + 0.5, { mode: 'drop', elite: kind === 'f13_nutcracker' });
+      ev.ids.push(m.id);
+      fx(sim, api, 'f13_dust', wx + 0.5, wy + 0.5, 0.8, 0.7);
     });
-    for (let n = 0; n < CLIMBERS[B.wave]; n++) {
-      // Стенолаз — рядом с героем по дорожке, руки на зубцах.
-      const x = clamp(Math.floor(h.x + (n % 2 ? 1 : -1) * (3 + n * 2 + sim.rng() * 3)), 6, 58);
-      const cell = (top + 60) * sim.world.w + x;
-      if (sim.world.mark[cell] !== MK.rampart) continue;
-      const m = spawnAt(sim, st, api, 'f13_climber', F13_WALL, x, 60, 'climb');
-      m.t = -n * 0.8;
-      m.data.leash = 30;
-      B.mobs.push(m.id);
-    }
-    B.wave += 1;
-    B.t = 0;
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_wave_call',
-      text: `ВОЛНА ${B.wave} ИЗ ${BATTERY_WAVES.length}`,
-      sub: B.wave === 1 ? 'руки на зубцах — стенолаз лезет' : undefined,
-    });
+    ev.wave += 1;
+    ev.t = 0;
     return;
   }
-  if (!alive.length || B.t > 50) B.gap = 4;
-}
-
-/** «Колокол тревоги» (Сторожевая площадь): набат, волны, ответный набат. */
-function stepAlarm(sim: Sim, st: F13State, api: SimApi, dt: number): void {
-  const A = st.alarm;
-  if (A.st === 'idle') {
-    if (!heroIn(sim, st, F13_BELL, 12, 82, 51, 101)) return;
-    A.st = 'on';
-    A.t = 0;
-    A.wave = 0;
-    A.tolls = 0;
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_alarm_trap',
-      text: 'КОЛОКОЛ ТРЕВОГИ',
-      sub: 'ударь в набат — волна глушит толпу',
-    });
-    return;
-  }
-  if (A.st !== 'on') return;
-  // Ушёл с площади — тревога ждёт: волны лезут у набата, а не за героем.
-  if (!heroIn(sim, st, F13_BELL, 2, 74, 61, 106)) return;
-  A.t += dt;
-  // Набат бьёт сам три раза — созывает.
-  if (A.tolls < 3 && A.t > A.tolls * 1.1) {
-    A.tolls += 1;
-    ringBell(sim, st, api, true);
-  }
-  A.mobs = A.mobs.filter((id) => sim.mobs.some((m) => m.id === id && m.mode !== 'dying'));
-  if (A.wave < 3 && A.t > 2 + A.wave * 13) {
-    A.wave += 1;
-    for (let i = 0; i < 4; i++) {
-      const b = api.pickBurrow(sim, 4, 16);
-      if (!b) continue;
-      const m = api.fromBurrow(sim, b, 'f13_grin', { rush: true });
-      m.t = -i * 0.3;
-      A.mobs.push(m.id);
-    }
-    for (const r of st.roosts) {
-      if (hypot(r.x - sim.hero.x, r.y - sim.hero.y) > 22) continue;
-      const m = api.spawnMob(sim, 'f13_crow', r.x, r.y, { mode: 'circle' });
-      A.mobs.push(m.id);
-    }
-    if (A.wave === 3) {
-      const m = spawnAt(sim, st, api, 'f13_walker', F13_BELL, 10, 78, 'stalk');
-      m.data.leash = 30;
-      A.mobs.push(m.id);
-    }
-    sim.events.push({ t: 'boss', what: 'f13_alarm_call', text: `НАБАТ ${A.wave}/3` });
-  }
-  if (A.wave >= 3 && (!A.mobs.length || A.t > 70)) {
-    A.st = 'done';
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_alarm_call',
-      text: 'ПЛОЩАДЬ ОТБИТА',
-      sub: 'у набата — добыча',
-    });
-    if (st.bell) reward(sim, api, st.bell.x, st.bell.y + 1.2, 2200, 20, [['f13mat', 3]]);
+  if (ev.wave >= CLOAK_WAVES.length && ev.ids.length === 0) {
+    ev.state = 2;
+    applause(sim, api, h.x, h.y, 1);
   }
 }
 
-/** «Разлом» (восток Площади): земля дрожит, обломки, вороны над трещиной. */
-function stepRift(sim: Sim, st: F13State, api: SimApi, dt: number): void {
-  const R = st.rift;
-  const top = st.tops[F13_BELL];
+// ---- Фойе: «Антракт» -------------------------------------------------------
+
+const INTER_KINDS = ['f13_knight', 'f13_harlequin', 'f13_ballerina', 'f13_knight', 'f13_fiddler', 'f13_comedy'];
+
+function stepInter(sim: Sim, st: F13State, api: SimApi, dt: number): void {
+  const ev = st.inter;
   const h = sim.hero;
-  const hly = h.y - top;
-  const inZone = areaAt(sim, h.y) === F13_BELL && h.x >= 34 && hly >= 53 && hly <= 71;
-  if (R.st === 'idle') {
-    if (!inZone) return;
-    R.st = 'on';
-    R.t = 0;
-    R.tick = 0.4;
-    sim.events.push({
-      t: 'boss',
-      what: 'f13_rift_trap',
-      text: 'РАЗЛОМ',
-      sub: 'земля уходит — крюк за крюком',
+  if (ev.state === 0) {
+    if (!inBox(BOX.buffet, h.x, h.y) || heroDown(sim)) return;
+    ev.state = 1;
+    ev.t = 0;
+    call(sim, 'f13_bell_call', 'АНТРАКТ', 'первый звонок — публика вышла в кулуары');
+    INTER_KINDS.forEach((kind, i) => {
+      const box = i % 2 ? BOX.lobbyE : BOX.lobbyW;
+      const p = floorNear(sim, api, (box[0] + box[2]) / 2 + 0.5, (box[1] + box[3]) / 2 + 0.5, 0, 6, box);
+      if (!p) return;
+      const m = api.spawnMob(sim, kind, p[0], p[1], { mode: 'f13_wait' });
+      m.face = sim.rng() * TAU;
+      ev.ids.push(m.id);
     });
     return;
   }
-  if (R.st !== 'on') return;
-  R.t += dt;
-  R.tick -= dt;
-  // Осыпь — только над трещиной, а не за героем по всему этажу.
-  if (R.tick <= 0 && inZone) {
-    R.tick = 1.35;
-    sim.events.push({ t: 'shake', k: 0.28 });
+  if (ev.state !== 1) return;
+  ev.t += dt;
+  ev.ids = aliveIds(sim, ev.ids);
+  // Кукол-зрителей стало больше: маска приводит пару.
+  for (const m of sim.mobs)
+    if (m.kind === 'f13_tragedy' && ev.ids.includes(m.data.pair ?? -1) && !ev.ids.includes(m.id)) ev.ids.push(m.id);
+  const peek = inBox(BOX.lobbyW, h.x, h.y) || inBox(BOX.lobbyE, h.x, h.y);
+  if (!ev.rushed && (ev.t > 12 || peek)) {
+    ev.rushed = true;
+    call(sim, 'f13_alarm_trap', 'ТРЕТИЙ ЗВОНОК', 'публика возвращается — опусти занавес у дверей');
+    for (const m of sim.mobs) if (ev.ids.includes(m.id) && m.mode === 'f13_wait') api.setMode(m, 'alert');
+  }
+  if (ev.rushed && ev.ids.length === 0) {
+    ev.state = 2;
+    applause(sim, api, h.x, h.y, 1);
+  }
+}
+
+// ---- Зал: «Премьера» -------------------------------------------------------
+
+function stepPremiere(sim: Sim, st: F13State, api: SimApi, dt: number): void {
+  const ev = st.prem;
+  const h = sim.hero;
+  if (ev.state === 0) {
+    if (!inBox(BOX.parterre, h.x, h.y) || heroDown(sim)) return;
+    ev.state = 1;
+    ev.t = 0;
+    call(sim, 'f13_alarm_call', 'ПРЕМЬЕРА', 'свет гаснет, занавес поднимается — в лучах встают тени');
+    sim.events.push({ t: 'flash', color: '#1a0410', k: 0.6 });
+    // Люстры зала гаснут.
+    for (const c of st.chands)
+      if (c.area === F13_HALL && inBox(BOX.parterre, c.x, c.y)) {
+        c.on = false;
+        api.light(sim, c.key, null);
+      }
+    // Занавес поднимается — навсегда: из ямы на сцену можно пройти.
+    for (const [x, y] of F13_GEO.f13wall.curtain) {
+      const [wx, wy] = gw(F13_HALL, x, y);
+      api.setTile(sim, wx, wy, T_FLOOR, MK.curtainUp);
+    }
+    // Тени в лучах партера, куклы — в проходах.
+    st.spots.forEach((s, i) => {
+      if (s.room !== 'parterre') return;
+      const [x, y] = spotAt(st, s, sim.time);
+      s.x = x;
+      s.y = y;
+      const m = api.spawnMob(sim, 'f13_shade', x, y, { mode: 'chase' });
+      m.data.beam = i;
+      ev.ids.push(m.id);
+    });
+    for (const kind of ['f13_knight', 'f13_knight', 'f13_comedy']) {
+      const p = floorNear(sim, api, h.x, h.y, 4, 8, BOX.parterre);
+      if (!p) continue;
+      const m = api.spawnMob(sim, kind, p[0], p[1], { mode: 'drop' });
+      ev.ids.push(m.id);
+    }
+    return;
+  }
+  if (ev.state !== 1) return;
+  ev.t += dt;
+  ev.ids = aliveIds(sim, ev.ids);
+  if (ev.t > 50 || (ev.t > 6 && ev.ids.length === 0)) {
+    ev.state = 2;
+    for (const c of st.chands)
+      if (!c.on) {
+        c.on = true;
+        api.light(sim, c.key, { x: c.x, y: c.y - 0.6, r: 4.6, tint: 'warm' });
+      }
+    // Свет зажёгся — тени партера тают.
+    for (const m of sim.mobs)
+      if (m.kind === 'f13_shade' && m.mode !== 'dying' && st.spots[m.data.beam ?? -1]?.room === 'parterre') {
+        fx(sim, api, 'f13_fade', m.x, m.y, 0.8, 0.8);
+        envKill(sim, api, m);
+      }
+    applause(sim, api, h.x, h.y, 2);
+  }
+}
+
+// ---- Зал: «Увертюра» -------------------------------------------------------
+
+const MUSIC = new Set(['f13_drummer', 'f13_fiddler']);
+
+function stepOverture(sim: Sim, st: F13State, api: SimApi, dt: number): void {
+  const ev = st.over;
+  const h = sim.hero;
+  if (ev.state === 0) {
+    if (!inBox(BOX.pit, h.x, h.y) || heroDown(sim)) return;
+    ev.state = 1;
+    ev.t = 0;
+    call(sim, 'f13_bell_call', 'УВЕРТЮРА', 'оркестр играет быстрее — люки ямы в такт; палочка дирижёра у пульта');
+    for (const m of sim.mobs)
+      if (MUSIC.has(m.kind) && m.mode !== 'dying' && inBox(BOX.pit, m.x, m.y)) {
+        if (m.mode === 'sleep') api.setMode(m, 'alert');
+        ev.ids.push(m.id);
+      }
     for (let i = 0; i < 2; i++) {
-      const a = sim.rng() * TAU;
-      const d = 0.8 + sim.rng() * 2.4;
-      const x = h.x + Math.cos(a) * d;
-      const y = h.y + Math.sin(a) * d;
-      if (!walkable(tileAt(sim, Math.floor(x), Math.floor(y)))) continue;
+      const p = floorNear(sim, api, h.x, h.y, 3, 6, BOX.pit);
+      if (!p) continue;
+      ev.ids.push(api.spawnMob(sim, 'f13_harlequin', p[0], p[1], { mode: 'drop' }).id);
+    }
+    return;
+  }
+  if (ev.state !== 1) return;
+  ev.t += dt;
+  ev.ids = aliveIds(sim, ev.ids);
+  if (ev.t > 60 || ev.ids.length === 0) {
+    ev.state = 2;
+    if (ev.ids.length === 0) applause(sim, api, h.x, h.y, 1);
+  }
+}
+
+// ---- Колосники: «Третий звонок» на поворотном круге ------------------------
+
+function layoutCells(sim: Sim, lay: number): number[] {
+  const L = F13_SCENERY[lay];
+  return L ? L.cells.map(([x, y]) => cellI(sim, x, y)) : [];
+}
+
+function clearLayout(sim: Sim, st: F13State, api: SimApi, lay: number): void {
+  for (const i of layoutCells(sim, lay)) restoreTile(sim, st, api, i);
+}
+
+function applyLayout(sim: Sim, st: F13State, api: SimApi, lay: number): void {
+  const L = F13_SCENERY[lay];
+  if (!L) return;
+  const cells = layoutCells(sim, lay);
+  const set = new Set(cells);
+  const w = sim.world.w;
+  const at = (x: number, y: number) => set.has(Math.floor(y) * w + Math.floor(x));
+  if (L.kind === 'wall') {
+    // Кого придавит картоном — получает своё (видно было две секунды).
+    if (!heroDown(sim) && at(sim.hero.x, sim.hero.y) && sim.hero.mode !== 'dash') api.hurtEnv(sim, SCENE.crushHero);
+    for (const m of sim.mobs)
+      if (m.mode !== 'dying' && !isGhost(m) && !api.def(m.kind).boss && at(m.x, m.y)) envHurt(sim, api, m, SCENE.crushMob);
+  }
+  for (const i of cells)
+    if (L.kind === 'wall') saveTile(sim, st, api, i, T_WALL, L.mark);
+    else saveTile(sim, st, api, i, T_HAZARD, L.mark, SEA_HAZ);
+}
+
+function stepTurn(sim: Sim, st: F13State, api: SimApi, dt: number): void {
+  const ev = st.turn;
+  const h = sim.hero;
+  const inDisc = hypot(h.x - TURN.cx, h.y - TURN.cy) < TURN.R - 1;
+  if (ev.state === 0) {
+    if (!inDisc || heroDown(sim)) return;
+    startTurn(sim, st, api);
+    return;
+  }
+  if (ev.state !== 1) return;
+  ev.t += dt;
+  ev.ids = aliveIds(sim, ev.ids);
+  const k = ev.lay + 1;
+  // Звонок и линии на полу за две секунды до смены.
+  if (k <= SCENE.changes && ev.t >= ev.next - SCENE.warn && ev.warned !== k) {
+    ev.warned = k;
+    if (k < SCENE.changes) {
+      fx(sim, api, 'f13_setwarn', TURN.cx, TURN.cy, TURN.R, SCENE.warn, { lay: k });
+      call(sim, 'f13_alarm_trap', 'ТРЕТИЙ ЗВОНОК', `декорации: ${F13_SCENERY[k].name} — сойди с линий`);
+    }
+  }
+  if (ev.t < ev.next) return;
+  if (ev.lay >= 0) clearLayout(sim, st, api, ev.lay);
+  if (k >= SCENE.changes) {
+    ev.state = 2;
+    ev.lay = -1;
+    applause(sim, api, h.x, h.y, 2);
+    return;
+  }
+  applyLayout(sim, st, api, k);
+  ev.lay = k;
+  ev.next = ev.t + SCENE.hold;
+  sim.events.push({ t: 'boss', what: 'f13_scene_wall' });
+  sim.events.push({ t: 'shake', k: 0.35 });
+  const kinds = k === 1 ? ['f13_knight', 'f13_nutcracker'] : ['f13_harlequin', 'f13_knight'];
+  for (const kind of kinds) {
+    const p = floorNear(sim, api, h.x, h.y, 3, 7);
+    if (!p || hypot(p[0] - TURN.cx, p[1] - TURN.cy) > TURN.R - 1) continue;
+    ev.ids.push(api.spawnMob(sim, kind, p[0], p[1], { mode: 'drop' }).id);
+  }
+}
+
+function startTurn(sim: Sim, st: F13State, api: SimApi): void {
+  const ev = st.turn;
+  ev.state = 1;
+  ev.t = 0;
+  ev.lay = -1;
+  ev.next = SCENE.warn + 0.4;
+  ev.warned = -1;
+  call(sim, 'f13_bell_call', 'СМЕНА ДЕКОРАЦИЙ', 'круг поворачивается — линии на полу покажут, где встанет картон');
+  void api;
+}
+
+// ---- Колосники: «Пожарный занавес» -----------------------------------------
+
+function stepIron(sim: Sim, st: F13State, api: SimApi): void {
+  const ev = st.iron;
+  const h = sim.hero;
+  const inside = inBox(BOX.gallery, h.x, h.y);
+  if (ev.state === 0 && inside && !heroDown(sim)) {
+    ev.state = 1;
+    ev.waveAt = sim.time + 1.2;
+    call(sim, 'f13_bell_call', 'ПОЖАРНЫЙ ЗАНАВЕС', 'железо падает волной — проходи между секциями; стопор клинит одну');
+  }
+  if (ev.state === 1 && !inside && h.y < BOX.gallery[1]) ev.state = 2;
+  if (ev.state === 1 && inside && sim.time >= ev.waveAt) {
+    ev.waveAt = sim.time + IRON.gap;
+    ev.rows.forEach((r, k) => {
+      if (!r.fallAt && !r.liftAt) r.startAt = sim.time + k * IRON.step;
+    });
+  }
+  const gal = BOX.gallery;
+  ev.rows.forEach((r, k) => {
+    if (r.startAt && sim.time >= r.startAt) {
+      r.startAt = 0;
+      if (sim.time < r.jamUntil || ev.state !== 1) return;
+      api.strike(sim, {
+        shape: 'line',
+        x: gal[0],
+        y: r.y + 0.5,
+        r: gal[2] - gal[0] + 1,
+        w: 0.5,
+        ang: 0,
+        warn: IRON.warn,
+        dmg: rawShare(sim, IRON.share),
+        knock: 4,
+        mobDmg: Infinity,
+        art: 'f13_iron',
+      });
+      r.fallAt = sim.time + IRON.warn;
+    }
+    if (r.fallAt && sim.time >= r.fallAt) {
+      r.fallAt = 0;
+      r.liftAt = sim.time + IRON.hold;
+      for (const i of r.cells) saveTile(sim, st, api, i, T_WALL, MK.iron);
+      if (k === 0) sim.events.push({ t: 'boss', what: 'f13_iron_wall' });
+    }
+    if (r.liftAt && sim.time >= r.liftAt) {
+      r.liftAt = 0;
+      for (const i of r.cells) restoreTile(sim, st, api, i);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Действия этажа.
+// ---------------------------------------------------------------------------
+
+function ready(sim: Sim, st: F13State, obj: WorldObj): boolean {
+  return (st.cds.get(obj.id) ?? 0) <= sim.time;
+}
+
+function spotOf(st: F13State, obj: WorldObj): Spot | null {
+  let best: Spot | null = null;
+  let bd = 2;
+  for (const s of st.spots) {
+    const d = hypot(s.lx - obj.x - 0.5, s.ly - obj.y - 0.5);
+    if (d < bd) {
+      bd = d;
+      best = s;
+    }
+  }
+  return best;
+}
+
+function doorOf(obj: WorldObj): readonly (readonly number[])[] {
+  return obj.x < 32 ? F13_GEO.f13.buffetDoorW : F13_GEO.f13.buffetDoorE;
+}
+
+function onUse(sim: Sim, obj: WorldObj, api: SimApi): boolean {
+  const st = stateOf(sim);
+  if (!ready(sim, st, obj)) return false;
+  const ox = obj.x + 0.5;
+  const oy = obj.y + 0.5;
+  switch (obj.ref) {
+    case 'f13_weight': {
+      // Мешок с песком — на ближнего врага: давит и режет нити.
+      let best: Mob | null = null;
+      let bd = 7.5;
+      for (const m of sim.mobs) {
+        if (m.mode === 'dying' || isGhost(m) || api.def(m.kind).boss) continue;
+        const d = hypot(m.x - ox, m.y - oy) - (hung(m) ? 1.5 : 0);
+        if (d < bd) {
+          bd = d;
+          best = m;
+        }
+      }
+      if (!best) return false;
       api.strike(sim, {
         shape: 'circle',
-        x,
-        y,
-        r: 0.9,
-        warn: 1,
-        dmg: rawShare(sim, 0.1),
+        x: best.x,
+        y: best.y,
+        r: 1.3,
+        warn: 0.6,
+        dmg: rawShare(sim, 0.05),
         knock: 3,
-        art: 'f13_debris',
+        mobDmg: best.maxHp * 0.45,
+        art: 'f13_sandbag',
       });
+      st.bags.push({ x: best.x, y: best.y, t: sim.time + 0.6 });
+      st.cds.set(obj.id, sim.time + ACT_CD.weight);
+      sim.events.push({ t: 'boss', what: 'f13_hook_call' });
+      return true;
     }
-  }
-  if (!R.crows && R.t > 2) {
-    R.crows = true;
-    for (let i = 0; i < 3; i++)
-      api.spawnMob(sim, 'f13_crow', 58.5 - i, top + 74.5, { mode: 'circle' });
-  }
-  if ((hly < 52.5 && h.x > 33) || R.t > 70 || (!inZone && R.t > 8 && hly > 72)) {
-    R.st = 'done';
-    if (hly < 52.5)
-      sim.events.push({
-        t: 'boss',
-        what: 'f13_rift_call',
-        text: 'ПЕРЕБРАЛСЯ',
-        sub: 'дальше — площадь Колосса',
+    case 'f13_spot': {
+      const s = spotOf(st, obj);
+      if (!s) return false;
+      s.turnUntil = sim.time < s.turnUntil ? 0 : sim.time + SPOT.turn;
+      st.cds.set(obj.id, sim.time + 1);
+      sim.events.push({ t: 'clank', x: ox, y: oy });
+      return true;
+    }
+    case 'f13_winch': {
+      const cells = doorOf(obj).map(([x, y]) => {
+        const [wx, wy] = gw(F13_FOYER, x, y);
+        return cellI(sim, wx, wy);
       });
-  }
-}
-
-// ---- Регистрация -------------------------------------------------------------
-
-registerFloor(13, {
-  start(sim, api) {
-    STATE.set(sim, scan(sim, api));
-  },
-  step(sim, dt, api) {
-    const st = stateOf(sim, api);
-    // Часы действий.
-    if (st.timers.length) {
-      const due = st.timers.filter((t) => t.at <= sim.time);
-      if (due.length) {
-        st.timers = st.timers.filter((t) => t.at > sim.time);
-        for (const t of due) t.fn(api);
+      for (const i of cells) saveTile(sim, st, api, i, T_WALL, MK.curtainDown);
+      st.doors.push({ cells, until: sim.time + ACT_CD.hold });
+      st.cds.set(obj.id, sim.time + ACT_CD.winch);
+      sim.events.push({ t: 'boss', what: 'f13_hook_call' });
+      return true;
+    }
+    case 'f13_lever': {
+      let n = 0;
+      for (const g of st.traps)
+        if (g.state === 0 && hypot(g.cx - ox, g.cy - oy) < 14) {
+          trapWarn(sim, g, api, 0.5);
+          n++;
+        }
+      if (!n) return false;
+      st.cds.set(obj.id, sim.time + TRAP.leverCd);
+      sim.events.push({ t: 'clank', x: ox, y: oy });
+      return true;
+    }
+    case 'f13_podium': {
+      st.hushUntil = sim.time + ACT_CD.hush;
+      st.cds.set(obj.id, sim.time + ACT_CD.baton);
+      fx(sim, api, 'f13_hush', ox, oy, 8, 1.2);
+      call(sim, 'f13_baton_call', 'ПАУЗА', 'палочка дирижёра — оркестр молчит 8 секунд');
+      return true;
+    }
+    case 'f13_bell': {
+      const ev = st.turn;
+      if (ev.state === 0) startTurn(sim, st, api);
+      else if (ev.state === 1) ev.next = Math.min(ev.next, ev.t + SCENE.warn);
+      else return false;
+      st.cds.set(obj.id, sim.time + ACT_CD.bell);
+      return true;
+    }
+    case 'f13_stopper': {
+      let best: IronRow | null = null;
+      let bd = 1e9;
+      for (const r of st.iron.rows) {
+        const d = Math.abs(r.y + 0.5 - oy);
+        if (d < bd) {
+          bd = d;
+          best = r;
+        }
       }
+      if (!best) return false;
+      best.jamUntil = sim.time + IRON.jam;
+      st.cds.set(obj.id, sim.time + ACT_CD.stopper);
+      fx(sim, api, 'f13_jam', (BOX.gallery[0] + BOX.gallery[2] + 1) / 2, best.y + 0.5, 6, IRON.jam);
+      sim.events.push({ t: 'clank', x: ox, y: oy });
+      return true;
     }
-    for (const hk of st.hooks) hk.cd = Math.max(0, hk.cd - dt);
-    for (const c of st.cannons) c.reload = Math.max(0, c.reload - dt);
-    if (st.bell) st.bell.cd = Math.max(0, st.bell.cd - dt);
-    stepFlight(sim, st, api, dt);
-    if (heroDown(sim)) return;
-    stepPosts(sim, st, api);
-    if (sim.boss?.state === 'fight') return;
-    stepFire(sim, st, api, dt);
-    stepMarch(sim, st, api);
-    stepBreach(sim, st, api, dt);
-    stepBattery(sim, st, api, dt);
-    stepAlarm(sim, st, api, dt);
-    stepRift(sim, st, api, dt);
-  },
-  onUse(sim, obj, api) {
-    return f13Use(sim, obj, api);
-  },
-  useLabel(sim, obj) {
-    const st = STATE.get(sim);
-    if (!st) return obj.use?.label ?? null;
-    switch (obj.ref) {
-      case 'f13_hook':
-      case 'f13_hookc': {
-        if (st.flight || sim.hero.pull) return null;
-        const hk = st.hooks.find((x) => x.obj === obj);
-        if (!hk || hk.cd > 0) return null;
-        if (!hk.combat) return 'Крюк';
-        const g = giantNear(sim, hk.x, hk.y, HOOK.range);
-        return g ? 'Крюк за спину' : 'Крюк';
-      }
-      case 'f13_cannon': {
-        const c = st.cannons.find((x) => x.obj === obj);
-        return c && c.reload > 0 ? 'Заряжается…' : 'Выстрел';
-      }
-      case 'f13_boulder':
-        return st.boulder?.used || st.breachEv.sealed ? null : 'Сбросить валун';
-      case 'f13_bell':
-        return st.bell && st.bell.cd > 0 ? null : 'Набат';
-    }
-    return obj.use?.label ?? null;
-  },
-});
-
-/** Нажать действие у предмета этажа (для тестов: как кнопка «Действие»). */
-export function f13Use(sim: Sim, obj: WorldObj, api: SimApi): boolean {
-  const st = stateOf(sim, api);
-  switch (obj.ref) {
-    case 'f13_hook':
-    case 'f13_hookc': {
-      const hk = st.hooks.find((x) => x.obj === obj);
-      return hk ? fireHook(sim, st, api, hk) : false;
-    }
-    case 'f13_cannon': {
-      const c = st.cannons.find((x) => x.obj === obj);
-      return c ? fireCannon(sim, st, api, c) : false;
-    }
-    case 'f13_boulder':
-      return dropBoulder(sim, st, api);
-    case 'f13_bell':
-      return ringBell(sim, st, api);
   }
   return false;
 }
+
+function useLabel(sim: Sim, obj: WorldObj): string | null {
+  const st = stateOf(sim);
+  if (!ready(sim, st, obj)) return null;
+  if (obj.ref === 'f13_spot') {
+    const s = spotOf(st, obj);
+    return s && sim.time < s.turnUntil ? 'Вернуть софит' : 'Повернуть софит';
+  }
+  if (obj.ref === 'f13_bell' && st.turn.state === 2) return null;
+  return obj.use?.label ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Правило этажа.
+// ---------------------------------------------------------------------------
+
+function stringsZone(sim: Sim, api: SimApi): void {
+  const h = sim.hero;
+  const z = sim.zones.find((q) => q.art === 'f13_strings');
+  if (z) {
+    z.x = h.x;
+    z.y = h.y;
+  } else api.vfx(sim, { x: h.x, y: h.y, r: 1, life: 1e9, art: 'f13_strings', above: true });
+}
+
+registerFloor(13, {
+  start(sim, api) {
+    API_REF.api = api;
+    STATE.delete(sim);
+    stateOf(sim);
+  },
+  step(sim, dt, api) {
+    API_REF.api = api;
+    const st = stateOf(sim);
+    F13_FX.mobs = sim.mobs;
+    F13_FX.time = sim.time;
+    stringsZone(sim, api);
+    stepBeat(sim, st, dt);
+    stepPosts(sim, st, api);
+    stepSpots(sim, st, api);
+    stepLight(sim, st, api, dt);
+    stepTraps(sim, st, api, dt);
+    stepCuts(sim, st, api, dt);
+    stepCloak(sim, st, api, dt);
+    stepInter(sim, st, api, dt);
+    stepPremiere(sim, st, api, dt);
+    stepOverture(sim, st, api, dt);
+    stepTurn(sim, st, api, dt);
+    stepIron(sim, st, api);
+    st.doors = st.doors.filter((d) => {
+      if (sim.time < d.until) return true;
+      for (const i of d.cells) restoreTile(sim, st, api, i);
+      return false;
+    });
+    st.hpx = sim.hero.x;
+    st.hpy = sim.hero.y;
+  },
+  onUse,
+  useLabel,
+});
+
+// ---------------------------------------------------------------------------
+// Монстры: общее для кукол.
+// ---------------------------------------------------------------------------
+
+/** Множитель удара куклы: нити, свет софита, шёпот суфлёра. */
+export function dmgK(sim: Sim, m: Mob): number {
+  let k = 1;
+  const n = m.data.sn ?? 0;
+  if (n > 0) k *= stringsLeft(m) === n ? STR.intact : m.data.crawl ? STR.crawlDmg : 1;
+  else if (m.data.crawl) k *= STR.crawlDmg;
+  if (STATE.get(sim)?.lit) k *= 1.2;
+  if ((m.data.buff ?? 0) > sim.time) k *= 1.3;
+  return k;
+}
+
+function hitHero(sim: Sim, m: Mob, api: SimApi, mult = 1, knock = 4): void {
+  api.hurtHero(sim, m.dmg * dmgK(sim, m) * mult, m.x, m.y, knock, m.kind);
+}
+
+/** Режимы, общие для кукол: шатается, потерял героя, ждёт звонка, молчит. */
+function pre(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): boolean {
+  initStrings(m);
+  if (m.data.yank) m.data.yank = Math.max(0, m.data.yank - dt);
+  const st = STATE.get(sim);
+  switch (m.mode) {
+    case 'f13_reel':
+      m.tele = null;
+      m.danger = 0;
+      m.vx *= 0.82;
+      m.vy *= 0.82;
+      if (m.t > STR.reel) api.setMode(m, 'chase');
+      return true;
+    case 'f13_lost':
+      lostStep(sim, m, dt, c, api);
+      return true;
+    case 'f13_wait':
+      // Антракт: курит в кулуарах, пока не прозвенит третий звонок.
+      m.tele = null;
+      m.danger = 0;
+      m.vx *= 0.8;
+      m.vy *= 0.8;
+      if (c.dist < 2.6) api.setMode(m, 'alert');
+      return true;
+    case 'f13_hush':
+      m.tele = null;
+      m.danger = 0;
+      m.vx *= 0.8;
+      m.vy *= 0.8;
+      if (!st || sim.time >= st.hushUntil) api.setMode(m, 'chase');
+      return true;
+  }
+  if (st && sim.time < st.hushUntil && MUSIC.has(m.kind) && inBox(BOX.pit, m.x, m.y)) {
+    m.tele = null;
+    m.danger = 0;
+    api.setMode(m, 'f13_hush');
+    return true;
+  }
+  return false;
+}
+
+/** Удар героя по кукле: из тени ×2, ползущая ×1,5, нити отдёргивают. */
+function puppetHit(sim: Sim, m: Mob, hit: { heavy: boolean; ang: number }, api: SimApi): number {
+  let k = 1;
+  if (m.mode === 'f13_lost' || m.mode === 'sleep' || m.mode === 'f13_wait') {
+    k *= 2;
+    fx(sim, api, 'f13_backstab', m.x, m.y, 0.9, 0.5);
+    if (m.mode !== 'sleep') api.setMode(m, 'alert');
+  }
+  if (m.data.crawl) k *= STR.crawlHit;
+  if (m.mode === 'f13_hush') k *= 1.3;
+  if (k <= 1 && !hit.heavy && hung(m) && (m.data.yank ?? 0) <= 0 && m.mode !== 'f13_reel') {
+    // Нити дёргают куклу из-под удара.
+    m.data.yank = STR.yankCd;
+    const mass = api.def(m.kind).mass ?? 1;
+    m.kx += (Math.cos(hit.ang) * 5) / Math.sqrt(mass);
+    m.ky += (Math.sin(hit.ang) * 5) / Math.sqrt(mass) - 1.5;
+    fx(sim, api, 'f13_yank', m.x, m.y, 0.6, 0.35);
+    return STR.yank;
+  }
+  return k;
+}
+
+/** Ближний бой: конус движка (`windup`), выпад, отдых. */
+function melee(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi, speedK = 1, chase = true): void {
+  const def = c.def;
+  const h = sim.hero;
+  const reach = def.reach + m.r + 0.2;
+  switch (m.mode) {
+    case 'chase': {
+      m.tele = null;
+      m.danger = 0;
+      if (lostCheck(sim, m, c, api)) return;
+      if (c.dist < reach + 0.35 && m.cd <= 0 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
+        m.face = Math.atan2(c.dy, c.dx);
+        api.setMode(m, 'windup');
+        return;
+      }
+      if (!chase) {
+        m.vx *= 0.8;
+        m.vy *= 0.8;
+        return;
+      }
+      const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+      api.steer(sim, m, dx, dy, m.speed * speedK, dt);
+      return;
+    }
+    case 'windup': {
+      m.vx *= 0.7;
+      m.vy *= 0.7;
+      const W = def.windup;
+      const to = Math.atan2(c.dy, c.dx);
+      if (m.t < W * 0.55) m.face += clamp(angDiff(to, m.face), -3 * dt, 3 * dt);
+      if (m.t > W - 0.22) m.danger = reach;
+      if (m.t >= W) {
+        const off = Math.abs(angDiff(to, m.face));
+        if (canHurt(sim) && c.dist < reach + h.r && off < 0.6 + Math.atan(h.r / Math.max(0.1, c.dist)))
+          hitHero(sim, m, api);
+        m.vx += Math.cos(m.face) * 2.5;
+        m.vy += Math.sin(m.face) * 2.5;
+        m.danger = 0;
+        m.cd = def.rest + sim.rng() * 0.4;
+        api.setMode(m, 'recover');
+      }
+      return;
+    }
+    case 'recover':
+      recoverStep(m, api, 0.45);
+      return;
+    default:
+      api.setMode(m, 'chase');
+  }
+}
+
+const brain = (id: string, b: Brain) => registerBrain(id, b);
+
+// ---- Рыцарь-марионетка -----------------------------------------------------
+
+brain('f13_knight', {
+  step(sim, m, dt, c, api) {
+    if (pre(sim, m, dt, c, api)) return;
+    melee(sim, m, dt, c, api);
+  },
+  onHit: (sim, m, hit, api) => puppetHit(sim, m, hit, api),
+  onDeath: (sim, m) => postDead(sim, m),
+});
+
+// ---- Щелкунчик-гвардеец: челюсти и марш-таран -----------------------------
+
+export const NUT = { aim: 1.0, len: 7, speed: 9, run: 0.75, w: 0.55, cd: 6, dizzy: 1.3 };
+
+brain('f13_nutcracker', {
+  step(sim, m, dt, c, api) {
+    if (pre(sim, m, dt, c, api)) return;
+    const h = sim.hero;
+    m.data.chargeCd = (m.data.chargeCd ?? 2) - dt;
+    switch (m.mode) {
+      case 'chase':
+        if (
+          !m.data.crawl &&
+          m.data.chargeCd <= 0 &&
+          c.dist > 3 &&
+          c.dist < NUT.len &&
+          api.lineOfSight(sim, m.x, m.y, h.x, h.y)
+        ) {
+          m.dir = Math.atan2(c.dy, c.dx);
+          m.face = m.dir;
+          api.setMode(m, 'aim');
+          return;
+        }
+        melee(sim, m, dt, c, api);
+        return;
+      case 'aim': {
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        if (m.t < NUT.aim * 0.5) m.dir += clamp(angDiff(Math.atan2(c.dy, c.dx), m.dir), -1.5 * dt, 1.5 * dt);
+        m.face = m.dir;
+        const len = Math.min(NUT.len, clearDist(sim, api, m.x, m.y, m.dir, NUT.len));
+        m.tele = { shape: 'line', r: len, w: NUT.w, ang: m.dir, k: clamp(m.t / NUT.aim, 0, 1) };
+        if (m.t > NUT.aim - 0.24) m.danger = 1.2;
+        if (m.t >= NUT.aim) {
+          m.tele = null;
+          m.data.hitDone = 0;
+          m.bounce = true;
+          api.setMode(m, 'f13_charge');
+        }
+        return;
+      }
+      case 'f13_charge': {
+        m.vx = Math.cos(m.dir) * NUT.speed;
+        m.vy = Math.sin(m.dir) * NUT.speed;
+        m.danger = 1.2;
+        if (!m.data.hitDone && c.dist < m.r + h.r + 0.25 && canHurt(sim)) {
+          m.data.hitDone = 1;
+          hitHero(sim, m, api, 1.3, 7);
+        }
+        if (m.t >= NUT.run) {
+          m.bounce = false;
+          m.danger = 0;
+          m.data.chargeCd = NUT.cd;
+          m.cd = 0.6;
+          api.setMode(m, 'recover');
+        }
+        return;
+      }
+      case 'dizzy':
+        m.vx *= 0.8;
+        m.vy *= 0.8;
+        m.tele = null;
+        m.danger = 0;
+        if (m.t > NUT.dizzy) api.setMode(m, 'chase');
+        return;
+      default:
+        melee(sim, m, dt, c, api);
+    }
+  },
+  onWall(sim, m, _nx, _ny, api) {
+    if (m.mode !== 'f13_charge') return;
+    m.bounce = false;
+    m.vx = 0;
+    m.vy = 0;
+    m.data.chargeCd = NUT.cd;
+    sim.events.push({ t: 'shake', k: 0.25 });
+    sim.events.push({ t: 'clank', x: m.x, y: m.y });
+    api.setMode(m, 'dizzy');
+  },
+  onHit: (sim, m, hit, api) => puppetHit(sim, m, hit, api),
+  onDeath: (sim, m) => postDead(sim, m),
+});
+
+// ---- Барабанщик: кольцо на сильную долю -------------------------------------
+
+export const DRUM = { near: 2.5, far: 4.5, w: 0.6, see: 6.5, home: 7 };
+
+brain('f13_drummer', {
+  step(sim, m, dt, c, api) {
+    if (pre(sim, m, dt, c, api)) return;
+    const st = STATE.get(sim);
+    if (m.mode === 'f13_drum') {
+      m.vx *= 0.7;
+      m.vy *= 0.7;
+      const T = m.data.drumLen ?? 0.75;
+      if (m.t > T - 0.2) m.danger = (m.data.drumR ?? 2.5) + DRUM.w;
+      if (m.t >= T) {
+        m.danger = 0;
+        m.cd = 0.5;
+        api.setMode(m, 'recover');
+      }
+      return;
+    }
+    if (
+      st &&
+      m.mode === 'chase' &&
+      st.onBeat &&
+      st.beatN % 4 === 3 &&
+      c.dist < DRUM.see &&
+      !m.data.crawl &&
+      !heroDown(sim)
+    ) {
+      const r = m.data.alt ? DRUM.far : DRUM.near;
+      m.data.alt = m.data.alt ? 0 : 1;
+      api.strike(sim, {
+        shape: 'ring',
+        x: m.x,
+        y: m.y,
+        r,
+        w: DRUM.w,
+        warn: st.beatLen,
+        dmg: m.dmg * dmgK(sim, m),
+        knock: 4,
+        art: 'f13_drum',
+        from: m.id,
+      });
+      m.data.drumLen = st.beatLen;
+      m.data.drumR = r;
+      api.setMode(m, 'f13_drum');
+      return;
+    }
+    // Далеко от ямы не уходит.
+    if (m.mode === 'chase' && hypot(m.x - m.hx, m.y - m.hy) > DRUM.home && c.dist > 2) {
+      const d = hypot(m.hx - m.x, m.hy - m.y) || 1;
+      api.steer(sim, m, (m.hx - m.x) / d, (m.hy - m.y) / d, m.speed, dt);
+      return;
+    }
+    melee(sim, m, dt, c, api);
+  },
+  onHit: (sim, m, hit, api) => puppetHit(sim, m, hit, api),
+  onDeath: (sim, m) => postDead(sim, m),
+});
+
+// ---- Скрипач: ноты дугой (режут и чужие нити) -------------------------------
+
+export const FIDDLE = { aim: 0.7, keep: [3.6, 6.2], cd: 2.6, n: 3, spread: 0.32 };
+
+function rangedStep(
+  sim: Sim,
+  m: Mob,
+  dt: number,
+  c: BrainCtx,
+  api: SimApi,
+  o: { aim: number; keep: number[]; cd: number; n: number; spread: number; line: number },
+): boolean {
+  const h = sim.hero;
+  m.data.shotCd = (m.data.shotCd ?? 1 + sim.rng()) - dt;
+  if (m.mode === 'aim') {
+    m.vx *= 0.6;
+    m.vy *= 0.6;
+    const ang = Math.atan2(c.dy, c.dx);
+    m.face = ang;
+    m.tele = { shape: 'line', r: o.line, w: 0.22, ang, k: clamp(m.t / o.aim, 0, 1) };
+    if (m.t >= o.aim) {
+      m.tele = null;
+      const spec = c.def.shot!;
+      api.shoot(sim, m, ang, { ...spec, n: o.n, spread: o.spread, dmg: spec.dmg * dmgK(sim, m) });
+      m.data.shotCd = o.cd + sim.rng() * 0.6;
+      api.setMode(m, 'recover');
+    }
+    return true;
+  }
+  if (m.mode !== 'chase') return false;
+  m.tele = null;
+  m.danger = 0;
+  if (lostCheck(sim, m, c, api)) return true;
+  if (c.dist < 1.4 && m.cd <= 0) return false;
+  const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
+  if (see && m.data.shotCd <= 0 && c.dist < 9) {
+    api.setMode(m, 'aim');
+    return true;
+  }
+  if (c.dist < o.keep[0]) {
+    const away = api.flowDir(sim, m.x, m.y, true) ?? [-c.dx / (c.dist || 1), -c.dy / (c.dist || 1)];
+    api.steer(sim, m, away[0], away[1], m.speed, dt);
+  } else if (c.dist > o.keep[1] || !see) {
+    const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+    api.steer(sim, m, dx, dy, m.speed, dt);
+  } else {
+    const s = m.id % 2 ? 1 : -1;
+    api.steer(sim, m, (-c.dy / c.dist) * s, (c.dx / c.dist) * s, m.speed * 0.5, dt);
+  }
+  return true;
+}
+
+brain('f13_fiddler', {
+  step(sim, m, dt, c, api) {
+    if (pre(sim, m, dt, c, api)) return;
+    if (rangedStep(sim, m, dt, c, api, { ...FIDDLE, line: 6 })) return;
+    melee(sim, m, dt, c, api);
+  },
+  onHit: (sim, m, hit, api) => puppetHit(sim, m, hit, api),
+  onDeath: (sim, m) => postDead(sim, m),
+});
+
+// ---- Балерина-волчок -------------------------------------------------------
+
+export const SPIN = { plie: 0.6, dur: 2.5, r: 1.3, tick: 0.45, speed: 3.6, dizzy: 1.8, mult: 0.75 };
+
+brain('f13_ballerina', {
+  step(sim, m, dt, c, api) {
+    if (pre(sim, m, dt, c, api)) return;
+    const h = sim.hero;
+    switch (m.mode) {
+      case 'chase':
+        if (lostCheck(sim, m, c, api)) return;
+        if (c.dist < 2.4 && m.cd <= 0 && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
+          api.setMode(m, 'f13_plie');
+          return;
+        }
+        melee(sim, m, dt, c, api, 1, true);
+        return;
+      case 'f13_plie':
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        m.tele = { shape: 'circle', r: SPIN.r, k: clamp(m.t / SPIN.plie, 0, 1) };
+        if (m.t > SPIN.plie - 0.22) m.danger = SPIN.r;
+        if (m.t >= SPIN.plie) {
+          m.data.tick = 0;
+          api.setMode(m, 'f13_spin');
+        }
+        return;
+      case 'f13_spin': {
+        const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+        api.steer(sim, m, dx, dy, SPIN.speed, dt);
+        m.face += 14 * dt;
+        m.tele = { shape: 'circle', r: SPIN.r, k: 1 };
+        m.danger = SPIN.r;
+        m.data.tick = (m.data.tick ?? 0) - dt;
+        if (m.data.tick <= 0 && c.dist < SPIN.r + h.r && canHurt(sim)) {
+          hitHero(sim, m, api, SPIN.mult, 3);
+          m.data.tick = SPIN.tick;
+        }
+        if (m.t >= SPIN.dur) {
+          m.tele = null;
+          m.danger = 0;
+          api.setMode(m, 'dizzy');
+        }
+        return;
+      }
+      case 'dizzy':
+        m.vx *= 0.8;
+        m.vy *= 0.8;
+        m.tele = null;
+        m.danger = 0;
+        if (m.t > SPIN.dizzy) {
+          m.cd = 1.2;
+          api.setMode(m, 'chase');
+        }
+        return;
+      default:
+        melee(sim, m, dt, c, api);
+    }
+  },
+  onHit(sim, m, hit, api) {
+    if (m.mode === 'f13_spin') return 0;
+    return puppetHit(sim, m, hit, api);
+  },
+  onDeath: (sim, m) => postDead(sim, m),
+});
+
+// ---- Арлекин: ныряет в люк и выскакивает за спиной -------------------------
+
+export const HARL = { dive: 0.45, pop: 0.75, r: 1.1, cd: 4.5, see: 6, mult: 1.1 };
+
+brain('f13_harlequin', {
+  step(sim, m, dt, c, api) {
+    if (pre(sim, m, dt, c, api)) return;
+    const h = sim.hero;
+    m.data.diveCd = (m.data.diveCd ?? 1.5) - dt;
+    switch (m.mode) {
+      case 'chase':
+        if (lostCheck(sim, m, c, api)) return;
+        if (
+          c.dist > 1.6 &&
+          c.dist < HARL.see &&
+          m.data.diveCd <= 0 &&
+          api.lineOfSight(sim, m.x, m.y, h.x, h.y)
+        ) {
+          // Ныряет в ближний люк, если он рядом, иначе — в свой лючок.
+          const g = trapNear(sim, m.x, m.y, 3);
+          if (g && g.state !== 2) {
+            m.data.hx2 = g.cx;
+            m.data.hy2 = g.cy;
+          } else {
+            m.data.hx2 = m.x;
+            m.data.hy2 = m.y;
+          }
+          fx(sim, api, 'f13_hatch', m.data.hx2, m.data.hy2, 0.7, 0.8);
+          api.setMode(m, 'f13_dive');
+          return;
+        }
+        melee(sim, m, dt, c, api);
+        return;
+      case 'f13_dive': {
+        m.vx *= 0.5;
+        m.vy *= 0.5;
+        if (m.t > 0.25) m.data.ghost = 1;
+        if (m.t >= HARL.dive) {
+          // За спиной героя: против того, куда он смотрит.
+          const back = h.face + Math.PI;
+          let tx = h.x + Math.cos(back) * 1.3;
+          let ty = h.y + Math.sin(back) * 1.3;
+          if (api.solidTile(sim, Math.floor(tx), Math.floor(ty)) || !api.lineOfSight(sim, h.x, h.y, tx, ty)) {
+            const p = floorNear(sim, api, h.x, h.y, 1, 1.6);
+            if (p) [tx, ty] = p;
+            else [tx, ty] = [m.x, m.y];
+          }
+          m.x = tx;
+          m.y = ty;
+          m.vx = 0;
+          m.vy = 0;
+          m.face = Math.atan2(h.y - ty, h.x - tx);
+          api.strike(sim, {
+            shape: 'circle',
+            x: tx,
+            y: ty,
+            r: HARL.r,
+            warn: HARL.pop,
+            dmg: m.dmg * dmgK(sim, m) * HARL.mult,
+            knock: 5,
+            art: 'f13_pop',
+            from: m.id,
+          });
+          fx(sim, api, 'f13_hatch', tx, ty, 0.7, HARL.pop + 0.3);
+          api.setMode(m, 'f13_pop');
+        }
+        return;
+      }
+      case 'f13_pop':
+        m.data.ghost = 1;
+        m.vx = 0;
+        m.vy = 0;
+        if (m.t > HARL.pop - 0.22) m.danger = HARL.r + 0.1;
+        if (m.t >= HARL.pop) {
+          m.data.ghost = 0;
+          m.danger = 0;
+          m.data.diveCd = HARL.cd;
+          m.cd = 0.5;
+          api.setMode(m, 'recover');
+        }
+        return;
+      default:
+        melee(sim, m, dt, c, api);
+    }
+  },
+  onHit: (sim, m, hit, api) => puppetHit(sim, m, hit, api),
+  onDeath: (sim, m) => postDead(sim, m),
+});
+
+// ---- Суфлёр: будка, шёпот соседям, листки роли ------------------------------
+
+export const PROMPT = { near: 3.2, buffR: 6, buffCd: 3, buff: 3.4, aim: 0.55, cd: 2.2, peekMax: 3 };
+
+brain('f13_prompter', {
+  step(sim, m, dt, c, api) {
+    initStrings(m);
+    const h = sim.hero;
+    m.vx = 0;
+    m.vy = 0;
+    m.x = m.hx;
+    m.y = m.hy;
+    m.danger = 0;
+    if (m.mode === 'f13_hide') {
+      m.data.ghost = 1;
+      m.tele = null;
+      if ((c.dist > PROMPT.near && m.t > 0.8) || m.t > PROMPT.peekMax) api.setMode(m, 'f13_peek');
+      return;
+    }
+    m.data.ghost = 0;
+    m.face = Math.atan2(c.dy, c.dx);
+    if (m.mode === 'aim') {
+      m.tele = { shape: 'line', r: 6, w: 0.2, ang: m.face, k: clamp(m.t / PROMPT.aim, 0, 1) };
+      if (m.t >= PROMPT.aim) {
+        m.tele = null;
+        const spec = c.def.shot!;
+        api.shoot(sim, m, m.face, { ...spec, dmg: spec.dmg * dmgK(sim, m) });
+        m.data.shotCd = PROMPT.cd;
+        api.setMode(m, 'f13_peek');
+      }
+      return;
+    }
+    if (m.mode !== 'f13_peek') {
+      api.setMode(m, 'f13_peek');
+      return;
+    }
+    m.tele = null;
+    if (c.dist < PROMPT.near && m.t > 1.6) {
+      fx(sim, api, 'f13_hatch', m.x, m.y, 0.5, 0.5);
+      api.setMode(m, 'f13_hide');
+      return;
+    }
+    m.data.buffCd = (m.data.buffCd ?? 0.5) - dt;
+    if (m.data.buffCd <= 0) {
+      m.data.buffCd = PROMPT.buffCd;
+      for (const o of sim.mobs) {
+        if (o === m || o.mode === 'dying' || api.def(o.kind).boss) continue;
+        if (hypot(o.x - m.x, o.y - m.y) > PROMPT.buffR) continue;
+        o.data.buff = sim.time + PROMPT.buff;
+        fx(sim, api, 'f13_whisper', m.x, m.y, 0.5, 1.1, { tx: o.x, ty: o.y });
+      }
+    }
+    m.data.shotCd = (m.data.shotCd ?? 1) - dt;
+    if (m.data.shotCd <= 0 && c.dist < 9 && !heroDown(sim) && api.lineOfSight(sim, m.x, m.y, h.x, h.y))
+      api.setMode(m, 'aim');
+  },
+  onDeath: (sim, m) => postDead(sim, m),
+});
+
+// ---- Маски Комедии и Трагедии ----------------------------------------------
+
+export const MASK = { heal: 0.25, healAt: 0.6, healCd: 5, broken: 4, revive: 0.5, keep: [3.4, 5.4] };
+
+function partner(sim: Sim, m: Mob): Mob | null {
+  const id = m.data.pair;
+  if (id === undefined || id < 0) return null;
+  return sim.mobs.find((x) => x.id === id && x.mode !== 'dying') ?? null;
+}
+
+function maskPre(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): boolean {
+  if (pre(sim, m, dt, c, api)) return true;
+  const p = partner(sim, m);
+  if (m.mode === 'f13_broken') {
+    m.data.ghost = 1;
+    m.tele = null;
+    m.danger = 0;
+    m.vx *= 0.85;
+    m.vy *= 0.85;
+    if (!p || p.mode === 'f13_broken') {
+      fx(sim, api, 'f13_shatter', m.x, m.y, 0.9, 0.9);
+      sim.events.push({ t: 'boss', what: 'f13_crystal_stone' });
+      envKill(sim, api, m);
+      return true;
+    }
+    if (m.t > MASK.broken) {
+      m.data.ghost = 0;
+      m.hp = m.maxHp * MASK.revive;
+      fx(sim, api, 'f13_mend', m.x, m.y, 0.9, 0.8);
+      api.setMode(m, 'chase');
+    }
+    return true;
+  }
+  if (m.mode === 'f13_heal') {
+    m.vx *= 0.7;
+    m.vy *= 0.7;
+    m.tele = null;
+    if (m.t >= 1) {
+      if (p && p.mode !== 'f13_broken') p.hp = Math.min(p.maxHp, p.hp + p.maxHp * MASK.heal);
+      api.setMode(m, 'chase');
+    }
+    return true;
+  }
+  m.data.healCd = (m.data.healCd ?? 2) - dt;
+  if (
+    p &&
+    m.mode === 'chase' &&
+    p.mode !== 'f13_broken' &&
+    p.hp < p.maxHp * MASK.healAt &&
+    m.data.healCd <= 0 &&
+    hypot(p.x - m.x, p.y - m.y) < 7
+  ) {
+    m.data.healCd = MASK.healCd;
+    api.setMode(m, 'f13_heal');
+    fx(sim, api, 'f13_healbeam', m.x, m.y, 0.6, 1, { to: p.id, from: m.id });
+    return true;
+  }
+  return false;
+}
+
+function maskHit(sim: Sim, m: Mob, hit: { dmg: number; heavy: boolean; ang: number }, api: SimApi): number {
+  const k = puppetHit(sim, m, hit, api);
+  const p = partner(sim, m);
+  if (p && p.mode !== 'f13_broken' && hit.dmg * k >= m.hp) {
+    // Пара цела: маска трескается и падает, а не умирает.
+    m.tele = null;
+    m.danger = 0;
+    api.setMode(m, 'f13_broken');
+    sim.events.push({ t: 'boss', what: 'f13_crystal_stone' });
+    return Math.max(0.0001, (m.hp - 1) / hit.dmg);
+  }
+  return k;
+}
+
+brain('f13_comedy', {
+  step(sim, m, dt, c, api) {
+    if (m.data.pair === undefined) {
+      const t = api.spawnMob(sim, 'f13_tragedy', m.x + 0.9, m.y + 0.2, {
+        mode: m.mode === 'sleep' || m.mode === 'f13_wait' ? m.mode : 'chase',
+      });
+      t.data.pair = m.id;
+      m.data.pair = t.id;
+    }
+    if (maskPre(sim, m, dt, c, api)) return;
+    melee(sim, m, dt, c, api);
+  },
+  onHit: (sim, m, hit, api) => maskHit(sim, m, hit, api),
+  onDeath: (sim, m) => postDead(sim, m),
+});
+
+brain('f13_tragedy', {
+  step(sim, m, dt, c, api) {
+    if (m.data.pair === undefined) m.data.pair = -1;
+    if (maskPre(sim, m, dt, c, api)) return;
+    if (rangedStep(sim, m, dt, c, api, { aim: 0.6, keep: MASK.keep, cd: 2.4, n: 1, spread: 0, line: 6 })) return;
+    melee(sim, m, dt, c, api);
+  },
+  onHit: (sim, m, hit, api) => maskHit(sim, m, hit, api),
+});
+
+// ---- Тень-актёр: только в луче софита ---------------------------------------
+
+brain('f13_shade', {
+  step(sim, m, dt, c, api) {
+    initStrings(m);
+    const st = STATE.get(sim);
+    const h = sim.hero;
+    if (m.data.beam === undefined && st) {
+      let bi = -1;
+      let bd = 1e9;
+      st.spots.forEach((s, i) => {
+        const d = hypot(s.x - m.x, s.y - m.y);
+        if (d < bd) {
+          bd = d;
+          bi = i;
+        }
+      });
+      m.data.beam = bi;
+    }
+    const sp = st?.spots[m.data.beam ?? -1];
+    if (!sp || !sp.on) {
+      m.data.ghost = 1;
+      m.data.vis = 0;
+      m.tele = null;
+      m.danger = 0;
+      m.vx *= 0.8;
+      m.vy *= 0.8;
+      if (m.mode !== 'chase') api.setMode(m, 'chase');
+      return;
+    }
+    const inB = hypot(m.x - sp.x, m.y - sp.y) < SPOT.r + 0.3;
+    m.data.ghost = inB ? 0 : 1;
+    m.data.vis = inB ? 1 : 0.25;
+    if (m.mode === 'windup' && !inB) {
+      m.tele = null;
+      m.danger = 0;
+      api.setMode(m, 'chase');
+      return;
+    }
+    if (m.mode === 'windup' || m.mode === 'recover') {
+      melee(sim, m, dt, c, api);
+      return;
+    }
+    if (m.mode !== 'chase') {
+      api.setMode(m, 'chase');
+      return;
+    }
+    m.tele = null;
+    m.danger = 0;
+    const dh = hypot(h.x - sp.x, h.y - sp.y);
+    let tx = dh < SPOT.r + 1.2 && !heroDown(sim) ? h.x : sp.x;
+    let ty = dh < SPOT.r + 1.2 && !heroDown(sim) ? h.y : sp.y;
+    const dd = hypot(tx - sp.x, ty - sp.y);
+    if (dd > SPOT.r - 0.2) {
+      tx = sp.x + ((tx - sp.x) / dd) * (SPOT.r - 0.2);
+      ty = sp.y + ((ty - sp.y) / dd) * (SPOT.r - 0.2);
+    }
+    const reach = c.def.reach + m.r + 0.2;
+    if (inB && c.dist < reach + 0.35 && m.cd <= 0 && dh < SPOT.r + 1.2 && canHurt(sim)) {
+      m.face = Math.atan2(c.dy, c.dx);
+      api.setMode(m, 'windup');
+      return;
+    }
+    const d = hypot(tx - m.x, ty - m.y);
+    if (d > 0.3) api.steer(sim, m, (tx - m.x) / d, (ty - m.y) / d, m.speed, dt);
+    else {
+      m.vx *= 0.8;
+      m.vy *= 0.8;
+    }
+  },
+  onDeath: (sim, m) => postDead(sim, m),
+});
+
+// ---- Паук-кукловод: спускается на нити, вяжет нити куклам ------------------
+
+export const SPIDER = { drop: 0.9, r: 0.95, hang: 3.5, climb: 0.6, dropCd: 2.8, retieCd: 9, tie: 1.2, see: 7 };
+
+brain('f13_spider', {
+  step(sim, m, dt, c, api) {
+    const h = sim.hero;
+    if (m.data.sn === undefined) {
+      m.data.sn = 0;
+      m.data.cut = 0;
+    }
+    m.data.dropCd = (m.data.dropCd ?? 1) - dt;
+    m.data.retieCd = (m.data.retieCd ?? 4) - dt;
+    switch (m.mode) {
+      case 'f13_up': {
+        m.data.ghost = 1;
+        m.data.sn = 0;
+        m.tele = null;
+        m.danger = 0;
+        if (m.data.retieCd <= 0) {
+          let best: Mob | null = null;
+          let bd = 8;
+          for (const o of sim.mobs) {
+            if (o === m || o.mode === 'dying' || !(o.data.cut ?? 0) || !STRINGS[o.kind]) continue;
+            const d = hypot(o.x - m.x, o.y - m.y);
+            if (d < bd) {
+              bd = d;
+              best = o;
+            }
+          }
+          if (best) {
+            const d = hypot(best.x - m.x, best.y - m.y);
+            if (d < 0.7) {
+              m.data.tie = best.id;
+              api.setMode(m, 'f13_retie');
+              return;
+            }
+            api.steer(sim, m, (best.x - m.x) / d, (best.y - m.y) / d, m.speed * 1.2, dt);
+            return;
+          }
+        }
+        if (!heroDown(sim) && c.dist < SPIDER.see && m.data.dropCd <= 0) {
+          const tx = h.x + h.vx * 0.3;
+          const ty = h.y + h.vy * 0.3;
+          if (!api.solidTile(sim, Math.floor(tx), Math.floor(ty))) {
+            m.data.tx = tx;
+            m.data.ty = ty;
+            api.setMode(m, 'f13_drop');
+            return;
+          }
+        }
+        const tx = c.dist < 12 ? h.x : m.hx;
+        const ty = c.dist < 12 ? h.y - 1.5 : m.hy;
+        const d = hypot(tx - m.x, ty - m.y);
+        if (d > 0.5) api.steer(sim, m, (tx - m.x) / d, (ty - m.y) / d, m.speed, dt);
+        return;
+      }
+      case 'f13_drop': {
+        m.data.ghost = 1;
+        const tx = m.data.tx;
+        const ty = m.data.ty;
+        const k = Math.min(1, dt * 8);
+        m.x += (tx - m.x) * k;
+        m.y += (ty - m.y) * k;
+        m.vx = 0;
+        m.vy = 0;
+        m.tele = { shape: 'circle', r: SPIDER.r, k: clamp(m.t / SPIDER.drop, 0, 1), x: tx, y: ty };
+        if (m.t > SPIDER.drop - 0.22) m.danger = SPIDER.r;
+        if (m.t >= SPIDER.drop) {
+          m.x = tx;
+          m.y = ty;
+          m.tele = null;
+          m.danger = 0;
+          m.data.ghost = 0;
+          if (canHurt(sim) && hypot(h.x - tx, h.y - ty) < SPIDER.r + h.r) hitHero(sim, m, api, 1, 3);
+          m.data.sn = 1;
+          m.data.cut = 0;
+          m.data.hangT = 0;
+          fx(sim, api, 'f13_dust', tx, ty, 0.8, 0.5);
+          api.setMode(m, 'f13_hang');
+        }
+        return;
+      }
+      case 'f13_retie': {
+        m.data.ghost = 1;
+        m.vx *= 0.7;
+        m.vy *= 0.7;
+        const o = sim.mobs.find((x) => x.id === m.data.tie && x.mode !== 'dying');
+        if (o) {
+          m.x += (o.x - m.x) * Math.min(1, dt * 6);
+          m.y += (o.y - 0.3 - m.y) * Math.min(1, dt * 6);
+        }
+        if (m.t >= SPIDER.tie) {
+          if (o) {
+            retie(o);
+            fx(sim, api, 'f13_retie', o.x, o.y, 0.8, 0.8);
+          }
+          m.data.retieCd = SPIDER.retieCd;
+          api.setMode(m, 'f13_up');
+        }
+        return;
+      }
+      case 'f13_climb':
+        m.vx *= 0.6;
+        m.vy *= 0.6;
+        m.tele = null;
+        m.danger = 0;
+        if (m.t > 0.25) {
+          m.data.ghost = 1;
+          m.data.sn = 0;
+        }
+        if (m.t >= SPIDER.climb) {
+          m.data.dropCd = SPIDER.dropCd;
+          api.setMode(m, 'f13_up');
+        }
+        return;
+      case 'f13_fallen':
+        m.data.ghost = 0;
+        m.vx *= 0.8;
+        m.vy *= 0.8;
+        m.tele = null;
+        m.danger = 0;
+        if (m.t > 1) {
+          m.data.fallen = 1;
+          m.data.crawl = 1;
+          api.setMode(m, 'chase');
+        }
+        return;
+      case 'f13_hang':
+      case 'chase':
+      case 'windup':
+      case 'recover': {
+        if (m.data.fallen) {
+          melee(sim, m, dt, c, api, 0.8);
+          return;
+        }
+        if ((m.data.sn ?? 0) !== 1) {
+          api.setMode(m, 'f13_up');
+          return;
+        }
+        m.data.ghost = 0;
+        m.data.hangT = (m.data.hangT ?? 0) + dt;
+        if (m.mode === 'windup' || m.mode === 'recover') {
+          melee(sim, m, dt, c, api, 0, false);
+          return;
+        }
+        if (m.mode === 'chase') {
+          api.setMode(m, 'f13_hang');
+          return;
+        }
+        m.vx *= 0.7;
+        m.vy *= 0.7;
+        m.face = Math.atan2(c.dy, c.dx);
+        if (m.data.hangT > SPIDER.hang) {
+          api.setMode(m, 'f13_climb');
+          return;
+        }
+        const reach = c.def.reach + m.r + 0.2;
+        if (c.dist < reach + 0.35 && m.cd <= 0 && !heroDown(sim)) api.setMode(m, 'windup');
+        return;
+      }
+      default:
+        if (m.data.fallen) melee(sim, m, dt, c, api, 0.8);
+        else api.setMode(m, 'f13_up');
+    }
+  },
+  onHit(sim, m, hit, api) {
+    if (m.data.fallen) return STR.crawlHit * (m.mode === 'f13_lost' ? 2 : 1);
+    void sim;
+    void hit;
+    void api;
+    return 1;
+  },
+  onDeath: (sim, m) => postDead(sim, m),
+});
+
+// ---- Кассир: удирает с выручкой --------------------------------------------
+
+brain('f13_cashier', {
+  step(sim, m, dt, c, api) {
+    m.tele = null;
+    m.danger = 0;
+    const away = api.flowDir(sim, m.x, m.y, true);
+    const d = away ?? [-c.dx / (c.dist || 1), -c.dy / (c.dist || 1)];
+    api.steer(sim, m, d[0], d[1], m.speed, dt);
+    m.data.run = (m.data.run ?? 0) + dt;
+    if (m.data.run > 25 && c.dist > 5) {
+      api.setMode(m, 'escape');
+      m.hp = 0;
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Кукловод: спектакль в четыре акта.
+//  I   «Рыцарский роман» — исполин на четырёх нитях к ваге; зубцы замка
+//      держат копьё; все нити срезаны — вага горит 6 с.
+//  II  «Буря» — волны рядами (проём, тень корабля или рывок сквозь гребень),
+//      молнии; Кукловод спускается к кораблю — окно 4,5 с.
+//  III «Звёздная ночь» — звёзды-маятники, луна-софит: в луне иглы, вне —
+//      удары «по памяти»; две нити звёзд — он оступается, окно 6 с.
+//  IV  «Оборванные нити» — ходит сам: вага (конус + выпад), аркан, сетка
+//      нитей по арене; после сетки окно ×1,6, в остальное время ×0,35.
+// Между актами падает занавес (камера к сцене), звонок, арена
+// переписывается `setTile`.
+// ---------------------------------------------------------------------------
+
+export const BOSS = {
+  notches: [0.75, 0.5, 0.25],
+  trans: 3.2,
+  swap: 1.3,
+  wake: 2.4,
+  // I
+  hangUp: 2.6,
+  dip: 2,
+  dipK: 1.2,
+  open: 6,
+  openK: 1.5,
+  rebuild: 2.5,
+  lance: { aim: 1.0, len: 8, w: 0.6 },
+  shield: { aim: 0.8, r: 2.7, arc: 1.75 },
+  charge: { aim: 1.0, speed: 8, run: 0.8, w: 0.8 },
+  knightEvery: 20,
+  // II
+  wave: { every: 5.5, swell: 1.2, speed: 5, gapW: 4, share: 0.14, band: 0.45 },
+  bolt: { every: 3.4, warn: 1.0, r: 1.2, share: 0.1 },
+  lower: { every: 12, open: 4.5, k: 1.4 },
+  // III
+  star: { L: 9.5, amp: 0.95, period: 4.6, r: 0.9, share: 0.1, need: 2 },
+  moon: { r: 2.6 },
+  needle: { every: 1.6, aim: 0.45, dmg: 0.6 },
+  memory: { every: 2.6, warn: 1.1, r: 1.5, share: 0.11, lag: 1 },
+  // IV
+  cone: { warn: 0.7, r: 2.2, arc: 2.1 },
+  thrust: { warn: 0.6, r: 4, w: 0.5 },
+  grid: { every: 13, cast: 1.2, warn: 1.2, w: 0.35, share: 0.16, window: 3.2, k: 1.6 },
+  snare: { cd: 9, aim: 0.8, len: 7, w: 0.4 },
+  outK: 0.35,
+  walk: 2.6,
+  turn: 4,
+};
+
+const ACT_NAMES = [
+  ['АКТ I — «РЫЦАРСКИЙ РОМАН»', 'режь нити исполина — вага загорится'],
+  ['АКТ II — «БУРЯ»', 'волны рядами: проём, тень корабля или рывок сквозь гребень'],
+  ['АКТ III — «ЗВЁЗДНАЯ НОЧЬ»', 'в луне он видит тебя; срежь две нити звёзд'],
+  ['АКТ IV — «ОБОРВАННЫЕ НИТИ»', 'он спустился сам; после сетки нитей вага горит'],
+];
+
+interface Wave {
+  y: number;
+  dir: number;
+  gaps: number[];
+  t: number;
+  hit: boolean;
+}
+
+interface Star {
+  px: number;
+  py: number;
+  L: number;
+  phase: number;
+  cut: number;
+  x: number;
+  y: number;
+  hitCd: number;
+}
+
+interface BState {
+  act: number;
+  trans: number;
+  swapped: boolean;
+  next: number;
+  giant: number;
+  openFrom: number;
+  openUntil: number;
+  openK: number;
+  dipUntil: number;
+  knightT: number;
+  waveT: number;
+  waveDir: number;
+  boltT: number;
+  lowerT: number;
+  /** Нос или корма корабля, куда спускается Кукловод во «Буре». */
+  lowX: number;
+  waves: Wave[];
+  stars: Star[];
+  starsBack: number;
+  moonT: number;
+  needleT: number;
+  memT: number;
+  hist: [number, number, number][];
+  gridT: number;
+  snareCd: number;
+  atkCd: number;
+  saved: Map<number, { tile: number; mark: number }>;
+}
+
+const BSTATE = new WeakMap<Sim, BState>();
+
+function newBState(): BState {
+  return {
+    act: 0,
+    trans: 0,
+    swapped: true,
+    next: 0,
+    giant: 0,
+    openFrom: 0,
+    openUntil: 0,
+    openK: 1,
+    dipUntil: 0,
+    knightT: 12,
+    waveT: 2,
+    waveDir: 1,
+    boltT: 3,
+    lowerT: 7,
+    lowX: ACX,
+    waves: [],
+    stars: [],
+    starsBack: 0,
+    moonT: 0,
+    needleT: 2,
+    memT: 2,
+    hist: [],
+    gridT: 6,
+    snareCd: 4,
+    atkCd: 1,
+    saved: new Map(),
+  };
+}
+
+function bstate(sim: Sim): BState {
+  let s = BSTATE.get(sim);
+  if (!s) {
+    s = newBState();
+    BSTATE.set(sim, s);
+  }
+  return s;
+}
+
+/** Сцена Кукловода — для тестов и стенда. */
+export const f13Boss = (sim: Sim) => BSTATE.get(sim) ?? null;
+
+const ARENA = BOX.arena;
+const ACX = (ARENA[0] + ARENA[2] + 1) / 2;
+const ACY = (ARENA[1] + ARENA[3]) / 2;
+/** Ряды арены, которые переписывают акты (без рампы). */
+const AY0 = ARENA[1];
+const AY1 = ARENA[3] - 1;
+
+const ACT_FLOOR = [MK.actCastle, MK.actSea, MK.actNight, MK.actGrid];
+
+/** Стены акта: картонные зубцы замка, корпус корабля. */
+function actWalls(act: number): Set<number> {
+  const s = new Set<number>();
+  const add = (x0: number, x1: number, y: number) => {
+    for (let x = x0; x <= x1; x++) s.add(y * 64 + x);
+  };
+  if (act === 0) {
+    for (const y of [7, 17]) {
+      add(16, 18, y);
+      add(24, 26, y);
+      add(37, 39, y);
+      add(45, 47, y);
+    }
+    add(19, 20, 12);
+    add(43, 44, 12);
+  } else if (act === 1) {
+    add(27, 36, 10);
+    add(26, 37, 11);
+  }
+  return s;
+}
+
+/** Борт корабля «Бури»: ряды 10–11, x 26–37. Нос и корма — точки спуска. */
+const SHIP = { west: 24.6, east: 39.4, y: 10.6 };
+
+const ACT_WALL_MARK = [MK.setCastle, MK.actShip, MK.actCloud, MK.actGrid];
+
+function arenaLook(sim: Sim, s: BState, api: SimApi, act: number): void {
+  const walls = actWalls(act);
+  const w = sim.world.w;
+  for (let y = AY0; y <= AY1; y++)
+    for (let x = ARENA[0]; x <= ARENA[2]; x++) {
+      const i = y * w + x;
+      if (!s.saved.has(i)) s.saved.set(i, { tile: sim.tiles[i], mark: sim.world.mark[i] });
+      if (walls.has(y * 64 + x)) api.setTile(sim, x, y, T_WALL, ACT_WALL_MARK[act]);
+      else api.setTile(sim, x, y, T_FLOOR, ACT_FLOOR[act]);
+    }
+}
+
+function restoreArena(sim: Sim, s: BState | undefined, api: SimApi): void {
+  if (!s) return;
+  const w = sim.world.w;
+  for (const [i, v] of s.saved) api.setTile(sim, i % w, Math.floor(i / w), v.tile, v.mark, null);
+  s.saved.clear();
+}
+
+const lordOf = (sim: Sim) => sim.mobs.find((x) => x.kind === 'f13boss' && x.mode !== 'dying') ?? null;
+const giantOf = (sim: Sim, s: BState) => sim.mobs.find((x) => x.id === s.giant && x.mode !== 'dying') ?? null;
+
+const clampArena = (x: number, y: number): [number, number] => [
+  clamp(x, ARENA[0] + 1.5, ARENA[2] - 0.5),
+  clamp(y, ARENA[1] + 1.5, ARENA[3] - 1.5),
+];
+
+/** Сменить акт: убрать прошлое, переписать арену, расставить своё. */
+function enterAct(sim: Sim, s: BState, api: SimApi, lead: Mob, act: number): void {
+  // Куклы прошлого акта уходят со сцены.
+  for (const m of sim.mobs) {
+    if (m === lead || m.mode === 'dying') continue;
+    if (!api.inArena(sim, m.x, m.y)) continue;
+    if (m.kind === 'f13_giant') m.hp = 0;
+    else if (!api.def(m.kind).boss) envKill(sim, api, m);
+  }
+  sim.mobs = sim.mobs.filter((m) => !(m.kind === 'f13_giant' && m.hp <= 0));
+  s.waves = [];
+  s.stars = [];
+  api.light(sim, 'f13moon', null);
+  s.act = act;
+  s.openUntil = 0;
+  s.openFrom = 0;
+  s.dipUntil = 0;
+  arenaLook(sim, s, api, act);
+  lead.data.act = act;
+  if (act === 0) {
+    // Исполина ставит шаг сценария: движок при начале боя убирает с арены
+    // всех, кроме самого босса.
+    s.giant = 0;
+    lead.x = ACX;
+    lead.y = ACY + 3.5 - BOSS.hangUp;
+    s.knightT = 12;
+  } else if (act === 1) {
+    s.waveT = 2.5;
+    s.boltT = 3.5;
+    s.lowerT = 7;
+    lead.x = ACX;
+    lead.y = 9;
+  } else if (act === 2) {
+    const py = ARENA[1] + 0.3;
+    s.stars = [ACX - 12, ACX, ACX + 12].map((px, i) => ({
+      px,
+      py,
+      L: BOSS.star.L,
+      phase: (i * TAU) / 3,
+      cut: 0,
+      x: px,
+      y: py + BOSS.star.L,
+      hitCd: 0,
+    }));
+    s.moonT = 0;
+    s.needleT = 2.5;
+    s.memT = 2;
+    lead.x = ACX;
+    lead.y = ACY - 4;
+  } else {
+    s.gridT = 6;
+    s.snareCd = 4;
+    s.atkCd = 1;
+    lead.x = ACX;
+    lead.y = ACY - 3;
+    api.setMode(lead, 'chase');
+  }
+}
+
+function startTrans(sim: Sim, s: BState, api: SimApi, lead: Mob, next: number): void {
+  s.trans = BOSS.trans;
+  s.swapped = false;
+  s.next = next;
+  sim.strikes = [];
+  sim.shots = [];
+  lead.tele = null;
+  lead.danger = 0;
+  lead.data.ghost = 1;
+  api.setMode(lead, 'f13_trans');
+  const g = giantOf(sim, s);
+  if (g) {
+    g.tele = null;
+    g.danger = 0;
+  }
+  api.camera(sim, ACX, ACY, BOSS.trans);
+  fx(sim, api, 'f13_curtainfall', ACX, ACY, 21, BOSS.trans, { act: next }, true);
+  sim.events.push({ t: 'boss', what: 'f13_bell_call', text: ACT_NAMES[next][0], sub: ACT_NAMES[next][1] });
+}
+
+/** Открыто ли окно (вага горит). */
+const isOpen = (sim: Sim, s: BState) => sim.time >= s.openFrom && sim.time < s.openUntil;
+
+// ---- Исполин ----------------------------------------------------------------
+
+CUT_HOOK.giant = (sim, g, api) => {
+  const s = bstate(sim);
+  if (stringsLeft(g) === 0) {
+    s.openFrom = sim.time;
+    s.openUntil = sim.time + BOSS.open;
+    s.openK = BOSS.openK;
+    g.tele = null;
+    g.danger = 0;
+    api.setMode(g, 'f13_slump');
+    sim.events.push({ t: 'shake', k: 0.4 });
+    sim.events.push({
+      t: 'boss',
+      what: 'f13_slump_wall',
+      text: 'ВАГА ГОРИТ',
+      sub: 'исполин рухнул — бей Кукловода',
+    });
+  } else s.dipUntil = Math.max(s.dipUntil, sim.time + BOSS.dip);
+};
+
+function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void {
+  const s = bstate(sim);
+  const h = sim.hero;
+  g.tele = null;
+  if (s.trans > 0 || s.act !== 0 || heroDown(sim)) {
+    g.vx *= 0.8;
+    g.vy *= 0.8;
+    g.danger = 0;
+    return;
+  }
+  s.atkCd -= dt;
+  switch (g.mode) {
+    case 'f13_stand':
+      g.vx *= 0.8;
+      g.vy *= 0.8;
+      if (g.t > 1.2) api.setMode(g, 'chase');
+      return;
+    case 'chase': {
+      g.danger = 0;
+      const [dx, dy] = api.chaseDir(sim, g, h.x, h.y);
+      if (c.dist > 1.8) api.steer(sim, g, dx, dy, g.speed, dt);
+      else {
+        g.vx *= 0.8;
+        g.vy *= 0.8;
+      }
+      g.face += clamp(angDiff(Math.atan2(c.dy, c.dx), g.face), -2.5 * dt, 2.5 * dt);
+      if (s.atkCd > 0) return;
+      const see = api.lineOfSight(sim, g.x, g.y, h.x, h.y);
+      if (c.dist < BOSS.shield.r + 0.4) api.setMode(g, 'f13_shield');
+      else if (see && c.dist < BOSS.lance.len) {
+        g.dir = Math.atan2(c.dy, c.dx);
+        api.setMode(g, c.dist > 3.5 && sim.rng() < 0.4 ? 'f13_charge_aim' : 'f13_lance');
+      }
+      return;
+    }
+    case 'f13_lance': {
+      g.vx *= 0.6;
+      g.vy *= 0.6;
+      if (g.t < BOSS.lance.aim * 0.5) g.dir += clamp(angDiff(Math.atan2(c.dy, c.dx), g.dir), -1.2 * dt, 1.2 * dt);
+      g.face = g.dir;
+      const len = Math.min(BOSS.lance.len, clearDist(sim, api, g.x, g.y, g.dir, BOSS.lance.len));
+      g.tele = { shape: 'line', r: len, w: BOSS.lance.w, ang: g.dir, k: clamp(g.t / BOSS.lance.aim, 0, 1) };
+      if (g.t > BOSS.lance.aim - 0.24) g.danger = 1.5;
+      if (g.t >= BOSS.lance.aim) {
+        const ux = Math.cos(g.dir);
+        const uy = Math.sin(g.dir);
+        const al = (h.x - g.x) * ux + (h.y - g.y) * uy;
+        const ac = Math.abs(-(h.x - g.x) * uy + (h.y - g.y) * ux);
+        if (canHurt(sim) && al > -0.3 && al < len + h.r && ac < BOSS.lance.w + h.r)
+          api.hurtHero(sim, g.dmg, g.x, g.y, 6, g.kind);
+        fx(sim, api, 'f13_lancehit', g.x + ux * len, g.y + uy * len, 0.8, 0.4, { ang: g.dir, len });
+        g.danger = 0;
+        s.atkCd = 1.5;
+        api.setMode(g, 'recover');
+      }
+      return;
+    }
+    case 'f13_shield': {
+      g.vx *= 0.6;
+      g.vy *= 0.6;
+      const to = Math.atan2(c.dy, c.dx);
+      if (g.t < BOSS.shield.aim * 0.5) g.face += clamp(angDiff(to, g.face), -2 * dt, 2 * dt);
+      g.tele = { shape: 'cone', r: BOSS.shield.r, arc: BOSS.shield.arc, ang: g.face, k: clamp(g.t / BOSS.shield.aim, 0, 1) };
+      if (g.t > BOSS.shield.aim - 0.24) g.danger = BOSS.shield.r;
+      if (g.t >= BOSS.shield.aim) {
+        const off = Math.abs(angDiff(to, g.face));
+        if (canHurt(sim) && c.dist < BOSS.shield.r + h.r && off < BOSS.shield.arc / 2 + 0.2)
+          api.hurtHero(sim, g.dmg * 0.9, g.x, g.y, 8, g.kind);
+        g.danger = 0;
+        s.atkCd = 1.3;
+        api.setMode(g, 'recover');
+      }
+      return;
+    }
+    case 'f13_charge_aim': {
+      g.vx *= 0.6;
+      g.vy *= 0.6;
+      if (g.t < BOSS.charge.aim * 0.5) g.dir += clamp(angDiff(Math.atan2(c.dy, c.dx), g.dir), -1.2 * dt, 1.2 * dt);
+      g.face = g.dir;
+      const len = Math.min(BOSS.charge.speed * BOSS.charge.run, clearDist(sim, api, g.x, g.y, g.dir, 7));
+      g.tele = { shape: 'line', r: len, w: BOSS.charge.w, ang: g.dir, k: clamp(g.t / BOSS.charge.aim, 0, 1) };
+      if (g.t > BOSS.charge.aim - 0.24) g.danger = 1.6;
+      if (g.t >= BOSS.charge.aim) {
+        g.data.hitDone = 0;
+        api.setMode(g, 'f13_charge');
+      }
+      return;
+    }
+    case 'f13_charge': {
+      g.vx = Math.cos(g.dir) * BOSS.charge.speed;
+      g.vy = Math.sin(g.dir) * BOSS.charge.speed;
+      g.danger = 1.6;
+      if (!g.data.hitDone && c.dist < g.r + h.r + 0.2 && canHurt(sim)) {
+        g.data.hitDone = 1;
+        api.hurtHero(sim, g.dmg * 1.1, g.x, g.y, 9, g.kind);
+      }
+      if (g.t >= BOSS.charge.run || api.solidTile(sim, Math.floor(g.x + Math.cos(g.dir) * (g.r + 0.3)), Math.floor(g.y + Math.sin(g.dir) * (g.r + 0.3)))) {
+        g.vx = 0;
+        g.vy = 0;
+        g.danger = 0;
+        s.atkCd = 1.6;
+        sim.events.push({ t: 'shake', k: 0.25 });
+        api.setMode(g, 'recover');
+      }
+      return;
+    }
+    case 'f13_slump':
+      g.vx *= 0.8;
+      g.vy *= 0.8;
+      g.danger = 0;
+      if (sim.time >= s.openUntil) api.setMode(g, 'f13_rebuild');
+      return;
+    case 'f13_rebuild':
+      g.vx *= 0.8;
+      g.vy *= 0.8;
+      if (g.t >= BOSS.rebuild) {
+        g.data.cut = 0;
+        g.data.cutAt = 0;
+        s.atkCd = 1.2;
+        api.setMode(g, 'chase');
+      }
+      return;
+    case 'recover':
+      g.vx *= 0.8;
+      g.vy *= 0.8;
+      g.danger = 0;
+      if (g.t > 0.8) api.setMode(g, 'chase');
+      return;
+    default:
+      api.setMode(g, 'chase');
+  }
+}
+
+registerBrain('f13_giant', {
+  raw: true,
+  step: giantStep,
+  onHit: () => 0,
+});
+
+// ---- Сам Кукловод -----------------------------------------------------------
+
+/** Плавно к точке (висит над сценой — без стен). */
+function glide(m: Mob, tx: number, ty: number, dt: number, speed: number): void {
+  const dx = tx - m.x;
+  const dy = ty - m.y;
+  const d = hypot(dx, dy);
+  if (d < 0.05) {
+    m.vx = 0;
+    m.vy = 0;
+    return;
+  }
+  const v = Math.min(speed, d * 3);
+  m.vx = (dx / d) * v;
+  m.vy = (dy / d) * v;
+}
+
+function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
+  const s = bstate(sim);
+  const h = sim.hero;
+  m.data.vNoTele = 1;
+  m.data.open = isOpen(sim, s) ? 1 : 0;
+  F13_FX.vaga.x = m.x;
+  F13_FX.vaga.y = m.y;
+  if (m.mode === 'roar') {
+    m.data.ghost = 1;
+    m.data.lift = 1;
+    m.vx = 0;
+    m.vy = 0;
+    if (m.t >= BOSS.wake) api.setMode(m, 'f13_hang');
+    return;
+  }
+  if (s.trans > 0 || m.mode === 'f13_trans') {
+    m.data.ghost = 1;
+    m.tele = null;
+    m.danger = 0;
+    m.vx *= 0.8;
+    m.vy *= 0.8;
+    m.data.lift = Math.min(1, (m.data.lift ?? 0) + dt);
+    if (s.trans <= 0) api.setMode(m, s.act === 3 ? 'chase' : 'f13_hang');
+    return;
+  }
+  const open = isOpen(sim, s);
+  const liftTo = (v: number) => {
+    m.data.lift = (m.data.lift ?? 1) + clamp(v - (m.data.lift ?? 1), -dt * 2.5, dt * 2.5);
+  };
+  if (s.act === 0) {
+    const g = giantOf(sim, s);
+    const dip = sim.time < s.dipUntil;
+    if (g) {
+      const [tx, ty] = clampArena(g.x, g.y - BOSS.hangUp);
+      if (!open) glide(m, tx, ty, dt, 3);
+      else {
+        m.vx *= 0.8;
+        m.vy *= 0.8;
+      }
+      VAGA.set(g, { x: m.x, y: m.y });
+    }
+    m.face = Math.PI / 2;
+    m.data.ghost = open || dip ? 0 : 1;
+    liftTo(open ? 0 : dip ? 0.45 : 1);
+    s.knightT -= dt;
+    if (s.knightT <= 0 && !open) {
+      s.knightT = BOSS.knightEvery;
+      const n = sim.mobs.filter((x) => x.kind === 'f13_knight' && x.mode !== 'dying' && api.inArena(sim, x.x, x.y)).length;
+      const p = n < 2 ? floorNear(sim, api, h.x, h.y, 3, 6, ARENA) : null;
+      if (p) {
+        api.spawnMob(sim, 'f13_knight', p[0], p[1], { mode: 'drop' });
+        fx(sim, api, 'f13_retie', p[0], p[1], 0.8, 0.8);
+      }
+    }
+    return;
+  }
+  if (s.act === 1) {
+    // Висит над кораблём; раз в 12 с спускается к нему — окно.
+    s.lowerT -= dt;
+    if (s.lowerT <= 0 && !open) {
+      s.openFrom = sim.time + 0.8;
+      s.openUntil = s.openFrom + BOSS.lower.open;
+      s.openK = BOSS.lower.k;
+      s.lowerT = BOSS.lower.every + BOSS.lower.open;
+      // К носу или корме — ближе к герою: сквозь борт он не пройдёт.
+      s.lowX = h.x < ACX ? SHIP.west : SHIP.east;
+      sim.events.push({ t: 'boss', what: 'f13_lower_call', text: 'КУКЛОВОД НА ПАЛУБЕ', sub: 'он спустился к кораблю — бей' });
+    }
+    const low = sim.time < s.openUntil;
+    if (low) glide(m, s.lowX, SHIP.y, dt, 6);
+    else glide(m, ACX + Math.sin(sim.time * 0.5) * 3, 8.6, dt, 3);
+    m.face = Math.PI / 2;
+    m.data.ghost = open ? 0 : 1;
+    liftTo(open ? 0 : low ? 0.3 : 1);
+    return;
+  }
+  if (s.act === 2) {
+    if (!open) {
+      const [tx, ty] = clampArena(h.x, h.y - 4);
+      glide(m, tx, Math.max(ty, ARENA[1] + 2.5), dt, 2.2);
+    } else {
+      m.vx *= 0.8;
+      m.vy *= 0.8;
+    }
+    m.data.ghost = open ? 0 : 1;
+    liftTo(open ? 0 : 1);
+    if (m.mode === 'f13_needle') {
+      const ang = Math.atan2(h.y - m.y, h.x - m.x);
+      m.face = ang;
+      m.tele = { shape: 'line', r: 9, w: 0.2, ang, k: clamp(m.t / BOSS.needle.aim, 0, 1) };
+      if (m.t >= BOSS.needle.aim) {
+        m.tele = null;
+        api.shoot(sim, m, ang, { speed: 8, r: 0.2, life: 2.6, dmg: BOSS.needle.dmg, art: 'f13_needle', n: 3, spread: 0.24 });
+        api.setMode(m, 'f13_hang');
+      }
+      return;
+    }
+    m.face = Math.PI / 2;
+    return;
+  }
+  // IV — ходит сам.
+  m.data.ghost = 0;
+  liftTo(0);
+  stepFinale(sim, s, m, dt, c, api);
+}
+
+function faceTo(m: Mob, ang: number, dt: number, rate = BOSS.turn): void {
+  m.face += clamp(angDiff(ang, m.face), -rate * dt, rate * dt);
+}
+
+function stepFinale(sim: Sim, s: BState, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
+  const h = sim.hero;
+  const to = Math.atan2(c.dy, c.dx);
+  s.atkCd -= dt;
+  s.snareCd -= dt;
+  s.gridT -= dt;
+  switch (m.mode) {
+    case 'chase': {
+      m.tele = null;
+      m.danger = 0;
+      if (heroDown(sim)) {
+        m.vx *= 0.8;
+        m.vy *= 0.8;
+        return;
+      }
+      if (s.gridT <= 0 && c.dist < 16) {
+        api.setMode(m, 'f13_grid');
+        return;
+      }
+      if (c.dist < BOSS.cone.r + 0.6 && s.atkCd <= 0) {
+        m.dir = to;
+        api.setMode(m, 'f13_cut1');
+        return;
+      }
+      if (s.snareCd <= 0 && c.dist > 3 && c.dist < BOSS.snare.len && api.lineOfSight(sim, m.x, m.y, h.x, h.y)) {
+        m.dir = to;
+        api.setMode(m, 'f13_snare');
+        return;
+      }
+      // Идёт лицом по ходу, поворачивает плавно.
+      const [dx, dy] = api.chaseDir(sim, m, h.x, h.y);
+      const want = Math.atan2(dy, dx);
+      faceTo(m, want, dt);
+      const along = Math.max(0.2, Math.cos(angDiff(want, m.face)));
+      const sp = c.dist > 1.6 ? BOSS.walk * along : 0;
+      m.vx += (Math.cos(m.face) * sp - m.vx) * Math.min(1, dt * 6);
+      m.vy += (Math.sin(m.face) * sp - m.vy) * Math.min(1, dt * 6);
+      return;
+    }
+    case 'f13_cut1': {
+      m.vx *= 0.7;
+      m.vy *= 0.7;
+      if (m.t < BOSS.cone.warn * 0.5) faceTo(m, to, dt, 3);
+      m.dir = m.face;
+      m.tele = { shape: 'cone', r: BOSS.cone.r, arc: BOSS.cone.arc, ang: m.face, k: clamp(m.t / BOSS.cone.warn, 0, 1) };
+      if (m.t > BOSS.cone.warn - 0.24) m.danger = BOSS.cone.r;
+      if (m.t >= BOSS.cone.warn) {
+        if (canHurt(sim) && c.dist < BOSS.cone.r + h.r && Math.abs(angDiff(to, m.face)) < BOSS.cone.arc / 2 + 0.15)
+          api.hurtHero(sim, m.dmg, m.x, m.y, 5, m.kind);
+        m.danger = 0;
+        api.setMode(m, 'f13_cut2');
+      }
+      return;
+    }
+    case 'f13_cut2': {
+      m.vx *= 0.7;
+      m.vy *= 0.7;
+      if (m.t < 0.25) faceTo(m, to, dt, 4);
+      const len = Math.min(BOSS.thrust.r, clearDist(sim, api, m.x, m.y, m.face, BOSS.thrust.r));
+      m.tele = { shape: 'line', r: len, w: BOSS.thrust.w, ang: m.face, k: clamp(m.t / BOSS.thrust.warn, 0, 1) };
+      if (m.t > BOSS.thrust.warn - 0.24) m.danger = 1.4;
+      if (m.t >= BOSS.thrust.warn) {
+        const ux = Math.cos(m.face);
+        const uy = Math.sin(m.face);
+        const al = (h.x - m.x) * ux + (h.y - m.y) * uy;
+        const ac = Math.abs(-(h.x - m.x) * uy + (h.y - m.y) * ux);
+        if (canHurt(sim) && al > -0.3 && al < len + h.r && ac < BOSS.thrust.w + h.r)
+          api.hurtHero(sim, m.dmg * 1.1, m.x, m.y, 7, m.kind);
+        m.vx = ux * 5;
+        m.vy = uy * 5;
+        m.tele = null;
+        m.danger = 0;
+        s.atkCd = 1.6;
+        api.setMode(m, 'recover');
+      }
+      return;
+    }
+    case 'f13_snare': {
+      m.vx *= 0.6;
+      m.vy *= 0.6;
+      if (m.t < BOSS.snare.aim * 0.5) faceTo(m, to, dt, 2.5);
+      const len = Math.min(BOSS.snare.len, clearDist(sim, api, m.x, m.y, m.face, BOSS.snare.len));
+      m.tele = { shape: 'line', r: len, w: BOSS.snare.w, ang: m.face, k: clamp(m.t / BOSS.snare.aim, 0, 1) };
+      if (m.t > BOSS.snare.aim - 0.24) m.danger = 1;
+      if (m.t >= BOSS.snare.aim) {
+        const ux = Math.cos(m.face);
+        const uy = Math.sin(m.face);
+        const al = (h.x - m.x) * ux + (h.y - m.y) * uy;
+        const ac = Math.abs(-(h.x - m.x) * uy + (h.y - m.y) * ux);
+        m.tele = null;
+        m.danger = 0;
+        s.snareCd = BOSS.snare.cd;
+        if (canHurt(sim) && al > 0 && al < len + h.r && ac < BOSS.snare.w + h.r) {
+          api.hurtHero(sim, rawShare(sim, 0.04), m.x, m.y, 0, m.kind);
+          api.pullHero(sim, m.x + ux * 1.3, m.y + uy * 1.3, { speed: 11, max: 1 });
+          fx(sim, api, 'f13_snareline', m.x, m.y, 0.5, 0.6, { tx: h.x, ty: h.y }, true);
+          sim.events.push({ t: 'boss', what: 'f13_hook_call' });
+          s.atkCd = 0;
+        }
+        api.setMode(m, 'recover');
+      }
+      return;
+    }
+    case 'f13_grid': {
+      m.vx *= 0.6;
+      m.vy *= 0.6;
+      m.tele = null;
+      m.danger = 0;
+      if (m.t >= BOSS.grid.cast && !m.data.gridOut) {
+        m.data.gridOut = 1;
+        castGrid(sim, s, api);
+      }
+      if (m.t >= BOSS.grid.cast + BOSS.grid.warn) {
+        m.data.gridOut = 0;
+        s.gridT = BOSS.grid.every;
+        api.setMode(m, 'f13_spent');
+      }
+      return;
+    }
+    case 'f13_spent':
+      m.vx *= 0.8;
+      m.vy *= 0.8;
+      m.tele = null;
+      m.danger = 0;
+      if (sim.time >= s.openUntil) {
+        s.atkCd = 0.6;
+        api.setMode(m, 'chase');
+      }
+      return;
+    case 'recover':
+      m.vx *= 0.8;
+      m.vy *= 0.8;
+      m.tele = null;
+      m.danger = 0;
+      if (m.t > 0.7) api.setMode(m, 'chase');
+      return;
+    default:
+      api.setMode(m, 'chase');
+  }
+}
+
+/** Сетка нитей: четыре ряда и четыре столбца с проёмами. */
+function castGrid(sim: Sim, s: BState, api: SimApi): void {
+  const G = BOSS.grid;
+  const dmg = rawShare(sim, G.share);
+  const x0 = ARENA[0];
+  const x1 = ARENA[2] + 1;
+  const y0 = ARENA[1];
+  const y1 = ARENA[3];
+  const line = (ax: number, ay: number, bx: number, by: number) => {
+    const len = hypot(bx - ax, by - ay);
+    if (len < 0.5) return;
+    api.strike(sim, {
+      shape: 'line',
+      x: ax,
+      y: ay,
+      r: len,
+      w: G.w,
+      ang: Math.atan2(by - ay, bx - ax),
+      warn: G.warn,
+      dmg,
+      knock: 3,
+      art: 'f13_gridline',
+      above: true,
+    });
+  };
+  for (const y of [y0 + 3.5, y0 + 7.5, y0 + 12.5, y0 + 16.5]) {
+    const gx = x0 + 4 + sim.rng() * (x1 - x0 - 8);
+    line(x0, y, gx - 1.6, y);
+    line(gx + 1.6, y, x1, y);
+  }
+  for (const x of [x0 + 5.5, x0 + 13.5, x1 - 13.5, x1 - 5.5]) {
+    const gy = y0 + 3 + sim.rng() * (y1 - y0 - 6);
+    line(x, y0, x, gy - 1.6);
+    line(x, gy + 1.6, x, y1);
+  }
+  s.openFrom = sim.time + G.warn;
+  s.openUntil = s.openFrom + G.window;
+  s.openK = G.k;
+  sim.events.push({ t: 'boss', what: 'f13_grid_call', text: 'СЕТКА НИТЕЙ', sub: 'встань в клетку — потом вага горит' });
+}
+
+// ---- Сценарий боя: волны, звёзды, луна, переходы ---------------------------
+
+function shipShelter(sim: Sim, x: number, y: number, dir: number): boolean {
+  for (let k = 1; k <= 3; k++) {
+    const cy = Math.floor(y - dir * k);
+    if (sim.tiles[cy * sim.world.w + Math.floor(x)] === T_WALL) return true;
+  }
+  return false;
+}
+
+function stepStorm(sim: Sim, s: BState, dt: number, api: SimApi): void {
+  const h = sim.hero;
+  const W = BOSS.wave;
+  s.waveT -= dt;
+  if (s.waveT <= 0) {
+    s.waveT = W.every;
+    const dir = s.waveDir;
+    s.waveDir = -dir;
+    const g0 = ARENA[0] + 3 + sim.rng() * 14;
+    const g1 = g0 + 10 + sim.rng() * 10;
+    const w: Wave = { y: dir > 0 ? ARENA[1] : ARENA[3] + 1, dir, gaps: [g0, Math.min(ARENA[2] - 2, g1)], t: 0, hit: false };
+    s.waves.push(w);
+    sim.events.push({ t: 'boss', what: 'f13_wave_call' });
+  }
+  F13_FX.waves.length = 0;
+  s.waves = s.waves.filter((w) => {
+    w.t += dt;
+    const run = w.t - W.swell;
+    const y = (w.dir > 0 ? ARENA[1] : ARENA[3] + 1) + w.dir * Math.max(0, run) * W.speed;
+    w.y = y;
+    F13_FX.waves.push({ y, dir: w.dir, gaps: w.gaps, gapW: W.gapW, t: w.t });
+    if (run < 0) return true;
+    if (!w.hit && Math.abs(y - h.y) < W.band + h.r) {
+      w.hit = true;
+      const inGap = w.gaps.some((gx) => Math.abs(h.x - gx) < W.gapW / 2);
+      if (!inGap && !shipShelter(sim, h.x, h.y, w.dir) && canHurt(sim)) {
+        api.hurtHero(sim, rawShare(sim, W.share), h.x, h.y - w.dir, 6);
+        fx(sim, api, 'f13_splash', h.x, h.y, 1.2, 0.6);
+      }
+    }
+    return y > ARENA[1] - 1 && y < ARENA[3] + 2;
+  });
+  s.boltT -= dt;
+  if (s.boltT <= 0 && !heroDown(sim)) {
+    s.boltT = BOSS.bolt.every;
+    api.strike(sim, {
+      shape: 'circle',
+      x: h.x + h.vx * 0.3,
+      y: h.y + h.vy * 0.3,
+      r: BOSS.bolt.r,
+      warn: BOSS.bolt.warn,
+      dmg: rawShare(sim, BOSS.bolt.share),
+      knock: 3,
+      art: 'f13_bolt',
+      above: true,
+    });
+  }
+}
+
+function stepNight(sim: Sim, s: BState, dt: number, api: SimApi, lead: Mob): void {
+  const h = sim.hero;
+  const S = BOSS.star;
+  const w = (TAU / S.period) * sim.time;
+  // Звёзды-маятники.
+  F13_FX.stars.length = 0;
+  for (const st of s.stars) {
+    const th = S.amp * Math.sin(w + st.phase);
+    st.x = st.px + Math.sin(th) * st.L;
+    st.y = st.py + Math.cos(th) * st.L;
+    st.hitCd = Math.max(0, st.hitCd - dt);
+    F13_FX.stars.push({ px: st.px, py: st.py, x: st.x, y: st.y, cut: st.cut, L: st.L });
+    if (st.cut) continue;
+    if (st.hitCd <= 0 && hypot(h.x - st.x, h.y - st.y) < S.r + h.r && canHurt(sim)) {
+      st.hitCd = 0.9;
+      api.hurtHero(sim, rawShare(sim, S.share), st.x, st.y, 5);
+    }
+  }
+  // Нити звёзд режут тем же взмахом и рывком.
+  const st = STATE.get(sim);
+  const cutStar = (k: number) => {
+    const t = s.stars[k];
+    if (t.cut) return;
+    t.cut = 1;
+    fx(sim, api, 'f13_snap', t.x, t.y, 0.6, 0.5, { bx: t.px, by: t.py }, true);
+    fx(sim, api, 'f13_starfall', t.x, t.y, 1, 1.2);
+    sim.events.push({ t: 'boss', what: 'f13_snap_fall' });
+  };
+  for (const e of sim.events) {
+    if (e.t !== 'swing') continue;
+    s.stars.forEach((t, k) => {
+      if (t.cut) return;
+      for (let q = 0.3; q <= 1.001; q += 0.05) {
+        const px = t.px + (t.x - t.px) * q;
+        const py = t.py + (t.y - t.py) * q;
+        if (hypot(px - e.x, py - e.y) > e.reach + 0.15) continue;
+        if (Math.abs(angDiff(Math.atan2(py - e.y, px - e.x), e.ang)) <= e.arc / 2 + 0.1) {
+          cutStar(k);
+          return;
+        }
+      }
+    });
+  }
+  if (h.mode === 'dash' && st)
+    s.stars.forEach((t, k) => {
+      if (!t.cut && segCross(st.hpx, st.hpy, h.x, h.y, t.px, t.py, t.x, t.y)) cutStar(k);
+    });
+  const cut = s.stars.filter((t) => t.cut).length;
+  if (cut >= S.need && !isOpen(sim, s) && sim.time >= s.openUntil) {
+    s.openFrom = sim.time;
+    s.openUntil = sim.time + BOSS.open;
+    s.openK = BOSS.openK;
+    s.starsBack = s.openUntil;
+    sim.events.push({ t: 'shake', k: 0.4 });
+    sim.events.push({ t: 'boss', what: 'f13_trip_wall', text: 'КУКЛОВОД ОСТУПИЛСЯ', sub: 'звёзды упали — вага горит' });
+  }
+  if (s.starsBack && sim.time >= s.starsBack) {
+    s.starsBack = 0;
+    for (const t of s.stars) t.cut = 0;
+  }
+  // Луна-софит.
+  const mx = ACX + Math.sin(sim.time * 0.23) * 14;
+  const my = ACY + Math.sin(sim.time * 0.31 + 1) * 6;
+  F13_FX.moon.x = mx;
+  F13_FX.moon.y = my;
+  F13_FX.moon.r = BOSS.moon.r;
+  api.light(sim, 'f13moon', { x: mx, y: my, r: BOSS.moon.r + 1, tint: 'cold' });
+  s.hist.push([sim.time, h.x, h.y]);
+  while (s.hist.length > 2 && s.hist[1][0] < sim.time - BOSS.memory.lag) s.hist.shift();
+  if (isOpen(sim, s) || heroDown(sim)) return;
+  const inMoon = hypot(h.x - mx, h.y - my) < BOSS.moon.r;
+  if (inMoon) {
+    s.needleT -= dt;
+    if (s.needleT <= 0 && lead.mode !== 'f13_needle') {
+      s.needleT = BOSS.needle.every;
+      api.setMode(lead, 'f13_needle');
+    }
+  } else {
+    s.memT -= dt;
+    if (s.memT <= 0) {
+      s.memT = BOSS.memory.every;
+      const [, px, py] = s.hist[0] ?? [0, h.x, h.y];
+      api.strike(sim, {
+        shape: 'circle',
+        x: px,
+        y: py,
+        r: BOSS.memory.r,
+        warn: BOSS.memory.warn,
+        dmg: rawShare(sim, BOSS.memory.share),
+        knock: 3,
+        art: 'f13_memory',
+      });
+    }
+  }
+}
+
+registerBrain('f13boss', {
+  raw: true,
+  step: lordStep,
+  onHit(sim, m, hit) {
+    const s = bstate(sim);
+    if (s.trans > 0) return 0.0001;
+    let k = 1;
+    if (s.act === 3) k = isOpen(sim, s) ? s.openK : BOSS.outK;
+    else if (isOpen(sim, s)) k = s.openK;
+    else if (sim.time < s.dipUntil) k = BOSS.dipK;
+    if (s.act < 3) {
+      const floorHp = BOSS.notches[s.act] * m.maxHp;
+      if (m.hp - hit.dmg * k < floorHp) k = Math.max(0.0001, (m.hp - floorHp) / hit.dmg);
+    }
+    return k;
+  },
+});
+
+registerBoss('f13boss', {
+  start(sim, b, lead, api) {
+    API_REF.api = api;
+    const old = BSTATE.get(sim);
+    restoreArena(sim, old, api);
+    const s = newBState();
+    BSTATE.set(sim, s);
+    b.phase = 0;
+    lead.data.vNoTele = 1;
+    lead.data.ghost = 1;
+    lead.data.lift = 1;
+    lead.face = Math.PI / 2;
+    enterAct(sim, s, api, lead, 0);
+    F13_FX.act = 0;
+    api.camera(sim, ACX, ACY, BOSS.wake);
+    fx(sim, api, 'f13_curtainrise', ACX, ACY, 21, BOSS.wake, {}, true);
+    sim.events.push({ t: 'boss', what: 'f13_bell_call', text: ACT_NAMES[0][0], sub: ACT_NAMES[0][1] });
+  },
+  step(sim, b, dt, api) {
+    API_REF.api = api;
+    const lead = lordOf(sim);
+    if (!lead) return;
+    const s = bstate(sim);
+    F13_FX.act = s.act;
+    F13_FX.trans = s.trans;
+    F13_FX.open = isOpen(sim, s) ? 1 : 0;
+    if (s.trans > 0) {
+      s.trans -= dt;
+      if (!s.swapped && s.trans <= BOSS.trans - BOSS.swap) {
+        s.swapped = true;
+        enterAct(sim, s, api, lead, s.next);
+        b.phase = s.next;
+        sim.events.push({ t: 'boss', what: 'f13_scene_wall' });
+      }
+      if (s.trans <= 0) s.trans = 0;
+      return;
+    }
+    if (s.act < 3 && lead.hp <= BOSS.notches[s.act] * lead.maxHp + 0.5) {
+      startTrans(sim, s, api, lead, s.act + 1);
+      return;
+    }
+    if (s.act === 0 && !giantOf(sim, s)) {
+      const g = api.spawnMob(sim, 'f13_giant', ACX, ACY + 3.5, { mode: 'f13_stand' });
+      g.data.sn = 4;
+      g.data.cut = 0;
+      g.face = Math.PI / 2;
+      s.giant = g.id;
+      VAGA.set(g, { x: lead.x, y: lead.y });
+    }
+    if (s.act === 1) stepStorm(sim, s, dt, api);
+    else if (s.act === 2) stepNight(sim, s, dt, api, lead);
+  },
+  onPartDown(sim, _b, m, api) {
+    if (m.kind !== 'f13boss') return true;
+    const s = bstate(sim);
+    // Нити лопаются, исполин и куклы уходят со сцены.
+    sim.mobs = sim.mobs.filter((x) => x.kind !== 'f13_giant');
+    for (const x of sim.mobs)
+      if (x !== m && x.mode !== 'dying' && api.inArena(sim, x.x, x.y) && !api.def(x.kind).boss) envKill(sim, api, x);
+    s.waves = [];
+    s.stars = [];
+    F13_FX.waves.length = 0;
+    F13_FX.stars.length = 0;
+    api.light(sim, 'f13moon', null);
+    fx(sim, api, 'f13_bow', m.x, m.y, 21, 6.5, { cx: ACX, cy: ACY }, true);
+    api.camera(sim, m.x, m.y, 3.5);
+    sim.events.push({ t: 'boss', what: 'f13_bow_call', text: 'ПОКЛОН', sub: 'нити лопнули — занавес' });
+    return false;
+  },
+  bar(sim) {
+    const lead = lordOf(sim);
+    return lead ? Math.max(0, lead.hp) / lead.maxHp : 0;
+  },
+  notches: () => [...BOSS.notches],
+  reset(sim, _b, api) {
+    restoreArena(sim, BSTATE.get(sim), api);
+    BSTATE.delete(sim);
+    api.light(sim, 'f13moon', null);
+    F13_FX.waves.length = 0;
+    F13_FX.stars.length = 0;
+    F13_FX.act = 0;
+    F13_FX.trans = 0;
+  },
+});
