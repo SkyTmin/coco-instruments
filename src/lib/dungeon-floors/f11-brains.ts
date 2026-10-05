@@ -3500,7 +3500,7 @@ function enterPhase(sim: Sim, st: F11State, b: BossFight, boss: Mob, api: SimApi
 function crumbleRing(sim: Sim, st: F11State, b: BossFight, api: SimApi, r: number): void {
   const cells = ringCells(sim, st, b, r);
   for (const i of cells) setCell(sim, st, api, i, T_FLOOR, MK.cracking);
-  // v2.87 — только рисунок: край трещит (трещины бегут, пыль) и уходит в небо (плиты всплывают).
+  // v2.87 — только рисунок: край трещит (жар по трещинам, пыль) и уходит в бездну (плиты падают).
   api.vfx(sim, { x: st.arena.cx, y: st.arena.cy, r: r, life: 2.1, art: 'f11v_crack', ...{ cells: cells.slice() } } as ZoneIn);
   sim.events.push({ t: 'boss', what: 'f11_crumble_trap', text: 'КРАЙ ТРЕЩИТ', sub: 'отойди к середине' });
   after(st, 2, () => {
@@ -3627,7 +3627,7 @@ registerBoss('f11boss', {
       } else a.k = 2;
     }
   },
-  onPartDown(sim, _b, m, api) {
+  onPartDown(sim, _b, m, api) { // v2.87 — только рисунок: `api` — для зоны-картинки смерти
     if (m.kind !== 'f11boss') return false;
     const st = stateOf(sim);
     api.vfx(sim, { x: m.x, y: m.y, r: 1.3, life: 3.2, art: 'f11v_death', ...{ left: Math.cos(m.face) < 0 ? 1 : 0 } } as ZoneIn); // v2.87 — только рисунок
