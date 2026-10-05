@@ -686,6 +686,9 @@ function ring(
 }
 
 /** Повёрнутый овал по пикселям: вдоль (ux, uy) полуось `l`, поперёк — `w`. */
+/** Строка ещё не начата. Не −1: x пробегает и отрицательные значения (от −R). */
+const NO_RUN = -1e9;
+
 function lens(
   p: Pen,
   cx: number,
@@ -700,7 +703,7 @@ function lens(
   const x0 = Math.floor(cx);
   const y0 = Math.floor(cy);
   for (let y = -R; y <= R; y++) {
-    let run = -1;
+    let run = NO_RUN;
     for (let x = -R; x <= R + 1; x++) {
       let inside = false;
       if (x <= R) {
@@ -710,11 +713,11 @@ function lens(
         const b = (-dx * uy + dy * ux) / w;
         inside = a * a + b * b <= 1 && !(dither && (x0 + x + y0 + y) & 1);
       }
-      if (inside && run < 0) run = x;
-      if (!inside && run >= 0) {
+      if (inside && run === NO_RUN) run = x;
+      if (!inside && run !== NO_RUN) {
         if (dither) for (let q = run; q < x; q++) p.rect(x0 + q, y0 + y, 1, 1);
         else p.rect(x0 + run, y0 + y, x - run, 1);
-        run = -1;
+        run = NO_RUN;
       }
     }
   }
@@ -727,7 +730,7 @@ function star(p: Pen, cx: number, cy: number, r: number, n: number, rot: number)
   const x0 = Math.floor(cx);
   const y0 = Math.floor(cy);
   for (let y = -R; y <= R; y++) {
-    let run = -1;
+    let run = NO_RUN;
     for (let x = -R; x <= R + 1; x++) {
       let on = false;
       if (x <= R) {
@@ -740,10 +743,10 @@ function star(p: Pen, cx: number, cy: number, r: number, n: number, rot: number)
           on = d <= r * (0.35 + 0.65 * spike);
         }
       }
-      if (on && run < 0) run = x;
-      if (!on && run >= 0) {
+      if (on && run === NO_RUN) run = x;
+      if (!on && run !== NO_RUN) {
         p.rect(x0 + run, y0 + y, x - run, 1);
-        run = -1;
+        run = NO_RUN;
       }
     }
   }

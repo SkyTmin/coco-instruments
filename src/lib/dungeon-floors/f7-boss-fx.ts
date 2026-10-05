@@ -668,12 +668,15 @@ function shards(p: Pen, s: ShardSpec, age: number, time: number, layer: 'air' | 
  * контакта: белая сердцевина и стеклянный ореол, за 2–3 кадра сжимается.
  * Строки сливаются в отрезки — вызовов рисования по числу строк.
  */
+/** Строка ещё не начата. Не −1: x пробегает и отрицательные значения (от −R). */
+const NO_RUN = -1e9;
+
 function starRows(p: Pen, cx: number, cy: number, r: number, n: number, rot: number): void {
   const R = Math.ceil(r) + 1;
   const x0 = Math.floor(cx);
   const y0 = Math.floor(cy);
   for (let y = -R; y <= R; y++) {
-    let run = -1;
+    let run = NO_RUN;
     for (let x = -R; x <= R + 1; x++) {
       let on = false;
       if (x <= R) {
@@ -686,10 +689,10 @@ function starRows(p: Pen, cx: number, cy: number, r: number, n: number, rot: num
           on = d <= r * (0.35 + 0.65 * spike);
         }
       }
-      if (on && run < 0) run = x;
-      if (!on && run >= 0) {
+      if (on && run === NO_RUN) run = x;
+      if (!on && run !== NO_RUN) {
         p.row(y0 + y, x0 + run, x0 + x - 1);
-        run = -1;
+        run = NO_RUN;
       }
     }
   }
