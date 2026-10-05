@@ -100,7 +100,7 @@ export const DEMON_E = {
 /** Владыка: тайминги и радиусы приёмов, множители урона по нему. */
 export const LORD = {
   /** Засечки: ГРАВИТАЦИЯ, ПОДЗЕМЕЛЬЕ ПОМНИТ, ЗАТМЕНИЕ, СВЕРХНОВАЯ. */
-  hp: [0.78, 0.56, 0.36, 0.16],
+  hp: [0.78, 0.56, 0.36, 0.15],
   /** Разворот тела, рад/с, и скорость полёта (клеток/с). */
   turn: 3.2,
   glide: 3.1,
@@ -128,7 +128,7 @@ export const LORD = {
   wellWarn: 0.9,
   wellLife: 3.4,
   wellR: 4.4,
-  wellPull: 2.4,
+  wellPull: 3.6,
   wellBoom: 1.6,
   wellCd: 8,
   /** Планеты: взмах, полёт, лежат, возврат, радиус удара. */
@@ -162,8 +162,8 @@ export const LORD = {
   pulseStep: 0.3,
   pulseGap: 1.3,
   exhale: 2.8,
-  shardEvery: 6.5,
-  shardMax: 3,
+  shardEvery: 7,
+  shardMax: 2,
   /** Множители урона по владыке. */
   mult: { window: 1.4, crown: 0.75, face: 1.6, wrapped: 0.15, open: 1.6, blaze: 0.7, exhale: 1.5, scene: 0.3 },
 } as const;
@@ -1299,7 +1299,8 @@ function startRepel(sim: Sim, m: Mob, st: F15BState, api: SimApi): void {
 
 function startWell(sim: Sim, m: Mob, st: F15BState, api: SimApi): void {
   const h = sim.hero;
-  const [x, y] = inside(st, h.x, h.y, 1.2);
+  // Колодец ложится туда, куда герой бежит (упреждение 0,6 с).
+  const [x, y] = inside(st, h.x + h.vx * 0.6, h.y + h.vy * 0.6, 1.2);
   m.data.tx = x;
   m.data.ty = y;
   api.strike(sim, {
@@ -1436,26 +1437,28 @@ function lordChase(sim: Sim, m: Mob, dt: number, c: BrainCtx, st: F15BState, api
   if (Math.abs(angDiff(toHero, m.face)) > 0.35) return;
   const r = sim.rng();
   const ready = (k: string) => (m.data[k] ?? 0) <= 0;
-  if (d < 3.1) {
-    if (ready('cdRepel') && r < 0.28) startRepel(sim, m, st, api);
-    else if (r < 0.66) startPalm(sim, m, api);
-    else startSweep(sim, m, api);
-    return;
-  }
+  // Приёмы фазы (колодец, планеты, звездопад, дирижёр) — и вблизи, и издали.
+  const opts: (() => void)[] = [];
   if (ph >= 2 && ph <= 3) {
-    const opts: (() => void)[] = [];
     if (ph === 2 && ready('cdWell') && d < 9) opts.push(() => startWell(sim, m, st, api));
     if (ready('cdOrbit') && !crownAway(st) && d < 10) opts.push(() => startOrbit(sim, m, st, api));
     if (ready('cdMeteor') && d < 10) opts.push(() => startMeteor(sim, m, st, api));
-    if (ph === 3 && ready('cdConduct') && quadAt(sim, st, h.x, h.y)?.on) opts.push(() => {
-      m.data.cdConduct = LORD.conductCd;
-      m.data.flared = 0;
-      api.setMode(m, 'f15l_conduct');
-    });
-    if (opts.length) {
-      opts[Math.floor(sim.rng() * opts.length)]();
-      return;
-    }
+    if (ph === 3 && ready('cdConduct') && quadAt(sim, st, h.x, h.y)?.on)
+      opts.push(() => {
+        m.data.cdConduct = LORD.conductCd;
+        m.data.flared = 0;
+        api.setMode(m, 'f15l_conduct');
+      });
+  }
+  if (opts.length && (d >= 3.1 || r < 0.4)) {
+    opts[Math.floor(sim.rng() * opts.length)]();
+    return;
+  }
+  if (d < 3.1) {
+    if (ready('cdRepel') && r < 0.5) startRepel(sim, m, st, api);
+    else if (r < 0.75) startPalm(sim, m, api);
+    else startSweep(sim, m, api);
+    return;
   }
   if (ready('cdRepel') && d < 4.6) startRepel(sim, m, st, api);
 }
@@ -1498,15 +1501,15 @@ function lordDark(sim: Sim, m: Mob, dt: number, st: F15BState, api: SimApi): voi
   } else {
     const rot = sim.rng() * TAU;
     const pts: [number, number][] = [[h.x, h.y]];
-    for (let k = 0; k < 4; k++) pts.push([h.x + Math.cos(rot + (k * TAU) / 4) * 2.15, h.y + Math.sin(rot + (k * TAU) / 4) * 2.15]);
+    for (let k = 0; k < 4; k++) pts.push([h.x + Math.cos(rot + (k * TAU) / 4) * 2.3, h.y + Math.sin(rot + (k * TAU) / 4) * 2.3]);
     pts.forEach(([x, y], k) =>
       api.strike(sim, {
         shape: 'circle',
         x,
         y,
-        r: 1.0,
+        r: 0.95,
         warn: LORD.darkWarn + k * 0.08,
-        dmg: m.dmg,
+        dmg: m.dmg * 0.85,
         knock: 5,
         art: 'f15b_starfall',
         from: m.id,
@@ -1836,9 +1839,9 @@ function stepNova(sim: Sim, st: F15BState, api: SimApi, lord: Mob, dt: number): 
         const along = dx * ux + dy * uy;
         const across = Math.abs(-dx * uy + dy * ux);
         if (along > 0.7 && along < st.r + 1 && across < LORD.beamW + h.r) {
-          api.hurtHero(sim, lord.dmg * 0.8, st.cx + ux * along, st.cy + uy * along, 6, 'f15boss', { kind: 'burn', dur: 1 });
+          api.hurtHero(sim, lord.dmg * 0.6, st.cx + ux * along, st.cy + uy * along, 7, 'f15boss', { kind: 'burn', dur: 0.6 });
           vfx(sim, api, 'f15b_fxsear', h.x, h.y, 0.45, { ang: a }, true);
-          nv.hitCd = 0.9;
+          nv.hitCd = 1.1;
           break;
         }
       }
@@ -1862,7 +1865,7 @@ function stepNova(sim: Sim, st: F15BState, api: SimApi, lord: Mob, dt: number): 
           ang: nv.gap + Math.PI,
           arc: TAU - LORD.pulseGap,
           warn: LORD.pulseWarn + i * LORD.pulseStep,
-          dmg: lord.dmg,
+          dmg: lord.dmg * 0.8,
           knock: 10,
           art: 'f15b_pulse',
           from: lord.id,

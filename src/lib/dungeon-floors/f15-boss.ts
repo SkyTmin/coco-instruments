@@ -217,7 +217,7 @@ const LEGEND: Record<string, LegendCell> = {
   },
   e: floorObj('f15b_lamp', 0.3, M.hall, { r: 4.2, tint: 'warm' }),
   t: floorObj('f15b_twinkle', 0, M.star, undefined, true),
-  x: floorObj('f15b_spire', 0.3, M.ground, { r: 1.6, tint: 'cold' }),
+  x: floorObj('f15b_spire', 0.2, M.ground, { r: 1.6, tint: 'cold' }),
 };
 
 // ---------------------------------------------------------------------------
