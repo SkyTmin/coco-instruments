@@ -174,6 +174,8 @@ export const F15_MARK = {
   bridge: 24,
   /** Пылевой вихрь (глубина). */
   vortex: 25,
+  /** Кристальная печать зала-события (стена на время боя). */
+  seal: 26,
 } as const;
 const M = F15_MARK;
 
@@ -480,7 +482,7 @@ const MOBS: MobDef[] = [
     name: 'Отражение',
     many: 'отражений',
     hp: 40,
-    dmg: 22,
+    dmg: 20,
     speed: 3.6,
     radius: 0.34,
     windup: 0.6,
@@ -601,11 +603,11 @@ export const F15_BEASTS = MOBS.map((m) => m.id);
 
 const spawnRoots: SpawnSpec = {
   mobs: [
-    ['f15_urchin', 42],
+    ['f15_urchin', 34],
     ['f15_meteor', 26],
     ['f15_comet', 22],
   ],
-  density: 0.6,
+  density: 0.66,
   pack: [1, 2],
   filler: 'f15_urchin',
   group: (i) => (i < 2 ? 'f15_comet' : i < 3 ? 'f15_meteor' : 'f15_urchin'),
@@ -622,7 +624,7 @@ const spawnObs: SpawnSpec = {
     ['f15_meteor', 16],
     ['f15_graviton', 10],
   ],
-  density: 0.6,
+  density: 0.72,
   pack: [1, 2],
   filler: 'f15_urchin',
   group: (i) => (i < 1 ? 'f15_astro' : i < 3 ? 'f15_comet' : 'f15_urchin'),
@@ -639,7 +641,7 @@ const spawnOrbit: SpawnSpec = {
     ['f15_astro', 14],
     ['f15_graviton', 12],
   ],
-  density: 0.62,
+  density: 0.74,
   pack: [1, 2],
   filler: 'f15_moon',
   group: (i) => (i < 2 ? 'f15_moon' : i < 3 ? 'f15_comet' : 'f15_meteor'),

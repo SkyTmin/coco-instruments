@@ -643,8 +643,8 @@ def area_obs():
         item(m, round(32 + math.cos(a) * 14), round(121 + math.sin(a) * 12), 'i', ok='m.')
     for (x, y) in ((14, 106), (50, 106), (14, 136), (50, 136), (14, 121), (50, 121)):
         m.put(x, y, 'O')
-    item(m, 32, 105, 'V', ok='m.')
-    spot('scope', A, 32, 105, 'sun')
+    item(m, 27, 104, 'V', ok='m.')
+    spot('scope', A, 27, 104, 'sun')
     for x in range(PX0 + 3, PX1 - 2, 5):
         try:
             face(m, x, PY0 - 1, 'F')
@@ -725,7 +725,7 @@ def area_orbit():
 
     # Малые орбиты: ядро, дорожка, зазор с причалами, кромка.
     OX, OY = 32.5, 258.5
-    disc(m, OX, OY, 11.5, '.', r0=9.5)
+    disc(m, OX, OY, 12.3, '.', r0=9.5)
     m.rect(31, 268, 33, 279, '.')
     m.rect(31, 238, 33, 249, '.')
     orbit(m, A, OX, OY, 3.5, 7.5, 2, 0.32, 'small')

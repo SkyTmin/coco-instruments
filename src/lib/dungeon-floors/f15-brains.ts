@@ -364,6 +364,8 @@ export interface Hall {
   next: number;
   ids: number[];
   data: Record<string, number>;
+  /** Печать на выходах: пары «клетка, прежняя метка». */
+  seal: number[];
 }
 
 export interface Star {
@@ -777,16 +779,25 @@ function stepHeroGravity(sim: Sim, st: F15State, api: SimApi, dt: number): void 
   }
   st.hv = [h.vx, h.vy];
   st.floating = true;
-  // Край пустоты: дрейф к ней — сорвался.
-  const v = hypot(h.vx, h.vy);
-  if (v > FLOAT.slip) {
-    const px = h.x + (h.vx / v) * (h.r + 0.12);
-    const py = h.y + (h.vy / v) * (h.r + 0.12);
-    if (tileAt(sim, Math.floor(px), Math.floor(py)) === T_DEEP) {
-      const mk = markAt(sim, Math.floor(px), Math.floor(py));
-      if (mk === MK.void || mk === MK.lane || mk === MK.vortex) fallHero(sim, st, api, 'в невесомости не затормозить — 8%');
+  // Край пустоты: дрейф В НЕЁ (а не вдоль кромки) — сорвался.
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const gx = cx + dx;
+      const gy = cy + dy;
+      if (tileAt(sim, gx, gy) !== T_DEEP) continue;
+      const mk = markAt(sim, gx, gy);
+      if (mk !== MK.void && mk !== MK.lane && mk !== MK.vortex) continue;
+      // Ближняя точка клетки пустоты и скорость к ней.
+      const nx = clamp(h.x, gx, gx + 1) - h.x;
+      const ny = clamp(h.y, gy, gy + 1) - h.y;
+      const d = hypot(nx, ny);
+      if (d > h.r + 0.1 || d < 1e-4) continue;
+      if ((h.vx * nx + h.vy * ny) / d > FLOAT.slip) {
+        fallHero(sim, st, api, 'в невесомости не затормозить — 8%');
+        return;
+      }
     }
-  }
 }
 
 /** Монстры в невесомости: отдача не гаснет, отбитые улетают в пустоту. */
@@ -1148,7 +1159,7 @@ function stepMems(sim: Sim, st: F15State, api: SimApi, dt: number): void {
         mem.used = true;
         // В Галерее каждый третий кристалл помнит двоих.
         const gal = mem.gallery ? st.halls.find((x) => x.name === 'gallery') : undefined;
-        const ids = releaseEcho(sim, api, mem, gal && gal.n % 3 === 0 ? 2 : 1);
+        const ids = releaseEcho(sim, api, mem, gal && gal.n % 4 === 0 ? 2 : 1);
         if (gal) gal.ids.push(...ids);
       }
     } else mem.glow = Math.max(0, mem.glow - dt * 0.6);
@@ -1236,10 +1247,11 @@ function stepCharts(sim: Sim, st: F15State, api: SimApi): void {
 
 export const EVENT = {
   awaken: { waves: 5, warn: 1.2, on: 3, off: 2.6, r: 8.5, burn: 2.6, k: 1.15, timeout: 80 },
-  gallery: { every: 2.2, glow: 0.9, maxAlive: 6, timeout: 90 },
+  gallery: { every: 2.2, glow: 0.9, maxAlive: 4, timeout: 90 },
   starfall: { dur: 20, every: 0.75, warn: 1.1, r: 1.3, share: 0.12, wellR: 3, wellOn: 1.3 },
   eclipse: { max: 80, fade: 1.2 },
   storm: { cycles: 4, phase: 5, warn: 1.2, slow: 0.6 },
+  hallMax: 150,
 };
 
 function hallAlive(sim: Sim, hall: Hall): number {
@@ -1273,8 +1285,45 @@ function hallSpawn(sim: Sim, api: SimApi, hall: Hall, kind: string, near?: [numb
   return m;
 }
 
+/**
+ * Кристальная печать: клетки рамки зала, через которые есть выход наружу,
+ * на время события становятся стеной. Снимается в конце (или по таймауту
+ * события — у каждого он есть).
+ */
+function sealHall(sim: Sim, hall: Hall, api: SimApi, on: boolean): void {
+  const W = sim.world.w;
+  if (!on) {
+    for (let k = 0; k < hall.seal.length; k += 2) {
+      const i = hall.seal[k];
+      api.setTile(sim, i % W, Math.floor(i / W), T_FLOOR, hall.seal[k + 1]);
+    }
+    if (hall.seal.length) say(sim, 'f15_unseal');
+    hall.seal = [];
+    return;
+  }
+  hall.seal = [];
+  const inside = (x: number, y: number) => x >= hall.x0 && x <= hall.x1 && y >= hall.y0 && y <= hall.y1;
+  for (let y = hall.y0; y <= hall.y1; y++)
+    for (let x = hall.x0; x <= hall.x1; x++) {
+      if (x !== hall.x0 && x !== hall.x1 && y !== hall.y0 && y !== hall.y1) continue;
+      if (tileAt(sim, x, y) !== T_FLOOR) continue;
+      const out = [
+        [x - 1, y],
+        [x + 1, y],
+        [x, y - 1],
+        [x, y + 1],
+      ].some(([ax, ay]) => !inside(ax, ay) && walkable(tileAt(sim, ax, ay)));
+      if (out) hall.seal.push(y * W + x, markAt(sim, x, y));
+    }
+  for (let k = 0; k < hall.seal.length; k += 2) {
+    const i = hall.seal[k];
+    api.setTile(sim, i % W, Math.floor(i / W), T_WALL, MK.seal);
+  }
+}
+
 function hallEnd(sim: Sim, hall: Hall, api: SimApi, drops: [string, number][], what: string, text: string): void {
   hall.state = 'done';
+  sealHall(sim, hall, api, false);
   const cx = (hall.x0 + hall.x1 + 1) / 2;
   const cy = (hall.y0 + hall.y1 + 1) / 2;
   const h = sim.hero;
@@ -1290,6 +1339,7 @@ function startHall(sim: Sim, st: F15State, hall: Hall, api: SimApi): void {
   hall.state = 'run';
   hall.t = 0;
   hall.n = 0;
+  sealHall(sim, hall, api, true);
   const cx = (hall.x0 + hall.x1 + 1) / 2;
   const cy = (hall.y0 + hall.y1 + 1) / 2;
   switch (hall.name) {
@@ -1567,6 +1617,15 @@ function stepHalls(sim: Sim, st: F15State, api: SimApi, dt: number): void {
       continue;
     }
     hall.t += dt;
+    // Страховка: печать не держит дольше двух с половиной минут.
+    if (hall.t > EVENT.hallMax) {
+      if (hall.name === 'eclipse') endEclipse(sim, st, hall, api, false);
+      else {
+        if (hall.name === 'storm') st.storm = st.stormWarn = 0;
+        hallEnd(sim, hall, api, [['f15_shard', 2]], `f15_${hall.name}_end`, 'Печать спала');
+      }
+      continue;
+    }
     if (hall.name === 'awaken') stepAwaken(sim, st, hall, api);
     else if (hall.name === 'gallery') stepGallery(sim, st, hall, api);
     else if (hall.name === 'starfall') stepStarfall(sim, st, hall, api);
@@ -1695,6 +1754,7 @@ function scan(sim: Sim, api: SimApi): F15State {
           next: 0,
           ids: [],
           data: {},
+          seal: [],
         });
         break;
       case 'mem':
@@ -2022,7 +2082,7 @@ const seeHero = (sim: Sim, m: Mob, api: SimApi) => api.lineOfSight(sim, m.x, m.y
 // у колодца путь гнётся; о две стены — оглушён; раскрывшись — веер игл.
 // ---------------------------------------------------------------------------
 
-export const URCHIN = { curl: 0.6, roll: 8, rollT: 1.5, open: 0.55, dizzy: 1.1, see: 6.5 };
+export const URCHIN = { curl: 0.6, roll: 8, rollT: 1.5, open: 0.55, dizzy: 1.1, see: 6.5, rollK: 0.75 };
 
 brain('f15_urchin', {
   step(sim, m, dt, c, api) {
@@ -2068,7 +2128,7 @@ brain('f15_urchin', {
         m.vy = (m.vy / sp) * URCHIN.roll;
         m.dir = Math.atan2(m.vy, m.vx);
         m.face = m.dir;
-        contact(sim, m, api, m.dmg, 3);
+        contact(sim, m, api, m.dmg * URCHIN.rollK, 3);
         if (m.t > URCHIN.rollT) {
           m.dir = Math.atan2(c.dy, c.dx);
           api.setMode(m, 'f15_open');
