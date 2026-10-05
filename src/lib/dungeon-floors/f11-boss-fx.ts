@@ -27,6 +27,7 @@
 // Частицы детерминированы — позиция считается от зерна и возраста, а не
 // копится по кадрам: лист кадров и игра рисуют одно и то же, стоп-кадр
 // держит позу сам.
+import { f11GuardPoints } from './f11-art';
 import { Px } from '../dungeon-art';
 import {
   MOB_PAINTERS,
@@ -1529,6 +1530,10 @@ function bossPose(m: Mob, time: number): MobPose {
 function bossEye(m: Mob, time: number, S: number): [number, number] {
   const bx = m.x * S;
   const by = m.y * S;
+  // Линза из последнего кадра, который нарисовало «Тело» (3D-риг отдаёт её
+  // точкой, а не полем `eye`: глаз рисуется в слое света).
+  const g = f11GuardPoints(m)?.lens;
+  if (g) return [bx + g[0] + 0.5, by + g[1] + 0.5];
   let fr: MobFrame | null = null;
   try {
     fr = MOB_PAINTERS.get('f11boss')?.(m, bossPose(m, time)) ?? null;
@@ -1551,6 +1556,8 @@ function bossEye(m: Mob, time: number, S: number): [number, number] {
 
 /** Ядро в груди: под глазом и чуть к спине (кадр стража смотрит вбок). */
 function bossCore(m: Mob, time: number, S: number): [number, number] {
+  const g = f11GuardPoints(m)?.core;
+  if (g) return [m.x * S + g[0] + 0.5, m.y * S + g[1] + 0.5];
   const [ex, ey] = bossEye(m, time, S);
   const side = Math.cos(m.face) < 0 ? -1 : 1;
   return [ex - 5 * side, ey + 15];

@@ -26,18 +26,15 @@
 import { Px } from '../dungeon-art';
 import { Tile, isWallTile } from '../dungeon-world';
 import {
-  MOB_PAINTERS,
-  frameLRU,
   paintSim,
   registerImpactPainter,
-  registerMobPainter,
   registerMobWarm,
   registerZonePainter,
 } from '../dungeon-paint';
-import type { ImpactRec, MobFrame, MobPose } from '../dungeon-paint';
-import type { Mob, Sim, Strike, Zone } from '../dungeon-sim';
+import type { ImpactRec } from '../dungeon-paint';
+import type { Mob, Strike, Zone } from '../dungeon-sim';
 import { F12_MARK } from './f12';
-import { F12_FX, KING, f12King } from './f12-brains';
+import { F12_FX, KING } from './f12-brains';
 import type { GridView } from './f12-brains';
 import { SHRINE_H, SHRINE_W, shrinePx } from './f12-art';
 
@@ -2259,11 +2256,11 @@ function pillarImg(H: number, W: number, f: number): HTMLCanvasElement {
       const u = (Hq + 5 - y) / Hq;
       if (u > 1.08) continue;
       // Ствол сужается к макушке; у основания — чуть шире (юбка).
-      let half = (Wq / 2) * (1 - 0.55 * Math.pow(Math.min(1, u), 2.2)) * (u < 0.08 ? 1.12 : 1);
+      const half = (Wq / 2) * (1 - 0.55 * Math.pow(Math.min(1, u), 2.2)) * (u < 0.08 ? 1.12 : 1);
       const sway = Math.sin(u * 7 + (f & 3) * 1.6) * 1.2 * u;
       for (let x = 0; x < Wq + 4; x++) {
         const dx = x + 0.5 - cx - sway;
-        let d = Math.abs(dx) / Math.max(0.5, half);
+        const d = Math.abs(dx) / Math.max(0.5, half);
         // Макушка рвётся тремя языками.
         if (u > 0.72) {
           const tongue = Math.abs(Math.sin((dx / Math.max(1, half)) * 2.4 + (f & 3) * 0.9));
@@ -3601,7 +3598,7 @@ function tethers(p: Pen, sx: number, sy: number, S: number, time: number): void 
       return [a * bx + b * mx + c * sx, a * by + b * my + c * sy];
     };
     let u0 = 0;
-    let u1 = 1;
+    const u1 = 1;
     let alpha = 1;
     let snap = -1;
     if (m.mode === 'f12_rise') u0 = 1 - eOut2(k01(m.t / 0.55));
@@ -4284,282 +4281,6 @@ registerZonePainter(
     p.dot(cx + 2, cy - 2 - 10 * k, cy);
     p.dot(cx - 2, cy - 4 - 7 * k, cy);
   }),
-);
-
-// =============================================================================
-// ЧАШИ ХРАМА — `f12_pillar` с `data.bowl`. Рисовальщик столба территорий —
-// общий, этаж; здесь только ветка чаши (поверх: вызов передаётся прежнему
-// рисовальщику для столбов). Чаша поднимается из пола, в ней горит
-// фиолетовое пламя (слой поверх темноты), с уроном по ней бегут трещины;
-// разбитая — раскалывается: черепки разлетаются с тяжестью, пламя вскидывается
-// и гаснет дымом, остаётся пенёк постамента (смерть 1 с).
-// =============================================================================
-
-const BOWL_W = 40;
-const BOWL_H = 44;
-const BOWL_G = 38;
-const BOWL_X = 20;
-const BOWL_ST: Tones4 = [hx('#14101a'), hx('#2a2232'), hx('#40354a'), hx('#5e5070')];
-type Tones4 = [RGBA, RGBA, RGBA, RGBA];
-const bowlFrames = frameLRU<MobFrame>(180);
-
-/** Пламя чаши в Px: высота h, кадр f (0…7). */
-function bowlFlame(p: Px, cx: number, by: number, h: number, f: number): void {
-  const pal = FLAME_PAL[2].map((c) => hx(c));
-  const H = Math.max(2, Math.round(h));
-  for (let y = 0; y < H; y++) {
-    const u = y / H;
-    const half =
-      3.4 *
-      Math.pow(Math.sin(Math.PI * Math.min(1, 0.15 + (1 - u) * 0.95) * 0.5), 0.8) *
-      (1 - u * 0.3);
-    const sway = Math.sin(f * 0.8 + u * 3) * u * 1.6;
-    for (let x = -4; x <= 4; x++) {
-      const d = Math.abs(x + 0.5 - sway) / Math.max(0.6, half);
-      if (d > 1) continue;
-      const hot = 1 - d * 0.8 - u * 0.6 + hash(x, y, f) * 0.15;
-      p.set(cx + x, by - y, hot > 0.6 ? pal[4] : hot > 0.4 ? pal[3] : hot > 0.2 ? pal[2] : pal[1]);
-    }
-  }
-  if (f & 1) p.set(cx + Math.round(Math.sin(f) * 1.5), by - H - 1, pal[3]);
-}
-
-/** Трещины постамента и чаши по урону: 0 — цела, 2 — вот-вот. */
-function bowlCracks(p: Px, stage: number): void {
-  if (stage <= 0) return;
-  const c = hx('#0a0608');
-  const lit = hx('#d070ff');
-  const cr1: [number, number][] = [
-    [BOWL_X - 2, BOWL_G - 14],
-    [BOWL_X - 1, BOWL_G - 12],
-    [BOWL_X - 2, BOWL_G - 10],
-    [BOWL_X - 1, BOWL_G - 8],
-    [BOWL_X, BOWL_G - 7],
-  ];
-  for (const [x, y] of cr1) p.set(x, y, c);
-  p.set(BOWL_X - 1, BOWL_G - 11, lit);
-  if (stage < 2) return;
-  const cr2: [number, number][] = [
-    [BOWL_X + 3, BOWL_G - 13],
-    [BOWL_X + 2, BOWL_G - 11],
-    [BOWL_X + 3, BOWL_G - 9],
-    [BOWL_X + 4, BOWL_G - 6],
-    [BOWL_X + 3, BOWL_G - 4],
-    [BOWL_X + 5, BOWL_G - 14],
-    [BOWL_X + 6, BOWL_G - 15],
-  ];
-  for (const [x, y] of cr2) p.set(x, y, c);
-  p.set(BOWL_X + 3, BOWL_G - 10, lit);
-  // Скол на краю чаши.
-  p.data[((BOWL_G - 16) * p.w + BOWL_X + 6) * 4 + 3] = 0;
-}
-
-/** Целая чаша: постамент, чаша, черепа; rise 0…1 — сколько вышло из пола. */
-function bowlBody(rise: number, stage: number): Px {
-  const p = new Px(BOWL_W, BOWL_H);
-  const G = BOWL_G;
-  const cx = BOWL_X;
-  // Постамент — сужается кверху.
-  for (let y = G - 12; y < G; y++) {
-    const u = (y - (G - 12)) / 12;
-    const half = 3.5 + 1.5 * u;
-    for (let x = Math.floor(cx - half); x <= Math.ceil(cx + half - 1); x++) {
-      const l = (x + 0.5 - cx) / half;
-      p.set(x, y, l < -0.6 ? BOWL_ST[2] : l < 0.3 ? BOWL_ST[1] : BOWL_ST[0]);
-    }
-  }
-  p.rect(cx - 6, G - 2, cx + 5, G - 1, BOWL_ST[1]);
-  for (let x = cx - 6; x <= cx + 5; x++) p.set(x, G - 2, BOWL_ST[2]);
-  // Черепа на постаменте.
-  for (const x of [cx - 3, cx + 2]) {
-    p.set(x, G - 7, hx('#e8dec0'));
-    p.set(x + 1, G - 7, hx('#c4b89a'));
-    p.set(x, G - 6, hx('#150f0b'));
-    p.set(x + 1, G - 6, hx('#9a8e76'));
-  }
-  // Чаша: лаковая, с кровавым краем.
-  for (let y = G - 17; y <= G - 12; y++) {
-    const u = (y - (G - 17)) / 5;
-    const half = 7 - 3 * u * u;
-    for (let x = Math.floor(cx - half); x <= Math.ceil(cx + half - 1); x++) {
-      const l = (x + 0.5 - cx) / half;
-      p.set(
-        x,
-        y,
-        y === G - 17
-          ? hx('#b02030')
-          : l < -0.5
-            ? hx('#a52a26')
-            : l < 0.4
-              ? hx('#781a1e')
-              : hx('#4e1016'),
-      );
-    }
-  }
-  for (let x = cx - 6; x <= cx + 5; x++)
-    p.set(x, G - 18, (x & 1) === 0 ? hx('#7a1420') : hx('#d04a36'));
-  bowlCracks(p, stage);
-  p.outline(hx('#150f0b'));
-  if (rise >= 1) return p;
-  // Выходит из пола: видна верхняя часть, опущенная к земле.
-  const h = Math.round(BOWL_H * eOut2(rise));
-  const q = new Px(BOWL_W, BOWL_H);
-  const dy = BOWL_H - h;
-  for (let y = 0; y < BOWL_H - dy; y++)
-    for (let x = 0; x < BOWL_W; x++) {
-      const i = (y * BOWL_W + x) * 4;
-      if (!p.data[i + 3] || y + dy > G) continue;
-      const j = ((y + dy) * BOWL_W + x) * 4;
-      q.data.set(p.data.subarray(i, i + 4), j);
-    }
-  // Земля вспучилась у основания.
-  for (let x = cx - 7; x <= cx + 7; x++)
-    if (hash(x, Math.round(rise * 8), 5) > 0.45) q.set(x, G - 1 + (x & 1), hx('#2a1418'));
-  return q;
-}
-
-function bowlFrame(m: Mob, pose: MobPose): MobFrame {
-  const mode = pose.mode;
-  const flash = pose.flash;
-  const stage = m.hp / Math.max(1, m.maxHp) > 0.66 ? 0 : m.hp / Math.max(1, m.maxHp) > 0.33 ? 1 : 2;
-  // Смерть: 24 кадра на 1 с (разбит), бегство (храм иссяк) — та же сцена ×2,5.
-  if (mode === 'dying' || mode === 'escape') {
-    const t = mode === 'escape' ? pose.t * 2.5 : pose.t;
-    const fr = Math.min(23, Math.floor(t * 24));
-    const sd = m.id % 5;
-    const key = `die|${sd}|${fr}`;
-    let hit = bowlFrames.get(key);
-    if (!hit) hit = bowlFrames.set(key, bowlDeath(fr / 24, sd));
-    return hit;
-  }
-  const rise = mode === 'f12_rise' ? Math.min(1, pose.t / 0.55) : 1;
-  const rf = Math.round(rise * 8);
-  const f = Math.floor(pose.now * 12) & 7;
-  const key = `b|${rf}|${stage}|${f}|${flash ? 1 : 0}`;
-  let hit = bowlFrames.get(key);
-  if (!hit) {
-    let body = bowlBody(rf / 8, stage);
-    const lit = new Px(BOWL_W, BOWL_H);
-    if (rf >= 7) {
-      const h = (rf === 7 ? 6 : 10) + (f % 3);
-      bowlFlame(body, BOWL_X, BOWL_G - 19, h, f);
-      bowlFlame(lit, BOWL_X, BOWL_G - 19, h, f);
-    }
-    if (flash) body = body.tint(hx('#ffffff'), 0.85);
-    hit = bowlFrames.set(key, {
-      img: body.canvas(),
-      lit: rf >= 7 ? lit.canvas() : null,
-      ax: BOWL_X,
-      ay: BOWL_G,
-      eye: null,
-      still: true,
-      shadow: rf >= 4 ? 7 : 0,
-    });
-  }
-  return hit;
-}
-
-/**
- * Сцена разбитой чаши, k 0…1 (1 с): кадр удара — чаша белым силуэтом; потом
- * две половины чаши кувыркаются в стороны с тяжестью и отскоком, сколы
- * постамента летят ниже, пламя вскидывается и гаснет дымом, остаётся пенёк.
- */
-function bowlDeath(k: number, seed: number): MobFrame {
-  const t = k;
-  const G = BOWL_G;
-  const cx = BOWL_X;
-  if (t < 0.07) {
-    // Кадр контакта: вся чаша — белым, пламя вскинулось.
-    const p = bowlBody(1, 2).tint(hx('#ffffff'), 0.9);
-    // Вспышка — и в слое поверх темноты, иначе в тёмном зале она серая.
-    const lit = bowlBody(1, 2).tint(hx('#ffffff'), 0.9);
-    bowlFlame(lit, cx, G - 19, 14, 1);
-    bowlFlame(p, cx, G - 19, 14, 1);
-    return {
-      img: p.canvas(),
-      lit: lit.canvas(),
-      ax: BOWL_X,
-      ay: BOWL_G,
-      eye: null,
-      still: true,
-      shadow: 7,
-      linger: 1,
-    };
-  }
-  const p = new Px(BOWL_W, BOWL_H);
-  const lit = new Px(BOWL_W, BOWL_H);
-  // Пенёк постамента.
-  for (let y = G - 5; y < G; y++)
-    for (let x = cx - 5; x <= cx + 4; x++) {
-      if (y <= G - 4 && hash(x, y + seed, 3) > 0.45) continue;
-      p.set(x, y, x < cx - 2 ? BOWL_ST[2] : BOWL_ST[1]);
-    }
-  const tt = t - 0.07;
-  // Две половины чаши: 5×3, кувыркаются (лёжа — стоя), падают с отскоком.
-  for (const side of [-1, 1]) {
-    const fl = fly(tt, 70, 320, 0.3);
-    const x = cx + side * (3 + 34 * fl.h);
-    const y = G - 15 - fl.z + 20 * fl.h;
-    const flip = fl.air ? Math.floor(tt * 14) & 1 : 0;
-    const w = flip ? 3 : 5;
-    const h = flip ? 5 : 3;
-    const X = Math.round(x - w / 2);
-    const Y = Math.round(Math.min(G - h, y));
-    for (let a = 0; a < w; a++)
-      for (let b = 0; b < h; b++) {
-        const rim = flip ? a === (side > 0 ? 0 : w - 1) : b === 0;
-        p.set(X + a, Y + b, rim ? hx('#d04a36') : b + a > 3 ? hx('#4e1016') : hx('#781a1e'));
-      }
-  }
-  // Сколы постамента и черепа — ниже и короче.
-  for (let i = 0; i < 6; i++) {
-    const an = (hash(seed, i, 1) - 0.5) * 3.2;
-    const v = 18 + 26 * hash(seed, i, 2);
-    const fl = fly(tt, 35 + 30 * hash(seed, i, 3), 300, 0.3);
-    const x = cx + Math.sin(an) * v * fl.h;
-    const y = G - 8 - fl.z + Math.cos(an) * 6 * fl.h;
-    const col = i === 0 ? hx('#e8dec0') : i & 1 ? BOWL_ST[2] : BOWL_ST[3];
-    const X = Math.round(x);
-    const Y = Math.round(Math.min(G - 2, y));
-    p.set(X, Y, col);
-    p.set(X + 1, Y, col);
-    if (i % 3 === 0) p.set(X, Y + 1, col);
-  }
-  // Пламя: вскидывается и гаснет, уходя дымом.
-  const fh = tt < 0.08 ? 14 + 40 * tt : Math.max(0, 17 - 34 * (tt - 0.08));
-  if (fh > 2) {
-    bowlFlame(p, cx, G - 6, fh, Math.floor(t * 24));
-    bowlFlame(lit, cx, G - 6, fh, Math.floor(t * 24));
-  }
-  // Дым — фиолетово-серые клубы поднимаются.
-  if (t > 0.25)
-    for (let i = 0; i < 3; i++) {
-      const q = t - 0.25 - i * 0.12;
-      if (q < 0) continue;
-      const r = 2 + 4 * q;
-      const sy = G - 12 - 30 * q - i * 3;
-      const sx = cx + Math.sin(i * 2 + q * 4) * 3;
-      const a = Math.max(0, 1 - q / 0.7);
-      p.ell(sx, sy, r, r * 0.8, hx('#3a2a46', Math.round(140 * a)));
-    }
-  p.outline(hx('#150f0b'));
-  const alpha = 1 - k01((t - 0.8) / 0.2);
-  return {
-    img: p.canvas(),
-    lit: lit.canvas(),
-    ax: BOWL_X,
-    ay: BOWL_G,
-    eye: null,
-    still: true,
-    shadow: 6,
-    linger: 1,
-    alpha,
-  };
-}
-
-const basePillar = MOB_PAINTERS.get('f12_pillar');
-registerMobPainter('f12_pillar', (m: Mob, pose: MobPose) =>
-  (m.data.bowl ?? 0) > 0 ? bowlFrame(m, pose) : basePillar ? basePillar(m, pose) : null,
 );
 
 // =============================================================================
