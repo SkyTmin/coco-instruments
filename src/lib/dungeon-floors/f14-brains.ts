@@ -3279,6 +3279,8 @@ function lordPlace(sim: Sim, m: Mob, api: SimApi): void {
     s.placed = 1;
     const to = spotNear(sim, api, h.x, h.y, 1.6, 2.3, (px, py) => -hypot(px - m.x, py - m.y));
     if (to) {
+      m.data.vAx = m.x; // v2.87 — только рисунок
+      m.data.vAy = m.y; // v2.87 — только рисунок
       m.x = to[0];
       m.y = to[1];
       m.face = Math.atan2(h.y - m.y, h.x - m.x);
@@ -3298,6 +3300,8 @@ function lordPlace(sim: Sim, m: Mob, api: SimApi): void {
       (px, py) => -Math.abs(hypot(px - h.x, py - h.y) - 5),
     );
     if (to) {
+      m.data.vBx = m.x; // v2.87 — только рисунок
+      m.data.vBy = m.y; // v2.87 — только рисунок
       m.x = to[0];
       m.y = to[1];
     }
@@ -3328,6 +3332,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
     s.own = false;
     s.launchAt = sim.time + LORD.knifeDelay;
     if (m.mode === 'f14_place') {
+      m.data.vFrom = 4; // v2.87 — только рисунок
       api.setMode(m, 'recover');
       m.cd = 0.8;
     }
@@ -3413,6 +3418,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.t > warn - 0.26) m.danger = LORD.hourR + 0.4;
       if (m.t >= warn) {
         m.data.lit = 0;
+        m.data.vFrom = 1; // v2.87 — только рисунок
         api.setMode(m, 'recover');
         m.cd = 0.8 / haste + sim.rng() * 0.4;
       }
@@ -3466,6 +3472,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.vx *= 0.6;
       m.vy *= 0.6;
       if (m.t > LORD.stuck) {
+        m.data.vFrom = 3; // v2.87 — только рисунок
         api.setMode(m, 'recover');
         m.cd = 0.5;
       }
@@ -3492,6 +3499,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.t > warn - 0.25) m.danger = LORD.spinR + LORD.spinW + 0.3;
       if (m.t >= warn) {
         m.data.lit = 0;
+        m.data.vFrom = 2; // v2.87 — только рисунок
         api.setMode(m, 'recover');
         m.cd = 0.9 / haste + sim.rng() * 0.4;
       }
@@ -3508,6 +3516,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         s.placed = 0;
         s.stops += 1;
         s.stopCd = LORD.stopEvery - (ph >= 3 ? 3 : 0);
+        delete m.data.vAx; // v2.87 — только рисунок
+        delete m.data.vBx; // v2.87 — только рисунок
         api.setMode(m, 'f14_place');
         stopWorld(sim, api, dur, 'boss');
         sim.events.push({
@@ -3520,6 +3530,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       return;
     case 'f14_place':
       // Мир снова идёт — сюда попадаем, только если остановку сорвали.
+      m.data.vFrom = 4; // v2.87 — только рисунок
       api.setMode(m, 'recover');
       return;
     case 'f14_toHub': {
@@ -3553,6 +3564,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       m.vy = 0;
       m.x = ax;
       m.y = ay;
+      m.data.vRit = (s.ritualHp - m.hp) / (s.need || 1); // v2.87 — только рисунок
       if (s.ritualHp - m.hp >= s.need) {
         api.setMode(m, 'f14_broken');
         s.ritualCd = LORD.ritualEvery;
@@ -3567,6 +3579,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         return;
       }
       if (m.t >= LORD.ritual) {
+        m.data.vFrom = 5; // v2.87 — только рисунок
         const back = lordHpAgo(s, sim.time, 12, m.hp);
         const gain = clamp(back - m.hp, 0, m.maxHp * LORD.regain);
         m.hp += gain;
