@@ -28,7 +28,7 @@ import {
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import { F15_MARK, F15_OBS, F15_ORBIT, F15_ROOTS } from './f15';
-import { F15_FX, f15State, MOTIFS } from './f15-brains';
+import { COMET, F15_FX, f15State, GRAVITON, METEOR as METEOR_K, MOTIFS, NOVA, URCHIN } from './f15-brains';
 import type { Arc, Chart, FShot, Ring, Well } from './f15-brains';
 
 type RGBA = [number, number, number, number];
@@ -1704,3 +1704,1080 @@ registerPropPainter('f15_vortex', (_o, time) => {
     return { p, ax: cx, ay: 27 };
   });
 });
+
+// ---------------------------------------------------------------------------
+// Монстры. Каждый кадр строится раз на позу, сторону и вид (элита, альбинос),
+// живёт в кеше с вытеснением. Слой `lit` — светящиеся части поверх темноты.
+// ---------------------------------------------------------------------------
+
+type Look = MobPose['look'];
+
+interface Built {
+  p: Px;
+  /** Середина тела и земля в кадре (смотрит вправо). */
+  ax: number;
+  ay: number;
+  eye: [number, number] | null;
+  /** Светящееся: `true` — взять яркие пиксели кадра; Px — свой слой. */
+  lit?: Px | boolean | null;
+}
+
+const FR = frameLRU<MobFrame>(1600);
+
+/** Яркие пиксели кадра — слой поверх темноты. */
+function litOf(p: Px, thr = 200): Px {
+  const q = new Px(p.w, p.h);
+  for (let i = 0; i < p.data.length; i += 4) {
+    if (p.data[i + 3] < 40) continue;
+    const mx = Math.max(p.data[i], p.data[i + 1], p.data[i + 2]);
+    const mn = Math.min(p.data[i], p.data[i + 1], p.data[i + 2]);
+    if (mx < thr && !(mx > thr - 50 && mx - mn > 90)) continue;
+    q.data[i] = p.data[i];
+    q.data[i + 1] = p.data[i + 1];
+    q.data[i + 2] = p.data[i + 2];
+    q.data[i + 3] = Math.round(p.data[i + 3] * 0.85);
+  }
+  return q;
+}
+
+function finish(b: Built, look: Look, flash: boolean, left: boolean): MobFrame {
+  let p = b.p;
+  let lit: Px | null = b.lit === true ? litOf(p) : b.lit || null;
+  if (look === 'albino') {
+    const pale = hx('#f4f0ff');
+    const q = new Px(p.w, p.h);
+    for (let i = 0; i < p.data.length; i += 4) {
+      if (!p.data[i + 3]) continue;
+      const l = (p.data[i] + p.data[i + 1] + p.data[i + 2]) / 3;
+      const c = mixc([l, l, l, 255], pale, 0.5);
+      q.data[i] = c[0];
+      q.data[i + 1] = c[1];
+      q.data[i + 2] = c[2];
+      q.data[i + 3] = p.data[i + 3];
+    }
+    p = q;
+  }
+  if (look === 'elite') p.outline(GOLDK);
+  if (flash) p = p.tint(WHITE, 0.85);
+  if (left) {
+    p = p.flipX();
+    if (lit) lit = lit.flipX();
+  }
+  const eye = b.eye ? ([left ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number]) : null;
+  return { img: p.canvas(), ax: left ? p.w - b.ax : b.ax, ay: b.ay, eye, lit: lit ? lit.canvas() : null };
+}
+
+/**
+ * Кадр из кеша. `flip` — отражать ли (кадры по направлению рисуются как
+ * есть). `extra` — поля хода кадра (сдвиг, шлейф, прозрачность).
+ */
+function frameOf(
+  kind: string,
+  pose: MobPose,
+  anim: string,
+  f: number,
+  build: () => Built,
+  extra?: Partial<MobFrame> | null,
+  flip: boolean = pose.left,
+): MobFrame {
+  const key = `${kind}|${anim}|${f}|${flip ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
+  let fr = FR.get(key);
+  if (!fr) fr = FR.set(key, finish(build(), pose.look, pose.flash, flip));
+  return extra ? { ...fr, ...extra } : fr;
+}
+
+/** Звёздочки над головой оглушённого (кадр f из 4). */
+function stars(p: Px, cx: number, cy: number, rx: number, f: number): void {
+  for (let i = 0; i < 3; i++) {
+    const a = (f / 4) * TAU + (i / 3) * TAU;
+    const x = Math.round(cx + Math.cos(a) * rx);
+    const y = Math.round(cy + Math.sin(a) * rx * 0.35);
+    sparkle(p, x, y, i === 0 ? WHITE : hx('#fff27a'), 1);
+  }
+}
+
+/** Смерть кристалла: фигура раскалывается, осколки летят в стороны и вниз. */
+function shatter(p: Px, k: number, seed: number, bits: RGBA[], cx: number, cy: number): Px {
+  if (k <= 0) return p;
+  const o = new Px(p.w, p.h);
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++) {
+      const i = (y * p.w + x) * 4;
+      if (!p.data[i + 3]) continue;
+      const r = hash(x >> 1, y >> 1, seed);
+      if (r < k * 0.45) continue;
+      const dx = x - cx;
+      const dy = y - cy;
+      const d = Math.hypot(dx, dy) || 1;
+      const push = k * (2 + r * 4);
+      const tx = Math.round(x + (dx / d) * push);
+      const ty = Math.round(y + (dy / d) * push * 0.6 + k * k * 4 * r);
+      if (tx < 0 || ty < 0 || tx >= o.w || ty >= o.h) continue;
+      const j = (ty * o.w + tx) * 4;
+      const c: RGBA = r < k * 0.6 ? bits[Math.floor(r * 97) % bits.length] : [p.data[i], p.data[i + 1], p.data[i + 2], 255];
+      o.data[j] = c[0];
+      o.data[j + 1] = c[1];
+      o.data[j + 2] = c[2];
+      o.data[j + 3] = Math.round(255 * (1 - k * 0.5));
+    }
+  return o;
+}
+
+/** Номер кадра смерти по времени режима (0…3). */
+const deathK = (pose: MobPose) => (pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0);
+
+/** Номер направления 0…n−1 по углу. */
+const dirBucket = (a: number, n: number) => ((Math.round((a / TAU) * n) % n) + n) % n;
+
+/** Глаз-бусина с бликом. */
+function eyeDot(p: Px, x: number, y: number, c: RGBA = INK, big = false): void {
+  p.set(x, y, c);
+  if (big) {
+    p.set(x + 1, y, c);
+    p.set(x, y + 1, c);
+    p.set(x + 1, y + 1, c);
+  }
+  p.set(x, y, big ? alpha(WHITE, 0.9) : c);
+  if (!big) p.set(x, y - 1, alpha(WHITE, 0.0));
+}
+
+/** Шип-кристалл от точки (x, y) по углу a, длина L, ширина основания w. */
+function spike(p: Px, x: number, y: number, a: number, L: number, w: number, t: Tones, tip: RGBA = WHITE): void {
+  const ux = Math.cos(a);
+  const uy = Math.sin(a);
+  const tx = x + ux * L;
+  const ty = y + uy * L;
+  const lx = x - uy * w * 0.5;
+  const ly = y + ux * w * 0.5;
+  const rx = x + uy * w * 0.5;
+  const ry = y - ux * w * 0.5;
+  // Две грани: светлая к свету, тёмная от него.
+  const lite = -uy * LX + ux * LY;
+  poly(p, [[lx, ly], [tx, ty], [x, y]], tone(t, 0.5 - lite * 0.4));
+  poly(p, [[x, y], [tx, ty], [rx, ry]], tone(t, 0.5 + lite * 0.4));
+  p.set(tx, ty, tip);
+}
+
+// --- Кристальный ёж -----------------------------------------------------------
+
+const URCH_FUR = tn('#2a1e3c', '#46345e', '#665088', '#9480b4');
+const URCH_SKIN = tn('#5a3a50', '#8a5a70', '#b88496', '#e8bcc8');
+
+/**
+ * Ёж: тельце, мордочка вправо, на спине кристальные иглы.
+ * `ball` 0…1 — свернулся, `bristle` 0…1 — иглы дыбом, `roll` — угол качения.
+ */
+function urchinBody(o: {
+  step: number;
+  ball: number;
+  bristle: number;
+  roll: number;
+  glowK: number;
+  dizzy: number;
+  dk: number;
+}): Built {
+  const p = new Px(34, 30);
+  const cx = 16;
+  const cy = 19 - o.ball * 2;
+  const rx = 7.5 - o.ball * 1.5;
+  const ry = 5.2 + o.ball * 0.8;
+  if (o.ball < 0.9) {
+    // Лапки.
+    const s = o.step;
+    for (const [lx, ph] of [[cx - 4, 0], [cx - 1, 2], [cx + 2, 1], [cx + 5, 3]] as [number, number][]) {
+      const up = (s + ph) % 4 < 2 ? 1 : 0;
+      p.rect(lx, cy + 3, lx + 1, cy + 5 - up, URCH_SKIN[1]);
+    }
+  }
+  // Иглы сзади (под телом): дальний ряд.
+  const n = o.ball > 0.5 ? 16 : 11;
+  const spikes: [number, number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    let a: number;
+    if (o.ball > 0.5) a = (i / n) * TAU + o.roll;
+    else a = PI * (0.62 + (i / (n - 1)) * 1.02 - o.ball * 0.4);
+    const L = (5 + (i % 3) * 1.5) * (0.75 + o.bristle * 0.45);
+    spikes.push([a, L, i]);
+  }
+  for (const [a, L, i] of spikes)
+    if (Math.sin(a) < -0.2 || o.ball > 0.5)
+      spike(p, cx + Math.cos(a) * rx * 0.7, cy + Math.sin(a) * ry * 0.7, a, L, 3, i % 4 === 0 ? VIOLET : CRYST);
+  // Тело.
+  shadeEll(p, cx, cy, rx, ry, URCH_FUR, 0.05);
+  if (o.ball < 0.6) {
+    // Мордочка: светлая, нос, глаз.
+    const fx = cx + rx - 1;
+    shadeEll(p, fx, cy + 1, 3.2 * (1 - o.ball), 2.6 * (1 - o.ball), URCH_SKIN, 0.1);
+    p.set(fx + 3 - o.ball * 2, cy + 1, INK);
+    if (o.dizzy) {
+      // Глаза крестиком.
+      p.set(fx - 1, cy - 2, INK);
+      p.set(fx + 1, cy, INK);
+      p.set(fx + 1, cy - 2, INK);
+      p.set(fx - 1, cy, INK);
+    } else {
+      p.rect(fx - 1, cy - 2, fx, cy - 1, INK);
+      p.set(fx - 1, cy - 2, WHITE);
+    }
+  }
+  // Ближние иглы поверх спины.
+  for (const [a, L, i] of spikes)
+    if (o.ball <= 0.5 && Math.sin(a) >= -0.2 && Math.cos(a) < 0.3)
+      spike(p, cx + Math.cos(a) * rx * 0.6, cy + Math.sin(a) * ry * 0.5, a, L * 0.8, 3, i % 3 === 0 ? VIOLET : CRYST);
+  for (const [a, L] of spikes.slice(0, 7))
+    if (o.ball <= 0.5) spike(p, cx - 2 + Math.cos(a) * 2, cy - 2 + Math.sin(a) * 2, a, L * 0.7, 2.5, CRYST);
+  if (o.glowK > 0) glow(p, cx - 2, cy - 4, 10, TEAL_GLOW, 0.35 * o.glowK);
+  if (o.dizzy) stars(p, cx + 2, cy - 10, 6, o.dizzy - 1);
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1901, [CRYST[2], CRYST[3], VIOLET[2], WHITE], cx, cy);
+  return { p: out, ax: cx, ay: 25, eye: o.ball < 0.6 && !o.dk ? [cx + rx - 2, cy - 2] : null, lit: true };
+}
+
+registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
+  const dk = deathK(pose);
+  if (dk) return frameOf('urchin', pose, 'die', dk, () => urchinBody({ step: 0, ball: 0, bristle: 1, roll: 0, glowK: 0, dizzy: 0, dk }));
+  switch (pose.mode) {
+    case 'f15_curl': {
+      const k = Math.min(4, Math.floor((pose.t / URCHIN.curl) * 5));
+      return frameOf('urchin', pose, 'curl', k, () => urchinBody({ step: 0, ball: k / 4, bristle: 0.5, roll: 0, glowK: k / 4, dizzy: 0, dk: 0 }), {
+        still: true,
+        sy: 1 - k * 0.03,
+      });
+    }
+    case 'f15_roll': {
+      const f = Math.floor(pose.now * 16) % 8;
+      const flip = Math.cos(m.dir) < 0;
+      return frameOf('urchin', pose, 'roll', f, () => urchinBody({ step: 0, ball: 1, bristle: 0.7, roll: (f / 8) * TAU * 0.5, glowK: 0.6, dizzy: 0, dk: 0 }), {
+        ghost: { every: 0.05, life: 0.18, tint: '108,240,255', alpha: 0.45 },
+        still: true,
+      }, flip);
+    }
+    case 'f15_dizzy': {
+      const f = Math.floor(pose.now * 6) % 4;
+      return frameOf('urchin', pose, 'dizzy', f, () => urchinBody({ step: 0, ball: 0.3, bristle: 0.2, roll: 0, glowK: 0, dizzy: f + 1, dk: 0 }), { still: true });
+    }
+    case 'f15_open': {
+      const k = Math.min(3, Math.floor((pose.t / URCHIN.open) * 4));
+      return frameOf('urchin', pose, 'open', k, () => urchinBody({ step: 0, ball: 0, bristle: 0.6 + k * 0.15, roll: 0, glowK: 0.3 + k * 0.25, dizzy: 0, dk: 0 }), {
+        still: true,
+        sx: 1 + k * 0.03,
+      });
+    }
+    case 'windup': {
+      const k = Math.min(2, Math.floor((pose.t / 0.6) * 3));
+      return frameOf('urchin', pose, 'wind', k, () => urchinBody({ step: 0, ball: 0.15, bristle: 0.9, roll: 0, glowK: 0.4, dizzy: 0, dk: 0 }), {
+        dx: -k * 0.6,
+        still: true,
+      });
+    }
+    default: {
+      const run = pose.anim === 'run';
+      const f = run ? pose.frame % 4 : 0;
+      return frameOf('urchin', pose, run ? 'run' : 'idle', f, () => urchinBody({ step: f, ball: 0, bristle: run ? 0.45 : 0.35, roll: 0, glowK: 0, dizzy: 0, dk: 0 }), run ? { dy: f % 2 ? -0.5 : 0 } : null);
+    }
+  }
+});
+
+
+// --- Метеорит ------------------------------------------------------------------
+
+/**
+ * Живой метеорит: гранёная глыба, трещины тлеют. `heat` 0…1 — накал
+ * трещин, `dir` — куда летит (для шлейфа), `trail` — длина огненного хвоста.
+ */
+function meteorBody(o: { heat: number; f: number; dir: number; trail: number; dizzy: number; dk: number; crouch: number }): Built {
+  const W = 52;
+  const p = new Px(W, 44);
+  const cx = 26;
+  const cy = 26 + o.crouch;
+  const ux = Math.cos(o.dir);
+  const uy = Math.sin(o.dir);
+  // Хвост пламени — против хода.
+  if (o.trail > 0) {
+    for (let i = 0; i < 26; i++) {
+      const k = i / 26;
+      const d = 6 + k * 16 * o.trail;
+      const wob = Math.sin(o.f * 1.7 + i * 0.9) * k * 2;
+      const x = cx - ux * d - uy * wob;
+      const y = cy - uy * d * 0.8 + ux * wob;
+      const r = (1 - k) * 6 + 1;
+      const c = k < 0.25 ? hx('#fff4c0') : k < 0.55 ? hx('#ffb040') : hx('#c84a20');
+      glow(p, x, y, r, c, 0.75 * (1 - k));
+    }
+  }
+  glow(p, cx, cy, 14, hx('#ff9a30'), 0.12 + o.heat * 0.25);
+  // Глыба: восьмиугольник с выщербинами, грани по свету.
+  const pts: [number, number][] = [];
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * TAU + 0.3;
+    const r = 9.5 + hash(i, 3, 1910) * 2.5;
+    pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.85]);
+  }
+  poly(p, pts, (x, y) => {
+    const v = voronoi(x * 1.6, y * 1.6, 6, 1911);
+    const l = -(v.ox * LX + v.oy * LY) * 1.1 + (cx - x) * 0.025 + (cy - y) * 0.04 + 0.3;
+    return v.d2 - v.d1 < 0.1 ? mixc(METEOR[0], hx('#ff7a20'), o.heat * 0.9) : tone(METEOR, l);
+  });
+  // Трещины.
+  const hot = mixc(hx('#c04010'), hx('#fff0a0'), o.heat);
+  const cracks: [number, number, number, number][] = [
+    [cx - 6, cy - 2, cx - 1, cy + 1],
+    [cx - 1, cy + 1, cx + 4, cy - 4],
+    [cx - 1, cy + 1, cx + 1, cy + 6],
+    [cx + 4, cy - 4, cx + 7, cy - 2],
+  ];
+  for (const [a, b, c2, d] of cracks) stroke(p, a, b, c2, d, hot);
+  // Глаза-угли — в сторону хода.
+  if (!o.dk) {
+    const ex = cx + 4;
+    const ey = cy - 2;
+    if (o.dizzy) {
+      p.set(ex - 1, ey - 1, INK);
+      p.set(ex + 1, ey + 1, INK);
+      p.set(ex + 1, ey - 1, INK);
+      p.set(ex - 1, ey + 1, INK);
+    } else {
+      p.rect(ex - 1, ey - 1, ex, ey, hx('#fff0a0'));
+      p.rect(ex + 3, ey - 1, ex + 4, ey, hx('#fff0a0'));
+      p.set(ex - 1, ey - 2, alpha(INK, 0.8));
+      p.set(ex + 4, ey - 2, alpha(INK, 0.8));
+    }
+  }
+  if (o.dizzy) stars(p, cx, cy - 13, 8, o.dizzy - 1);
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1912, [METEOR[1], METEOR[2], hx('#ffb040'), hx('#fff0a0')], cx, cy);
+  return { p: out, ax: cx, ay: 36, eye: o.dk || o.dizzy ? null : [cx + 4, cy - 2], lit: true };
+}
+
+registerMobPainter('f15_meteor', (m: Mob, pose: MobPose) => {
+  const dk = deathK(pose);
+  if (dk) return frameOf('meteor', pose, 'die', dk, () => meteorBody({ heat: 0.4, f: 0, dir: 0, trail: 0, dizzy: 0, dk, crouch: 0 }));
+  switch (pose.mode) {
+    case 'aim': {
+      const k = Math.min(3, Math.floor((pose.t / METEOR_K.aim) * 4));
+      const f = Math.floor(pose.now * 12) % 2;
+      return frameOf('meteor', pose, 'aim', k * 2 + f, () => meteorBody({ heat: 0.4 + k * 0.2, f, dir: 0, trail: 0, dizzy: 0, dk: 0, crouch: k * 0.6 }), {
+        still: true,
+        dx: f ? 0.5 : -0.5,
+      });
+    }
+    case 'f15_charge': {
+      const b = dirBucket(Math.atan2(m.vy, m.vx), 16);
+      const f = Math.floor(pose.now * 14) % 3;
+      return frameOf('meteor', pose, 'charge', b * 3 + f, () => meteorBody({ heat: 1, f, dir: (b / 16) * TAU, trail: 1, dizzy: 0, dk: 0, crouch: 0 }), {
+        still: true,
+        ghost: { every: 0.04, life: 0.2, tint: '255,150,60', alpha: 0.5 },
+      }, false);
+    }
+    case 'f15_dizzy': {
+      const f = Math.floor(pose.now * 6) % 4;
+      return frameOf('meteor', pose, 'dizzy', f, () => meteorBody({ heat: 0.15, f: 0, dir: 0, trail: 0, dizzy: f + 1, dk: 0, crouch: 1 }), { still: true });
+    }
+    default: {
+      const run = pose.anim === 'run' || pose.anim === 'wind';
+      const f = Math.floor(pose.now * 5) % 4;
+      return frameOf('meteor', pose, 'idle', f, () => meteorBody({ heat: 0.35 + 0.1 * Math.sin((f / 4) * TAU), f, dir: 0, trail: 0, dizzy: 0, dk: 0, crouch: 0 }), run ? { rot: Math.sin(pose.now * 8) * 0.08 } : null);
+    }
+  }
+});
+
+// --- Комета -------------------------------------------------------------------
+
+/** Комета: ледяное ядро с мордочкой и хвост света против хода. */
+function cometBody(o: { dir: number; tail: number; f: number; aim: number; dk: number }): Built {
+  const p = new Px(48, 40);
+  const cx = 24;
+  const cy = 22;
+  const ux = Math.cos(o.dir);
+  const uy = Math.sin(o.dir);
+  // Хвост: два языка — бирюзовый (газ) и белый (пыль), чуть врозь.
+  for (const [off, col] of [[0.18, hx('#7ae8ff')], [-0.12, hx('#e8f4ff')]] as [number, RGBA][]) {
+    const a = o.dir + PI + off;
+    for (let i = 0; i < 22; i++) {
+      const k = i / 22;
+      const d = 3 + k * 18 * o.tail;
+      const wob = Math.sin(o.f * 1.3 + i * 0.7) * k * 1.4;
+      const x = cx + Math.cos(a) * d - Math.sin(a) * wob;
+      const y = cy + Math.sin(a) * d * 0.85 + Math.cos(a) * wob;
+      glow(p, x, y, (1 - k) * 4 + 0.8, col, 0.55 * (1 - k));
+    }
+  }
+  // Ядро.
+  glow(p, cx, cy, 8 + o.aim * 3, TEAL_GLOW, 0.4 + o.aim * 0.3);
+  shadeEll(p, cx, cy, 5, 4.6, tn('#4a8ab0', '#8ad0f0', '#d0f4ff', '#ffffff'), 0.2);
+  // Ледяные гребни по ядру.
+  for (let i = 0; i < 5; i++) {
+    const a = o.dir + PI * 0.6 + i * 0.5;
+    spike(p, cx + Math.cos(a) * 3.5, cy + Math.sin(a) * 3.2, a, 3.5, 2.2, CRYST);
+  }
+  // Мордочка — по ходу.
+  if (!o.dk) {
+    const ex = cx + ux * 2.2;
+    const ey = cy + uy * 1.8 - 1;
+    p.set(ex - 1.2, ey, INK);
+    p.set(ex + 1.2, ey, INK);
+    if (o.aim > 0.5) {
+      p.set(ex - 1.2, ey - 1, INK);
+      p.set(ex + 1.2, ey - 1, INK);
+    }
+  }
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1920, [WHITE, CRYST[3], TEAL[2]], cx, cy);
+  return { p: out, ax: cx, ay: 30, eye: o.dk ? null : [cx + Math.round(ux * 2), cy - 1], lit: true };
+}
+
+registerMobPainter('f15_comet', (m: Mob, pose: MobPose) => {
+  const dk = deathK(pose);
+  const sp = Math.hypot(m.vx, m.vy);
+  const ang = sp > 1 ? Math.atan2(m.vy, m.vx) : m.dir;
+  const b = dirBucket(ang, 16);
+  if (dk) return frameOf('comet', pose, 'die', dk * 16 + b, () => cometBody({ dir: (b / 16) * TAU, tail: 0.3, f: 0, aim: 0, dk }), null, false);
+  const f = Math.floor(pose.now * 10) % 4;
+  if (pose.mode === 'aim') {
+    const k = Math.min(2, Math.floor((pose.t / COMET.aim) * 3));
+    return frameOf('comet', pose, 'aim', (b * 3 + k) * 4 + f, () => cometBody({ dir: (b / 16) * TAU, tail: 0.35 - k * 0.1, f, aim: 0.4 + k * 0.3, dk: 0 }), { still: true }, false);
+  }
+  if (pose.mode === 'f15_dash')
+    return frameOf('comet', pose, 'dash', b * 4 + f, () => cometBody({ dir: (b / 16) * TAU, tail: 1.2, f, aim: 1, dk: 0 }), {
+      still: true,
+      ghost: { every: 0.03, life: 0.22, tint: '140,240,255', alpha: 0.55 },
+    }, false);
+  const tail = Math.min(1, 0.45 + sp * 0.08);
+  return frameOf('comet', pose, 'fly', b * 4 + f, () => cometBody({ dir: (b / 16) * TAU, tail, f, aim: 0, dk: 0 }), null, false);
+});
+
+// --- Гравитон -----------------------------------------------------------------
+
+const GRAV_T = tn('#120a20', '#24163c', '#3a2660', '#5a428a');
+const GRAV_PLATE = tn('#1a1c34', '#2e3458', '#4a5484', '#7a88bc');
+
+/**
+ * Гравитон: тяжёлый страж из тёмной материи. Спереди — щит-плита (удар в лоб
+ * гасится), сзади открыто ядро. Вокруг — линза: кольцо искривлённого света.
+ * `arms` 0…1 — кулаки вверх (замах), `slam` — удар вниз.
+ */
+function gravBody(o: { step: number; arms: number; slam: number; f: number; dk: number }): Built {
+  const p = new Px(56, 56);
+  const cx = 26;
+  const gy = 50;
+  const cy = 34 + o.slam * 2;
+  // Кольцо-линза за спиной (задняя половина).
+  const ringR = 15 + Math.sin((o.f / 8) * TAU) * 0.6;
+  for (let a = PI; a < TAU; a += 0.03) p.set(cx + Math.cos(a) * ringR, cy - 4 + Math.sin(a) * ringR * 0.35, alpha(VIOLET_GLOW, 0.55));
+  // Ноги — столбы.
+  const s = o.step;
+  for (const [lx, ph] of [[cx - 6, 0], [cx + 5, 2]] as [number, number][]) {
+    const up = (s + ph) % 4 < 2 ? 1 : 0;
+    limb(p, lx, cy + 6, lx, gy - 1 - up, 3.6, 3.2, GRAV_T);
+    p.ell(lx, gy - 1 - up, 4, 1.6, GRAV_T[0]);
+  }
+  // Задняя рука.
+  const ay = cy - 6;
+  const hb = o.arms > 0 ? ay - 14 * o.arms + o.slam * 22 : cy + 6;
+  limb(p, cx - 9, ay, cx - 10 + o.arms * 4, hb, 3, 3.4, GRAV_T, -0.1);
+  shadeEll(p, cx - 10 + o.arms * 4, hb, 4, 3.6, GRAV_T, -0.05);
+  // Корпус: глыба шире кверху.
+  poly(p, [[cx - 11, cy - 12], [cx + 11, cy - 12], [cx + 8, cy + 8], [cx - 8, cy + 8]], (x, y) => {
+    const v = voronoi(x * 1.3, y * 1.3, 7, 1930);
+    const l = -(v.ox * LX + v.oy * LY) * 0.9 + (cx - x) * 0.03 + 0.3;
+    return v.d2 - v.d1 < 0.09 ? hx('#7a56d8') : tone(GRAV_T, l);
+  });
+  // Ядро на спине (видно сзади: слева) — горит фиолетом.
+  glow(p, cx - 9, cy - 3, 6, VIOLET_GLOW, 0.7);
+  shadeEll(p, cx - 9, cy - 3, 2.6, 3.2, VIOLET, 0.4);
+  p.set(cx - 10, cy - 5, WHITE);
+  // Щит-плита спереди (справа).
+  poly(p, [[cx + 4, cy - 14], [cx + 14, cy - 10], [cx + 13, cy + 7], [cx + 4, cy + 10]], (x, y) => tone(GRAV_PLATE, (cx + 10 - x) * 0.04 + (cy - y) * 0.035 + 0.35));
+  stroke(p, cx + 4, cy - 14, cx + 14, cy - 10, GRAV_PLATE[3]);
+  for (const [rx, ry] of [[cx + 7, cy - 9], [cx + 11, cy - 7], [cx + 7, cy + 5], [cx + 11, cy + 4]]) p.set(rx, ry, BRASS[3]);
+  // Руна тяжести на щите.
+  for (let a = 0; a < TAU; a += 0.5) p.set(cx + 9 + Math.cos(a) * 2.6, cy - 2 + Math.sin(a) * 3.4, alpha(VIOLET_GLOW, 0.9));
+  p.set(cx + 9, cy - 2, WHITE);
+  // Голова: низкий шлем, щель-глаз.
+  shadeEll(p, cx + 2, cy - 15, 5, 4, GRAV_T, 0.05);
+  p.rect(cx + 3, cy - 16, cx + 6, cy - 15, hx('#d0b0ff'));
+  // Передняя рука.
+  const hf = o.arms > 0 ? ay - 16 * o.arms + o.slam * 24 : cy + 7;
+  const fx = cx + 12 + o.arms * -2 + o.slam * 3;
+  limb(p, cx + 9, ay, fx, hf, 3.2, 3.6, GRAV_T, 0.05);
+  shadeEll(p, fx, hf, 4.6, 4.2, GRAV_T, 0.1);
+  if (o.arms > 0.3) glow(p, fx, hf, 6, VIOLET_GLOW, 0.4 * o.arms);
+  // Передняя половина кольца.
+  for (let a = 0; a < PI; a += 0.03) p.set(cx + Math.cos(a) * ringR, cy - 4 + Math.sin(a) * ringR * 0.35, alpha(hx('#e0d0ff'), 0.7));
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1931, [GRAV_T[2], VIOLET[2], VIOLET_GLOW, GRAV_PLATE[2]], cx, cy);
+  return { p: out, ax: cx, ay: gy, eye: o.dk ? null : [cx + 5, cy - 16], lit: true };
+}
+
+registerMobPainter('f15_graviton', (_m: Mob, pose: MobPose) => {
+  const dk = deathK(pose);
+  if (dk) return frameOf('grav', pose, 'die', dk, () => gravBody({ step: 0, arms: 0, slam: 0, f: 0, dk }));
+  const f = Math.floor(pose.now * 6) % 8;
+  if (pose.mode === 'windup') {
+    // Замах 1,15 с: кулаки поднимаются, последние 0,15 с — удар вниз.
+    const T = GRAVITON.punchAt;
+    const k = Math.min(1, pose.t / (T - 0.15));
+    const slam = pose.t > T - 0.15 ? Math.min(1, (pose.t - (T - 0.15)) / 0.12) : 0;
+    const kb = Math.min(5, Math.floor(k * 6));
+    const sb = Math.min(2, Math.floor(slam * 3));
+    return frameOf('grav', pose, 'wind', kb * 3 + sb, () => gravBody({ step: 0, arms: slam ? 1 - slam * 0.2 : kb / 5, slam, f: 0, dk: 0 }), {
+      still: true,
+      sy: slam ? 0.94 : 1 + kb * 0.01,
+    });
+  }
+  if (pose.mode === 'recover') return frameOf('grav', pose, 'rec', 0, () => gravBody({ step: 0, arms: 0.8, slam: 1, f: 0, dk: 0 }), { still: true });
+  const run = pose.anim === 'run';
+  const st = run ? pose.frame % 4 : 0;
+  return frameOf('grav', pose, run ? 'run' : 'idle', st * 8 + f, () => gravBody({ step: st, arms: 0, slam: 0, f, dk: 0 }), run ? { dy: st % 2 ? 0.6 : 0 } : null);
+});
+
+// --- Звездочёт ----------------------------------------------------------------
+
+const ROBE = tn('#0c0c2a', '#18184a', '#262a70', '#3a44a0');
+const SKIN = tn('#6a4a5a', '#9a7080', '#c8a0a8', '#f0d0d0');
+
+/**
+ * Звездочёт: мантия в звёздах, капюшон, посох с астролябией. Вокруг —
+ * камни-спутники (сколько осталось). `cast` 0…1 — посох вверх (колодец)
+ * или вперёд (залп), `kind` 1 — колодец, 2 — залп.
+ */
+function astroBody(o: { step: number; stones: number; f: number; cast: number; kind: number; dk: number }): Built {
+  const p = new Px(40, 44);
+  const cx = 18;
+  const gy = 39;
+  const orbit = (front: boolean) => {
+    for (let i = 0; i < o.stones; i++) {
+      const a = (o.f / 16) * TAU + (i * TAU) / 3;
+      const z = Math.sin(a);
+      if (z >= 0 !== front) continue;
+      const x = cx + Math.cos(a) * 12;
+      const y = 22 + z * 4 - (o.cast && o.kind === 1 ? o.cast * 6 : 0);
+      glow(p, x, y, 3.5, GOLDK, o.cast ? 0.6 : 0.35);
+      shadeEll(p, x, y, 1.8, 1.6, i === 1 ? VIOLET : METEOR, 0.2);
+      p.set(x - 0.5, y - 1, hx('#ffe8a0'));
+    }
+  };
+  orbit(false);
+  // Полы мантии: колокол, шаг качает край.
+  const sw = o.step % 2 ? 1 : 0;
+  poly(p, [[cx - 4, 16], [cx + 4, 16], [cx + 8 + sw, gy], [cx - 8 - sw, gy]], (x, y) => {
+    const fold = Math.sin((x - cx) * 1.1 + y * 0.1);
+    return tone(ROBE, (cx - x) * 0.05 + 0.35 + fold * 0.15);
+  });
+  // Звёзды на мантии (мерцают по кадру).
+  for (let i = 0; i < 7; i++) {
+    const x = cx - 6 + Math.round(hash(i, 1, 1940) * 12);
+    const y = 20 + Math.round(hash(i, 2, 1940) * 17);
+    if (Math.abs(x - cx) > 3 + (y - 16) * 0.2) continue;
+    p.set(x, y, (i + o.f) % 5 === 0 ? WHITE : hx('#c8c0ff'));
+  }
+  // Пояс — латунь.
+  p.rect(cx - 4, 24, cx + 4, 24, BRASS[2]);
+  // Капюшон и лицо.
+  shadeEll(p, cx, 12, 5, 5.5, ROBE, 0.1);
+  p.ell(cx + 2, 13, 2.6, 3, SKIN[1]);
+  p.ell(cx + 2.5, 12.5, 1.8, 2, SKIN[2]);
+  p.set(cx + 3, 12, INK);
+  // Борода-звёздная пыль.
+  for (let y = 15; y < 19; y++) p.set(cx + 2 + (y % 2), y, alpha(hx('#d8d4f0'), 0.9));
+  // Острый кончик капюшона.
+  poly(p, [[cx - 5, 10], [cx - 1, 6], [cx - 9, 4]], ROBE[2]);
+  // Рука и посох.
+  let sx0 = cx + 7;
+  let sy0 = 38;
+  let sx1 = cx + 9;
+  let sy1 = 8;
+  if (o.kind === 1) {
+    sx1 = cx + 6 - o.cast * 2;
+    sy1 = 8 - o.cast * 6;
+    sx0 = cx + 6;
+    sy0 = 36 - o.cast * 6;
+  } else if (o.kind === 2) {
+    sx0 = cx + 2;
+    sy0 = 26;
+    sx1 = cx + 9 + o.cast * 10;
+    sy1 = 20 - o.cast * 4;
+  }
+  stroke(p, sx0, sy0, sx1, sy1, hx('#5a3a20'));
+  stroke(p, sx0 + 0.6, sy0, sx1 + 0.6, sy1, hx('#8a6034'));
+  // Рука держит посох.
+  const hxp = sx0 + (sx1 - sx0) * 0.55;
+  const hyp = sy0 + (sy1 - sy0) * 0.55;
+  limb(p, cx + 2, 20, hxp, hyp, 1.8, 1.4, ROBE, 0.1);
+  p.ell(hxp, hyp, 1.4, 1.4, SKIN[2]);
+  // Астролябия на конце.
+  const lit = 0.35 + o.cast * 0.6;
+  glow(p, sx1, sy1, 5 + o.cast * 4, o.kind === 2 ? GOLDK : TEAL_GLOW, lit);
+  for (let a = 0; a < TAU; a += 0.35) p.set(sx1 + Math.cos(a) * 2.6, sy1 + Math.sin(a) * 2.6, BRASS[3]);
+  stroke(p, sx1 - 2.6, sy1, sx1 + 2.6, sy1, BRASS[2]);
+  sparkle(p, sx1, sy1, WHITE, o.cast > 0.5 ? 2 : 1);
+  orbit(true);
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1941, [ROBE[2], hx('#c8c0ff'), GOLDK, WHITE], cx, 24);
+  return { p: out, ax: cx, ay: gy, eye: o.dk ? null : [cx + 3, 12], lit: true };
+}
+
+registerMobPainter('f15_astro', (m: Mob, pose: MobPose) => {
+  const dk = deathK(pose);
+  const stones = Math.max(0, Math.min(3, m.data.stones ?? 3));
+  if (dk) return frameOf('astro', pose, 'die', dk, () => astroBody({ step: 0, stones: 0, f: 0, cast: 0, kind: 0, dk }));
+  const f = Math.floor(pose.now * 8) % 16;
+  if (pose.mode === 'f15_cast_well' || pose.mode === 'f15_cast_bolt') {
+    const well = pose.mode === 'f15_cast_well';
+    const T = well ? 0.9 : 0.75;
+    const k = Math.min(3, Math.floor((pose.t / T) * 4));
+    return frameOf('astro', pose, well ? 'cw' : 'cb', (k * 4 + stones) * 16 + f, () => astroBody({ step: 0, stones, f, cast: (k + 1) / 4, kind: well ? 1 : 2, dk: 0 }), { still: true });
+  }
+  const run = pose.anim === 'run';
+  const st = run ? pose.frame % 4 : 0;
+  return frameOf('astro', pose, run ? 'run' : 'idle', (st * 4 + stones) * 16 + f, () => astroBody({ step: st, stones, f, cast: 0, kind: 0, dk: 0 }), run ? { dy: st % 2 ? -0.5 : 0 } : null);
+});
+
+// --- Созвездие ----------------------------------------------------------------
+
+/**
+ * Созвездие: яркая звезда-узел и три звёздочки на нитях — фигура меняется по
+ * кадру. `rise` 0…1 — проявляется из карты, `pulse` 0…1 — набирает вспышку.
+ */
+function constelBody(o: { f: number; rise: number; pulse: number; dk: number }): Built {
+  const p = new Px(36, 34);
+  const cx = 18;
+  const cy = 16;
+  const k = o.rise;
+  const sat: [number, number][] = [];
+  for (let i = 0; i < 3; i++) {
+    const a = (o.f / 12) * TAU * 0.3 + (i * TAU) / 3 + i;
+    const r = (8 + Math.sin((o.f / 12) * TAU + i) * 1.5) * (0.4 + k * 0.6);
+    sat.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.75]);
+  }
+  for (const [x, y] of sat) stroke(p, cx, cy, x, y, alpha(hx('#a8c8ff'), 0.45 * k));
+  stroke(p, sat[0][0], sat[0][1], sat[1][0], sat[1][1], alpha(hx('#a8c8ff'), 0.25 * k));
+  for (const [x, y] of sat) {
+    glow(p, x, y, 2.6, hx('#c8d8ff'), 0.6 * k);
+    sparkle(p, x, y, alpha(WHITE, k), 1);
+  }
+  const R = 6 + o.pulse * 4;
+  glow(p, cx, cy, R + 3, hx('#9ab8ff'), (0.45 + o.pulse * 0.4) * k);
+  glow(p, cx, cy, 3.5 + o.pulse * 2, WHITE, k);
+  // Лучи звезды: длинные по осям, короче по диагоналям.
+  const L = (5 + o.pulse * 4) * k;
+  for (let i = 1; i <= L; i++) {
+    const c = alpha(WHITE, (1 - i / (L + 1)) * k);
+    p.set(cx + i, cy, c);
+    p.set(cx - i, cy, c);
+    p.set(cx, cy + i, c);
+    p.set(cx, cy - i, c);
+    if (i < L * 0.5) {
+      p.set(cx + i, cy + i, c);
+      p.set(cx - i, cy - i, c);
+      p.set(cx + i, cy - i, c);
+      p.set(cx - i, cy + i, c);
+    }
+  }
+  if (o.pulse > 0.6) for (let a = 0; a < TAU; a += 0.2) p.set(cx + Math.cos(a) * R * 1.3, cy + Math.sin(a) * R, alpha(WHITE, 0.6));
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1950, [WHITE, hx('#a8c8ff')], cx, cy);
+  return { p: out, ax: cx, ay: 26, eye: null, lit: true };
+}
+
+registerMobPainter('f15_constel', (_m: Mob, pose: MobPose) => {
+  const dk = deathK(pose);
+  if (dk) return frameOf('constel', pose, 'die', dk, () => constelBody({ f: 0, rise: 1, pulse: 0, dk }));
+  const f = Math.floor(pose.now * 6) % 12;
+  if (pose.mode === 'f15_rise') {
+    const k = Math.min(4, Math.floor((pose.t / 1.2) * 5));
+    return frameOf('constel', pose, 'rise', k * 12 + f, () => constelBody({ f, rise: 0.2 + k * 0.2, pulse: 0, dk: 0 }), { lift: 1 + k * 1.5, still: true });
+  }
+  if (pose.mode === 'windup') {
+    const k = Math.min(3, Math.floor((pose.t / 0.6) * 4));
+    return frameOf('constel', pose, 'wind', k * 12 + f, () => constelBody({ f, rise: 1, pulse: (k + 1) / 4, dk: 0 }), { still: true });
+  }
+  return frameOf('constel', pose, 'fly', f, () => constelBody({ f, rise: 1, pulse: 0, dk: 0 }));
+});
+
+// --- Пожиратель света -----------------------------------------------------------
+
+const VOID_T = tn('#04030a', '#0c0818', '#181030', '#2a1c50');
+
+/**
+ * Пожиратель света: чернильный скат пустоты, край светится фиолетом, глаза —
+ * две холодные звезды. `suck` 0…1 — тянет свет лампы (рот раскрыт, искры
+ * летят внутрь), `wind` 0…1 — надувается холодом перед ударом.
+ */
+function devBody(o: { f: number; suck: number; wind: number; dk: number }): Built {
+  const p = new Px(52, 40);
+  const cx = 26;
+  const cy = 18;
+  const flap = Math.sin((o.f / 8) * TAU);
+  const span = 17 + o.wind * 2;
+  // Крылья: края волной.
+  const wing = (side: number) => {
+    const pts: [number, number][] = [[cx, cy - 5]];
+    for (let i = 1; i <= 6; i++) {
+      const k = i / 6;
+      pts.push([cx + side * span * k, cy - 3 - flap * 5 * k + Math.sin(k * PI) * -2]);
+    }
+    for (let i = 6; i >= 0; i--) {
+      const k = i / 6;
+      pts.push([cx + side * span * k * 0.92, cy + 4 - flap * 4 * k + Math.sin(k * 3 + o.f) * 1.2]);
+    }
+    poly(p, pts, (x, y) => tone(VOID_T, (cy - y) * 0.05 + 0.25 - Math.abs(x - cx) * 0.012));
+    // Светящаяся кайма.
+    for (let i = 1; i < pts.length - 1; i++) if (i <= 6) p.set(pts[i][0], pts[i][1], alpha(VIOLET_GLOW, 0.85));
+  };
+  wing(-1);
+  wing(1);
+  // Хвост-нить.
+  for (let i = 0; i < 12; i++) {
+    const x = cx - 2 - i * 0.6 + Math.sin(o.f * 0.8 + i * 0.6) * 1.5;
+    p.set(x, cy + 6 + i, alpha(VIOLET[2], 0.9 - i * 0.06));
+  }
+  // Тело.
+  shadeEll(p, cx, cy, 7 + o.wind * 1.5, 6 + o.wind, VOID_T, 0.05);
+  if (o.wind > 0) glow(p, cx, cy, 6 + o.wind * 3, hx('#9ad0ff'), 0.45 * o.wind);
+  // Глаза — две холодные звезды.
+  sparkle(p, cx + 1, cy - 2, hx('#c8f0ff'), 1);
+  sparkle(p, cx + 5, cy - 2, hx('#c8f0ff'), 1);
+  // Рот: при поглощении — воронка света.
+  if (o.suck > 0) {
+    p.ell(cx + 3, cy + 3, 2 + o.suck * 1.5, 1.4 + o.suck, INK);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU + o.f * 0.5;
+      const d = 4 + ((o.f * 2 + i * 3) % 9);
+      p.set(cx + 3 + Math.cos(a) * d, cy + 3 + Math.sin(a) * d * 0.7, alpha(hx('#bff8ff'), 1 - d / 13));
+    }
+  } else p.rect(cx + 2, cy + 3, cx + 4, cy + 3, alpha(VIOLET[1], 0.8));
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1960, [VOID_T[2], VIOLET[2], VIOLET_GLOW], cx, cy);
+  return { p: out, ax: cx, ay: 30, eye: o.dk ? null : [cx + 3, cy - 2], lit: true };
+}
+
+registerMobPainter('f15_devourer', (_m: Mob, pose: MobPose) => {
+  const dk = deathK(pose);
+  if (dk) return frameOf('dev', pose, 'die', dk, () => devBody({ f: 0, suck: 0, wind: 0, dk }));
+  const f = Math.floor(pose.now * 8) % 8;
+  if (pose.mode === 'f15_snuff') {
+    const k = Math.min(2, Math.floor(pose.t * 3));
+    return frameOf('dev', pose, 'snuff', k * 8 + f, () => devBody({ f, suck: (k + 1) / 3, wind: 0, dk: 0 }), { still: true });
+  }
+  if (pose.mode === 'windup') {
+    const k = Math.min(3, Math.floor((pose.t / 0.7) * 4));
+    return frameOf('dev', pose, 'wind', k * 8 + f, () => devBody({ f, suck: 0, wind: (k + 1) / 4, dk: 0 }), { still: true });
+  }
+  return frameOf('dev', pose, 'fly', f, () => devBody({ f, suck: 0, wind: 0, dk: 0 }), { lift: 8 });
+});
+
+// --- Эхо: тени прошлых этажей ------------------------------------------------------
+
+/** Чей рисовальщик даёт тень каждому мотиву (в порядке `MOTIFS`). */
+const ECHO_SRC = ['f1_rat', 'f2_shroom', 'f6_salamander', 'f7_phantom', 'f11_harpy', 'f14_soldier'];
+const SPECTRAL: RGBA[] = [hx('#140a38'), hx('#3a2a90'), hx('#6a7ae0'), hx('#9ae8ff'), hx('#ffffff')];
+const ECHO_TINT = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
+/** Перекрасить кадр в призрачную палитру: яркость → индиго…бирюза…белое. */
+function spectral(src: HTMLCanvasElement): HTMLCanvasElement {
+  const hit = ECHO_TINT.get(src);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d');
+  if (!g || !src.width || !src.height) return src;
+  g.drawImage(src, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < d.data.length; i += 4) {
+    if (!d.data[i + 3]) continue;
+    const l = (d.data[i] * 0.3 + d.data[i + 1] * 0.55 + d.data[i + 2] * 0.15) / 255;
+    const col = ramp(SPECTRAL, Math.min(1, l * 1.25 + 0.08));
+    d.data[i] = col[0];
+    d.data[i + 1] = col[1];
+    d.data[i + 2] = col[2];
+    d.data[i + 3] = Math.round(d.data[i + 3] * 0.88);
+  }
+  g.putImageData(d, 0, 0);
+  ECHO_TINT.set(src, c);
+  return c;
+}
+
+/** Своё эхо на случай, если чужого рисовальщика нет: облачко-силуэт. */
+function echoFallback(o: { f: number; motif: number; dk: number }): Built {
+  const p = new Px(28, 30);
+  const cx = 14;
+  glow(p, cx, 16, 11, hx('#9ae8ff'), 0.35);
+  shadeEll(p, cx, 16, 7, 8, tn('#1a1048', '#3a3aa0', '#6a8ae0', '#c8f4ff'), 0.1);
+  for (let i = 0; i < 4; i++) p.set(cx - 5 + i * 3, 24 + ((o.f + i) % 2), alpha(hx('#9ae8ff'), 0.7));
+  motifGlyph(p, cx, 15, o.motif, WHITE);
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1970, SPECTRAL, cx, 16);
+  return { p: out, ax: cx, ay: 26, eye: null, lit: true };
+}
+
+const ECHO_MODE: Record<string, string> = {
+  f15_lunge_aim: 'windup',
+  f15_spore: 'windup',
+  f15_gust: 'windup',
+  f15_tick: 'windup',
+  f15_lunge: 'chase',
+  f15_blink: 'chase',
+  f15_born: 'idle',
+};
+
+registerMobPainter('f15_echo', (m: Mob, pose: MobPose) => {
+  const motif = ((m.data.motif ?? 0) % 6 + 6) % 6;
+  const src = MOB_PAINTERS.get(ECHO_SRC[motif]);
+  const born = pose.mode === 'f15_born' ? Math.min(1, pose.t / 0.7) : 1;
+  const blink = pose.mode === 'f15_blink' && (m.data.ghost ?? 0) > 0;
+  const extra: Partial<MobFrame> = {
+    alpha: blink ? 0.25 : 0.35 + born * 0.55,
+    ghost: { every: 0.08, life: 0.3, tint: '140,200,255', alpha: 0.3 },
+    lit: null,
+    linger: undefined,
+  };
+  if (src) {
+    try {
+      const mode = ECHO_MODE[pose.mode] ?? pose.mode;
+      const anim = mode === 'windup' ? 'wind' : pose.anim;
+      const fr = src(m, { ...pose, mode, anim, look: pose.look === 'elite' ? 'elite' : 'normal' });
+      if (fr && fr.img) {
+        return {
+          ...fr,
+          img: spectral(fr.img),
+          eye: fr.eye ?? null,
+          ...extra,
+          sy: (fr.sy ?? 1) * (0.4 + born * 0.6),
+          lit: null,
+          ghost: extra.ghost,
+          linger: undefined,
+        };
+      }
+    } catch {
+      // Чужой рисовальщик упал на нашем мобе — рисуем своё.
+    }
+  }
+  const dk = deathK(pose);
+  const f = Math.floor(pose.now * 6) % 4;
+  return frameOf('echo', pose, dk ? 'die' : 'fly', motif * 8 + (dk || f), () => echoFallback({ f, motif, dk }), { ...extra, sy: 0.4 + born * 0.6 });
+});
+
+// --- Луна -------------------------------------------------------------------------
+
+const MOON_T = tn('#3a3850', '#6a6880', '#a8a4b8', '#eceaf4');
+
+/**
+ * Луна: шарик в кратерах, тень фазы ползёт по кругу; в кратерах — мордочка.
+ * `phase` 0…15, `aim` — щурится и светлеет, `dive` — сжата в комок.
+ */
+function moonBody(o: { phase: number; aim: number; dive: number; dk: number }): Built {
+  const p = new Px(28, 30);
+  const cx = 14;
+  const cy = 13;
+  const R = 6.5;
+  glow(p, cx, cy, R + 5, hx('#d8d4ff'), 0.3 + o.aim * 0.35);
+  const ph = (o.phase / 16) * TAU;
+  // Терминатор: тень с той стороны, куда «смотрит» фаза.
+  const sx = Math.cos(ph);
+  for (let y = -R; y <= R; y++)
+    for (let x = -R; x <= R; x++) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      const d = Math.hypot(px, py) / R;
+      if (d > 1) continue;
+      const nz = Math.sqrt(1 - d * d);
+      const nx = px / R;
+      const ny = py / R;
+      let l = nx * LX + ny * LY + nz * LZ + 0.15;
+      // Кратеры.
+      const cr = voronoi(px + 20, py + 20, 3.5, 1980);
+      if (cr.id < 0.4 && cr.d1 < 0.35) l += cr.d1 > 0.26 ? 0.15 : -0.25;
+      // Тень фазы.
+      const shade = nx * sx * 1.2 + nz * 0.15 * Math.sin(ph);
+      if (shade < -0.25) l -= 0.55;
+      p.set(cx + x, cy + y, tone(MOON_T, l + o.aim * 0.2));
+    }
+  // Мордочка.
+  if (!o.dk) {
+    if (o.aim > 0) {
+      p.rect(cx - 2, cy - 1, cx - 1, cy - 1, INK);
+      p.rect(cx + 2, cy - 1, cx + 3, cy - 1, INK);
+    } else {
+      p.set(cx - 2, cy - 1, INK);
+      p.set(cx + 2, cy - 1, INK);
+    }
+    p.set(cx, cy + 2, alpha(INK, 0.6));
+    p.set(cx - 3, cy + 1, alpha(hx('#c08aa0'), 0.6));
+    p.set(cx + 3, cy + 1, alpha(hx('#c08aa0'), 0.6));
+  }
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1981, [MOON_T[2], MOON_T[3], WHITE], cx, cy);
+  return { p: out, ax: cx, ay: 25, eye: o.dk ? null : [cx + 2, cy - 1], lit: false };
+}
+
+registerMobPainter('f15_moon', (m: Mob, pose: MobPose) => {
+  const dk = deathK(pose);
+  if (dk) return frameOf('moon', pose, 'die', dk, () => moonBody({ phase: 0, aim: 0, dive: 0, dk }));
+  const phase = Math.floor(pose.now * 2 + m.id) % 16;
+  if (pose.mode === 'aim') {
+    const f = Math.floor(pose.now * 16) % 2;
+    return frameOf('moon', pose, 'aim', phase * 2 + f, () => moonBody({ phase, aim: 1, dive: 0, dk: 0 }), { still: true, dx: f ? 0.6 : -0.6 });
+  }
+  if (pose.mode === 'f15_dive')
+    return frameOf('moon', pose, 'dive', phase, () => moonBody({ phase, aim: 1, dive: 1, dk: 0 }), {
+      still: true,
+      lift: 3,
+      ghost: { every: 0.03, life: 0.2, tint: '220,215,255', alpha: 0.55 },
+    });
+  return frameOf('moon', pose, 'fly', phase, () => moonBody({ phase, aim: 0, dive: 0, dk: 0 }), { lift: 9 });
+});
+
+// --- Сверхновая ---------------------------------------------------------------------
+
+const NOVA_T = tn('#b0501a', '#f08a28', '#ffd060', '#fff8d8');
+
+/**
+ * Сверхновая: шар плазмы с короной языков и ликом в огне. `g` 0…1 — набор:
+ * сжимается и белеет, корона втягивается, по краю бегут лучи.
+ */
+function novaBody(o: { f: number; g: number; step: number; dk: number }): Built {
+  const p = new Px(64, 64);
+  const cx = 32;
+  const cy = 32;
+  const R = 11 - o.g * 2.5;
+  glow(p, cx, cy, R + 14 + o.g * 6, hx('#ffb040'), 0.35 + o.g * 0.35);
+  // Корона: языки по кругу, длина пульсирует.
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * TAU + o.f * 0.12;
+    const L = (5 + 3 * Math.sin(o.f * 0.9 + i * 1.7)) * (1 - o.g * 0.7);
+    for (let k = 0; k < L; k++) {
+      const r = R + k;
+      const w = (1 - k / L) * 2.2;
+      const bend = Math.sin(o.f * 0.6 + i) * k * 0.08;
+      const x = cx + Math.cos(a + bend) * r;
+      const y = cy + Math.sin(a + bend) * r;
+      p.ell(x, y, w, w, k / L < 0.4 ? NOVA_T[2] : alpha(NOVA_T[1], 0.8));
+    }
+  }
+  // Ядро — шар с гранулами плазмы.
+  p.ell(cx, cy, R, R, (x, y) => {
+    const dx = (x + 0.5 - cx) / R;
+    const dy = (y + 0.5 - cy) / R;
+    const d = Math.hypot(dx, dy);
+    const gran = vnoise(x * 3 + o.f * 2, y * 3, 3, 1990);
+    const l = 1 - d * 0.6 + (gran - 0.5) * 0.35 + o.g * 0.4;
+    return tone(NOVA_T, l);
+  });
+  // Лик: прищуренные глаза-щели и рот, при наборе — раскрыт.
+  if (!o.dk) {
+    const ey = cy - 2;
+    p.rect(cx - 5, ey, cx - 2, ey, NOVA_T[0]);
+    p.rect(cx + 3, ey, cx + 6, ey, NOVA_T[0]);
+    p.set(cx - 2, ey - 1, NOVA_T[0]);
+    p.set(cx + 3, ey - 1, NOVA_T[0]);
+    if (o.g > 0.3) p.ell(cx + 0.5, cy + 4, 2 + o.g * 1.5, 1 + o.g * 1.5, WHITE);
+    else p.rect(cx - 1, cy + 4, cx + 2, cy + 4, NOVA_T[0]);
+  }
+  if (o.g > 0.4)
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU + o.f * 0.3;
+      for (let k = 0; k < 10 * o.g; k++) p.set(cx + Math.cos(a) * (R + 4 + k), cy + Math.sin(a) * (R + 4 + k), alpha(WHITE, 0.8 - k * 0.07));
+    }
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1991, [NOVA_T[2], NOVA_T[3], WHITE, NOVA_T[1]], cx, cy);
+  return { p: out, ax: cx, ay: 48 - o.step, eye: null, lit: true };
+}
+
+registerMobPainter('f15_nova', (_m: Mob, pose: MobPose) => {
+  const dk = deathK(pose);
+  if (dk) return frameOf('nova', pose, 'die', dk, () => novaBody({ f: 0, g: 1, step: 0, dk }), { shadow: 0 });
+  const f = Math.floor(pose.now * 8) % 16;
+  if (pose.mode === 'f15_gather') {
+    const k = Math.min(4, Math.floor((pose.t / NOVA.gather) * 5));
+    return frameOf('nova', pose, 'gather', k * 16 + f, () => novaBody({ f, g: (k + 1) / 5, step: 0, dk: 0 }), {
+      still: true,
+      sx: 1 - k * 0.03,
+      sy: 1 - k * 0.03,
+    });
+  }
+  const step = pose.anim === 'run' ? (pose.frame % 2) * 1 : 0;
+  return frameOf('nova', pose, 'idle', f * 2 + step, () => novaBody({ f, g: 0, step, dk: 0 }), { shadow: 9 });
+});
+
+// --- Золотой скарабей (редкий бегун) ----------------------------------------------------
+
+/** Скарабей: золотой панцирь со звёздным узором; удирая, раскрывает крылья. */
+function bugBody(o: { f: number; dk: number }): Built {
+  const p = new Px(30, 26);
+  const cx = 14;
+  const cy = 15;
+  // Лапки.
+  for (let i = 0; i < 3; i++) {
+    const lx = cx - 3 + i * 3;
+    const up = (o.f + i) % 2;
+    stroke(p, lx, cy + 2, lx - 1 + up * 2, cy + 6, GOLD[0]);
+  }
+  // Крылья: прозрачные, машут.
+  const flap = o.f % 2;
+  for (const side of [-1, 1]) {
+    const tipY = cy - 7 - flap * 3;
+    poly(p, [[cx - 1, cy - 3], [cx - 8 * side * 0.4 - 6, tipY], [cx - 2, cy + 1]], alpha(hx('#e8f8ff'), 0.45));
+  }
+  // Панцирь.
+  shadeEll(p, cx, cy, 6.5, 4.8, GOLD, 0.15);
+  stroke(p, cx - 6, cy, cx + 5, cy, GOLD[0]);
+  // Звёздный узор.
+  sparkle(p, cx - 2, cy - 2, WHITE, 1);
+  p.set(cx + 2, cy - 1, GOLD[3]);
+  p.set(cx - 4, cy + 2, GOLD[3]);
+  // Голова и рожки.
+  shadeEll(p, cx + 7, cy, 2.4, 2.2, tn('#3a2a10', '#6a4c14', '#a07a20', '#e0b848'), 0.1);
+  stroke(p, cx + 8, cy - 2, cx + 11, cy - 5, GOLD[2]);
+  p.set(cx + 8, cy - 1, INK);
+  glow(p, cx, cy, 9, GOLDK, 0.3);
+  let out = p;
+  if (o.dk) out = shatter(p, o.dk / 3, 1995, [GOLD[2], GOLD[3], WHITE], cx, cy);
+  return { p: out, ax: cx, ay: 21, eye: o.dk ? null : [cx + 8, cy - 1], lit: true };
+}
+
+registerMobPainter('f15_goldbug', (_m: Mob, pose: MobPose) => {
+  const dk = deathK(pose);
+  if (dk) return frameOf('bug', pose, 'die', dk, () => bugBody({ f: 0, dk }));
+  const f = Math.floor(pose.now * 18) % 4;
+  return frameOf('bug', pose, 'run', f, () => bugBody({ f, dk: 0 }), { dy: f % 2 ? -0.5 : 0 });
+});
+
+// --- Прогрев кадров ------------------------------------------------------------------
+
+/** Кадры по позам: рендер дорисует их по 3 мс за кадр, пока такой моб в мире. */
+function warm(kind: string, poses: [string, number, () => Built][]): () => Iterator<unknown> {
+  return function* () {
+    for (const [anim, f, build] of poses) {
+      for (const left of [false, true]) {
+        const key = `${kind}|${anim}|${f}|${left ? 1 : 0}|0|normal`;
+        if (!FR.get(key)) FR.set(key, finish(build(), 'normal', false, left));
+        yield 0;
+      }
+    }
+  };
+}
+
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+registerMobWarm(
+  'f15_urchin',
+  warm('urchin', [
+    ...range(4).map((f): [string, number, () => Built] => ['run', f, () => urchinBody({ step: f, ball: 0, bristle: 0.45, roll: 0, glowK: 0, dizzy: 0, dk: 0 })]),
+    ...range(8).map((f): [string, number, () => Built] => ['roll', f, () => urchinBody({ step: 0, ball: 1, bristle: 0.7, roll: (f / 8) * TAU * 0.5, glowK: 0.6, dizzy: 0, dk: 0 })]),
+    ...range(5).map((k): [string, number, () => Built] => ['curl', k, () => urchinBody({ step: 0, ball: k / 4, bristle: 0.5, roll: 0, glowK: k / 4, dizzy: 0, dk: 0 })]),
+  ]),
+);
+registerMobWarm(
+  'f15_graviton',
+  warm('grav', range(8).map((f): [string, number, () => Built] => ['idle', f, () => gravBody({ step: 0, arms: 0, slam: 0, f, dk: 0 })])),
+);
+registerMobWarm(
+  'f15_nova',
+  warm('nova', range(16).map((f): [string, number, () => Built] => ['idle', f * 2, () => novaBody({ f, g: 0, step: 0, dk: 0 })])),
+);
+registerMobWarm(
+  'f15_astro',
+  warm('astro', range(16).map((f): [string, number, () => Built] => ['idle', 3 * 16 + f, () => astroBody({ step: 0, stones: 3, f, cast: 0, kind: 0, dk: 0 })])),
+);
