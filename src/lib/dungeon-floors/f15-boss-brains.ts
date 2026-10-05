@@ -1521,6 +1521,20 @@ function lordDark(sim: Sim, m: Mob, dt: number, st: F15BState, api: SimApi): voi
   api.setMode(m, 'f15l_dstrike');
 }
 
+/** Номер приёма для рисунка позы «отдыха» после него (`m.data.act`). */
+export const LORD_ACT: Record<string, number> = {
+  f15l_palm: 1,
+  f15l_sweep: 2,
+  f15l_repel: 3,
+  f15l_well: 4,
+  f15l_orbit: 5,
+  f15l_meteor: 6,
+  f15l_conduct: 7,
+  f15l_dstrike: 8,
+  f15l_open: 9,
+  f15l_wrap: 10,
+};
+
 function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
   const b = sim.boss;
   const st = stateOf(sim, api);
@@ -1537,6 +1551,9 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
   const h = sim.hero;
   const T = m.t;
   m.danger = 0;
+  // Только рисунок: какой приём доигрывает «отдых» (поза после удара).
+  const act = LORD_ACT[m.mode];
+  if (act) m.data.act = act;
   switch (m.mode) {
     case 'f15l_sleep':
     case 'f15l_stir':
