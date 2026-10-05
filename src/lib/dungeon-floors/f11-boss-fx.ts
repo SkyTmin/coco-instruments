@@ -806,7 +806,7 @@ function shardImg(f: number, len: number): HTMLCanvasElement {
 }
 
 /**
- * Плита края арены, уходящая в небо: верх — мрамор с плитами, торец —
+ * Плита края арены, падающая в бездну: верх — мрамор с плитами, торец —
  * светлый камень, низ — земля с корнями (остров!). Вариант v (0…3).
  */
 function slabImg(v: number): HTMLCanvasElement {
@@ -3520,9 +3520,10 @@ function pylonSky(p: Pen, sim: Sim, S: number, time: number): void {
 // клетке бегут трещины, в них к концу пульсирует красный жар, из щелей
 // сыплется пыль, крошка подпрыгивает, с внешней кромки в небо сыплются
 // камешки; последние 0,4 с — дрожь пылью. `f11v_fall` (в миг «уходит»):
-// плиты отрываются и всплывают в небо, каждая — кусок острова с землёй и
-// корешками снизу; пыль из-под них сдувает ветром к обрыву, сверху
-// сыплются комья.
+// плиты отрываются вразнобой (последние дрожат ещё полсекунды) и падают в
+// бездну под островом, кувыркаясь и тая в дымке; видно их только в
+// провале — край острова перед ними заслоняет. Каждая — кусок острова с
+// землёй и корешками снизу, за ней летят комья; пыль облома — над провалом.
 // =============================================================================
 
 /**
@@ -3569,6 +3570,8 @@ function cellCrackGlow(wx: number, wy: number, st: number): HTMLCanvasElement {
   return c;
 }
 const TS_PX = 16;
+/** Клетка неба под островом (`T_DEEP` мозга). */
+const SKY_TILE = 11;
 
 registerZonePainter(
   'f11v_crack',
@@ -3594,7 +3597,7 @@ registerZonePainter(
       const cy = wy * S + 8;
       const v = (i * 2654435761) >>> 0;
       // Только пока клетка ещё трещит (сценарий мог её уже обрушить).
-      if (sim.tiles[i] !== 11) {
+      if (sim.tiles[i] !== SKY_TILE) {
         p.alpha(glow);
         p.img(cellCrackGlow(wx, wy, st), cx - 8, cy - 8);
       }
@@ -3614,7 +3617,7 @@ registerZonePainter(
       }
       // С кромки над небом сыплются камешки.
       const below = i + W;
-      if (sim.tiles[below] === 11 && n % 2 === 0) {
+      if (sim.tiles[below] === SKY_TILE && n % 2 === 0) {
         const ph = mod(time * 1.3 + (v % 53) / 53, 1);
         p.col(C.shade, 0.8 * (1 - ph));
         p.dot(cx - 6 + (v % 13), cy + 8 + ph * ph * 26);
@@ -3635,43 +3638,82 @@ registerZonePainter(
     const few = reduced();
     const acx = z.x * S;
     const acy = z.y * S;
+    // Плита ПАДАЕТ под остров: ниже пола её видно только в провале (клетки
+    // неба), край острова перед ней заслоняет — так она уходит в бездну, а
+    // не всплывает (всплытие читалось «острова взлетают»). Клип — один на
+    // кадр, из прямоугольников клеток неба у кольца.
+    const sky: number[] = [];
+    for (const i of z.cells)
+      for (let k = 0; k < 4; k++) {
+        const j = i + k * W;
+        if (sim.tiles[j] !== SKY_TILE) break;
+        sky.push(j);
+      }
+    if (sky.length) {
+      g.save();
+      g.beginPath();
+      for (const j of sky) g.rect((j % W) * S + p.qx, Math.floor(j / W) * S + p.qy, S, S);
+      g.clip();
+      const G = 300;
+      for (let n = 0; n < z.cells.length; n++) {
+        const i: number = z.cells[n];
+        const v = (i * 2654435761) >>> 0;
+        const cx = (i % W) * S + 8;
+        const cy = Math.floor(i / W) * S + 8;
+        const out = Math.atan2(cy - acy, cx - acx);
+        // Отрываются не разом: кто-то держится ещё полсекунды и дрожит.
+        const d = 0.5 * ((v % 101) / 101);
+        const tt = t - d;
+        const im = slabImg(v & 7);
+        if (tt < 0) {
+          const jit = Math.floor(time * 30 + n) % 2;
+          p.alpha(1);
+          p.img(im, cx - im.width / 2 + jit, cy - 9);
+          continue;
+        }
+        const fall = 0.5 * G * tt * tt;
+        if (fall > 90) continue;
+        const x = cx + Math.cos(out) * 8 * tt;
+        const y = cy + fall;
+        // Тает в дымке неба по мере падения.
+        const a = 1 - k01((fall - 18) / 60);
+        const rot = (((v >> 5) % 3) - 1) * 0.9 * tt;
+        g.save();
+        g.globalAlpha = a;
+        g.translate(Math.floor(x) + p.qx, Math.floor(y) + p.qy + 2);
+        g.rotate(rot);
+        g.drawImage(im, -im.width / 2, -11);
+        g.restore();
+        // Комья земли и крошка летят следом, быстрее плиты.
+        for (let q = 0; q < (few ? 1 : 3); q++) {
+          const tq = tt - 0.05 * q;
+          if (tq < 0) continue;
+          const fq = 0.5 * G * 1.25 * tq * tq;
+          p.col(q === 1 ? C.pebble : '#5c4028', a);
+          p.dot(cx - 6 + ((v >> (q * 3)) % 13), cy + 10 + fq);
+        }
+      }
+      g.restore();
+    }
+    // Пыль облома — над провалом, её клип не режет; сдувает к обрыву.
     for (let n = 0; n < z.cells.length; n++) {
+      if (few && n % 3) continue;
       const i: number = z.cells[n];
       const v = (i * 2654435761) >>> 0;
       const cx = (i % W) * S + 8;
       const cy = Math.floor(i / W) * S + 8;
       const out = Math.atan2(cy - acy, cx - acx);
-      const d = 0.25 * ((v % 101) / 101);
-      // Оторвалась — и пошла вверх с разгоном, уплывая к обрыву по ветру.
-      const u = k01((t - d) / (2.0 + (0.8 * ((v >> 7) % 97)) / 97));
-      const lift = (72 * eIn2(u) + 12 * u) * (0.75 + (0.5 * ((v >> 3) % 89)) / 89);
-      const drift = 26 * eIn2(u) + Math.sin(t * 2 + n) * 1.5 * u;
-      const x = cx + Math.cos(out) * drift;
-      const y = cy + Math.sin(out) * drift * 0.5 - lift;
-      // Пыль из-под плиты сдувает к обрыву.
-      if (t - d < 0.9 && (!few || n % 3 === 0)) {
-        const pa = Math.max(0, t - d);
-        const k = pa / 0.9;
-        for (let q = 0; q < 2; q++) {
-          const pr = puffImg(0, 2 + 4 * eOut2(k), (v >> q) & 3);
-          p.alpha(0.6 * (1 - k));
-          p.img(
-            pr,
-            cx + Math.cos(out) * (6 + 30 * eOut2(k)) + (q ? 4 : -4) - pr.width / 2,
-            cy + Math.sin(out) * 12 * eOut2(k) - 3 * k - pr.height / 2,
-          );
-        }
-      }
-      if (u >= 1) continue;
-      const a = 1 - k01((u - 0.55) / 0.45);
-      const im = slabImg(v & 7);
-      p.alpha(a);
-      p.img(im, x - im.width / 2, y - 9);
-      // Комья земли сыплются из-под плиты в небо.
-      if (u < 0.7) {
-        const ph = mod(t * 1.7 + (v % 37) / 37, 1);
-        p.col('#5c4028', a * (1 - ph));
-        p.dot(x - 4 + (v % 9), y + 10 + ph * 18);
+      const pa = t - 0.5 * ((v % 101) / 101);
+      if (pa < 0 || pa > 0.9) continue;
+      const k = pa / 0.9;
+      for (let q = 0; q < 2; q++) {
+        const pr = puffImg(0, 2 + 4 * eOut2(k), (v >> q) & 3);
+        p.alpha(0.6 * (1 - k));
+        p.img(
+          pr,
+          cx + Math.cos(out) * (4 + 18 * eOut2(k)) + (q ? 4 : -4) - pr.width / 2,
+          cy + Math.sin(out) * 8 * eOut2(k) - 6 * k - pr.height / 2,
+        );
       }
     }
   }),
