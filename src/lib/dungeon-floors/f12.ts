@@ -316,6 +316,14 @@ const COMMON: Record<string, LegendCell> = {
     mark: M.warm,
     obj: { kind: 'deco', ref: 'f12_steam', solid: 0, flat: true },
   },
+  // Рёбра мамонта, вмёрзшие в снег.
+  b: { tile: 'floor', obj: { kind: 'deco', ref: 'f12_bones', solid: 0.45 } },
+  // Тотем шаманки: ленты сияния на ветру.
+  c: {
+    tile: 'floor',
+    obj: { kind: 'deco', ref: 'f12_totem', solid: 0.3 },
+    light: { r: 2.2, tint: 'green' },
+  },
 };
 
 const LEGEND_GROTTO: Record<string, LegendCell> = { ...COMMON };

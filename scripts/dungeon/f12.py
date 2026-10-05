@@ -68,7 +68,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from brush import Map, W, check, show, write_floor  # noqa: E402
 
 # Клетки, на которых стоят (для настенного и нор).
-FLOORISH = '.itsgrpkIHANd' + 'Ff8OUVjemqxy0134679'
+FLOORISH = '.itsgrpkIHANd' + 'Ff8OUVjemqxy0134679bc'
 
 
 def paint(m, x0, y0, x1, y1, ch, share=1.0, ok='.'):
@@ -536,6 +536,11 @@ def area_shrine():
         m.put(x, y, 'y')
     m.put(27, 80, '6')
     m.put(36, 83, '4')
+    # Рёбра мамонта из снега и тотемы шаманки с лентами сияния.
+    m.put(17, 86, 'b')
+    m.put(47, 84, 'b')
+    m.put(24, 79, 'c')
+    m.put(40, 89, 'c')
 
     # --- Врата дворца.
     m.rect(26, 66, 38, 74, 'p')
