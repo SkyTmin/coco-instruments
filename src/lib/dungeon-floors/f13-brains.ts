@@ -1618,7 +1618,7 @@ function colSwipe(sim: Sim, m: Mob, api: SimApi): boolean {
       warn: T,
       dmg: m.dmg * S.dmg,
       knock: 9,
-      art: 'f13_palm',
+      art: 'f13_colpalm', // v2.87 — только рисунок
       from: m.id,
     });
   }
@@ -1664,12 +1664,14 @@ function colStomp(sim: Sim, m: Mob, api: SimApi): boolean {
     puff(
       api,
       sim,
-      'f13_dust',
+      'f13_coldust', // v2.87 — только рисунок
       m.x + Math.cos(m.data.sa) * S.r,
       m.y + Math.sin(m.data.sa) * S.r,
       1.6,
       0.8,
     );
+    // v2.87 — только рисунок: нога опустилась — раскол и пыль у ног.
+    api.vfx(sim, { x: m.x, y: m.y + 0.2, r: 1.5, life: 1.1, art: 'f13_colplant' }); // v2.87 — только рисунок
     return true;
   }
   return false;
@@ -1683,6 +1685,7 @@ function colBack(sim: Sim, m: Mob, api: SimApi): boolean {
   if (!m.data.lit) {
     m.data.lit = 1;
     m.data.sa = m.face + Math.PI;
+    m.data.vSpin = angDiff(m.data.sa, m.face) < 0 ? -1 : 1; // v2.87 — только рисунок: куда повернётся
     api.strike(sim, {
       shape: 'cone',
       x: m.x,
@@ -1693,16 +1696,19 @@ function colBack(sim: Sim, m: Mob, api: SimApi): boolean {
       warn: S.warn,
       dmg: m.dmg * S.dmg,
       knock: 9,
-      art: 'f13_backhand',
+      art: 'f13_colback', // v2.87 — только рисунок
       from: m.id,
     });
   }
   if (m.t > S.warn - 0.25) m.danger = S.r + 0.5;
   if (m.t >= S.warn) {
+    if (!m.data.vPiv) api.vfx(sim, { x: m.x, y: m.y + 0.1, r: 1.4, life: 0.8, art: 'f13_colpivot', k: m.data.vSpin } as ZX); // v2.87 — только рисунок
+    m.data.vPiv = 1; // v2.87 — только рисунок
     const k = Math.min(1, (m.t - S.warn) / 0.5);
     m.face += angDiff(m.data.sa, m.face) * k;
     if (k >= 1) {
       m.face = m.data.sa;
+      m.data.vPiv = 0; // v2.87 — только рисунок
       m.data.lit = 0;
       m.data.naped = 0;
       m.data.behind = 0;
@@ -1728,7 +1734,7 @@ function colQuake(sim: Sim, m: Mob, api: SimApi, b: BossFight): boolean {
       warn: Q.warn,
       dmg: m.dmg * 1.2,
       knock: 8,
-      art: 'f13_stomp',
+      art: 'f13_colquake', // v2.87 — только рисунок
       from: m.id,
     });
     // Обломки Стены — по всей площади, с метками.
@@ -1746,7 +1752,7 @@ function colQuake(sim: Sim, m: Mob, api: SimApi, b: BossFight): boolean {
         warn: Q.warn + 0.2 + sim.rng() * 0.7,
         dmg: m.dmg * 0.8,
         knock: 3,
-        art: 'f13_debris',
+        art: 'f13_coldebris', // v2.87 — только рисунок
         from: m.id,
       });
     }
@@ -1759,7 +1765,7 @@ function colQuake(sim: Sim, m: Mob, api: SimApi, b: BossFight): boolean {
       warn: Q.warn + 0.5,
       dmg: m.dmg * 0.8,
       knock: 3,
-      art: 'f13_debris',
+      art: 'f13_coldebris', // v2.87 — только рисунок
       from: m.id,
     });
   }
@@ -1768,16 +1774,20 @@ function colQuake(sim: Sim, m: Mob, api: SimApi, b: BossFight): boolean {
     m.data.lit = 0;
     sim.events.push({ t: 'shake', k: 0.85 });
     sim.events.push({ t: 'boss', what: 'f13_quake_wall' });
-    puff(api, sim, 'f13_dust', m.x, m.y, 4, 1.1);
+    puff(api, sim, 'f13_coldust', m.x, m.y, 4, 1.1); // v2.87 — только рисунок
     // Площадь трескается по очередной линии разлома.
     const st = colState(sim);
     const line = st.faults.shift();
     if (line) {
+      const vc: number[] = []; // v2.87 — только рисунок
       for (const i of line) {
         if (sim.tiles[i] === T_DEEP) continue;
         retile(sim, api, i, T_FLOOR, MK.cracking);
         st.cracking.set(i, sim.time + Q.crack);
+        vc.push(i); // v2.87 — только рисунок
       }
+      const W0 = sim.world.w; // v2.87 — только рисунок
+      if (vc.length) api.vfx(sim, { x: (vc[0] % W0) + 0.5, y: Math.floor(vc[0] / W0) + 0.5, r: 1, life: Q.crack + 0.25, art: 'f13_colfault', cells: vc, ww: W0 } as ZX); // v2.87 — только рисунок
       sim.events.push({
         t: 'boss',
         what: 'f13_crack_trap',
@@ -1796,6 +1806,8 @@ function colThrow(sim: Sim, m: Mob, api: SimApi, dt: number): boolean {
   m.vx *= 0.6;
   m.vy *= 0.6;
   turnTo(m, Math.atan2(h.y - m.y, h.x - m.x), 1.6, dt);
+  if (!m.data.vRip) api.vfx(sim, { x: m.x, y: m.y, r: 1.2, life: COL.throw.windup + 0.4, art: 'f13_colrip', ang: m.face } as ZX); // v2.87 — только рисунок
+  m.data.vRip = 1; // v2.87 — только рисунок
   if (m.t >= COL.throw.windup) {
     const tx = h.x + h.vx * 0.3;
     const ty = h.y + h.vy * 0.3;
@@ -1808,13 +1820,20 @@ function colThrow(sim: Sim, m: Mob, api: SimApi, dt: number): boolean {
         r: 1.1,
         life: 3,
         dmg: 1.1,
-        art: 'f13_boulder',
+        art: 'f13_colrock', // v2.87 — только рисунок
         lob: true,
-        onLand: { r: 1.4, life: 3, slow: 0.6, art: 'f13_rubble' },
+        onLand: { r: 1.4, life: 3, slow: 0.6, art: 'f13_colrubble' }, // v2.87 — только рисунок
       },
       tx,
       ty,
     );
+    // v2.87 — только рисунок: метка падения (полёт — как в `shoot`).
+    const va = Math.atan2(ty - m.y, tx - m.x); // v2.87 — только рисунок
+    const vx0 = m.x + Math.cos(va) * (m.r + 0.1); // v2.87 — только рисунок
+    const vy0 = m.y + Math.sin(va) * (m.r + 0.1); // v2.87 — только рисунок
+    const vT = Math.max(0.35, hypot(tx - vx0, ty - vy0) / 8); // v2.87 — только рисунок
+    api.vfx(sim, { x: tx, y: ty, r: 1.1, life: vT, art: 'f13_colaim', k: vT, sx: vx0, sy: vy0 } as ZX); // v2.87 — только рисунок
+    m.data.vRip = 0; // v2.87 — только рисунок
     return true;
   }
   return false;
@@ -1938,6 +1957,8 @@ function colStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
       }
       if (m.t > V.warn - 0.22) m.danger = V.r + 0.4;
       if (m.t >= V.warn) {
+        sim.events.push({ t: 'shake', k: 0.3 }); // v2.87 — только рисунок: выброс пара
+        api.vfx(sim, { x: m.x, y: m.y, r: V.r, life: V.life, art: 'f13_colvent', above: true }); // v2.87 — только рисунок
         m.data.lit = 0;
         api.setMode(m, 'recover');
         m.cd = 0.8;
@@ -1966,6 +1987,7 @@ function colStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
       m.vx *= 0.7;
       m.vy *= 0.7;
       if (m.t >= COL.kneel) {
+        api.vfx(sim, { x: m.x, y: m.y + 0.1, r: 1.6, life: 0.9, art: 'f13_colkneel', k: 0 } as ZX); // v2.87 — только рисунок
         api.setMode(m, 'stalk');
         m.cd = 0.5;
       }
@@ -2030,6 +2052,8 @@ function colStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void {
   const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
   const near = dist < m.r + 1.4;
   stride(m, Math.atan2(cy, cx), near ? 0 : m.speed * COL.walk[phase], COL.turn[phase], dt);
+  m.data.vWalk = (m.data.vWalk ?? 0) + hypot(m.vx, m.vy) * dt; // v2.87 — только рисунок: шаги по пройденному пути
+  if (m.data.vWalk > 0.9) { m.data.vWalk = 0; m.data.vFoot = m.data.vFoot ? 0 : 1; api.vfx(sim, { x: m.x + (m.data.vFoot ? 0.5 : -0.5), y: m.y + 0.15, r: 0.7, life: 0.85, art: 'f13_colstep', k: phase } as ZX); } // v2.87 — только рисунок
 }
 
 registerBrain('f13boss', {
@@ -2101,7 +2125,7 @@ registerBoss('f13boss', {
     api.setMode(lead, 'rise');
     // Вход камерой: встаёт из пара у колокольни.
     api.camera(sim, lead.x, lead.y - 1.5, COL.rise + 0.4);
-    puff(api, sim, 'f13_ventburst', lead.x, lead.y, 4.5, COL.rise);
+    puff(api, sim, 'f13_colrise', lead.x, lead.y, 4.5, COL.rise); // v2.87 — только рисунок
     sim.events.push({ t: 'shake', k: 0.9 });
     sim.events.push({
       t: 'boss',
@@ -2126,6 +2150,7 @@ registerBoss('f13boss', {
       b.phase = 1;
       api.setMode(m, 'roar');
       setAura(sim, api, st, m, 'f13_cloak', COL.cloak.r, COL.cloak.dps);
+      api.vfx(sim, { x: m.x, y: m.y, r: 4, life: COL.roar, art: 'f13_colroar', k: 1 } as ZX); // v2.87 — только рисунок
       sim.events.push({
         t: 'boss',
         what: 'phase',
@@ -2139,6 +2164,7 @@ registerBoss('f13boss', {
       b.phase = 2;
       api.setMode(m, 'roar');
       setAura(sim, api, st, m, null);
+      api.vfx(sim, { x: m.x, y: m.y, r: 4.5, life: COL.roar, art: 'f13_colroar', k: 2 } as ZX); // v2.87 — только рисунок
       m.data.quakeCd = 1.6;
       sim.events.push({
         t: 'boss',
@@ -2153,6 +2179,8 @@ registerBoss('f13boss', {
       b.phase = 3;
       api.setMode(m, 'roar');
       setAura(sim, api, st, m, 'f13_heat', COL.heat.r, COL.heat.dps);
+      api.vfx(sim, { x: m.x, y: m.y, r: 4.5, life: COL.roar, art: 'f13_colroar', k: 3, above: true } as ZX); // v2.87 — только рисунок
+      api.vfx(sim, { x: m.x, y: m.y, r: COL.heat.r, life: 1e6, art: 'f13_colheatlit', above: true }); // v2.87 — только рисунок: угли жара
       m.data.ringCd = 1.5;
       sim.events.push({
         t: 'boss',
@@ -2182,6 +2210,7 @@ registerBoss('f13boss', {
             status: 'burn',
             dur: 1,
             art: 'f13_jet',
+            above: true, // v2.87 — только рисунок
           });
         });
       }
@@ -2190,9 +2219,11 @@ registerBoss('f13boss', {
     if (st.cracking.size) {
       const h = sim.hero;
       const hi = Math.floor(h.y) * W + Math.floor(h.x);
+      const fell: number[] = []; // v2.87 — только рисунок
       for (const [i, at] of st.cracking) {
         if (sim.time < at) continue;
         st.cracking.delete(i);
+        fell.push(i); // v2.87 — только рисунок
         const onIt = i === hi && !h.pull && h.r > 0.05;
         retile(sim, api, i, T_DEEP, MK.rift);
         if (onIt && !heroDown(sim)) {
@@ -2209,6 +2240,7 @@ registerBoss('f13boss', {
           }
         }
       }
+      if (fell.length) api.vfx(sim, { x: (fell[0] % W) + 0.5, y: Math.floor(fell[0] / W) + 0.5, r: 1, life: 1.7, art: 'f13_colrift', cells: fell, ww: W } as ZX); // v2.87 — только рисунок
     }
     // ИСПАРЕНИЕ: площадь чернеет под его шагами.
     if (b.phase === 3) {
@@ -2813,6 +2845,7 @@ function fireCannon(sim: Sim, st: F13State, api: SimApi, c: Cannon): boolean {
         m.hp = Math.max(1, m.hp - m.maxHp * COL.cannonHit);
         m.flash = 0.2;
         a.setMode(m, 'kneel');
+        a.vfx(sim, { x: m.x, y: m.y + 0.1, r: 2, life: 1.3, art: 'f13_colkneel', k: 1 } as ZX); // v2.87 — только рисунок
         m.data.lit = 0;
         sim.events.push({
           t: 'boss',
