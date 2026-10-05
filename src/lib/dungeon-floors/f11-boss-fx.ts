@@ -657,6 +657,33 @@ function hexImg(r: number, f: number): HTMLCanvasElement {
   });
 }
 
+/** Осколок купола: тонкий клин стекла-света, поворот f (0…7), длина 4…7. */
+function shardImg(f: number, len: number): HTMLCanvasElement {
+  const Ln = Math.max(4, Math.min(7, Math.round(len)));
+  return spr(45000 + Ln * 8 + (f & 7), () => {
+    const s = Ln * 2 + 3;
+    const p = new Px(s, s);
+    const a = ((f & 7) / 8) * PI;
+    const ux = Math.cos(a);
+    const uy = Math.sin(a);
+    const c = s / 2;
+    for (let y = 0; y < s; y++)
+      for (let x = 0; x < s; x++) {
+        const dx = x + 0.5 - c;
+        const dy = y + 0.5 - c;
+        const al = dx * ux + dy * uy;
+        const ac = -dx * uy + dy * ux;
+        if (Math.abs(al) > Ln * 0.5) continue;
+        // Клин: широкий конец сзади, острие спереди.
+        const w = 1.6 * (0.5 - al / Ln);
+        if (Math.abs(ac) > w + 0.35) continue;
+        const edge = Math.abs(ac) > w - 0.6 || al < -Ln * 0.5 + 1;
+        p.set(x, y, edge ? (ac < 0 ? hx('#ffffff') : hx('#8af2ff', 230)) : hx('#c8fbff', 150));
+      }
+    return p;
+  });
+}
+
 /**
  * Плита края арены, уходящая в небо: верх — мрамор с плитами, торец —
  * светлый камень, низ — земля с корнями (остров!). Вариант v (0…3).
@@ -665,8 +692,9 @@ function slabImg(v: number): HTMLCanvasElement {
   return spr(50000 + (v & 7), () => {
     const W = 16;
     const p = new Px(W + 2, 22);
-    const top = [hx('#a8a6b8'), hx('#c4c2d0'), hx('#dcdae6'), hx('#f2f1f6')];
-    const side = [hx('#6a6878'), hx('#8a8898'), hx('#a8a6b6')];
+    // Верх — те же плиты, что на арене (шов, основа, свет, фаска).
+    const top = [hx('#7c7a8c'), hx('#aeacbc'), hx('#c2c0ce'), hx('#dcdae6')];
+    const side = [hx('#5a5868'), hx('#76748a'), hx('#8e8c9c')];
     const earth = [hx('#3e2c1e'), hx('#5c4028'), hx('#7a5636')];
     const cut = (x: number) => Math.round(Math.sin(x * 0.9 + v * 1.7) * 1.2 + hash(x, v, 61) * 1.5);
     for (let x = 1; x <= W; x++) {
@@ -684,6 +712,12 @@ function slabImg(v: number): HTMLCanvasElement {
         for (let y = depth; y < depth + 2 + (x & 1); y++) p.set(x, y, earth[0]);
     }
     if (v & 2) for (let k = 0; k < 4; k++) p.set(4 + k * 3, 6 + (k & 1), hx('#4670a8'));
+    // Трещина, по которой плита откололась.
+    for (let k = 0, x = 3 + (v % 5), y = 3; k < 7; k++) {
+      p.set(x, y, hx('#4a4658'));
+      x += hash(v, k, 93) < 0.5 ? 1 : 0;
+      y += 1;
+    }
     p.outline(hx(C.ink));
     return p;
   });
@@ -703,7 +737,8 @@ function fistImg(mir: boolean): HTMLCanvasElement {
     const p = new Px(W + 4, H + 4);
     const T = C.bronze.map((c) => hx(c));
     const put = (x: number, y: number, c: RGBA) => p.set(2 + (mir ? W - 1 - x : x), 2 + y, c);
-    const shade = (l: number) => (l > 0.55 ? T[4] : l > 0.15 ? T[3] : l > -0.3 ? T[2] : l > -0.7 ? T[1] : T[0]);
+    const shade = (l: number) =>
+      l > 0.55 ? T[4] : l > 0.15 ? T[3] : l > -0.3 ? T[2] : l > -0.7 ? T[1] : T[0];
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const X = x + 0.5;
@@ -717,27 +752,32 @@ function fistImg(mir: boolean): HTMLCanvasElement {
         // Пальцы: четыре столбика, низ — костяшки.
         const fi = Math.floor((X - 3) / 4.25);
         const fcx = 3 + fi * 4.25 + 2.1;
-        const finger = fi >= 0 && fi < 4 && Y > 10 && Math.abs(X - fcx) < 2.05 && (Y < 17.5 || (X - fcx) ** 2 + (Y - 17.5) ** 2 < 4.4);
+        const finger =
+          fi >= 0 &&
+          fi < 4 &&
+          Y > 10 &&
+          Math.abs(X - fcx) < 2.05 &&
+          (Y < 17.5 || (X - fcx) ** 2 + (Y - 17.5) ** 2 < 4.4);
         // Большой палец — поперёк пальцев.
         const thumb = (X - 8) ** 2 / 30 + (Y - 12.4) ** 2 / 2.8 < 1 && X > 1.5;
         if (!wrist && !back && !finger && !thumb) continue;
         let c: RGBA;
         if (thumb) {
-          const l = -(Y - 12.4) / 1.7 * 0.8 - (X - 8) / 10 * 0.3;
+          const l = (-(Y - 12.4) / 1.7) * 0.8 - ((X - 8) / 10) * 0.3;
           c = shade(l + 0.25);
           if (X > 11.5 && X < 13.5 && Y < 12.6) c = T[4];
           if (Y > 13.4) c = T[1];
         } else if (finger) {
           // Цилиндр пальца: светлее к левому верху, костяшка блестит.
-          const l = -(X - fcx) / 2.05 * 0.55 - (Y - 15) / 4 * 0.5;
+          const l = (-(X - fcx) / 2.05) * 0.55 - ((Y - 15) / 4) * 0.5;
           c = shade(l);
           if (Math.abs(X - fcx) > 1.7) c = T[0];
           if (Y > 16.6 && Y < 17.6 && X - fcx < -0.2 && X - fcx > -1.2) c = T[4];
         } else if (back) {
-          const l = -(X - 11.5) / 8 * 0.5 - (Y - 10) / 4 * 0.6;
+          const l = (-(X - 11.5) / 8) * 0.5 - ((Y - 10) / 4) * 0.6;
           c = shade(l + 0.1);
         } else {
-          const l = -(X - 12) / 4 * 0.6;
+          const l = (-(X - 12) / 4) * 0.6;
           c = shade(l - 0.1);
         }
         put(x, y, c);
@@ -1874,9 +1914,10 @@ function slamFloor(p: Pen, m: Mob, S: number, time: number): void {
   disc(p, tx, ty, R);
   // Тень кулаков: растёт и темнеет по мере падения.
   const u = k01((t - FIST_T0) / (T - FIST_T0));
-  const sz = 7 + 13 * eIn2(Math.max(k * 0.6, u));
-  const sh = fistShadow(sz, u < 0.5);
-  p.alpha(0.18 + 0.5 * Math.max(k * 0.5, u));
+  const fall = Math.pow(u, 2.3);
+  const sz = 8 + 14 * Math.max(k * 0.35, fall);
+  const sh = fistShadow(sz, false);
+  p.alpha(0.12 + 0.5 * Math.max(k * 0.4, fall));
   p.img(sh, tx - sh.width / 2, ty + 2 - sh.height / 2);
   // Кромка: пунктир бежит, к удару — сплошная.
   const run = time * (24 + 70 * k);
@@ -1923,27 +1964,29 @@ function slamSky(p: Pen, m: Mob, S: number, time: number): void {
   const fadeIn = k01((t - FIST_T0) / 0.14);
   const L = fistImg(true);
   const Rr = fistImg(false);
-  // Полосы скорости над кулаками.
-  if (u > 0.5) {
-    const v = (u - 0.5) / 0.5;
-    p.col(C.ice, 0.55 * v);
-    for (let i = 0; i < 6; i++) {
-      const x = tx - 14 + i * 5.5 + (i % 2);
-      const y0 = ty - z - 14 - hash(i, 3, 17) * 6;
-      p.line(x, y0 - 8 - 22 * v, x, y0);
+  // Полосы скорости над кулаками — к концу падения.
+  if (u > 0.45) {
+    const v = (u - 0.45) / 0.55;
+    p.col(C.ice, 0.6 * v);
+    for (let i = 0; i < 7; i++) {
+      const x = tx - 18 + i * 6 + (i % 2);
+      const y0 = ty - z - 22 - hash(i, 3, 17) * 6;
+      p.line(x, y0 - 6 - 26 * v, x, y0);
     }
   }
-  // Свет рун от кулаков на земле — сверху вниз ярче.
-  p.col(C.rune, 0.12 + 0.25 * u);
-  disc(p, tx, ty + 1, 6 + 10 * u, true);
-  p.alpha(0.55 + 0.4 * fadeIn * (0.6 + 0.4 * u));
-  p.img(L, tx - 10 - L.width / 2, ty - z - L.height + 3);
-  p.img(Rr, tx + 10 - Rr.width / 2, ty - z - Rr.height + 3);
+  // Свет рун от кулаков на земле — ближе, ярче.
+  p.col(C.rune, 0.1 + 0.25 * u);
+  disc(p, tx, ty + 1, 6 + 12 * u, true);
+  // Проекция появляется из света: сначала полупрозрачная, к земле — плотная.
+  // Костяшки — в 2 px над полом в миг удара.
+  p.alpha(fadeIn * (0.55 + 0.45 * u));
+  p.img(L, tx - 11 - L.width / 2, ty - z - L.height + 4);
+  p.img(Rr, tx + 11 - Rr.width / 2, ty - z - Rr.height + 4);
   // Мерцание вязи: кулак — проекция, а не камень.
   if (Math.floor(time * 20) % 3 === 0) {
-    p.col(C.cyan, 0.35);
-    p.dot(tx - 10, ty - z - 9, 2, 1);
-    p.dot(tx + 9, ty - z - 9, 2, 1);
+    p.col(C.white, 0.6);
+    p.dot(tx - 13, ty - z - 22, 4, 1);
+    p.dot(tx + 9, ty - z - 22, 4, 1);
   }
 }
 
@@ -1960,20 +2003,22 @@ registerImpactPainter('f11_slam', {
     const sd = rec.seed >>> 0;
     const few = reduced();
     const fade = 1 - k01((age - 1.25) / 0.55);
-    // Кратер: вмятина с тёмным краем сверху-слева и светлым снизу-справа.
-    p.col(C.shade, 0.55 * fade);
-    disc(p, cx, cy + 1, 9);
-    p.col(C.groove, 0.6 * fade);
-    disc(p, cx - 1, cy, 6);
-    ring(p, cx, cy + 1, 10, C.lip, 0.7 * fade, (a) => a > -0.3 && a < 2.2);
-    ring(p, cx, cy + 1, 10, C.groove, 0.6 * fade, (a) => a < -1.2 || a > 2.6);
+    // Кратер: две вмятины от кулаков, тень сверху-слева, светлый край снизу-справа.
+    for (const ox of [-8, 8]) {
+      p.col(C.groove, 0.28 * fade);
+      disc(p, cx + ox, cy + 1, 6.5);
+      p.col(C.groove, 0.32 * fade);
+      disc(p, cx + ox - 1, cy, 4);
+      ring(p, cx + ox, cy + 1, 7, C.lip, 0.85 * fade, (a) => a > -0.2 && a < 2.4);
+      ring(p, cx + ox, cy + 1, 7, C.groove, 0.5 * fade, (a) => a < -1.4 || a > 2.8);
+    }
     // Трещины звездой: бегут от удара за 0,12 с.
     const ck = crackOf(
       `slam|${sd % 61}`,
       sd,
-      starBranches(sd, 7, hash(sd, 0, 1) * TAU, R * 0.5, R * 1.05, 3),
-      0.5,
-      0.25,
+      starBranches(sd, 7, hash(sd, 0, 1) * TAU, R * 0.5, R * 1.05, 2),
+      0.35,
+      0.14,
     );
     const reach = ck.max * eOut3(k01(age / 0.12));
     drawCrack(p, ck, cx, cy, reach, C.groove, C.lip, fade);
@@ -2131,9 +2176,9 @@ registerImpactPainter('f11_stomp', {
     const ck = crackOf(
       `stomp|${sd % 53}`,
       sd,
-      starBranches(sd, 9, hash(sd, 0, 1) * TAU, R1 * 0.8, R1 * 1.05, 3),
-      0.45,
-      0.2,
+      starBranches(sd, 8, hash(sd, 0, 1) * TAU, R1 * 0.75, R1 * 1.05, 2),
+      0.3,
+      0.1,
     );
     drawCrack(p, ck, cx, cy, ck.max * eOut3(k01(age / 0.16)), C.groove, C.lip, fade);
     // Обрывки трещин по внешней кромке.
@@ -2467,8 +2512,8 @@ function rocketTrails(p: Pen, sim: Sim, S: number, time: number): void {
       const ox = wx * 7 * pa + (hash(tr.seed, i, 2) - 0.5) * 3;
       const oy = wy * 7 * pa - 10 * eOut2(k) + (hash(tr.seed, i, 3) - 0.5) * 2;
       const hot = pa < 0.07;
-      const im = puffImg(hot ? 4 : 2, hot ? 1.5 : 1.2 + 3.2 * eOut2(k01(pa / 0.45)), i);
-      p.alpha(hot ? 0.95 : 0.7 * Math.pow(1 - k, 1.3));
+      const im = puffImg(hot ? 4 : 7, hot ? 1.5 : 1.5 + 3.5 * eOut2(k01(pa / 0.45)), i);
+      p.alpha(hot ? 0.95 : 0.88 * Math.pow(1 - k, 1.2));
       p.img(im, x + ox - im.width / 2, y + oy - im.height / 2);
     }
   }
@@ -2490,18 +2535,18 @@ function rocketsSky(p: Pen, m: Mob, S: number, time: number): void {
       t,
       hx0,
       hy0,
-      6,
+      9,
       -PI / 2,
       0.45,
       5,
       8,
-      1,
-      3.5,
-      12,
-      0.8,
-      2,
-      0.55 * (0.4 + 0.6 * k),
-      (i) => i * 0.11,
+      1.2,
+      4.5,
+      14,
+      0.75,
+      7,
+      0.85 * (0.4 + 0.6 * k),
+      (i) => i * 0.075,
     );
     if (Math.floor(time * (8 + 16 * k)) % 2 === 0) {
       p.col(C.hot, 0.9);
@@ -2677,8 +2722,8 @@ function spinNow(sim: Sim, z: FxZone): SpinNow | null {
     if (m.t < SPIN_CH) return { m, stage: 0, k: k01(m.t / SPIN_CH), sa, sdir };
     return { m, stage: 1, k: k01((m.t - SPIN_CH) / BOSS.spinDur), sa, sdir };
   }
-  if (m.mode === 'recover' && z.t >= SPIN_END - 0.05 && m.t < 0.3)
-    return { m, stage: 2, k: k01(m.t / 0.25), sa, sdir };
+  if (m.mode === 'recover' && z.t >= SPIN_END - 0.05 && m.t < 0.18)
+    return { m, stage: 2, k: k01(m.t / 0.18), sa, sdir };
   return null;
 }
 
@@ -2709,9 +2754,9 @@ function spinFloor(p: Pen, sim: Sim, z: FxZone, S: number, time: number): void {
       const uy = Math.sin(a);
       const nx = -uy;
       const ny = ux;
-      // Клин первых мгновений хода — куда пойдёт луч.
-      p.col(C.red, 0.05 + 0.12 * k);
-      fillSector(p, bx, by, s0, s1, sdir > 0 ? a : a - 0.45, sdir > 0 ? a + 0.45 : a);
+      // Клин первых мгновений хода — куда пойдёт луч (бледно: подсказка, не стена).
+      p.col(C.red, 0.04 + 0.1 * k);
+      fillSector(p, bx, by, s0, s1, sdir > 0 ? a : a - 0.4, sdir > 0 ? a + 0.4 : a);
       p.col(C.redDk, 0.12 + 0.18 * k);
       fillLane(p, bx, by, ux, uy, s0, s1, hw);
       const run = Math.floor(time * (30 + 90 * k));
@@ -2810,35 +2855,25 @@ registerZonePainter(
       const s1 = stage === 2 ? s0 + (s1full - s0) * (1 - eIn2(k)) : s0 + (s1full - s0) * ign;
       const ux = Math.cos(a);
       const uy = Math.sin(a);
-      const rx = bx + ux * s0;
-      const ry = by + uy * s0 - SPIN_H;
       const w = out * (0.85 + 0.15 * Math.sin(time * 40 + a));
-      const layers: [number, string, number][] = [
-        [(SPIN_HW * S + jit * 0.8) * w, C.red, 0.5],
-        [4.4 * w, C.hot, 0.85],
-        [2.6 * w, C.yellow, 1],
-        [Math.max(0.6, 1.1 * w), C.white, 1],
+      // Ореол через пиксель (ширина — ровно удар), дальше сплошные слои к ядру.
+      const layers: BeamLayer[] = [
+        [(SPIN_HW * S + jit * 0.8) * w, C.red, true],
+        [4.4 * w, C.hot, false],
+        [2.6 * w, C.yellow, false],
+        [Math.max(0.6, 1.1 * w), C.white, false],
       ];
-      // Из груди — вниз к корню луча.
-      front(p, bodies, by + uy * s0, () => {
-        for (const [hw, c, al] of layers) {
-          p.col(c, al);
-          fillSeg(p, cx, cy, rx, ry, hw * 0.7);
-        }
-      });
-      frontRun(p, bodies, bx, by, ux, uy, s0, s1, (sa0, sa1) => {
-        for (const [hw, c, al] of layers) {
-          p.col(c, al);
-          fillLane(p, bx, by - SPIN_H, ux, uy, sa0, sa1, hw);
-        }
-        // Сгустки бегут наружу — энергия идёт из ядра.
-        p.col(C.white, 0.9 * out);
-        for (let j = 0; j < 5; j++) {
-          const s = s0 + mod(time * 240 + j * 47 + (a > sa ? 23 : 0), Math.max(1, s1full - s0));
-          if (s < sa0 || s > sa1) continue;
-          disc(p, bx + ux * s, by + uy * s - SPIN_H, 2.2 * w);
-        }
-      });
+      // Из груди луч плавно опускается к колену героя и идёт к стене.
+      const sCurve = s0 + 0.9 * S;
+      drawBeam(p, bodies, [cx, cy], bx, by, ux, uy, 0.2 * S, sCurve, s1, SPIN_H, layers);
+      // Сгустки бегут наружу — энергия идёт из ядра.
+      p.col(C.white, 0.9 * out);
+      for (let j = 0; j < 5; j++) {
+        const s =
+          sCurve + mod(time * 240 + j * 47 + (a > sa ? 23 : 0), Math.max(1, s1full - sCurve));
+        if (s > s1) continue;
+        front(p, bodies, by + uy * s, () => disc(p, bx + ux * s, by + uy * s - SPIN_H, 2.2 * w));
+      }
       // У стены — раскалённое пятно и фонтан искр (искра помнит, где был луч).
       if (stage === 1 && ign >= 1) {
         const ex = bx + ux * s1;
@@ -2938,11 +2973,14 @@ registerZonePainter(
       }
       return;
     }
-    // Бьёт: мокрый горячий круг на полу.
+    // Бьёт: мокрый горячий круг на полу — пока жжёт, кромка видна.
     const kl = k01((z.t - warn) / z.life);
-    p.col(C.ice, 0.22 * (1 - kl));
+    const live = 1 - k01((kl - 0.75) / 0.25);
+    p.col(C.ice, 0.3 * live);
     disc(p, cx, cy, R, true);
-    ring(p, cx, cy, R, C.white, 0.4 * (1 - kl));
+    ring(p, cx, cy, R + 1, C.ink, 0.35 * live);
+    ring(p, cx, cy, R, C.white, 0.85 * live, (a) => mod(a * R - time * 40, 7) < 5);
+    ring(p, cx, cy, R - 1, C.hot, 0.45 * live);
   }),
 );
 
@@ -2995,19 +3033,31 @@ function steamSky(p: Pen, sim: Sim, z: Zone, S: number, time: number, bodies: Bo
         (_a, i) => hash(i >> 2, sd, 9) > 0.3,
       );
     }
-    // Столб: клубы бьют вверх, раздуваются, уходят по ветру.
-    const dt = few ? 0.07 : 0.035;
+    // Струя: клубы бьют вверх быстро и узко, к верху тормозят, раздуваются
+    // и уходят по ветру — столб, а не облако.
+    const dt = few ? 0.06 : 0.03;
     for (let i = 0, born = 0; born <= Math.min(lt, stop); i++, born += dt) {
       const pa = lt - born;
-      const L = 0.75 * (0.8 + 0.4 * hash(sd, i, 2));
+      const L = 0.9 * (0.8 + 0.4 * hash(sd, i, 2));
       if (pa >= L) continue;
       const k = pa / L;
-      const up = 70 * drag(1, 2.4, pa) * (0.8 + 0.4 * hash(sd, i, 3));
-      const x = cx + (hash(sd, i, 4) - 0.5) * 8 + wx * 10 * pa * pa;
+      const up = 160 * drag(1, 2.3, pa) * (0.85 + 0.3 * hash(sd, i, 3));
+      const spread = (hash(sd, i, 4) - 0.5) * (3 + up * 0.3);
+      const x = cx + spread + wx * 12 * pa * pa;
       const y = cy - 3 - up + wy * 6 * pa * pa;
-      const im = puffImg(3, 2 + 7 * eOut2(k01(pa / 0.5)), i);
-      p.alpha(0.85 * (1 - Math.pow(k, 1.5)));
+      const im = puffImg(3, 1.5 + 7.5 * eOut2(k01(pa / 0.6)), i);
+      p.alpha(0.9 * Math.pow(1 - k, 1.3));
       p.img(im, x - im.width / 2, y - im.height / 2);
+    }
+    // У решётки — ядро струи: белые штрихи, каждый кадр свои.
+    if (lt < stop) {
+      const g = Math.floor(time * 30);
+      p.col(C.white, 0.9);
+      for (let i = 0; i < 4; i++) {
+        const x = cx - 5 + i * 3.3;
+        const h = 10 + hash(i, g, sd) * 14;
+        p.line(x, cy - 2, x + (hash(i, g, sd + 1) - 0.5) * 2, cy - 2 - h);
+      }
     }
   });
 }
@@ -3054,19 +3104,26 @@ registerZonePainter(
     const nx = -uy;
     const ny = ux;
     const hit = pylon.flash > 0 && Math.floor(time * 30) % 2 === 0;
-    // Лента: две нити, дрожат бегущей волной.
+    // Лента: бирюзовый ореол в три пикселя и белая нить, дрожат бегущей волной.
     for (let pass = 0; pass < 2; pass++) {
-      p.col(pass ? C.white : C.cyan, pass ? 0.9 : hit ? 0.35 : 0.7);
-      let lx = sx;
-      let ly = sy;
-      for (let s = 2; s <= L; s += 2) {
-        const wob =
-          Math.sin(s * 0.22 - time * 16 + pass * 1.5) * (pass ? 0.6 : 1.4) * Math.sin((s / L) * PI);
-        const qx = sx + ux * s + nx * wob;
-        const qy = sy + uy * s + ny * wob;
-        p.line(lx, ly, qx, qy);
-        lx = qx;
-        ly = qy;
+      for (const off of pass ? [0] : [-1, 0, 1]) {
+        p.col(
+          pass ? C.white : off ? C.teal : C.cyan,
+          pass ? 0.95 : (hit ? 0.35 : 0.8) * (off ? 0.6 : 1),
+        );
+        let lx = sx + nx * off;
+        let ly = sy + ny * off;
+        for (let s = 2; s <= L; s += 2) {
+          const wob =
+            Math.sin(s * 0.22 - time * 16 + pass * 1.5) *
+            (pass ? 0.6 : 1.4) *
+            Math.sin((s / L) * PI);
+          const qx = sx + ux * s + nx * (wob + off);
+          const qy = sy + uy * s + ny * (wob + off);
+          p.line(lx, ly, qx, qy);
+          lx = qx;
+          ly = qy;
+        }
       }
     }
     // Сгустки — к куполу.
@@ -3191,9 +3248,9 @@ function domeSky(p: Pen, sim: Sim, S: number, time: number): void {
       ring(p, dcx, fy - DOME_DY, DOME_R - 2, C.cyan, 1 - ft / 0.12);
     }
     const cells = domeGrid();
-    const step = few ? 3 : 1;
+    const step = few ? 4 : 2;
     const G = 300;
-    for (let i = 0; i < cells.length; i += step) {
+    for (let i = sd & 1; i < cells.length; i += step) {
       const [x, y] = cells[i];
       // Сота падает со своей высоты на купол: верхние — дольше.
       const h0 = Math.max(1, DOME_DY - y);
@@ -3213,14 +3270,19 @@ function domeSky(p: Pen, sim: Sim, S: number, time: number): void {
       }
       const gx = gx0 + Math.cos(out) * v * Math.min(tt, 0.6);
       const gy = gy0 + Math.sin(out) * v * 0.5 * Math.min(tt, 0.6);
-      const a = 1 - k01((ft - 0.9) / 0.7);
-      const im = hexImg(3 + (i % 2), Math.floor(tt * 14 + i));
-      p.alpha(a * (Math.floor(ft * 20 + i) % 4 === 0 ? 1 : 0.8));
+      // Лёг — блеснул и рассыпался в искру за 0,3 с; в воздухе — кувыркается.
+      const landed = tt - fallT;
+      const a = landed < 0 ? 1 : 1 - k01(landed / 0.3);
+      if (a <= 0) continue;
+      const spin = landed < 0 ? Math.floor(tt * 18 + i) : i;
+      const im = shardImg(spin, 4 + (i % 4));
+      p.alpha(a * (Math.floor(ft * 20 + i) % 4 === 0 ? 1 : 0.85));
       p.img(im, gx - im.width / 2, gy - zt - im.height / 2);
       // Звон о пол — искорка в миг касания.
-      if (tt >= fallT && tt < fallT + 0.06) {
-        p.col(C.white, 0.9);
-        p.dot(gx - 1, gy, 3, 1);
+      if (landed >= 0 && landed < 0.08) {
+        p.col(C.white, 1);
+        p.dot(gx - 2, gy, 5, 1);
+        p.dot(gx, gy - 2, 1, 5);
       }
     }
   }
@@ -3305,50 +3367,50 @@ function pylonSky(p: Pen, sim: Sim, S: number, time: number): void {
 // сыплются комья.
 // =============================================================================
 
-/** Ступени роста трещины клетки одним холстом (4 ступени × цвет). */
-const crackStages = new WeakMap<
-  Crack,
-  Map<string, { img: HTMLCanvasElement; x: number; y: number }>
->();
-function crackStage(c: Crack, st: number, core: string, lip: string | null) {
-  let m = crackStages.get(c);
-  if (!m) {
-    m = new Map();
-    crackStages.set(c, m);
+/**
+ * Трещина клетки края — ТЕ ЖЕ пиксели, что рисует клетка «трещит» в куске
+ * карты (`crackPx` в f11-art: обход от зерна `hash(wx, wy, 191)`). Здесь —
+ * жар, бегущий по ней: стадия n (1…4) — сколько шагов обхода уже горит.
+ * Свой рисунок трещин поверх клетки дал бы вторую сетку трещин.
+ */
+const cellCracks = new Map<number, HTMLCanvasElement>();
+function cellCrackGlow(wx: number, wy: number, st: number): HTMLCanvasElement {
+  const key = ((wx * 4096 + wy) * 8 + st) >>> 0;
+  let c = cellCracks.get(key);
+  if (c) return c;
+  const p = new Px(TS_PX, TS_PX);
+  const seed = Math.floor(hash(wx, wy, 191) * 1000);
+  let x = 2 + (seed % 12);
+  let y = 1;
+  const steps = Math.round((26 * st) / 4);
+  const core = hx(C.hot);
+  const rim = hx(C.orange, 200);
+  for (let i = 0; i < 26; i++) {
+    if (i < steps) {
+      p.set(x, y, core);
+      if (hash(seed, i, 1) < 0.3) p.set(x + 1, y, rim);
+    }
+    x += hash(seed, i, 2) < 0.5 ? -1 : 1;
+    y += hash(seed, i, 3) < 0.7 ? 1 : 0;
+    x = Math.max(1, Math.min(14, x));
+    if (y > 14) {
+      y = 1 + Math.floor(hash(seed, i, 4) * 6);
+      x = 2 + Math.floor(hash(seed, i, 5) * 12);
+    }
   }
-  const key = `${st}|${core}|${lip}`;
-  let hit = m.get(key);
-  if (hit) return hit;
-  const reach = (c.max * st) / 4;
-  let x0 = 1e9;
-  let y0 = 1e9;
-  let x1 = -1e9;
-  let y1 = -1e9;
-  for (let i = 0; i < c.x.length; i++) {
-    x0 = Math.min(x0, c.x[i]);
-    y0 = Math.min(y0, c.y[i]);
-    x1 = Math.max(x1, c.x[i] + 1);
-    y1 = Math.max(y1, c.y[i] + 1);
-  }
-  if (x1 < x0) x0 = y0 = x1 = y1 = 0;
-  const px = new Px(x1 - x0 + 1, y1 - y0 + 1);
-  if (lip)
-    for (let i = 0; i < c.lx.length; i++)
-      if (c.ld[i] <= reach) px.set(c.lx[i] - x0, c.ly[i] - y0, hx(lip, 200));
-  for (let i = 0; i < c.x.length; i++)
-    if (c.d[i] <= reach) px.set(c.x[i] - x0, c.y[i] - y0, hx(core));
-  hit = { img: px.canvas(), x: x0, y: y0 };
-  m.set(key, hit);
-  return hit;
+  if (st >= 3)
+    for (let i = 0; i < 6; i++)
+      p.set(
+        1 + Math.floor(hash(seed, i, 6) * 14),
+        1 + Math.floor(hash(seed, i, 7) * 14),
+        hx(C.yellow),
+      );
+  c = p.canvas();
+  if (cellCracks.size > 600) cellCracks.delete(cellCracks.keys().next().value as number);
+  cellCracks.set(key, c);
+  return c;
 }
-const edgeCrack = (v: number) =>
-  crackOf(
-    `edge|${v}`,
-    v * 977 + 13,
-    starBranches(v * 31 + 5, 3, hash(v, 1, 3) * TAU, 7, 12, 2),
-    0.6,
-    0.3,
-  );
+const TS_PX = 16;
 
 registerZonePainter(
   'f11v_crack',
@@ -3360,23 +3422,23 @@ registerZonePainter(
     const W = sim.world.w;
     const t = z.t;
     const few = reduced();
-    const st = Math.min(4, 1 + Math.floor(t / 0.4));
-    const pulse = t > 0.6 ? 0.5 + 0.5 * Math.sin(time * (8 + 14 * k01((t - 0.6) / 1.4))) : 0;
+    // Жар бежит по трещинам за 1,2 с и пульсирует всё чаще к обрушению.
+    const st = Math.min(4, 1 + Math.floor(t / 0.3));
+    const beat = 0.5 + 0.5 * Math.sin(time * (6 + 16 * k01((t - 0.4) / 1.6)));
+    const glow = (0.35 + 0.6 * beat) * k01(t / 0.25);
     const shake = t > 1.6;
     for (let n = 0; n < z.cells.length; n++) {
       const i: number = z.cells[n];
       if (sim.world.mark[i] === undefined) continue;
-      const cx = (i % W) * S + 8;
-      const cy = Math.floor(i / W) * S + 8;
+      const wx = i % W;
+      const wy = Math.floor(i / W);
+      const cx = wx * S + 8;
+      const cy = wy * S + 8;
       const v = (i * 2654435761) >>> 0;
-      const ck = edgeCrack(v % 6);
-      const im = crackStage(ck, st, C.groove, C.lip);
-      p.alpha(1);
-      p.img(im.img, cx + im.x, cy + im.y);
-      if (pulse > 0) {
-        const hot = crackStage(ck, st, C.hot, null);
-        p.alpha(0.25 + 0.6 * pulse);
-        p.img(hot.img, cx + hot.x, cy + hot.y);
+      // Только пока клетка ещё трещит (сценарий мог её уже обрушить).
+      if (sim.tiles[i] !== 11) {
+        p.alpha(glow);
+        p.img(cellCrackGlow(wx, wy, st), cx - 8, cy - 8);
       }
       // Пыль из щелей и прыгающая крошка.
       if (!few || n % 3 === 0) {
@@ -3422,9 +3484,10 @@ registerZonePainter(
       const cy = Math.floor(i / W) * S + 8;
       const out = Math.atan2(cy - acy, cx - acx);
       const d = 0.25 * ((v % 101) / 101);
-      const u = k01((t - d) / 2.5);
-      const lift = 34 * eIn2(u) + 14 * u;
-      const drift = 22 * eIn2(u);
+      // Оторвалась — и пошла вверх с разгоном, уплывая к обрыву по ветру.
+      const u = k01((t - d) / 2.4);
+      const lift = 72 * eIn2(u) + 12 * u;
+      const drift = 26 * eIn2(u);
       const x = cx + Math.cos(out) * drift;
       const y = cy + Math.sin(out) * drift * 0.5 - lift;
       // Пыль из-под плиты сдувает к обрыву.
@@ -3504,19 +3567,15 @@ function shiftFloor(p: Pen, sim: Sim, m: Mob, S: number, time: number): void {
   const R = 2.6 * S;
   const few = reduced();
   const fade = 1 - k01((t - 1.0) / 0.3);
-  // Круг рун чертит сам себя.
+  // Круг рун чертит сам себя: пояс в три пикселя с тёмной каймой — на
+  // светлом мраморе тонкая светлая линия пропадает.
   const sweep = TAU * eOut2(k01(t / 0.45));
-  ring(p, bx, by, R + 1, C.ink, 0.5 * fade, (a) => mod(a + PI / 2, TAU) <= sweep);
-  ring(p, bx, by, R, col, 0.95 * fade, (a) => mod(a + PI / 2, TAU) <= sweep);
-  ring(
-    p,
-    bx,
-    by,
-    R - 4,
-    col,
-    0.6 * fade,
-    (a) => mod(a * 30 - time * 9, 6) < 3 && mod(a + PI / 2, TAU) <= sweep,
-  );
+  const on = (a: number) => mod(a + PI / 2, TAU) <= sweep;
+  ring(p, bx, by, R + 2, C.ink, 0.55 * fade, on);
+  ring(p, bx, by, R - 2, C.ink, 0.45 * fade, on);
+  for (const d of [-1, 0, 1])
+    ring(p, bx, by, R + d, d ? col : C.white, (d ? 0.95 : 0.8) * fade, on);
+  ring(p, bx, by, R - 5, col, 0.75 * fade, (a) => mod(a * 30 - time * 9, 6) < 3 && on(a), 0.6);
   for (let j = 0; j < 12; j++) {
     const a = -PI / 2 + (j / 12) * TAU;
     if (mod(a + PI / 2, TAU) > sweep) continue;
@@ -3535,16 +3594,11 @@ function shiftFloor(p: Pen, sim: Sim, m: Mob, S: number, time: number): void {
   for (const t0 of [0, 0.42, 0.84]) {
     const u = (t - t0) / 0.6;
     if (u < 0 || u > 1) continue;
-    ring(
-      p,
-      bx,
-      by,
-      1.2 * S + 5 * S * eOut2(u),
-      col,
-      0.8 * (1 - u),
-      (_a, i) => hash(i >> 2, Math.round(t0 * 10), 5) > 0.2,
-      0.5,
-    );
+    const rw = 1.2 * S + 5 * S * eOut2(u);
+    const keep = (_a: number, i: number) => hash(i >> 2, Math.round(t0 * 10), 5) > 0.2;
+    ring(p, bx, by, rw + 1, C.ink, 0.5 * (1 - u), keep);
+    ring(p, bx, by, rw, col, 0.9 * (1 - u), keep);
+    ring(p, bx, by, rw - 1, C.white, 0.6 * (1 - u), keep);
   }
   const sd = m.id * 53 + ph;
   if (t < 0.9)
@@ -3558,13 +3612,13 @@ function shiftFloor(p: Pen, sim: Sim, m: Mob, S: number, time: number): void {
     const ck = crackOf(
       `shift4|${m.id % 7}`,
       sd,
-      starBranches(sd, 6, 0.3, S * 3, S * 5, 3),
-      0.5,
+      starBranches(sd, 6, 0.3, S * 3, S * 5, 2),
       0.3,
+      0.12,
     );
     const reach = ck.max * eOut2(k01(t / 1.1));
-    drawCrack(p, ck, bx, by, reach, C.groove, C.lip, 1);
-    drawCrack(p, ck, bx, by, reach, heatCol(0.35 + 0.3 * k01(t / 1.3)), null, 0.85);
+    drawCrack(p, ck, bx, by, reach, C.groove, C.lip, fade);
+    drawCrack(p, ck, bx, by, reach, heatCol(0.3 + 0.35 * k01(t / 1.3)), null, 0.9 * fade);
   }
 }
 
@@ -3626,13 +3680,47 @@ function wakeFloor(p: Pen, m: Mob, S: number, time: number): void {
   const bx = m.x * S;
   const by = m.y * S;
   const R = 2.2 * S;
-  ring(p, bx, by, R + 1, C.ink, 0.4 * k);
-  ring(p, bx, by, R, C.rune, 0.3 + 0.6 * k, (a) => mod(a + PI / 2, TAU) <= TAU * k);
-  ring(p, bx, by, R - 4, C.rune, 0.5 * k, (a) => mod(a * 30 + time * 6, 7) < 3);
+  // Круг рун разгорается вместе с ним и гаснет к концу пробуждения.
+  const out = 1 - k01((t - (BOSS.wake - 0.35)) / 0.35);
+  const on = (a: number) => mod(a + PI / 2, TAU) <= TAU * eOut2(k);
+  const runeDk = '#14a898';
+  ring(p, bx, by, R + 2, C.ink, 0.5 * k * out, on);
+  ring(p, bx, by, R - 2, C.ink, 0.4 * k * out, on);
+  ring(p, bx, by, R + 1, runeDk, (0.4 + 0.5 * k) * out, on);
+  ring(p, bx, by, R, C.rune, (0.5 + 0.5 * k) * out, on);
+  ring(p, bx, by, R - 1, runeDk, (0.4 + 0.5 * k) * out, on);
+  ring(p, bx, by, R - 5, C.rune, 0.6 * k * out, (a) => mod(a * 30 + time * 6, 7) < 3, 0.6);
   // Руки вверх (последняя стадия) — волна по полу.
   const u = (t - BOSS.wake * 0.75) / 0.5;
-  if (u > 0 && u < 1)
-    ring(p, bx, by, 1.4 * S + 4 * S * eOut2(u), C.rune, 0.8 * (1 - u), undefined, 0.5);
+  if (u > 0 && u < 1) {
+    const rw = 1.4 * S + 4 * S * eOut2(u);
+    ring(p, bx, by, rw + 1, C.ink, 0.45 * (1 - u));
+    ring(p, bx, by, rw, C.rune, 0.9 * (1 - u));
+    ring(p, bx, by, rw - 1, C.white, 0.6 * (1 - u));
+    dust(
+      p,
+      m.id * 7,
+      t - BOSS.wake * 0.75,
+      bx,
+      by,
+      10,
+      0,
+      0.3,
+      30,
+      20,
+      2,
+      6,
+      4,
+      0.8,
+      0,
+      0.7,
+      undefined,
+      (i) => {
+        const th = (i / 10) * TAU;
+        return [bx + Math.cos(th) * 16, by + Math.sin(th) * 7, th];
+      },
+    );
+  }
 }
 
 function wakeSky(p: Pen, m: Mob, S: number, time: number): void {
@@ -3641,18 +3729,42 @@ function wakeSky(p: Pen, m: Mob, S: number, time: number): void {
   const by = m.y * S;
   const sd = m.id * 17;
   // С корпуса сыплются пыль и мох — веками лежали.
-  if (t < 1.6) {
-    for (let i = 0; i < (reduced() ? 6 : 16); i++) {
-      const born = hash(sd, i, 1) * 1.2;
+  if (t < 1.9) {
+    for (let i = 0; i < (reduced() ? 8 : 22); i++) {
+      const born = hash(sd, i, 1) * 1.5;
       const a = t - born;
-      if (a < 0 || a > 0.6) continue;
-      const x = bx - 16 + hash(sd, i, 2) * 32;
-      const y0 = by - 52 + hash(sd, i, 3) * 28;
-      const y = y0 + 160 * a * a;
+      if (a < 0 || a > 0.7) continue;
+      const x = bx - 17 + hash(sd, i, 2) * 34 + Math.sin(a * 9 + i) * 1.5;
+      const y0 = by - 54 + hash(sd, i, 3) * 30;
+      const y = y0 + 150 * a * a;
       if (y > by + 2) continue;
-      p.col(i % 3 === 0 ? '#86a05e' : i % 3 === 1 ? '#c4bba9' : '#5a6e3e', 1);
-      p.dot(x, y, i % 4 === 0 ? 2 : 1, 1);
+      const big = i % 3 === 0;
+      p.col(C.ink, 0.6);
+      p.dot(x + 1, y + 1, big ? 2 : 1, big ? 2 : 1);
+      p.col(i % 3 === 0 ? '#86a05e' : i % 3 === 1 ? '#d8cfbc' : '#5a6e3e', 1);
+      p.dot(x, y, big ? 2 : 1, big ? 2 : 1);
     }
+    // У ног оседает пыль.
+    dust(
+      p,
+      sd + 1,
+      t,
+      bx,
+      by,
+      6,
+      0,
+      PI,
+      12,
+      10,
+      2,
+      5,
+      3,
+      1.0,
+      0,
+      0.55,
+      (i) => 0.2 + i * 0.2,
+      (i) => [bx + (i % 2 ? 1 : -1) * (8 + 4 * hash(sd, i, 4)), by, i % 2 ? 0 : PI],
+    );
   }
   // Глаз загорается — вспышка.
   const et = t - BOSS.wake * 0.5;
@@ -3719,7 +3831,7 @@ registerZonePainter(
       8,
       8,
       1.4,
-      6,
+      0,
       0.6,
       (i) => 0.45 + 0.05 * i,
     );
@@ -3736,10 +3848,14 @@ function deathSky(p: Pen, sim: Sim, z: FxZone, S: number, time: number): void {
   const sd = ((z.id >>> 0) * 2246822519) >>> 0;
   const few = reduced();
   const [wx, wy] = windPx(sim, z.x, z.y);
-  // Ядро схлопывается и рвётся.
+  // Ядро схлопывается (свет стягивается в точку) и рвётся.
   if (t < 0.12) {
+    const k = t / 0.12;
+    p.col(C.cyan, 0.8);
+    ring(p, cx, cy, 16 * (1 - k) + 2, C.cyan, 1);
     p.col(C.white, 1);
-    disc(p, cx, cy, 14 * (1 - t / 0.12) + 2);
+    disc(p, cx, cy, 2 + 2 * k);
+    flare(p, cx, cy, Math.round(4 + 10 * k), C.white, 1);
   } else if (t < 0.4) {
     const k = (t - 0.12) / 0.28;
     p.col(C.cyan, 1 - k);
@@ -3777,13 +3893,18 @@ function deathSky(p: Pen, sim: Sim, z: FxZone, S: number, time: number): void {
     [wx * 10, wy * 10],
   );
   // Сад на плечах отпускает лепестки — их уносит ветер.
-  for (let i = 0; i < (few ? 6 : 16); i++) {
-    const a = t - 0.2 - hash(sd, i, 5) * 0.8;
+  for (let i = 0; i < (few ? 8 : 22); i++) {
+    const a = t - 0.2 - hash(sd, i, 5) * 0.9;
     if (a < 0 || a > 2.6) continue;
     const x = bx - 14 + hash(sd, i, 6) * 28 + (wx * 14 + 10) * a + Math.sin(a * 6 + i) * 3;
     const y = by - 40 + hash(sd, i, 7) * 10 + wy * 10 * a - 14 * a + Math.cos(a * 5 + i) * 2;
-    p.col(PETAL[i % 4], 1 - k01((a - 1.8) / 0.8));
-    p.dot(x, y, 2, 1);
+    const al = 1 - k01((a - 1.8) / 0.8);
+    // Лепесток кувыркается: то пластинкой, то ребром.
+    const flip = Math.floor(a * 10 + i) % 3;
+    p.col(C.ink, 0.45 * al);
+    p.dot(x + 1, y + 1, flip ? 2 : 1, flip === 1 ? 2 : 1);
+    p.col(PETAL[i % 4], al);
+    p.dot(x, y, flip ? 2 : 1, flip === 1 ? 2 : 1);
   }
 }
 
@@ -3797,37 +3918,39 @@ registerZonePainter(
     const t = z.t;
     const sd = ((z.id >>> 0) * 2654435761) >>> 0;
     const [wx, wy] = windPx(paintSim(), z.x, z.y);
-    if (t < 0.15) ring(p, cx, cy, 3 + 6 * eOut2(t / 0.15), C.shade, 0.35 * (1 - t / 0.15));
+    // Куда выбивает пыль: вбок от ступни и назад (мозг кладёт угол в зону).
+    const a = z.ang ?? PI / 2;
+    if (t < 0.15) ring(p, cx, cy, 3 + 7 * eOut2(t / 0.15), C.shade, 0.45 * (1 - t / 0.15));
     const ck = crackOf(
       `step|${sd % 8}`,
       sd % 8,
       starBranches(sd % 8, 3, hash(sd % 8, 2, 2) * TAU, 3, 6, 1),
-      0.6,
-      0.1,
+      0.4,
+      0.05,
     );
-    drawCrack(p, ck, cx, cy, ck.max, C.groove, null, 0.6 * (1 - k01((t - 0.4) / 0.5)));
+    drawCrack(p, ck, cx, cy, ck.max, C.groove, C.lip, 0.7 * (1 - k01((t - 0.35) / 0.5)));
     dust(
       p,
       sd,
       t,
       cx,
       cy,
-      3,
-      PI * 0.5,
-      PI * 0.6,
-      14,
-      14,
-      1.5,
       4,
-      3,
-      0.8,
+      a,
+      0.6,
+      22,
+      16,
+      1.5,
+      4.5,
+      4,
+      0.85,
       0,
-      0.55,
-      undefined,
+      0.75,
+      (i) => 0.02 * i,
       undefined,
       [wx * 6, wy * 6],
     );
-    chunks(p, sd + 1, t, cx, cy, 2, 0, PI, 12, 14, 30, 30, [0.5, 0.8], 0, 0);
+    chunks(p, sd + 1, t, cx, cy, 2, a, 0.8, 14, 14, 30, 30, [0.5, 0.8], 0, 0);
   }),
 );
 
@@ -3923,7 +4046,7 @@ registerMobWarm('f11boss', function* () {
         rocketImg(d, f, r);
         yield;
       }
-  for (const pal of [0, 1, 2, 3, 4])
+  for (const pal of [0, 1, 3, 4, 7])
     for (let r = 1; r <= 10; r++)
       for (let v = 0; v < 4; v++) {
         puffImg(pal, r, v);
@@ -3936,7 +4059,6 @@ registerMobWarm('f11boss', function* () {
         yield;
       }
   for (let s = 4; s <= 28; s++) {
-    fistShadow(s, true);
     fistShadow(s, false);
     yield;
   }
@@ -3951,17 +4073,14 @@ registerMobWarm('f11boss', function* () {
       hexImg(r, f);
       yield;
     }
+  for (let l = 4; l <= 7; l++)
+    for (let f = 0; f < 8; f++) {
+      shardImg(f, l);
+      yield;
+    }
   for (let h = 3; h <= 12; h++)
     for (let f = 0; f < 4; f++) {
       flameImg(h, f);
       yield;
     }
-  for (let v = 0; v < 6; v++) {
-    const ck = edgeCrack(v);
-    for (let st = 1; st <= 4; st++) {
-      crackStage(ck, st, C.groove, C.lip);
-      crackStage(ck, st, C.hot, null);
-      yield;
-    }
-  }
 });

@@ -3159,7 +3159,7 @@ registerBrain('f11boss', {
             m.data.vWalk = 0;
             m.data.vFoot = m.data.vFoot ? 0 : 1;
             const fa = Math.atan2(m.vy, m.vx) + (m.data.vFoot ? 1.4 : -1.4);
-            api.vfx(sim, { x: m.x + Math.cos(fa) * 0.42, y: m.y + 0.05, r: 0.5, life: 0.9, art: 'f11v_step' });
+            api.vfx(sim, { x: m.x + Math.cos(fa) * 0.42, y: m.y + 0.05, r: 0.5, life: 0.9, art: 'f11v_step', ...{ ang: fa + (m.data.vFoot ? 0.5 : -0.5) } } as ZoneIn);
           }
         } else {
           m.vx *= 0.8;
