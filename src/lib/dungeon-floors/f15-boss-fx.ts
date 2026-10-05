@@ -4077,15 +4077,24 @@ registerImpactPainter('f15b_cleave', {
 /** Призрачное лезвие секиры, воткнутое в пол: полумесяц и обух. */
 function ghostAxe(): HTMLCanvasElement {
   return sprite(120000, () => {
-    const p = new Px(17, 16);
-    for (let y = 0; y < 14; y++)
-      for (let x = 0; x < 17; x++) {
-        const dx = x + 0.5 - 8.5;
-        const dy = y + 0.5 - 4;
-        const inBlade = dx * dx / 64 + dy * dy / 49 <= 1 && !(dx * dx / 30 + (dy + 3.5) * (dy + 3.5) / 40 <= 1);
-        if (inBlade && y < 12) p.set(x, y, dx < -2 ? hx(G[5]) : dx < 2 ? hx(G[4]) : hx(G[3]));
+    // Полумесяц лезвия слева от древка, режущая кромка — белая; древко
+    // уходит в пол (нижние строки картинки — уже под полом).
+    const p = new Px(26, 26);
+    for (let y = 0; y < 22; y++)
+      for (let x = 0; x < 26; x++) {
+        const dx = x + 0.5 - 15;
+        const dy = y + 0.5 - 10;
+        const outer = dx * dx + dy * dy <= 11 * 11;
+        const ix = x + 0.5 - 19;
+        const inner = ix * ix + dy * dy <= 9.5 * 9.5;
+        if (!outer || inner || x > 15) continue;
+        const edge = dx * dx + dy * dy > 9.6 * 9.6;
+        p.set(x, y, edge ? hx(C.white) : dy < -2 ? hx(G[4]) : dy < 4 ? hx(G[3]) : hx(G[2]));
       }
-    for (let y = 0; y < 16; y++) p.set(8, y, hx(y < 4 ? C.white : G[2]));
+    for (let y = 0; y < 26; y++) {
+      p.set(15, y, hx(y < 3 ? C.white : G[2]));
+      p.set(16, y, hx(G[1]));
+    }
     p.outline(hx(G[0]));
     return p;
   });
@@ -4162,7 +4171,7 @@ registerImpactPainter('f15b_axe', {
       const im = ghostAxe();
       p.scan = scanOf(time);
       p.alpha(1 - age / 0.4);
-      p.img(im, cx - 8.5, cy - im.height + 3);
+      p.img(im, cx - 15, cy - im.height + 5);
       p.scan = -1;
     }
     hitStar(p, cx, cy - 2, age, 0.13, 15, 0.2, G[5]);
