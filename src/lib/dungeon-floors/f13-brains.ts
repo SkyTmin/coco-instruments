@@ -3113,12 +3113,10 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
       if (go) {
         const along = Math.max(0.15, Math.cos(angDiff(want, g.face)));
         api.steer(sim, g, Math.cos(g.face), Math.sin(g.face), g.speed * along, dt);
-        // анимации 13 — только рисунок: пыль из-под ноги на каждом шаге.
-        g.data.vStep = (g.data.vStep ?? 0) + Math.hypot(g.vx, g.vy) * dt;
-        if (g.data.vStep > 1.15) {
-          g.data.vStep = 0;
-          fx(sim, api, 'f13_v_dust', g.x, g.y + 0.3, 0.6, 0.7, { ang: g.face });
-        }
+        // анимации 13 — только рисунок: пыль из-под ноги на каждом шаге (шаг 1,15 кл).
+        const vD = Math.hypot(g.vx, g.vy) * dt; // анимации 13 — только рисунок
+        const vS = (g.data.vStep = ((g.data.vStep ?? 0) + vD) % 1.15); // анимации 13 — только рисунок
+        if (vS < vD) fx(sim, api, 'f13_v_dust', g.x, g.y + 0.3, 0.6, 0.7, { ang: g.face }); // анимации 13 — только рисунок
       } else {
         g.vx *= 0.8;
         g.vy *= 0.8;
@@ -3221,11 +3219,8 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
         fx(sim, api, 'f13_v_ram', h.x, h.y, 1, 0.5, { ang: g.dir }, true); // анимации 13 — только рисунок
       }
       // анимации 13 — только рисунок: пыль за тараном — не чаще 10 раз в секунду.
-      g.data.vStep = (g.data.vStep ?? 0) + dt;
-      if (g.data.vStep > 0.1) {
-        g.data.vStep = 0;
-        fx(sim, api, 'f13_v_dust', g.x, g.y + 0.3, 0.6, 0.6, { ang: g.dir });
-      }
+      g.data.vStep = ((g.data.vStep ?? 0) + dt) % 0.1; // анимации 13 — только рисунок
+      if (g.data.vStep < dt) fx(sim, api, 'f13_v_dust', g.x, g.y + 0.3, 0.6, 0.6, { ang: g.dir }); // анимации 13 — только рисунок
       if (
         g.t >= BOSS.charge.run ||
         api.solidTile(
