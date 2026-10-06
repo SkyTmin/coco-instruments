@@ -442,6 +442,9 @@ const FLOOR_SOUND: Record<string, () => void> = {
     boom(1);
   },
   f12_glacier: () => stoneGrind(),
+  f12_tusk: () => glassBreak(),
+  f12_skid: () => stoneGrind(),
+  f12_spike: () => glassBreak(true),
   f12_drum: () => heartbeat(),
   f12_shaman_down: () => softThud(),
   f12_dome_call: () => clockChime(3),

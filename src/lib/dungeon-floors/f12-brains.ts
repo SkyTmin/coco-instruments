@@ -3312,6 +3312,7 @@ function mammothStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): vo
         sim.events.push({ t: 'shake', k: 0.25 });
         const vTusk = { x: m.x, y: m.y, r: T.tusk.r, life: 0.5, art: 'f12_tuskhit', dur: m.face }; // анимации 12 — только рисунок
         fx(sim, api, vTusk); // анимации 12 — только рисунок
+        sim.events.push({ t: 'boss', what: 'f12_tusk' }); // звук удара бивнями
       }
       if (m.t >= T.tusk.end) {
         m.data.hit = 0;
@@ -3408,6 +3409,7 @@ function mammothStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): vo
         const skid = ((m.data.v ?? 0) * T.charge.skid) / 2; // анимации 12 — только рисунок
         const vSkid = { x: m.x, y: m.y, r: skid, life: 2.2, art: 'f12_skid', dur: m.face }; // анимации 12 — только рисунок
         fx(sim, api, vSkid); // анимации 12 — только рисунок
+        sim.events.push({ t: 'boss', what: 'f12_skid' }); // звук юза
       }
       return;
     }
@@ -3490,6 +3492,7 @@ function mammothStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): vo
         }
         sim.events.push({ t: 'shake', k: 0.3 });
         fx(sim, api, { x: m.x, y: m.y, r: 1.5, life: 0.7, art: 'f12_slam' }); // анимации 12 — только рисунок
+        sim.events.push({ t: 'boss', what: 'f12_spike' }); // звук шипов
       }
       if (m.t >= T.spikes.end) {
         m.data.hit = 0;
