@@ -4953,7 +4953,9 @@ registerZonePainter(
     fillSector(p, cx, cy, r0, R, a0, a0 + arc);
     // Налив от владыки к краю веера.
     const rf = r0 + (R - r0) * Math.pow(k, 1.2);
-    p.col(sig ? C.gold[2] : C.vio[1], sig ? (tk ? 0.26 : 0.14) : 0.14 + 0.22 * k);
+    // Сигнал — как у круглых меток: фиолет гуще, «тик» светлее; золото по
+    // ночи давало бежевую засветку поверх героя.
+    p.col(tk ? C.vio[3] : C.vio[1], sig ? (tk ? 0.26 : 0.5) : 0.14 + 0.22 * k);
     fillSector(p, cx, cy, r0, rf, a0, a0 + arc);
     ring(
       p,
