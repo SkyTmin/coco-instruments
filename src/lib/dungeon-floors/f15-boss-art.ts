@@ -1467,6 +1467,13 @@ for (const k of ['crown', 'axe', 'skull', 'hydra', 'sword', 'empty'])
 // =============================================================================
 // Хозяин подземелья: поза по режиму мозга (ключевые кадры, 24 к/с).
 // =============================================================================
+//
+// Каждый приём — дорожка ключей: подготовка (присел, вобрал плащ), удар (кадр
+// контакта ровно в урон мозга), проводка (перелёт руки, плащ догоняет), отдых
+// (дорожка `recover` по `m.data.act`). Числа позы: раскрытие плаща, распах,
+// наклон (сдвигом строк кадра), парение, глаза, ядро, свет ладоней, шар
+// тяготения, корона (сколько планет на орбите, радиус, лишний оборот),
+// выгорание плаща (сверхновая), сжатие кадра, отмашка подола, искры по руке.
 
 const LW = 104;
 const LH = 112;
@@ -1486,12 +1493,48 @@ const SH_R = 10.5;
 const ARM = 13;
 const DIRS = 32;
 
-/** Жест кисти: 0 — спрятана в плаще, 1 — свободна, 2 — ладонь, 3 — кулак, 4 — указ, 5 — когти. */
-type Gest = 0 | 1 | 2 | 3 | 4 | 5;
+/**
+ * Жест кисти: 0 — спрятана в плаще, 1 — свободна, 2 — ладонь, 3 — кулак,
+ * 4 — указ, 5 — когти, 6 — сжимается (полукулак), 7 — пальцы врозь.
+ */
+type Gest = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** Кисть: вперёд, вправо, вверх (пиксели тела), жест. */
 type HK = [number, number, number, Gest];
-type Num = 'flare' | 'open' | 'lean' | 'hover' | 'eyes' | 'core' | 'gl' | 'gr' | 'ball';
-const NUMS: Num[] = ['flare', 'open', 'lean', 'hover', 'eyes', 'core', 'gl', 'gr', 'ball'];
+type Num =
+  | 'flare'
+  | 'open'
+  | 'lean'
+  | 'hover'
+  | 'eyes'
+  | 'core'
+  | 'gl'
+  | 'gr'
+  | 'ball'
+  | 'crown'
+  | 'orb'
+  | 'cspin'
+  | 'burn'
+  | 'sq'
+  | 'hx'
+  | 'spark';
+const NUMS: Num[] = [
+  'flare',
+  'open',
+  'lean',
+  'hover',
+  'eyes',
+  'core',
+  'gl',
+  'gr',
+  'ball',
+  'crown',
+  'orb',
+  'cspin',
+  'burn',
+  'sq',
+  'hx',
+  'spark',
+];
 const NDEF: Record<Num, number> = {
   flare: 0,
   open: 0,
@@ -1502,6 +1545,13 @@ const NDEF: Record<Num, number> = {
   gl: 0,
   gr: 0,
   ball: 0,
+  crown: 5,
+  orb: 1,
+  cspin: 0,
+  burn: 0,
+  sq: 0,
+  hx: 0,
+  spark: 0,
 };
 type Ease = 'in' | 'out' | 'io' | 'lin';
 const EASE: Record<Ease, (t: number) => number> = { in: eIn, out: eOut, io: smooth, lin: clamp01 };
@@ -1526,6 +1576,11 @@ const HID_L: HK = [6, -5, 26, 0];
 const HID_R: HK = [6, 5, 26, 0];
 const GLIDE_L: HK = [-4, -17, 33, 1];
 const GLIDE_R: HK = [-4, 17, 33, 1];
+/** Обе руки симметрично: [вперёд, вширь, вверх, жест]. */
+const both = (f: number, w: number, z: number, g: Gest): { L: HK; R: HK } => ({
+  L: [f, -w, z, g],
+  R: [f, w, z, g],
+});
 
 function track(list: KFi[]): KFull[] {
   const out: KFull[] = [];
@@ -1570,170 +1625,256 @@ function blend(a: KFull, b: KFull, k: number): KFull {
 
 const L_ = LORD;
 
+// ---- Ладонь сверху: рука взмывает над головой, виснет, падает в пол --------
 const T_PALM = track([
   { t: 0, L: REST_L, R: REST_R },
+  { t: 0.14, R: [9, 15, 27, 1], hover: -1, flare: 0.15, sq: 0.45, e: 'out' },
   {
-    t: 0.55,
-    L: [10, -10, 34, 1],
-    R: [-3, 9, 60, 2],
-    lean: -0.06,
-    gr: 0.6,
-    eyes: 1.3,
-    flare: 0.1,
-    hover: 2,
-    e: 'out',
+    t: 0.5,
+    L: [8, -13, 33, 1],
+    R: [-2, 9, 64, 2],
+    lean: -0.08,
+    gr: 0.7,
+    eyes: 1.4,
+    flare: 0.2,
+    core: 1.2,
+    hover: 3,
+    sq: -0.5,
   },
-  { t: 0.78, R: [-5, 9, 63, 2], gr: 1, eyes: 1.8, lean: -0.09, hover: 3 },
-  { t: L_.palmWarn, R: [15, 5, 17, 2], hover: 0, e: 'in' },
+  { t: 0.74, R: [-4, 8, 67, 2], gr: 1, eyes: 1.8, lean: -0.1, hover: 4, sq: -0.6, e: 'out' },
+  { t: L_.palmWarn, R: [18, 4, 15, 2], hover: -1, lean: 0.16, flare: 0.3, sq: 0, e: 'in' },
 ]);
+// Удар — кадр 0 отдыха; окно (урон ×1,4) — ладонь лежит и гаснет.
 const T_PALM_R = track([
   {
     t: 0,
-    L: [8, -12, 30, 1],
-    R: [15, 5, 17, 2],
-    lean: 0.14,
+    L: [9, -12, 30, 1],
+    R: [18, 4, 15, 2],
+    lean: 0.16,
     gr: 1,
     eyes: 1.6,
-    flare: -0.35,
+    flare: 0.45,
     core: 1.5,
+    hover: -2,
+    sq: 1,
   },
-  { t: 0.3, R: [15, 6, 19, 2], gr: 0.5, lean: 0.1, flare: -0.15, e: 'out' },
-  { t: 0.75, R: [14, 8, 26, 1], gr: 0, lean: 0.03, eyes: 1.1, flare: 0, core: 1.3 },
-  { t: L_.palmOpen, L: REST_L, R: REST_R, lean: 0, eyes: 1, core: 1 },
+  { t: 0.07, R: [19, 4, 14, 2], sq: 0.45, flare: 0.3, hover: -1.5, e: 'out' },
+  { t: 0.25, R: [17, 5, 16, 2], gr: 0.35, sq: 0, flare: 0.1, core: 1.2 },
+  { t: 0.5, R: [16, 6, 18, 2], gr: 0, eyes: 1.2, core: 1 },
+  { t: 0.85, R: [12, 9, 24, 1], lean: 0.05, eyes: 1, hover: 0, flare: 0 },
+  { t: L_.palmOpen, L: REST_L, R: REST_R, lean: 0 },
 ]);
+
+// ---- Взмах наотмашь: рука уходит за спину, дуга справа налево --------------
 const T_SWEEP = track([
   { t: 0, L: REST_L, R: REST_R },
-  { t: 0.5, L: [9, -8, 36, 1], R: [-6, 24, 50, 2], lean: -0.05, gr: 0.7, eyes: 1.4, e: 'out' },
-  { t: 0.64, R: [-8, 25, 52, 2], gr: 1, eyes: 1.8 },
-  { t: L_.sweepWarn, R: [10, 24, 44, 2], e: 'in' },
+  { t: 0.12, L: [8, -14, 32, 1], R: [10, 6, 30, 1], hover: -1, sq: 0.3, hx: -1, e: 'out' },
+  {
+    t: 0.45,
+    R: [-9, 23, 46, 2],
+    lean: -0.07,
+    gr: 0.8,
+    eyes: 1.4,
+    flare: 0.1,
+    hover: 2,
+    sq: -0.2,
+    hx: 2.5,
+  },
+  { t: 0.56, R: [-11, 24, 48, 2], gr: 1, eyes: 1.8, hx: 3 },
+  { t: 0.64, R: [17, 17, 36, 2], lean: 0.05, hx: 1, e: 'in' },
+  { t: L_.sweepWarn, R: [14, -20, 32, 2], lean: 0.12, flare: 0.35, hx: -3, sq: 0.4, e: 'lin' },
 ]);
 const T_SWEEP_R = track([
-  { t: 0, L: [9, -8, 36, 1], R: [22, 0, 32, 2], lean: 0.1, gr: 1, flare: -0.25, eyes: 1.6 },
-  { t: 0.08, R: [12, -20, 30, 2], lean: 0.08, e: 'out' },
-  { t: 0.35, R: [4, -14, 28, 1], gr: 0.2, flare: 0 },
-  { t: 0.75, L: REST_L, R: REST_R, lean: 0, gr: 0, eyes: 1 },
+  {
+    t: 0,
+    L: [8, -14, 32, 1],
+    R: [14, -20, 32, 2],
+    lean: 0.12,
+    gr: 1,
+    eyes: 1.6,
+    flare: 0.35,
+    hx: -3,
+    sq: 0.4,
+  },
+  { t: 0.1, R: [2, -25, 31, 2], hx: -4.5, flare: 0.2, sq: 0, e: 'out' },
+  { t: 0.35, R: [5, -16, 30, 1], gr: 0.3, hx: 1.5, lean: 0.05, eyes: 1.2 },
+  { t: 0.5, hx: -0.8 },
+  { t: 0.75, L: REST_L, R: REST_R, gr: 0, hx: 0, lean: 0, flare: 0, eyes: 1 },
 ]);
+
+// ---- Волна отталкивания: ладони сходятся, шар — и резко врозь (3 кольца) ---
 const RW = L_.repelWarn;
 const RS = L_.repelStep;
 const T_REPEL = track([
   { t: 0, L: REST_L, R: REST_R },
+  { t: 0.15, ...both(4, 19, 27, 1), hover: -1, flare: 0.1, sq: 0.3, e: 'out' },
   {
     t: RW - 0.35,
-    L: [10, -3, 40, 2],
-    R: [10, 3, 40, 2],
+    ...both(11, 3.5, 40, 2),
     flare: -0.45,
-    ball: 0.7,
+    ball: 0.8,
     gl: 0.6,
     gr: 0.6,
     eyes: 1.5,
-    e: 'out',
+    hover: 1,
+    sq: -0.2,
   },
   {
     t: RW - 0.05,
-    L: [11, -2.5, 41, 2],
-    R: [11, 2.5, 41, 2],
+    ...both(12, 2.4, 41, 2),
     ball: 1,
     gl: 1,
     gr: 1,
     eyes: 1.9,
     hover: 2,
+    flare: -0.55,
+    sq: -0.3,
   },
-  {
-    t: RW,
-    L: [5, -30, 42, 2],
-    R: [5, 30, 42, 2],
-    flare: 0.85,
-    ball: 0,
-    eyes: 2,
-    hover: 0,
-    e: 'lin',
-  },
-  { t: RW + RS - 0.05, L: [5, -22, 38, 2], R: [5, 22, 38, 2], flare: 0.7, e: 'out' },
-  { t: RW + RS, L: [5, -24, 39, 2], R: [5, 24, 39, 2], flare: 0.95, e: 'lin' },
-  { t: RW + 2 * RS - 0.05, L: [5, -22, 38, 2], R: [5, 22, 38, 2], flare: 0.75, e: 'out' },
-  { t: RW + 2 * RS, L: [5, -24, 39, 2], R: [5, 24, 39, 2], flare: 1, e: 'lin' },
-  { t: RW + 0.65, gl: 0.6, gr: 0.6 },
+  { t: RW, ...both(5, 29, 43, 7), flare: 1, ball: 0, eyes: 2, hover: 0, sq: 0.6, e: 'lin' },
+  { t: RW + 0.1, ...both(4, 30, 44, 7), flare: 0.8, sq: 0.15, e: 'out' },
+  { t: RW + RS - 0.05, ...both(7, 23, 40, 2), flare: 0.65, sq: -0.1 },
+  { t: RW + RS, ...both(4, 30, 43, 7), flare: 0.95, sq: 0.4, e: 'lin' },
+  { t: RW + RS + 0.1, ...both(5, 29, 44, 7), flare: 0.75, sq: 0.1, e: 'out' },
+  { t: RW + 2 * RS - 0.05, ...both(7, 23, 40, 2), flare: 0.65, sq: -0.1 },
+  { t: RW + 2 * RS, ...both(4, 31, 44, 7), flare: 1, sq: 0.45, e: 'lin' },
+  { t: RW + 0.65, ...both(5, 30, 44, 7), flare: 0.9, sq: 0.15, gl: 0.7, gr: 0.7, e: 'out' },
 ]);
 const T_REPEL_R = track([
-  { t: 0, L: [5, -24, 39, 2], R: [5, 24, 39, 2], flare: 1, gl: 0.6, gr: 0.6, eyes: 1.6 },
+  { t: 0, ...both(5, 30, 44, 7), flare: 0.9, gl: 0.7, gr: 0.7, eyes: 1.6, sq: 0.15 },
+  { t: 0.12, ...both(5, 28, 42, 2), flare: 0.7, sq: 0, e: 'out' },
   { t: 0.5, L: REST_L, R: REST_R, flare: 0, gl: 0, gr: 0, eyes: 1 },
 ]);
+
+// ---- Колодец: рука тянется, кулак сжимается медленно, искры бегут к кулаку --
+const WW = L_.wellWarn;
 const T_WELL = track([
   { t: 0, L: REST_L, R: REST_R },
+  { t: 0.12, R: [3, 12, 29, 1], sq: 0.3, hover: -1, e: 'out' },
   {
-    t: 0.55,
-    L: [7, -11, 34, 1],
-    R: [6, 7, 61, 3],
-    gr: 0.7,
-    eyes: 1.5,
-    lean: -0.05,
+    t: 0.42,
+    L: [6, -14, 33, 1],
+    R: [21, 7, 48, 7],
+    gr: 0.5,
+    eyes: 1.4,
     hover: 2,
-    e: 'out',
+    lean: 0.05,
+    sq: -0.15,
   },
-  { t: L_.wellWarn - 0.06, R: [7, 7, 63, 3], gr: 1, eyes: 1.9, hover: 3 },
-  { t: L_.wellWarn, R: [14, 4, 16, 3], hover: 0, e: 'in' },
+  { t: 0.45, spark: 0 },
+  { t: 0.62, R: [22, 7, 49, 6], gr: 0.8, spark: 0.38, e: 'lin' },
+  { t: WW - 0.06, R: [22, 7, 50, 6], gr: 1, eyes: 1.8, spark: 0.87, e: 'lin' },
+  { t: WW, R: [17, 7, 46, 3], lean: -0.05, flare: -0.2, core: 1.5, sq: 0.35, spark: 1, e: 'in' },
 ]);
 const T_WELL_R = track([
-  { t: 0, L: [7, -11, 34, 1], R: [14, 4, 16, 3], gr: 1, eyes: 1.9, lean: 0.1, flare: -0.3 },
-  { t: 0.3, R: [13, 5, 19, 3], gr: 0.7, lean: 0.06, e: 'out' },
-  { t: 0.55, L: REST_L, R: REST_R, gr: 0, eyes: 1, lean: 0, flare: 0 },
+  { t: 0, L: [6, -14, 33, 1], R: [17, 7, 46, 3], gr: 1, eyes: 1.8, lean: -0.05, flare: -0.2 },
+  { t: 0.12, R: [15, 8, 44, 3], gr: 0.6, sq: 0, core: 1.2, e: 'out' },
+  { t: 0.55, L: REST_L, R: REST_R, gr: 0, eyes: 1, lean: 0, flare: 0, core: 1 },
 ]);
+
+// ---- Планеты: рука чертит круг над головой — корона срывается с орбиты ------
+// К броску корона сходится к точкам `crownSpot` мозга (оттуда летят планеты
+// «Техник»), лишний оборот кончается полным кругом — без скачка.
+const CSPOT = 0.95 * 16;
 const T_ORBIT = track([
   { t: 0, L: REST_L, R: REST_R },
-  { t: 0.42, L: [6, -9, 32, 1], R: [0, 10, 76, 2], gr: 0.8, eyes: 1.6, hover: 2, e: 'out' },
-  { t: 0.62, R: [-3, 9, 78, 2], gr: 1, eyes: 1.9 },
-  { t: L_.orbitWarn, R: [17, 6, 54, 2], e: 'in' },
+  { t: 0.1, R: [6, 14, 28, 1], hover: -1, sq: 0.3, e: 'out' },
+  { t: 0.32, L: [7, -12, 32, 1], R: [3, 11, 64, 2], gr: 0.7, eyes: 1.5, hover: 3, sq: -0.3 },
+  { t: 0.42, R: [-5, 4, 70, 2], cspin: 0.9, e: 'lin' },
+  { t: 0.52, R: [1, -7, 70, 2], cspin: 2.4, orb: 0.95, gr: 1, e: 'lin' },
+  { t: 0.6, R: [10, 1, 67, 2], cspin: 4.0, orb: 0.88, eyes: 1.8, e: 'lin' },
+  {
+    t: L_.orbitWarn,
+    R: [22, 5, 40, 2],
+    lean: 0.12,
+    cspin: TAU,
+    orb: CSPOT / 19.5,
+    flare: 0.25,
+    hover: 0,
+    sq: 0.35,
+    e: 'in',
+  },
 ]);
 const T_ORBIT_R = track([
-  { t: 0, L: [6, -9, 32, 1], R: [23, 4, 36, 2], gr: 1, lean: 0.1, hover: 0, eyes: 1.7 },
-  { t: 0.25, R: [18, 3, 30, 1], gr: 0.3, lean: 0.06, e: 'out' },
-  { t: 0.6, L: REST_L, R: REST_R, gr: 0, lean: 0, eyes: 1 },
+  {
+    t: 0,
+    L: [7, -12, 32, 1],
+    R: [22, 5, 40, 2],
+    gr: 1,
+    lean: 0.12,
+    eyes: 1.7,
+    core: 1.3,
+    flare: 0.25,
+    sq: 0.35,
+  },
+  { t: 0.12, R: [20, 4, 36, 2], gr: 0.5, sq: 0, e: 'out' },
+  { t: 0.6, L: REST_L, R: REST_R, gr: 0, lean: 0, eyes: 1, core: 1, flare: 0 },
 ]);
+
+// ---- Звездопад: кулаки вверх — пальцы раскрываются, небо падает ------------
 const MW = L_.meteorWarn;
 const T_METEOR = track([
   { t: 0, L: REST_L, R: REST_R },
+  { t: 0.12, ...both(8, 10, 27, 3), sq: 0.4, hover: -1, flare: -0.1, e: 'out' },
   {
-    t: MW - 0.3,
-    L: [2, -12, 78, 2],
-    R: [2, 12, 78, 2],
+    t: 0.55,
+    ...both(1, 11, 72, 3),
     gl: 0.8,
     gr: 0.8,
-    eyes: 2,
-    core: 1.6,
     hover: 4,
-    flare: 0.3,
-    e: 'out',
+    flare: 0.25,
+    lean: -0.08,
+    sq: -0.4,
+    eyes: 1.7,
+    core: 1.4,
   },
-  { t: MW, L: [0, -13, 80, 2], R: [0, 13, 80, 2], gl: 1, gr: 1 },
-  { t: MW + 0.1, L: [10, -17, 38, 3], R: [10, 17, 38, 3], hover: 0, flare: 0.6, e: 'in' },
-  { t: MW + 0.3, L: [8, -17, 32, 2], R: [8, 17, 32, 2], gl: 0.5, gr: 0.5, flare: 0.3, e: 'out' },
+  { t: MW - 0.06, ...both(0, 12, 74, 3), gl: 1, gr: 1, eyes: 2, hover: 5 },
+  { t: MW, ...both(0, 16, 76, 7), sq: -0.6, flare: 0.45, e: 'in' },
+  { t: MW + 0.1, ...both(1, 17, 74, 7), sq: -0.2, e: 'out' },
+  { t: MW + 0.3, ...both(5, 17, 58, 2), hover: 2, flare: 0.2, lean: 0, sq: 0, gl: 0.6, gr: 0.6 },
 ]);
 const T_METEOR_R = track([
-  {
-    t: 0,
-    L: [8, -17, 32, 2],
-    R: [8, 17, 32, 2],
-    gl: 0.5,
-    gr: 0.5,
-    flare: 0.3,
-    eyes: 1.6,
-    core: 1.3,
-  },
-  { t: 0.5, L: REST_L, R: REST_R, gl: 0, gr: 0, flare: 0, eyes: 1, core: 1 },
+  { t: 0, ...both(5, 17, 58, 2), gl: 0.6, gr: 0.6, hover: 2, flare: 0.2, eyes: 1.6, core: 1.3 },
+  { t: 0.5, L: REST_L, R: REST_R, gl: 0, gr: 0, hover: 0, flare: 0, eyes: 1, core: 1 },
 ]);
+
+// ---- Дирижёр: указ отбивает доли, вторая рука ведёт — сильная доля в 0,9 ---
 const T_CONDUCT = track([
   { t: 0, L: REST_L, R: REST_R },
-  { t: 0.4, L: [4, -12, 54, 2], R: [17, 7, 47, 4], gl: 0.5, gr: 0.8, eyes: 1.5, e: 'out' },
-  { t: 0.65, R: [18, 11, 54, 4] },
-  { t: 0.82, R: [16, 3, 56, 4] },
-  { t: 0.9, R: [21, 3, 36, 4], gr: 1, eyes: 2, e: 'in' },
-  { t: 1.2, R: [19, 5, 40, 4], e: 'out' },
-  { t: L_.conduct, L: [5, -11, 40, 1], R: [14, 8, 38, 4], gr: 0.4, eyes: 1.2 },
+  {
+    t: 0.25,
+    L: [8, -12, 48, 2],
+    R: [12, 8, 50, 4],
+    gl: 0.4,
+    gr: 0.5,
+    eyes: 1.4,
+    hover: 1,
+    e: 'out',
+  },
+  { t: 0.4, R: [17, 3, 40, 4], sq: 0.25, e: 'in' },
+  { t: 0.48, R: [15, 7, 48, 4], sq: 0, e: 'out' },
+  { t: 0.6, L: [9, -14, 44, 2], R: [16, 14, 42, 4], sq: 0.25, e: 'in' },
+  { t: 0.68, R: [14, 12, 50, 4], sq: 0, e: 'out' },
+  { t: 0.82, L: [8, -15, 56, 2], R: [12, 6, 60, 4], gr: 1, hover: 3, sq: -0.3, eyes: 1.8 },
+  {
+    t: 0.9,
+    L: [16, -8, 32, 2],
+    R: [21, 4, 30, 4],
+    lean: 0.1,
+    flare: 0.35,
+    sq: 0.5,
+    hover: 0,
+    eyes: 2,
+    e: 'in',
+  },
+  { t: 1.05, R: [19, 5, 34, 4], sq: 0, e: 'out' },
+  { t: L_.conduct, L: [8, -12, 40, 1], R: [14, 8, 38, 4], gr: 0.4, gl: 0, lean: 0, flare: 0 },
 ]);
 const T_CONDUCT_R = track([
-  { t: 0, L: [5, -11, 40, 1], R: [14, 8, 38, 4], gr: 0.4, eyes: 1.2 },
+  { t: 0, L: [8, -12, 40, 1], R: [14, 8, 38, 4], gr: 0.4, eyes: 1.2 },
   { t: 0.4, L: REST_L, R: REST_R, gr: 0, eyes: 1 },
 ]);
+
+// ---- Затмение: руки под плащом, удар из тьмы когтем или указом -------------
 const HIDDEN: Omit<KFi, 't'> = {
   L: HID_L,
   R: HID_R,
@@ -1745,99 +1886,142 @@ const HIDDEN: Omit<KFi, 't'> = {
   gr: 0,
   hover: 0,
   lean: 0,
+  sq: 0,
 };
 const T_HIDDEN = track([{ t: 0, ...HIDDEN }]);
 const DW = L_.darkWarn;
 const T_CLAW = track([
   { t: 0, ...HIDDEN },
-  { t: 0.3, R: [-2, 14, 50, 5], flare: -0.5, hover: 3, eyes: 2, gr: 0.6, e: 'out' },
-  { t: DW - 0.1, R: [-5, 16, 55, 5], gr: 1 },
-  { t: DW, R: [19, -6, 30, 5], lean: 0.12, hover: 0, flare: -0.3, e: 'in' },
-  { t: DW + 0.25, R: [13, -14, 27, 5], lean: 0.06, gr: 0.4, e: 'out' },
+  { t: 0.35, R: [4, 13, 42, 5], flare: -0.6, hover: 2, eyes: 2, gr: 0.5, e: 'out' },
+  { t: 0.85, R: [-4, 16, 54, 5], gr: 0.8, lean: -0.06, hover: 3, sq: -0.2 },
+  { t: DW - 0.05, R: [-6, 18, 57, 5], gr: 1 },
+  { t: DW, R: [21, -6, 30, 5], lean: 0.14, hover: 0, flare: -0.3, sq: 0.5, e: 'in' },
+  { t: DW + 0.1, R: [13, -16, 27, 5], lean: 0.08, sq: 0, e: 'out' },
+  { t: DW + 0.25, R: [12, -15, 28, 5], gr: 0.4 },
 ]);
 const T_STARFALL = track([
   { t: 0, ...HIDDEN },
-  { t: 0.3, R: [2, 8, 74, 4], flare: -0.5, hover: 3, eyes: 2, gr: 0.7, e: 'out' },
-  { t: DW - 0.1, R: [0, 8, 80, 4], gr: 1 },
-  { t: DW, R: [21, 4, 32, 4], hover: 0, lean: 0.08, e: 'in' },
-  { t: DW + 0.25, R: [18, 5, 30, 4], gr: 0.4, e: 'out' },
+  { t: 0.35, R: [3, 9, 60, 4], flare: -0.5, hover: 2, eyes: 2, gr: 0.6, e: 'out' },
+  { t: DW - 0.1, R: [0, 8, 76, 4], gr: 1, hover: 4, sq: -0.3 },
+  { t: DW, R: [21, 4, 40, 4], hover: 0, lean: 0.1, sq: 0.4, e: 'in' },
+  { t: DW + 0.1, R: [19, 5, 36, 4], sq: 0, e: 'out' },
+  { t: DW + 0.25, gr: 0.4 },
 ]);
 /** Из удара во тьме — обратно под плащ. */
 const T_CLAW_BACK = track([
-  { t: 0, R: [13, -14, 27, 5], L: HID_L, flare: -0.3, eyes: 1.8, core: 0.5, gr: 0.4 },
+  { t: 0, R: [12, -15, 28, 5], L: HID_L, flare: -0.3, eyes: 1.8, core: 0.5, gr: 0.4, lean: 0.08 },
   { t: 0.3, ...HIDDEN },
 ]);
 const T_STAR_BACK = track([
-  { t: 0, R: [18, 5, 30, 4], L: HID_L, flare: -0.5, eyes: 1.8, core: 0.5, gr: 0.4 },
+  { t: 0, R: [19, 5, 36, 4], L: HID_L, flare: -0.5, eyes: 1.8, core: 0.5, gr: 0.4 },
   { t: 0.3, ...HIDDEN },
 ]);
 const CO = L_.cloakOpen;
 const T_OPEN = track([
   { t: 0, ...HIDDEN },
+  { t: 0.06, flare: -1, sq: 0.5, hover: -1, e: 'out' },
   {
-    t: 0.2,
-    L: [2, -24, 47, 2],
-    R: [2, 24, 47, 2],
+    t: 0.18,
+    ...both(2, 25, 48, 7),
     flare: 1,
     open: 1,
-    core: 2,
-    eyes: 1.3,
+    core: 2.2,
+    eyes: 1.4,
     gl: 0.8,
     gr: 0.8,
     hover: 3,
+    sq: -0.4,
     e: 'out',
   },
-  { t: 1.2, L: [3, -23, 45, 2], R: [3, 23, 45, 2], flare: 0.9, open: 0.95, core: 1.8, hover: 2 },
-  { t: CO - 0.3, L: [2, -24, 47, 2], R: [2, 24, 47, 2], flare: 1, open: 1, core: 2, hover: 3 },
+  { t: 0.3, ...both(1, 27, 50, 2), sq: 0 },
+  { t: 1.3, ...both(3, 23, 46, 2), flare: 0.9, open: 0.9, core: 2, hover: 2 },
+  { t: CO - 0.35, ...both(2, 24, 47, 2), flare: 1, open: 1, core: 2.2, hover: 3 },
   { t: CO, ...HIDDEN, e: 'in' },
 ]);
 const T_WRAP = track([
   { t: 0, L: REST_L, R: REST_R },
-  { t: 0.7, L: [9, 6, 40, 2], R: [9, -6, 41, 2], flare: -0.6, eyes: 1.5 },
-  { t: 1.4, L: [8, 5, 42, 2], R: [8, -5, 43, 2], flare: -0.9, eyes: 1.8, core: 0.7 },
+  { t: 0.5, L: [10, 6, 40, 2], R: [10, -6, 41, 2], flare: -0.5, eyes: 1.5, e: 'out' },
+  { t: 1.3, L: [8, 5, 42, 2], R: [8, -5, 43, 2], flare: -0.9, eyes: 1.9, core: 0.6, hover: 1 },
   { t: L_.wrap, ...HIDDEN, e: 'in' },
 ]);
+
+// ---- Сбор планет (фаза 2): корона сжимается в шар между ладонями — вспышка --
 const T_GATHER = track([
   { t: 0, L: REST_L, R: REST_R },
+  { t: 0.3, ...both(4, 24, 40, 7), orb: 1.15, gl: 0.5, gr: 0.5, sq: -0.2, e: 'out' },
   {
     t: 1.2,
-    L: [13, -4.5, 42, 2],
-    R: [13, 4.5, 42, 2],
+    ...both(13, 4.5, 42, 2),
     ball: 1,
-    gl: 0.7,
-    gr: 0.7,
+    orb: 0.55,
+    cspin: 3,
     flare: -0.35,
     eyes: 1.6,
+    gl: 0.8,
+    gr: 0.8,
+    sq: 0,
   },
-  { t: 1.5, L: [12, -3.5, 42, 2], R: [12, 3.5, 42, 2], ball: 1.2, eyes: 1.9 },
+  { t: 1.5, ...both(12, 3.5, 42, 2), ball: 1.25, orb: 0.45, cspin: 5, eyes: 1.9, sq: -0.2 },
   {
     t: 1.6,
-    L: [10, -3, 42, 3],
-    R: [10, 3, 42, 3],
+    ...both(6, 22, 46, 7),
     ball: 0,
-    flare: 0.5,
+    orb: 1.3,
+    cspin: TAU,
+    flare: 0.6,
     eyes: 2,
     core: 1.8,
+    sq: 0.5,
     e: 'lin',
   },
-  { t: L_.gather, L: REST_L, R: REST_R, flare: 0, eyes: 1, core: 1, gl: 0, gr: 0 },
+  { t: 1.85, ...both(6, 20, 40, 2), orb: 0.95, sq: 0, e: 'out' },
+  {
+    t: L_.gather,
+    L: REST_L,
+    R: REST_R,
+    orb: 1,
+    flare: 0,
+    eyes: 1,
+    core: 1,
+    gl: 0,
+    gr: 0,
+  },
 ]);
+// ---- Память (фаза 3): руки к небу, корона шире, ядро в цветах четвертей -----
 const T_MEMORY = track([
   { t: 0, L: REST_L, R: REST_R },
+  { t: 0.15, ...both(6, 14, 28, 1), sq: 0.3, hover: -1, e: 'out' },
   {
     t: 0.8,
-    L: [4, -16, 66, 2],
-    R: [4, 16, 66, 2],
+    ...both(4, 16, 66, 7),
     flare: 0.5,
     gl: 0.8,
     gr: 0.8,
     eyes: 1.8,
     core: 1.6,
     hover: 4,
+    orb: 1.2,
+    cspin: 1.5,
+    sq: -0.3,
   },
-  { t: 2.0, L: [3, -17, 68, 2], R: [3, 17, 68, 2] },
-  { t: L_.memory, L: REST_L, R: REST_R, flare: 0, gl: 0, gr: 0, eyes: 1, core: 1, hover: 0 },
+  { t: 2.0, ...both(3, 17, 68, 2), cspin: 4.8, orb: 1.15 },
+  {
+    t: L_.memory,
+    L: REST_L,
+    R: REST_R,
+    flare: 0,
+    gl: 0,
+    gr: 0,
+    eyes: 1,
+    core: 1,
+    hover: 0,
+    orb: 1,
+    cspin: TAU,
+    sq: 0,
+  },
 ]);
+
+// ---- Сон, шевеление, пробуждение -------------------------------------------
 const SLEEP: Omit<KFi, 't'> = {
   L: HID_L,
   R: HID_R,
@@ -1846,82 +2030,137 @@ const SLEEP: Omit<KFi, 't'> = {
   core: 0.25,
   hover: -2,
   open: 0,
+  crown: 0,
 };
 const T_SLEEP = track([{ t: 0, ...SLEEP }]);
 const T_STIR = track([
   { t: 0, ...SLEEP },
-  { t: 0.4, flare: -0.75, eyes: 0, core: 0.4, hover: -1, e: 'out' },
-  { t: 0.5, flare: -0.2, eyes: 0.7, core: 1, hover: 1, e: 'in' },
-  { t: 0.9, ...SLEEP },
+  { t: 0.4, flare: -0.75, core: 0.4, hover: -1, hx: 1.5, e: 'out' },
+  { t: 0.5, flare: -0.3, eyes: 0.7, core: 0.9, hover: 1, hx: -1.5, e: 'in' },
+  { t: 0.62, eyes: 0, hx: 1 },
+  { t: 0.9, ...SLEEP, hx: 0 },
 ]);
+// Плащ раскрывается снизу вверх, планеты выходят по одной, глаза — последними.
 const T_WAKE = track([
   { t: 0, ...SLEEP },
-  { t: 0.8, eyes: 0, core: 0.4 },
-  { t: 1.0, eyes: 1.4, core: 1.2, e: 'out' },
-  { t: 1.5, L: [7, -9, 30, 1], R: [7, 9, 30, 1], flare: -0.5, hover: 2 },
+  { t: 0.5, hover: -1, core: 0.35 },
+  { t: 1.0, hover: 1, core: 0.6, flare: -0.8 },
+  { t: 1.5, ...both(8, 7, 28, 1), flare: -0.95, hover: 0, sq: 0.5, core: 0.7 },
   {
     t: 1.7,
-    L: [3, -25, 52, 2],
-    R: [3, 25, 52, 2],
-    flare: 1,
-    open: 0.6,
-    eyes: 2,
-    core: 2,
+    ...both(3, 24, 50, 7),
+    flare: 0.7,
+    open: 0.5,
+    hover: 6,
     gl: 1,
     gr: 1,
-    hover: 6,
+    core: 1.2,
+    sq: -0.5,
     e: 'in',
   },
-  { t: 2.0, L: [3, -26, 54, 2], R: [3, 26, 54, 2], flare: 1, hover: 7, e: 'out' },
+  {
+    t: 2.0,
+    ...both(3, 26, 55, 2),
+    flare: 1,
+    open: 0.7,
+    hover: 7,
+    core: 1.4,
+    sq: 0.3,
+    crown: 0,
+    e: 'out',
+  },
+  { t: 2.08, sq: 0 },
+  { t: 2.25, crown: 1, e: 'lin' },
+  { t: 2.45, crown: 2, e: 'lin' },
+  { t: 2.65, crown: 3, e: 'lin' },
   {
     t: 2.8,
-    L: [5, -20, 44, 2],
-    R: [5, 20, 44, 2],
+    ...both(5, 20, 44, 2),
     flare: 0.4,
     open: 0.2,
-    core: 1.4,
-    eyes: 1.4,
     gl: 0.4,
     gr: 0.4,
     hover: 3,
+    core: 1.2,
+    crown: 3.75,
   },
-  { t: L_.wake, L: REST_L, R: REST_R, flare: 0, open: 0, core: 1, eyes: 1, gl: 0, gr: 0, hover: 0 },
+  { t: 2.85, crown: 4, e: 'lin' },
+  { t: 3.0, eyes: 0, e: 'lin' },
+  { t: 3.05, crown: 5, eyes: 0.6, e: 'lin' },
+  { t: 3.15, eyes: 2, core: 1.5, e: 'out' },
+  {
+    t: L_.wake,
+    L: REST_L,
+    R: REST_R,
+    flare: 0,
+    open: 0,
+    core: 1,
+    eyes: 1,
+    gl: 0,
+    gr: 0,
+    hover: 0,
+  },
 ]);
+
+// ---- Сверхновая: плывёт к звезде, плащ выгорает от кромки, корона — в ядро --
 const NV = L_.nova;
 const T_NOVA = track([
   { t: 0, L: GLIDE_L, R: GLIDE_R, lean: 0.1, flare: -0.3 },
-  { t: NV - 1.4, lean: 0.06 },
+  { t: 0.9, ...both(6, 14, 40, 2), lean: 0.03, flare: -0.2 },
   {
-    t: NV - 0.8,
-    L: [6, -12, 40, 2],
-    R: [6, 12, 40, 2],
+    t: 1.4,
+    ...both(2, 24, 50, 7),
     lean: 0,
-    flare: -0.5,
-    ball: 0.8,
+    flare: 0.5,
+    open: 0.6,
+    core: 1.8,
+    eyes: 1.8,
     gl: 0.8,
     gr: 0.8,
-    eyes: 1.8,
-    core: 1.6,
+    hover: 2,
+  },
+  {
+    t: 2.4,
+    burn: 0.55,
+    orb: 0.55,
+    cspin: 6,
+    core: 2.2,
+    hover: 4,
+    flare: 0.8,
+    open: 0.8,
+    e: 'lin',
+  },
+  {
+    t: NV - 0.7,
+    ...both(1, 27, 54, 2),
+    burn: 0.95,
+    orb: 0.1,
+    cspin: 12,
+    hover: 5,
+    sq: -0.4,
+    e: 'lin',
   },
   {
     t: NV - 0.6,
-    L: [1, -27, 52, 2],
-    R: [1, 27, 52, 2],
-    flare: 1,
-    open: 1,
-    core: 2,
+    burn: 1,
+    orb: 0,
+    crown: 0,
+    cspin: 4 * Math.PI,
+    core: 3,
     eyes: 2,
-    ball: 0,
+    sq: 0.6,
     gl: 1,
     gr: 1,
-    hover: 4,
     e: 'in',
   },
-  { t: NV, L: [1, -26, 50, 2], R: [1, 26, 50, 2], hover: 3, e: 'out' },
+  { t: NV - 0.45, sq: 0, e: 'out' },
+  { t: NV - 0.3, sq: 0.45, e: 'in' },
+  { t: NV - 0.15, sq: 0, e: 'out' },
+  { t: NV, ...both(1, 26, 50, 2), flare: 1, open: 1, core: 2, hover: 3 },
 ]);
+/** Тело света после сверхновой. */
 const BLAZE: Omit<KFi, 't'> = {
-  L: [1, -26, 50, 2],
-  R: [1, 26, 50, 2],
+  ...both(1, 26, 50, 2),
   flare: 1,
   open: 1,
   core: 2,
@@ -1930,41 +2169,36 @@ const BLAZE: Omit<KFi, 't'> = {
   gr: 1,
   hover: 3,
   lean: 0,
+  burn: 1,
+  crown: 0,
+  sq: 0,
 };
 const T_BEAMS = track([
   { t: 0, ...BLAZE },
-  { t: 1, L: [1, -25, 48, 2], R: [1, 25, 48, 2], hover: 2 },
+  { t: 1, ...both(1, 25, 48, 2), hover: 2, flare: 0.85 },
   { t: 2, ...BLAZE },
 ]);
 const PW = L_.pulseWarn;
 const PS = L_.pulseStep;
 const T_PULSE = track([
   { t: 0, ...BLAZE },
-  { t: PW - 0.35, L: [0, -14, 78, 2], R: [0, 14, 78, 2], core: 2.4, hover: 6, e: 'out' },
-  { t: PW, L: [2, -27, 50, 2], R: [2, 27, 50, 2], hover: 3, e: 'in' },
-  { t: PW + PS - 0.06, L: [2, -25, 52, 2], R: [2, 25, 52, 2] },
-  { t: PW + PS, L: [2, -27, 50, 2], R: [2, 27, 50, 2], e: 'in' },
-  { t: PW + 2 * PS - 0.06, L: [2, -25, 52, 2], R: [2, 25, 52, 2] },
-  { t: PW + 2 * PS, L: [2, -28, 50, 2], R: [2, 28, 50, 2], e: 'in' },
+  { t: PW - 0.35, ...both(0, 14, 76, 3), core: 2.4, hover: 6, sq: -0.4, flare: 0.6, e: 'out' },
+  { t: PW, ...both(2, 27, 50, 7), hover: 3, sq: 0.5, flare: 1, e: 'in' },
+  { t: PW + 0.08, sq: 0, e: 'out' },
+  { t: PW + PS - 0.06, ...both(2, 24, 52, 2), flare: 0.85 },
+  { t: PW + PS, ...both(2, 27, 50, 7), sq: 0.45, flare: 1, e: 'in' },
+  { t: PW + PS + 0.08, sq: 0, e: 'out' },
+  { t: PW + 2 * PS - 0.06, ...both(2, 24, 52, 2), flare: 0.85 },
+  { t: PW + 2 * PS, ...both(2, 28, 50, 7), sq: 0.5, flare: 1, e: 'in' },
+  { t: PW + 2 * PS + 0.1, ...both(2, 27, 50, 2), sq: 0, e: 'out' },
 ]);
+// Выдох: свет стекает к кромке, под ним — тёмная ткань (урон ×1,5 — честно).
 const EX = L_.exhale;
 const T_EXHALE = track([
-  {
-    t: 0,
-    L: [2, -28, 50, 2],
-    R: [2, 28, 50, 2],
-    flare: 1,
-    open: 1,
-    core: 2,
-    eyes: 2,
-    gl: 1,
-    gr: 1,
-    hover: 3,
-  },
+  { t: 0, ...BLAZE, ...both(2, 28, 50, 2) },
   {
     t: 0.6,
-    L: [5, -15, 26, 1],
-    R: [5, 15, 26, 1],
+    ...both(5, 15, 26, 1),
     flare: 0.15,
     open: 0.35,
     core: 0.5,
@@ -1972,10 +2206,15 @@ const T_EXHALE = track([
     gl: 0,
     gr: 0,
     hover: -1,
+    burn: 0.12,
+    e: 'out',
   },
-  { t: EX - 0.5, L: [5, -14, 25, 1], R: [5, 14, 25, 1], core: 0.6 },
-  { t: EX, ...BLAZE },
+  { t: EX - 0.5, ...both(5, 14, 25, 1), core: 0.6, burn: 0.18 },
+  { t: EX, ...BLAZE, e: 'in' },
 ]);
+
+// ---- Смерть (в своих секундах, ×2,3): отдача, руки к небу, тело света
+// осыпается звёздами вверх, ядро стягивается в точку и вспыхивает. -----------
 const DIE = 2.6;
 // Сцена смерти идёт в 2,3 раза быстрее мира: страница открывает церемонию и
 // ставит мир на паузу через 1,5 с после `finale`, а мир к тому мгновению
@@ -1985,29 +2224,24 @@ const DIE_K = 2.3;
 const T_DIE = track([
   {
     t: 0,
-    L: [4, -22, 50, 2],
-    R: [4, 22, 50, 2],
+    ...both(2, 26, 56, 7),
     flare: 1,
     open: 0.8,
-    core: 2,
-    eyes: 2,
+    core: 2.6,
+    eyes: 2.2,
     gl: 1,
     gr: 1,
     hover: 4,
-    lean: -0.08,
+    lean: -0.14,
+    burn: 1,
+    crown: 0,
+    sq: -0.6,
   },
-  { t: 0.35, L: [2, -24, 58, 2], R: [2, 24, 58, 2], hover: 7, lean: -0.12, e: 'out' },
-  {
-    t: 1.4,
-    L: [4, -18, 54, 2],
-    R: [4, 18, 54, 2],
-    flare: 0.6,
-    open: 0.4,
-    hover: 8,
-    gl: 0.6,
-    gr: 0.6,
-  },
-  { t: 2.0, L: [6, -10, 52, 0], R: [6, 10, 52, 0], core: 2.4, eyes: 2, gl: 0, gr: 0, hover: 9 },
+  { t: 0.3, ...both(0, 16, 70, 2), hover: 7, sq: 0, lean: -0.1, e: 'out' },
+  { t: 1.0, ...both(3, 20, 60, 2), hover: 8, lean: -0.04, burn: 0.8 },
+  { t: 1.6, ...both(4, 14, 52, 2), gl: 0.5, gr: 0.5, hover: 9, flare: 0.6, open: 0.4 },
+  { t: 2.0, ...both(6, 8, 50, 0), core: 2.6, eyes: 2, gl: 0, gr: 0, hover: 9 },
+  { t: 2.3, core: 3.2, hover: 10, e: 'in' },
   { t: DIE, core: 3, hover: 10 },
 ]);
 const T_IDLE = track([{ t: 0, L: REST_L, R: REST_R }]);
@@ -2040,9 +2274,8 @@ const MODE_TRACK: Record<string, KFull[]> = {
   f15l_nova: T_NOVA,
 };
 
-/** Поза владыки этого кадра: ключ геометрии и все числа. */
+/** Поза владыки этого кадра: числа, ключ кадра и откуда она взята (для следа рук). */
 interface LPose extends KFull {
-  key: string;
   train: number;
   sway: number;
   alpha: number;
@@ -2052,6 +2285,11 @@ interface LPose extends KFull {
   dim: number;
   tint: number;
   ph: number;
+  /** Тьма затмения: тело под пеленой, в свете — только глаза и звёзды плаща. */
+  veil: number;
+  /** Дорожка и её время — след быстрой руки берёт позу на 1/48 с раньше. */
+  tr: KFull[] | null;
+  tt: number;
 }
 
 const fr24 = (t: number) => Math.max(0, Math.floor(t * 24));
@@ -2063,67 +2301,62 @@ function lordPose(m: Mob, pose: MobPose, now: number): LPose {
   const ph = Math.floor(now * 5) % 10;
   const sp = Math.hypot(m.vx, m.vy);
   const spQ = Math.round(clamp01(sp / 3.1) * 2) / 2;
-  let key = '';
   let k: KFull;
   let alpha = 1;
   let dissolve = 0;
   let shrink = 0;
   let dim = 1;
   let tint = -1;
+  let trk: KFull[] | null = null;
+  let tt = 0;
   const mode = pose.mode;
-  const at = (tr: KFull[], name: string, t: number, cap = 1e9) => {
+  const at = (tr: KFull[], t: number, cap = 1e9) => {
     const f = Math.min(fr24(t), cap);
-    key = `${name}${f}`;
-    return sample(tr, f / 24);
+    trk = tr;
+    tt = f / 24;
+    return sample(tr, tt);
   };
   if (mode === 'dying') {
-    k = at(T_DIE, 'die', T);
+    k = at(T_DIE, T);
     dissolve = clamp01((T - 0.35) / 1.4);
     shrink = clamp01((T - 1.9) / 0.6);
   } else if (mode === 'f15l_sleep') {
     k = T_SLEEP[0];
-    key = 'sleep';
-    alpha = 0.4 + 0.08 * Math.sin(now * 1.6);
+    alpha = 0.45 + 0.08 * Math.sin(now * 1.6);
   } else if (mode === 'f15l_stir') {
-    k = at(T_STIR, 'stir', T);
-    alpha = 0.5 + 0.2 * Math.sin(clamp01(T / 0.9) * Math.PI);
+    k = at(T_STIR, T);
+    alpha = 0.55 + 0.2 * Math.sin(clamp01(T / 0.9) * Math.PI);
   } else if (mode === 'f15l_wake') {
-    k = at(T_WAKE, 'wake', T);
-    alpha = 0.45 + 0.55 * smooth(T / 1.7);
+    k = at(T_WAKE, T);
+    alpha = 0.5 + 0.5 * smooth(T / 1.7);
   } else if (mode === 'f15l_dstrike') {
-    k = m.data.kind
-      ? at(T_STARFALL, 'sf', T, fr24(DW + 0.25))
-      : at(T_CLAW, 'cl', T, fr24(DW + 0.25));
+    k = m.data.kind ? at(T_STARFALL, T, fr24(DW + 0.25)) : at(T_CLAW, T, fr24(DW + 0.25));
     dim = 0.45;
   } else if (mode === 'f15l_dark') {
     const act = m.data.act ?? 0;
-    if (act === 8 && T < 0.3) k = m.data.kind ? at(T_STAR_BACK, 'sb', T) : at(T_CLAW_BACK, 'cb', T);
-    else {
-      k = T_HIDDEN[0];
-      key = 'hid';
-    }
+    if (act === 8 && T < 0.3) k = m.data.kind ? at(T_STAR_BACK, T) : at(T_CLAW_BACK, T);
+    else k = T_HIDDEN[0];
     dim = 0.35;
   } else if (mode === 'f15l_core') {
     const nv = v?.nova;
     const t = s && nv ? s.time - nv.at : 0;
-    if (nv?.stage === 'pulse') k = at(T_PULSE, 'pu', t, fr24(PW + 2 * PS + 0.3));
-    else if (nv?.stage === 'exhale') k = at(T_EXHALE, 'ex', t, fr24(EX));
+    if (nv?.stage === 'pulse') k = at(T_PULSE, t, fr24(PW + 2 * PS + 0.3));
+    else if (nv?.stage === 'exhale') k = at(T_EXHALE, t, fr24(EX));
     else {
       // Лучи: дыхание по кругу 2 с, 12 кадров.
       const f = Math.floor(now * 6) % 12;
-      key = `bm${f}`;
       k = sample(T_BEAMS, f / 6);
     }
   } else if (MODE_TRACK[mode]) {
     const tr = MODE_TRACK[mode];
-    k = at(tr, mode.slice(5, 9), T, fr24(tr[tr.length - 1].t + 0.05));
+    k = at(tr, T, fr24(tr[tr.length - 1].t + 0.05));
     if (mode === 'f15l_memory') tint = Math.floor(now * 4) % 4;
-    if (mode === 'f15l_wrap' || mode === 'f15l_open') dim = mode === 'f15l_open' ? 1 : 0.6;
+    if (mode === 'f15l_wrap') dim = 0.6;
   } else if (mode === 'recover' && RECOVER[m.data.act ?? 0]) {
     const tr = RECOVER[m.data.act ?? 0];
-    k = at(tr, `r${m.data.act}`, T, fr24(tr[tr.length - 1].t + 0.05));
+    k = at(tr, T, fr24(tr[tr.length - 1].t + 0.05));
   } else {
-    // Погоня: покой дышит, на ходу — плащ тянется назад.
+    // Погоня: покой дышит (плечи и руки), на ходу — плащ тянется назад.
     const sb = spQ >= 1 ? 0 : Math.round(Math.sin((ph / 10) * TAU));
     const idle = {
       ...T_IDLE[0],
@@ -2132,16 +2365,15 @@ function lordPose(m: Mob, pose: MobPose, now: number): LPose {
       flare: 0.04 * sb,
     };
     k = blend(idle, T_GLIDE[0], spQ);
-    key = `ch${spQ}|${sb}`;
   }
-  // Затмение: плащ запахнут, тьма — звёзды на нём еле видны.
-  if (v && v.dark > 0.5 && mode !== 'f15l_open') dim = Math.min(dim, 0.45);
+  // Затмение: плащ запахнут, тьма — на теле видны только глаза и звёзды.
+  const veil = v && mode !== 'f15l_open' && mode !== 'dying' ? clamp01((v.dark - 0.35) / 0.5) : 0;
+  if (veil > 0.5) dim = Math.min(dim, 0.45);
   const turnV = m.data.turnV ?? 0;
   const sway = Math.round(Math.max(-1, Math.min(1, -turnV / 3.2)) * 2) / 2;
   return {
     ...k,
-    key,
-    train: mode === 'f15l_sleep' || mode === 'f15l_core' ? 0 : spQ,
+    train: mode === 'f15l_sleep' || mode === 'f15l_core' || mode === 'dying' ? 0 : spQ,
     sway,
     alpha,
     dissolve,
@@ -2149,12 +2381,21 @@ function lordPose(m: Mob, pose: MobPose, now: number): LPose {
     dim,
     tint,
     ph,
+    veil,
+    tr: trk,
+    tt,
   };
 }
 
 // =============================================================================
 // Хозяин подземелья: геометрия кадра (точки с буфером глубины).
 // =============================================================================
+//
+// Колокол, купол плеч и пелерина считаются один раз на раскрытие плаща
+// (`surfOf`: экранные точки, свет, перед/изнанка по мировому углу), а на
+// кадр остаются только сравнения: где распах, где золотая кайма, что видно
+// сквозь распах. Наклон корпуса и отмашка подола — сдвигом строк при
+// покраске (`paintBody`), поэтому в ключ геометрии не входят.
 
 /** Радиус колокола на высоте `z` при раскрытии `fl` (−1 запахнут … 1 распахнут). */
 function bellR(z: number, fl: number): number {
@@ -2168,11 +2409,11 @@ function openHalf(z: number, fl: number, open: number): number {
   const tz = clamp01((z - HEM) / (SHO - HEM));
   return (0.09 + 0.3 * (1 - tz)) * (1 - 0.85 * Math.max(0, -fl)) + open * (0.8 + 0.6 * (1 - tz));
 }
-/** Высота кромки под углом ψ (мир) — живая волна. */
 /** Фаза волны подола и шлейфа: стоит — подол неподвижен (дешёвый кеш), летит — 5 фаз. */
 function cph(p: LPose): number {
   return p.train > 0 ? p.ph >> 1 : 0;
 }
+/** Высота кромки под углом ψ (мир) — живая волна. */
 function hemZ(psi: number, ph: number, fl: number): number {
   const p = (ph / 10) * TAU;
   const k = fl < -0.5 ? 0.5 : 1;
@@ -2187,12 +2428,17 @@ interface HandOut {
   vis: boolean;
   side: number;
   depth: number;
+  /** Плечо и локоть в кадре — путь искр по руке. */
+  shx: number;
+  shy: number;
+  elx: number;
+  ely: number;
 }
 interface LGeo {
   /** Неизменные пиксели: номер и цвет (RGBA в одном числе). */
   sIdx: Uint16Array;
   sCol: Uint32Array;
-  /** Ткань: номер пикселя, угол (0…255), высота ×2, свет (0…255, старший бит — колокол). */
+  /** Ткань: номер пикселя, угол (0…255), высота ×2, свет (биты 0–5), кромка (6), колокол (7). */
   cIdx: Uint16Array;
   cU: Uint8Array;
   cV: Uint8Array;
@@ -2211,13 +2457,173 @@ interface Cloak {
   s: Uint8Array;
   c: Uint32Array;
 }
-const CLOAK = frameLRU<Cloak>(200);
+const CLOAK = frameLRU<Cloak>(260);
 const pack = (c: RGBA) => ((c[3] << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
 
 /** Свет: слева-сверху-спереди. */
 const LXv = -0.5;
 const LYv = 0.45;
 const LZv = 0.74;
+const shadeOf = (nx: number, ny: number, nz: number) => {
+  const n = Math.hypot(nx, ny, nz) || 1;
+  return clamp01(((nx * LXv + ny * LYv + nz * LZv) / n) * 0.62 + 0.42);
+};
+const uByte = (u: number) => Math.round((((u / TAU) % 1) + 1) * 256) & 255;
+
+/** Поверхность плаща при раскрытии `fl`: точки в кадре, не зависящие от румба. */
+interface Surf {
+  /** Колокол: X, Y, глубина, мировой угол, высота, свет, перед (1)/изнанка (0), кольцо. */
+  bX: Float32Array;
+  bY: Float32Array;
+  bD: Float32Array;
+  bPsi: Float32Array;
+  bZ: Float32Array;
+  bSh: Uint8Array;
+  bFront: Uint8Array;
+  bRing: Uint8Array;
+  bHem: Uint8Array;
+  /** Звёзды изнанки: 0 нет, 1 белая, 2 лёд, 3 золото, 4 пурпур. */
+  bStar: Uint8Array;
+  ringZ: Float32Array;
+  ringR: Float32Array;
+  /** Купол плеч. */
+  dX: Float32Array;
+  dY: Float32Array;
+  dD: Float32Array;
+  dPsi: Float32Array;
+  dZ: Float32Array;
+  dSh: Uint8Array;
+  /** Пелерина (только лицевые точки). */
+  pX: Float32Array;
+  pY: Float32Array;
+  pD: Float32Array;
+  pPsi: Float32Array;
+  pZ: Float32Array;
+  pSh: Uint8Array;
+}
+const SURF = new Map<number, Surf>();
+function surfOf(fl: number): Surf {
+  const key = Math.round(fl * 4);
+  const hit = SURF.get(key);
+  if (hit) return hit;
+  const bX: number[] = [];
+  const bY: number[] = [];
+  const bD: number[] = [];
+  const bPsi: number[] = [];
+  const bZ: number[] = [];
+  const bSh: number[] = [];
+  const bFront: number[] = [];
+  const bRing: number[] = [];
+  const bHem: number[] = [];
+  const bStar: number[] = [];
+  const ringZ: number[] = [];
+  const ringR: number[] = [];
+  let ri = 0;
+  for (let z = HEM - 3; z <= SHO; z += 0.7, ri++) {
+    const R = bellR(z, fl);
+    const dR = bellR(z - 0.5, fl) - bellR(z + 0.5, fl);
+    ringZ.push(z);
+    ringR.push(R);
+    const n = Math.ceil((TAU * R) / 0.7);
+    for (let i = 0; i < n; i++) {
+      const psi = (i / n) * TAU;
+      const cx = Math.cos(psi);
+      const sy = Math.sin(psi);
+      const wy = sy * R;
+      bX.push(LAX + cx * R);
+      bY.push(LAY - z + wy * KF);
+      bD.push(wy * VY + z * VZ);
+      bPsi.push(psi);
+      bZ.push(z);
+      bSh.push(Math.round(shadeOf(cx, sy, dR) * 255));
+      bFront.push(sy * VY + dR * VZ > 0 ? 1 : 0);
+      bRing.push(ri);
+      bHem.push(((i / n) * 256) | 0);
+      const hs = hash(ri, i, 9);
+      bStar.push(hs < 0.012 ? 1 : hs < 0.03 ? 2 : hs < 0.05 ? 3 : hs < 0.09 ? 4 : 0);
+    }
+  }
+  const dX: number[] = [];
+  const dY: number[] = [];
+  const dD: number[] = [];
+  const dPsi: number[] = [];
+  const dZ: number[] = [];
+  const dSh: number[] = [];
+  {
+    const R = bellR(SHO, fl);
+    for (let rr = 0; rr <= R; rr += 0.6) {
+      const n = Math.max(6, Math.ceil((TAU * rr) / 0.6));
+      const z = SHO + (1 - rr / R) * 2.5;
+      for (let i = 0; i < n; i++) {
+        const psi = (i / n) * TAU;
+        const wx = Math.cos(psi) * rr;
+        const wy = Math.sin(psi) * rr;
+        dX.push(LAX + wx);
+        dY.push(LAY - z + wy * KF);
+        dD.push(wy * VY + z * VZ);
+        dPsi.push(psi);
+        dZ.push(z);
+        dSh.push(Math.round(shadeOf(Math.cos(psi) * 0.5, Math.sin(psi) * 0.5, 1) * 255));
+      }
+    }
+  }
+  const pX: number[] = [];
+  const pY: number[] = [];
+  const pD: number[] = [];
+  const pPsi: number[] = [];
+  const pZ: number[] = [];
+  const pSh: number[] = [];
+  {
+    const top = SHO + 1.5;
+    for (let z = SHO - 14; z <= top; z += 0.7) {
+      const R = bellR(Math.min(z, SHO), fl) + 2.4 + (top - z) * 0.08;
+      const n = Math.ceil((TAU * R) / 0.7);
+      for (let i = 0; i < n; i++) {
+        const psi = (i / n) * TAU;
+        const cx = Math.cos(psi);
+        const sy = Math.sin(psi);
+        if (sy * VY + 0.35 * VZ <= 0) continue;
+        const wy = sy * R;
+        pX.push(LAX + cx * R);
+        pY.push(LAY - z + wy * KF);
+        pD.push(wy * VY + z * VZ + 0.6);
+        pPsi.push(psi);
+        pZ.push(z);
+        pSh.push(Math.round(shadeOf(cx, sy, 0.45) * 255));
+      }
+    }
+  }
+  const f32 = (a: number[]) => Float32Array.from(a);
+  const u8 = (a: number[]) => Uint8Array.from(a);
+  const o: Surf = {
+    bX: f32(bX),
+    bY: f32(bY),
+    bD: f32(bD),
+    bPsi: f32(bPsi),
+    bZ: f32(bZ),
+    bSh: u8(bSh),
+    bFront: u8(bFront),
+    bRing: u8(bRing),
+    bHem: u8(bHem),
+    bStar: u8(bStar),
+    ringZ: f32(ringZ),
+    ringR: f32(ringR),
+    dX: f32(dX),
+    dY: f32(dY),
+    dD: f32(dD),
+    dPsi: f32(dPsi),
+    dZ: f32(dZ),
+    dSh: u8(dSh),
+    pX: f32(pX),
+    pY: f32(pY),
+    pD: f32(pD),
+    pPsi: f32(pPsi),
+    pZ: f32(pZ),
+    pSh: u8(pSh),
+  };
+  SURF.set(key, o);
+  return o;
+}
 
 const BN = LW * LH;
 const B_ZB = new Float32Array(BN);
@@ -2232,21 +2638,81 @@ const O_CI = new Uint16Array(BN);
 const O_CU = new Uint8Array(BN);
 const O_CV = new Uint8Array(BN);
 const O_CS = new Uint8Array(BN);
+const HEM_T = new Float32Array(256);
+const RING_OP = new Float32Array(128);
+const RING_X0 = new Float32Array(128);
+const RING_X1 = new Float32Array(128);
+const GOLD_P = [GOLD[1], GOLD[2], GOLD[3], GOLD[4]].map(pack);
+const PEL_P = [GOLD[2], GOLD[3], GOLD[4], GOLD[5]].map(pack);
+const CUFF_P = [GOLD[2], GOLD[3], GOLD[4]].map(pack);
+const INK_P = pack(INK);
+const STAR_C = [WHITE, ICE[5], GOLD[5], MAG[2]];
 
-function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
+/** Плечо, локоть, запястье руки (обратная кинематика), точки тела [вперёд, вправо, вверх]. */
+type V3 = [number, number, number];
+function armChain(h: HK, side: number): [V3, V3, V3] {
+  const S: V3 = [0.5, side * (SH_R - 1.5), SHO - 4.5];
+  let H: V3 = [h[0], h[1], h[2]];
+  const dx = H[0] - S[0];
+  const dy = H[1] - S[1];
+  const dzz = H[2] - S[2];
+  let d = Math.hypot(dx, dy, dzz);
+  if (d > ARM * 2 - 0.05) {
+    const k = (ARM * 2 - 0.05) / d;
+    H = [S[0] + dx * k, S[1] + dy * k, S[2] + dzz * k];
+    d = ARM * 2 - 0.05;
+  }
+  const hh = Math.sqrt(Math.max(0, ARM * ARM - (d / 2) * (d / 2)));
+  // Локоть уходит наружу и вниз, перпендикулярно руке.
+  const ax = (H[0] - S[0]) / (d || 1);
+  const ay = (H[1] - S[1]) / (d || 1);
+  const az = (H[2] - S[2]) / (d || 1);
+  let bx = -0.3;
+  let by = side;
+  let bz = -1;
+  const dot = bx * ax + by * ay + bz * az;
+  bx -= dot * ax;
+  by -= dot * ay;
+  bz -= dot * az;
+  const bn = Math.hypot(bx, by, bz) || 1;
+  const E: V3 = [
+    (S[0] + H[0]) / 2 + (bx / bn) * hh,
+    (S[1] + H[1]) / 2 + (by / bn) * hh,
+    (S[2] + H[2]) / 2 + (bz / bn) * hh,
+  ];
+  return [S, E, H];
+}
+/** Точка тела → кадр (x, y, глубина) при угле `a`. */
+function toFrame(a: number, q: V3): V3 {
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const wx = q[0] * ca - q[1] * sa;
+  const wy = q[0] * sa + q[1] * ca;
+  return [LAX + wx, LAY - q[2] + wy * KF, wy * VY + q[2] * VZ];
+}
+/** Кисть в кадре (без сдвига строк): запястье + 2,5 px по предплечью. */
+function handAt(a: number, h: HK, side: number): [number, number, number] {
+  const [, E, H] = armChain(h, side);
+  const e2 = toFrame(a, E);
+  const w2 = toFrame(a, H);
+  const ang = Math.atan2(w2[1] - e2[1], w2[0] - e2[0]);
+  return [w2[0] + Math.cos(ang) * 2.5, w2[1] + Math.sin(ang) * 2.5, ang];
+}
+
+/**
+ * Геометрия кадра: плащ под углом `a` (тело, догоняет), руки — под углом
+ * `af` (плечи идут за головой первыми).
+ */
+function buildLord(a: number, af: number, p: LPose, cloakKey: string): LGeo {
   const N = BN;
   const zb = B_ZB.fill(-1e9);
-  // 0 пусто, 1 ткань (туманность), 2 ткань колокола, 3 неизменный цвет.
+  // 0 пусто, 1 ткань рукава/шлейфа, 2 ткань колокола, 3 неизменный цвет, 4 кромка колокола.
   const kind = B_KIND.fill(0);
   const tu = B_TU;
   const tv = B_TV;
   const ts = B_TS;
   const col = B_COL;
-  const ca = Math.cos(a);
-  const sa = Math.sin(a);
   const fl = p.flare;
-  const lean = p.lean;
-  const lx = (z: number) => lean * Math.max(0, z - HEM) * 0.6;
   const put = (
     X: number,
     Y: number,
@@ -2255,10 +2721,10 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
     u: number,
     v: number,
     s: number,
-    c = 0,
+    c: number,
   ) => {
-    const x = Math.round(X);
-    const y = Math.round(Y);
+    const x = (X + 0.5) | 0;
+    const y = (Y + 0.5) | 0;
     if (x < 0 || y < 0 || x >= LW || y >= LH) return;
     const i = y * LW + x;
     if (d <= zb[i]) return;
@@ -2269,11 +2735,6 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
     ts[i] = s;
     col[i] = c;
   };
-  const shadeOf = (nx: number, ny: number, nz: number) => {
-    const n = Math.hypot(nx, ny, nz) || 1;
-    return clamp01(((nx * LXv + ny * LYv + nz * LZv) / n) * 0.62 + 0.42);
-  };
-  const uByte = (u: number) => Math.round((((u / TAU) % 1) + 1) * 256) & 255;
   const dz = p.dissolve > 0 ? HEM - 3 + (SHO + 6 - HEM) * p.dissolve : -1e9;
   const cl = CLOAK.get(cloakKey);
   if (cl) {
@@ -2287,147 +2748,116 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
       col[i] = cl.c[j];
     }
   } else {
-    // --- Колокол плаща.
-    const hemT = new Float32Array(256);
-    for (let i = 0; i < 256; i++) hemT[i] = hemZ((i / 256) * TAU, cph(p) * 2, fl);
-    for (let z = HEM - 3; z <= SHO; z += 0.7) {
-      const R = bellR(z, fl);
-      const dR = bellR(z - 0.5, fl) - bellR(z + 0.5, fl);
-      const op = openHalf(z, fl, p.open);
-      const trim = 1.6 / R;
-      const n = Math.ceil((TAU * R) / 0.7);
-      const ox = lx(z) * ca;
-      const oy = lx(z) * sa;
-      for (let i = 0; i < n; i++) {
-        const psi = (i / n) * TAU;
-        if (z < hemT[((i / n) * 256) | 0]) continue;
-        const cx = Math.cos(psi);
-        const sy = Math.sin(psi);
-        const wx = ox + cx * R;
-        const wy = oy + sy * R;
-        const X = LAX + wx;
-        const Y = LAY - z + wy * KF;
-        if (dz > -1e8 && z < dz + (hash(Math.round(X), Math.round(Y), 7) - 0.5) * 6) continue;
-        let u = psi - a;
-        u -= Math.round(u / TAU) * TAU;
-        const front = sy * VY + dR * VZ > 0;
-        const depth = wy * VY + z * VZ;
-        if (front) {
-          if (Math.abs(u) < op) continue;
-          if (Math.abs(u) < op + trim) {
-            const s = shadeOf(cx, sy, dR);
-            put(X, Y, depth, 3, 0, 0, 0, pack(s > 0.75 ? GOLD[4] : s > 0.5 ? GOLD[3] : GOLD[2]));
-            continue;
-          }
-          put(
-            X,
-            Y,
-            depth,
-            2,
-            uByte(u),
-            Math.min(255, Math.round(z * 2)),
-            Math.round(shadeOf(cx, sy, dR) * 255),
-          );
-        } else {
-          // Изнанка: видна в распахе и под кромкой — бездна со светом изнутри.
-          const xi = Math.round(X);
-          const yi = Math.round(Y);
-          if (xi < 0 || yi < 0 || xi >= LW || yi >= LH || depth - 0.01 <= zb[yi * LW + xi])
-            continue;
-          const k = clamp01(1 - Math.abs(cx));
-          let c = mixc(NIGHT[1], VIO[1], 0.2 + 0.5 * k);
-          if (p.open > 0.05) {
-            c = mixc(c, VIO[3], k * k * p.open * 0.75);
-            if (k > 0.72) c = mixc(c, k > 0.9 ? WHITE : GOLD[5], (k - 0.72) * 3.2 * p.open);
-          }
-          const hs = hash(Math.round(X), Math.round(Y), 9);
-          if (hs < 0.012) c = WHITE;
-          else if (hs < 0.05) c = mixc(c, hs < 0.03 ? ICE[5] : GOLD[5], 0.75);
-          else if (hs < 0.09) c = mixc(c, MAG[2], 0.35);
-          put(X, Y, depth - 0.01, 3, 0, 0, 0, pack(c));
+    const S = surfOf(fl);
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    const ph2 = cph(p) * 2;
+    for (let i = 0; i < 256; i++) HEM_T[i] = hemZ((i / 256) * TAU, ph2, fl);
+    // Распах и кайма по кольцам; что из изнанки видно сквозь распах (по x).
+    const nr = S.ringZ.length;
+    const backAll = p.dissolve > 0;
+    const slitNear = sa > -0.25;
+    for (let r = 0; r < nr; r++) {
+      const op = openHalf(S.ringZ[r], fl, p.open) + 1.0 / S.ringR[r];
+      RING_OP[r] = op;
+      let x0 = 1e9;
+      let x1 = -1e9;
+      for (let k = 0; k <= 6; k++) {
+        const x = Math.cos(a - op + (k / 6) * 2 * op) * S.ringR[r];
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+      }
+      if (op > Math.PI) {
+        x0 = -1e9;
+        x1 = 1e9;
+      }
+      RING_X0[r] = LAX + x0 - 1.5;
+      RING_X1[r] = LAX + x1 + 1.5;
+    }
+    const open = p.open;
+    const bn = S.bX.length;
+    for (let j = 0; j < bn; j++) {
+      const z = S.bZ[j];
+      if (z < HEM_T[S.bHem[j]]) continue;
+      const X = S.bX[j];
+      const Y = S.bY[j];
+      if (dz > -1e8 && z < dz + (hash((X + 0.5) | 0, (Y + 0.5) | 0, 7) - 0.5) * 6) continue;
+      let u = S.bPsi[j] - a;
+      u -= Math.round(u / TAU) * TAU;
+      const r = S.bRing[j];
+      if (S.bFront[j]) {
+        const au = Math.abs(u);
+        const op = RING_OP[r];
+        const trim = 1.0 / S.ringR[r];
+        if (au < op - trim) continue;
+        const sh = S.bSh[j];
+        if (au < op) {
+          put(X, Y, S.bD[j], 3, 0, 0, 0, GOLD_P[sh > 205 ? 3 : sh > 150 ? 2 : sh > 100 ? 1 : 0]);
+          continue;
         }
+        const hem = z < HEM_T[S.bHem[j]] + 1.6;
+        put(X, Y, S.bD[j], hem ? 4 : 2, uByte(u), Math.min(255, Math.round(z * 2)), sh, 0);
+      } else {
+        // Изнанка: видна только сквозь распах — бездна со светом изнутри.
+        if (!backAll && (!slitNear || X < RING_X0[r] || X > RING_X1[r])) continue;
+        const cx = Math.cos(S.bPsi[j]);
+        const k = clamp01(1 - Math.abs(cx));
+        let c = mixc(NIGHT[1], VIO[1], 0.2 + 0.5 * k);
+        if (open > 0.05) {
+          c = mixc(c, VIO[3], k * k * open * 0.75);
+          if (k > 0.72) c = mixc(c, k > 0.9 ? WHITE : GOLD[5], (k - 0.72) * 3.2 * open);
+        }
+        const st = S.bStar[j];
+        if (st === 1) c = WHITE;
+        else if (st) c = mixc(c, STAR_C[st - 1], st === 4 ? 0.35 : 0.75);
+        put(X, Y, S.bD[j] - 0.01, 3, 0, 0, 0, pack(c));
       }
     }
     // Плечи сверху: купол-пелерина.
-    {
-      const R = bellR(SHO, fl);
-      const ox = lx(SHO) * ca;
-      const oy = lx(SHO) * sa;
-      for (let rr = 0; rr <= R; rr += 0.5) {
-        const n = Math.max(6, Math.ceil((TAU * rr) / 0.5));
-        const z = SHO + (1 - rr / R) * 2.5;
-        for (let i = 0; i < n; i++) {
-          const psi = (i / n) * TAU;
-          const wx = ox + Math.cos(psi) * rr;
-          const wy = oy + Math.sin(psi) * rr;
-          let u = psi - a;
-          u -= Math.round(u / TAU) * TAU;
-          const X = LAX + wx;
-          const Y = LAY - z + wy * KF;
-          if (p.dissolve > 0.95) continue;
-          put(
-            X,
-            Y,
-            wy * VY + z * VZ,
-            2,
-            uByte(u),
-            Math.round(z * 2),
-            Math.round(shadeOf(Math.cos(psi) * 0.5, Math.sin(psi) * 0.5, 1) * 255),
-          );
-        }
+    if (p.dissolve < 0.95)
+      for (let j = 0; j < S.dX.length; j++) {
+        let u = S.dPsi[j] - a;
+        u -= Math.round(u / TAU) * TAU;
+        put(
+          S.dX[j],
+          S.dY[j],
+          S.dD[j],
+          2,
+          uByte(u),
+          Math.round(S.dZ[j] * 2),
+          S.dSh[j],
+          0,
+        );
       }
-    }
     // --- Пелерина: короткий колокол поверх плеч, кромка зубцами, кайма золотом.
-    if (p.dissolve < 0.9) {
-      const top = SHO + 1.5;
-      for (let z = SHO - 14; z <= top; z += 0.7) {
-        const R = bellR(Math.min(z, SHO), fl) + 2.4 + (top - z) * 0.08;
-        const n = Math.ceil((TAU * R) / 0.7);
-        const ox = lx(z) * ca;
-        const oy = lx(z) * sa;
-        for (let i = 0; i < n; i++) {
-          const psi = (i / n) * TAU;
-          let u = psi - a;
-          u -= Math.round(u / TAU) * TAU;
-          const zc = SHO - 13 + 2.6 * Math.abs(Math.sin(3.5 * u));
-          if (z < zc) continue;
-          if (Math.abs(u) < 0.95) continue;
-          const cx = Math.cos(psi);
-          const sy = Math.sin(psi);
-          const wx = ox + cx * R;
-          const wy = oy + sy * R;
-          const X = LAX + wx;
-          const Y = LAY - z + wy * KF;
-          if (dz > -1e8 && z < dz + (hash(Math.round(X), Math.round(Y), 7) - 0.5) * 6) continue;
-          const front = sy * VY + 0.35 * VZ > 0;
-          if (!front) continue;
-          const depth = wy * VY + z * VZ + 0.6;
-          const s = shadeOf(cx, sy, 0.45);
-          if (z < zc + 1.2 || Math.abs(u) < 1.05) {
-            put(
-              X,
-              Y,
-              depth,
-              3,
-              0,
-              0,
-              0,
-              pack(s > 0.72 ? GOLD[5] : s > 0.5 ? GOLD[4] : s > 0.3 ? GOLD[3] : GOLD[2]),
-            );
-            continue;
-          }
-          put(
-            X,
-            Y,
-            depth,
-            2,
-            uByte(u + 1.7),
-            Math.min(255, Math.round(z * 2 + 40)),
-            Math.round(clamp01(s + 0.08) * 255),
-          );
+    if (p.dissolve < 0.9)
+      for (let j = 0; j < S.pX.length; j++) {
+        let u = S.pPsi[j] - a;
+        u -= Math.round(u / TAU) * TAU;
+        const au = Math.abs(u);
+        if (au < 0.95) continue;
+        const z = S.pZ[j];
+        const zc = SHO - 13 + 2.6 * Math.abs(Math.sin(3.5 * u));
+        if (z < zc) continue;
+        const X = S.pX[j];
+        const Y = S.pY[j];
+        if (dz > -1e8 && z < dz + (hash((X + 0.5) | 0, (Y + 0.5) | 0, 7) - 0.5) * 6) continue;
+        const sh = S.pSh[j];
+        if (z < zc + 1.2 || au < 1.05) {
+          put(X, Y, S.pD[j], 3, 0, 0, 0, PEL_P[sh > 184 ? 3 : sh > 128 ? 2 : sh > 77 ? 1 : 0]);
+          continue;
         }
+        put(
+          X,
+          Y,
+          S.pD[j],
+          2,
+          uByte(u + 1.7),
+          Math.min(255, Math.round(z * 2 + 40)),
+          Math.min(255, sh + 20),
+          0,
+        );
       }
-    }
     // --- Шлейф: лента от задней кромки, тянется назад и вбок на развороте.
     if (p.train > 0.05 && p.dissolve < 0.2) {
       const Lt = 4 + p.train * 18;
@@ -2445,16 +2875,15 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
         for (let q = -1; q <= 1; q += 1 / (w * 1.6)) {
           const wx = cx0 + px * q * w;
           const wy = cy0 + py * q * w;
-          const X = LAX + wx;
-          const Y = LAY - z + wy * KF;
           put(
-            X,
-            Y,
+            LAX + wx,
+            LAY - z + wy * KF,
             wy * VY + z * VZ,
             1,
             uByte(Math.PI + q * 0.6),
             Math.min(255, Math.round((z + s * Lt) * 2)),
             Math.round(clamp01(0.55 - q * 0.25 - s * 0.2) * 255),
+            0,
           );
         }
       }
@@ -2484,50 +2913,15 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
     }
     CLOAK.set(cloakKey, o);
   }
-  // --- Рукава: плечо → локоть → запястье (обратная кинематика).
-  const P = (f: number, r: number, z: number): [number, number, number] => {
-    const ff = f + lx(z);
-    const wx = ff * ca - r * sa;
-    const wy = ff * sa + r * ca;
-    return [LAX + wx, LAY - z + wy * KF, wy * VY + z * VZ];
-  };
+  // --- Рукава: плечо → локоть → запястье (обратная кинематика), под углом головы.
   const hands: HandOut[] = [];
   for (const side of [-1, 1]) {
     const h = side < 0 ? p.L : p.R;
     if (h[3] === 0 || p.dissolve > 0.7) continue;
-    const S: [number, number, number] = [0.5, side * (SH_R - 1.5), SHO - 4.5];
-    let H: [number, number, number] = [h[0], h[1], h[2]];
-    const dx = H[0] - S[0];
-    const dy = H[1] - S[1];
-    const dzz = H[2] - S[2];
-    let d = Math.hypot(dx, dy, dzz);
-    if (d > ARM * 2 - 0.05) {
-      const k = (ARM * 2 - 0.05) / d;
-      H = [S[0] + dx * k, S[1] + dy * k, S[2] + dzz * k];
-      d = ARM * 2 - 0.05;
-    }
-    const M: [number, number, number] = [(S[0] + H[0]) / 2, (S[1] + H[1]) / 2, (S[2] + H[2]) / 2];
-    const hh = Math.sqrt(Math.max(0, ARM * ARM - (d / 2) * (d / 2)));
-    // Локоть уходит наружу и вниз, перпендикулярно руке.
-    const ax = (H[0] - S[0]) / (d || 1);
-    const ay = (H[1] - S[1]) / (d || 1);
-    const az = (H[2] - S[2]) / (d || 1);
-    let bx = -0.3;
-    let by = side;
-    let bz = -1;
-    const dot = bx * ax + by * ay + bz * az;
-    bx -= dot * ax;
-    by -= dot * ay;
-    bz -= dot * az;
-    const bn = Math.hypot(bx, by, bz) || 1;
-    const E: [number, number, number] = [
-      M[0] + (bx / bn) * hh,
-      M[1] + (by / bn) * hh,
-      M[2] + (bz / bn) * hh,
-    ];
-    const s2 = P(...S);
-    const e2 = P(...E);
-    const w2 = P(...H);
+    const [S3, E3, H3] = armChain(h, side);
+    const s2 = toFrame(af, S3);
+    const e2 = toFrame(af, E3);
+    const w2 = toFrame(af, H3);
     const seg = (A: number[], B: number[], ra: number, rb: number, cuff: boolean) => {
       const x0 = Math.floor(Math.min(A[0] - ra, B[0] - rb)) - 1;
       const x1 = Math.ceil(Math.max(A[0] + ra, B[0] + rb)) + 1;
@@ -2553,11 +2947,11 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
           const across = (ex * -vy + ey * vx) / Ln / r;
           const s = clamp01(0.5 - across * 0.35 - (ey / r) * 0.25 + (bulge / r) * 0.2);
           if (dd > r - 0.8) {
-            put(x, y, depth - 0.3, 3, 0, 0, 0, pack(INK));
+            put(x, y, depth - 0.3, 3, 0, 0, 0, INK_P);
             continue;
           }
           if (cuff && t > 0.86) {
-            put(x, y, depth, 3, 0, 0, 0, pack(s > 0.6 ? GOLD[4] : s > 0.35 ? GOLD[3] : GOLD[2]));
+            put(x, y, depth, 3, 0, 0, 0, CUFF_P[s > 0.6 ? 2 : s > 0.35 ? 1 : 0]);
             continue;
           }
           put(
@@ -2568,6 +2962,7 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
             (side < 0 ? 40 : 200) + Math.round(t * 30),
             Math.round(40 + t * 60),
             Math.round(clamp01(s + 0.14) * 255),
+            0,
           );
         }
     };
@@ -2578,9 +2973,22 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
     const hy0 = w2[1] + Math.sin(ang) * 2.5;
     const hi = Math.round(hy0) * LW + Math.round(hx0);
     const vis = hi < 0 || hi >= N || zb[hi] <= w2[2] + 3 || kind[hi] === 3;
-    hands.push({ x: hx0, y: hy0, ang, g: h[3], vis, side, depth: w2[2] });
+    hands.push({
+      x: hx0,
+      y: hy0,
+      ang,
+      g: h[3],
+      vis,
+      side,
+      depth: w2[2],
+      shx: s2[0],
+      shy: s2[1],
+      elx: e2[0],
+      ely: e2[1],
+    });
   }
-  // --- Контур: тёмно-синий, снаружи фигуры; ткань на правом краю — холодный кант.
+  // --- Контур: тёмно-синий, снаружи фигуры. Ткань по краю: слева-сверху —
+  // светлый кант (свет), справа — холодный.
   const sIdx = O_SI;
   const sCol = O_SC;
   const cIdx = O_CI;
@@ -2593,8 +3001,8 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
   for (let i = 0; i < N; i++) {
     const k = kind[i];
     const x = i % LW;
+    const y = (i / LW) | 0;
     if (!k) {
-      const y = (i / LW) | 0;
       if (
         (x > 0 && kind[i - 1]) ||
         (x < LW - 1 && kind[i + 1]) ||
@@ -2612,11 +3020,12 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
       continue;
     }
     let s = ts[i];
-    if (x < LW - 1 && !kind[i + 1]) s = Math.min(255, s + 70);
+    if ((x > 0 && !kind[i - 1]) || (y > 0 && !kind[i - LW])) s = Math.min(255, s + 85);
+    else if (x < LW - 1 && !kind[i + 1]) s = Math.min(255, s + 50);
     cIdx[nc] = i;
     cU[nc] = tu[i];
     cV[nc] = tv[i];
-    cS[nc++] = (s >> 1) | (k === 2 ? 128 : 0);
+    cS[nc++] = (s >> 2) | (k === 4 ? 64 : 0) | (k >= 2 ? 128 : 0);
   }
   return {
     sIdx: sIdx.slice(0, ns),
@@ -2661,7 +3070,7 @@ function nebula(): Uint8Array {
         0.55 * pnoise(x * 4 + w * 1.2, y * 4 + w2 * 1.2, 4, 11) +
         0.3 * pnoise(x * 8, y * 8, 8, 12) +
         0.15 * pnoise(x * 16, y * 16, 16, 13);
-      const dens = clamp01((d - 0.44) * 2.6);
+      const dens = clamp01((d - 0.47) * 2.8);
       const hue = pnoise(x * 2, y * 2, 2, 21);
       const ds = Math.min(3, Math.floor(dens * 3.6));
       const hc = hue < 0.45 ? 0 : hue < 0.72 ? 1 : 2;
@@ -2670,22 +3079,64 @@ function nebula(): Uint8Array {
   NEB = t;
   return t;
 }
-/** Цвета ткани: свет (6) × плотность (4) × оттенок (3); вторая половина — вспышка. */
+/**
+ * Цвета ткани. Ночь: свет (6) × плотность (4) × оттенок (3), вторая половина
+ * — вспышка. Кромка — живой край космоса: оттенок (3) × свет (6). Тело света
+ * (сверхновая): жар (3) × свет (6) × плотность (4).
+ */
 let CLOTH: Uint32Array | null = null;
+let EDGE: Uint32Array | null = null;
+let BLAZE_T: Uint32Array | null = null;
+const HOT = ['#8a4a12', '#c0721c', '#e8a030', '#ffd060', '#ffeeaa', '#fffbe8'].map((c) => hx(c));
+const WARM = ['#5a2414', '#8a3c18', '#c0621e', '#e89430', '#ffc860', '#ffe8a8'].map((c) => hx(c));
+const EMBER = ['#1e0a16', '#36101c', '#5a1c1c', '#80301a', '#a8481a', '#d07020'].map((c) => hx(c));
 function clothTable(): Uint32Array {
   if (CLOTH) return CLOTH;
   const t = new Uint32Array(6 * 4 * 3 * 2);
-  const hues = [VIO[3], MAG[2], TEAL[3]];
-  const amt = [0, 0.24, 0.44, 0.66];
+  const soft = [VIO[2], MAG[1], TEAL[2]];
+  const core = [VIO[3], MAG[2], TEAL[3]];
+  const amt = [0, 0.22, 0.4, 0.58];
   for (let s = 0; s < 6; s++)
     for (let d = 0; d < 4; d++)
       for (let h = 0; h < 3; h++) {
-        const c = mixc(NIGHT[1 + s], hues[h], amt[d] * (0.7 + s * 0.08));
+        const base = NIGHT[1 + s];
+        const c =
+          d === 3
+            ? mixc(mixc(base, soft[h], 0.45), core[h], 0.3 + s * 0.06)
+            : mixc(base, soft[h], amt[d] * (0.75 + s * 0.06));
         const i = (s * 4 + d) * 3 + h;
         t[i] = pack(c);
         t[72 + i] = pack(mixc(c, WHITE, 0.6));
       }
   CLOTH = t;
+  return t;
+}
+function edgeTable(): Uint32Array {
+  if (EDGE) return EDGE;
+  const t = new Uint32Array(3 * 6 * 2);
+  const lo = [VIO[2], MAG[1], TEAL[2]];
+  const hi = [VIO[4], hx('#e070e8'), ICE[4]];
+  for (let h = 0; h < 3; h++)
+    for (let s = 0; s < 6; s++) {
+      const c = mixc(lo[h], hi[h], 0.25 + s * 0.15);
+      t[h * 6 + s] = pack(c);
+      t[18 + h * 6 + s] = pack(mixc(c, WHITE, 0.6));
+    }
+  EDGE = t;
+  return t;
+}
+function blazeTable(): Uint32Array {
+  if (BLAZE_T) return BLAZE_T;
+  const t = new Uint32Array(3 * 6 * 4);
+  const ramps = [EMBER, WARM, HOT];
+  for (let h = 0; h < 3; h++)
+    for (let s = 0; s < 6; s++)
+      for (let d = 0; d < 4; d++) {
+        const r = ramps[h];
+        const c = mixc(r[s], r[Math.min(5, s + 1)], d * 0.3);
+        t[(h * 6 + s) * 4 + d] = pack(c);
+      }
+  BLAZE_T = t;
   return t;
 }
 
@@ -2710,68 +3161,118 @@ function slot(pool: Slot[], i: number): Slot {
   }
   return pool[i];
 }
+/** Где колокол (после сдвига строк) — звёзды плаща садятся только на него. */
 const clothMask = new Uint8Array(LW * LH);
+let maskKey = '';
+function fillMask(geo: LGeo, shift: Int8Array, key: string): void {
+  if (maskKey === key) return;
+  maskKey = key;
+  clothMask.fill(0);
+  for (let i = 0; i < geo.cIdx.length; i++) {
+    if (!(geo.cS[i] & 128)) continue;
+    const pi = geo.cIdx[i];
+    const Y = (pi / LW) | 0;
+    const X = pi - Y * LW + shift[Y];
+    if (X >= 0 && X < LW) clothMask[Y * LW + X] = 1;
+  }
+}
+
+/** Вес строки кадра для отмашки подола: 0 на плечах, 1 у кромки. */
+const ROW_W = new Float32Array(LH);
+for (let y = 0; y < LH; y++) {
+  const k = clamp01((y - (LAY - SHO)) / (SHO - HEM));
+  ROW_W[y] = k * k;
+}
+/** Сдвиг строк: наклон корпуса (вверху) и отмашка подола (внизу), px. */
+function rowShift(out: Int8Array, leanX: number, hemX: number): Int8Array {
+  for (let y = 0; y < LH; y++) {
+    const z = Math.max(0, LAY - y - HEM);
+    out[y] = Math.round(leanX * Math.min(z, CORE - HEM) * 0.6 + hemX * ROW_W[y]);
+  }
+  return out;
+}
+const SHIFT = new Int8Array(LH);
+const TWIST = new Int8Array(LH);
 
 /** Тело кадра: неизменное + ткань с туманностью, что течёт вниз. */
 const BODY_N = 12;
 const bodyKeys: string[] = [];
 const bodyAt = new Map<string, number>();
-function paintBody(
-  geo: LGeo,
-  gk: string,
-  now: number,
-  flash: boolean,
-  fresh: boolean,
-  p: LPose,
-  a: number,
-  kindled: number,
-): HTMLCanvasElement {
+interface BodyLook {
+  gk: string;
+  now: number;
+  flash: boolean;
+  p: LPose;
+  /** Угол тела (плащ), сдвиги строк, закрутка ткани (единицы текстуры у кромки). */
+  a: number;
+  sk: string;
+  shift: Int8Array;
+  twist: number;
+  kindled: number;
+}
+function paintBody(geo: LGeo, L: BodyLook): HTMLCanvasElement {
+  const { p, now, flash, shift } = L;
   // Туманность течёт ступенями: полшага вниз 6,4 раза в секунду, по кругу — 2,2;
   // звёзды плаща рисуются тут же — тело обновляется ~9 раз в секунду.
   const flow = Math.floor(now * 6.4) / 2;
   const swirl = Math.floor(now * 2.2);
-  const key = `${gk}|${flow}|${swirl}|${flash ? 1 : 0}|${kindled}|${Math.round(p.dim * 20)}`;
-  if (!fresh) {
-    const hit = bodyAt.get(key);
-    if (hit !== undefined) return BODY[hit].c;
-  }
-  let sl: Slot;
-  if (fresh) {
-    const c = document.createElement('canvas');
-    c.width = LW;
-    c.height = LH;
-    const g = c.getContext('2d')!;
-    sl = { c, g, id: g.createImageData(LW, LH) };
-  } else {
-    sl = slot(BODY, bodyI);
-    if (bodyKeys[bodyI] !== undefined) bodyAt.delete(bodyKeys[bodyI]);
-    bodyKeys[bodyI] = key;
-    bodyAt.set(key, bodyI);
-    bodyI = (bodyI + 1) % BODY_N;
-  }
+  const burnQ = Math.round(p.burn * 24);
+  const heat = p.core >= 1.6 ? 2 : p.core >= 0.9 ? 1 : 0;
+  const veil = p.veil > 0.5 ? 1 : 0;
+  const key = `${L.gk}|${flow}|${swirl}|${flash ? 1 : 0}|${L.kindled}|${Math.round(p.dim * 20)}|${L.sk}|${L.twist}|${burnQ}|${heat}|${veil}`;
+  const hit = bodyAt.get(key);
+  if (hit !== undefined) return BODY[hit].c;
+  const sl = slot(BODY, bodyI);
+  if (bodyKeys[bodyI] !== undefined) bodyAt.delete(bodyKeys[bodyI]);
+  bodyKeys[bodyI] = key;
+  bodyAt.set(key, bodyI);
+  bodyI = (bodyI + 1) % BODY_N;
   const d32 = new Uint32Array(sl.id.data.buffer);
   d32.fill(0);
-  clothMask.fill(0);
   const neb = nebula();
   const tab = clothTable();
+  const edge = edgeTable();
+  const bl = blazeTable();
   const fo = flash ? 72 : 0;
+  const eo = flash ? 18 : 0;
+  for (let y = 0; y < LH; y++) TWIST[y] = Math.round(L.twist * ROW_W[y]);
+  // Выгорание: всё ниже фронта — тело света, у фронта — тлеющая кайма.
+  const bz = burnQ > 0 ? HEM - 3 + (SHO + 6 - HEM) * (burnQ / 24) : -1e9;
+  const cyc = Math.floor(now * 2.5);
   for (let i = 0; i < geo.cIdx.length; i++) {
     const pi = geo.cIdx[i];
-    const X = pi % LW;
     const Y = (pi / LW) | 0;
+    const X0 = pi - Y * LW;
+    const X = X0 + shift[Y];
+    if (X < 0 || X >= LW) continue;
+    const di = Y * LW + X;
     const sb = geo.cS[i];
-    const sh = (sb & 127) / 127;
-    if (sb & 128) clothMask[pi] = 1;
-    const iu = ((((geo.cU[i] >> 2) + swirl) % NT) + NT) % NT;
-    const iv = ((Math.floor(geo.cV[i] * 0.45 + flow) % NT) + NT) % NT;
+    const sh = (sb & 63) / 63;
+    const iu = ((geo.cU[i] >> 2) + swirl + TWIST[Y]) & 63;
+    const iv = ((geo.cV[i] * 0.45 + flow) | 0) & 63;
     const n = neb[iv * NT + iu];
-    const zz = geo.cV[i] * 0.5;
-    const rim = zz < HEM + 5 ? (zz < HEM + 2.5 ? 2 : 1) : 0;
-    const si = Math.max(0, Math.min(5, Math.floor(sh * 5.6 + bay(X, Y) - 0.5) + rim));
-    const ds = rim ? 3 : Math.max(0, Math.min(3, (n & 3) - (bay(X + 1, Y) < 0.25 ? 1 : 0)));
-    d32[pi] = tab[fo + (si * 4 + ds) * 3 + (n >> 2)];
+    const si = Math.max(0, Math.min(5, Math.floor(sh * 5.6 + bay(X0, Y) - 0.5)));
+    const z = geo.cV[i] * 0.5;
+    if (z < bz + 2.6) {
+      if (z < bz) d32[di] = bl[(heat * 6 + si) * 4 + (n & 3)];
+      else {
+        const k = (z - bz) / 2.6 + (bay(X0, Y) - 0.5) * 0.5;
+        d32[di] = pack(k < 0.35 ? WHITE : k < 0.7 ? HOT[4] : HOT[2]);
+      }
+      continue;
+    }
+    if (sb & 64) {
+      d32[di] = edge[eo + (((n >> 2) + ((iu + cyc * 5) >> 4)) % 3) * 6 + Math.min(5, si + 1)];
+      continue;
+    }
+    const ds = Math.max(0, Math.min(3, (n & 3) - (bay(X0 + 1, Y) < 0.25 ? 1 : 0)));
+    d32[di] = tab[fo + (si * 4 + ds) * 3 + (n >> 2)];
   }
   for (let i = 0; i < geo.sIdx.length; i++) {
+    const pi = geo.sIdx[i];
+    const Y = (pi / LW) | 0;
+    const X = pi - Y * LW + shift[Y];
+    if (X < 0 || X >= LW) continue;
     let c = geo.sCol[i];
     if (flash && c >>> 24 > 200) {
       const r = c & 255;
@@ -2784,9 +3285,15 @@ function paintBody(
         c >>> 24,
       ]);
     }
-    d32[geo.sIdx[i]] = c;
+    // Изнанка и кайма тоже выгорают.
+    if (bz > -1e8 && c >>> 24 > 200 && LAY - Y < bz + 6 && c !== INK_P) {
+      const k = clamp01((bz + 6 - (LAY - Y)) / 6);
+      if (k > 0.3) c = pack(k > 0.8 ? HOT[4] : HOT[2]);
+    }
+    d32[Y * LW + X] = c;
   }
-  decoBody(d32, p, a, now, kindled);
+  fillMask(geo, shift, `${L.gk}|${L.sk}`);
+  if (!veil) decoBody(d32, p, L.a, now, L.kindled, shift);
   sl.g.putImageData(sl.id, 0, 0);
   return sl.c;
 }
@@ -2797,15 +3304,19 @@ const css = (c: RGBA, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${clamp01(a).toFix
 const CORE_R = [8, 6, 4, 2, 1];
 const CORE_LRU = frameLRU<HTMLCanvasElement>(220);
 
-/** Ядро-лицо: диск ночи в короне затмения, глаза — две звезды. */
+/**
+ * Ядро-лицо: диск ночи в короне затмения, глаза — две звезды. `veil` — во
+ * тьме затмения от лица остаются одни глаза.
+ */
 function coreSprite(
   dir: number,
   eyes: number,
   lvl: number,
   tint: number,
   rq: number,
+  veil: boolean,
 ): HTMLCanvasElement {
-  const key = `${dir}|${eyes}|${lvl}|${tint}|${rq}`;
+  const key = `${dir}|${eyes}|${lvl}|${tint}|${rq}|${veil ? 1 : 0}`;
   const hit = CORE_LRU.get(key);
   if (hit) return hit;
   const S = 37;
@@ -2815,61 +3326,66 @@ function coreSprite(
   const a = (dir * TAU) / DIRS;
   const hot = lvl >= 2;
   const glow = hot ? GOLD : ICE;
-  // Корона затмения: мягкое сияние и лучи разной длины.
-  p.ell(C - 0.5, C - 0.5, Rc + 3.5, Rc + 3.5, fade(glow[4], 0.1 + lvl * 0.05));
-  if (rq <= 2) {
-    const nR = 14;
-    for (let k = 0; k < nR; k++) {
-      const an = (k / nR) * TAU + 0.11 + hash(k, 1, 77) * 0.12;
-      const L = (k % 2 ? 2.5 : 5) + lvl * 1.6 + hash(k, 2, 77) * 2.5;
-      for (let d = 0; d < L; d += 0.5) {
-        const r = Rc + 0.6 + d;
-        const al = (1 - d / L) * (0.5 + lvl * 0.13);
-        p.set(
-          C - 0.5 + Math.cos(an) * r,
-          C - 0.5 + Math.sin(an) * r,
-          fade(d < 1.5 ? glow[5] : glow[4], al),
-        );
+  if (!veil) {
+    // Корона затмения: мягкое сияние в два слоя и лучи разной длины.
+    p.ell(C - 0.5, C - 0.5, Rc + 5.5, Rc + 5.5, fade(glow[3], 0.06 + lvl * 0.03));
+    p.ell(C - 0.5, C - 0.5, Rc + 3.5, Rc + 3.5, fade(glow[4], 0.12 + lvl * 0.05));
+    if (rq <= 2) {
+      const nR = 14;
+      for (let k = 0; k < nR; k++) {
+        const an = (k / nR) * TAU + 0.11 + hash(k, 1, 77) * 0.12;
+        const L = (k % 2 ? 2.5 : 5) + lvl * 1.8 + hash(k, 2, 77) * 2.5;
+        for (let d = 0; d < L; d += 0.5) {
+          const r = Rc + 0.6 + d;
+          const al = (1 - d / L) * (0.55 + lvl * 0.13);
+          p.set(
+            C - 0.5 + Math.cos(an) * r,
+            C - 0.5 + Math.sin(an) * r,
+            fade(d < 1.5 ? glow[5] : glow[4], al),
+          );
+        }
       }
     }
+    const rim = tint >= 0 ? QCOL[tint] : hot ? GOLD[5] : ICE[5];
+    p.ell(C - 0.5, C - 0.5, Rc, Rc, (x, y) => {
+      const dx = (x + 0.5 - C + 0.5) / Rc;
+      const dy = (y + 0.5 - C + 0.5) / Rc;
+      const r = Math.sqrt(dx * dx + dy * dy);
+      if (r > 0.84) return -dx * 0.6 - dy * 0.8 > 0.3 ? WHITE : rim;
+      if (lvl === 3) return r < 0.4 ? WHITE : r < 0.65 ? GOLD[5] : GOLD[4];
+      if (r > 0.7) return hot ? GOLD[2] : ICE[1];
+      // Пустота со спиралью галактики.
+      const sw = Math.sin(Math.atan2(dy, dx) * 2 - r * 7 + a);
+      if (r < 0.22 && lvl >= 1) return hot ? GOLD[3] : NIGHT[6];
+      return sw > 0.55 ? NIGHT[4 + lvl] : NIGHT[2 + lvl];
+    });
   }
-  const rim = tint >= 0 ? QCOL[tint] : hot ? GOLD[5] : ICE[5];
-  p.ell(C - 0.5, C - 0.5, Rc, Rc, (x, y) => {
-    const dx = (x + 0.5 - C + 0.5) / Rc;
-    const dy = (y + 0.5 - C + 0.5) / Rc;
-    const r = Math.sqrt(dx * dx + dy * dy);
-    if (r > 0.84) return -dx * 0.6 - dy * 0.8 > 0.3 ? WHITE : rim;
-    if (lvl === 3) return r < 0.4 ? WHITE : r < 0.65 ? GOLD[5] : GOLD[4];
-    if (r > 0.7) return hot ? GOLD[2] : ICE[1];
-    // Пустота со спиралью галактики.
-    const sw = Math.sin(Math.atan2(dy, dx) * 2 - r * 7 + a);
-    if (r < 0.22 && lvl >= 1) return hot ? GOLD[3] : NIGHT[6];
-    return sw > 0.55 ? NIGHT[4 + lvl] : NIGHT[2 + lvl];
-  });
   if (rq <= 1) {
     // Венец через лоб и глаза-звёзды — на лицевой стороне диска.
-    for (let k = -12; k <= 12; k++) {
-      const az = a + (k / 12) * 1.25;
-      if (Math.sin(az) <= 0.05) continue;
-      p.set(
-        C + Math.cos(az) * Rc * 0.78 - 0.5,
-        C - Rc * 0.62 + Math.sin(az) * Rc * 0.22 - 0.5,
-        fade(GOLD[4], 0.85),
-      );
-    }
+    if (!veil)
+      for (let k = -12; k <= 12; k++) {
+        const az = a + (k / 12) * 1.25;
+        if (Math.sin(az) <= 0.05) continue;
+        p.set(
+          C + Math.cos(az) * Rc * 0.78 - 0.5,
+          C - Rc * 0.62 + Math.sin(az) * Rc * 0.22 - 0.5,
+          fade(GOLD[4], 0.85),
+        );
+      }
     for (const o of [-0.42, 0.42]) {
       const az = a + o;
       if (Math.sin(az) < -0.1) continue;
       const ex = Math.round(C + Math.cos(az) * Rc * 0.55 - 0.5);
       const ey = Math.round(C - Rc * 0.08 + Math.sin(az) * Rc * 0.25 - 0.5);
       if (eyes === 0) {
-        p.set(ex - 1, ey, fade(ICE[3], 0.7));
-        p.set(ex, ey, fade(ICE[4], 0.8));
-        p.set(ex + 1, ey, fade(ICE[3], 0.7));
+        if (veil) continue;
+        p.set(ex - 1, ey, fade(ICE[2], 0.6));
+        p.set(ex, ey, fade(ICE[3], 0.7));
+        p.set(ex + 1, ey, fade(ICE[2], 0.6));
         continue;
       }
       // Звезда глаза: длинный горизонтальный луч, короткий вертикальный.
-      const L = eyes + 1;
+      const L = eyes + 1 + (veil ? 1 : 0);
       const glowC = hot ? GOLD[4] : ICE[4];
       p.set(ex - 1, ey - 1, fade(glowC, 0.35));
       p.set(ex + 1, ey - 1, fade(glowC, 0.35));
@@ -3019,6 +3535,22 @@ function handSprite(g: Gest, a16: number, side: number): HTMLCanvasElement {
     for (const o of [-1.2, -0.4, 0.4, 1.2]) {
       fingers.push([2.8, o, 5, o * 1.5], [5, o * 1.5, 6.6, o * 1.2 + 0.6]);
     }
+  } else if (g === 6) {
+    // Полукулак: пальцы короткие и загнуты к ладони.
+    palmR = 2.9;
+    for (const o of [-0.5, -0.17, 0.17, 0.5])
+      fingers.push([3, o * 2, 4.5, o * 2.1], [4.5, o * 2.1, 4.1, o * 1.6 + th * 0.8]);
+    fingers.push([1.3, th * 1.4, 2.6, th * 1.7]);
+  } else if (g === 7) {
+    // Пальцы врозь — всплеск силы.
+    for (const o of [-0.95, -0.35, 0.25, 0.85])
+      fingers.push([3, o * 1.6, 3 + Math.cos(o) * 4, o * 1.6 + Math.sin(o) * 4]);
+    fingers.push([
+      1.2,
+      th * 1.6,
+      1.2 + Math.cos(th * 1.6) * 3,
+      th * 1.6 + Math.sin(th * 1.6) * 3,
+    ]);
   }
   for (const f of fingers) for (let q = 0; q < 4; q++) f[q] *= 1.3;
   const tips: [number, number][] = fingers.map((f) => [f[2], f[3]]);
@@ -3054,16 +3586,21 @@ function corePos(a: number, p: LPose): [number, number] {
   return [LAX + Math.cos(a) * f, LAY - CORE + bow + Math.sin(a) * f * KF];
 }
 
-function paintLit(
-  m: Mob,
-  p: LPose,
-  a: number,
-  dir: number,
-  geo: LGeo,
-  now: number,
-  s: Sim | null,
-  dieT: number,
-): HTMLCanvasElement {
+/** Что нужно свету кроме позы: углы, сдвиг строк, подъём кадра. */
+interface LitCtx {
+  /** Угол тела (плащ) и головы (ядро, руки). */
+  ab: number;
+  af: number;
+  dir: number;
+  shift: Int8Array;
+  rise: number;
+  kindled: number;
+  dieT: number;
+  /** Ключ маски колокола (как у тела кадра). */
+  mk: string;
+}
+
+function paintLit(m: Mob, p: LPose, geo: LGeo, now: number, s: Sim | null, X: LitCtx): HTMLCanvasElement {
   const v = f15bView(s);
   const sl = slot(LIT, litI);
   litI = (litI + 1) % 4;
@@ -3073,16 +3610,24 @@ function paintLit(
   g.globalAlpha = 1;
   g.imageSmoothingEnabled = false;
   g.clearRect(0, 0, LW, LH);
-  const fl = Math.round(p.flare * 4) / 4;
+  const { af, dir, shift } = X;
   const ds = p.dissolve;
+  const veil = p.veil > 0.5;
+  const px1 = (x: number, y: number, c: RGBA, a: number, w = 1, h = 1) => {
+    if (a <= 0.02) return;
+    g.fillStyle = css(c, a);
+    g.fillRect(Math.round(x - w / 2), Math.round(y - h / 2), w, h);
+  };
   // Ядро, воротник, корона.
-  const [cx0, cy0] = corePos(a, p);
+  const [cx0, cy0] = corePos(af, p);
   const eyesQ = Math.max(0, Math.min(3, Math.round(p.eyes * 1.5)));
-  const lvl = Math.max(0, Math.min(3, Math.round(p.core * 1.1)));
+  // Корона улетела — лицо голое и ярче (урон по лицу ×1,6 — честно).
+  const awayN = v ? v.planets.filter((q) => q.stage !== 0).length : 0;
+  const lvl = Math.max(0, Math.min(3, Math.round(p.core * 1.1) + (awayN >= 3 ? 1 : 0)));
   const rq = Math.min(4, Math.floor(p.shrink * 5));
   // Свет между плечами и ядром: голова — пустота со светом.
-  if (rq < 4) {
-    g.fillStyle = css(lvl >= 2 ? GOLD[4] : ICE[3], 0.18 * Math.min(1, p.core));
+  if (rq < 4 && !veil) {
+    g.fillStyle = css(lvl >= 2 ? GOLD[4] : ICE[3], 0.2 * Math.min(1, p.core));
     g.fillRect(
       Math.round(cx0) - 1,
       Math.round(cy0) + 4,
@@ -3091,34 +3636,49 @@ function paintLit(
     );
   }
   const [cb, cf] = collarSprites(dir);
-  const collarOn = p.dissolve < 0.95;
-  const crownA = (s?.time ?? now) * 1.3;
-  const away = (i: number) => !!v && !!v.planets[i] && v.planets[i].stage !== 0;
-  const crownK = Math.max(0.35, Math.min(1, p.core)) * (1 - p.shrink);
-  const orbR = 19.5 * (1 - p.shrink * 0.85);
+  const collarOn = ds < 0.95 && !veil && p.burn < 0.98;
+  const time = s?.time ?? now;
+  const crownA = time * 1.3 + p.cspin;
+  const crownK = Math.max(0.35, Math.min(1, p.core)) * (1 - p.shrink) * clamp01(1.6 - p.veil * 2);
+  const orbR = 19.5 * p.orb * (1 - p.shrink * 0.85);
+  const orbY = 6.2 * p.orb * (1 - p.shrink * 0.85);
+  const nOn = Math.floor(p.crown + 1e-6);
   const planet = (front: boolean) => {
+    if (crownK <= 0.02) return;
     for (let i = 0; i < 5; i++) {
-      if (away(i)) continue;
+      const pl = v?.planets[i];
+      if (pl && pl.stage !== 0) continue;
+      const part = i < nOn ? 1 : i === nOn ? p.crown - nOn : 0;
+      if (part <= 0.02) continue;
       const an = crownA + (i * TAU) / 5 + p.shrink * 7;
       if (Math.sin(an) >= 0 !== front) continue;
-      const img = planetSprite(i);
-      g.globalAlpha = crownK;
-      g.drawImage(
-        img,
-        Math.round(cx0 + Math.cos(an) * orbR - 7.5),
-        Math.round(cy0 - 1 + Math.sin(an) * 6.2 * (1 - p.shrink * 0.85) - 5.5),
-      );
+      let x = cx0 + Math.cos(an) * orbR * part;
+      let y = cy0 - 1 + Math.sin(an) * orbY * part;
+      // Вернулась с броска: из точки мозга — на орбиту короны.
+      const back = pl && s ? s.time - pl.at - L_.orbitBack : 9;
+      if (back >= 0 && back < 0.3) {
+        const k = smooth(back / 0.3);
+        const a0 = time * 1.3 + (i * TAU) / 5;
+        const bx = LAX + Math.cos(a0) * CSPOT;
+        const by = LAY - 2 - X.rise + (-4.1 + Math.sin(a0) * 0.32) * 16;
+        x = lerp(bx, x, k);
+        y = lerp(by, y, k);
+      }
+      g.globalAlpha = crownK * Math.min(1, part * 1.5);
+      g.drawImage(planetSprite(i), Math.round(x - 7.5), Math.round(y - 5.5));
       g.globalAlpha = 1;
+      // Выходит из ядра — тонкий след по орбите.
+      if (part < 1) px1(cx0 + Math.cos(an) * orbR * part * 0.5, y, GOLD[5], 0.5 * (1 - part));
     }
   };
   // Орбита короны — тонкий пунктир.
-  if (p.shrink < 0.5) {
+  if (p.shrink < 0.5 && nOn > 0 && crownK > 0.1) {
     g.fillStyle = css(GOLD[3], 0.22 * crownK);
     for (let k = 0; k < 48; k += 2) {
       const t = (k / 48) * TAU + crownA * 0.2;
       g.fillRect(
         Math.round(cx0 + Math.cos(t) * orbR - 0.5),
-        Math.round(cy0 - 1 + Math.sin(t) * 6.2 - 0.5),
+        Math.round(cy0 - 1 + Math.sin(t) * orbY - 0.5),
         1,
         1,
       );
@@ -3126,35 +3686,108 @@ function paintLit(
   }
   planet(false);
   if (collarOn) g.drawImage(cb, Math.round(cx0 - 27), Math.round(cy0 - 27));
-  const core = coreSprite(dir, eyesQ, lvl, p.tint, rq);
+  const core = coreSprite(dir, eyesQ, lvl, p.tint, rq, veil);
   g.drawImage(core, Math.round(cx0 - 18), Math.round(cy0 - 18));
   if (collarOn) g.drawImage(cf, Math.round(cx0 - 27), Math.round(cy0 - 27));
   planet(true);
   // Удар отбит короной: звон кольцом.
   const pingAge = s && m.data.ping !== undefined ? s.time - m.data.ping : 9;
-  if (pingAge >= 0 && pingAge < 0.3) {
+  if (pingAge >= 0 && pingAge < 0.3 && !veil) {
     const k = pingAge / 0.3;
     g.strokeStyle = css(k < 0.3 ? WHITE : ICE[4], 1 - k);
     g.lineWidth = 1;
     g.beginPath();
-    g.ellipse(cx0, cy0 - 1, orbR + 2 + k * 5, 6 + k * 2, 0, 0, TAU);
+    g.ellipse(cx0, cy0 - 1, Math.max(8, orbR) + 2 + k * 5, 6 + k * 2, 0, 0, TAU);
     g.stroke();
   }
-  // Ладони: свет кисти, шар тяготения между ними.
+  // Во тьме затмения: звёзды плаща и пять звёзд эха — поверх пелены.
+  if (veil) {
+    fillMask(geo, shift, X.mk);
+    cloakStars(p, X.ab, now, X.kindled, shift, (x, y, c, a, big) => {
+      px1(x, y, c, a * 0.85);
+      if (big) {
+        px1(x - 1, y, c, a * 0.4);
+        px1(x + 1, y, c, a * 0.4);
+        px1(x, y - 1, c, a * 0.4);
+        px1(x, y + 1, c, a * 0.4);
+      }
+    });
+  }
+  // Ладони: свет кисти, след быстрой руки, искры по руке, шар тяготения.
+  const sh = (x: number, y: number) => x + shift[Math.max(0, Math.min(LH - 1, Math.round(y)))];
   for (const h of geo.hands) {
     if (!h.vis) continue;
     const gl = h.side < 0 ? p.gl : p.gr;
+    const hxp = sh(h.x, h.y);
+    const claw = h.g === 5;
+    // След: поза на 1/48…4/48 с раньше — дуга звёздного света за кистью.
+    if (p.tr) {
+      let lx = hxp;
+      let ly = h.y;
+      let lenSum = 0;
+      const pts: [number, number][] = [];
+      for (let j = 1; j <= 4; j++) {
+        const q = sample(p.tr, Math.max(0, p.tt - j / 48));
+        const hk = h.side < 0 ? q.L : q.R;
+        if (hk[3] === 0) break;
+        const [qx, qy] = handAt(af, hk, h.side);
+        const y = qy - (q.hover - p.hover);
+        const x = sh(qx, y);
+        lenSum += Math.hypot(x - lx, y - ly);
+        pts.push([x, y]);
+        lx = x;
+        ly = y;
+      }
+      if (lenSum > 5) {
+        let ax = hxp;
+        let ay = h.y;
+        for (let j = 0; j < pts.length; j++) {
+          const [bx, by] = pts[j];
+          const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)));
+          for (let k = 0; k < n; k++) {
+            const t = (j + k / n) / pts.length;
+            const x = ax + ((bx - ax) * k) / n;
+            const y = ay + ((by - ay) * k) / n;
+            const al = (1 - t) * 0.8;
+            px1(x, y, claw ? VIO[4] : t < 0.3 ? WHITE : GOLD[5], al, t < 0.4 ? 2 : 1, t < 0.4 ? 2 : 1);
+          }
+          ax = bx;
+          ay = by;
+        }
+      }
+    }
     if (gl > 0.05) {
-      g.fillStyle = css(h.g === 3 ? VIO[3] : GOLD[4], 0.12 + gl * 0.16);
+      g.fillStyle = css(h.g === 3 || h.g === 6 ? VIO[3] : claw ? VIO[4] : GOLD[4], 0.12 + gl * 0.16);
       g.beginPath();
-      g.arc(h.x, h.y, 3 + gl * 3.5, 0, TAU);
+      g.arc(hxp, h.y, 3 + gl * 3.5, 0, TAU);
       g.fill();
     }
+    // Искры бегут по руке от плеча к кулаку (колодец).
+    if (p.spark > 0 && p.spark < 1 && h.side > 0) {
+      for (let k = 0; k < 6; k++) {
+        const t = p.spark * 1.5 - k * 0.12;
+        if (t < 0 || t > 1) continue;
+        const u = t * 2;
+        const x = u < 1 ? lerp(h.shx, h.elx, u) : lerp(h.elx, h.x, u - 1);
+        const y = u < 1 ? lerp(h.shy, h.ely, u) : lerp(h.ely, h.y, u - 1);
+        const j = hash(k, Math.floor(now * 24), 61) - 0.5;
+        px1(sh(x, y) + j * 2, y - 1, k % 2 ? VIO[5] : WHITE, 0.95, k === 0 ? 2 : 1, 1);
+      }
+    }
+    // Пальцы врозь — короткие лучи от ладони.
+    if (h.g === 7 && gl > 0.3)
+      for (let k = 0; k < 6; k++) {
+        const an = h.ang + (k - 2.5) * 0.45;
+        const r0 = 5;
+        const r1 = 5 + 2.5 * gl + hash(k, Math.floor(now * 12), 63) * 2;
+        for (let r = r0; r < r1; r += 1)
+          px1(hxp + Math.cos(an) * r, h.y + Math.sin(an) * r, GOLD[5], 0.7 * (1 - (r - r0) / (r1 - r0)));
+      }
     const a16 = ((Math.round((h.ang / TAU) * 16) % 16) + 16) % 16;
-    g.drawImage(handSprite(h.g, a16, h.side), Math.round(h.x - 10), Math.round(h.y - 10));
+    g.drawImage(handSprite(h.g, a16, h.side), Math.round(hxp - 10), Math.round(h.y - 10));
   }
   if (p.ball > 0.05 && geo.hands.length === 2) {
-    const bx = (geo.hands[0].x + geo.hands[1].x) / 2;
+    const bx = sh((geo.hands[0].x + geo.hands[1].x) / 2, (geo.hands[0].y + geo.hands[1].y) / 2);
     const by = (geo.hands[0].y + geo.hands[1].y) / 2;
     const r = 1.5 + p.ball * 3;
     g.fillStyle = css(VIO[3], 0.25);
@@ -3176,10 +3809,11 @@ function paintLit(
       );
     }
   }
-  // Смерть: плащ осыпается звёздами вверх; в конце ядро вспыхивает точкой.
+  // Смерть: тело света осыпается звёздами вверх; ядро стягивается и вспыхивает.
   if (ds > 0) {
-    const T = dieT;
-    for (let i = 0; i < 46; i++) {
+    const T = X.dieT;
+    const fl = Math.round(p.flare * 4) / 4;
+    for (let i = 0; i < 64; i++) {
       const zf = hash(i, 5, 505);
       const z0 = HEM + (SHO - HEM) * zf;
       const t0 = 0.35 + 1.4 * zf;
@@ -3187,22 +3821,27 @@ function paintLit(
       if (age < 0 || age > 1.3) continue;
       const u = hash(i, 6, 505) * TAU - Math.PI;
       const R = bellR(z0, fl);
-      const psi = a + u;
-      const X = LAX + Math.cos(psi) * R * (1 + age * 0.4);
-      const Y = LAY - z0 - age * 22 + Math.sin(psi) * R * KF;
+      const psi = X.ab + u;
+      const x = LAX + Math.cos(psi) * R * (1 + age * 0.5);
+      const y = LAY - z0 - age * (16 + hash(i, 7, 505) * 14) + Math.sin(psi) * R * KF;
       const al = 1 - age / 1.3;
-      g.fillStyle = css(i % 3 === 0 ? GOLD[5] : i % 3 === 1 ? ICE[5] : VIO[4], al);
-      g.fillRect(Math.round(X - 0.5), Math.round(Y - 0.5), 1, 1);
-      if (i % 5 === 0) {
-        g.fillStyle = css(WHITE, al * 0.6);
-        g.fillRect(Math.round(X - 1.5), Math.round(Y - 0.5), 3, 1);
-      }
+      px1(x, y, i % 3 === 0 ? GOLD[5] : i % 3 === 1 ? HOT[4] : ICE[5], al);
+      if (i % 5 === 0) px1(x, y, WHITE, al * 0.6, 3, 1);
+    }
+    // Ядро стягивается: кольцо света сходится к точке.
+    if (T > 1.9 && T < 2.3) {
+      const k = (T - 1.9) / 0.4;
+      g.strokeStyle = css(GOLD[5], 0.4 + 0.5 * k);
+      g.lineWidth = 1;
+      g.beginPath();
+      g.arc(cx0, cy0, 14 * (1 - k) + 1, 0, TAU);
+      g.stroke();
     }
     if (T > 2.3) {
       const k = clamp01((T - 2.3) / 0.3);
       g.fillStyle = css(WHITE, 1 - k);
       g.beginPath();
-      g.arc(cx0, cy0, 2 + k * 10, 0, TAU);
+      g.arc(cx0, cy0, 2 + k * 12, 0, TAU);
       g.fill();
     }
   }
@@ -3211,11 +3850,68 @@ function paintLit(
 
 // ---- Кадр владыки ---------------------------------------------------------
 
-function geoKey(dir: number, p: LPose): string {
-  return `${dir}|${p.key}|${Math.round(p.flare * 4)}|${Math.round(p.open * 4)}|${p.train}|${p.sway}|${cph(p)}|${Math.round(p.dissolve * 20)}`;
+/** Инерция тела: плащ догоняет голову на развороте, подол отстаёт на разгоне. */
+interface Iner {
+  now: number;
+  /** Угол плаща и его скорость. */
+  ba: number;
+  bw: number;
+  /** Отмашка подола по экрану (px) и её скорость. */
+  hx: number;
+  hv: number;
+  /** Скорость моба по экрану, px/с. */
+  vx: number;
 }
-function lordGeo(dir: number, p: LPose): LGeo {
-  const key = geoKey(dir, p);
+const INER = new Map<number, Iner>();
+const angD = (a: number, b: number) => {
+  const d = a - b;
+  return d - Math.round(d / TAU) * TAU;
+};
+function inertia(m: Mob, now: number, face: number, hxT: number): Iner {
+  let st = INER.get(m.id);
+  const vx = m.vx * 16;
+  if (
+    !st ||
+    now < st.now ||
+    now - st.now > 0.25 ||
+    Math.abs(angD(face, st.ba)) > 0.9 ||
+    m.mode === 'dying'
+  ) {
+    st = { now, ba: face, bw: 0, hx: hxT, hv: 0, vx };
+    INER.set(m.id, st);
+    if (INER.size > 8) INER.delete(INER.keys().next().value as number);
+    return st;
+  }
+  let dt = now - st.now;
+  if (dt <= 0) return st;
+  const ax = Math.max(-500, Math.min(500, (vx - st.vx) / dt));
+  st.vx = vx;
+  st.now = now;
+  while (dt > 1e-6) {
+    const h = Math.min(dt, 1 / 60);
+    dt -= h;
+    const e = angD(face, st.ba);
+    st.bw += (150 * e - 17 * st.bw) * h;
+    st.ba += st.bw * h;
+    st.hv += (-95 * (st.hx - hxT) - 5.5 * st.hv - 1.6 * ax) * h;
+    st.hx += st.hv * h;
+  }
+  st.hx = Math.max(-6, Math.min(6, st.hx));
+  const lag = angD(face, st.ba);
+  if (Math.abs(lag) > 0.6) st.ba = face - Math.sign(lag) * 0.6;
+  return st;
+}
+
+const hkKey = (h: HK) =>
+  h[3] === 0 ? 'h' : `${Math.round(h[0] * 2)},${Math.round(h[1] * 2)},${Math.round(h[2] * 2)},${h[3]}`;
+function cloakKey(dirB: number, p: LPose): string {
+  return `${dirB}|${Math.round(p.flare * 4)}|${Math.round(p.open * 4)}|${p.train}|${p.sway}|${cph(p)}|${Math.round(p.dissolve * 20)}`;
+}
+function geoKey(dirB: number, dirF: number, p: LPose): string {
+  return `${cloakKey(dirB, p)}|${dirF}|${hkKey(p.L)}|${hkKey(p.R)}`;
+}
+function lordGeo(dirB: number, dirF: number, p: LPose): LGeo {
+  const key = geoKey(dirB, dirF, p);
   const hit = LGEO.get(key);
   if (hit) return hit;
   const q: LPose = {
@@ -3223,10 +3919,11 @@ function lordGeo(dir: number, p: LPose): LGeo {
     flare: Math.round(p.flare * 4) / 4,
     open: Math.round(p.open * 4) / 4,
     dissolve: Math.round(p.dissolve * 20) / 20,
-    lean: Math.round(p.lean * 20) / 20,
   };
-  const ck = `${dir}|${q.flare}|${q.open}|${q.lean}|${p.train}|${p.sway}|${cph(p)}|${q.dissolve}`;
-  return LGEO.set(key, buildLord((dir * TAU) / DIRS, q, ck));
+  return LGEO.set(
+    key,
+    buildLord((dirB * TAU) / DIRS, (dirF * TAU) / DIRS, q, cloakKey(dirB, p)),
+  );
 }
 
 const LIT_LAST: { k: string; c: HTMLCanvasElement | null } = { k: '', c: null };
@@ -3236,53 +3933,86 @@ const HANDS = new Map<number, { px: [number, number]; side: number }[]>();
  * Где ладонь владыки (`side` — как у `HandOut`, −1 или 1) — px кадра от
  * точки моба на полу, по последнему нарисованному кадру; `null` — кадра ещё
  * не было или руки скрыты. Эффекты рук («Техники») берут ладонь только
- * отсюда, «Тело» держит её в согласии с кадром.
+ * отсюда, «Тело» держит её в согласии с кадром (сдвиг строк, сжатие кадра).
  */
 export function lordHandPx(m: Mob, side: number): [number, number] | null {
   const hs = HANDS.get(m.id);
   if (!hs || !hs.length) return null;
   return (hs.find((x) => x.side === side) ?? hs[0]).px;
 }
+const dirOf = (a: number) => ((Math.round(a / (TAU / DIRS)) % DIRS) + DIRS) % DIRS;
 registerMobPainter('f15boss', (m: Mob, pose: MobPose): MobFrame | null => {
   const s = paintSim();
   const now = pose.now;
   const p = lordPose(m, pose, now);
-  const dir = ((Math.round(m.face / (TAU / DIRS)) % DIRS) + DIRS) % DIRS;
-  const geo = lordGeo(dir, p);
-  const gk = geoKey(dir, p);
+  const dirF = dirOf(m.face);
+  // Отмашка подола от жеста — по экрану (вправо тела → по x кадра).
+  const hxT = -Math.sin(m.face) * p.hx;
+  const ine = inertia(m, now, m.face, hxT);
+  const dirB = dirOf(ine.ba);
+  const ab = (dirB * TAU) / DIRS;
+  const af = (dirF * TAU) / DIRS;
+  const geo = lordGeo(dirB, dirF, p);
+  const gk = geoKey(dirB, dirF, p);
   const sp = Math.hypot(m.vx, m.vy);
   const ghostOn =
     pose.mode !== 'dying' && sp > 3.4 && (pose.mode === 'f15l_dark' || pose.mode === 'f15l_nova');
   const v = f15bView(s);
   const kindled = !v ? 0 : (s?.boss?.phase ?? 0) === 0 ? v.echo : 5;
+  // Наклон корпуса и отмашка подола — сдвигом строк (целые px).
+  const leanQ = Math.round(p.lean * Math.cos(af) * 20) / 20;
+  const hemQ = Math.round(ine.hx);
+  const shift = rowShift(SHIFT, leanQ, hemQ);
+  const sk = `${leanQ}|${hemQ}`;
+  const twist = Math.round(angD(m.face, ine.ba) * (NT / TAU) * 1.3);
   // Шлейф держит ссылки на кадры ~0,3 с, а кольцо из 12 тел живёт дольше 1 с — копия не нужна.
-  const img = paintBody(geo, gk, now, pose.flash, false, p, (dir * TAU) / DIRS, kindled);
+  const img = paintBody(geo, {
+    gk,
+    now,
+    flash: pose.flash,
+    p,
+    a: ab,
+    sk,
+    shift,
+    twist,
+    kindled,
+  });
+  const asleep = pose.mode === 'f15l_sleep' || pose.mode === 'f15l_stir';
+  const bob = asleep ? Math.sin(now * 1.2) * 1 : Math.sin(now * 1.7) * 1.5;
+  const rise = -(HOVER + p.hover) - bob;
   // Свет — 24 кадра в секунду, как и вся анимация владыки.
-  const lk = `${m.id}|${Math.floor(now * 24)}|${gk}|${pose.mode}`;
+  const lk = `${m.id}|${Math.floor(now * 24)}|${gk}|${pose.mode}|${sk}`;
   let lit = LIT_LAST.c;
   if (lk !== LIT_LAST.k || !lit) {
-    lit = paintLit(
-      m,
-      p,
-      (dir * TAU) / DIRS,
-      dir,
-      geo,
-      now,
-      s,
-      pose.mode === 'dying' ? pose.t * DIE_K : 0,
-    );
+    lit = paintLit(m, p, geo, now, s, {
+      ab,
+      af,
+      dir: dirF,
+      shift,
+      rise,
+      kindled,
+      dieT: pose.mode === 'dying' ? pose.t * DIE_K : 0,
+      mk: `${gk}|${sk}`,
+    });
     LIT_LAST.k = lk;
     LIT_LAST.c = lit;
   }
-  const asleep = pose.mode === 'f15l_sleep' || pose.mode === 'f15l_stir';
-  const bob = asleep ? Math.sin(now * 1.2) * 1 : Math.sin(now * 1.7) * 1.5;
   // Герой за владыкой — тело просвечивает, иначе героя не видно.
   const h = s?.hero;
   const behind = !!h && h.y < m.y - 0.2 && m.y - h.y < 5.2 && Math.abs(h.x - m.x) < 2.2;
-  const rise = -(HOVER + p.hover) - bob;
+  // Вес: сжатие в ударе, вытяжение в замахе — от подошвы кадра.
+  const sq = Math.abs(p.sq) > 0.04 ? p.sq : 0;
+  const sx = 1 + sq * 0.05;
+  const sy = 1 - sq * 0.06;
   HANDS.set(
     m.id,
-    geo.hands.map((x) => ({ px: [x.x - LAX, x.y - LAY + rise] as [number, number], side: x.side })),
+    geo.hands.map((x) => {
+      const X0 = x.x + shift[Math.max(0, Math.min(LH - 1, Math.round(x.y)))];
+      return {
+        px: [(X0 - LAX) * sx, (x.y - LAY) * sy + rise] as [number, number],
+        side: x.side,
+      };
+    }),
   );
   if (HANDS.size > 8) HANDS.delete(HANDS.keys().next().value as number);
   return {
@@ -3290,7 +4020,8 @@ registerMobPainter('f15boss', (m: Mob, pose: MobPose): MobFrame | null => {
     ax: LAX,
     ay: LAY,
     eye: null,
-    dy: -(HOVER + p.hover) - bob,
+    dy: rise,
+    ...(sq ? { sx, sy } : {}),
     still: true,
     lift: 0,
     shadow: Math.max(8, 15 - p.hover * 0.4),
@@ -3308,6 +4039,20 @@ registerMobWarm('f15boss', function* () {
     order.push((8 + k) % DIRS);
     if (k && k < 16) order.push((8 - k + DIRS) % DIRS);
   }
+  const mk = (k: KFull, train: number, ph: number): LPose => ({
+    ...k,
+    train,
+    sway: 0,
+    alpha: 1,
+    dissolve: 0,
+    shrink: 0,
+    dim: 1,
+    tint: -1,
+    ph,
+    veil: 0,
+    tr: null,
+    tt: 0,
+  });
   for (const spQ of [0, 1])
     for (const d of order)
       for (let b = 0; b < (spQ ? 5 : 3); b++) {
@@ -3318,20 +4063,7 @@ registerMobWarm('f15boss', function* () {
           R: [6, 18, 31 - sb, 1] as HK,
           flare: 0.04 * sb,
         };
-        const k = blend(idle, T_GLIDE[0], spQ);
-        const p: LPose = {
-          ...k,
-          key: `ch${spQ}|${sb}`,
-          train: spQ,
-          sway: 0,
-          alpha: 1,
-          dissolve: 0,
-          shrink: 0,
-          dim: 1,
-          tint: -1,
-          ph: spQ ? b * 2 : 0,
-        };
-        lordGeo(d, p);
+        lordGeo(d, d, mk(blend(idle, T_GLIDE[0], spQ), spQ, spQ ? b * 2 : 0));
         yield;
       }
 });
@@ -3368,23 +4100,28 @@ const KINDLE: [number, number][] = [
   [1.15, 34],
 ];
 
-/** Текущие звёзды, звёзды павших эх, огоньки кромки. */
-function decoBody(d32: Uint32Array, p: LPose, a: number, now: number, kindled: number): void {
-  const ca = Math.cos(a);
-  const sa = Math.sin(a);
+type StarFn = (x: number, y: number, c: RGBA, a: number, big: boolean) => void;
+/** Звёзды плаща (текут вниз) и звёзды павших эх — по маске колокола. */
+function cloakStars(
+  p: LPose,
+  a: number,
+  now: number,
+  kindled: number,
+  shift: Int8Array,
+  emit: StarFn,
+  kEmit?: (x: number, y: number, tw: number) => void,
+): void {
   const fl = Math.round(p.flare * 4) / 4;
   const op = Math.round(p.open * 4) / 4;
   const dim = p.dim;
-  const lean = Math.round(p.lean * 20) / 20;
-  const lx = (z: number) => lean * Math.max(0, z - HEM) * 0.6;
   const onBell = (u: number, z: number): [number, number, boolean] => {
     const R = bellR(z, fl);
     const dR = bellR(z - 0.5, fl) - bellR(z + 0.5, fl);
     const psi = a + u;
-    const cx = Math.cos(psi);
     const sy = Math.sin(psi);
-    const X = Math.round(LAX + lx(z) * ca + cx * R - 0.5);
-    const Y = Math.round(LAY - z + (lx(z) * sa + sy * R) * KF - 0.5);
+    const Y = Math.round(LAY - z + sy * R * KF - 0.5);
+    const yy = Math.max(0, Math.min(LH - 1, Y));
+    const X = Math.round(LAX + Math.cos(psi) * R - 0.5) + shift[yy];
     const vis =
       sy * VY + dR * VZ > 0.06 &&
       X >= 0 &&
@@ -3395,7 +4132,7 @@ function decoBody(d32: Uint32Array, p: LPose, a: number, now: number, kindled: n
     return [X, Y, vis];
   };
   const ds = p.dissolve;
-  if (ds < 0.9) {
+  if (ds < 0.9 && p.burn < 0.9) {
     const span = SHO - HEM - 3;
     for (let i = 0; i < 38; i++) {
       const h1 = hash(i, 1, 501);
@@ -3412,43 +4149,76 @@ function decoBody(d32: Uint32Array, p: LPose, a: number, now: number, kindled: n
       const tw = 0.55 + 0.45 * Math.sin(now * (2 + h2 * 4) + i * 1.7);
       const al = k * tw * dim;
       if (al <= 0.05) continue;
-      if (h1 < 0.2) {
-        for (const [dx, dy] of [
-          [-1, 0],
-          [1, 0],
-          [0, -1],
-          [0, 1],
-        ])
-          blendPx(d32, x + dx, y + dy, ICE[5], al * 0.7);
-        blendPx(d32, x, y, WHITE, al);
-      } else blendPx(d32, x, y, h1 < 0.55 ? ICE[4] : h1 < 0.8 ? VIO[4] : GOLD[4], al * 0.9);
+      if (h1 < 0.2) emit(x, y, WHITE, al, true);
+      else emit(x, y, h1 < 0.55 ? ICE[4] : h1 < 0.8 ? VIO[4] : GOLD[4], al * 0.9, false);
     }
   }
   // Звёзды павших эх: по одной на каждое — горят до конца боя.
-  for (let i = 0; i < kindled && ds < 0.6; i++) {
+  for (let i = 0; i < kindled && ds < 0.6 && p.burn < 0.9; i++) {
     const [u, z] = KINDLE[i];
     const [x, y, vis] = onBell(u, z);
     if (!vis) continue;
     const tw = 0.75 + 0.25 * Math.sin(now * 3 + i * 2);
-    for (let dy = -2; dy <= 2; dy++)
-      for (let dx = -2; dx <= 2; dx++) {
-        if (dx && dy) {
-          blendPx(
-            d32,
-            x + dx,
-            y + dy,
-            GOLD[4],
-            (Math.abs(dx) + Math.abs(dy) > 2 ? 0.12 : 0.3) * tw,
-          );
-          continue;
-        }
-        blendPx(d32, x + dx, y + dy, Math.abs(dx + dy) === 2 ? GOLD[4] : GOLD[5], 0.9 * tw);
-      }
-    blendPx(d32, x, y, WHITE, 1);
+    if (kEmit) kEmit(x, y, tw);
+    else {
+      emit(x, y, WHITE, 1, true);
+      emit(x - 2, y, GOLD[4], 0.6 * tw, false);
+      emit(x + 2, y, GOLD[4], 0.6 * tw, false);
+      emit(x, y - 2, GOLD[4], 0.6 * tw, false);
+      emit(x, y + 2, GOLD[4], 0.6 * tw, false);
+    }
   }
+}
+
+/** Текущие звёзды, звёзды павших эх, огоньки кромки. */
+function decoBody(
+  d32: Uint32Array,
+  p: LPose,
+  a: number,
+  now: number,
+  kindled: number,
+  shift: Int8Array,
+): void {
+  cloakStars(
+    p,
+    a,
+    now,
+    kindled,
+    shift,
+    (x, y, c, al, big) => {
+      if (big) {
+        blendPx(d32, x - 1, y, ICE[5], al * 0.7);
+        blendPx(d32, x + 1, y, ICE[5], al * 0.7);
+        blendPx(d32, x, y - 1, ICE[5], al * 0.7);
+        blendPx(d32, x, y + 1, ICE[5], al * 0.7);
+      }
+      blendPx(d32, x, y, c, al);
+    },
+    (x, y, tw) => {
+      for (let dy = -2; dy <= 2; dy++)
+        for (let dx = -2; dx <= 2; dx++) {
+          if (dx && dy) {
+            blendPx(
+              d32,
+              x + dx,
+              y + dy,
+              GOLD[4],
+              (Math.abs(dx) + Math.abs(dy) > 2 ? 0.12 : 0.3) * tw,
+            );
+            continue;
+          }
+          blendPx(d32, x + dx, y + dy, Math.abs(dx + dy) === 2 ? GOLD[4] : GOLD[5], 0.9 * tw);
+        }
+      blendPx(d32, x, y, WHITE, 1);
+    },
+  );
   // Кромка — живой космос: огоньки по краю, капли света вниз.
-  if (ds < 0.15) {
-    const cols = [VIO[3], MAG[2], TEAL[3], GOLD[4]];
+  const ds = p.dissolve;
+  if (ds < 0.15 && p.burn < 0.05) {
+    const fl = Math.round(p.flare * 4) / 4;
+    const op = Math.round(p.open * 4) / 4;
+    const dim = p.dim;
+    const cols = [VIO[4], hx('#e070e8'), ICE[4], GOLD[4]];
     const n = 56;
     const ph = cph(p) * 2;
     for (let k = 0; k < n; k++) {
@@ -3460,8 +4230,8 @@ function decoBody(d32: Uint32Array, p: LPose, a: number, now: number, kindled: n
       const R = bellR(z, fl);
       const sy = Math.sin(psi);
       if (sy * VY + 0.3 * VZ < 0) continue;
-      const X = Math.round(LAX + lx(z) * ca + Math.cos(psi) * R - 0.5);
-      const Y = Math.round(LAY - z + (lx(z) * sa + sy * R) * KF - 0.5);
+      const Y = Math.round(LAY - z + sy * R * KF - 0.5);
+      const X = Math.round(LAX + Math.cos(psi) * R - 0.5) + shift[Math.max(0, Math.min(LH - 1, Y))];
       const c = cols[(k + Math.floor(now * 3)) & 3];
       const fl2 = 0.5 + 0.5 * Math.sin(now * 5 + k * 1.3);
       blendPx(d32, X, Y, c, (0.45 + 0.5 * fl2) * dim);
