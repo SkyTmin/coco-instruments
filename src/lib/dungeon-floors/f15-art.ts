@@ -841,9 +841,19 @@ function brassFloor(p: Px, c: CellCtx): void {
     for (let x = 0; x < TS; x++) {
       const X = X0 + x;
       const Y = Y0 + y;
-      const n = vnoise(X, Y, 3, 1620);
-      let col = tone(BRASS, 0.42 + (n - 0.5) * 0.5 + Math.sin((X + Y) * 0.3) * 0.12 + dith(X, Y) * 0.1);
-      if ((((X * 7 + Y * 3) % 23) + 23) % 23 === 0) col = BRASS[0];
+      // Латунные плиты по клеткам: фаска, шлифовка, гравировка дуг, заклёпки, патина.
+      const streak = (hash(0, Y, 1621) - 0.5) * 0.12;
+      const sheen = Math.sin((X - Y) * 0.06) * 0.1;
+      let col = tone(BRASS, 0.5 + streak + sheen + dith(X, Y) * 0.06);
+      const R = Math.hypot((((X % 96) + 96) % 96) - 48, (((Y % 96) + 96) % 96) - 48);
+      if (Math.abs(R - 30) < 0.6 || Math.abs(R - 40) < 0.5) col = BRASS[1];
+      if (x === 0 || y === 0) col = BRASS[3];
+      else if (x === TS - 1 || y === TS - 1) col = BRASS[0];
+      else if (x === 1 || y === 1) col = mixc(col, BRASS[3], 0.3);
+      if ((x === 2 || x === TS - 3) && (y === 2 || y === TS - 3)) col = BRASS[0];
+      if ((x === 2 || x === TS - 3) && (y === 1 || y === TS - 4)) col = BRASS[3];
+      const pat = fbm(X, Y, 22, 1622);
+      if (pat > 0.66 && x > 0 && y > 0) col = mixc(col, hx('#3c8a78'), Math.min(0.7, (pat - 0.66) * 4));
       p.set(x, y, col);
     }
 }
