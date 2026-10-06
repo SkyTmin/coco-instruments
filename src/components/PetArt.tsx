@@ -16,6 +16,9 @@
 // рисунка: рамка подгоняется к ЦЕЛОМУ числу точек экрана на пиксель рисунка
 // (`pxFit`) и растягивается без сглаживания, иначе пиксели размываются или
 // выходят разной ширины. У них свой `rev` в адресе и нет крупных полос.
+// Золотой и радужный у них запечены в свои полосы (`<anim>-v1/-v2.webp`,
+// `thumb-v1/-v2`): класс `is-pxpet` снимает CSS-фильтр с полосы и миниатюры
+// при любом масштабе — фильтр на длинной полосе растеризовал её целиком.
 
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
@@ -31,9 +34,10 @@ export type PetAnim = 'idle' | 'walk' | 'happy' | 'work' | 'attack' | 'sleep';
 /** С какого размера рамки берём крупные полосы (там, где они есть). */
 const LARGE_FROM = 110;
 
-const stripSrc = (id: PetId, anim: PetAnim, large: boolean): string => {
+const stripSrc = (id: PetId, anim: PetAnim, large: boolean, v = 0): string => {
   const px = PET_PX[id];
-  if (px) return `/ui/pets/${id}/${anim}.webp?v=${px.rev}`;
+  // У пиксельных золотой и радужный — свои запечённые полосы, а не CSS-фильтр.
+  if (px) return `/ui/pets/${id}/${anim}${v ? `-v${v}` : ''}.webp?v=${px.rev}`;
   return `/ui/pets/${id}/${anim}${large && (PET_LARGE as readonly string[]).includes(anim) ? '-l' : ''}.webp?v=${PET_REV}`;
 };
 
@@ -149,9 +153,9 @@ export function PetArt({
   }, [show?.k]);
   useEffect(() => {
     if (still || ghost) return;
-    preload(stripSrc(id, 'happy', large));
-    preload(stripSrc(id, 'work', large));
-  }, [id, large, still, ghost]);
+    preload(stripSrc(id, 'happy', large, v));
+    preload(stripSrc(id, 'work', large, v));
+  }, [id, large, still, ghost, v]);
 
   // Разовая анимация доигрывает и уступает покою; таймер — на случай, если
   // конец анимации не придёт (вкладка в фоне, отключённые анимации).
@@ -175,6 +179,7 @@ export function PetArt({
     v ? `v${v}` : '',
     ghost ? 'is-ghost' : '',
     still || ghost ? 'is-still' : '',
+    px ? 'is-pxpet' : '',
     fit?.crisp ? 'is-px' : '',
     className ?? '',
   ]
@@ -199,7 +204,11 @@ export function PetArt({
       {still || ghost || !st ? (
         <img
           className="pet__thumb"
-          src={`/ui/pets/${id}/thumb.webp?v=${px ? px.rev : PET_REV}`}
+          src={
+            px
+              ? `/ui/pets/${id}/thumb${v && !ghost ? `-v${v}` : ''}.webp?v=${px.rev}`
+              : `/ui/pets/${id}/thumb.webp?v=${PET_REV}`
+          }
           alt=""
           draggable={false}
         />
@@ -220,7 +229,7 @@ export function PetArt({
             <img
               key={`${cur}:${once?.k ?? 'loop'}`}
               className={`pet__strip${once ? ' is-once' : ''}`}
-              src={stripSrc(id, cur, false)}
+              src={stripSrc(id, cur, false, v)}
               style={
                 {
                   width: `${st.n * 100}%`,

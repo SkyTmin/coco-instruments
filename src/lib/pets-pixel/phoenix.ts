@@ -177,10 +177,11 @@ const REST: Pose = {
   nod: 0,
   tilt: 0,
   crest: 0,
-  thL: 0.8,
-  thR: 0.8,
-  fanL: 1.2,
-  fanR: 1.2,
+  // Покой: крылья сложены вдоль тела плащом, маховые — узким веером.
+  thL: 0.38,
+  thR: 0.38,
+  fanL: 0.85,
+  fanR: 0.85,
   hugL: 0,
   hugR: 0,
   tailUp: 0,
@@ -370,11 +371,11 @@ function happyPose(t: number): Pose {
   ]);
   o.thL = o.thR = flap;
   o.fanL = o.fanR = kf(t, [
-    [0, 1.2],
+    [0, REST.fanL],
     [0.16, 0.8, 'o'],
     [0.3, 1.55, 'o'],
     [0.85, 1.45],
-    [1.0, 1.2],
+    [1.0, REST.fanL],
   ]);
   o.nod = kf(t, [
     [0, 0],
@@ -452,12 +453,12 @@ function workPose(t: number): Pose {
     [T, REST.thL],
   ]);
   o.fanL = o.fanR = kf(t, [
-    [0, 1.2],
+    [0, REST.fanL],
     [0.24, 0.45],
     [1.3, 0.45],
     [1.46, 1.65, 'o'],
     [1.75, 1.5],
-    [1.92, 1.2],
+    [1.92, REST.fanL],
   ]);
   o.sq = kf(t, [
     [0, 0],
@@ -600,11 +601,11 @@ function attackPose(t: number): Pose {
     [0.84, 0],
   ]);
   o.fanL = o.fanR = kf(t, [
-    [0, 1.2],
+    [0, REST.fanL],
     [0.3, 1.55, 'o'],
     [0.39, 1.0],
     [0.55, 0.7],
-    [0.84, 1.2],
+    [0.84, REST.fanL],
   ]);
   o.nod = kf(t, [
     [0, 0],
@@ -716,11 +717,16 @@ interface Skel {
   k: number;
 }
 
-const BODY0: V3 = [0, 0, 12.5];
-const HEAD0: V3 = [0, 1.2, 25];
+const BODY0: V3 = [0, 0, 14];
+const HEAD0: V3 = [0, 1.6, 29.5];
+/**
+ * Масштаб модели в рамке: тело (лапы — макушка хохолка) занимает ~5/6 рамки,
+ * как у соседей по отряду; хвост и крылья могут выходить за неё.
+ */
+const G = 0.84;
 
 function skel(o: Pose): Skel {
-  const s = o.scale;
+  const s = o.scale * G;
   const sq = o.sq;
   const up = (p: V3): V3 => {
     let q: V3 = [p[0] * (1 + sq * 0.55), p[1] * (1 + sq * 0.4), p[2] * (1 - sq)];
@@ -729,17 +735,17 @@ function skel(o: Pose): Skel {
     q = mul(q, s);
     return add(q, [o.x, 0, o.z]);
   };
-  const footL: V3 = add([-4.3 * s + o.fLx, 2.3 * s, 0.6 * s + o.fLz], [o.x * 0.15, 0, o.z]);
-  const footR: V3 = add([4.3 * s + o.fRx, 2.3 * s, 0.6 * s + o.fRz], [o.x * 0.15, 0, o.z]);
+  const footL: V3 = add([-3.8 * s + o.fLx, 2.3 * s, 0.6 * s + o.fLz], [o.x * 0.15, 0, o.z]);
+  const footR: V3 = add([3.8 * s + o.fRx, 2.3 * s, 0.6 * s + o.fRz], [o.x * 0.15, 0, o.z]);
   return {
     up,
     body: up(BODY0),
     head: up(add(HEAD0, [o.hx, 0, o.hz])),
-    shoulderL: up([-8.0, 1.2, 19]),
-    shoulderR: up([8.0, 1.2, 19]),
-    rump: up([0, -4.5, 6]),
-    hipL: up([-3.9, 1.6, 4.4]),
-    hipR: up([3.9, 1.6, 4.4]),
+    shoulderL: up([-6.8, 1.0, 21.5]),
+    shoulderR: up([6.8, 1.0, 21.5]),
+    rump: up([0, -5, 8]),
+    hipL: up([-3.4, 1.4, 6.4]),
+    hipR: up([3.4, 1.4, 6.4]),
     footL,
     footR,
     k: s,
@@ -836,7 +842,8 @@ let PER = FLICK_T;
 const dirFront = (th: number, side: number, fwd = 0): V3 =>
   norm([side * Math.sin(th), fwd, -Math.cos(th)]);
 
-const FEATHER_W = [1.2, 2.0, 2.4, 2.4, 2.0, 1.2, 0.3];
+/** Маховое: широкое, кончик округлый — веер без «колючек». */
+const FEATHER_W = [1.3, 2.1, 2.5, 2.6, 2.5, 2.0, 1.1];
 const PLUME_W = [0.6, 0.9, 1.4, 2.0, 2.6, 2.7, 2.2, 1.2, 0.25];
 const CREST_W = [0.55, 1.1, 1.35, 1.2, 0.8, 0.25];
 const TONGUE_W = [1.8, 2.8, 3.0, 2.4, 1.5, 0.6, 0.15];
@@ -852,6 +859,9 @@ interface Ctx {
     thR: number;
     rootX: number;
     rootZ: number;
+    /** Кончики хвоста: пружина медленнее, чем у середины пера. */
+    tailX: number;
+    tailZ: number;
     footX: number;
   };
   tau: number;
@@ -879,7 +889,7 @@ function wing(out: Part[], c: Ctx, side: -1 | 1): void {
   out.push({
     c: add(sh, mul(dW, 2.8 * k)),
     ax: axes(dW, nrm),
-    r: [4.6 * k, 3.8 * k, 2.4 * k],
+    r: [4.2 * k, 3.5 * k, 2.3 * k],
     pal: P_BODY,
     id: nid(),
     bias: 0.06,
@@ -898,13 +908,13 @@ function wing(out: Part[], c: Ctx, side: -1 | 1): void {
   }
   // Маховые веером: верхние (передний край) длиннее, нижние — короче, к телу.
   // Кончик отстаёт от взмаха пружиной и колышется языком пламени.
-  const lens = [8.4, 9, 8.8, 8.2, 7.3, 6.3];
+  const lens = [11.6, 12.2, 11.4, 10.2, 8.8, 7.4];
   const nF = lens.length;
   for (let j = 0; j < nF; j++) {
     const off = fan * (0.5 - j / (nF - 1));
     const a0 = th + off;
     const a1 = thLag + off * 1.06;
-    const root = add(add(sh, mul(dW, (8.4 - j * 1.25) * k)), mul(nrm, -0.3 * j * k));
+    const root = add(add(sh, mul(dW, (6.4 - j * 1.0) * k)), mul(nrm, -0.3 * j * k));
     const fl = 1 + 0.09 * (o.fire - 1) + 0.05 * o.fire * flick(c.tau, 20 + j + side * 10);
     const L = lens[j] * k * fl;
     const mid = add(root, mul(tw(a0), L * 0.55));
@@ -934,40 +944,57 @@ function wing(out: Part[], c: Ctx, side: -1 | 1): void {
 function tail(out: Part[], c: Ctx): void {
   const { o, S, lag } = c;
   const k = S.k;
-  // Хвост — два длинных пера на сторону: от крестца назад-вниз, по полу в
-  // стороны, кончик загибается вверх языком. Отстаёт от корпуса пружиной.
-  const swayX = (lag.rootX - o.x) * 0.9;
-  const swayZ = (lag.rootZ - o.z) * 0.7;
-  const fan = 1 + o.tailFan * 0.22;
-  for (const side of [-1, 1] as const) {
-    for (let j = 0; j < 2; j++) {
-      const outer = j === 0;
-      const base = add(S.rump, [side * (outer ? 2.4 : 1.2) * k, 0, (outer ? 0.8 : -1.2) * k]);
-      const fl = 1 + 0.08 * (o.fire - 1) + 0.06 * o.fire * flick(c.tau, 40 + j + side * 3);
-      const tipRel: V3 = outer
-        ? [side * 18 * fan, -3, 5.5 + o.tailUp * 6]
-        : [side * 15 * fan, -2.5, -2.2 + o.tailUp * 4];
-      const ctlRel: V3 = outer ? [side * 12.5, -5, -3.6] : [side * 8, -4, -3.8];
-      const tip = add(add(base, mul(tipRel, k * fl)), [swayX * (outer ? 1 : 0.7), 0, swayZ]);
-      const ctl = add(add(base, mul(ctlRel, k)), [swayX * 0.4, 0, swayZ * 0.4]);
-      const wave = side * (outer ? 1.4 : -1) * (1 + 0.35 * flick(c.tau, 140 + j + side * 5)) * k;
-      feather(
-        out,
-        base,
-        ctl,
-        tip,
-        PLUME_W.map((w) => w * k * (outer ? 1 : 0.8)),
-        0.8 * k,
-        norm([side * 0.2, 1, 0.4]),
-        P_FIRE,
-        [0.08, Math.min(1, 0.86 + 0.1 * o.fire)],
-        0.6,
-        nid(),
-        9,
-        [0, 0, wave],
-        1.5,
-      );
-    }
+  // Хвост — лира из четырёх длинных перьев-языков за телом: внешние уходят
+  // низко в стороны и загибаются кверху, внутренние поднимаются за плечами.
+  // Огонь — формой самого пера: багрянец у основания, белый жар к кончику.
+  // Вторичное движение в два звена: середина пера отстаёт от корпуса одной
+  // пружиной, кончик — второй, медленнее; по перу бежит волна.
+  const b = S.body;
+  const midX = (lag.rootX - b[0]) * 0.8;
+  const midZ = (lag.rootZ - b[2]) * 0.8;
+  const tipX = (lag.tailX - b[0]) * 1.25;
+  const tipZ = (lag.tailZ - b[2]) * 1.25;
+  const fan = 1 + o.tailFan * 0.25;
+  const up = o.tailUp;
+  // Перья (от нижнего к верхнему): изгиб и кончик относительно крестца.
+  // Хвост уходит за телом вправо по кадру и загибается кверху — одна
+  // S-образная струя, а не лучи во все стороны (те читались «звездой» и «рогами»).
+  const FE: [V3, V3, number][] = [
+    [[12.5, -7, -5], [23, -6, 3.5], 1.15],
+    [[11.5, -7, -1.5], [22, -7, 11], 1.1],
+    [[9.5, -7, 3], [19, -8, 17.5], 1],
+    [[7, -7, 6.5], [14.5, -8, 21.5], 0.85],
+  ];
+  for (let j = 0; j < FE.length; j++) {
+    const [cr, tr, wk] = FE[j];
+    const base = add(S.rump, [(1.2 + j * 0.3) * k, 0, (j * 0.9 - 0.8) * k]);
+    const fl = 1 + 0.08 * (o.fire - 1) + 0.05 * o.fire * flick(c.tau, 40 + j);
+    const ctlRel: V3 = [cr[0] * fan, cr[1], cr[2] + up * 2];
+    const tipRel: V3 = [tr[0] * fan, tr[1], tr[2] * (1 + up * 0.25) + up * (6 - j)];
+    // Запаздывание растёт к нижним (длинным) перьям.
+    const lw = 1 + (FE.length - 1 - j) * 0.12;
+    const ctl = add(add(base, mul(ctlRel, k)), [midX * lw, 0, midZ * lw]);
+    const tip = add(add(base, mul(tipRel, k * fl)), [tipX * lw, 0, tipZ * lw]);
+    // Волна поперёк пера в плоскости кадра: язык пламени колышется.
+    const d = sub(tip, base);
+    const perp = norm([-d[2], 0, d[0]]);
+    const wv = (0.8 + 0.4 * flick(c.tau, 140 + j)) * k * (j % 2 ? -1 : 1);
+    feather(
+      out,
+      base,
+      ctl,
+      tip,
+      PLUME_W.map((w) => w * k * wk),
+      0.85 * k,
+      norm([0.35, 1, 0.3]),
+      P_FIRE,
+      [0.04 + j * 0.03, Math.min(1, 0.84 + 0.12 * o.fire)],
+      0.6,
+      nid(),
+      10,
+      mul(perp, wv),
+      1.35,
+    );
   }
 }
 
@@ -981,11 +1008,11 @@ function crest(out: Part[], c: Ctx): void {
   const up = o.crest;
   const feathers: [number, number, number][] = [
     // смещение основания по x, наклон наружу, длина
-    [-3.4, -0.75, 4.6],
-    [-1.8, -0.36, 6.8],
-    [0, 0, 8.4],
-    [1.8, 0.36, 6.8],
-    [3.4, 0.75, 4.6],
+    [-2.9, -0.75, 5],
+    [-1.5, -0.36, 7.6],
+    [0, 0, 9.6],
+    [1.5, 0.36, 7.6],
+    [2.9, 0.75, 5],
   ];
   for (let j = 0; j < feathers.length; j++) {
     const [bx, lean, len0] = feathers[j];
@@ -994,7 +1021,7 @@ function crest(out: Part[], c: Ctx): void {
     const base = add(H, [
       (bx * 0.9 + o.turn * 3) * k,
       -1.6 * k,
-      6.4 * k + Math.abs(bx) * -0.35 * k,
+      5.6 * k + Math.abs(bx) * -0.35 * k,
     ]);
     const fl = 1 + 0.08 * (o.fire - 1) + 0.07 * o.fire * flick(c.tau, 60 + j);
     const L = len0 * k * (1 + up * 0.22) * fl * (up < 0 ? 1 + up * 0.25 : 1);
@@ -1098,30 +1125,50 @@ function body(out: Part[], c: Ctx): void {
   out.push({
     c: S.body,
     ax: axes(rollY([1, 0, 0], o.lean), [0, 0, 1]),
+    // Стройное тело-капля: уже и выше прежнего «шара».
     r: [
-      (9.6 + fl) * (1 + sq * 0.55) * k,
-      (8 + fl * 0.8) * (1 + sq * 0.4) * k,
-      (10.6 + fl * 0.4) * (1 - sq) * k,
+      (7.4 + fl) * (1 + sq * 0.55) * k,
+      (7 + fl * 0.8) * (1 + sq * 0.4) * k,
+      (10 + fl * 0.4) * (1 - sq) * k,
     ],
     pal: P_BODY,
     id: nid(),
     tex: scallop(6, 3.2, 0.1),
   });
   out.push({
-    c: S.up([0, 3.9 + fl * 0.6, 11.2]),
+    c: S.up([0, 3.5 + fl * 0.6, 13.2]),
     ax: axes(rollY([1, 0, 0], o.lean), pitchX([0, 0, 1], o.bow)),
-    r: [(6.6 + fl * 0.8) * (1 + sq * 0.5) * k, 4.8 * k, (8.4 + fl * 0.3) * (1 - sq) * k],
+    r: [(5.2 + fl * 0.8) * (1 + sq * 0.5) * k, 4.2 * k, (8.8 + fl * 0.3) * (1 - sq) * k],
     pal: P_BELLY,
     id: nid(),
     tex: scallop(4, 3.2, 0.16, 0.95),
     bias: -0.08,
   });
-  // Голова чуть шире тела сверху — «пухлый» силуэт.
+  // Шея: голову несёт, а не ставит на плечи; золотая грудь уходит по ней вверх.
   const H = S.head;
+  const neckDir = norm(sub(H, S.up([0, 0.6, 18])));
+  const neckC = S.up([0, 1.2, 23.4]);
+  out.push({
+    c: neckC,
+    ax: axes(rollY([1, 0, 0], (o.tilt + o.lean) * 0.5), neckDir),
+    r: [4.5 * k, 4.3 * k, 5.4 * k],
+    pal: P_BODY,
+    id: nid(),
+    tex: scallop(3, 3, 0.07),
+  });
+  out.push({
+    c: add(neckC, [0, 2.9 * k, -0.6 * k]),
+    ax: axes(rollY([1, 0, 0], (o.tilt + o.lean) * 0.5), neckDir),
+    r: [3.0 * k, 2.0 * k, 4.6 * k],
+    pal: P_BELLY,
+    id: nid(),
+    bias: -0.02,
+  });
+  // Голова: выразительная, но не шире тела.
   out.push({
     c: H,
     ax: axes(rollY([1, 0, 0], o.tilt + o.lean), [0, 0, 1]),
-    r: [8.4 * k, 7.8 * k, 7.8 * k],
+    r: [7.0 * k, 6.6 * k, 6.6 * k],
     pal: P_BODY,
     id: nid(),
     bias: -0.04,
@@ -1129,20 +1176,20 @@ function body(out: Part[], c: Ctx): void {
   });
   // Клюв: верхний крючком, нижний открывается.
   const fwd = norm(pitchX(yawZ0([0, 1, 0], o.turn), o.nod + o.bow + 0.38));
-  const bb = add(H, mul(norm(pitchX(yawZ0([0, 1, 0], o.turn), o.nod + o.bow + 0.3)), 7.0 * k));
+  const bb = add(H, mul(norm(pitchX(yawZ0([0, 1, 0], o.turn), o.nod + o.bow + 0.3)), 5.9 * k));
   const beakId = nid();
   out.push({
     c: add(bb, mul(fwd, 1.1 * k)),
     ax: axes(fwd, [0, 0, 1]),
-    r: [2.7 * k, 2.4 * k, 1.7 * k],
+    r: [2.4 * k, 2.3 * k, 1.5 * k],
     pal: P_GOLD,
     id: beakId,
     bias: -0.12,
   });
   out.push({
-    c: add(bb, add(mul(fwd, 2.6 * k), [0, 0, -1.3 * k])),
+    c: add(bb, add(mul(fwd, 2.5 * k), [0, 0, -1.2 * k])),
     ax: axes(norm(add(fwd, [0, 0, -1])), [0, 1, 0]),
-    r: [1.4 * k, 1.1 * k, 0.9 * k],
+    r: [1.25 * k, 1.0 * k, 0.85 * k],
     pal: P_GOLD,
     id: beakId,
     bias: -0.3,
@@ -1211,21 +1258,23 @@ const EYE_PAL: Record<string, RGBA> = {
   o: GOLD[3],
 };
 const EYES: Record<string, string[]> = {
-  open: ['.KK.', 'oKWo', 'oKKo', '.oo.'],
-  half: ['....', '.KK.', 'oKKo', '.oo.'],
+  // Глаз-бусина 2×2 с бликом в золотом кольце: на голове в 12 пикселей
+  // глаз 3×4 читался тёмными «очками».
+  open: ['....', 'oKWo', 'oKKo', '.oo.'],
+  half: ['....', '....', 'oKKo', '.oo.'],
   shut: ['....', '....', 'KKKK', '....'],
   happy: ['....', '.KK.', 'K..K', '....'],
   sleep: ['....', '....', 'K..K', '.KK.'],
-  angry: ['K...', 'oKK.', 'oKWK', '.oo.'],
+  angry: ['....', 'KKK.', 'oKWK', '.oo.'],
 };
 
 function eyes(p: Px, f: Frame, c: Ctx): void {
   const { o, S } = c;
   if (o.scale < 0.5 || o.burn > 0.6) return;
   const H = S.head;
-  const R = 7.8 * S.k;
+  const R = 6.6 * S.k;
   for (const side of [-1, 1] as const) {
-    const yaw = side * 0.5 + o.turn;
+    const yaw = side * 0.52 + o.turn;
     const el = 0.2 - (o.nod + o.bow) * 0.9;
     let pt: V3 = add(H, [
       Math.sin(yaw) * Math.cos(el) * R * 1.04,
@@ -1297,6 +1346,8 @@ export function lagOf(a: Anim, t: number): Ctx['lag'] {
     thR: lagged((tt) => P(tt).thR, 4.2, 0.38),
     rootX: lagged((tt) => sk(tt).body[0], 2.2, 0.28),
     rootZ: lagged((tt) => sk(tt).body[2], 2.4, 0.3),
+    tailX: lagged((tt) => sk(tt).body[0], 1.5, 0.22),
+    tailZ: lagged((tt) => sk(tt).body[2], 1.6, 0.24),
     footX: lagged((tt) => sk(tt).footL[0], 2.6, 0.22),
   };
 }
@@ -1323,7 +1374,16 @@ export function phoenixFrame(a: Anim, i: number): Px {
     wing(parts, c, 1);
     crest(parts, c);
   }
-  // Трюк: столб пламени вокруг тела, уголь.
+  // Трюк: столб пламени вокруг тела, уголь; `charge` — нарастание жара угля
+  // перед второй вспышкой.
+  const charge =
+    a === 'work'
+      ? kf(t, [
+          [1.06, 0],
+          [1.33, 1, 'i'],
+          [1.38, 0],
+        ])
+      : 0;
   if (o.pillar > 0.01) tongues(parts, c, o.pillar, o.x, 30 * Math.min(1.2, o.pillar), 18);
   if (o.ember > 0.01) {
     // Кучка пепла под углем: от неё птица и восстаёт.
@@ -1336,20 +1396,25 @@ export function phoenixFrame(a: Anim, i: number): Px {
       bias: 0.1,
       tex: (qx, qy) => (Math.sin(qx * 9 + qy * 5) > 0.6 ? -0.25 : 0),
     });
-    const eg = 0.5 + 0.5 * Math.sin((t - 0.96) * 2 * Math.PI * 2.6);
+    // Уголь живёт: дышит жаром (пульс размера и накала), а перед вспышкой
+    // жар нарастает — пульс чаще, уголь раздувается, по нему бегут языки.
+    const dt = Math.max(0, t - 1.08);
+    const eg = 0.5 + 0.5 * Math.sin(2 * Math.PI * (2.6 * (t - 0.96) + 4.2 * dt * dt));
+    const es = o.ember * (1 + 0.08 * eg + 0.32 * charge);
     parts.push({
-      c: [0, 2, 3.8 * o.ember],
+      c: [0, 2, 3.8 * es],
       ax: AX0,
-      r: [7 * o.ember, 5.6 * o.ember, 4.6 * o.ember],
+      r: [7 * es, 5.6 * es, 4.6 * es],
       pal: P_EMBER,
       id: nid(),
-      bias: -0.1 + 0.25 * eg,
+      bias: -0.12 + 0.28 * eg + 0.4 * charge,
       tex: (qx, qy, qz) => {
         // Трещины угля светятся: полосы по точке на угле.
         const v = Math.abs(Math.sin(qx * 4.1 + qz * 2.3) + Math.sin(qy * 3.7 - qz * 3.1));
-        return v < 0.35 ? 0.55 * eg + 0.15 : 0;
+        return v < 0.35 + 0.25 * charge ? 0.55 * eg + 0.15 + 0.3 * charge : 0;
       },
     });
+    if (o.ember > 0.4) tongues(parts, c, 0.22 + 0.55 * charge, 0, 6 + 10 * charge, 8 + 3 * charge);
   }
   const pals = burnPal(o.burn);
   const f = newFrame(CW, CH);
@@ -1363,10 +1428,10 @@ export function phoenixFrame(a: Anim, i: number): Px {
   const nsp = a === 'sleep' || a === 'walk' ? 2 : 4;
   sparks(p, c, nsp, 0.8, (j) =>
     j % 2
-      ? add(S.head, [((j % 3) - 1) * 3, -1, 13 * S.k])
-      : add(S.rump, [(j % 4 < 2 ? -1 : 1) * 17, -3, 9]),
+      ? add(S.head, [((j % 3) - 1) * 3, -1, 12 * S.k])
+      : add(S.rump, [(j % 4 < 2 ? -1 : 1) * 19 * S.k, -6, 12 * S.k]),
   );
-  if (o.burn > 0.2 || o.ember > 0.2) {
+  if (o.burn > 0.2) {
     sparks(
       p,
       { ...c, tau: c.tau * 2.0 },
@@ -1374,6 +1439,17 @@ export function phoenixFrame(a: Anim, i: number): Px {
       0.6,
       (j) => [((j % 5) - 2) * 3.2, 1, 6 + (j % 3) * 4],
       14,
+    );
+  }
+  if (o.ember > 0.2) {
+    // Искры от угля вверх: гуще и выше, пока жар нарастает.
+    sparks(
+      p,
+      { ...c, tau: c.tau * 1.8 },
+      7,
+      0.55,
+      (j) => [((j % 3) - 1) * 2.4, 2, 5 + 4 * o.ember],
+      11 + 7 * charge,
     );
   }
   // Пепел оседает, пока птица прогорает.

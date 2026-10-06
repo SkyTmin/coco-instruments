@@ -19,14 +19,14 @@ export interface PetPx {
 export const PET_PX: Record<string, PetPx> = {
   phoenix: {
     box: 48,
-    rev: 'dff6b00cd0',
+    rev: '914ba0d3eb',
     anims: {
-      idle: { n: 72, fps: 24, x: -2, y: -3, w: 52, h: 52 },
-      walk: { n: 24, fps: 24, x: -4, y: -4, w: 57, h: 53 },
-      happy: { n: 26, fps: 24, x: -4, y: -11, w: 56, h: 60 },
-      work: { n: 48, fps: 24, x: -4, y: -6, w: 56, h: 57 },
-      attack: { n: 22, fps: 24, x: -3, y: -2, w: 54, h: 55 },
-      sleep: { n: 72, fps: 24, x: 3, y: 1, w: 42, h: 48 },
+      idle: { n: 72, fps: 24, x: 2, y: -2, w: 48, h: 52 },
+      walk: { n: 24, fps: 24, x: 1, y: -3, w: 53, h: 54 },
+      happy: { n: 26, fps: 24, x: -1, y: -10, w: 55, h: 60 },
+      work: { n: 48, fps: 24, x: -1, y: -6, w: 57, h: 60 },
+      attack: { n: 22, fps: 24, x: -1, y: -1, w: 56, h: 55 },
+      sleep: { n: 72, fps: 24, x: 4, y: 2, w: 43, h: 48 },
     },
   },
 };
