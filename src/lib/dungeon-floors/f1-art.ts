@@ -875,16 +875,22 @@ function mobFrame(
   if (MIR8[d]) {
     // Зеркальная сторона — сперва тот же холст, отражённый движком (sx < 0):
     // ни нового рисунка, ни холста. Но блит с отражением втрое дороже
-    // простого, поэтому кадр, который показали уже MIR_BAKE раз (покой, ход),
-    // получает свой отражённый холст — он живёт, пока жив исходный кадр.
+    // простого, поэтому кадр покоя или хода, который показали уже MIR_BAKE
+    // раз, получает свой отражённый холст — он живёт, пока жив исходный кадр.
+    // Кадры ударов идут по разу на удар: им отражённый холст не окупается.
     const src = mobFrame(lru, base, SRC8[d], look, flash, buff, make);
     if (FB.fell) return src;
     let e = MIR_F.get(src);
     if (!e) {
-      e = { f: { ...src, sx: -1, eye: src.eye ? [src.eye[0] + 1, src.eye[1]] : null }, n: 0 };
+      const a = base.split('|')[1];
+      e = {
+        f: { ...src, sx: -1, eye: src.eye ? [src.eye[0] + 1, src.eye[1]] : null },
+        n: a === 'run' || a === 'idle' ? 0 : -1,
+      };
       MIR_F.set(src, e);
     }
-    if (++e.n === MIR_BAKE) {
+    if (e.n >= 0 && ++e.n >= MIR_BAKE && !(FB.hold && FB.spent >= F1_MOB_STAT.budget)) {
+      e.n = -1;
       const t0 = performance.now();
       const w = src.img.width;
       e.f = {
@@ -4369,7 +4375,7 @@ function bipWarmList(kind: string): [string, number, number[]][] {
         ['jabR', 0.55, [0]],
         ['coil', 0.42, [0]],
         ['coil', 0.34, [0]],
-        ['lunge', 0.24, [0]],
+        ['lunge', 0.24, [0, 1, 2]],
         ['skid', 0.55, [0]],
         ['feint', 0.3, [0]],
         ['hop', 0.22, [-1, 1]],
@@ -4380,7 +4386,7 @@ function bipWarmList(kind: string): [string, number, number[]][] {
         ['punchR', 0.45, [0]],
         ['spin', 0.8, [0]],
         ['throw', 0.45, [0]],
-        ['run', 0, [0, 2, 4]],
+        ['run', 0, [0, 2, 3, 4, 5]],
       ];
     case 'f1_shaman':
       return [
@@ -4398,7 +4404,7 @@ function bipWarmList(kind: string): [string, number, number[]][] {
         ['charge', 0, [0]],
         ['bashR', 0.8, [0]],
         ['skidG', 1.15, [0]],
-        ['run', 0, [0, 2, 4]],
+        ['run', 0, [0, 2, 3, 4, 5]],
       ];
   }
 }
