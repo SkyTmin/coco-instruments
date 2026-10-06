@@ -293,7 +293,10 @@ function moon(g: CanvasRenderingContext2D, to: (x: number, y: number) => [number
   if (m.r <= 0) return;
   const [x, y] = to(m.x, m.y);
   const hy = y - 70;
+  const old = g.globalCompositeOperation;
+  g.globalCompositeOperation = 'lighter';
   beam(g, x + 6, hy + 6, x, y, m.r * 16, MOON, 0.16);
+  g.globalCompositeOperation = old;
   // Месяц из картона на нити.
   g.strokeStyle = rgba(GOLD[1], 0.7);
   g.lineWidth = 0.6;
@@ -398,8 +401,8 @@ registerZonePainter('f13_strings', (g, z, px, py, S, time) => {
     const [x, y] = to(s.x, s.y);
     beam(g, lx, ly - 13, x, y, SPOT.r * 16, WARM, 0.13);
   }
-  if (F13_FX.act === 2 && F13_FX.moon.r > 0) moon(g, to, time);
   g.globalCompositeOperation = old;
+  if (F13_FX.act === 2 && F13_FX.moon.r > 0) moon(g, to, time);
   if (F13_FX.act === 1) for (const w of F13_FX.waves) waveCrest(g, to, w, time);
   if (F13_FX.act === 2) drawStars(g, to, time);
   drawStrings(g, to, z.x, z.y, time);

@@ -3864,9 +3864,12 @@ function lordFrame(m: Mob, now: number, flash: boolean, open: boolean, ghost: bo
   }
   const o = renderRig(rig, (dir / 16) * TAU, 72, 100, 36, 92, {
     flash,
-    tint: ghost ? hx('#3a2c50') : undefined,
-    tintK: ghost ? 0.25 : 0,
+    tint: ghost ? hx('#6a5a90') : undefined,
+    tintK: ghost ? 0.2 : 0,
   });
+  // Контровой свет рампы: светлая кайма вокруг контура — чёрный фрак не
+  // тонет в тёмной сцене (у тени-«призрака» кайма сиреневая).
+  o.px.outline(ghost ? [200, 180, 255, 150] : [255, 226, 170, 120]);
   return LORD_CACHE.set(key, toFrame(o, 36, 92, { shadow: 10 }));
 }
 
@@ -3880,7 +3883,7 @@ paintMob('f13boss', (m, pose) => {
   const t = m.t;
   const extra: Partial<MobFrame> = {
     dy: -lift,
-    alpha: ghost ? 0.82 : m.mode === 'dying' ? (t < LORD_DEATH - 0.6 ? 1 : Math.max(0, (LORD_DEATH - t) / 0.6)) : 1,
+    alpha: ghost ? 0.9 : m.mode === 'dying' ? (t < LORD_DEATH - 0.6 ? 1 : Math.max(0, (LORD_DEATH - t) / 0.6)) : 1,
     shadow: 10 - Math.min(5, lift / 6),
   };
   if (m.mode === 'dying') extra.linger = LORD_DEATH;
