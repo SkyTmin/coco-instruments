@@ -22,7 +22,7 @@ import {
 } from '../dungeon-paint';
 import type { FrameLRU, MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob, Strike, Zone } from '../dungeon-sim';
-import { CE, F3, Rig, SE, proj, renderRig } from './f15-rig';
+import { CE, F3, Rig, SE, proj, renderRig, vcross, vmul, vnorm, vsub } from './f15-rig';
 import type { Mat, RGBA, RigOut, Tones, V3 } from './f15-rig';
 
 const TAU = Math.PI * 2;
@@ -52,7 +52,6 @@ const smooth = (k: number) => {
 const sstep = (a: number, b: number, x: number) => smooth((x - a) / (b - a));
 const easeOut = (k: number) => 1 - (1 - clamp01(k)) ** 3;
 const easeIn = (k: number) => clamp01(k) ** 2;
-const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const vlerp = (a: V3, b: V3, k: number): V3 => [
   a[0] + (b[0] - a[0]) * k,
   a[1] + (b[1] - a[1]) * k,
@@ -281,8 +280,14 @@ function stat(ms: number, key: string): void {
 }
 
 type Proj2 = (v: V3) => [number, number];
-function draw(K: Kind, r: Rig, post?: (o: RigOut, P: Proj2) => void, inner = 2.2): Pic {
-  const o = renderRig(r, K.w, K.h, K.ax, K.ay, { outline: INK, inner });
+function draw(
+  K: Kind,
+  r: Rig,
+  post?: (o: RigOut, P: Proj2) => void,
+  inner = 2.2,
+  outline: RGBA = INK,
+): Pic {
+  const o = renderRig(r, K.w, K.h, K.ax, K.ay, { outline, inner });
   if (post)
     post(o, (v) => {
       const q = proj(v, K.ax, K.ay);
@@ -2861,5 +2866,575 @@ registerMobWarm('f5_rabbit', function* () {
       ['sleep', 2],
     ],
     rabbitPic,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Тень лабиринта: высокая, чёрная, с фиолетовой кромкой; маска-осколок,
+// длинные руки с тремя когтями, подол дымится и тянется за ней. Скользит —
+// подол рябит по пройденному пути. Когти (0,45 с): правая рука уходит за
+// голову, корпус скручен — рубка наискось в кадр удара (смаз когтей);
+// наотмашь (0,34 с): левая через грудь — широкий взмах наружу в удар.
+// Ранена — растекается лужей (0,55 с) и уходит в стену; выходит из стены,
+// собираясь из лужи. Смерть: отшатнулась, маска падает и раскалывается,
+// тело уходит дымом вверх.
+// ---------------------------------------------------------------------------
+
+const SH_BODY = tn('#050308', '#120d1a', '#261d36', '#453764');
+const SH_RIM = hx('#4a3878');
+const SH_GLOW = hx('#a07cff');
+const SH_MASK = tn('#5e5878', '#8e86ac', '#dcd6ec', '#f4f0fc');
+const SH_CLAW = tn('#5a5278', '#9a92b8', '#e4def4', '#ffffff');
+const SH_EYE = hx('#c8a0ff');
+const SH_SMOKE = tn('#0c0812', '#1c1428', '#2e2442', '#40345a');
+const SHS = 2.4;
+
+interface ShadeO {
+  fwd: number;
+  lean: number;
+  turn: number;
+  roll: number;
+  head: number;
+  hturn: number;
+  /** Кисти рук в осях тела (правая, левая). */
+  hR: V3;
+  hL: V3;
+  /** Подол: рябь (фаза), отставание назад 0…1, вспышка. */
+  ripple: number;
+  trail: number;
+  flare: number;
+  /** Растеклась 0…1; растворяется дымом 0…1. */
+  sink: number;
+  fade: number;
+  /** Маска: падение 0…1, раскол 0…1. */
+  drop: number;
+  split: number;
+  /** Смаз когтей: какая рука (1 правая, −1 левая, 0 нет), сила, дуга. */
+  smear: number;
+  smearK: number;
+  /** Глаза тлеют 0…1. */
+  eye: number;
+}
+const SH_IDLE_R: V3 = [0.9, 2.1, 0.7];
+const SH_IDLE_L: V3 = [0.9, -2.1, 0.7];
+const SHD0: ShadeO = {
+  fwd: 0,
+  lean: 0,
+  turn: 0,
+  roll: 0,
+  head: 0,
+  hturn: 0,
+  hR: SH_IDLE_R,
+  hL: SH_IDLE_L,
+  ripple: 0,
+  trail: 0,
+  flare: 0,
+  sink: 0,
+  fade: 0,
+  drop: 0,
+  split: 0,
+  smear: 0,
+  smearK: 0,
+  eye: 1,
+};
+
+/** Путь кисти по ключам (по каждой оси свой трек). */
+function hand(k: number, keys: [number, V3, Ease?][]): V3 {
+  return [0, 1, 2].map((i) =>
+    trk(
+      k,
+      keys.map(([t, v, e]) => [t, v[i], e] as Key),
+    ),
+  ) as V3;
+}
+
+/** Смаз когтей: точки дуги в мире, кадр рисует их после рига. */
+let shSmear: { pts: V3[]; k: number } | null = null;
+/** Клочья дыма смерти: точка в мире и возраст 0…1. */
+const shSmoke: { P: V3; u: number }[] = [];
+
+function shadeRig(o: ShadeO, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw).scale(SHS);
+  const cs = camSide(yaw);
+  const sk = clamp01(o.sink);
+  const fd = clamp01(o.fade);
+  const hipZ = 4.4 * (1 - sk) + 0.3 * sk;
+  let C = B.at(o.fwd, 0, hipZ).turn(o.turn).pitch(o.lean).roll(o.roll);
+  // Растекается: всё выше пояса сплющивается к полу.
+  if (sk > 0) C = new F3(C.o, C.f, C.s, vmul(C.u, 1 - 0.85 * sk));
+  const shrink = 1 - fd * 0.3;
+  const R = (x: number) => x * SHS * shrink;
+  const body: Mat = { T: SH_BODY };
+  // Лужа под ней (растекание и сборка).
+  const pr = (1.2 + 2.4 * sk) * (1 - 0.7 * fd);
+  if (sk > 0.05 && pr > 0.4) r.ell(B, [0, 0, 0.05], [pr, pr, 0.25], { T: SH_SMOKE });
+  // Подол: книзу шире, отстаёт назад на ходу; дымные языки по кругу.
+  const hem = B.p(o.fwd - 0.6 * o.trail, 0, 0.7);
+  r.cap(C.p(0, 0, 0.2), hem, R(1.25), R(1.9 + sk * 0.8), body);
+  if (fd < 0.9)
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * TAU + 0.6;
+      const w = Math.sin(o.ripple + i * 1.7) * 0.5;
+      const base = vadd(hem, B.v(Math.cos(a) * 1.5, Math.sin(a) * 1.5, -0.2));
+      const tip = vadd(
+        base,
+        B.v(
+          -0.9 * o.trail + Math.cos(a) * (0.4 + o.flare * 0.8) + w * 0.3,
+          Math.sin(a) * (0.4 + o.flare * 0.8) + w,
+          -0.2 + o.flare * 0.5,
+        ),
+      );
+      r.cap(base, tip, R(0.45), R(0.08), { T: SH_SMOKE });
+    }
+  // Корпус: узкая грудь, сутулые плечи.
+  r.ell(C, [0, 0, 2.5], [1.05 * shrink, 1.55 * shrink, 2.0 * shrink], body);
+  r.ell(C, [0.15, 0, 4.1], [1.0 * shrink, 2.0 * shrink, 0.85 * shrink], body);
+  // Голова в капюшоне, рожки-клочья.
+  const Hd = C.at(0.55, 0, 5.3).turn(o.hturn).pitch(o.head);
+  r.ell(Hd, [0, 0, 0], [1.0 * shrink, 0.9 * shrink, 1.2 * shrink], body);
+  for (const sd of [-1, 1])
+    r.cap(Hd.p(-0.3, sd * 0.45, 0.7), Hd.p(-1.1, sd * 0.9, 2.0), R(0.42), R(0.06), body);
+  // Маска-осколок: на лице или падает и колется.
+  const maskPts: V3[] = [
+    [0.95, -0.7, 0.6],
+    [1.05, 0.75, 0.45],
+    [1.0, 0.25, -0.95],
+    [0.9, -0.45, -0.6],
+  ];
+  const dropK = clamp01(o.drop);
+  const onFace = (q: V3): V3 => Hd.p(q[0], q[1], q[2]);
+  const ground = (q: V3, side: number): V3 =>
+    vadd(B.p(1.6, 0, 0.15), B.v(-q[2] * 0.9, q[1] * 0.9 + o.split * 0.6 * side, 0));
+  const maskAt = (q: V3, side: number): V3 =>
+    dropK > 0 ? vlerp(onFace(q), ground(q, side), easeIn(dropK)) : onFace(q);
+  if (o.split > 0) {
+    r.poly(
+      [
+        maskAt(maskPts[0], -1),
+        maskAt([1.0, 0, 0.5], -1),
+        maskAt([0.95, -0.1, -0.8], -1),
+        maskAt(maskPts[3], -1),
+      ],
+      { T: SH_MASK },
+      0.4,
+    );
+    r.poly(
+      [
+        maskAt([1.0, 0, 0.5], 1),
+        maskAt(maskPts[1], 1),
+        maskAt(maskPts[2], 1),
+        maskAt([0.95, -0.1, -0.8], 1),
+      ],
+      { T: SH_MASK },
+      0.4,
+    );
+  } else
+    r.poly(
+      maskPts.map((q) => maskAt(q, 0)),
+      { T: SH_MASK },
+      0.4,
+    );
+  if (dropK < 0.2 && o.eye > 0)
+    for (const sd of [-1, 1]) r.dot(Hd.p(1.12, sd * 0.32, 0.15), SH_EYE, o.eye, 1, 1.2);
+  r.eye = dropK < 0.2 && o.eye > 0.5 ? Hd.p(1.12, cs * 0.32, 0.15) : null;
+  // Руки: плечо → локоть → кисть, три когтя по ходу предплечья.
+  if (fd < 0.85)
+    for (const sd of [1, -1]) {
+      const hp = sd > 0 ? o.hR : o.hL;
+      const S = C.p(0.2, sd * 1.85, 3.9);
+      const Hn =
+        sk > 0
+          ? vlerp(C.p(hp[0], hp[1], hp[2]), B.p(hp[0] * 0.8, hp[1] * 1.3, 0.2), sk)
+          : C.p(hp[0], hp[1], hp[2]);
+      const mid = vlerp(S, Hn, 0.5);
+      const El = vadd(mid, C.v(-0.6, sd * 0.7, -0.2));
+      const armM: Mat = { T: SH_BODY, bias: sd === cs ? 0.05 : -0.15 };
+      r.cap(S, El, R(0.48), R(0.36), armM);
+      r.cap(El, Hn, R(0.36), R(0.3), armM);
+      const dir = vnorm(vsub(Hn, El));
+      const side = Math.abs(dir[2]) > 0.95 ? vnorm(C.s) : vnorm(vcross(dir, [0, 0, 1]));
+      for (const k of [-1, 0, 1]) {
+        const tip = vadd(Hn, vadd(vmul(dir, 1.5 * SHS * shrink), vmul(side, k * 0.45 * SHS)));
+        r.cap(vadd(Hn, vmul(side, k * 0.18 * SHS)), tip, R(0.17), R(0.04), {
+          T: SH_CLAW,
+          glow: 0.25,
+        });
+      }
+    }
+  // Дым растворения — клочья поднимаются из лужи и редеют (рисует пост).
+  shSmoke.length = 0;
+  if (fd > 0)
+    for (let i = 0; i < 9; i++) {
+      const u = fd * 1.3 - hash(i, 3) * 0.45;
+      if (u <= 0 || u >= 1) continue;
+      const P = B.p(
+        (hash(i, 1) - 0.5) * 3.4 + Math.sin(u * 5 + i) * 0.4,
+        (hash(i, 2) - 0.5) * 3.8,
+        0.6 + u * 7,
+      );
+      shSmoke.push({ P, u });
+    }
+  // Смаз когтей: дуга от прошлой точки кисти к нынешней.
+  shSmear = null;
+  if (o.smear !== 0 && o.smearK > 0.05) {
+    const S = C.p(0.2, o.smear * 1.85, 3.9);
+    const a0 = o.smear > 0 ? [-1.2, 2.4, 6.8] : [0.8, 1.8, 4.2];
+    const a1 = o.smear > 0 ? o.hR : o.hL;
+    const pts: V3[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const k = i / 8;
+      const q = vlerp(C.p(a0[0], a0[1], a0[2]), C.p(a1[0], a1[1], a1[2]), k);
+      // Дуга — оттянуть от плеча.
+      const d = vsub(q, S);
+      const L = Math.hypot(d[0], d[1], d[2]) || 1;
+      pts.push(vadd(S, vmul(d, (3.6 * SHS) / L)));
+    }
+    shSmear = { pts, k: o.smearK };
+  }
+  return r;
+}
+
+/** Смаз когтей поверх кадра — и в слой поверх темноты. */
+function shadePost(o: RigOut, P: Proj2): void {
+  // Дым — мягкие полупрозрачные клочья, без контура; тают к вершине.
+  for (const { P: w, u } of shSmoke) {
+    const [x, y] = P(w);
+    const a = 0.75 * (1 - u);
+    const c = alpha(SH_RIM, a);
+    const r = u < 0.5 ? 1 : 0;
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r - 1; dx <= r + 1; dx++)
+        if (Math.abs(dx) + Math.abs(dy) <= r + 1) o.p.set(x + dx, y + dy, c);
+    o.p.set(x, y - 1, alpha(SH_GLOW, a));
+  }
+  if (!shSmear) return;
+  const { pts, k } = shSmear;
+  const lit = litOn(o);
+  const sp = pts.map(P);
+  for (let i = 0; i < sp.length - 1; i++) {
+    const [x0, y0] = sp[i];
+    const [x1, y1] = sp[i + 1];
+    const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0)));
+    const w = (i / (sp.length - 1)) * k;
+    for (let j = 0; j <= n; j++) {
+      const x = x0 + ((x1 - x0) * j) / n;
+      const y = y0 + ((y1 - y0) * j) / n;
+      const c = w > 0.6 ? SH_CLAW[3] : w > 0.3 ? SH_CLAW[2] : SH_GLOW;
+      o.p.set(x, y, c);
+      lit.set(x, y, alpha(c, 0.4 + 0.6 * w));
+      if (w > 0.45) {
+        o.p.set(x, y + 1, SH_GLOW);
+        lit.set(x, y + 1, alpha(SH_GLOW, 0.6 * w));
+      }
+    }
+  }
+}
+
+function shadePose(anim: string, f: number): ShadeO {
+  const o: ShadeO = { ...SHD0 };
+  switch (anim) {
+    case 'idle': {
+      // 8 кадров по 6 к/с: колышется, когти подрагивают, подол рябит.
+      const a = (f / 8) * TAU;
+      o.roll = 0.06 * Math.sin(a);
+      o.lean = 0.05 + 0.03 * Math.sin(a * 2);
+      o.ripple = a;
+      o.hturn = 0.15 * Math.sin(a * 0.5);
+      o.hR = vadd(SH_IDLE_R, [0, 0, 0.25 * Math.sin(a + 1)]);
+      o.hL = vadd(SH_IDLE_L, [0, 0, 0.25 * Math.sin(a + 2.4)]);
+      o.eye = 0.7 + 0.3 * Math.sin(a);
+      break;
+    }
+    case 'glide': {
+      // Скольжение: подался вперёд, подол и руки тянутся назад.
+      const a = (f / 8) * TAU;
+      o.lean = 0.28;
+      o.trail = 1;
+      o.ripple = a * 2;
+      o.roll = 0.05 * Math.sin(a);
+      o.hR = [-0.6, 2.2, 1.4 + 0.3 * Math.sin(a)];
+      o.hL = [-0.6, -2.2, 1.4 + 0.3 * Math.sin(a + PI)];
+      o.head = -0.1;
+      break;
+    }
+    case 'windup': {
+      // Когти, 0,45 с (11 кадров): правая за голову, корпус скручен назад,
+      // левая вперёд для равновесия; к удару — натяг.
+      const k = kf(f, 0.45);
+      o.hR = hand(k, [
+        [0, SH_IDLE_R],
+        [0.6, [-1.2, 2.4, 6.8], easeOut],
+      ]);
+      o.hL = hand(k, [
+        [0, SH_IDLE_L],
+        [0.6, [1.8, -1.6, 2.6], easeOut],
+      ]);
+      o.turn = trk(k, [
+        [0, 0],
+        [0.6, -0.45, easeOut],
+        [1, -0.55],
+      ]);
+      o.lean = trk(k, [
+        [0, 0.05],
+        [0.6, -0.12],
+        [1, -0.16],
+      ]);
+      o.head = -0.1;
+      o.flare = trk(k, [
+        [0.7, 0],
+        [1, 0.5],
+      ]);
+      o.eye = 1;
+      break;
+    }
+    case 'slash2': {
+      // Удар 1 в кадре 0 (рубка наискось, смаз), потом наотмашь, 0,34 с
+      // (9 кадров): левая через грудь, корпус скручен в другую сторону.
+      const t = f / FPS;
+      o.hR = hand(t, [
+        [0, [2.6, -1.4, 1.6]],
+        [0.12, [1.6, -0.6, 1.2]],
+        [0.3, [-0.6, 2.2, 1.6]],
+      ]);
+      o.hL = hand(t, [
+        [0, [1.8, -1.6, 2.6]],
+        [0.06, [1.6, -1.8, 3.0]],
+        [0.26, [0.8, 1.8, 4.2], easeOut],
+      ]);
+      o.turn = trk(t, [
+        [0, 0.55],
+        [0.08, 0.5],
+        [0.26, 0.6, easeOut],
+        [0.34, 0.65],
+      ]);
+      o.lean = trk(t, [
+        [0, 0.3],
+        [0.15, 0.1],
+        [0.34, -0.05],
+      ]);
+      o.fwd = trk(t, [
+        [0, 0.6],
+        [0.2, 0.2],
+      ]);
+      o.smear = 1;
+      o.smearK = trk(t, [
+        [0, 1],
+        [0.12, 0],
+      ]);
+      o.flare = trk(t, [
+        [0, 0.8],
+        [0.2, 0.2],
+      ]);
+      break;
+    }
+    case 'slashf': {
+      // Удар 2 в кадре 0 (наотмашь наружу, смаз), проводка, возврат.
+      const t = f / FPS;
+      o.hL = hand(t, [
+        [0, [2.0, -3.4, 3.0]],
+        [0.15, [1.4, -3.0, 2.2]],
+        [0.5, SH_IDLE_L],
+      ]);
+      o.hR = hand(t, [
+        [0, [-0.6, 2.2, 1.6]],
+        [0.5, SH_IDLE_R],
+      ]);
+      o.turn = trk(t, [
+        [0, -0.5],
+        [0.12, -0.6],
+        [0.5, 0],
+      ]);
+      o.lean = trk(t, [
+        [0, 0.25],
+        [0.5, 0.05],
+      ]);
+      o.fwd = trk(t, [
+        [0, 0.5],
+        [0.4, 0],
+      ]);
+      o.smear = -1;
+      o.smearK = trk(t, [
+        [0, 1],
+        [0.14, 0],
+      ]);
+      o.flare = trk(t, [
+        [0, 0.9],
+        [0.3, 0],
+      ]);
+      o.ripple = t * 12;
+      break;
+    }
+    case 'flinch': {
+      const k = f / 4;
+      const b = Math.sin(PI * Math.min(1, k * 1.25)) * (1 - k * 0.5);
+      o.lean = -0.35 * b;
+      o.fwd = -0.6 * b;
+      o.head = -0.3 * b;
+      o.flare = b;
+      o.hR = vadd(SH_IDLE_R, [-0.4 * b, 0.6 * b, 1.6 * b]);
+      o.hL = vadd(SH_IDLE_L, [-0.4 * b, -0.6 * b, 1.6 * b]);
+      o.eye = 1;
+      break;
+    }
+    case 'melt': {
+      // Растекается (14 кадров на 0,55 с): оседает в лужу, руки в пол.
+      const k = kf(f, 0.55);
+      o.sink = easeIn(k);
+      o.flare = 0.6;
+      o.head = 0.3 * k;
+      o.eye = 1 - k;
+      o.ripple = k * 10;
+      break;
+    }
+    case 'rise': {
+      // Собирается из лужи у стены (кадр f из 8).
+      const k = f / 7;
+      o.sink = 1 - easeOut(k);
+      o.flare = 0.6 * (1 - k);
+      o.eye = k;
+      o.ripple = k * 8;
+      break;
+    }
+    case 'sleep': {
+      o.head = 0.35;
+      o.lean = 0.12;
+      o.eye = 0.25 + f * 0.15;
+      o.ripple = f * 1.5;
+      break;
+    }
+    case 'die': {
+      // 22 кадра: отшатнулась (0–3), оседает лужей (4–13), маска падает
+      // (4–10) и колется (11), лужа уходит дымом вверх (8–20), на полу осколки.
+      const t = f / FPS;
+      const b = trk(t, [
+        [0, 1],
+        [0.15, 0.6],
+      ]);
+      o.lean = -0.35 * b;
+      o.head = -0.4 * b;
+      o.hR = vadd(SH_IDLE_R, [-0.6, 1.0, 2.4 * b]);
+      o.hL = vadd(SH_IDLE_L, [-0.6, -1.0, 2.4 * b]);
+      o.flare = b;
+      o.sink = trk(t, [
+        [0.14, 0],
+        [0.55, 1, easeIn],
+      ]);
+      o.fade = sstep(0.32, 0.85, t);
+      o.drop = trk(t, [
+        [0.12, 0],
+        [0.42, 1, easeIn],
+      ]);
+      o.split = trk(t, [
+        [0.44, 0],
+        [0.56, 1, easeOut],
+      ]);
+      o.eye = 1 - sstep(0.1, 0.3, t);
+      o.ripple = t * 14;
+      break;
+    }
+  }
+  return o;
+}
+
+const SHADE = kindOf(40, 44, 20, 35, 1000);
+const SHADE_EMPTY: Pic = { p: new Px(1, 1), lit: null, ax: 0, ay: 0, eye: null };
+const shadePic = (anim: string, f: number, d: number): Pic =>
+  anim === 'gone'
+    ? SHADE_EMPTY
+    : draw(SHADE, shadeRig(shadePose(anim, f), yawN(d)), shadePost, 2.2, SH_RIM);
+
+registerMobPainter('f5_shade', (m: Mob, pose: MobPose) => {
+  const md = pose.mode;
+  const t = pose.t;
+  const now = pose.now || 0;
+  const tech = md === 'windup' || md === 'slash2' || md === 'recover' || md === 'melt';
+  const v = visOf(m, pose, tech ? (m.face ?? 0) : headOf(m), 10);
+  const d = dirN(v.yaw);
+  const ex: Partial<MobFrame> = { shadow: 7 };
+  let anim = 'idle';
+  let f = 0;
+  let dark = 0;
+  const id = m.id ?? 0;
+  if (md === 'f5_gone') {
+    anim = 'gone';
+    ex.shadow = 0;
+  } else if (md === 'dying') {
+    f = fi(t, 21);
+    anim = 'die';
+    ex.linger = 0.9;
+    ex.alpha = 1 - sstep(0.7, 0.9, t);
+    ex.shadow = 7 * (1 - sstep(0.2, 0.6, t));
+    ex.still = true;
+  } else if (md === 'windup') {
+    f = fi(t, 10);
+    anim = 'windup';
+    ex.still = true;
+  } else if (md === 'slash2') {
+    f = fi(t, 8);
+    anim = 'slash2';
+    ex.still = true;
+    if (f === 0) {
+      ex.sx = 1.06;
+      ex.sy = 0.96;
+    }
+  } else if (md === 'recover') {
+    f = fi(t, 13);
+    anim = 'slashf';
+    ex.still = true;
+    if (f === 0) {
+      ex.sx = 1.08;
+      ex.sy = 0.95;
+    }
+  } else if (md === 'melt') {
+    f = fi(t, 13);
+    anim = 'melt';
+    ex.still = true;
+    ex.shadow = 7 * (1 - t / 0.55);
+  } else if (md === 'f5_born') {
+    const k = clamp01(t / 0.8);
+    f = Math.min(7, Math.floor(k * 8));
+    anim = 'rise';
+    dark = 2 - Math.min(2, Math.floor(k * 3));
+    const [wx, wy] = wallDir(m);
+    const off = (1 - easeOut(k)) * 8;
+    ex.dx = wx * off;
+    ex.dy = wy * off;
+    ex.alpha = 0.4 + 0.6 * k;
+    ex.shadow = 7 * k;
+  } else if (md === 'sleep') {
+    f = Math.floor(now * 1.1 + hash(id, 3)) % 2;
+    anim = 'sleep';
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(md === 'stun' ? t : now - v.hit, 4);
+    anim = 'flinch';
+  } else if (moving(m)) {
+    f = Math.floor(v.dist * 8) % 8;
+    anim = 'glide';
+  } else {
+    f = Math.floor((now + hash(id, 7) * 4) * 6) % 8;
+    anim = 'idle';
+    if (md === 'alert') ex.dy = -Math.sin(PI * clamp01(t / 0.35)) * 2;
+  }
+  if (md !== 'dying' && md !== 'f5_gone') hurtFx(v, now, 1.5, ex);
+  return { ...frameOf(SHADE, anim, f, d, pose, () => shadePic(anim, f, d), dark), ...ex };
+});
+
+registerMobWarm('f5_shade', function* () {
+  yield* warmAll(
+    SHADE,
+    [
+      ['glide', 8],
+      ['idle', 8],
+      ['windup', 11],
+      ['slash2', 9],
+      ['slashf', 14],
+      ['flinch', 5],
+      ['melt', 14],
+      ['rise', 8],
+      ['die', 22],
+      ['sleep', 2],
+    ],
+    shadePic,
   );
 });
