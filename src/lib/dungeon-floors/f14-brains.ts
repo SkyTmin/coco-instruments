@@ -3545,6 +3545,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           len,
           above: true,
         } as ZoneIn); // v2.87 — только рисунок
+        api.vfx(sim, { x: m.x, y: m.y, r: 0.5, life: 1.1, art: 'f14b_scuff', ang: m.dir, len } as ZoneIn); // анимации 14 — только рисунок
         api.setMode(m, 'f14_lunge');
       }
       return;
@@ -3568,8 +3569,9 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           life: LORD.stuck + 0.9,
           art: 'f14b_stab',
           ang: m.dir,
-          above: true,
+          above: false, // анимации 14 — только рисунок: воронка и трещины — на полу
         } as ZoneIn); // v2.87 — только рисунок
+        api.vfx(sim, { x: vx, y: vy, r: 0.5, life: LORD.stuck + 0.9, art: 'f14b_stabfx', ang: m.dir, above: true, mob: m.id } as ZoneIn); // анимации 14 — только рисунок
         api.setMode(m, 'f14_stuck');
       }
       return;
