@@ -28,7 +28,16 @@ import {
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import { F15_MARK, F15_OBS, F15_ORBIT, F15_ROOTS } from './f15';
-import { COMET, F15_FX, f15State, GRAVITON, METEOR as METEOR_K, MOTIFS, NOVA, URCHIN } from './f15-brains';
+import {
+  COMET,
+  F15_FX,
+  f15State,
+  GRAVITON,
+  METEOR as METEOR_K,
+  MOTIFS,
+  NOVA,
+  URCHIN,
+} from './f15-brains';
 import type { Arc, Chart, FShot, Ring, Well } from './f15-brains';
 
 type RGBA = [number, number, number, number];
@@ -56,14 +65,21 @@ const mixc = (a: RGBA, b: RGBA, k: number): RGBA => {
     Math.round(a[3] + (b[3] - a[3]) * k),
   ];
 };
-const alpha = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(Math.max(0, Math.min(1, a)) * 255)];
+const alpha = (c: RGBA, a: number): RGBA => [
+  c[0],
+  c[1],
+  c[2],
+  Math.round(Math.max(0, Math.min(1, a)) * 255),
+];
 const tn = (a: string, b: string, c: string, d: string): Tones => [hx(a), hx(b), hx(c), hx(d)];
-const rgba = (c: RGBA, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
+const rgba = (c: RGBA, a = 1) =>
+  `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (k: number) => k * k * (3 - 2 * k);
 
 function hash(x: number, y: number, s: number): number {
-  let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041)) | 0;
+  let h =
+    (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
@@ -85,7 +101,9 @@ function vnoise(x: number, y: number, sc: number, s: number): number {
 }
 
 const fbm = (x: number, y: number, sc: number, s: number) =>
-  vnoise(x, y, sc, s) * 0.55 + vnoise(x, y, sc / 2, s + 1) * 0.3 + vnoise(x, y, sc / 4, s + 2) * 0.15;
+  vnoise(x, y, sc, s) * 0.55 +
+  vnoise(x, y, sc / 2, s + 1) * 0.3 +
+  vnoise(x, y, sc / 4, s + 2) * 0.15;
 
 interface Vor {
   d1: number;
@@ -149,7 +167,17 @@ function shadeEll(p: Px, cx: number, cy: number, rx: number, ry: number, t: Tone
   });
 }
 
-function limb(p: Px, x0: number, y0: number, x1: number, y1: number, r0: number, r1: number, t: Tones, bias = 0): void {
+function limb(
+  p: Px,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  r0: number,
+  r1: number,
+  t: Tones,
+  bias = 0,
+): void {
   const minX = Math.floor(Math.min(x0 - r0, x1 - r1)) - 1;
   const maxX = Math.ceil(Math.max(x0 + r0, x1 + r1)) + 1;
   const minY = Math.floor(Math.min(y0 - r0, y1 - r1)) - 1;
@@ -211,7 +239,14 @@ function stroke(p: Px, x0: number, y0: number, x1: number, y1: number, c: RGBA, 
     const x = x0 + ((x1 - x0) * i) / n;
     const y = y0 + ((y1 - y0) * i) / n;
     if (w <= 1) p.set(Math.floor(x), Math.floor(y), c);
-    else p.rect(Math.floor(x - w / 2), Math.floor(y - w / 2), Math.floor(x + w / 2 - 0.01), Math.floor(y + w / 2 - 0.01), c);
+    else
+      p.rect(
+        Math.floor(x - w / 2),
+        Math.floor(y - w / 2),
+        Math.floor(x + w / 2 - 0.01),
+        Math.floor(y + w / 2 - 0.01),
+        c,
+      );
   }
 }
 
@@ -311,7 +346,8 @@ function spacePx(p: Px, wx: number, wy: number, k = 1, lane: boolean | Ring = fa
           if (k > 0) c = mixc(c, hx('#2c2666'), smooth(k) * (0.3 + dn * 0.2));
           const mid = (lane.r0 + lane.r1) / 2;
           const ang = Math.atan2(Y + 0.5 - lane.cy * TS, X + 0.5 - lane.cx * TS);
-          if (Math.abs(d - mid) < 0.05 && ((Math.floor(ang * mid * TS) % 6) + 6) % 6 < 2) c = mixc(c, TEAL_GLOW, 0.45);
+          if (Math.abs(d - mid) < 0.05 && ((Math.floor(ang * mid * TS) % 6) + 6) % 6 < 2)
+            c = mixc(c, TEAL_GLOW, 0.45);
         }
       }
       p.set(x, y, c);
@@ -325,7 +361,8 @@ function spacePx(p: Px, wx: number, wy: number, k = 1, lane: boolean | Ring = fa
     if (h < 0.05) sparkle(p, x, y, col, 1);
     else p.set(x, y, alpha(col, 0.5 + h));
   }
-  if (hash(wx, wy, 1513) < 0.004) shadeEll(p, 8, 8, 3.5, 3.5, hash(wx, wy, 1514) < 0.5 ? ROSE : LAPIS, -0.1);
+  if (hash(wx, wy, 1513) < 0.004)
+    shadeEll(p, 8, 8, 3.5, 3.5, hash(wx, wy, 1514) < 0.5 ? ROSE : LAPIS, -0.1);
 }
 
 /** Провал в породе: тьма, по северному краю — обрыв со светом кристаллов. */
@@ -365,7 +402,8 @@ function ledgeFace(p: Px, c: CellCtx, t: Tones): void {
   const X0 = c.wx * TS;
   for (let x = 0; x < TS; x++) {
     const X = X0 + x;
-    const h = 5 + Math.floor(vnoise(X, c.wy, 5, 1595) * 4) + (hash(X >> 1, c.wy, 1596) < 0.12 ? 3 : 0);
+    const h =
+      5 + Math.floor(vnoise(X, c.wy, 5, 1595) * 4) + (hash(X >> 1, c.wy, 1596) < 0.12 ? 3 : 0);
     for (let y = 0; y < h; y++) {
       const k = y / h;
       let col = tone(t, 0.75 - k * 1.1 + (hash(X, y, 1597) - 0.5) * 0.15);
@@ -386,7 +424,9 @@ function craterAt(c: CellCtx): [number, number] | null {
   if (!sim) return null;
   let l = SHARD_AT.get(sim.world);
   if (!l) {
-    l = sim.world.objs.filter((o) => o.ref === 'f15_bigshard').map((o) => [o.x + 0.5, o.y + 0.5] as [number, number]);
+    l = sim.world.objs
+      .filter((o) => o.ref === 'f15_bigshard')
+      .map((o) => [o.x + 0.5, o.y + 0.5] as [number, number]);
     SHARD_AT.set(sim.world, l);
   }
   for (const s of l) if (Math.hypot(s[0] - c.wx - 0.5, s[1] - c.wy - 0.5) < 4.4) return s;
@@ -397,7 +437,12 @@ function craterAt(c: CellCtx): [number, number] | null {
  * Кратер осколка: круглая воронка по пикселям (клетки ямы — крестом, край
  * рисуем кругом). Северная внутренняя стенка видна, на дне — свет ядра.
  */
-function craterPx(p: Px, c: CellCtx, at: [number, number], base: (p: Px, c: CellCtx) => void): void {
+function craterPx(
+  p: Px,
+  c: CellCtx,
+  at: [number, number],
+  base: (p: Px, c: CellCtx) => void,
+): void {
   rimFloor(p, c, false, base);
   const cx = at[0] * TS;
   const cy = at[1] * TS;
@@ -425,7 +470,10 @@ function craterPx(p: Px, c: CellCtx, at: [number, number], base: (p: Px, c: Cell
       } else {
         const r = hd / HR;
         const sw = 0.5 + 0.5 * Math.sin(a * 3 + r * 6);
-        col = ramp([hx('#d8ffff'), hx('#6ce4f4'), hx('#1c78a8'), hx('#0c2458'), hx('#060a24')], r * 0.95 + sw * 0.1);
+        col = ramp(
+          [hx('#d8ffff'), hx('#6ce4f4'), hx('#1c78a8'), hx('#0c2458'), hx('#060a24')],
+          r * 0.95 + sw * 0.1,
+        );
         if (hash(X, Y, 1563) < 0.012) col = WHITE;
       }
       p.set(x, y, col);
@@ -444,7 +492,10 @@ function corePx(p: Px): void {
       const col =
         r > 1
           ? CRYST_DIM[0]
-          : ramp([hx('#ffffff'), hx('#9ff8ff'), hx('#2aa8c8'), hx('#123060'), hx('#081838')], r * 0.9 + sw * 0.12);
+          : ramp(
+              [hx('#ffffff'), hx('#9ff8ff'), hx('#2aa8c8'), hx('#123060'), hx('#081838')],
+              r * 0.9 + sw * 0.12,
+            );
       p.set(x, y, col);
     }
 }
@@ -459,7 +510,9 @@ function chips(p: Px, c: CellCtx, share: number, big: boolean): void {
       const cx = bx * 8 + 1 + Math.floor(hash(bx, by, 1536) * 6) - X0;
       const cy = by * 8 + 2 + Math.floor(hash(bx, by, 1537) * 5) - Y0;
       const t = hash(bx, by, 1538) < 0.3 ? VIOLET : CRYST_DIM;
-      const h = big ? 4 + Math.floor(hash(bx, by, 1539) * 3) : 2 + Math.floor(hash(bx, by, 1539) * 2);
+      const h = big
+        ? 4 + Math.floor(hash(bx, by, 1539) * 3)
+        : 2 + Math.floor(hash(bx, by, 1539) * 2);
       // Тень, левая (светлая) и правая (тёмная) грани, вершина.
       p.set(cx + 1, cy + 1, alpha(INK, 0.5));
       p.set(cx + 2, cy + 1, alpha(INK, 0.35));
@@ -498,7 +551,7 @@ function rootFloor(p: Px, c: CellCtx, grit: boolean): void {
       const m = fbm(X, Y, 110, 1533);
       let l = 0.2 + (n - 0.5) * 0.9 + v.id * 0.2 + dith(X, Y) * 0.16 + (m - 0.5) * 0.35;
       if (seam < 0.05) l = -0.2;
-      else if (seam < 0.11) l += (v.ox * LX + v.oy * LY) > 0 ? 0.25 : -0.22;
+      else if (seam < 0.11) l += v.ox * LX + v.oy * LY > 0 ? 0.25 : -0.22;
       let col = tone(ROOT_FLOOR, l);
       // У камней свой оттенок: одни в фиолет, другие в синеву.
       if (seam >= 0.05) {
@@ -507,12 +560,15 @@ function rootFloor(p: Px, c: CellCtx, grit: boolean): void {
       }
       // Трещина через камень со слабым светом изнутри.
       if (v.id > 0.4 && v.id < 0.47 && seam > 0.12) {
-        const cr = Math.abs((X - Y * 0.6) * 0.25 + Math.sin(Y * 0.5) * 0.8 - Math.round((X - Y * 0.6) * 0.25));
+        const cr = Math.abs(
+          (X - Y * 0.6) * 0.25 + Math.sin(Y * 0.5) * 0.8 - Math.round((X - Y * 0.6) * 0.25),
+        );
         if (cr < 0.07) col = mixc(INK, VIOLET[2], 0.35);
       }
       // Лишайник — кустиками в швах, а не ровной крошкой.
       const clump = vnoise(X, Y, 5, 1527);
-      if (m > 0.58 && seam < 0.13 && clump > 0.62 && hash(X, Y, 1534) < (m - 0.58) * 2.2) col = hash(X, Y, 1529) < 0.3 ? TEAL[3] : TEAL[2];
+      if (m > 0.58 && seam < 0.13 && clump > 0.62 && hash(X, Y, 1534) < (m - 0.58) * 2.2)
+        col = hash(X, Y, 1529) < 0.3 ? TEAL[3] : TEAL[2];
       else if (m < 0.36 && seam >= 0.05) col = mixc(col, hx('#120e2a'), (0.36 - m) * 1.6);
       p.set(x, y, col);
     }
@@ -600,7 +656,12 @@ function rimFloor(p: Px, c: CellCtx, obs: boolean, base: (p: Px, c: CellCtx) => 
       else if (edge) col = obs ? BRASS[fr < 0.07 ? 2 : 1] : CRYST_DIM[0];
       else {
         // Плита наклонена к ядру: ближняя к свету сторона светлее.
-        const l = 0.5 - ring * 0.14 + hash(seg, ring, 1550) * 0.2 + ((dx * LX + dy * LY) / (d || 1)) * -0.2 + dith(X, Y) * 0.1;
+        const l =
+          0.5 -
+          ring * 0.14 +
+          hash(seg, ring, 1550) * 0.2 +
+          ((dx * LX + dy * LY) / (d || 1)) * -0.2 +
+          dith(X, Y) * 0.1;
         col = tone(t, l);
       }
       p.set(x, y, col);
@@ -682,8 +743,13 @@ function heavyFloor(p: Px, c: CellCtx, base: (p: Px, c: CellCtx) => void): void 
       const e = ed(x, y) + (vnoise(X, Y, 6, 1571) - 0.5) * 7;
       if (e < 0.6) continue;
       const n = fbm(X, Y, 14, 1570);
-      const ring = Math.sin(Math.hypot((((X % 48) + 48) % 48) - 24, (((Y % 48) + 48) % 48) - 24) * 0.9);
-      let col = tone(tn('#1c1024', '#2a1834', '#3c244a', '#543462'), (n - 0.5) * 0.8 + 0.25 + dith(X, Y) * 0.12);
+      const ring = Math.sin(
+        Math.hypot((((X % 48) + 48) % 48) - 24, (((Y % 48) + 48) % 48) - 24) * 0.9,
+      );
+      let col = tone(
+        tn('#1c1024', '#2a1834', '#3c244a', '#543462'),
+        (n - 0.5) * 0.8 + 0.25 + dith(X, Y) * 0.12,
+      );
       if (ring > 0.93) col = mixc(col, hx('#b0507a'), 0.45);
       if (e < 1.8) col = mixc(col, hx('#d070a8'), 0.55);
       else if (e < 3.2 && dith(X, Y) < 0.5) col = mixc(col, hx('#2a1834'), 0.5);
@@ -694,9 +760,14 @@ function heavyFloor(p: Px, c: CellCtx, base: (p: Px, c: CellCtx) => void): void 
 /** Тень у подножия стены: сверху и с боков. */
 function wallShade(p: Px, c: CellCtx): void {
   const sh = hx('#000000');
-  if (!c.open(0, -1)) for (let x = 0; x < TS; x++) for (let y = 0; y < 3; y++) p.set(x, y, alpha(sh, 0.5 - y * 0.15));
-  if (!c.open(-1, 0)) for (let y = 0; y < TS; y++) for (let x = 0; x < 2; x++) p.set(x, y, alpha(sh, 0.32 - x * 0.14));
-  if (!c.open(1, 0)) for (let y = 0; y < TS; y++) for (let x = 0; x < 2; x++) p.set(15 - x, y, alpha(sh, 0.32 - x * 0.14));
+  if (!c.open(0, -1))
+    for (let x = 0; x < TS; x++) for (let y = 0; y < 3; y++) p.set(x, y, alpha(sh, 0.5 - y * 0.15));
+  if (!c.open(-1, 0))
+    for (let y = 0; y < TS; y++)
+      for (let x = 0; x < 2; x++) p.set(x, y, alpha(sh, 0.32 - x * 0.14));
+  if (!c.open(1, 0))
+    for (let y = 0; y < TS; y++)
+      for (let x = 0; x < 2; x++) p.set(15 - x, y, alpha(sh, 0.32 - x * 0.14));
 }
 
 /** Светлая кайма верха стены там, где рядом пол (силуэт массива). */
@@ -752,8 +823,30 @@ function rockWall(p: Px, c: CellCtx, crystal: boolean): void {
       const bx = 3 + Math.floor(hash(c.wx, c.wy + i, 1586) * 10);
       const h = 4 + Math.floor(hash(c.wx + i, c.wy, 1587) * 5);
       const t = hash(c.wx + i, c.wy + 1, 1588) < 0.3 ? VIOLET : CRYST;
-      facet(p, [[bx - 2, 16], [bx, 16 - h], [bx + 0.5, 16]], t, -1, 0, 0.15);
-      facet(p, [[bx + 0.5, 16], [bx, 16 - h], [bx + 2.5, 16]], t, 1, 0, -0.1);
+      facet(
+        p,
+        [
+          [bx - 2, 16],
+          [bx, 16 - h],
+          [bx + 0.5, 16],
+        ],
+        t,
+        -1,
+        0,
+        0.15,
+      );
+      facet(
+        p,
+        [
+          [bx + 0.5, 16],
+          [bx, 16 - h],
+          [bx + 2.5, 16],
+        ],
+        t,
+        1,
+        0,
+        -0.1,
+      );
     }
   }
 }
@@ -788,7 +881,15 @@ function slabFloor(p: Px, c: CellCtx): void {
       const v = ((Y % 16) + 16) % 16;
       const id = hash(Math.floor((X + off) / 16), row, 1600);
       const n = fbm(X, Y, 12, 1601);
-      let col = tone(OBS_FLOOR, 0.3 + (n - 0.5) * 0.5 + id * 0.22 + dith(X, Y) * 0.12 - (u + v) * 0.006 - (id > 0.9 ? 0.2 : 0));
+      let col = tone(
+        OBS_FLOOR,
+        0.3 +
+          (n - 0.5) * 0.5 +
+          id * 0.22 +
+          dith(X, Y) * 0.12 -
+          (u + v) * 0.006 -
+          (id > 0.9 ? 0.2 : 0),
+      );
       if (id < 0.07) {
         // Редкая плита со звездой-инкрустацией: латунь и слоновая кость.
         const dx = u - 7.5;
@@ -796,7 +897,8 @@ function slabFloor(p: Px, c: CellCtx): void {
         const r = Math.hypot(dx, dy);
         const a = Math.atan2(dy, dx);
         if (r < 1.6) col = IVORY[3];
-        else if (r < 2.2 + 3.6 * Math.pow(Math.abs(Math.cos(a * 2)), 6)) col = tone(BRASS, 0.75 - (dx + dy) * 0.06);
+        else if (r < 2.2 + 3.6 * Math.pow(Math.abs(Math.cos(a * 2)), 6))
+          col = tone(BRASS, 0.75 - (dx + dy) * 0.06);
         else if (Math.abs(r - 6) < 0.5) col = mixc(col, BRASS[1], 0.6);
       }
       if (u === 0 || v === 0) col = BRASS[0];
@@ -814,7 +916,10 @@ function chartFloor(p: Px, c: CellCtx, node: boolean): void {
       const X = X0 + x;
       const Y = Y0 + y;
       const n = fbm(X, Y, 30, 1610);
-      let col = tone(tn('#141e4c', '#1c2a62', '#26387a', '#344a96'), 0.25 + (n - 0.5) * 0.7 + dith(X, Y) * 0.15);
+      let col = tone(
+        tn('#141e4c', '#1c2a62', '#26387a', '#344a96'),
+        0.25 + (n - 0.5) * 0.7 + dith(X, Y) * 0.15,
+      );
       const h = hash(X, Y, 1611);
       if (h < 0.006) col = IVORY[3];
       else if (h < 0.01) col = GOLD[2];
@@ -830,7 +935,16 @@ function chartFloor(p: Px, c: CellCtx, node: boolean): void {
     p.ell(8, 8, 5.5, 5.5, BRASS[1]);
     p.ell(8, 8, 4.5, 4.5, (x, y) => tone(BRASS, 0.5 - (x + y - 16) * 0.05));
     p.ell(8, 8, 3.5, 3.5, LAPIS[0]);
-    poly(p, [[8, 5], [11, 8], [8, 11], [5, 8]], (x, y) => tone(CRYST, 0.8 - (x - 5 + y - 5) * 0.06));
+    poly(
+      p,
+      [
+        [8, 5],
+        [11, 8],
+        [8, 11],
+        [5, 8],
+      ],
+      (x, y) => tone(CRYST, 0.8 - (x - 5 + y - 5) * 0.06),
+    );
     p.set(7, 6, WHITE);
   }
 }
@@ -855,7 +969,8 @@ function brassFloor(p: Px, c: CellCtx): void {
       if ((x === 2 || x === TS - 3) && (y === 2 || y === TS - 3)) col = BRASS[0];
       if ((x === 2 || x === TS - 3) && (y === 1 || y === TS - 4)) col = BRASS[3];
       const pat = fbm(X, Y, 22, 1622);
-      if (pat > 0.66 && x > 0 && y > 0) col = mixc(col, hx('#3c8a78'), Math.min(0.7, (pat - 0.66) * 4));
+      if (pat > 0.66 && x > 0 && y > 0)
+        col = mixc(col, hx('#3c8a78'), Math.min(0.7, (pat - 0.66) * 4));
       p.set(x, y, col);
     }
 }
@@ -901,7 +1016,8 @@ function mosaicFloor(p: Px, c: CellCtx): void {
       let col: RGBA;
       if (r > 27 && r < 29.5) col = tone(SILVER, 0.2 + h * 0.4);
       else if (r < 5) col = tone(IVORY, 0.2 + h * 0.4);
-      else if (Math.abs(Math.sin(Math.atan2(cy, cx) * 4)) < 0.1 && r < 27 && r > 7) col = tone(SILVER, 0.1 + h * 0.3);
+      else if (Math.abs(Math.sin(Math.atan2(cy, cx) * 4)) < 0.1 && r < 27 && r > 7)
+        col = tone(SILVER, 0.1 + h * 0.3);
       else col = tone(LAPIS, 0.3 + h * 0.45 + dith(X, Y) * 0.1);
       if (grout) col = mixc(col, INK, 0.4);
       p.set(x, y, col);
@@ -923,14 +1039,23 @@ function obsWall(p: Px, c: CellCtx, window: boolean): void {
         const row = Math.floor(Y / 8);
         const off = row % 2 ? 6 : 0;
         const u = (((X + off) % 12) + 12) % 12;
-        col = tone(OBS_CAP, 0.3 + hash(Math.floor((X + off) / 12), row, 1650) * 0.35 + dith(X, Y) * 0.1);
+        col = tone(
+          OBS_CAP,
+          0.3 + hash(Math.floor((X + off) / 12), row, 1650) * 0.35 + dith(X, Y) * 0.1,
+        );
         if (u === 0 || ((Y % 8) + 8) % 8 === 0) col = OBS_CAP[0];
       } else {
         const yy = y - capH;
         const row = Math.floor(yy / 4);
         const off = (row + c.wy) % 2 ? 5 : 0;
         const u = (((X + off) % 10) + 10) % 10;
-        col = tone(OBS_FACE, 0.5 + hash(Math.floor((X + off) / 10), row + c.wy * 4, 1651) * 0.3 - yy * 0.035 + dith(X, Y) * 0.1);
+        col = tone(
+          OBS_FACE,
+          0.5 +
+            hash(Math.floor((X + off) / 10), row + c.wy * 4, 1651) * 0.3 -
+            yy * 0.035 +
+            dith(X, Y) * 0.1,
+        );
         if (yy % 4 === 3 || u === 0) col = OBS_FACE[0];
         if (yy < 2) col = yy === 0 ? BRASS[3] : BRASS[1];
         if (y === 15) col = mixc(col, INK, 0.5);
@@ -1008,9 +1133,13 @@ function dockFloor(p: Px, c: CellCtx): void {
       const X = X0 + x;
       const Y = Y0 + y;
       const plank = ((Y % 5) + 5) % 5;
-      let col = tone(tn('#2a1e10', '#4a3618', '#6a5024', '#8a6c34'), 0.35 + vnoise(X, Y, 6, 1710) * 0.4 + dith(X, Y) * 0.1);
+      let col = tone(
+        tn('#2a1e10', '#4a3618', '#6a5024', '#8a6c34'),
+        0.35 + vnoise(X, Y, 6, 1710) * 0.4 + dith(X, Y) * 0.1,
+      );
       if (plank === 0) col = hx('#1a120a');
-      if ((((X % 16) + 16) % 16 === 3 || ((X % 16) + 16) % 16 === 12) && plank === 2) col = BRASS[3];
+      if ((((X % 16) + 16) % 16 === 3 || ((X % 16) + 16) % 16 === 12) && plank === 2)
+        col = BRASS[3];
       p.set(x, y, col);
     }
   const voidAt = (dx: number, dy: number) => {
@@ -1041,7 +1170,8 @@ function bridgePx(p: Px, c: CellCtx): void {
     }
   const rail = (side: 'l' | 'r' | 't' | 'b') => {
     for (let i = 0; i < TS; i++) {
-      const [x, y] = side === 'l' ? [0, i] : side === 'r' ? [15, i] : side === 't' ? [i, 0] : [i, 15];
+      const [x, y] =
+        side === 'l' ? [0, i] : side === 'r' ? [15, i] : side === 't' ? [i, 0] : [i, 15];
       p.set(x, y, hx('#e0ffff'));
     }
   };
@@ -1065,7 +1195,10 @@ function asteroidWall(p: Px, c: CellCtx): void {
       let col: RGBA;
       if (y < capH) {
         const l = -(v.ox * LX + v.oy * LY) * 0.8 + 0.15 + dith(X, Y) * 0.1;
-        col = v.d2 - v.d1 < 0.07 ? hx('#0a0606') : tone(tn('#0c0808', '#181212', '#261e1c', '#3a2e2a'), l);
+        col =
+          v.d2 - v.d1 < 0.07
+            ? hx('#0a0606')
+            : tone(tn('#0c0808', '#181212', '#261e1c', '#3a2e2a'), l);
       } else {
         const l = 0.6 - (y - capH) * 0.05 - (v.ox * LX + v.oy * LY) * 0.6 + dith(X, Y) * 0.1;
         col = y === capH ? METEOR[3] : tone(METEOR, l);
@@ -1088,14 +1221,14 @@ function cellOf(area: string) {
         const at = craterAt(c);
         if (at) craterPx(p, c, at, baseOf);
         else chasmPx(p, c);
-      }
-      else if (mk === MK.lane || mk === MK.island) spacePx(p, c.wx, c.wy, 1, ringFor(c) ?? true);
+      } else if (mk === MK.lane || mk === MK.island) spacePx(p, c.wx, c.wy, 1, ringFor(c) ?? true);
       else if (mk === MK.vortex) spacePx(p, c.wx, c.wy, 1.3);
       else if (area === F15_ROOTS && mk !== MK.void) chasmPx(p, c);
       else {
         spacePx(p, c.wx, c.wy);
         // Под краем пола — его толща: уступ уходит в пустоту, снизу свет левитации.
-        if (solidFloorAt(c, 0, -1)) ledgeFace(p, c, area === F15_ORBIT ? REG : area === F15_OBS ? OBS_FACE : ROOT_FACE);
+        if (solidFloorAt(c, 0, -1))
+          ledgeFace(p, c, area === F15_ORBIT ? REG : area === F15_OBS ? OBS_FACE : ROOT_FACE);
       }
       return p;
     }
@@ -1103,7 +1236,8 @@ function cellOf(area: string) {
       if (mk === MK.seal) sealPx(p, c);
       else if (mk === MK.door) doorPx(p, c, false);
       else if (mk === MK.xwall || mk === MK.memory) rockWall(p, c, true);
-      else if (mk === MK.obswall || mk === MK.window || area === F15_OBS) obsWall(p, c, mk === MK.window);
+      else if (mk === MK.obswall || mk === MK.window || area === F15_OBS)
+        obsWall(p, c, mk === MK.window);
       else if (area === F15_ORBIT) asteroidWall(p, c);
       else rockWall(p, c, false);
       return p;
@@ -1190,7 +1324,16 @@ const stNow = () => {
 };
 
 /** Кристалл-призма: основание (bx, by), ширина, высота, наклон вершины. */
-function crystal(p: Px, bx: number, by: number, w: number, h: number, lean: number, t: Tones, glowK = 0): void {
+function crystal(
+  p: Px,
+  bx: number,
+  by: number,
+  w: number,
+  h: number,
+  lean: number,
+  t: Tones,
+  glowK = 0,
+): void {
   const tipX = bx + lean;
   const tipY = by - h;
   const sh = h * 0.72;
@@ -1234,7 +1377,9 @@ function floorShadow(p: Px, cx: number, cy: number, rx: number, ry: number, k = 
 /** Осколок звезды над ядром колодца: висит, крутится; тянет колодец — ярче. */
 registerPropPainter('f15_core', (o, time) => {
   const st = stNow();
-  const w = st?.wells.find((q) => Math.abs(q.x - o.x - 0.5) < 1.2 && Math.abs(q.y - o.y - 0.5) < 1.2);
+  const w = st?.wells.find(
+    (q) => Math.abs(q.x - o.x - 0.5) < 1.2 && Math.abs(q.y - o.y - 0.5) < 1.2,
+  );
   const s = w ? w.state : 0;
   const push = w && w.mode < 0 ? 1 : 0;
   const f = Math.floor(time * (s === 2 ? 14 : 7)) % 12;
@@ -1259,8 +1404,24 @@ registerPropPainter('f15_core', (o, time) => {
       const front = Math.sin(a0 + PI / 4) > 0;
       if (!front) continue;
       const l = Math.cos(a0 + PI / 4 + 0.7);
-      poly(p, [[x0, cy + Math.sin(a0) * 1.2], [cx, cy - H], [x1, cy + Math.sin(a1) * 1.2]], tone(col, 0.45 + l * 0.45));
-      poly(p, [[x0, cy + Math.sin(a0) * 1.2], [cx, cy + H * 0.8], [x1, cy + Math.sin(a1) * 1.2]], tone(col, 0.15 + l * 0.4));
+      poly(
+        p,
+        [
+          [x0, cy + Math.sin(a0) * 1.2],
+          [cx, cy - H],
+          [x1, cy + Math.sin(a1) * 1.2],
+        ],
+        tone(col, 0.45 + l * 0.45),
+      );
+      poly(
+        p,
+        [
+          [x0, cy + Math.sin(a0) * 1.2],
+          [cx, cy + H * 0.8],
+          [x1, cy + Math.sin(a1) * 1.2],
+        ],
+        tone(col, 0.15 + l * 0.4),
+      );
     }
     p.set(cx, cy - H + 1, WHITE);
     p.set(cx - 1, cy - 2, WHITE);
@@ -1268,7 +1429,13 @@ registerPropPainter('f15_core', (o, time) => {
     // Искры по орбите.
     for (let i = 0; i < 3; i++) {
       const a = (f / 12) * TAU * (s === 2 ? -1 : 1) + (i * TAU) / 3;
-      sparkle(p, cx + Math.cos(a) * 9, cy + Math.sin(a) * 3.5, s ? WHITE : alpha(g, 0.8), s === 2 ? 1 : 0);
+      sparkle(
+        p,
+        cx + Math.cos(a) * 9,
+        cy + Math.sin(a) * 3.5,
+        s ? WHITE : alpha(g, 0.8),
+        s === 2 ? 1 : 0,
+      );
     }
     return { p, ax: cx, ay: 34 };
   });
@@ -1285,7 +1452,14 @@ registerPropPainter('f15_bigshard', (o, time) => {
     const cx = 24;
     const by = 58;
     const pulse = 0.5 + 0.5 * Math.sin((f / 8) * TAU);
-    glow(p, cx, by - 22, 22, run === 2 ? hx('#7ab0c0') : TEAL_GLOW, 0.25 + pulse * 0.25 * (run === 2 ? 0.3 : 1));
+    glow(
+      p,
+      cx,
+      by - 22,
+      22,
+      run === 2 ? hx('#7ab0c0') : TEAL_GLOW,
+      0.25 + pulse * 0.25 * (run === 2 ? 0.3 : 1),
+    );
     const t = run === 2 ? tn('#1a2a3a', '#2a4a5a', '#4a7a8a', '#9ac8d0') : CRYST;
     crystal(p, cx - 11, by, 8, 26, -5, t, 0.3);
     crystal(p, cx + 12, by, 9, 30, 6, t, 0.3);
@@ -1367,7 +1541,15 @@ registerPropPainter('f15_memory', (o, time) => {
     crystal(p, cx, by, 10, 26, 0.5, t, used ? 0 : 0.35 + g * 0.1);
     if (!used) {
       motifGlyph(p, cx, by - 13, motif, alpha(hx('#fff4ff'), 0.6 + g * 0.13));
-      if (g >= 2) for (let i = 0; i < 4; i++) sparkle(p, cx + Math.cos(i * 1.57 + f) * 9, by - 13 + Math.sin(i * 1.57 + f) * 9, WHITE, 1);
+      if (g >= 2)
+        for (let i = 0; i < 4; i++)
+          sparkle(
+            p,
+            cx + Math.cos(i * 1.57 + f) * 9,
+            by - 13 + Math.sin(i * 1.57 + f) * 9,
+            WHITE,
+            1,
+          );
     } else {
       stroke(p, cx - 2, by - 22, cx + 2, by - 14, INK);
       stroke(p, cx + 2, by - 14, cx - 1, by - 6, INK);
@@ -1435,7 +1617,11 @@ registerPropPainter('f15_pillar', (o) => {
     const cx = 10;
     floorShadow(p, cx, 41, 8, 2.2, 0.5);
     for (let y = 4; y < 42; y++) {
-      const wv = 6 + Math.sin(y * 0.35 + v) * 0.8 + (y > 36 ? (y - 36) * 0.4 : 0) + (y < 8 ? (8 - y) * 0.3 : 0);
+      const wv =
+        6 +
+        Math.sin(y * 0.35 + v) * 0.8 +
+        (y > 36 ? (y - 36) * 0.4 : 0) +
+        (y < 8 ? (8 - y) * 0.3 : 0);
       for (let x = Math.floor(cx - wv); x <= Math.ceil(cx + wv); x++) {
         const nx = (x + 0.5 - cx) / wv;
         if (Math.abs(nx) > 1) continue;
@@ -1484,7 +1670,12 @@ registerPropPainter('f15_stalag', (o) => {
  * Мелкий убор пола (не твёрдый): место внутри клетки — по номеру клетки,
  * чтобы россыпь не стояла по сетке. Холст 24×24, якорь сдвигается.
  */
-function floorBit(o: WorldObj, kind: string, n: number, build: (p: Px, v: number) => void): Sprite | null {
+function floorBit(
+  o: WorldObj,
+  kind: string,
+  n: number,
+  build: (p: Px, v: number) => void,
+): Sprite | null {
   const h = hash(o.x, o.y, 1590);
   const v = Math.floor(h * n);
   const ox = Math.floor(hash(o.x, o.y, 1591) * 4) * 2 - 3;
@@ -1634,8 +1825,25 @@ registerPropPainter('f15_rock', (o, time) => {
     glow(p, cx, 12, 10, hx('#ffb040'), 0.18 + pulse * 0.12);
     // Глыба — гранёная.
     const pts: [number, number][] = v
-      ? [[3, 16], [2, 10], [6, 5], [12, 4], [18, 7], [20, 13], [17, 17], [8, 18]]
-      : [[2, 15], [4, 8], [9, 4], [15, 5], [19, 10], [18, 16], [11, 18]];
+      ? [
+          [3, 16],
+          [2, 10],
+          [6, 5],
+          [12, 4],
+          [18, 7],
+          [20, 13],
+          [17, 17],
+          [8, 18],
+        ]
+      : [
+          [2, 15],
+          [4, 8],
+          [9, 4],
+          [15, 5],
+          [19, 10],
+          [18, 16],
+          [11, 18],
+        ];
     poly(p, pts, (x, y) => {
       const n = fbm(x * 2, y * 2, 5, 1810 + v);
       return tone(METEOR, (cx - x) * 0.05 + (12 - y) * 0.06 + (n - 0.5) * 0.6 + 0.2);
@@ -1670,9 +1878,15 @@ registerPropPainter('f15_anchor', (o, time) => {
     p.ell(cx, 7.5, 3.6, 1.5, BRASS[3]);
     p.ell(cx, 8, 3.6, 1.2, BRASS[2]);
     // Кольцо.
-    for (let a = 0; a < TAU; a += 0.25) p.set(cx + 3 + Math.cos(a) * 2.2, 12 + Math.sin(a) * 2.6, Math.sin(a) < 0 ? BRASS[3] : BRASS[1]);
+    for (let a = 0; a < TAU; a += 0.25)
+      p.set(
+        cx + 3 + Math.cos(a) * 2.2,
+        12 + Math.sin(a) * 2.6,
+        Math.sin(a) < 0 ? BRASS[3] : BRASS[1],
+      );
     // Витки троса у основания.
-    for (let i = 0; i < 3; i++) p.ell(cx, 16 - i * 1.5, 3.2, 0.7, i % 2 ? hx('#7a6a90') : hx('#b0a4c8'));
+    for (let i = 0; i < 3; i++)
+      p.ell(cx, 16 - i * 1.5, 3.2, 0.7, i % 2 ? hx('#7a6a90') : hx('#b0a4c8'));
     if (on) {
       glow(p, cx + 3, 12, 5, TEAL_GLOW, 0.5 + (f % 2) * 0.2);
       sparkle(p, cx + 3, 9 + (f % 2), WHITE, 1);
@@ -1717,7 +1931,8 @@ registerPropPainter('f15_telescope', (o, time) => {
   const st = stNow();
   const sc = st?.scopes.find((s) => s.obj === o);
   const what = sc?.what ?? 'door';
-  const done = what === 'door' ? (st?.doors.some((d) => d.open) ? 1 : 0) : st && st.dark > 0.05 ? 0 : 1;
+  const done =
+    what === 'door' ? (st?.doors.some((d) => d.open) ? 1 : 0) : st && st.dark > 0.05 ? 0 : 1;
   const f = Math.floor(time * 4) % 4;
   return sprite(`scope|${what}|${done}|${done ? f : 0}`, () => {
     const p = new Px(28, 30);
@@ -1767,7 +1982,8 @@ registerPropPainter('f15_beacon', (o, time) => {
     if (Math.sin(a) > -0.2) {
       glow(p, lx, 8.5, 3, WHITE, 0.95);
       // Луч в сторону вращения.
-      for (let i = 2; i < 7; i++) p.set(cx + Math.cos(a) * (2 + i), 8.5, alpha(hx('#cff6ff'), 0.6 - i * 0.07));
+      for (let i = 2; i < 7; i++)
+        p.set(cx + Math.cos(a) * (2 + i), 8.5, alpha(hx('#cff6ff'), 0.6 - i * 0.07));
     } else p.ell(cx, 8.5, 1.5, 1.5, hx('#5ab0e0'));
     p.outline(alpha(INK, 0.8));
     return { p, ax: cx, ay: 26 };
@@ -1846,11 +2062,14 @@ registerPropPainter('f15_armillary', (o, time) => {
       { pts: ringPts(1.25 - 0.4, a * 0.5 + 1, R - 2), c: BRASS },
     ];
     // Задние половины колец, шар, передние половины.
-    for (const rg of rings) for (const [x, y, z] of rg.pts) if (z < 0) p.set(cx + x, cy + y, rg.c[1]);
+    for (const rg of rings)
+      for (const [x, y, z] of rg.pts) if (z < 0) p.set(cx + x, cy + y, rg.c[1]);
     shadeEll(p, cx, cy, 3.4, 3.4, LAPIS, 0.1);
     p.set(cx - 1, cy - 1, hx('#7ad0a0'));
     p.set(cx + 1, cy, hx('#5ab080'));
-    for (const rg of rings) for (const [x, y, z] of rg.pts) if (z >= 0) p.set(cx + x, cy + y, z > R * 0.5 ? rg.c[3] : rg.c[2]);
+    for (const rg of rings)
+      for (const [x, y, z] of rg.pts)
+        if (z >= 0) p.set(cx + x, cy + y, z > R * 0.5 ? rg.c[3] : rg.c[2]);
     // Ось.
     stroke(p, cx - 2, cy - R - 1, cx + 2, cy + R + 1, alpha(BRASS[3], 0.8));
     p.outline(alpha(INK, 0.7));
@@ -1870,7 +2089,8 @@ registerPropPainter('f15_orrery', (_o, time) => {
     p.ell(cx, 28, 15, 5, BRASS[0]);
     p.ell(cx, 27, 15, 5, BRASS[1]);
     p.ell(cx, 26.5, 14, 4.4, BRASS[2]);
-    for (let a = 0; a < TAU; a += TAU / 24) p.set(cx + Math.cos(a) * 13, 26.5 + Math.sin(a) * 4, BRASS[3]);
+    for (let a = 0; a < TAU; a += TAU / 24)
+      p.set(cx + Math.cos(a) * 13, 26.5 + Math.sin(a) * 4, BRASS[3]);
     limb(p, cx, 26, cx, 18, 1.2, 1, BRASS);
     const t = (f / 48) * TAU;
     const planets = [
@@ -1880,15 +2100,24 @@ registerPropPainter('f15_orrery', (_o, time) => {
       { r: 15.5, s: -1, c: GOLD, rad: 1.7 },
     ];
     // Орбиты — тонкие латунные кольца, сплюснутые.
-    for (const pl of planets) for (let a = 0; a < TAU; a += 0.06) p.set(cx + Math.cos(a) * pl.r, cy + Math.sin(a) * pl.r * 0.34, alpha(BRASS[2], 0.45));
+    for (const pl of planets)
+      for (let a = 0; a < TAU; a += 0.06)
+        p.set(cx + Math.cos(a) * pl.r, cy + Math.sin(a) * pl.r * 0.34, alpha(BRASS[2], 0.45));
     const pos = planets.map((pl) => {
       const a = t * pl.s + pl.r;
-      return { ...pl, x: cx + Math.cos(a) * pl.r, y: cy + Math.sin(a) * pl.r * 0.34, z: Math.sin(a) };
+      return {
+        ...pl,
+        x: cx + Math.cos(a) * pl.r,
+        y: cy + Math.sin(a) * pl.r * 0.34,
+        z: Math.sin(a),
+      };
     });
     const drawP = (q: (typeof pos)[number]) => {
       stroke(p, cx, cy, q.x, q.y - 2, alpha(BRASS[1], 0.9));
       shadeEll(p, q.x, q.y - 2, q.rad, q.rad, q.c, 0.1);
-      if (q.c === GOLD) for (let a = 0; a < TAU; a += 0.3) p.set(q.x + Math.cos(a) * 3, q.y - 2 + Math.sin(a), alpha(GOLD[3], 0.7));
+      if (q.c === GOLD)
+        for (let a = 0; a < TAU; a += 0.3)
+          p.set(q.x + Math.cos(a) * 3, q.y - 2 + Math.sin(a), alpha(GOLD[3], 0.7));
     };
     for (const q of pos) if (q.z < 0) drawP(q);
     // Солнце.
@@ -1919,7 +2148,13 @@ registerPropPainter('f15_brazier', (o, time) => {
         const kk = k / h;
         const w = (1 - kk) * 1.8;
         const xx = x0 + Math.sin(ph * TAU + kk * 3) * kk * 1.4;
-        p.ell(xx, 15 - k, w, 0.7, kk < 0.3 ? hx('#ffe8a0') : kk < 0.7 ? hx('#bff4ff') : alpha(hx('#7ad8ff'), 0.8));
+        p.ell(
+          xx,
+          15 - k,
+          w,
+          0.7,
+          kk < 0.3 ? hx('#ffe8a0') : kk < 0.7 ? hx('#bff4ff') : alpha(hx('#7ad8ff'), 0.8),
+        );
       }
     }
     p.set(cx + ((f * 3) % 5) - 2, 3 + (f % 3), alpha(hx('#fff4c0'), 0.8));
@@ -1957,12 +2192,18 @@ registerPropPainter('f15_globe', (o, time) => {
         const lon = Math.atan2(nx, nz) + rot;
         const lat = Math.asin(Math.max(-1, Math.min(1, ny)));
         const h = hash(Math.floor(lon * 3), Math.floor(lat * 5), 1820);
-        if (h < 0.18 && hash(Math.floor(lon * 7), Math.floor(lat * 9), 1821) < 0.4) c = mixc(c, STAR_C, 0.8);
+        if (h < 0.18 && hash(Math.floor(lon * 7), Math.floor(lat * 9), 1821) < 0.4)
+          c = mixc(c, STAR_C, 0.8);
         if (Math.abs(((lon % 1.57) + 1.57) % 1.57) < 0.08) c = mixc(c, GOLD[2], 0.5);
         p.set(cx + x, cy + y, c);
       }
     // Меридиан-оправа.
-    for (let a = -PI * 0.85; a < PI * 0.85; a += 0.08) p.set(cx + Math.sin(a) * (R + 1.2), cy - Math.cos(a) * (R + 1.2), BRASS[Math.cos(a) > 0 ? 3 : 1]);
+    for (let a = -PI * 0.85; a < PI * 0.85; a += 0.08)
+      p.set(
+        cx + Math.sin(a) * (R + 1.2),
+        cy - Math.cos(a) * (R + 1.2),
+        BRASS[Math.cos(a) > 0 ? 3 : 1],
+      );
     p.outline(alpha(INK, 0.8));
     return { p, ax: cx, ay: 24 };
   });
@@ -1981,9 +2222,36 @@ registerPropPainter('f15_lectern', (o, time) => {
     p.rect(cx + 1, 11, cx + 1, 19, WOOD[1]);
     p.rect(cx - 4, 19, cx + 4, 20, WOOD[1]);
     // Наклонная доска и раскрытая книга.
-    poly(p, [[2, 10], [16, 10], [15, 13], [3, 13]], WOOD[2]);
-    poly(p, [[3, 5], [9, 6], [9, 11], [3, 10]], IVORY[3]);
-    poly(p, [[9, 6], [15, 5], [15, 10], [9, 11]], IVORY[2]);
+    poly(
+      p,
+      [
+        [2, 10],
+        [16, 10],
+        [15, 13],
+        [3, 13],
+      ],
+      WOOD[2],
+    );
+    poly(
+      p,
+      [
+        [3, 5],
+        [9, 6],
+        [9, 11],
+        [3, 10],
+      ],
+      IVORY[3],
+    );
+    poly(
+      p,
+      [
+        [9, 6],
+        [15, 5],
+        [15, 10],
+        [9, 11],
+      ],
+      IVORY[2],
+    );
     // Карта на странице: звёзды и линия.
     sparkle(p, 5, 7, LAPIS[2], 0);
     p.set(7, 8, LAPIS[2]);
@@ -1992,7 +2260,16 @@ registerPropPainter('f15_lectern', (o, time) => {
     if (turn) {
       const k = turn / 6;
       const x = 15 - k * 12;
-      poly(p, [[9, 6], [x, 5 - Math.sin(k * PI) * 3], [x, 10 - Math.sin(k * PI) * 3], [9, 11]], IVORY[3]);
+      poly(
+        p,
+        [
+          [9, 6],
+          [x, 5 - Math.sin(k * PI) * 3],
+          [x, 10 - Math.sin(k * PI) * 3],
+          [9, 11],
+        ],
+        IVORY[3],
+      );
     }
     p.outline(alpha(INK, 0.85));
     return { p, ax: cx, ay: 20 };
@@ -2044,10 +2321,19 @@ registerPropPainter('f15_statue', (o, time) => {
     p.rect(19, 40, 21, 47, IVORY[0]);
     p.rect(5, 42, 19, 43, BRASS[2]);
     // Мантия: конус складок.
-    poly(p, [[cx - 7, 38], [cx - 3, 14], [cx + 3, 14], [cx + 7, 38]], (x, y) => {
-      const fold = Math.sin((x - cx) * 1.3 + y * 0.08);
-      return tone(IVORY, (cx - x) * 0.06 + 0.42 + fold * 0.18);
-    });
+    poly(
+      p,
+      [
+        [cx - 7, 38],
+        [cx - 3, 14],
+        [cx + 3, 14],
+        [cx + 7, 38],
+      ],
+      (x, y) => {
+        const fold = Math.sin((x - cx) * 1.3 + y * 0.08);
+        return tone(IVORY, (cx - x) * 0.06 + 0.42 + fold * 0.18);
+      },
+    );
     // Голова в капюшоне.
     shadeEll(p, cx, 11, 3.2, 3.6, IVORY, 0.05);
     p.ell(cx + 0.5, 12, 1.8, 2, IVORY[0]);
@@ -2087,7 +2373,15 @@ registerPropPainter('f15_float', (o, time) => {
     poly(p, pts, (x, y) => tone(v === 2 ? STONE : METEOR, (cx - x) * 0.08 + (cy - y) * 0.1 + 0.3));
     if (v === 0) {
       // Латунный осколок (обломок прибора).
-      poly(p, [[cx + 1, cy - 2], [cx + 6, cy - 4], [cx + 4, cy + 1]], BRASS[2]);
+      poly(
+        p,
+        [
+          [cx + 1, cy - 2],
+          [cx + 6, cy - 4],
+          [cx + 4, cy + 1],
+        ],
+        BRASS[2],
+      );
       p.set(cx + 4, cy - 3, BRASS[3]);
     } else if (v === 2) crystal(p, cx, cy + 1, 3, 6, 1, CRYST, 0.4);
     // Слабая тень на пустоте — ниже, размытая (он висит высоко).
@@ -2181,7 +2475,13 @@ function finish(b: Built, look: Look, flash: boolean, left: boolean): MobFrame {
     if (lit) lit = lit.flipX();
   }
   const eye = b.eye ? ([left ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number]) : null;
-  return { img: p.canvas(), ax: left ? p.w - b.ax : b.ax, ay: b.ay, eye, lit: lit ? lit.canvas() : null };
+  return {
+    img: p.canvas(),
+    ax: left ? p.w - b.ax : b.ax,
+    ay: b.ay,
+    eye,
+    lit: lit ? lit.canvas() : null,
+  };
 }
 
 /**
@@ -2200,7 +2500,8 @@ function frameOf(
   const key = `${kind}|${anim}|${f}|${flip ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
   let fr = FR.get(key);
   // Осколки смерти элиты без золотой обводки: она съедала их цвет.
-  const look = pose.look === 'elite' && (anim === 'die' || anim.startsWith('dying')) ? 'normal' : pose.look;
+  const look =
+    pose.look === 'elite' && (anim === 'die' || anim.startsWith('dying')) ? 'normal' : pose.look;
   if (!fr) fr = FR.set(key, finish(build(), look, pose.flash, flip));
   return extra ? { ...fr, ...extra } : fr;
 }
@@ -2234,7 +2535,10 @@ function shatter(p: Px, k: number, seed: number, bits: RGBA[], cx: number, cy: n
       const ty = Math.round(y + (dy / d) * push * 0.5 + k * k * 7 * r);
       if (tx < 0 || ty < 0 || tx >= o.w || ty >= o.h) continue;
       const j = (ty * o.w + tx) * 4;
-      const c: RGBA = r < k * 0.75 ? bits[Math.floor(r * 97) % bits.length] : [p.data[i], p.data[i + 1], p.data[i + 2], 255];
+      const c: RGBA =
+        r < k * 0.75
+          ? bits[Math.floor(r * 97) % bits.length]
+          : [p.data[i], p.data[i + 1], p.data[i + 2], 255];
       o.data[j] = c[0];
       o.data[j + 1] = c[1];
       o.data[j + 2] = c[2];
@@ -2245,7 +2549,8 @@ function shatter(p: Px, k: number, seed: number, bits: RGBA[], cx: number, cy: n
 
 /** Обводка по телу: свечение (полупрозрачное) не обводится. */
 function edge(p: Px, c: RGBA): void {
-  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < p.w && y < p.h && p.data[(y * p.w + x) * 4 + 3] >= 200;
+  const solid = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < p.w && y < p.h && p.data[(y * p.w + x) * 4 + 3] >= 200;
   const add: number[] = [];
   for (let y = 0; y < p.h; y++)
     for (let x = 0; x < p.w; x++) {
@@ -2256,13 +2561,23 @@ function edge(p: Px, c: RGBA): void {
 }
 
 /** Номер кадра смерти по времени режима (0…3). */
-const deathK = (pose: MobPose) => (pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0);
+const deathK = (pose: MobPose) =>
+  pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0;
 
 /** Номер направления 0…n−1 по углу. */
 const dirBucket = (a: number, n: number) => ((Math.round((a / TAU) * n) % n) + n) % n;
 
 /** Шип-кристалл от точки (x, y) по углу a, длина L, ширина основания w. */
-function spike(p: Px, x: number, y: number, a: number, L: number, w: number, t: Tones, tip: RGBA = WHITE): void {
+function spike(
+  p: Px,
+  x: number,
+  y: number,
+  a: number,
+  L: number,
+  w: number,
+  t: Tones,
+  tip: RGBA = WHITE,
+): void {
   const ux = Math.cos(a);
   const uy = Math.sin(a);
   const tx = x + ux * L;
@@ -2272,8 +2587,24 @@ function spike(p: Px, x: number, y: number, a: number, L: number, w: number, t: 
   const rx = x + uy * w * 0.5;
   const ry = y - ux * w * 0.5;
   const lite = -uy * LX + ux * LY;
-  poly(p, [[lx, ly], [tx, ty], [x, y]], tone(t, 0.55 - lite * 0.45));
-  poly(p, [[x, y], [tx, ty], [rx, ry]], tone(t, 0.35 + lite * 0.45));
+  poly(
+    p,
+    [
+      [lx, ly],
+      [tx, ty],
+      [x, y],
+    ],
+    tone(t, 0.55 - lite * 0.45),
+  );
+  poly(
+    p,
+    [
+      [x, y],
+      [tx, ty],
+      [rx, ry],
+    ],
+    tone(t, 0.35 + lite * 0.45),
+  );
   p.set(tx, ty, tip);
 }
 
@@ -2287,7 +2618,15 @@ const URCH_SKIN = tn('#5a3848', '#8c5a6c', '#c08a9a', '#f0c4cc');
  * назад-вверх. `ball` 0…1 — свернулся (иглы во все стороны), `bristle` —
  * иглы дыбом, `roll` — поворот клубка.
  */
-function urchinBody(o: { step: number; ball: number; bristle: number; roll: number; glowK: number; dizzy: number; dk: number }): Built {
+function urchinBody(o: {
+  step: number;
+  ball: number;
+  bristle: number;
+  roll: number;
+  glowK: number;
+  dizzy: number;
+  dk: number;
+}): Built {
   const p = new Px(42, 36);
   const cx = 19;
   const gy = 30;
@@ -2296,7 +2635,12 @@ function urchinBody(o: { step: number; ball: number; bristle: number; roll: numb
   const ry = 6.5 + o.ball;
   if (o.ball < 0.6) {
     const s = o.step;
-    for (const [lx, ph] of [[cx - 5, 0], [cx - 2, 2], [cx + 3, 1], [cx + 6, 3]] as [number, number][]) {
+    for (const [lx, ph] of [
+      [cx - 5, 0],
+      [cx - 2, 2],
+      [cx + 3, 1],
+      [cx + 6, 3],
+    ] as [number, number][]) {
       const up = (s + ph) % 4 < 2 ? 1 : 0;
       p.rect(lx, cy + 4, lx + 1, gy - 1 - up, URCH_SKIN[1]);
       p.set(lx + 1, gy - 1 - up, URCH_SKIN[0]);
@@ -2311,13 +2655,34 @@ function urchinBody(o: { step: number; ball: number; bristle: number; roll: numb
   } else {
     const spread = 1 + o.bristle * 0.35;
     // Задний ряд (короче, темнее) и передний.
-    for (let i = 0; i < 5; i++) quills.push([PI * (1.2 + i * 0.13 * spread) - o.ball * 0.4, (7 + (i % 2) * 1.5) * (0.85 + o.bristle * 0.35), i, 0]);
-    for (let i = 0; i < 5; i++) quills.push([PI * (1.14 + i * 0.15 * spread) - o.ball * 0.4, (8.5 + ((i + 1) % 2) * 2) * (0.85 + o.bristle * 0.35), i + 5, 1]);
+    for (let i = 0; i < 5; i++)
+      quills.push([
+        PI * (1.2 + i * 0.13 * spread) - o.ball * 0.4,
+        (7 + (i % 2) * 1.5) * (0.85 + o.bristle * 0.35),
+        i,
+        0,
+      ]);
+    for (let i = 0; i < 5; i++)
+      quills.push([
+        PI * (1.14 + i * 0.15 * spread) - o.ball * 0.4,
+        (8.5 + ((i + 1) % 2) * 2) * (0.85 + o.bristle * 0.35),
+        i + 5,
+        1,
+      ]);
   }
   // Задний ряд под тело.
   for (const [a, L, i, row] of quills)
     if (!row || (o.ball > 0.5 && Math.sin(a) < 0))
-      spike(p, cx + Math.cos(a) * rx * 0.55, cy + Math.sin(a) * ry * 0.55, a, L, 3.4, i % 3 ? CRYST_DIM : VIOLET, CRYST[3]);
+      spike(
+        p,
+        cx + Math.cos(a) * rx * 0.55,
+        cy + Math.sin(a) * ry * 0.55,
+        a,
+        L,
+        3.4,
+        i % 3 ? CRYST_DIM : VIOLET,
+        CRYST[3],
+      );
   shadeEll(p, cx, cy, rx, ry, URCH_FUR, 0.05);
   // Брюшко светлее.
   if (o.ball < 0.5) p.ell(cx + 1, cy + 3.5, rx * 0.7, 2, URCH_FUR[2]);
@@ -2344,25 +2709,59 @@ function urchinBody(o: { step: number; ball: number; bristle: number; roll: numb
   // Передний ряд — поверх спины.
   for (const [a, L, i, row] of quills)
     if (row && !(o.ball > 0.5 && Math.sin(a) < 0))
-      spike(p, cx + Math.cos(a) * rx * 0.45, cy + Math.sin(a) * ry * 0.4, a, L, 3.8, i % 4 === 1 ? VIOLET : CRYST, WHITE);
+      spike(
+        p,
+        cx + Math.cos(a) * rx * 0.45,
+        cy + Math.sin(a) * ry * 0.4,
+        a,
+        L,
+        3.8,
+        i % 4 === 1 ? VIOLET : CRYST,
+        WHITE,
+      );
   edge(p, alpha(INK, 0.9));
   if (o.glowK > 0) glow(p, cx - 3, cy - 5, 12, TEAL_GLOW, 0.3 * o.glowK);
   if (o.dizzy) stars(p, cx + 3, cy - 11, 7, o.dizzy - 1);
   let out = p;
   if (o.dk) out = shatter(p, o.dk / 3, 1901, [CRYST[2], CRYST[3], VIOLET[2], WHITE], cx, cy);
-  return { p: out, ax: cx, ay: gy, eye: o.ball < 0.6 && !o.dk ? [cx + rx - 2, cy - 3] : null, lit: true };
+  return {
+    p: out,
+    ax: cx,
+    ay: gy,
+    eye: o.ball < 0.6 && !o.dk ? [cx + rx - 2, cy - 3] : null,
+    lit: true,
+  };
 }
 
 registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
   const dk = deathK(pose);
-  if (dk) return frameOf('urchin', pose, 'die', dk, () => urchinBody({ step: 0, ball: 0, bristle: 1, roll: 0, glowK: 0, dizzy: 0, dk }));
+  if (dk)
+    return frameOf('urchin', pose, 'die', dk, () =>
+      urchinBody({ step: 0, ball: 0, bristle: 1, roll: 0, glowK: 0, dizzy: 0, dk }),
+    );
   switch (pose.mode) {
     case 'f15_curl': {
       const k = Math.min(4, Math.floor((pose.t / URCHIN.curl) * 5));
-      return frameOf('urchin', pose, 'curl', k, () => urchinBody({ step: 0, ball: k / 4, bristle: 0.5, roll: 0, glowK: k / 4, dizzy: 0, dk: 0 }), {
-        still: true,
-        sy: 1 - k * 0.03,
-      });
+      return frameOf(
+        'urchin',
+        pose,
+        'curl',
+        k,
+        () =>
+          urchinBody({
+            step: 0,
+            ball: k / 4,
+            bristle: 0.5,
+            roll: 0,
+            glowK: k / 4,
+            dizzy: 0,
+            dk: 0,
+          }),
+        {
+          still: true,
+          sy: 1 - k * 0.03,
+        },
+      );
     }
     case 'f15_roll': {
       const f = Math.floor(pose.now * 16) % 8;
@@ -2372,28 +2771,69 @@ registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
         pose,
         'roll',
         f,
-        () => urchinBody({ step: 0, ball: 1, bristle: 0.7, roll: (f / 8) * TAU * 0.5, glowK: 0.6, dizzy: 0, dk: 0 }),
+        () =>
+          urchinBody({
+            step: 0,
+            ball: 1,
+            bristle: 0.7,
+            roll: (f / 8) * TAU * 0.5,
+            glowK: 0.6,
+            dizzy: 0,
+            dk: 0,
+          }),
         { ghost: { every: 0.05, life: 0.18, tint: '108,240,255', alpha: 0.45 }, still: true },
         flip,
       );
     }
     case 'f15_dizzy': {
       const f = Math.floor(pose.now * 6) % 4;
-      return frameOf('urchin', pose, 'dizzy', f, () => urchinBody({ step: 0, ball: 0.2, bristle: 0.2, roll: 0, glowK: 0, dizzy: f + 1, dk: 0 }), { still: true });
+      return frameOf(
+        'urchin',
+        pose,
+        'dizzy',
+        f,
+        () =>
+          urchinBody({ step: 0, ball: 0.2, bristle: 0.2, roll: 0, glowK: 0, dizzy: f + 1, dk: 0 }),
+        { still: true },
+      );
     }
     case 'f15_open': {
       const k = Math.min(3, Math.floor((pose.t / URCHIN.open) * 4));
-      return frameOf('urchin', pose, 'open', k, () => urchinBody({ step: 0, ball: 0, bristle: 0.6 + k * 0.15, roll: 0, glowK: 0.3 + k * 0.25, dizzy: 0, dk: 0 }), {
-        still: true,
-        sx: 1 + k * 0.03,
-      });
+      return frameOf(
+        'urchin',
+        pose,
+        'open',
+        k,
+        () =>
+          urchinBody({
+            step: 0,
+            ball: 0,
+            bristle: 0.6 + k * 0.15,
+            roll: 0,
+            glowK: 0.3 + k * 0.25,
+            dizzy: 0,
+            dk: 0,
+          }),
+        {
+          still: true,
+          sx: 1 + k * 0.03,
+        },
+      );
     }
     case 'windup': {
       const k = Math.min(2, Math.floor((pose.t / 0.6) * 3));
-      return frameOf('urchin', pose, 'wind', k, () => urchinBody({ step: 0, ball: 0.15, bristle: 0.9, roll: 0, glowK: 0.4, dizzy: 0, dk: 0 }), {
-        dx: -k * 0.6,
-        still: true,
-      });
+      return frameOf(
+        'urchin',
+        pose,
+        'wind',
+        k,
+        () =>
+          urchinBody({ step: 0, ball: 0.15, bristle: 0.9, roll: 0, glowK: 0.4, dizzy: 0, dk: 0 }),
+        {
+          dx: -k * 0.6,
+          still: true,
+        },
+      );
     }
     default: {
       const run = pose.anim === 'run';
@@ -2403,7 +2843,16 @@ registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
         pose,
         run ? 'run' : 'idle',
         f,
-        () => urchinBody({ step: f, ball: 0, bristle: run ? 0.45 : 0.35, roll: 0, glowK: 0, dizzy: 0, dk: 0 }),
+        () =>
+          urchinBody({
+            step: f,
+            ball: 0,
+            bristle: run ? 0.45 : 0.35,
+            roll: 0,
+            glowK: 0,
+            dizzy: 0,
+            dk: 0,
+          }),
         run ? { dy: f % 2 ? -0.5 : 0 } : null,
       );
     }
@@ -2417,7 +2866,15 @@ registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
  * трещины тлеют. `heat` 0…1 — накал, `dir` — куда летит (хвост огня против
  * хода), `trail` — длина хвоста.
  */
-function meteorBody(o: { heat: number; f: number; dir: number; trail: number; dizzy: number; dk: number; crouch: number }): Built {
+function meteorBody(o: {
+  heat: number;
+  f: number;
+  dir: number;
+  trail: number;
+  dizzy: number;
+  dk: number;
+  crouch: number;
+}): Built {
   const p = new Px(64, 56);
   const cx = 32;
   const gy = 47;
@@ -2450,10 +2907,13 @@ function meteorBody(o: { heat: number; f: number; dir: number; trail: number; di
     const my = (a[1] + b[1]) / 2 - hub[1];
     const ml = Math.hypot(mx, my) || 1;
     const l = (mx / ml) * LX + (my / ml) * LY + 0.42 + hash(i, 4, 1910) * 0.15;
-    poly(p, [hub, a, b], (x, y) => tone(METEOR, l + (fbm(x * 2, y * 2, 4, 1911) - 0.5) * 0.3 + dith(x, y) * 0.1));
+    poly(p, [hub, a, b], (x, y) =>
+      tone(METEOR, l + (fbm(x * 2, y * 2, 4, 1911) - 0.5) * 0.3 + dith(x, y) * 0.1),
+    );
   }
   // Рёбра граней — чуть светлее, к свету.
-  for (let i = 0; i < pts.length; i++) if (pts[i][1] < cy) stroke(p, hub[0], hub[1], pts[i][0], pts[i][1], alpha(METEOR[3], 0.35));
+  for (let i = 0; i < pts.length; i++)
+    if (pts[i][1] < cy) stroke(p, hub[0], hub[1], pts[i][0], pts[i][1], alpha(METEOR[3], 0.35));
   // Тлеющие трещины.
   const hot = mixc(hx('#c04010'), hx('#fff0a0'), o.heat);
   const warm = mixc(hx('#7a2408'), hx('#ffb040'), o.heat);
@@ -2495,21 +2955,41 @@ function meteorBody(o: { heat: number; f: number; dir: number; trail: number; di
   glow(p, cx, cy, 16, hx('#ff9a30'), 0.08 + o.heat * 0.2);
   if (o.dizzy) stars(p, cx, cy - 15, 9, o.dizzy - 1);
   let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1912, [METEOR[1], METEOR[2], hx('#ffb040'), hx('#fff0a0')], cx, cy);
+  if (o.dk)
+    out = shatter(p, o.dk / 3, 1912, [METEOR[1], METEOR[2], hx('#ffb040'), hx('#fff0a0')], cx, cy);
   return { p: out, ax: cx, ay: gy, eye: o.dk || o.dizzy ? null : [cx + 4, cy], lit: true };
 }
 
 registerMobPainter('f15_meteor', (m: Mob, pose: MobPose) => {
   const dk = deathK(pose);
-  if (dk) return frameOf('meteor', pose, 'die', dk, () => meteorBody({ heat: 0.4, f: 0, dir: 0, trail: 0, dizzy: 0, dk, crouch: 0 }));
+  if (dk)
+    return frameOf('meteor', pose, 'die', dk, () =>
+      meteorBody({ heat: 0.4, f: 0, dir: 0, trail: 0, dizzy: 0, dk, crouch: 0 }),
+    );
   switch (pose.mode) {
     case 'aim': {
       const k = Math.min(3, Math.floor((pose.t / METEOR_K.aim) * 4));
       const f = Math.floor(pose.now * 12) % 2;
-      return frameOf('meteor', pose, 'aim', k * 2 + f, () => meteorBody({ heat: 0.4 + k * 0.2, f, dir: 0, trail: 0, dizzy: 0, dk: 0, crouch: k * 0.6 }), {
-        still: true,
-        dx: f ? 0.5 : -0.5,
-      });
+      return frameOf(
+        'meteor',
+        pose,
+        'aim',
+        k * 2 + f,
+        () =>
+          meteorBody({
+            heat: 0.4 + k * 0.2,
+            f,
+            dir: 0,
+            trail: 0,
+            dizzy: 0,
+            dk: 0,
+            crouch: k * 0.6,
+          }),
+        {
+          still: true,
+          dx: f ? 0.5 : -0.5,
+        },
+      );
     }
     case 'f15_charge': {
       const b = dirBucket(Math.atan2(m.vy, m.vx), 16);
@@ -2526,7 +3006,14 @@ registerMobPainter('f15_meteor', (m: Mob, pose: MobPose) => {
     }
     case 'f15_dizzy': {
       const f = Math.floor(pose.now * 6) % 4;
-      return frameOf('meteor', pose, 'dizzy', f, () => meteorBody({ heat: 0.15, f: 0, dir: 0, trail: 0, dizzy: f + 1, dk: 0, crouch: 1 }), { still: true });
+      return frameOf(
+        'meteor',
+        pose,
+        'dizzy',
+        f,
+        () => meteorBody({ heat: 0.15, f: 0, dir: 0, trail: 0, dizzy: f + 1, dk: 0, crouch: 1 }),
+        { still: true },
+      );
     }
     default: {
       const run = pose.anim === 'run' || pose.anim === 'wind';
@@ -2536,7 +3023,16 @@ registerMobPainter('f15_meteor', (m: Mob, pose: MobPose) => {
         pose,
         'idle',
         f,
-        () => meteorBody({ heat: 0.35 + 0.1 * Math.sin((f / 4) * TAU), f, dir: 0, trail: 0, dizzy: 0, dk: 0, crouch: 0 }),
+        () =>
+          meteorBody({
+            heat: 0.35 + 0.1 * Math.sin((f / 4) * TAU),
+            f,
+            dir: 0,
+            trail: 0,
+            dizzy: 0,
+            dk: 0,
+            crouch: 0,
+          }),
         run ? { rot: Math.sin(pose.now * 8) * 0.08 } : null,
       );
     }
@@ -2553,7 +3049,10 @@ function cometBody(o: { dir: number; tail: number; f: number; aim: number; dk: n
   const ux = Math.cos(o.dir);
   const uy = Math.sin(o.dir);
   // Хвост: два языка — бирюзовый (газ) и белый (пыль), чуть врозь.
-  for (const [off, col] of [[0.18, hx('#7ae8ff')], [-0.12, hx('#e8f4ff')]] as [number, RGBA][]) {
+  for (const [off, col] of [
+    [0.18, hx('#7ae8ff')],
+    [-0.12, hx('#e8f4ff')],
+  ] as [number, RGBA][]) {
     const a = o.dir + PI + off;
     for (let i = 0; i < 22; i++) {
       const k = i / 22;
@@ -2586,7 +3085,13 @@ function cometBody(o: { dir: number; tail: number; f: number; aim: number; dk: n
   edge(p, alpha(INK, 0.8));
   let out = p;
   if (o.dk) out = shatter(p, o.dk / 3, 1920, [WHITE, CRYST[3], TEAL[2]], cx, cy);
-  return { p: out, ax: cx, ay: 30, eye: o.dk ? null : [cx + Math.round(ux * 2), cy - 1], lit: true };
+  return {
+    p: out,
+    ax: cx,
+    ay: 30,
+    eye: o.dk ? null : [cx + Math.round(ux * 2), cy - 1],
+    lit: true,
+  };
 }
 
 registerMobPainter('f15_comet', (m: Mob, pose: MobPose) => {
@@ -2594,19 +3099,52 @@ registerMobPainter('f15_comet', (m: Mob, pose: MobPose) => {
   const sp = Math.hypot(m.vx, m.vy);
   const ang = sp > 1 ? Math.atan2(m.vy, m.vx) : m.dir;
   const b = dirBucket(ang, 16);
-  if (dk) return frameOf('comet', pose, 'die', dk * 16 + b, () => cometBody({ dir: (b / 16) * TAU, tail: 0.3, f: 0, aim: 0, dk }), null, false);
+  if (dk)
+    return frameOf(
+      'comet',
+      pose,
+      'die',
+      dk * 16 + b,
+      () => cometBody({ dir: (b / 16) * TAU, tail: 0.3, f: 0, aim: 0, dk }),
+      null,
+      false,
+    );
   const f = Math.floor(pose.now * 10) % 4;
   if (pose.mode === 'aim') {
     const k = Math.min(2, Math.floor((pose.t / COMET.aim) * 3));
-    return frameOf('comet', pose, 'aim', (b * 3 + k) * 4 + f, () => cometBody({ dir: (b / 16) * TAU, tail: 0.35 - k * 0.1, f, aim: 0.4 + k * 0.3, dk: 0 }), { still: true }, false);
+    return frameOf(
+      'comet',
+      pose,
+      'aim',
+      (b * 3 + k) * 4 + f,
+      () => cometBody({ dir: (b / 16) * TAU, tail: 0.35 - k * 0.1, f, aim: 0.4 + k * 0.3, dk: 0 }),
+      { still: true },
+      false,
+    );
   }
   if (pose.mode === 'f15_dash')
-    return frameOf('comet', pose, 'dash', b * 4 + f, () => cometBody({ dir: (b / 16) * TAU, tail: 1.2, f, aim: 1, dk: 0 }), {
-      still: true,
-      ghost: { every: 0.03, life: 0.22, tint: '140,240,255', alpha: 0.55 },
-    }, false);
+    return frameOf(
+      'comet',
+      pose,
+      'dash',
+      b * 4 + f,
+      () => cometBody({ dir: (b / 16) * TAU, tail: 1.2, f, aim: 1, dk: 0 }),
+      {
+        still: true,
+        ghost: { every: 0.03, life: 0.22, tint: '140,240,255', alpha: 0.55 },
+      },
+      false,
+    );
   const tail = Math.min(1, 0.45 + sp * 0.08);
-  return frameOf('comet', pose, 'fly', b * 4 + f, () => cometBody({ dir: (b / 16) * TAU, tail, f, aim: 0, dk: 0 }), null, false);
+  return frameOf(
+    'comet',
+    pose,
+    'fly',
+    b * 4 + f,
+    () => cometBody({ dir: (b / 16) * TAU, tail, f, aim: 0, dk: 0 }),
+    null,
+    false,
+  );
 });
 
 // --- Гравитон -----------------------------------------------------------------
@@ -2638,10 +3176,14 @@ function gravBody(o: { step: number; arms: number; slam: number; f: number; dk: 
     }
   };
   // Задняя половина кольца и камешки за спиной.
-  for (let a = PI; a < TAU; a += 0.025) p.set(cx + Math.cos(a) * ringR, ringY + Math.sin(a) * ringR * 0.3, alpha(VIOLET_GLOW, 0.5));
+  for (let a = PI; a < TAU; a += 0.025)
+    p.set(cx + Math.cos(a) * ringR, ringY + Math.sin(a) * ringR * 0.3, alpha(VIOLET_GLOW, 0.5));
   pebble(false);
   // Ноги-столбы.
-  for (const [lx, ph] of [[cx - 6, 0], [cx + 5, 2]] as [number, number][]) {
+  for (const [lx, ph] of [
+    [cx - 6, 0],
+    [cx + 5, 2],
+  ] as [number, number][]) {
     const up = (o.step + ph) % 4 < 2 ? 1 : 0;
     limb(p, lx, cy + 7, lx, gy - 2 - up, 4, 3.6, GRAV_PLATE, -0.05);
     p.rect(lx - 4, gy - 3 - up, lx + 4, gy - 1 - up, GRAV_PLATE[1]);
@@ -2654,16 +3196,34 @@ function gravBody(o: { step: number; arms: number; slam: number; f: number; dk: 
   limb(p, cx - 9, sh, bx, hb, 3.4, 3.8, GRAV_T, -0.1);
   shadeEll(p, bx, hb, 4.4, 4, GRAV_PLATE, -0.1);
   // Корпус: широкие плечи, к поясу уже; гладкая тень, пара швов.
-  poly(p, [[cx - 13, sh - 3], [cx + 12, sh - 3], [cx + 9, cy + 8], [cx - 9, cy + 8]], (x, y) => {
-    const nx = (x - cx) / 13;
-    const l = nx * LX * 1.4 + ((sh - y) / 20) * -LY * 0.6 + 0.42 + dith(x, y) * 0.12;
-    return tone(GRAV_T, l);
-  });
+  poly(
+    p,
+    [
+      [cx - 13, sh - 3],
+      [cx + 12, sh - 3],
+      [cx + 9, cy + 8],
+      [cx - 9, cy + 8],
+    ],
+    (x, y) => {
+      const nx = (x - cx) / 13;
+      const l = nx * LX * 1.4 + ((sh - y) / 20) * -LY * 0.6 + 0.42 + dith(x, y) * 0.12;
+      return tone(GRAV_T, l);
+    },
+  );
   p.rect(cx - 12, sh - 3, cx + 11, sh - 3, GRAV_T[3]);
   stroke(p, cx - 9, cy + 1, cx + 9, cy + 1, GRAV_T[0]);
   stroke(p, cx, sh - 2, cx, cy + 7, alpha(GRAV_T[0], 0.7));
   // Трещина ядра на спине (слева): слабое место.
-  poly(p, [[cx - 12, sh + 1], [cx - 7, sh + 3], [cx - 9, cy + 2], [cx - 12, cy]], hx('#2a0c50'));
+  poly(
+    p,
+    [
+      [cx - 12, sh + 1],
+      [cx - 7, sh + 3],
+      [cx - 9, cy + 2],
+      [cx - 12, cy],
+    ],
+    hx('#2a0c50'),
+  );
   for (let y = sh + 2; y < cy + 1; y++) p.set(cx - 10 + Math.sin(y * 0.9) * 1.2, y, VIOLET[3]);
   // Голова: низкий шлем, щель-глаз.
   shadeEll(p, cx + 2, sh - 6, 6, 4.6, GRAV_PLATE, 0.05);
@@ -2675,13 +3235,24 @@ function gravBody(o: { step: number; arms: number; slam: number; f: number; dk: 
   shadeEll(p, fx, hf, 5, 4.6, GRAV_PLATE, 0.1);
   if (o.arms < 0.3) {
     // Щит: плита в рост, руна тяжести.
-    poly(p, [[cx + 11, sh - 2], [cx + 18, sh + 1], [cx + 17, cy + 9], [cx + 11, cy + 11]], (x, y) => tone(GRAV_PLATE, (cx + 18 - x) * 0.05 + (cy - y) * 0.03 + 0.4 + dith(x, y) * 0.1));
+    poly(
+      p,
+      [
+        [cx + 11, sh - 2],
+        [cx + 18, sh + 1],
+        [cx + 17, cy + 9],
+        [cx + 11, cy + 11],
+      ],
+      (x, y) => tone(GRAV_PLATE, (cx + 18 - x) * 0.05 + (cy - y) * 0.03 + 0.4 + dith(x, y) * 0.1),
+    );
     stroke(p, cx + 11, sh - 2, cx + 18, sh + 1, GRAV_PLATE[3]);
-    for (let a = 0; a < TAU; a += 0.45) p.set(cx + 14.5 + Math.cos(a) * 2.2, cy + Math.sin(a) * 3.2, VIOLET[3]);
+    for (let a = 0; a < TAU; a += 0.45)
+      p.set(cx + 14.5 + Math.cos(a) * 2.2, cy + Math.sin(a) * 3.2, VIOLET[3]);
     p.set(cx + 14.5, cy, WHITE);
   }
   // Передняя половина кольца и камешки.
-  for (let a = 0; a < PI; a += 0.025) p.set(cx + Math.cos(a) * ringR, ringY + Math.sin(a) * ringR * 0.3, alpha(hx('#e0d0ff'), 0.75));
+  for (let a = 0; a < PI; a += 0.025)
+    p.set(cx + Math.cos(a) * ringR, ringY + Math.sin(a) * ringR * 0.3, alpha(hx('#e0d0ff'), 0.75));
   pebble(true);
   edge(p, alpha(INK, 0.9));
   glow(p, cx - 10, cy - 3, 7, VIOLET_GLOW, 0.55);
@@ -2690,13 +3261,17 @@ function gravBody(o: { step: number; arms: number; slam: number; f: number; dk: 
     glow(p, bx, hb, 6, VIOLET_GLOW, 0.35 * o.arms);
   }
   let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1931, [GRAV_T[2], VIOLET[2], VIOLET_GLOW, GRAV_PLATE[2]], cx, cy);
+  if (o.dk)
+    out = shatter(p, o.dk / 3, 1931, [GRAV_T[2], VIOLET[2], VIOLET_GLOW, GRAV_PLATE[2]], cx, cy);
   return { p: out, ax: cx, ay: gy, eye: o.dk ? null : [cx + 6, sh - 7], lit: true };
 }
 
 registerMobPainter('f15_graviton', (_m: Mob, pose: MobPose) => {
   const dk = deathK(pose);
-  if (dk) return frameOf('grav', pose, 'die', dk, () => gravBody({ step: 0, arms: 0, slam: 0, f: 0, dk }));
+  if (dk)
+    return frameOf('grav', pose, 'die', dk, () =>
+      gravBody({ step: 0, arms: 0, slam: 0, f: 0, dk }),
+    );
   const f = Math.floor(pose.now * 6) % 8;
   if (pose.mode === 'windup') {
     // Замах: кулаки поднимаются, последние 0,15 с — удар вниз.
@@ -2705,15 +3280,37 @@ registerMobPainter('f15_graviton', (_m: Mob, pose: MobPose) => {
     const slam = pose.t > T - 0.15 ? Math.min(1, (pose.t - (T - 0.15)) / 0.12) : 0;
     const kb = Math.min(5, Math.floor(k * 6));
     const sb = Math.min(2, Math.floor(slam * 3));
-    return frameOf('grav', pose, 'wind', kb * 3 + sb, () => gravBody({ step: 0, arms: slam ? 1 - slam * 0.2 : kb / 5, slam, f: 0, dk: 0 }), {
-      still: true,
-      sy: slam ? 0.94 : 1 + kb * 0.01,
-    });
+    return frameOf(
+      'grav',
+      pose,
+      'wind',
+      kb * 3 + sb,
+      () => gravBody({ step: 0, arms: slam ? 1 - slam * 0.2 : kb / 5, slam, f: 0, dk: 0 }),
+      {
+        still: true,
+        sy: slam ? 0.94 : 1 + kb * 0.01,
+      },
+    );
   }
-  if (pose.mode === 'recover') return frameOf('grav', pose, 'rec', 0, () => gravBody({ step: 0, arms: 0.8, slam: 1, f: 0, dk: 0 }), { still: true });
+  if (pose.mode === 'recover')
+    return frameOf(
+      'grav',
+      pose,
+      'rec',
+      0,
+      () => gravBody({ step: 0, arms: 0.8, slam: 1, f: 0, dk: 0 }),
+      { still: true },
+    );
   const run = pose.anim === 'run';
   const st = run ? pose.frame % 4 : 0;
-  return frameOf('grav', pose, run ? 'run' : 'idle', st * 8 + f, () => gravBody({ step: st, arms: 0, slam: 0, f, dk: 0 }), run ? { dy: st % 2 ? 0.6 : 0 } : null);
+  return frameOf(
+    'grav',
+    pose,
+    run ? 'run' : 'idle',
+    st * 8 + f,
+    () => gravBody({ step: st, arms: 0, slam: 0, f, dk: 0 }),
+    run ? { dy: st % 2 ? 0.6 : 0 } : null,
+  );
 });
 
 // --- Звездочёт ----------------------------------------------------------------
@@ -2726,7 +3323,14 @@ const SKIN = tn('#6a4a5a', '#9a7080', '#c8a0a8', '#f0d0d0');
  * камни-спутники (сколько осталось). `cast` 0…1 — посох вверх (колодец)
  * или вперёд (залп), `kind` 1 — колодец, 2 — залп.
  */
-function astroBody(o: { step: number; stones: number; f: number; cast: number; kind: number; dk: number }): Built {
+function astroBody(o: {
+  step: number;
+  stones: number;
+  f: number;
+  cast: number;
+  kind: number;
+  dk: number;
+}): Built {
   const p = new Px(40, 44);
   const cx = 18;
   const gy = 39;
@@ -2745,10 +3349,19 @@ function astroBody(o: { step: number; stones: number; f: number; cast: number; k
   orbit(false);
   // Полы мантии: колокол, шаг качает край.
   const sw = o.step % 2 ? 1 : 0;
-  poly(p, [[cx - 4, 16], [cx + 4, 16], [cx + 8 + sw, gy], [cx - 8 - sw, gy]], (x, y) => {
-    const fold = Math.sin((x - cx) * 1.1 + y * 0.1);
-    return tone(ROBE, (cx - x) * 0.05 + 0.35 + fold * 0.15);
-  });
+  poly(
+    p,
+    [
+      [cx - 4, 16],
+      [cx + 4, 16],
+      [cx + 8 + sw, gy],
+      [cx - 8 - sw, gy],
+    ],
+    (x, y) => {
+      const fold = Math.sin((x - cx) * 1.1 + y * 0.1);
+      return tone(ROBE, (cx - x) * 0.05 + 0.35 + fold * 0.15);
+    },
+  );
   // Звёзды на мантии (мерцают по кадру).
   for (let i = 0; i < 7; i++) {
     const x = cx - 6 + Math.round(hash(i, 1, 1940) * 12);
@@ -2766,7 +3379,15 @@ function astroBody(o: { step: number; stones: number; f: number; cast: number; k
   // Борода-звёздная пыль.
   for (let y = 15; y < 19; y++) p.set(cx + 2 + (y % 2), y, alpha(hx('#d8d4f0'), 0.9));
   // Острый кончик капюшона.
-  poly(p, [[cx - 5, 10], [cx - 1, 6], [cx - 9, 4]], ROBE[2]);
+  poly(
+    p,
+    [
+      [cx - 5, 10],
+      [cx - 1, 6],
+      [cx - 9, 4],
+    ],
+    ROBE[2],
+  );
   // Рука и посох.
   let sx0 = cx + 7;
   let sy0 = 38;
@@ -2793,7 +3414,8 @@ function astroBody(o: { step: number; stones: number; f: number; cast: number; k
   // Астролябия на конце.
   const lit = 0.35 + o.cast * 0.6;
   glow(p, sx1, sy1, 5 + o.cast * 4, o.kind === 2 ? GOLDK : TEAL_GLOW, lit);
-  for (let a = 0; a < TAU; a += 0.35) p.set(sx1 + Math.cos(a) * 2.6, sy1 + Math.sin(a) * 2.6, BRASS[3]);
+  for (let a = 0; a < TAU; a += 0.35)
+    p.set(sx1 + Math.cos(a) * 2.6, sy1 + Math.sin(a) * 2.6, BRASS[3]);
   stroke(p, sx1 - 2.6, sy1, sx1 + 2.6, sy1, BRASS[2]);
   sparkle(p, sx1, sy1, WHITE, o.cast > 0.5 ? 2 : 1);
   orbit(true);
@@ -2806,17 +3428,34 @@ function astroBody(o: { step: number; stones: number; f: number; cast: number; k
 registerMobPainter('f15_astro', (m: Mob, pose: MobPose) => {
   const dk = deathK(pose);
   const stones = Math.max(0, Math.min(3, m.data.stones ?? 3));
-  if (dk) return frameOf('astro', pose, 'die', dk, () => astroBody({ step: 0, stones: 0, f: 0, cast: 0, kind: 0, dk }));
+  if (dk)
+    return frameOf('astro', pose, 'die', dk, () =>
+      astroBody({ step: 0, stones: 0, f: 0, cast: 0, kind: 0, dk }),
+    );
   const f = Math.floor(pose.now * 8) % 16;
   if (pose.mode === 'f15_cast_well' || pose.mode === 'f15_cast_bolt') {
     const well = pose.mode === 'f15_cast_well';
     const T = well ? 0.9 : 0.75;
     const k = Math.min(3, Math.floor((pose.t / T) * 4));
-    return frameOf('astro', pose, well ? 'cw' : 'cb', (k * 4 + stones) * 16 + f, () => astroBody({ step: 0, stones, f, cast: (k + 1) / 4, kind: well ? 1 : 2, dk: 0 }), { still: true });
+    return frameOf(
+      'astro',
+      pose,
+      well ? 'cw' : 'cb',
+      (k * 4 + stones) * 16 + f,
+      () => astroBody({ step: 0, stones, f, cast: (k + 1) / 4, kind: well ? 1 : 2, dk: 0 }),
+      { still: true },
+    );
   }
   const run = pose.anim === 'run';
   const st = run ? pose.frame % 4 : 0;
-  return frameOf('astro', pose, run ? 'run' : 'idle', (st * 4 + stones) * 16 + f, () => astroBody({ step: st, stones, f, cast: 0, kind: 0, dk: 0 }), run ? { dy: st % 2 ? -0.5 : 0 } : null);
+  return frameOf(
+    'astro',
+    pose,
+    run ? 'run' : 'idle',
+    (st * 4 + stones) * 16 + f,
+    () => astroBody({ step: st, stones, f, cast: 0, kind: 0, dk: 0 }),
+    run ? { dy: st % 2 ? -0.5 : 0 } : null,
+  );
 });
 
 // --- Созвездие ----------------------------------------------------------------
@@ -2872,21 +3511,55 @@ function constelBody(o: { f: number; rise: number; pulse: number; dk: number }):
   const on = (i: number) => i / FOX.length < o.rise + 0.01;
   // Туманность тела — бледный вдоль хребта.
   const neb = 0.22 * o.rise + o.pulse * 0.15;
-  for (const [a, b] of [[1, 3], [3, 4], [4, 5], [9, 10], [3, 9], [4, 10]] as [number, number][])
-    for (let k = 0; k <= 1; k += 0.25) glow(p, pts[a][0] + (pts[b][0] - pts[a][0]) * k, pts[a][1] + (pts[b][1] - pts[a][1]) * k, 5, hx('#6a7ae0'), neb);
+  for (const [a, b] of [
+    [1, 3],
+    [3, 4],
+    [4, 5],
+    [9, 10],
+    [3, 9],
+    [4, 10],
+  ] as [number, number][])
+    for (let k = 0; k <= 1; k += 0.25)
+      glow(
+        p,
+        pts[a][0] + (pts[b][0] - pts[a][0]) * k,
+        pts[a][1] + (pts[b][1] - pts[a][1]) * k,
+        5,
+        hx('#6a7ae0'),
+        neb,
+      );
   for (const [a, b] of FOX_LINES) {
     if (!on(a) || !on(b)) continue;
-    stroke(p, pts[a][0], pts[a][1], pts[b][0], pts[b][1], alpha(hx('#a8c0ff'), 0.6 + o.pulse * 0.3));
+    stroke(
+      p,
+      pts[a][0],
+      pts[a][1],
+      pts[b][0],
+      pts[b][1],
+      alpha(hx('#a8c0ff'), 0.6 + o.pulse * 0.3),
+    );
   }
   pts.forEach(([x, y], i) => {
     if (!on(i)) return;
     const main = i === 1;
     const big = main || i === 6 || i === 2;
-    glow(p, x, y, main ? 5 + o.pulse * 3 : 3 + o.pulse * 1.5, main ? hx('#d0e0ff') : hx('#a8c0ff'), 0.7);
+    glow(
+      p,
+      x,
+      y,
+      main ? 5 + o.pulse * 3 : 3 + o.pulse * 1.5,
+      main ? hx('#d0e0ff') : hx('#a8c0ff'),
+      0.7,
+    );
     sparkle(p, Math.round(x), Math.round(y), WHITE, big ? (main ? 2 : 1) : o.pulse > 0.5 ? 1 : 0);
   });
   if (o.pulse > 0.4)
-    for (let a = 0; a < TAU; a += 0.12) p.set(cx + Math.cos(a) * (12 + o.pulse * 4), cy + Math.sin(a) * (9 + o.pulse * 3), alpha(WHITE, 0.3 + o.pulse * 0.4));
+    for (let a = 0; a < TAU; a += 0.12)
+      p.set(
+        cx + Math.cos(a) * (12 + o.pulse * 4),
+        cy + Math.sin(a) * (9 + o.pulse * 3),
+        alpha(WHITE, 0.3 + o.pulse * 0.4),
+      );
   let out = p;
   if (o.dk) out = shatter(p, o.dk / 3, 1950, [WHITE, hx('#a8c8ff')], cx, cy);
   return { p: out, ax: cx, ay: 34, eye: null, lit: true };
@@ -2894,15 +3567,32 @@ function constelBody(o: { f: number; rise: number; pulse: number; dk: number }):
 
 registerMobPainter('f15_constel', (_m: Mob, pose: MobPose) => {
   const dk = deathK(pose);
-  if (dk) return frameOf('constel', pose, 'die', dk, () => constelBody({ f: 0, rise: 1, pulse: 0.3, dk }));
+  if (dk)
+    return frameOf('constel', pose, 'die', dk, () =>
+      constelBody({ f: 0, rise: 1, pulse: 0.3, dk }),
+    );
   const f = Math.floor(pose.now * 10) % 8;
   if (pose.mode === 'f15_rise') {
     const k = Math.min(5, Math.floor((pose.t / 1.2) * 6));
-    return frameOf('constel', pose, 'rise', k * 8 + f, () => constelBody({ f, rise: (k + 1) / 6, pulse: 0, dk: 0 }), { lift: 1 + k * 1.2, still: true });
+    return frameOf(
+      'constel',
+      pose,
+      'rise',
+      k * 8 + f,
+      () => constelBody({ f, rise: (k + 1) / 6, pulse: 0, dk: 0 }),
+      { lift: 1 + k * 1.2, still: true },
+    );
   }
   if (pose.mode === 'windup') {
     const k = Math.min(3, Math.floor((pose.t / 0.6) * 4));
-    return frameOf('constel', pose, 'wind', k * 8 + f, () => constelBody({ f, rise: 1, pulse: (k + 1) / 4, dk: 0 }), { still: true });
+    return frameOf(
+      'constel',
+      pose,
+      'wind',
+      k * 8 + f,
+      () => constelBody({ f, rise: 1, pulse: (k + 1) / 4, dk: 0 }),
+      { still: true },
+    );
   }
   return frameOf('constel', pose, 'fly', f, () => constelBody({ f, rise: 1, pulse: 0, dk: 0 }));
 });
@@ -2945,7 +3635,12 @@ function devBody(o: { f: number; suck: number; wind: number; dk: number }): Buil
   // Тело-холм: чуть светлее, глянец.
   shadeEll(p, cx + 1, cy, 7 + o.wind * 1.5, 5 + o.wind, VOID_T, 0.1);
   // Хвост-нить со звездой на конце.
-  for (let i = 0; i < 14; i++) p.set(cx - 2 - i * 0.5 + Math.sin(o.f * 0.8 + i * 0.5) * 1.6, cy + 5 + i, alpha(VIOLET[3], 0.85 - i * 0.04));
+  for (let i = 0; i < 14; i++)
+    p.set(
+      cx - 2 - i * 0.5 + Math.sin(o.f * 0.8 + i * 0.5) * 1.6,
+      cy + 5 + i,
+      alpha(VIOLET[3], 0.85 - i * 0.04),
+    );
   edge(p, alpha(VIOLET_GLOW, 0.95));
   glow(p, cx, cy, 24, VIOLET_GLOW, 0.14);
   if (o.wind > 0) glow(p, cx, cy, 8 + o.wind * 5, hx('#9ad0ff'), 0.4 * o.wind);
@@ -2956,7 +3651,11 @@ function devBody(o: { f: number; suck: number; wind: number; dk: number }): Buil
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * TAU + o.f * 0.5;
       const d = 4 + ((o.f * 2 + i * 3) % 10);
-      p.set(cx + 4 + Math.cos(a) * d, cy + 3 + Math.sin(a) * d * 0.7, alpha(hx('#bff8ff'), 1 - d / 15));
+      p.set(
+        cx + 4 + Math.cos(a) * d,
+        cy + 3 + Math.sin(a) * d * 0.7,
+        alpha(hx('#bff8ff'), 1 - d / 15),
+      );
     }
   }
   let out = p;
@@ -2972,11 +3671,25 @@ registerMobPainter('f15_devourer', (_m: Mob, pose: MobPose) => {
   const f = Math.floor(pose.now * 8) % 8;
   if (pose.mode === 'f15_snuff') {
     const k = Math.min(2, Math.floor(pose.t * 3));
-    return frameOf('dev', pose, 'snuff', k * 8 + f, () => devBody({ f, suck: (k + 1) / 3, wind: 0, dk: 0 }), { still: true });
+    return frameOf(
+      'dev',
+      pose,
+      'snuff',
+      k * 8 + f,
+      () => devBody({ f, suck: (k + 1) / 3, wind: 0, dk: 0 }),
+      { still: true },
+    );
   }
   if (pose.mode === 'windup') {
     const k = Math.min(3, Math.floor((pose.t / 0.7) * 4));
-    return frameOf('dev', pose, 'wind', k * 8 + f, () => devBody({ f, suck: 0, wind: (k + 1) / 4, dk: 0 }), { still: true });
+    return frameOf(
+      'dev',
+      pose,
+      'wind',
+      k * 8 + f,
+      () => devBody({ f, suck: 0, wind: (k + 1) / 4, dk: 0 }),
+      { still: true },
+    );
   }
   return frameOf('dev', pose, 'fly', f, () => devBody({ f, suck: 0, wind: 0, dk: 0 }), { lift: 8 });
 });
@@ -2985,7 +3698,13 @@ registerMobPainter('f15_devourer', (_m: Mob, pose: MobPose) => {
 
 /** Чей рисовальщик даёт тень каждому мотиву (в порядке `MOTIFS`). */
 const ECHO_SRC = ['f1_rat', 'f2_shroom', 'f6_salamander', 'f7_phantom', 'f11_harpy', 'f14_soldier'];
-const SPECTRAL: RGBA[] = [hx('#140a38'), hx('#3a2a90'), hx('#6a7ae0'), hx('#9ae8ff'), hx('#ffffff')];
+const SPECTRAL: RGBA[] = [
+  hx('#140a38'),
+  hx('#3a2a90'),
+  hx('#6a7ae0'),
+  hx('#9ae8ff'),
+  hx('#ffffff'),
+];
 const ECHO_TINT = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
 
 /** Перекрасить кадр в призрачную палитру: яркость → индиго…бирюза…белое. */
@@ -3019,7 +3738,8 @@ function echoFallback(o: { f: number; motif: number; dk: number }): Built {
   const cx = 14;
   glow(p, cx, 16, 11, hx('#9ae8ff'), 0.35);
   shadeEll(p, cx, 16, 7, 8, tn('#1a1048', '#3a3aa0', '#6a8ae0', '#c8f4ff'), 0.1);
-  for (let i = 0; i < 4; i++) p.set(cx - 5 + i * 3, 24 + ((o.f + i) % 2), alpha(hx('#9ae8ff'), 0.7));
+  for (let i = 0; i < 4; i++)
+    p.set(cx - 5 + i * 3, 24 + ((o.f + i) % 2), alpha(hx('#9ae8ff'), 0.7));
   motifGlyph(p, cx, 15, o.motif, WHITE);
   let out = p;
   if (o.dk) out = shatter(p, o.dk / 3, 1970, SPECTRAL, cx, 16);
@@ -3037,7 +3757,7 @@ const ECHO_MODE: Record<string, string> = {
 };
 
 registerMobPainter('f15_echo', (m: Mob, pose: MobPose) => {
-  const motif = ((m.data.motif ?? 0) % 6 + 6) % 6;
+  const motif = (((m.data.motif ?? 0) % 6) + 6) % 6;
   const src = MOB_PAINTERS.get(ECHO_SRC[motif]);
   const born = pose.mode === 'f15_born' ? Math.min(1, pose.t / 0.7) : 1;
   const blink = pose.mode === 'f15_blink' && (m.data.ghost ?? 0) > 0;
@@ -3070,7 +3790,14 @@ registerMobPainter('f15_echo', (m: Mob, pose: MobPose) => {
   }
   const dk = deathK(pose);
   const f = Math.floor(pose.now * 6) % 4;
-  return frameOf('echo', pose, dk ? 'die' : 'fly', motif * 8 + (dk || f), () => echoFallback({ f, motif, dk }), { ...extra, sy: 0.4 + born * 0.6 });
+  return frameOf(
+    'echo',
+    pose,
+    dk ? 'die' : 'fly',
+    motif * 8 + (dk || f),
+    () => echoFallback({ f, motif, dk }),
+    { ...extra, sy: 0.4 + born * 0.6 },
+  );
 });
 
 // --- Луна -------------------------------------------------------------------------
@@ -3129,7 +3856,10 @@ registerMobPainter('f15_moon', (m: Mob, pose: MobPose) => {
   const phase = Math.floor(pose.now * 2 + m.id) % 16;
   if (pose.mode === 'aim') {
     const f = Math.floor(pose.now * 16) % 2;
-    return frameOf('moon', pose, 'aim', phase * 2 + f, () => moonBody({ phase, aim: 1, dk: 0 }), { still: true, dx: f ? 0.6 : -0.6 });
+    return frameOf('moon', pose, 'aim', phase * 2 + f, () => moonBody({ phase, aim: 1, dk: 0 }), {
+      still: true,
+      dx: f ? 0.6 : -0.6,
+    });
   }
   if (pose.mode === 'f15_dive')
     return frameOf('moon', pose, 'dive', phase, () => moonBody({ phase, aim: 1, dk: 0 }), {
@@ -3163,7 +3893,13 @@ function novaBody(o: { f: number; g: number; step: number; dk: number }): Built 
       const r = R + k - 1;
       const w = (1 - k / L) * 2.4;
       const bend = Math.sin(o.f * 0.6 + i) * k * 0.08;
-      p.ell(cx + Math.cos(a + bend) * r, cy + Math.sin(a + bend) * r, w, w, k / L < 0.4 ? NOVA_T[2] : alpha(NOVA_T[1], 0.75));
+      p.ell(
+        cx + Math.cos(a + bend) * r,
+        cy + Math.sin(a + bend) * r,
+        w,
+        w,
+        k / L < 0.4 ? NOVA_T[2] : alpha(NOVA_T[1], 0.75),
+      );
     }
   }
   p.ell(cx, cy, R, R, (x, y) => {
@@ -3183,7 +3919,12 @@ function novaBody(o: { f: number; g: number; step: number; dk: number }): Built 
   if (o.g > 0.4)
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * TAU + o.f * 0.3;
-      for (let k = 0; k < 12 * o.g; k++) p.set(cx + Math.cos(a) * (R + 4 + k), cy + Math.sin(a) * (R + 4 + k), alpha(WHITE, 0.85 - k * 0.06));
+      for (let k = 0; k < 12 * o.g; k++)
+        p.set(
+          cx + Math.cos(a) * (R + 4 + k),
+          cy + Math.sin(a) * (R + 4 + k),
+          alpha(WHITE, 0.85 - k * 0.06),
+        );
     }
   let out = p;
   if (o.dk) out = shatter(p, o.dk / 3, 1991, [NOVA_T[2], NOVA_T[3], WHITE, NOVA_T[1]], cx, cy);
@@ -3192,18 +3933,30 @@ function novaBody(o: { f: number; g: number; step: number; dk: number }): Built 
 
 registerMobPainter('f15_nova', (_m: Mob, pose: MobPose) => {
   const dk = deathK(pose);
-  if (dk) return frameOf('nova', pose, 'die', dk, () => novaBody({ f: 0, g: 1, step: 0, dk }), { shadow: 0 });
+  if (dk)
+    return frameOf('nova', pose, 'die', dk, () => novaBody({ f: 0, g: 1, step: 0, dk }), {
+      shadow: 0,
+    });
   const f = Math.floor(pose.now * 8) % 16;
   if (pose.mode === 'f15_gather') {
     const k = Math.min(4, Math.floor((pose.t / NOVA.gather) * 5));
-    return frameOf('nova', pose, 'gather', k * 16 + f, () => novaBody({ f, g: (k + 1) / 5, step: 0, dk: 0 }), {
-      still: true,
-      sx: 1 - k * 0.03,
-      sy: 1 - k * 0.03,
-    });
+    return frameOf(
+      'nova',
+      pose,
+      'gather',
+      k * 16 + f,
+      () => novaBody({ f, g: (k + 1) / 5, step: 0, dk: 0 }),
+      {
+        still: true,
+        sx: 1 - k * 0.03,
+        sy: 1 - k * 0.03,
+      },
+    );
   }
   const step = pose.anim === 'run' ? (pose.frame % 2) * 1 : 0;
-  return frameOf('nova', pose, 'idle', f * 2 + step, () => novaBody({ f, g: 0, step, dk: 0 }), { shadow: 10 });
+  return frameOf('nova', pose, 'idle', f * 2 + step, () => novaBody({ f, g: 0, step, dk: 0 }), {
+    shadow: 10,
+  });
 });
 
 // --- Золотой скарабей (редкий бегун) ----------------------------------------------------
@@ -3224,7 +3977,16 @@ function bugBody(o: { f: number; dk: number }): Built {
   for (const sgn of [0, 1]) {
     const tipX = cx - 9 - sgn * 3;
     const tipY = cy - 8 - flap * 4 + sgn * 2;
-    poly(p, [[cx - 1, cy - 4], [tipX, tipY], [tipX + 3, tipY + 5], [cx, cy]], alpha(hx('#e8f8ff'), 0.4));
+    poly(
+      p,
+      [
+        [cx - 1, cy - 4],
+        [tipX, tipY],
+        [tipX + 3, tipY + 5],
+        [cx, cy],
+      ],
+      alpha(hx('#e8f8ff'), 0.4),
+    );
     stroke(p, cx - 1, cy - 4, tipX, tipY, alpha(WHITE, 0.6));
   }
   shadeEll(p, cx, cy, 7.5, 5.6, GOLD, 0.15);
@@ -3279,22 +4041,65 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 registerMobWarm(
   'f15_urchin',
   warm('urchin', [
-    ...range(4).map((f): [string, number, () => Built] => ['run', f, () => urchinBody({ step: f, ball: 0, bristle: 0.45, roll: 0, glowK: 0, dizzy: 0, dk: 0 })]),
-    ...range(8).map((f): [string, number, () => Built] => ['roll', f, () => urchinBody({ step: 0, ball: 1, bristle: 0.7, roll: (f / 8) * TAU * 0.5, glowK: 0.6, dizzy: 0, dk: 0 })]),
-    ...range(5).map((k): [string, number, () => Built] => ['curl', k, () => urchinBody({ step: 0, ball: k / 4, bristle: 0.5, roll: 0, glowK: k / 4, dizzy: 0, dk: 0 })]),
+    ...range(4).map((f): [string, number, () => Built] => [
+      'run',
+      f,
+      () => urchinBody({ step: f, ball: 0, bristle: 0.45, roll: 0, glowK: 0, dizzy: 0, dk: 0 }),
+    ]),
+    ...range(8).map((f): [string, number, () => Built] => [
+      'roll',
+      f,
+      () =>
+        urchinBody({
+          step: 0,
+          ball: 1,
+          bristle: 0.7,
+          roll: (f / 8) * TAU * 0.5,
+          glowK: 0.6,
+          dizzy: 0,
+          dk: 0,
+        }),
+    ]),
+    ...range(5).map((k): [string, number, () => Built] => [
+      'curl',
+      k,
+      () =>
+        urchinBody({ step: 0, ball: k / 4, bristle: 0.5, roll: 0, glowK: k / 4, dizzy: 0, dk: 0 }),
+    ]),
   ]),
 );
 registerMobWarm(
   'f15_graviton',
-  warm('grav', range(8).map((f): [string, number, () => Built] => ['idle', f, () => gravBody({ step: 0, arms: 0, slam: 0, f, dk: 0 })])),
+  warm(
+    'grav',
+    range(8).map((f): [string, number, () => Built] => [
+      'idle',
+      f,
+      () => gravBody({ step: 0, arms: 0, slam: 0, f, dk: 0 }),
+    ]),
+  ),
 );
 registerMobWarm(
   'f15_nova',
-  warm('nova', range(16).map((f): [string, number, () => Built] => ['idle', f * 2, () => novaBody({ f, g: 0, step: 0, dk: 0 })])),
+  warm(
+    'nova',
+    range(16).map((f): [string, number, () => Built] => [
+      'idle',
+      f * 2,
+      () => novaBody({ f, g: 0, step: 0, dk: 0 }),
+    ]),
+  ),
 );
 registerMobWarm(
   'f15_astro',
-  warm('astro', range(16).map((f): [string, number, () => Built] => ['idle', 3 * 16 + f, () => astroBody({ step: 0, stones: 3, f, cast: 0, kind: 0, dk: 0 })])),
+  warm(
+    'astro',
+    range(16).map((f): [string, number, () => Built] => [
+      'idle',
+      3 * 16 + f,
+      () => astroBody({ step: 0, stones: 3, f, cast: 0, kind: 0, dk: 0 }),
+    ]),
+  ),
 );
 
 // ---------------------------------------------------------------------------
@@ -3473,7 +4278,8 @@ function islandArt(r: Ring): IslandArt {
       const inR = d >= R0 + 0.5 + wob * 0.6 && d < R1 - 0.5 + wob;
       const inA = Math.abs(a) * d <= half * d - 1 + wob;
       if (!inR || !inA) {
-        if (d >= R0 - 4 && d < R1 + 4 && Math.abs(a) * d <= half * d + 4) glowP.set(x, y, alpha(TEAL_GLOW, 0.2));
+        if (d >= R0 - 4 && d < R1 + 4 && Math.abs(a) * d <= half * d + 4)
+          glowP.set(x, y, alpha(TEAL_GLOW, 0.2));
         continue;
       }
       glowP.set(x, y, alpha(TEAL_GLOW, 0.32));
@@ -3494,7 +4300,11 @@ function islandArt(r: Ring): IslandArt {
   const nest = (rr: number, side: number) => {
     const x = C + rr;
     const y = C + side;
-    for (const [ox, oy, h] of [[0, 0, 4], [2, 1, 3], [-1, 2, 2]] as [number, number, number][]) {
+    for (const [ox, oy, h] of [
+      [0, 0, 4],
+      [2, 1, 3],
+      [-1, 2, 2],
+    ] as [number, number, number][]) {
       for (let i = 0; i < h; i++) {
         top.set(x + ox, y + oy - i, CRYST[2]);
         top.set(x + ox + 1, y + oy - i, CRYST[1]);
@@ -3511,7 +4321,13 @@ function islandArt(r: Ring): IslandArt {
     top.ell(C + rr, C, 1.8, 1.8, BRASS[1]);
     top.ell(C + rr - 0.3, C - 0.3, 1, 1, BRASS[3]);
   }
-  const out: IslandArt = { top: top.canvas(), silHi: tintCanvas(sil, '#3c3254'), silLo: tintCanvas(sil, '#140f1c'), glowC: glowP.canvas(), C };
+  const out: IslandArt = {
+    top: top.canvas(),
+    silHi: tintCanvas(sil, '#3c3254'),
+    silLo: tintCanvas(sil, '#140f1c'),
+    glowC: glowP.canvas(),
+    C,
+  };
   ISLANDS.set(key, out);
   return out;
 }
@@ -3784,7 +4600,9 @@ registerZonePainter('f15_stormwarn', (g, z, px, py) => {
   g.save();
   for (let i = 0; i < 3; i++) {
     const u = (k * 1.5 + i / 3) % 1;
-    g.strokeStyle = heavy ? `rgba(184,120,255,${(1 - u) * 0.6})` : `rgba(160,230,255,${(1 - u) * 0.6})`;
+    g.strokeStyle = heavy
+      ? `rgba(184,120,255,${(1 - u) * 0.6})`
+      : `rgba(160,230,255,${(1 - u) * 0.6})`;
     g.lineWidth = 2;
     g.beginPath();
     g.ellipse(px, py, z.r * TS * u, z.r * TS * u * 0.7, 0, 0, TAU);
@@ -3802,7 +4620,8 @@ registerZonePainter('f15_dark', (g, z, px, py) => {
   // Тьма — только в зале затмения (из запечатанного зала не выйти).
   const hall = st.halls.find((q) => q.name === 'eclipse');
   const h = sim.hero;
-  if (hall && (h.x < hall.x0 - 1 || h.x > hall.x1 + 2 || h.y < hall.y0 - 1 || h.y > hall.y1 + 2)) return true;
+  if (hall && (h.x < hall.x0 - 1 || h.x > hall.x1 + 2 || h.y < hall.y0 - 1 || h.y > hall.y1 + 2))
+    return true;
   const at = viewOf(z, px, py);
   const holes: [number, number, number][] = [];
   for (const l of st.lamps) if (l.lit) holes.push([...at(l.x, l.y), 3.6 * TS]);
@@ -3900,7 +4719,12 @@ registerZonePainter('f15_starland', (g, z, px, py) => {
     const a = (i / 12) * TAU + hash(i, z.id, 2060);
     const d = R * (0.3 + k * 1.1);
     g.fillStyle = `rgba(255,${200 + (i % 3) * 20},120,${1 - k})`;
-    g.fillRect(Math.round(px + Math.cos(a) * d), Math.round(py + Math.sin(a) * d * 0.75 - Math.sin(k * PI) * 5), 1, 1);
+    g.fillRect(
+      Math.round(px + Math.cos(a) * d),
+      Math.round(py + Math.sin(a) * d * 0.75 - Math.sin(k * PI) * 5),
+      1,
+      1,
+    );
   }
   g.restore();
   return true;
@@ -4059,7 +4883,12 @@ registerZonePainter('f15_spore', (g, z, px, py, _s, time) => {
     const a = hash(i, z.id, 2090) * TAU + time * (0.3 + hash(i, 1, 2090) * 0.5);
     const d = R * Math.sqrt(hash(i, 2, 2090));
     g.fillStyle = `rgba(${i % 2 ? '180,240,255' : '200,170,255'},${0.7 * fade})`;
-    g.fillRect(Math.round(px + Math.cos(a) * d), Math.round(py + Math.sin(a) * d * 0.8 - Math.sin(time * 2 + i) * 2), 1, 1);
+    g.fillRect(
+      Math.round(px + Math.cos(a) * d),
+      Math.round(py + Math.sin(a) * d * 0.8 - Math.sin(time * 2 + i) * 2),
+      1,
+      1,
+    );
   }
   g.restore();
   return true;
@@ -4126,7 +4955,8 @@ registerShotPainter('f15_needle', (s: Shot) => {
     const a = (b / 16) * TAU;
     const ux = Math.cos(a);
     const uy = Math.sin(a);
-    for (let i = 1; i <= 4; i++) p.set(9 - ux * (3 + i * 1.5), 9 - uy * (3 + i * 1.5), alpha(TEAL_GLOW, 0.55 - i * 0.12));
+    for (let i = 1; i <= 4; i++)
+      p.set(9 - ux * (3 + i * 1.5), 9 - uy * (3 + i * 1.5), alpha(TEAL_GLOW, 0.55 - i * 0.12));
     spike(p, 9 - ux * 3, 9 - uy * 3, a, 8, 2.4, CRYST, WHITE);
     p.outline(alpha(INK, 0.6));
     return { p, ax: 9, ay: 11 };
@@ -4142,7 +4972,8 @@ registerShotPainter('f15_starbolt', (s: Shot, time: number) => {
     const a = (b / 8) * TAU;
     const ux = Math.cos(a);
     const uy = Math.sin(a);
-    for (let i = 1; i <= 6; i++) glow(p, 13 - ux * i * 1.8, 13 - uy * i * 1.8, 3 - i * 0.35, GOLDK, 0.5 - i * 0.07);
+    for (let i = 1; i <= 6; i++)
+      glow(p, 13 - ux * i * 1.8, 13 - uy * i * 1.8, 3 - i * 0.35, GOLDK, 0.5 - i * 0.07);
     glow(p, 13, 13, 6, hx('#ffd060'), 0.6);
     const rot = (f / 4) * (PI / 2);
     const pts: [number, number][] = [];
@@ -4182,7 +5013,12 @@ registerImpactPainter('f15_starbolt', {
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * TAU + rec.seed;
       g.fillStyle = `rgba(255,245,200,${1 - k})`;
-      g.fillRect(Math.round(px + Math.cos(a) * (3 + k * 9)), Math.round(py + Math.sin(a) * (3 + k * 9)), 1, 1);
+      g.fillRect(
+        Math.round(px + Math.cos(a) * (3 + k * 9)),
+        Math.round(py + Math.sin(a) * (3 + k * 9)),
+        1,
+        1,
+      );
     }
     return true;
   },
@@ -4215,7 +5051,19 @@ registerItemArt('f15_dust', () => {
 
 registerItemArt('f15_meteorite', () => {
   const p = new Px(10, 10);
-  poly(p, [[1, 7], [2, 3], [5, 1], [8, 2], [9, 6], [7, 9], [3, 9]], (x, y) => tone(METEOR, (5 - x) * 0.08 + (5 - y) * 0.1 + 0.35));
+  poly(
+    p,
+    [
+      [1, 7],
+      [2, 3],
+      [5, 1],
+      [8, 2],
+      [9, 6],
+      [7, 9],
+      [3, 9],
+    ],
+    (x, y) => tone(METEOR, (5 - x) * 0.08 + (5 - y) * 0.1 + 0.35),
+  );
   stroke(p, 3, 5, 5, 6, hx('#ffb040'));
   stroke(p, 5, 6, 7, 4, hx('#ffe080'));
   p.outline(INK);
@@ -4245,7 +5093,20 @@ registerItemArt('f15_void', () => {
 
 registerItemArt('f15_memory', () => {
   const p = new Px(10, 10);
-  poly(p, [[2, 3], [4, 1], [6, 1], [8, 3], [8, 7], [6, 9], [4, 9], [2, 7]], (x, y) => mixc(VIOLET[3], VIOLET[1], (x + y) / 16));
+  poly(
+    p,
+    [
+      [2, 3],
+      [4, 1],
+      [6, 1],
+      [8, 3],
+      [8, 7],
+      [6, 9],
+      [4, 9],
+      [2, 7],
+    ],
+    (x, y) => mixc(VIOLET[3], VIOLET[1], (x + y) / 16),
+  );
   p.set(4, 3, WHITE);
   p.set(5, 5, hx('#fff0ff'));
   p.set(6, 6, alpha(WHITE, 0.6));
@@ -4256,7 +5117,18 @@ registerItemArt('f15_memory', () => {
 registerItemArt('f15_honey', () => {
   const p = new Px(10, 10);
   // Кристальный мёд: соты-шестигранник, светится бирюзой.
-  poly(p, [[2, 3], [5, 1], [8, 3], [8, 7], [5, 9], [2, 7]], (x, y) => tone(TEAL, (5 - x) * 0.1 + (5 - y) * 0.1 + 0.55));
+  poly(
+    p,
+    [
+      [2, 3],
+      [5, 1],
+      [8, 3],
+      [8, 7],
+      [5, 9],
+      [2, 7],
+    ],
+    (x, y) => tone(TEAL, (5 - x) * 0.1 + (5 - y) * 0.1 + 0.55),
+  );
   stroke(p, 5, 1, 5, 9, alpha(TEAL[0], 0.6));
   stroke(p, 2, 5, 8, 5, alpha(TEAL[0], 0.4));
   p.set(4, 3, WHITE);

@@ -196,7 +196,12 @@ const COMMON: Record<string, LegendCell> = {
   d: { tile: 'deep', mark: M.pit, obj: prop('f15_bigshard', 0), light: { r: 4.4, tint: 'teal' } },
   _: { tile: 'deep', mark: M.void },
   W: { tile: 'wall', mark: M.xwall },
-  Q: { tile: 'wall', mark: M.memory, obj: prop('f15_memory', 0), light: { r: 2.3, tint: 'violet' } },
+  Q: {
+    tile: 'wall',
+    mark: M.memory,
+    obj: prop('f15_memory', 0),
+    light: { r: 2.3, tint: 'violet' },
+  },
   i: { tile: 'floor', obj: prop('f15_lamp', 0.3, { use: { label: 'Зажечь кристалл' } }) },
   k: { tile: 'floor', obj: prop('f15_druse', 0.32), light: { r: 1.7, tint: 'cold' } },
   I: { tile: 'floor', obj: prop('f15_pillar', 0.45) },
@@ -250,7 +255,12 @@ const LEGEND_ORBIT: Record<string, LegendCell> = {
   p: { tile: 'floor', mark: M.dock },
   ';': { tile: 'floor', mark: M.bridge },
   '^': { tile: 'deep', mark: M.void, obj: prop('f15_float', 0) },
-  '(': { tile: 'deep', mark: M.vortex, obj: prop('f15_vortex', 0), light: { r: 3, tint: 'violet' } },
+  '(': {
+    tile: 'deep',
+    mark: M.vortex,
+    obj: prop('f15_vortex', 0),
+    light: { r: 3, tint: 'violet' },
+  },
 };
 
 // ---------------------------------------------------------------------------

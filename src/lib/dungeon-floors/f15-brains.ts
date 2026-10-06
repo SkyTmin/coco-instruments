@@ -156,7 +156,8 @@ function openNear(sim: Sim, x: number, y: number, R = 4): [number, number] | nul
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
         const t = tileAt(sim, cx + dx, cy + dy);
-        if (t === T_FLOOR && markAt(sim, cx + dx, cy + dy) !== MK.island) return [cx + dx + 0.5, cy + dy + 0.5];
+        if (t === T_FLOOR && markAt(sim, cx + dx, cy + dy) !== MK.island)
+          return [cx + dx + 0.5, cy + dy + 0.5];
       }
   return null;
 }
@@ -416,7 +417,17 @@ export interface F15State {
   /** Отброс героя из сердцевины (свой, гаснет). */
   kick: [number, number];
   /** Трос якоря. */
-  tether: { x0: number; y0: number; x1: number; y1: number; ax: number; ay: number; t: number; T: number; ring: Ring | null } | null;
+  tether: {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+    ax: number;
+    ay: number;
+    t: number;
+    T: number;
+    ring: Ring | null;
+  } | null;
   /** Затмение 0…1 и куда идёт. */
   dark: number;
   darkTo: number;
@@ -452,7 +463,15 @@ function spotXY(sim: Sim, area: string, x: number, y: number): [number, number] 
 // Картинки-якоря: зона без действия (`api.vfx`), которую мы держим и двигаем.
 // ---------------------------------------------------------------------------
 
-function anchorZone(sim: Sim, api: SimApi, x: number, y: number, r: number, art: string, above = false): Zone {
+function anchorZone(
+  sim: Sim,
+  api: SimApi,
+  x: number,
+  y: number,
+  r: number,
+  art: string,
+  above = false,
+): Zone {
   api.vfx(sim, { x, y, r, life: 1e9, art, above });
   return sim.zones[sim.zones.length - 1];
 }
@@ -690,7 +709,11 @@ export function floatAt(sim: Sim, x: number, y: number): boolean {
 export function heavyAt(sim: Sim, x: number, y: number): boolean {
   if (markAt(sim, Math.floor(x), Math.floor(y)) === MK.heavy) return true;
   for (const z of sim.zones)
-    if ((z.art === 'f15_heavy' || z.art === 'f15_heavyall') && z.t >= (z.warn ?? 0) && hypot(z.x - x, z.y - y) < z.r)
+    if (
+      (z.art === 'f15_heavy' || z.art === 'f15_heavyall') &&
+      z.t >= (z.warn ?? 0) &&
+      hypot(z.x - x, z.y - y) < z.r
+    )
       return true;
   return false;
 }
@@ -727,9 +750,13 @@ function stepHeroGravity(sim: Sim, st: F15State, api: SimApi, dt: number): void 
   st.safeT -= dt;
   if (st.safeT <= 0) {
     st.safeT = 0.25;
-    let ok = tileAt(sim, cx, cy) === T_FLOOR && markAt(sim, cx, cy) !== MK.island && markAt(sim, cx, cy) !== MK.float;
+    let ok =
+      tileAt(sim, cx, cy) === T_FLOOR &&
+      markAt(sim, cx, cy) !== MK.island &&
+      markAt(sim, cx, cy) !== MK.float;
     for (let dy = -1; dy <= 1 && ok; dy++)
-      for (let dx = -1; dx <= 1 && ok; dx++) if (tileAt(sim, cx + dx, cy + dy) === T_DEEP) ok = false;
+      for (let dx = -1; dx <= 1 && ok; dx++)
+        if (tileAt(sim, cx + dx, cy + dy) === T_DEEP) ok = false;
     if (ok) st.safe = [h.x, h.y];
   }
   // Под ногами пустота (остров уехал) — сорвался.
@@ -828,7 +855,8 @@ function stepMobGravity(sim: Sim, st: F15State, api: SimApi, dt: number): void {
 
 function stepParry(sim: Sim, st: F15State, api: SimApi, dt: number): void {
   for (const e of sim.events)
-    if (e.t === 'swing') st.swing = { t: sim.time, x: e.x, y: e.y, ang: e.ang, arc: e.arc, reach: e.reach };
+    if (e.t === 'swing')
+      st.swing = { t: sim.time, x: e.x, y: e.y, ang: e.ang, arc: e.arc, reach: e.reach };
   const sw = st.swing;
   if (sw && sim.time - sw.t <= PARRY.window && !heroDown(sim)) {
     const h = sim.hero;
@@ -878,7 +906,15 @@ function stepParry(sim: Sim, st: F15State, api: SimApi, dt: number): void {
         envHurt(sim, api, m, s.dmg);
         m.kx += (s.vx / Math.max(1, hypot(s.vx, s.vy))) * 3;
         m.ky += (s.vy / Math.max(1, hypot(s.vx, s.vy))) * 3;
-        sim.events.push({ t: 'hit', x: m.x, y: m.y, dmg: Math.round(s.dmg), crit: false, kill: m.hp <= 0, boss: false });
+        sim.events.push({
+          t: 'hit',
+          x: m.x,
+          y: m.y,
+          dmg: Math.round(s.dmg),
+          crit: false,
+          kill: m.hp <= 0,
+          boss: false,
+        });
         dead = true;
         break;
       }
@@ -1023,21 +1059,33 @@ function stepRings(sim: Sim, st: F15State, api: SimApi, dt: number, quiet: boole
   const hall = st.halls.find((x) => x.name === 'parade');
   if (!pr.length || !hall) return;
   const h = sim.hero;
-  const inside = h.x >= hall.x0 - 1 && h.x <= hall.x1 + 2 && h.y >= hall.y0 - 3 && h.y <= hall.y1 + 6;
+  const inside =
+    h.x >= hall.x0 - 1 && h.x <= hall.x1 + 2 && h.y >= hall.y0 - 3 && h.y <= hall.y1 + 6;
   const d = hall.data;
   const state = d.state ?? 0;
   if (state === 0 && inside && sim.time >= (d.cdAt ?? 0)) {
     d.state = 1;
     for (const r of pr) r.parade = 1;
     const first = hall.n === 0;
-    say(sim, first ? 'f15_parade_trap' : 'f15_parade_call', 'ПАРАД ПЛАНЕТ', 'кольца выстраиваются в мост');
+    say(
+      sim,
+      first ? 'f15_parade_trap' : 'f15_parade_call',
+      'ПАРАД ПЛАНЕТ',
+      'кольца выстраиваются в мост',
+    );
     if (first) {
       hall.n = 1;
       for (let i = 0; i < 2; i++) {
         const a = -Math.PI / 2 + (i - 0.5) * 1.6;
-        const m = api.spawnMob(sim, 'f15_moon', pr[0].cx + Math.cos(a) * 9, pr[0].cy + Math.sin(a) * 9, {
-          mode: 'chase',
-        });
+        const m = api.spawnMob(
+          sim,
+          'f15_moon',
+          pr[0].cx + Math.cos(a) * 9,
+          pr[0].cy + Math.sin(a) * 9,
+          {
+            mode: 'chase',
+          },
+        );
         hall.ids.push(m.id);
       }
     }
@@ -1092,7 +1140,8 @@ function stepTether(sim: Sim, st: F15State, api: SimApi, dt: number): void {
   st.hv = [0, 0];
   if (k >= 1) {
     st.tether = null;
-    if (tileAt(sim, Math.floor(h.x), Math.floor(h.y)) === T_DEEP) fallHero(sim, st, api, 'трос не достал — 8%');
+    if (tileAt(sim, Math.floor(h.x), Math.floor(h.y)) === T_DEEP)
+      fallHero(sim, st, api, 'трос не достал — 8%');
   }
 }
 
@@ -1138,7 +1187,9 @@ function releaseEcho(sim: Sim, api: SimApi, mem: Mem, n = 1): number[] {
   const p = openNear(sim, mem.x + 0.5, mem.y + 1.6, 3);
   if (!p) return ids;
   for (let i = 0; i < n; i++) {
-    const m = api.spawnMob(sim, 'f15_echo', p[0] + (i - (n - 1) / 2) * 0.6, p[1] + 0.2, { mode: 'f15_born' });
+    const m = api.spawnMob(sim, 'f15_echo', p[0] + (i - (n - 1) / 2) * 0.6, p[1] + 0.2, {
+      mode: 'f15_born',
+    });
     m.data.motif = mem.motif;
     ids.push(m.id);
   }
@@ -1264,20 +1315,33 @@ function hallAlive(sim: Sim, hall: Hall): number {
 }
 
 function inRect(hall: Hall, x: number, y: number, pad = 0): boolean {
-  return x >= hall.x0 - pad && x <= hall.x1 + 1 + pad && y >= hall.y0 - pad && y <= hall.y1 + 1 + pad;
+  return (
+    x >= hall.x0 - pad && x <= hall.x1 + 1 + pad && y >= hall.y0 - pad && y <= hall.y1 + 1 + pad
+  );
 }
 
 /** Моб события: из норы зала, иначе — из пола рядом с серединой. */
-function hallSpawn(sim: Sim, api: SimApi, hall: Hall, kind: string, near?: [number, number]): Mob | null {
+function hallSpawn(
+  sim: Sim,
+  api: SimApi,
+  hall: Hall,
+  kind: string,
+  near?: [number, number],
+): Mob | null {
   const h = sim.hero;
   const bs = sim.burrows.filter(
-    (b) => !b.sealed && inRect(hall, b.obj.x, b.obj.y, 1) && hypot(b.obj.x - h.x, b.obj.y - h.y) > 3,
+    (b) =>
+      !b.sealed && inRect(hall, b.obj.x, b.obj.y, 1) && hypot(b.obj.x - h.x, b.obj.y - h.y) > 3,
   );
   let m: Mob | null = null;
   if (bs.length && !near) m = api.fromBurrow(sim, bs[Math.floor(sim.rng() * bs.length)], kind);
   else {
-    const cx = near ? near[0] : (hall.x0 + hall.x1) / 2 + (sim.rng() - 0.5) * (hall.x1 - hall.x0) * 0.6;
-    const cy = near ? near[1] : (hall.y0 + hall.y1) / 2 + (sim.rng() - 0.5) * (hall.y1 - hall.y0) * 0.6;
+    const cx = near
+      ? near[0]
+      : (hall.x0 + hall.x1) / 2 + (sim.rng() - 0.5) * (hall.x1 - hall.x0) * 0.6;
+    const cy = near
+      ? near[1]
+      : (hall.y0 + hall.y1) / 2 + (sim.rng() - 0.5) * (hall.y1 - hall.y0) * 0.6;
     const p = openNear(sim, cx, cy, 4);
     if (p) m = api.spawnMob(sim, kind, p[0], p[1], { mode: 'chase' });
   }
@@ -1302,7 +1366,8 @@ function sealHall(sim: Sim, hall: Hall, api: SimApi, on: boolean): void {
     return;
   }
   hall.seal = [];
-  const inside = (x: number, y: number) => x >= hall.x0 && x <= hall.x1 && y >= hall.y0 && y <= hall.y1;
+  const inside = (x: number, y: number) =>
+    x >= hall.x0 && x <= hall.x1 && y >= hall.y0 && y <= hall.y1;
   for (let y = hall.y0; y <= hall.y1; y++)
     for (let x = hall.x0; x <= hall.x1; x++) {
       if (x !== hall.x0 && x !== hall.x1 && y !== hall.y0 && y !== hall.y1) continue;
@@ -1321,7 +1386,14 @@ function sealHall(sim: Sim, hall: Hall, api: SimApi, on: boolean): void {
   }
 }
 
-function hallEnd(sim: Sim, hall: Hall, api: SimApi, drops: [string, number][], what: string, text: string): void {
+function hallEnd(
+  sim: Sim,
+  hall: Hall,
+  api: SimApi,
+  drops: [string, number][],
+  what: string,
+  text: string,
+): void {
   hall.state = 'done';
   sealHall(sim, hall, api, false);
   const cx = (hall.x0 + hall.x1 + 1) / 2;
@@ -1364,7 +1436,12 @@ function startHall(sim: Sim, st: F15State, hall: Hall, api: SimApi): void {
       hall.data.well = w.id;
       hall.data.ph = 0;
       hall.next = sim.time + 1.4;
-      say(sim, 'f15_awaken_trap', 'ПРОБУЖДЕНИЕ ОСКОЛКА', 'осколок тянет волнами — заманивай жуков в ядро');
+      say(
+        sim,
+        'f15_awaken_trap',
+        'ПРОБУЖДЕНИЕ ОСКОЛКА',
+        'осколок тянет волнами — заманивай жуков в ядро',
+      );
       break;
     }
     case 'gallery':
@@ -1391,7 +1468,12 @@ function startHall(sim: Sim, st: F15State, hall: Hall, api: SimApi): void {
       hall.data.cyc = 0;
       hallSpawn(sim, api, hall, 'f15_graviton');
       hallSpawn(sim, api, hall, 'f15_meteor');
-      say(sim, 'f15_storm_trap', 'ГРАВИТАЦИОННЫЙ ШТОРМ', 'в тяжести бей, в невесомости сталкивай в пустоту');
+      say(
+        sim,
+        'f15_storm_trap',
+        'ГРАВИТАЦИОННЫЙ ШТОРМ',
+        'в тяжести бей, в невесомости сталкивай в пустоту',
+      );
       break;
   }
 }
@@ -1407,11 +1489,26 @@ function stepAwaken(sim: Sim, st: F15State, hall: Hall, api: SimApi): void {
       if (w.zone) st.zmap.delete(w.zone);
       st.wells.splice(st.wells.indexOf(w), 1);
       api.light(sim, 'f15_awaken', null);
-      hallEnd(sim, hall, api, [['f15_shard', 4], ['f15_memory', 1]], 'f15_awaken_end', 'Осколок уснул');
+      hallEnd(
+        sim,
+        hall,
+        api,
+        [
+          ['f15_shard', 4],
+          ['f15_memory', 1],
+        ],
+        'f15_awaken_end',
+        'Осколок уснул',
+      );
     }
     return;
   }
-  api.light(sim, 'f15_awaken', { x: w.x, y: w.y, r: 4.6 + (w.state === 2 ? 3 : w.state === 1 ? 1.5 : 0), tint: 'teal' });
+  api.light(sim, 'f15_awaken', {
+    x: w.x,
+    y: w.y,
+    r: 4.6 + (w.state === 2 ? 3 : w.state === 1 ? 1.5 : 0),
+    tint: 'teal',
+  });
   if (sim.time < hall.next) return;
   if (hall.data.ph === 0) {
     hall.data.ph = 1;
@@ -1456,7 +1553,17 @@ function stepGallery(sim: Sim, st: F15State, hall: Hall, api: SimApi): void {
     return;
   }
   if (mems.every((m) => m.used) && (hallAlive(sim, hall) === 0 || hall.t > E.timeout))
-    hallEnd(sim, hall, api, [['f15_memory', 2], ['f15_shard', 2]], 'f15_gallery_end', 'Память улеглась');
+    hallEnd(
+      sim,
+      hall,
+      api,
+      [
+        ['f15_memory', 2],
+        ['f15_shard', 2],
+      ],
+      'f15_gallery_end',
+      'Память улеглась',
+    );
 }
 
 function stepStarfall(sim: Sim, st: F15State, hall: Hall, api: SimApi): void {
@@ -1499,7 +1606,17 @@ function stepStarfall(sim: Sim, st: F15State, hall: Hall, api: SimApi): void {
     return;
   }
   if (!st.stars.length && (hallAlive(sim, hall) === 0 || hall.t > E.dur + 30))
-    hallEnd(sim, hall, api, [['f15_dust', 3], ['f15_shard', 2]], 'f15_starfall_end', 'Небо закрылось');
+    hallEnd(
+      sim,
+      hall,
+      api,
+      [
+        ['f15_dust', 3],
+        ['f15_shard', 2],
+      ],
+      'f15_starfall_end',
+      'Небо закрылось',
+    );
 }
 
 /** Падающие звёзды: свет летит с ними, упавшая на миг становится колодцем. */
@@ -1509,11 +1626,18 @@ function stepStars(sim: Sim, st: F15State, api: SimApi): void {
     const s = st.stars[i];
     const k = clamp(1 - (s.at - sim.time) / W, 0, 1);
     if (sim.time < s.at) {
-      api.light(sim, s.key, { x: s.x - (1 - k) * 2, y: s.y - (1 - k) * 7, r: 1.6 + k * 1.4, tint: 'warm' });
+      api.light(sim, s.key, {
+        x: s.x - (1 - k) * 2,
+        y: s.y - (1 - k) * 7,
+        r: 1.6 + k * 1.4,
+        tint: 'warm',
+      });
       continue;
     }
     api.light(sim, s.key, null);
-    tempWell(sim, st, api, s.x, s.y, EVENT.starfall.wellR, 0.05, EVENT.starfall.wellOn, 'star', { burn: 0.6 });
+    tempWell(sim, st, api, s.x, s.y, EVENT.starfall.wellR, 0.05, EVENT.starfall.wellOn, 'star', {
+      burn: 0.6,
+    });
     api.vfx(sim, { x: s.x, y: s.y, r: 1.8, life: 0.5, art: 'f15_starland' });
     sim.events.push({ t: 'shake', k: 0.12 });
     st.stars.splice(i, 1);
@@ -1524,14 +1648,22 @@ function endEclipse(sim: Sim, st: F15State, hall: Hall, api: SimApi, sun: boolea
   st.darkTo = 0;
   if (sun) {
     sim.events.push({ t: 'flash', color: '#fff4d0', k: 0.9 });
-    api.light(sim, 'f15_sun', { x: (hall.x0 + hall.x1) / 2, y: (hall.y0 + hall.y1) / 2, r: 14, tint: 'warm' });
+    api.light(sim, 'f15_sun', {
+      x: (hall.x0 + hall.x1) / 2,
+      y: (hall.y0 + hall.y1) / 2,
+      r: 14,
+      tint: 'warm',
+    });
     hall.data.sunOff = sim.time + 2.5;
   }
   hallEnd(
     sim,
     hall,
     api,
-    [['f15_void', 2], ['f15_lens', 1]],
+    [
+      ['f15_void', 2],
+      ['f15_lens', 1],
+    ],
     'f15_eclipse_end',
     sun ? 'Солнце вернулось' : 'Затмение прошло',
   );
@@ -1559,7 +1691,17 @@ function stepStorm(sim: Sim, st: F15State, hall: Hall, api: SimApi): void {
     st.storm = 0;
     st.stormWarn = 0;
     if (hallAlive(sim, hall) === 0 || hall.t > E.cycles * E.phase * 2 + 30)
-      hallEnd(sim, hall, api, [['f15_void', 2], ['f15_meteorite', 2]], 'f15_storm_end', 'Ядро стихло');
+      hallEnd(
+        sim,
+        hall,
+        api,
+        [
+          ['f15_void', 2],
+          ['f15_meteorite', 2],
+        ],
+        'f15_storm_end',
+        'Ядро стихло',
+      );
     return;
   }
   if (sim.time < hall.next) return;
@@ -1606,7 +1748,8 @@ function stepHalls(sim: Sim, st: F15State, api: SimApi, dt: number): void {
   const h = sim.hero;
   for (const hall of st.halls) {
     if (hall.state === 'idle') {
-      if (hall.name !== 'parade' && inRect(hall, h.x, h.y, -1) && !heroDown(sim)) startHall(sim, st, hall, api);
+      if (hall.name !== 'parade' && inRect(hall, h.x, h.y, -1) && !heroDown(sim))
+        startHall(sim, st, hall, api);
       continue;
     }
     if (hall.state !== 'run') {
@@ -1634,7 +1777,8 @@ function stepHalls(sim: Sim, st: F15State, api: SimApi, dt: number): void {
   }
   // Затмение наплывает и уходит.
   const k = dt / EVENT.eclipse.fade;
-  st.dark = st.darkTo > st.dark ? Math.min(st.darkTo, st.dark + k) : Math.max(st.darkTo, st.dark - k);
+  st.dark =
+    st.darkTo > st.dark ? Math.min(st.darkTo, st.dark + k) : Math.max(st.darkTo, st.dark - k);
   if (st.dark <= 0 && st.darkZone) {
     dropZone(sim, st.darkZone);
     st.darkZone = null;
@@ -1728,7 +1872,8 @@ function scan(sim: Sim, api: SimApi): F15State {
           parade: 0,
         };
         ring.floor = new Uint8Array(ring.cells.length);
-        for (const c of ring.cells) ring.floor[c.i] = sim.tiles[c.y * w.w + c.x] === T_FLOOR ? 1 : 0;
+        for (const c of ring.cells)
+          ring.floor[c.i] = sim.tiles[c.y * w.w + c.x] === T_FLOOR ? 1 : 0;
         // Парад на старте разобран: мост сложится, когда придёшь.
         if (ring.name.startsWith('p')) {
           const off = Math.round(K * (0.3 + 0.2 * st.rings.length));
@@ -1784,7 +1929,17 @@ function scan(sim: Sim, api: SimApi): F15State {
             if (markAt(sim, x, y) === MK.node) nodes.push([x + 0.5, y + 0.5]);
         // Узлы — по кругу: линии фигуры идут от соседа к соседу.
         nodes.sort((p, q) => Math.atan2(p[1] - cy, p[0] - cx) - Math.atan2(q[1] - cy, q[0] - cx));
-        const chart: Chart = { area: s.area, cx, cy, r, nodes, state: 'sleep', lashAt: 0, ids: [], zone: null };
+        const chart: Chart = {
+          area: s.area,
+          cx,
+          cy,
+          r,
+          nodes,
+          state: 'sleep',
+          lashAt: 0,
+          ids: [],
+          zone: null,
+        };
         chart.zone = anchorZone(sim, api, cx, cy, r, 'f15_figure');
         st.zmap.set(chart.zone, chart);
         st.charts.push(chart);
@@ -1805,7 +1960,8 @@ function scan(sim: Sim, api: SimApi): F15State {
   const gal = st.halls.find((x) => x.name === 'gallery');
   if (gal) for (const m of st.mems) if (inRect(gal, m.x, m.y, 1)) m.gallery = true;
   for (const o of w.objs)
-    if (o.ref === 'f15_lamp') st.lamps.push({ obj: o, x: o.x + 0.5, y: o.y + 0.5, lit: false, t: -9 });
+    if (o.ref === 'f15_lamp')
+      st.lamps.push({ obj: o, x: o.x + 0.5, y: o.y + 0.5, lit: false, t: -9 });
   // Звёздные двери закрыты, пока телескоп не наведён.
   for (const d of st.doors) {
     const top = bandTop(sim, d.area);
@@ -1834,7 +1990,8 @@ function labelOf(sim: Sim, obj: WorldObj): string | null {
     case 'f15_telescope': {
       const s = st.scopes.find((x) => x.obj === obj);
       if (!s) return null;
-      if (s.what === 'door') return st.doors.some((d) => !d.open && !d.at) ? 'Навести телескоп' : null;
+      if (s.what === 'door')
+        return st.doors.some((d) => !d.open && !d.at) ? 'Навести телескоп' : null;
       const ec = st.halls.find((x) => x.name === 'eclipse');
       return ec?.state === 'run' ? 'Вернуть солнце' : null;
     }
@@ -1867,7 +2024,12 @@ function onUse(sim: Sim, obj: WorldObj, api: SimApi): boolean {
       const ws = leverWells(st, obj);
       const to = ws[0].mode > 0 ? -1 : 1;
       for (const w of ws) w.mode = to;
-      say(sim, 'f15_lever', to > 0 ? 'КОЛОДЦЫ ТЯНУТ' : 'КОЛОДЦЫ ТОЛКАЮТ', to > 0 ? 'ядро зовёт к себе' : 'снаряды врагов отводит прочь');
+      say(
+        sim,
+        'f15_lever',
+        to > 0 ? 'КОЛОДЦЫ ТЯНУТ' : 'КОЛОДЦЫ ТОЛКАЮТ',
+        to > 0 ? 'ядро зовёт к себе' : 'снаряды врагов отводит прочь',
+      );
       return true;
     }
     case 'f15_telescope': {
@@ -1907,7 +2069,13 @@ function onUse(sim: Sim, obj: WorldObj, api: SimApi): boolean {
         ring: t.ring,
       };
       // Картинка троса (только рисунок, номер зоны отрицательный).
-      api.vfx(sim, { x: obj.x + 0.5, y: obj.y + 0.5, r: d + 1, life: st.tether.T + 0.05, art: 'f15_tether' });
+      api.vfx(sim, {
+        x: obj.x + 0.5,
+        y: obj.y + 0.5,
+        r: d + 1,
+        life: st.tether.T + 0.05,
+        art: 'f15_tether',
+      });
       say(sim, 'f15_anchor');
       return true;
     }
@@ -2077,14 +2245,23 @@ function pullingWell(sim: Sim, x: number, y: number): Well | null {
   return w && w.state === 2 ? w : null;
 }
 
-const seeHero = (sim: Sim, m: Mob, api: SimApi) => api.lineOfSight(sim, m.x, m.y, sim.hero.x, sim.hero.y);
+const seeHero = (sim: Sim, m: Mob, api: SimApi) =>
+  api.lineOfSight(sim, m.x, m.y, sim.hero.x, sim.hero.y);
 
 // ---------------------------------------------------------------------------
 // Кристальный ёж: сворачивается (линия), катится 8 кл/с с отскоком от стен,
 // у колодца путь гнётся; о две стены — оглушён; раскрывшись — веер игл.
 // ---------------------------------------------------------------------------
 
-export const URCHIN = { curl: 0.6, roll: 8, rollT: 1.5, open: 0.55, dizzy: 1.1, see: 6.5, rollK: 0.75 };
+export const URCHIN = {
+  curl: 0.6,
+  roll: 8,
+  rollT: 1.5,
+  open: 0.55,
+  dizzy: 1.1,
+  see: 6.5,
+  rollK: 0.75,
+};
 
 brain('f15_urchin', {
   step(sim, m, dt, c, api) {
@@ -2303,8 +2480,21 @@ brain('f15_comet', {
             const a0 = Math.atan2(m.y - w.y, m.x - w.x);
             const a1 = Math.atan2(h.y - w.y, h.x - w.x);
             if (Math.abs(angDiff(a1, a0)) > 0.45 && R0 > 1.2 && R1 > 1.2) {
-              const arc: Arc = { id: m.id, cx: w.x, cy: w.y, R: R0, R1, a0, a1, t: 0, aim: COMET.aim, T: 0, zone: null };
-              const len = Math.abs(angDiff(a1, a0)) * (R0 + R1) * 0.5 * COMET.over + Math.abs(R1 - R0);
+              const arc: Arc = {
+                id: m.id,
+                cx: w.x,
+                cy: w.y,
+                R: R0,
+                R1,
+                a0,
+                a1,
+                t: 0,
+                aim: COMET.aim,
+                T: 0,
+                zone: null,
+              };
+              const len =
+                Math.abs(angDiff(a1, a0)) * (R0 + R1) * 0.5 * COMET.over + Math.abs(R1 - R0);
               arc.T = COMET.aim + len / COMET.dash;
               arc.zone = anchorZone(sim, api, w.x, w.y, Math.max(R0, R1) + 1, 'f15_arc');
               st.zmap.set(arc.zone, arc);
@@ -2388,7 +2578,14 @@ brain('f15_comet', {
 // тяжести: встань в него — и щит пробивается.
 // ---------------------------------------------------------------------------
 
-export const GRAVITON = { turn: 2.1, punchR: 1.45, punchAt: 1.15, shield: 0.15, back: 1.35, front: 1.1 };
+export const GRAVITON = {
+  turn: 2.1,
+  punchR: 1.45,
+  punchAt: 1.15,
+  shield: 0.15,
+  back: 1.35,
+  front: 1.1,
+};
 
 brain('f15_graviton', {
   step(sim, m, dt, c, api) {
@@ -2456,7 +2653,16 @@ brain('f15_graviton', {
 // сбивает все).
 // ---------------------------------------------------------------------------
 
-export const ASTRO = { near: 4.6, far: 7.2, castWell: 0.9, castBolt: 0.75, wellR: 2.8, wellOn: 2, stones: 3, regen: 5 };
+export const ASTRO = {
+  near: 4.6,
+  far: 7.2,
+  castWell: 0.9,
+  castBolt: 0.75,
+  wellR: 2.8,
+  wellOn: 2,
+  stones: 3,
+  regen: 5,
+};
 
 brain('f15_astro', {
   step(sim, m, dt, c, api) {
@@ -2487,7 +2693,10 @@ brain('f15_astro', {
           const [cx, cy] = api.chaseDir(sim, m, h.x, h.y);
           api.steer(sim, m, cx, cy, m.speed, dt);
         } else if (c.dist < ASTRO.near) {
-          const away = api.flowDir(sim, m.x, m.y, true) ?? [-c.dx / (c.dist || 1), -c.dy / (c.dist || 1)];
+          const away = api.flowDir(sim, m.x, m.y, true) ?? [
+            -c.dx / (c.dist || 1),
+            -c.dy / (c.dist || 1),
+          ];
           api.steer(sim, m, away[0], away[1], m.speed, dt);
         } else {
           const s = m.id % 2 ? 1 : -1;
@@ -2503,9 +2712,17 @@ brain('f15_astro', {
           m.data.px = h.x;
           m.data.py = h.y;
         }
-        m.tele = { shape: 'circle', x: m.data.px, y: m.data.py, r: ASTRO.wellR, k: clamp(m.t / T, 0, 1) };
+        m.tele = {
+          shape: 'circle',
+          x: m.data.px,
+          y: m.data.py,
+          r: ASTRO.wellR,
+          k: clamp(m.t / T, 0, 1),
+        };
         if (m.t >= T) {
-          tempWell(sim, st, api, m.data.px, m.data.py, ASTRO.wellR, 0.05, ASTRO.wellOn, 'astro', { burn: 0.7 });
+          tempWell(sim, st, api, m.data.px, m.data.py, ASTRO.wellR, 0.05, ASTRO.wellOn, 'astro', {
+            burn: 0.7,
+          });
           say(sim, 'f15_cast');
           m.cd = c.def.rest;
           api.setMode(m, 'recover');
@@ -2582,7 +2799,8 @@ brain('f15_constel', {
           ty = m.hy + ((ty - m.hy) / dh) * CONSTEL_MOB.leash;
         }
         const d = hypot(tx - m.x, ty - m.y);
-        if (d > 0.2) api.steer(sim, m, (tx - m.x) / d, (ty - m.y) / d, m.speed * Math.min(1, d), dt);
+        if (d > 0.2)
+          api.steer(sim, m, (tx - m.x) / d, (ty - m.y) / d, m.speed * Math.min(1, d), dt);
         else {
           m.vx *= 0.8;
           m.vy *= 0.8;
@@ -2596,7 +2814,8 @@ brain('f15_constel', {
         m.tele = { shape: 'circle', r: CONSTEL_MOB.pulse, k: clamp(m.t / T, 0, 1) };
         if (m.t > T - 0.24) m.danger = CONSTEL_MOB.pulse + h.r;
         if (m.t >= T) {
-          if (c.dist < CONSTEL_MOB.pulse + h.r && canHurt(sim)) api.hurtHero(sim, m.dmg, m.x, m.y, 2, m.kind);
+          if (c.dist < CONSTEL_MOB.pulse + h.r && canHurt(sim))
+            api.hurtHero(sim, m.dmg, m.x, m.y, 2, m.kind);
           m.cd = c.def.rest;
           api.setMode(m, 'recover');
         }
@@ -2801,7 +3020,16 @@ brain('f15_echo', {
         m.tele = { shape: 'circle', r: 1.7, k: clamp(m.t / ECHO.spore, 0, 1) };
         if (m.t > ECHO.spore - 0.24) m.danger = 1.7 + h.r;
         if (m.t >= ECHO.spore) {
-          api.zone(sim, { x: m.x, y: m.y, r: 1.7, life: 3, dps: 0.02, status: 'poison', dur: 2, art: 'f15_spore' });
+          api.zone(sim, {
+            x: m.x,
+            y: m.y,
+            r: 1.7,
+            life: 3,
+            dps: 0.02,
+            status: 'poison',
+            dur: 2,
+            art: 'f15_spore',
+          });
           m.data.sp = 6;
           api.setMode(m, 'recover');
         }
@@ -2811,7 +3039,13 @@ brain('f15_echo', {
         m.data.ghost = m.t > 0.2 ? 1 : 0;
         m.vx = 0;
         m.vy = 0;
-        m.tele = { shape: 'circle', x: m.data.bx, y: m.data.by, r: 0.5, k: clamp(m.t / ECHO.blink, 0, 1) };
+        m.tele = {
+          shape: 'circle',
+          x: m.data.bx,
+          y: m.data.by,
+          r: 0.5,
+          k: clamp(m.t / ECHO.blink, 0, 1),
+        };
         if (m.t >= ECHO.blink) {
           m.x = m.data.bx;
           m.y = m.data.by;
@@ -2830,7 +3064,8 @@ brain('f15_echo', {
         if (m.t > ECHO.gust - 0.24) m.danger = 3.2;
         if (m.t >= ECHO.gust) {
           const off = Math.abs(angDiff(Math.atan2(c.dy, c.dx), m.dir));
-          if (c.dist < 3.2 + h.r && off < 0.65 && canHurt(sim)) api.hurtHero(sim, m.dmg * 0.5, m.x, m.y, 8, m.kind);
+          if (c.dist < 3.2 + h.r && off < 0.65 && canHurt(sim))
+            api.hurtHero(sim, m.dmg * 0.5, m.x, m.y, 8, m.kind);
           m.data.sp = 5;
           api.setMode(m, 'recover');
         }
@@ -2878,7 +3113,8 @@ brain('f15_moon', {
         const tx = h.x + Math.cos(th) * R;
         const ty = h.y + Math.sin(th) * R;
         const d = hypot(tx - m.x, ty - m.y);
-        if (d > 0.05) api.steer(sim, m, (tx - m.x) / d, (ty - m.y) / d, Math.min(m.speed * 1.4, d * 6), dt);
+        if (d > 0.05)
+          api.steer(sim, m, (tx - m.x) / d, (ty - m.y) / d, Math.min(m.speed * 1.4, d * 6), dt);
         m.face = Math.atan2(c.dy, c.dx);
         if (R <= MOON.rMin + 0.05 && m.cd <= 0 && c.dist < 3.2 && seeHero(sim, m, api)) {
           m.dir = Math.atan2(c.dy, c.dx);
@@ -2891,7 +3127,13 @@ brain('f15_moon', {
         m.vy *= 0.6;
         if (m.t < MOON.aim * 0.5) m.dir = Math.atan2(c.dy, c.dx);
         m.face = m.dir;
-        m.tele = { shape: 'line', r: MOON.dive * MOON.diveT, w: 0.45, ang: m.dir, k: clamp(m.t / MOON.aim, 0, 1) };
+        m.tele = {
+          shape: 'line',
+          r: MOON.dive * MOON.diveT,
+          w: 0.45,
+          ang: m.dir,
+          k: clamp(m.t / MOON.aim, 0, 1),
+        };
         if (m.t > MOON.aim - 0.24) m.danger = 1.2;
         if (m.t >= MOON.aim) {
           m.data.hit = 0;
@@ -2924,7 +3166,17 @@ brain('f15_moon', {
 // вспыхивает; погибнув, схлопывается в колодец на 6 с.
 // ---------------------------------------------------------------------------
 
-export const NOVA = { gather: 1.4, ringR: 2.2, ringW: 1.1, at: 3, wellR: 4.5, warn: 0.4, on: 6, burn: 1.2, k: 1.3 };
+export const NOVA = {
+  gather: 1.4,
+  ringR: 2.2,
+  ringW: 1.1,
+  at: 3,
+  wellR: 4.5,
+  warn: 0.4,
+  on: 6,
+  burn: 1.2,
+  k: 1.3,
+};
 
 brain('f15_nova', {
   step(sim, m, dt, c, api) {
@@ -2948,7 +3200,14 @@ brain('f15_nova', {
         if (m.t >= NOVA.gather) {
           if (Math.abs(c.dist - NOVA.ringR) < NOVA.ringW + h.r && canHurt(sim))
             api.hurtHero(sim, m.dmg, m.x, m.y, 5, m.kind, { kind: 'burn', dur: 2 });
-          api.vfx(sim, { x: m.x, y: m.y, r: NOVA.ringR + NOVA.ringW, life: 0.5, art: 'f15_novaburst', above: true });
+          api.vfx(sim, {
+            x: m.x,
+            y: m.y,
+            r: NOVA.ringR + NOVA.ringW,
+            life: 0.5,
+            art: 'f15_novaburst',
+            above: true,
+          });
           api.light(sim, key, null);
           sim.events.push({ t: 'shake', k: 0.25 });
           sim.events.push({ t: 'flash', color: '#fff0b0', k: 0.35 });
@@ -2968,8 +3227,16 @@ brain('f15_nova', {
   onDeath(sim, m, _mode, api) {
     const st = stateOf(sim, api);
     api.light(sim, `f15_nova:${m.id}`, null);
-    tempWell(sim, st, api, m.x, m.y, NOVA.wellR, NOVA.warn, NOVA.on, 'nova', { burn: NOVA.burn, k: NOVA.k });
-    say(sim, 'f15_collapse', 'СВЕРХНОВАЯ СХЛОПНУЛАСЬ', 'колодец на шесть секунд — уводи туда врагов');
+    tempWell(sim, st, api, m.x, m.y, NOVA.wellR, NOVA.warn, NOVA.on, 'nova', {
+      burn: NOVA.burn,
+      k: NOVA.k,
+    });
+    say(
+      sim,
+      'f15_collapse',
+      'СВЕРХНОВАЯ СХЛОПНУЛАСЬ',
+      'колодец на шесть секунд — уводи туда врагов',
+    );
   },
 });
 
@@ -2996,7 +3263,10 @@ brain('f15_goldbug', {
       ux = (-dy / d) * s + (dx / d) * inward;
       uy = (dx / d) * s + (dy / d) * inward;
     } else {
-      const away = api.flowDir(sim, m.x, m.y, true) ?? [-c.dx / (c.dist || 1), -c.dy / (c.dist || 1)];
+      const away = api.flowDir(sim, m.x, m.y, true) ?? [
+        -c.dx / (c.dist || 1),
+        -c.dy / (c.dist || 1),
+      ];
       const z = Math.sin(sim.time * 6 + m.id) * 0.45;
       ux = away[0] - away[1] * z;
       uy = away[1] + away[0] * z;
