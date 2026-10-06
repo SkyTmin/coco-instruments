@@ -337,13 +337,45 @@ function chasmPx(p: Px, c: CellCtx): void {
       const n = fbm(X0 + x, Y0 + y, 24, 1520);
       p.set(x, y, ramp([hx('#020108'), hx('#06041a'), hx('#0e0a2c')], n * 0.7));
     }
-  if (c.open(0, -1) && c.markAt(0, -1) !== c.mark) {
+  if (solidFloorAt(c, 0, -1)) {
     for (let x = 0; x < TS; x++) {
       const h = 6 + Math.floor(vnoise(X0 + x, Y0, 4, 1521) * 4);
       for (let y = 0; y < h; y++) p.set(x, y, mixc(ROOT_FACE[2], hx('#05030c'), y / h));
       p.set(x, 0, ROOT_FACE[3]);
       if (hash(X0 + x, Y0, 1522) < 0.15) p.set(x, h - 3, alpha(TEAL_GLOW, 0.6));
     }
+  }
+}
+
+/**
+ * Толща плиты пола над пустотой (клетка пустоты прямо под полом): лицо
+ * породы с неровным низом, капли-сосульки, под ними бирюзовый отсвет.
+ */
+/** Твёрдый пол (не пустота и не стена) в соседней клетке. `open` движка считает пустоту открытой. */
+function solidFloorAt(c: CellCtx, dx: number, dy: number): boolean {
+  const sim = F15_FX.sim;
+  if (!sim || !c.open(dx, dy)) return false;
+  const x = c.wx + dx;
+  const y = c.wy + dy;
+  if (x < 0 || y < 0 || x >= sim.world.w || y >= sim.world.h) return false;
+  return sim.tiles[y * sim.world.w + x] !== T_DEEP;
+}
+
+function ledgeFace(p: Px, c: CellCtx, t: Tones): void {
+  const X0 = c.wx * TS;
+  for (let x = 0; x < TS; x++) {
+    const X = X0 + x;
+    const h = 5 + Math.floor(vnoise(X, c.wy, 5, 1595) * 4) + (hash(X >> 1, c.wy, 1596) < 0.12 ? 3 : 0);
+    for (let y = 0; y < h; y++) {
+      const k = y / h;
+      let col = tone(t, 0.75 - k * 1.1 + (hash(X, y, 1597) - 0.5) * 0.15);
+      if (y === 0) col = t[3];
+      // Слои породы.
+      if ((y + (X >> 3)) % 4 === 2) col = mixc(col, INK, 0.25);
+      p.set(x, y, col);
+    }
+    p.set(x, h, alpha(TEAL_GLOW, 0.35));
+    p.set(x, h + 1, alpha(TEAL_GLOW, 0.15));
   }
 }
 
@@ -1048,7 +1080,11 @@ function cellOf(area: string) {
       else if (mk === MK.lane || mk === MK.island) spacePx(p, c.wx, c.wy, 1, ringFor(c) ?? true);
       else if (mk === MK.vortex) spacePx(p, c.wx, c.wy, 1.3);
       else if (area === F15_ROOTS && mk !== MK.void) chasmPx(p, c);
-      else spacePx(p, c.wx, c.wy);
+      else {
+        spacePx(p, c.wx, c.wy);
+        // Под краем пола — его толща: уступ уходит в пустоту, снизу свет левитации.
+        if (solidFloorAt(c, 0, -1)) ledgeFace(p, c, area === F15_ORBIT ? REG : area === F15_OBS ? OBS_FACE : ROOT_FACE);
+      }
       return p;
     }
     if (!c.open(0, 0)) {
