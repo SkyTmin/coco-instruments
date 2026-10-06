@@ -28,6 +28,7 @@ import type { X72Name } from '../dungeon-x72-frames';
 import { F6_GALLERY, F6_LAKES, F6_MARK, F6_NEST } from './f6';
 import { GOLEM, serpentView, WISP } from './f6-brains';
 import './f6-mob-sal';
+import './f6-mob-beetle';
 
 type RGBA = [number, number, number, number];
 
@@ -703,57 +704,7 @@ registerMobPainter('f6_ashbat', (m: Mob, pose: MobPose) => {
   return frameDir('f6_ashbat', pose, 'fly', dir, f, () => paintBat(dir, f, 'fly'));
 });
 
-// ---------------------------------------------------------------------------
-// Жук-огнёвка — «жук» Ninja Adventure: обугленный панцирь, раскалённые
-// полосы; брюшко дышит светом, перед укусом разгорается.
-// ---------------------------------------------------------------------------
-
-/** Цвет тлеющих кромок панциря в листе (`f6-sheet.py`, роль «B»). */
-const BEETLE_EMBER = hx('#7a2a16');
-
-function paintBeetle(dir: number, f: number, glow: number, anim: string): Built | null {
-  const base = sheetPx(2, dir, f);
-  if (!base) return null;
-  const p = new Px(18, 18);
-  let body = base;
-  if (glow > 0) {
-    // Полосы панциря ярче: перекраска раскалённого.
-    body = new Px(16, 16);
-    for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) {
-        const c = base.get(x, y);
-        if (!c[3]) continue;
-        // Раскаляются только тлеющие кромки панциря — не весь купол.
-        const hot = c[0] === BEETLE_EMBER[0] && c[1] === BEETLE_EMBER[1];
-        body.set(x, y, hot ? mixc(c, hx('#ff9a38'), glow * 0.85) : c);
-      }
-  }
-  if (anim === 'dead') {
-    // На спине: лапки кверху.
-    body = new Px(16, 16);
-    for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) {
-        const c = base.get(x, y);
-        if (c[3]) body.set(x, 15 - y, mixc(c, hx('#2a1a14'), 0.5));
-      }
-  }
-  // Жуков делаем чуть меньше: пропускаем каждый… нет — пиксели не режем.
-  paste(p, body, 1, 1);
-  return { p, ax: 9, ay: 16, eye: dir === 1 ? null : [9, 9] };
-}
-
-registerMobPainter('f6_beetle', (m: Mob, pose: MobPose) => {
-  const dir = dir4(m.face);
-  const anim = pose.anim;
-  if (anim === 'dead')
-    return frameDir('f6_beetle', pose, 'dead', dir, 0, () => paintBeetle(dir, 0, 0, 'dead'));
-  const wind = anim === 'wind' || anim === 'bite';
-  const speed = Math.hypot(m.vx, m.vy);
-  const f = speed > 0.3 ? ((Math.floor(pose.t * 14 + m.id) % 4) + 4) % 4 : 0;
-  // Брюшко дышит: три ступени свечения, на замахе — полное.
-  const g = wind ? 3 : Math.floor((Math.sin(pose.t * 5 + m.id) * 0.5 + 0.5) * 2.99);
-  return frameDir('f6_beetle', pose, `w${g}`, dir, f, () => paintBeetle(dir, f, g / 3, anim));
-});
+// Жук-огнёвка — `f6-mob-beetle.ts` (анимации мобов 6).
 
 // ---------------------------------------------------------------------------
 // Лавовый голем: сутулый, из базальтовых плит, кулаки до земли. Между
