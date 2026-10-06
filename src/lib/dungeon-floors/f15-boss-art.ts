@@ -2438,8 +2438,12 @@ interface LGeo {
   /** Неизменные пиксели: номер и цвет (RGBA в одном числе). */
   sIdx: Uint16Array;
   sCol: Uint32Array;
-  /** Ткань: номер пикселя, угол (0…255), высота ×2, свет (биты 0–5), кромка (6), колокол (7). */
+  /**
+   * Ткань: номер пикселя, строка, угол (0…255), высота ×2; ступень света
+   * (биты 0–2), дизер плотности (3), кромка (6), колокол (7).
+   */
   cIdx: Uint16Array;
+  cY: Uint8Array;
   cU: Uint8Array;
   cV: Uint8Array;
   cS: Uint8Array;
@@ -2470,161 +2474,6 @@ const shadeOf = (nx: number, ny: number, nz: number) => {
 };
 const uByte = (u: number) => Math.round((((u / TAU) % 1) + 1) * 256) & 255;
 
-/** Поверхность плаща при раскрытии `fl`: точки в кадре, не зависящие от румба. */
-interface Surf {
-  /** Колокол: X, Y, глубина, мировой угол, высота, свет, перед (1)/изнанка (0), кольцо. */
-  bX: Float32Array;
-  bY: Float32Array;
-  bD: Float32Array;
-  bPsi: Float32Array;
-  bZ: Float32Array;
-  bSh: Uint8Array;
-  bFront: Uint8Array;
-  bRing: Uint8Array;
-  bHem: Uint8Array;
-  /** Звёзды изнанки: 0 нет, 1 белая, 2 лёд, 3 золото, 4 пурпур. */
-  bStar: Uint8Array;
-  ringZ: Float32Array;
-  ringR: Float32Array;
-  /** Купол плеч. */
-  dX: Float32Array;
-  dY: Float32Array;
-  dD: Float32Array;
-  dPsi: Float32Array;
-  dZ: Float32Array;
-  dSh: Uint8Array;
-  /** Пелерина (только лицевые точки). */
-  pX: Float32Array;
-  pY: Float32Array;
-  pD: Float32Array;
-  pPsi: Float32Array;
-  pZ: Float32Array;
-  pSh: Uint8Array;
-}
-const SURF = new Map<number, Surf>();
-function surfOf(fl: number): Surf {
-  const key = Math.round(fl * 4);
-  const hit = SURF.get(key);
-  if (hit) return hit;
-  const bX: number[] = [];
-  const bY: number[] = [];
-  const bD: number[] = [];
-  const bPsi: number[] = [];
-  const bZ: number[] = [];
-  const bSh: number[] = [];
-  const bFront: number[] = [];
-  const bRing: number[] = [];
-  const bHem: number[] = [];
-  const bStar: number[] = [];
-  const ringZ: number[] = [];
-  const ringR: number[] = [];
-  let ri = 0;
-  for (let z = HEM - 3; z <= SHO; z += 0.7, ri++) {
-    const R = bellR(z, fl);
-    const dR = bellR(z - 0.5, fl) - bellR(z + 0.5, fl);
-    ringZ.push(z);
-    ringR.push(R);
-    const n = Math.ceil((TAU * R) / 0.7);
-    for (let i = 0; i < n; i++) {
-      const psi = (i / n) * TAU;
-      const cx = Math.cos(psi);
-      const sy = Math.sin(psi);
-      const wy = sy * R;
-      bX.push(LAX + cx * R);
-      bY.push(LAY - z + wy * KF);
-      bD.push(wy * VY + z * VZ);
-      bPsi.push(psi);
-      bZ.push(z);
-      bSh.push(Math.round(shadeOf(cx, sy, dR) * 255));
-      bFront.push(sy * VY + dR * VZ > 0 ? 1 : 0);
-      bRing.push(ri);
-      bHem.push(((i / n) * 256) | 0);
-      const hs = hash(ri, i, 9);
-      bStar.push(hs < 0.012 ? 1 : hs < 0.03 ? 2 : hs < 0.05 ? 3 : hs < 0.09 ? 4 : 0);
-    }
-  }
-  const dX: number[] = [];
-  const dY: number[] = [];
-  const dD: number[] = [];
-  const dPsi: number[] = [];
-  const dZ: number[] = [];
-  const dSh: number[] = [];
-  {
-    const R = bellR(SHO, fl);
-    for (let rr = 0; rr <= R; rr += 0.6) {
-      const n = Math.max(6, Math.ceil((TAU * rr) / 0.6));
-      const z = SHO + (1 - rr / R) * 2.5;
-      for (let i = 0; i < n; i++) {
-        const psi = (i / n) * TAU;
-        const wx = Math.cos(psi) * rr;
-        const wy = Math.sin(psi) * rr;
-        dX.push(LAX + wx);
-        dY.push(LAY - z + wy * KF);
-        dD.push(wy * VY + z * VZ);
-        dPsi.push(psi);
-        dZ.push(z);
-        dSh.push(Math.round(shadeOf(Math.cos(psi) * 0.5, Math.sin(psi) * 0.5, 1) * 255));
-      }
-    }
-  }
-  const pX: number[] = [];
-  const pY: number[] = [];
-  const pD: number[] = [];
-  const pPsi: number[] = [];
-  const pZ: number[] = [];
-  const pSh: number[] = [];
-  {
-    const top = SHO + 1.5;
-    for (let z = SHO - 14; z <= top; z += 0.7) {
-      const R = bellR(Math.min(z, SHO), fl) + 2.4 + (top - z) * 0.08;
-      const n = Math.ceil((TAU * R) / 0.7);
-      for (let i = 0; i < n; i++) {
-        const psi = (i / n) * TAU;
-        const cx = Math.cos(psi);
-        const sy = Math.sin(psi);
-        if (sy * VY + 0.35 * VZ <= 0) continue;
-        const wy = sy * R;
-        pX.push(LAX + cx * R);
-        pY.push(LAY - z + wy * KF);
-        pD.push(wy * VY + z * VZ + 0.6);
-        pPsi.push(psi);
-        pZ.push(z);
-        pSh.push(Math.round(shadeOf(cx, sy, 0.45) * 255));
-      }
-    }
-  }
-  const f32 = (a: number[]) => Float32Array.from(a);
-  const u8 = (a: number[]) => Uint8Array.from(a);
-  const o: Surf = {
-    bX: f32(bX),
-    bY: f32(bY),
-    bD: f32(bD),
-    bPsi: f32(bPsi),
-    bZ: f32(bZ),
-    bSh: u8(bSh),
-    bFront: u8(bFront),
-    bRing: u8(bRing),
-    bHem: u8(bHem),
-    bStar: u8(bStar),
-    ringZ: f32(ringZ),
-    ringR: f32(ringR),
-    dX: f32(dX),
-    dY: f32(dY),
-    dD: f32(dD),
-    dPsi: f32(dPsi),
-    dZ: f32(dZ),
-    dSh: u8(dSh),
-    pX: f32(pX),
-    pY: f32(pY),
-    pD: f32(pD),
-    pPsi: f32(pPsi),
-    pZ: f32(pZ),
-    pSh: u8(pSh),
-  };
-  SURF.set(key, o);
-  return o;
-}
-
 const BN = LW * LH;
 const B_ZB = new Float32Array(BN);
 const B_KIND = new Uint8Array(BN);
@@ -2638,15 +2487,219 @@ const O_CI = new Uint16Array(BN);
 const O_CU = new Uint8Array(BN);
 const O_CV = new Uint8Array(BN);
 const O_CS = new Uint8Array(BN);
+const O_CY = new Uint8Array(BN);
 const HEM_T = new Float32Array(256);
 const RING_OP = new Float32Array(128);
-const RING_X0 = new Float32Array(128);
-const RING_X1 = new Float32Array(128);
+const RING_TR = new Float32Array(128);
 const GOLD_P = [GOLD[1], GOLD[2], GOLD[3], GOLD[4]].map(pack);
 const PEL_P = [GOLD[2], GOLD[3], GOLD[4], GOLD[5]].map(pack);
 const CUFF_P = [GOLD[2], GOLD[3], GOLD[4]].map(pack);
 const INK_P = pack(INK);
 const STAR_C = [WHITE, ICE[5], GOLD[5], MAG[2]];
+
+/**
+ * Плащ при раскрытии `fl` и фазе кромки — растр, не зависящий от румба: в
+ * пикселе ближняя лицевая точка колокола или купола плеч, ближняя точка
+ * изнанки и пелерина (мировой угол, высота, свет). Румб только раскладывает
+ * по готовым пикселям распах, золотую кайму и зубцы пелерины — это в разы
+ * дешевле, чем заново сыпать ~8 тыс. точек на каждый из 32 румбов.
+ */
+interface Raster {
+  idx: Uint16Array;
+  /** Лицо: есть ли, глубина, мировой угол, кольцо (255 — купол), высота ×2, свет, кромка, высота. */
+  fOk: Uint8Array;
+  fD: Float32Array;
+  fPsi: Float32Array;
+  fRing: Uint8Array;
+  fV: Uint8Array;
+  fSh: Uint8Array;
+  fHem: Uint8Array;
+  fZ: Float32Array;
+  /** Изнанка: видна сквозь распах. */
+  bOk: Uint8Array;
+  bD: Float32Array;
+  bPsi: Float32Array;
+  bZ: Float32Array;
+  bStar: Uint8Array;
+  /** Пелерина поверх плеч. */
+  pOk: Uint8Array;
+  pD: Float32Array;
+  pPsi: Float32Array;
+  pZ: Float32Array;
+  pSh: Uint8Array;
+  ringZ: Float32Array;
+  ringR: Float32Array;
+}
+const RASTER = new Map<string, Raster>();
+const T_FD = new Float32Array(BN);
+const T_FPSI = new Float32Array(BN);
+const T_FRING = new Uint8Array(BN);
+const T_FV = new Uint8Array(BN);
+const T_FSH = new Uint8Array(BN);
+const T_FHEM = new Uint8Array(BN);
+const T_FZ = new Float32Array(BN);
+const T_BD = new Float32Array(BN);
+const T_BPSI = new Float32Array(BN);
+const T_BZ = new Float32Array(BN);
+const T_BSTAR = new Uint8Array(BN);
+const T_PD = new Float32Array(BN);
+const T_PPSI = new Float32Array(BN);
+const T_PZ = new Float32Array(BN);
+const T_PSH = new Uint8Array(BN);
+function rasterOf(fl: number, ph2: number): Raster {
+  const key = `${Math.round(fl * 4)}|${ph2}`;
+  const hit = RASTER.get(key);
+  if (hit) return hit;
+  const fD = T_FD.fill(-1e9);
+  const bD = T_BD.fill(-1e9);
+  const pD = T_PD.fill(-1e9);
+  for (let i = 0; i < 256; i++) HEM_T[i] = hemZ((i / 256) * TAU, ph2, fl);
+  const ringZ: number[] = [];
+  const ringR: number[] = [];
+  let ri = 0;
+  for (let z = HEM - 3; z <= SHO; z += 0.7, ri++) {
+    const R = bellR(z, fl);
+    const dR = bellR(z - 0.5, fl) - bellR(z + 0.5, fl);
+    ringZ.push(z);
+    ringR.push(R);
+    const n = Math.ceil((TAU * R) / 0.7);
+    for (let i = 0; i < n; i++) {
+      const hz = HEM_T[((i / n) * 256) | 0];
+      if (z < hz) continue;
+      const psi = (i / n) * TAU;
+      const cx = Math.cos(psi);
+      const sy = Math.sin(psi);
+      const x = (LAX + cx * R + 0.5) | 0;
+      const y = (LAY - z + sy * R * KF + 0.5) | 0;
+      if (x < 0 || y < 0 || x >= LW || y >= LH) continue;
+      const pi = y * LW + x;
+      const d = sy * R * VY + z * VZ;
+      if (sy * VY + dR * VZ > 0) {
+        if (d <= fD[pi]) continue;
+        fD[pi] = d;
+        T_FPSI[pi] = psi;
+        T_FRING[pi] = ri;
+        T_FV[pi] = Math.min(255, Math.round(z * 2));
+        T_FSH[pi] = Math.round(shadeOf(cx, sy, dR) * 255);
+        T_FHEM[pi] = z < hz + 1.6 ? 1 : 0;
+        T_FZ[pi] = z;
+      } else {
+        if (d <= bD[pi]) continue;
+        bD[pi] = d;
+        T_BPSI[pi] = psi;
+        T_BZ[pi] = z;
+        const hs = hash(ri, i, 9);
+        T_BSTAR[pi] = hs < 0.012 ? 1 : hs < 0.03 ? 2 : hs < 0.05 ? 3 : hs < 0.09 ? 4 : 0;
+      }
+    }
+  }
+  // Купол плеч.
+  {
+    const R = bellR(SHO, fl);
+    for (let rr = 0; rr <= R; rr += 0.6) {
+      const n = Math.max(6, Math.ceil((TAU * rr) / 0.6));
+      const z = SHO + (1 - rr / R) * 2.5;
+      for (let i = 0; i < n; i++) {
+        const psi = (i / n) * TAU;
+        const wy = Math.sin(psi) * rr;
+        const x = (LAX + Math.cos(psi) * rr + 0.5) | 0;
+        const y = (LAY - z + wy * KF + 0.5) | 0;
+        if (x < 0 || y < 0 || x >= LW || y >= LH) continue;
+        const pi = y * LW + x;
+        const d = wy * VY + z * VZ;
+        if (d <= fD[pi]) continue;
+        fD[pi] = d;
+        T_FPSI[pi] = psi;
+        T_FRING[pi] = 255;
+        T_FV[pi] = Math.round(z * 2);
+        T_FSH[pi] = Math.round(shadeOf(Math.cos(psi) * 0.5, Math.sin(psi) * 0.5, 1) * 255);
+        T_FHEM[pi] = 0;
+        T_FZ[pi] = z;
+      }
+    }
+  }
+  // Пелерина: короткий колокол поверх плеч (лицевые точки).
+  {
+    const top = SHO + 1.5;
+    for (let z = SHO - 14; z <= top; z += 0.7) {
+      const R = bellR(Math.min(z, SHO), fl) + 2.4 + (top - z) * 0.08;
+      const n = Math.ceil((TAU * R) / 0.7);
+      for (let i = 0; i < n; i++) {
+        const psi = (i / n) * TAU;
+        const cx = Math.cos(psi);
+        const sy = Math.sin(psi);
+        if (sy * VY + 0.35 * VZ <= 0) continue;
+        const x = (LAX + cx * R + 0.5) | 0;
+        const y = (LAY - z + sy * R * KF + 0.5) | 0;
+        if (x < 0 || y < 0 || x >= LW || y >= LH) continue;
+        const pi = y * LW + x;
+        const d = sy * R * VY + z * VZ + 0.6;
+        if (d <= pD[pi]) continue;
+        pD[pi] = d;
+        T_PPSI[pi] = psi;
+        T_PZ[pi] = z;
+        T_PSH[pi] = Math.round(shadeOf(cx, sy, 0.45) * 255);
+      }
+    }
+  }
+  let n = 0;
+  for (let i = 0; i < BN; i++) if (fD[i] > -1e8 || bD[i] > -1e8 || pD[i] > -1e8) n++;
+  const o: Raster = {
+    idx: new Uint16Array(n),
+    fOk: new Uint8Array(n),
+    fD: new Float32Array(n),
+    fPsi: new Float32Array(n),
+    fRing: new Uint8Array(n),
+    fV: new Uint8Array(n),
+    fSh: new Uint8Array(n),
+    fHem: new Uint8Array(n),
+    fZ: new Float32Array(n),
+    bOk: new Uint8Array(n),
+    bD: new Float32Array(n),
+    bPsi: new Float32Array(n),
+    bZ: new Float32Array(n),
+    bStar: new Uint8Array(n),
+    pOk: new Uint8Array(n),
+    pD: new Float32Array(n),
+    pPsi: new Float32Array(n),
+    pZ: new Float32Array(n),
+    pSh: new Uint8Array(n),
+    ringZ: Float32Array.from(ringZ),
+    ringR: Float32Array.from(ringR),
+  };
+  n = 0;
+  for (let i = 0; i < BN; i++) {
+    if (!(fD[i] > -1e8 || bD[i] > -1e8 || pD[i] > -1e8)) continue;
+    o.idx[n] = i;
+    if (fD[i] > -1e8) {
+      o.fOk[n] = 1;
+      o.fD[n] = fD[i];
+      o.fPsi[n] = T_FPSI[i];
+      o.fRing[n] = T_FRING[i];
+      o.fV[n] = T_FV[i];
+      o.fSh[n] = T_FSH[i];
+      o.fHem[n] = T_FHEM[i];
+      o.fZ[n] = T_FZ[i];
+    }
+    if (bD[i] > -1e8) {
+      o.bOk[n] = 1;
+      o.bD[n] = bD[i];
+      o.bPsi[n] = T_BPSI[i];
+      o.bZ[n] = T_BZ[i];
+      o.bStar[n] = T_BSTAR[i];
+    }
+    if (pD[i] > -1e8) {
+      o.pOk[n] = 1;
+      o.pD[n] = pD[i];
+      o.pPsi[n] = T_PPSI[i];
+      o.pZ[n] = T_PZ[i];
+      o.pSh[n] = T_PSH[i];
+    }
+    n++;
+  }
+  RASTER.set(key, o);
+  return o;
+}
 
 /** Плечо, локоть, запястье руки (обратная кинематика), точки тела [вперёд, вправо, вверх]. */
 type V3 = [number, number, number];
@@ -2748,116 +2801,94 @@ function buildLord(a: number, af: number, p: LPose, cloakKey: string): LGeo {
       col[i] = cl.c[j];
     }
   } else {
-    const S = surfOf(fl);
+    const Rs = rasterOf(fl, cph(p) * 2);
     const ca = Math.cos(a);
     const sa = Math.sin(a);
-    const ph2 = cph(p) * 2;
-    for (let i = 0; i < 256; i++) HEM_T[i] = hemZ((i / 256) * TAU, ph2, fl);
-    // Распах и кайма по кольцам; что из изнанки видно сквозь распах (по x).
-    const nr = S.ringZ.length;
-    const backAll = p.dissolve > 0;
-    const slitNear = sa > -0.25;
+    const nr = Rs.ringZ.length;
     for (let r = 0; r < nr; r++) {
-      const op = openHalf(S.ringZ[r], fl, p.open) + 1.0 / S.ringR[r];
-      RING_OP[r] = op;
-      let x0 = 1e9;
-      let x1 = -1e9;
-      for (let k = 0; k <= 6; k++) {
-        const x = Math.cos(a - op + (k / 6) * 2 * op) * S.ringR[r];
-        if (x < x0) x0 = x;
-        if (x > x1) x1 = x;
-      }
-      if (op > Math.PI) {
-        x0 = -1e9;
-        x1 = 1e9;
-      }
-      RING_X0[r] = LAX + x0 - 1.5;
-      RING_X1[r] = LAX + x1 + 1.5;
+      RING_TR[r] = 1.0 / Rs.ringR[r];
+      RING_OP[r] = openHalf(Rs.ringZ[r], fl, p.open) + RING_TR[r];
     }
     const open = p.open;
-    const bn = S.bX.length;
-    for (let j = 0; j < bn; j++) {
-      const z = S.bZ[j];
-      if (z < HEM_T[S.bHem[j]]) continue;
-      const X = S.bX[j];
-      const Y = S.bY[j];
-      if (dz > -1e8 && z < dz + (hash((X + 0.5) | 0, (Y + 0.5) | 0, 7) - 0.5) * 6) continue;
-      let u = S.bPsi[j] - a;
-      u -= Math.round(u / TAU) * TAU;
-      const r = S.bRing[j];
-      if (S.bFront[j]) {
+    const dzOn = dz > -1e8;
+    const gone = (i: number, z: number) => {
+      if (!dzOn) return false;
+      const y = (i / LW) | 0;
+      return z < dz + (hash(i - y * LW, y, 7) - 0.5) * 6;
+    };
+    const pelOn = p.dissolve < 0.9;
+    const domeOn = p.dissolve < 0.95;
+    const set = (i: number, d: number, k: number, u: number, v: number, s: number, c: number) => {
+      zb[i] = d;
+      kind[i] = k;
+      tu[i] = u;
+      tv[i] = v;
+      ts[i] = s;
+      col[i] = c;
+    };
+    for (let j = 0; j < Rs.idx.length; j++) {
+      const i = Rs.idx[j];
+      // Пелерина: зубцы и кайма по углу от лица, спереди — вырез.
+      if (pelOn && Rs.pOk[j]) {
+        let u = Rs.pPsi[j] - a;
+        u -= Math.round(u / TAU) * TAU;
         const au = Math.abs(u);
-        const op = RING_OP[r];
-        const trim = 1.0 / S.ringR[r];
-        if (au < op - trim) continue;
-        const sh = S.bSh[j];
-        if (au < op) {
-          put(X, Y, S.bD[j], 3, 0, 0, 0, GOLD_P[sh > 205 ? 3 : sh > 150 ? 2 : sh > 100 ? 1 : 0]);
+        const z = Rs.pZ[j];
+        const zc = SHO - 13 + 2.6 * Math.abs(Math.sin(3.5 * u));
+        if (au >= 0.95 && z >= zc && !gone(i, z)) {
+          const sh = Rs.pSh[j];
+          if (z < zc + 1.2 || au < 1.05)
+            set(i, Rs.pD[j], 3, 0, 0, 0, PEL_P[sh > 184 ? 3 : sh > 128 ? 2 : sh > 77 ? 1 : 0]);
+          else
+            set(
+              i,
+              Rs.pD[j],
+              2,
+              uByte(u + 1.7),
+              Math.min(255, Math.round(z * 2 + 40)),
+              Math.min(255, sh + 20),
+              0,
+            );
           continue;
         }
-        const hem = z < HEM_T[S.bHem[j]] + 1.6;
-        put(X, Y, S.bD[j], hem ? 4 : 2, uByte(u), Math.min(255, Math.round(z * 2)), sh, 0);
-      } else {
-        // Изнанка: видна только сквозь распах — бездна со светом изнутри.
-        if (!backAll && (!slitNear || X < RING_X0[r] || X > RING_X1[r])) continue;
-        const cx = Math.cos(S.bPsi[j]);
+      }
+      // Лицо колокола или купол плеч; в распахе — изнанка.
+      if (Rs.fOk[j] && !gone(i, Rs.fZ[j])) {
+        const r = Rs.fRing[j];
+        let u = Rs.fPsi[j] - a;
+        u -= Math.round(u / TAU) * TAU;
+        if (r === 255) {
+          if (domeOn) {
+            set(i, Rs.fD[j], 2, uByte(u), Rs.fV[j], Rs.fSh[j], 0);
+            continue;
+          }
+        } else {
+          const au = Math.abs(u);
+          const op = RING_OP[r];
+          if (au >= op - RING_TR[r]) {
+            const sh = Rs.fSh[j];
+            if (au < op)
+              set(i, Rs.fD[j], 3, 0, 0, 0, GOLD_P[sh > 205 ? 3 : sh > 150 ? 2 : sh > 100 ? 1 : 0]);
+            else set(i, Rs.fD[j], Rs.fHem[j] ? 4 : 2, uByte(u), Rs.fV[j], sh, 0);
+            continue;
+          }
+        }
+      }
+      // Изнанка: бездна со светом изнутри.
+      if (Rs.bOk[j] && !gone(i, Rs.bZ[j])) {
+        const cx = Math.cos(Rs.bPsi[j]);
         const k = clamp01(1 - Math.abs(cx));
         let c = mixc(NIGHT[1], VIO[1], 0.2 + 0.5 * k);
         if (open > 0.05) {
           c = mixc(c, VIO[3], k * k * open * 0.75);
           if (k > 0.72) c = mixc(c, k > 0.9 ? WHITE : GOLD[5], (k - 0.72) * 3.2 * open);
         }
-        const st = S.bStar[j];
+        const st = Rs.bStar[j];
         if (st === 1) c = WHITE;
         else if (st) c = mixc(c, STAR_C[st - 1], st === 4 ? 0.35 : 0.75);
-        put(X, Y, S.bD[j] - 0.01, 3, 0, 0, 0, pack(c));
+        set(i, Rs.bD[j] - 0.01, 3, 0, 0, 0, pack(c));
       }
     }
-    // Плечи сверху: купол-пелерина.
-    if (p.dissolve < 0.95)
-      for (let j = 0; j < S.dX.length; j++) {
-        let u = S.dPsi[j] - a;
-        u -= Math.round(u / TAU) * TAU;
-        put(
-          S.dX[j],
-          S.dY[j],
-          S.dD[j],
-          2,
-          uByte(u),
-          Math.round(S.dZ[j] * 2),
-          S.dSh[j],
-          0,
-        );
-      }
-    // --- Пелерина: короткий колокол поверх плеч, кромка зубцами, кайма золотом.
-    if (p.dissolve < 0.9)
-      for (let j = 0; j < S.pX.length; j++) {
-        let u = S.pPsi[j] - a;
-        u -= Math.round(u / TAU) * TAU;
-        const au = Math.abs(u);
-        if (au < 0.95) continue;
-        const z = S.pZ[j];
-        const zc = SHO - 13 + 2.6 * Math.abs(Math.sin(3.5 * u));
-        if (z < zc) continue;
-        const X = S.pX[j];
-        const Y = S.pY[j];
-        if (dz > -1e8 && z < dz + (hash((X + 0.5) | 0, (Y + 0.5) | 0, 7) - 0.5) * 6) continue;
-        const sh = S.pSh[j];
-        if (z < zc + 1.2 || au < 1.05) {
-          put(X, Y, S.pD[j], 3, 0, 0, 0, PEL_P[sh > 184 ? 3 : sh > 128 ? 2 : sh > 77 ? 1 : 0]);
-          continue;
-        }
-        put(
-          X,
-          Y,
-          S.pD[j],
-          2,
-          uByte(u + 1.7),
-          Math.min(255, Math.round(z * 2 + 40)),
-          Math.min(255, sh + 20),
-          0,
-        );
-      }
     // --- Шлейф: лента от задней кромки, тянется назад и вбок на развороте.
     if (p.train > 0.05 && p.dissolve < 0.2) {
       const Lt = 4 + p.train * 18;
@@ -2995,6 +3026,7 @@ function buildLord(a: number, af: number, p: LPose, cloakKey: string): LGeo {
   const cU = O_CU;
   const cV = O_CV;
   const cS = O_CS;
+  const cY = O_CY;
   let ns = 0;
   let nc = 0;
   const ink = pack(hx('#07061a', 235));
@@ -3022,15 +3054,19 @@ function buildLord(a: number, af: number, p: LPose, cloakKey: string): LGeo {
     let s = ts[i];
     if ((x > 0 && !kind[i - 1]) || (y > 0 && !kind[i - LW])) s = Math.min(255, s + 85);
     else if (x < LW - 1 && !kind[i + 1]) s = Math.min(255, s + 50);
+    // Ступень света с дизером и сдвиг плотности — постоянны для пикселя.
+    const si = Math.max(0, Math.min(5, Math.floor((s / 255) * 5.6 + bay(x, y) - 0.5)));
     cIdx[nc] = i;
+    cY[nc] = y;
     cU[nc] = tu[i];
     cV[nc] = tv[i];
-    cS[nc++] = (s >> 2) | (k === 4 ? 64 : 0) | (k >= 2 ? 128 : 0);
+    cS[nc++] = si | (bay(x + 1, y) < 0.25 ? 8 : 0) | (k === 4 ? 64 : 0) | (k >= 2 ? 128 : 0);
   }
   return {
     sIdx: sIdx.slice(0, ns),
     sCol: sCol.slice(0, ns),
     cIdx: cIdx.slice(0, nc),
+    cY: cY.slice(0, nc),
     cU: cU.slice(0, nc),
     cV: cV.slice(0, nc),
     cS: cS.slice(0, nc),
@@ -3170,9 +3206,8 @@ function fillMask(geo: LGeo, shift: Int8Array, key: string): void {
   clothMask.fill(0);
   for (let i = 0; i < geo.cIdx.length; i++) {
     if (!(geo.cS[i] & 128)) continue;
-    const pi = geo.cIdx[i];
-    const Y = (pi / LW) | 0;
-    const X = pi - Y * LW + shift[Y];
+    const Y = geo.cY[i];
+    const X = geo.cIdx[i] - Y * LW + shift[Y];
     if (X >= 0 && X < LW) clothMask[Y * LW + X] = 1;
   }
 }
@@ -3241,17 +3276,16 @@ function paintBody(geo: LGeo, L: BodyLook): HTMLCanvasElement {
   const cyc = Math.floor(now * 2.5);
   for (let i = 0; i < geo.cIdx.length; i++) {
     const pi = geo.cIdx[i];
-    const Y = (pi / LW) | 0;
+    const Y = geo.cY[i];
     const X0 = pi - Y * LW;
     const X = X0 + shift[Y];
     if (X < 0 || X >= LW) continue;
     const di = Y * LW + X;
     const sb = geo.cS[i];
-    const sh = (sb & 63) / 63;
+    const si = sb & 7;
     const iu = ((geo.cU[i] >> 2) + swirl + TWIST[Y]) & 63;
     const iv = ((geo.cV[i] * 0.45 + flow) | 0) & 63;
     const n = neb[iv * NT + iu];
-    const si = Math.max(0, Math.min(5, Math.floor(sh * 5.6 + bay(X0, Y) - 0.5)));
     const z = geo.cV[i] * 0.5;
     if (z < bz + 2.6) {
       if (z < bz) d32[di] = bl[(heat * 6 + si) * 4 + (n & 3)];
@@ -3265,7 +3299,7 @@ function paintBody(geo: LGeo, L: BodyLook): HTMLCanvasElement {
       d32[di] = edge[eo + (((n >> 2) + ((iu + cyc * 5) >> 4)) % 3) * 6 + Math.min(5, si + 1)];
       continue;
     }
-    const ds = Math.max(0, Math.min(3, (n & 3) - (bay(X0 + 1, Y) < 0.25 ? 1 : 0)));
+    const ds = Math.max(0, (n & 3) - ((sb >> 3) & 1));
     d32[di] = tab[fo + (si * 4 + ds) * 3 + (n >> 2)];
   }
   for (let i = 0; i < geo.sIdx.length; i++) {
