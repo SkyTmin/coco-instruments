@@ -29,6 +29,7 @@ import {
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import { F15_MARK, F15_OBS, F15_ORBIT, F15_ROOTS } from './f15';
 import {
+  ASTRO,
   COMET,
   F15_FX,
   f15State,
@@ -2622,151 +2623,6 @@ function spike(
   p.set(tx, ty, tip);
 }
 
-// --- Звездочёт ----------------------------------------------------------------
-
-const ROBE = tn('#0c0c2a', '#18184a', '#262a70', '#3a44a0');
-const SKIN = tn('#6a4a5a', '#9a7080', '#c8a0a8', '#f0d0d0');
-
-/**
- * Звездочёт: мантия в звёздах, капюшон, посох с астролябией. Вокруг —
- * камни-спутники (сколько осталось). `cast` 0…1 — посох вверх (колодец)
- * или вперёд (залп), `kind` 1 — колодец, 2 — залп.
- */
-function astroBody(o: {
-  step: number;
-  stones: number;
-  f: number;
-  cast: number;
-  kind: number;
-  dk: number;
-}): Built {
-  const p = new Px(40, 44);
-  const cx = 18;
-  const gy = 39;
-  const orbit = (front: boolean) => {
-    for (let i = 0; i < o.stones; i++) {
-      const a = (o.f / 16) * TAU + (i * TAU) / 3;
-      const z = Math.sin(a);
-      if (z >= 0 !== front) continue;
-      const x = cx + Math.cos(a) * 12;
-      const y = 22 + z * 4 - (o.cast && o.kind === 1 ? o.cast * 6 : 0);
-      glow(p, x, y, 3.5, GOLDK, o.cast ? 0.6 : 0.35);
-      shadeEll(p, x, y, 1.8, 1.6, i === 1 ? VIOLET : METEOR, 0.2);
-      p.set(x - 0.5, y - 1, hx('#ffe8a0'));
-    }
-  };
-  orbit(false);
-  // Полы мантии: колокол, шаг качает край.
-  const sw = o.step % 2 ? 1 : 0;
-  poly(
-    p,
-    [
-      [cx - 4, 16],
-      [cx + 4, 16],
-      [cx + 8 + sw, gy],
-      [cx - 8 - sw, gy],
-    ],
-    (x, y) => {
-      const fold = Math.sin((x - cx) * 1.1 + y * 0.1);
-      return tone(ROBE, (cx - x) * 0.05 + 0.35 + fold * 0.15);
-    },
-  );
-  // Звёзды на мантии (мерцают по кадру).
-  for (let i = 0; i < 7; i++) {
-    const x = cx - 6 + Math.round(hash(i, 1, 1940) * 12);
-    const y = 20 + Math.round(hash(i, 2, 1940) * 17);
-    if (Math.abs(x - cx) > 3 + (y - 16) * 0.2) continue;
-    p.set(x, y, (i + o.f) % 5 === 0 ? WHITE : hx('#c8c0ff'));
-  }
-  // Пояс — латунь.
-  p.rect(cx - 4, 24, cx + 4, 24, BRASS[2]);
-  // Капюшон и лицо.
-  shadeEll(p, cx, 12, 5, 5.5, ROBE, 0.1);
-  p.ell(cx + 2, 13, 2.6, 3, SKIN[1]);
-  p.ell(cx + 2.5, 12.5, 1.8, 2, SKIN[2]);
-  p.set(cx + 3, 12, INK);
-  // Борода-звёздная пыль.
-  for (let y = 15; y < 19; y++) p.set(cx + 2 + (y % 2), y, alpha(hx('#d8d4f0'), 0.9));
-  // Острый кончик капюшона.
-  poly(
-    p,
-    [
-      [cx - 5, 10],
-      [cx - 1, 6],
-      [cx - 9, 4],
-    ],
-    ROBE[2],
-  );
-  // Рука и посох.
-  let sx0 = cx + 7;
-  let sy0 = 38;
-  let sx1 = cx + 9;
-  let sy1 = 8;
-  if (o.kind === 1) {
-    sx1 = cx + 6 - o.cast * 2;
-    sy1 = 8 - o.cast * 6;
-    sx0 = cx + 6;
-    sy0 = 36 - o.cast * 6;
-  } else if (o.kind === 2) {
-    sx0 = cx + 2;
-    sy0 = 26;
-    sx1 = cx + 9 + o.cast * 10;
-    sy1 = 20 - o.cast * 4;
-  }
-  stroke(p, sx0, sy0, sx1, sy1, hx('#5a3a20'));
-  stroke(p, sx0 + 0.6, sy0, sx1 + 0.6, sy1, hx('#8a6034'));
-  // Рука держит посох.
-  const hxp = sx0 + (sx1 - sx0) * 0.55;
-  const hyp = sy0 + (sy1 - sy0) * 0.55;
-  limb(p, cx + 2, 20, hxp, hyp, 1.8, 1.4, ROBE, 0.1);
-  p.ell(hxp, hyp, 1.4, 1.4, SKIN[2]);
-  // Астролябия на конце.
-  const lit = 0.35 + o.cast * 0.6;
-  glow(p, sx1, sy1, 5 + o.cast * 4, o.kind === 2 ? GOLDK : TEAL_GLOW, lit);
-  for (let a = 0; a < TAU; a += 0.35)
-    p.set(sx1 + Math.cos(a) * 2.6, sy1 + Math.sin(a) * 2.6, BRASS[3]);
-  stroke(p, sx1 - 2.6, sy1, sx1 + 2.6, sy1, BRASS[2]);
-  sparkle(p, sx1, sy1, WHITE, o.cast > 0.5 ? 2 : 1);
-  orbit(true);
-  edge(p, alpha(INK, 0.8));
-  let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1941, [ROBE[2], hx('#c8c0ff'), GOLDK, WHITE], cx, 24);
-  return { p: out, ax: cx, ay: gy, eye: o.dk ? null : [cx + 3, 12], lit: true };
-}
-
-registerMobPainter('f15_astro', (m: Mob, pose: MobPose) => {
-  const dk = deathK(pose);
-  const stones = Math.max(0, Math.min(3, m.data.stones ?? 3));
-  if (dk)
-    return frameOf('astro', pose, 'die', dk, () =>
-      astroBody({ step: 0, stones: 0, f: 0, cast: 0, kind: 0, dk }),
-    );
-  const f = Math.floor(pose.now * 8) % 16;
-  if (pose.mode === 'f15_cast_well' || pose.mode === 'f15_cast_bolt') {
-    const well = pose.mode === 'f15_cast_well';
-    const T = well ? 0.9 : 0.75;
-    const k = Math.min(3, Math.floor((pose.t / T) * 4));
-    return frameOf(
-      'astro',
-      pose,
-      well ? 'cw' : 'cb',
-      (k * 4 + stones) * 16 + f,
-      () => astroBody({ step: 0, stones, f, cast: (k + 1) / 4, kind: well ? 1 : 2, dk: 0 }),
-      { still: true },
-    );
-  }
-  const run = pose.anim === 'run';
-  const st = run ? pose.frame % 4 : 0;
-  return frameOf(
-    'astro',
-    pose,
-    run ? 'run' : 'idle',
-    (st * 4 + stones) * 16 + f,
-    () => astroBody({ step: st, stones, f, cast: 0, kind: 0, dk: 0 }),
-    run ? { dy: st % 2 ? -0.5 : 0 } : null,
-  );
-});
-
 // --- Созвездие ----------------------------------------------------------------
 
 /** Звёзды лисы-созвездия (смотрит вправо): нос, глаз, ухо, затылок, спина, хвост, лапы. */
@@ -4864,6 +4720,358 @@ registerMobWarm('f15_graviton', function* () {
   }
 });
 
+
+// --- Звездочёт ----------------------------------------------------------------
+//
+// Сутулый звездочёт в мантии с узором созвездий (узор по координатам тела —
+// поворачивается с ним), капюшон с двумя огоньками, посох с армиллярной
+// сферой. Три камня-щита кружат вокруг по орбите — сколько их сейчас
+// (`m.data.stones`), столько и рисуется: камни сбиваются ударами и
+// отрастают, рисунок не врёт. Камни дорисовываются поверх готового кадра
+// тела (за телом — дальние, перед ним — ближние), чтобы не множить кадры.
+// Колодец: посох вверх, сфера крутится — удар посохом оземь ровно в кадр,
+// когда мозг ставит колодец. Залп: посох наводится, на навершии копятся
+// три звезды, выстрел — отдача.
+
+const ROBE = tn('#0c0c2a', '#18184a', '#262a70', '#3a44a0');
+const ROBE_IN = tn('#06061a', '#0c0c2a', '#141444', '#1c1c5a');
+const STAFF = tn('#2a1a0c', '#4a3018', '#7a5228', '#b08040');
+
+/** Звёзды мантии: точки и пары-штрихи на сфере тела. */
+const robeStar = (q: V3) => {
+  const a = Math.atan2(q[2], q[1]);
+  const h = q[0];
+  const cell = hash(Math.floor(a * 3.2 + 50), Math.floor(h * 2.2 + 50), 9);
+  return cell > 0.82;
+};
+
+interface APose {
+  /** Шаг 0…1 (подол, носки). */
+  ph: number;
+  walk: number;
+  /** Посох: кисть правой руки в осях земли (вперёд, вправо, вверх). */
+  hand: V3;
+  /** Навершие посоха — куда смотрит (вектор в осях земли). */
+  tip: V3;
+  lean: number;
+  /** Поворот сферы на навершии. */
+  spin: number;
+  /** Сколько звёзд копится на навершии 0…3 (дробно — набор). */
+  stars: number;
+  glow: number;
+  /** Левая рука к небу (каст колодца) 0…1. */
+  raise: number;
+  dk: number;
+}
+const A_HAND: V3 = [3.5, 5.5, 8];
+const A0: APose = {
+  ph: 0,
+  walk: 0,
+  hand: A_HAND,
+  tip: [0.3, 0.2, 1],
+  lean: 0.1,
+  spin: 0,
+  stars: 0,
+  glow: 0.3,
+  raise: 0,
+  dk: 0,
+};
+
+function astroRig(o: APose, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw);
+  const body = B.at(0, 0, 0).pitch(o.lean);
+  const fall = o.dk > 0 ? sstep(0, 0.5, o.dk) : 0;
+  const robe: Mat = {
+    T: ROBE,
+    pat: (q, l) => (robeStar([q[0], q[1], q[2]]) && l > 0 ? hx('#fff4d0') : null),
+  };
+  // Мантия: колокол от плеч до пола, подол качается.
+  const sw = Math.sin(o.ph * TAU) * 1.2 * o.walk;
+  const hem = B.p(sw * 0.4, 0, 1.2);
+  const neck = body.p(0.4, 0, 14 - fall * 6);
+  const from = r.size;
+  r.cap(hem, neck, 5.6 - fall, 2.8, robe);
+  r.ell(F3.yaw(yaw, hem), [0, 0, 0], [5.8, 5.8, 1.6], { T: ROBE_IN });
+  // Носки под подолом.
+  if (o.walk > 0)
+    for (const s of [-1, 1]) {
+      const p = Math.sin(o.ph * TAU + (s > 0 ? PI : 0));
+      r.ell(F3.yaw(yaw, B.p(2.5 + p * 2, s * 2, 0.8)), [0, 0, 0], [1.6, 1.1, 0.9], { T: ROBE_IN });
+    }
+  // Капюшон-колпак и лицо во тьме.
+  const hd = F3.yaw(yaw, vadd(neck, B.v(0.6, 0, 2.6))).pitch(o.lean * 0.5);
+  r.ell(hd, [0, 0, 0], [3.0, 3.0, 3.2], robe);
+  r.cap(hd.p(-0.6, 0, 2.2), hd.p(-3.2, 0, 7.0), 2.6, 0.4, robe);
+  r.ell(hd, [1.9, 0, -0.4], [1.3, 2.0, 2.0], { T: ROBE_IN, flat: 0 });
+  for (const s of [-1, 1])
+    r.dot(hd.p(2.9, s * 0.9, -0.2), o.dk > 0 ? INK : hx('#ffe9a0'), o.dk > 0 ? 0 : 1, 1, 0.8);
+  if (o.dk <= 0) r.eye = hd.p(2.9, -0.9, -0.2);
+  // Плечи и рукава.
+  const shR = body.p(0.6, 3.2, 12.6 - fall * 6);
+  const shL = body.p(0.6, -3.2, 12.6 - fall * 6);
+  const hand = B.p(o.hand[0], o.hand[1], o.hand[2] - fall * 5);
+  const elR = ik2(shR, hand, 4.6, 4.6, B.v(-0.4, 1, -0.6));
+  r.cap(shR, elR, 1.9, 1.6, robe);
+  r.cap(elR, hand, 1.6, 2.0, robe);
+  const handL = B.p(2.5 + o.raise * 1.5, -4 - o.raise * 0.5, 7.5 + o.raise * 12 - fall * 4);
+  const elL = ik2(shL, handL, 4.6, 4.6, B.v(-0.4, -1, -0.4));
+  r.cap(shL, elL, 1.9, 1.6, robe);
+  r.cap(elL, handL, 1.6, 2.0, robe);
+  if (o.raise > 0.3) r.dot(vadd(handL, [0, 0, 1.5]), hx('#fff4d0'), 1, 2, 0.8);
+  // Посох: древко через кисть, навершие — сфера с двумя кольцами.
+  const td = vnorm(B.v(o.tip[0], o.tip[1], o.tip[2]));
+  const top = vadd(hand, vmul(td, 9));
+  const bot = vadd(hand, vmul(td, -10));
+  r.cap(bot, top, 0.8, 0.9, { T: STAFF });
+  const core = vadd(top, vmul(td, 2.2));
+  r.ball(core, 1.3, { T: tn('#6a4410', '#f0b838', '#fff2b0', '#ffffff'), glow: 0.6 + o.glow * 0.4 });
+  for (let k = 0; k < 2; k++) {
+    const n = 10;
+    let prev: V3 | null = null;
+    for (let i = 0; i <= n; i++) {
+      const a = (i / n) * TAU;
+      const R = 3.0;
+      const sp = o.spin + k * 1.3;
+      const P: V3 =
+        k === 0
+          ? vadd(core, [Math.cos(a) * R, Math.sin(a) * R * Math.cos(sp), Math.sin(a) * R * Math.sin(sp)])
+          : vadd(core, [Math.cos(a) * R * Math.cos(sp), Math.sin(a) * R, Math.cos(a) * R * Math.sin(sp)]);
+      if (prev) r.line(prev, P, k ? hx('#c09038') : hx('#f4dc8a'), 0.5, 0.2);
+      prev = P;
+    }
+  }
+  // Звёзды на навершии — набор залпа.
+  for (let i = 0; i < 3; i++) {
+    const k = clamp01(o.stars - i);
+    if (k <= 0) continue;
+    const a = (i / 3) * TAU + o.spin * 2;
+    const P = vadd(core, [Math.cos(a) * 4.2 * (1.4 - k * 0.4), Math.sin(a) * 4.2, 1.5 + Math.sin(a) * 1.5]);
+    r.dot(P, k > 0.95 ? WHITE : hx('#fff4d0'), 1, k > 0.5 ? 2 : 1, 1.2);
+  }
+  if (o.dk > 0) r.explode(sstep(0.4, 1, o.dk), body.p(0, 0, 6), 51, 5, 20, from, 0.4);
+  return r;
+}
+
+function astroPic(o: APose, yaw: number, post?: (o: RigOut, P: Proj2) => void): Pic {
+  return draw(astroRig(o, yaw), 64, 64, 32, 46, post);
+}
+
+// Камни на орбите: свой маленький кадр на каждый поворот, кладутся поверх.
+const STONE_N = 6;
+const STONES = new Map<string, HTMLCanvasElement>();
+function stoneImg(i: number, rot: number, lit: boolean): HTMLCanvasElement {
+  const key = `${i}|${rot}|${lit ? 1 : 0}`;
+  let c = STONES.get(key);
+  if (c) return c;
+  const r = new Rig();
+  const F = F3.yaw((rot / STONE_N) * TAU + i).pitch(0.6 + i);
+  r.ell(F, [0, 0, 0], [2.4 - i * 0.3, 1.8, 1.6 + i * 0.2], {
+    T: METEOR,
+    pat: (q, l) => (Math.abs(q[0] + q[2] * 0.4) < 0.18 && l > -0.2 ? hx('#ffd060') : null),
+    gpat: (q) => (Math.abs(q[0] + q[2] * 0.4) < 0.18 ? 0.9 : 0),
+  });
+  const o = renderRig(r, 9, 9, 4.5, 6.5);
+  c = (lit ? (o.lit ?? new Px(9, 9)) : o.p).canvas();
+  STONES.set(key, c);
+  return c;
+}
+
+/** Кадр тела с камнями: дальние за телом, ближние перед ним. */
+const WITH_STONES = new WeakMap<MobFrame, Map<string, MobFrame>>();
+function withStones(fr: MobFrame, n: number, phase: number, lift: number): MobFrame {
+  if (n <= 0) return fr;
+  const key = `${n}|${phase}|${lift}`;
+  let mp = WITH_STONES.get(fr);
+  if (!mp) WITH_STONES.set(fr, (mp = new Map()));
+  let out = mp.get(key);
+  if (out) return out;
+  if (mp.size > 96) mp.clear();
+  const w = fr.img.width;
+  const h = fr.img.height;
+  const mk = () => {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    return c;
+  };
+  const img = mk();
+  const g = img.getContext('2d');
+  const lit = mk();
+  const gl = lit.getContext('2d');
+  if (!g || !gl) return fr;
+  const pts: { x: number; y: number; z: number; i: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (phase / 24) * TAU + (i / 3) * TAU;
+    const R = 13;
+    const wx = Math.cos(a) * R;
+    const wy = Math.sin(a) * R;
+    const wz = 9 + lift + Math.sin(a * 2 + i) * 1.5;
+    const [x, y, z] = proj([wx, wy, wz], fr.ax, fr.ay);
+    pts.push({ x, y, z, i });
+  }
+  const put = (front: boolean) => {
+    for (const p of pts) {
+      if (p.z > 0 !== front) continue;
+      const rot = (phase + p.i * 2) % STONE_N;
+      g.drawImage(stoneImg(p.i, rot, false), Math.round(p.x - 4.5), Math.round(p.y - 6.5));
+      gl.drawImage(stoneImg(p.i, rot, true), Math.round(p.x - 4.5), Math.round(p.y - 6.5));
+    }
+  };
+  put(false);
+  g.drawImage(fr.img, 0, 0);
+  if (fr.lit) gl.drawImage(fr.lit, 0, 0);
+  put(true);
+  out = { ...fr, img, lit };
+  mp.set(key, out);
+  return out;
+}
+
+registerMobPainter('f15_astro', (m: Mob, pose: MobPose) => {
+  const t = pose.t;
+  const md = pose.mode;
+  const cast = md === 'f15_cast_well' || md === 'f15_cast_bolt';
+  const v = visOf(m, pose, cast || md === 'recover' ? m.face : headOf(m), 9);
+  const { d, yaw } = side16(v.yaw);
+  const o: APose = { ...A0 };
+  const extra: Partial<MobFrame> = { shadow: 8 };
+  let anim = 'idle';
+  let f = 0;
+  let post: ((o: RigOut, P: Proj2) => void) | undefined;
+  const stones = md === 'dying' ? 0 : Math.max(0, Math.min(3, m.data.stones ?? ASTRO.stones));
+  if (md === 'dying') {
+    const T = 1.1;
+    f = fi(t, 26);
+    const k = f / FPS / T;
+    anim = 'die';
+    o.dk = k;
+    o.glow = 1 - k;
+    o.lean = 0.1 + 0.4 * sstep(0, 0.5, k);
+    extra.linger = T;
+    extra.alpha = 1 - sstep(0.7, 1, k);
+    extra.shadow = 8 * (1 - k);
+  } else if (md === 'f15_cast_well') {
+    // Колодец: посох и рука вверх, сфера раскручивается — посох оземь.
+    const T = ASTRO.castWell;
+    f = fi(t, 21);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'well';
+    const up = easeOut(k / 0.55);
+    const down = easeIn((k - 0.82) / 0.18);
+    o.hand = vlerp(vlerp(A_HAND, [3, 4, 15], up), [5, 4, 5], down);
+    o.tip = [0.15 + down * 0.3, 0.1, 1];
+    o.raise = up * (1 - down * 0.5);
+    o.lean = -0.12 * up * (1 - down) + 0.2 * down;
+    o.spin = k * 9;
+    o.glow = 0.4 + 0.6 * k;
+    extra.still = true;
+  } else if (md === 'f15_cast_bolt') {
+    // Залп: посох наводится вперёд, на навершии копятся три звезды.
+    const T = ASTRO.castBolt;
+    f = fi(t, 17);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'bolt';
+    const aim = easeOut(k / 0.45);
+    o.hand = vlerp(A_HAND, [6, 3, 10], aim);
+    o.tip = [aim * 1.6 + 0.3, 0, 1 - aim * 0.6];
+    o.lean = 0.15 * aim;
+    o.stars = 3 * sstep(0.25, 0.95, k);
+    o.spin = k * 6;
+    o.glow = 0.4 + 0.6 * k;
+    extra.still = true;
+  } else if (md === 'recover') {
+    const T = 0.4;
+    f = fi(t, 9);
+    const k = (f + 0.5) / FPS / T;
+    if (v.prev === 'f15_cast_bolt') {
+      // Отдача: посох вскинут, вспышка на навершии гаснет.
+      anim = 'boltfol';
+      const kick = 1 - easeOut(k);
+      o.hand = vlerp(A_HAND, [4, 3, 11], kick);
+      o.tip = [kick * 0.8 + 0.3, 0, 1];
+      o.lean = -0.12 * kick;
+      o.glow = kick;
+      if (k < 0.5)
+        post = (out, P) => {
+          const tip = F3.yaw(yaw).p(9, 3, 18);
+          const [x, y] = P(tip);
+          burstPx(litOn(out), x, y, k / 0.5, 8, 7, hx('#fff4d0'), 11);
+        };
+    } else if (v.prev === 'f15_cast_well') {
+      // Посох стоит в полу, от него по земле — кольцо.
+      anim = 'wellfol';
+      const hold = 1 - sstep(0.3, 1, k);
+      o.hand = vlerp(A_HAND, [5, 4, 5], hold);
+      o.tip = [0.45 * hold + 0.15, 0.1, 1];
+      o.lean = 0.2 * hold;
+      o.glow = hold;
+      post = (out, P) => {
+        const [x, y] = P(F3.yaw(yaw).p(5, 4, 0));
+        const lit = litOn(out);
+        const rr = 3 + k * 7;
+        for (let i = 0; i < 20; i++) {
+          const a = (i / 20) * TAU;
+          lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * SE), alpha(GOLDK, 0.8 * (1 - k)));
+        }
+      };
+    } else anim = 'rec';
+    extra.still = true;
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(t, 6);
+    anim = 'hurt';
+    const k = 1 - f / 6;
+    o.lean = -0.25 * k;
+    o.hand = [2, 5, 9];
+  } else if (moving(m)) {
+    f = Math.floor((v.dist / 0.9) * 8) % 8;
+    anim = 'walk';
+    o.walk = 1;
+    o.ph = f / 8;
+    o.lean = 0.16;
+    o.hand = [4 + Math.sin((f / 8) * TAU) * 1.5, 5.5, 8 + Math.abs(Math.cos((f / 8) * TAU))];
+    o.spin = f * 0.4;
+  } else {
+    f = Math.floor(pose.now * 3) % 6;
+    anim = 'idle';
+    o.spin = f * 0.5;
+    o.lean = 0.08 + (f % 3 === 1 ? 0.04 : 0);
+  }
+  const fr = mobFrame('astro', pose, anim, f, d, () => astroPic(o, yaw, post), extra);
+  return withStones(fr, stones, Math.floor(pose.now * 8) % 24, 0);
+});
+
+registerMobWarm('f15_astro', function* () {
+  const pose: MobPose = {
+    anim: 'run',
+    frame: 0,
+    mode: 'chase',
+    t: 0,
+    left: false,
+    flash: false,
+    look: 'normal',
+    now: 0,
+  };
+  for (let d = 0; d < NDIR; d++) {
+    const yaw = (d / NDIR) * TAU;
+    for (let f = 0; f < 8; f++) {
+      mobFrame('astro', pose, 'walk', f, d, () =>
+        astroPic(
+          {
+            ...A0,
+            walk: 1,
+            ph: f / 8,
+            lean: 0.16,
+            hand: [4 + Math.sin((f / 8) * TAU) * 1.5, 5.5, 8 + Math.abs(Math.cos((f / 8) * TAU))],
+            spin: f * 0.4,
+          },
+          yaw,
+        ),
+      );
+      yield 0;
+    }
+  }
+});
+
 // --- Прогрев кадров ------------------------------------------------------------------
 
 /** Кадры по позам: рендер дорисует их по 3 мс за кадр, пока такой моб в мире. */
@@ -4889,17 +5097,6 @@ registerMobWarm(
       'idle',
       f * 2,
       () => novaBody({ f, g: 0, step: 0, dk: 0 }),
-    ]),
-  ),
-);
-registerMobWarm(
-  'f15_astro',
-  warm(
-    'astro',
-    range(16).map((f): [string, number, () => Built] => [
-      'idle',
-      3 * 16 + f,
-      () => astroBody({ step: 0, stones: 3, f, cast: 0, kind: 0, dk: 0 }),
     ]),
   ),
 );
