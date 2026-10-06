@@ -20,6 +20,8 @@ import {
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import type { Mob, Strike, Zone } from '../dungeon-sim';
 import { F5_ARENA, F5_MARK, F5_MAZE } from './f5';
+// Мобы этажа в объёме (анимации мобов 5): регистрация рисовальщиков.
+import './f5-mobs';
 
 type RGBA = [number, number, number, number];
 
@@ -820,204 +822,14 @@ registerMobPainter('f5_hound', (m: Mob, pose: MobPose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Муравей-убийца: красно-бурый хитин, жвала, шесть лап. 28×17.
+// Муравей-убийца — рисует `f5-mobs.ts` (мини-3D, 8 сторон); здесь — хитин
+// для иконки материала.
 // ---------------------------------------------------------------------------
 
 const AN = {
   shell: [hx('#2a0c08'), hx('#5c1c12'), hx('#8e3620'), hx('#d06a40')] as Tones,
   spec: hx('#f6c49a'),
-  leg: hx('#2e120a'),
-  legHi: hx('#7a3420'),
-  jaw: hx('#2c120a'),
-  jawTip: hx('#d8c8a0'),
-  eye: hx('#0a0404'),
-  eyeHi: hx('#ffb070'),
-  pher: hx('#e070c8'),
 };
-
-interface AntPose {
-  gx: number;
-  gy: number;
-  /** Брюшко приподнято (зовёт). */
-  lift: number;
-  tx: number;
-  ty: number;
-  headX: number;
-  headY: number;
-  jaw: number;
-  ant: number;
-  legs: number;
-  belly: boolean;
-}
-
-function antPose(anim: string, f: number): AntPose {
-  const ps: AntPose = {
-    gx: 7,
-    gy: 9,
-    lift: 0,
-    tx: 14.5,
-    ty: 9.5,
-    headX: 20.5,
-    headY: 8.5,
-    jaw: 0.25,
-    ant: 0,
-    legs: 0,
-    belly: false,
-  };
-  if (anim === 'idle') {
-    ps.ant = f % 4;
-    ps.gy += f % 2 ? 0.3 : 0;
-  } else if (anim === 'run') {
-    ps.legs = f % 4;
-    ps.ant = f % 2;
-    ps.gy += f % 2 ? 0.4 : 0;
-    ps.headY += f % 2 ? 0.3 : 0;
-  } else if (anim === 'wind') {
-    ps.headY -= 1.6;
-    ps.headX -= 0.6;
-    ps.jaw = 1;
-    ps.ant = 2;
-  } else if (anim === 'bite') {
-    ps.headX += 1.8;
-    ps.tx += 0.8;
-    ps.headY += 0.6;
-    ps.jaw = f === 0 ? 0 : 0.5;
-  } else if (anim === 'call') {
-    ps.lift = 1;
-    ps.gy -= 2.5;
-    ps.gx += 0.5;
-    ps.ant = 3;
-    ps.jaw = f % 2 ? 0.9 : 0.2;
-  } else if (anim === 'hurt') {
-    ps.headX -= 0.8;
-    ps.gx -= 0.6;
-    ps.jaw = 0.6;
-  }
-  return ps;
-}
-
-function paintAnt(ap: AntPose, anim: string, f: number): Built {
-  const W = 28;
-  const H = 17;
-  const G = 15;
-  const p = new Px(W, H);
-  if (anim === 'dead') {
-    shadeEll(p, 9, 12, 5, 3, AN.shell);
-    shadeEll(p, 15, 12.5, 2.6, 2, AN.shell);
-    shadeEll(p, 20, 12.5, 2.6, 2.4, AN.shell);
-    for (const x of [12, 14, 16, 18]) stroke(p, x, 10.5, x + (x % 4 ? -1 : 1), 7.5, AN.leg);
-    p.outline(INK);
-    return { p, ax: 13, ay: G, eye: null };
-  }
-  // Лапы: три с дальней стороны (темнее), три с ближней. Трёхточечная походка.
-  const gait = [0, 1, 0, 1][ap.legs] ?? 0;
-  const legX = [ap.tx - 1.8, ap.tx, ap.tx + 1.6];
-  const legSpan = [-4.5, 0.5, 5];
-  const legAt = (i: number, farSide: boolean) => {
-    const x0 = legX[i];
-    const y0 = ap.ty + 0.8;
-    const phase = (i + (farSide ? 1 : 0)) % 2 === gait ? 1.6 : -1.2;
-    const kx = x0 + legSpan[i] * 0.45 + (ap.legs ? phase * 0.6 : 0);
-    const ky = ap.ty - 2.2;
-    const fx = x0 + legSpan[i] + (ap.legs ? phase : 0);
-    const fy = G - (ap.legs && phase > 0 ? 1 : 0);
-    const c = farSide ? AN.leg : AN.legHi;
-    stroke(p, x0, y0, kx, ky, c);
-    stroke(p, kx, ky, fx, fy, c);
-    p.set(Math.floor(fx) + (legSpan[i] > 0 ? 1 : -1), Math.floor(fy), c);
-  };
-  for (let i = 0; i < 3; i++) legAt(i, true);
-  // Брюшко с полосами.
-  shadeEll(p, ap.gx, ap.gy, 5.4, 3.9, AN.shell);
-  for (const k of [-0.35, 0.15]) {
-    const bx = ap.gx + k * 5.4;
-    for (let y = -3; y <= 3; y++) {
-      const yy = Math.round(ap.gy + y);
-      if (p.solid(Math.round(bx), yy)) p.set(Math.round(bx), yy, AN.shell[0]);
-    }
-  }
-  // Стебелёк, грудь.
-  shadeEll(p, ap.gx + 5.6, ap.gy + 0.6 + ap.lift, 1.3, 1.2, AN.shell);
-  shadeEll(p, ap.tx, ap.ty, 2.8, 2.1, AN.shell);
-  // Голова и жвала.
-  shadeEll(p, ap.headX, ap.headY, 3.1, 2.8, AN.shell);
-  const jx = ap.headX + 2.8;
-  const jy = ap.headY + 1.2;
-  const open = ap.jaw * 1.8;
-  const jaws: [number, number][][] = [
-    [
-      [jx - 0.5, jy - 0.8],
-      [jx + 2.5, jy - 1.2 - open],
-      [jx + 4, jy - 0.2 - open * 0.5],
-      [jx + 1.5, jy + 0.2],
-    ],
-    [
-      [jx - 0.5, jy + 0.6],
-      [jx + 2.5, jy + 1.4 + open],
-      [jx + 4, jy + 0.6 + open * 0.5],
-      [jx + 1.5, jy - 0.2],
-    ],
-  ];
-  for (const j of jaws) poly(p, j, AN.jaw);
-  // Усики с изломом.
-  for (const [dx, k] of [
-    [-0.5, 1],
-    [0.8, 0.8],
-  ] as const) {
-    const a0 = -1.3 - (ap.ant % 2) * 0.25 * k - (ap.ant === 3 ? 0.4 : 0);
-    const x0 = ap.headX + dx;
-    const y0 = ap.headY - 2.4;
-    const x1 = x0 + Math.cos(a0) * 3.5;
-    const y1 = y0 + Math.sin(a0) * 3.5;
-    stroke(p, x0, y0, x1, y1, AN.legHi);
-    stroke(p, x1, y1, x1 + 2.5 * k, y1 + (ap.ant === 2 ? -1.5 : 0.5), AN.legHi);
-  }
-  for (let i = 0; i < 3; i++) legAt(i, false);
-  p.outline(INK);
-  // Блики хитина и глаз.
-  p.set(Math.floor(ap.gx - 2), Math.floor(ap.gy - 2.5), AN.spec);
-  p.set(Math.floor(ap.headX - 1), Math.floor(ap.headY - 1.8), AN.spec);
-  const ex = Math.floor(ap.headX + 1);
-  const ey = Math.floor(ap.headY - 0.6);
-  p.set(ex, ey, AN.eye);
-  p.set(ex + 1, ey, AN.eye);
-  p.set(ex, ey - 1, AN.eyeHi);
-  // Кончики жвал.
-  p.set(Math.floor(jx + 3.5), Math.floor(jy - 0.6 - open * 0.5), AN.jawTip);
-  p.set(Math.floor(jx + 3.5), Math.floor(jy + 0.6 + open * 0.5), AN.jawTip);
-  if (anim === 'call') {
-    // Капли феромона с кончика брюшка.
-    const bx = ap.gx - 5;
-    const by = ap.gy - 1;
-    for (let i = 0; i < 4; i++) {
-      const a = Math.PI + 0.6 - i * 0.35 + f * 0.2;
-      const r = 1.5 + ((i + f) % 3);
-      p.set(Math.floor(bx + Math.cos(a) * r), Math.floor(by + Math.sin(a) * r), AN.pher);
-    }
-  }
-  return { p, ax: Math.round(ap.tx - 1), ay: G, eye: [ex, ey] };
-}
-
-registerMobPainter('f5_ant', (m: Mob, pose: MobPose) => {
-  let anim: string = pose.anim;
-  let f = pose.frame;
-  if (pose.mode === 'call') {
-    anim = 'call';
-    f = Math.floor(pose.t * 8) % 2;
-  } else if (pose.mode === 'f5_born') {
-    const k = Math.min(3, Math.floor((pose.t / 0.8) * 4));
-    return frameOf('f5_ant', pose, 'born', k, () =>
-      bornFrom(paintAnt(antPose('idle', 0), 'idle', 0), k),
-    );
-  }
-  if (anim === 'run') f = ((f % 4) + 4) % 4;
-  else if (anim === 'idle') f = ((f % 4) + 4) % 4;
-  else if (anim === 'bite' || anim === 'wind') f = Math.min(1, Math.max(0, f));
-  else if (anim === 'sleep') anim = 'idle';
-  else if (anim !== 'call') f = 0;
-  if (anim === 'sleep') f = 0;
-  return frameOf('f5_ant', pose, anim, f, () => paintAnt(antPose(anim, f), anim, f));
-});
 
 // ---------------------------------------------------------------------------
 // Тень лабиринта: высокая, чёрная, маска-осколок, три когтя. 22×30.
