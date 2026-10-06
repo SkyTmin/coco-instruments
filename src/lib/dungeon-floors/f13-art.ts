@@ -5251,9 +5251,12 @@ export function giantShoulderPx(m: Mob, _now: number): number {
 // ---------------------------------------------------------------------------
 // Кукловод: высокий цилиндр с лентой, фарфоровая маска с нарисованной
 // улыбкой, фрак с фалдами, белая манишка, золото; вага-крестовина в руке.
-// Акты I–III висит на нитях: маятник вокруг подвеса, ноги и фалды отстают
-// пружиной, рука с вагой дёргает раньше удара исполина. Акт IV ходит сам.
-// Техники — ключи 24 к/с от `m.t`, контакт — в кадре урона.
+// Акты I–III висит на нитях: маятник вокруг полей шляпы, считанный 24 раза
+// в секунду; ноги, фалды и рукава берут ТОТ ЖЕ маятник со сдвигом на 1–4
+// отсчёта (отстают и доигрывают после остановки). Рука с вагой дёргает
+// раньше удара исполина, плечи отдают. Акт IV ходит сам, шаг по пути.
+// Техники — ключи 24 к/с от `m.t` в кадрах, контакт — в кадре урона;
+// фалды, висящие ноги и шляпа — те же ключи со сдвигом времени.
 // ---------------------------------------------------------------------------
 
 /** Масштаб модели и холст до обрезки (точка ног — LAX, LAY). */
@@ -5263,7 +5266,7 @@ const LH = 150;
 const LAX = 62;
 const LAY = 134;
 const LIFT_PX = 30;
-/** Точка подвеса (поля шляпы), пиксели над ногами: вокруг неё качается. */
+/** Точка подвеса (поля шляпы), пиксели над ногами, если кадр её не знает. */
 const PIVOT = 47;
 
 const COAT: Tone = [hx('#09060e'), hx('#1e1632'), hx('#3a2c5a'), hx('#6e5ca6')];
@@ -5277,9 +5280,26 @@ const GHOST_T = hx('#7a68b0');
 const RIM = hx('#ffe6be', 150);
 const RIM_G = hx('#d8caff', 140);
 const THREAD = P.gold[2];
+/** Свечение маски, перчаток и манишки в темноте — слабее ваги (0,9). */
+const GLOW_MASK = 0.42;
+const GLOW_SHIRT = 0.3;
 
-/** Перед и право торса — для манишки (узор читает нормаль модели). */
-const DRESS = { fwd: v3(0, 0, 1), right: v3(1, 0, 0) };
+/** Манишка — V от пояса к вороту, золотые лацканы, запонки; перед и право торса — свои у каждого кадра. */
+function shirtPat(dress: { fwd: V3; right: V3 }): Pat {
+  return (t, _nx, _ny, nm) => {
+    const f = vdot(nm, dress.fwd);
+    if (f < 0.25) return null;
+    const r = Math.abs(vdot(nm, dress.right));
+    const v = 0.1 + 0.34 * clamp01((t - 0.18) / 0.82);
+    if (t > 0.18 && r < v) {
+      if (r < 0.07 && (Math.abs(t - 0.42) < 0.05 || Math.abs(t - 0.64) < 0.05)) return P.gold[2];
+      return SHIRT;
+    }
+    if (t > 0.22 && r < v + 0.14) return P.gold;
+    if (t < 0.16 && t > 0.04 && Math.abs(r - 0.3) < 0.08) return P.gold[2];
+    return null;
+  };
+}
 
 const LORD_BODY: Body = {
   hip: 13.8,
@@ -5307,20 +5327,6 @@ const LORD_BODY: Body = {
     foot: SHOE,
     joint: SHIRT,
     pelvis: COAT,
-  },
-  // Манишка — V от пояса к вороту, по краю золотые лацканы, запонки.
-  torsoPat: (t, _nx, _ny, nm) => {
-    const f = vdot(nm, DRESS.fwd);
-    if (f < 0.25) return null;
-    const r = Math.abs(vdot(nm, DRESS.right));
-    const v = 0.1 + 0.34 * clamp01((t - 0.18) / 0.82);
-    if (t > 0.18 && r < v) {
-      if (r < 0.07 && (Math.abs(t - 0.42) < 0.05 || Math.abs(t - 0.64) < 0.05)) return P.gold[2];
-      return SHIRT;
-    }
-    if (t > 0.22 && r < v + 0.14) return P.gold;
-    if (t < 0.16 && t > 0.04 && Math.abs(r - 0.3) < 0.08) return P.gold[2];
-    return null;
   },
 };
 
@@ -5351,6 +5357,8 @@ interface LP extends Pose {
   hY: number;
   hZ: number;
   hT: number;
+  /** Шляпа отстаёт от головы: наклон назад (+) / вперёд, рад. */
+  hk: number;
   /** Иглы веером в левой. */
   nd: number;
   /** Аркан: петля есть, угол раскрутки, бросок (0…1 летит, 1…2 лежит). */
@@ -5386,6 +5394,7 @@ const LP0: LP = {
   hY: 0,
   hZ: 0,
   hT: 0,
+  hk: 0,
   nd: 0,
   lo: 0,
   la: 0,
@@ -5396,6 +5405,8 @@ const LP0: LP = {
   sq: 1,
 };
 const lp = (o: Partial<LP>, b: LP = LP0): LP => ({ ...b, ...o });
+/** Время ключа в кадрах 24 к/с: контакт ставится ровно на кадр урона. */
+const fr24 = (n: number) => n / 24;
 
 // ---- опорные позы ----------------------------------------------------------
 
@@ -5465,59 +5476,121 @@ const GUARD = lp({
 /** Рука у полей шляпы. */
 const DOFF = limb(2.6, 0.3, 1.2);
 
+// ---- вторичное движение: те же ключи со сдвигом времени --------------------
+
+/**
+ * Поза на треке с запаздывающими частями: фалды берут позу на 0,1 с раньше
+ * и раскручиваются от поворота и наклона корпуса; висящие ноги и голова —
+ * на 0,06 с раньше; шляпа отстаёт от кивка. Всё — из тех же ключей, своей
+ * анимации у частей нет: тело ощущается одной массой с инерцией.
+ */
+function follow(at: (t: number) => LP, t: number, hang: boolean): LP {
+  const L = { ...at(t) };
+  const T = at(t - 0.1);
+  const H = at(t - 0.06);
+  const dLean = L.lean - T.lean;
+  const dTw = L.twist - T.twist;
+  L.tb = clampN(T.tb + dLean * 0.75 + (L.fw - T.fw) * 0.035 + (L.sink - T.sink) * 0.03, -0.35, 1.2);
+  L.ts = clampN(T.ts - dTw * 0.7 + (L.side - T.side) * 0.6, -0.7, 0.7);
+  L.tw = clampN(T.tw + Math.abs(dTw) * 0.3, 0, 0.6);
+  if (hang) {
+    // Висит: ноги не держат вес, отстают от наклона корпуса.
+    const dl = L.lean - H.lean;
+    const ds = L.side - H.side;
+    L.lL = limb(H.lL.sw - dl * 0.55, H.lL.out + ds * 0.5, H.lL.bend + Math.abs(dl) * 0.3);
+    L.lR = limb(H.lR.sw - dl * 0.55, H.lR.out - ds * 0.5, H.lR.bend + Math.abs(dl) * 0.3);
+    L.toe = H.toe;
+  }
+  // Голова и шляпа: кивок отстаёт от корпуса.
+  const dh = L.lean + L.hp - (H.lean + H.hp);
+  L.hp += -dh * 0.25;
+  L.hk = clampN(L.hk + dh * 0.55, -0.4, 0.4);
+  return L;
+}
+
 // ---- циклы -------------------------------------------------------------------
 
-/** Висит: 16 кадров (10 к/с); ноги и фалды отстают на пружине (lg, ls). */
-function hangPose(f: number, lg: number, ls: number): LP {
+/**
+ * Висит: 16 кадров дыхания (10 к/с). Поверх — отставание частей от маятника
+ * (в осях тела, рад): ноги (lf, ls), фалды (tf, ts), рукава (af).
+ */
+interface Lag {
+  lf: number;
+  ls: number;
+  tf: number;
+  ts: number;
+  af: number;
+}
+function hangPose(f: number, g: Lag): LP {
   const ph = (f / 16) * TAU;
   const s = Math.sin(ph);
+  const sp = Math.hypot(g.lf, g.ls);
   return lp(
     {
       bob: 0.6 * s,
-      hp: HOLD.hp + 0.06 * Math.sin(ph + 1.1),
+      hp: HOLD.hp + 0.06 * Math.sin(ph + 1.1) - g.lf * 0.35,
       hr: 0.05 * Math.sin(ph - 0.3),
       lL: limb(
-        HOLD.lL.sw + 0.1 * Math.sin(ph - 0.7) + lg,
-        HOLD.lL.out - ls,
-        HOLD.lL.bend + 0.1 * Math.max(0, s),
+        HOLD.lL.sw + 0.1 * Math.sin(ph - 0.7) + g.lf,
+        HOLD.lL.out + g.ls,
+        HOLD.lL.bend + 0.1 * Math.max(0, s) + sp * 0.5,
       ),
       lR: limb(
-        HOLD.lR.sw - 0.1 * Math.sin(ph - 0.7) + lg,
-        HOLD.lR.out + ls,
-        HOLD.lR.bend + 0.1 * Math.max(0, -s),
+        HOLD.lR.sw - 0.1 * Math.sin(ph - 0.7) + g.lf * 0.85,
+        HOLD.lR.out - g.ls,
+        HOLD.lR.bend + 0.1 * Math.max(0, -s) + sp * 0.35,
       ),
-      aL: limb(HOLD.aL.sw + 0.07 * Math.sin(ph - 0.4), HOLD.aL.out + 0.04 * s, HOLD.aL.bend),
-      tb: HOLD.tb + 0.05 * Math.sin(ph - 1.3) - lg * 1.5,
-      ts: ls * 1.4,
-      tw: 0.04 * Math.sin(ph - 0.9),
-      toe: HOLD.toe + 0.06 * Math.sin(ph - 0.5),
+      aL: limb(
+        HOLD.aL.sw + 0.07 * Math.sin(ph - 0.4) + g.af,
+        HOLD.aL.out + 0.04 * s,
+        HOLD.aL.bend - g.af * 0.4,
+      ),
+      aR: limb(HOLD.aR.sw + g.af * 0.4, HOLD.aR.out, HOLD.aR.bend),
+      tb: HOLD.tb + 0.05 * Math.sin(ph - 1.3) + g.tf,
+      ts: g.ts,
+      tw: 0.04 * Math.sin(ph - 0.9) + Math.abs(g.ts) * 0.4,
+      toe: HOLD.toe + 0.06 * Math.sin(ph - 0.5) + sp * 0.6,
     },
     HOLD,
   );
 }
 
-/** Акт IV, шаг: 8 кадров на 1,3 клетки пути; вага тростью, фалды запаздывают. */
+/**
+ * Акт IV, шаг: 12 кадров на 1,3 клетки пути (по пройденному пути, не по
+ * часам). Удар пятки — кадры 0 и 6: корпус проседает, вага-трость ставится
+ * на пол. Фалды — тот же цикл на 2 кадра позже. `k` — ширина шага (на
+ * развороте почти переступ на месте), `turn` — куда поворачивает (−1…1).
+ */
 const L_STRIDE = 1.3;
-function walkPose(f: number): LP {
-  const ph = (f / 8) * TAU;
+function walkPose(f: number, k = 1, turn = 0): LP {
+  const ph = (f / 12) * TAU;
   const s = Math.sin(ph);
   const c = Math.cos(ph);
+  const lag = ((f - 2) / 12) * TAU;
+  const st = 0.3 + 0.7 * k;
+  // Проседание на ударе пятки (cos = ±1), подъём на переносе.
+  const dip = Math.abs(c) ** 3;
   return lp({
-    bob: 0.9 * Math.abs(c) - 0.3,
-    lean: 0.1,
-    twist: 0.14 * s + 0.05,
-    hp: 0.04,
+    bob: (0.9 * (1 - dip) - 0.5 * dip) * st - 0.2,
+    lean: 0.06 + 0.06 * k,
+    twist: (0.14 * s + 0.05) * st + turn * 0.18,
+    hp: 0.04 + 0.05 * dip * st,
     hr: 0.03 * s,
-    lL: limb(0.5 * s, 0.07, 0.12 + 0.95 * Math.max(0, c) ** 1.5),
-    lR: limb(-0.5 * s, 0.07, 0.12 + 0.95 * Math.max(0, -c) ** 1.5),
-    aL: limb(-0.4 * s, 0.16, 0.3 + 0.15 * Math.max(0, -s)),
-    aR: limb(0.55 + 0.12 * s, 0.2, 0.6),
+    side: 0.025 * s * st,
+    lL: limb(0.5 * s * st, 0.07, 0.12 + 1.0 * st * Math.max(0, c) ** 1.5),
+    lR: limb(-0.5 * s * st, 0.07, 0.12 + 1.0 * st * Math.max(0, -c) ** 1.5),
+    aL: limb(-0.4 * s * st, 0.16, 0.3 + 0.15 * Math.max(0, -s)),
+    // Трость: вперёд на правой ноге, упор — на ударе пятки.
+    aR: limb(0.55 + 0.16 * Math.sin(ph + 0.4) * st, 0.2, 0.6 - 0.1 * dip),
     wx: 0.05,
     wy: -0.75,
-    wz: 0.65,
+    wz: 0.65 + 0.12 * Math.sin(ph + 0.4) * st,
     wg: 1,
-    tb: 0.22 + 0.08 * Math.sin(2 * ph - 1.2),
-    tw: 0.07 * Math.sin(ph - 0.8),
+    tb: 0.22 + (0.1 * Math.sin(2 * lag - 1.2) + 0.06) * st,
+    ts: -0.08 * Math.sin(lag) * st - turn * 0.2,
+    tw: 0.07 * Math.sin(lag - 0.8) + Math.abs(turn) * 0.1,
+    toe: 0,
+    sq: 1 - 0.025 * dip * st,
   });
 }
 
@@ -5532,6 +5605,7 @@ function standPose(f: number): LP {
       hy: 0.22 * Math.sin(ph + 0.6),
       wx: STAND.wx + 0.12 * Math.sin(ph - 0.4),
       tb: STAND.tb + 0.03 * Math.sin(ph - 1),
+      ts: 0.04 * Math.sin(ph - 0.9),
     },
     STAND,
   );
@@ -5541,14 +5615,16 @@ function standPose(f: number): LP {
 function lostPose(f: number): LP {
   const ph = (f / 16) * TAU;
   const s = Math.sin(ph);
+  const c = Math.cos(ph);
   return lp(
     {
-      sink: 1.3,
+      sink: 1.3 + 0.4 * Math.max(0, c),
       lean: 0.12,
-      bob: 0.25 * Math.abs(Math.cos(ph)),
+      bob: 0.25 * Math.abs(c),
       hy: 0.6 * s,
-      hp: 0.12,
+      hp: 0.12 - 0.1 * Math.max(0, -c),
       hr: -0.12 * s,
+      side: 0.05 * s,
       aL: limb(0.75, 0.55 + 0.12 * s, 1.0),
       aR: limb(0.85, 0.35, 0.95),
       wx: 0.15,
@@ -5558,59 +5634,111 @@ function lostPose(f: number): LP {
       fL: 0.5,
       lL: limb(0.14 + 0.1 * Math.max(0, s), 0.12, 0.25 + 0.3 * Math.max(0, s)),
       lR: limb(-0.1 + 0.1 * Math.max(0, -s), 0.13, 0.3 + 0.3 * Math.max(0, -s)),
+      tb: 0.08 + 0.04 * Math.sin(ph - 1.2),
+      ts: -0.08 * Math.sin(ph - 0.6),
+      hk: -0.05 * s,
     },
     STAND,
   );
 }
 
-// ---- сцены и техники (ключи) ---------------------------------------------------
+// ---- сцены и техники: ключи в кадрах 24 к/с ------------------------------------
 
-/** Пробуждение 2,4 с: кукла оживает по частям, вага выводит дугу. */
+/**
+ * Пробуждение 2,4 с (кадры 0–57): кукла оживает по нитям — сперва поля
+ * шляпы (голова вскидывается, кадр 11), потом правое запястье (вага в руку,
+ * 18), левое (25), всё тело подтягивают (31) — и росчерк ваги со следом.
+ * Перед каждым рывком часть чуть проседает: подготовка.
+ */
 const ROAR: readonly PKey<LP>[] = [
   [0, LIMP],
-  [0.3, lp({ side: 0.05, hr: 0.16 }, LIMP)],
-  [0.47, lp({ hp: -0.25, hr: 0, side: 0.04 }, LIMP), eBack],
+  [fr24(7), lp({ side: 0.05, hr: 0.16 }, LIMP)],
+  [fr24(10), lp({ side: 0.03, hr: 0.1, hp: 1.05 }, LIMP)],
+  [fr24(11), lp({ hp: -0.3, hr: 0, side: 0.04, hk: 0.3, sq: 1.04 }, LIMP), eBack],
+  [fr24(15), lp({ hp: -0.18, side: 0.03, hk: -0.08 }, LIMP)],
+  [fr24(17), lp({ hp: -0.15, side: 0.03, aR: limb(-0.1, 0.18, 0.1) }, LIMP)],
   [
-    0.74,
-    lp({ hp: -0.15, aR: HOLD.aR, wx: HOLD.wx, wy: HOLD.wy, wz: HOLD.wz, wg: 0, side: 0.02 }, LIMP),
-    eBack,
-  ],
-  [
-    1.02,
+    fr24(18),
     lp(
-      { hp: -0.1, aR: HOLD.aR, aL: HOLD.aL, wx: HOLD.wx, wy: HOLD.wy, wz: HOLD.wz, wg: 0, side: 0 },
+      { hp: -0.15, aR: HOLD.aR, wx: HOLD.wx, wy: HOLD.wy, wz: HOLD.wz, wg: 0, side: 0.06, fR: 0.6 },
       LIMP,
     ),
     eBack,
   ],
-  [1.28, lp({ bob: 1.5 }, HOLD), eBack],
+  [fr24(24), lp({ hp: -0.12, aR: HOLD.aR, wx: HOLD.wx, wy: HOLD.wy, wz: HOLD.wz, wg: 0 }, LIMP)],
   [
-    1.55,
+    fr24(25),
     lp(
-      { aL: DOFF, aR: limb(1.55, 1.15, 0.45), wx: 1, wy: 0.35, wz: 0.25, twist: 0.25, hp: -0.1 },
+      {
+        hp: -0.1,
+        aR: HOLD.aR,
+        aL: limb(HOLD.aL.sw + 0.3, HOLD.aL.out + 0.2, HOLD.aL.bend),
+        wx: HOLD.wx,
+        wy: HOLD.wy,
+        wz: HOLD.wz,
+        wg: 0,
+        side: -0.04,
+        fL: 0.8,
+      },
+      LIMP,
+    ),
+    eBack,
+  ],
+  [fr24(29), lp({ bob: -1.2, lean: 0.14, hp: 0.08, sq: 0.95 }, HOLD)],
+  [fr24(31), lp({ bob: 2.2, lean: -0.04, hp: -0.12, sq: 1.06, toe: 1.05, hk: 0.2 }, HOLD), eBack],
+  [fr24(35), lp({ bob: 1.2, hk: -0.06 }, HOLD)],
+  [
+    fr24(38),
+    lp(
+      { aL: DOFF, aR: limb(1.6, 1.2, 0.4), wx: 1, wy: 0.4, wz: 0.2, twist: 0.3, hp: -0.12, bob: 1 },
       HOLD,
     ),
+    easeOut,
   ],
   [
-    1.85,
+    fr24(44),
     lp(
       {
         aL: DOFF,
-        aR: limb(1.35, -0.25, 0.7),
-        wx: -0.8,
+        aR: limb(1.35, -0.3, 0.7),
+        wx: -0.85,
         wy: 0.3,
         wz: 0.6,
-        twist: -0.25,
-        lean: 0.12,
+        twist: -0.3,
+        lean: 0.14,
+        bob: 0.6,
       },
       HOLD,
     ),
+    eIn,
   ],
-  [2.15, lp({ lean: 0.4, hp: 0.3, aL: limb(1.0, 0.8, 0.4), aR: limb(1.1, 0.3, 1.2) }, HOLD)],
-  [2.4, HOLD],
+  [
+    fr24(46),
+    lp(
+      {
+        aL: DOFF,
+        aR: limb(1.3, -0.4, 0.75),
+        wx: -0.95,
+        wy: 0.25,
+        wz: 0.5,
+        twist: -0.36,
+        lean: 0.17,
+      },
+      HOLD,
+    ),
+    easeOut,
+  ],
+  [
+    fr24(52),
+    lp({ lean: 0.42, hp: 0.32, aL: limb(1.0, 0.85, 0.4), aR: limb(1.1, 0.3, 1.2), hk: 0.1 }, HOLD),
+  ],
+  [fr24(55), lp({ lean: 0.38, hp: 0.28, aL: limb(1.0, 0.8, 0.4), aR: limb(1.1, 0.3, 1.2) }, HOLD)],
+  [fr24(58), HOLD],
 ];
+/** Кадр, с которого нить пробуждения натянута: поля шляпы ×2, левое, правое запястье. */
+const ROAR_TAUT = [11, 11, 25, 18] as const;
 
-/** Смена акта 3,2 с: снимает шляпу, глубокий поклон в воздухе, надевает. */
+/** Смена акта 3,2 с (кадры 0–76): снимает шляпу, поклон в воздухе с отскоком, надевает. */
 const BOW_AIR = lp(
   {
     lean: 0.95,
@@ -5630,134 +5758,226 @@ const BOW_AIR = lp(
 const VAGA_LOW = { aR: limb(0.4, 0.25, 0.95), wx: 0.1, wy: -0.85, wz: 0.45 };
 const TRANS: readonly PKey<LP>[] = [
   [0, HOLD],
-  [0.25, lp({ aL: DOFF, ...VAGA_LOW, hp: 0.05 }, HOLD)],
-  [0.45, lp({ aL: limb(2.75, 0.35, 0.9), hat: 1, ...VAGA_LOW }, HOLD)],
-  [0.8, lp({ aL: limb(1.55, 1.25, 0.25), hat: 1, ...VAGA_LOW, twist: 0.15 }, HOLD)],
-  [1.25, BOW_AIR],
-  [2.1, lp({ lean: 0.88, hp: 0.3 }, BOW_AIR)],
-  [2.45, lp({ aL: limb(2.75, 0.35, 0.9), hat: 1, ...VAGA_LOW, lean: 0.05 }, HOLD)],
-  [2.62, lp({ aL: DOFF, hat: 0, ...VAGA_LOW }, HOLD)],
+  [fr24(6), lp({ aL: DOFF, ...VAGA_LOW, hp: 0.05 }, HOLD)],
+  [fr24(11), lp({ aL: limb(2.75, 0.35, 0.9), hat: 1, ...VAGA_LOW }, HOLD)],
+  [fr24(19), lp({ aL: limb(1.55, 1.25, 0.25), hat: 1, ...VAGA_LOW, twist: 0.15 }, HOLD)],
+  [fr24(22), lp({ aL: limb(1.6, 1.3, 0.25), hat: 1, ...VAGA_LOW, twist: 0.2, lean: -0.1 }, HOLD)],
+  [fr24(30), lp({ lean: 1.02, hp: 0.4, sq: 0.97 }, BOW_AIR), eIn],
+  [fr24(34), lp({ lean: 0.9, hp: 0.32 }, BOW_AIR), easeOut],
+  [fr24(50), lp({ lean: 0.88, hp: 0.3 }, BOW_AIR)],
+  [fr24(59), lp({ aL: limb(2.75, 0.35, 0.9), hat: 1, ...VAGA_LOW, lean: 0.05 }, HOLD)],
+  [fr24(63), lp({ aL: DOFF, hat: 0, ...VAGA_LOW, hk: 0.15 }, HOLD)],
   [
-    2.9,
+    fr24(70),
     lp(
-      { aL: limb(1.3, 1.25, 0.35), aR: limb(1.3, 1.2, 0.35), wx: 0.7, wy: 0.3, wz: 0.6, hp: -0.15 },
+      {
+        aL: limb(1.3, 1.25, 0.35),
+        aR: limb(1.3, 1.2, 0.35),
+        wx: 0.7,
+        wy: 0.3,
+        wz: 0.6,
+        hp: -0.15,
+        bob: 1.2,
+        sq: 1.03,
+      },
       HOLD,
     ),
     easeOut,
   ],
-  [3.2, HOLD],
+  [fr24(77), HOLD],
 ];
 
-/** Иглы (акт III): веер в левой у уха → бросок в 0,45 (вага остаётся в правой). */
+/**
+ * Иглы (акт III): веер в левой у уха (кадр 6), взвод (9), бросок с кадра 10,
+ * выпуск — кадр 11 (урон 0,45; это уже `f13_hang`, `needleAt`).
+ */
 const NEEDLE: readonly PKey<LP>[] = [
   [0, HOLD],
   [
-    0.26,
+    fr24(6),
     lp({ aL: limb(2.5, 0.55, 2.1), twist: -0.15, hy: -0.15, fL: 1, nd: 1, lean: -0.05 }, HOLD),
     easeOut,
   ],
   [
-    0.33,
-    lp({ aL: limb(2.65, 0.6, 2.25), twist: -0.22, hy: -0.15, fL: 1, nd: 1, lean: -0.08 }, HOLD),
+    fr24(9),
+    lp({ aL: limb(2.7, 0.62, 2.3), twist: -0.26, hy: -0.18, fL: 1, nd: 1, lean: -0.1 }, HOLD),
   ],
   [
-    0.45,
-    lp({ aL: limb(1.45, 0.25, 0.1), twist: 0.4, lean: 0.12, fL: 1, nd: 0, hy: 0.05 }, HOLD),
+    fr24(10),
+    lp({ aL: limb(2.25, 0.5, 1.4), twist: -0.05, hy: -0.05, fL: 1, nd: 1, lean: 0 }, HOLD),
     eIn,
   ],
 ];
+/** Выпуск игл (0 — кадр урона) и проводка, от `needleAt`. */
 const NEEDLE_FT: readonly PKey<LP>[] = [
-  [0, NEEDLE[3][1]],
-  [0.1, lp({ aL: limb(1.15, 0.2, 0.05), twist: 0.5, lean: 0.15, fL: 0.6 }, HOLD), easeOut],
-  [0.5, HOLD],
+  [
+    0,
+    lp(
+      { aL: limb(1.45, 0.25, 0.1), twist: 0.4, lean: 0.12, fL: 1, nd: 0, hy: 0.05, sq: 0.97 },
+      HOLD,
+    ),
+  ],
+  [
+    fr24(2),
+    lp({ aL: limb(1.12, 0.2, 0.05), twist: 0.52, lean: 0.16, fL: 0.6, sq: 1.01 }, HOLD),
+    easeOut,
+  ],
+  [fr24(5), lp({ aL: limb(1.2, 0.22, 0.15), twist: 0.44, lean: 0.13, fL: 0.4 }, HOLD)],
+  [fr24(12), HOLD],
 ];
 
-// Жесты акта I поверх висения: вага дёргает РАНЬШЕ удара исполина.
+// Жесты акта I поверх висения: вага дёргает РАНЬШЕ удара исполина, рука
+// с весом — плечи отдают, корпус качает (толчок маятника в `lordTick`).
 const G_L_PULL = lp(
   { aR: limb(1.5, 0.45, 1.65), wx: 0.05, wy: 0.45, wz: 0.85, twist: 0.12, lean: -0.08 },
   HOLD,
 );
 const G_L_JERK = lp(
-  { aR: limb(0.62, 0.18, 0.35), wx: -0.1, wy: -0.65, wz: 0.75, twist: -0.3, lean: 0.16 },
+  {
+    aR: limb(0.6, 0.18, 0.32),
+    wx: -0.1,
+    wy: -0.68,
+    wz: 0.75,
+    twist: -0.32,
+    lean: 0.18,
+    hp: 0.12,
+    aL: limb(0.75, 0.75, 0.6),
+    sq: 0.96,
+  },
   HOLD,
 );
-/** Копьё исполина (1,0) и его отдых (1 + t). */
+/** Копьё исполина: рывок ваги — кадр 20, удар исполина — 24 (его `recover` с 0). */
 const LG_LANCE: readonly PKey<LP>[] = [
   [0, HOLD],
-  [0.55, G_L_PULL],
-  [0.76, lp({ aR: limb(1.62, 0.5, 1.8), wy: 0.55, wz: 0.8, twist: 0.18, lean: -0.1 }, G_L_PULL)],
-  [0.86, G_L_JERK, eIn],
-  [1.0, lp({ aR: limb(0.72, 0.2, 0.45), wy: -0.55, twist: -0.26, lean: 0.12 }, G_L_JERK)],
-  [1.1, lp({ aR: limb(0.55, 0.15, 0.3), wy: -0.75, twist: -0.36, lean: 0.18 }, G_L_JERK), easeOut],
-  [1.8, HOLD],
+  [fr24(13), G_L_PULL],
+  [
+    fr24(18),
+    lp({ aR: limb(1.66, 0.52, 1.85), wy: 0.6, wz: 0.78, twist: 0.2, lean: -0.12 }, G_L_PULL),
+  ],
+  [fr24(20), G_L_JERK, eIn],
+  [
+    fr24(24),
+    lp({ aR: limb(0.7, 0.2, 0.42), wy: -0.58, twist: -0.27, lean: 0.13, sq: 1 }, G_L_JERK),
+  ],
+  [
+    fr24(26),
+    lp({ aR: limb(0.52, 0.14, 0.28), wy: -0.78, twist: -0.38, lean: 0.2, sq: 1 }, G_L_JERK),
+    easeOut,
+  ],
+  [fr24(43), HOLD],
 ];
-/** Щит (0,8) и отдых (0,8 + t): вага влево поперёк тела → рывок вправо. */
 const G_S_SWING = lp(
   { aR: limb(1.15, -0.25, 1.35), wx: -0.85, wy: 0.15, wz: 0.5, twist: -0.35 },
   HOLD,
 );
 const G_S_JERK = lp(
-  { aR: limb(0.95, 0.95, 0.55), wx: 0.95, wy: -0.25, wz: 0.35, twist: 0.32, lean: 0.06 },
+  {
+    aR: limb(0.95, 0.98, 0.52),
+    wx: 0.95,
+    wy: -0.25,
+    wz: 0.35,
+    twist: 0.34,
+    lean: 0.06,
+    side: -0.06,
+    sq: 0.97,
+  },
   HOLD,
 );
+/** Щит исполина: вага поперёк тела (11–14) → рывок вбок (16) → удар (20, `recover` с 0). */
 const LG_SHIELD: readonly PKey<LP>[] = [
   [0, HOLD],
-  [0.45, G_S_SWING],
-  [0.6, lp({ aR: limb(1.2, -0.3, 1.45), wx: -0.9, wy: 0.2, twist: -0.38 }, G_S_SWING)],
-  [0.68, G_S_JERK, eIn],
-  [0.8, lp({ aR: limb(0.9, 0.85, 0.6), wx: 0.85, twist: 0.25 }, G_S_JERK)],
-  [0.9, lp({ aR: limb(0.85, 1.0, 0.5), wx: 1.0, twist: 0.36 }, G_S_JERK), easeOut],
-  [1.4, HOLD],
+  [fr24(11), G_S_SWING],
+  [fr24(14), lp({ aR: limb(1.22, -0.32, 1.48), wx: -0.92, wy: 0.2, twist: -0.4 }, G_S_SWING)],
+  [fr24(16), G_S_JERK, eIn],
+  [fr24(20), lp({ aR: limb(0.9, 0.86, 0.6), wx: 0.85, twist: 0.26, sq: 1 }, G_S_JERK)],
+  [fr24(22), lp({ aR: limb(0.84, 1.02, 0.5), wx: 1.0, twist: 0.38, sq: 1 }, G_S_JERK), easeOut],
+  [fr24(34), HOLD],
 ];
-/** Таран: прицел (0–1) → бег (1–1,8) → рывок на себя на остановке (1,8 + t). */
+/** Таран: прицел (0–22, рука дрожит) → рывок на старт (23) → бег → рывок на себя (46). */
 const LG_CHARGE: readonly PKey<LP>[] = [
   [0, HOLD],
-  [0.45, lp({ lean: 0.18, aR: limb(1.35, 0.3, 0.95), wx: 0, wy: -0.1, wz: 1, hp: 0 }, HOLD)],
-  [0.9, lp({ lean: 0.22, aR: limb(1.45, 0.32, 1.05), wx: 0, wy: 0.05, wz: 1, hp: -0.05 }, HOLD)],
+  [fr24(11), lp({ lean: 0.18, aR: limb(1.35, 0.3, 0.95), wx: 0, wy: -0.1, wz: 1, hp: 0 }, HOLD)],
   [
-    0.97,
-    lp({ lean: 0.3, aR: limb(0.95, 0.2, 0.25), wx: 0, wy: -0.35, wz: 1, twist: -0.22 }, HOLD),
+    fr24(22),
+    lp({ lean: 0.22, aR: limb(1.48, 0.32, 1.08), wx: 0, wy: 0.08, wz: 1, hp: -0.06 }, HOLD),
+  ],
+  [
+    fr24(23),
+    lp(
+      { lean: 0.32, aR: limb(0.92, 0.2, 0.22), wx: 0, wy: -0.38, wz: 1, twist: -0.24, sq: 0.96 },
+      HOLD,
+    ),
     eIn,
   ],
-  [1.8, lp({ lean: 0.26, aR: limb(1.05, 0.22, 0.3), wx: 0, wy: -0.3, wz: 1, twist: -0.18 }, HOLD)],
   [
-    1.92,
-    lp({ lean: -0.22, aR: limb(1.9, 0.45, 1.95), wy: 0.6, wz: 0.6, twist: 0.3 }, HOLD),
+    fr24(43),
+    lp({ lean: 0.26, aR: limb(1.05, 0.22, 0.3), wx: 0, wy: -0.3, wz: 1, twist: -0.18 }, HOLD),
+  ],
+  [
+    fr24(46),
+    lp(
+      { lean: -0.24, aR: limb(1.92, 0.45, 1.98), wy: 0.62, wz: 0.6, twist: 0.32, hp: -0.15 },
+      HOLD,
+    ),
     easeOut,
   ],
-  [2.6, HOLD],
+  [fr24(62), HOLD],
 ];
-/** Сборка исполина: рывок на каждую часть (0; 0,5; 1,0; 1,6). */
-const PULL_R = lp({ aR: limb(1.9, 0.45, 1.7), wy: 0.7, wz: 0.6, lean: -0.1, twist: 0.12 }, HOLD);
+/** Сборка исполина: рывок на каждую часть (кадры 2, 14, 26, 40). */
+const PULL_R = lp(
+  { aR: limb(1.9, 0.45, 1.7), wy: 0.7, wz: 0.6, lean: -0.1, twist: 0.12, sq: 1.02 },
+  HOLD,
+);
 const PULL_L = lp({ aL: limb(2.6, 0.5, 0.6), fL: 1, lean: -0.08, twist: -0.1, hy: -0.2 }, HOLD);
 const PULL_B = lp(
-  { aR: limb(2.0, 0.45, 1.6), aL: limb(2.5, 0.55, 0.5), wy: 0.7, wz: 0.6, lean: -0.15, fL: 1 },
+  {
+    aR: limb(2.0, 0.45, 1.6),
+    aL: limb(2.5, 0.55, 0.5),
+    wy: 0.7,
+    wz: 0.6,
+    lean: -0.15,
+    fL: 1,
+    sq: 1.03,
+  },
   HOLD,
 );
 const LG_REBUILD: readonly PKey<LP>[] = [
   [0, HOLD],
-  [0.08, PULL_R, easeOut],
-  [0.45, HOLD],
-  [0.58, PULL_L, easeOut],
-  [0.95, HOLD],
-  [1.08, PULL_R, easeOut],
-  [1.5, HOLD],
-  [1.68, PULL_B, easeOut],
-  [2.25, HOLD],
+  [fr24(2), PULL_R, easeOut],
+  [fr24(11), HOLD],
+  [fr24(14), PULL_L, easeOut],
+  [fr24(23), HOLD],
+  [fr24(26), PULL_R, easeOut],
+  [fr24(36), HOLD],
+  [fr24(40), PULL_B, easeOut],
+  [fr24(54), HOLD],
 ];
 /** Исполин встаёт: вага тянет вверх. */
 const LG_STAND: readonly PKey<LP>[] = [
   [0, lp({ aR: limb(0.6, 0.25, 0.6), wy: -0.5 }, HOLD)],
-  [0.9, lp({ aR: limb(1.75, 0.4, 1.6), wy: 0.55, wz: 0.7, lean: -0.08 }, HOLD)],
-  [1.2, HOLD, easeOut],
+  [fr24(22), lp({ aR: limb(1.75, 0.4, 1.6), wy: 0.55, wz: 0.7, lean: -0.08 }, HOLD)],
+  [fr24(29), HOLD, easeOut],
 ];
-/** Исполин рухнул: вага упала, нити ослабли. */
+/** Исполин рухнул: вагу рвануло вниз, нити ослабли. */
 const LG_SLUMP: readonly PKey<LP>[] = [
   [0, HOLD],
-  [0.15, lp({ aR: limb(0.45, 0.2, 0.3), wy: -0.85, wz: 0.5, lean: 0.12, hp: 0.3 }, HOLD), easeOut],
+  [
+    fr24(3),
+    lp({ aR: limb(0.4, 0.2, 0.25), wy: -0.9, wz: 0.5, lean: 0.16, hp: 0.32, sq: 0.95 }, HOLD),
+    eIn,
+  ],
+  [
+    fr24(8),
+    lp({ aR: limb(0.48, 0.2, 0.32), wy: -0.82, wz: 0.5, lean: 0.11, hp: 0.28 }, HOLD),
+    easeOut,
+  ],
 ];
 
-/** Акт IV: удар по дуге (cut1, контакт 0,7) → выпад (cut2, контакт 1,3) → отдых. */
+/**
+ * Акт IV, рубка и укол одним треком (кадры): замах 0–14, удар — кадр 17
+ * (`f13_cut2` с 0: урон конуса), проводка 19; взвод 25–29, укол — кадр 32
+ * (`recover` с 0: урон укола), перелёт 34, отдача 37, к стойке 44–49.
+ */
 const AT_WIND = lp(
   {
     twist: 0.75,
@@ -5794,6 +6014,7 @@ const AT_CUT = lp(
     wg: 1,
     tb: 0.35,
     fw: 3,
+    sq: 0.94,
   },
   GUARD,
 );
@@ -5831,40 +6052,58 @@ const AT_LUNGE = lp(
     wg: 1,
     fw: 7,
     tb: 0.5,
+    sq: 0.93,
   },
   GUARD,
 );
 const ATK: readonly PKey<LP>[] = [
   [0, GUARD],
-  [0.42, AT_WIND],
-  [0.58, lp({ twist: 0.82, aR: limb(2.85, 0.9, 1.6) }, AT_WIND), easeOut],
-  [0.7, AT_CUT, eIn],
+  [fr24(4), lp({ twist: -0.35, sink: 1.8, aR: limb(1.1, 0.35, 0.7) }, GUARD)],
+  [fr24(10), AT_WIND],
   [
-    0.8,
+    fr24(14),
+    lp({ twist: 0.84, sink: 1.4, aR: limb(2.88, 0.92, 1.62), hp: -0.14 }, AT_WIND),
+    easeOut,
+  ],
+  [fr24(15), lp({ twist: 0.7, aR: limb(2.6, 0.7, 1.3) }, AT_WIND), eIn],
+  [fr24(17), AT_CUT, eIn],
+  [
+    fr24(19),
     lp(
       {
-        twist: -0.78,
-        lean: 0.34,
-        sink: 3.2,
-        aR: limb(0.85, -0.8, 0.1),
+        twist: -0.8,
+        lean: 0.35,
+        sink: 3.3,
+        aR: limb(0.82, -0.82, 0.1),
         wx: -1,
         wy: -0.55,
         wz: 0.3,
-        fw: 3.5,
+        fw: 3.6,
+        sq: 1.02,
       },
       AT_CUT,
     ),
     easeOut,
   ],
-  [1.05, AT_DRAW],
-  [1.2, lp({ twist: 0.5, sink: 2.3, aR: limb(1.2, 0.38, 2.05) }, AT_DRAW), easeOut],
-  [1.3, AT_LUNGE, eIn],
-  [1.42, lp({ lean: 0.55, fw: 8, aR: limb(1.62, 0.05, 0) }, AT_LUNGE), easeOut],
-  [1.85, lp({ fw: 0 }, GUARD)],
-  [2.0, STAND],
+  [fr24(21), lp({ twist: -0.74, sink: 3.1, fw: 3.2, sq: 1 }, AT_CUT)],
+  [fr24(25), AT_DRAW],
+  [
+    fr24(29),
+    lp({ twist: 0.52, sink: 2.4, aR: limb(1.2, 0.38, 2.1), lean: -0.16 }, AT_DRAW),
+    easeOut,
+  ],
+  [fr24(30), lp({ twist: 0.3, sink: 2.8, aR: limb(1.35, 0.3, 1.6), lean: 0.05 }, AT_DRAW), eIn],
+  [fr24(32), AT_LUNGE, eIn],
+  [fr24(34), lp({ lean: 0.56, fw: 8.2, aR: limb(1.64, 0.05, 0), sq: 1.03 }, AT_LUNGE), easeOut],
+  [fr24(37), lp({ lean: 0.48, fw: 6.4, aR: limb(1.5, 0.08, 0.15), sq: 1 }, AT_LUNGE)],
+  [fr24(44), lp({ fw: 0 }, GUARD)],
+  [fr24(49), STAND],
 ];
+/** Кадры ATK: удар конуса (начало `f13_cut2`), укол (начало `recover`). */
+const ATK_CUT = 17;
+const ATK_THRUST = 32;
 
-/** Аркан: петля над головой (0,15–0,65) → взвод → бросок в 0,8. */
+/** Аркан: петля над головой (кадры 4–15) → взвод (17) → бросок, выпуск — кадр 20. */
 const SN_UP = lp(
   {
     aR: limb(2.85, 0.35, 0.45),
@@ -5887,66 +6126,78 @@ const SN_THROW = lp(
     wy: 0.1,
     wz: 1,
     wg: 1,
-    lo: 1,
-    lt: 0.35,
+    lo: 0,
     twist: -0.4,
     lean: 0.3,
     sink: 2.5,
     lL: limb(0.7, 0.1, 0.6),
     lR: limb(-0.6, 0.14, 0.1),
     aL: limb(0.3, 0.7, 0.3),
+    sq: 0.95,
   },
   GUARD,
 );
 const SNARE: readonly PKey<LP>[] = [
   [0, GUARD],
-  [0.15, SN_UP],
-  [0.62, lp({ aR: limb(2.8, 0.45, 0.5) }, SN_UP)],
-  [0.68, lp({ aR: limb(2.35, 0.65, 1.35), wy: 0.6, wz: -0.7, twist: 0.45, lean: -0.12 }, SN_UP)],
-  [0.8, SN_THROW, eIn],
-];
-/** Попал: рывок на себя. Время — от начала аркана (0,8 + t). */
-const SN_YANK: readonly PKey<LP>[] = [
-  [0.8, lp({ lo: 0 }, SN_THROW)],
-  [0.88, lp({ lo: 0, lean: 0.32 }, SN_THROW)],
+  [fr24(4), SN_UP],
+  [fr24(15), lp({ aR: limb(2.8, 0.45, 0.5), bob: 0.6 }, SN_UP)],
   [
-    1.08,
+    fr24(17),
+    lp(
+      { aR: limb(2.35, 0.68, 1.4), wy: 0.6, wz: -0.7, twist: 0.48, lean: -0.14, sink: 1.6 },
+      SN_UP,
+    ),
+  ],
+  [fr24(19), lp({ aR: limb(2.1, 0.5, 1.0), wy: 0.7, wz: 0.2, twist: 0.1, lean: 0.05 }, SN_UP), eIn],
+  [fr24(20), SN_THROW, eIn],
+];
+const SNARE_N = 20;
+/** Попал: рывок на себя (22 — натяг, 26 — дёрнул). Время — от начала аркана. */
+const SN_YANK: readonly PKey<LP>[] = [
+  [fr24(20), SN_THROW],
+  [fr24(22), lp({ lean: 0.34, sq: 1 }, SN_THROW)],
+  [
+    fr24(26),
     lp(
       {
-        lean: -0.35,
-        aR: limb(0.95, 0.3, 1.9),
+        lean: -0.36,
+        aR: limb(0.95, 0.3, 1.95),
         aL: limb(1.15, -0.15, 1.5),
-        twist: 0.3,
-        sink: 2.2,
+        twist: 0.32,
+        sink: 2.4,
         lL: limb(0.3, 0.1, 0.3),
-        lR: limb(-0.5, 0.14, 0.35),
+        lR: limb(-0.55, 0.14, 0.4),
         wy: 0.3,
         wz: 0.9,
-        fw: -3,
+        fw: -3.2,
         hp: -0.15,
-        lo: 0,
+        sq: 0.96,
       },
       GUARD,
     ),
-    easeOut,
+    eIn,
   ],
-  [1.5, STAND],
+  [fr24(29), lp({ lean: -0.28, fw: -2.6, sq: 1.02, sink: 2 }, GUARD), easeOut],
+  [fr24(37), STAND],
 ];
-/** Мимо: петля долетает и падает, он качает головой. */
+/** Мимо: тянет пустую верёвку назад, качает головой. */
 const SN_MISS: readonly PKey<LP>[] = [
-  [0.8, SN_THROW],
-  [1.0, lp({ lt: 1, aR: limb(1.2, 0.15, 0.1), lean: 0.2 }, SN_THROW), easeOut],
-  [1.2, lp({ lo: 1, lt: 1.6, hy: 0.35, wg: 1 }, STAND)],
-  [1.32, lp({ lo: 1, lt: 1.8, hy: -0.35 }, STAND)],
-  [1.5, lp({ lo: 0 }, STAND)],
+  [fr24(20), SN_THROW],
+  [fr24(24), lp({ aR: limb(1.25, 0.15, 0.1), lean: 0.22, sq: 1 }, SN_THROW), easeOut],
+  [fr24(30), lp({ aR: limb(1.1, 0.25, 1.2), wy: 0.3, wz: 0.9, lean: -0.05, hy: 0.35 }, GUARD)],
+  [fr24(33), lp({ hy: -0.35 }, STAND)],
+  [fr24(37), STAND],
 ];
 /** Угол раскрутки петли: разгоняется. */
 const snareSpin = (T: number) => {
-  const u = clamp01((T - 0.15) / 0.5);
+  const u = clamp01((T - fr24(4)) / fr24(12));
   return TAU * (1.5 * u + 1.6 * u * u);
 };
 
-/** Сетка: руки вверх (0,45), пальцы растягивают нити до каста (1,2) → разводит. */
+/**
+ * Сетка: руки вверх (кадр 11), пальцы растягивают нити 1,2 с (руки
+ * расходятся, нити дрожат), подготовка (26), каст — кадр 28, до 57.
+ */
 const UP2 = lp(
   {
     aR: limb(2.9, 0.25, 0.35),
@@ -5969,7 +6220,7 @@ const GRID_OPEN = lp(
     aR: limb(1.65, 1.55, 0.05),
     aL: limb(1.65, 1.55, 0.05),
     bob: 0.5,
-    sink: 1.5,
+    sink: 1.8,
     hp: -0.2,
     lean: 0.05,
     wx: 1,
@@ -5978,25 +6229,42 @@ const GRID_OPEN = lp(
     wg: 0.5,
     fR: 1,
     fL: 1,
+    sq: 0.92,
   },
   STAND,
 );
 const GRID: readonly PKey<LP>[] = [
   [0, GUARD],
-  [0.45, UP2],
-  [1.1, lp({ aR: limb(2.6, 0.95, 0.3), aL: limb(2.6, 0.95, 0.3), web: 1, wx: 0.6, wy: 0.8 }, UP2)],
-  [1.2, lp({ aR: limb(2.55, 1.0, 0.3), aL: limb(2.55, 1.0, 0.3), web: 1, wx: 0.6, wy: 0.8 }, UP2)],
-  [1.27, GRID_OPEN, easeOut],
-  [2.0, lp({ aR: limb(1.6, 1.45, 0.15), aL: limb(1.6, 1.45, 0.15) }, GRID_OPEN)],
+  [fr24(4), lp({ sink: 2.2, lean: 0.1, aR: limb(0.8, 0.4, 0.8), aL: limb(0.8, 0.4, 0.8) }, GUARD)],
+  [fr24(11), UP2, easeOut],
+  [fr24(14), lp({ web: 0.4, aR: limb(2.85, 0.4, 0.35), aL: limb(2.85, 0.4, 0.35) }, UP2)],
   [
-    2.4,
+    fr24(24),
+    lp({ aR: limb(2.6, 0.95, 0.3), aL: limb(2.6, 0.95, 0.3), web: 1, wx: 0.6, wy: 0.8 }, UP2),
+  ],
+  [
+    fr24(26),
+    lp(
+      { aR: limb(2.7, 0.8, 0.45), aL: limb(2.7, 0.8, 0.45), web: 1, wx: 0.6, wy: 0.8, bob: 2.8 },
+      UP2,
+    ),
+  ],
+  [fr24(28), GRID_OPEN, eIn],
+  [
+    fr24(30),
+    lp({ aR: limb(1.62, 1.62, 0), aL: limb(1.62, 1.62, 0), sq: 1.03, sink: 1.4 }, GRID_OPEN),
+    easeOut,
+  ],
+  [fr24(48), lp({ aR: limb(1.6, 1.45, 0.15), aL: limb(1.6, 1.45, 0.15), sq: 1 }, GRID_OPEN)],
+  [
+    fr24(57),
     lp(
       { aR: limb(0.9, 0.7, 0.3), aL: limb(0.9, 0.7, 0.3), sink: 2, lean: 0.2, fR: 0, fL: 0 },
       STAND,
     ),
   ],
 ];
-/** Выдохся: оседает на колено, вага вниз. */
+/** Выдохся (окно 3,2 с): оседает на колено с ударом, дышит, встаёт. */
 const KNEEL = lp(
   {
     sink: 5.5,
@@ -6019,16 +6287,19 @@ const KNEEL = lp(
 );
 const SPENT_IN: readonly PKey<LP>[] = [
   [0, GRID[GRID.length - 1][1]],
-  [0.3, lp({ sink: 6.2, lean: 0.62 }, KNEEL), eIn],
-  [0.4, KNEEL, easeOut],
+  [fr24(4), lp({ sink: 3.5, lean: 0.4, hp: 0.3 }, KNEEL), eIn],
+  [fr24(7), lp({ sink: 6.3, lean: 0.64, sq: 0.93, hk: 0.2 }, KNEEL), eIn],
+  [fr24(10), lp({ sq: 1.02, hk: -0.05 }, KNEEL), easeOut],
 ];
 const SPENT_UP: readonly PKey<LP>[] = [
   [0, KNEEL],
-  [0.25, lp({ sink: 2.5, lean: 0.25, hp: 0.1 }, GUARD)],
-  [0.4, GUARD],
+  [fr24(3), lp({ sink: 6, lean: 0.7, hp: 0.4 }, KNEEL)],
+  [fr24(7), lp({ sink: 2.4, lean: 0.22, hp: 0.05, sq: 1.03 }, GUARD), easeOut],
+  [fr24(10), GUARD],
 ];
+const SPENT_LEN = 3.2;
 
-// Добавки (относительно LP0): приземление, подъём, спуск, отдача от удара.
+// Добавки (относительно LP0): приземление, подъём, спуск, отдача, срыв нити.
 const LAND: readonly PKey<LP>[] = [
   [
     0,
@@ -6042,33 +6313,36 @@ const LAND: readonly PKey<LP>[] = [
       aR: dl(LP0.aR, 0.1, 0.1, 0),
       sq: 0.9,
       toe: -0.6,
+      hk: 0.2,
     }),
   ],
   [
-    0.1,
+    fr24(2),
     lp({
-      sink: 3.6,
-      lean: 0.16,
-      hp: 0.3,
+      sink: 3.8,
+      lean: 0.17,
+      hp: 0.32,
       lL: dl(LP0.lL, 0.45, 0, 0.95),
       lR: dl(LP0.lR, 0.4, 0, 0.9),
-      aL: dl(LP0.aL, 0.25, 0.35, 0),
-      sq: 0.92,
+      aL: dl(LP0.aL, 0.25, 0.4, 0),
+      sq: 0.9,
       toe: -0.8,
+      hk: 0.1,
     }),
     easeOut,
   ],
   [
-    0.28,
+    fr24(7),
     lp({
-      sink: 0.6,
-      sq: 1.03,
+      sink: 0.5,
+      sq: 1.04,
       toe: -0.8,
       lL: dl(LP0.lL, 0.1, 0, 0.2),
       lR: dl(LP0.lR, 0.1, 0, 0.2),
+      hk: -0.08,
     }),
   ],
-  [0.5, LP0],
+  [fr24(12), LP0],
 ];
 const RISE: readonly PKey<LP>[] = [
   [
@@ -6080,20 +6354,22 @@ const RISE: readonly PKey<LP>[] = [
       sq: 1.08,
       lL: dl(LP0.lL, 0, 0, -0.05),
       lR: dl(LP0.lR, 0, 0, -0.05),
+      hk: 0.25,
     }),
   ],
   [
-    0.1,
+    fr24(3),
     lp({
       aL: dl(LP0.aL, 0.5, 0, -0.05),
       hp: -0.2,
       sq: 1.04,
       lL: dl(LP0.lL, 0.35, 0, 0.7),
       lR: dl(LP0.lR, 0.3, 0, 0.6),
+      hk: 0.1,
     }),
     easeOut,
   ],
-  [0.45, LP0],
+  [fr24(11), LP0],
 ];
 const DROP = lp({
   toe: -0.45,
@@ -6102,16 +6378,99 @@ const DROP = lp({
   aL: dl(LP0.aL, 0.35, 0.1, 0),
   aR: dl(LP0.aR, 0.15, 0, 0),
   hp: -0.1,
+  hk: 0.12,
 });
+/**
+ * Срыв нити исполина (акт I, `dipUntil`, 2 с): вагу рвануло вниз, его
+ * бросило, левой ловит вагу, ноги ищут опору; висит ниже и бьётся (цикл).
+ */
+const DIP_IN: readonly PKey<LP>[] = [
+  [0, LP0],
+  [
+    fr24(2),
+    lp({
+      aR: dl(LP0.aR, -0.75, 0.05, -0.5),
+      lean: 0.3,
+      hp: 0.35,
+      side: 0.12,
+      sq: 0.94,
+      lL: dl(LP0.lL, 0.5, 0.1, 0.9),
+      lR: dl(LP0.lR, 0.3, 0.1, 0.6),
+      hk: 0.3,
+      tb: 0.35,
+      fR: 0.6,
+    }),
+    eIn,
+  ],
+  [
+    fr24(5),
+    lp({
+      aR: dl(LP0.aR, -0.45, 0.05, -0.3),
+      aL: dl(LP0.aL, 0.85, -0.5, 0.9),
+      lean: 0.18,
+      hp: 0.15,
+      side: 0.08,
+      sq: 1.03,
+      lL: dl(LP0.lL, 0.3, 0.1, 0.6),
+      lR: dl(LP0.lR, 0.6, 0.1, 1.0),
+      hk: -0.1,
+      fL: 0.8,
+    }),
+    easeOut,
+  ],
+  [
+    fr24(10),
+    lp({
+      aR: dl(LP0.aR, -0.35, 0.05, -0.2),
+      aL: dl(LP0.aL, 0.75, -0.45, 0.85),
+      lean: 0.14,
+      hp: 0.12,
+      side: 0.06,
+      lL: dl(LP0.lL, 0.25, 0.08, 0.5),
+      lR: dl(LP0.lR, 0.2, 0.08, 0.4),
+      fL: 0.8,
+    }),
+  ],
+];
+/** Висит ниже и бьётся: 8 кадров (10 к/с), добавка относительно LP0. */
+function dipLoop(f: number): LP {
+  const ph = (f / 8) * TAU;
+  const s = Math.sin(ph);
+  const end = DIP_IN[DIP_IN.length - 1][1];
+  return lp(
+    {
+      lL: dl(end.lL, 0.25 * s, 0, 0.35 * Math.max(0, s)),
+      lR: dl(end.lR, -0.25 * s, 0, 0.35 * Math.max(0, -s)),
+      aR: dl(end.aR, 0.08 * Math.sin(ph * 2), 0, 0),
+      side: end.side + 0.03 * s,
+      hr: 0.12 * Math.sin(ph + 1),
+      tb: end.tb + 0.08 * Math.sin(ph - 1),
+    },
+    end,
+  );
+}
 /** Отдача: герой спереди, сзади, слева, справа (в осях тела). */
 const FLINCH: readonly LP[] = [
-  lp({ lean: -0.32, hp: -0.3, aL: dl(LP0.aL, 0, 0.3, -0.1), aR: dl(LP0.aR, 0, 0.25, -0.1) }),
-  lp({ lean: 0.28, hp: 0.3, aL: dl(LP0.aL, 0, 0.25, 0), aR: dl(LP0.aR, 0, 0.2, 0) }),
+  lp({
+    lean: -0.32,
+    hp: -0.3,
+    aL: dl(LP0.aL, 0, 0.3, -0.1),
+    aR: dl(LP0.aR, 0, 0.25, -0.1),
+    hk: 0.2,
+  }),
+  lp({ lean: 0.28, hp: 0.3, aL: dl(LP0.aL, 0, 0.25, 0), aR: dl(LP0.aR, 0, 0.2, 0), hk: -0.15 }),
   lp({ side: 0.24, hr: 0.22, aL: dl(LP0.aL, 0, 0.3, 0) }),
   lp({ side: -0.24, hr: -0.22, aR: dl(LP0.aR, 0, 0.3, 0) }),
 ];
 
-/** Смерть 5,2 с: нити лопаются по одной → куча → встаёт сам → поклон → занавес. */
+/**
+ * Смерть 5,2 с (кадры 0–124): удар отбрасывает (0–3), его вздёргивают на
+ * всех нитях (8), нити лопаются по одной — правое запястье (11), левое
+ * (17), поля шляпы (23, 28); на каждом обрыве тело дёргает. Падает (32) —
+ * куча с ударом о пол (36, сжатие) и отскоком (38); лежит; рука тянется
+ * (57); встаёт сам по частям (71–89), поднимает шляпу (95), надевает
+ * (106), поклон (114) — и тает.
+ */
 export const LORD_DEATH = 5.2;
 const DIE_HIT = lp(
   {
@@ -6126,6 +6485,7 @@ const DIE_HIT = lp(
     wy: 0.3,
     wz: 0.6,
     wg: 0.6,
+    hk: 0.3,
   },
   GUARD,
 );
@@ -6187,26 +6547,27 @@ const DIE_BOW = lp(
 );
 const DIE: readonly PKey<LP>[] = [
   [0, DIE_HIT],
-  [0.12, lp({ lean: -0.42 }, DIE_HIT)],
-  [0.35, DIE_PUP, easeOut],
-  [0.45, lp({ side: 0.05 }, DIE_PUP)],
-  [0.55, lp({ side: 0.2, up: 8.6, aR: limb(0.15, 0.3, 0.1), fR: 0 }, DIE_PUP), eIn],
+  [fr24(3), lp({ lean: -0.44, sq: 0.95 }, DIE_HIT), easeOut],
+  [fr24(8), lp({ sq: 1.05 }, DIE_PUP), eBack],
+  [fr24(11), lp({ side: 0.05 }, DIE_PUP)],
+  [fr24(13), lp({ side: 0.2, up: 8.4, aR: limb(0.15, 0.3, 0.1), fR: 0 }, DIE_PUP), eIn],
+  [fr24(15), lp({ side: 0.16, up: 8.6, aR: limb(0.3, 0.35, 0.2), fR: 0 }, DIE_PUP), easeOut],
   [
-    0.8,
+    fr24(19),
     lp(
-      { side: 0.04, up: 8.2, aR: limb(0.1, 0.25, 0.1), aL: limb(0.1, 0.25, 0.1), fR: 0, fL: 0 },
+      { side: 0.04, up: 8.0, aR: limb(0.1, 0.25, 0.1), aL: limb(0.1, 0.25, 0.1), fR: 0, fL: 0 },
       DIE_PUP,
     ),
     eIn,
   ],
   [
-    1.05,
+    fr24(25),
     lp(
       {
         side: -0.28,
         hr: 0.6,
         hp: 0.55,
-        up: 7.6,
+        up: 7.4,
         aR: limb(0.05, 0.2, 0.05),
         aL: limb(0.15, 0.3, 0.1),
         fR: 0,
@@ -6218,12 +6579,12 @@ const DIE: readonly PKey<LP>[] = [
     eIn,
   ],
   [
-    1.15,
+    fr24(28),
     lp(
       {
-        side: -0.32,
-        hr: 0.62,
-        hp: 0.6,
+        side: -0.34,
+        hr: 0.64,
+        hp: 0.62,
         up: 7.6,
         aR: limb(0.05, 0.2, 0.05),
         aL: limb(0.15, 0.3, 0.1),
@@ -6235,7 +6596,7 @@ const DIE: readonly PKey<LP>[] = [
     ),
   ],
   [
-    1.32,
+    fr24(32),
     lp(
       {
         sink: 6,
@@ -6248,17 +6609,20 @@ const DIE: readonly PKey<LP>[] = [
         aL: limb(0.4, 0.9, 0.2),
         aR: limb(0.5, 0.9, 0.3),
         toe: 0.4,
+        sq: 1.04,
       },
       STAND,
     ),
     eIn,
   ],
-  [1.5, DIE_HEAP, eBack],
-  [2.3, DIE_HEAP],
-  [2.38, lp({ aR: limb(0.95, 1.1, 1.1) }, DIE_HEAP), easeOut],
-  [2.5, DIE_HEAP],
+  [fr24(36), lp({ sq: 0.86, sink: 10.2 }, DIE_HEAP), eIn],
+  [fr24(38), lp({ sq: 1.04, sink: 9.2, lean: 1.1 }, DIE_HEAP), easeOut],
+  [fr24(41), DIE_HEAP],
+  [fr24(55), DIE_HEAP],
+  [fr24(57), lp({ aR: limb(0.95, 1.1, 1.1) }, DIE_HEAP), easeOut],
+  [fr24(60), DIE_HEAP],
   [
-    2.95,
+    fr24(71),
     lp(
       {
         sink: 6.5,
@@ -6275,7 +6639,7 @@ const DIE: readonly PKey<LP>[] = [
     ),
   ],
   [
-    3.3,
+    fr24(79),
     lp(
       {
         sink: 4.5,
@@ -6290,7 +6654,7 @@ const DIE: readonly PKey<LP>[] = [
     ),
   ],
   [
-    3.6,
+    fr24(86),
     lp(
       {
         side: 0.12,
@@ -6298,21 +6662,22 @@ const DIE: readonly PKey<LP>[] = [
         aR: limb(0.6, 0.95, 0.3),
         lL: limb(0.05, 0.18, 0.05),
         lR: limb(-0.05, 0.2, 0.05),
+        sq: 1.03,
       },
       STAND,
     ),
     eBack,
   ],
-  [3.72, lp({ side: -0.08, aL: limb(0.5, 0.8, 0.3), aR: limb(0.5, 0.8, 0.3) }, STAND)],
-  [3.95, DIE_PICK],
-  [4.05, DIE_PICK],
-  [4.3, lp({ aL: DOFF, hat: 1 }, STAND)],
-  [4.4, lp({ aL: DOFF, hat: 0 }, STAND)],
-  [4.75, DIE_BOW],
-  [5.2, DIE_BOW],
+  [fr24(89), lp({ side: -0.08, aL: limb(0.5, 0.8, 0.3), aR: limb(0.5, 0.8, 0.3) }, STAND)],
+  [fr24(95), DIE_PICK],
+  [fr24(97), DIE_PICK],
+  [fr24(103), lp({ aL: DOFF, hat: 1 }, STAND)],
+  [fr24(106), lp({ aL: DOFF, hat: 0, hk: 0.15 }, STAND)],
+  [fr24(114), DIE_BOW],
+  [fr24(125), DIE_BOW],
 ];
-/** Обрыв нитей: поля шляпы слева, справа, запястья слева, справа. */
-const SNAP_T = [0.95, 1.15, 0.7, 0.45] as const;
+/** Кадр обрыва нити: поля шляпы слева, справа, запястья слева, справа. */
+const SNAP_F = [23, 28, 17, 11] as const;
 
 // ---- рисунок ---------------------------------------------------------------------
 
@@ -6342,18 +6707,26 @@ function vagaOf(j: Joints, L: LP): VagaG {
 const HAT_BR = 4.6;
 const HAT_CR = 3.0;
 const HAT_H = 6.4;
+/** Шляпа: на голове (с отставанием `hk` — кивок назад/вперёд), в руке, слетела. */
 function hatOf(j: Joints, L: LP): { b: V3; up: V3 } {
   if (L.hat >= 1.5)
     return {
       b: v3(L.hX, L.hY, L.hZ),
       up: vnorm(v3(Math.sin(L.hT), Math.cos(L.hT), 0.25 * Math.sin(L.hT))),
     };
-  const b0 = onHead(j, LORD_BODY.head, -0.06, 0, 0.6);
+  let b0 = onHead(j, LORD_BODY.head, -0.06, 0, 0.6);
+  let u0 = j.hUp;
+  if (L.hk !== 0) {
+    // Отстаёт: тулья кренится назад (+) или вперёд, поля съезжают к затылку.
+    const back = vcross(j.hRight, j.hUp);
+    u0 = vnorm(vadd(vsc(j.hUp, Math.cos(L.hk)), vsc(back, -Math.sin(L.hk))));
+    b0 = vadd(b0, vsc(back, -0.9 * L.hk));
+  }
   const k = clamp01(L.hat);
-  if (k === 0) return { b: b0, up: j.hUp };
+  if (k === 0) return { b: b0, up: u0 };
   const b1 = vadd(j.haL, vadd(vsc(j.foreL, 1.3), vsc(j.up, 0.4)));
   const u1 = vnorm(vadd(vsc(j.fwd, 0.75), vsc(j.up, 0.65)));
-  return { b: vmix(b0, b1, k), up: vnorm(vmix(j.hUp, u1, k)) };
+  return { b: vmix(b0, b1, k), up: vnorm(vmix(u0, u1, k)) };
 }
 
 interface LRig {
@@ -6361,15 +6734,18 @@ interface LRig {
   j: Joints;
   vg: VagaG;
   hat: { b: V3; up: V3 };
+  /** Номер примитива торса (манишка светится в темноте). */
+  torso: number;
 }
 function lordRig(L: LP, open: boolean): LRig {
   const rig = new Rig();
-  const B = LORD_BODY;
-  // Перед торса — та же цепочка поворотов, что у `humanoid`.
+  // Перед торса — та же цепочка поворотов, что у `humanoid`; у каждого
+  // кадра свой (кадр «на потом» рисуется вперемешку с текущим).
   const tf = (v: V3) => rotZ(rotX(rotY(v, L.twist), L.lean), L.side);
-  DRESS.fwd = tf(v3(0, 0, 1));
-  DRESS.right = tf(v3(1, 0, 0));
+  const pat = shirtPat({ fwd: tf(v3(0, 0, 1)), right: tf(v3(1, 0, 0)) });
+  const B: Body = { ...LORD_BODY, torsoPat: pat };
   const j = humanoid(rig, B, { ...L, toe: Math.max(0, L.toe) }, { head: true, arms: true });
+  const torso = rig.prims.findIndex((q) => q.k === 0 && q.pat === pat);
   // Белые гетры.
   for (const [an, kn] of [
     [j.anL, j.knL],
@@ -6390,28 +6766,34 @@ function lordRig(L: LP, open: boolean): LRig {
       1.12,
       SHIRT,
       undefined,
-      0.2,
+      GLOW_SHIRT,
     );
-    rig.ball(ha, B.hand, SHIRT, undefined, 0.5);
+    rig.ball(ha, B.hand, SHIRT, undefined, GLOW_SHIRT + 0.05);
     if (fan > 0.05) {
       const s0 = vcross(fore, v3(0, 1, 0));
       const s = vlen(s0) < 0.2 ? j.right : vnorm(s0);
       for (let k = 0; k < 4; k++) {
         const o = (k - 1.5) * 0.62 * fan;
         const along = 1.0 + 0.5 * fan * (1 - Math.abs(k - 1.5) / 3);
-        rig.ball(vadd(vadd(ha, vsc(fore, along)), vsc(s, o)), 0.42, SHIRT, undefined, 0.5);
+        rig.ball(
+          vadd(vadd(ha, vsc(fore, along)), vsc(s, o)),
+          0.42,
+          SHIRT,
+          undefined,
+          GLOW_SHIRT + 0.05,
+        );
       }
     }
   };
   arm(j.shL, j.elL, j.haL, j.foreL, L.fL);
   arm(j.shR, j.elR, j.haR, j.foreR, L.fR);
   // Воротник, бабочка, маска с нарисованным лицом.
-  rig.cap(j.chest, vadd(j.neck, vsc(j.up, 0.3)), 1.3, 1.15, SHIRT, undefined, 0.2);
+  rig.cap(j.chest, vadd(j.neck, vsc(j.up, 0.3)), 1.3, 1.15, SHIRT, undefined, GLOW_SHIRT);
   const bt = vadd(vadd(j.neck, vsc(j.fwd, 1.05)), vsc(j.up, -0.5));
   rig.ball(vadd(bt, vsc(j.right, -0.6)), 0.6, P.velvet);
   rig.ball(vadd(bt, vsc(j.right, 0.6)), 0.6, P.velvet);
   const R = B.head;
-  rig.ball(j.head, R, P.porcelain, undefined, 0.45);
+  rig.ball(j.head, R, P.porcelain, undefined, GLOW_MASK);
   for (const s of [-1, 1]) {
     rig.dot(onHead(j, R, 0.93, 0.36 * s, 0.16), INK, 1);
     rig.dot(onHead(j, R, 0.84, 0.44 * s, 0.44), INK, 1);
@@ -6494,19 +6876,10 @@ function lordRig(L: LP, open: boolean): LRig {
       );
     }
   }
-  // Аркан: петля над вагой, летит вперёд, падает.
+  // Аркан: петля крутится над вагой (бросок — уже нить «Техник» в мире).
   if (L.lo > 0.5) {
-    let c: V3;
-    let r = 2.6;
-    if (L.lt <= 0) c = vadd(vg.tip, v3(Math.cos(L.la) * 3, 1.6, Math.sin(L.la) * 3));
-    else if (L.lt <= 1) {
-      c = vadd(vg.tip, v3(0, 1.6 - L.lt * 2.4, 2 + L.lt * 16));
-      r += L.lt * 1.2;
-    } else {
-      const tp = vadd(vg.tip, v3(0, 0, 18));
-      c = v3(tp.x, 0.4, tp.z);
-      r = 3.8;
-    }
+    const c = vadd(vg.tip, v3(Math.cos(L.la) * 3, 1.6, Math.sin(L.la) * 3));
+    const r = 2.6;
     for (let k = 0; k < 16; k++) {
       const a = (k / 16) * TAU;
       rig.dot(
@@ -6519,14 +6892,12 @@ function lordRig(L: LP, open: boolean): LRig {
     const n = Math.max(4, Math.ceil(vlen(vsub(c, vg.tip)) / 0.8));
     for (let i = 1; i < n; i++) {
       const p = vmix(vg.tip, c, i / n);
-      p.y -= Math.sin((i / n) * Math.PI) * (L.lt > 0 ? 1.5 : 0.5);
+      p.y -= Math.sin((i / n) * Math.PI) * 0.5;
       rig.dot(p, THREAD, 1, 0.6);
     }
   }
-  // Нити между пальцами (сетка).
+  // Нити между пальцами (сетка): «колыбель для кошки», дрожит от натяга.
   if (L.web > 0.3) {
-    // «Колыбель для кошки»: две пары нитей крест-накрест и одна прямая,
-    // с провисом к середине; редкие точки, чтобы между нитями был просвет.
     const ends: [number, number][] = [
       [1.4, -1.4],
       [-1.4, 1.4],
@@ -6544,10 +6915,14 @@ function lordRig(L: LP, open: boolean): LRig {
       }
     }
   }
-  return { rig, j, vg, hat };
+  return { rig, j, vg, hat, torso };
 }
 
-/** Нить, на которой висит: вверх от точки, с провисом; оборвалась — верх уходит. */
+/**
+ * Своя нить к колосникам: вверх от точки (наклон `ang` — против поворота
+ * кадра, чтобы на экране висела отвесно), провис `sag`; оборвалась (`age`
+ * ≥ 0) — верх уходит вверх, хвост хлещет и гаснет.
+ */
 function lordThread(
   lit: Px,
   x: number,
@@ -6556,14 +6931,18 @@ function lordThread(
   sag: number,
   i: number,
   age: number,
+  ang: number,
 ): void {
   const len = 64;
   const sgn = i % 2 ? 1 : -1;
+  const ux = Math.sin(ang);
+  const uy = -Math.cos(ang);
   if (age < 0) {
     for (let s = 1; s < len; s++) {
-      const yy = y - s;
+      const off = sag * Math.sin(Math.PI * Math.min(1, s / 28)) * sgn;
+      const xx = x + ux * s - uy * off;
+      const yy = y + uy * s + ux * off;
       if (yy < 0) break;
-      const xx = x + sag * Math.sin(Math.PI * Math.min(1, s / 28)) * sgn;
       lit.set(xx, yy, withA(THREAD, str * 0.8 * (1 - s / len) ** 0.7));
     }
     return;
@@ -6572,14 +6951,34 @@ function lordThread(
   const a = str * 0.8 * clamp01(1 - age / 0.6);
   if (a > 0.02)
     for (let s = gap; s < len + gap; s++) {
-      const yy = y - s;
+      const off = Math.sin(s * 0.4 + age * 30) * 0.8;
+      const xx = x + ux * s - uy * off;
+      const yy = y + uy * s;
       if (yy < 0) break;
-      lit.set(x + Math.sin(s * 0.4 + age * 30) * 0.8, yy, withA(THREAD, a * (1 - (s - gap) / len)));
+      lit.set(xx, yy, withA(THREAD, a * (1 - (s - gap) / len)));
     }
   const sw = Math.sin(age * 14) * 2.5 * clamp01(1 - age / 1.2);
   const la = str * 0.75 * clamp01(1 - age / 1.6);
   if (la > 0.02)
     for (let s = 0; s < 7; s++) lit.set(x + sw * (s / 7), y - 1 + s, withA(THREAD, la));
+}
+
+/** Манишка торса светится в темноте (светлые пиксели примитива торса). */
+function shirtGlow(o: RigOut, lit: Px | null, id: number): Px | null {
+  const ids = o.ids;
+  if (!ids || id < 0) return lit;
+  const { w, h, data } = o.px;
+  const [X0, Y0, X1, Y1] = o.box ?? [0, 0, w - 1, h - 1];
+  for (let y = Y0; y <= Y1; y++)
+    for (let x = X0; x <= X1; x++) {
+      const i = y * w + x;
+      if (ids[i] !== id) continue;
+      const q = i * 4;
+      if (Math.min(data[q], data[q + 1], data[q + 2]) < 170) continue;
+      lit ??= new Px(w, h);
+      lit.set(x, y, [data[q], data[q + 1], data[q + 2], Math.round(GLOW_SHIRT * 255)]);
+    }
+  return lit;
 }
 
 interface LSmear {
@@ -6595,10 +6994,13 @@ interface LordDraw {
   flash: boolean;
   open: boolean;
   ghost: boolean;
-  str: number;
-  sag: number;
+  /** Нити к колосникам по одной (поля слева, справа, запястья слева, справа). */
+  str: readonly number[];
+  sag: readonly number[];
   snap: readonly number[] | null;
   smear: LSmear | null;
+  /** Наклон своих нитей в кадре (против поворота маятника). */
+  tang: number;
 }
 interface LordCached {
   fr: MobFrame;
@@ -6607,41 +7009,95 @@ interface LordCached {
   vy: number;
 }
 
-function lordRender(d: LordDraw): LordCached {
-  const { L } = d;
-  const { j, rig, vg, hat } = lordRig(L, d.open);
+/**
+ * Кадр Кукловода по шагам: риг (поза), части (`rigJob`), рисунок поверх
+ * (контур, свечение, нити, след, ореол), обрезка. `own` — свои буферы для
+ * кадра «на потом»; итог тот же, что сразу, до пикселя.
+ */
+interface LordTask {
+  key: string;
+  res: LordCached | null;
+  step: (ms: number) => boolean;
+}
+function lordTask(key: string, d: LordDraw, own?: RigScr): LordTask {
+  let stage = 0;
+  let R: LRig | null = null;
+  let job: RigJob | null = null;
   const yaw = (d.dir / 16) * TAU;
-  const o = renderRig(rig, yaw, LW, LH, LAX, LAY, {
-    scale: LS,
-    flash: d.flash,
-    tint: d.ghost ? GHOST_T : undefined,
-    tintK: d.ghost ? 0.1 : 0,
-  });
+  const task: LordTask = {
+    key,
+    res: null,
+    step: (ms) => {
+      const t0 = ms < Infinity ? performance.now() : 0;
+      const over = () => ms < Infinity && performance.now() - t0 > ms;
+      if (stage === 0) {
+        R = lordRig(d.L, d.open);
+        job = rigJob(
+          R.rig,
+          yaw,
+          LW,
+          LH,
+          LAX,
+          LAY,
+          {
+            scale: LS,
+            flash: d.flash,
+            tint: d.ghost ? GHOST_T : undefined,
+            tintK: d.ghost ? 0.1 : 0,
+          },
+          own,
+        );
+        stage = 1;
+        if (over()) return false;
+      }
+      if (stage === 1 && job) {
+        if (!job.step(ms < Infinity ? Math.max(0, ms - (performance.now() - t0)) : Infinity))
+          return false;
+        stage = 2;
+        if (over()) return false;
+      }
+      if (stage === 2 && R && job) {
+        task.res = lordPost(d, R, job.out());
+        LORD_CACHE.set(key, task.res);
+        stage = 3;
+      }
+      return true;
+    },
+  };
+  return task;
+}
+
+function lordPost(d: LordDraw, R: LRig, o: RigOut): LordCached {
+  const { L } = d;
+  const { j, vg, hat } = R;
+  const yaw = (d.dir / 16) * TAU;
   const proj = rigProj(yaw, LS, LAX, LAY);
   let lit = rimLight(o, o.lit, d.ghost ? RIM_G : RIM);
+  lit = shirtGlow(o, lit, R.torso);
   // Свои нити: к полям шляпы (или к вискам) и к запястьям.
-  if (d.str > 0.02) {
+  if (d.str.some((s) => s > 0.02)) {
     const out = lit ?? new Px(LW, LH);
     lit = out;
-    const R = LORD_BODY.head;
+    const H = LORD_BODY.head;
     const onH = L.hat < 0.5;
     const pts: V3[] = [
-      onH ? vadd(hat.b, vsc(j.hRight, -HAT_BR * 0.8)) : onHead(j, R, 0, -0.95, 0.3),
-      onH ? vadd(hat.b, vsc(j.hRight, HAT_BR * 0.8)) : onHead(j, R, 0, 0.95, 0.3),
+      onH ? vadd(hat.b, vsc(j.hRight, -HAT_BR * 0.8)) : onHead(j, H, 0, -0.95, 0.3),
+      onH ? vadd(hat.b, vsc(j.hRight, HAT_BR * 0.8)) : onHead(j, H, 0, 0.95, 0.3),
       vadd(j.haL, v3(0, 0.8, 0)),
       vadd(j.haR, v3(0, 0.8, 0)),
     ];
     pts.forEach((p, i) => {
+      if (d.str[i] <= 0.02) return;
       const [x, y] = proj(p);
-      lordThread(out, x, y, d.str, d.sag, i, d.snap ? d.snap[i] : -1);
+      lordThread(out, x, y, d.str[i], d.sag[i], i, d.snap ? d.snap[i] : -1, d.tang);
     });
   }
-  // След взмаха.
+  // След взмаха: 8 положений через 1/48 с, ярче к «сейчас».
   const sm = d.smear;
   if (sm) {
     const segs: [number, number, number, number][] = [];
-    for (let k = 0; k < 7; k++) {
-      const ts = sm.t - k / 72;
+    for (let k = 0; k < 8; k++) {
+      const ts = sm.t - k / 48;
       if (ts < sm.w0 - 1e-6) break;
       if (ts > sm.w1 + 1e-6) continue;
       const Lk = k === 0 ? L : sm.at(ts);
@@ -6674,9 +7130,10 @@ function lordRender(d: LordDraw): LordCached {
   return { fr, vx: cx - x0, vy: cy - y0 };
 }
 
-// ---- состояние и выбор кадра ----------------------------------------------------
+// ---- состояние: маятник 24 отсчёта в секунду -------------------------------------
 
 const HANG_MODES = new Set(['roar', 'f13_hang', 'f13_needle', 'f13_trans']);
+const FACE_MODES = new Set(['roar', 'f13_trans', 'f13_needle']);
 const ACT4 = new Set([
   'chase',
   'f13_cut1',
@@ -6694,19 +7151,130 @@ export function lordLiftPx(m: Mob): number {
   return liftOf(m) * LIFT_PX;
 }
 
+/** Шаг акта IV — скорость мозга (`BOSS.walk`): ширина шага по ней. */
+const L_WALK = 2.6;
+const RING = 8;
+/**
+ * Привод: маятник вокруг полей шляпы (мир, рад — куда ушли ноги от отвеса)
+ * считается ровно 24 раза в секунду и пишется в кольцо: ноги, фалды и
+ * рукава берут его же на 1–4 отсчёта раньше. Сторона и путь шага — тут же.
+ */
+interface Drive {
+  tk: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  ring: Float32Array;
+  yaw: number;
+  yawV: number;
+  odo: number;
+}
+interface DriveIn {
+  vx: number;
+  vy: number;
+  hang: boolean;
+  to: number;
+  rate: number;
+}
+const driveNew = (yaw: number, tk: number): Drive => ({
+  tk,
+  x: 0,
+  y: 0,
+  vx: 0,
+  vy: 0,
+  ring: new Float32Array(RING * 2),
+  yaw,
+  yawV: 0,
+  odo: 0,
+});
+const driveCopy = (D: Drive): Drive => ({ ...D, ring: D.ring.slice() });
+
+function driveTick(D: Drive, I: DriveIn): void {
+  const dt = 1 / 24;
+  // Несут — ноги отстают от хода (сопротивление); встал — перелёт и качание.
+  const tx = I.hang ? clampN(-I.vx * 0.065, -0.22, 0.22) : 0;
+  const ty = I.hang ? clampN(-I.vy * 0.065, -0.22, 0.22) : 0;
+  const w = I.hang ? 5.5 : 14;
+  const z = I.hang ? 0.2 : 0.9;
+  [D.x, D.vx] = spring(D.x, D.vx, tx, w, z, dt);
+  [D.y, D.vy] = spring(D.y, D.vy, ty, w, z, dt);
+  const dy = clampN(angD(I.to, D.yaw), -I.rate * dt, I.rate * dt);
+  D.yaw += dy;
+  D.yawV = dy / dt;
+  // Путь шага: ход и переступ на развороте.
+  D.odo += (Math.hypot(I.vx, I.vy) + 0.45 * Math.abs(D.yawV)) * dt;
+  D.tk++;
+  const r = (((D.tk % RING) + RING) % RING) * 2;
+  D.ring[r] = D.x;
+  D.ring[r + 1] = D.y;
+}
+/** Маятник `n` отсчётов назад. */
+function driveAt(D: Drive, n: number): [number, number] {
+  const r = ((((D.tk - n) % RING) + RING) % RING) * 2;
+  return [D.ring[r], D.ring[r + 1]];
+}
+/** Маятник сейчас — между двумя последними отсчётами (плавный поворот кадра). */
+function swingNow(D: Drive, now: number): [number, number] {
+  const f = clamp01(now * 24 - D.tk);
+  const [ax, ay] = driveAt(D, 1);
+  const [bx, by] = driveAt(D, 0);
+  return [ax + (bx - ax) * f, ay + (by - ay) * f];
+}
+/** Толчок маятника в осях тела: вперёд (ноги вперёд) и вбок (к +x модели). */
+function kick(D: Drive, f: number, r: number): void {
+  const c = Math.cos(D.yaw);
+  const s = Math.sin(D.yaw);
+  D.vx += f * c - r * s;
+  D.vy += f * s + r * c;
+}
+
+/** Куда смотреть и как маятник несут — из мозга. */
+function driveIn(m: Mob, lift: number): DriveIn {
+  const dying = m.mode === 'dying';
+  const hang = lift > 0.02 && !dying;
+  let to = m.face;
+  let rate = 9;
+  if (dying || ACT4.has(m.mode)) rate = 14;
+  else if (hang && !FACE_MODES.has(m.mode)) {
+    // Несут быстро — лицом по ходу; висит — как велит мозг.
+    const w = ease(clamp01((Math.hypot(m.vx, m.vy) - 0.5) / 1.0));
+    if (w > 0) to = m.face + angD(Math.atan2(m.vy, m.vx), m.face) * w;
+    rate = 6;
+  }
+  return { vx: m.vx, vy: m.vy, hang, to, rate };
+}
+
+/** Отставание частей от маятника в осях тела (сколько отсчётов, во сколько раз). */
+function lagOf(D: Drive, I: DriveIn): Lag {
+  const [x0, y0] = driveAt(D, 0);
+  const c = Math.cos(D.yaw);
+  const s = Math.sin(D.yaw);
+  const rel = (n: number, k: number): [number, number] => {
+    const [x, y] = driveAt(D, n);
+    const dx = (x - x0) * k;
+    const dy = (y - y0) * k;
+    return [dx * c + dy * s, -dx * s + dy * c];
+  };
+  const vf = I.hang ? I.vx * c + I.vy * s : 0;
+  const [lf, lr] = rel(2, 1.45);
+  const [tf, tr] = rel(4, 1.9);
+  const [af] = rel(1, 1.1);
+  return {
+    lf: quantS(lf - 0.03 * vf, 0.08, 0.48),
+    ls: quantS(-lr, 0.08, 0.32),
+    tf: quantS(-tf + 0.05 * vf, 0.1, 0.6),
+    ts: quantS(tr, 0.1, 0.5),
+    af: quantS(af, 0.1, 0.4),
+  };
+}
+
 interface LState {
   now: number;
   mode: string;
   prev: string;
-  yaw: number;
-  /** Маятник (рад) и его скорость. */
-  th: number;
-  thv: number;
-  /** Отставание ног и фалд: вперёд-назад и вбок. */
-  lg: number;
-  lgv: number;
-  ls: number;
-  lsv: number;
+  D: Drive;
+  inp: DriveIn;
   lift: number;
   liftV: number;
   landAt: number;
@@ -6716,8 +7284,12 @@ interface LState {
   hb: number;
   hdx: number;
   hdy: number;
-  odo: number;
   needleAt: number;
+  dip: boolean;
+  dipAt: number;
+  dipEnd: number;
+  cue: number;
+  cueN: number;
   last: LP | null;
   lastKey: string;
   bFrom: LP | null;
@@ -6726,6 +7298,19 @@ interface LState {
   vaga: [number, number] | null;
 }
 const LST = new Map<number, LState>();
+
+/** Толчки маятника от жестов ваги: [код исполина, кадр жеста, вперёд, вбок]. */
+const KICKS: readonly [number, number, number, number][] = [
+  [1, 20, 0.9, 0],
+  [2, 16, 0, -0.75],
+  [3, 23, 0.6, 0],
+  [10, 46, -0.9, 0],
+  [6, 3, 0.6, 0],
+  [7, 2, -0.3, 0],
+  [7, 14, 0, 0.3],
+  [7, 26, -0.3, 0],
+  [7, 40, -0.45, 0],
+];
 
 function lordTick(m: Mob, now: number, flash: boolean): LState {
   const lift = liftOf(m);
@@ -6736,13 +7321,8 @@ function lordTick(m: Mob, now: number, flash: boolean): LState {
       now,
       mode: m.mode,
       prev: '',
-      yaw: m.face,
-      th: 0,
-      thv: 0,
-      lg: 0,
-      lgv: 0,
-      ls: 0,
-      lsv: 0,
+      D: driveNew(m.face, Math.floor(now * 24)),
+      inp: { vx: 0, vy: 0, hang: false, to: m.face, rate: 0 },
       lift,
       liftV: 0,
       landAt: -9,
@@ -6752,8 +7332,12 @@ function lordTick(m: Mob, now: number, flash: boolean): LState {
       hb: 0,
       hdx: 0,
       hdy: 0,
-      odo: 0,
       needleAt: -9,
+      dip: false,
+      dipAt: -9,
+      dipEnd: -9,
+      cue: 0,
+      cueN: -1,
       last: null,
       lastKey: '',
       bFrom: null,
@@ -6765,8 +7349,12 @@ function lordTick(m: Mob, now: number, flash: boolean): LState {
   }
   const dt = Math.min(0.1, Math.max(0, now - st.now));
   st.now = now;
+  const D = st.D;
   if (m.mode !== st.mode) {
-    if (st.mode === 'f13_needle' && m.mode === 'f13_hang') st.needleAt = now;
+    if (st.mode === 'f13_needle' && m.mode === 'f13_hang') {
+      st.needleAt = now;
+      kick(D, -0.7, 0);
+    }
     if (st.last && st.lastKey.length < 140 && m.mode !== 'dying') {
       st.bFrom = st.last;
       st.bKey = st.lastKey;
@@ -6776,56 +7364,56 @@ function lordTick(m: Mob, now: number, flash: boolean): LState {
     st.mode = m.mode;
   }
   const dying = m.mode === 'dying';
-  const hang = lift > 0.02;
-  if (dt > 0) {
-    if (!dying) {
-      if (HANG_MODES.has(m.mode)) st.yaw += clampN(angD(m.face, st.yaw), -9 * dt, 9 * dt);
-      else if (m.mode === 'chase' || m.mode === 'recover' || m.mode === 'idle') {
-        // Ходит лицом по ходу, стоит — к цели; поворот плавный.
-        const sp = Math.hypot(m.vx, m.vy);
-        const to = m.mode === 'chase' && sp > 0.3 ? Math.atan2(m.vy, m.vx) : m.face;
-        st.yaw += clampN(angD(to, st.yaw), -14 * dt, 14 * dt);
-      } else st.yaw = m.face;
-    }
-    // Маятник: вершина идёт за вагой, низ отстаёт; на остановке — перелёт.
-    const thT = hang && !dying ? clampN(m.vx * 0.075, -0.3, 0.3) : 0;
-    [st.th, st.thv] = spring(st.th, st.thv, thT, hang ? 5.2 : 10, hang ? 0.2 : 0.9, dt);
-    const c = Math.cos(st.yaw);
-    const s = Math.sin(st.yaw);
-    const vf = m.vx * c + m.vy * s;
-    const vs = -m.vx * s + m.vy * c;
-    [st.lg, st.lgv] = spring(
-      st.lg,
-      st.lgv,
-      hang ? clampN(-vf * 0.11, -0.45, 0.45) : 0,
-      4.4,
-      0.2,
-      dt,
-    );
-    [st.ls, st.lsv] = spring(st.ls, st.lsv, hang ? clampN(-vs * 0.07, -0.3, 0.3) : 0, 4.4, 0.2, dt);
-    st.liftV += ((lift - st.lift) / dt - st.liftV) * Math.min(1, dt * 20);
-    st.odo += Math.hypot(m.vx, m.vy) * dt;
-  }
+  const I = driveIn(m, lift);
+  st.inp = I;
+  const T = Math.floor(now * 24);
+  if (T - D.tk > 24) D.tk = T - 24;
+  while (D.tk < T) driveTick(D, I);
+  if (dt > 0) st.liftV += ((lift - st.lift) / dt - st.liftV) * Math.min(1, dt * 20);
   if (st.lift > 0.02 && lift <= 0.02) st.landAt = now;
   if (st.lift <= 0.02 && lift > 0.02) st.riseAt = now;
   st.lift = lift;
+  // Срыв нити исполина (акт I): ниже, без защиты, окно ещё не открыто.
+  const dip =
+    !dying &&
+    HANG_MODES.has(m.mode) &&
+    lift > 0.02 &&
+    (m.data.open ?? 0) <= 0 &&
+    (m.data.ghost ?? 1) <= 0;
+  if (dip && !st.dip) {
+    st.dipAt = now;
+    kick(D, -0.6, 0.4);
+  }
+  if (!dip && st.dip) st.dipEnd = now;
+  st.dip = dip;
+  // Жест ваги: на рывке плечи отдают, тело качнуло.
+  const cue = HANG_MODES.has(m.mode) && lift > 0.02 ? giantCue(m, now, 0) : null;
+  const code = cue?.code ?? 0;
+  const n = cue ? gestureN(cue) : -1;
+  if (code && code === st.cue)
+    for (const [c, f, kf, kr] of KICKS) if (c === code && st.cueN < f && n >= f) kick(D, kf, kr);
+  st.cue = code;
+  st.cueN = n;
   // Удар героя: отдача от него, висящего ещё и качнёт.
   if (flash && !st.fl && !dying) {
     const h = paintSim()?.hero;
-    let ax = h ? h.x - m.x : Math.cos(st.yaw);
-    let ay = h ? h.y - m.y : Math.sin(st.yaw);
+    let ax = h ? h.x - m.x : Math.cos(D.yaw);
+    let ay = h ? h.y - m.y : Math.sin(D.yaw);
     const L = Math.hypot(ax, ay) || 1;
     ax /= L;
     ay /= L;
     st.hitAt = now;
     st.hdx = -ax;
     st.hdy = -ay;
-    const c = Math.cos(st.yaw);
-    const s = Math.sin(st.yaw);
+    const c = Math.cos(D.yaw);
+    const s = Math.sin(D.yaw);
     const f = ax * c + ay * s;
     const sd = -ax * s + ay * c;
     st.hb = Math.abs(f) >= Math.abs(sd) ? (f > 0 ? 0 : 1) : sd > 0 ? 3 : 2;
-    if (hang) st.thv += ax * 1.8;
+    if (lift > 0.02) {
+      D.vx -= ax * 1.5;
+      D.vy -= ay * 1.5;
+    }
   }
   st.fl = flash;
   return st;
@@ -6842,9 +7430,14 @@ const GCODE: Record<string, number> = {
   chase: 8,
   f13_stand: 9,
 };
-function giantCue(m: Mob, now: number): { code: number; t: number; ph: number } | null {
+interface Cue {
+  code: number;
+  t: number;
+  ph: number;
+}
+function giantCue(m: Mob, now: number, ahead: number): Cue | null {
   const v = m.data.vG ?? 0;
-  if (v > 0) return { code: v, t: m.t, ph: (now * 0.8) % 1 };
+  if (v > 0) return { code: v, t: m.t + ahead, ph: (((now * 0.8) % 1) + 1) % 1 };
   if (!paintSim()) return null;
   const g = F13_FX.mobs.find((q) => q.kind === 'f13_giant' && q.mode !== 'dying');
   if (!g) return null;
@@ -6852,10 +7445,28 @@ function giantCue(m: Mob, now: number): { code: number; t: number; ph: number } 
   let code = GCODE[g.mode] ?? 0;
   if (g.mode === 'recover')
     code = gs?.prev === 'f13_charge' ? 10 : gs?.prev === 'f13_shield' ? 11 : 5;
-  return code ? { code, t: g.t, ph: gs ? (gs.odo / G_STRIDE) % 1 : 0 } : null;
+  return code ? { code, t: g.t + ahead, ph: gs ? (gs.odo / G_STRIDE) % 1 : 0 } : null;
 }
 
-function gesture(c: { code: number; t: number; ph: number }): { L: LP; key: string } | null {
+/** Жест: ключи, первый кадр режима исполина в треке (удар — его начало `recover`). */
+const GESTURES: Record<number, [readonly PKey<LP>[], number, number]> = {
+  1: [LG_LANCE, 0, 1],
+  5: [LG_LANCE, 24, 1],
+  2: [LG_SHIELD, 0, 2],
+  11: [LG_SHIELD, 20, 2],
+  3: [LG_CHARGE, 0, 3],
+  4: [LG_CHARGE, 24, 3],
+  10: [LG_CHARGE, 43, 3],
+  6: [LG_SLUMP, 0, 6],
+  7: [LG_REBUILD, 0, 7],
+  9: [LG_STAND, 0, 9],
+};
+function gestureN(c: Cue): number {
+  const e = GESTURES[c.code];
+  if (!e) return -1;
+  return Math.min(e[1] + F24(c.t), Math.round(trackEnd(e[0]) * 24));
+}
+function gesture(c: Cue): { L: LP; key: string } | null {
   if (c.code === 8) {
     // Исполин шагает: вага покачивается в такт его шагу.
     const f = Math.floor(c.ph * 8) % 8;
@@ -6872,24 +7483,12 @@ function gesture(c: { code: number; t: number; ph: number }): { L: LP; key: stri
       key: `gc${f}`,
     };
   }
-  const tab: Record<number, [readonly PKey<LP>[], number, number]> = {
-    1: [LG_LANCE, 0, 1],
-    5: [LG_LANCE, 1, 1],
-    2: [LG_SHIELD, 0, 2],
-    11: [LG_SHIELD, 0.8, 2],
-    3: [LG_CHARGE, 0, 3],
-    4: [LG_CHARGE, 1, 3],
-    10: [LG_CHARGE, 1.8, 3],
-    6: [LG_SLUMP, 0, 6],
-    7: [LG_REBUILD, 0, 7],
-    9: [LG_STAND, 0, 9],
-  };
-  const e = tab[c.code];
+  const e = GESTURES[c.code];
   if (!e) return null;
-  const n = F24(e[1] + c.t, trackEnd(e[0]));
-  let L = track(n / 24, e[0]);
+  const n = gestureN(c);
+  let L = follow((x) => track(x, e[0]), n / 24, true);
   // Прицел тарана: рука дрожит от натяжения.
-  if (e[2] === 3 && n / 24 > 0.45 && n / 24 < 0.9 && n % 2)
+  if (e[2] === 3 && n > 11 && n < 22 && n % 2)
     L = lp({ aR: limb(L.aR.sw + 0.07, L.aR.out, L.aR.bend) }, L);
   return { L, key: `g${e[2]}.${n}` };
 }
@@ -6897,8 +7496,8 @@ function gesture(c: { code: number; t: number; ph: number }): { L: LP; key: stri
 interface LSpec {
   key: string;
   L: LP;
-  str: number;
-  sag: number;
+  str: number[];
+  sag: number[];
   snap: readonly number[] | null;
   smear: LSmear | null;
   /** Доля маятника (висит — 1). */
@@ -6909,172 +7508,216 @@ interface LSpec {
   blend: boolean;
 }
 
-function hangSpec(m: Mob, now: number, st: LState, o: LSpec): void {
-  const t = m.t;
+/** Иглы одним треком: замах (0–10), выпуск (11) и проводка (11–23). */
+const NEEDLE_ALL: readonly PKey<LP>[] = [
+  ...NEEDLE,
+  ...NEEDLE_FT.map(([t, p, e]): PKey<LP> => [t + fr24(11), p, e]),
+];
+
+function hangSpec(m: Mob, now: number, mt: number, st: LState, D: Drive, o: LSpec): void {
   const lift = st.lift;
-  o.str = 1;
-  o.hang = 1;
+  o.hang = clamp01(lift * 4);
   o.blend = false;
+  o.str = [1, 1, 1, 1];
+  o.sag = [0, 0, 0, 0];
   if (m.mode === 'roar') {
-    const n = F24(t, trackEnd(ROAR));
-    const tq = n / 24;
-    o.L = track(tq, ROAR);
+    const n = F24(mt, 2.4);
+    o.L = follow((x) => track(x, ROAR), n / 24, true);
     o.key = `roar${n}`;
-    if (tq >= 1.55 && tq <= 1.92)
-      o.smear = { at: (x) => track(x, ROAR), t: tq, w0: 1.55, w1: 1.85, part: 'vaga' };
+    // Нити натягиваются по одной: до рывка висят провисшими.
+    o.sag = ROAR_TAUT.map((f) => (n < f ? 6 : n < f + 2 ? 2 - (n - f) : 0));
+    o.str = ROAR_TAUT.map((f) => (n < f ? 0.55 : 1));
+    if (n >= 38 && n <= 48)
+      o.smear = {
+        at: (x) => track(x, ROAR),
+        t: n / 24,
+        w0: fr24(38),
+        w1: fr24(46),
+        part: 'vaga',
+      };
     return;
   }
   if (m.mode === 'f13_trans') {
-    const n = F24(t, trackEnd(TRANS));
-    o.L = track(n / 24, TRANS);
+    const n = F24(mt, 3.2);
+    o.L = follow((x) => track(x, TRANS), n / 24, true);
     o.key = `tr${n}`;
     return;
   }
-  const lg = quantS(st.lg, 0.08, 0.48);
-  const ls = quantS(st.ls, 0.08, 0.32);
   if (lift <= 0.02) {
+    // Внизу, без нитей: растерян.
     const f = Math.floor(now * 8) % 16;
     o.L = lostPose(f);
     o.key = `fl${f}`;
-    o.sag = 5;
+    o.sag = [5, 5, 5, 5];
   } else {
-    // Пока исполин действует или летят иглы, цикл висения стоит (жест ведёт
-    // руку сам, маятник и ноги живут на пружинах) — кадров в кеше меньше.
-    const cue = giantCue(m, now);
-    const still = !!cue || m.mode === 'f13_needle' || now - st.needleAt < 0.5;
-    const f = still ? 0 : (((Math.floor(now * 10) + m.id * 3) % 16) + 16) % 16;
-    o.L = hangPose(f, lg, ls);
-    o.key = `hg${f}.${Math.round(lg / 0.08)}.${Math.round(ls / 0.08)}`;
+    const cue = giantCue(m, now, mt - m.t);
+    const lg = lagOf(D, st.inp);
+    const moving = lg.lf || lg.ls || lg.tf || lg.ts || lg.af;
+    // Пока исполин действует, летят иглы или качает — дыхание стоит.
+    const still = moving || !!cue || st.dip || m.mode === 'f13_needle' || now - st.needleAt < 0.55;
+    const f = still ? 0 : (((Math.floor(now * 8) + m.id * 3) % 16) + 16) % 16;
+    o.L = hangPose(f, lg);
+    const q = (v: number, s: number) => Math.round(v / s);
+    o.key = `hg${f}.${q(lg.lf, 0.08)}.${q(lg.ls, 0.08)}.${q(lg.tf, 0.1)}.${q(lg.ts, 0.1)}.${q(lg.af, 0.1)}`;
     // Спускают: нити провисают, ноги тянутся к полу.
     if (st.liftV < -0.4) {
       o.L = addP(o.L, DROP, LP0);
       o.key += 'd';
-      o.sag = Math.round(1 + 3 * (1 - lift));
+      const s = Math.round(1 + 3 * (1 - lift));
+      o.sag = [s, s, s, s];
     }
     const g = cue ? gesture(cue) : null;
     if (g) {
       o.L = addP(o.L, g.L, HOLD);
       o.key += g.key;
     }
+    // Срыв нити: сцена — бросок, ловит вагу, бьётся ниже; связали — подтянули.
+    if (st.dip) {
+      const da = now - st.dipAt;
+      const n = F24(da);
+      if (n <= 10) {
+        o.L = addP(o.L, track(n / 24, DIP_IN), LP0);
+        o.key += `dp${n}`;
+      } else {
+        const fl = Math.floor((da - fr24(10)) * 10) % 8;
+        o.L = addP(o.L, dipLoop(fl), LP0);
+        o.key += `dl${fl}`;
+      }
+      o.sag = [0, n < 3 ? 7 : 4, 0, n < 3 ? 5 : 2];
+    } else {
+      const ea = now - st.dipEnd;
+      if (ea >= 0 && ea < 0.46) {
+        const n = F24(ea);
+        o.L = addP(o.L, track(n / 24, RISE), LP0);
+        o.key += `dr${n}`;
+      }
+    }
   }
-  if (m.mode === 'f13_needle') {
-    const n = F24(t, 0.45);
-    const tq = n / 24;
+  // Иглы: замах в `f13_needle`, выпуск и проводка — уже в висении.
+  let nn = -1;
+  if (m.mode === 'f13_needle') nn = Math.min(10, F24(mt));
+  else {
+    const na = now - st.needleAt;
+    if (na >= 0 && na < 0.5) nn = 11 + F24(na);
+  }
+  if (nn >= 0) {
     const base = o.L;
-    o.L = addP(base, track(tq, NEEDLE), HOLD);
-    o.key += `nd${n}`;
-    if (tq >= 0.35)
+    o.L = addP(
+      base,
+      follow((x) => track(x, NEEDLE_ALL), nn / 24, true),
+      HOLD,
+    );
+    o.key += `nd${nn}`;
+    if (nn >= 9 && nn <= 13)
       o.smear = {
-        at: (x) => addP(base, track(x, NEEDLE), HOLD),
-        t: tq,
-        w0: 0.33,
-        w1: 0.45,
+        at: (x) => addP(base, track(x, NEEDLE_ALL), HOLD),
+        t: nn / 24,
+        w0: fr24(9),
+        w1: fr24(12),
         part: 'handL',
       };
-  } else {
-    const na = now - st.needleAt;
-    if (na >= 0 && na < 0.5) {
-      const n = F24(na);
-      const base = o.L;
-      o.L = addP(base, track(n / 24, NEEDLE_FT), HOLD);
-      o.key += `nf${n}`;
-      // Кадр выпуска (урон в 0,45) — со следом руки от замаха.
-      if (n === 0)
-        o.smear = {
-          at: (x) => addP(base, track(x, NEEDLE), HOLD),
-          t: 0.45,
-          w0: 0.33,
-          w1: 0.45,
-          part: 'handL',
-        };
-    }
   }
   // Подъём с пола — рывком: руки вверх, тело тянет, ноги догоняют.
   const ra = now - st.riseAt;
-  if (ra >= 0 && ra < 0.45 && lift > 0.02) {
+  if (ra >= 0 && ra < 0.46 && lift > 0.02) {
     const n = F24(ra);
     o.L = addP(o.L, track(n / 24, RISE), LP0);
     o.key += `r${n}`;
   }
 }
 
-function walkSpec(m: Mob, now: number, st: LState, o: LSpec): void {
-  const t = m.t;
-  o.str = clamp01(st.lift * 3);
+function walkSpec(m: Mob, now: number, mt: number, st: LState, D: Drive, o: LSpec): void {
+  const s = clamp01(st.lift * 3);
+  o.str = [s, s, s, s];
+  o.sag = [0, 0, 0, 0];
   o.hang = clamp01(st.lift * 4);
-  const atk = (T: number) => {
-    const n = F24(T, trackEnd(ATK));
-    const tq = n / 24;
-    o.L = track(tq, ATK);
+  const atk = (n: number) => {
+    o.L = follow((x) => track(x, ATK), n / 24, false);
     o.key = `at${n}`;
-    if (tq >= 0.56 && tq <= 0.82)
-      o.smear = { at: (x) => track(x, ATK), t: tq, w0: 0.56, w1: 0.76, part: 'vaga' };
-    if (tq >= 1.18 && tq <= 1.38)
-      o.smear = { at: (x) => track(x, ATK), t: tq, w0: 1.18, w1: 1.33, part: 'vaga' };
-    o.trail = tq >= 1.18 && tq <= 1.45;
+    if (n >= 14 && n <= 19)
+      o.smear = { at: (x) => track(x, ATK), t: n / 24, w0: fr24(14), w1: fr24(18), part: 'vaga' };
+    if (n >= 29 && n <= 34)
+      o.smear = { at: (x) => track(x, ATK), t: n / 24, w0: fr24(29), w1: fr24(33), part: 'vaga' };
+    o.trail = n >= 30 && n <= 38;
   };
+  const snareAt = (yank: boolean) => (x: number) =>
+    x < fr24(SNARE_N)
+      ? { ...track(x, SNARE), la: snareSpin(x) }
+      : track(x, yank ? SN_YANK : SN_MISS);
   switch (m.mode) {
     case 'f13_cut1':
-      return atk(t);
+      return atk(Math.min(ATK_CUT - 1, F24(mt)));
     case 'f13_cut2':
-      return atk(0.7 + t);
+      return atk(Math.min(ATK_THRUST - 1, ATK_CUT + F24(mt)));
     case 'f13_snare': {
-      const n = F24(t, 0.8);
-      const tq = n / 24;
-      o.L = { ...track(tq, SNARE), la: snareSpin(tq) };
+      const n = Math.min(SNARE_N - 1, F24(mt));
+      o.L = follow(snareAt(false), n / 24, false);
       o.key = `sn${n}`;
-      if (tq >= 0.66)
+      if (n >= 17)
         o.smear = {
-          at: (x) => ({ ...track(x, SNARE), la: snareSpin(x) }),
-          t: tq,
-          w0: 0.66,
-          w1: 0.8,
+          at: snareAt(false),
+          t: n / 24,
+          w0: fr24(17),
+          w1: fr24(SNARE_N),
           part: 'vaga',
         };
       return;
     }
     case 'f13_grid': {
-      const n = F24(t, trackEnd(GRID));
-      const tq = n / 24;
-      o.L = track(tq, GRID);
-      if (tq > 0.45 && tq < 1.2 && n % 2)
+      const n = F24(mt, 2.4);
+      o.L = follow((x) => track(x, GRID), n / 24, false);
+      // Нити натянуты: пальцы дрожат.
+      if (n > 12 && n < 26 && n % 2)
         o.L = lp({ aR: dl(o.L.aR, 0, 0.05, 0), aL: dl(o.L.aL, 0, 0.05, 0) }, o.L);
       o.key = `gr${n}`;
       return;
     }
     case 'f13_spent': {
-      if (t < 0.4) {
-        const n = F24(t, 0.4);
-        o.L = track(n / 24, SPENT_IN);
+      if (mt < fr24(10)) {
+        const n = F24(mt);
+        o.L = follow((x) => track(x, SPENT_IN), n / 24, false);
         o.key = `sp${n}`;
-      } else if (t < 2.75) {
+      } else if (mt < SPENT_LEN - fr24(10)) {
+        // Тяжело дышит на колене: плечи ходят, голова клонится.
         const f = Math.floor(now * 8) % 12;
-        const s = Math.sin((f / 12) * TAU);
-        o.L = lp({ bob: 0.4 * s, hp: KNEEL.hp + 0.08 * s, lean: KNEEL.lean - 0.04 * s }, KNEEL);
+        const sn = Math.sin((f / 12) * TAU);
+        o.L = lp(
+          {
+            bob: 0.45 * sn,
+            hp: KNEEL.hp + 0.1 * sn,
+            lean: KNEEL.lean - 0.05 * sn,
+            aR: dl(KNEEL.aR, 0.04 * sn, 0, 0),
+            tb: KNEEL.tb + 0.03 * Math.sin((f / 12) * TAU - 1),
+          },
+          KNEEL,
+        );
         o.key = `sb${f}`;
       } else {
-        const n = F24(t - 2.75, 0.4);
-        o.L = track(n / 24, SPENT_UP);
+        const n = Math.min(10, F24(mt - (SPENT_LEN - fr24(10))));
+        o.L = follow((x) => track(x, SPENT_UP), n / 24, false);
         o.key = `su${n}`;
       }
       return;
     }
     case 'recover':
-      if (st.prev === 'f13_cut2') return atk(1.3 + t);
+      if (st.prev === 'f13_cut2') return atk(Math.min(48, ATK_THRUST + F24(mt)));
       if (st.prev === 'f13_snare') {
         const yank = (m.data.vYank ?? 0) > 0;
-        const n = F24(t, 0.7);
-        const tq = 0.8 + n / 24;
-        o.L = { ...track(tq, yank ? SN_YANK : SN_MISS), la: snareSpin(0.66) };
+        const n = Math.min(36, SNARE_N + F24(mt));
+        o.L = follow(snareAt(yank), n / 24, false);
         o.key = `s${yank ? 'y' : 'm'}${n}`;
         return;
       }
       break;
   }
-  if (Math.hypot(m.vx, m.vy) > 0.3) {
-    const f = Math.floor(((st.odo / L_STRIDE) % 1) * 8) % 8;
-    o.L = walkPose(f);
-    o.key = `wk${f}`;
+  // Ходит: шаг по пройденному пути; разворот — переступом на месте.
+  const sp = Math.hypot(m.vx, m.vy);
+  const turn = Math.abs(D.yawV) > 1.2 ? Math.sign(D.yawV) : 0;
+  if (sp > 0.3 || turn) {
+    const kq = sp < 0.3 ? 1 : sp < L_WALK * 0.6 ? 2 : 3;
+    const f = Math.floor(((D.odo / L_STRIDE) % 1) * 12) % 12;
+    o.L = walkPose(f, kq / 3, turn);
+    o.key = `wk${f}.${kq}.${turn}`;
   } else {
     const f = Math.floor(now * 8) % 12;
     o.L = standPose(f);
@@ -7086,13 +7729,13 @@ let DIE_AUX: { hand: V3; hat: V3; pick: V3 } | null = null;
 /** Где рука роняет вагу, где шляпа слетает и где её поднимут. */
 function dieAux(): { hand: V3; hat: V3; pick: V3 } {
   if (!DIE_AUX) {
-    const at = (t: number) => {
-      const L = track(t, DIE);
+    const at = (n: number) => {
+      const L = track(n / 24, DIE);
       return { L, j: humanoid(new Rig(), LORD_BODY, L, { head: true, arms: true }) };
     };
-    const a = at(0.3);
-    const b = at(1.05);
-    const c = at(3.95);
+    const a = at(11);
+    const b = at(25);
+    const c = at(95);
     DIE_AUX = { hand: vagaOf(a.j, a.L).c, hat: hatOf(b.j, b.L).b, pick: c.j.haL };
   }
   return DIE_AUX;
@@ -7101,11 +7744,11 @@ function dieAux(): { hand: V3; hat: V3; pick: V3 } {
 function deathSpec(t: number): LSpec {
   const n = F24(t, LORD_DEATH);
   const tq = n / 24;
-  const L: LP = { ...track(tq, DIE) };
+  const L: LP = { ...follow((x) => track(x, DIE), tq, false) };
   const ax = dieAux();
-  if (tq >= 0.3) {
+  if (n >= 11) {
     // Вага выпала из руки и легла у ног.
-    const k = eIn((tq - 0.3) / 0.2);
+    const k = eIn((n - 11) / 5);
     const p = vmix(ax.hand, v3(ax.hand.x, 0.6, ax.hand.z), k);
     L.wh = 0;
     L.vX = p.x;
@@ -7115,19 +7758,19 @@ function deathSpec(t: number): LSpec {
     L.wy = 0.8 * (1 - k);
     L.wz = 0.35;
   }
-  if (tq >= 1.05 && tq < 4.05) {
+  if (n >= 25 && n < 97) {
     // Шляпа слетает дугой, катится и ждёт, пока её поднимут.
     const P1 = v3(-6, HAT_BR, 4);
     const P2 = v3(ax.pick.x, HAT_BR, ax.pick.z);
     let p: V3;
     let hT = Math.PI / 2;
-    if (tq < 1.4) {
-      const k = (tq - 1.05) / 0.35;
+    if (n < 33) {
+      const k = (n - 25) / 8;
       p = vmix(ax.hat, P1, k);
       p.y += Math.sin(k * Math.PI) * 4;
       hT = k * (Math.PI / 2);
-    } else if (tq < 2.2) {
-      const k = ease((tq - 1.4) / 0.8);
+    } else if (n < 53) {
+      const k = ease((n - 33) / 20);
       p = vmix(P1, P2, k);
       hT = Math.PI / 2 - 0.25 * Math.sin(k * Math.PI * 3) * (1 - k);
     } else p = P2;
@@ -7137,13 +7780,21 @@ function deathSpec(t: number): LSpec {
     L.hZ = p.z;
     L.hT = hT;
   }
+  // Каждый обрыв дёргает тело: просел, сжался.
+  for (const f of SNAP_F) {
+    const a = n - f;
+    if (a >= 0 && a < 3) {
+      L.up -= 0.8 * (1 - a / 3);
+      L.sq *= 0.95 + 0.017 * a;
+    }
+  }
   const str = tq < 0.12 || tq > 2.8 ? 0 : clamp01((tq - 0.12) / 0.15);
   return {
     key: `D${n}`,
     L,
-    str,
-    sag: 0,
-    snap: SNAP_T.map((s) => (tq >= s ? tq - s : -1)),
+    str: [str, str, str, str],
+    sag: [0, 0, 0, 0],
+    snap: SNAP_F.map((f) => (n >= f ? (n - f) / 24 : -1)),
     smear: null,
     hang: 0,
     liftPx: L.up,
@@ -7153,13 +7804,15 @@ function deathSpec(t: number): LSpec {
   };
 }
 
-function lordSpec(m: Mob, now: number, st: LState): LSpec {
-  if (m.mode === 'dying') return deathSpec(m.t);
+/** Поза и всё, что идёт в кадр, на момент `now` (`ahead` — насколько вперёд). */
+function lordSpec(m: Mob, now: number, st: LState, D: Drive, ahead: number): LSpec {
+  const mt = m.t + ahead;
+  if (m.mode === 'dying') return deathSpec(mt);
   const o: LSpec = {
     key: '',
     L: LP0,
-    str: 0,
-    sag: 0,
+    str: [0, 0, 0, 0],
+    sag: [0, 0, 0, 0],
     snap: null,
     smear: null,
     hang: 0,
@@ -7168,8 +7821,11 @@ function lordSpec(m: Mob, now: number, st: LState): LSpec {
     trail: false,
     blend: true,
   };
-  if (HANG_MODES.has(m.mode) || (!ACT4.has(m.mode) && st.lift > 0.02)) hangSpec(m, now, st, o);
-  else walkSpec(m, now, st, o);
+  if (HANG_MODES.has(m.mode) || (!ACT4.has(m.mode) && st.lift > 0.02))
+    hangSpec(m, now, mt, st, D, o);
+  else walkSpec(m, now, mt, st, D, o);
+  // Несут быстро (спуск к кораблю) — шлейф.
+  if (st.lift > 0.02 && Math.hypot(m.vx, m.vy) > 4) o.trail = true;
   // Приземлился: колени подогнулись, сжался.
   const la = now - st.landAt;
   if (la >= 0 && la < 0.5) {
@@ -7188,25 +7844,28 @@ function lordSpec(m: Mob, now: number, st: LState): LSpec {
   return o;
 }
 
-const LORD_CACHE = frameLRU<LordCached>(640);
+const LORD_CACHE = frameLRU<LordCached>(800);
 const LORD_TRAIL = { every: 0.05, life: 0.24, tint: '#2a1e3a', alpha: 0.4 };
 
-function lordKey(
-  key: string,
-  dir: number,
-  flash: boolean,
-  open: boolean,
-  ghost: boolean,
-  str: number,
-  sag: number,
-): string {
-  return `${key}:${dir}:${flash ? 1 : 0}${open ? 'o' : ''}${ghost ? 'g' : ''}:${Math.round(str * 10)}.${sag}`;
+interface LPlan {
+  L: LP;
+  key: string;
+  full: string;
+  d: LordDraw;
+  sp: LSpec;
+  rot: number;
+  syT: number;
 }
-
-function paintLord(m: Mob, pose: MobPose): MobFrame {
-  const now = pose.now;
-  const st = lordTick(m, now, pose.flash);
-  const sp = lordSpec(m, now, st);
+/** Кадр целиком: поза, сторона, нити, наклон маятника — и ключ кеша. */
+function lordPlan(
+  m: Mob,
+  now: number,
+  st: LState,
+  D: Drive,
+  ahead: number,
+  flash0: boolean,
+): LPlan {
+  const sp = lordSpec(m, now, st, D, ahead);
   let L = sp.L;
   let key = sp.key;
   // Смена режима в акте IV — короткое сведение поз (без скачка).
@@ -7218,35 +7877,103 @@ function paintLord(m: Mob, pose: MobPose): MobFrame {
       key = `B${n}{${st.bKey}}${key}`;
     }
   }
-  st.last = L;
-  st.lastKey = key;
   const dying = m.mode === 'dying';
-  const dir = dying ? dirOf(m.face, 16) : dirOf(st.yaw, 16);
-  const flash = pose.flash && (!dying || m.t < 0.08);
+  const dir = dying ? dirOf(m.face, 16) : dirOf(D.yaw, 16);
+  const flash = flash0 && (!dying || m.t < 0.08);
   const open = (m.data.open ?? 0) > 0 && !dying;
   const ghost = (m.data.ghost ?? 0) > 0 && !dying;
-  const full = lordKey(key, dir, flash, open, ghost, sp.str, sp.sag);
-  let c = LORD_CACHE.get(full);
-  if (!c)
-    c = LORD_CACHE.set(
-      full,
-      lordRender({
-        L,
-        dir,
-        flash,
-        open,
-        ghost,
-        str: sp.str,
-        sag: sp.sag,
-        snap: sp.snap,
-        smear: sp.smear,
-      }),
-    );
-  // Маятник вокруг подвеса, подъём на нитях, выпад, отдача.
-  const th = st.th * sp.hang;
-  const yaw = (dir / 16) * TAU;
-  let dx = L.fw * Math.cos(yaw) - PIVOT * Math.sin(th);
-  let dy = L.fw * Math.sin(yaw) - sp.liftPx - PIVOT * (1 - Math.cos(th));
+  // Маятник: вбок — поворот кадра у полей шляпы, к зрителю — растяжение.
+  const [sx, sy] = swingNow(D, now);
+  const rot = -sx * sp.hang;
+  const syT = 1 + (Math.cos(sy) + 0.56 * Math.sin(sy) - 1) * sp.hang;
+  const tq = sp.str.some((s) => s > 0.02) ? Math.round(rot / 0.06) : 0;
+  const sk = sp.str.map((s, i) => `${Math.round(s * 10)}.${Math.round(sp.sag[i])}`).join(',');
+  const full = `${key}:${dir}:${flash ? 1 : 0}${open ? 'o' : ''}${ghost ? 'g' : ''}:${sk}:${tq}`;
+  return {
+    L,
+    key,
+    full,
+    sp,
+    rot,
+    syT,
+    d: {
+      L,
+      dir,
+      flash,
+      open,
+      ghost,
+      str: sp.str,
+      sag: sp.sag,
+      snap: sp.snap,
+      smear: sp.smear,
+      tang: -tq * 0.06,
+    },
+  };
+}
+
+/**
+ * Кадр «на потом». Техники и висение идут 24 к/с, игра — 60–100: новый
+ * рисунок нужен раз в 2–4 кадра игры. Следующий кадр Кукловода рисуется
+ * заранее в своих буферах по `AHEAD_MS` за кадр игры; к своему времени он
+ * уже в кеше, не успел — остаток дорисовывается сразу. Не угадал (сменился
+ * режим, качнуло иначе) — брошен; картинка та же, что без него.
+ */
+const LORD_PIPE = rigScr();
+const AHEAD_MS = 0.45;
+let lordNext: { id: number; mode: string; until: number; task: LordTask } | null = null;
+let lordWarming = false;
+
+function lordAhead(m: Mob, now: number, st: LState): void {
+  if (lordWarming) return;
+  if (lordNext && (lordNext.id !== m.id || lordNext.mode !== m.mode || now > lordNext.until))
+    lordNext = null;
+  const t0 = performance.now();
+  const left = () => AHEAD_MS - (performance.now() - t0);
+  let D: Drive | null = null;
+  for (let j = 1; j <= 3 && left() > 0; j++) {
+    if (!lordNext) {
+      D ??= driveCopy(st.D);
+      while (D.tk < st.D.tk + j) driveTick(D, st.inp);
+      const p = lordPlan(m, now + j / 24, st, D, j / 24, false);
+      if (LORD_CACHE.get(p.full)) continue;
+      lordNext = {
+        id: m.id,
+        mode: m.mode,
+        until: now + 0.3,
+        task: lordTask(p.full, p.d, LORD_PIPE),
+      };
+    }
+    if (!lordNext.task.step(left())) return;
+    lordNext = null;
+  }
+}
+
+function paintLord(m: Mob, pose: MobPose): MobFrame {
+  const now = pose.now;
+  const st = lordTick(m, now, pose.flash);
+  const p = lordPlan(m, now, st, st.D, 0, pose.flash);
+  const { L, sp, rot } = p;
+  st.last = L;
+  st.lastKey = p.key;
+  // Нужный кадр рисовался заранее — дорисовать остаток.
+  if (lordNext?.task.key === p.full) {
+    lordNext.task.step(Infinity);
+    lordNext = null;
+  }
+  let c = LORD_CACHE.get(p.full);
+  if (!c) {
+    const t = lordTask(p.full, p.d);
+    t.step(Infinity);
+    c = t.res as LordCached;
+  }
+  const dying = m.mode === 'dying';
+  // Сжатие (поза) и растяжение маятника к зрителю; поворот у полей шляпы.
+  const sy = L.sq * p.syT;
+  const sx = 1 + (1 - L.sq) * 0.6;
+  const yaw = (p.d.dir / 16) * TAU;
+  const hw = sp.hang;
+  let dx = L.fw * Math.cos(yaw) - hw * PIVOT * sy * Math.sin(rot);
+  let dy = L.fw * Math.sin(yaw) - sp.liftPx + hw * PIVOT * (sy * Math.cos(rot) - 1);
   const ha = now - st.hitAt;
   if (ha >= 0 && ha < 0.3 && !dying) {
     const k = 1 - ha / 0.3;
@@ -7258,13 +7985,11 @@ function paintLord(m: Mob, pose: MobPose): MobFrame {
     dx,
     dy,
     shadow: dying ? 15 * sp.alpha : 15 - 7 * st.lift,
-    alpha: (ghost ? 0.92 : 1) * sp.alpha,
+    alpha: (p.d.ghost ? 0.92 : 1) * sp.alpha,
     ghost: sp.trail ? LORD_TRAIL : null,
   };
-  const sy = L.sq;
-  const sx = 1 + (1 - L.sq) * 0.6;
-  if (Math.abs(th) > 1e-3) fr.rot = th;
-  if (sy !== 1) {
+  if (Math.abs(rot) > 1e-3) fr.rot = rot;
+  if (sy !== 1 || sx !== 1) {
     fr.sx = sx;
     fr.sy = sy;
   }
@@ -7272,16 +7997,17 @@ function paintLord(m: Mob, pose: MobPose): MobFrame {
   // Вага на экране (от точки на полу) — сюда «Техники» сводят нити исполина.
   const lx = (c.vx - c.fr.ax) * sx;
   const ly = (c.vy - c.fr.ay) * sy;
-  const cs = Math.cos(th);
-  const sn = Math.sin(th);
+  const cs = Math.cos(rot);
+  const sn = Math.sin(rot);
   st.vaga = [lx * cs - ly * sn + dx, lx * sn + ly * cs + dy + 2];
+  lordAhead(m, now, st);
   return fr;
 }
 paintMob('f13boss', paintLord);
 
 /**
  * Вага на экране относительно точки Кукловода на полу, игровые пиксели:
- * из последнего нарисованного кадра (поза, подъём, маятник, зеркало).
+ * из последнего нарисованного кадра (поза, подъём, маятник, сжатие).
  */
 export function lordVagaPx(m: Mob, _now: number): [number, number] {
   return LST.get(m.id)?.vaga ?? [-2, -44 - lordLiftPx(m)];
@@ -7320,21 +8046,31 @@ registerMobWarm('f13boss', function* () {
     look: 'normal',
     now,
   });
+  const paint = (now: number) => {
+    lordWarming = true;
+    try {
+      paintLord(m, at(now));
+    } finally {
+      lordWarming = false;
+    }
+  };
   m.mode = 'roar';
   m.face = Math.PI / 2;
   m.data = { lift: 1, ghost: 1 };
   for (let n = 0; n <= 58; n++) {
     m.t = n / 24;
-    paintLord(m, at(n / 24));
+    paint(n / 24);
     yield n;
   }
+  let now = 10;
   for (const side of [1, -1]) {
     m.face = Math.atan2(1, -side);
     m.mode = 'f13_hang';
     m.data = { lift: 1, ghost: 1 };
     for (let f = 0; f < 16; f++) {
-      m.t = f / 10;
-      paintLord(m, at(f / 10));
+      m.t = f / 8;
+      now += 1 / 8;
+      paint(now);
       yield f;
     }
     for (const [code, dur] of [
@@ -7347,30 +8083,32 @@ registerMobWarm('f13boss', function* () {
       m.data = { lift: 1, ghost: 1, vG: code };
       for (let n = 0; n / 24 <= dur; n++) {
         m.t = n / 24;
-        paintLord(m, at(n / 24));
+        now += 1 / 24;
+        paint(now);
         yield n;
       }
     }
+    now += 2;
   }
   for (let d = 0; d < 16; d++)
-    for (let f = 0; f < 8; f++) {
-      const key = lordKey(`wk${f}`, d, false, false, false, 0, 0);
+    for (let f = 0; f < 12; f++) {
+      const L = walkPose(f, 1, 0);
+      const s = [0, 0, 0, 0];
+      const key = `wk${f}.3.0:${d}:0:${s.map(() => '0.0').join(',')}:0`;
       if (!LORD_CACHE.get(key)) {
-        const L = walkPose(f);
-        LORD_CACHE.set(
-          key,
-          lordRender({
-            L,
-            dir: d,
-            flash: false,
-            open: false,
-            ghost: false,
-            str: 0,
-            sag: 0,
-            snap: null,
-            smear: null,
-          }),
-        );
+        const t = lordTask(key, {
+          L,
+          dir: d,
+          flash: false,
+          open: false,
+          ghost: false,
+          str: s,
+          sag: s,
+          snap: null,
+          smear: null,
+          tang: 0,
+        });
+        t.step(Infinity);
       }
       yield f;
     }
