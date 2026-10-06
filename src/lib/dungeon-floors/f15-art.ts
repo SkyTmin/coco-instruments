@@ -12,6 +12,7 @@
 
 import { Px, TS } from '../dungeon-art';
 import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
+import { bandOf } from '../dungeon-world';
 import type { WorldObj } from '../dungeon-world';
 import {
   frameLRU,
@@ -5483,76 +5484,293 @@ function wellColors(w: Well): { c: string; hot: string } {
   }
 }
 
+// --- Мир живёт -------------------------------------------------------------------
+//
+// Одна зона-картинка на всю вылазку (`f15_life`, ставит правило этажа через
+// `api.vfx`): поверх кусков карты, под мобами. Рисует только видимые
+// клетки: звёзды пустоты медленно текут, кристаллы вспыхивают искрой,
+// пыль невесомости плывёт по кругу, тёмная сетка тяжести давит волной,
+// редкая пыль тянется к ядру (на север, к «Сердцу»). В невесомости за
+// героем и мобами тянется лёгкий шлейф светящейся пыли.
+
+/** Видимое окно в игровых пикселях экрана (с запасом). */
+function viewBox(g: CanvasRenderingContext2D, pad = 24): [number, number, number, number] {
+  const m = g.getTransform();
+  const sc = m.a || 1;
+  const x0 = -m.e / sc - pad;
+  const y0 = -m.f / sc - pad;
+  return [x0, y0, x0 + g.canvas.width / sc + pad * 2, y0 + g.canvas.height / sc + pad * 2];
+}
+
+/** Круг (x, y, r) в игровых пикселях экрана задевает видимое окно. */
+function onScreen(g: CanvasRenderingContext2D, x: number, y: number, r: number): boolean {
+  const [x0, y0, x1, y1] = viewBox(g, 0);
+  return x + r >= x0 && x - r <= x1 && y + r >= y0 && y - r <= y1;
+}
+
+interface Trail {
+  pts: { x: number; y: number; t: number }[];
+  last: number;
+}
+const TRAILS = new WeakMap<object, Map<number, Trail>>();
+const HERO_TRAIL = -1e9;
+const F15_HEART = 'f15heart';
+
+function trailOf(sim: object, id: number): Trail {
+  let mp = TRAILS.get(sim);
+  if (!mp) TRAILS.set(sim, (mp = new Map()));
+  let tr = mp.get(id);
+  if (!tr) mp.set(id, (tr = { pts: [], last: -1 }));
+  return tr;
+}
+
+/** Шлейф пыли за телом в невесомости: точки раз в 0,05 с, живут 0,6 с. */
+function stepTrail(tr: Trail, x: number, y: number, time: number, on: boolean): void {
+  if (on && time - tr.last > 0.05) {
+    tr.pts.push({ x, y, t: time });
+    tr.last = time;
+  }
+  while (tr.pts.length && (time - tr.pts[0].t > 0.6 || tr.pts.length > 14)) tr.pts.shift();
+}
+
+registerZonePainter('f15_life', (g, z, px, py, _s, time) => {
+  const sim = paintSim();
+  const st = stNow();
+  if (!sim || !st || sim.area === F15_HEART) return true;
+  const hb = bandOf(sim.world, F15_HEART);
+  const at = viewOf(z, px, py);
+  const [bx0, by0, bx1, by1] = viewBox(g, 8);
+  // Мир → экран: (wx, wy) → at(wx, wy). Обратно — через сдвиг нуля.
+  const [ox, oy] = at(0, 0);
+  const W = sim.world.w;
+  const H = sim.world.h;
+  const cx0 = Math.max(0, Math.floor((bx0 - ox) / TS));
+  const cy0 = Math.max(0, Math.floor((by0 - oy) / TS));
+  const cx1 = Math.min(W - 1, Math.ceil((bx1 - ox) / TS));
+  const cy1 = Math.min(H - 1, Math.ceil((by1 - oy) / TS));
+  const tiles = sim.tiles;
+  const mark = sim.world.mark;
+  g.save();
+  for (let cy = cy0; cy <= cy1; cy++) {
+    // Ряды «Сердца» рисуют агенты босса — их не трогаем.
+    if (hb && cy >= hb.top && cy < hb.top + hb.h) continue;
+    for (let cx = cx0; cx <= cx1; cx++) {
+      const i = cy * W + cx;
+      const mk = mark[i];
+      const sx = ox + cx * TS;
+      const sy = oy + cy * TS;
+      const h0 = hash(cx, cy, 1501);
+      if (tiles[i] === T_DEEP) {
+        if (mk === MK.core || mk === MK.pit) continue;
+        // Звёзды пустоты текут: в каждой клетке своя, поток единый.
+        if (h0 < 0.45) continue;
+        const u = (h0 * 7.3 + time * 0.045) % 1;
+        const v = (hash(cx, cy, 1502) + time * 0.018) % 1;
+        const tw = 0.45 + 0.55 * Math.sin(time * (1.5 + h0 * 2) + h0 * 40);
+        g.fillStyle = h0 > 0.93 ? `rgba(200,240,255,${0.5 + tw * 0.4})` : `rgba(255,244,208,${0.18 + tw * 0.3})`;
+        g.fillRect(Math.floor(sx + u * TS), Math.floor(sy + v * TS), 1, 1);
+        continue;
+      }
+      if (mk === MK.xwall || mk === MK.memory || mk === MK.xfloor || mk === MK.vein) {
+        // Кристалл вспыхивает искрой: редко, у каждой клетки свой такт.
+        const ph = Math.sin(time * (0.8 + h0 * 1.4) + h0 * 60);
+        if (ph > 0.94) {
+          const k = (ph - 0.94) / 0.06;
+          const x = Math.floor(sx + 3 + hash(cx, cy, 1503) * 10);
+          const y = Math.floor(sy + 2 + hash(cx, cy, 1504) * 8);
+          g.fillStyle = `rgba(220,250,255,${0.5 + k * 0.5})`;
+          g.fillRect(x, y, 1, 1);
+          if (k > 0.5) {
+            g.fillStyle = `rgba(108,240,255,${(k - 0.5) * 1.2})`;
+            g.fillRect(x - 1, y, 3, 1);
+            g.fillRect(x, y - 1, 1, 3);
+          }
+        }
+        continue;
+      }
+      if (mk === MK.float) {
+        // Пыль невесомости: две пылинки на клетку ходят медленными кругами.
+        for (let k = 0; k < 2; k++) {
+          const hk = hash(cx, cy, 1510 + k);
+          const a = time * (0.4 + hk * 0.5) + hk * TAU;
+          const x = sx + 4 + hk * 8 + Math.cos(a) * 3;
+          const y = sy + 4 + hash(cx, cy, 1520 + k) * 8 + Math.sin(a) * 2 - Math.sin(time * 0.7 + hk * 9) * 1.5;
+          g.fillStyle = `rgba(184,220,255,${0.25 + 0.25 * Math.sin(a * 1.7)})`;
+          g.fillRect(Math.floor(x), Math.floor(y), 1, 1);
+        }
+        continue;
+      }
+      if (mk === MK.heavy) {
+        // Тяжесть давит: тёмная сетка вздрагивает волной сверху вниз.
+        const wv = Math.sin(time * 2.2 - cy * 0.55 - cx * 0.12);
+        if (wv > 0.55) {
+          const k = (wv - 0.55) / 0.45;
+          g.fillStyle = `rgba(4,2,14,${0.18 + k * 0.22})`;
+          g.fillRect(Math.floor(sx), Math.floor(sy + TS - 1), TS, 1);
+          g.fillRect(Math.floor(sx + TS - 1), Math.floor(sy), 1, TS);
+          g.fillStyle = `rgba(122,86,216,${k * 0.25})`;
+          g.fillRect(Math.floor(sx + 7), Math.floor(sy + 7 + k * 2), 2, 1);
+        }
+        continue;
+      }
+      // Редкая пыль тянется к ядру: на север, покачиваясь.
+      if (h0 > 0.93) {
+        const v = 1 - ((hash(cx, cy, 1531) + time * 0.12) % 1);
+        const x = sx + 8 + Math.sin(time * 1.3 + h0 * 30) * 3;
+        const y = sy + v * TS;
+        const a = Math.min(1, Math.min(v, 1 - v) * 5) * 0.35;
+        g.fillStyle = `rgba(255,236,190,${a})`;
+        g.fillRect(Math.floor(x), Math.floor(y), 1, 1);
+      }
+    }
+  }
+  // Шлейфы невесомости: герой и мобы.
+  const h = sim.hero;
+  const heroTr = trailOf(sim, HERO_TRAIL);
+  stepTrail(heroTr, h.x, h.y, time, st.floating && Math.hypot(st.hv[0], st.hv[1]) > 0.6);
+  const draw1 = (tr: Trail, c: string) => {
+    for (const p of tr.pts) {
+      const age = (time - p.t) / 0.6;
+      if (age >= 1) continue;
+      const [x, y] = at(p.x, p.y);
+      g.fillStyle = `rgba(${c},${0.45 * (1 - age)})`;
+      const s = age < 0.3 ? 2 : 1;
+      g.fillRect(Math.floor(x - s / 2), Math.floor(y - 2 - age * 3), s, s);
+    }
+  };
+  draw1(heroTr, '184,230,255');
+  for (const m of sim.mobs) {
+    if (m.mode === 'dying') continue;
+    const fl = mark[Math.floor(m.y) * W + Math.floor(m.x)] === MK.float;
+    const tr = trailOf(sim, m.id);
+    stepTrail(tr, m.x, m.y, time, fl && Math.hypot(m.vx, m.vy) > 0.6);
+    if (tr.pts.length) draw1(tr, '200,190,255');
+  }
+  g.restore();
+  return true;
+});
+
 /**
- * Колодец: тихо — пунктир границы и редкая пыль; предупреждает — граница
- * мигает, шевроны бегут к ядру; тянет — спираль частиц течёт внутрь
- * (толкает — наружу), ядро ожога горит белым с красной каймой.
+ * Колодец — воронка в полу. Сетка пола (кольца и спицы) прогибается к ядру:
+ * кольца сбегаются к середине, спицы закручиваются; тихо — сетка почти
+ * ровная и еле видна, предупреждение (секунда) — граница бьётся, сетка
+ * начинает проседать, шевроны бегут к ядру; тяга — воронка во всю глубину,
+ * искры по спирали внутрь (толкает — наружу и сетка горбом); к концу тяги
+ * стихает. Временный колодец рождается вспышкой.
  */
 registerZonePainter('f15_well', (g, z, px, py, _s, time) => {
   const w = zoneOf<Well>(z);
   if (!w) return true;
-  const { c, hot } = wellColors(w);
   const R = w.r * TS;
+  if (!onScreen(g, px, py, R + 8)) return true;
+  const { c, hot } = wellColors(w);
   const s = w.state;
   const dir = w.mode < 0 ? -1 : 1;
+  const depth =
+    s === 2 ? (w.f < 0.82 ? 1 : 1 - smooth((w.f - 0.82) / 0.18) * 0.5) : s === 1 ? 0.15 + 0.55 * smooth(w.f) : 0.08;
   g.save();
-  // Граница.
-  const pulse = s === 1 ? 0.5 + 0.5 * Math.sin(time * 14) : 0;
-  g.strokeStyle = `rgba(${c},${s === 0 ? 0.16 : s === 1 ? 0.35 + pulse * 0.45 : 0.55})`;
-  g.lineWidth = 1;
-  g.setLineDash(s === 0 ? [2, 6] : [5, 3]);
-  g.lineDashOffset = -time * 8 * dir;
-  g.beginPath();
-  g.ellipse(px, py, R, R, 0, 0, TAU);
-  g.stroke();
-  g.setLineDash([]);
-  if (s === 2) {
-    // Засветка поля.
+  // Тень воронки: глубже к середине (толкает — светлый горб).
+  if (depth > 0.1) {
     const gr = g.createRadialGradient(px, py, 0, px, py, R);
-    gr.addColorStop(0, `rgba(${c},0.22)`);
-    gr.addColorStop(0.6, `rgba(${c},0.07)`);
-    gr.addColorStop(1, `rgba(${c},0)`);
+    if (dir > 0) {
+      gr.addColorStop(0, `rgba(2,1,10,${0.55 * depth})`);
+      gr.addColorStop(0.45, `rgba(4,2,16,${0.25 * depth})`);
+      gr.addColorStop(1, 'rgba(4,2,16,0)');
+    } else {
+      gr.addColorStop(0, `rgba(${c},${0.2 * depth})`);
+      gr.addColorStop(1, `rgba(${c},0)`);
+    }
     g.fillStyle = gr;
     g.beginPath();
     g.arc(px, py, R, 0, TAU);
     g.fill();
   }
-  // Частицы: тянет — внутрь по спирали; предупреждает — шевроны; тихо — пыль.
-  const n = Math.round((s === 2 ? 46 : s === 1 ? 10 : 8) * Math.max(0.7, w.r / 5));
+  // Сетка: кольца сбегаются к ядру (r = R·u^p), спицы закручиваются.
+  const p = 1 + depth * 1.4 * dir;
+  const twist = depth * 1.6 * dir;
+  const spin = time * 0.35 * dir * depth;
+  const NR = 6;
+  const NS = 12;
+  g.lineWidth = 1;
+  for (let j = 1; j <= NR; j++) {
+    const u = j / NR;
+    const rr = R * Math.pow(u, Math.max(0.4, p));
+    const a = (0.06 + 0.12 * depth) * (0.4 + 0.6 * (1 - u)) * (s === 0 ? 0.6 : 1);
+    g.strokeStyle = `rgba(${c},${a})`;
+    g.beginPath();
+    g.arc(px, py, rr, 0, TAU);
+    g.stroke();
+  }
+  for (let i = 0; i < NS; i++) {
+    const a0 = (i / NS) * TAU + spin;
+    g.strokeStyle = `rgba(${c},${(0.05 + 0.1 * depth) * (s === 0 ? 0.6 : 1)})`;
+    g.beginPath();
+    for (let k = 0; k <= 8; k++) {
+      const u = 1 - k / 8;
+      const rr = R * Math.pow(Math.max(0.02, u), Math.max(0.4, p));
+      const a = a0 + twist * (1 - u) * (1 - u);
+      const x = px + Math.cos(a) * rr;
+      const y = py + Math.sin(a) * rr;
+      if (k === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  // Граница.
+  const pulse = s === 1 ? 0.5 + 0.5 * Math.sin(time * 14) : 0;
+  g.strokeStyle = `rgba(${c},${s === 0 ? 0.16 : s === 1 ? 0.35 + pulse * 0.45 : 0.5 * (0.4 + 0.6 * depth)})`;
+  g.setLineDash(s === 0 ? [2, 6] : [5, 3]);
+  g.lineDashOffset = -time * 8 * dir;
+  g.beginPath();
+  g.arc(px, py, R, 0, TAU);
+  g.stroke();
+  g.setLineDash([]);
+  // Рождение временного колодца: вспышка кольцом от середины.
+  if (w.temp && s === 1 && w.f < 0.6) {
+    const k = w.f / 0.6;
+    g.strokeStyle = `rgba(${hot},${0.9 * (1 - k)})`;
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(px, py, Math.max(1, R * easeOut(k)), 0, TAU);
+    g.stroke();
+    g.lineWidth = 1;
+  }
+  // Частицы: тянет — искры по спирали внутрь; предупреждает — шевроны; тихо — пыль.
+  const n = Math.round((s === 2 ? 46 * depth + 6 : s === 1 ? 12 : 8) * Math.max(0.7, w.r / 5));
   for (let i = 0; i < n; i++) {
     const h0 = hash(i, w.id, 2001);
-    const speed = s === 2 ? 0.55 * w.k : 0.12;
+    const speed = s === 2 ? 0.55 * w.k * (0.4 + 0.6 * depth) : 0.12 + (s === 1 ? 0.2 * w.f : 0);
     let u = (time * speed + h0) % 1;
     if (dir < 0) u = 1 - u;
     const rr = R * (1 - u) + w.burn * TS * u;
-    const a = h0 * TAU + (1 - u) * 2.6 * dir;
+    const a = h0 * TAU + (1 - u) * (1 - u) * 3.2 * dir + spin;
     const x = px + Math.cos(a) * rr;
     const y = py + Math.sin(a) * rr;
     if (s === 1) {
-      // Шеврон к ядру (от ядра — если толкает).
       const ux = -Math.cos(a) * dir;
       const uy = -Math.sin(a) * dir;
-      g.strokeStyle = `rgba(${c},${0.5 + pulse * 0.4})`;
+      g.strokeStyle = `rgba(${c},${0.4 + pulse * 0.4 + w.f * 0.2})`;
       g.beginPath();
       g.moveTo(x - ux * 2 - uy * 2, y - uy * 2 + ux * 2);
       g.lineTo(x, y);
       g.lineTo(x - ux * 2 + uy * 2, y - uy * 2 - ux * 2);
       g.stroke();
     } else if (s === 2) {
-      // Штрих по спирали: от точки назад по ходу — видно, куда течёт.
+      // Искра со штрихом назад по спирали — видно, куда течёт.
       const fadeIn = Math.min(1, u * 5) * (1 - Math.max(0, u - 0.85) / 0.15);
-      const back = 0.05 + 0.04 * h0;
+      const back = 0.06 + 0.05 * h0;
       const ub = Math.min(1, Math.max(0, u - back * dir));
       const rb = R * (1 - ub) + w.burn * TS * ub;
-      const ab = h0 * TAU + (1 - ub) * 2.6 * dir;
-      g.strokeStyle = `rgba(${u > 0.7 ? hot : c},${(0.45 + u * 0.5) * fadeIn})`;
+      const ab = h0 * TAU + (1 - ub) * (1 - ub) * 3.2 * dir + spin;
+      g.strokeStyle = `rgba(${u > 0.7 ? hot : c},${(0.4 + u * 0.55) * fadeIn * (0.5 + 0.5 * depth)})`;
       g.lineWidth = h0 > 0.75 ? 2 : 1;
       g.beginPath();
       g.moveTo(px + Math.cos(ab) * rb, py + Math.sin(ab) * rb);
       g.lineTo(x, y);
       g.stroke();
+      g.lineWidth = 1;
     } else {
-      g.fillStyle = `rgba(${c},${0.25 * (1 - Math.abs(u - 0.5) * 0.6)})`;
+      g.fillStyle = `rgba(${c},${0.22 * (1 - Math.abs(u - 0.5) * 0.6)})`;
       g.fillRect(Math.round(x), Math.round(y), 1, 1);
     }
   }
@@ -5560,7 +5778,7 @@ registerZonePainter('f15_well', (g, z, px, py, _s, time) => {
   if (w.burn > 0 && s === 2) {
     const B = w.burn * TS;
     const gr = g.createRadialGradient(px, py, 0, px, py, B);
-    gr.addColorStop(0, `rgba(${hot},0.75)`);
+    gr.addColorStop(0, `rgba(${hot},${0.75 * (0.5 + 0.5 * depth)})`);
     gr.addColorStop(0.7, `rgba(${c},0.35)`);
     gr.addColorStop(1, 'rgba(255,90,70,0.2)');
     g.fillStyle = gr;
