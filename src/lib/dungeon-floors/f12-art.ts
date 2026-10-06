@@ -193,6 +193,9 @@ export interface RigOut {
   lit: Px | null;
   /** Глаз в кадре (если виден). */
   eye: [number, number] | null;
+  /** Обрезка (`crop`): левый верхний угол кадра в полном холсте. */
+  cx?: number;
+  cy?: number;
 }
 
 interface Axes {
@@ -255,8 +258,14 @@ export function renderRig(
   eyes: { x: number; y: number; z: number; c: RGBA; r?: number }[] = [],
   flash = 0,
   clipZ = -1e9,
+  crop = false,
 ): RigOut {
   const p = new Px(w, h);
+  // Рамка нарисованного: швы, контур и холст — только в ней.
+  let bx0 = w;
+  let by0 = h;
+  let bx1 = -1;
+  let by1 = -1;
   const zb = new Float32Array(w * h).fill(-1e9);
   const idb = new Int16Array(w * h).fill(-1);
   const glowAt = new Uint8Array(w * h);
@@ -278,55 +287,71 @@ export function renderRig(
     const y0 = Math.max(0, Math.floor(oy + scy - R));
     const y1 = Math.min(h - 1, Math.ceil(oy + scy + R));
     if (x0 > x1 || y0 > y1) return;
-    const qd: V3 = [dot(VIEW, e1) / r1, dot(VIEW, e2) / r2, dot(VIEW, e3) / r3];
-    const a = dot(qd, qd);
+    // Всё по скалярам: массив на пиксель — это сборщик мусора в кадре.
+    const [e1x, e1y, e1z] = e1;
+    const [e2x, e2y, e2z] = e2;
+    const [e3x, e3y, e3z] = e3;
+    const qdx = dot(VIEW, e1) / r1;
+    const qdy = dot(VIEW, e2) / r2;
+    const qdz = dot(VIEW, e3) / r3;
+    const a = qdx * qdx + qdy * qdy + qdz * qdz;
+    const [ccx, ccy, ccz] = A.c;
     const id = pt.id ?? k;
-    for (let py = y0; py <= y1; py++)
+    const fur = pt.fur ?? 0;
+    const alphaP = pt.alpha ?? 1;
+    for (let py = y0; py <= y1; py++) {
+      const sy = py + 0.5 - oy;
+      // Точка луча при t = 0: (sx, sy·C, −sy·S).
+      const dy0 = sy * CAM_C - ccy;
+      const dz0 = -sy * CAM_S - ccz;
+      const zTop = -sy * CAM_S;
       for (let px = x0; px <= x1; px++) {
-        const sx = px + 0.5 - ox;
-        const sy = py + 0.5 - oy;
-        // Точка луча при t = 0: (sx, sy·C, −sy·S).
-        const d: V3 = [sx - A.c[0], sy * CAM_C - A.c[1], -sy * CAM_S - A.c[2]];
-        const q0: V3 = [dot(d, e1) / r1, dot(d, e2) / r2, dot(d, e3) / r3];
-        const b = 2 * dot(q0, qd);
-        const cc = dot(q0, q0) - 1;
+        const dx0 = px + 0.5 - ox - ccx;
+        const q0x = (dx0 * e1x + dy0 * e1y + dz0 * e1z) / r1;
+        const q0y = (dx0 * e2x + dy0 * e2y + dz0 * e2z) / r2;
+        const q0z = (dx0 * e3x + dy0 * e3y + dz0 * e3z) / r3;
+        const b = 2 * (q0x * qdx + q0y * qdy + q0z * qdz);
+        const cc = q0x * q0x + q0y * q0y + q0z * q0z - 1;
         const disc = b * b - 4 * a * cc;
         if (disc < 0) continue;
         const t = (-b + Math.sqrt(disc)) / (2 * a);
         const i = py * w + px;
         if (t <= zb[i]) continue;
-        if (-sy * CAM_S + t * CAM_C < clipZ) continue;
+        if (zTop + t * CAM_C < clipZ) continue;
+        if (px < bx0) bx0 = px;
+        if (px > bx1) bx1 = px;
+        if (py < by0) by0 = py;
+        if (py > by1) by1 = py;
         if (!glass) {
           zb[i] = t;
           idb[i] = id;
         }
-        const q: V3 = [q0[0] + t * qd[0], q0[1] + t * qd[1], q0[2] + t * qd[2]];
-        const n: V3 = [
-          (e1[0] * q[0]) / r1 + (e2[0] * q[1]) / r2 + (e3[0] * q[2]) / r3,
-          (e1[1] * q[0]) / r1 + (e2[1] * q[1]) / r2 + (e3[1] * q[2]) / r3,
-          (e1[2] * q[0]) / r1 + (e2[2] * q[1]) / r2 + (e3[2] * q[2]) / r3,
-        ];
-        const nl = Math.hypot(n[0], n[1], n[2]) || 1;
-        let lam = dot(n, LIGHT) / nl;
+        const qx = q0x + t * qdx;
+        const qy = q0y + t * qdy;
+        const qz = q0z + t * qdz;
+        const nx = (e1x * qx) / r1 + (e2x * qy) / r2 + (e3x * qz) / r3;
+        const ny = (e1y * qx) / r1 + (e2y * qy) / r2 + (e3y * qz) / r3;
+        const nz = (e1z * qx) / r1 + (e2z * qy) / r2 + (e3z * qz) / r3;
+        const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+        const lam = (nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]) / nl;
         // Отражённый снизу холодный свет: тень не чёрная.
-        const rim = Math.max(0, -n[2] / nl) * 0.18;
+        const rim = Math.max(0, -nz / nl) * 0.18;
         let k2 = Math.max(0, lam * 0.62 + 0.36 + rim);
-        if (pt.fur) {
+        if (fur) {
           // Пряди: тёмные штрихи по вертикали модели, зерно — по месту на теле.
-          const hz = hash(Math.round(q[0] * 9 + q[1] * 5), Math.round(q[2] * 3 + q[1] * 2), id);
-          if (hz < pt.fur) k2 -= 0.22;
-          else if (hz > 1 - pt.fur * 0.4) k2 += 0.1;
+          const hz = hash(Math.round(qx * 9 + qy * 5), Math.round(qz * 3 + qy * 2), id);
+          if (hz < fur) k2 -= 0.22;
+          else if (hz > 1 - fur * 0.4) k2 += 0.1;
         }
         if (pt.gloss) {
-          const hs = dot(n, [0.2, 0.5, 0.84]) / nl;
+          const hs = (nx * 0.2 + ny * 0.5 + nz * 0.84) / nl;
           if (hs > 0.93) k2 = 1;
         }
-        lam = k2;
-        const col = toneOf(pt.ramp, lam, px, py);
+        const col = toneOf(pt.ramp, k2, px, py);
         if (glass) {
           // Стекло: кромка плотнее середины.
-          const edge = 1 - Math.abs(dot(n, VIEW) / nl);
-          p.set(px, py, alpha(col, Math.min(1, (pt.alpha ?? 1) * (0.6 + edge * 0.9))));
+          const edge = 1 - Math.abs((nx * VIEW[0] + ny * VIEW[1] + nz * VIEW[2]) / nl);
+          p.set(px, py, alpha(col, Math.min(1, alphaP * (0.6 + edge * 0.9))));
           if (pt.glow) {
             glowAt[i] = 1;
             anyGlow = true;
@@ -339,13 +364,15 @@ export function renderRig(
           anyGlow = true;
         } else glowAt[i] = 0;
       }
+    }
   });
   // Линии стыка: дальняя часть темнее у кромки ближней.
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
+  for (let y = by0; y <= by1; y++)
+    for (let x = bx0; x <= bx1; x++) {
       const i = y * w + x;
       if (idb[i] < 0) continue;
-      for (const j of [i + 1, i + w, i - 1, i - w]) {
+      for (let n = 0; n < 4; n++) {
+        const j = n === 0 ? i + 1 : n === 1 ? i + w : n === 2 ? i - 1 : i - w;
         if (j < 0 || j >= w * h || idb[j] < 0 || idb[j] === idb[i]) continue;
         if (zb[j] - zb[i] > 2.2) {
           const c = p.get(x, y);
@@ -372,6 +399,32 @@ export function renderRig(
     p.set(ex, ey, e.c);
     if ((e.r ?? 0) > 0) p.set(ex + 1, ey, e.c);
     if (!eye) eye = [ex + 0.5, ey + 0.5];
+  }
+  if (crop) {
+    // Кадр по рамке (+6: контур и рисунок поверх — звёзды, брызги): меньше
+    // холст, контур и вывод на экран.
+    if (bx1 < 0) {
+      bx0 = by0 = 0;
+      bx1 = by1 = 0;
+    }
+    const cx = Math.max(0, bx0 - 6);
+    const cy = Math.max(0, by0 - 6);
+    const cw = Math.min(w, bx1 + 7) - cx;
+    const ch = Math.min(h, by1 + 7) - cy;
+    const q = new Px(cw, ch);
+    for (let y = 0; y < ch; y++) {
+      const src = ((y + cy) * w + cx) * 4;
+      q.data.set(p.data.subarray(src, src + cw * 4), y * cw * 4);
+    }
+    q.outline(INK);
+    let lit: Px | null = null;
+    if (anyGlow) {
+      lit = new Px(cw, ch);
+      for (let y = 0; y < ch; y++)
+        for (let x = 0; x < cw; x++) if (glowAt[(y + cy) * w + x + cx]) lit.set(x, y, q.get(x, y));
+    }
+    const e2: [number, number] | null = eye ? [eye[0] - cx, eye[1] - cy] : null;
+    return { p: flash > 0 ? q.tint(WHITE, flash) : q, lit, eye: e2, cx, cy };
   }
   p.outline(INK);
   let lit: Px | null = null;
@@ -463,6 +516,9 @@ type Cached = {
   img: HTMLCanvasElement;
   lit: HTMLCanvasElement | null;
   eye: [number, number] | null;
+  /** Сдвиг обрезанного кадра от левого верха полного холста. */
+  dx: number;
+  dy: number;
 };
 function cachedRig(
   cache: ReturnType<typeof frameLRU<Cached>>,
@@ -472,7 +528,13 @@ function cachedRig(
   const hit = cache.get(key);
   if (hit) return hit;
   const o = make();
-  return cache.set(key, { img: o.p.canvas(), lit: o.lit ? o.lit.canvas() : null, eye: o.eye });
+  return cache.set(key, {
+    img: o.p.canvas(),
+    lit: o.lit ? o.lit.canvas() : null,
+    eye: o.eye,
+    dx: o.cx ?? 0,
+    dy: o.cy ?? 0,
+  });
 }
 
 /** Кадр 24 к/с по времени режима. */
@@ -1949,12 +2011,15 @@ function rigCached(
       b.eyes ?? [],
       flash ? 0.8 : 0,
       b.clip,
+      true,
     );
     if (b.post) {
+      const cx = out.cx ?? 0;
+      const cy = out.cy ?? 0;
       const scr: Scr = (x, y, z) => {
         const [wx, wy, wz] = toWorld(x, y, z, f);
         const [sx, sy] = project(wx, wy, wz);
-        return [cv.ox + sx, cv.oy + sy];
+        return [cv.ox + sx - cx, cv.oy + sy - cy];
       };
       b.post(out.p, scr);
     }
@@ -1963,7 +2028,7 @@ function rigCached(
 }
 
 function mobFrame(c: Cached, cv: Canvas, extra: Partial<MobFrame> = {}): MobFrame {
-  return { img: c.img, lit: c.lit, eye: c.eye, ax: cv.ox, ay: cv.oy, ...extra };
+  return { img: c.img, lit: c.lit, eye: c.eye, ax: cv.ox - c.dx, ay: cv.oy - c.dy, ...extra };
 }
 
 /** Прошлый режим моба (контакт удара рисуется в первых кадрах `recover`). */
@@ -4502,7 +4567,28 @@ const M_FUR = ramp('#170c08', '#2e1a10', '#4c2e1a', '#6e4628', '#946238');
 const M_FUR2 = ramp('#120a06', '#26160c', '#3e2414', '#5a3820', '#7a5030');
 const M_TUSK = ramp('#6a604c', '#9a8e72', '#c8bc98', '#e8e0c4', '#fffaea');
 const M_SKIN = ramp('#1a1210', '#2e221c', '#4a3a30', '#6a5446', '#8a705e');
-const CV_MAM: Canvas = { w: 112, h: 108, ox: 56, oy: 70 };
+/** Мамонт крупнее модели в 1,3 раза: на арене он должен давить массой. */
+const MAM_SC = 1.3;
+const CV_MAM: Canvas = { w: 144, h: 128, ox: 72, oy: 84 };
+
+/** Масштаб сборки: части, глаза и рисунок поверх. */
+function scaleBuild(b: Build, s: number): Build {
+  return {
+    ...b,
+    parts: b.parts.map((p) => ({
+      ...p,
+      x: p.x * s,
+      y: p.y * s,
+      z: p.z * s,
+      rx: p.rx * s,
+      ry: p.ry * s,
+      rz: p.rz * s,
+    })),
+    eyes: b.eyes?.map((e) => ({ ...e, x: e.x * s, y: e.y * s, z: e.z * s, r: 1 })),
+    clip: b.clip === undefined ? undefined : b.clip * s,
+    post: b.post ? (p, scr) => b.post?.(p, (x, y, z) => scr(x * s, y * s, z * s)) : undefined,
+  };
+}
 
 interface MamO {
   /** Шаг: фаза 0…1 и длина шага (0 — стоит). */
@@ -4784,44 +4870,47 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   }
   // Глаза.
   const eyeP = (e: number) => {
-    let c = head(7.5, e * 5.4, 4);
+    let c = head(8.6, e * 5.2, 3.4);
     c = pitchAbout(c, piv, pa);
     c = rollAbout(c, zRoll, o.roll);
     return { x: c[0], y: c[1], z: c[2], c: hx('#8ad8ff') };
   };
-  return {
-    parts,
-    eyes: o.fall > 0.7 ? [] : [eyeP(-1), eyeP(1)],
-    post: (p, scr) => {
-      // Сосульки на бахроме (по фазам их больше).
-      const n = 4 + o.phase * 3;
-      for (let k = 0; k < n; k++) {
-        const x = -14 + (k * 29) / n;
-        let c: V3 = [x, (k % 2 ? 1 : -1) * 11, z0 - 14];
-        c = pitchAbout(c, piv, pa);
-        c = rollAbout(c, zRoll, o.roll);
-        const [sx, sy] = scr(c[0], c[1], c[2]);
-        p.set(sx, sy, ICE[4]);
-        p.set(sx, sy + 1, ICE[2]);
-      }
-      if (o.crack) {
-        let hc2 = head(4, 0, 14);
-        hc2 = pitchAbout(hc2, piv, pa);
-        hc2 = rollAbout(hc2, zRoll, o.roll);
-        stars(p, scr, hc2[2], (o.hy + 1) * 0.5, hc2[0], hc2[1], 7);
-      }
-      if (o.crack)
-        // Трещина по бивням — светится (бей сюда, он оглушён).
-        for (const pts of tuskPts)
-          for (let i = 2; i < 6; i++) {
-            let c = pts[i];
-            c = pitchAbout(c, piv, pa);
-            c = rollAbout(c, zRoll, o.roll);
-            const [sx, sy] = scr(c[0], c[1], c[2] + 1);
-            p.set(sx, sy, i % 2 ? WHITE : TEAL[4]);
-          }
+  return scaleBuild(
+    {
+      parts,
+      eyes: o.fall > 0.7 ? [] : [eyeP(-1), eyeP(1)],
+      post: (p, scr) => {
+        // Сосульки на бахроме (по фазам их больше).
+        const n = 4 + o.phase * 3;
+        for (let k = 0; k < n; k++) {
+          const x = -14 + (k * 29) / n;
+          let c: V3 = [x, (k % 2 ? 1 : -1) * 11, z0 - 14];
+          c = pitchAbout(c, piv, pa);
+          c = rollAbout(c, zRoll, o.roll);
+          const [sx, sy] = scr(c[0], c[1], c[2]);
+          p.set(sx, sy, ICE[4]);
+          p.set(sx, sy + 1, ICE[2]);
+        }
+        if (o.crack) {
+          let hc2 = head(4, 0, 14);
+          hc2 = pitchAbout(hc2, piv, pa);
+          hc2 = rollAbout(hc2, zRoll, o.roll);
+          stars(p, scr, hc2[2], (o.hy + 1) * 0.5, hc2[0], hc2[1], 7);
+        }
+        if (o.crack)
+          // Трещина по бивням — светится (бей сюда, он оглушён).
+          for (const pts of tuskPts)
+            for (let i = 2; i < 6; i++) {
+              let c = pts[i];
+              c = pitchAbout(c, piv, pa);
+              c = rollAbout(c, zRoll, o.roll);
+              const [sx, sy] = scr(c[0], c[1], c[2] + 1);
+              p.set(sx, sy, i % 2 ? WHITE : TEAL[4]);
+            }
+      },
     },
-  };
+    MAM_SC,
+  );
 }
 
 /** Позы мамонта по режиму мозга. */
