@@ -339,7 +339,6 @@ export function renderRig(
     const y0 = Math.max(0, Math.floor(oy + scy - RY));
     const y1 = Math.min(h - 1, Math.ceil(oy + scy + RY));
     if (x0 > x1 || y0 > y1) return;
-    const PC = ((globalThis as any).__pc ??= { px: 0, sh: 0, f: 0 }); PC.px += (x1 - x0 + 1) * (y1 - y0 + 1); // PROF
     // Всё по скалярам: массив на пиксель — это сборщик мусора в кадре.
     const qdx = dot(VIEW, e1) / r1;
     const qdy = dot(VIEW, e2) / r2;
@@ -351,7 +350,7 @@ export function renderRig(
     const alphaP = pt.alpha ?? 1;
     // Ближе этой глубины у части точек нет: пиксель, где уже лежит что-то
     // ближе, луч не проверяет (части идут от ближних к дальним).
-    const tMax = (globalThis as any).__noEO ? 1e9 : dot(VIEW, A.c) + Math.max(r1, r2, r3) + 1e-3; // PROF
+    const tMax = dot(VIEW, A.c) + Math.max(r1, r2, r3) + 1e-3;
     for (let py = y0; py <= y1; py++) {
       const sy = py + 0.5 - oy;
       // Точка луча при t = 0: (sx, sy·C, −sy·S).
@@ -361,7 +360,6 @@ export function renderRig(
       for (let px = x0; px <= x1; px++) {
         const i = py * w + px;
         if (zb[i] >= tMax) continue;
-        PC.rt = (PC.rt ?? 0) + 1; // PROF
         const dx0 = px + 0.5 - ox - ccx;
         const q0x = (dx0 * e1x + dy0 * e1y + dz0 * e1z) / r1;
         const q0y = (dx0 * e2x + dy0 * e2y + dz0 * e2z) / r2;
@@ -381,7 +379,6 @@ export function renderRig(
           zb[i] = t;
           idb[i] = id;
         }
-        PC.sh++; // PROF
         const qx = q0x + t * qdx;
         const qy = q0y + t * qdy;
         const qz = q0z + t * qdz;
@@ -4727,13 +4724,18 @@ function shamanParts(
     sub.push({ x: c[0], y: c[1], z: c[2], rx: 1.05 * s, ry: 1.05 * s, rz: 1.05 * s, ramp: SH_TRIM, fur: 0.3, id: 122 });
   }
   // Оленьи рога над капюшоном.
+  // Рога назад-в стороны дугой, с отростком вперёд-вверх: сбоку — серп,
+  // спереди — «рогатка» (прямые рога сбоку читались восклицательным знаком).
   for (const e of [-1, 1]) {
-    const ant = bez(at([-0.8, e * 1.4, 2.4]), at([-2, e * 4, 5]), at([-1.2, e * 5, 8]), 4);
-    ant.forEach((pt) =>
-      sub.push({ x: pt[0], y: pt[1], z: pt[2], rx: 0.6 * s, ry: 0.6 * s, rz: 0.6 * s, ramp: BONE, id: 123 }),
-    );
-    const tine = at([-1.6, e * 4.2, 5.8]);
-    sub.push({ x: tine[0], y: tine[1], z: tine[2], rx: 0.5 * s, ry: 1.5 * s, rz: 0.5 * s, ramp: BONE, id: 123 });
+    const ant = bez(at([-0.6, e * 1.6, 2.2]), at([-3.6, e * 4.6, 3.8]), at([-5.8, e * 5.4, 7.2]), 5);
+    ant.forEach((pt, i) => {
+      const r = (0.75 - i * 0.06) * s;
+      sub.push({ x: pt[0], y: pt[1], z: pt[2], rx: r, ry: r, rz: r, ramp: BONE, id: 123 });
+    });
+    for (const u of [0, 0.5, 1]) {
+      const tp = lerp3(at([-2.7, e * 3.9, 4.4]), at([-1.6, e * 4.3, 6.8]), u);
+      sub.push({ x: tp[0], y: tp[1], z: tp[2], rx: 0.55 * s, ry: 0.55 * s, rz: 0.55 * s, ramp: BONE, id: 123 });
+    }
   }
   // Подол парки с опушкой: в полёте сносит назад.
   const hipZ = (9 - b.crouch - b.kneel * 4.5) * s + b.up;
@@ -5112,8 +5114,7 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     });
     tips.push([at[0] - n3[0] * half * 2, at[1] - n3[1] * half * 2, at[2] - n3[2] * half * 2]);
   };
-  const MX = (globalThis as any).__mx ?? {}; // PROF
-  for (const e of MX.noStrands ? [] : [-1, 1]) // PROF
+  for (const e of [-1, 1])
     for (let k = 0; k < 9; k++) {
       const x = -21 + k * 4.5;
       const hw = 12.8 * Math.sqrt(Math.max(0.15, 1 - ((x + 2) / 21) ** 2));
@@ -5163,7 +5164,6 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   ];
   const rolled = clamp01((Math.abs(R) - 0.2) / 0.7);
   LEGS.forEach(([lx, ly, offW, offG, front], k) => {
-    if (MX.noLegs) return; // PROF
     const hip = S.B([lx, ly * 0.92, z0 - 5]);
     let foot: V3 = [lx + (front ? o.reachF + (k === 0 ? o.reachL : o.reachR) : o.reachB), ly, 0];
     let lifted = 0;
@@ -5221,7 +5221,7 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
         const c = S.H(8.8, e * 5.5, 3.4);
         return { x: c[0], y: c[1], z: c[2], c: M_EYE };
       });
-  if (o.rider && !MX.noRider) { // PROF
+  if (o.rider) {
     const rp = riderPlace(o, S);
     const r = shamanParts(parts, riderSh(o), look, rp.place, rp.onBody ? P : 0, rp.onBody ? R : 0);
     eyes.push(...r.eyes);
@@ -5968,8 +5968,7 @@ lruOf('f12_shaman', 320);
 
 regMob('f12boss', (m, pose) => {
   const { o, key, ex } = mamPose(m, pose);
-  const PF = ((globalThis as any).__mp ??= { b: 0, r: 0, p: 0, n: 0, parts: 0 }); // PROF
-  const c = rigFrame('f12boss', key + ((globalThis as any).__salt ?? ''), m.face, CV_MAM, pose.flash, () => { const t0 = performance.now(); const kk = (PF.keys ??= {}); const kp = key.split('|').slice(0, 2).join('|') + '|' + key.split('|')[2].replace(/[0-9].*$/, '') + `|${pose.mode}`; kk[kp] = (kk[kp] ?? 0) + 1; const bb = mammothBuild(pose.look, o); PF.b += performance.now() - t0; PF.n++; PF.parts += bb.parts.length; const pp = bb.post; if (pp) bb.post = (q, sc, fx) => { const t1 = performance.now(); pp(q, sc, fx); PF.p += performance.now() - t1; }; return bb; }); // PROF
+  const c = rigFrame('f12boss', key, m.face, CV_MAM, pose.flash, () => mammothBuild(pose.look, o));
   MAM_PTS.set(m.id, mamPts(o, m.face, ex));
   if (MAM_PTS.size > 8) MAM_PTS.delete(MAM_PTS.keys().next().value as number);
   return mobFrame(c, CV_MAM, ex);
