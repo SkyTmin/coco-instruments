@@ -30,6 +30,7 @@ import { doorOpen, F8_CLOCK } from './f8-brains';
 import './f8-mob-imp';
 import './f8-mob-blade';
 import './f8-mob-spider';
+import './f8-mob-lantern';
 
 type RGBA = [number, number, number, number];
 type V = [number, number];
@@ -3253,115 +3254,6 @@ registerMobPainter('f8_drum', (m: Mob, pose: MobPose) => {
     if (pose.mode === 'stun') stars(p, r.head[0], r.head[1] - 5, 5, mod(pose.t * 8, 4));
     return { p, ax: Math.round(W / 2), ay: H - 2, eye: anim === 'dead' ? null : eye };
   });
-});
-
-// ---------------------------------------------------------------------------
-// Фонарный дух: бумажный фонарь с одним глазом и длинным языком.
-// ---------------------------------------------------------------------------
-
-function lanternPx(anim: string, f: number): Built {
-  const W = 24;
-  const H = 32;
-  const p = new Px(W, H);
-  const dim = anim === 'gutter';
-  const cx = 11.5;
-  const top = 5 + (anim === 'idle' ? [0, 0, 1, 1][f] : 0) + (dim ? 2 : 0);
-  const bot = top + 17 - (dim ? 2 : 0);
-  const paper = dim
-    ? tones('#7a6a48', '#a08a60', '#bca47a', '#d8c098')
-    : tones('#b09460', '#e0c890', '#f8e8b8', '#fff8e0');
-  // Ручка-петля сверху.
-  stroke(p, cx - 2, top - 3, cx + 2, top - 3, LACQ[2]);
-  p.set(Math.round(cx - 2), top - 2, LACQ[2]);
-  p.set(Math.round(cx + 2), top - 2, LACQ[2]);
-  // Тело: бочонок с рёбрами, светится изнутри.
-  for (let y = top; y <= bot; y++) {
-    const k = (y - top) / (bot - top);
-    const hw = 3.5 + Math.sin(k * Math.PI) * 3.2;
-    for (let x = Math.floor(cx - hw); x <= Math.ceil(cx + hw); x++) {
-      const u = (x + 0.5 - (cx - hw)) / (hw * 2);
-      const l = 1 - Math.abs(u - 0.38) * 2;
-      let c = l > 0.55 ? paper[3] : l > 0.1 ? paper[2] : paper[1];
-      if ((y - top) % 3 === 0) c = darker(c, 0.18);
-      if (u < 0.08 || u > 0.94) c = paper[0];
-      p.set(x, y, c);
-    }
-  }
-  // Шапка и донце — чёрный лак.
-  p.rect(Math.round(cx - 3), top - 1, Math.round(cx + 3), top, LACQ[2]);
-  p.rect(Math.round(cx - 3), bot, Math.round(cx + 3), bot + 1, LACQ[1]);
-  // Прорехи, сквозь них огонь.
-  const fire = dim ? hx('#c86a20') : hx('#ffd060');
-  p.set(Math.round(cx + 3), top + 5, fire);
-  p.set(Math.round(cx - 4), top + 11, fire);
-  p.set(Math.round(cx - 3), top + 11, hx('#fff0a0'));
-  // Рот: рваная щель, язык.
-  const my = top + 12;
-  const open = anim === 'aim' ? 3 : anim === 'wind' || anim === 'bite' ? 2 : 1;
-  p.rect(Math.round(cx - 3), my, Math.round(cx + 4), my + open - 1, hx('#2a0a08'));
-  if (anim === 'aim') p.rect(Math.round(cx - 1), my + 1, Math.round(cx + 2), my + 1, hx('#ffb040'));
-  if (anim !== 'dead') {
-    const wag =
-      anim === 'idle' ? [0, 1, 0, -1][f] : anim === 'run' ? [1, 0, -1, 0, 1, 0][mod(f, 6)] : 0;
-    const tongue = [hx('#8a1a2a'), hx('#c8304a'), hx('#f06a80')];
-    const x0 = Math.round(cx + 1);
-    for (let i = 0; i < 7; i++) {
-      const x = x0 + Math.round(Math.sin(i * 0.7) * 0.8 + (i > 3 ? wag : 0));
-      p.set(x, my + open + i, tongue[i < 5 ? 1 : 0]);
-      p.set(x + 1, my + open + i, tongue[i < 3 ? 2 : 1]);
-    }
-  }
-  p.outline(INK);
-  // Глаз — один, большой.
-  const ey = top + 6;
-  const ex = Math.round(cx + 1);
-  let eye: [number, number] | null = [ex, ey];
-  if (anim === 'dead') {
-    stroke(p, ex - 2, ey, ex + 2, ey, INK);
-    eye = null;
-  } else if (anim === 'sleep' || dim) {
-    stroke(p, ex - 2, ey + (dim ? 0 : 1), ex + 2, ey + (dim ? 0 : 1), INK);
-    p.set(ex, ey + 1, dim ? hx('#ff8a30') : INK);
-    if (!dim) eye = null;
-  } else {
-    p.ell(ex + 0.5, ey + 0.5, 2.6, 2.1, hx('#fff8e8'));
-    p.ell(ex + 0.8, ey + 0.5, 1.3, 1.5, anim === 'aim' ? hx('#ff3a28') : hx('#e8a020'));
-    p.set(ex + 1, ey, INK);
-    p.set(ex + 1, ey + 1, INK);
-    // Брови-складки бумаги.
-    stroke(p, ex - 2, ey - 3, ex + 3, ey - 2 - (anim === 'aim' ? 1 : 0), paper[0]);
-  }
-  if (anim === 'dead') {
-    // Смят и горит.
-    for (let i = 0; i < 6; i++) flame(p, 6 + i * 2, bot - 3 + (i % 2), 3 + (i % 3), i);
-  }
-  return { p, ax: 12, ay: H - 2, eye };
-}
-
-registerMobPainter('f8_lantern', (m: Mob, pose: MobPose) => {
-  let anim: string = pose.anim;
-  let f = mod(pose.frame, anim === 'run' ? 6 : 4);
-  if (pose.mode === 'aim') {
-    anim = 'aim';
-    f = 0;
-  } else if (pose.mode === 'gutter') {
-    anim = 'gutter';
-    f = 0;
-  } else if (pose.mode === 'chase') {
-    anim = 'idle';
-    f = mod(pose.t * 4 + m.id, 4);
-  }
-  if (pose.mode === 'f8_rise') {
-    // Поднимается из пропасти: проявляется снизу вверх.
-    const k = Math.min(4, Math.floor(pose.t * 5));
-    return frameOf('f8_lantern', pose, `rise${k}`, 0, () => {
-      const b = lanternPx('idle', 0);
-      const cut = Math.round((b.p.h * (4 - k)) / 5);
-      for (let y = 0; y < cut; y++) for (let x = 0; x < b.p.w; x++) clear(b.p, x, y);
-      return b;
-    });
-  }
-  return frameOf('f8_lantern', pose, anim, f, () => lanternPx(anim, f));
 });
 
 // ---------------------------------------------------------------------------
