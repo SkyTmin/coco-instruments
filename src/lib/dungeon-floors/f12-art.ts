@@ -4798,7 +4798,13 @@ function shamanParts(
   }
   for (const pt of sub) {
     const c = place([pt.x, pt.y, pt.z]);
-    parts.push({ ...pt, x: c[0], y: c[1], z: c[2], pitch: (pt.pitch ?? 0) + pitch, roll: (pt.roll ?? 0) + roll });
+    // Части фигуры свои (только что собраны) — правим на месте, без копий.
+    pt.x = c[0];
+    pt.y = c[1];
+    pt.z = c[2];
+    pt.pitch = (pt.pitch ?? 0) + pitch;
+    pt.roll = (pt.roll ?? 0) + roll;
+    parts.push(pt);
   }
   const eyes: Eye[] = [-1, 1].map((e) => {
     const c = place(at([2.75, e * 0.75, 0.15]));
@@ -5005,8 +5011,8 @@ function riderSh(o: MamO): ShO {
       handR: R,
       kneel: off ? 1 : 0,
       feet: off ? undefined : [
-        [1.8, -7.4, 1.6],
-        [1.8, 7.4, 1.6],
+        [1.8, -8.4, 2.2],
+        [1.8, 8.4, 2.2],
       ],
     },
     drum: o.rDrum,
@@ -5025,9 +5031,15 @@ function riderPlace(o: MamO, S: MamSkel): { place: (p: V3) => V3; onBody: boolea
   const hip0 = 9 * SH_S;
   const seat: V3 = [5, 0, S.z0 + 16 + o.rUp - o.rCrouch * 0.6];
   if (o.rSlide <= 0) return { place: (p) => S.B([seat[0] + p[0], p[1], seat[2] + p[2] - hip0]), onBody: true };
+  // Сползает с правого бока: сперва вбок через шерсть, потом вниз — не
+  // сквозь тушу.
   const A = S.B(seat);
-  const k = ease(o.rSlide);
-  const pos: V3 = [lerp(A[0], 2, k), lerp(A[1], 21, k), lerp(A[2], hip0 * 0.4, k) + Math.sin(o.rSlide * Math.PI) * 5];
+  const u = o.rSlide;
+  const pos: V3 = [
+    lerp(A[0], 2, ease(u)),
+    lerp(A[1], 22, easeOut(u * 1.4)),
+    lerp(A[2], hip0 * 0.4, u * u) + Math.sin(u * Math.PI) * 4,
+  ];
   return { place: (p) => [pos[0] + p[0], pos[1] + p[1], pos[2] + p[2] - hip0], onBody: false };
 }
 
@@ -5039,7 +5051,7 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   const fur = lookRamp(frostRamp(M_FUR, fr), look);
   const hair = lookRamp(frostRamp(M_HAIR, fr * 1.5), look);
   const skin = frostRamp(M_SKIN, o.frost * 0.7);
-  const snowy = Math.min(0.9, 0.1 + o.phase * 0.08 + o.frost * 0.6);
+  const snowy = Math.min(0.9, 0.1 + o.phase * 0.05 + o.frost * 0.6);
   const ice = o.frost > 0.45;
   const P = o.pitch;
   const R = o.roll;
@@ -5068,12 +5080,12 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   const ball = (w: V3, r: number, rp: RGBA[], id: number, ex: Partial<Part> = {}) =>
     parts.push({ ...ex, x: w[0], y: w[1], z: w[2], rx: r, ry: r, rz: r, ramp: rp, id, gloss: ex.gloss || ice });
   // Корпус: бочка, горб, загривок, круп, грудь, брюхо. Снег — пятнами по верху.
-  body([-2, 0, z0], 18, 12.5, 12.5, fur, 1, { fur: 0.3, snowy });
-  body([7, 0, z0 + 7], 11, 10, 9.5, fur, 2, { fur: 0.3, snowy });
-  body([10.5, 0, z0 + 12], 6.5, 6.5, 5.5, fur, 2, { fur: 0.3, snowy: Math.min(0.95, snowy + 0.12) });
-  body([-14, 0, z0 - 2], 9.5, 11, 10, fur, 1, { fur: 0.3, snowy });
-  body([13, 0, z0 - 1], 8, 10, 10.5, fur, 3, { fur: 0.32 });
-  body([-1, 0, z0 - 7.5], 15, 10, 5.5, hair, 4, { fur: 0.45 });
+  body([-2, 0, z0], 18, 13.8, 12.5, fur, 1, { fur: 0.3, snowy });
+  body([7, 0, z0 + 7], 11, 11.2, 9.5, fur, 2, { fur: 0.3, snowy });
+  body([10.5, 0, z0 + 12], 6.5, 7.2, 5.5, fur, 2, { fur: 0.3, snowy: Math.min(0.95, snowy + 0.12) });
+  body([-14, 0, z0 - 2], 9.5, 12.2, 10, fur, 1, { fur: 0.3, snowy });
+  body([13, 0, z0 - 1], 8, 11.2, 10.5, fur, 3, { fur: 0.32 });
+  body([-1, 0, z0 - 7.5], 15, 11.2, 5.5, hair, 4, { fur: 0.45 });
   // Длинная шерсть — пряди по бокам, груди и крупу. Висят по отвесу (не по
   // корпусу), качаются волной с отставанием от шага, подлетают на ударе.
   const tips: V3[] = [];
@@ -5104,7 +5116,7 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   for (const e of MX.noStrands ? [] : [-1, 1]) // PROF
     for (let k = 0; k < 9; k++) {
       const x = -21 + k * 4.5;
-      const hw = 11.6 * Math.sqrt(Math.max(0.15, 1 - ((x + 2) / 21) ** 2));
+      const hw = 12.8 * Math.sqrt(Math.max(0.15, 1 - ((x + 2) / 21) ** 2));
       strand([x, e * (hw - 1), z0 - 1], 12 + hash(k, e + 3, 91) * 4 + (k > 2 && k < 7 ? 2 : 0), e, 6 + (k % 2));
     }
   for (let k = 0; k < 4; k++) strand([17, -4.5 + k * 3, z0 - 5], 11 + (k % 2) * 2.5, 0, 8 + (k % 2));
@@ -5114,7 +5126,7 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   head([-0.5, 0, 11.5], 6.4, 6, 6, hair, 10, { fur: 0.4, snowy });
   head([7.5, 0, -2], 5.2, 5.6, 6.6, lookRamp(frostRamp(M_SKIN, o.frost * 0.7), look), 11, { fur: 0.2 });
   for (const e of [-1, 1])
-    head([-1.5, e * 7.6, 2.5], 1.5, 2.4 + o.ear * 1.4, 3.8, hair, 12, { fur: 0.45, yaw: e * (0.25 + o.ear * 0.7) });
+    head([-1.5, e * 7.8, 2.5], 1.6, 3 + o.ear * 1.6, 4.4, hair, 12, { fur: 0.45, yaw: e * (0.25 + o.ear * 0.7) });
   if (o.jaw > 0.05) head([5.5, 0, -7.5 - o.jaw], 3, 3, 1.4 + o.jaw * 1.6, M_MOUTH, 16);
   head([5, 0, -9 - o.jaw * 2.4], 2.4, 2.6, 1.3, skin, 16, { fur: 0.1 });
   // Бивни: вниз-наружу и вверх-внутрь; у основания темнее.
@@ -5144,10 +5156,10 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   // Ноги-тумбы. Шаг — диагональная последовательность (ЛЗ, ПП, ПЗ, ЛП),
   // галоп — поворотный; в опоре стопа идёт назад ровно со скоростью хода.
   const LEGS: [number, number, number, number, boolean][] = [
-    [11, -7.5, 0.75, 0.55, true],
-    [11, 7.5, 0.25, 0.43, true],
-    [-14, -7.8, 0, 0, false],
-    [-14, 7.8, 0.5, 0.12, false],
+    [11, -8.2, 0.75, 0.55, true],
+    [11, 8.2, 0.25, 0.43, true],
+    [-14, -8.6, 0, 0, false],
+    [-14, 8.6, 0.5, 0.12, false],
   ];
   const rolled = clamp01((Math.abs(R) - 0.2) / 0.7);
   LEGS.forEach(([lx, ly, offW, offG, front], k) => {
@@ -5198,8 +5210,9 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     for (let i = 0; i < 3; i++) ball(lerp3(hip, knee, i / 3), 5.4 - i * 0.25, fur, 20 + k, { fur: 0.32 });
     for (let i = 0; i < 3; i++) ball(lerp3(knee, foot, i / 2.6), 4.7 - i * 0.2, i < 2 ? fur : hair, 20 + k, { fur: 0.3 });
     parts.push({ x: foot[0] + 0.5, y: foot[1], z: foot[2] + 1.2, rx: 4.9, ry: 4.7, rz: 1.9, ramp: skin, id: 24 + k, roll: R * rolled });
-    for (const nn of [-1.9, 0, 1.9])
-      parts.push({ x: foot[0] + 4.6, y: foot[1] + nn, z: foot[2] + 1.1, rx: 0.9, ry: 0.9, rz: 0.7, ramp: BONE, id: 24 + k });
+    if (front)
+      for (const nn of [-1.9, 0, 1.9])
+        parts.push({ x: foot[0] + 4.6, y: foot[1] + nn, z: foot[2] + 1.1, rx: 0.9, ry: 0.9, rz: 0.7, ramp: BONE, id: 24 + k });
   });
   // Глаза мамонта (закрыты — не светятся) и наездница.
   const eyes: Eye[] = o.shut
@@ -5353,12 +5366,35 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   );
 }
 
-/** Масштаб сборки: части, глаза, точки кадра и рисунок поверх. */
+/**
+ * Масштаб сборки: части, глаза, точки кадра и рисунок поверх. Части —
+ * литералом одной формы (не `{...p}`): копия через spread у двух сотен
+ * частей — заметная доля кадра, а одна форма объекта ускоряет и сам риг.
+ */
 function scaleBuild(b: Build, s: number): Build {
   const sc = (v: V3): V3 => [v[0] * s, v[1] * s, v[2] * s];
   return {
     ...b,
-    parts: b.parts.map((p) => ({ ...p, x: p.x * s, y: p.y * s, z: p.z * s, rx: p.rx * s, ry: p.ry * s, rz: p.rz * s })),
+    parts: b.parts.map(
+      (p): Part => ({
+        x: p.x * s,
+        y: p.y * s,
+        z: p.z * s,
+        rx: p.rx * s,
+        ry: p.ry * s,
+        rz: p.rz * s,
+        yaw: p.yaw ?? 0,
+        pitch: p.pitch ?? 0,
+        roll: p.roll ?? 0,
+        ramp: p.ramp,
+        fur: p.fur ?? 0,
+        snowy: p.snowy ?? 0,
+        glow: p.glow ?? false,
+        gloss: p.gloss ?? false,
+        id: p.id,
+        alpha: p.alpha ?? 1,
+      }),
+    ),
     eyes: b.eyes?.map((e) => ({ ...e, x: e.x * s, y: e.y * s, z: e.z * s, r: 1 })),
     extent: b.extent?.map(sc),
     clip: b.clip === undefined ? undefined : b.clip * s,
@@ -5778,36 +5814,6 @@ const MAM_TRAIL: Record<string, [number, number]> = {
   f12b_tusk: [0.72, 1.06],
 };
 
-/**
- * Где техника идёт по 24 кадра в секунду: удар и контакт. Медленная
- * подготовка и отдача — «по двойкам» (12 к/с): глаз их не различит, а
- * каждый новый кадр огромного зверя — 1,5–2 мс, и в бою он поворачивается
- * к герою, так что кадры техники в каждой стороне — новые.
- */
-const MAM_DENSE: Record<string, [number, number][]> = {
-  roar: [[0.72, 0.96]],
-  f12b_tusk: [[0.62, 1.02]],
-  f12b_stomp: [[0.86, 1.18]],
-  f12b_rear: [[0.78, 1.06]],
-  f12b_spikes: [[0.8, 1.04]],
-  f12b_blow: [[0.78, 0.96]],
-  f12b_drum: [
-    [0.27, 0.42],
-    [0.62, 0.77],
-    [0.97, 1.12],
-  ],
-  f12b_drop: [[0.6, 0.8]],
-  f12b_skid: [[0.62, 0.86]],
-  f12b_paw: [],
-  dying: [[1.78, 2.0]],
-};
-/** Номер кадра (24 к/с) с учётом «двоек» вне плотных окон. */
-function mamFi(mode: string, t: number): number {
-  const w = MAM_DENSE[mode];
-  if (!w || w.some(([a, b]) => t >= a && t < b)) return f24(t);
-  return 2 * Math.max(0, Math.floor(t * 12));
-}
-
 /** Кадр мамонта: поза на квантованное время, ключ и поля движка. */
 function mamFrame(
   mode: string,
@@ -5817,7 +5823,8 @@ function mamFrame(
   face: number,
 ): { o: MamO; key: string; ex: Partial<MobFrame> } {
   const len = MAM_LEN[mode];
-  const fi = mamFi(mode, tRaw);
+  // Техника — 24 к/с от времени режима (библия §14, правило 1).
+  const fi = f24(tRaw);
   const t = len !== undefined ? Math.min(len, fi / 24) : fi / 24;
   const ex: Partial<MobFrame> = { shadow: 30, still: true };
   let key: string;
@@ -5853,7 +5860,7 @@ function mamFrame(
     ex.dy = Math.sin(face) * rec;
   } else if (mode === 'f12b_paw') {
     const tt = clamp01(c.k) * MAMMOTH.paw;
-    const pi = mamFi(mode, tt);
+    const pi = f24(tt);
     o = mamAt(mode, t, now, { ...c, k: pi / 24 / MAMMOTH.paw });
     key = `paw${pi}`;
   } else if (len !== undefined) {
@@ -5921,7 +5928,9 @@ function mamFrame(
 function mamCtx(m: Mob): MamCtx {
   return {
     rider: (m.data.rider ?? 0) > 0,
-    phase: Math.max(0, Math.min(3, m.data.phase ?? 0)),
+    // Иней по фазам: 0–1 один облик (иначе на смене фазы все кадры ходьбы
+    // и техник рисуются заново), 2 — седеет, 3 — весь в инее.
+    phase: [0, 0, 1.5, 3][Math.max(0, Math.min(3, Math.round(m.data.phase ?? 0)))],
     walk: m.data.walk ?? 0,
     turn: m.data.turn ?? 0,
     speed: speedOf(m),
@@ -5960,7 +5969,7 @@ lruOf('f12_shaman', 320);
 regMob('f12boss', (m, pose) => {
   const { o, key, ex } = mamPose(m, pose);
   const PF = ((globalThis as any).__mp ??= { b: 0, r: 0, p: 0, n: 0, parts: 0 }); // PROF
-  const c = rigFrame('f12boss', key, m.face, CV_MAM, pose.flash, () => { const t0 = performance.now(); const kk = (PF.keys ??= {}); const kp = key.split('|').slice(0, 2).join('|') + '|' + key.split('|')[2].replace(/[0-9].*$/, '') + `|${pose.mode}`; kk[kp] = (kk[kp] ?? 0) + 1; const bb = mammothBuild(pose.look, o); PF.b += performance.now() - t0; PF.n++; PF.parts += bb.parts.length; const pp = bb.post; if (pp) bb.post = (q, sc, fx) => { const t1 = performance.now(); pp(q, sc, fx); PF.p += performance.now() - t1; }; return bb; }); // PROF
+  const c = rigFrame('f12boss', key + ((globalThis as any).__salt ?? ''), m.face, CV_MAM, pose.flash, () => { const t0 = performance.now(); const kk = (PF.keys ??= {}); const kp = key.split('|').slice(0, 2).join('|') + '|' + key.split('|')[2].replace(/[0-9].*$/, '') + `|${pose.mode}`; kk[kp] = (kk[kp] ?? 0) + 1; const bb = mammothBuild(pose.look, o); PF.b += performance.now() - t0; PF.n++; PF.parts += bb.parts.length; const pp = bb.post; if (pp) bb.post = (q, sc, fx) => { const t1 = performance.now(); pp(q, sc, fx); PF.p += performance.now() - t1; }; return bb; }); // PROF
   MAM_PTS.set(m.id, mamPts(o, m.face, ex));
   if (MAM_PTS.size > 8) MAM_PTS.delete(MAM_PTS.keys().next().value as number);
   return mobFrame(c, CV_MAM, ex);
