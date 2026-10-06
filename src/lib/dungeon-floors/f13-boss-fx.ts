@@ -1622,40 +1622,59 @@ function drawStars(g: G, to: To, time: number): void {
 }
 
 /** Облака из ваты на нитях над северным краем сцены (акт III). */
+const CLOUD_PUFFS = [
+  [-9, 1, 6],
+  [-3, -3, 7],
+  [4, -2, 6.5],
+  [10, 1, 5],
+  [1, 2, 6],
+];
+/**
+ * Облако с двумя нитями — одна картинка в кеше (нити без провиса и бликов,
+ * от времени не зависят): прямо в кадр это было ~4 тыс. `fillRect`.
+ */
+function cloudSprite(): Img {
+  const hit = SPR.get('cloud');
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = 40;
+  c.height = 74;
+  const g = c.getContext('2d') as G;
+  const keep = [OX, OY, QX, QY];
+  OX = OY = QX = QY = 0;
+  const x = 20;
+  const y = 64;
+  for (const [dx, seed] of [
+    [-6, 0],
+    [7, 9],
+  ])
+    threadPx(g, x + dx, y - 60, x + dx, y - 5, {
+      a: 0.5,
+      sag: 0,
+      seed,
+      time: 0,
+      fade: true,
+      glints: false,
+    });
+  if (ink(g, C.ink, 0.6)) for (const [dx, dy, r] of CLOUD_PUFFS) fDisc(g, x + dx, y + dy, r + 1);
+  if (ink(g, '#9096c4', 1)) for (const [dx, dy, r] of CLOUD_PUFFS) fDisc(g, x + dx, y + dy, r);
+  if (ink(g, '#e2e4f6', 1))
+    for (const [dx, dy, r] of CLOUD_PUFFS) fDisc(g, x + dx - 1, y + dy - 1.5, r * 0.7);
+  g.globalAlpha = 1;
+  [OX, OY, QX, QY] = keep;
+  return SPR.set('cloud', c);
+}
+
 function cottonClouds(g: G, to: To, time: number): void {
   const [vw] = viewSize(g);
-  const puffs = [
-    [-9, 1, 6],
-    [-3, -3, 7],
-    [4, -2, 6.5],
-    [10, 1, 5],
-    [1, 2, 6],
-  ];
+  const img = cloudSprite();
   for (let i = 0; i < 5; i++) {
     const wx = ARENA_X0 + 4 + i * 8 + Math.sin(time * 0.15 + i * 2) * 1.2;
     const [x, y0] = to(wx, 2.6 + (i % 2) * 0.6);
     if (x < -30 || x > vw + 30) continue;
     const y = y0 - 34 + Math.sin(time * 0.7 + i) * 1.5;
-    threadPx(g, x - 6, y - 60, x - 6, y - 5, {
-      a: 0.5,
-      sag: 0,
-      seed: i,
-      time,
-      fade: true,
-      glints: false,
-    });
-    threadPx(g, x + 7, y - 60, x + 7, y - 5, {
-      a: 0.5,
-      sag: 0,
-      seed: i + 9,
-      time,
-      fade: true,
-      glints: false,
-    });
-    if (ink(g, C.ink, 0.6)) for (const [dx, dy, r] of puffs) fDisc(g, x + dx, y + dy, r + 1);
-    if (ink(g, '#9096c4', 1)) for (const [dx, dy, r] of puffs) fDisc(g, x + dx, y + dy, r);
-    if (ink(g, '#e2e4f6', 1))
-      for (const [dx, dy, r] of puffs) fDisc(g, x + dx - 1, y + dy - 1.5, r * 0.7);
+    // Середина картинки — на (x, y − 27): облако в её низу, нити уходят вверх.
+    blit(g, img, x, y - 27);
   }
   g.globalAlpha = 1;
 }
