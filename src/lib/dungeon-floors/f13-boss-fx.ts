@@ -31,6 +31,7 @@ import {
 } from '../dungeon-paint';
 import type { ImpactRec, Sprite } from '../dungeon-paint';
 import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
+import { solidTile } from '../dungeon-sim';
 import { Px } from '../dungeon-art';
 import { BOSS, F13_FX, F13_SCENERY, SPOT, stringsOf } from './f13-brains';
 import type { StringSeg } from './f13-brains';
@@ -2107,6 +2108,84 @@ function needleTrails(g: G, to: To, time: number): void {
 }
 
 // ---------------------------------------------------------------------------
+// Декорации живут (клетки — в кеше, живое — здесь, на полу под мобами):
+// тканевое море «Бури» перекатывает блики по гребням полотнищ, нарисованные
+// краской звёзды «Ночи» мерцают. Формулы — те же, что у клеток.
+// ---------------------------------------------------------------------------
+
+/** Видимые клетки арены вокруг зоны (мир), без лишнего за краем экрана. */
+function arenaCells(
+  g: G,
+  z: { x: number; y: number },
+  px: number,
+  py: number,
+): [number, number, number, number] {
+  const [vw, vh] = viewSize(g);
+  const x0 = Math.max(ARENA_X0, Math.floor(z.x - px / TS) - 1);
+  const x1 = Math.min(ARENA_X1, Math.ceil(z.x + (vw - px) / TS) + 1);
+  const y0 = Math.max(2, Math.floor(z.y - py / TS) - 1);
+  const y1 = Math.min(24, Math.ceil(z.y + (vh - py) / TS) + 1);
+  return [x0, x1, y0, y1];
+}
+
+/** Акт II: блики бегут по гребням полотнищ моря (шов — каждые 8 точек). */
+function seaGlints(g: G, z: { x: number; y: number }, px: number, py: number, time: number): void {
+  const [x0, x1, y0, y1] = arenaCells(g, z, px, py);
+  const ox = px - z.x * TS;
+  const oy = py - z.y * TS;
+  const sim = paintSim();
+  for (let strip = y0 * 2; strip < y1 * 2; strip++) {
+    const Ys = strip * 8;
+    const ph = hash(strip, 0, 71) * TAU;
+    const dir = strip % 2 ? 1 : -1;
+    for (let j = 0; j < 3; j++) {
+      // Блик скользит вдоль полотнища; у каждого свой ход и период.
+      const span = 56;
+      const base = Math.floor((x0 * TS) / span) * span;
+      for (let X0 = base; X0 < x1 * TS; X0 += span) {
+        const X = X0 + mod(hash(strip, j, X0) * span + time * (10 + 6 * j) * dir, span);
+        const wx = X / TS;
+        const wy = Ys / TS;
+        if (sim && solidTile(sim, Math.floor(wx), Math.floor(wy))) continue;
+        if (wx > SHIP_BOX[0] && wx < SHIP_BOX[1] && wy > SHIP_BOX[2] && wy < SHIP_BOX[3]) continue;
+        const crest = 2.6 + Math.sin(X * 0.17 + ph) * 1.5 + Math.sin(X * 0.06 + ph * 2) * 0.7;
+        const a = 0.55 * Math.sin(mod(time * 0.7 + hash(strip, j, 5), 1) * Math.PI);
+        if (!ink(g, j ? C.sea3 : C.foam, a)) continue;
+        pp(g, ox + X, oy + Ys + Math.round(crest), j ? 3 : 2, 1);
+      }
+    }
+  }
+  g.globalAlpha = 1;
+}
+/** Где на сцене корабль (палуба — не море): x0, x1, y0, y1 в клетках. */
+const SHIP_BOX = [24.6, 39.4, 9.2, 12.2];
+
+/** Акт III: звёзды краской на досках мерцают (те же места, что у клетки). */
+function nightTwinkle(
+  g: G,
+  z: { x: number; y: number },
+  px: number,
+  py: number,
+  time: number,
+): void {
+  const [x0, x1, y0, y1] = arenaCells(g, z, px, py);
+  const ox = px - z.x * TS;
+  const oy = py - z.y * TS;
+  const sim = paintSim();
+  for (let wy = y0; wy < y1; wy++)
+    for (let wx = x0; wx < x1; wx++) {
+      const n = hash(wx, wy, 41);
+      if (n >= 0.3 || (sim && solidTile(sim, wx, wy))) continue;
+      const tw = Math.sin(time * (1.3 + n * 4) + hash(wx, wy, 45) * TAU);
+      if (tw < 0.55) continue;
+      const x = ox + wx * TS + 2 + Math.floor(hash(wx, wy, 42) * 12);
+      const y = oy + wy * TS + 2 + Math.floor(hash(wx, wy, 43) * 12);
+      sparkPx(g, x, y, tw > 0.9 ? C.white : '#e8d890', (tw - 0.55) / 0.45, n < 0.1 && tw > 0.92);
+    }
+  g.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------------------
 // Зоны-режиссёры.
 // ---------------------------------------------------------------------------
 
@@ -2150,6 +2229,8 @@ registerZonePainter('f13_stage', (g, z, px, py, S, time) => {
     pool(g, x, y, SPOT.r * 16, WARM, 0.22);
   }
   const act = F13_FX.act;
+  if (act === 1) seaGlints(g, z, px, py, time);
+  if (act === 2) nightTwinkle(g, z, px, py, time);
   if (act === 2) {
     moonPool(g, to, time);
     starFloor(g, to, time);
