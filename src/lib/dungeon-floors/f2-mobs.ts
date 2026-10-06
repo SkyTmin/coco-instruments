@@ -3120,6 +3120,622 @@ registerImpactPainter('f2_snap', {
 });
 
 // ---------------------------------------------------------------------------
+// Сундучный рак (мимик). Спит — тот же кадр атласа, что у настоящих
+// тайников, до пикселя (кадр сна не менялся: иначе рисунок выдал бы его).
+// Проснулся — сцена: крышка дёрнулась, сундук подпрыгнул, лапы выстрелили
+// из-под днища, стебельки глаз — с перелётом, клешни раскрылись. Лапы,
+// клешни и глаза — в «плоском 3D» вокруг сундука: ход трёх лап разом по
+// пройденному пути, корпус туда, куда идёт. Бросок (`lunge`): 0–0,375 замах
+// назад (клешни вверх, пасть нараспашку, дрожь) → кадр контакта 0,4 (клешни
+// и крышка вперёд) → рывок 7 кл/с со шлейфом. Щипок (`windup` 0,45) —
+// контакт на первом кадре `recover`. Смерть — переворачивается, лапы
+// кверху и поджимаются, монеты сыплются из пасти.
+// ---------------------------------------------------------------------------
+
+const MM_W = 44;
+const MM_H = 38;
+const MM_GY = 32;
+const MM_CX = 22;
+/** Тайминги мозга: spring 0,25, lunge 0,4 + 0,18, windup 0,45, recover 0,4, close 0,45. */
+const MM_SPRING = 0.25;
+const MM_LUNGE_HIT = 0.4;
+const MM_LUNGE = 0.58;
+const MM_PINCH = 0.45;
+const MM_REC = 0.4;
+const MM_CLOSE = 0.45;
+const MM_DIE = 0.9;
+const MM_DIE_F = 21;
+
+/** Сундук кодом — пока не пришёл атлас. */
+function chestFallback(open: number): Px {
+  const p = new Px(16, 16);
+  const wood = hex('#8a4a22');
+  const woodD = hex('#5a2a14');
+  const band = hex('#d8a83a');
+  p.rect(1, 7, 14, 15, wood);
+  p.rect(1, 3 - open, 14, 7 - open, mix(wood, WHITE, 0.15));
+  p.rect(1, 11, 14, 11, woodD);
+  p.rect(3, 3 - open, 3, 15, band);
+  p.rect(12, 3 - open, 12, 15, band);
+  p.rect(7, 8, 8, 10, band);
+  if (open) p.rect(2, 7 - open, 13, 7, hex('#1a0a08'));
+  p.outline(INK);
+  return p;
+}
+
+const CHEST_OPEN: X72Name[] = [
+  'chest_mimic_open_anim_f0',
+  'chest_mimic_open_anim_f1',
+  'chest_mimic_open_anim_f2',
+];
+/** Пасть: −1 — сундук закрыт (как настоящий), 0…2 — кадры раскрытия мимика. */
+function chestPx(open: number): Px {
+  if (open < 0) return x72('chest_full_open_anim_f0') ?? chestFallback(0);
+  return x72(CHEST_OPEN[open]) ?? chestFallback(open);
+}
+/** Атлас ещё не пришёл — кадр не кешируется навсегда запасным. */
+const atlasKey = () => (x72('chest_full_open_anim_f0') ? '' : '~');
+
+/** Спит: прежний кадр сундука (холст 28×26, якорь 14, 24), крышка «дышит». */
+function mimicSleepPic(peek: boolean): Pic {
+  const p = new Px(28, 26);
+  const base = chestPx(-1);
+  for (let y = 0; y < base.h; y++)
+    for (let x = 0; x < base.w; x++) {
+      const c = base.get(x, y);
+      if (!c[3]) continue;
+      p.set(6 + x, 9 + y + (peek && y < 8 ? -1 : 0), c);
+    }
+  p.outline(INK);
+  return { p, ax: 14, ay: 24, eye: null };
+}
+
+interface MmO {
+  d: number;
+  /** Кадр пасти: −1 закрыт, 0…2. */
+  open: number;
+  /** Лапы: 0 спрятаны … 1 стоит (сундук поднят на 4 px). */
+  legs: number;
+  /** Фаза шага 0…1 (ход трёх лап разом). */
+  step: number;
+  /** Шаг идёт: лапы переставляются. */
+  walk: boolean;
+  /** Сундук: подскок (px вверх), наклон верха вперёд (px), дрожь вбок. */
+  hop: number;
+  tilt: number;
+  shake: number;
+  /** Клешни: вынос вперёд (px), подъём (px), раскрытие 0…1, разлёт в стороны. */
+  cF: number;
+  cZ: number;
+  cOpen: number;
+  cSpread: number;
+  /** Стебельки глаз: высота (px), наклон назад. */
+  stalk: number;
+  stalkBack: number;
+  /** Монеты из пасти 0…1 (смерть, щипок). */
+  coins: number;
+  /** Вспышка контакта у клешней 0…1. */
+  hit: number;
+}
+
+const MM0: MmO = {
+  d: 2,
+  open: 0,
+  legs: 1,
+  step: 0,
+  walk: false,
+  hop: 0,
+  tilt: 0,
+  shake: 0,
+  cF: 0,
+  cZ: 0,
+  cOpen: 0.3,
+  cSpread: 0,
+  stalk: 3,
+  stalkBack: 0,
+  coins: 0,
+  hit: 0,
+};
+
+const COIN = [hex('#6a4a10'), hex('#e2b442'), hex('#fff0a0')];
+
+function mimicPic(o: MmO): Pic {
+  const p = new Px(MM_W, MM_H);
+  const lit = o.hit > 0 ? new Px(MM_W, MM_H) : null;
+  const yaw = SIDE_YAW[o.d];
+  const GY = MM_GY;
+  const cx = MM_CX + 0.5 + o.shake;
+  const lift = o.legs * 3 + o.hop;
+  const top = GY - 15 - Math.round(lift);
+  const P = (f: number, s: number, z: number, yw = yaw) => {
+    const [x, y, dp] = prj(yw, f, s, z);
+    return { x: cx + x, y: GY + y, dp };
+  };
+  // Лапы — в рамке сундука (он всегда к нам передом): раскинуты влево-вправо.
+  const PL = (f: number, s: number, z: number) => P(f, s, z, PI / 2);
+  // Лапы: по три с боку, бедро под днищем, колено вверх, ступня на полу.
+  type Seg = {
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+    c: { x: number; y: number };
+    dp: number;
+  };
+  const legs: Seg[] = [];
+  if (o.legs > 0)
+    for (const sd of [-1, 1])
+      for (let i = 0; i < 3; i++) {
+        const grp = (i + (sd > 0 ? 1 : 0)) % 2;
+        const ph = o.step + grp * 0.5;
+        const sw = o.walk ? Math.cos(ph * TAU) * 1.8 : 0;
+        const up = o.walk ? Math.max(0, Math.sin(ph * TAU)) * 1.8 : 0;
+        const f0 = (i - 1) * 3.4;
+        const hip = PL(f0, sd * (3.6 + i * 0.6), lift + 1);
+        const knee = PL(f0 + sw * 0.4 + (i - 1) * 1.4, sd * (5.5 + 2.6 * o.legs), lift + 3.5 + up);
+        const foot = PL(f0 + sw + (i - 1) * 2.6, sd * (6.5 + 3.6 * o.legs), up);
+        legs.push({ a: hip, b: knee, c: foot, dp: f0 - 0.1 });
+      }
+  const drawLeg = (l: Seg) => {
+    const far = l.dp < 0;
+    thick(p, l.a.x, l.a.y, l.b.x, l.b.y, 0.55, far ? MIM.chit[0] : MIM.chit[2]);
+    thick(p, l.b.x, l.b.y, l.c.x, l.c.y, 0.5, far ? MIM.chit[1] : MIM.chit[3]);
+    p.set(Math.round(l.c.x), Math.round(l.c.y), far ? MIM.chit[1] : MIM.tip);
+  };
+  // Клешни: плечо из-под крышки вперёд, клешня — две доли по ходу.
+  const claws =
+    o.legs > 0
+      ? [-1, 1].map((sd) => {
+          const sh = P(4.5, sd * 4.2, lift + 4);
+          const tip = P(7 + o.cF, sd * (3.6 + o.cSpread), lift + 4 + o.cZ);
+          const ahead = P(9 + o.cF, sd * (3.6 + o.cSpread), lift + 4 + o.cZ + o.cZ * 0.3);
+          const ang = Math.atan2(ahead.y - tip.y, ahead.x - tip.x);
+          return { sh, tip, ang, dp: tip.dp, sd };
+        })
+      : [];
+  const drawClaw = (c: (typeof claws)[number]) => {
+    const far = c.dp < -0.5;
+    thick(p, c.sh.x, c.sh.y, c.tip.x, c.tip.y, 0.75, far ? MIM.chit[1] : MIM.chit[2]);
+    const op = o.cOpen * 0.6;
+    leaf(p, c.tip.x, c.tip.y, c.ang - 0.25 - op, 5, 1.6, far ? MIM.chit[2] : MIM.chit[3]);
+    leaf(p, c.tip.x, c.tip.y, c.ang + 0.25 + op, 4.2, 1.3, far ? MIM.chit[1] : MIM.chit[2]);
+    if (lit && o.hit > 0) {
+      const ex = c.tip.x + Math.cos(c.ang) * 4;
+      const ey = c.tip.y + Math.sin(c.ang) * 4;
+      glowAt(lit, ex, ey, 3 + o.hit * 2, MIM.tip, 0.8 * o.hit);
+      lit.set(Math.round(ex), Math.round(ey), alpha(WHITE, o.hit));
+    }
+  };
+  for (const l of legs) if (l.dp < 0) drawLeg(l);
+  for (const c of claws) if (c.dp < 0) drawClaw(c);
+  // Сундук: кадр атласа, верх сдвинут наклоном (сдвиг строк).
+  const base = chestPx(o.open);
+  const left = Math.round(cx - 8);
+  for (let y = 0; y < base.h; y++) {
+    const sh = Math.round(o.tilt * (1 - y / 15));
+    for (let x = 0; x < base.w; x++) {
+      const c = base.get(x, y);
+      if (c[3]) p.set(left + x + sh, top + y, c);
+    }
+  }
+  // Монеты из пасти.
+  if (o.coins > 0)
+    for (let i = 0; i < 7; i++) {
+      const k = clamp01(o.coins * 1.3 - i * 0.07);
+      if (k <= 0) continue;
+      const a = -PI / 2 + (hash(i, 61) - 0.5) * 2.2;
+      const x = cx + Math.cos(a) * k * (5 + hash(i, 63) * 6);
+      const y = top + 5 - Math.sin(-a) * k * 7 + k * k * 12;
+      p.set(Math.round(x), Math.round(Math.min(GY, y)), COIN[i % 3 ? 1 : 2]);
+      if (i % 2) p.set(Math.round(x) + 1, Math.round(Math.min(GY, y)), COIN[0]);
+    }
+  for (const l of legs) if (l.dp >= 0) drawLeg(l);
+  for (const c of claws) if (c.dp >= 0) drawClaw(c);
+  // Стебельки глаз над крышкой.
+  let eye: [number, number] | null = null;
+  if (o.legs > 0 && o.stalk > 0) {
+    for (const sd of [-1, 1]) {
+      const b = P(1.5, sd * 2.4, 0);
+      const bx = b.x + o.tilt * 0.8;
+      const by = top + 2 + (b.y - GY) * 0.5;
+      const ex = bx - Math.cos(yaw) * o.stalkBack;
+      const ey = by - o.stalk;
+      thick(p, bx, by, ex, ey + 1, 0.4, MIM.stalk);
+      p.set(Math.round(ex), Math.round(ey), MIM.eye);
+      p.set(Math.round(ex) + 1, Math.round(ey), MIM.eye);
+      if (!eye || sd > 0) eye = [Math.round(ex) + 1, Math.round(ey)];
+    }
+  }
+  p.outline(INK);
+  if (eye) p.set(eye[0], eye[1], MIM.eye);
+  return { p, ax: MM_CX, ay: MM_GY, eye, lit };
+}
+
+/** Проснулся (0,25 с): крышка дёрнулась → подскок, лапы и глаза выстрелили → клешни раскрылись. */
+function mmSpring(d: number, f: number): MmO {
+  const t = (f + 0.5) / FPS;
+  const k = seg(t, 0.04, MM_SPRING);
+  return {
+    ...MM0,
+    d,
+    open: t < 0.08 ? 0 : t < 0.16 ? 1 : 2,
+    legs: eOut(k),
+    hop: Math.sin(seg(t, 0.04, 0.2) * PI) * 3,
+    shake: t < 0.06 ? (f % 2 ? 0.6 : -0.6) : 0,
+    stalk: 4 * spring(k * 1.6, 12),
+    cOpen: k,
+    cZ: 2 * k,
+  };
+}
+
+/** Бросок: 0–0,375 замах (кадры 0–8) → контакт (кадр 9) → рывок (10–13). */
+function mmLunge(d: number, f: number): MmO {
+  const t = (f + 0.5) / FPS;
+  if (f <= 8) {
+    const k = eOut(seg(t, 0, 0.25));
+    const quiver = t > 0.25 ? (f % 2 ? 0.5 : -0.5) : 0;
+    return {
+      ...MM0,
+      d,
+      open: 2,
+      tilt: -2 * k,
+      hop: -1.2 * k,
+      cF: -2 * k,
+      cZ: 5 * k,
+      cOpen: 1,
+      cSpread: 1.5 * k,
+      shake: quiver,
+      stalk: 3 + k,
+      stalkBack: 1.5 * k,
+    };
+  }
+  if (f === 9)
+    return {
+      ...MM0,
+      d,
+      open: 1,
+      tilt: 2.5,
+      cF: 5,
+      cZ: -1,
+      cOpen: 0,
+      cSpread: -1,
+      hop: -0.5,
+      stalk: 2,
+      stalkBack: -1,
+      hit: 1,
+    };
+  const k = (f - 9) / 4;
+  return {
+    ...MM0,
+    d,
+    open: 1,
+    tilt: 2,
+    cF: 4,
+    cZ: -0.5,
+    cOpen: 0.2,
+    hop: -1,
+    walk: true,
+    step: k * 1.5,
+    stalk: 2.5,
+    stalkBack: 1.5,
+    hit: Math.max(0, 0.6 - k),
+  };
+}
+
+/** Щипок (0,45 с): клешня назад и вверх, раскрыта → держит → к удару. */
+function mmPinch(d: number, f: number): MmO {
+  const t = (f + 0.5) / FPS;
+  const k = eOut(seg(t, 0, 0.3));
+  const go = eIn(seg(t, 0.38, MM_PINCH));
+  return {
+    ...MM0,
+    d,
+    open: 1,
+    tilt: -1.4 * k * (1 - go) + 1.5 * go,
+    cF: -1.5 * k * (1 - go) + 3 * go,
+    cZ: 4 * k * (1 - go),
+    cOpen: 1 - go * 0.6,
+    cSpread: 0.8 * k,
+    shake: t > 0.3 && t < 0.38 ? (f % 2 ? 0.4 : -0.4) : 0,
+  };
+}
+
+/** После щипка: контакт (клешни сомкнулись впереди) → возврат; после броска — тормозит юзом. */
+function mmRecover(d: number, f: number, afterLunge: boolean): MmO {
+  const t = f / FPS;
+  const back = eIO(seg(t, 0.08, 0.35));
+  if (afterLunge)
+    return {
+      ...MM0,
+      d,
+      open: f < 4 ? 1 : 0,
+      tilt: lerp(2, 0, back),
+      cF: lerp(3, 0, back),
+      cOpen: lerp(0.2, 0.3, back),
+      hop: lerp(-1, 0, back),
+      stalk: lerp(2.5, 3, back),
+    };
+  return {
+    ...MM0,
+    d,
+    open: f < 3 ? 0 : 1,
+    tilt: lerp(2, 0, back),
+    cF: lerp(4, 0, back),
+    cZ: lerp(-1, 0, back),
+    cOpen: lerp(0, 0.3, back),
+    cSpread: lerp(-1.2, 0, back),
+    hit: f < 3 ? 1 - f / 3 : 0,
+  };
+}
+
+/** Прячется (0,45 с): лапы под днище, глаза вниз, крышка закрывается, сел со стуком. */
+function mmClose(d: number, f: number): MmO {
+  const t = (f + 0.5) / FPS;
+  const k = eIn(seg(t, 0, 0.32));
+  return {
+    ...MM0,
+    d,
+    open: t < 0.15 ? 2 : t < 0.27 ? 1 : t < 0.38 ? 0 : -1,
+    legs: 1 - k,
+    stalk: 3 * (1 - eOut(seg(t, 0, 0.2))),
+    cOpen: 0,
+    cF: -2 * k,
+    hop: t > 0.32 ? -Math.sin(seg(t, 0.32, MM_CLOSE) * PI) : 0,
+  };
+}
+
+/** Смерть 0,9 с: подброшен → на спине, лапы кверху и поджимаются, монеты сыплются. */
+function mimicDeathPic(d: number, f: number): Pic {
+  const t = (f + 0.5) / FPS;
+  if (t < 0.12) {
+    const pic = mimicPic({
+      ...MM0,
+      d,
+      open: 2,
+      hop: 4 * Math.sin((t / 0.12) * PI),
+      shake: f % 2 ? 1 : -1,
+      cOpen: 1,
+      stalk: 2,
+    });
+    pic.eye = null;
+    return pic;
+  }
+  const p = new Px(MM_W, MM_H);
+  const GY = MM_GY;
+  const cx = MM_CX + 0.5;
+  const k = eOut(seg(t, 0.12, 0.3));
+  // Сундук на спине: кадр атласа вверх дном (строки снизу вверх), открытая пасть набок.
+  const base = chestPx(2);
+  const bounce = t < 0.42 ? Math.abs(Math.sin(seg(t, 0.12, 0.42) * PI * 2)) * 3 * (1 - k * 0.5) : 0;
+  const top = GY - 15 - Math.round(bounce);
+  for (let y = 0; y < base.h; y++)
+    for (let x = 0; x < base.w; x++) {
+      const c = base.get(x, y);
+      if (c[3]) p.set(Math.round(cx - 8) + x, top + (15 - y), mix(c, BLACK, 0.15 * k));
+    }
+  // Лапы кверху: дёргаются и поджимаются.
+  const curl = seg(t, 0.35, 0.75);
+  for (let i = 0; i < 6; i++) {
+    const bx = cx - 6 + i * 2.4;
+    const twitch = t < 0.75 ? Math.sin(t * 40 + i * 2) * (1 - curl) * 1.2 : 0;
+    const kx = bx + (i - 2.5) * 0.9 + twitch;
+    const ky = top - 3 - 2 * (1 - curl);
+    thick(p, bx, top + 1, kx, ky, 0.5, MIM.chit[i % 2 ? 1 : 2]);
+    const fx = kx + (i < 3 ? -1 : 1) * (1 + 2 * (1 - curl));
+    const fy = ky - 2 * (1 - curl) + curl * 2;
+    thick(p, kx, ky, fx, fy, 0.45, MIM.chit[3]);
+    p.set(Math.round(fx), Math.round(fy), MIM.tip);
+  }
+  // Монеты сыплются из пасти и ложатся.
+  const ck = seg(t, 0.2, 0.7);
+  for (let i = 0; i < 10; i++) {
+    const kk = clamp01(ck * 1.4 - i * 0.04);
+    if (kk <= 0) continue;
+    const a = (hash(i, 71) - 0.5) * 2.6;
+    const x = cx + Math.sin(a) * kk * (6 + hash(i, 73) * 8);
+    const y = Math.min(GY + (i % 3) - 1, top + 12 - (1 - kk) * 4 + kk * kk * 8);
+    p.set(Math.round(x), Math.round(y), COIN[i % 3 === 0 ? 2 : 1]);
+    if (i % 2) p.set(Math.round(x) + 1, Math.round(y), COIN[0]);
+  }
+  p.outline(INK);
+  return { p, ax: MM_CX, ay: MM_GY, eye: null, lit: null };
+}
+
+/** Режим мимика → кадр. */
+function mimicFrame(m: Mob, pose: MobPose): MobFrame {
+  const md = pose.mode;
+  const t = pose.t;
+  const ak = atlasKey();
+  if (md === 'sleep') {
+    const peek = (m.data?.tw ?? 1) < 0;
+    return frame('mim', `zz${peek ? 1 : 0}${ak}`, pose, () => mimicSleepPic(peek), null);
+  }
+  const tech = md === 'spring' || md === 'lunge' || md === 'windup' || md === 'recover';
+  const v = visOf(m, pose, tech ? (m.face ?? 0) : headOf(m), md === 'lunge' ? 30 : 12);
+  const { d, flip } = side8(v.yaw);
+  const sh = { shadow: 9 };
+  if (md === 'dying') {
+    const f = fi(t, MM_DIE_F);
+    const key = t < 0.12 ? `die${f}d${d}${ak}` : `die${f}${ak}`;
+    return frame('mim', key, pose, () => mimicDeathPic(d, f), {
+      ...merge(flip && t < 0.12),
+      linger: MM_DIE,
+      alpha: 1 - seg(t, 0.75, MM_DIE),
+      shadow: 9,
+      still: true,
+    });
+  }
+  const hurt = hurtOf(m, pose, v, 0.7);
+  if (md === 'spring') {
+    const f = fi(t, Math.round(MM_SPRING * FPS) - 1);
+    return frame('mim', `sp${f}d${d}${ak}`, pose, () => mimicPic(mmSpring(d, f)), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+      still: true,
+    });
+  }
+  if (md === 'lunge') {
+    const f = fi(t, Math.round(MM_LUNGE * FPS) - 1);
+    return frame('mim', `l${f}d${d}${ak}`, pose, () => mimicPic(mmLunge(d, f)), {
+      ...merge(flip, hurt?.ex, f === 9 ? { sx: 1.1, sy: 0.9 } : null),
+      ...sh,
+      still: true,
+      ghost: f >= 9 ? { every: 0.025, life: 0.14, tint: '255,190,120', alpha: 0.3 } : null,
+    });
+  }
+  if (md === 'windup') {
+    const f = fi(t, Math.round(MM_PINCH * FPS) - 1);
+    return frame('mim', `w${f}d${d}${ak}`, pose, () => mimicPic(mmPinch(d, f)), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+      still: true,
+    });
+  }
+  if (md === 'recover') {
+    const f = fi(t, Math.round(MM_REC * FPS));
+    const al = v.prev === 'lunge';
+    return frame(
+      'mim',
+      `r${al ? 'l' : ''}${f}d${d}${ak}`,
+      pose,
+      () => mimicPic(mmRecover(d, f, al)),
+      {
+        ...merge(flip, al ? null : squash(t, 0.12, 0.14), hurt?.ex),
+        ...sh,
+        still: t < 0.12,
+      },
+    );
+  }
+  if (md === 'close') {
+    const f = fi(t, Math.round(MM_CLOSE * FPS) - 1);
+    return frame('mim', `c${f}d${d}${ak}`, pose, () => mimicPic(mmClose(d, f)), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+      still: true,
+    });
+  }
+  if (md === 'stun' || hurt?.wince) {
+    const o: MmO = {
+      ...MM0,
+      d,
+      open: 1,
+      tilt: -1.5,
+      legs: 0.8,
+      cOpen: 0.8,
+      cSpread: 1,
+      stalk: 2,
+      stalkBack: 1.5,
+    };
+    return frame('mim', `hu${d}${ak}`, pose, () => mimicPic(o), {
+      ...merge(flip, hurt?.ex ?? squash(t, 0.12, 0.14)),
+      ...sh,
+    });
+  }
+  const sp = spd(m);
+  if (sp > 0.4) {
+    // Ход трёх лап разом по пути: 6 кадров на 0,8 клетки; крышка клацает.
+    const i = Math.floor(mod((v.dist / 0.8) * 6, 6));
+    const o: MmO = {
+      ...MM0,
+      d,
+      walk: true,
+      step: i / 6,
+      hop: i % 3 === 1 ? 1 : 0,
+      open: i % 3 === 0 ? 1 : 0,
+    };
+    return frame('mim', `m${i}d${d}${ak}`, pose, () => mimicPic(o), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+    });
+  }
+  const i = Math.floor(idlePh(m, pose.now, 1.6) * 6);
+  const b = Math.sin((i / 6) * TAU);
+  const o: MmO = {
+    ...MM0,
+    d,
+    hop: b > 0.5 ? 1 : 0,
+    cOpen: 0.3 + 0.3 * b,
+    stalk: 3 + (b > 0 ? 1 : 0),
+  };
+  return frame('mim', `i${i}d${d}${ak}`, pose, () => mimicPic(o), {
+    ...merge(flip, hurt?.ex),
+    ...sh,
+  });
+}
+
+registerMobPainter('f2_mimic', mimicFrame);
+
+registerMobWarm('f2_mimic', function* () {
+  if (atlasKey()) return;
+  const P = { flash: false, look: 'normal' as Look };
+  for (const peek of [false, true]) {
+    frame('mim', `zz${peek ? 1 : 0}`, P, () => mimicSleepPic(peek));
+    yield 0;
+  }
+  for (const d of [2, 0, 1, 3, 4]) {
+    for (let f = 0; f < Math.round(MM_SPRING * FPS); f++) {
+      frame('mim', `sp${f}d${d}`, P, () => mimicPic(mmSpring(d, f)));
+      yield 0;
+    }
+    for (let f = 0; f < Math.round(MM_LUNGE * FPS); f++) {
+      frame('mim', `l${f}d${d}`, P, () => mimicPic(mmLunge(d, f)));
+      yield 0;
+    }
+    for (let i = 0; i < 6; i++) {
+      const o: MmO = {
+        ...MM0,
+        d,
+        walk: true,
+        step: i / 6,
+        hop: i % 3 === 1 ? 1 : 0,
+        open: i % 3 === 0 ? 1 : 0,
+      };
+      frame('mim', `m${i}d${d}`, P, () => mimicPic(o));
+      yield 0;
+    }
+  }
+});
+
+// Бросок сундучного рака: две борозды клешней по конусу, щепа и пыль у
+// края. На полу; вспышка клешней — в кадре (`lit`).
+registerImpactPainter('f2_bite', {
+  life: 0.6,
+  shake: 0.18,
+  paint(g, rec, px, py, _s, age) {
+    const sd = rec.seed >>> 0;
+    const R = (rec.r ?? 1.7) * TS;
+    const a0 = rec.ang ?? 0;
+    const arc = rec.arc ?? 1.4;
+    const fade = 1 - seg(age, 0.25, 0.6);
+    const k = eOut(seg(age, 0, 0.1));
+    // Две дуги-борозды: от края конуса к середине, как сомкнувшиеся клешни.
+    for (const sgn of [-1, 1]) {
+      for (let i = 0; i <= 10; i++) {
+        const u = i / 10;
+        if (u > k) break;
+        const a = a0 + sgn * arc * 0.4 * (1 - u);
+        const r = R * (0.45 + 0.5 * u);
+        g.globalAlpha = 0.75 * fade;
+        g.fillStyle = i > 7 ? 'rgb(255,220,170)' : 'rgb(42,26,16)';
+        g.fillRect(Math.round(px + Math.cos(a) * r), Math.round(py + Math.sin(a) * r), 1, 1);
+      }
+    }
+    // Щепа и пыль у кромки конуса.
+    for (let i = 0; i < 10; i++) {
+      const a = a0 + (hash(sd, i, 1) - 0.5) * arc;
+      const r = R * (0.7 + 0.3 * hash(sd, i, 2));
+      const kk = eOut(seg(age, 0.02, 0.25));
+      const x = px + Math.cos(a) * (r + kk * 6);
+      const y = py + Math.sin(a) * (r + kk * 6) - Math.sin(kk * PI) * 4;
+      g.globalAlpha = 0.85 * fade;
+      g.fillStyle =
+        i % 3 === 0 ? 'rgb(200,112,74)' : i % 3 === 1 ? 'rgb(138,74,34)' : 'rgb(122,96,70)';
+      g.fillRect(Math.round(x), Math.round(y), i % 3 === 0 ? 2 : 1, 1);
+    }
+    g.globalAlpha = 1;
+    return age < 0.6;
+  },
+});
+
+// ---------------------------------------------------------------------------
 // ВРЕМЕННО: прежние рисовальщики — заменяются по одному.
 // ---------------------------------------------------------------------------
 
@@ -3170,181 +3786,6 @@ function finish(
 }
 
 const lookKey = (pose: MobPose) => `${pose.left ? 1 : 0}${pose.flash ? 1 : 0}${pose.look[0]}`;
-
-// ---------------------------------------------------------------------------
-// Сундучный рак (мимик). Сундук — тот же кадр атласа, что у настоящих
-// тайников: пока он спит, отличить нельзя. Проснулся — лапы, стебельки глаз,
-// клешня и зубастая пасть (кадры мимика из того же атласа).
-// ---------------------------------------------------------------------------
-
-/** Сундук кодом — пока не пришёл атлас. */
-function chestFallback(open: number): Px {
-  const p = new Px(16, 16);
-  const wood = hex('#8a4a22');
-  const woodD = hex('#5a2a14');
-  const band = hex('#d8a83a');
-  p.rect(1, 7, 14, 15, wood);
-  p.rect(1, 3 - open, 14, 7 - open, mix(wood, WHITE, 0.15));
-  p.rect(1, 11, 14, 11, woodD);
-  p.rect(3, 3 - open, 3, 15, band);
-  p.rect(12, 3 - open, 12, 15, band);
-  p.rect(7, 8, 8, 10, band);
-  if (open) p.rect(2, 7 - open, 13, 7, hex('#1a0a08'));
-  p.outline(INK);
-  return p;
-}
-
-function chestPx(name: X72Name, open: number): Px {
-  return x72(name) ?? chestFallback(open);
-}
-
-interface MimicPose {
-  frame: 0 | 1 | 2;
-  /** Лапы: 0 — спрятаны, 1 — стоит. */
-  legs: number;
-  /** Фаза шага. */
-  step: number;
-  /** Сдвиг корпуса вперёд (укус). */
-  lunge: number;
-  /** Приподнять крышку на пиксель (выдаёт себя). */
-  peek: boolean;
-  claw: number;
-  dead: boolean;
-}
-
-function mimicPx(s: MimicPose): { px: Px; eye: [number, number] | null } {
-  const W = 28;
-  const H = 26;
-  const GY = 24;
-  const px = new Px(W, H);
-  const lift = Math.round(s.legs * 4);
-  const ox = 6 + s.lunge;
-  const oy = GY - 15 - lift;
-  // Лапы — по три с каждой стороны, суставом вверх.
-  if (s.legs > 0 && !s.dead) {
-    for (let i = 0; i < 3; i++) {
-      for (const far of [true, false]) {
-        const ph = s.step + i * 2.1 + (far ? Math.PI : 0);
-        const bx = ox + 3 + i * 4.5 + (far ? 1 : 0);
-        const by = oy + 13;
-        const kx = bx + (i - 1) * 1.8 + Math.cos(ph) * 1.2;
-        const ky = by - 1 - s.legs * 1.2 - Math.max(0, Math.sin(ph)) * 1.5;
-        const fx = bx + (i - 1) * 3.2 + Math.cos(ph) * 1.5;
-        const fy = GY - Math.max(0, Math.sin(ph)) * 1.5;
-        const c = far ? MIM.chit[0] : MIM.chit[2];
-        thick(px, bx, by, kx, ky, 0.5, c);
-        thick(px, kx, ky, fx, fy, 0.5, far ? MIM.chit[1] : MIM.chit[3]);
-        px.set(Math.round(fx), Math.round(fy), far ? MIM.chit[1] : MIM.tip);
-      }
-    }
-  }
-  // Сундук.
-  const names: X72Name[] = [
-    'chest_mimic_open_anim_f0',
-    'chest_mimic_open_anim_f1',
-    'chest_mimic_open_anim_f2',
-  ];
-  const base =
-    s.legs > 0 || s.frame > 0
-      ? chestPx(names[s.frame], s.frame)
-      : chestPx('chest_full_open_anim_f0', 0);
-  for (let y = 0; y < base.h; y++)
-    for (let x = 0; x < base.w; x++) {
-      const c = base.get(x, y);
-      if (!c[3]) continue;
-      // Крышка (верх сундука) приподнята на пиксель — сундук «дышит».
-      const dy = s.peek && y < 8 ? -1 : 0;
-      px.set(ox + x, oy + y + dy, c);
-    }
-  let eye: [number, number] | null = null;
-  if (s.dead) {
-    // Лапы кверху, сундук пуст.
-    for (let i = 0; i < 3; i++) {
-      const bx = ox + 4 + i * 4;
-      thick(px, bx, oy + 2, bx + (i - 1) * 2, oy - 3, 0.5, MIM.chit[1]);
-      px.set(bx + (i - 1) * 2, oy - 4, MIM.tip);
-    }
-  } else if (s.legs > 0) {
-    // Стебельки глаз над крышкой и клешня спереди.
-    const sy = oy + 1 - Math.round(s.legs * 2);
-    for (const ex of [ox + 9, ox + 13]) {
-      thick(px, ex, oy + 2, ex + 0.5, sy + 1, 0.4, MIM.stalk);
-      px.set(ex, sy, MIM.eye);
-      px.set(ex + 1, sy, MIM.eye);
-    }
-    eye = [ox + 13, sy];
-    const cx0 = ox + 15;
-    const cy0 = oy + 11;
-    const open = s.claw;
-    thick(px, cx0, cy0, cx0 + 3, cy0 - 1, 0.7, MIM.chit[2]);
-    leaf(px, cx0 + 3, cy0 - 1, -0.5 - open * 0.5, 4, 1.3, MIM.chit[3]);
-    leaf(px, cx0 + 3, cy0 - 1, 0.35 + open * 0.5, 3.5, 1.1, MIM.chit[2]);
-  }
-  px.outline(INK);
-  if (eye) {
-    px.set(eye[0], eye[1], MIM.eye);
-    px.set(eye[0] - 4, eye[1], MIM.eye);
-  }
-  return { px, eye };
-}
-
-registerMobPainter('f2_mimic', (m, pose) => {
-  const t = pose.t;
-  const f = pose.frame;
-  const s: MimicPose = {
-    frame: 0,
-    legs: 1,
-    step: 0,
-    lunge: 0,
-    peek: false,
-    claw: 0,
-    dead: false,
-  };
-  switch (pose.mode) {
-    case 'sleep':
-      s.legs = 0;
-      s.peek = (m.data.tw ?? 1) < 0;
-      break;
-    case 'spring':
-      s.frame = t < 0.1 ? 1 : 2;
-      s.legs = q(t / 0.25, 3) / 2;
-      s.claw = 1;
-      break;
-    case 'lunge':
-      s.frame = 2;
-      s.claw = 1;
-      s.lunge = t < 0.4 ? -1 : 2;
-      break;
-    case 'windup':
-      s.frame = 2;
-      s.claw = 1;
-      s.lunge = -1;
-      break;
-    case 'close':
-      s.legs = 1 - q(t / 0.45, 3) / 2;
-      break;
-    case 'dying':
-      s.dead = true;
-      s.frame = 2;
-      break;
-    default:
-      if (pose.mode === 'recover' && t < 0.18) {
-        s.frame = 1;
-        s.lunge = 2;
-      } else if (pose.anim === 'run') {
-        s.step = (mod(f, 6) / 6) * TAU;
-        s.frame = f % 3 === 0 ? 1 : 0;
-      } else if (pose.anim === 'hurt') {
-        s.frame = 1;
-        s.lunge = -1;
-      } else s.step = mod(f, 4) * 0.4;
-  }
-  const key = `mim|${JSON.stringify(s)}|${lookKey(pose)}`;
-  return cachedFrame(key, () => {
-    const { px, eye } = mimicPx(s);
-    return finish(px, 14 + (s.lunge > 0 ? 0 : 0), 24, eye, pose);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Монетный жук.
