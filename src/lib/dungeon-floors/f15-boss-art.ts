@@ -4418,15 +4418,43 @@ function shardSprite(
     stroke(p, SAX + 1, SAY - 1, SAX - 1, SAY + 4, ICE[0]);
   }
   p.outline(hx('#081028'));
-  if (flash) p.tint(WHITE, 0.6);
-  return SHARD_LRU.set(key, p.canvas());
+  // Вспышка удара: `tint` возвращает новый рисунок (раньше результат терялся).
+  return SHARD_LRU.set(key, (flash ? p.tint(WHITE, 0.6) : p).canvas());
 }
 
-function shardLit(glow: number, dizzy: number): HTMLCanvasElement {
-  const key = `${glow}|${dizzy}`;
+/**
+ * Свет осколка. `streak` — шлейф тарана (низ кадра — «зад»: кадр повёрнут
+ * остриём по ходу), `ring` 0…3 — звон о стену, кольцо расходится.
+ * Холст ниже обычного на 20 строк — якорь тот же.
+ */
+function shardLit(glow: number, dizzy: number, streak = 0, ring = -1): HTMLCanvasElement {
+  const key = `${glow}|${dizzy}|${streak}|${ring}`;
   const hit = SHARD_LIT.get(key);
   if (hit) return hit;
-  const p = new Px(SW, SH);
+  const p = new Px(SW, SH + 20);
+  if (streak) {
+    for (let y = 0; y < 19; y++) {
+      const k = y / 19;
+      p.set(SAX, SAY + 4 + y, fade(k < 0.3 ? WHITE : ICE[4], 0.9 * (1 - k)));
+      if (k < 0.55) {
+        const a = 0.45 * (1 - k / 0.55);
+        p.set(SAX - 1, SAY + 4 + y, fade(ICE[4], a));
+        p.set(SAX + 1, SAY + 4 + y, fade(ICE[4], a));
+      }
+    }
+  }
+  if (ring >= 0) {
+    const r = 5 + ring * 2.5;
+    const a = 0.75 - ring * 0.2;
+    for (let i = 0; i < 40; i++) {
+      const t = (i / 40) * TAU;
+      p.set(
+        Math.round(SAX - 0.5 + Math.cos(t) * r),
+        Math.round(SAY - 1.5 + Math.sin(t) * r),
+        fade(ring < 2 ? WHITE : ICE[4], a),
+      );
+    }
+  }
   const r = 2 + glow * 1.5;
   p.ell(SAX - 0.5, SAY - 1.5, r + 2, r + 2, fade(ICE[4], 0.12 + glow * 0.05));
   p.ell(SAX - 0.5, SAY - 1.5, r, r, fade(glow >= 2 ? GOLD[4] : ICE[4], 0.25 + glow * 0.1));
@@ -4497,31 +4525,70 @@ registerMobPainter('f15b_shard', (m: Mob, pose: MobPose): MobFrame | null => {
   let glow = 0;
   let scale = 4;
   let rot = 0;
+  let sx = 1;
   let sy = 1;
+  let dx = 0;
+  let dy = 0;
   let dizzy = 0;
+  let streak = 0;
+  let ring = -1;
   let ghost: MobFrame['ghost'] = null;
-  const toward = (m.data.ang ?? m.face) + Math.PI / 2;
+  const ang = m.data.ang ?? m.face;
+  const ca = Math.cos(ang);
+  const sa = Math.sin(ang);
+  const toward = ang + Math.PI / 2;
   if (pose.mode === 'f15s_eject') {
     spinRate = 5;
     scale = Math.min(4, Math.floor((T / 0.4) * 4));
     glow = 1;
   } else if (pose.mode === 'f15s_aim') {
+    // Прицел 0,7 с: разворот остриём к цели и раскрутка, с 0,45 — захват
+    // (щелчок сжатием), отход назад на 3 px и мелкая дрожь поперёк — пружина.
     spinRate = 2 + T * 10;
     glow = Math.min(3, 1 + Math.floor((T / 0.7) * 3));
     rot = toward * eOut(T / 0.45);
+    const back = 3 * eOut(clamp01(T / 0.7));
+    dx = -ca * back;
+    dy = -sa * back;
+    if (T >= 0.45) {
+      const j = Math.floor(now * 40) & 1 ? 0.6 : -0.6;
+      dx -= sa * j;
+      dy += ca * j;
+      if (T < 0.53) {
+        glow = 3;
+        sx = 1.18;
+        sy = 0.84;
+      }
+    }
   } else if (pose.mode === 'f15s_ram') {
+    // Таран: первый миг — вытянут иглой, дальше держит форму; шлейф света.
     spinRate = 9;
     glow = 3;
     rot = toward;
-    sy = 1.15;
+    const k = eOut(clamp01(T / 0.14));
+    sy = 1.45 - 0.3 * k;
+    sx = 0.78 + 0.12 * k;
+    streak = 1;
     ghost = { every: 0.03, life: 0.22, tint: '#8cd0f4', alpha: 0.5 };
   } else if (pose.mode === 'dizzy') {
+    // Звон о стену: сплющен ударом, дрожит камертоном, кольцо звона; потом
+    // качается и выпрямляется.
     spinRate = 0.6;
+    const hitK = clamp01(T / 0.12);
+    sy = 0.68 + 0.32 * eOut(hitK);
+    sx = 1.28 - 0.28 * eOut(hitK);
+    const buzz = Math.sin(now * 95) * 1.2 * Math.max(0, 1 - T / 0.45);
+    dx = -sa * buzz;
+    dy = ca * buzz;
+    if (T < 0.36) ring = Math.min(3, Math.floor(T / 0.09));
     rot = Math.sin(now * 9) * 0.5 * (1 - T / 1.2) + toward * Math.max(0, 1 - T / 0.2);
     dizzy = 1 + (Math.floor(now * 12) % 8);
   } else if (pose.mode === 'recover') {
-    rot = toward * Math.max(0, 1 - T / 0.3);
-    spinRate = 1;
+    // Доводка после тарана: выпрямляется с лёгким перехлёстом.
+    const k = clamp01(T / 0.35);
+    rot = toward * (1 - k) - Math.sin(k * Math.PI) * 0.25;
+    spinRate = 1 + 3 * (1 - k);
+    glow = T < 0.2 ? 2 : 0;
   }
   // Угол поворота — к ближайшему эквиваленту, чтобы не крутило через полкруга.
   rot = Math.atan2(Math.sin(rot), Math.cos(rot));
@@ -4533,10 +4600,13 @@ registerMobPainter('f15b_shard', (m: Mob, pose: MobPose): MobFrame | null => {
     ay: SAY,
     eye: null,
     rot,
+    sx,
     sy,
+    dx,
+    dy,
     lift: 7,
     shadow: 5,
-    lit: shardLit(glow, dizzy),
+    lit: shardLit(glow, dizzy, streak, ring),
     ghost,
     linger: 0.5,
   };
