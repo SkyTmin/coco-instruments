@@ -414,6 +414,38 @@ function hrow(g: G, x0: number, x1: number, j: number): void {
   if (b > a) g.fillRect(a + QX, j + QY, b - a, 1);
 }
 
+// Склейка точек: соседние по строке или столбцу точки уходят на канву одним
+// прямоугольником. Линия вала во всю арену была ~300 вызовов `fillRect`, стала
+// единицы; рисунок тот же до пикселя.
+let RX = 0;
+let RY = 0;
+let RW = 0;
+let RH = 0;
+/** Точка сетки мира (целые `WX/WY`) — в текущий отрезок или новый. */
+function runPx(g: G, x: number, y: number): void {
+  if (RW) {
+    if (RH === 1 && y === RY) {
+      if (x === RX + RW) return void RW++;
+      if (x === RX - 1) return void ((RX = x), RW++);
+    }
+    if (RW === 1 && x === RX) {
+      if (y === RY + RH) return void RH++;
+      if (y === RY - 1) return void ((RY = y), RH++);
+    }
+    if (x >= RX && x < RX + RW && y >= RY && y < RY + RH) return;
+    g.fillRect(RX + QX, RY + QY, RW, RH);
+  }
+  RX = x;
+  RY = y;
+  RW = 1;
+  RH = 1;
+}
+/** Дорисовать накопленный отрезок (до смены цвета или прозрачности). */
+function runEnd(g: G): void {
+  if (RW) g.fillRect(RX + QX, RY + QY, RW, RH);
+  RW = 0;
+}
+
 /** Круг строками (без сглаживания). */
 function fDisc(g: G, X: number, Y: number, R: number): void {
   fSector(g, X, Y, 0, R, 0, TAU);
@@ -531,9 +563,13 @@ function arcPx(
     lx = x;
     ly = y;
     i++;
-    if (dash && (((i + Math.floor(off)) % dash) + dash) % dash >= onN) continue;
-    g.fillRect(x + QX, y + QY, 1, 1);
+    if (dash && (((i + Math.floor(off)) % dash) + dash) % dash >= onN) {
+      runEnd(g);
+      continue;
+    }
+    runPx(g, x, y);
   }
+  runEnd(g);
 }
 
 /** Линия по пикселям мира (Брезенхэм), `dash` — период, `on` — сколько точек горит. */
@@ -558,8 +594,8 @@ function linePx(
   let err = dx + dy;
   const onN = on || dash / 2;
   for (let n = 0; n < 2000; n++) {
-    if (!dash || (((n + Math.floor(off)) % dash) + dash) % dash < onN)
-      g.fillRect(x + QX, y + QY, 1, 1);
+    if (!dash || (((n + Math.floor(off)) % dash) + dash) % dash < onN) runPx(g, x, y);
+    else runEnd(g);
     if (x === xe && y === ye) break;
     const e2 = 2 * err;
     if (e2 >= dy) {
@@ -571,6 +607,7 @@ function linePx(
       y += sy;
     }
   }
+  runEnd(g);
 }
 
 /** Пятно света (мягкое — только свет и вспышки). */
@@ -641,12 +678,16 @@ function crack(
   const N = path.length >> 1;
   const n = Math.min(N, Math.ceil(N * k01(frac)));
   if (n <= 0 || a <= 0.012) return;
-  const ox = WX(X) + QX;
-  const oy = WY(Y) + QY;
-  if (lo && ink(g, lo, a * 0.75))
-    for (let i = 0; i < n; i++) g.fillRect(ox + path[2 * i], oy + path[2 * i + 1] + 1, 1, 1);
-  if (ink(g, hi, a))
-    for (let i = 0; i < n; i++) g.fillRect(ox + path[2 * i], oy + path[2 * i + 1], 1, 1);
+  const ox = WX(X);
+  const oy = WY(Y);
+  if (lo && ink(g, lo, a * 0.75)) {
+    for (let i = 0; i < n; i++) runPx(g, ox + path[2 * i], oy + path[2 * i + 1] + 1);
+    runEnd(g);
+  }
+  if (ink(g, hi, a)) {
+    for (let i = 0; i < n; i++) runPx(g, ox + path[2 * i], oy + path[2 * i + 1]);
+    runEnd(g);
+  }
 }
 
 /**
@@ -666,6 +707,7 @@ function frostGrid(
   f: (x: number, y: number, h: number) => number,
 ): void {
   if (a <= 0.012) return;
+  for (const b of FROST_BIN) b.length = 0;
   const i0 = Math.floor(WX(x0) / st);
   const i1 = Math.floor(WX(x1) / st);
   const j0 = Math.floor(WY(y0) / st);
@@ -678,14 +720,28 @@ function frostGrid(
       const v = f(wx + OX + 0.5, wy + OY + 0.5, h);
       if (v <= 0) continue;
       const tw = 0.7 + 0.3 * Math.sin(time * 2.6 + h * 40);
-      if (h > 0.9) {
-        if (!ink(g, C.white, a * v * tw)) continue;
+      const lv = Math.min(7, Math.round(a * v * tw * 7));
+      if (lv <= 0) continue;
+      const kind = h > 0.9 ? 0 : h > 0.45 ? 1 : 2;
+      FROST_BIN[kind * 8 + lv].push(wx, wy, h > 0.75 ? 2 : 1);
+    }
+  for (let b = 0; b < 24; b++) {
+    const pts = FROST_BIN[b];
+    if (!pts.length) continue;
+    const kind = b >> 3;
+    ink(g, kind === 0 ? C.white : kind === 1 ? C.frost : C.iceL, (b & 7) / 7);
+    for (let i = 0; i < pts.length; i += 3) {
+      const wx = pts[i];
+      const wy = pts[i + 1];
+      if (kind === 0) {
         g.fillRect(wx + QX, wy - 1 + QY, 1, 3);
         g.fillRect(wx - 1 + QX, wy + QY, 3, 1);
-      } else if (ink(g, h > 0.45 ? C.frost : C.iceL, a * v * tw))
-        g.fillRect(wx + QX, wy + QY, h > 0.75 ? 2 : 1, 1);
+      } else g.fillRect(wx + QX, wy + QY, pts[i + 2], 1);
     }
+  }
 }
+/** Корзины инея: [белые звёздочки, иней, лёд] × 8 ступеней яркости. */
+const FROST_BIN: number[][] = Array.from({ length: 24 }, () => []);
 
 // ---- Частицы: всё от возраста и зерна, без состояния ---------------------
 
@@ -950,7 +1006,7 @@ function markStomp(
   if (ink(g, C.tealD, 0.16 + 0.18 * k + 0.12 * s)) fDisc(g, X, Y, R);
   ripples(g, X, Y, R * 0.25, R - 2, 0, TAU, k, time);
   const depth = R * (0.12 + 0.8 * eIn(k));
-  frostGrid(g, X - R, Y - R, X + R, Y + R, 3, 1201, time, 0.9, (x, y, h) => {
+  frostGrid(g, X - R, Y - R, X + R, Y + R, 4, 1201, time, 0.9, (x, y, h) => {
     const d = Math.hypot(x - X, y - Y);
     return d < R - 1.5 && d > R - depth * (0.5 + 0.5 * h) ? 0.45 + 0.55 * h : 0;
   });
@@ -995,7 +1051,7 @@ function markTusk(
   if (ink(g, C.tealD, 0.16 + 0.18 * k + 0.12 * s)) fSector(g, X, Y, 0, R, a0, a1);
   ripples(g, X, Y, r0, R - 2, a0 + 0.04, a1 - 0.04, k, time);
   const rf = r0 + (R - r0) * k01(k);
-  frostGrid(g, X - R, Y - R, X + R, Y + R, 3, 1202, time, 0.9, (x, y, hh) => {
+  frostGrid(g, X - R, Y - R, X + R, Y + R, 4, 1202, time, 0.9, (x, y, hh) => {
     const d = Math.hypot(x - X, y - Y);
     if (d > rf || d > R - 1.5) return 0;
     const off = Math.abs(mod(Math.atan2(y - Y, x - X) - ang + Math.PI, TAU) - Math.PI);
@@ -1067,7 +1123,9 @@ function markLane(
   const bx1 = Math.max(X + ux * r0, X + ux * L) + hw + 2;
   const by0 = Math.min(Y + uy * r0, Y + uy * L) - hw - 2;
   const by1 = Math.max(Y + uy * r0, Y + uy * L) + hw + 2;
-  frostGrid(g, bx0, by0, bx1, by1, 4, 1203, time, 0.9 * aK, (x, y, h) => {
+  // Длинная полоса (вал во всю арену) — иней реже: точек вдвое меньше.
+  const fst = L - r0 > 160 ? 6 : 4;
+  frostGrid(g, bx0, by0, bx1, by1, fst, 1203, time, 0.9 * aK, (x, y, h) => {
     const dx = x - X;
     const dy = y - Y;
     const u = dx * ux + dy * uy;
@@ -1328,7 +1386,7 @@ function drumWaves(
     const sd = Math.round(st.y * 31);
     // Передняя половина эллипса — к валу; задняя — бледнее.
     // Три прохода одним цветом: тень под комьями, хвост фронта, сами комья.
-    const n = Math.round(90 + 170 * e);
+    const n = Math.round(70 + 120 * e);
     const at = (i: number, rr: number): [number, number, number] => {
       const ang = (i / n) * TAU + hash(sd, i, 1) * 0.05;
       const jit = (hash(sd, i, 2) - 0.5) * 3;
@@ -3520,7 +3578,7 @@ zoneFx('f12_glacierwarn', (g, z, X, Y, k, age, time) => {
     if (ink(g, C.shade, 0.1 + 0.2 * k)) pp(g, cx, cy, TS, TS);
     // Иней от краёв клетки к середине.
     const d = 8 * eOut(k);
-    frostGrid(g, cx, cy, cx + TS - 1, cy + TS - 1, 3, 1240, time, 0.95, (x, y, h) => {
+    frostGrid(g, cx, cy, cx + TS - 1, cy + TS - 1, 4, 1240, time, 0.95, (x, y, h) => {
       const e = Math.min(x - cx, y - cy, cx + TS - x, cy + TS - y);
       return e < d * (0.6 + 0.4 * h) ? 0.4 + 0.6 * h : 0;
     });
