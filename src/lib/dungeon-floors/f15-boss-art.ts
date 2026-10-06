@@ -5131,51 +5131,142 @@ const ECHO_SRC: Record<string, string> = {
   f15b_echo_demon: 'f10boss',
 };
 const ECHO_RAMP: RGBA[] = [NIGHT[1], NIGHT[2], NIGHT[3], NIGHT[4], NIGHT[5], VIO[1], VIO[2]];
+/** Кадры эха по кадру источника: `n` — целое, `r…` — сборка, `d…` — рассыпание. */
 const echoCache = new WeakMap<HTMLCanvasElement, Map<string, HTMLCanvasElement>>();
+/** Поля холста при рассыпании: звёзды улетают за край кадра источника. */
+const EPAD = 14;
+/** Узлы созвездия — одна звезда на клетку 6×6 тела (не на каждый кадр своя). */
+const ENODE = 6;
 
-function constellate(src: HTMLCanvasElement, fq: number, tw: number): HTMLCanvasElement {
+/**
+ * Созвездие из кадра источника: тёмная синь по яркости, золотой контур, узлы
+ * звёзд. Звёзды стоят на своих местах — эхо не «кипит».
+ * - `n` — целое созвездие;
+ * - `r` (`q` 0…1, сборка) — по одной зажигаются звёзды-узлы, потом золотая
+ *   линия контура обегает фигуру, в конце проступает ночь заливки;
+ * - `d` (`q` 0…1, рассыпание) — заливка гаснет, контур рвётся, звёзды
+ *   разлетаются от середины и гаснут.
+ */
+function constellate(src: HTMLCanvasElement, st: 'n' | 'r' | 'd', q: number): HTMLCanvasElement {
   let mm = echoCache.get(src);
   if (!mm) {
     mm = new Map();
     echoCache.set(src, mm);
   }
-  const key = `${fq}|${tw}`;
+  const key = `${st}${q}`;
   const hit = mm.get(key);
   if (hit) return hit;
   const w = src.width;
   const h = src.height;
+  const P = st === 'd' ? EPAD : 0;
+  const W = w + P * 2;
+  const H = h + P * 2;
   const out = document.createElement('canvas');
-  out.width = w;
-  out.height = h;
+  out.width = W;
+  out.height = H;
   const g = src.getContext('2d');
-  if (!g) return out;
+  if (!g || !w || !h) return out;
   const d = g.getImageData(0, 0, w, h).data;
   const solid = (x: number, y: number) =>
     x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3] > 40;
-  const o = new ImageData(w, h);
+  const o = new ImageData(W, H);
   const od = o.data;
+  const put = (x: number, y: number, c: RGBA, al: number) => {
+    x = Math.round(x);
+    y = Math.round(y);
+    if (x < 0 || y < 0 || x >= W || y >= H || al <= 0) return;
+    const i = (y * W + x) * 4;
+    if (od[i + 3] > al && c !== WHITE) return;
+    od[i] = c[0];
+    od[i + 1] = c[1];
+    od[i + 2] = c[2];
+    od[i + 3] = Math.min(255, al);
+  };
+  // Доли трёх слоёв по стадии.
+  const fillK = st === 'r' ? clamp01((q - 0.62) / 0.38) : st === 'd' ? clamp01(1 - q / 0.3) : 1;
+  const lineK = st === 'r' ? clamp01((q - 0.3) / 0.36) : st === 'd' ? clamp01(1 - (q - 0.05) / 0.45) : 1;
+  // Середина фигуры — от неё обегает контур и разлетаются звёзды.
+  const cx = w / 2;
+  const cy = h * 0.6;
+  const nodes: [number, number, number][] = [];
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
       if (d[i + 3] <= 40) continue;
-      if (fq > 0 && hash(x >> 1, y >> 1, 623) < fq) continue;
+      const nx = Math.floor(x / ENODE);
+      const ny = Math.floor(y / ENODE);
+      // Узел клетки: одна точка, есть не в каждой клетке.
+      if (
+        hash(nx, ny, 643) < 0.5 &&
+        x === nx * ENODE + Math.floor(hash(nx, ny, 641) * ENODE) &&
+        y === ny * ENODE + Math.floor(hash(nx, ny, 642) * ENODE)
+      )
+        nodes.push([x, y, hash(nx, ny, 644)]);
+      const eA = !solid(x - 1, y) || !solid(x, y - 1);
+      const eB = !eA && (!solid(x + 1, y) || !solid(x, y + 1));
+      if (eA || eB) {
+        // Линия контура: в сборке обегает фигуру по кругу, в рассыпании рвётся кусками.
+        const th =
+          st === 'r'
+            ? (Math.atan2(y - cy, x - cx) / TAU + 0.75 + hash(x >> 1, y >> 1, 633) * 0.06) % 1
+            : hash(x >> 1, y >> 1, 633);
+        if (th < lineK) put(x + P, y + P, eA ? GOLD[4] : GOLD[2], 230);
+        continue;
+      }
+      if (BAYER[(y & 3) * 4 + (x & 3)] >= fillK) continue;
       const l = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) / 255;
       let c = ECHO_RAMP[Math.max(0, Math.min(6, Math.floor(l * 7.5)))];
-      let al = 230;
-      if (!solid(x - 1, y) || !solid(x, y - 1)) c = GOLD[4];
-      else if (!solid(x + 1, y) || !solid(x, y + 1)) c = GOLD[2];
-      else {
-        const hs = hash(x, y, 625 + tw);
-        if (hs < 0.012) c = WHITE;
-        else if (hs < 0.03) c = ICE[4];
-        else if (l > 0.7) c = mixc(c, VIO[3], 0.5);
-        al = 215;
-      }
-      od[i] = c[0];
-      od[i + 1] = c[1];
-      od[i + 2] = c[2];
-      od[i + 3] = al;
+      const hs = hash(x, y, 625);
+      if (hs < 0.012) c = WHITE;
+      else if (hs < 0.03) c = ICE[4];
+      else if (l > 0.7) c = mixc(c, VIO[3], 0.5);
+      put(x + P, y + P, c, 215);
     }
+  // Звёзды-узлы поверх.
+  for (const [x, y, k] of nodes) {
+    const big = k < 0.3;
+    if (st === 'r') {
+      // Зажигаются по одной: 0,04…0,4 сборки; первые кадры — вспышка крестом.
+      const ta = 0.04 + k * 0.36;
+      if (q < ta) continue;
+      const fresh = q - ta < 0.07;
+      put(x, y, WHITE, 255);
+      if (fresh || big) {
+        const a = fresh ? 200 : 110;
+        put(x - 1, y, ICE[4], a);
+        put(x + 1, y, ICE[4], a);
+        put(x, y - 1, ICE[4], a);
+        put(x, y + 1, ICE[4], a);
+      }
+      continue;
+    }
+    if (st === 'd') {
+      // Разлёт: от середины, у каждой звезды своя скорость; гаснут к концу.
+      let ux = x - cx;
+      let uy = y - cy;
+      const L = Math.hypot(ux, uy) || 1;
+      ux /= L;
+      uy /= L;
+      const e = 1 - (1 - q) * (1 - q);
+      const sp = (4 + 14 * hash(x, y, 645)) * e;
+      const al = 255 * clamp01(1 - (q - 0.5) / 0.5);
+      const X = x + P + ux * sp;
+      const Y = y + P + uy * sp - 5 * q;
+      put(X, Y, big ? WHITE : ICE[4], al);
+      if (big && q < 0.5) {
+        put(X - 1, Y, ICE[4], al * 0.5);
+        put(X + 1, Y, ICE[4], al * 0.5);
+      }
+      continue;
+    }
+    put(x, y, big ? WHITE : ICE[4], 255);
+    if (big) {
+      put(x - 1, y, ICE[3], 120);
+      put(x + 1, y, ICE[3], 120);
+      put(x, y - 1, ICE[3], 120);
+      put(x, y + 1, ICE[3], 120);
+    }
+  }
   out.getContext('2d')!.putImageData(o, 0, 0);
   mm.set(key, out);
   return out;
@@ -5185,19 +5276,24 @@ registerMobPainter('f15b_echo', (m: Mob, pose: MobPose): MobFrame | null => {
   const src = MOB_PAINTERS.get(ECHO_SRC[m.kind] ?? '');
   if (!src) return null;
   const rising = pose.mode === 'f15e_rise';
+  const dying = pose.mode === 'dying';
   const pp: MobPose = rising ? { ...pose, mode: 'chase', anim: 'idle', t: 0 } : pose;
   const fr = src(m, pp);
   if (!fr) return null;
-  let fd = 0;
-  if (rising) fd = Math.max(0, 1 - pose.t / 1.3);
-  if (pose.mode === 'dying') fd = Math.min(1, pose.t / 0.6);
-  const fq = Math.round(fd * 6) / 6;
-  const tw = Math.floor(pose.now * 3) % 2;
+  // Сборка — 24 шага за 1,3 с подъёма; рассыпание — 16 шагов за 0,7 с жизни
+  // умирающего моба (движок убирает его на 0,7 с).
+  let img: HTMLCanvasElement;
+  let P = 0;
+  if (rising) img = constellate(fr.img, 'r', Math.min(24, Math.floor((pose.t / 1.3) * 24)) / 24);
+  else if (dying) {
+    img = constellate(fr.img, 'd', Math.min(16, Math.floor((pose.t / 0.7) * 16)) / 16);
+    P = EPAD;
+  } else img = constellate(fr.img, 'n', 0);
   return {
-    img: constellate(fr.img, fq, tw),
-    ax: fr.ax,
-    ay: fr.ay,
-    eye: fr.eye,
+    img,
+    ax: fr.ax + P,
+    ay: fr.ay + P,
+    eye: fr.eye ? [fr.eye[0] + P, fr.eye[1] + P] : fr.eye,
     dx: fr.dx,
     dy: fr.dy,
     sx: fr.sx,
@@ -5223,14 +5319,19 @@ function ebuf(): HTMLCanvasElement[] {
   return ebufs;
 }
 
-registerZonePainter('f15b_echobody', (g, z, px, py, _S, time) => {
+registerZonePainter('f15b_echobody', (g, z, px, py, S, time) => {
   const s = paintSim();
   const v = f15bView(s);
   const m = s?.mobs.find((x) => x.id === (z as Zone & { mob?: number }).mob);
   if (!v || !m || !s) return true;
   const rising = m.mode === 'f15e_rise';
-  const k = rising ? clamp01(m.t / 1.3) : m.mode === 'dying' ? Math.max(0, 1 - m.t / 0.6) : 1;
-  if (k <= 0.02 || v.trail.length < 4) return true;
+  const dying = m.mode === 'dying';
+  // Сборка: сперва звёзды, потом кант, потом ночь тела; рассыпание — наоборот.
+  const k = rising ? clamp01(m.t / 1.3) : dying ? clamp01(m.t / 0.6) : 1;
+  const starA = rising ? clamp01(k / 0.3) : dying ? 1 - clamp01((k - 0.45) / 0.55) : 1;
+  const lineA = rising ? clamp01((k - 0.3) / 0.3) : dying ? 1 - clamp01((k - 0.1) / 0.4) : 1;
+  const fillA = rising ? clamp01((k - 0.55) / 0.45) : dying ? 1 - clamp01(k / 0.35) : 1;
+  if (starA <= 0.02 || v.trail.length < 4) return true;
   const [A, B, C] = ebuf();
   const ga = A.getContext('2d');
   const gb = B.getContext('2d');
@@ -5260,46 +5361,89 @@ registerZonePainter('f15b_echobody', (g, z, px, py, _S, time) => {
     16,
     time,
   );
-  // Созвездие: цвет — индиго, яркость — своя.
+  const bx0 = Math.round(px - ox);
+  const by0 = Math.round(py - oy);
+  const prevA = g.globalAlpha;
+  const prevS = g.imageSmoothingEnabled;
+  g.imageSmoothingEnabled = false;
+  // Ночь тела: цвет — индиго, яркость — своя.
+  if (fillA > 0.02) {
+    gb.setTransform(1, 0, 0, 1, 0, 0);
+    gb.globalCompositeOperation = 'source-over';
+    gb.globalAlpha = 1;
+    gb.clearRect(0, 0, EB, EB);
+    gb.drawImage(A, 0, 0);
+    gb.globalCompositeOperation = 'color';
+    gb.fillStyle = '#3a2a8a';
+    gb.fillRect(0, 0, EB, EB);
+    gb.globalCompositeOperation = 'multiply';
+    gb.fillStyle = '#7a70c0';
+    gb.fillRect(0, 0, EB, EB);
+    gb.globalCompositeOperation = 'destination-in';
+    gb.drawImage(A, 0, 0);
+    gb.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 0.9 * fillA;
+    g.drawImage(B, bx0, by0);
+  }
+  // Золотой кант сверху-слева.
+  if (lineA > 0.02) {
+    gc.setTransform(1, 0, 0, 1, 0, 0);
+    gc.globalCompositeOperation = 'source-over';
+    gc.clearRect(0, 0, EB, EB);
+    gc.drawImage(A, 0, 0);
+    gc.globalCompositeOperation = 'destination-out';
+    gc.drawImage(A, 1, 1);
+    gc.globalCompositeOperation = 'source-in';
+    gc.fillStyle = '#ffd866';
+    gc.fillRect(0, 0, EB, EB);
+    gc.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 0.9 * lineA;
+    g.drawImage(C, bx0, by0);
+  }
+  // Звёзды тела стоят в МИРЕ (сетка 7×7 игровых px), тело плывёт сквозь них —
+  // не «кипят». Маска — само тело; при рассыпании звёзды разлетаются от головы.
+  const wx0 = Math.round(px - z.x * S);
+  const wy0 = Math.round(py - z.y * S);
+  const offX = bx0 - wx0;
+  const offY = by0 - wy0;
+  const G = 7;
+  const c0 = Math.floor(offX / G);
+  const r0 = Math.floor(offY / G);
   gb.setTransform(1, 0, 0, 1, 0, 0);
   gb.globalCompositeOperation = 'source-over';
   gb.globalAlpha = 1;
   gb.clearRect(0, 0, EB, EB);
-  gb.drawImage(A, 0, 0);
-  gb.globalCompositeOperation = 'color';
-  gb.fillStyle = '#3a2a8a';
-  gb.fillRect(0, 0, EB, EB);
-  gb.globalCompositeOperation = 'multiply';
-  gb.fillStyle = '#7a70c0';
-  gb.fillRect(0, 0, EB, EB);
+  const e = dying ? 1 - (1 - k) * (1 - k) : 0;
+  for (let cy = r0; cy <= r0 + EB / G + 1; cy++)
+    for (let cx = c0; cx <= c0 + EB / G + 1; cx++) {
+      if (hash(cx, cy, 627) > 0.42) continue;
+      const x = cx * G + Math.floor(hash(cx, cy, 628) * G) - offX;
+      const y = cy * G + Math.floor(hash(cx, cy, 629) * G) - offY;
+      if (x < 0 || y < 0 || x >= EB || y >= EB) continue;
+      const big = hash(cx, cy, 630) < 0.25;
+      gb.fillStyle = big ? '#ffffff' : 'rgba(140,208,244,0.9)';
+      gb.fillRect(x, y, 1, 1);
+      if (big) {
+        gb.fillStyle = 'rgba(140,208,244,0.45)';
+        gb.fillRect(x - 1, y, 3, 1);
+        gb.fillRect(x, y - 1, 1, 3);
+      }
+    }
   gb.globalCompositeOperation = 'destination-in';
   gb.drawImage(A, 0, 0);
-  // Звёзды внутри тела.
-  gb.globalCompositeOperation = 'source-atop';
-  const tw = Math.floor(time * 3) % 2;
-  for (let i = 0; i < 90; i++) {
-    const x = Math.floor(hash(i, 1, 627 + tw) * EB);
-    const y = Math.floor(hash(i, 2, 627 + tw) * EB);
-    gb.fillStyle = i % 4 ? 'rgba(140,208,244,0.9)' : '#ffffff';
-    gb.fillRect(x, y, 1, 1);
-  }
-  // Золотой кант сверху-слева.
-  gc.setTransform(1, 0, 0, 1, 0, 0);
-  gc.globalCompositeOperation = 'source-over';
-  gc.clearRect(0, 0, EB, EB);
-  gc.drawImage(A, 0, 0);
-  gc.globalCompositeOperation = 'destination-out';
-  gc.drawImage(A, 1, 1);
-  gc.globalCompositeOperation = 'source-in';
-  gc.fillStyle = '#ffd866';
-  gc.fillRect(0, 0, EB, EB);
   gb.globalCompositeOperation = 'source-over';
-  gb.drawImage(C, 0, 0);
-  const prevA = g.globalAlpha;
-  const prevS = g.imageSmoothingEnabled;
-  g.imageSmoothingEnabled = false;
-  g.globalAlpha = 0.9 * k;
-  g.drawImage(B, Math.round(px - ox), Math.round(py - oy));
+  if (!dying) {
+    g.globalAlpha = starA;
+    g.drawImage(B, bx0, by0);
+  } else {
+    // Рассыпание: слой звёзд — кольцами от головы, каждое дальше и бледнее.
+    for (let j = 0; j < 3; j++) {
+      const sp = (6 + j * 7) * e;
+      g.globalAlpha = starA * (j === 0 ? 0.9 : 0.55);
+      const a = (j * TAU) / 3 + m.id;
+      g.drawImage(B, bx0 + Math.round(Math.cos(a) * sp), by0 + Math.round(Math.sin(a) * sp - 4 * k));
+    }
+  }
   g.globalAlpha = prevA;
   g.imageSmoothingEnabled = prevS;
   return true;
