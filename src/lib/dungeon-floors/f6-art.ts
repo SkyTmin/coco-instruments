@@ -30,6 +30,7 @@ import './f6-mob-beetle';
 import './f6-mob-wisp';
 import './f6-mob-bat';
 import './f6-mob-golem';
+import './f6-mob-ore';
 
 type RGBA = [number, number, number, number];
 
@@ -352,149 +353,10 @@ const SAL = {
 
 // Лавовый голем — `f6-mob-golem.ts` (анимации мобов 6).
 
-// ---------------------------------------------------------------------------
-// Живая руда: самородок кварца (белые кристаллы) или серебра (жилы), пока
-// лежит; проснувшись — на четырёх каменных лапах, глаза в трещине.
-// 22×20, смотрит вправо, земля — 17.
-// ---------------------------------------------------------------------------
-
+// Живая руда — `f6-mob-ore.ts` (анимации мобов 6); здесь — палитры иконок.
 const ORE_ROCK: Tones = [hx('#2e282e'), hx('#4a424a'), hx('#6a5e66'), hx('#8e8088')];
 const QUARTZ: Tones = [hx('#9a8aa0'), hx('#d4c8dc'), hx('#f0e8f6'), hx('#ffffff')];
 const SILVER: Tones = [hx('#5a6068'), hx('#98a2ac'), hx('#d0d8e0'), hx('#ffffff')];
-
-function paintOre(v: number, anim: string, f: number, sink: number): Built {
-  const p = new Px(22, 20);
-  const G = 17;
-  const awake = anim !== 'hide' && anim !== 'dig';
-  const lift = awake ? 2 : 0;
-  const hop = anim === 'wake' ? [0, 2, 1, 0][f % 4] : 0;
-  const cx = 11 + (anim === 'bite' ? 1.5 : 0);
-  const cy = G - 3.2 - lift - hop;
-  if (anim === 'dead') {
-    // Раскололась: осколки кристаллов и камня.
-    for (let i = 0; i < 6; i++) {
-      const x = 5 + hash(i, v) * 12;
-      const y = G - 1 - hash(i, v, 2) * 3;
-      shadeEll(p, x, y, 1.6, 1.2, i % 2 ? ORE_ROCK : v === 11 ? SILVER : QUARTZ);
-    }
-    p.outline(INK);
-    return { p, ax: 11, ay: G + 1, eye: null };
-  }
-  // Лапы (проснулась).
-  if (awake) {
-    const run = anim === 'run';
-    for (const [lx, ph, fr] of [
-      [-3.5, 0, true],
-      [3, Math.PI, true],
-      [-2, Math.PI, false],
-      [4.5, 0, false],
-    ] as [number, number, boolean][]) {
-      const s = run ? Math.sin((f / 6) * TAU + ph) : 0;
-      const up = run && s > 0.4 ? 1 : 0;
-      limb(p, cx + lx, cy + 1.5, cx + lx + s * 1.2, G - up, 1.1, 1, ORE_ROCK, fr ? -0.3 : 0);
-    }
-  }
-  // Глыба.
-  shadeEll(p, cx, cy, 5.4, 3.8, ORE_ROCK);
-  shadeEll(p, cx - 1.8, cy - 1.8, 3, 2.2, ORE_ROCK, 0.1);
-  if (v === 11) {
-    // Серебро: жилы и самородный комок.
-    const vein = spline(
-      [
-        [cx - 4, cy + 1],
-        [cx - 1, cy - 1],
-        [cx + 2, cy],
-        [cx + 4, cy - 2],
-      ],
-      4,
-    );
-    vein.forEach(([x, y]) => p.set(Math.floor(x), Math.floor(y), SILVER[2]));
-    shadeEll(p, cx + 1.5, cy - 2.5, 2, 1.6, SILVER);
-    shadeEll(p, cx - 3, cy - 2.6, 1.2, 1, SILVER);
-  } else {
-    // Кварц: шестигранные кристаллы торчат вверх.
-    const cr: [number, number, number, number][] = [
-      [cx - 2, cy - 2, 1.3, 5],
-      [cx + 0.5, cy - 2.5, 1.5, 6.5],
-      [cx + 2.8, cy - 1.8, 1.1, 4],
-    ];
-    for (const [x, y, w, h] of cr) {
-      poly(
-        p,
-        [
-          [x - w, y],
-          [x - w, y - h + 1],
-          [x, y - h],
-          [x + w, y - h + 1],
-          [x + w, y],
-        ],
-        (px) => (px < x ? QUARTZ[2] : px > x ? QUARTZ[1] : QUARTZ[3]),
-      );
-    }
-  }
-  p.outline(INK);
-  // Блеск: бежит по кристаллу.
-  if (anim === 'hide' || anim === 'idle') {
-    const gx = Math.round(cx - 2 + (f % 4) * 1.5);
-    const gy = Math.round(cy - 5 + (f % 2));
-    if (p.solid(gx, gy) && f > 0) p.set(gx, gy, WHITE);
-  }
-  let eye: [number, number] | null = null;
-  if (awake) {
-    // Трещина-пасть и глаза.
-    const open = anim === 'wind' ? 1 : anim === 'bite' ? 2 : 0;
-    const mx = Math.round(cx + 3);
-    const my = Math.round(cy + 1);
-    for (let i = 0; i < 4; i++) p.set(mx - 1 + i, my + (i % 2), INK);
-    if (open) {
-      p.ell(cx + 3.5, cy + 1.5, 2, open * 0.9, hx('#1a0e14'));
-      p.set(mx, my + 1, QUARTZ[3]);
-      p.set(mx + 2, my + 1, QUARTZ[3]);
-    }
-    const ex = Math.round(cx + 2);
-    const ey = Math.round(cy - 1);
-    if (anim !== 'hurt') {
-      p.set(ex, ey, hx('#a8f0ff'));
-      p.set(ex + 2, ey, hx('#a8f0ff'));
-      eye = [ex, ey];
-    } else {
-      p.set(ex, ey, INK);
-      p.set(ex + 2, ey, INK);
-    }
-  }
-  if (sink > 0) {
-    // Зарывается: низ уходит в пол, по краю — крошка.
-    const cut = Math.round(G - sink * 6);
-    for (let y = cut; y < p.h; y++) for (let x = 0; x < p.w; x++) clear(p, x, y);
-    for (let x = 5; x < 17; x += 2) p.set(x, cut, alpha(ASH.mid, 0.9));
-  }
-  return { p, ax: 11, ay: G + 1, eye };
-}
-
-registerMobPainter('f6_ore', (m: Mob, pose: MobPose) => {
-  const v = m.data?.v === 11 ? 11 : 10;
-  const mode = pose.mode;
-  const t = pose.t;
-  let anim: string = pose.anim;
-  let f = ((pose.frame % 4) + 4) % 4;
-  let sink = 0;
-  if (mode === 'f6_hide') {
-    anim = 'hide';
-    // Блеск раз в пару секунд, остальное время — просто камень.
-    f = Math.floor((t + m.id * 0.7) * 4) % 10;
-    if (f > 3) f = 0;
-  } else if (mode === 'f6_wake') {
-    anim = 'wake';
-    f = Math.min(3, Math.floor(t * 8));
-  } else if (mode === 'f6_dig') {
-    anim = 'dig';
-    sink = Math.min(1, t / 0.6);
-    f = Math.round(sink * 3);
-    sink = f / 3;
-  } else if (anim === 'run') f = ((pose.frame % 6) + 6) % 6;
-  else if (anim === 'wind' || anim === 'bite') f = Math.min(1, pose.frame);
-  return frameOf(`f6_ore${v}`, pose, anim, f, () => paintOre(v, anim, f, sink));
-});
 
 // ---------------------------------------------------------------------------
 // Магмовый червь: кольца корки с лавой между ними, пасть — венец клыков.
