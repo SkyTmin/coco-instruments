@@ -122,8 +122,6 @@ import {
   hardClang,
   clockTick,
   doorLatch,
-  trainHorn,
-  trainPass,
   windGust,
 } from '@/lib/sound';
 import type { MusicScene } from '@/lib/sound';
@@ -411,51 +409,52 @@ const FLOOR_SOUND: Record<string, () => void> = {
     beastRoar();
     thunder();
   },
-  // Этаж 12: поезда (гудок, проход, удар состава), территории, духи станции.
-  f12_horn: () => trainHorn(),
-  f12_ghost_horn: () => {
-    trainHorn();
-    heartbeat();
-  },
-  f12_pass: () => trainPass(false),
-  f12_train_hit: () => {
-    boom(1);
-    fleshSquelch(true);
-  },
-  f12_train_wall: () => {
-    trainHorn();
-    fleshSquelch(true);
-    beastRoar();
-  },
-  f12_meet_trap: () => trainHorn(),
-  f12_signal_trap: () => trainHorn(),
-  f12_ghost_call: () => heartbeat(),
-  f12_ghost_trap: () => steamBurst(),
-  f12_stairs_trap: () => stoneGrind(),
-  f12_stairs_call: () => stoneGrind(),
-  f12_rush_trap: () => {
-    gateSlam();
-    heartbeat(true);
-  },
-  f12_dark_trap: () => heartbeat(true),
-  f12_dark_call: () => softChime(0),
-  f12_lever_call: () => chainRattle(),
-  f12_bell_call: () => clockBell(),
-  f12_gate_call: () => gateSlam(),
-  f12_domain_call: () => heartbeat(true),
-  f12_doll_call: () => heartbeat(true),
-  f12_hall_trap: () => heartbeat(true),
-  f12_cast_call: () => heartbeat(true),
-  f12_grid_trap: () => heartbeat(true),
-  f12_domain_trap: () => glassBreak(true),
-  f12_grid_call: () => teleport(),
-  f12_eye_call: () => fleshSquelch(),
-  f12_grab_call: () => fleshSquelch(true),
-  f12_scream_call: () => beastRoar(false),
+  // Этаж 12 «Полярная ночь»: лёд трещит и ломается, полыньи, вьюга, сияние.
+  f12_crack: () => softChime(7),
+  f12_break: () => glassBreak(),
+  f12_shatter: () => glassBreak(true),
+  f12_dunk: () => fishSplash(1.2),
+  f12_seal_splash: () => fishSplash(1),
+  f12_splash: () => fishSplash(1),
+  f12_glide: () => {},
+  f12_light: () => lavaHiss(),
+  f12_blowout: () => steamBurst(),
+  f12_thaw_wall: () => steamBurst(),
+  f12_gust: () => windGust(0.8),
+  f12_gong: () => clockBell(true),
+  f12_winch: () => chainRattle(),
+  f12_gate_hit: () => softThud(),
+  f12_owl_dive: () => wingFlap(),
+  f12_fox_leap: () => dashWhoosh(),
+  f12_fox_howl: () => beastRoar(false),
+  f12_charge: () => beastRoar(),
   f12_wake_call: () => {
     beastRoar();
-    heartbeat(true);
+    deepRumble();
   },
+  f12_roll: () => cartRoll(0.7),
+  f12_summon: () => teleport(),
+  f12_aurora: () => clockChime(2),
+  f12_dome_wave: () => clockChime(2),
+  f12_stomp: () => deepRumble(),
+  f12_wall_stun: () => {
+    deepRumble();
+    boom(1);
+  },
+  f12_glacier: () => stoneGrind(),
+  f12_drum: () => heartbeat(),
+  f12_shaman_down: () => softThud(),
+  f12_dome_call: () => clockChime(3),
+  f12_storm_call: () => windGust(1),
+  f12_drift_call: () => windGust(0.6),
+  f12_thaw_call: () => steamBurst(),
+  f12_rapids_call: () => stoneGrind(),
+  f12_rapids_trap: () => glassBreak(true),
+  f12_bridge_call: () => chainRattle(),
+  f12_dome_end: () => softChime(2),
+  f12_storm_end: () => softChime(2),
+  f12_thaw_end: () => softChime(2),
+  f12_hush_end: () => softChime(2),
   // Этаж 15, «Сердце»: пульс арены, эхо прошлых боссов, память четвертей.
   f15b_intro_call: () => {
     heartbeat();
