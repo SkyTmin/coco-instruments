@@ -2803,7 +2803,7 @@ registerMobPainter('f5_rabbit', (m: Mob, pose: MobPose) => {
     f = Math.floor(t * FPS) % 6;
     anim = 'charge';
     ex.still = true;
-    ex.ghost = { every: 0.03, life: 0.16, tint: '#f4ece4', alpha: 0.35 };
+    ex.ghost = { every: 0.04, life: 0.14, tint: '#d8ccc4', alpha: 0.25 };
   } else if (md === 'recover') {
     f = fi(t, 13);
     anim = m.data.hit ? 'hitf' : 'missf';
