@@ -2103,6 +2103,7 @@ registerFloor(15, {
   start(sim, api) {
     API_REF = api;
     STATE.delete(sim);
+    api.vfx(sim, { x: 0, y: 0, r: 0, life: 1e9, art: 'f15_life' }); // анимации 15 — только рисунок
     scan(sim, api);
   },
   step(sim, dt, api) {
@@ -2111,6 +2112,9 @@ registerFloor(15, {
     F15_FX.clock += dt;
     F15_FX.st = st;
     F15_FX.sim = sim;
+    // анимации 15 — только рисунок: слой «мир живёт» (сброс боя чистит все зоны).
+    if (!sim.zones.some((z) => z.art === 'f15_life'))
+      api.vfx(sim, { x: 0, y: 0, r: 0, life: 1e9, art: 'f15_life' }); // анимации 15 — только рисунок
     // В районе «Сердца» и в бою с боссом этаж молчит: колодцы не тянут,
     // события не начинаются (острова и отбитые снаряды доживают своё).
     const quiet = sim.area === HEART || sim.boss?.state === 'fight';
