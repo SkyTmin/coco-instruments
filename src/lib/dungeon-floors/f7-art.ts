@@ -41,6 +41,7 @@ import './f7-mob-phantom';
 import './f7-mob-golem';
 import './f7-mob-spider';
 import './f7-mob-moth';
+import './f7-mob-prism';
 
 type RGBA = [number, number, number, number];
 
@@ -3138,118 +3139,12 @@ registerMobPainter('f7_shadow', (m: Mob, pose: MobPose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Призма: парящая трёхгранная призма; вращается (кадры — поворот модели),
-// внутри радуга. В прицеле сердцевина раскаляется.
+// Радуга призмы (иконка ядра; сама призма — `f7-mob-prism.ts`).
 // ---------------------------------------------------------------------------
 
 const RAINBOW = ['#ff5a7a', '#ffb050', '#fff080', '#80f0a0', '#70c8ff', '#b890ff'].map((c) =>
   hx(c),
 );
-
-function paintPrism(f: number, hot: number, rise: number): Built {
-  const p = new Px(20, 26);
-  const cx = 10;
-  const top = 3;
-  const bot = 20;
-  const a0 = (f / 6) * (TAU / 3);
-  // Три ребра на окружности: видимые грани — между соседними рёбрами.
-  const R = 6;
-  const edges = [0, 1, 2].map((i) => {
-    const a = a0 + (i / 3) * TAU;
-    return { x: cx + Math.cos(a) * R, z: Math.sin(a) };
-  });
-  const faces = [0, 1, 2]
-    .map((i) => {
-      const e0 = edges[i];
-      const e1 = edges[(i + 1) % 3];
-      return { e0, e1, zm: (e0.z + e1.z) / 2 };
-    })
-    .sort((a, b) => a.zm - b.zm);
-  const t: Tones = [hx('#3c2a70'), hx('#6a58b4'), hx('#a8a0ec'), hx('#eee8ff')];
-  for (const fc of faces) {
-    if (fc.zm < -0.3) continue;
-    const l = 0.35 + fc.zm * 0.3 + (fc.e0.x < fc.e1.x ? 0.1 : -0.1) + hot * 0.15;
-    poly(
-      p,
-      [
-        [fc.e0.x, top + 3 - fc.e0.z],
-        [fc.e1.x, top + 3 - fc.e1.z],
-        [fc.e1.x, bot - 3 - fc.e1.z],
-        [fc.e0.x, bot - 3 - fc.e0.z],
-      ],
-      () => tone(t, l),
-    );
-  }
-  // Верх и низ — острия.
-  poly(
-    p,
-    [
-      [cx - 5, top + 3],
-      [cx, top - 2],
-      [cx + 5, top + 3],
-    ],
-    VIO[2],
-  );
-  poly(
-    p,
-    [
-      [cx - 5, bot - 3],
-      [cx, bot + 3],
-      [cx + 5, bot - 3],
-    ],
-    VIO[0],
-  );
-  // Радуга внутри: полоска, сдвигается с поворотом.
-  for (let y = top + 4; y < bot - 3; y++) {
-    const c = RAINBOW[(y + f) % RAINBOW.length];
-    p.set(cx + Math.round(Math.sin(a0 * 3) * 1.5), y, alpha(c, 0.8));
-  }
-  if (hot)
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * TAU + f;
-      p.set(
-        Math.round(cx + Math.cos(a) * 8),
-        Math.round(12 + Math.sin(a) * 9),
-        alpha(RAINBOW[i], 0.8),
-      );
-    }
-  p.set(cx - 2, top + 5, WHITE);
-  p.outline(alpha(INK, 0.85));
-  let q = p;
-  if (rise < 4) {
-    // Поднимается из подставки: сперва видна верхушка.
-    q = new Px(p.w, p.h);
-    const topCut = Math.round(p.h * (1 - (rise + 1) / 4));
-    for (let y = 0; y < p.h - topCut; y++)
-      for (let x = 0; x < p.w; x++) {
-        const i = (y * p.w + x) * 4;
-        if (p.data[i + 3])
-          q.set(x, y + topCut, [p.data[i], p.data[i + 1], p.data[i + 2], p.data[i + 3]]);
-      }
-  }
-  return { p: q, ax: 10, ay: 25, eye: [cx, 12] };
-}
-
-registerMobPainter('f7_prism', (m: Mob, pose: MobPose) => {
-  const f = Math.floor(pose.t * 5 + m.id) % 6;
-  const hot = pose.mode === 'aim' ? 1 : 0;
-  const rise = pose.mode === 'f7_rise' ? Math.min(3, Math.floor(pose.t / 0.25)) : 4;
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf(
-      'f7_prism',
-      pose,
-      'dead',
-      k,
-      () => {
-        const b = paintPrism(0, 1, 4);
-        return { ...b, p: shatter(b.p, 10, 12, (k + 1) / 4, 13) };
-      },
-      false,
-    );
-  }
-  return frameOf('f7_prism', pose, `p${hot}${rise}`, f, () => paintPrism(f, hot, rise), false);
-});
 
 // ---------------------------------------------------------------------------
 // Стекольщик-воришка: бесёнок в фартуке и зеркальных очках, за спиной мешок
