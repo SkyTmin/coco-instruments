@@ -604,8 +604,21 @@ function regionMark(c: CellCtx, g: Geo): number {
   return MK.ground;
 }
 
+/**
+ * Клетки — из кеша: рисунок зависит только от места, вида и четырёх соседей.
+ * Четверти «памяти» меняют пол на ходу, и без кеша кусок 16×16 клеток
+ * перерисовывался целиком — запинка до 120 мс.
+ */
+const CELL_LRU = frameLRU<Px | null>(4000);
 registerCellPainter(F15_HEART, (c: CellCtx) => {
   const g = geo();
+  const ob = (c.open(0, 0) ? 1 : 0) | (c.open(-1, 0) ? 2 : 0) | (c.open(1, 0) ? 4 : 0) | (c.open(0, -1) ? 8 : 0) | (c.open(0, 1) ? 16 : 0);
+  const key = `${c.wx},${c.wy},${g.top}|${c.tile}|${c.mark}|${ob}|${c.markAt(-1, 0)},${c.markAt(1, 0)},${c.markAt(0, -1)},${c.markAt(0, 1)}`;
+  const hit = CELL_LRU.get(key);
+  if (hit !== undefined) return hit;
+  return CELL_LRU.set(key, cellOf(c, g));
+});
+function cellOf(c: CellCtx, g: Geo): Px | null {
   const p = new Px(16, 16);
   const mk = c.mark;
   // Клетки памяти (на любой плитке: глубина, опасный пол, пол).
@@ -630,7 +643,7 @@ registerCellPainter(F15_HEART, (c: CellCtx) => {
   else if (m === MK.runway) runwayFloor(p, c);
   else groundFloor(p, c, m === MK.dust);
   return p;
-});
+}
 
 // =============================================================================
 // Предметы района.
@@ -1439,11 +1452,10 @@ function lordPose(m: Mob, pose: MobPose, now: number): LPose {
     k = at(tr, `r${m.data.act}`, T, fr24(tr[tr.length - 1].t + 0.05));
   } else {
     // Погоня: покой дышит, на ходу — плащ тянется назад.
-    const b = ph;
-    const sb = Math.sin((b / 10) * TAU);
+    const sb = spQ >= 1 ? 0 : Math.round(Math.sin((ph / 10) * TAU));
     const idle = { ...T_IDLE[0], L: [6, -18, 31 + sb, 1] as HK, R: [6, 18, 31 - sb, 1] as HK, flare: 0.04 * sb };
     k = blend(idle, T_GLIDE[0], spQ);
-    key = `ch${spQ}|${b}`;
+    key = `ch${spQ}|${sb}`;
   }
   // Затмение: плащ запахнут, тьма — звёзды на нём еле видны.
   if (v && v.dark > 0.5 && mode !== 'f15l_open') dim = Math.min(dim, 0.45);
@@ -1480,6 +1492,10 @@ function openHalf(z: number, fl: number, open: number): number {
   return (0.09 + 0.3 * (1 - tz)) * (1 - 0.85 * Math.max(0, -fl)) + open * (0.8 + 0.6 * (1 - tz));
 }
 /** Высота кромки под углом ψ (мир) — живая волна. */
+/** Фаза волны подола и шлейфа: стоит — подол неподвижен (дешёвый кеш), летит — 5 фаз. */
+function cph(p: LPose): number {
+  return p.train > 0 ? p.ph >> 1 : 0;
+}
 function hemZ(psi: number, ph: number, fl: number): number {
   const p = (ph / 10) * TAU;
   const k = fl < -0.5 ? 0.5 : 1;
@@ -1526,15 +1542,29 @@ const LXv = -0.5;
 const LYv = 0.45;
 const LZv = 0.74;
 
+const BN = LW * LH;
+const B_ZB = new Float32Array(BN);
+const B_KIND = new Uint8Array(BN);
+const B_TU = new Uint8Array(BN);
+const B_TV = new Uint8Array(BN);
+const B_TS = new Uint8Array(BN);
+const B_COL = new Uint32Array(BN);
+const O_SI = new Uint16Array(BN);
+const O_SC = new Uint32Array(BN);
+const O_CI = new Uint16Array(BN);
+const O_CU = new Uint8Array(BN);
+const O_CV = new Uint8Array(BN);
+const O_CS = new Uint8Array(BN);
+
 function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
-  const N = LW * LH;
-  const zb = new Float32Array(N).fill(-1e9);
+  const N = BN;
+  const zb = B_ZB.fill(-1e9);
   // 0 пусто, 1 ткань (туманность), 2 ткань колокола, 3 неизменный цвет.
-  const kind = new Uint8Array(N);
-  const tu = new Uint8Array(N);
-  const tv = new Uint8Array(N);
-  const ts = new Uint8Array(N);
-  const col = new Uint32Array(N);
+  const kind = B_KIND.fill(0);
+  const tu = B_TU;
+  const tv = B_TV;
+  const ts = B_TS;
+  const col = B_COL;
   const ca = Math.cos(a);
   const sa = Math.sin(a);
   const fl = p.flare;
@@ -1572,24 +1602,26 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
     }
   } else {
     // --- Колокол плаща.
-    for (let z = HEM - 3; z <= SHO; z += 0.5) {
+    const hemT = new Float32Array(256);
+    for (let i = 0; i < 256; i++) hemT[i] = hemZ((i / 256) * TAU, cph(p) * 2, fl);
+    for (let z = HEM - 3; z <= SHO; z += 0.7) {
       const R = bellR(z, fl);
       const dR = bellR(z - 0.5, fl) - bellR(z + 0.5, fl);
       const op = openHalf(z, fl, p.open);
       const trim = 1.6 / R;
-      const n = Math.ceil((TAU * R) / 0.5);
+      const n = Math.ceil((TAU * R) / 0.7);
       const ox = lx(z) * ca;
       const oy = lx(z) * sa;
       for (let i = 0; i < n; i++) {
         const psi = (i / n) * TAU;
-        if (z < hemZ(psi, p.ph, fl)) continue;
+        if (z < hemT[((i / n) * 256) | 0]) continue;
         const cx = Math.cos(psi);
         const sy = Math.sin(psi);
         const wx = ox + cx * R;
         const wy = oy + sy * R;
         const X = LAX + wx;
         const Y = LAY - z + wy * KF;
-        if (z < dz + (hash(Math.round(X), Math.round(Y), 7) - 0.5) * 6) continue;
+        if (dz > -1e8 && z < dz + (hash(Math.round(X), Math.round(Y), 7) - 0.5) * 6) continue;
         let u = psi - a;
         u -= Math.round(u / TAU) * TAU;
         const front = sy * VY + dR * VZ > 0;
@@ -1604,6 +1636,9 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
           put(X, Y, depth, 2, uByte(u), Math.min(255, Math.round(z * 2)), Math.round(shadeOf(cx, sy, dR) * 255));
         } else {
           // Изнанка: видна в распахе и под кромкой — бездна со светом изнутри.
+        const xi = Math.round(X);
+        const yi = Math.round(Y);
+        if (xi < 0 || yi < 0 || xi >= LW || yi >= LH || depth - 0.01 <= zb[yi * LW + xi]) continue;
           const k = clamp01(1 - Math.abs(cx));
           let c = mixc(NIGHT[1], VIO[1], 0.2 + 0.5 * k);
           if (p.open > 0.05) {
@@ -1642,9 +1677,9 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
     // --- Пелерина: короткий колокол поверх плеч, кромка зубцами, кайма золотом.
     if (p.dissolve < 0.9) {
       const top = SHO + 1.5;
-      for (let z = SHO - 14; z <= top; z += 0.5) {
+      for (let z = SHO - 14; z <= top; z += 0.7) {
         const R = bellR(Math.min(z, SHO), fl) + 2.4 + (top - z) * 0.08;
-        const n = Math.ceil((TAU * R) / 0.5);
+        const n = Math.ceil((TAU * R) / 0.7);
         const ox = lx(z) * ca;
         const oy = lx(z) * sa;
         for (let i = 0; i < n; i++) {
@@ -1660,7 +1695,7 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
           const wy = oy + sy * R;
           const X = LAX + wx;
           const Y = LAY - z + wy * KF;
-          if (z < dz + (hash(Math.round(X), Math.round(Y), 7) - 0.5) * 6) continue;
+          if (dz > -1e8 && z < dz + (hash(Math.round(X), Math.round(Y), 7) - 0.5) * 6) continue;
           const front = sy * VY + 0.35 * VZ > 0;
           if (!front) continue;
           const depth = wy * VY + z * VZ + 0.6;
@@ -1686,7 +1721,7 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
         const sw = p.sway * s * s * 9;
         const cx0 = bx * (R0 + s * Lt) + px * sw;
         const cy0 = by * (R0 + s * Lt) + py * sw;
-        const z = Math.max(1.5, HEM + 1 - s * 7 + Math.sin(s * 9 + p.ph * 0.63) * 0.8);
+        const z = Math.max(1.5, HEM + 1 - s * 7 + Math.sin(s * 9 + cph(p) * 1.26) * 0.8);
         for (let q = -1; q <= 1; q += 1 / (w * 1.6)) {
           const wx = cx0 + px * q * w;
           const wy = cy0 + py * q * w;
@@ -1798,12 +1833,14 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
     hands.push({ x: hx0, y: hy0, ang, g: h[3], vis, side, depth: w2[2] });
   }
   // --- Контур: тёмно-синий, снаружи фигуры; ткань на правом краю — холодный кант.
-  const sIdx: number[] = [];
-  const sCol: number[] = [];
-  const cIdx: number[] = [];
-  const cU: number[] = [];
-  const cV: number[] = [];
-  const cS: number[] = [];
+  const sIdx = O_SI;
+  const sCol = O_SC;
+  const cIdx = O_CI;
+  const cU = O_CU;
+  const cV = O_CV;
+  const cS = O_CS;
+  let ns = 0;
+  let nc = 0;
   const ink = pack(hx('#07061a', 235));
   for (let i = 0; i < N; i++) {
     const k = kind[i];
@@ -1816,30 +1853,30 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
         (y > 0 && kind[i - LW]) ||
         (y < LH - 1 && kind[i + LW])
       ) {
-        sIdx.push(i);
-        sCol.push(ink);
+        sIdx[ns] = i;
+        sCol[ns++] = ink;
       }
       continue;
     }
     if (k === 3) {
-      sIdx.push(i);
-      sCol.push(col[i]);
+      sIdx[ns] = i;
+      sCol[ns++] = col[i];
       continue;
     }
     let s = ts[i];
     if (x < LW - 1 && !kind[i + 1]) s = Math.min(255, s + 70);
-    cIdx.push(i);
-    cU.push(tu[i]);
-    cV.push(tv[i]);
-    cS.push((s >> 1) | (k === 2 ? 128 : 0));
+    cIdx[nc] = i;
+    cU[nc] = tu[i];
+    cV[nc] = tv[i];
+    cS[nc++] = (s >> 1) | (k === 2 ? 128 : 0);
   }
   return {
-    sIdx: Uint16Array.from(sIdx),
-    sCol: Uint32Array.from(sCol),
-    cIdx: Uint16Array.from(cIdx),
-    cU: Uint8Array.from(cU),
-    cV: Uint8Array.from(cV),
-    cS: Uint8Array.from(cS),
+    sIdx: sIdx.slice(0, ns),
+    sCol: sCol.slice(0, ns),
+    cIdx: cIdx.slice(0, nc),
+    cU: cU.slice(0, nc),
+    cV: cV.slice(0, nc),
+    cS: cS.slice(0, nc),
     hands,
   };
 }
@@ -1925,7 +1962,19 @@ function slot(pool: Slot[], i: number): Slot {
 const clothMask = new Uint8Array(LW * LH);
 
 /** Тело кадра: неизменное + ткань с туманностью, что течёт вниз. */
-function paintBody(geo: LGeo, now: number, flash: boolean, fresh: boolean): HTMLCanvasElement {
+const BODY_N = 12;
+const bodyKeys: string[] = [];
+const bodyAt = new Map<string, number>();
+function paintBody(geo: LGeo, gk: string, now: number, flash: boolean, fresh: boolean, p: LPose, a: number, kindled: number): HTMLCanvasElement {
+  // Туманность течёт ступенями: полшага вниз 6,4 раза в секунду, по кругу — 2,2;
+  // звёзды плаща рисуются тут же — тело обновляется ~9 раз в секунду.
+  const flow = Math.floor(now * 6.4) / 2;
+  const swirl = Math.floor(now * 2.2);
+  const key = `${gk}|${flow}|${swirl}|${flash ? 1 : 0}|${kindled}|${Math.round(p.dim * 20)}`;
+  if (!fresh) {
+    const hit = bodyAt.get(key);
+    if (hit !== undefined) return BODY[hit].c;
+  }
   let sl: Slot;
   if (fresh) {
     const c = document.createElement('canvas');
@@ -1935,7 +1984,10 @@ function paintBody(geo: LGeo, now: number, flash: boolean, fresh: boolean): HTML
     sl = { c, g, id: g.createImageData(LW, LH) };
   } else {
     sl = slot(BODY, bodyI);
-    bodyI = (bodyI + 1) % 4;
+    if (bodyKeys[bodyI] !== undefined) bodyAt.delete(bodyKeys[bodyI]);
+    bodyKeys[bodyI] = key;
+    bodyAt.set(key, bodyI);
+    bodyI = (bodyI + 1) % BODY_N;
   }
   const d32 = new Uint32Array(sl.id.data.buffer);
   d32.fill(0);
@@ -1943,8 +1995,6 @@ function paintBody(geo: LGeo, now: number, flash: boolean, fresh: boolean): HTML
   const neb = nebula();
   const tab = clothTable();
   const fo = flash ? 72 : 0;
-  const flow = now * 3.2;
-  const swirl = now * 2.2;
   for (let i = 0; i < geo.cIdx.length; i++) {
     const pi = geo.cIdx[i];
     const X = pi % LW;
@@ -1952,7 +2002,7 @@ function paintBody(geo: LGeo, now: number, flash: boolean, fresh: boolean): HTML
     const sb = geo.cS[i];
     const sh = (sb & 127) / 127;
     if (sb & 128) clothMask[pi] = 1;
-    const iu = (((geo.cU[i] >> 2) + Math.floor(swirl)) % NT + NT) % NT;
+    const iu = (((geo.cU[i] >> 2) + swirl) % NT + NT) % NT;
     const iv = ((Math.floor(geo.cV[i] * 0.45 + flow) % NT) + NT) % NT;
     const n = neb[iv * NT + iu];
     const zz = geo.cV[i] * 0.5;
@@ -1971,6 +2021,7 @@ function paintBody(geo: LGeo, now: number, flash: boolean, fresh: boolean): HTML
     }
     d32[geo.sIdx[i]] = c;
   }
+  decoBody(d32, p, a, now, kindled);
   sl.g.putImageData(sl.id, 0, 0);
   return sl.c;
 }
@@ -2200,15 +2251,6 @@ function corePos(a: number, p: LPose): [number, number] {
   return [LAX + Math.cos(a) * f, LAY - CORE + bow + Math.sin(a) * f * KF];
 }
 
-/** Пять звёзд эха на плаще: (угол от лица, высота). */
-const KINDLE: [number, number][] = [
-  [-1.15, 34],
-  [-0.7, 24],
-  [-0.48, 42],
-  [0.7, 24],
-  [1.15, 34],
-];
-
 function paintLit(m: Mob, p: LPose, a: number, dir: number, geo: LGeo, now: number, s: Sim | null, dieT: number): HTMLCanvasElement {
   const v = f15bView(s);
   const sl = slot(LIT, litI);
@@ -2219,101 +2261,8 @@ function paintLit(m: Mob, p: LPose, a: number, dir: number, geo: LGeo, now: numb
   g.globalAlpha = 1;
   g.imageSmoothingEnabled = false;
   g.clearRect(0, 0, LW, LH);
-  const ca = Math.cos(a);
-  const sa = Math.sin(a);
   const fl = Math.round(p.flare * 4) / 4;
-  const op = Math.round(p.open * 4) / 4;
-  const dim = p.dim;
-  const lx = (z: number) => p.lean * Math.max(0, z - HEM) * 0.6;
-  /** Точка колокола: угол от лица `u`, высота `z` → пиксель и видна ли. */
-  const onBell = (u: number, z: number): [number, number, boolean] => {
-    const R = bellR(z, fl);
-    const dR = bellR(z - 0.5, fl) - bellR(z + 0.5, fl);
-    const psi = a + u;
-    const cx = Math.cos(psi);
-    const sy = Math.sin(psi);
-    const X = LAX + lx(z) * ca + cx * R;
-    const Y = LAY - z + (lx(z) * sa + sy * R) * KF;
-    const vis = sy * VY + dR * VZ > 0.06 && clothMask[Math.round(Y) * LW + Math.round(X)] === 1;
-    return [X, Y, vis];
-  };
   const ds = p.dissolve;
-  // Звёзды плаща текут сверху вниз и уходят в кромку.
-  if (ds < 0.9) {
-    const span = SHO - HEM - 3;
-    for (let i = 0; i < 38; i++) {
-      const h1 = hash(i, 1, 501);
-      const h2 = hash(i, 2, 501);
-      const h3 = hash(i, 3, 501);
-      const sp = 2.2 + h2 * 3.6;
-      const z = SHO - 2 - (((now * sp + h1 * span * 7) % span) + span) % span;
-      let u = h3 * TAU - Math.PI + now * 0.05 * (h2 - 0.5);
-      u -= Math.round(u / TAU) * TAU;
-      if (Math.abs(u) < openHalf(z, fl, op) + 0.25) continue;
-      const [X, Y, vis] = onBell(u, z);
-      if (!vis) continue;
-      const k = Math.min(1, (z - HEM) / 6, (SHO - z) / 4);
-      const tw = 0.55 + 0.45 * Math.sin(now * (2 + h2 * 4) + i * 1.7);
-      const al = k * tw * dim;
-      if (al <= 0.05) continue;
-      const x = Math.round(X - 0.5);
-      const y = Math.round(Y - 0.5);
-      if (h1 < 0.2) {
-        g.fillStyle = css(ICE[5], al * 0.8);
-        g.fillRect(x - 1, y, 3, 1);
-        g.fillRect(x, y - 1, 1, 3);
-        g.fillStyle = css(WHITE, al);
-        g.fillRect(x, y, 1, 1);
-      } else {
-        g.fillStyle = css(h1 < 0.55 ? ICE[4] : h1 < 0.8 ? VIO[4] : GOLD[4], al * 0.85);
-        g.fillRect(x, y, 1, 1);
-      }
-    }
-  }
-  // Звёзды павших эх: по одной на каждое — горят до конца боя.
-  const ph = s?.boss?.phase ?? 0;
-  const kindled = !v ? 0 : ph === 0 ? v.echo : 5;
-  for (let i = 0; i < kindled && ds < 0.6; i++) {
-    const [u, z] = KINDLE[i];
-    const [X, Y, vis] = onBell(u, z);
-    if (!vis) continue;
-    const x = Math.round(X - 0.5);
-    const y = Math.round(Y - 0.5);
-    const tw = 0.75 + 0.25 * Math.sin(now * 3 + i * 2);
-    g.fillStyle = css(GOLD[4], 0.22 * tw);
-    g.fillRect(x - 2, y - 2, 5, 5);
-    g.fillStyle = css(GOLD[5], 0.9 * tw);
-    g.fillRect(x - 2, y, 5, 1);
-    g.fillRect(x, y - 2, 1, 5);
-    g.fillStyle = css(WHITE, 1);
-    g.fillRect(x, y, 1, 1);
-  }
-  // Кромка — живой космос: огоньки по краю, капли света вниз.
-  if (ds < 0.15) {
-    const cols = [VIO[3], MAG[2], TEAL[3], GOLD[4]];
-    const n = 56;
-    for (let k = 0; k < n; k++) {
-      const psi = (k / n) * TAU;
-      const z = hemZ(psi, p.ph, fl) + 0.5;
-      let u = psi - a;
-      u -= Math.round(u / TAU) * TAU;
-      if (Math.abs(u) < openHalf(z, fl, op)) continue;
-      const R = bellR(z, fl);
-      const sy = Math.sin(psi);
-      if (sy * VY + 0.3 * VZ < 0) continue;
-      const X = Math.round(LAX + lx(z) * ca + Math.cos(psi) * R - 0.5);
-      const Y = Math.round(LAY - z + (lx(z) * sa + sy * R) * KF - 0.5);
-      const c = cols[(k + Math.floor(now * 3)) & 3];
-      const fl2 = 0.5 + 0.5 * Math.sin(now * 5 + k * 1.3);
-      g.fillStyle = css(c, (0.35 + 0.45 * fl2) * dim);
-      g.fillRect(X, Y, 1, 1);
-      const hh = hash(k, Math.floor(now * 7), 503);
-      if (hh < 0.22) {
-        g.fillStyle = css(c, 0.35 * dim);
-        g.fillRect(X, Y + 1 + Math.floor(hh * 9), 1, 1);
-      }
-    }
-  }
   // Ядро, воротник, корона.
   const [cx0, cy0] = corePos(a, p);
   const eyesQ = Math.max(0, Math.min(3, Math.round(p.eyes * 1.5)));
@@ -2432,7 +2381,7 @@ function paintLit(m: Mob, p: LPose, a: number, dir: number, geo: LGeo, now: numb
 // ---- Кадр владыки ---------------------------------------------------------
 
 function geoKey(dir: number, p: LPose): string {
-  return `${dir}|${p.key}|${Math.round(p.flare * 4)}|${Math.round(p.open * 4)}|${p.train}|${p.sway}|${p.ph}|${Math.round(p.dissolve * 20)}`;
+  return `${dir}|${p.key}|${Math.round(p.flare * 4)}|${Math.round(p.open * 4)}|${p.train}|${p.sway}|${cph(p)}|${Math.round(p.dissolve * 20)}`;
 }
 function lordGeo(dir: number, p: LPose): LGeo {
   const key = geoKey(dir, p);
@@ -2443,22 +2392,34 @@ function lordGeo(dir: number, p: LPose): LGeo {
     flare: Math.round(p.flare * 4) / 4,
     open: Math.round(p.open * 4) / 4,
     dissolve: Math.round(p.dissolve * 20) / 20,
-    lean: Math.round(p.lean * 50) / 50,
+    lean: Math.round(p.lean * 20) / 20,
   };
-  const ck = `${dir}|${q.flare}|${q.open}|${q.lean}|${p.train}|${p.sway}|${p.ph}|${q.dissolve}`;
+  const ck = `${dir}|${q.flare}|${q.open}|${q.lean}|${p.train}|${p.sway}|${cph(p)}|${q.dissolve}`;
   return LGEO.set(key, buildLord((dir * TAU) / DIRS, q, ck));
 }
 
+const LIT_LAST: { k: string; c: HTMLCanvasElement | null } = { k: '', c: null };
 registerMobPainter('f15boss', (m: Mob, pose: MobPose): MobFrame | null => {
   const s = paintSim();
   const now = pose.now;
   const p = lordPose(m, pose, now);
   const dir = ((Math.round(m.face / (TAU / DIRS)) % DIRS) + DIRS) % DIRS;
   const geo = lordGeo(dir, p);
+  const gk = geoKey(dir, p);
   const sp = Math.hypot(m.vx, m.vy);
   const ghostOn = pose.mode !== 'dying' && sp > 3.4 && (pose.mode === 'f15l_dark' || pose.mode === 'f15l_nova');
-  const img = paintBody(geo, now, pose.flash, ghostOn);
-  const lit = paintLit(m, p, (dir * TAU) / DIRS, dir, geo, now, s, pose.mode === 'dying' ? pose.t : 0);
+  const v = f15bView(s);
+  const kindled = !v ? 0 : (s?.boss?.phase ?? 0) === 0 ? v.echo : 5;
+  // Шлейф держит ссылки на кадры ~0,3 с, а кольцо из 12 тел живёт дольше 1 с — копия не нужна.
+  const img = paintBody(geo, gk, now, pose.flash, false, p, (dir * TAU) / DIRS, kindled);
+  // Свет — 24 кадра в секунду, как и вся анимация владыки.
+  const lk = `${m.id}|${Math.floor(now * 24)}|${gk}|${pose.mode}`;
+  let lit = LIT_LAST.c;
+  if (lk !== LIT_LAST.k || !lit) {
+    lit = paintLit(m, p, (dir * TAU) / DIRS, dir, geo, now, s, pose.mode === 'dying' ? pose.t : 0);
+    LIT_LAST.k = lk;
+    LIT_LAST.c = lit;
+  }
   const asleep = pose.mode === 'f15l_sleep' || pose.mode === 'f15l_stir';
   const bob = asleep ? Math.sin(now * 1.2) * 1 : Math.sin(now * 1.7) * 1.5;
   // Герой за владыкой — тело просвечивает, иначе героя не видно.
@@ -2489,15 +2450,127 @@ registerMobWarm('f15boss', function* () {
   }
   for (const spQ of [0, 1])
     for (const d of order)
-      for (let b = 0; b < 10; b++) {
-        const sb = Math.sin((b / 10) * TAU);
+      for (let b = 0; b < (spQ ? 5 : 3); b++) {
+        const sb = spQ ? 0 : b - 1;
         const idle = { ...T_IDLE[0], L: [6, -18, 31 + sb, 1] as HK, R: [6, 18, 31 - sb, 1] as HK, flare: 0.04 * sb };
         const k = blend(idle, T_GLIDE[0], spQ);
-        const p: LPose = { ...k, key: `ch${spQ}|${b}`, train: spQ, sway: 0, alpha: 1, dissolve: 0, shrink: 0, dim: 1, tint: -1, ph: b };
+        const p: LPose = { ...k, key: `ch${spQ}|${sb}`, train: spQ, sway: 0, alpha: 1, dissolve: 0, shrink: 0, dim: 1, tint: -1, ph: spQ ? b * 2 : 0 };
         lordGeo(d, p);
         yield;
       }
 });
+
+// ---- Звёзды плаща — прямо в пикселях тела (без вызовов канвы) -------------
+
+/** Смешать цвет в пиксель тела; пустой пиксель — цвет с прозрачностью. */
+function blendPx(d32: Uint32Array, x: number, y: number, c: RGBA, al: number): void {
+  if (x < 0 || y < 0 || x >= LW || y >= LH || al <= 0.02) return;
+  const i = y * LW + x;
+  const o = d32[i];
+  const k = Math.min(1, al);
+  if (!(o >>> 24)) {
+    d32[i] = pack([c[0], c[1], c[2], Math.round(k * 255)]);
+    return;
+  }
+  const r = o & 255;
+  const g = (o >> 8) & 255;
+  const b = (o >> 16) & 255;
+  d32[i] = pack([Math.round(r + (c[0] - r) * k), Math.round(g + (c[1] - g) * k), Math.round(b + (c[2] - b) * k), o >>> 24]);
+}
+
+/** Пять звёзд эха на плаще: (угол от лица, высота). */
+const KINDLE: [number, number][] = [
+  [-1.15, 34],
+  [-0.7, 24],
+  [-0.48, 42],
+  [0.7, 24],
+  [1.15, 34],
+];
+
+/** Текущие звёзды, звёзды павших эх, огоньки кромки. */
+function decoBody(d32: Uint32Array, p: LPose, a: number, now: number, kindled: number): void {
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const fl = Math.round(p.flare * 4) / 4;
+  const op = Math.round(p.open * 4) / 4;
+  const dim = p.dim;
+  const lean = Math.round(p.lean * 20) / 20;
+  const lx = (z: number) => lean * Math.max(0, z - HEM) * 0.6;
+  const onBell = (u: number, z: number): [number, number, boolean] => {
+    const R = bellR(z, fl);
+    const dR = bellR(z - 0.5, fl) - bellR(z + 0.5, fl);
+    const psi = a + u;
+    const cx = Math.cos(psi);
+    const sy = Math.sin(psi);
+    const X = Math.round(LAX + lx(z) * ca + cx * R - 0.5);
+    const Y = Math.round(LAY - z + (lx(z) * sa + sy * R) * KF - 0.5);
+    const vis = sy * VY + dR * VZ > 0.06 && X >= 0 && Y >= 0 && X < LW && Y < LH && clothMask[Y * LW + X] === 1;
+    return [X, Y, vis];
+  };
+  const ds = p.dissolve;
+  if (ds < 0.9) {
+    const span = SHO - HEM - 3;
+    for (let i = 0; i < 38; i++) {
+      const h1 = hash(i, 1, 501);
+      const h2 = hash(i, 2, 501);
+      const h3 = hash(i, 3, 501);
+      const sp = 2.2 + h2 * 3.6;
+      const z = SHO - 2 - ((((now * sp + h1 * span * 7) % span) + span) % span);
+      let u = h3 * TAU - Math.PI + now * 0.05 * (h2 - 0.5);
+      u -= Math.round(u / TAU) * TAU;
+      if (Math.abs(u) < openHalf(z, fl, op) + 0.25) continue;
+      const [x, y, vis] = onBell(u, z);
+      if (!vis) continue;
+      const k = Math.min(1, (z - HEM) / 6, (SHO - z) / 4);
+      const tw = 0.55 + 0.45 * Math.sin(now * (2 + h2 * 4) + i * 1.7);
+      const al = k * tw * dim;
+      if (al <= 0.05) continue;
+      if (h1 < 0.2) {
+        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) blendPx(d32, x + dx, y + dy, ICE[5], al * 0.7);
+        blendPx(d32, x, y, WHITE, al);
+      } else blendPx(d32, x, y, h1 < 0.55 ? ICE[4] : h1 < 0.8 ? VIO[4] : GOLD[4], al * 0.9);
+    }
+  }
+  // Звёзды павших эх: по одной на каждое — горят до конца боя.
+  for (let i = 0; i < kindled && ds < 0.6; i++) {
+    const [u, z] = KINDLE[i];
+    const [x, y, vis] = onBell(u, z);
+    if (!vis) continue;
+    const tw = 0.75 + 0.25 * Math.sin(now * 3 + i * 2);
+    for (let dy = -2; dy <= 2; dy++)
+      for (let dx = -2; dx <= 2; dx++) {
+        if (dx && dy) {
+          blendPx(d32, x + dx, y + dy, GOLD[4], (Math.abs(dx) + Math.abs(dy) > 2 ? 0.12 : 0.3) * tw);
+          continue;
+        }
+        blendPx(d32, x + dx, y + dy, Math.abs(dx + dy) === 2 ? GOLD[4] : GOLD[5], 0.9 * tw);
+      }
+    blendPx(d32, x, y, WHITE, 1);
+  }
+  // Кромка — живой космос: огоньки по краю, капли света вниз.
+  if (ds < 0.15) {
+    const cols = [VIO[3], MAG[2], TEAL[3], GOLD[4]];
+    const n = 56;
+    const ph = cph(p) * 2;
+    for (let k = 0; k < n; k++) {
+      const psi = (k / n) * TAU;
+      const z = hemZ(psi, ph, fl) + 0.5;
+      let u = psi - a;
+      u -= Math.round(u / TAU) * TAU;
+      if (Math.abs(u) < openHalf(z, fl, op)) continue;
+      const R = bellR(z, fl);
+      const sy = Math.sin(psi);
+      if (sy * VY + 0.3 * VZ < 0) continue;
+      const X = Math.round(LAX + lx(z) * ca + Math.cos(psi) * R - 0.5);
+      const Y = Math.round(LAY - z + (lx(z) * sa + sy * R) * KF - 0.5);
+      const c = cols[(k + Math.floor(now * 3)) & 3];
+      const fl2 = 0.5 + 0.5 * Math.sin(now * 5 + k * 1.3);
+      blendPx(d32, X, Y, c, (0.45 + 0.5 * fl2) * dim);
+      const hh = hash(k, Math.floor(now * 7), 503);
+      if (hh < 0.22) blendPx(d32, X, Y + 1 + Math.floor(hh * 9), c, 0.45 * dim);
+    }
+  }
+}
 
 // =============================================================================
 // Осколок звезды: кристалл-бипирамида, крутится; в прицеле — разгорается и

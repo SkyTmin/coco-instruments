@@ -163,6 +163,7 @@ def main(show_map=False):
         for x in range(18, 46):
             if get(x, y) == 'f' and dist(x, y) <= 2.6:
                 put(x, y, 'q')
+    DIM_SIGIL = {'1': '5', '2': '6', '3': '8', '4': '9'}
     quads = {
         '1': (KX - 7, 23),   # СЗ — лава
         '2': (KX + 7, 23),   # СВ — бездна
@@ -173,7 +174,8 @@ def main(show_map=False):
         for dy in (-1, 0, 1):
             for dx in (-1, 0, 1):
                 assert get(qx + dx, qy + dy) == 'f', ('знак мимо пола', ch, qx + dx, qy + dy)
-                put(qx + dx, qy + dy, ch)
+                # Светит только середина знака: 36 ламп на арене дорого стоили кадру.
+                put(qx + dx, qy + dy, ch if dx == 0 and dy == 0 else DIM_SIGIL[ch])
 
     # Световая дорожка Зала памяти — от выхода к воротам.
     for y in range(44, 59):
@@ -239,7 +241,7 @@ def main(show_map=False):
     ring.sort(key=lambda p: math.atan2(p[1] + 0.5 - CY, p[0] + 0.5 - CX))
     for i, (x, y) in enumerate(ring):
         if get(x, y) == 'W' and i % 3 == 1:
-            put(x, y, 'Q')
+            put(x, y, 'Q' if i % 6 == 1 else 'R')
     # Колыбель и арки: друзы реже.
     for i, (x, y) in enumerate(faces(1, 11) + faces(57, H - 2)):
         if get(x, y) == 'W' and i % 4 == 2:

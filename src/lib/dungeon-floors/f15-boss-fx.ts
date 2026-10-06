@@ -5369,51 +5369,75 @@ registerZonePainter(
 
 function veil(p: Pen, cx: number, cy: number, R: number, holes: [number, number, number][], col: string, a: number): void {
   const LV = [0, 0.35, 0.7, 1];
-  const y0 = Math.floor(cy - R);
-  const y1 = Math.ceil(cy + R);
+  const RING = [0.75, 1, 1.3];
+  // Только видимая часть экрана: ночь на всю арену — сотни строк за кадром.
+  const m = p.g.getTransform();
+  const sc = m.a || 1;
+  const vx0 = Math.floor(-m.e / sc - p.qx) - 1;
+  const vx1 = Math.ceil((p.g.canvas.width - m.e) / sc - p.qx) + 1;
+  const vy0 = Math.floor(-m.f / sc - p.qy) - 1;
+  const vy1 = Math.ceil((p.g.canvas.height - m.f) / sc - p.qy) + 1;
+  const y0 = Math.max(vy0, Math.floor(cy - R));
+  const y1 = Math.min(vy1, Math.ceil(cy + R));
+  const lvAt = (X: number, Y: number) => {
+    let lv = 3;
+    for (const [hx2, hy2, hr] of holes) {
+      const d = Math.hypot(X + 0.5 - hx2, Y + 0.5 - hy2) / hr;
+      lv = Math.min(lv, d < RING[0] ? 0 : d < RING[1] ? 1 : d < RING[2] ? 2 : 3);
+    }
+    return lv;
+  };
+  const cuts: number[] = [];
   for (let Y = y0; Y <= y1; Y++) {
     const yy = Y + 0.5 - cy;
     if (Math.abs(yy) >= R) continue;
     const hw = Math.sqrt(R * R - yy * yy);
-    const xa = Math.ceil(cx - hw - 0.5);
-    const xb = Math.floor(cx + hw - 0.5);
-    const wins: [number, number][] = [];
+    const xa = Math.max(vx0, Math.ceil(cx - hw - 0.5));
+    const xb = Math.min(vx1, Math.floor(cx + hw - 0.5));
+    if (xb < xa) continue;
+    // Границы ступеней окон в этой строке: уровень меняется только на них.
+    cuts.length = 0;
     for (const [hx2, hy2, hr] of holes) {
-      const ro = hr * 1.3;
       const dy = Y + 0.5 - hy2;
-      if (Math.abs(dy) >= ro) continue;
-      const w = Math.sqrt(ro * ro - dy * dy);
-      wins.push([Math.floor(hx2 - w), Math.ceil(hx2 + w)]);
+      for (const k of RING) {
+        const ro = hr * k;
+        if (Math.abs(dy) >= ro) continue;
+        const w = Math.sqrt(ro * ro - dy * dy);
+        // Пиксель X внутри, если |X + 0.5 − hx| < w.
+        cuts.push(Math.floor(hx2 - w - 0.5) + 1, Math.ceil(hx2 + w - 0.5));
+      }
     }
-    wins.sort((q1, q2) => q1[0] - q2[0]);
-    let x = xa;
-    const flush = (x0: number, x1: number, lv: number) => {
-      if (x1 < x0 || lv === 0) return;
-      p.col(col, a * LV[lv]);
-      p.rect(x0, Y, x1 - x0 + 1, 1);
-    };
-    for (const [w0, w1] of wins) {
-      if (w1 < x) continue;
-      if (w0 > x) flush(x, Math.min(xb, w0 - 1), 3);
-      let runX = Math.max(x, w0);
-      let runL = -1;
-      for (let X = Math.max(x, w0); X <= Math.min(xb, w1); X++) {
-        let lv = 3;
-        for (const [hx2, hy2, hr] of holes) {
-          const d = Math.hypot(X + 0.5 - hx2, Y + 0.5 - hy2) / hr;
-          lv = Math.min(lv, d < 0.75 ? 0 : d < 1 ? 1 : d < 1.3 ? 2 : 3);
-        }
+    if (!cuts.length) {
+      p.col(col, a);
+      p.rect(xa, Y, xb - xa + 1, 1);
+      continue;
+    }
+    cuts.push(xa, xb + 1);
+    cuts.sort((q1, q2) => q1 - q2);
+    let runX = xa;
+    let runL = -1;
+    for (let i = 0; i < cuts.length; i++) {
+      const X0 = Math.max(xa, cuts[i]);
+      if (X0 > xb) break;
+      const X1 = i + 1 < cuts.length ? Math.min(xb, cuts[i + 1] - 1) : xb;
+      if (X1 < X0) continue;
+      // На отрезке уровень постоянен — кроме кромок, проверим оба конца.
+      for (const X of X0 === X1 ? [X0] : [X0, X1]) {
+        const lv = lvAt(X, Y);
         if (lv !== runL) {
-          if (runL >= 0) flush(runX, X - 1, runL);
+          if (runL > 0 && X > runX) {
+            p.col(col, a * LV[runL]);
+            p.rect(runX, Y, X - runX, 1);
+          }
           runX = X;
           runL = lv;
         }
       }
-      if (runL >= 0) flush(runX, Math.min(xb, w1), runL);
-      x = Math.max(x, w1 + 1);
-      if (x > xb) break;
     }
-    if (x <= xb) flush(x, xb, 3);
+    if (runL > 0 && xb >= runX) {
+      p.col(col, a * LV[runL]);
+      p.rect(runX, Y, xb - runX + 1, 1);
+    }
   }
 }
 
