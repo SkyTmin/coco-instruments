@@ -1022,13 +1022,13 @@ function auraOf(w: number, h: number, ax: number, ay: number, buff: number, ph: 
   const g = c.getContext('2d')!;
   const col = BUFF_C[buff];
   const rgb = `${col[0]},${col[1]},${col[2]}`;
-  const rx = Math.max(6, Math.min(14, Math.round(w * 0.27)));
+  const rx = Math.max(5, Math.min(9, Math.round(w * 0.17)));
   const ry = Math.max(2, Math.round(rx * 0.38));
-  g.fillStyle = `rgba(${rgb},0.16)`;
+  g.fillStyle = `rgba(${rgb},0.07)`;
   g.beginPath();
   g.ellipse(ax, ay + 1, rx, ry, 0, 0, Math.PI * 2);
   g.fill();
-  g.strokeStyle = `rgba(${rgb},0.8)`;
+  g.strokeStyle = `rgba(${rgb},0.5)`;
   g.lineWidth = 1;
   g.beginPath();
   g.ellipse(ax, ay + 1, rx - 0.5, ry - 0.5, 0, 0, Math.PI * 2);
