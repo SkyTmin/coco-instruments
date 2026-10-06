@@ -793,6 +793,8 @@ const ARENA_X0 = 12;
 const ARENA_X1 = 52;
 type Wave = (typeof F13_FX.waves)[number];
 const inGap = (w: Wave, x: number) => w.gaps.some((gx) => Math.abs(x - gx) < w.gapW / 2);
+/** Волна проходит за кораблём: над бортом полотно не рисуем. */
+const behindShip = (w: Wave, x: number) => Math.abs(w.y - 10.9) < 1.3 && x > 25.8 && x < 38.2;
 
 /** Высота гребня: набухает, потом катится с перекатом полотна. */
 function crestH(w: Wave, x: number, time: number): number {
@@ -816,7 +818,7 @@ function waveCrest(g: CanvasRenderingContext2D, to: To, w: Wave, time: number): 
   const xb = Math.min(ex1, vw + 4);
   for (let sx = Math.floor(xa / 2) * 2; sx < xb; sx += 2) {
     const wx = ARENA_X0 + (sx - ex0) / 16;
-    if (inGap(w, wx + 1 / 16)) continue;
+    if (inGap(w, wx + 1 / 16) || behindShip(w, wx)) continue;
     const h = crestH(w, wx, time);
     const top = sy - h;
     // Складки полотна: светлые гребни ткани и тени между ними.
@@ -1271,7 +1273,7 @@ function markLine(
       g.beginPath();
       g.rect(0, -w, L * easeIn(0.25 + 0.75 * k), w * 2);
       g.clip();
-      g.fillStyle = rgba(P.red[2], 0.16 + 0.22 * k + 0.2 * f);
+      g.fillStyle = rgba(GOLD[2], 0.16 + 0.22 * k + 0.2 * f);
       const off = (time * 20) % 8;
       for (let x = -8 + off; x < L + 8; x += 8) {
         g.beginPath();
@@ -1334,10 +1336,10 @@ function markLine(
   }
   // Поверх темноты: нить по оси (от руки к концу) и бусина-остриё.
   const tight = ease(k);
-  if (style !== 'charge' && style !== 'lance') {
+  if (style === 'thrust' || style === 'snare') {
     thread(g, hand[0], hand[1], ex, ey, {
       a: 0.3 + 0.45 * k + 0.25 * f,
-      w: style === 'needle' ? 0.5 : 0.7,
+      w: 0.7,
       sag: 1.4 * (1 - tight),
       buzz: f * 0.7,
       lit: 0.3 * k + 0.7 * f,
@@ -1371,7 +1373,10 @@ function markLine(
     // Края полосы вспыхивают.
     const nx = -sa * w;
     const ny = ca * w;
-    g.strokeStyle = rgba(mixc(T.edge, WHITE, f), 0.35 + 0.55 * p);
+    g.strokeStyle = rgba(
+      mixc(T.edge, WHITE, f * 0.6),
+      (0.35 + 0.55 * p) * (style === 'needle' ? 0.5 : 1),
+    );
     g.lineWidth = 0.9;
     g.beginPath();
     if (style === 'needle' || style === 'snare') {
@@ -1466,6 +1471,20 @@ function bossMarks(g: CanvasRenderingContext2D, layer: Layer, to: To, time: numb
         // Три иглы веером (разброс мозга 0,24): каждая — своя серебряная нить.
         for (const d of [-0.12, 0, 0.12])
           markLine(g, layer, ox, oy, hand, R, 2.4, a0 + d, k, f, time, T_NEEDLE, 'needle');
+        if (layer === 'above')
+          // Три иглы в пальцах веером — блестят сильнее к броску.
+          for (const d of [-0.35, 0, 0.35]) {
+            const a = a0 + d;
+            const x0 = hand[0] + Math.cos(a) * 2;
+            const y0 = hand[1] + Math.sin(a) * 2;
+            g.strokeStyle = rgba(SILVER[3], 0.9);
+            g.lineWidth = 0.8;
+            g.beginPath();
+            g.moveTo(x0, y0);
+            g.lineTo(x0 + Math.cos(a) * 6, y0 + Math.sin(a) * 6);
+            g.stroke();
+            twinkle(g, x0 + Math.cos(a) * 6, y0 + Math.sin(a) * 6, 1 + 2 * k, WHITE, 0.4 + 0.6 * f);
+          }
         break;
       case 'f13_lance':
         markLine(g, layer, ox, oy, hand, R, W, a0, k, f, time, T_LANCE, 'lance');
@@ -1504,7 +1523,7 @@ function needleTrails(g: CanvasRenderingContext2D, to: To, time: number): void {
     g.moveTo(x - ux * 4, hy - uy * 4);
     for (let j = 1; j <= 6; j++) {
       const d = 4 + j * 3;
-      const wv = Math.sin(time * 30 + j * 1.3 + s.id) * j * 0.35;
+      const wv = Math.sin(time * 14 + j * 0.9 + s.id) * j * 0.18;
       g.lineTo(x - ux * d - uy * wv, hy - uy * d + ux * wv + Math.min(lift, j * 2) * 0.3);
     }
     g.stroke();
@@ -2266,13 +2285,35 @@ registerZonePainter('f13_lancehit', (g, z, px, py) => {
   const sa = Math.sin(a);
   // Прочерк: яркая полоса от древка к острию, быстро гаснет с хвоста.
   const tail = easeOut(k01(t / 0.25));
-  g.strokeStyle = rgba(P.cream[3], 0.8 * (1 - k));
+  const x0 = px - ca * L * (1 - tail);
+  const y0 = py - h - sa * L * (1 - tail);
+  lighter(g, () => {
+    g.strokeStyle = rgba(WARM, 0.45 * (1 - k));
+    g.lineWidth = 6 * (1 - k) + 1;
+    g.beginPath();
+    g.moveTo(x0, y0);
+    g.lineTo(px, py - h);
+    g.stroke();
+  });
+  g.strokeStyle = rgba(P.cream[3], 0.9 * (1 - k));
   g.lineWidth = 2.2 * (1 - k) + 0.4;
   g.beginPath();
-  g.moveTo(px - ca * L * (1 - tail), py - h - sa * L * (1 - tail));
+  g.moveTo(x0, y0);
   g.lineTo(px, py - h);
   g.stroke();
-  hitStar(g, px, py - h, k01(t / 0.3), 7, WARM);
+  // Кольца скорости вдоль древка.
+  for (let i = 1; i <= 3; i++) {
+    const u = 1 - i * 0.22 - k * 0.3;
+    if (u <= 0) continue;
+    const cx = px - ca * L * (1 - u);
+    const cy = py - h - sa * L * (1 - u);
+    g.strokeStyle = rgba(P.cream[3], 0.5 * (1 - k));
+    g.lineWidth = 0.8;
+    g.beginPath();
+    g.ellipse(cx, cy, 2 + 3 * k, 4 + 4 * k, a, 0, TAU);
+    g.stroke();
+  }
+  hitStar(g, px, py - h, k01(t / 0.3), 10, WARM);
   // Ударная дуга на полу перед остриём.
   g.strokeStyle = rgba(P.cream[2], 0.6 * (1 - k));
   g.lineWidth = 1;

@@ -456,7 +456,8 @@ function actSeaFloor(p: Px, c: CellCtx): void {
     // Склон к свету (север) светлее, гребень — кружевом, за ним тень.
     if (d < -1.6) return mixc(T[1], T[2], 0.35);
     if (d < -0.5) return T[2];
-    if (d < 0.5) return hash(X >> 1, strip, 72) < 0.35 ? T[3] : mixc(T[2], T[3], 0.45);
+    if (d < 0.5)
+      return hash(X >> 1, strip, 72) < 0.2 ? mixc(T[2], T[3], 0.7) : mixc(T[2], T[3], 0.3);
     if (d < 1.6) return mixc(T[0], T[1], 0.45);
     return d > 3.2 ? mixc(T[1], T[0], 0.15) : T[1];
   });
@@ -515,8 +516,8 @@ function castleFloor(p: Px, c: CellCtx): void {
 /** Акт IV: пустая тёмная сцена, золотая лента разметки, метки актёров. */
 function gridFloor(p: Px, c: CellCtx): void {
   boards(p, c, [hx('#0c080e'), hx('#18101a'), hx('#221824'), hx('#302432')], false);
-  const g = withA(P.gold[1], 0.6);
-  const gd = withA(P.gold[0], 0.5);
+  const g = withA(P.gold[1], 0.4);
+  const gd = withA(P.gold[0], 0.35);
   const ex = (c.wx & 1) === 0;
   const ey = (c.wy & 1) === 0;
   // Лента местами стёрта.
