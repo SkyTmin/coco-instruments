@@ -19,9 +19,16 @@
 // мобом: путь там — скорость × время режима, удар героя — `data.vSheetHurt`.
 
 import { hex, Px } from '../dungeon-art';
-import { frameLRU, registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import {
+  frameLRU,
+  registerImpactPainter,
+  registerMobPainter,
+  registerMobWarm,
+  registerZonePainter,
+} from '../dungeon-paint';
 import type { FrameLRU, MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
+import type { F3Zone } from './f3-brains';
 import { F3 as Fr, proj, renderRig, Rig, SE, vadd, vlerp, vmul, vnorm, vsub } from './f15-rig';
 import type { Mat, RGBA, RigOut, Tones, V3 } from './f15-rig';
 
@@ -2417,4 +2424,597 @@ registerMobWarm('f3_spear', function* () {
       yield 0;
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// Омутник: под водой — тёмная тень, рябь и два светящихся глаза. Хват
+// (`rise` 0,8 с): пузыри, вода вспухает → голова прорывает гладь, с неё
+// стекает вода → руки выныривают и встают высоко, пасть раскрыта (взвод) →
+// бросок рук вперёд со следом → контакт (первый кадр `hold`, миг урона):
+// ладони вниз, всплеск. Держит 1,6 с: тянет к себе двумя рывками, жуёт,
+// качается. Уходит (`sink`): тело вниз, руки — последними. Смерть: всплыл
+// брюхом, тонет. Тело ниже кромки воды срезано: кадр сидит в воде сам
+// (`lift` 0, тени нет). Контакт хвата — в два слоя: мокрые следы ладоней
+// с волоком к воде на полу (зона `f3_grab`) и брызги поверх темноты.
+// ---------------------------------------------------------------------------
+
+const G_SKIN = tn('#1e2c26', '#34483e', '#557060', '#7e9a82');
+const G_ARM = tn('#5a6e5e', '#8ea48a', '#b8cab0', '#dce8d2');
+const G_CLAW = tn('#9aa890', '#c8d4b8', '#e8f0dc', '#ffffff');
+const G_MOUTH = tn('#12060a', '#12060a', '#1e0a10', '#1e0a10');
+const G_TOOTH: RGBA = hex('#f2f6e4');
+const G_EYE: RGBA = hex('#d6ff6a');
+const G_FOAM: RGBA = hex('#bff4ea');
+const G_RIP: RGBA = hex('#8fe0d8');
+const G_DARK: RGBA = hex('#0c2a2c');
+/** Кромка воды (высота в риге). */
+const G_WL = 0.25;
+
+interface GraspO {
+  /** Высота середины тела: −4 — под водой, 1,4 — вынырнул. */
+  z: number;
+  pitch: number;
+  roll: number;
+  hp: number;
+  mouth: number;
+  /** Руки: подъём (рад), разлёт (рад), вытянуты 0…1, когти раскрыты 0…1. */
+  ae: number;
+  as: number;
+  ar: number;
+  claw: number;
+  /** Левая рука отстаёт (добавка к подъёму). */
+  aeL: number;
+  /** Брюхом вверх 0…1 (смерть). */
+  belly: number;
+  eyes: number;
+  /** Тень под водой 0…1, пузыри (фаза, −1 — нет), вода стекает 0…1, пена у кромки 0…1. */
+  under: number;
+  bub: number;
+  wet: number;
+  foam: number;
+  /** Фаза ряби. */
+  rip: number;
+}
+
+const GRASP0: GraspO = {
+  z: 1.4,
+  pitch: 0,
+  roll: 0,
+  hp: 0,
+  mouth: 0,
+  ae: 0.3,
+  as: 0.6,
+  ar: 0.4,
+  claw: 0.3,
+  aeL: 0,
+  belly: 0,
+  eyes: 1,
+  under: 0,
+  bub: -1,
+  wet: 0,
+  foam: 1,
+  rip: 0,
+};
+
+const GW = 52;
+const GH = 46;
+const GAX = 26;
+const GAY = 30;
+/** Под водой 16 × 2, хват 20, держит 23, уходит 11, смерть 11, удар 4 × 5 сторон. */
+const GRASP_LIM = 700;
+
+/** Срез эллипсоида кромкой воды: всё ниже `G_WL` не рисуется. */
+function wcut(F: Fr, rad: V3): (q: V3) => boolean {
+  const oz = F.o[2];
+  const kz = [F.f[2] * rad[0], F.s[2] * rad[1], F.u[2] * rad[2]];
+  return (q) => oz + q[0] * kz[0] + q[1] * kz[1] + q[2] * kz[2] < G_WL;
+}
+
+/** Капсула, обрезанная кромкой воды; точка пересечения — в `wl` (для пены). */
+function capW(r: Rig, a: V3, b: V3, r0: number, r1: number, m: Mat, wl: V3[]): void {
+  const ua = a[2] >= G_WL;
+  const ub = b[2] >= G_WL;
+  if (!ua && !ub) return;
+  if (ua && ub) {
+    r.cap(a, b, r0, r1, m);
+    return;
+  }
+  const k = (G_WL - a[2]) / (b[2] - a[2]);
+  const c = vlerp(a, b, k);
+  wl.push(c);
+  if (ua) r.cap(a, c, r0, mix(r0, r1, k), m);
+  else r.cap(c, b, mix(r0, r1, k), r1, m);
+}
+
+function graspRig(o: GraspO, yaw: number, wl: V3[], hands: V3[]): Rig {
+  const r = new Rig();
+  const B = Fr.yaw(yaw);
+  const tor = B.at(0, 0, o.z)
+    .pitch(o.pitch)
+    .roll(o.roll + o.belly * PI * 0.85);
+  const tr: V3 = [3.4, 4.4, 3.8];
+  r.ell(
+    tor,
+    [0, 0, 0],
+    tr,
+    {
+      T: G_SKIN,
+      pat: (q, l) => (q[2] < -0.35 ? G_ARM[l > 0.2 ? 2 : 1] : null),
+    },
+    wcut(tor, tr),
+  );
+  // Голова: широкая, плоская, пасть-щель во всю ширину.
+  const hd = tor.at(1.9, 0, 2.7).pitch(o.hp);
+  const hr: V3 = [3.3, 4.4, 2.1];
+  r.ell(
+    hd,
+    [0, 0, 0],
+    hr,
+    {
+      T: G_SKIN,
+      pat: (q, l) =>
+        Math.abs(q[1]) > 0.5 && q[2] > 0.3 && ((q[0] * 5 + q[1] * 3) & 1) === 0 && l < 0.6
+          ? G_SKIN[0]
+          : null,
+    },
+    wcut(hd, hr),
+  );
+  const mf = hd.at(2.7, 0, -0.65 - o.mouth * 0.4);
+  const mr: V3 = [0.9, 3.0, 0.35 + o.mouth * 1.1];
+  r.ell(mf, [0, 0, 0], mr, { T: G_MOUTH, flat: 0 }, wcut(mf, mr));
+  for (let i = -3; i <= 3; i++) {
+    const up = hd.p(3.25, i * 0.8, -0.4);
+    if (up[2] > G_WL) r.dot(up, G_TOOTH, 0, 1, 0.9);
+    if (o.mouth > 0.35) {
+      const lo = hd.p(3.1, i * 0.8 + 0.4, -0.9 - o.mouth * 1.4);
+      if (lo[2] > G_WL) r.dot(lo, G_TOOTH, 0, 1, 0.9);
+    }
+  }
+  for (const s of [-1, 1]) {
+    const e = hd.p(2.2, s * 1.9, 1.1);
+    if (e[2] > G_WL && o.eyes > 0.05) {
+      r.dot(e, G_EYE, o.eyes, 1, 1.1);
+      if (s > 0) r.eye = e;
+    }
+  }
+  // Гребень по спине.
+  for (let i = 0; i < 3; i++) {
+    const bp = tor.p(-0.5 - i * 1.4, 0, 3.5 - i * 0.4);
+    if (bp[2] > G_WL) r.spike(bp, tor.v(-0.5, 0, 1), 2.2 - i * 0.4, 0.7, { T: G_SKIN, bias: -0.1 }, 3);
+  }
+  // Руки: длинные, бледные, с крючьями; ниже воды срезаны.
+  const am: Mat = { T: G_ARM };
+  for (const s of [-1, 1]) {
+    const e = o.ae + (s < 0 ? o.aeL : 0);
+    const sh = tor.p(0.8, s * 3.9, 1.2);
+    const d = vnorm(tor.v(Math.cos(e) * Math.cos(o.as), s * Math.sin(o.as), Math.sin(e)));
+    const L = 5.5 + 8 * o.ar;
+    const bend = vmul(tor.v(0, s * 0.6, -1), 1.6 * (1 - o.ar));
+    const el = vadd(vadd(sh, vmul(d, L * 0.48)), bend);
+    const hand = vadd(sh, vmul(d, L));
+    capW(r, sh, el, 1.3, 1.05, am, wl);
+    capW(r, el, hand, 1.05, 0.85, am, wl);
+    if (hand[2] >= G_WL) {
+      hands.push(hand);
+      const side = vnorm(tor.v(-Math.sin(o.as) * s, Math.cos(o.as), 0));
+      const down = vnorm(vsub(vmul(d, 0.4), [0, 0, 1]));
+      for (let k = -1; k <= 1; k++) {
+        const tip = vadd(
+          vadd(hand, vmul(d, 2.0 + 0.8 * o.claw)),
+          vadd(vmul(side, k * (0.6 + 1.0 * o.claw)), vmul(down, 1.1 * (1 - o.claw * 0.5))),
+        );
+        r.cap(hand, tip, 0.6, 0.25, { T: G_CLAW, bias: 0.1 });
+      }
+    }
+  }
+  return r;
+}
+
+function graspPic(o: GraspO, yaw: number, post?: ((o: RigOut, P: Proj2) => void) | null): Pic {
+  const wl: V3[] = [];
+  const hands: V3[] = [];
+  const rig = graspRig(o, yaw, wl, hands);
+  // Курс на экране — для тени под водой и глаз.
+  const hx = Math.cos(yaw);
+  const hy = Math.sin(yaw) * SE;
+  const hl = Math.hypot(hx, hy) || 1;
+  const ux = hx / hl;
+  const uy = hy / hl;
+  return draw(rig, GW, GH, GAX, GAY, (out, P) => {
+    const p = out.p;
+    const lit = litOn(out);
+    const empty = (x: number, y: number) => !p.solid(Math.round(x), Math.round(y));
+    // Тень под водой: вытянута по курсу, только там, где пусто.
+    if (o.under > 0.02) {
+      for (let y = -6; y <= 6; y++)
+        for (let x = -9; x <= 9; x++) {
+          const a = (x * ux + y * uy) / 7.5;
+          const b = (-x * uy + y * ux) / 4.6;
+          if (a * a + b * b > 1) continue;
+          if (empty(GAX + x, GAY + y)) dotA(p, GAX + x, GAY + y, G_DARK, o.under * (a * a + b * b > 0.6 ? 0.35 : 0.55));
+        }
+      if (o.eyes > 0.05 && o.under > 0.4)
+        for (const s of [-1, 1]) {
+          const ex = GAX + ux * 4.5 - uy * s * 1.8;
+          const ey = GAY + uy * 4.5 + ux * s * 1.8 * 0.7;
+          dotA(lit, ex, ey, G_EYE, o.eyes * o.under);
+          dotA(p, ex, ey, G_EYE, 0.6 * o.eyes * o.under);
+        }
+    }
+    // Рябь: кольцо расходится от тела (только по пустому).
+    const rr = 6 + ((o.rip % 1) + 1) % 1 * 7;
+    const ra = 0.55 * (1 - (((o.rip % 1) + 1) % 1));
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * TAU;
+      const x = GAX + Math.cos(a) * rr;
+      const y = GAY + Math.sin(a) * rr * 0.55;
+      if (empty(x, y) && (i + Math.floor(o.rip * 7)) % 3 !== 0) dotA(p, x, y, G_RIP, ra);
+    }
+    // Пена у кромки вокруг тела: передняя дуга — поверх тела.
+    if (o.foam > 0.02) {
+      const fr = 4.6 + (o.z > 0 ? 0.6 : 0);
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * TAU;
+        const x = GAX + Math.cos(a) * fr + ((i * 7) % 3) - 1;
+        const y = GAY + Math.sin(a) * fr * 0.55;
+        if (Math.sin(a) > 0 || empty(x, y)) dotA(p, x, y, i % 3 ? G_FOAM : G_RIP, o.foam * 0.9);
+      }
+      for (const c of wl) {
+        const [x, y] = P(c);
+        for (let k = -2; k <= 2; k++) dotA(p, x + k, y + (k & 1), G_FOAM, o.foam * 0.85);
+      }
+    }
+    // Пузыри: всплывают и лопаются.
+    if (o.bub >= 0)
+      for (let i = 0; i < 6; i++) {
+        const q = (o.bub + rnd(i, 61)) % 1;
+        const a = rnd(i, 62) * TAU;
+        const rad = 2 + rnd(i, 63) * 6;
+        const x = GAX + Math.cos(a) * rad;
+        const y = GAY + Math.sin(a) * rad * 0.55;
+        if (q < 0.7) dotA(p, x, y, G_FOAM, 0.9);
+        else for (let k = 0; k < 4; k++) dotA(p, x + [1, -1, 0, 0][k], y + [0, 0, 1, -1][k], G_RIP, 0.7);
+      }
+    // Вода стекает с головы и рук.
+    if (o.wet > 0.05) {
+      const pts = hands.map((h) => P(h));
+      pts.push(P([Math.cos(yaw) * 3.5, Math.sin(yaw) * 3.5, o.z + 1.2]));
+      pts.forEach(([x, y], i) => {
+        for (let k = 0; k < 3; k++) dotA(p, x + ((i + k) % 3) - 1, y + 2 + k * 2, G_FOAM, o.wet * (1 - k * 0.25));
+      });
+    }
+    if (post) post(out, P);
+  });
+}
+
+/** Хват 0,8 с: поза на время `t`. */
+function graspRise(t: number, o: GraspO): void {
+  o.z = kf(t, [
+    [0, -4],
+    [0.3, -2.4, 'i'],
+    [0.36, -0.6, 'o'],
+    [0.5, 1.1, 'o'],
+    [0.6, 1.5],
+    [0.72, 1.7],
+    [0.8, 1.3, 'i'],
+  ]);
+  o.under = 1 - sstep(0.3, 0.45, t);
+  o.bub = t < 0.36 ? t * 2.6 : -1;
+  o.foam = sstep(0.3, 0.38, t);
+  o.wet = kf(t, [
+    [0.34, 0],
+    [0.4, 1],
+    [0.8, 0.4],
+  ]);
+  o.ae = kf(t, [
+    [0, -1.2],
+    [0.48, -0.9],
+    [0.6, 1.2, 'o'],
+    [0.72, 1.45],
+    [0.8, 0.02, 'i'],
+  ]);
+  o.ar = kf(t, [
+    [0, 0.2],
+    [0.6, 0.45],
+    [0.72, 0.5],
+    [0.8, 1.0, 'i'],
+  ]);
+  o.as = kf(t, [
+    [0, 0.6],
+    [0.6, 0.8],
+    [0.72, 0.9],
+    [0.8, 0.3, 'i'],
+  ]);
+  o.aeL = kf(t, [
+    [0.5, 0],
+    [0.6, -0.35],
+    [0.7, 0],
+  ]);
+  o.claw = kf(t, [
+    [0, 0],
+    [0.6, 1],
+    [0.77, 1],
+    [0.8, 0.3],
+  ]);
+  o.pitch = kf(t, [
+    [0, 0],
+    [0.5, -0.1],
+    [0.62, -0.32, 'o'],
+    [0.72, -0.38],
+    [0.8, 0.14, 'i'],
+  ]);
+  o.mouth = kf(t, [
+    [0, 0],
+    [0.5, 0.1],
+    [0.62, 1, 'o'],
+    [0.76, 1],
+    [0.8, 0.2, 'i'],
+  ]);
+  o.hp = kf(t, [
+    [0, 0],
+    [0.62, -0.2],
+    [0.8, 0.15],
+  ]);
+  o.eyes = 1;
+  o.rip = t * 2;
+}
+
+/** Держит 1,6 с: тянет к себе двумя рывками, жуёт, качается. */
+function graspHold(q: number, o: GraspO): void {
+  const tug = (a: number) => Math.exp(-(((q - a) / 0.08) ** 2));
+  const pull = tug(0.35) + tug(0.8) * 1.1;
+  o.z = 1.3 + Math.sin(q * TAU * 1.2) * 0.2 - pull * 0.3;
+  o.ar = kf(q, [
+    [0, 1],
+    [0.25, 0.95],
+    [0.4, 0.62, 'o'],
+    [0.7, 0.6],
+    [0.85, 0.32, 'o'],
+    [1.6, 0.3],
+  ]);
+  o.ae = kf(q, [
+    [0, 0.02],
+    [0.4, 0.08],
+    [0.85, 0.2],
+    [1.6, 0.35],
+  ]);
+  o.as = kf(q, [
+    [0, 0.3],
+    [0.85, 0.45],
+    [1.6, 0.6],
+  ]);
+  o.claw = kf(q, [
+    [0, 0.2],
+    [1.2, 0.2],
+    [1.5, 0.7],
+  ]);
+  o.pitch = kf(q, [
+    [0, 0.14],
+    [0.25, 0.08],
+    [1.6, 0],
+  ]) - pull * 0.22;
+  o.hp = -pull * 0.12;
+  o.mouth = q > 0.3 ? 0.35 + 0.35 * Math.sin((q - 0.3) * TAU * 2.2) : 0.15;
+  o.roll = Math.sin(q * 4.2) * 0.06;
+  o.wet = 0.4 * (1 - q / 1.6);
+  o.rip = q * 1.5;
+}
+
+registerMobPainter('f3_grasp', (m: Mob, pose: MobPose) => {
+  const md = pose.mode;
+  const t = Math.max(0, pose.t);
+  const now = pose.now;
+  const id = m.id ?? 0;
+  const sp = speedOf(m);
+  const travel = sp > 0.4 ? Math.atan2(m.vy ?? 0, m.vx ?? 0) : (m.face ?? 0);
+  const lock = md === 'rise' || md === 'hold' || md === 'sink';
+  const v = visOf(m, pose, lock ? (m.face ?? 0) : travel, lock ? 12 : 5);
+  const d = side8(v.yaw);
+  const o: GraspO = { ...GRASP0 };
+  const ex: Partial<MobFrame> = { shadow: 0, still: true, lift: 0 };
+  let key: string;
+  let post: ((r: RigOut, P: Proj2) => void) | null = null;
+  if (md === 'dying') {
+    // Смерть: дёрнулся, перевернулся брюхом вверх, всплыл — и тонет.
+    const f = Math.min(10, Math.floor(t * 12));
+    const k = f / 12;
+    o.belly = sstep(0.08, 0.45, k);
+    o.z = kf(k, [
+      [0, 1.3],
+      [0.15, 2.0, 'o'],
+      [0.45, 0.6, 'i'],
+      [0.85, -0.4],
+    ]);
+    o.ae = kf(k, [
+      [0, 1.2],
+      [0.3, 0.5],
+      [0.5, -0.6],
+    ]);
+    o.ar = 0.5;
+    o.as = 0.9;
+    o.claw = 1 - k;
+    o.mouth = kf(k, [
+      [0, 1],
+      [0.4, 0.6],
+      [0.6, 0.2],
+    ]);
+    o.eyes = 1 - sstep(0.1, 0.4, k);
+    o.wet = 0;
+    o.bub = f >= 6 ? f * 0.13 : -1;
+    o.rip = k * 2;
+    key = `die${f}`;
+    ex.linger = 0.9;
+    ex.alpha = 1 - sstep(0.6, 0.9, t);
+    if (f >= 3 && f <= 5) {
+      const ff = f - 3;
+      post = (out) => dust(out, GAX, GAY + 1, (ff + 0.5) / 3.5, 10, 41, G_FOAM, 10);
+    }
+  } else if (md === 'rise') {
+    const f = fi(t, 19);
+    graspRise((f + 0.5) / FPS, o);
+    key = `rise${f}`;
+    if (f >= 18) {
+      // Бросок рук: серп следа от поднятых ладоней вниз-вперёд.
+      const yawB = yawOfSide(BASE[d]);
+      const ff = f;
+      post = (out, P) => {
+        const pts: [number, number][] = [];
+        for (let i = 0; i <= 5; i++) {
+          const oo: GraspO = { ...o, ae: mix(1.45, o.ae, i / 5), ar: mix(0.5, o.ar, i / 5) };
+          const hs: V3[] = [];
+          graspRig(oo, yawB, [], hs);
+          if (hs[1]) pts.push(P(hs[1]));
+        }
+        smear(out, pts, [220, 240, 228, 255], ff === 19 ? 0.95 : 0.6);
+      };
+    }
+  } else if (md === 'hold') {
+    // Кадр 0 — контакт (миг урона): ладони у цели, всплеск, тело вперёд.
+    const f = t < 0.25 ? fi(t, 5) : 6 + Math.min(16, Math.floor((t - 0.25) * 12));
+    const q = f < 6 ? (f + 0.5) / FPS : 0.25 + (f - 6 + 0.5) / 12;
+    graspHold(q, o);
+    key = `hold${f}`;
+    if (f < 3) {
+      const qq = 1 - f / 3;
+      ex.sx = 1 + 0.12 * qq;
+      ex.sy = 1 - 0.1 * qq;
+      const ff = f;
+      post = (out, P) => {
+        const hs: V3[] = [];
+        graspRig(o, yawOfSide(BASE[d]), [], hs);
+        for (const h of hs) {
+          const [x, y] = P([h[0], h[1], 0]);
+          dust(out, x, y, (ff + 0.6) / 3.6, 7, 13 + ff, G_FOAM, 7);
+        }
+      };
+    }
+    const hf = Math.floor(hurtAge(v, now) * FPS);
+    if (hf >= 0 && hf < 4) {
+      // Удар героя: голова откинута, пасть настежь.
+      const qq = [1, 0.75, 0.4, 0.15][hf];
+      Object.assign(o, GRASP0);
+      graspHold(1.0, o);
+      o.hp = -0.45 * qq;
+      o.pitch = -0.3 * qq;
+      o.mouth = 0.9 * qq + 0.2;
+      key = `hurt${hf}`;
+    }
+  } else if (md === 'sink') {
+    // Уходит: тело вниз, руки — последними.
+    const f = fi(t, 10);
+    const q = (f + 0.5) / FPS;
+    o.z = kf(q, [
+      [0, 1.3],
+      [0.1, 1.6, 'o'],
+      [0.45, -4, 'i'],
+    ]);
+    o.ae = kf(q, [
+      [0, 0.25],
+      [0.2, 1.3, 'o'],
+    ]);
+    o.ar = 0.55;
+    o.as = 0.5;
+    o.claw = kf(q, [
+      [0, 0.6],
+      [0.3, 1],
+    ]);
+    o.mouth = 0;
+    o.under = sstep(0.22, 0.4, q);
+    o.wet = 0.3;
+    o.rip = q * 2;
+    key = `sink${f}`;
+  } else {
+    // Под водой: тень, глаза, рябь; плывёт — горб воды впереди.
+    const moving = sp > 0.5;
+    const f = (((Math.floor(now * (moving ? 12 : 6) + id * 3.7) % 16) + 16) % 16) | 0;
+    o.z = -4;
+    o.under = md === 'sleep' ? 0.6 : 1;
+    o.eyes = md === 'sleep' || f === 9 ? 0 : 1;
+    o.foam = moving ? 0.35 : 0;
+    o.rip = f / 16;
+    o.bub = !moving && f >= 12 ? (f - 12) / 4 : -1;
+    key = `lurk${moving ? 1 : 0}${o.eyes ? '' : 'c'}${f}`;
+  }
+  if (md !== 'dying') recoil(v, now, 1.2, ex, 0.1);
+  return frameOf('grasp', GRASP_LIM, key, d, pose, (yaw) => graspPic(o, yaw, post), ex);
+});
+
+registerMobWarm('f3_grasp', function* () {
+  const pose = warmPose('lurk');
+  for (let d = 0; d < 8; d++) {
+    if (MIRR[d]) continue;
+    const yaw = yawOfSide(d);
+    for (let f = 0; f < 20; f++) {
+      const o: GraspO = { ...GRASP0 };
+      graspRise((f + 0.5) / FPS, o);
+      frameOf('grasp', GRASP_LIM, `rise${f}`, d, pose, () => graspPic(o, yaw));
+      yield 0;
+    }
+  }
+});
+
+/** Брызги хвата — поверх темноты: капли взлетают из-под ладоней и падают. */
+registerImpactPainter('f3_grab', {
+  life: 0.6,
+  shake: 0.22,
+  above: true,
+  paint(g, rec, px, py, _scale, age) {
+    const seed = (rec.seed ?? 1) >>> 0;
+    const k = age / 0.6;
+    for (let i = 0; i < 14; i++) {
+      const a = rnd(seed % 997, i, 1) * TAU;
+      const sp = 14 + rnd(seed % 997, i, 2) * 22;
+      const x = px + Math.cos(a) * sp * age * 1.4;
+      const y = py + Math.sin(a) * sp * age * 0.7 - (40 * age - 70 * age * age) * (0.6 + rnd(seed % 997, i, 3));
+      g.fillStyle = i % 3 ? 'rgba(191,244,234,1)' : 'rgba(255,255,255,1)';
+      g.globalAlpha = Math.max(0, 1 - k);
+      g.fillRect(Math.round(x), Math.round(y), 1, 1);
+    }
+    if (age < 0.12) {
+      // Вспышка-кольцо пены в миг хвата.
+      const r = 4 + age * 60;
+      g.globalAlpha = 1 - age / 0.12;
+      g.fillStyle = 'rgba(232,255,250,1)';
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * TAU;
+        g.fillRect(Math.round(px + Math.cos(a) * r), Math.round(py + Math.sin(a) * r * 0.55), 1, 1);
+      }
+    }
+    g.globalAlpha = 1;
+    return true;
+  },
+});
+
+/** Хват на полу: мокрое пятно, следы ладоней с когтями и волок к воде. */
+registerZonePainter('f3_grab', (g, z, px, py) => {
+  const zz = z as F3Zone & { t: number; life: number; id: number };
+  const u = clamp01(zz.t / (zz.life || 1.4));
+  const a = zz.vAng ?? 0;
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const fade = 1 - sstep(0.55, 1, u);
+  // Волок: ладони тянут к воде.
+  const drag = 12 * easeOut(sstep(0.12, 0.6, u));
+  g.fillStyle = 'rgba(12,42,44,1)';
+  g.globalAlpha = 0.35 * fade;
+  for (let s = 0; s <= drag; s += 1)
+    for (const side of [-1, 1])
+      g.fillRect(Math.round(px + ca * s - sa * side * 3), Math.round(py + sa * s * 0.6 + ca * side * 2), 1, 1);
+  // Мокрое пятно.
+  g.globalAlpha = 0.3 * fade;
+  for (let i = -5; i <= 5; i++)
+    for (let j = -2; j <= 2; j++)
+      if ((i * i) / 30 + (j * j) / 6 <= 1) g.fillRect(Math.round(px + i), Math.round(py + j), 1, 1);
+  // Ладони с когтями — бледные, тают.
+  g.fillStyle = 'rgba(220,232,210,1)';
+  g.globalAlpha = 0.75 * fade;
+  for (const side of [-1, 1]) {
+    const hx = px + ca * drag - sa * side * 3;
+    const hy = py + sa * drag * 0.6 + ca * side * 2;
+    g.fillRect(Math.round(hx) - 1, Math.round(hy), 2, 1);
+    for (let k = -1; k <= 1; k++)
+      g.fillRect(Math.round(hx - ca * 2 + -sa * k), Math.round(hy - sa * 1.2 + ca * k * 0.6), 1, 1);
+  }
+  g.globalAlpha = 1;
+  return true;
 });
