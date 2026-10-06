@@ -11,7 +11,12 @@
 //
 // Координаты — игровые пиксели (16 на клетку); рисуем векторно, тонко.
 
-import { paintSim, registerImpactPainter, registerShotPainter, registerZonePainter } from '../dungeon-paint';
+import {
+  paintSim,
+  registerImpactPainter,
+  registerShotPainter,
+  registerZonePainter,
+} from '../dungeon-paint';
 import type { ImpactRec, Sprite } from '../dungeon-paint';
 import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
 import { Px } from '../dungeon-art';
@@ -25,7 +30,8 @@ const ease = (k: number) => {
   const v = k01(k);
   return v * v * (3 - 2 * v);
 };
-const zf = (z: Zone | Strike, key: string): number => (z as unknown as Record<string, number>)[key] ?? 0;
+const zf = (z: Zone | Strike, key: string): number =>
+  (z as unknown as Record<string, number>)[key] ?? 0;
 const rgba = (c: RGBA, a: number) => css(c, Math.max(0, Math.min(1, a)));
 
 /** Мир → экран относительно точки зоны. */
@@ -54,7 +60,9 @@ function shoulderH(m: Mob): number {
 }
 
 /** Вага Кукловода на экране: [x, y, сдвиг от его точки на полу по y]. */
-function vagaScreen(to: (x: number, y: number) => [number, number]): [number, number, number] | null {
+function vagaScreen(
+  to: (x: number, y: number) => [number, number],
+): [number, number, number] | null {
   const lord = F13_FX.mobs.find((q) => q.kind === 'f13boss' && q.mode !== 'dying');
   if (!lord) return null;
   const [x, y] = to(lord.x, lord.y);
@@ -63,7 +71,18 @@ function vagaScreen(to: (x: number, y: number) => [number, number]): [number, nu
 }
 
 /** Нить: чуть провисшая, с бегущим бликом. */
-function thread(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, a: number, time: number, seed: number, w = 0.7, col: RGBA = GOLD[2]): void {
+function thread(
+  g: CanvasRenderingContext2D,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  a: number,
+  time: number,
+  seed: number,
+  w = 0.7,
+  col: RGBA = GOLD[2],
+): void {
   const mx = (x0 + x1) / 2 + Math.sin(time * 1.7 + seed) * 1.2;
   const my = (y0 + y1) / 2 + 1.5;
   g.strokeStyle = rgba(col, a);
@@ -95,7 +114,13 @@ function crossbar(g: CanvasRenderingContext2D, x: number, y: number, a: number):
   g.fillRect(x + 3.5, y - 0.5, 1, 1);
 }
 
-function drawStrings(g: CanvasRenderingContext2D, to: (x: number, y: number) => [number, number], hx0: number, hy0: number, time: number): void {
+function drawStrings(
+  g: CanvasRenderingContext2D,
+  to: (x: number, y: number) => [number, number],
+  hx0: number,
+  hy0: number,
+  time: number,
+): void {
   const vaga = vagaScreen(to);
   for (const m of F13_FX.mobs) {
     if (m.mode === 'dying' || (m.data.sn ?? 0) <= 0) continue;
@@ -151,7 +176,16 @@ function drawStrings(g: CanvasRenderingContext2D, to: (x: number, y: number) => 
 // Свет: софиты и луна.
 // ---------------------------------------------------------------------------
 
-function beam(g: CanvasRenderingContext2D, lx: number, ly: number, x: number, y: number, r: number, col: RGBA, a: number): void {
+function beam(
+  g: CanvasRenderingContext2D,
+  lx: number,
+  ly: number,
+  x: number,
+  y: number,
+  r: number,
+  col: RGBA,
+  a: number,
+): void {
   // Столб света от фонаря к пятну: трапеция, мягкий градиент.
   const dx = x - lx;
   const dy = y - ly;
@@ -171,7 +205,14 @@ function beam(g: CanvasRenderingContext2D, lx: number, ly: number, x: number, y:
   g.fill();
 }
 
-function pool(g: CanvasRenderingContext2D, x: number, y: number, r: number, col: RGBA, a: number): void {
+function pool(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  col: RGBA,
+  a: number,
+): void {
   const gr = g.createRadialGradient(x, y, 0, x, y, r);
   gr.addColorStop(0, rgba(col, a));
   gr.addColorStop(0.7, rgba(col, a * 0.6));
@@ -192,7 +233,12 @@ const MOON: RGBA = [170, 200, 255, 255];
 const ARENA_X0 = 12;
 const ARENA_X1 = 52;
 
-function waveCrest(g: CanvasRenderingContext2D, to: (x: number, y: number) => [number, number], w: (typeof F13_FX.waves)[number], time: number): void {
+function waveCrest(
+  g: CanvasRenderingContext2D,
+  to: (x: number, y: number) => [number, number],
+  w: (typeof F13_FX.waves)[number],
+  time: number,
+): void {
   const swell = w.t < BOSS.wave.swell;
   const k = swell ? w.t / BOSS.wave.swell : 1;
   const [, sy] = to(0, w.y);
@@ -246,7 +292,15 @@ function waveCrest(g: CanvasRenderingContext2D, to: (x: number, y: number) => [n
     }
 }
 
-function star(g: CanvasRenderingContext2D, x: number, y: number, r: number, rot: number, fill: string, edge: string): void {
+function star(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  rot: number,
+  fill: string,
+  edge: string,
+): void {
   g.beginPath();
   for (let i = 0; i < 10; i++) {
     const a = rot + (i * Math.PI) / 5 - Math.PI / 2;
@@ -264,7 +318,11 @@ function star(g: CanvasRenderingContext2D, x: number, y: number, r: number, rot:
   g.stroke();
 }
 
-function drawStars(g: CanvasRenderingContext2D, to: (x: number, y: number) => [number, number], time: number): void {
+function drawStars(
+  g: CanvasRenderingContext2D,
+  to: (x: number, y: number) => [number, number],
+  time: number,
+): void {
   for (const s of F13_FX.stars) {
     const [px, py] = to(s.px, s.py);
     const [x, y] = to(s.x, s.y);
@@ -288,7 +346,11 @@ function drawStars(g: CanvasRenderingContext2D, to: (x: number, y: number) => [n
   }
 }
 
-function moon(g: CanvasRenderingContext2D, to: (x: number, y: number) => [number, number], time: number): void {
+function moon(
+  g: CanvasRenderingContext2D,
+  to: (x: number, y: number) => [number, number],
+  time: number,
+): void {
   const m = F13_FX.moon;
   if (m.r <= 0) return;
   const [x, y] = to(m.x, m.y);
@@ -323,7 +385,11 @@ function moon(g: CanvasRenderingContext2D, to: (x: number, y: number) => [number
 
 const TELE: RGBA = [255, 70, 50, 255];
 
-function lordTele(g: CanvasRenderingContext2D, to: (x: number, y: number) => [number, number], time: number): void {
+function lordTele(
+  g: CanvasRenderingContext2D,
+  to: (x: number, y: number) => [number, number],
+  time: number,
+): void {
   for (const m of F13_FX.mobs) {
     if (m.kind !== 'f13boss' || !m.tele) continue;
     const t = m.tele;
@@ -467,7 +533,17 @@ registerZonePainter('f13_stage', (g, z, px, py, S, time) => {
 
 const life = (z: Zone | Strike) => k01(z.t / Math.max(0.01, (z as Zone).life ?? 1));
 
-function burst(g: CanvasRenderingContext2D, x: number, y: number, k: number, n: number, seed: number, cols: RGBA[], R: number, up = 0): void {
+function burst(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  k: number,
+  n: number,
+  seed: number,
+  cols: RGBA[],
+  R: number,
+  up = 0,
+): void {
   for (let i = 0; i < n; i++) {
     const a = hash(seed, i, 1) * TAU;
     const sp = (0.4 + hash(seed, i, 2)) * R;
@@ -491,7 +567,12 @@ registerZonePainter('f13_snap', (g, z, px, py, S) => {
   g.lineWidth = 0.8;
   g.beginPath();
   g.moveTo(bx, by - 18);
-  g.quadraticCurveTo(bx + (x - bx) * 0.5 + 6 * (1 - e), (by - 18 + y) / 2, bx + (x - bx) * (1 - e), by - 18 + (y - by + 18) * (1 - e));
+  g.quadraticCurveTo(
+    bx + (x - bx) * 0.5 + 6 * (1 - e),
+    (by - 18 + y) / 2,
+    bx + (x - bx) * (1 - e),
+    by - 18 + (y - by + 18) * (1 - e),
+  );
   g.stroke();
   // Звёздочка разреза.
   g.fillStyle = rgba([255, 255, 255, 255], 1 - k);
@@ -506,7 +587,17 @@ registerZonePainter('f13_snap', (g, z, px, py, S) => {
 registerZonePainter('f13_collapse', (g, z, px, py) => {
   const k = life(z);
   const pale = zf(z, 'k') > 0;
-  burst(g, px, py - 8, k, 18, z.id, pale ? [P.pink[2], P.porcelain[3], GOLD[2]] : [P.wood[2], P.wood[3], P.cream[2], GOLD[2]], 14, 6);
+  burst(
+    g,
+    px,
+    py - 8,
+    k,
+    18,
+    z.id,
+    pale ? [P.pink[2], P.porcelain[3], GOLD[2]] : [P.wood[2], P.wood[3], P.cream[2], GOLD[2]],
+    14,
+    6,
+  );
   // Пыль оседает.
   g.fillStyle = rgba(P.cream[1], 0.35 * (1 - k));
   g.beginPath();
@@ -729,7 +820,15 @@ registerZonePainter('f13_retie', (g, z, px, py) => {
 // ---- занавес ------------------------------------------------------------------
 
 /** Бархатный занавес через всю сцену, низ — на `drop` (0 поднят, 1 опущен). */
-function curtain(g: CanvasRenderingContext2D, z: Zone | Strike, px: number, py: number, S: number, drop: number, time: number): void {
+function curtain(
+  g: CanvasRenderingContext2D,
+  z: Zone | Strike,
+  px: number,
+  py: number,
+  S: number,
+  drop: number,
+  time: number,
+): void {
   if (drop <= 0.001) return;
   const to = viewOf(z, px, py, S);
   const [x0, top] = to(ARENA_X0, 0);
@@ -765,7 +864,12 @@ function curtain(g: CanvasRenderingContext2D, z: Zone | Strike, px: number, py: 
 registerZonePainter('f13_curtainfall', (g, z, px, py, S, time) => {
   const t = z.t;
   const T = BOSS.trans;
-  const drop = t < 0.9 ? ease(t / 0.9) : t < BOSS.swap + 0.3 ? 1 : 1 - ease((t - BOSS.swap - 0.3) / (T - BOSS.swap - 0.3));
+  const drop =
+    t < 0.9
+      ? ease(t / 0.9)
+      : t < BOSS.swap + 0.3
+        ? 1
+        : 1 - ease((t - BOSS.swap - 0.3) / (T - BOSS.swap - 0.3));
   curtain(g, z, px, py, S, drop, time);
   return true;
 });
@@ -791,7 +895,8 @@ registerZonePainter('f13_bow', (g, z, px, py, S, time) => {
       g.fillRect(x, y, 2.4, 2.4);
     }
   }
-  const drop = t < 4.4 ? 0 : t < 5.6 ? ease((t - 4.4) / 1.2) : t < 6.1 ? 1 : 1 - ease((t - 6.1) / 0.4);
+  const drop =
+    t < 4.4 ? 0 : t < 5.6 ? ease((t - 4.4) / 1.2) : t < 6.1 ? 1 : 1 - ease((t - 6.1) / 0.4);
   const cz = { ...z, x: zf(z, 'cx'), y: zf(z, 'cy') } as Zone;
   const to = viewOf(z, px, py, S);
   const [cx, cy] = to(cz.x, cz.y);
@@ -1011,7 +1116,20 @@ registerZonePainter('f13_memory', (g, z, px, py) => {
 
 // ---- контакты ударов ----------------------------------------------------------
 
-function impact(art: string, paint: (g: CanvasRenderingContext2D, r: ImpactRec, px: number, py: number, k: number, time: number) => void, life0: number, shake = 0.15, above = false): void {
+function impact(
+  art: string,
+  paint: (
+    g: CanvasRenderingContext2D,
+    r: ImpactRec,
+    px: number,
+    py: number,
+    k: number,
+    time: number,
+  ) => void,
+  life0: number,
+  shake = 0.15,
+  above = false,
+): void {
   registerImpactPainter(art, {
     life: life0,
     shake,
@@ -1023,61 +1141,112 @@ function impact(art: string, paint: (g: CanvasRenderingContext2D, r: ImpactRec, 
   });
 }
 
-impact('f13_sandbag', (g, r, px, py, k) => {
-  g.fillStyle = rgba(P.cream[1], 1 - k);
-  g.beginPath();
-  g.ellipse(px, py - 4, 7, 5, 0, 0, TAU);
-  g.fill();
-  burst(g, px, py, k, 14, r.seed, [P.cream[2], P.cream[1], P.wood[2]], 18, 4);
-}, 0.6, 0.25);
+impact(
+  'f13_sandbag',
+  (g, r, px, py, k) => {
+    g.fillStyle = rgba(P.cream[1], 1 - k);
+    g.beginPath();
+    g.ellipse(px, py - 4, 7, 5, 0, 0, TAU);
+    g.fill();
+    burst(g, px, py, k, 14, r.seed, [P.cream[2], P.cream[1], P.wood[2]], 18, 4);
+  },
+  0.6,
+  0.25,
+);
 
-impact('f13_iron', (g, r, px, py, k) => {
-  burst(g, px, py - 6, k, 18, r.seed, [GOLD[3], [255, 255, 255, 255], P.steel[3]], 26, 6);
-}, 0.5, 0.3);
+impact(
+  'f13_iron',
+  (g, r, px, py, k) => {
+    burst(g, px, py - 6, k, 18, r.seed, [GOLD[3], [255, 255, 255, 255], P.steel[3]], 26, 6);
+  },
+  0.5,
+  0.3,
+);
 
-impact('f13_drum', (g, r, px, py, k) => {
-  const R = (r.r ?? 3) * 16;
-  g.strokeStyle = rgba(GOLD[3], 1 - k);
-  g.lineWidth = 2 * (1 - k);
-  g.beginPath();
-  g.ellipse(px, py, R * (0.8 + 0.4 * k), R * (0.8 + 0.4 * k) * 0.9, 0, 0, TAU);
-  g.stroke();
-}, 0.4, 0.2);
+impact(
+  'f13_drum',
+  (g, r, px, py, k) => {
+    const R = (r.r ?? 3) * 16;
+    g.strokeStyle = rgba(GOLD[3], 1 - k);
+    g.lineWidth = 2 * (1 - k);
+    g.beginPath();
+    g.ellipse(px, py, R * (0.8 + 0.4 * k), R * (0.8 + 0.4 * k) * 0.9, 0, 0, TAU);
+    g.stroke();
+  },
+  0.4,
+  0.2,
+);
 
-impact('f13_pop', (g, r, px, py, k) => burst(g, px, py, k, 12, r.seed, [P.wood[2], P.red[2], GOLD[2]], 16, 8), 0.5, 0.12);
+impact(
+  'f13_pop',
+  (g, r, px, py, k) => burst(g, px, py, k, 12, r.seed, [P.wood[2], P.red[2], GOLD[2]], 16, 8),
+  0.5,
+  0.12,
+);
 
-impact('f13_gridline', (g, r, px, py, k) => {
-  const L = (r.r ?? 8) * 16;
-  const a = r.ang ?? 0;
-  g.strokeStyle = rgba([255, 255, 230, 255], 1 - k);
-  g.lineWidth = 2.2 * (1 - k);
-  g.beginPath();
-  g.moveTo(px - Math.cos(a) * L, py - Math.sin(a) * L);
-  g.lineTo(px + Math.cos(a) * L, py + Math.sin(a) * L);
-  g.stroke();
-}, 0.35, 0.08, true);
+impact(
+  'f13_gridline',
+  (g, r, px, py, k) => {
+    const L = (r.r ?? 8) * 16;
+    const a = r.ang ?? 0;
+    g.strokeStyle = rgba([255, 255, 230, 255], 1 - k);
+    g.lineWidth = 2.2 * (1 - k);
+    g.beginPath();
+    g.moveTo(px - Math.cos(a) * L, py - Math.sin(a) * L);
+    g.lineTo(px + Math.cos(a) * L, py + Math.sin(a) * L);
+    g.stroke();
+  },
+  0.35,
+  0.08,
+  true,
+);
 
-impact('f13_bolt', (g, r, px, py, k) => {
-  // Зигзаг молнии сверху и вспышка.
-  g.strokeStyle = rgba([235, 240, 255, 255], 1 - k);
-  g.lineWidth = 1.6;
-  g.beginPath();
-  let x = px + (hash(r.seed, 1) - 0.5) * 10;
-  let y = py - 90;
-  g.moveTo(x, y);
-  for (let i = 0; i < 6; i++) {
-    x = px + (hash(r.seed, i + 2) - 0.5) * 14 * (1 - i / 6);
-    y += 15;
-    g.lineTo(x, y);
-  }
-  g.stroke();
-  g.fillStyle = rgba([220, 230, 255, 255], 0.5 * (1 - k));
-  g.beginPath();
-  g.ellipse(px, py, 18, 14, 0, 0, TAU);
-  g.fill();
-}, 0.35, 0.2, true);
+impact(
+  'f13_bolt',
+  (g, r, px, py, k) => {
+    // Зигзаг молнии сверху и вспышка.
+    g.strokeStyle = rgba([235, 240, 255, 255], 1 - k);
+    g.lineWidth = 1.6;
+    g.beginPath();
+    let x = px + (hash(r.seed, 1) - 0.5) * 10;
+    let y = py - 90;
+    g.moveTo(x, y);
+    for (let i = 0; i < 6; i++) {
+      x = px + (hash(r.seed, i + 2) - 0.5) * 14 * (1 - i / 6);
+      y += 15;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+    g.fillStyle = rgba([220, 230, 255, 255], 0.5 * (1 - k));
+    g.beginPath();
+    g.ellipse(px, py, 18, 14, 0, 0, TAU);
+    g.fill();
+  },
+  0.35,
+  0.2,
+  true,
+);
 
-impact('f13_memory', (g, r, px, py, k) => burst(g, px, py - 6, k, 12, r.seed, [[200, 210, 255, 255], [255, 255, 255, 255]], 14, 6), 0.45, 0.1);
+impact(
+  'f13_memory',
+  (g, r, px, py, k) =>
+    burst(
+      g,
+      px,
+      py - 6,
+      k,
+      12,
+      r.seed,
+      [
+        [200, 210, 255, 255],
+        [255, 255, 255, 255],
+      ],
+      14,
+      6,
+    ),
+  0.45,
+  0.1,
+);
 
 // ---------------------------------------------------------------------------
 // Снаряды.
@@ -1138,15 +1307,60 @@ registerShotPainter('f13_needle', (s) => {
     const a = (d / 8) * TAU;
     const cx = 7;
     const cy = 7;
-    p.line(cx - Math.cos(a) * 5, cy - Math.sin(a) * 5, cx + Math.cos(a) * 5, cy + Math.sin(a) * 5, P.silver[3]);
+    p.line(
+      cx - Math.cos(a) * 5,
+      cy - Math.sin(a) * 5,
+      cx + Math.cos(a) * 5,
+      cy + Math.sin(a) * 5,
+      P.silver[3],
+    );
     p.set(cx + Math.cos(a) * 5, cy + Math.sin(a) * 5, hx('#ffffff'));
-    p.line(cx - Math.cos(a) * 5, cy - Math.sin(a) * 5, cx - Math.cos(a) * 7 + Math.sin(a) * 2, cy - Math.sin(a) * 7 - Math.cos(a) * 2, P.gold[2]);
+    p.line(
+      cx - Math.cos(a) * 5,
+      cy - Math.sin(a) * 5,
+      cx - Math.cos(a) * 7 + Math.sin(a) * 2,
+      cy - Math.sin(a) * 7 - Math.cos(a) * 2,
+      P.gold[2],
+    );
   });
 });
 
-impact('f13_note', (g, r, px, py, k) => burst(g, px, py - 6, k, 6, r.seed, [[168, 224, 255, 255], GOLD[3]], 8), 0.3, 0);
-impact('f13_page', (g, r, px, py, k) => burst(g, px, py - 6, k, 6, r.seed, [P.cream[3], P.cream[1]], 8), 0.3, 0);
-impact('f13_tear', (g, r, px, py, k) => burst(g, px, py - 6, k, 6, r.seed, [[106, 200, 255, 255], [255, 255, 255, 255]], 8), 0.3, 0);
-impact('f13_needle', (g, r, px, py, k) => burst(g, px, py - 6, k, 5, r.seed, [P.silver[3], GOLD[3]], 8), 0.3, 0);
+impact(
+  'f13_note',
+  (g, r, px, py, k) => burst(g, px, py - 6, k, 6, r.seed, [[168, 224, 255, 255], GOLD[3]], 8),
+  0.3,
+  0,
+);
+impact(
+  'f13_page',
+  (g, r, px, py, k) => burst(g, px, py - 6, k, 6, r.seed, [P.cream[3], P.cream[1]], 8),
+  0.3,
+  0,
+);
+impact(
+  'f13_tear',
+  (g, r, px, py, k) =>
+    burst(
+      g,
+      px,
+      py - 6,
+      k,
+      6,
+      r.seed,
+      [
+        [106, 200, 255, 255],
+        [255, 255, 255, 255],
+      ],
+      8,
+    ),
+  0.3,
+  0,
+);
+impact(
+  'f13_needle',
+  (g, r, px, py, k) => burst(g, px, py - 6, k, 5, r.seed, [P.silver[3], GOLD[3]], 8),
+  0.3,
+  0,
+);
 
 void paintSim;

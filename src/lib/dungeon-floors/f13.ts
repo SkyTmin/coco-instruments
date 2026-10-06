@@ -302,9 +302,7 @@ const DUST_VELVET = ['#4a0c14', '#a0202c', '#e8b860', '#1a0608'];
 const DUST_PORCELAIN = ['#d8d0c4', '#f8f0e4', '#e8b860', '#6a6058'];
 const DUST_SHADE = ['#1a1424', '#3a2c50', '#8a7ab0', '#0a0610'];
 
-const mob = (
-  m: Partial<MobDef> & Pick<MobDef, 'id' | 'name' | 'many' | 'hp' | 'dmg'>,
-): MobDef => ({
+const mob = (m: Partial<MobDef> & Pick<MobDef, 'id' | 'name' | 'many' | 'hp' | 'dmg'>): MobDef => ({
   speed: 2.6,
   radius: 0.34,
   windup: 0.7,

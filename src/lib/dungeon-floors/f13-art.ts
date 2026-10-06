@@ -41,7 +41,12 @@ export const mixc = (a: RGBA, b: RGBA, k: number): RGBA => [
   Math.round(a[2] + (b[2] - a[2]) * k),
   Math.round(a[3] + (b[3] - a[3]) * k),
 ];
-export const withA = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(Math.max(0, Math.min(1, a)) * 255)];
+export const withA = (c: RGBA, a: number): RGBA => [
+  c[0],
+  c[1],
+  c[2],
+  Math.round(Math.max(0, Math.min(1, a)) * 255),
+];
 export const css = (c: RGBA, a = 1): string => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
 /** Детерминированный шум 0…1 по трём целым. */
@@ -105,7 +110,8 @@ function autoLook(c: CellCtx): number {
   for (let dy = -2; dy <= 2; dy++)
     for (let dx = -2; dx <= 2; dx++) {
       const m = c.markAt(dx, dy);
-      if (m >= 1 && m <= 9 && c.open(dx, dy)) n.set(m, (n.get(m) ?? 0) + (Math.abs(dx) + Math.abs(dy) <= 1 ? 3 : 1));
+      if (m >= 1 && m <= 9 && c.open(dx, dy))
+        n.set(m, (n.get(m) ?? 0) + (Math.abs(dx) + Math.abs(dy) <= 1 ? 3 : 1));
     }
   let best = 0;
   let bv = 0;
@@ -202,10 +208,16 @@ function carpet(p: Px, c: CellCtx, deep = false): void {
     const d = Math.abs(lx - 3.5) + Math.abs(ly - 3.5);
     if (!deep && d > 2.6 && d < 3.6) return mixc(T[1], g[1], 0.45);
     if (!deep && lx === 3 && ly === 3) return g[2];
-    if (deep && (X % 6 === 0 && Y % 6 === 3)) return T[2];
+    if (deep && X % 6 === 0 && Y % 6 === 3) return T[2];
     // Ворс: ровный, редкие ворсинки — без «снега».
     const n = hash(X, Y, 4);
-    return n < 0.03 ? mixc(T[1], T[2], 0.5) : n > 0.985 ? mixc(T[1], T[0], 0.5) : (X + Y) % 2 ? T[1] : mixc(T[1], T[0], 0.12);
+    return n < 0.03
+      ? mixc(T[1], T[2], 0.5)
+      : n > 0.985
+        ? mixc(T[1], T[0], 0.5)
+        : (X + Y) % 2
+          ? T[1]
+          : mixc(T[1], T[0], 0.12);
   });
 }
 
@@ -977,7 +989,8 @@ registerItemArt(
   'f13_velvet',
   icon((p) => {
     for (let y = 3; y < 13; y++)
-      for (let x = 3; x < 13; x++) if (x + y > 6 && x + y < 23) p.set(x, y, (x + y) % 4 < 2 ? P.velvet[2] : P.velvet[1]);
+      for (let x = 3; x < 13; x++)
+        if (x + y > 6 && x + y < 23) p.set(x, y, (x + y) % 4 < 2 ? P.velvet[2] : P.velvet[1]);
     p.line(4, 12, 12, 4, P.gold[2]);
   }),
 );
@@ -1051,7 +1064,15 @@ registerItemArt(
 /** Холст под кадр предмета, кеш по ключу. */
 const PROP_CACHE = frameLRU<Sprite>(500);
 
-function sprite(key: string, w: number, h: number, ax: number, ay: number, draw: (p: Px) => void, outline = true): Sprite {
+function sprite(
+  key: string,
+  w: number,
+  h: number,
+  ax: number,
+  ay: number,
+  draw: (p: Px) => void,
+  outline = true,
+): Sprite {
   const hit = PROP_CACHE.get(key);
   if (hit) return hit;
   const p = new Px(w, h);
@@ -1095,7 +1116,9 @@ function chandelierOn(o: WorldObj): boolean {
   const s = paintSim();
   const st = s ? f13State(s) : null;
   if (!st) return true;
-  const c = st.chands.find((q) => Math.abs(q.x - (o.x + 0.5)) < 0.1 && Math.abs(q.y - (o.y + 0.5)) < 0.1);
+  const c = st.chands.find(
+    (q) => Math.abs(q.x - (o.x + 0.5)) < 0.1 && Math.abs(q.y - (o.y + 0.5)) < 0.1,
+  );
   return c ? c.on : true;
 }
 
@@ -1111,7 +1134,8 @@ registerPropPainter('f13_chandelier', (o, time) => {
     p.ell(20, 26, 15, 5, G[0]);
     p.ell(20, 25, 15, 4.4, G[1]);
     p.ell(20, 25, 13, 3.2, [0, 0, 0, 0]);
-    for (let x = 6; x < 34; x++) if (x % 3 === 0) p.set(x, 21 + Math.round(4 - Math.abs(x - 20) / 4), G[3]);
+    for (let x = 6; x < 34; x++)
+      if (x % 3 === 0) p.set(x, 21 + Math.round(4 - Math.abs(x - 20) / 4), G[3]);
     // Рожки и свечи.
     for (let k = 0; k < 7; k++) {
       const a = (k / 7) * TAU + 0.3;
@@ -1129,7 +1153,8 @@ registerPropPainter('f13_chandelier', (o, time) => {
     for (let k = 0; k < 9; k++) {
       const x = 8 + k * 3;
       const len = 4 + Math.round(4 - Math.abs(k - 4));
-      for (let y = 0; y < len; y++) p.set(x, 29 + y, y === len - 1 ? P.porcelain[3] : withA(P.porcelain[2], 0.8));
+      for (let y = 0; y < len; y++)
+        p.set(x, 29 + y, y === len - 1 ? P.porcelain[3] : withA(P.porcelain[2], 0.8));
       if (on && (f + k) % 6 === 0) p.set(x, 29 + len - 1, WHITE);
     }
     p.ell(20, 33, 3, 4, G[2]);
@@ -1155,7 +1180,13 @@ registerPropPainter('f13_rack', (o, _t, _a, flash) =>
       p.line(x + 2, 3, x + 2, 6, P.iron[2]);
       for (let y = 6; y < 22; y++) {
         const w = y < 9 ? 2 : 2 + Math.floor((y - 9) / 4);
-        p.rect(x + 2 - w, y, x + 2 + w, y, y === 6 ? T[2] : x + 2 - w === x + 2 - w && y % 5 === 0 ? T[0] : T[1]);
+        p.rect(
+          x + 2 - w,
+          y,
+          x + 2 + w,
+          y,
+          y === 6 ? T[2] : x + 2 - w === x + 2 - w && y % 5 === 0 ? T[0] : T[1],
+        );
         p.set(x + 2 - w, y, T[2]);
       }
     }
@@ -1222,7 +1253,10 @@ registerPropPainter('f13_post', (o, _t, _a, flash) =>
     // Канат к соседу — провисает.
     for (let x = 0; x < 16; x++) {
       if (x > 6 && x < 10) continue;
-      const y = 8 + Math.round(Math.sin((x / 16) * Math.PI) * 0) + (x < 8 ? Math.round((8 - x) / 4) : Math.round((x - 8) / 4));
+      const y =
+        8 +
+        Math.round(Math.sin((x / 16) * Math.PI) * 0) +
+        (x < 8 ? Math.round((8 - x) / 4) : Math.round((x - 8) / 4));
       p.set(x, y, P.velvet[2]);
       p.set(x, y + 1, P.velvet[0]);
     }
@@ -1273,7 +1307,14 @@ registerPropPainter('f13_trunk', (_o, _t, _a, flash) =>
 // Корзина цветов (бьётся).
 registerPropPainter('f13_flowers', (o, _t, _a, flash) =>
   sprite(flashed(`flowers:${o.x % 3}`, flash), 16, 20, 8, 19, (p) => {
-    for (let y = 11; y < 19; y++) p.rect(3 - (y - 11 >> 2), y, 12 + ((y - 11) >> 2), y, (y + o.x) % 2 ? P.wood[2] : P.wood[1]);
+    for (let y = 11; y < 19; y++)
+      p.rect(
+        3 - ((y - 11) >> 2),
+        y,
+        12 + ((y - 11) >> 2),
+        y,
+        (y + o.x) % 2 ? P.wood[2] : P.wood[1],
+      );
     const cols = [P.red, P.pink, P.cream, P.gold];
     for (let k = 0; k < 7; k++) {
       const x = 3 + ((k * 5 + o.x) % 10);
@@ -1289,7 +1330,9 @@ registerPropPainter('f13_flowers', (o, _t, _a, flash) =>
 registerPropPainter('f13_sandbags', (_o, _t, _a, flash) =>
   sprite(flashed('bags', flash), 20, 16, 10, 15, (p) => {
     const bag = (x: number, y: number) => {
-      p.ell(x, y, 5, 3, (xx, yy) => (yy < y - 1 ? P.cream[2] : xx > x + 2 ? P.cream[0] : P.cream[1]));
+      p.ell(x, y, 5, 3, (xx, yy) =>
+        yy < y - 1 ? P.cream[2] : xx > x + 2 ? P.cream[0] : P.cream[1],
+      );
       p.set(x - 4, y, P.cream[0]);
       p.rect(x + 4, y - 1, x + 5, y, P.wood[1]);
     };
@@ -1323,7 +1366,13 @@ registerPropPainter('f13_flat', (o, _t, _a, flash) =>
       for (let k = 0; k < 5; k++) ball(p, 5 + k * 3, 14 - ((k * 7) % 5), 5, P.forest);
       p.rect(9, 18, 11, 25, P.wood[1]);
     } else if (kind === 1) {
-      for (let k = 0; k < 4; k++) ball(p, 5 + k * 4, 12 - (k % 2) * 3, 4.5, [hx('#8a86a4'), hx('#c4c0d8'), hx('#e4e0ee'), WHITE]);
+      for (let k = 0; k < 4; k++)
+        ball(p, 5 + k * 4, 12 - (k % 2) * 3, 4.5, [
+          hx('#8a86a4'),
+          hx('#c4c0d8'),
+          hx('#e4e0ee'),
+          WHITE,
+        ]);
     } else {
       p.rect(4, 6, 17, 24, P.castle[1]);
       for (let x = 4; x <= 17; x += 4) p.rect(x, 3, x + 1, 6, P.castle[2]);
@@ -1380,10 +1429,13 @@ registerPropPainter('f13_timpani', (_o, time, _a, flash) => {
   return sprite(flashed(`timp:${hit}`, flash), 22, 22, 11, 21, (p) => {
     for (let y = 8; y < 19; y++) {
       const w = 9 - Math.round((y - 8) * 0.35);
-      for (let x = -w; x <= w; x++) p.set(11 + x, y, x < -w * 0.4 ? P.brass[2] : x < w * 0.3 ? P.brass[1] : P.brass[0]);
+      for (let x = -w; x <= w; x++)
+        p.set(11 + x, y, x < -w * 0.4 ? P.brass[2] : x < w * 0.3 ? P.brass[1] : P.brass[0]);
     }
     p.ell(11, 8, 9.5, 3.4, P.cream[hit ? 3 : 2]);
-    p.ell(11, 8, 9.5, 3.4, (x, y) => (Math.hypot((x - 11) / 9.5, (y - 8) / 3.4) > 0.86 ? P.brass[3] : hit ? P.cream[3] : P.cream[2]));
+    p.ell(11, 8, 9.5, 3.4, (x, y) =>
+      Math.hypot((x - 11) / 9.5, (y - 8) / 3.4) > 0.86 ? P.brass[3] : hit ? P.cream[3] : P.cream[2],
+    );
     if (hit) {
       p.ell(11, 8, 5, 1.6, P.cream[1]);
       p.ell(11, 8, 3, 1, P.cream[3]);
@@ -1571,7 +1623,11 @@ registerPropPainter('f13_bell', (o, time, _a, flash) => {
       for (let x = -w; x <= w; x++) {
         const X = cx + x + Math.sin(sw) * y;
         const k = (x + w) / (2 * w);
-        p.set(X, cy + y, k < 0.2 ? P.brass[3] : k < 0.45 ? P.brass[2] : k < 0.8 ? P.brass[1] : P.brass[0]);
+        p.set(
+          X,
+          cy + y,
+          k < 0.2 ? P.brass[3] : k < 0.45 ? P.brass[2] : k < 0.8 ? P.brass[1] : P.brass[0],
+        );
       }
     }
     p.rect(cx - 12 + Math.sin(sw) * 20, cy + 20, cx + 12 + Math.sin(sw) * 20, cy + 20, P.brass[0]);
@@ -1630,45 +1686,75 @@ registerPropPainter('f13_poster', (o) =>
 // Зеркало в золотой раме — в нём отблеск.
 registerPropPainter('f13_mirror', (o, time) => {
   const f = quant(time * 0.4 + o.x, 3, 10);
-  return sprite(`mirror:${f}`, 14, 16, 7, 15, (p) => {
-    p.ell(7, 8, 6, 7.5, P.gold[1]);
-    p.ell(7, 8, 4.6, 6, (x, y) => mixc(hx('#3a4458'), hx('#8a9ab4'), clamp01((x - y + 8) / 14)));
-    p.set(7, 0, P.gold[3]);
-    if (f < 3) {
-      p.line(4 + f * 2, 4, 6 + f * 2, 2, WHITE);
-      p.line(4 + f * 2, 6, 7 + f * 2, 3, withA(WHITE, 0.6));
-    }
-  }, false);
+  return sprite(
+    `mirror:${f}`,
+    14,
+    16,
+    7,
+    15,
+    (p) => {
+      p.ell(7, 8, 6, 7.5, P.gold[1]);
+      p.ell(7, 8, 4.6, 6, (x, y) => mixc(hx('#3a4458'), hx('#8a9ab4'), clamp01((x - y + 8) / 14)));
+      p.set(7, 0, P.gold[3]);
+      if (f < 3) {
+        p.line(4 + f * 2, 4, 6 + f * 2, 2, WHITE);
+        p.line(4 + f * 2, 6, 7 + f * 2, 3, withA(WHITE, 0.6));
+      }
+    },
+    false,
+  );
 });
 
 // Камин с огнём.
 registerPropPainter('f13_fireplace', (o, time) => {
   const f = quant(time + o.x * 0.17, 8, 6);
-  return sprite(`fire:${f}`, 16, 16, 8, 16, (p) => {
-    p.rect(0, 0, 15, 2, P.cream[3]);
-    p.rect(0, 3, 2, 15, P.cream[2]);
-    p.rect(13, 3, 15, 15, P.cream[1]);
-    p.rect(3, 5, 12, 15, hx('#100604'));
-    p.rect(4, 13, 11, 14, P.wood[0]);
-    for (let k = 0; k < 4; k++) {
-      const h = 3 + ((f + k * 2) % 5);
-      const x = 5 + k * 2;
-      for (let y = 0; y < h; y++) p.set(x + (y > 2 ? (f + k) % 2 : 0), 13 - y, y < 2 ? hx('#ffe080') : y < 4 ? hx('#ff9a30') : hx('#c84018'));
-    }
-  }, false);
+  return sprite(
+    `fire:${f}`,
+    16,
+    16,
+    8,
+    16,
+    (p) => {
+      p.rect(0, 0, 15, 2, P.cream[3]);
+      p.rect(0, 3, 2, 15, P.cream[2]);
+      p.rect(13, 3, 15, 15, P.cream[1]);
+      p.rect(3, 5, 12, 15, hx('#100604'));
+      p.rect(4, 13, 11, 14, P.wood[0]);
+      for (let k = 0; k < 4; k++) {
+        const h = 3 + ((f + k * 2) % 5);
+        const x = 5 + k * 2;
+        for (let y = 0; y < h; y++)
+          p.set(
+            x + (y > 2 ? (f + k) % 2 : 0),
+            13 - y,
+            y < 2 ? hx('#ffe080') : y < 4 ? hx('#ff9a30') : hx('#c84018'),
+          );
+      }
+    },
+    false,
+  );
 });
 
 // Окошко кассы: лампа, табличка.
 registerPropPainter('f13_kassa', (o, time) => {
   const f = quant(time + o.y, 2, 5);
-  return sprite(`kassa:${f}`, 16, 16, 8, 16, (p) => {
-    p.rect(1, 1, 14, 15, P.wood[1]);
-    p.rect(1, 1, 14, 3, P.gold[2]);
-    p.rect(3, 5, 12, 12, hx('#2a1a08'));
-    for (let y = 5; y < 13; y++) for (let x = 3; x < 13; x++) p.set(x, y, [255, 200, 120, f === 4 ? 60 : 110]);
-    p.rect(3, 13, 12, 14, P.cream[2]);
-    p.rect(7, 5, 8, 12, P.wood[0]);
-  }, false);
+  return sprite(
+    `kassa:${f}`,
+    16,
+    16,
+    8,
+    16,
+    (p) => {
+      p.rect(1, 1, 14, 15, P.wood[1]);
+      p.rect(1, 1, 14, 3, P.gold[2]);
+      p.rect(3, 5, 12, 12, hx('#2a1a08'));
+      for (let y = 5; y < 13; y++)
+        for (let x = 3; x < 13; x++) p.set(x, y, [255, 200, 120, f === 4 ? 60 : 110]);
+      p.rect(3, 13, 12, 14, P.cream[2]);
+      p.rect(7, 5, 8, 12, P.wood[0]);
+    },
+    false,
+  );
 });
 
 // Маски театра на стене.
@@ -1703,7 +1789,11 @@ export interface V3 {
 export const v3 = (x: number, y: number, z: number): V3 => ({ x, y, z });
 export const vadd = (a: V3, b: V3): V3 => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z });
 export const vsc = (a: V3, k: number): V3 => ({ x: a.x * k, y: a.y * k, z: a.z * k });
-export const vmix = (a: V3, b: V3, k: number): V3 => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k });
+export const vmix = (a: V3, b: V3, k: number): V3 => ({
+  x: a.x + (b.x - a.x) * k,
+  y: a.y + (b.y - a.y) * k,
+  z: a.z + (b.z - a.z) * k,
+});
 const vlen = (a: V3) => Math.hypot(a.x, a.y, a.z);
 export const vnorm = (a: V3): V3 => vsc(a, 1 / (vlen(a) || 1));
 
@@ -1799,7 +1889,15 @@ export interface RenderOpt {
 }
 
 /** Нарисовать риг на холст w×h; (ax, ay) — точка ног. */
-export function renderRig(rig: Rig, yaw: number, w: number, h: number, ax: number, ay: number, opt: RenderOpt = {}): RigOut {
+export function renderRig(
+  rig: Rig,
+  yaw: number,
+  w: number,
+  h: number,
+  ax: number,
+  ay: number,
+  opt: RenderOpt = {},
+): RigOut {
   const S = opt.scale ?? 1;
   const fx = Math.cos(yaw);
   const fy = Math.sin(yaw);
@@ -1825,7 +1923,8 @@ export function renderRig(rig: Rig, yaw: number, w: number, h: number, ax: numbe
     col[i * 4 + 3] = c[3];
     glowB[i] = glow ? 1 : 0;
   };
-  const band = (T: Tone, l: number): RGBA => (l > 0.8 ? T[3] : l > 0.36 ? T[2] : l > -0.08 ? T[1] : T[0]);
+  const band = (T: Tone, l: number): RGBA =>
+    l > 0.8 ? T[3] : l > 0.36 ? T[2] : l > -0.08 ? T[1] : T[0];
   rig.prims.forEach((q, id) => {
     if (q.k === 0) {
       const [x0, y0, d0] = proj(q.a);
@@ -1859,7 +1958,11 @@ export function renderRig(rig: Rig, yaw: number, w: number, h: number, ax: numbe
           if (z <= zb[i]) continue;
           const l = -0.5 * nx - 0.62 * ny + 0.6 * nz;
           const pv = q.pat ? q.pat(t, nx, ny) : null;
-          const c = pv ? (pv.length === 4 && typeof pv[0] === 'number' ? (pv as RGBA) : band(pv as Tone, l)) : band(q.T, l);
+          const c = pv
+            ? pv.length === 4 && typeof pv[0] === 'number'
+              ? (pv as RGBA)
+              : band(pv as Tone, l)
+            : band(q.T, l);
           put(i, c, z, id, !!q.glow);
         }
     } else if (q.k === 1) {
@@ -1881,8 +1984,17 @@ export function renderRig(rig: Rig, yaw: number, w: number, h: number, ax: numbe
             if (z <= zb[i]) continue;
             const rim = u * u + v * v > 0.72;
             const pv = q.pat ? q.pat(u, v, false) : null;
-            const base = pv ? (pv.length === 4 && typeof pv[0] === 'number' ? (pv as RGBA) : (pv as Tone)[2]) : q.T[2];
-            const c = rim && !(pv && pv.length === 4 && typeof pv[0] === 'number') ? (u + v < 0 ? q.T[3] : q.T[1]) : base;
+            const base = pv
+              ? pv.length === 4 && typeof pv[0] === 'number'
+                ? (pv as RGBA)
+                : (pv as Tone)[2]
+              : q.T[2];
+            const c =
+              rim && !(pv && pv.length === 4 && typeof pv[0] === 'number')
+                ? u + v < 0
+                  ? q.T[3]
+                  : q.T[1]
+                : base;
             put(i, c, z, id, !!q.glow);
             continue;
           }
@@ -1894,7 +2006,14 @@ export function renderRig(rig: Rig, yaw: number, w: number, h: number, ax: numbe
           if (z <= zb[i]) continue;
           const pv = q.pat ? q.pat(u, 1, true) : null;
           const T = pv && !(pv.length === 4 && typeof pv[0] === 'number') ? (pv as Tone) : q.T;
-          const c = pv && pv.length === 4 && typeof pv[0] === 'number' ? (pv as RGBA) : u < -0.55 ? T[2] : u < 0.35 ? T[1] : T[0];
+          const c =
+            pv && pv.length === 4 && typeof pv[0] === 'number'
+              ? (pv as RGBA)
+              : u < -0.55
+                ? T[2]
+                : u < 0.35
+                  ? T[1]
+                  : T[0];
           put(i, c, z, id, !!q.glow);
         }
     } else {
@@ -1926,7 +2045,12 @@ export function renderRig(rig: Rig, yaw: number, w: number, h: number, ax: numbe
     const z = zb[i];
     const id = idb[i];
     const near = (j: number) => idb[j] >= 0 && idb[j] !== id && zb[j] - z > 2.4 * S;
-    if ((x > 0 && near(i - 1)) || (x < w - 1 && near(i + 1)) || (i >= w && near(i - w)) || (i < N - w && near(i + w))) {
+    if (
+      (x > 0 && near(i - 1)) ||
+      (x < w - 1 && near(i + 1)) ||
+      (i >= w && near(i - w)) ||
+      (i < N - w && near(i + w))
+    ) {
       r = r * 0.45 + INK[0] * 0.55;
       g = g * 0.45 + INK[1] * 0.55;
       b = b * 0.45 + INK[2] * 0.55;
@@ -2015,7 +2139,16 @@ export interface Body {
   shin: number;
   legR: number;
   foot: number;
-  T: { torso: Tone; arm: Tone; leg: Tone; head: Tone; hand: Tone; foot: Tone; joint: Tone; pelvis: Tone };
+  T: {
+    torso: Tone;
+    arm: Tone;
+    leg: Tone;
+    head: Tone;
+    hand: Tone;
+    foot: Tone;
+    joint: Tone;
+    pelvis: Tone;
+  };
   torsoPat?: Pat;
   armPat?: Pat;
   legPat?: Pat;
@@ -2057,10 +2190,16 @@ function limbDir(l: Limb, side: number, extra: number): V3 {
   return rotX(d, -(l.sw + extra));
 }
 
-const inFrame = (d: V3, right: V3, up: V3, fwd: V3): V3 => vadd(vadd(vsc(right, d.x), vsc(up, d.y)), vsc(fwd, d.z));
+const inFrame = (d: V3, right: V3, up: V3, fwd: V3): V3 =>
+  vadd(vadd(vsc(right, d.x), vsc(up, d.y)), vsc(fwd, d.z));
 
 /** Собрать человечка в риг; вернуть суставы для оружия и украшений. */
-export function humanoid(rig: Rig, b: Body, q: Pose, skip: { head?: boolean; legs?: boolean; arms?: boolean } = {}): Joints {
+export function humanoid(
+  rig: Rig,
+  b: Body,
+  q: Pose,
+  skip: { head?: boolean; legs?: boolean; arms?: boolean } = {},
+): Joints {
   // Таз: свой поворот (на треть от торса), ноги — от него.
   const pR = rotY(v3(1, 0, 0), q.twist * 0.3);
   const pF = rotY(v3(0, 0, 1), q.twist * 0.3);
@@ -2107,7 +2246,13 @@ export function humanoid(rig: Rig, b: Body, q: Pose, skip: { head?: boolean; leg
       rig.cap(hp, kn, b.legR * 1.1, b.legR, T.leg, b.legPat);
       rig.cap(kn, an, b.legR, b.legR * 0.85, T.leg, b.legPat);
       if (b.joints) rig.ball(kn, b.legR * 1.05, T.joint);
-      rig.cap(an, vadd(vadd(an, vsc(pF, b.foot)), v3(0, -0.6, 0)), b.legR * 1.05, b.legR * 0.9, T.foot);
+      rig.cap(
+        an,
+        vadd(vadd(an, vsc(pF, b.foot)), v3(0, -0.6, 0)),
+        b.legR * 1.05,
+        b.legR * 0.9,
+        T.foot,
+      );
     }
   }
   // Таз и торс.
@@ -2128,7 +2273,32 @@ export function humanoid(rig: Rig, b: Body, q: Pose, skip: { head?: boolean; leg
     rig.cap(chest, neck, b.armR * 0.9, b.armR * 0.8, T.joint);
     rig.ball(head, b.head, T.head);
   }
-  return { pelvis, chest, neck, head, up, fwd, right, hUp, hFwd, hRight, shL, shR, elL, elR, haL, haR, hpL, hpR, knL, knR, anL, anR, foreL, foreR };
+  return {
+    pelvis,
+    chest,
+    neck,
+    head,
+    up,
+    fwd,
+    right,
+    hUp,
+    hFwd,
+    hRight,
+    shL,
+    shR,
+    elL,
+    elR,
+    haL,
+    haR,
+    hpL,
+    hpR,
+    knL,
+    knR,
+    anL,
+    anR,
+    foreL,
+    foreR,
+  };
 }
 
 /** Точка на поверхности головы: вперёд на `f`, вправо на `r`, вверх на `u` (доли радиуса). */
@@ -2450,11 +2620,29 @@ function warmPuppet(kind: string, dirs: number) {
     for (let d = 0; d < dirs; d++) {
       m.face = (d / dirs) * TAU;
       for (let f = 0; f < RUN_N; f++) {
-        paint(m, { anim: 'run', frame: f, mode: 'chase', t: 0, left: false, flash: false, look: 'normal', now: 0 });
+        paint(m, {
+          anim: 'run',
+          frame: f,
+          mode: 'chase',
+          t: 0,
+          left: false,
+          flash: false,
+          look: 'normal',
+          now: 0,
+        });
         yield f;
       }
       for (let f = 0; f < IDLE_N; f++) {
-        paint(m, { anim: 'idle', frame: 0, mode: 'chase', t: 0, left: false, flash: false, look: 'normal', now: f / 5 });
+        paint(m, {
+          anim: 'idle',
+          frame: 0,
+          mode: 'chase',
+          t: 0,
+          left: false,
+          flash: false,
+          look: 'normal',
+          now: f / 5,
+        });
         yield f;
       }
     }
@@ -2531,7 +2719,16 @@ const KNIGHT_BODY: Body = {
   shin: 4.4,
   legR: 1.3,
   foot: 2,
-  T: { torso: P.silver, arm: P.wood, leg: P.wood, head: P.silver, hand: P.wood, foot: P.iron, joint: P.brass, pelvis: P.blue },
+  T: {
+    torso: P.silver,
+    arm: P.wood,
+    leg: P.wood,
+    head: P.silver,
+    hand: P.wood,
+    foot: P.iron,
+    joint: P.brass,
+    pelvis: P.blue,
+  },
   torsoPat: bandPat(0, 0.3, P.blue),
   legPat: bandPat(0.55, 1, P.silver),
   joints: true,
@@ -2591,7 +2788,13 @@ paintMob(
       // Меч и щит.
       sword(rig, j.haR, swordDir(j, 'R'), 10);
       const sh = vadd(vmix(j.elL, j.haL, 0.6), vsc(j.right, -1));
-      rig.ball(sh, 3.3, P.red, (t, nx, ny) => (Math.abs(nx) < 0.18 || Math.abs(ny) < 0.18 ? P.gold : Math.hypot(nx, ny) > 0.82 ? P.gold : null));
+      rig.ball(sh, 3.3, P.red, (t, nx, ny) =>
+        Math.abs(nx) < 0.18 || Math.abs(ny) < 0.18
+          ? P.gold
+          : Math.hypot(nx, ny) > 0.82
+            ? P.gold
+            : null,
+      );
       void c;
     },
   }),
@@ -2618,8 +2821,22 @@ const NUT_BODY: Body = {
   shin: 5,
   legR: 1.6,
   foot: 2.4,
-  T: { torso: P.red, arm: P.red, leg: P.blue, head: P.cream, hand: P.cream, foot: P.black, joint: P.gold, pelvis: P.blue },
-  torsoPat: (t, nx) => (Math.abs(nx + (t - 0.5) * 1.2) < 0.16 || Math.abs(nx - (t - 0.5) * 1.2) < 0.16 ? P.cream : t < 0.12 ? P.gold : null),
+  T: {
+    torso: P.red,
+    arm: P.red,
+    leg: P.blue,
+    head: P.cream,
+    hand: P.cream,
+    foot: P.black,
+    joint: P.gold,
+    pelvis: P.blue,
+  },
+  torsoPat: (t, nx) =>
+    Math.abs(nx + (t - 0.5) * 1.2) < 0.16 || Math.abs(nx - (t - 0.5) * 1.2) < 0.16
+      ? P.cream
+      : t < 0.12
+        ? P.gold
+        : null,
   legPat: bandPat(0.62, 1, P.black),
   joints: true,
 };
@@ -2634,7 +2851,12 @@ paintMob(
     dirs: 8,
     body: NUT_BODY,
     shadow: 8,
-    keyX: (c) => (c.m.mode === 'windup' ? `j${Math.floor(windK(c.m) * 6)}` : c.m.mode === 'recover' && c.m.t < 0.2 ? 'jc' : ''),
+    keyX: (c) =>
+      c.m.mode === 'windup'
+        ? `j${Math.floor(windK(c.m) * 6)}`
+        : c.m.mode === 'recover' && c.m.t < 0.2
+          ? 'jc'
+          : '',
     pose: (c, q) => {
       const { m } = c;
       if (m.mode === 'windup') {
@@ -2699,7 +2921,12 @@ paintMob(
       // Эполеты и пуговицы.
       rig.disc(vadd(j.shL, v3(0, 0.8, 0)), 2.2, 0.8, P.gold);
       rig.disc(vadd(j.shR, v3(0, 0.8, 0)), 2.2, 0.8, P.gold);
-      for (let k = 0; k < 3; k++) rig.dot(vadd(vmix(j.pelvis, j.chest, 0.3 + k * 0.25), vsc(j.fwd, NUT_BODY.chest * 0.95)), P.gold[3], 1);
+      for (let k = 0; k < 3; k++)
+        rig.dot(
+          vadd(vmix(j.pelvis, j.chest, 0.3 + k * 0.25), vsc(j.fwd, NUT_BODY.chest * 0.95)),
+          P.gold[3],
+          1,
+        );
       sword(rig, j.haR, swordDir(j, 'R', 0.3), 13, P.silver);
     },
   }),
@@ -2716,7 +2943,16 @@ const DRUM_BODY: Body = {
   waist: 3,
   chest: 3.4,
   head: 3.3,
-  T: { torso: P.blue, arm: P.blue, leg: P.cream, head: P.skin, hand: P.cream, foot: P.black, joint: P.gold, pelvis: P.cream },
+  T: {
+    torso: P.blue,
+    arm: P.blue,
+    leg: P.cream,
+    head: P.skin,
+    hand: P.cream,
+    foot: P.black,
+    joint: P.gold,
+    pelvis: P.cream,
+  },
   torsoPat: (t, nx) => (Math.abs(nx) < 0.15 && t > 0.2 ? P.gold : null),
   legPat: bandPat(0.6, 1, P.black),
   armPat: bandPat(0.85, 1, P.gold),
@@ -2774,7 +3010,15 @@ paintMob(
       rig.cap(hb, vadd(hb, vsc(j.hUp, 3.4)), 2.8, 3, P.red, bandPat(0, 0.25, P.gold));
       // Барабан на поясе.
       const dc = vadd(vadd(j.pelvis, vsc(j.up, 2.2)), vsc(j.fwd, 4));
-      rig.disc(dc, 4.6, 3.6, P.red, (u, v, side) => (side ? ((Math.floor((u + 1) * 5) % 2) ? P.gold : P.red) : u * u + v * v > 0.8 ? P.gold : P.cream));
+      rig.disc(dc, 4.6, 3.6, P.red, (u, v, side) =>
+        side
+          ? Math.floor((u + 1) * 5) % 2
+            ? P.gold
+            : P.red
+          : u * u + v * v > 0.8
+            ? P.gold
+            : P.cream,
+      );
       // Палочки.
       for (const [ha, fo] of [
         [j.haL, j.foreL],
@@ -2802,7 +3046,16 @@ const FIDDLE_BODY: Body = {
   shW: 3,
   armR: 1.05,
   legR: 1.05,
-  T: { torso: P.green, arm: P.green, leg: P.black, head: P.pale, hand: P.porcelain, foot: P.black, joint: P.brass, pelvis: P.black },
+  T: {
+    torso: P.green,
+    arm: P.green,
+    leg: P.black,
+    head: P.pale,
+    hand: P.porcelain,
+    foot: P.black,
+    joint: P.brass,
+    pelvis: P.black,
+  },
   torsoPat: (t, nx) => (t > 0.7 && Math.abs(nx) < 0.3 ? P.cream : null),
 };
 
@@ -2834,7 +3087,10 @@ paintMob(
     dirs: 8,
     body: FIDDLE_BODY,
     shadow: 5,
-    pose: (c, q) => (c.m.mode === 'dying' || c.m.mode === 'f13_reel' || c.m.mode === 'sleep' || c.m.data.crawl ? null : fiddlePose(c, q)),
+    pose: (c, q) =>
+      c.m.mode === 'dying' || c.m.mode === 'f13_reel' || c.m.mode === 'sleep' || c.m.data.crawl
+        ? null
+        : fiddlePose(c, q),
     dress: (rig, j, c) => {
       const R = FIDDLE_BODY.head;
       rig.dot(onHead(j, R, 0.95, -0.35, 0.1), INK, 1);
@@ -2875,7 +3131,16 @@ const BALL_BODY: Body = {
   shin: 4.8,
   legR: 0.95,
   foot: 1.2,
-  T: { torso: P.pink, arm: P.porcelain, leg: P.porcelain, head: P.porcelain, hand: P.porcelain, foot: P.pink, joint: P.porcelain, pelvis: P.pink },
+  T: {
+    torso: P.pink,
+    arm: P.porcelain,
+    leg: P.porcelain,
+    head: P.porcelain,
+    hand: P.porcelain,
+    foot: P.pink,
+    joint: P.porcelain,
+    pelvis: P.pink,
+  },
   torsoPat: bandPat(0.75, 1, P.porcelain),
 };
 
@@ -2891,7 +3156,8 @@ paintMob(
     shadow: 6,
     pose: (c, q) => {
       const { m } = c;
-      if (m.mode === 'dying' || m.data.crawl || m.mode === 'f13_reel' || m.mode === 'sleep') return null;
+      if (m.mode === 'dying' || m.data.crawl || m.mode === 'f13_reel' || m.mode === 'sleep')
+        return null;
       if (m.mode === 'f13_plie' || m.mode === 'windup') {
         const n = Math.min(7, Math.floor((m.t / 0.6) * 8));
         const e = ease(n / 7);
@@ -2943,7 +3209,12 @@ paintMob(
     },
     keyX: (c) => (c.m.mode === 'f13_spin' ? `${dirOf(c.m.face + c.now * 22, 8)}` : ''),
     frame: (c) =>
-      c.m.mode === 'f13_spin' ? { ghost: { every: 0.05, life: 0.18, tint: '#ffc8e0', alpha: 0.5 }, rot: Math.sin(c.now * 30) * 0.05 } : {},
+      c.m.mode === 'f13_spin'
+        ? {
+            ghost: { every: 0.05, life: 0.18, tint: '#ffc8e0', alpha: 0.5 },
+            rot: Math.sin(c.now * 30) * 0.05,
+          }
+        : {},
   }),
 );
 
@@ -2961,7 +3232,16 @@ const HARL_BODY: Body = {
   shW: 3,
   armR: 1.05,
   legR: 1.1,
-  T: { torso: P.red, arm: P.red, leg: P.red, head: P.porcelain, hand: P.black, foot: P.black, joint: P.gold, pelvis: P.black },
+  T: {
+    torso: P.red,
+    arm: P.red,
+    leg: P.red,
+    head: P.porcelain,
+    hand: P.black,
+    foot: P.black,
+    joint: P.gold,
+    pelvis: P.black,
+  },
   torsoPat: diamonds(P.red, P.black, P.gold),
   armPat: diamonds(P.black, P.red, P.gold),
   legPat: diamonds(P.gold, P.red, P.black),
@@ -3022,7 +3302,9 @@ paintMob(
         rig.ball(tip, 1.1, P.gold);
       }
       // Воротник-жабо.
-      rig.disc(vadd(j.neck, v3(0, -0.6, 0)), 3.4, 0.6, P.porcelain, (u, v) => (Math.floor(Math.atan2(v, u) * 3) % 2 ? P.porcelain : P.cream));
+      rig.disc(vadd(j.neck, v3(0, -0.6, 0)), 3.4, 0.6, P.porcelain, (u, v) =>
+        Math.floor(Math.atan2(v, u) * 3) % 2 ? P.porcelain : P.cream,
+      );
       // Деревянный шлепок-«батоккио».
       if (c.m.mode !== 'f13_dive') {
         const d = swordDir(j, 'R', 0.5);
@@ -3031,8 +3313,13 @@ paintMob(
     },
     frame: (c) => {
       const m = c.m;
-      if (m.mode === 'f13_dive') return { alpha: 1 - ease(clamp01((m.t - 0.2) / 0.25)), dy: ease(m.t / 0.45) * 6 };
-      if (m.mode === 'f13_pop') return { alpha: clamp01(m.t / 0.12), ghost: { every: 0.04, life: 0.2, tint: '#ff7088', alpha: 0.4 } };
+      if (m.mode === 'f13_dive')
+        return { alpha: 1 - ease(clamp01((m.t - 0.2) / 0.25)), dy: ease(m.t / 0.45) * 6 };
+      if (m.mode === 'f13_pop')
+        return {
+          alpha: clamp01(m.t / 0.12),
+          ghost: { every: 0.04, life: 0.2, tint: '#ff7088', alpha: 0.4 },
+        };
       return {};
     },
   }),
@@ -3059,7 +3346,16 @@ const PROMPT_BODY: Body = {
   shin: 3,
   legR: 1.1,
   foot: 1.8,
-  T: { torso: P.wood, arm: P.wood, leg: P.black, head: P.skin, hand: P.skin, foot: P.black, joint: P.wood, pelvis: P.wood },
+  T: {
+    torso: P.wood,
+    arm: P.wood,
+    leg: P.black,
+    head: P.skin,
+    hand: P.skin,
+    foot: P.black,
+    joint: P.wood,
+    pelvis: P.wood,
+  },
   joints: false,
 };
 
@@ -3126,7 +3422,14 @@ paintMob(
       rig.ball(onHead(j, R, 1.05, 0, -0.15), 0.9, P.skin);
       // Свиток роли в левой руке.
       if (c.m.mode !== 'dying')
-        rig.cap(vadd(j.haL, vsc(j.right, -1.5)), vadd(j.haL, vsc(j.right, 1.5)), 1.2, 1.2, P.cream, (t) => (t < 0.15 || t > 0.85 ? P.wood : null));
+        rig.cap(
+          vadd(j.haL, vsc(j.right, -1.5)),
+          vadd(j.haL, vsc(j.right, 1.5)),
+          1.2,
+          1.2,
+          P.cream,
+          (t) => (t < 0.15 || t > 0.85 ? P.wood : null),
+        );
     },
     frame: (c) => (c.m.mode === 'f13_hide' ? { alpha: 0.85 } : {}),
   }),
@@ -3145,7 +3448,16 @@ const SHADE_BODY: Body = {
   head: 3,
   armR: 1.1,
   legR: 1.2,
-  T: { torso: P.shade, arm: P.shade, leg: P.shade, head: P.shade, hand: P.shade, foot: P.shade, joint: P.shade, pelvis: P.shade },
+  T: {
+    torso: P.shade,
+    arm: P.shade,
+    leg: P.shade,
+    head: P.shade,
+    hand: P.shade,
+    foot: P.shade,
+    joint: P.shade,
+    pelvis: P.shade,
+  },
   joints: false,
 };
 
@@ -3200,7 +3512,13 @@ paintMob(
     frame: (c) => {
       const m = c.m;
       const vis = m.data.ghost ? 0.12 + 0.08 * Math.sin(c.now * 6 + m.id) : 0.88;
-      return { alpha: vis, ghost: m.mode === 'chase' && !m.data.ghost ? { every: 0.08, life: 0.3, tint: '#3a2c50', alpha: 0.35 } : null };
+      return {
+        alpha: vis,
+        ghost:
+          m.mode === 'chase' && !m.data.ghost
+            ? { every: 0.08, life: 0.3, tint: '#3a2c50', alpha: 0.35 }
+            : null,
+      };
     },
     keyX: (c) => (c.m.data.ghost ? 'g' : ''),
   }),
@@ -3227,7 +3545,16 @@ const CASH_BODY: Body = {
   shin: 3,
   legR: 1.05,
   foot: 1.8,
-  T: { torso: P.green, arm: P.cream, leg: P.black, head: P.skin, hand: P.skin, foot: P.black, joint: P.wood, pelvis: P.black },
+  T: {
+    torso: P.green,
+    arm: P.cream,
+    leg: P.black,
+    head: P.skin,
+    hand: P.skin,
+    foot: P.black,
+    joint: P.wood,
+    pelvis: P.black,
+  },
   torsoPat: (t, nx) => (Math.abs(nx) < 0.12 && t > 0.3 ? P.gold : null),
 };
 
@@ -3263,7 +3590,9 @@ paintMob(
       rig.cap(onHead(j, R, 0, 0, 0.6), onHead(j, R, 0, 0, 1.05), 2.6, 2.4, P.green);
       // Мешок с монетами.
       const bag = vadd(j.haR, v3(0, -1.4, 0));
-      rig.ball(bag, 3.2, P.cream, (_t, nx, ny) => (Math.abs(nx) < 0.2 && Math.abs(ny) < 0.5 ? P.gold : null));
+      rig.ball(bag, 3.2, P.cream, (_t, nx, ny) =>
+        Math.abs(nx) < 0.2 && Math.abs(ny) < 0.5 ? P.gold : null,
+      );
       rig.cap(j.haR, vadd(j.haR, v3(0, 1, 0)), 0.8, 0.5, P.wood);
       rig.dot(vadd(bag, v3(0, 3.4, 0)), P.gold[3], 1, true);
     },
@@ -3276,7 +3605,14 @@ paintMob(
 
 const MASK_CACHE = frameLRU<MobFrame>(240);
 
-function maskPx(tragic: boolean, f: number, open: number, broken: boolean, glow: boolean, flash: boolean): { px: Px; lit: Px | null } {
+function maskPx(
+  tragic: boolean,
+  f: number,
+  open: number,
+  broken: boolean,
+  glow: boolean,
+  flash: boolean,
+): { px: Px; lit: Px | null } {
   const W = 30;
   const H = 30;
   const p = new Px(W, H);
@@ -3385,9 +3721,24 @@ function maskPainter(tragic: boolean) {
     let fr = MASK_CACHE.get(key);
     if (!fr) {
       const o = maskPx(tragic, f, open, broken, glow, pose.flash);
-      fr = MASK_CACHE.set(key, { img: o.px.canvas(), lit: o.lit ? o.lit.canvas() : null, ax: 15, ay: 26, eye: [11, 10], still: true });
+      fr = MASK_CACHE.set(key, {
+        img: o.px.canvas(),
+        lit: o.lit ? o.lit.canvas() : null,
+        ax: 15,
+        ay: 26,
+        eye: [11, 10],
+        still: true,
+      });
     }
-    return { ...fr, rot, sx: sc, sy: m.mode === 'f13_broken' && t < 3.4 ? 0.6 * sc : sc, lift, shadow: lift > 2 ? 5 : 7, alpha: m.mode === 'dying' ? Math.max(0, 1 - t / 0.7) : 1 };
+    return {
+      ...fr,
+      rot,
+      sx: sc,
+      sy: m.mode === 'f13_broken' && t < 3.4 ? 0.6 * sc : sc,
+      lift,
+      shadow: lift > 2 ? 5 : 7,
+      alpha: m.mode === 'dying' ? Math.max(0, 1 - t / 0.7) : 1,
+    };
   };
 }
 
@@ -3420,27 +3771,50 @@ function spiderRig(m: Mob, now: number, mode: string, t: number): { rig: Rig; ke
   const walk = mode === 'chase' || mode === 'f13_retie' || mode === 'alert';
   const f = walk ? Math.floor(now * 12 + m.id) % 8 : Math.floor(now * 5 + m.id) % 8;
   const ph = (f / 8) * TAU;
-  const hang = mode === 'f13_hang' || mode === 'f13_drop' || mode === 'f13_climb' || mode === 'f13_up';
+  const hang =
+    mode === 'f13_hang' || mode === 'f13_drop' || mode === 'f13_climb' || mode === 'f13_up';
   const wind = mode === 'windup' ? ease(clamp01(t / 0.8)) : 0;
   const hit = mode === 'recover' && t < 0.25 ? 1 - t / 0.25 : 0;
   const by = back ? 3 : hang ? 6 : 5 + wind * 2;
   const body = v3(0, by, -1);
   const head = v3(0, by + 0.5 + wind * 2, 3.2);
   const flip = back ? -1 : 1;
-  rig.ball(body, 4.4, P.black, (_t, nx, ny) => (Math.abs(ny + nx * 0.3) < 0.12 || Math.abs(ny + nx * 0.3 - 0.45) < 0.1 ? P.gold : null));
+  rig.ball(body, 4.4, P.black, (_t, nx, ny) =>
+    Math.abs(ny + nx * 0.3) < 0.12 || Math.abs(ny + nx * 0.3 - 0.45) < 0.1 ? P.gold : null,
+  );
   rig.ball(head, 2.6, P.wood);
   for (let i = 0; i < 8; i++) {
     const s = i < 4 ? -1 : 1;
     const k = i % 4;
     const a0 = (-0.9 + k * 0.6) * 1;
-    const sw = walk ? Math.sin(ph + k * 1.6 + (s > 0 ? Math.PI : 0)) * 0.35 : hang ? Math.sin(now * 6 + i) * 0.5 : back ? Math.sin(now * 14 + i * 1.3) * 0.6 : 0;
+    const sw = walk
+      ? Math.sin(ph + k * 1.6 + (s > 0 ? Math.PI : 0)) * 0.35
+      : hang
+        ? Math.sin(now * 6 + i) * 0.5
+        : back
+          ? Math.sin(now * 14 + i * 1.3) * 0.6
+          : 0;
     const raise = k === 3 ? wind * 1.2 + hit * 0.8 : 0;
     const root = vadd(body, v3(s * 2.6, 0.5 * flip, a0 * 2 + 1));
     const dir = a0 + sw;
-    const knee = vadd(root, v3(s * 4 * Math.cos(dir * 0.5), (hang ? 1 : 4 + raise * 4) * flip, Math.sin(dir) * 4 + raise * 3));
+    const knee = vadd(
+      root,
+      v3(
+        s * 4 * Math.cos(dir * 0.5),
+        (hang ? 1 : 4 + raise * 4) * flip,
+        Math.sin(dir) * 4 + raise * 3,
+      ),
+    );
     const foot = back
       ? vadd(knee, v3(s * 1.5, 4 + Math.sin(now * 14 + i) * 1.5, Math.sin(dir) * 2))
-      : vadd(knee, v3(s * 2.4 * Math.cos(dir * 0.5), hang ? -5 : -(knee.y - 0.2) + raise * 5, Math.sin(dir) * 2.4 + raise * 2));
+      : vadd(
+          knee,
+          v3(
+            s * 2.4 * Math.cos(dir * 0.5),
+            hang ? -5 : -(knee.y - 0.2) + raise * 5,
+            Math.sin(dir) * 2.4 + raise * 2,
+          ),
+        );
     rig.cap(root, knee, 0.75, 0.6, P.wood);
     rig.cap(knee, foot, 0.6, 0.35, P.wood);
     rig.ball(knee, 0.75, P.brass);
@@ -3593,11 +3967,15 @@ paintMob('f13_giant', (m, pose) => {
     rig.ball(vadd(j.shR, v3(0, 0.6, 0)), 1.9, P.silver);
     // Копьё: длинное, с конусом-гардой.
     const ld = vnorm(vadd(j.foreR, vsc(j.fwd, 1.4)));
-    rig.cap(vadd(j.haR, vsc(ld, -4)), vadd(j.haR, vsc(ld, 15)), 0.7, 0.35, P.wood, (t) => (t > 0.85 ? P.silver : (Math.floor(t * 10) % 2 ? P.red : null)));
+    rig.cap(vadd(j.haR, vsc(ld, -4)), vadd(j.haR, vsc(ld, 15)), 0.7, 0.35, P.wood, (t) =>
+      t > 0.85 ? P.silver : Math.floor(t * 10) % 2 ? P.red : null,
+    );
     rig.cap(vadd(j.haR, vsc(ld, 0.5)), vadd(j.haR, vsc(ld, 2.5)), 1.8, 0.6, P.silver);
     // Щит-миндаль с гербом.
     const sh = vadd(vmix(j.elL, j.haL, 0.6), vsc(j.fwd, 1));
-    rig.cap(vadd(sh, v3(0, 2, 0)), vadd(sh, v3(0, -2.5, 0)), 3.6, 1.6, P.blue, (t, nx) => (Math.abs(nx) < 0.15 || Math.abs(t - 0.4) < 0.08 ? P.gold : null));
+    rig.cap(vadd(sh, v3(0, 2, 0)), vadd(sh, v3(0, -2.5, 0)), 3.6, 1.6, P.blue, (t, nx) =>
+      Math.abs(nx) < 0.15 || Math.abs(t - 0.4) < 0.08 ? P.gold : null,
+    );
     const o = renderRig(rig, (dir / 16) * TAU, 88, 96, 44, 88, { flash: pose.flash, scale: 2 });
     fr = GIANT_CACHE.set(key, toFrame(o, 44, 88, { shadow: 16 }));
   }
@@ -3625,9 +4003,23 @@ const LORD_BODY: Body = {
   shin: 6.4,
   legR: 1.25,
   foot: 2.4,
-  T: { torso: P.black, arm: P.black, leg: P.black, head: P.porcelain, hand: P.porcelain, foot: P.black, joint: P.black, pelvis: P.black },
+  T: {
+    torso: P.black,
+    arm: P.black,
+    leg: P.black,
+    head: P.porcelain,
+    hand: P.porcelain,
+    foot: P.black,
+    joint: P.black,
+    pelvis: P.black,
+  },
   // Манишка и золотые лацканы.
-  torsoPat: (t, nx) => (Math.abs(nx) < 0.22 && t > 0.35 ? P.porcelain : Math.abs(Math.abs(nx) - 0.32) < 0.08 && t > 0.3 ? P.gold : null),
+  torsoPat: (t, nx) =>
+    Math.abs(nx) < 0.22 && t > 0.35
+      ? P.porcelain
+      : Math.abs(Math.abs(nx) - 0.32) < 0.08 && t > 0.3
+        ? P.gold
+        : null,
   armPat: bandPat(0.88, 1, P.gold),
 };
 
@@ -3817,7 +4209,14 @@ function lordPose(m: Mob, now: number): LordQ {
 
 const LORD_CACHE = cacheOf('f13boss', 640);
 
-function lordFrame(m: Mob, now: number, flash: boolean, open: boolean, ghost: boolean, act: number): MobFrame {
+function lordFrame(
+  m: Mob,
+  now: number,
+  flash: boolean,
+  open: boolean,
+  ghost: boolean,
+  act: number,
+): MobFrame {
   const L = lordPose(m, now);
   const dir = dirOf(m.face, 16);
   const key = `${L.key}:${dir}:${flash ? 1 : 0}${open ? 'o' : ''}${ghost ? 'g' : ''}${act === 3 ? 'f' : ''}`;
@@ -3852,7 +4251,12 @@ function lordFrame(m: Mob, now: number, flash: boolean, open: boolean, ghost: bo
     const T = open ? P.gold : P.wood;
     rig.cap(vadd(c, vsc(a, -5)), vadd(c, vsc(a, 5)), 0.65, 0.65, T, undefined, open);
     rig.cap(vadd(c, vsc(b, -3.6)), vadd(c, vsc(b, 3.6)), 0.6, 0.6, T, undefined, open);
-    for (const e of [vadd(c, vsc(a, -5)), vadd(c, vsc(a, 5)), vadd(c, vsc(b, -3.6)), vadd(c, vsc(b, 3.6))])
+    for (const e of [
+      vadd(c, vsc(a, -5)),
+      vadd(c, vsc(a, 5)),
+      vadd(c, vsc(b, -3.6)),
+      vadd(c, vsc(b, 3.6)),
+    ])
       rig.ball(e, 0.8, P.gold, undefined, true);
   };
   if (m.mode !== 'dying') {
@@ -3883,17 +4287,34 @@ paintMob('f13boss', (m, pose) => {
   const t = m.t;
   const extra: Partial<MobFrame> = {
     dy: -lift,
-    alpha: ghost ? 0.9 : m.mode === 'dying' ? (t < LORD_DEATH - 0.6 ? 1 : Math.max(0, (LORD_DEATH - t) / 0.6)) : 1,
+    alpha: ghost
+      ? 0.9
+      : m.mode === 'dying'
+        ? t < LORD_DEATH - 0.6
+          ? 1
+          : Math.max(0, (LORD_DEATH - t) / 0.6)
+        : 1,
     shadow: 10 - Math.min(5, lift / 6),
   };
   if (m.mode === 'dying') extra.linger = LORD_DEATH;
-  if (m.mode === 'chase' || m.mode === 'f13_cut2') extra.ghost = { every: 0.07, life: 0.28, tint: '#2a1e3a', alpha: 0.35 };
+  if (m.mode === 'chase' || m.mode === 'f13_cut2')
+    extra.ghost = { every: 0.07, life: 0.28, tint: '#2a1e3a', alpha: 0.35 };
   return { ...fr, ...extra };
 });
 
 // ---- прогрев -----------------------------------------------------------------
 
-for (const k of ['f13_knight', 'f13_nutcracker', 'f13_drummer', 'f13_fiddler', 'f13_ballerina', 'f13_harlequin', 'f13_prompter', 'f13_shade', 'f13_cashier'])
+for (const k of [
+  'f13_knight',
+  'f13_nutcracker',
+  'f13_drummer',
+  'f13_fiddler',
+  'f13_ballerina',
+  'f13_harlequin',
+  'f13_prompter',
+  'f13_shade',
+  'f13_cashier',
+])
   warmPuppet(k, 8);
 
 registerMobWarm('f13boss', function* () {
@@ -3920,7 +4341,16 @@ registerMobWarm('f13_giant', function* () {
       m.face = (d / 16) * TAU;
       for (let f = 0; f < 6; f++) {
         m.t = f * 0.15;
-        paint(m, { anim: mode === 'chase' ? 'run' : 'idle', frame: f * 2, mode, t: m.t, left: false, flash: false, look: 'normal', now: f / 8 });
+        paint(m, {
+          anim: mode === 'chase' ? 'run' : 'idle',
+          frame: f * 2,
+          mode,
+          t: m.t,
+          left: false,
+          flash: false,
+          look: 'normal',
+          now: f / 8,
+        });
         yield f;
       }
     }

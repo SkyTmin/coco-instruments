@@ -11,16 +11,7 @@ import { FLOOR_SCRIPTS } from '../dungeon-ai';
 import { buildWorld, Tile, walkableTile } from '../dungeon-world';
 import { API, createSim, NO_INPUT, spawnMob, stepSim, strikeHits, SWORD } from '../dungeon-sim';
 import type { Mob, Sim, SimInput } from '../dungeon-sim';
-import {
-  BOSS,
-  F13_FX,
-  F13_SCENERY,
-  f13Boss,
-  f13State,
-  inBeam,
-  STR,
-  stringsOf,
-} from './f13-brains';
+import { BOSS, F13_FX, F13_SCENERY, f13Boss, f13State, inBeam, STR, stringsOf } from './f13-brains';
 import { F13_FLIES, F13_FOYER, F13_GEO, F13_HALL, F13_TOP } from './f13';
 
 const world = buildWorld(13);
@@ -50,11 +41,16 @@ function run(s: Sim, secs: number, inp: SimInput | ((s: Sim) => SimInput) = NO_I
   for (let t = 0; t < secs * 60; t++) stepSim(s, DT, typeof inp === 'function' ? inp(s) : inp);
 }
 
-function runEv(s: Sim, secs: number, inp: SimInput | ((s: Sim) => SimInput) = NO_INPUT): Set<string> {
+function runEv(
+  s: Sim,
+  secs: number,
+  inp: SimInput | ((s: Sim) => SimInput) = NO_INPUT,
+): Set<string> {
   const out = new Set<string>();
   for (let t = 0; t < secs * 60; t++) {
     stepSim(s, DT, typeof inp === 'function' ? inp(s) : inp);
-    for (const e of s.events) if (e.t === 'boss') out.add(e.what);
+    for (const e of s.events)
+      if (e.t === 'boss') out.add(e.what);
       else out.add(e.t);
   }
   return out;
@@ -218,7 +214,11 @@ function bot(s: Sim, st: BotState): SimInput {
     return d;
   };
   // Кукловод открыт — бить его.
-  if (lord && !(lord.data.ghost ?? 0) && (lord.data.open || bs?.act === 3 || s.time < (bs?.dipUntil ?? 0))) {
+  if (
+    lord &&
+    !(lord.data.ghost ?? 0) &&
+    (lord.data.open || bs?.act === 3 || s.time < (bs?.dipUntil ?? 0))
+  ) {
     const d = go(lord.x, lord.y, SWORD.reach * 0.8 + lord.r * 0.5);
     if (d < SWORD.reach + lord.r) swingAt(s, st, inp, lord.x, lord.y);
     return inp;
@@ -226,7 +226,9 @@ function bot(s: Sim, st: BotState): SimInput {
   // Нити исполина и звёзд — резать.
   if (bs && bs.trans <= 0) {
     if (bs.act === 0) {
-      const g = s.mobs.find((m) => m.kind === 'f13_giant' && m.mode !== 'f13_slump' && m.mode !== 'f13_rebuild');
+      const g = s.mobs.find(
+        (m) => m.kind === 'f13_giant' && m.mode !== 'f13_slump' && m.mode !== 'f13_rebuild',
+      );
       const seg = g ? stringsOf(g).find((q) => !q.cut) : null;
       if (seg) {
         const px = seg.ax + (seg.bx - seg.ax) * 0.55;
@@ -251,7 +253,13 @@ function bot(s: Sim, st: BotState): SimInput {
   let near: Mob | null = null;
   let nd = 1e9;
   for (const m of s.mobs) {
-    if (m.mode === 'dying' || (m.data.ghost ?? 0) > 0 || m.kind === 'f13boss' || m.kind === 'f13_giant') continue;
+    if (
+      m.mode === 'dying' ||
+      (m.data.ghost ?? 0) > 0 ||
+      m.kind === 'f13boss' ||
+      m.kind === 'f13_giant'
+    )
+      continue;
     const d = Math.hypot(m.x - h.x, m.y - h.y);
     if (d < nd) {
       nd = d;
@@ -287,7 +295,10 @@ function fight(tier: number, plus: number, seed: number, meat = 4): Fight {
     low = Math.min(low, s.hero.hp / s.stats.maxHp);
     const k = s.mobs.find((m) => m.kind === 'f13boss');
     if (k) {
-      modes.set(`${f13Boss(s)?.act}:${k.mode}`, (modes.get(`${f13Boss(s)?.act}:${k.mode}`) ?? 0) + DT);
+      modes.set(
+        `${f13Boss(s)?.act}:${k.mode}`,
+        (modes.get(`${f13Boss(s)?.act}:${k.mode}`) ?? 0) + DT,
+      );
       lordK = k.hp / k.maxHp;
       if (process.env.F13TRACE && t % 600 === 0)
         console.log(
@@ -448,7 +459,10 @@ describe('этаж 13: сцена и дорога', () => {
         break;
       }
     }
-    if (LOG) console.log(`от лифта до ворот: ${arrived.toFixed(0)} с; стоит ${h.x.toFixed(1)},${h.y.toFixed(1)}`);
+    if (LOG)
+      console.log(
+        `от лифта до ворот: ${arrived.toFixed(0)} с; стоит ${h.x.toFixed(1)},${h.y.toFixed(1)}`,
+      );
     expect(arrived).toBeGreaterThan(0);
   });
 
@@ -457,7 +471,8 @@ describe('этаж 13: сцена и дорога', () => {
     stepSim(s, DT, NO_INPUT);
     const st = f13State(s)!;
     expect(st.posts.length).toBeGreaterThan(30);
-    for (const p of st.posts) expect(walkableTile(world.tiles[Math.floor(p.y) * W + Math.floor(p.x)])).toBe(true);
+    for (const p of st.posts)
+      expect(walkableTile(world.tiles[Math.floor(p.y) * W + Math.floor(p.x)])).toBe(true);
     expect(st.traps.length).toBe(11);
     expect(st.spots.length).toBe(7);
     expect(st.chands.length).toBeGreaterThan(10);
@@ -495,7 +510,11 @@ describe('этаж 13: нити', () => {
       m.y = s.hero.y + 0.8;
       m.vx = m.vy = 0;
       const seg = stringsOf(m).find((q) => !q.cut)!;
-      run(s, 0.3, () => ({ ...NO_INPUT, attack: true, aim: { x: seg.ax - s.hero.x, y: seg.ay - 0.8 - s.hero.y } }));
+      run(s, 0.3, () => ({
+        ...NO_INPUT,
+        attack: true,
+        aim: { x: seg.ax - s.hero.x, y: seg.ay - 0.8 - s.hero.y },
+      }));
       s.hero.hp = s.stats.maxHp;
       m.hp = m.maxHp;
     }
@@ -504,7 +523,11 @@ describe('этаж 13: нити', () => {
     const f = lab('f13_fiddler', 1.2, 0.8, 6);
     stepSim(f.s, DT, NO_INPUT);
     const seg = stringsOf(f.m)[0];
-    const ev = runEv(f.s, 0.4, () => ({ ...NO_INPUT, attack: true, aim: { x: seg.ax - f.s.hero.x, y: seg.ay - 0.8 - f.s.hero.y } }));
+    const ev = runEv(f.s, 0.4, () => ({
+      ...NO_INPUT,
+      attack: true,
+      aim: { x: seg.ax - f.s.hero.x, y: seg.ay - 0.8 - f.s.hero.y },
+    }));
     expect(ev.has('f13_snap_fall')).toBe(true);
     run(f.s, 0.2, still);
     expect(f.s.mobs.some((x) => x.id === f.m.id && x.mode !== 'dying')).toBe(false);
@@ -535,7 +558,9 @@ describe('этаж 13: нити', () => {
   it('мешок противовеса режет нити и давит', () => {
     const { s, m } = lab('f13_knight', 2, 0);
     stepSim(s, DT, NO_INPUT);
-    const w = s.world.objs.find((o) => o.ref === 'f13_weight' && Math.hypot(o.x - m.x, o.y - m.y) < 12)!;
+    const w = s.world.objs.find(
+      (o) => o.ref === 'f13_weight' && Math.hypot(o.x - m.x, o.y - m.y) < 12,
+    )!;
     expect(w).toBeTruthy();
     m.x = w.x + 1.5;
     m.y = w.y + 1.5;
@@ -598,7 +623,11 @@ describe('этаж 13: сцена', () => {
     expect(t).toBeTruthy();
     expect(t.data.pair).toBe(m.id);
     m.hp = 1;
-    const ev = runEv(s, 0.5, () => ({ ...still(s), attack: true, aim: { x: m.x - s.hero.x, y: m.y - s.hero.y } }));
+    const ev = runEv(s, 0.5, () => ({
+      ...still(s),
+      attack: true,
+      aim: { x: m.x - s.hero.x, y: m.y - s.hero.y },
+    }));
     expect(m.mode === 'f13_broken' || ev.has('f13_crystal_stone')).toBe(true);
     run(s, 4.5, still);
     expect(m.mode).not.toBe('dying');
@@ -620,7 +649,8 @@ describe('этаж 13: сцена', () => {
       return still(q);
     });
     expect(f13State(s)!.turn.state).toBe(2);
-    for (const L of F13_SCENERY) for (const [x, y] of L.cells) expect(s.tiles[y * W + x]).toBe(Tile.Floor);
+    for (const L of F13_SCENERY)
+      for (const [x, y] of L.cells) expect(s.tiles[y * W + x]).toBe(Tile.Floor);
   });
 
   it('пожарный занавес: ряд горит секунду, потом стоит стеной; стопор клинит его', () => {
@@ -661,7 +691,10 @@ describe('этаж 13: Кукловод — акты', () => {
     run(s, 0.3, () => ({
       ...still(s),
       attack: true,
-      aim: { x: seg.ax + (seg.bx - seg.ax) * 0.5 - s.hero.x, y: seg.ay + (seg.by - seg.ay) * 0.5 - s.hero.y },
+      aim: {
+        x: seg.ax + (seg.bx - seg.ax) * 0.5 - s.hero.x,
+        y: seg.ay + (seg.by - seg.ay) * 0.5 - s.hero.y,
+      },
     }));
     expect(g.mode).toBe('f13_slump');
     run(s, 0.2, still);
