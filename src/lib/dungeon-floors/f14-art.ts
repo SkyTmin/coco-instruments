@@ -3610,13 +3610,13 @@ function lSpin(t: number, h: number): LRig {
   const OUT: Partial<LRig> = {
     af: 0,
     ar: 14,
-    au: 27,
+    au: 31,
     aa: 1.5,
     ap: 0.08,
     ae: 0.6,
     bf: 0,
     br: -14,
-    bu: 27,
+    bu: 31,
     ba: -1.5,
     bp: 0.08,
     be: 0.6,
@@ -3628,8 +3628,8 @@ function lSpin(t: number, h: number): LRig {
       W,
       {
         ...OUT,
-        yaw: -0.75,
-        tw: -0.35,
+        yaw: -0.55,
+        tw: -0.3,
         lean: -1,
         drop: 3.5,
         sx: 1.04,
@@ -3640,12 +3640,12 @@ function lSpin(t: number, h: number): LRig {
         glow: 1,
         aglow: 0.5,
         bglow: 0.5,
-        ap: -0.1,
-        bp: -0.1,
+        ap: 0.2,
+        bp: 0.2,
       },
       lIO,
     ],
-    [C - 6 * F, { yaw: -0.75, tw: -0.2, hyw: 0.3, drop: 3 }, lIn],
+    [C - 6 * F, { yaw: -0.4, tw: -0.15, hyw: 0.3, drop: 3 }, lIn],
     [
       C,
       {
@@ -5395,6 +5395,8 @@ interface LJob {
 }
 /** Кадр, который рисуется заранее (один на всех: босс один). */
 let LJOB: LJob | null = null;
+/** Сторона, на которую корпус встанет к следующему кадру (её считает `lordReq`). */
+let lNextD = 0;
 /** Сколько рисовать заранее за вызов рисовальщика, мс (как у мамонта). */
 const PIPE_MS = 0.45;
 
@@ -5490,6 +5492,8 @@ interface LMem {
   head: number;
   /** Режим мозга прошлого кадра и кадр шага, из которого началась техника. */
   mode: string;
+  /** Сторона прошлого кадра (−1 — ещё не было). */
+  d: number;
   tech: LTech;
   wf: number;
   from: number;
@@ -5516,6 +5520,7 @@ function lordReq(m: Mob, pose: MobPose): LReq {
       yaw: NaN,
       head: NaN,
       mode: pose.mode,
+      d: -1,
       tech: 'idle',
       wf: 0,
       from: -1,
@@ -5718,7 +5723,16 @@ function lordReq(m: Mob, pose: MobPose): LReq {
       q.f = Math.floor((s.turn / 0.9) * WALK_N) % WALK_N;
     }
   }
+  // Сторона с запасом: у границы двух сторон кадр не дёргается туда-сюда.
   q.d = lToDir(s.yaw);
+  if (s.d >= 0 && q.d !== s.d && Math.abs(lWrap(s.yaw - s.d * LDIR)) < LDIR * 0.62) q.d = s.d;
+  s.d = q.d;
+  // Куда корпус довернётся к следующему кадру анимации (для «на потом»).
+  const lead = lWrap(tgt - s.yaw);
+  const st1 = rate === Infinity ? lead : lclamp(lead, -rate * LF1, rate * LF1);
+  const y1 = s.yaw + st1;
+  lNextD = lToDir(y1);
+  if (lNextD !== q.d && Math.abs(lWrap(y1 - q.d * LDIR)) < LDIR * 0.62) lNextD = q.d;
   if (lStepTech(q.tech) || q.tech === 'idle') {
     if (q.tech !== 'hurt') {
       const off = lWrap(s.head - q.d * LDIR);
@@ -5823,7 +5837,7 @@ registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
   }
   // Следующий кадр — заранее, кусками.
   const nq = lNext(q);
-  if (nq) lAhead(nq);
+  if (nq) lAhead({ ...nq, d: lNextD });
   return out;
 });
 
