@@ -13,7 +13,7 @@
 // (сидящий колосс на троне, 60×66: улыбка, глаза-светильники, печать на
 // груди — золото, когда уязвим).
 
-import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
+import type { Mob, Strike, Zone } from '../dungeon-sim';
 import type { WorldObj } from '../dungeon-world';
 import { hex, mix, Px, TS } from '../dungeon-art';
 import {
@@ -25,12 +25,16 @@ import {
   registerMobPainter,
   registerMobWarm,
   registerPropPainter,
-  registerShotPainter,
   registerZonePainter,
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import { F4_MARK } from './f4';
-import { F4_VIEW, knightGuards } from './f4-brains';
+import { F4_VIEW } from './f4-brains';
+// Мобы этажа (анимации мобов 4): костяк, кучка, латник, некромант — свой модуль.
+import './f4-mobs';
+import './f4-mob-knight';
+import './f4-mob-necro';
+import { statueFrame } from './f4-mob-statue';
 
 type RGBA = [number, number, number, number];
 
@@ -58,7 +62,6 @@ const IRON = {
   sh: hex('#646a70'),
   dk: hex('#3c4046'),
 };
-const RAG = { mid: hex('#4d5a46'), dk: hex('#2f382c'), hi: hex('#6a7862') };
 const STONE = {
   hi: hex('#c6c8be'),
   mid: hex('#989b91'),
@@ -68,19 +71,12 @@ const STONE = {
   mossDk: hex('#44563a'),
 };
 const GOLD = { hi: hex('#fff2b0'), mid: hex('#dcb44c'), dk: hex('#8a6a20') };
-const ROBE = {
-  hi: hex('#6e5a7e'),
-  mid: hex('#4a3856'),
-  dk: hex('#2c2036'),
-  deep: hex('#1a1220'),
-};
 const GREEN = { hi: hex('#e2ffd4'), mid: hex('#8cff7c'), dk: hex('#2eae4c') };
 const TABARD = { hi: hex('#a8443a'), mid: hex('#7a2c2a'), dk: hex('#4a1a1a') };
 const WOOD = { mid: hex('#6e4a2e'), dk: hex('#432a1a'), hi: hex('#94683e') };
 const EYE_RED = hex('#ff3a28');
 const EYE_AMBER = hex('#ffb040');
 
-const cache = new Map<string, MobFrame>();
 const sprites = new Map<string, Sprite>();
 
 /** Холст из пикселей: зеркало, вспышка белым, облик. */
@@ -109,714 +105,6 @@ function bone(p: Px, x0: number, y0: number, x1: number, y1: number, knobs = tru
     p.set(x1, y1, BONE.hi);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Костяк.
-// ---------------------------------------------------------------------------
-
-interface SkelPose {
-  /** Сдвиг всей фигуры (подскок, наклон). */
-  bx: number;
-  by: number;
-  /** Голова: сдвиг черепа и открыта ли челюсть. */
-  hx: number;
-  hy: number;
-  jaw: boolean;
-  /** Ступни (задняя, передняя) и колени. */
-  feet: [number, number][];
-  knees: [number, number][];
-  /** Руки: локоть и кисть — задняя, передняя. */
-  elbows: [number, number][];
-  hands: [number, number][];
-  /** Меч в передней руке: угол (0 — вперёд, −π/2 — вверх). */
-  sword: number;
-}
-
-const SK_W = 20;
-const SK_H = 22;
-const SK_CX = 9;
-const SK_G = 21;
-
-function skelPose(anim: string, f: number, t: number): SkelPose {
-  const base: SkelPose = {
-    bx: 0,
-    by: 0,
-    hx: 0,
-    hy: 0,
-    jaw: false,
-    feet: [
-      [SK_CX - 2, SK_G],
-      [SK_CX + 2, SK_G],
-    ],
-    knees: [
-      [SK_CX - 2, SK_G - 3],
-      [SK_CX + 2, SK_G - 3],
-    ],
-    elbows: [
-      [SK_CX - 3, 13],
-      [SK_CX + 3, 13],
-    ],
-    hands: [
-      [SK_CX - 3, 16],
-      [SK_CX + 4, 15],
-    ],
-    sword: 0.5,
-  };
-  switch (anim) {
-    case 'idle': {
-      const bob = [0, 0, 1, 0][f];
-      base.by = bob;
-      base.jaw = f === 2;
-      base.hands[1] = [SK_CX + 4, 15 + bob];
-      base.sword = 0.7;
-      break;
-    }
-    case 'run': {
-      const s = [
-        [-3, 3],
-        [-1, 1],
-        [3, -3],
-        [1, -1],
-      ][f];
-      base.by = f % 2 === 1 ? -1 : 0;
-      base.feet = [
-        [SK_CX + s[0], SK_G],
-        [SK_CX + s[1], SK_G],
-      ];
-      base.knees = [
-        [SK_CX + s[0] * 0.5 - 0.5, SK_G - 3],
-        [SK_CX + s[1] * 0.5 + 0.5, SK_G - 3],
-      ];
-      base.hands = [
-        [SK_CX - 2 - s[1] * 0.4, 15],
-        [SK_CX + 4 + s[0] * 0.3, 14],
-      ];
-      base.elbows = [
-        [SK_CX - 3, 12],
-        [SK_CX + 3, 12],
-      ];
-      base.sword = 0.3;
-      base.jaw = f === 0;
-      break;
-    }
-    case 'wind':
-      // Меч занесён над головой, корпус откинут.
-      base.bx = -1;
-      base.hx = -1;
-      base.elbows[1] = [SK_CX + 2, 8];
-      base.hands[1] = [SK_CX + 1 + f, 5];
-      base.sword = -1.9 + f * 0.25;
-      base.jaw = true;
-      break;
-    case 'bite':
-      // Рубит вниз-вперёд, выпад.
-      base.bx = 1;
-      base.hx = 1;
-      base.feet[1] = [SK_CX + 4, SK_G];
-      base.knees[1] = [SK_CX + 3, SK_G - 3];
-      base.elbows[1] = [SK_CX + 5, 12];
-      base.hands[1] = [SK_CX + 7, 14 - f];
-      base.sword = 0.45 + f * 0.25;
-      base.jaw = true;
-      break;
-    case 'hurt':
-      base.bx = -1;
-      base.hx = -2;
-      base.hy = -1;
-      base.hands = [
-        [SK_CX - 5, 11],
-        [SK_CX + 5, 12],
-      ];
-      base.sword = -0.6;
-      base.jaw = true;
-      break;
-  }
-  void t;
-  return base;
-}
-
-/** Череп 7×6 в точке (x, y) — левый верхний угол, смотрит вправо. */
-function skull(p: Px, x: number, y: number, jaw: boolean, eyes: RGBA | null): void {
-  p.map(
-    ['.hhhhh.', 'hhmmmmh', 'hmmmmmm', 'mmssmss', 'smmmnmm', '.sjjjj.'],
-    { h: BONE.hi, m: BONE.mid, s: BONE.sh, n: BONE.hole, j: BONE.sh },
-    x,
-    y,
-  );
-  // Глазницы — провалы, в них тлеет глаз.
-  p.set(x + 2, y + 3, BONE.hole);
-  p.set(x + 3, y + 3, BONE.hole);
-  p.set(x + 5, y + 3, BONE.hole);
-  p.set(x + 6, y + 3, BONE.hole);
-  if (eyes) {
-    p.set(x + 3, y + 3, eyes);
-    p.set(x + 6, y + 3, eyes);
-  }
-  // Зубы и челюсть.
-  p.set(x + 2, y + 5, BONE.hi);
-  p.set(x + 4, y + 5, BONE.hi);
-  if (jaw) {
-    p.set(x + 3, y + 6, BONE.sh);
-    p.set(x + 4, y + 6, BONE.mid);
-    p.set(x + 5, y + 6, BONE.sh);
-    p.set(x + 3, y + 5, BONE.hole);
-    p.set(x + 5, y + 5, BONE.hole);
-  }
-}
-
-/** Ржавый меч: рукоять в кисти (x, y), клинок по углу `a`. */
-function rustySword(p: Px, x: number, y: number, a: number, len = 7): void {
-  const cx = Math.cos(a);
-  const cy = Math.sin(a);
-  // Гарда поперёк.
-  p.set(Math.round(x - cy), Math.round(y + cx), RUST.dk);
-  p.set(Math.round(x + cy), Math.round(y - cx), RUST.dk);
-  // Рукоять назад.
-  p.set(Math.round(x - cx), Math.round(y - cy), WOOD.dk);
-  for (let i = 1; i <= len; i++) {
-    const px = Math.round(x + cx * i);
-    const py = Math.round(y + cy * i);
-    const rust = (i * 7 + 3) % 5 === 0;
-    p.set(px, py, rust ? RUST.mid : i === len ? IRON.hi : IRON.mid);
-    if (i < len - 1) p.set(Math.round(px - cy * 0.6), Math.round(py + cx * 0.6), IRON.sh);
-  }
-}
-
-function paintSkel(anim: string, f: number, t: number, eyes: RGBA | null): Px {
-  const p = new Px(SK_W, SK_H);
-  const s = skelPose(anim, f, t);
-  const ox = s.bx;
-  const oy = s.by;
-  const pelvisY = 15 + oy;
-  const chestY = 10 + oy;
-  const neckY = 8 + oy;
-  const cx = SK_CX + ox;
-  // Задняя рука и нога — тенью.
-  const [be, bh] = [s.elbows[0], s.hands[0]];
-  p.line(cx - 2, chestY, be[0] + ox, be[1] + oy, BONE.sh);
-  p.line(be[0] + ox, be[1] + oy, bh[0] + ox, bh[1] + oy, BONE.sh);
-  p.line(cx - 1, pelvisY + 1, s.knees[0][0] + ox, s.knees[0][1], BONE.sh);
-  p.line(s.knees[0][0] + ox, s.knees[0][1], s.feet[0][0], s.feet[0][1], BONE.sh);
-  p.set(s.feet[0][0] - 1, s.feet[0][1], BONE.dk);
-  // Таз и тряпка.
-  p.rect(cx - 2, pelvisY, cx + 2, pelvisY + 1, BONE.mid);
-  p.set(cx - 2, pelvisY, BONE.hi);
-  p.rect(cx - 2, pelvisY + 1, cx + 1, pelvisY + 3, RAG.mid);
-  p.set(cx - 2, pelvisY + 3, RAG.dk);
-  p.set(cx, pelvisY + 4, RAG.dk);
-  p.set(cx - 1, pelvisY + 1, RAG.hi);
-  // Хребет и рёбра: светлая кость, между рёбрами — пусто.
-  p.line(cx, neckY, cx, pelvisY - 1, BONE.sh);
-  for (const [dy, w] of [
-    [0, 3],
-    [2, 3],
-    [4, 2],
-  ]) {
-    const y = chestY + dy - 1;
-    p.line(cx - w + 1, y, cx + w, y, BONE.mid);
-    p.set(cx - w + 1, y, BONE.hi);
-    p.set(cx + w, y + 1, BONE.sh);
-  }
-  // Передняя нога.
-  const [fk, ff] = [s.knees[1], s.feet[1]];
-  bone(p, cx + 1, pelvisY + 1, fk[0] + ox, fk[1]);
-  bone(p, fk[0] + ox, fk[1], ff[0], ff[1]);
-  p.set(ff[0] + 1, ff[1], BONE.mid);
-  // Череп.
-  skull(p, cx - 3 + s.hx, 2 + oy + s.hy, s.jaw, eyes);
-  // Передняя рука с мечом.
-  const [fe, fh] = [s.elbows[1], s.hands[1]];
-  bone(p, cx + 2, chestY, fe[0] + ox, fe[1] + oy, false);
-  bone(p, fe[0] + ox, fe[1] + oy, fh[0] + ox, fh[1] + oy);
-  rustySword(p, fh[0] + ox, fh[1] + oy, s.sword);
-  p.outline(INK);
-  return p;
-}
-
-/**
- * Кучка костей: `k` — сколько накопилось подъёма (0 — только рассыпались,
- * 1 — встаёт). Кости сползаются к середине, череп поднимается, глаза
- * разгораются. `j` — дрожь (кадр).
- */
-function paintPile(k: number, j: number, eyesOn: boolean): Px {
-  const p = new Px(20, 12);
-  const g = 11;
-  const sp = (1 - k) * 3; // разброс
-  const jit = (n: number) => (j % 2 === 0 ? 0 : ((n * 7) % 3) - 1) * (k > 0.3 ? 1 : 0);
-  // Бедренные кости крест-накрест.
-  bone(p, 3 - sp + jit(1), g - 1, 11 - sp * 0.3, g - 4 + jit(2));
-  bone(p, 8 + sp * 0.3, g - 4, 16 + sp, g - 1 + jit(3));
-  // Рёбра дугами.
-  for (let i = 0; i < 3; i++) {
-    const x = 6 + i * 2 - sp * 0.5 + jit(i + 4);
-    p.line(x, g - 2, x + 2, g - 3, BONE.mid);
-    p.set(x, g - 2, BONE.sh);
-  }
-  // Таз.
-  p.rect(10 + sp * 0.4, g - 2, 12 + sp * 0.4, g - 1, BONE.sh);
-  p.set(10 + sp * 0.4, g - 2, BONE.mid);
-  // Тряпка.
-  p.rect(12 + sp * 0.6, g - 1, 14 + sp * 0.6, g, RAG.dk);
-  // Череп: чем ближе подъём, тем выше он сидит.
-  const sy = Math.round(g - 6 - k * 2);
-  const sx = Math.round(7 + sp * 0.2) + jit(9);
-  skull(p, sx, sy, k > 0.8 && j % 2 === 1, eyesOn ? mix(EYE_RED, WHITE, 0.2) : null);
-  p.outline(INK);
-  return p;
-}
-
-registerMobPainter('f4_skel', (m, pose) => {
-  let anim: string = pose.anim;
-  let frame = pose.frame;
-  // Встаёт из кучки: четыре стадии сборки.
-  if (pose.mode === 'rise' || pose.mode === 'alert') {
-    const k = Math.min(1, pose.t / (pose.mode === 'alert' ? 0.35 : 0.55));
-    anim = 'rise';
-    frame = Math.min(3, Math.floor(k * 4));
-  } else if (anim === 'sleep') anim = 'rest';
-  else if (anim === 'dead') anim = 'dead';
-  const f =
-    anim === 'idle' || anim === 'run' ? mod(frame, 4) : anim === 'rise' ? frame : mod(frame, 2);
-  const key = `sk|${anim}|${f}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  let px: Px;
-  const eyes = mix(EYE_RED, WHITE, 0.15);
-  if (anim === 'dead') px = paintPile(0, 0, false);
-  else if (anim === 'rest') px = paintPile(0.55, 0, false);
-  else if (anim === 'rise') {
-    // Сборка: кучка внизу, фигура проявляется снизу вверх.
-    const full = paintSkel('idle', 0, 0, f >= 3 ? eyes : null);
-    const pile = paintPile(0.9, 0, f >= 2);
-    px = new Px(SK_W, SK_H);
-    const cut = [SK_H - 6, SK_H - 11, SK_H - 16, 0][f];
-    for (let y = 0; y < SK_H; y++)
-      for (let x = 0; x < SK_W; x++) {
-        const c = full.get(x, y);
-        if (c[3] && y >= cut) px.set(x, y + (3 - f), c);
-      }
-    if (f < 3)
-      for (let y = 0; y < pile.h; y++)
-        for (let x = 0; x < pile.w; x++) {
-          const c = pile.get(x, y);
-          if (c[3] && !px.solid(x - 1, SK_H - pile.h + y)) px.set(x - 1, SK_H - pile.h + y, c);
-        }
-  } else px = paintSkel(anim, f, pose.t, eyes);
-  const pile = anim === 'dead' || anim === 'rest';
-  const out: MobFrame = {
-    img: finish(px, pose.left, pose.flash, pose.look),
-    ax: pile ? 10 : pose.left ? SK_W - 1 - SK_CX : SK_CX,
-    ay: pile ? 10 : SK_G,
-    eye:
-      pile || anim === 'rise' ? null : [pose.left ? SK_W - 1 - (SK_CX - 3 + 3) : SK_CX - 3 + 3, 5],
-  };
-  cache.set(key, out);
-  void m;
-  return out;
-});
-
-registerMobPainter('f4_bones', (m, pose) => {
-  const k = Math.min(1, m.data.k ?? 0);
-  const ks = Math.floor(k * 6);
-  const j = k > 0.35 ? mod(pose.frame, 2) : 0;
-  const key = `pile|${ks}|${j}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const px = paintPile(ks / 6, j, ks >= 4);
-  const out: MobFrame = {
-    img: finish(px, pose.left, pose.flash, 'normal'),
-    ax: 10,
-    ay: 10,
-    eye: null,
-  };
-  cache.set(key, out);
-  return out;
-});
-
-// ---------------------------------------------------------------------------
-// Латник склепа: четыре стороны, щит — туда, куда смотрит.
-// ---------------------------------------------------------------------------
-
-type Dir4 = 'down' | 'up' | 'side';
-
-function dirOf(face: number): { dir: Dir4; left: boolean } {
-  const s = Math.sin(face);
-  const c = Math.cos(face);
-  if (s > 0.72) return { dir: 'down', left: c < 0 };
-  if (s < -0.72) return { dir: 'up', left: c < 0 };
-  return { dir: 'side', left: c < 0 };
-}
-
-const KN_W = 24;
-const KN_H = 30;
-const KN_CX = 12;
-const KN_G = 29;
-
-/** Башенный щит лицом к зрителю: железная оковка, тёмно-красное поле, костяной знак. */
-function towerShield(p: Px, x0: number, y0: number, w: number, h: number, knocked = false): void {
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const edge = x === 0 || x === w - 1 || y === 0 || y === h - 1;
-      // Низ щита — клином.
-      if (y === h - 1 && (x === 0 || x === w - 1)) continue;
-      const c = edge
-        ? x === 0 || y === 0
-          ? IRON.hi
-          : IRON.sh
-        : x < 2
-          ? TABARD.hi
-          : x > w - 3
-            ? TABARD.dk
-            : TABARD.mid;
-      p.set(x0 + x, y0 + y, knocked ? mix(c, IRON.dk, 0.25) : c);
-    }
-  // Знак: череп склепа (светлый) на поле.
-  const sx = x0 + Math.floor(w / 2) - 1;
-  const sy = y0 + Math.floor(h / 2) - 2;
-  p.rect(sx, sy, sx + 2, sy + 1, BONE.mid);
-  p.set(sx, sy + 2, BONE.sh);
-  p.set(sx + 2, sy + 2, BONE.sh);
-  p.set(sx + 1, sy + 2, BONE.mid);
-  p.set(sx, sy + 1, BONE.hole);
-  p.set(sx + 2, sy + 1, BONE.hole);
-  // Заклёпки.
-  p.set(x0 + 1, y0 + 1, IRON.hi);
-  p.set(x0 + w - 2, y0 + 1, IRON.mid);
-  p.set(x0 + 1, y0 + h - 2, IRON.mid);
-}
-
-/** Щит сбоку — ребром: узкая полоса с оковкой. */
-function shieldEdge(p: Px, x0: number, y0: number, h: number, tilt = 0): void {
-  for (let y = 0; y < h; y++) {
-    const x = x0 + Math.round((y / h) * tilt);
-    p.set(x, y0 + y, IRON.hi);
-    p.set(x + 1, y0 + y, TABARD.mid);
-    p.set(x + 2, y0 + y, TABARD.dk);
-    p.set(x + 3, y0 + y, IRON.sh);
-  }
-}
-
-/** Копьё: древко от (x, y) по углу `a` длиной `len`, железный наконечник. */
-function spear(p: Px, x: number, y: number, a: number, len: number, back = 4): void {
-  const cx = Math.cos(a);
-  const cy = Math.sin(a);
-  for (let i = -back; i <= len; i++) {
-    const px = Math.round(x + cx * i);
-    const py = Math.round(y + cy * i);
-    if (i >= len - 2) p.set(px, py, i === len ? IRON.hi : IRON.mid);
-    else p.set(px, py, i % 3 === 0 ? WOOD.hi : WOOD.mid);
-  }
-  // Крылья наконечника.
-  const bx = Math.round(x + cx * (len - 2));
-  const by = Math.round(y + cy * (len - 2));
-  p.set(Math.round(bx - cy), Math.round(by + cx), IRON.sh);
-  p.set(Math.round(bx + cy), Math.round(by - cx), IRON.sh);
-}
-
-/** Шлем-ведро со смотровой щелью; `eyes` — тлеющий взгляд в щели. */
-function helm(p: Px, x: number, y: number, dir: Dir4, eyes: boolean): void {
-  // Гребень — тёмно-красный.
-  p.rect(x + 2, y - 2, x + 4, y - 1, TABARD.mid);
-  p.set(x + 2, y - 2, TABARD.hi);
-  p.rect(x, y, x + 6, y + 6, IRON.mid);
-  p.rect(x, y, x + 1, y + 6, IRON.hi);
-  p.rect(x + 5, y, x + 6, y + 6, IRON.sh);
-  p.rect(x, y + 6, x + 6, y + 6, IRON.dk);
-  if (dir === 'down') {
-    p.rect(x + 1, y + 3, x + 5, y + 3, IRON.dk);
-    p.rect(x + 3, y + 3, x + 3, y + 5, IRON.dk);
-    if (eyes) {
-      p.set(x + 2, y + 3, EYE_AMBER);
-      p.set(x + 4, y + 3, EYE_AMBER);
-    }
-  } else if (dir === 'side') {
-    p.rect(x + 3, y + 3, x + 6, y + 3, IRON.dk);
-    p.set(x + 6, y + 4, IRON.dk);
-    if (eyes) p.set(x + 5, y + 3, EYE_AMBER);
-  } else {
-    // Затылок: заклёпки по шву.
-    p.set(x + 3, y + 1, IRON.sh);
-    p.set(x + 3, y + 3, IRON.sh);
-    p.set(x + 3, y + 5, IRON.sh);
-  }
-}
-
-function paintKnight(dir: Dir4, mode: string, f: number, eyes: boolean): Px {
-  const p = new Px(KN_W, KN_H);
-  const cx = KN_CX;
-  const g = KN_G;
-  const lunge = mode === 'lunge';
-  const aim = mode === 'aim';
-  const open = mode === 'open';
-  const stag = mode === 'stagger';
-  const dead = mode === 'dead';
-  if (dead) {
-    // Латы грудой: шлем на боку, щит плашмя, копьё поперёк.
-    spear(p, 3, g - 1, -0.08, 17, 0);
-    p.rect(5, g - 4, 15, g - 1, TABARD.dk);
-    p.rect(6, g - 5, 14, g - 3, TABARD.mid);
-    p.set(8, g - 4, BONE.mid);
-    p.set(10, g - 4, BONE.mid);
-    p.rect(14, g - 5, 19, g - 1, IRON.mid);
-    p.rect(14, g - 5, 15, g - 1, IRON.hi);
-    p.rect(16, g - 3, 19, g - 3, IRON.dk);
-    p.outline(INK);
-    return p;
-  }
-  const step = mode === 'run' ? [0, 1, 0, -1][f] : 0;
-  const bob = mode === 'idle' ? [0, 0, 1, 1][f] : mode === 'run' ? f % 2 : 0;
-  const lean = lunge ? 2 : aim ? -1 : stag ? -2 : 0;
-  const top = 7 + bob;
-  // Ноги в поножах.
-  const legL = cx - 3 + (dir === 'side' ? -step : 0);
-  const legR = cx + 1 + (dir === 'side' ? step + (lunge ? 2 : 0) : 0);
-  const legH = dir === 'side' || dir === 'up' ? step : 0;
-  p.rect(legL, g - 6 + Math.max(0, legH), legL + 1, g, IRON.sh);
-  p.rect(legR, g - 6 + Math.max(0, -legH), legR + 1, g, IRON.mid);
-  p.set(legL - 1, g, IRON.dk);
-  p.set(legR + 2, g, IRON.dk);
-  // Корпус: кираса под сюрко.
-  const bx = cx - 4 + lean;
-  p.rect(bx, top + 7, bx + 8, top + 16, IRON.mid);
-  p.rect(bx, top + 7, bx + 1, top + 16, IRON.hi);
-  p.rect(bx + 7, top + 7, bx + 8, top + 16, IRON.sh);
-  // Сюрко (накидка) — тёмно-красная, с рваным низом; сбоку — узкой полосой.
-  if (dir === 'side') {
-    p.rect(bx + 5, top + 9, bx + 6, top + 18, TABARD.mid);
-    p.set(bx + 5, top + 19, TABARD.dk);
-  } else {
-    p.rect(bx + 2, top + 9, bx + 6, top + 18, TABARD.mid);
-    p.rect(bx + 2, top + 9, bx + 2, top + 18, TABARD.hi);
-    p.set(bx + 3, top + 19, TABARD.dk);
-    p.set(bx + 5, top + 19, TABARD.dk);
-  }
-  p.rect(bx + 1, top + 13, bx + 7, top + 13, WOOD.dk);
-  p.set(bx + 4, top + 13, GOLD.dk);
-  // Наплечники.
-  p.rect(bx - 1, top + 7, bx + 1, top + 9, IRON.hi);
-  p.rect(bx + 7, top + 7, bx + 9, top + 9, IRON.sh);
-  // Шлем.
-  helm(p, cx - 3 + lean, top, dir, eyes);
-
-  if (dir === 'up') {
-    // Спиной: плащ на всю спину, щит ребром слева, копьё справа.
-    p.rect(bx + 1, top + 8, bx + 7, top + 19, TABARD.dk);
-    p.rect(bx + 1, top + 8, bx + 2, top + 19, TABARD.mid);
-    for (let x = bx + 1; x <= bx + 7; x += 2) p.set(x, top + 20, TABARD.dk);
-    shieldEdge(p, bx - 3, top + 8, 13, open ? 3 : 0);
-    if (lunge) spear(p, bx + 9, top + 12, -Math.PI / 2, 16, 2);
-    else if (aim) spear(p, bx + 9, top + 18, -Math.PI / 2, 10, 2);
-    else spear(p, bx + 10, top + 17, -Math.PI / 2 - 0.05, 18, 3);
-  } else if (dir === 'down') {
-    // Лицом: щит закрывает грудь и ноги; в замахе и выпаде копьё — ПЕРЕД
-    // щитом, остриём к зрителю (иначе щит его прятал).
-    if (open) spear(p, cx + 6, top + 10, Math.PI / 2 - 0.4, 12, 3);
-    else if (!lunge && !aim) spear(p, cx + 6, top + 19, -Math.PI / 2 + 0.03, 20, 2);
-    if (open || stag) towerShield(p, bx - 4, top + 12, 7, 11, true);
-    else towerShield(p, cx - 6 + lean, top + 8 - (aim ? 1 : 0), 10, 13);
-    if (lunge) spear(p, cx + 3, top + 13, Math.PI / 2 - 0.08, 15, 2);
-    else if (aim) spear(p, cx + 6, top + 6, Math.PI / 2 - 0.25, 9, 5);
-  } else {
-    // Сбоку (вправо): плащ за спиной, кираса видна; щит впереди в три
-    // четверти — оковка, красное поле, костяной знак; копьё над щитом.
-    p.rect(bx - 2, top + 8, bx, top + 19, TABARD.dk);
-    p.set(bx - 2, top + 20, TABARD.dk);
-    p.set(bx - 1, top + 9, TABARD.mid);
-    if (lunge) spear(p, bx + 6, top + 11, 0, 14, 7);
-    else if (aim) spear(p, bx + 2, top + 10, 0, 9, 6);
-    else if (open) spear(p, bx + 7, top + 12, 0.7, 10, 4);
-    else if (stag) spear(p, bx + 4, top + 9, -1.9, 12, 3);
-    else spear(p, bx + 9, top + 18, -Math.PI / 2 + 0.2, 20, 2);
-    if (open) towerShield(p, bx - 3, top + 12, 5, 10, true);
-    else if (stag) shieldEdge(p, bx - 4, top + 5, 11, -4);
-    else towerShield(p, bx + 5 + (aim ? -1 : 0) + (lunge ? 2 : 0), top + 7, 6, 14);
-  }
-  p.outline(INK);
-  return p;
-}
-
-registerMobPainter('f4_knight', (m, pose) => {
-  const { dir, left } = dirOf(m.face);
-  let mode = pose.mode;
-  if (pose.anim === 'dead') mode = 'dead';
-  else if (mode === 'guard' || mode === 'chase')
-    mode = Math.hypot(m.vx, m.vy) > 0.4 ? 'run' : 'idle';
-  else if (mode !== 'aim' && mode !== 'lunge' && mode !== 'open' && mode !== 'stagger')
-    mode = pose.anim === 'run' ? 'run' : 'idle';
-  const f = mode === 'idle' || mode === 'run' ? mod(pose.frame, 4) : 0;
-  const flip = dir === 'side' ? left : false;
-  // Щит закрыт от героя — кант щита светлее (видно, что он «держит»).
-  const key = `kn|${dir}|${mode}|${f}|${flip ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const px = paintKnight(dir, mode, f, mode !== 'dead');
-  const out: MobFrame = {
-    img: finish(px, flip, pose.flash, pose.look),
-    ax: KN_CX,
-    ay: KN_G,
-    eye: null,
-  };
-  cache.set(key, out);
-  void knightGuards;
-  return out;
-});
-
-// ---------------------------------------------------------------------------
-// Некромант.
-// ---------------------------------------------------------------------------
-
-const NC_W = 22;
-const NC_H = 28;
-const NC_CX = 10;
-const NC_G = 26;
-
-function flame(p: Px, x: number, y: number, f: number, big = false): void {
-  const h = big ? 5 : 3;
-  const sway = [0, 1, 0, -1][f % 4];
-  for (let i = 0; i < h; i++) {
-    const w = Math.max(0, Math.round((h - i) / (big ? 2 : 2.2)));
-    const xx = x + (i > 1 ? sway : 0);
-    const c = i < 1 ? GREEN.hi : i < h - 1 ? GREEN.mid : GREEN.dk;
-    p.rect(xx - w, y - i, xx + w, y - i, c);
-  }
-  p.set(x + sway, y - h, GREEN.dk);
-}
-
-function paintNecro(mode: string, f: number, t: number): Px {
-  const p = new Px(NC_W, NC_H);
-  const cx = NC_CX;
-  const float = mode === 'dead' ? 0 : [0, -1, -1, 0][f % 4];
-  const g = NC_G + float;
-  if (mode === 'dead') {
-    // Балахон осел пустой грудой, посох рядом, гримуар раскрыт.
-    p.rect(cx - 6, g - 3, cx + 5, g, ROBE.dk);
-    p.rect(cx - 5, g - 4, cx + 3, g - 3, ROBE.mid);
-    p.set(cx - 2, g - 5, ROBE.mid);
-    spear(p, cx - 8, g + 1, -0.1, 17, 0);
-    p.rect(cx + 3, g - 1, cx + 6, g, hex('#6a2a2a'));
-    p.set(cx + 4, g - 1, BONE.hi);
-    p.outline(INK);
-    return p;
-  }
-  const lean = mode === 'run' ? 1 : mode === 'aim' ? 1 : 0;
-  // Балахон: трапеция с рваным подолом, свет слева.
-  for (let y = 9; y <= g - 1; y++) {
-    const k = (y - 9) / (g - 10);
-    const half = 3 + k * 3.5;
-    const x0 = Math.round(cx - half + lean * (1 - k));
-    const x1 = Math.round(cx + half + lean * (1 - k));
-    for (let x = x0; x <= x1; x++) {
-      const rel = (x - x0) / Math.max(1, x1 - x0);
-      let c = rel < 0.22 ? ROBE.hi : rel < 0.7 ? ROBE.mid : ROBE.dk;
-      if ((x + y) % 5 === 0 && rel > 0.3) c = ROBE.dk; // складки
-      p.set(x, y, c);
-    }
-  }
-  // Рваный подол колышется.
-  for (let x = cx - 6; x <= cx + 6; x += 2) {
-    const sway = (x + f) % 3 === 0 ? 1 : 0;
-    p.set(x + sway, g, ROBE.dk);
-  }
-  // Пояс-верёвка и гримуар.
-  p.rect(cx - 3 + lean, 15, cx + 3 + lean, 15, GOLD.dk);
-  p.rect(cx - 5 + lean, 16, cx - 3 + lean, 19, hex('#6a2a2a'));
-  p.set(cx - 5 + lean, 16, hex('#9a4a3a'));
-  p.set(cx - 4 + lean, 17, GOLD.mid);
-  // Капюшон и тьма лица, в ней — два зелёных глаза.
-  const hx = cx - 3 + lean;
-  p.rect(hx, 2, hx + 6, 9, ROBE.mid);
-  p.rect(hx, 3, hx + 1, 9, ROBE.hi);
-  erase(p, hx, 2);
-  erase(p, hx + 6, 2);
-  p.set(hx + 3, 1, ROBE.mid);
-  p.set(hx + 4, 1, ROBE.dk);
-  p.rect(hx + 2, 4, hx + 6, 8, ROBE.deep);
-  p.set(hx + 3, 6, GREEN.mid);
-  p.set(hx + 5, 6, GREEN.mid);
-  // Посох с черепом и огнём.
-  const raise = mode === 'raise';
-  const cast = mode === 'aim';
-  const sx = cx + 5 + lean + (cast ? 2 : 0);
-  const topY = raise ? 1 : cast ? 4 : 5;
-  const tilt = cast ? 0.45 : 0;
-  for (let y = topY + 3; y <= g - 1; y++) {
-    const x = Math.round(sx - (y - topY) * tilt * 0.3);
-    p.set(x, y, y % 4 === 0 ? WOOD.hi : WOOD.dk);
-  }
-  // Кисть на посохе — кость.
-  p.set(sx - 1, topY + 9, BONE.mid);
-  p.set(sx - 1, topY + 10, BONE.sh);
-  // Череп на навершии.
-  p.rect(sx - 1, topY + 1, sx + 1, topY + 2, BONE.mid);
-  p.set(sx - 1, topY + 1, BONE.hi);
-  p.set(sx, topY + 2, BONE.hole);
-  p.set(sx - 1, topY + 3, BONE.sh);
-  p.set(sx + 1, topY + 3, BONE.sh);
-  flame(p, sx, topY, f, cast || raise);
-  if (raise) {
-    // Вторая рука вверх — зовёт кости.
-    p.line(cx - 4, 10, cx - 6, 5, ROBE.mid);
-    p.set(cx - 6, 4, BONE.mid);
-    p.set(cx - 7, 3, GREEN.mid);
-  } else {
-    p.set(cx - 5 + lean, 12, ROBE.hi);
-    p.set(cx - 5 + lean, 13, BONE.sh);
-  }
-  p.outline(INK);
-  // Колдовство — зелёные искры вокруг (поверх контура).
-  if (cast || raise) {
-    const n = raise ? 5 : 3;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + t * 6;
-      p.set(Math.round(sx + Math.cos(a) * 3), Math.round(topY + 1 + Math.sin(a) * 2), GREEN.hi);
-    }
-  }
-  return p;
-}
-
-registerMobPainter('f4_necro', (m, pose) => {
-  let mode = pose.mode;
-  if (pose.anim === 'dead') mode = 'dead';
-  else if (
-    mode === 'chase' ||
-    mode === 'recover' ||
-    mode === 'stun' ||
-    mode === 'alert' ||
-    mode === 'emerge' ||
-    mode === 'sleep'
-  )
-    mode = pose.anim === 'run' ? 'run' : 'idle';
-  const fade =
-    mode === 'blink'
-      ? Math.min(1, pose.t / 0.35)
-      : mode === 'appear'
-        ? 1 - Math.min(1, pose.t / 0.35)
-        : 0;
-  const fs = Math.floor(fade * 4);
-  if (mode === 'blink' || mode === 'appear') mode = 'idle';
-  const f = mod(pose.frame, 4);
-  const ts = mode === 'aim' || mode === 'raise' ? mod(pose.t * 10, 6) : 0;
-  const key = `nc|${mode}|${f}|${ts}|${fs}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const px = paintNecro(mode, f, ts / 10);
-  // Исчезает в пыль: выпадают пиксели по шуму, снизу вверх.
-  if (fs > 0)
-    for (let y = 0; y < px.h; y++)
-      for (let x = 0; x < px.w; x++) {
-        const n = ((x * 7 + y * 13) % 11) / 11;
-        if (n < fs / 4 + (y / px.h) * 0.25 * (fs / 4)) erase(px, x, y);
-      }
-  const out: MobFrame = {
-    img: finish(px, pose.left, pose.flash, pose.look),
-    ax: pose.left ? NC_W - 1 - NC_CX : NC_CX,
-    ay: NC_G,
-    eye: fs >= 3 ? null : [pose.left ? NC_W - 1 - (NC_CX + 1) : NC_CX + 1, 6],
-  };
-  cache.set(key, out);
-  void m;
-  return out;
-});
 
 // ---------------------------------------------------------------------------
 // Анимация (v2.85): кривые, кванты, кеш кадров, память рисовальщика.
@@ -1084,7 +372,6 @@ const SP = {
   /** На колене перед взором идола. */
   bow: sr({ kneel: 1, gx: 15, gy: 16, sa: Math.PI / 2, hy: 1 }),
 };
-const FROZEN = [SP.guard, SP.high, SP.lunge, SP.claw];
 
 function mixStatue(a: StatueRig, b: StatueRig, k: number): StatueRig {
   if (k <= 0) return a;
@@ -1379,149 +666,6 @@ function statueRise(t: number, gold: boolean): StatueRig {
   return rig;
 }
 
-/** Ходьба крадучись: 8 кадров на два шага, корпус проседает на опорной. */
-function statueCreep(t: number, gold: boolean): StatueRig {
-  const f = Math.floor(t * 14) % 8;
-  const step = f < 4 ? 1 : -1;
-  const ph = f % 4;
-  // Контакт (разведены) → присед → проход (вместе, нога поднята) → подъём.
-  const spread = [3, 3, 0, 1][ph];
-  const bob = [0, 1, 0, -1][ph];
-  const lifted = ph === 2 ? 1 : ph === 3 ? 0 : 0;
-  const base = { ...SP.claw, gold, eyes: 1 };
-  return {
-    ...base,
-    fb: step > 0 ? -spread : spread - 1,
-    ff: step > 0 ? spread : -spread + 1,
-    lb: step > 0 ? 0 : lifted,
-    lf: step > 0 ? lifted : 0,
-    by: bob,
-    sway: -step * (ph === 1 || ph === 2 ? 1 : 0),
-    hy: ph === 1 ? 1 : 0,
-    // Меч волочится и качается в такт.
-    sa: 2.35 + (ph === 1 ? 0.08 : ph === 3 ? -0.06 : 0),
-  };
-}
-
-/**
- * Замах (доля k копится, только пока на статую не смотрят — смотришь, и
- * она замирает посреди замаха): присед, меч уходит за голову, зависание,
- * удар по дуге за три кадра со следом. Контакт — первый кадр `recover`.
- */
-const WIND_T = 0.55;
-function statueWind(k: number, from: StatueRig, gold: boolean): StatueRig {
-  const t = q24(k * WIND_T, WIND_T);
-  const kk = t / WIND_T;
-  const dip = eInOut(seg(kk, 0, 0.16));
-  const up = seg(kk, 0.1, 0.7);
-  const hang = seg(kk, 0.7, 0.8);
-  const swing = seg(kk, 0.8, 1);
-  let r = mixStatue(from, { ...from, by: from.by + 1, gx: from.gx - 2 }, dip);
-  if (up > 0) r = mixStatue(r, { ...SP.wind, gold, eyes: 1 }, eInOut(up));
-  if (hang > 0) r = { ...r, sa: r.sa - eOut(hang) * 0.15, by: r.by - eOut(hang) * 0.5 };
-  if (swing > 0) {
-    const s = eIn(swing) * 0.55 + swing * 0.45;
-    const prev = r.sa;
-    r = mixStatue(r, { ...SP.hit, gold, eyes: 1 }, s);
-    // Меч идёт ЧЕРЕЗ верх вперёд: угол растёт от «за головой» к «в пол перед собой».
-    r.sa = lerp(prev, SP.hit.sa, s);
-    // След — только когда клинок уже прошёл заметную дугу: иначе у острия
-    // висело бы пятно.
-    if (r.sa - (SP.wind.sa - 0.15) > 0.5) r.smear = [SP.wind.sa - 0.15, r.sa, 0.9];
-  }
-  return { ...r, eyes: 1, gold };
-}
-
-/** После удара: контакт, проводка (меч вгрызается в пол), возврат в стойку. */
-function statueRecover(t: number, gold: boolean): { rig: StatueRig; sy: number } {
-  const tq = q24(t);
-  const bite = seg(tq, 0, 0.08);
-  const back = eInOut(seg(tq, 0.2, 0.5));
-  let r: StatueRig = { ...SP.hit, gold, eyes: 1 };
-  r = { ...r, gy: r.gy + (bite > 0 ? 1 : 0), sa: r.sa + bite * 0.08 };
-  if (tq < 0.09) r.smear = [SP.wind.sa - 0.15, SP.hit.sa, 0.9 * (1 - tq / 0.09)];
-  r = mixStatue(r, { ...SP.guard, gold, eyes: 1 }, back);
-  r.crumbs = statueCrumbs(tq, [
-    [0.03, 5, 11, -1, 18],
-    [0.07, 16, 11, 1, 18],
-  ]);
-  const sy = tq < 0.045 ? 0.92 : tq < 0.09 ? 0.96 : tq < 0.16 ? 1.02 : 1;
-  return { rig: r, sy };
-}
-
-/** Поклон: опускается на колено с весом, меч остриём в пол, голова склонена. */
-function statueBow(t: number, from: StatueRig, gold: boolean): { rig: StatueRig; sy: number } {
-  const k = seg(q24(t), 0, 0.3);
-  const r = mixStatue(from, { ...SP.bow, gold }, eIn(k));
-  const land = q24(t) - 0.3;
-  const sy = land >= 0 && land < 0.05 ? 0.93 : land >= 0.05 && land < 0.1 ? 0.97 : 1;
-  if (land >= 0 && land < 0.35)
-    r.crumbs = statueCrumbs(land, [
-      [0, 4, 15, -1, 14],
-      [0.04, 16, 15, 1, 13],
-    ]);
-  return { rig: { ...r, eyes: 0 }, sy };
-}
-
-/** Распад: трещины, шлем слетает дугой к груде, кираса и юбка рушатся, меч падает. */
-const STATUE_LINGER = 1.0;
-function paintStatueDeath(t: number, gold: boolean, from: StatueRig): OPx {
-  const p = new OPx(SA_W, SA_H, SA_OX, SA_OY);
-  const tq = q24(t);
-  if (tq < 0.12) {
-    // Застыла в трещинах.
-    paintStatueInto(p, { ...from, cracks: 4, smear: null, crumbs: [] }, 0, 0, 0);
-    outlineRaw(p, INK);
-    return p;
-  }
-  const k = (tq - 0.12) / 0.4;
-  if (k < 1) {
-    // Куски падают по очереди: шлем дугой влево, кираса вниз, юбка оседает.
-    const f = { ...from, cracks: 4, smear: null, crumbs: [] };
-    const helmK = clamp01(k * 1.2);
-    const torsoK = clamp01((k - 0.15) / 0.7);
-    const skirtK = clamp01((k - 0.35) / 0.6);
-    const swordK = clamp01((k - 0.05) / 0.8);
-    paintRubbleInto(p, gold, Math.floor(clamp01((k - 0.3) / 0.6) * 5), false, false);
-    if (skirtK < 1)
-      paintStatueInto(p, f, 0, Math.round(eIn(skirtK) * 8), S_TORSO | S_HELM | S_SWORD);
-    if (torsoK < 1)
-      paintStatueInto(
-        p,
-        f,
-        Math.round(torsoK * -2),
-        Math.round(eIn(torsoK) * 16),
-        S_LEGS | S_SKIRT | S_HELM | S_SWORD,
-      );
-    if (helmK < 1) {
-      const hx = Math.round(-helmK * 10);
-      const hy = Math.round(-Math.sin(helmK * Math.PI) * 4 + eIn(helmK) * 21);
-      paintStatueInto(p, f, hx, hy, S_LEGS | S_SKIRT | S_TORSO | S_SWORD);
-    } else paintRubbleInto(p, gold, 0, true, false);
-    if (swordK < 1)
-      stoneSword(
-        p,
-        Math.round(lerp(f.gx + f.bx, 12, swordK)),
-        Math.round(lerp(f.gy + f.by, ST_G - 5, eIn(swordK))),
-        lerp(f.sa, -0.2, swordK),
-        swordK > 0.6 ? 7 : 12,
-      );
-    else paintRubbleInto(p, gold, 0, false, true);
-  } else {
-    paintRubbleInto(p, gold, 5, true, true);
-    // Пыль оседает.
-    const dk = (tq - 0.52) / 0.4;
-    if (dk < 1)
-      for (let i = 0; i < 6; i++) {
-        const x = 2 + i * 3.4 + dk * (i % 2 ? 2 : -2);
-        const y = ST_G - 3 - (1 - dk) * (2 + (i % 3)) - dk * 1;
-        p.set(Math.round(x), Math.round(y), hex('#b8bcb0', Math.round(150 * (1 - dk))));
-      }
-  }
-  outlineRaw(p, INK);
-  return p;
-}
-
 /** Сборка из груды (страж собран заново): камни взлетают на свои места. */
 function paintStatueReform(t: number, gold: boolean): OPx {
   const p = new OPx(SA_W, SA_H, SA_OX, SA_OY);
@@ -1674,6 +818,10 @@ registerMobPainter('f4_statue', (m, pose) => {
   mem.now = now;
   const hpK = m.maxHp > 0 ? m.hp / m.maxHp : 1;
   const cracks = hpK > 0.72 ? 0 : hpK > 0.46 ? 1 : hpK > 0.22 ? 2 : 3;
+  // Анимации мобов 4: всё, кроме сна, постамента и пробуждения, — 3D-риг в 8
+  // сторон (`f4-mob-statue.ts`); здесь остался фасад, совпадающий с предметом.
+  const fr3 = statueFrame(m, pose, gold, cracks);
+  if (fr3) return fr3;
   const out = (
     key: string,
     make: () => Px,
@@ -1714,23 +862,7 @@ registerMobPainter('f4_statue', (m, pose) => {
       rot,
     };
   };
-  if (pose.anim === 'dead') {
-    const t = Math.min(pose.t, STATUE_LINGER - 0.001);
-    const tq = q24(t);
-    const from = mem.last;
-    const alpha = 1 - seg(tq, 0.75, STATUE_LINGER);
-    return out(
-      `die|${tq.toFixed(3)}|${statueKey(from)}`,
-      () => paintStatueDeath(tq, gold, from),
-      { ...from, eyes: 0 },
-      { alpha, linger: STATUE_LINGER },
-      tq < 0.5 ? 1 - seg(tq, 0.12, 0.5) : 0,
-    );
-  }
   let rig: StatueRig;
-  let sy = 1;
-  let ghost: MobFrame['ghost'] = null;
-  const since = now - mem.since;
   if (mode === 'sleep' || mode === 'dormant') rig = { ...SP.rest, gold };
   else if (mode === 'rise' || mode === 'alert') {
     const reform = mode === 'rise' && (m.data.vRe ?? 0) > 0;
@@ -1745,62 +877,19 @@ registerMobPainter('f4_statue', (m, pose) => {
       });
     }
     rig = statueRise(q24(Math.min(T, 0.8)), gold);
-  } else if (mode === 'stun') {
-    // Оглушён ударом — держит прежнюю позу, отдачу рисует удар.
-    rig = { ...mem.last, smear: null, crumbs: [] };
-  } else if (mode === 'still') {
-    // Застыла камнем в новой позе — без перехода: повернулся, а она уже иначе.
-    rig = { ...FROZEN[mod(m.data.pose ?? 0, 4)], gold, eyes: m.data.eyes ?? 0 };
-  } else if (mode === 'creep' || mode === 'chase') {
-    rig = statueCreep(pose.t, gold);
-    if (since < 0.14) rig = mixStatue(mem.from, rig, eInOut(since / 0.14));
-  } else if (mode === 'wind') {
-    const k = clamp01((m.data.wk ?? pose.t) / WIND_T);
-    rig = statueWind(k, mem.from, gold);
-    rig.eyes = m.data.eyes ?? 1;
-    // Удар — быстрое движение всего тела: шлейф силуэтов, как у рывка героя.
-    if (k > 0.82) ghost = { every: 0.03, life: 0.16, tint: '#c8ccc0', alpha: 0.32 };
-  } else if (mode === 'recover') {
-    const got = statueRecover(pose.t, gold);
-    rig = got.rig;
-    sy = got.sy;
-    if (pose.t < 0.05) ghost = { every: 0.03, life: 0.16, tint: '#c8ccc0', alpha: 0.32 };
-  } else if (mode === 'bow') {
-    const got = statueBow(pose.t, mem.from, gold);
-    rig = got.rig;
-    sy = got.sy;
   } else rig = { ...SP.guard, gold, eyes: m.data.eyes ?? 0 };
   rig = { ...rig, cracks };
   mem.last = rig;
-  const extra: Partial<MobFrame> = sy !== 1 ? { sy, sx: 2 - sy } : {};
-  if (ghost) extra.ghost = ghost;
-  return out(statueKey(rig), () => paintStatueRig(rig), rig, extra);
+  return out(statueKey(rig), () => paintStatueRig(rig), rig);
 });
 
-/** Прогрев стража: подъём, четыре позы, шаг, замах с ударом, поклон — в обе стороны. */
+/** Прогрев фасада стража: подъём в обе стороны (остальное греет `f4-mob-statue.ts`). */
 registerMobWarm('f4_statue', function* () {
   for (const left of [false, true]) {
     const make = (r: StatueRig) =>
       statueCanvas(statueKey(r), () => paintStatueRig(r), left, false, 'normal');
     for (let i = 0; i <= 19; i++) {
       make({ ...statueRise(i / 24, true), cracks: 0 });
-      yield;
-    }
-    for (const r of FROZEN) {
-      make({ ...r, gold: true, eyes: 0 });
-      yield;
-    }
-    for (let i = 0; i < 8; i++) {
-      make({ ...statueCreep(i / 14, true), cracks: 0 });
-      yield;
-    }
-    const from = statueCreep(0, true);
-    for (let i = 0; i <= 13; i++) {
-      make({ ...statueWind(i / 13.2, from, true), cracks: 0 });
-      yield;
-    }
-    for (let i = 0; i < 12; i++) {
-      make({ ...statueRecover(i / 24, true).rig, cracks: 0 });
       yield;
     }
   }
@@ -4062,31 +3151,6 @@ registerMobWarm('f4_idol', function* () {
     paint({ st: 0, vT0: -10 }, 10, i / 10);
     yield;
   }
-});
-
-// ---------------------------------------------------------------------------
-// Снаряды, лучи, плиты, кара.
-// ---------------------------------------------------------------------------
-
-registerShotPainter('f4_gravefire', (s: Shot, time: number) => {
-  const f = mod(time * 12 + s.id, 3);
-  const key = `gf|${f}`;
-  const hit = sprites.get(key);
-  if (hit) return hit;
-  const p = new Px(10, 10);
-  // Зелёный череп в огне: огонь хвостом назад, череп светлый.
-  p.ell(5, 5, 3.6, 3.2, GREEN.dk);
-  p.ell(5, 4.5, 2.6, 2.4, GREEN.mid);
-  p.rect(3, 3, 6, 5, GREEN.hi);
-  p.set(4, 4, ROBE.deep);
-  p.set(6, 4, ROBE.deep);
-  p.set(5, 6, ROBE.deep);
-  p.set(1 + f, 1, GREEN.mid);
-  p.set(8 - f, 2, GREEN.dk);
-  p.outline(hex('#0c2a12'));
-  const out = { img: p.canvas(), ax: 5, ay: 5 };
-  sprites.set(key, out);
-  return out;
 });
 
 // ---------------------------------------------------------------------------
