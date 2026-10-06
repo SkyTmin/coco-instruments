@@ -317,7 +317,7 @@ const ROOT_FLOOR = tn('#221e44', '#2e2a5a', '#3b3672', '#4c4690');
 const ROOT_CAP = tn('#07061a', '#0d0b24', '#151232', '#201c44');
 const ROOT_FACE = tn('#161236', '#241e50', '#342c6c', '#5a50a8');
 const CRYST_DIM = tn('#0c2448', '#154276', '#2470a8', '#62bce6');
-const GRIT = tn('#1e1828', '#2c2438', '#3c324c', '#54486a');
+const GRIT = tn('#1a1634', '#282248', '#383062', '#524a86');
 const OBS_FLOOR = tn('#242a4a', '#30385e', '#3e4876', '#505c92');
 const OBS_CAP = tn('#06071a', '#0c0e22', '#131730', '#1b2042');
 const OBS_FACE = tn('#181c38', '#242a4e', '#323a68', '#444e88');
@@ -718,13 +718,24 @@ function gritFloor(p: Px, c: CellCtx): void {
   rootFloor(p, c, false);
   const q = new Px(TS, TS);
   rootFloor(q, c, true);
-  const ed = patchEdge(c);
+  // Пятно — «капли» вокруг центров соседних клеток гравия: круглое у
+  // одиночной клетки, слитное у группы, за свою клетку не вылезает.
+  const near: [number, number][] = [];
+  for (let dy = -2; dy <= 2; dy++)
+    for (let dx = -2; dx <= 2; dx++)
+      if (c.markAt(dx, dy) === c.mark) near.push([dx * TS + 8, dy * TS + 8]);
+  const R = 12.5;
   for (let y = 0; y < TS; y++)
     for (let x = 0; x < TS; x++) {
       const X = c.wx * TS + x;
       const Y = c.wy * TS + y;
-      const e = ed(x, y) + (vnoise(X, Y, 5, 1528) - 0.5) * 8;
-      if (e < 0.5 || (e < 3 && dith(X, Y) > e / 3)) continue;
+      let f = 0;
+      for (const [cx, cy] of near) {
+        const d2 = ((x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2) / (R * R);
+        if (d2 < 1) f += (1 - d2) ** 2;
+      }
+      f += (vnoise(X, Y, 4, 1528) - 0.5) * 0.3;
+      if (f < 0.35 || (f < 0.45 && dith(X, Y) > (f - 0.35) * 10)) continue;
       const i = (y * TS + x) * 4;
       p.set(x, y, [q.data[i], q.data[i + 1], q.data[i + 2], 255]);
     }
@@ -1222,8 +1233,8 @@ function cellOf(area: string) {
         const at = craterAt(c);
         if (at) craterPx(p, c, at, baseOf);
         else chasmPx(p, c);
-      } else if (mk === MK.lane || mk === MK.island) spacePx(p, c.wx, c.wy, 1, ringFor(c) ?? true);
-      else if (mk === MK.vortex) spacePx(p, c.wx, c.wy, 1.3);
+      } else if (mk === MK.lane || mk === MK.island) spacePx(p, c.wx, c.wy, 1, ringFor(c) ?? false);
+      else if (mk === MK.vortex) spacePx(p, c.wx, c.wy);
       else if (area === F15_ROOTS && mk !== MK.void) chasmPx(p, c);
       else {
         spacePx(p, c.wx, c.wy);
@@ -1292,7 +1303,7 @@ function cellOf(area: string) {
         return p;
       case MK.island:
         // Остров рисует кольцо целиком (плавно едет); клетка — пустота.
-        spacePx(p, c.wx, c.wy, 1, ringFor(c) ?? true);
+        spacePx(p, c.wx, c.wy, 1, ringFor(c) ?? false);
         return p;
       default:
         baseOf(p, c);
