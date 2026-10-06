@@ -34,6 +34,7 @@ import { F4_VIEW } from './f4-brains';
 import './f4-mobs';
 import './f4-mob-knight';
 import './f4-mob-necro';
+import { statueFrame } from './f4-mob-statue';
 
 type RGBA = [number, number, number, number];
 
@@ -371,7 +372,6 @@ const SP = {
   /** На колене перед взором идола. */
   bow: sr({ kneel: 1, gx: 15, gy: 16, sa: Math.PI / 2, hy: 1 }),
 };
-const FROZEN = [SP.guard, SP.high, SP.lunge, SP.claw];
 
 function mixStatue(a: StatueRig, b: StatueRig, k: number): StatueRig {
   if (k <= 0) return a;
@@ -666,149 +666,6 @@ function statueRise(t: number, gold: boolean): StatueRig {
   return rig;
 }
 
-/** Ходьба крадучись: 8 кадров на два шага, корпус проседает на опорной. */
-function statueCreep(t: number, gold: boolean): StatueRig {
-  const f = Math.floor(t * 14) % 8;
-  const step = f < 4 ? 1 : -1;
-  const ph = f % 4;
-  // Контакт (разведены) → присед → проход (вместе, нога поднята) → подъём.
-  const spread = [3, 3, 0, 1][ph];
-  const bob = [0, 1, 0, -1][ph];
-  const lifted = ph === 2 ? 1 : ph === 3 ? 0 : 0;
-  const base = { ...SP.claw, gold, eyes: 1 };
-  return {
-    ...base,
-    fb: step > 0 ? -spread : spread - 1,
-    ff: step > 0 ? spread : -spread + 1,
-    lb: step > 0 ? 0 : lifted,
-    lf: step > 0 ? lifted : 0,
-    by: bob,
-    sway: -step * (ph === 1 || ph === 2 ? 1 : 0),
-    hy: ph === 1 ? 1 : 0,
-    // Меч волочится и качается в такт.
-    sa: 2.35 + (ph === 1 ? 0.08 : ph === 3 ? -0.06 : 0),
-  };
-}
-
-/**
- * Замах (доля k копится, только пока на статую не смотрят — смотришь, и
- * она замирает посреди замаха): присед, меч уходит за голову, зависание,
- * удар по дуге за три кадра со следом. Контакт — первый кадр `recover`.
- */
-const WIND_T = 0.55;
-function statueWind(k: number, from: StatueRig, gold: boolean): StatueRig {
-  const t = q24(k * WIND_T, WIND_T);
-  const kk = t / WIND_T;
-  const dip = eInOut(seg(kk, 0, 0.16));
-  const up = seg(kk, 0.1, 0.7);
-  const hang = seg(kk, 0.7, 0.8);
-  const swing = seg(kk, 0.8, 1);
-  let r = mixStatue(from, { ...from, by: from.by + 1, gx: from.gx - 2 }, dip);
-  if (up > 0) r = mixStatue(r, { ...SP.wind, gold, eyes: 1 }, eInOut(up));
-  if (hang > 0) r = { ...r, sa: r.sa - eOut(hang) * 0.15, by: r.by - eOut(hang) * 0.5 };
-  if (swing > 0) {
-    const s = eIn(swing) * 0.55 + swing * 0.45;
-    const prev = r.sa;
-    r = mixStatue(r, { ...SP.hit, gold, eyes: 1 }, s);
-    // Меч идёт ЧЕРЕЗ верх вперёд: угол растёт от «за головой» к «в пол перед собой».
-    r.sa = lerp(prev, SP.hit.sa, s);
-    // След — только когда клинок уже прошёл заметную дугу: иначе у острия
-    // висело бы пятно.
-    if (r.sa - (SP.wind.sa - 0.15) > 0.5) r.smear = [SP.wind.sa - 0.15, r.sa, 0.9];
-  }
-  return { ...r, eyes: 1, gold };
-}
-
-/** После удара: контакт, проводка (меч вгрызается в пол), возврат в стойку. */
-function statueRecover(t: number, gold: boolean): { rig: StatueRig; sy: number } {
-  const tq = q24(t);
-  const bite = seg(tq, 0, 0.08);
-  const back = eInOut(seg(tq, 0.2, 0.5));
-  let r: StatueRig = { ...SP.hit, gold, eyes: 1 };
-  r = { ...r, gy: r.gy + (bite > 0 ? 1 : 0), sa: r.sa + bite * 0.08 };
-  if (tq < 0.09) r.smear = [SP.wind.sa - 0.15, SP.hit.sa, 0.9 * (1 - tq / 0.09)];
-  r = mixStatue(r, { ...SP.guard, gold, eyes: 1 }, back);
-  r.crumbs = statueCrumbs(tq, [
-    [0.03, 5, 11, -1, 18],
-    [0.07, 16, 11, 1, 18],
-  ]);
-  const sy = tq < 0.045 ? 0.92 : tq < 0.09 ? 0.96 : tq < 0.16 ? 1.02 : 1;
-  return { rig: r, sy };
-}
-
-/** Поклон: опускается на колено с весом, меч остриём в пол, голова склонена. */
-function statueBow(t: number, from: StatueRig, gold: boolean): { rig: StatueRig; sy: number } {
-  const k = seg(q24(t), 0, 0.3);
-  const r = mixStatue(from, { ...SP.bow, gold }, eIn(k));
-  const land = q24(t) - 0.3;
-  const sy = land >= 0 && land < 0.05 ? 0.93 : land >= 0.05 && land < 0.1 ? 0.97 : 1;
-  if (land >= 0 && land < 0.35)
-    r.crumbs = statueCrumbs(land, [
-      [0, 4, 15, -1, 14],
-      [0.04, 16, 15, 1, 13],
-    ]);
-  return { rig: { ...r, eyes: 0 }, sy };
-}
-
-/** Распад: трещины, шлем слетает дугой к груде, кираса и юбка рушатся, меч падает. */
-const STATUE_LINGER = 1.0;
-function paintStatueDeath(t: number, gold: boolean, from: StatueRig): OPx {
-  const p = new OPx(SA_W, SA_H, SA_OX, SA_OY);
-  const tq = q24(t);
-  if (tq < 0.12) {
-    // Застыла в трещинах.
-    paintStatueInto(p, { ...from, cracks: 4, smear: null, crumbs: [] }, 0, 0, 0);
-    outlineRaw(p, INK);
-    return p;
-  }
-  const k = (tq - 0.12) / 0.4;
-  if (k < 1) {
-    // Куски падают по очереди: шлем дугой влево, кираса вниз, юбка оседает.
-    const f = { ...from, cracks: 4, smear: null, crumbs: [] };
-    const helmK = clamp01(k * 1.2);
-    const torsoK = clamp01((k - 0.15) / 0.7);
-    const skirtK = clamp01((k - 0.35) / 0.6);
-    const swordK = clamp01((k - 0.05) / 0.8);
-    paintRubbleInto(p, gold, Math.floor(clamp01((k - 0.3) / 0.6) * 5), false, false);
-    if (skirtK < 1)
-      paintStatueInto(p, f, 0, Math.round(eIn(skirtK) * 8), S_TORSO | S_HELM | S_SWORD);
-    if (torsoK < 1)
-      paintStatueInto(
-        p,
-        f,
-        Math.round(torsoK * -2),
-        Math.round(eIn(torsoK) * 16),
-        S_LEGS | S_SKIRT | S_HELM | S_SWORD,
-      );
-    if (helmK < 1) {
-      const hx = Math.round(-helmK * 10);
-      const hy = Math.round(-Math.sin(helmK * Math.PI) * 4 + eIn(helmK) * 21);
-      paintStatueInto(p, f, hx, hy, S_LEGS | S_SKIRT | S_TORSO | S_SWORD);
-    } else paintRubbleInto(p, gold, 0, true, false);
-    if (swordK < 1)
-      stoneSword(
-        p,
-        Math.round(lerp(f.gx + f.bx, 12, swordK)),
-        Math.round(lerp(f.gy + f.by, ST_G - 5, eIn(swordK))),
-        lerp(f.sa, -0.2, swordK),
-        swordK > 0.6 ? 7 : 12,
-      );
-    else paintRubbleInto(p, gold, 0, false, true);
-  } else {
-    paintRubbleInto(p, gold, 5, true, true);
-    // Пыль оседает.
-    const dk = (tq - 0.52) / 0.4;
-    if (dk < 1)
-      for (let i = 0; i < 6; i++) {
-        const x = 2 + i * 3.4 + dk * (i % 2 ? 2 : -2);
-        const y = ST_G - 3 - (1 - dk) * (2 + (i % 3)) - dk * 1;
-        p.set(Math.round(x), Math.round(y), hex('#b8bcb0', Math.round(150 * (1 - dk))));
-      }
-  }
-  outlineRaw(p, INK);
-  return p;
-}
-
 /** Сборка из груды (страж собран заново): камни взлетают на свои места. */
 function paintStatueReform(t: number, gold: boolean): OPx {
   const p = new OPx(SA_W, SA_H, SA_OX, SA_OY);
@@ -961,6 +818,10 @@ registerMobPainter('f4_statue', (m, pose) => {
   mem.now = now;
   const hpK = m.maxHp > 0 ? m.hp / m.maxHp : 1;
   const cracks = hpK > 0.72 ? 0 : hpK > 0.46 ? 1 : hpK > 0.22 ? 2 : 3;
+  // Анимации мобов 4: всё, кроме сна, постамента и пробуждения, — 3D-риг в 8
+  // сторон (`f4-mob-statue.ts`); здесь остался фасад, совпадающий с предметом.
+  const fr3 = statueFrame(m, pose, gold, cracks);
+  if (fr3) return fr3;
   const out = (
     key: string,
     make: () => Px,
@@ -1001,23 +862,7 @@ registerMobPainter('f4_statue', (m, pose) => {
       rot,
     };
   };
-  if (pose.anim === 'dead') {
-    const t = Math.min(pose.t, STATUE_LINGER - 0.001);
-    const tq = q24(t);
-    const from = mem.last;
-    const alpha = 1 - seg(tq, 0.75, STATUE_LINGER);
-    return out(
-      `die|${tq.toFixed(3)}|${statueKey(from)}`,
-      () => paintStatueDeath(tq, gold, from),
-      { ...from, eyes: 0 },
-      { alpha, linger: STATUE_LINGER },
-      tq < 0.5 ? 1 - seg(tq, 0.12, 0.5) : 0,
-    );
-  }
   let rig: StatueRig;
-  let sy = 1;
-  let ghost: MobFrame['ghost'] = null;
-  const since = now - mem.since;
   if (mode === 'sleep' || mode === 'dormant') rig = { ...SP.rest, gold };
   else if (mode === 'rise' || mode === 'alert') {
     const reform = mode === 'rise' && (m.data.vRe ?? 0) > 0;
@@ -1032,62 +877,19 @@ registerMobPainter('f4_statue', (m, pose) => {
       });
     }
     rig = statueRise(q24(Math.min(T, 0.8)), gold);
-  } else if (mode === 'stun') {
-    // Оглушён ударом — держит прежнюю позу, отдачу рисует удар.
-    rig = { ...mem.last, smear: null, crumbs: [] };
-  } else if (mode === 'still') {
-    // Застыла камнем в новой позе — без перехода: повернулся, а она уже иначе.
-    rig = { ...FROZEN[mod(m.data.pose ?? 0, 4)], gold, eyes: m.data.eyes ?? 0 };
-  } else if (mode === 'creep' || mode === 'chase') {
-    rig = statueCreep(pose.t, gold);
-    if (since < 0.14) rig = mixStatue(mem.from, rig, eInOut(since / 0.14));
-  } else if (mode === 'wind') {
-    const k = clamp01((m.data.wk ?? pose.t) / WIND_T);
-    rig = statueWind(k, mem.from, gold);
-    rig.eyes = m.data.eyes ?? 1;
-    // Удар — быстрое движение всего тела: шлейф силуэтов, как у рывка героя.
-    if (k > 0.82) ghost = { every: 0.03, life: 0.16, tint: '#c8ccc0', alpha: 0.32 };
-  } else if (mode === 'recover') {
-    const got = statueRecover(pose.t, gold);
-    rig = got.rig;
-    sy = got.sy;
-    if (pose.t < 0.05) ghost = { every: 0.03, life: 0.16, tint: '#c8ccc0', alpha: 0.32 };
-  } else if (mode === 'bow') {
-    const got = statueBow(pose.t, mem.from, gold);
-    rig = got.rig;
-    sy = got.sy;
   } else rig = { ...SP.guard, gold, eyes: m.data.eyes ?? 0 };
   rig = { ...rig, cracks };
   mem.last = rig;
-  const extra: Partial<MobFrame> = sy !== 1 ? { sy, sx: 2 - sy } : {};
-  if (ghost) extra.ghost = ghost;
-  return out(statueKey(rig), () => paintStatueRig(rig), rig, extra);
+  return out(statueKey(rig), () => paintStatueRig(rig), rig);
 });
 
-/** Прогрев стража: подъём, четыре позы, шаг, замах с ударом, поклон — в обе стороны. */
+/** Прогрев фасада стража: подъём в обе стороны (остальное греет `f4-mob-statue.ts`). */
 registerMobWarm('f4_statue', function* () {
   for (const left of [false, true]) {
     const make = (r: StatueRig) =>
       statueCanvas(statueKey(r), () => paintStatueRig(r), left, false, 'normal');
     for (let i = 0; i <= 19; i++) {
       make({ ...statueRise(i / 24, true), cracks: 0 });
-      yield;
-    }
-    for (const r of FROZEN) {
-      make({ ...r, gold: true, eyes: 0 });
-      yield;
-    }
-    for (let i = 0; i < 8; i++) {
-      make({ ...statueCreep(i / 14, true), cracks: 0 });
-      yield;
-    }
-    const from = statueCreep(0, true);
-    for (let i = 0; i <= 13; i++) {
-      make({ ...statueWind(i / 13.2, from, true), cracks: 0 });
-      yield;
-    }
-    for (let i = 0; i < 12; i++) {
-      make({ ...statueRecover(i / 24, true).rig, cracks: 0 });
       yield;
     }
   }
