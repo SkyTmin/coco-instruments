@@ -240,7 +240,6 @@ const seg = (t: number, a: number, b: number) => clamp01((t - a) / (b - a));
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const eIn = (k: number) => k * k;
 const eOut = (k: number) => 1 - (1 - k) * (1 - k);
-const eOut3 = (k: number) => 1 - (1 - k) ** 3;
 const eIO = (k: number) => k * k * (3 - 2 * k);
 /** Затухающая пружина 0 → 1 с перелётом. */
 const spring = (k: number, w = 9) => (k >= 1.6 ? 1 : 1 - Math.exp(-5 * k) * Math.cos(k * w));
@@ -1595,12 +1594,11 @@ const SL_W = 40;
 const SL_H = 34;
 const SL_GY = 28;
 const SL_CX = 20;
-/** Тайминги мозга (`f2-brains.ts`): HOP_AIM 0,6, HOP_T 0,32, recover 0,7, stunT 0,35. */
+/** Тайминги мозга (`f2-brains.ts`): HOP_AIM 0,6, HOP_T 0,32 (recover 0,7 — желе полями движка), stunT 0,35. */
 const SL_AIM = 0.6;
 const SL_AIM_F = 14;
 const SL_HOP = 0.32;
 const SL_HOP_F = 7;
-const SL_REC = 0.7;
 const SL_DIE = 0.8;
 const SL_DIE_F = 19;
 
@@ -2910,7 +2908,7 @@ function snAim(ang: number, f: number, len: number): SnO {
   const t = (f + 0.5) / FPS;
   const coil = eOut(seg(t, 0, 0.45));
   const quiver = t > 0.45 && t < 0.67 ? (f % 2 ? 0.6 : -0.6) : 0;
-  if (t >= 0.67) {
+  if (t >= SN_AIM - 0.08) {
     // Хлыст летит: две доли пути, волна идёт к голове.
     const k = f === SN_AIM_F - 1 ? 0.38 : 0.78;
     return { ...SN0, ang, reach: len * k, open: 1, wave: (1 - k) * 7, lure: 1, bulb: -0.6 };
@@ -3020,7 +3018,7 @@ function snapperFrame(m: Mob, pose: MobPose): MobFrame {
   const hurt = hurtOf(m, pose, v, 0.4);
   if (md === 'aim') {
     const f = fi(t, SN_AIM_F);
-    const out = (f + 0.5) / FPS >= 0.67;
+    const out = (f + 0.5) / FPS >= SN_AIM - 0.08;
     return frame(
       'snp',
       out ? `x${f}r${r16}L${L2}` : `a${f}r${r16}`,
@@ -3139,6 +3137,8 @@ const MM_CX = 22;
 /** Тайминги мозга: spring 0,25, lunge 0,4 + 0,18, windup 0,45, recover 0,4, close 0,45. */
 const MM_SPRING = 0.25;
 const MM_LUNGE_HIT = 0.4;
+/** Кадр контакта броска: урон в 0,4 попадает в кадр 9 (0,375–0,417). */
+const MM_HIT_F = Math.floor(MM_LUNGE_HIT * FPS);
 const MM_LUNGE = 0.58;
 const MM_PINCH = 0.45;
 const MM_REC = 0.4;
@@ -3369,7 +3369,7 @@ function mmSpring(d: number, f: number): MmO {
 /** Бросок: 0–0,375 замах (кадры 0–8) → контакт (кадр 9) → рывок (10–13). */
 function mmLunge(d: number, f: number): MmO {
   const t = (f + 0.5) / FPS;
-  if (f <= 8) {
+  if (f < MM_HIT_F) {
     const k = eOut(seg(t, 0, 0.25));
     const quiver = t > 0.25 ? (f % 2 ? 0.5 : -0.5) : 0;
     return {
@@ -3387,7 +3387,7 @@ function mmLunge(d: number, f: number): MmO {
       stalkBack: 1.5 * k,
     };
   }
-  if (f === 9)
+  if (f === MM_HIT_F)
     return {
       ...MM0,
       d,
@@ -3402,7 +3402,7 @@ function mmLunge(d: number, f: number): MmO {
       stalkBack: -1,
       hit: 1,
     };
-  const k = (f - 9) / 4;
+  const k = (f - MM_HIT_F) / 4;
   return {
     ...MM0,
     d,
@@ -3575,10 +3575,10 @@ function mimicFrame(m: Mob, pose: MobPose): MobFrame {
   if (md === 'lunge') {
     const f = fi(t, Math.round(MM_LUNGE * FPS) - 1);
     return frame('mim', `l${f}d${d}${ak}`, pose, () => mimicPic(mmLunge(d, f)), {
-      ...merge(flip, hurt?.ex, f === 9 ? { sx: 1.1, sy: 0.9 } : null),
+      ...merge(flip, hurt?.ex, f === MM_HIT_F ? { sx: 1.1, sy: 0.9 } : null),
       ...sh,
       still: true,
-      ghost: f >= 9 ? { every: 0.025, life: 0.14, tint: '255,190,120', alpha: 0.3 } : null,
+      ghost: f >= MM_HIT_F ? { every: 0.025, life: 0.14, tint: '255,190,120', alpha: 0.3 } : null,
     });
   }
   if (md === 'windup') {
@@ -3736,106 +3736,362 @@ registerImpactPainter('f2_bite', {
 });
 
 // ---------------------------------------------------------------------------
-// ВРЕМЕННО: прежние рисовальщики — заменяются по одному.
+// Монетный жук. Панцирь — горка монет с камушками, голова с усами, шесть
+// лап. Бежит к норе: ход трёх лап разом по пройденному пути, монеты на
+// спине подпрыгивают с запаздыванием; тело туда, куда бежит (5 сторон +
+// зеркало). Вылезает из норы сценой, от удара монеты выскакивают из
+// панциря, уходит в землю носом вниз. Смерть — на спину, лапы дрыгают,
+// монеты рассыпаются.
 // ---------------------------------------------------------------------------
 
-const q = (n: number, steps: number) => Math.max(0, Math.min(steps - 1, Math.floor(n * steps)));
-// ---------------------------------------------------------------------------
-// Кадр: облик, вспышка, зеркало, кеш.
-// ---------------------------------------------------------------------------
+const BG_W = 32;
+const BG_H = 26;
+const BG_GY = 20;
+const BG_CX = 16;
+const BG_EMERGE = 0.45;
+const BG_ESC = 0.4;
+const BG_DIE = 0.8;
+const BG_DIE_F = 19;
 
-const legacyFrames = new Map<string, MobFrame | null>();
-
-function cachedFrame(key: string, make: () => MobFrame | null): MobFrame | null {
-  const hit = legacyFrames.get(key);
-  if (hit !== undefined) return hit;
-  const f = make();
-  legacyFrames.set(key, f);
-  return f;
+interface BgO {
+  d: number;
+  /** Фаза шага 0…1, идёт ли. */
+  step: number;
+  walk: boolean;
+  /** Подскок корпуса (px вверх) и монет (px, с запаздыванием). */
+  bob: number;
+  coinBob: number;
+  /** Нос вниз (+) / вверх (−), px. */
+  pitch: number;
+  /** Под землёй, px. */
+  sink: number;
+  /** Монеты выскочили: фаза 0…1 (0 — нет). */
+  pop: number;
+  /** Усы: подняты (+). */
+  ant: number;
+  /** Блеск монет поверх темноты 0…1. */
+  shine: number;
 }
 
-/**
- * Готовый рисунок (смотрит вправо) → кадр: альбинос белёсый, элита в
- * золотом канте, удар белым, влево — зеркало.
- */
-function finish(
-  src: Px,
-  ax: number,
-  ay: number,
-  eye: [number, number] | null,
-  o: { left: boolean; flash: boolean; look: MobPose['look'] },
-): MobFrame {
-  let p = src;
-  if (o.look === 'albino') p = p.tint(PALE, 0.55);
-  if (o.look === 'elite') {
-    const q2 = new Px(p.w + 2, p.h + 2);
-    for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) q2.set(x + 1, y + 1, p.get(x, y));
-    q2.outline(GOLD);
-    p = q2;
-    ax += 1;
-    ay += 1;
-    if (eye) eye = [eye[0] + 1, eye[1] + 1];
-  }
-  if (o.flash) p = p.tint(WHITE, 0.85);
-  if (o.left) {
-    p = p.flipX();
-    ax = p.w - ax;
-    if (eye) eye = [p.w - 1 - eye[0], eye[1]];
-  }
-  return { img: p.canvas(), ax, ay, eye };
-}
+const BG0: BgO = {
+  d: 2,
+  step: 0,
+  walk: false,
+  bob: 0,
+  coinBob: 0,
+  pitch: 0,
+  sink: 0,
+  pop: 0,
+  ant: 0,
+  shine: 0,
+};
 
-const lookKey = (pose: MobPose) => `${pose.left ? 1 : 0}${pose.flash ? 1 : 0}${pose.look[0]}`;
+/** Монеты панциря: [вперёд, вбок] в долях полуосей, цвет-камень. */
+const BG_COINS: [number, number, number][] = [
+  [-0.55, -0.35, 0],
+  [0.05, -0.55, 0],
+  [0.45, 0.2, 0],
+  [-0.2, 0.45, 0],
+  [0.35, -0.3, 0],
+  [-0.15, -0.05, 1],
+  [0.25, 0.55, 2],
+  [-0.6, 0.25, 3],
+];
 
-// ---------------------------------------------------------------------------
-// Монетный жук.
-// ---------------------------------------------------------------------------
-
-function coinbugPx(step: number, bob: number, hurt: boolean, dead: boolean): Px {
-  const px = new Px(20, 14);
-  const GY = 12;
-  const cx = 9;
-  const cy = GY - 4.5 + bob;
-  if (!dead)
+function coinbugPic(o: BgO): Pic {
+  const p = new Px(BG_W, BG_H);
+  const lit = o.shine > 0 || o.pop > 0 ? new Px(BG_W, BG_H) : null;
+  const yaw = SIDE_YAW[o.d];
+  const GY = BG_GY + o.sink;
+  const cx = BG_CX + 0.5;
+  const A = 5.6;
+  const B = 4.4;
+  const H = 4.2;
+  const lift = 1.5 + o.bob;
+  const P = (f: number, s: number, z: number) => {
+    const [x, y, dp] = prj(yaw, f, s, z + (f / A) * -o.pitch * 0.6);
+    return { x: cx + x, y: GY + y, dp };
+  };
+  // Лапы: по три с боку, ход трёх разом.
+  const legs: {
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+    c: { x: number; y: number };
+    dp: number;
+  }[] = [];
+  for (const sd of [-1, 1])
     for (let i = 0; i < 3; i++) {
-      const ph = step + i * 2.1;
-      const bx = cx - 3.5 + i * 3.5;
-      px.line(bx, cy + 2, bx + Math.cos(ph) * 1.5 - 0.5, GY - Math.max(0, Math.sin(ph)), BUG.leg);
+      const grp = (i + (sd > 0 ? 1 : 0)) % 2;
+      const ph = o.step + grp * 0.5;
+      const sw = o.walk ? Math.cos(ph * TAU) * 1.6 : 0;
+      const up = o.walk ? Math.max(0, Math.sin(ph * TAU)) * 1.4 : 0;
+      const f0 = (i - 1) * 2.6;
+      const hip = P(f0, sd * 2.2, lift);
+      const knee = P(f0 + sw * 0.5 + (i - 1) * 0.8, sd * 4, lift + 1.4 + up);
+      const foot = P(f0 + sw + (i - 1) * 1.8, sd * 4.8, up);
+      legs.push({ a: hip, b: knee, c: foot, dp: P(f0, sd * 5, 0).dp });
     }
-  // Голова с усами.
-  ball(px, { x: cx + 6, y: cy + 1, rx: 2, ry: 1.8 }, BUG.head);
-  px.line(cx + 7, cy - 0.5, cx + 9, cy - 3 + (hurt ? 1 : 0), BUG.leg);
-  // Спина — горка монет.
-  const shell: Ell = { x: cx, y: cy, rx: 6.2, ry: dead ? 2.4 : 4 };
-  ball(px, shell, BUG.gold, (_x, y) => y <= cy + 2);
-  const coins: [number, number][] = [
-    [-3.5, -1],
-    [0, -2.5],
-    [3, -1],
-    [-1, 0.8],
-    [2.5, 1],
-  ];
-  for (const [dx, dy] of coins) {
-    const x = Math.round(cx + dx);
-    const y = Math.round(cy + dy);
-    px.set(x, y, BUG.gold[3]);
-    px.set(x + 1, y, BUG.gold[2]);
-    px.set(x, y + 1, BUG.gold[0]);
+  const drawLeg = (l: (typeof legs)[number]) => {
+    thick(p, l.a.x, l.a.y, l.b.x, l.b.y, 0.45, BUG.leg);
+    thick(p, l.b.x, l.b.y, l.c.x, l.c.y, 0.4, BUG.leg);
+  };
+  // Голова и усы — по ходу.
+  const hd = P(A + 0.8, 0, lift + 1.6);
+  const drawHead = () => {
+    ball(p, { x: hd.x, y: hd.y, rx: 2.2, ry: 1.9 }, BUG.head);
+    for (const sd of [-1, 1]) {
+      const a0 = P(A + 1.8, sd * 0.9, lift + 2.4);
+      const a1 = P(A + 4.2, sd * 2.2, lift + 4 + o.ant);
+      p.line(Math.round(a0.x), Math.round(a0.y), Math.round(a1.x), Math.round(a1.y), BUG.leg);
+    }
+  };
+  const headBehind = hd.dp < -0.5;
+  for (const l of legs) if (l.dp < 0) drawLeg(l);
+  if (headBehind) drawHead();
+  // Панцирь — купол-горка: овал по проекции осей, верх — ниже по ходу при клевке.
+  const c = Math.cos(yaw);
+  const n = Math.sin(yaw);
+  const rx = Math.hypot(A * c, B * n);
+  const rg = SE * Math.hypot(A * n, B * c);
+  const sh: Ell = { x: cx, y: GY - lift - H * 0.5 + 0.5, rx, ry: rg + H * 0.5 };
+  ball(p, sh, BUG.gold, (_x, y) => y <= GY - lift + rg * 0.6);
+  // Монеты и камни на куполе — в координатах тела.
+  for (const [ff, ss, kind] of BG_COINS) {
+    const f = ff * A * 0.8;
+    const s = ss * B * 0.8;
+    const z =
+      lift + H * Math.sqrt(Math.max(0, 1 - ff * ff - ss * ss)) + o.coinBob * (0.6 + 0.4 * ff);
+    const q = P(f, s, z);
+    const x = Math.round(q.x);
+    const y = Math.round(q.y);
+    if (kind === 0) {
+      p.set(x, y, BUG.gold[3]);
+      p.set(x + 1, y, BUG.gold[2]);
+      p.set(x, y + 1, BUG.gold[0]);
+    } else p.set(x, y, kind === 1 ? BUG.ruby : kind === 2 ? BUG.sapph : BUG.emer);
+    if (lit && o.shine > 0 && kind === 0 && (x + y) % 3 === 0)
+      lit.set(x, y, alpha(BUG.gold[3], o.shine));
   }
-  px.set(Math.round(cx - 1), Math.round(cy - 1.5), BUG.ruby);
-  px.set(Math.round(cx + 2), Math.round(cy - 2.8), BUG.sapph);
-  px.set(Math.round(cx + 4), Math.round(cy + 0.5), BUG.emer);
-  px.outline(INK);
-  return px;
+  for (const l of legs) if (l.dp >= 0) drawLeg(l);
+  if (!headBehind) drawHead();
+  // Выскочившие монеты: дугой вверх и вниз.
+  if (o.pop > 0)
+    for (let i = 0; i < 3; i++) {
+      const k = o.pop;
+      const x = cx + (i - 1) * 4 * k;
+      const y = GY - lift - H - 2 - Math.sin(k * PI) * (5 + i) + k * 2;
+      p.set(Math.round(x), Math.round(y), BUG.gold[3]);
+      p.set(Math.round(x) + 1, Math.round(y), BUG.gold[1]);
+      lit?.set(Math.round(x), Math.round(y), alpha(BUG.gold[3], 1 - k * 0.5));
+    }
+  p.outline(INK);
+  if (o.sink > 0) {
+    for (let y = BG_GY + 1; y < BG_H; y++)
+      for (let x = 0; x < BG_W; x++) p.data[(y * BG_W + x) * 4 + 3] = 0;
+  }
+  const eye: [number, number] | null =
+    o.sink < 3 && !headBehind ? [Math.round(hd.x + c * 1.2), Math.round(hd.y - 0.5)] : null;
+  return { p, ax: BG_CX, ay: BG_GY, eye, lit };
 }
 
-registerMobPainter('f2_coinbug', (_m, pose) => {
-  const f = pose.frame;
-  const run = pose.anim === 'run';
-  const step = run ? (mod(f, 6) / 6) * TAU : 0;
-  const bob = run ? -Math.round(Math.abs(Math.sin(step))) : 0;
-  const hurt = pose.anim === 'hurt';
-  const dead = pose.anim === 'dead';
-  const key = `bug|${step.toFixed(2)}|${bob}|${hurt ? 1 : 0}|${dead ? 1 : 0}|${lookKey(pose)}`;
-  return cachedFrame(key, () => finish(coinbugPx(step, bob, hurt, dead), 9, 12, [16, 7], pose));
+/** Холмик и комья у норы (вылезает / уходит). */
+function bgDirt(pic: Pic, k: number, spray: number): Pic {
+  const p = pic.p;
+  const mound = Math.round(lerp(3, 1, k));
+  for (let x = -6; x <= 6; x++) {
+    const hh = Math.round(mound * (1 - (x / 6.5) ** 2));
+    for (let y = 0; y < hh; y++) p.set(BG_CX + x, BG_GY - y, y === hh - 1 ? MDR.soilL : MDR.soil);
+  }
+  if (spray > 0)
+    for (let i = 0; i < 6; i++) {
+      const a = PI + (i / 5) * PI;
+      const x = BG_CX + 0.5 + Math.cos(a) * (3 + spray * 8);
+      const y = BG_GY - 1 + Math.sin(a) * (1 + spray * 6) + spray * spray * 9;
+      if (y <= BG_GY) p.set(Math.round(x), Math.round(y), i % 2 ? MDR.soilL : MDR.soil);
+    }
+  return pic;
+}
+
+function bgEmerge(d: number, f: number): Pic {
+  const t = (f + 0.5) / FPS;
+  const out = eOut(seg(t, 0.03, 0.28));
+  const shake = seg(t, 0.28, BG_EMERGE);
+  const o: BgO = {
+    ...BG0,
+    d,
+    sink: Math.round(lerp(10, 0, out)),
+    pitch: lerp(-2.5, 0, out),
+    bob: t > 0.28 ? Math.round(wob(shake, 1.5) * 1.5) : 0,
+    coinBob: t > 0.28 ? wob(shake + 0.1, 2) * 2 : 0,
+    ant: 1.5,
+    shine: t > 0.28 ? 1 - shake : 0,
+  };
+  return bgDirt(coinbugPic(o), seg(t, 0, 0.4), t < 0.3 ? seg(t, 0.03, 0.3) : 0);
+}
+
+function bgEscape(d: number, f: number): Pic {
+  const t = (f + 0.5) / FPS;
+  const k = eIn(seg(t, 0.04, BG_ESC));
+  const o: BgO = {
+    ...BG0,
+    d,
+    sink: Math.round(k * 11),
+    pitch: 3,
+    walk: true,
+    step: t * 6,
+    ant: -1,
+  };
+  return bgDirt(coinbugPic(o), 1 - k, seg(t, 0.04, BG_ESC));
+}
+
+/** Смерть 0,8 с: подброшен → на спине, лапы дрыгают и поджимаются, монеты рассыпаются. */
+function coinbugDeathPic(d: number, f: number): Pic {
+  const t = (f + 0.5) / FPS;
+  if (t < 0.1) {
+    const pic = coinbugPic({ ...BG0, d, bob: 2, pop: t / 0.1, ant: 2 });
+    pic.eye = null;
+    return pic;
+  }
+  const p = new Px(BG_W, BG_H);
+  const lit = new Px(BG_W, BG_H);
+  const GY = BG_GY;
+  const cx = BG_CX + 0.5;
+  const fl = eOut(seg(t, 0.1, 0.25));
+  const sh: Ell = { x: cx, y: GY - 2.5, rx: 6, ry: lerp(4, 2.8, fl) };
+  // Брюхо кверху: тёмное, лапы дрыгают.
+  ball(p, sh, BUG.head);
+  const curl = seg(t, 0.35, 0.7);
+  for (let i = 0; i < 6; i++) {
+    const bx = cx - 3.5 + (i % 3) * 3.5;
+    const sd = i < 3 ? -1 : 1;
+    const kick = t < 0.7 ? Math.sin(t * 38 + i * 1.7) * (1 - curl) * 1.4 : 0;
+    const kx = bx + sd * (1 + kick * 0.5);
+    const ky = GY - 6.5 + Math.abs(kick) - curl * 1.5;
+    p.line(Math.round(bx), Math.round(GY - 4.5), Math.round(kx), Math.round(ky), BUG.leg);
+    p.set(Math.round(kx + sd * (1 - curl)), Math.round(ky - 1 + curl * 2), BUG.leg);
+  }
+  // Голова набок.
+  ball(p, { x: cx + 6.5, y: GY - 1.6, rx: 2, ry: 1.6 }, BUG.head);
+  // Монеты рассыпаются вокруг и звенят.
+  const ck = seg(t, 0.1, 0.55);
+  for (let i = 0; i < 12; i++) {
+    const kk = clamp01(ck * 1.3 - i * 0.03);
+    if (kk <= 0) continue;
+    const a = hash(i, 81) * TAU;
+    const r = 3 + hash(i, 83) * 9;
+    const x = cx + Math.cos(a) * r * kk;
+    const y = Math.min(GY + 1, GY - 3 + Math.sin(a) * r * kk * SE - Math.sin(kk * PI) * 5);
+    const col = i % 5 === 0 ? BUG.ruby : i % 7 === 0 ? BUG.sapph : BUG.gold[i % 2 ? 2 : 3];
+    p.set(Math.round(x), Math.round(y), col);
+    if (i % 2 === 0) p.set(Math.round(x) + 1, Math.round(y), BUG.gold[1]);
+    if (kk < 1 || t < 0.6)
+      lit.set(Math.round(x), Math.round(y), alpha(BUG.gold[3], 0.8 * (1 - seg(t, 0.4, BG_DIE))));
+  }
+  p.outline(INK);
+  return { p, ax: BG_CX, ay: BG_GY, eye: null, lit };
+}
+
+/** Режим жука → кадр. */
+function coinbugFrame(m: Mob, pose: MobPose): MobFrame {
+  const md = pose.mode;
+  const t = pose.t;
+  const v = visOf(m, pose, headOf(m), 16);
+  const { d, flip } = side8(v.yaw);
+  const sh = { shadow: 6 };
+  if (md === 'dying') {
+    const f = fi(t, BG_DIE_F);
+    return frame('bug', t < 0.1 ? `die${f}d${d}` : `die${f}`, pose, () => coinbugDeathPic(d, f), {
+      ...merge(flip && t < 0.1),
+      linger: BG_DIE,
+      alpha: 1 - seg(t, 0.65, BG_DIE),
+      shadow: t < 0.1 ? 6 : 0,
+      still: true,
+    });
+  }
+  if (md === 'emerge') {
+    const f = fi(t, Math.round(BG_EMERGE * FPS) - 1);
+    return frame('bug', `em${f}d${d}`, pose, () => bgEmerge(d, f), {
+      ...merge(flip),
+      shadow: 0,
+      still: true,
+    });
+  }
+  if (md === 'escape') {
+    const f = fi(t, Math.round(BG_ESC * FPS) - 1);
+    return frame('bug', `es${f}d${d}`, pose, () => bgEscape(d, f), {
+      ...merge(flip),
+      shadow: 0,
+      still: true,
+    });
+  }
+  const hurt = hurtOf(m, pose, v, 1.2);
+  if (md === 'stun' || hurt?.wince) {
+    // Монеты выскочили из панциря, лапы растопырены.
+    const k = md === 'stun' ? clamp01(t / 0.3) : clamp01((pose.now - v.hitAt) / HURT_T);
+    const f = Math.min(5, Math.floor(k * 6));
+    const o: BgO = {
+      ...BG0,
+      d,
+      pop: (f + 0.5) / 6,
+      bob: 1,
+      coinBob: f < 2 ? 1.5 : 0,
+      ant: -1,
+      pitch: -1.5,
+    };
+    return frame('bug', `hu${f}d${d}`, pose, () => coinbugPic(o), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+    });
+  }
+  if (spd(m) > 0.4) {
+    // Ход трёх лап по пути: 6 кадров на 1,3 клетки; монеты подпрыгивают позже.
+    const i = Math.floor(mod((v.dist / 1.3) * 6, 6));
+    const up = Math.abs(Math.sin((i / 6) * TAU));
+    const lag = Math.abs(Math.sin(((i - 1) / 6) * TAU));
+    const o: BgO = {
+      ...BG0,
+      d,
+      walk: true,
+      step: i / 6,
+      bob: Math.round(up),
+      coinBob: lag * 1.2,
+      pitch: 0.8,
+      ant: -0.5,
+    };
+    return frame('bug', `w${i}d${d}`, pose, () => coinbugPic(o), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+    });
+  }
+  const i = Math.floor(idlePh(m, pose.now, 1.4) * 6);
+  const o: BgO = { ...BG0, d, ant: Math.sin((i / 6) * TAU) * 1.2, coinBob: i === 2 ? 0.6 : 0 };
+  return frame('bug', `i${i}d${d}`, pose, () => coinbugPic(o), { ...merge(flip, hurt?.ex), ...sh });
+}
+
+registerMobPainter('f2_coinbug', coinbugFrame);
+
+registerMobWarm('f2_coinbug', function* () {
+  const P = { flash: false, look: 'normal' as Look };
+  for (let d = 0; d < 5; d++) {
+    for (let i = 0; i < 6; i++) {
+      const up = Math.abs(Math.sin((i / 6) * TAU));
+      const lag = Math.abs(Math.sin(((i - 1) / 6) * TAU));
+      const o: BgO = {
+        ...BG0,
+        d,
+        walk: true,
+        step: i / 6,
+        bob: Math.round(up),
+        coinBob: lag * 1.2,
+        pitch: 0.8,
+        ant: -0.5,
+      };
+      frame('bug', `w${i}d${d}`, P, () => coinbugPic(o));
+      yield 0;
+    }
+    for (let f = 0; f < Math.round(BG_EMERGE * FPS); f++) {
+      frame('bug', `em${f}d${d}`, P, () => bgEmerge(d, f));
+      yield 0;
+    }
+  }
 });
