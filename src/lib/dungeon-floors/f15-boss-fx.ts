@@ -7007,7 +7007,8 @@ registerZonePainter(
     for (let i = 0; i < nStar; i++) {
       const u = k01((t - 0.12 - 0.5 * hash(i, 4, 103)) / 1.1);
       if (u <= 0) continue;
-      const rr = R * (0.3 + 0.62 * Math.sqrt(hash(i, 5, 103)));
+      // Садятся в 2–7 клетках от сердца: столько видит экран вокруг героя.
+      const rr = R * (0.15 + 0.4 * Math.sqrt(hash(i, 5, 103)));
       const aa = TAU * hash(i, 6, 103);
       const ex = cx + Math.cos(aa) * rr;
       const ey = cy + Math.sin(aa) * rr;
