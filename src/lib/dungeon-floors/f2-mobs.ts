@@ -2659,6 +2659,467 @@ registerImpactPainter('f2_scream', {
 });
 
 // ---------------------------------------------------------------------------
+// Хваталка. Луковица с розеткой, шея-лоза коброй, голова-ловушка с ягодой-
+// приманкой. Прицел (0,75 с, урон в конце): шея сжимается назад, пасть
+// раскрывается (0–0,45, голова ведёт героя) → дрожит на взводе (0,45–0,67)
+// → хлыст летит волной (последние 2 кадра) → кадр контакта (первый `snap`):
+// шея натянута во всю длину, пасть захлопнулась; 0,3 с треплет добычу,
+// потом лежит плетью и втягивается рывками (1,2 с). Хлыст — в мировых
+// координатах (точка удара мозга), направление — 16 румбов, длина — по 0,5.
+// ---------------------------------------------------------------------------
+
+const SN_AIM = 0.75;
+const SN_AIM_F = 17;
+const SN_SNAP = 0.3;
+const SN_RET = 1.2;
+const SN_DIE = 0.8;
+const SN_DIE_F = 19;
+
+/** Голова-ловушка: две доли с зубами по кромке, `open` 0…1, смотрит по `ang`. */
+function trapHead(px: Px, hx: number, hy: number, ang: number, open: number, R = 4): void {
+  const ux = Math.cos(ang);
+  const uy = Math.sin(ang);
+  const gap = open * 1.8;
+  const e: Ell = { x: hx, y: hy, rx: R, ry: R * 0.65 };
+  for (let y = Math.floor(hy - 7); y <= Math.ceil(hy + 7); y++)
+    for (let x = Math.floor(hx - 7); x <= Math.ceil(hx + 7); x++) {
+      const dx = x + 0.5 - hx;
+      const dy = y + 0.5 - hy;
+      const u = dx * ux + dy * uy;
+      const v = -dx * uy + dy * ux;
+      const opening = gap * Math.max(0, (u + R) / (2 * R));
+      const vu = v + opening;
+      const vl = v - opening;
+      const inU = (u / R) ** 2 + (Math.min(0, vu) / (R * 0.65)) ** 2 <= 1 && vu <= 0.5;
+      const inL = (u / R) ** 2 + (Math.max(0, vl) / (R * 0.65)) ** 2 <= 1 && vl >= -0.5;
+      if (open > 0.1 && Math.abs(v) < opening && u > -R * 0.6 && (u / R) ** 2 < 1) {
+        px.set(x, y, u > 1 ? SNP.mouthL : SNP.mouth);
+        continue;
+      }
+      if (inU || inL) px.set(x, y, tone(SNP.jaw, e, x, y));
+    }
+  if (open > 0.1)
+    for (let i = -1; i <= 3; i++) {
+      const u = i * 1.2;
+      for (const s of [-1, 1]) {
+        const v = s * (open * 1.8 * ((u + R) / (2 * R)) - 0.3);
+        px.set(Math.round(hx + u * ux - v * uy), Math.round(hy + u * uy + v * ux), SNP.tooth);
+      }
+    }
+  else
+    for (let i = -2; i <= 3; i++)
+      px.set(Math.round(hx + i * ux), Math.round(hy + i * uy), i % 2 ? SNP.tooth : SNP.jaw[0]);
+}
+
+interface SnO {
+  /** Куда смотрит голова (игровой угол). */
+  ang: number;
+  /** Голова вытянута на столько клеток по `ang` (0 — шея коброй). */
+  reach: number;
+  open: number;
+  /** Шея коброй: оттянута назад (px), качается вбок (px), голова ниже (px). */
+  pull: number;
+  sway: number;
+  drop: number;
+  /** Волна по лозе (px поперёк) и провис плетью (px вниз). */
+  wave: number;
+  sag: number;
+  /** Луковица: сжата (+) / раздута (−). */
+  bulb: number;
+  /** Розетка поникла 0…1, высохла 0…1. */
+  wilt: number;
+  dry: number;
+  /** Приманка горит 0…1, вспышка у пасти 0…1. */
+  lure: number;
+  flash: number;
+  /** Мёртвая: голова на полу. */
+  dead: boolean;
+}
+
+const SN0: SnO = {
+  ang: 0,
+  reach: 0,
+  open: 0,
+  pull: 0,
+  sway: 0,
+  drop: 0,
+  wave: 0,
+  sag: 0,
+  bulb: 0,
+  wilt: 0,
+  dry: 0,
+  lure: 0.6,
+  flash: 0,
+  dead: false,
+};
+
+/** Обрезать пустые поля кадра — большие кадры хлыста легче. */
+function cropPic(b: Pic): Pic {
+  const { p } = b;
+  let x0 = p.w;
+  let y0 = p.h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++)
+      if (p.data[(y * p.w + x) * 4 + 3] > 0) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+  if (x1 < 0) return b;
+  y1 = Math.max(y1, Math.ceil(b.ay));
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  const cut = (src: Px) => {
+    const out = new Px(w, h);
+    for (let y = 0; y < h; y++) {
+      const s = ((y + y0) * src.w + x0) * 4;
+      out.data.set(src.data.subarray(s, s + w * 4), y * w * 4);
+    }
+    return out;
+  };
+  return {
+    p: cut(p),
+    ax: b.ax - x0,
+    ay: b.ay - y0,
+    eye: b.eye ? [b.eye[0] - x0, b.eye[1] - y0] : null,
+    lit: b.lit ? cut(b.lit) : null,
+  };
+}
+
+function snapperPic(o: SnO): Pic {
+  const reachPx = o.reach * TS;
+  const R = Math.ceil(reachPx + 18);
+  const p = new Px(R * 2, R * 2);
+  const lit = new Px(R * 2, R * 2);
+  const cx = R;
+  const GY = R + 3;
+  const leafC = (c: RGBA) => (o.dry > 0 ? mix(c, hex('#6a5a30'), o.dry) : c);
+  // Розетка листьев на полу.
+  for (let i = 0; i < 5; i++) {
+    const a = PI * (0.05 + i * 0.225) + (i % 2 ? 0.1 : 0) - o.wilt * 0.15 * (i - 2);
+    leaf(p, cx, GY - 1, PI + a, 6 - o.wilt * 1.5, 1.5, leafC(i % 2 ? SNP.leaf : SNP.leafL));
+  }
+  // Луковица.
+  const bulb: Ell = {
+    x: cx,
+    y: GY - 3 + o.bulb * 0.5,
+    rx: 5 + o.bulb * 0.5,
+    ry: 3.6 - o.bulb * 0.6,
+  };
+  ball(p, bulb, o.dry > 0 ? SNP.pod.map((c) => mix(c, hex('#4a3a30'), o.dry * 0.6)) : SNP.pod);
+  p.set(cx - 2, Math.round(bulb.y - 2), SNP.pod[3]);
+  // Голова.
+  let hx: number;
+  let hy: number;
+  let ang = o.ang;
+  const c = Math.cos(o.ang);
+  const n = Math.sin(o.ang);
+  if (o.dead) {
+    hx = cx + c * 8;
+    hy = GY - 1 + n * 4;
+    ang = o.ang + 0.6;
+  } else if (o.reach > 0.05) {
+    hx = cx + c * reachPx;
+    hy = GY - 5 + n * reachPx + o.sag * 0.5;
+  } else {
+    // Кобра: шея над луковицей, голова чуть вперёд по взгляду.
+    hx = cx + c * (3 - o.pull) - n * o.sway;
+    hy = GY - 14 + n * (3 - o.pull) * SE + o.drop + c * o.sway * 0.3;
+  }
+  // Лоза: кривая от луковицы к голове; волна — поперёк, провис — вниз.
+  const sx = cx;
+  const sy = GY - 5;
+  let mx: number;
+  let my: number;
+  if (o.reach > 0.05 || o.dead) {
+    mx = (sx + hx) / 2 - Math.sin(ang) * o.wave;
+    my = (sy + hy) / 2 + Math.cos(ang) * o.wave + o.sag;
+  } else {
+    mx = (sx + hx) / 2 - c * 4 - o.pull * c;
+    my = (sy + hy) / 2 + 2 - Math.abs(n) * 2;
+  }
+  const L = Math.hypot(hx - sx, hy - sy);
+  const steps = Math.max(8, Math.ceil(L * 1.5));
+  for (let i = 0; i <= steps; i++) {
+    const tt = i / steps;
+    let x = (1 - tt) * (1 - tt) * sx + 2 * (1 - tt) * tt * mx + tt * tt * hx;
+    let y = (1 - tt) * (1 - tt) * sy + 2 * (1 - tt) * tt * my + tt * tt * hy;
+    // Вторая волна — S-образный изгиб летящего хлыста.
+    if (o.wave) {
+      const w = Math.sin(tt * TAU) * o.wave * 0.35 * (1 - tt);
+      x += -Math.sin(ang) * w;
+      y += Math.cos(ang) * w;
+    }
+    const r = 1.8 - tt * 0.8;
+    p.ell(x, y, r, r, leafC(SNP.vineM));
+    p.set(Math.round(x - 0.5), Math.round(y - 1), leafC(SNP.vineL));
+    if (i % 6 === 3) p.set(Math.round(x + 1.5), Math.round(y - 1.5), leafC(SNP.leafL));
+  }
+  trapHead(p, hx, hy, ang, o.open, o.reach > 0.05 ? 5 : 4);
+  p.outline(INK);
+  // Приманка — светящаяся ягода на усике над головой.
+  let eye: [number, number] | null = null;
+  if (!o.dead) {
+    const lx = Math.round(hx - Math.cos(ang) * 1 - 1);
+    const ly = Math.round(hy - 4.5);
+    p.set(lx, ly + 1, SNP.vine);
+    p.set(lx, ly, SNP.lure);
+    if (o.lure > 0) glowAt(lit, lx + 0.5, ly + 0.5, 2 + o.lure * 2, SNP.lure, 0.6 * o.lure);
+    eye = [lx, ly];
+  }
+  if (o.flash > 0) {
+    glowAt(
+      lit,
+      hx + Math.cos(ang) * 3,
+      hy + Math.sin(ang) * 3,
+      5 + o.flash * 3,
+      WHITE,
+      0.8 * o.flash,
+    );
+    for (let i = 0; i < 6; i++) {
+      const a = ang + (i - 2.5) * 0.45;
+      const r = 5 + (1 - o.flash) * 4;
+      lit.set(
+        Math.round(hx + Math.cos(a) * r),
+        Math.round(hy + Math.sin(a) * r),
+        alpha(SNP.tooth, o.flash),
+      );
+    }
+  }
+  return cropPic({ p, ax: cx, ay: GY, eye, lit });
+}
+
+/** Покой: шея коброй качается, луковица дышит, ягода мерцает. */
+function snIdle(ang: number, i: number): SnO {
+  const s = Math.sin((i / 8) * TAU);
+  return {
+    ...SN0,
+    ang,
+    sway: Math.round(s * 1.2),
+    drop: Math.round(Math.sin(((i - 1.5) / 8) * TAU) * 0.8),
+    bulb: s * 0.4,
+    lure: 0.5 + 0.4 * Math.sin((i / 8) * TAU + 2),
+  };
+}
+
+/** Прицел 0,75 с: сжимается назад, пасть раскрыта, дрожит → хлыст летит. */
+function snAim(ang: number, f: number, len: number): SnO {
+  const t = (f + 0.5) / FPS;
+  const coil = eOut(seg(t, 0, 0.45));
+  const quiver = t > 0.45 && t < 0.67 ? (f % 2 ? 0.6 : -0.6) : 0;
+  if (t >= 0.67) {
+    // Хлыст летит: две доли пути, волна идёт к голове.
+    const k = f === SN_AIM_F - 1 ? 0.38 : 0.78;
+    return { ...SN0, ang, reach: len * k, open: 1, wave: (1 - k) * 7, lure: 1, bulb: -0.6 };
+  }
+  return {
+    ...SN0,
+    ang,
+    pull: 4.5 * coil,
+    drop: 2.5 * coil + quiver,
+    sway: quiver,
+    open: Math.min(1, coil * 1.15),
+    bulb: 1.1 * coil,
+    lure: 0.6 + 0.4 * coil,
+  };
+}
+
+/** Удар и трёпка 0,3 с: контакт (во всю длину, пасть захлопнута) → треплет. */
+function snSnap(ang: number, f: number, len: number): SnO {
+  const t = f / FPS;
+  const over = f === 0 ? 1.04 : 1 - 0.04 * Math.sin(seg(t, 0.04, 0.3) * PI);
+  const thrash = f >= 1 && f <= 5 ? [0, 1.6, -1.4, 1, -0.6, 0.3][f] : 0;
+  return {
+    ...SN0,
+    ang,
+    reach: len * over,
+    open: f === 0 ? 0 : f < 4 ? (f % 2 ? 0.35 : 0) : 0.15,
+    wave: thrash * 2,
+    sag: seg(t, 0.15, 0.3) * 2,
+    flash: f < 3 ? 1 - f / 3 : 0,
+    lure: 1,
+    bulb: f < 2 ? -0.6 : 0,
+  };
+}
+
+/** Плетью втягивается: шаги по 1/12 длины (12 к/с), в конце встаёт коброй. */
+function snRetract(ang: number, step: number, len: number): SnO {
+  const ext = 1 - step / 12;
+  if (ext <= 0.12) {
+    const k = ext / 0.12;
+    return { ...SN0, ang, pull: -1, drop: 5 * k + 2, open: 0.4, lure: 0.4, sway: 0 };
+  }
+  return {
+    ...SN0,
+    ang,
+    reach: len * ext,
+    open: 0.45,
+    sag: 3 + 2 * Math.sin(step * 1.3) * 0.5,
+    wave: (step % 2 ? 1 : -1) * 0.8,
+    lure: 0.35,
+  };
+}
+
+/** Смерть 0,8 с: шея падает с отскоком, пасть разинута, розетка вянет и сохнет. */
+function snDeath(ang: number, f: number): SnO {
+  const t = (f + 0.5) / FPS;
+  const fall = seg(t, 0, 0.25);
+  const bounce =
+    t > 0.25 ? Math.abs(Math.sin(seg(t, 0.25, 0.45) * PI)) * 2 * (1 - seg(t, 0.25, 0.45)) : 0;
+  if (t < 0.25)
+    return {
+      ...SN0,
+      ang,
+      open: 1,
+      drop: 14 * eIn(fall) - 1,
+      pull: -2 * fall,
+      lure: 1 - fall,
+      wilt: fall * 0.5,
+      bulb: 0.8 * fall,
+    };
+  return {
+    ...SN0,
+    ang,
+    dead: true,
+    open: 0.8,
+    sag: -bounce,
+    wilt: 0.5 + 0.5 * seg(t, 0.3, 0.7),
+    dry: seg(t, 0.35, SN_DIE),
+    bulb: 1.2,
+    lure: 0,
+  };
+}
+
+const dir16 = (a: number) => mod(Math.round((a / TAU) * 16), 16);
+
+/** Режим хваталки → кадр. */
+function snapperFrame(m: Mob, pose: MobPose): MobFrame {
+  const md = pose.mode;
+  const t = pose.t;
+  const tech = md === 'aim' || md === 'snap' || md === 'retract';
+  const want = tech ? (m.dir ?? m.face ?? 0) : (heroAng(m) ?? m.face ?? 0);
+  const v = visOf(m, pose, want, tech ? 40 : 3);
+  const len = clamp(Math.round((m.data?.len ?? 3.3) * 2) / 2, 0.5, 3.5);
+  const r16 = dir16(tech ? want : v.yaw);
+  const ang = (r16 / 16) * TAU;
+  const L2 = Math.round(len * 2);
+  const sh = { shadow: 6 };
+  if (md === 'dying') {
+    const r8 = mod(Math.round((ang / TAU) * 8), 8);
+    const f = fi(t, SN_DIE_F);
+    return frame('snp', `die${f}r${r8}`, pose, () => snapperPic(snDeath((r8 / 8) * TAU, f)), {
+      linger: SN_DIE,
+      alpha: 1 - seg(t, 0.65, SN_DIE),
+      shadow: 6,
+      still: true,
+    });
+  }
+  const hurt = hurtOf(m, pose, v, 0.4);
+  if (md === 'aim') {
+    const f = fi(t, SN_AIM_F);
+    const out = (f + 0.5) / FPS >= 0.67;
+    return frame(
+      'snp',
+      out ? `x${f}r${r16}L${L2}` : `a${f}r${r16}`,
+      pose,
+      () => snapperPic(snAim(ang, f, len)),
+      {
+        ...merge(false, hurt?.ex),
+        ...sh,
+        still: true,
+        ghost: out ? { every: 0.02, life: 0.1, tint: '200,255,170', alpha: 0.35 } : null,
+      },
+    );
+  }
+  if (md === 'snap') {
+    const f = fi(t, Math.round(SN_SNAP * FPS) - 1);
+    return frame('snp', `s${f}r${r16}L${L2}`, pose, () => snapperPic(snSnap(ang, f, len)), {
+      ...merge(false, hurt?.ex),
+      ...sh,
+      still: true,
+    });
+  }
+  if (md === 'retract' || md === 'stun') {
+    // Втягивается рывками по 12 к/с — видно, что плеть тяжёлая.
+    const st = md === 'stun' ? 0 : Math.min(12, Math.floor((t / SN_RET) * 12));
+    return frame('snp', `r${st}r${r16}L${L2}`, pose, () => snapperPic(snRetract(ang, st, len)), {
+      ...merge(false, hurt?.ex),
+      ...sh,
+    });
+  }
+  const r8 = mod(Math.round((v.yaw / TAU) * 8), 8);
+  const a8 = (r8 / 8) * TAU;
+  if (hurt?.wince) {
+    const o: SnO = { ...SN0, ang: a8, pull: 2, drop: 2, open: 0.7, bulb: 0.8, lure: 1 };
+    return frame('snp', `hu${r8}`, pose, () => snapperPic(o), { ...merge(false, hurt.ex), ...sh });
+  }
+  const i = Math.floor(idlePh(m, pose.now, 1.9) * 8);
+  return frame('snp', `i${i}r${r8}`, pose, () => snapperPic(snIdle(a8, i)), {
+    ...merge(false, hurt?.ex),
+    ...sh,
+  });
+}
+
+registerMobPainter('f2_snapper', snapperFrame);
+
+registerMobWarm('f2_snapper', function* () {
+  const P = { flash: false, look: 'normal' as Look };
+  for (let r8 = 0; r8 < 8; r8++)
+    for (let i = 0; i < 8; i++) {
+      frame('snp', `i${i}r${r8}`, P, () => snapperPic(snIdle((r8 / 8) * TAU, i)));
+      yield 0;
+    }
+  for (let r16 = 0; r16 < 16; r16++)
+    for (let f = 0; f < 16; f++) {
+      frame('snp', `a${f}r${r16}`, P, () => snapperPic(snAim((r16 / 16) * TAU, f, 3.5)));
+      yield 0;
+    }
+});
+
+// Укус хваталки на конце хлыста: щелчок челюстей — дуги зубов, брызги сока
+// и листочки, вмятина. На полу; вспышка пасти — в кадре (`lit`).
+registerImpactPainter('f2_snap', {
+  life: 0.55,
+  shake: 0.16,
+  paint(g, rec, px, py, _s, age) {
+    const sd = rec.seed >>> 0;
+    const fade = 1 - seg(age, 0.2, 0.55);
+    if (age < 0.1) {
+      // Дуги зубов — смыкаются.
+      const k = age / 0.1;
+      g.globalAlpha = 1 - k;
+      g.fillStyle = 'rgb(239,230,208)';
+      for (let i = -3; i <= 3; i++) {
+        const gap = 5 * (1 - k) + 1;
+        g.fillRect(Math.round(px + i * 1.5), Math.round(py - gap - Math.abs(i) * 0.5), 1, 2);
+        g.fillRect(Math.round(px + i * 1.5), Math.round(py + gap + Math.abs(i) * 0.5 - 1), 1, 2);
+      }
+    }
+    g.globalAlpha = 0.4 * fade;
+    g.fillStyle = 'rgb(20,15,11)';
+    g.beginPath();
+    g.ellipse(px, py + 1, 4, 2, 0, 0, TAU);
+    g.fill();
+    for (let i = 0; i < 9; i++) {
+      const a = hash(sd, i, 1) * TAU;
+      const d = 3 + hash(sd, i, 2) * 9;
+      const k = eOut(seg(age, 0, 0.2 + 0.1 * hash(sd, i, 3)));
+      const x = px + Math.cos(a) * d * k;
+      const y = py + Math.sin(a) * d * k * SE - Math.sin(k * PI) * 5;
+      g.globalAlpha = 0.9 * fade;
+      g.fillStyle =
+        i % 3 === 0 ? 'rgb(95,154,68)' : i % 3 === 1 ? 'rgb(216,74,90)' : 'rgb(159,208,106)';
+      g.fillRect(Math.round(x), Math.round(y), i % 3 === 0 ? 2 : 1, 1);
+    }
+    g.globalAlpha = 1;
+    return age < 0.55;
+  },
+});
+
+// ---------------------------------------------------------------------------
 // ВРЕМЕННО: прежние рисовальщики — заменяются по одному.
 // ---------------------------------------------------------------------------
 
@@ -2882,211 +3343,6 @@ registerMobPainter('f2_mimic', (m, pose) => {
   return cachedFrame(key, () => {
     const { px, eye } = mimicPx(s);
     return finish(px, 14 + (s.lunge > 0 ? 0 : 0), 24, eye, pose);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Хваталка.
-// ---------------------------------------------------------------------------
-
-/** Голова-ловушка: две доли с зубами по кромке, `open` 0…1, смотрит по `ang`. */
-function trapHead(px: Px, hx: number, hy: number, ang: number, open: number, R = 4): void {
-  const ux = Math.cos(ang);
-  const uy = Math.sin(ang);
-  const gap = open * 1.8;
-  for (let y = Math.floor(hy - 7); y <= Math.ceil(hy + 7); y++)
-    for (let x = Math.floor(hx - 7); x <= Math.ceil(hx + 7); x++) {
-      const dx = x + 0.5 - hx;
-      const dy = y + 0.5 - hy;
-      const u = dx * ux + dy * uy;
-      const v = -dx * uy + dy * ux;
-      // Доли: верхняя и нижняя половины овала, раскрытые клином к морде.
-      const opening = gap * Math.max(0, (u + R) / (2 * R));
-      const vu = v + opening;
-      const vl = v - opening;
-      const inU = (u / R) ** 2 + (Math.min(0, vu) / (R * 0.65)) ** 2 <= 1 && vu <= 0.5;
-      const inL = (u / R) ** 2 + (Math.max(0, vl) / (R * 0.65)) ** 2 <= 1 && vl >= -0.5;
-      if (open > 0.1 && Math.abs(v) < opening && u > -R * 0.6 && (u / R) ** 2 < 1) {
-        px.set(x, y, u > 1 ? SNP.mouthL : SNP.mouth);
-        continue;
-      }
-      if (inU || inL) {
-        const e: Ell = { x: hx, y: hy, rx: R, ry: R * 0.65 };
-        px.set(x, y, tone(SNP.jaw, e, x, y));
-      }
-    }
-  // Зубы по кромкам долей.
-  if (open > 0.1)
-    for (let i = -1; i <= 3; i++) {
-      const u = i * 1.2;
-      for (const s of [-1, 1]) {
-        const v = s * (open * 1.8 * ((u + R) / (2 * R)) - 0.3);
-        px.set(Math.round(hx + u * ux - v * uy), Math.round(hy + u * uy + v * ux), SNP.tooth);
-      }
-    }
-  else {
-    // Сомкнута: шов зубов посередине.
-    for (let i = -2; i <= 3; i++)
-      px.set(Math.round(hx + i * ux), Math.round(hy + i * uy), i % 2 ? SNP.tooth : SNP.jaw[0]);
-  }
-}
-
-interface SnapPose {
-  dir: number;
-  /** Длина хлыста, клеток (0 — голова у корня). */
-  reach: number;
-  open: number;
-  limp: boolean;
-  sway: number;
-  pull: number;
-  dead: boolean;
-}
-
-function snapperPx(s: SnapPose): { px: Px; ax: number; ay: number; eye: [number, number] | null } {
-  const reachPx = s.reach * TS;
-  const R = Math.ceil(reachPx + 14);
-  const W = R * 2;
-  const H = R * 2;
-  const px = new Px(W, H);
-  const cx = R;
-  const GY = R + 3;
-  // Листья-розетка у корня (лежат на полу).
-  for (let i = 0; i < 5; i++) {
-    const a = Math.PI * (0.05 + i * 0.225) + (i % 2 ? 0.1 : 0);
-    leaf(px, cx, GY - 1, Math.PI + a, 6, 1.5, i % 2 ? SNP.leaf : SNP.leafL);
-  }
-  // Луковица.
-  ball(px, { x: cx, y: GY - 3, rx: 5, ry: 3.6 }, SNP.pod);
-  px.set(cx - 2, GY - 5, SNP.pod[3]);
-  // Куда голова.
-  let hx: number;
-  let hy: number;
-  let ang = s.dir;
-  if (s.dead) {
-    hx = cx + 7;
-    hy = GY - 1;
-    ang = 0.3;
-  } else if (s.reach > 0.05) {
-    hx = cx + Math.cos(s.dir) * reachPx;
-    hy = GY - 5 + Math.sin(s.dir) * reachPx + (s.limp ? 3 : 0);
-  } else {
-    // Покой: шея изогнута над луковицей, голова качается.
-    hx = cx + 3 + s.sway - Math.cos(s.dir) * s.pull;
-    hy = GY - 13 - Math.sin(s.dir) * s.pull * 0.6;
-  }
-  // Лоза: изогнутая кривая от луковицы к голове.
-  const sx = cx;
-  const sy = GY - 5;
-  const mx = (sx + hx) / 2 + (s.reach > 0.05 ? -Math.sin(ang) * 3 : -4);
-  const my = (sy + hy) / 2 + (s.reach > 0.05 ? Math.cos(ang) * 3 + (s.limp ? 3 : 0) : 2);
-  const n = Math.max(8, Math.ceil(Math.hypot(hx - sx, hy - sy) * 1.5));
-  for (let i = 0; i <= n; i++) {
-    const tt = i / n;
-    const x = (1 - tt) * (1 - tt) * sx + 2 * (1 - tt) * tt * mx + tt * tt * hx;
-    const y = (1 - tt) * (1 - tt) * sy + 2 * (1 - tt) * tt * my + tt * tt * hy;
-    const r = 1.8 - tt * 0.8;
-    px.ell(x, y, r, r, SNP.vineM);
-    px.set(Math.round(x - 0.5), Math.round(y - 1), SNP.vineL);
-    // Шипы-листочки вдоль лозы.
-    if (i % 6 === 3) px.set(Math.round(x + 1.5), Math.round(y - 1.5), SNP.leafL);
-  }
-  trapHead(px, hx, hy, ang, s.dead ? 0 : s.open, s.reach > 0.05 ? 5 : 4);
-  px.outline(INK);
-  // Приманка — светящаяся ягода на усике над головой.
-  let eye: [number, number] | null = null;
-  if (!s.dead) {
-    const lx = Math.round(hx - Math.cos(ang) * 1 - 1);
-    const ly = Math.round(hy - 4.5);
-    px.set(lx, ly + 1, SNP.vine);
-    px.set(lx, ly, SNP.lure);
-    eye = [lx, ly];
-  }
-  return { px, ax: cx, ay: GY, eye };
-}
-
-/** Обрезать пустые поля кадра — большие кадры хлыста легче. */
-function crop(px: Px, ax: number, ay: number, eye: [number, number] | null) {
-  let x0 = px.w;
-  let y0 = px.h;
-  let x1 = -1;
-  let y1 = -1;
-  for (let y = 0; y < px.h; y++)
-    for (let x = 0; x < px.w; x++)
-      if (px.solid(x, y)) {
-        x0 = Math.min(x0, x);
-        x1 = Math.max(x1, x);
-        y0 = Math.min(y0, y);
-        y1 = Math.max(y1, y);
-      }
-  if (x1 < 0) return { px, ax, ay, eye };
-  y1 = Math.max(y1, Math.ceil(ay));
-  const out = new Px(x1 - x0 + 1, y1 - y0 + 1);
-  for (let y = y0; y <= y1; y++)
-    for (let x = x0; x <= x1; x++) out.set(x - x0, y - y0, px.get(x, y));
-  return {
-    px: out,
-    ax: ax - x0,
-    ay: ay - y0,
-    eye: eye ? ([eye[0] - x0, eye[1] - y0] as [number, number]) : null,
-  };
-}
-
-registerMobPainter('f2_snapper', (m, pose) => {
-  const t = pose.t;
-  const f = pose.frame;
-  const dir16 = Math.round((mod(m.dir, TAU) / TAU) * 16) % 16;
-  const dir = (dir16 / 16) * TAU;
-  const len = Math.round((m.data.len ?? 3.3) * 2) / 2;
-  const s: SnapPose = {
-    dir: pose.left ? Math.PI : 0,
-    reach: 0,
-    open: 0,
-    limp: false,
-    sway: [0, 1, 0, -1][mod(f, 4)],
-    pull: 0,
-    dead: false,
-  };
-  let free = false;
-  switch (pose.mode) {
-    case 'aim': {
-      const k = q(t / 0.75, 4) / 3;
-      s.dir = dir;
-      s.open = k;
-      s.pull = 2 + k * 2;
-      free = true;
-      break;
-    }
-    case 'snap':
-      s.dir = dir;
-      s.reach = len * (t < 0.08 ? 0.6 : 1);
-      s.open = 0;
-      free = true;
-      break;
-    case 'retract': {
-      const ext = Math.max(0, 1 - t / 1.2);
-      s.dir = dir;
-      s.reach = Math.round(len * q(ext, 4) * 4) / 12;
-      s.open = 0.5;
-      s.limp = true;
-      free = true;
-      if (s.reach < 0.2) {
-        s.reach = 0;
-        s.limp = false;
-      }
-      break;
-    }
-    case 'dying':
-      s.dead = true;
-      break;
-  }
-  if (pose.anim === 'dead') s.dead = true;
-  const leftKey = free ? 0 : pose.left ? 1 : 0;
-  const key = `snp|${JSON.stringify(s)}|${pose.flash ? 1 : 0}|${pose.look[0]}|${leftKey}`;
-  return cachedFrame(key, () => {
-    const r = snapperPx(s);
-    const c = crop(r.px, r.ax, r.ay, r.eye);
-    // Хлыст в свободном направлении не зеркалим: он уже смотрит куда надо.
-    return finish(c.px, c.ax, c.ay, c.eye, { ...pose, left: false });
   });
 });
 
