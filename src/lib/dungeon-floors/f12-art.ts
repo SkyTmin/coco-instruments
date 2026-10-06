@@ -1248,10 +1248,6 @@ registerCellPainter(F12_GROTTO, cellPainter(F12_GROTTO));
 registerCellPainter(F12_LAKE, cellPainter(F12_LAKE));
 registerCellPainter(F12_SHRINE, cellPainter(F12_SHRINE));
 
-// ВРЕМЕННО: заглушки слоёв.
-registerZonePainter('f12_floor', () => true);
-registerZonePainter('f12_sky', () => true);
-
 // ---------------------------------------------------------------------------
 // Предметы. Кадры живых — по времени, в кеше по ключу.
 // ---------------------------------------------------------------------------
@@ -3981,4 +3977,664 @@ registerMobWarm('f12boss', function* () {
         rigCached('f12boss', key, f, CV_MAM, false, () => mammothBuild('normal', o));
         yield 0;
       }
+});
+
+// ---------------------------------------------------------------------------
+// Слой пола (`f12_floor`, под мобами): трещины тонкого льда, пролом
+// Ледолома, полыньи затягиваются, льдины протоки, рябь течения, след
+// скольжения героя. Зона одна на вылазку и едет за героем — рисуем окно вида.
+// ---------------------------------------------------------------------------
+
+function viewOf(g: CanvasRenderingContext2D, z: Zone | Strike, px: number, py: number) {
+  const m = g.getTransform();
+  const s = m.a || 1;
+  return {
+    left: z.x * TS - px,
+    top: z.y * TS - py,
+    gw: g.canvas.width / s,
+    gh: g.canvas.height / s,
+  };
+}
+
+/** Трещины тонкого льда: стадия 0…2 × 4 вида. Лучи из точки нагрузки. */
+const CRACK = new Map<number, HTMLCanvasElement>();
+function crackCv(stage: number, v: number): HTMLCanvasElement {
+  const key = stage * 8 + v;
+  const hit = CRACK.get(key);
+  if (hit) return hit;
+  const p = new Px(TS, TS);
+  const cx = 5 + hash(v, 1, 71) * 6;
+  const cy = 5 + hash(v, 2, 71) * 6;
+  const rays = 3 + stage * 2;
+  const light = stage >= 2 ? WHITE : alpha(ICE[4], 0.55 + stage * 0.2);
+  for (let k = 0; k < rays; k++) {
+    let a = (k / rays) * TAU + hash(v, k, 72) * 1.2;
+    let x = cx;
+    let y = cy;
+    const len = 3 + stage * 2.6 + hash(v, k, 73) * 3;
+    for (let s = 0; s < len; s++) {
+      x += Math.cos(a);
+      y += Math.sin(a);
+      a += (hash(v * 7 + k, s, 74) - 0.5) * 0.8;
+      p.set(x, y, light);
+      p.set(x, y + 1, alpha(WATER[0], 0.45 + stage * 0.15));
+    }
+  }
+  if (stage >= 1) {
+    // Кольцо вокруг точки нагрузки.
+    for (let a = 0; a < TAU; a += 0.35)
+      if (hash(v, Math.round(a * 10), 75) < 0.4 + stage * 0.25)
+        p.set(cx + Math.cos(a) * (2.4 + stage), cy + Math.sin(a) * (1.9 + stage), light);
+  }
+  if (stage >= 2) {
+    // Вода выступает в середине.
+    p.ell(cx, cy + 0.5, 1.8, 1.3, alpha(WATER[2], 0.85));
+    p.set(cx - 1, cy, alpha(THIN[4], 0.9));
+  }
+  const cv = p.canvas();
+  CRACK.set(key, cv);
+  return cv;
+}
+
+/** Вода пролома: тёмная, с бликом, 4 вида. */
+const OPEN = new Map<number, HTMLCanvasElement>();
+function openCv(v: number): HTMLCanvasElement {
+  const hit = OPEN.get(v);
+  if (hit) return hit;
+  const p = new Px(TS, TS);
+  for (let y = 0; y < TS; y++)
+    for (let x = 0; x < TS; x++) {
+      const k = 0.3 + (vnoise(x * 0.3 + v * 5, y * 0.3, 77) - 0.5) * 0.3;
+      p.set(x, y, toneOf(WATER, k, x, y));
+    }
+  for (let i = 0; i < 3; i++) {
+    const x = Math.floor(hash(v, i, 78) * 12) + 2;
+    const y = Math.floor(hash(v, i, 79) * 12) + 2;
+    p.line(x, y, x + 3, y, alpha(WATER[4], 0.5));
+  }
+  const cv = p.canvas();
+  OPEN.set(v, cv);
+  return cv;
+}
+
+/** Обломок льда в воде: белая плитка с тёмной кромкой (3 вида). */
+const SHARD = new Map<number, HTMLCanvasElement>();
+function shardCv(v: number): HTMLCanvasElement {
+  const hit = SHARD.get(v);
+  if (hit) return hit;
+  const w = 4 + (v % 3);
+  const p = new Px(w + 2, w);
+  for (let y = 0; y < w - 1; y++)
+    for (let x = 0; x < w + 1; x++) {
+      const e = Math.abs(x - w / 2) / (w / 2 + 0.5) + Math.abs(y - (w - 2) / 2) / (w / 2);
+      if (e > 1.15 + hash(v, x + y * 9, 80) * 0.3) continue;
+      p.set(x, y, y < 1 ? WHITE : y < w / 2 ? ICE[4] : ICE[3]);
+    }
+  for (let x = 0; x < w + 2; x++) if (p.solid(x, w - 2)) p.set(x, w - 1, alpha(ICE[0], 0.9));
+  const cv = p.canvas();
+  SHARD.set(v, cv);
+  return cv;
+}
+
+/** Льдина протоки: неровный край, толщина снизу, снег сверху. */
+const FLOE = new Map<string, HTMLCanvasElement>();
+function floeCv(f: { id: number; rx: number; ry: number }): HTMLCanvasElement {
+  const key = `${f.id}:${f.rx.toFixed(2)}:${f.ry.toFixed(2)}`;
+  const hit = FLOE.get(key);
+  if (hit) return hit;
+  if (FLOE.size > 80) FLOE.clear();
+  const RX = f.rx * TS;
+  const RY = f.ry * TS;
+  const W = Math.ceil(RX * 2) + 4;
+  const H = Math.ceil(RY * 2) + 8;
+  const p = new Px(W, H);
+  const cx = W / 2;
+  const cy = RY + 2;
+  const rim = (a: number) =>
+    1 - 0.13 * vnoise(Math.cos(a) * 2 + f.id * 3.1, Math.sin(a) * 2, 81) - 0.05 * Math.sin(a * 5 + f.id);
+  const inside = (x: number, y: number, dz: number) => {
+    const dx = (x - cx) / RX;
+    const dy = (y - cy - dz) / RY;
+    const r = Math.hypot(dx, dy);
+    return r <= rim(Math.atan2(dy, dx));
+  };
+  // Толщина: тёмный бок, видный снизу.
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      if (inside(x, y, 0)) continue;
+      if (inside(x, y, -4)) p.set(x, y, y > cy + RY - 1 ? ICE[1] : ICE[2]);
+    }
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      if (!inside(x, y, -0.0)) continue;
+      const dx = (x - cx) / RX;
+      const dy = (y - cy) / RY;
+      const r = Math.hypot(dx, dy);
+      // Снег на льдине пятнами, по краю — голый лёд.
+      const sn = vnoise(x * 0.18 + f.id, y * 0.22, 82) - r * 0.55;
+      const lit = 0.55 - dx * 0.18 - dy * 0.22;
+      if (sn > 0.12) p.set(x, y, toneOf(SNOW, lit + 0.15, x, y));
+      else p.set(x, y, toneOf(ICE, lit + (r > 0.85 ? 0.12 : 0), x, y));
+    }
+  // Кромка: светлая сверху-слева, трещина поперёк.
+  for (let y = 1; y < H; y++)
+    for (let x = 1; x < W; x++)
+      if (p.solid(x, y) && !p.solid(x, y - 1) && y < cy) p.set(x, y, WHITE);
+  for (let i = 0; i < RX * 1.2; i++) {
+    const x = cx - RX * 0.6 + i;
+    const y = cy - 2 + Math.sin(i * 0.5 + f.id) * 1.5 + i * 0.12;
+    if (p.solid(x, y)) p.set(x, y, alpha(ICE[1], 0.8));
+  }
+  p.outline(alpha(INK, 0.8));
+  const cv = p.canvas();
+  FLOE.set(key, cv);
+  return cv;
+}
+
+/** След скольжения героя: точки за последние ~1,2 с, своя на вылазку. */
+const TRAIL = new WeakMap<Sim, { x: number; y: number; t: number }[]>();
+
+registerZonePainter('f12_floor', (g, z, px, py, _s, time) => {
+  const sim = paintSim();
+  if (!sim) return true;
+  const w = sim.world;
+  const { left, top, gw, gh } = viewOf(g, z, px, py);
+  const x0 = Math.floor(left / TS) - 2;
+  const y0 = Math.floor(top / TS) - 2;
+  const x1 = Math.ceil((left + gw) / TS) + 2;
+  const y1 = Math.ceil((top + gh) / TS) + 2;
+  const inView = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  const mk = (x: number, y: number) =>
+    x < 0 || y < 0 || x >= w.w || y >= w.h ? 0 : w.mark[y * w.w + x];
+
+  // Рябь течения протоки: блики плывут на север вместе со льдинами.
+  g.fillStyle = css(WATER[4], 0.45);
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      if (mk(x, y) !== MK.current) continue;
+      for (let k = 0; k < 2; k++) {
+        const s = hash(x, y, 83 + k);
+        const yy = (((s * TS - time * 22 * (0.7 + s * 0.6)) % TS) + TS) % TS;
+        g.fillRect(Math.round(x * TS - left + 2 + s * 10), Math.round(y * TS - top + yy), 3, 1);
+      }
+    }
+
+  // Трещины тонкого льда.
+  const thin = f12Thin(sim);
+  if (thin)
+    for (const [i, v] of thin) {
+      const x = i % w.w;
+      const y = (i - x) / w.w;
+      if (!inView(x, y)) continue;
+      const stage = Math.min(2, Math.floor(v));
+      // Перед проломом трещина дрожит.
+      const sh = v > 2.4 ? Math.round(Math.sin(time * 40 + i) * 0.6) : 0;
+      g.drawImage(crackCv(stage, (i * 7) & 3), x * TS - left + sh, y * TS - top);
+      if (v % 1 > 0.5 && stage < 2) {
+        g.globalAlpha = (v % 1) - 0.5;
+        g.drawImage(crackCv(stage + 1, (i * 7) & 3), x * TS - left, y * TS - top);
+        g.globalAlpha = 1;
+      }
+    }
+
+  // Полыньи затягиваются: шуга, потом корка от краёв к середине.
+  for (const hl of f12Holes(sim)) {
+    const x = hl.i % w.w;
+    const y = (hl.i - x) / w.w;
+    if (!inView(x, y)) continue;
+    const k = Math.min(1, hl.t / 22);
+    const X = x * TS - left;
+    const Y = y * TS - top;
+    const n = Math.floor(k * 14);
+    for (let s = 0; s < n; s++) {
+      const a = hash(hl.i, s, 84);
+      const b = hash(hl.i, s, 85);
+      g.fillStyle = css(s % 3 ? ICE[3] : WHITE, 0.5 + k * 0.4);
+      g.fillRect(Math.round(X + 1 + a * 13 + Math.sin(time + s) * 0.6), Math.round(Y + 1 + b * 13), 2, 1);
+    }
+    if (k > 0.35) {
+      const d = Math.round(((k - 0.35) / 0.65) * 8);
+      g.fillStyle = css(THIN[3], 0.85);
+      g.fillRect(X, Y, TS, d);
+      g.fillRect(X, Y + TS - d, TS, d);
+      g.fillRect(X, Y + d, d, TS - 2 * d);
+      g.fillRect(X + TS - d, Y + d, d, TS - 2 * d);
+      g.fillStyle = css(THIN[4], 0.7);
+      if (d < 8) {
+        g.fillRect(X + d, Y + d, TS - 2 * d, 1);
+        g.fillRect(X + d, Y + d, 1, TS - 2 * d);
+      }
+    }
+  }
+
+  // Пролом Ледолома: сперва трещит, потом вода с обломками, потом
+  // замерзает рядами (клетки уходят из списка).
+  const broken = f12Broken(sim);
+  if (broken && broken.size) {
+    for (const [i, v] of broken) {
+      const x = i % w.w;
+      const y = (i - x) / w.w;
+      if (!inView(x, y)) continue;
+      const X = x * TS - left;
+      const Y = y * TS - top;
+      if (v < 0) {
+        const sh = v > -0.25 ? Math.round(Math.sin(time * 50 + i) * 0.8) : 0;
+        g.drawImage(crackCv(v > -0.4 ? 2 : 1, (i * 5) & 3), X + sh, Y);
+        continue;
+      }
+      g.drawImage(openCv((i * 3) & 3), X, Y);
+      // Кромка там, где сосед цел.
+      g.fillStyle = css(ICE[4], 0.95);
+      if (!broken.has(i - w.w) || (broken.get(i - w.w) ?? 0) < 0) {
+        g.fillRect(X, Y, TS, 2);
+        g.fillStyle = css(ICE[1], 0.9);
+        g.fillRect(X, Y + 2, TS, 2);
+        g.fillStyle = css(ICE[4], 0.95);
+      }
+      if (!broken.has(i + w.w) || (broken.get(i + w.w) ?? 0) < 0) g.fillRect(X, Y + TS - 1, TS, 1);
+      if (!broken.has(i - 1) || (broken.get(i - 1) ?? 0) < 0) g.fillRect(X, Y, 1, TS);
+      if (!broken.has(i + 1) || (broken.get(i + 1) ?? 0) < 0) g.fillRect(X + TS - 1, Y, 1, TS);
+      // Обломки качаются и дрейфуют.
+      for (let s = 0; s < 2; s++) {
+        const a = hash(i, s, 86);
+        const b = hash(i, s, 87);
+        const fx = X + 2 + a * 9 + Math.sin(time * 0.9 + a * 9) * 1.5;
+        const fy = Y + 3 + b * 8 + Math.cos(time * 0.7 + b * 9) * 1.2;
+        g.drawImage(shardCv(Math.floor(a * 3)), Math.round(fx), Math.round(fy));
+      }
+    }
+  }
+
+  // Льдины протоки.
+  for (const f of f12Floes(sim)) {
+    const sx = f.x * TS - left;
+    const sy = f.y * TS - top;
+    if (sx < -60 || sy < -60 || sx > gw + 60 || sy > gh + 60) continue;
+    const cv = floeCv(f);
+    const bob = Math.round(Math.sin(time * 1.6 + f.ph) * 0.8);
+    // Тень и пена вокруг.
+    g.fillStyle = css(WATER[0], 0.55);
+    g.beginPath();
+    g.ellipse(sx, sy + 3, f.rx * TS + 2, f.ry * TS + 2, 0, 0, TAU);
+    g.fill();
+    g.fillStyle = css(WHITE, 0.35);
+    for (let s = 0; s < 6; s++) {
+      const a = (s / 6) * TAU + time * 0.4 + f.ph;
+      g.fillRect(
+        Math.round(sx + Math.cos(a) * (f.rx * TS + 2)),
+        Math.round(sy + 2 + Math.sin(a) * (f.ry * TS + 2)),
+        2,
+        1,
+      );
+    }
+    g.drawImage(cv, Math.round(sx - cv.width / 2), Math.round(sy - f.ry * TS - 2 + bob));
+    if (f.lamp) {
+      // Фонарь на шесте: шест, рамка, огонёк.
+      const lx = Math.round(sx + f.rx * TS * 0.35);
+      const ly = Math.round(sy - 2 + bob);
+      g.fillStyle = css(WOOD[1]);
+      g.fillRect(lx, ly - 12, 1, 12);
+      g.fillStyle = css(INK);
+      g.fillRect(lx - 2, ly - 17, 5, 6);
+      const fl = 0.75 + 0.25 * Math.sin(time * 9 + f.id);
+      g.fillStyle = css(FIRE[3], fl);
+      g.fillRect(lx - 1, ly - 16, 3, 4);
+      g.fillStyle = css(FIRE[4]);
+      g.fillRect(lx, ly - 15, 1, 2);
+    }
+  }
+
+  // След скольжения.
+  const ice = f12Ice(sim);
+  let tr = TRAIL.get(sim);
+  if (!tr) {
+    tr = [];
+    TRAIL.set(sim, tr);
+  }
+  const h = sim.hero;
+  if (ice.on && ice.slide > 0.4) {
+    const last = tr[tr.length - 1];
+    if (!last || Math.hypot(last.x - h.x, last.y - h.y) > 0.18) tr.push({ x: h.x, y: h.y, t: time });
+  }
+  while (tr.length && (time - tr[0].t > 1.4 || tr[0].t > time)) tr.shift();
+  for (let k = 1; k < tr.length; k++) {
+    const a = tr[k - 1];
+    const b = tr[k];
+    const life = 1 - (time - b.t) / 1.4;
+    g.strokeStyle = css(WHITE, 0.35 * life);
+    g.lineWidth = 1;
+    for (const o of [-3, 3]) {
+      g.beginPath();
+      g.moveTo(Math.round(a.x * TS - left + o), Math.round(a.y * TS - top + 5));
+      g.lineTo(Math.round(b.x * TS - left + o), Math.round(b.y * TS - top + 5));
+      g.stroke();
+    }
+  }
+  return true;
+});
+
+// ---------------------------------------------------------------------------
+// Слой неба (`f12_sky`, поверх темноты): мороз на герое (иней, три доли над
+// головой, глыба при заморозке), вьюга с порывами, ленты сияния Купола,
+// ледяная пыль в воздухе.
+// ---------------------------------------------------------------------------
+
+/** Снежинка доли мороза 7×7: пустая и полная. */
+const FLAKE: HTMLCanvasElement[] = [];
+function flakeCv(full: boolean): HTMLCanvasElement {
+  const k = full ? 1 : 0;
+  if (FLAKE[k]) return FLAKE[k];
+  const p = new Px(9, 9);
+  const c = full ? TEAL[4] : alpha(ICE[1], 0.9);
+  const d = full ? TEAL[2] : alpha(INK, 0.7);
+  for (let a = 0; a < 6; a++) {
+    const ang = (a / 6) * TAU - Math.PI / 2;
+    for (let r = 0; r <= 3.6; r += 0.5) p.set(4 + Math.cos(ang) * r, 4 + Math.sin(ang) * r, c);
+  }
+  p.set(4, 4, full ? WHITE : d);
+  p.outline(full ? alpha(TEAL[0], 0.95) : alpha(INK, 0.85));
+  FLAKE[k] = p.canvas();
+  return FLAKE[k];
+}
+
+/** Глыба льда на замёрзшем герое, трещины по стадии 0…2. */
+const BLOCK: HTMLCanvasElement[] = [];
+function blockCv(stage: number): HTMLCanvasElement {
+  if (BLOCK[stage]) return BLOCK[stage];
+  const W = 24;
+  const H = 30;
+  const p = new Px(W, H);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      // Гранёная глыба: срезанные углы.
+      const cut = Math.min(x, W - 1 - x) + Math.min(y, H - 1 - y) * 0.6;
+      if (cut < 3) continue;
+      const k = 0.45 + (x < 7 ? 0.25 : 0) - y * 0.008 + (x + y * 2 > 46 ? -0.15 : 0);
+      const c = toneOf(ICE, k, x, y);
+      p.set(x, y, alpha(c, 0.55));
+    }
+  // Блики граней.
+  p.line(4, 3, 4, 20, alpha(WHITE, 0.8));
+  p.line(5, 2, 12, 2, alpha(WHITE, 0.7));
+  p.line(18, 5, 18, 12, alpha(ICE[4], 0.6));
+  for (let s = 0; s < stage * 3; s++) {
+    let x = 8 + hash(stage, s, 88) * 8;
+    let y = 6 + hash(stage, s, 89) * 16;
+    let a = hash(stage, s, 90) * TAU;
+    for (let t = 0; t < 7; t++) {
+      x += Math.cos(a);
+      y += Math.sin(a);
+      a += (hash(s, t, 91) - 0.5) * 0.9;
+      p.set(x, y, WHITE);
+    }
+  }
+  p.outline(alpha(ICE[0], 0.9));
+  BLOCK[stage] = p.canvas();
+  return BLOCK[stage];
+}
+
+registerZonePainter('f12_sky', (g, z, px, py, _s, time) => {
+  const sim = paintSim();
+  if (!sim) return true;
+  const { left, top, gw, gh } = viewOf(g, z, px, py);
+  const h = sim.hero;
+  const hx0 = Math.round(h.x * TS - left);
+  const hy0 = Math.round(h.y * TS - top);
+
+  // Ленты сияния Купола: пятно света на полу и занавес вверх.
+  const bands = f12Aurora(sim);
+  if (bands.length) {
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (const b of bands) {
+      const bx = b.x * TS - left;
+      const by = b.y * TS - top;
+      const R = 3.4 * TS;
+      const gr = g.createRadialGradient(bx, by, 2, bx, by, R);
+      gr.addColorStop(0, css(AURORA[2], 0.32 * b.k));
+      gr.addColorStop(0.6, css(AURORA[1], 0.14 * b.k));
+      gr.addColorStop(1, css(AURORA[0], 0));
+      g.fillStyle = gr;
+      g.beginPath();
+      g.ellipse(bx, by, R, R * 0.7, 0, 0, TAU);
+      g.fill();
+      // Занавес: вертикальные лучи, волна бежит по ним.
+      for (let k = -9; k <= 9; k++) {
+        const xx = bx + k * 3 + Math.sin(time * 1.3 + k * 0.5) * 3;
+        const hgt = 34 + 16 * Math.sin(time * 0.9 + k * 0.7);
+        const a = 0.16 * b.k * (1 - Math.abs(k) / 10) * (0.6 + 0.4 * Math.sin(time * 3 + k));
+        const lg = g.createLinearGradient(0, by - hgt - 20, 0, by);
+        lg.addColorStop(0, css(TEAL[3], 0));
+        lg.addColorStop(0.5, css(AURORA[3], a));
+        lg.addColorStop(1, css(AURORA[2], a * 0.4));
+        g.fillStyle = lg;
+        g.fillRect(Math.round(xx), Math.round(by - hgt - 20), 2, hgt + 20);
+      }
+    }
+    g.restore();
+  }
+
+  // Ледяная пыль: редкие искры в воздухе (вне вьюги).
+  const storm = f12Storm(sim);
+  if (storm.k < 0.3) {
+    for (let i = 0; i < 26; i++) {
+      const s = hash(i, 1, 92);
+      const xx = ((((s * 997 + time * (4 + s * 6) - left * 0.9) % gw) + gw) % gw) | 0;
+      const yy = ((((hash(i, 2, 92) * 991 + time * (3 + s * 4) - top * 0.9) % gh) + gh) % gh) | 0;
+      const tw = Math.sin(time * (2 + s * 3) + i);
+      if (tw < 0.3) continue;
+      g.fillStyle = css(i % 4 ? ICE[4] : AURORA[3], 0.35 * tw);
+      g.fillRect(xx, yy, 1, 1);
+    }
+  }
+
+  // Вьюга: пелена и косой снег; порыв — сперва стрелки по ветру, потом
+  // снег гуще и вдоль порыва.
+  if (storm.k > 0.02) {
+    const k = storm.k;
+    const gust = storm.gust;
+    const push = !!gust && gust.t > gust.warn;
+    g.fillStyle = css(SNOW[3], 0.1 * k + (push ? 0.06 : 0));
+    g.fillRect(0, 0, gw, gh);
+    const ang = gust ? gust.ang : Math.PI / 2 + 0.55;
+    const ux = Math.cos(ang);
+    const uy = Math.sin(ang);
+    const n = Math.round((push ? 220 : 130) * k);
+    const sp = push ? 260 : 120;
+    for (let i = 0; i < n; i++) {
+      const s = hash(i, 3, 93);
+      const d = 0.5 + s * 0.8;
+      const ox = hash(i, 4, 93) * (gw + 80);
+      const oy = hash(i, 5, 93) * (gh + 80);
+      const xx = ((((ox + ux * time * sp * d - left * 0.15) % (gw + 80)) + gw + 80) % (gw + 80)) - 40;
+      const yy = ((((oy + uy * time * sp * d - top * 0.15) % (gh + 80)) + gh + 80) % (gh + 80)) - 40;
+      const L = (push ? 7 : 3) * d;
+      g.strokeStyle = css(i % 5 ? SNOW[4] : WHITE, 0.45 + 0.4 * s);
+      g.lineWidth = d > 1 ? 2 : 1;
+      g.beginPath();
+      g.moveTo(Math.round(xx), Math.round(yy));
+      g.lineTo(Math.round(xx - ux * L), Math.round(yy - uy * L));
+      g.stroke();
+    }
+    if (gust && !push) {
+      // Предупреждение: три шеврона у героя по ходу порыва, наливаются.
+      const w = gust.t / gust.warn;
+      g.strokeStyle = css(WHITE, 0.35 + 0.55 * w);
+      g.lineWidth = 2;
+      for (let c = 0; c < 3; c++) {
+        const off = 18 + c * 9 + ((time * 30) % 9);
+        const cx = hx0 + ux * off;
+        const cy = hy0 - 8 + uy * off;
+        const nx = -uy;
+        const ny = ux;
+        g.beginPath();
+        g.moveTo(Math.round(cx - ux * 4 + nx * 5), Math.round(cy - uy * 4 + ny * 5));
+        g.lineTo(Math.round(cx), Math.round(cy));
+        g.lineTo(Math.round(cx - ux * 4 - nx * 5), Math.round(cy - uy * 4 - ny * 5));
+        g.stroke();
+      }
+    }
+  }
+
+  // Мороз на герое.
+  const fr = f12Frost(sim);
+  if (fr.frozen > 0) {
+    const stage = fr.frozen > 0.66 ? 0 : fr.frozen > 0.33 ? 1 : 2;
+    const cv = blockCv(stage);
+    const sh = stage === 2 ? Math.round(Math.sin(time * 45) * 0.7) : 0;
+    g.drawImage(cv, hx0 - 12 + sh, hy0 - 26);
+  }
+  if (fr.frost > 0.01 || fr.frozen > 0) {
+    // Иней: искры вокруг фигуры, гуще с каждой долей.
+    const n = Math.round(fr.frost * 5);
+    for (let i = 0; i < n; i++) {
+      const a = hash(i, 6, 94) * TAU + time * 0.3;
+      const r = 6 + hash(i, 7, 94) * 5;
+      const tw = 0.5 + 0.5 * Math.sin(time * 5 + i * 1.7);
+      g.fillStyle = css(i % 2 ? WHITE : TEAL[4], 0.4 + 0.5 * tw);
+      g.fillRect(Math.round(hx0 + Math.cos(a) * r), Math.round(hy0 - 10 + Math.sin(a) * r * 1.3), 1, 1);
+    }
+    // Три доли над головой: полная — бирюзовая, часть — наливается снизу.
+    const full = flakeCv(true);
+    const empty = flakeCv(false);
+    const top0 = hy0 - 38;
+    for (let i = 0; i < 3; i++) {
+      const x = hx0 - 15 + i * 10;
+      const f = fr.frozen > 0 ? 1 : Math.max(0, Math.min(1, fr.frost - i));
+      g.drawImage(empty, x, top0);
+      if (f > 0) {
+        const hh = Math.max(1, Math.round(9 * f));
+        g.drawImage(full, 0, 9 - hh, 9, hh, x, top0 + 9 - hh, 9, hh);
+      }
+    }
+  }
+  return true;
+});
+
+// ---------------------------------------------------------------------------
+// Иконки вещей 10×10.
+// ---------------------------------------------------------------------------
+
+registerItemArt('f12mat', () => {
+  // Осколок вечного льда: гранёный клин со светом внутри.
+  const p = new Px(10, 10);
+  const pts: [number, number][] = [
+    [5, 0],
+    [8, 3],
+    [7, 8],
+    [4, 9],
+    [2, 5],
+  ];
+  for (let y = 0; y < 10; y++)
+    for (let x = 0; x < 10; x++) {
+      let ins = true;
+      for (let k = 0; k < pts.length; k++) {
+        const [ax, ay] = pts[k];
+        const [bx, by] = pts[(k + 1) % pts.length];
+        if ((bx - ax) * (y + 0.5 - ay) - (by - ay) * (x + 0.5 - ax) < 0) ins = false;
+      }
+      if (!ins) continue;
+      const k = 0.7 - x * 0.06 + (x > 5 ? -0.15 : 0.05) - y * 0.02;
+      p.set(x, y, toneOf(ICE, k, x, y));
+    }
+  p.line(5, 1, 5, 8, TEAL[3]);
+  p.set(5, 4, TEAL[4]);
+  p.set(4, 2, WHITE);
+  p.outline(hx('#0a1830'));
+  return p;
+});
+
+registerItemArt('f12_crystal', () => {
+  // Кристалл сияния: две зелёные призмы.
+  const p = new Px(10, 10);
+  const prism = (x0: number, y0: number, h: number) => {
+    for (let y = 0; y < h; y++) {
+      const w = y < 2 ? y : 2;
+      for (let x = -w; x <= w; x++) {
+        const k = 0.75 - (x + 2) * 0.12 - y * 0.03;
+        p.set(x0 + x, y0 + y, toneOf(AURORA, k, x, y));
+      }
+    }
+  };
+  prism(6, 1, 8);
+  prism(3, 3, 6);
+  p.set(5, 2, WHITE);
+  p.set(2, 4, AURORA[4]);
+  p.outline(hx('#062a22'));
+  return p;
+});
+
+registerItemArt('f12_fur', () => {
+  // Песцовый мех: свёрнутая шкурка с хвостом.
+  const p = new Px(10, 10);
+  p.ell(4.5, 5.5, 3.6, 2.8, (x, y) => toneOf(SNOW, 0.85 - (x - 2) * 0.05 - (y - 4) * 0.08, x, y));
+  for (let i = 0; i < 4; i++) p.set(7 + i * 0.6, 4 - i, SNOW[4 - (i >> 1)]);
+  p.set(9, 1, WHITE);
+  p.set(8, 2, WHITE);
+  p.line(2, 5, 6, 5, alpha(SNOW[1], 0.7));
+  p.set(3, 4, WHITE);
+  p.outline(hx('#1a2440'));
+  return p;
+});
+
+registerItemArt('f12_fish', () => {
+  // Мороженая рыба: серебро в инее, хвост вверх.
+  const p = new Px(10, 10);
+  p.ell(4.5, 5.5, 3.5, 2, (x, y) => toneOf(ICE, 0.8 - (y - 4) * 0.18, x, y));
+  p.set(8, 4, ICE[3]);
+  p.set(9, 3, ICE[3]);
+  p.set(8, 6, ICE[2]);
+  p.set(9, 7, ICE[2]);
+  p.set(2, 5, INK);
+  p.set(4, 4, WHITE);
+  p.set(6, 6, WHITE);
+  p.line(3, 6, 6, 6, alpha(ICE[1], 0.6));
+  p.outline(hx('#0a1830'));
+  return p;
+});
+
+registerItemArt('f12_tea', () => {
+  // Брусничный сбитень: деревянная кружка, пар.
+  const p = new Px(10, 10);
+  p.rect(2, 4, 6, 9, WOOD[2]);
+  p.rect(2, 4, 2, 9, WOOD[3]);
+  p.rect(6, 4, 6, 9, WOOD[1]);
+  p.rect(2, 4, 6, 4, hx('#8a1a2a'));
+  p.set(3, 4, hx('#d0405a'));
+  p.rect(7, 5, 8, 5, WOOD[1]);
+  p.rect(8, 6, 8, 7, WOOD[1]);
+  p.set(4, 2, alpha(WHITE, 0.6));
+  p.set(5, 1, alpha(WHITE, 0.5));
+  p.set(4, 0, alpha(WHITE, 0.35));
+  p.outline(hx('#1a0c06'));
+  return p;
+});
+
+registerItemArt('f12_quill', () => {
+  // Ледяная игла ежа: тонкая наискось, белое остриё.
+  const p = new Px(10, 10);
+  for (let i = 0; i < 8; i++) {
+    p.set(1 + i, 8 - i, ICE[2 + (i > 4 ? 1 : 0)]);
+    if (i < 6) p.set(1 + i, 9 - i, ICE[1]);
+  }
+  p.set(8, 1, WHITE);
+  p.set(9, 0, WHITE);
+  p.outline(hx('#0a1830'));
+  return p;
+});
+
+registerItemArt('f12_tusk', () => {
+  // Бивень мамонта: изогнутая кость, тёмный корень.
+  const p = new Px(10, 10);
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    const x = 1.5 + t * 7;
+    const y = 8 - Math.sin(t * Math.PI * 0.9) * 5 - t * 1.5;
+    const r = 1.4 * (1 - t * 0.6);
+    p.ell(x, y, r, r, i < 2 ? BONE[1] : BONE[3 - (i > 6 ? 0 : 1)]);
+  }
+  p.set(4, 3, BONE[4]);
+  p.set(5, 2, BONE[4]);
+  p.outline(hx('#2a2018'));
+  return p;
 });
