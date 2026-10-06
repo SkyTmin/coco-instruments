@@ -5581,9 +5581,10 @@ registerZonePainter('f15_life', (g, z, px, py, _s, time) => {
       }
       if (mk === MK.xwall || mk === MK.memory || mk === MK.xfloor || mk === MK.vein) {
         // Кристалл вспыхивает искрой: редко, у каждой клетки свой такт.
+        if (h0 < 0.55) continue;
         const ph = Math.sin(time * (0.8 + h0 * 1.4) + h0 * 60);
-        if (ph > 0.94) {
-          const k = (ph - 0.94) / 0.06;
+        if (ph > 0.97) {
+          const k = (ph - 0.97) / 0.03;
           const x = Math.floor(sx + 3 + hash(cx, cy, 1503) * 10);
           const y = Math.floor(sy + 2 + hash(cx, cy, 1504) * 8);
           g.fillStyle = `rgba(220,250,255,${0.5 + k * 0.5})`;
@@ -5779,11 +5780,12 @@ registerZonePainter('f15_well', (g, z, px, py, _s, time) => {
   const n = Math.round((s === 2 ? 60 * depth + 8 : s === 1 ? 12 : 8) * Math.max(0.7, w.r / 5));
   for (let i = 0; i < n; i++) {
     const h0 = hash(i, w.id, 2001);
+    const a0 = hash(i * 7 + 3, w.id, 2002) * TAU;
     const speed = s === 2 ? 0.55 * w.k * (0.4 + 0.6 * depth) : 0.12 + (s === 1 ? 0.2 * w.f : 0);
     let u = (time * speed + h0) % 1;
     if (dir < 0) u = 1 - u;
     const rr = R * (1 - u) + w.burn * TS * u;
-    const a = h0 * TAU + (1 - u) * (1 - u) * 3.2 * dir + spin;
+    const a = a0 + (1 - u) * (1 - u) * 3.2 * dir + spin;
     const x = px + Math.cos(a) * rr;
     const y = py + Math.sin(a) * rr;
     if (s === 1) {
@@ -5798,15 +5800,22 @@ registerZonePainter('f15_well', (g, z, px, py, _s, time) => {
     } else if (s === 2) {
       // Искра со штрихом назад по спирали — видно, куда течёт.
       const fadeIn = Math.min(1, u * 5) * (1 - Math.max(0, u - 0.85) / 0.15);
-      const back = 0.06 + 0.05 * h0;
-      const ub = Math.min(1, Math.max(0, u - back * dir));
+      const ub = Math.min(1, Math.max(0, u - 0.04 * dir));
       const rb = R * (1 - ub) + w.burn * TS * ub;
-      const ab = h0 * TAU + (1 - ub) * (1 - ub) * 3.2 * dir + spin;
+      const ab = a0 + (1 - ub) * (1 - ub) * 3.2 * dir + spin;
+      // Штрих не длиннее 6 px: у кромки спираль быстрая по углу.
+      let bx = px + Math.cos(ab) * rb - x;
+      let by = py + Math.sin(ab) * rb - y;
+      const bl = Math.hypot(bx, by);
+      if (bl > 6) {
+        bx *= 6 / bl;
+        by *= 6 / bl;
+      }
       const al = (0.55 + u * 0.45) * fadeIn * (0.55 + 0.45 * depth);
       g.strokeStyle = `rgba(${c},${al * 0.8})`;
       g.lineWidth = h0 > 0.7 ? 2 : 1;
       g.beginPath();
-      g.moveTo(px + Math.cos(ab) * rb, py + Math.sin(ab) * rb);
+      g.moveTo(x + bx, y + by);
       g.lineTo(x, y);
       g.stroke();
       g.lineWidth = 1;
