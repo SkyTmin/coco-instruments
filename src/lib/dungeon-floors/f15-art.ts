@@ -347,6 +347,59 @@ function chasmPx(p: Px, c: CellCtx): void {
   }
 }
 
+/** Центры спящих больших осколков мира (кратер «Пробуждения»). */
+const SHARD_AT = new WeakMap<object, [number, number][]>();
+function craterAt(c: CellCtx): [number, number] | null {
+  const sim = F15_FX.sim;
+  if (!sim) return null;
+  let l = SHARD_AT.get(sim.world);
+  if (!l) {
+    l = sim.world.objs.filter((o) => o.ref === 'f15_bigshard').map((o) => [o.x + 0.5, o.y + 0.5] as [number, number]);
+    SHARD_AT.set(sim.world, l);
+  }
+  for (const s of l) if (Math.hypot(s[0] - c.wx - 0.5, s[1] - c.wy - 0.5) < 4.4) return s;
+  return null;
+}
+
+/**
+ * Кратер осколка: круглая воронка по пикселям (клетки ямы — крестом, край
+ * рисуем кругом). Северная внутренняя стенка видна, на дне — свет ядра.
+ */
+function craterPx(p: Px, c: CellCtx, at: [number, number], base: (p: Px, c: CellCtx) => void): void {
+  rimFloor(p, c, false, base);
+  const cx = at[0] * TS;
+  const cy = at[1] * TS;
+  const RP = 2.05 * TS;
+  for (let y = 0; y < TS; y++)
+    for (let x = 0; x < TS; x++) {
+      const X = c.wx * TS + x + 0.5;
+      const Y = c.wy * TS + y + 0.5;
+      const dx = X - cx;
+      const dy = Y - cy;
+      const a = Math.atan2(dy, dx);
+      const R = RP + (vnoise(a * 9, 0, 1, 1561) - 0.5) * 2.4;
+      const d = Math.hypot(dx, dy);
+      if (d > R) continue;
+      // Дно — круг, сдвинутый вниз: над ним видна северная стенка.
+      const hd = Math.hypot(dx, (dy - 0.55 * TS) * 1.1);
+      const HR = R - 0.45 * TS;
+      let col: RGBA;
+      if (d > R - 1.2) col = dy > 0 ? CRYST[3] : ROOT_FACE[0];
+      else if (hd > HR) {
+        // Стенка: камень сверху светлее, к дну темнее; жилы кристалла.
+        const k = clamp01((Y - (cy - R)) / (0.9 * TS));
+        col = mixc(ROOT_FACE[2], hx('#07051a'), k);
+        if (hash(Math.floor(X / 2), Math.floor(Y / 3), 1562) < 0.08) col = mixc(col, TEAL[2], 0.6);
+      } else {
+        const r = hd / HR;
+        const sw = 0.5 + 0.5 * Math.sin(a * 3 + r * 6);
+        col = ramp([hx('#d8ffff'), hx('#6ce4f4'), hx('#1c78a8'), hx('#0c2458'), hx('#060a24')], r * 0.95 + sw * 0.1);
+        if (hash(X, Y, 1563) < 0.012) col = WHITE;
+      }
+      p.set(x, y, col);
+    }
+}
+
 /** Сердцевина колодца: воронка света, закрученная (осколок над ней — предмет). */
 function corePx(p: Px): void {
   for (let y = 0; y < TS; y++)
@@ -471,8 +524,9 @@ function wellFor(c: CellCtx): Well | null {
 function rimFloor(p: Px, c: CellCtx, obs: boolean, base: (p: Px, c: CellCtx) => void): void {
   base(p, c);
   const w = wellFor(c);
-  const cx = w ? w.x * TS : (c.wx + 0.5) * TS;
-  const cy = w ? w.y * TS : (c.wy + 0.5) * TS;
+  const cr = w ? null : craterAt(c);
+  const cx = w ? w.x * TS : cr ? cr[0] * TS : (c.wx + 0.5) * TS;
+  const cy = w ? w.y * TS : cr ? cr[1] * TS : (c.wy + 0.5) * TS;
   const RIM = 2.45 * TS;
   const t = obs ? LAPIS : CRYST_DIM;
   for (let y = 0; y < TS; y++)
@@ -921,7 +975,11 @@ function cellOf(area: string) {
     const p = new Px(TS, TS);
     if (c.tile === T_DEEP) {
       if (mk === MK.core) corePx(p);
-      else if (mk === MK.pit) chasmPx(p, c);
+      else if (mk === MK.pit) {
+        const at = craterAt(c);
+        if (at) craterPx(p, c, at, baseOf);
+        else chasmPx(p, c);
+      }
       else if (mk === MK.lane || mk === MK.island) spacePx(p, c.wx, c.wy, 1, ringFor(c) ?? true);
       else if (mk === MK.vortex) spacePx(p, c.wx, c.wy, 1.3);
       else if (area === F15_ROOTS && mk !== MK.void) chasmPx(p, c);
@@ -947,9 +1005,13 @@ function cellOf(area: string) {
       case MK.vein:
         veinFloor(p, c);
         break;
-      case MK.rim:
-        rimFloor(p, c, area === F15_OBS, baseOf);
+      case MK.rim: {
+        // Кайма кратера осколка тоже рисует его воронку: круг шире креста ямы.
+        const at = craterAt(c);
+        if (at) craterPx(p, c, at, baseOf);
+        else rimFloor(p, c, area === F15_OBS, baseOf);
         break;
+      }
       case MK.float:
         floatFloor(p, c, baseOf);
         break;
@@ -1879,7 +1941,8 @@ function finish(b: Built, look: Look, flash: boolean, left: boolean): MobFrame {
     }
     p = q;
   }
-  if (look === 'elite') p.outline(GOLDK);
+  // Золотая кайма элиты — по телу, а не по ореолу (иначе кольцо вокруг света).
+  if (look === 'elite') edge(p, GOLDK);
   if (flash) p = p.tint(WHITE, 0.85);
   if (left) {
     p = p.flipX();
@@ -1904,7 +1967,9 @@ function frameOf(
 ): MobFrame {
   const key = `${kind}|${anim}|${f}|${flip ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
   let fr = FR.get(key);
-  if (!fr) fr = FR.set(key, finish(build(), pose.look, pose.flash, flip));
+  // Осколки смерти элиты без золотой обводки: она съедала их цвет.
+  const look = pose.look === 'elite' && (anim === 'die' || anim.startsWith('dying')) ? 'normal' : pose.look;
+  if (!fr) fr = FR.set(key, finish(build(), look, pose.flash, flip));
   return extra ? { ...fr, ...extra } : fr;
 }
 
