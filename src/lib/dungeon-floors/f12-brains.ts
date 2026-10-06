@@ -3004,6 +3004,15 @@ function meltGlacier(sim: Sim, api: SimApi): void {
   s.layers = [];
 }
 
+// анимации 12 — только рисунок: комья снега из-под ног (набег, рытьё), не чаще `every`.
+function vKick(sim: Sim, api: SimApi, m: Mob, dt: number, every: number, r: number): void {
+  // анимации 12 — только рисунок
+  m.data.vKick = (m.data.vKick ?? 0) + dt; // анимации 12 — только рисунок
+  if (m.data.vKick < every) return; // анимации 12 — только рисунок
+  m.data.vKick = 0; // анимации 12 — только рисунок
+  fx(sim, api, { x: m.x, y: m.y, r, life: 0.6, art: 'f12_kick', dur: m.face } as ZoneIn); // анимации 12 — только рисунок
+} // анимации 12 — только рисунок
+
 /** Ход танком: разворот с ограничением, скорость — по косинусу. */
 function tankStep(m: Mob, dt: number, tx: number, ty: number, v: number): void {
   const want = Math.atan2(ty - m.y, tx - m.x);
@@ -3301,6 +3310,8 @@ function mammothStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): vo
         m.data.hit = 1;
         if (inCone(sim, m.x, m.y, m.face, T.tusk.r, T.tusk.arc)) hit(sim, api, m, m.dmg, 9);
         sim.events.push({ t: 'shake', k: 0.25 });
+        const vTusk = { x: m.x, y: m.y, r: T.tusk.r, life: 0.5, art: 'f12_tuskhit', dur: m.face }; // анимации 12 — только рисунок
+        fx(sim, api, vTusk); // анимации 12 — только рисунок
       }
       if (m.t >= T.tusk.end) {
         m.data.hit = 0;
@@ -3364,6 +3375,7 @@ function mammothStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): vo
       const len = Math.min(14, clearDist(sim, api, m.x, m.y, m.face, 14));
       m.data.len = len;
       m.data.k = clamp(m.t / T.paw, 0, 1);
+      vKick(sim, api, m, dt, 0.25, 0.6); // анимации 12 — только рисунок
       if (m.t > T.paw - 0.25) m.danger = 2;
       if (m.t >= T.paw) {
         m.bounce = true;
@@ -3382,15 +3394,20 @@ function mammothStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): vo
       m.vy = Math.sin(m.face) * m.data.v;
       m.data.walk = (m.data.walk ?? 0) + m.data.v * dt;
       m.danger = 2;
+      vKick(sim, api, m, dt, 0.1, 1); // анимации 12 — только рисунок
       if (!m.data.hit && c.dist < m.r + h.r + 0.3) {
         if (hit(sim, api, m, m.dmg * 1.3, 12)) {
           m.data.hit = 1;
           sim.events.push({ t: 'shake', k: 0.4 });
+          fx(sim, api, { x: h.x, y: h.y, r: 1, life: 0.5, art: 'f12_ram', dur: m.face } as ZoneIn); // анимации 12 — только рисунок
         }
       }
       if (m.t >= T.charge.max) {
         m.bounce = false;
         api.setMode(m, 'f12b_skid');
+        const skid = ((m.data.v ?? 0) * T.charge.skid) / 2; // анимации 12 — только рисунок
+        const vSkid = { x: m.x, y: m.y, r: skid, life: 2.2, art: 'f12_skid', dur: m.face }; // анимации 12 — только рисунок
+        fx(sim, api, vSkid); // анимации 12 — только рисунок
       }
       return;
     }
@@ -3472,6 +3489,7 @@ function mammothStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): vo
           });
         }
         sim.events.push({ t: 'shake', k: 0.3 });
+        fx(sim, api, { x: m.x, y: m.y, r: 1.5, life: 0.7, art: 'f12_slam' }); // анимации 12 — только рисунок
       }
       if (m.t >= T.spikes.end) {
         m.data.hit = 0;
@@ -3555,6 +3573,7 @@ registerBrain('f12boss', {
       art: 'f12_wallhit',
     });
     sim.events.push({ t: 'shake', k: 0.8 });
+    sim.events.push({ t: 'flash', color: '#d6f2ff', k: 0.35 }); // анимации 12 — только рисунок
     sim.events.push({
       t: 'boss',
       what: 'f12_wall_stun',
@@ -3666,6 +3685,8 @@ registerBoss('f12boss', {
       }
       if (s.layerT <= 0) {
         raiseGlacier(sim, api, s.layers[s.layer]);
+        const vRise = { x: m.x, y: m.y, r: 16, life: 0.9, art: 'f12_glacierrise', dur: s.layer }; // анимации 12 — только рисунок
+        fx(sim, api, vRise); // анимации 12 — только рисунок
         s.layer += 1;
         s.layerT = 9;
       }
@@ -3682,6 +3703,7 @@ registerBoss('f12boss', {
         api.setMode(x, 'escape');
       }
     fx(sim, api, { x: m.x, y: m.y, r: 3, life: 3, art: 'f12_mamdeath', dur: m.face } as ZoneIn);
+    fx(sim, api, { x: m.x, y: m.y, r: 3, life: 3, art: 'f12_mamsoul', above: true }); // анимации 12 — только рисунок
     meltGlacier(sim, api);
     s.shaman = 0;
     sim.events.push({ t: 'shake', k: 0.9 });

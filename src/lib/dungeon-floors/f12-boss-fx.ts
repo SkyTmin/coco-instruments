@@ -3632,7 +3632,15 @@ zoneFx('f12_mamdeath', (g, z, X, Y, k, age, time) => {
       return d < R * fr ? 0.3 + 0.7 * h : 0;
     });
   }
-  // Дух уходит в сияние: ленты над телом и огни вверх.
+});
+
+/**
+ * Дух мамонта уходит в сияние (та же длина и место, что `f12_mamdeath`, но
+ * над темнотой): ленты над телом и зелёные огни вверх со следом.
+ */
+zoneFx('f12_mamsoul', (g, z, X, Y, _k, age, time) => {
+  pinZ(g, z, X, Y);
+  const sd = seedOf(z);
   const pil = k01((age - 1.6) / 0.5) * (1 - k01((age - 2.5) / 0.5));
   if (pil > 0) ribbons(g, X - 24, Y - 4, 0, 48, 0.8 * pil, 1.6, time, sd % 97, 0.1 * pil);
   const op = g.globalCompositeOperation;
