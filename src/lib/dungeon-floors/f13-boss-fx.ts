@@ -1735,10 +1735,10 @@ function markCone(
   const p = pulse(f);
   if (layer === 'floor') {
     // Свет на досках: ровный слой, у кромки гуще; фронт рампы бежит наружу.
-    if (ink(g, T.fill, 0.1 + 0.1 * k + 0.12 * f)) fSector(g, X, Y, 3, R, l, r);
+    if (ink(g, T.fill, 0.15 + 0.12 * k + 0.14 * f)) fSector(g, X, Y, 3, R, l, r);
     if (ink(g, T.fill, 0.1 + 0.1 * k)) fSector(g, X, Y, R - 3, R, l, r);
     const fr = 3 + (R - 3) * easeIn(k);
-    if (ink(g, T.fill, 0.18 + 0.12 * k)) fSector(g, X, Y, Math.max(3, fr - 4), fr, l, r);
+    if (ink(g, T.fill, 0.24 + 0.16 * k)) fSector(g, X, Y, Math.max(3, fr - 4), fr, l, r);
     // «Куда»: пунктир ленты по всему контуру с первого кадра.
     const off = reduced() ? 0 : -time * 8;
     if (ink(g, C.shade, 0.35)) arcPx(g, X + 1, Y + 1, R, l, r, 5, off, 3);
@@ -1838,11 +1838,11 @@ function markLine(
   const [ex, ey] = at(L, 0);
   if (layer === 'floor') {
     const narrow = W < 4;
-    if (ink(g, T.fill, (narrow ? 0.14 : 0.1) + 0.1 * k + 0.12 * f))
+    if (ink(g, T.fill, (narrow ? 0.18 : 0.15) + 0.12 * k + 0.14 * f))
       fLane(g, X, Y, a0, u0, L, -W, W);
     // Фронт рампы: полоса света бежит к острию и упирается в него к удару.
     const uf = u0 + (L - u0) * easeIn(k);
-    if (ink(g, T.fill, 0.16 + 0.14 * k)) fLane(g, X, Y, a0, Math.max(u0, uf - 6), uf, -W, W);
+    if (ink(g, T.fill, 0.24 + 0.16 * k)) fLane(g, X, Y, a0, Math.max(u0, uf - 6), uf, -W, W);
     const off = reduced() ? 0 : -time * 9;
     // «Куда»: пунктир по краям (тонкая полоса — одной лентой по оси).
     const edges = narrow ? [0] : [-W, W];
@@ -2638,8 +2638,8 @@ function drape(
     const f = fold(x);
     // Свет сверху-слева: склон складки к свету светлее (ворс бархата).
     const sl = fold(x + 1) - fold(x - 1);
-    const lit = f * 0.8 - sl * 4;
-    const i = lit > 1.05 ? 3 : lit > 0.25 ? 2 : lit > -0.6 ? 1 : 0;
+    const lit = f * 0.75 - sl * 1.5;
+    const i = lit > 1.0 ? 3 : lit > 0.2 ? 2 : lit > -0.55 ? 1 : 0;
     const yh = yb + hem(x) + (f > 0.25 ? 1 : 0);
     const T0 = WY(top);
     const H = WY(yh) - T0;
@@ -2647,9 +2647,9 @@ function drape(
     g.fillStyle = V_COL[i];
     g.fillRect(X + QX, T0 + QY, 1, H);
     // Блик ворса на гребне складки.
-    if (i === 3 && sl < 0) {
-      g.fillStyle = '#e8707a';
-      g.fillRect(X + QX, T0 + 30 + QY, 1, Math.max(0, H - 44));
+    if (lit > 1.25) {
+      g.fillStyle = '#d85a64';
+      g.fillRect(X + QX, T0 + 26 + QY, 1, Math.max(0, Math.round((H - 26) * 0.7)));
     }
     // Галун над низом и бахрома (нитки разной длины, отстают от качания).
     const Y = WY(yh);
@@ -2958,7 +2958,7 @@ registerZonePainter('f13_v_spark', (g, z, px0, py0) => {
   }
   // Кольцо звона: бежит наружу и гаснет за 0,2 с.
   if (t < 0.2 && ink(g, C.cream, 0.7 * (1 - t / 0.2)))
-    arcPx(g, px, py - 4, 3 + 40 * kk * easeOut(t / 0.2), 0, TAU, 3, 0, 2);
+    arcPx(g, px, py - 4, 3 + 20 * kk * easeOut(t / 0.2), 0, TAU, 3, 0, 2);
   sparksPx(
     g,
     px,
@@ -3934,18 +3934,25 @@ impact(
     const R = (r.r ?? 1.2) * TS;
     if (t < 0.09) {
       glowC(g, px, py - 10, R + 18, MOON, reduced() ? 0.3 : 0.6);
-      // Разряд: два зигзага с колосников в точку удара.
-      for (let b = 0; b < 2; b++) {
-        if (!ink(g, b ? C.moonL : C.white, 1 - t / 0.09)) continue;
-        let x = px + (b ? 14 : -10);
-        let y = py - 90;
-        for (let i = 0; i < 7; i++) {
-          const nx = lerp(x, px, 1 / (7 - i)) + (i < 6 ? (hash(r.seed, i, b + 1) - 0.5) * 12 : 0);
-          const ny = y + (py - 6 - y) / (7 - i);
+      // Разряд: ствол зигзагом с колосников в точку удара и отросток вбок.
+      const bolt = (x0: number, y0: number, x1: number, y1: number, n: number, q: number) => {
+        let x = x0;
+        let y = y0;
+        for (let i = 1; i <= n; i++) {
+          const u = i / n;
+          const side = (i % 2 ? 1 : -1) * (3 + 6 * hash(r.seed, i, q));
+          const nx = i === n ? x1 : lerp(x0, x1, u) + side;
+          const ny = lerp(y0, y1, u);
           linePx(g, x, y, nx, ny);
+          if (q === 1) linePx(g, x + 1, y, nx + 1, ny);
           x = nx;
           y = ny;
         }
+      };
+      if (ink(g, C.white, 1 - t / 0.09)) bolt(px + 6, py - 100, px, py - 6, 8, 1);
+      if (ink(g, C.moonL, 0.9 * (1 - t / 0.09))) {
+        const fy = py - 100 + (94 * 3) / 8;
+        bolt(px + 4, fy, px - 16, fy + 30, 4, 2);
       }
     }
     // Фанера бьётся о палубу, подпрыгивает и ложится набок.
