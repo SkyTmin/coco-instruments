@@ -378,30 +378,33 @@ const NO_OCC: Occ = Object.assign(() => false, { clear: () => true });
  * того, что лежит на полу, годится любая глубина: пиксель пола внутри
  * прямоугольника тела всегда за его ногами. Одна обрезка на проход —
  * дешевле `occOf` по пикселям. Повелитель — роба и циферблат со шпилями.
+ * Каждое тело — своя обрезка (они пересекаются: при `evenodd` одним путём
+ * двойное перекрытие снова открывалось). Тела дальше экрана от героя — мимо.
  * Вызывать между `save`/`restore`.
  */
 function clipBodies(g: CanvasRenderingContext2D, p: Pen, S: number, depth = -1e9): void {
   const sim = paintSim();
   if (!sim) return;
-  g.beginPath();
-  g.rect(-8192, -8192, 16384, 16384);
+  const h = sim.hero;
   const box = (x: number, fy: number, hw: number, y0: number, y1: number) => {
     if (fy <= depth + 1) return;
+    g.beginPath();
+    g.rect(-8192, -8192, 16384, 16384);
     g.rect(Math.floor(x - hw) + p.qx, Math.floor(y0) + p.qy, Math.ceil(hw * 2), Math.ceil(y1 - y0));
+    g.clip('evenodd');
   };
   for (const m of sim.mobs) {
     if (m.mode === 'dying' && m.t > 0.5) continue;
+    if (Math.abs(m.x - h.x) > 12 || Math.abs(m.y - h.y) > 16) continue;
     const x = m.x * S;
     const fy = m.y * S + 2;
     if (m.kind === 'f14boss') {
-      box(x, fy, 12, fy - 40, fy + 1);
-      box(x, fy, 15, fy - 61, fy - 38);
+      box(x, fy, 14, fy - 39, fy + 1);
+      box(x, fy, 15, fy - 62, fy - 39);
     } else if (m.r >= 0.8) box(x, fy, 0.85 * S, fy - 3.6 * S, fy + 1);
     else box(x, fy, Math.max(5, m.r * S), fy - m.r * S * 3.4, fy + 1);
   }
-  const h = sim.hero;
   box(h.x * S, h.y * S + 2, 0.42 * S, h.y * S + 2 - 1.25 * S, h.y * S + 3);
-  g.clip('evenodd');
 }
 
 /** Точка тела Повелителя в мире, px: из кадра «Тела» (`lordPointPx`), иначе — запасная. */
@@ -1298,6 +1301,7 @@ type FxZone = Zone & {
   mob?: number;
   ang?: number;
   arc?: number;
+  w?: number;
   len?: number;
   /** Номер: удар часов, фаза, тик или так, вход или выход. */
   n?: number;
@@ -2030,33 +2034,42 @@ registerZonePainter(
     ring(p, cx, cy, ro, edge, ea);
     ring(p, cx, cy, ri - 1, P.edgeSh, ea * 0.7);
     ring(p, cx, cy, ri, edge, ea, (_a, i) => sig || (i >> 1) % 2 === 0);
+    // Последние 0,2 с к ободу сходится белое кольцо — «сейчас».
+    closeIn(p, cx, cy, ro + 1, 0, TAU, left);
   }),
 );
 
 const SPIN_RUN = 0.16;
 
+/** Где прошёл лист разворота к возрасту `age` (одна мера на оба слоя). */
+const spinFront = (age: number) => (Math.PI + 0.5) * (0.7 + 0.3 * eOut2(k01(age / SPIN_RUN)));
+/** Рваный процарапанный круг: какие пиксели обода прошёл клинок. */
+const spinPassed = (sd: number, front: number) => (ang: number, i: number) =>
+  mod(ang + Math.PI / 2, Math.PI) / Math.PI <= front / (Math.PI + 0.5) + 0.02 &&
+  hash(i >> 3, sd, 4) > 0.3;
+
+// Контакт разворота, слой ПОЛА: два листа смаза облетают круг, за ними —
+// процарапанный рваный круг (жёлоб), сколы наружу и пыль. Свет — `f14b_spinfx`.
 registerImpactPainter('f14_lordspin', {
   life: 1.25,
   shake: 0.25,
   flash: 0.12,
   flashRgb: '255,232,190',
-  above: true,
   paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number) => {
     const cx = rec.x * S;
     const cy = rec.y * S;
     const p = new Pen(g, px, py, cx, cy);
-    const occ = occOf(S);
     const Rm = (rec.r ?? 2.1) * S;
     const w = (rec.w ?? 0.72) * S;
     const ri = Rm - w;
     const ro = Rm + w;
-    const sd = rec.seed >>> 0;
+    const sd = seedAt(rec.x, rec.y);
     const few = reduced();
     const ph = phaseNow();
     const top = -Math.PI / 2;
     // Два листа смаза облетают каждый свою половину и перелетают на 0,5.
     const span = Math.PI + 0.5;
-    const front = span * (0.7 + 0.3 * eOut2(k01(age / SPIN_RUN)));
+    const front = spinFront(age);
     const tail = span * eOut2(k01((age + 0.02) / 0.3));
     const fadeA = 1 - k01((age - 0.14) / 0.16);
     for (const s0 of [top, top + Math.PI])
@@ -2074,85 +2087,14 @@ registerImpactPainter('f14_lordspin', {
         SMEAR[ph],
         age < 0.12 ? 0.6 : 0,
       );
-    // Храповик: двенадцать щелчков по часовым рискам, по часовой стрелке —
-    // за каждым листом по шесть.
-    for (let i = 0; i < 12; i++) {
-      const ta = top + (i / 12) * TAU;
-      const t0 = ((i % 6) / 6) * SPIN_RUN * 0.7;
-      const t = age - t0;
-      if (t < 0 || t > 0.18) continue;
-      const kk = t / 0.18;
-      // Зуб храповика: яркая риска поперёк обода и блик на ней (звёздочкой с
-      // тенью щелчок читался птицей).
-      const ux = Math.cos(ta);
-      const uy = Math.sin(ta);
-      const r0 = ri - 2 + 4 * kk;
-      const r1 = ro + 2 - 4 * kk;
-      p.lineS(
-        cx + ux * r0,
-        cy + uy * r0,
-        cx + ux * r1,
-        cy + uy * r1,
-        kk < 0.35 ? '#ffffff' : SMEAR[ph][1],
-        1 - kk * 0.7,
-        0.6,
-      );
-      p.lineS(
-        cx + ux * r0 - uy,
-        cy + uy * r0 + ux,
-        cx + ux * r1 - uy,
-        cy + uy * r1 + ux,
-        SMEAR[ph][2],
-        0.8 * (1 - kk),
-        0,
-      );
-      glint(p, cx + ux * Rm, cy + uy * Rm, 3 * (1 - kk) + 1, SMEAR[ph][1], 1 - kk);
-    }
-    // Волна воздуха наружу.
-    if (age < 0.42)
-      ring(
-        p,
-        cx,
-        cy,
-        ro + 2 + 26 * eOut2(age / 0.42),
-        GLOW_HI[ph],
-        0.85 * (1 - age / 0.42),
-        (_a, i) => hash(i >> 2, sd, 9) > 0.22,
-        0.5,
-      );
-    // Процарапанный круг — рваными дугами, тёмный жёлоб с жаром; к 0,7 с
-    // гаснет (сплошное кольцо надолго читалось гравировкой циферблата).
+    // Процарапанный круг — рваными дугами, тёмный жёлоб; к 0,7 с гаснет
+    // (сплошное кольцо надолго читалось гравировкой циферблата).
     const fade = 1 - k01((age - 0.35) / 0.35);
     if (fade > 0) {
-      const passed = (ang: number, i: number) =>
-        mod(ang - top, Math.PI) / Math.PI <= front / span + 0.02 && hash(i >> 3, sd, 4) > 0.3;
-      ring(p, cx, cy, Rm + 1, C.white, 0.35 * fade, passed, 0, occ, cy + Rm);
-      ring(p, cx, cy, Rm, '#1a0e06', 0.7 * fade, passed, 0, occ, cy + Rm);
-      if (age < 0.3)
-        ring(p, cx, cy, Rm, hotSpark(age / 0.3), 1 - age / 0.3, passed, 0, occ, cy + Rm);
+      const passed = spinPassed(sd, front);
+      ring(p, cx, cy, Rm + 1, C.white, 0.35 * fade, passed);
+      ring(p, cx, cy, Rm, '#1a0e06', 0.7 * fade, passed);
     }
-    // Искры по касательной из обода и сколы наружу.
-    const nS = few ? 6 : 18;
-    sparks(
-      p,
-      sd,
-      age,
-      cx,
-      cy,
-      nS,
-      0,
-      0.35,
-      60,
-      70,
-      0.45,
-      60,
-      metalSpark(ph),
-      (i) => (i % 6) * 0.02,
-      (i) => {
-        const ta = top + hash(sd, i, 71) * TAU;
-        return [cx + Math.cos(ta) * Rm, cy + Math.sin(ta) * Rm, ta + Math.PI / 2];
-      },
-    );
     chips(
       p,
       sd + 3,
@@ -2174,7 +2116,6 @@ registerImpactPainter('f14_lordspin', {
         const ta = top + hash(sd, i, 72) * TAU;
         return [cx + Math.cos(ta) * Rm, cy + Math.sin(ta) * Rm, ta];
       },
-      occ,
     );
     dust(
       p,
@@ -2201,6 +2142,106 @@ registerImpactPainter('f14_lordspin', {
     );
   }),
 });
+
+/**
+ * Контакт разворота, слой ПОВЕРХ ТЕМНОТЫ (`f14b_spinfx`): храповик щёлкает по
+ * двенадцати рискам, жар в процарапанном круге, волна воздуха наружу, искры
+ * по касательной — всё на полу и прячется за телами; на остриях обеих
+ * стрелок (точки из кадра «Тела» в кадр контакта) — вспышки и сноп искр.
+ */
+registerZonePainter(
+  'f14b_spinfx',
+  guarded((g, z: Zone | Strike, px: number, py: number, S: number) => {
+    const zz = z as FxZone;
+    const age = zz.t;
+    if (age > 1) return;
+    const cx = zz.x * S;
+    const cy = zz.y * S;
+    const p = new Pen(g, px, py, cx, cy);
+    const Rm = zz.r * S;
+    const w = (zz.w ?? 0.72) * S;
+    const ri = Rm - w;
+    const ro = Rm + w;
+    const sd = seedAt(zz.x, zz.y);
+    const few = reduced();
+    const ph = phaseNow();
+    const top = -Math.PI / 2;
+    const front = spinFront(age);
+    g.save();
+    clipBodies(g, p, S);
+    // Храповик: двенадцать щелчков по часовым рискам, по часовой стрелке —
+    // за каждым листом по шесть.
+    for (let i = 0; i < 12; i++) {
+      const ta = top + (i / 12) * TAU;
+      const t = age - ((i % 6) / 6) * SPIN_RUN * 0.7;
+      if (t < 0 || t > 0.18) continue;
+      const kk = t / 0.18;
+      const ux = Math.cos(ta);
+      const uy = Math.sin(ta);
+      const r0 = ri - 2 + 4 * kk;
+      const r1 = ro + 2 - 4 * kk;
+      const hot = kk < 0.35 ? '#ffffff' : SMEAR[ph][1];
+      p.lineS(cx + ux * r0, cy + uy * r0, cx + ux * r1, cy + uy * r1, hot, 1 - kk * 0.7, 0.6);
+      p.lineS(
+        cx + ux * r0 - uy,
+        cy + uy * r0 + ux,
+        cx + ux * r1 - uy,
+        cy + uy * r1 + ux,
+        SMEAR[ph][2],
+        0.8 * (1 - kk),
+        0,
+      );
+      glint(p, cx + ux * Rm, cy + uy * Rm, 3 * (1 - kk) + 1, SMEAR[ph][1], 1 - kk);
+    }
+    // Жар в процарапанном круге — остывает за 0,3 с.
+    if (age < 0.3) ring(p, cx, cy, Rm, hotSpark(age / 0.3), 1 - age / 0.3, spinPassed(sd, front));
+    // Волна воздуха наружу.
+    if (age < 0.42)
+      ring(
+        p,
+        cx,
+        cy,
+        ro + 2 + 26 * eOut2(age / 0.42),
+        GLOW_HI[ph],
+        0.85 * (1 - age / 0.42),
+        (_a, i) => hash(i >> 2, sd, 9) > 0.22,
+        0.5,
+      );
+    // Искры по касательной из обода.
+    sparks(
+      p,
+      sd,
+      age,
+      cx,
+      cy,
+      few ? 6 : 18,
+      0,
+      0.35,
+      60,
+      70,
+      0.45,
+      60,
+      metalSpark(ph),
+      (i) => (i % 6) * 0.02,
+      (i) => {
+        const ta = top + hash(sd, i, 71) * TAU;
+        return [cx + Math.cos(ta) * Rm, cy + Math.sin(ta) * Rm, ta + Math.PI / 2];
+      },
+    );
+    g.restore();
+    // Острия обеих стрелок в кадр контакта: вспышка и сноп по ходу.
+    const tips = contactPts(zz.id, mobById(zz.mob), ['minTip', 'hourTip'], S);
+    tips.forEach(([tx, ty], j) => {
+      const ta = Math.atan2(ty - cy, tx - cx) + Math.PI / 2;
+      if (age < 0.12) {
+        const kk = age / 0.12;
+        p.col(kk < 0.4 ? '#ffffff' : SMEAR[ph][1], 1 - kk * 0.5);
+        star(p, tx, ty, 7 * (1 - kk * 0.5), 4, ta + 0.4);
+      }
+      sparks(p, sd + 11 + j, age, tx, ty, few ? 3 : 7, ta, 0.6, 60, 70, 0.38, 50, metalSpark(ph));
+    });
+  }),
+);
 
 // =============================================================================
 // МИНУТНАЯ — прицел линией первые 0,25 с (линия ходит за героем), удар —

@@ -3590,6 +3590,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       const warn = LORD.spinWarn / haste;
       if (!m.data.lit) {
         m.data.lit = 1;
+        m.data.vSx = m.x; // анимации 14 — только рисунок
+        m.data.vSy = m.y; // анимации 14 — только рисунок
         api.strike(sim, {
           shape: 'ring',
           x: m.x,
@@ -3607,6 +3609,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.t >= warn) {
         m.data.lit = 0;
         m.data.vFrom = 2; // v2.87 — только рисунок
+        api.vfx(sim, { x: m.data.vSx ?? m.x, y: m.data.vSy ?? m.y, r: LORD.spinR, w: LORD.spinW, life: 1, art: 'f14b_spinfx', above: true, mob: m.id } as ZoneIn); // анимации 14 — только рисунок
         api.setMode(m, 'recover');
         m.cd = 0.9 / haste + sim.rng() * 0.4;
       }
