@@ -300,19 +300,31 @@ class Pen {
       this.g.fillRect(x + this.qx, y + this.qy, w, h);
       return;
     }
+    // Ни одно тело не задевает прямоугольник — одной заливкой, без строк.
+    if (h > 1 && !this.hits(x, y, x + w - 1, y + h - 1)) {
+      this.g.fillRect(x + this.qx, y + this.qy, w, h);
+      return;
+    }
     for (let yy = y; yy < y + h; yy++) this.run(yy, x, x + w - 1);
+  }
+  /** Задевает ли тело из `occ` строки [ya, yb] в столбцах [xa, xb]. */
+  private hits(xa: number, ya: number, xb: number, yb: number): boolean {
+    for (const b of this.occ!)
+      if (!(yb < b.y0 || ya > b.y1 || ya >= b.fy - 1 || b.x1 < xa || b.x0 > xb)) return true;
+    return false;
   }
   /** Строка пикселей [xa, xb] без заслонённых кусков. */
   private run(Y: number, xa: number, xb: number): void {
+    // Частый случай — строка мимо тел: без списка вырезов.
+    if (!this.hits(xa, Y, xb, Y)) {
+      this.g.fillRect(xa + this.qx, Y + this.qy, xb - xa + 1, 1);
+      return;
+    }
     let lo = xa;
     const cuts: [number, number][] = [];
     for (const b of this.occ!) {
       if (Y < b.y0 || Y > b.y1 || Y >= b.fy - 1 || b.x1 < xa || b.x0 > xb) continue;
       cuts.push(spanOf(b, Y));
-    }
-    if (!cuts.length) {
-      this.g.fillRect(xa + this.qx, Y + this.qy, xb - xa + 1, 1);
-      return;
     }
     cuts.sort((p, q) => p[0] - q[0]);
     // Заслонённое не вырезается дочиста, а ложится на треть: прямоугольник
